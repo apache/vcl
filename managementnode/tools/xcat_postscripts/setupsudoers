@@ -1,0 +1,6 @@
+#!/bin/ksh
+
+logger -t xcat "Install: setup sudoers"
+cp /etc/sudoers /etc/sudoers.ORIG
+echo "%ncsu   ALL = NOPASSWD: /sbin/iptables" >> /etc/sudoers
+echo "%ncsu   ALL = NOPASSWD: /etc/rc.d/init.d/iptables" >> /etc/sudoers

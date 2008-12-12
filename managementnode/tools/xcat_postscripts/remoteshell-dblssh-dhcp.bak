@@ -1,0 +1,82 @@
+#!/bin/ksh
+#egan@us.ibm.com
+#(C)IBM Corp
+#
+
+. $XCATROOT/lib/functions
+
+echo "$RSHC" | grep "rsh" >/dev/null 2>&1
+if [ "$?" = "0" ]
+then
+	if [ -r /etc/xinetd.d/rsh ]
+	then
+		logger -t xcat "Install: enable rsh"
+		perl -pi -e 's/^(\tdisable[^=]*=) yes/$1 no/' /etc/xinetd.d/rsh
+		perl -pi -e 's/^(\tdisable[^=]*=) yes/$1 no/' /etc/xinetd.d/rlogin
+		logger -t xcat "Install: setup root .rhosts"
+		cd /root
+		echo "$MASTER" >.rhosts
+		echo "$MASTER.$DOMAIN" >>.rhosts
+		chmod 600 .rhosts
+	fi
+	echo "rsh" >>/etc/securetty
+	echo "rlogin" >>/etc/securetty
+fi
+
+
+MIP=$(nametoip $MASTER)
+
+echo "$RSHC" | grep "ssh" >/dev/null 2>&1
+if [ "$?" = "0" ]
+then
+	if [ -r /etc/ssh/sshd_config ]
+	then
+		logger -t xcat "Install: setup /etc/ssh/sshd_config"
+		cp /etc/ssh/sshd_config /etc/ssh/sshd_config.ORIG
+		perl -pi -e 's/^X11Forwarding .*$/X11Forwarding yes/' /etc/ssh/sshd_config
+		perl -pi -e 's/^KeyRegenerationInterval .*$/KeyRegenerationInterval 0/' /etc/ssh/sshd_config
+		perl -pi -e 's/(.*MaxStartups.*)/#\1/' /etc/ssh/sshd_config
+		echo "MaxStartups 1024" >>/etc/ssh/sshd_config
+#		echo "PasswordAuthentication no" >>/etc/ssh/sshd_config
+# setup second sshd (external)
+		cp /etc/ssh/sshd_config /etc/ssh/external_sshd_config
+		echo "AllowUsers root@$MIP" >>/etc/ssh/sshd_config
+
+		logger -t xcat "Install: setup /etc/ssh/external_sshd_config"
+		echo "PidFile /var/run/ext_sshd.pid" >>/etc/ssh/external_sshd_config
+		echo "PermitRootLogin no" >>/etc/ssh/external_sshd_config
+		echo "Banner /etc/banner" >>/etc/ssh/external_sshd_config
+
+	fi
+
+	if [ -d /post/.ssh ]
+	then
+		logger -t xcat "Install: setup root .ssh"
+		cd /post/.ssh
+		mkdir -p /root/.ssh
+		cp -f * /root/.ssh
+		chmod 700 /root/.ssh
+		chmod 600 /root/.ssh/*
+	fi
+# make rc.local to change "ListenAddress" in sshd's configs accordingly to network interfaces values
+echo "" >> /etc/rc.local
+echo "
+IP0=\$(ifconfig eth0 | grep inet | awk '{print \$2}' | awk -F: '{print \$2}')
+IP1=\$(ifconfig eth1 | grep inet | awk '{print \$2}' | awk -F: '{print \$2}')
+perl -pi -e 's/^AllowUsers .*\\\n//' /etc/ssh/sshd_config
+perl -pi -e 's/^ListenAddress .*\\\n//' /etc/ssh/sshd_config
+perl -pi -e 's/^ListenAddress .*\\\n//' /etc/ssh/external_sshd_config
+echo \"AllowUsers root@\$MYMASTER\" >> /etc/ssh/sshd_config
+echo \"ListenAddress \$IP0\" >> /etc/ssh/sshd_config
+echo \"ListenAddress \$IP1\" >> /etc/ssh/external_sshd_config
+/etc/rc.d/init.d/sshd stop
+/etc/rc.d/init.d/ext_sshd stop
+/etc/rc.d/init.d/sshd start
+/etc/rc.d/init.d/ext_sshd start
+
+" >> /etc/rc.local
+
+fi
+
+exit 0
+

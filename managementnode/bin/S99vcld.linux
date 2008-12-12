@@ -1,0 +1,94 @@
+#!/bin/bash
+##############################################################################
+# $Id: S99vcld.linux 1951 2008-12-12 13:48:10Z arkurth $
+##############################################################################
+
+# chkconfig: 45 99 99
+# description: VCL management node daemon
+
+# DAEMON: Name of the daemon executable
+DAEMON=vcld
+
+# DAEMON_PATH: Path to the daemon, no trailing '/'
+DAEMON_PATH=/usr/local/vcl/bin
+
+# DAEMON_OPTIONS: options for the daemon, these can be overridden by
+# setting DAEMON_OPTIONS in /etc/sysconfig/$DAEMON
+DAEMON_OPTIONS='-v -conf=/etc/vcl/vcld.conf'
+
+
+# You shouldn't need to edit anything below here
+# --------------------------------------------------------------------
+
+# Source function library.
+. /etc/init.d/functions
+
+#[ -f $DAEMON_PATH/$DAEMON ] || exit 0
+
+# Source config
+if [ -f /etc/sysconfig/$DAEMON ] ; then
+	. /etc/sysconfig/$DAEMON
+fi
+
+RETVAL=0
+
+umask 077
+
+start() {
+ 	echo -n $"Starting $DAEMON daemon: "
+	daemon $DAEMON_PATH/$DAEMON $DAEMON_OPTIONS
+	RETVAL=$?
+	echo
+	[ $RETVAL -eq 0 ] && touch /var/lock/subsys/$DAEMON
+	return $RETVAL
+}	
+stop() {
+	echo -n $"Shutting down $DAEMON daemon: "
+	#killproc $DAEMON_PATH/$DAEMON
+	kill -9 `/bin/cat /var/run/$DAEMON.pid`
+	#RETVAL=$?
+	echo
+	[ $RETVAL -eq 0 ] && rm -f /var/lock/subsys/$DAEMON
+	return $RETVAL
+}
+_status() {
+	status vcld
+}
+restart() {
+	stop
+	#echo -n $"Shutting down $DAEMON daemon: "
+        #killproc $DAEMON_PATH/$DAEMON
+        #kill -9 `/bin/cat /var/run/$DAEMON.pid`
+	sleep 1
+	start
+}	
+
+case "$1" in
+  start)
+  	start
+	;;
+  stop)
+  	stop
+	;;
+  status)
+	# modified this not to call _status because that was matching vcldev
+	if line=`/bin/ps aux | /bin/egrep -e 'vcld( )*$'` ; then 
+		pid=`echo $line | /bin/awk '{print $2}'`
+		echo vcld \(pid $pid\) is running...
+	else
+		echo no vcld processes found
+		exit 1
+	fi
+	;;
+  restart|reload)
+  	restart
+	;;
+  condrestart)
+  	[ -f /var/lock/subsys/$DAEMON ] && restart || :
+	;;
+  *)
+	echo $"Usage: $0 {start|stop|status|restart|condrestart}"
+	exit 1
+esac
+
+exit $?

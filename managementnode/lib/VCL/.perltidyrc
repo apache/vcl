@@ -1,0 +1,107 @@
+# This is a .perltidyrc configuration file
+# It is used by the perltidy module for formatting source code
+# http://perltidy.sourceforge.net/perltidy.html
+
+# GENERAL CONFIGURATION
+-log     # save the .log file
+-se      # errors to standard error output
+-w       # show all warnings
+-syn     # perform Perl syntax check
+-pscf=-c # don't run Perl syntax taint checking
+-b	 # modify files in place
+
+# INDENTATION
+-et=3    # replace each 3 leading space charaters with 1 tab character
+-i=3     # use 3 columns per indentation level
+-nola    # do not outdent labels
+#-naws    # don't add whitespace
+
+
+# COMMENTS
+-nbbc    # don't add blank lines before a full-line comments
+-nbbs    # don't add blank lines before a sub definitions
+-ibc     # indent block comments
+-isbc    # indent spaced block comments
+
+
+# BLANK LINES AND LINE LENGTH
+-l=0     # don't set a maximum line length, leave long lines alone
+-mbl=3   # set the maximum number of consecutive blank lines
+-ole=win # output line endings for a specific system (Windows)
+
+# TIGHTNESS
+-lp      # line up parentheses
+
+-vt=2
+-vtc=2
+# -vt=0 always break a line after opening token (default)
+# -vt=1 do not break unless this would produce more than one step in indentation in a line
+# -vt=2 never break a line after opening token
+# -vtc=0 always break a line before a closing token (default)
+# -vtc=1 do not break before a closing token which is followed by a semicolon or another closing token, and is not in a list environment
+# -vtc=2 never break before a closing token
+
+#-pvt=2    # paren vert tight
+#-pvtc=2   # paren closing vert tight
+
+#-sbvt=2   # square vert tight
+#-sbvtc=2  # square closing vert tight
+
+#-bvt=2    # non-code block braces
+#-bvtc=2   # non-code block closing braces
+
+#-bbvt=2   # just like the -vt=n flag but applies to opening code block braces
+
+#-sot    # stack opening tokens when possible to avoid lines with isolated opening tokens
+        # -sot is a synonym for -sop -sohb -sosb
+#-sop    # stack opening paren
+#-sohb   # stack opening hash brace
+#-sosb   # stack opening square bracket
+
+#-sct    # stack closing tokens
+        # -sct is a synonym for -scp -schb -scsb
+#-scp    # stack closing paren
+#-schb   # stack closing hash brace
+#-scsb   # stack closing square bracket
+
+-pt=2    # parenthesis tightness, no spaces after ( and before )
+# if ( ( my $len_tab = length( $tabstr ) ) > 0 ) {  # -pt=0
+# if ( ( my $len_tab = length($tabstr) ) > 0 ) {    # -pt=1 (default)
+# if ((my $len_tab = length($tabstr)) > 0) {        # -pt=2
+
+-sbt=2   # square bracket tightness, no spaces after [ and before ]
+# $width = $col[ $j + $k ] - $col[ $j ];  # -sbt=0
+# $width = $col[ $j + $k ] - $col[$j];    # -sbt=1 (default)
+# $width = $col[$j + $k] - $col[$j];      # -sbt=2
+
+-bt=2    # curly brace tightness, no spaces after { and before }
+# $obj->{ $parsed_sql->{ 'table' }[0] };    # -bt=0
+# $obj->{ $parsed_sql->{'table'}[0] };      # -bt=1 (default)
+# $obj->{$parsed_sql->{'table'}[0]};        # -bt=2
+
+-bbt=2   # curly brace tightness which contain blocks of code
+# %bf = map { $_ => -M $_ } grep { /\.deb$/ } dirents '.'; # -bbt=0 (default)
+# %bf = map { $_ => -M $_ } grep {/\.deb$/} dirents '.';   # -bbt=1
+# %bf = map {$_ => -M $_} grep {/\.deb$/} dirents '.';     # -bbt=2
+
+-nsts    # no space before semicolons
+# $i = 1 ;     #  -sts
+# $i = 1;      #  -nsts   (default)
+
+-nsfs    # no spaces between special semicolons in for loops
+# for ( @a = @$ap, $u = shift @a ; @a ; $u = $v ) {  # -sfs (default)
+# for ( @a = @$ap, $u = shift @a; @a; $u = $v ) {    # -nsfs
+
+
+# CLOSING SIDE SCOMMENTS
+-csc     # add closing side comments, adds or updates closing side comments
+# sub message {
+# } ## end sub message <-- -csc adds this
+
+#-cscw   # enable closing side-comment warnings
+
+-csci=10 # minimum number of lines that a block must have in order for a closing side comment to be added
+
+-csct=40 # closing side comment maximum text
+
+-csce=2  # each elsif is also given the text of the opening if statement

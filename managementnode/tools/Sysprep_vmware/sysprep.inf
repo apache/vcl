@@ -1,0 +1,39 @@
+;SetupMgrTag
+[Unattended]
+    OemSkipEula=Yes
+    OemPreinstall=Yes
+    InstallFilesPath=C:\sysprep\i386
+    TargetPath=\WINDOWS
+
+[GuiUnattended]
+    AdminPassword=*
+    EncryptedAdminPassword=NO
+    OEMSkipRegional=1
+    OEMDuplicatorstring="VCL project"
+    TimeZone=35
+    OemSkipWelcome=1
+
+[UserData]
+    ProductKey=WIN_XP_PRO_KEY
+    FullName="VCL"
+    OrgName="NCSU"
+    ComputerName=*
+
+[Display]
+    BitsPerPel=32
+    Xresolution=1024
+    YResolution=768
+    Vrefresh=75
+
+[Identification]
+    JoinWorkgroup=WORKGROUP
+
+[Networking]
+    InstallDefaultComponents=Yes
+
+[Branding]
+    BrandIEUsingUnattended=Yes
+
+[Proxy]
+    Proxy_Enable=0
+    Use_Same_Proxy=0

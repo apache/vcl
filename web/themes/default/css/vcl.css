@@ -1,0 +1,383 @@
+/*
+* Licensed to the Apache Software Foundation (ASF) under one or more
+* contributor license agreements.  See the NOTICE file distributed with
+* this work for additional information regarding copyright ownership.
+* The ASF licenses this file to You under the Apache License, Version 2.0
+* (the "License"); you may not use this file except in compliance with
+* the License.  You may obtain a copy of the License at
+*
+*     http://www.apache.org/licenses/LICENSE-2.0
+*
+* Unless required by applicable law or agreed to in writing, software
+* distributed under the License is distributed on an "AS IS" BASIS,
+* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+* See the License for the specific language governing permissions and
+* limitations under the License.
+*/
+body {
+	font: 11px helvetica, arial, sans;
+	color: black;
+	background: #FFFFFF;
+	margin: 0;
+	padding: 0;
+	text-align: center;
+	
+}
+
+p {
+	font: 11px arial, helvetica, sans;
+	margin-top: 0px;
+	text-align: left;
+}
+
+pre {
+	font: 11px trebuchet ms, arial, helvetica, sans;
+	font-weight: bold;
+}
+
+a:link {
+	text-decoration: none;
+	color: #990000;
+}
+
+a:visited {
+	text-decoration: none;	
+	color: #595959;
+}
+
+a:hover, a:active {
+	background: #CCCCCC;	
+	text-decoration: none;
+	color: black;
+}
+
+table, td {
+	font: 11px helvetica, arial, sans;
+	font-weight: normal;
+	color: black;
+}
+
+table tr td.white {
+	background: white;
+}
+
+th {
+	font: 12px helvetica, arial, sans;
+	font-weight: bold;
+	color: black;
+	cursor: default;
+}
+
+h1, h2, h3 span {display:none}
+
+form {
+	margin-bottom: 0;
+}
+
+#container {
+	background: #E5E5E5 url(../images/background.gif) repeat-y center;
+	display: block;
+	position: relative;
+	border: none;
+	margin: 0 auto 0 auto;
+	width: 752px;
+	min-height: 768px;
+	text-align: center;
+	overflow: visible;
+}
+
+#gradient {
+	background: url(../images/background_gradient.gif) left top;
+	display: block;
+	position: relative;
+	border: none;
+	min-height: 768px;
+	text-align: center;
+	overflow: visible;
+}
+
+#container-whitespace {
+	background: url(../images/background_whitespace.gif) center;
+	display: block;
+	border: none;
+	padding: 0;
+	text-align: center;
+	overflow: visible;
+}
+
+#container-inner {
+	background: transparent url(../images/menu_bg.jpg) repeat-y left top;
+	display: block;
+	border: none;
+	margin: 0 3px 0 3px;
+	padding: 0;
+	overflow: visible;
+}
+
+#header {
+	display: block;
+	background: transparent;
+	height: 100px;
+	margin: 0;
+	padding: 0;
+	border: 0;
+}
+
+#bar {
+	background: url(../images/bar_bg.jpg) repeat-x left top;
+	display: block;
+	height: 23px;
+	margin: 0;
+	padding: 0;
+}
+
+#menu {
+	float: left;
+	width: 160px;
+	padding: 0;
+	border: 0;
+}
+
+#menulist {
+	background: none;
+	display: block;
+	margin: 0;
+	border: 0;
+	padding: 0;
+}
+
+#menulist ul {
+	margin: 0;
+	padding: 0;
+}
+
+#menulist ul li {
+	display: block;
+	background: url(../images/menu.jpg) no-repeat left top;
+	height: 22px;
+	width: 158px;
+	list-style-type: none;
+	margin: 0 1px 0 0;
+	padding: 0;
+	text-align: left;
+	vertical-align: bottom;
+}
+
+#menulist ul li a {
+	display: block;
+	background: none;
+	font: 12px arial, helvetica, sans-serif;	
+	font-weight: bold;
+	text-align: left;
+	color: black;
+	line-height: 13px;
+	padding: 4px 0 0 4px;
+}
+
+#menulist ul li a:visted {
+	display: block;
+	background: none;
+	font: 12px arial, helvetica, sans-serif;		
+	font-weight: bold;
+	text-align: left;
+	line-height: 13px;
+	color: black;
+}
+
+#menulist ul li a:hover, a:active {
+	text-decoration: none;
+	color: #B90000;
+}
+
+#menulist ul li.selected {
+	display: block;
+	background: url(../images/menu_selected.jpg) no-repeat left top;
+	height: 22px;
+	width: 158px;
+	list-style-type: none;
+	padding: 0;
+	margin: 0 1px 0 0;
+	vertical-align: bottom;
+}
+
+#menulist ul li.selected a {
+	display: block;
+	background: none;
+	font: 12px arial, helvetica, sans-serif;	
+	font-weight: bold;
+	text-align: left;
+	color: white;
+	line-height: 13px;
+	padding: 4px 0 0 4px;
+}
+
+#menulist ul li.selected a:visted {
+	display: block;
+	background: none;
+	font: 12px arial, helvetica, sans-serif;	
+	font-weight: bold;
+	text-align: left;
+	line-height: 13px;
+	color: white;
+}
+
+#menulist ul li.selected a:hover, a:active {
+	text-decoration: none;
+	color: black;
+}	
+
+#links {
+	width: 158px;
+	margin: 0;
+	padding: 0;
+	border: 0;
+}
+
+#links p {
+	margin: 0;
+	padding: 5px;
+	font: 10px arial, helvetica, sans-serif;
+	color: black;
+}
+
+#content {
+	margin: 0px 0px 0px 10px;
+	display: block;
+	text-align: left;
+	overflow: visible;
+}
+
+#content h2 {
+	display: block;
+	font-family: arial, helvetica, sans;	
+	text-shadow: #ccc 0 0 2px;
+	color: #111;
+}
+
+
+#content table {
+	background: #ffffff;
+	border-spacing: 1px;
+	margin: 10px 10px 10px 0;
+	padding: 0;
+}
+
+#content table th {
+	margin: 0;
+	padding: 3px;
+	vertical-align: top;
+}
+
+#content table td {
+	margin: 0;
+	padding: 3px;
+
+}
+
+
+#ext {
+	clear: left;
+	height: 1px;
+}
+
+#footer {
+	background: transparent;	
+	width: 750px;
+	margin: 0 8px 0 8px;
+	padding: 0 0 20px 0;
+}
+
+#footer-top {
+	height: 5px;
+	width: 724px;
+	margin: 0;
+	padding: 0;
+}
+
+#footer-top span {display: none}
+
+#footer-padding {
+	clear: left;
+	background: transparent;
+	width: 724px;
+	height: 10px;
+	margin: 0;
+	padding: 0;
+}
+
+#footer-box-left {
+	float: left;
+	background: #F2F2F2;
+	width: 350px;
+	margin: 8px 1px 1px 1px;
+	padding: 5px;
+	border: #595959 1px solid;
+	color: black;
+	font: 9px helvetica, arial, sans;
+}
+
+#footer-box-left p {
+	margin: 0;
+	padding: 0;
+}
+
+#footer-box-left p a:link {
+	text-decoration: none;
+	color: black;
+}
+
+#footer-box-left p a:visited {
+	text-decoration: none;	
+	color: #595959;
+}
+
+#footer-box-left p a:hover, a:active {
+	background: #CCCCCC;	
+	text-decoration: none;
+	color: black;
+}
+
+
+#footer-box-right {
+	display: block;
+	background: transparent;
+	margin: 8px 0 0 370px;
+	padding: 0;
+}
+
+#footer-box-right p {
+	font: 9px helvetica, arial, sans;
+	text-align: left;
+	color: black;
+}
+
+.leftlabel {
+	width: 150px;
+	float: left;
+	text-align: right;
+	margin-right: 0.5em;
+	margin-bottom: 0.2em;
+	display: block;
+	font-weight: bold;
+	font-size: 12px;
+}
+
+.helpformleftlabel {
+	width: 80px;
+	float: left;
+	text-align: right;
+	margin-right: 0.5em;
+	margin-bottom: 0.2em;
+	display: block;
+	font-weight: bold;
+	font-size: 12px;
+}
+
+.leftlabeldiv {
+	float: left;
+}
+
+.test1 {
+	float: none;
+	display: block;
+}

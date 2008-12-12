@@ -1,0 +1,117 @@
+#!/bin/ksh
+#egan@us.ibm.com
+#(C)IBM Corp
+#
+# Updates must be located in $INSTALLDIR/post/otherrpms/$OSVER/$ARCH
+#
+# ARCH for x86 is special and may be i386 - i686.
+#
+# noarch is also applied.
+#
+
+NODEPS=""
+FORCE=""
+for i in $*
+do
+    case "$i" in
+        nodeps)
+            NODEPS="--nodeps"
+            ;;
+        force)
+            FORCE="--force"
+            ;;
+    esac
+done
+
+logger -t xcat "Install: other RPMs"
+
+echo $ARCH | perl -pi -e "if(/^i.86$/) {exit 0} else {exit 1}"
+if [ "$?" = "0" ]
+then
+	ARCH=x86
+fi
+
+set -A UPDATEDIR
+integer c=-1
+
+if [ -d "/post/otherrpms/$OSVER/$ARCH" ]
+then
+	c=c+1
+	UPDATEDIR[$c]=/post/otherrpms/$OSVER/$ARCH
+fi
+
+if [ "$ARCH" = "x86" ]
+then
+	for i in 6 5 4 3
+	do
+		if [ -d /post/otherrpms/$OSVER/i${i}86 ]
+		then
+			c=c+1
+			UPDATEDIR[$c]=/post/otherrpms/$OSVER/i${i}86
+		fi
+	done
+fi
+
+if [ -d "/post/otherrpms/$OSVER/noarch" ]
+then
+	c=c+1
+	UPDATEDIR[$c]=/post/otherrpms/$OSVER/noarch
+fi
+
+if ((c < 0))
+then
+	logger -t xcat "Install: No otherrpm dir, exiting other RPMs"
+	exit
+fi
+
+RPMLIST=""
+integer d=-1
+for i in ${UPDATEDIR[*]}
+do
+	d=d+1
+	ls $i/*.rpm >/dev/null 2>&1
+	if [ "$?" != "0" ]
+	then
+		continue
+	fi
+	for j in $i/*.rpm
+	do
+		if ((d > 0))
+		then
+			integer e=$d-1
+			GOTIT=0
+			for k in $(seq 0 $e)
+			do
+				RPM=$(basename $j)
+				RPMNAME=$(echo $RPM | perl -pi -e 's/\.[^\.]+?\.rpm//')
+				if [ -r ${UPDATEDIR[$k]}/$RPMNAME.*.rpm ]
+				then
+					GOTIT=1
+					echo "Already got $j as $(ls ${UPDATEDIR[$k]}/$RPMNAME.*.rpm)"
+					break
+				fi
+			done
+			if [ "$GOTIT" = "0" ]
+			then
+				RPMLIST="$RPMLIST $j"
+			fi
+		else
+			RPMLIST="$RPMLIST $j"
+		fi
+	done
+done
+
+RPMLIST=$(echo $RPMLIST | sed 's/^ *//')
+
+if [ -z "$RPMLIST" ]
+then
+	logger -t xcat "Install: otherrpm dirs ${UPDATEDIR[*]} empty, exiting other RPMs"
+	exit
+fi
+
+logger -t xcat "Install: Installing RPMs from ${UPDATEDIR[*]}"
+
+rpm -iv $FORCE $NODEPS $RPMLIST 2>&1 | logger -t xcat
+
+exit 0
+

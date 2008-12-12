@@ -1,0 +1,33 @@
+#!/bin/ksh
+#egan@us.ibm.com
+#(C)IBM Corp
+#
+
+# make rc.local to check swap configuration and adjust it accordingly to the HDD type
+echo "" >> /etc/rc.local
+echo "
+# fix swap partitons in fstab if neccessary
+DISK=\$(basename \`/sbin/findfs LABEL=/\`)
+DISK=\$(echo \$DISK | sed -e 's/[0-9]*\$//')
+                                                                                          
+cp -f /etc/fstab /etc/fstab.ORIG
+cp -f /etc/fstab /etc/fstab.tmp
+for j in \$(cat /etc/fstab.ORIG | grep swap | awk '{print \$1}')
+do
+  #check if partition has a label
+  if [ \`echo \$j | grep \"LABEL\"\` ]
+  then
+    partname=\$(echo \$j | awk -F- '{print \$2}')
+  else
+    partname=\$(basename \$j)
+  fi
+  partnamenew=\${partname/#???/\$DISK}
+  sed -e \"s/\$partname/\$partnamenew/\" /etc/fstab.tmp > /etc/fstab
+  cp -f /etc/fstab /etc/fstab.tmp
+done
+mv -f /etc/fstab.tmp /etc/fstab
+/sbin/swapon -a
+" >> /etc/rc.local
+
+exit 0
+

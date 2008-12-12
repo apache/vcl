@@ -1,0 +1,67 @@
+;SetupMgrTag
+[Unattended]
+    OemSkipEula=Yes
+    OemPreinstall=Yes
+    InstallFilesPath=C:\sysprep\i386
+    TargetPath=\WINDOWS
+    DriverSigningPolicy=ignore
+    UpdateInstalledDrivers=no
+
+[GuiUnattended]
+    AdminPassword=*
+    EncryptedAdminPassword=NO
+    OEMSkipRegional=1
+    OEMDuplicatorstring="VCL project"
+    TimeZone=35
+    OemSkipWelcome=1
+
+[UserData]
+    ProductKey=WIN_XP_PRO_KEY
+    FullName="VCL"
+    OrgName="NCSU"
+    ComputerName=*
+
+[Display]
+    BitsPerPel=32
+    Xresolution=1024
+    YResolution=768
+    Vrefresh=75
+
+[Identification]
+    JoinWorkgroup=WORKGROUP
+
+[Networking]
+    InstallDefaultComponents=Yes
+
+[Branding]
+    BrandIEUsingUnattended=Yes
+
+[Proxy]
+    Proxy_Enable=0
+    Use_Same_Proxy=0
+
+[SysprepMassStorage]
+PCI\VEN_1000&DEV_0622 = "C:\Sysprep\Drivers\Storage\LSI-SAS\symmpi.inf"
+PCI\VEN_1000&DEV_0624 = "C:\Sysprep\Drivers\Storage\LSI-SAS\symmpi.inf"
+PCI\VEN_1000&DEV_0626 = "C:\Sysprep\Drivers\Storage\LSI-SAS\symmpi.inf"
+PCI\VEN_1000&DEV_0628 = "C:\Sysprep\Drivers\Storage\LSI-SAS\symmpi.inf"
+PCI\VEN_1000&DEV_0030 = "C:\Sysprep\Drivers\Storage\LSI-SAS\symmpi.inf"
+PCI\VEN_1000&DEV_0032 = "C:\Sysprep\Drivers\Storage\LSI-SAS\symmpi.inf"
+PCI\VEN_1000&DEV_0050 = "C:\Sysprep\Drivers\Storage\LSI-SAS\symmpi.inf"
+PCI\VEN_1000&DEV_0054 = "C:\Sysprep\Drivers\Storage\LSI-SAS\symmpi.inf"
+PCI\VEN_1000&DEV_0058 = "C:\Sysprep\Drivers\Storage\LSI-SAS\symmpi.inf"
+PCI\VEN_1000&DEV_0056 = "C:\Sysprep\Drivers\Storage\LSI-SAS\symmpi.inf"
+PCI\VEN_1000&DEV_0640 = "C:\Sysprep\Drivers\Storage\LSI-SAS\symmpi.inf"
+PCI\VEN_1000&DEV_0646 = "C:\Sysprep\Drivers\Storage\LSI-SAS\symmpi.inf"
+PCI\VEN_1000&DEV_0062 = "C:\Sysprep\Drivers\Storage\LSI-SAS\symmpi.inf"
+PCI\VEN_1000&DEV_0054&SUBSYS_1F041028 = "C:\Sysprep\Drivers\Storage\LSI-SAS\symmpi.inf"
+PCI\VEN_1000&DEV_0054&SUBSYS_1F051028 = "C:\Sysprep\Drivers\Storage\LSI-SAS\symmpi.inf"
+PCI\VEN_1000&DEV_0054&SUBSYS_1F061028 = "C:\Sysprep\Drivers\Storage\LSI-SAS\symmpi.inf"
+PCI\VEN_1000&DEV_0054&SUBSYS_1F071028 = "C:\Sysprep\Drivers\Storage\LSI-SAS\symmpi.inf"
+PCI\VEN_1000&DEV_0054&SUBSYS_1F081028 = "C:\Sysprep\Drivers\Storage\LSI-SAS\symmpi.inf"
+PCI\VEN_1000&DEV_0054&SUBSYS_1F091028 = "C:\Sysprep\Drivers\Storage\LSI-SAS\symmpi.inf"
+PCI\VEN_1000&DEV_0058&SUBSYS_1F0E1028 = "C:\Sysprep\Drivers\Storage\LSI-SAS\symmpi.inf"
+PCI\VEN_1000&DEV_0058&SUBSYS_1F0F1028 = "C:\Sysprep\Drivers\Storage\LSI-SAS\symmpi.inf"
+PCI\VEN_1000&DEV_0058&SUBSYS_1F101028 = "C:\Sysprep\Drivers\Storage\LSI-SAS\symmpi.inf"
+
+

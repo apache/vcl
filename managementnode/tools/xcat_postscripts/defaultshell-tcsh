@@ -1,0 +1,11 @@
+#!/bin/ksh
+
+logger -t xcat "Install: defaultshell-tcsh"
+mv /etc/default/useradd /etc/default/useradd.ORIG
+echo "# useradd defaults file" >> /etc/default/useradd
+echo "GROUP=100" >> /etc/default/useradd
+echo "HOME=/home" >> /etc/default/useradd
+echo "INACTIVE=-1" >> /etc/default/useradd
+echo "EXPIRE=" >> /etc/default/useradd
+echo "SHELL=/bin/tcsh" >> /etc/default/useradd
+echo "SKEL=/etc/skel" >> /etc/default/useradd

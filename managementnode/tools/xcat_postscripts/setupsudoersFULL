@@ -1,0 +1,5 @@
+#!/bin/ksh
+
+logger -t xcat "Install: setup sudoers"
+cp /etc/sudoers /etc/sudoers.ORIG
+echo "%ncsu   ALL = NOPASSWD: ALL" >> /etc/sudoers

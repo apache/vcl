@@ -1,0 +1,27 @@
+#!/bin/ksh
+#egan@us.ibm.com
+#(C)IBM Corp
+#
+
+. $XCATROOT/lib/functions
+
+logger -t xcat "Install: setting up hostname"
+
+HOSTNAME=$NODE
+
+case $OSVER in
+	sles[89]|suse8*|suse9*|suse10|ul*)
+		cp -f /etc/HOSTNAME /etc/HOSTNAME.ORIG
+		echo "$HOSTNAME" >/etc/HOSTNAME
+		;;
+	rh*)
+		cp -f /etc/sysconfig/network /etc/sysconfig/network.ORIG
+		perl -pi -e 's/^NETWORKING=.*\n//' /etc/sysconfig/network
+		perl -pi -e 's/^HOSTNAME=.*\n//' /etc/sysconfig/network
+		echo "NETWORKING=yes" >>/etc/sysconfig/network
+#		echo "HOSTNAME=$HOSTNAME" >>/etc/sysconfig/network
+		;;
+esac
+
+exit 0
+

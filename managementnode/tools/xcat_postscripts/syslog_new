@@ -1,0 +1,124 @@
+#!/bin/ksh
+#egan@us.ibm.com
+#(C)IBM Corp
+#
+
+. $XCATROOT/lib/functions
+
+HARD_SYSLOG=$1
+
+if [ -n "$HARD_SYSLOG" ]
+then
+	MASTER=$HARD_SYSLOG
+fi
+
+if [ -e /etc/syslog.conf ]
+then
+	mv -f /etc/syslog.conf /etc/syslog.conf.ORIG
+	echo "*.*	@$(getent hosts $MASTER | awk '{print $1}')" >/etc/syslog.conf
+	cp -f /etc/syslog.conf.ORIG /etc/syslog.conf.HPC
+	echo "*.warn	@$(getent hosts $MASTER | awk '{print $1}')" >>/etc/syslog.conf.HPC
+
+	case $OSVER in
+		sles[89]|suse8*|suse9*|suse10|ul*)
+			if grep 'SYSLOGD_PARAMS="-m0' /etc/sysconfig/syslog >/dev/null 2>&1
+			then
+				:
+			else
+				perl -pi -e 's/SYSLOGD_PARAMS="/SYSLOGD_PARAMS="-m0 /' /etc/sysconfig/syslog
+			fi
+			/etc/init.d/syslog restart
+			;;
+		rh*)
+			/etc/rc.d/init.d/syslog start
+			;;
+	esac
+	
+	logger -t xcat "Install: syslog setup"
+	
+	case $OSVER in
+		rhfc[45]*)
+			dhclientpath="/var/lib/dhclient/dhclient-eth0.leases"
+			;;
+		rh*)
+			dhclientpath="/var/lib/dhcp/dhclient-eth0.leases"
+			;;
+	esac
+	
+	# prepare to adjust syslog.conf to report to correct head-node in case of imaging
+	echo "" >> /etc/rc.local
+	echo "
+	if [ -x $dhclientpath ]
+	then
+	  cp -f /etc/syslog.conf.ORIG /etc/syslog.conf
+	  for i in \$(cat $dhclientpath | grep \"dhcp-server-identifier\" | awk '{print \$3}' | awk -F\\; '{print \$1}')
+	  do
+	    MYMASTER=\$i
+	  done
+	  echo \"*.warn    @\$MYMASTER\" >> /etc/syslog.conf
+	else
+	  mv -f /etc/syslog.conf.HPC /etc/syslog.conf
+	fi
+	/etc/rc.d/init.d/syslog restart
+	
+	" >> /etc/rc.local
+elif [ -e /etc/rsyslog.conf ]
+then
+logger -t xcat "Install: rsyslog setup"
+cp -f /etc/rsyslog.conf /etc/rsyslog.conf.ORIG
+echo "*.*       @$(getent hosts $MASTER | awk '{print $1}')" >>/etc/rsyslog.conf
+cp -f /etc/rsyslog.conf.ORIG /etc/rsyslog.conf.HPC
+echo "*.warn    @$(getent hosts $MASTER | awk '{print $1}')" >>/etc/rsyslog.conf.HPC
+
+case $OSVER in
+        sles[89]|suse8*|suse9*|suse10|ul*)
+                if grep 'SYSLOGD_PARAMS="-m0' /etc/sysconfig/rsyslog >/dev/null 2>&1
+                then
+                        :
+                else
+                        perl -pi -e 's/SYSLOGD_PARAMS="/SYSLOGD_PARAMS="-m0 /' /etc/sysconfig/rsyslog
+                fi
+                /etc/init.d/rsyslog restart
+                ;;
+        rh*)
+                /etc/rc.d/init.d/rsyslog restart
+                ;;
+esac
+
+
+case $OSVER in
+        rhfc[9]*)
+                dhclientpath="/var/run/dhclient-eth0.lease"
+                ;;
+        rhfc[45]*)
+                dhclientpath="/var/lib/dhclient/dhclient-eth0.leases"
+                ;;
+        rh*)
+                dhclientpath="/var/lib/dhcp/dhclient-eth0.leases"
+                ;;
+esac
+
+# prepare to adjust syslog.conf to report to correct head-node in case of imaging
+echo "" >> /etc/rc.local
+echo "
+if [ -x $dhclientpath ]
+then
+  cp -f /etc/rsyslog.conf.ORIG /etc/rsyslog.conf
+  for i in \$(cat $dhclientpath | grep \"dhcp-server-identifier\" | awk '{print \$3}' | awk -F\\; '{print \$1}')
+   do
+    MYMASTER=\$i
+  done
+  echo \"*.*    @\$MYMASTER\" >> /etc/rsyslog.conf
+else
+  mv -f /etc/rsyslog.conf.HPC /etc/rsyslog.conf
+fi
+/etc/init.d/rsyslog restart
+
+" >> /etc/rc.local
+
+else
+	echo "syslog or rsyslog conf not found"
+fi	
+
+exit 0
+

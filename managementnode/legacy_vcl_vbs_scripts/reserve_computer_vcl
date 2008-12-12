@@ -1,0 +1,275 @@
+#! /bin/sh
+if [ "$#" -lt 3 ]
+then
+  echo "Not enough parameters!"
+  echo "Usage: ./reserve_computer <machine_name> <user_name> <user_password>"
+  echo "     example: ./reserve_computer vcla1-7 guest RT56ij"
+  exit 0
+fi
+
+name=$1
+len=`expr length $name`
+pos=`expr index "$name" -`
+num=${name:$pos:$len}
+num=`expr $num + 20`
+wanip=152.1.14.$num
+
+echo -e "\nWorking...."
+
+# check if <machine_name> is valid
+if [ -z "`nodels | grep -w $1`" ]
+then
+   echo -e "\nERROR : '$1' - there is no such machine!"
+   echo -e "Nothing can be done! Exit.\n"
+   exit 1
+else
+   echo "Check: Machine '$1' exists. Good!"
+fi
+
+# check if machine is ON
+if [ "`rpower $1 stat | grep -w on`" ]
+then
+   echo "Check: Machine '$1' is ON. Good!"
+else
+   if [ "`rpower $1 stat | grep -w off`" ]
+   then
+      echo -e "\nERROR: Machine '$1' is OFF!"
+   else
+      echo -e "\nERROR: Cannot determine whether '$1' is ON or OFF!"
+      echo "ERROR INFO: (result of 'rpower $1 stat'): `rpower $1 stat`"
+   fi
+   echo -e "Nothing can be done! Exit.\n"
+   exit 1
+fi
+
+# check if machine IS on local network
+if [ "`pping $1 | grep -w noping`" ]
+then
+   echo -e "\nERROR: Machine '$1' is NOT on local network!"
+   echo "ERROR INFO: (result of 'pping $1'): `pping $1`"
+   echo -e "Nothing can be done! Exit.\n"
+   exit 1
+else
+   echo "Check: Machine '$1' IS on local network. Good!"
+fi
+
+# check if machine is available 
+# i.e. NOT in the middle of something (like creating image, re-loading OS, etc.)
+
+case $( nodeset $1 stat | gawk 'split($0, a, " ") {print a[2]}' ) in
+install )
+   echo -e "\nERROR: Machine '$1' is in the middle of re-loading OS!"
+   echo "ERROR INFO: (result of 'nodeset $1 stat'): `nodeset $1 stat`"
+   echo "Please try again later."
+   echo -e "Exit. Nothing was done!\n"
+   exit 1
+   ;;
+image )
+   echo -e "\nERROR: Machine '$1' is in the middle of creating image of OS!"
+   echo "ERROR INFO: (result of 'nodeset $1 stat'): `nodeset $1 stat`"
+   echo "Please try again later."
+   echo -e "Exit. Nothing was done!\n"
+   exit 1
+   ;;
+boot )
+   echo "Check: Machine '$1' is available. Good!" ;;
+* )
+   echo -e "\nERROR: Machine '$1' is in UKNOWN state!"
+   echo "ERROR INFO: (result of 'nodeset $1 stat'): `nodeset $1 stat`"
+   echo -e "Nothing can be done! Exit.\n"
+   exit 1
+   ;;
+esac
+
+# check if machine is accessible
+if [ -z "`psh $1 uname -r`" ]
+then
+   echo -e "\nERROR: Machine '$1' is NOT accessible!"
+   echo "ERROR INFO: possibly SSH deamon is NOT running on '$1'"
+   echo -e "Nothing can be done! Exit.\n"
+   exit 1
+else
+   echo "Check: Machine '$1' is accessible. Good!"
+fi
+
+# determine what OS 
+os=`ssh $1 uname -s`
+if [ $os == "CYGWIN_NT-5.1" ]
+then
+   os="WinXP"
+fi
+if [ $os == "CYGWIN_NT-5.2" ]
+then
+   os="Win2003"
+fi
+ver=`ssh $1 uname -r`
+
+case $os in
+Linux ) 
+   echo "Check: Machine '$1' is Linux machine ($ver). Good" ;;
+WinXP )
+   echo "Check: Machine '$1' is WindowsXP machine. Good." ;;
+Win2003 )
+   echo "Check: Machine '$1' is Windows2003 machine. Good." ;;
+*     ) 
+   echo "ERROR: Cannot determine OS of '$1'!"
+   echo "ERROR INFO: (result of 'ssh $1 uname -s'): `ssh $1 uname -s`"
+   exit 1
+   ;;
+esac
+
+#if [ $os == "Linux" ]
+#then
+#   echo -e "\nThis script temporarily works only with Windows machines. Sorry!"
+#   echo -e "Exit. Nothing was done!\n"
+#   exit 0
+#fi
+
+# check if <user_name> already exists on this machine
+if [[ $os == "Win2003" || $os == "WinXP" ]]
+then
+   if [ -z "`ssh $1 ls | grep -w list_users.vbs`" ]
+   then
+      echo -e "\nERROR: missing script: 'list_users.vbs'"
+      echo "ERROR: cannot continue! Exit."
+      exit 1
+   fi
+fi
+
+user_already_exists="no"
+if [[ $os == "Win2003" || $os == "WinXP" ]]
+then
+# Windows
+   if [ -n "`ssh $1 cscript.exe //Nologo list_users.vbs | grep -w $2`" ]
+   then
+      user_already_exists="yes"
+   fi
+else
+# Linux
+   if [ -n "`ssh $1 cat /etc/passwd | grep -w $2`" ]
+   then
+      user_already_exists="yes"
+   fi
+fi
+# create user if new
+if [ $user_already_exists == "yes" ]
+then
+   echo -e "\nWARNING: user '$2' already exists on $1 !"
+   echo "WARNING: Assuming that password is known."
+   echo "Do you want just enable WAN network interface? (y or n)"
+   read ans
+   if [ $ans != "y" ]
+   then
+      echo -e "Exit. Nothing was done!\n"
+      exit 0
+   fi
+else
+   if [[ $os == "Win2003" || $os == "WinXP" ]]
+   then
+# Windows
+      ssh $1 cscript.exe //Nologo add_user.vbs $2 $3
+   else
+# Linux
+      ssh $1 "adduser $2" > /dev/null
+      ssh $1 "echo $3 | passwd $2 --stdin" > /dev/null
+   fi
+fi
+
+# check if <user_name> exists NOW on this machine
+user_now_exists="yes"
+if [[ $os == "Win2003" || $os == "WinXP" ]]
+then
+# Windows
+   if [ -z "`ssh $1 cscript.exe //Nologo list_users.vbs | grep -w $2`" ]
+   then
+      user_now_exists="no"
+   fi
+else
+# Linux
+   if [ -z "`ssh $1 cat /etc/passwd | grep -w $2`" ]
+   then
+      user_now_exists="no"
+   fi
+fi
+if [ $user_now_exists == "yes" ]
+then
+   echo "Check: User '$2' exists now. Good!"
+else
+   echo -e "\nERROR: Could NOT create user '$2'!"
+#   echo "ERROR INFO: check 'add_user.vbs' script."
+   echo -e "\n Cannot continue! Exit.\n"
+   exit 1
+fi
+
+# Enable WAN interface
+#echo -n "Enabling WAN interface..."
+if [[ $os == "Win2003" || $os == "WinXP" ]]
+then
+# Windows
+   if [ -z "`ssh $1 ls | grep -w enWAN.vbs`" ]
+   then
+      echo -e "\nERROR: Missing script: 'enWAN.vbs'"
+      echo "ERROR: Cannot continue! Exit."
+      exit 1
+   fi
+   ssh $1 cscript.exe //Nologo enWAN.vbs
+else
+# Linux
+   if [ -n "`ssh $1 ifconfig | grep -w $wanip`" ]
+   then
+      echo "WAN is already enabled!"
+   else
+      touch ifcfg-eth1.tmp
+      for ln in `ssh $1 cat /etc/sysconfig/network-scripts/ifcfg-eth1`
+      do
+         if [ -n "`echo $ln | grep -w ONBOOT`" ]
+         then
+            echo "ONBOOT=yes" >> ifcfg-eth1.tmp
+         else
+            echo $ln >> ifcfg-eth1.tmp
+         fi
+      done
+      scp -q ifcfg-eth1.tmp $1:/etc/sysconfig/network-scripts/ifcfg-eth1 > /dev/null
+      psh $1 "service network restart" > /dev/null
+      rm -f ifcfg-eth1.tmp
+   fi
+fi
+#echo ""
+
+# check if WAN was actually enabled
+if [[ $os == "Win2003" || $os == "WinXP" ]]
+then
+   if [ -z "`ssh $1 ipconfig | grep -w $wanip`" ]
+   then
+      echo -e "\nERROR: Cannot ping WAN interface ($wanip)!"
+      echo -e "ERROR: Cannot continue! Exit.\n"
+      exit 1
+   fi
+fi
+if [ $os == "Linux" ]
+then
+   if [ -z "`ssh $1 ifconfig | grep -w $wanip`" ]
+   then
+      echo -e "\nERROR: Cannot ping WAN interface ($wanip)!"
+      echo -e "ERROR: Cannot continue! Exit.\n"
+      exit 1
+   fi
+fi
+
+echo -e "Check: WAN interface is enabled now. Good!\n"
+
+if [ -z $ans ]
+then
+   echo -e "\n User '$2' was created on machine '$1'."
+fi
+echo " Machine '$1' is ON-LINE now."
+if [[ $os == "Win2003" || $os == "WinXP" ]]
+then
+   echo " You can access '$1' machine using Remote Desktop client"
+else
+   echo " You can access '$1' machine using SSH client"
+fi
+echo " (use it's name: '$1.hpc.ncsu.edu' OR use it's IP address: '$wanip')."
+echo " NOTE: to log in use your name and password you provided to this script."
+echo ""
+

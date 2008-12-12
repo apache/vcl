@@ -1,0 +1,134 @@
+           Virtual Computing Laboratory
+   North Carolina State University, Raleigh, NC 27695, USA
+   2004-2007 by NC State University. All Rights Reserved.
+                  http://vcl.ncsu.edu
+
+                INSTALLATION: V3/Jun07
+
+Please read the README file.
+For use license and copyright information see LICENSE and COPYRIGHT files.
+
+
+3 directories web, mysql, managementnode
+
+prerequisites:
+for single server environment.
+Linux Host - tested RH Enterprise/Advanced Server 4
+ - apache httpd with SSL configured
+ - mysql 5.X with SSL configured
+ - PHP 5.X with php-mcrypt module
+ - Perl 5.8
+
+ - DHCP (The dhcp service is should be running on a private network.
+   This is needed to statically assign addresses to the machines.)
+        
+         
+ NOTE: from the redhat install CD it's easiest to select the install everything
+ option. With RH package selection, select "Custom", then scroll down to
+ the bottom and select "Everything".
+
+ If using xCAT <xcat.org>
+ - see install documentation http://xcat.org/doc
+
+VCL is orginally developed in a blade environment using IBM blades and
+xcat.
+ 
+The blade configuration is using:
+BladeCenter chassis
+two network Layer 2/3 Copper GigE switch modules
+HS21 blades
+
+The blades have two network adapters, eth0,eth1
+eth0 ideally should be on private network so as to not allow pxe booting
+on public or internal campus network.
+ 
+In a single blade chassis environment a public switch is needed. For
+multiple chassis's two switches are needed:
+one public
+one for interconnecting chassis on private network.
+
+******* WARNING *********
+Detailed documentation is still in progress, the below steps should be enough to
+get started.
+************************
+
+
+Importing/configuring database and web application:
+
+1) create a database in mysql named vcl
+   (CREATE DATABASE vcl;)
+2) create a user with SELECT, INSERT, UPDATE, and DELETE privileges on the database from #1
+   (GRANT SELECT,INSERT,UPDATE,DELETE ON vcl.* TO '<insert user here>'@'localhost' IDENTIFIED BY '<insert pwd here>';)
+3) import mysql/vcl.sql file into database
+   (mysql vcl < vcl.sql)
+4) copy web somewhere under webroot
+   (cp -R web /var/www/html/vcl)
+5) modify vcl/.ht-inc/secrets.php to match your database setup; also create random passwords for $mcryptkey, $mcryptiv, and $pemkey
+6) run the genkeys.sh script from within vcl/.ht-inc and give it $pemkey from secrets.php as the passphrase (3 times)
+7) modify vcl/.ht-inc/conf.php to match your site
+8) download jpgraph from http://www.aditus.nu/jpgraph/jpdownload.php
+	if you are using PHP5, download the 2.x series, extract it, and copy the src directory from it to vcl/.ht-inc/jpgraph
+	if you are using PHP4, download the 1.x series, extract it, and copy the src directory from it to vcl/.ht-inc/jpgraph.old
+9) download version 0.4.0 of Dojo Toolkit: http://download.dojotoolkit.org/release-0.4.0/dojo-0.4.0-ajax.tar.gz
+	extract it under the vcl directory and rename "dojo-0.4.0-ajax" to "dojoAjax"
+10) download version 1.1.0 of Dojo Toolkit: http://download.dojotoolkit.org/release-1.1.0/dojo-release-1.1.0.tar.gz
+	extract it under the vcl directory and rename "dojo-release-1.1.0" to "dojo"
+11) if you want to be able to edit any of the documentation that comes bundled with the vcl web code, download fckeditor from http://www.fckeditor.net/download
+	extract it under the vcl directory
+12) open a browser and go to the URL you set up; use 'admin' as the user and 'adminVc1passw0rd' as the password
+13) click the "Management Nodes" link
+14) enter the hostname and IP of your management node
+15) click Add
+16) click Submit
+17) click the "Management Nodes" link
+18) select "Edit Management Node Grouping"
+19) click Submit
+20) select the checkbox for your management node
+21) click Submit
+22) click "Manage Computers"
+23) click the 'Add' button
+24) fill in Hostname, IP Address, RAM, Proc Speed, Network Speed, select "blade" for Type, select "xCAT 1.x Provisioning" for "Provisioning Engine", and click the checkbox under "allcomputers", and "newimages"
+	Note: if using using vmware, select "virtualmachine" for Type and "VMWare Server Provisioning" for "Provisioning Engine"
+25) click Confirm
+26) click Submit (don't worry about the fact that the computer you just added isn't listed)
+27) after you've configured your image library and your management node has started checking in, you should be able to make a reservations
+
+Management node - vcld
+28) To install the perl code extract the vcl.tar.gz , any
+location should be fine (/usr/local/, /root, ... etc)
+29) cd to the lib directory /PATH/vcl/lib/VCL
+30) copy configuration directory file to /etc: cp -r <PATH>/vcl/etc/vcl /etc
+31) modify /etc/vcl/vcld.conf
+    at a minimum you'll need to add the database information:
+    database,server,User,user's password
+32) Modify the startup script. S99vcld.linux to include the installation
+path.
+33) run the S99vcld.linux script i.e. S99vcld.linux start
+34) drivers for loading Windows images onto different hardware than they were created on can be extracted under the Drivers directory of each Sysprep type under the tools directory
+
+
+Image creation:
+The images listed in the VCL menu are only placeholders.
+Images/Environments need to be created.
+For information on creating images, please visit:
+http://vcl.ncsu.edu/node/16
+
+
+Adding extra local accounts
+There's not currently a tool for this.  You will need to add entries directly to the database.
+1) add entry to user table
+INSERT INTO user (unityid, firstname, lastname, email, lastupdated) VALUES ('myusername', 'myfirstname', 'mylastname', 'myemailaddr', NOW());
+2) find out the id generated for that user
+SELECT id, unityid FROM user WHERE unityid = 'myusername';
+3) add entry to the localauth table
+INSERT INTO localauth (userid, salt, passhash, lastupdated) VALUES ('place1', 'place2', 'place3', NOW())
+with place1 = id from step 2
+     place2 = an 8 char random string
+	  place3 = sha1sum( desired password with place2 stuck on the end )
+	           this can be generated under linux like this (using 'thedog' as the password and 11111111 as place2):
+				     echo -n 'thedog11111111' | sha1sum
+
+Adding LDAP authentication
+1) fill in the necessary information in vcl/.ht-inc/conf.php
+2) modify the user table in the vcl database and change the 'vcladmin' user's information to match information of the main site admin
+3) uncomment the 'require_once(".ht-inc/authmethods/ldapauth.php");' line in in vcl/.ht-inc/cconf.php

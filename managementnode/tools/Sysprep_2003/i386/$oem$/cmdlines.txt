@@ -1,0 +1,5 @@
+[Commands]
+"cmd /c C:\WINDOWS\regedit.exe /s nodyndns.reg"
+"cmd /c wsname.exe /N:%DNS /MCN"
+"cmd /c C:\WINDOWS\system32\ping.exe 1.1.1.1 -n 1 -w 5000 > NUL"
+"cmd /c C:\WINDOWS\system32\cscript.exe setautologon.vbs"

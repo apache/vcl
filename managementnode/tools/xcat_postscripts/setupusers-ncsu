@@ -1,0 +1,4 @@
+#!/bin/ksh
+
+logger -t xcat "Install: adding user(s)"
+groupadd ncsu
