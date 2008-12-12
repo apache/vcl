@@ -1,0 +1,14 @@
+#!/bin/bash
+
+# Run perltidy
+find ../../ -regex '.*lib/VCL.*\.p[lm]$\|.*bin/vcld$\|.*bin/.*\.p[lm]$' \
+ -exec echo --------------------------- \; \
+ -exec echo Processing {}... \; \
+ -exec perl -I ../../lib ./perltidy -pro=./.perltidyrc -b {} \; \
+
+# Clear out old log and bak directories
+rm -f ./log/*
+rm -f ./bak/*
+
+find ../../ -regex '.*lib/VCL.*\.LOG\|.*bin/.*\.LOG' -exec mv {} ./log \;
+find ../../ -regex '.*lib/VCL.*\.bak\|.*bin/.*\.bak' -exec mv {} ./bak \;

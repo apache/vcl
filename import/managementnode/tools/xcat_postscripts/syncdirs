@@ -1,0 +1,61 @@
+#!/bin/ksh
+#egan@us.ibm.com
+#(C)IBM Corp
+#
+
+. $XCATROOT/lib/functions
+
+#OTHER_DIR=$1
+
+#if [ -n "OTHER_DIR" ]
+#then
+#        OTHERS=$OTHER_DIR
+#fi
+
+
+RESNAME=$(whatismyres2 $NODE)
+
+if [ "$RESNAME" = "$NODE" ]
+then
+	RESNAME=""
+fi
+
+NODETYPE=$(tabdb $NODETYPETAB $NODE 3)
+
+GROUPS="$(
+	egrep "^$NODE( |	|$)" $NODELISTTAB | \
+	head -1 | \
+	awk '{print $2}' | \
+	tr ',' ' '
+)"
+
+echo $ARCH | perl -pi -e "if(/^i.86$/) {exit 0} else {exit 1}"
+if [ "$?" = "0" ]
+then
+        ARCH=x86
+fi
+                                                                                                         
+#for i in $OSVER/$ARCH $OSVER/noarch $ARCH $NODETYPE $RESNAME $GROUPS $NODE $*
+for i in $OSVER/$ARCH $OSVER/noarch $ARCH $NODETYPE $GROUPS $NODE $*
+do
+	newi=$(echo $i | tr '/' '-')
+	if [ -d /post/sync/$i ]
+	then
+		logger -t xcat "Install: copying /post/sync/$i to /"
+		if cd /post/sync/$i
+		then
+			pwd | logger -t xcat
+			for j in $(find . -type f -print)
+			do
+				if [ -r /$j ]
+				then
+					cp -f /$j /${j}.${newi}.ORIG 2>&1 | logger -t xcat
+				fi
+			done
+			find . -print | cpio -dump / 2>&1 | logger -t xcat
+		fi
+	else
+		logger -t xcat "Install: not syncing from $i"
+	fi
+done
+

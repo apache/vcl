@@ -1,0 +1,11 @@
+#!/bin/ksh
+#egan@us.ibm.com
+#(C)IBM Corp
+#
+
+logger -t xcat "Install: Setup NTP"
+
+mkdir -p /etc/ntp
+chown ntp /etc/ntp
+
+# /etc/ntp.conf will be copied from "sync" directory

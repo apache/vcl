@@ -1,0 +1,107 @@
+#!/bin/ksh
+#egan@us.ibm.com
+#(C)IBM Corp
+#
+
+if [ -z "$XCATROOT" ]
+then
+	if [ -r /etc/sysconfig/xcat ]
+	then
+		. /etc/sysconfig/xcat
+	else
+		if [ -r /etc/rc.config ]
+		then
+			. /etc/rc.config
+		fi
+	fi
+fi
+
+if [ -z "$XCATROOT" ]
+then
+	if [ -r "$(dirname $0)/../lib/xcatroot" ]
+	then
+		. $(dirname $0)/../lib/xcatroot
+	fi
+fi
+
+if [ -z "$XCATROOT" ]
+then
+	echo "$(basename $0): env XCATROOT not defined!" >&2
+	exit 1
+fi
+
+if [ ! -d "$XCATROOT" ]
+then
+	echo "$(basename $0): XCATROOT $XCATROOT does not exist!" >&2
+	exit 1
+fi
+
+. $XCATROOT/lib/functions
+
+#
+# Hardcode eth0
+#
+logger -t xcat "Install: setting up eth0"
+IP0=$(ifconfig eth0 | grep inet | awk '{print $2}' | awk -F: '{print $2}')
+BC0=$(ifconfig eth0 | grep inet | awk '{print $3}' | awk -F: '{print $2}')
+SM0=$(ifconfig eth0 | grep inet | awk '{print $4}' | awk -F: '{print $2}')
+cd /etc/sysconfig/network-scripts
+cp ifcfg-eth0 ../ORIG.ifcfg-eth0
+echo "DEVICE=eth0
+BOOTPROTO=none
+ONBOOT=yes
+USERCTL=no
+IPADDR=$IP0
+BROADCAST=$BC0
+NETMASK=$SM0" >ifcfg-eth0
+                                                                                          
+#mv /etc/resolv.conf /etc/resolv.conf.ORIG
+#echo "search $DNSDOMAIN" >/etc/resolv.conf
+#for i in $(echo $NAMESERVERS | tr ',' ' ')
+#do
+#        echo "nameserver $i"
+#done >>/etc/resolv.conf
+                                                                                          
+HOSTNAME=$(host $IP0 2>/dev/null | awk '{print $5}' | awk -F. '{print $1}')
+cp /etc/sysconfig/network /etc/sysconfig/network.ORIG
+echo "NETWORKING=yes
+HOSTNAME=$HOSTNAME
+GATEWAYDEV=eth1
+GATEWAY=X.X.X.X" >/etc/sysconfig/network
+
+if [ "$NISDOMAIN" != "NA" ]
+then
+        echo "NISDOMAIN=$NISDOMAIN" >>/etc/sysconfig/network
+fi
+                                                                                          
+#
+# Setup eth1
+#
+logger -t xcat "Install: setting up eth1"
+IP1=$(ifconfig eth0 | grep inet | awk '{print $2}' | awk -F: '{print $2}' | awk -F. '{print $1.$2.$3.$4}')
+BC1=X.X.X.X
+SM1=255.255.255.0
+cd /etc/sysconfig/network-scripts
+cp ifcfg-eth1 ../ORIG.ifcfg-eth1
+echo "DEVICE=eth1
+BOOTPROTO=none
+ONBOOT=yes
+USERCTL=no
+IPADDR=$IP1
+BROADCAST=$BC1
+NETMASK=$SM1" >ifcfg-eth1
+                                                                                          
+chmod 755 ifcfg-eth*
+                                                                                          
+#
+# Setup hosts
+#
+echo "Install: setting up /etc/hosts"
+echo "127.0.0.1 localhost
+                                                                                          
+$IP0    $HOSTNAME       $HOSTNAME.$DOMAIN
+$MIP    $MASTER         $MASTER.$DOMAIN" >/etc/hosts
+                                                                                          
+exit 0
+
+

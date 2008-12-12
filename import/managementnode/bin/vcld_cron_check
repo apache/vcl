@@ -1,0 +1,13 @@
+#!/bin/bash
+##############################################################################
+# $Id: vcld_cron_check 1951 2008-12-12 13:48:10Z arkurth $
+##############################################################################
+
+email=
+if ! /etc/init.d/vcld.start status &> /dev/null; then
+   if /etc/init.d/vcld.start start &> /dev/null; then
+  	 echo "restarted vcld on `hostname`" |mail -s "vcld restarted" $email 
+   else
+	echo "restart of vcld failed on `hostname`" |mail -s "vcld restart failed" $email
+   fi
+fi

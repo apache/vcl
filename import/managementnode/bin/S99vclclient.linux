@@ -1,0 +1,78 @@
+#!/bin/bash
+##############################################################################
+# $Id: S99vclclient.linux 1951 2008-12-12 13:48:10Z arkurth $
+##############################################################################
+
+# path to the daemon, no trailing '/'
+DAEMON_PATH=
+# name of the daemon executable
+DAEMON=
+# any options for the daemon, these can be overridden by setting DAEMON_OPTIONS
+# in /etc/sysconfig/$DAEMON, probably want to enclose them in ' marks
+DAEMON_OPTIONS=
+
+
+# don't need to edit anything below here
+# --------------------------------------------------------------------
+
+# Source function library.
+. /etc/init.d/functions
+
+[ -f $DAEMON_PATH/$DAEMON ] || exit 0
+
+# Source config
+if [ -f /etc/sysconfig/$DAEMON ] ; then
+	. /etc/sysconfig/$DAEMON
+fi
+
+RETVAL=0
+
+umask 077
+
+start() {
+ 	echo -n $"Starting $DAEMON daemon: "
+	daemon $DAEMON_PATH/$DAEMON $DAEMON_OPTIONS
+	RETVAL=$?
+	echo
+	[ $RETVAL -eq 0 ] && touch /var/lock/subsys/$DAEMON
+	return $RETVAL
+}	
+stop() {
+	echo -n $"Shutting down $DAEMON daemon: "
+	killproc $DAEMON_PATH/$DAEMON
+	RETVAL=$?
+	echo
+	[ $RETVAL -eq 0 ] && rm -f /var/lock/subsys/$DAEMON
+	return $RETVAL
+}
+_status() {
+	status $DAEMON
+}
+restart() {
+	stop
+	start
+}	
+
+case "$1" in
+  start)
+  	start
+	;;
+  stop)
+  	stop
+	;;
+  status)
+  	_status
+	;;
+  restart|reload)
+  	restart
+	;;
+  condrestart)
+  	[ -f /var/lock/subsys/$DAEMON ] && restart || :
+	;;
+  *)
+	echo $"Usage: $0 {start|stop|status|restart|condrestart}"
+	exit 1
+esac
+
+exit $?
+

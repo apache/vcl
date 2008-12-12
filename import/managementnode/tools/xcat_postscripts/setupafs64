@@ -1,0 +1,5 @@
+#!/bin/ksh
+
+logger -t xcat "Install: configuring afs"
+perl -pi -e 's/pam_krb5.so/pam_krb5afs.so/' /etc/pam.d/system-auth
+perl -pi -e 's/(OPTIONS=.*)/OPTIONS="\$MEDIUM -nosettime"/' /etc/sysconfig/openafs

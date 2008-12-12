@@ -1,0 +1,186 @@
+#! /bin/sh
+if [ "$#" -lt 1 ]
+then
+#  echo "Not enough parameters!"
+  echo ""
+  echo "Usage: ./virt_lab_status all | <blade-range> "
+  echo "    examples: ./virt_lab_status all"
+  echo "              ./virt_lab_status vcla1-3"
+  echo "              ./virt_lab_status vcla1-3,vcla1-5"
+  echo ""
+  exit 0
+fi
+
+group=vcla1
+if [ $1 != "all" ]
+then
+  group=$1
+fi
+
+# initializing data arrays
+for ((i=1; i < 15 ; i++))
+do
+  blade_power_status[$i]="off"
+  blade_status[$i]="N/A"
+  blade_sshd_status[$i]="OFF"
+  blade_os[$i]="N/A    "
+  blade_wan_status[$i]="N/A"
+done
+
+#echo -e "Working...\n"
+echo -en "\nCollecting information."
+
+#power_status="`rpower blades1 stat`"
+power_status="`rpower $group stat`"
+for pw in $power_status
+do
+#   if [ -n "`echo $pw | grep blade`" ]
+   if [ -n "`echo $pw | grep vcla`" ]
+   then
+      ind="`echo $pw | gawk 'split($0, a, "-") {print a[2]}' | gawk 'split($0, a, ":") {print a[1]}'`"
+#      echo -en "$ind "
+   else
+      blade_power_status[$ind]=$pw
+#      echo $pw
+   fi
+done
+
+echo -n "."
+
+#status="`nodeset blades1 stat`"
+status="`nodeset $group stat`"
+skip=0
+for st in $status
+do
+#   if [ -n "`echo $st | grep blade`" ]
+   if [ -n "`echo $st | grep vcla`" ]
+   then
+      ind="`echo $st | gawk 'split($0, a, "-") {print a[2]}' | gawk 'split($0, a, ":") {print a[1]}'`"
+#      echo -en "$ind "
+      skip=0
+   else
+      if [ $skip == "0" ]
+      then
+        blade_status[$ind]=$st
+#        echo $st
+        skip=1
+      else
+        skip=0
+      fi
+   fi
+done
+
+echo -n "."
+
+#sshd_status="`psh blades1 uname -s`"
+sshd_status="`psh $group uname -s`"
+for ss in $sshd_status
+do
+#   if [ -n "`echo $ss | grep blade`" ]
+   if [ -n "`echo $ss | grep vcla`" ]
+   then
+      ind="`echo $ss | gawk 'split($0, a, "-") {print a[2]}' | gawk 'split($0, a, ":") {print a[1]}'`"
+#      echo -en "$ind "
+   else
+      if [ $ss == "noping" ]
+      then
+         blade_sshd_status[$ind]="N/A"
+      else
+         os=$ss
+         case $os in
+            CYGWIN_NT-5.1 )
+               os="WinXP" ;;
+            CYGWIN_NT-5.2 )
+               os="Win2003" ;;
+            Linux )
+               os="Linux" ;;
+            * )
+               os="Unknown" ;;
+         esac
+         blade_os[$ind]=$os
+         blade_sshd_status[$ind]="on"
+      fi
+#      echo "ss=$ss"
+   fi
+done
+
+echo -n "."
+
+touch wan.tmp
+#wan_status="`psh $group ipconfig; psh $group ifconfig`"
+psh $group ipconfig >> wan.tmp
+psh $group ifconfig >> wan.tmp
+blade_list="`nodels $group`"
+for bl in $blade_list
+do
+   i="`echo $bl | gawk 'split($0, a, "-") {print a[2]}' | gawk 'split($0, a, ":") {print a[1]}'`"
+   if [ ${blade_sshd_status[$i]} != "OFF" ]
+   then
+   num=`expr $i + 20`
+   wanip=152.1.14.$num
+   wanst="`cat wan.tmp | grep -w $wanip`"
+#   if [ -z "`echo $wan_status | grep -w $wanip`" ] 
+#   echo "wanst = $wanst"
+   if [ -z $wanst ] 
+   then
+      if [ ${blade_power_status[$i]} != "off" ]
+      then
+         blade_wan_status[$i]="$wanip:off"
+      fi
+   else
+      blade_wan_status[$i]="$wanip:ON"
+   fi
+   fi
+done
+rm -f wan.tmp
+
+echo -e ".\n"
+
+# for testing only
+#for ((i=1; i < 15 ; i++))
+#do
+#  echo "blade_power_status[$i]=${blade_power_status[$i]}"
+#  echo "blade_status[$i]=${blade_status[$i]}"
+#  echo "blade_sshd_status[$i]=${blade_sshd_status[$i]}"
+#  echo "blade_os[$i]=${blade_os[$i]}"
+#  echo "blade_wan_status[$i]=${blade_wan_status[$i]}"
+#  echo "================="
+#done
+#exit 0
+
+echo -e "Name\t       Power   Status          SSHD      OS            WAN <IP>:<status>"
+echo "================================================================================="
+#blade_list="`nodels $group`"
+#blade_list="`nodels $group | sort --key=1.8,1.9 -n`" -- good for names "blade"
+blade_list="`nodels $group | sort --key=1.7,1.8 -n`"
+for bl in $blade_list
+do
+   ind="`echo $bl | gawk 'split($0, a, "-") {print a[2]}' | gawk 'split($0, a, ":") {print a[1]}'`"
+   echo -en "$bl" 
+# Power?
+   echo -en " \t${blade_power_status[$ind]}"
+# Status?
+   echo -en "\t${blade_status[$ind]}"
+# SSHD is running?
+   echo -en "\t\t${blade_sshd_status[$ind]}"
+# OS?
+   echo -en "\t${blade_os[$ind]}   "
+# WAN status?
+   echo -en "\t${blade_wan_status[$ind]}"
+   echo ""
+done
+echo ""
+exit 0
+
+# check if machine IS on local network
+#if [ "`pping $1 | grep -w noping`" ]
+#then
+#   echo -e "\nERROR: Machine '$1' is NOT on local network!"
+#   echo "ERROR INFO: (result of 'pping $1'): `pping $1`"
+#   echo -e "Nothing can be done! Exit.\n"
+#   exit 1
+#else
+#   echo "Check: Machine '$1' IS on local network. Good!"
+#fi
+
+

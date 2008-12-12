@@ -1,0 +1,23 @@
+#!/bin/bash
+##############################################################################
+# $Id: search-replace 1951 2008-12-12 13:48:10Z arkurth $
+##############################################################################
+# This shell script searches and replaces a string in all of the files under
+# the path specified.
+if [ $# -ne 3 ]
+then
+  echo "Usage: $0 SEARCH_PATTERN REPLACE_PATTERN SEARCH_PATH"
+  exit 1
+fi
+
+SEARCH_PATTERN=$1
+REPLACE_PATTERN=$2
+SEARCH_PATH=$3
+
+echo Replacing $SEARCH_PATTERN with $REPLACE_PATTERN in all files under $SEARCH_PATH
+for FILEPATH in `grep -r -l $SEARCH_PATTERN $SEARCH_PATH | grep -v svn` 
+do
+  echo "replacing $SEARCH_PATTERN with $REPLACE_PATTERN in $FILEPATH" 
+  sed -i -e "s/$SEARCH_PATTERN/$REPLACE_PATTERN/g" $FILEPATH
+done
+exit

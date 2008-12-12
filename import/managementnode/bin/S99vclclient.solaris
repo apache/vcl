@@ -1,0 +1,63 @@
+#!/bin/sh
+##############################################################################
+# $Id: S99vclclient.solaris 1951 2008-12-12 13:48:10Z arkurth $
+##############################################################################
+
+# Start vcld
+
+DAEMON=/local/adm/vclclientd
+LOGF=/var/log/vclclientd.log
+HOME=/home/vclstaff
+
+# Replace 'username' with an actual user name
+
+case $1 in
+'start')
+echo
+echo "Starting VCL client daemons"
+
+if [ -x ${DAEMON} ]; then
+    if [ ! -r ${HOME}/.ssh ]; then
+       /bin/mkdir -m 755 ${HOME}/.ssh
+       /bin/chown vclstaff:0 ${HOME}/.ssh
+    fi
+
+    if [ ! -r ${HOME}/.ssh/authorized_keys ] ; then
+       /bin/cp ${HOME}/authorized_keys ${HOME}/.ssh/authorized_keys
+       /bin/chown vclstaff:0 ${HOME}/.ssh/authorized_keys
+    fi
+
+    if [ -r ${LOGF} ]; then
+        maxlog=20
+                _i="`expr ${maxlog} - 1`"
+                while test ${_i} -gt 0
+                do
+                        _j=${_i}
+                        _i="`expr ${_i} - 1`"
+                if test -r ${LOGF}.${_i}.gz
+                then
+                    mv ${LOGF}.${_i}.gz ${LOGF}.${_j}.gz
+                fi
+                done
+                cp ${LOGF} ${LOGF}.0
+                gzip ${LOGF}.0
+    fi	
+    umask 022
+    ${DAEMON} 
+else
+	echo ""
+	echo "Cannot locate or read ${DAEMON}"
+
+fi
+
+	;;
+'stop')
+	if [ -r  /var/run/vclclientd.pid ];then
+	kill `/bin/cat /var/run/vclclientd.pid`
+	fi
+	;;
+*)	
+	echo "Usage /etc/init.d/vclclient.init { start | stop }"
+	;;
+esac
+exit 0

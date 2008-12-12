@@ -1,0 +1,177 @@
+/*
+* Licensed to the Apache Software Foundation (ASF) under one or more
+* contributor license agreements.  See the NOTICE file distributed with
+* this work for additional information regarding copyright ownership.
+* The ASF licenses this file to You under the Apache License, Version 2.0
+* (the "License"); you may not use this file except in compliance with
+* the License.  You may obtain a copy of the License at
+*
+*     http://www.apache.org/licenses/LICENSE-2.0
+*
+* Unless required by applicable law or agreed to in writing, software
+* distributed under the License is distributed on an "AS IS" BASIS,
+* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+* See the License for the specific language governing permissions and
+* limitations under the License.
+*/
+.scriptonly {
+	display: none;
+}
+
+.scriptoff {
+	display: inline;
+}
+.compstatelink {
+	color: red;
+}
+
+.compstatelink a {
+	color: red;
+}
+
+.compstatelink a:hover {
+	background: #CCCCCC;
+	text-decoration: none;
+}
+
+#expauthul li {
+	list-style-type: disc;
+}
+
+.shown {
+	display: block;
+}
+
+.hidden {
+	display: none;
+}
+
+.hlrow td {
+	background: #ffff88;
+}
+
+.hlrow th {
+	background: #ffff88;
+}
+
+.hlcol {
+	background: #ccccff;
+}
+
+.nohlcol {
+	background: #ededed;
+}
+
+.rightborder {
+	border-right: 1px solid #000000;
+}
+
+.preferenceslist {
+	display: block;
+	list-style-type: none;
+	margin: 0 1px 0 0;
+	padding: 0;
+	text-align: left;
+}
+
+.preferenceslist a {
+	font-size: 15px;
+}
+
+.whenusefieldset {
+	border-width: 0px;
+}
+
+.errormsg {
+	float: right;
+	width: 100px;
+}
+
+#resStatusText div {
+	background: threedface;
+}
+
+#resStatusText table {
+	background: threedface;
+	border-spacing: 5px 0px;
+	margin: 0px 0px 0px 0px;
+}
+
+#resStatusText table td {
+	padding: 1px;
+}
+
+.usergrouptable form {
+	margin: 0;
+}
+
+.usergrouptable td {
+	padding-left: 1px;
+}
+
+.resourcegrouptable form {
+	margin: 0;
+}
+
+.resourcegrouptable td {
+	padding-left: 1px;
+}
+
+#layouttable td {
+	vertical-align: top;
+}
+
+#ttlayout td {
+	border: solid 1px #eeeeee;
+}
+
+#listitems {
+	z-index: -10;
+	position: absolute;
+	left: 50px;
+	top: 100px;
+	background-color: lightblue;
+	border: 2px;
+}
+
+.dojoDialog {
+	background: #eee;
+	border: 1px solid #999;
+	-moz-border-radius: 5px;
+	padding: 4px;
+}
+.vcldocpage ol {
+	list-style-type: decimal;
+}
+
+.vcldocpage ul {
+	list-style-type: disc;
+}
+
+.profileDlg {
+	background: #eee;
+	border: 1px solid #999;
+	-moz-border-radius: 5px;
+	padding: 4px;
+}
+
+.nperrormsg {
+	font-style: italic;
+	color: red;
+}
+
+#revisiontable th {
+	border: solid 1px #000000;
+	padding: 2px;
+	vertical-align: middle;
+}
+
+#revisiontable td {
+	border: solid 1px #000000;
+	padding: 2px;
+	vertical-align: middle;
+}
+
+.numbers {
+	list-style-type: decimal;
+}

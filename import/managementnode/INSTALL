@@ -1,0 +1,98 @@
+##############################################################################
+# $Id$
+##############################################################################
+mkdir /usr/local/vcl/source
+
+wget --directory-prefix=/usr/local/vcl/source http://search.cpan.org/CPAN/authors/id/M/MA/MARKOV/MailTools-2.04.tar.gz
+tar -xzf /usr/local/vcl/source/MailTools-2.04.tar.gz -C /usr/local/vcl/source
+cd /usr/local/vcl/source/MailTools-2.04
+perl Makefile.PL
+make
+make test
+make install
+
+
+wget --directory-prefix=/usr/local/vcl/source http://search.cpan.org/CPAN/authors/id/T/TM/TMTM/Class-Data-Inheritable-0.08.tar.gz
+tar -xzf /usr/local/vcl/source/Class-Data-Inheritable-0.08.tar.gz -C /usr/local/vcl/source
+cd /usr/local/vcl/source/Class-Data-Inheritable-0.08
+perl Makefile.PL
+make
+make test
+make install
+
+wget --directory-prefix=/usr/local/vcl/source http://search.cpan.org/CPAN/authors/id/D/DR/DROLSKY/Devel-StackTrace-1.20.tar.gz
+tar -xzf /usr/local/vcl/source/Devel-StackTrace-1.20.tar.gz -C /usr/local/vcl/source
+cd /usr/local/vcl/source/Devel-StackTrace-1.20
+perl Makefile.PL
+make
+make test
+make install
+
+
+wget --directory-prefix=/usr/local/vcl/source http://search.cpan.org/CPAN/authors/id/D/DR/DROLSKY/Exception-Class-1.26.tar.gz
+tar -xzf /usr/local/vcl/source/Exception-Class-1.26.tar.gz -C /usr/local/vcl/source
+cd /usr/local/vcl/source/Exception-Class-1.26
+perl Makefile.PL
+make
+make test
+make install
+
+wget --directory-prefix=/usr/local/vcl/source http://search.cpan.org/CPAN/authors/id/J/JD/JDHEDDEN/Object-InsideOut-3.52.tar.gz
+tar -xzf /usr/local/vcl/source/Object-InsideOut-3.52.tar.gz -C /usr/local/vcl/source
+cd /usr/local/vcl/source/Object-InsideOut-3.52
+perl Makefile.PL
+make
+make test
+make install
+
+
+wget --directory-prefix=/usr/local/vcl/source http://search.cpan.org/CPAN/authors/id/K/KW/KWILLIAMS/Module-Build-0.30.tar.gz
+tar -xzf /usr/local/vcl/source/Module-Build-0.30.tar.gz -C /usr/local/vcl/source
+cd /usr/local/vcl/source/Module-Build-0.30
+perl Makefile.PL
+make
+make test
+make install
+
+
+wget --directory-prefix=/usr/local/vcl/source http://search.cpan.org/CPAN/authors/id/A/AG/AGROLMS/GSSAPI-0.26.tar.gz
+tar -xzf /usr/local/vcl/source/GSSAPI-0.26.tar.gz -C /usr/local/vcl/source
+cd /usr/local/vcl/source/GSSAPI-0.26
+perl Makefile.PL
+make
+make test
+make install
+
+
+wget --directory-prefix=/usr/local/vcl/source http://search.cpan.org/CPAN/authors/id/G/GB/GBARR/Authen-SASL-2.12.tar.gz
+tar -xzf /usr/local/vcl/source/Authen-SASL-2.12.tar.gz -C /usr/local/vcl/source
+cd /usr/local/vcl/source/Authen-SASL-2.12
+perl Makefile.PL
+make
+make test
+make install
+
+wget --directory-prefix=/usr/local/vcl/source http://search.cpan.org/CPAN/authors/id/R/RE/REATMON/XML-Stream-1.22.tar.gz
+tar -xzf /usr/local/vcl/source/XML-Stream-1.22.tar.gz -C /usr/local/vcl/source
+cd /usr/local/vcl/source/XML-Stream-1.22
+perl Makefile.PL
+make
+make test
+make install
+
+
+wget --directory-prefix=/usr/local/vcl/source http://search.cpan.org/CPAN/authors/id/H/HA/HACKER/Net-XMPP-1.02.tar.gz
+tar -xzf /usr/local/vcl/source/Net-XMPP-1.02.tar.gz -C /usr/local/vcl/source
+cd /usr/local/vcl/source/Net-XMPP-1.02
+perl Makefile.PL
+make
+make test
+make install
+
+wget --directory-prefix=/usr/local/vcl/source http://search.cpan.org/CPAN/authors/id/R/RE/REATMON/Net-Jabber-2.0.tar.gz
+tar -xzf /usr/local/vcl/source/Net-Jabber-2.0.tar.gz -C /usr/local/vcl/source
+cd /usr/local/vcl/source/Net-Jabber-2.0
+perl Makefile.PL
+make
+make test
+make install

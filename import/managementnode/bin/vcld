@@ -1,0 +1,750 @@
+#!/usr/bin/perl -w
+
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+##############################################################################
+# $Id: vcld 1951 2008-12-12 13:48:10Z arkurth $
+##############################################################################
+
+=head1 NAME
+
+VCL::vcld - VCL daemon module
+
+=head1 SYNOPSIS
+
+ perl vcld
+
+=head1 DESCRIPTION
+
+ This is the executable module for running the VCL management node daemon.
+
+=cut
+
+##############################################################################
+package VCL::vcld;
+
+# Specify the lib path using FindBin
+use FindBin;
+use lib "$FindBin::Bin/../lib";
+
+# Configure inheritance
+use base qw();
+
+# Specify the version of this module
+our $VERSION = '2.00';
+
+# Specify the version of Perl to use
+use 5.008000;
+
+use strict;
+use warnings;
+use diagnostics;
+
+use Symbol;
+use POSIX;
+use Getopt::Long;
+use English;
+
+use VCL::utils;
+use VCL::DataStructure;
+
+##############################################################################
+# Turn on autoflush
+$| = 1;
+
+# Get the command line options
+our $opt_d = '';
+Getopt::Long::Configure('bundling', 'no_ignore_case');
+GetOptions('d|debug' => \$opt_d,
+			  'h|help'  => \&help);
+
+# Call daemonize if -d (debug) wasn't specified
+if (!$opt_d) {
+	&daemonize;
+}
+
+# Variables to store child process information
+our %child_pids = ();    # keys are current child process IDs
+our $child_count = 0;     # current number of children
+
+# Install signal handlers
+$SIG{CHLD} = \&REAPER;
+$SIG{INT}  = \&HUNTSMAN;
+$SIG{QUIT} = \&HUNTSMAN;
+$SIG{HUP}  = \&HUNTSMAN;
+$SIG{TERM} = \&HUNTSMAN;
+
+# Call main subroutine
+&main();
+
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 main
+
+ Parameters  : 
+ Returns     : 
+ Description : Main VCL daemon engine subroutine. Queries database for request
+               and passes off data to make_new_child() to begin processing.
+
+=cut
+
+sub main () {
+	preplogfile($LOGFILE);
+
+	#===========================================================================
+	# BEGIN NEW CODE
+	# This section does some prep work before looping
+	my ($package, $filename, $line, $sub) = caller(0);
+
+	# Set the vcld environment variable to 0 so other subroutines know if this is the vcld or child process
+	$ENV{vcld} = 1;
+	notify($ERRORS{'OK'}, $LOGFILE, "vcld environment variable set to $ENV{vcld} for this process");
+
+	# Rename this process
+	rename_vcld_process();
+
+	# Create a hash to store all of the program state information
+	my %info;
+
+	# Get the management node info from the database
+	# get_management_node_info() will determine the hostname
+	if ($info{managementnode} = get_management_node_info()) {
+		notify($ERRORS{'OK'}, $LOGFILE, "retrieved management node information from database");
+	}
+	else {
+		notify($ERRORS{'CRITICAL'}, $LOGFILE, "unable to retieve management node information from database");
+		exit;
+	}
+
+	# Define local variables from the management node hash for code simplicity
+	my $management_node_id       = $info{managementnode}{id};
+	my $management_node_hostname = $info{managementnode}{hostname};
+
+	# Set environment variables for global management node information
+	$ENV{management_node_id} = $management_node_id;
+	notify($ERRORS{'OK'}, $LOGFILE, "management_node_id environment variable set: $management_node_id");
+
+	# Get the management node checkin interval from the database if defined
+	# Otherwise, the default is 12 seconds
+	my $management_node_checkin_interval = 12;
+	if (defined $info{managementnode}{checkininterval}) {
+		$management_node_checkin_interval = $info{managementnode}{checkininterval};
+	}
+	notify($ERRORS{'OK'}, $LOGFILE, "management node checkin interval is $management_node_checkin_interval seconds");
+	notify($ERRORS{'OK'}, $LOGFILE, "vcld started on $management_node_hostname");
+
+	#===========================================================================
+	while (1) {
+		SLEEP:
+		
+		delete $ENV{request_id};
+		delete $ENV{reservation_id};
+		delete $ENV{state};
+		
+		sleep $management_node_checkin_interval;
+
+		#===========================================================================
+		# Update lastcheckin for this management node
+		my $lastcheckin_timestamp = update_lastcheckin($management_node_id);
+		if ($lastcheckin_timestamp) {
+			notify($ERRORS{'DEBUG'}, $LOGFILE, "lastcheckin time updated for management node $management_node_id: $lastcheckin_timestamp");
+			# Update the local hash info to reflect the new timestamp
+			$info{managementnode}{lastcheckin} = $lastcheckin_timestamp;
+		}
+		else {
+			notify($ERRORS{'CRITICAL'}, $LOGFILE, "could not update lastcheckin for management node $management_node_id");
+		}
+
+		# Get all the requests assigned to this management node
+		# get_management_node_requests() gets a subset of the information available
+		if ($info{request} = {get_management_node_requests($management_node_id)}) {
+			#notify($ERRORS{'DEBUG'}, $LOGFILE, "retieved request information for management node $management_node_id");
+		}
+		else {
+			notify($ERRORS{'CRITICAL'}, $LOGFILE, "could not retieve request information for management node $management_node_id");
+		}
+
+		# See if there's anything to do
+		my $request_count = scalar keys %{$info{request}};
+		#notify($ERRORS{'DEBUG'}, $LOGFILE, "number of requests assigned to management node $management_node_id: $request_count");
+
+		#===========================================================================
+		# Loop through the requests assigned to this management node
+		REQUEST: foreach my $request_id (keys %{$info{request}}) {
+			#notify($ERRORS{'DEBUG'}, $LOGFILE, "management node $management_node_id has been assigned request id: $request_id");
+
+			# Store some request data into a local variables
+			my $request_state_name     = $info{request}{$request_id}{state}{name};
+			my $request_laststate_name = $info{request}{$request_id}{laststate}{name};
+			my $request_start          = $info{request}{$request_id}{start};
+			my $request_end            = $info{request}{$request_id}{end};
+			my $request_preload        = $info{request}{$request_id}{preload};
+			
+			$ENV{request_id}     = $request_id;
+			$ENV{reservation_id}     = 0;
+			$ENV{state}     = $request_state_name;
+
+			# Make sure the request state is valid
+			if ($request_state_name !~ /inuse|reserved|deleted|timeout|reclaim|reload|new|tomaintenance|image|imageprep|makeproduction|imageinuse|complete|failed|pending|maintenance|tovmhostinuse/) {
+				notify($ERRORS{'WARNING'}, $LOGFILE, "assigned request in unsupported state: $request_state_name");
+				next REQUEST;
+			}
+
+			# Don't process requests that are already pending
+			if ($request_state_name =~ /^(pending|maintenance)/) {
+				next REQUEST;
+			}
+
+			#===========================================================================
+			# Loop through the reservations associated with this request
+			RESERVATION: foreach my $reservation_id (keys %{$info{request}{$request_id}{reservation}}) {
+				$ENV{reservation_id} = $reservation_id;
+				
+				# Check to see if the reservation is still in the hash before proceeding
+				# If request was deleted from database, it was also removed from this hash
+				if (!defined($info{request}{$request_id}{reservation}{$reservation_id})) {
+					#notify($ERRORS{'DEBUG'}, $LOGFILE, "reservation was deleted");
+					next RESERVATION;
+				}
+
+				# Store reservation variables into local variable
+				my $reservation_lastcheck = $info{request}{$request_id}{reservation}{$reservation_id}{lastcheck};
+
+				# Perform steps common to all states
+				#notify($ERRORS{'DEBUG'}, $LOGFILE, "assigned reservation in state: $request_state_name");
+
+				# The request_info hash stores all the information for this request
+				my %request_info;
+
+				# Figure out the status of this reservation based on reservation times and the request state
+				# check_time_result can be: start, preload, end, poll, old, remove, 0
+				my $check_time_result = check_time($request_start, $request_end, $reservation_lastcheck, $request_state_name, $request_laststate_name);
+				#notify($ERRORS{'DEBUG'}, 0, "check_time returned \'$check_time_result\'");
+
+				# Do nothing if check_time returned 0
+				# Check this before querying for the large set of request data
+				if (!$check_time_result) {
+					# do nothing - disabled debug output too much info for large numbr of requests
+					#notify($ERRORS{'DEBUG'}, $LOGFILE, "request will not be processed");
+					next RESERVATION;
+				}
+				elsif ($check_time_result eq "old") {
+					# Only complain
+					notify($ERRORS{'WARNING'}, $LOGFILE, "this is an old request");
+					next RESERVATION;
+				}
+				elsif ($check_time_result eq "remove") {
+					# Remove the request and associated reservations from database
+					# This also removes rows from computerloadlog table for associated reservations
+					if (delete_request($request_id)) {
+						notify($ERRORS{'OK'}, $LOGFILE, "request deleted");
+					}
+					else {
+						notify($ERRORS{'WARNING'}, $LOGFILE, "unable to delete rows from request, reservation, and computerloadlog tables for request");
+					}
+
+					# Remove the request key from the hash
+					delete $info{request}{$request_id};
+					next RESERVATION;
+				} ## end elsif ($check_time_result eq "remove")  [ if (!$check_time_result)
+				elsif ($check_time_result eq "preload" && $request_preload) {
+					# Preload flag has already been set, don't process preload request again
+					notify($ERRORS{'DEBUG'}, $LOGFILE, "preload request has already been processed");
+					next RESERVATION;
+				}
+				
+				# Make sure reservation is not currently being processed
+				if (reservation_being_processed($reservation_id)) {
+					notify($ERRORS{'WARNING'}, $LOGFILE, "reservation $reservation_id is already being processed");
+					next RESERVATION;
+				}
+				else {
+					notify($ERRORS{'DEBUG'}, $LOGFILE, "reservation $reservation_id is NOT already being processed");
+				}
+
+				# Get the full set of database data for this request
+				if (%request_info = get_request_info($request_id)) {
+					notify($ERRORS{'DEBUG'}, $LOGFILE, "retieved request information from database");
+
+					# Set request variables that may have changed by other processes to their original values
+					# They may change if this is a cluster reservation
+					$request_info{state}{name}     = $request_state_name;
+					$request_info{laststate}{name} = $request_laststate_name;
+					$request_info{preload}         = $request_preload;
+				}
+				else {
+					notify($ERRORS{'WARNING'}, $LOGFILE, "could not retieve request information from database");
+					next RESERVATION;
+				}
+
+				# Add the check_time result to the hash
+				$request_info{CHECKTIME} = $check_time_result;
+
+				# Get a new data structure object
+				my $data_structure;
+				eval {$data_structure = new VCL::DataStructure({request_data => \%request_info, reservation_id => $reservation_id});};
+				if (my $e = Exception::Class::Base->caught()) {
+					notify($ERRORS{'CRITICAL'}, 0, "unable to create DataStructure object" . $e->message);
+					next RESERVATION;
+				}
+
+				# Check if preload was returned by check_time and that preload flag is 0
+				# The preload flag will be set to 1 by new.pm module after it's done
+				if ($check_time_result =~ /preload/ && !($request_info{preload})) {
+					notify($ERRORS{'OK'}, $LOGFILE, "request start time within 25-35 minute window and preload flag is 0, processing preload request");
+					$request_info{PRELOADONLY} = 1;
+				}
+
+				# Add the reservation ID to be processed to the hash
+				$request_info{RESERVATIONID} = $reservation_id;
+
+				# Wait for a short amount of time before making new child
+				# This is to give processes a chance to start before subsequent processes
+				#   check for conflicts such as overlapping computer reservations
+				notify($ERRORS{'DEBUG'}, $LOGFILE, "sleeping for 2 seconds before updating state to pending");
+				sleep 2;
+
+				# Update the request state to pending, laststate to next state
+				# Pending is set now so vcld doesn't try to process it again
+				# The previous state is already in the hash as the laststate value
+				# This will be passed to the next module so it knows where it came from
+				my $is_parent_reservation = $data_structure->is_parent_reservation();
+				if ($is_parent_reservation && update_request_state($request_id, "pending", $request_state_name)) {
+					notify($ERRORS{'OK'}, $LOGFILE, "request state updated to pending, laststate $request_state_name");
+				}
+				elsif (!$is_parent_reservation) {
+					notify($ERRORS{'OK'}, $LOGFILE, "child reservation: request state NOT updated to pending");
+				}
+				else {
+					notify($ERRORS{'CRITICAL'}, $LOGFILE, "request state could not be updated to pending, reservation not processed");
+					next RESERVATION;
+				}
+				
+				# Insert a computerloadlog entry to indicate processing has begin for this reservation
+				my $computer_id = $data_structure->get_computer_id();
+				if (insertloadlog($reservation_id, $computer_id, "begin", "beginning to process, state is $request_state_name")) {
+					notify($ERRORS{'OK'}, $LOGFILE, "inserted 'begin' entry into computerloadlog for reservation $reservation_id");
+				}
+				else {
+					notify($ERRORS{'CRITICAL'}, $LOGFILE, "failed to insert 'begin' entry into computerloadlog for reservation $reservation_id");
+				}
+
+				# Make a new child process, passing it the request/reservation info
+				make_new_child({request_info => \%request_info, data_structure => $data_structure});
+
+			} ## end foreach my $reservation_id (keys %{$info{request...
+		} ## end foreach my $request_id (keys %{$info{request}})
+		
+		delete $ENV{request_id};
+		delete $ENV{reservation_id};
+		delete $ENV{state};
+
+		#===========================================================================
+		# Get all the block requests assigned to this management node
+		my $blockrequest_data = get_management_node_blockrequests($management_node_id);
+		if (!defined $blockrequest_data) {
+			notify($ERRORS{'CRITICAL'}, $LOGFILE, "could not retrieve block request information for management node $management_node_id");
+			next;
+		}
+		elsif (!$blockrequest_data) {
+			#notify($ERRORS{'OK'}, 0, "there are 0 block requests assigned to management node $management_node_id");
+			next;
+		}
+
+		#notify($ERRORS{'CRITICAL'}, $LOGFILE, "\$blockrequest_data", $blockrequest_data);
+		#next;
+
+		# Loop through the block requests assigned to this management node
+		BLOCKREQUEST: foreach my $blockrequest_id (keys %{$blockrequest_data}) {
+			#notify($ERRORS{'DEBUG'}, $LOGFILE, "checking block request id=$blockrequest_id");
+
+			BLOCKTIME: foreach my $blocktime_id (keys %{$blockrequest_data->{$blockrequest_id}{blockTimes}}) {
+				#notify($ERRORS{'DEBUG'}, $LOGFILE, "checking block time id=$blocktime_id");
+
+				# Get a new data structure object
+				my $data_structure;
+				eval {$data_structure = new VCL::DataStructure({blockrequest_data => $blockrequest_data, blockrequest_id => $blockrequest_id, blocktime_id => $blocktime_id});};
+				if (my $e = Exception::Class::Base->caught()) {
+					notify($ERRORS{'CRITICAL'}, 0, "unable to create DataStructure object" . $e->message);
+					next;
+				}
+
+				# Store some block request data into a local variables
+				my $blockrequest_name       = $data_structure->get_blockrequest_name();
+				my $blockrequest_expire     = $data_structure->get_blockrequest_expire();
+				my $blockrequest_processing = $data_structure->get_blockrequest_processing();
+				my $blocktime_start         = $data_structure->get_blocktime_start();
+				my $blocktime_end           = $data_structure->get_blocktime_end();
+				my $blocktime_processed     = $data_structure->get_blocktime_processed();
+				my $blocktime_id            = $data_structure->get_blocktime_id();
+
+				#use VCL::blockrequest;
+				#$data_structure->set_blockrequest_mode('start');
+				#my $br_start = VCL::blockrequest->new({%{$blockrequest_data->{$blockrequest_id}}, data_structure => $data_structure});
+				#notify($ERRORS{'OK'}, $LOGFILE, "***** Starting start process *****");
+				#$br_start->process();
+				#exit;
+				#notify($ERRORS{'OK'}, $LOGFILE, "***** DONE WITH START *****");
+				#sleep 5;
+				#$data_structure->set_blockrequest_mode('end');
+				#my $br_end = VCL::blockrequest->new({%{$blockrequest_data->{$blockrequest_id}}, data_structure => $data_structure});
+				#notify($ERRORS{'OK'}, $LOGFILE, "***** Starting end process *****");
+				#$br_end->process();
+				#notify($ERRORS{'OK'}, $LOGFILE, "***** DONE WITH END *****");
+				#exit;
+
+				# Check if the block request is already being processed
+				if ($blockrequest_processing) {
+					#notify($ERRORS{'DEBUG'}, $LOGFILE, "block request $blockrequest_id '$blockrequest_name' is already being processed");
+					next BLOCKREQUEST;
+				}
+				else {
+					#notify($ERRORS{'OK'}, $LOGFILE, "block request $blockrequest_id '$blockrequest_name' is not currently being processed");
+				}
+
+				# Check block request start, end and expire time
+				my $blockrequest_mode = check_blockrequest_time($blocktime_start, $blocktime_end, $blockrequest_expire);
+
+				# check_blockrequest_time will return 0 if nothing needs to be done and undefined if an error occurred
+				if (!defined $blockrequest_mode) {
+					notify($ERRORS{'CRITICAL'}, $LOGFILE, "error occurred checking block request $blockrequest_id '$blockrequest_name' status");
+					next;
+				}
+				elsif (!$blockrequest_mode) {
+					#notify($ERRORS{'DEBUG'}, $LOGFILE, "block request $blockrequest_id will not be processed at this time");
+					next;
+				}
+				else {
+					#notify($ERRORS{'DEBUG'}, $LOGFILE, "block request $blockrequest_id will be processed, mode: $blockrequest_mode");
+				}
+
+				if ($blockrequest_mode eq 'start' && $blocktime_processed) {
+					#notify($ERRORS{'DEBUG'}, $LOGFILE, "block request $blockrequest_id '$blockrequest_name' blocktime_id $blocktime_id has already been processed");
+					next BLOCKREQUEST;
+				}
+
+				# Start processing block request
+				$data_structure->set_blockrequest_mode($blockrequest_mode);
+
+				# Attempt to set the blockRequest processing column to 1
+				if (update_blockrequest_processing($blockrequest_id, 1)) {
+					notify($ERRORS{'OK'}, $LOGFILE, "block request $blockrequest_id '$blockrequest_name' processing set to 1");
+
+					# Make a new child process, passing it the request/reservation info
+					make_new_child({data_structure => $data_structure, request_info => $blockrequest_data->{$blockrequest_id}});
+				}
+				else {
+					notify($ERRORS{'CRITICAL'}, $LOGFILE, "unable to set block request $blockrequest_id '$blockrequest_name' processing to 1");
+					next;
+				}
+			} ## end foreach my $blocktime_id (keys %{$blockrequest_data...
+
+		} ## end foreach my $blockrequest_id (keys %{$blockrequest_data...
+	} ## end while (1)
+} ## end sub main ()
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 make_new_child
+
+ Parameters  : 
+ Returns     : 
+ Description :
+
+=cut
+
+sub make_new_child {
+	my ($args) = @_;
+
+	my $request_data   = $args->{request_info};
+	my $data_structure = $args->{data_structure};
+	$data_structure = 0 if !$data_structure;
+
+	# Assemble a consistent prefix for notify messages
+	my $request_id     = $request_data->{id};
+	my $reservation_id = $request_data->{RESERVATIONID};
+
+	# Get the state name
+	my $state;
+	my $state_module;
+	if ($data_structure) {
+		$state        = $data_structure->get_state_name();
+		$state_module = "VCL::$state";
+	}
+	else {
+		$state        = $request_data->{state}{name};
+		$state_module = "VCL::$state";
+	}
+
+	# The timeout and deleted states have been combined into reclaim.pm
+	if ($state =~ /^(timeout|deleted)$/) {
+		notify($ERRORS{'OK'}, $LOGFILE, "request will be processed by reclaim.pm");
+		$state_module = "VCL::reclaim";
+	}
+
+	# The imageinuse state is now handled by inuse.pm
+	if ($state =~ /^(imageinuse)$/) {
+		notify($ERRORS{'OK'}, $LOGFILE, "request will be processed by inuse.pm");
+		$state_module = "VCL::inuse";
+	}
+
+	# The tomaintenance state is handled by new.pm
+	if ($state =~ /^(tomaintenance|imageprep|reload|tovmhostinuse)$/) {
+		notify($ERRORS{'OK'}, $LOGFILE, "request will be processed by new.pm");
+		$state_module = "VCL::new";
+	}
+
+	notify($ERRORS{'OK'}, $LOGFILE, "creating new process");
+
+	eval "use $state_module";
+	if (!$EVAL_ERROR) {
+		notify($ERRORS{'OK'}, $LOGFILE, "loaded $state_module module");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, $LOGFILE, "$state_module module could not be loaded");
+	}
+
+	# For testing purposes on Windows
+	if ($^O =~ /win/i) {
+		# Set the request_id and reservation_id environment variables
+		$ENV{request_id}     = $request_id;
+		$ENV{reservation_id} = $reservation_id;
+
+		# Set the vcld environment variable to 0 so other subroutines know if this is the vcld or child process
+		$ENV{vcld} = 0;
+		notify($ERRORS{'OK'}, $LOGFILE, "vcld environment variable set to $ENV{vcld} for this process");
+
+		my $kid;
+		if ($kid = ($state_module)->new({%{$request_data}, data_structure => $data_structure})) {
+			notify($ERRORS{'OK'}, $LOGFILE, "$state object created and initialized");
+			# Set the request_id and reservation_id environment variables
+			$kid->process();
+		}
+		else {
+			notify($ERRORS{'CRITICAL'}, $LOGFILE, "$state object could not be created and initialized");
+			switch_state($request_data, 'failed', '', 'failed', 1);
+		}
+
+		# Set the request_id and reservation_id environment variables
+		delete $ENV{request_id};
+		delete $ENV{reservation_id};
+		delete $ENV{state};
+
+		# Restore the vcld environment variable to 1
+		$ENV{vcld} = 1;
+		
+		# Only return from make_new_child if running on Windows for testing without actually forking
+		return;
+	} ## end if ($^O =~ /win/i)
+
+	# Build a signal set using POSIX::SigSet->new, contains only the SIGINT signal
+	my $sigset = POSIX::SigSet->new(SIGINT);
+	
+	# Pass the POSIX::SigSet object to sigprocmask with the SIG_BLOCK flag to delay SIGINT signal delivery
+	sigprocmask(SIG_BLOCK, $sigset) or die "can't block SIGINT for fork: $!\n";
+
+	FORK: {
+		my $pid;
+		if ($pid = fork) {
+			# If here, this is the parent process
+			
+			# Restore delivery of SIGINT signal for the parent process
+			sigprocmask(SIG_UNBLOCK, $sigset) or die "can't unblock SIGINT for fork: $!\n";
+			
+			# Parent process records the child's PID and returns
+			$child_count++;
+			$child_pids{$pid} = 1;
+			notify($ERRORS{'OK'}, $LOGFILE, "current number of forked kids: $child_count");
+			return;
+		}
+		elsif (defined $pid) {
+			# If here, this is the child process
+			# Child must *NOT* return from this subroutine after this point. It must exit.
+			# If child returns it will become a parent process and spawn off its own children
+			
+			# Configure the SIGINT signal to kill this process normally
+			$SIG{INT} = 'DEFAULT';
+			
+			# Unblock the SIGINT signal
+			sigprocmask(SIG_UNBLOCK, $sigset) or die "can't unblock SIGINT for fork: $!\n";
+
+			# Set the vcld environment variable to 0 so other subroutines know if this is the vcld or child process
+			$ENV{vcld} = 0;
+			notify($ERRORS{'OK'}, $LOGFILE, "vcld environment variable set to $ENV{vcld} for this process");
+
+			# Set the request_id and reservation_id environment variables
+			$ENV{request_id}     = $request_id;
+			$ENV{reservation_id} = $reservation_id if $reservation_id;
+			$ENV{state}          = $state;
+
+			# Create a new VCL state object, passing it the reservation data
+			if (my $state_object = ($state_module)->new({%{$request_data}, data_structure => $data_structure})) {
+				notify($ERRORS{'OK'}, $LOGFILE, "$state_module object created and initialized");
+				
+				# Call the state object's process() subroutine
+				$state_object->process();
+			}
+			else {
+				notify($ERRORS{'CRITICAL'}, $LOGFILE, "$state_module object could not be created and initialized, $!");
+				switch_state($request_data, 'failed', '', 'failed', 1);
+			}
+			
+			exit;
+			
+		} ## end elsif (defined $pid)  [ if ($pid = fork)
+		
+		elsif ($! =~ /No more process/) {
+			sleep 5;
+			redo FORK;
+		}
+		
+		else {
+			# strange error
+			die "can't fork: $!\n";
+		}
+	} ## end FORK:
+} ## end sub make_new_child
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 HUNTSMAN
+
+ Parameters  : 
+ Returns     : 
+ Description :
+
+=cut
+
+sub HUNTSMAN {   
+	# Temporarily override the the SIGCHLD signal handler
+	# Set SIGCHLD handler to IGNORE, meaning nothing happens when a child process exits
+	local ($SIG{CHLD}) = 'IGNORE';
+	
+	# Send SIGINT to child processes
+	kill 'INT' => keys %child_pids;
+	
+	notify($ERRORS{'OK'}, $LOGFILE, "vcld process exiting, pid=$$");
+	exit;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 REAPER
+
+ Parameters  : None
+ Returns     : Undefined
+ Description : The REAPER subroutine gets called whenever a child process
+               stops running or exits. This occurs because the subroutine is
+					configured as the handler for SIGCHLD signals. The system will
+					send a SIGCHLD signal whenever a child process stops running
+					or exits.
+               
+					The REAPER subroutine manages the child PID hash when a VCL .
+					state process exits. It also captures the exit code of the
+					child process which died and makes sure the special $?
+					variable is set to this value.
+
+=cut
+
+sub REAPER {
+	# Save the information saved in $? before proceeding
+	# This is done to save the exit status of the child process which died
+	# If you don't save it, wait() will overwrite it
+	my $child_exit_status = $? >> 8;
+	my $signal_number = $? & 127;
+	my $dumped_core = $? & 128;
+	
+	# Configure the REAPER() subroutine to handle SIGCHLD signals
+	$SIG{CHLD} = \&REAPER;
+	
+	# Wait for a child process to terminate
+	# Should have already happened since this subroutine is only called when CHLD signals are sent
+	my $dead_pid = wait;
+	
+	# Check if the child PID hash contains the pid of the process which just died
+	if (exists $child_pids{$dead_pid}) {
+		# Child which died was a VCL state process since its pid is in the hash
+		$child_count--;
+		delete $child_pids{$dead_pid};
+		notify($ERRORS{'OK'}, $LOGFILE, "VCL state process exited, pid=$dead_pid");
+	}
+	else {
+		# Child which died was some other process
+		notify($ERRORS{'DEBUG'}, $LOGFILE, "child process exited, pid=$dead_pid");
+	}
+	
+	# Set the special $? variable back to the exit status of the child which died
+	# This is useful when utilities such as SSH are run in other places in the code
+	# The code which called the utility can check the exit status to see if it was successful
+	$? = $child_exit_status;
+	
+	return;
+} ## end sub REAPER
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 daemonize
+
+ Parameters  : 
+ Returns     : 
+ Description :
+
+=cut
+
+sub daemonize {
+	chdir '/' or die "Can't chdir to /: $!";
+	defined(my $pid = fork) or die "Can't fork $!";
+	exit if $pid;
+	#development
+	#$0 = "vcldev";
+	#production
+	#$0 = "vcld";
+	$0 = $PROCESSNAME;
+	print "Created process $$ renamed to $0 ...\n";
+	setsid or die "Can't start a new session: $!";
+	open STDIN,  '/dev/null'  or die "Can't read /dev/null $!";
+	open STDOUT, ">>$LOGFILE" or die "Can't write $LOGFILE $!";
+	open STDERR, ">>$LOGFILE" or die "Can't write $LOGFILE $!";
+	setsid or die "Can't start a new session: $!";
+	umask 0;
+	open(PIDFILE, ">" . $PIDFILE) or notify($ERRORS{'WARNING'}, $LOGFILE, "unable to open PID file: $PIDFILE, $!");    # so I can kill myself easily
+	print PIDFILE $$;
+	close(PIDFILE);
+} ## end sub daemonize
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 help
+
+ Parameters  : 
+ Returns     : 
+ Description :
+
+=cut
+
+sub help {
+	my $message = <<"END";
+--------------------------------------------
+
+vcld is intented to run in daemon mode.
+
+Please read the INSTALLATION file in the source directory.
+END
+
+	print $message;
+	exit;
+} ## end sub help
