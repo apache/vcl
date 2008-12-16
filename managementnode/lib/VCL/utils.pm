@@ -337,7 +337,7 @@ BEGIN {
 				$DATABASE = $1;
 			}
 			#name of database server
-			if ($l =~ /^server=([.a-zA-Z0-9]*)/) {
+			if ($l =~ /^server=([-.a-zA-Z0-9]*)/) {
 				$SERVER = $1;
 			}
 			#write user name
