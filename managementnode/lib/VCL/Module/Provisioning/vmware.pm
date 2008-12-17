@@ -383,14 +383,19 @@ sub load {
 
 								foreach my $v (keys %vmlist) {
 									#handle any spaces in the path
-									$vmlist{$v}{path} =~ s/(\s+)/\\\\ /g;
+									$vmlist{$v}{path} =~ s/(\s+)/\\ /g;
 									my @sshcmd_2 = run_ssh_command($hostnode, $identity, "vmware-cmd -q $vmlist{$v}{path} getstate", "root");
 									foreach $a (@{$sshcmd_2[1]}) {
 										next if ($a =~ /^Warning: /);
 										chomp($a);
-										if ($a =~ /^on/i) {
+										if ($a =~ /^(on|off|stuck)/i) {
 											$vmlist{$v}{"state"} = $a;
 										}
+										else{
+											notify($ERRORS{'WARNING'}, 0, "unknown state $a for $vmlist{$v}{path} on $hostnode");
+											$vmlist{$v}{"state"} = $a;
+										}
+
 									}
 								} ## end foreach my $v (keys %vmlist)
 								notify($ERRORS{'OK'}, 0, "ls datastorepath $datastorepath ");
@@ -410,6 +415,10 @@ sub load {
 												if (defined(run_ssh_command($hostnode, $identity, "vmware-cmd -s unregister $vmlist{$v}{path}", "root"))) {
 													notify($ERRORS{'DEBUG'}, 0, "unregistered $vmlist{$v}{path}");
 												}
+											}
+											elsif ($vmlist{$v}{state} eq "stuck") {
+												$save = 1;
+												notify($ERRORS{'DEBUG'}, 0, "vm on $hostnode in stuck state saving $vmlist{$v}{path}");
 											}
 											else {
 												notify($ERRORS{'DEBUG'}, 0, "$vmlist{$v}{path} is in strange state $vmlist{$v}{state}");
@@ -2046,6 +2055,7 @@ sub node_status {
 	my $vmhost_hostname    = $self->data->get_vmhost_hostname;
 	my $vmhost_imagename   = $self->data->get_vmhost_image_name;
 	my $vmclient_shortname = $self->data->get_computer_short_name;
+	my $request_forimaging              = $self->data->get_request_forimaging();
 
 	my ($hostnode, $identity);
 
@@ -2137,6 +2147,11 @@ sub node_status {
 	}
 	else {
 		$status{status} = 'RELOAD';
+	}
+
+	if($request_forimaging){
+		$status{status} = 'RELOAD';
+		notify($ERRORS{'OK'}, 0, "forimaging flag enabled RELOAD machine");
 	}
 
 	notify($ERRORS{'OK'}, 0, "returning node status hash reference (\$node_status->{status}=$status{status})");
