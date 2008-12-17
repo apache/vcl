@@ -664,9 +664,11 @@ sub REAPER {
 	# Save the information saved in $? before proceeding
 	# This is done to save the exit status of the child process which died
 	# If you don't save it, wait() will overwrite it
+	my $status_save = $?;
 	my $child_exit_status = $? >> 8;
 	my $signal_number = $? & 127;
 	my $dumped_core = $? & 128;
+	#notify($ERRORS{'DEBUG'}, 0, "\$?: $?, signal: $signal_number, dumped core: $dumped_core, child exit status: $child_exit_status");
 	
 	# Configure the REAPER() subroutine to handle SIGCHLD signals
 	$SIG{CHLD} = \&REAPER;
@@ -684,13 +686,13 @@ sub REAPER {
 	}
 	else {
 		# Child which died was some other process
-		notify($ERRORS{'DEBUG'}, $LOGFILE, "child process exited, pid=$dead_pid");
+		#notify($ERRORS{'DEBUG'}, $LOGFILE, "child process exited, pid=$dead_pid");
 	}
 	
 	# Set the special $? variable back to the exit status of the child which died
 	# This is useful when utilities such as SSH are run in other places in the code
 	# The code which called the utility can check the exit status to see if it was successful
-	$? = $child_exit_status;
+	$? = $status_save;
 	
 	return;
 } ## end sub REAPER
