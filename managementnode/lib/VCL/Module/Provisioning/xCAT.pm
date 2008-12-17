@@ -1355,6 +1355,8 @@ sub capture_monitor {
 		if ($current_image_size > $image_size) {
 			notify($ERRORS{'OK'}, 0, "image size has increased: $image_size -> $current_image_size, still copying");
 			$image_size = $current_image_size;
+			#reset capture_loop_count
+			$capture_loop_count = 0;
 		}
 		else {
 			notify($ERRORS{'OK'}, 0, "image size is the same: $image_size=$current_image_size, copy may be complete");
