@@ -2737,24 +2737,17 @@ sub check_ssh {
 	if (!defined($port)) {
 		$port = 22;
 	}
-	if (open(CHECKSSH, "$TOOLS/check_ssh -t 5 -p $port -H $node 2>&1 |")) {
-		my @ssh = <CHECKSSH>;
-		close(CHECKSSH);
-		foreach my $l (@ssh) {
-			if ($l =~ /SSH OK/) {
-				chomp($l);
-				notify($ERRORS{'OK'}, $log, " $node check_ssh module $l");
-				return 1;
-			}
-			if ($l =~ /check_ssh|No such file|Permission|socket/) {
-				chomp($l);
-				notify($ERRORS{'CRITICAL'}, $log, "$node $TOOLS/check_ssh problem $l");
-				return 0;
-			}
-		} ## end foreach my $l (@ssh)
-		return 0;
-	} ## end if (open(CHECKSSH, "$TOOLS/check_ssh -t 5 -p $port -H $node 2>&1 |"...
 
+	if(nmap_port($node,$port)){
+		notify($ERRORS{'OK'}, $log, " $node ssh port $port open");
+		return 1;
+	}
+	else{
+		notify($ERRORS{'OK'}, $log, " $node ssh port $port closed");
+		return 0;
+	}
+
+		return 0;
 } ## end sub check_ssh
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -2773,10 +2766,6 @@ sub _sshd_status {
 	notify($ERRORS{'WARNING'}, $log, "node is not defined") if (!(defined($node)));
 
 	if (!nmap_port($node, 22)) {
-		return "off";
-	}
-
-	if (!(check_ssh($node, 22))) {
 		return "off";
 	}
 
