@@ -101,7 +101,7 @@ sub initialize {
 	my $reservation_id            = $self->data->get_reservation_id();
 	my $provisioning_perl_package = $self->data->get_computer_provisioning_module_perl_package();
 	my $os_perl_package           = $self->data->get_image_os_module_perl_package();
-	my $predictive_perl_package   = $self->data->get_management_node_predictive_module_perl_package();
+	#my $predictive_perl_package   = $self->data->get_management_node_predictive_module_perl_package();
 
 	# Store the name of this class in an environment variable
 	$ENV{class_name} = ref($self);
@@ -165,26 +165,26 @@ sub initialize {
 	}
 
 	# Attempt to load the predictive loading module
-	if ($predictive_perl_package) {
-		notify($ERRORS{'OK'}, 0, "attempting to load predictive loading module: $predictive_perl_package");
-		eval "use $predictive_perl_package";
-		if ($EVAL_ERROR) {
-			notify($ERRORS{'WARNING'}, 0, "$predictive_perl_package module could not be loaded");
-			notify($ERRORS{'OK'},      0, "returning 0");
-			return 0;
-		}
-		if (my $predictor = ($predictive_perl_package)->new({data_structure => $self->data})) {
-			notify($ERRORS{'OK'}, 0, ref($predictor) . " predictive loading object successfully created");
-			$self->{predictor} = $predictor;
-		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "predictive loading object could not be created, returning 0");
-			return 0;
-		}
-	} ## end if ($predictive_perl_package)
-	else {
-		notify($ERRORS{'OK'}, 0, "predictive loading module not loaded, Perl package is not defined");
-	}
+	#if ($predictive_perl_package) {
+	#	notify($ERRORS{'OK'}, 0, "attempting to load predictive loading module: $predictive_perl_package");
+	#	eval "use $predictive_perl_package";
+	#	if ($EVAL_ERROR) {
+	#		notify($ERRORS{'WARNING'}, 0, "$predictive_perl_package module could not be loaded");
+	#		notify($ERRORS{'OK'},      0, "returning 0");
+	#		return 0;
+	#	}
+	#	if (my $predictor = ($predictive_perl_package)->new({data_structure => $self->data})) {
+	#		notify($ERRORS{'OK'}, 0, ref($predictor) . " predictive loading object successfully created");
+	#		$self->{predictor} = $predictor;
+	#	}
+	#	else {
+	#		notify($ERRORS{'WARNING'}, 0, "predictive loading object could not be created, returning 0");
+	#		return 0;
+	#	}
+	#} ## end if ($predictive_perl_package)
+	#else {
+	#	notify($ERRORS{'OK'}, 0, "predictive loading module not loaded, Perl package is not defined");
+	#}
 
 	notify($ERRORS{'OK'}, 0, "returning 1");
 	return 1;

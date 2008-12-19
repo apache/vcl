@@ -75,6 +75,7 @@ use 5.008000;
 use strict;
 use warnings;
 use diagnostics;
+use English '-no_match_vars';
 
 use Object::InsideOut;
 use List::Util qw(min max);
@@ -897,6 +898,63 @@ sub get_state_name {
 	}
 } ## end sub get_state_name
 
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_next_image
+
+ Parameters  : none
+ Returns     : array 
+ Description : called mainly from reclaim module. Refreshes predictive load 
+					module information from database, loads module and calls next_image. 
+
+=cut
+
+sub get_next_image_dataStructure {
+	my $self = shift;
+
+	#collect predictive reload information from database.
+	my $management_predictive_info = get_management_predictive_info();
+	if(!$management_predictive_info->{predictivemoduleid}){
+		notify($ERRORS{'CRITICAL'}, 0, "unable to obtain management node info for this node");
+      return 0;
+	}
+
+	#update ENV in case other modules need to know
+	$ENV{management_node_info}{predictivemoduleid} = $management_predictive_info->{predictivemoduleid};
+	$ENV{management_node_info}{predictive_name} = $management_predictive_info->{predictive_name};
+	$ENV{management_node_info}{predictive_prettyname} = $management_predictive_info->{predictive_prettyname};
+	$ENV{management_node_info}{predictive_description} = $management_predictive_info->{predictive_description};
+	$ENV{management_node_info}{predictive_perlpackage} = $management_predictive_info->{predictive_perlpackage};
+
+	my $predictive_perl_package = $management_predictive_info->{predictive_perlpackage};
+	my @nextimage;
+
+	if ($predictive_perl_package) {
+		notify($ERRORS{'OK'}, 0, "attempting to load predictive loading module: $predictive_perl_package");
+
+		eval "use $predictive_perl_package";
+
+		if ($EVAL_ERROR) {
+			notify($ERRORS{'WARNING'}, 0, "$predictive_perl_package module could not be loaded");
+			notify($ERRORS{'OK'},      0, "returning 0");
+			return 0;
+		}
+		if (my $predictor = ($predictive_perl_package)->new({data_structure => $self})) {
+			notify($ERRORS{'OK'}, 0, ref($predictor) . " predictive loading object successfully created");
+			@nextimage = $predictor->get_next_image();
+			return @nextimage;
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "predictive loading object could not be created, returning 0");
+			return 0;
+		}
+	} ## end if ($predictive_perl_package)
+	else {
+		notify($ERRORS{'OK'}, 0, "predictive loading module not loaded, Perl package is not defined");
+		return 0
+	}
+
+}
 #/////////////////////////////////////////////////////////////////////////////
 
 =head2 print_data

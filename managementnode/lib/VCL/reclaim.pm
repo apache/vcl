@@ -115,8 +115,8 @@ sub process {
 	# It's possible the results may not get used based on the state of the reservation 
 	my @nextimage;
 
-	if($self->predictor->can("get_next_image")){
-		@nextimage = $self->predictor->get_next_image();
+	if($self->data->can("get_next_image_dataStructure")){
+		@nextimage = $self->data->get_next_image_dataStructure();
 	}
 	else{
 		notify($ERRORS{'WARNING'}, 0, "$notify_prefix predictor module does not support get_next_image, calling default get_next_image from utils");
