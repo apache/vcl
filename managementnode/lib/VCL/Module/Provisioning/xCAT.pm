@@ -449,7 +449,7 @@ sub load {
 					if (!$s5) {
 
 						#here we look for rpc.mountd
-						if ($_ =~ /authenticated mount request from $computer_node_name:(\d+) for/) {
+						if ($_ =~ /authenticated mount request from ($computer_node_name|$privateIP):(\d+) for/) {
 							$s5 = 1;
 							chomp($_);
 							notify($ERRORS{'OK'}, 0, "$computer_node_name STAGE 5 set $_");
