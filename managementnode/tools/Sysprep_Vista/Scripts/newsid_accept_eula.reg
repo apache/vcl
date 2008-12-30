@@ -1,0 +1,6 @@
+Windows Registry Editor Version 5.00
+
+; This registry file contains the entries to bypass the license agreement when newsid.exe is run
+
+[HKEY_CURRENT_USER\Software\Sysinternals\NewSID]
+"EulaAccepted"=dword:00000001
