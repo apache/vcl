@@ -6109,7 +6109,7 @@ sub get_request_info {
 		# Set the image identity file path
 		my $imagerevision_imagename = $request_info{reservation}{$reservation_id}{imagerevision}{imagename};
 		my $identity_file_path;
-		if ($imagerevision_imagename =~ /^(win|vmwarewin|vmwareesxwin)/) {
+		if ($imagerevision_imagename =~ /^(win|vmwarewin|vmwareesxwin|vista)/) {
 			$identity_file_path = $IDENTITY_wxp;
 		}
 		elsif ($imagerevision_imagename =~ /^(rh|fc|esx)/) {
@@ -6128,7 +6128,7 @@ sub get_request_info {
 			notify($ERRORS{'OK'}, 0, "MPLS reservation: $request_id:$reservation_id");
 		}
 		else {
-			notify($ERRORS{'WARNING'}, 0, "unsupported image type: $imagerevision_imagename");
+			notify($ERRORS{'WARNING'}, 0, "unsupported image type: '$imagerevision_imagename'");
 		}
 		$request_info{reservation}{$reservation_id}{image}{IDENTITY} = $identity_file_path;
 

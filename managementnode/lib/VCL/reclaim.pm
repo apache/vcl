@@ -107,6 +107,7 @@ sub process {
 	my $image_os_name           = $request_data->{reservation}{$reservation_id}{image}{OS}{name};
 	my $imagerevision_imagename = $request_data->{reservation}{$reservation_id}{imagerevision}{imagename};
 	my $user_unityid            = $request_data->{user}{unityid};
+	my $computer_currentimage_name = $self->data->get_computer_currentimage_name();
 
 	# Assemble a consistent prefix for notify messages
 	my $notify_prefix = "req=$request_id, res=$reservation_id:";
@@ -161,17 +162,58 @@ sub process {
 	#    The request will either be changed to "reload" or they will be cleaned
 	#    up based on the OS.
 	# Lab computers only need to have sshd disabled.
-
+	
 	elsif ($computer_type =~ /blade|virtualmachine/) {
 		notify($ERRORS{'OK'}, 0, "$notify_prefix computer type is $computer_type");
 
-				# Check if request laststate is reserved
+		# Check if request laststate is reserved
 		# This is the only case where computers will be cleaned and not reloaded
 		if ($request_laststate_name =~ /reserved/) {
 			notify($ERRORS{'OK'}, 0, "$notify_prefix request laststate is $request_laststate_name, attempting to clean up computer for next user");
 
+			# *** BEGIN MODULARIZED OS CODE ***
+			# Attempt to get the name of the image currently loaded on the computer
+			# This should match the computer table's current image
+			if ($self->os->can("get_current_image_name")) {
+				notify($ERRORS{'OK'}, 0, "calling " . ref($self->os) . "::get_current_image_name() subroutine");
+				my $current_image_name;
+				if ($current_image_name = $self->os->get_current_image_name()) {
+					notify($ERRORS{'OK'}, 0, "retrieved name of image currently loaded on $computer_shortname: $current_image_name");
+				}
+				else {
+					# OS module's get_current_image_name() subroutine returned false, reload is necessary
+					notify($ERRORS{'WARNING'}, 0, "failed to retrieve name of image currently loaded on $computer_shortname, computer will be reloaded");
+					$self->insert_reload_and_exit();
+				}
+				
+				# Make sure the computer table's current image name matches what's on the computer
+				if ($current_image_name eq $computer_currentimage_name) {
+					notify($ERRORS{'OK'}, 0, "computer table current image name ($computer_currentimage_name) matches OS's current image name ($current_image_name)");
+				}
+				else {
+					# Computer table current image name does not match current image, reload is necessary
+					notify($ERRORS{'WARNING'}, 0, "computer table current image name (" . string_to_ascii($computer_currentimage_name) . ") does not match OS's current image name (" . string_to_ascii($current_image_name) . "), computer will be reloaded");
+					$self->insert_reload_and_exit();
+				}
+			}
+			
+			# Attempt to call modularized OS module's sanitize() subroutine
+			# This subroutine should perform all the tasks necessary to sanitize the OS if it was reserved and not logged in to
+			if ($self->os->can("sanitize")) {
+				notify($ERRORS{'OK'}, 0, "calling " . ref($self->os) . "::sanitize() subroutine");
+				if ($self->os->sanitize()) {
+					notify($ERRORS{'OK'}, 0, "OS has been sanitized on $computer_shortname");
+				}
+				else {
+					# OS module's sanitize() subroutine returned false, meaning reload is necessary
+					notify($ERRORS{'WARNING'}, 0, "failed to sanitize OS on $computer_shortname, computer will be reloaded");
+					$self->insert_reload_and_exit();
+				}
+			}
+			# *** END MODULARIZED OS CODE ***
+	
 			# Check the image OS type and clean up computer accordingly
-			if ($image_os_name =~ /^(win|vmwarewin|vmwareesxwin)/) {
+			elsif ($image_os_name =~ /^(win|vmwarewin|vmwareesxwin)/) {
 				# Loaded Windows image needs to be cleaned up
 				notify($ERRORS{'OK'}, 0, "$notify_prefix attempting steps to clean up loaded $image_os_name image");
 
@@ -379,6 +421,62 @@ sub process {
 	}
 
 } ## end sub process
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 insert_reload_and_exit
+
+ Parameters  : $request_data_hash_reference
+ Returns     : 1 if successful, 0 otherwise
+ Description : 
+
+=cut
+
+sub insert_reload_and_exit {
+	my $self = shift;
+	my $request_data = $self->data->get_request_data;
+	my $reservation_id = $self->data->get_reservation_id();
+	my $computer_id = $self->data->get_computer_id();
+	
+	# Retrieve next image
+	my $next_image_name;
+	my $next_image_id;
+	my $next_imagerevision_id;
+
+	if($self->predictor->can("get_next_image")){
+		($next_image_name, $next_image_id, $next_imagerevision_id) = $self->predictor->get_next_image();
+	}
+	else{
+		notify($ERRORS{'WARNING'}, 0, "predictor module does not support get_next_image, calling get_next_image_default");
+		($next_image_name, $next_image_id, $next_imagerevision_id) = get_next_image_default($computer_id);
+	}
+
+	# Update the DataStructure object with the next image values
+	# These will be used by insert_reload_request()
+	$self->data->set_image_name($next_image_name);
+	$self->data->set_image_id($next_image_id);
+	$self->data->set_imagerevision_id($next_imagerevision_id);
+
+	notify($ERRORS{'OK'}, 0, "next image: name=$next_image_name, image id=$next_image_id, imagerevisionid=$next_imagerevision_id");
+	
+	# Insert reload request data into the datbase
+	if (insert_reload_request($request_data)) {
+		notify($ERRORS{'OK'}, 0, "inserted reload request into database for computer id=$computer_id, image=$next_image_name");
+
+		# Switch the request state to complete, leave the computer state as is, log ending to EOR, exit
+		switch_state($request_data, 'complete', '', 'EOR', '1');
+	}
+	else {
+		notify($ERRORS{'CRITICAL'}, 0, "failed to insert reload request into database for computer id=$computer_id image=$next_image_name");
+
+		# Switch the request and computer states to failed, log ending to failed, exit
+		switch_state($request_data, 'failed', 'failed', 'failed', '1');
+	}
+	
+	# Make sure this VCL state process exits
+	exit;
+}
+
 #/////////////////////////////////////////////////////////////////////////////
 
 1;

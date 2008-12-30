@@ -192,17 +192,32 @@ sub process {
 			# User has acknowledged
 			notify($ERRORS{'OK'}, 0, "user acknowledged, remote IP: $remote_ip");
 
+			# Attempt to call modularized OS module's grant_access() subroutine
+			if ($self->os->can("grant_access")) {
+				# If grant_access() has been implemented by OS module,
+				# don't check for remote IP and open RDP firewall port directly in this module
+				# OS module's grant_access() subroutine to perform the same tasks as below
+				notify($ERRORS{'OK'}, 0, "calling " . ref($self->os) . "::grant_access() subroutine");
+				if ($self->os->grant_access()) {
+					notify($ERRORS{'OK'}, 0, "OS access has been granted on $nodename");
+				}
+				else {
+					notify($ERRORS{'WARNING'}, 0, "failed to grant OS access on $nodename");
+				}
+			}
+			
+			# Older style code, remove below once all OS's have been modularized
 			# Check if computer type is blade
-			if ($computer_type =~ /blade|virtualmachine/) {
+			elsif ($computer_type =~ /blade|virtualmachine/) {
 				notify($ERRORS{'OK'}, 0, "blade or virtual machine detected: $computer_type");
 				# different senerios
 				# standard -- 1-1-1 with connection checks
 				# group access M-N-K -- multiple users need access
 				# standard with no connection checks
-
+				
 				if ($image_os_name =~ /win|vmwarewin/) {
 					notify($ERRORS{'OK'}, 0, "Windows image detected: $image_os_name");
-
+					
 					# Determine whether to open RDP port for single IP or group access
 					if ($user_group_member_count > 0) {
 						# Imagemeta user group defined and member count is > 0

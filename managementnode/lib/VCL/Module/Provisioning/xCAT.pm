@@ -364,8 +364,8 @@ sub load {
 		return;
 	}
 
-# Check progress, locate MAC and IP address for this node, monitor /var/log/messages for communication from node
-# dhcp req/ack, xcat calls, etc
+	# Check progress, locate MAC and IP address for this node, monitor /var/log/messages for communication from node
+	# dhcp req/ack, xcat calls, etc
 	my ($eth0MACaddress, $privateIP);
 	if (open(MACTAB, "$XCAT_ROOT/etc/mac.tab")) {
 		my @mactab = <MACTAB>;
@@ -661,7 +661,8 @@ sub load {
 			READYFLAG:
 
 			#check /var/log/messages file for READY
-
+			
+			# Wait for READY flag
 			if (open(TAIL, "</var/log/messages")) {
 				seek TAIL, -1, 2;
 				for (;;) {
@@ -687,7 +688,7 @@ sub load {
 						close(TAIL);
 						goto SSHDATTEMPT;
 					}
-					if ($readycount > 2) {
+					#if ($readycount > 2) {
 
 						#check ssh status just in case we missed the flag
 						my $sshd = _sshd_status($computer_node_name, $image_name);
@@ -697,7 +698,7 @@ sub load {
 							close(TAIL);
 							goto SSHDATTEMPT;
 						}
-					} ## end if ($readycount > 2)
+					#} ## end if ($readycount > 2)
 					if (!$ready) {
 						notify($ERRORS{'OK'}, 0, "$computer_node_name not ready yet, sleeping for 40 seconds");
 						sleep 40;
@@ -861,11 +862,57 @@ sub load {
 	else {
 		notify($ERRORS{'CRITICAL'}, 0, "could not execute $XCAT_ROOT/sbin/makesshgkh $computer_node_name $!");
 	}
+	
+	# IP configuration
+	if ($IPCONFIGURATION ne "manualDHCP") {
+		insertloadlog($reservation_id, $computer_id, "info", "detected change required in IP address configuration on node");
+
+		#not default setting
+		if ($IPCONFIGURATION eq "dynamicDHCP") {
+			my $assignedIPaddress = getdynamicaddress($computer_node_name, $image_os_name);
+			if ($assignedIPaddress) {
+
+				#update computer table
+				if (update_computer_address($computer_id, $assignedIPaddress)) {
+					notify($ERRORS{'OK'}, 0, "dynamic address collected $assignedIPaddress -- updated computer table");
+					insertloadlog($reservation_id, $computer_id, "dynamicDHCPaddress", "SUCCESS collected dynamicDHCP address");
+				}
+				else {
+					notify($ERRORS{'OK'}, 0, "failed to update dynamic address $assignedIPaddress for$computer_id $computer_node_name ");
+					insertloadlog($reservation_id, $computer_id, "dynamicDHCPaddress", "FAILED to update dynamicDHCP address failing reservation");
+					return 0;
+				}
+			} ## end if ($assignedIPaddress)
+			else {
+				notify($ERRORS{'CRITICAL'}, 0, "could not fetch dynamic address from $computer_node_name $image_name");
+				insertloadlog($reservation_id, $computer_id, "dynamicDHCPaddress", "FAILED to collected dynamicDHCP address failing reservation");
+				return 0;
+			}
+		} ## end if ($IPCONFIGURATION eq "dynamicDHCP")
+		elsif ($IPCONFIGURATION eq "static") {
+			insertloadlog($reservation_id, $computer_id, "info", "setting staticIPaddress");
+
+			if (setstaticaddress($computer_node_name, $image_os_name, $computer_ip_address)) {
+				notify($ERRORS{'DEBUG'}, 0, "set static address on $computer_ip_address $computer_node_name ");
+				insertloadlog($reservation_id, $computer_id, "staticIPaddress", "SUCCESS set static IP address on public interface");
+			}
+			else {
+				insertloadlog($reservation_id, $computer_id, "staticIPaddress", "failed to set static IP address on public interface");
+				return 0;
+			}
+		} ## end elsif ($IPCONFIGURATION eq "static")  [ if ($IPCONFIGURATION eq "dynamicDHCP")
+	} ## end if ($IPCONFIGURATION ne "manualDHCP")
 
 	# Perform post load tasks
 
 	# Windows specific routines
-	if ($image_os_name =~ /winxp|wxp|win2003/) {
+	if ($image_os_name =~ /winvista/) {
+		# If Vista, don't perform post-load tasks here
+		# new.pm calls the Vista module's post_load() subroutine to perform the same tasks as below
+		notify($ERRORS{'OK'}, 0, "vista image, skipping OS preparation tasks in xCAT.pm, returning 1");
+		return 1;
+	}
+	elsif ($image_os_name =~ /winxp|wxp|win2003|winvista/) {
 
 		insertloadlog($reservation_id, $computer_id, "info", "randomizing system level passwords");
 
@@ -948,11 +995,10 @@ sub load {
 			}    #while
 		}    #reboot
 
-#win2003 only - need to set private adapter to static without a gateway
-# win2003 and probably vista zero out one gateway and we only need a gateway on the public adapter
-# so we need to remove the one on the private side
-# downside - we need to reset it to dhcp before making an image.....
-
+		#win2003 only - need to set private adapter to static without a gateway
+		# win2003 and probably vista zero out one gateway and we only need a gateway on the public adapter
+		# so we need to remove the one on the private side
+		# downside - we need to reset it to dhcp before making an image.....
 		if ($image_os_name =~ /^(win2003)/) {
 			insertloadlog($reservation_id, $computer_id, "info", "detected OS which requires network gateway modification");
 			notify($ERRORS{'OK'}, 0, "detected win2003 OS, proceeding to change private adapter to static from dhcp on  $computer_node_name");
@@ -1134,46 +1180,6 @@ sub load {
 
 
 	} ## end elsif ($image_os_name =~ /^(rh[0-9]image|rhel[0-9]|fc[0-9]image|rhfc[0-9]|rhas[0-9]|esx[0-9]+)/) [ if ($image_os_name =~ /winxp|wxp|win2003/)
-
-	# IP configuration
-	if ($IPCONFIGURATION ne "manualDHCP") {
-		insertloadlog($reservation_id, $computer_id, "info", "detected change required in IP address configuration on node");
-
-		#not default setting
-		if ($IPCONFIGURATION eq "dynamicDHCP") {
-			my $assignedIPaddress = getdynamicaddress($computer_node_name, $image_os_name);
-			if ($assignedIPaddress) {
-
-				#update computer table
-				if (update_computer_address($computer_id, $assignedIPaddress)) {
-					notify($ERRORS{'OK'}, 0, "dynamic address collected $assignedIPaddress -- updated computer table");
-					insertloadlog($reservation_id, $computer_id, "dynamicDHCPaddress", "SUCCESS collected dynamicDHCP address");
-				}
-				else {
-					notify($ERRORS{'OK'}, 0, "failed to update dynamic address $assignedIPaddress for$computer_id $computer_node_name ");
-					insertloadlog($reservation_id, $computer_id, "dynamicDHCPaddress", "FAILED to update dynamicDHCP address failing reservation");
-					return 0;
-				}
-			} ## end if ($assignedIPaddress)
-			else {
-				notify($ERRORS{'CRITICAL'}, 0, "could not fetch dynamic address from $computer_node_name $image_name");
-				insertloadlog($reservation_id, $computer_id, "dynamicDHCPaddress", "FAILED to collected dynamicDHCP address failing reservation");
-				return 0;
-			}
-		} ## end if ($IPCONFIGURATION eq "dynamicDHCP")
-		elsif ($IPCONFIGURATION eq "static") {
-			insertloadlog($reservation_id, $computer_id, "info", "setting staticIPaddress");
-
-			if (setstaticaddress($computer_node_name, $image_os_name, $computer_ip_address)) {
-				notify($ERRORS{'DEBUG'}, 0, "set static address on $computer_ip_address $computer_node_name ");
-				insertloadlog($reservation_id, $computer_id, "staticIPaddress", "SUCCESS set static IP address on public interface");
-			}
-			else {
-				insertloadlog($reservation_id, $computer_id, "staticIPaddress", "failed to set static IP address on public interface");
-				return 0;
-			}
-		} ## end elsif ($IPCONFIGURATION eq "static")  [ if ($IPCONFIGURATION eq "dynamicDHCP")
-	} ## end if ($IPCONFIGURATION ne "manualDHCP")
 
 	return 1;
 } ## end sub load

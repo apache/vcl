@@ -49,6 +49,8 @@ our $VERSION = '2.00';
 # Specify the version of Perl to use
 use 5.008000;
 
+no warnings 'redefine';
+
 use strict;
 use warnings;
 use diagnostics;
@@ -94,7 +96,7 @@ our $ROOT_PASSWORD = $WINDOWS_ROOT_PASSWORD;
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 post_reload
+=head2 post_load
 
  Parameters  :
  Returns     :
@@ -102,7 +104,7 @@ our $ROOT_PASSWORD = $WINDOWS_ROOT_PASSWORD;
 
 =cut
 
-sub post_reload {
+sub post_load {
 	my $self = shift;
 	if (ref($self) !~ /windows/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
@@ -112,40 +114,85 @@ sub post_reload {
 	my $management_node_keys     = $self->data->get_management_node_keys();
 	my $image_name               = $self->data->get_image_name();
 	my $computer_node_name       = $self->data->get_computer_node_name();
-	
+
 	notify($ERRORS{'OK'}, 0, "beginning Windows Vista post-reload preparation tasks: $image_name on $computer_node_name");
+
+	# Set KMS licensing
+	if (!$self->set_kms_licensing('kms.unity.ad.ncsu.edu')) {
+		notify($ERRORS{'WARNING'}, 0, "OS post-reload configuration failed, failed to configure node for KMS licensing");
+		return 0;
+	}
 	
-	# Run NewSID
+	# Activate Microsoft Vista software licensing
+	if (!$self->activate_licensing()) {
+		notify($ERRORS{'WARNING'}, 0, "OS post-reload configuration failed, failed to activate licensing");
+		return 0;
+	}
+
+	# Disable Vista's defrag scheduled task
+	if (!$self->disable_scheduled_task('\Microsoft\Windows\Defrag\ScheduledDefrag')) {
+		notify($ERRORS{'WARNING'}, 0, "capture preparation failed, unable to disable defrag scheduled task");
+		return 0;
+	}
+	
+	# Disable system restore scheduled task
+	if (!$self->disable_scheduled_task('\Microsoft\Windows\SystemRestore\SR')) {
+		notify($ERRORS{'WARNING'}, 0, "capture preparation failed, unable to disable system restore scheduled task");
+		return 0;
+	}
+	
+	# Disable customer improvement program consolidator scheduled task
+	if (!$self->disable_scheduled_task('\Microsoft\Windows\Customer Experience Improvement Program\Consolidator')) {
+		notify($ERRORS{'WARNING'}, 0, "capture preparation failed, unable to disable customer improvement program consolidator scheduled task");
+		return 0;
+	}
+	
+	# Disable customer improvement program opt-in notification scheduled task
+	if (!$self->disable_scheduled_task('\Microsoft\Windows\Customer Experience Improvement Program\OptinNotification')) {
+		notify($ERRORS{'WARNING'}, 0, "capture preparation failed, unable to disable customer improvement program opt-in notification scheduled task");
+		return 0;
+	}
+
+	# Set the computer description to the image pretty name and image name
+	if (!$self->set_computer_description()) {
+		notify($ERRORS{'WARNING'}, 0, "capture preparation failed, unable to set the computer description");
+		return 0;
+	}
+	
+	# Set the "My Computer" description to the image pretty name
+	if (!$self->rename_my_computer()) {
+		notify($ERRORS{'WARNING'}, 0, "capture preparation failed, unable to rename my computer");
+		return 0;
+	}
+	
+	# Run NewSID, this initiates a reboot
+	# The run_newsid subroutine monitors the reboot and returns when it has completed
 	if (!$self->run_newsid()) {
 		notify($ERRORS{'WARNING'}, 0, "OS post-reload configuration failed, unable to run newsid.exe on $computer_node_name");
 		return 0;
 	}
 	
-	# Reboot the computer in order for the newsid changes to take effect
-	if (!$self->reboot()) {
-		notify($ERRORS{'WARNING'}, 0, "OS post-reload configuration failed, failed to reboot computer after disabling pagefile");
+	# ********* node reboots *********
+
+	# Disable RDP firewall exceptions from all addresses
+	if (!$self->firewall_disable_rdp()) {
+		notify($ERRORS{'WARNING'}, 0, "OS post-reload configuration failed, failed to disable RDP");
 		return 0;
 	}
-	
-	# Set KMS licensing
-	if (!$self->set_kms_licensing()) {
-		notify($ERRORS{'WARNING'}, 0, "OS post-reload configuration failed, failed to configure node for KMS licensing");
+
+	# Set sshd service startup to auto
+	if (!$self->set_service_startup_mode('sshd', 'auto')) {
+		notify($ERRORS{'WARNING'}, 0, "OS post-reload configuration failed, failed to set sshd service startup mode to auto");
 		return 0;
 	}
-	
-	# Activate
-	if (!$self->activate_licensing()) {
-		notify($ERRORS{'WARNING'}, 0, "OS post-reload configuration failed, failed to activate licensing");
+
+	# Randomize root password
+	my $root_random_password = getpw();
+	if (!$self->set_password('root', $root_random_password)) {
+		notify($ERRORS{'WARNING'}, 0, "OS post-reload configuration failed, failed to set random root password");
 		return 0;
 	}
-	
-	## Randomize root password
-	#my $root_random_password = getpw();
-	#if (!$self->set_password('root', $root_random_password)) {
-	#	notify($ERRORS{'WARNING'}, 0, "OS post-reload configuration failed, failed to set random root password");
-	#	return 0;
-	#}
-	
+
 	# Randomize Administrator password
 	my $administrator_random_password = getpw();
 	if (!$self->set_password('Administrator', $administrator_random_password)) {
@@ -153,19 +200,7 @@ sub post_reload {
 		return 0;
 	}
 	
-	# Disable RDP
-	if (!$self->firewall_disable_rdp()) {
-		notify($ERRORS{'WARNING'}, 0, "OS post-reload configuration failed, failed to disable RDP");
-		return 0;
-	}
-	
-	# Set sshd service startup to auto
-	if (!$self->set_service_startup_mode('sshd', 'auto')) {
-		notify($ERRORS{'WARNING'}, 0, "OS post-reload configuration failed, failed to set sshd service startup mode to auto");
-		return 0;
-	}
-	
-	notify($ERRORS{'WARNING'}, 0, "OS post-reload configuration successful, returning 1");
+	notify($ERRORS{'OK'}, 0, "Vista OS post-reload configuration successful, returning 1");
 	return 1;
 }
 
@@ -235,8 +270,6 @@ sub capture_prepare {
 		return 0;
 	}
 	
-$self->firewall_enable_rdp('152.14.52.0/24');
-	
 	# Enable SSH access from private IP addresses by adding a firewall exception
 	if (!$self->firewall_enable_ssh_private()) {
 		notify($ERRORS{'WARNING'}, 0, "capture preparation failed, unable to enable SSH from private IP addresses");
@@ -246,12 +279,6 @@ $self->firewall_enable_rdp('152.14.52.0/24');
 	# Enable ping access from private IP addresses by adding a firewall exception
 	if (!$self->firewall_enable_ping_private()) {
 		notify($ERRORS{'WARNING'}, 0, "capture preparation failed, unable to enable ping from private IP addresses");
-		return 0;
-	}
-
-	# Create startup scheduled task to prepare computer
-	if (!$self->create_startup_scheduled_task('VCL Startup Configuration', $NODE_CONFIGURATION_DIRECTORY . '/Scripts/VCLPrepare.cmd  >> ' . $NODE_CONFIGURATION_DIRECTORY . '/Logs/VCLPrepare.log')) {
-		notify($ERRORS{'WARNING'}, 0, "capture preparation failed, unable to create startup scheduled task");
 		return 0;
 	}
 	
@@ -287,9 +314,15 @@ $self->firewall_enable_rdp('152.14.52.0/24');
 		notify($ERRORS{'WARNING'}, 0, "capture preparation failed, failed to copy $CONFIGURATION_DIRECTORY to $computer_node_name");
 		return 0;
 	}
-	
-	# Disagle autoadminlogon before disabling the pagefile and rebooting
-	# There is no need to automatically logon after the reboot
+
+	# Create startup scheduled task to prepare computer
+	if (!$self->create_startup_scheduled_task('VCL Startup Configuration', $NODE_CONFIGURATION_DIRECTORY . '/Scripts/vcl_startup.cmd  >> ' . $NODE_CONFIGURATION_DIRECTORY . '/Logs/vcl_startup.log')) {
+		notify($ERRORS{'WARNING'}, 0, "capture preparation failed, unable to create startup scheduled task");
+		return 0;
+	}
+
+	# Disable autoadminlogon before disabling the pagefile and rebooting
+	# There is no longer a need to automatically logon after the reboot
 	if (!$self->disable_autoadminlogon()) {
 		notify($ERRORS{'WARNING'}, 0, "capture preparation failed, unable to disable autoadminlogon");
 		return 0;
@@ -307,8 +340,14 @@ $self->firewall_enable_rdp('152.14.52.0/24');
 		return 0;
 	}
 	
+	# Disable dynamic dns
+	if (!$self->disable_dynamic_dns()) {
+		notify($ERRORS{'WARNING'}, 0, "capture preparation failed, unable to disable dynamic dns");
+		return 0;
+	}
+	
 	# Call script to clean up the hard drive
-	my $cleanup_command = $NODE_CONFIGURATION_DIRECTORY . '/Scripts/cleanup_hard_drive.cmd > ' . $NODE_CONFIGURATION_DIRECTORY . '/logs/cleanup_hard_drive.log';
+	my $cleanup_command = $NODE_CONFIGURATION_DIRECTORY . '/Scripts/cleanup_hard_drive.cmd > ' . $NODE_CONFIGURATION_DIRECTORY . '/Logs/cleanup_hard_drive.log';
 	my ($cleanup_status, $cleanup_output) = run_ssh_command($computer_node_name, $management_node_keys, $cleanup_command);
 	if (defined($cleanup_status) && $cleanup_status == 0) {
 		notify($ERRORS{'OK'}, 0, "successfully ran cleanup script");
@@ -322,11 +361,11 @@ $self->firewall_enable_rdp('152.14.52.0/24');
 		return 0;
 	}
 	
-## Defragment the hard drive
-#if (!$self->defragment_hard_drive()) {
-#	notify($ERRORS{'WARNING'}, 0, "capture preparation failed, unable to defragment the hard drive");
-#	return 0;
-#}
+	## Defragment the hard drive
+	#if (!$self->defragment_hard_drive()) {
+	#	notify($ERRORS{'WARNING'}, 0, "capture preparation failed, unable to defragment the hard drive");
+	#	return 0;
+	#}
 
 	# Disable and delete the pagefile
 	# This will set the registry key to disable the pagefile, reboot, then delete pagefile.sys
@@ -409,18 +448,6 @@ $self->firewall_enable_rdp('152.14.52.0/24');
 		return 0;
 	}
 
-	## Enable autoadminlogon
-	#if (!$self->enable_autoadminlogon()) {
-	#	notify($ERRORS{'WARNING'}, 0, "capture preparation failed, unable to enable autoadminlogon");
-	#	return 0;
-	#}
-
-	## Add a RunOnce registry key to run VCLprepare.cmd when the captured image comes up
-	#if (!$self->add_runonce_registry_value("VCL Prepare", 'C:\\\\VCL\\\\Scripts\\\\VCLprepare.cmd')) {
-	#	notify($ERRORS{'WARNING'}, 0, "capture preparation failed, unable to add runonce registry value to call VCLprepare.cmd");
-	#	return 0;
-	#}
-
 	# Set sshd service startup mode to manual
 	if (!$self->set_service_startup_mode('sshd', 'manual')) {
 		notify($ERRORS{'WARNING'}, 0, "capture preparation failed, unable to set sshd service startup mode to manual");
@@ -475,52 +502,6 @@ sub capture_start {
 	notify($ERRORS{'OK'}, 0, "returning 1");
 	return 1;
 } ## end sub capture_start
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 user_exists
-
- Parameters  :
- Returns     :
- Description :
-
-=cut
-
-sub user_exists {
-	my $self = shift;
-	if (ref($self) !~ /windows/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-	
-	my $management_node_keys     = $self->data->get_management_node_keys();
-	my $computer_node_name       = $self->data->get_computer_node_name();
-	
-	# Attempt to get the user login id from the arguments
-	# If not specified, use DataStructure value
-	my $user_login_id = shift;
-	if (!defined($user_login_id)) {
-		$user_login_id = $self->data->get_user_login_id();
-	}
-
-	my ($net_user_exit_status, $net_user_output) = run_ssh_command($computer_node_name, $management_node_keys, "net user $user_login_id");
-	if (defined($net_user_exit_status) && $net_user_exit_status == 0) {
-		notify($ERRORS{'OK'}, 0, "user $user_login_id exists on $computer_node_name");
-		return 1;
-	}
-	elsif ($net_user_exit_status == 2) {
-		notify($ERRORS{'OK'}, 0, "user $user_login_id does NOT exist on $computer_node_name");
-		return 0;
-	}
-	elsif ($net_user_exit_status) {
-		notify($ERRORS{'WARNING'}, 0, "failed to determine if user $user_login_id exists on $computer_node_name, exit status: $net_user_exit_status, output:\n@{$net_user_output}");
-		return;
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to determine if user $user_login_id exists on $computer_node_name");
-		return;
-	}
-}
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -579,6 +560,313 @@ sub logoff_users {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 add_users
+
+ Parameters  : 
+ Returns     : 
+ Description : 
+
+=cut
+
+sub add_users {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $management_node_keys     = $self->data->get_management_node_keys();
+	my $computer_node_name       = $self->data->get_computer_node_name();
+	
+	# Attempt to get the user array from the arguments
+	# If no argument was supplied, use the users specified in the DataStructure
+	my $user_array_ref = shift;
+	my @users;
+	if ($user_array_ref) {
+		$user_array_ref = $self->data->get_imagemeta_usergroupmembers();
+		@users = @{$user_array_ref};
+	}
+	else {
+		# User list was not specified as an argument
+		# Use the imagemeta group members and the primary reservation user
+		my $user_login_id      = $self->data->get_user_login_id();
+		my $user_group_members = $self->data->get_imagemeta_usergroupmembers();
+		
+		push @users, $user_login_id;
+		
+		foreach my $user_group_member_uid (keys(%{$user_group_members})) {
+			my $user_group_member_login_id = $user_group_members->{$user_group_member_uid};
+			push @users, $user_group_member_login_id;
+		}
+	}
+	
+	# Attempt to get the password from the arguments
+	# If no argument was supplied, use the password specified in the DataStructure
+	my $password = shift;
+	if (!$password) {
+		$password = $self->data->get_reservation_password();
+	}
+	
+	# Loop through the users in the imagemeta group and attempt to add them
+	for my $username (@users) {
+		if (!$self->create_user($username, $password)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to add users to $computer_node_name");
+			return 0;
+		}
+	}
+	
+	notify($ERRORS{'OK'}, 0, "successfully added " . @users . " users to $computer_node_name");
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 delete_users
+
+ Parameters  : 
+ Returns     : 
+ Description : 
+
+=cut
+
+sub delete_users {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $management_node_keys     = $self->data->get_management_node_keys();
+	my $computer_node_name       = $self->data->get_computer_node_name();
+	
+	# Attempt to get the user array from the arguments
+	# If no argument was supplied, use the users specified in the DataStructure
+	my $user_array_ref = shift;
+	my @users;
+	if ($user_array_ref) {
+		$user_array_ref = $self->data->get_imagemeta_usergroupmembers();
+		@users = @{$user_array_ref};
+	}
+	else {
+		# User list was not specified as an argument
+		# Use the imagemeta group members and the primary reservation user
+		my $user_login_id      = $self->data->get_user_login_id();
+		my $user_group_members = $self->data->get_imagemeta_usergroupmembers();
+		
+		push @users, $user_login_id;
+		
+		foreach my $user_group_member_uid (keys(%{$user_group_members})) {
+			my $user_group_member_login_id = $user_group_members->{$user_group_member_uid};
+			push @users, $user_group_member_login_id;
+		}
+	}
+	
+	# Loop through the users and attempt to delete them
+	for my $username (@users) {
+		if (!$self->delete_user($username)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to delete user $username from $computer_node_name");
+			return 0;
+		}
+	}
+	
+	notify($ERRORS{'OK'}, 0, "successfully deleted " . @users . " users from $computer_node_name");
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 user_exists
+
+ Parameters  : 
+ Returns     : 
+ Description : 
+
+=cut
+
+sub user_exists {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $management_node_keys     = $self->data->get_management_node_keys();
+	my $computer_node_name       = $self->data->get_computer_node_name();
+	
+	# Attempt to get the username from the arguments
+	# If no argument was supplied, use the user specified in the DataStructure
+	my $username = shift;
+	if (!$username) {
+		$username = $self->data->get_user_login_id();
+	}
+	
+	notify($ERRORS{'OK'}, 0, "checking if user $username exists on $computer_node_name");
+	
+	# Attempt to query the user account
+	my $query_user_command = "net user \"$username\"";
+	my ($query_user_exit_status, $query_user_output) = run_ssh_command($computer_node_name, $management_node_keys, $query_user_command);
+	if (defined($query_user_exit_status) && $query_user_exit_status == 0) {
+		notify($ERRORS{'OK'}, 0, "user $username exists on $computer_node_name");
+		return 1;
+	}
+	elsif (defined($query_user_exit_status) && $query_user_exit_status == 2) {
+		notify($ERRORS{'OK'}, 0, "user $username does not exist on $computer_node_name");
+		return 0;
+	}
+	elsif (defined($query_user_exit_status)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to determine if user $username exists on $computer_node_name, exit status: $query_user_exit_status, output:\n@{$query_user_output}");
+		return;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to determine if user $username exists on $computer_node_name");
+		return;
+	}
+} ## end sub del_user
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 create_user
+
+ Parameters  : 
+ Returns     : 
+ Description : 
+
+=cut
+
+sub create_user {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $management_node_keys     = $self->data->get_management_node_keys();
+	my $computer_node_name       = $self->data->get_computer_node_name();
+	
+	# Attempt to get the username from the arguments
+	# If no argument was supplied, use the user specified in the DataStructure
+	my $username = shift;
+	my $password = shift;
+	if (!$username) {
+		$username = $self->data->get_user_login_id();
+	}
+	if (!$password) {
+		$password = $self->data->get_user_password();
+	}
+	
+	# Check if user already exists
+	if ($self->user_exists($username)) {
+		notify($ERRORS{'OK'}, 0, "user $username already exists on $computer_node_name, attempting to delete user");
+		
+		# Attempt to delete the user
+		if (!$self->delete_user($username)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to add user $username to $computer_node_name, user already exists and could not be deleted");
+			return 0;
+		}
+	}
+	
+	notify($ERRORS{'OK'}, 0, "attempting to add user $username to $computer_node_name");
+	
+	# Attempt to add the user account
+	my $add_user_command = "net user \"$username\" \"$password\" /ADD  /EXPIRES:NEVER /COMMENT:\"Account created by VCL\"";
+	$add_user_command .= " && net localgroup \"Administrators\" \"$username\" /ADD";
+	$add_user_command .= " && net localgroup \"Remote Desktop Users\" \"$username\" /ADD";
+	
+	my ($add_user_exit_status, $add_user_output) = run_ssh_command($computer_node_name, $management_node_keys, $add_user_command);
+	if (defined($add_user_exit_status) && $add_user_exit_status == 0) {
+		notify($ERRORS{'OK'}, 0, "added user $username from $computer_node_name");
+	}
+	elsif (defined($add_user_exit_status) && $add_user_exit_status == 2) {
+		notify($ERRORS{'OK'}, 0, "user $username was not added, user already exists");
+		return 1;
+	}
+	elsif (defined($add_user_exit_status)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to add user $username to $computer_node_name, exit status: $add_user_exit_status, output:\n@{$add_user_output}");
+		return 0;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command add user $username to $computer_node_name");
+		return;
+	}
+	
+	## Add the user to the Administrators group
+	#if (!$self->add_user_to_group($username, 'Administrators')) {
+	#	notify($ERRORS{'WARNING'}, 0, "added user $username but failed to add user to Administrators group");
+	#	return 0;
+	#}
+	#
+	## Add the user to the Remote Desktop Users group
+	#if (!$self->add_user_to_group($username, 'Remote Desktop Users')) {
+	#	notify($ERRORS{'WARNING'}, 0, "added user $username but failed to add user to Remote Desktop Users group");
+	#	return 0;
+	#}
+	
+	return 1;
+} ## end sub del_user
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 add_user_to_group
+
+ Parameters  : 
+ Returns     : 
+ Description : 
+
+=cut
+
+sub add_user_to_group {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $management_node_keys     = $self->data->get_management_node_keys();
+	my $computer_node_name       = $self->data->get_computer_node_name();
+	
+	# Attempt to get the username from the arguments
+	# If no argument was supplied, use the user specified in the DataStructure
+	my $username = shift;
+	my $group = shift;
+	if (!$username || !$group) {
+		notify($ERRORS{'WARNING'}, 0, "unable to add user to group, arguments were not passed correctly");
+		return;
+	}
+	
+	# Attempt to add the user to the group using net localgroup
+	my $localgroup_user_command = "net localgroup \"$group\" $username /ADD";
+	my ($localgroup_user_exit_status, $localgroup_user_output) = run_ssh_command($computer_node_name, $management_node_keys, $localgroup_user_command);
+	if (defined($localgroup_user_exit_status) && $localgroup_user_exit_status == 0) {
+		notify($ERRORS{'OK'}, 0, "added user $username to \"$group\" group on $computer_node_name");
+	}
+	elsif (defined($localgroup_user_exit_status) && $localgroup_user_exit_status == 2) {
+		# Exit status is 2, this could mean the user is already a member or that the group doesn't exist
+		# Check the output to determine what happened
+		if (grep(/error 1378/, @{$localgroup_user_output})) {
+			# System error 1378 has occurred.
+			# The specified account name is already a member of the group.
+			notify($ERRORS{'OK'}, 0, "user $username was not added to $group group, user already a member");
+			return 1;
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to add user $username to $group group on $computer_node_name, exit status: $localgroup_user_exit_status, output:\n@{$localgroup_user_output}");
+			return 0;
+		}
+	}
+	elsif (defined($localgroup_user_exit_status)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to add user $username to $group group on $computer_node_name, exit status: $localgroup_user_exit_status, output:\n@{$localgroup_user_output}");
+		return 0;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to add user $username to $group group on $computer_node_name");
+		return;
+	}
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 delete_user
 
  Parameters  : $node, $user, $type, $osname
@@ -614,7 +902,6 @@ sub delete_user {
 	}
 	elsif (defined($delete_user_exit_status) && $delete_user_exit_status == 2) {
 		notify($ERRORS{'OK'}, 0, "user $username was not deleted, user does not exist");
-		return 1;
 	}
 	elsif (defined($delete_user_exit_status)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to delete user $username from $computer_node_name, exit status: $delete_user_exit_status, output:\n@{$delete_user_output}");
@@ -626,18 +913,12 @@ sub delete_user {
 	}
 
 	# Delete the user's home directory
-	my $delete_profile_command = "/bin/rm -rf /cygdrive/c/Users/$username";
-	my ($delete_profile_exit_status, $delete_profile_output) = run_ssh_command($computer_node_name, $management_node_keys, $delete_profile_command);
-	if (defined($delete_profile_exit_status) && $delete_profile_exit_status == 0) {
+	if ($self->delete_directory("C:/Users/$username")) {
 		notify($ERRORS{'OK'}, 0, "deleted profile for user $username from $computer_node_name");
 	}
-	elsif (defined($delete_profile_exit_status)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to delete profile for user $username from $computer_node_name, exit status: $delete_profile_exit_status, output:\n@{$delete_profile_output}");
-		return 0;
-	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command delete profile for user $username from $computer_node_name");
-		return;
+		notify($ERRORS{'WARNING'}, 0, "failed to delete profile for user $username from $computer_node_name");
+		return 0;
 	}
 	
 	return 1;
@@ -682,12 +963,25 @@ sub set_password {
 	my ($set_password_exit_status, $set_password_output) = run_ssh_command($computer_node_name, $management_node_keys, "net user $username '$password'");
 	if ($set_password_exit_status == 0) {
 		notify($ERRORS{'OK'}, 0, "$username password changed to $password on $computer_node_name");
-		return 1;
 	}
 	else {
 		notify($ERRORS{'WARNING'}, 0, "failed to set password of $username to $password on $computer_node_name, exit status: $set_password_exit_status, output:\n@{$set_password_output}");
 		return 0;
 	}
+	
+	# Check if root user, must set sshd service password too
+	if ($username eq 'root') {
+		notify($ERRORS{'OK'}, 0, "root account password changed, must also change sshd service credentials");
+		if ($self->set_service_credentials('sshd', $username, $password)) {
+			notify($ERRORS{'OK'}, 0, "sshd service credentials changed to $username ($password)");
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to set sshd service credentials to $username ($password)");
+			return 0;
+		}
+	}
+	
+	return 1;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -2285,18 +2579,46 @@ sub run_newsid {
 		return;
 	}
 	
+	my $reservation_id           = $self->data->get_reservation_id();
 	my $management_node_keys     = $self->data->get_management_node_keys();
 	my $computer_node_name       = $self->data->get_computer_node_name();
+	my $computer_id              = $self->data->get_computer_id();
 	
 	# Attempt to get the computer name from the arguments
 	# If no argument was supplied, use the name specified in the DataStructure
 	my $computer_name = shift;
 	if (!(defined($computer_name))) {
-		$computer_name = $self->data->get_computer_short_name();
+		my $image_id = $self->data->get_image_id();
+		my $computer_short_name = $self->data->get_computer_short_name();
+		$computer_name = "$computer_short_name-$image_id";
 	}
 	
-	# Attempt to delete the user account
-	my $newsid_command = "start /wait $NODE_CONFIGURATION_DIRECTORY/Utilities/newsid.exe /a /n $computer_name";
+	my $registry_string .= <<'EOF';
+Windows Registry Editor Version 5.00
+
+; This registry file contains the entries to bypass the license agreement when newsid.exe is run
+
+[HKEY_CURRENT_USER\\Software\\Sysinternals\\NewSID]
+"EulaAccepted"=dword:00000001
+EOF
+	
+	# Import the string into the registry
+	if ($self->import_registry_string($registry_string)) {
+		notify($ERRORS{'OK'}, 0, "successfully added newsid eulaaccepted registry string");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to add newsid eulaaccepted registry string");
+		return 0;
+	}
+	
+	# Attempt to run newsid.exe
+	# newsid.exe should automatically reboot the computer
+	# It isn't done when the process exits, newsid.exe starts working and immediately returns
+	# NewSid.exe [/a[[/n]|[/d <reboot delay (in seconds)>]]][<new computer name>]
+	# /a - run without prompts
+	# /n - Don't reboot after automatic run
+	my $newsid_command = "\"$NODE_CONFIGURATION_DIRECTORY/Utilities/newsid.exe\" /a \"$computer_name\"";
+	my $newsid_start_processing_time = time();
 	my ($newsid_exit_status, $newsid_output) = run_ssh_command($computer_node_name, $management_node_keys, $newsid_command);
 	if (defined($newsid_exit_status) && $newsid_exit_status == 0) {
 		notify($ERRORS{'OK'}, 0, "successfully ran newsid.exe on $computer_node_name, new computer name: $computer_name");
@@ -2310,7 +2632,682 @@ sub run_newsid {
 		return;
 	}
 	
+	my $newsid_end_processing_time = time();
+	my $newsid_processing_duration = ($newsid_end_processing_time - $newsid_start_processing_time);
+	notify($ERRORS{'OK'}, 0, "newsid.exe finished processing, newsid.exe took $newsid_processing_duration seconds");
+	insertloadlog($reservation_id, $computer_id, "info", "newsid.exe processing took $newsid_processing_duration seconds");
+	
+	# After launching newsid.exe, wait for machine to become unresponsive
+	if (!$self->wait_for_shutdown(10)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run newsid.exe, $computer_node_name never rebooted after waiting 10 minutes");
+		return 0;
+	}
+	
+	my $newsid_shutdown_time = time();
+	notify($ERRORS{'OK'}, 0, "newsid.exe initiated reboot, $computer_node_name is unresponsive, reboot initialization took " . ($newsid_shutdown_time - $newsid_end_processing_time) . " seconds");
+	
+	# Wait maximum of 6 minutes for the computer to come back up
+	if (!$self->wait_for_ping(6)) {
+		notify($ERRORS{'WARNING'}, 0, "$computer_node_name never responded to ping, it never came back up");
+		return 0;
+	}
+	
+	my $newsid_ping_respond_time = time();
+	notify($ERRORS{'OK'}, 0, "reboot nearly complete on $computer_node_name after running newsid.exe, ping response took " . ($newsid_ping_respond_time - $newsid_shutdown_time) . " seconds");
+	
+	# Ping successful, try ssh
+	notify($ERRORS{'OK'}, 0, "waiting for ssh to respond on $computer_node_name");
+	if (!$self->wait_for_ssh(3)) {
+		notify($ERRORS{'WARNING'}, 0, "newsid.exe failed, $computer_node_name rebooted but ssh never became available");
+		return 0;
+	}
+	
+	my $newsid_ssh_respond_time = time();
+	my $newsid_entire_duration = ($newsid_ssh_respond_time - $newsid_start_processing_time);
+	notify($ERRORS{'OK'}, 0, "newsid.exe succeeded on $computer_node_name, entire process took $newsid_entire_duration seconds");
+	insertloadlog($reservation_id, $computer_id, "info", "entire newsid.exe process took $newsid_entire_duration seconds");
+	
 	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 set_service_credentials
+
+ Parameters  : $service_name, $username, $password
+ Returns     : 
+ Description : 
+
+=cut
+
+sub set_service_credentials {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $management_node_keys     = $self->data->get_management_node_keys();
+	my $computer_node_name       = $self->data->get_computer_node_name();
+	
+	# Attempt to get the username from the arguments
+	my $service_name = shift;
+	my $username = shift;
+	my $password = shift;
+	
+	# Make sure arguments were supplied
+	if (!$service_name || !$username || !$password) {
+		notify($ERRORS{'WARNING'}, 0, "set service logon failed, service name, username, and password arguments were not passed correctly");
+		return 0;
+	}
+
+	# Attempt to set the service logon user name and password
+	my $service_logon_command = '$SYSTEMROOT/System32/sc.exe config ' . $service_name . ' obj= ".\\' . $username . '" password= "' . $password . '"';
+	my ($service_logon_exit_status, $service_logon_output) = run_ssh_command($computer_node_name, $management_node_keys, $service_logon_command);
+	if (defined($service_logon_exit_status) && $service_logon_exit_status == 0) {
+		notify($ERRORS{'OK'}, 0, "successfully changed $service_name service logon credentials to $username ($password) on $computer_node_name");
+	}
+	elsif (defined($service_logon_exit_status)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to change $service_name service logon credentials to $username ($password) on $computer_node_name, exit status: $service_logon_exit_status, output:\n@{$service_logon_output}");
+		return 0;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to change $service_name service logon credentials to $username ($password) on $computer_node_name");
+		return;
+	}
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_service_list
+
+ Parameters  : $service_name, $username, $password
+ Returns     : 
+ Description : 
+
+=cut
+
+sub get_service_list {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $management_node_keys     = $self->data->get_management_node_keys();
+	my $computer_node_name       = $self->data->get_computer_node_name();
+
+	# Attempt to delete the user account
+	my $sc_query_command = "\$SYSTEMROOT/System32/sc.exe query | grep SERVICE_NAME | cut --fields=2 --delimiter=' '";
+	my ($sc_query_exit_status, $sc_query_output) = run_ssh_command($computer_node_name, $management_node_keys, $sc_query_command);
+	if (defined($sc_query_exit_status) && $sc_query_exit_status == 0) {
+		notify($ERRORS{'OK'}, 0, "successfully retrieved service list from $computer_node_name");
+	}
+	elsif (defined($sc_query_exit_status)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve service list from $computer_node_name, exit status: $sc_query_exit_status, output:\n@{$sc_query_output}");
+		return 0;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to failed to retrieve service list from $computer_node_name");
+		return;
+	}
+	
+	my @service_name_array = split("\n", $sc_query_output);
+	notify($ERRORS{'DEBUG'}, 0, "found " . @service_name_array . " services on $computer_node_name");
+	return @service_name_array;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_service_login_ids
+
+ Parameters  : 
+ Returns     : 
+ Description : 
+
+=cut
+
+sub get_services_using_login_id {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $management_node_keys     = $self->data->get_management_node_keys();
+	my $computer_node_name       = $self->data->get_computer_node_name();
+	
+	my $login_id = shift;
+	if (!$login_id) {
+		notify($ERRORS{'WARNING'}, 0, "unable to get services using login id, login id argument was not passed correctly");
+		return;
+	}
+	
+	# Get a list of the services on the node
+	my @service_list = $self->get_service_list();
+	if (!@service_list) {
+		notify($ERRORS{'WARNING'}, 0, "unable to get service logon ids, failed to retrieve service name list from $computer_node_name, service credentials cannot be changed");
+		return 0;
+	}
+	
+	my @services_using_login_id;
+	for my $service_name (@service_list) {
+		# Attempt to get the service start name using sc.exe qc
+		my $sc_qc_command = "\$SYSTEMROOT/System32/sc.exe qc $service_name | grep SERVICE_START_NAME | cut --fields=2 --delimiter='\\'";
+		my ($sc_qc_exit_status, $sc_qc_output) = run_ssh_command($computer_node_name, $management_node_keys, $sc_qc_command);
+		if (defined($sc_qc_exit_status) && $sc_qc_exit_status == 0) {
+			notify($ERRORS{'OK'}, 0, "successfully retrieved $service_name service start name from $computer_node_name");
+		}
+		elsif (defined($sc_qc_exit_status)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to retrieve $service_name service start name from $computer_node_name, exit status: $sc_qc_exit_status, output:\n@{$sc_qc_output}");
+			return 0;
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to failed to retrieve $service_name service start name from $computer_node_name");
+			return;
+		}
+		
+		my $service_logon_id = @{$sc_qc_output}[0];
+		if ($service_logon_id =~ /^$login_id$/i) {
+			push @services_using_login_id, $service_logon_id;
+		}
+	}
+	
+	return @services_using_login_id;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 disable_scheduled_task
+
+ Parameters  : 
+ Returns     : 1 success 0 failure
+ Description : 
+
+=cut
+
+sub disable_scheduled_task {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $management_node_keys     = $self->data->get_management_node_keys();
+	my $computer_node_name       = $self->data->get_computer_node_name();
+	
+	# Attempt to get the task name from the arguments
+	my $task_name = shift;
+	if (!$task_name) {
+		notify($ERRORS{'OK'}, 0, "failed to disable scheduled task, task name argument was not correctly passed");
+		return;
+	}
+	
+	# Attempt to delete the user account
+	my $schtasks_command = '$SYSTEMROOT/System32/schtasks.exe /Change /DISABLE /TN "' . $task_name . '"';
+	my ($schtasks_exit_status, $schtasks_output) = run_ssh_command($computer_node_name, $management_node_keys, $schtasks_command);
+	if (defined($schtasks_exit_status) && $schtasks_exit_status == 0) {
+		notify($ERRORS{'OK'}, 0, "$task_name scheduled task disabled on $computer_node_name");
+	}
+	elsif (defined($schtasks_exit_status)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to disable $task_name scheduled task on $computer_node_name, exit status: $schtasks_exit_status, output:\n@{$schtasks_output}");
+		return 0;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to disable $task_name scheduled task on $computer_node_name");
+		return;
+	}
+	
+	return 1;
+} ## end sub del_user
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 disable_dynamic_dns
+
+ Parameters  :
+ Returns     :
+ Description :
+
+=cut
+
+sub disable_dynamic_dns {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $management_node_keys     = $self->data->get_management_node_keys();
+	my $computer_node_name       = $self->data->get_computer_node_name();
+
+	my $registry_string .= <<"EOF";
+Windows Registry Editor Version 5.00
+
+; This file disables dynamic DNS updates
+
+[HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters]
+"DisableDynamicUpdate"=dword:00000001
+
+[HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters]
+"DisableReverseAddressRegistrations"=dword:00000001
+EOF
+	
+	# Import the string into the registry
+	if ($self->import_registry_string($registry_string)) {
+		notify($ERRORS{'OK'}, 0, "successfully disabled dynamic dns");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to disable dynamic dns");
+		return 0;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 set_computer_description
+
+ Parameters  :
+ Returns     :
+ Description :
+
+=cut
+
+sub set_computer_description {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $management_node_keys     = $self->data->get_management_node_keys();
+	my $computer_node_name       = $self->data->get_computer_node_name();
+	
+	# Attempt to get the description from the arguments
+	my $description = shift;
+	if (!$description) {
+		my $image_name = $self->data->get_image_name();
+		my $image_prettyname = $self->data->get_image_prettyname();
+		$description = "$image_prettyname ($image_name)";
+	}
+
+	my $registry_string .= <<"EOF";
+Windows Registry Editor Version 5.00
+
+[HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Services\\LanmanServer\\Parameters]
+"srvcomment"="$description"
+EOF
+	
+	# Import the string into the registry
+	if ($self->import_registry_string($registry_string)) {
+		notify($ERRORS{'OK'}, 0, "successfully set computer description");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to set computer description");
+		return 0;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 rename_my_computer
+
+ Parameters  :
+ Returns     :
+ Description :
+
+=cut
+
+sub rename_my_computer {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $management_node_keys     = $self->data->get_management_node_keys();
+	my $computer_node_name       = $self->data->get_computer_node_name();
+	my $image_prettyname         = $self->data->get_image_prettyname();
+	
+	my $add_registry_command .= "\"\$SYSTEMROOT/System32/reg.exe\" add \"HKCR\\CLSID\\{20D04FE0-3AEA-1069-A2D8-08002B30309D}\" /v LocalizedString /t REG_EXPAND_SZ /d \"$image_prettyname\" /f";
+	my ($add_registry_exit_status, $add_registry_output) = run_ssh_command($computer_node_name, $management_node_keys, $add_registry_command, '', '', 1);
+	if (defined($add_registry_exit_status) && $add_registry_exit_status == 0) {
+		notify($ERRORS{'OK'}, 0, "my computer name changed");
+	}
+	elsif ($add_registry_exit_status) {
+		notify($ERRORS{'WARNING'}, 0, "failed to change my computer name, exit status: $add_registry_exit_status, output:\n@{$add_registry_output}");
+		return;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to change my computer name");
+		return;
+	}
+
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 delete_directory
+
+ Parameters  :
+ Returns     :
+ Description :
+
+=cut
+
+sub delete_directory {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $management_node_keys     = $self->data->get_management_node_keys();
+	my $computer_node_name       = $self->data->get_computer_node_name();
+	
+	# Get the path from the subroutine arguments and make sure it was passed
+	my $path = shift;
+	if (!$path) {
+		notify($ERRORS{'WARNING'}, 0, "directory path was not specified as an argument");
+		return;
+	}
+	
+	# Assemble the Windows shell rmdir command and execute it
+	my $rmdir_command = '$SYSTEMROOT/System32/cmd.exe /c "rmdir /s /q \\"' . $path . '\\""';
+	my ($rmdir_exit_status, $rmdir_output) = run_ssh_command($computer_node_name, $management_node_keys, $rmdir_command, '', '', 1);
+	if (defined($rmdir_exit_status) && $rmdir_exit_status == 0) {
+		notify($ERRORS{'OK'}, 0, "directory deleted on $computer_node_name: $path");
+	}
+	elsif (defined($rmdir_exit_status) && $rmdir_exit_status == 2) {
+		# Exit status 2 should mean the directory was not found
+		notify($ERRORS{'OK'}, 0, "directory was not deleted on $computer_node_name: $path, exit status: $rmdir_exit_status, output:\n@{$rmdir_output}");
+	}
+	elsif ($rmdir_exit_status) {
+		notify($ERRORS{'WARNING'}, 0, "failed to delete directory on $computer_node_name: $path, exit status: $rmdir_exit_status, output:\n@{$rmdir_output}");
+		return;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to delete directory on $computer_node_name: $path");
+		return;
+	}
+	
+	# Make sure directory was deleted
+	if ($self->filesystem_entry_exists($path)) {
+		notify($ERRORS{'WARNING'}, 0, "directory still exists on $computer_node_name: $path");
+		return 0;
+	}
+	else {
+		notify($ERRORS{'OK'}, 0, "verified that directory does NOT exist on $computer_node_name: $path");
+		return 1;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 filesystem_entry_exists
+
+ Parameters  :
+ Returns     :
+ Description :
+
+=cut
+
+sub filesystem_entry_exists {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $management_node_keys     = $self->data->get_management_node_keys();
+	my $computer_node_name       = $self->data->get_computer_node_name();
+	
+	# Get the path from the subroutine arguments and make sure it was passed
+	my $path = shift;
+	if (!$path) {
+		notify($ERRORS{'WARNING'}, 0, "unable to detmine if file exists, path was not specified as an argument");
+		return;
+	}
+	
+	# Assemble the ls command and execute it
+	my $ls_command = "ls -la '$path'";
+	my ($ls_exit_status, $ls_output) = run_ssh_command($computer_node_name, $management_node_keys, $ls_command, '', '', 1);
+	if (defined($ls_exit_status) && $ls_exit_status == 0) {
+		notify($ERRORS{'OK'}, 0, "filesystem entry exists on $computer_node_name: $path");
+		return 1;
+	}
+	elsif (defined($ls_exit_status) && $ls_exit_status == 2) {
+		notify($ERRORS{'OK'}, 0, "filesystem entry does NOT exist on $computer_node_name: $path");
+		return 0;
+	}
+	elsif ($ls_exit_status) {
+		notify($ERRORS{'WARNING'}, 0, "failed to determine if filesystem entry exists on $computer_node_name: $path, exit status: $ls_exit_status, output:\n@{$ls_output}");
+		return;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to determine if filesystem entry exists on $computer_node_name: $path");
+		return;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 grant_access
+
+ Parameters  :
+ Returns     :
+ Description :
+
+=cut
+
+sub grant_access {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $management_node_keys     = $self->data->get_management_node_keys();
+	my $computer_node_name       = $self->data->get_computer_node_name();
+	my $remote_ip                = $self->data->get_reservation_remote_ip();
+	my $multiple_users           = $self->data->get_imagemeta_usergroupmembercount();
+	
+	# Check to make sure remote IP is defined
+	my $remote_ip_range;
+	if (!$remote_ip) {
+		notify($ERRORS{'WARNING'}, 0, "reservation remote IP address is not set in the data structure, opening RDP to any address");
+		$remote_ip_range = '0.0.0.0/32';
+	}
+	elsif ($multiple_users) {
+		notify($ERRORS{'OK'}, 0, "reservation has multiple users, opening RDP to any address");
+		$remote_ip_range = '0.0.0.0/32';
+	}
+	elsif ($remote_ip !~ /^(\d{1,3}\.?){4}$/) {
+		notify($ERRORS{'WARNING'}, 0, "reservation remote IP address format is invalid: $remote_ip, opening RDP to any address");
+		$remote_ip_range = '0.0.0.0/32';
+	}
+	else {
+		# Assemble the IP range string in CIDR notation
+		$remote_ip_range = "$remote_ip/16";
+		notify($ERRORS{'OK'}, 0, "RDP access will be granted from $remote_ip_range on $computer_node_name");
+	}
+	
+	# Allow RDP connections
+	if ($self->firewall_enable_rdp($remote_ip_range)) {
+		notify($ERRORS{'OK'}, 0, "firewall was configured to grant RDP access from $remote_ip_range on $computer_node_name");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "firewall could not be configured to grant RDP access from $remote_ip_range on $computer_node_name");
+		return 0;
+	}
+	
+	notify($ERRORS{'OK'}, 0, "access has been granted for reservation on $computer_node_name");
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 revoke_access
+
+ Parameters  :
+ Returns     :
+ Description :
+
+=cut
+
+sub revoke_access {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $management_node_keys     = $self->data->get_management_node_keys();
+	my $computer_node_name       = $self->data->get_computer_node_name();
+	
+	# Disallow RDP connections
+	if ($self->firewall_disable_rdp()) {
+		notify($ERRORS{'OK'}, 0, "firewall was configured to deny RDP access on $computer_node_name");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "firewall could not be configured to deny RDP access on $computer_node_name");
+		return 0;
+	}
+	
+	notify($ERRORS{'OK'}, 0, "access has been revoked for reservation on $computer_node_name");
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 sanitize
+
+ Parameters  :
+ Returns     :
+ Description :
+
+=cut
+
+sub sanitize {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $computer_node_name       = $self->data->get_computer_node_name();
+	
+	# Revoke RDP access
+	if ($self->revoke_access()) {
+		notify($ERRORS{'OK'}, 0, "RDP access was revoked on $computer_node_name");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to revoke RDP access on $computer_node_name");
+		return 0;
+	}
+	
+	# Delete all users associated with the reservation
+	# This includes the primary reservation user and users listed in imagemeta group if it's configured
+	if ($self->delete_users()) {
+		notify($ERRORS{'OK'}, 0, "users have been deleted from $computer_node_name");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to delete users from $computer_node_name");
+		return 0;
+	}
+	
+	notify($ERRORS{'OK'}, 0, "$computer_node_name has been sanitized");
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_currentimage_txt_contents
+
+ Parameters  : 
+ Returns     : array containing lines in currentimage.txt
+ Description : 
+
+=cut
+
+sub get_currentimage_txt_contents {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $management_node_keys     = $self->data->get_management_node_keys();
+	my $computer_node_name       = $self->data->get_computer_node_name();
+
+	# Attempt to retrieve the contents of currentimage.txt
+	my $cat_command = "cat ~/currentimage.txt";
+	my ($cat_exit_status, $cat_output) = run_ssh_command($computer_node_name, $management_node_keys, $cat_command);
+	if (defined($cat_exit_status) && $cat_exit_status == 0) {
+		notify($ERRORS{'OK'}, 0, "successfully retrieved currentimage.txt from $computer_node_name");
+	}
+	elsif (defined($cat_exit_status)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve currentimage.txt from $computer_node_name, exit status: $cat_exit_status, output:\n@{$cat_output}");
+		return ();
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to failed to retrieve currentimage.txt from $computer_node_name");
+		return;
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "found " . @{$cat_output} . " lines in currentimage.txt on $computer_node_name");
+	
+	return @{$cat_output};
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_current_image_name
+
+ Parameters  : 
+ Returns     : string containing image name loaded on computer
+ Description : 
+
+=cut
+
+sub get_current_image_name {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $computer_node_name = $self->data->get_computer_node_name();
+	
+	# Get the contents of the currentimage.txt file
+	my @current_image_txt_contents;
+	if (@current_image_txt_contents = $self->get_currentimage_txt_contents()) {
+		notify($ERRORS{'DEBUG'}, 0, "retrieved currentimage.txt contents from $computer_node_name");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve currentimage.txt contents from $computer_node_name");
+		return;
+	}
+	
+	# Make sure an empty array wasn't returned
+	if (defined $current_image_txt_contents[0]) {
+		my $current_image_name = $current_image_txt_contents[0];
+		
+		# Remove any line break characters
+		$current_image_name =~ s/[\r\n]*//g;
+		
+		notify($ERRORS{'DEBUG'}, 0, "returning name of image currently loaded on $computer_node_name: $current_image_name");
+		return $current_image_name;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "empty array was returned when currentimage.txt contents were retrieved from $computer_node_name");
+		return;
+	}
 }
 
 #/////////////////////////////////////////////////////////////////////////////

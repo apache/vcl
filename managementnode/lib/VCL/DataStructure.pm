@@ -871,6 +871,62 @@ sub get_computer_private_ip {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 get_reservation_remote_ip
+
+ Parameters  : None
+ Returns     : string
+ Description : 
+
+=cut
+
+sub get_reservation_remote_ip {
+	my $self = shift;
+	my $reservation_id  = $self->get_reservation_id();
+
+	# Create the select statement
+	my $select_statement = "
+	SELECT
+	remoteIP
+	FROM
+	reservation
+	WHERE
+	id = $reservation_id
+	";
+
+	# Call the database select subroutine
+	my @selected_rows = database_select($select_statement);
+
+	# Check to make sure 1 row was returned
+	if (scalar @selected_rows == 0) {
+		notify($ERRORS{'WARNING'}, 0, "failed to get reservation remote IP for reservation $reservation_id, zero rows were returned from database select");
+		return 0;
+	}
+	elsif (scalar @selected_rows > 1) {
+		notify($ERRORS{'WARNING'}, 0, "failed to get reservation remote IP for reservation $reservation_id, " . scalar @selected_rows . " rows were returned from database select");
+		return 0;
+	}
+
+	# Get the single returned row
+	# It contains a hash
+	my $remote_ip;
+
+	# Make sure we return undef if the column wasn't found
+	if (!defined $selected_rows[0]{remoteIP}) {
+		notify($ERRORS{'WARNING'}, 0, "failed to get reservation remote IP for reservation $reservation_id, remoteIP value is undefined");
+		return;
+	}
+	# Make sure we return undef if remote IP is blank
+	elsif ($selected_rows[0]{remoteIP} eq '') {
+		notify($ERRORS{'WARNING'}, 0, "failed to get reservation remote IP for reservation $reservation_id, remoteIP value is blank");
+		return;
+	}
+
+	notify($ERRORS{'DEBUG'}, 0, "retrieved remote IP for reservation $reservation_id: $selected_rows[0]{remoteIP}");
+	return $selected_rows[0]{remoteIP};
+} ## end sub get_reservation_remote_ip
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 get_state_name
 
  Parameters  : None
