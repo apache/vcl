@@ -1647,7 +1647,28 @@ sub getdynamicaddress {
 
 	my $identity;
 	my $dynaIPaddress = 0;
-	if ($osname =~ /win|vmwarewin/) {
+	if ($osname =~ /vista/) {
+		$identity = $IDENTITY_wxp;
+
+		@sshcmd = run_ssh_command($node, $identity, "ipconfig", "root");
+		for my $l (@{$sshcmd[1]}) {
+			# skip class a,b,c private addresses
+			next if ($l !~ /IP.*Address[\s\.:]*([\d\.]*)/);
+			my $ip_address = $1;
+			next if ($ip_address =~ /^10\./);
+			next if ($ip_address =~ /^127\./);
+			next if ($ip_address =~ /^172\./);
+			next if ($ip_address =~ /^192\./);
+			
+			if ($l !~ /IPAddress = $privateIP/) {
+				#to cover sites using eth0 as public
+				$dynaIPaddress = $1;
+			}
+
+		}
+
+	} ## end if ($osname =~ /win|vmwarewin/)
+	elsif ($osname =~ /win|vmwarewin/) {
 		$identity = $IDENTITY_wxp;
 
 		@sshcmd = run_ssh_command($node, $identity, "netsh diag show ip", "root");
@@ -1691,6 +1712,8 @@ sub getdynamicaddress {
 		notify($ERRORS{'WARNING'}, 0, "OSname $osname not supported ");
 		return 0;
 	}
+	
+	notify($ERRORS{'OK'}, 0, "dynamic IP address for $node collected: $dynaIPaddress");
 	return $dynaIPaddress;
 
 } ## end sub getdynamicaddress
