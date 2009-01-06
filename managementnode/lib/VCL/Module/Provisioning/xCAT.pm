@@ -1331,7 +1331,7 @@ sub capture_monitor {
 	sleep 120;
 
 	# Set variables to control how may attempts are made to wait for capture to finish
-	my $capture_loop_attempts = 80;
+	my $capture_loop_attempts = 40;
 	my $capture_loop_wait     = 30;
 
 	# Figure out and print how long will wait before timing out
@@ -1341,7 +1341,10 @@ sub capture_monitor {
 	my $image_size = 0;
 	my $nodeset_status;
 	CAPTURE_LOOP: for (my $capture_loop_count = 0; $capture_loop_count < $capture_loop_attempts; $capture_loop_count++) {
-		notify($ERRORS{'OK'}, 0, "attempt $capture_loop_count/$capture_loop_attempts: image copy not complete, sleeping for $capture_loop_wait seconds");
+		notify($ERRORS{'OK'}, 0, "image copy not complete, sleeping for $capture_loop_wait seconds");
+		if($capture_loop_attempts > 1){
+			notify($ERRORS{'OK'}, 0, "attempt $capture_loop_count/$capture_loop_attempts: image copy not complete, sleeping for $capture_loop_wait seconds");
+		}
 		sleep $capture_loop_wait;
 
 		# Get the nodeset status for the node being captured
