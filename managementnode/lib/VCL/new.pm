@@ -1056,7 +1056,7 @@ sub reserve_computer {
 				if ($request_forimaging) {
 					# Set the Administrator password
 					notify($ERRORS{'OK'}, 0, "attempting to set Administrator password to $reservation_password on $computer_short_name");
-					if (!$self->os->set_password('Administrator')) {
+					if (!$self->os->set_password('Administrator', $reservation_password)) {
 						notify($ERRORS{'WARNING'}, 0, "reserve computer failed: unable to set password for administrator account on $computer_short_name");
 						return 0;
 					}
