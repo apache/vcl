@@ -949,12 +949,16 @@ sub set_password {
 	my $password = shift;
 	
 	# If no argument was supplied, use the user specified in the DataStructure
-	if (!defined($username) && !defined($password)) {
+	if (!defined($username)) {
 		$username = $self->data->get_user_logon_id();
+	}
+	if (!defined($password)) {
 		$password = $self->data->get_reservation_password();
 	}
-	elsif (defined($username) && !defined($password)) {
-		notify($ERRORS{'WARNING'}, 0, "password set failed, username $username was passed as an argument but the password was not");
+	
+	# Make sure both the username and password were determined
+	if (!defined($username) || !defined($password)) {
+		notify($ERRORS{'WARNING'}, 0, "username and password could not be determined");
 		return 0;
 	}
 	
@@ -979,6 +983,58 @@ sub set_password {
 			notify($ERRORS{'WARNING'}, 0, "failed to set sshd service credentials to $username ($password)");
 			return 0;
 		}
+	}
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 enable_user
+
+ Parameters  : $username (optional
+ Returns     : 
+ Description : 
+
+=cut
+
+sub enable_user {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $management_node_keys     = $self->data->get_management_node_keys();
+	my $computer_node_name       = $self->data->get_computer_node_name();
+	
+	# Attempt to get the username from the arguments
+	my $username = shift;
+	
+	# If no argument was supplied, use the user specified in the DataStructure
+	if (!defined($username)) {
+		$username = $self->data->get_user_logon_id();
+	}
+	
+	# Make sure the username was determined
+	if (!defined($username)) {
+		notify($ERRORS{'WARNING'}, 0, "username could not be determined");
+		return 0;
+	}
+	
+	# Attempt to enable the user account (set ACTIVE=YES)
+	notify($ERRORS{'OK'}, 0, "enabling user $username on $computer_node_name");
+	my ($enable_exit_status, $enable_output) = run_ssh_command($computer_node_name, $management_node_keys, "net user $username /ACTIVE:YES");
+	if ($enable_exit_status == 0) {
+		notify($ERRORS{'OK'}, 0, "user $username enabled on $computer_node_name");
+	}
+	elsif ($enable_exit_status) {
+		notify($ERRORS{'WARNING'}, 0, "failed to enable user $username on $computer_node_name, exit status: $enable_exit_status, output:\n@{$enable_output}");
+		return 0;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to enable user $username on $computer_node_name");
+		return 0;
 	}
 	
 	return 1;
@@ -3116,6 +3172,7 @@ sub grant_access {
 	my $computer_node_name       = $self->data->get_computer_node_name();
 	my $remote_ip                = $self->data->get_reservation_remote_ip();
 	my $multiple_users           = $self->data->get_imagemeta_usergroupmembercount();
+	my $request_forimaging       = $self->data->get_request_forimaging();
 	
 	# Check to make sure remote IP is defined
 	my $remote_ip_range;
@@ -3137,6 +3194,7 @@ sub grant_access {
 		notify($ERRORS{'OK'}, 0, "RDP access will be granted from $remote_ip_range on $computer_node_name");
 	}
 	
+	
 	# Allow RDP connections
 	if ($self->firewall_enable_rdp($remote_ip_range)) {
 		notify($ERRORS{'OK'}, 0, "firewall was configured to grant RDP access from $remote_ip_range on $computer_node_name");
@@ -3144,6 +3202,18 @@ sub grant_access {
 	else {
 		notify($ERRORS{'WARNING'}, 0, "firewall could not be configured to grant RDP access from $remote_ip_range on $computer_node_name");
 		return 0;
+	}
+	
+	# If this is an imaging request, make sure the Administrator account is enabled
+	if ($request_forimaging) {
+		notify($ERRORS{'DEBUG'}, 0, "imaging request, making sure Administrator account is enabled");
+		if ($self->enable_user('Administrator')) {
+			notify($ERRORS{'OK'}, 0, "Administrator account is enabled for imaging request");
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to enable Administrator account for imaging request");
+			return 0;
+		}
 	}
 	
 	notify($ERRORS{'OK'}, 0, "access has been granted for reservation on $computer_node_name");
