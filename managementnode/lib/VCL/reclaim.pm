@@ -442,12 +442,12 @@ sub insert_reload_and_exit {
 	my $next_image_name;
 	my $next_image_id;
 	my $next_imagerevision_id;
-
-	if($self->predictor->can("get_next_image")){
-		($next_image_name, $next_image_id, $next_imagerevision_id) = $self->predictor->get_next_image();
+	
+	if($self->data->can("get_next_image_dataStructure")){
+		($next_image_name, $next_image_id, $next_imagerevision_id) = $self->data->get_next_image_dataStructure();
 	}
 	else{
-		notify($ERRORS{'WARNING'}, 0, "predictor module does not support get_next_image, calling get_next_image_default");
+		notify($ERRORS{'WARNING'}, 0, "predictor module does not support get_next_image_dataStructure, calling get_next_image_default from utils");
 		($next_image_name, $next_image_id, $next_imagerevision_id) = get_next_image_default($computer_id);
 	}
 

@@ -967,12 +967,28 @@ sub get_state_name {
 
 sub get_next_image_dataStructure {
 	my $self = shift;
+	
+	# Get the current image data in case something goes wrong
+	my $image_name = $self->get_image_name();
+	my $image_id = $self->get_image_id();
+	my $imagerevision_id = $self->get_imagerevision_id();
+	
+	# Assemble an array with the current image information
+	# This will be returned if the predictive method fails
+	my @current_image;
+	if ($image_name && $image_id && $imagerevision_id) {
+		@current_image = ($image_name, $image_id, $imagerevision_id);
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unable to obtain current image information");
+      @current_image = ();
+	}
 
 	#collect predictive reload information from database.
 	my $management_predictive_info = get_management_predictive_info();
 	if(!$management_predictive_info->{predictivemoduleid}){
-		notify($ERRORS{'CRITICAL'}, 0, "unable to obtain management node info for this node");
-      return 0;
+		notify($ERRORS{'CRITICAL'}, 0, "unable to obtain management node info for this node, returning current reservation image information");
+      return @current_image;
 	}
 
 	#update ENV in case other modules need to know
@@ -992,22 +1008,29 @@ sub get_next_image_dataStructure {
 
 		if ($EVAL_ERROR) {
 			notify($ERRORS{'WARNING'}, 0, "$predictive_perl_package module could not be loaded");
-			notify($ERRORS{'OK'},      0, "returning 0");
-			return 0;
+			notify($ERRORS{'OK'},      0, "returning current reservation image information");
+			return @current_image;
 		}
 		if (my $predictor = ($predictive_perl_package)->new({data_structure => $self})) {
 			notify($ERRORS{'OK'}, 0, ref($predictor) . " predictive loading object successfully created");
 			@nextimage = $predictor->get_next_image();
-			return @nextimage;
+			if (scalar(@nextimage) == 3) {
+				notify($ERRORS{'OK'}, 0, "predictive loading module retreived image information: @nextimage");
+				return @nextimage;
+			}
+			else {
+				notify($ERRORS{'WARNING'}, 0, "predictive loading module failed to retrieve image information, returning current reservation image information");
+				return @current_image;
+			}
 		}
 		else {
-			notify($ERRORS{'WARNING'}, 0, "predictive loading object could not be created, returning 0");
-			return 0;
+			notify($ERRORS{'WARNING'}, 0, "predictive loading object could not be created, returning current reservation image information");
+			return @current_image;
 		}
 	} ## end if ($predictive_perl_package)
 	else {
-		notify($ERRORS{'OK'}, 0, "predictive loading module not loaded, Perl package is not defined");
-		return 0
+		notify($ERRORS{'OK'}, 0, "predictive loading module not loaded, Perl package is not defined, returning current reservation image information");
+		return @current_image;
 	}
 
 }
