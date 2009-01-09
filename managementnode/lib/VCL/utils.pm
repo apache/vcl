@@ -1675,10 +1675,10 @@ sub getdynamicaddress {
 		for my $l (@{$sshcmd[1]}) {
 			# skip class a,b,c private addresses
 			next if ($l =~ /IPAddress = $privateIP/);
-			next if ($l =~ /inet addr:10.([.0-9]*)/);
-			next if ($l =~ /inet addr:127([.0-9]*)/);
-			next if ($l =~ /inet addr:172([.0-9]*)/);
-			next if ($l =~ /inet addr:192.168([.0-9]*)/);
+			next if ($l =~ /IPAddress = 10.([.0-9]*)/);
+			next if ($l =~ /IPAddress = 127([.0-9]*)/);
+			next if ($l =~ /IPAddress = 172([.0-9]*)/);
+			next if ($l =~ /IPAddress = 192([.0-9]*)/);
 			if ($l =~ /IPAddress = ([.0-9]*)/) {
 				if ($l !~ /IPAddress = $privateIP/) {
 					#to cover sites using eth0 as public
