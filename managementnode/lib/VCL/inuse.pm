@@ -134,8 +134,8 @@ sub process {
 	# Check if this is an imaging request, causes process to exit if state or laststate = image
 	$request_forimaging = $self->_check_imaging_request();
 
-	# Remove rows from computerloadlog for this reservation
-	if (delete_computerloadlog_reservation($reservation_id)) {
+	# Remove rows from computerloadlog for this reservation, don't remove the loadstate=begin row
+	if (delete_computerloadlog_reservation($reservation_id, '!begin')) {
 		notify($ERRORS{'OK'}, 0, "rows removed from computerloadlog table for reservation $reservation_id");
 	}
 	else {

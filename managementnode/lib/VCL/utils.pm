@@ -8124,7 +8124,11 @@ sub windowsroutetable {
 
  Parameters  : $reservation_id, optional loadstatename
  Returns     : 0 failed or 1 success
- Description : Deletes rows from the computerloadlog table
+ Description : Deletes rows from the computerloadlog table. A loadstatename
+               argument can be specified to limit the rows removed to a
+               certain loadstatename. To delete all rows except those
+               matching a certain loadstatename, begin the loadstatename
+               with a !.
 
 =cut
 
@@ -8142,7 +8146,9 @@ sub delete_computerloadlog_reservation {
 	my $sql_statement;
 	# Check if loadstateid was specified
 	# If so, only delete rows matching the loadstateid
-	if ($loadstatename) {
+	if ($loadstatename && $loadstatename !~ /^!/) {
+		notify($ERRORS{'DEBUG'}, 0, "removing computerloadlog entries matching loadstate = $loadstatename");
+		
 		$sql_statement = "
 		DELETE
 		computerloadlog
@@ -8155,7 +8161,26 @@ sub delete_computerloadlog_reservation {
 		AND computerloadstate.loadstatename = \'$loadstatename\'
 		";
 	}
+	elsif ($loadstatename) {
+		# Remove the first character of loadstatename, it is !
+		$loadstatename = substr($loadstatename, 1);
+		notify($ERRORS{'DEBUG'}, 0, "removing computerloadlog entries NOT matching loadstate = $loadstatename");
+		
+		$sql_statement = "
+		DELETE
+		computerloadlog
+		FROM
+		computerloadlog,
+		computerloadstate
+		WHERE
+		computerloadlog.reservationid = $reservation_id
+		AND computerloadlog.loadstateid = computerloadstate.id
+		AND computerloadstate.loadstatename != \'$loadstatename\'
+		";
+	}
 	else {
+		notify($ERRORS{'DEBUG'}, 0, "removing all computerloadlog entries for reservation");
+		
 		$loadstatename = 'all';
 		$sql_statement = "
 		DELETE
@@ -8169,11 +8194,11 @@ sub delete_computerloadlog_reservation {
 
 	# Call the database execute subroutine
 	if (database_execute($sql_statement)) {
-		notify($ERRORS{'OK'}, 0, "deleted rows from computerloadlog table where reservation id=$reservation_id, loadstatename=$loadstatename");
+		notify($ERRORS{'OK'}, 0, "deleted rows from computerloadlog for reservation id=$reservation_id");
 		return 1;
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "unable to delete from computerloadlog table where reservation id=$reservation_id, loadstatename=$loadstatename");
+		notify($ERRORS{'WARNING'}, 0, "unable to delete from computerloadlog table for reservation id=$reservation_id");
 		return 0;
 	}
 } ## end sub delete_computerloadlog_reservation
