@@ -158,26 +158,31 @@ END
 		$create_image_result = 1;
 
 		notify($ERRORS{'OK'}, 0, "OS modularization supported, beginning OS module capture prepare");
-		if (!($create_image_result = $self->os->capture_prepare())) {
+		if (!$self->os->capture_prepare()) {
 			notify($ERRORS{'WARNING'}, 0, "OS module capture prepare failed");
+			$self->image_creation_failed();
 		}
 
 		notify($ERRORS{'OK'}, 0, "beginning provisioning module capture prepare");
-		if ($create_image_result && !($create_image_result = $self->provisioner->capture_prepare())) {
+		if (!$self->provisioner->capture_prepare()) {
 			notify($ERRORS{'WARNING'}, 0, "provisioning module capture prepare failed");
+			$self->image_creation_failed();
 		}
-
+		
 		notify($ERRORS{'OK'}, 0, "beginning OS module capture start");
-		if ($create_image_result && !($create_image_result = $self->os->capture_start())) {
+		if (!$self->os->capture_start()) {
 			notify($ERRORS{'WARNING'}, 0, "OS module capture start failed");
+			$self->image_creation_failed();
 		}
 
 		notify($ERRORS{'OK'}, 0, "beginning provisioning module capture monitor");
-		if ($create_image_result && !($create_image_result = $self->provisioner->capture_monitor())) {
+		if (!$self->provisioner->capture_monitor()) {
 			notify($ERRORS{'WARNING'}, 0, "provisioning module capture monitor failed");
+			$self->image_creation_failed();
 		}
 
 	} ## end if ($computer_type eq "blade" && $self->os)
+	
 	elsif ($computer_type eq "blade") {
 		$create_image_result = $self->provisioner->capture_prepare();
 

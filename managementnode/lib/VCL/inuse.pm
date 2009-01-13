@@ -129,6 +129,10 @@ sub process {
 
 	# Set the user connection timeout limit in minutes
 	my $connect_timeout_limit = 15;
+	
+	# Check if request imaging status has changed
+	# Check if this is an imaging request, causes process to exit if state or laststate = image
+	$request_forimaging = $self->_check_imaging_request();
 
 	# Remove rows from computerloadlog for this reservation
 	if (delete_computerloadlog_reservation($reservation_id)) {
@@ -157,7 +161,7 @@ sub process {
 				notify($ERRORS{'OK'}, 0, "confirmed firewall scope has been updated");
 			}
 		}
-
+		
 		# Check the imagemeta checkuser flag, request forimaging flag, and if cluster request
 		if (!$imagemeta_checkuser || $request_forimaging || ($reservation_count > 1)) {
 			# Either imagemeta checkuser flag = 0, forimaging = 1, or cluster request
@@ -202,14 +206,9 @@ sub process {
 				exit;
 			}
 
-			# If forimage flag is set - check for state change to image creation mode and exit quietly
-			if ($request_forimaging) {
-				notify($ERRORS{'DEBUG'}, 0, "request has forimaging flag enabled, checking for image state");
-				if (is_request_imaging($request_id)) {
-					notify($ERRORS{'OK'}, 0, "request is now in image creation mode, quietly exiting");
-					exit;
-				}
-			}
+			# Check if request imaging status has changed
+			# Check if this is an imaging request, causes process to exit if state or laststate = image
+			$request_forimaging = $self->_check_imaging_request();
 
 			# Put this request back into the inuse state
 			if ($is_parent_reservation && update_request_state($request_id, "inuse", "inuse")) {
@@ -273,9 +272,13 @@ sub process {
 		#$check_connection = 'timeout';
 
 		# Proceed based on status of check_connection
-		if ($check_connection eq "connected") {
+		if ($check_connection eq "connected" || $check_connection eq "conn_wrong_ip") {
 			notify($ERRORS{'OK'}, 0, "user connected");
 
+			# Check if request imaging status has changed
+			# Check if this is an imaging request, causes process to exit if state or laststate = image
+			$request_forimaging = $self->_check_imaging_request();
+	
 			# Put this request back into the inuse state
 			if (update_request_state($request_id, "inuse", "inuse")) {
 				notify($ERRORS{'OK'}, 0, "request state set back to inuse");
@@ -296,33 +299,13 @@ sub process {
 			exit;
 		}    # Close check_connection is connected
 
-		elsif ($check_connection eq "conn_wrong_ip") {
-			notify($ERRORS{'OK'}, 0, "polling, user connected but wrong remote IP is used");
-
-			# Update the lastcheck time for this reservation
-			if (update_reservation_lastcheck($reservation_id)) {
-				notify($ERRORS{'OK'}, 0, "updated lastcheck time for this reservation to now");
-			}
-			else {
-				notify($ERRORS{'WARNING'}, 0, "unable to update lastcheck time for this reservation to now");
-			}
-
-			# Put this request back into the inuse state
-			if (update_request_state($request_id, "inuse", "inuse")) {
-				notify($ERRORS{'OK'}, 0, "request state set back to inuse");
-			}
-			else {
-				notify($ERRORS{'WARNING'}, 0, "unable to set request state back to inuse");
-			}
-
-			notify($ERRORS{'OK'}, 0, "exiting");
-			exit;
-		} ## end elsif ($check_connection eq "conn_wrong_ip")  [ if ($check_connection eq "connected")
-
-
-		elsif ($check_connection eq "timeout") {
+		elsif (!$request_forimaging && $check_connection eq "timeout") {
 			notify($ERRORS{'OK'}, 0, "user did not reconnect within $connect_timeout_limit minute time limit");
 
+			# Check if request imaging status has changed
+			# Check if this is an imaging request, causes process to exit if state or laststate = image
+			$request_forimaging = $self->_check_imaging_request();
+	
 			notify($ERRORS{'OK'}, 0, "notifying user that request timed out");
 			$self->_notify_user_timeout();
 
@@ -378,6 +361,10 @@ sub process {
 		else {
 			notify($ERRORS{'CRITICAL'}, 0, "unexpected return value from check_connection: $check_connection, treating request as connected");
 
+			# Check if request imaging status has changed
+			# Check if this is an imaging request, causes process to exit if state or laststate = image
+			$request_forimaging = $self->_check_imaging_request();
+			
 			# Put this request back into the inuse state
 			if (update_request_state($request_id, "inuse", "inuse")) {
 				notify($ERRORS{'OK'}, 0, "request state set back to inuse");
@@ -421,20 +408,14 @@ sub process {
 			# Sleep one minute and decrement disconnect time by a minute
 			sleep 60;
 			$disconnect_time--;
-
+		
 			# Check if the user deleted the request
 			if (is_request_deleted($request_id)) {
 				# User deleted request, exit queitly
 				notify($ERRORS{'OK'}, 0, "user has deleted the request, quietly exiting");
 				exit;
 			}
-
-			# check for state change to image creation mode and exit quietly
-			if (is_request_imaging($request_id)) {
-				notify($ERRORS{'OK'}, 0, "request is now in image creation mode, quietly exiting");
-				exit;
-			}
-
+			
 			# Perform some actions at 5 minutes until end of request
 			if ($disconnect_time == 5) {
 				# Check for connection
@@ -460,6 +441,10 @@ sub process {
 			# Convert the current and new end times to epoch seconds
 			my $new_request_end_epoch = convert_to_epoch_seconds($new_request_end);
 			my $request_end_epoch     = convert_to_epoch_seconds($request_end);
+			
+			# Check if request imaging status has changed
+			# Check if this is an imaging request, causes process to exit if state or laststate = image
+			$request_forimaging = $self->_check_imaging_request();
 
 			# Check if request end is later than the original (user extended time)
 			if ($new_request_end_epoch > $request_end_epoch) {
@@ -482,16 +467,8 @@ sub process {
 
 		}    # Close while disconnect time is not 0
 
-		# If forimage flag is set - check for state change to image creation mode and exit quietly
-		# One last check - if forimaging lets sleep 1 min and check the state
-		if ($request_forimaging) {
-			sleep 60;
-			notify($ERRORS{'OK'}, 0, "request has forimaging flag enabled checking for image state");
-			if (is_request_imaging($request_id)) {
-				notify($ERRORS{'OK'}, 0, "request is now in image creation mode, quietly exiting");
-				exit;
-			}
-		}
+		# Check if this is an imaging request, causes process to exit if state or laststate = image
+		$request_forimaging = $self->_check_imaging_request();
 
 		# Insert an entry into the load log
 		insertloadlog($reservation_id, $computer_id, "timeout", "endtime reached moving to timeout");
@@ -560,6 +537,7 @@ sub process {
 	notify($ERRORS{'OK'}, 0, "exiting");
 	exit;
 } ## end sub process
+
 #/////////////////////////////////////////////////////////////////////////////
 
 =head2 _notify_user_endtime
@@ -842,6 +820,60 @@ EOF
 
 	return 1;
 } ## end sub _notify_user_request_ended
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 _check_imaging_request
+
+ Parameters  : 
+ Returns     : 1 if not an imaging request, undefined if an error occurred, exits otherwise
+ Description : The inuse process exits if the request state or laststate are set to image, or if the forimaging flag has been set.
+
+=cut
+
+sub _check_imaging_request {
+	my $self            = shift;
+	my $request_id = $self->data->get_request_id();
+	my $reservation_id = $self->data->get_reservation_id();
+	my $request_forimaging = $self->data->get_request_forimaging();
+	
+	notify($ERRORS{'DEBUG'}, 0, "checking if request is imaging or if forimaging flag has changed");
+	
+	# Call is_request_imaging
+	# -returns 'image' if request state or laststate = image
+	# -returns 'forimaging' if request state and laststate != image, and forimaging = 1
+	# -returns 0 if request state and laststate != image, and forimaging = 0
+	# -returns undefined if an error occurred
+	my $imaging_result = is_request_imaging($request_id);
+	
+	if ($imaging_result eq 'image') {
+		notify($ERRORS{'OK'}, 0, "image creation process has begun, exiting");
+		exit;
+	}
+	elsif ($imaging_result eq 'forimaging') {
+		if ($request_forimaging != 1) {
+			notify($ERRORS{'OK'}, 0, "request forimaging flag has changed to 1, updating data structure");
+			$self->data->set_request_forimaging(1);
+		}
+		return 1;
+	}
+	elsif ($imaging_result == 0) {
+		if ($request_forimaging != 0) {
+			notify($ERRORS{'OK'}, 0, "request forimaging flag has changed to 0, updating data structure");
+			$self->data->set_request_forimaging(0);
+		}
+		return 0;
+	}
+	elsif (!defined($imaging_result)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve request imaging values from database");
+		return;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unexpected result returned from is_request_imaging: $imaging_result");
+		return;
+	}
+	
+}
 #/////////////////////////////////////////////////////////////////////////////
 
 1;

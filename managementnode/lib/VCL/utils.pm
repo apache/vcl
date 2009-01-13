@@ -2482,26 +2482,28 @@ sub is_reservation_deleted {
 =head2 is_request_imaging
 
  Parameters  : $request_id
- Returns     : return 1 if request state or laststate is set to image or if request does not exist
-					return 0 if request exists and neither request state nor laststate is set to image success 0 failure
- Description : checks if request is in imaging mode
+ Returns     : return 'image' if request state or laststate is set to image
+					return 'forimaging' if forimaging is set to 1, and neither request state nor laststate is set to image
+					return 0 if forimaging is set to 0, and neither request state nor laststate is set to image
+					return undefined if an error occurred
+ Description : checks if request is in imaging mode and if forimaging has been set
 
 =cut
 
 sub is_request_imaging {
 
 	my ($request_id) = @_;
-	my ($package, $filename, $line, $sub) = caller(0);
-
+	
 	# Check the passed parameter
 	if (!(defined($request_id))) {
 		notify($ERRORS{'WARNING'}, 0, "request ID was not specified");
-		return 0;
+		return;
 	}
 
 	# Create the select statement
 	my $select_statement = "
 	SELECT
+	request.forimaging AS forimaging,
 	request.stateid AS currentstate_id,
 	request.laststateid AS laststate_id,
 	currentstate.name AS currentstate_name,
@@ -2519,24 +2521,29 @@ sub is_request_imaging {
 	my @selected_rows = database_select($select_statement);
 
 	# Check to make sure 1 row was returned
-	if (scalar @selected_rows == 0) {
-		return 1;
-	}
-	elsif (scalar @selected_rows > 1) {
-		notify($ERRORS{'WARNING'}, 0, "" . scalar @selected_rows . " rows were returned from database select");
-		return 0;
+	if (scalar @selected_rows != 1) {
+		notify($ERRORS{'WARNING'}, 0, scalar @selected_rows . " rows were returned from database select");
+		return;
 	}
 
+	my $forimaging     = $selected_rows[0]{forimaging};
 	my $state_name     = $selected_rows[0]{currentstate_name};
 	my $laststate_name = $selected_rows[0]{laststate_name};
 
-	notify($ERRORS{'DEBUG'}, 0, "is_request_imaging currentstate= $state_name laststate= $laststate_name");
+	notify($ERRORS{'DEBUG'}, 0, "forimaging=$forimaging, currentstate=$state_name, laststate=$laststate_name");
 
+	# If request state or laststate has been changed to image, return 1
+	# If forimaging is set, return 0
+	# If neither state is image and forimaging is not set, return undefined
 	if ($state_name eq 'image' || $laststate_name eq 'image') {
-		return 1;
+		return 'image';
 	}
-
-	return 0;
+	elsif ($forimaging) {
+		return 'forimaging';
+	}
+	else {
+		return 0;
+	}
 } ## end sub is_request_imaging
 
 #/////////////////////////////////////////////////////////////////////////////
