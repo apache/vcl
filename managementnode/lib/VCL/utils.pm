@@ -1647,7 +1647,7 @@ sub getdynamicaddress {
 
 	my $identity;
 	my $dynaIPaddress = 0;
-	if ($osname =~ /vista/) {
+	if ($osname =~ /vista|win|vmwarewin|vmwareesxwin/) {
 		$identity = $IDENTITY_wxp;
 
 		@sshcmd = run_ssh_command($node, $identity, "ipconfig", "root");
@@ -1665,26 +1665,6 @@ sub getdynamicaddress {
 				$dynaIPaddress = $1;
 			}
 
-		}
-
-	} ## end if ($osname =~ /win|vmwarewin/)
-	elsif ($osname =~ /win|vmwarewin/) {
-		$identity = $IDENTITY_wxp;
-
-		@sshcmd = run_ssh_command($node, $identity, "netsh diag show ip", "root");
-		for my $l (@{$sshcmd[1]}) {
-			# skip class a,b,c private addresses
-			next if ($l =~ /IPAddress = $privateIP/);
-			next if ($l =~ /IPAddress = 10.([.0-9]*)/);
-			next if ($l =~ /IPAddress = 127([.0-9]*)/);
-			next if ($l =~ /IPAddress = 172([.0-9]*)/);
-			next if ($l =~ /IPAddress = 192([.0-9]*)/);
-			if ($l =~ /IPAddress = ([.0-9]*)/) {
-				if ($l !~ /IPAddress = $privateIP/) {
-					#to cover sites using eth0 as public
-					$dynaIPaddress = $1;
-				}
-			}
 		}
 
 	} ## end if ($osname =~ /win|vmwarewin/)
