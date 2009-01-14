@@ -6781,7 +6781,7 @@ sub run_ssh_command {
 		# Bits 9-16 of $? contain the child process exit status
 		$exit_status = $? >> 8;
 		
-		notify($ERRORS{'DEBUG'}, 0, "\$?: $?, signal: $signal_number, core dump: $core_dump, exit status: $exit_status");
+		#notify($ERRORS{'DEBUG'}, 0, "\$?: $?, signal: $signal_number, core dump: $core_dump, exit status: $exit_status");
 
 		## For some reason the SSH exit status is sometimes right-padded with 8 0's
 		## Shift right 8 bits to get the real value if it's > 255
@@ -6789,10 +6789,15 @@ sub run_ssh_command {
 		#	$ssh_exit_status = ($ssh_exit_status >> 8);
 		#}
 
-		# Strip out the key warning message
+		# Strip out the key warning message from the output
 		$ssh_output =~ s/\@{10,}.*man-in-the-middle attacks\.//igs;
+		
+		# Strip out known hosts warning message
+		#    Warning: Permanently added 'blade1b2-8' (RSA) to the list of known hosts.
+		$ssh_output =~ s/Warning: Permanently added .+ to the list of known hosts\.//igs;
+		
+		# Remove any spaces from the beginning and end of the output
 		$ssh_output =~ s/^\s+|\s+$//g;
-		chomp $ssh_output;
 
 		# Set the output string to none if no output was produced
 		$ssh_output = 'none' if !$ssh_output;
