@@ -1,0 +1,3 @@
+AuthType shibboleth
+ShibRequireSession Off
+require shibboleth

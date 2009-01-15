@@ -40,6 +40,7 @@ $cache['nodes'] = array();
 $cache['unityids'] = array();
 $cache['nodeprivs']['resources'] = array();
 $docreaders = array();
+$shibauthed = 0;
 
 require_once(".ht-inc/states.php");
 

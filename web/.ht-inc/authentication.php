@@ -35,14 +35,19 @@
 /// a timestamp
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function getAuthCookieData($loginid, $valid=600) {
+function getAuthCookieData($loginid, $valid=600, $shibauthid=0) {
 	global $keys;
 	$ts = time() + ($valid * 60);
 	$remoteIP = $_SERVER["REMOTE_ADDR"];
 	if(empty($remoteIP))
 		return "Failed to obtain remote IP address for fixed cookie type";
-	$cdata = "$loginid|$remoteIP|$ts";
+	if($shibauthid)
+		$cdata = "$loginid|$remoteIP|$ts|$shibauthid";
+	else
+		$cdata = "$loginid|$remoteIP|$ts";
 
+	# 245 characters can be encrypted; anything over that, and
+	#   openssl_private_encrypt will fail
 	if(! openssl_private_encrypt($cdata, $cryptdata, $keys["private"]))
 		return "Failed to encrypt cookie data";
 
@@ -53,26 +58,16 @@ function getAuthCookieData($loginid, $valid=600) {
 ///
 /// \fn readAuthCookie()
 ///
-/// \return on success, an array with the following indices:\n
-/// \b userid - numeric user id\n
-/// \b first - first name\n
-/// \b middle - middle name (may be an empty string)\n
-/// \b last - last name\n
-/// \b email - email address\n
-/// \b created - timestamp of account creation (in mysql datetime format)\n
-/// \b ts - timestamp that authentication cookie will expire (in unix timestamp
-/// format)\n
-/// \b type - 'fixed' or 'floating' - fixed = tied to specific IP address;
-/// floating = not tied to any IP address (only fixed is supported at this time)\n
-/// \b remoteIP - empty for type 'floating'; user's IP address for type 'fixed'
+/// \return on success, userid of user in VCLAUTH cookie in user@affil form;
+/// NULL on failure
 ///
-/// \brief parses the ITECSAUTH cookie and returns an array; on failure, returns
-/// an empty array.  You will then need to call ITECSAUTH_getError to get
-/// the reason.
+/// \brief parses the VCLAUTH cookie to get the contained userid; also checks
+/// that the contained remoteIP matches the current remoteIP and that the cookie
+/// has not expired
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function readAuthCookie() {
-	global $keys, $AUTHERROR;
+	global $keys, $AUTHERROR, $shibauthed;
 	if(get_magic_quotes_gpc())
 		$cookie = stripslashes($_COOKIE["VCLAUTH"]);
 	else
@@ -87,6 +82,25 @@ function readAuthCookie() {
 	$loginid = $tmparr[0];
 	$remoteIP = $tmparr[1];
 	$ts = $tmparr[2];
+	if(count($tmparr) > 3) {
+		$shibauthed = $tmparr[3];
+	
+		# check to see if shibauth entry still exists for $shibauthed
+		$query = "SELECT ts FROM shibauth WHERE id = $shibauthed";
+		$qh = doQuery($query, 101);
+		if($row = mysql_fetch_assoc($qh)) {
+			$shibstart = $row['ts'];
+			# TODO if $shibstart is too old, expire the login session
+		}
+		else {
+			# user should have been logged out, log them out now
+			setcookie("VCLAUTH", "", time() - 10, "/", COOKIEDOMAIN);
+			stopSession();
+			dbDisconnect();
+			header("Location: " . BASEURL);
+			exit;
+		}
+	}
 
    if($ts < time()) {
       $AUTHERROR["code"] = 4;
@@ -409,9 +423,9 @@ function ldapLogin($authtype, $userid, $passwd) {
 		$cookie = getAuthCookieData("$userid@" . getAffiliationName($authMechs[$authtype]['affiliationid']));
 		// set cookie
 		if(version_compare(PHP_VERSION, "5.2", ">=") == true)
-			setcookie("VCLAUTH", "{$cookie['data']}", $cookie['ts'], "/", COOKIEDOMAIN, 1, 1);
+			setcookie("VCLAUTH", "{$cookie['data']}", 0, "/", COOKIEDOMAIN, 0, 1);
 		else
-			setcookie("VCLAUTH", "{$cookie['data']}", $cookie['ts'], "/", COOKIEDOMAIN, 1);
+			setcookie("VCLAUTH", "{$cookie['data']}", 0, "/", COOKIEDOMAIN, 0);
 		# set skin cookie based on affiliation
 		/*if(getAffiliationName($authMechs[$authtype]['affiliationid']) == 'EXAMPLE1')
 			setcookie("VCLSKIN", "EXAMPLE1", (time() + (SECINDAY * 31)), "/", COOKIEDOMAIN);
@@ -452,9 +466,9 @@ function localLogin() {
 		//set cookie
 		$cookie = getAuthCookieData("$userid@local");
 		if(version_compare(PHP_VERSION, "5.2", ">=") == true)
-			setcookie("VCLAUTH", "{$cookie['data']}", $cookie['ts'], "/", COOKIEDOMAIN, 1, 1);
+			setcookie("VCLAUTH", "{$cookie['data']}", 0, "/", COOKIEDOMAIN, 0, 1);
 		else
-			setcookie("VCLAUTH", "{$cookie['data']}", $cookie['ts'], "/", COOKIEDOMAIN, 1);
+			setcookie("VCLAUTH", "{$cookie['data']}", 0, "/", COOKIEDOMAIN);
 		//load main page
 		setcookie("VCLSKIN", "NCSU", (time() + (SECINDAY * 31)), "/", COOKIEDOMAIN);
 		header("Location: " . BASEURL . SCRIPT);

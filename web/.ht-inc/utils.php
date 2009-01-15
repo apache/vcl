@@ -160,6 +160,12 @@ function initGlobals() {
 		if(! is_null($userid))
 			$authed = 1;
 	}
+	elseif(preg_match('/_shibsession/', join(',', array_keys($_COOKIE)))) {
+		# redirect to shibauth directory
+		header('Location: ' . BASEURL . "/shibauth/");
+		dbDisconnect();
+		exit;
+	}
 	# end auth check
 
 	if($authed && $mode == 'selectauth')
@@ -189,6 +195,7 @@ function initGlobals() {
 
 		require_once(".ht-inc/requests.php");
 		if($mode != "logout" &&
+			$mode != "shiblogout" &&
 			$mode != "vcldquery" &&
 			$mode != "xmlrpccall" &&
 			$mode != "xmlrpcaffiliations" &&
@@ -3117,7 +3124,8 @@ function getUserInfo($id) {
 	       .        "u.mapprinters AS mapprinters, "
 	       .        "u.mapserial AS mapserial, "
 	       .        "u.showallgroups, "
-	       .        "u.lastupdated AS lastupdated "
+	       .        "u.lastupdated AS lastupdated, "
+	       .        "af.shibonly "
 	       . "FROM user u, "
 	       .      "curriculum c, "
 	       .      "IMtype i, "
@@ -3136,7 +3144,8 @@ function getUserInfo($id) {
 	if($user = mysql_fetch_assoc($qh)) {
 		if((datetimeToUnix($user["lastupdated"]) > time() - SECINDAY) ||
 		   $user['unityid'] == 'vclreload' ||
-		   $user['affiliation'] == 'Local') {
+		   $user['affiliation'] == 'Local' ||
+		   $user['shibonly']) {
 			# get user's groups
 			$user["groups"] = getUsersGroups($user["id"], 1);
 
@@ -7991,6 +8000,45 @@ function continuationsError() {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
+/// \fn getShibauthData($id)
+///
+/// \param $id - id for entry in shibauth table
+///
+/// \return NULL if id not found in table or array of data with these keys:\n
+/// \b userid - id of user that data belongs to\n
+/// \b ts - datetime of when authdata was created\n
+/// \b sessid - shibboleth session id\n
+/// \b Shib-Application-ID - ??\n
+/// \b Shib-Identity-Provider - ??\n
+/// \b Shib-AuthnContext-Dec - ??\n
+/// \b Shib-logouturl - idp's logout url\n
+/// \b eppn - edu person principal name for user\n
+/// \b unscoped-affiliation - shibboleth unscoped affiliation\n
+/// \b affiliation - shibboleth scoped affiliation
+///
+/// \brief gets entry from shibauth table
+///
+////////////////////////////////////////////////////////////////////////////////
+function getShibauthData($id) {
+	$query = "SELECT id, "
+	       .        "userid, "
+	       .        "ts, "
+	       .        "sessid, "
+	       .        "data "
+	       . "FROM shibauth "
+	       . "WHERE id = $id";
+	$qh = doQuery($query, 101);
+	if($row = mysql_fetch_assoc($qh)) {
+		$data = unserialize($row['data']);
+		unset($row['data']);
+		$data2 = array_merge($row, $data);
+		return $data2;
+	}
+	return NULL;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
 /// \fn xmlrpccall()
 ///
 /// \brief registers all functions available to xmlrpc, handles the current
@@ -8321,6 +8369,7 @@ function menulistLI($page) {
 ////////////////////////////////////////////////////////////////////////////////
 function sendHeaders() {
 	global $mode, $user, $authed, $oldmode, $viewmode, $actionFunction, $skin;
+	global $shibauthed;
 	$setwrapreferer = processInputVar('am', ARG_NUMERIC, 0);
 	if(! $authed && $mode == "auth") {
 		/*if($oldmode != "auth" && $oldmode != "" && array_key_exists('mode', $_GET)) {
@@ -8346,12 +8395,59 @@ function sendHeaders() {
 			$cookieHeaderString = "WRAP_REFERER=https://vcl.ncsu.edu/; path=/; domain=" . COOKIEDOMAIN;
 		header("Set-Cookie: $cookieHeaderString");
 	}
-	if($mode == "logout") {
-		setcookie("VCLAUTH", "", time() - 10, "/", COOKIEDOMAIN);
-		header("Location: " . HOMEURL);
-		stopSession();
-		dbDisconnect();
-		exit;
+	switch($mode) {
+		case 'logout':
+			if($shibauthed) {
+				$shibdata = getShibauthData($shibauthed);
+				dbDisconnect();
+				header("Location: {$shibdata['Shib-logouturl']}");
+				exit;
+			}
+		case 'shiblogout':
+			setcookie("WRAP16", "", time() - 10, "/", COOKIEDOMAIN);
+			setcookie("WRAP_REFERER", "", time() - 10, "/", COOKIEDOMAIN);
+			setcookie("ITECSAUTH", "", time() - 10, "/", COOKIEDOMAIN);
+			setcookie("VCLAUTH", "", time() - 10, "/", COOKIEDOMAIN);
+			if($shibauthed) {
+				$msg = '';
+				$shibdata = getShibauthData($shibauthed);
+				# find and clear shib cookies
+				/*foreach(array_keys($_COOKIE) as $key) {
+					if(preg_match('/^_shibsession[_0-9a-fA-F]+$/', $key))
+						setcookie($key, "", time() - 10, "/", $_SERVER['SERVER_NAME']);
+					elseif(preg_match('/^_shibstate_/', $key))
+						setcookie($key, "", time() - 10, "/", $_SERVER['SERVER_NAME']);
+				}*/
+				doQuery("DELETE FROM shibauth WHERE id = $shibauthed", 101);
+				stopSession();
+				dbDisconnect();
+				print "<html>\n";
+				print "   <head>\n";
+				print "      <style type=\"text/css\">\n";
+				print "         .red {\n";
+				print "            color: red;\n";
+				print "         }\n";
+				print "         body{\n";
+				print "            margin:0px; color: red;\n";
+				print "         }\n";
+				print "      </style>\n";
+				print "   </head>\n";
+				print "   <body>\n";
+				print "      <span class=red>Done.</span>&nbsp;&nbsp;&nbsp;<a target=\"_top\" href=\"" . BASEURL . "/\">Return to VCL</a>\n";
+				#print "      <iframe src=\"http://{$_SERVER['SERVER_NAME']}/Shibboleth.sso/Logout\" class=hidden>\n";
+				#print "      </iframe>\n";
+				/*if($mode == 'logout') {
+					print "      <iframe src=\"{$shibdata['Shib-logouturl']}\" class=hidden>\n";
+					print "      </iframe>\n";
+				}*/
+				print "   </body>\n";
+				print "</html>\n";
+				exit;
+			}
+			header("Location: " . HOMEURL);
+			stopSession();
+			dbDisconnect();
+			exit;
 	}
 	if($mode == "submitviewmode") {
 		$expire = time() + 31536000; //expire in 1 year

@@ -42,6 +42,7 @@ $actions["entry"] = array('main',
                           'helpform',
                           'viewdocs',
                           'logout',
+                          'shiblogout',
                           'xmlrpccall',
                           'selectauth',
                           'xmlrpcaffiliations',
@@ -583,5 +584,7 @@ $actions['mode']['errorrpt'] = "errorrpt";
 $actions['pages']['continuationsError'] = "misc";
 $actions['pages']['clearCache'] = "misc";
 $actions['pages']['errorrpt'] = "misc";
+$actions['pages']['logout'] = "misc";
+$actions['pages']['shiblogout'] = "misc";
 
 ?>
