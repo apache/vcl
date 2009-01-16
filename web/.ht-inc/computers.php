@@ -3032,12 +3032,12 @@ function processBulkComputerInput($checks=1) {
 	else {
 		$return["startipaddress"] = getContinuationVar("startipaddress", processInputVar("startipaddress", ARG_STRING));
 		$return["endipaddress"] = getContinuationVar("endipaddress", processInputVar("endipaddress", ARG_STRING));
-		$return["startpripaddress"] = getContinuationVar("startpripaddress", processInputVar("startpripaddress", ARG_STRING));
-		$return["endpripaddress"] = getContinuationVar("endpripaddress", processInputVar("endpripaddress", ARG_STRING));
 		$return["starthostval"] = getContinuationVar("starthostval", processInputVar("starthostval", ARG_NUMERIC));
 		$return["endhostval"] = getContinuationVar("endhostval", processInputVar("endhostval", ARG_NUMERIC));
-		$return["startmac"] = getContinuationVar("startmac", processInputVar("startmac", ARG_STRING));
 	}
+	$return["startpripaddress"] = getContinuationVar("startpripaddress", processInputVar("startpripaddress", ARG_STRING));
+	$return["endpripaddress"] = getContinuationVar("endpripaddress", processInputVar("endpripaddress", ARG_STRING));
+	$return["startmac"] = getContinuationVar("startmac", processInputVar("startmac", ARG_STRING));
 
 	$return["stateid"] = getContinuationVar("stateid", processInputVar("stateid", ARG_NUMERIC));
 	$return["deptid"] = getContinuationVar("deptid", processInputVar("deptid", ARG_NUMERIC));
@@ -3391,7 +3391,7 @@ function addComputer($data) {
 ///                                $platformid, $scheduleid, $currentimgid,
 ///                                $ram, $numprocs, $procspeed,
 ///                                $network,  $hostname, $compid, $type,
-///                                $provisioningid) {
+///                                $provisioningid)
 ///
 /// \param $ipaddress -  IP address of computer
 /// \param $stateid - stateid of computer
