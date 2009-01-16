@@ -1201,7 +1201,7 @@ sub capture_prepare {
 		return 0;
 	}
 
-	# Get data
+	# Get required data
 	my $image_name          = $self->data->get_image_name();
 	my $computer_short_name = $self->data->get_computer_short_name();
 	my $computer_node_name  = $self->data->get_computer_node_name();
@@ -1209,7 +1209,7 @@ sub capture_prepare {
 	# Print some preliminary information
 	notify($ERRORS{'OK'}, 0, "image=$image_name, computer=$computer_short_name");
 
-	# Modify currentimage.txt
+	# Create currentimage.txt on the node containing information about the new image revision
 	if (write_currentimage_txt($self->data)) {
 		notify($ERRORS{'OK'}, 0, "currentimage.txt updated on $computer_short_name");
 	}
@@ -1217,16 +1217,14 @@ sub capture_prepare {
 		notify($ERRORS{'WARNING'}, 0, "unable to update currentimage.txt on $computer_short_name");
 	}
 
+	# Edit the nodetype.tab file to set the node with the new image name
 	if ($self->_edit_nodetype($computer_node_name, $image_name)) {
 		notify($ERRORS{'OK'}, 0, "nodetype modified, node $computer_node_name, image name $image_name");
-	}    # Close if _edit_nodetype
+	}
 	else {
 		notify($ERRORS{'CRITICAL'}, 0, "could not edit nodetype, node $computer_node_name, image name $image_name");
 		return 0;
-	}    # Close _edit_nodetype failed
-
-	my @Images;
-	my ($i, $imagefile);
+	}
 
 	# Get the image repository path
 	my $image_repository_path = $self->_get_image_repository_path();
@@ -1245,52 +1243,25 @@ sub capture_prepare {
 	# Get the image template repository path
 	my $basetmpl = $self->_get_base_template_filename();
 	if (!$basetmpl) {
-		notify($ERRORS{'CRITICAL'}, 0, "xCAT template repository information could not be determined");
+		notify($ERRORS{'WARNING'}, 0, "xCAT template repository information could not be determined");
 		return 0;
 	}
 
-	notify($ERRORS{'OK'}, 0, "attempting to create $tmpl_repository_path/$image_name.tmpl");
-	if (open(IMAGE, "/bin/cp  $tmpl_repository_path/$basetmpl $tmpl_repository_path/$image_name.tmpl |")) {
-		@Images = <IMAGE>;
-		close(IMAGE);
-		foreach $i (@Images) {
-
-			#if anything could mean failure
-			if ($i) {
-				notify($ERRORS{'OK'}, 0, "@Images");
-			}
-		}
-	}    # Close if open handle for cp tmpl file command
-
-	#check to see if the new image file is there
-	if (open(IMAGES, "/bin/ls -1 $tmpl_repository_path |")) {
-		@Images = <IMAGES>;
-		close(IMAGES);
-		($i, $imagefile) = 0;
-		foreach $i (@Images) {
-			if ($i =~ /$image_name.tmpl/) {
-				$imagefile = 1;
-			}
-		}
-		if ($imagefile) {
-			notify($ERRORS{'OK'}, 0, "$tmpl_repository_path/$image_name created");
-		}
-		else {
-			notify($ERRORS{'CRITICAL'}, 0, " $tmpl_repository_path/$image_name NOT created");
-			return 0;
-		}
-	}    # Close if tmpl file exists
+	# Create the tmpl file for the image
+	if ($self->_create_template()) {
+		notify($ERRORS{'OK'}, 0, "created template file for $image_name");
+	}
 	else {
-		notify($ERRORS{'CRITICAL'}, 0, "could not execute  /bin/ls -1 $tmpl_repository_path $! ");
+		notify($ERRORS{'WARNING'}, 0, "failed to create template file for $image_name");
 		return 0;
-	}    # Close tmpl file does not exist
+	}
 
-	# Call xCAT's nodeset, configure xCAT to save image on next reboot
+	# Call xCAT's 'nodeset <nodename> image', configures xCAT to save image on next reboot
 	if (_nodeset_option($computer_node_name, "image")) {
-		notify($ERRORS{'OK'}, 0, "$computer_node_name set to image state");
+		notify($ERRORS{'OK'}, 0, "$computer_node_name set to capture image on next reboot");
 	}
 	else {
-		notify($ERRORS{'CRITICAL'}, 0, "failed $computer_node_name set to image state");
+		notify($ERRORS{'WARNING'}, 0, "failed to set $computer_node_name to capture image on next reboot");
 		return 0;
 	}
 
@@ -1567,8 +1538,7 @@ sub _edit_nodetype {
 	$image_name = $self->data->get_image_name() if !$image_name;
 
 	# Get the rest of the variables
-	$computer_node_name = $self->data->get_computer_node_name()
-	  if !$computer_node_name;
+	$computer_node_name = $self->data->get_computer_node_name() if !$computer_node_name;
 	my $image_os_name        = $self->data->get_image_os_name();
 	my $image_architecture   = $self->data->get_image_architecture();
 	my $image_os_source_path = $self->data->get_image_os_source_path();
@@ -1743,7 +1713,7 @@ sub _nodeset {
 	notify($ERRORS{'WARNING'}, 0, "_nodeset: node is not defined")
 	  if (!(defined($node)));
 	return 0 if (!(defined($node)));
-
+	
 	my ($blah, $case);
 	my @file;
 	my $l;
@@ -2344,18 +2314,45 @@ sub does_image_exist {
 		notify($ERRORS{'OK'}, 0, "image files do not exist in repository: $image_repository_path/$image_name");
 	}
 
-	# Image files found
+	# Check if either tmpl file or image files exist, but not both
+	# Attempt to correct the situation:
+	#    tmpl file exists but not image files: delete tmpl file
+	#    image files exist but not tmpl file: create tmpl file
+	if ($tmpl_file_exists && !$image_files_exist) {
+		notify($ERRORS{'WARNING'}, 0, "template file exists but image files do not for $image_name");
+		
+		# Attempt to delete the orphaned tmpl file for the image
+		if ($self->_delete_template($image_name)) {
+			notify($ERRORS{'OK'}, 0, "deleted orphaned template file for image $image_name");
+			$tmpl_file_exists = 0;
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to delete orphaned template file for image $image_name, returning undefined");
+			return;
+		}
+	}
+	elsif (!$tmpl_file_exists && $image_files_exist) {
+		notify($ERRORS{'WARNING'}, 0, "image files exist but template file does not for $image_name");
+		
+		# Attempt to create the missing tmpl file for the image
+		if ($self->_create_template($image_name)) {
+			notify($ERRORS{'OK'}, 0, "created missing template file for image $image_name");
+			$tmpl_file_exists = 1;
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to create missing template file for image $image_name, returning undefined");
+			return;
+		}
+	}
+	
+	# Check if both image files and tmpl file were found and return
 	if ($tmpl_file_exists && $image_files_exist) {
-		notify($ERRORS{'OK'}, 0, "image $image_name exists on this management node, returning 0");
+		notify($ERRORS{'OK'}, 0, "image $image_name exists on this management node, returning 1");
 		return 1;
 	}
-	elsif (!$tmpl_file_exists && !$image_files_exist) {
-		notify($ERRORS{'OK'}, 0, "image $image_name does not exist on this management node, returning 1");
-		return 0;
-	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "image $image_name partially exists on this management node, tmpl=$tmpl_file_exists, image=$image_files_exist, returning undefined");
-		return;
+		notify($ERRORS{'OK'}, 0, "image $image_name does not exist on this management node, returning 0");
+		return 0;
 	}
 
 } ## end sub does_image_exist
@@ -2410,33 +2407,6 @@ sub retrieve_image {
 		return;
 	}
 
-	# Get the tmpl repository path
-	my $tmpl_repository_path = $self->_get_image_template_path();
-	if (!$tmpl_repository_path) {
-		notify($ERRORS{'WARNING'}, 0, "image template path could not be determined");
-		return;
-	}
-
-	# Check if template file exists for the image
-	# -s File has nonzero size
-	if (-s "$tmpl_repository_path/$image_name.tmpl") {
-		notify($ERRORS{'OK'}, 0, "template file already exists: $image_name.tmpl");
-	}
-	else {
-
-		# Get the name of the base tmpl file
-		my $basetmpl = $self->_get_base_template_filename();
-
-		# Template file doesn't exist, try to make a copy of the base template file
-		if (copy("$tmpl_repository_path/$basetmpl", "$tmpl_repository_path/$image_name.tmpl")) {
-			notify($ERRORS{'OK'}, 0, "template file copied: $basetmpl --> $image_name.tmpl");
-		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "template file could not be copied copied: $basetmpl --> $image_name.tmpl, $!");
-			return;
-		}
-	} ## end else [ if (-s "$tmpl_repository_path/$image_name.tmpl")
-
 	# Attempt to copy image from other management nodes
 	notify($ERRORS{'OK'}, 0, "attempting to copy $image_name from other management nodes");
 
@@ -2452,7 +2422,7 @@ sub retrieve_image {
 		notify($ERRORS{'OK'}, 0, "checking if $partner has $image_name");
 
 		# Use ssh to call ls on the partner management node
-		my ($ls_exit_status, $ls_output_array_ref) = run_ssh_command($partner, $image_lib_key, "ls -1 $image_repository_path", $image_lib_user);
+		my ($ls_exit_status, $ls_output_array_ref) = run_ssh_command($partner, $image_lib_key, "ls -1 $image_repository_path", $image_lib_user, '', 1);
 
 		# Check if the ssh command failed
 		if (!$ls_output_array_ref) {
@@ -2492,12 +2462,22 @@ sub retrieve_image {
 	# Make sure image was copied
 	if ($self->does_image_exist($image_name)) {
 		notify($ERRORS{'OK'}, 0, "$image_name was copied to this management node");
-		return 1;
 	}
 	else {
 		notify($ERRORS{'WARNING'}, 0, "$image_name was not copied to this management node");
 		return 0;
 	}
+	
+	# Create the template file for the image
+	if ($self->_create_template()) {
+		notify($ERRORS{'OK'}, 0, "template file created for image $image_name");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to create template file for image $image_name");
+		return;
+	}
+	
+	return 1;
 } ## end sub retrieve_image
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -2601,7 +2581,7 @@ sub get_image_size {
 		return 0;
 	}
 
-# Either use a passed parameter as the image name or use the one stored in this object's DataStructure
+	# Either use a passed parameter as the image name or use the one stored in this object's DataStructure
 	my $image_name = shift;
 	$image_name = $self->data->get_image_name() if !$image_name;
 	if (!$image_name) {
@@ -2624,7 +2604,7 @@ sub get_image_size {
 	# Save the exit status
 	my $du_exit_status = $?;
 
-#notify($ERRORS{'DEBUG'}, 0, "du exit staus: $du_exit_status, output:\n$du_output");
+	#notify($ERRORS{'DEBUG'}, 0, "du exit staus: $du_exit_status, output:\n$du_output");
 
 	# Check the du command output
 	if ($du_exit_status > 0) {
@@ -2813,6 +2793,133 @@ sub _get_base_template_filename {
 		return 0;
 	}
 } ## end sub _get_base_template_filename
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 _create_template
+
+ Parameters  : image name (optional)
+ Returns     : true if successful, false if failed
+ Description : Creates a template file for the image specified for the reservation.
+
+=cut
+
+sub _create_template {
+	my $self = shift;
+	if (ref($self) !~ /xCAT/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get the image name
+	my $image_name = shift;
+	$image_name = $self->data->get_image_name() if !$image_name;
+	if (!$image_name) {
+		notify($ERRORS{'WARNING'}, 0, "failed to create template file, image name could not be retrieved");
+		return 0;
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "attempting to create tmpl file for image: $image_name");
+	
+	# Get the image template repository path
+	my $tmpl_repository_path = $self->_get_image_template_path();
+	if (!$tmpl_repository_path) {
+		notify($ERRORS{'WARNING'}, 0, "xCAT template repository information could not be determined");
+		return 0;
+	}
+
+	# Get the base template filename
+	my $basetmpl = $self->_get_base_template_filename();
+	if (!$basetmpl) {
+		notify($ERRORS{'WARNING'}, 0, "base template filename could not be determined");
+		return 0;
+	}
+	
+	# Make a copy of the base template file
+	my $cp_output = `/bin/cp -fv  $tmpl_repository_path/$basetmpl $tmpl_repository_path/$image_name.tmpl 2>&1`;
+	my $cp_exit_status = $? >> 8;
+	if ($cp_exit_status == 0) {
+		notify($ERRORS{'DEBUG'}, 0, "copied $basetmpl to $tmpl_repository_path/$image_name.tmpl, output:\n$cp_output");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to copy $basetmpl to $tmpl_repository_path/$image_name.tmpl, returning undefined, exit status: $cp_exit_status, output:\n$cp_output");
+		return;
+	}
+	
+	# Make sure template file was created
+	# -s File has nonzero size
+	my $tmpl_file_exists;
+	if (-s "$tmpl_repository_path/$image_name.tmpl") {
+		notify($ERRORS{'DEBUG'}, 0, "confirmed template file exists: $tmpl_repository_path/$image_name.tmpl");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "template file should have been copied but does not exist: $tmpl_repository_path/$image_name.tmpl, returning undefined");
+		return;
+	}
+	
+	notify($ERRORS{'OK'}, 0, "successfully created template file: $tmpl_repository_path/$image_name.tmpl");
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 _delete_template
+
+ Parameters  : image name (optional)
+ Returns     : true if successful, false if failed
+ Description : Deletes a template file for the image specified for the reservation.
+
+=cut
+
+sub _delete_template {
+	my $self = shift;
+	if (ref($self) !~ /xCAT/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get the image name
+	my $image_name = shift;
+	$image_name = $self->data->get_image_name() if !$image_name;
+	if (!$image_name) {
+		notify($ERRORS{'WARNING'}, 0, "failed to delete template file, image name could not be retrieved");
+		return 0;
+	}
+	
+	notify($ERRORS{'OK'}, 0, "attempting to delete tmpl file for image: $image_name");
+	
+	# Get the image template repository path
+	my $tmpl_repository_path = $self->_get_image_template_path();
+	if (!$tmpl_repository_path) {
+		notify($ERRORS{'WARNING'}, 0, "xCAT template repository information could not be determined");
+		return 0;
+	}
+
+	# Delete the template file
+	my $rm_output = `/bin/rm -fv  $tmpl_repository_path/$image_name.tmpl 2>&1`;
+	my $rm_exit_status = $? >> 8;
+	if ($rm_exit_status == 0) {
+		notify($ERRORS{'DEBUG'}, 0, "deleted $tmpl_repository_path/$image_name.tmpl, output:\n$rm_output");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to delete $tmpl_repository_path/$image_name.tmpl, returning undefined, exit status: $rm_exit_status, output:\n$rm_output");
+		return;
+	}
+	
+	# Make sure template file was deleted
+	# -s File has nonzero size
+	my $tmpl_file_exists;
+	if (-s "$tmpl_repository_path/$image_name.tmpl") {
+		notify($ERRORS{'WARNING'}, 0, "template file should have been deleted but still exists: $tmpl_repository_path/$image_name.tmpl, returning undefined");
+		return;
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "confirmed template file was deleted: $tmpl_repository_path/$image_name.tmpl");
+	}
+	
+	notify($ERRORS{'OK'}, 0, "successfully deleted template file: $tmpl_repository_path/$image_name.tmpl");
+	return 1;
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 
