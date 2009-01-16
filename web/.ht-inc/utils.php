@@ -393,6 +393,7 @@ function checkAccess() {
 					exit;
 				}
 				ldap_set_option($ds, LDAP_OPT_PROTOCOL_VERSION, 3);
+				ldap_set_option($ds, LDAP_OPT_REFERRALS, 0);
 				$ldapuser = sprintf($authMechs[$authtype]['userid'], $user['unityid']);
 				$res = ldap_bind($ds, $ldapuser, $xmlpass);
 				if(! $res) {
@@ -932,6 +933,7 @@ function ldapUIDLookup($uid, &$userInfo, $doMerge=TRUE) {
 		return FALSE;
 	}
 
+	ldap_set_option($ldapConnect, LDAP_OPT_REFERRALS, 0);
 	$result = ldap_bind($ldapConnect, $ldaprdn, $ldappass);
 	if(!$result) {
 		$error['op'] = "ldapUIDLookup";

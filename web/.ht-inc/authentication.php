@@ -344,12 +344,11 @@ function ldapLogin($authtype, $userid, $passwd) {
 		return;
 	}
 	ldap_set_option($ds, LDAP_OPT_PROTOCOL_VERSION, 3);
+	ldap_set_option($ds, LDAP_OPT_REFERRALS, 0);
 	/*if($authtype == 'EXAMPLE1 LDAP') {
 		# in this case, we have to look up what part of the tree the user is in
 		#   before we can actually look up the user
 		$auth = $authMechs[$authtype];
-		ldap_set_option($ds, LDAP_OPT_PROTOCOL_VERSION, 3);
-		ldap_set_option($ds, LDAP_OPT_REFERRALS, 0);
 		$res = ldap_bind($ds, $auth['masterlogin'],
 		                 $auth['masterpwd']);
 		if(! $res) {

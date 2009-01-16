@@ -459,6 +459,7 @@ function updateEXAMPLE2Groups($user) {
 	if(! $ds)
 		return 0;
 	ldap_set_option($ds, LDAP_OPT_PROTOCOL_VERSION, 3);
+	ldap_set_option($ds, LDAP_OPT_REFERRALS, 0);
 
 	$res = ldap_bind($ds, $auth['masterlogin'],
 	                  $auth['masterpwd']);
