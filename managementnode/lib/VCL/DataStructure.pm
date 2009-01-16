@@ -152,7 +152,7 @@ $SUBROUTINE_MAPPINGS{reservation_lastcheck_time} = '$self->request_data->{reserv
 $SUBROUTINE_MAPPINGS{reservation_machine_ready}  = '$self->request_data->{reservation}{RESERVATION_ID}{MACHINEREADY}';
 #$SUBROUTINE_MAPPINGS{reservation_managementnodeid} = '$self->request_data->{reservation}{RESERVATION_ID}{managementnodeid}';
 $SUBROUTINE_MAPPINGS{reservation_password}  = '$self->request_data->{reservation}{RESERVATION_ID}{pw}';
-$SUBROUTINE_MAPPINGS{reservation_remote_ip} = '$self->request_data->{reservation}{RESERVATION_ID}{remoteIP}';
+#$SUBROUTINE_MAPPINGS{reservation_remote_ip} = '$self->request_data->{reservation}{RESERVATION_ID}{remoteIP}';
 #$SUBROUTINE_MAPPINGS{reservation_requestid} = '$self->request_data->{reservation}{RESERVATION_ID}{requestid}';
 $SUBROUTINE_MAPPINGS{reservation_ready} = '$self->request_data->{reservation}{RESERVATION_ID}{READY}';
 
@@ -899,27 +899,31 @@ sub get_reservation_remote_ip {
 	# Check to make sure 1 row was returned
 	if (scalar @selected_rows == 0) {
 		notify($ERRORS{'WARNING'}, 0, "failed to get reservation remote IP for reservation $reservation_id, zero rows were returned from database select");
-		return 0;
+		return;
 	}
 	elsif (scalar @selected_rows > 1) {
 		notify($ERRORS{'WARNING'}, 0, "failed to get reservation remote IP for reservation $reservation_id, " . scalar @selected_rows . " rows were returned from database select");
-		return 0;
+		return;
 	}
 
 	# Get the single returned row
 	# It contains a hash
 	my $remote_ip;
 
-	# Make sure we return undef if the column wasn't found
+	# Return undefined if the column wasn't found
 	if (!defined $selected_rows[0]{remoteIP}) {
-		notify($ERRORS{'WARNING'}, 0, "failed to get reservation remote IP for reservation $reservation_id, remoteIP value is undefined");
+		notify($ERRORS{'WARNING'}, 0, "failed to get reservation remote IP, remoteIP value is undefined");
 		return;
 	}
-	# Make sure we return undef if remote IP is blank
+	
+	# Make sure we return 0 if remote IP is blank
 	elsif ($selected_rows[0]{remoteIP} eq '') {
-		notify($ERRORS{'WARNING'}, 0, "failed to get reservation remote IP for reservation $reservation_id, remoteIP value is blank");
-		return;
+		notify($ERRORS{'OK'}, 0, "reservation remote IP is not set");
+		return 0;
 	}
+	
+	# Set the current value in the request data hash
+	$self->request_data->{reservation}{$reservation_id}{remoteIP} = $selected_rows[0]{remoteIP};
 
 	notify($ERRORS{'DEBUG'}, 0, "retrieved remote IP for reservation $reservation_id: $selected_rows[0]{remoteIP}");
 	return $selected_rows[0]{remoteIP};

@@ -127,7 +127,6 @@ our @EXPORT = qw(
   get_request_by_computerid
   get_request_end
   get_request_info
-  get_reservation_remote_ip
   get_vmhost_info
   getanothermachine
   getdynamicaddress
@@ -7780,72 +7779,6 @@ sub construct_image_name {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 get_reservation_remote_ip
-
- Parameters  : $reservation_id
- Returns     : String containing remoteIP value for specified reservation ID, 0 if reservation was not found
- Description :
-
-=cut
-
-
-sub get_reservation_remote_ip {
-	my ($reservation_id) = @_;
-	my ($package, $filename, $line, $sub) = caller(0);
-
-	# Check the passed parameter
-	if (!(defined($reservation_id))) {
-		notify($ERRORS{'WARNING'}, 0, "reservation ID was not specified");
-		return 0;
-	}
-
-	# Create the select statement
-	my $select_statement = "
-	SELECT
-	remoteIP
-	FROM
-	reservation
-	WHERE
-	id = $reservation_id
-	";
-
-	# Call the database select subroutine
-	# This will return an array of one or more rows based on the select statement
-	my @selected_rows = database_select($select_statement);
-
-	# Check to make sure 1 row was returned
-	if (scalar @selected_rows == 0) {
-		notify($ERRORS{'WARNING'}, 0, "zero rows were returned from database select");
-		return 0;
-	}
-	elsif (scalar @selected_rows > 1) {
-		notify($ERRORS{'WARNING'}, 0, "" . scalar @selected_rows . " rows were returned from database select");
-		return 0;
-	}
-
-	# Get the single returned row
-	# It contains a hash
-	my $remote_ip;
-
-	# Make sure we return undef if the column wasn't found
-	if (defined $selected_rows[0]{remoteIP}) {
-		$remote_ip = $selected_rows[0]{remoteIP};
-	}
-	else {
-		return undef;
-	}
-
-	# Make sure we return undef if remote IP is blank
-	if ($remote_ip eq '') {
-		return undef;
-	}
-	else {
-		return $remote_ip;
-	}
-} ## end sub get_reservation_remote_ip
-
-#/////////////////////////////////////////////////////////////////////////////
-
 =head2 update_log_ending
 
  Parameters  : $log_id, $ending
@@ -9929,8 +9862,8 @@ sub reservation_being_processed {
 	#	notify($ERRORS{'WARNING'}, 0, "error occurred running command: $pgrep_command, exit status: $pgrep_exit_status"); #, output: $pgrep_output");
 	#	return 0;
 	#}
-}
-
+	}
+	
 #/////////////////////////////////////////////////////////////////////////////
 
 =head2 string_to_ascii

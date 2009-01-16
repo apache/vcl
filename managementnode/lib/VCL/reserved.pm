@@ -172,234 +172,230 @@ sub process {
 	notify($ERRORS{'OK'}, 0, "begin checking for user acknowledgement");
 	insertloadlog($reservation_id, $computer_id, "info", "reserved: waiting for user acknowledgement");
 
-	my $remote_ip;
-
 	ACKNOWLEDGE:
 	$acknowledge_attempts++;
 
-	if (!defined($remote_ip)) {
-		# Try to get the remote IP again and update the data hash
-		$remote_ip = get_reservation_remote_ip($reservation_id);
-		$request_data->{reservation}{$reservation_id}{remoteIP} = $remote_ip;
+	# Try to get the remote IP again and update the data hash
+	my $remote_ip = $self->data->get_reservation_remote_ip();
 
-		# Undef should be returned if remoteIP isn't set, 0 if an error occurred
-		if (defined $remote_ip && $remote_ip eq '0') {
-			notify($ERRORS{'WARNING'}, 0, "could not determine remote IP");
+	# 0 should be returned if remoteIP isn't set, undefined if an error occurred
+	if (!defined $remote_ip) {
+		notify($ERRORS{'WARNING'}, 0, "failed to determine remote IP");
+		return;
+	}
+
+	# Check if remoteIP is defined yet (user has acknowledged)
+	elsif ($remote_ip ne '0') {
+		# User has acknowledged
+		notify($ERRORS{'OK'}, 0, "user acknowledged, remote IP: $remote_ip");
+
+		# Attempt to call modularized OS module's grant_access() subroutine
+		if ($self->os->can("grant_access")) {
+			# If grant_access() has been implemented by OS module,
+			# don't check for remote IP and open RDP firewall port directly in this module
+			# OS module's grant_access() subroutine to perform the same tasks as below
+			notify($ERRORS{'OK'}, 0, "calling " . ref($self->os) . "::grant_access() subroutine");
+			if ($self->os->grant_access()) {
+				notify($ERRORS{'OK'}, 0, "OS access has been granted on $nodename");
+			}
+			else {
+				notify($ERRORS{'WARNING'}, 0, "failed to grant OS access on $nodename");
+			}
 		}
+		
+		# Older style code, remove below once all OS's have been modularized
+		# Check if computer type is blade
+		elsif ($computer_type =~ /blade|virtualmachine/) {
+			notify($ERRORS{'OK'}, 0, "blade or virtual machine detected: $computer_type");
+			# different senerios
+			# standard -- 1-1-1 with connection checks
+			# group access M-N-K -- multiple users need access
+			# standard with no connection checks
+			
+			if ($image_os_name =~ /win|vmwarewin/) {
+				notify($ERRORS{'OK'}, 0, "Windows image detected: $image_os_name");
+				
+				# Determine whether to open RDP port for single IP or group access
+				if ($user_group_member_count > 0) {
+					# Imagemeta user group defined and member count is > 0
+					notify($ERRORS{'OK'}, 0, "group set in imagemeta has members");
+					if (remotedesktopport($nodename, "ENABLE")) {
+						notify($ERRORS{'OK'}, 0, "remote desktop enabled on $nodename for group access");
+					}
+					else {
+						notify($ERRORS{'WARNING'}, 0, "remote desktop not group enabled on $nodename");
+						$retval_conn = "failed";
+						goto RETVALCONN;
+					}
+				}    # Close imagemeta user group defined and member count is > 0
+				else {
+					# Imagemeta user group undefined or member count is 0
+					notify($ERRORS{'OK'}, 0, "either group not set in imagemeta or has 0 members");
+					if (remotedesktopport($nodename, "ENABLE", $remote_ip)) {
+						insertloadlog($reservation_id, $computer_id, "info", "reserved: opening remote access port for $remote_ip");
+						notify($ERRORS{'OK'}, 0, "remote desktop enabled on $nodename");
+					}
+					else {
+						notify($ERRORS{'WARNING'}, 0, "remote desktop not enabled on $nodename");
+						$retval_conn = "failed";
+						goto RETVALCONN;
+					}
+				}    # Close imagemeta user group undefined or member count is 0
 
-		# Check if remoteIP is defined yet (user has acknowledged)
-		elsif (defined($remote_ip)) {
-			# User has acknowledged
-			notify($ERRORS{'OK'}, 0, "user acknowledged, remote IP: $remote_ip");
+				# Check if forimaging is set on the request
+				if (!$request_forimaging) {
+					## Don't care to monitor any imaging reservations
+					#notify($ERRORS{'OK'}, 0, "this is not a forimaging request, check for ITM monitoring");
+					#if (system_monitoring($nodename, $image_name, "start", "ITM")) {
+					#	notify($ERRORS{'OK'}, 0, "ITM monitoring enabled");
+					#	insertloadlog($reservation_id, $computer_id, "info", "reserved: ITM detected starting system monitoring");
+					#}
+					#else {
+					#	# Don't care at this time
+					#	notify($ERRORS{'OK'}, 0, "ITM monitoring is not enabled");
+					#}
+				}    # Close if request forimaging
 
-			# Attempt to call modularized OS module's grant_access() subroutine
-			if ($self->os->can("grant_access")) {
-				# If grant_access() has been implemented by OS module,
-				# don't check for remote IP and open RDP firewall port directly in this module
-				# OS module's grant_access() subroutine to perform the same tasks as below
-				notify($ERRORS{'OK'}, 0, "calling " . ref($self->os) . "::grant_access() subroutine");
-				if ($self->os->grant_access()) {
-					notify($ERRORS{'OK'}, 0, "OS access has been granted on $nodename");
+			}    # Close if OS name is win or vmware
+
+			# Check if linux image
+			elsif ($image_os_name =~ /^(rh[0-9]image|rhel[0-9]|fc[0-9]image|rhfc[0-9]|rhas[0-9])/) {
+				notify($ERRORS{'OK'}, 0, "Linux image detected: $image_os_name");
+
+				# adduser ; this adds user and restarts sshd
+				# check for group access
+
+				my $grpflag = 0;
+				my @group;
+
+				if ($imagemeta_usergroupid ne '') {
+					notify($ERRORS{'OK'}, 0, "group access groupid $imagemeta_usergroupid");
+
+					# Check group membership count
+					if ($user_group_member_count > 0) {
+						# Good, at least something is listed
+						notify($ERRORS{'OK'}, 0, "imagemeta group acess membership is $user_group_member_count");
+						$grpflag = $user_group_member_count;
+						@group   = @user_group_members;
+					}
+					else {
+						notify($ERRORS{'CRITICAL'}, 0, "image claims group acess but membership is 0, usergrouid: $imagemeta_usergroupid, only adding reqeustor");
+					}
+
+				}    # Close imagemeta user group defined and member count is > 0
+
+				# Try to add the user account to the linux computer
+				if (add_user($computer_short_name, $user_unityid, $user_uid, 0, $computer_hostname, $image_os_name, $remote_ip, $grpflag, @group)) {
+					notify($ERRORS{'OK'}, 0, "user $user_unityid added to $computer_short_name");
+					insertloadlog($reservation_id, $computer_id, "info", "reserved: adding user and opening remote access port for $remote_ip");
 				}
 				else {
-					notify($ERRORS{'WARNING'}, 0, "failed to grant OS access on $nodename");
+					notify($ERRORS{'WARNING'}, 0, "could not add user $user_unityid to $computer_short_name");
+					insertloadlog($reservation_id, $computer_id, "failed", "reserved: could not add user to node");
+					$retval_conn = "failed";
+					goto RETVALCONN;
 				}
-			}
-			
-			# Older style code, remove below once all OS's have been modularized
-			# Check if computer type is blade
-			elsif ($computer_type =~ /blade|virtualmachine/) {
-				notify($ERRORS{'OK'}, 0, "blade or virtual machine detected: $computer_type");
-				# different senerios
-				# standard -- 1-1-1 with connection checks
-				# group access M-N-K -- multiple users need access
-				# standard with no connection checks
-				
-				if ($image_os_name =~ /win|vmwarewin/) {
-					notify($ERRORS{'OK'}, 0, "Windows image detected: $image_os_name");
-					
-					# Determine whether to open RDP port for single IP or group access
-					if ($user_group_member_count > 0) {
-						# Imagemeta user group defined and member count is > 0
-						notify($ERRORS{'OK'}, 0, "group set in imagemeta has members");
-						if (remotedesktopport($nodename, "ENABLE")) {
-							notify($ERRORS{'OK'}, 0, "remote desktop enabled on $nodename for group access");
-						}
-						else {
-							notify($ERRORS{'WARNING'}, 0, "remote desktop not group enabled on $nodename");
-							$retval_conn = "failed";
-							goto RETVALCONN;
-						}
-					}    # Close imagemeta user group defined and member count is > 0
-					else {
-						# Imagemeta user group undefined or member count is 0
-						notify($ERRORS{'OK'}, 0, "either group not set in imagemeta or has 0 members");
-						if (remotedesktopport($nodename, "ENABLE", $remote_ip)) {
-							insertloadlog($reservation_id, $computer_id, "info", "reserved: opening remote access port for $remote_ip");
-							notify($ERRORS{'OK'}, 0, "remote desktop enabled on $nodename");
-						}
-						else {
-							notify($ERRORS{'WARNING'}, 0, "remote desktop not enabled on $nodename");
-							$retval_conn = "failed";
-							goto RETVALCONN;
-						}
-					}    # Close imagemeta user group undefined or member count is 0
 
-					# Check if forimaging is set on the request
-					if (!$request_forimaging) {
-						## Don't care to monitor any imaging reservations
-						#notify($ERRORS{'OK'}, 0, "this is not a forimaging request, check for ITM monitoring");
-						#if (system_monitoring($nodename, $image_name, "start", "ITM")) {
-						#	notify($ERRORS{'OK'}, 0, "ITM monitoring enabled");
-						#	insertloadlog($reservation_id, $computer_id, "info", "reserved: ITM detected starting system monitoring");
-						#}
-						#else {
-						#	# Don't care at this time
-						#	notify($ERRORS{'OK'}, 0, "ITM monitoring is not enabled");
-						#}
-					}    # Close if request forimaging
-
-				}    # Close if OS name is win or vmware
-
-				# Check if linux image
-				elsif ($image_os_name =~ /^(rh[0-9]image|rhel[0-9]|fc[0-9]image|rhfc[0-9]|rhas[0-9])/) {
-					notify($ERRORS{'OK'}, 0, "Linux image detected: $image_os_name");
-
-					# adduser ; this adds user and restarts sshd
-					# check for group access
-
-					my $grpflag = 0;
-					my @group;
-
-					if ($imagemeta_usergroupid ne '') {
-						notify($ERRORS{'OK'}, 0, "group access groupid $imagemeta_usergroupid");
-
-						# Check group membership count
-						if ($user_group_member_count > 0) {
-							# Good, at least something is listed
-							notify($ERRORS{'OK'}, 0, "imagemeta group acess membership is $user_group_member_count");
-							$grpflag = $user_group_member_count;
-							@group   = @user_group_members;
-						}
-						else {
-							notify($ERRORS{'CRITICAL'}, 0, "image claims group acess but membership is 0, usergrouid: $imagemeta_usergroupid, only adding reqeustor");
-						}
-
-					}    # Close imagemeta user group defined and member count is > 0
-
-					# Try to add the user account to the linux computer
-					if (add_user($computer_short_name, $user_unityid, $user_uid, 0, $computer_hostname, $image_os_name, $remote_ip, $grpflag, @group)) {
-						notify($ERRORS{'OK'}, 0, "user $user_unityid added to $computer_short_name");
-						insertloadlog($reservation_id, $computer_id, "info", "reserved: adding user and opening remote access port for $remote_ip");
+				# Check if user was set to standalone
+				# Occurs if affiliation is not NCSU or if vcladmin is the user
+				if ($user_standalone) {
+					if (changelinuxpassword($computer_short_name, $user_unityid, $reservation_password)) {
+						# Password successfully changed
+						notify($ERRORS{'OK'}, 0, "password changed on $computer_short_name for standalone user $user_unityid");
 					}
 					else {
-						notify($ERRORS{'WARNING'}, 0, "could not add user $user_unityid to $computer_short_name");
-						insertloadlog($reservation_id, $computer_id, "failed", "reserved: could not add user to node");
+						notify($ERRORS{'WARNING'}, 0, "could not change linux password for $user_unityid on $computer_short_name");
+						insertloadlog($reservation_id, $computer_id, "failed", "reserved: could not change user password on node");
 						$retval_conn = "failed";
 						goto RETVALCONN;
 					}
+				}    # Close if standalone
+				else {
+					notify($ERRORS{'OK'}, 0, "password not changed on $computer_short_name for non-standalone user $user_unityid");
+				}
 
-					# Check if user was set to standalone
-					# Occurs if affiliation is not NCSU or if vcladmin is the user
-					if ($user_standalone) {
-						if (changelinuxpassword($computer_short_name, $user_unityid, $reservation_password)) {
-							# Password successfully changed
-							notify($ERRORS{'OK'}, 0, "password changed on $computer_short_name for standalone user $user_unityid");
-						}
-						else {
-							notify($ERRORS{'WARNING'}, 0, "could not change linux password for $user_unityid on $computer_short_name");
-							insertloadlog($reservation_id, $computer_id, "failed", "reserved: could not change user password on node");
-							$retval_conn = "failed";
-							goto RETVALCONN;
-						}
-					}    # Close if standalone
-					else {
-						notify($ERRORS{'OK'}, 0, "password not changed on $computer_short_name for non-standalone user $user_unityid");
+				#if cluster reservation - populate parent node with child node information
+				if ($request_data->{RESERVATIONCOUNT} > 1) {
+					notify($ERRORS{'OK'}, 0, "cluster reservation, attempting to populate nodes with cluster_info data");
+					if (update_cluster_info($request_data)) {
+						notify($ERRORS{'OK'}, 0, "updated cluster nodes with cluster infomation");
+					}
+				}
+
+			}    # Close elseif linux computer
+
+		}    # Close if computer type is blade
+
+		# Check if computer type is lab
+		elsif ($computer_type eq "lab") {
+			notify($ERRORS{'OK'}, 0, "lab computer detected");
+
+			# Check if Solaris or RHEL
+			if ($image_os_name =~ /sun4x_|rhel/) {
+				notify($ERRORS{'OK'}, 0, "Sun or RHEL lab computer detected");
+				if (enablesshd($computer_ip_address, $user_unityid, $remote_ip, "new", $image_os_name)) {
+					notify($ERRORS{'OK'}, 0, "SSHD enabled on $computer_hostname $computer_ip_address");
+				}
+				else {
+					# Could not enable SSHD
+					# Add code to better handle this such as fetch another machine
+					notify($ERRORS{'WARNING'}, 0, "could not enable SSHD on $computer_hostname");
+
+					# Update the computer state to failed
+					if (update_computer_state($computer_id, "failed", "new")) {
+						notify($ERRORS{'OK'}, 0, "setting computer ID $computer_id into failed state");
 					}
 
-					#if cluster reservation - populate parent node with child node information
-					if ($request_data->{RESERVATIONCOUNT} > 1) {
-						notify($ERRORS{'OK'}, 0, "cluster reservation, attempting to populate nodes with cluster_info data");
-						if (update_cluster_info($request_data)) {
-							notify($ERRORS{'OK'}, 0, "updated cluster nodes with cluster infomation");
-						}
-					}
+					insertloadlog($reservation_id, $computer_id, "failed", "reserved: could not enable access port on remote machine");
+					$retval_conn = "failed";
+					goto RETVALCONN;
+				} ## end else [ if (enablesshd($computer_ip_address, $user_unityid...
+			}    # Close if Solaris or RHEL
 
-				}    # Close elseif linux computer
+		}    # Close elsif computer type is lab
 
-			}    # Close if computer type is blade
+	}    # close if defined remoteIP
 
-			# Check if computer type is lab
-			elsif ($computer_type eq "lab") {
-				notify($ERRORS{'OK'}, 0, "lab computer detected");
+	elsif ($acknowledge_attempts < 180) {
+		# User has approximately 15 minutes to acknowledge (5 seconds * 180 attempts)
 
-				# Check if Solaris or RHEL
-				if ($image_os_name =~ /sun4x_|rhel/) {
-					notify($ERRORS{'OK'}, 0, "Sun or RHEL lab computer detected");
-					if (enablesshd($computer_ip_address, $user_unityid, $remote_ip, "new", $image_os_name)) {
-						notify($ERRORS{'OK'}, 0, "SSHD enabled on $computer_hostname $computer_ip_address");
-					}
-					else {
-						# Could not enable SSHD
-						# Add code to better handle this such as fetch another machine
-						notify($ERRORS{'WARNING'}, 0, "could not enable SSHD on $computer_hostname");
+		# Print a status message every tenth attempt
+		if (($acknowledge_attempts % 10) == 0) {
+			# Print message every tenth attempt
+			notify($ERRORS{'OK'}, 0, "attempt $acknowledge_attempts of 180, user has not acknowleged");
+		}
 
-						# Update the computer state to failed
-						if (update_computer_state($computer_id, "failed", "new")) {
-							notify($ERRORS{'OK'}, 0, "setting computer ID $computer_id into failed state");
-						}
+		sleep 5;
 
-						insertloadlog($reservation_id, $computer_id, "failed", "reserved: could not enable access port on remote machine");
-						$retval_conn = "failed";
-						goto RETVALCONN;
-					} ## end else [ if (enablesshd($computer_ip_address, $user_unityid...
-				}    # Close if Solaris or RHEL
+		# Check if user deleted the request
+		if (is_request_deleted($request_id)) {
+			notify($ERRORS{'OK'}, 0, "user has deleted the request, exiting");
+			exit;
+		}
 
-			}    # Close elsif computer type is lab
+		# Going back to check for user acknowledgment again
+		goto ACKNOWLEDGE;
 
-		}    # close if defined remoteIP
-
-		elsif ($acknowledge_attempts < 180) {
-			# User has approximately 15 minutes to acknowledge (5 seconds * 180 attempts)
-
-			# Print a status message every tenth attempt
-			if (($acknowledge_attempts % 10) == 0) {
-				# Print message every tenth attempt
-				notify($ERRORS{'OK'}, 0, "attempt $acknowledge_attempts of 180, user has not acknowleged");
-			}
-
-			sleep 5;
-
-			# Check if user deleted the request
-			if (is_request_deleted($request_id)) {
-				notify($ERRORS{'OK'}, 0, "user has deleted the request, exiting");
-				exit;
-			}
-
-			# Going back to check for user acknowledgment again
-			goto ACKNOWLEDGE;
-
-		}    # Close acknowledge attempts < 120
+	}    # Close acknowledge attempts < 120
 
 
-		else {
-			# Acknowledge attemtps >= 120
-			# User never acknowledged reques, return noack
-			notify($ERRORS{'OK'}, 0, "user never acknowleged request, proceed to timeout");
+	else {
+		# Acknowledge attemtps >= 120
+		# User never acknowledged reques, return noack
+		notify($ERRORS{'OK'}, 0, "user never acknowleged request, proceed to timeout");
 
-			# Check if user deleted the request
-			if (is_request_deleted($request_id)) {
-				notify($ERRORS{'OK'}, 0, "user has deleted the request, exiting");
-				exit;
-			}
+		# Check if user deleted the request
+		if (is_request_deleted($request_id)) {
+			notify($ERRORS{'OK'}, 0, "user has deleted the request, exiting");
+			exit;
+		}
 
-			$retval_conn = "noack";
+		$retval_conn = "noack";
 
-			# Skipping check_connection code
-			goto RETVALCONN;
-		} ## end else [ if (defined $remote_ip && $remote_ip eq '0') [... [elsif ($acknowledge_attempts < 180)
+		# Skipping check_connection code
+		goto RETVALCONN;
+	} ## end else [ if (defined $remote_ip && $remote_ip eq '0') [... [elsif ($acknowledge_attempts < 180)
 
-	}    # Close remoteIP not defined
 
 	# Determine if connection needs to be checked based on imagemeta checkuser flag
 	if (!$imagemeta_checkuser) {
