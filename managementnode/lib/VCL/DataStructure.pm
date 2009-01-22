@@ -910,10 +910,10 @@ sub get_reservation_remote_ip {
 	# It contains a hash
 	my $remote_ip;
 
-	# Return undefined if the column wasn't found
+	# Return 0 if the column isn't set
 	if (!defined $selected_rows[0]{remoteIP}) {
-		notify($ERRORS{'WARNING'}, 0, "failed to get reservation remote IP, remoteIP value is undefined");
-		return;
+		notify($ERRORS{'OK'}, 0, "reservation remote IP is not defined");
+		return 0;
 	}
 	
 	# Make sure we return 0 if remote IP is blank
