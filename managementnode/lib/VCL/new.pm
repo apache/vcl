@@ -568,7 +568,7 @@ sub reload_image {
 		notify($ERRORS{'OK'}, 0, "node status not checked, node_status() not implemented by " . ref($self->provisioner) . ", assuming load=true");
 	}
 
-	if ($request_state_name eq 'reload') {
+	if ($computer_state_name eq 'reload') {
 		# Always call load() if state is reload regardless of node_status()
 		# Admin-initiated reloads will always cause node to be reloaded
 		notify($ERRORS{'OK'}, 0, "request state is $request_state_name, node will be reloaded regardless of status");
