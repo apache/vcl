@@ -58,6 +58,7 @@ use VCL::Module::Utils::Logging;
 use VCL::Module::Utils::SCP;
 use VCL::Module::Utils::SSH;
 use File::Basename;
+use VCL::Module::Provisioning::xCAT;
 
 ##############################################################################
 
@@ -474,7 +475,7 @@ sub capture_prepare {
 			# force a reboot, or really a power cycle.
 			#crap hate to do this.
 			notify($ERRORS{'WARNING'}, 0, "forcing a power cycle");
-			if (_rpower($computer_node_name, "boot")) {
+			if (VCL::Module::Provisioning::xCAT::_rpower($computer_node_name, "boot")) {
 				notify($ERRORS{'WARNING'}, 0, "forced power cycle complete");
 				next;
 			}
@@ -498,7 +499,7 @@ sub capture_prepare {
 		}
 		if ($pingloop > 10) {
 			notify($ERRORS{'CRITICAL'}, 0, "$computer_node_name should have rebooted by now, trying to force it");
-			if (_rpower($computer_node_name, "boot")) {
+			if (VCL::Module::Provisioning::xCAT::_rpower($computer_node_name, "boot")) {
 				notify($ERRORS{'WARNING'}, 0, "forced power cycle complete");
 				sleep 25;
 				next;
@@ -554,7 +555,7 @@ sub capture_prepare {
 			}
 			notify($ERRORS{'CRITICAL'}, 0, "discovered ssh read from socket failure on $computer_node_name, attempting to repair");
 			#power cycle node
-			if (_rpower($computer_node_name, "cycle")) {
+			if (VCL::Module::Provisioning::xCAT::_rpower($computer_node_name, "cycle")) {
 				notify($ERRORS{'CRITICAL'}, 0, "$computer_node_name power cycled going to reboot check routine");
 				sleep 40;
 				$socketflag = 1;
