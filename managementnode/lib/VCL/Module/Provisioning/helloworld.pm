@@ -29,7 +29,13 @@ VCL::Provisioning::helloworld - VCL module to serve as a template for other prov
 
 =head1 DESCRIPTION
 
- This module provides a starting point for other VCL provisioning modules
+ This module provides a starting point for other VCL provisioning modules.  To install this module in your VCL installation, create the following three database entries in your vcl database.
+
+1)  Insert a row into the module table with `perlpackage` equal to 'VCL::Module::Provisioning::helloworld'
+2)  Insert a row into the provisioning table with `moduleid` equal to the id of the entry from step 1 in the module table
+3)  Insert/Modify a row in the computers table with `provisioningid` equal to the id of the entry from step 2 in the provisioning table
+
+Any computer table entry modified according to step 3 will now use the helloworld.pm provisioning module.
 
 =cut
 
