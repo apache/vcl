@@ -52,9 +52,11 @@ CREATE TABLE IF NOT EXISTS `adminlevel` (
 CREATE TABLE IF NOT EXISTS `affiliation` (
   `id` mediumint(8) unsigned NOT NULL auto_increment,
   `name` varchar(40) NOT NULL,
+  `shibname` varchar(60) default NULL,
   `dataUpdateText` text NOT NULL,
   `sitewwwaddress` varchar(56) default NULL,
   `helpaddress` varchar(32) default NULL,
+  `shibonly` tinyint(1) unsigned NOT NULL default '0',
   PRIMARY KEY  (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1 AUTO_INCREMENT=2 ;
 
@@ -820,6 +822,21 @@ CREATE TABLE IF NOT EXISTS `scheduletimes` (
 -- --------------------------------------------------------
 
 -- 
+-- Table structure for table `shibauth`
+--
+
+CREATE TABLE IF NOT EXISTS `shibauth` (
+  `id` mediumint(8) unsigned NOT NULL auto_increment,
+  `userid` mediumint(8) unsigned NOT NULL,
+  `ts` datetime NOT NULL,
+  `sessid` varchar(80) NOT NULL,
+  `data` text NOT NULL,
+  PRIMARY KEY  (`id`)
+) ENGINE=InnoDB  DEFAULT CHARSET=latin1 AUTO_INCREMENT=1 ;
+
+-- --------------------------------------------------------
+
+--
 -- Table structure for table `state`
 -- 
 
