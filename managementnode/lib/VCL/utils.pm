@@ -5447,27 +5447,35 @@ sub checkonprocess {
 
 sub kill_reservation_process {
 	my ($reservation_id) = @_;
-
-	notify($ERRORS{'WARNING'}, 0, "reservation id is not defined") if (!(defined($reservation_id)));
-	return if (!(defined($reservation_id)));
+	
+	# Sanity check, make sure reservation id is valid
+	if (!$reservation_id) {
+		notify($ERRORS{'WARNING'}, 0, "reservation id is not defined");
+		return;
+	}
+	if ($reservation_id !~ /^\d+$/) {
+		notify($ERRORS{'WARNING'}, 0, "reservation id is not valid: $reservation_id");
+		return;
+	}
 	
 	notify($ERRORS{'OK'}, 0, "attempting to kill process for reservation $reservation_id");
 	
 	# Use the pkill utility to find processes matching the reservation ID
+	# Do not use -9 or else DESTROY won't run
 	my $pkill_command = "pkill -f ':$reservation_id ' 2>&1";
 	notify($ERRORS{'DEBUG'}, 0, "executing pkill command: $pkill_command");
 	
 	my $pkill_output = `$pkill_command`;
-	my $pkill_exit_status = $?;
+	my $pkill_exit_status = $? >> 8;
 	
 	# Check the pgrep exit status
-	if ($pkill_exit_status == 0) {
+	if ($pkill_exit_status == 0 || $? == -1) {
 		notify($ERRORS{'DEBUG'}, 0, "reservation $reservation_id process was killed, returning 1");
 		return 1;
 	}
 	elsif ($pkill_exit_status == 1) {
-		notify($ERRORS{'WARNING'}, 0, "process was not found for reservation $reservation_id, returning 0");
-		return 0;
+		notify($ERRORS{'WARNING'}, 0, "process was not found for reservation $reservation_id, returning 1");
+		return 1;
 	}
 	else {
 		notify($ERRORS{'WARNING'}, 0, "pkill error occurred, returning undefined, output:\n$pkill_output");
@@ -7230,7 +7238,7 @@ sub get_management_node_info {
 
 	# Check to make sure 1 row was returned
 	if (scalar @selected_rows == 0) {
-		notify($ERRORS{'WARNING'}, 0, "zero rows were returned from database select");
+		notify($ERRORS{'WARNING'}, 0, "zero rows were returned from database select statement:\n$select_statement");
 		return ();
 	}
 	elsif (scalar @selected_rows > 1) {
@@ -7600,7 +7608,7 @@ sub get_request_by_computerid {
 	s.name AS currentstate,
 	ls.name AS laststate,
 	req.id AS requestid,
-   req.start AS requeststart
+    req.start AS requeststart
 	FROM
 	request req,reservation res,state s,state ls
 	WHERE
@@ -9828,41 +9836,117 @@ sub reservation_being_processed {
 	my @computerloadlog_rows = database_select($select_statement);
 
 	# Check if at least 1 row was returned
+	my $computerloadlog_exists;
 	if (scalar @computerloadlog_rows == 1) {
 		notify($ERRORS{'DEBUG'}, 0, "computerloadlog 'begin' entry exists for reservation");
-		return 1;
+		$computerloadlog_exists = 1;
 	}
 	elsif (scalar @computerloadlog_rows > 1) {
 		notify($ERRORS{'WARNING'}, 0, "multiple computerloadlog 'begin' entries exist for reservation");
-		return 1;
+		$computerloadlog_exists = 1;
 	}
 	else {
 		notify($ERRORS{'DEBUG'}, 0, "computerloadlog 'begin' entry does NOT exist for reservation $reservation_id");
-		0
+		$computerloadlog_exists = 0;
 	}
 	
-	## Check for any running processes
-	#my $pgrep_command = "pgrep -fl 'VCL::.*:$reservation_id '";
-	#$pgrep_command .= ' 2>&1';
-	#notify($ERRORS{'DEBUG'}, 0, "searching for process via: $pgrep_command");
-	#
-	#my $pgrep_output = `$pgrep_command`;
-	#my $pgrep_exit_status = $?;
-	#notify($ERRORS{'DEBUG'}, 0, "pgrep exit status=$pgrep_exit_status, output: $pgrep_output");
-	#
-	#if ($pgrep_exit_status == 0) {
-	#	notify($ERRORS{'DEBUG'}, 0, "reservation is being processed by:\n$pgrep_output");
-	#	return 1;
-	#}
-	#elsif ($pgrep_exit_status == 1) {
-	#	notify($ERRORS{'DEBUG'}, 0, "did not find any running processes for reservation, returning 0");
-	#	return 0;
+	# Check for any running processes
+	#my $ps_command = "ps -ef";
+	#notify($ERRORS{'DEBUG'}, 0, "executing ps -ef command: $ps_command");
+	#my ($ps_exit_status, $ps_output) = run_command($ps_command);
+	#if (defined $ps_exit_status && $ps_exit_status == 0) {
+	#	notify($ERRORS{'DEBUG'}, 0, "ps exit status=$ps_exit_status, output:\n@{$ps_output}");
+	#	
+	#	my @matching_processes = grep {/VCL::.*:$reservation_id/} @{$ps_output};
+	#	notify($ERRORS{'DEBUG'}, 0, "matching processes: @matching_processes, count: " . scalar @matching_processes);
 	#}
 	#else {
-	#	notify($ERRORS{'WARNING'}, 0, "error occurred running command: $pgrep_command, exit status: $pgrep_exit_status"); #, output: $pgrep_output");
-	#	return 0;
+	#	notify($ERRORS{'WARNING'}, 0, "failed to execute ps command");
 	#}
+	
+	my $process_running = 0;
+
+	#my $process_running;
+	#if (defined($pgrep_exit_status) && @{$pgrep_output} > 0) {
+	#	notify($ERRORS{'DEBUG'}, 0, "reservation is being processed by:\n@{$pgrep_output}");
+	#	$process_running = 1;
+	#}
+	#elsif (defined($pgrep_exit_status) && @{$pgrep_output} == 0) {
+	#	notify($ERRORS{'DEBUG'}, 0, "did not find any running processes for reservation");
+	#	$process_running = 0;
+	#}
+	#elsif (defined($pgrep_exit_status))  {
+	#	notify($ERRORS{'WARNING'}, 0, "error occurred running command: $pgrep_command, exit status: $pgrep_exit_status, output:\n@{$pgrep_output}");
+	#	$process_running = 0;
+	#}
+	#else {
+	#	notify($ERRORS{'WARNING'}, 0, "command could not be executed: $pgrep_command");
+	#	$process_running = 0;
+	#}
+	
+	# Check the results and return
+	if ($computerloadlog_exists && $process_running) {
+		notify($ERRORS{'DEBUG'}, 0, "reservation is currently being processed");
+		return 1;
 	}
+	elsif (!$computerloadlog_exists && $process_running) {
+		notify($ERRORS{'WARNING'}, 0, "computerloadlog 'begin' entry does NOT exist but running process was found, returning 1");
+		return 1;
+	}
+	elsif ($computerloadlog_exists && !$process_running) {
+		notify($ERRORS{'WARNING'}, 0, "computerloadlog 'begin' entry exists but running process was NOT found, returning 0");
+		return 0;
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "reservation is NOT currently being processed");
+		return 0;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 run_command
+
+ Parameters  : string
+ Returns     : array if command run, undefined if it didn't
+ Description : Runs a command locally on the management node.
+               If command completed successfully, an array containing
+               the exit status and a reference to an array containing the
+               lines of output of the command specified is returned.
+               $array[0] = the exit status of the command
+               $array[1] = reference to array containing lines of output
+                           generated by the command
+               If the command fails, an empty array is returned.
+
+=cut
+
+sub run_command {
+	my $command = shift;
+	
+	my $pid;
+	my @output = ();
+	my $exit_status;
+	
+	# Pipe the command output to a file handle
+	# The open function returns the pid of the process
+	if ($pid = open(COMMAND, "$command 2>&1 |")) {
+		# Capture the output of the command
+		@output = <COMMAND>;
+		
+		# Save the exit status
+		$exit_status = $? >> 8;
+		
+		# Close the command handle
+		close(COMMAND);
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command: $command, error: $!");
+		return;
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "executed command: $command, pid: $pid, exit status: $exit_status, output:\n@output");
+	return ($exit_status, \@output);
+}
 	
 #/////////////////////////////////////////////////////////////////////////////
 
