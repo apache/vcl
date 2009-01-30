@@ -6034,9 +6034,9 @@ sub get_request_info {
 		$request_info{user}{preferredname} = $request_info{user}{firstname};
 	}
 
-	# Set the user's uid to -1 if it's NULL
+	# Set the user's uid to to the VCL user ID if it's NULL
 	if (!defined($request_info{user}{uid}) || !$request_info{user}{uid}) {
-		$request_info{user}{uid} = -1;
+		$request_info{user}{uid} = $request_info{user}{id};
 	}
 
 	# Set the user's IMid to '' if it's NULL
