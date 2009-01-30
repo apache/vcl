@@ -759,10 +759,10 @@ sub REAPER {
 			$child_count--;
 			delete $child_pids{$dead_pid};
 		}
-		
-		# Reinstall the signal handler in case of unreliable signals
-		$SIG{CHLD} = \&REAPER;
 	}
+	
+	# Reinstall the signal handler in case of unreliable signals
+	$SIG{CHLD} = \&REAPER;
 	
 	# Set the special $? variable back to the exit status of the child which died
 	# This is useful when utilities such as SSH are run in other places in the code
