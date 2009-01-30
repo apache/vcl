@@ -279,7 +279,7 @@ sub process {
 						@group   = @user_group_members;
 					}
 					else {
-						notify($ERRORS{'CRITICAL'}, 0, "image claims group acess but membership is 0, usergrouid: $imagemeta_usergroupid, only adding reqeustor");
+						notify($ERRORS{'OK'}, 0, "image claims group access but membership is 0, usergrouid: $imagemeta_usergroupid, only adding requester");
 					}
 
 				}    # Close imagemeta user group defined and member count is > 0
