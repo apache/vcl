@@ -1,0 +1,86 @@
+Pre-Installation:
+
+You need to install the VMware VI Perl toolkit installed on the VCL server
+
+Each vmware esx hypervisor requires a mounted NFS datastore named 'VCL'
+
+This same datastore needs to be mounted on the VCL server at /mnt/vcl/
+
+This NFS export needs to be exported (from the NFS server) at /mnt/export/
+
+This same datastore requires the following structure.
+
+[VCL]
+	/inuse  (required)
+	/golden  (required)
+		/imagename
+			imagename.vmdk
+			imagename-flat.vmdk
+		...
+
+Image requirements:
+	All images used by this module must have names that begin with esx3-<anything you want>
+	ssh must be set to start on boot
+	ssh keys must be setup so that VCL can ssh into it
+	The image needs two NICs (eth0 is private, eth1 is public)
+	The IP addressing of the private (eth1) interface must be set to DHCP on boot
+
+
+VCL expects the blades to have a consistant private IP address.  Go configure dhcpd.conf and in /etc/hosts manually
+
+
+Customize the module:
+
+This module expects the following three variables to be hard-coded at the top of the esx.pm file.  Remember to character escape any special characters.
+
+$vmhost_username, $vmhost_password, $datastore_ip
+
+A note about datastore_ip.  Because the module ssh's to the storage system directly instead of doing a cp over nfs, you need to set the IP of the datastore here.  The datastore machine should be setup with SSH keys from the VCL ssh keys set as IDENTITY_blade_linux in the VCL conf file.
+
+Install the module:
+
+Do these once:
+1)  Insert a row into the module table with `perlpackage` equal to 'VCL::Module::Provisioning::esx'
+2)  Insert a row into the provisioning table with `moduleid` equal to the id of the entry from step 1 in the module table
+3)  Insert a record into the 'vmprofile' table with the following guidelines
+	profilename: VMware ESX SAN
+	vmtypeid: link to anything valid ID from the vmtype table.
+	imageid: link to the "No Image" id in the image table
+	virtualswitch0: <name of your private virtual machine port group> 
+	virtualswitch1: <name of your public virtual machine port group>
+
+Make VCL aware of your ESX hosts:
+1)  For each esx hypervisor, which VCL should provisong virtual machine to, create an entry for that hypervisor by going to Manage Computers -> Edit Computer Information -> Add
+	Hostname <your ESX's hostname>
+	IP <your ESX's IP>
+	Type "blade"
+	Provisioning Engine:  This doesn't matter
+	Computer Groups:  Don't add the hypervisors to any computer groups
+
+2)  For each esx hypervisor manually create an entry in the 'vmhost' database table with the following guidelines:
+	computerid: the id of the computer created in step 1
+	vmlimit: the max number of vms to have on this hypervisor
+	vmprofileid: the id of the vmprofile entry created in the "Do these once" secion step 3
+
+Create a virtual machine placeholder for each VM you would like to concurrently run.  Do so by going to Manage Computers -> Edit Computer Information -> Add
+	Hostname: <the hostname of the vm when it is provisioned and turned on>
+	IP: <the public IP of the vm when it is provisioned and turned on>
+	Type: virtualmachine
+	Provisioning Engine: VMware ESX
+	Computer Groups:  allComputers
+
+For each virtual machine, manually update the private IP, eth0macaddress (private), and eth1macaddress (public) for the placeholder virtual machine entries created in in the computers table during step (4)
+
+Add static entries in dhcpd.conf for the eth0macaddresses (private) for all computer placeholder entries
+
+Add similar entries for each compter placeholder to the /etc/hosts file to provide VCL with name resolution on these vms
+
+Finally, once all virtual machines placeholders have been created, 'assign' them to hypervisors by using the 'Virtual Hosts' area of your web interface.
+
+Now your hypervisors and virtual machines are setup, time to add an image:
+
+1)  Create an entry in the image table.
+	name:  esx3-<what you want>-v0
+	OSid:  link to the fc9 entry on the OS table
+2)  Create an image revision table with the imageid fromt the entry created in (1) and the imagename used in (1)
+3)  Add the image revision to the allImages and allVMimages groups
