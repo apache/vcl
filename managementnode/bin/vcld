@@ -56,7 +56,7 @@ use diagnostics;
 use Symbol;
 use POSIX;
 use Getopt::Long;
-use English;
+use English qw( -no_match_vars );
 
 use VCL::utils;
 use VCL::DataStructure;
@@ -86,6 +86,8 @@ $SIG{INT}  = \&HUNTSMAN;
 $SIG{QUIT} = \&HUNTSMAN;
 $SIG{HUP}  = \&HUNTSMAN;
 $SIG{TERM} = \&HUNTSMAN;
+$SIG{__WARN__} = \&warning_handler;
+$SIG{__DIE__} = \&die_handler;
 
 # Call main subroutine
 &main();
@@ -126,7 +128,7 @@ sub main () {
 		notify($ERRORS{'OK'}, $LOGFILE, "retrieved management node information from database");
 	}
 	else {
-		notify($ERRORS{'CRITICAL'}, $LOGFILE, "unable to retieve management node information from database");
+		notify($ERRORS{'CRITICAL'}, $LOGFILE, "unable to retrieve management node information from database");
 		exit;
 	}
 
@@ -172,10 +174,10 @@ sub main () {
 		# Get all the requests assigned to this management node
 		# get_management_node_requests() gets a subset of the information available
 		if ($info{request} = {get_management_node_requests($management_node_id)}) {
-			#notify($ERRORS{'DEBUG'}, $LOGFILE, "retieved request information for management node $management_node_id");
+			#notify($ERRORS{'DEBUG'}, $LOGFILE, "retrieved request information for management node $management_node_id");
 		}
 		else {
-			notify($ERRORS{'CRITICAL'}, $LOGFILE, "could not retieve request information for management node $management_node_id");
+			notify($ERRORS{'CRITICAL'}, $LOGFILE, "could not retrieve request information for management node $management_node_id");
 		}
 
 		# See if there's anything to do
@@ -268,9 +270,13 @@ sub main () {
 				}
 				
 				# Make sure reservation is not currently being processed
-				if (reservation_being_processed($reservation_id)) {
+				my $being_processed = reservation_being_processed($reservation_id);
+				if ($being_processed && $request_state_name ne 'deleted') {
 					notify($ERRORS{'WARNING'}, $LOGFILE, "reservation $reservation_id is already being processed");
 					next RESERVATION;
+				}
+				elsif ($being_processed) {
+					notify($ERRORS{'DEBUG'}, $LOGFILE, "$request_state_name processing delayed, reservation $reservation_id is currently being processed");
 				}
 				else {
 					notify($ERRORS{'DEBUG'}, $LOGFILE, "reservation $reservation_id is NOT already being processed");
@@ -278,7 +284,7 @@ sub main () {
 
 				# Get the full set of database data for this request
 				if (%request_info = get_request_info($request_id)) {
-					notify($ERRORS{'DEBUG'}, $LOGFILE, "retieved request information from database");
+					notify($ERRORS{'DEBUG'}, $LOGFILE, "retrieved request information from database");
 
 					# Set request variables that may have changed by other processes to their original values
 					# They may change if this is a cluster reservation
@@ -287,7 +293,7 @@ sub main () {
 					$request_info{preload}         = $request_preload;
 				}
 				else {
-					notify($ERRORS{'WARNING'}, $LOGFILE, "could not retieve request information from database");
+					notify($ERRORS{'WARNING'}, $LOGFILE, "could not retrieve request information from database");
 					next RESERVATION;
 				}
 
@@ -566,8 +572,9 @@ sub make_new_child {
 			sigprocmask(SIG_UNBLOCK, $sigset) or die "can't unblock SIGINT for fork: $!\n";
 			
 			# Parent process records the child's PID and returns
+			# Store the reservation ID so REAPER can clean up the reservation when it dies
 			$child_count++;
-			$child_pids{$pid} = 1;
+			$child_pids{$pid} = $reservation_id;
 			notify($ERRORS{'OK'}, $LOGFILE, "current number of forked kids: $child_count");
 			return;
 		}
@@ -621,23 +628,78 @@ sub make_new_child {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 HUNTSMAN
+=head2 warning_handler
 
- Parameters  : 
- Returns     : 
- Description :
+ Parameters  : None
+ Returns     : Nothing
+ Description : Handles __WARN__ signals. This signal is generated when warn()
+               is called. This may occur when the VCL code encounters an
+					error such as:
+					Use of uninitialized value in concatenation (.) or string at
+					
+					If the signal isn't handled, the warning message is dumped
+					to STDOUT and will appear in the log file. This handler
+					causes WARN signals to be logged by the notify() subroutine.
 
 =cut
 
-sub HUNTSMAN {   
-	# Temporarily override the the SIGCHLD signal handler
-	# Set SIGCHLD handler to IGNORE, meaning nothing happens when a child process exits
+sub warning_handler {
+	# Call notify, passing it a string of whatever is contained in @_
+	notify($ERRORS{'WARNING'}, $LOGFILE, "@_");
+	
+	# Reinstall the signal handler in case of unreliable signals
+	$SIG{__WARN__} = \&warning_handler;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 die_handler
+
+ Parameters  : None
+ Returns     : Nothing
+ Description : Handles __DIE__ signals. This signal is generated when die()
+               is called. This may occur when the VCL code encounters an
+					error such as:
+					Uncaught exception from user code:
+               Undefined subroutine ... called at ...
+					
+					If the signal isn't handled, the output is dumped to STDERR
+					and the process exits quietly.
+
+
+=cut
+
+sub die_handler {
+	# Call notify, passing it a string of whatever is contained in @_
+	notify($ERRORS{'CRITICAL'}, $LOGFILE, "@_");
+	
+	# Reinstall the signal handler in case of unreliable signals
+	$SIG{__DIE__} = \&warning_handler;
+	
+	exit;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 HUNTSMAN
+
+ Parameters  : None
+ Returns     : Nothing, process exits
+ Description : Signal handler for:
+               $SIG{INT}
+               $SIG{QUIT}
+               $SIG{HUP}
+               $SIG{TERM}
+
+=cut
+
+sub HUNTSMAN {
+	my $signal = shift;
+	
 	local ($SIG{CHLD}) = 'IGNORE';
 	
-	# Send SIGINT to child processes
-	kill 'INT' => keys %child_pids;
-	
-	notify($ERRORS{'OK'}, $LOGFILE, "vcld process exiting, pid=$$");
+	# Display a message and exit
+	notify($ERRORS{'DEBUG'}, 0, "HUNTSMAN called: signal: $signal, pid: $PID, process exiting");
 	exit;
 }
 
@@ -661,6 +723,11 @@ sub HUNTSMAN {
 =cut
 
 sub REAPER {
+	my $signal = shift;
+	
+	# Don't overwrite current error
+	local $!;
+
 	# Save the information saved in $? before proceeding
 	# This is done to save the exit status of the child process which died
 	# If you don't save it, wait() will overwrite it
@@ -668,30 +735,39 @@ sub REAPER {
 	my $child_exit_status = $? >> 8;
 	my $signal_number = $? & 127;
 	my $dumped_core = $? & 128;
-	#notify($ERRORS{'DEBUG'}, 0, "\$?: $?, signal: $signal_number, dumped core: $dumped_core, child exit status: $child_exit_status");
+	#notify($ERRORS{'DEBUG'}, 0, "REAPER called: signal: $signal, initial value of \$?: $status_save");
 	
-	# Configure the REAPER() subroutine to handle SIGCHLD signals
-	$SIG{CHLD} = \&REAPER;
-	
-	# Wait for a child process to terminate
-	# Should have already happened since this subroutine is only called when CHLD signals are sent
-	my $dead_pid = wait;
-	
-	# Check if the child PID hash contains the pid of the process which just died
-	if (exists $child_pids{$dead_pid}) {
-		# Child which died was a VCL state process since its pid is in the hash
-		$child_count--;
-		delete $child_pids{$dead_pid};
-		notify($ERRORS{'OK'}, $LOGFILE, "VCL state process exited, pid=$dead_pid");
-	}
-	else {
-		# Child which died was some other process
-		#notify($ERRORS{'DEBUG'}, $LOGFILE, "child process exited, pid=$dead_pid");
+	# Wait for a child processes to die
+	my $dead_pid = -1;
+	my $wait_pid;
+	while (($wait_pid = waitpid(-1, WNOHANG)) > 0) {
+		$status_save = $?;
+		$child_exit_status = $? >> 8;
+		$signal_number = $? & 127;
+		$dumped_core = $? & 128;
+		$dead_pid = $wait_pid;
+		
+		# Assemble a string containing the dead process info
+		notify($ERRORS{'DEBUG'}, 0, "process reaped: pid: $dead_pid, \$?: $status_save, exit status: $child_exit_status");
+		
+		# Check if the child PID hash contains the pid of the process which just died
+		if (exists $child_pids{$dead_pid}) {
+			my $dead_reservation_id = $child_pids{$dead_pid};
+			notify($ERRORS{'DEBUG'}, 0, "VCL process exited for reservation $dead_reservation_id");
+			
+			# Child which died was a VCL state process since its pid is in the hash
+			$child_count--;
+			delete $child_pids{$dead_pid};
+		}
+		
+		# Reinstall the signal handler in case of unreliable signals
+		$SIG{CHLD} = \&REAPER;
 	}
 	
 	# Set the special $? variable back to the exit status of the child which died
 	# This is useful when utilities such as SSH are run in other places in the code
 	# The code which called the utility can check the exit status to see if it was successful
+	notify($ERRORS{'DEBUG'}, 0, "setting \$? to $status_save, exit status: $child_exit_status");
 	$? = $status_save;
 	
 	return;
