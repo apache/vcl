@@ -764,6 +764,8 @@ sub computer_not_being_used {
 	# reserved
 	# vmhostinuse
 
+	notify($ERRORS{'DEBUG'}, 0, "$computer_short_name state is $computer_state_name");
+		
 	# Return 0 if computer state is maintenance or deleted
 	if ($computer_state_name =~ /^(deleted|maintenance)$/) {
 		notify($ERRORS{'WARNING'}, 0, "$computer_short_name is NOT available, its state is $computer_state_name");
@@ -833,7 +835,7 @@ sub computer_not_being_used {
 
 			# Check for overlapping reservations which user is involved or image is being created
 			# Don't check for state = new, it could be a future reservation
-			if ($neighbor_state_name =~ /^(reserved|inuse|image)$/) {
+			if ($neighbor_state_name =~ /^(maintenance|reserved|inuse|image)$/) {
 				notify($ERRORS{'WARNING'}, 0, "detected overlapping reservation on $computer_short_name: req=$neighbor_request_id, res=$neighbor_reservation_id, request state=$neighbor_state_name, laststate=$neighbor_laststate_name, computer state=$computer_state_name");
 				return 0;
 			}
@@ -900,22 +902,18 @@ sub computer_not_being_used {
 					}
 					else {
 						notify($ERRORS{'WARNING'}, 0, "failed to kill competing process for reservation $neighbor_reservation_id");
-						# Wait then try again
-						next INUSE_LOOP;
 					}
 				} ## end if (checkonprocess($neighbor_laststate_name...
 
 				# Either neighbor process was not found or competing process was just killed
 				# Set neighbor request to complete
-				if (update_request_state($neighbor_request_id, "complete", $neighbor_laststate_name)) {
-					notify($ERRORS{'OK'}, 0, "neighbor request $neighbor_request_id state set to 'complete'");
+				if (update_request_state($neighbor_request_id, "deleted", $neighbor_laststate_name)) {
+					notify($ERRORS{'OK'}, 0, "neighbor request $neighbor_request_id state set to 'deleted'");
 					# Check other neighbor requests
 					next NEIGHBOR_REQUESTS;
 				}
 				else {
-					notify($ERRORS{'WARNING'}, 0, "failed to set neighbor request $neighbor_request_id state to 'complete'");
-					# Wait then try again
-					next INUSE_LOOP;
+					notify($ERRORS{'WARNING'}, 0, "failed to set neighbor request $neighbor_request_id state to 'deleted'");
 				}
 			} ## end elsif ($neighbor_state_name eq "pending")  [ if ($neighbor_state_name =~ /^(reserved|inuse|image)$/)
 
