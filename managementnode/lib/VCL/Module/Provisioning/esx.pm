@@ -157,9 +157,9 @@ sub load {
 
 	#eventually get these from a config file or database
 	
-        my $vmhost_username = "root";
-        my $vmhost_password = "M\$r\@geCl0ud";
-        my $datastore_ip = "152.14.17.78";
+        my $vmhost_username = "";
+        my $vmhost_password = "";
+        my $datastore_ip = "";
 
 	notify($ERRORS{'OK'}, 0, "Entered ESX module, loading $image_name on $computer_shortname (on $vmhost_hostname) for reservation $reservation_id");
 
