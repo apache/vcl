@@ -60,6 +60,12 @@ use diagnostics;
 use VCL::utils;
 use Fcntl qw(:DEFAULT :flock);
 
+# Used to query for the MAC address once a host has been registered
+use VMware::VIRuntime;
+use VMware::VILib;
+
+
+
 ##############################################################################
 
 =head1 CLASS ATTRIBUTES
@@ -150,9 +156,10 @@ sub load {
 	my $vmclient_OSname           = $self->data->get_image_os_name;
 
 	#eventually get these from a config file or database
-	my $vmhost_username = "";
-	my $vmhost_password = "";
-	my $datastore_ip = "";
+	
+        my $vmhost_username = "root";
+        my $vmhost_password = "M\$r\@geCl0ud";
+        my $datastore_ip = "152.14.17.78";
 
 	notify($ERRORS{'OK'}, 0, "Entered ESX module, loading $image_name on $computer_shortname (on $vmhost_hostname) for reservation $reservation_id");
 
@@ -266,9 +273,9 @@ sub load {
 	push(@vmxfile, "ethernet0.wakeOnPcktRcv = \"false\"\n");
 	push(@vmxfile, "ethernet1.wakeOnPcktRcv = \"false\"\n");
 
-	push(@vmxfile, "ethernet0.address = \"$vmclient_eth0MAC\"\n");
-	push(@vmxfile, "ethernet1.address = \"$vmclient_eth1MAC\"\n");
-	push(@vmxfile, "ethernet0.addressType = \"static\"\n");
+	#push(@vmxfile, "ethernet0.address = \"$vmclient_eth0MAC\"\n");
+	#push(@vmxfile, "ethernet1.address = \"$vmclient_eth1MAC\"\n");
+	push(@vmxfile, "ethernet0.addressType = \"generated\"\n");
 	push(@vmxfile, "ethernet1.addressType = \"generated\"\n");
 	push(@vmxfile, "gui.exitOnCLIHLT = \"FALSE\"\n");
 	push(@vmxfile, "snapshot.disabled = \"TRUE\"\n");
@@ -324,11 +331,71 @@ sub load {
 	notify($ERRORS{'DEBUG'},0,"Powered on: $poweron_output");
 
 
-	# Start waiting for SSH to come up
-	
+	# Query the VI Perl toolkit for the mac address of our newly registered
+	# machine
+	Vim::login(service_url => "https://$vmhost_hostname/sdk", user_name => $vmhost_username, password => $vmhost_password);
+	my $vm_view = Vim::find_entity_view(view_type => 'VirtualMachine', filter => {'config.name' => "$computer_shortname"});
+	if (!$vm_view) {
+		notify($ERRORS{'CRITICAL'}, 0, "Could not query for VM in VI PERL API");
+		Vim::logout();
+		return 0;
+	}
+	my $devices = $vm_view->config->hardware->device;
+	my $mac_addr;
+	foreach my $dev (@$devices) {
+		next unless ($dev->isa ("VirtualEthernetCard"));
+		notify($ERRORS{'DEBUG'}, 0, "deviceinfo->summary: $dev->deviceinfo->summary");
+		notify($ERRORS{'DEBUG'}, 0, "virtualswitch0: $virtualswitch0");
+		if ($dev->deviceInfo->summary eq $virtualswitch0) {
+			$mac_addr = $dev->macAddress;
+		}
+	}
+	Vim::logout();
+	if (!$mac_addr) {
+		notify($ERRORS{'CRITICAL'}, 0, "Failed to find MAC address");
+		return 0;
+	}
+	notify($ERRORS{'OK'}, 0, "Queried MAC address is $mac_addr");
 
-	my $sshdstatus = 0;
+	# Query ARP table for $mac_addr to find the IP (waiting for machine to come up if necessary)
+	# The DHCP negotiation should add the appropriate ARP entry for us
+	my $arpstatus = 0;
 	my $wait_loops = 0;
+	my $client_ip;
+	while (!$arpstatus) {
+		my $arpoutput = `arp -n`;
+		if ($arpoutput =~ /^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}).*?$mac_addr/mi) {
+			$client_ip = $1;
+			$arpstatus = 1;
+			notify($ERRORS{'OK'}, 0, "$computer_shortname now has ip $client_ip");
+		}
+		else {
+			if ($wait_loops > 24) {
+				notify($ERRORS{'CRITICAL'}, 0, "waited acceptable amount of time for dhcp, please check $computer_shortname on $vmhost_hostname");
+				return 0;
+			}
+			else {
+				$wait_loops++;
+				notify($ERRORS{'OK'}, 0, "going to sleep 5 seconds, waiting for computer to DHCP. Try $wait_loops");
+				sleep 5;
+			}
+		}
+	}
+
+
+	notify($ERRORS{'OK'}, 0, "Found IP address $client_ip");
+
+	# Delete existing entry for $computer_shortname in /etc/hosts (if any)
+	notify($ERRORS{'OK'}, 0, "Removing old hosts entry");
+	my $sedoutput = `sed -i "/.*\\b$computer_shortname\$/d" /etc/hosts`;
+	notify($ERRORS{'DEBUG'}, 0, $sedoutput);
+	
+	# Add new entry to /etc/hosts for $computer_shortname
+	`echo -e "$client_ip\t$computer_shortname" >> /etc/hosts`;
+
+	# Start waiting for SSH to come up
+	my $sshdstatus = 0;
+	$wait_loops = 0;
 	my $sshd_status = "off";
 	notify($ERRORS{'DEBUG'}, 0, "Waiting for ssh to come up on $computer_shortname");
 	while (!$sshdstatus) {
@@ -347,7 +414,7 @@ sub load {
 			else {
 				$wait_loops++;
 				# to give post config a chance
-				notify($ERRORS{'OK'}, 0, "going to sleep 5 seconds, waiting for post config to finish. Try $wait_loops");
+				notify($ERRORS{'OK'}, 0, "going to sleep 5 seconds, waiting for computer to start SSH. Try $wait_loops");
 				sleep 5;
 			}
 		}    # else
