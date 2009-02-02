@@ -5469,12 +5469,16 @@ sub kill_reservation_process {
 	my $pkill_exit_status = $? >> 8;
 	
 	# Check the pgrep exit status
-	if ($pkill_exit_status == 0 || $? == -1) {
-		notify($ERRORS{'DEBUG'}, 0, "reservation $reservation_id process was killed, returning 1");
+	if ($pkill_exit_status == 0) {
+		notify($ERRORS{'OK'}, 0, "reservation $reservation_id process was killed, returning 1");
+		return 1;
+	}
+	elsif ($? == -1) {
+		notify($ERRORS{'OK'}, 0, "\$? is set to -1, Perl bug likely encountered, assuming reservation $reservation_id process was killed, returning 1");
 		return 1;
 	}
 	elsif ($pkill_exit_status == 1) {
-		notify($ERRORS{'WARNING'}, 0, "process was not found for reservation $reservation_id, returning 1");
+		notify($ERRORS{'OK'}, 0, "process was not found for reservation $reservation_id, returning 1");
 		return 1;
 	}
 	else {
@@ -6768,13 +6772,15 @@ sub run_ssh_command {
 		# Bits 9-16 of $? contain the child process exit status
 		$exit_status = $? >> 8;
 		
+		# Ignore the returned value of $? if it is -1
+		# This likely means a Perl bug was encountered
+		# Assume command was successful
+		if ($? == -1) {
+			notify($ERRORS{'OK'}, 0, "exit status changed from $exit_status to 0, Perl bug likely encountered");
+			$exit_status = 0;
+		}
+		
 		#notify($ERRORS{'DEBUG'}, 0, "\$?: $?, signal: $signal_number, core dump: $core_dump, exit status: $exit_status");
-
-		## For some reason the SSH exit status is sometimes right-padded with 8 0's
-		## Shift right 8 bits to get the real value if it's > 255
-		#if ($ssh_exit_status > 255) {
-		#	$ssh_exit_status = ($ssh_exit_status >> 8);
-		#}
 
 		# Strip out the key warning message from the output
 		$ssh_output =~ s/\@{10,}.*man-in-the-middle attacks\.//igs;
@@ -6811,6 +6817,13 @@ sub run_ssh_command {
 		# Check the exit status
 		# ssh exits with the exit status of the remote command or with 255 if an error occurred.
 		if ($exit_status == 255 || $ssh_output_formatted =~ /lost connection|reset by peer|no route to host|connection refused|connection timed out/i) {
+			# Temporary fix for problem of nodes using different ports
+			if ($attempts == 3) {
+				$max_attempts++;
+				notify($ERRORS{'OK'}, 0, "making 1 more attempt using port 24");
+				$ssh_command = "$ssh_path $identity_paths -l $user -p 24 -x $node '$command' 2>&1";
+			}
+			
 			notify($ERRORS{'WARNING'}, 0, "attempt $attempts/$max_attempts: failed to execute SSH command on $node: $command, exit status: $exit_status, SSH exits with the exit status of the remote command or with 255 if an error occurred, output:\n$ssh_output_formatted");
 			next;
 		}
@@ -6971,6 +6984,14 @@ sub run_scp_command {
 		# scp exits with 0 on success or >0 if an error occurred
 		if ($scp_exit_status > 0 || $scp_output =~ /lost connection|failed|reset by peer|no route to host/i) {
 			notify($ERRORS{'WARNING'}, 0, "scp error occurred: attempt $attempts/$max_attempts, command: $scp_command, exit status: $scp_exit_status, output: $scp_output");
+			
+			# Temporary fix for problem of nodes using different ports
+			if ($attempts == 3) {
+				$max_attempts++;
+				notify($ERRORS{'OK'}, 0, "making 1 more attempt using port 24");
+				$scp_command = "$scp_path -B $identity_paths-P 24 -p -r $path1 $path2 2>&1";
+			}
+			
 			next;
 		}
 		else {
@@ -9935,6 +9956,11 @@ sub run_command {
 		
 		# Save the exit status
 		$exit_status = $? >> 8;
+		
+		if ($? == -1) {
+			notify($ERRORS{'OK'}, 0, "\$? is set to $?, setting exit status to 0, Perl bug likely encountered");
+			$exit_status = 0;
+		}
 		
 		# Close the command handle
 		close(COMMAND);

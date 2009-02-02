@@ -56,6 +56,7 @@ use 5.008000;
 use strict;
 use warnings;
 use diagnostics;
+use English qw( -no_match_vars );
 
 use VCL::utils;
 use Fcntl qw(:DEFAULT :flock);
@@ -103,11 +104,11 @@ sub initialize {
 		$XCAT_ROOT = $ENV{XCATROOT};
 	}
 	elsif (defined($ENV{XCATROOT})) {
-		notify($ERRORS{'WARNING'}, 0, "XCATROOT environment variable is not defined, using /opt/xcat");
+		notify($ERRORS{'OK'}, 0, "XCATROOT environment variable is not defined, using /opt/xcat");
 		$XCAT_ROOT = '/opt/xcat';
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "XCATROOT environment variable is not set, using /opt/xcat");
+		notify($ERRORS{'OK'}, 0, "XCATROOT environment variable is not set, using /opt/xcat");
 		$XCAT_ROOT = '/opt/xcat';
 	}
 
@@ -117,13 +118,13 @@ sub initialize {
 	# Make sure the xCAT root path is valid
 	if (!-d $XCAT_ROOT) {
 		notify($ERRORS{'WARNING'}, 0, "unable to initialize xCAT module, $XCAT_ROOT directory does not exist");
-		return 0;
+		return;
 	}
 
 	# Check to make sure one of the expected executables is where it should be
 	if (!-x "$XCAT_ROOT/bin/rpower") {
 		notify($ERRORS{'WARNING'}, 0, "unable to initialize xCAT module, expected executable was not found: $XCAT_ROOT/bin/rpower");
-		return 0;
+		return;
 	}
 	notify($ERRORS{'DEBUG'}, 0, "xCAT root path found: $XCAT_ROOT");
 
@@ -176,7 +177,7 @@ sub load {
 	  if (!defined($reservation_id));
 	notify($ERRORS{'OK'}, 0, "architecture not set")
 	  if (!defined($image_architecture));
-
+	
 	# Initialize some timer variables
 	# Do this here in case goto passes over the declaration
 	my $sshd_start_time;
@@ -771,7 +772,23 @@ sub load {
 					#need to check power, maybe reboot it. for now fail it
 					#try to reinstall it once
 					if ($rinstall_attempts < 2) {
-						notify($ERRORS{'WARNING'}, 0, "$computer_node_name starting rinstall again");
+						my $debugging_message = "*reservation has NOT failed yet*\n";
+						$debugging_message .= "this notice is for debugging purposes so that node can be watched during 2nd rinstall attempt\n";
+						$debugging_message .= "sshd did not become active on $computer_node_name after first rinstall attempt\n\n";
+						
+						$debugging_message .= "management node:     " . $self->data->get_management_node_hostname() . "\n";
+						$debugging_message .= "pid:                 " . $PID . "\n";
+						$debugging_message .= "request:             " . $self->data->get_request_id() . "\n";
+						$debugging_message .= "reservation:         " . $self->data->get_reservation_id() . "\n";
+						$debugging_message .= "state/laststate:     " . $self->data->get_request_state_name() . "/" . $self->data->get_request_laststate_name() . "\n";
+						$debugging_message .= "computer:            " . $self->data->get_computer_host_name() . " (id: " . $self->data->get_computer_id() . ")\n";
+						$debugging_message .= "user:                " . $self->data->get_user_login_id() . " (id: " . $self->data->get_user_id() . ")\n";
+						$debugging_message .= "image:               " . $self->data->get_image_name() . " (id: " . $self->data->get_image_id() . ")\n";
+						$debugging_message .= "image prettyname:    " . $self->data->get_image_prettyname() . "\n";
+						$debugging_message .= "image size:          " . $self->data->get_image_size() . "\n";
+						$debugging_message .= "reload time:         " . $self->data->get_image_reload_time() . "\n";
+
+						notify($ERRORS{'CRITICAL'}, 0, "$debugging_message");
 						insertloadlog($reservation_id, $computer_id, "repeat", "starting install process");
 						close(TAIL);
 						goto XCATRINSTALL;
@@ -2402,9 +2419,19 @@ sub retrieve_image {
 
 	# Get the image repository path
 	my $image_repository_path = $self->_get_image_repository_path();
+	my $image_repository_path_source = $image_repository_path;
 	if (!$image_repository_path) {
 		notify($ERRORS{'WARNING'}, 0, "image repository path could not be determined");
 		return;
+	}
+	
+	# Fix for Linux images on henry4
+	my $management_node_hostname = $self->data->get_management_node_hostname();
+	my $image_os_type            = $self->data->get_image_os_type();
+	my $image_os_source_path     = $self->data->get_image_os_source_path();
+	if ($management_node_hostname =~ /henry4/i && $image_os_type =~ /linux/i && $image_os_source_path eq 'image') {
+		$image_repository_path_source =~ s/linux_image/image/;
+		notify($ERRORS{'DEBUG'}, 0, "fixed retrieval Linux image path for henry4: linux_image --> image: $image_repository_path_source");
 	}
 
 	# Attempt to copy image from other management nodes
@@ -2422,7 +2449,7 @@ sub retrieve_image {
 		notify($ERRORS{'OK'}, 0, "checking if $partner has $image_name");
 
 		# Use ssh to call ls on the partner management node
-		my ($ls_exit_status, $ls_output_array_ref) = run_ssh_command($partner, $image_lib_key, "ls -1 $image_repository_path", $image_lib_user, '', 1);
+		my ($ls_exit_status, $ls_output_array_ref) = run_ssh_command($partner, $image_lib_key, "ls -1 $image_repository_path_source", $image_lib_user, '', 1);
 
 		# Check if the ssh command failed
 		if (!$ls_output_array_ref) {
@@ -2449,7 +2476,7 @@ sub retrieve_image {
 		notify($ERRORS{'OK'}, 0, "$image_name exists on $partner, attempting to copy");
 
 		# Attempt copy
-		if (run_scp_command("$image_lib_user\@$partner:$image_repository_path/$image_name*", $image_repository_path, $image_lib_key)) {
+		if (run_scp_command("$image_lib_user\@$partner:$image_repository_path_source/$image_name*", $image_repository_path, $image_lib_key)) {
 			notify($ERRORS{'OK'}, 0, "$image_name files copied via SCP");
 			last;
 		}
@@ -2602,9 +2629,13 @@ sub get_image_size {
 	my $du_output = `$du_command`;
 
 	# Save the exit status
-	my $du_exit_status = $?;
-
-	#notify($ERRORS{'DEBUG'}, 0, "du exit staus: $du_exit_status, output:\n$du_output");
+	my $du_exit_status = $? >> 8;
+	
+	# Check if $? = -1, this likely means a Perl CHLD signal bug was encountered
+	if ($? == -1) {
+		notify($ERRORS{'OK'}, 0, "\$? is set to $?, setting exit status to 0, Perl bug likely encountered");
+		$du_exit_status = 0;
+	}
 
 	# Check the du command output
 	if ($du_exit_status > 0) {
@@ -2838,6 +2869,13 @@ sub _create_template {
 	# Make a copy of the base template file
 	my $cp_output = `/bin/cp -fv  $tmpl_repository_path/$basetmpl $tmpl_repository_path/$image_name.tmpl 2>&1`;
 	my $cp_exit_status = $? >> 8;
+	
+	# Check if $? = -1, this likely means a Perl CHLD signal bug was encountered
+	if ($? == -1) {
+		notify($ERRORS{'OK'}, 0, "\$? is set to $?, setting exit status to 0, Perl bug likely encountered");
+		$cp_exit_status = 0;
+	}
+	
 	if ($cp_exit_status == 0) {
 		notify($ERRORS{'DEBUG'}, 0, "copied $basetmpl to $tmpl_repository_path/$image_name.tmpl, output:\n$cp_output");
 	}
@@ -2898,6 +2936,13 @@ sub _delete_template {
 	# Delete the template file
 	my $rm_output = `/bin/rm -fv  $tmpl_repository_path/$image_name.tmpl 2>&1`;
 	my $rm_exit_status = $? >> 8;
+	
+	# Check if $? = -1, this likely means a Perl CHLD signal bug was encountered
+	if ($? == -1) {
+		notify($ERRORS{'OK'}, 0, "\$? is set to $?, setting exit status to 0, Perl bug likely encountered");
+		$rm_exit_status = 0;
+	}
+	
 	if ($rm_exit_status == 0) {
 		notify($ERRORS{'DEBUG'}, 0, "deleted $tmpl_repository_path/$image_name.tmpl, output:\n$rm_output");
 	}

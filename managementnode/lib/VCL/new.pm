@@ -654,7 +654,7 @@ sub reload_image {
 		insertloadlog($reservation_id, $computer_id, "loadimagecomplete", "$image_name was successfully reloaded on $computer_short_name");
 	}
 	else {
-		notify($ERRORS{'CRITICAL'}, 0, "$image_name failed to load on $computer_short_name, returning");
+		notify($ERRORS{'WARNING'}, 0, "$image_name failed to load on $computer_short_name, returning");
 		insertloadlog($reservation_id, $computer_id, "loadimagefailed", "$image_name failed to load on $computer_short_name");
 		return;
 	}
