@@ -164,11 +164,11 @@ function viewImages() {
 		if(! in_array($id, $userImageIDs))
 			continue;
 		print "  <TR>\n";
-		print "    <FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
+		print "    <TD align=center>\n";
+		print "      <FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
 		$cdata = array('imageid' => $id);
 		$cont = addContinuationsEntry('submitImageButton', $cdata);
-		print "    <INPUT type=hidden name=continuation value=\"$cont\">\n";
-		print "    <TD align=center>\n";
+		print "      <INPUT type=hidden name=continuation value=\"$cont\">\n";
 		if($showdeleted && $images[$id]["deleted"] == 1) {
 			print "      <INPUT type=submit name=submode value=Undelete>\n";
 		}
@@ -177,8 +177,8 @@ function viewImages() {
 			print "      <INPUT type=submit name=submode value=Delete><br>\n";
 		}
 		print "      <INPUT type=submit name=submode value=Details>\n";
+		print "      </FORM>\n";
 		print "    </TD>\n";
-		print "    </FORM>\n";
 		print "    <TD align=center>" . $images[$id]["prettyname"] . "</TD>\n";
 		print "    <TD align=center>" . $images[$id]["owner"] . "</TD>\n";
 		print "    <TD align=center>" . $images[$id]["platform"] . "</TD>\n";
