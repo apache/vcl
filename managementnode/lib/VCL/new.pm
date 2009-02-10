@@ -118,7 +118,7 @@ sub process {
 	my $imagemeta_usergroupid           = $self->data->get_imagemeta_usergroupid();
 	my $imagemeta_usergroupmembercount  = $self->data->get_imagemeta_usergroupmembercount();
 	my $imagemeta_usergroupmembers      = $self->data->get_imagemeta_usergroupmembers();
-	my $imagerevision_id                = $self->data->get_computer_imagerevision_id();
+	my $imagerevision_id                = $self->data->get_imagerevision_id();
 	my $managementnode_id               = $self->data->get_management_node_id();
 	my $managementnode_hostname         = $self->data->get_management_node_hostname();
 	my $user_unityid                    = $self->data->get_user_login_id();
@@ -479,6 +479,7 @@ sub reload_image {
 	my $computer_state_name             = $self->data->get_computer_state_name();
 	my $computer_preferred_image_id     = $self->data->get_computer_preferredimage_id();
 	my $computer_preferred_image_name   = $self->data->get_computer_preferredimage_name();
+	my $computer_currentimage_name 		= $self->data->get_computer_currentimage_name();
 	my $image_id                        = $self->data->get_image_id();
 	my $image_os_name                   = $self->data->get_image_os_name();
 	my $image_name                      = $self->data->get_image_name();
@@ -491,7 +492,7 @@ sub reload_image {
 	my $imagemeta_usergroupid           = $self->data->get_imagemeta_usergroupid();
 	my $imagemeta_usergroupmembercount  = $self->data->get_imagemeta_usergroupmembercount();
 	my $imagemeta_usergroupmembers      = $self->data->get_imagemeta_usergroupmembers();
-	my $imagerevision_id                = $self->data->get_computer_imagerevision_id();
+	my $imagerevision_id                = $self->data->get_imagerevision_id();
 	my $managementnode_id               = $self->data->get_management_node_id();
 	my $managementnode_hostname         = $self->data->get_management_node_hostname();
 	my $user_unityid                    = $self->data->get_user_login_id();
@@ -580,7 +581,18 @@ sub reload_image {
 		# node_status returned 'ready'
 		notify($ERRORS{'OK'}, 0, "node_status returned '$node_status_string', $computer_short_name will not be reloaded");
 		insertloadlog($reservation_id, $computer_id, "info", "node status is $node_status_string, $computer_short_name will not be reloaded");
-		
+
+		if($image_name ne $computer_currentimage_name){
+			notify($ERRORS{'OK'}, 0, "request image_name does not match computer_current_image name, updating computer record");
+			#update computer to reflect correct image name 
+			if (update_currentimage($computer_id, $image_id, $imagerevision_id, $image_id)) {
+			 notify($ERRORS{'OK'}, 0, "updated computer table for $computer_short_name: currentimageid=$image_id");
+			}
+			else {
+			 notify($ERRORS{'WARNING'}, 0, "failed to update computer table for $computer_short_name: currentimageid=$image_id");
+			}
+
+		}
 		notify($ERRORS{'OK'}, 0, "returning 1");
 		return 1;
 	}
