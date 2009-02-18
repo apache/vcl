@@ -307,7 +307,7 @@ function submitLogin() {
 		exit;
 	}
 	$userid = processInputVar('userid', ARG_STRING, '');
-	$passwd = processInputVar('password', ARG_STRING, '');
+	$passwd = $_POST['password'];
 	if(empty($userid) || empty($passwd)) {
 		selectAuth();
 		return;
@@ -317,7 +317,7 @@ function submitLogin() {
 	if($authMechs[$authtype]['type'] == 'ldap')
 		ldapLogin($authtype, $userid, $passwd);
 	elseif($authMechs[$authtype]['type'] == 'local')
-		localLogin($authtype, $userid, $passwd);
+		localLogin($userid, $passwd);
 	else
 		selectAuth();
 }
@@ -451,16 +451,17 @@ function ldapLogin($authtype, $userid, $passwd) {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn localLogin()
+/// \fn localLogin($userid, $passwd)
+///
+/// \param $userid - userid without affiliation
+/// \param $passwd - submitted password
 ///
 /// \brief tries to authenticate user locally; calls printLoginPageWithSkin if
 /// authentication fails
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function localLogin() {
+function localLogin($userid, $passwd) {
 	global $HTMLheader, $phpVer;
-	$userid = processInputVar('userid', ARG_STRING);
-	$passwd = processInputVar('password', ARG_STRING);
 	if(validateLocalAccount($userid, $passwd)) {
 		//set cookie
 		$cookie = getAuthCookieData("$userid@local");
