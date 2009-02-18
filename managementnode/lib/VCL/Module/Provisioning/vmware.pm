@@ -1363,7 +1363,7 @@ sub capture {
 
 			my $vmisoff = 0;
 
-			if (open(SSH, "/usr/bin/ssh -x -i $IDENTITY_wxp $computer_nodename \"C:\/Sysprep\/sysprep.cmd\" & |")) {
+			if (open(SSH, "/usr/bin/ssh -x -i $IDENTITY_wxp $computer_nodename \"C:\/Sysprep\/sysprep.cmd\" 2>&1 |")) {
 				my $notstop = 1;
 				my $loop    = 0;
 				while ($notstop) {
