@@ -308,12 +308,15 @@ sub get_next_image {
 	$inlist = join(',', @imgids);
 	my $select_loaded = "
         SELECT
-        DISTINCT(currentimageid)
+        DISTINCT(currentimageid),
+	COUNT(currentimageid) AS count
         FROM
         computer
         WHERE
         currentimageid IN ($inlist)
-        AND stateid = 2";
+        AND stateid = 2
+	GROUP BY currentimageid
+          HAVING count > 1";
 	@data = database_select($select_loaded);
 	my @loaded;
 	foreach (@data) {
