@@ -63,6 +63,45 @@ use VCL::utils;
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 set_os
+
+ Parameters  : None
+ Returns     : Process's OS object
+ Description : Sets the OS object for the provisioner module to access.
+
+=cut
+
+sub set_os {
+	my $self = shift;
+	my $os = shift;
+	$self->{os} = $os;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 os
+
+ Parameters  : None
+ Returns     : Process's OS object
+ Description : Allows provisioning modules to access the reservation's OS
+               object.
+
+=cut
+
+sub os {
+	my $self = shift;
+	
+	if (!$self->{os}) {
+		notify($ERRORS{'WARNING'}, 0, "unable to return OS object, \$self->{os} is not set");
+		return;
+	}
+	else {
+		return $self->{os};
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 1;
 __END__
 

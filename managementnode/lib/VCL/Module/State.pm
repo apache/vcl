@@ -163,28 +163,9 @@ sub initialize {
 	else {
 		notify($ERRORS{'OK'}, 0, "OS module not loaded, Perl package is not defined");
 	}
-
-	# Attempt to load the predictive loading module
-	#if ($predictive_perl_package) {
-	#	notify($ERRORS{'OK'}, 0, "attempting to load predictive loading module: $predictive_perl_package");
-	#	eval "use $predictive_perl_package";
-	#	if ($EVAL_ERROR) {
-	#		notify($ERRORS{'WARNING'}, 0, "$predictive_perl_package module could not be loaded");
-	#		notify($ERRORS{'OK'},      0, "returning 0");
-	#		return 0;
-	#	}
-	#	if (my $predictor = ($predictive_perl_package)->new({data_structure => $self->data})) {
-	#		notify($ERRORS{'OK'}, 0, ref($predictor) . " predictive loading object successfully created");
-	#		$self->{predictor} = $predictor;
-	#	}
-	#	else {
-	#		notify($ERRORS{'WARNING'}, 0, "predictive loading object could not be created, returning 0");
-	#		return 0;
-	#	}
-	#} ## end if ($predictive_perl_package)
-	#else {
-	#	notify($ERRORS{'OK'}, 0, "predictive loading module not loaded, Perl package is not defined");
-	#}
+	
+	$self->{provisioner}->set_os($self->{os});
+	$self->{os}->set_provisioner($self->{provisioner});
 
 	notify($ERRORS{'OK'}, 0, "returning 1");
 	return 1;

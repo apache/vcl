@@ -161,6 +161,7 @@ our @EXPORT = qw(
   reservations_ready
   restoresshkeys
   round
+  run_command
   run_scp_command
   run_ssh_command
   set_hash_process_id
@@ -6982,7 +6983,7 @@ sub run_scp_command {
 		# Check the output for known error messages
 		# Check the exit status
 		# scp exits with 0 on success or >0 if an error occurred
-		if ($scp_exit_status > 0 || $scp_output =~ /lost connection|failed|reset by peer|no route to host/i) {
+		if ($scp_exit_status > 0 || $scp_output =~ /lost connection|failed|reset by peer|no route to host|no such file/i) {
 			notify($ERRORS{'WARNING'}, 0, "scp error occurred: attempt $attempts/$max_attempts, command: $scp_command, exit status: $scp_exit_status, output: $scp_output");
 			
 			# Temporary fix for problem of nodes using different ports

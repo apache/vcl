@@ -63,6 +63,45 @@ use VCL::utils;
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 set_provisioner
+
+ Parameters  : None
+ Returns     : Process's provisioner object
+ Description : Sets the provisioner object for the OS module to access.
+
+=cut
+
+sub set_provisioner {
+	my $self = shift;
+	my $provisioner = shift;
+	$self->{provisioner} = $provisioner;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 provisioner
+
+ Parameters  : None
+ Returns     : Process's provisioner object
+ Description : Allows OS modules to access the reservation's provisioner
+               object.
+
+=cut
+
+sub provisioner {
+	my $self = shift;
+	
+	if (!$self->{provisioner}) {
+		notify($ERRORS{'WARNING'}, 0, "unable to return provisioner object, \$self->{provisioner} is not set");
+		return;
+	}
+	else {
+		return $self->{provisioner};
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 1;
 __END__
 

@@ -151,10 +151,26 @@ END
 	my $timestamp = makedatestring();
 	$self->data->set_image_lastupdate($timestamp);
 	$self->data->set_imagerevision_date_created($timestamp);
-
-	# Call the create image subroutine in utils.pm
+	
 	my $create_image_result;
-	if ($computer_type eq "blade" && $self->os) {
+	
+	# --- BEGIN NEW MODULARIZED METHOD ---
+	# Check if capture() subroutine has been implemented by the provisioning module
+	if ($self->provisioner->can("capture")) {
+		# Call the provisioning modules's capture() subroutine
+		# The provisioning module should do everything necessary to capture the image
+		notify($ERRORS{'OK'}, 0, "calling provisioning module's capture() subroutine");
+		if ($create_image_result = $self->provisioner->capture()) {
+			notify($ERRORS{'OK'}, 0, "$image_name image was successfully captured by the provisioning module");
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "$image_name image failed to be captured by provisioning module");
+			$self->image_creation_failed();
+		}
+	}
+	# --- END NEW MODULARIZED METHOD ---
+
+	elsif ($computer_type eq "blade" && $self->os) {
 		$create_image_result = 1;
 
 		notify($ERRORS{'OK'}, 0, "OS modularization supported, beginning OS module capture prepare");
