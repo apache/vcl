@@ -1060,9 +1060,22 @@ sub reserve_computer {
 			# Set the password in the DataStructure object
 			$self->data->set_reservation_password($reservation_password);
 			
+			# Check if OS module had implemented a reserve() subroutine
+			# This is only true for modularized OS modules
+			if ($self->os->can('reserve')) {
+				# Call the OS module's reserve() subroutine
+				notify($ERRORS{'DEBUG'}, 0, "calling OS module's reserve() subroutine");
+				if ($self->os->reserve()) {
+					notify($ERRORS{'DEBUG'}, 0, "OS module successfully reserved resources for this reservation");
+				}
+				else {
+					$self->reservation_failed("OS module failed to reserve resources for this reservation");
+				}
+			}
+			
 			# Windows Vista reservation tasks
 			# Much of this subroutine will be rearranged once other OS's are modularized
-			if ($image_os_name =~ /winvista/) {
+			elsif ($image_os_name =~ /winvista/) {
 				if ($request_forimaging) {
 					# Set the Administrator password
 					notify($ERRORS{'OK'}, 0, "attempting to set Administrator password to $reservation_password on $computer_short_name");
