@@ -26,6 +26,19 @@ define("MNHOSTNAMEERR", 1);
 define("IPADDRESSERR", 1 << 1);
 /// signifies an error with submitted owner
 define("MNOWNERERR", 1 << 2);
+/// signifies an error with submitted install path
+define("MNINSTPATHERR", 1 << 3);
+/// signifies an error with submitted image library user
+define("MNIMGLIBUSERERR", 1 << 4);
+/// signifies an error with submitted image library key
+define("MNIMGLIBKEYERR", 1 << 5);
+/// signifies an error with submitted SSH port
+define("MNSSHPORTERR", 1 << 6);
+/// signifies an error with submitted SSH identity keys
+define("MNSSHIDKEYSERR", 1 << 7);
+/// signifies an error with submitted image library group id
+define("MNIMGLIBGRPIDERR", 1 << 8);
+
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
@@ -136,7 +149,7 @@ function viewMgmtnodes() {
 	printSelectInput('premoduleid', $premodules);
 	print "    </TD>\n";
 	print "    <TD align=center>N/A</TD>\n";
-	$cont = addContinuationsEntry('confirmAddMgmtnode');
+	$cont = addContinuationsEntry('addMgmtNode');
 	print "    <INPUT type=hidden name=continuation value=\"$cont\">\n";
 	print "    </FORM>\n";
 	print "  </TR>\n";
@@ -200,7 +213,22 @@ function editOrAddMgmtnode($state) {
 		$data["owner"] = $mgmtnodes[$id]["owner"];
 		$data["stateid"] = $mgmtnodes[$id]["stateid"];
 		$data["premoduleid"] = $mgmtnodes[$id]["predictivemoduleid"];
+		$data["checkininterval"] = $mgmtnodes[$id]["checkininterval"];
+		$data["installpath"] = $mgmtnodes[$id]["installpath"];
+		if($mgmtnodes[$id]['imagelibenable'])
+			$data['imagelibenable'] = "checked";
+		else
+			$data['imagelibenable'] = "";
+		$data['imagelibgroupid'] = $mgmtnodes[$id]['imagelibgroupid'];
+		$data['imagelibgroup'] = $mgmtnodes[$id]['imagelibgroup']; # TODO this can be removed
+		$data['imagelibuser'] = $mgmtnodes[$id]['imagelibuser'];
+		$data['imagelibkey'] = $mgmtnodes[$id]['imagelibkey'];
+		$data['keys'] = $mgmtnodes[$id]['keys'];
+		$data['sshport'] = $mgmtnodes[$id]['sshport'];
 	}
+	$disabled = '';
+	if(! $data['imagelibenable'])
+		$disabled = 'disabled';
 
 	print "<FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
 	print "<DIV align=center>\n";
@@ -226,6 +254,7 @@ function editOrAddMgmtnode($state) {
 	print "    <TD>";
 	printSubmitErr(IPADDRESSERR);
 	print "</TD>\n";
+	print "  </TR>\n";
 	print "  <TR>\n";
 	print "    <TH align=right>Owner:</TH>\n";
 	print "    <TD><INPUT type=text name=owner value=\"" . $data["owner"];
@@ -248,17 +277,133 @@ function editOrAddMgmtnode($state) {
 	printSelectInput("premoduleid", $premodules, $data["premoduleid"]);
 	print "    </TD>\n";
 	print "  </TR>\n";
+
+	# checkininterval
+	print "  <TR>\n";
+	print "    <TH id=th1 align=right\n";
+	print "        onmouseover=\"showHelp('interval between database checks for new tasks', 'th1');\"\n";
+	print "        onmouseout=\"clearHelpbox();\">\n";
+	print "      Check-in Interval (sec):\n";
+	print "    </TH>\n";
+	print "    <TD>\n";
+	print "      <input dojoType=\"dijit.form.NumberSpinner\"\n";
+	print "                value=\"{$data['checkininterval']}\"\n";
+	print "                constraints=\"{min:5,max:30,places:0}\"\n";
+	print "                maxlength=\"2\"\n";
+	print "                id=\"checkininterval\"\n";
+	print "                name=\"checkininterval\">\n";
+	print "    </TD>\n";
+	print "    <TD></TD>";
+	print "  </TR>\n";
+	# installpath
+	print "  <TR>\n";
+	print "    <TH id=th2 align=right\n";
+	print "        onmouseover=\"showHelp('path to parent directory of image repository directories', 'th2');\"\n";
+	print "        onmouseout=\"clearHelpbox();\">\n";
+	print "      Install Path:</TH>\n";
+	print "    <TD><INPUT type=text name=installpath value=\"";
+	print $data["installpath"] . "\" maxlength=100></TD>\n";
+	print "    <TD>";
+	printSubmitErr(MNINSTPATHERR);
+	print "</TD>\n";
+	print "  </TR>\n";
+	# keys
+	print "  <TR>\n";
+	print "    <TH id=th5 align=right\n";
+	print "        onmouseover=\"showHelp('comma delimited list of full paths to ssh identity keys to try when connecting to end nodes (optional)', 'th5');\"\n";
+	print "        onmouseout=\"clearHelpbox();\">\n";
+	print "      End Node SSH Identity Key Files:</TH>\n";
+	print "    <TD><INPUT type=text name=keys value=\"";
+	print $data["keys"] . "\" maxlength=1024></TD>\n";
+	print "    <TD>";
+	printSubmitErr(MNSSHIDKEYSERR);
+	print "</TD>\n";
+	print "  </TR>\n";
+	# sshport
+	print "  <TR>\n";
+	print "    <TH id=th6 align=right\n";
+	print "        onmouseover=\"showHelp('SSH port this node is listening on for image file transfers', 'th6');\"\n";
+	print "        onmouseout=\"clearHelpbox();\">\n";
+	print "      SSH Port for this node:\n";
+	print "    </TH>\n";
+	print "    <TD>\n";
+	print "      <input dojoType=\"dijit.form.NumberSpinner\"\n";
+	print "                value=\"{$data['sshport']}\"\n";
+	print "                constraints=\"{min:1,max:65535,places:0}\"\n";
+	print "                maxlength=\"5\"\n";
+	print "                id=\"sshport\"\n";
+	print "                name=\"sshport\">\n";
+	print "    </TD>\n";
+	print "    <TD>";
+	printSubmitErr(MNSSHPORTERR);
+	print "</TD>\n";
+	print "  </TR>\n";
+	# imagelibenable
+	print "  <TR>\n";
+	print "    <TH id=th7 align=right\n";
+	print "        onmouseover=\"showHelp('path to parent directory of image repository directories', 'th7');\"\n";
+	print "        onmouseout=\"clearHelpbox();\">\n";
+	print "      Enable Image Library:</TH>\n";
+	print "    <TD><input type=checkbox name=imagelibenable value=1 ";
+	print $data["imagelibenable"] . " onchange=\"toggleImageLibrary();\" \n";
+	if($data['imagelibenable'])
+		print "id=imagelibenable checked></TD>\n";
+	else
+		print "id=imagelibenable></TD>\n";
+	print "    <TD></TD>\n";
+	print "  </TR>\n";
+	# imagelibgroupid
+	print "  <TR>\n";
+	print "    <TH id=th8 align=right\n";
+	print "        onmouseover=\"showHelp('this management node will try to get image files from other nodes in the selected group', 'th8');\"\n";
+	print "        onmouseout=\"clearHelpbox();\">\n";
+	print "      Image Library Management Node Group:</TH>\n";
+	print "    <TD>";
+	$mgmtnodegroups = getUserResources(array('mgmtNodeAdmin'), array("manageGroup"), 1);
+	printSelectInput("imagelibgroupid", $mgmtnodegroups['managementnode'], -1, 0, 0, 'imagelibgroupid', $disabled);
+	print "    </TD>\n";
+	print "    <TD>";
+	printSubmitErr(MNIMGLIBGRPIDERR);
+	print "</TD>\n";
+	print "  </TR>\n";
+	# imagelibuser
+	print "  <TR>\n";
+	print "    <TH id=th3 align=right\n";
+	print "        onmouseover=\"showHelp('userid to use when scp\'ing image files from another management node', 'th3');\"\n";
+	print "        onmouseout=\"clearHelpbox();\">\n";
+	print "      Image Library User:</TH>\n";
+	print "    <TD><INPUT type=text name=imagelibuser value=\"";
+	print $data["imagelibuser"] . "\" $disabled id=imagelibuser></TD>\n";
+	print "    <TD>";
+	printSubmitErr(MNIMGLIBUSERERR);
+	print "</TD>\n";
+	print "  </TR>\n";
+	# imagelibkey
+	print "  <TR>\n";
+	print "    <TH id=th4 align=right\n";
+	print "        onmouseover=\"showHelp('path to ssh identity key file to use when scp\'ing image files from another management node', 'th4');\"\n";
+	print "        onmouseout=\"clearHelpbox();\">\n";
+	print "      Image Library SSH Identity Key File:</TH>\n";
+	print "    <TD><INPUT type=text name=imagelibkey value=\"";
+	print $data["imagelibkey"] . "\" maxlength=100 $disabled id=imagelibkey></TD>\n";
+	print "    <TD>";
+	printSubmitErr(MNIMGLIBKEYERR);
+	print "</TD>\n";
+	print "  </TR>\n";
+
 	print "</TABLE>\n";
 	print "<TABLE>\n";
 	print "  <TR valign=top>\n";
 	print "    <TD>\n";
 	if($state) {
-		$cont = addContinuationsEntry('confirmAddMgmtnode', array(), SECINDAY, 0, 1, 1);
+		$cdata = array('mgmtgroups' => $mgmtnodegroups['managementnode']);
+		$cont = addContinuationsEntry('confirmAddMgmtnode', $cdata, SECINDAY, 0, 1, 1);
 		print "      <INPUT type=hidden name=continuation value=\"$cont\">\n";
 		print "      <INPUT type=submit value=\"Confirm Management Node\">\n";
 	}
 	else {
-		$cdata = array('mgmtnodeid' => $data['mgmtnodeid']);
+		$cdata = array('mgmtnodeid' => $data['mgmtnodeid'],
+		               'mgmtgroups' => $mgmtnodegroups['managementnode']);
 		$cont = addContinuationsEntry('confirmEditMgmtnode', $cdata, SECINDAY, 0, 1, 1);
 		print "      <INPUT type=hidden name=continuation value=\"$cont\">\n";
 		print "      <INPUT type=submit value=\"Confirm Changes\">\n";
@@ -274,6 +419,7 @@ function editOrAddMgmtnode($state) {
 	print "    </TD>\n";
 	print "  </TR>\n";
 	print "</TABLE>\n";
+	print "<div id=helpbox onmouseover=\"blockClear();\" onmouseout=\"clearHelpbox2(0);\"></div>\n";
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -332,6 +478,47 @@ function confirmEditOrAddMgmtnode($state) {
 	print "    <TH align=right>Predictive Loading Module:</TH>\n";
 	print "    <TD>{$premodules[$data["premoduleid"]]['prettyname']}</TD>\n";
 	print "  </TR>\n";
+	print "  <TR>\n";
+	print "    <TH align=right>Check-in Interval(sec):</TH>\n";
+	print "    <TD>{$data["checkininterval"]}</TD>\n";
+	print "  </TR>\n";
+	print "  <TR>\n";
+	print "    <TH align=right>Install Path:</TH>\n";
+	print "    <TD>{$data["installpath"]}</TD>\n";
+	print "  </TR>\n";
+	print "  <TR>\n";
+	print "    <TH align=right>End node SSH Identity Key Files:</TH>\n";
+	print "    <TD>{$data["keys"]}</TD>\n";
+	print "  </TR>\n";
+	print "  <TR>\n";
+	print "    <TH align=right>SSH Port for this node:</TH>\n";
+	print "    <TD>{$data["sshport"]}</TD>\n";
+	print "  </TR>\n";
+	if($data['imagelibenable']) {
+		print "  <TR>\n";
+		print "    <TH align=right>Image Library:</TH>\n";
+		print "    <TD>enabled</TD>\n";
+		print "  </TR>\n";
+		$mgmtgroups = getContinuationVar('mgmtgroups');
+		print "  <TR>\n";
+		print "    <TH align=right>Image Library Management Node Group:</TH>\n";
+		print "    <TD>{$mgmtgroups[$data["imagelibgroupid"]]}</TD>\n";
+		print "  </TR>\n";
+		print "  <TR>\n";
+		print "    <TH align=right>Image Library User:</TH>\n";
+		print "    <TD>{$data["imagelibuser"]}</TD>\n";
+		print "  </TR>\n";
+		print "  <TR>\n";
+		print "    <TH align=right>Image Library SSH Identity Key File:</TH>\n";
+		print "    <TD>{$data["imagelibkey"]}</TD>\n";
+		print "  </TR>\n";
+	}
+	else {
+		print "  <TR>\n";
+		print "    <TH align=right>Image Library:</TH>\n";
+		print "    <TD>disabled</TD>\n";
+		print "  </TR>\n";
+	}
 	print "</TABLE>\n";
 	print "<TABLE>\n";
 	print "  <TR valign=top>\n";
@@ -811,12 +998,34 @@ function submitMgmtnodeMapping() {
 ////////////////////////////////////////////////////////////////////////////////
 function updateMgmtnode($data) {
 	$ownerid = getUserlistID($data["owner"]);
+	$data['installpath'] = mysql_escape_string($data['installpath']);
+	$data['keys'] = mysql_escape_string($data['keys']);
+	$data['imagelibuser'] = mysql_escape_string($data['imagelibuser']);
+	if($data['imagelibuser'] != 'NULL')
+		$data['imagelibuser'] = "'{$data['imagelibuser']}'";
+	$data['imagelibkey'] = mysql_escape_string($data['imagelibkey']);
+	if($data['imagelibkey'] != 'NULL')
+		$data['imagelibkey'] = "'{$data['imagelibkey']}'";
+	if($data['imagelibenable'] != 1)
+		$data['imagelibenable'] = 0;
+	if($data['keys'] == '')
+		$data['keys'] = 'NULL';
+	else
+		$data['keys'] = "'{$data['keys']}'";
 	$query = "UPDATE managementnode "
 	       . "SET hostname = '{$data["hostname"]}', "
 	       .     "IPaddress = '{$data["IPaddress"]}', "
 	       .     "ownerid = $ownerid, "
 	       .     "stateid = {$data["stateid"]}, "
-	       .     "predictivemoduleid = {$data["premoduleid"]} "
+	       .     "predictivemoduleid = {$data["premoduleid"]}, "
+	       .     "checkininterval = {$data["checkininterval"]}, "
+	       .     "installpath = '{$data["installpath"]}', "
+	       .     "`keys` = {$data["keys"]}, "
+	       .     "sshport = {$data["sshport"]}, "
+	       .     "imagelibenable = {$data["imagelibenable"]}, "
+	       .     "imagelibgroupid = {$data["imagelibgroupid"]}, "
+	       .     "imagelibuser = {$data["imagelibuser"]}, "
+	       .     "imagelibkey = {$data["imagelibkey"]} "
 	       . "WHERE id = " . $data["mgmtnodeid"];
 	$qh = doQuery($query, 101);
 	return mysql_affected_rows($GLOBALS["mysql_link_vcl"]);
@@ -835,17 +1044,47 @@ function updateMgmtnode($data) {
 ////////////////////////////////////////////////////////////////////////////////
 function addMgmtnode($data) {
 	$ownerid = getUserlistID($data["owner"]);
+	$data['installpath'] = mysql_escape_string($data['installpath']);
+	$data['keys'] = mysql_escape_string($data['keys']);
+	$data['imagelibuser'] = mysql_escape_string($data['imagelibuser']);
+	if($data['imagelibuser'] != 'NULL')
+		$data['imagelibuser'] = "'{$data['imagelibuser']}'";
+	$data['imagelibkey'] = mysql_escape_string($data['imagelibkey']);
+	if($data['imagelibkey'] != 'NULL')
+		$data['imagelibkey'] = "'{$data['imagelibkey']}'";
+	if($data['imagelibenable'] != 1)
+		$data['imagelibenable'] = 0;
+	if($data['keys'] == '')
+		$data['keys'] = 'NULL';
+	else
+		$data['keys'] = "'{$data['keys']}'";
 	$query = "INSERT INTO managementnode "
 	       .         "(hostname, "
 	       .         "IPaddress, "
 	       .         "ownerid, "
 	       .         "stateid, "
-	       .         "predictivemoduleid) "
+	       .         "checkininterval, "
+	       .         "installpath, "
+	       .         "imagelibenable, "
+	       .         "imagelibgroupid, "
+	       .         "imagelibuser, "
+	       .         "imagelibkey, "
+	       .         "`keys`, "
+	       .         "predictivemoduleid, "
+	       .         "sshport) "
 	       . "VALUES ('{$data["hostname"]}', "
 	       .         "'{$data["IPaddress"]}', "
 	       .         "$ownerid, "
 	       .         "{$data["stateid"]}, "
-	       .         "{$data["premoduleid"]})";
+	       .         "{$data["checkininterval"]}, "
+	       .         "'{$data["installpath"]}', "
+	       .         "{$data["imagelibenable"]}, "
+	       .         "{$data["imagelibgroupid"]}, "
+	       .         "{$data["imagelibuser"]}, "
+	       .         "{$data["imagelibkey"]}, "
+	       .         "{$data["keys"]}, "
+	       .         "{$data["premoduleid"]}, "
+	       .         "{$data["sshport"]}) ";
 	doQuery($query, 205);
 
 	// get last insert id
@@ -890,13 +1129,35 @@ function processMgmtnodeInput($checks=1) {
 	$return["stateid"] = getContinuationVar("stateid", processInputVar("stateid", ARG_STRING));
 	$return["premoduleid"] = getContinuationVar("premoduleid", processInputVar("premoduleid", ARG_NUMERIC));
 
-	if(! $checks) {
-		return $return;
+	$return["checkininterval"] = getContinuationVar("checkininterval", processInputVar("checkininterval", ARG_NUMERIC));
+	$return["installpath"] = getContinuationVar("installpath", processInputVar("installpath", ARG_STRING));
+	$return["keys"] = getContinuationVar("keys", processInputVar("keys", ARG_STRING));
+	$return["sshport"] = getContinuationVar("sshport", processInputVar("sshport", ARG_NUMERIC));
+	$return["imagelibenable"] = getContinuationVar("imagelibenable", processInputVar("imagelibenable", ARG_NUMERIC));
+	$return["imagelibgroupid"] = getContinuationVar("imagelibgroupid", processInputVar("imagelibgroupid", ARG_NUMERIC));
+	$return["imagelibuser"] = getContinuationVar("imagelibuser", processInputVar("imagelibuser", ARG_STRING));
+	$return["imagelibkey"] = getContinuationVar("imagelibkey", processInputVar("imagelibkey", ARG_STRING));
+
+	if($return['checkininterval'] < 5)
+		$return['checkininterval'] = 5;
+	if($return['checkininterval'] > 30)
+		$return['checkininterval'] = 30;
+	if($return['sshport'] < 1 || $return['sshport'] > 65535)
+		$return['sshport'] = 22;
+	if($return['imagelibenable'] != '' && $return['imagelibenable'] != 1)
+		$return['imagelibenable'] = '';
+	if($return['imagelibenable'] != 1) {
+		$return["imagelibgroupid"] = 'NULL';
+		$return["imagelibuser"] = 'NULL';
+		$return["imagelibkey"] = 'NULL';
 	}
+
+	if(! $checks)
+		return $return;
 	
-	if(! ereg('^[a-zA-Z0-9_][-a-zA-Z0-9_.]{1,49}$', $return["hostname"])) {
+	if(! ereg('^[a-zA-Z0-9_][-a-zA-Z0-9_\.]{1,49}$', $return["hostname"])) {
 	   $submitErr |= MNHOSTNAMEERR;
-	   $submitErrMsg[MNHOSTNAMEERR] = "Hostname must be <= 50 characters";
+	   $submitErrMsg[MNHOSTNAMEERR] = "Hostname can only contain letters, numbers, dashes(-), periods(.), and underscores(_). It can be from 1 to 50 characters long";
 	}
 	if(! ($submitErr & MNHOSTNAMEERR) &&
 	   $mode != "confirmEditMgmtnode" &&
@@ -924,6 +1185,37 @@ function processMgmtnodeInput($checks=1) {
 		$submitErr |= MNOWNERERR;
 		$submitErrMsg[MNOWNERERR] = "Submitted ID is not valid";
 	}
+
+	if(! preg_match('/^([-a-zA-Z0-9_\.\/]){2,100}$/', $return["installpath"])) {
+	   $submitErr |= MNINSTPATHERR;
+	   $submitErrMsg[MNINSTPATHERR] = "This can only contain letters, numbers, dashes(-), periods(.), underscores(_), and forward slashes(/). It can be from 2 to 100 characters long";
+	}
+	if(! empty($return['keys']) && ! preg_match('/^([-a-zA-Z0-9_\.\/,]){2,1024}$/', $return["keys"])) {
+	   $submitErr |= MNSSHIDKEYSERR;
+	   $submitErrMsg[MNSSHIDKEYSERR] = "This can only contain letters, numbers, dashes(-), periods(.), underscores(_), forward slashes(/), and commas(,). It can be from 2 to 1024 characters long";
+	}
+
+	if($return['imagelibenable'] == 1) {
+		$validgroups = getUserResources(array('mgmtNodeAdmin'), array("manageGroup"), 1);
+		if(! in_array($return['imagelibgroupid'], array_keys($validgroups['managementnode']))) {
+			$submitErr |= MNIMGLIBGRPIDERR;
+			$submitErrMsg[MNIMGLIBGRPIDERR] = "The selected group was invalid";
+		}
+		if(! preg_match('/^([-a-zA-Z0-9_\.\/,]){2,20}$/', $return["imagelibuser"])) {
+			$submitErr |= MNIMGLIBUSERERR;
+			$submitErrMsg[MNIMGLIBUSERERR] = "This can only contain letters, numbers, and dashes(-) and can be from 2 to 20 characters long";
+		}
+		if(! preg_match('/^([-a-zA-Z0-9_\.\/,]){2,100}$/', $return["imagelibkey"])) {
+			$submitErr |= MNIMGLIBKEYERR;
+			$submitErrMsg[MNIMGLIBKEYERR] = "This can only contain letters, numbers, dashes(-), periods(.), underscores(_), and forward slashes(/). It can be from 2 to 100 characters long";
+		}
+	}
+	else {
+		$return["imagelibgroupid"] = 'NULL';
+		$return["imagelibuser"] = 'NULL';
+		$return["imagelibkey"] = 'NULL';
+	}
+
 	return $return;
 }
 

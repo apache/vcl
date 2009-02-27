@@ -131,7 +131,16 @@
 	left: 50px;
 	top: 100px;
 	background-color: lightblue;
-	border: 2px;
+	border: solid 1px black;
+}
+
+#helpbox {
+	z-index: -10;
+	position: absolute;
+	left: 50px;
+	top: 100px;
+	background-color: #ffffdc;
+	border: solid 1px black;
 }
 
 .dojoDialog {

@@ -5270,16 +5270,26 @@ function getManagementNodes($alive="neither") {
 	       .        "m.stateid, "
 	       .        "s.name as state, "
 	       .        "m.lastcheckin, "
+	       .        "m.checkininterval, "
+	       .        "m.installpath, "
+	       .        "m.imagelibenable, "
+	       .        "m.imagelibgroupid, "
+	       .        "rg.name AS imagelibgroup, "
+	       .        "m.imagelibuser, "
+	       .        "m.imagelibkey, "
+	       .        "m.keys, "
+	       .        "m.sshport, "
 	       .        "r.id as resourceid, "
 	       .        "m.predictivemoduleid, "
 	       .        "mo.prettyname AS predictivemodule "
-	       . "FROM managementnode m, "
-	       .      "user u, "
+	       . "FROM user u, "
 	       .      "state s, "
 	       .      "resource r, "
 	       .      "resourcetype rt, "
 	       .      "affiliation a, "
-	       .      "module mo "
+	       .      "module mo, "
+	       .      "managementnode m "
+	       . "LEFT JOIN resourcegroup rg ON (m.imagelibgroupid = rg.id) "
 	       . "WHERE m.ownerid = u.id AND "
 	       .       "m.stateid = s.id AND "
 	       .       "m.id = r.subid AND "
@@ -8753,6 +8763,13 @@ function getDojoHTML($refresh) {
 		case 'submitDeleteGroup':
 			$dojoRequires = array('dojo.parser');
 			break;
+		case 'editMgmtNode':
+		case 'addMgmtNode':
+		case 'confirmEditMgmtnode':
+		case 'confirmAddMgmtnode':
+			$dojoRequires = array('dojo.parser');
+			$dojoRequires = array('dijit.form.NumberSpinner');
+			break;
 		case 'selectauth':
 			$dojoRequires = array('dojo.parser');
 			break;
@@ -8853,6 +8870,29 @@ function getDojoHTML($refresh) {
 			$rt .= "   dojo.addOnLoad(function() {document.onmousemove = updateMouseXY;});\n";
 			$rt .= "</script>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"js/groups.js\"></script>\n";
+			return $rt;
+
+		case 'editMgmtNode':
+		case 'addMgmtNode':
+		case 'confirmEditMgmtnode':
+		case 'confirmAddMgmtnode':
+			$rt .= "<style type=\"text/css\">\n";
+			$rt .= "   @import \"themes/$skin/css/dojo/$skin.css\";\n";
+			#$rt .= "   @import \"dojo/dijit/themes/tundra/tundra.css\";\n";
+			#$rt .= "    @import \"dojo/dojo/resources/dojo.css\";\n";
+			$rt .= "</style>\n";
+			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
+			$rt .= "   djConfig=\"parseOnLoad: true\">\n";
+			$rt .= "</script>\n";
+			$rt .= "<script type=\"text/javascript\">\n";
+			$rt .= "   dojo.addOnLoad(function() {\n";
+			foreach($dojoRequires as $req) {
+				$rt .= "   dojo.require(\"$req\");\n";
+			}
+			$rt .= "   });\n";
+			$rt .= "   dojo.addOnLoad(function() {document.onmousemove = updateMouseXY;});\n";
+			$rt .= "</script>\n";
+			$rt .= "<script type=\"text/javascript\" src=\"js/managementnodes.js\"></script>\n";
 			return $rt;
 
 		case "selectComputers":
