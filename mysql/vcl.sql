@@ -516,6 +516,7 @@ CREATE TABLE IF NOT EXISTS `managementnode` (
   `imagelibkey` varchar(100) default '/etc/vcl/imagelib.key',
   `keys` varchar(1024) default NULL,
   `predictivemoduleid` smallint(5) unsigned NOT NULL default '1',
+  `sshport` smallint(5) unsigned NOT NULL default '22',
   PRIMARY KEY  (`id`),
   KEY `stateid` (`stateid`),
   KEY `ownerid` (`ownerid`),
