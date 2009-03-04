@@ -93,20 +93,21 @@ sub process {
 	# Store hash variables into local variables
 	my $request_data = $self->data->get_request_data;
 
-	my $request_id              = $request_data->{id};
-	my $request_state_name      = $request_data->{state}{name};
-	my $request_laststate_name  = $request_data->{laststate}{name};
-	my $reservation_id          = $request_data->{RESERVATIONID};
-	my $reservation_remoteip    = $request_data->{reservation}{$reservation_id}{remoteIP};
-	my $computer_type           = $request_data->{reservation}{$reservation_id}{computer}{type};
-	my $computer_id             = $request_data->{reservation}{$reservation_id}{computer}{id};
-	my $computer_shortname      = $request_data->{reservation}{$reservation_id}{computer}{SHORTNAME};
-	my $computer_hostname       = $request_data->{reservation}{$reservation_id}{computer}{hostname};
-	my $computer_ipaddress      = $request_data->{reservation}{$reservation_id}{computer}{IPaddress};
-	my $computer_state_name     = $request_data->{reservation}{$reservation_id}{computer}{state}{name};
-	my $image_os_name           = $request_data->{reservation}{$reservation_id}{image}{OS}{name};
-	my $imagerevision_imagename = $request_data->{reservation}{$reservation_id}{imagerevision}{imagename};
-	my $user_unityid            = $request_data->{user}{unityid};
+	my $request_id              = $self->data->get_request_data();
+	my $request_state_name      = $self->data->get_request_state_name();
+	my $request_laststate_name  = $self->data->get_request_laststate_name();
+	my $reservation_id          = $self->data->get_reservation_id();
+	my $reservation_remoteip    = $self->data->get_reservation_remote_ip();
+	my $computer_type           = $self->data->get_computer_type();
+	my $computer_id             = $self->data->get_computer_id();
+	my $computer_shortname      = $self->data->get_computer_short_name();
+	my $computer_hostname       = $self->data->get_computer_host_name();
+	my $computer_ipaddress      = $self->data->get_computer_ip_address();
+	my $computer_state_name     = $self->data->get_computer_state_name();
+	my $image_os_name           = $self->data->get_image_os_name();
+	my $image_os_type                   = $self->data->get_image_os_type();
+	my $imagerevision_imagename = $self->data->get_image_name();
+	my $user_unityid            = $self->data->get_user_login_id();
 	my $computer_currentimage_name = $self->data->get_computer_currentimage_name();
 
 	# Assemble a consistent prefix for notify messages
@@ -213,7 +214,7 @@ sub process {
 			# *** END MODULARIZED OS CODE ***
 	
 			# Check the image OS type and clean up computer accordingly
-			elsif ($image_os_name =~ /^(win|vmwarewin|vmwareesxwin)/) {
+			elsif ($image_os_type =~ /windows/) {
 				# Loaded Windows image needs to be cleaned up
 				notify($ERRORS{'OK'}, 0, "$notify_prefix attempting steps to clean up loaded $image_os_name image");
 
@@ -273,12 +274,12 @@ sub process {
 				#}
 			} ## end if ($image_os_name =~ /^(win|vmwarewin|vmwareesxwin)/)
 
-			elsif ($image_os_name =~ /^(rh[0-9]image|rhel[0-9]|fc[0-9]image|rhfc[0-9]|rhas[0-9])/) {
+			elsif ($image_os_type =~ /linux/){
 				# Loaded Linux image needs to be cleaned up
 				notify($ERRORS{'OK'}, 0, "$notify_prefix attempting steps to clean up loaded $image_os_name image");
 
 				# Make sure user is not connected
-				if (isconnected($computer_shortname, $computer_type, $reservation_remoteip, $image_os_name, $computer_ipaddress)) {
+				if (isconnected($computer_shortname, $computer_type, $reservation_remoteip, $image_os_name, $computer_ipaddress,$image_os_type)) {
 					notify($ERRORS{'WARNING'}, 0, "$notify_prefix user $user_unityid is connected to $computer_shortname, vm will be reloaded");
 
 					# Insert reload request data into the datbase
@@ -320,7 +321,7 @@ sub process {
 					}
 					exit;
 				} ## end else [ if (del_user($computer_shortname, $user_unityid...
-			} ## end elsif ($image_os_name =~ /^(rh[0-9]image|rhel[0-9]|fc[0-9]image|rhfc[0-9]|rhas[0-9])/) [ if ($image_os_name =~ /^(win|vmwarewin|vmwareesxwin)/)
+			} ## end elsif ($image_os_type =~ /linux/) [ if ($image_os_type =~ /windows/)
 
 			else {
 				# Unknown image type
@@ -340,7 +341,7 @@ sub process {
 					switch_state($request_data, 'failed', 'failed', 'failed', '1');
 				}
 				exit;
-			} ## end else [ if ($image_os_name =~ /^(win|vmwarewin|vmwareesxwin)/) [elsif ($image_os_name =~ /^(rh[0-9]image|rhel[0-9]|fc[0-9]image|rhfc[0-9]|rhas[0-9])/)
+			} ## end else [ if ($image_os_type =~ /windows/) [elsif ($image_os_type =~ /linux/)
 		} ## end if ($request_laststate_name =~ /reserved/)
 
 		else {

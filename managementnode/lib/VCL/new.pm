@@ -1022,7 +1022,7 @@ sub reserve_computer {
 		if ($IPCONFIGURATION ne "manualDHCP") {
 			#not default setting
 			if ($IPCONFIGURATION eq "dynamicDHCP") {
-				my $assignedIPaddress = getdynamicaddress($computer_short_name, $image_os_name);
+				my $assignedIPaddress = getdynamicaddress($computer_short_name, $image_os_name,$image_os_type);
 
 				if ($assignedIPaddress) {
 					#$IPaddressforlog = $assignedIPaddress;
@@ -1111,7 +1111,7 @@ sub reserve_computer {
 				insertloadlog($reservation_id, $computer_id, "addinguser", "adding user account $user_unityid");
 
 				# Add the request user to the computer
-				if (add_user($computer_short_name, $user_unityid, $user_uid, $reservation_password, $computer_host_name, $image_os_name, 0, 0, 0)) {
+				if (add_user($computer_short_name, $user_unityid, $user_uid, $reservation_password, $computer_host_name, $image_os_name,$image_os_type, 0, 0, 0)) {
 					notify($ERRORS{'OK'}, 0, "user $user_unityid added to $computer_short_name");
 				}
 				else {
@@ -1131,7 +1131,7 @@ sub reserve_computer {
 
 					insertloadlog($reservation_id, $computer_id, "info", "multiple user accounts flagged adding additional users");
 
-					if (add_users_by_group($computer_short_name, $reservation_password, $computer_host_name, $image_os_name, $imagemeta_usergroupmembers)) {
+					if (add_users_by_group($computer_short_name, $reservation_password, $computer_host_name, $image_os_name,$image_os_type, $imagemeta_usergroupmembers)) {
 						notify($ERRORS{'OK'}, 0, "successfully added multiple users");
 					}
 					else {

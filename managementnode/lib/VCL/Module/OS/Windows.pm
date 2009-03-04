@@ -244,7 +244,7 @@ sub capture_prepare {
 
 
 	# Check for user account and clean out if listed
-	if (_is_user_added($computer_node_name, $user_unityid, $computer_type, $image_os_name)) {
+	if (_is_user_added($computer_node_name, $user_unityid, $computer_type, $image_os_name,$image_os_type)) {
 		# Make sure user is logged off
 		my @QA = run_ssh_command($computer_node_name, $IDENTITY_wxp, "cmd /c qwinsta.exe", "root");
 		foreach my $r (@{$QA[1]}) {

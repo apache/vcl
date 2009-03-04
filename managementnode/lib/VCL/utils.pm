@@ -107,7 +107,6 @@ our @EXPORT = qw(
   delete_computerloadlog_reservation
   delete_request
   disablesshd
-  doesimageexists
   enablesshd
   firewall_compare_update
   format_data
@@ -1297,7 +1296,7 @@ sub mail {
 =cut
 
 sub setstaticaddress {
-	my ($node, $osname, $IPaddress) = @_;
+	my ($node, $osname, $image_os_type, $IPaddress) = @_;
 	my ($package, $filename, $line, $sub) = caller(0);
 	notify($ERRORS{'OK'},       0, "nodename not set")  if (!defined($node));
 	notify($ERRORS{'OK'},       0, "osname not set")    if (!defined($osname));
@@ -1325,7 +1324,7 @@ sub setstaticaddress {
 
 	my $identity;
 	my @sshcmd;
-	if ($osname =~ /^(rh|fc|esx)/) {
+	if ($image_os_type =~ /linux/i) {
 		$identity = $IDENTITY_bladerhel;
 		#create local tmp file
 		# down interface
@@ -1504,8 +1503,9 @@ sub setstaticaddress {
 		else {
 			notify($ERRORS{'WARNING'}, 0, "pulling resolve.conf from $node failed output= @{ $sshcmd[1] }");
 		}
-	} ## end if ($osname =~ /^(rh|fc|esx)/)
-	elsif ($osname =~ /^(win|vmwarewin|vista)/) {
+	} ## end if 
+	#elsif ($osname =~ 
+	elsif ($image_os_type =~ /windows/i) {
 		$identity = $IDENTITY_wxp;
 		#scan adapter list to figure out which adapter is public
 		# run netsh command to set the public adapter to static
@@ -1600,7 +1600,7 @@ sub setstaticaddress {
 			}
 		}
 
-	} ## end elsif ($osname =~ /^(win|vmwarewin|vista)/)  [ if ($osname =~ /^(rh|fc|esx)/)
+	} ## end elsif 
 	else {
 
 		# osname not defined
@@ -1619,10 +1619,11 @@ sub setstaticaddress {
 =cut
 
 sub getdynamicaddress {
-	my ($node, $osname) = @_;
+	my ($node, $osname, $image_os_type) = @_;
 	my ($package, $filename, $line, $sub) = caller(0);
 	notify($ERRORS{'OK'}, 0, "nodename not set") if (!defined($node));
 	notify($ERRORS{'OK'}, 0, "osname not set")   if (!defined($osname));
+	notify($ERRORS{'OK'}, 0, "image_os_type not set")   if (!defined($image_os_type));
 
 	#collect private address -- read hosts file only useful if running
 	# xcat setup and private addresses are listsed in the local
@@ -1647,7 +1648,7 @@ sub getdynamicaddress {
 
 	my $identity;
 	my $dynaIPaddress = 0;
-	if ($osname =~ /vista|win|vmwarewin|vmwareesxwin/) {
+	if ($image_os_type =~ /windows/i) {
 		$identity = $IDENTITY_wxp;
 
 		@sshcmd = run_ssh_command($node, $identity, "ipconfig", "root");
@@ -1668,7 +1669,7 @@ sub getdynamicaddress {
 		}
 
 	} ## end if ($osname =~ /win|vmwarewin/)
-	elsif ($osname =~ /^(rh|fc)/) {
+	elsif ($image_os_type =~ /linux/) {
 		$identity = $IDENTITY_bladerhel;
 		undef @sshcmd;
 		@sshcmd = run_ssh_command($node, $identity, "/sbin/ifconfig \|grep inet", "root");
@@ -1801,7 +1802,7 @@ sub _checknstartservice {
 =cut
 
 sub check_connection {
-	my ($nodename, $ipaddress, $type, $remoteIP, $time_limit, $osname, $dbh, $requestid, $user) = @_;
+	my ($nodename, $ipaddress, $type, $remoteIP, $time_limit, $osname, $dbh, $requestid, $user,$image_os_type) = @_;
 	my ($package, $filename, $line, $sub) = caller(0);
 	notify($ERRORS{'OK'}, 0, "nodename not set")   if (!defined($nodename));
 	notify($ERRORS{'OK'}, 0, "ipaddress not set")  if (!defined($ipaddress));
@@ -1812,6 +1813,7 @@ sub check_connection {
 	notify($ERRORS{'OK'}, 0, "dbh not set")        if (!defined($dbh));
 	notify($ERRORS{'OK'}, 0, "requestid not set")  if (!defined($requestid));
 	notify($ERRORS{'OK'}, 0, "user not set")       if (!defined($user));
+	notify($ERRORS{'OK'}, 0, "image_os_type not set")       if (!defined($image_os_type));
 
 	my $start_time    = time();
 	my $time_exceeded = 0;
@@ -1820,10 +1822,13 @@ sub check_connection {
 
 	$dbh = getnewdbh() if !$dbh;
 	my $identity;
-	if ($osname =~ /win|vmwarewin|vmwareesxwin|vista/) {
+	if ($image_os_type =~ /windows/i) {
 		$identity = $IDENTITY_wxp;
 	}
-	elsif ($osname =~ /^(rh[0-9]image|rhel[0-9]|fc[0-9]image|rhfc[0-9]|rhas[0-9]|centos)/) {
+	elsif ($image_os_type =~ /linux/i) {
+		$identity = $IDENTITY_bladerhel;
+	}
+	else {
 		$identity = $IDENTITY_bladerhel;
 	}
 	# Figure out number of loops for log messates
@@ -1868,7 +1873,7 @@ sub check_connection {
 			if ($type =~ /blade|virtualmachine/) {
 				my $shortnodename = $nodename;
 				$shortnodename = $1 if ($nodename =~ /([-_a-zA-Z0-9]*)\./);
-				if ($osname =~ /win|vmwarewin/) {
+				if ($image_os_type =~ /windows/i) {
 					undef @SSHCMD;
 					@SSHCMD = run_ssh_command($shortnodename, $identity, "netstat -an", "root", 22, 1);
 					foreach my $line (@{$SSHCMD[1]}) {
@@ -1902,8 +1907,7 @@ sub check_connection {
 					}    #foreach
 
 				} ## end if ($osname =~ /win|vmwarewin/)
-				        #elsif($osname =~ /^(rhel|rh3image|rh4image|rhfc|fc)/){
-				elsif ($osname =~ /^(rh[0-9]image|rhel[0-9]|fc[0-9]image|rhfc[0-9]|rhas[0-9]|centos)/) {
+				elsif ($image_os_type =~ /linux/i) {
 					#run two checks
 					# 1:check connected IP address
 					# 2:simply check who ouput
@@ -1947,7 +1951,7 @@ sub check_connection {
 						}
 					}
 
-				} ## end elsif ($osname =~ /^(rh[0-9]image|rhel[0-9]|fc[0-9]image|rhfc[0-9]|rhas[0-9]|centos)/) [ if ($osname =~ /win|vmwarewin/)
+				} ## end elsif ($image_os_type =~ /linux/) [ if ($osname =~ /windows/)
 			} ## end if ($type =~ /blade|virtualmachine/)
 			elsif ($type eq "lab") {
 				my $identity;
@@ -2035,13 +2039,26 @@ sub check_connection {
 =cut
 
 sub isconnected {
-	my ($nodename, $type, $remoteIP, $osname, $ipaddress) = @_;
+	my ($nodename, $type, $remoteIP, $osname, $ipaddress, $image_os_type) = @_;
 	my ($package, $filename, $line, $sub) = caller(0);
 	notify($ERRORS{'OK'}, 0, "nodename not set")  if (!defined($nodename));
 	notify($ERRORS{'OK'}, 0, "type not set")      if (!defined($type));
 	notify($ERRORS{'OK'}, 0, "remoteIP not set")  if (!defined($remoteIP));
 	notify($ERRORS{'OK'}, 0, "osname not set")    if (!defined($osname));
+	notify($ERRORS{'OK'}, 0, "image_os_type not set")    if (!defined($image_os_type));
 	notify($ERRORS{'OK'}, 0, "ipaddress not set") if (!defined($ipaddress));
+
+	my $identity;
+
+	if ($image_os_type =~ /windows/i) {
+		$identity = $IDENTITY_wxp;
+	}
+	elsif ($image_os_type =~ /linux/i) {
+		$identity = $IDENTITY_bladerhel;
+	}
+	else {
+		$identity = $IDENTITY_bladerhel;
+	}
 
 	my @netstat;
 	my @SSHCMD;
@@ -2053,10 +2070,10 @@ sub isconnected {
 			$nodename = $shortname;
 		}
 
-		if ($osname =~ /win|vmwarewin/) {
+		if ($image_os_type =~ /windows/i) {
 			#notify($ERRORS{'OK'},0,"checking $nodename $ipaddress");
 			undef @SSHCMD;
-			@SSHCMD = run_ssh_command($shortname, $IDENTITY_wxp, "netstat -an", "root", 22, 1);
+			@SSHCMD = run_ssh_command($shortname, $identity, "netstat -an", "root", 22, 1);
 			foreach my $line (@{$SSHCMD[1]}) {
 				chomp($line);
 				if ($line =~ /Connection refused/) {
@@ -2074,9 +2091,9 @@ sub isconnected {
 				}
 			} ## end foreach my $line (@{$SSHCMD[1]})
 		} ## end if ($osname =~ /win|vmwarewin/)
-		elsif ($osname =~ /^(rh[0-9]image|rhel[0-9]|fc[0-9]image|rhfc[0-9]|rhas[0-9])/) {
+		elsif ($image_os_type =~ /linux/i) {
 			undef @SSHCMD;
-			@SSHCMD = run_ssh_command($nodename, $IDENTITY_bladerhel, "netstat -an", "root", 22, 1);
+			@SSHCMD = run_ssh_command($nodename, $identity, "netstat -an", "root", 22, 1);
 			foreach my $line (@{$SSHCMD[1]}) {
 				chomp($line);
 				if ($line =~ /Warning/) {
@@ -2097,7 +2114,7 @@ sub isconnected {
 					}
 				}
 			} ## end foreach my $line (@{$SSHCMD[1]})
-		} ## end elsif ($osname =~ /^(rh[0-9]image|rhel[0-9]|fc[0-9]image|rhfc[0-9]|rhas[0-9])/) [ if ($osname =~ /win|vmwarewin/)
+		} 
 		return 0;
 	} ## end if ($type =~ /blade|virtualmachine/)
 	elsif ($type eq "lab") {
@@ -2776,7 +2793,7 @@ sub check_ssh {
 =cut
 
 sub _sshd_status {
-	my ($node, $imagename, $log) = @_;
+	my ($node, $imagename,$image_os_type, $log) = @_;
 	my ($package, $filename, $line, $sub) = caller(0);
 	$log = 0 if (!defined($log));
 	notify($ERRORS{'WARNING'}, $log, "node is not defined") if (!(defined($node)));
@@ -2785,11 +2802,18 @@ sub _sshd_status {
 		return "off";
 	}
 
-	my $identity = $IDENTITY_wxp;
-	if (defined($imagename)) {
-		$identity = $IDENTITY_bladerhel if ($imagename =~ /^(rh[0-9]image|rhel[0-9]|fc[0-9]image|rhfc[0-9]|rhas[0-9]|esx[0-9]+)/);
+	my $identity;
+
+	if ($image_os_type =~ /windows/i) {
+		$identity = $IDENTITY_wxp;
 	}
-	#notify($ERRORS{'OK'},$log,"identity file $identity for imagename $imagename");
+	elsif ($image_os_type =~ /linux/i) {
+		$identity = $IDENTITY_bladerhel;
+	}
+	else {
+		$identity = $IDENTITY_bladerhel;
+	}
+
 	my @sshcmd = run_ssh_command($node, $identity, "uname -s", "root");
 	foreach my $l (@{$sshcmd[1]}) {
 		if ($l =~ /^Warning:/) {
@@ -2865,7 +2889,7 @@ sub _machine_os {
 =cut
 
 sub _is_user_added {
-	my ($node,    $user,     $type, $os)  = @_;
+	my ($node,    $user,     $type, $os,$image_os_type)  = @_;
 	my ($package, $filename, $line, $sub) = caller(0);
 	notify($ERRORS{'WARNING'}, 0, "node is not defined") if (!(defined($node)));
 	notify($ERRORS{'WARNING'}, 0, "user is not defined") if (!(defined($user)));
@@ -2878,7 +2902,7 @@ sub _is_user_added {
 
 	if ($type =~ /blade|virtualmachine/) {
 
-		if ($os =~ /^win|winxp|wxp|win2003|vmwarewin|vmwareesxwin/) {
+		if ($image_os_type =~ /windows/i) {
 			undef @SSHCMD;
 			@SSHCMD = run_ssh_command($node, $IDENTITY_wxp, "cscript.exe //Nologo list_users.vbs", "root");
 			foreach $l (@{$SSHCMD[1]}) {
@@ -2886,7 +2910,7 @@ sub _is_user_added {
 			}
 			return 0;
 		}
-		elsif ($os =~ /^(rhel|rh3image|rh|fc|esx)/) {
+		elsif ($image_os_type =~ /linux/i) {
 			undef @SSHCMD;
 			@SSHCMD = run_ssh_command($node, $IDENTITY_bladerhel, "cat /etc/passwd", "root");
 			foreach $l (@{$SSHCMD[1]}) {
@@ -2916,7 +2940,7 @@ sub _is_user_added {
 =cut
 
 sub add_user {
-	my ($node, $user, $uid, $passwd, $hostname, $os, $remoteip, $grpflag, @group) = @_;
+	my ($node, $user, $uid, $passwd, $hostname, $os, $image_os_type,$remoteip, $grpflag, @group) = @_;
 	my ($package, $filename, $line, $sub) = caller(0);
 	notify($ERRORS{'WARNING'}, 0, "node is not defined")     if (!(defined($node)));
 	notify($ERRORS{'WARNING'}, 0, "user is not defined")     if (!(defined($user)));
@@ -2933,17 +2957,22 @@ sub add_user {
 		notify($ERRORS{'OK'}, 0, "group access memberlist= @group ");
 	}
 
-	# set common linux useradd string
-	my $useradd_string;
-	if (!(defined($uid))) {    # check for uid if not let OS set one
-		$useradd_string = "/usr/sbin/useradd -d /home/$user -m $user -g ncsu";
-	}
-	else {
-		$useradd_string = "/usr/sbin/useradd -u $uid -d /home/$user -m $user -g ncsu";
-	}
+	my $identity;
 
-	if ($os =~ /win|vmwarewin/) {
-		my @sshcmd1 = run_ssh_command($node, $IDENTITY_wxp, "cscript.exe //Nologo add_user.vbs $user $passwd", "root");
+	if ($image_os_type =~ /windows/i) {
+       $identity = $IDENTITY_wxp;
+   }
+   elsif ($image_os_type =~ /linux/i) {
+         $identity = $IDENTITY_bladerhel;
+   }
+   else {
+         $identity = $IDENTITY_bladerhel;
+   }
+
+	
+
+	if ($image_os_type =~ /windows/i) {
+		my @sshcmd1 = run_ssh_command($node, $identity, "cscript.exe //Nologo add_user.vbs $user $passwd", "root");
 		my $delete_user = 0;
 		foreach my $l (@{$sshcmd1[1]}) {
 			if ($l =~ /The filename, directory name, or volume label syntax is incorrect/) {
@@ -2960,17 +2989,25 @@ sub add_user {
 			}
 
 			#rerun command
-			if (run_ssh_command($node, $IDENTITY_wxp, "cscript.exe //Nologo add_user.vbs $user $passwd", "root")) {
+			if (run_ssh_command($node, $identity, "cscript.exe //Nologo add_user.vbs $user $passwd", "root")) {
 				#good
 			}
 		} ## end if ($delete_user)
 
-		return _is_user_added($node, $user, "blade", $os);
+		return _is_user_added($node, $user, "blade", $os, $image_os_type);
 
 		notify($ERRORS{'OK'}, 0, "prep $node $user $passwd");
 
 	} ## end if ($os =~ /win|vmwarewin/)
-	elsif ($os =~ /^(rh[0-9]image|rhel[0-9]|fc[0-9]image|rhfc[0-9]|rhas[0-9]|esx)/) {
+	elsif ($image_os_type =~ /linux/i) {
+		# set common linux useradd string
+		my $useradd_string;
+		if (!(defined($uid))) {    # check for uid if not let OS set one
+			$useradd_string = "/usr/sbin/useradd -d /home/$user -m $user -g ncsu";
+		}
+		else {
+			$useradd_string = "/usr/sbin/useradd -u $uid -d /home/$user -m $user -g ncsu";
+		}
 
 		# two methods: single user or group of users
 		if ($grpflag) {
@@ -2981,7 +3018,7 @@ sub add_user {
 				#$u in form of  unity:uid
 				my ($user_unityid, $uid) = split(":", $u);
 				my $cmd = "/usr/sbin/useradd -u $uid -d /home/$user_unityid -m $user_unityid -g ncsu";
-				if (run_ssh_command($node, $IDENTITY_bladerhel, $cmd, "root")) {
+				if (run_ssh_command($node, $identity, $cmd, "root")) {
 					notify($ERRORS{'OK'}, 0, "added user $user_unityid to $node");
 				}
 				else {
@@ -2995,10 +3032,10 @@ sub add_user {
 			# modify external_sshd config
 			my $cmdstring = "echo \"$allowuserstring\" >> /etc/ssh/external_sshd_config";
 			my @sshcmd;
-			if (run_ssh_command($node, $IDENTITY_bladerhel, $cmdstring, "root")) {
+			if (run_ssh_command($node, $identity, $cmdstring, "root")) {
 				notify($ERRORS{'OK'}, 0, "adding user string to sshd conf $allowuserstring");
 				undef @sshcmd;
-				@sshcmd = run_ssh_command($node, $IDENTITY_bladerhel, "/etc/init.d/ext_sshd restart", "root");
+				@sshcmd = run_ssh_command($node, $identity, "/etc/init.d/ext_sshd restart", "root");
 				foreach my $l (@{$sshcmd[1]}) {
 					if ($l =~ /Stopping ext_sshd:/i) {
 						#notify($ERRORS{'OK'},0,"stopping sshd on $node ");
@@ -3018,7 +3055,7 @@ sub add_user {
 		} ## end if ($grpflag)
 		else {
 			#single user proceed
-			my @sshcmd = run_ssh_command($node, $IDENTITY_bladerhel, $useradd_string, "root");
+			my @sshcmd = run_ssh_command($node, $identity, $useradd_string, "root");
 			foreach my $l (@{$sshcmd[1]}) {
 				if ($l =~ /user $user exists/) {
 					notify($ERRORS{'OK'}, 0, "detected user already has account, deleting");
@@ -3026,17 +3063,17 @@ sub add_user {
 					if (del_user($node, $user, "blade", $os)) {
 						notify($ERRORS{'OK'}, 0, "$user deleted");
 					}
-					if (run_ssh_command($node, $IDENTITY_bladerhel, $useradd_string, "root")) {
+					if (run_ssh_command($node, $identity, $useradd_string, "root")) {
 						notify($ERRORS{'OK'}, 0, "user $user added");
 					}
 				} ## end if ($l =~ /user $user exists/)
 
 			} ## end foreach my $l (@{$sshcmd[1]})
-			if (_is_user_added($node, $user, "blade", $os)) {
+			if (_is_user_added($node, $user, "blade", $os, $image_os_type)) {
 				notify($ERRORS{'OK'}, 0, "added user account $user to $node");
 				undef @sshcmd;
 				my $cmd = "echo \"AllowUsers $user\" >> /etc/ssh/external_sshd_config";
-				if (run_ssh_command($node, $IDENTITY_bladerhel, $cmd, "root")) {
+				if (run_ssh_command($node, $identity, $cmd, "root")) {
 					notify($ERRORS{'DEBUG'}, 0, "added AllowUsers $user to external_sshd_config");
 				}
 				else {
@@ -3044,7 +3081,7 @@ sub add_user {
 					return 0;
 				}
 				undef @sshcmd;
-				@sshcmd = run_ssh_command($node, $IDENTITY_bladerhel, "/etc/init.d/ext_sshd restart", "root");
+				@sshcmd = run_ssh_command($node, $identity, "/etc/init.d/ext_sshd restart", "root");
 
 				foreach my $l (@{$sshcmd[1]}) {
 					if ($l =~ /Stopping ext_sshd:/i) {
@@ -3080,7 +3117,7 @@ sub add_user {
 =cut
 
 sub add_users_by_group {
-	my ($computer_short_name, $passwd, $computer_hostname, $OSname, %usermembers) = @_;
+	my ($computer_short_name, $passwd, $computer_hostname, $OSname,$image_os_type, %usermembers) = @_;
 	my ($package, $filename, $line, $sub) = caller(0);
 	notify($ERRORS{'WARNING'}, 0, "computer_short_name is not defined") if (!(defined($computer_short_name)));
 	notify($ERRORS{'WARNING'}, 0, "pw is not defined")                  if (!(defined($passwd)));
@@ -3093,7 +3130,8 @@ sub add_users_by_group {
 	}
 
 	foreach my $user (keys %usermembers) {
-		if ($OSname =~ /win|vmwarewin/) {
+		#if ($OSname =~ /win|vmwarewin/) {
+		if ($image_os_type =~ /windows/i) {
 			my $cmd = "cscript.exe //Nologo add_user.vbs $usermembers{$user}{username} $passwd";
 			my @cmdout = run_ssh_command($computer_short_name, $IDENTITY_wxp, $cmd, "root");
 			foreach my $line (@{$cmdout[1]}) {
@@ -3117,18 +3155,19 @@ sub add_users_by_group {
 =cut
 
 sub del_user {
-	my ($node,    $user,     $type, $osname) = @_;
+	my ($node, $user, $type, $osname, $image_os_type) = @_;
 	my ($package, $filename, $line, $sub)    = caller(0);
 	notify($ERRORS{'WARNING'}, 0, "node is not defined")   if (!(defined($node)));
 	notify($ERRORS{'WARNING'}, 0, "user is not defined")   if (!(defined($user)));
 	notify($ERRORS{'WARNING'}, 0, "type is not defined")   if (!(defined($type)));
 	notify($ERRORS{'WARNING'}, 0, "osname is not defined") if (!(defined($osname)));
+	notify($ERRORS{'WARNING'}, 0, "image_os_type is not defined") if (!(defined($image_os_type)));
 	#set variables to use
 	my $cmd;
 	my @sshcmd;
 	if ($type =~ /blade|virtualmachine/) {
 		#my $os = _machine_os($node);
-		if ($osname =~ /wxp|win|vmware/) {
+		if ($image_os_type =~ /windows/i) {
 			$cmd = "cscript.exe //Nologo del_user.vbs $user";
 			@sshcmd = run_ssh_command($node, $IDENTITY_wxp, $cmd, "root");
 			foreach my $l (@{$sshcmd[1]}) {
@@ -3140,7 +3179,7 @@ sub del_user {
 			}
 			notify($ERRORS{'DEBUG'}, 0, "cscript.exe //Nologo del_user.vbs $user produced output: " . join("\n", @{$sshcmd[1]}));
 
-			if (!(_is_user_added($node, $user, $type, $osname))) {
+			if (!(_is_user_added($node, $user, $type, $osname, $image_os_type))) {
 				return 1;
 			}
 			else {
@@ -3158,7 +3197,7 @@ sub del_user {
 			}
 
 		} ## end if ($osname =~ /wxp|win|vmware/)
-		elsif ($osname =~ /^(rh[0-9]image|rhel[0-9]|fc[0-9]image|rhfc[0-9]|rhas[0-9]|esx[0-9]+)/) {
+		elsif ($image_os_type =~ /linux/i) {
 			#remove user from machine
 			my @file;
 			my $l;
@@ -3212,7 +3251,7 @@ sub del_user {
 					return 0;
 				}
 			} ## end if (open(SSHDCFG, "/tmp/$node.sshd"))
-		} ## end elsif ($osname =~ /^(rh[0-9]image|rhel[0-9]|fc[0-9]image|rhfc[0-9]|rhas[0-9]|esx[0-9]+)/) [ if ($osname =~ /wxp|win|vmware/)
+		} ## end elsif 
 		else {
 			notify($ERRORS{'WARNING'}, 0, "$osname does not exist ");
 			return 0;
@@ -4500,140 +4539,6 @@ sub getimagesize {
 
 	return 0;
 } ## end sub getimagesize
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 doesimageexists
-
- Parameters  : imagename
- Returns     : 0 or 1
- Description : scans  our image local image library for requested image
-					returns 1 if found or 0 if not
-					attempts to scp image files from peer management nodes
-=cut
-
-sub doesimageexists {
-	my $imagename = $_[0];
-	my ($package, $filename, $line, $sub) = caller(0);
-	notify($ERRORS{'WARNING'}, 0, "node is not defined") if (!(defined($imagename)));
-	if (!(defined($imagename))) {
-		return 0;
-	}
-	my ($IMAGEREPOSITORY, $TMPLREPOSITORY, $basetmpl);
-	if ($imagename =~ /^(win|rh3image)/) {
-		$IMAGEREPOSITORY = "/install/image/x86";
-		$TMPLREPOSITORY  = "$XCATROOT/install/image/x86";
-		$basetmpl        = "wxp2-base.tmpl";
-	}
-	elsif ($imagename =~ /^(rh([0-9])image|fc([0-9])image)/) {
-		$IMAGEREPOSITORY = "/install/$LINUX_IMAGE/x86";
-		$TMPLREPOSITORY  = "$XCATROOT/install/$LINUX_IMAGE/x86";
-		$basetmpl        = "rhel4-base-v0.tmpl";
-	}
-	elsif ($imagename =~ /^rhel([0-9])/) {
-		$IMAGEREPOSITORY = "$XCATROOT/install/rhas$1/x86";
-		$TMPLREPOSITORY  = "$XCATROOT/install/rhas$1/x86";
-		$basetmpl        = "rhel$1-base-v0.tmpl";
-	}
-	elsif ($imagename =~ /^rhfc([0-9])/) {
-		$IMAGEREPOSITORY = "$XCATROOT/install/rhfc$1/x86";
-		$TMPLREPOSITORY  = "$XCATROOT/install/rhfc$1/x86";
-		$basetmpl        = "rhfc$1-base-v0.tmpl";
-	}
-	elsif ($imagename =~ /^esx([0-9]+)/) {
-		$IMAGEREPOSITORY = "$XCATROOT/install/esx$1/x86";
-		$TMPLREPOSITORY  = "$XCATROOT/install/esx$1/x86";
-		$basetmpl        = "esx$1-base-v0.tmpl";
-	}
-	elsif ($imagename =~ /^(vmware)/) {
-		$IMAGEREPOSITORY = "$VMWAREREPOSITORY";
-		goto IMAGEREPOSCHK;
-	}
-
-	#does template file exist
-	if (-e "$TMPLREPOSITORY/$imagename.tmpl") {
-		#good
-		notify($ERRORS{'OK'}, 0, "template $imagename.tmpl exists");
-	}
-	else {
-		#try to create it.
-		if (open(IMAGE, "/bin/cp $TMPLREPOSITORY/$basetmpl $TMPLREPOSITORY/$imagename.tmpl |")) {
-			my @Images = <IMAGE>;
-			close(IMAGE);
-			if (-e "$TMPLREPOSITORY/$imagename.tmpl") {
-				#good
-				notify($ERRORS{'OK'}, 0, "template $imagename.tmpl exists");
-			}
-			foreach my $i (@Images) {
-				#if anything could mean failure
-				if ($i) {
-					notify($ERRORS{'OK'}, 0, "@Images");
-				}
-			}
-		} ## end if (open(IMAGE, "/bin/cp $TMPLREPOSITORY/$basetmpl $TMPLREPOSITORY/$imagename.tmpl |"...
-	} ## end else [ if (-e "$TMPLREPOSITORY/$imagename.tmpl")
-
-	IMAGEREPOSCHK:
-	if (open(IMAGES, "/bin/ls -1 $IMAGEREPOSITORY 2>&1 |")) {
-		my @images = <IMAGES>;
-		close(IMAGES);
-		foreach my $i (@images) {
-			if ($i =~ /$imagename/) {
-				notify($ERRORS{'OK'}, 0, "image $imagename exists");
-				return 1;
-			}
-		}
-	} ## end if (open(IMAGES, "/bin/ls -1 $IMAGEREPOSITORY 2>&1 |"...
-
-	notify($ERRORS{'OK'}, 0, "IMAGELIBENABLE= $IMAGELIBENABLE ");
-	if ($IMAGELIBENABLE) {
-		#proceed to copy image from other management nodes
-		notify($ERRORS{'OK'}, 0, "image $IMAGEREPOSITORY/$imagename does NOT exists attempting to pull from other management nodes");
-		#globals being used - $IMAGELIBENABLE,$IMAGESERVERS,$IMAGELIBUSER,$IMAGELIBKEY
-		my @serverlist = split(/,/, $IMAGESERVERS);
-		my $length = @serverlist;
-		if ($length == 0) {
-			notify($ERRORS{'CRITICAL'}, 0, "imageservers variable is not listed correctly or does not contain any information");
-			return 0;
-		}
-
-		foreach my $s (@serverlist) {
-			#first pass - use my current repository paths
-			notify($ERRORS{'OK'}, 0, "checking for $imagename on $s");
-			my @sshcmd = run_ssh_command($s, $IMAGELIBKEY, "ls -1 $IMAGEREPOSITORY", $IMAGELIBUSER);
-			foreach my $i (@{$sshcmd[1]}) {
-				if ($i =~ /Permission denied/) {
-					notify($ERRORS{'CRITICAL'}, 0, "identity key $IMAGELIBKEY not valid for $IMAGELIBUSER @ $s");
-				}
-				if ($i =~ /$imagename/) {
-					notify($ERRORS{'OK'}, 0, "SUCCESS image $imagename exists on $s, attempting to copy");
-					#great - fetch it
-					if (run_scp_command("$IMAGELIBUSER\@$s:$IMAGEREPOSITORY/$imagename*", $IMAGEREPOSITORY, $IMAGELIBKEY)) {
-						#double check our image set has been copied
-						if (open(IMAGES, "/bin/ls -1 $IMAGEREPOSITORY 2>&1 |")) {
-							my @images = <IMAGES>;
-							close(IMAGES);
-							foreach my $i (@images) {
-								if ($i =~ /$imagename/) {
-									notify($ERRORS{'OK'}, 0, "image $imagename exists");
-									return 1;
-								}
-							}
-						} ## end if (open(IMAGES, "/bin/ls -1 $IMAGEREPOSITORY 2>&1 |"...
-					} ## end if (run_scp_command("$IMAGELIBUSER\@$s:$IMAGEREPOSITORY/$imagename*"...
-				}    ## ($i =~ /$imagename/)
-			}    ## foreach my $i
-		} ## end foreach my $s (@serverlist)
-	} ## end if ($IMAGELIBENABLE)
-	else {
-		notify($ERRORS{'OK'}, 0, "imagelibenable disabled");
-	}
-
-	notify($ERRORS{'WARNING'}, 0, "image $IMAGEREPOSITORY/$imagename does NOT exists");
-	return 0;
-
-} ## end sub doesimageexists
-
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -6110,6 +6015,7 @@ sub get_request_info {
 
 		# Set the node name based on the type of computer
 		my $computer_type = $request_info{reservation}{$reservation_id}{computer}{type};
+		my $computer_id = $request_info{reservation}{$reservation_id}{computer}{id};
 
 		# Figure out the nodename based on the type of computer
 		my $computer_nodename;
@@ -6123,35 +6029,44 @@ sub get_request_info {
 			$computer_nodename = $computer_shortname;
 		}
 		else {
-			my $computer_id = $request_info{reservation}{$reservation_id}{computer}{id};
 			notify($ERRORS{'WARNING'}, 0, "computer=$computer_id is of an unknown or unusual type=$computer_type");
 		}
 		$request_info{reservation}{$reservation_id}{computer}{NODENAME} = $computer_nodename;
 
 		# Set the image identity file path
 		my $imagerevision_imagename = $request_info{reservation}{$reservation_id}{imagerevision}{imagename};
+		my $image_os_type = $request_info{reservation}{$reservation_id}{image}{OS}{type};
+
 		my $identity_file_path;
-		if ($imagerevision_imagename =~ /^(win|vmwarewin|vmwareesxwin|vista)/) {
-			$identity_file_path = $IDENTITY_wxp;
+		if($computer_type =~ /blade|virtualmachine/){
+			if($image_os_type =~ /windows/i){
+				$identity_file_path = $IDENTITY_wxp;
+			}
+			elsif ($image_os_type =~ /linux/i){
+				$identity_file_path = $IDENTITY_bladerhel;
+			}
+			else{
+				notify($ERRORS{'WARNING'}, 0, "computer_type=$computer_type is of an unknown or unusual image_os_type=$image_os_type type=$computer_type");
+			}
 		}
-		elsif ($imagerevision_imagename =~ /^(rh|fc|esx)/) {
-			$identity_file_path = $IDENTITY_bladerhel;
+		elsif($computer_type eq "lab"){
+			if ($imagerevision_imagename =~ /realmrh|i386_linux26/) {
+				$identity_file_path = $IDENTITY_linux_lab;
+			}
+			elsif ($imagerevision_imagename =~ /sun/) {
+				$identity_file_path = $IDENTITY_solaris_lab;
+			}
+			elsif ($imagerevision_imagename =~ /^mpls/) {
+				notify($ERRORS{'OK'}, 0, "MPLS reservation: $request_id:$reservation_id");
+			}
+			else {
+				notify($ERRORS{'WARNING'}, 0, "unsupported image type: '$imagerevision_imagename'");
+			}
 		}
-		#elsif ($imagerevision_imagename =~ /vmimage|vmwarewin|vmwareesxwin/) {
-		#	$identity_file_path = $IDENTITY_wxp;
-		#}
-		elsif ($imagerevision_imagename =~ /realmrh|i386_linux26/) {
-			$identity_file_path = $IDENTITY_linux_lab;
+		else{
+			notify($ERRORS{'WARNING'}, 0, "computer=$computer_id is of an unknown or unusual type=$computer_type");
 		}
-		elsif ($imagerevision_imagename =~ /sun/) {
-			$identity_file_path = $IDENTITY_solaris_lab;
-		}
-		elsif ($imagerevision_imagename =~ /^mpls/) {
-			notify($ERRORS{'OK'}, 0, "MPLS reservation: $request_id:$reservation_id");
-		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "unsupported image type: '$imagerevision_imagename'");
-		}
+
 		$request_info{reservation}{$reservation_id}{image}{IDENTITY} = $identity_file_path;
 
 		# Set some non-database defaults

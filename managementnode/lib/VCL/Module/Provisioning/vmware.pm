@@ -190,7 +190,7 @@ sub load {
 	my ($hostnode, $identity);
 	if ($host_type eq "blade") {
 		$hostnode = $1 if ($vmhost_hostname =~ /([-_a-zA-Z0-9]*)(\.?)/);
-		$identity = $IDENTITY_bladerhel if ($vmhost_imagename =~ /^(rh[0-9]image|rhel[0-9]|fc[0-9]image|rhfc[0-9]|rhas[0-9]|esx[0-9]*)/);
+		$identity = $IDENTITY_bladerhel;
 
 		# assign2project is only for blades - and not all blades
 		#if (VCL::Module::Provisioning::xCAT::_assign2project($hostnode, $project)) {
@@ -906,7 +906,7 @@ sub load {
 							$sloop = $sloop - 5;
 						}
 
-						my $sshd_status = _sshd_status($computer_shortname, $requestedimagename);
+						my $sshd_status = _sshd_status($computer_shortname, $requestedimagename,$image_os_type);
 						if ($sshd_status eq "on") {
 							notify($ERRORS{'OK'}, 0, "$computer_shortname now has active sshd running, maybe we missed the READY flag setting STAGE5 flag");
 							$s5 = 1;
@@ -959,7 +959,7 @@ sub load {
 	$sshd_attempts++;
 	my $sshd_status = "off";
 	while (!$sshdstatus) {
-		my $sshd_status = _sshd_status($computer_shortname, $requestedimagename);
+		my $sshd_status = _sshd_status($computer_shortname, $requestedimagename,$image_os_type);
 		if ($sshd_status eq "on") {
 			$sshdstatus = 1;
 			notify($ERRORS{'OK'}, 0, "$computer_shortname now has active sshd running, ok to proceed to sync ssh keys");
@@ -1071,7 +1071,7 @@ sub load {
 		#not default setting
 		if ($IPCONFIGURATION eq "dynamicDHCP") {
 			insertloadlog($reservation_id, $vmclient_computerid, "dynamicDHCPaddress", "collecting dynamic IP address for node");
-			my $assignedIPaddress = getdynamicaddress($computer_shortname, $vmclient_OSname);
+			my $assignedIPaddress = getdynamicaddress($computer_shortname, $vmclient_OSname,$image_os_type);
 			if ($assignedIPaddress) {
 				#update computer table
 				if (update_computer_address($vmclient_computerid, $assignedIPaddress)) {
@@ -1090,7 +1090,7 @@ sub load {
 		} ## end if ($IPCONFIGURATION eq "dynamicDHCP")
 		elsif ($IPCONFIGURATION eq "static") {
 			insertloadlog($reservation_id, $vmclient_computerid, "staticIPaddress", "setting static IP address for node");
-			if (setstaticaddress($computer_shortname, $vmclient_OSname, $vmclient_publicIPaddress)) {
+			if (setstaticaddress($computer_shortname, $vmclient_OSname, $vmclient_publicIPaddress,$image_os_type)) {
 				# good set static address
 			}
 		}
@@ -1159,7 +1159,7 @@ sub capture {
 	my ($hostIdentity, $hostnodename);
 	if ($host_type eq "blade") {
 		$hostnodename = $1 if ($vmhost_hostname =~ /([-_a-zA-Z0-9]*)(\.?)/);
-		$hostIdentity = $IDENTITY_bladerhel if ($vmhost_imagename =~ /^(rh[0-9]image|rhel[0-9]|fc[0-9]image|rhfc[0-9]|rhas[0-9]|esx[0-9]*)/);
+		$hostIdentity = $IDENTITY_bladerhel;
 	}
 	else {
 		#using FQHN
@@ -1284,7 +1284,7 @@ sub capture {
 				if (_pingnode($computer_nodename)) {
 					#it pingable check if sshd is open
 					notify($ERRORS{'OK'}, 0, "$computer_nodename is pingable, checking sshd port");
-					my $sshd = _sshd_status($computer_nodename, $image_name);
+					my $sshd = _sshd_status($computer_nodename, $image_name,$image_os_type);
 					if ($sshd =~ /on/) {
 						$rebooted = 0;
 						notify($ERRORS{'OK'}, 0, "$computer_nodename sshd is open");
@@ -1805,7 +1805,7 @@ sub control_VM {
 		else {
 			$hostnode = $1 if ($vmhost_shortname =~ /([-_a-zA-Z0-9]*)(\.?)/);
 		}
-		$identity = $IDENTITY_bladerhel if ($vmhost_imagename =~ /^(rh[0-9]image|rhel[0-9]|fc[0-9]image|rhfc[0-9]|rhas[0-9]|esx[0-9]*)/);
+		$identity = $IDENTITY_bladerhel;
 	} ## end if ($vmhost_type eq "blade")
 	else {
 		#using FQHN
@@ -2055,6 +2055,7 @@ sub node_status {
 	my $vmhost_hostname    = $self->data->get_vmhost_hostname;
 	my $vmhost_imagename   = $self->data->get_vmhost_image_name;
 	my $vmclient_shortname = $self->data->get_computer_short_name;
+	my $image_os_type		  = $self->data->get_image_os_type;
 	my $request_forimaging              = $self->data->get_request_forimaging();
 
 	my ($hostnode, $identity);
@@ -2072,7 +2073,7 @@ sub node_status {
 
 	if ($vmhost_type eq "blade") {
 		$hostnode = $1 if ($vmhost_hostname =~ /([-_a-zA-Z0-9]*)(\.?)/);
-		$identity = $IDENTITY_bladerhel;    #if($vm{vmhost}{imagename} =~ /^(rhel|rh3image|rh4image|fc|rhfc)/);
+		$identity = $IDENTITY_bladerhel;    
 	}
 	else {
 		#using FQHN
@@ -2104,7 +2105,7 @@ sub node_status {
 
 
 	#can I ssh into it
-	my $sshd = _sshd_status($vmclient_shortname, $requestedimagename);
+	my $sshd = _sshd_status($vmclient_shortname, $requestedimagename,$image_os_type);
 
 
 	#is it running the requested image

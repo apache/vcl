@@ -153,6 +153,7 @@ sub load {
 	my $reservation_id       = $self->data->get_reservation_id();
 	my $image_name           = $self->data->get_image_name();
 	my $image_os_name        = $self->data->get_image_os_name();
+	my $image_os_type        = $self->data->get_image_os_type();
 	my $image_project        = $self->data->get_image_project();
 	my $image_reload_time    = $self->data->get_image_reload_time();
 	my $imagemeta_postoption = $self->data->get_imagemeta_postoption();
@@ -438,7 +439,7 @@ sub load {
 						}
 					}
 					if (!$s4) {
-						if ($_ =~ /Serving \/tftpboot\/xcat\/(rhfc|linux_image|image|rhas.)\/x86\/install.gz to $privateIP:/) {
+						if ($_ =~ /Serving \/tftpboot\/xcat\/([.-_a-zA-Z0-9]*)\/x86\/install.gz to $privateIP:/) {
 							$s4 = 1;
 							chomp($_);
 							notify($ERRORS{'OK'}, 0, "$computer_node_name STAGE 4 set $_");
@@ -458,7 +459,7 @@ sub load {
 						}
 
 						#in case we miss the above statement
-						if ($image_os_name =~ /^(rhel|rhfc|fc|esx)/) {
+						if ($image_os_type =~ /linux/i) {
 							if ($_ =~ /xcat: xcatd: $computer_node_name installing/) {
 								$s5 = 1;
 								chomp($_);
@@ -555,7 +556,7 @@ sub load {
 
 					#is it even near completion only checking rhel installs
 					#not really useful for linux_images
-					if ($image_os_name =~ /^(rhel|rhfc|fc|esx)/) {
+					if ($image_os_type =~ /linux/i) {
 						if (!$gettingclose) {
 							if ($_ =~ /rpc.mountd: authenticated mount request from $computer_node_name:(\d+) for \/install\/post/) {
 								$gettingclose = 1;
@@ -572,7 +573,7 @@ sub load {
 								}
 							}
 						} ## end else [ if (!$gettingclose)
-					} ## end if ($image_os_name =~ /^(rhel|rhfc|fc|esx)/)
+					} ## end if ($image_os_type
 				} ## end if (!$s1)
 			}    #while
 			if ($s1) {
@@ -644,13 +645,12 @@ sub load {
 			$bootstatus = 1;
 			notify($ERRORS{'OK'}, 0, "$computer_node_name has been reinstalled with $image_name");
 			notify($ERRORS{'OK'}, 0, "xcat has set the boot flag");
-			if ($image_os_name =~ /win|wxp|2003/) {
+			if ($image_os_type =~ /windows/i) {
 				notify($ERRORS{'OK'}, 0, "waiting 3 minutes to allow OS to reboot and initialize machine");
 				sleep 180;
 			}
 
-			#elsif($osname =~ /^(rhel|rh3image|fc|rhfc|rh4image)/){
-			elsif ($image_os_name =~ /^(rh[0-9]image|rhel[0-9]|fc[0-9]image|rhfc[0-9]|rhas[0-9]|esx[0-9]+)/) {
+			elsif ($image_os_type =~ /linux/i) {
 				notify($ERRORS{'OK'}, 0, "waiting 65 sec to allow OS to reboot and initialize machine");
 				sleep 65;
 			}
@@ -672,7 +672,7 @@ sub load {
 						if ($_ =~ /READY|ready|Starting firstboot:  succeeded/) {
 							$ready = 1 if ($_ =~ /$computer_node_name/);
 						}
-						if ($image_os_name =~ /^(rh|fc|esx)/) {
+						if ($image_os_type =~ /linux/i) {
 							if ($_ =~ /$computer_node_name|$computer_node_name kernel/) {
 								notify($ERRORS{'OK'}, 0, "$computer_node_name booting up");
 								sleep 5;
@@ -692,7 +692,7 @@ sub load {
 					#if ($readycount > 2) {
 
 						#check ssh status just in case we missed the flag
-						my $sshd = _sshd_status($computer_node_name, $image_name);
+						my $sshd = _sshd_status($computer_node_name, $image_name,$image_os_type);
 						if ($sshd eq "on") {
 							$ready = 1;
 							notify($ERRORS{'OK'}, 0, "we may have missed start flag going next stage");
@@ -741,7 +741,7 @@ sub load {
 	$sshd_start_time = time() if !$sshd_start_time;
 
 	while (!$sshdstatus) {
-		my $sshd_status = _sshd_status($computer_node_name, $image_name);
+		my $sshd_status = _sshd_status($computer_node_name, $image_name,$image_os_type);
 		if ($sshd_status eq "on") {
 
 			# Set the sshd end time to now to capture how long it took sshd to become active
@@ -852,7 +852,7 @@ sub load {
 
 		while (!$keysync) {
 			$keysynccheck++;
-			my $sshd = _sshd_status($computer_node_name, $image_name);
+			my $sshd = _sshd_status($computer_node_name, $image_name,$image_os_type);
 			if ($sshd =~ /on/) {
 				$keysync = 1;
 				notify($ERRORS{'OK'}, 0, "keys synced");
@@ -886,7 +886,7 @@ sub load {
 
 		#not default setting
 		if ($IPCONFIGURATION eq "dynamicDHCP") {
-			my $assignedIPaddress = getdynamicaddress($computer_node_name, $image_os_name);
+			my $assignedIPaddress = getdynamicaddress($computer_node_name, $image_os_name,$image_os_type);
 			if ($assignedIPaddress) {
 
 				#update computer table
@@ -909,7 +909,7 @@ sub load {
 		elsif ($IPCONFIGURATION eq "static") {
 			insertloadlog($reservation_id, $computer_id, "info", "setting staticIPaddress");
 
-			if (setstaticaddress($computer_node_name, $image_os_name, $computer_ip_address)) {
+			if (setstaticaddress($computer_node_name, $image_os_name, $computer_ip_address,$image_os_type)) {
 				notify($ERRORS{'DEBUG'}, 0, "set static address on $computer_ip_address $computer_node_name ");
 				insertloadlog($reservation_id, $computer_id, "staticIPaddress", "SUCCESS set static IP address on public interface");
 			}
@@ -997,7 +997,7 @@ sub load {
 
 					#it pingable check if sshd is open
 					notify($ERRORS{'OK'}, 0, "$computer_node_name is pingable, checking sshd port");
-					my $sshd = _sshd_status($computer_node_name, $image_name);
+					my $sshd = _sshd_status($computer_node_name, $image_name,$image_os_type);
 					if ($sshd =~ /on/) {
 						$rebooted = 0;
 						notify($ERRORS{'OK'}, 0, "$computer_node_name sshd is open");
@@ -1077,7 +1077,7 @@ sub load {
 			} ## end if (open(NETSH, "/usr/bin/ssh -x -i $IDENTITY_wxp $computer_node_name \"netsh interface ip set address name=\\\"$privateadapter\\\" source=static addr=$privateIP mask=$subnetmask\" & 2>&1 |"...
 
 			#make sure it came back
-			if (_sshd_status($computer_node_name, $image_name)) {
+			if (_sshd_status($computer_node_name, $image_name,$image_os_type)) {
 				notify($ERRORS{'OK'}, 0, "successful $computer_node_name is accessible after static assignment");
 				insertloadlog($reservation_id, $computer_id, "info", "SUCCESS network gateway modification successful");
 			}
@@ -1107,7 +1107,7 @@ sub load {
 	} ## end if ($image_os_name =~ /winxp|wxp|win2003/)
 
 	# Linux post-load tasks
-	elsif ($image_os_name =~ /^(rh[0-9]image|rhel[0-9]|fc[0-9]image|rhfc[0-9]|rhas[0-9]|esx[0-9]+)/) {
+	elsif ($image_os_type =~ /linux/i) {
 
 		#linux specfic routines
 		#FIXME move to generic post options on per image basis
@@ -1155,7 +1155,7 @@ sub load {
 
 		#if an image, clear wtmp and krb token files
 		# FIXME - move to createimage
-		if ($image_os_name =~ /^(rh[0-9]image|rhel[0-9]|fc[0-9]image|rhfc[0-9]|rhas[0-9]|esx[0-9]+)/) {
+		if ($image_os_type =~ /linux/i) {
 			my @cleartmp = run_ssh_command($computer_node_name, $IDENTITY_bladerhel, "/usr/sbin/tmpwatch -f 0 /tmp; /bin/cp /dev/null /var/log/wtmp", "root");
 			foreach my $l (@{$cleartmp[1]}) {
 				notify($ERRORS{'DEBUG'}, 0, "output from cleartmp post load $computer_node_name $l");
@@ -1196,7 +1196,7 @@ sub load {
 		} ## end if (open(SSHDCFG, "/tmp/$computer_node_name.sshd"...
 
 
-	} ## end elsif ($image_os_name =~ /^(rh[0-9]image|rhel[0-9]|fc[0-9]image|rhfc[0-9]|rhas[0-9]|esx[0-9]+)/) [ if ($image_os_name =~ /winxp|wxp|win2003/)
+	} ## end elsif ($image_os_type =~ 
 
 	return 1;
 } ## end sub load
@@ -1973,11 +1973,13 @@ sub node_status {
 	my $computer_ip_address     = 0;
 	my $image_os_name           = 0;
 	my $image_name              = 0;
+	my $image_os_type				 = 0;
 
 	# Check if subroutine was called as a class method
 	if (ref($self) !~ /xcat/i) {
 		#$cidhash->{hostname}, $cidhash->{OSname}, $cidhash->{MNos}, $cidhash->{IPaddress}, $LOG
 		$computer_node_name = $self;
+		$image_os_type = shift;
 
 		$log                 = shift;
 		$log                 = 0 if !$log;
@@ -1994,6 +1996,7 @@ sub node_status {
 		$computer_host_name  = $self->data->get_computer_host_name();
 		$computer_short_name = $self->data->get_computer_short_name();
 		$image_name          = $self->data->get_image_name();
+		$image_os_type       = $self->data->get_image_os_type();
 		$log                 = 0;
 	} ## end else [ if (ref($self) !~ /xcat/i)
 
@@ -2086,7 +2089,7 @@ sub node_status {
 
 	# Check the sshd status
 	notify($ERRORS{'DEBUG'}, $log, "checking if $computer_short_name sshd service is accessible");
-	my $sshd_status = _sshd_status($computer_short_name, $status{nodetype}, $log);
+	my $sshd_status = _sshd_status($computer_short_name, $status{nodetype}, $image_os_type,$log);
 
 	# If sshd is accessible, perform sshd-dependent checks
 	if ($sshd_status =~ /on/) {

@@ -147,6 +147,7 @@ sub load {
 	my $vmclient_computerid = $self->data->get_computer_id;
 	my $vmclient_imageminram      = $self->data->get_image_minram;
 	my $image_os_name  = $self->data->get_image_os_name;
+	my $image_os_type  = $self->data->get_image_os_type;
 	my $image_identity = $self->data->get_image_identity;
 
 	my $virtualswitch0    = $self->data->get_vmhost_profile_virtualswitch0;
@@ -426,7 +427,7 @@ sub load {
 		if ($IPCONFIGURATION eq "dynamicDHCP") {
 			insertloadlog($reservation_id, $vmclient_computerid, "dynamicDHCPaddress", "collecting dynamic IP address for node");
 			notify($ERRORS{'DEBUG'}, 0, "Attempting to query vmclient for its public IP...");
-			my $assignedIPaddress = getdynamicaddress($computer_shortname, $vmclient_OSname);
+			my $assignedIPaddress = getdynamicaddress($computer_shortname, $vmclient_OSname,$image_os_type);
 			if ($assignedIPaddress) {
 				#update computer table
 				notify($ERRORS{'DEBUG'}, 0, " Got dynamic address from vmclient, attempting to update database");

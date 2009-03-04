@@ -98,22 +98,23 @@ sub process {
 	# Store hash variables into local variables
 	my $request_data = $self->data->get_request_data;
 
-	my $request_id           = $request_data->{id};
-	my $request_logid        = $request_data->{logid};
-	my $reservation_id       = $request_data->{RESERVATIONID};
+	my $request_id           = $self->data->get_request_id();
+	my $request_logid        = $self->data->get_request_log_id();
+	my $reservation_id       = $self->data->get_reservation_id();
 	my $reservation_password = $request_data->{reservation}{$reservation_id}{pw};
-	my $computer_id          = $request_data->{reservation}{$reservation_id}{computer}{id};
-	my $computer_hostname    = $request_data->{reservation}{$reservation_id}{computer}{hostname};
-	my $computer_short_name  = $request_data->{reservation}{$reservation_id}{computer}{SHORTNAME};
-	my $computer_type        = $request_data->{reservation}{$reservation_id}{computer}{type};
-	my $computer_ip_address  = $request_data->{reservation}{$reservation_id}{computer}{IPaddress};
-	my $image_os_name        = $request_data->{reservation}{$reservation_id}{image}{OS}{name};
-	my $request_forimaging   = $request_data->{forimaging};
-	my $image_name           = $request_data->{reservation}{$reservation_id}{imagerevision}{imagename};
-	my $user_uid             = $request_data->{user}{uid};
-	my $user_unityid         = $request_data->{user}{unityid};
-	my $user_standalone      = $request_data->{user}{STANDALONE};
-	my $imagemeta_checkuser  = $request_data->{reservation}{$reservation_id}{image}{imagemeta}{checkuser};
+	my $computer_id          = $self->data->get_computer_id();
+	my $computer_hostname    = $self->data->get_computer_host_name();
+	my $computer_short_name  = $self->data->get_computer_short_name();
+	my $computer_type        = $self->data->get_computer_type();
+	my $computer_ip_address  = $self->data->get_computer_ip_address();
+	my $image_os_name        = $self->data->get_image_os_name();
+	my $image_os_type        = $self->data->get_image_os_type();
+	my $request_forimaging   = $self->data->get_request_forimaging;
+	my $image_name           = $self->data->get_image_name();
+	my $user_uid             = $self->data->get_user_uid();
+	my $user_unityid         = $self->data->get_user_login_id();
+	my $user_standalone      = $self->data->get_user_standalone();
+	my $imagemeta_checkuser  = $self->data->get_imagemeta_checkuser();
 	my $reservation_count     = $self->data->get_reservation_count();
 	
 
@@ -259,7 +260,7 @@ sub process {
 			}    # Close if OS name is win or vmware
 
 			# Check if linux image
-			elsif ($image_os_name =~ /^(rh[0-9]image|rhel[0-9]|fc[0-9]image|rhfc[0-9]|rhas[0-9])/) {
+			elsif ($image_os_type =~  /linux/){
 				notify($ERRORS{'OK'}, 0, "Linux image detected: $image_os_name");
 
 				# adduser ; this adds user and restarts sshd
@@ -285,7 +286,7 @@ sub process {
 				}    # Close imagemeta user group defined and member count is > 0
 
 				# Try to add the user account to the linux computer
-				if (add_user($computer_short_name, $user_unityid, $user_uid, 0, $computer_hostname, $image_os_name, $remote_ip, $grpflag, @group)) {
+				if (add_user($computer_short_name, $user_unityid, $user_uid, 0, $computer_hostname, $image_os_name, $image_os_type, $remote_ip, $grpflag, @group)) {
 					notify($ERRORS{'OK'}, 0, "user $user_unityid added to $computer_short_name");
 					insertloadlog($reservation_id, $computer_id, "info", "reserved: adding user and opening remote access port for $remote_ip");
 				}
@@ -418,11 +419,11 @@ sub process {
 		# Check for "administrator" if this is an imaging request
 		if ($request_forimaging) {
 			notify($ERRORS{'OK'}, 0, "forimaging flag is set to 1, checking for connection by administrator");
-			$retval_conn = check_connection($nodename, $computer_ip_address, $computer_type, $remote_ip, $time_limit, $image_os_name, 0, $request_id, "administrator");
+			$retval_conn = check_connection($nodename, $computer_ip_address, $computer_type, $remote_ip, $time_limit, $image_os_name, 0, $request_id, "administrator",$image_os_type);
 		}
 		else {
 			notify($ERRORS{'OK'}, 0, "forimaging flag is set to 0, checking for connection by $user_unityid");
-			$retval_conn = check_connection($nodename, $computer_ip_address, $computer_type, $remote_ip, $time_limit, $image_os_name, 0, $request_id, $user_unityid);
+			$retval_conn = check_connection($nodename, $computer_ip_address, $computer_type, $remote_ip, $time_limit, $image_os_name, 0, $request_id, $user_unityid,$image_os_type);
 		}
 	} ## end else [ if (!$imagemeta_checkuser)
 
@@ -649,20 +650,17 @@ sub _notify_user_timeout {
 	my $self = shift;
 	my ($package, $filename, $line, $sub) = caller(0);
 
-	# Store hash variables into local variables
-	my $request_data = $self->data->get_request_data;
-
-	my $request_id                 = $request_data->{id};
-	my $reservation_id             = $request_data->{RESERVATIONID};
-	my $user_preferredname         = $request_data->{user}{preferredname};
-	my $user_email                 = $request_data->{user}{email};
-	my $user_emailnotices          = $request_data->{user}{emailnotices};
-	my $user_im_name               = $request_data->{user}{IMtype}{name};
-	my $user_im_id                 = $request_data->{user}{IMid};
-	my $affiliation_sitewwwaddress = $request_data->{user}{affiliation}{sitewwwaddress};
-	my $affiliation_helpaddress    = $request_data->{user}{affiliation}{helpaddress};
-	my $image_prettyname           = $request_data->{reservation}{$reservation_id}{image}{prettyname};
-	my $computer_ip_address        = $request_data->{reservation}{$reservation_id}{computer}{IPaddress};
+	my $request_id                 = $self->data->get_request_id();
+	my $reservation_id             = $self->data->get_reservation_id();
+	my $user_preferredname         = $self->data->get_user_preferred_name();
+	my $user_email                 = $self->data->get_user_email();
+	my $user_emailnotices          = $self->data->get_user_emailnotices();
+	my $user_im_name               = $self->data->get_user_imtype_name();
+	my $user_im_id                 = $self->data->get_user_im_id();
+	my $affiliation_sitewwwaddress = $self->data->get_user_affiliation_sitewwwaddress();
+	my $affiliation_helpaddress    = $self->data->get_user_affiliation_helpaddress();
+	my $image_prettyname           = $self->data->get_image_prettyname();
+	my $computer_ip_address        = $self->data->get_computer_ip_address();
 
 	#my ($emailaddress,$firstname,$type,$ipaddress,$imagename,$url,$IMname,$IMid) = @_;
 	my $message = <<"EOF";

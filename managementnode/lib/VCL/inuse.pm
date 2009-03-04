@@ -266,7 +266,7 @@ sub process {
 		notify($ERRORS{'OK'}, 0, "end time not yet reached, polling machine for user connection");
 
 		# Check the user connection, this will loop until user connects or time limit is reached
-		my $check_connection = check_connection($computer_nodename, $computer_ipaddress, $computer_type, $reservation_remoteip, $connect_timeout_limit, $image_os_name, 0, $request_id, $user_unityid);
+		my $check_connection = check_connection($computer_nodename, $computer_ipaddress, $computer_type, $reservation_remoteip, $connect_timeout_limit, $image_os_name, 0, $request_id, $user_unityid,$image_os_type);
 
 		#TESTING
 		#$check_connection = 'timeout';
@@ -419,7 +419,7 @@ sub process {
 			# Perform some actions at 5 minutes until end of request
 			if ($disconnect_time == 5) {
 				# Check for connection
-				if (isconnected($computer_hostname, $computer_type, $reservation_remoteip, $image_os_name, $computer_ipaddress)) {
+				if (isconnected($computer_hostname, $computer_type, $reservation_remoteip, $image_os_name, $computer_ipaddress,$image_os_type)) {
 					insertloadlog($reservation_id, $computer_id, "inuseend5", "notifying user of endtime");
 					$self->_notify_user_disconnect($disconnect_time);
 				}
@@ -651,11 +651,12 @@ sub _notify_user_disconnect {
 	my $user_unityid               = $request_data->{user}{unityid};
 	my $affiliation_sitewwwaddress = $request_data->{user}{affiliation}{sitewwwaddress};
 	my $affiliation_helpaddress    = $request_data->{user}{affiliation}{helpaddress};
-	my $image_prettyname           = $request_data->{reservation}{$reservation_id}{image}{prettyname};
-	my $image_os_name              = $request_data->{reservation}{$reservation_id}{image}{OS}{name};
+	my $image_prettyname           = $self->data->get_image_prettyname();
+	my $image_os_name              = $self->data->get_image_os_name();
 	my $computer_ipaddress         = $request_data->{reservation}{$reservation_id}{computer}{IPaddress};
-	my $computer_type              = $request_data->{reservation}{$reservation_id}{computer}{type};
-	my $computer_shortname         = $request_data->{reservation}{$reservation_id}{computer}{SHORTNAME};
+	my $computer_type              = $self->data->get_computer_type();
+	my $image_os_type					 = $self->data->get_image_os_type();
+	my $computer_shortname         = $self->data->get_computer_short_name();
 
 	my $disconnect_string;
 	if ($disconnect_time == 0) {
@@ -696,11 +697,11 @@ EOF
 
 	# Send message to machine
 	if ($computer_type =~ /blade|virtualmachine/) {
-		if ($image_os_name =~ /^(win|vmwarewin)/) {
+		if ($image_os_type =~ /windows/) {
 			# Notify via windows msg cmd
 			notify_via_msg($computer_shortname, $user_unityid, $short_message);
 		}
-		elsif ($image_os_name =~ /^(rh[0-9]image|rhel[0-9]|fc[0-9]image|rhfc[0-9]|rhas[0-9])/) {
+		elsif ($image_os_type =~ /linux/){
 			# Notify via wall
 			notify_via_wall($computer_shortname, $user_unityid, $short_message, $image_os_name, $computer_type);
 		}
