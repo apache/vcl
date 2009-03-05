@@ -219,7 +219,7 @@ sub process {
 				notify($ERRORS{'OK'}, 0, "$notify_prefix attempting steps to clean up loaded $image_os_name image");
 
 				# Remove user
-				if (del_user($computer_shortname, $user_unityid, $computer_type, $image_os_name)) {
+				if (del_user($computer_shortname, $user_unityid, $computer_type, $image_os_name,$image_os_type)) {
 					notify($ERRORS{'OK'}, 0, "$notify_prefix user $user_unityid removed from $computer_shortname");
 					insertloadlog($reservation_id, $computer_id, "info", "reclaim: removed user");
 				}
