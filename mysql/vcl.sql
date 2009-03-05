@@ -1461,7 +1461,7 @@ INSERT INTO `state` (`id`, `name`) VALUES
 
 INSERT INTO `user` (`id`, `uid`, `unityid`, `affiliationid`, `curriculumid`, `firstname`, `middlename`, `lastname`, `preferredname`, `email`, `emailnotices`, `IMtypeid`, `IMid`, `adminlevelid`, `width`, `height`, `bpp`, `audiomode`, `mapdrives`, `mapprinters`, `mapserial`, `showallgroups`, `lastupdated`) VALUES 
 (1, 101, 'admin', 1, 1, 'vcl', '', 'admin', '', 'root@localhost', 0, 1, NULL, 3, 1024, 768, 16, 'local', 1, 1, 1, 1, '2007-05-17 09:58:39'),
-(2, NULL, 'vclreload', 1, 3, 'vcl', NULL, 'reload', NULL, '', 1, 1, NULL, 1, 1024, 768, 16, 'local', 1, 1, 0, 0, '0000-00-00 00:00:00');
+(2, NULL, 'vclreload', 1, 1, 'vcl', NULL, 'reload', NULL, '', 1, 1, NULL, 1, 1024, 768, 16, 'local', 1, 1, 0, 0, '0000-00-00 00:00:00');
 
 -- 
 -- Dumping data for table `usergroup`
