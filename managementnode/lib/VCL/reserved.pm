@@ -417,12 +417,12 @@ sub process {
 		notify($ERRORS{'OK'}, 0, "checkuser flag is set to 1, checking user connection");
 		# Check for the normal user ID if this isn't an imaging request
 		# Check for "administrator" if this is an imaging request
-		if ($request_forimaging) {
-			notify($ERRORS{'OK'}, 0, "forimaging flag is set to 1, checking for connection by administrator");
+		if ($request_forimaging && $image_os_name =~ /win|vmwarewin/) {
+			notify($ERRORS{'OK'}, 0, "forimaging flag is set to 1 and imageosname is $image_os_name, checking for connection by administrator");
 			$retval_conn = check_connection($nodename, $computer_ip_address, $computer_type, $remote_ip, $time_limit, $image_os_name, 0, $request_id, "administrator",$image_os_type);
 		}
 		else {
-			notify($ERRORS{'OK'}, 0, "forimaging flag is set to 0, checking for connection by $user_unityid");
+			notify($ERRORS{'OK'}, 0, "forimaging flag is set to $request_forimaging and imageosname is $image_os_name, checking for connection by $user_unityid");
 			$retval_conn = check_connection($nodename, $computer_ip_address, $computer_type, $remote_ip, $time_limit, $image_os_name, 0, $request_id, $user_unityid,$image_os_type);
 		}
 	} ## end else [ if (!$imagemeta_checkuser)
