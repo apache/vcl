@@ -158,9 +158,10 @@ sub load {
 
 	#eventually get these from a config file or database
 	
-        my $vmhost_username = "";
-        my $vmhost_password = "";
-        my $datastore_ip = "";
+        my $vmhost_username = "vcl";
+        my $vmhost_password = "AUqGcDDejbFxN6qX";
+        my $datastore_ip = "152.14.17.112";
+	my $datastore_share_path = "/mnt/export";
 
 	notify($ERRORS{'OK'}, 0, "Entered ESX module, loading $image_name on $computer_shortname (on $vmhost_hostname) for reservation $reservation_id");
 
@@ -206,9 +207,9 @@ sub load {
 		$unregister_output = `$unregister_command`;
 		notify($ERRORS{'DEBUG'}, 0, "Un-Registered: $unregister_output");
 
-		my $remove_vm_output = `rm -rf $datastorepath4vmx`;
-		notify($ERRORS{'DEBUG'}, 0, "Output from remove command is: $remove_vm_output");
 	}
+	my $remove_vm_output = `rm -rf $datastorepath4vmx`;
+	notify($ERRORS{'DEBUG'}, 0, "Output from remove command is: $remove_vm_output");
 
 	# copy appropriate vmdk file
 	my $newdir = $datastorepath4vmx;
@@ -228,8 +229,8 @@ sub load {
 
 	# Copy the (large) -flat.vmdk file
 	# This uses ssh to do the copy locally on the nfs server.
-	$from = "/mnt/export/golden/$image_name/$image_name-flat.vmdk";
-	$to = "/mnt/export/inuse/$computer_shortname/$image_name-flat.vmdk";
+	$from = "$datastore_share_path/golden/$image_name/$image_name-flat.vmdk";
+	$to = "$datastore_share_path/inuse/$computer_shortname/$image_name-flat.vmdk";
 	my @copy_command = ("ssh", $datastore_ip, "-i", $image_identity, "-o", "BatchMode yes", "cp $from $to");
 	notify($ERRORS{'OK'}, 0, "SSHing to copy vmdk-flat file");
 	if (system(@copy_command) >> 8) {
@@ -400,7 +401,7 @@ sub load {
 	my $sshd_status = "off";
 	notify($ERRORS{'DEBUG'}, 0, "Waiting for ssh to come up on $computer_shortname");
 	while (!$sshdstatus) {
-		my $sshd_status = _sshd_status($computer_shortname, $image_name);
+		my $sshd_status = _sshd_status($computer_shortname, $image_name, $image_os_type);
 		if ($sshd_status eq "on") {
 			$sshdstatus = 1;
 			notify($ERRORS{'OK'}, 0, "$computer_shortname now has active sshd running");
@@ -469,7 +470,115 @@ sub load {
 =cut
 
 sub capture {
-	notify($ERRORS{'OK'}, 0, "Hello world, I am capturing an image now");
+	notify($ERRORS{'DEBUG'}, 0, "**********************************************************");
+	notify($ERRORS{'OK'}, 0, "Entering ESX Capture routine");
+	my $self = shift;
+
+
+	#check to make sure this call is for the esx module
+	if (ref($self) !~ /esx/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return 0;
+	}
+
+	my $request_data = shift;
+	my ($package, $filename, $line, $sub) = caller(0);
+	my $vmhost_hostname    = $self->data->get_vmhost_hostname;
+	my $new_imagename   = $self->data->get_image_name;
+	my $computer_shortname  = $self->data->get_computer_short_name;
+	my $image_identity = $self->data->get_image_identity;
+        my $vmhost_username = "vcl";
+        my $vmhost_password = "AUqGcDDejbFxN6qX";
+        my $datastore_ip = "152.14.17.112";
+	my $datastore_share_path = "/mnt/export";
+
+
+	my $inuse_image = "/mnt/vcl/inuse/$computer_shortname";
+	my $new_golden = "/mnt/vcl/golden/$new_imagename";
+
+
+	# Find old image name:
+	my $oldimage;
+	if (open(LISTFILES, "ls -1 $inuse_image 2>&1 |")) {
+		my @list = <LISTFILES>;
+		close(LISTFILES);
+		my $numfiles = @list;
+		#figure out old name
+		foreach my $a (@list) {
+			chomp($a);
+			if ($a =~ /(.*)-(v[0-9]*)\.vmdk/) {
+				$oldimage = "$1-$2";
+			}
+		}
+	} else {
+		notify($ERRORS{'CRITICAL'}, 0, "LS failed");
+		return 0;
+	}
+	notify($ERRORS{'DEBUG'}, 0, "found previous name= $oldimage");
+
+	notify($ERRORS{'OK'}, 0, "SSHing to node to configure currentimage.txt");
+	my @sshcmd = run_ssh_command($computer_shortname, $image_identity, "echo $new_imagename > /root/currentimage.txt", "root");
+
+	my $poweroff_command = "/usr/lib/vmware-viperl/apps/vm/vmcontrol.pl";
+	$poweroff_command .= " --server '$vmhost_hostname'";
+	$poweroff_command .= " --vmname $computer_shortname";
+	$poweroff_command .= " --operation poweroff";
+	$poweroff_command .= " --username $vmhost_username";
+	$poweroff_command .= " --password '$vmhost_password'";
+	notify($ERRORS{'DEBUG'},0,"Power off command: $poweroff_command");
+	my $poweroff_output;
+	$poweroff_output = `$poweroff_command`;
+	notify($ERRORS{'DEBUG'},0,"Powered off: $poweroff_output");
+
+	notify($ERRORS{'OK'}, 0, "Waiting 5 seconds for power off");
+	sleep(5);
+	# copy appropriate vmdk file
+	my $newdir = $new_golden;
+	if (!mkdir($newdir)) {
+		notify($ERRORS{'CRITICAL'}, 0, "Could not create new directory: $!");
+		return 0;
+	}
+	my $from = "$inuse_image/$oldimage.vmdk";
+	my $to = "$new_golden/$new_imagename.vmdk";
+	notify($ERRORS{'DEBUG'}, 0, "Preparing to copy vmdk from $from to $to");
+	if (!copy($from, $to)) {
+		notify($ERRORS{'CRITICAL'}, 0, "Could not copy VMDK file! $!");
+		# insert load log here perhaps
+		return 0;
+	}
+	notify($ERRORS{'DEBUG'}, 0, "COPIED VMDK SUCCESSFULLY");
+
+	$from = "$inuse_image/$oldimage.vmx";
+	$to = "$new_golden/$new_imagename.vmx";
+	notify($ERRORS{'DEBUG'}, 0, "Preparing to copy vmx from $from to $to");
+	if (!copy($from, $to)) {
+		notify($ERRORS{'CRITICAL'}, 0, "Could not copy VMX file! $!");
+		# insert load log here perhaps
+		return 0;
+	}
+	notify($ERRORS{'DEBUG'}, 0, "COPIED VMX SUCCESSFULLY");
+
+	my $output;
+	notify($ERRORS{'OK'}, 0, "Rewriting VMDK and VMX files with new image name");
+	$output = `sed -i 's/$oldimage/$new_imagename/' $new_golden/$new_imagename.vmx`;
+	notify($ERRORS{'DEBUG'}, 0, "VMX sed: $output");
+	$output = `sed -i 's/$oldimage/$new_imagename/' $new_golden/$new_imagename.vmdk`;
+	notify($ERRORS{'DEBUG'}, 0, "VMDK sed: $output");
+
+	# Copy the (large) -flat.vmdk file
+	# This uses ssh to do the copy locally on the nfs server.
+	$from = "$datastore_share_path/inuse/$computer_shortname/$oldimage-flat.vmdk";
+	$to = "$datastore_share_path/golden/$new_imagename/$new_imagename-flat.vmdk";
+	notify($ERRORS{'DEBUG'}, 0, "Preparing to ssh to $datastore_ip copy vmdk-flat from $from to $to");
+	my @copy_command = ("ssh", $datastore_ip, "-i", $image_identity, "-o", "BatchMode yes", "cp $from $to");
+	notify($ERRORS{'OK'}, 0, "SSHing to copy vmdk-flat file");
+	if (system(@copy_command) >> 8) {
+		notify($ERRORS{'CRITICAL'}, 0, "Could not copy VMDK-flat file! $!");
+		# insert load log here perhaps
+		return 0;
+	}
+	
+
 	return 1;
 } ## end sub capture
 
@@ -505,6 +614,7 @@ sub node_status {
 	my $vmhost_type        = $self->data->get_vmhost_type;
 	my $vmhost_hostname    = $self->data->get_vmhost_hostname;
 	my $vmhost_imagename   = $self->data->get_vmhost_image_name;
+	my $image_os_type  = $self->data->get_image_os_type;
 	my $vmclient_shortname = $self->data->get_computer_short_name;
 	my $request_forimaging              = $self->data->get_request_forimaging();
 
@@ -560,7 +670,7 @@ sub node_status {
 	notify($ERRORS{'DEBUG'}, 0, "Trying to ssh...");
 
 	#can I ssh into it
-	my $sshd = _sshd_status($vmclient_shortname, $requestedimagename);
+	my $sshd = _sshd_status($vmclient_shortname, $requestedimagename, $image_os_type);
 
 
 	#is it running the requested image
@@ -638,6 +748,57 @@ sub does_image_exist {
 	return 0;
 
 } ## end sub does_image_exist
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2  getimagesize
+
+ Parameters  : imagename
+ Returns     : 0 failure or size of image
+ Description : in size of Kilobytes
+
+=cut
+
+sub get_image_size {
+	my $self = shift;
+	if (ref($self) !~ /esx/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return 0;
+	}
+
+	# Either use a passed parameter as the image name or use the one stored in this object's DataStructure
+	my $image_name = shift;
+	$image_name = $self->data->get_image_name() if !$image_name;
+	if (!$image_name) {
+		notify($ERRORS{'CRITICAL'}, 0, "image name could not be determined");
+		return 0;
+	}
+	notify($ERRORS{'DEBUG'}, 0, "getting size of image: $image_name");
+
+	my $IMAGEREPOSITORY = "/mnt/vcl/golden/$image_name";
+
+	#list files in image directory, account for main .gz file and any .gz.00X files
+	if (open(FILELIST, "/bin/ls -s1 $IMAGEREPOSITORY 2>&1 |")) {
+		my @filelist = <FILELIST>;
+		close(FILELIST);
+		my $size = 0;
+		foreach my $f (@filelist) {
+			if ($f =~ /$image_name-flat.vmdk/) {
+				my ($presize, $blah) = split(" ", $f);
+				$size += $presize;
+			}
+		}
+		if ($size == 0) {
+			#strange imagename not found
+			return 0;
+		}
+		return int($size / 1024);
+	} ## end if (open(FILELIST, "/bin/ls -s1 $IMAGEREPOSITORY 2>&1 |"...
+
+	return 0;
+} ## end sub get_image_size
+
+
 
 initialize();
 1;
