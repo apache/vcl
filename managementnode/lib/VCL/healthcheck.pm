@@ -465,11 +465,8 @@ sub process {
 
 sub _valid_host {
 	my ($node) = @_;
-	my @ns     = qw(152.1.1.22 152.1.2.22 152.1.1.161);
-	my $rns    = \@ns;
-	my $res = Net::DNS::Resolver->new(nameservers => $rns,
-												 tcp_timeout => 5,
-												 retry       => 2);
+	my $res = Net::DNS::Resolver->new( tcp_timeout => 5, 
+					   retry       => 2);
 	my $q = $res->search($node);
 	if ($q) {
 		foreach my $rr ($q->answer) {
