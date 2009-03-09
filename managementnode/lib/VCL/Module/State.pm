@@ -364,6 +364,10 @@ sub check_image_os {
 		# Change rhelX --> rhXimage, rhfcX --> fcXimage
 		$image_os_name_new = "$1$2image";
 	}
+	elsif($image_os_name =~ /^(centos)([0-9])/) {
+		# Change rhelX --> rhXimage, rhfcX --> fcXimage
+		$image_os_name_new = "$1$2image";
+	}
 	else {
 		notify($ERRORS{'OK'}, 0, "no corrections need to be made to image OS: $image_os_name");
 		return 1;
