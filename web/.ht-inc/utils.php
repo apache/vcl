@@ -1279,6 +1279,20 @@ function doQuery($query, $errcode, $db="vcl", $nolog=0) {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
+/// \fn dbLastInsertID()
+///
+/// \return last insert id for $mysql_link_vcl
+///
+/// \brief calls mysql_insert_id for $mysql_link_vcl
+///
+////////////////////////////////////////////////////////////////////////////////
+function dbLastInsertID() {
+	global $mysql_link_vcl;
+	return mysql_insert_id($mysql_link_vcl);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
 /// \fn getOSList()
 ///
 /// \return $oslist - array of OSs
@@ -1317,7 +1331,7 @@ function getOSList() {
 /// \b minprocspeed - minimum speed of processor(s) needed for image\n
 /// \b minnetwork - minimum speed of network needed for image\n
 /// \b maxconcurrent - maximum concurrent usage of this iamge\n
-/// \b reloadtime - time in minutes for image to loaded\n
+/// \b reloadtime - time in minutes for image to be loaded\n
 /// \b deleted - 'yes' or 'no'; whether or not this image has been deleted\n
 /// \b test - 0 or 1; whether or not there is a test version of this image\n
 /// \b resourceid - image's resource id from the resource table\n
@@ -3359,7 +3373,7 @@ function getOverallUserPrivs($userid) {
 ////////////////////////////////////////////////////////////////////////////////
 ///
 /// \fn isAvailable($images, $imageid, $start, $end, $os, $requestid,
-///                          $userid)
+///                          $userid, $ignoreprivileges)
 ///
 /// \param $images - array as returned from getImages
 /// \param $imageid - imageid from the image table
@@ -3370,6 +3384,10 @@ function getOverallUserPrivs($userid) {
 /// timeslot to update a request, pass the request id that will be updated;
 /// otherwise, don't pass this argument
 /// \param $userid - (optional) id from user table
+/// \param $ignoreprivileges (optional, default=0) - 0 (false) or 1 (true) - set
+/// to 1 to look for computers from any that are mapped to be able to run the
+/// image; set to 0 to only look for computers from ones that are both mapped
+/// and that $userid has been granted access to through the privilege tree
 ///
 /// \return -1 if $imageid is limited in the number of concurrent reservations
 ///         available, and the limit has been reached
@@ -3380,7 +3398,7 @@ function getOverallUserPrivs($userid) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function isAvailable($images, $imageid, $start, $end, $os, $requestid=0,
-                     $userid=0) {
+                     $userid=0, $ignoreprivileges=0) {
 	global $requestInfo;
 	$requestInfo["start"] = $start;
 	$requestInfo["end"] = $end;
@@ -3525,10 +3543,12 @@ function isAvailable($images, $imageid, $start, $end, $os, $requestid=0,
 		// otherwise, build a list of computers
 		else {
 			# get list of available computers
-			$resources = getUserResources(array("imageAdmin", "imageCheckOut"),
-			                              array("available"), 0, 0, $userid);
-			$computers = implode("','", array_keys($resources["computer"]));
-			$computers = "'$computers'";
+			if(! $ignoreprivileges) {
+				$resources = getUserResources(array("imageAdmin", "imageCheckOut"),
+				                              array("available"), 0, 0, $userid);
+				$usercomputers = implode("','", array_keys($resources["computer"]));
+				$usercomputers = "'$usercomputers'";
+			}
 			$alloccompids = implode(",", $allocatedcompids);
 
 			$schedules = implode(',', $scheduleids);
@@ -3554,9 +3574,10 @@ function isAvailable($images, $imageid, $start, $end, $os, $requestid=0,
 			       .       "c.RAM >= i.minram AND "
 			       .       "c.procnumber >= i.minprocnumber AND "
 			       .       "c.procspeed >= i.minprocspeed AND "
-			       .       "c.network >= i.minnetwork AND "
-			       .       "c.id IN ($computers) AND "
-			       .       "c.id IN ($mappedcomputers) AND "
+			       .       "c.network >= i.minnetwork AND ";
+			if(! $ignoreprivileges)
+				$query .=   "c.id IN ($usercomputers) AND ";
+			$query .=      "c.id IN ($mappedcomputers) AND "
 			       .       "c.id NOT IN ($alloccompids) "
 			       . "ORDER BY (c.procspeed * c.procnumber) DESC, "
 			       .          "RAM DESC, "
@@ -3569,7 +3590,8 @@ function isAvailable($images, $imageid, $start, $end, $os, $requestid=0,
 				}
 			}
 			# get computer ids available from block reservations
-			$blockids = getAvailableBlockComputerids($imageid, $start, $end);
+			$blockids = getAvailableBlockComputerids($imageid, $start, $end,
+			                                         $allocatedcompids);
 		}
 
 		#remove computers from list that are already scheduled
@@ -3791,7 +3813,8 @@ function RPCisAvailable($imageid, $start, $end, $userid) {
 			}
 		}
 		# get computer ids available from block reservations
-		$blockids = getAvailableBlockComputerids($imageid, $start, $end);
+		$blockids = getAvailableBlockComputerids($imageid, $start, $end,
+		                                         $allocatedcompids);
 
 		# remove computers from list that are already scheduled
 		$usedComputerids = array();
@@ -6360,11 +6383,13 @@ function sortComputers($a, $b) {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn getAvailableBlockComputerids($imageid, $start, $end)
+/// \fn getAvailableBlockComputerids($imageid, $start, $end, $allocatedcompids)
 ///
 /// \param $imageid - id of an image
 /// \param $start - starting time in unix timestamp form
 /// \param $end - ending time in unix timestamp form
+/// \param $allocatedcompids - array of computer ids that have already been
+/// allocated while processing this request
 ///
 /// \return an array of computer ids
 ///
@@ -6372,7 +6397,7 @@ function sortComputers($a, $b) {
 /// in user is a part of that are available between $start and $end
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function getAvailableBlockComputerids($imageid, $start, $end) {
+function getAvailableBlockComputerids($imageid, $start, $end, $allocatedcompids) {
 	global $user;
 	$compids = array();
 	$groupids = implode(',', array_keys($user['groups']));
@@ -6380,6 +6405,7 @@ function getAvailableBlockComputerids($imageid, $start, $end) {
 		$groupids = "''";
 	$startdt = unixToDatetime($start);
 	$enddt = unixToDatetime($end);
+	$alloccompids = implode(",", $allocatedcompids);
 	$query = "SELECT c.computerid "
 	       . "FROM blockComputers c, "
 	       .      "blockRequest r, "
@@ -6387,15 +6413,16 @@ function getAvailableBlockComputerids($imageid, $start, $end) {
 	       .      "state s, "
 	       .      "computer c2 "
 	       . "WHERE r.groupid IN ($groupids) AND "
-	       .       "r.imageid = $imageid AND "
+	       .       "c.computerid = c2.id AND "
+	       .       "c2.currentimageid = $imageid AND "
 	       .       "r.expireTime > NOW() AND "
 	       .       "t.blockRequestid = r.id AND "
 	       .       "c.blockTimeid = t.id AND "
 	       .       "t.start < '$enddt' AND "
 	       .       "t.end > '$startdt' AND "
-	       .       "c.computerid = c2.id AND "
 	       .       "c2.stateid = s.id AND "
-	       .       "s.name != 'failed' "
+	       .       "s.name != 'failed' AND "
+	       .       "c2.id NOT IN ($alloccompids) "
 	       . "ORDER BY s.name";
 	$qh = doQuery($query, 101);
 	while($row = mysql_fetch_assoc($qh)) {
@@ -8069,6 +8096,8 @@ function xmlrpccall() {
 	xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCgetRequestConnectData", "xmlRPChandler");
 	xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCendRequest", "xmlRPChandler");
 	xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCgetRequestIds", "xmlRPChandler");
+	xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCblockAllocation", "xmlRPChandler");
+	xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCprocessBlockTime", "xmlRPChandler");
 
 	print xmlrpc_server_call_method($xmlrpc_handle, $HTTP_RAW_POST_DATA, '');
 	xmlrpc_server_destroy($xmlrpc_handle);

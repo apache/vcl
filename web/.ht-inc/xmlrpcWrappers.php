@@ -448,6 +448,294 @@ function XMLRPCgetRequestIds() {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
+/// \fn XMLRPCblockAllocation($imageid, $start, $end, $requestcount,
+///                           $usergroupid, $ignoreprivileges)
+///
+/// \param $imageid - id of the image to be used
+/// \param $start - mysql datetime for the start time (i.e. requests should be
+/// prep'd and ready by this time)
+/// \param $end - mysql datetime for the end time
+/// \param $requestcount - number of computers to allocate
+/// \param $usergroupid - id of user group for checking user access to machines
+/// \param $ignoreprivileges (optional, default=0) - 0 (false) or 1 (true) - set
+/// to 1 to select computers from any that are mapped to be able to run the
+/// image; set to 0 to only select computers from ones that are both mapped and
+/// that users in the usergroup assigned to this block request have been granted
+/// access to through the privilege tree
+///
+/// \return an array with blockTimesid as an index with the value of the newly
+/// created block time and at least one other index named 'status' which will
+/// have one of these values\n
+/// \b error - error occurred; there will be 2 additional elements in the array:
+/// \li \b errorcode - error number\n
+/// \li \b errormsg - error string\n
+/// \b success - blockTimesid was processed; there will be two additional
+/// elements in this case:\n
+/// \li \b allocated - total number of desired requests that have been
+/// allocated\n
+/// \li \b unallocated - total number of desired requests that have not been
+/// allocated\n
+/// \b warning - there was a non-fatal issue that occurred while processing
+/// the call; there will be four additional elements in this case:\n
+/// \li \b warningcode - warning number\n
+/// \li \b warningmsg - warning string\n
+/// \li \b allocated - total number of desired requests that have been
+/// allocated\n
+/// \li \b unallocated - total number of desired requests that have not been
+/// allocated\n
+/// note that status may be warning, but allocated may be 0 indicating there
+/// were no errors that occurred, but there simply were not any machines
+/// available\n
+///
+/// \brief creates and processes a block reservation according to the passed
+/// in criteria
+///
+////////////////////////////////////////////////////////////////////////////////
+function XMLRPCblockAllocation($imageid, $start, $end, $requestcount,
+                               $usergroupid, $ignoreprivileges=0) {
+	$ownerid = getUserlistID('vclreload@Local');
+	$name = "API:$start";
+	$managementnodes = getManagementNodes('future');
+	if(empty($managementnodes)) {
+		return array('status' => 'error',
+		             'errorcode' => 12,
+		             'errormsg' => 'could not allocate a management node to handle block allocation');
+	}
+	$mnid = array_rand($managementnodes);
+	$query = "INSERT INTO blockRequest "
+	       .        "(name, "
+	       .        "imageid, "
+	       .        "numMachines, "
+	       .        "groupid, "
+	       .        "repeating, "
+	       .        "ownerid, "
+	       .        "admingroupid, "
+	       .        "managementnodeid, "
+	       .        "expireTime) "
+	       . "VALUES "
+	       .        "('$name', "
+	       .        "$imageid, "
+	       .        "$requestcount, "
+	       .        "$usergroupid, "
+	       .        "'list', "
+	       .        "$ownerid, "
+	       .        "0, "
+	       .        "$mnid, "
+	       .        "'$end')";
+	doQuery($query, 101);
+	$brid = dbLastInsertID();
+	$query = "INSERT INTO blockTimes "
+	       .        "(blockRequestid, "
+	       .        "start, "
+	       .        "end) "
+	       . "VALUES "
+	       .        "($brid, "
+	       .        "'$start', "
+	       .        "'$end')";
+	doQuery($query, 101);
+	$btid = dbLastInsertID();
+	$return = XMLRPCprocessBlockTime($btid, $ignoreprivileges);
+	$return['blockTimesid'] = $btid;
+	return $return;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn XMLRPCprocessBlockTime($blockTimesid, $ignoreprivileges)
+///
+/// \param $blockTimesid - id from the blockTimes table
+/// \param $ignoreprivileges (optional, default=0) - 0 (false) or 1 (true) - set
+/// to 1 to select computers from any that are mapped to be able to run the
+/// image; set to 0 to only select computers from ones that are both mapped and
+/// that users in the usergroup assigned to this block request have been granted
+/// access to through the privilege tree
+///
+/// \return an array with at least one index named 'status' which will have
+/// one of these values\n
+/// \b error - error occurred; there will be 2 additional elements in the array:
+/// \li \b errorcode - error number\n
+/// \li \b errormsg - error string\n
+/// \b completed - blockTimesid was previously successfully processed\n
+/// \b success - blockTimesid was processed; there will be two additional
+/// elements in this case:\n
+/// \li \b allocated - total number of desired requests that have been
+/// allocated\n
+/// \li \b unallocated - total number of desired requests that have not been
+/// allocated\n
+/// \b warning - there was a non-fatal issue that occurred while processing
+/// the call; there will be four additional elements in this case:\n
+/// \li \b warningcode - warning number\n
+/// \li \b warningmsg - warning string\n
+/// \li \b allocated - total number of desired requests that have been
+/// allocated\n
+/// \li \b unallocated - total number of desired requests that have not been
+/// allocated\n
+/// note that status may be warning, but allocated may be 0 indicating there
+/// were no errors that occurred, but there simply were not any machines
+/// available\n
+///
+/// \brief processes a block reservation for the blockTimes entry associated
+/// with blockTimesid
+///
+////////////////////////////////////////////////////////////////////////////////
+function XMLRPCprocessBlockTime($blockTimesid, $ignoreprivileges=0) {
+	global $requestInfo;
+	$return = array('status' => 'success');
+	$query = "SELECT bt.start, "
+	       .        "bt.end, "
+	       .        "br.imageid, "
+	       .        "br.numMachines, "
+	       .        "br.groupid, "
+	       .        "br.expireTime "
+	       . "FROM blockRequest br, "
+	       .      "blockTimes bt "
+	       . "WHERE bt.blockRequestid = br.id AND "
+	       .       "bt.id = $blockTimesid";
+	$qh = doQuery($query, 101);
+	if(! $rqdata = mysql_fetch_assoc($qh)) {
+		return array('status' => 'error',
+		             'errorcode' => 8,
+		             'errormsg' => 'unknown blockTimesid');
+	}
+	if(datetimeToUnix($rqdata['expireTime']) < time()) {
+		return array('status' => 'error',
+		             'errorcode' => 9,
+		             'errormsg' => 'expired block reservation');
+	}
+
+	$images = getImages(0, $rqdata['imageid']);
+	if(empty($images)) {
+		return array('status' => 'error',
+		             'errorcode' => 10,
+		             'errormsg' => 'invalid image associated with block request');
+	}
+
+	# check to see if all computers have been allocated
+	$query = "SELECT COUNT(computerid) AS allocated "
+	       . "FROM blockComputers "
+	       . "WHERE blockTimeid = $blockTimesid";
+	$qh = doQuery($query, 101);
+	if(! $row = mysql_fetch_assoc($qh)) {
+		return array('status' => 'error',
+		             'errorcode' => 15,
+		             'errormsg' => 'failure to communicate with database');
+	}
+	$compCompleted = $row['allocated'];
+	$compsPerRequest = 1 + count($images[$rqdata['imageid']]['subimages']);
+	$toallocate = ($rqdata['numMachines'] * $compsPerRequest) - $compCompleted;
+	if($toallocate == 0)
+		return array('status' => 'completed');
+	$reqToAlloc = $toallocate / $compsPerRequest;
+
+	if(! $ignoreprivileges) {
+		# get userids in user group
+		$tmp = getUserGroupMembers($rqdata['groupid']);
+		if(empty($tmp)) {
+			return array('status' => 'error',
+			             'errorcode' => 11,
+			             'errormsg' => 'empty user group and ignoreprivileges set to 0');
+		}
+		$userids = array_keys($tmp);
+		# make length of $userids match $reqToAlloc by duplicating or trimming some users
+		while($reqToAlloc > count($userids))
+			$userids = array_merge($userids, $userids);
+		if($reqToAlloc < count($userids))
+			$userids = array_splice($userids, 0, $reqToAlloc);
+	}
+
+	# staggering: stagger start times for this round (ie, don't worry about
+	#   previous processing of this block time) such that there is 1 minute
+	#   between the start times for each request
+	$stagExtra = $reqToAlloc * 60;
+
+	# determine estimated load time
+	$imgLoadTime = getImageLoadEstimate($rqdata['imageid']);
+	if($imgLoadTime == 0)
+		$imgLoadTime = $images[$rqdata['imageid']]['reloadtime'] * 60;
+	$loadtime = $imgLoadTime + (10 * 60); # add 10 minute fudge factor
+	$unixstart = datetimeToUnix($rqdata['start']);
+	if((time() + $loadtime + $stagExtra) > $unixstart) {
+		$return['status'] = 'warning';
+		$return['warningcode'] = 13;
+		$return['warningmsg'] = 'possibly insufficient time to load machines';
+	}
+	$start = unixToDatetime($unixstart - $loadtime);
+	$unixend = datetimeToUnix($rqdata['end']);
+
+	$userid = 0;
+	$allocated = 0;
+	$vclreloadid = getUserlistID('vclreload@Local');
+	$revisionid = getProductionRevisionid($rqdata['imageid']);
+	$blockCompVals = array();
+	# FIXME (maybe) - if some subset of users in the user group have available
+	# computers, but others do not, $allocated will be less than the desired
+	# number of machines; however, calling this function enough times will
+	# result in enough machines being allocated because they will continue to be
+	# allocated based on the ones with machines available; this seems like odd
+	# behavior
+	$stagCnt = 0;
+	for($i = 0; $i < $reqToAlloc; $i++) {
+		$stagunixstart = $unixstart - $loadtime - ($stagCnt * 60);
+		$stagstart = unixToDatetime($stagunixstart);
+		if(! $ignoreprivileges)
+			$userid = array_pop($userids);
+		# use end of block time to find available computers, but...
+		$rc = isAvailable($images, $rqdata['imageid'], $stagunixstart,
+		                  $unixend, 0, 0, $userid, $ignoreprivileges);
+		if($rc < 1)
+			continue;
+
+		$stagCnt++;
+
+		$compid = $requestInfo['computers'][0];
+		# ...use start of block time as end of reload reservation
+		$reqid = simpleAddRequest($compid, $rqdata['imageid'], $revisionid,
+		                          $stagstart, $rqdata['start'], 19, $vclreloadid);
+		$allocated++;
+		$blockCompVals[] = "($blockTimesid, $compid, {$rqdata['imageid']})";
+
+		# process any subimages
+		for($key = 1; $key < count($requestInfo['computers']); $key++) {
+			$subimageid = $requestInfo['images'][$key];
+			$subrevid = getProductionRevisionid($subimageid);
+			$compid = $requestInfo['computers'][$key];
+			$mgmtnodeid = $requestInfo['mgmtnodes'][$key];
+			$blockCompVals[] = "($blockTimesid, $compid, $subimageid)";
+
+			$query = "INSERT INTO reservation "
+					 .        "(requestid, "
+					 .        "computerid, "
+					 .        "imageid, "
+					 .        "imagerevisionid, "
+					 .        "managementnodeid) "
+					 . "VALUES "
+					 .       "($reqid, "
+					 .       "$compid, "
+					 .       "$subimageid, "
+					 .       "$subrevid, "
+					 .       "$mgmtnodeid)";
+			doQuery($query, 101);
+		}
+		semUnlock();
+		$blockComps = implode(',', $blockCompVals);
+		$query = "INSERT INTO blockComputers "
+		       .        "(blockTimeid, computerid, imageid) "
+		       . "VALUES $blockComps";
+		doQuery($query, 101);
+		$blockCompVals = array();
+	}
+	if($allocated == 0) {
+		$return['status'] = 'warning';
+		$return['warningcode'] = 14;
+		$return['warningmsg'] = 'unable to allocate any machines';
+	}
+	$return['allocated'] = ($compCompleted / $compsPerRequest) + $allocated;
+	$return['unallocated'] = $rqdata['numMachines'] - $return['allocated'];
+	return $return;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
 /// \fn XMLRPCtest($string)
 ///
 /// \param $string - a string
