@@ -465,27 +465,28 @@ function XMLRPCgetRequestIds() {
 ///
 /// \return an array with blockTimesid as an index with the value of the newly
 /// created block time and at least one other index named 'status' which will
-/// have one of these values\n
+/// have one of these values:\n
 /// \b error - error occurred; there will be 2 additional elements in the array:
-/// \li \b errorcode - error number\n
-/// \li \b errormsg - error string\n
+/// \li \b errorcode - error number
+/// \li \b errormsg - error string
+///
 /// \b success - blockTimesid was processed; there will be two additional
-/// elements in this case:\n
-/// \li \b allocated - total number of desired requests that have been
-/// allocated\n
+/// elements in this case:
+/// \li \b allocated - total number of desired requests that have been allocated
 /// \li \b unallocated - total number of desired requests that have not been
-/// allocated\n
+/// allocated
+///
 /// \b warning - there was a non-fatal issue that occurred while processing
-/// the call; there will be four additional elements in this case:\n
-/// \li \b warningcode - warning number\n
-/// \li \b warningmsg - warning string\n
-/// \li \b allocated - total number of desired requests that have been
-/// allocated\n
+/// the call; there will be four additional elements in this case:
+/// \li \b warningcode - warning number
+/// \li \b warningmsg - warning string
+/// \li \b allocated - total number of desired requests that have been allocated
 /// \li \b unallocated - total number of desired requests that have not been
-/// allocated\n
+/// allocated
+///
 /// note that status may be warning, but allocated may be 0 indicating there
 /// were no errors that occurred, but there simply were not any machines
-/// available\n
+/// available
 ///
 /// \brief creates and processes a block reservation according to the passed
 /// in criteria
@@ -551,28 +552,29 @@ function XMLRPCblockAllocation($imageid, $start, $end, $requestcount,
 /// access to through the privilege tree
 ///
 /// \return an array with at least one index named 'status' which will have
-/// one of these values\n
+/// one of these values:\n
 /// \b error - error occurred; there will be 2 additional elements in the array:
-/// \li \b errorcode - error number\n
-/// \li \b errormsg - error string\n
+/// \li \b errorcode - error number
+/// \li \b errormsg - error string
+///
 /// \b completed - blockTimesid was previously successfully processed\n
 /// \b success - blockTimesid was processed; there will be two additional
-/// elements in this case:\n
-/// \li \b allocated - total number of desired requests that have been
-/// allocated\n
+/// elements in this case:
+/// \li \b allocated - total number of desired requests that have been allocated
 /// \li \b unallocated - total number of desired requests that have not been
-/// allocated\n
+/// allocated
+///
 /// \b warning - there was a non-fatal issue that occurred while processing
-/// the call; there will be four additional elements in this case:\n
-/// \li \b warningcode - warning number\n
-/// \li \b warningmsg - warning string\n
-/// \li \b allocated - total number of desired requests that have been
-/// allocated\n
+/// the call; there will be four additional elements in this case:
+/// \li \b warningcode - warning number
+/// \li \b warningmsg - warning string
+/// \li \b allocated - total number of desired requests that have been allocated
 /// \li \b unallocated - total number of desired requests that have not been
-/// allocated\n
+/// allocated
+///
 /// note that status may be warning, but allocated may be 0 indicating there
 /// were no errors that occurred, but there simply were not any machines
-/// available\n
+/// available
 ///
 /// \brief processes a block reservation for the blockTimes entry associated
 /// with blockTimesid
