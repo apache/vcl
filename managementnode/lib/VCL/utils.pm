@@ -6490,6 +6490,8 @@ sub get_vmhost_info {
    vmprofile.virtualswitch0 AS vmprofile_virtualswitch0,
    vmprofile.virtualswitch1 AS vmprofile_virtualswitch1,
    vmprofile.vmdisk AS vmprofile_vmdisk,
+   vmprofile.username AS vmprofile_username,
+   vmprofile.password AS vmprofile_password,
 
    vmtype.id AS vmtype_id,
 	vmtype.name AS vmtype_name,
@@ -6550,8 +6552,13 @@ sub get_vmhost_info {
 			$vmhost_info{$original_key} = $value;
 		}
 		elsif ($key =~ /vmprofile_/) {
-			#$vmhost_info{vmprofile}{$original_key} = $value;
-			$vmhost_info{"vmprofile"}{$original_key} = $value;
+			# Set values to 0 if database values are null to avoid DataStructure warnings and concat errors
+			if(!defined($value)){
+			   $vmhost_info{"vmprofile"}{$original_key} = 0;
+			}
+			else{
+			   $vmhost_info{"vmprofile"}{$original_key} = $value;
+			}
 		}
 		elsif ($key =~ /vmtype_/) {
 			$vmhost_info{"vmprofile"}{"vmtype"}{$original_key} = $value;
@@ -6562,19 +6569,11 @@ sub get_vmhost_info {
 	}    # Close loop through hash keys (columns)
 
 	$vmhost_info{vmprofile}{"datastorepath4vmx"} = $vmhost_info{vmprofile}{datastorepath};
-	$vmhost_info{vmprofile}{"vmpath"} = $vmhost_info{vmprofile}{datastorepath} if (!(defined($vmhost_info{vmprofile}{vmpath})));
-	#$vmhost_info{vmprofile}{datastorepath} =~ s/(\s+)/\\\\ /g; #detect/handle any spaces;
-	#$vmhost_info{vmprofile}{vmpath} =~ s/(\s+)/\\\\ /g; #detect/handle any spaces;
+	# FIXME - set vmpath to not null in database and update frontend 
+	# IF vmpath is not defined set it to the datastorepath variable
+	$vmhost_info{vmprofile}{"vmpath"} = $vmhost_info{vmprofile}{datastorepath} if (!($vmhost_info{vmprofile}{vmpath}));
 	$vmhost_info{vmprofile}{datastorepath} =~ s/(\s+)/\\ /g;    #detect/handle any spaces;
 	$vmhost_info{vmprofile}{vmpath}        =~ s/(\s+)/\\ /g;    #detect/handle any spaces;
-
-	#for legacy datastructure
-	#$vmhost_info{"datastorepath4vmx"} = $vmhost_info{vmhost}{datastorepath};
-	#$vmhost_info{"vmpath"} = $vmhost_info{datastorepath} if(!(defined($vmhost_info{vmpath})));
-	#$vmhost_info{datastorepath} =~ s/(\s+)/\\\\ /g; #detect/handle any spaces;
-	#$vmhost_info{vmpath} =~ s/(\s+)/\\\\ /g; #detect/handle any spaces;
-	#$vmhost_info{datastorepath} =~ s/(\s+)/\\ /g; #detect/handle any spaces;
-	#$vmhost_info{vmpath} =~ s/(\s+)/\\ /g; #detect/handle any spaces;
 
 
 	return %vmhost_info;

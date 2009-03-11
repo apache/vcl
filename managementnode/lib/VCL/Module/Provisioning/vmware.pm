@@ -2041,13 +2041,10 @@ sub node_status {
 		notify($ERRORS{'DEBUG'}, 0, "subroutine was called as a function, it must be called as a class method");
 	}
 
-	#my ($vmhash) = shift;
-
 	my ($package, $filename, $line, $sub) = caller(0);
 
-	# try to contact vm
-	# $self->data->get_request_data;
-	# get state of vm
+	# Collect local variables from DataStructure
+
 	my $vmpath             = $self->data->get_vmhost_profile_vmpath;
 	my $datastorepath      = $self->data->get_vmhost_profile_datastore_path;
 	my $requestedimagename = $self->data->get_image_name;
@@ -2055,9 +2052,9 @@ sub node_status {
 	my $vmhost_hostname    = $self->data->get_vmhost_hostname;
 	my $vmhost_imagename   = $self->data->get_vmhost_image_name;
 	my $vmclient_shortname = $self->data->get_computer_short_name;
-	my $image_os_type		  = $self->data->get_image_os_type;
-	my $request_forimaging              = $self->data->get_request_forimaging();
-
+	my $image_os_type	  = $self->data->get_image_os_type;
+	my $request_forimaging = $self->data->get_request_forimaging();
+	
 	my ($hostnode, $identity);
 
 	# Create a hash to store status components

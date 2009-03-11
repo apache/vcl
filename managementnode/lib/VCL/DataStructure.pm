@@ -224,6 +224,8 @@ $SUBROUTINE_MAPPINGS{vmhost_profile_virtualswitch0} = '$self->request_data->{res
 $SUBROUTINE_MAPPINGS{vmhost_profile_virtualswitch1} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{vmprofile}{virtualswitch1}';
 $SUBROUTINE_MAPPINGS{vmhost_profile_vmdisk}         = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{vmprofile}{vmdisk}';
 $SUBROUTINE_MAPPINGS{vmhost_profile_vmpath}         = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{vmprofile}{vmpath}';
+$SUBROUTINE_MAPPINGS{vmhost_profile_username}         = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{vmprofile}{username}';
+$SUBROUTINE_MAPPINGS{vmhost_profile_password}         = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{vmprofile}{password}';
 
 #$SUBROUTINE_MAPPINGS{vmhost_typeid} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{vmprofile}{vmtypeid}';
 $SUBROUTINE_MAPPINGS{vmhost_type_id}   = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{vmprofile}{vmtype}{id}';
