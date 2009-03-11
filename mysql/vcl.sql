@@ -1021,6 +1021,8 @@ CREATE TABLE IF NOT EXISTS `vmprofile` (
   `virtualswitch0` varchar(80) default NULL,
   `virtualswitch1` varchar(80) default NULL,
   `vmdisk` enum('localdisk','networkdisk') NOT NULL default 'localdisk',
+  `username` varchar(32) NULL default NULL,
+  `password` varchar(128) NULL default NULL,
   PRIMARY KEY  (`id`)
 ) ENGINE=InnoDB  DEFAULT CHARSET=latin1 AUTO_INCREMENT=5 ;
 
