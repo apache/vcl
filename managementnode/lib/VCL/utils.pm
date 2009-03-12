@@ -716,9 +716,9 @@ sub notify {
 		chomp $formatted_data;
 	}
 
-	# Assemble an email message body if CRITICAL or MAILMASTERS
+	# Assemble an email message body if CRITICAL
 	my $body;
-	if ($error == 2 || ($error == 5 && $SHARED_MAILBOX)) {
+	if ($error == 2 ) {
 		# Get the previous several log file entries for this process
 		my $log_history_count = 100;
 		my $log_history       = "RECENT LOG ENTRIES FOR THIS PROCESS:\n";
@@ -740,7 +740,7 @@ END
 
 		# Add the formatted data to the message body if data was passed
 		$body .= "\n\n$formatted_data\n" if $formatted_data;
-	} ## end if ($error == 2 || ($error == 5 && $SHARED_MAILBOX...
+	} ## end if ($error == 2) 
 
 
 	# OK, VERBOSE
@@ -770,6 +770,17 @@ END
 		my $to      = $SHARED_MAILBOX;
 		my $from    = "root\@$FQDN";
 		my $subject = "Informational -- $filename";
+
+		# Assemble the e-mail message body
+		$body = <<"END";
+$string
+
+Time: $currenttime
+PID: $PID
+Caller: $caller_info
+
+END
+
 		mail($to, $subject, $body, $from);
 	}
 
