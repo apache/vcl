@@ -596,6 +596,19 @@ To edit this reservation:
 
 Thank You,
 VCL Team
+
+
+******************************************************************
+This is an automated notice. If you need assistance please respond 
+with detailed information on the issue and a help ticket will be 
+generated.
+
+To disable email notices
+-Visit $affiliation_sitewwwaddress
+-Select User Preferences
+-Select General Preferences
+
+******************************************************************
 EOF
 
 	my $subject = "VCL -- $notice_interval until end of reservation";
@@ -677,8 +690,21 @@ Reservation extensions are available if the machine you are on does not have a r
 
 Visit $affiliation_sitewwwaddress and select Current Reservations to edit this reservation.
 
-Thank you,
+Thank You,
 VCL Team
+
+
+******************************************************************
+This is an automated notice. If you need assistance please respond 
+with detailed information on the issue and a help ticket will be 
+generated.
+
+To disable email notices
+-Visit $affiliation_sitewwwaddress
+-Select User Preferences
+-Select General Preferences
+
+******************************************************************
 EOF
 
 	my $short_message = "$user_preferredname, You have $disconnect_string until the end of your reservation. Please save all work and prepare to log off.";
@@ -751,8 +777,21 @@ Your reservation has timed out due to inactivity for image $image_prettyname at 
 To make another reservation, please revisit:
 $affiliation_sitewwwaddress
 
-Thank you
+Thank You,
 VCL Team
+
+
+******************************************************************
+This is an automated notice. If you need assistance please respond 
+with detailed information on the issue and a help ticket will be 
+generated.
+
+To disable email notices
+-Visit $affiliation_sitewwwaddress
+-Select User Preferences
+-Select General Preferences
+
+******************************************************************
 EOF
 
 	my $subject = "VCL -- reservation timeout";
@@ -807,6 +846,19 @@ Your reservation of $image_prettyname has ended. Thank you for using $affiliatio
 
 Regards,
 VCL Team
+
+
+******************************************************************
+This is an automated notice. If you need assistance please respond 
+with detailed information on the issue and a help ticket will be 
+generated.
+
+To disable email notices
+-Visit $affiliation_sitewwwaddress
+-Select User Preferences
+-Select General Preferences
+
+******************************************************************
 EOF
 
 	# Send mail

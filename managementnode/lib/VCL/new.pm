@@ -1229,6 +1229,19 @@ EOF
 		$mailstring .= <<"EOF";
 Thank You,
 VCL Team
+
+
+******************************************************************
+This is an automated notice. If you need assistance please respond 
+with detailed information on the issue and a help ticket will be 
+generated.
+
+To disable email notices
+-Visit $user_affiliation_sitewwwaddress
+-Select User Preferences
+-Select General Preferences
+
+******************************************************************
 EOF
 		if ($user_emailnotices) {
 			mail($user_email, $subject, $mailstring, $user_affiliation_helpaddress);
@@ -1266,8 +1279,23 @@ Connection will not be allowed until you acknowledge using the VCL web interface
 -Select Current Reservations
 -Click the Connect button to acknowledge
 
+
 Thank You,
 VCL Team
+
+
+
+******************************************************************
+This is an automated notice. If you need assistance please respond 
+with detailed information on the issue and a help ticket will be 
+generated.
+
+To disable email notices
+-Visit $user_affiliation_sitewwwaddress
+-Select User Preferences
+-Select General Preferences
+
+******************************************************************
 EOF
 
 			if ($user_emailnotices) {
