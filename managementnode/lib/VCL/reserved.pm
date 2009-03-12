@@ -671,6 +671,19 @@ To make another reservation, please revisit $affiliation_sitewwwaddress.
 
 Thank You,
 VCL Team
+
+
+******************************************************************
+This is an automated notice. If you need assistance please respond 
+with detailed information on the issue and a help ticket will be 
+generated.
+
+To disable email notices
+-Visit $affiliation_sitewwwaddress
+-Select User Preferences
+-Select General Preferences
+
+******************************************************************
 EOF
 
 	my $subject = "VCL -- Reservation Timeout";
