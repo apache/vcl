@@ -8423,7 +8423,7 @@ function sendHeaders() {
 	global $shibauthed;
 	$setwrapreferer = processInputVar('am', ARG_NUMERIC, 0);
 	if(! $authed && $mode == "auth") {
-		if($oldmode != "auth" && $oldmode != "" && array_key_exists('mode', $_GET)) {
+		/*if($oldmode != "auth" && $oldmode != "" && array_key_exists('mode', $_GET)) {
 			$cookieHeaderString = "WRAP_REFERER=" . BASEURL . SCRIPT . "?mode=$oldmode; path=/; domain=" . COOKIEDOMAIN;
 			$itecscookie = BASEURL . SCRIPT . "?mode=$oldmode";
 		}
@@ -8433,7 +8433,7 @@ function sendHeaders() {
 		}
 		header("Set-Cookie: $cookieHeaderString");
 		setcookie("ITECSAUTH_RETURN", "$itecscookie", 0, "/", COOKIEDOMAIN);
-		setcookie("ITECSAUTH_CSS", "vcl.css", 0, "/", COOKIEDOMAIN);
+		setcookie("ITECSAUTH_CSS", "vcl.css", 0, "/", COOKIEDOMAIN);*/
 		header("Location: " . BASEURL . SCRIPT . "?mode=selectauth");
 		dbDisconnect();
 		exit;
