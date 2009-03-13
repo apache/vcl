@@ -1878,11 +1878,11 @@ function printAddSubimage() {
 		}
 		print "<br>Add additional subimage:<br><br>\n";
 	}
-	else
+	else {
 		print "There are currently no subimages for <strong>";
 		print "{$images[$imageid]["prettyname"]}</strong>.<br><br>";
+	}
 	print "<FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
-	unset($images[$imageid]);
 	printSelectInput("addimageid", $images, -1, 1);
 	$cdata = $data;
 	$cdata['imageid'] = $imageid;
