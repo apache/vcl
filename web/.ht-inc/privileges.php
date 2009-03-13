@@ -1841,6 +1841,7 @@ function getResourcePrivRowHTML($privname, $rownum, $privs, $types,
 	if($blocked) {
 		$js .= "changeCascadedRights(true, $rownum, $count, 0, 0);";
 	}
+	$text = preg_replace("/'/", '&#39;', $text);
 	return array('html' => $text,
 	             'javascript' => $js);
 }
