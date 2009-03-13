@@ -183,7 +183,7 @@ function viewStatistics() {
 	print "<H3>Reservation information between $month1/$day1/$year1 and ";
 	print "$month2/$day2/$year2:\n";
 	print "</H3>\n";
-	$reloadid = getUserlistID('vclreload');
+	$reloadid = getUserlistID('vclreload@Local');
 	$query = "SELECT l.userid, "
 	       .        "l.nowfuture, "
 	       .        "UNIX_TIMESTAMP(l.start) AS start, "
@@ -540,7 +540,7 @@ function getStatGraphDayData($start, $end, $affilid) {
 	$data = array();
 	$data["points"] = array();
 	$data["labels"] = array();
-	$reloadid = getUserlistID('vclreload');
+	$reloadid = getUserlistID('vclreload@Local');
 	for($i = $startunix; $i < $endunix; $i += SECINDAY) {
 		array_push($data["labels"], date('Y-m-d', $i));
 		$startdt = unixToDatetime($i);
@@ -651,7 +651,7 @@ function getStatGraphHourData($start, $end, $affilid) {
 		$data["points"][$i] = 0;
 	}
 
-	$reloadid = getUserlistID('vclreload');
+	$reloadid = getUserlistID('vclreload@Local');
 	if($affilid != 0) {
 		$query = "SELECT DATE_FORMAT(l.start, '%k') AS shour, "
 		       .        "DATE_FORMAT(l.start, '%i') AS smin, "
@@ -791,7 +791,7 @@ function getStatGraphDayConUsersData($start, $end, $affilid) {
 	$data["points"] = array();
 	$data["labels"] = array();
 
-	$reloadid = getUserlistID('vclreload');
+	$reloadid = getUserlistID('vclreload@Local');
 	for($daystart = $startunix; $daystart < $endunix; $daystart += SECINDAY) {
 		array_push($data["labels"], date('Y-m-d', $daystart));
 		$count = array();
@@ -927,7 +927,7 @@ function getStatGraphConBladeUserData($start, $end, $affilid) {
 	$data["points"] = array();
 	$data["labels"] = array();
 
-	$reloadid = getUserlistID('vclreload');
+	$reloadid = getUserlistID('vclreload@Local');
 	for($daystart = $startunix; $daystart < $endunix; $daystart += SECINDAY) {
 		array_push($data["labels"], date('Y-m-d', $daystart));
 		$count = array();

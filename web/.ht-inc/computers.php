@@ -2316,7 +2316,7 @@ function submitReloadComputers() {
 			break;
 		}
 	}
-	$vclreloadid = getUserlistID('vclreload');
+	$vclreloadid = getUserlistID('vclreload@Local');
 	$fails = array();
 	$passes = array();
 	foreach($reloadnow as $compid) {
@@ -2456,7 +2456,7 @@ function submitCompStateChange() {
 		$data['notes'] = mysql_escape_string($data['notes']);
 		$data["notes"] = $user["unityid"] . " " . unixToDatetime(time()) . "@"
 		               . $data["notes"];
-		$vclreloadid = getUserlistID('vclreload');
+		$vclreloadid = getUserlistID('vclreload@Local');
 		// get semaphore lock
 		if(! semLock())
 			abort(3);
@@ -2630,7 +2630,7 @@ function submitCompStateChange() {
 				$start = unixToDatetime($start);
 				$end = unixToDatetime($end);
 				$imagerevisionid = getProductionRevisionid($data['profiles'][$profileid]['imageid']);
-				$vclreloadid = getUserlistID('vclreload');
+				$vclreloadid = getUserlistID('vclreload@Local');
 				simpleAddRequest($compid, $data['profiles'][$profileid]['imageid'],
 				                 $imagerevisionid, $start, $end, 21, $vclreloadid);
 				unset_by_val($compid, $changeasap);

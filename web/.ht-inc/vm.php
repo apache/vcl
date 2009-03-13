@@ -532,7 +532,7 @@ function AJvmFromHost() {
 	$vmids = explode(',', $vmlistids);
 	$rems = array();
 	$checks = array();
-	$vclreloadid = getUserlistID('vclreload');
+	$vclreloadid = getUserlistID('vclreload@Local');
 	$start = getReloadStartTime();
 	$end = $start + SECINMONTH;
 	$start = unixToDatetime($start);
@@ -604,7 +604,7 @@ function AJvmFromHost() {
 ////////////////////////////////////////////////////////////////////////////////
 function AJvmFromHostDelayed() {
 	$data = getContinuationVar();
-	$vclreloadid = getUserlistID('vclreload');
+	$vclreloadid = getUserlistID('vclreload@Local');
 	foreach($data as $comp) {
 		$end = datetimeToUnix($comp['end2']) + SECINMONTH;
 		$end = unixToDatetime($end);
