@@ -968,7 +968,7 @@ function submitScheduleTime() {
 ///
 /// \param $day - number of day of week (0-6) with 0 being Sunday
 /// \param $time - time of day in 'HH:MM mm' format
-/// \param $startend - "start" or "end" - neede to know if 12:00 am on Sunday
+/// \param $startend - "start" or "end" - need to know if 12:00 am on Sunday
 /// is a the beginning of the week or end of the week
 ///
 /// \return minute of the week
@@ -983,7 +983,7 @@ function daytimeToMin($day, $time, $startend) {
 	list($hour, $other) = explode(':', $time);
 	list($min, $meridian) = explode(' ', $other);
 	if($meridian == "am" && $hour == 12) {
-		if($startend == "end" && $day == 0)
+		if($startend == "end" && $day == 0 && $min == 0)
 			$day = 7;
 		$hour = 0;
 	}
