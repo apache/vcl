@@ -2415,7 +2415,7 @@ function editRequest() {
 			print "has a total length of " . minToHourMin($maxtimes["total"]);
 			print ". This reservation already meets that length. Therefore, ";
 			print "you are not allowed to extend your reservation any further.<br><br>\n";
-			printEditNewUpdate($request, $res);
+			printEditNewUpdate($request, $reservation);
 			return;
 		}
 		//if have time left to extend it, create an array of lengths based on maxextend that has a cap
@@ -2519,10 +2519,7 @@ function editRequest() {
 	print "  </TR>\n";
 	print "</table>\n";
 
-	if($request['forimaging'])
-		return;
-
-	printEditNewUpdate($request, $res);
+	printEditNewUpdate($request, $reservation);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -2540,6 +2537,10 @@ function printEditNewUpdate($request, $res) {
 	global $user;
 	# do not allow save/update for cluster images
 	if(count($request['reservations']) > 1)
+		return;
+
+	# if already an imaging reservation, don't display update info here
+	if($request['forimaging'])
 		return;
 
 	$resources = getUserResources(array("imageAdmin"));
