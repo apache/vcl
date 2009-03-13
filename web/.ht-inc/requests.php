@@ -183,6 +183,7 @@ function AJupdateWaitTime() {
 	if(preg_match('/\w/', $imagenotes['description'])) {
 		$desc = preg_replace("/\n/", '<br>', $imagenotes['description']);
 		$desc = preg_replace("/\r/", '', $desc);
+		$desc = preg_replace("/'/", '&#39;', $desc);
 		print "dojo.byId('imgdesc').innerHTML = '<strong>Image Description</strong>:<br>";
 		print "$desc<br><br>'; ";
 	}
