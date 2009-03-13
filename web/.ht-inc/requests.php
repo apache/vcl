@@ -1622,6 +1622,9 @@ function viewRequests() {
 		for($i = 0, $noedit = 0, $text = '';
 		   $i < $count;
 		   $i++, $noedit = 0, $text = '') {
+			if($requests[$i]['forcheckout'] == 0 &&
+			   $requests[$i]['forimaging'] == 0)
+				continue;
 			$imageid = $requests[$i]["imageid"];
 			$text .= "  <TR valign=top id=reqrow{$requests[$i]['id']}>\n";
 			if(requestIsReady($requests[$i])) {
@@ -2211,10 +2214,14 @@ function detailStatusHTML($reqid) {
 function viewRequestInfo() {
 	$requestid = processInputVar("requestid", ARG_NUMERIC);
 	$request = getRequestInfo($requestid);
-	foreach($request["reservations"] as $res) {
-		if($res["forcheckout"]) {
-			$prettyimage = $res["prettyimage"];
-			break;
+	if($request['forimaging'])
+		$reservation = $request['reservations'][0];
+	else {
+		foreach($request["reservations"] as $res) {
+			if($res["forcheckout"]) {
+				$reservation = $res;
+				break;
+			}
 		}
 	}
 	$states = getStates();
@@ -2228,7 +2235,7 @@ function viewRequestInfo() {
 	print "  </TR>\n";
 	print "  <TR>\n";
 	print "    <TH align=right>Requested&nbsp;Image:</TH>\n";
-	print "    <TD>$prettyimage</TD>\n";
+	print "    <TD>{$reservation['prettyimage']}</TD>\n";
 	print "  </TR>\n";
 	print "  <TR>\n";
 	print "    <TH align=right>Start&nbsp;Time:</TH>\n";
@@ -2316,10 +2323,14 @@ function editRequest() {
 		viewRequests();
 		return;
 	}
-	foreach($request["reservations"] as $res) {
-		if($res["forcheckout"]) {
-			$reservation = $res;
-			break;
+	if($request['forimaging'])
+		$reservation = $request['reservations'][0];
+	else {
+		foreach($request["reservations"] as $res) {
+			if($res["forcheckout"]) {
+				$reservation = $res;
+				break;
+			}
 		}
 	}
 	if($submitErr) {
@@ -2507,6 +2518,9 @@ function editRequest() {
 	print "    </TD>\n";
 	print "  </TR>\n";
 	print "</table>\n";
+
+	if($request['forimaging'])
+		return;
 
 	printEditNewUpdate($request, $res);
 }
@@ -2698,10 +2712,14 @@ function confirmEditRequest() {
 	}
 	$cdata = getContinuationVar();
 	$request = getRequestInfo($cdata["requestid"]);
-	foreach($request["reservations"] as $res) {
-		if($res["forcheckout"]) {
-			$reservation = $res;
-			break;
+	if($request['forimaging'])
+		$reservation = $request['reservations'][0];
+	else {
+		foreach($request["reservations"] as $res) {
+			if($res["forcheckout"]) {
+				$reservation = $res;
+				break;
+			}
 		}
 	}
 	print "<H2>Modify Reservation</H2>\n";
@@ -3041,12 +3059,14 @@ function submitEditRequest() {
 function confirmDeleteRequest() {
 	$requestid = getContinuationVar('requestid', 0);
 	$request = getRequestInfo($requestid);
-	# FIXME if an imaging reservation for a non-checkout image, this will result
-	#   in $reservation not being set
-	foreach($request["reservations"] as $res) {
-		if($res["forcheckout"]) {
-			$reservation = $res;
-			break;
+	if($request['forimaging'])
+		$reservation = $request['reservations'][0];
+	else {
+		foreach($request["reservations"] as $res) {
+			if($res["forcheckout"]) {
+				$reservation = $res;
+				break;
+			}
 		}
 	}
 	if(datetimeToUnix($request["start"]) > time()) {
@@ -3141,10 +3161,14 @@ function confirmDeleteRequestProduction($request) {
 function submitDeleteRequest() {
 	$requestid = getContinuationVar('requestid', 0);
 	$request = getRequestInfo($requestid);
-	foreach($request["reservations"] as $res) {
-		if($res["forcheckout"]) {
-			$reservation = $res;
-			break;
+	if($request['forimaging'])
+		$reservation = $request['reservations'][0];
+	else {
+		foreach($request["reservations"] as $res) {
+			if($res["forcheckout"]) {
+				$reservation = $res;
+				break;
+			}
 		}
 	}
 	deleteRequest($request);

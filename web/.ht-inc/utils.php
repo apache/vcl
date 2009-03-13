@@ -3373,7 +3373,7 @@ function getOverallUserPrivs($userid) {
 ////////////////////////////////////////////////////////////////////////////////
 ///
 /// \fn isAvailable($images, $imageid, $start, $end, $os, $requestid,
-///                          $userid, $ignoreprivileges)
+///                          $userid, $ignoreprivileges, $forimaging)
 ///
 /// \param $images - array as returned from getImages
 /// \param $imageid - imageid from the image table
@@ -3388,6 +3388,8 @@ function getOverallUserPrivs($userid) {
 /// to 1 to look for computers from any that are mapped to be able to run the
 /// image; set to 0 to only look for computers from ones that are both mapped
 /// and that $userid has been granted access to through the privilege tree
+/// \param $forimaging - (optional, default=0) - 0 if normal reservation, 1 if
+/// an imaging reservation
 ///
 /// \return -1 if $imageid is limited in the number of concurrent reservations
 ///         available, and the limit has been reached
@@ -3398,7 +3400,7 @@ function getOverallUserPrivs($userid) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function isAvailable($images, $imageid, $start, $end, $os, $requestid=0,
-                     $userid=0, $ignoreprivileges=0) {
+                     $userid=0, $ignoreprivileges=0, $forimaging=0) {
 	global $requestInfo;
 	$requestInfo["start"] = $start;
 	$requestInfo["end"] = $end;
@@ -3455,7 +3457,7 @@ function isAvailable($images, $imageid, $start, $end, $os, $requestid=0,
 	$requestInfo["images"][0] = $imageid;
 
 	# loop to check for available computers for all needed images
-	if($images[$imageid]["imagemetaid"] != NULL) {
+	if(! $forimaging && $images[$imageid]["imagemetaid"] != NULL) {
 		$count = 1;
 		foreach($images[$imageid]["subimages"] as $imgid) {
 			$requestInfo['computers'][$count] = 0;
@@ -4685,6 +4687,7 @@ function moveReservationsOffComputer($compid=0, $count=0) {
 /// \b currstateid - current stateid of request\n
 /// \b laststateid - last stateid of request\n
 /// \b forimaging - 0 if an normal request, 1 if imaging request\n
+/// \b forcheckout - 1 if image is available for reservations, 0 if not\n
 /// \b test - test flag - 0 or 1\n
 /// \b longterm - 1 if request length is > 24 hours\n
 /// \b resid - id of primary reservation\n
@@ -4731,6 +4734,7 @@ function getUserRequests($type, $id=0) {
 	       .        "c.IPaddress, "
 	       .        "c.type AS comptype, "
 	       .        "rq.forimaging, "
+	       .        "i.forcheckout, "
 	       .        "rq.test "
 	       . "FROM request rq, "
 	       .      "reservation rs, "
@@ -4744,15 +4748,16 @@ function getUserRequests($type, $id=0) {
 	       .       "i.OSid = o.id AND "
 	       .       "c.id = rs.computerid AND "
 	       .       "rq.stateid NOT IN (1, 10, 16, 17) AND "      # deleted, maintenance, complete, image, makeproduction
-	       .       "rq.laststateid NOT IN (1, 10, 16, 17) AND "  # deleted, maintenance, complete, image, makeproduction
-	       .       "i.forcheckout = 1 ";
+	       .       "rq.laststateid NOT IN (1, 10, 16, 17) ";  # deleted, maintenance, complete, image, makeproduction
 	if($type == "normal")
-		$query .=   "AND rq.forimaging = 0 ";
+		$query .=   "AND rq.forimaging = 0 "
+		       .    "AND i.forcheckout = 1 ";
 	if($type == "forimaging")
 		$query .=   "AND rq.forimaging = 1 ";
-	$query .= "ORDER BY rq.start";
+	$query .= "ORDER BY rq.start, "
+	       .           "rs.id";
 
-	$query2 = "SELECT rs.id AS resid, "
+	$qbase2 = "SELECT rs.id AS resid, "
 	        .        "i.name AS image, "
 	        .        "i.prettyname, "
 	        .        "i.id AS imageid, "
@@ -4766,21 +4771,26 @@ function getUserRequests($type, $id=0) {
 	        .      "image i, "
 	        .      "OS o, "
 	        .      "computer c "
-	        . "WHERE rs.requestid = $id AND "
-	        .       "rs.imageid = i.id AND "
+	        . "WHERE rs.imageid = i.id AND "
 	        .       "rs.computerid = c.id AND "
 	        .       "i.OSid = o.id AND "
-	        .       "i.forcheckout = 0";
+	        .       "rs.id != %d AND "
+	        .       "rs.requestid = %d";
 	$qh = doQuery($query, 160);
 	$count = 0;
 	$data = array();
+	$foundids = array();
 	while($row = mysql_fetch_assoc($qh)) {
+		if(array_key_exists($row['id'], $foundids))
+			continue;
+		$foundids[$row['id']] = 1;
 		$data[$count] = $row;
 		if((datetimeToUnix($row['end']) - datetimeToUnix($row['start'])) > SECINDAY)
 			$data[$count]['longterm'] = 1;
 		else
 			$data[$count]['longterm'] = 0;
 		$data[$count]["reservations"] = array();
+		$query2 = sprintf($qbase2, $row['resid'], $row['id']);
 		$qh2 = doQuery($query2, 160);
 		while($row2 = mysql_fetch_assoc($qh2)) {
 			array_push($data[$count]["reservations"], $row2);
@@ -8413,7 +8423,7 @@ function sendHeaders() {
 	global $shibauthed;
 	$setwrapreferer = processInputVar('am', ARG_NUMERIC, 0);
 	if(! $authed && $mode == "auth") {
-		/*if($oldmode != "auth" && $oldmode != "" && array_key_exists('mode', $_GET)) {
+		if($oldmode != "auth" && $oldmode != "" && array_key_exists('mode', $_GET)) {
 			$cookieHeaderString = "WRAP_REFERER=" . BASEURL . SCRIPT . "?mode=$oldmode; path=/; domain=" . COOKIEDOMAIN;
 			$itecscookie = BASEURL . SCRIPT . "?mode=$oldmode";
 		}
@@ -8423,7 +8433,7 @@ function sendHeaders() {
 		}
 		header("Set-Cookie: $cookieHeaderString");
 		setcookie("ITECSAUTH_RETURN", "$itecscookie", 0, "/", COOKIEDOMAIN);
-		setcookie("ITECSAUTH_CSS", "vcl.css", 0, "/", COOKIEDOMAIN);*/
+		setcookie("ITECSAUTH_CSS", "vcl.css", 0, "/", COOKIEDOMAIN);
 		header("Location: " . BASEURL . SCRIPT . "?mode=selectauth");
 		dbDisconnect();
 		exit;

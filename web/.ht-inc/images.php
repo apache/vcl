@@ -949,7 +949,7 @@ function submitCreateImage() {
 		print "</FORM>\n";
 		return;
 	}
-	$rc = isAvailable($images, $data["imageid"], $start, $end, $data["os"]);
+	$rc = isAvailable($images, $data["imageid"], $start, $end, $data["os"], 0, 0, 0, 1);
 	if($rc == -1) {
 		$printedHTMLheader = 1;
 		print $HTMLheader;
