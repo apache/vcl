@@ -1354,7 +1354,7 @@ function recurseGetChildren($node) {
 ////////////////////////////////////////////////////////////////////////////////
 function printUserPrivRow($privname, $rownum, $privs, $types, 
                           $cascadeprivs, $usergroup, $disabled) {
-	$allprivs = array_merge($privs, $cascadeprivs);
+	$allprivs = $cascadeprivs + $privs;
 	print "  <TR>\n";
 	if($usergroup == 'group' && ! empty($allprivs[$privname]['affiliation']))
 		print "    <TH>$privname@{$allprivs[$privname]['affiliation']}</TH>\n";
@@ -1483,7 +1483,7 @@ function printUserPrivRow($privname, $rownum, $privs, $types,
 ////////////////////////////////////////////////////////////////////////////////
 function getUserPrivRowHTML($privname, $rownum, $privs, $types, 
                             $cascadeprivs, $usergroup, $disabled) {
-	$allprivs = array_merge($privs, $cascadeprivs);
+	$allprivs = $cascadeprivs + $privs;
 	$text = "";
 	$js = "";
 	$text .= "  <TR>";
