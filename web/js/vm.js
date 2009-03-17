@@ -564,6 +564,7 @@ function getVMprofileDataCB(data, ioArgs) {
 	dijit.byId('pvmpath').noValueIndicator = '(empty)';
 	dijit.byId('pvs0').noValueIndicator = '(empty)';
 	dijit.byId('pvs1').noValueIndicator = '(empty)';
+	dijit.byId('pusername').noValueIndicator = '(empty)';
 
 	dijit.byId('pname').setValue(curprofile.name);
 	dijit.byId('pnasshare').setValue(curprofile.nasshare);
@@ -571,6 +572,10 @@ function getVMprofileDataCB(data, ioArgs) {
 	dijit.byId('pvmpath').setValue(curprofile.vmpath);
 	dijit.byId('pvs0').setValue(curprofile.virtualswitch0);
 	dijit.byId('pvs1').setValue(curprofile.virtualswitch1);
+	dijit.byId('pusername').setValue(curprofile.username);
+	document.getElementById('ppassword').value = curprofile.password;
+	document.getElementById('ppwdconfirm').value = curprofile.password;
+	checkProfilePassword();
 	document.getElementById('vmprofiledata').className = 'shown';
 	document.body.style.cursor = 'default';
 }
@@ -692,9 +697,14 @@ function delProfileCB(data, ioArgs) {
 }
 
 function updateProfile(id, field) {
-	var newvalue = dijit.byId(id).value;
+	if(dijit.byId(id))
+		var newvalue = dijit.byId(id).value;
+	else
+		var newvalue = document.getElementById(id).value;
 	if(curprofile[field] == newvalue)
 		return;
+	if(field == 'password')
+		document.getElementById('savestatus').innerHTML = 'Saving...';
    document.body.style.cursor = 'wait';
 	
 	var profileid = document.getElementById('profileid').value;
@@ -717,4 +727,20 @@ function updateProfile(id, field) {
 function updateProfileCB(data, ioArgs) {
 	eval(data);
 	document.body.style.cursor = 'default';
+}
+
+function checkProfilePassword() {
+	var pobj = document.getElementById('ppassword');
+	var cobj = document.getElementById('ppwdconfirm');
+	var mobj = document.getElementById('ppwdmatch');
+
+	if(pobj.value == "" && cobj.value == "") {
+		mobj.innerHTML = '';
+	}
+	else if(pobj.value == cobj.value) {
+		mobj.innerHTML = '<font color="#008000">match</font>';
+	}
+	else {
+		mobj.innerHTML = '<font color="red">no match</font>';
+	}
 }

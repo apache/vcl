@@ -234,6 +234,33 @@ function editVMInfo() {
 	print "    <th align=right>VM Disk:</th>\n";
 	print "    <td><select id=pvmdisk dojoType=\"dijit.form.FilteringSelect\" searchAttr=\"name\" onchange=\"updateProfile('pvmdisk', 'vmdisk');\"></span></td>\n";
 	print "  </tr>\n";
+	print "  <tr>\n";
+	print "    <th align=right>Username:</th>\n";
+	print "    <td><span id=pusername dojoType=\"dijit.InlineEditBox\" onChange=\"updateProfile('pusername', 'username');\"></span></td>\n";
+	print "  </tr>\n";
+	print "  <tr>\n";
+	print "    <th align=right>Password:</th>\n";
+	print "    <td><input type=password id=ppassword onkeyup=\"checkProfilePassword();\"></input></td>\n";
+	print "  </tr>\n";
+	print "  <tr>\n";
+	print "    <th align=right>Confirm:</th>\n";
+	print "    <td>\n";
+	print "      <input type=password id=ppwdconfirm onkeyup=\"checkProfilePassword();\"></input>\n";
+	print "      <span id=ppwdmatch></span>\n";
+	print "    </td>\n";
+	print "  </tr>\n";
+	print "  <tr>\n";
+	print "    <td></td>\n";
+	print "    <td>\n";
+	print "      <button dojoType=\"dijit.form.Button\" id=\"savePwdBtn\">\n";
+	print "        Save Password\n";
+	print "        <script type=\"dojo/method\" event=onClick>\n";
+	print "        updateProfile('ppassword', 'password');\n";
+	print "        </script>\n";
+	print "      </button>\n";
+	print "      <span id=savestatus></span>\n";
+	print "    </td>\n";
+	print "  </tr>\n";
 	print "</table>\n";
 	print "</div>\n";
 	print "</div>\n";
@@ -763,14 +790,16 @@ function AJupdateVMprofileItem() {
 	}
 	$profileid = processInputVar('profileid', ARG_NUMERIC);
 	$item = processInputVar('item', ARG_STRING);
-	$newvalue = processInputVar('newvalue', ARG_STRING);
+	if($item == 'password')
+		$newvalue = $_POST['newvalue'];
+	else
+		$newvalue = processInputVar('newvalue', ARG_STRING);
 	if($newvalue == '')
 		$newvalue2 = 'NULL';
 	else {
-		if(get_magic_quotes_gpc()) {
-			$newvalue2 = stripslashes($newvalue);
-			$newvalue2 = mysql_escape_string($newvalue2);
-		}
+		if(get_magic_quotes_gpc())
+			$newvalue = stripslashes($newvalue);
+		$newvalue2 = mysql_escape_string($newvalue);
 		$newvalue2 = "'$newvalue2'";
 	}
 
@@ -781,6 +810,11 @@ function AJupdateVMprofileItem() {
 	       . "SET `$item` = $newvalue2 "
 	       . "WHERE id = $profileid";
 	doQuery($query, 101);
+	if($item == 'password') {
+		print "document.getElementById('savestatus').innerHTML = 'Saved'; ";
+		print "setTimeout(function() {document.getElementById('savestatus').innerHTML = '';}, 3000); ";
+	}
+	$newvalue = preg_replace("/'/", "\\'", $newvalue);
 	print "curprofile.$item = '$newvalue';";
 }
 

@@ -7778,6 +7778,8 @@ function generateString($length=8) {
 /// \b virtualswitch1 - name of second virtual switch\n
 /// \b vmdisk - "localdisk" or "networkdisk" - whether or not vm files are
 /// stored on local disk or network attached storage
+/// \b username - vmware username associated with this profile\n
+/// \b password - vmware password associated with this profile
 ///
 /// \brief gets information about vm profiles and returns it as an array
 ///
@@ -7794,7 +7796,9 @@ function getVMProfiles($id="") {
 	       .        "vp.vmpath, "
 	       .        "vp.virtualswitch0, "
 	       .        "vp.virtualswitch1, "
-	       .        "vp.vmdisk "
+	       .        "vp.vmdisk, "
+	       .        "vp.username, "
+	       .        "vp.password "
 	       . "FROM vmprofile vp "
 	       . "LEFT JOIN vmtype vt ON (vp.vmtypeid = vt.id) "
 	       . "LEFT JOIN image i ON (vp.imageid = i.id)";
