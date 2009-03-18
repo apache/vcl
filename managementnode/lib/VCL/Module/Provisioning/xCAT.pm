@@ -923,10 +923,10 @@ sub load {
 	# Perform post load tasks
 
 	# Windows specific routines
-	if ($image_os_name =~ /winvista/) {
-		# If Vista, don't perform post-load tasks here
-		# new.pm calls the Vista module's post_load() subroutine to perform the same tasks as below
-		notify($ERRORS{'OK'}, 0, "vista image, skipping OS preparation tasks in xCAT.pm, returning 1");
+	if ($self->os->can('post_load')) {
+		# If post-load has been implemented by the OS module, don't perform these tasks here
+		# new.pm calls the Windows module's post_load() subroutine to perform the same tasks as below
+		notify($ERRORS{'OK'}, 0, "post_load() has been implemented by the OS module, skipping these tasks in xCAT.pm, returning 1");
 		return 1;
 	}
 	elsif ($image_os_name =~ /winxp|wxp|win2003|winvista/) {
@@ -1203,15 +1203,15 @@ sub load {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 capture_prepare
+=head2 capture
 
  Parameters  :
- Returns     : 1 if sucessful, 0 if failed
+ Returns     : 1 if successful, 0 if failed
  Description :
 
 =cut
 
-sub capture_prepare {
+sub capture {
 	my $self = shift;
 	if (ref($self) !~ /xCAT/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
@@ -1224,7 +1224,7 @@ sub capture_prepare {
 	my $computer_node_name  = $self->data->get_computer_node_name();
 
 	# Print some preliminary information
-	notify($ERRORS{'OK'}, 0, "image=$image_name, computer=$computer_short_name");
+	notify($ERRORS{'OK'}, 0, "xCAT capture beginning: image=$image_name, computer=$computer_short_name");
 
 	# Create currentimage.txt on the node containing information about the new image revision
 	if (write_currentimage_txt($self->data)) {
@@ -1233,43 +1233,68 @@ sub capture_prepare {
 	else {
 		notify($ERRORS{'WARNING'}, 0, "unable to update currentimage.txt on $computer_short_name");
 	}
+	
+	# Check if pre_capture() subroutine has been implemented by the OS module
+	if ($self->os->can("pre_capture")) {
+		# Call OS pre_capture() - it should perform all OS steps necessary to capture an image
+		# pre_capture() should shut down the computer when it is done
+		notify($ERRORS{'OK'}, 0, "calling OS module's pre_capture() subroutine");
+		if (!$self->os->pre_capture({end_state => 'off'})) {
+			notify($ERRORS{'WARNING'}, 0, "OS module pre_capture() failed");
+			return 0;
+		}
+	
+		# Get the power status, make sure computer is off
+		my $power_status = $self->power_status();
+		notify($ERRORS{'DEBUG'}, 0, "retrieved power status: $power_status");
+		if ($power_status eq 'off') {
+			notify($ERRORS{'OK'}, 0, "verified $computer_node_name power is off");
+		}
+		elsif ($power_status eq 'on') {
+			notify($ERRORS{'WARNING'}, 0, "$computer_node_name power is still on, turning computer off");
+			
+			# Attempt to power off computer
+			if ($self->power_off()) {
+				notify($ERRORS{'OK'}, 0, "$computer_node_name was powered off");
+			}
+			else {
+				notify($ERRORS{'WARNING'}, 0, "failed to power off $computer_node_name");
+				return 0;
+			}
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to determine power status of $computer_node_name");
+			return 0;
+		}
+	}
+	elsif ($self->os->can("capture_prepare")) {
+		notify($ERRORS{'OK'}, 0, "calling OS module's capture_prepare() subroutine");
+		if (!$self->os->capture_prepare()) {
+			notify($ERRORS{'WARNING'}, 0, "OS module capture_prepare() failed");
+			$self->image_creation_failed();
+		}
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "OS module does not have either a pre_capture() or capture_prepare() subroutine");
+		$self->image_creation_failed();
+	}
 
+
+	# Create the tmpl file for the image
+	if ($self->_create_template()) {
+		notify($ERRORS{'OK'}, 0, "created .tmpl file for $image_name");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to create .tmpl file for $image_name");
+		return 0;
+	}
+	
 	# Edit the nodetype.tab file to set the node with the new image name
 	if ($self->_edit_nodetype($computer_node_name, $image_name)) {
 		notify($ERRORS{'OK'}, 0, "nodetype modified, node $computer_node_name, image name $image_name");
 	}
 	else {
-		notify($ERRORS{'CRITICAL'}, 0, "could not edit nodetype, node $computer_node_name, image name $image_name");
-		return 0;
-	}
-
-	# Get the image repository path
-	my $image_repository_path = $self->_get_image_repository_path();
-	if (!$image_repository_path) {
-		notify($ERRORS{'CRITICAL'}, 0, "xCAT image repository information could not be determined");
-		return 0;
-	}
-
-	# Get the image template repository path
-	my $tmpl_repository_path = $self->_get_image_template_path();
-	if (!$tmpl_repository_path) {
-		notify($ERRORS{'CRITICAL'}, 0, "xCAT template repository information could not be determined");
-		return 0;
-	}
-
-	# Get the image template repository path
-	my $basetmpl = $self->_get_base_template_filename();
-	if (!$basetmpl) {
-		notify($ERRORS{'WARNING'}, 0, "xCAT template repository information could not be determined");
-		return 0;
-	}
-
-	# Create the tmpl file for the image
-	if ($self->_create_template()) {
-		notify($ERRORS{'OK'}, 0, "created template file for $image_name");
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to create template file for $image_name");
+		notify($ERRORS{'WARNING'}, 0, "could not edit nodetype, node $computer_node_name, image name $image_name");
 		return 0;
 	}
 
@@ -1281,8 +1306,44 @@ sub capture_prepare {
 		notify($ERRORS{'WARNING'}, 0, "failed to set $computer_node_name to capture image on next reboot");
 		return 0;
 	}
+	
+	
+	# Check if pre_capture() subroutine has been implemented by the OS module
+	# If so, all that needs to happen is for the computer to be powered on
+	if ($self->os->can("pre_capture")) {
+		# Turn the computer on
+		if ($self->power_on()) {
+			notify($ERRORS{'OK'}, 0, "$computer_node_name was powered on");
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to turn computer on before monitoring image capture");
+			return 0;
+		}
+	}
+	# If capture_start() is implemented, call it, it will initiate a reboot
+	elsif ($self->os->can("capture_start")) {
+		notify($ERRORS{'OK'}, 0, "calling OS module's capture_start() subroutine");
+		if (!$self->os->capture_start()) {
+			notify($ERRORS{'WARNING'}, 0, "OS module capture_start() failed");
+			$self->image_creation_failed();
+		}
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "OS module does not have either a pre_capture() or capture_start() subroutine");
+		$self->image_creation_failed();
+	}
+	
+	
+	# Monitor the image capture
+	if ($self->capture_monitor()) {
+		notify($ERRORS{'OK'}, 0, "image capture monitoring is complete");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "problem occurred while monitoring image capture");
+		return 0;
+	}
 
-	notify($ERRORS{'OK'}, 0, "returning 1");
+	notify($ERRORS{'OK'}, 0, "image was successfully captured, returning 1");
 	return 1;
 } ## end sub capture_prepare
 
@@ -1806,6 +1867,357 @@ sub _nodeset_option {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 power_reset
+
+ Parameters  : $computer_node_name (optional)
+ Returns     : 
+ Description : 
+
+=cut
+
+sub power_reset {
+	my $argument_1 = shift;
+	my $argument_2 = shift;
+	
+	my $computer_node_name;
+	
+	# Check if subroutine was called as an object method
+	if (ref($argument_1) =~ /xcat/i) {
+		my $self = $argument_1;
+		
+		$computer_node_name = $argument_2;
+		
+		# Check if computer argument was specified
+		# If not, use computer node name in the data object
+		if (!$computer_node_name) {
+			$computer_node_name = $self->data->get_computer_node_name();
+		}
+	}
+	else {
+		# Subroutine was not called as an object method, 2 arguments must be specified
+		$computer_node_name = $argument_1;
+	}
+	
+	# Check if computer was determined
+	if (!$computer_node_name) {
+		notify($ERRORS{'WARNING'}, 0, "computer could not be determined from arguments");
+		return;
+	}
+	
+	# Turn computer off
+	my $off_attempts = 0;
+	while (!power_off($computer_node_name)) {
+		$off_attempts++;
+		
+		if ($off_attempts == 3) {
+			notify($ERRORS{'WARNING'}, 0, "failed to turn $computer_node_name off, rpower status not is off after 3 attempts");
+			return;
+		}
+		
+		sleep 2;
+	}
+	
+	# Turn computer on
+	my $on_attempts = 0;
+	while (!power_on($computer_node_name)) {
+		$on_attempts++;
+		
+		if ($on_attempts == 3) {
+			notify($ERRORS{'WARNING'}, 0, "failed to turn $computer_node_name on, rpower status not is on after 3 attempts");
+			return;
+		}
+		
+		sleep 2;
+	}
+	
+	notify($ERRORS{'OK'}, 0, "successfully reset power on $computer_node_name");
+	return 1;
+} ## end sub _nodeset_option
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 power_on
+
+ Parameters  : $computer_node_name (optional)
+ Returns     : 
+ Description : 
+
+=cut
+
+sub power_on {
+	my $argument_1 = shift;
+	my $argument_2 = shift;
+	
+	my $computer_node_name;
+	
+	# Check if subroutine was called as an object method
+	if (ref($argument_1) =~ /xcat/i) {
+		my $self = $argument_1;
+		
+		$computer_node_name = $argument_2;
+		
+		# Check if computer argument was specified
+		# If not, use computer node name in the data object
+		if (!$computer_node_name) {
+			$computer_node_name = $self->data->get_computer_node_name();
+		}
+	}
+	else {
+		# Subroutine was not called as an object method, 2 arguments must be specified
+		$computer_node_name = $argument_1;
+	}
+	
+	# Check if computer was determined
+	if (!$computer_node_name) {
+		notify($ERRORS{'WARNING'}, 0, "computer could not be determined from arguments");
+		return;
+	}
+	
+	# Turn computer on
+	my $on_attempts = 0;
+	my $power_status = 'unknown';
+	while ($power_status !~ /on/) {
+		$on_attempts++;
+		
+		if ($on_attempts == 3) {
+			notify($ERRORS{'WARNING'}, 0, "failed to turn $computer_node_name on, rpower status not is on after 3 attempts");
+			return;
+		}
+		
+		_rpower($computer_node_name, 'on');
+		sleep 2;
+		
+		$power_status = power_status($computer_node_name);
+	}
+	
+	notify($ERRORS{'OK'}, 0, "successfully powered on $computer_node_name");
+	return 1;
+} ## end sub _nodeset_option
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 power_off
+
+ Parameters  : $computer_node_name (optional)
+ Returns     : 
+ Description : 
+
+=cut
+
+sub power_off {
+	my $argument_1 = shift;
+	my $argument_2 = shift;
+	
+	my $computer_node_name;
+	
+	# Check if subroutine was called as an object method
+	if (ref($argument_1) =~ /xcat/i) {
+		my $self = $argument_1;
+		
+		$computer_node_name = $argument_2;
+		
+		# Check if computer argument was specified
+		# If not, use computer node name in the data object
+		if (!$computer_node_name) {
+			$computer_node_name = $self->data->get_computer_node_name();
+		}
+	}
+	else {
+		# Subroutine was not called as an object method, 2 arguments must be specified
+		$computer_node_name = $argument_1;
+	}
+	
+	# Check if computer was determined
+	if (!$computer_node_name) {
+		notify($ERRORS{'WARNING'}, 0, "computer could not be determined from arguments");
+		return;
+	}
+	
+	# Turn computer off
+	my $power_status = 'unknown';
+	my $off_attempts = 0;
+	while ($power_status !~ /off/) {
+		$off_attempts++;
+		
+		if ($off_attempts == 3) {
+			notify($ERRORS{'WARNING'}, 0, "failed to turn $computer_node_name off, rpower status not is off after 3 attempts");
+			return;
+		}
+		
+		_rpower($computer_node_name, 'off');
+		sleep 2;
+		
+		$power_status = power_status($computer_node_name);
+	}
+	
+	notify($ERRORS{'OK'}, 0, "successfully powered off $computer_node_name");
+	return 1;
+} ## end sub _nodeset_option
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 power_status
+
+ Parameters  : $computer_node_name (optional)
+ Returns     : 
+ Description : 
+
+=cut
+
+sub power_status {
+	my $argument_1 = shift;
+	my $argument_2 = shift;
+	
+	my $computer_node_name;
+	
+	# Check if subroutine was called as an object method
+	if (ref($argument_1) =~ /xcat/i) {
+		my $self = $argument_1;
+		
+		$computer_node_name = $argument_2;
+		
+		# Check if computer argument was specified
+		# If not, use computer node name in the data object
+		if (!$computer_node_name) {
+			$computer_node_name = $self->data->get_computer_node_name();
+		}
+	}
+	else {
+		# Subroutine was not called as an object method, 2 arguments must be specified
+		$computer_node_name = $argument_1;
+	}
+	
+	# Check if computer was determined
+	if (!$computer_node_name) {
+		notify($ERRORS{'WARNING'}, 0, "computer could not be determined from arguments");
+		return;
+	}
+	
+	# Call rpower to determine power status
+	my $rpower_stat = _rpower($computer_node_name, 'stat');
+	notify($ERRORS{'DEBUG'}, 0, "retrieved power status of $computer_node_name: $rpower_stat");
+	
+	if (!$rpower_stat) {
+		notify($ERRORS{'WARNING'}, 0, "failed to determine power status, rpower subroutine returned $rpower_stat");
+		return;
+	}
+	elsif ($rpower_stat =~ /^(on|off)$/i) {
+		return lc($1);
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to determine power status, unexpected output returned from rpower: $rpower_stat");
+		return;
+	}
+} ## end sub _nodeset_option
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 wait_for_on
+
+ Parameters  : Maximum number of minutes to wait (optional)
+ Returns     : 1 if computer is on, 0 otherwise
+ Description : 
+
+=cut
+
+sub wait_for_on {
+	my $self = shift;
+	if (ref($self) !~ /xcat/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $computer_node_name = $self->data->get_computer_node_name();
+	
+	# Attempt to get the total number of minutes to wait from the arguments
+	my $total_wait_minutes = shift;
+	if (!defined($total_wait_minutes) || $total_wait_minutes !~ /^\d+$/) {
+		$total_wait_minutes = 5;
+	}
+	
+	# Looping configuration variables
+	# Seconds to wait in between loop attempts
+	my $attempt_delay = 15;
+	# Total loop attempts made
+	# Add 1 to the number of attempts because if you're waiting for x intervals, you check x+1 times including at 0
+	my $attempts = ($total_wait_minutes * 4) + 1;
+	
+	notify($ERRORS{'OK'}, 0, "waiting for $computer_node_name to turn on, maximum of $total_wait_minutes minutes");
+	
+	# Loop until computer is on
+	for (my $attempt = 1; $attempt <= $attempts; $attempt++) {
+		if ($attempt > 1) {
+			notify($ERRORS{'OK'}, 0, "attempt " . ($attempt-1) . "/" . ($attempts-1) . ": $computer_node_name is not on, sleeping for $attempt_delay seconds");
+			sleep $attempt_delay;
+		}
+		
+		if ($self->power_status() =~ /on/i) {
+			notify($ERRORS{'OK'}, 0, "$computer_node_name is on");
+			return 1;
+		}
+	}
+	
+	# Calculate how long this waited
+	my $total_wait = ($attempts * $attempt_delay);
+	notify($ERRORS{'WARNING'}, 0, "$computer_node_name is NOT on after waiting for $total_wait seconds");
+	return 0;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 wait_for_off
+
+ Parameters  : Maximum number of minutes to wait (optional)
+ Returns     : 1 if computer is off, 0 otherwise
+ Description : 
+
+=cut
+
+sub wait_for_off {
+	my $self = shift;
+	if (ref($self) !~ /xcat/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $computer_node_name = $self->data->get_computer_node_name();
+	
+	# Attempt to get the total number of minutes to wait from the arguments
+	my $total_wait_minutes = shift;
+	if (!defined($total_wait_minutes) || $total_wait_minutes !~ /^\d+$/) {
+		$total_wait_minutes = 5;
+	}
+	
+	# Looping configuration variables
+	# Seconds to wait in between loop attempts
+	my $attempt_delay = 15;
+	# Total loop attempts made
+	# Add 1 to the number of attempts because if you're waiting for x intervals, you check x+1 times including at 0
+	my $attempts = ($total_wait_minutes * 4) + 1;
+	
+	notify($ERRORS{'OK'}, 0, "waiting for $computer_node_name to turn off, maximum of $total_wait_minutes minutes");
+	
+	# Loop until computer is off
+	for (my $attempt = 1; $attempt <= $attempts; $attempt++) {
+		if ($attempt > 1) {
+			notify($ERRORS{'OK'}, 0, "attempt " . ($attempt-1) . "/" . ($attempts-1) . ": $computer_node_name is not off, sleeping for $attempt_delay seconds");
+			sleep $attempt_delay;
+		}
+		
+		if ($self->power_status() =~ /off/i) {
+			notify($ERRORS{'OK'}, 0, "$computer_node_name is off");
+			return 1;
+		}
+	}
+	
+	# Calculate how long this waited
+	my $total_wait = ($attempts * $attempt_delay);
+	notify($ERRORS{'WARNING'}, 0, "$computer_node_name is NOT off after waiting for $total_wait seconds");
+	return 0;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 makesshgkh
 
  Parameters  : imagename
@@ -1852,41 +2264,108 @@ sub makesshgkh {
 =cut
 
 sub _rpower {
-	my ($node, $option) = @_;
-
-	#make sure node and option are defined
-	notify($ERRORS{'WARNING'}, 0, "_rpower: node is not defined")
-	  if (!(defined($node)));
-	notify($ERRORS{'WARNING'}, 0, "_rpower: option is not defined setting to cycle")
-	  if (!(defined($option)));
-	return 0 if (!(defined($node)));
-
-	$option = "cycle" if (!(defined($option)));
-
-	my $l;
-	my @file;
-	RPOWER:
-	if (open(RPOWER, "$XCAT_ROOT/bin/rpower $node $option |")) {
-		@file = <RPOWER>;
-		close(RPOWER);
-		foreach $l (@file) {
-			if ($l =~ /not in bay/) {
-
-				# not in bay problem
-				if (_fix_rpower($node)) {
-					goto RPOWER;    #try again
-				}
-			}
-			if ($l =~ /$node:\s+(on|off)/) {
-				return $1;
-			}
-		} ## end foreach $l (@file)
-		return 0;
-	} ## end if (open(RPOWER, "$XCAT_ROOT/bin/rpower $node $option |"...
-	else {
-		notify($ERRORS{'WARNING'}, 0, "_rpower: could not run $XCAT_ROOT/bin/rpower $node $option $!");
-		return 0;
+	my $argument_1 = shift;
+	my $argument_2 = shift;
+	my $argument_3 = shift;
+	
+	my $computer_node_name;
+	my $mode;
+	
+	# Check if subroutine was called as an object method
+	if (ref($argument_1) =~ /xcat/i) {
+		my $self = $argument_1;
+		
+		# Check if 1 or 2 arguments were specified
+		if ($argument_3) {
+			$computer_node_name = $argument_2;
+			$mode = $argument_3;
+		}
+		else {
+			$computer_node_name = $self->data->get_computer_node_name();
+			$mode = $argument_2;
+		}
 	}
+	else {
+		# Subroutine was not called as an object method, 2 arguments must be specified
+		$computer_node_name = $argument_1;
+		$mode = $argument_2;
+	}
+	
+	# Check the arguments
+	if (!$computer_node_name) {
+		notify($ERRORS{'WARNING'}, 0, "rpower was not executed, computer was not specified");
+		return;
+	}
+	if (!$mode) {
+		notify($ERRORS{'WARNING'}, 0, "rpower mode was not specified, setting mode to cycle");
+		$mode = 'cycle';
+	}
+	if ($mode !~ /^on|off|stat|state|reset|boot|cycle$/i) {
+		notify($ERRORS{'WARNING'}, 0, "rpower was not executed, mode is not valid: $mode");
+		return;
+	}
+	
+	# If one of the reset modes was specified, call power_reset()
+	# It attempts to turn off then on, and makes sure attempts were successful
+	if ($mode =~ /^reset|boot|cycle$/i) {
+		return power_reset($computer_node_name);
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "attempting to execute rpower for computer: $computer_node_name, mode: $mode");
+	
+	# Assemble the rpower command
+	my $command = "$XCAT_ROOT/bin/rpower $computer_node_name $mode";
+	
+	# Run the command
+	my ($exit_status, $output) = run_command($command);
+	
+	# rpower options:
+	# on           - Turn power on
+	# off          - Turn power off
+	# stat | state - Return the current power state
+	# reset        - Send a hardware reset
+	# boot         - If off, then power on. If on, then hard reset. This option is recommended over cycle.
+	# cycle        - Power off, then on
+	
+	# Typical output:
+	# Invalid node is specified (exit status = 0):
+	#    [root@managementnode]# rpower vclb2-8x stat
+	#    invalid node, group, or range: vclb2-8x
+	# Successful off (exit status = 0):
+	#    [root@managementnode]# rpower vclb2-8 off
+	#    vclb2-8: off
+	# Successful reset (exit status = 0):
+	#    [root@managementnode test]# rpower vclb2-8 reset
+	#    vclb2-8: reset
+	# Successful stat (exit status = 0):
+	#    [root@managementnode test]# rpower vclb2-8 stat
+	#    vclb2-8: on
+	# Successful cycle (exit status = 0):
+	#	  [root@managementnode test]# rpower vclb2-8 cycle
+	#    vclb2-8: off on
+	
+	foreach my $output_line (@{$output}) {
+		# Check for 'invalid node'
+		if ($output_line =~ /invalid node/) {
+			notify($ERRORS{'WARNING'}, 0, "rpower reported invalid node: @{$output}");
+			return;
+		}
+		
+		# Check for known 'not in bay' problem
+		if ($output_line =~ /not in bay/) {
+			if (_fix_rpower($computer_node_name)) {
+				return _rpower($computer_node_name, $mode);
+			}
+		}
+		
+		# Check for successful output line
+		if ($output_line =~ /$computer_node_name:\s+(.*)/) {
+			return $1;
+		}
+	}
+	
+	notify($ERRORS{'WARNING'}, 0, "unexpected output returned from rpower: @{$output}");
+	return 0;
 
 } ## end sub _rpower
 
