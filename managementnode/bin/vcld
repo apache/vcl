@@ -318,12 +318,6 @@ sub main () {
 				# Add the reservation ID to be processed to the hash
 				$request_info{RESERVATIONID} = $reservation_id;
 
-				# Wait for a short amount of time before making new child
-				# This is to give processes a chance to start before subsequent processes
-				#   check for conflicts such as overlapping computer reservations
-				notify($ERRORS{'DEBUG'}, $LOGFILE, "sleeping for 2 seconds before updating state to pending");
-				sleep 2;
-
 				# Update the request state to pending, laststate to next state
 				# Pending is set now so vcld doesn't try to process it again
 				# The previous state is already in the hash as the laststate value
@@ -748,7 +742,7 @@ sub REAPER {
 		$dead_pid = $wait_pid;
 		
 		# Assemble a string containing the dead process info
-		notify($ERRORS{'DEBUG'}, 0, "process reaped: pid: $dead_pid, \$?: $status_save, exit status: $child_exit_status");
+		#notify($ERRORS{'DEBUG'}, 0, "process reaped: pid: $dead_pid, \$?: $status_save, exit status: $child_exit_status");
 		
 		# Check if the child PID hash contains the pid of the process which just died
 		if (exists $child_pids{$dead_pid}) {
@@ -767,7 +761,7 @@ sub REAPER {
 	# Set the special $? variable back to the exit status of the child which died
 	# This is useful when utilities such as SSH are run in other places in the code
 	# The code which called the utility can check the exit status to see if it was successful
-	notify($ERRORS{'DEBUG'}, 0, "setting \$? to $status_save, exit status: $child_exit_status");
+	#notify($ERRORS{'DEBUG'}, 0, "setting \$? to $status_save, exit status: $child_exit_status");
 	$? = $status_save;
 	
 	return;
