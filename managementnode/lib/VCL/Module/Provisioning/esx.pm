@@ -29,8 +29,11 @@ VCL::Provisioning::esx - VCL module to support the vmware esx provisioning engin
 
 =head1 DESCRIPTION
 
- This module provides VCL support for vmware server
+ This module provides VCL support for vmware esx
  http://www.vmware.com
+
+ TODO list:
+ Refactor all run_ssh_command calls to check the return code and fail if not 0
 
 =cut
 
@@ -156,16 +159,20 @@ sub load {
 	my $vmclient_eth1MAC          = $self->data->get_computer_eth1_mac_address;
 	my $vmclient_OSname           = $self->data->get_image_os_name;
 
-	#eventually get these from a config file or database
-	
-        my $vmhost_username = "vcl";
-        my $vmhost_password = "AUqGcDDejbFxN6qX";
-        my $datastore_ip = "152.14.17.112";
-	my $datastore_share_path = "/mnt/export";
+	my $vmhost_username = $self->data->get_vmhost_profile_username();
+	my $vmhost_password = $self->data->get_vmhost_profile_password();
 
+	#Get the config datastore information from the database
+        my $datastore_ip;
+	my $datastore_share_path;
+	($datastore_ip, $datastore_share_path) = split(":", $self->data->get_vmhost_profile_datastore_path());
+
+	notify($ERRORS{'OK'}, 0, "DATASTORE IP is $datastore_ip and DATASTORE_SHARE_PATH is $datastore_share_path");
 	notify($ERRORS{'OK'}, 0, "Entered ESX module, loading $image_name on $computer_shortname (on $vmhost_hostname) for reservation $reservation_id");
+	notify($ERRORS{'DEBUG'}, 0, "Datastore: $datastore_ip:$datastore_share_path");
 
-	my $datastorepath4vmx = "/mnt/vcl/inuse/$computer_shortname";
+	# path to the inuse vm folder on the datastore (not a local path)
+	my $vmpath = "$datastore_share_path/inuse/$computer_shortname";
 
 	# query the host to see if the vm currently exists
 	my $vminfo_command = "/usr/lib/vmware-viperl/apps/vm/vminfo.pl";
@@ -208,40 +215,40 @@ sub load {
 		notify($ERRORS{'DEBUG'}, 0, "Un-Registered: $unregister_output");
 
 	}
-	my $remove_vm_output = `rm -rf $datastorepath4vmx`;
-	notify($ERRORS{'DEBUG'}, 0, "Output from remove command is: $remove_vm_output");
+	
+	# Remove old vm folder
+	run_ssh_command($datastore_ip, $image_identity, "rm -rf $vmpath");
+	notify($ERRORS{'DEBUG'}, 0, "Removed old vm folder");
 
-	# copy appropriate vmdk file
-	my $newdir = $datastorepath4vmx;
-	if (!mkdir($newdir)) {
-		notify($ERRORS{'CRITICAL'}, 0, "Could not create new directory: $!");
+	# Create new folder for this vm
+	if (!run_ssh_command($datastore_ip, $image_identity, "mkdir $vmpath")) {
+		notify($ERRORS{'CRITICAL'}, 0, "Could not create new directory");
 		return 0;
 	}
-	my $from = "/mnt/vcl/golden/$image_name/$image_name.vmdk";
-	my $to = "$datastorepath4vmx/$image_name.vmdk";
-	if (!copy($from, $to)) {
-		notify($ERRORS{'CRITICAL'}, 0, "Could not copy VMDK file! $!");
-		# insert load log here perhaps
+
+
+	# copy appropriate vmdk file
+	my $from = "$datastore_share_path/golden/$image_name/$image_name.vmdk";
+	my $to = "$vmpath/$image_name.vmdk";
+	if (!run_ssh_command($datastore_ip, $image_identity, "cp $from $to")) {
+		notify($ERRORS{'CRITICAL'}, 0, "Could not copy vmdk file!");
 		return 0;
 	}
 	notify($ERRORS{'DEBUG'}, 0, "COPIED VMDK SUCCESSFULLY");
 
 
 	# Copy the (large) -flat.vmdk file
-	# This uses ssh to do the copy locally on the nfs server.
+	# This uses ssh to do the copy locally, copying over nfs is too costly
 	$from = "$datastore_share_path/golden/$image_name/$image_name-flat.vmdk";
-	$to = "$datastore_share_path/inuse/$computer_shortname/$image_name-flat.vmdk";
-	my @copy_command = ("ssh", $datastore_ip, "-i", $image_identity, "-o", "BatchMode yes", "cp $from $to");
-	notify($ERRORS{'OK'}, 0, "SSHing to copy vmdk-flat file");
-	if (system(@copy_command) >> 8) {
-		notify($ERRORS{'CRITICAL'}, 0, "Could not copy VMDK-flat file! $!");
-		# insert load log here perhaps
+	$to = "$vmpath/$image_name-flat.vmdk";
+	if (!run_ssh_command($datastore_ip, $image_identity, "cp $from $to")) {
+		notify($ERRORS{'CRITICAL'}, 0, "Could not copy vmdk-flat file!");
 		return 0;
 	}
 
-	# Author new VMX file
+	# Author new VMX file, output to temporary file (will scp it below)
 	my @vmxfile;
-	my $vmxpath = "$datastorepath4vmx/$image_name.vmx";
+	my $vmxpath = "/tmp/$computer_shortname.vmx";
 
 	my $guestOS = "other";
 	$guestOS = "linux"   if ($image_os_name =~ /(fc|centos)/i);
@@ -249,16 +256,19 @@ sub load {
 
 	# determine adapter type by looking at vmdk file
 	my $adapter = "lsilogic"; # default
-	if (open(RE, "grep adapterType $datastorepath4vmx/$image_name.vmdk 2>&1 |")) {
-		my @LIST = <RE>;
-		close(RE);
-		foreach my $a (@LIST) {
-			if ($a =~ /(ide|buslogic|lsilogic)/) {
+	my @output;
+	if (@output = run_ssh_command($datastore_ip, $image_identity, "grep adapterType $vmpath/$image_name.vmdk 2>&1")) {
+		my @LIST = @{$output[1]};
+		foreach (@LIST) {
+			if ($_ =~ /(ide|buslogic|lsilogic)/) {
 				$adapter = $1;
 				notify($ERRORS{'OK'}, 0, "adapter= $1 ");
 			}
 		}
-	} ## end if (open(RE, "grep adapterType $VMWAREREPOSITORY/$image_name/$image_name.vmdk 2>&1 |"...
+	} else {
+		notify($ERRORS{'CRITICAL'}, 0, "Could not ssh to grep the vmdk file");
+		return 0;
+	}
 
 	push(@vmxfile, "#!/usr/bin/vmware\n");
 	push(@vmxfile, "config.version = \"8\"\n");
@@ -293,7 +303,7 @@ sub load {
 	push(@vmxfile, "scsi0:0.deviceType = \"scsi-hardDisk\"\n");
 	push(@vmxfile, "scsi0:0.fileName =\"$image_name.vmdk\"\n");
 
-	#write to tmpfile
+	# write vmx to temp file
 	if (open(TMP, ">$vmxpath")) {
 		print TMP @vmxfile;
 		close(TMP);
@@ -302,6 +312,12 @@ sub load {
 	else {
 		notify($ERRORS{'CRITICAL'}, 0, "could not write vmxarray to $vmxpath");
 		insertloadlog($reservation_id, $vmclient_computerid, "failed", "could not write vmx file to local tmp file");
+		return 0;
+	}
+
+	# scp $vmxpath to $vmpath/$image_name.vmx
+	if (!run_scp_command($vmxpath, "$datastore_ip:$vmpath/$image_name.vmx", $image_identity)) {
+		notify($ERRORS{'CRITICAL'}, 0, "could not scp vmx file to $datastore_ip");
 		return 0;
 	}
 
@@ -487,37 +503,43 @@ sub capture {
 	my $new_imagename   = $self->data->get_image_name;
 	my $computer_shortname  = $self->data->get_computer_short_name;
 	my $image_identity = $self->data->get_image_identity;
-        my $vmhost_username = "vcl";
-        my $vmhost_password = "AUqGcDDejbFxN6qX";
-        my $datastore_ip = "152.14.17.112";
-	my $datastore_share_path = "/mnt/export";
+	my $vmhost_username = $self->data->get_vmhost_profile_username();
+	my $vmhost_password = $self->data->get_vmhost_profile_password();
 
+	#Get the config datastore information from the database
+        my $datastore_ip;
+	my $datastore_share_path;
+	($datastore_ip, $datastore_share_path) = split(":", $self->data->get_vmhost_profile_datastore_path());
 
-	my $inuse_image = "/mnt/vcl/inuse/$computer_shortname";
-	my $new_golden = "/mnt/vcl/golden/$new_imagename";
+	my $old_vmpath = "$datastore_share_path/inuse/$computer_shortname";
+	my $new_vmpath = "$datastore_share_path/golden/$new_imagename";
+
+	# These four vars are useful:
+	# $old_vmpath, $new_vmpath, $old_imagename, $new_imagename
 
 
 	# Find old image name:
-	my $oldimage;
-	if (open(LISTFILES, "ls -1 $inuse_image 2>&1 |")) {
-		my @list = <LISTFILES>;
-		close(LISTFILES);
-		my $numfiles = @list;
+	my $old_imagename;
+	#if (open(LISTFILES, "ls -1 $inuse_image 2>&1 |")) {
+	my @ssh_output;
+	if (@ssh_output = run_ssh_command($datastore_ip, $image_identity, "ls -1 $old_vmpath 2>&1")) {
+		my @list = @{$ssh_output[1]};
 		#figure out old name
 		foreach my $a (@list) {
 			chomp($a);
 			if ($a =~ /(.*)-(v[0-9]*)\.vmdk/) {
-				$oldimage = "$1-$2";
+				$old_imagename = "$1-$2";
 			}
 		}
 	} else {
 		notify($ERRORS{'CRITICAL'}, 0, "LS failed");
 		return 0;
 	}
-	notify($ERRORS{'DEBUG'}, 0, "found previous name= $oldimage");
+	notify($ERRORS{'DEBUG'}, 0, "found previous name= $old_imagename");
 
 	notify($ERRORS{'OK'}, 0, "SSHing to node to configure currentimage.txt");
-	my @sshcmd = run_ssh_command($computer_shortname, $image_identity, "echo $new_imagename > /root/currentimage.txt", "root");
+	# XXX SHOULD INSTEAD USE write_currentimage_txt IN utils.pm
+	my @sshcmd = run_ssh_command($computer_shortname, $image_identity, "echo $new_imagename > /root/currentimage.txt");
 
 	my $poweroff_command = "/usr/lib/vmware-viperl/apps/vm/vmcontrol.pl";
 	$poweroff_command .= " --server '$vmhost_hostname'";
@@ -532,49 +554,50 @@ sub capture {
 
 	notify($ERRORS{'OK'}, 0, "Waiting 5 seconds for power off");
 	sleep(5);
-	# copy appropriate vmdk file
-	my $newdir = $new_golden;
-	if (!mkdir($newdir)) {
+
+	# Make the new golden directory
+	if (!run_ssh_command($datastore_ip, $image_identity, "mkdir $new_vmpath")) {
 		notify($ERRORS{'CRITICAL'}, 0, "Could not create new directory: $!");
 		return 0;
 	}
-	my $from = "$inuse_image/$oldimage.vmdk";
-	my $to = "$new_golden/$new_imagename.vmdk";
-	notify($ERRORS{'DEBUG'}, 0, "Preparing to copy vmdk from $from to $to");
-	if (!copy($from, $to)) {
+
+	# copy appropriate vmdk file
+	my $from = "$old_vmpath/$old_imagename.vmdk";
+	my $to = "$new_vmpath/$new_imagename.vmdk";
+	if (!run_ssh_command($datastore_ip, $image_identity, "cp $from $to")) {
 		notify($ERRORS{'CRITICAL'}, 0, "Could not copy VMDK file! $!");
-		# insert load log here perhaps
 		return 0;
 	}
 	notify($ERRORS{'DEBUG'}, 0, "COPIED VMDK SUCCESSFULLY");
 
-	$from = "$inuse_image/$oldimage.vmx";
-	$to = "$new_golden/$new_imagename.vmx";
-	notify($ERRORS{'DEBUG'}, 0, "Preparing to copy vmx from $from to $to");
-	if (!copy($from, $to)) {
+	# Now copy the vmx file (for debugging, vmx isn't actually used. This code can be taken out)
+	$from = "$old_vmpath/$old_imagename.vmx";
+	$to = "$new_vmpath/$new_imagename.vmx";
+	if (!run_ssh_command($datastore_ip, $image_identity, "cp $from $to")) {
 		notify($ERRORS{'CRITICAL'}, 0, "Could not copy VMX file! $!");
-		# insert load log here perhaps
 		return 0;
 	}
 	notify($ERRORS{'DEBUG'}, 0, "COPIED VMX SUCCESSFULLY");
 
 	my $output;
 	notify($ERRORS{'OK'}, 0, "Rewriting VMDK and VMX files with new image name");
-	$output = `sed -i 's/$oldimage/$new_imagename/' $new_golden/$new_imagename.vmx`;
-	notify($ERRORS{'DEBUG'}, 0, "VMX sed: $output");
-	$output = `sed -i 's/$oldimage/$new_imagename/' $new_golden/$new_imagename.vmdk`;
-	notify($ERRORS{'DEBUG'}, 0, "VMDK sed: $output");
+	if (!run_ssh_command($datastore_ip, $image_identity, "sed -i \"s/$old_imagename/$new_imagename/\" $new_vmpath/$new_imagename.vmx")){
+		notify($ERRORS{'CRITICAL'}, 0, "Sed error");
+		return 0;
+	}
+	if (!run_ssh_command($datastore_ip, $image_identity, "sed -i \"s/$old_imagename/$new_imagename/\" $new_vmpath/$new_imagename.vmdk")){
+		notify($ERRORS{'CRITICAL'}, 0, "Sed error");
+		return 0;
+	}
 
 	# Copy the (large) -flat.vmdk file
 	# This uses ssh to do the copy locally on the nfs server.
-	$from = "$datastore_share_path/inuse/$computer_shortname/$oldimage-flat.vmdk";
-	$to = "$datastore_share_path/golden/$new_imagename/$new_imagename-flat.vmdk";
+	$from = "$old_vmpath/$old_imagename-flat.vmdk";
+	$to = "$new_vmpath/$new_imagename-flat.vmdk";
 	notify($ERRORS{'DEBUG'}, 0, "Preparing to ssh to $datastore_ip copy vmdk-flat from $from to $to");
-	my @copy_command = ("ssh", $datastore_ip, "-i", $image_identity, "-o", "BatchMode yes", "cp $from $to");
 	notify($ERRORS{'OK'}, 0, "SSHing to copy vmdk-flat file");
-	if (system(@copy_command) >> 8) {
-		notify($ERRORS{'CRITICAL'}, 0, "Could not copy VMDK-flat file! $!");
-		# insert load log here perhaps
+	if (!run_ssh_command($datastore_ip, $image_identity, "cp $from $to")) {
+		notify($ERRORS{'CRITICAL'}, 0, "Could not copy VMDK-flat file!");
 		return 0;
 	}
 	
@@ -725,26 +748,38 @@ sub does_image_exist {
 		return 0;
 	}
 
+	my $image_identity = $self->data->get_image_identity;
 	my $image_name = $self->data->get_image_name();
+
+	#Get the config datastore information from the database
+        my $datastore_ip;
+	my $datastore_share_path;
+	($datastore_ip, $datastore_share_path) = split(":", $self->data->get_vmhost_profile_datastore_path());
+
 	if (!$image_name) {
 		notify($ERRORS{'CRITICAL'}, 0, "unable to determine if image exists, unable to determine image name");
 		return 0;
 	}
 
-	my $IMAGEREPOSITORY = "/mnt/vcl/golden";
+	my $goldenpath = "$datastore_share_path/golden";
 
-	if (open(IMAGES, "/bin/ls -1 $IMAGEREPOSITORY 2>&1 |")) {
-		my @images = <IMAGES>;
-		close(IMAGES);
-		foreach my $i (@images) {
-			if ($i =~ /$image_name/) {
+	my @ssh_output;
+	if (@ssh_output = run_ssh_command($datastore_ip, $image_identity, "ls -1 $goldenpath 2>&1")) {
+		my @list = @{$ssh_output[1]};
+		#figure out old name
+		foreach my $a (@list) {
+			chomp($a);
+			if ($a =~ /$image_name/) {
 				notify($ERRORS{'OK'}, 0, "image $image_name exists");
 				return 1;
 			}
 		}
-	} ## end if (open(IMAGES, "/bin/ls -1 $IMAGEREPOSITORY 2>&1 |"...
+	} else {
+		notify($ERRORS{'CRITICAL'}, 0, "LS failed");
+		return 0;
+	}
 
-	notify($ERRORS{'WARNING'}, 0, "image $IMAGEREPOSITORY/$image_name does NOT exists");
+	notify($ERRORS{'WARNING'}, 0, "image $goldenpath/$image_name does NOT exists");
 	return 0;
 
 } ## end sub does_image_exist
@@ -768,6 +803,7 @@ sub get_image_size {
 
 	# Either use a passed parameter as the image name or use the one stored in this object's DataStructure
 	my $image_name = shift;
+	my $image_identity = $self->data->get_image_identity;
 	$image_name = $self->data->get_image_name() if !$image_name;
 	if (!$image_name) {
 		notify($ERRORS{'CRITICAL'}, 0, "image name could not be determined");
@@ -775,12 +811,17 @@ sub get_image_size {
 	}
 	notify($ERRORS{'DEBUG'}, 0, "getting size of image: $image_name");
 
-	my $IMAGEREPOSITORY = "/mnt/vcl/golden/$image_name";
+	#Get the config datastore information from the database
+        my $datastore_ip;
+	my $datastore_share_path;
+	($datastore_ip, $datastore_share_path) = split(":", $self->data->get_vmhost_profile_datastore_path());
+
+	my $IMAGEREPOSITORY = "$datastore_share_path/golden/$image_name";
 
 	#list files in image directory, account for main .gz file and any .gz.00X files
-	if (open(FILELIST, "/bin/ls -s1 $IMAGEREPOSITORY 2>&1 |")) {
-		my @filelist = <FILELIST>;
-		close(FILELIST);
+	my @output;
+	if (@output = run_ssh_command($datastore_ip, $image_identity, "/bin/ls -s1 $IMAGEREPOSITORY 2>&1")) {
+		my @filelist = @{$output[1]};
 		my $size = 0;
 		foreach my $f (@filelist) {
 			if ($f =~ /$image_name-flat.vmdk/) {
@@ -793,7 +834,7 @@ sub get_image_size {
 			return 0;
 		}
 		return int($size / 1024);
-	} ## end if (open(FILELIST, "/bin/ls -s1 $IMAGEREPOSITORY 2>&1 |"...
+	}
 
 	return 0;
 } ## end sub get_image_size

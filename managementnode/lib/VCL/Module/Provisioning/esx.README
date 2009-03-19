@@ -2,13 +2,9 @@ Pre-Installation:
 
 You need to install the VMware VI Perl toolkit installed on any management node using the esx module
 
-Each vmware ESX hypervisor requires a mounted NFS datastore named 'VCL'
+Each vmware ESX hypervisor you want VCL to provision to requires the storage library mounted via NFS and named 'VCL'
 
-Mount this same datastore on the VCL management node /mnt/vcl/
-
-This NFS export needs to be exported (from the NFS server) at /mnt/export/
-
-Populate this datastore with the following structure
+Ensure your NFS exported storage library has the following structure
 [VCL]
 	/inuse  (required)
 	/golden  (required)
@@ -18,9 +14,9 @@ Populate this datastore with the following structure
 		...
 
 Image requirements:
-	All images used by this module must have names that begin with esx3-<anything you want>
+	All images used by this module must have names in the form of esx3-<anything you want>-v#    (where # is the image revision number)
 	ssh must be set to start on boot
-	ssh keys must be setup so that VCL can ssh into it
+	ssh keys must be setup so that VCL can ssh into it (put another way, the /root/.ssh/id_rsa.pub key from a VCL management node must be added to each image's authorized_keys file)
 	The image needs two NICs (eth0 is private, eth1 is public)
 	The IP addressing of the private (eth0) interface must be set to DHCP on boot
 
@@ -30,39 +26,28 @@ The VCL management node acts as a dhcp server for the private (eth0) NICs of the
                 max-lease-time                  43200;
                 min-lease-time                  43200;
                 default-lease-time              43200;
-                option routers                  10.0.0.1;
                 option subnet-mask              255.255.0.0;
                 option nis-domain               "NA";
-                option domain-name              "vcl.internal";
-                option domain-name-servers      10.0.0.1;
                 option nis-servers      noip;
                 option time-offset              -5;
                 range 10.0.0.2 10.0.255.255;
 
 
 
-Set a few variables and install the module:
+Install the module:
 
-This module expects the following three variables to be hard-coded at the top of the esx.pm file.  Remember to character escape any special characters.
-
-$vmhost_username, $vmhost_password, $datastore_ip
-
-A note about datastore_ip.  Because the module (from the management node) ssh's to the storage system directly instead of doing a cp over nfs, you need to set the IP of the datastore here.  The machine exporting the NFS datastore should be setup with SSH keys from the VCL ssh keys.  This is set in the VCL conf file as the IDENTITY_blade_linux variable.
-
-Place the module (esx.pm) in your management node's lib/VCL/Module/Provisioning/ directory
-
-
-
-Do these once:
-
-1)  Insert a row into the module table with `perlpackage` equal to 'VCL::Module::Provisioning::esx'
-2)  Insert a row into the provisioning table with `moduleid` equal to the id of the entry from step 1 (inserting into the module table)
-3)  Insert a record into the 'vmprofile' table with the following guidelines
+1)  Place the module (esx.pm) in your management node's lib/VCL/Module/Provisioning/ directory
+2)  Insert a row into the module table with `perlpackage` equal to 'VCL::Module::Provisioning::esx'
+3)  Insert a row into the provisioning table with `moduleid` equal to the id of the entry from step 1 (inserting into the module table)
+4)  Insert a record into the 'vmprofile' table with the following guidelines
 	profilename: VMware ESX SAN
 	vmtypeid: link to anything valid ID from the vmtype table.
 	imageid: link to the "No Image" id in the image table
+	datastorepath: <ipaddress>:<NFS mount path>  for example a valid entry could be  (152.14.17.112:/mnt/export)
 	virtualswitch0: <name of your private virtual machine port group> 
 	virtualswitch1: <name of your public virtual machine port group>
+	username: <name of a valid user on your ESX hypervisors>
+	password: <password for the ESX hypervisor user>
 
 
 
@@ -78,7 +63,7 @@ For each ESX hypervisor which VCL will provision machines on, do the following:
 2)  For each ESX hypervisor, manually create an entry in the 'vmhost' database table with the following guidelines:
 	computerid: the id of the computer created in step 1
 	vmlimit: the max number of vms to have on this hypervisor (ie: 5)
-	vmprofileid: the id of the vmprofile entry created in step 3 of the above section labeled "Do these once"
+	vmprofileid: the id of the vmprofile entry created in step 4 of the above section labeled "Install the module"
 
 
 
@@ -97,6 +82,6 @@ Now your hypervisors and virtual machines are setup.  Add an image:
 
 1)  Create an entry in the image table.
 	name:  esx3-<what you want>-v0
-	OSid:  link to the fc9 entry on the OS table
-2)  Create an image revision table with the imageid fromt the entry created in (1) and the imagename used in (1)
+	OSid:  link to the correct operating system entry in the OS table
+2)  Create an image revision table with the imageid from the entry created in the image table  and the imagename used in that same entry
 3)  Add the image revision to the allImages and allVMimages groups
