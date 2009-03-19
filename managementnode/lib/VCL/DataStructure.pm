@@ -491,7 +491,7 @@ my @blocktime_id : Field : Arg('Name' => 'blocktime_id') : Type(scalar) : Get('N
 
 =cut
 
-my @request_data : Field : Arg('Name' => 'request_data') : Get('Name' => 'request_data', 'Private' => 1) : Set('Name' => 'refresh_request_data', 'Private' => 1);
+my @request_data : Field : Arg('Name' => 'request_data', 'Default' => {}) : Get('Name' => 'request_data', 'Private' => 1) : Set('Name' => 'refresh_request_data', 'Private' => 1);
 
 =head3 @blockrequest_data
 
@@ -500,7 +500,7 @@ my @request_data : Field : Arg('Name' => 'request_data') : Get('Name' => 'reques
 
 =cut
 
-my @blockrequest_data : Field : Arg('Name' => 'blockrequest_data') : Get('Name' => 'blockrequest_data', 'Private' => 1);
+my @blockrequest_data : Field : Arg('Name' => 'blockrequest_data', 'Default' => {}) : Get('Name' => 'blockrequest_data', 'Private' => 1);
 
 ##############################################################################
 
@@ -1082,8 +1082,173 @@ sub print_subroutines {
 
 	notify($ERRORS{'OK'}, 0, "valid subroutines:\n$output");
 } ## end sub print_subroutines
+
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 retrieve_user_data
+
+ Parameters  : If subroutine is called as a DataStructure object method an no arguments are supplied:
+                  -the user ID stored in the DataStructure object is used
+						-the user login ID stored in the DataStructure object is used if the user ID is not set
+						-if neither the user ID or login ID are set in the object, an error message is generated and null is returned
+					If subroutine is NOT called as an object method, either of the following must be passed:
+					   -user ID containing all digits (example: retrieve_user_data(2870))
+						-user ID containing all digits (example: retrieve_user_data('ibuser'))
+						-if an argument is not passed, an error message is generated and null is returned
+ Returns     : If successful: hash reference containing user data (evaluates to true)
+               If failed: undefined (evaluates to false)
+ Description : This subroutine attempts to retrieve data for a user.
+               If called as an object method the user data is stored in the DataStructure object.
+					If called as a class function, the data can be utilized by accessing the hash reference returned.
+					A populated DataStructure object does not need to be created in order to use this subroutine.
+					A reservation is not required in order to use this subroutine.
+					Examples:
+					use VCL::DataStructure;
+					
+					# Called as a class function
+					my $user_data = VCL::DataStructure::retrieve_user_data(2870);
+					foreach my $key (sort keys(%{$user_data})) {
+						print "key: $key, value: $user_data->{$key}\n";
+					}
+					
+					# Called as an object method
+					$self->data->retrieve_user_data('ibuser');
+					print $self->data->get_user_id();
+
+=cut
+
+sub retrieve_user_data {
+	my $self;
+	my $argument = shift;
+	
+	# Check if subroutine was called as an object method
+	if (ref($argument) =~ /DataStructure/) {
+		# Subroutine was called as an object method, get next argument
+		$self = $argument;
+		$argument = shift;
+	}
+	
+	# Get a hash containing all of the tables and columns in the database
+	my $database_table_columns = VCL::utils::get_database_table_columns();
+	if (!$database_table_columns) {
+		notify($ERRORS{'WARNING'}, 0, "database table and column names could not be retrieved");
+		return;
+	}
+	
+	# Assemble a hash containing table names and aliases to be used in the select statement
+	my %tables_to_join = (
+		'user' => 'user',
+		'adminlevel' => 'user_adminlevel',
+		'affiliation' => 'user_affiliation',
+		'IMtype' => 'user_IMtype',
+	);
+	
+	# Assemble the WHERE part of the select statement
+	# The user must be specified by either passing an id or login_id argument
+	my $where_clause;
+	if ($argument && $argument =~ /^\d+$/) {
+		# Simple scalar argument was passed containing all digits, assume it's the user id
+		$where_clause = "user.id = '$argument'\n";
+	}
+	elsif ($argument) {
+		# Simple scalar argument was passed not consisting of all digits, assume it's the user login id
+		$where_clause = "user.unityid = '$argument'\n";
+	}
+	elsif ($self && (my $user_id = $self->get_user_id())) {
+		# Argument was not passed but subroutine was called as a DataStructure object method
+		# $self->get_user_id() returned something
+		$where_clause = "user.id = '$user_id'\n";
+	}
+	elsif ($self && (my $user_login_id = $self->get_user_login_id())) {
+		# Argument was not passed but subroutine was called as a DataStructure object method
+		# $self->get_user_login_id() returned something
+		$where_clause = "user.unityid = '$user_login_id'\n";
+	}
+	elsif (!$self) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine which user to query, subroutine was not called as an object method and id or login id argument was not passed");
+		return;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine which user to query, subroutine was called as an object method but get_user_id() and get_user_login_id() did not return values");
+		return;
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "attempting to retrieve and store data for user: $where_clause");
+	
+	# Add the tables to join to the WHERE clause
+	$where_clause .= "AND user.adminlevelid = user_adminlevel.id\n";
+	$where_clause .= "AND user.affiliationid = user_affiliation.id\n";
+	$where_clause .= "AND user.IMtypeid = user_IMtype.id\n";
+	
+	# Loop through the tables which will be joined together and assemble the columns part of the select statement
+	# Get the column names for each table
+	# Assemble a line for each column: tablealias_table.column AS tablealias_column
+	my $sql_query_columns;
+	foreach my $table_to_join (keys(%tables_to_join)) {
+		my $table_alias = $tables_to_join{$table_to_join};
+		for my $column (@{$database_table_columns->{$table_to_join}}) {
+			$sql_query_columns .= "$table_alias.$column AS $table_alias\_$column,\n";
+		}
+		$sql_query_columns .= "\n";
+	}
+	
+	# Remove the last comma and trailing newlines from the column names string
+	$sql_query_columns =~ s/,\n+$//;
+	
+	# Use join to put together the FROM part of the select statement
+	# This generates a string:
+	#    table1 tablealias1,
+	#    table2 tablealias2...
+	my $from_clause = join(",\n", map ("$_ $tables_to_join{$_}", keys(%tables_to_join)));
+	
+	# Assemble the select statement
+	my $sql_select_statement = "SELECT DISTINCT\n\n$sql_query_columns\n\nFROM\n$from_clause\n\nWHERE\n$where_clause";
+	
+	# Call database_select() to execute the select statement and make sure 1 row was returned
+	my @select_rows = VCL::utils::database_select($sql_select_statement);
+	if (!scalar @select_rows == 1) {
+		notify($ERRORS{'WARNING'}, 0, "select statement returned " . scalar @select_rows . " rows:\n" . join("\n", $sql_select_statement));
+		return;
+	}
+	
+	# $select_rows[0] is a hash reference, the keys are the column names
+	# Loop through the column names and add the data to $self->request_data
+	my $user_data_row = $select_rows[0];
+	my %user_data_hash;
+	foreach my $column_name (sort keys(%{$user_data_row})) {
+		# Get the data value for the column
+		my $user_data_value = $user_data_row->{$column_name};
+		
+		# The column name is in the format: user_affiliation_name
+		# Underscores represent hash depth
+		# Transform the column name: user_affiliation_name --> {user}{affiliation}{name}
+		(my $hash_path = "{$column_name}") =~ s/_/}{/g;
+		
+		# Use eval to set the correct data key to the value
+		eval '$user_data_hash' . $hash_path . '= $user_data_value';
+	}
+	
+	# Attempt to get the user ID and login ID from the data that was just retrieved
+	my $user_id = $user_data_hash{user}{id};
+	my $user_login_id = $user_data_hash{user}{unityid};
+	if (!$user_id && $user_login_id) {
+		notify($ERRORS{'WARNING'}, 0, "user id and login id could not be determined for user data just retrieved");
+		return;
+	}
+	
+	# If subroutine was called as an object method, replace the user key in the request data
+	if ($self) {
+		$self->request_data->{user} = $user_data_hash{user};
+		notify($ERRORS{'DEBUG'}, 0, "data has been stored for user: $user_login_id (id: $user_id)");
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "data has been retrieved for user: $user_login_id (id: $user_id)");
+	}
+	
+	return $user_data_hash{user};
+}
+
+#/////////////////////////////////////////////////////////////////////////////
 
 1;
 __END__
