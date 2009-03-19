@@ -1534,6 +1534,18 @@ INSERT INTO `vmprofile` (`id`, `profilename`, `vmtypeid`, `imageid`, `nasshare`,
 (3, 'Vmware ESX standard localdisk', 5, 9, NULL, '/vmfs/volumes/storage1', NULL, 'VM Network', 'Virtual Machine Public Network', 'localdisk'),
 (4, 'Vmware ESX SAN ', 5, 9, NULL, '/vmfs/volumes/NetApp', '/vmfs/volumes/storage1', 'Intranet2', 'MCNC Public', 'networkdisk');
 
+-- 
+-- Dumping data for table `vmtype`
+-- 
+
+INSERT INTO `vmtype` (`id`, `name`) VALUES
+(1, 'vmware'),
+(2, 'xen'),
+(3, 'vmwareGSX'),
+(4, 'vmwarefreeserver'),
+(5, 'vmwareESX3'),
+(6, 'vmwareESXi');
+
 -- =========================================================
 
 -- 
