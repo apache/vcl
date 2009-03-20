@@ -36,6 +36,7 @@ $ERRORS = array (
 	"9"   => 'getRequestInfo was called with an empty $id',
 	"10"  => "Failed to insert row while submitting new image",
 	"11"  => "getContinuationsData returned an empty array",
+	"12"  => "Failed to determine affiliation id in getUserListID",
 	"15"  => "Failed to insert row while submitting new schedule",
 	"20"  => "There was an attempt submit data to the page, but the referrer was not the entry script.",
 	"25"  => "Failed to get IPaddress of computer in acknowledgeRequest.",

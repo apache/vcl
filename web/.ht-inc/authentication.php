@@ -608,7 +608,7 @@ function checkExpiredDemoUser($userid, $groups=0) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function testGeneralAffiliation(&$login, &$affilid) {
-	if(preg_match('/^([^@]*)@([^@\.]*)$/', $login, $matches)) {
+	if(preg_match('/^([^@]+)@([^@\.]*)$/', $login, $matches)) {
 		$login = $matches[1];
 		$affilid = getAffiliationID($matches[2]);
 		return 1;

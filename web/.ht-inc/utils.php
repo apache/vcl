@@ -211,6 +211,7 @@ function initGlobals() {
 			$semislocked = 0;
 			require_once(".ht-inc/xmlrpcWrappers.php");
 			require_once(".ht-inc/requests.php");
+			require_once(".ht-inc/groups.php");
 			setupSession();
 		}
 		return;
@@ -2079,7 +2080,7 @@ function getResourcesFromGroups($groups, $type, $includedeleted) {
 ///
 /// \fn updateUserOrGroupPrivs($name, $node, $adds, $removes, $mode)
 ///
-/// \param $name - unityid, user id, user group name, or user group id
+/// \param $name - unityid, user id, or user group id
 /// \param $node - id of the node
 /// \param $adds - array of privs (the name, not the id) to add
 /// \param $removes - array of privs (the name, not the id) to remove
@@ -2104,10 +2105,7 @@ function updateUserOrGroupPrivs($name, $node, $adds, $removes, $mode) {
 	}
 	else {
 		$field = "usergroupid";
-		if(is_numeric($name))
-			$id = $name;
-		else
-			$id = getUserGroupID($name);
+		$id = $name;
 	}
 	foreach($adds as $type) {
 		$typeid = getUserPrivTypeID($type);
@@ -2678,9 +2676,11 @@ function deleteUserGroupMember($userid, $groupid) {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn getUserlistID($loginid)
+/// \fn getUserlistID($loginid, $noadd)
 ///
 /// \param $loginid - login ID
+/// \param $noadd - (optional, default=0) 0 to try to add user to database if
+/// not there, 1 to only return the id if it already exists in the database
 ///
 /// \return id from userlist table for the user
 ///
@@ -2688,12 +2688,12 @@ function deleteUserGroupMember($userid, $groupid) {
 /// calls addUser to add it to the table
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function getUserlistID($loginid) {
+function getUserlistID($loginid, $noadd=0) {
 	$_loginid = $loginid;
 	getAffilidAndLogin($loginid, $affilid);
 
 	if(empty($affilid))
-		abort(11);
+		abort(12);
 
 	$query = "SELECT id "
 	       . "FROM user "
@@ -2704,6 +2704,8 @@ function getUserlistID($loginid) {
 		$row = mysql_fetch_row($qh);
 		return $row[0];
 	}
+	if($noadd)
+		return NULL;
 	return addUser($_loginid);
 }
 
@@ -3187,10 +3189,13 @@ function getUserInfo($id) {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn getUsersGroups($userid, $includeowned)
+/// \fn getUsersGroups($userid, $includeowned, $includeaffil)
 ///
 /// \param $userid - an id from the user table
-/// \param $includeowned - include groups the user owns but is not in
+/// \param $includeowned - (optional, default=0) include groups the user owns
+///                        but is not in
+/// \param $includeaffil - (optional, default=0) include @affiliation in name
+///                        of group
 ///
 /// \return an array of the user's groups where the index is the id of the
 /// group
@@ -3198,13 +3203,25 @@ function getUserInfo($id) {
 /// \brief builds a array of the groups the user is member of
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function getUsersGroups($userid, $includeowned=0) {
-	$query = "SELECT m.usergroupid, "
-	       .        "g.name "
-	       . "FROM usergroupmembers m, "
-	       .      "usergroup g "
-	       . "WHERE m.userid = $userid AND "
-	       .       "m.usergroupid = g.id";
+function getUsersGroups($userid, $includeowned=0, $includeaffil=0) {
+	if($includeaffil) {
+		$query = "SELECT m.usergroupid, "
+		       .        "CONCAT(g.name, '@', a.name) AS name "
+		       . "FROM usergroupmembers m, "
+		       .      "usergroup g, "
+		       .      "affiliation a "
+		       . "WHERE m.userid = $userid AND "
+		       .       "m.usergroupid = g.id AND "
+		       .       "g.affiliationid = a.id";
+	}
+	else {
+		$query = "SELECT m.usergroupid, "
+		       .        "g.name "
+		       . "FROM usergroupmembers m, "
+		       .      "usergroup g "
+		       . "WHERE m.userid = $userid AND "
+		       .       "m.usergroupid = g.id";
+	}
 	$qh = doQuery($query, "101");
 	$groups = array();
 	while($row = mysql_fetch_assoc($qh)) {
@@ -6918,11 +6935,7 @@ function getUserGroupID($name, $affilid=DEFAULT_AFFILID) {
 	$query = "SELECT id "
 	       . "FROM usergroup "
 	       . "WHERE name = '$name' AND "
-	       .       "((custom = 0 AND "
-	       .       "courseroll = 0 AND "
-	       .       "affiliationid = $affilid) OR "
-	       .       "custom = 1 OR "
-	       .       "courseroll = 1)";
+	       .       "affiliationid = $affilid";
 	$qh = doQuery($query, 300);
 	if($row = mysql_fetch_row($qh)) {
 		return $row[0];
@@ -7777,7 +7790,7 @@ function generateString($length=8) {
 /// \b virtualswitch0 - name of first virtual switch\n
 /// \b virtualswitch1 - name of second virtual switch\n
 /// \b vmdisk - "localdisk" or "networkdisk" - whether or not vm files are
-/// stored on local disk or network attached storage
+/// stored on local disk or network attached storage\n
 /// \b username - vmware username associated with this profile\n
 /// \b password - vmware password associated with this profile
 ///
@@ -8112,6 +8125,13 @@ function xmlrpccall() {
 	xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCgetRequestIds", "xmlRPChandler");
 	xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCblockAllocation", "xmlRPChandler");
 	xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCprocessBlockTime", "xmlRPChandler");
+	xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCaddUserGroup", "xmlRPChandler");
+	xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCgetUserGroupAttributes", "xmlRPChandler");
+	xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCdeleteUserGroup", "xmlRPChandler");
+	xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCeditUserGroup", "xmlRPChandler");
+	xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCgetUserGroupMembers", "xmlRPChandler");
+	xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCaddUsersToGroup", "xmlRPChandler");
+	xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCremoveUsersFromGroup", "xmlRPChandler");
 
 	print xmlrpc_server_call_method($xmlrpc_handle, $HTTP_RAW_POST_DATA, '');
 	xmlrpc_server_destroy($xmlrpc_handle);
@@ -8166,7 +8186,7 @@ function xmlRPChandler($function, $args, $blah) {
 	else
 		$keyid = $user['id'];
 	if(function_exists($function)) {
-		$saveargs = serialize($args);
+		$saveargs = mysql_escape_string(serialize($args));
 		$query = "INSERT INTO xmlrpcLog "
 		       .        "(xmlrpcKeyid, " 
 		       .        "timestamp, "
@@ -8276,6 +8296,133 @@ function printXMLRPCerror($errcode) {
 	print " </value>\n";
 	print "</fault>\n";
 	print "</methodResponse>\n";
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn validateAPIgroupInput($items, $exists)
+///
+/// \param $items - array of data to validate; the following items can be
+/// validated:\n
+/// \b name - if specified, affiliation must also be specified\n
+/// \b affiliation - if specified, name must also be specified\n
+/// \b owner \n
+/// \b managingGroup \n
+/// \b initialMaxTime \n
+/// \b totalMaxTime \n
+/// \b maxExtendTime
+/// \param $exists - 1 to check if $name\@$affiliation exists, 0 to check that
+///                  they it does not exist
+///
+/// \return an array to be returned as an error status or $items with these
+/// extra keys:\n
+/// \b status - "success"\n
+/// \b managingGroupID - (if managingGroup in $items) id of managingGroup
+/// \b managingGroupName - (if managingGroup in $items) name of managingGroup
+/// \b managingGroupAffilid - (if managingGroup in $items) affiliation id of
+///                           managingGroup
+/// \b affiliationid - (if affiliation in $items) affiliation id
+///
+/// \brief validates data in $items
+///
+////////////////////////////////////////////////////////////////////////////////
+function validateAPIgroupInput($items, $exists) {
+	# initialMaxTime
+	if(array_key_exists('initialMaxTime', $items)) {
+		if(! is_numeric($items['initialMaxTime']) ||
+		   $items['initialMaxTime'] < 1 ||
+		   $items['initialMaxTime'] > 65535) {
+			return array('status' => 'error',
+			             'errorcode' => 21,
+			             'errormsg' => 'submitted initialMaxTime is invalid');
+		}
+	}
+	# totalMaxTime
+	if(array_key_exists('totalMaxTime', $items)) {
+		if(! is_numeric($items['totalMaxTime']) ||
+		   $items['totalMaxTime'] < 1 ||
+		   $items['totalMaxTime'] > 65535) {
+			return array('status' => 'error',
+			             'errorcode' => 22,
+			             'errormsg' => 'submitted totalMaxTime is invalid');
+		}
+	}
+	# maxExtendTime
+	if(array_key_exists('maxExtendTime', $items)) {
+		if(! is_numeric($items['maxExtendTime']) ||
+		   $items['maxExtendTime'] < 1 ||
+		   $items['maxExtendTime'] > 65535) {
+			return array('status' => 'error',
+			             'errorcode' => 23,
+			             'errormsg' => 'submitted maxExtendTime is invalid');
+		}
+	}
+	# affiliation
+	if(array_key_exists('affiliation', $items)) {
+		$esc_affiliation = mysql_escape_string($items['affiliation']);
+		$affilid = getAffiliationID($esc_affiliation);
+		if(is_null($affilid)) {
+			return array('status' => 'error',
+			             'errorcode' => 17,
+			             'errormsg' => 'unknown affiliation');
+		}
+		$items['affiliationid'] = $affilid;
+	}
+	# name
+	if(array_key_exists('name', $items)) {
+		if(! ereg('^[-a-zA-Z0-9_\.: ]{3,30}$', $items['name'])) {
+			return array('status' => 'error',
+			             'errorcode' => 19,
+			             'errormsg' => 'Name must be between 3 and 30 characters '
+			                         . 'and can only contain letters, numbers, and '
+			                         . 'these characters: - _ . :');
+		}
+		$esc_name = mysql_escape_string($items['name']);
+		$doesexist = checkForGroupName($esc_name, 'user', '', $affilid);
+		if($exists && ! $doesexist) {
+			return array('status' => 'error',
+			             'errorcode' => 18,
+			             'errormsg' => 'user group with submitted name and affiliation does not exist');
+		}
+		elseif(! $exists && $doesexist) {
+			return array('status' => 'error',
+			             'errorcode' => 27,
+			             'errormsg' => 'existing user group with submitted name and affiliation');
+		}
+		elseif($exists && $doesexist) {
+			$items['id'] = getUserGroupID($esc_name, $affilid);
+		}
+	}
+	# owner
+	if(array_key_exists('owner', $items)) {
+		if(! validateUserid(mysql_escape_string($items['owner']))) {
+			return array('status' => 'error',
+			             'errorcode' => 20,
+			             'errormsg' => 'submitted owner is invalid');
+		}
+	}
+	# managingGroup
+	if(array_key_exists('managingGroup', $items)) {
+		$parts = explode('@', $items['managingGroup']);
+		if(count($parts) != 2) {
+			return array('status' => 'error',
+			             'errorcode' => 24,
+			             'errormsg' => 'submitted managingGroup is invalid');
+		}
+		$esc_mgName = mysql_escape_string($parts[0]);
+		$esc_mgAffil = mysql_escape_string($parts[1]);
+		$mgaffilid = getAffiliationID($esc_mgAffil);
+		if(! checkForGroupName($esc_mgName, 'user', '', $mgaffilid)) {
+			return array('status' => 'error',
+			             'errorcode' => 25,
+			             'errormsg' => 'submitted managingGroup does not exist');
+		}
+		$items['managingGroupID'] = getUserGroupID($esc_mgName, $mgaffilid);
+		$items['managingGroupName'] = $parts[0];
+		$items['managingGroupAffilid'] = $mgaffilid;
+	}
+	$items['status'] = 'success';
+	return $items;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
