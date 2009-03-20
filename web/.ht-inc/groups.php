@@ -599,10 +599,14 @@ function processGroupInput($checks=1) {
 		                       . "and can only contain letters, numbers, and "
 		                       . "these characters: - _ . :";
 	}
+	if($return['type'] == 'user')
+		$extraid = $return['affiliationid'];
+	else
+		$extraid = $return['resourcetypeid'];
 	if(! empty($return["type"]) && ! empty($return["name"]) && 
 	   ! ($submitErr & GRPNAMEERR) && 
 	   checkForGroupName($return["name"], $return["type"], $return["groupid"],
-		                  $return["resourcetypeid"])) {
+		                  $extraid)) {
 	   $submitErr |= GRPNAMEERR;
 	   $submitErrMsg[GRPNAMEERR] = "A group already exists with this name.";
 	}
@@ -637,12 +641,13 @@ function processGroupInput($checks=1) {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn checkForGroupName($name, $type, $id, $resourcetypeid)
+/// \fn checkForGroupName($name, $type, $id, $extraid)
 ///
 /// \param $name - the name of a group
 /// \param $type - user or resource
 /// \param $id - id of a group to ignore
-/// \param $resourcetypeid - a resource type
+/// \param $extraid - if $type is resource, this is a resource type id; if
+///                   $type is user, this is an affiliation id
 ///
 /// \return 1 if $name is already in the associated table, 0 if not
 ///
@@ -650,14 +655,15 @@ function processGroupInput($checks=1) {
 /// except for $id
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function checkForGroupName($name, $type, $id, $resourcetypeid) {
+function checkForGroupName($name, $type, $id, $extraid) {
 	if($type == "user")
 		$query = "SELECT id FROM usergroup "
-		       . "WHERE name = '$name'";
+		       . "WHERE name = '$name' AND "
+		       .       "affiliationid = $extraid";
 	else
 		$query = "SELECT id FROM resourcegroup "
 		       . "WHERE name = '$name' AND "
-		       .       "resourcetypeid = $resourcetypeid";
+		       .       "resourcetypeid = $extraid";
 	if(! empty($id))
 		$query .= " AND id != $id";
 	$qh = doQuery($query, 101);
