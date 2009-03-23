@@ -2213,7 +2213,7 @@ function detailStatusHTML($reqid) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function viewRequestInfo() {
-	$requestid = processInputVar("requestid", ARG_NUMERIC);
+	$requestid = getContinuationVar("requestid");
 	$request = getRequestInfo($requestid);
 	if($request['forimaging'])
 		$reservation = $request['reservations'][0];

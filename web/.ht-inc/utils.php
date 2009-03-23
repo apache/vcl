@@ -5931,9 +5931,11 @@ function showTimeTable($links) {
 				else {
 					$title = "User: " . $timeslots[$id][$stamp]["unityid"]
 					       . " Image: " . $timeslots[$id][$stamp]["prettyimage"];
-					print "          <TD bgcolor=\"#ff0000\"><a href=\"" . BASEURL . SCRIPT;
-					print "?mode=viewRequestInfo&requestid=" . $timeslots[$id][$stamp]["requestid"] . "\"><img ";
-					print "src=images/red.jpg alt=used border=0 title=\"$title\"></a></TD>\n";
+					$cdata = array('requestid' => $timeslots[$id][$stamp]["requestid"]);
+					$cont = addContinuationsEntry('viewRequestInfo', $cdata);
+					print "          <TD bgcolor=\"#ff0000\"><a href=\"" . BASEURL;
+					print SCRIPT . "?continuation=$cont\"><img src=images/red.jpg ";
+					print "alt=used border=0 title=\"$title\"></a></TD>\n";
 				}
 			}
 		}
