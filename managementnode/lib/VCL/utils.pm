@@ -7158,15 +7158,21 @@ sub get_management_node_info {
    predictivemodule.prettyname AS predictive_prettyname,
    predictivemodule.description AS predictive_description,
    predictivemodule.perlpackage  AS predictive_perlpackage,
-	state.name AS statename
+	state.name AS statename,
+	resource.id AS resource_id
    FROM
    managementnode,
    module predictivemodule,
-	state
+	state,
+	resource,
+	resourcetype
    WHERE
    managementnode.predictivemoduleid = predictivemodule.id
 	AND managementnode.stateid = state.id
-   AND
+	AND resource.resourcetypeid = resourcetype.id
+	AND resource.subid = managementnode.id
+	AND resourcetype.name = \'managementnode\'
+	AND
    ";
 
 	# Figure out if the ID or hostname was passed as the identifier and complete the SQL statement
@@ -7259,6 +7265,100 @@ sub get_management_node_info {
 	notify($ERRORS{'DEBUG'}, 0, "management node info retrieved from database for $shortname");
 	return $management_node_info;
 } ## end sub get_management_node_info
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_management_node_resource_groups
+
+ Parameters  : mangement node resource id 
+ Returns     : Hash containing data contained in the managementnode table
+ Description :
+
+=cut
+
+sub get_management_node_resource_groups {
+	my ($management_resource_id) = @_;
+   my ($package, $filename, $line, $sub) = caller(0);
+
+   if (!(defined($management_resource_id))) {
+      notify($ERRORS{'WARNING'}, 0, "management resource ID was not specified");
+      return ();
+   }
+
+   my $select_statement = "
+   SELECT DISTINCT
+	resourcegroupid AS resourcegroupid
+	FROM
+	resourcegroupmembers
+	WHERE resourceid = $management_resource_id
+	 ";
+
+   # Call the database select subroutine
+   # This will return an array of one or more rows based on the
+	# select statement
+   my @selected_rows = database_select($select_statement);
+
+   # Check to make sure 1 or more rows were returned
+   if (scalar @selected_rows == 0) {
+      return ();
+   }
+
+	#Build the list
+	my %ret_grouplist;
+
+	for (@selected_rows) {
+	 	 my %resroucegroupids = %{$_};
+		 $ret_grouplist{$resroucegroupids{resourcegroupid}}= $resroucegroupids{resourcegroupid};
+	}
+
+	return %ret_grouplist;
+	
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_managementnode_computer_groups
+
+ Parameters  : mangement node resource group id 
+ Returns     : Hash containing computer groups controlled by resource group
+ Description :
+
+=cut
+
+sub get_managementnode_computer_groups {
+	my $manging_resource_grp_id = @_;
+   my ($package, $filename, $line, $sub) = caller(0);
+
+   if (!(defined($manging_resource_grp_id))) {
+      notify($ERRORS{'WARNING'}, 0, "management resource group ID was not specified");
+      return ();
+   }
+
+   my $select_statement = "
+   SELECT DISTINCT
+	resourcemap.resourcegroupid2
+	FROM
+	resourcemap,
+	resourcetype
+	WHERE 
+	resourcemap.resourcetypeid2 = resourcetype.id 
+	AND resourcemap.resourcegroupid1 = $manging_resource_grp_id
+	AND resourcetype.name = 'computer'
+	 ";
+
+   # Call the database select subroutine
+   # This will return an array of one or more rows based on the
+	# select statement
+   my @selected_rows = database_select($select_statement);
+
+   # Check to make sure 1 or more rows were returned
+   if (scalar @selected_rows == 0) {
+      return ();
+   }
+
+	#Build the list
+
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 
