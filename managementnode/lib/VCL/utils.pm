@@ -1275,7 +1275,6 @@ sub mail {
 	}
 	my $localreturnpath = "-f$RETURNPATH";
 	my $mailer = Mail::Mailer->new("sendmail", $localreturnpath);
-#	my $mailer = Mail::Mailer->new("sendmail", "-fitecs-vclsysroot\@engr.ncsu.edu");
 
 	if ($SHARED_MAILBOX) {
 		my $bcc = $SHARED_MAILBOX;
