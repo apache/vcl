@@ -254,7 +254,7 @@ BEGIN {
 	our ($JABBER, $jabServer, $jabUser, $jabPass, $jabResource, $jabPort) = 0;
 	our ($LOGFILE, $PIDFILE, $PROCESSNAME) = 0;
 	our ($DATABASE, $SERVER, $WRTUSER, $WRTPASS, $LockerRdUser, $rdPass) = 0;
-	our ($SYSADMIN, $SHARED_MAILBOX, $DEFAULTURL, $DEFAULTHELPEMAIL) = 0;
+	our ($SYSADMIN, $SHARED_MAILBOX, $DEFAULTURL, $DEFAULTHELPEMAIL, $RETURNPATH) = 0;
 	our ($XCATROOT) = 0;
 	our ($FQDN)     = 0;
 	our ($MYSQL_SSL,       $MYSQL_SSL_CERT);
@@ -391,8 +391,13 @@ BEGIN {
 				$ETHDEVICE = $1;
 			}
 			#Sysadmin list
-			if ($l =~ /^sysadmin=([,.\@a-zA-Z0-9]*)/) {
+			if ($l =~ /^sysadmin=([,-.\@a-zA-Z0-9]*)/) {
 				$SYSADMIN = $1;
+			}
+
+			#Sendmail Envelope Sender 
+			if ($l =~ /^RETURNPATH=([,-.\@a-zA-Z0-9]*)/) {
+				$RETURNPATH = $1;
 			}
 
 			#sharedmailbox
@@ -538,6 +543,9 @@ BEGIN {
 		#set default
 		$PIDFILE = "/var/run/$PROCESSNAME.pid";
 	}
+	if (!($RETURNPATH)){
+		$RETURNPATH="";
+	}
 	if (!$IPCONFIGURATION) {
 		#default
 		$IPCONFIGURATION = "manualDHCP";
@@ -586,7 +594,7 @@ our ($JABBER, $PROCESSNAME);
 our %ERRORS = ('DEPENDENT' => 4, 'UNKNOWN' => 3, 'OK' => 0, 'WARNING' => 1, 'CRITICAL' => 2, 'MAILMASTERS' => 5, 'DEBUG' => 6);
 our ($LockerWrtUser, $wrtPass,  $database,       $server);
 our ($jabServer,     $jabUser,  $jabPass,        $jabResource, $jabPort);
-our ($vcldquerykey,  $SYSADMIN, $SHARED_MAILBOX, $DEFAULTURL, $DEFAULTHELPEMAIL);
+our ($vcldquerykey,  $SYSADMIN, $SHARED_MAILBOX, $DEFAULTURL, $DEFAULTHELPEMAIL,$RETURNPATH);
 our ($LOGFILE, $PIDFILE, $VCLDRPCQUERYKEY);
 our ($SERVER, $DATABASE, $WRTUSER, $WRTPASS);
 our ($MYSQL_SSL,       $MYSQL_SSL_CERT);
@@ -1263,9 +1271,11 @@ sub mail {
 
 	# compare requestor and owner, if same only mail one
 	if (!(defined($from))) {
-		$from = "vcl_help\@ncsu.edu";
+		$from = $DEFAULTHELPEMAIL;
 	}
-	my $mailer = Mail::Mailer->new("sendmail", "-fitecs-vclsysroot\@engr.ncsu.edu");
+	my $localreturnpath = "-f$RETURNPATH";
+	my $mailer = Mail::Mailer->new("sendmail", $localreturnpath);
+#	my $mailer = Mail::Mailer->new("sendmail", "-fitecs-vclsysroot\@engr.ncsu.edu");
 
 	if ($SHARED_MAILBOX) {
 		my $bcc = $SHARED_MAILBOX;
@@ -7158,21 +7168,15 @@ sub get_management_node_info {
    predictivemodule.prettyname AS predictive_prettyname,
    predictivemodule.description AS predictive_description,
    predictivemodule.perlpackage  AS predictive_perlpackage,
-	state.name AS statename,
-	resource.id AS resource_id
+	state.name AS statename
    FROM
    managementnode,
    module predictivemodule,
-	state,
-	resource,
-	resourcetype
+	state
    WHERE
    managementnode.predictivemoduleid = predictivemodule.id
 	AND managementnode.stateid = state.id
-	AND resource.resourcetypeid = resourcetype.id
-	AND resource.subid = managementnode.id
-	AND resourcetype.name = \'managementnode\'
-	AND
+   AND
    ";
 
 	# Figure out if the ID or hostname was passed as the identifier and complete the SQL statement
@@ -7265,100 +7269,6 @@ sub get_management_node_info {
 	notify($ERRORS{'DEBUG'}, 0, "management node info retrieved from database for $shortname");
 	return $management_node_info;
 } ## end sub get_management_node_info
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 get_management_node_resource_groups
-
- Parameters  : mangement node resource id 
- Returns     : Hash containing data contained in the managementnode table
- Description :
-
-=cut
-
-sub get_management_node_resource_groups {
-	my ($management_resource_id) = @_;
-   my ($package, $filename, $line, $sub) = caller(0);
-
-   if (!(defined($management_resource_id))) {
-      notify($ERRORS{'WARNING'}, 0, "management resource ID was not specified");
-      return ();
-   }
-
-   my $select_statement = "
-   SELECT DISTINCT
-	resourcegroupid AS resourcegroupid
-	FROM
-	resourcegroupmembers
-	WHERE resourceid = $management_resource_id
-	 ";
-
-   # Call the database select subroutine
-   # This will return an array of one or more rows based on the
-	# select statement
-   my @selected_rows = database_select($select_statement);
-
-   # Check to make sure 1 or more rows were returned
-   if (scalar @selected_rows == 0) {
-      return ();
-   }
-
-	#Build the list
-	my %ret_grouplist;
-
-	for (@selected_rows) {
-	 	 my %resroucegroupids = %{$_};
-		 $ret_grouplist{$resroucegroupids{resourcegroupid}}= $resroucegroupids{resourcegroupid};
-	}
-
-	return %ret_grouplist;
-	
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 get_managementnode_computer_groups
-
- Parameters  : mangement node resource group id 
- Returns     : Hash containing computer groups controlled by resource group
- Description :
-
-=cut
-
-sub get_managementnode_computer_groups {
-	my $manging_resource_grp_id = @_;
-   my ($package, $filename, $line, $sub) = caller(0);
-
-   if (!(defined($manging_resource_grp_id))) {
-      notify($ERRORS{'WARNING'}, 0, "management resource group ID was not specified");
-      return ();
-   }
-
-   my $select_statement = "
-   SELECT DISTINCT
-	resourcemap.resourcegroupid2
-	FROM
-	resourcemap,
-	resourcetype
-	WHERE 
-	resourcemap.resourcetypeid2 = resourcetype.id 
-	AND resourcemap.resourcegroupid1 = $manging_resource_grp_id
-	AND resourcetype.name = 'computer'
-	 ";
-
-   # Call the database select subroutine
-   # This will return an array of one or more rows based on the
-	# select statement
-   my @selected_rows = database_select($select_statement);
-
-   # Check to make sure 1 or more rows were returned
-   if (scalar @selected_rows == 0) {
-      return ();
-   }
-
-	#Build the list
-
-}
 
 #/////////////////////////////////////////////////////////////////////////////
 
