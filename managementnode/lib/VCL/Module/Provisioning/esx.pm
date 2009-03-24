@@ -187,7 +187,7 @@ sub load {
 
 	# parse the results from the host and determine if we need to remove an old vm
 	if ($vminfo_output =~ /^Information of Virtual Machine $computer_shortname/m) {
-		# Turn new vm on
+		# Power off this vm
 		my $poweroff_command = "/usr/lib/vmware-viperl/apps/vm/vmcontrol.pl";
 		$poweroff_command .= " --server '$vmhost_hostname'";
 		$poweroff_command .= " --vmname $computer_shortname";
@@ -210,6 +210,7 @@ sub load {
 		$unregister_command .= " --pool Resources";
 		$unregister_command .= " --hostname '$vmhost_hostname'";
 		$unregister_command .= " --datacenter 'ha-datacenter'";
+		notify($ERRORS{'DEBUG'}, 0, "Un-Register Command: $unregister_command");
 		my $unregister_output;
 		$unregister_output = `$unregister_command`;
 		notify($ERRORS{'DEBUG'}, 0, "Un-Registered: $unregister_output");
@@ -332,6 +333,7 @@ sub load {
 	$register_command .= " --pool Resources";
 	$register_command .= " --hostname '$vmhost_hostname'";
 	$register_command .= " --datacenter 'ha-datacenter'";
+	notify($ERRORS{'DEBUG'}, 0, "Register Command: $register_command");
 	my $register_output;
 	$register_output = `$register_command`;
 	notify($ERRORS{'DEBUG'}, 0, "Registered: $register_output");
