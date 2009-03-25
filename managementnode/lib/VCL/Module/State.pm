@@ -291,13 +291,16 @@ sub reservation_failed {
 	else {
 		notify($ERRORS{'WARNING'}, 0, "failed to insert computerloadlog entry");
 	}
-
-	# Update log table ending column to failed for this request
-	if (update_log_ending($request_logid, "failed")) {
-		notify($ERRORS{'OK'}, 0, "updated log ending value to 'failed', logid=$request_logid");
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to update log ending value to 'failed', logid=$request_logid");
+	
+	
+	if($request_state_name =~ /^(new|reserved|inuse|image)/){
+		# Update log table ending column to failed for this request
+		if (update_log_ending($request_logid, "failed")) {
+			notify($ERRORS{'OK'}, 0, "updated log ending value to 'failed', logid=$request_logid");
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to update log ending value to 'failed', logid=$request_logid");
+		}
 	}
 
 	# Update the computer state to failed

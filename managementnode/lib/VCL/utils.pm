@@ -8520,6 +8520,10 @@ sub switch_state {
 	my $computer_type              = $request_data->{reservation}{$reservation_id}{computer}{type};
 	my $computer_state_name_old    = $request_data->{reservation}{$reservation_id}{computer}{state}{name};
 	my $computer_shortname         = $request_data->{reservation}{$reservation_id}{computer}{SHORTNAME};
+	
+	if($request_state_name_old eq 'reload'){
+		$request_logid = 0;
+	}
 
 	# Figure out if this is the parent reservation
 	my @reservation_ids = sort keys %{$request_data->{reservation}};
@@ -9131,7 +9135,7 @@ sub insert_reload_request {
 
 	# Attempt to create a new reload request
 	my $request_id_reload;
-	if ($request_id_reload = insert_request($managementnode_id, 'reload', $request_laststate_name, $request_logid, 'vclreload', $computer_id, $image_id, $imagerevision_id, '0', '30')) {
+	if ($request_id_reload = insert_request($managementnode_id, 'reload', $request_laststate_name, '0', 'vclreload', $computer_id, $image_id, $imagerevision_id, '0', '30')) {
 		notify($ERRORS{'OK'}, 0, "$notify_prefix inserted new reload request, id=$request_id_reload nodeid=$computer_id, imageid=$image_id, imagerevision_id=$imagerevision_id");
 		insertloadlog($reservation_id, $computer_id, "info", "$calling_sub: created new reload request");
 	}
