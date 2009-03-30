@@ -280,6 +280,7 @@ sub reserve {
 	}
 
 	notify($ERRORS{'DEBUG'}, 0, "Enterered reserve() in the Ubuntu OS module");
+
 	my $user_name = $self->data->get_user_login_id();
 	my $computer_node_name = $self->data->get_computer_node_name();
 	my $image_identity = $self->data->get_image_identity;
@@ -310,7 +311,7 @@ sub reserve {
 	}
 
 	return 1;
-} ## end sub delete_user
+}
 
 sub grant_access {
 	my $self = shift;
@@ -319,27 +320,8 @@ sub grant_access {
 		return 0;
 	}
 
-	notify($ERRORS{'DEBUG'}, 0, "===+++++++++++========+++++++++++++Enterered grant_access in Ubuntu");
-	
-	my $user_name = $self->data->get_user_login_id();
-	my $computer_node_name = $self->data->get_computer_node_name();
-	my $reservation_password = $self->data->get_reservation_password();
-	my $image_identity = $self->data->get_image_identity;
-
-	notify($ERRORS{'OK'}, 0, "user_name $user_name");
-	notify($ERRORS{'OK'}, 0, "comp_node_name $computer_node_name");
-	notify($ERRORS{'OK'}, 0, "identity key $image_identity");
-
-#		my @sshcmd = run_ssh_command($computer_node_name, $image_identity, "echo $reservation_password \| /usr/bin/passwd -f $user_name --stdin", "root");
-#		foreach my $l (@{$sshcmd[1]}) {
-#			if ($l =~ /authentication tokens updated successfully/) {
-#				notify($ERRORS{'OK'}, 0, "successfully changed local password account $user_name");
-#				return 1;
-#			}
-#		}
-	
 	return 1;
-} ## end sub delete_user
+}
 
 1;
 __END__
