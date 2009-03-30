@@ -182,6 +182,8 @@ function updateLDAPUser($authtype, $userid) {
 	       .        "u.IMid AS IMid, "
 	       .        "u.affiliationid, "
 	       .        "af.name AS affiliation, "
+	       .        "af.shibonly, "
+	       .        "u.emailnotices, "
 	       .        "a.name AS adminlevel, "
 	       .        "a.id AS adminlevelid, "
 	       .        "u.preferredname AS preferredname, "
