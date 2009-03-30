@@ -884,3 +884,18 @@ function showGroupInfo(data, ioArgs) {
    obj.style.top = my - y - obj.clientWidth;
    obj.style.zIndex = 10;
 }
+
+function checkNewLocalPassword() {
+	var pwd1 = document.getElementById('newpassword');
+	var pwd2 = document.getElementById('confirmpassword');
+	var stat = document.getElementById('pwdstatus');
+	if(pwd1.value == "" && pwd2.value == "") {
+		stat.innerHTML = '';
+	}
+	else if(pwd1.value == pwd2.value) {
+		stat.innerHTML = '<font color="#008000">match</font>';
+	}
+	else {
+		stat.innerHTML = '<font color="red">no match</font>';
+	}
+}

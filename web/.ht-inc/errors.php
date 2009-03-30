@@ -189,6 +189,7 @@ $ERRORS = array (
 	"378" => "Failed to execute query 2 in updateResourcePrivs",
 	"380" => "Failed to fetch last insert id in submitBlockRequest",
 	"385" => "Failed to execute query in submitDeleteMgmtnode",
+	"390" => "Failed to fetch salt while updating locally affiliated user password",
 );
 
 $XMLRPCERRORS = array(

@@ -28,6 +28,8 @@ define("WIDTHERR", 1 << 1);
 define("HEIGHTERR", 1 << 2);
 /// signifies an error with submitted viewasuser id
 define("VIEWASUSERERR", 1 << 3);
+/// signifies an error with submitted new password
+define("LOCALPASSWORDERR", 1 << 4);
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
@@ -122,10 +124,44 @@ function userpreferences() {
 	print "          <TD>" . $user["email"] . "</TD>\n";
 	print "          <TD></TD>\n";
 	print "        </TR>\n";
+	if($user['affiliation'] == 'Local') {
+		print "        <TR>\n";
+		print "          <TD colspan=3 align=center><h3>Change Password</h3></TD>\n";
+		print "        </TR>\n";
+		print "        <TR>\n";
+		print "          <TH align=right>Current Password:</TH>\n";
+		print "          <TD>\n";
+		print "            <label class=hidden for=currentpassword>Current Password</label>\n";
+		print "            <INPUT type=password name=currentpassword maxlength=100 size=15>\n";
+		print "          </TD>\n";
+		print "          <TD>";
+		printSubmitErr(LOCALPASSWORDERR);
+		print "</TD>\n";
+		print "        </TR>\n";
+		print "        <TR>\n";
+		print "          <TH align=right>New Password:</TH>\n";
+		print "          <TD>\n";
+		print "            <label class=hidden for=newpassword>New Password</label>\n";
+		print "            <INPUT type=password name=newpassword maxlength=100 ";
+		print "id=newpassword onkeyup=\"checkNewLocalPassword();\" size=15>\n";
+		print "          </TD>\n";
+		print "          <TD></TD>\n";
+		print "        </TR>\n";
+		print "        <TR>\n";
+		print "          <TH align=right>Confirm Password:</TH>\n";
+		print "          <TD>\n";
+		print "            <label class=hidden for=confirmpassword>Confirm Password</label>\n";
+		print "            <INPUT type=password name=confirmpassword maxlength=100 ";
+		print "id=confirmpassword onkeyup=\"checkNewLocalPassword();\" size=15>\n";
+		print "          </TD>\n";
+		print "          <TD><span id=pwdstatus></span></TD>\n";
+		print "        </TR>\n";
+	}
 	print "      </table>\n";
 	$updateText = getAffiliationDataUpdateText($user['affiliationid']);
-	print "<a name=updateinfo></a>{$updateText[$user['affiliationid']]}";
-	print "<br><br>\n";
+	print "<a name=updateinfo></a>\n";
+	if(! empty($updateText[$user['affiliationid']]))
+		print "{$updateText[$user['affiliationid']]}<br><br>";
 	$cont = addContinuationsEntry('confirmpersonalprefs', array(), SECINDAY, 1, 1, 1);
 	print "      <INPUT type=hidden name=continuation value=\"$cont\">\n";
 	print "      <div align=center>\n";
@@ -323,7 +359,7 @@ function userpreferences() {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function confirmUserPrefs($type) {
-	global $submitErr;
+	global $submitErr, $user;
 
 	$data = processUserPrefsInput(1);
 
@@ -359,6 +395,10 @@ function confirmUserPrefs($type) {
 		print "    <TD>" . $data["preferredname"] . "</TD>\n";
 		print "  </TR>\n";
 		print "</table>\n";
+		if($user['affiliation'] == 'Local' &&
+		   ! empty($data['newpassword'])) {
+			print "New password will be submitted<br>\n";
+		}
 	}
 	elseif($type == 1) {
 		print "<H2>RDP File Preferences</H2>\n";
@@ -430,6 +470,22 @@ function submitUserPrefs() {
 	if(updateUserPrefs($user['id'], $data["preferredname"], $width, $height, 
 	                   $data["bpp"], $data["audiomode"], $data["mapdrives"],
 	                   $data["mapprinters"], $data["mapserial"])) {
+	}
+	if($user['affiliation'] == 'Local' &&
+	   ! empty($data['newpassword'])) {
+		$query = "SELECT l.salt "
+		       . "FROM localauth l, "
+		       .      "user u "
+		       . "WHERE u.id = '{$user['id']}' AND "
+		       .       "l.userid = u.id";
+		$qh = doQuery($query, 101);
+		if(! ($row = mysql_fetch_assoc($qh)))
+			abort();
+		$passhash = sha1("{$data['newpassword']}{$row['salt']}");
+		$query = "UPDATE localauth "
+		       . "SET passhash = '$passhash' "
+		       . "WHERE userid = {$user['id']}";
+		doQuery($query, 101);
 	}
 	$user = getUserInfo($user["id"]);
 	$_SESSION['user'] = $user;
@@ -532,6 +588,27 @@ function processUserPrefsInput($checks=1) {
 	   ! validateUserid($return['unityid'])) {
 	   $submitErr |= VIEWASUSERERR;
 	   $submitErrMsg[VIEWASUSERERR] = "Invalid user id";
+	}
+	if($user['affiliation'] == 'Local') {
+		$return['newpassword'] = $_POST['newpassword'];
+		$confirmpwd = $_POST['confirmpassword'];
+		$curr = $_POST['currentpassword'];
+		if(get_magic_quotes_gpc()) {
+			$return['newpassword'] = stripslashes($return['newpassword']);
+			$confirmpwd = stripslashes($confirmpwd);
+			$curr = stripslashes($curr);
+		}
+		if(! empty($return['newpassword']) && ! empty($confirmpwd) &&
+		   ! validateLocalAccount($user['unityid'], $curr)) {
+			$submitErr |= LOCALPASSWORDERR;
+			$submitErrMsg[LOCALPASSWORDERR] = "Password incorrect";
+		}
+		elseif((empty($return['newpassword']) && ! empty($confirmpwd)) ||
+		   (! empty($return['newpassword']) && empty($confirmpwd)) ||
+		   ($return['newpassword'] != $confirmpwd)) {
+			$submitErr |= LOCALPASSWORDERR;
+			$submitErrMsg[LOCALPASSWORDERR] = "Passwords do not match";
+		}
 	}
 	return $return;
 }
