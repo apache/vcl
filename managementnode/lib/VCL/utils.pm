@@ -3623,9 +3623,13 @@ sub getnewdbh {
 	my $dbh;
 
 	# Try to use the existing database handle
-	if (defined $ENV{dbh} && $ENV{dbh} && $ENV{dbh}->ping) {
+	if ($ENV{dbh} && $ENV{dbh}->ping && $ENV{dbh}->{Name} =~ /^$database:/) {
 		#notify($ERRORS{'DEBUG'}, 0, "using database handle stored in \$ENV{dbh}");
 		return $ENV{dbh};
+	}
+	elsif ($ENV{dbh} && $ENV{dbh}->ping) {
+		my ($stored_database_name) = $ENV{dbh}->{Name} =~ /^([^:]*)/;
+		notify($ERRORS{'DEBUG'}, 0, "database requested ($database) does not match handle stored in \$ENV{dbh} (" . $ENV{dbh}->{Name} . ")");
 	}
 	elsif (defined $ENV{dbh}) {
 		notify($ERRORS{'DEBUG'}, 0, "unable to use database handle stored in \$ENV{dbh}");
@@ -6689,10 +6693,10 @@ sub run_ssh_command {
 
 		# Print the SSH command, only display the attempt # if > 1
 		if ($attempts == 1) {
-			notify($ERRORS{'DEBUG'}, 0, "executing SSH command on $node: $command");
+			notify($ERRORS{'DEBUG'}, 0, "executing SSH command on $node:\n$command");
 		}
 		else {
-			notify($ERRORS{'DEBUG'}, 0, "attempt $attempts/$max_attempts: executing SSH command on $node: $ssh_command");
+			notify($ERRORS{'DEBUG'}, 0, "attempt $attempts/$max_attempts: executing SSH command on $node:\n$ssh_command");
 		}
 
 		# Execute the command
@@ -6711,7 +6715,7 @@ sub run_ssh_command {
 		# This likely means a Perl bug was encountered
 		# Assume command was successful
 		if ($? == -1) {
-			notify($ERRORS{'OK'}, 0, "exit status changed from $exit_status to 0, Perl bug likely encountered");
+			notify($ERRORS{'DEBUG'}, 0, "exit status changed from $exit_status to 0, Perl bug likely encountered");
 			$exit_status = 0;
 		}
 		
@@ -6756,7 +6760,7 @@ sub run_ssh_command {
 			if ($attempts == 3) {
 				$max_attempts++;
 				notify($ERRORS{'OK'}, 0, "making 1 more attempt using port 24");
-				$ssh_command = "$ssh_path $identity_paths -l $user -p 24 -x $node '$command' 2>&1";
+				$ssh_command = "$ssh_path $identity_paths -l $user -p 24 -x $node '$command 2>&1' 2>&1";
 			}
 			
 			notify($ERRORS{'WARNING'}, 0, "attempt $attempts/$max_attempts: failed to execute SSH command on $node: $command, exit status: $exit_status, SSH exits with the exit status of the remote command or with 255 if an error occurred, output:\n$ssh_output_formatted");
@@ -6769,10 +6773,15 @@ sub run_ssh_command {
 			my @output_lines = split(/\n/, $ssh_output);
 			
 			# Print the output unless no_output is set
-			notify($ERRORS{'DEBUG'}, 0, "run_ssh_command output: $ssh_output") unless $no_output;
+			notify($ERRORS{'DEBUG'}, 0, "run_ssh_command output:\n$ssh_output") unless $no_output;
 			
 			# Print the command and exit status
-			notify($ERRORS{'OK'}, 0, "SSH command executed on $node: $command, returning ($exit_status, output)");
+			(my $ssh_output_summary = $ssh_output) =~ s/\s+/ /gs;
+			if (length($ssh_output_summary) > 30) {
+				$ssh_output_summary = substr($ssh_output_summary, 0, 30);
+				$ssh_output_summary .= "...";
+			}
+			notify($ERRORS{'DEBUG'}, 0, "SSH command executed on $node, returning ($exit_status, \"$ssh_output_summary\")");
 			
 			# Return the exit status and output
 			return ($exit_status, \@output_lines);
@@ -9971,6 +9980,7 @@ sub string_to_ascii {
 	foreach my $ascii_code (unpack("C*", $string)) {
 		if (defined($ascii_codes{$ascii_code})) {
 			$ascii_value_string .= "[$ascii_codes{$ascii_code}]";
+			$ascii_value_string .= "\n" if $ascii_code == 10;
 		}
 		else {
 			$ascii_value_string .= pack("C*", $ascii_code);
