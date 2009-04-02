@@ -794,7 +794,7 @@ sub load {
 						goto XCATRINSTALL;
 					}
 					else {
-						notify($ERRORS{'CRITICAL'}, 0, "$computer_node_name: sshd never became active after 2 rinstall attempts");
+						notify($ERRORS{'WARNING'}, 0, "$computer_node_name: sshd never became active after 2 rinstall attempts");
 						insertloadlog($reservation_id, $computer_id, "failed", "exceeded maximum install attempts");
 						return 0;
 					}
