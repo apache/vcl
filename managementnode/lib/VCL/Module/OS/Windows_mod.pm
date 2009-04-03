@@ -2833,6 +2833,118 @@ sub disable_scheduled_task {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 get_scheduled_tasks
+
+ Parameters  : 
+ Returns     : array reference if successful, false if failed
+ Description : Queries the scheduled tasks on a computer and returns the
+               configuration for each task. An array reference is returned.
+					Each array element represents a scheduled task and contains
+					a hash reference. The hash contains the schedule task
+					configuration.  The hash keys are:
+						$scheduled_task_hash{"HostName"},
+						$scheduled_task_hash{"TaskName"},
+						$scheduled_task_hash{"Next Run Time"},
+						$scheduled_task_hash{"Status"},
+						$scheduled_task_hash{"Last Run Time"},
+						$scheduled_task_hash{"Last Result"},
+						$scheduled_task_hash{"Creator"},
+						$scheduled_task_hash{"Schedule"},
+						$scheduled_task_hash{"Task To Run"},
+						$scheduled_task_hash{"Start In"},
+						$scheduled_task_hash{"Comment"},
+						$scheduled_task_hash{"Scheduled Task State"},
+						$scheduled_task_hash{"Scheduled Type"},
+						$scheduled_task_hash{"Start Time"},
+						$scheduled_task_hash{"Start Date"},
+						$scheduled_task_hash{"End Date"},
+						$scheduled_task_hash{"Days"},
+						$scheduled_task_hash{"Months"},
+						$scheduled_task_hash{"Run As User"},
+						$scheduled_task_hash{"Delete Task If Not Rescheduled"},
+						$scheduled_task_hash{"Stop Task If Runs X Hours and X Mins"},
+						$scheduled_task_hash{"Repeat: Every"},
+						$scheduled_task_hash{"Repeat: Until: Time"},
+						$scheduled_task_hash{"Repeat: Until: Duration"},
+						$scheduled_task_hash{"Repeat: Stop If Still Running"},
+						$scheduled_task_hash{"Idle Time"},
+						$scheduled_task_hash{"Power Management"}
+
+=cut
+
+sub get_scheduled_tasks {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+
+	my $management_node_keys = $self->data->get_management_node_keys();
+	my $computer_node_name   = $self->data->get_computer_node_name();
+
+	# Attempt to retrieve scheduled task information
+	my $schtasks_command = '$SYSTEMROOT/System32/schtasks.exe /Query /NH /V /FO CSV';
+	my ($schtasks_exit_status, $schtasks_output) = run_ssh_command($computer_node_name, $management_node_keys, $schtasks_command);
+	if (defined($schtasks_exit_status) && $schtasks_exit_status == 0) {
+		notify($ERRORS{'OK'}, 0, "retrieved scheduled task information");
+	}
+	elsif (defined($schtasks_exit_status)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve scheduled task information, exit status: $schtasks_exit_status, output:\n@{$schtasks_output}");
+		return 0;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to retrieve scheduled task information");
+		return;
+	}
+	
+	my @scheduled_task_data;
+	for my $scheduled_task_line (@{$schtasks_output}) {
+		# Remove quotes from the hash values
+		$scheduled_task_line =~ s/"//g;
+		
+		# Split the line up
+		my @scheduled_task_fields = split(/,/, $scheduled_task_line);
+		
+		# Create a hash containing the line data
+		my %scheduled_task_hash;
+		($scheduled_task_hash{"HostName"},
+		$scheduled_task_hash{"TaskName"},
+		$scheduled_task_hash{"Next Run Time"},
+		$scheduled_task_hash{"Status"},
+		$scheduled_task_hash{"Last Run Time"},
+		$scheduled_task_hash{"Last Result"},
+		$scheduled_task_hash{"Creator"},
+		$scheduled_task_hash{"Schedule"},
+		$scheduled_task_hash{"Task To Run"},
+		$scheduled_task_hash{"Start In"},
+		$scheduled_task_hash{"Comment"},
+		$scheduled_task_hash{"Scheduled Task State"},
+		$scheduled_task_hash{"Scheduled Type"},
+		$scheduled_task_hash{"Start Time"},
+		$scheduled_task_hash{"Start Date"},
+		$scheduled_task_hash{"End Date"},
+		$scheduled_task_hash{"Days"},
+		$scheduled_task_hash{"Months"},
+		$scheduled_task_hash{"Run As User"},
+		$scheduled_task_hash{"Delete Task If Not Rescheduled"},
+		$scheduled_task_hash{"Stop Task If Runs X Hours and X Mins"},
+		$scheduled_task_hash{"Repeat: Every"},
+		$scheduled_task_hash{"Repeat: Until: Time"},
+		$scheduled_task_hash{"Repeat: Until: Duration"},
+		$scheduled_task_hash{"Repeat: Stop If Still Running"},
+		$scheduled_task_hash{"Idle Time"},
+		$scheduled_task_hash{"Power Management"}) = @scheduled_task_fields;
+		
+		push @scheduled_task_data, \%scheduled_task_hash;
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "found " . scalar(@scheduled_task_data) . " scheduled tasks");
+	
+	return \@scheduled_task_data;
+} ## end sub disable_scheduled_task
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 disable_dynamic_dns
 
  Parameters  :
