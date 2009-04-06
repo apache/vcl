@@ -1273,7 +1273,7 @@ sub mail {
 	if (!(defined($from))) {
 		$from = $DEFAULTHELPEMAIL;
 	}
-	my $localreturnpath = "-f$RETURNPATH";
+	my $localreturnpath = "-f $RETURNPATH";
 	my $mailer = Mail::Mailer->new("sendmail", $localreturnpath);
 
 	if ($SHARED_MAILBOX) {
@@ -6781,7 +6781,14 @@ sub run_ssh_command {
 				$ssh_output_summary = substr($ssh_output_summary, 0, 30);
 				$ssh_output_summary .= "...";
 			}
-			notify($ERRORS{'DEBUG'}, 0, "SSH command executed on $node, returning ($exit_status, \"$ssh_output_summary\")");
+			
+			# Display the full ssh command if the exit status is not 0
+			if ($exit_status) {
+				notify($ERRORS{'OK'}, 0, "SSH command executed on $node, command:\n$ssh_command\nreturning ($exit_status, \"$ssh_output_summary\")");
+			}
+			else {
+				notify($ERRORS{'DEBUG'}, 0, "SSH command executed on $node, returning ($exit_status, \"$ssh_output_summary\")");
+			}
 			
 			# Return the exit status and output
 			return ($exit_status, \@output_lines);
