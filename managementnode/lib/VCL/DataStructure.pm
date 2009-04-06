@@ -141,6 +141,28 @@ $SUBROUTINE_MAPPINGS{request_updated}          = '$self->request_data->{UPDATED}
 $SUBROUTINE_MAPPINGS{request_state_name}     = '$self->request_data->{state}{name}';
 $SUBROUTINE_MAPPINGS{request_laststate_name} = '$self->request_data->{laststate}{name}';
 
+$SUBROUTINE_MAPPINGS{log_id} = '$self->request_data->{log}{id}';
+$SUBROUTINE_MAPPINGS{log_userid} = '$self->request_data->{log}{userid}';
+$SUBROUTINE_MAPPINGS{log_nowfuture} = '$self->request_data->{log}{nowfuture}';
+$SUBROUTINE_MAPPINGS{log_start} = '$self->request_data->{log}{start}';
+$SUBROUTINE_MAPPINGS{log_loaded} = '$self->request_data->{log}{loaded}';
+$SUBROUTINE_MAPPINGS{log_initialend} = '$self->request_data->{log}{initialend}';
+$SUBROUTINE_MAPPINGS{log_finalend} = '$self->request_data->{log}{finalend}';
+$SUBROUTINE_MAPPINGS{log_wasavailable} = '$self->request_data->{log}{wasavailable}';
+$SUBROUTINE_MAPPINGS{log_ending} = '$self->request_data->{log}{ending}';
+$SUBROUTINE_MAPPINGS{log_requestid} = '$self->request_data->{log}{requestid}';
+$SUBROUTINE_MAPPINGS{log_computerid} = '$self->request_data->{log}{computerid}';
+$SUBROUTINE_MAPPINGS{log_remoteIP} = '$self->request_data->{log}{remoteIP}';
+$SUBROUTINE_MAPPINGS{log_imageid} = '$self->request_data->{log}{imageid}';
+$SUBROUTINE_MAPPINGS{log_size} = '$self->request_data->{log}{size}';
+
+$SUBROUTINE_MAPPINGS{sublog_imageid} = '$self->request_data->{log}{imageid}';
+$SUBROUTINE_MAPPINGS{sublog_imagerevisionid} = '$self->request_data->{log}{imagerevisionid}';
+$SUBROUTINE_MAPPINGS{sublog_computerid} = '$self->request_data->{log}{computerid}';
+$SUBROUTINE_MAPPINGS{sublog_IPaddress} = '$self->request_data->{log}{IPaddress}';
+$SUBROUTINE_MAPPINGS{sublog_managementnodeid} = '$self->request_data->{log}{managementnodeid}';
+$SUBROUTINE_MAPPINGS{sublog_predictivemoduleid} = '$self->request_data->{log}{predictivemoduleid}';
+
 #$SUBROUTINE_MAPPINGS{request_reservationid} = '$self->request_data->{RESERVATIONID}';
 $SUBROUTINE_MAPPINGS{reservation_id} = '$self->request_data->{RESERVATIONID}';
 
@@ -606,7 +628,24 @@ sub _automethod : Automethod {
 		# Get the data from the request_data hash
 		# eval is required in order to interpolate the hash path before retrieving the data
 		my $key_defined = eval "defined $hash_path";
-		if (!$key_defined) {
+		
+		# If log or sublog data was requested and not yet populated, attempt to retrieve it
+		if (!$key_defined && $data_identifier =~ /^(log_|sublog_)/) {
+			notify($ERRORS{'DEBUG'}, 0, "attempting to retrieve log data, requested data has not been initialized ($data_identifier)");
+			
+			if ($self->get_log_data()) {
+				# Log data was retrieved, check if requested data is now populated
+				if (!eval "defined $hash_path") {
+					notify($ERRORS{'WARNING'}, 0, "log data was retrieved but corresponding data has not been initialized for $method_name: $hash_path", $self->request_data);
+					return sub { };
+				}
+			}
+			else {
+				notify($ERRORS{'WARNING'}, 0, "log data could not be retrieved");
+				return sub { };
+			}
+		}
+		elsif (!$key_defined) {
 			notify($ERRORS{'WARNING'}, 0, "corresponding data has not been initialized for $method_name: $hash_path", $self->request_data);
 			return sub { };
 		}
@@ -1246,6 +1285,267 @@ sub retrieve_user_data {
 	}
 	
 	return $user_data_hash{user};
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_log_data
+
+ Parameters  : log ID (optional)
+ Returns     : hash reference
+ Description : Retrieves data from the log and sublog tables for the log ID
+               either specified via an argument or the log ID for the
+					reservation represented by the DataStructure object.
+
+=cut
+
+sub get_log_data {
+	my $self;
+	my $argument = shift;
+	my $request_log_id;
+	
+	# Check if subroutine was called as an object method
+	if (ref($argument) =~ /DataStructure/) {
+		# Subroutine was called as an object method, get next argument
+		$self = $argument;
+		$argument = shift;
+		
+		# If argument wasn't passed, attempt to get the log id from this DataStructure object
+		if (!$argument) {
+			# Get the log id and make sure it is set
+			$request_log_id = $self->get_request_log_id();
+			if (!$request_log_id) {
+				notify($ERRORS{'WARNING'}, 0, "log id was not passed as an argument and could not be retrieved from the existing DataStructure object");
+				return;
+			}
+		}
+		else {
+			$request_log_id = $argument;
+		}
+	}
+	else {
+		$request_log_id = $argument;
+		
+		# Make sure log id was determined and is valid
+		if (!$request_log_id) {
+			notify($ERRORS{'WARNING'}, 0, "log id was not passed as an argument and subroutine was not called as an object method");
+			return;
+		}
+	}
+	
+	# Make sure log id was determined and is valid
+	if (!$request_log_id) {
+		notify($ERRORS{'WARNING'}, 0, "log id could not be determined");
+		return;
+	}
+	elsif ($request_log_id !~ /^\d+$/) {
+		notify($ERRORS{'WARNING'}, 0, "log id is not valid: $request_log_id");
+		return;
+	}
+	
+	# Construct a select statement 
+	my $sql_select_statement = "
+	SELECT
+	*
+	FROM
+	log
+	LEFT JOIN sublog ON sublog.logid = log.id
+	WHERE
+	log.id = $request_log_id
+	";
+	
+	# Call database_select() to execute the select statement and make sure 1 row was returned
+	my @select_rows = VCL::utils::database_select($sql_select_statement);
+	if (!scalar @select_rows == 1) {
+		notify($ERRORS{'WARNING'}, 0, "select statement returned " . scalar @select_rows . " rows:\n" . join("\n", $sql_select_statement));
+		return;
+	}
+	
+	# $select_rows[0] is a hash reference, the keys are the column names
+	# Loop through the column names and add the data to $self->request_data
+	my $row = $select_rows[0];
+	
+	my %data_hash;
+	foreach my $column_name (sort keys(%{$row})) {
+		# Get the data value for the column
+		my $data_value = $row->{$column_name};
+		$self->request_data->{log}{$column_name} = $data_value if !defined($self->request_data->{log}{$column_name});
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "retrieved log data for log id: $request_log_id");
+	return $self->request_data->{log};
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 update_log_ending_DataStructure
+
+ Parameters  : string containing the log ending value
+ Returns     : true if successful, false if failed
+ Description : Updates the log.ending value in the database for the log ID
+               set for this reservation. Returns false if log ID is not
+					set. A string argument must be passed containing the new
+					log.ending value.
+					
+=cut
+
+sub update_log_ending_DataStructure {
+	my $self = shift;
+	my $request_log_ending = shift;
+	
+	# Check if subroutine was called as an object method
+	if (!ref($self) =~ /DataStructure/) {
+		notify($ERRORS{'WARNING'}, 0, "subroutine must be called as an object method");
+		return;
+	}
+	
+	# Make sure log ending value was passed
+	if (!$request_log_ending) {
+		notify($ERRORS{'WARNING'}, 0, "log ending value argument was not passed");
+		return;
+	}
+	
+	# Get the log id
+	my $request_log_id = $self->get_request_log_id();
+	if (!$request_log_id) {
+		notify($ERRORS{'WARNING'}, 0, "request log id could not be retrieved");
+		return;
+	}
+	
+	# Get the request state name
+	my $request_state_name = $self->get_request_state_name();
+	if (!$request_state_name) {
+		notify($ERRORS{'WARNING'}, 0, "request state name could not be retrieved");
+		return;
+	}
+	
+	# Get the image id
+	my $image_id = $self->get_image_id();
+	if (!$image_id) {
+		notify($ERRORS{'WARNING'}, 0, "image id could not be retrieved");
+		return;
+	}
+	
+	# Get the image name
+	my $image_name = $self->get_image_name();
+	if (!$image_name) {
+		notify($ERRORS{'WARNING'}, 0, "image name could not be retrieved");
+		return;
+	}
+	
+	# Get the imagerevision production flag
+	my $imagerevision_production = $self->get_imagerevision_production();
+	if ($imagerevision_production !~ /^(0|1)$/) {
+		notify($ERRORS{'WARNING'}, 0, "imagerevision production flag could not be retrieved");
+		return;
+	}
+	
+	# Construct a select statement to retrieve the resource group names this image belongs to
+	my $select_image_groups_statement = "
+	SELECT DISTINCT
+	resourcegroup.name
+	FROM
+	image,
+	resource,
+	resourcetype,
+	resourcegroup,
+	resourcegroupmembers
+	WHERE
+	image.id = $image_id AND
+	resource.subid = image.id AND resource.resourcetypeid = 13 AND
+	resourcegroupmembers.resourceid = resource.id AND
+	resourcegroup.id = resourcegroupmembers.resourcegroupid
+	";
+	
+	# Call database_select() to execute the select statement
+	my @image_group_rows = VCL::utils::database_select($select_image_groups_statement);
+	if (!scalar @image_group_rows == 1) {
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve image group names for image $image_name");
+		return;
+	}
+	
+	# Assemble an array from the select return array
+	my @image_group_names;
+	for my $image_group_row (@image_group_rows) {
+		my $image_group_name = $image_group_row->{name};
+		push @image_group_names, $image_group_name;
+	}
+	notify($ERRORS{'DEBUG'}, 0, "retrieved groups image $image_name belongs to:\n" . join("\n", @image_group_names));
+	
+	
+	# Make sure the requested log ending makes sense
+	
+	# Don't set ending to 'failed' if image only belongs to newimages-* group
+	if ($request_log_ending eq 'failed' && scalar @image_group_names == 1 && $image_group_names[0] =~ /^newimages-.*/i) {
+		notify($ERRORS{'WARNING'}, 0, "log ending should not be set to '$request_log_ending' because image only belongs to $image_group_names[0] group, changing to 'failedtest'");
+		$request_log_ending = 'failedtest';
+	}
+	
+	# Don't set ending to 'failed' if not a state the end user sees
+	if ($request_log_ending eq 'failed' && $request_state_name =~ /^(reload|to.*|makeproduction|.*hpc.*|image)$/) {
+		notify($ERRORS{'WARNING'}, 0, "log ending should not be set to '$request_log_ending' because request state is $request_state_name, changing to 'failedtest'");
+		$request_log_ending = 'failedtest';
+	}
+	
+	# Don't set ending to 'failed' if imagerevision.production = 0
+	if ($request_log_ending eq 'failed' && !$imagerevision_production) {
+		notify($ERRORS{'WARNING'}, 0, "log ending should not be set to '$request_log_ending' because imagerevision.production = 0, changing to 'failedtest'");
+		$request_log_ending = 'failedtest';
+	}
+	
+	
+	# Construct the update statement 
+	my $sql_update_statement = "
+	UPDATE
+	log
+	SET
+	log.ending = \'$request_log_ending\',
+	log.finalend = NOW()
+	WHERE
+	log.id = $request_log_id
+	";
+	
+	# Execute the update statement
+	if (database_execute($sql_update_statement)) {
+		notify($ERRORS{'OK'}, 0, "executed update statement to set log ending to $request_log_ending for log id: $request_log_id");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute update statement to set log ending to $request_log_ending for log id: $request_log_id");
+		return;
+	}
+	
+	# Check the actual ending value in the database, SQL update returns 1 even if 0 rows were affected
+	# Construct a select statement 
+	my $sql_select_statement = "
+	SELECT
+	log.ending,
+	log.finalend
+	FROM
+	log
+	WHERE
+	log.id = $request_log_id
+	";
+	
+	# Call database_select() to execute the select statement and make sure 1 row was returned
+	my @select_rows = VCL::utils::database_select($sql_select_statement);
+	if (!scalar @select_rows == 1) {
+		notify($ERRORS{'WARNING'}, 0, "unable to verify log ending value, select statement returned " . scalar @select_rows . " rows:\n" . join("\n", $sql_select_statement));
+		return;
+	}
+	
+	# $select_rows[0] is a hash reference, the keys are the column names
+	my $log_ending = $select_rows[0]->{ending};
+	
+	# Compare the ending value in the database to the argument
+	if ($log_ending && $log_ending eq $request_log_ending) {
+		notify($ERRORS{'DEBUG'}, 0, "verified log ending was set to '$request_log_ending' for log id: $request_log_id");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "log ending in database ('$log_ending') does not match requested value ('$request_log_ending') for log id: $request_log_id");
+		return;
+	}
+
+	return 1;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
