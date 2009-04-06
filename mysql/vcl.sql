@@ -1250,7 +1250,8 @@ INSERT INTO `module` (`id`, `name`, `prettyname`, `description`, `perlpackage`) 
 (6, 'os_unix', 'Unix Operating System Module', '', ''),
 (7, 'os_winvista', 'Windows Vista OS Module', '', 'VCL::Module::OS::Windows::Desktop::Vista'),
 (8, 'predictive_level_0', 'Predictive Loading Level 0 Module', '', 'VCL::Module::Predictive::Level_0'),
-(9, 'predictive_level_1', 'Predictive Loading Level 1 Module', '', 'VCL::Module::Predictive::Level_1');
+(9, 'predictive_level_1', 'Predictive Loading Level 1 Module', '', 'VCL::Module::Predictive::Level_1'),
+(10, 'provisioning_esx_server', 'VMWare ESX Provisioning Module', '', 'VCL::Module::Provisioning::esx');
 
 -- 
 -- Dumping data for table `OS`
@@ -1329,7 +1330,8 @@ INSERT INTO `privnode` (`id`, `parent`, `name`) VALUES
 INSERT INTO `provisioning` (`id`, `name`, `prettyname`, `moduleid`) VALUES
 (1, 'xcat', 'xCAT 1.x Provisioning', 1),
 (2, 'vmware_server', 'VMWare Server Provisioning', 2),
-(3, 'lab', 'Computing Lab Provisioning', 3);
+(3, 'lab', 'Computing Lab Provisioning', 3),
+(4, 'esx', 'VMWare ESX', 10);
 
 -- 
 -- Dumping data for table `resource`
@@ -1532,7 +1534,7 @@ INSERT INTO `vmprofile` (`id`, `profilename`, `vmtypeid`, `imageid`, `nasshare`,
 (1, 'VMware GSX standard', 3, 8, NULL, '/var/lib/vmware/Virtual Machines', NULL, NULL, 'VMnet2', 'localdisk'),
 (2, 'Vmware ESX standard network mounted share', 5, 9, NULL, '/vmfs/volumes/nfs1', '/vmfs/volumes/storage1', 'VM Network', 'Virtual Machine Public Network', 'networkdisk'),
 (3, 'Vmware ESX standard localdisk', 5, 9, NULL, '/vmfs/volumes/storage1', NULL, 'VM Network', 'Virtual Machine Public Network', 'localdisk'),
-(4, 'Vmware ESX SAN ', 5, 9, NULL, '/vmfs/volumes/NetApp', '/vmfs/volumes/storage1', 'Intranet2', 'MCNC Public', 'networkdisk');
+(4, 'Vmware ESX SAN ', 6, 9, NULL, '/vmfs/volumes/NetApp', '/vmfs/volumes/storage1', 'Intranet2', 'MCNC Public', 'networkdisk');
 
 -- 
 -- Dumping data for table `vmtype`
