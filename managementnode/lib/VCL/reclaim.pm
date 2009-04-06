@@ -110,9 +110,6 @@ sub process {
 	my $user_unityid            = $self->data->get_user_login_id();
 	my $computer_currentimage_name = $self->data->get_computer_currentimage_name();
 
-	# Assemble a consistent prefix for notify messages
-	my $notify_prefix = "req=$request_id, res=$reservation_id:";
-
 	# Retrieve next image
 	# It's possible the results may not get used based on the state of the reservation 
 	my @nextimage;
@@ -121,7 +118,7 @@ sub process {
 		@nextimage = $self->data->get_next_image_dataStructure();
 	}
 	else{
-		notify($ERRORS{'WARNING'}, 0, "$notify_prefix predictor module does not support get_next_image, calling default get_next_image from utils");
+		notify($ERRORS{'WARNING'}, 0, "predictor module does not support get_next_image, calling default get_next_image from utils");
 		@nextimage = get_next_image_default($computer_id);
 	}
 
@@ -134,7 +131,7 @@ sub process {
 	$request_data->{reservation}{$reservation_id}{imagerevisionid}          = $nextimage[2];
 
 	my $nextimagename = $nextimage[0];
-	notify($ERRORS{'OK'}, 0, "$notify_prefix nextimage results imagename=$nextimage[0] imageid=$nextimage[1] imagerevisionid=$nextimage[2]");
+	notify($ERRORS{'OK'}, 0, "nextimage results imagename=$nextimage[0] imageid=$nextimage[1] imagerevisionid=$nextimage[2]");
 
 
 	# Insert into computerloadlog if request state = timeout
@@ -148,13 +145,13 @@ sub process {
 
 	# If request laststate = new, nothing needs to be done
 	if ($request_laststate_name =~ /new/) {
-		notify($ERRORS{'OK'}, 0, "$notify_prefix request laststate is $request_laststate_name, nothing needs to be done to the computer");
+		notify($ERRORS{'OK'}, 0, "request laststate is $request_laststate_name, nothing needs to be done to the computer");
 		# Proceed to set request to complete and computer to available
 	}
 
 	# Don't attempt to do anything to machines that are currently reloading
 	elsif ($computer_state_name =~ /maintenance|reloading/) {
-		notify($ERRORS{'OK'}, 0, "$notify_prefix computer in $computer_state_name state, nothing needs to be done to the computer");
+		notify($ERRORS{'OK'}, 0, "computer in $computer_state_name state, nothing needs to be done to the computer");
 		# Proceed to set request to complete
 	}
 
@@ -165,12 +162,12 @@ sub process {
 	# Lab computers only need to have sshd disabled.
 	
 	elsif ($computer_type =~ /blade|virtualmachine/) {
-		notify($ERRORS{'OK'}, 0, "$notify_prefix computer type is $computer_type");
+		notify($ERRORS{'OK'}, 0, "computer type is $computer_type");
 
 		# Check if request laststate is reserved
 		# This is the only case where computers will be cleaned and not reloaded
 		if ($request_laststate_name =~ /reserved/) {
-			notify($ERRORS{'OK'}, 0, "$notify_prefix request laststate is $request_laststate_name, attempting to clean up computer for next user");
+			notify($ERRORS{'OK'}, 0, "request laststate is $request_laststate_name, attempting to clean up computer for next user");
 
 			# *** BEGIN MODULARIZED OS CODE ***
 			# Attempt to get the name of the image currently loaded on the computer
@@ -216,19 +213,19 @@ sub process {
 			# Check the image OS type and clean up computer accordingly
 			elsif ($image_os_type =~ /windows/) {
 				# Loaded Windows image needs to be cleaned up
-				notify($ERRORS{'OK'}, 0, "$notify_prefix attempting steps to clean up loaded $image_os_name image");
+				notify($ERRORS{'OK'}, 0, "attempting steps to clean up loaded $image_os_name image");
 
 				# Remove user
 				if (del_user($computer_shortname, $user_unityid, $computer_type, $image_os_name,$image_os_type)) {
-					notify($ERRORS{'OK'}, 0, "$notify_prefix user $user_unityid removed from $computer_shortname");
+					notify($ERRORS{'OK'}, 0, "user $user_unityid removed from $computer_shortname");
 					insertloadlog($reservation_id, $computer_id, "info", "reclaim: removed user");
 				}
 				else {
-					notify($ERRORS{'WARNING'}, 0, "$notify_prefix could not remove user $user_unityid from $computer_shortname, proceed to forced reload");
+					notify($ERRORS{'WARNING'}, 0, "could not remove user $user_unityid from $computer_shortname, proceed to forced reload");
 
 					# Insert reload request data into the datbase
 					if (insert_reload_request($request_data)) {
-						notify($ERRORS{'OK'}, 0, "$notify_prefix inserted reload request into database for computer id=$computer_id imagename=$nextimagename");
+						notify($ERRORS{'OK'}, 0, "inserted reload request into database for computer id=$computer_id imagename=$nextimagename");
 
 						# Switch the request state to complete, leave the computer state as is
 						# Update log ending to EOR
@@ -236,7 +233,7 @@ sub process {
 						switch_state($request_data, 'complete', '', 'EOR', '1');
 					}
 					else {
-						notify($ERRORS{'CRITICAL'}, 0, "$notify_prefix failed to insert reload request into database for computer id=$computer_id imagename=$nextimagename");
+						notify($ERRORS{'CRITICAL'}, 0, "failed to insert reload request into database for computer id=$computer_id imagename=$nextimagename");
 
 						# Switch the request and computer states to failed, log ending to failed, exit
 						switch_state($request_data, 'failed', 'failed', 'failed', '1');
@@ -246,21 +243,21 @@ sub process {
 
 				# Disable RDP
 				if (remotedesktopport($computer_shortname, "DISABLE")) {
-					notify($ERRORS{'OK'}, 0, "$notify_prefix remote desktop disabled on $computer_shortname");
+					notify($ERRORS{'OK'}, 0, "remote desktop disabled on $computer_shortname");
 					insertloadlog($reservation_id, $computer_id, "info", "reclaim: disabled RDP");
 				}
 				else {
-					notify($ERRORS{'WARNING'}, 0, "$notify_prefix remote desktop could not be disabled on $computer_shortname");
+					notify($ERRORS{'WARNING'}, 0, "remote desktop could not be disabled on $computer_shortname");
 
 					# Insert reload request data into the datbase
 					if (insert_reload_request($request_data)) {
-						notify($ERRORS{'OK'}, 0, "$notify_prefix inserted reload request into database for computer id=$computer_id imagename=$nextimagename");
+						notify($ERRORS{'OK'}, 0, "inserted reload request into database for computer id=$computer_id imagename=$nextimagename");
 
 						# Switch the request state to complete, leave the computer state as is, log ending to EOR, exit
 						switch_state($request_data, 'complete', '', 'EOR', '1');
 					}
 					else {
-						notify($ERRORS{'CRITICAL'}, 0, "$notify_prefix failed to insert reload request into database for computer id=$computer_id imagename=$nextimagename");
+						notify($ERRORS{'CRITICAL'}, 0, "failed to insert reload request into database for computer id=$computer_id imagename=$nextimagename");
 
 						# Switch the request and computer states to failed, log ending to failed, exit
 						switch_state($request_data, 'failed', 'failed', 'failed', '1');
@@ -270,27 +267,27 @@ sub process {
 
 				## Stop Tivoli Monitoring
 				#if (system_monitoring($computer_shortname, $imagerevision_imagename, "stop", "ITM")) {
-				#	notify($ERRORS{'OK'}, 0, "$notify_prefix ITM monitoring disabled");
+				#	notify($ERRORS{'OK'}, 0, "ITM monitoring disabled");
 				#}
 			} ## end if ($image_os_name =~ /^(win|vmwarewin|vmwareesxwin)/)
 
 			elsif ($image_os_type =~ /linux/){
 				# Loaded Linux image needs to be cleaned up
-				notify($ERRORS{'OK'}, 0, "$notify_prefix attempting steps to clean up loaded $image_os_name image");
+				notify($ERRORS{'OK'}, 0, "attempting steps to clean up loaded $image_os_name image");
 
 				# Make sure user is not connected
 				if (isconnected($computer_shortname, $computer_type, $reservation_remoteip, $image_os_name, $computer_ipaddress,$image_os_type)) {
-					notify($ERRORS{'WARNING'}, 0, "$notify_prefix user $user_unityid is connected to $computer_shortname, vm will be reloaded");
+					notify($ERRORS{'WARNING'}, 0, "user $user_unityid is connected to $computer_shortname, vm will be reloaded");
 
 					# Insert reload request data into the datbase
 					if (insert_reload_request($request_data)) {
-						notify($ERRORS{'OK'}, 0, "$notify_prefix inserted reload request into database for computer id=$computer_id imagename=$nextimagename");
+						notify($ERRORS{'OK'}, 0, "inserted reload request into database for computer id=$computer_id imagename=$nextimagename");
 
 						# Switch the request state to complete, leave the computer state as is, set log ending to EOR, exit
 						switch_state($request_data, 'complete', '', 'EOR', '1');
 					}
 					else {
-						notify($ERRORS{'CRITICAL'}, 0, "$notify_prefix failed to insert reload request into database for computer id=$computer_id");
+						notify($ERRORS{'CRITICAL'}, 0, "failed to insert reload request into database for computer id=$computer_id");
 
 						# Switch the request and computer states to failed, log ending to failed, exit
 						switch_state($request_data, 'failed', 'failed', 'failed', '1');
@@ -300,21 +297,21 @@ sub process {
 
 				# User is not connected, delete the user
 				if (del_user($computer_shortname, $user_unityid, $computer_type, $image_os_name)) {
-					notify($ERRORS{'OK'}, 0, "$notify_prefix user $user_unityid removed from $computer_shortname");
+					notify($ERRORS{'OK'}, 0, "user $user_unityid removed from $computer_shortname");
 					insertloadlog($reservation_id, $computer_id, "info", "reclaim: removed user");
 				}
 				else {
-					notify($ERRORS{'OK'}, 0, "$notify_prefix user $user_unityid could not be removed from $computer_shortname, vm will be reloaded");
+					notify($ERRORS{'OK'}, 0, "user $user_unityid could not be removed from $computer_shortname, vm will be reloaded");
 
 					# Insert reload request data into the datbase
 					if (insert_reload_request($request_data)) {
-						notify($ERRORS{'OK'}, 0, "$notify_prefix inserted reload request into database for computer id=$computer_id");
+						notify($ERRORS{'OK'}, 0, "inserted reload request into database for computer id=$computer_id");
 
 						# Switch the request state to complete, leave the computer state as is, log ending to EOR, exit
 						switch_state($request_data, 'complete', '', 'EOR', '1');
 					}
 					else {
-						notify($ERRORS{'CRITICAL'}, 0, "$notify_prefix failed to insert reload request into database for computer id=$computer_id");
+						notify($ERRORS{'CRITICAL'}, 0, "failed to insert reload request into database for computer id=$computer_id");
 
 						# Switch the request and computer states to failed, log ending to failed, exit
 						switch_state($request_data, 'failed', 'failed', 'failed', '1');
@@ -325,17 +322,17 @@ sub process {
 
 			else {
 				# Unknown image type
-				notify($ERRORS{'WARNING'}, 0, "$notify_prefix unsupported image OS detected: $image_os_name, reload will be attempted");
+				notify($ERRORS{'WARNING'}, 0, "unsupported image OS detected: $image_os_name, reload will be attempted");
 
 				# Insert reload request data into the datbase
 				if (insert_reload_request($request_data)) {
-					notify($ERRORS{'OK'}, 0, "$notify_prefix inserted reload request into database for computer id=$computer_id");
+					notify($ERRORS{'OK'}, 0, "inserted reload request into database for computer id=$computer_id");
 
 					# Switch the request state to complete, leave the computer state as is, log ending to EOR, exit
 					switch_state($request_data, 'complete', '', 'EOR', '1');
 				}
 				else {
-					notify($ERRORS{'CRITICAL'}, 0, "$notify_prefix failed to insert reload request into database for computer id=$computer_id");
+					notify($ERRORS{'CRITICAL'}, 0, "failed to insert reload request into database for computer id=$computer_id");
 
 					# Switch the request and computer states to failed, log ending to failed, exit
 					switch_state($request_data, 'failed', 'failed', 'failed', '1');
@@ -347,14 +344,14 @@ sub process {
 		else {
 			# Either blade or vm, request laststate is not reserved
 			# Computer should be reloaded
-			notify($ERRORS{'OK'}, 0, "$notify_prefix request laststate is $request_laststate_name, reload will be attempted");
+			notify($ERRORS{'OK'}, 0, "request laststate is $request_laststate_name, reload will be attempted");
 
 			# Insert reload request data into the datbase
 			if (insert_reload_request($request_data)) {
-				notify($ERRORS{'OK'}, 0, "$notify_prefix inserted reload request into database for computer id=$computer_id imagename=$nextimagename");
+				notify($ERRORS{'OK'}, 0, "inserted reload request into database for computer id=$computer_id imagename=$nextimagename");
 			}
 			else {
-				notify($ERRORS{'CRITICAL'}, 0, "$notify_prefix failed to insert reload request into database for computer id=$computer_id imagename=$nextimagename");
+				notify($ERRORS{'CRITICAL'}, 0, "failed to insert reload request into database for computer id=$computer_id imagename=$nextimagename");
 
 				# Switch the request and computer states to failed, log ending to failed, exit
 				switch_state($request_data, 'failed', 'failed', 'failed', '1');
@@ -368,37 +365,37 @@ sub process {
 	} ## end elsif ($computer_type =~ /blade|virtualmachine/) [ if ($request_laststate_name =~ /new/)
 
 	elsif ($computer_type =~ /lab/) {
-		notify($ERRORS{'OK'}, 0, "$notify_prefix computer type is $computer_type");
+		notify($ERRORS{'OK'}, 0, "computer type is $computer_type");
 
 		# Display a warning if laststate is not inuse, or reserved
 		#    but still try to clean up computer
 		if ($request_laststate_name =~ /inuse|reserved/) {
-			notify($ERRORS{'OK'}, 0, "$notify_prefix request laststate is $request_laststate_name");
+			notify($ERRORS{'OK'}, 0, "request laststate is $request_laststate_name");
 		}
 		else {
-			notify($ERRORS{'WARNING'}, 0, "$notify_prefix laststate for request is $request_laststate_name, this shouldn't happen");
+			notify($ERRORS{'WARNING'}, 0, "laststate for request is $request_laststate_name, this shouldn't happen");
 		}
 
 		# Disable sshd
 		if (disablesshd($computer_ipaddress, $user_unityid, $reservation_remoteip, "timeout", $image_os_name)) {
-			notify($ERRORS{'OK'}, 0, "$notify_prefix sshd on $computer_shortname $computer_ipaddress has been disabled");
+			notify($ERRORS{'OK'}, 0, "sshd on $computer_shortname $computer_ipaddress has been disabled");
 			insertloadlog($reservation_id, $computer_id, "info", "reclaim: disabled sshd");
 		}
 		else {
-			notify($ERRORS{'CRITICAL'}, 0, "$notify_prefix unable to disable sshd on $computer_shortname $computer_ipaddress");
+			notify($ERRORS{'CRITICAL'}, 0, "unable to disable sshd on $computer_shortname $computer_ipaddress");
 			insertloadlog($reservation_id, $computer_id, "info", "reclaim: unable to disable sshd");
 
 			# Attempt to put lab computer in failed state if not already in maintenance
 			if ($computer_state_name =~ /maintenance/) {
-				notify($ERRORS{'OK'}, 0, "$notify_prefix $computer_shortname in $computer_state_name state, skipping state update to failed");
+				notify($ERRORS{'OK'}, 0, "$computer_shortname in $computer_state_name state, skipping state update to failed");
 			}
 			else {
 				if (update_computer_state($computer_id, "failed")) {
-					notify($ERRORS{'OK'}, 0, "$notify_prefix $computer_shortname put into failed state");
+					notify($ERRORS{'OK'}, 0, "$computer_shortname put into failed state");
 					insertloadlog($reservation_id, $computer_id, "info", "reclaim: set computer state to failed");
 				}
 				else {
-					notify($ERRORS{'CRITICAL'}, 0, "$notify_prefix unable to put $computer_shortname into failed state");
+					notify($ERRORS{'CRITICAL'}, 0, "unable to put $computer_shortname into failed state");
 					insertloadlog($reservation_id, $computer_id, "info", "reclaim: unable to set computer state to failed");
 				}
 			} ## end else [ if ($computer_state_name =~ /maintenance/)
@@ -407,14 +404,14 @@ sub process {
 
 	# Unknown computer type, this shouldn't happen
 	else {
-		notify($ERRORS{'CRITICAL'}, 0, "$notify_prefix unsupported computer type: $computer_type, not blade, virtualmachine, or lab");
+		notify($ERRORS{'CRITICAL'}, 0, "unsupported computer type: $computer_type, not blade, virtualmachine, or lab");
 		insertloadlog($reservation_id, $computer_id, "info", "reclaim: unsupported computer type: $computer_type");
 	}
 
 	# Update the request state to complete and exit
 	# Set the computer state to available if it isn't in the maintenance or reloading state
 	if ($computer_state_name =~ /maintenance|reloading/) {
-		notify($ERRORS{'OK'}, 0, "$notify_prefix $computer_shortname in $computer_state_name state, skipping state update to available");
+		notify($ERRORS{'OK'}, 0, "$computer_shortname in $computer_state_name state, skipping state update to available");
 		switch_state($request_data, 'complete', '', '', '1');
 	}
 	else {
