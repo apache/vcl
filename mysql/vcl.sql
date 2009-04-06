@@ -480,7 +480,7 @@ CREATE TABLE IF NOT EXISTS `log` (
   `initialend` datetime NOT NULL default '0000-00-00 00:00:00',
   `finalend` datetime NOT NULL default '0000-00-00 00:00:00',
   `wasavailable` tinyint(1) unsigned NOT NULL default '0',
-  `ending` enum('deleted','released','failed','noack','nologin','timeout','EOR','none') NOT NULL default 'none',
+  `ending` enum('deleted','released','failed','failedtest','noack','nologin','timeout','EOR','none') NOT NULL default 'none',
   `requestid` mediumint(8) unsigned default NULL,
   `computerid` smallint(5) unsigned default NULL,
   `remoteIP` varchar(15) default NULL,
