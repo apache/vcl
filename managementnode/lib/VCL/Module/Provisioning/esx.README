@@ -34,15 +34,10 @@ The VCL management node acts as a dhcp server for the private (eth0) NICs of the
 
 
 
-Install the module:
+Customizing the ESX module for your hypervisors:
 
-1)  Place the module (esx.pm) in your management node's lib/VCL/Module/Provisioning/ directory
-2)  Insert a row into the module table with `perlpackage` equal to 'VCL::Module::Provisioning::esx'
-3)  Insert a row into the provisioning table with `moduleid` equal to the id of the entry from step 1 (inserting into the module table)
-4)  Insert a record into the 'vmprofile' table with the following guidelines
-	profilename: VMware ESX SAN
-	vmtypeid: link to anything valid ID from the vmtype table.
-	imageid: link to the "No Image" id in the image table
+Update the database record in the 'vmprofile' table where vmprofile.id=6 with information specific to your environment
+
 	datastorepath: <ipaddress>:<NFS mount path>  for example a valid entry could be  (152.14.17.112:/mnt/export)
 	virtualswitch0: <name of your private virtual machine port group> 
 	virtualswitch1: <name of your public virtual machine port group>
