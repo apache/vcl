@@ -79,4 +79,5 @@ Now your hypervisors and virtual machines are setup.  Add an image:
 	name:  esx3-<what you want>-v0
 	OSid:  link to the correct operating system entry in the OS table
 2)  Create an image revision table with the imageid from the entry created in the image table  and the imagename used in that same entry
-3)  Add the image revision to the allImages and allVMimages groups
+3)  Create an image in the resource table with resource.type=13 and resource.subid=<your image's image.subid>
+4)  Add the image revision to the allImages and allVMimages groups
