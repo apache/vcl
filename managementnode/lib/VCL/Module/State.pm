@@ -339,6 +339,455 @@ sub reservation_failed {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 update_request_state_new
+
+ Parameters  : 
+ Returns     : 1 if successful
+               0 if the state was not updated because the state is already maintenance
+					undefined if an error occurred
+ Description : 
+
+=cut
+
+sub update_request_state_new {
+	my $self = shift;
+	if (ref($self) !~ /VCL::/) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was NOT called as a class method, process exiting");
+		exit;
+	}
+	
+	# Get and check the argument
+	my $request_state_name_argument = shift;
+	if (!$request_state_name_argument) {
+		notify($ERRORS{'CRITICAL'}, 0, "new request state name argument was not passed");
+		return;
+	}
+	
+	# Get the necessary data from the DataStructure object
+	my $request_id = $self->data->get_request_id();
+	
+	# Retrieve the current states directly from the database
+	my $select_state_names_statement = "
+	SELECT
+	state.name AS state_name,
+	laststate.name AS laststate_name
+	FROM
+	request,
+	state state,
+	state laststate
+	WHERE
+	request.id = $request_id
+	AND state.id = request.stateid
+	AND laststate.id = request.laststateid
+	";
+	
+	# Execute the select statement
+	my @selected_rows = database_select($select_state_names_statement);
+	
+	# Check if row was returned
+	if ((scalar @selected_rows) == 0) {
+		notify($ERRORS{'WARNING'}, 0, "0 rows returned from request state select statement, request was probably deleted, returning 0");
+		return 0;
+	}
+	
+	# Get the state names from the row
+	my $request_state_name_old = $selected_rows[0]{state_name};
+	my $request_laststate_name_old = $selected_rows[0]{laststate_name};
+	
+	# Check if request state is maintenance
+	if ($request_state_name_old =~ /^(maintenance)$/ || ($request_state_name_old eq 'pending' && $request_laststate_name_old =~ /^(maintenance)$/)) {
+		notify($ERRORS{'WARNING'}, 0, "request state not updated because it is already set to $request_state_name_old/$request_laststate_name_old, returning 0");
+		return 0;
+	}
+	
+	# Figure out the new states based on what was requested and the current values in the database
+	my $request_state_name_new;
+	my $request_laststate_name_new;
+	
+	# If request state name argument is 'pending':
+	#   state --> 'pending'
+	#   laststate --> previous state
+	# If current state is already 'pending', leave states alone
+	# Request laststate should never be set to 'pending' (that's useless data)
+	if ($request_state_name_argument eq 'pending') {
+		if ($request_state_name_old eq 'pending') {
+			notify($ERRORS{'WARNING'}, 0, "request state not updated to $request_state_name_argument, it is already set to $request_state_name_old/$request_laststate_name_old, returning 1");
+			return 1;
+		}
+		else {
+			$request_state_name_new = $request_state_name_argument;
+			$request_laststate_name_new = $request_state_name_old;
+		}
+	}
+	else {
+		if ($request_state_name_old eq 'pending') {
+			# Request is currently: pending/yyy
+			# Update to:            argument/yyy
+			$request_state_name_new = $request_state_name_argument;
+			$request_laststate_name_new = $request_laststate_name_old;
+		}
+		else {
+			# Request is currently: xxx/yyy
+			# Update to:            argument/xxx
+			$request_state_name_new = $request_state_name_argument;
+			$request_laststate_name_new = $request_laststate_name_old;
+		}
+	}
+	
+
+	# Construct the SQL update statement
+	my $update_statement = "
+	UPDATE
+	request,
+	state state,
+	state laststate
+	SET
+	request.stateid = state.id,
+	request.laststateid = laststate.id
+	WHERE
+	state.name = \'$request_state_name_new\'
+	AND laststate.name = \'$request_laststate_name_new\'
+	AND request.id = $request_id
+	";
+	
+	# Call the database execute subroutine
+	if (database_execute($update_statement)) {
+		notify($ERRORS{'OK'}, 0, "database request state updated: $request_state_name_old/$request_laststate_name_old --> $request_state_name_new/$request_laststate_name_new");
+		$self->insert_computerloadlog("info", "request state updated: $request_state_name_old/$request_laststate_name_old --> $request_state_name_new/$request_laststate_name_new");
+		
+		# Update the DataStructure object
+		# Never update the request state or laststate in the DataStructure object to 'pending'
+		if ($request_state_name_new eq 'pending') {
+			# If the new request state is 'pending', update it to what was previously in the database
+			$self->data->set_request_state_name($request_state_name_old);
+			$self->data->set_request_laststate_name($request_laststate_name_old);
+		}
+		else {
+			# If the new request state isn't 'pending', update it to what was just set in the database
+			$self->data->set_request_state_name($request_state_name_new);
+			$self->data->set_request_laststate_name($request_laststate_name_new);
+		}
+		notify($ERRORS{'DEBUG'}, 0, "DataStructure object request state updated: " . $self->data->get_request_state_name() . "/" . $self->data->get_request_laststate_name());
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to update request state: $request_state_name_old/$request_laststate_name_old --> $request_state_name_new/$request_laststate_name_new");
+		$self->insert_computerloadlog("info", "failed to update request state: $request_state_name_old/$request_laststate_name_old --> $request_state_name_new/$request_laststate_name_new");
+		return;
+	}
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 update_computer_state_new
+
+ Parameters  : 
+ Returns     : 
+ Description : 
+
+=cut
+
+sub update_computer_state_new {
+	my $self = shift;
+	if (ref($self) !~ /VCL::/) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was NOT called as a class method, process exiting");
+		exit;
+	}
+	
+	# Get and check the argument
+	my $computer_state_name_argument = shift;
+	if (!$computer_state_name_argument) {
+		notify($ERRORS{'CRITICAL'}, 0, "new computer state name argument was not passed");
+		return;
+	}
+	
+	# Get the necessary data from the DataStructure object
+	my $computer_id = $self->data->get_computer_id();
+	my $computer_state_name_old = $self->data->get_computer_state_name();
+	
+	# Construct the SQL update statement
+	my $update_statement = "
+	UPDATE
+	computer,
+	state
+	SET
+	computer.stateid = state.id
+	WHERE
+	state.name = \'$computer_state_name_argument\'
+	AND computer.id = $computer_id
+	";
+
+	# Call the database execute subroutine
+	if (database_execute($update_statement)) {
+		notify($ERRORS{'OK'}, 0, "computer state updated: $computer_state_name_old --> $computer_state_name_argument");
+		$self->insert_computerloadlog("info", "computer state updated: $computer_state_name_old --> $computer_state_name_argument");
+		$self->data->set_computer_state_name($computer_state_name_argument);
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to update computer state: $computer_state_name_old --> $computer_state_name_argument");
+		$self->insert_computerloadlog("info", "failed to update computer state: $computer_state_name_old --> $computer_state_name_argument");
+		return;
+	}
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 insert_computerloadlog
+
+ Parameters  : 
+ Returns     : 
+ Description : 
+
+=cut
+
+sub insert_computerloadlog {
+	my $self = shift;
+	if (ref($self) !~ /VCL::/) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was NOT called as a class method, process exiting");
+		exit;
+	}
+	
+	# Get and check the arguments
+	my $loadstate_name = shift;
+	my $additional_info = shift;
+	if (!$loadstate_name || !$additional_info) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was not called with necessary arguments");
+		return;
+	}
+	
+	# Escape any single quotes in the additional info message
+	$additional_info =~ s/\'/\\\'/g;
+	
+	# Get the reservation id
+	my $reservation_id = $self->data->get_reservation_id();
+	if (!$reservation_id) {
+		notify($ERRORS{'WARNING'}, 0, "reservation id could not be retrieved");
+		return;
+	}
+	
+	# Get the computer id
+	my $computer_id = $self->data->get_computer_id();
+	if (!$computer_id) {
+		notify($ERRORS{'WARNING'}, 0, "computer id could not be retrieved");
+		return;
+	}
+	
+
+	# Check to make sure the passed loadstatename exists in the computerloadstate table
+	my $select_statement = "
+	SELECT DISTINCT
+	computerloadstate.id
+	FROM
+	computerloadstate
+	WHERE
+	computerloadstate.loadstatename = '$loadstate_name'
+	";
+
+	my $loadstate_id;
+	my @selected_rows = database_select($select_statement);
+	
+	# Check if loadstate name was found
+	if ((scalar @selected_rows) == 0) {
+		notify($ERRORS{'CRITICAL'}, 0, "computerloadstate name does not exist: $loadstate_name, using NULL");
+		$loadstate_id   = 'NULL';
+		$loadstate_name = 'NULL';
+	}
+	else {
+		$loadstate_id = $selected_rows[0]{id};
+	}
+
+	# Assemble the SQL statement
+	my $insert_loadlog_statement = "
+   INSERT INTO
+   computerloadlog
+   (
+      reservationid,
+      computerid,
+      loadstateid,
+      timestamp,
+      additionalinfo
+   )
+   VALUES
+   (
+      '$reservation_id',
+      '$computer_id',
+      '$loadstate_id',
+      NOW(),
+      '$additional_info'
+   )
+   ";
+
+	# Execute the insert statement, the return value should be the id of the computerloadlog row that was inserted
+	my $loadlog_id = database_execute($insert_loadlog_statement);
+	if ($loadlog_id) {
+		notify($ERRORS{'DEBUG'}, 0, "inserted row into computerloadlog table: id=$loadlog_id, loadstate=$loadstate_name, additional info: '$additional_info'");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to insert row into computerloadlog table: loadstate=$loadstate_name, additional info: '$additional_info'");
+	}
+
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 update_log_ending_new
+
+ Parameters  : string containing the log ending value
+ Returns     : true if successful, false if failed
+ Description : Updates the log.ending value in the database for the log ID
+               set for this reservation. Returns false if log ID is not
+					set. A string argument must be passed containing the new
+					log.ending value.
+					
+=cut
+
+sub update_log_ending_new {
+	# Check if subroutine was called as an object method
+	my $self = shift;
+	if (!ref($self) =~ /VCL::/) {
+		notify($ERRORS{'WARNING'}, 0, "subroutine must be called as an object method");
+		return;
+	}
+	
+	# Make sure log ending value was passed
+	my $request_log_ending = shift;
+	if (!$request_log_ending) {
+		notify($ERRORS{'WARNING'}, 0, "log ending value argument was not passed");
+		return;
+	}
+	
+	# Get the log id, make sure it is configured
+	my $request_log_id = $self->data->get_request_log_id();
+	if (!$request_log_id) {
+		notify($ERRORS{'WARNING'}, 0, "request log id could not be retrieved");
+		return;
+	}
+	
+	# Get the other necessary data
+	my $request_state_name = $self->data->get_request_state_name();
+	my $image_id = $self->data->get_image_id();
+	my $image_name = $self->data->get_image_name();
+	my $imagerevision_production = $self->data->get_imagerevision_production();
+		
+	
+	# Make sure the requested log ending makes sense
+	if ($request_log_ending eq 'failed') {		
+		
+		# Don't set ending to 'failed' if imagerevision.production = 0
+		if (!$imagerevision_production) {
+			notify($ERRORS{'WARNING'}, 0, "log ending should not be set to '$request_log_ending' because imagerevision.production = 0, changing to 'failedtest'");
+			$request_log_ending = 'failedtest';
+		}
+		
+		else {
+			# Construct a select statement to retrieve the resource group names this image belongs to
+			my $select_image_groups_statement = "
+			SELECT DISTINCT
+			resourcegroup.name
+			FROM
+			image,
+			resource,
+			resourcetype,
+			resourcegroup,
+			resourcegroupmembers
+			WHERE
+			image.id = $image_id AND
+			resource.subid = image.id AND resource.resourcetypeid = 13 AND
+			resourcegroupmembers.resourceid = resource.id AND
+			resourcegroup.id = resourcegroupmembers.resourcegroupid
+			";
+			
+			# Call database_select() to execute the select statement
+			my @image_group_rows = VCL::utils::database_select($select_image_groups_statement);
+			if (!scalar @image_group_rows == 1) {
+				notify($ERRORS{'WARNING'}, 0, "unable to retrieve image group names for image $image_name");
+				return;
+			}
+			
+			# Assemble an array from the select return array
+			my @image_group_names;
+			for my $image_group_row (@image_group_rows) {
+				my $image_group_name = $image_group_row->{name};
+				push @image_group_names, $image_group_name;
+			}
+			notify($ERRORS{'DEBUG'}, 0, "retrieved groups image $image_name belongs to:\n" . join("\n", @image_group_names));
+			
+			# Don't set ending to 'failed' if image only belongs to newimages-* group
+			if ($request_log_ending eq 'failed' && scalar @image_group_names == 1 && $image_group_names[0] =~ /^newimages-.*/i) {
+				notify($ERRORS{'WARNING'}, 0, "log ending should not be set to '$request_log_ending' because image only belongs to $image_group_names[0] group, changing to 'failedtest'");
+				$request_log_ending = 'failedtest';
+			}
+		}
+	}
+	
+	# Always set ending to 'none' if not a state the end user sees
+	if ($request_log_ending ne 'none' && $request_state_name =~ /^(reload|to.*|.*hpc.*|image)$/) {
+		notify($ERRORS{'WARNING'}, 0, "log ending should NOT be set to '$request_log_ending' because request state is $request_state_name, changing to 'none'");
+		$request_log_ending = 'none';
+	}
+	
+	# Construct the update statement 
+	my $sql_update_statement = "
+	UPDATE
+	log
+	SET
+	log.ending = \'$request_log_ending\',
+	log.finalend = NOW()
+	WHERE
+	log.id = $request_log_id
+	";
+	
+	# Execute the update statement
+	if (database_execute($sql_update_statement)) {
+		notify($ERRORS{'DEBUG'}, 0, "executed update statement to set log ending to $request_log_ending for log id: $request_log_id");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute update statement to set log ending to $request_log_ending for log id: $request_log_id");
+		return;
+	}
+	
+	# Check the actual ending value in the database, SQL update returns 1 even if 0 rows were affected
+	# Construct a select statement 
+	my $sql_select_statement = "
+	SELECT
+	log.ending,
+	log.finalend
+	FROM
+	log
+	WHERE
+	log.id = $request_log_id
+	";
+	
+	# Call database_select() to execute the select statement and make sure 1 row was returned
+	my @select_rows = VCL::utils::database_select($sql_select_statement);
+	if (!scalar @select_rows == 1) {
+		notify($ERRORS{'WARNING'}, 0, "unable to verify log ending value, select statement returned " . scalar @select_rows . " rows:\n" . join("\n", $sql_select_statement));
+		return;
+	}
+	
+	# $select_rows[0] is a hash reference, the keys are the column names
+	my $log_ending = $select_rows[0]->{ending};
+	
+	# Compare the ending value in the database to the argument
+	if ($log_ending && $log_ending eq $request_log_ending) {
+		notify($ERRORS{'OK'}, 0, "log ending was set to '$request_log_ending' for log id: $request_log_id");
+		$self->insert_computerloadlog("info", "log ending was set to '$request_log_ending' for log id: $request_log_id");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "log ending in database ('$log_ending') does not match requested value ('$request_log_ending') for log id: $request_log_id");
+		$self->insert_computerloadlog("info", "log ending in database ('$log_ending') does not match requested value ('$request_log_ending') for log id: $request_log_id");
+		return;
+	}
+
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 check_image_os
 
  Parameters  :
@@ -358,7 +807,7 @@ sub check_image_os {
 
 	# Only make corrections if state is image
 	if ($request_state_name ne 'image') {
-		notify($ERRORS{'OK'}, 0, "no corrections need to be made, not an imaging request, returning 1");
+		notify($ERRORS{'DEBUG'}, 0, "no corrections need to be made, not an imaging request, returning 1");
 		return 1;
 	}
 
@@ -372,7 +821,7 @@ sub check_image_os {
 		$image_os_name_new = "$1$2image";
 	}
 	else {
-		notify($ERRORS{'OK'}, 0, "no corrections need to be made to image OS: $image_os_name");
+		notify($ERRORS{'DEBUG'}, 0, "no corrections need to be made to image OS: $image_os_name");
 		return 1;
 	}
 
@@ -403,19 +852,19 @@ sub check_image_os {
 		notify($ERRORS{'OK'}, 0, "image and imagerevision tables updated: $image_name -> $image_name_new");
 	}
 	else {
-		notify($ERRORS{'OK'}, 0, "failed to update image and imagerevision tables: $image_name -> $image_name_new, returning 0");
+		notify($ERRORS{'WARNING'}, 0, "failed to update image and imagerevision tables: $image_name -> $image_name_new, returning 0");
 		return 0;
 	}
 
 	if ($self->data->refresh()) {
-		notify($ERRORS{'OK'}, 0, "DataStructure refreshed after correcting image OS");
+		notify($ERRORS{'DEBUG'}, 0, "DataStructure refreshed after correcting image OS");
 	}
 	else {
 		notify($ERRORS{'WARNING'}, 0, "failed to update DataStructure updated correcting image OS, returning 0");
 		return 0;
 	}
 
-	notify($ERRORS{'OK'}, 0, "returning 1");
+	notify($ERRORS{'DEBUG'}, 0, "returning 1");
 	return 1;
 } ## end sub check_image_os
 
@@ -443,7 +892,7 @@ sub DESTROY {
 	
 	# Delete all computerloadlog rows with loadstatename = 'begin' for thie reservation
 	if (delete_computerloadlog_reservation($reservation_id, 'begin')) {
-		notify($ERRORS{'OK'}, 0, "removed computerloadlog rows with loadstate=begin for reservation");
+		notify($ERRORS{'DEBUG'}, 0, "removed computerloadlog rows with loadstate=begin for reservation");
 	}
 	else {
 		notify($ERRORS{'WARNING'}, 0, "failed to remove computerloadlog rows with loadstate=begin for reservation");
@@ -462,18 +911,20 @@ sub DESTROY {
 		notify($ERRORS{'DEBUG'}, 0, "process has a database handle stored in \$ENV{dbh}, attempting disconnect");
 
 		if ($ENV{dbh}->disconnect) {
-			notify($ERRORS{'OK'}, 0, "\$ENV{dbh}: database disconnect successful");
+			notify($ERRORS{'DEBUG'}, 0, "\$ENV{dbh}: database disconnect successful");
 		}
 		else {
 			notify($ERRORS{'WARNING'}, 0, "\$ENV{dbh}: database disconnect failed, " . DBI::errstr());
 		}
 	} ## end if (defined $ENV{dbh})
 	else {
-		notify($ERRORS{'OK'}, 0, "process does not have a database handle stored in \$ENV{dbh}");
+		notify($ERRORS{'DEBUG'}, 0, "process does not have a database handle stored in \$ENV{dbh}");
 	}
 
 	# Check for an overridden destructor
 	$self->SUPER::DESTROY if $self->can("SUPER::DESTROY");
+	
+	notify($ERRORS{'OK'}, 0, ref($self) . " process $PID exiting");
 } ## end sub DESTROY
 
 #/////////////////////////////////////////////////////////////////////////////
