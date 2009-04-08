@@ -111,6 +111,9 @@ our @EXPORT = qw(
   firewall_compare_update
   format_data
   get_computer_current_state_name
+  get_computer_grp_members
+  get_computer_info
+  get_computers_controlled_by_MN
   get_highest_imagerevision_info
   get_image_info
   get_imagemeta_info
@@ -126,6 +129,8 @@ our @EXPORT = qw(
   get_request_by_computerid
   get_request_end
   get_request_info
+  get_resource_groups
+  get_managable_resource_groups
   get_vmhost_info
   getanothermachine
   getdynamicaddress
@@ -2756,7 +2761,7 @@ sub _getcurrentimage {
 			#else {
 			#}
 		}
-		if ($s =~ /^(rh|win|fc|vmware)/) {
+		if ($s =~ /^(rh|win|fc|vmware|cent)/) {
 			chomp($s);
 			if ($s =~ s/\x0d//) {
 				notify($ERRORS{'OK'}, 0, "stripped dos newline $s");
@@ -7179,6 +7184,7 @@ sub get_management_node_info {
 	my $select_statement = "
    SELECT
    managementnode.*,
+	resource.id AS resource_id,
    predictivemodule.name AS predictive_name,
    predictivemodule.prettyname AS predictive_prettyname,
    predictivemodule.description AS predictive_description,
@@ -7187,10 +7193,15 @@ sub get_management_node_info {
    FROM
    managementnode,
    module predictivemodule,
+	resource,
+	resourcetype,
 	state
    WHERE
    managementnode.predictivemoduleid = predictivemodule.id
 	AND managementnode.stateid = state.id
+	AND resource.resourcetypeid = resourcetype.id 
+	AND resource.subid =  managementnode.id
+	AND resourcetype.name = 'managementnode'
    AND
    ";
 
@@ -8967,6 +8978,419 @@ sub get_management_node_blockrequests {
 	return \%blockrequests;
 
 } ## end sub get_management_node_blockrequests
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_computers_controlled_by_MN
+
+ Parameters  : $managementnode_id
+ Returns     : hash containing computer info
+ Description :
+
+=cut
+
+sub get_computers_controlled_by_MN {
+	my (%managementnode) = @_;
+
+	my %info;
+
+	#set some local variables
+	my $management_node_resourceid = $managementnode{resource_id};
+	my $management_node_id       	 = $managementnode{id};
+	my $management_node_hostname 	 = $managementnode{hostname};
+
+	# Collect resource group this management node is a member of
+	if($info{managementnode}{resoucegroups} = get_resource_groups($management_node_resourceid)){
+		notify($ERRORS{'OK'}, $LOGFILE, "retrieved management node resource groups from database");
+	}
+	else {
+		notify($ERRORS{'CRITICAL'}, $LOGFILE, "unable to retrieve management node resource groups from database");
+		return 0;
+	}
+
+	# Collect resource group management node grpcan control
+	foreach my $mresgrp_id (keys %{$info{managementnode}{resoucegroups}} ) {  
+
+		my $grp_id = $info{managementnode}{resoucegroups}{$mresgrp_id}{groupid}; 
+
+		notify($ERRORS{'OK'}, $LOGFILE, "grp_id = $grp_id ");
+
+		if($info{manageable_resoucegroups}{$mresgrp_id} = get_managable_resource_groups($grp_id)){
+			notify($ERRORS{'OK'}, $LOGFILE, "retrieved manageable resource groups from database for mresgrp_id= $grp_id groupname= $info{managementnode}{resoucegroups}{$mresgrp_id}{groupname}");
+
+			foreach my $id (keys %{ $info{manageable_resoucegroups}{$grp_id} } ) {
+				my $computer_group_id = $info{manageable_resoucegroups}{$grp_id}{$id}{groupid};
+				if($info{"manageable_computer_grps"}{$id}{"members"} = get_computer_grp_members($computer_group_id) ){
+					notify($ERRORS{'OK'}, $LOGFILE, "retrieved computers from computer groupname= $info{manageable_resoucegroups}{$grp_id}{$id}{groupname}");
+				}
+				else{ 
+					notify($ERRORS{'OK'}, $LOGFILE, "no computers in computer groupname= $info{managementnode}{resoucegroups}{$grp_id}{$id}{groupname}");
+					delete $info{manageable_resoucegroups}{$grp_id}{$id};
+				}
+			}
+		}
+		else {
+			notify($ERRORS{'OK'}, $LOGFILE, "no manageable resource groups associated for resgrp_id= $mresgrp_id groupname= $info{managementnode}{resoucegroups}{$mresgrp_id}{groupname}");
+			#delete $info{managementnode}{resoucegroups}{$mresgrp_id};
+		}
+	}
+
+	#Build master list of computerids
+	my %computer_list;
+
+	foreach my $computergroup (keys %{ $info{manageable_computer_grps}}){
+		foreach my $computerid (keys %{ $info{manageable_computer_grps}{$computergroup}{members} }){
+			  if ( !(exists $computer_list{$computerid}) ){
+				  # add to return list
+				  $computer_list{$computerid}{"computer_id"}=$computerid;
+			  }
+			}
+	}
+
+	return \%computer_list;
+
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_resource_groups
+
+ Parameters  : $management_node_resourceid
+ Returns     : hash containing list of resource groups id is a part of
+ Description :
+
+=cut
+
+sub get_resource_groups {
+	my ($resource_id) = @_;
+
+	if(!defined($resource_id)){
+		notify($ERRORS{'WARNING'}, $LOGFILE, "resource_id was not supplied");
+		return 0;
+	}
+
+	my $select_statement = "
+   SELECT DISTINCT
+	resourcegroupmembers.resourcegroupid AS resource_groupid,
+	resourcegroup.name AS resource_groupname
+	FROM 
+	resourcegroupmembers, 
+	resourcegroup
+	WHERE 
+	resourcegroup.id = resourcegroupmembers.resourcegroupid
+	AND resourceid = $resource_id
+	";
+
+	# Call the database select subroutine
+	# This will return an array of one or more rows based on the select statement
+	my @selected_rows = database_select($select_statement);
+
+	# Check to make sure 1 row was returned
+	if (scalar @selected_rows == 0) {
+		notify($ERRORS{'WARNING'}, 0, "zero rows were returned from database select for resource id $resource_id");
+		return ();
+	}
+
+	#my %return_hash = %{$selected_rows[0]};
+	my %return_hash;
+	for (@selected_rows) {
+		my %resgrps = %{$_};
+		my $resgrpid = $resgrps{resource_groupid};
+		$return_hash{$resgrpid}{"groupid"} = $resgrpid;
+		$return_hash{$resgrpid}{"groupname"} = $resgrps{resource_groupname};
+	}
+
+	return \%return_hash;
+
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_managable_resource_groups
+
+ Parameters  : $management_node_grp_id
+ Returns     : hash containing list of resource groups that can be controlled
+ Description :
+
+=cut
+
+sub get_managable_resource_groups {
+	my ($managing_resgrp_id) = @_;
+
+	if(!defined($managing_resgrp_id)){
+		notify($ERRORS{'WARNING'}, $LOGFILE, "managing_resgrp_id resource_id was not supplied");
+		return 0;
+	}
+
+	my $select_statement = "
+   SELECT DISTINCT
+	resourcemap.resourcegroupid2 AS resource_groupid,
+	resourcegroup.name AS resource_groupname
+	FROM 
+	resourcemap,
+	resourcegroup, 
+	resourcetype 
+	WHERE 
+	resourcemap.resourcetypeid2 = resourcetype.id 
+	AND resourcetype.name = 'computer'
+	AND resourcegroup.id = resourcemap.resourcegroupid2
+	AND resourcemap.resourcegroupid1 = $managing_resgrp_id 
+	";
+
+	# Call the database select subroutine
+	# This will return an array of one or more rows based on the select statement
+	my @selected_rows = database_select($select_statement);
+
+	# Check to make sure 1 row was returned
+	if (scalar @selected_rows == 0) {
+		notify($ERRORS{'OK'}, 0, "zero rows were returned from database select for resource id $managing_resgrp_id");
+		return ();
+	}
+	my %return_hash;
+   for (@selected_rows) {
+        my %resgrps = %{$_};
+        my $resgrpid = $resgrps{resource_groupid};
+        $return_hash{$resgrpid}{"groupid"} = $resgrpid;
+        $return_hash{$resgrpid}{"groupname"} = $resgrps{resource_groupname};
+   }
+   return \%return_hash;
+}
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_computer_grp_members
+
+ Parameters  : $computer_grp_id
+ Returns     : hash containing list of of computer ids
+ Description :
+
+=cut
+
+sub get_computer_grp_members {
+	my ($computer_grp_id) = @_;
+
+	if(!defined($computer_grp_id)){
+		notify($ERRORS{'WARNING'}, $LOGFILE, "computer_grp_id resource_id was not supplied");
+		return 0;
+	}
+
+	my $select_statement = "
+   SELECT DISTINCT
+	resource.subid AS computer_id
+   FROM 
+	resourcegroupmembers,
+	resourcetype,
+	resource
+   WHERE 
+	resourcegroupmembers.resourceid = resource.id 
+	AND resourcetype.id = resource.resourcetypeid 
+	AND resourcetype.name = 'computer' 
+	AND resourcegroupmembers.resourcegroupid = $computer_grp_id
+	";
+
+	# Call the database select subroutine
+	# This will return an array of one or more rows based on the select statement
+	my @selected_rows = database_select($select_statement);
+
+	# Check to make sure 1 row was returned
+	if (scalar @selected_rows == 0) {
+		notify($ERRORS{'OK'}, 0, "zero rows were returned from database select for computer grp id $computer_grp_id");
+		return ();
+	}
+	my %return_hash;
+   for (@selected_rows) {
+        my %computerids = %{$_};
+        my $compid = $computerids{computer_id};
+        $return_hash{$compid}{"computer_id"} = $compid;
+   }
+   return \%return_hash;
+
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_computer_info
+
+ Parameters  : $computer_id
+ Returns     : hash containing information on computer id
+ Description :
+
+=cut
+
+sub get_computer_info {
+	my ($computer_id) = @_;
+
+	if(!defined($computer_id)){
+		notify($ERRORS{'WARNING'}, $LOGFILE, "computer_id was not supplied");
+		return 0;
+	}
+
+	my $select_statement = "
+	SELECT DISTINCT
+   computer.id AS computer_id,
+   computer.ownerid AS computer_ownerid,
+   computer.platformid AS computer_platformid,
+   computer.currentimageid AS computer_currentimageid,
+   computer.imagerevisionid AS computer_imagerevisionid,
+   computer.RAM AS computer_RAM,
+   computer.procnumber AS computer_procnumber,
+   computer.procspeed AS computer_procspeed,
+   computer.hostname AS computer_hostname,
+   computer.IPaddress AS computer_IPaddress,
+   computer.privateIPaddress AS computer_privateIPaddress,
+   computer.eth0macaddress AS computer_eth0macaddress,
+   computer.eth1macaddress AS computer_eth1macaddress,
+	computer.type AS computer_type,
+	computer.provisioningid AS computer_provisioningid,
+	computer.drivetype AS computer_drivetype,
+	computer.deleted AS computer_deleted,
+	computer.notes AS computer_notes,
+	computer.lastcheck AS computer_lastcheck,
+	computer.location AS computer_location,
+	computer.vmhostid AS computer_vmhostid,
+	computerplatform.name AS computerplatform_name,
+	computerstate.name AS computerstate_name,
+
+	computerprovisioning.name AS computerprovisioning_name,
+	computerprovisioning.prettyname AS computerprovisioning_prettyname,
+	computerprovisioning.moduleid AS computerprovisioning_moduleid,
+	
+	computerprovisioningmodule.name AS computerprovisioningmodule_name,
+	computerprovisioningmodule.prettyname AS computerprovisioningmodule_prettyname,
+	computerprovisioningmodule.perlpackage AS computerprovisioningmodule_perlpackage,
+	
+	imagerevision.id AS imagerevision_id,
+	imagerevision.revision AS imagerevision_revision,
+	imagerevision.imagename AS imagerevision_imagename,
+
+	image.id AS image_id,
+	image.name AS image_name,
+	image.prettyname AS image_prettyname,
+	image.platformid AS image_platformid,
+	image.OSid AS image_OSid,
+	image.imagemetaid AS image_imagemetaid,
+	image.architecture AS image_architecture,
+
+	imageplatform.name AS imageplatform_name,
+
+	OS.name AS OS_name,
+   OS.prettyname AS OS_prettyname,
+   OS.type AS OS_type,
+   OS.installtype AS OS_installtype,
+   OS.sourcepath AS OS_sourcepath,
+	imageOSmodule.name AS imageOSmodule_name,
+	imageOSmodule.perlpackage AS imageOSmodule_perlpackage
+
+	FROM
+	computer,
+	platform computerplatform,
+	platform imageplatform,
+	state computerstate,
+	provisioning computerprovisioning,
+	module computerprovisioningmodule,
+	image,
+	OS,
+	imagerevision,
+	module imageOSmodule
+   
+	WHERE
+	computerplatform.id = computer.platformid
+	AND computerstate.id = computer.stateid
+	AND computerprovisioning.id = computer.provisioningid
+	AND computerprovisioningmodule.id = computerprovisioning.moduleid 
+	AND imagerevision.id = computer.imagerevisionid
+	AND image.id = imagerevision.imageid
+	AND OS.id = image.OSid
+	AND imageplatform.id = image.platformid
+	AND imageOSmodule.id = OS.moduleid
+	AND computer.deleted != '1'
+	AND computer.id =  $computer_id;
+	";
+
+
+	# Call the database select subroutine
+	# This will return an array of one or more rows based on the select statement
+	my @selected_rows = database_select($select_statement);
+
+	# Check to make sure only 1 row was returned
+	if (scalar @selected_rows == 0) {
+		notify($ERRORS{'DEBUG'}, 0, "zero rows were returned from database select for computer id $computer_id");
+		return ();
+	}
+	elsif (scalar @selected_rows > 1) {
+		notify($ERRORS{'WARNING'}, 0, "" . scalar @selected_rows . " rows were returned from database select");
+		return ();
+	}
+
+	# Build the hash
+   my %comp_info;
+
+   for (@selected_rows) {
+        my %computer_row = %{$_};
+		  # Check if the computer associated with this reservation has a vmhostid set
+        if ($computer_row{computer_vmhostid}) {
+            my %vmhost_info = get_vmhost_info($computer_row{computer_vmhostid});
+            # Make sure vmhost was located if vmhostid was specified for the image
+            if (!%vmhost_info) {
+               notify($ERRORS{'WARNING'}, 0, "vmhostid=" . $computer_row{computer_vmhostid} . " was specified for computer id=" . $computer_row{computer_id} . " but vmhost could not be found");
+            }
+            else {
+               # Image meta data found, add it to the hash
+               $comp_info{vmhost} = \%vmhost_info;
+            }
+        } ## end if ($reservation_row{computer_vmhostid})
+
+
+		  # Loop through all the columns returned for the reservation
+		  foreach my $key (keys %computer_row) {
+           my $value = $computer_row{$key};
+			  # Create another variable by stripping off the column_ part of each key
+           # This variable stores the original (correct) column name
+           (my $original_key = $key) =~ s/^.+_//;
+
+			  if ($key =~ /computer_/) {
+               $comp_info{computer}{$original_key} = $value;
+           }
+			  elsif ($key =~ /computerplatform_/) {
+				  $comp_info{computer}{platform}{$original_key} = $value;
+			  }
+			  elsif ($key =~ /computerstate_/) {
+				  $comp_info{computer}{state}{$original_key} = $value;
+			  }
+			  elsif ($key =~ /computerprovisioning_/) {
+				  $comp_info{computer}{provisioning}{$original_key} = $value;
+			  }
+			  elsif ($key =~ /computerprovisioningmodule_/) {
+				  $comp_info{computer}{provisioning}{module}{$original_key} = $value;
+			  }
+			  elsif ($key =~ /image_/) {
+				  $comp_info{image}{$original_key} = $value;
+			  }
+			  elsif ($key =~ /imageplatform_/) {
+				  $comp_info{platform}{$original_key} = $value;
+			  }
+			  elsif ($key =~ /imagerevision_/) {
+				  $comp_info{imagerevision}{$original_key} = $value;
+			  }
+			  elsif ($key =~ /OS_/) {
+				  $comp_info{image}{OS}{$original_key} = $value;
+			  }
+			  elsif ($key =~ /imageOSmodule_/) {
+				  $comp_info{image}{OS}{module}{$original_key} = $value;
+			  }
+			  elsif ($key =~ /user_/) {
+				  $comp_info{user}{$original_key} = $value;
+			  }
+			  else {
+				  notify($ERRORS{'WARNING'}, 0, "unknown key found in SQL data: $key");
+			  }
+
+		  }	
+
+	}
+
+	return \%comp_info;
+
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 
