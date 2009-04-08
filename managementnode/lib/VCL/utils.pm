@@ -338,7 +338,7 @@ BEGIN {
 
 			#mysql settings
 			#name of db
-			if ($l =~ /^database=([a-zA-Z0-9]*)/) {
+			if ($l =~ /^database=(.*)/) {
 				$DATABASE = $1;
 			}
 			#name of database server
@@ -346,18 +346,17 @@ BEGIN {
 				$SERVER = $1;
 			}
 			#write user name
-			if ($l =~ /^LockerWrtUser=([-a-zA-Z0-9]*)/) {
+			if ($l =~ /^LockerWrtUser=(.*)/) {
 				$WRTUSER = $1;
 			}
 
 			#write user password
-			#if($l =~ /^wrtPass=([-a-zA-Z0-9]*)/){
 			if ($l =~ /^wrtPass=(.*)/) {
 				$WRTPASS = $1;
 			}
 
 			#read user name
-			if ($l =~ /^LockerRdUser=([-a-zA-Z0-9]*)/) {
+			if ($l =~ /^LockerRdUser=(.*)/) {
 				$LockerRdUser = $1;
 			}
 
@@ -396,17 +395,17 @@ BEGIN {
 				$ETHDEVICE = $1;
 			}
 			#Sysadmin list
-			if ($l =~ /^sysadmin=([,-.\@a-zA-Z0-9]*)/) {
+			if ($l =~ /^sysadmin=([,-.\@a-zA-Z0-9_]*)/) {
 				$SYSADMIN = $1;
 			}
 
 			#Sendmail Envelope Sender 
-			if ($l =~ /^RETURNPATH=([,-.\@a-zA-Z0-9]*)/) {
+			if ($l =~ /^RETURNPATH=([,-.\@a-zA-Z0-9_]*)/) {
 				$RETURNPATH = $1;
 			}
 
 			#sharedmailbox
-			if ($l =~ /^sharedmailbox=([,-.\@a-zA-Z0-9]*)/) {
+			if ($l =~ /^sharedmailbox=([,-.\@a-zA-Z0-9_]*)/) {
 				$SHARED_MAILBOX = $1;
 			}
 
@@ -425,13 +424,13 @@ BEGIN {
 			if ($l =~ /^jabPort=([0-9]*)/) {
 				$jabPort = $1;
 			}
-			if ($l =~ /^jabUser=([.a-zA-Z0-9]*)/) {
+			if ($l =~ /^jabUser=(.*)/) {
 				$jabUser = $1;
 			}
-			if ($l =~ /^jabPass=([a-zA-Z0-9]*)/) {
+			if ($l =~ /^jabPass=(.*)/) {
 				$jabPass = $1;
 			}
-			if ($l =~ /^jabResource=([a-zA-Z0-9]*)/) {
+			if ($l =~ /^jabResource=(.*)/) {
 				$jabResource = $1;
 			}
 
@@ -481,10 +480,7 @@ BEGIN {
 			if ($l =~ /^imageservers=(.*)/) {
 				$IMAGESERVERS = $1;
 			}
-			if ($l =~ /^imagelibuser=([a-z0-9]*)/) {
-				$IMAGELIBUSER = $1;
-			}
-			if ($l =~ /^imagelibuser=([-a-zA-Z0-9]*)/) {
+			if ($l =~ /^imagelibuser=(.*)/) {
 				$IMAGELIBUSER = $1;
 			}
 			if ($l =~ /^imagelibidkey=(.*)/) {
