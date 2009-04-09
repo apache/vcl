@@ -1604,7 +1604,7 @@ sub import_registry_file {
 	}
 
 	my $registry_file_contents = `cat $registry_file_path`;
-	notify($ERRORS{'DEBUG'}, 0, "registry file contents:\n$registry_file_contents");
+	notify($ERRORS{'DEBUG'}, 0, "registry file '$registry_file_path' contents:\n$registry_file_contents");
 
 	$registry_file_contents =~ s/([\"])/\\$1/gs;
 	$registry_file_contents =~ s/\\+"/\\"/gs;
@@ -4241,14 +4241,35 @@ sub prepare_drivers {
 		notify($ERRORS{'OK'}, 0, "executed spdrvscn.exe");
 	}
 	elsif (defined($spdrvscn_status)) {
-		notify($ERRORS{'OK'}, 0, "failed to execute spdrvscn.exe, exit status: $spdrvscn_status, output:\n@{$spdrvscn_output}");
+		notify($ERRORS{'WARNING'}, 0, "failed to execute spdrvscn.exe, exit status: $spdrvscn_status, output:\n@{$spdrvscn_output}");
 		return 0;
 	}
 	else {
 		notify($ERRORS{'WARNING'}, 0, "unable to run ssh command to execute spdrvscn.exe");
 		return 0;
 	}
-
+	
+	# Query the DevicePath registry value in order to save it in the log for troubleshooting
+	my $reg_query_command = '$SYSTEMROOT/System32/reg.exe QUERY "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion" /v DevicePath';
+	my ($reg_query_status, $reg_query_output) = run_ssh_command($computer_node_name, $management_node_keys, $reg_query_command, '', '', 1);
+	if (defined($reg_query_status) && $reg_query_status == 0) {
+		notify($ERRORS{'DEBUG'}, 0, "queried DevicePath registry key");
+	}
+	elsif (defined($reg_query_status)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to query DevicePath registry key, exit status: $reg_query_status, output:\n@{$reg_query_output}");
+		return 0;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unable to run ssh command to query DevicePath registry key");
+		return 0;
+	}
+	
+	# Format the string for the log output
+	my ($device_path_string) = grep(/devicepath\s+reg_expand_sz/i, @{$reg_query_output});
+	$device_path_string =~ s/.*(devicepath\s+reg_expand_sz)\s*/$1\n/i;
+	$device_path_string =~ s/;/\n/g;
+	notify($ERRORS{'OK'}, 0, "device path string: $device_path_string");
+	
 	return 1;
 } ## end sub prepare_drivers
 
