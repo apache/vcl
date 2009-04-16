@@ -1282,7 +1282,8 @@ INSERT INTO `OS` (`id`, `name`, `prettyname`, `type`, `installtype`, `sourcepath
 (25, 'rh5image', 'RedHat Enterprise Linux 5 (rhel5 im', 'linux', 'partimage', 'image', 5),
 (26, 'rhfc9', 'RedHat Fedora Core 9 kickstart', 'linux', 'kickstart', 'rhfc9', 5),
 (27, 'fc9image', 'RedHat Fedora Core 9 image', 'linux', 'partimage', 'image', 5),
-(28, 'winvista', 'Windows Vista', 'windows', 'partimage', 'image', 4);
+(28, 'winvista', 'Windows Vista', 'windows', 'partimage', 'image', 7),
+(29, 'centos5image', 'centos5image', 'linux', 'partimage', 'image', 5);
 
 -- 
 -- Dumping data for table `OSinstalltype`
