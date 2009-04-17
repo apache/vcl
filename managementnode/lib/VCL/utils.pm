@@ -1669,49 +1669,39 @@ sub getdynamicaddress {
 
 	my $identity;
 	my $dynaIPaddress = 0;
+	my $ip_address;
 	if ($image_os_type =~ /windows/i) {
 		$identity = $IDENTITY_wxp;
 
 		@sshcmd = run_ssh_command($node, $identity, "ipconfig", "root");
 		for my $l (@{$sshcmd[1]}) {
 			# skip class a,b,c private addresses
-			next if ($l !~ /IP.*Address[\s\.:]*([\d\.]*)/);
-			my $ip_address = $1;
-			next if ($ip_address =~ /^10\./);
-			next if ($ip_address =~ /^127\./);
-			next if ($ip_address =~ /^172\./);
-			next if ($ip_address =~ /^192\./);
-			
-			if ($l !~ /IPAddress = $privateIP/) {
-				#to cover sites using eth0 as public
-				$dynaIPaddress = $1;
-			}
+                        next if ($l !~ /IP(.*)?Address[\s\.:]*([\d\.]*)/);
+                        my $ip_address_found = $2;
+                        next if ($ip_address && $ip_address_found =~ /^(10|127|192\.168|172\.(1[6-9]|2[0-9]|3[0-1]))\./);
+                        next if ($ip_address_found =~ /$privateIP/);
+                        $ip_address = $ip_address_found;
+                }
+                $dynaIPaddress = $ip_address;
 
-		}
-
-	} ## end if ($osname =~ /win|vmwarewin/)
+	} ## end if ($osname =~ /windows/)
 	elsif ($image_os_type =~ /linux/) {
 		$identity = $IDENTITY_bladerhel;
 		undef @sshcmd;
 		@sshcmd = run_ssh_command($node, $identity, "/sbin/ifconfig \|grep inet", "root");
 		for my $l (@{$sshcmd[1]}) {
 			# skip class a,b,c private addresses
-			next if ($l =~ /inet addr:$privateIP/);
-			next if ($l =~ /inet addr:10.([.0-9]*)/);
-			next if ($l =~ /inet addr:127([.0-9]*)/);
-			next if ($l =~ /inet addr:172([.0-9]*)/);
-			next if ($l =~ /inet addr:192.168([.0-9]*)/);
-			if ($l =~ /inet addr:([.0-9]*)/) {
-				if ($l !~ /inet addr:$privateIP/) {
-					#to cover sites using eth0 as public
-					$dynaIPaddress = $1;
-				}
-			}
-		} ## end for my $l (@{$sshcmd[1]})
+			next if ($l !~ /inet addr:([\d\.]*)/);
+                        my $ip_address_found = $1;
+                        next if ($ip_address && $ip_address_found =~ /^(10|127|192\.168|172\.(1[6-9]|2[0-9]|3[0-1]))\./);
+                        next if ($ip_address_found =~ /$privateIP/);
+                        $ip_address = $ip_address_found;
+		}
+		$dynaIPaddress = $ip_address;
 
-	} ## end elsif ($osname =~ /^(rh|fc)/)  [ if ($osname =~ /win|vmwarewin/)
+	} ## end elsif ($image_os_type =~ /linux/)  [ if ($image_os_type =~ /windows/)
 	else {
-		notify($ERRORS{'WARNING'}, 0, "OSname $osname not supported ");
+		notify($ERRORS{'WARNING'}, 0, "OStype $image_os_type not supported ");
 		return 0;
 	}
 	
