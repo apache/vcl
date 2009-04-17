@@ -244,11 +244,6 @@ sub main () {
 					#notify($ERRORS{'DEBUG'}, $LOGFILE, "request will not be processed");
 					next RESERVATION;
 				}
-				elsif ($check_time_result eq "old") {
-					# Only complain
-					notify($ERRORS{'WARNING'}, $LOGFILE, "this is an old request");
-					next RESERVATION;
-				}
 				elsif ($check_time_result eq "remove") {
 					# Remove the request and associated reservations from database
 					# This also removes rows from computerloadlog table for associated reservations

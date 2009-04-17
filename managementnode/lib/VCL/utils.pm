@@ -1164,14 +1164,14 @@ sub check_time {
 		else {
 			# Start time is in past, $start_diff_minutes is negative
 
-			if ($start_diff_minutes >= -17) {
-				notify($ERRORS{'DEBUG'}, 0, "reservation start time was in the past 17 minutes ($start_diff_minutes)");
-				return "start";
+			#Start time is fairly old - something is off
+			#send warning to log for tracking purposes
+			if ($start_diff_minutes < -17) {
+				notify($ERRORS{'WARNING'}, 0, "reservation start time was in the past 17 minutes ($start_diff_minutes)");
 			}
-			else {
-				notify($ERRORS{'DEBUG'}, 0, "reservation start time was more than 17 minutes ago ($start_diff_minutes)");
-				return "old";
-			}
+
+			return "start";
+
 		} ## end else [ if ($start_diff_minutes > 0)
 	} ## end if ($request_state_name =~ /new|imageprep|reload|tomaintenance|tovmhostinuse/)
 
