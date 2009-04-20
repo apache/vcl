@@ -186,7 +186,7 @@ form {
 
 #menulist ul li a:hover, a:active {
 	text-decoration: none;
-	color: #B90000;
+	color: #0051f8;
 }
 
 #menulist ul li.selected {
@@ -284,7 +284,7 @@ form {
 	background: transparent;	
 	width: 750px;
 	margin: 0 8px 0 8px;
-	padding: 0 0 20px 0;
+	padding: 0;
 }
 
 #footer-top {
@@ -295,48 +295,6 @@ form {
 }
 
 #footer-top span {display: none}
-
-#footer-padding {
-	clear: left;
-	background: transparent;
-	width: 724px;
-	height: 10px;
-	margin: 0;
-	padding: 0;
-}
-
-#footer-box-left {
-	float: left;
-	background: #F2F2F2;
-	width: 350px;
-	margin: 8px 1px 1px 1px;
-	padding: 5px;
-	border: #595959 1px solid;
-	color: black;
-	font: 9px helvetica, arial, sans;
-}
-
-#footer-box-left p {
-	margin: 0;
-	padding: 0;
-}
-
-#footer-box-left p a:link {
-	text-decoration: none;
-	color: black;
-}
-
-#footer-box-left p a:visited {
-	text-decoration: none;	
-	color: #595959;
-}
-
-#footer-box-left p a:hover, a:active {
-	background: #CCCCCC;	
-	text-decoration: none;
-	color: black;
-}
-
 
 #footer-box-right {
 	display: block;
