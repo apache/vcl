@@ -830,6 +830,18 @@ sub load {
 					if ($l =~ /= on/) {
 						#good vm still on
 						notify($ERRORS{'OK'}, 0, "vm $computer_shortname reports on");
+
+						if($sloop > 15 ){
+							my $sshd_status = _sshd_status($computer_shortname, $requestedimagename);
+                     if ($sshd_status eq "on") {
+                        notify($ERRORS{'OK'}, 0, "$computer_shortname now has active sshd running, maybe we missed the READY flag setting STAGE5 flag");
+                        $s5 = 1;
+                        #speed this up a bit
+                        close(TAIL);
+                        goto VMWAREROUND2;
+                     }
+						}
+
 					}
 					elsif ($l =~ /= off/) {
 						#good vm still on
