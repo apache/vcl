@@ -1251,7 +1251,8 @@ INSERT INTO `module` (`id`, `name`, `prettyname`, `description`, `perlpackage`) 
 (7, 'os_winvista', 'Windows Vista OS Module', '', 'VCL::Module::OS::Windows::Desktop::Vista'),
 (8, 'predictive_level_0', 'Predictive Loading Level 0 Module', '', 'VCL::Module::Predictive::Level_0'),
 (9, 'predictive_level_1', 'Predictive Loading Level 1 Module', '', 'VCL::Module::Predictive::Level_1'),
-(10, 'provisioning_esx_server', 'VMWare ESX Provisioning Module', '', 'VCL::Module::Provisioning::esx');
+(10, 'provisioning_esx_server', 'VMWare ESX Provisioning Module', '', 'VCL::Module::Provisioning::esx'),
+(11, 'provisioning_xcat_2_1', 'xCAT 2.1 Provisioning Module', 'Extreme Cluster Administration Toolkit 2.1 VCL support module', 'VCL::Module::Provisioning::xCAT21');
 
 -- 
 -- Dumping data for table `OS`
@@ -1332,7 +1333,8 @@ INSERT INTO `provisioning` (`id`, `name`, `prettyname`, `moduleid`) VALUES
 (1, 'xcat', 'xCAT 1.x Provisioning', 1),
 (2, 'vmware_server', 'VMWare Server Provisioning', 2),
 (3, 'lab', 'Computing Lab Provisioning', 3),
-(4, 'esx', 'VMWare ESX', 10);
+(4, 'esx', 'VMWare ESX', 10),
+(5, 'xcat21', 'xCAT 2.1 Provisioning', 11);
 
 -- 
 -- Dumping data for table `resource`
