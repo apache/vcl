@@ -1640,13 +1640,20 @@ function viewRequests() {
 				$text .= "      </FORM>\n";
 				$text .= "    </TD>\n";
 				if($requests[$i]['forimaging']) {
+					# this is the imaging case, need to do sanity check here for if the request
+					#   state currstateid or laststateid are "inuse", otherwise disable out the
+					#   create image button					
 					$noedit = 1;
 					$text .= "    <TD>\n";
-					$text .= "      <FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
-					$cont = addContinuationsEntry('startImage', $cdata);
-					$text .= "      <INPUT type=hidden name=continuation value=\"$cont\">\n";
-					$text .= "      <INPUT type=submit value=\"Create\nImage\">\n";
-					$text .= "      </FORM>\n";
+					if($requests[$i]['currstateid'] == 8 || $requests[$i]['laststateid'] == 8) {
+						# the user has connected successfully so we will allow create image button
+						#   to be displayed
+						$text .= "      <FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
+						$cont = addContinuationsEntry('startImage', $cdata);
+						$text .= "      <INPUT type=hidden name=continuation value=\"$cont\">\n";
+						$text .= "      <INPUT type=submit value=\"Create\nImage\">\n";
+						$text .= "      </FORM>\n";
+					}
 					$text .= "    </TD>\n";
 					$text .= "    <TD>\n";
 					$text .= "      <FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
@@ -2542,6 +2549,10 @@ function printEditNewUpdate($request, $res) {
 
 	# if already an imaging reservation, don't display update info here
 	if($request['forimaging'])
+		return;
+	
+	# don't allow save/update unless reservation has made inuse state
+	if($request['stateid'] != 8 && $request['laststateid'] != 8)
 		return;
 
 	$resources = getUserResources(array("imageAdmin"));
