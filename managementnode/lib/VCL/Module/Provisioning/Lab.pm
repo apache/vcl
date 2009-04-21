@@ -145,16 +145,25 @@ sub node_status {
 
 	# Check if subroutine was called as a class method
 	if (ref($self) !~ /lab/i) {
-		#$cidhash->{hostname}, $cidhash->{OSname}, $cidhash->{MNos}, $cidhash->{IPaddress}, $identity, $LOG)
-		$computer_node_name      = $self;
-		$image_os_name           = shift;
-		$management_node_os_name = shift;
-		$computer_ip_address     = shift;
-		$management_node_keys    = shift;
-		$log                     = shift;
+		if (ref($self) eq 'HASH') {
+			$log = $self->{logfile};
+			notify($ERRORS{'DEBUG'}, $log, "self is a hash reference");
+		}
+		# Check if node_status returned an array ref
+		elsif (ref($self) eq 'ARRAY') {
+			notify($ERRORS{'DEBUG'}, 0, "self is a array reference");
+		}
+		
+		$computer_node_name = $self->{computer}->{hostname};
+		$management_node_os_name = $self->{managementnode}->{OSNAME};
+		$management_node_keys    = $self->{managementnode}->{keys};
+		$computer_host_name      = $self->{computer}->{hostname};
+		$computer_ip_address     = $self->{computer}->{IPaddress}; 
+		$image_os_name				 = $self->{image}->{OS}->{name};
 
 		$log = 0 if !$log;
 		$computer_short_name = $1 if ($computer_node_name =~ /([-_a-zA-Z0-9]*)(\.?)/);
+
 	} ## end if (ref($self) !~ /lab/i)
 	else {
 		# Get the computer name from the DataStructure
@@ -172,17 +181,17 @@ sub node_status {
 		$log                     = 0;
 	} ## end else [ if (ref($self) !~ /lab/i)
 
-	notify($ERRORS{'OK'}, $log, "computer_short_name= $computer_short_name ");
-	notify($ERRORS{'OK'}, $log, "computer_node_name= $computer_node_name ");
-	notify($ERRORS{'OK'}, $log, "image_os_name= $image_os_name");
-	notify($ERRORS{'OK'}, $log, "management_node_os_name= $management_node_os_name");
-	notify($ERRORS{'OK'}, $log, "computer_ip_address= $computer_ip_address");
-	notify($ERRORS{'OK'}, $log, "management_node_keys= $management_node_keys");
+	notify($ERRORS{'DEBUG'}, $log, "computer_short_name= $computer_short_name ");
+	notify($ERRORS{'DEBUG'}, $log, "computer_node_name= $computer_node_name ");
+	notify($ERRORS{'DEBUG'}, $log, "image_os_name= $image_os_name");
+	notify($ERRORS{'DEBUG'}, $log, "management_node_os_name= $management_node_os_name");
+	notify($ERRORS{'DEBUG'}, $log, "computer_ip_address= $computer_ip_address");
+	notify($ERRORS{'DEBUG'}, $log, "management_node_keys= $management_node_keys");
 
 
 	# Check the node name variable
 	if (!$computer_node_name) {
-		notify($ERRORS{'WARNING'}, 0, "node name could not be determined");
+		notify($ERRORS{'WARNING'}, $log, "node name could not be determined");
 		return 0;
 	}
 	notify($ERRORS{'DEBUG'}, $log, "checking status of node: $computer_node_name");
@@ -215,7 +224,7 @@ sub node_status {
 		$status{ping} = 1;
 	}
 	else {
-		notify($ERRORS{'WARNING'}, $log, "$computer_ip_address is not pingable");
+		notify($ERRORS{'OK'}, $log, "$computer_ip_address is not pingable");
 		$status{ping} = 0;
 	}
 
