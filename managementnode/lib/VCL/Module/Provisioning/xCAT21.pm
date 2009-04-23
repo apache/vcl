@@ -21,7 +21,7 @@
 
 =head1 NAME
 
-VCL::Provisioning::xCAT2 - VCL module to support the xCAT2 provisioning engine
+VCL::Provisioning::xCAT21 - VCL module to support the xCAT 2.1 provisioning engine
 
 =head1 SYNOPSIS
 
@@ -38,7 +38,7 @@ VCL::Provisioning::xCAT2 - VCL module to support the xCAT2 provisioning engine
 =cut
 
 ##############################################################################
-package VCL::Module::Provisioning::xCAT2;
+package VCL::Module::Provisioning::xCAT21;
 
 # Specify the lib path using FindBin
 use FindBin;
