@@ -158,50 +158,6 @@ Delete the users assigned to this reservation
 
 =item *
 
-Disable all RDP access by removing firewall exceptions
-
-=cut
-
-	if (!$self->firewall_disable_rdp()) {
-		notify($ERRORS{'WARNING'}, 0, "unable to disable RDP");
-		return 0;
-	}
-
-=item *
-
-Enable RDP access from private IP addresses by adding a firewall exception
-
-=cut
-
-	if (!$self->firewall_enable_rdp('10.0.0.0/8')) {
-		notify($ERRORS{'WARNING'}, 0, "unable to enable RDP from private IP addresses");
-		return 0;
-	}
-
-=item *
-
-Enable SSH access from private IP addresses by adding a firewall exception
-
-=cut
-
-	if (!$self->firewall_enable_ssh_private()) {
-		notify($ERRORS{'WARNING'}, 0, "unable to enable SSH from private IP addresses");
-		return 0;
-	}
-
-=item *
-
-Enable ping access from private IP addresses by adding a firewall exception
-
-=cut
-
-	if (!$self->firewall_enable_ping_private()) {
-		notify($ERRORS{'WARNING'}, 0, "unable to enable ping from private IP addresses");
-		return 0;
-	}
-
-=item *
-
 Delete existing capture configuration files from the computer (scripts, utilities, drivers...)
 
 =cut
@@ -263,30 +219,19 @@ Call script to clean up the hard drive
 		notify($ERRORS{'WARNING'}, 0, "unable to clean unnecessary files the hard drive");
 	}
 	
-=item *
-
-Delete the 'VCL Startup Script' scheduled task
-
-=cut
-	
-	# This task must be deleted because it will conflict with the vcl_first_boot.cmd Run command that is added
-	# It also may cause problems after the reboot that occurs when the pagefile is disabled
-	# SSH commands may fail while the networking and Cygwin scripts are running
-	if (!$self->delete_scheduled_task('VCL Startup Script')) {
-		notify($ERRORS{'WARNING'}, 0, "unable to delete 'VCL Startup Script' scheduled task");
-		return 0;
-	}
-	
-=item *
-
-Delete 'VCL First Boot' Run registry key
-
-=cut
-	
-	if (!$self->delete_hklm_run_registry_key('VCL First Boot')) {
-		notify($ERRORS{'WARNING'}, 0, "unable to delete 'VCL First Boot' run registry key");
-		return 0;
-	}
+#=item *
+#
+#Delete the 'System Startup Script' scheduled task
+#
+#=cut
+#	
+#	# This task must be deleted because it will conflict with the post_load.cmd Run command that is added
+#	# It also may cause problems after the reboot that occurs when the pagefile is disabled
+#	# SSH commands may fail while the networking and Cygwin scripts are running
+#	if (!$self->delete_scheduled_task('System Startup Script')) {
+#		notify($ERRORS{'WARNING'}, 0, "unable to delete 'System Startup Script' scheduled task");
+#		return 0;
+#	}
 	
 =item *
 
@@ -309,12 +254,45 @@ Disable the pagefile, reboot, and delete pagefile.sys
 
 =item *
 
-Use netsh to set the public NIC to use DHCP
+Configure the network adapters to use DHCP
 
 =cut
 
-	if (!$self->enable_dhcp('public')) {
-		notify($ERRORS{'WARNING'}, 0, "unable to enable DHCP on the public interface");
+	if (!$self->enable_dhcp()) {
+		notify($ERRORS{'WARNING'}, 0, "unable to enable DHCP on the public and private interfaces");
+		return 0;
+	}
+
+=item *
+
+Enable RDP access from private IP addresses by adding a firewall exception
+
+=cut
+
+	if (!$self->firewall_enable_rdp('10.0.0.0/8')) {
+		notify($ERRORS{'WARNING'}, 0, "unable to enable RDP from private IP addresses");
+		return 0;
+	}
+
+=item *
+
+Enable SSH access from any IP addresses by adding a firewall exception
+
+=cut
+
+	if (!$self->firewall_enable_ssh()) {
+		notify($ERRORS{'WARNING'}, 0, "unable to enable SSH from any IP address");
+		return 0;
+	}
+
+=item *
+
+Enable ping access from any IP addresses by adding a firewall exception
+
+=cut
+
+	if (!$self->firewall_enable_ping()) {
+		notify($ERRORS{'WARNING'}, 0, "unable to enable ping from any IP address");
 		return 0;
 	}
 
@@ -337,18 +315,6 @@ Enable autoadminlogon
 
 	if (!$self->enable_autoadminlogon()) {
 		notify($ERRORS{'WARNING'}, 0, "unable to enable autoadminlogon");
-		return 0;
-	}
-
-=item *
-
-Create HKLM run vcl_first_boot.cmd registry key
-
-=cut
-	
-	# Wrap entire command in cmd.exe /c start so command window has a title letting onlooker know what is running
-	if (!$self->add_hklm_run_registry_key('VCL First Boot', 'cmd.exe /c start "vcl_first_boot.cmd" cmd.exe /c "' . $NODE_CONFIGURATION_DIRECTORY . '/Scripts/vcl_first_boot.cmd  >> ' . $NODE_CONFIGURATION_DIRECTORY . '/Logs/vcl_first_boot.log 2>&1"')) {
-		notify($ERRORS{'WARNING'}, 0, "unable to add run vcl_first_boot.cmd key");
 		return 0;
 	}
 
@@ -392,19 +358,61 @@ sub post_load {
 		return;
 	}
 
+	my $management_node_keys = $self->data->get_management_node_keys();
+	my $computer_node_name   = $self->data->get_computer_node_name();
 	my $imagemeta_postoption = $self->data->get_imagemeta_postoption();
 
 	notify($ERRORS{'OK'}, 0, "beginning Windows post-load tasks");
 
-=item 1
+=item *
+
+Log off all currently logged in users
+
+=cut
+
+	if (!$self->logoff_users()) {
+		notify($ERRORS{'WARNING'}, 0, "failed to log off all currently logged in users");
+	}
+
+=item *
+
+Enable RDP access from private IP addresses by adding a firewall exception
+
+=cut
+
+	if (!$self->firewall_enable_rdp('10.0.0.0/8')) {
+		notify($ERRORS{'WARNING'}, 0, "unable to enable RDP from private IP addresses");
+		return 0;
+	}
+	
+=item *
+
+Enable SSH access only from private IP addresses by adding a firewall exception
+
+=cut
+
+	if (!$self->firewall_enable_ssh_private()) {
+		notify($ERRORS{'WARNING'}, 0, "unable to enable SSH from private IP address");
+	}
+
+=item *
+
+Enable ping access only from private IP addresses by adding a firewall exception
+
+=cut
+
+	if (!$self->firewall_enable_ping_private()) {
+		notify($ERRORS{'WARNING'}, 0, "unable to enable ping from private IP address");
+	}
+	
+=item *
 
 Set the "My Computer" description to the image pretty name
 
 =cut
 
 	if (!$self->set_my_computer_name()) {
-		notify($ERRORS{'WARNING'}, 0, "Windows post-load failed, unable to rename my computer");
-		return 0;
+		notify($ERRORS{'WARNING'}, 0, "failed to rename My Computer");
 	}
 
 =item *
@@ -414,8 +422,7 @@ Disable NetBIOS
 =cut
 
 	if (!$self->disable_netbios()) {
-		notify($ERRORS{'WARNING'}, 0, "Windows post-load failed, failed to disable NetBIOS");
-		return 0;
+		notify($ERRORS{'WARNING'}, 0, "failed to disable NetBIOS");
 	}
 
 =item *
@@ -425,19 +432,7 @@ Disable dynamic DNS
 =cut
 
 	if (!$self->disable_dynamic_dns()) {
-		notify($ERRORS{'WARNING'}, 0, "Windows post-load failed, failed to disable dynamic DNS");
-		return 0;
-	}
-
-=item *
-
-Disable RDP firewall exceptions from all addresses
-
-=cut
-
-	if (!$self->firewall_disable_rdp()) {
-		notify($ERRORS{'WARNING'}, 0, "Windows post-load failed, failed to disable RDP");
-		return 0;
+		notify($ERRORS{'WARNING'}, 0, "failed to disable dynamic DNS");
 	}
 
 =item *
@@ -448,8 +443,7 @@ Randomize root password
 
 	my $root_random_password = getpw();
 	if (!$self->set_password('root', $root_random_password)) {
-		notify($ERRORS{'WARNING'}, 0, "Windows post-load failed, failed to set random root password");
-		return 0;
+		notify($ERRORS{'WARNING'}, 0, "failed to set random root password");
 	}
 
 =item *
@@ -460,20 +454,18 @@ Randomize Administrator password
 
 	my $administrator_random_password = getpw();
 	if (!$self->set_password('Administrator', $administrator_random_password)) {
-		notify($ERRORS{'WARNING'}, 0, "Windows post-load failed, failed to set random Administrator password");
-		return 0;
+		notify($ERRORS{'WARNING'}, 0, "failed to set random Administrator password");
 	}
 	
-=item *
-
-Create scheduled task to run script at computer startup
-
-=cut
-
-	if (!$self->create_startup_scheduled_task('VCL Startup Script', 'cmd.exe /c start "vcl_startup.cmd" /MIN ' . $NODE_CONFIGURATION_DIRECTORY . '/Scripts/vcl_startup.cmd  >> ' . $NODE_CONFIGURATION_DIRECTORY . '/Logs/vcl_startup.log 2>&1', 'root', $root_random_password)) {
-		notify($ERRORS{'WARNING'}, 0, "Windows post-load failed, failed to create scheduled task to run vcl_startup.cmd at computer startup");
-		return 0;
-	}
+#=item *
+#
+#Create scheduled task to run script at computer startup
+#
+#=cut
+#
+#	if (!$self->create_startup_scheduled_task('System Startup Script', 'cmd.exe /c start "system_startup.cmd" /MIN cmd.exe /c "' . $NODE_CONFIGURATION_DIRECTORY . '/Scripts/system_startup.cmd  >> ' . $NODE_CONFIGURATION_DIRECTORY . '/Logs/system_startup.log 2>&1"', 'root', $root_random_password)) {
+#		notify($ERRORS{'WARNING'}, 0, "failed to create scheduled task to run system_startup.cmd at computer startup");
+#	}
 
 =item *
 
@@ -484,7 +476,7 @@ Check if imagemeta postoption is set to reboot
 	if ($imagemeta_postoption =~ /reboot/i) {
 		notify($ERRORS{'OK'}, 0, "imagemeta postoption reboot is set for image, rebooting computer");
 		if (!$self->reboot()) {
-			notify($ERRORS{'WARNING'}, 0, "Windows post-load failed, failed to reboot the computer");
+			notify($ERRORS{'WARNING'}, 0, "failed to reboot the computer");
 			return 0;
 		}
 	}
@@ -668,7 +660,7 @@ sub create_directory {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 delete_filesystem_entry
+=head2 delete_file
 
  Parameters  :
  Returns     :
@@ -676,7 +668,7 @@ sub create_directory {
 
 =cut
 
-sub delete_filesystem_entry {
+sub delete_file {
 	my $self = shift;
 	if (ref($self) !~ /windows/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
@@ -686,86 +678,153 @@ sub delete_filesystem_entry {
 	my $management_node_keys = $self->data->get_management_node_keys();
 	my $computer_node_name   = $self->data->get_computer_node_name();
 
-	my @paths;
+	# Get file path subroutine argument
+	my $path = shift;
+	if (!$path) {
+		notify($ERRORS{'WARNING'}, 0, "file path was not specified as an argument");
+		return;
+	}
+	
+	# Replace backslashes with forward slashes
+	$path =~ s/\\+/\//gs;
+	
+	notify($ERRORS{'DEBUG'}, 0, "attempting to delete file: $path");
 
-	# Get 1 or more paths from the subroutine arguments
-	while (my $path = shift) {
-		push @paths, $path;
+	# Assemble the Windows shell del command and execute it
+	my $rm_command = "rm -rfv \"$path\"";
+	my ($rm_exit_status, $rm_output) = run_ssh_command($computer_node_name, $management_node_keys, $rm_command, '', '', 1);
+	if ($rm_output && grep(/removed/i, @{$rm_output})) {
+		my $files_deleted = grep(/removed \W/i, @{$rm_output});
+		my $directories_deleted = grep(/removed directory/i, @{$rm_output});
+		notify($ERRORS{'OK'}, 0, "deleted $path using rm, files deleted: $files_deleted, directories deleted: $directories_deleted");
+	}
+	elsif (defined($rm_exit_status) && $rm_exit_status == 0) {
+		notify($ERRORS{'OK'}, 0, "file either deleted or does not exist on $computer_node_name: $path, output:\n@{$rm_output}");
+	}
+	elsif ($rm_exit_status) {
+		notify($ERRORS{'WARNING'}, 0, "failed to delete file on $computer_node_name: $path, exit status: $rm_exit_status, output:\n@{$rm_output}");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to delete file on $computer_node_name: $path");
 	}
 
-	# Make sure at least 1 path was specified
-	if (!@paths) {
-		notify($ERRORS{'WARNING'}, 0, "filesystem path was not specified as an argument");
+	# Check if file was deleted
+	sleep 1;
+	if (!$self->filesystem_entry_exists($path)) {
+		notify($ERRORS{'DEBUG'}, 0, "confirmed file does not exist: $path");
+		return 1;
+	}
+	
+	# rm didn't get rid of the file, try del
+	# Assemble the Windows shell del command and execute it
+	my $del_command = '$SYSTEMROOT/System32/cmd.exe /c "del /s /q /f /a \\"' . $path . '\\""';
+	my ($del_exit_status, $del_output) = run_ssh_command($computer_node_name, $management_node_keys, $del_command, '', '', 1);
+	if ($del_output && (my $deleted_count = grep(/deleted file/i, @{$del_output}))) {
+		notify($ERRORS{'OK'}, 0, "deleted $path using del, files deleted: $deleted_count");
+	}
+	elsif (defined($del_exit_status) && $del_exit_status == 0) {
+		notify($ERRORS{'DEBUG'}, 0, "file does not exist on $computer_node_name: $path, output:\n@{$del_output}");
+	}
+	elsif ($del_output && grep(/cannot find/, @{$del_output})) {
+		notify($ERRORS{'DEBUG'}, 0, "file not found on $computer_node_name: $path, exit status: $del_exit_status, output:\n@{$del_output}");
+	}
+	elsif ($del_exit_status) {
+		notify($ERRORS{'WARNING'}, 0, "failed to delete file on $computer_node_name: $path, exit status: $del_exit_status, output:\n@{$del_output}");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to delete file on $computer_node_name: $path");
+	}
+	
+	# Check if file was deleted
+	sleep 1;
+	if (!$self->filesystem_entry_exists($path)) {
+		notify($ERRORS{'DEBUG'}, 0, "confirmed file does not exist: $path");
+		return 1;
+	}
+
+	# Assemble the Windows shell rmdir command and execute it
+	my $rmdir_command = '$SYSTEMROOT/System32/cmd.exe /c "rmdir /s /q \\"' . $path . '\\""';
+	my ($rmdir_exit_status, $rmdir_output) = run_ssh_command($computer_node_name, $management_node_keys, $rmdir_command, '', '', 1);
+	if (defined($rmdir_exit_status) && $rmdir_exit_status == 0) {
+		notify($ERRORS{'DEBUG'}, 0, "directory deleted using rmdir on $computer_node_name: $path, output:\n@{$rmdir_output}");
+	}
+	elsif (defined($rmdir_output) && grep(/cannot find the/, @{$rmdir_output})) {
+		# Exit status 2 should mean the directory was not found
+		notify($ERRORS{'DEBUG'}, 0, "directory to be deleted was not found on $computer_node_name: $path, exit status: $rmdir_exit_status, output:\n@{$rmdir_output}");
+	}
+	elsif ($rmdir_exit_status) {
+		notify($ERRORS{'WARNING'}, 0, "failed to delete directory on $computer_node_name: $path, exit status: $rmdir_exit_status, output:\n@{$rmdir_output}");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to delete directory on $computer_node_name: $path");
+	}
+	
+	# Check if file was deleted
+	sleep 1;
+	if (!$self->filesystem_entry_exists($path)) {
+		notify($ERRORS{'DEBUG'}, 0, "confirmed file does not exist: $path");
+		return 1;
+	}
+	
+	notify($ERRORS{'WARNING'}, 0, "file could not be deleted, it still exists: $path");
+	return;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 move_file
+
+ Parameters  :
+ Returns     :
+ Description :
+
+=cut
+
+sub move_file {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
 
-	notify($ERRORS{'DEBUG'}, 0, "attempting to delete " . scalar @paths . " paths:\n" . join("\n", @paths));
+	my $management_node_keys = $self->data->get_management_node_keys();
+	my $computer_node_name   = $self->data->get_computer_node_name();
 
-	# Keep a count of paths which couldn't be deleted
-	my $paths_not_deleted = 0;
+	# Get file path subroutine arguments
+	my $source_path = shift;
+	my $destination_path = shift;
+	if (!$source_path) {
+		notify($ERRORS{'WARNING'}, 0, "file source path was not specified as an argument");
+		return;
+	}
+	if (!$destination_path) {
+		notify($ERRORS{'WARNING'}, 0, "file destination path was not specified as an argument");
+		return;
+	}
+	
+	# Replace backslashes with forward slashes
+	$source_path =~ s/\\+/\//gs;
+	$destination_path =~ s/\\+/\//gs;
 
-	# Loop through the paths
-	for my $path (@paths) {
-		notify($ERRORS{'DEBUG'}, 0, "attempting to delete: $path");
+	notify($ERRORS{'DEBUG'}, 0, "attempting to move file: $source_path --> $destination_path");
 
-		# Assemble the Windows shell del command and execute it
-		my $del_command = '$SYSTEMROOT/System32/cmd.exe /c "del /s /q /f /a \\"' . $path . '\\""';
-		my ($del_exit_status, $del_output) = run_ssh_command($computer_node_name, $management_node_keys, $del_command, '', '', 1);
-		if (defined($del_exit_status) && $del_exit_status == 0) {
-			notify($ERRORS{'DEBUG'}, 0, "file either deleted or does not exist on $computer_node_name: $path, output:\n@{$del_output}");
-		}
-		elsif ($del_exit_status) {
-			notify($ERRORS{'WARNING'}, 0, "failed to delete file on $computer_node_name: $path, exit status: $del_exit_status, output:\n@{$del_output}");
-			$paths_not_deleted++;
-			next;
-		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to delete file on $computer_node_name: $path");
-			$paths_not_deleted++;
-			next;
-		}
-
-		# Assemble the Windows shell rmdir command and execute it
-		my $rmdir_command = '$SYSTEMROOT/System32/cmd.exe /c "rmdir /s /q \\"' . $path . '\\""';
-		my ($rmdir_exit_status, $rmdir_output) = run_ssh_command($computer_node_name, $management_node_keys, $rmdir_command, '', '', 1);
-		if (defined($rmdir_exit_status) && $rmdir_exit_status == 0) {
-			notify($ERRORS{'DEBUG'}, 0, "directory deleted on $computer_node_name: $path, output:\n@{$rmdir_output}");
-		}
-		elsif (defined($rmdir_output) && grep(/cannot find the/, @{$rmdir_output})) {
-			# Exit status 2 should mean the directory was not found
-			notify($ERRORS{'DEBUG'}, 0, "directory to be deleted was not found on $computer_node_name: $path, exit status: $rmdir_exit_status, output:\n@{$rmdir_output}");
-		}
-		elsif ($rmdir_exit_status) {
-			notify($ERRORS{'WARNING'}, 0, "failed to delete directory on $computer_node_name: $path, exit status: $rmdir_exit_status, output:\n@{$rmdir_output}");
-			$paths_not_deleted++;
-			next;
-		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to delete directory on $computer_node_name: $path");
-			$paths_not_deleted++;
-			next;
-		}
-
-		# Make sure directory was deleted
-		if ($self->filesystem_entry_exists($path)) {
-			notify($ERRORS{'WARNING'}, 0, "filesystem entry still exists on $computer_node_name: $path");
-			$paths_not_deleted++;
-			next;
-		}
-		else {
-			notify($ERRORS{'OK'}, 0, "file or directory has been deleted: $path");
-		}
-	} ## end for my $path (@paths)
-
-	# Check if any paths couldn't be deleted
-	if ($paths_not_deleted) {
-		notify($ERRORS{'WARNING'}, 0, "some paths could not be deleted");
-		return 0;
+	# Assemble the Windows shell move command and execute it
+	my $move_command = "mv -fv \"$source_path\" \"$destination_path\"";
+	my ($move_exit_status, $move_output) = run_ssh_command($computer_node_name, $management_node_keys, $move_command, '', '', 1);
+	if (defined($move_exit_status) && $move_exit_status == 0) {
+		notify($ERRORS{'OK'}, 0, "file moved: $source_path --> $destination_path, output:\n@{$move_output}");
+	}
+	elsif ($move_exit_status) {
+		notify($ERRORS{'WARNING'}, 0, "failed to move file: $source_path --> $destination_path, exit status: $move_exit_status, output:\n@{$move_output}");
+		return;
 	}
 	else {
-		return 1;
+		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to move file: $source_path --> $destination_path");
+		return;
 	}
-} ## end sub delete_filesystem_entry
+	
+	return 1;
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -1281,7 +1340,7 @@ sub delete_user {
 	}
 
 	# Delete the user's home directory
-	if ($self->delete_filesystem_entry("C:/Documents and Settings/$username")) {
+	if ($self->delete_file("C:/Documents and Settings/$username")) {
 		notify($ERRORS{'OK'}, 0, "deleted profile for user $username from $computer_node_name");
 	}
 	else {
@@ -1488,7 +1547,7 @@ EOF
 	}
 
 	# Attempt to delete the pagefile
-	if (!$self->delete_filesystem_entry("C:/pagefile.sys")) {
+	if (!$self->delete_file("C:/pagefile.sys")) {
 		notify($ERRORS{'WARNING'}, 0, "failed to delete pagefile.sys");
 		return;
 	}
@@ -1671,7 +1730,7 @@ sub import_registry_string {
 		return;
 	}
 
-	notify($ERRORS{'DEBUG'}, 0, "registry string:\n" . $registry_string);
+	#notify($ERRORS{'DEBUG'}, 0, "registry string:\n" . $registry_string);
 
 	# Escape special characters with a backslash:
 	# \
@@ -1691,7 +1750,7 @@ sub import_registry_string {
 	my $temp_registry_file_path = 'C:/Cygwin/tmp/vcl_import.reg';
 
 	# Echo the registry string to a file on the node
-	my $echo_registry_command = "/usr/bin/echo.exe -E \"$registry_string\" > " . $temp_registry_file_path;
+	my $echo_registry_command = "rm -f $temp_registry_file_path; /usr/bin/echo.exe -E \"$registry_string\" > " . $temp_registry_file_path;
 	my ($echo_registry_exit_status, $echo_registry_output) = run_ssh_command($computer_node_name, $management_node_keys, $echo_registry_command, '', '', 1);
 	if (defined($echo_registry_exit_status) && $echo_registry_exit_status == 0) {
 		notify($ERRORS{'DEBUG'}, 0, "registry string contents echoed to $temp_registry_file_path");
@@ -1718,6 +1777,11 @@ sub import_registry_string {
 	else {
 		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to import registry string contents from $temp_registry_file_path");
 		return;
+	}
+	
+	# Delete the temporary .reg file
+	if (!$self->delete_file($temp_registry_file_path)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to delete the temporary registry file: $temp_registry_file_path");
 	}
 
 	return 1;
@@ -1786,7 +1850,7 @@ EOF
 	}
 	
 	# Attempt to query the registry key to make sure it was added
-	my $reg_query_command = '$SYSTEMROOT/System32/reg.exe query "HKLM\\SOFTWARE\\Microsoft\Windows\\\CurrentVersion\\Run" /v "' . $command_name . '"';
+	my $reg_query_command = '$SYSTEMROOT/System32/reg.exe query "HKLM\\SOFTWARE\\Microsoft\Windows\\\CurrentVersion\\Run"';
 	my ($reg_query_exit_status, $reg_query_output) = run_ssh_command($computer_node_name, $management_node_keys, $reg_query_command, '', '', 1);
 	if (defined($reg_query_exit_status) && $reg_query_exit_status == 0) {
 		notify($ERRORS{'DEBUG'}, 0, "queried '$command_name' registry key:\n" . join("\n", @{$reg_query_output}));
@@ -1944,7 +2008,7 @@ sub create_startup_scheduled_task {
 	
 	# Run schtasks.exe to add the task
 	# Occasionally see this error even though it schtasks.exe returns exit status 0:
-	# WARNING: The Scheduled task "VCL Startup Script" has been created, but may not run because the account information could not be set.
+	# WARNING: The Scheduled task "System Startup Script" has been created, but may not run because the account information could not be set.
 	my $create_task_command = "schtasks.exe /Create /RU \"$task_user\" /RP \"$task_password\" /SC ONSTART /TN \"$task_name\" /TR \"$task_command\"";
 	my ($create_task_exit_status, $create_task_output) = run_ssh_command($computer_node_name, $management_node_keys, $create_task_command);
 	if (defined($create_task_output) && grep(/could not be set/i, @{$create_task_output})) {
@@ -2234,17 +2298,19 @@ sub reboot {
 			next WAIT_ATTEMPT;
 		}
 
-		# Wait then check ssh again in case initialization scripts are running
-		# ssh may be available when the computer first boots, then network configuration scripts may automatically run
-		# Make sure ssh is available a short time after it's first available
-		notify($ERRORS{'DEBUG'}, 0, "$computer_node_name responded to ssh, sleeping for 20 seconds then checking ssh again");
-		sleep 20;
-
-		# Wait maximum of 2 minutes for ssh to respond
-		if (!$self->wait_for_ssh(2)) {
-			notify($ERRORS{'WARNING'}, 0, "ssh responded then stopped responding on $computer_node_name");
-			next WAIT_ATTEMPT;
-		}
+		notify($ERRORS{'DEBUG'}, 0, "$computer_node_name responded to ssh");
+		
+		## Wait then check ssh again in case initialization scripts are running
+		## ssh may be available when the computer first boots, then network configuration scripts may automatically run
+		## Make sure ssh is available a short time after it's first available
+		#notify($ERRORS{'DEBUG'}, 0, "sleeping for 20 seconds then checking ssh again");
+		#sleep 20;
+		#
+		## Wait maximum of 2 minutes for ssh to respond
+		#if (!$self->wait_for_ssh(2)) {
+		#	notify($ERRORS{'WARNING'}, 0, "ssh responded then stopped responding on $computer_node_name");
+		#	next WAIT_ATTEMPT;
+		#}
 
 		# Reboot was successful, calculate how long reboot took
 		my $reboot_end_time = time();
@@ -3530,6 +3596,41 @@ sub firewall_close {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 firewall_enable_ping
+
+ Parameters  : 
+ Returns     : 1 if succeeded, 0 otherwise
+ Description : 
+
+=cut
+
+sub firewall_enable_ping {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+
+	
+	my %firewall_parameters = (protocol  => 'icmp',
+										type      => 8,
+										mode      => 'ENABLE',
+										profile   => 'ALL');
+
+	# Call the configure firewall subroutine, pass it the necessary parameters
+	if ($self->firewall_configure(\%firewall_parameters)) {
+		notify($ERRORS{'OK'}, 0, "opened firewall for incoming ping on all interfaces");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to open firewall for incoming ping on all interfaces");
+		return 0;
+	}
+
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 firewall_enable_ping_private
 
  Parameters  : 
@@ -3565,8 +3666,59 @@ sub firewall_enable_ping_private {
 			return 0;
 		}
 	} ## end for my $private_interface_name (@private_interface_names)
+	
+	# Remove exception for all interfaces
+	my %firewall_parameters = (protocol  => 'icmp',
+										type      => 8,
+										mode      => 'DISABLE',
+										profile   => 'ALL');
+
+	# Call the configure firewall subroutine, pass it the necessary parameters
+	if ($self->firewall_configure(\%firewall_parameters)) {
+		notify($ERRORS{'OK'}, 0, "closed firewall for incoming ping on all interfaces");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to close firewall for incoming ping on all interfaces");
+	}
+	
 	return 1;
 } ## end sub firewall_enable_ping_private
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 firewall_enable_ssh
+
+ Parameters  : 
+ Returns     : 1 if succeeded, 0 otherwise
+ Description : 
+
+=cut
+
+sub firewall_enable_ssh {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+
+	my %firewall_parameters = (name      => 'Cygwin SSHD',
+										protocol  => 'TCP',
+										port      => '22',
+										mode      => 'ENABLE',
+										profile   => 'ALL',
+										scope     => 'ALL');
+
+	# Call the configure firewall subroutine, pass it the necessary parameters
+	if ($self->firewall_configure(\%firewall_parameters)) {
+		notify($ERRORS{'OK'}, 0, "opened firewall for incoming ssh via TCP port 22 on all interfaces");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to open firewall for incoming ssh via TCP port 22 on all interfaces");
+		return 0;
+	}
+	
+	return 1;
+} ## end sub firewall_enable_ssh_private
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -3591,7 +3743,7 @@ sub firewall_enable_ssh_private {
 	}
 
 	for my $private_interface_name (@private_interface_names) {
-		my %firewall_parameters = (name      => 'SSHD',
+		my %firewall_parameters = (name      => 'Cygwin SSHD',
 											protocol  => 'TCP',
 											port      => '22',
 											interface => $private_interface_name,
@@ -3606,8 +3758,60 @@ sub firewall_enable_ssh_private {
 			return 0;
 		}
 	} ## end for my $private_interface_name (@private_interface_names)
+	
+	# Remove exception for all interfaces
+	my %firewall_parameters = (protocol => 'TCP',
+										port     => '22',
+										profile  => 'ALL',);
+
+	# Call the configure firewall subroutine, pass it the necessary parameters
+	if ($self->firewall_close(\%firewall_parameters)) {
+		notify($ERRORS{'OK'}, 0, "closed firewall for incoming RDP via TCP port 22 from any address");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to close firewall for incoming RDP via TCP port 22 from any address");
+	}
+	
 	return 1;
 } ## end sub firewall_enable_ssh_private
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 allow_remote_access
+
+ Parameters  : 
+ Returns     : 1 if succeeded, 0 otherwise
+ Description : 
+
+=cut
+
+sub allow_remote_access {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Set the registry key that allows users to connect remotely
+	# This key is configured by the "Allow users to connect remotely to this computer" checkbox
+	my $registry_string .= <<EOF;
+Windows Registry Editor Version 5.00
+
+[HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\Terminal Server]
+"fDenyTSConnections"=dword:00000000
+EOF
+
+	# Import the string into the registry
+	if ($self->import_registry_string($registry_string)) {
+		notify($ERRORS{'OK'}, 0, "set registry key to allow users to connect remotely");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to set registry key to allow users to connect remotely");
+		return;
+	}
+	
+	return 1;
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -3624,6 +3828,14 @@ sub firewall_enable_rdp {
 	if (ref($self) !~ /windows/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
+	}
+	
+	# Allow users to connect remotely
+	if ($self->allow_remote_access()) {
+		notify($ERRORS{'OK'}, 0, "allowed users to connect remotely");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to allow users to connect remotely");
 	}
 
 	my %firewall_parameters = (name     => 'Remote Desktop',
@@ -3813,7 +4025,10 @@ sub get_private_interface_names {
 		if (($interface_name . $description) =~ /loopback|virtual|pseudo|vmware|afs/i) {
 			next;
 		}
-		elsif ($octets[0] == 10) {
+		elsif (($octets[0] == 10) ||
+				 ($octets[0] != 172 && ($octets[1] >= 16 && $octets[1] <= 31)) ||
+				 ($octets[0] == 192 && $octets[1] == 168)
+				 ) {
 			# Check if a matching interface was already found
 			if (@private_interface_names) {
 				notify($ERRORS{'WARNING'}, 0, "multiple interfaces found with private IP address");
@@ -3821,6 +4036,7 @@ sub get_private_interface_names {
 
 			push(@private_interface_names, $interface_name);
 		}
+		
 	} ## end foreach my $interface_name (sort keys %{$network_configuration...
 
 	# Check if a matching interface was found
@@ -3995,34 +4211,697 @@ sub delete_capture_configuration_files {
 	my $computer_node_name   = $self->data->get_computer_node_name();
 
 	# Remove old logon and logoff scripts
-	$self->delete_files_by_pattern('$SYSTEMROOT/system32/GroupPolicy/User/Scripts', '.*VCL\(Prepare\|prepare\|Cleanup\|cleanup\).*');
+	$self->delete_files_by_pattern('$SYSTEMROOT/system32/GroupPolicy/User/Scripts', '.*\(Prepare\|prepare\|Cleanup\|cleanup\|post_load\).*');
 
-	# Remove VCLprepare.cmd and VCLcleanup.cmd lines from scripts.ini file
-	my $scripts_ini = '$SYSTEMROOT\\system32\\GroupPolicy\\User\\Scripts\\scripts.ini';
-	my $sed_command = 'sed -i -r -e "s/[0-9]CmdLine=VCL(prepare|cleanup).*\.cmd//i" "' . $scripts_ini . '"';
-	my ($sed_status, $sed_output) = run_ssh_command($computer_node_name, $management_node_keys, $sed_command);
-	if (defined($sed_status) && $sed_status == 0) {
-		notify($ERRORS{'OK'}, 0, "removed calls to VCLprepare.cmd and VCLcleanup.cmd from scripts.ini");
-	}
-	elsif (defined($sed_status)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to remove calls to VCLprepare.cmd and VCLcleanup.cmd from scripts.ini, exit status: $sed_status, output:\n@{$sed_output}");
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "unable to run ssh command to removed calls to VCLprepare.cmd and VCLcleanup.cmd from scripts.ini");
-	}
-
+	# Remove old scripts and utilities
+	$self->delete_files_by_pattern('C:/Cygwin/home/root', '.*\(vbs\|exe\|cmd\|bat\|log\)');
+	
+	## Remove VCLprepare.cmd and VCLcleanup.cmd lines from scripts.ini file
+	$self->remove_group_policy_script('logon', 'VCLprepare.cmd');
+	$self->remove_group_policy_script('logoff', 'VCLcleanup.cmd');
+	
 	# Remove old root Application Data/VCL directory
-	$self->delete_filesystem_entry('$SYSTEMDRIVE/Documents and Settings/root/Application Data/VCL');
+	$self->delete_file('$SYSTEMDRIVE/Documents and Settings/root/Application Data/VCL');
 
 	# Remove existing configuration files if they exist
 	notify($ERRORS{'OK'}, 0, "attempting to remove old configuration directory if it exists: $NODE_CONFIGURATION_DIRECTORY");
-	if (!$self->delete_filesystem_entry($NODE_CONFIGURATION_DIRECTORY)) {
+	if (!$self->delete_file($NODE_CONFIGURATION_DIRECTORY)) {
 		notify($ERRORS{'WARNING'}, 0, "unable to remove existing configuration directory: $NODE_CONFIGURATION_DIRECTORY");
-		return 0;
 	}
 
 	return 1;
-} ## end sub delete_capture_configuration_files
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 add_group_policy_script
+
+ Parameters  : 
+ Returns     :
+ Description : 
+
+=cut
+
+sub add_group_policy_script {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+
+	my $management_node_keys = $self->data->get_management_node_keys();
+	my $computer_node_name   = $self->data->get_computer_node_name();
+	
+	# Get the arguments
+	my $stage_argument = shift;
+	my $cmdline_argument = shift;
+	my $parameters_argument = shift;
+	if (!$stage_argument || $stage_argument !~ /^(logon|logoff)$/i) {
+		notify($ERRORS{'WARNING'}, 0, "stage (logon/logoff) argument was not specified");
+		return;
+	}	
+	if (!$cmdline_argument) {
+		notify($ERRORS{'WARNING'}, 0, "CmdLine argument was not specified");
+		return;
+	}
+	if (!$parameters_argument) {
+		$parameters_argument = '';
+	}
+	
+	# Capitalize the first letter of logon/logoff
+	$stage_argument = lc($stage_argument);
+	$stage_argument = "L" . substr($stage_argument, 1);
+	
+	# Store the stage name (logon/logoff) not being modified
+	my $opposite_stage_argument;
+	if ($stage_argument =~ /logon/i) {
+		$opposite_stage_argument = 'Logoff';
+	}
+	else {
+		$opposite_stage_argument = 'Logon';
+	}
+
+	# Path to scripts.ini file
+	my $scripts_ini = '$SYSTEMROOT/system32/GroupPolicy/User/Scripts/scripts.ini';
+	
+	# Set the owner of scripts.ini to root
+	my $chown_command = "touch $scripts_ini && chown root $scripts_ini";
+	my ($chown_status, $chown_output) = run_ssh_command($computer_node_name, $management_node_keys, $chown_command);
+	if (defined($chown_status) && $chown_status == 0) {
+		notify($ERRORS{'DEBUG'}, 0, "set root as owner of scripts.ini");
+	}
+	elsif (defined($chown_status)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to set root as owner of scripts.ini, exit status: $chown_status, output:\n@{$chown_output}");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unable to run ssh command to set root as owner of scripts.ini");
+	}
+	
+	# Set the permissions of scripts.ini to 664
+	my $chmod_command = "chmod 664 $scripts_ini";
+	my ($chmod_status, $chmod_output) = run_ssh_command($computer_node_name, $management_node_keys, $chmod_command);
+	if (defined($chmod_status) && $chmod_status == 0) {
+		notify($ERRORS{'DEBUG'}, 0, "ran chmod on scripts.ini");
+	}
+	elsif (defined($chmod_status)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run chmod 664 on scripts.ini, exit status: $chmod_status, output:\n@{$chmod_output}");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unable to run ssh command to run chmod 664 on scripts.ini");
+	}
+	
+	# Clear hidden, system, and readonly flags on scripts.ini
+	my $attrib_command = "attrib -H -S -R $scripts_ini";
+	my ($attrib_status, $attrib_output) = run_ssh_command($computer_node_name, $management_node_keys, $attrib_command);
+	if (defined($attrib_status) && $attrib_status == 0) {
+		notify($ERRORS{'DEBUG'}, 0, "ran attrib -H -S -R on scripts.ini");
+	}
+	elsif (defined($attrib_status)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run attrib -H -S -R on scripts.ini, exit status: $attrib_status, output:\n@{$attrib_output}");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unable to run ssh command to run attrib -H -S -R on scripts.ini");
+	}
+	
+	# Get the contents of scripts.ini
+	my $cat_command = "cat $scripts_ini";
+	my ($cat_status, $cat_output) = run_ssh_command($computer_node_name, $management_node_keys, $cat_command, '', '', 1);
+	if (defined($cat_status) && $cat_status == 0) {
+		notify($ERRORS{'DEBUG'}, 0, "retrieved scripts.ini contents:\n" . join("\n", @{$cat_output}));
+	}
+	elsif (defined($cat_status)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to cat scripts.ini contents");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unable to run ssh command to scripts.ini contents");
+	}
+	
+	# Create a string containing all of the lines in scripts.ini
+	my $scripts_ini_string = join("\n", @{$cat_output}) || '';
+	
+	# Remove any carriage returns to make pattern matching easier
+	$scripts_ini_string =~ s/\r//gs;
+	
+	# Get a string containing just the section being modified (logon/logoff)
+	my ($section_string) = $scripts_ini_string =~ /(\[$stage_argument\][^\[\]]*)/is;
+	$section_string = "[$stage_argument]" if !$section_string;
+	notify($ERRORS{'DEBUG'}, 0, "scripts.ini $stage_argument section:\n" . string_to_ascii($section_string));
+	
+	my ($opposite_section_string) = $scripts_ini_string =~ /(\[$opposite_stage_argument\][^\[\]]*)/is;
+	$opposite_section_string = "[$opposite_stage_argument]" if !$opposite_section_string;
+	notify($ERRORS{'DEBUG'}, 0, "scripts.ini $opposite_stage_argument section:\n" . string_to_ascii($opposite_section_string));
+	
+	my @section_lines = split(/[\r\n]+/, $section_string);
+	notify($ERRORS{'DEBUG'}, 0, "scripts.ini $stage_argument section line count: " . scalar @section_lines);
+	
+	my %scripts_original;
+	for my $section_line (@section_lines) {
+		if ($section_line =~ /(\d+)Parameters\s*=(.*)/i) {
+			my $index = $1;
+			my $parameters = $2;
+			if (!defined $scripts_original{$index}{Parameters}) {
+				$scripts_original{$index}{Parameters} = $parameters;
+				#notify($ERRORS{'DEBUG'}, 0, "found $stage_argument parameters:\nline: '$section_line'\nparameters: '$parameters'\nindex: $index");
+			}
+			else {
+				notify($ERRORS{'WARNING'}, 0, "found duplicate $stage_argument parameters line for index $index");
+			}
+		}
+		elsif ($section_line =~ /(\d+)CmdLine\s*=(.*)/i) {
+			my $index = $1;
+			my $cmdline = $2;
+			if (!defined $scripts_original{$index}{CmdLine}) {
+				$scripts_original{$index}{CmdLine} = $cmdline;
+				#notify($ERRORS{'DEBUG'}, 0, "found $stage_argument cmdline:\nline: '$section_line'\ncmdline: '$cmdline'\nindex: $index");
+			}
+			else {
+				notify($ERRORS{'WARNING'}, 0, "found duplicate $stage_argument CmdLine line for index $index");
+			}
+		}
+		elsif ($section_line =~ /\[$stage_argument\]/i) {
+			#notify($ERRORS{'DEBUG'}, 0, "found $stage_argument heading:\nline: '$section_line'");
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "found unexpected line: '$section_line'");
+		}
+	}
+	
+	my %scripts_modified;
+	my $index_modified = 0;
+	foreach my $index (sort keys %scripts_original) {
+		if (!defined $scripts_original{$index}{CmdLine}) {
+			notify($ERRORS{'WARNING'}, 0, "CmdLine not specified for index $index");
+			next;
+		}
+		elsif ($scripts_original{$index}{CmdLine} =~ /^\s*$/) {
+			notify($ERRORS{'WARNING'}, 0, "CmdLine blank for index $index");
+			next;
+		}
+		if (!defined $scripts_original{$index}{Parameters}) {
+			notify($ERRORS{'WARNING'}, 0, "Parameters not specified for index $index");
+			$scripts_original{$index}{Parameters} = '';
+		}
+		
+		if ($scripts_original{$index}{CmdLine} =~ /$cmdline_argument/i && $scripts_original{$index}{Parameters} =~ /$parameters_argument/i) {
+			notify($ERRORS{'DEBUG'}, 0, "replacing existing $stage_argument script at index $index:\ncmdline: $scripts_original{$index}{CmdLine}\nparameters: $scripts_original{$index}{Parameters}");
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "retaining existing $stage_argument script at index $index:\ncmdline: $scripts_original{$index}{CmdLine}\nparameters: $scripts_original{$index}{Parameters}");
+			$scripts_modified{$index_modified}{CmdLine} = $scripts_original{$index}{CmdLine};
+			$scripts_modified{$index_modified}{Parameters} = $scripts_original{$index}{Parameters};
+			$index_modified++;
+		}
+	}
+	
+	# Add the argument script to the hash
+	$scripts_modified{$index_modified}{CmdLine} = $cmdline_argument;
+	$scripts_modified{$index_modified}{Parameters} = $parameters_argument;
+	$index_modified++;
+	
+	#notify($ERRORS{'DEBUG'}, 0, "arguments:\ncmdline: $cmdline_argument\nparameters: $parameters_argument");
+	#notify($ERRORS{'DEBUG'}, 0, "original $stage_argument scripts data:\n" . format_data(\%scripts_original));
+	#notify($ERRORS{'DEBUG'}, 0, "modified $stage_argument scripts data:\n" . format_data(\%scripts_modified));
+	
+	my $section_string_new = "[$stage_argument]\n";
+	foreach my $index_new (sort keys(%scripts_modified)) {
+		$section_string_new .= $index_new . "CmdLine=$scripts_modified{$index_new}{CmdLine}\n";
+		$section_string_new .= $index_new . "Parameters=$scripts_modified{$index_new}{Parameters}\n";
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "original $stage_argument scripts section:\n$section_string");
+	notify($ERRORS{'DEBUG'}, 0, "modified $stage_argument scripts section:\n$section_string_new");
+	
+	my $scripts_ini_modified;
+	if ($stage_argument =~ /logon/i) {
+		$scripts_ini_modified = "$section_string_new\n$opposite_section_string";
+	}
+	else {
+		$scripts_ini_modified = "$opposite_section_string\n$section_string_new";
+	}
+	notify($ERRORS{'DEBUG'}, 0, "modified scripts.ini contents:\n$scripts_ini_modified");
+	
+	# Escape quote characters
+	$scripts_ini_modified =~ s/"/\\"/gs;
+	
+	# Echo the modified contents to scripts.ini
+	my $echo_command = "echo \"$scripts_ini_modified\" > $scripts_ini";
+	my ($echo_status, $echo_output) = run_ssh_command($computer_node_name, $management_node_keys, $echo_command);
+	if (defined($echo_status) && $echo_status == 0) {
+		notify($ERRORS{'DEBUG'}, 0, "echo'd modified contents to scripts.ini");
+	}
+	elsif (defined($echo_status)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to echo modified contents to scripts.ini, exit status: $echo_status, output:\n@{$echo_output}");
+		return;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unable to run ssh command to echo modified contents to scripts.ini");
+		return;
+	}
+	
+	# Run unix2dos on scripts.ini
+	$self->run_unix2dos($scripts_ini);
+	
+	# Get the modified contents of scripts.ini
+	my $cat_modified_command = "cat $scripts_ini";
+	my ($cat_modified_status, $cat_modified_output) = run_ssh_command($computer_node_name, $management_node_keys, $cat_modified_command, '', '', 1);
+	if (defined($cat_modified_status) && $cat_modified_status == 0) {
+		notify($ERRORS{'DEBUG'}, 0, "retrieved modified scripts.ini contents");
+	}
+	elsif (defined($cat_modified_status)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to cat scripts.ini contents");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unable to run ssh command to scripts.ini contents");
+	}
+	
+	## Run gpupdate so the new settings take effect immediately
+	#$self->run_gpupdate();
+	
+	notify($ERRORS{'OK'}, 0, "added '$cmdline_argument' $stage_argument script to scripts.ini\noriginal contents:\n$scripts_ini_string\n-----\nnew contents:\n" . join("\n", @{$cat_modified_output}));
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 remove_group_policy_script
+
+ Parameters  : 
+ Returns     :
+ Description : 
+
+=cut
+
+sub remove_group_policy_script {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+
+	my $management_node_keys = $self->data->get_management_node_keys();
+	my $computer_node_name   = $self->data->get_computer_node_name();
+	
+	# Get the arguments
+	my $stage_argument = shift;
+	my $cmdline_argument = shift;
+	if (!$stage_argument || $stage_argument !~ /^(logon|logoff)$/i) {
+		notify($ERRORS{'WARNING'}, 0, "stage (logon/logoff) argument was not specified");
+		return;
+	}	
+	if (!$cmdline_argument) {
+		notify($ERRORS{'WARNING'}, 0, "CmdLine argument was not specified");
+		return;
+	}
+	
+	# Capitalize the first letter of logon/logoff
+	$stage_argument = lc($stage_argument);
+	$stage_argument = "L" . substr($stage_argument, 1);
+	
+	# Store the stage name (logon/logoff) not being modified
+	my $opposite_stage_argument;
+	if ($stage_argument =~ /logon/i) {
+		$opposite_stage_argument = 'Logoff';
+	}
+	else {
+		$opposite_stage_argument = 'Logon';
+	}
+
+	# Path to scripts.ini file
+	my $scripts_ini = '$SYSTEMROOT/system32/GroupPolicy/User/Scripts/scripts.ini';
+	
+	# Set the owner of scripts.ini to root
+	my $chown_command = "touch $scripts_ini && chown root $scripts_ini";
+	my ($chown_status, $chown_output) = run_ssh_command($computer_node_name, $management_node_keys, $chown_command);
+	if (defined($chown_output) && grep(/no such file/i, @$chown_output)) {
+		notify($ERRORS{'DEBUG'}, 0, "scripts.ini file does not exist, nothing to remove");
+		return 1;
+	}
+	elsif (defined($chown_status) && $chown_status == 0) {
+		notify($ERRORS{'DEBUG'}, 0, "set root as owner of scripts.ini");
+	}
+	elsif (defined($chown_status)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to set root as owner of scripts.ini, exit status: $chown_status, output:\n@{$chown_output}");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unable to run ssh command to set root as owner of scripts.ini");
+	}
+	
+	# Set the permissions of scripts.ini to 664
+	my $chmod_command = "chmod 664 $scripts_ini";
+	my ($chmod_status, $chmod_output) = run_ssh_command($computer_node_name, $management_node_keys, $chmod_command);
+	if (defined($chmod_status) && $chmod_status == 0) {
+		notify($ERRORS{'DEBUG'}, 0, "ran chmod on scripts.ini");
+	}
+	elsif (defined($chmod_status)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run chmod 664 on scripts.ini, exit status: $chmod_status, output:\n@{$chmod_output}");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unable to run ssh command to run chmod 664 on scripts.ini");
+	}
+	
+	# Clear hidden, system, and readonly flags on scripts.ini
+	my $attrib_command = "attrib -H -S -R $scripts_ini";
+	my ($attrib_status, $attrib_output) = run_ssh_command($computer_node_name, $management_node_keys, $attrib_command);
+	if (defined($attrib_status) && $attrib_status == 0) {
+		notify($ERRORS{'DEBUG'}, 0, "ran attrib -H -S -R on scripts.ini");
+	}
+	elsif (defined($attrib_status)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run attrib -H -S -R on scripts.ini, exit status: $attrib_status, output:\n@{$attrib_output}");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unable to run ssh command to run attrib -H -S -R on scripts.ini");
+	}
+	
+	# Get the contents of scripts.ini
+	my $cat_command = "cat $scripts_ini";
+	my ($cat_status, $cat_output) = run_ssh_command($computer_node_name, $management_node_keys, $cat_command, '', '', 1);
+	if (defined($cat_status) && $cat_status == 0) {
+		notify($ERRORS{'DEBUG'}, 0, "retrieved scripts.ini contents:\n" . join("\n", @{$cat_output}));
+	}
+	elsif (defined($cat_status)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to cat scripts.ini contents");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unable to run ssh command to scripts.ini contents");
+	}
+	
+	# Create a string containing all of the lines in scripts.ini
+	my $scripts_ini_string = join("\n", @{$cat_output}) || '';
+	
+	# Remove any carriage returns to make pattern matching easier
+	$scripts_ini_string =~ s/\r//gs;
+	
+	# Get a string containing just the section being modified (logon/logoff)
+	my ($section_string) = $scripts_ini_string =~ /(\[$stage_argument\][^\[\]]*)/is;
+	$section_string = "[$stage_argument]" if !$section_string;
+	notify($ERRORS{'DEBUG'}, 0, "scripts.ini $stage_argument section:\n" . string_to_ascii($section_string));
+	
+	my ($opposite_section_string) = $scripts_ini_string =~ /(\[$opposite_stage_argument\][^\[\]]*)/is;
+	$opposite_section_string = "[$opposite_stage_argument]" if !$opposite_section_string;
+	notify($ERRORS{'DEBUG'}, 0, "scripts.ini $opposite_stage_argument section:\n" . string_to_ascii($opposite_section_string));
+	
+	my @section_lines = split(/[\r\n]+/, $section_string);
+	notify($ERRORS{'DEBUG'}, 0, "scripts.ini $stage_argument section line count: " . scalar @section_lines);
+	
+	my %scripts_original;
+	for my $section_line (@section_lines) {
+		if ($section_line =~ /(\d+)Parameters\s*=(.*)/i) {
+			my $index = $1;
+			my $parameters = $2;
+			if (!defined $scripts_original{$index}{Parameters}) {
+				$scripts_original{$index}{Parameters} = $parameters;
+				#notify($ERRORS{'DEBUG'}, 0, "found $stage_argument parameters:\nline: '$section_line'\nparameters: '$parameters'\nindex: $index");
+			}
+			else {
+				notify($ERRORS{'WARNING'}, 0, "found duplicate $stage_argument parameters line for index $index");
+			}
+		}
+		elsif ($section_line =~ /(\d+)CmdLine\s*=(.*)/i) {
+			my $index = $1;
+			my $cmdline = $2;
+			if (!defined $scripts_original{$index}{CmdLine}) {
+				$scripts_original{$index}{CmdLine} = $cmdline;
+				#notify($ERRORS{'DEBUG'}, 0, "found $stage_argument cmdline:\nline: '$section_line'\ncmdline: '$cmdline'\nindex: $index");
+			}
+			else {
+				notify($ERRORS{'WARNING'}, 0, "found duplicate $stage_argument CmdLine line for index $index");
+			}
+		}
+		elsif ($section_line =~ /\[$stage_argument\]/i) {
+			#notify($ERRORS{'DEBUG'}, 0, "found $stage_argument heading:\nline: '$section_line'");
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "found unexpected line: '$section_line'");
+		}
+	}
+	
+	my %scripts_modified;
+	my $index_modified = 0;
+	foreach my $index (sort keys %scripts_original) {
+		if (!defined $scripts_original{$index}{CmdLine}) {
+			notify($ERRORS{'WARNING'}, 0, "CmdLine not specified for index $index");
+			next;
+		}
+		elsif ($scripts_original{$index}{CmdLine} =~ /^\s*$/) {
+			notify($ERRORS{'WARNING'}, 0, "CmdLine blank for index $index");
+			next;
+		}
+		if (!defined $scripts_original{$index}{Parameters}) {
+			notify($ERRORS{'WARNING'}, 0, "Parameters not specified for index $index");
+			$scripts_original{$index}{Parameters} = '';
+		}
+		
+		if ($scripts_original{$index}{CmdLine} =~ /$cmdline_argument/i) {
+			notify($ERRORS{'DEBUG'}, 0, "removing $stage_argument script at index $index:\ncmdline: $scripts_original{$index}{CmdLine}\nparameters: $scripts_original{$index}{Parameters}");
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "retaining existing $stage_argument script at index $index:\ncmdline: $scripts_original{$index}{CmdLine}\nparameters: $scripts_original{$index}{Parameters}");
+			$scripts_modified{$index_modified}{CmdLine} = $scripts_original{$index}{CmdLine};
+			$scripts_modified{$index_modified}{Parameters} = $scripts_original{$index}{Parameters};
+			$index_modified++;
+		}
+	}
+	
+	my $section_string_new = "[$stage_argument]\n";
+	foreach my $index_new (sort keys(%scripts_modified)) {
+		$section_string_new .= $index_new . "CmdLine=$scripts_modified{$index_new}{CmdLine}\n";
+		$section_string_new .= $index_new . "Parameters=$scripts_modified{$index_new}{Parameters}\n";
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "original $stage_argument scripts section:\n$section_string");
+	notify($ERRORS{'DEBUG'}, 0, "modified $stage_argument scripts section:\n$section_string_new");
+	
+	my $scripts_ini_modified;
+	if ($stage_argument =~ /logon/i) {
+		$scripts_ini_modified = "$section_string_new\n$opposite_section_string";
+	}
+	else {
+		$scripts_ini_modified = "$opposite_section_string\n$section_string_new";
+	}
+	notify($ERRORS{'DEBUG'}, 0, "modified scripts.ini contents:\n$scripts_ini_modified");
+	
+	$scripts_ini_modified =~ s/"/\\"/gs;
+	
+	# Echo the modified contents to scripts.ini
+	my $echo_command = "echo \"$scripts_ini_modified\" > $scripts_ini";
+	my ($echo_status, $echo_output) = run_ssh_command($computer_node_name, $management_node_keys, $echo_command);
+	if (defined($echo_status) && $echo_status == 0) {
+		notify($ERRORS{'DEBUG'}, 0, "echo'd modified contents to scripts.ini");
+	}
+	elsif (defined($echo_status)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to echo modified contents to scripts.ini, exit status: $echo_status, output:\n@{$echo_output}");
+		return;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unable to run ssh command to echo modified contents to scripts.ini");
+		return;
+	}
+	
+	# Run unix2dos on scripts.ini
+	$self->run_unix2dos($scripts_ini);
+	
+	# Get the modified contents of scripts.ini
+	my $cat_modified_command = "cat $scripts_ini";
+	my ($cat_modified_status, $cat_modified_output) = run_ssh_command($computer_node_name, $management_node_keys, $cat_modified_command, '', '', 1);
+	if (defined($cat_modified_status) && $cat_modified_status == 0) {
+		notify($ERRORS{'DEBUG'}, 0, "retrieved modified scripts.ini contents");
+	}
+	elsif (defined($cat_modified_status)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to cat scripts.ini contents");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unable to run ssh command to scripts.ini contents");
+	}
+	
+	notify($ERRORS{'OK'}, 0, "removed '$cmdline_argument' $stage_argument script from scripts.ini\noriginal contents:\n$scripts_ini_string\n-----\nnew contents:\n" . join("\n", @{$cat_modified_output}));
+	
+	## Run gpupdate so the new settings take effect immediately
+	#$self->run_gpupdate();
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 run_gpupdate
+
+ Parameters  : 
+ Returns     :
+ Description : 
+
+=cut
+
+sub run_gpupdate {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+
+	my $management_node_keys = $self->data->get_management_node_keys();
+	my $computer_node_name   = $self->data->get_computer_node_name();
+	
+	# Set the owner of scripts.ini to root
+	my $gpupdate_command = 'cmd.exe /c $SYSTEMROOT/system32/gpupdate.exe /Force';
+	my ($gpupdate_status, $gpupdate_output) = run_ssh_command($computer_node_name, $management_node_keys, $gpupdate_command);
+	if (defined($gpupdate_output) && !grep(/error/i, @{$gpupdate_output})) {
+		notify($ERRORS{'OK'}, 0, "ran gpupdate /force");
+	}
+	elsif (defined($gpupdate_status)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run gpupdate /force, exit status: $gpupdate_status, output:\n@{$gpupdate_output}");
+		return;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unable to run ssh command to run gpupdate /force");
+		return;
+	}
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 run_unix2dos
+
+ Parameters  : 
+ Returns     :
+ Description : 
+
+=cut
+
+sub run_unix2dos {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+
+	my $management_node_keys = $self->data->get_management_node_keys();
+	my $computer_node_name   = $self->data->get_computer_node_name();
+
+	# Get the arguments
+	my $file_path = shift;
+	if (!$file_path) {
+		notify($ERRORS{'WARNING'}, 0, "file path was not specified as an argument");
+		return;
+	}
+
+	# Run unix2dos on scripts.ini
+	my $unix2dos_command = "unix2dos $file_path";
+	my ($unix2dos_status, $unix2dos_output) = run_ssh_command($computer_node_name, $management_node_keys, $unix2dos_command);
+	if (defined($unix2dos_status) && $unix2dos_status == 0) {
+		notify($ERRORS{'DEBUG'}, 0, "ran unix2dos on $file_path");
+	}
+	elsif (defined($unix2dos_status)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run unix2dos on $file_path, exit status: $unix2dos_status, output:\n@{$unix2dos_output}");
+		return;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unable to run ssh command to run unix2dos on $file_path");
+		return;
+	}
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 search_and_replace_in_files
+
+ Parameters  : 
+ Returns     :
+ Description : 
+
+=cut
+
+sub search_and_replace_in_files {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+
+	my $management_node_keys = $self->data->get_management_node_keys();
+	my $computer_node_name   = $self->data->get_computer_node_name();
+
+	# Get the arguments
+	my $base_directory = shift;
+	my $search_pattern = shift;
+	my $replace_string = shift;
+	if (!$base_directory) {
+		notify($ERRORS{'WARNING'}, 0, "base directory was not specified as an argument");
+		return;
+	}
+	if (!$search_pattern) {
+		notify($ERRORS{'WARNING'}, 0, "search pattern was not specified as an argument");
+		return;
+	}
+	if (!$replace_string) {
+		notify($ERRORS{'WARNING'}, 0, "replace string was not specified as an argument");
+		return;
+	}
+	
+	# Run grep to find files matching pattern
+	my $grep_command = "/bin/grep -ilr \"$search_pattern\" \"$base_directory\"";
+	my ($grep_status, $grep_output) = run_ssh_command($computer_node_name, $management_node_keys, $grep_command);
+	if (!defined($grep_status)) {
+		notify($ERRORS{'WARNING'}, 0, "unable to run ssh command to run grep on directory: $base_directory, pattern: $search_pattern");
+		return;
+	}
+	elsif ("@$grep_output" =~ /$base_directory: No such file/i) {
+		notify($ERRORS{'WARNING'}, 0, "base directory does not exist: $base_directory");
+		return;
+	}
+	elsif ("@$grep_output" =~ /grep:/i) {
+		notify($ERRORS{'WARNING'}, 0, "grep output contains 'grep:', unexpected:\n" . join("\n", @$grep_output));
+		return;
+	}
+	elsif ($grep_status == 1) {
+		notify($ERRORS{'OK'}, 0, "no files were found matching pattern '$search_pattern' in: $base_directory");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "found files matching pattern '$search_pattern' in $base_directory:\n" . join("\n", @$grep_output));
+	}
+	
+	# Run sed on each matching file to replace string
+	my $sed_error_count = 0;
+	for my $matching_file (@$grep_output) {
+		# Run grep to find files matching pattern
+		my $sed_command = "/bin/sed -i -e \"s/$search_pattern/$replace_string/\" \"$matching_file\"";
+		my ($sed_status, $sed_output) = run_ssh_command($computer_node_name, $management_node_keys, $sed_command);
+		if (!defined($sed_status)) {
+			notify($ERRORS{'WARNING'}, 0, "unable to run ssh command to run sed on file: $matching_file");
+			$sed_error_count++;
+		}
+		elsif ("@$sed_output" =~ /No such file/i) {
+			notify($ERRORS{'WARNING'}, 0, "file was not found: $matching_file, sed output:\n" . join("\n", @$sed_output));
+			$sed_error_count++;
+		}
+		elsif ("@$sed_output" =~ /sed:/i) {
+			notify($ERRORS{'WARNING'}, 0, "sed output contains 'sed:', unexpected output:\n" . join("\n", @$sed_output));
+			$sed_error_count++;
+		}
+		elsif ($sed_status != 0) {
+			notify($ERRORS{'WARNING'}, 0, "sed exit status is $sed_status, output:\n" . join("\n", @$sed_output));
+			$sed_error_count++;
+		}
+		else {
+			notify($ERRORS{'OK'}, 0, "replaced '$search_pattern' with '$replace_string' in $matching_file");
+			
+			# sed replaces Windows newlines with \n
+			$self->run_unix2dos($matching_file);
+		}
+	}
+	
+	# Return false if any errors occurred
+	if ($sed_error_count) {
+		return;
+	}
+	
+	return 1;
+	
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -4056,7 +4935,7 @@ sub copy_capture_configuration_files {
 	# Attempt to create the node configuration directory if it doesn't already exist
 	if (!$self->create_directory($NODE_CONFIGURATION_DIRECTORY)) {
 		notify($ERRORS{'WARNING'}, 0, "unable to create directory on $computer_node_name: $NODE_CONFIGURATION_DIRECTORY");
-		return 0;
+		return;
 	}
 
 	# Copy configuration files
@@ -4070,11 +4949,21 @@ sub copy_capture_configuration_files {
 		}
 		else {
 			notify($ERRORS{'WARNING'}, 0, "could not chmod -R 777 $computer_node_name:$NODE_CONFIGURATION_DIRECTORY");
+			return;
 		}
 	} ## end if (run_scp_command("$source_configuration_directory/*"...
 	else {
 		notify($ERRORS{'WARNING'}, 0, "failed to copy $source_configuration_directory to $computer_node_name");
-		return 0;
+		return;
+	}
+	
+	# Insert the Windows root password in any files containing 'WINDOWS_ROOT_PASSWORD'
+	if ($self->search_and_replace_in_files($NODE_CONFIGURATION_DIRECTORY, 'WINDOWS_ROOT_PASSWORD', $WINDOWS_ROOT_PASSWORD)) {
+		notify($ERRORS{'DEBUG'}, 0, "set the Windows root password in configuration files");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to set the Windows root password in configuration files");
+		return;
 	}
 
 	return 1;
@@ -4108,15 +4997,8 @@ sub run_sysprep {
 
 	# Remove old C:\Sysprep directory if it exists
 	notify($ERRORS{'DEBUG'}, 0, "attempting to remove old C:/Sysprep directory if it exists");
-	if (!$self->delete_filesystem_entry('C:/Sysprep')) {
+	if (!$self->delete_file('C:/Sysprep')) {
 		notify($ERRORS{'WARNING'}, 0, "unable to remove existing C:/Sysprep directory");
-		return 0;
-	}
-
-	# Copy and scan drivers
-	notify($ERRORS{'DEBUG'}, 0, "attempting to copy and scan drivers");
-	if (!$self->prepare_drivers()) {
-		notify($ERRORS{'WARNING'}, 0, "unable to copy and scan drivers");
 		return 0;
 	}
 
@@ -4137,6 +5019,13 @@ sub run_sysprep {
 		notify($ERRORS{'WARNING'}, 0, "unable to run ssh command to copy Sysprep files to C:/Sysprep");
 		return 0;
 	}
+	
+	# Copy and scan drivers
+	notify($ERRORS{'DEBUG'}, 0, "attempting to copy and scan drivers");
+	if (!$self->prepare_drivers()) {
+		notify($ERRORS{'WARNING'}, 0, "unable to copy and scan drivers");
+		return 0;
+	}
 
 	# Clear out setupapi.log
 	my $setupapi_command = "/bin/cat C:/Windows/setupapi.log >> C:/Windows/setupapi_save.log && /bin/cp /dev/null C:/Windows/setupapi.log";
@@ -4153,7 +5042,7 @@ sub run_sysprep {
 	}
 
 	# Run Sysprep.exe, use cygstart to lauch the .exe and return immediately
-	my $sysprep_command = '/bin/cygstart.exe C:/Sysprep/sysprep.exe /quiet /reseal /mini /forceshutdown';
+	my $sysprep_command = '/bin/cygstart.exe cmd.exe /c "C:/Sysprep/sysprep.exe /forceshutdown /quiet /reseal /mini"';
 	my ($sysprep_status, $sysprep_output) = run_ssh_command($computer_node_name, $management_node_keys, $sysprep_command);
 	if (defined($sysprep_status) && $sysprep_status == 0) {
 		notify($ERRORS{'OK'}, 0, "initiated Sysprep.exe, waiting for $computer_node_name to become unresponsive");
@@ -4208,34 +5097,44 @@ sub prepare_drivers {
 
 	my $management_node_keys = $self->data->get_management_node_keys();
 	my $computer_node_name   = $self->data->get_computer_node_name();
+	my $imagemeta_sysprep = $self->data->get_imagemeta_sysprep();
+	
+	my $driver_directory;
+	if ($imagemeta_sysprep) {
+		$driver_directory = 'C:/Sysprep/Drivers';
+	}
+	else {
+		$driver_directory = 'C:/Drivers';
+	}
+	
 
-	# Remove old C:/Drivers directory if it exists
+	# Remove old driver directories if they exists
+	notify($ERRORS{'DEBUG'}, 0, "attempting to remove old C:/Sysprep\\Drivers directory if it exists");
+	if (!$self->delete_file("C:/Sysprep/Drivers")) {
+		notify($ERRORS{'WARNING'}, 0, "unable to remove existing C:/Sysprep/Drivers directory");
+	}
 	notify($ERRORS{'DEBUG'}, 0, "attempting to remove old C:/Drivers directory if it exists");
-	if (!$self->delete_filesystem_entry('C:/Drivers')) {
+	if (!$self->delete_file("C:/Drivers")) {
 		notify($ERRORS{'WARNING'}, 0, "unable to remove existing C:/Drivers directory");
-		return 0;
 	}
-
-	# Fix the path, xcopy.exe requires backslashes
-	(my $node_configuration_directory = $NODE_CONFIGURATION_DIRECTORY) =~ s/\//\\/g;
-
+	
 	# Copy driver files to C:/Drivers
-	my $xcopy_command = "xcopy.exe /E /C /I /Q /H /K /O /Y \"$node_configuration_directory\\Drivers\" \"C:\\Drivers\"";
-	my ($xcopy_status, $xcopy_output) = run_ssh_command($computer_node_name, $management_node_keys, $xcopy_command);
-	if (defined($xcopy_status) && $xcopy_status == 0) {
-		notify($ERRORS{'DEBUG'}, 0, "copied driver files to C:/Drivers");
+	my $cp_command = "cp -rf \"$NODE_CONFIGURATION_DIRECTORY/Drivers\" \"$driver_directory\"";
+	my ($cp_status, $cp_output) = run_ssh_command($computer_node_name, $management_node_keys, $cp_command);
+	if (defined($cp_status) && $cp_status == 0) {
+		notify($ERRORS{'DEBUG'}, 0, "copied driver files to $driver_directory");
 	}
-	elsif (defined($xcopy_status)) {
-		notify($ERRORS{'OK'}, 0, "failed to copy driver files to C:/Drivers, exit status: $xcopy_status, output:\n@{$xcopy_output}");
+	elsif (defined($cp_status)) {
+		notify($ERRORS{'OK'}, 0, "failed to copy driver files to $driver_directory, exit status: $cp_status, output:\n@{$cp_output}");
 		return 0;
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "unable to run ssh command to drivers files to C:/Drivers");
+		notify($ERRORS{'WARNING'}, 0, "unable to run ssh command to drivers files to $driver_directory");
 		return 0;
 	}
 
 	# Run spdrvscn.exe
-	my $spdrvscn_command = $NODE_CONFIGURATION_DIRECTORY . '/Utilities/SPDrvScn/spdrvscn.exe /p "C:/Drivers" /e inf /f /a /s /q';
+	my $spdrvscn_command = "$NODE_CONFIGURATION_DIRECTORY/Utilities/SPDrvScn/spdrvscn.exe /p \"$driver_directory\" /e inf /d \$SYSTEMROOT\\\\inf /a /s /q";
 	my ($spdrvscn_status, $spdrvscn_output) = run_ssh_command($computer_node_name, $management_node_keys, $spdrvscn_command);
 	if (defined($spdrvscn_status) && $spdrvscn_status == 0) {
 		notify($ERRORS{'OK'}, 0, "executed spdrvscn.exe");
@@ -4253,7 +5152,7 @@ sub prepare_drivers {
 	my $reg_query_command = '$SYSTEMROOT/System32/reg.exe QUERY "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion" /v DevicePath';
 	my ($reg_query_status, $reg_query_output) = run_ssh_command($computer_node_name, $management_node_keys, $reg_query_command, '', '', 1);
 	if (defined($reg_query_status) && $reg_query_status == 0) {
-		notify($ERRORS{'DEBUG'}, 0, "queried DevicePath registry key");
+		notify($ERRORS{'DEBUG'}, 0, "queried DevicePath registry key:\n" . join("\n", @{$reg_query_output}));
 	}
 	elsif (defined($reg_query_status)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to query DevicePath registry key, exit status: $reg_query_status, output:\n@{$reg_query_output}");
@@ -4297,7 +5196,36 @@ sub clean_hard_drive {
 	my $management_node_keys = $self->data->get_management_node_keys();
 	my $computer_node_name   = $self->data->get_computer_node_name();
 
-	my @patterns_to_delete = ('$TEMP,.*', '$TMP,.*', '$SYSTEMDRIVE/Temp,.*', '$SYSTEMROOT/Temp,.*', '$SYSTEMROOT/ie7updates,.*', '$SYSTEMROOT/ServicePackFiles,.*', '$SYSTEMROOT/SoftwareDistribution/Download,.*', '$SYSTEMROOT/Minidump,.*', '$ALLUSERSPROFILE/Application Data/Microsoft/Dr Watson,.*', '$SYSTEMROOT,.*\\.tmp', '$SYSTEMROOT,.*\\$hf_mig\\$.*', '$SYSTEMROOT,.*\\$NtUninstall.*', '$SYSTEMROOT,.*\\$NtServicePackUninstall.*', '$SYSTEMROOT,.*\\$MSI.*Uninstall.*', '$SYSTEMROOT/inf,.*INFCACHE\\.1', '$SYSTEMROOT/inf,.*[\\\\\\/]oem.*\\..*', '$SYSTEMROOT,.*AFSCache', '$SYSTEMROOT,.*afsd_init\\.log', '$SYSTEMDRIVE/Documents and Settings,.*\\.log', '$SYSTEMDRIVE/Documents and Settings,.*Recent\\/.*', '$SYSTEMDRIVE/Documents and Settings,.*Cookies\\/.*', '$SYSTEMDRIVE/Documents and Settings,.*Temp\\/.*', '$SYSTEMDRIVE/Documents and Settings,.*Temporary Internet Files\\/Content.*\\/.*', '$SYSTEMDRIVE,.*pagefile\\.sys',);
+	# Note: attempt to delete everything under C:\RECYCLER before running cleanmgr.exe
+	# The Recycle Bin occasionally becomes corrupted
+	# cleanmgr.exe will hang with an "OK/Cancel" box on the screen if this happens
+	my @patterns_to_delete = (
+		'$SYSTEMDRIVE/RECYCLER,.*',
+		'$TEMP,.*',
+		'$TMP,.*',
+		'$SYSTEMDRIVE/Temp,.*',
+		'$SYSTEMROOT/Temp,.*',
+		'$SYSTEMROOT/ie7updates,.*',
+		'$SYSTEMROOT/ServicePackFiles,.*',
+		'$SYSTEMROOT/SoftwareDistribution/Download,.*',
+		'$SYSTEMROOT/Minidump,.*',
+		'$ALLUSERSPROFILE/Application Data/Microsoft/Dr Watson,.*',
+		'$SYSTEMROOT,.*\\.tmp',
+		'$SYSTEMROOT,.*\\$hf_mig\\$.*',
+		'$SYSTEMROOT,.*\\$NtUninstall.*',
+		'$SYSTEMROOT,.*\\$NtServicePackUninstall.*',
+		'$SYSTEMROOT,.*\\$MSI.*Uninstall.*',
+		'$SYSTEMROOT/inf,.*INFCACHE\\.1',
+		'$SYSTEMROOT/inf,.*[\\\\\\/]oem.*\\..*',
+		'$SYSTEMROOT,.*AFSCache',
+		'$SYSTEMROOT,.*afsd_init\\.log',
+		'$SYSTEMDRIVE/Documents and Settings,.*\\.log',
+		'$SYSTEMDRIVE/Documents and Settings,.*Recent\\/.*',
+		'$SYSTEMDRIVE/Documents and Settings,.*Cookies\\/.*',
+		'$SYSTEMDRIVE/Documents and Settings,.*Temp\\/.*',
+		'$SYSTEMDRIVE/Documents and Settings,.*Temporary Internet Files\\/Content.*\\/.*',
+		'$SYSTEMDRIVE,.*pagefile\\.sys',
+	);
 
 	# Attempt to stop the AFS service, needed to delete AFS files
 	$self->stop_service('TransarcAFSDaemon');
