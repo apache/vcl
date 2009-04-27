@@ -812,7 +812,7 @@ sub check_image_os {
 	}
 
 	my $image_os_name_new;
-	if ($image_os_name =~ /^(rh)el([0-9])/ || $image_os_name =~ /^rh(fc)([0-9])/) {
+	if ($image_os_name =~ /^(rh)el[s]?([0-9])/ || $image_os_name =~ /^rh(fc)([0-9])/) {
 		# Change rhelX --> rhXimage, rhfcX --> fcXimage
 		$image_os_name_new = "$1$2image";
 	}
@@ -820,6 +820,11 @@ sub check_image_os {
 		# Change rhelX --> rhXimage, rhfcX --> fcXimage
 		$image_os_name_new = "$1$2image";
 	}
+	elsif ($image_os_name =~ /^(fedora)([0-9])/) {
+		# Change fedoraX --> fcXimage
+		$image_os_name_new = "fc$1image"
+   }
+
 	else {
 		notify($ERRORS{'DEBUG'}, 0, "no corrections need to be made to image OS: $image_os_name");
 		return 1;
@@ -849,7 +854,7 @@ sub check_image_os {
 
 	# Update the image and imagerevision tables
 	if (database_execute($sql_statement)) {
-		notify($ERRORS{'OK'}, 0, "image and imagerevision tables updated: $image_name -> $image_name_new");
+		notify($ERRORS{'OK'}, 0, "image($image_id) and imagerevision($imagerevision_id) tables updated: $image_name -> $image_name_new");
 	}
 	else {
 		notify($ERRORS{'WARNING'}, 0, "failed to update image and imagerevision tables: $image_name -> $image_name_new, returning 0");
