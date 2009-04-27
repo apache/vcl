@@ -14,7 +14,7 @@
 ' limitations under the License.
 
 strCurrentImagePath = "C:\Cygwin\home\root\currentimage.txt"
-strSetnameLogfile = "C:\Cygwin\home\root\VCL\Logs\wsname_output.log"
+strSetnameLogfile = "C:\Cygwin\home\root\VCL\Logs\sysprep_cmdlines\wsname_output.log"
 strWSNamePath = "C:\Cygwin\home\root\VCL\Utilities\WSName\wsname.exe"
 
 Set objShell = WScript.CreateObject("WScript.Shell")

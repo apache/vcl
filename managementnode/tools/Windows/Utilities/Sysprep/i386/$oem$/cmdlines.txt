@@ -1,2 +1,2 @@
 [Commands]
-"cmd.exe /c C:\Cygwin\home\root\VCL\Scripts\cmdlines.cmd > C:\Cygwin\home\root\VCL\Logs\cmdlines.log 2>&1"
+"cmd.exe /c C:\Cygwin\home\root\VCL\Scripts\sysprep_cmdlines.cmd > C:\Cygwin\home\root\VCL\Logs\sysprep_cmdlines.log 2>&1"

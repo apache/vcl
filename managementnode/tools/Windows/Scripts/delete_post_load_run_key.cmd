@@ -15,11 +15,11 @@ rem See the License for the specific language governing permissions and
 rem limitations under the License.
 
 rem DESCRIPTION:
-rem This script enables AutoAdminLogon for the root account. It causes root
-rem to automatically log in after Windows boots for the first time after
-rem an image has been loaded. It is called by sysprep_cmdlines.cmd. It
-rem must be called during this stage because Sysprep will disable
-rem AutoAdminLogon if it has been configured previously.
+rem This script is called by post_load.cmd after it has completed most
+rem of its configuration tasks when the root account is logged in.
+rem This script deletes the registry entry under
+rem HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Run.
+rem which causes post_load.cmd to be executed automatically.
 
 set /A STATUS=0
 
@@ -37,23 +37,8 @@ echo.
 
 echo ----------------------------------------------------------------------
 
-set USERNAME=root
-set PASSWORD=WINDOWS_ROOT_PASSWORD
-
-echo Setting AutoAdminLogon to 1...
-reg add "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon" /v "AutoAdminLogon" /t REG_SZ /d "1" /f
-echo ERRORLEVEL: %ERRORLEVEL%
-set /A STATUS+=%ERRORLEVEL%
-echo.
-
-echo Setting DefaultUserName to %USERNAME%...
-reg add "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon" /v "DefaultUserName" /t REG_SZ /d "%USERNAME%" /f
-echo ERRORLEVEL: %ERRORLEVEL%
-set /A STATUS+=%ERRORLEVEL%
-echo.
-
-echo Setting DefaultPassword...
-reg add "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon" /v "DefaultPassword" /t REG_SZ /d "%PASSWORD%" /f
+echo Deleting registry HKLM-Run command to run post_load.cmd...
+"%SystemRoot%\system32\reg.exe" DELETE "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Run" /v "post_load.cmd" /f
 echo ERRORLEVEL: %ERRORLEVEL%
 set /A STATUS+=%ERRORLEVEL%
 echo.

@@ -14,16 +14,25 @@ rem WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 rem See the License for the specific language governing permissions and
 rem limitations under the License.
 
-rem This script reconfigures the Cygwin sshd service. 
-rem It regenerates the computer's host keys. This is necessary
-rem when Sysprep is run and a new SID is generated.
-rem This script MUST be run by the root account or else the 
-rem sshd service will not start.
+rem DESCRIPTION:
+rem Displays various debugging information helpful in troubleshooting
+rem Windows image problems.
+
 set /A STATUS=0
 
+rem Get the name of this batch file and the directory it is running from
+set SCRIPT_NAME=%~n0
+set SCRIPT_FILENAME=%~nx0
+set SCRIPT_DIR=%~dp0
+rem Remove trailing slash from SCRIPT_DIR
+set SCRIPT_DIR=%SCRIPT_DIR:~0,-1%
+
 echo ======================================================================
-echo %~nx0 beginning to run at: %DATE% %TIME%
+echo %SCRIPT_FILENAME% beginning to run at: %DATE% %TIME%
+echo Directory %SCRIPT_FILENAME% is running from: %SCRIPT_DIR%
 echo.
+
+echo ----------------------------------------------------------------------
 
 echo Environment:
 set
@@ -34,7 +43,6 @@ echo ----------------------------------------------------------------------
 echo Querying HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\DevicePath registry key...
 "%SystemRoot%\system32\reg.exe" query HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion /v DevicePath 2>&1
 echo ERRORLEVEL: %ERRORLEVEL%
-set /A STATUS+=%ERRORLEVEL%
 echo.
 
 echo ----------------------------------------------------------------------
@@ -42,17 +50,21 @@ echo ----------------------------------------------------------------------
 echo Querying HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Run registry key...
 "%SystemRoot%\system32\reg.exe" query HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Run 2>&1
 echo ERRORLEVEL: %ERRORLEVEL%
-set /A STATUS+=%ERRORLEVEL%
 echo.
 
 echo ----------------------------------------------------------------------
 
-echo Querying HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Run registry key...
-"%SystemRoot%\system32\reg.exe" query HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Run 2>&1
+echo Displaying contents of scripts.ini...
+type "%SYSTEMROOT%\system32\GroupPolicy\User\Scripts\scripts.ini" 2>&1
 echo ERRORLEVEL: %ERRORLEVEL%
-set /A STATUS+=%ERRORLEVEL%
 echo.
 
-echo %~nx0 finished at: %DATE% %TIME%
+echo ----------------------------------------------------------------------
+
+echo %SCRIPT_FILENAME% finished at: %DATE% %TIME%
 echo exiting with status: %STATUS%
+"%SystemRoot%\system32\eventcreate.exe" /T INFORMATION /L APPLICATION /SO %SCRIPT_FILENAME% /ID 555 /D "exit status: %STATUS%" 2>&1
+
+echo.
+echo.
 exit /B %STATUS%

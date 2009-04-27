@@ -12,6 +12,9 @@
 ' WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 ' See the License for the specific language governing permissions and
 ' limitations under the License.
+
+Set objShell = CreateObject("WScript.Shell")
+
 WScript.Echo (WScript.ScriptName & " beginning to run: " & Date & " " & Time)
 
 strSystem32="%SystemRoot%\system32"
@@ -37,8 +40,8 @@ CMD_IPCONFIG_ALL=strSystem32 & "\ipconfig.exe /all"
 CMD_IPCONFIG_RELEASE=strSystem32 & "\ipconfig.exe /release"
 CMD_IPCONFIG_RENEW=strSystem32 & "\ipconfig.exe /renew"
 
-RunCommand CMD_IPCONFIG_RELEASE, "Releasing DHCP lease"
-RunCommand CMD_IPCONFIG_RENEW, "Renewing DHCP lease"
+'RunCommand CMD_IPCONFIG_RELEASE, "Releasing DHCP lease"
+'RunCommand CMD_IPCONFIG_RENEW, "Renewing DHCP lease"
 RunCommand CMD_IPCONFIG_ALL, "Running ipconfig /all"
 
 
@@ -62,7 +65,7 @@ WScript.Echo "PUBLIC_GATEWAY        = " & PUBLIC_GATEWAY
 WScript.Echo
 
 ' Check if all the required information was found
-If (Len(PRIVATE_NAME) > 0) And (Len(PRIVATE_IP) > 0) And (Len(PRIVATE_GATEWAY) > 0) _
+If (Len(PRIVATE_NAME) > 0) And (Len(PRIVATE_IP) > 0) _
    And (Len(PUBLIC_NAME) > 0) And (Len(PUBLIC_IP) > 0) And (Len(PUBLIC_GATEWAY) > 0) _
 Then
 	WScript.Echo "Successfully retrieved private and public network configuration"
@@ -71,31 +74,31 @@ Else
 	WScript.Quit 1
 End If
 
-' Set system environment variables
-Set objShell = CreateObject("WScript.Shell")
-Set sysvars = objShell.Environment("SYSTEM")
-sysvars("VCL_PRIVATE_NAME")    = PRIVATE_NAME
-sysvars("VCL_PRIVATE_IP")      = PRIVATE_IP
-sysvars("VCL_PRIVATE_MASK")    = PRIVATE_SUBNET_MASK
-sysvars("VCL_PRIVATE_GATEWAY") = PRIVATE_GATEWAY
-sysvars("VCL_PUBLIC_NAME")     = PUBLIC_NAME
-sysvars("VCL_PUBLIC_IP")       = PUBLIC_IP
-sysvars("VCL_PUBLIC_MASK")       = PUBLIC_SUBNET_MASK
-sysvars("VCL_PUBLIC_GATEWAY")  = PUBLIC_GATEWAY
-
-WScript.Echo
-
-WScript.Echo "Set environment variables:"
-Set sysvars = objShell.Environment("SYSTEM")
-WScript.Echo "VCL_PRIVATE_NAME: " & sysvars("VCL_PRIVATE_NAME")
-WScript.Echo "VCL_PRIVATE_IP: " & sysvars("VCL_PRIVATE_IP")
-WScript.Echo "VCL_PRIVATE_MASK: " & sysvars("VCL_PRIVATE_MASK")
-WScript.Echo "VCL_PRIVATE_GATEWAY: " & sysvars("VCL_PRIVATE_GATEWAY")
-WScript.Echo
-WScript.Echo "VCL_PUBLIC_NAME: " & sysvars("VCL_PUBLIC_NAME")
-WScript.Echo "VCL_PUBLIC_IP: " & sysvars("VCL_PUBLIC_IP")
-WScript.Echo "VCL_PUBLIC_MASK: " & sysvars("VCL_PUBLIC_MASK")
-WScript.Echo "VCL_PUBLIC_GATEWAY: " & sysvars("VCL_PUBLIC_GATEWAY")
+'' Set system environment variables
+'Set objShell = CreateObject("WScript.Shell")
+'Set sysvars = objShell.Environment("SYSTEM")
+'sysvars("VCL_PRIVATE_NAME")    = PRIVATE_NAME
+'sysvars("VCL_PRIVATE_IP")      = PRIVATE_IP
+'sysvars("VCL_PRIVATE_MASK")    = PRIVATE_SUBNET_MASK
+'sysvars("VCL_PRIVATE_GATEWAY") = PRIVATE_GATEWAY
+'sysvars("VCL_PUBLIC_NAME")     = PUBLIC_NAME
+'sysvars("VCL_PUBLIC_IP")       = PUBLIC_IP
+'sysvars("VCL_PUBLIC_MASK")       = PUBLIC_SUBNET_MASK
+'sysvars("VCL_PUBLIC_GATEWAY")  = PUBLIC_GATEWAY
+'
+'WScript.Echo
+'
+'WScript.Echo "Set environment variables:"
+'Set sysvars = objShell.Environment("SYSTEM")
+'WScript.Echo "VCL_PRIVATE_NAME: " & sysvars("VCL_PRIVATE_NAME")
+'WScript.Echo "VCL_PRIVATE_IP: " & sysvars("VCL_PRIVATE_IP")
+'WScript.Echo "VCL_PRIVATE_MASK: " & sysvars("VCL_PRIVATE_MASK")
+'WScript.Echo "VCL_PRIVATE_GATEWAY: " & sysvars("VCL_PRIVATE_GATEWAY")
+'WScript.Echo
+'WScript.Echo "VCL_PUBLIC_NAME: " & sysvars("VCL_PUBLIC_NAME")
+'WScript.Echo "VCL_PUBLIC_IP: " & sysvars("VCL_PUBLIC_IP")
+'WScript.Echo "VCL_PUBLIC_MASK: " & sysvars("VCL_PUBLIC_MASK")
+'WScript.Echo "VCL_PUBLIC_GATEWAY: " & sysvars("VCL_PUBLIC_GATEWAY")
 
 '----------------------------------------------------------------------------
 ' Assemble the external commands
@@ -180,38 +183,37 @@ intExitStatusTotal = 0
 intExitStatusTotal = intExitStatusTotal + RunCommand(CMD_SET_PUBLIC_DNS, "Setting the public adapter to not register DNS records")
 intExitStatusTotal = intExitStatusTotal + RunCommand(CMD_SET_PRIVATE_DNS, "Setting the private adapter to not register DNS records")
 
-' Set the private adapter to static and remove the default gateway
-intExitStatusTotal = intExitStatusTotal + RunCommand(CMD_SET_PRIVATE_STATIC, "Setting the private adapter to static")
+'' Set the private adapter to static and remove the default gateway
+'intExitStatusTotal = intExitStatusTotal + RunCommand(CMD_SET_PRIVATE_STATIC, "Setting the private adapter to static")
 
 ' Configure the routing table default gateways
 intExitStatusTotal = intExitStatusTotal + RunCommand(CMD_ROUTE_DELETE_GATEWAYS, "Deleting routes to default gateways")
 intExitStatusTotal = intExitStatusTotal + RunCommand(CMD_ROUTE_ADD_PUBLIC_GATEWAY, "Adding route to public default gateway")
 'intExitStatusTotal = intExitStatusTotal + RunCommand(CMD_ROUTE_ADD_PRIVATE_GATEWAY, "Adding route to private default gateway")
 
-' Configure the ntsyslog service to use the address of the private default gateway (management node)
-RunCommand CMD_STOP_NTSYSLOG_SERVICE, "Stopping the ntsyslog service"
-WScript.Sleep 2000
-intExitStatusTotal = intExitStatusTotal + RunCommand(CMD_SET_NTSYSLOG_GATEWAY, "Configuring ntsyslog to use private default gateway")
-intExitStatusTotal = intExitStatusTotal + RunCommand(CMD_START_NTSYSLOG_SERVICE, "STARTING the ntsyslog service")
+'' Configure the ntsyslog service to use the address of the private default gateway (management node)
+'RunCommand CMD_STOP_NTSYSLOG_SERVICE, "Stopping the ntsyslog service"
+'intExitStatusTotal = intExitStatusTotal + RunCommand(CMD_SET_NTSYSLOG_GATEWAY, "Configuring ntsyslog to use private default gateway")
+'intExitStatusTotal = intExitStatusTotal + RunCommand(CMD_START_NTSYSLOG_SERVICE, "STARTING the ntsyslog service")
 
 ' Configure the firewall to allow ping, RDP and SSH on the private network
-print_hr
+'print_hr
 
-If (Left(strWindowsVersion, 1) < 6) Then
-	WScript.Echo "Windows version is " & strWindowsVersion & ", configuring firewall with netsh firewall"
-	intExitStatusTotal = intExitStatusTotal + RunCommand(CMD_FIREWALL_ALLOW_PRIVATE_PING, "Allowing ping on the private interface")
-	intExitStatusTotal = intExitStatusTotal + RunCommand(CMD_FIREWALL_ALLOW_PRIVATE_SSH, "Allowing SSH on the private interface")
-	intExitStatusTotal = intExitStatusTotal + RunCommand(CMD_FIREWALL_ALLOW_PRIVATE_RDP, "Allowing RDP on the private interface")
-Else
-   WScript.Echo "Windows version is " & strWindowsVersion & ", configuring firewall with netsh advfirewall"
-	intExitStatusTotal = intExitStatusTotal + RunCommand(CMD_ADVFIREWALL_ALLOW_PRIVATE_PING, "Allowing ping from private addresses")
-	intExitStatusTotal = intExitStatusTotal + RunCommand(CMD_ADVFIREWALL_ALLOW_PRIVATE_SSH, "Allowing SSH from private addresses")
-	intExitStatusTotal = intExitStatusTotal + RunCommand(CMD_ADVFIREWALL_ALLOW_PRIVATE_RDP, "Allowing RDP from private addresses")
-End If
+'If (Left(strWindowsVersion, 1) < 6) Then
+'	WScript.Echo "Windows version is " & strWindowsVersion & ", configuring firewall with netsh firewall"
+'	intExitStatusTotal = intExitStatusTotal + RunCommand(CMD_FIREWALL_ALLOW_PRIVATE_PING, "Allowing ping on the private interface")
+'	intExitStatusTotal = intExitStatusTotal + RunCommand(CMD_FIREWALL_ALLOW_PRIVATE_SSH, "Allowing SSH on the private interface")
+'	'intExitStatusTotal = intExitStatusTotal + RunCommand(CMD_FIREWALL_ALLOW_PRIVATE_RDP, "Allowing RDP on the private interface")
+'Else
+'   WScript.Echo "Windows version is " & strWindowsVersion & ", configuring firewall with netsh advfirewall"
+'	intExitStatusTotal = intExitStatusTotal + RunCommand(CMD_ADVFIREWALL_ALLOW_PRIVATE_PING, "Allowing ping from private addresses")
+'	intExitStatusTotal = intExitStatusTotal + RunCommand(CMD_ADVFIREWALL_ALLOW_PRIVATE_SSH, "Allowing SSH from private addresses")
+'	'intExitStatusTotal = intExitStatusTotal + RunCommand(CMD_ADVFIREWALL_ALLOW_PRIVATE_RDP, "Allowing RDP from private addresses")
+'End If
 
-' Set the names of the adapters to Public and Private
-RunCommand CMD_SET_PRIVATE_NAME, "Setting the private adapter name to Private"
-RunCommand CMD_SET_PUBLIC_NAME, "Setting the public adapter name to Public"
+'' Set the names of the adapters to Public and Private
+'RunCommand CMD_SET_PRIVATE_NAME, "Setting the private adapter name to Private"
+'RunCommand CMD_SET_PUBLIC_NAME, "Setting the public adapter name to Public"
 
 ' Print the routing table
 RunCommand CMD_ROUTE_PRINT, "Printing routing table"
@@ -258,11 +260,11 @@ function get_network_configuration
 	' 192.168.0.0 – 192.168.255.255
 	strPatternNotPublic = "^(10|127|192\.168|172\.(1[6-9]|2[0-9]|3[0-1]))\."
 	
-	intCheckAdapters = 1
-	intLoopCount = 0
-	Do While (intCheckAdapters <> 0 And intLoopCount < 3)
-		intLoopCount = intLoopCount + 1
-		intCheckAdapters = 0
+	'intCheckAdapters = 1
+	'intLoopCount = 0
+	'Do While (intCheckAdapters <> 0 And intLoopCount < 3)
+	'	intLoopCount = intLoopCount + 1
+	'	intCheckAdapters = 0
 		
 		' Renew the DHCP lease if not the first iteration
 		' This means DHCP was enabled on an adapter
@@ -320,20 +322,22 @@ function get_network_configuration
 					PRIVATE_NAME = NA.NetConnectionID
 					WScript.Echo "* PRIVATE_NAME          = " & PRIVATE_NAME
 					WScript.Echo "* DHCP enabled          = " & NAC.DHCPEnabled
-					If (NAC.DHCPEnabled = "False") Then
-						CMD_PRIVATE_ENABLE_DHCP=strSystem32 & "\netsh.exe interface ip set address name=""" & PRIVATE_NAME & """ source=dhcp"
-						RunCommand CMD_PRIVATE_ENABLE_DHCP, "Enabling DHCP on the private adapter"
-						intCheckAdapters = 1
-					Else
+					'If (NAC.DHCPEnabled = "False") Then
+					'	CMD_PRIVATE_ENABLE_DHCP=strSystem32 & "\netsh.exe interface ip set address name=""" & PRIVATE_NAME & """ source=dhcp"
+					'	RunCommand CMD_PRIVATE_ENABLE_DHCP, "Enabling DHCP on the private adapter"
+					'	intCheckAdapters = 1
+					'Else
 						PRIVATE_IP = strIPAddress
 						PRIVATE_SUBNET_MASK = Join(NAC.IPSubnet)
 						PRIVATE_DESCRIPTION = NA.Description
-						PRIVATE_GATEWAY = Join(NAC.DefaultIPGateway)
+						If Not IsNull(NAC.DefaultIPGateway) Then
+						   PRIVATE_GATEWAY = Join(NAC.DefaultIPGateway)
+						End If
 						WScript.Echo "* PRIVATE_IP            = " & PRIVATE_IP
 						WScript.Echo "* PRIVATE_SUBNET_MASK   = " & PRIVATE_SUBNET_MASK
 						WScript.Echo "* PRIVATE_GATEWAY       = " & PRIVATE_GATEWAY
 						WScript.Echo "* PRIVATE_DESCRIPTION   = " & PRIVATE_DESCRIPTION
-					End If
+					'End If
 				' Address is not a valid VCL private address (10.*) but may still be private (192.168.* ...)
 				' Check if address is private
 				Elseif Len(strIPAddressMatchNotPublic) > 0 Then
@@ -344,25 +348,27 @@ function get_network_configuration
 					PUBLIC_NAME = NA.NetConnectionID
 					WScript.Echo "* PUBLIC_NAME          = " & PUBLIC_NAME
 					WScript.Echo "* DHCP enabled         = " & NAC.DHCPEnabled
-					If (NAC.DHCPEnabled = "False") Then
-						CMD_PUBLIC_ENABLE_DHCP=strSystem32 & "\netsh.exe interface ip set address name=""" & PUBLIC_NAME & """ source=dhcp"
-						RunCommand CMD_PUBLIC_ENABLE_DHCP, "Enabling DHCP on the public adapter"
-						intCheckAdapters = 1
-					Else
+					'If (NAC.DHCPEnabled = "False") Then
+					'	CMD_PUBLIC_ENABLE_DHCP=strSystem32 & "\netsh.exe interface ip set address name=""" & PUBLIC_NAME & """ source=dhcp"
+					'	RunCommand CMD_PUBLIC_ENABLE_DHCP, "Enabling DHCP on the public adapter"
+					'	intCheckAdapters = 1
+					'Else
 						PUBLIC_IP = strIPAddress
 						PUBLIC_SUBNET_MASK = Join(NAC.IPSubnet)
 						PUBLIC_DESCRIPTION = NA.Description
-						PUBLIC_GATEWAY = Join(NAC.DefaultIPGateway)
+						If Not IsNull(NAC.DefaultIPGateway) Then
+						   PUBLIC_GATEWAY = Join(NAC.DefaultIPGateway)
+						End If
 						WScript.Echo "* PUBLIC_IP            = " & PUBLIC_IP
 						WScript.Echo "* PUBLIC_SUBNET_MASK   = " & PUBLIC_SUBNET_MASK
 						WScript.Echo "* PUBLIC_GATEWAY       = " & PUBLIC_GATEWAY
 						WScript.Echo "* PUBLIC_DESCRIPTION   = " & PUBLIC_DESCRIPTION
-					End If
+					'End If
 				End If
 			Next
 		Next
 		
-	Loop
+	'Loop
 End function
 
 '-----------------------------------------------------------------------------
@@ -397,7 +403,6 @@ Function RunCommand (strCommand, strDescription)
 	print_hr
 	strCommand = "cmd.exe /c " & strCommand
 	WScript.Echo strDescription & ", command: " & strCommand
-	Set objShell = CreateObject("WScript.Shell")
 	Set objExecResult = objShell.Exec(strCommand & " 2>&1")
 
 	If objExecResult.ProcessID = 0 And objExecResult.Status = 1 Then
@@ -410,7 +415,7 @@ Function RunCommand (strCommand, strDescription)
 		WScript.StdOut.Write objExecResult.StdOut.ReadAll()
 		WScript.StdErr.Write objExecResult.StdErr.ReadAll()
 		If intStatus <> 0 Then Exit Do
-		WScript.Sleep 10
+		'WScript.Sleep 10
 	Loop
 
 	If objExecResult.ExitCode > 0 Then
