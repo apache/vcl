@@ -88,51 +88,26 @@ use VCL::utils;
 
 sub process {
 	my $self = shift;
-	my ($package, $filename, $line, $sub) = caller(0);
-
+	
 	# Store hash variables into local variables
 	my $request_data = $self->data->get_request_data;
 
-	my $request_id              = $self->data->get_request_data();
-	my $request_state_name      = $self->data->get_request_state_name();
-	my $request_laststate_name  = $self->data->get_request_laststate_name();
-	my $reservation_id          = $self->data->get_reservation_id();
-	my $reservation_remoteip    = $self->data->get_reservation_remote_ip();
-	my $computer_type           = $self->data->get_computer_type();
-	my $computer_id             = $self->data->get_computer_id();
-	my $computer_shortname      = $self->data->get_computer_short_name();
-	my $computer_hostname       = $self->data->get_computer_host_name();
-	my $computer_ipaddress      = $self->data->get_computer_ip_address();
-	my $computer_state_name     = $self->data->get_computer_state_name();
-	my $image_os_name           = $self->data->get_image_os_name();
-	my $image_os_type                   = $self->data->get_image_os_type();
-	my $imagerevision_imagename = $self->data->get_image_name();
-	my $user_unityid            = $self->data->get_user_login_id();
+	my $request_id                 = $self->data->get_request_data();
+	my $request_state_name         = $self->data->get_request_state_name();
+	my $request_laststate_name     = $self->data->get_request_laststate_name();
+	my $reservation_id             = $self->data->get_reservation_id();
+	my $reservation_remoteip       = $self->data->get_reservation_remote_ip();
+	my $computer_type              = $self->data->get_computer_type();
+	my $computer_id                = $self->data->get_computer_id();
+	my $computer_shortname         = $self->data->get_computer_short_name();
+	my $computer_hostname          = $self->data->get_computer_host_name();
+	my $computer_ipaddress         = $self->data->get_computer_ip_address();
+	my $computer_state_name        = $self->data->get_computer_state_name();
+	my $image_os_name              = $self->data->get_image_os_name();
+	my $image_os_type              = $self->data->get_image_os_type();
+	my $imagerevision_imagename    = $self->data->get_image_name();
+	my $user_unityid               = $self->data->get_user_login_id();
 	my $computer_currentimage_name = $self->data->get_computer_currentimage_name();
-
-	# Retrieve next image
-	# It's possible the results may not get used based on the state of the reservation 
-	my @nextimage;
-
-	if($self->data->can("get_next_image_dataStructure")){
-		@nextimage = $self->data->get_next_image_dataStructure();
-	}
-	else{
-		notify($ERRORS{'WARNING'}, 0, "predictor module does not support get_next_image, calling default get_next_image from utils");
-		@nextimage = get_next_image_default($computer_id);
-	}
-
-	# Assign values to hash for insert reload request
-	# Not necessary to change local variables for active image
-	$request_data->{reservation}{$reservation_id}{imagerevision}{imagename} = $nextimage[0];
-	$request_data->{reservation}{$reservation_id}{image}{id}                = $nextimage[1];
-	$request_data->{reservation}{$reservation_id}{imagerevision}{id}        = $nextimage[2];
-	$request_data->{reservation}{$reservation_id}{imageid}                  = $nextimage[1];
-	$request_data->{reservation}{$reservation_id}{imagerevisionid}          = $nextimage[2];
-
-	my $nextimagename = $nextimage[0];
-	notify($ERRORS{'OK'}, 0, "nextimage results imagename=$nextimage[0] imageid=$nextimage[1] imagerevisionid=$nextimage[2]");
-
 
 	# Insert into computerloadlog if request state = timeout
 	if ($request_state_name =~ /timeout|deleted/) {
@@ -157,17 +132,15 @@ sub process {
 
 	# Check the computer type
 	# Treat blades and virtual machines the same
-	#    The request will either be changed to "reload" or they will be cleaned
-	#    up based on the OS.
+	# Either a reload request will be inserted or the node will be sanitized
 	# Lab computers only need to have sshd disabled.
 	
 	elsif ($computer_type =~ /blade|virtualmachine/) {
-		notify($ERRORS{'OK'}, 0, "computer type is $computer_type");
+		notify($ERRORS{'DEBUG'}, 0, "computer type is $computer_type");
 
-		# Check if request laststate is reserved
-		# This is the only case where computers will be cleaned and not reloaded
+		# Check if request laststate is reserved - computer should be sanitized and not reloaded because user did not log on
 		if ($request_laststate_name =~ /reserved/) {
-			notify($ERRORS{'OK'}, 0, "request laststate is $request_laststate_name, attempting to clean up computer for next user");
+			notify($ERRORS{'OK'}, 0, "request laststate is $request_laststate_name, attempting to sanitize computer");
 
 			# *** BEGIN MODULARIZED OS CODE ***
 			# Attempt to get the name of the image currently loaded on the computer
@@ -195,25 +168,26 @@ sub process {
 				}
 			}
 			
-			# Attempt to call modularized OS module's sanitize() subroutine
+			# Attempt to call OS module's sanitize() subroutine
 			# This subroutine should perform all the tasks necessary to sanitize the OS if it was reserved and not logged in to
 			if ($self->os->can("sanitize")) {
-				notify($ERRORS{'OK'}, 0, "calling " . ref($self->os) . "::sanitize() subroutine");
+				notify($ERRORS{'DEBUG'}, 0, "calling " . ref($self->os) . "::sanitize() subroutine");
 				if ($self->os->sanitize()) {
-					notify($ERRORS{'OK'}, 0, "OS has been sanitized on $computer_shortname");
+					notify($ERRORS{'OK'}, 0, "$computer_shortname has been sanitized");
 				}
 				else {
 					# OS module's sanitize() subroutine returned false, meaning reload is necessary
-					notify($ERRORS{'WARNING'}, 0, "failed to sanitize OS on $computer_shortname, computer will be reloaded");
+					notify($ERRORS{'WARNING'}, 0, "failed to sanitize $computer_shortname, computer will be reloaded");
 					$self->insert_reload_and_exit();
 				}
 			}
 			# *** END MODULARIZED OS CODE ***
 	
 			# Check the image OS type and clean up computer accordingly
+			# This whole section should be removed once the original Windows.pm is replaced by Windows_mod.pm
 			elsif ($image_os_type =~ /windows/) {
 				# Loaded Windows image needs to be cleaned up
-				notify($ERRORS{'OK'}, 0, "attempting steps to clean up loaded $image_os_name image");
+				notify($ERRORS{'DEBUG'}, 0, "attempting steps to clean up loaded $image_os_name image");
 
 				# Remove user
 				if (del_user($computer_shortname, $user_unityid, $computer_type, $image_os_name,$image_os_type)) {
@@ -221,25 +195,9 @@ sub process {
 					insertloadlog($reservation_id, $computer_id, "info", "reclaim: removed user");
 				}
 				else {
-					notify($ERRORS{'WARNING'}, 0, "could not remove user $user_unityid from $computer_shortname, proceed to forced reload");
-
-					# Insert reload request data into the datbase
-					if (insert_reload_request($request_data)) {
-						notify($ERRORS{'OK'}, 0, "inserted reload request into database for computer id=$computer_id imagename=$nextimagename");
-
-						# Switch the request state to complete, leave the computer state as is
-						# Update log ending to EOR
-						# Exit
-						switch_state($request_data, 'complete', '', 'EOR', '1');
-					}
-					else {
-						notify($ERRORS{'CRITICAL'}, 0, "failed to insert reload request into database for computer id=$computer_id imagename=$nextimagename");
-
-						# Switch the request and computer states to failed, log ending to failed, exit
-						switch_state($request_data, 'failed', 'failed', 'failed', '1');
-					}
-					exit;
-				} ## end else [ if (del_user($computer_shortname, $user_unityid...
+					notify($ERRORS{'WARNING'}, 0, "could not remove user $user_unityid from $computer_shortname, computer will be reloaded");
+					$self->insert_reload_and_exit();
+				}
 
 				# Disable RDP
 				if (remotedesktopport($computer_shortname, "DISABLE")) {
@@ -247,52 +205,19 @@ sub process {
 					insertloadlog($reservation_id, $computer_id, "info", "reclaim: disabled RDP");
 				}
 				else {
-					notify($ERRORS{'WARNING'}, 0, "remote desktop could not be disabled on $computer_shortname");
-
-					# Insert reload request data into the datbase
-					if (insert_reload_request($request_data)) {
-						notify($ERRORS{'OK'}, 0, "inserted reload request into database for computer id=$computer_id imagename=$nextimagename");
-
-						# Switch the request state to complete, leave the computer state as is, log ending to EOR, exit
-						switch_state($request_data, 'complete', '', 'EOR', '1');
-					}
-					else {
-						notify($ERRORS{'CRITICAL'}, 0, "failed to insert reload request into database for computer id=$computer_id imagename=$nextimagename");
-
-						# Switch the request and computer states to failed, log ending to failed, exit
-						switch_state($request_data, 'failed', 'failed', 'failed', '1');
-					}
-					exit;
-				} ## end else [ if (remotedesktopport($computer_shortname,...
-
-				## Stop Tivoli Monitoring
-				#if (system_monitoring($computer_shortname, $imagerevision_imagename, "stop", "ITM")) {
-				#	notify($ERRORS{'OK'}, 0, "ITM monitoring disabled");
-				#}
-			} ## end if ($image_os_name =~ /^(win|vmwarewin|vmwareesxwin)/)
+					notify($ERRORS{'WARNING'}, 0, "remote desktop could not be disabled on $computer_shortname, computer will be reloaded");
+					$self->insert_reload_and_exit();
+				}
+			}
 
 			elsif ($image_os_type =~ /linux/){
 				# Loaded Linux image needs to be cleaned up
 				notify($ERRORS{'OK'}, 0, "attempting steps to clean up loaded $image_os_name image");
 
 				# Make sure user is not connected
-				if (isconnected($computer_shortname, $computer_type, $reservation_remoteip, $image_os_name, $computer_ipaddress,$image_os_type)) {
-					notify($ERRORS{'WARNING'}, 0, "user $user_unityid is connected to $computer_shortname, vm will be reloaded");
-
-					# Insert reload request data into the datbase
-					if (insert_reload_request($request_data)) {
-						notify($ERRORS{'OK'}, 0, "inserted reload request into database for computer id=$computer_id imagename=$nextimagename");
-
-						# Switch the request state to complete, leave the computer state as is, set log ending to EOR, exit
-						switch_state($request_data, 'complete', '', 'EOR', '1');
-					}
-					else {
-						notify($ERRORS{'CRITICAL'}, 0, "failed to insert reload request into database for computer id=$computer_id");
-
-						# Switch the request and computer states to failed, log ending to failed, exit
-						switch_state($request_data, 'failed', 'failed', 'failed', '1');
-					}
-					exit;
+				if (isconnected($computer_shortname, $computer_type, $reservation_remoteip, $image_os_name, $computer_ipaddress, $image_os_type)) {
+					notify($ERRORS{'WARNING'}, 0, "user $user_unityid is connected to $computer_shortname, computer will be reloaded");
+					$self->insert_reload_and_exit();
 				} ## end if (isconnected($computer_shortname, $computer_type...
 
 				# User is not connected, delete the user
@@ -301,73 +226,30 @@ sub process {
 					insertloadlog($reservation_id, $computer_id, "info", "reclaim: removed user");
 				}
 				else {
-					notify($ERRORS{'OK'}, 0, "user $user_unityid could not be removed from $computer_shortname, vm will be reloaded");
-
-					# Insert reload request data into the datbase
-					if (insert_reload_request($request_data)) {
-						notify($ERRORS{'OK'}, 0, "inserted reload request into database for computer id=$computer_id");
-
-						# Switch the request state to complete, leave the computer state as is, log ending to EOR, exit
-						switch_state($request_data, 'complete', '', 'EOR', '1');
-					}
-					else {
-						notify($ERRORS{'CRITICAL'}, 0, "failed to insert reload request into database for computer id=$computer_id");
-
-						# Switch the request and computer states to failed, log ending to failed, exit
-						switch_state($request_data, 'failed', 'failed', 'failed', '1');
-					}
-					exit;
-				} ## end else [ if (del_user($computer_shortname, $user_unityid...
-			} ## end elsif ($image_os_type =~ /linux/) [ if ($image_os_type =~ /windows/)
+					notify($ERRORS{'OK'}, 0, "user $user_unityid could not be removed from $computer_shortname, computer will be reloaded");
+					$self->insert_reload_and_exit();
+				}
+			}
 
 			else {
 				# Unknown image type
-				notify($ERRORS{'WARNING'}, 0, "unsupported image OS detected: $image_os_name, reload will be attempted");
-
-				# Insert reload request data into the datbase
-				if (insert_reload_request($request_data)) {
-					notify($ERRORS{'OK'}, 0, "inserted reload request into database for computer id=$computer_id");
-
-					# Switch the request state to complete, leave the computer state as is, log ending to EOR, exit
-					switch_state($request_data, 'complete', '', 'EOR', '1');
-				}
-				else {
-					notify($ERRORS{'CRITICAL'}, 0, "failed to insert reload request into database for computer id=$computer_id");
-
-					# Switch the request and computer states to failed, log ending to failed, exit
-					switch_state($request_data, 'failed', 'failed', 'failed', '1');
-				}
-				exit;
-			} ## end else [ if ($image_os_type =~ /windows/) [elsif ($image_os_type =~ /linux/)
-		} ## end if ($request_laststate_name =~ /reserved/)
+				notify($ERRORS{'WARNING'}, 0, "unsupported image OS detected: $image_os_name, computer will be reloaded");
+				$self->insert_reload_and_exit();
+			}
+		}
 
 		else {
-			# Either blade or vm, request laststate is not reserved
+			# Either blade or vm and request laststate is not reserved
 			# Computer should be reloaded
-			notify($ERRORS{'OK'}, 0, "request laststate is $request_laststate_name, reload will be attempted");
-
-			# Insert reload request data into the datbase
-			if (insert_reload_request($request_data)) {
-				notify($ERRORS{'OK'}, 0, "inserted reload request into database for computer id=$computer_id imagename=$nextimagename");
-			}
-			else {
-				notify($ERRORS{'CRITICAL'}, 0, "failed to insert reload request into database for computer id=$computer_id imagename=$nextimagename");
-
-				# Switch the request and computer states to failed, log ending to failed, exit
-				switch_state($request_data, 'failed', 'failed', 'failed', '1');
-			}
-
-			# Switch the request state to complete, leave the computer state as is, log ending to EOR, exit
-			switch_state($request_data, 'complete', '', 'EOR', '1');
-
-		} ## end else [ if ($request_laststate_name =~ /reserved/)
-
-	} ## end elsif ($computer_type =~ /blade|virtualmachine/) [ if ($request_laststate_name =~ /new/)
+			notify($ERRORS{'OK'}, 0, "request laststate is $request_laststate_name, computer will be reloaded");
+			$self->insert_reload_and_exit();
+		}
+	}
 
 	elsif ($computer_type =~ /lab/) {
 		notify($ERRORS{'OK'}, 0, "computer type is $computer_type");
 
-		# Display a warning if laststate is not inuse, or reserved
+		# Display a warning if laststate is not inuse or reserved
 		#    but still try to clean up computer
 		if ($request_laststate_name =~ /inuse|reserved/) {
 			notify($ERRORS{'OK'}, 0, "request laststate is $request_laststate_name");
@@ -398,9 +280,9 @@ sub process {
 					notify($ERRORS{'CRITICAL'}, 0, "unable to put $computer_shortname into failed state");
 					insertloadlog($reservation_id, $computer_id, "info", "reclaim: unable to set computer state to failed");
 				}
-			} ## end else [ if ($computer_state_name =~ /maintenance/)
-		} ## end else [ if (disablesshd($computer_ipaddress, $user_unityid...
-	} ## end elsif ($computer_type =~ /lab/)  [ if ($request_laststate_name =~ /new/)
+			}
+		}
+	}
 
 	# Unknown computer type, this shouldn't happen
 	else {
@@ -424,28 +306,25 @@ sub process {
 
 =head2 insert_reload_and_exit
 
- Parameters  : $request_data_hash_reference
- Returns     : 1 if successful, 0 otherwise
- Description : 
+ Parameters  : Reference to state object
+ Returns     : Nothing, process always exits
+ Description : -Retrieves the next image to be loaded on the computer based on a predictive loading algorithm
+					-Inserts a new reload request for the predicted image on the computer
+					-Sets the state of the request being processed to complete
+					-Sets the state of the computer to reload
 
 =cut
 
 sub insert_reload_and_exit {
 	my $self = shift;
-	my $request_data = $self->data->get_request_data;
-	my $reservation_id = $self->data->get_reservation_id();
-	my $computer_id = $self->data->get_computer_id();
+	my $request_data               = $self->data->get_request_data;
+	my $computer_id                = $self->data->get_computer_id();
+	my $computer_host_name         = $self->data->get_computer_hostname();
 	
 	# Retrieve next image
-	my $next_image_name;
-	my $next_image_id;
-	my $next_imagerevision_id;
-	
-	if($self->data->can("get_next_image_dataStructure")){
-		($next_image_name, $next_image_id, $next_imagerevision_id) = $self->data->get_next_image_dataStructure();
-	}
-	else{
-		notify($ERRORS{'WARNING'}, 0, "predictor module does not support get_next_image_dataStructure, calling get_next_image_default from utils");
+	my ($next_image_name, $next_image_id, $next_imagerevision_id) = $self->data->get_next_image_dataStructure();
+	if (!$next_image_name || !$next_image_id || !$next_imagerevision_id) {
+		notify($ERRORS{'WARNING'}, 0, "predictor module did not return required information, calling get_next_image_default from utils");
 		($next_image_name, $next_image_id, $next_imagerevision_id) = get_next_image_default($computer_id);
 	}
 
@@ -455,20 +334,20 @@ sub insert_reload_and_exit {
 	$self->data->set_image_id($next_image_id);
 	$self->data->set_imagerevision_id($next_imagerevision_id);
 
-	notify($ERRORS{'OK'}, 0, "next image: name=$next_image_name, image id=$next_image_id, imagerevisionid=$next_imagerevision_id");
+	notify($ERRORS{'OK'}, 0, "next image: $next_image_name, image id=$next_image_id, imagerevision id=$next_imagerevision_id");
 	
 	# Insert reload request data into the datbase
 	if (insert_reload_request($request_data)) {
 		notify($ERRORS{'OK'}, 0, "inserted reload request into database for computer id=$computer_id, image=$next_image_name");
 
-		# Switch the request state to complete, leave the computer state as is, log ending to EOR, exit
-		switch_state($request_data, 'complete', '', 'EOR', '1');
+		# Switch the request state to complete, the computer state to reload
+		switch_state($request_data, 'complete', 'reload', '', '1');
 	}
 	else {
 		notify($ERRORS{'CRITICAL'}, 0, "failed to insert reload request into database for computer id=$computer_id image=$next_image_name");
 
-		# Switch the request and computer states to failed, log ending to failed, exit
-		switch_state($request_data, 'failed', 'failed', 'failed', '1');
+		# Switch the request and computer states to failed
+		switch_state($request_data, 'failed', 'failed', '', '1');
 	}
 	
 	# Make sure this VCL state process exits
@@ -496,4 +375,3 @@ L<http://vcl.ncsu.edu>
 
 =cut
 
-=======
