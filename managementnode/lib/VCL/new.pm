@@ -143,8 +143,9 @@ sub process {
 	if ($request_state_name =~ /tomaintenance/) {
 		notify($ERRORS{'OK'}, 0, "this is a 'tomaintenance' request");
 
-		# Update the request state to complete, update the computer state to maintenance, set the log ending to EOR, exit
-		if (switch_state($request_data, 'complete', 'maintenance', 'EOR', '0')) {
+		# Update the request state to complete, update the computer state to maintenance, exit
+		# Do not update log.ending for tomaintenance reservations
+		if (switch_state($request_data, 'complete', 'maintenance', '', '0')) {
 			notify($ERRORS{'OK'}, 0, "$computer_short_name set to maintenance");
 		}
 
