@@ -1,5 +1,7 @@
 #!/usr/bin/perl -w
-
+###############################################################################
+# $Id$
+###############################################################################
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.
@@ -14,10 +16,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-##############################################################################
-# $Id$
-##############################################################################
+###############################################################################
 
 =head1 NAME
 
@@ -119,12 +118,6 @@ sub pre_capture {
 		return 0;
 	}
 	
-	# Copy the capture configuration files to the computer (scripts, utilities, drivers...)
-	if (!$self->copy_capture_configuration_files($SOURCE_CONFIGURATION_DIRECTORY)) {
-		notify($ERRORS{'WARNING'}, 0, "capture preparation failed, unable to copy XP-specific capture configuration files");
-		return 0;
-	}
-	
 	# Check if Sysprep should be used
 	if ($imagemeta_sysprep) {
 		# Copy the Sysprep files to C:\Sysprep
@@ -144,29 +137,16 @@ sub pre_capture {
 1;
 __END__
 
-=head1 BUGS and LIMITATIONS
+=head1 COPYRIGHT
 
- There are no known bugs in this module.
- Please report problems to the VCL team (vcl_help@ncsu.edu).
-
-=head1 AUTHOR
-
- Aaron Peeler, aaron_peeler@ncsu.edu
- Andy Kurth, andy_kurth@ncsu.edu
+ Apache VCL incubator project
+ Copyright 2009 The Apache Software Foundation
+ 
+ This product includes software developed at
+ The Apache Software Foundation (http://www.apache.org/).
 
 =head1 SEE ALSO
 
-L<http://vcl.ncsu.edu>
-
-=head1 COPYRIGHT AND LICENSE
-
- Copyright (C) 2004-2008 by NC State University. All Rights Reserved.
-
- Virtual Computing Laboratory
- North Carolina State University
- Raleigh, NC, USA 27695
-
- For use license and copyright information see LICENSE and COPYRIGHT files
- included in the source files.
+L<http://cwiki.apache.org/VCL/>
 
 =cut

@@ -1,5 +1,7 @@
 #!/usr/bin/perl -w
-
+###############################################################################
+# $Id$
+###############################################################################
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.
@@ -14,14 +16,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-##############################################################################
-# $Id$
-##############################################################################
+###############################################################################
 
 =head1 NAME
 
-VCL::Module::OS::Windows::Desktop
+VCL::Module::OS::Windows_mod - Windows OS support module
 
 =head1 SYNOPSIS
 
@@ -53,7 +52,7 @@ use 5.008000;
 use strict;
 use warnings;
 use diagnostics;
-
+use English '-no_match_vars';
 use VCL::utils;
 use File::Basename;
 
@@ -158,22 +157,11 @@ Delete the users assigned to this reservation
 
 =item *
 
-Delete existing capture configuration files from the computer (scripts, utilities, drivers...)
-
-=cut
-
-	if (!$self->delete_capture_configuration_files()) {
-		notify($ERRORS{'WARNING'}, 0, "unable to delete existing capture configuration files to $computer_node_name");
-		return 0;
-	}
-
-=item *
-
 Copy the capture configuration files to the computer (scripts, utilities, drivers...)
 
 =cut
 
-	if (!$self->copy_capture_configuration_files($SOURCE_CONFIGURATION_DIRECTORY)) {
+	if (!$self->copy_capture_configuration_files()) {
 		notify($ERRORS{'WARNING'}, 0, "unable to copy general Windows capture configuration files to $computer_node_name");
 		return 0;
 	}
@@ -1032,7 +1020,7 @@ sub add_users {
 
 		# Remove duplicate users
 		@users = keys %{{map {$_, 1} @users}};
-	} ## end else [ if ($user_array_ref)
+	}
 
 	notify($ERRORS{'DEBUG'}, 0, "attempting to add " . scalar @users . " users to $computer_node_name: " . join(", ", @users));
 
@@ -1575,7 +1563,7 @@ sub enable_pagefile {
 	my $management_node_keys = $self->data->get_management_node_keys();
 	my $computer_node_name   = $self->data->get_computer_node_name();
 
-	my $registry_string .= <<'EOF';
+	my $registry_string .= <<"EOF";
 Windows Registry Editor Version 5.00
 
 [HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management]
@@ -1614,7 +1602,7 @@ sub disable_ipv6 {
 	my $management_node_keys = $self->data->get_management_node_keys();
 	my $computer_node_name   = $self->data->get_computer_node_name();
 
-	my $registry_string .= <<'EOF';
+	my $registry_string .= <<"EOF";
 Windows Registry Editor Version 5.00
 
 ; This registry file contains the entries to disable all IPv6 components 
@@ -2627,7 +2615,7 @@ sub run_newsid {
 		$computer_name = "$computer_short_name-$image_id";
 	}
 
-	my $registry_string .= <<'EOF';
+	my $registry_string .= <<"EOF";
 Windows Registry Editor Version 5.00
 
 ; This registry file contains the entries to bypass the license agreement when newsid.exe is run
@@ -3777,6 +3765,42 @@ sub firewall_enable_ssh_private {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 firewall_enable_sessmgr
+
+ Parameters  : 
+ Returns     : 1 if succeeded, 0 otherwise
+ Description : 
+
+=cut
+
+sub firewall_enable_sessmgr {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $management_node_keys = $self->data->get_management_node_keys();
+	my $computer_node_name   = $self->data->get_computer_node_name();
+
+	# Configure the firewall to allow the sessmgr.exe program
+	my $netsh_command = "netsh firewall set allowedprogram name = \"Microsoft Remote Desktop Help Session Manager\" mode = ENABLE scope = ALL profile = ALL program = \"\$SYSTEMROOT\\system32\\sessmgr.exe\"";
+	my ($netsh_status, $netsh_output) = run_ssh_command($computer_node_name, $management_node_keys, $netsh_command);
+	if (defined($netsh_status) && $netsh_status == 0) {
+		notify($ERRORS{'DEBUG'}, 0, "configured firewall to allow sessmgr.exe");
+	}
+	elsif (defined($netsh_status)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to configure firewall to allow sessmgr.exe, exit status: $netsh_status, output:\n@{$netsh_output}");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unable to run ssh command to configure firewall to allow sessmgr.exe");
+	}
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 allow_remote_access
 
  Parameters  : 
@@ -4917,47 +4941,57 @@ sub search_and_replace_in_files {
 
 sub copy_capture_configuration_files {
 	my $self = shift;
-	if (ref($self) !~ /windows/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a VCL module object method");
+		return;	
 	}
 
 	my $management_node_keys = $self->data->get_management_node_keys();
 	my $computer_node_name   = $self->data->get_computer_node_name();
-
-	# Get the source configuration directory
-	my $source_configuration_directory = shift;
-	if (!$source_configuration_directory) {
-		notify($ERRORS{'WARNING'}, 0, "source configuration directory was not specified as an argument");
-		return 0;
+	
+	# Get an array containing the configuration directory paths on the management node
+	# This is made up of all the the $SOURCE_CONFIGURATION_DIRECTORY values for the OS class and it's parent classes
+	# The first array element is the value from the top-most class the OS object inherits from
+	my @source_configuration_directories = $self->get_source_configuration_directories();
+	if (!@source_configuration_directories) {
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve source configuration directories");
+		return;
+	}
+	
+	# Delete existing configuration directory if it exists
+	if (!$self->delete_capture_configuration_files()) {
+		notify($ERRORS{'WARNING'}, 0, "unable to delete existing capture configuration files");
+		return;
 	}
 
-	# Attempt to create the node configuration directory if it doesn't already exist
+	# Attempt to create the configuration directory if it doesn't already exist
 	if (!$self->create_directory($NODE_CONFIGURATION_DIRECTORY)) {
 		notify($ERRORS{'WARNING'}, 0, "unable to create directory on $computer_node_name: $NODE_CONFIGURATION_DIRECTORY");
 		return;
 	}
 
 	# Copy configuration files
-	notify($ERRORS{'OK'}, 0, "copying image capture configuration files from $source_configuration_directory to $computer_node_name");
-	if (run_scp_command("$source_configuration_directory/*", "$computer_node_name:$NODE_CONFIGURATION_DIRECTORY", $management_node_keys)) {
-		notify($ERRORS{'OK'}, 0, "copied $source_configuration_directory directory to $computer_node_name:$NODE_CONFIGURATION_DIRECTORY");
-
-		notify($ERRORS{'DEBUG'}, 0, "attempting to set permissions on $computer_node_name:$NODE_CONFIGURATION_DIRECTORY");
-		if (run_ssh_command($computer_node_name, $management_node_keys, "/usr/bin/chmod.exe -R 777 $NODE_CONFIGURATION_DIRECTORY")) {
-			notify($ERRORS{'OK'}, 0, "chmoded -R 777 $computer_node_name:$NODE_CONFIGURATION_DIRECTORY");
-		}
+	for my $source_configuration_directory (@source_configuration_directories) {
+		notify($ERRORS{'OK'}, 0, "copying image capture configuration files from $source_configuration_directory to $computer_node_name");
+		if (run_scp_command("$source_configuration_directory/*", "$computer_node_name:$NODE_CONFIGURATION_DIRECTORY", $management_node_keys)) {
+			notify($ERRORS{'OK'}, 0, "copied $source_configuration_directory directory to $computer_node_name:$NODE_CONFIGURATION_DIRECTORY");
+	
+			notify($ERRORS{'DEBUG'}, 0, "attempting to set permissions on $computer_node_name:$NODE_CONFIGURATION_DIRECTORY");
+			if (run_ssh_command($computer_node_name, $management_node_keys, "/usr/bin/chmod.exe -R 777 $NODE_CONFIGURATION_DIRECTORY")) {
+				notify($ERRORS{'OK'}, 0, "chmoded -R 777 $computer_node_name:$NODE_CONFIGURATION_DIRECTORY");
+			}
+			else {
+				notify($ERRORS{'WARNING'}, 0, "could not chmod -R 777 $computer_node_name:$NODE_CONFIGURATION_DIRECTORY");
+				return;
+			}
+		} ## end if (run_scp_command("$source_configuration_directory/*"...
 		else {
-			notify($ERRORS{'WARNING'}, 0, "could not chmod -R 777 $computer_node_name:$NODE_CONFIGURATION_DIRECTORY");
+			notify($ERRORS{'WARNING'}, 0, "failed to copy $source_configuration_directory to $computer_node_name");
 			return;
 		}
-	} ## end if (run_scp_command("$source_configuration_directory/*"...
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to copy $source_configuration_directory to $computer_node_name");
-		return;
 	}
 	
-	# Insert the Windows root password in any files containing 'WINDOWS_ROOT_PASSWORD'
+	# Find any files containing a 'WINDOWS_ROOT_PASSWORD' string and replace it with the root password
 	if ($self->search_and_replace_in_files($NODE_CONFIGURATION_DIRECTORY, 'WINDOWS_ROOT_PASSWORD', $WINDOWS_ROOT_PASSWORD)) {
 		notify($ERRORS{'DEBUG'}, 0, "set the Windows root password in configuration files");
 	}
@@ -5024,6 +5058,13 @@ sub run_sysprep {
 	notify($ERRORS{'DEBUG'}, 0, "attempting to copy and scan drivers");
 	if (!$self->prepare_drivers()) {
 		notify($ERRORS{'WARNING'}, 0, "unable to copy and scan drivers");
+		return 0;
+	}
+	
+	# Configure the firewall to allow the sessmgr.exe program
+	# Sysprep may hang with a dialog box asking to allow this program
+	if (!$self->firewall_enable_sessmgr()) {
+		notify($ERRORS{'WARNING'}, 0, "unable to configure firewall to allow sessmgr.exe program, Sysprep may hang");
 		return 0;
 	}
 
@@ -5164,8 +5205,8 @@ sub prepare_drivers {
 	}
 	
 	# Format the string for the log output
-	my ($device_path_string) = grep(/devicepath\s+reg_expand_sz/i, @{$reg_query_output});
-	$device_path_string =~ s/.*(devicepath\s+reg_expand_sz)\s*/$1\n/i;
+	my ($device_path_string) = grep(/devicepath\s+(reg_.*sz)/i, @{$reg_query_output});
+	$device_path_string =~ s/.*(devicepath\s+reg_.*sz)\s*/$1\n/i;
 	$device_path_string =~ s/;/\n/g;
 	notify($ERRORS{'OK'}, 0, "device path string: $device_path_string");
 	
@@ -5641,19 +5682,16 @@ sub get_task_list {
 1;
 __END__
 
-=head1 BUGS and LIMITATIONS
+=head1 COPYRIGHT
 
- There are no known bugs in this module.
- Please report problems to the VCL team (vcl_help@ncsu.edu).
-
-=head1 AUTHOR
-
- Aaron Peeler, aaron_peeler@ncsu.edu
- Andy Kurth, andy_kurth@ncsu.edu
+ Apache VCL incubator project
+ Copyright 2009 The Apache Software Foundation
+ 
+ This product includes software developed at
+ The Apache Software Foundation (http://www.apache.org/).
 
 =head1 SEE ALSO
 
-L<http://vcl.ncsu.edu>
-
+L<http://cwiki.apache.org/VCL/>
 
 =cut
