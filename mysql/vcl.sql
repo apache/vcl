@@ -1247,7 +1247,7 @@ INSERT INTO `module` (`id`, `name`, `prettyname`, `description`, `perlpackage`) 
 (3, 'provisioning_lab', 'Computing Lab Provisioning Module', '', 'VCL::Module::Provisioning::Lab'),
 (4, 'os_windows', 'Windows Operating System Module', '', 'VCL::Module::OS::Windows'),
 (5, 'os_linux', 'Linux Operating System Module', '', 'VCL::Module::OS::Linux'),
-(6, 'os_unix', 'Unix Operating System Module', '', ''),
+(6, 'os_unix', 'Unix Operating System Module', '', 'VCL::Module::OS'),
 (7, 'os_winvista', 'Windows Vista OS Module', '', 'VCL::Module::OS::Windows::Desktop::Vista'),
 (8, 'predictive_level_0', 'Predictive Loading Level 0 Module', '', 'VCL::Module::Predictive::Level_0'),
 (9, 'predictive_level_1', 'Predictive Loading Level 1 Module', '', 'VCL::Module::Predictive::Level_1'),
