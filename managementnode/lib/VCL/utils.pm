@@ -9088,7 +9088,7 @@ sub get_computers_controlled_by_MN {
 
 	# Collect resource group this management node is a member of
 	if($info{managementnode}{resoucegroups} = get_resource_groups($management_node_resourceid)){
-		notify($ERRORS{'OK'}, $LOGFILE, "retrieved management node resource groups from database");
+		notify($ERRORS{'DEBUG'}, $LOGFILE, "retrieved management node resource groups from database");
 	}
 	else {
 		notify($ERRORS{'CRITICAL'}, $LOGFILE, "unable to retrieve management node resource groups from database");
@@ -9100,24 +9100,24 @@ sub get_computers_controlled_by_MN {
 
 		my $grp_id = $info{managementnode}{resoucegroups}{$mresgrp_id}{groupid}; 
 
-		notify($ERRORS{'OK'}, $LOGFILE, "grp_id = $grp_id ");
+		notify($ERRORS{'DEBUG'}, $LOGFILE, "grp_id = $grp_id ");
 
 		if($info{manageable_resoucegroups}{$mresgrp_id} = get_managable_resource_groups($grp_id)){
-			notify($ERRORS{'OK'}, $LOGFILE, "retrieved manageable resource groups from database for mresgrp_id= $grp_id groupname= $info{managementnode}{resoucegroups}{$mresgrp_id}{groupname}");
+			notify($ERRORS{'DEBUG'}, $LOGFILE, "retrieved manageable resource groups from database for mresgrp_id= $grp_id groupname= $info{managementnode}{resoucegroups}{$mresgrp_id}{groupname}");
 
 			foreach my $id (keys %{ $info{manageable_resoucegroups}{$grp_id} } ) {
 				my $computer_group_id = $info{manageable_resoucegroups}{$grp_id}{$id}{groupid};
 				if($info{"manageable_computer_grps"}{$id}{"members"} = get_computer_grp_members($computer_group_id) ){
-					notify($ERRORS{'OK'}, $LOGFILE, "retrieved computers from computer groupname= $info{manageable_resoucegroups}{$grp_id}{$id}{groupname}");
+					notify($ERRORS{'DEBUG'}, $LOGFILE, "retrieved computers from computer groupname= $info{manageable_resoucegroups}{$grp_id}{$id}{groupname}");
 				}
 				else{ 
-					notify($ERRORS{'OK'}, $LOGFILE, "no computers in computer groupname= $info{managementnode}{resoucegroups}{$grp_id}{$id}{groupname}");
+					notify($ERRORS{'DEBUG'}, $LOGFILE, "no computers in computer groupname= $info{managementnode}{resoucegroups}{$grp_id}{$id}{groupname}");
 					delete $info{manageable_resoucegroups}{$grp_id}{$id};
 				}
 			}
 		}
 		else {
-			notify($ERRORS{'OK'}, $LOGFILE, "no manageable resource groups associated for resgrp_id= $mresgrp_id groupname= $info{managementnode}{resoucegroups}{$mresgrp_id}{groupname}");
+			notify($ERRORS{'DEBUG'}, $LOGFILE, "no manageable resource groups associated for resgrp_id= $mresgrp_id groupname= $info{managementnode}{resoucegroups}{$mresgrp_id}{groupname}");
 			#delete $info{managementnode}{resoucegroups}{$mresgrp_id};
 		}
 	}
@@ -9230,7 +9230,7 @@ sub get_managable_resource_groups {
 
 	# Check to make sure 1 row was returned
 	if (scalar @selected_rows == 0) {
-		notify($ERRORS{'OK'}, 0, "zero rows were returned from database select for resource id $managing_resgrp_id");
+		notify($ERRORS{'DEBUG'}, 0, "zero rows were returned from database select for resource id $managing_resgrp_id");
 		return ();
 	}
 	my %return_hash;
@@ -9280,7 +9280,7 @@ sub get_computer_grp_members {
 
 	# Check to make sure 1 row was returned
 	if (scalar @selected_rows == 0) {
-		notify($ERRORS{'OK'}, 0, "zero rows were returned from database select for computer grp id $computer_grp_id");
+		notify($ERRORS{'DEBUG'}, 0, "zero rows were returned from database select for computer grp id $computer_grp_id");
 		return ();
 	}
 	my %return_hash;
