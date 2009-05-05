@@ -184,7 +184,9 @@ our @EXPORT = qw(
   update_cluster_info
   update_computer_address
   update_computer_state
+  update_computer_lastcheck
   update_currentimage
+  update_computer_imagename
   update_image_name
   update_lastcheckin
   update_log_ending
@@ -2322,6 +2324,50 @@ sub update_computer_state {
 	}
 } ## end sub update_computer_state
 
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 update_computer_lastcheck
+
+ Parameters  : $computer_id, $datestring, $log
+ Returns     : 1 success 0 failure
+ Description : update computer state
+
+=cut
+
+sub update_computer_lastcheck {
+	my ($computer_id, $datestring, $log) = @_;
+
+	my ($package, $filename, $line, $sub) = caller(0);
+	$log = 0 unless (defined $log);
+
+	notify($ERRORS{'WARNING'}, $log, "computer id is not defined") unless (defined($computer_id));
+	notify($ERRORS{'WARNING'}, $log, "$datestring is not defined") unless (defined($datestring));
+	return 0 unless (defined $computer_id);
+
+	unless (defined($datestring) ) {
+		$datestring = makedatestring;
+	}
+
+	my $update_statement = "
+	UPDATE
+	computer
+	SET
+	computer.lastcheck = '$datestring'
+	WHERE
+	computer.id = $computer_id
+	";
+
+	# Call the database execute subroutine
+	if (database_execute($update_statement)) {
+		# Update successful
+		notify($ERRORS{'DEBUG'}, $log, "computer $computer_id lastcheck updated to: $datestring");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'CRITICAL'}, $log, "unable to update datestring for computer $computer_id");
+		return 0;
+	}
+} ## end
 #/////////////////////////////////////////////////////////////////////////////
 
 =head2 update_request_password
@@ -6289,26 +6335,31 @@ sub get_image_info {
 
 =cut
 
-
 sub get_imagerevision_info {
-	my ($imagerevision_id) = @_;
+	my ($imagerevision) = @_;
 	my ($package, $filename, $line, $sub) = caller(0);
 
 	# Check the passed parameter
-	if (!(defined($imagerevision_id))) {
+	if (!(defined($imagerevision))) {
 		notify($ERRORS{'WARNING'}, 0, "imagerevision ID was not specified");
 		return ();
 	}
 
-	# If imagemetaid isnt' NULL, perform another query to get the meta info
 	my $select_statement = "
    SELECT
    imagerevision.*
    FROM
    imagerevision
    WHERE
-   imagerevision.id = '$imagerevision_id'
    ";
+
+	#Check input value - complete select_statement
+	if($imagerevision =~ /^\d/){
+		$select_statement .= "imagerevision.id = '$imagerevision'";
+	}
+	else{
+		$select_statement .= "imagerevision.imagename = '$imagerevision'";
+	}
 
 	# Call the database select subroutine
 	# This will return an array of one or more rows based on the select statement
@@ -6316,7 +6367,7 @@ sub get_imagerevision_info {
 
 	# Check to make sure 1 row was returned
 	if (scalar @selected_rows == 0) {
-		notify($ERRORS{'OK'}, 0, "imagerevision id $imagerevision_id was not found in the database, 0 rows were returned");
+		notify($ERRORS{'OK'}, 0, "imagerevision id $imagerevision was not found in the database, 0 rows were returned");
 		return ();
 	}
 	elsif (scalar @selected_rows > 1) {
@@ -7281,6 +7332,56 @@ sub get_management_node_info {
 	notify($ERRORS{'DEBUG'}, 0, "management node info retrieved from database for $shortname");
 	return $management_node_info;
 } ## end sub get_management_node_info
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 update_computer_imagename
+
+ Parameters  : $computerid, $imagename
+ Returns     : 0 failed or 1 success
+ Description : Updates currentimage on a node, based on imagename only
+
+=cut
+sub update_computer_imagename {
+	my ($computerid, $imagename, $log) = @_;
+
+	my ($package,    $filename, $line,            $sub)             = caller(0);
+
+	# Check the passed parameters
+	if (!(defined($computerid))) {
+		notify($ERRORS{'WARNING'}, 0, "computer ID was not specified");
+		return ();
+	}
+	if (!(defined($imagename))) {
+		notify($ERRORS{'WARNING'}, 0, "image name was not specified");
+		return ();
+	}
+
+	#get computer infomation based on imagename
+	my %info;
+	if( %info = get_imagerevision_info($imagename)){
+		notify($ERRORS{'DEBUG'}, 0, "successfully retreived image info for $imagename");
+	}
+	else{
+		notify($ERRORS{'WARNING'}, 0, "failed to get_imagerevision_info for $imagename");
+		return 0;
+	}
+
+	my $image_id  = $info{imageid};
+	my $imagerevision_id = $info{id};
+
+	if(update_currentimage($computerid, $image_id, $imagerevision_id)){
+		notify($ERRORS{'DEBUG'}, 0, "successfully updated computerid= $computerid image_id= $image_id imagerevision_id= $imagerevision_id");
+		return 1;
+	}
+	else{
+		notify($ERRORS{'WARNING'}, 0, "failed to update_currentimage imagename= $imagename computerid= $computerid");
+		return 0;
+	}
+
+	return 0;
+
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 
