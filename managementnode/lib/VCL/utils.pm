@@ -1,5 +1,7 @@
 #!/usr/bin/perl -w
-
+###############################################################################
+# $Id$
+###############################################################################
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.
@@ -14,10 +16,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-##############################################################################
-# $Id$
-##############################################################################
+###############################################################################
 
 =head1 NAME
 
@@ -2872,6 +2871,8 @@ sub _sshd_status {
 	}
 
 	my @sshcmd = run_ssh_command($node, $identity, "uname -s", "root");
+	
+	return "off" if (!defined($sshcmd[0]) || !defined($sshcmd[1]) || $sshcmd[0] == 1);
 	foreach my $l (@{$sshcmd[1]}) {
 		if ($l =~ /^Warning:/) {
 			#if (VCL::Module::Provisioning::xCAT::makesshgkh($node)) {
@@ -4243,10 +4244,7 @@ sub hostname {
 			foreach $h (@host) {
 				if ($h =~ /([-a-z0-9]*)([.a-z]*)/) {
 					chomp($h);
-					if ($h !~ /ncsu.edu/) {
-						#hack
-						#$h .= ".hpc.ncsu.edu";
-					}
+					
 					@host = ($h, "linux");
 					return @host;
 				}
@@ -6036,10 +6034,10 @@ sub get_request_info {
 
 	# Set the user's affiliation sitewwwaddress and help address if not defined or blank
 	if (!defined($request_info{user}{affiliation}{sitewwwaddress}) || !$request_info{user}{affiliation}{sitewwwaddress}) {
-		$request_info{user}{affiliation}{sitewwwaddress} = 'http://vcl.ncsu.edu';
+		$request_info{user}{affiliation}{sitewwwaddress} = 'http://cwiki.apache.org/VCL';
 	}
 	if (!defined($request_info{user}{affiliation}{helpaddress}) || !$request_info{user}{affiliation}{helpaddress}) {
-		$request_info{user}{affiliation}{helpaddress} = 'vcl_help@ncsu.edu';
+		$request_info{user}{affiliation}{helpaddress} = 'vcl-user@incubator.apache.org';
 	}
 
 
@@ -6453,6 +6451,7 @@ sub get_imagemeta_info {
 									 'usergroupid'          => '',
 									 'sysprep'              => '1',
 									 'postoption'           => '',
+									 'rootaccess'           => '1',
 									 'USERGROUPMEMBERS'     => \%default_usergroupmembers,
 									 'USERGROUPMEMBERCOUNT' => 0);
 
@@ -9751,7 +9750,7 @@ sub update_cluster_info {
 =cut
 
 sub format_data {
-
+	
 	my $return_string;
 
 	my $level = 0;
@@ -9766,6 +9765,7 @@ sub format_data {
 	if (ref($_[0]) eq "HASH") {
 		$data = $_[0];
 		$type = '%';
+		return "%<empty>" if (keys(%{$_[0]}) == 0);
 	}
 	elsif (ref($_[0]) eq "ARRAY") {
 		my $index = 0;
@@ -9774,6 +9774,7 @@ sub format_data {
 			$index++;
 		}
 		$type = '@';
+		return "@<empty>" if (@{$_[0]} == 0);
 	}
 	elsif (ref($_[0]) eq "SCALAR") {
 		$data = $_[0];
@@ -10513,18 +10514,16 @@ sub string_to_ascii {
 1;
 __END__
 
-=head1 BUGS and LIMITATIONS
+=head1 COPYRIGHT
 
- There are no known bugs in this module.
- Please report problems to the VCL team (vcl_help@ncsu.edu).
-
-=head1 AUTHOR
-
- Aaron Peeler, aaron_peeler@ncsu.edu
- Andy Kurth, andy_kurth@ncsu.edu
+ Apache VCL incubator project
+ Copyright 2009 The Apache Software Foundation
+ 
+ This product includes software developed at
+ The Apache Software Foundation (http://www.apache.org/).
 
 =head1 SEE ALSO
 
-L<http://vcl.ncsu.edu>
+L<http://cwiki.apache.org/VCL/>
 
 =cut

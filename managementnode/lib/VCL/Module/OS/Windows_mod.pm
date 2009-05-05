@@ -220,7 +220,19 @@ Call script to clean up the hard drive
 #		notify($ERRORS{'WARNING'}, 0, "unable to delete 'System Startup Script' scheduled task");
 #		return 0;
 #	}
-	
+
+=item *
+
+Apply Windows security templates
+
+=cut
+
+	# This find any .inf security template files configured for the OS and run secedit.exe to apply them
+	if (!$self->apply_security_templates()) {
+		notify($ERRORS{'WARNING'}, 0, "unable to apply security templates");
+		return 0;
+	}
+
 =item *
 
 Disable the pagefile
@@ -996,7 +1008,7 @@ sub add_users {
 
 	my $management_node_keys = $self->data->get_management_node_keys();
 	my $computer_node_name   = $self->data->get_computer_node_name();
-
+	
 	# Attempt to get the user array from the arguments
 	# If no argument was supplied, use the users specified in the DataStructure
 	my $user_array_ref = shift;
@@ -1169,6 +1181,7 @@ sub create_user {
 
 	my $management_node_keys = $self->data->get_management_node_keys();
 	my $computer_node_name   = $self->data->get_computer_node_name();
+	my $imagemeta_rootaccess = $self->data->get_imagemeta_rootaccess();
 
 	# Attempt to get the username from the arguments
 	# If no argument was supplied, use the user specified in the DataStructure
@@ -1196,8 +1209,12 @@ sub create_user {
 
 	# Attempt to add the user account
 	my $add_user_command = "net user \"$username\" \"$password\" /ADD  /EXPIRES:NEVER /COMMENT:\"Account created by VCL\"";
-	$add_user_command .= " && net localgroup \"Administrators\" \"$username\" /ADD";
 	$add_user_command .= " && net localgroup \"Remote Desktop Users\" \"$username\" /ADD";
+	
+	# Add the user to the Administrators group if imagemeta.rootaccess is 1
+	if ($imagemeta_rootaccess != 0) {
+		$add_user_command .= " && net localgroup \"Administrators\" \"$username\" /ADD";
+	}
 
 	my ($add_user_exit_status, $add_user_output) = run_ssh_command($computer_node_name, $management_node_keys, $add_user_command);
 	if (defined($add_user_exit_status) && $add_user_exit_status == 0) {
@@ -5676,6 +5693,194 @@ sub get_task_list {
 
 	return $tasklist_output;
 } ## end sub get_task_list
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 apply_security_templates
+
+ Parameters  : None
+ Returns     : If successful: true
+               If failed: false
+ Description : Runs secedit.exe to apply the security template files configured
+               for the OS. Windows security template files use the .inf
+               extension.
+               
+               Security templates are always copied from the management node
+               rather than using a copy stored locally on the computer. This
+               allows templates updated centrally to always be applied to the
+               computer. Template files residing locally on the computer are not
+               processed.
+               
+               The template files should reside in a directory named "Security"
+               under the OS source configuration directory. An example would be:
+               
+               /usr/local/vcl/tools/Windows_XP/Security/xp_security.inf
+               
+               This subroutine supports OS module inheritence meaning that if an
+               OS module inherits from another OS module, the security templates
+               of both will be applied. The order is from the highest parent
+               class down to any template files configured specifically for the
+               OS module which was instantiated.
+               
+               This allows any Windows OS module to inherit from another class
+               which has security templates defined and override any settings
+               from above.
+               
+               Multiple .inf security template files may be configured for each
+               OS. They will be applied in alphabetical order.
+               
+               Example: Inheritence is configured as follows, with the XP module
+               being the instantiated (lowest) class:
+               
+               VCL::Module
+               ^
+               VCL::Module::OS
+               ^
+               VCL::Module::OS::Windows
+               ^
+               VCL::Module::OS::Windows::Version_5
+               ^
+               VCL::Module::OS::Windows::Version_5::XP
+               
+               The XP and Windows classes each have 2 security template files
+               configured in their respective Security directories:
+               
+               /usr/local/vcl/tools/Windows/Security/eventlog_512.inf
+               /usr/local/vcl/tools/Windows/Security/windows_security.inf
+               /usr/local/vcl/tools/Windows_XP/Security/xp_eventlog_4096.inf
+               /usr/local/vcl/tools/Windows_XP/Security/xp_security.inf
+               
+               The templates will be applied in the order shown above. The
+               Windows templates are applied first because it is a parent class
+               of XP. For each class being processed, the files are applied in
+               alphabetical order.
+               
+               Assume in the example above that the Windows module's
+               eventlog_512.inf file configures the event log to be a maximum of
+               512 KB and that it is desirable under Windows XP to configure a
+               larger maximum event log size. In order to achieve this,
+               xp_eventlog_4096.inf was placed in XP's Security directory which
+               contains settings to set the maximum size to 4,096 KB. The
+               xp_eventlog_4096.inf file is applied after the eventlog_512.inf
+               file, thus overridding the setting configured in the
+               eventlog_512.inf file. The resultant maximum event log size will
+               be set to 4,096 KB.
+
+=cut
+
+sub apply_security_templates {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a VCL::Module:: module object method");
+		return;	
+	}
+
+	my $management_node_keys = $self->data->get_management_node_keys();
+	my $computer_node_name   = $self->data->get_computer_node_name();
+	
+	# Get an array containing the configuration directory paths on the management node
+	# This is made up of all the the $SOURCE_CONFIGURATION_DIRECTORY values for the OS class and it's parent classes
+	# The first array element is the value from the top-most class the OS object inherits from
+	my @source_configuration_directories = $self->get_source_configuration_directories();
+	if (!@source_configuration_directories) {
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve source configuration directories");
+		return;
+	}
+	
+	# Loop through the configuration directories for each OS class on the management node
+	# Find any .inf files residing under Security
+	my @inf_file_paths;
+	for my $source_configuration_directory (@source_configuration_directories) {
+		notify($ERRORS{'OK'}, 0, "checking if any security templates exist in: $source_configuration_directory/Security");
+		
+		# Check each source configuration directory for .inf files under a Security subdirectory
+		my $find_command = "find $source_configuration_directory/Security -name \"*.inf\" | sort -f";
+		my ($find_exit_status, $find_output) = run_command($find_command);
+		if (defined($find_exit_status) && $find_exit_status == 0) {
+			notify($ERRORS{'DEBUG'}, 0, "ran find, output:\n" . join("\n", @$find_output));
+			push @inf_file_paths, @$find_output;
+		}
+		elsif (defined($find_output) && grep(/No such file/i, @$find_output)) {
+			notify($ERRORS{'DEBUG'}, 0, "path does not exist: $source_configuration_directory/Security, output:\n@{$find_output}");
+		}
+		elsif (defined($find_exit_status)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to run find, exit status: $find_exit_status, output:\n@{$find_output}");
+			return;
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to run find");
+			return;
+		}
+	}
+	
+	# Remove any newlines from the file paths in the array
+	chomp(@inf_file_paths);
+	notify($ERRORS{'DEBUG'}, 0, "security templates will be applied in this order:\n" . join("\n", @inf_file_paths));
+	
+	# Make sure the Security directory exists before attempting to copy files or SCP will fail
+	if (!$self->create_directory("$NODE_CONFIGURATION_DIRECTORY/Security")) {
+		notify($ERRORS{'WARNING'}, 0, "unable to create directory: $NODE_CONFIGURATION_DIRECTORY/Security");
+	}
+	
+	# Loop through the .inf files and apply them to the node using secedit.exe
+	my $inf_count = 0;
+	my $error_occurred = 0;
+	for my $inf_file_path (@inf_file_paths) {
+		$inf_count++;
+		
+		# Get the name of the file
+		my ($inf_file_name) = $inf_file_path =~ /.*[\\\/](.*)/g;
+		my ($inf_file_root) = $inf_file_path =~ /.*[\\\/](.*).inf/gi;
+		
+		# Construct the target path, prepend a number to indicate the order the files were processed
+		my $inf_target_path = "$NODE_CONFIGURATION_DIRECTORY/Security/$inf_count\_$inf_file_name";
+		
+		# Copy the file to the node and set the permissions to 644
+		notify($ERRORS{'DEBUG'}, 0, "attempting to copy file to: $inf_target_path");
+		if (run_scp_command($inf_file_path, "$computer_node_name:$inf_target_path", $management_node_keys)) {
+			notify($ERRORS{'DEBUG'}, 0, "copied file: $computer_node_name:$inf_target_path");
+	
+			# Set permission on the copied file
+			if (!run_ssh_command($computer_node_name, $management_node_keys, "/usr/bin/chmod.exe -R 644 $inf_target_path", '', '', 1)) {
+				notify($ERRORS{'WARNING'}, 0, "could not set permissions on $inf_target_path");
+			}
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to copy $inf_file_path to $inf_target_path");
+			next;
+		}
+		
+		# Assemble the paths secedit needs
+		my $secedit_exe = '$SYSTEMROOT/System32/secedit.exe';
+		my $secedit_db = '$SYSTEMROOT/security/Database/' . "$inf_count\_$inf_file_root.sdb";
+		my $secedit_log = '$SYSTEMROOT/security/Logs/' . "$inf_count\_$inf_file_root.log";
+		
+		# The inf path must use backslashes or secedit.exe will fail
+		$inf_target_path =~ s/\//\\\\/g;
+		
+		my $secedit_command = "$secedit_exe /configure /cfg \"$inf_target_path\" /db $secedit_db /log $secedit_log /verbose";
+		my ($secedit_exit_status, $secedit_output) = run_ssh_command($computer_node_name, $management_node_keys, $secedit_command, '', '', 1);
+		if (defined($secedit_exit_status) && $secedit_exit_status == 0) {
+			notify($ERRORS{'OK'}, 0, "ran secedit.exe to apply $inf_file_name");
+		}
+		elsif (defined($secedit_exit_status)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to run secedit.exe to apply $inf_target_path, exit status: $secedit_exit_status, output:\n@{$secedit_output}");
+			$error_occurred++;
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to run secedit.exe to apply $inf_target_path");
+			$error_occurred++;
+		}
+	}
+	
+	if ($error_occurred) {
+		return 0;
+	}
+	else {
+		return 1;
+	}
+	
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 

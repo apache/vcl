@@ -1,5 +1,7 @@
 #!/usr/bin/perl -w
-
+###############################################################################
+# $Id$
+###############################################################################
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.
@@ -14,10 +16,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-##############################################################################
-# $Id$
-##############################################################################
+###############################################################################
 
 =head1 NAME
 
@@ -362,6 +361,7 @@ $SUBROUTINE_MAPPINGS{imagemeta_postoption}           = '$self->request_data->{re
 $SUBROUTINE_MAPPINGS{imagemeta_subimages}            = '$self->request_data->{reservation}{RESERVATION_ID}{image}{imagemeta}{subimages}';
 $SUBROUTINE_MAPPINGS{imagemeta_sysprep}              = '$self->request_data->{reservation}{RESERVATION_ID}{image}{imagemeta}{sysprep}';
 $SUBROUTINE_MAPPINGS{imagemeta_usergroupid}          = '$self->request_data->{reservation}{RESERVATION_ID}{image}{imagemeta}{usergroupid}';
+$SUBROUTINE_MAPPINGS{imagemeta_rootaccess}           = '$self->request_data->{reservation}{RESERVATION_ID}{image}{imagemeta}{rootaccess}';
 $SUBROUTINE_MAPPINGS{imagemeta_usergroupmembercount} = '$self->request_data->{reservation}{RESERVATION_ID}{image}{imagemeta}{USERGROUPMEMBERCOUNT}';
 $SUBROUTINE_MAPPINGS{imagemeta_usergroupmembers}     = '$self->request_data->{reservation}{RESERVATION_ID}{image}{imagemeta}{USERGROUPMEMBERS}';
 
@@ -1380,18 +1380,16 @@ sub get_log_data {
 1;
 __END__
 
-=head1 BUGS and LIMITATIONS
+=head1 COPYRIGHT
 
- There are no known bugs in this module.
- Please report problems to the VCL team (vcl_help@ncsu.edu).
-
-=head1 AUTHOR
-
- Aaron Peeler, aaron_peeler@ncsu.edu
- Andy Kurth, andy_kurth@ncsu.edu
+ Apache VCL incubator project
+ Copyright 2009 The Apache Software Foundation
+ 
+ This product includes software developed at
+ The Apache Software Foundation (http://www.apache.org/).
 
 =head1 SEE ALSO
 
-L<http://vcl.ncsu.edu>
+L<http://cwiki.apache.org/VCL/>
 
 =cut
