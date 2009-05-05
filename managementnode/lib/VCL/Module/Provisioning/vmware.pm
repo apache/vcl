@@ -53,6 +53,7 @@ use 5.008000;
 use strict;
 use warnings;
 use diagnostics;
+use English qw( -no_match_vars );
 
 use VCL::utils;
 use Fcntl qw(:DEFAULT :flock);
@@ -391,12 +392,12 @@ sub load {
 										if ($a =~ /^(on|off|stuck)/i) {
 											$vmlist{$v}{"state"} = $a;
 										}
-										else{
+										else {
 											notify($ERRORS{'WARNING'}, 0, "unknown state $a for $vmlist{$v}{path} on $hostnode");
 											$vmlist{$v}{"state"} = $a;
 										}
 
-									}
+									} ## end foreach $a (@{$sshcmd_2[1]})
 								} ## end foreach my $v (keys %vmlist)
 								notify($ERRORS{'OK'}, 0, "ls datastorepath $datastorepath ");
 								my @sshcmd_3 = run_ssh_command($hostnode, $identity, "ls -1 $datastorepath", "root");
@@ -831,18 +832,18 @@ sub load {
 						#good vm still on
 						notify($ERRORS{'OK'}, 0, "vm $computer_shortname reports on");
 
-						if($sloop > 15 ){
+						if ($sloop > 15) {
 							my $sshd_status = _sshd_status($computer_shortname, $requestedimagename);
-                     if ($sshd_status eq "on") {
-                        notify($ERRORS{'OK'}, 0, "$computer_shortname now has active sshd running, maybe we missed the READY flag setting STAGE5 flag");
-                        $s5 = 1;
-                        #speed this up a bit
-                        close(TAIL);
-                        goto VMWAREROUND2;
-                     }
-						}
+							if ($sshd_status eq "on") {
+								notify($ERRORS{'OK'}, 0, "$computer_shortname now has active sshd running, maybe we missed the READY flag setting STAGE5 flag");
+								$s5 = 1;
+								#speed this up a bit
+								close(TAIL);
+								goto VMWAREROUND2;
+							}
+						} ## end if ($sloop > 15)
 
-					}
+					} ## end if ($l =~ /= on/)
 					elsif ($l =~ /= off/) {
 						#good vm still on
 						notify($ERRORS{'CRITICAL'}, 0, "state of vm $computer_shortname reports off after pass number $sloop attempting to restart: start attempts $vmware_starts");
@@ -918,7 +919,7 @@ sub load {
 							$sloop = $sloop - 5;
 						}
 
-						my $sshd_status = _sshd_status($computer_shortname, $requestedimagename,$image_os_type);
+						my $sshd_status = _sshd_status($computer_shortname, $requestedimagename, $image_os_type);
 						if ($sshd_status eq "on") {
 							notify($ERRORS{'OK'}, 0, "$computer_shortname now has active sshd running, maybe we missed the READY flag setting STAGE5 flag");
 							$s5 = 1;
@@ -971,7 +972,7 @@ sub load {
 	$sshd_attempts++;
 	my $sshd_status = "off";
 	while (!$sshdstatus) {
-		my $sshd_status = _sshd_status($computer_shortname, $requestedimagename,$image_os_type);
+		my $sshd_status = _sshd_status($computer_shortname, $requestedimagename, $image_os_type);
 		if ($sshd_status eq "on") {
 			$sshdstatus = 1;
 			notify($ERRORS{'OK'}, 0, "$computer_shortname now has active sshd running, ok to proceed to sync ssh keys");
@@ -1083,7 +1084,7 @@ sub load {
 		#not default setting
 		if ($IPCONFIGURATION eq "dynamicDHCP") {
 			insertloadlog($reservation_id, $vmclient_computerid, "dynamicDHCPaddress", "collecting dynamic IP address for node");
-			my $assignedIPaddress = getdynamicaddress($computer_shortname, $vmclient_OSname,$image_os_type);
+			my $assignedIPaddress = getdynamicaddress($computer_shortname, $vmclient_OSname, $image_os_type);
 			if ($assignedIPaddress) {
 				#update computer table
 				if (update_computer_address($vmclient_computerid, $assignedIPaddress)) {
@@ -1102,7 +1103,7 @@ sub load {
 		} ## end if ($IPCONFIGURATION eq "dynamicDHCP")
 		elsif ($IPCONFIGURATION eq "static") {
 			insertloadlog($reservation_id, $vmclient_computerid, "staticIPaddress", "setting static IP address for node");
-			if (setstaticaddress($computer_shortname, $vmclient_OSname, $vmclient_publicIPaddress,$image_os_type)) {
+			if (setstaticaddress($computer_shortname, $vmclient_OSname, $vmclient_publicIPaddress, $image_os_type)) {
 				# good set static address
 			}
 		}
@@ -1149,7 +1150,7 @@ sub capture {
 	my $image_os_name  = $self->data->get_image_os_name;
 	my $image_identity = $self->data->get_image_identity;
 	my $image_os_type  = $self->data->get_image_os_type;
-	my $image_name          = $self->data->get_image_name();
+	my $image_name     = $self->data->get_image_name();
 
 
 	my $imagemeta_sysprep = $self->data->get_imagemeta_sysprep;
@@ -1296,7 +1297,7 @@ sub capture {
 				if (_pingnode($computer_nodename)) {
 					#it pingable check if sshd is open
 					notify($ERRORS{'OK'}, 0, "$computer_nodename is pingable, checking sshd port");
-					my $sshd = _sshd_status($computer_nodename, $image_name,$image_os_type);
+					my $sshd = _sshd_status($computer_nodename, $image_name, $image_os_type);
 					if ($sshd =~ /on/) {
 						$rebooted = 0;
 						notify($ERRORS{'OK'}, 0, "$computer_nodename sshd is open");
@@ -2048,26 +2049,66 @@ sub get_image_size {
 sub node_status {
 	my $self = shift;
 
+	my $vmpath             = 0;
+	my $datastorepath      = 0;
+	my $requestedimagename = 0;
+	my $vmhost_type        = 0;
+	my $log                = 0;
+	my $vmhost_hostname    = 0;
+	my $vmhost_imagename   = 0;
+	my $vmclient_shortname = 0;
+	my $image_os_type      = 0;
+	my $request_forimaging = 0;
+	my $computer_node_name = 0;
+	my $identity_keys      = 0;
+
 	# Check if subroutine was called as a class method
 	if (ref($self) !~ /vmware/i) {
-		notify($ERRORS{'DEBUG'}, 0, "subroutine was called as a function, it must be called as a class method");
-	}
+		if (ref($self) eq 'HASH') {
+			$log = $self->{logfile};
+			#notify($ERRORS{'DEBUG'}, $log, "self is a hash reference");
 
-	my ($package, $filename, $line, $sub) = caller(0);
+			$computer_node_name = $self->{computer}->{hostname};
+			$identity_keys      = $self->{managementnode}->{keys};
+			$requestedimagename = $self->{imagerevision}->{imagename};
+			$image_os_type      = $self->{image}->{OS}->{type};
+			$vmhost_type        = $self->{vmhost}->{vmprofile}->{vmtype}->{name};
+			$vmhost_imagename   = $self->{vmhost}->{imagename};
+			$vmpath             = $self->{vmhost}->{vmprofile}->{vmpath};
+			$datastorepath      = $self->{vmhost}->{vmprofile}->{datastorepath};
+			$vmhost_hostname    = $self->{vmhost}->{hostname};
 
-	# Collect local variables from DataStructure
+		} ## end if (ref($self) eq 'HASH')
+		# Check if node_status returned an array ref
+		elsif (ref($self) eq 'ARRAY') {
+			notify($ERRORS{'DEBUG'}, $log, "self is a array reference");
+		}
 
-	my $vmpath             = $self->data->get_vmhost_profile_vmpath;
-	my $datastorepath      = $self->data->get_vmhost_profile_datastore_path;
-	my $requestedimagename = $self->data->get_image_name;
-	my $vmhost_type        = $self->data->get_vmhost_type;
-	my $vmhost_hostname    = $self->data->get_vmhost_hostname;
-	my $vmhost_imagename   = $self->data->get_vmhost_image_name;
-	my $vmclient_shortname = $self->data->get_computer_short_name;
-	my $image_os_type	  = $self->data->get_image_os_type;
-	my $request_forimaging = $self->data->get_request_forimaging();
-	
-	my ($hostnode, $identity);
+		$vmclient_shortname = $1 if ($computer_node_name =~ /([-_a-zA-Z0-9]*)(\.?)/);
+
+	} ## end if (ref($self) !~ /vmware/i)
+	else {
+		# called as an object
+		# Collect local variables from DataStructure
+
+		$vmpath             = $self->data->get_vmhost_profile_vmpath;
+		$datastorepath      = $self->data->get_vmhost_profile_datastore_path;
+		$requestedimagename = $self->data->get_image_name;
+		$vmhost_type        = $self->data->get_vmhost_type;
+		$vmhost_hostname    = $self->data->get_vmhost_hostname;
+		$vmhost_imagename   = $self->data->get_vmhost_image_name;
+		$vmclient_shortname = $self->data->get_computer_short_name;
+		$image_os_type      = $self->data->get_image_os_type;
+		$request_forimaging = $self->data->get_request_forimaging();
+		$identity_keys      = $self->data->get_management_node_keys;
+	} ## end else [ if (ref($self) !~ /vmware/i)
+
+	notify($ERRORS{'DEBUG'}, $log, "identity_keys= $identity_keys");
+	notify($ERRORS{'DEBUG'}, $log, "requestedimagename= $requestedimagename");
+	notify($ERRORS{'DEBUG'}, $log, "image_os_type= $image_os_type");
+	notify($ERRORS{'DEBUG'}, $log, "request_forimaging= $request_forimaging");
+	notify($ERRORS{'DEBUG'}, $log, "vmpath= $vmpath");
+	notify($ERRORS{'DEBUG'}, $log, "datastorepath= $datastorepath");
 
 	# Create a hash to store status components
 	my %status;
@@ -2080,76 +2121,65 @@ sub node_status {
 	$status{vmstate}      = 0;    #on or off
 	$status{image_match}  = 0;
 
-	if ($vmhost_type eq "blade") {
-		$hostnode = $1 if ($vmhost_hostname =~ /([-_a-zA-Z0-9]*)(\.?)/);
-		$identity = $IDENTITY_bladerhel;    
-	}
-	else {
-		#using FQHN
-		$hostnode = $vmhost_hostname;
-		$identity = $IDENTITY_linux_lab if ($vmhost_imagename =~ /^(realmrhel)/);
-	}
-
-	if (!$identity) {
-		notify($ERRORS{'CRITICAL'}, 0, "could not set ssh identity variable for image $vmhost_imagename type= $vmhost_type host= $vmhost_hostname");
+	if (!$identity_keys) {
+		notify($ERRORS{'CRITICAL'}, $log, "could not set ssh identity variable for image $vmhost_imagename type= $vmhost_type host= $vmhost_hostname");
 	}
 
 	# Check if node is pingable
-	notify($ERRORS{'DEBUG'}, 0, "checking if $vmclient_shortname is pingable");
+	notify($ERRORS{'DEBUG'}, $log, "checking if $vmclient_shortname is pingable");
 	if (_pingnode($vmclient_shortname)) {
 		$status{ping} = 1;
-		notify($ERRORS{'OK'}, 0, "$vmclient_shortname is pingable ($status{ping})");
+		notify($ERRORS{'OK'}, $log, "$vmclient_shortname is pingable ($status{ping})");
 	}
 	else {
-		notify($ERRORS{'OK'}, 0, "$vmclient_shortname is not pingable ($status{ping})");
+		notify($ERRORS{'OK'}, $log, "$vmclient_shortname is not pingable ($status{ping})");
 		$status{status} = 'RELOAD';
 		return $status{status};
 	}
 
-	#
 	my $vmx_directory = "$requestedimagename$vmclient_shortname";
 	my $myvmx         = "$vmpath/$requestedimagename$vmclient_shortname/$requestedimagename$vmclient_shortname.vmx";
 	my $mybasedirname = $requestedimagename;
 	my $myimagename   = $requestedimagename;
 
+	# #vm running
+	my @sshcmd = run_ssh_command($vmhost_hostname, $identity_keys, "vmware-cmd $myvmx getstate", "root");
+	foreach my $l (@{$sshcmd[1]}) {
+		notify($ERRORS{'OK'}, $log, "$l");
+		$status{vmstate} = "on"    if ($l =~ /^getstate\(\) = on/);
+		$status{vmstate} = "off"   if ($l =~ /= off/);
+		$status{vmstate} = "stuck" if ($l =~ /= stuck/);
+
+		if ($l =~ /No such virtual machine/) {
+			#ok wait something is using that hostname
+			#reset $status{image_match} controlVM will detect and remove it
+			$status{image_match} = 0;
+		}
+	} ## end foreach my $l (@{$sshcmd[1]})
+	notify($ERRORS{'OK'}, $log, "$vmclient_shortname vmstate reports $status{vmstate}");
 
 	#can I ssh into it
-	my $sshd = _sshd_status($vmclient_shortname, $requestedimagename,$image_os_type);
-
+	my $sshd = _sshd_status($vmclient_shortname, $requestedimagename, $image_os_type);
 
 	#is it running the requested image
 	if ($sshd eq "on") {
 
-		$status{ssh}          = 1;
+		$status{ssh} = 1;
+
 		$status{currentimage} = _getcurrentimage($vmclient_shortname);
 
 		if ($status{currentimage}) {
 			chomp($status{currentimage});
 			if ($status{currentimage} =~ /$requestedimagename/) {
 				$status{image_match} = 1;
-				notify($ERRORS{'OK'}, 0, "$vmclient_shortname is loaded with requestedimagename $requestedimagename");
+				notify($ERRORS{'OK'}, $log, "$vmclient_shortname is loaded with requestedimagename $requestedimagename");
 			}
 			else {
-				notify($ERRORS{'OK'}, 0, "$vmclient_shortname reports current image is currentimage= $status{currentimage} requestedimagename= $requestedimagename");
+				notify($ERRORS{'OK'}, $log, "$vmclient_shortname reports current image is currentimage= $status{currentimage} requestedimagename= $requestedimagename");
 			}
 		} ## end if ($status{currentimage})
 	} ## end if ($sshd eq "on")
 
-	# #vm running
-	if ($status{image_match}) {
-		my @sshcmd = run_ssh_command($hostnode, $identity, "vmware-cmd $myvmx getstate", "root");
-		foreach my $l (@{$sshcmd[1]}) {
-			notify($ERRORS{'OK'}, 0, "$l");
-			$status{vmstate} = 1 if ($l =~ /^getstate\(\) = on/);
-			$status{vmstate} = 0 if ($l =~ /= off/);
-
-			if ($l =~ /No such virtual machine/) {
-				#ok wait something is using that hostname
-				#reset $status{image_match} controlVM will detect and remove it
-				$status{image_match} = 0;
-			}
-		} ## end foreach my $l (@{$sshcmd[1]})
-	} ## end if ($status{image_match})
 
 	# Determine the overall machine status based on the individual status results
 	if ($status{ssh} && $status{image_match}) {
@@ -2159,12 +2189,12 @@ sub node_status {
 		$status{status} = 'RELOAD';
 	}
 
-	if($request_forimaging){
+	if ($request_forimaging) {
 		$status{status} = 'RELOAD';
-		notify($ERRORS{'OK'}, 0, "forimaging flag enabled RELOAD machine");
+		notify($ERRORS{'OK'}, $log, "forimaging flag enabled RELOAD machine");
 	}
 
-	notify($ERRORS{'OK'}, 0, "returning node status hash reference (\$node_status->{status}=$status{status})");
+	notify($ERRORS{'OK'}, $log, "returning node status hash reference (\$node_status->{status}=$status{status})");
 	return \%status;
 
 } ## end sub node_status
