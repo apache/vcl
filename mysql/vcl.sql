@@ -410,6 +410,7 @@ CREATE TABLE IF NOT EXISTS `imagemeta` (
   `sysprep` tinyint(1) unsigned NOT NULL default '1',
   `postoption` varchar(32) default NULL,
   `architecture` varchar(10) default NULL,
+  `rootaccess` tinyint(1) unsigned NOT NULL default '1',
   PRIMARY KEY  (`id`),
   KEY `usergroupid` (`usergroupid`)
 ) ENGINE=InnoDB  DEFAULT CHARSET=latin1 AUTO_INCREMENT=1 ;
