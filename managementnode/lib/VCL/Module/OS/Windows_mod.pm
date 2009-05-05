@@ -1143,7 +1143,7 @@ sub user_exists {
 
 	# Attempt to query the user account
 	my $query_user_command = "net user \"$username\"";
-	my ($query_user_exit_status, $query_user_output) = run_ssh_command($computer_node_name, $management_node_keys, $query_user_command);
+	my ($query_user_exit_status, $query_user_output) = run_ssh_command($computer_node_name, $management_node_keys, $query_user_command, '', '', '1');
 	if (defined($query_user_exit_status) && $query_user_exit_status == 0) {
 		notify($ERRORS{'DEBUG'}, 0, "user $username exists on $computer_node_name");
 		return 1;
@@ -1191,7 +1191,7 @@ sub create_user {
 		$username = $self->data->get_user_login_id();
 	}
 	if (!$password) {
-		$password = $self->data->get_user_password();
+		$password = $self->data->get_reservation_password();
 	}
 
 	# Check if user already exists
@@ -1208,15 +1208,19 @@ sub create_user {
 	notify($ERRORS{'DEBUG'}, 0, "attempting to add user $username to $computer_node_name ($password)");
 
 	# Attempt to add the user account
-	my $add_user_command = "net user \"$username\" \"$password\" /ADD  /EXPIRES:NEVER /COMMENT:\"Account created by VCL\"";
+	my $add_user_command = "net user \"$username\" \"$password\" /ADD /EXPIRES:NEVER /COMMENT:\"Account created by VCL\"";
 	$add_user_command .= " && net localgroup \"Remote Desktop Users\" \"$username\" /ADD";
 	
-	# Add the user to the Administrators group if imagemeta.rootaccess is 1
-	if ($imagemeta_rootaccess != 0) {
+	# Add the user to the Administrators group if imagemeta.rootaccess isn't 0
+	if (defined($imagemeta_rootaccess) && $imagemeta_rootaccess eq '0') {
+		notify($ERRORS{'DEBUG'}, 0, "user will NOT be added to the Administrators group");
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "user will be added to the Administrators group");
 		$add_user_command .= " && net localgroup \"Administrators\" \"$username\" /ADD";
 	}
 
-	my ($add_user_exit_status, $add_user_output) = run_ssh_command($computer_node_name, $management_node_keys, $add_user_command);
+	my ($add_user_exit_status, $add_user_output) = run_ssh_command($computer_node_name, $management_node_keys, $add_user_command, '', '', '1');
 	if (defined($add_user_exit_status) && $add_user_exit_status == 0) {
 		notify($ERRORS{'OK'}, 0, "added user $username ($password) to $computer_node_name");
 	}

@@ -6507,6 +6507,7 @@ sub get_imagemeta_info {
 	$imagemeta{usergroupid}  = 0 if !defined($imagemeta{usergroupid});
 	$imagemeta{postoption}   = 0 if !defined($imagemeta{postoption});
 	$imagemeta{architecture} = 0 if !defined($imagemeta{architecture});
+	$imagemeta{rootaccess} = 1 if !defined($imagemeta{rootaccess});
 
 	# Populate the count of user group members
 	$imagemeta{USERGROUPMEMBERCOUNT} = scalar(keys(%{$imagemeta{USERGROUPMEMBERS}}));
