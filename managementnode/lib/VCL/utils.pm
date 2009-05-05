@@ -2995,7 +2995,7 @@ sub add_user {
 		}
 		if ($delete_user) {
 			notify($ERRORS{'OK'}, 0, "error $user may already be listed");
-			if (del_user($node, $user, "blade", $os)) {
+			if (del_user($node, $user, "blade", $os, $image_os_type)) {
 				notify($ERRORS{'OK'}, 0, "$user deleted");
 			}
 
@@ -3071,7 +3071,7 @@ sub add_user {
 				if ($l =~ /user $user exists/) {
 					notify($ERRORS{'OK'}, 0, "detected user already has account, deleting");
 					#FIXME - if type or project is not  HPC related.
-					if (del_user($node, $user, "blade", $os)) {
+					if (del_user($node, $user, "blade", $os, $image_os_type)) {
 						notify($ERRORS{'OK'}, 0, "$user deleted");
 					}
 					if (run_ssh_command($node, $identity, $useradd_string, "root")) {
