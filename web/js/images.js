@@ -268,10 +268,6 @@ function addRemImgGrpCompGrp(data, ioArgs) {
 	document.body.style.cursor = 'default';
 }
 
-function errorHandler(data, ioArgs) {
-	alert('Error encountered while processing AJAX callback');
-}
-
 function getImagesButton() {
    document.body.style.cursor = 'wait';
 	var selobj1 = document.getElementById('inimages');

@@ -159,10 +159,6 @@ function addRemComp2(data, ioArgs) {
 	document.body.style.cursor = 'default';
 }
 
-function errorHandler(data, ioArgs) {
-	alert('Error encountered while processing AJAX callback');
-}
-
 function getCompsButton() {
    document.body.style.cursor = 'wait';
 	var selobj1 = document.getElementById('incomps');

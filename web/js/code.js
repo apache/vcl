@@ -261,6 +261,10 @@ var errorHandler = function(type, error, data) {
 	alert('error occurred' + error.message + data.responseText);
 }
 
+function errorHandler(data, ioArgs) {
+	alert('Error encountered while processing AJAX callback');
+}
+
 function nodeSelect(node) {
    var nodeid = node.widgetId;
    var nodename = node.title;
