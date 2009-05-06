@@ -16,7 +16,7 @@
 # limitations under the License.
 
 ##############################################################################
-# $Id:$
+# $Id$
 ##############################################################################
 
 =head1 NAME
@@ -150,17 +150,17 @@ sub load {
 	}
 
 	# Get the data
-	my $reservation_id       = $self->data->get_reservation_id();
-	my $image_name           = $self->data->get_image_name();
-	my $image_os_name        = $self->data->get_image_os_name();
-	my $image_os_type        = $self->data->get_image_os_type();
-	my $image_project        = $self->data->get_image_project();
-	my $image_reload_time    = $self->data->get_image_reload_time();
-	my $imagemeta_postoption = $self->data->get_imagemeta_postoption();
-	my $image_architecture   = $self->data->get_image_architecture();
-	my $computer_id          = $self->data->get_computer_id();
-	my $computer_node_name   = $self->data->get_computer_node_name();
-	my $computer_ip_address  = $self->data->get_computer_ip_address();
+	my $reservation_id        = $self->data->get_reservation_id();
+	my $image_name            = $self->data->get_image_name();
+	my $image_os_name         = $self->data->get_image_os_name();
+	my $image_os_type         = $self->data->get_image_os_type();
+	my $image_project         = $self->data->get_image_project();
+	my $image_reload_time     = $self->data->get_image_reload_time();
+	my $imagemeta_postoption  = $self->data->get_imagemeta_postoption();
+	my $image_architecture    = $self->data->get_image_architecture();
+	my $computer_id           = $self->data->get_computer_id();
+	my $computer_node_name    = $self->data->get_computer_node_name();
+	my $computer_ip_address   = $self->data->get_computer_ip_address();
 	my $image_os_install_type = $self->data->get_image_os_install_type();
 
 	notify($ERRORS{'OK'}, 0, "nodename not set")
@@ -194,6 +194,7 @@ sub load {
 	$image_architecture = "x86" if (!defined($image_architecture));
 
 	# Run xCAT's assign2project utility
+
 =pod
 	if (_assign2project($computer_node_name, $image_project)) {
 		notify($ERRORS{'OK'}, 0, "$computer_node_name _assign2project return successful");
@@ -223,7 +224,7 @@ sub load {
 
 	# Insert a computerloadlog record and edit nodetype table
 	insertloadlog($reservation_id, $computer_id, "editnodetype", "updating nodetype table");
-	if ($self->_edit_nodetype($computer_node_name, $image_name, 0)) { #FIXME
+	if ($self->_edit_nodetype($computer_node_name, $image_name, 0)) {    #FIXME
 		notify($ERRORS{'OK'}, 0, "nodetype updated for $computer_node_name with $image_name");
 	}
 	else {
@@ -283,15 +284,15 @@ sub load {
 			else {
 				notify($ERRORS{'WARNING'}, 0, "failed to obtain exclusive lock on $lckloadfile");
 			}
-			
+
 			notify($ERRORS{'OK'}, 0, "releasing exclusive lock on $lckloadfile, proceeding to install");
 			close(SEM);
-			
+
 		} ## end if (sysopen(SEM, $lckloadfile, O_RDONLY | ...
 		else {
 			notify($ERRORS{'WARNING'}, 0, "failed to open node loading lockfile");
 		}
-		
+
 	} ## end if ($THROTTLE)
 	else {
 		notify($ERRORS{'DEBUG'}, 0, "throttle is NOT set");
@@ -319,7 +320,7 @@ sub load {
 				while (<RINSTALL>) {
 					chomp($_);
 					# TODO make sure "not in bay" still exists
-					notify($ERRORS{'OK'},0,"$_");
+					notify($ERRORS{'OK'}, 0, "$_");
 					if ($_ =~ /not in bay/) {
 						notify($ERRORS{'WARNING'}, 0, "rpower not in bay issue, will attempt to correct, calling rinv");
 						if (_fix_rpower($computer_node_name)) {
@@ -339,7 +340,7 @@ sub load {
 							}
 						} ## end if (_fix_rpower($computer_node_name))
 					} ## end if ($_ =~ /not in bay/)
-					# TODO make sure "Invalid login|does not exist" still exists
+					                     # TODO make sure "Invalid login|does not exist" still exists
 					if ($_ =~ /Invalid login|does not exist/) {
 						notify($ERRORS{'CRITCAL'}, 0, "failed to initate rinstall on $computer_node_name - $_");
 						close(RINSTALL);
@@ -349,59 +350,59 @@ sub load {
 					}
 					if ($_ =~ /nodeset failure/) {
 						my $success = 0;
-						notify($ERRORS{'WARNING'},0,"rinstall's nodeset failed - trying nodeset directly: ($_)");
+						notify($ERRORS{'WARNING'}, 0, "rinstall's nodeset failed - trying nodeset directly: ($_)");
 						if (open(NODESET, "$XCAT_ROOT/sbin/nodeset $computer_node_name install 2>&1 |")) {
 							while (<NODESET>) {
 								chomp($_);
 								if ($_ =~ /$computer_node_name: install/) {
 									$success = 1;
-									notify($ERRORS{'OK'},0,"node set to install");
+									notify($ERRORS{'OK'}, 0, "node set to install");
 								}
 							}
 							close(NODESET);
-						}
+						} ## end if (open(NODESET, "$XCAT_ROOT/sbin/nodeset $computer_node_name install 2>&1 |"...
 						else {
-							notify($ERRORS{'CRITICAL'},0,"failed to open nodeset directly ($XCAT_ROOT/sbin/nodeset)");
+							notify($ERRORS{'CRITICAL'}, 0, "failed to open nodeset directly ($XCAT_ROOT/sbin/nodeset)");
 							close(RINSTALL);
 							close(SEM);
 							insertloadlog($reservation_id, $computer_id, "failed", "failed to start load process on $computer_node_name");
 							return 0;
 						}
-						if($success) {
+						if ($success) {
 							$success = 0;
 							if (open(RPOWER, "$XCAT_ROOT/bin/rpower $computer_node_name boot 2>&1 |")) {
 								while (<RPOWER>) {
 									chomp($_);
 									if ($_ =~ /$computer_node_name:.* on/) {
 										$success = 1;
-										notify($ERRORS{'OK'},0,"node power set to boot");
+										notify($ERRORS{'OK'}, 0, "node power set to boot");
 									}
 								}
 								close(RPOWER);
-							}
+							} ## end if (open(RPOWER, "$XCAT_ROOT/bin/rpower $computer_node_name boot 2>&1 |"...
 							else {
-								notify($ERRORS{'CRITICAL'},0,"failed to open rpower directly");
+								notify($ERRORS{'CRITICAL'}, 0, "failed to open rpower directly");
 								close(RINSTALL);
 								close(SEM);
 								insertloadlog($reservation_id, $computer_id, "failed", "failed to start load process on $computer_node_name");
 								return 0;
 							}
-						}
+						} ## end if ($success)
 						else {
-							notify($ERRORS{'CRITICAL'},0,"direct call of nodeset failed ($_)");
+							notify($ERRORS{'CRITICAL'}, 0, "direct call of nodeset failed ($_)");
 							close(RINSTALL);
 							close(SEM);
 							insertloadlog($reservation_id, $computer_id, "failed", "failed to start load process on $computer_node_name");
 							return 0;
 						}
-						if(! $success) {
-							notify($ERRORS{'CRITICAL'},0,"direct call of rpower failed ($_)");
+						if (!$success) {
+							notify($ERRORS{'CRITICAL'}, 0, "direct call of rpower failed ($_)");
 							close(RINSTALL);
 							close(SEM);
 							insertloadlog($reservation_id, $computer_id, "failed", "failed to start load process on $computer_node_name");
 							return 0;
 						}
-					}
+					} ## end if ($_ =~ /nodeset failure/)
 
 				}    #while RINSTALL
 				close(RINSTALL);
@@ -437,8 +438,8 @@ sub load {
 				$eth0MACaddress = $3;
 				notify($ERRORS{'OK'}, 0, "MAC address for $computer_node_name collected $eth0MACaddress");
 			}
-		} ## end foreach my $l (@file)
-	} ## end if (open(NODELS, "$XCAT_ROOT/bin/nodels ...
+		}
+	} ## end if (open(NODELS, "$XCAT_ROOT/bin/nodels $computer_node_name mac.mac 2>&1 |"...
 	else {
 		# could not run nodels command
 		notify($ERRORS{'CRITICAL'}, 0, "could not run $XCAT_ROOT/bin/nodels command to get mac address");
@@ -511,6 +512,7 @@ sub load {
 							insertloadlog($reservation_id, $computer_id, "xcatstage4", "SUCCESS stage4 node received pxe install instructions");
 						}
 					}
+
 =pod
 					#stage5 is where images and rhas(KS) are different
 					if (!$s5) {
@@ -534,9 +536,10 @@ sub load {
 						}
 					} ## end if (!$s5)
 =cut
+
 				}    #while
-				#either stages are set or we loop or we rinstall again
-				#check s5 and counter for loop control
+				     #either stages are set or we loop or we rinstall again
+				     #check s5 and counter for loop control
 				if ($s4) {
 					notify($ERRORS{'OK'}, 0, "$computer_node_name ROUND1 stages are set proceeding to next round");
 					close(TAIL);
@@ -567,7 +570,7 @@ sub load {
 						close(TAIL);
 						return 0;
 					}
-				} ## end elsif ($sloop > $maxloops)  [ if ($s5)
+				} ## end elsif ($sloop > $maxloops)  [ if ($s4)
 				else {
 					#keep checking the messages log
 					$sloop++;
@@ -590,7 +593,7 @@ sub load {
 	#begin second round of checks reset $sX
 	($s1, $s2, $s3, $s4, $s5) = 0;
 	$sloop = 0;
-	my $status = '';
+	my $status     = '';
 	my $laststatus = '';
 	# start time for loading
 	my $R2starttime = convert_to_epoch_seconds();
@@ -609,11 +612,11 @@ sub load {
 			close(NODESTAT);
 			foreach my $l (@file) {
 				$laststatus = $status;
-				$status = $l;
+				$status     = $l;
 				chomp $status;
 				if ($status !~ /^$computer_node_name:/) {
 					notify($ERRORS{'WARNING'}, 0, "received unexpected output while running nodestat $computer_node_name: $status");
-					if($badoutputcnt > 5) {
+					if ($badoutputcnt > 5) {
 						notify($ERRORS{'CRITICAL'}, 0, "failed to receive valid output from nodestat command, failing request");
 						insertloadlog($reservation_id, $computer_id, "failed", "failed to get current status of machine");
 						return 0;
@@ -621,10 +624,10 @@ sub load {
 					$badoutputcnt++;
 					sleep 5;
 					next;
-				}
+				} ## end if ($status !~ /^$computer_node_name:/)
 				$status =~ s/$computer_node_name: //;
 			} ## end foreach my $l (@file)
-		} ## end if (open(NODESTAT, "$XCAT_ROOT/bin/nodestat $computer_node_name stat
+		} ## end if (open(NODESTAT, "$XCAT_ROOT/bin/nodestat $computer_node_name stat 2>&1 |"...
 		else {
 			# could not run nodestat command
 			notify($ERRORS{'CRITICAL'}, 0, "could not run $XCAT_ROOT/bin/nodestat command");
@@ -633,30 +636,31 @@ sub load {
 		}
 		# FIXME add check for condition where capture finished and machine reboots before we catch it
 		if (!$s1) {
-			if($status =~ /install/) {
+			if ($status =~ /install/) {
 				notify($ERRORS{'OK'}, 0, "$computer_node_name is installing: $status");
 				insertloadlog($reservation_id, $computer_id, "xcatstage5", "SUCCESS node started installing");
 				$s1 = 1;
 			}
-			elsif($status =~ /partimage-ng: complete/) {
+			elsif ($status =~ /partimage-ng: complete/) {
 				notify($ERRORS{'OK'}, 0, "$computer_node_name is finished installing: $status");
 				insertloadlog($reservation_id, $computer_id, "bootstate", "node completed imaging process - proceeding to next round");
 				$s1 = 1;
 				$s2 = 1;
 			}
-			elsif($status =~ /partimage-ng:/) {
+			elsif ($status =~ /partimage-ng:/) {
 				notify($ERRORS{'OK'}, 0, "$computer_node_name is installing: $status");
 				insertloadlog($reservation_id, $computer_id, "xcatstage5", "SUCCESS node started installing");
 				$s1 = 1;
 			}
-		}
+		} ## end if (!$s1)
 		if ($s1 && !$s2) {
-			if($status !~ /install/ || $status =~ /partimage-ng: complete/) {
+			if ($status !~ /install/ || $status =~ /partimage-ng: complete/) {
 				notify($ERRORS{'OK'}, 0, "$computer_node_name is finished installing: $status");
 				insertloadlog($reservation_id, $computer_id, "bootstate", "node in boot state completed imaging process - proceeding to next round");
 				$s2 = 2;
 			}
 		}
+
 =pod
 			#b15n02: ping boot   Wed Nov  5 09:41:28 EST 2008
 			#b15n02: ping boot   Wed Nov  5 09:43:56 EST 2008
@@ -669,6 +673,7 @@ sub load {
 			elsif($status =~ /sshd/) {
 			}
 =cut
+
 =pod
 			if ($_ =~ /xcat: xcatd: set boot request from $computer_node_name/) {
 
@@ -698,6 +703,7 @@ sub load {
 				} ## end else [ if (!$gettingclose)
 			} ## end if ($image_os_type =~ /linux/i)
 =cut
+
 		if ($s2) {
 			#good, move on
 			goto ROUND3;
@@ -723,7 +729,7 @@ sub load {
 				elsif ($rinstall_attempts < 2) {
 					notify($ERRORS{'WARNING'}, 0, "starting rinstall again");
 					insertloadlog($reservation_id, $computer_id, "WARNING", "potential problem, restarting rinstall current attempt $rinstall_attempts");
-					insertloadlog($reservation_id, $computer_id, "repeat", "starting install process");
+					insertloadlog($reservation_id, $computer_id, "repeat",  "starting install process");
 					goto XCATRINSTALL;
 				}
 				else {
@@ -732,13 +738,13 @@ sub load {
 					insertloadlog($reservation_id, $computer_id, "failed", "rinstall made $rinstall_attempts failing request");
 					return 0;
 				}
-			} ## end if ($sloop > $image_reload_time)
+			} ## end if ($sloop >= ($image_reload_time * 4))
 			else {
 				sleep 15;
 				$sloop++;    #loop control
 				insertloadlog($reservation_id, $computer_id, "info", "node in load process: $status");
 			}
-		} ## end else [ if ($s1)
+		} ## end else [ if ($s2)
 	}    #for
 
 
@@ -787,7 +793,7 @@ sub load {
 								close(TAIL);
 								goto SSHDATTEMPT;
 							}
-						}
+						} ## end if ($image_os_type =~ /linux/i)
 					}    #while
 
 					if ($readycount > 10) {
@@ -825,7 +831,7 @@ sub load {
 				notify($ERRORS{'CRITICAL'}, 0, "could not open messages at READYFLAG $!");
 			}
 			notify($ERRORS{'OK'}, 0, "proceeding for sync sshd active");
-		} ## end if ($status[2] =~ /boot/)
+		} ## end if ($nodeset_status =~ /boot/)
 		else {
 			# check for strange states
 		}
@@ -844,7 +850,7 @@ sub load {
 	$sshd_start_time = time() if !$sshd_start_time;
 
 	while (!$sshdstatus) {
-		my $sshd_status = _sshd_status($computer_node_name, $image_name,$image_os_type);
+		my $sshd_status = _sshd_status($computer_node_name, $image_name, $image_os_type);
 		if ($sshd_status eq "on") {
 			# Set the sshd end time to now to capture how long it took sshd to become active
 			$sshd_end_time = time();
@@ -853,7 +859,7 @@ sub load {
 			$sshdstatus = 1;
 			notify($ERRORS{'OK'}, 0, "$computer_node_name sshd has become active, took $sshd_duration secs, ok to proceed to sync ssh keys");
 			insertloadlog($reservation_id, $computer_id, "info", "synchronizing keys");
-		} ## end if ($sshd_status eq "on")
+		}
 		else {
 			#either sshd is off or N/A, we wait
 			if ($wait_loops >= 7) {
@@ -874,7 +880,7 @@ sub load {
 						my $debugging_message = "*reservation has NOT failed yet*\n";
 						$debugging_message .= "this notice is for debugging purposes so that node can be watched during 2nd rinstall attempt\n";
 						$debugging_message .= "sshd did not become active on $computer_node_name after first rinstall attempt\n\n";
-						
+
 						$debugging_message .= "management node:     " . $self->data->get_management_node_hostname() . "\n";
 						$debugging_message .= "pid:                 " . $PID . "\n";
 						$debugging_message .= "request:             " . $self->data->get_request_id() . "\n";
@@ -891,14 +897,14 @@ sub load {
 						insertloadlog($reservation_id, $computer_id, "repeat", "starting install process");
 						close(TAIL);
 						goto XCATRINSTALL;
-					}
+					} ## end if ($rinstall_attempts < 2)
 					else {
 						notify($ERRORS{'CRITICAL'}, 0, "$computer_node_name: sshd never became active after 2 rinstall attempts");
 						insertloadlog($reservation_id, $computer_id, "failed", "exceeded maximum install attempts");
 						return 0;
 					}
 				} ## end else [ if ($sshd_attempts < 3)
-			} ## end if ($wait_loops > 3)
+			} ## end if ($wait_loops >= 7)
 			else {
 				$wait_loops++;
 				# to give post config a chance
@@ -910,6 +916,7 @@ sub load {
 
 
 	# Clear ssh public keys from /root/.ssh/known_hosts
+
 =pod
 	my $known_hosts = "/root/.ssh/known_hosts";
 	my @file;
@@ -990,7 +997,7 @@ sub load {
 
 		#not default setting
 		if ($IPCONFIGURATION eq "dynamicDHCP") {
-			my $assignedIPaddress = getdynamicaddress($computer_node_name, $image_os_name,$image_os_type);
+			my $assignedIPaddress = getdynamicaddress($computer_node_name, $image_os_name, $image_os_type);
 			if ($assignedIPaddress) {
 
 				#update computer table
@@ -1013,7 +1020,7 @@ sub load {
 		elsif ($IPCONFIGURATION eq "static") {
 			insertloadlog($reservation_id, $computer_id, "info", "setting staticIPaddress");
 
-			if (setstaticaddress($computer_node_name, $image_os_name, $computer_ip_address,$image_os_type)) {
+			if (setstaticaddress($computer_node_name, $image_os_name, $computer_ip_address, $image_os_type)) {
 				notify($ERRORS{'DEBUG'}, 0, "set static address on $computer_ip_address $computer_node_name ");
 				insertloadlog($reservation_id, $computer_id, "staticIPaddress", "SUCCESS set static IP address on public interface");
 			}
@@ -1204,7 +1211,7 @@ sub load {
 			}
 
 		} ## end if ($image_os_name =~ /^(win2003)/)
-	} ## end if ($image_os_name =~ /winxp|wxp|win2003/)
+	} ## end elsif ($image_os_name =~ /winxp|wxp|win2003|winvista/) [ if ($image_os_name =~ /winvista/)
 
 
 	# Linux post-load tasks
@@ -1230,8 +1237,8 @@ sub load {
 					return 0;
 				}
 			}
-		} ## end if ($image_os_name =~ /^(esx[0-9])/)
-		    #FIXME - could be an issue for esx servers
+		} ## end if ($image_os_name =~ /^(esx[0-9]*)/)
+		                #FIXME - could be an issue for esx servers
 		if (changelinuxpassword($computer_node_name, "root")) {
 			notify($ERRORS{'OK'}, 0, "successfully changed root password on $computer_node_name");
 			#insertloadlog($reservation_id, $computer_id, "info", "SUCCESS randomized roots password");
@@ -1275,7 +1282,7 @@ sub load {
 			if (open(SCP, ">/tmp/$computer_node_name.sshd")) {
 				print SCP @file;
 				close SCP;
-			} ## end if (open(SCP, ">/tmp/$computer_node_name.sshd"))
+			}
 			undef $path1;
 			undef $path2;
 			$path1 = "/tmp/$computer_node_name.sshd";
@@ -1287,8 +1294,8 @@ sub load {
 			else {
 				notify($ERRORS{'WARNING'}, 0, "failed to copy $path1 to $path2");
 			}
-		} ## end if (open(SSHDCFG, "/tmp/$node.sshd"))
-	} ## end elsif ($image_os_type =~ /linux/i)
+		} ## end if (open(SSHDCFG, "/tmp/$computer_node_name.sshd"...
+	} ## end elsif ($image_os_type =~ /linux/i)  [ if ($image_os_name =~ /winvista/)
 
 	return 1;
 } ## end sub load
@@ -1311,7 +1318,7 @@ sub capture_prepare {
 	}
 
 	# Get data
-	my $image_name      = $self->data->get_image_name();
+	my $image_name          = $self->data->get_image_name();
 	my $computer_short_name = $self->data->get_computer_short_name();
 	my $computer_node_name  = $self->data->get_computer_node_name();
 
@@ -1384,7 +1391,7 @@ sub capture_monitor {
 
 	# Get the required data
 	my $computer_node_name = $self->data->get_computer_node_name();
-	my $image_name = $self->data->get_image_name();
+	my $image_name         = $self->data->get_image_name();
 
 	# Get the image repository path
 	my $image_repository_path = $self->_get_image_repository_path();
@@ -1393,12 +1400,12 @@ sub capture_monitor {
 		return 0;
 	}
 
-	my $fullloopcnt = 0;
-	my $filesize = 0;
-	my $filewatchcnt = 0;
-	my $status = '';
-	my $laststatus = '';
-	my $badoutputcnt = 0;
+	my $fullloopcnt       = 0;
+	my $filesize          = 0;
+	my $filewatchcnt      = 0;
+	my $status            = '';
+	my $laststatus        = '';
+	my $badoutputcnt      = 0;
 	my $nostatuschangecnt = 0;
 
 	CIWAITIMAGE:
@@ -1408,7 +1415,7 @@ sub capture_monitor {
 	# check /var/log/messages file for node entries or
 	# or check nodestat for boot flag
 
-	if($fullloopcnt > 10) {
+	if ($fullloopcnt > 10) {
 		# looped 10 times without seeing a change in file size or
 		#   change in output of nodestat, must have failed
 		notify($ERRORS{'CRITICAL'}, 0, "reached max loop cnt with no change in image file size and no change in output from nodestat, failing");
@@ -1434,7 +1441,7 @@ sub capture_monitor {
 		#complete return success
 		notify($ERRORS{'OK'}, 0, "image capture complete, found and removed capturedone file");
 		return 1;
-	}
+	} ## end if (-e "$image_repository_path/$image_name.img.capturedone")
 	elsif (-e "$image_repository_path/$image_name.img.capturefailed") {
 		unlink("$image_repository_path/$image_name.img.capturefailed");
 		notify($ERRORS{'CRITICAL'}, 0, "partimage-ng failed for $image_name on $computer_node_name, failing reservation");
@@ -1446,11 +1453,11 @@ sub capture_monitor {
 		close(NODESTAT);
 		foreach my $l (@file) {
 			$laststatus = $status;
-			$status = $l;
+			$status     = $l;
 			chomp $status;
 			if ($status !~ /^$computer_node_name:/) {
 				notify($ERRORS{'WARNING'}, 0, "received unexpected output while running nodestat $computer_node_name: $status");
-				if($badoutputcnt > 5) {
+				if ($badoutputcnt > 5) {
 					notify($ERRORS{'CRITICAL'}, 0, "failed to receive valid output from nodestat command, failing request");
 					return 0;
 				}
@@ -1458,7 +1465,7 @@ sub capture_monitor {
 			}
 			$status =~ s/$computer_node_name: //;
 		} ## end foreach my $l (@file)
-	} ## end if (open(NODESTAT, "$XCAT_ROOT/bin/nodestat $computer_node_name stat
+	} ## end if (open(NODESTAT, "$XCAT_ROOT/bin/nodestat $computer_node_name stat 2>&1 |"...
 	else {
 		# could not run nodestat command, fall back to watching image size
 		# Check the image size to see if it's growing
@@ -1466,21 +1473,21 @@ sub capture_monitor {
 		my $size = $self->get_image_size($image_name);
 		if ($size > $filesize) {
 			notify($ERRORS{'OK'}, 0, "image size has changed: $size, still copying");
-			$filesize = $size;
+			$filesize    = $size;
 			$fullloopcnt = 0;
 		}
-		elsif($size == $filesize) {
-			if($filewatchcnt > 5) {
+		elsif ($size == $filesize) {
+			if ($filewatchcnt > 5) {
 				notify($ERRORS{'CRITICAL'}, 0, "waited too long for file size to change for $image_name from $computer_node_name, failing");
 				return 0;
 			}
 			$filewatchcnt++;
 		}
-	}
-	if($status =~ /partimage-ng: partition/) {
-		if($status eq $laststatus) {
+	} ## end else [ if (open(NODESTAT, "$XCAT_ROOT/bin/nodestat $computer_node_name stat 2>&1 |"...
+	if ($status =~ /partimage-ng: partition/) {
+		if ($status eq $laststatus) {
 			notify($ERRORS{'DEBUG'}, 0, "nodestat status did not change from last iteration ($status)");
-			if($nostatuschangecnt > 5) {
+			if ($nostatuschangecnt > 5) {
 				notify($ERRORS{'CRITICAL'}, 0, "waited too long for status of $computer_node_name to change - seems to be hung, failing");
 				return 0;
 			}
@@ -1488,11 +1495,11 @@ sub capture_monitor {
 		}
 		else {
 			$nostatuschangecnt = 0;
-			$fullloopcnt = 0;
+			$fullloopcnt       = 0;
 		}
 		# report status
 		notify($ERRORS{'OK'}, 0, "partimage-ng running on $computer_node_name: $status");
-	}
+	} ## end if ($status =~ /partimage-ng: partition/)
 	$fullloopcnt++;
 	goto CIWAITIMAGE;
 } ## end sub capture_monitor
@@ -1512,9 +1519,9 @@ sub _edit_template {
 	my ($imagename, $drivetype) = @_;
 	my ($package, $filename, $line, $sub) = caller(0);
 	notify($ERRORS{'CRITCAL'}, 0, "drivetype is not defined")
-		if (!(defined($drivetype)));
+	  if (!(defined($drivetype)));
 	notify($ERRORS{'CRITCAL'}, 0, "imagename is not defined")
-		if (!(defined($imagename)));
+	  if (!(defined($imagename)));
 
 	my $template = "$XCAT_ROOT/install/image/x86/$imagename.tmpl";
 	my @lines;
@@ -1566,26 +1573,26 @@ sub _edit_nodetype {
 
 	# Use arguments for computer and image if they were passed
 	my $computer_node_name = shift;
-	my $image_name = shift;
-	my $installmode = shift;
+	my $image_name         = shift;
+	my $installmode        = shift;
 
 	# Use the new image name if it is set
 	$image_name = $self->data->get_image_name() if !$image_name;
 
 	# Get the rest of the variables
 	$computer_node_name = $self->data->get_computer_node_name() if !$computer_node_name;
-	my $image_os_name = $self->data->get_image_os_name();
-	my $image_architecture = $self->data->get_image_architecture();
-	my $image_os_source_path = $self->data->get_image_os_source_path();
+	my $image_os_name         = $self->data->get_image_os_name();
+	my $image_architecture    = $self->data->get_image_architecture();
+	my $image_os_source_path  = $self->data->get_image_os_source_path();
 	my $image_os_install_type = $self->data->get_image_os_install_type();
 
 	# Fix for Linux images on henry4
 	my $management_node_hostname = $self->data->get_management_node_hostname();
-	my $image_os_type = $self->data->get_image_os_type();
-	if (  $management_node_hostname =~ /henry4/i
-		&& $image_os_type =~ /linux/i
-		&& $image_os_source_path eq 'image')
-		{
+	my $image_os_type            = $self->data->get_image_os_type();
+	if (   $management_node_hostname =~ /henry4/i
+		 && $image_os_type =~ /linux/i
+		 && $image_os_source_path eq 'image')
+	{
 		$image_os_source_path = 'linux_image';
 		notify($ERRORS{'DEBUG'}, 0, "fixed Linux image path for henry4: image --> linux_image");
 	}
@@ -1619,7 +1626,7 @@ sub _edit_nodetype {
 	# set os
 	my $osname = $image_os_name;
 	# FIXME undo hardcode
-	if($installmode || $image_os_install_type eq 'partimage') {
+	if ($installmode || $image_os_install_type eq 'partimage') {
 		$image_os_name = 'image';
 	}
 	notify($ERRORS{'DEBUG'}, 0, "$computer_node_name, image=$image_name, os=$image_os_name, installtype=$image_os_install_type arch=$image_architecture, path=$image_os_source_path");
@@ -1633,9 +1640,9 @@ sub _edit_nodetype {
 				notify($ERRORS{'WARNING'}, 0, "received output while setting OS for $computer_node_name: $l");
 				return 1;
 			}
-		} ## end foreach my $l (@file)
+		}
 		notify($ERRORS{'OK'}, 0, "nodetype.os set to $image_os_name for $computer_node_name");
-	} ## end if (open(NODECH, "$XCAT_ROOT/bin/nodech $computer_node_name nodetype.os=...
+	} ## end if (open(NODECH, "$XCAT_ROOT/bin/nodech $computer_node_name nodetype.os=$image_os_name 2>&1 |"...
 	else {
 		# could not run nodech command
 		notify($ERRORS{'CRITICAL'}, 0, "could not run $XCAT_ROOT/bin/nodech command to set nodetype.os");
@@ -1653,9 +1660,9 @@ sub _edit_nodetype {
 				notify($ERRORS{'WARNING'}, 0, "received output while setting arch for $computer_node_name: $l");
 				return 1;
 			}
-		} ## end foreach my $l (@file)
+		}
 		notify($ERRORS{'OK'}, 0, "nodetype.arch set to $image_architecture for $computer_node_name");
-	} ## end if (open(NODECH, "$XCAT_ROOT/bin/nodech $computer_node_name nodetype.arch=...
+	} ## end if (open(NODECH, "$XCAT_ROOT/bin/nodech $computer_node_name nodetype.arch=$image_architecture 2>&1 |"...
 	else {
 		# could not run nodech command
 		notify($ERRORS{'CRITICAL'}, 0, "could not run $XCAT_ROOT/bin/nodech command to set nodetype.arch");
@@ -1673,9 +1680,9 @@ sub _edit_nodetype {
 				notify($ERRORS{'WARNING'}, 0, "received output while setting profile for $computer_node_name: $l");
 				return 1;
 			}
-		} ## end foreach my $l (@file)
+		}
 		notify($ERRORS{'OK'}, 0, "nodetype.profile set to $image_name for $computer_node_name");
-	} ## end if (open(NODECH, "$XCAT_ROOT/bin/nodech $computer_node_name nodetype.profile=...
+	} ## end if (open(NODECH, "$XCAT_ROOT/bin/nodech $computer_node_name nodetype.profile=$image_name 2>&1 |"...
 	else {
 		# could not run nodech command
 		notify($ERRORS{'CRITICAL'}, 0, "could not run $XCAT_ROOT/bin/nodech command to set nodetype.profile");
@@ -1703,13 +1710,13 @@ sub _edit_nodelist {
 
 	# Use arguments for computer and image if they were passed
 	my $computer_node_name = shift;
-	my $installmode = shift;
+	my $installmode        = shift;
 
 	# Get the rest of the variables
 	$computer_node_name = $self->data->get_computer_node_name() if !$computer_node_name;
 	my $image_os_install_type = $self->data->get_image_os_install_type();
 	# FIXME undo hardcode
-	if($installmode) {
+	if ($installmode) {
 		$image_os_install_type = 'partimage';
 	}
 
@@ -1747,7 +1754,7 @@ sub _edit_nodelist {
 					$newlist =~ s/compute(,)?//;
 					$newlist =~ s/,$//;
 				}
-			}
+			} ## end if ($image_os_install_type eq 'partimage')
 			else {
 				# do not want 'image' to be in the list
 				if ($newlist =~ /image/) {
@@ -1758,10 +1765,10 @@ sub _edit_nodelist {
 				if ($newlist !~ /compute/) {
 					$newlist = "$newlist,compute";
 				}
-			}
+			} ## end else [ if ($image_os_install_type eq 'partimage')
 		} ## end foreach my $l (@file)
 		notify($ERRORS{'DEBUG'}, 0, "old nodelist.groups=$oldlist, new nodelist.groups=$newlist");
-	} ## end if (open(NODECH, "$XCAT_ROOT/bin/nodels $computer_node_name nodelist.groups
+	} ## end if (open(NODELS, "$XCAT_ROOT/bin/nodels $computer_node_name nodelist.groups 2>&1 |"...
 	else {
 		# could not run nodels command
 		notify($ERRORS{'CRITICAL'}, 0, "could not run $XCAT_ROOT/bin/nodels command to get nodelist.groups");
@@ -1779,9 +1786,9 @@ sub _edit_nodelist {
 				notify($ERRORS{'WARNING'}, 0, "received output while setting nodelist.groups for $computer_node_name: $l");
 				return 1;
 			}
-		} ## end foreach my $l (@file)
+		}
 		notify($ERRORS{'OK'}, 0, "nodelist.groups set to $newlist for $computer_node_name");
-	} ## end if (open(NODECH, "$XCAT_ROOT/bin/nodech $computer_node_name nodetype.arch=...
+	} ## end if (open(NODECH, "$XCAT_ROOT/bin/nodech $computer_node_name nodelist.groups=$newlist 2>&1 |"...
 	else {
 		# could not run nodech command
 		notify($ERRORS{'CRITICAL'}, 0, "could not run $XCAT_ROOT/bin/nodech command to set nodelist.groups");
@@ -1804,7 +1811,7 @@ sub _pping {
 	my $node = $_[0];
 	my ($package, $filename, $line, $sub) = caller(0);
 	notify($ERRORS{'WARNING'}, 0, "_pping: node is not defined")
-		if (!(defined($node)));
+	  if (!(defined($node)));
 	if (open(PPING, "$XCAT_ROOT/bin/pping $node 2>&1 |")) {
 		my @file = <PPING>;
 		close(PPING);
@@ -1840,7 +1847,7 @@ sub _nodeset {
 	my $node = $_[0];
 	my ($package, $filename, $line, $sub) = caller(0);
 	notify($ERRORS{'WARNING'}, 0, "_nodeset: node is not defined")
-		if (!(defined($node)));
+	  if (!(defined($node)));
 	return 0 if (!(defined($node)));
 
 	my ($blah, $case);
@@ -1862,7 +1869,7 @@ sub _nodeset {
 			notify($ERRORS{'WARNING'}, 0, "case for $node is empty");
 			return 0;
 		}
-	} ## end if (open(NODESET, "$XCAT_ROOT/bin/nodeset $node stat |"...
+	} ## end if (open(NODESET, "$XCAT_ROOT/sbin/nodeset $node stat |"...
 	else {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute $XCAT_ROOT/bin/nodeset $node stat");
 		return 0;
@@ -1884,12 +1891,13 @@ sub _nodeset_option {
 	my ($node, $option) = @_;
 	my ($package, $filename, $line, $sub) = caller(0);
 	notify($ERRORS{'WARNING'}, 0, "_nodeset_option: node is not defined")
-		if (!(defined($node)));
+	  if (!(defined($node)));
 	notify($ERRORS{'WARNING'}, 0, "_nodeset_option: option is not defined")
-		if (!(defined($option)));
+	  if (!(defined($option)));
 	my ($blah, $case);
 	my @file;
 	my $l;
+
 	if (open(NODESET, "$XCAT_ROOT/sbin/nodeset $node $option |")) {
 		#notify($ERRORS{'OK'},0,"executing $XCAT_ROOT/bin/nodeset $node $option");
 		@file = <NODESET>;
@@ -1906,7 +1914,7 @@ sub _nodeset_option {
 			notify($ERRORS{'WARNING'}, 0, "case for $node is empty");
 			return 0;
 		}
-	} ## end if (open(NODESET, "$XCAT_ROOT/bin/nodeset $node $option |"...
+	} ## end if (open(NODESET, "$XCAT_ROOT/sbin/nodeset $node $option |"...
 	else {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute $XCAT_ROOT/bin/nodeset $node $option");
 		return 0;
@@ -1928,7 +1936,7 @@ sub makesshgkh {
 	my $node = $_[0];
 	my ($package, $filename, $line, $sub) = caller(0);
 	notify($ERRORS{'WARNING'}, 0, "node is not defined")
-		if (!(defined($node)));
+	  if (!(defined($node)));
 	if (!(defined($node))) {
 		return 0;
 	}
@@ -1964,9 +1972,9 @@ sub _rpower {
 
 	#make sure node and option are defined
 	notify($ERRORS{'WARNING'}, 0, "_rpower: node is not defined")
-		if (!(defined($node)));
+	  if (!(defined($node)));
 	notify($ERRORS{'WARNING'}, 0, "_rpower: option is not defined setting to cycle")
-		if (!(defined($option)));
+	  if (!(defined($option)));
 	return 0 if (!(defined($node)));
 
 	$option = "cycle" if (!(defined($option)));
@@ -2083,13 +2091,28 @@ sub node_status {
 
 	# Check if subroutine was called as a class method
 	if (ref($self) !~ /xcat/i) {
-		#$cidhash->{hostname}, $cidhash->{OSname}, $cidhash->{MNos}, $cidhash->{IPaddress}, $LOG
-		$computer_node_name = $self;
+		if (ref($self) eq 'HASH') {
+			$log = $self->{logfile};
+			notify($ERRORS{'DEBUG'}, $log, "self is a hash reference");
 
-		$log                = shift;
-		$log                = 0 if !$log;
-		$computer_short_name = $computer_node_name;
-	}
+			$computer_node_name      = $self->{computer}->{hostname};
+			$management_node_os_name = $self->{managementnode}->{OSNAME};
+			$management_node_keys    = $self->{managementnode}->{keys};
+			$computer_host_name      = $self->{computer}->{hostname};
+			$computer_ip_address     = $self->{computer}->{IPaddress};
+			$image_os_name           = $self->{image}->{OS}->{name};
+			$image_name              = $self->{imagerevision}->{imagename};
+			$image_os_type           = $self->{image}->{OS}->{type};
+
+		} ## end if (ref($self) eq 'HASH')
+		# Check if node_status returned an array ref
+		elsif (ref($self) eq 'ARRAY') {
+			notify($ERRORS{'DEBUG'}, 0, "self is a array reference");
+		}
+
+		$log = 0 if !$log;
+		$computer_short_name = $1 if ($computer_node_name =~ /([-_a-zA-Z0-9]*)(\.?)/);
+	} ## end if (ref($self) !~ /xcat/i)
 	else {
 
 		# Get the computer name from the DataStructure
@@ -2097,11 +2120,11 @@ sub node_status {
 
 		# Check if this was called as a class method, but a node name was also specified as an argument
 		my $node_name_argument = shift;
-		$computer_node_name = $node_name_argument if $node_name_argument;
+		$computer_node_name  = $node_name_argument if $node_name_argument;
 		$computer_host_name  = $self->data->get_computer_host_name();
 		$computer_short_name = $self->data->get_computer_short_name();
 		$image_name          = $self->data->get_image_name();
-		$log = 0;
+		$log                 = 0;
 	} ## end else [ if (ref($self) !~ /xcat/i)
 
 	# Check the node name variable
@@ -2136,8 +2159,8 @@ sub node_status {
 				notify($ERRORS{'DEBUG'}, 0, "found image for $computer_short_name in nodetype table: $nodetype_image_name");
 				$status{nodetype} = $nodetype_image_name;
 			}
-		} ## end foreach my $l (@file)
-	} ## end if (open(NODELS, "$XCAT_ROOT/bin/nodels ...
+		}
+	} ## end if (open(NODELS, "$XCAT_ROOT/bin/nodels $computer_short_name nodetype.profile 2>&1 |"...
 	else {
 		# could not run nodels command
 		notify($ERRORS{'CRITICAL'}, 0, "could not run $XCAT_ROOT/bin/nodels command to get current image");
@@ -2246,7 +2269,7 @@ sub node_status {
 
 	notify($ERRORS{'OK'}, $log, "returning node status hash reference with {status}=$status{status}");
 	return \%status;
-}
+} ## end sub node_status
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -2263,9 +2286,9 @@ sub _assign2project {
 	my ($package, $filename, $line, $sub) = caller(0);
 
 	notify($ERRORS{'CRITICAL'}, 0, "node is not defined")
-		if (!(defined($node)));
+	  if (!(defined($node)));
 	notify($ERRORS{'CRITICAL'}, 0, "project is not defined")
-		if (!(defined($project)));
+	  if (!(defined($project)));
 	my $PROJECTtab     = "$XCAT_ROOT/etc/project.tab";
 	my $assign2project = "$XCAT_ROOT/sbin/assign2project";
 	my $LCK            = $PROJECTtab . "lockfile";
@@ -2396,9 +2419,9 @@ sub does_image_exist {
 			notify($ERRORS{'OK'}, 0, "template file does not exist: $tmpl_repository_path/$image_name.tmpl");
 			return 0;
 		}
-	}
+	} ## end if ($image_os_install_type eq 'kickstart')
 	# Check if image files exist (Partimage files)
-	elsif (! -s "$image_repository_path/$image_name.img") {
+	elsif (!-s "$image_repository_path/$image_name.img") {
 		notify($ERRORS{'OK'}, 0, "image file $image_repository_path/$image_name.img does not exist");
 		return 0;
 	}
@@ -2494,13 +2517,13 @@ sub retrieve_image {
 	}
 
 	# Get the image repository path
-	my $image_repository_path = $self->_get_image_repository_path();
+	my $image_repository_path        = $self->_get_image_repository_path();
 	my $image_repository_path_source = $image_repository_path;
 	if (!$image_repository_path) {
 		notify($ERRORS{'WARNING'}, 0, "image repository path could not be determined");
 		return;
 	}
-	
+
 	# Fix for Linux images on henry4
 	my $management_node_hostname = $self->data->get_management_node_hostname();
 	my $image_os_type            = $self->data->get_image_os_type();
@@ -2616,7 +2639,7 @@ sub _check_pxe_grub_files {
 	my $imagename = $_[0];
 	my ($package, $filename, $line, $sub) = caller(0);
 	notify($ERRORS{'WARNING'}, 0, "node is not defined")
-		if (!(defined($imagename)));
+	  if (!(defined($imagename)));
 	if (!(defined($imagename))) {
 		return 0;
 	}
@@ -2760,7 +2783,7 @@ sub get_image_size {
 =cut
 
 sub _get_image_repository_path {
-	my $self = shift;
+	my $self                 = shift;
 	my $return_template_path = shift;
 
 	if (ref($self) !~ /xCAT/i) {
@@ -2769,14 +2792,14 @@ sub _get_image_repository_path {
 	}
 
 	# Get the required variables from the DataStructure
-	my $management_node_id = $self->data->get_management_node_id();
+	my $management_node_id       = $self->data->get_management_node_id();
 	my $management_node_hostname = $self->data->get_management_node_hostname();
-	my $install_path = $self->data->get_management_node_install_path();
-	my $image_os_name = $self->data->get_image_os_name();
-	my $image_os_type = $self->data->get_image_os_type();
-	my $image_os_install_type = $self->data->get_image_os_install_type();
-	my $image_os_source_path = $self->data->get_image_os_source_path();
-	my $image_architecture = $self->data->get_image_architecture();
+	my $install_path             = $self->data->get_management_node_install_path();
+	my $image_os_name            = $self->data->get_image_os_name();
+	my $image_os_type            = $self->data->get_image_os_type();
+	my $image_os_install_type    = $self->data->get_image_os_install_type();
+	my $image_os_source_path     = $self->data->get_image_os_source_path();
+	my $image_architecture       = $self->data->get_image_architecture();
 
 	if (!(defined($image_os_name) && defined($image_os_type) && defined($image_os_install_type) && defined($image_os_source_path) && defined($image_architecture))) {
 		notify($ERRORS{'CRITICAL'}, 0, "some of the required data could not be retrieved");
@@ -2787,7 +2810,7 @@ sub _get_image_repository_path {
 
 	notify($ERRORS{'DEBUG'}, 0, "OS=$image_os_name, OS type=$image_os_type, OS install type=$image_os_install_type, OS source=$image_os_source_path");
 
-	if($image_os_name =~ /image/) {
+	if ($image_os_name =~ /image/) {
 		$image_os_source_path = "image";
 	}
 
@@ -2842,7 +2865,7 @@ sub _get_image_repository_path {
 		notify($ERRORS{'DEBUG'}, 0, "repository path: $return_path");
 		return $return_path;
 	}
-}
+} ## end sub _get_image_repository_path
 
 #/////////////////////////////////////////////////////////////////////////////
 

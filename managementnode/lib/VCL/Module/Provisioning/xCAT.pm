@@ -178,7 +178,7 @@ sub load {
 	  if (!defined($reservation_id));
 	notify($ERRORS{'OK'}, 0, "architecture not set")
 	  if (!defined($image_architecture));
-	
+
 	# Initialize some timer variables
 	# Do this here in case goto passes over the declaration
 	my $sshd_start_time;
@@ -244,12 +244,12 @@ sub load {
 	# Check to see if management node throttle is configured
 	if ($THROTTLE) {
 		notify($ERRORS{'DEBUG'}, 0, "throttle is set to $THROTTLE");
-		
+
 		my $lckloadfile = "/tmp/nodeloading.lockfile";
 		notify($ERRORS{'DEBUG'}, 0, "attempting to open node loading lockfile for throttling: $lckloadfile");
 		if (sysopen(SEM, $lckloadfile, O_RDONLY | O_CREAT)) {
 			notify($ERRORS{'DEBUG'}, 0, "opened lockfile, attempting to obtain lock");
-		
+
 			if (flock(SEM, LOCK_EX)) {
 				notify($ERRORS{'DEBUG'}, 0, "obtained exclusive lock on $lckloadfile, checking for concurrent loads");
 				my $maxload = 1;
@@ -260,7 +260,7 @@ sub load {
 						close(NODESET);
 						my $ld = @nodesetout;
 						notify($ERRORS{'DEBUG'}, 0, "current number of nodes loading: $ld");
-						
+
 						if ($ld < $THROTTLE) {
 							notify($ERRORS{'OK'}, 0, "current nodes loading is less than throttle, ok to proceed");
 							$maxload = 0;
@@ -278,15 +278,15 @@ sub load {
 			else {
 				notify($ERRORS{'WARNING'}, 0, "failed to obtain exclusive lock on $lckloadfile");
 			}
-			
+
 			notify($ERRORS{'OK'}, 0, "releasing exclusive lock on $lckloadfile, proceeding to install");
 			close(SEM);
-			
+
 		} ## end if (sysopen(SEM, $lckloadfile, O_RDONLY | ...
 		else {
 			notify($ERRORS{'WARNING'}, 0, "failed to open node loading lockfile");
 		}
-		
+
 	} ## end if ($THROTTLE)
 	else {
 		notify($ERRORS{'DEBUG'}, 0, "throttle is NOT set");
@@ -303,7 +303,7 @@ sub load {
 	notify($ERRORS{'DEBUG'}, 0, "attempting to open rinstall lockfile: $lckfile");
 	if (sysopen(SEM, $lckfile, O_RDONLY | O_CREAT)) {
 		notify($ERRORS{'DEBUG'}, 0, "opened lockfile, attempting to obtain lock");
-		
+
 		if (flock(SEM, LOCK_EX)) {
 			notify($ERRORS{'DEBUG'}, 0, "obtained exclusive lock on $lckfile");
 
@@ -346,7 +346,7 @@ sub load {
 
 				}    #while RINSTALL
 				close(RINSTALL);
-				
+
 				notify($ERRORS{'OK'}, 0, "releasing exclusive lock on $lckfile");
 				close(SEM);
 			} ## end if (open(RINSTALL, "$XCAT_ROOT/bin/rinstall $computer_node_name 2>&1 |"...
@@ -573,7 +573,7 @@ sub load {
 								}
 							}
 						} ## end else [ if (!$gettingclose)
-					} ## end if ($image_os_type
+					} ## end if ($image_os_type =~ /linux/i)
 				} ## end if (!$s1)
 			}    #while
 			if ($s1) {
@@ -662,7 +662,7 @@ sub load {
 			READYFLAG:
 
 			#check /var/log/messages file for READY
-			
+
 			# Wait for READY flag
 			if (open(TAIL, "</var/log/messages")) {
 				seek TAIL, -1, 2;
@@ -691,14 +691,14 @@ sub load {
 					}
 					#if ($readycount > 2) {
 
-						#check ssh status just in case we missed the flag
-						my $sshd = _sshd_status($computer_node_name, $image_name,$image_os_type);
-						if ($sshd eq "on") {
-							$ready = 1;
-							notify($ERRORS{'OK'}, 0, "we may have missed start flag going next stage");
-							close(TAIL);
-							goto SSHDATTEMPT;
-						}
+					#check ssh status just in case we missed the flag
+					my $sshd = _sshd_status($computer_node_name, $image_name, $image_os_type);
+					if ($sshd eq "on") {
+						$ready = 1;
+						notify($ERRORS{'OK'}, 0, "we may have missed start flag going next stage");
+						close(TAIL);
+						goto SSHDATTEMPT;
+					}
 					#} ## end if ($readycount > 2)
 					if (!$ready) {
 						notify($ERRORS{'OK'}, 0, "$computer_node_name not ready yet, sleeping for 40 seconds");
@@ -741,7 +741,7 @@ sub load {
 	$sshd_start_time = time() if !$sshd_start_time;
 
 	while (!$sshdstatus) {
-		my $sshd_status = _sshd_status($computer_node_name, $image_name,$image_os_type);
+		my $sshd_status = _sshd_status($computer_node_name, $image_name, $image_os_type);
 		if ($sshd_status eq "on") {
 
 			# Set the sshd end time to now to capture how long it took sshd to become active
@@ -775,7 +775,7 @@ sub load {
 						my $debugging_message = "*reservation has NOT failed yet*\n";
 						$debugging_message .= "this notice is for debugging purposes so that node can be watched during 2nd rinstall attempt\n";
 						$debugging_message .= "sshd did not become active on $computer_node_name after first rinstall attempt\n\n";
-						
+
 						$debugging_message .= "management node:     " . $self->data->get_management_node_hostname() . "\n";
 						$debugging_message .= "pid:                 " . $PID . "\n";
 						$debugging_message .= "request:             " . $self->data->get_request_id() . "\n";
@@ -792,7 +792,7 @@ sub load {
 						insertloadlog($reservation_id, $computer_id, "repeat", "starting install process");
 						close(TAIL);
 						goto XCATRINSTALL;
-					}
+					} ## end if ($rinstall_attempts < 2)
 					else {
 						notify($ERRORS{'WARNING'}, 0, "$computer_node_name: sshd never became active after 2 rinstall attempts");
 						insertloadlog($reservation_id, $computer_id, "failed", "exceeded maximum install attempts");
@@ -852,7 +852,7 @@ sub load {
 
 		while (!$keysync) {
 			$keysynccheck++;
-			my $sshd = _sshd_status($computer_node_name, $image_name,$image_os_type);
+			my $sshd = _sshd_status($computer_node_name, $image_name, $image_os_type);
 			if ($sshd =~ /on/) {
 				$keysync = 1;
 				notify($ERRORS{'OK'}, 0, "keys synced");
@@ -879,14 +879,14 @@ sub load {
 	else {
 		notify($ERRORS{'CRITICAL'}, 0, "could not execute $XCAT_ROOT/sbin/makesshgkh $computer_node_name $!");
 	}
-	
+
 	# IP configuration
 	if ($IPCONFIGURATION ne "manualDHCP") {
 		insertloadlog($reservation_id, $computer_id, "info", "detected change required in IP address configuration on node");
 
 		#not default setting
 		if ($IPCONFIGURATION eq "dynamicDHCP") {
-			my $assignedIPaddress = getdynamicaddress($computer_node_name, $image_os_name,$image_os_type);
+			my $assignedIPaddress = getdynamicaddress($computer_node_name, $image_os_name, $image_os_type);
 			if ($assignedIPaddress) {
 
 				#update computer table
@@ -909,7 +909,7 @@ sub load {
 		elsif ($IPCONFIGURATION eq "static") {
 			insertloadlog($reservation_id, $computer_id, "info", "setting staticIPaddress");
 
-			if (setstaticaddress($computer_node_name, $image_os_name, $computer_ip_address,$image_os_type)) {
+			if (setstaticaddress($computer_node_name, $image_os_name, $computer_ip_address, $image_os_type)) {
 				notify($ERRORS{'DEBUG'}, 0, "set static address on $computer_ip_address $computer_node_name ");
 				insertloadlog($reservation_id, $computer_id, "staticIPaddress", "SUCCESS set static IP address on public interface");
 			}
@@ -997,7 +997,7 @@ sub load {
 
 					#it pingable check if sshd is open
 					notify($ERRORS{'OK'}, 0, "$computer_node_name is pingable, checking sshd port");
-					my $sshd = _sshd_status($computer_node_name, $image_name,$image_os_type);
+					my $sshd = _sshd_status($computer_node_name, $image_name, $image_os_type);
 					if ($sshd =~ /on/) {
 						$rebooted = 0;
 						notify($ERRORS{'OK'}, 0, "$computer_node_name sshd is open");
@@ -1077,7 +1077,7 @@ sub load {
 			} ## end if (open(NETSH, "/usr/bin/ssh -x -i $IDENTITY_wxp $computer_node_name \"netsh interface ip set address name=\\\"$privateadapter\\\" source=static addr=$privateIP mask=$subnetmask\" & 2>&1 |"...
 
 			#make sure it came back
-			if (_sshd_status($computer_node_name, $image_name,$image_os_type)) {
+			if (_sshd_status($computer_node_name, $image_name, $image_os_type)) {
 				notify($ERRORS{'OK'}, 0, "successful $computer_node_name is accessible after static assignment");
 				insertloadlog($reservation_id, $computer_id, "info", "SUCCESS network gateway modification successful");
 			}
@@ -1104,7 +1104,7 @@ sub load {
 			}
 
 		} ## end if ($image_os_name =~ /^(win2003)/)
-	} ## end if ($image_os_name =~ /winxp|wxp|win2003/)
+	} ## end elsif ($image_os_name =~ /winxp|wxp|win2003|winvista/) [ if ($self->os->can('post_load'))
 
 	# Linux post-load tasks
 	elsif ($image_os_type =~ /linux/i) {
@@ -1196,7 +1196,7 @@ sub load {
 		} ## end if (open(SSHDCFG, "/tmp/$computer_node_name.sshd"...
 
 
-	} ## end elsif ($image_os_type =~ 
+	} ## end elsif ($image_os_type =~ /linux/i)  [ if ($self->os->can('post_load'))
 
 	return 1;
 } ## end sub load
@@ -1233,7 +1233,7 @@ sub capture {
 	else {
 		notify($ERRORS{'WARNING'}, 0, "unable to update currentimage.txt on $computer_short_name");
 	}
-	
+
 	# Check if pre_capture() subroutine has been implemented by the OS module
 	if ($self->os->can("pre_capture")) {
 		# Call OS pre_capture() - it should perform all OS steps necessary to capture an image
@@ -1243,7 +1243,7 @@ sub capture {
 			notify($ERRORS{'WARNING'}, 0, "OS module pre_capture() failed");
 			return 0;
 		}
-	
+
 		# Get the power status, make sure computer is off
 		my $power_status = $self->power_status();
 		notify($ERRORS{'DEBUG'}, 0, "retrieved power status: $power_status");
@@ -1252,7 +1252,7 @@ sub capture {
 		}
 		elsif ($power_status eq 'on') {
 			notify($ERRORS{'WARNING'}, 0, "$computer_node_name power is still on, turning computer off");
-			
+
 			# Attempt to power off computer
 			if ($self->power_off()) {
 				notify($ERRORS{'OK'}, 0, "$computer_node_name was powered off");
@@ -1261,12 +1261,12 @@ sub capture {
 				notify($ERRORS{'WARNING'}, 0, "failed to power off $computer_node_name");
 				return 0;
 			}
-		}
+		} ## end elsif ($power_status eq 'on')  [ if ($power_status eq 'off')
 		else {
 			notify($ERRORS{'WARNING'}, 0, "failed to determine power status of $computer_node_name");
 			return 0;
 		}
-	}
+	} ## end if ($self->os->can("pre_capture"))
 	elsif ($self->os->can("capture_prepare")) {
 		notify($ERRORS{'OK'}, 0, "calling OS module's capture_prepare() subroutine");
 		if (!$self->os->capture_prepare()) {
@@ -1288,7 +1288,7 @@ sub capture {
 		notify($ERRORS{'WARNING'}, 0, "failed to create .tmpl file for $image_name");
 		return 0;
 	}
-	
+
 	# Edit the nodetype.tab file to set the node with the new image name
 	if ($self->_edit_nodetype($computer_node_name, $image_name)) {
 		notify($ERRORS{'OK'}, 0, "nodetype modified, node $computer_node_name, image name $image_name");
@@ -1306,8 +1306,8 @@ sub capture {
 		notify($ERRORS{'WARNING'}, 0, "failed to set $computer_node_name to capture image on next reboot");
 		return 0;
 	}
-	
-	
+
+
 	# Check if pre_capture() subroutine has been implemented by the OS module
 	# If so, all that needs to happen is for the computer to be powered on
 	if ($self->os->can("pre_capture")) {
@@ -1319,7 +1319,7 @@ sub capture {
 			notify($ERRORS{'WARNING'}, 0, "failed to turn computer on before monitoring image capture");
 			return 0;
 		}
-	}
+	} ## end if ($self->os->can("pre_capture"))
 	# If capture_start() is implemented, call it, it will initiate a reboot
 	elsif ($self->os->can("capture_start")) {
 		notify($ERRORS{'OK'}, 0, "calling OS module's capture_start() subroutine");
@@ -1332,8 +1332,8 @@ sub capture {
 		notify($ERRORS{'WARNING'}, 0, "OS module does not have either a pre_capture() or capture_start() subroutine");
 		$self->image_creation_failed();
 	}
-	
-	
+
+
 	# Monitor the image capture
 	if ($self->capture_monitor()) {
 		notify($ERRORS{'OK'}, 0, "image capture monitoring is complete");
@@ -1345,7 +1345,7 @@ sub capture {
 
 	notify($ERRORS{'OK'}, 0, "image was successfully captured, returning 1");
 	return 1;
-} ## end sub capture_prepare
+} ## end sub capture
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -1391,7 +1391,7 @@ sub capture_monitor {
 	my $nodeset_status;
 	CAPTURE_LOOP: for (my $capture_loop_count = 0; $capture_loop_count < $capture_loop_attempts; $capture_loop_count++) {
 		notify($ERRORS{'OK'}, 0, "image copy not complete, sleeping for $capture_loop_wait seconds");
-		if($capture_loop_attempts > 1){
+		if ($capture_loop_attempts > 1) {
 			notify($ERRORS{'OK'}, 0, "attempt $capture_loop_count/$capture_loop_attempts: image copy not complete, sleeping for $capture_loop_wait seconds");
 		}
 		sleep $capture_loop_wait;
@@ -1791,7 +1791,7 @@ sub _nodeset {
 	notify($ERRORS{'WARNING'}, 0, "_nodeset: node is not defined")
 	  if (!(defined($node)));
 	return 0 if (!(defined($node)));
-	
+
 	my ($blah, $case);
 	my @file;
 	my $l;
@@ -1878,61 +1878,61 @@ sub _nodeset_option {
 sub power_reset {
 	my $argument_1 = shift;
 	my $argument_2 = shift;
-	
+
 	my $computer_node_name;
-	
+
 	# Check if subroutine was called as an object method
 	if (ref($argument_1) =~ /xcat/i) {
 		my $self = $argument_1;
-		
+
 		$computer_node_name = $argument_2;
-		
+
 		# Check if computer argument was specified
 		# If not, use computer node name in the data object
 		if (!$computer_node_name) {
 			$computer_node_name = $self->data->get_computer_node_name();
 		}
-	}
+	} ## end if (ref($argument_1) =~ /xcat/i)
 	else {
 		# Subroutine was not called as an object method, 2 arguments must be specified
 		$computer_node_name = $argument_1;
 	}
-	
+
 	# Check if computer was determined
 	if (!$computer_node_name) {
 		notify($ERRORS{'WARNING'}, 0, "computer could not be determined from arguments");
 		return;
 	}
-	
+
 	# Turn computer off
 	my $off_attempts = 0;
 	while (!power_off($computer_node_name)) {
 		$off_attempts++;
-		
+
 		if ($off_attempts == 3) {
 			notify($ERRORS{'WARNING'}, 0, "failed to turn $computer_node_name off, rpower status not is off after 3 attempts");
 			return;
 		}
-		
+
 		sleep 2;
-	}
-	
+	} ## end while (!power_off($computer_node_name))
+
 	# Turn computer on
 	my $on_attempts = 0;
 	while (!power_on($computer_node_name)) {
 		$on_attempts++;
-		
+
 		if ($on_attempts == 3) {
 			notify($ERRORS{'WARNING'}, 0, "failed to turn $computer_node_name on, rpower status not is on after 3 attempts");
 			return;
 		}
-		
+
 		sleep 2;
-	}
-	
+	} ## end while (!power_on($computer_node_name))
+
 	notify($ERRORS{'OK'}, 0, "successfully reset power on $computer_node_name");
 	return 1;
-} ## end sub _nodeset_option
+} ## end sub power_reset
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -1947,52 +1947,52 @@ sub power_reset {
 sub power_on {
 	my $argument_1 = shift;
 	my $argument_2 = shift;
-	
+
 	my $computer_node_name;
-	
+
 	# Check if subroutine was called as an object method
 	if (ref($argument_1) =~ /xcat/i) {
 		my $self = $argument_1;
-		
+
 		$computer_node_name = $argument_2;
-		
+
 		# Check if computer argument was specified
 		# If not, use computer node name in the data object
 		if (!$computer_node_name) {
 			$computer_node_name = $self->data->get_computer_node_name();
 		}
-	}
+	} ## end if (ref($argument_1) =~ /xcat/i)
 	else {
 		# Subroutine was not called as an object method, 2 arguments must be specified
 		$computer_node_name = $argument_1;
 	}
-	
+
 	# Check if computer was determined
 	if (!$computer_node_name) {
 		notify($ERRORS{'WARNING'}, 0, "computer could not be determined from arguments");
 		return;
 	}
-	
+
 	# Turn computer on
-	my $on_attempts = 0;
+	my $on_attempts  = 0;
 	my $power_status = 'unknown';
 	while ($power_status !~ /on/) {
 		$on_attempts++;
-		
+
 		if ($on_attempts == 3) {
 			notify($ERRORS{'WARNING'}, 0, "failed to turn $computer_node_name on, rpower status not is on after 3 attempts");
 			return;
 		}
-		
+
 		_rpower($computer_node_name, 'on');
 		sleep 2;
-		
+
 		$power_status = power_status($computer_node_name);
-	}
-	
+	} ## end while ($power_status !~ /on/)
+
 	notify($ERRORS{'OK'}, 0, "successfully powered on $computer_node_name");
 	return 1;
-} ## end sub _nodeset_option
+} ## end sub power_on
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -2007,52 +2007,52 @@ sub power_on {
 sub power_off {
 	my $argument_1 = shift;
 	my $argument_2 = shift;
-	
+
 	my $computer_node_name;
-	
+
 	# Check if subroutine was called as an object method
 	if (ref($argument_1) =~ /xcat/i) {
 		my $self = $argument_1;
-		
+
 		$computer_node_name = $argument_2;
-		
+
 		# Check if computer argument was specified
 		# If not, use computer node name in the data object
 		if (!$computer_node_name) {
 			$computer_node_name = $self->data->get_computer_node_name();
 		}
-	}
+	} ## end if (ref($argument_1) =~ /xcat/i)
 	else {
 		# Subroutine was not called as an object method, 2 arguments must be specified
 		$computer_node_name = $argument_1;
 	}
-	
+
 	# Check if computer was determined
 	if (!$computer_node_name) {
 		notify($ERRORS{'WARNING'}, 0, "computer could not be determined from arguments");
 		return;
 	}
-	
+
 	# Turn computer off
 	my $power_status = 'unknown';
 	my $off_attempts = 0;
 	while ($power_status !~ /off/) {
 		$off_attempts++;
-		
+
 		if ($off_attempts == 3) {
 			notify($ERRORS{'WARNING'}, 0, "failed to turn $computer_node_name off, rpower status not is off after 3 attempts");
 			return;
 		}
-		
+
 		_rpower($computer_node_name, 'off');
 		sleep 2;
-		
+
 		$power_status = power_status($computer_node_name);
-	}
-	
+	} ## end while ($power_status !~ /off/)
+
 	notify($ERRORS{'OK'}, 0, "successfully powered off $computer_node_name");
 	return 1;
-} ## end sub _nodeset_option
+} ## end sub power_off
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -2067,36 +2067,36 @@ sub power_off {
 sub power_status {
 	my $argument_1 = shift;
 	my $argument_2 = shift;
-	
+
 	my $computer_node_name;
-	
+
 	# Check if subroutine was called as an object method
 	if (ref($argument_1) =~ /xcat/i) {
 		my $self = $argument_1;
-		
+
 		$computer_node_name = $argument_2;
-		
+
 		# Check if computer argument was specified
 		# If not, use computer node name in the data object
 		if (!$computer_node_name) {
 			$computer_node_name = $self->data->get_computer_node_name();
 		}
-	}
+	} ## end if (ref($argument_1) =~ /xcat/i)
 	else {
 		# Subroutine was not called as an object method, 2 arguments must be specified
 		$computer_node_name = $argument_1;
 	}
-	
+
 	# Check if computer was determined
 	if (!$computer_node_name) {
 		notify($ERRORS{'WARNING'}, 0, "computer could not be determined from arguments");
 		return;
 	}
-	
+
 	# Call rpower to determine power status
 	my $rpower_stat = _rpower($computer_node_name, 'stat');
 	notify($ERRORS{'DEBUG'}, 0, "retrieved power status of $computer_node_name: $rpower_stat");
-	
+
 	if (!$rpower_stat) {
 		notify($ERRORS{'WARNING'}, 0, "failed to determine power status, rpower subroutine returned $rpower_stat");
 		return;
@@ -2108,7 +2108,7 @@ sub power_status {
 		notify($ERRORS{'WARNING'}, 0, "failed to determine power status, unexpected output returned from rpower: $rpower_stat");
 		return;
 	}
-} ## end sub _nodeset_option
+} ## end sub power_status
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -2126,42 +2126,42 @@ sub wait_for_on {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
-	
+
 	my $computer_node_name = $self->data->get_computer_node_name();
-	
+
 	# Attempt to get the total number of minutes to wait from the arguments
 	my $total_wait_minutes = shift;
 	if (!defined($total_wait_minutes) || $total_wait_minutes !~ /^\d+$/) {
 		$total_wait_minutes = 5;
 	}
-	
+
 	# Looping configuration variables
 	# Seconds to wait in between loop attempts
 	my $attempt_delay = 15;
 	# Total loop attempts made
 	# Add 1 to the number of attempts because if you're waiting for x intervals, you check x+1 times including at 0
 	my $attempts = ($total_wait_minutes * 4) + 1;
-	
+
 	notify($ERRORS{'OK'}, 0, "waiting for $computer_node_name to turn on, maximum of $total_wait_minutes minutes");
-	
+
 	# Loop until computer is on
 	for (my $attempt = 1; $attempt <= $attempts; $attempt++) {
 		if ($attempt > 1) {
-			notify($ERRORS{'OK'}, 0, "attempt " . ($attempt-1) . "/" . ($attempts-1) . ": $computer_node_name is not on, sleeping for $attempt_delay seconds");
+			notify($ERRORS{'OK'}, 0, "attempt " . ($attempt - 1) . "/" . ($attempts - 1) . ": $computer_node_name is not on, sleeping for $attempt_delay seconds");
 			sleep $attempt_delay;
 		}
-		
+
 		if ($self->power_status() =~ /on/i) {
 			notify($ERRORS{'OK'}, 0, "$computer_node_name is on");
 			return 1;
 		}
-	}
-	
+	} ## end for (my $attempt = 1; $attempt <= $attempts...
+
 	# Calculate how long this waited
 	my $total_wait = ($attempts * $attempt_delay);
 	notify($ERRORS{'WARNING'}, 0, "$computer_node_name is NOT on after waiting for $total_wait seconds");
 	return 0;
-}
+} ## end sub wait_for_on
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -2179,42 +2179,42 @@ sub wait_for_off {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
-	
+
 	my $computer_node_name = $self->data->get_computer_node_name();
-	
+
 	# Attempt to get the total number of minutes to wait from the arguments
 	my $total_wait_minutes = shift;
 	if (!defined($total_wait_minutes) || $total_wait_minutes !~ /^\d+$/) {
 		$total_wait_minutes = 5;
 	}
-	
+
 	# Looping configuration variables
 	# Seconds to wait in between loop attempts
 	my $attempt_delay = 15;
 	# Total loop attempts made
 	# Add 1 to the number of attempts because if you're waiting for x intervals, you check x+1 times including at 0
 	my $attempts = ($total_wait_minutes * 4) + 1;
-	
+
 	notify($ERRORS{'OK'}, 0, "waiting for $computer_node_name to turn off, maximum of $total_wait_minutes minutes");
-	
+
 	# Loop until computer is off
 	for (my $attempt = 1; $attempt <= $attempts; $attempt++) {
 		if ($attempt > 1) {
-			notify($ERRORS{'OK'}, 0, "attempt " . ($attempt-1) . "/" . ($attempts-1) . ": $computer_node_name is not off, sleeping for $attempt_delay seconds");
+			notify($ERRORS{'OK'}, 0, "attempt " . ($attempt - 1) . "/" . ($attempts - 1) . ": $computer_node_name is not off, sleeping for $attempt_delay seconds");
 			sleep $attempt_delay;
 		}
-		
+
 		if ($self->power_status() =~ /off/i) {
 			notify($ERRORS{'OK'}, 0, "$computer_node_name is off");
 			return 1;
 		}
-	}
-	
+	} ## end for (my $attempt = 1; $attempt <= $attempts...
+
 	# Calculate how long this waited
 	my $total_wait = ($attempts * $attempt_delay);
 	notify($ERRORS{'WARNING'}, 0, "$computer_node_name is NOT off after waiting for $total_wait seconds");
 	return 0;
-}
+} ## end sub wait_for_off
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -2267,30 +2267,30 @@ sub _rpower {
 	my $argument_1 = shift;
 	my $argument_2 = shift;
 	my $argument_3 = shift;
-	
+
 	my $computer_node_name;
 	my $mode;
-	
+
 	# Check if subroutine was called as an object method
 	if (ref($argument_1) =~ /xcat/i) {
 		my $self = $argument_1;
-		
+
 		# Check if 1 or 2 arguments were specified
 		if ($argument_3) {
 			$computer_node_name = $argument_2;
-			$mode = $argument_3;
+			$mode               = $argument_3;
 		}
 		else {
 			$computer_node_name = $self->data->get_computer_node_name();
-			$mode = $argument_2;
+			$mode               = $argument_2;
 		}
-	}
+	} ## end if (ref($argument_1) =~ /xcat/i)
 	else {
 		# Subroutine was not called as an object method, 2 arguments must be specified
 		$computer_node_name = $argument_1;
-		$mode = $argument_2;
+		$mode               = $argument_2;
 	}
-	
+
 	# Check the arguments
 	if (!$computer_node_name) {
 		notify($ERRORS{'WARNING'}, 0, "rpower was not executed, computer was not specified");
@@ -2304,21 +2304,21 @@ sub _rpower {
 		notify($ERRORS{'WARNING'}, 0, "rpower was not executed, mode is not valid: $mode");
 		return;
 	}
-	
+
 	# If one of the reset modes was specified, call power_reset()
 	# It attempts to turn off then on, and makes sure attempts were successful
 	if ($mode =~ /^reset|boot|cycle$/i) {
 		return power_reset($computer_node_name);
 	}
-	
+
 	notify($ERRORS{'DEBUG'}, 0, "attempting to execute rpower for computer: $computer_node_name, mode: $mode");
-	
+
 	# Assemble the rpower command
 	my $command = "$XCAT_ROOT/bin/rpower $computer_node_name $mode";
-	
+
 	# Run the command
 	my ($exit_status, $output) = run_command($command);
-	
+
 	# rpower options:
 	# on           - Turn power on
 	# off          - Turn power off
@@ -2326,7 +2326,7 @@ sub _rpower {
 	# reset        - Send a hardware reset
 	# boot         - If off, then power on. If on, then hard reset. This option is recommended over cycle.
 	# cycle        - Power off, then on
-	
+
 	# Typical output:
 	# Invalid node is specified (exit status = 0):
 	#    [root@managementnode]# rpower vclb2-8x stat
@@ -2343,27 +2343,27 @@ sub _rpower {
 	# Successful cycle (exit status = 0):
 	#	  [root@managementnode test]# rpower vclb2-8 cycle
 	#    vclb2-8: off on
-	
+
 	foreach my $output_line (@{$output}) {
 		# Check for 'invalid node'
 		if ($output_line =~ /invalid node/) {
 			notify($ERRORS{'WARNING'}, 0, "rpower reported invalid node: @{$output}");
 			return;
 		}
-		
+
 		# Check for known 'not in bay' problem
 		if ($output_line =~ /not in bay/) {
 			if (_fix_rpower($computer_node_name)) {
 				return _rpower($computer_node_name, $mode);
 			}
 		}
-		
+
 		# Check for successful output line
 		if ($output_line =~ /$computer_node_name:\s+(.*)/) {
 			return $1;
 		}
-	}
-	
+	} ## end foreach my $output_line (@{$output})
+
 	notify($ERRORS{'WARNING'}, 0, "unexpected output returned from rpower: @{$output}");
 	return 0;
 
@@ -2452,18 +2452,34 @@ sub node_status {
 	my $computer_ip_address     = 0;
 	my $image_os_name           = 0;
 	my $image_name              = 0;
-	my $image_os_type				 = 0;
+	my $image_os_type           = 0;
 
 	# Check if subroutine was called as a class method
 	if (ref($self) !~ /xcat/i) {
-		#$cidhash->{hostname}, $cidhash->{OSname}, $cidhash->{MNos}, $cidhash->{IPaddress}, $LOG
-		$computer_node_name = $self;
-		$image_os_type = shift;
 
-		$log                 = shift;
-		$log                 = 0 if !$log;
-		$computer_short_name = $computer_node_name;
-	}
+		if (ref($self) eq 'HASH') {
+			$log = $self->{logfile};
+			notify($ERRORS{'DEBUG'}, $log, "self is a hash reference");
+
+			$computer_node_name      = $self->{computer}->{hostname};
+			$management_node_os_name = $self->{managementnode}->{OSNAME};
+			$management_node_keys    = $self->{managementnode}->{keys};
+			$computer_host_name      = $self->{computer}->{hostname};
+			$computer_ip_address     = $self->{computer}->{IPaddress};
+			$image_os_name           = $self->{image}->{OS}->{name};
+			$image_name              = $self->{imagerevision}->{imagename};
+			$image_os_type           = $self->{image}->{OS}->{type};
+
+		} ## end if (ref($self) eq 'HASH')
+		# Check if node_status returned an array ref
+		elsif (ref($self) eq 'ARRAY') {
+			notify($ERRORS{'DEBUG'}, 0, "self is a array reference");
+		}
+
+		$log = 0 if !$log;
+		$computer_short_name = $1 if ($computer_node_name =~ /([-_a-zA-Z0-9]*)(\.?)/);
+
+	} ## end if (ref($self) !~ /xcat/i)
 	else {
 
 		# Get the computer name from the DataStructure
@@ -2484,8 +2500,15 @@ sub node_status {
 		notify($ERRORS{'WARNING'}, 0, "node name could not be determined");
 		return;
 	}
-	notify($ERRORS{'DEBUG'}, 0, "checking status of node: $computer_node_name");
-
+	notify($ERRORS{'DEBUG'}, $log, "checking status of node: $computer_node_name");
+	notify($ERRORS{'DEBUG'}, $log, "computer_short_name= $computer_short_name ");
+	notify($ERRORS{'DEBUG'}, $log, "computer_node_name= $computer_node_name ");
+	notify($ERRORS{'DEBUG'}, $log, "image_os_name= $image_os_name");
+	notify($ERRORS{'DEBUG'}, $log, "management_node_os_name= $management_node_os_name");
+	notify($ERRORS{'DEBUG'}, $log, "computer_ip_address= $computer_ip_address");
+	notify($ERRORS{'DEBUG'}, $log, "management_node_keys= $management_node_keys");
+	notify($ERRORS{'DEBUG'}, $log, "image_name=  $image_name");
+	notify($ERRORS{'DEBUG'}, $log, "image_os_type=  $image_os_type");
 
 
 	# Create a hash to store status components
@@ -2504,7 +2527,7 @@ sub node_status {
 	notify($ERRORS{'DEBUG'}, $log, "checking the current image listed in nodetype.tab for $computer_short_name");
 	my $nodetype_file_path = "$XCAT_ROOT/etc/nodetype.tab";
 	if (open(NODETYPE, $nodetype_file_path)) {
-		notify($ERRORS{'OK'}, 0, "opened $nodetype_file_path for reading");
+		notify($ERRORS{'OK'}, $log, "opened $nodetype_file_path for reading");
 
 		# Get all the lines in nodetype.tab
 		my @nodetype_lines = <NODETYPE>;
@@ -2525,11 +2548,11 @@ sub node_status {
 			$nodetype_image_name =~ s/^\s+//;
 			$nodetype_image_name =~ s/\s+$//;
 
-			notify($ERRORS{'DEBUG'}, 0, "found nodetype.tab line: path=$nodetype_install_path, arch=$nodetype_image_architecture, image=$nodetype_image_name");
+			notify($ERRORS{'OK'}, $log, "found nodetype.tab line: path=$nodetype_install_path, arch=$nodetype_image_architecture, image=$nodetype_image_name");
 			$status{nodetype} = $nodetype_image_name;
 		} ## end if ($nodetype_contents =~ /^$computer_short_name\s+(\w+),(\w+),(.+)$/xm...
 		else {
-			notify($ERRORS{'WARNING'}, 0, "unable to find line in nodetype.tab for computer: $computer_short_name");
+			notify($ERRORS{'WARNING'}, $log, "unable to find line in nodetype.tab for computer: $computer_short_name");
 			return;
 		}
 	} ## end if (open(NODETYPE, $nodetype_file_path))
@@ -2558,7 +2581,7 @@ sub node_status {
 	else {
 		$status{rpower} = 0;
 	}
-	notify($ERRORS{'OK'}, $log, "$computer_short_name rpower status: $rpower_status ($status{rpower})");
+	notify($ERRORS{'DEBUG'}, $log, "$computer_short_name rpower status: $rpower_status ($status{rpower})");
 
 	# Check the xCAT nodeset status
 	notify($ERRORS{'DEBUG'}, $log, "checking $computer_short_name xCAT nodeset status");
@@ -2568,7 +2591,7 @@ sub node_status {
 
 	# Check the sshd status
 	notify($ERRORS{'DEBUG'}, $log, "checking if $computer_short_name sshd service is accessible");
-	my $sshd_status = _sshd_status($computer_short_name, $status{nodetype}, $image_os_type,$log);
+	my $sshd_status = _sshd_status($computer_short_name, $status{nodetype}, $image_os_type, $log);
 
 	# If sshd is accessible, perform sshd-dependent checks
 	if ($sshd_status =~ /on/) {
@@ -2819,7 +2842,7 @@ sub does_image_exist {
 	#    image files exist but not tmpl file: create tmpl file
 	if ($tmpl_file_exists && !$image_files_exist) {
 		notify($ERRORS{'WARNING'}, 0, "template file exists but image files do not for $image_name");
-		
+
 		# Attempt to delete the orphaned tmpl file for the image
 		if ($self->_delete_template($image_name)) {
 			notify($ERRORS{'OK'}, 0, "deleted orphaned template file for image $image_name");
@@ -2829,10 +2852,10 @@ sub does_image_exist {
 			notify($ERRORS{'WARNING'}, 0, "failed to delete orphaned template file for image $image_name, returning undefined");
 			return;
 		}
-	}
+	} ## end if ($tmpl_file_exists && !$image_files_exist)
 	elsif (!$tmpl_file_exists && $image_files_exist) {
 		notify($ERRORS{'WARNING'}, 0, "image files exist but template file does not for $image_name");
-		
+
 		# Attempt to create the missing tmpl file for the image
 		if ($self->_create_template($image_name)) {
 			notify($ERRORS{'OK'}, 0, "created missing template file for image $image_name");
@@ -2842,8 +2865,8 @@ sub does_image_exist {
 			notify($ERRORS{'WARNING'}, 0, "failed to create missing template file for image $image_name, returning undefined");
 			return;
 		}
-	}
-	
+	} ## end elsif (!$tmpl_file_exists && $image_files_exist) [ if ($tmpl_file_exists && !$image_files_exist)
+
 	# Check if both image files and tmpl file were found and return
 	if ($tmpl_file_exists && $image_files_exist) {
 		notify($ERRORS{'OK'}, 0, "image $image_name exists on this management node, returning 1");
@@ -2900,13 +2923,13 @@ sub retrieve_image {
 	}
 
 	# Get the image repository path
-	my $image_repository_path = $self->_get_image_repository_path();
+	my $image_repository_path        = $self->_get_image_repository_path();
 	my $image_repository_path_source = $image_repository_path;
 	if (!$image_repository_path) {
 		notify($ERRORS{'WARNING'}, 0, "image repository path could not be determined");
 		return;
 	}
-	
+
 	# Fix for Linux images on henry4
 	my $management_node_hostname = $self->data->get_management_node_hostname();
 	my $image_os_type            = $self->data->get_image_os_type();
@@ -2976,7 +2999,7 @@ sub retrieve_image {
 		notify($ERRORS{'WARNING'}, 0, "$image_name was not copied to this management node");
 		return 0;
 	}
-	
+
 	# Create the template file for the image
 	if ($self->_create_template()) {
 		notify($ERRORS{'OK'}, 0, "template file created for image $image_name");
@@ -2985,7 +3008,7 @@ sub retrieve_image {
 		notify($ERRORS{'WARNING'}, 0, "failed to create template file for image $image_name");
 		return;
 	}
-	
+
 	return 1;
 } ## end sub retrieve_image
 
@@ -3112,7 +3135,7 @@ sub get_image_size {
 
 	# Save the exit status
 	my $du_exit_status = $? >> 8;
-	
+
 	# Check if $? = -1, this likely means a Perl CHLD signal bug was encountered
 	if ($? == -1) {
 		notify($ERRORS{'OK'}, 0, "\$? is set to $?, setting exit status to 0, Perl bug likely encountered");
@@ -3323,7 +3346,7 @@ sub _create_template {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
-	
+
 	# Get the image name
 	my $image_name = shift;
 	$image_name = $self->data->get_image_name() if !$image_name;
@@ -3331,9 +3354,9 @@ sub _create_template {
 		notify($ERRORS{'WARNING'}, 0, "failed to create template file, image name could not be retrieved");
 		return 0;
 	}
-	
+
 	notify($ERRORS{'DEBUG'}, 0, "attempting to create tmpl file for image: $image_name");
-	
+
 	# Get the image template repository path
 	my $tmpl_repository_path = $self->_get_image_template_path();
 	if (!$tmpl_repository_path) {
@@ -3347,17 +3370,17 @@ sub _create_template {
 		notify($ERRORS{'WARNING'}, 0, "base template filename could not be determined");
 		return 0;
 	}
-	
+
 	# Make a copy of the base template file
-	my $cp_output = `/bin/cp -fv  $tmpl_repository_path/$basetmpl $tmpl_repository_path/$image_name.tmpl 2>&1`;
+	my $cp_output      = `/bin/cp -fv  $tmpl_repository_path/$basetmpl $tmpl_repository_path/$image_name.tmpl 2>&1`;
 	my $cp_exit_status = $? >> 8;
-	
+
 	# Check if $? = -1, this likely means a Perl CHLD signal bug was encountered
 	if ($? == -1) {
 		notify($ERRORS{'OK'}, 0, "\$? is set to $?, setting exit status to 0, Perl bug likely encountered");
 		$cp_exit_status = 0;
 	}
-	
+
 	if ($cp_exit_status == 0) {
 		notify($ERRORS{'DEBUG'}, 0, "copied $basetmpl to $tmpl_repository_path/$image_name.tmpl, output:\n$cp_output");
 	}
@@ -3365,7 +3388,7 @@ sub _create_template {
 		notify($ERRORS{'WARNING'}, 0, "failed to copy $basetmpl to $tmpl_repository_path/$image_name.tmpl, returning undefined, exit status: $cp_exit_status, output:\n$cp_output");
 		return;
 	}
-	
+
 	# Make sure template file was created
 	# -s File has nonzero size
 	my $tmpl_file_exists;
@@ -3376,10 +3399,10 @@ sub _create_template {
 		notify($ERRORS{'WARNING'}, 0, "template file should have been copied but does not exist: $tmpl_repository_path/$image_name.tmpl, returning undefined");
 		return;
 	}
-	
+
 	notify($ERRORS{'OK'}, 0, "successfully created template file: $tmpl_repository_path/$image_name.tmpl");
 	return 1;
-}
+} ## end sub _create_template
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -3397,7 +3420,7 @@ sub _delete_template {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
-	
+
 	# Get the image name
 	my $image_name = shift;
 	$image_name = $self->data->get_image_name() if !$image_name;
@@ -3405,9 +3428,9 @@ sub _delete_template {
 		notify($ERRORS{'WARNING'}, 0, "failed to delete template file, image name could not be retrieved");
 		return 0;
 	}
-	
+
 	notify($ERRORS{'OK'}, 0, "attempting to delete tmpl file for image: $image_name");
-	
+
 	# Get the image template repository path
 	my $tmpl_repository_path = $self->_get_image_template_path();
 	if (!$tmpl_repository_path) {
@@ -3416,15 +3439,15 @@ sub _delete_template {
 	}
 
 	# Delete the template file
-	my $rm_output = `/bin/rm -fv  $tmpl_repository_path/$image_name.tmpl 2>&1`;
+	my $rm_output      = `/bin/rm -fv  $tmpl_repository_path/$image_name.tmpl 2>&1`;
 	my $rm_exit_status = $? >> 8;
-	
+
 	# Check if $? = -1, this likely means a Perl CHLD signal bug was encountered
 	if ($? == -1) {
 		notify($ERRORS{'OK'}, 0, "\$? is set to $?, setting exit status to 0, Perl bug likely encountered");
 		$rm_exit_status = 0;
 	}
-	
+
 	if ($rm_exit_status == 0) {
 		notify($ERRORS{'DEBUG'}, 0, "deleted $tmpl_repository_path/$image_name.tmpl, output:\n$rm_output");
 	}
@@ -3432,7 +3455,7 @@ sub _delete_template {
 		notify($ERRORS{'WARNING'}, 0, "failed to delete $tmpl_repository_path/$image_name.tmpl, returning undefined, exit status: $rm_exit_status, output:\n$rm_output");
 		return;
 	}
-	
+
 	# Make sure template file was deleted
 	# -s File has nonzero size
 	my $tmpl_file_exists;
@@ -3443,10 +3466,10 @@ sub _delete_template {
 	else {
 		notify($ERRORS{'DEBUG'}, 0, "confirmed template file was deleted: $tmpl_repository_path/$image_name.tmpl");
 	}
-	
+
 	notify($ERRORS{'OK'}, 0, "successfully deleted template file: $tmpl_repository_path/$image_name.tmpl");
 	return 1;
-}
+} ## end sub _delete_template
 
 #/////////////////////////////////////////////////////////////////////////////
 
