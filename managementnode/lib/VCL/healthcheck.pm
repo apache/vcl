@@ -52,12 +52,10 @@ use 5.008000;
 use strict;
 use warnings;
 use diagnostics;
+use English qw( -no_match_vars );
 
 use VCL::utils;
 use DBI;
-use Net::DNS;
-use VCL::Module::Provisioning::xCAT;
-use VCL::Module::Provisioning::Lab;
 
 ##############################################################################
 
@@ -71,18 +69,14 @@ use VCL::Module::Provisioning::Lab;
 our $LOG = "/var/log/healthcheckvcl.log";
 our $MYDBH;
 
-=pod
-////////////////////////////////////////////////////////////////////////////////
-///
-/// \fn function
-///
-/// \param
-///
-/// \return
-///
-/// \brief
-///
-////////////////////////////////////////////////////////////////////////////////
+#////////////////////////////////////////////////////////////////////////////////
+
+=head2  new
+
+  Parameters  : 
+  Returns     : 
+  Description :
+
 =cut
 
 sub new {
@@ -94,656 +88,361 @@ sub new {
 
 }
 
-=pod
-////////////////////////////////////////////////////////////////////////////////
-///
-/// \fn function
-///
-/// \param
-///
-/// \return
-///
-/// \brief
-///
-////////////////////////////////////////////////////////////////////////////////
+#////////////////////////////////////////////////////////////////////////////////
+
+=head2  _initialize
+
+  Parameters  : 
+  Returns     : 
+  Description :
+
 =cut
 
 sub _initialize {
-	my ($hck) = @_;
+	my ($info) = @_;
 	my ($mnid, $managementnodeid, $selh, @row, $rows, $mnresourceid, $resourceid);
-	my @hostinfo = hostname;
-	$hck->{MN}   = $hostinfo[0];
-	$hck->{MNos} = $hostinfo[1];
-	$hck->{dbh}  = getnewdbh;
+	my $date_time = convert_to_datetime;
 
-	#set global dbh for imagerevision check
-	$MYDBH = $hck->{dbh};
+	notify($ERRORS{'OK'}, $LOG, "########### healthcheck run $date_time #################");
 
-	#= DBI->connect(qq{dbi:mysql:$DATABASE:$SERVER}, $WRTUSER,$WRTPASS, {PrintError => 0});
-	unless (defined $hck->{dbh}) {    # dbh is an undef on failure
-		my $outstring = DBI::errstr();
-		notify($ERRORS{'WARNING'}, $LOG, $outstring);
-		#goto SLEEP;
-		return 0;
-	}
-	$hck->{"globalmsg"}->{"header"} = "STATUS SUMMARY of VCL nodes:\n\n";
+	$info->{"globalmsg"}->{"header"} = "STATUS SUMMARY of VCL nodes:\n\n";
+	$info->{"logfile"} = $LOG;
 
-	#1 get management node id and management node's resource id
-	$selh = $hck->{dbh}->prepare(
-		"SELECT m.id,r.id
-                            FROM resource r, resourcetype rt, managementnode m
-                            WHERE r.resourcetypeid = rt.id AND r.subid = m.id AND rt.name = ? AND m.hostname = ?") or notify($ERRORS{'WARNING'}, $hck->{LOG}, "Could not prepare select for management node id" . $hck->{dbh}->errstr());
-
-	$selh->execute("managementnode", $hck->{MN}) or notify($ERRORS{'WARNING'}, $LOG, "Could not execute management node id" . $hck->{dbh}->errstr());
-
-	my $dbretval = $selh->bind_columns(\($managementnodeid, $resourceid));
-	$rows = $selh->rows;
-	if ($rows != 0) {
-		while ($selh->fetch) {
-			$mnid                  = $managementnodeid;
-			$mnresourceid          = $resourceid;
-			$hck->{"mnid"}         = $managementnodeid;
-			$hck->{"mnresourceid"} = $resourceid;
-			notify($ERRORS{'OK'}, $LOG, "$hck->{MN} mnid $mnid  resourceid $resourceid");
-		}
+	if ($info->{managementnode} = get_management_node_info()) {
+		notify($ERRORS{'OK'}, $LOG, "retrieved management node information from database");
 	}
 	else {
-		notify($ERRORS{'CRITICAL'}, $LOG, "No management id for $hck->{MN}.");
+		notify($ERRORS{'CRITICAL'}, $LOG, "unable to retrieve management node information from database");
 		exit;
 	}
 
-	#2 select management node groups I belong to
-
-	$selh = $hck->{dbh}->prepare("SELECT resourcegroupid FROM resourcegroupmembers WHERE resourceid= ?") or notify($ERRORS{'WARNING'}, $LOG, "Could not prepare select for management node group membership" . $hck->{dbh}->errstr());
-	$selh->execute($hck->{mnresourceid}) or notify($ERRORS{'WARNING'}, $LOG, "Could not execute statement for collecting my group membership" . $hck->{dbh}->errstr());
-	$rows = $selh->rows;
-	if ($rows != 0) {
-		while (@row = $selh->fetchrow_array) {
-			$hck->{"groupmembership"}->{$row[0]} = $row[0];
-			notify($ERRORS{'OK'}, $LOG, "$hck->{MN} resourceid $hck->{mnresourceid} is in group $row[0]");
-		}
+	#2 Collect hash of computers I can control with data
+	if ($info->{computertable} = get_computers_controlled_by_MN(%{$info->{managementnode}})) {
+		notify($ERRORS{'OK'}, $LOG, "retrieved management node resource groups from database");
 	}
 	else {
-		notify($ERRORS{'CRITICAL'}, $LOG, "Not a member of any groups $hck->{MN} resourceid $hck->{mnresourceid}");
+		notify($ERRORS{'CRITICAL'}, $LOG, "unable to retrieve management node resource groups from database");
 		exit;
 	}
 
-	#3 get list of computer groups I have access to control
-	$selh = $hck->{dbh}->prepare("SELECT r.resourcegroupid2 FROM resourcemap r, resourcetype rt WHERE r.resourcetypeid2=rt.id AND r.resourcegroupid1=? AND rt.name=?") or notify($ERRORS{'WARNING'}, $LOG, "Could not prepare computer groups statement:" . $hck->{dbh}->errstr());
-	foreach my $grpid (sort keys(%{$hck->{groupmembership}})) {
-		$selh->execute($hck->{groupmembership}->{$grpid}, "computer") or notify($ERRORS{'WARNING'}, $LOG, "Could not execute computer goups statement:" . $hck->{dbh}->errstr());
-		$rows = $selh->rows;
-		if ($rows != 0) {
-			while (@row = $selh->fetchrow_array) {
-				$hck->{"groupscancrontrol"}->{$row[0]} = $row[0];
-				notify($ERRORS{'OK'}, $LOG, "$hck->{MN} resourceid $hck->{mnresourceid} cg= $grpid manages group $row[0]");
-			}
+	foreach my $cid (keys %{$info->{computertable}}) {
+		#notify($ERRORS{'OK'}, $LOGFILE, "computer_id= $info->{computertable}->{$cid}->{computer_id}");
+		#get computer information
+		if ($info->{computertable}->{$cid} = get_computer_info($cid)) {
+
 		}
 		else {
-			notify($ERRORS{'WARNING'}, $LOG, "no group to control $hck->{MN} resourceid $hck->{mnresourceid} groupid $grpid ");
+			delete $info->{computertable}->{$cid};
 		}
-	} ## end foreach my $grpid (sort keys(%{$hck->{groupmembership...
+	} ## end foreach my $cid (keys %{$info->{computertable}})
 
-	#4 foreach of the groups i can manage get the computer members
-	$selh = $hck->{dbh}->prepare(
-		"SELECT r.subid,r.id
-                                    FROM resourcegroupmembers rm,resourcetype rt,resource r
-                                    WHERE rm.resourceid=r.id AND rt.id=r.resourcetypeid AND rt.name=? AND rm.resourcegroupid =?
-                                    ") or notify($ERRORS{'WARNING'}, $LOG, "Could not prepare computer groups statement:" . $hck->{dbh}->errstr());
-	foreach my $rgroupid (sort keys(%{$hck->{groupscancrontrol}})) {
-		$selh->execute("computer", $hck->{groupscancrontrol}->{$rgroupid}) or notify($ERRORS{'WARNING'}, $LOG, "Could not execute computer goups statement:" . $hck->{dbh}->errstr());
-		$rows = $selh->rows;
-		#notify($ERRORS{'OK'},$LOG,"rows = $rows for group$hck->{groupscancrontrol}->{$rgroupid}");
-		if ($rows != 0) {
-			while (@row = $selh->fetchrow_array) {
-				$hck->{"computers"}->{$row[0]}->{"id"} = $row[0];
-				#  notify($ERRORS{'OK'},$LOG,"$hck->{MN} resourceid $row[1] computerid $row[0] in group $hck->{groupscancrontrol}->{$rgroupid}");
-			}
-		}
-		else {
-			notify($ERRORS{'WARNING'}, $LOG, "no group to control $hck->{MN} resourceid $hck->{mnresourceid} groupid $rgroupid ");
-		}
-	} ## end foreach my $rgroupid (sort keys(%{$hck->{groupscancrontrol...
+}    ### end sub _initialize
 
-	#5 based from our hash table of computer ids collect individual computer information
-	$selh = $hck->{dbh}->prepare(
-		"SELECT c.hostname,c.IPaddress,c.lastcheck,s.name,c.currentimageid,c.preferredimageid,c.imagerevisionid,c.type,c.ownerid,i.name,o.name,c.deleted
-                                    FROM computer c,state s, image i, OS o
-                                    WHERE s.id=c.stateid AND i.id=c.currentimageid AND o.id=i.OSid AND c.id =?
-                                    ") or notify($ERRORS{'WARNING'}, $LOG, "Could not prepare computer info statement:" . $hck->{dbh}->errstr());
-	foreach my $cid (sort keys(%{$hck->{computers}})) {
-		$selh->execute($hck->{computers}->{$cid}->{id}) or notify($ERRORS{'WARNING'}, $LOG, "Could not execute computer info statement:" . $hck->{dbh}->errstr());
-		$rows = $selh->rows;
-		my @crow;
-		if ($rows != 0) {
-			while (@crow = $selh->fetchrow_array) {
-				$hck->{computers}->{$cid}->{"hostname"}         = $crow[0];
-				$hck->{computers}->{$cid}->{"IPaddress"}        = $crow[1];
-				$hck->{computers}->{$cid}->{"lastcheck"}        = $crow[2] if (defined($crow[2]));
-				$hck->{computers}->{$cid}->{"state"}            = $crow[3];
-				$hck->{computers}->{$cid}->{"currentimageid"}   = $crow[4];
-				$hck->{computers}->{$cid}->{"preferredimageid"} = $crow[5];
-				$hck->{computers}->{$cid}->{"imagerevisionid"}  = $crow[6];
-				$hck->{computers}->{$cid}->{"type"}             = $crow[7];
-				$hck->{computers}->{$cid}->{"ownerid"}          = $crow[8];
-				$hck->{computers}->{$cid}->{"dbimagename"}      = $crow[9];
-				$hck->{computers}->{$cid}->{"OSname"}           = $crow[10];
-				$hck->{computers}->{$cid}->{"shortname"}        = $1 if ($crow[0] =~ /([-_a-zA-Z0-9]*)\./);    #should cover all host
-				$hck->{computers}->{$cid}->{"MNos"}             = $hck->{MNos};
-				$hck->{computers}->{$cid}->{"deleted"}          = $crow[11];
-				$hck->{computers}->{$cid}->{"id"}               = $cid;
-			} ## end while (@crow = $selh->fetchrow_array)
-		} ## end if ($rows != 0)
-		else {
-			notify($ERRORS{'WARNING'}, $LOG, "no rows related to computer id $hck->{computers}->{$cid}->{id} reporting no data to pull for computer info statement ");
-		}
-	} ## end foreach my $cid (sort keys(%{$hck->{computers}}...
-} ## end sub _initialize
+#////////////////////////////////////////////////////////////////////////////////
 
-=pod
-////////////////////////////////////////////////////////////////////////////////
-///
-/// \fn function process
-///
-/// \param
-///
-/// \return
-///
-/// \brief check each computer, sort checks by type
-///   lab: ssh check,vclclientd running, adduser,deluser
-///   blade: ssh check, correct image, adduser,deluser
-///
-////////////////////////////////////////////////////////////////////////////////
+=head2  process
+
+  Parameters  : object
+  Returns     : 
+  Description :
+
 =cut
 
 sub process {
-	my ($hck) = @_;
+	my ($info) = @_;
 	notify($ERRORS{'OK'}, $LOG, "in processing routine");
-	$hck->{"globalmsg"}->{"body"} = "Summary of VCL node monitoring system:\n\n";
+	$info->{"globalmsg"}->{"body"} = "Summary of VCL node monitoring system:\n\n";
 
-	if (!($hck->{dbh}->ping)) {
-		$hck->{dbh} = getnewdbh();
-	}
+	foreach my $cid (keys %{$info->{computertable}}) {
+		#set some local variables
+		my $comp_hostname             = $info->{computertable}->{$cid}->{computer}->{hostname};
+		my $comp_type                 = $info->{computertable}->{$cid}->{computer}->{type};
+		my $comp_state                = $info->{computertable}->{$cid}->{computer}->{state}->{name};
+		my $provisioning_perl_package = $info->{computertable}->{$cid}->{computer}->{provisioning}->{module}->{perlpackage};
+		my $last_check                = $info->{computertable}->{$cid}->{computer}->{lastcheck};
+		my $image_os_name             = $info->{computertable}->{$cid}->{image}->{OS}->{name};
+		my $comp_id                   = $cid;
 
-	my $checkstate = $hck->{dbh}->prepare(
-		"SELECT s.name,c.lastcheck FROM computer c,state s
-                                    WHERE s.id=c.stateid AND c.id =?") or notify($ERRORS{'WARNING'}, $LOG, "Could not prepare state check statement on computer:" . $hck->{dbh}->errstr());
+		#next if ($comp_type eq "lab");
+		#next if($comp_type eq "blade");
+		#next if ($comp_type eq "virtualmachine");
+		#need to pass some of the management node info to provisioing module node_status
+		$info->{computertable}->{$cid}->{"managementnode"} = $info->{managementnode};
+		$info->{computertable}->{$cid}->{"logfile"}        = $info->{logfile};
 
-	$hck->{"computercount"}    = 0;
-	$hck->{"computerschecked"} = 0;
+		notify($ERRORS{'DEBUG'}, $LOG, "cid= $cid");
+		notify($ERRORS{'DEBUG'}, $LOG, "comp_hostname= $comp_hostname");
+		notify($ERRORS{'DEBUG'}, $LOG, "comp_type= $comp_type");
+		notify($ERRORS{'DEBUG'}, $LOG, "comp_state= $comp_state");
+		notify($ERRORS{'DEBUG'}, $LOG, "provisioning_perl_package= $provisioning_perl_package");
+		notify($ERRORS{'DEBUG'}, $LOG, "image_os_name= $image_os_name");
 
-	foreach my $cid (sort keys(%{$hck->{computers}})) {
-		#skipping virtual machines for now
-		next if ($hck->{computers}->{$cid}->{type} eq "virtualmachine");
+		my ($datestring, $node_status_string);
 
-		# check ssh
-		# check uptime
-		# check vclclientd working
-		# reboot if needed
-		# update lastcheck timestamp
-		# update state if needed
-		# add to failed notification summary if needed
-		# $hostname,$os,$mnOS,$ipaddress,$log
-		# check the current image revision
-
-		#count the node
-		$hck->{"computercount"} += 1;
-		#recheck state and lastcheck time -- this is important as more machines are checked
-		if (!($hck->{dbh}->ping)) {
-			#just incase handle and statement are lost
-			$hck->{dbh} = getnewdbh();
-			$checkstate = $hck->{dbh}->prepare(
-				"SELECT s.name FROM computer c,state s
-                                   WHERE s.id=c.stateid AND c.id =?") or notify($ERRORS{'WARNING'}, $LOG, "Could not prepare state check statement on computer:" . $hck->{dbh}->errstr());
-
-		}
-
-		$checkstate->execute($hck->{computers}->{$cid}->{id}) or notify($ERRORS{'WARNING'}, $LOG, "Could not execute computer check state for $hck->{computers}->{$cid}->{id}:" . $hck->{dbh}->errstr());
-		my $rows = $checkstate->rows;
-		if ($rows != 0) {
-			my @crow = $checkstate->fetchrow_array;
-			$hck->{computers}->{$cid}->{"state"} = $crow[0];
+		# Collect current state of node - it could have changed since we started
+		if (my $comp_current_state = get_computer_current_state_name($cid)) {
+			$comp_state = $comp_current_state;
 		}
 		else {
-			notify($ERRORS{'WARNING'}, $LOG, "no rows related to computer id $hck->{computers}->{$cid}->{id} reporting no data to pull for computer info statement ");
-			$hck->{"globalmsg"}->{"failedbody"} .= "$hck->{computers}->{$cid}->{hostname} : UNABLE to pull current state, skipping";
-			next;
-		}
-		if ($hck->{computers}->{$cid}->{state} =~ /inuse|reloading/) {
-			next;
-			notify($ERRORS{'OK'}, $LOG, "NODE $hck->{computers}->{$cid}->{hostname} inuse skipping");
-
-		}
-		if ($hck->{computers}->{$cid}->{state} =~ /^(maintenance|hpc|vmhostinue)/) {
-			$hck->{computers}->{$cid}->{"skip"} = 1;
-			$hck->{"computersskipped"} += 1;
-			next;
+			#could not get it, use existing data
+			notify($ERRORS{'OK'}, $LOG, "could not retrieve current computer state cid= $cid, using old data");
 		}
 
-		if ($hck->{computers}->{$cid}->{deleted}) {
-			#machine deleted but set on a state we monitor
-			$hck->{computers}->{$cid}->{"confirmedstate"} = "maintenance";
-			goto UPDATESTATE;
+		#Only preform actions on these available or failed computer states
+		#skip if is inuse, maintenance, tovmhost, etc.
+		if ($comp_state !~ /available|failed/) {
+
+			notify($ERRORS{'OK'}, $LOG, "NODE $comp_hostname $comp_state skipping");
+			$info->{computers}->{$cid}->{"skip"} = 1;
+			$info->{"computersskipped"} += 1;
+			next;
 		}
 
 		#check lastcheck
-		if (defined($hck->{computers}->{$cid}->{"lastcheck"})) {
-			my $lastcheckepoch  = convert_to_epoch_seconds($hck->{computers}->{$cid}->{lastcheck});
+		if (defined($last_check) && $comp_state !~ /failed/) {
+			my $lastcheckepoch  = convert_to_epoch_seconds($last_check);
 			my $currentimeepoch = convert_to_epoch_seconds();
 			my $delta           = ($currentimeepoch - $lastcheckepoch);
-			#if( $delta <= (5*60) ){
-			if ($delta <= (1 * 60 * 60 * 24 + 60 * 60)) {
-				#if( $delta <= (90*60) ){
-				notify($ERRORS{'OK'}, $LOG, "NODE $hck->{computers}->{$cid}->{hostname} recently checked skipping");
+
+			my $delta_minutes = round($delta / 60);
+
+			if ($delta_minutes <= (60)) {
+				notify($ERRORS{'OK'}, $LOG, "NODE $comp_hostname recently checked $delta_minutes minutes ago skipping");
 				#this node was recently checked
-				$hck->{computers}->{$cid}->{"skip"} = 1;
-				$hck->{"computersskipped"} += 1;
+				$info->{computers}->{$cid}->{"skip"} = 1;
+				$info->{"computersskipped"} += 1;
 				next;
 			}
-			$hck->{"computerschecked"} += 1;
-		} ## end if (defined($hck->{computers}->{$cid}->{"lastcheck"...
+			$info->{"computerschecked"} += 1;
+		} ## end if (defined($last_check) && $comp_state !~...
 
-		#handle the failed machines first
-		if ($hck->{computers}->{$cid}->{state} =~ /failed|available/) {
-
-			if (_valid_host($hck->{computers}->{$cid}->{hostname})) {
-				$hck->{computers}->{$cid}->{"valid_host"}   = 1;
-				$hck->{computers}->{$cid}->{"basechecksok"} = 0;
-				notify($ERRORS{'OK'}, $LOG, "process: reports valid host for $hck->{computers}->{$cid}->{hostname}");
-			}
-			else {
-				# for now leave state as to annoy owner to either remove or update the machine
-				$hck->{computers}->{$cid}->{"valid_host"} = 0;
-				$hck->{"globalmsg"}->{"failedbody"} .= "$hck->{computers}->{$cid}->{hostname}, $hck->{computers}->{$cid}->{IPaddress} : INVALID HOSTname, remove or update\n";
-				next;
-			}
-
-			my @basestatus = _baseline_checks($hck->{computers}->{$cid});
-			$hck->{computers}->{$cid}->{"ping"}           = $basestatus[0];
-			$hck->{computers}->{$cid}->{"sshd"}           = $basestatus[1];
-			$hck->{computers}->{$cid}->{"vclclientd"}     = $basestatus[2] if ($hck->{computers}->{$cid}->{type} eq "lab");
-			$hck->{computers}->{$cid}->{"localimagename"} = $basestatus[2] if ($hck->{computers}->{$cid}->{type} eq "blade");
-			$hck->{computers}->{$cid}->{"uptime"}         = $basestatus[3];
-			$hck->{computers}->{$cid}->{"basechecksok"}   = $basestatus[4];
-			$hck->{"globalmsg"}->{"failedbody"} .= "$hck->{computers}->{$cid}->{hostname} : $basestatus[5]\n" if (defined($basestatus[5]));
-			#notify($ERRORS{'OK'},$LOG,"status= $basestatus[0],$basestatus[1],$basestatus[2],$basestatus[3],$basestatus[4]");
-
-			if ($hck->{computers}->{$cid}->{basechecksok}) {
-				#baseline checks ok, do more checks
-				if (_imagerevision_check($hck->{computers}->{$cid})) {
-
-				}
-
-				if ($hck->{computers}->{$cid}->{type} eq "lab") {
-					#  if(enablesshd($hck->{computers}->{$cid}->{hostname},"eostest1",$hck->{computers}->{$cid}->{IPaddress},"new",$hck->{computers}->{$cid}->{OSname},$LOG)){
-					#good now disable it disable($hostname,$unityname,$remoteIP,$state,$osname,$log
-					#   if(disablesshd($hck->{computers}->{$cid}->{hostname},"eostest1",$hck->{computers}->{$cid}->{IPaddress},"timeout",$hck->{computers}->{$cid}->{OSname},$LOG)){
-					$hck->{computers}->{$cid}->{"confirmedstate"} = "available";
-					$hck->{"labnodesavailable"} += 1;
-					$hck->{"globalmsg"}->{"correctedbody"} .= "$hck->{computers}->{$cid}->{hostname} : was failed, now active\n" if ($hck->{computers}->{$cid}->{state} eq "failed");
-					#  }
-					# else{
-					# #failed
-					#$hck->{computers}->{$cid}->{"confirmedstate"}="failed";
-					# $hck->{"labnodesfailed"} +=1;
-					#$hck->{"globalmsg"}->{"failedbody"} .= "$hck->{computers}->{$cid}->{hostname} : failed could not disablesshd\n";
-					#}
-					#}
-					#else{
-					#failed
-					#$hck->{computers}->{$cid}->{"confirmedstate"}="failed";
-					#$hck->{"globalmsg"}->{"failedbody"} .= "$hck->{computers}->{$cid}->{hostname} : failed could not enablesshd\n";
-					#}
-					if ($hck->{computers}->{$cid}->{uptime} >= 10) {
-						$hck->{"globalmsg"}->{"failedbody"} .= "$hck->{computers}->{$cid}->{hostname} : UPTIME $hck->{computers}->{$cid}->{uptime} days\n";
-					}
-				} ## end if ($hck->{computers}->{$cid}->{type} eq "lab")
-				elsif ($hck->{computers}->{$cid}->{type} eq "blade") {
-					#blade tasks
-					#options fork in order to load mulitples simultaneously
-					#TASKS:
-					# 1) partly completed, basechecks are ok, pingable, sshd running/logins ok,
-					# 2) does image name match whats listed
-					#
-					$hck->{computers}->{$cid}->{"confirmedstate"} = "available";
-				}
-			} ## end if ($hck->{computers}->{$cid}->{basechecksok...
-			else {
-				#basechecks failed, reason appended to failedbody already
-				if ($hck->{computers}->{$cid}->{type} eq "lab") {
-					# can not do much about a lab machine
-					$hck->{computers}->{$cid}->{"confirmedstate"} = "failed";
-					$hck->{"labnodesfailed"} += 1;
-				}
-				elsif ($hck->{computers}->{$cid}->{type} eq "blade") {
-					$hck->{computers}->{$cid}->{"confirmedstate"} = "failed";
-					#dig deeper --
-					#if no power turn on and wait
-					#if no sshd
-				}
-			} ## end else [ if ($hck->{computers}->{$cid}->{basechecksok...
-			UPDATESTATE:
-			if ($hck->{computers}->{$cid}->{"confirmedstate"} ne $hck->{computers}->{$cid}->{"state"}) {
-				#different states update db to reflected confirmed state
-				#my $stateid;
-				#$stateid = 2 if($hck->{computers}->{$cid}->{"confirmedstate"} eq "available");
-				#$stateid = 5 if($hck->{computers}->{$cid}->{"confirmedstate"} eq "failed");
-				#$stateid = 10 if($hck->{computers}->{$cid}->{"confirmedstate"} eq "maintenance");
-				$hck->{computers}->{$cid}->{"state"} = $hck->{computers}->{$cid}->{"confirmedstate"};
-				#notify($ERRORS{'OK'}, $LOG, "basestatus check= $hck->{computers}->{$cid}->{basechecksok} setting to $hck->{computers}->{$cid}->{hostname} to $hck->{computers}->{$cid}->{confirmedstate} ") if (updatestate(0, $hck->{computers}->{$cid}->{id}, "computer", $hck->{computers}->{$cid}->{confirmedstate}, 0, $LOG));
-				if (update_computer_state($hck->{computers}->{$cid}->{id}, $hck->{computers}->{$cid}->{confirmedstate})) {
-					notify($ERRORS{'OK'}, $LOG, "basestatus check= $hck->{computers}->{$cid}->{basechecksok} setting to $hck->{computers}->{$cid}->{hostname} to $hck->{computers}->{$cid}->{confirmedstate} ");
-				}
-
-			} ## end if ($hck->{computers}->{$cid}->{"confirmedstate"...
-		} ## end if ($hck->{computers}->{$cid}->{state} =~ ...
-		if ($hck->{computers}->{$cid}->{skip}) {
-			#update lastcheck time
-			my $datestring = makedatestring;
-			my $update_lc = $hck->{dbh}->prepare("UPDATE computer SET lastcheck=? WHERE id=?") or notify($ERRORS{'WARNING'}, $LOG, "Could not prepare lastcheck time update" . $hck->{dbh}->errstr());
-			$update_lc->execute($datestring, $hck->{computers}->{$cid}->{id}) or notify($ERRORS{'WARNING'}, $LOG, "Could not execute lastcheck time update");
-			$update_lc->finish;
+		#count the nodes processed
+		$info->{"computercount"} += 1;
+		eval "use $provisioning_perl_package";
+		if ($EVAL_ERROR) {
+			notify($ERRORS{'WARNING'}, $LOG, "$provisioning_perl_package module could not be loaded");
+			notify($ERRORS{'OK'},      $LOG, "returning 0");
+			return 0;
 		}
+
+		my $node_status = eval "&$provisioning_perl_package" . '::node_status($info->{computertable}->{$cid});';
+		if (!$EVAL_ERROR) {
+			notify($ERRORS{'OK'}, $LOG, "loaded $provisioning_perl_package");
+		}
+		else {
+			notify($ERRORS{'WARNING'}, $LOG, "$provisioning_perl_package module could not be loaded $@");
+		}
+
+		if (defined $node_status->{status}) {
+			$node_status_string = $node_status->{status};
+			notify($ERRORS{'DEBUG'}, $LOG, "node_status hash reference contains key {status}=$node_status_string");
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, $LOG, "node_status hash reference does not contain a key called 'status'");
+		}
+
+		if ($node_status_string =~ /^ready/i) {
+			#proceed
+			notify($ERRORS{'OK'}, $LOG, "nodestatus reports  $node_status_string for $comp_hostname");
+
+			#update lastcheck datetime
+			$datestring = makedatestring;
+			if (update_computer_lastcheck($comp_id, $datestring, $LOG)) {
+				notify($ERRORS{'OK'}, $LOG, "updated lastcheckin for $comp_hostname");
+			}
+
+			#udpate state to available if old state is failed
+			if ($comp_state =~ /failed/i) {
+				if (update_computer_state($comp_id, "available", $LOG)) {
+					notify($ERRORS{'OK'}, $LOG, "updated state to available for $comp_hostname");
+				}
+			}
+		} ## end if ($node_status_string =~ /^ready/i)
+		elsif ($node_status_string =~ /^reload/i) {
+
+			$info->{computertable}->{$cid}->{node_status} = \%{$node_status};
+
+			notify($ERRORS{'OK'}, $LOG, "nodestatus reports $node_status_string for $comp_hostname");
+
+			#additional steps
+			my $node_available = 0;
+
+			if ($comp_type eq "lab") {
+				#no additional checks required for lab type
+				#if(lab_investigator($info->{computertable}->{$cid})){
+				#	$node_available =1;
+				#}
+			}
+			elsif ($comp_type eq "virtualmachine") {
+				if (_virtualmachine_investigator($info->{computertable}->{$cid})) {
+					$node_available = 1;
+				}
+			}
+			elsif ($comp_type eq "blade") {
+				if (_blade_investigator($info->{computertable}->{$cid})) {
+					$node_available = 1;
+				}
+			}
+
+			if ($node_available) {
+				#update state to available
+				if (update_computer_state($comp_id, "available", $LOG)) {
+					notify($ERRORS{'OK'}, $LOG, "updated state to available for $comp_hostname");
+				}
+				#update lastcheck datetime
+				$datestring = makedatestring;
+				if (update_computer_lastcheck($comp_id, $datestring, $LOG)) {
+					notify($ERRORS{'OK'}, $LOG, "updated lastcheckin for $comp_hostname");
+				}
+			} ## end if ($node_available)
+			else{
+				$info->{globalmsg}->{failedbody} .= "$comp_hostname type= $comp_type offline\n";
+			}
+
+		} ## end elsif ($node_status_string =~ /^reload/i)  [ if ($node_status_string =~ /^ready/i)
+		else {
+			notify($ERRORS{'OK'}, $LOG, "node_status reports unknown value for $comp_hostname node_status_string= $node_status_string ");
+
+		}
+
+
+		if ($info->{computers}->{$cid}->{skip}) {
+			#update lastcheck time
+			$datestring = makedatestring;
+		}
+
 	}    #for loop
-	$hck->{dbh}->disconnect;
 	return 1;
 } ## end sub process
 
-=pod
-////////////////////////////////////////////////////////////////////////////////
-///
-/// \fn function   _valid_host
-///
-/// \param
-///
-/// \return   1,0
-///
-/// \brief  is this a valid host in dns
-///
-////////////////////////////////////////////////////////////////////////////////
-=cut
+#////////////////////////////////////////////////////////////////////////////////
 
-sub _valid_host {
-	my ($node) = @_;
-	my $res = Net::DNS::Resolver->new( tcp_timeout => 5, 
-					   retry       => 2);
-	my $q = $res->search($node);
-	if ($q) {
-		foreach my $rr ($q->answer) {
-			next unless $rr->type eq "A";
-			next unless $rr->type eq "PTR";
+=head2  blade_investigator
+
+  Parameters  : hash
+  Returns     : 1,0 
+  Description : provides additional checks for blade types
+
+=cut
+sub _blade_investigator {
+	my ($self) = @_;
+
+	my $retval                  = 0;
+	my $comp_hostname           = $self->{computer}->{hostname};
+	my $comp_imagename          = $self->{imagerevision}->{imagename};
+	my $comp_id                 = $self->{computer}->{id};
+	my $nodestatus_status       = $self->{node_status}->{status};
+	my $nodestatus_nodetype     = $self->{node_status}->{nodetype};
+	my $nodestatus_currentimage = $self->{node_status}->{currentimage};
+	my $nodestatus_ping         = $self->{node_status}->{ping};
+	my $nodestatus_rpower       = $self->{node_status}->{rpower};
+	my $nodestatus_nodeset      = $self->{node_status}->{nodeset};
+	my $nodestatus_ssh          = $self->{node_status}->{ssh};
+
+	notify($ERRORS{'OK'}, $LOG, "comp_hostname= $comp_hostname node_status_status= $nodestatus_status");
+
+	#If can ping and can ssh into it, compare loaded image with database imagename
+	if ($nodestatus_ping && $nodestatus_ssh) {
+		if (_image_revision_check($comp_id, $comp_imagename, $nodestatus_currentimage)) {
+			#return success
+			notify($ERRORS{'OK'}, $LOG, "comp_hostname= $comp_hostname imagename updated");
+			$retval = 1;
 		}
-		return 1;
 	}
 	else {
-		return 0;
-	}
-} ## end sub _valid_host
-
-=pod
-////////////////////////////////////////////////////////////////////////////////
-///
-/// \fn function _baseline_checks
-///
-/// \param
-///
-/// \return array - ping status(1,0),ssh status(1,0),uptime(1,0)- reboots, basestatus (1,0), failure statement
-///
-/// \brief  pingable, sshd, uptime
-///
-////////////////////////////////////////////////////////////////////////////////
-=cut
-
-sub _baseline_checks {
-	my ($cidhash) = @_;
-	#based on type and OS
-	#ping
-	#sshd
-	#uptime
-	# ? for unix lab machines is vclclientd running
-	my @ret;
-	my $node = $cidhash->{IPaddress};
-	if ($cidhash->{type} eq "blade") {
-		$node = $cidhash->{shortname};
+		notify($ERRORS{'OK'}, $LOG, "comp_hostname= $comp_hostname is confirmed down");
 	}
 
-	# node_status
-	# hashref: reference to hash with keys/values:
-	#				         {status} => <"READY","FAIL">
-	#					   	{ping} => <0,1>
-	#					   	{ssh} => <0,1>
-	#						   {rpower} => <0,1>
-	#							{nodeset} => <"boot", "install", "image", ...>
-	#							{nodetype} => <image name>
-	#							{currentimage} => <image name>
+	return $retval;
 
-	if ($cidhash->{type} eq "lab") {
-		my $identity;
-		if ($cidhash->{OSname} =~ /sun4x/) {
-			$identity = $IDENTITY_solaris_lab;
-		}
-		elsif ($cidhash->{OSname} =~ /rhel/) {
-			$identity = $IDENTITY_linux_lab;
-		}
-		else {
-			notify($ERRORS{'OK'}, $LOG, "os $cidhash->{OSname} set but not something I can handle yet, will attempt the unix identity.");
+} ## end sub _blade_investigator
 
-			$identity = $IDENTITY_linux_lab;
-		}
+#////////////////////////////////////////////////////////////////////////////////
 
-		#my @status = VCL::Module::Provisioning::Lab::node_status($cidhash->{hostname}, $cidhash->{OSname}, $cidhash->{MNos}, $cidhash->{IPaddress}, $identity, $LOG);
-		my $node_status = VCL::Module::Provisioning::Lab::node_status($cidhash->{hostname}, $cidhash->{OSname}, $cidhash->{MNos}, $cidhash->{IPaddress}, $identity, $LOG);
-		if ($node_status->{ping}) {
-			#pingable
-			notify($ERRORS{'OK'}, $LOG, "$cidhash->{IPaddress} pingable");
-			push(@ret, 1);
-		}
-		else {
-			push(@ret, 0, 0, 0, 0, 0, "NOT pingable");
-			return @ret;
-		}
-		#sshd
-		if ($node_status->{ssh}) {
-			push(@ret, 1);
-			notify($ERRORS{'OK'}, $LOG, "$cidhash->{IPaddress} ssh reponds");
-		}
-		else {
-			push(@ret, 0, 0, 0, 0, "sshd NOT responding");
-			return @ret;
-		}
-		#vclclientd
-		if ($node_status->{vcl_client}) {
-			push(@ret, 1);
-			notify($ERRORS{'OK'}, $LOG, "$cidhash->{IPaddress} vclclientd running");
-		}
-		else {
-			push(@ret, 0, 0, 0, "vclclientd NOT running");
-			return @ret;
-		}
-		#check_uptime ($node,$IPaddress,$OSname,$type)
-		my @check_uptime_array = check_uptime($cidhash->{hostname}, $cidhash->{IPaddress}, $cidhash->{OSname}, $cidhash->{type}, $LOG);
-		push(@ret, $check_uptime_array[0]);
+=head2  virtualmachine_investigator
 
-		#if here then basechecks are ok
-		push(@ret, 1);
+  Parameters  : hash
+  Returns     : 1,0 
+  Description : provides additional checks for virtualmachine types
 
-	} ## end if ($cidhash->{type} eq "lab")
-	elsif ($cidhash->{type} eq "blade") {
-		#my @status = VCL::Module::Provisioning::xCAT::node_status($cidhash->{shortname}, $LOG);
-		my $node_status = VCL::Module::Provisioning::xCAT::node_status($cidhash->{shortname}, $LOG);
-		# First see if it returned a hashref
-		if (ref($node_status) eq 'HASH') {
-			notify($ERRORS{'DEBUG'}, 0, "node_status returned a hash reference");
-		}
-
-		# Check if node_status returned an array ref
-		elsif (ref($node_status) eq 'ARRAY') {
-			notify($ERRORS{'OK'}, $LOG, "node_status returned an array reference");
-
-		}
-
-		# Check if node_status didn't return a reference
-		# Assume string was returned
-		elsif (!ref($node_status)) {
-			# Use scalar value of node_status's return value
-		}
-
-		else {
-			notify($ERRORS{'OK'}, $LOG, "->node_status() returned an unsupported reference type: " . ref($node_status) . ", returning");
-			return;
-		}
-
-		#host/power (pingable)
-		#if ($status[1] eq "on") {
-		if ($node_status->{rpower}) {
-			#powered on
-			notify($ERRORS{'OK'}, $LOG, "$cidhash->{shortname} power on ");
-			push(@ret, 1);
-		}
-		else {
-			push(@ret, 0, 0, 0, 0, 0, "Powered off\n");
-			return @ret;
-		}
-		#sshd
-		#if ($status[3] eq "on") {
-		if ($node_status->{ssh}) {
-			push(@ret, 1);
-			notify($ERRORS{'OK'}, $LOG, "$cidhash->{shortname} ssh reponds");
-		}
-		else {
-			push(@ret, 0, 0, 0, 0, "$cidhash->{shortname} sshd NOT responding");
-			return @ret;
-		}
-		#imagename
-		#if ($status[7]) {
-		if ($node_status->{nodetype}) {
-			notify($ERRORS{'OK'}, $LOG, "$cidhash->{shortname} imagename set $node_status->{nodetype}");
-
-			if ($node_status->{currentimage}) {
-				if ($node_status->{currentimage} =~ /\r/) {
-					chop($node_status->{currentimage});
-					#notify($ERRORS{'OK'},$LOG,"$cidhash->{shortname} imagename had carriage return $status[8]");
-				}
-				if ($node_status->{nodetype} =~ /$node_status->{currentimage}/) {    #do 7 & 8 match
-					                                                                  #notify($ERRORS{'OK'},$LOG,"$cidhash->{shortname} nodetype matches imagename on local file");
-					push(@ret, $node_status->{nodetype});
-				}
-				else {
-					#notify($ERRORS{'OK'},$LOG,"$cidhash->{shortname} nodetype DO NOT matche imagename on remote file");
-					push(@ret, "$node_status->{currentimage}");
-				}
-			} ## end if ($node_status->{currentimage})
-			else {
-				#possible linux env
-				push(@ret, $node_status->{nodetype});
-			}
-
-		} ## end if ($node_status->{nodetype})
-		else {
-			#very strange imagename for nodetype not defined
-			push(@ret, 0, 0, "imagename for nodetype not defined");
-			return @ret;
-		}
-		#uptime not checkable yet for some blades
-		#basechecks ok if made it here
-		push(@ret, 0, 1);
-
-		notify($ERRORS{'OK'}, $LOG, "$cidhash->{shortname} past basecheck flag ret = @ret");
-
-	} ## end elsif ($cidhash->{type} eq "blade")  [ if ($cidhash->{type} eq "lab")
-
-	return @ret;
-} ## end sub _baseline_checks
-
-=pod
-////////////////////////////////////////////////////////////////////////////////
-///
-/// \fn function   _reload
-///
-/// \param
-///
-/// \return array - [1,0], [string]
-///
-/// \brief  trys to reload the blade if needed, returns success or reason why could not be done
-///
-////////////////////////////////////////////////////////////////////////////////
 =cut
 
-sub _reload {
-	my ($cidhash) = @_;
+sub _virtualmachine_investigator {
+	my ($self) = @_;
 
-}
+	my $retval                  = 0;
+	my $comp_hostname           = $self->{computer}->{hostname};
+	my $comp_imagename          = $self->{imagerevision}->{imagename};
+	my $comp_id                 = $self->{computer}->{id};
+	my $nodestatus_status       = $self->{node_status}->{status};
+	my $nodestatus_currentimage = $self->{node_status}->{currentimage};
+	my $nodestatus_ping         = $self->{node_status}->{ping};
+	my $nodestatus_ssh          = $self->{node_status}->{ssh};
+	my $nodestatus_vmstate      = $self->{node_status}->{vmstate};
+	my $nodestatus_image_match  = $self->{node_status}->{image_match};
 
-=pod
-////////////////////////////////////////////////////////////////////////////////
-///
-/// \fn function _imagerevision_check
-///
-/// \param
-///
-/// \return array - [1,0], [string]
-///
-/// \brief  checks image name and revsion number of computer id
-///
-////////////////////////////////////////////////////////////////////////////////
-=cut
-
-sub _imagerevision_check {
-	my ($cidhash) = @_;
-
-	if (!($MYDBH->ping)) {
-		$MYDBH = getnewdbh();
+	if($nodestatus_vmstate =~ /off/){
+		# Ok for node to be off
+		$retval =1;
+		return $retval;
 	}
 
-	my %imagerev;
-
-	my $sel = $MYDBH->prepare(
-		"SELECT ir.id,ir.imagename,ir.revision,ir.production
-                          FROM imagerevision ir
-                          WHERE ir.imageid = ?")                                         or notify($ERRORS{'WARNING'}, $LOG, "Could not prepare select for imagerevision check" . $MYDBH->errstr());
-	$sel->execute($cidhash->{currentimageid}) or notify($ERRORS{'WARNING'}, $LOG, "Could not prepare select for imagerevision check" . $MYDBH->errstr());
-
-	my $update = $MYDBH->prepare("UPDATE computer SET imagerevisionid =? WHERE id = ?") or notify($ERRORS{'WARNING'}, $LOG, "Could not prepare update for correct image revision" . $MYDBH->errstr());
-
-	my $rows = $sel->rows;
-	if ($rows != 0) {
-		while (my @row = $sel->fetchrow_array) {
-			$imagerev{"$row[0]"}{"id"}         = $row[0];
-			$imagerev{"$row[0]"}{"imagename"}  = $row[1];
-			$imagerev{"$row[0]"}{"revision"}   = $row[2];
-			$imagerev{"$row[0]"}{"production"} = $row[3];
-			if ($row[3]) {
-				#check computer version
-				if ($row[0] != $cidhash->{imagerevisionid}) {
-					$update->execute($row[0], $cidhash->{id}) or notify($ERRORS{'WARNING'}, $LOG, "Could not update for correct image revision" . $MYDBH->errstr());
-					notify($ERRORS{'OK'}, $LOG, "imagerevisionid $cidhash->{imagerevisionid} does not match on computer id $cidhash->{id} -- setting to version $row[2] revision id $row[0]");
-				}
-				else {
-					notify($ERRORS{'OK'}, $LOG, "imagerevision matches -- skipping update");
-				}
-				return 1;
-			} ## end if ($row[3])
-		} ## end while (my @row = $sel->fetchrow_array)
-	} ## end if ($rows != 0)
+	if ($nodestatus_currentimage && $nodestatus_ssh) {
+		if (_image_revision_check($comp_id, $comp_imagename, $nodestatus_currentimage)) {
+			#return success
+			notify($ERRORS{'OK'}, $LOG, "comp_hostname= $comp_hostname imagename updated");
+			$retval = 1;
+		}
+	}
 	else {
-		notify($ERRORS{'WARNING'}, $LOG, "imagerevision check -- no rows found for computer id $cidhash->{id}");
-		return 0;
+		notify($ERRORS{'OK'}, $LOG, "comp_hostname= $comp_hostname is confirmed down nodestatus_vmstate= $nodestatus_vmstate nodestatus_ssh= $nodestatus_ssh");
 	}
 
-} ## end sub _imagerevision_check
+	return $retval;
+} ## end sub _virtualmachine_investigator
 
-=pod
-////////////////////////////////////////////////////////////////////////////////
-///
-/// \fn function send_report
-///
-/// \param
-///
-/// \return  1,0
-///
-/// \brief  sends detailed report to owners of possible issues with the boxes
-///
-////////////////////////////////////////////////////////////////////////////////
+#////////////////////////////////////////////////////////////////////////////////
+
+=head2  _image_revision_check
+
+  Parameters  : hash
+  Returns     : 1,0 
+  Description : compare the input values, if no difference or success
+					 updated return 1, if can not update return 0
+					 provides additional checks for virtualmachine types
+
+=cut
+
+sub _image_revision_check {
+
+	my ($comp_id, $comp_imagename, $nodestatus_currentimage) = @_;
+
+	my $retval = 1;
+	#Return retval=1 only if update_computer_imagename fails
+	if ($comp_imagename !~ /$nodestatus_currentimage/) {
+		#update computer entry
+		if (update_computer_imagename($comp_id, $nodestatus_currentimage, $LOG)) {
+			$retval = 1;
+		}
+		else {
+			#failed to update computer image info
+			notify($ERRORS{'OK'}, $LOG, "update_computer_imagename return 0");
+			$retval = 0;
+		}
+	} ## end if ($comp_imagename !~ /$nodestatus_currentimage/)
+
+	return $retval;
+
+} ## end sub _image_revision_check
+
+#////////////////////////////////////////////////////////////////////////////////
+
+=head2 send_report
+
+  Parameters  : hash
+  Returns     : 1,0 
+  Description : 
+
 =cut
 
 sub send_report {
@@ -787,16 +486,13 @@ __END__
 =head1 BUGS and LIMITATIONS
 
  There are no known bugs in this module.
- Please report problems to the VCL team (vcl_help@ncsu.edu).
+ Please report problems to the VCL team (vcl-dev@incubator.apache.org).
 
-=head1 AUTHOR
-
- Aaron Peeler, aaron_peeler@ncsu.edu
- Andy Kurth, andy_kurth@ncsu.edu
+=head1 AUTHORS
 
 =head1 SEE ALSO
 
-L<http://vcl.ncsu.edu>
+L<http://cwiki.apache.org/VCL>
 
 
 =cut

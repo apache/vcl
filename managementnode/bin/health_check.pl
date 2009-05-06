@@ -52,6 +52,7 @@ use 5.008000;
 use strict;
 use warnings;
 use diagnostics;
+use English qw( -no_match_vars );
 
 use VCL::utils;
 use VCL::healthcheck;
@@ -79,6 +80,6 @@ sub main() {
 
 	my $check = new VCL::healthcheck();
 	$check->process;
-	$check->send_report;
+	#$check->send_report;
 
 }
