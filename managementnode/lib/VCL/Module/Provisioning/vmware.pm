@@ -2134,7 +2134,7 @@ sub node_status {
 	else {
 		notify($ERRORS{'OK'}, $log, "$vmclient_shortname is not pingable ($status{ping})");
 		$status{status} = 'RELOAD';
-		return $status{status};
+		$status{ping}         = 0;
 	}
 
 	my $vmx_directory = "$requestedimagename$vmclient_shortname";
