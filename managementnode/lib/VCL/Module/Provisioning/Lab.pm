@@ -52,6 +52,7 @@ use 5.008000;
 use strict;
 use warnings;
 use diagnostics;
+use English qw( -no_match_vars );
 
 use VCL::utils;
 
@@ -72,22 +73,22 @@ use VCL::utils;
 =cut
 
 sub initialize {
-	my $self = shift;
-	my $request_id = $self->data->get_request_id();
-	my $reservation_id = $self->data->get_reservation_id();
+	my $self                  = shift;
+	my $request_id            = $self->data->get_request_id();
+	my $reservation_id        = $self->data->get_reservation_id();
 	my $reservation_is_parent = $self->data->is_parent_reservation;
-	my $request_check_time = $self->data->get_request_check_time();
-	my $computer_id = $self->data->get_computer_id();
-	
+	my $request_check_time    = $self->data->get_request_check_time();
+	my $computer_id           = $self->data->get_computer_id();
+
 	notify($ERRORS{'OK'}, 0, "initializing Lab module, computer id: $computer_id, is parent reservation: $reservation_is_parent");
-	
+
 	# Check if this is a preload request
 	# Nothing needs to be done for lab preloads
 	if ($request_check_time eq 'preload') {
 		notify($ERRORS{'OK'}, 0, "check_time result is $request_check_time, nothing needs to be done for lab preloads");
-		
+
 		insertloadlog($reservation_id, $computer_id, "info", "lab preload does not need to be processed");
-		
+
 		# Only the parent reservation should update the preload flag
 		if ($reservation_is_parent) {
 			# Set the preload flag back to 1 so it will be processed again
@@ -99,17 +100,17 @@ sub initialize {
 				notify($ERRORS{'WARNING'}, 0, "parent reservation: failed to update preload flag to 1");
 				insertloadlog($reservation_id, $computer_id, "info", "failed to update request preload flag to 1");
 			}
-		}
+		} ## end if ($reservation_is_parent)
 		else {
 			notify($ERRORS{'OK'}, 0, "child reservation: request preload flag will be changed by the parent reservation");
 		}
 		notify($ERRORS{'OK'}, 0, "preload lab reservation process exiting");
 		exit;
-	}
+	} ## end if ($request_check_time eq 'preload')
 	else {
 		notify($ERRORS{'OK'}, 0, "check_time result is $request_check_time, reservation will be processed");
 	}
-}
+} ## end sub initialize
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -153,13 +154,13 @@ sub node_status {
 		elsif (ref($self) eq 'ARRAY') {
 			notify($ERRORS{'DEBUG'}, 0, "self is a array reference");
 		}
-		
-		$computer_node_name = $self->{computer}->{hostname};
+
+		$computer_node_name      = $self->{computer}->{hostname};
 		$management_node_os_name = $self->{managementnode}->{OSNAME};
 		$management_node_keys    = $self->{managementnode}->{keys};
 		$computer_host_name      = $self->{computer}->{hostname};
-		$computer_ip_address     = $self->{computer}->{IPaddress}; 
-		$image_os_name				 = $self->{image}->{OS}->{name};
+		$computer_ip_address     = $self->{computer}->{IPaddress};
+		$image_os_name           = $self->{image}->{OS}->{name};
 
 		$log = 0 if !$log;
 		$computer_short_name = $1 if ($computer_node_name =~ /([-_a-zA-Z0-9]*)(\.?)/);
@@ -289,7 +290,7 @@ sub node_status {
 	else {
 		# Lab machine is not available, return undefined to indicate error occurred
 		notify($ERRORS{'WARNING'}, 0, "lab machine $computer_host_name ($computer_ip_address) is not available");
-		return;
+		$status{status} = 'RELOAD';
 	}
 
 	notify($ERRORS{'OK'}, 0, "returning node status hash reference with {status}=$status{status}");
