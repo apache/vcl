@@ -38,7 +38,6 @@ function addITECSUser($loginid) {
 		return NULL;
 	$query = "SELECT id AS uid, "
 	       .        "first, " 
-	       .        "middle, "
 	       .        "last, "
 	       .        "email, "
 	       .        "created, "
@@ -51,7 +50,6 @@ function addITECSUser($loginid) {
 		// FIXME test replacing ''s
 		// FIXME do we care if the account is active?
 		$first = ereg_replace("'", "\'", $row['first']);
-		$middle = ereg_replace("'", "\'", $row['middle']);
 		$last = ereg_replace("'", "\'", $row['last']);
 		$loweruser = strtolower($row['email']);
 		$query = "INSERT INTO user ("
@@ -59,7 +57,6 @@ function addITECSUser($loginid) {
 		       .        "unityid, "
 		       .        "affiliationid, "
 		       .        "firstname, "
-		       .        "middlename, "
 		       .        "lastname, "
 		       .        "email, "
 		       .        "emailnotices, "
@@ -69,7 +66,6 @@ function addITECSUser($loginid) {
 		       .        "'$loweruser', "
 		       .        "2, "
 		       .        "'$first', "
-		       .        "'$middle', "
 		       .        "'$last', "
 		       .        "'{$row['email']}', "
 		       .        "0, "
@@ -125,10 +121,8 @@ function validateITECSUser($loginid) {
 /// \b unityid - unity ID for the user\n
 /// \b affiliation - user's affiliation\n
 /// \b affiliationid - user's affiliation id\n
-/// \b curriculum - curriculum user is in\n
 /// \b firstname - user's first name\n
 /// \b preferredname - user's preferred name\n
-/// \b middlename - user's middle name\n
 /// \b lastname - user's last name\n
 /// \b email - user's preferred email address\n
 /// \b IMtype - user's preferred IM protocol\n
@@ -155,7 +149,6 @@ function updateITECSUser($userid) {
 		return NULL;
 	$query = "SELECT id AS uid, "
 	       .        "first, " 
-	       .        "middle, "
 	       .        "last, "
 	       .        "email, "
 	       .        "created "
@@ -168,8 +161,7 @@ function updateITECSUser($userid) {
 	$now = unixToDatetime(time());
 
 	// select desired data from db
-	$query = "SELECT c.name AS curriculum, "
-	       .        "i.name AS IMtype, "
+	$query = "SELECT i.name AS IMtype, "
 	       .        "u.IMid AS IMid, "
 	       .        "u.affiliationid, "
 	       .        "af.name AS affiliation, "
@@ -187,12 +179,10 @@ function updateITECSUser($userid) {
 	       .        "u.mapserial AS mapserial, "
 	       .        "u.showallgroups "
 	       . "FROM user u, "
-	       .      "curriculum c, "
 	       .      "IMtype i, "
 	       .      "affiliation af, "
 	       .      "adminlevel a "
-	       . "WHERE u.curriculumid = c.id AND "
-	       .       "u.IMtypeid = i.id AND "
+	       . "WHERE u.IMtypeid = i.id AND "
 	       .       "u.adminlevelid = a.id AND "
 	       .       "u.affiliationid = af.id AND "
 		    .       "u.uid = " . $userData["uid"];
@@ -203,14 +193,12 @@ function updateITECSUser($userid) {
 	if($user = mysql_fetch_assoc($qh)) {
 		$user["unityid"] = $userid;
 		$user["firstname"] = $userData['first'];
-		$user["middlename"] = $userData['middle'];
 		$user["lastname"] = $userData["last"];
 		$user["email"] = $userData["email"];
 		$user["lastupdated"] = $now;
 		$query = "UPDATE user "
 		       . "SET unityid = '$userid', "
 		       .     "firstname = '{$userData['first']}', "
-		       .     "middlename = '{$userData['middle']}', "
 		       .     "lastname = '{$userData['last']}', "
 		       .     "email = '{$userData['email']}', "
 		       .     "lastupdated = '$now' "
@@ -223,9 +211,7 @@ function updateITECSUser($userid) {
 		$query = "SELECT u.unityid AS unityid, "
 		       .        "u.affiliationid, "
 		       .        "af.name AS affiliation, "
-		       .        "c.name AS curriculum, "
 		       .        "u.firstname AS firstname, "
-		       .        "u.middlename AS middlename, "
 		       .        "u.lastname AS lastname, "
 		       .        "u.preferredname AS preferredname, "
 		       .        "u.email AS email, "
@@ -245,12 +231,10 @@ function updateITECSUser($userid) {
 		       .        "u.showallgroups, "
 		       .        "u.lastupdated AS lastupdated "
 		       . "FROM user u, "
-		       .      "curriculum c, "
 		       .      "IMtype i, "
 		       .      "affiliation af, "
 		       .      "adminlevel a "
-		       . "WHERE u.curriculumid = c.id AND "
-		       .       "u.IMtypeid = i.id AND "
+		       . "WHERE u.IMtypeid = i.id AND "
 		       .       "u.adminlevelid = a.id AND "
 		       .       "u.affiliationid = af.id AND "
 		       .       "u.id = $id";

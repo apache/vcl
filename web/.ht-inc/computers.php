@@ -574,7 +574,6 @@ function editOrAddComputer($state) {
 	elseif($nocomps) {
 		$data["ipaddress"] = '';
 		$data["stateid"] = '';
-		$data["deptid"] = '';
 		$data["owner"] = '';
 		$data["platformid"] = '';
 		$data["scheduleid"] = '';
@@ -594,7 +593,6 @@ function editOrAddComputer($state) {
 		$id = $data["compid"];
 		$data["ipaddress"] = $computers[$id]["IPaddress"];
 		$data["stateid"] = $computers[$id]["stateid"];
-		$data["deptid"] = $computers[$id]["deptid"];
 		$data["owner"] = $computers[$id]["owner"];
 		$data["platformid"] = $computers[$id]["platformid"];
 		$data["scheduleid"] = $computers[$id]["scheduleid"];
@@ -836,7 +834,6 @@ function confirmEditOrAddComputer($state) {
 	print "<H3>$question</H3>\n";
 	printComputerInfo($data["ipaddress"],
 	                  $data["stateid"],
-	                  $data["deptid"],
 	                  $data["owner"],
 	                  $data["platformid"],
 	                  $data["scheduleid"],
@@ -1024,7 +1021,6 @@ function confirmDeleteComputer() {
 	print "<H3>$question</H3>\n";
 	printComputerInfo($computers[$compid]["IPaddress"],
 	                  $computers[$compid]["stateid"],
-	                  $computers[$compid]["deptid"],
 	                  $computers[$compid]["owner"],
 	                  $computers[$compid]["platformid"],
 	                  $computers[$compid]["scheduleid"],
@@ -2860,7 +2856,7 @@ function submitCompScheduleChange() {
 /// \param $checks - (optional) 1 to perform validation, 0 not to
 ///
 /// \return an array with the following keys:\n
-/// bulk, ipaddress, stateid, deptid, platformid, scheduleid, currentimgid,
+/// bulk, ipaddress, stateid, platformid, scheduleid, currentimgid,
 /// ram, numprocs, procspeed, network, hostname, compid, type
 ///
 /// \brief validates input from the previous form; if anything was improperly
@@ -2874,7 +2870,6 @@ function processComputerInput($checks=1) {
 	$return["bulk"] = getContinuationVar("bulk", processInputVar("bulk", ARG_NUMERIC));
 	$return["ipaddress"] = getContinuationVar("ipaddress", processInputVar("ipaddress", ARG_STRING));
 	$return["stateid"] = getContinuationVar("stateid", processInputVar("stateid", ARG_NUMERIC));
-	$return["deptid"] = getContinuationVar("deptid", processInputVar("deptid", ARG_NUMERIC));
 	$return["owner"] = getContinuationVar("owner", processInputVar("owner", ARG_STRING));
 	$return["platformid"] = getContinuationVar("platformid", processInputVar("platformid", ARG_NUMERIC));
 	$return["scheduleid"] = getContinuationVar("scheduleid", processInputVar("scheduleid", ARG_NUMERIC));
@@ -2940,19 +2935,18 @@ function processComputerInput($checks=1) {
 /// \fn processComputerInput2()
 ///
 /// \return an array with the following keys:\n
-/// depts, platforms, schedules, showhostname, shownextimage, 
-/// showipaddress, showram, showstate, showprocnumber, showdepartment,
-/// showprocspeed, showplatform, shownetwork, showschedule, showcomputerid,
-/// showcurrentimage, showtype, showprovisioning
+/// platforms, schedules, showhostname, shownextimage, showipaddress, showram,
+/// showstate, showprocnumber, showdepartment, showprocspeed, showplatform,
+/// shownetwork, showschedule, showcomputerid, showcurrentimage, showtype,
+/// showprovisioning
 ///
-/// \brief processes depts, platforms, schedules, and all of the flags for
+/// \brief processes platforms, schedules, and all of the flags for
 /// what data to show
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function processComputerInput2() {
 	$return = array();
 
-	$return["depts"] = getContinuationVar('depts', processInputVar("depts", ARG_MULTINUMERIC));
 	$return["platforms"] = getContinuationVar('platforms', processInputVar("platforms", ARG_MULTINUMERIC));
 	$return["schedules"] = getContinuationVar('schedules', processInputVar("schedules", ARG_MULTINUMERIC));
 	$return["groups"] = getContinuationVar('groups', processInputVar("groups", ARG_MULTINUMERIC));
@@ -3008,7 +3002,7 @@ function processComputerInput3() {
 /// \param $checks - (optional) 1 to perform validation, 0 not to
 ///
 /// \return an array with the following indexes:\n
-/// startipaddress, endipaddress, starthostval, endhostval, stateid, deptid,
+/// startipaddress, endipaddress, starthostval, endhostval, stateid,
 /// platformid, scheduleid, ram, numprocs, procspeed, network,
 /// hostname, type, count (0 if any errors found)
 ///
@@ -3040,7 +3034,6 @@ function processBulkComputerInput($checks=1) {
 	$return["startmac"] = getContinuationVar("startmac", processInputVar("startmac", ARG_STRING));
 
 	$return["stateid"] = getContinuationVar("stateid", processInputVar("stateid", ARG_NUMERIC));
-	$return["deptid"] = getContinuationVar("deptid", processInputVar("deptid", ARG_NUMERIC));
 	$return["owner"] = getContinuationVar("owner", processInputVar("owner", ARG_STRING));
 	$return["platformid"] = getContinuationVar("platformid", processInputVar("platformid", ARG_NUMERIC));
 	$return["scheduleid"] = getContinuationVar("scheduleid", processInputVar("scheduleid", ARG_NUMERIC));
@@ -3284,7 +3277,7 @@ function getCompIdList($groups) {
 /// \fn updateComputer($data)
 ///
 /// \param $data - an array with the following indexes:\n
-/// ipaddress, stateid, deptid, platformid, scheduleid,
+/// ipaddress, stateid, platformid, scheduleid,
 /// ram, numprocs, procspeed, network, hostname, compid, type
 ///
 /// \return number of rows affected by the update\n
@@ -3298,7 +3291,6 @@ function updateComputer($data) {
 	$ownerid = getUserlistID($data["owner"]);
 	$query = "UPDATE computer "
 	       . "SET stateid = {$data["stateid"]}, "
-	       /*.     "deptid = " . $data["deptid"] . ", "*/
 	       .     "ownerid = $ownerid, "
 	       .     "platformid = {$data["platformid"]}, "
 	       .     "scheduleid = {$data["scheduleid"]}, "
@@ -3321,7 +3313,7 @@ function updateComputer($data) {
 /// \fn addComputer($data)
 ///
 /// \param $data - an array with the following indexes:\n
-/// ipaddress, stateid, deptid, platformid, scheduleid,
+/// ipaddress, stateid, platformid, scheduleid,
 /// ram, numprocs, procspeed, network, hostname, type
 ///
 /// \brief adds a computer to the computer table
@@ -3387,15 +3379,13 @@ function addComputer($data) {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn printComputerInfo($ipaddress, $stateid, $deptid, $owner,
-///                                $platformid, $scheduleid, $currentimgid,
-///                                $ram, $numprocs, $procspeed,
-///                                $network,  $hostname, $compid, $type,
-///                                $provisioningid)
+/// \fn printComputerInfo($ipaddress, $stateid, $owner, $platformid,
+///                       $scheduleid, $currentimgid, $ram, $numprocs,
+///                       $procspeed, $network,  $hostname, $compid, $type,
+///                       $provisioningid)
 ///
 /// \param $ipaddress -  IP address of computer
 /// \param $stateid - stateid of computer
-/// \param $deptid - departmentid of computer
 /// \param $owner - owner of computer
 /// \param $platformid - platformid of computer
 /// \param $scheduleid - scheduleid of computer
@@ -3412,7 +3402,7 @@ function addComputer($data) {
 /// \brief prints a table of information about the computer
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function printComputerInfo($ipaddress, $stateid, $deptid, $owner, $platformid,
+function printComputerInfo($ipaddress, $stateid, $owner, $platformid,
                            $scheduleid, $currentimgid, $ram, $numprocs,
                            $procspeed, $network, $hostname, $compid, $type,
                            $provisioningid) {

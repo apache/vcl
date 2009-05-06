@@ -101,11 +101,6 @@ function userpreferences() {
 	print "          <TD></TD>\n";
 	print "        </TR>\n";
 	print "        <TR>\n";
-	print "          <TH align=right>Middle Name<a href=#updateinfo>*</a>:</TH>\n";
-	print "          <TD>" . $user["middlename"] . "</TD>\n";
-	print "          <TD></TD>\n";
-	print "        </TR>\n";
-	print "        <TR>\n";
 	print "          <TH align=right>Last Name<a href=#updateinfo>*</a>:</TH>\n";
 	print "          <TD>" . $user["lastname"] . "</TD>\n";
 	print "          <TD></TD>\n";

@@ -1121,10 +1121,6 @@ function userLookup() {
 		print "    <TD>{$userdata["firstname"]}</TD>\n";
 		print "  </TR>\n";
 		print "  <TR>\n";
-		print "    <TH align=right>Middle Name:</TH>\n";
-		print "    <TD>{$userdata["middlename"]}</TD>\n";
-		print "  </TR>\n";
-		print "  <TR>\n";
 		print "    <TH align=right>Last Name:</TH>\n";
 		print "    <TD>{$userdata["lastname"]}</TD>\n";
 		print "  </TR>\n";

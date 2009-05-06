@@ -354,6 +354,7 @@ function checkAccess() {
 		}
 		$xmlpass = processInputData($_SERVER['HTTP_X_PASS'], ARG_STRING, 1);
 		$apiver = processInputData($_SERVER['HTTP_X_APIVERSION'], ARG_NUMERIC, 1);
+		/* code for version 1 should probably be removed in VCL 2.2 */
 		if($apiver == 1) {
 			$query = "SELECT x.id "
 			       . "FROM xmlrpcKey x, "
@@ -868,7 +869,6 @@ function errorrpt() {
 /// \b sn - surname\n
 /// \b employeeType - SPA/EPA/GRAD/??\n
 /// \b givenName - first name\n
-/// \b ncsuMiddleName - middle name\n
 /// \b initials \n
 /// \b title \n
 /// \b ncsuPreferredName \n
@@ -923,7 +923,6 @@ function ldapUIDLookup($uid, &$userInfo, $doMerge=TRUE) {
 	                  "homeDirectory" => "",
 	                  "mailHost" => "",
 	                  "ncsuMUAprotocol" => "",
-	                  "ncsuMiddleName" => "",
 	                  "memberNisNetgroup" => array());
 	
 	$ldapConnect = ldap_connect("ldaps://ldap.ncsu.edu/");
@@ -1081,7 +1080,6 @@ function ldapUIDLookup($uid, &$userInfo, $doMerge=TRUE) {
 			$name = explode(' ', $userInfo["info"]["account"]["gecos"]);
 			if(count($name) == 3) {
 				$userInfo["givenName"] = $name[0];
-				$userInfo["ncsuMiddleName"] = $name[1];
 				$userInfo["sn"] = $name[2];
 			}
 			elseif(count($name) == 2) {
@@ -1320,7 +1318,6 @@ function getOSList() {
 /// \return $imagelist - array of images with the following elements:\n
 /// \b name - name of image\n
 /// \b prettyname - pretty name of image\n
-/// \b deptid - dept id image belongs to\n
 /// \b ownerid - userid of owner\n
 /// \b owner - unity id of owner\n
 /// \b platformid - platformid for the platform the image if for\n
@@ -1360,7 +1357,6 @@ function getImages($includedeleted=0, $imageid=0) {
 	$query = "SELECT i.id AS id,"
 	       .        "i.name AS name, "
 	       .        "i.prettyname AS prettyname, "
-	       .        "i.deptid AS deptid, "
 	       .        "i.ownerid AS ownerid, "
 	       .        "CONCAT(u.unityid, '@', a.name) AS owner, "
 	       .        "i.platformid AS platformid, "
@@ -3082,9 +3078,7 @@ function processInputData($data, $type, $addslashes=0, $defaultvalue=NULL) {
 /// \b affiliationid - affiliation id of user\n
 /// \b affiliation - affiliation of user\n
 /// \b login - login ID for the user (unity ID or part before \@sign)\n
-/// \b curriculum - curriculum user is in\n
 /// \b firstname - user's first name\n
-/// \b middlename - user's middle name\n
 /// \b lastname - user's last name\n
 /// \b preferredname - user's preferred name\n
 /// \b email - user's preferred email address\n
@@ -3122,9 +3116,7 @@ function getUserInfo($id) {
 	$query = "SELECT u.unityid AS unityid, "
 	       .        "u.affiliationid, "
 	       .        "af.name AS affiliation, "
-	       .        "c.name AS curriculum, "
 	       .        "u.firstname AS firstname, "
-	       .        "u.middlename AS middlename, "
 	       .        "u.lastname AS lastname, "
 	       .        "u.preferredname AS preferredname, "
 	       .        "u.email AS email, "
@@ -3145,12 +3137,10 @@ function getUserInfo($id) {
 	       .        "u.lastupdated AS lastupdated, "
 	       .        "af.shibonly "
 	       . "FROM user u, "
-	       .      "curriculum c, "
 	       .      "IMtype i, "
 	       .      "affiliation af, "
 	       .      "adminlevel a "
-	       . "WHERE u.curriculumid = c.id AND "
-	       .       "u.IMtypeid = i.id AND "
+	       . "WHERE u.IMtypeid = i.id AND "
 	       .       "u.adminlevelid = a.id AND "
 	       .       "u.affiliationid = af.id AND ";
 	if(is_numeric($id))
@@ -3256,9 +3246,7 @@ function getUsersGroups($userid, $includeowned=0, $includeaffil=0) {
 /// \b unityid - unity ID for the user\n
 /// \b affiliation - user's affiliation\n
 /// \b affiliationid - user's affiliation id\n
-/// \b curriculum - curriculum user is in\n
 /// \b firstname - user's first name\n
-/// \b middlename - user's middle name\n
 /// \b lastname - user's last name\n
 /// \b email - user's preferred email address\n
 /// \b IMtype - user's preferred IM protocol\n
@@ -5032,49 +5020,6 @@ function getDepartmentName($id) {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn getDepartmentID($dept)
-///
-/// \param $dept - department name
-///
-/// \return id from department table for the department name
-///
-/// \brief gets id field from department table for $dept
-///
-////////////////////////////////////////////////////////////////////////////////
-function getDepartmentID($dept) {
-	$dept = strtolower($dept);
-	$query = "SELECT id FROM department WHERE name = '$dept'";
-	$qh = doQuery($query, 101);
-	if(mysql_num_rows($qh)) {
-		$row = mysql_fetch_row($qh);
-		return $row[0];
-	}
-	else {
-		return 0;
-	}
-}
-
-////////////////////////////////////////////////////////////////////////////////
-///
-/// \fn getAppId($app)
-///
-/// \param $app - name of an app (must match name in the app table)
-///
-/// \return the id of matching $app in the app table or 0 if lookup fails
-///
-/// \brief looks up the id for $app and returns it
-///
-////////////////////////////////////////////////////////////////////////////////
-function getAppId($app) {
-	$qh = doQuery("SELECT id FROM app WHERE name = '$app'", 139);
-	if($row = mysql_fetch_row($qh)) {
-		return $row[0];
-	}
-	return 0;
-}
-
-////////////////////////////////////////////////////////////////////////////////
-///
 /// \fn getImageId($image)
 ///
 /// \param $image - name of an image (must match name (not prettyname) in the 
@@ -5128,28 +5073,6 @@ function getStates() {
 		$states[$row[0]] = $row[1];
 	}
 	return $states;
-}
-
-////////////////////////////////////////////////////////////////////////////////
-///
-/// \fn getDepartments()
-///
-/// \return array of departments where the index are the id from the dept table,
-/// each index has the following elements:\n
-/// \b name - short name of department\n
-/// \b prettyname - nice looking name of department
-///
-/// \brief gets names for departments in dept table
-///
-////////////////////////////////////////////////////////////////////////////////
-function getDepartments() {
-	$qh = doQuery("SELECT id, name, prettyname FROM dept", 177);
-	$depts = array();
-	while($row = mysql_fetch_row($qh)) {
-		$depts[$row[0]]["name"] = $row[1];
-		$depts[$row[0]]["prettyname"] = $row[2];
-	}
-	return $depts;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -6002,9 +5925,6 @@ function showTimeTable($links) {
 /// items\n
 /// \b state - current state of the computer\n
 /// \b stateid - id of current state\n
-/// \b dept - department owning the computer\n
-/// \b prettydept - pretty name of department owning the computer\n
-/// \b deptid - id of department owning the computer\n
 /// \b owner - unity id of owner\n
 /// \b ownerid - user id of owner\n
 /// \b platform - computer's platform\n
@@ -6038,9 +5958,6 @@ function getComputers($sort=0, $includedeleted=0, $compid="") {
 	$query = "SELECT c.id AS id, "
 	       .        "st.name AS state, "
 	       .        "c.stateid AS stateid, "
-	       .        "d.name AS dept, "
-	       .        "d.prettyname AS prettydept, "
-	       .        "c.deptid AS deptid, "
 	       .        "CONCAT(u.unityid, '@', a.name) AS owner, "
 	       .        "u.id AS ownerid, "
 	       .        "p.name AS platform, "
@@ -6067,7 +5984,6 @@ function getComputers($sort=0, $includedeleted=0, $compid="") {
 	       .        "c.provisioningid, "
 	       .        "pr.prettyname AS provisioning "
 	       . "FROM state st, "
-	       .      "dept d, "
 	       .      "platform p, "
 	       .      "schedule sc, "
 	       .      "image cur, "
@@ -6082,7 +5998,6 @@ function getComputers($sort=0, $includedeleted=0, $compid="") {
 	       . "LEFT JOIN image next ON (c.nextimageid = next.id) "
 	       . "LEFT JOIN provisioning pr ON (c.provisioningid = pr.id) "
 	       . "WHERE c.stateid = st.id AND "
-	       .       "c.deptid = d.id AND "
 	       .       "c.platformid = p.id AND "
 	       .       "c.scheduleid = sc.id AND "
 	       .       "c.currentimageid = cur.id AND "
@@ -6110,11 +6025,10 @@ function getComputers($sort=0, $includedeleted=0, $compid="") {
 ///
 /// \fn getUserComputerMetaData()
 ///
-/// \return an array of 3 indices - depts, platforms, schedules - where each
+/// \return an array of 2 indices - platforms, schedules - where each
 /// index's value is an array of user's computer's data
 ///
-/// \brief builds an array of depts, platforms, and schedules for user's 
-/// computers
+/// \brief builds an array of platforms and schedules for user's computers
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function getUserComputerMetaData() {
@@ -6124,15 +6038,11 @@ function getUserComputerMetaData() {
 	$computers = getComputers();
 	$resources = getUserResources(array("computerAdmin"), 
 	                              array("administer", "manageGroup"), 0, 1);
-	$return = array("depts" => array(),
-	                "platforms" => array(),
+	$return = array("platforms" => array(),
 	                "schedules" => array());
 	foreach(array_keys($resources["computer"]) as $compid) {
 		if(! array_key_exists($compid, $computers))
 			continue;
-		/*if(! in_array($computers[$compid]["prettydept"], $return["depts"]))
-			$return["depts"][$computers[$compid]["deptid"]] = 
-			      $computers[$compid]["prettydept"];*/
 		if(! in_array($computers[$compid]["platform"], $return["platforms"]))
 			$return["platforms"][$computers[$compid]["platformid"]] =
 			      $computers[$compid]["platform"];

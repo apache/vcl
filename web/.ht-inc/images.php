@@ -124,7 +124,6 @@ function viewImages() {
 	$userImageIDs = array_keys($resources["image"]);
 	$platforms = getPlatforms();
 	$oslist = getOSList();
-	$depts = getDepartments();
 
 	print "<H2>Image Profiles</H2>\n";
 	if($mode == "submitDeleteImage") {
@@ -1086,7 +1085,6 @@ function editOrAddImage($state) {
 	$images = getImages();
 	$platforms = getPlatforms();
 	$oslist = getOSList();
-	$depts = getDepartments();
 	$groups = getUserGroups(0, $user['affiliationid']);
 	$groups = array_reverse($groups, TRUE);
 	$groups[0] = array("name" => "Any");
@@ -1116,17 +1114,6 @@ function editOrAddImage($state) {
 		$tmp = getImageNotes($id);
 		$data['description'] = $tmp['description'];
 		$data['usage'] = $tmp['usage'];
-		# commented out sometime before 9-30-08
-		/*$data["prettyname"] = $images[$id]["prettyname"];
-		$data["deptid"] = $images[$id]["deptid"];
-		$data["owner"] = $images[$id]["owner"];
-		$data["platformid"] = $images[$id]["platformid"];
-		$data["osid"] = $images[$id]["osid"];
-		$data["minram"] = $images[$id]["minram"];
-		$data["minprocnumber"] = $images[$id]["minprocnumber"];
-		$data["minprocspeed"] = $images[$id]["minprocspeed"];
-		$data["minnetwork"] = $images[$id]["minnetwork"];
-		$data["reloadtime"] = $images[$id]["reloadtime"];*/
 	}
 
 	print "<FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
@@ -1198,8 +1185,8 @@ function editOrAddImage($state) {
 	print "  </TR>\n";
 	print "</TABLE><br>\n";
 	print "<div dojoType=\"dijit.TitlePane\" title=\"Advanced Options - leave ";
-	print "default values unless you really know what you are doing\" ";
-	print "open=false style=\"width: 500px\">\n";
+	print "default values unless you really know what you are doing<br>(click to ";
+	print "expand)\" open=false style=\"width: 500px\">\n";
 	print "<TABLE>\n";
 	print "  <TR>\n";
 	print "    <TD colspan=3 id=hide1><hr></TD>\n";
@@ -1506,7 +1493,6 @@ function confirmEditOrAddImage($state) {
 
 	$platforms = getPlatforms();
 	$oslist = getOSList();
-	$depts = getDepartments();
 
 	print "<FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
 	print "<DIV align=center>\n";
@@ -2222,7 +2208,6 @@ function confirmDeleteImage() {
 
 	$platforms = getPlatforms();
 	$oslist = getOSList();
-	$depts = getDepartments();
 
 	print "<FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
 	print "<DIV align=center>\n";
@@ -2646,7 +2631,6 @@ function processImageInput($checks=1) {
 	$return['requestid'] = getContinuationVar('requestid');
 	#$return["name"] = processInputVar("name", ARG_STRING);
 	$return["prettyname"] = processInputVar("prettyname", ARG_STRING);
-	$return["deptid"] = processInputVar("deptid", ARG_NUMERIC);
 	$return["owner"] = processInputVar("owner", ARG_STRING, "{$user["unityid"]}@{$user['affiliation']}");
 	#$return["platformid"] = processInputVar("platformid", ARG_NUMERIC);
 	#$return["osid"] = processInputVar("osid", ARG_NUMERIC);

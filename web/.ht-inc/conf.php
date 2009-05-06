@@ -91,7 +91,6 @@ $authMechs = array(
 	                                                             #        example3: '%s@ad.example.com'
 	                           "unityid" => "samAccountName",    # ldap field that contains the user's login id
 	                           "firstname" => "givenname",       # ldap field that contains the user's first name
-	                           #"middlename" => "middlename",    # ldap field that contains the user's middle name (optional)
 	                           "lastname" => "sn",               # ldap field that contains the user's last name
 	                           "email" => "mail",                # ldap field that contains the user's email address
 	                           "defaultemail" => "@example.com", # if for some reason an email address may not be returned for a user, this is what

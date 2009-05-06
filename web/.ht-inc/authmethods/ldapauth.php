@@ -78,10 +78,8 @@ function addLDAPUser($authtype, $userid) {
 		$query .=    "uid, ";
 	$query .=       "unityid, "
 	       .        "affiliationid, "
-	       .        "firstname, ";
-	if(array_key_exists('middle', $data))
-		$query .=    "middlename, ";
-	$query .=       "lastname, "
+	       .        "firstname, "
+	       .        "lastname, "
 	       .        "email, "
 	       .        "emailnotices, "
 	       .        "lastupdated) "
@@ -90,10 +88,8 @@ function addLDAPUser($authtype, $userid) {
 		$query .=    "{$data['numericid']}, ";
 	$query .=       "'$loweruserid', "
 	       .        "{$authMechs[$authtype]['affiliationid']}, "
-	       .        "'{$data['first']}', ";
-	if(array_key_exists('middle', $data))
-		$query .=    "'{$data['middle']}', ";
-	$query .=       "'{$data['last']}', "
+	       .        "'{$data['first']}', "
+	       .        "'{$data['last']}', "
 	       .        "'{$data['email']}', "
 	       .        "'{$data['emailnotices']}', "
 	       .        "NOW())";
@@ -171,14 +167,11 @@ function updateLDAPUser($authtype, $userid) {
 	$userData = getLDAPUserData($authtype, $userid);
 	if(is_null($userData))
 		return NULL;
-	if(! array_key_exists('middle', $userData))
-		$userData['middle'] = '';
 	$affilid = $authMechs[$authtype]['affiliationid'];
 	$now = unixToDatetime(time());
 
 	// select desired data from db
-	$query = "SELECT c.name AS curriculum, "
-	       .        "i.name AS IMtype, "
+	$query = "SELECT i.name AS IMtype, "
 	       .        "u.IMid AS IMid, "
 	       .        "u.affiliationid, "
 	       .        "af.name AS affiliation, "
@@ -198,12 +191,10 @@ function updateLDAPUser($authtype, $userid) {
 	       .        "u.mapserial AS mapserial, "
 	       .        "u.showallgroups "
 	       . "FROM user u, "
-	       .      "curriculum c, "
 	       .      "IMtype i, "
 	       .      "adminlevel a, "
 	       .      "affiliation af "
-	       . "WHERE u.curriculumid = c.id AND "
-	       .       "u.IMtypeid = i.id AND "
+	       . "WHERE u.IMtypeid = i.id AND "
 	       .       "u.adminlevelid = a.id AND "
 	       .       "af.id = $affilid AND ";
 	if(array_key_exists('numericid', $userData))
@@ -219,14 +210,12 @@ function updateLDAPUser($authtype, $userid) {
 	if($user = mysql_fetch_assoc($qh)) {
 		$user["unityid"] = $userid;
 		$user["firstname"] = $userData['first'];
-		$user["middlename"] = $userData['middle'];
 		$user["lastname"] = $userData["last"];
 		$user["email"] = $userData["email"];
 		$user["lastupdated"] = $now;
 		$query = "UPDATE user "
 		       . "SET unityid = '$userid', "
 		       .     "firstname = '{$userData['first']}', "
-		       .     "middlename = '{$userData['middle']}', "
 		       .     "lastname = '{$userData['last']}', "
 		       .     "email = '{$userData['email']}', "
 		       .     "lastupdated = '$now' ";
@@ -243,9 +232,7 @@ function updateLDAPUser($authtype, $userid) {
 		$query = "SELECT u.unityid AS unityid, "
 		       .        "u.affiliationid, "
 		       .        "af.name AS affiliation, "
-		       .        "c.name AS curriculum, "
 		       .        "u.firstname AS firstname, "
-		       .        "u.middlename AS middlename, "
 		       .        "u.lastname AS lastname, "
 		       .        "u.preferredname AS preferredname, "
 		       .        "u.email AS email, "
@@ -265,12 +252,10 @@ function updateLDAPUser($authtype, $userid) {
 		       .        "u.showallgroups, "
 		       .        "u.lastupdated AS lastupdated "
 		       . "FROM user u, "
-		       .      "curriculum c, "
 		       .      "IMtype i, "
 		       .      "affiliation af, "
 		       .      "adminlevel a "
-		       . "WHERE u.curriculumid = c.id AND "
-		       .       "u.IMtypeid = i.id AND "
+		       . "WHERE u.IMtypeid = i.id AND "
 		       .       "u.adminlevelid = a.id AND "
 		       .       "u.affiliationid = af.id AND "
 		       .       "u.id = $id";
@@ -311,10 +296,7 @@ function updateLDAPUser($authtype, $userid) {
 function getLDAPUserData($authtype, $userid) {
 	global $authMechs, $mysql_link_vcl;
 	$auth = $authMechs[$authtype];
-	$domiddle = 0;
 	$donumericid = 0;
-	if(array_key_exists('middlename', $auth))
-		$domiddle = 1;
 	if(array_key_exists('numericid', $auth))
 		$donumericid = 1;
 
@@ -333,8 +315,6 @@ function getLDAPUserData($authtype, $userid) {
 	$ldapsearch = array($auth['firstname'],
 	                    $auth['lastname'],
 	                    $auth['email']);
-	if($domiddle)
-		array_push($ldapsearch, $auth['middlename']);
 	if($donumericid)
 		array_push($ldapsearch, $auth['numericid']);
 	# FIXME hack
@@ -365,24 +345,19 @@ function getLDAPUserData($authtype, $userid) {
 				$tmpArr = explode(' ', $data['gecos']);
 				if(count($tmpArr) == 3) {
 					$data[strtolower($auth['firstname'])] = $tmpArr[0];
-					$data[strtolower($auth['middlename'])] = $tmpArr[1];
 					$data[strtolower($auth['lastname'])] = $tmpArr[2];
 				}
 				elseif(count($tmpArr) == 2) {
 					$data[strtolower($auth['firstname'])] = $tmpArr[0];
-					$data[strtolower($auth['middlename'])] = '';
 					$data[strtolower($auth['lastname'])] = $tmpArr[1];
 				}
 				elseif(count($tmpArr) == 1) {
 					$data[strtolower($auth['firstname'])] = '';
-					$data[strtolower($auth['middlename'])] = '';
 					$data[strtolower($auth['lastname'])] = $tmpArr[0];
 				}
 			}
 			else {
 				$data[strtolower($auth['firstname'])] = '';
-				if($domiddle)
-					$data[strtolower($auth['middlename'])] = '';
 				$data[strtolower($auth['lastname'])] = '';
 			}
 		}
@@ -392,8 +367,6 @@ function getLDAPUserData($authtype, $userid) {
 
 		$return['first'] = ereg_replace("'", "\'", $data[strtolower($auth['firstname'])]);
 		$return['last'] = ereg_replace("'", "\'", $data[strtolower($auth['lastname'])]);
-		if($domiddle && array_key_exists(strtolower($auth['middlename']), $data))
-			$return['middle'] = ereg_replace("'", "\'", $data[strtolower($auth['middlename'])]);
 		if($donumericid)
 			$return['numericid'] = $data[strtolower($auth['numericid'])];
 		$return['email'] = $data[strtolower($auth['email'])];

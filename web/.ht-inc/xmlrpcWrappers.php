@@ -48,6 +48,8 @@
  * \b X-APIVERSION - set this to 2\n\n
  * 
  * <h2>API Version 1</h2>
+ * \b NOTICE: API version 1 will probably be removed in VCL 2.2.  If you are
+ * still using API version 1, you need to update your code to use version 2.\n\n
  * This version is being phased out in favor of version 2. Documentation is
  * provided for those currently using version 1 who are not ready to switch
  * to using version 2.\n\n

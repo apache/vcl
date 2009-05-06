@@ -659,7 +659,8 @@ function submitScheduleGroups() {
 /// \param $checks - (optional) 1 to perform validation, 0 not to
 ///
 /// \return an array with the following indexes:\n
-/// scheduleid, name, owner, start[0] - start[6], end[0] - end[6]
+/// scheduleid, name, owner, submode, selrow, count, startDay, startTime,
+/// endDay, endTime
 ///
 /// \brief validates input from the previous form; if anything was improperly
 /// submitted, sets submitErr and submitErrMsg
