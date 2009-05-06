@@ -433,17 +433,7 @@ function ldapLogin($authtype, $userid, $passwd) {
 		else*/
 			setcookie("VCLSKIN", "DEFAULT", (time() + (SECINDAY * 31)), "/", COOKIEDOMAIN);
 		// redirect to main page
-		$tmp = explode('/', $_SERVER['HTTP_REFERER']);
-		if($tmp[2] != 'vcl.ncsu.edu' || 
-		   (array_key_exists(3, $tmp) && $tmp[3] != 'scheduling')) {
-			array_shift($tmp);
-			array_shift($tmp);
-			array_shift($tmp);
-			$rest = implode('/', $tmp);
-			header("Location: https://vcl.ncsu.edu/$rest");
-		}
-		else
-			header("Location: " . BASEURL . SCRIPT);
+		header("Location: " . BASEURL . SCRIPT);
 		dbDisconnect();
 		exit;
 	}
@@ -470,7 +460,7 @@ function localLogin($userid, $passwd) {
 		else
 			setcookie("VCLAUTH", "{$cookie['data']}", 0, "/", COOKIEDOMAIN);
 		//load main page
-		setcookie("VCLSKIN", "NCSU", (time() + (SECINDAY * 31)), "/", COOKIEDOMAIN);
+		setcookie("VCLSKIN", "default", (time() + (SECINDAY * 31)), "/", COOKIEDOMAIN);
 		header("Location: " . BASEURL . SCRIPT);
 		dbDisconnect();
 		exit;
@@ -575,7 +565,7 @@ function checkExpiredDemoUser($userid, $groups=0) {
 				doQuery($query, 101);
 				updateGroups(array($nodemoid), $userid);
 				if(empty($skin)) {
-					$skin = 'ncsu';
+					$skin = 'default';
 					require_once("themes/$skin/page.php");
 				}
 				$mode = 'expiredemouser';

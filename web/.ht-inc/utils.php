@@ -140,22 +140,9 @@ function initGlobals() {
 	# the user table corresponding to the user you want
 	# logged in
 
+	# start auth check
 	$authed = 0;
-	# check for being logged in to WRAP or ITECSAUTH
-	if/*(array_key_exists("WRAP_AFFIL", $_SERVER) && 
-	   $_SERVER["WRAP_AFFIL"] == "ncsu.edu" &&
-	   $_SERVER['WRAP_USERID'] != 'Guest') {
-		$authed = 1;
-		$userid = "{$_SERVER["WRAP_USERID"]}@NCSU";
-	}
-	elseif(array_key_exists("ITECSAUTH", $_COOKIE)) {
-		$authdata = authUser();
-		if(! ($error = getAuthError())) {
-			$authed = 1;
-			$userid = "{$authdata["email"]}@ITECS";
-		}
-	}
-	elseif*/(array_key_exists("VCLAUTH", $_COOKIE)) {
+	if(array_key_exists("VCLAUTH", $_COOKIE)) {
 		$userid = readAuthCookie();
 		if(! is_null($userid))
 			$authed = 1;
@@ -375,8 +362,6 @@ function checkAccess() {
 		elseif($apiver == 2) {
 			$authtype = "";
 			foreach($authMechs as $key => $authmech) {
-				/*if($key == "NCSU WRAP")
-					continue;*/
 				if($authmech['affiliationid'] == $user['affiliationid']) {
 					$authtype = $key;
 					break;
@@ -446,70 +431,12 @@ function checkAccess() {
 			exit;
 		}
 	}
-	# this protects against an attacker submitting data without coming from
-	# our index.php page
 	elseif(! empty($mode)) {
-		/*if(empty($_SERVER["HTTP_REFERER"])) {
-			# when firefox auto-reloads a page, it doesn't set HTTP_REFERER
-			# since we are auto-reloading the 'Current Reservations' page if
-			# there is a pending request, we can't abort
-			if(in_array($mode, $actions['entry']) ||
-			   $mode == "viewRequests" ||
-			   $mode == "statgraphday" ||
-			   $mode == "statgraphdayconcuruser" ||
-			   $mode == "statgraphdayconcurblade" ||
-			   $mode == "statgraphhour" ||
-			   $mode == "selectauth" ||
-			   $mode == "selectNode" ||
-			   $mode == "AJsubmitAddUserPriv" ||
-				$mode == "AJsubmitAddUserGroupPriv" ||
-			   $mode == "AJchangeUserPrivs" ||
-			   $mode == "AJchangeUserGroupPrivs" ||
-			   $mode == "AJsubmitAddChildNode" ||
-			   $mode == "AJsubmitDeleteNode" ||
-			   $mode == "AJupdateWaitTime" ||
-			   $mode == "clearCache" ||
-			   $mode == "jsonImageInformation" ||
-			   $mode == "helpform" ||
-			   $mode == "auth") {
-				return;
-			}
-			$mode = "";
-			$actionFunction = "main";
-			#$user["adminlevel"] = "none";
-			#$viewmode = ADMIN_NONE;
-			#abort(20);
-			return;
-		}
-		$urlArray = explode('?', $_SERVER["HTTP_REFERER"]);
-		#print "urlArray[0] - " . $urlArray[0] . "<BR>\n";
-		#print "correct URL - " . BASEURL . "/<br>\n";
-		if(($urlArray[0] != BASEURL . SCRIPT) &&
-		   ($urlArray[0] != BASEURL . "/") &&
-		   ($urlArray[0] != "https://webauth.ncsu.edu/wrap-bin/was16.cgi") &&
-		   ($urlArray[0] != "http://vcl.ncsu.edu/index.php") &&
-		   ($urlArray[0] != "http://vcl.ncsu.edu/") &&
-		   ($urlArray[0] != "http://vcl.ncsu.edu/site/pages/help/vcl-help" &&
-		   $urlArray[0] != "http://vcl.ncsu.edu/site/pages/help/default" &&
-		   $urlArray[0] != "http://vcl.ncsu.edu/site/pages/default/default" &&
-		   $urlArray[0] != "http://vcl.ncsu.edu/site.php" &&
-		   $urlArray[0] != "http://vcl.ncsu.edu/site" &&
-		   $urlArray[0] != "https://vcl.ncsu.edu/" &&
-		   $urlArray[0] != "https://vcl.ncsu.edu/email-vcl-help-support" &&
-		   $urlArray[0] != "http://vcl.ncsu.edu/email-vcl-help-support" &&
-		   $mode == "helpform") &&
-		   (($urlArray[0] != "http://vcl.ncsu.edu/site" &&
-		   $urlArray[0] != "http://vcl.ncsu.edu/site/pages/default/default" &&
-		   $urlArray[0] != "http://vcl.ncsu.edu/site/index/default") ||
-		   $mode != "viewRequests")) {*/
 		if(! in_array($mode, $actions['entry']) &&
 		   ! $inContinuation) {
 			$mode = "main";
 			$actionFunction = "main";
 			return;
-			#$user["adminlevel"] = "none";
-			#$viewmode = ADMIN_NONE;
-			#abort(20);
 	   }
 		else {
 			if(! $inContinuation) {
@@ -852,248 +779,6 @@ function abort($errcode, $query="") {
 function errorrpt() {
 	$mailParams = "-f" . ENVELOPESENDER;
 	mail(ERROREMAIL, "Error with VCL pages (ajax sent html wrappers)", $_POST['data'], '', $mailParams);
-}
-
-////////////////////////////////////////////////////////////////////////////////
-///
-/// \fn ldapUIDLookup($uid, &$userInfo, $doMerge)
-///
-/// \param $uid - userid to lookup
-/// \param $userInfo - the following fields get populated if they are received
-/// from the LDAP server:\n
-/// \b uid - userid\n
-/// \b info->has_account - TRUE/FALSE\n
-/// \b info->is_employee - TRUE/FALSE\n
-/// \b info->is_student - TRUE/FALSE\n
-/// \b cn - full name\n
-/// \b sn - surname\n
-/// \b employeeType - SPA/EPA/GRAD/??\n
-/// \b givenName - first name\n
-/// \b initials \n
-/// \b title \n
-/// \b ncsuPreferredName \n
-/// \b displayName \n
-/// \b employeeNumber \n
-/// \b departmentNumber \n
-/// \b ncsuAffiliation - ??\n
-/// \b mail - preferred email address\n
-/// \b registeredAddress \n
-/// \b telephoneNumber \n
-/// \b facsimileTelephoneNumber \n
-/// \b ou - department \n
-/// \b gecos - ??\n
-/// \b loginShell - preferred unix shell \n
-/// \b uidNumber - numeric unix id \n
-/// \b gidNumber - numeric unix groud id \n
-/// \b homeDirectory \n
-/// \b mailHost \n
-/// \b ncsuMUAprotocol - POP/IMAP (not current??)\n
-/// \b memberNisNetgroup - array of hesiod groups\n
-/// \param $doMerge - (optional) ??
-///
-/// \return TRUE or FALSE
-///
-/// \brief looks up a userid on the LDAP server, populates $userInfo, returns
-/// TRUE or FALSE
-///
-////////////////////////////////////////////////////////////////////////////////
-function ldapUIDLookup($uid, &$userInfo, $doMerge=TRUE) {
-	global $ldaprdn, $ldappass, $error;
-	$userInfo = array("uid" => "",
-	                  "cn" => "",
-	                  "sn" => "",
-	                  "employeeType" => "",
-	                  "givenName" => "",
-	                  "initials" => "",
-	                  "title" => "",
-	                  "ncsuPreferredName" => "",
-	                  "displayName" => "",
-	                  "employeeNumber" => "",
-	                  "departmentNumber" => "",
-	                  "ncsuAffiliation" => "",
-	                  "mail" => "",
-	                  "registeredAddress" => "",
-	                  "telephoneNumber" => "",
-	                  "facsimileTelephoneNumber" => "",
-	                  "ou" => "",
-	                  "gecos" => "",
-	                  "loginShell" => "",
-	                  "uidNumber" => "",
-	                  "gidNumber" => "",
-	                  "homeDirectory" => "",
-	                  "mailHost" => "",
-	                  "ncsuMUAprotocol" => "",
-	                  "memberNisNetgroup" => array());
-	
-	$ldapConnect = ldap_connect("ldaps://ldap.ncsu.edu/");
-	if(!$ldapConnect) {
-		$error['op'] = "ldapUIDLookup";
-		$error['shortmsg'] = "Could not connect to LDAP server: ";
-		$error['shortmsg'] .= "ldap.ncsu.edu"; 
-		return FALSE;
-	}
-
-	ldap_set_option($ldapConnect, LDAP_OPT_REFERRALS, 0);
-	$result = ldap_bind($ldapConnect, $ldaprdn, $ldappass);
-	if(!$result) {
-		$error['op'] = "ldapUIDLookup";
-		$error['shortmsg'] = "Could not create LDAP binding";   
-		$error['syscode'] = ldap_errno($ldapConnect);
-		$error['sysmsg'] = ldap_err2str($error['syscode']);     
-		ldap_close($ldapConnect);
-		return FALSE;
-	}
-
-	$context = "dc=ncsu,dc=edu";
-	$searchstring = "uid=".$uid;
-	$searchResult = 
-	   ldap_search($ldapConnect,$context,$searchstring,array("*","+"));
-	if(!$searchResult) {
-		$error['op'] = "ldapUIDLookup";
-		$error['shortmsg'] = "Could not execute LDAP search ";
-		$error['shortmsg'] .= "($context => $searchstring)";
-		$error['context'] = $context;
-		$error['search'] = $searchstring;
-		$error['syscode'] = ldap_errno($ldapConnect);
-		$error['sysmsg'] = ldap_err2str($error['syscode']);
-		ldap_close($ldapConnect);
-		return FALSE;
-	}
-
-	if(ldap_count_entries($ldapConnect,$searchResult) == 0) {
-		$error['op'] = "ldapUIDLookup";
-		$error['shortmsg'] = "Specified uid: $uid not found";
-		ldap_close($ldapConnect);
-		return FALSE;
-	}
-
-
-	// basic information
-	$haveuser = FALSE;      
-	$userInfo['uid'] = $uid;
-	$userInfo['info']['has_account'] = FALSE;
-	$accountInfo = array();
-	$userInfo['info']['is_employee'] = FALSE;
-	$employeeInfo = array();
-	$userInfo['info']['is_student'] = FALSE;
-	$studentInfo = array();
-
-	for($entryID = ldap_first_entry($ldapConnect,$searchResult);
-		$entryID != FALSE;
-		$entryID = ldap_next_entry($ldapConnect,$entryID)) {
-		$thisEntry = array();
-		$thisDN = '';
-		$thisDN = ldap_get_dn($ldapConnect,$entryID);
-		$thisEntry = ldap_get_attributes($ldapConnect,$entryID);
-
-		if(!(isset($thisEntry))) continue;
-
-		// parse dn
-		$dnarray = explode(',',$thisDN);
-		$checkou = $dnarray[1];
-		switch($checkou) {
-
-			case "ou=accounts":
-				$haveuser = TRUE;
-				$userInfo['info']['has_account'] = TRUE;
-				$dataInfo = &$accountInfo;
-				break;
-
-			case "ou=employees":
-				$haveuser = TRUE;
-				$userInfo['info']['is_employee'] = TRUE;
-				$dataInfo = &$employeeInfo;
-				break;  
-
-			case "ou=students":
-				$haveuser = TRUE;
-				$userInfo['info']['is_student'] = TRUE;
-				$dataInfo = &$studentInfo;
-				break;
-
-			// not dealing with a group/printer/host/other
-			// somehow (don't know how) keyed by identifier uid=$uid...
-			default:
-				continue 2;
-		}
-
-		foreach($thisEntry as $attribute => $value) {
-			if(!(is_array($value))) continue;
-			if($attribute == "uid") continue;
-			if($attribute == "count") continue;
-
-			if($value['count'] > 1) {
-				$dataInfo[$attribute] = $value;
-				unset($dataInfo[$attribute]['count']);
-			}
-			else {
-				$dataInfo[$attribute] = $value[0];      
-			}
-		}       
-	}
-
-	if(!($haveuser)) {
-		$error['op'] = "ldapUIDLookup";
-		$error['shortmsg'] = "Specified uid: $uid is not a user account";
-		ldap_close($ldapConnect);
-		return FALSE;
-	}
-
-	// merge information student, then employee, then account
-
-	if($userInfo['info']['is_student']) {
-		if($doMerge) $userInfo = array_merge($userInfo,$studentInfo);
-		$userInfo['info']['student'] = $studentInfo;
-	}
-
-	if($userInfo['info']['is_employee']) {
-		if($doMerge) $userInfo = array_merge($userInfo,$employeeInfo);
-		$userInfo['info']['employee'] = $employeeInfo;
-	}
-
-	if($userInfo['info']['has_account']) {
-		if($doMerge) $userInfo = array_merge($userInfo,$accountInfo);
-		$userInfo['info']['account'] = $accountInfo;
-	}
-
-	if($doMerge) {
-		// merged values we don't care about:
-		$noMergeAttribs = array('objectClass',
-		                        'structuralObjectClass',
-		                        'entryUUID',
-		                        'creatorsName',
-		                        'createTimestamp',
-		                        'modifyTimestamp',
-		                        'subschemaSubentry',
-		                        'hasSubordinates',
-		                        'modifiersName',
-		                        'entryCSN');
-
-		foreach($noMergeAttribs as $attribute) {
-			unset($userInfo[$attribute]);
-		}
-	}
-
-	if(! $userInfo["info"]["is_employee"] && ! $userInfo["info"]["is_student"] &&
-	   $userInfo["info"]["has_account"]) {
-		if(array_key_exists("gecos", $userInfo["info"]["account"])) {
-			$name = explode(' ', $userInfo["info"]["account"]["gecos"]);
-			if(count($name) == 3) {
-				$userInfo["givenName"] = $name[0];
-				$userInfo["sn"] = $name[2];
-			}
-			elseif(count($name) == 2) {
-				$userInfo["givenName"] = $name[0];
-				$userInfo["sn"] = $name[1];
-			}
-			elseif(count($name) == 1) {
-				$userInfo["sn"] = $name[0];
-			}
-		}
-		$userInfo["mail"] = $userInfo["uid"] . "@ncsu.edu";
-	}
-
-	return TRUE;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -7403,9 +7088,6 @@ function sortKeepIndex($a, $b) {
 		else
 			return 0;
 	}
-	if(ereg('\.ncsu\.edu$', $a)) {
-		return compareDashedNumbers($a, $b);
-	}
 	return strcasecmp($a, $b);
 }
 
@@ -8489,28 +8171,9 @@ function sendHeaders() {
 	global $shibauthed;
 	$setwrapreferer = processInputVar('am', ARG_NUMERIC, 0);
 	if(! $authed && $mode == "auth") {
-		/*if($oldmode != "auth" && $oldmode != "" && array_key_exists('mode', $_GET)) {
-			$cookieHeaderString = "WRAP_REFERER=" . BASEURL . SCRIPT . "?mode=$oldmode; path=/; domain=" . COOKIEDOMAIN;
-			$itecscookie = BASEURL . SCRIPT . "?mode=$oldmode";
-		}
-		else {
-			$cookieHeaderString = "WRAP_REFERER=" . BASEURL . "; path=/; domain=" . COOKIEDOMAIN;
-			$itecscookie = BASEURL;
-		}
-		header("Set-Cookie: $cookieHeaderString");
-		setcookie("ITECSAUTH_RETURN", "$itecscookie", 0, "/", COOKIEDOMAIN);
-		setcookie("ITECSAUTH_CSS", "vcl.css", 0, "/", COOKIEDOMAIN);*/
 		header("Location: " . BASEURL . SCRIPT . "?mode=selectauth");
 		dbDisconnect();
 		exit;
-	}
-	elseif(! $authed && $mode == 'selectauth' && $setwrapreferer == 1) {
-		$tmp = explode('/', $_SERVER['HTTP_REFERER']);
-		if($tmp[2] == 'vcl.ncsu.edu')
-			$cookieHeaderString = "WRAP_REFERER={$_SERVER['HTTP_REFERER']}; path=/; domain=" . COOKIEDOMAIN;
-		else
-			$cookieHeaderString = "WRAP_REFERER=https://vcl.ncsu.edu/; path=/; domain=" . COOKIEDOMAIN;
-		header("Set-Cookie: $cookieHeaderString");
 	}
 	switch($mode) {
 		case 'logout':
@@ -8568,18 +8231,6 @@ function sendHeaders() {
 	}
 	if($mode == "submitviewmode") {
 		$expire = time() + 31536000; //expire in 1 year
-		/*if(array_key_exists('WRAP_USERID', $_SERVER)) {
-			$testuser = getUserInfo("{$_SERVER['WRAP_USERID']}@NCSU");
-			if($testuser['adminlevelid'] == ADMIN_DEVELOPER) {
-				$viewasuser = processInputVar("viewasuser", ARG_STRING, $_SERVER['WRAP_USERID']);
-				if(validateUserid($viewasuser)) {
-					if($viewasuser == $_SERVER['WRAP_USERID'])
-						setcookie("VCLTESTUSER", "", time() - 10, "/", COOKIEDOMAIN);
-					else
-						setcookie("VCLTESTUSER", $viewasuser, $expire, "/", COOKIEDOMAIN);
-				}
-			}
-		}*/
 		$newviewmode = processInputVar("viewmode", ARG_NUMERIC);
 		if(! empty($newviewmode) && $newviewmode <= $user['adminlevelid'])
 			setcookie("VCLVIEWMODE", $newviewmode, $expire, "/", COOKIEDOMAIN);

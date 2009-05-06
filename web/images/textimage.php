@@ -16,9 +16,6 @@
   limitations under the License.
 */
 
-// most of this was taken from Troy's documentation at
-// http://sysadm.eos.ncsu.edu/site/pages/phpdev/gd-graphics
-
 $face = "fonts/arialbd.ttf";
 
 function vectordist($a, $b){

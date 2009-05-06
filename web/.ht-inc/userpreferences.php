@@ -53,14 +53,8 @@ function userpreferences() {
 	}
 
 	$adminleveldeveloper = 0;
-	if(array_key_exists('WRAP_USERID', $_SERVER)) {
-		$testid = getAffiliationID("NCSU");
-		if(! empty($testid)) {
-			$testuser = getUserInfo("{$_SERVER['WRAP_USERID']}@NCSU");
-			if($testuser['adminlevelid'] == ADMIN_DEVELOPER)
-				$adminleveldeveloper = 1;
-		}
-	}
+	if($user['adminlevelid'] == ADMIN_DEVELOPER)
+		$adminleveldeveloper = 1;
 
 
 	print "<H2 align=center>User Preferences</H2>\n";

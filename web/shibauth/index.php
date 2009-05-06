@@ -199,7 +199,7 @@ switch($affil) {
 		setcookie("VCLSKIN", $skin, (time() + (SECINDAY * 31)), "/", COOKIEDOMAIN);
 		break;
 	default:
-		setcookie("VCLSKIN", "NCSU", (time() + (SECINDAY * 31)), "/", COOKIEDOMAIN);
+		setcookie("VCLSKIN", "default", (time() + (SECINDAY * 31)), "/", COOKIEDOMAIN);
 }
 header("Location: " . BASEURL . "/");
 dbDisconnect();

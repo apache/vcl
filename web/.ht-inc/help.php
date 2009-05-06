@@ -54,12 +54,11 @@ function printHelpForm() {
 		print "<H2>VCL Help</H2>\n";
 	print "This form sends a request to the VCL support group.  Please provide ";
 	print "as much information as possible.<br><br>\n";
-	if(! in_array('helpform', $noHTMLwrappers))
+	if(HELPFAQURL != '') {
 		print "Please see our <a href=\"" . HELPFAQURL . "\">";
-	else
-		print "Please see our <a href=\"http://vcl.ncsu.edu/drupal/?q=faq\">";
-	print "FAQ</a> Section before sending your request - it may be an easy ";
-	print "fix!<br><br>\n";
+		print "FAQ</a> Section before sending your request - it may be an easy ";
+		print "fix!<br><br>\n";
+	}
 	print "<FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
 
 	print "<TABLE>\n";

@@ -2344,14 +2344,12 @@ function editRequest() {
 	if($submitErr) {
 		$data = processRequestInput(0);
 	}
-	// NCSU code
 	$groupid = getUserGroupID('Specify End Time', 1);
 	$members = getUserGroupMembers($groupid);
 	if(array_key_exists($user['id'], $members))
 		$openend = 1;
 	else
 		$openend = 0;
-	// end NCSU code
 	$unixstart = datetimeToUnix($request["start"]);
 	$unixend = datetimeToUnix($request["end"]);
 	$maxtimes = getUserMaxTimes("initialmaxtime");
@@ -3228,18 +3226,12 @@ function printReserveItems($modifystart=1, $day=NULL, $hour=NULL, $minute=NULL,
                           $meridian=NULL, $length=60, $oneline=0, $nolength=0) {
 	global $user;
 	$enddate = processInputVar("enddate", ARG_STRING);
-	// NCSU code
 	$groupid = getUserGroupID('Specify End Time', 1);
 	$members = getUserGroupMembers($groupid);
 	if(array_key_exists($user['id'], $members))
 		$openend = 1;
 	else
 		$openend = 0;
-	// end NCSU code
-	/*if($user['adminlevel'] == 'developer')
-		$openend = 1;
-	else
-		$openend = 0;*/
 	$days = array();
 	$inputday = "";
 	for($cur = time(), $end = $cur + DAYSAHEAD * SECINDAY; 
@@ -3338,46 +3330,6 @@ function connectRequest() {
 		$requestid = getContinuationVar('requestid', 0);
 	else
 		$requestid = processInputVar("requestid", ARG_NUMERIC);
-	$skipwarning = getContinuationVar('skipwarning', 0);
-	# check for using ncsu-guest addr
-	if(! $skipwarning) {
-		$iparr = explode('.', $remoteIP);
-		if($iparr[0] == 204 && $iparr[1] == 84 &&
-			(($iparr[2] == 244) ||
-			($iparr[2] == 245) ||
-			($iparr[2] == 246 && $iparr[3] < 128))) {
-			print "<H2 align=center>Connect!</H2>\n";
-			print "<big><strong>WARNING:</strong> It appears as though you are ";
-			print "connected to an <strong>ncsu-guest</strong> wireless access ";
-			print "point. If this is true, you will not be able to connect to ";
-			print "your reservation because ncsu-guest only allows web traffic. ";
-			print "You need to switch to using <strong>ncsu</strong> as your ";
-			print "wireless access point. If you are sure you are not using ";
-			print "ncsu-guest and want to try to connect anyway, you may select ";
-			print "<strong>Ignore this Warning</strong> to continue to the ";
-			print "normal <strong>Connect!</strong> page.</big><br><br>\n";
-			$cdata = array('requestid' => $requestid,
-								'skipwarning' => 1);
-			$cont = addContinuationsEntry('connectRequest', $cdata);
-			print "<table summary=\"\">\n";
-			print "  <tr>\n";
-			print "    <td>\n";
-			print "      <FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
-			print "      <INPUT type=hidden name=continuation value=\"$cont\">\n";
-			print "      <INPUT type=submit value=\"Ignore this Warning\">\n";
-			print "      </FORM>\n";
-			print "    </td>\n";
-			print "    <td>\n";
-			print "      <FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
-			print "      <INPUT type=hidden name=mode value=viewRequests>\n";
-			print "      <INPUT type=submit value=\"Cancel\">\n";
-			print "      </FORM>\n";
-			print "    </td>\n";
-			print "  </tr>\n";
-			print "</table>\n";
-			return;
-		}
-	}
 	$requestData = getRequestInfo($requestid);
 	if($requestData['reservations'][0]['remoteIP'] != $remoteIP) {
 		$setback = unixToDatetime(time() - 600);
@@ -3401,8 +3353,7 @@ function connectRequest() {
 		$passwd = $requestData["reservations"][0]["password"];
 		if(eregi("windows", $osname)) {
 			print "You will need to use a ";
-			print "<a href=\"http://vcl.ncsu.edu/help/connecting-vcl/how-connect-vcl\">Remote ";
-			print "Desktop program</a> to connect to the ";
+			print "Remote Desktop program to connect to the ";
 			print "system. If you did not click on the <b>Connect!</b> button from ";
 			print "the computer you will be using to access the VCL system, you ";
 			print "will need to cancel this reservation, request a new one, and ";
@@ -3453,17 +3404,13 @@ function connectRequest() {
 			print "      <INPUT type=submit value=\"Get RDP File\">\n";
 			print "      </FORM>\n";
 			print "    </TD>\n";
-			print "    <TD><a href=\"http://vcl.ncsu.edu/help/connecting-vcl/";
-			print "remote-desktop/what-rdp-file\">What is an RDP file?</a></TD>\n";
 			print "  </TR>\n";
 			print "</table>\n";
 		}
 		else {
 			print "You will need to have an ";
-			print "<a href=\"http://vcl.ncsu.edu/help/connecting-vcl/how-connect-vcl#sshx\">X server";
-			print "</a> running on your local computer and use an ";
-			print "<a href=\"http://vcl.ncsu.edu/help/connecting-vcl/how-connect-vcl#sshx\">ssh ";
-			print "client</a> to connect to the system. If you did not ";
+			print "X server running on your local computer and use an ";
+			print "ssh client to connect to the system. If you did not ";
 			print "click on the <b>Connect!</b> button from the computer you will ";
 			print "need to cancel this reservation, request a new one, and ";
 			print "make sure you click the <strong>Connect!</strong> button in ";
@@ -3490,8 +3437,7 @@ function connectRequest() {
 			}
 			print "<strong><big>NOTE:</big> You cannot use the Windows Remote ";
 			print "Desktop Connection to connect to this computer. You must use an ";
-			print "<a href=\"http://vcl.ncsu.edu/help/connecting-vcl/how-connect-vcl#sshx\">";
-			print "ssh client</a>.</strong>\n";
+			print "ssh client.</strong>\n";
 			/*if(eregi("windows", $_SERVER["HTTP_USER_AGENT"])) {
 				print "<br><br><h3>NEW!</h3>\n";
 				print "Connect to the server using a java applet:<br>\n";
@@ -3505,11 +3451,9 @@ function connectRequest() {
 	}
 	else {
 		print "You will need an ";
-		print "<a href=\"http://vcl.ncsu.edu/help/connecting-vcl/how-connect-vcl#sshx\">ssh ";
-		print "client</a> to connect to any unix systems.<br>\n";
+		print "ssh client to connect to any unix systems.<br>\n";
 		print "You will need a ";
-		print "<a href=\"http://vcl.ncsu.edu/help/connecting-vcl/how-connect-vcl\">Remote ";
-		print "Desktop program</a> to connect to any windows systems.<br><br>\n";
+		print "Remote Desktop program</a> to connect to any windows systems.<br><br>\n";
 		print "Use the following information when you are ready to connect:<br>\n";
 		$total = count($requestData["reservations"]);
 		$count = 0;

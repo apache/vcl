@@ -246,8 +246,8 @@ var genericCB = function(type, data, evt) {
 	if(data.match(regex)) {
 		var mesg = 'A minor error has occurred. It is probably safe to ' +
 		           'ignore. However, if you keep getting this message and ' +
-		           'are unable to use VCL, you may contact vcl_help@ncsu.edu ' +
-		           'for further assistance.';
+		           'are unable to use VCL, you may contact the ' +
+		           'administrators of this site for further assistance.';
 		alert(mesg);
 		var d = {mode: 'errorrpt',
 		         data: data};

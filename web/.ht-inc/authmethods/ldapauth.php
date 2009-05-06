@@ -269,9 +269,6 @@ function updateLDAPUser($authtype, $userid) {
 		case 'EXAMPLE1':
 			updateEXAMPLE1Groups($user);
 			break;
-		case 'EXAMPLE2':
-			updateEXAMPLE2Groups($user);
-			break;
 		default:
 			//TODO possibly add to a default group
 	}
@@ -383,53 +380,13 @@ function getLDAPUserData($authtype, $userid) {
 ///
 /// \param $user - an array of user data
 ///
-/// \brief builds an array of nisNetgroups user is a member of and calls
-/// updateGroups
-///
-////////////////////////////////////////////////////////////////////////////////
-function updateEXAMPLE1Groups($user) {
-	$count = 0;
-	do {
-		if($count > 2)
-			abort(35);
-		if($count > 0)
-			sleep(1);
-		ldapUIDLookup($user['unityid'], $userData);
-		$count++;
-	} while(! array_key_exists("info", $userData) ||
-		! array_key_exists("account", $userData["info"]) ||
-		! array_key_exists("memberNisNetgroup", $userData["info"]["account"]));
-	$newusergroups = array();
-	if(! array_key_exists('info', $userData) ||
-	   ! array_key_exists('account', $userData['info']) ||
-	   ! array_key_exists('memberNisNetgroup', $userData['info']['account']))
-		return;
-	foreach($userData["info"]["account"]["memberNisNetgroup"] as $item) {
-		$tmpArr = explode(',', $item);
-		$tmpArr = explode('=', $tmpArr[0]);
-		if(! array_key_exists(1, $tmpArr)) {
-			continue;
-		}
-		$grp = mysql_escape_string($tmpArr[1]);
-		array_push($newusergroups, getUserGroupID($grp, $user['affiliationid']));
-	}
-	$newusergroups = array_unique($newusergroups);
-	updateGroups($newusergroups, $user["id"]);
-}
-
-////////////////////////////////////////////////////////////////////////////////
-///
-/// \fn updateEXAMPLE2Groups($user)
-///
-/// \param $user - an array of user data
-///
 /// \brief builds an array of memberof groups user is a member of and calls
 /// updateGroups
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function updateEXAMPLE2Groups($user) {
+function updateEXAMPLE1Groups($user) {
 	global $authMechs;
-	$auth = $authMechs['EXAMPLE2 LDAP'];
+	$auth = $authMechs['EXAMPLE1 LDAP'];
 	$ds = ldap_connect("ldaps://{$auth['server']}/");
 	if(! $ds)
 		return 0;
@@ -453,9 +410,9 @@ function updateEXAMPLE2Groups($user) {
 	if(! array_key_exists('memberof', $data[0]))
 		return;
 	for($i = 0; $i < $data[0]['memberof']['count']; $i++) {
-		if(preg_match('/^CN=(.+),OU=CourseRolls,DC=example2,DC=com/', $data[0]['memberof'][$i], $match) ||
-		   preg_match('/^CN=(Students_Enrolled),OU=Students,DC=example2,DC=com$/', $data[0]['memberof'][$i], $match) ||
-		   preg_match('/^CN=(Staff),OU=IT,DC=example2,DC=com$/', $data[0]['memberof'][$i], $match))
+		if(preg_match('/^CN=(.+),OU=CourseRolls,DC=example1,DC=com/', $data[0]['memberof'][$i], $match) ||
+		   preg_match('/^CN=(Students_Enrolled),OU=Students,DC=example1,DC=com$/', $data[0]['memberof'][$i], $match) ||
+		   preg_match('/^CN=(Staff),OU=IT,DC=example1,DC=com$/', $data[0]['memberof'][$i], $match))
 			array_push($newusergroups, getUserGroupID($match[1], $user['affiliationid']));
 	}
 	$newusergroups = array_unique($newusergroups);

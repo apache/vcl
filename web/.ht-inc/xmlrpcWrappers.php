@@ -24,8 +24,13 @@
  * There is one function called \b XMLRPCtest() that can be used during 
  * initial development to get started without actually making a request.\n
  * \n
- * The URL you will use to submit RPC calls is\n\n
- * https://vcl.ncsu.edu/scheduling/index.php?mode=xmlrpccall\n\n
+ * The URL you will use to submit RPC calls is the URL for your VCL site
+ * followed by\n\n
+ * index.php?mode=xmlrpccall\n\n
+ * for example if the URL for your VCL site is\n\n
+ * https://vcl.mysite.org/vcl/\n\n
+ * the RPC URL would be\n\n
+ * https://vcl.mysite.org/vcl/index.php?mode=xmlrpccall\n\n
  * Your application must connect using HTTPS.\n\n
  * Internal to the VCL code, "Reservations" are called "Requests"; therefore,
  * "request" is used instead of "reservation" in this documentation and in the
@@ -38,14 +43,15 @@
  * send:\n
  * \b X-User - the userid you would use to log in to the VCL site, followed
  * by the at sign (@), followed by your affiliation\n
- * example: myuserid\@NCSU -
- * currently, you need to  contact vcl_help@ncsu.edu to find out your
- * affiliation, but in the future there will be an API method of obtaining
- * this\n
+ * example: myuserid\@NCSU\n
+ * You can obtain a list of the affiliations by using the XMLRPCaffiliations()
+ * call\n\n
  * \b X-Pass - the password you would use to log in to the VCL site\n
  * \n
  * There is one other additional HTTP header you must send:\n
  * \b X-APIVERSION - set this to 2\n\n
+ * The X-User and X-Pass HTTP headers do not need to be passed to call the
+ * XMLRPCaffiliations() function.
  * 
  * <h2>API Version 1</h2>
  * \b NOTICE: API version 1 will probably be removed in VCL 2.2.  If you are
@@ -53,8 +59,6 @@
  * This version is being phased out in favor of version 2. Documentation is
  * provided for those currently using version 1 who are not ready to switch
  * to using version 2.\n\n
- * To connect to VCL with XML RPC, you will need to obtain a key. Contact
- * vcl_help@ncsu.edu to get one.\n
  * 
  * Authentication is handled by 2 additional HTTP headers you will need to
  * send:\n
@@ -75,7 +79,9 @@
 /// \b id - id of the affiliation\n
 /// \b name - name of the affiliation
 ///
-/// \brief gets all of the affilations for which users can log in to VCL
+/// \brief gets all of the affilations for which users can log in to VCL\n
+/// \b NOTE: This is the only function available for which the X-User and X-Pass
+/// HTTP headers do not need to be passed
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function XMLRPCaffiliations() {

@@ -192,7 +192,7 @@ $ERRORS = array (
 
 $XMLRPCERRORS = array(
 	1 => 'Internal error while processing your method call. If the '
-		. 'problem persists, please email vcl_help@ncsu.edu for further '
+		. 'problem persists, please email ' . HELPEMAIL . ' for further '
 		. 'assistance. In your email message, please include the time you '
 		. 'made the call, the user you connected as, the method you '
 		. 'called, and all passed in arguments.',
