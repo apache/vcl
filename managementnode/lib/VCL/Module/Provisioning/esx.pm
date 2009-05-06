@@ -620,28 +620,59 @@ sub capture {
 sub node_status {
 	my $self = shift;
 
-	# Check if subroutine was called as a class method
-	if (ref($self) !~ /esx/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return 0;
-	}
-
-	#my ($vmhash) = shift;
-
 	my ($package, $filename, $line, $sub) = caller(0);
 
-	# try to contact vm
-	# $self->data->get_request_data;
-	# get state of vm
-	my $vmpath             = $self->data->get_vmhost_profile_vmpath;
-	my $datastorepath      = $self->data->get_vmhost_profile_datastore_path;
-	my $requestedimagename = $self->data->get_image_name;
-	my $vmhost_type        = $self->data->get_vmhost_type;
-	my $vmhost_hostname    = $self->data->get_vmhost_hostname;
-	my $vmhost_imagename   = $self->data->get_vmhost_image_name;
-	my $image_os_type  = $self->data->get_image_os_type;
-	my $vmclient_shortname = $self->data->get_computer_short_name;
-	my $request_forimaging              = $self->data->get_request_forimaging();
+	my $vmpath             = 0;
+	my $datastorepath      = 0;
+	my $requestedimagename = 0;
+	my $vmhost_type        = 0;
+	my $vmhost_hostname    = 0;
+	my $vmhost_imagename   = 0;
+	my $image_os_type  	  = 0;
+	my $vmclient_shortname = 0;
+	my $request_forimaging = 0;
+	my $identity_keys      = 0
+
+	# Check if subroutine was called as a class method
+	if (ref($self) !~ /esx/i) {
+		notify($ERRORS{'OK'}, 0, "subroutine was called as a function");
+		if (ref($self) eq 'HASH') {
+			$log = $self->{logfile};
+			#notify($ERRORS{'DEBUG'}, $log, "self is a hash reference");
+
+			$vmpath             = $self->{vmhost}->{vmprofile}->{vmpath};
+			$datastorepath      = $self->{vmhost}->{vmprofile}->{datastorepath};
+			$requestedimagename = $self->{imagerevision}->{imagename};
+			$vmhost_type        = $self->{vmhost}->{vmprofile}->{vmtype}->{name};
+			$vmhost_hostname    = $self->{vmhost}->{hostname};
+			$vmhost_imagename   = $self->{vmhost}->{imagename};
+			$image_os_type      = $self->{image}->{OS}->{type};
+			$computer_node_name = $self->{computer}->{hostname};
+			$identity_keys      = $self->{managementnode}->{keys};
+
+		} ## end if (ref($self) eq 'HASH')
+		# Check if node_status returned an array ref
+		elsif (ref($self) eq 'ARRAY') {
+			notify($ERRORS{'DEBUG'}, $log, "self is a array reference");
+		}
+
+		$vmclient_shortname = $1 if ($computer_node_name =~ /([-_a-zA-Z0-9]*)(\.?)/);
+	}
+	else{
+
+		# try to contact vm
+		# $self->data->get_request_data;
+		# get state of vm
+		$vmpath             = $self->data->get_vmhost_profile_vmpath;
+		$datastorepath      = $self->data->get_vmhost_profile_datastore_path;
+		$requestedimagename = $self->data->get_image_name;
+		$vmhost_type        = $self->data->get_vmhost_type;
+		$vmhost_hostname    = $self->data->get_vmhost_hostname;
+		$vmhost_imagename   = $self->data->get_vmhost_image_name;
+		$image_os_type  = $self->data->get_image_os_type;
+		$vmclient_shortname = $self->data->get_computer_short_name;
+		$request_forimaging              = $self->data->get_request_forimaging();
+	}
 
 	notify($ERRORS{'OK'}, 0, "Entering node_status, checking status of $vmclient_shortname");
 	notify($ERRORS{'DEBUG'}, 0, "request_for_imaging: $request_forimaging");
