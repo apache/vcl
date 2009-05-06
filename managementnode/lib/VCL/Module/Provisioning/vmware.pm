@@ -2447,16 +2447,13 @@ __END__
 =head1 BUGS and LIMITATIONS
 
  There are no known bugs in this module.
- Please report problems to the VCL team (vcl_help@ncsu.edu).
+ Please report problems to the VCL team (vcl-dev@incubator.apache.org).
 
 =head1 AUTHOR
 
- Aaron Peeler, aaron_peeler@ncsu.edu
- Andy Kurth, andy_kurth@ncsu.edu
-
 =head1 SEE ALSO
 
-L<http://vcl.ncsu.edu>
+L<http://cwiki.apache.org/VCL/>
 
 =cut
 
