@@ -8184,8 +8184,6 @@ function sendHeaders() {
 				exit;
 			}
 		case 'shiblogout':
-			setcookie("WRAP16", "", time() - 10, "/", COOKIEDOMAIN);
-			setcookie("WRAP_REFERER", "", time() - 10, "/", COOKIEDOMAIN);
 			setcookie("ITECSAUTH", "", time() - 10, "/", COOKIEDOMAIN);
 			setcookie("VCLAUTH", "", time() - 10, "/", COOKIEDOMAIN);
 			if($shibauthed) {

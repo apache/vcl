@@ -556,10 +556,7 @@ function processUserPrefsInput($checks=1) {
 	$return["mapdrives"] = processInputVar("mapdrives" , ARG_NUMERIC, $user["mapdrives"]);
 	$return["mapprinters"] = processInputVar("mapprinters" , ARG_NUMERIC, $user["mapprinters"]);
 	$return["mapserial"] = processInputVar("mapserial" , ARG_NUMERIC, $user["mapserial"]);
-	if(array_key_exists('WRAP_USERID', $_SERVER) && ($user['unityid'] != $_SERVER["WRAP_USERID"]))
-		$return["unityid"] = processInputVar("viewasuser" , ARG_STRING, "{$user["unityid"]}@{$user['affiliation']}");
-	else
-		$return['unityid'] = "{$user['unityid']}@{$user['affiliation']}";
+	$return['unityid'] = "{$user['unityid']}@{$user['affiliation']}";
 
 	if(! $checks) {
 		return $return;
