@@ -5586,6 +5586,7 @@ function getTimeSlots($compids, $end=0, $start=0) {
 			if($current >= $times[$id][$count]["start"] && 
 			   $current <  $times[$id][$count]["end"]) {
 				if($first) {
+					# set the previous 15 minute block to show as busy to allow for load time
 					$first = 0;
 					$reserveInfo[$id][$current - 900]['blockRequest'] = 0;
 					$reserveInfo[$id][$current - 900]["scheduleclosed"] = 0;
@@ -5863,6 +5864,8 @@ function showTimeTable($links) {
 	}
 	$yesterday = "";
 	foreach(array_keys($timeslots[$first]) as $stamp) {
+		if($stamp < $now)
+			continue;
 		print "        <TR>\n";
 		$stampArr = getdate($stamp);
 		$label = "";
