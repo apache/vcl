@@ -1,5 +1,7 @@
 #!/usr/bin/perl -w
-
+###############################################################################
+# $Id$
+###############################################################################
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.
@@ -14,14 +16,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-##############################################################################
-# $Id$
-##############################################################################
+###############################################################################
 
 =head1 NAME
 
-VCL::Provisioning::vmware - VCL module to support the vmware provisioning engine
+VCL::Provisioning::vmware - VCL module to support the VMWare Server 1.x Provisioning
 
 =head1 SYNOPSIS
 
@@ -29,7 +28,7 @@ VCL::Provisioning::vmware - VCL module to support the vmware provisioning engine
 
 =head1 DESCRIPTION
 
- This module provides VCL support for vmware server
+ This module provides VCL support for VMWare Server 1.x.
  http://www.vmware.com
 
 =cut
@@ -1206,6 +1205,44 @@ sub capture {
 
 	# Check the vm type
 	if ($vmtype_name =~ /vmware|vmwareESX/) {
+		
+		# *** BEGIN MODULARIZED CODE ***
+		# Check if pre_capture() subroutine has been implemented by the OS module
+		if ($self->os->can("pre_capture")) {
+			# Call OS pre_capture() - it should perform all OS steps necessary to capture an image
+			# pre_capture() should shut down the computer when it is done
+			notify($ERRORS{'OK'}, 0, "calling OS module's pre_capture() subroutine");
+			
+			if (!$self->os->pre_capture({end_state => 'off'})) {
+				notify($ERRORS{'WARNING'}, 0, "OS module pre_capture() failed");
+				return 0;
+			}
+		
+			# Get the power status, make sure computer is off
+			my $power_status = $self->power_status();
+			notify($ERRORS{'DEBUG'}, 0, "retrieved power status: $power_status");
+			if ($power_status eq 'off') {
+				notify($ERRORS{'OK'}, 0, "verified $computer_nodename power is off");
+			}
+			elsif ($power_status eq 'on') {
+				notify($ERRORS{'WARNING'}, 0, "$computer_nodename power is still on, turning computer off");
+				
+				# Attempt to power off computer
+				if ($self->power_off()) {
+					notify($ERRORS{'OK'}, 0, "$computer_nodename was powered off");
+				}
+				else {
+					notify($ERRORS{'WARNING'}, 0, "failed to power off $computer_nodename");
+					return 0;
+				}
+			}
+			else {
+				notify($ERRORS{'WARNING'}, 0, "failed to determine power status of $computer_nodename");
+				return 0;
+			}
+		}
+		# *** END MODULARIZED CODE ***
+		
 
 		#if windows
 		#set sshd to mode= demand
@@ -1218,7 +1255,7 @@ sub capture {
 		#    copy appropriate files, execute and wait for shutdown signal
 		#
 		# is os windows
-		if ($image_name =~ /^(vmwarewinxp|vmwarewin2003|vmwareesxwin)/) {
+		elsif ($image_name =~ /^(vmwarewinxp|vmwarewin2003|vmwareesxwin)/) {
 			#change password of root and sshd service back to default
 			# only useful on win platforms
 			# changewindowspasswd($node,$account,$passwd)
@@ -1521,7 +1558,7 @@ sub capture {
 						#figure out old name
 						foreach my $a (@list) {
 							chomp($a);
-							if ($a =~ /([a-z]*)-([_0-9a-zA-Z]*)-(v[0-9]*)\.vmdk/) {
+							if ($a =~ /([a-z_]*)-([_0-9a-zA-Z]*)-(v[0-9]*)\.vmdk/) {
 								#print "old name $1-$2-$3\n";
 								$oldname = "$1-$2-$3";
 								notify($ERRORS{'OK'}, 0, "found previous name= $oldname");
@@ -1995,7 +2032,7 @@ sub get_image_size {
 		return 0;
 	}
 
-# Either use a passed parameter as the image name or use the one stored in this object's DataStructure
+	# Either use a passed parameter as the image name or use the one stored in this object's DataStructure
 	my $image_name = shift;
 	$image_name = $self->data->get_image_name() if !$image_name;
 	if (!$image_name) {
@@ -2019,7 +2056,7 @@ sub get_image_size {
 		close(FILELIST);
 		my $size = 0;
 		foreach my $f (@filelist) {
-			if ($f =~ /$image_name.vmdk/) {
+			if ($f =~ /$image_name.*vmdk/) {
 				my ($presize, $blah) = split(" ", $f);
 				$size += $presize;
 			}
@@ -2245,7 +2282,7 @@ sub does_image_exist {
 		}
 	} ## end if (open(IMAGES, "/bin/ls -1 $IMAGEREPOSITORY 2>&1 |"...
 
-	notify($ERRORS{'WARNING'}, 0, "image $IMAGEREPOSITORY/$image_name does NOT exists");
+	notify($ERRORS{'OK'}, 0, "image $IMAGEREPOSITORY/$image_name does NOT exist");
 	return 0;
 
 } ## end sub does_image_exist
@@ -2400,8 +2437,6 @@ sub _get_image_repository_path {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-#/////////////////////////////////////////////////////////////////////////////
-
 =head2 put_node_in_maintenance
 
  Parameters  : none, must be called as an object method
@@ -2436,24 +2471,390 @@ sub post_maintenance_action {
 
 } ## end sub post_maintenance_action
 
+#/////////////////////////////////////////////////////////////////////////////
 
-#////////////////////////
+=head2 power_on
+
+ Parameters  : 
+ Returns     : 
+ Description : 
+
+=cut
+
+sub power_on {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a VCL::Module module object method");
+		return;	
+	}
+	
+	## Get necessary data
+	my $vmhost_hostname    = $self->data->get_vmhost_hostname();
+	my ($vmdk_name, $vmx_path, $vm_directory, $base_vm_directory) = $self->get_vm_paths();
+	
+	# vmware-cmd <vm-cfg-path> start <powerop_mode>
+	# Powers on a previously powered-off virtual machine or resumes a suspended virtual machine.
+	# Hard, soft or trysoft specifies the behavior of the power operation <powerop_mode>.
+	# If <powerop_mode> is not specified, the default behavior is soft.
+
+	# start soft, VM is suspended:
+	# -Resumes the VM
+	# -Attempts to run a script in the guest operating system
+	# -The Start operation always succeeds
+	# -However, if VMware Tools is not present or is malfunctioning, the running of the script may fail
+	
+	# start soft, VM is powered off:
+	# -Powers on the VM
+	# -Attempts to run a script in the guest operating system when the VMware Tools service becomes active
+	# -The default script does nothing during this operation as there is no DHCP lease to renew
+	# -The Start operation always succeeds
+	# -However, if VMware Tools is not present or is malfunctioning, the running of the script may fail
+
+	# start hard:
+	# -Starts or resumes a virtual machine without running any scripts
+	# -Initiates a standard power on or resume
+
+	# start trysoft:
+	# -First attempts to perform the soft power transition operation
+	# -If this fails, the hard power operation is performed
+
+	# Typical output:
+	# Success: VM was turned on, exit status = 0
+	# start() = 1
+	
+	# Error: VM is already on, exit status = 8
+	# VMControl error -8: Invalid operation for virtual machine's current state:
+	# The requested operation ("start") could not be completed because it conflicted
+	# with the state of the virtual machine ("on") at the time the request was received.
+	# This error often occurs because the state of the virtual machine changed before it received the request.
+	
+	notify($ERRORS{'DEBUG'}, 0, "attempting to start vm using trysoft mode: $vm_directory");
+	my ($exit_status, $output) = run_ssh_command($vmhost_hostname, '', "vmware-cmd $vmx_path start trysoft", '', '', '1');
+	if (defined($exit_status) && $exit_status == 0 && grep(/start\(\w*\) = 1/i, @$output)) {
+		notify($ERRORS{'OK'}, 0, "$vm_directory vm was turned on");
+	}
+	elsif (defined($output) && grep(/VMControl error -8.*virtual machine \("on"\)/i, @$output)) {
+		notify($ERRORS{'OK'}, 0, "$vm_directory vm is already turned on");
+	}
+	elsif (defined($exit_status)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run vmware-cmd start on $vm_directory, exit status: $exit_status, output:\n@{$output}");
+		return;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to run vmware-cmd start on $vm_directory");
+		return;
+	}
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 power_off
+
+ Parameters  : 
+ Returns     : 
+ Description : 
+
+=cut
+
+sub power_off {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a VCL::Module module object method");
+		return;	
+	}
+	
+	## Get necessary data
+	my $vmhost_hostname    = $self->data->get_vmhost_hostname();
+	my ($vmdk_name, $vmx_path, $vm_directory, $base_vm_directory) = $self->get_vm_paths();
+	
+	# vmware-cmd <vm-cfg-path> stop <powerop_mode>
+	# Shuts down and powers off a virtual machine
+	# Hard, soft or trysoft specifies the behavior of the power operation <powerop_mode>
+	# If <powerop_mode> is not specified, the default behavior is soft
+
+	# stop soft:
+	# -Attempts to shut down the guest OS and then powers off the VM
+	
+	# start hard:
+	# -Immediately and unconditionally powers off the VM
+
+	# start trysoft:
+	# -First attempts to perform the soft power transition operation
+	# -If this fails, the hard power operation is performed
+
+	# Typical output:
+	# Success: VM was turned off, exit status = 0
+	# stop() = 1
+	
+	# Error: VM is already off, exit status = 8
+	# VMControl error -8: Invalid operation for virtual machine's current state:
+	# The requested operation ("stop") could not be completed because it
+	# conflicted with the state of the virtual machine ("off") at the time the
+	# request was received. This error often occurs because the state of the
+	# virtual machine changed before it received the request.
+	
+	# Error: VM Tools are not running, exit status = 8
+	# VMControl error -8: Invalid operation for virtual machine's current state:
+	# Make sure the VMware Server Tools are running
+	
+	# Error: stop timed out, exit status = 7
+	# VMControl error -7: Timeout
+	 
+	# Attempt to stop vm using soft mode
+	notify($ERRORS{'DEBUG'}, 0, "attempting to stop vm using soft mode: $vm_directory");
+	my ($exit_status, $output) = run_ssh_command($vmhost_hostname, '', "vmware-cmd $vmx_path stop soft", '', '', '1');
+	if (defined($exit_status) && $exit_status == 0 && grep(/stop\(\w*\) = 1/i, @$output)) {
+		notify($ERRORS{'OK'}, 0, "$vm_directory vm was turned off");
+		return 1;
+	}
+	elsif (defined($output) && grep(/VMControl error -8.*Tools are running/i, @$output)) {
+		notify($ERRORS{'OK'}, 0, "unable to perform soft stop of $vm_directory vm because vm tools are not running, attempting hard stop");
+	}
+	elsif (defined($output) && grep(/VMControl error -8.*virtual machine \("off"\)/i, @$output)) {
+		notify($ERRORS{'OK'}, 0, "$vm_directory vm is already turned off");
+		return 1;
+	}
+	elsif (defined($output) && grep(/VMControl error -7.*Timeout/i, @$output)) {
+		notify($ERRORS{'WARNING'}, 0, "vm stop trysoft timed out on $vm_directory vm, attempting hard stop");
+	}
+	elsif (defined($exit_status)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run vmware-cmd stop trysoft on $vm_directory, exit status: $exit_status, output:\n@{$output}");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to run vmware-cmd stop trysoft on $vm_directory");
+		return;
+	}
+	
+	# Soft stop failed, attempt to stop vm using hard mode
+	notify($ERRORS{'DEBUG'}, 0, "attempting to stop vm using hard mode: $vm_directory");
+	my ($hard_exit_status, $hard_output) = run_ssh_command($vmhost_hostname, '', "vmware-cmd $vmx_path stop hard", '', '', '1');
+	if (defined($hard_exit_status) && $hard_exit_status == 0 && grep(/stop\(\w*\) = 1/i, @$hard_output)) {
+		notify($ERRORS{'OK'}, 0, "$vm_directory vm was turned off");
+		return 1;
+	}
+	elsif (defined($hard_output) && grep(/VMControl error -8.*virtual machine \("off"\)/i, @$hard_output)) {
+		notify($ERRORS{'OK'}, 0, "$vm_directory vm is already turned off");
+		return 1;
+	}
+	elsif (defined($hard_output) && grep(/VMControl error -7.*Timeout/i, @$hard_output)) {
+		notify($ERRORS{'WARNING'}, 0, "$vm_directory vm stop hard timed out");
+		return;
+	}
+	elsif (defined($hard_exit_status)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run vmware-cmd stop hard on $vm_directory, exit status: $hard_exit_status, output:\n@{$hard_output}");
+		return;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to run vmware-cmd stop hard on $vm_directory");
+		return;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 power_reset
+
+ Parameters  : 
+ Returns     : 
+ Description : 
+
+=cut
+
+sub power_reset {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a VCL::Module module object method");
+		return;	
+	}
+	
+	## Get necessary data
+	my $vmhost_hostname    = $self->data->get_vmhost_hostname();
+	my ($vmdk_name, $vmx_path, $vm_directory, $base_vm_directory) = $self->get_vm_paths();
+	
+	# vmware-cmd <vm-cfg-path> reset <powerop_mode>
+	# Shuts down, then reboots a VM
+	# Hard, soft or trysoft specifies the behavior of the power operation <powerop_mode>
+	# If <powerop_mode> is not specified, the default behavior is soft
+
+	# reset soft:
+	# -Attempts to shut down the guest OS, then reboots the VM
+	
+	# reset hard:
+	# -Immediately and unconditionally resets the VM
+
+	# reset trysoft:
+	# -First attempts to perform the soft power transition operation
+	# -If this fails, the hard power operation is performed
+
+	# Typical output:
+	# Success: VM was reset, exit status = 0
+	# reset() = 1
+	
+	# Error: only happens when mode is soft, VM is on but VM Tools are not running, exit status = 8
+	# VMControl error -8: Invalid operation for virtual machine's current state:
+	# Make sure the VMware Server Tools are running
+
+	# Error: VM is off, exit status = 8
+	# VMControl error -8: Invalid operation for virtual machine's current state: The
+	# requested operation ("reset") could not be completed because it conflicted
+	# with the state of the virtual machine ("off") at the time the request was
+	# received. This error often occurs because the state of the virtual machine
+	# changed before it received the request.
+	
+	notify($ERRORS{'DEBUG'}, 0, "attempting to reset vm using trysoft mode: $vm_directory");
+	my ($exit_status, $output) = run_ssh_command($vmhost_hostname, '', "vmware-cmd $vmx_path reset trysoft", '', '', '1');
+	if (defined($exit_status) && $exit_status == 0 && grep(/reset\(\w*\) = 1/i, @$output)) {
+		notify($ERRORS{'OK'}, 0, "$vm_directory vm was reset");
+	}
+	elsif (defined($output) && grep(/VMControl error -8.*virtual machine \("off"\)/i, @$output)) {
+		notify($ERRORS{'WARNING'}, 0, "unable to reset $vm_directory vm because it is turned off, attempting to start vm");
+		return $self->power_on();
+	}
+	elsif (defined($exit_status)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run vmware-cmd reset on $vm_directory, exit status: $exit_status, output:\n@{$output}");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to run vmware-cmd reset on $vm_directory");
+		return;
+	}
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 power_status
+
+ Parameters  : 
+ Returns     : If successful: string containing "on", "off", "suspended", or "stuck"
+               If failed: undefined
+ Description : Retrieves the power status of a registered VM by using the
+               'vmware-cmd <.vmx path> getstate' command.
+ 
+
+=cut
+
+sub power_status {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a VCL::Module module object method");
+		return;	
+	}
+	
+	## Get necessary data
+	my $vmhost_hostname    = $self->data->get_vmhost_hostname();
+	my ($vmdk_name, $vmx_path, $vm_directory, $base_vm_directory) = $self->get_vm_paths();
+	
+	# Typical output:
+	# Success: VM is on, exit status = 0
+	# getstate() = on
+
+	# Success: VM is off, exit status = 0
+	# getstate() = off
+	
+	# Error: VMX not registered, exit status = 11
+	#	/usr/bin/vmware-cmd: Could not connect to VM <VMX path>
+	#  (VMControl error -11: No such virtual machine: The config file <VMX path> is not registered.
+	
+	notify($ERRORS{'DEBUG'}, 0, "attempting to execute vmware-cmd getstate");
+	my ($exit_status, $output) = run_ssh_command($vmhost_hostname, '', "vmware-cmd $vmx_path getstate", '', '', '1');
+	if (defined($exit_status) && $exit_status == 0 && (my ($state_line) = grep(/getstate\(\w*\) = \w+/i, @$output))) {
+		my ($state) = $state_line =~ /getstate\(\w*\) = (\w+)/i;
+		notify($ERRORS{'OK'}, 0, "$vm_directory vm state is '$state'");
+		return $state;
+	}
+	elsif (defined($exit_status)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run vmware-cmd getstate for $vm_directory vm, exit status: $exit_status, output:\n@{$output}");
+		return;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to run vmware-cmd getstate for $vm_directory vm");
+		return;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_vmx
+
+ Parameters  : None
+ Returns     : Array:
+               [0]: vmdk name
+               [1]: vmx path
+               [2]: vm directory
+               [3]: base vm directory
+ Description : Determines the file paths and directories for VM files. 
+
+=cut
+
+sub get_vm_paths {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a VCL::Module module object method");
+		return;	
+	}
+	
+	# Get required data
+	my $reservation_id      = $self->data->get_reservation_id() || '';
+	my $request_forimaging  = $self->data->get_request_forimaging();
+	my $computer_short_name = $self->data->get_computer_short_name() || '';
+	my $vmhost_vmpath       = $self->data->get_vmhost_profile_vmpath() || '';
+	my $vmtype_name         = $self->data->get_vmhost_type_name() || '';
+	my $image_name          = $self->data->get_image_name() || '';
+	
+	# Make sure required data was retrieved
+	unless (length($reservation_id) && length($request_forimaging) && length($computer_short_name) && length($vmhost_vmpath) && length($vmtype_name) && length($image_name)) {
+		my $debug_string = "reservation id: $reservation_id\nforimaging: $request_forimaging\ncomputer: $computer_short_name\nvm path: $vmhost_vmpath\nvm type: $vmtype_name\nimage name: $image_name";
+		notify($ERRORS{'WARNING'}, 0, "required data is missing:\n$debug_string");
+		return;	
+	}
+	
+	my ($vmdk_name, $vmx_path, $vm_directory, $base_vm_directory);
+	
+	# Check if in imaging mode - persistent will be used
+	if ($request_forimaging) {
+		$vm_directory   = "$reservation_id$computer_short_name";
+		$vmx_path       = "$vmhost_vmpath/$vm_directory/$vm_directory.vmx";
+		$base_vm_directory = "$vm_directory";
+
+		# If GSX use image name
+		if ($vmtype_name =~ /(vmware|vmwareGSX)$/) {
+			$vmdk_name = $image_name;
+		}
+		# If ESX use requestid+shortname
+		elsif ($vmtype_name =~ /(vmwareESX3)/) {
+			$vmdk_name = "$reservation_id$computer_short_name";
+		}
+	}
+	else {
+		# Standard use - not persistent
+		$vm_directory   = "$image_name$computer_short_name";
+		$vmx_path       = "$vmhost_vmpath/$vm_directory/$vm_directory.vmx";
+		$base_vm_directory = $image_name;
+		$vmdk_name  = $image_name;
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "vm locations:\nvmdk name: $vmdk_name\nvmx path: $vmx_path\nvm directory: $vm_directory\nbase vm directory: $base_vm_directory");
+	return ($vmdk_name, $vmx_path, $vm_directory, $base_vm_directory);
+}
+	
+#/////////////////////////////////////////////////////////////////////////////
 
 1;
-
-#/////////////////////
 __END__
 
-=head1 BUGS and LIMITATIONS
+=head1 COPYRIGHT
 
- There are no known bugs in this module.
- Please report problems to the VCL team (vcl-dev@incubator.apache.org).
-
-=head1 AUTHOR
+ Apache VCL incubator project
+ Copyright 2009 The Apache Software Foundation
+ 
+ This product includes software developed at
+ The Apache Software Foundation (http://www.apache.org/).
 
 =head1 SEE ALSO
 
 L<http://cwiki.apache.org/VCL/>
 
 =cut
-
