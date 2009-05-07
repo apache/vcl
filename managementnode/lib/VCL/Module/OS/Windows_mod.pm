@@ -854,19 +854,23 @@ sub delete_files_by_pattern {
 		notify($ERRORS{'WARNING'}, 0, "base directory and pattern must be specified as arguments");
 		return;
 	}
+	
+	# Make sure base directory has trailing / or else find will fail
+	$base_directory =~ s/[\/\\]*$/\//;
 
 	notify($ERRORS{'DEBUG'}, 0, "attempting to delete files under $base_directory matching pattern $pattern");
-
-
+	
 	# Assemble command
-	my $command = "/bin/find.exe \"$base_directory\" -mindepth 1 -iregex \"$pattern\" -print0 | xargs -0 rm -rvf";
-	my ($exit_status, $output) = run_ssh_command($computer_node_name, $management_node_keys, $command, '', '', 0);
-	if (defined($exit_status) && $exit_status == 0) {
-		notify($ERRORS{'OK'}, 0, "files have been deleted under '$base_directory' matching pattern '$pattern'");
-	}
-	elsif ($exit_status) {
-		notify($ERRORS{'WARNING'}, 0, "failed to delete files under $base_directory matching pattern $pattern, exit status: $exit_status, output:\n@{$output}");
-		return;
+	# Use find to locate all the files under the base directory matching the pattern specified
+	# chmod 777 each file then call rm
+	my $command = "/bin/find.exe \"$base_directory\" -mindepth 1 -iregex \"$pattern\" -exec chmod 777 {} \\; -exec rm -rvf {} \\;";
+	my ($exit_status, $output) = run_ssh_command($computer_node_name, $management_node_keys, $command, '', '', 1);
+	if (defined($exit_status)) {
+		my @deleted = grep(/removed /, @$output);
+		my @not_deleted = grep(/cannot remove/, @$output);
+		notify($ERRORS{'OK'}, 0, scalar @deleted . "/" . scalar @not_deleted . " files deleted deleted under '$base_directory' matching '$pattern'");
+		notify($ERRORS{'DEBUG'}, 0, "files/directories which were deleted:\n" . join("\n", @deleted)) if @deleted;
+		notify($ERRORS{'DEBUG'}, 0, "files/directories which were NOT deleted:\n" . join("\n", @not_deleted)) if @not_deleted;
 	}
 	else {
 		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to delete files under $base_directory matching pattern $pattern");
@@ -2259,8 +2263,8 @@ sub reboot {
 	}
 
 	# Wait for reboot is true
-	notify($ERRORS{'OK'}, 0, "sleeping for 30 seconds while $computer_node_name begins to boot");
-	sleep 30;
+	notify($ERRORS{'OK'}, 0, "sleeping for 5 seconds while $computer_node_name begins to reboot");
+	sleep 5;
 
 	# Make multiple attempts to wait for the reboot to complete
 	my $wait_attempt_limit = 2;
@@ -2280,17 +2284,17 @@ sub reboot {
 			}
 		} ## end if ($wait_attempt > 1)
 
-		# Wait maximum of 2 minutes for the computer to become unresponsive
-		if (!$self->wait_for_no_ping(2)) {
+		# Wait maximum of 3 minutes for the computer to become unresponsive
+		if (!$self->wait_for_no_ping(3)) {
 			# Computer never stopped responding to ping
 			notify($ERRORS{'WARNING'}, 0, "$computer_node_name never became unresponsive to ping");
 			next WAIT_ATTEMPT;
 		}
 
 		# Computer is unresponsive, reboot has begun
-		# Wait for 30 seconds before beginning to check if computer is back online
-		notify($ERRORS{'DEBUG'}, 0, "$computer_node_name reboot has begun, sleeping for 30 seconds");
-		sleep 30;
+		# Wait for 15 seconds before beginning to check if computer is back online
+		notify($ERRORS{'DEBUG'}, 0, "$computer_node_name reboot has begun, sleeping for 15 seconds");
+		sleep 15;
 
 		# Wait maximum of 4 minutes for the computer to come back up
 		if (!$self->wait_for_ping(4)) {
@@ -2363,10 +2367,10 @@ sub wait_for_ping {
 
 	# Looping configuration variables
 	# Seconds to wait in between loop attempts
-	my $attempt_delay = 15;
+	my $attempt_delay = 5;
 	# Total loop attempts made
 	# Add 1 to the number of attempts because if you're waiting for x intervals, you check x+1 times including at 0
-	my $attempts = ($total_wait_minutes * 4) + 1;
+	my $attempts = ($total_wait_minutes * 12) + 1;
 
 	notify($ERRORS{'OK'}, 0, "waiting for $computer_node_name to respond to ping, maximum of $total_wait_minutes minutes");
 
@@ -2418,10 +2422,10 @@ sub wait_for_no_ping {
 
 	# Looping configuration variables
 	# Seconds to wait in between loop attempts
-	my $attempt_delay = 15;
+	my $attempt_delay = 5;
 	# Total loop attempts made
 	# Add 1 to the number of attempts because if you're waiting for x intervals, you check x+1 times including at 0
-	my $attempts = ($total_wait_minutes * 4) + 1;
+	my $attempts = ($total_wait_minutes * 12) + 1;
 
 	notify($ERRORS{'OK'}, 0, "waiting for $computer_node_name to become unresponsive, maximum of $total_wait_minutes minutes");
 
@@ -2477,10 +2481,10 @@ sub wait_for_ssh {
 
 	# Looping configuration variables
 	# Seconds to wait in between loop attempts
-	my $attempt_delay = 15;
+	my $attempt_delay = 5;
 	# Total loop attempts made
 	# Add 1 to the number of attempts because if you're waiting for x intervals, you check x+1 times including at 0
-	my $attempts = ($total_wait_minutes * 4) + 1;
+	my $attempts = ($total_wait_minutes * 12) + 1;
 
 	notify($ERRORS{'OK'}, 0, "waiting for $computer_node_name to respond to ssh, maximum of $total_wait_minutes minutes");
 
@@ -4060,14 +4064,15 @@ sub get_private_interface_names {
 			notify($ERRORS{'DEBUG'}, 0, "interface does not have an ip address: $interface_name");
 			next;
 		}
-
+		
 		# Split the ip address up
 		my @octets = split(/\./, $ip_address);
 
 		# Figure out if this is a private or public address
 
 		# Private: 10.0.0.0 10.255.255.255 16,777,216
-		if (($interface_name . $description) =~ /loopback|virtual|pseudo|vmware|afs/i) {
+		if ($interface_name =~ /loopback|virtual|pseudo|vmware|afs/i) {
+			notify($ERRORS{'DEBUG'}, 0, "interface ignored because of name: $interface_name, description: $description, address: $ip_address");
 			next;
 		}
 		elsif (($octets[0] == 10) ||
@@ -4138,7 +4143,8 @@ sub get_public_interface_names {
 
 		# Figure out if this is a public or public address
 		# Igore loopback and other interface names
-		if (($interface_name . $description) =~ /loopback|virtual|pseudo|vmware|afs/i) {
+		if ($interface_name =~ /loopback|virtual|pseudo|vmware|afs/i) {
+			notify($ERRORS{'DEBUG'}, 0, "interface ignored because of name: $interface_name, description: $description, address: $ip_address");
 			next;
 		}
 		# Private: 10.0.0.0 10.255.255.255 16,777,216
@@ -5883,7 +5889,69 @@ sub apply_security_templates {
 	else {
 		return 1;
 	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 kill_process
+
+ Parameters  : String containing task name pattern
+ Returns     : If successful: true
+               If failed: false
+ Description : Runs taskkill.exe to kill processes with names matching a
+					pattern. Wildcards can be specified using *, but task name
+					patterns cannot begin with a *.
+               
+               Example pattern: notepad*
+
+=cut
+
+sub kill_process {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a VCL::Module module object method");
+		return;	
+	}
 	
+	# Get the task name pattern argument
+	my $task_pattern = shift;
+	unless ($task_pattern) {
+		notify($ERRORS{'WARNING'}, 0, "task name pattern argument was not specified");
+		return;	
+	}
+	
+	my $management_node_keys = $self->data->get_management_node_keys();
+	my $computer_node_name   = $self->data->get_computer_node_name();
+	
+	# Typical output:
+	# Task was killed, exit status = 0:
+	# SUCCESS: The process with PID 3476 child of PID 5876 has been terminated.
+	
+	# No tasks match pattern, exit status = 0:
+	# INFO: No tasks running with the specified criteria.
+	
+	# Bad search filter, exit status = 1:
+	# ERROR: The search filter cannot be recognized.
+	
+	# Attempt to kill task
+	my $taskkill_command = "\$SYSTEMROOT/system32/taskkill.exe /F /T /FI \"IMAGENAME eq $task_pattern\"";
+	my ($taskkill_exit_status, $taskkill_output) = run_ssh_command($computer_node_name, $management_node_keys, $taskkill_command, '', '', '1');
+	if (defined($taskkill_exit_status) && $taskkill_exit_status == 0 && (my @killed = grep(/SUCCESS/, @$taskkill_output))) {
+		notify($ERRORS{'OK'}, 0, scalar @killed . "processe(s) killed matching pattern: $task_pattern\n" . join("\n", @killed));
+	}
+	elsif (defined($taskkill_exit_status) && $taskkill_exit_status == 0 && grep(/No tasks running/i, @{$taskkill_output})) {
+		notify($ERRORS{'DEBUG'}, 0, "process does not exist matching patterh: $task_pattern");
+	}
+	elsif (defined($taskkill_exit_status)) {
+		notify($ERRORS{'WARNING'}, 0, "unable to kill process matching $task_pattern\n" . join("\n", @{$taskkill_output}));
+		return;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to kill process matching $task_pattern");
+		return;
+	}
+	
+	return 1;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
