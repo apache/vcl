@@ -1,5 +1,7 @@
 #!/usr/bin/perl -w
-
+###############################################################################
+# $Id$
+###############################################################################
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.
@@ -14,10 +16,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-##############################################################################
-# $Id$
-##############################################################################
+###############################################################################
 
 =head1 NAME
 
@@ -872,24 +871,28 @@ sub get_image_size {
 	return 0;
 } ## end sub get_image_size
 
-
-
 initialize();
+
+#/////////////////////////////////////////////////////////////////////////////
+
 1;
 __END__
-
-=head1 BUGS and LIMITATIONS
-
- There are no known bugs in this module.
- Please report problems to the VCL team (vcl_help@ncsu.edu).
 
 =head1 AUTHOR
 
  Andrew Brown <ambrown4@ncsu.edu>
  Brian Bouterse <bmbouter@ncsu.edu>
 
+=head1 COPYRIGHT
+
+ Apache VCL incubator project
+ Copyright 2009 The Apache Software Foundation
+ 
+ This product includes software developed at
+ The Apache Software Foundation (http://www.apache.org/).
+
 =head1 SEE ALSO
 
-L<http://vcl.ncsu.edu>
+L<http://cwiki.apache.org/VCL/>
 
 =cut

@@ -3531,6 +3531,11 @@ initialize() if (!$XCAT_ROOT);
 1;
 __END__
 
+=head1 AUTHOR
+
+ Aaron Peeler <aaron_peeler@ncsu.edu>
+ Andy Kurth <andy_kurth@ncsu.edu>
+
 =head1 COPYRIGHT
 
  Apache VCL incubator project
