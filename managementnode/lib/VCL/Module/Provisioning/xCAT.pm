@@ -1,5 +1,7 @@
 #!/usr/bin/perl -w
-
+###############################################################################
+# $Id$
+###############################################################################
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.
@@ -14,10 +16,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-##############################################################################
-# $Id$
-##############################################################################
+###############################################################################
 
 =head1 NAME
 
@@ -1617,19 +1616,15 @@ sub _edit_nodetype {
 
 	# Get the rest of the variables
 	$computer_node_name = $self->data->get_computer_node_name() if !$computer_node_name;
-	my $image_os_name        = $self->data->get_image_os_name();
-	my $image_architecture   = $self->data->get_image_architecture();
-	my $image_os_source_path = $self->data->get_image_os_source_path();
-
-	# Fix for Linux images on henry4
-	my $management_node_hostname = $self->data->get_management_node_hostname();
-	my $image_os_type            = $self->data->get_image_os_type();
-	if (   $management_node_hostname =~ /henry4/i
-		 && $image_os_type =~ /linux/i
-		 && $image_os_source_path eq 'image')
-	{
+	my $image_os_name         = $self->data->get_image_os_name();
+	my $image_architecture    = $self->data->get_image_architecture();
+	my $image_os_source_path  = $self->data->get_image_os_source_path();
+	my $image_repository_path = $self->_get_image_repository_path();
+	
+	# Fix for Linux images using linux_image repository path
+	if ($image_os_source_path eq 'image' && $image_repository_path =~ /linux_image/) {
 		$image_os_source_path = 'linux_image';
-		notify($ERRORS{'DEBUG'}, 0, "fixed Linux image path for henry4: image --> linux_image");
+		notify($ERRORS{'DEBUG'}, 0, "fixed Linux image path: image --> linux_image");
 	}
 
 	# Check to make sure the variables are populated
@@ -2810,7 +2805,7 @@ sub does_image_exist {
 	}
 	else {
 		$tmpl_file_exists = 0;
-		notify($ERRORS{'OK'}, 0, "template file does not exist: $tmpl_repository_path/$image_name.tmpl");
+		notify($ERRORS{'DEBUG'}, 0, "template file does not exist: $tmpl_repository_path/$image_name.tmpl");
 	}
 
 	# Check if image files exist (Partimage files)
@@ -2833,7 +2828,7 @@ sub does_image_exist {
 	}
 	else {
 		$image_files_exist = 0;
-		notify($ERRORS{'OK'}, 0, "image files do not exist in repository: $image_repository_path/$image_name");
+		notify($ERRORS{'DEBUG'}, 0, "image files do not exist in repository: $image_repository_path/$image_name");
 	}
 
 	# Check if either tmpl file or image files exist, but not both
@@ -2869,11 +2864,11 @@ sub does_image_exist {
 
 	# Check if both image files and tmpl file were found and return
 	if ($tmpl_file_exists && $image_files_exist) {
-		notify($ERRORS{'OK'}, 0, "image $image_name exists on this management node, returning 1");
+		notify($ERRORS{'DEBUG'}, 0, "image $image_name exists on this management node");
 		return 1;
 	}
 	else {
-		notify($ERRORS{'OK'}, 0, "image $image_name does not exist on this management node, returning 0");
+		notify($ERRORS{'DEBUG'}, 0, "image $image_name does not exist on this management node");
 		return 0;
 	}
 
@@ -2883,7 +2878,7 @@ sub does_image_exist {
 
 =head2 retrieve_image
 
- Parameters  :
+ Parameters  : Image name (optional)
  Returns     :
  Description : Attempts to retrieve an image from an image library partner
 
@@ -2891,12 +2886,12 @@ sub does_image_exist {
 
 sub retrieve_image {
 	my $self = shift;
-	if (ref($self) !~ /xCAT/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a VCL::Module module object method");
+		return;	
 	}
 
-	# Make sure imag library functions are enabled
+	# Make sure image library functions are enabled
 	my $image_lib_enable = $self->data->get_management_node_image_lib_enable();
 	if (!$image_lib_enable) {
 		notify($ERRORS{'OK'}, 0, "image library functions are disabled");
@@ -2904,43 +2899,32 @@ sub retrieve_image {
 	}
 
 	# Get the image name
-	my $image_name = shift;
-	$image_name = $self->data->get_image_name() if !$image_name;
+	my $image_name = shift || $self->data->get_image_name();
 	if (!$image_name) {
-		notify($ERRORS{'WARNING'}, 0, "unable to determine image name");
+		notify($ERRORS{'WARNING'}, 0, "unable to determine image name from argument or reservation data");
 		return;
+	}
+	
+	# Make sure image does not already exist on this management node
+	if ($self->does_image_exist($image_name)) {
+		notify($ERRORS{'WARNING'}, 0, "image $image_name already exists on this management node");
+		return 1;
 	}
 
 	# Get the other image library variables
-	my $image_lib_user = $self->data->get_management_node_image_lib_user()
-	  || 'undefined';
-	my $image_lib_key = $self->data->get_management_node_image_lib_key()
-	  || 'undefined';
+	my $image_repository_path_local = $self->_get_image_repository_path()          || 'undefined';
 	my $image_lib_partners = $self->data->get_management_node_image_lib_partners() || 'undefined';
-	if ("$image_lib_user $image_lib_key $image_lib_partners" =~ /undefined/) {
-		notify($ERRORS{'WARNING'}, 0, "image library configuration data is missing: user=$image_lib_user, key=$image_lib_key, partners=$image_lib_partners");
+	
+	if ("$image_repository_path_local $image_lib_partners" =~ /undefined/) {
+		notify($ERRORS{'WARNING'}, 0, "image library configuration data is missing:
+			local image repository path=$image_repository_path_local
+			partners=$image_lib_partners
+		");
 		return;
-	}
-
-	# Get the image repository path
-	my $image_repository_path        = $self->_get_image_repository_path();
-	my $image_repository_path_source = $image_repository_path;
-	if (!$image_repository_path) {
-		notify($ERRORS{'WARNING'}, 0, "image repository path could not be determined");
-		return;
-	}
-
-	# Fix for Linux images on henry4
-	my $management_node_hostname = $self->data->get_management_node_hostname();
-	my $image_os_type            = $self->data->get_image_os_type();
-	my $image_os_source_path     = $self->data->get_image_os_source_path();
-	if ($management_node_hostname =~ /henry4/i && $image_os_type =~ /linux/i && $image_os_source_path eq 'image') {
-		$image_repository_path_source =~ s/linux_image/image/;
-		notify($ERRORS{'DEBUG'}, 0, "fixed retrieval Linux image path for henry4: linux_image --> image: $image_repository_path_source");
 	}
 
 	# Attempt to copy image from other management nodes
-	notify($ERRORS{'OK'}, 0, "attempting to copy $image_name from other management nodes");
+	notify($ERRORS{'OK'}, 0, "attempting to retrieve image $image_name from another management node");
 
 	# Split up the partner list
 	my @partner_list = split(/,/, $image_lib_partners);
@@ -2951,62 +2935,61 @@ sub retrieve_image {
 
 	# Loop through the partners, attempt to copy
 	foreach my $partner (@partner_list) {
-		notify($ERRORS{'OK'}, 0, "checking if $partner has $image_name");
-
+		# If another management node's repo path was requested, run find via ssh
+		my $management_node_hostname = $self->data->get_management_node_hostname($partner) || '';
+		my $management_node_image_lib_user = $self->data->get_management_node_image_lib_user($partner) || '';
+		my $management_node_image_lib_key = $self->data->get_management_node_image_lib_key($partner) || '';
+		my $management_node_ssh_port = $self->data->get_management_node_ssh_port($partner) || '';
+		my $image_repository_path_remote = $self->_get_image_repository_path($partner);
+		
+		notify($ERRORS{'OK'}, 0, "checking if $management_node_hostname has image $image_name");
+		notify($ERRORS{'DEBUG'}, 0, "remote image repository path on $partner: $image_repository_path_remote");
+		
 		# Use ssh to call ls on the partner management node
-		my ($ls_exit_status, $ls_output_array_ref) = run_ssh_command($partner, $image_lib_key, "ls -1 $image_repository_path_source", $image_lib_user, '', 1);
-
-		# Check if the ssh command failed
-		if (!$ls_output_array_ref) {
-			notify($ERRORS{'WARNING'}, 0, "unable to run ls command via ssh on $partner");
+		my ($ls_exit_status, $ls_output) = run_ssh_command($partner, $management_node_image_lib_key, "ls -lh $image_repository_path_remote", $management_node_image_lib_user, $management_node_ssh_port, 1);
+		if (defined($ls_output) && grep(/$image_name/, @$ls_output)) {
+			notify($ERRORS{'OK'}, 0, "image $image_name exists on $management_node_hostname");
+		}
+		elsif (defined($ls_exit_status) && $ls_exit_status == 0) {
+			notify($ERRORS{'OK'}, 0, "image $image_name does NOT exist on $management_node_hostname");
 			next;
 		}
-
-		# Convert the output array to a string
-		my $ls_output = join("\n", @{$ls_output_array_ref});
-
-		# Check the ls output for permission denied
-		if ($ls_output =~ /permission denied/i) {
-			notify($ERRORS{'CRITICAL'}, 0, "permission denied when checking if $partner has $image_name, exit status=$ls_exit_status, output:\n$ls_output");
+		elsif (defined($ls_output) && grep(/No such file or directory/, @$ls_output)) {
+			notify($ERRORS{'OK'}, 0, "image repository path '$image_repository_path_remote' does not exist on $management_node_hostname");
 			next;
 		}
-
-		# Check the ls output for the image name
-		if ($ls_output !~ /$image_name[\.\-]/i) {
-			notify($ERRORS{'OK'}, 0, "$image_name does not exist on $partner");
+		elsif (defined($ls_exit_status)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to determine if image $image_name exists on $management_node_hostname, exit status: $ls_exit_status, output:\n" . join("\n", @$ls_output));
 			next;
-		}
-
-		# Image exists
-		notify($ERRORS{'OK'}, 0, "$image_name exists on $partner, attempting to copy");
-
-		# Attempt copy
-		if (run_scp_command("$image_lib_user\@$partner:$image_repository_path_source/$image_name*", $image_repository_path, $image_lib_key)) {
-			notify($ERRORS{'OK'}, 0, "$image_name files copied via SCP");
-			last;
 		}
 		else {
-			notify($ERRORS{'WARNING'}, 0, "unable to copy $image_name files via SCP");
+			notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to determine if image $image_name exists on $management_node_hostname");
 			next;
 		}
-	} ## end foreach my $partner (@partner_list)
-
-	# Make sure image was copied
-	if ($self->does_image_exist($image_name)) {
-		notify($ERRORS{'OK'}, 0, "$image_name was copied to this management node");
+		
+		# Attempt copy
+		notify($ERRORS{'OK'}, 0, "copying image $image_name from $management_node_hostname");
+		if (run_scp_command("$management_node_image_lib_user\@$partner:$image_repository_path_remote/$image_name*", $image_repository_path_local, $management_node_image_lib_key, $management_node_ssh_port)) {
+			notify($ERRORS{'OK'}, 0, "image $image_name was copied from $management_node_hostname");
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to copy image $image_name from $management_node_hostname");
+			next;
+		}
+		
+		# Create the template file for the image
+		if (!$self->_create_template()) {
+			notify($ERRORS{'WARNING'}, 0, "failed to create template file for image $image_name");
+			return;
+		}
+		
+		last;
 	}
-	else {
+	
+	# Make sure image was copied
+	if (!$self->does_image_exist($image_name)) {
 		notify($ERRORS{'WARNING'}, 0, "$image_name was not copied to this management node");
 		return 0;
-	}
-
-	# Create the template file for the image
-	if ($self->_create_template()) {
-		notify($ERRORS{'OK'}, 0, "template file created for image $image_name");
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to create template file for image $image_name");
-		return;
 	}
 
 	return 1;
@@ -3173,113 +3156,181 @@ sub get_image_size {
 
 =head2 _get_image_repository_path
 
- Parameters  : none, must be called as an xCAT object method
- Returns     :
+ Parameters  : management node identifier (optional)
+ Returns     : Successful: string containing filesystem path
+               Failed:     false
  Description :
 
 =cut
 
 sub _get_image_repository_path {
-	my $self                 = shift;
-	my $return_template_path = shift;
-
-	if (ref($self) !~ /xCAT/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return 0;
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a VCL::Module module object method");
+		return;	
 	}
-
-	# Get the required variables from the DataStructure
-	my $management_node_id       = $self->data->get_management_node_id();
-	my $management_node_hostname = $self->data->get_management_node_hostname();
-	my $install_path             = $self->data->get_management_node_install_path();
-	my $image_os_name            = $self->data->get_image_os_name();
-	my $image_os_type            = $self->data->get_image_os_type();
-	my $image_os_install_type    = $self->data->get_image_os_install_type();
-	my $image_os_source_path     = $self->data->get_image_os_source_path();
-	my $image_architecture       = $self->data->get_image_architecture();
-
-	if (!(defined($image_os_name) && defined($image_os_type) && defined($image_os_install_type) && defined($image_os_source_path) && defined($image_architecture))) {
-		notify($ERRORS{'CRITICAL'}, 0, "some of the required data could not be retrieved");
-		return 0;
+	
+	# Check if a management node identifier argument was passed
+	my $management_node_identifier = shift;
+	if ($management_node_identifier) {
+		notify($ERRORS{'DEBUG'}, 0, "management node identifier argument was specified: $management_node_identifier");
 	}
-
-	$return_template_path = 0 if !defined($return_template_path);
-
-	notify($ERRORS{'DEBUG'}, 0, "OS=$image_os_name, OS type=$image_os_type, OS install type=$image_os_install_type, OS source=$image_os_source_path");
-
-	# Fix for Linux images on henry4
-	if (   $management_node_hostname =~ /henry4/i
-		 && $image_os_type =~ /linux/i
-		 && $image_os_source_path eq 'image')
-	{
-		$image_os_source_path = 'linux_image';
-		notify($ERRORS{'DEBUG'}, 0, "fixed Linux image path for henry4: image --> linux_image");
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "management node identifier argument was not specified");
 	}
-
+	
+	my $management_node_install_path = $self->data->get_management_node_install_path($management_node_identifier);
+	
+	# Get required image data
+	my $image_id            = $self->data->get_image_id() || 'undefined';
+	my $image_os_name            = $self->data->get_image_os_name() || 'undefined';
+	my $image_os_type            = $self->data->get_image_os_type() || 'undefined';
+	my $image_os_install_type    = $self->data->get_image_os_install_type() || 'undefined';
+	my $image_os_source_path     = $self->data->get_image_os_source_path() || 'undefined';
+	my $image_architecture       = $self->data->get_image_architecture() || 'undefined';
+	if ("$image_os_name $image_os_type $image_os_install_type $image_os_source_path $image_architecture" =~ /undefined/) {
+		notify($ERRORS{'WARNING'}, 0, "some of the required data could not be retrieved: OS name=$image_os_name, OS type=$image_os_type, OS install type=$image_os_install_type, OS source path=$image_os_source_path, architecture=$image_architecture");
+		return;
+	}
+	
 	# Remove trailing / from $image_os_source_path if exists
 	$image_os_source_path =~ s/\/$//;
-
+	
+	notify($ERRORS{'DEBUG'}, 0, "attempting to determine repository path for image:
+		image id:        $image_id
+		OS name:         $image_os_name
+		OS type:         $image_os_type
+		OS install type: $image_os_install_type
+		OS source path:  $image_os_source_path\n
+		architecture:    $image_architecture
+	");
+	
 	# If image OS source path has a leading /, assume it was meant to be absolute
 	# Otherwise, prepend the install path
 	my $image_install_path;
 	if ($image_os_source_path =~ /^\//) {
-
-		# If $image_os_source_path = '/centos5', use '/centos5'
 		$image_install_path = $image_os_source_path;
 	}
 	else {
-
-		# If $image_os_source_path = 'centos5', use '/install/centos5'
-		# Note: $install_path has a leading /
-		$image_install_path = "$install_path/$image_os_source_path";
+		$image_install_path = "$management_node_install_path/$image_os_source_path";
 	}
 
 	# Note: $XCAT_ROOT has a leading /
 	# Note: $image_install_path has a leading /
-
-# Check $return_template_path, either return repo path or template directory path
-# This is done because the code to figure out the paths is mostly the same
-# _get_image_repository_path calls this subroutine with the $return_template_path flag set
-	my $return_path;
-	if ($return_template_path) {
-		$return_path = "$XCAT_ROOT$image_install_path/$image_architecture";
-		notify($ERRORS{'DEBUG'}, 0, "template path: $return_path");
-		return $return_path;
-	}
-	elsif ($image_os_install_type eq 'kickstart') {
-
+	if ($image_os_install_type eq 'kickstart') {
 		# Kickstart installs use the xCAT path for both repo and tmpl paths
-		$return_path = "$XCAT_ROOT$image_install_path/$image_architecture";
-		notify($ERRORS{'DEBUG'}, 0, "kickstart path: $return_path");
-		return $return_path;
+		my $kickstart_repo_path = "$XCAT_ROOT$image_install_path/$image_architecture";
+		notify($ERRORS{'DEBUG'}, 0, "kickstart install type, returning $kickstart_repo_path");
+		return $kickstart_repo_path;
 	}
-	else {
-
-# Imaging installs use the xCAT path for the tmpl path, and the install path for the repo path
-		$return_path = "$image_install_path/$image_architecture";
-		notify($ERRORS{'DEBUG'}, 0, "repository path: $return_path");
-		return $return_path;
+	
+	elsif ($image_os_type eq 'linux' && $image_os_source_path eq 'image') {
+		my $linux_image_repo_path = "$management_node_install_path/linux_image/$image_architecture";
+		
+		# Use the find command to check if any .gz files exist under a linux_image directory on the management node being checked
+		my ($find_exit_status, $find_output);
+		my $find_command = "find $linux_image_repo_path -name \"$image_os_name-*.gz\"";
+		
+		# Check if the repo path for this management node or another management node was requested
+		if (!$management_node_identifier) {
+			# If this management node's repo path was requested, just run find directly
+			($find_exit_status, $find_output) = run_command($find_command, '1');
+		}
+		else {
+			# If another management node's repo path was requested, run find via ssh
+			my $management_node_hostname = $self->data->get_management_node_hostname($management_node_identifier) || '';
+			my $management_node_image_lib_user = $self->data->get_management_node_image_lib_user($management_node_identifier) || '';
+			my $management_node_image_lib_key = $self->data->get_management_node_image_lib_key($management_node_identifier) || '';
+			my $management_node_ssh_port = $self->data->get_management_node_ssh_port($management_node_identifier) || '';
+			
+			notify($ERRORS{'DEBUG'}, 0, "attempting to find linux images under '$linux_image_repo_path' on management node:
+					 hostname=$management_node_hostname
+					 user=$management_node_image_lib_user
+					 key=$management_node_image_lib_key
+					 port=$management_node_ssh_port
+			");
+			
+			($find_exit_status, $find_output) = run_ssh_command($management_node_hostname, $management_node_image_lib_key, $find_command, $management_node_image_lib_user, $management_node_ssh_port, 1);
+		}
+		
+		# Check the output of the find command for any .gz files
+		# If a .gz file was found, assume linux_image should be used
+		if ($find_output) {
+			my $linux_images_found = grep(/\.gz/, @$find_output);
+			if ($linux_images_found) {
+				notify($ERRORS{'DEBUG'}, 0, "found $linux_images_found images, returning $linux_image_repo_path");
+				return $linux_image_repo_path;
+			}
+			else {
+				notify($ERRORS{'DEBUG'}, 0, "did not find any images under $linux_image_repo_path");
+			}
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to run find");
+		}
+		
 	}
+	
+	my $repo_path = "$image_install_path/$image_architecture";
+	notify($ERRORS{'DEBUG'}, 0, "returning: $repo_path");
+	return $repo_path;
 } ## end sub _get_image_repository_path
 
 #/////////////////////////////////////////////////////////////////////////////
 
 =head2 _get_image_template_path
 
- Parameters  : none, must be called as an xCAT object method
- Returns     :
+ Parameters  : management node identifier (optional)
+ Returns     : Successful: string containing filesystem path
+               Failed:     false
  Description :
 
 =cut
 
 sub _get_image_template_path {
 	my $self = shift;
-	if (ref($self) !~ /xCAT/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return 0;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a VCL::Module module object method");
+		return;	
 	}
-
-	return $self->_get_image_repository_path(1);
+	
+	# Check if a management node identifier argument was passed
+	my $management_node_identifier = shift;
+	if ($management_node_identifier) {
+		notify($ERRORS{'DEBUG'}, 0, "management node identifier argument was specified: $management_node_identifier");
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "management node identifier argument was not specified");
+	}
+	
+	# Get required image data
+	my $management_node_install_path = $self->data->get_management_node_install_path($management_node_identifier);
+	my $image_os_source_path     = $self->data->get_image_os_source_path() || 'undefined';
+	my $image_architecture       = $self->data->get_image_architecture() || 'undefined';
+	if ("$image_os_source_path $image_architecture" =~ /undefined/) {
+		notify($ERRORS{'WARNING'}, 0, "some of the required data could not be retrieved:
+			OS source path=$image_os_source_path
+			architecture=$image_architecture
+		");
+		return;
+	}
+	
+	# Remove trailing / from $image_os_source_path if exists
+	$image_os_source_path =~ s/\/$//;
+	
+	# If image OS source path has a leading /, assume it was meant to be absolute
+	# Otherwise, prepend the install path
+	my $image_install_path;
+	if ($image_os_source_path =~ /^\//) {
+		$image_install_path = $image_os_source_path;
+	}
+	else {
+		$image_install_path = "$management_node_install_path/$image_os_source_path";
+	}
+	
+	my $template_path = "$XCAT_ROOT$image_install_path/$image_architecture";
+	notify($ERRORS{'DEBUG'}, 0, "template path: $template_path");
+	return $template_path;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -3400,7 +3451,7 @@ sub _create_template {
 		return;
 	}
 
-	notify($ERRORS{'OK'}, 0, "successfully created template file: $tmpl_repository_path/$image_name.tmpl");
+	notify($ERRORS{'OK'}, 0, "successfully created template file: $image_name.tmpl");
 	return 1;
 } ## end sub _create_template
 
@@ -3474,25 +3525,22 @@ sub _delete_template {
 #/////////////////////////////////////////////////////////////////////////////
 
 initialize() if (!$XCAT_ROOT);
-1;
 
 #/////////////////////////////////////////////////////////////////////////////
 
+1;
 __END__
 
-=head1 BUGS and LIMITATIONS
+=head1 COPYRIGHT
 
- There are no known bugs in this module.
- Please report problems to the VCL team (vcl_help@ncsu.edu).
-
-=head1 AUTHOR
-
- Aaron Peeler, aaron_peeler@ncsu.edu
- Andy Kurth, andy_kurth@ncsu.edu
+ Apache VCL incubator project
+ Copyright 2009 The Apache Software Foundation
+ 
+ This product includes software developed at
+ The Apache Software Foundation (http://www.apache.org/).
 
 =head1 SEE ALSO
 
-L<http://vcl.ncsu.edu>
-
+L<http://cwiki.apache.org/VCL/>
 
 =cut
