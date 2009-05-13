@@ -84,7 +84,7 @@ sub initialize {
 
 	# Attempt to get a database handle
 	if ($ENV{dbh} = getnewdbh()) {
-		notify($ERRORS{'OK'}, 0, "obtained a database handle for this state process, stored as \$ENV{dbh}");
+		notify($ERRORS{'DEBUG'}, 0, "obtained a database handle for this state process, stored as \$ENV{dbh}");
 	}
 	else {
 		notify($ERRORS{'WARNING'}, 0, "unable to obtain a database handle for this state process");
@@ -119,22 +119,21 @@ sub initialize {
 
 	# Attempt to load the computer provisioning module
 	if ($provisioning_perl_package) {
-		notify($ERRORS{'OK'}, 0, "attempting to load provisioning module: $provisioning_perl_package");
+		notify($ERRORS{'DEBUG'}, 0, "attempting to load provisioning module: $provisioning_perl_package");
 		eval "use $provisioning_perl_package";
 		if ($EVAL_ERROR) {
-			notify($ERRORS{'WARNING'}, 0, "$provisioning_perl_package module could not be loaded");
-			notify($ERRORS{'OK'},      0, "returning 0");
+			notify($ERRORS{'WARNING'}, 0, "$provisioning_perl_package module could not be loaded, returning 0");
 			return 0;
 		}
-		notify($ERRORS{'OK'}, 0, "$provisioning_perl_package module successfully loaded");
+		notify($ERRORS{'DEBUG'}, 0, "$provisioning_perl_package module loaded");
 
 		# Create provisioner object
 		if (my $provisioner = ($provisioning_perl_package)->new({data_structure => $self->data})) {
-			notify($ERRORS{'OK'}, 0, ref($provisioner) . " provisioner object successfully created");
+			notify($ERRORS{'OK'}, 0, ref($provisioner) . " provisioner object created");
 			$self->{provisioner} = $provisioner;
 		}
 		else {
-			notify($ERRORS{'OK'}, 0, "provisioning object could not be created, returning 0");
+			notify($ERRORS{'WARNING'}, 0, "provisioning object could not be created, returning 0");
 			return 0;
 		}
 	} ## end if ($provisioning_perl_package)
@@ -144,15 +143,16 @@ sub initialize {
 
 	# Attempt to load the OS module
 	if ($os_perl_package) {
-		notify($ERRORS{'OK'}, 0, "attempting to load OS module: $os_perl_package");
+		notify($ERRORS{'DEBUG'}, 0, "attempting to load OS module: $os_perl_package");
 		eval "use $os_perl_package";
 		if ($EVAL_ERROR) {
-			notify($ERRORS{'WARNING'}, 0, "$os_perl_package module could not be loaded");
-			notify($ERRORS{'OK'},      0, "returning 0");
+			notify($ERRORS{'WARNING'}, 0, "$os_perl_package module could not be loaded, returning 0");
 			return 0;
 		}
+		notify($ERRORS{'DEBUG'}, 0, "$os_perl_package module loaded");
+
 		if (my $os = ($os_perl_package)->new({data_structure => $self->data})) {
-			notify($ERRORS{'OK'}, 0, ref($os) . " OS object successfully created");
+			notify($ERRORS{'OK'}, 0, ref($os) . " OS object created");
 			$self->{os} = $os;
 		}
 		else {
@@ -167,7 +167,7 @@ sub initialize {
 	$self->{provisioner}->set_os($self->{os});
 	$self->{os}->set_provisioner($self->{provisioner});
 
-	notify($ERRORS{'OK'}, 0, "returning 1");
+	notify($ERRORS{'DEBUG'}, 0, "returning 1");
 	return 1;
 
 } ## end sub initialize
