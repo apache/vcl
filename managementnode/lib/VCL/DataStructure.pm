@@ -456,6 +456,7 @@ $SUBROUTINE_MAPPINGS{management_node_short_name}           = '$ENV{management_no
 $SUBROUTINE_MAPPINGS{management_node_state_name}           = '$ENV{management_node_info}{state}{name}';
 $SUBROUTINE_MAPPINGS{management_node_os_name}              = '$ENV{management_node_info}{OSNAME}';
 $SUBROUTINE_MAPPINGS{management_node_predictive_module_id} = '$ENV{management_node_info}{predictivemoduleid}';
+$SUBROUTINE_MAPPINGS{management_node_ssh_port}             = '$ENV{management_node_info}{sshport}';
 
 $SUBROUTINE_MAPPINGS{management_node_predictive_module_name}         = '$ENV{management_node_info}{predictive_name}';
 $SUBROUTINE_MAPPINGS{management_node_predictive_module_pretty_name}  = '$ENV{management_node_info}{predictive_prettyname}';
@@ -628,6 +629,8 @@ sub _automethod : Automethod {
 		# eval is required in order to interpolate the hash path before retrieving the data
 		my $key_defined = eval "defined $hash_path";
 		
+		my $return_value;
+		
 		# If log or sublog data was requested and not yet populated, attempt to retrieve it
 		if (!$key_defined && $data_identifier =~ /^(log_|sublog_)/) {
 			notify($ERRORS{'DEBUG'}, 0, "attempting to retrieve log data, requested data has not been initialized ($data_identifier)");
@@ -644,12 +647,40 @@ sub _automethod : Automethod {
 				return sub { };
 			}
 		}
+		elsif ($data_identifier =~ /^(management_node)/ && $args[0]) {
+			# Data about a specific management node was requested by passing an argument:
+			# get_management_node_xxx(<management node identifier>)
+			#notify($ERRORS{'DEBUG'}, 0, "attempting to retrieve data for management node identifier: $args[0]");
+			
+			# Get the management node info hash ref for the management node specified by the argument
+			my $management_node_info_retrieved = get_management_node_info($args[0]);
+			unless ($management_node_info_retrieved) {
+				notify($ERRORS{'WARNING'}, 0, "failed to retrieve data for management node: $args[0]");
+				return sub { };
+			}
+			
+			my $management_node_id = $management_node_info_retrieved->{id};
+			my $management_node_hostname = $management_node_info_retrieved->{hostname};
+			#notify($ERRORS{'DEBUG'}, 0, "retrieved data for management node: id=$management_node_id, hostname=$management_node_hostname");
+			
+			# The normal reservation management node data is stored in $ENV{management_node_info}
+			# We don't want to overwrite this, but want to temporarily store the data retrieved for the different management node
+			# This allows the $hash_path mechanism to work without alterations
+			# Temporarily overwrite this data by using 'local', and set it to the data just retrieved
+			# Once the current scope is exited, $ENV{management_node_info} will return to its original value
+			local $ENV{management_node_info} = $management_node_info_retrieved;
+			
+			# Attempt to retrieve the value from the temporary data: $ENV{management_node_info}{KEY}
+			$return_value = eval $hash_path;
+		}
 		elsif (!$key_defined) {
 			notify($ERRORS{'WARNING'}, 0, "corresponding data has not been initialized for $method_name: $hash_path", $self->request_data);
 			return sub { };
 		}
-
-		my $return_value = eval $hash_path;
+		else {
+			# Just attempt to retrieve the value from the hash path
+			$return_value = eval $hash_path;
+		}
 
 		if (!defined $return_value) {
 			notify($ERRORS{'WARNING'}, 0, "corresponding data is undefined for $method_name: $hash_path", $self->request_data);

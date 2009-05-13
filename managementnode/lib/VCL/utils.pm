@@ -691,20 +691,21 @@ sub notify {
 
 	# Get the caller trace information
 	my $caller_trace = get_caller_trace(6);
-
-
+	
 	# Format the message string
 	# Remove Windows carriage returns from the message string for consistency
-	$string =~ s/\r//g;
-
-	# Remove newlines from the beginning and end of the message string
-	$string =~ s/^\n+//;
-	$string =~ s/\n+$//;
-
+	$string =~ s/\r//gs;
+	
+	## Remove newlines from the beginning and end of the message string
+	#$string =~ s/^\n+//;
+	#$string =~ s/\n+$//;
+	
 	# Remove any spaces from the beginning or end of the string
-	$string =~ s/^\s+//;
-	$string =~ s/\s+$//;
-
+	$string =~ s/(^\s+)|(\s+$)//gs;
+	
+	# Remove any spaces from the beginning or end of the each line
+	$string =~ s/\s*\n\s*/\n/gs;
+	
 	# Replace consecutive spaces with a single space to keep log file concise as long as string doesn't contain a quote
 	if ($string !~ /[\'\"]/gs) {
 		$string =~ s/[ \t]+/ /gs;
@@ -6735,7 +6736,7 @@ sub run_ssh_command {
 
 		# Print the SSH command, only display the attempt # if > 1
 		if ($attempts == 1) {
-			notify($ERRORS{'DEBUG'}, 0, "executing SSH command on $node:\n$command");
+			notify($ERRORS{'DEBUG'}, 0, "executing SSH command on $node:\n$ssh_command");
 		}
 		else {
 			notify($ERRORS{'DEBUG'}, 0, "attempt $attempts/$max_attempts: executing SSH command on $node:\n$ssh_command");
@@ -6825,10 +6826,10 @@ sub run_ssh_command {
 			}
 			
 			# Display the full ssh command if the exit status is not 0
-			if ($exit_status) {
+			if ($exit_status && !$no_output) {
 				notify($ERRORS{'OK'}, 0, "SSH command executed on $node, command:\n$ssh_command\nreturning ($exit_status, \"$ssh_output_summary\")");
 			}
-			else {
+			elsif (!$no_output) {
 				notify($ERRORS{'DEBUG'}, 0, "SSH command executed on $node, returning ($exit_status, \"$ssh_output_summary\")");
 			}
 			
@@ -7219,36 +7220,40 @@ sub get_management_node_info {
 	}
 
 	my $select_statement = "
-   SELECT
-   managementnode.*,
-	resource.id AS resource_id,
-   predictivemodule.name AS predictive_name,
-   predictivemodule.prettyname AS predictive_prettyname,
-   predictivemodule.description AS predictive_description,
-   predictivemodule.perlpackage  AS predictive_perlpackage,
-	state.name AS statename
-   FROM
-   managementnode,
-   module predictivemodule,
-	resource,
-	resourcetype,
-	state
-   WHERE
-   managementnode.predictivemoduleid = predictivemodule.id
-	AND managementnode.stateid = state.id
-	AND resource.resourcetypeid = resourcetype.id 
-	AND resource.subid =  managementnode.id
-	AND resourcetype.name = 'managementnode'
-   AND
-   ";
+SELECT
+managementnode.*,
+resource.id AS resource_id,
+predictivemodule.name AS predictive_name,
+predictivemodule.prettyname AS predictive_prettyname,
+predictivemodule.description AS predictive_description,
+predictivemodule.perlpackage  AS predictive_perlpackage,
+state.name AS statename
+FROM
+managementnode,
+module predictivemodule,
+resource,
+resourcetype,
+state
+WHERE
+managementnode.predictivemoduleid = predictivemodule.id
+AND managementnode.stateid = state.id
+AND resource.resourcetypeid = resourcetype.id 
+AND resource.subid =  managementnode.id
+AND resourcetype.name = 'managementnode'
+AND ";
 
 	# Figure out if the ID or hostname was passed as the identifier and complete the SQL statement
-	# Check if it only contains digits
 	chomp $management_node_identifier;
 	if ($management_node_identifier =~ /^\d+$/) {
+		# Identifier only contains digits, assume it's the id
 		$select_statement .= "managementnode.id = $management_node_identifier";
 	}
+	elsif ($management_node_identifier =~ /^[\d\.]+$/) {
+		# Identifier contains digits and periods, assume it's the IP address
+		$select_statement .= "managementnode.IPAddress like \'$management_node_identifier%\'";
+	}
 	else {
+		# Assume hostname was specified
 		$select_statement .= "managementnode.hostname like \'$management_node_identifier%\'";
 	}
 
@@ -7258,11 +7263,12 @@ sub get_management_node_info {
 
 	# Check to make sure 1 row was returned
 	if (scalar @selected_rows == 0) {
-		notify($ERRORS{'WARNING'}, 0, "zero rows were returned from database select statement:\n$select_statement");
+		notify($ERRORS{'WARNING'}, 0, "zero rows were returned from database select, management node identifier may be invalid: '$management_node_identifier'\n$select_statement");
 		return ();
 	}
 	elsif (scalar @selected_rows > 1) {
-		notify($ERRORS{'WARNING'}, 0, "" . scalar @selected_rows . " rows were returned from database select");
+		my @id_hostnames = map ("management node: id=$_->{id}, hostname=$_->{hostname}, IP=$_->{IPaddress}", @selected_rows);
+		notify($ERRORS{'WARNING'}, 0, "" . scalar @selected_rows . " rows were returned from database select, management node identifier may be ambiguous: '$management_node_identifier'\n" . join("\n", @id_hostnames));
 		return ();
 	}
 
@@ -7284,19 +7290,19 @@ sub get_management_node_info {
 	my $management_node_id = $management_node_info->{id};
 	if ($imagelib_enable && defined($imagelib_group_id) && $imagelib_group_id) {
 		my $imagelib_statement = "
-		SELECT DISTINCT
-		managementnode.IPAddress
-		FROM
-		managementnode,
-		resource,
-		resourcegroup,
-		resourcegroupmembers
-		WHERE
-		resourcegroup.id = $imagelib_group_id
-		AND resourcegroupmembers.resourcegroupid = resourcegroup.id
-		AND resource.id = resourcegroupmembers.resourceid
-		AND resource.subid = managementnode.id
-		AND managementnode.id != $management_node_id
+SELECT DISTINCT
+managementnode.IPaddress
+FROM
+managementnode,
+resource,
+resourcegroup,
+resourcegroupmembers
+WHERE
+resourcegroup.id = $imagelib_group_id
+AND resourcegroupmembers.resourcegroupid = resourcegroup.id
+AND resource.id = resourcegroupmembers.resourceid
+AND resource.subid = managementnode.id
+AND managementnode.id != $management_node_id
 		";
 
 		# Call the database select subroutine
@@ -7312,7 +7318,7 @@ sub get_management_node_info {
 			# Loop through the rows, assemble a string separated by commas
 			my $imagelib_ipaddress_string;
 			for my $imagelib_row (@imagelib_rows) {
-				$imagelib_ipaddress_string .= "$imagelib_row->{IPAddress},";
+				$imagelib_ipaddress_string .= "$imagelib_row->{IPaddress},";
 			}
 			# Remove the trailing comma
 			$imagelib_ipaddress_string =~ s/,$//;
@@ -8410,7 +8416,7 @@ sub rename_vcld_process {
 		# Get a new data structure object
 		eval {
 			$data_structure = new VCL::DataStructure({request_data => $input_data, reservation_id => $input_data->{RESERVATIONID}});
-			notify($ERRORS{'OK'}, 0, "created DataStructure object from passed hash");
+			notify($ERRORS{'DEBUG'}, 0, "created DataStructure object from passed hash");
 		};
 		if (my $e = Exception::Class::Base->caught()) {
 			notify($ERRORS{'WARNING'}, 0, "hash was passed but could not be turned into a DataStructure, " . $e->message);
@@ -8454,7 +8460,7 @@ sub rename_vcld_process {
 			$new_process_name .= " imaging" if $request_forimaging;
 
 			# Append cluster if there are multiple reservations for this request
-			notify($ERRORS{'OK'}, 0, "reservation count: $reservation_count");
+			notify($ERRORS{'DEBUG'}, 0, "reservation count: $reservation_count");
 
 			if ($reservation_count > 1) {
 				if ($reservation_is_parent) {
@@ -8473,8 +8479,8 @@ sub rename_vcld_process {
 				$data_structure->get_request_data->{SUBIMAGE}    = 0;
 			}
 
-			notify($ERRORS{'OK'}, 0, "PARENTIMAGE: " . $data_structure->get_request_data->{PARENTIMAGE});
-			notify($ERRORS{'OK'}, 0, "SUBIMAGE: " . $data_structure->get_request_data->{SUBIMAGE});
+			notify($ERRORS{'DEBUG'}, 0, "PARENTIMAGE: " . $data_structure->get_request_data->{PARENTIMAGE});
+			notify($ERRORS{'DEBUG'}, 0, "SUBIMAGE: " . $data_structure->get_request_data->{SUBIMAGE});
 		} ## end if ($state_name ne 'blockrequest')
 		else {
 			my $blockrequest_id   = $data_structure->get_blockrequest_id();
@@ -10410,7 +10416,7 @@ sub reservation_being_processed {
 =cut
 
 sub run_command {
-	my $command = shift;
+	my ($command, $no_output) = @_;
 	
 	my $pid;
 	my @output = ();
@@ -10438,7 +10444,10 @@ sub run_command {
 		return;
 	}
 	
-	notify($ERRORS{'DEBUG'}, 0, "executed command: $command, pid: $pid, exit status: $exit_status, output:\n@output");
+	if (!$no_output) {
+		notify($ERRORS{'DEBUG'}, 0, "executed command: $command, pid: $pid, exit status: $exit_status, output:\n@output");
+	}
+	
 	return ($exit_status, \@output);
 }
 	
