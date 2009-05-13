@@ -114,7 +114,7 @@ sub main () {
 
 	# Set the vcld environment variable to 0 so other subroutines know if this is the vcld or child process
 	$ENV{vcld} = 1;
-	notify($ERRORS{'OK'}, $LOGFILE, "vcld environment variable set to $ENV{vcld} for this process");
+	notify($ERRORS{'DEBUG'}, $LOGFILE, "vcld environment variable set to $ENV{vcld} for this process");
 
 	# Rename this process
 	rename_vcld_process();
@@ -125,7 +125,7 @@ sub main () {
 	# Get the management node info from the database
 	# get_management_node_info() will determine the hostname
 	if ($info{managementnode} = get_management_node_info()) {
-		notify($ERRORS{'OK'}, $LOGFILE, "retrieved management node information from database");
+		notify($ERRORS{'DEBUG'}, $LOGFILE, "retrieved management node information from database");
 	}
 	else {
 		notify($ERRORS{'CRITICAL'}, $LOGFILE, "unable to retrieve management node information from database");
@@ -138,7 +138,7 @@ sub main () {
 
 	# Set environment variables for global management node information
 	$ENV{management_node_id} = $management_node_id;
-	notify($ERRORS{'OK'}, $LOGFILE, "management_node_id environment variable set: $management_node_id");
+	notify($ERRORS{'DEBUG'}, $LOGFILE, "management_node_id environment variable set: $management_node_id");
 
 	# Get the management node checkin interval from the database if defined
 	# Otherwise, the default is 12 seconds
@@ -146,7 +146,7 @@ sub main () {
 	if (defined $info{managementnode}{checkininterval}) {
 		$management_node_checkin_interval = $info{managementnode}{checkininterval};
 	}
-	notify($ERRORS{'OK'}, $LOGFILE, "management node checkin interval is $management_node_checkin_interval seconds");
+	notify($ERRORS{'DEBUG'}, $LOGFILE, "management node checkin interval is $management_node_checkin_interval seconds");
 	notify($ERRORS{'OK'}, $LOGFILE, "vcld started on $management_node_hostname");
 
 	#===========================================================================
@@ -319,7 +319,7 @@ sub main () {
 				# This will be passed to the next module so it knows where it came from
 				my $is_parent_reservation = $data_structure->is_parent_reservation();
 				if ($is_parent_reservation && update_request_state($request_id, "pending", $request_state_name)) {
-					notify($ERRORS{'OK'}, $LOGFILE, "request state updated to pending, laststate $request_state_name");
+					#notify($ERRORS{'OK'}, $LOGFILE, "request state updated to pending, laststate $request_state_name");
 				}
 				elsif (!$is_parent_reservation) {
 					notify($ERRORS{'OK'}, $LOGFILE, "child reservation: request state NOT updated to pending");
@@ -332,7 +332,7 @@ sub main () {
 				# Insert a computerloadlog entry to indicate processing has begin for this reservation
 				my $computer_id = $data_structure->get_computer_id();
 				if (insertloadlog($reservation_id, $computer_id, "begin", "beginning to process, state is $request_state_name")) {
-					notify($ERRORS{'OK'}, $LOGFILE, "inserted 'begin' entry into computerloadlog for reservation $reservation_id");
+					#notify($ERRORS{'OK'}, $LOGFILE, "inserted 'begin' entry into computerloadlog for reservation $reservation_id");
 				}
 				else {
 					notify($ERRORS{'CRITICAL'}, $LOGFILE, "failed to insert 'begin' entry into computerloadlog for reservation $reservation_id");
@@ -487,27 +487,27 @@ sub make_new_child {
 
 	# The timeout and deleted states have been combined into reclaim.pm
 	if ($state =~ /^(timeout|deleted)$/) {
-		notify($ERRORS{'OK'}, $LOGFILE, "request will be processed by reclaim.pm");
+		notify($ERRORS{'DEBUG'}, $LOGFILE, "request will be processed by reclaim.pm");
 		$state_module = "VCL::reclaim";
 	}
 
 	# The imageinuse state is now handled by inuse.pm
 	if ($state =~ /^(imageinuse)$/) {
-		notify($ERRORS{'OK'}, $LOGFILE, "request will be processed by inuse.pm");
+		notify($ERRORS{'DEBUG'}, $LOGFILE, "request will be processed by inuse.pm");
 		$state_module = "VCL::inuse";
 	}
 
 	# The tomaintenance state is handled by new.pm
 	if ($state =~ /^(tomaintenance|imageprep|reload|tovmhostinuse)$/) {
-		notify($ERRORS{'OK'}, $LOGFILE, "request will be processed by new.pm");
+		notify($ERRORS{'DEBUG'}, $LOGFILE, "request will be processed by new.pm");
 		$state_module = "VCL::new";
 	}
 
-	notify($ERRORS{'OK'}, $LOGFILE, "creating new process");
+	#notify($ERRORS{'DEBUG'}, $LOGFILE, "creating new process");
 
 	eval "use $state_module";
 	if (!$EVAL_ERROR) {
-		notify($ERRORS{'OK'}, $LOGFILE, "loaded $state_module module");
+		notify($ERRORS{'DEBUG'}, $LOGFILE, "loaded $state_module module");
 	}
 	else {
 		notify($ERRORS{'WARNING'}, $LOGFILE, "$state_module module could not be loaded");
@@ -521,7 +521,7 @@ sub make_new_child {
 
 		# Set the vcld environment variable to 0 so other subroutines know if this is the vcld or child process
 		$ENV{vcld} = 0;
-		notify($ERRORS{'OK'}, $LOGFILE, "vcld environment variable set to $ENV{vcld} for this process");
+		notify($ERRORS{'DEBUG'}, $LOGFILE, "vcld environment variable set to $ENV{vcld} for this process");
 
 		my $kid;
 		if ($kid = ($state_module)->new({%{$request_data}, data_structure => $data_structure})) {
@@ -564,7 +564,7 @@ sub make_new_child {
 			# Store the reservation ID so REAPER can clean up the reservation when it dies
 			$child_count++;
 			$child_pids{$pid} = $reservation_id;
-			notify($ERRORS{'OK'}, $LOGFILE, "current number of forked kids: $child_count");
+			notify($ERRORS{'DEBUG'}, $LOGFILE, "current number of forked kids: $child_count");
 			return;
 		}
 		elsif (defined $pid) {
@@ -580,7 +580,7 @@ sub make_new_child {
 
 			# Set the vcld environment variable to 0 so other subroutines know if this is the vcld or child process
 			$ENV{vcld} = 0;
-			notify($ERRORS{'OK'}, $LOGFILE, "vcld environment variable set to $ENV{vcld} for this process");
+			notify($ERRORS{'DEBUG'}, $LOGFILE, "vcld environment variable set to $ENV{vcld} for this process");
 
 			# Set the request_id and reservation_id environment variables
 			$ENV{request_id}     = $request_id;
