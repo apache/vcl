@@ -245,7 +245,10 @@ function get_network_configuration
 	End If
 	
 	' Regular expression to ignore certain network connection names
-	strPatternIgnoredAdapterNames = "(loop|vmware|virtual|afs)"
+	strPatternIgnoredAdapterNames = "(loopback|vmnet|afs)"
+	
+	' Regular expression to ignore certain network connection descriptions
+	strPatternIgnoredAdapterDescriptions = "(loopback|virtual|afs)"
 	
 	' Regular expression to make sure the address is in the correct format
 	strPatternIPAddress = "((\d{1,3}\.?){4})"
@@ -299,12 +302,14 @@ function get_network_configuration
 	
 				' Evaluate the regular expressions
 				strIgnoredAdapterName = RegExpVal(strPatternIgnoredAdapterNames, NA.Name, 0)
+				strIgnoredAdapterDescription = RegExpVal(strPatternIgnoredAdapterDescriptions, NA.Description, 0)
 				strIPAddress = RegExpVal(strPatternIPAddress, Join(NAC.IPAddress), 0)
 				strIPAddressMatchPrivate = RegExpVal(strPatternPrivate, strIPAddress, 0)
 				strIPAddressMatchNotPublic = RegExpVal(strPatternNotPublic, strIPAddress, 0)
 	
 				WScript.Echo "Adpater name: " & NA.Name
 				WScript.Echo "Ignored adpater name section: " & strIgnoredAdapterName
+				WScript.Echo "Ignored adpater description section: " & strIgnoredAdapterDescription
 				WScript.Echo "IP address: " & strIPAddress
 				WScript.Echo "Matching VCL private address section: " & strIPAddressMatchPrivate
 				WScript.Echo "Matching non-public address section: " & strIPAddressMatchNotPublic
@@ -312,6 +317,10 @@ function get_network_configuration
 				' Check if adapter should be ignored
 				If Len(strIgnoredAdapterName) > 0 Then
 					WScript.Echo "Network adapter " & NA.Name & " is being ignored because the name contains: " & strIgnoredAdapterName
+				
+				' Check if adapter should be ignored
+				Elseif Len(strIgnoredAdapterDescription) > 0 Then
+					WScript.Echo "Network adapter " & NA.Name & " is being ignored because the description contains: " & strIgnoredAdapterDescription
 				
 				' Check to make sure a valid IP address was found
 				Elseif Len(strIPAddress) = 0 Then
