@@ -2524,8 +2524,13 @@ sub wait_for_ssh {
 		}
 
 		# Run a test SSH command
-		my ($exit_status, $output) = run_ssh_command($computer_node_name, $management_node_keys, "echo testing ssh on $computer_node_name", '', '', 1);
-
+		my ($exit_status, $output) = run_ssh_command({
+			node => $computer_node_name,
+			command => "echo testing ssh on $computer_node_name",
+			max_attempts => 1,
+			output_level => 0,
+		});
+		
 		# The exit status will be 0 if the command succeeded
 		if (defined($exit_status) && $exit_status == 0) {
 			notify($ERRORS{'OK'}, 0, "$computer_node_name is responding to ssh");
