@@ -334,14 +334,14 @@ sub load {
 								goto XCATRINSTALL;
 							}
 							else {
-								notify($ERRORS{'CRITCAL'}, 0, "rpower failed $rpower_fixes times on $computer_node_name");
+								notify($ERRORS{'CRITICAL'}, 0, "rpower failed $rpower_fixes times on $computer_node_name");
 								return 0;
 							}
 						} ## end if (_fix_rpower($computer_node_name))
 					} ## end if ($_ =~ /not in bay/)
 					                     # TODO make sure "Invalid login|does not exist" still exists
 					if ($_ =~ /Invalid login|does not exist/) {
-						notify($ERRORS{'CRITCAL'}, 0, "failed to initate rinstall on $computer_node_name - $_");
+						notify($ERRORS{'CRITICAL'}, 0, "failed to initate rinstall on $computer_node_name - $_");
 						close(RINSTALL);
 						close(SEM);
 						insertloadlog($reservation_id, $computer_id, "failed", "failed to start load process on $computer_node_name");
@@ -1517,9 +1517,9 @@ sub capture_monitor {
 sub _edit_template {
 	my ($imagename, $drivetype) = @_;
 	my ($package, $filename, $line, $sub) = caller(0);
-	notify($ERRORS{'CRITCAL'}, 0, "drivetype is not defined")
+	notify($ERRORS{'CRITICAL'}, 0, "drivetype is not defined")
 	  if (!(defined($drivetype)));
-	notify($ERRORS{'CRITCAL'}, 0, "imagename is not defined")
+	notify($ERRORS{'CRITICAL'}, 0, "imagename is not defined")
 	  if (!(defined($imagename)));
 
 	my $template = "$XCAT_ROOT/install/image/x86/$imagename.tmpl";

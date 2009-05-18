@@ -330,13 +330,13 @@ sub load {
 								goto XCATRINSTALL;
 							}
 							else {
-								notify($ERRORS{'CRITCAL'}, 0, "rpower failed $rpower_fixes times on $computer_node_name");
+								notify($ERRORS{'CRITICAL'}, 0, "rpower failed $rpower_fixes times on $computer_node_name");
 								return 0;
 							}
 						} ## end if (_fix_rpower($computer_node_name))
 					} ## end if ($_ =~ /not in bay/)
 					if ($_ =~ /Invalid login|does not exist/) {
-						notify($ERRORS{'CRITCAL'}, 0, "failed to initate rinstall on $computer_node_name - $_");
+						notify($ERRORS{'CRITICAL'}, 0, "failed to initate rinstall on $computer_node_name - $_");
 						close(RINSTALL);
 						close(SEM);
 						insertloadlog($reservation_id, $computer_id, "failed", "failed to start load process on $computer_node_name");
@@ -1551,9 +1551,9 @@ sub capture_monitor {
 sub _edit_template {
 	my ($imagename, $drivetype) = @_;
 	my ($package, $filename, $line, $sub) = caller(0);
-	notify($ERRORS{'CRITCAL'}, 0, "drivetype is not defined")
+	notify($ERRORS{'CRITICAL'}, 0, "drivetype is not defined")
 	  if (!(defined($drivetype)));
-	notify($ERRORS{'CRITCAL'}, 0, "imagename is not defined")
+	notify($ERRORS{'CRITICAL'}, 0, "imagename is not defined")
 	  if (!(defined($imagename)));
 
 	my $template = "$XCAT_ROOT/install/image/x86/$imagename.tmpl";
@@ -2631,7 +2631,7 @@ sub node_status {
 		$nodetype_currentimage_match = 1;
 	}
 	else {
-		notify($ERRORS{'OK'}, $log, "nodetype.tab ($status{nodetype}) does not match currentimage.txt ($status{currentimage}), assuming nodetype.tab is correct");
+		notify($ERRORS{'OK'}, $log, "nodetype.tab ($status{nodetype}) does not match currentimage.txt ($status{currentimage})");
 	}
 
 	# Determine the overall machine status based on the individual status results
@@ -2647,6 +2647,10 @@ sub node_status {
 	if (!$nodetype_image_match) {
 		$status{status} = 'RELOAD';
 		notify($ERRORS{'OK'}, $log, "nodetype.tab does not match requested image, node needs to be reloaded");
+	}
+	if (!$nodetype_currentimage_match) {
+		$status{status} = 'RELOAD';
+		notify($ERRORS{'OK'}, $log, "nodetype.tab does not match currentimage.txt, node needs to be reloaded");
 	}
 
 	# Node is up and doesn't need to be reloaded
@@ -3303,34 +3307,93 @@ sub _get_image_template_path {
 		notify($ERRORS{'DEBUG'}, 0, "management node identifier argument was not specified");
 	}
 	
-	# Get required image data
 	my $management_node_install_path = $self->data->get_management_node_install_path($management_node_identifier);
+	
+	# Get required image data
+	my $image_id            = $self->data->get_image_id() || 'undefined';
+	my $image_os_name            = $self->data->get_image_os_name() || 'undefined';
+	my $image_os_type            = $self->data->get_image_os_type() || 'undefined';
+	my $image_os_install_type    = $self->data->get_image_os_install_type() || 'undefined';
 	my $image_os_source_path     = $self->data->get_image_os_source_path() || 'undefined';
 	my $image_architecture       = $self->data->get_image_architecture() || 'undefined';
-	if ("$image_os_source_path $image_architecture" =~ /undefined/) {
-		notify($ERRORS{'WARNING'}, 0, "some of the required data could not be retrieved:
-			OS source path=$image_os_source_path
-			architecture=$image_architecture
-		");
+	if ("$image_os_name $image_os_type $image_os_install_type $image_os_source_path $image_architecture" =~ /undefined/) {
+		notify($ERRORS{'WARNING'}, 0, "some of the required data could not be retrieved: OS name=$image_os_name, OS type=$image_os_type, OS install type=$image_os_install_type, OS source path=$image_os_source_path, architecture=$image_architecture");
 		return;
 	}
 	
 	# Remove trailing / from $image_os_source_path if exists
 	$image_os_source_path =~ s/\/$//;
 	
-	# If image OS source path has a leading /, assume it was meant to be absolute
-	# Otherwise, prepend the install path
-	my $image_install_path;
-	if ($image_os_source_path =~ /^\//) {
-		$image_install_path = $image_os_source_path;
-	}
-	else {
-		$image_install_path = "$management_node_install_path/$image_os_source_path";
+	# Remove trailing / from $XCAT_ROOT if exists
+	(my $xcat_root = $XCAT_ROOT) =~ s/\/$//;
+	
+	notify($ERRORS{'DEBUG'}, 0, "attempting to determine template path for image:
+		image id:        $image_id
+		OS name:         $image_os_name
+		OS type:         $image_os_type
+		OS install type: $image_os_install_type
+		OS source path:  $image_os_source_path\n
+		architecture:    $image_architecture
+	");
+	
+	my $image_template_path = "$xcat_root$management_node_install_path/$image_os_source_path/$image_architecture";
+	
+	# Note: $image_install_path has a leading /
+	if ($image_os_install_type eq 'kickstart') {
+		# Kickstart installs use the xCAT path for both repo and tmpl paths
+		notify($ERRORS{'DEBUG'}, 0, "kickstart install type, returning $image_template_path");
+		return $image_template_path;
 	}
 	
-	my $template_path = "$XCAT_ROOT$image_install_path/$image_architecture";
-	notify($ERRORS{'DEBUG'}, 0, "template path: $template_path");
-	return $template_path;
+	elsif ($image_os_type eq 'linux' && $image_os_source_path eq 'image') {
+		my $linux_image_tmpl_path = "$xcat_root$management_node_install_path/linux_image/$image_architecture";
+		
+		# Use the find command to check if any .tmpl files exist under a linux_image directory on the management node being checked
+		my ($find_exit_status, $find_output);
+		my $find_command = "find $linux_image_tmpl_path -name \"$image_os_name-*.tmpl\"";
+		
+		# Check if the repo path for this management node or another management node was requested
+		if (!$management_node_identifier) {
+			# If this management node's repo path was requested, just run find directly
+			($find_exit_status, $find_output) = run_command($find_command, '1');
+		}
+		else {
+			# If another management node's repo path was requested, run find via ssh
+			my $management_node_hostname = $self->data->get_management_node_hostname($management_node_identifier) || '';
+			my $management_node_image_lib_user = $self->data->get_management_node_image_lib_user($management_node_identifier) || '';
+			my $management_node_image_lib_key = $self->data->get_management_node_image_lib_key($management_node_identifier) || '';
+			my $management_node_ssh_port = $self->data->get_management_node_ssh_port($management_node_identifier) || '';
+			
+			notify($ERRORS{'DEBUG'}, 0, "attempting to find linux image template files under '$linux_image_tmpl_path' on management node:
+					 hostname=$management_node_hostname
+					 user=$management_node_image_lib_user
+					 key=$management_node_image_lib_key
+					 port=$management_node_ssh_port
+			");
+			
+			($find_exit_status, $find_output) = run_ssh_command($management_node_hostname, $management_node_image_lib_key, $find_command, $management_node_image_lib_user, $management_node_ssh_port, 1);
+		}
+		
+		# Check the output of the find command for any .gz files
+		# If a .tmpl file was found, assume linux_image should be used
+		if ($find_output) {
+			my $linux_templates_found = grep(/\.tmpl/, @$find_output);
+			if ($linux_templates_found) {
+				notify($ERRORS{'DEBUG'}, 0, "found $linux_templates_found template files, returning $linux_image_tmpl_path");
+				return $linux_image_tmpl_path;
+			}
+			else {
+				notify($ERRORS{'DEBUG'}, 0, "did not find any template files under $linux_image_tmpl_path");
+			}
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to run find");
+		}
+		
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "returning: $image_template_path");
+	return $image_template_path;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
