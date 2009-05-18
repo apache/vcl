@@ -196,6 +196,17 @@ Disable dynamic DNS
 	if (!$self->disable_dynamic_dns()) {
 		notify($ERRORS{'WARNING'}, 0, "unable to disable dynamic dns");
 	}
+	
+	
+=item *
+
+Disable Internet Explorer configuration page
+
+=cut
+
+	if (!$self->disable_ie_configuration_page()) {
+		notify($ERRORS{'WARNING'}, 0, "unable to disable IE configuration");
+	}
 
 =item *
 
@@ -261,6 +272,16 @@ Configure the network adapters to use DHCP
 	if (!$self->enable_dhcp()) {
 		notify($ERRORS{'WARNING'}, 0, "unable to enable DHCP on the public and private interfaces");
 		return 0;
+	}
+	
+=item *
+
+Allow users to connect remoteley
+
+=cut
+
+	if (!$self->allow_remote_access()) {
+		notify($ERRORS{'WARNING'}, 0, "unable to allow users to connect remotely");
 	}
 
 =item *
@@ -3878,14 +3899,6 @@ sub firewall_enable_rdp {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
-	
-	# Allow users to connect remotely
-	if ($self->allow_remote_access()) {
-		notify($ERRORS{'OK'}, 0, "allowed users to connect remotely");
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to allow users to connect remotely");
-	}
 
 	my %firewall_parameters = (name     => 'Remote Desktop',
 										protocol => 'TCP',
@@ -5951,6 +5964,55 @@ sub kill_process {
 		return;
 	}
 	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 disable_ie_configuration_page
+
+ Parameters  : None.
+ Returns     : If successful: true
+               If failed: false
+ Description : Sets registry keys which prevent Internet Explorer's
+					configuration page from appearing the first time a user launches
+					it. This subroutine also enables the Internet Explorer Phishing
+					Filter and sets it to not display a balloon message.
+
+=cut
+
+sub disable_ie_configuration_page {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a VCL::Module module object method");
+		return;	
+	}
+
+	my $management_node_keys = $self->data->get_management_node_keys();
+	my $computer_node_name   = $self->data->get_computer_node_name();
+
+	my $registry_string .= <<"EOF";
+Windows Registry Editor Version 5.00
+
+[HKEY_LOCAL_MACHINE\\Software\\Microsoft\\Internet Explorer\\Main]
+"RunOnceHasShown"=dword:00000001
+"RunOnceComplete"=dword:00000001
+
+[HKEY_LOCAL_MACHINE\\Software\\Microsoft\\Internet Explorer\\PhishingFilter]
+"Enabled"=dword:00000002
+"ShownVerifyBalloon"=dword:00000001
+
+EOF
+
+	# Import the string into the registry
+	if ($self->import_registry_string($registry_string)) {
+		notify($ERRORS{'OK'}, 0, "set the registry keys to disable IE runonce");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to set the registry key to disable IE runonce");
+		return 0;
+	}
+
 	return 1;
 }
 
