@@ -41,52 +41,52 @@ use diagnostics;
 use Symbol;
 use POSIX;
 
-$|=1; # turning off autoflush
+$| = 1;    # turning off autoflush
 
 # -- DEVELOPMENT testing
 #my $PIDFILE = "/var/run/vcldev.pid";
 #our $LOG = "/var/log/vcldev.log";
 
 # GLOBALS
-our $HOME = "/home/vclstaff";
-our $VCLFLAG = "$HOME/flag";
+our $HOME       = "/home/vclstaff";
+our $VCLFLAG    = "$HOME/flag";
 our $CLIENTDATA = "$HOME/clientdata";
-our $PIDFILE ="/var/run/vclclientd.pid";
-our %children               = ();       # keys are current child process IDs
-our $children               = 0;        # current number of children
-our $LOG = "/var/log/vclclientd.log";
-our %ERRORS=('DEPENDENT'=>4,'UNKNOWN'=>3,'OK'=>0,'WARNING'=>1,'CRITICAL'=>2,'MAILMASTERS'=>5);
-our $opt_d='';
+our $PIDFILE    = "/var/run/vclclientd.pid";
+our %children   = ();                                                                                                   # keys are current child process IDs
+our $children   = 0;                                                                                                    # current number of children
+our $LOG        = "/var/log/vclclientd.log";
+our %ERRORS     = ('DEPENDENT' => 4, 'UNKNOWN' => 3, 'OK' => 0, 'WARNING' => 1, 'CRITICAL' => 2, 'MAILMASTERS' => 5);
+our $opt_d      = '';
 
 Getopt::Long::Configure('bundling', 'no_ignore_case');
-GetOptions('d|debug' => \$opt_d );
-if(!$opt_d){
-    #daemonize
-    &daemonize;
+GetOptions('d|debug' => \$opt_d);
+if (!$opt_d) {
+	#daemonize
+	&daemonize;
 }
 
 
-sub daemonize {                                                 
-   chdir '/'    or die "Can't chdir to /: $!";
-   defined(my $pid = fork) or die "Can't fork $!";
-   exit if $pid;
-   #production
-   $0 = "vclclientd";
-   print "Created process $$ renamed to $0 ...\n";
-   setsid  or die "Can't start a new session: $!";
-   open STDIN, '/dev/null' or die "Can't read /dev/null $!";
-   open STDOUT, '>>$LOG' or die "Can't write $LOG $!";
-   open STDERR, '>>$LOG' or die "Can't write $LOG $!";
-   umask 0;
-   open(PIDFILE, ">$PIDFILE"); # so I can kill myself easily
-   print PIDFILE $$;
-   close(PIDFILE);
+sub daemonize {
+	chdir '/' or die "Can't chdir to /: $!";
+	defined(my $pid = fork) or die "Can't fork $!";
+	exit if $pid;
+	#production
+	$0 = "vclclientd";
+	print "Created process $$ renamed to $0 ...\n";
+	setsid or die "Can't start a new session: $!";
+	open STDIN,  '/dev/null' or die "Can't read /dev/null $!";
+	open STDOUT, '>>$LOG'    or die "Can't write $LOG $!";
+	open STDERR, '>>$LOG'    or die "Can't write $LOG $!";
+	umask 0;
+	open(PIDFILE, ">$PIDFILE");    # so I can kill myself easily
+	print PIDFILE $$;
+	close(PIDFILE);
 
-}
+} ## end sub daemonize
 
 
 #------- Subroutine declarations -------
-sub main();                   # main calls primary subroutines
+sub main();                       # main calls primary subroutines
 sub flag;
 sub processdata;
 sub startsshd;
@@ -98,919 +98,905 @@ sub sshdstatus;
 sub createnewssh_config_vcl;
 sub restartsshd;
 
-sub REAPER {                        # takes care of dead children
-       $SIG{CHLD} = \&REAPER;
-       my $pid = wait;
-       if(exists $children{$pid}){
-        $children--;
-        notify($ERRORS{'OK'},"$pid -- child process exiting, deleting $pid ");
-        delete $children{$pid};
-       }
-       else{
-          notify($ERRORS{'OK'},"$pid -- sub process exiting");
-       }
-       
-}
+sub REAPER {                      # takes care of dead children
+	$SIG{CHLD} = \&REAPER;
+	my $pid = wait;
+	if (exists $children{$pid}) {
+		$children--;
+		notify($ERRORS{'OK'}, "$pid -- child process exiting, deleting $pid ");
+		delete $children{$pid};
+	}
+	else {
+		notify($ERRORS{'OK'}, "$pid -- sub process exiting");
+	}
 
-sub HUNTSMAN {                      # signal handler for SIGINT
-   local($SIG{CHLD}) = 'IGNORE';   # we're going to kill our child processes
-   kill 'INT' => keys %children;
-   notify($ERRORS{'OK'},"$$ -- process exiting");
-   exit;                           # clean up with dignity
+} ## end sub REAPER
+
+sub HUNTSMAN {    # signal handler for SIGINT
+	local ($SIG{CHLD}) = 'IGNORE';    # we're going to kill our child processes
+	kill 'INT' => keys %children;
+	notify($ERRORS{'OK'}, "$$ -- process exiting");
+	exit;                             # clean up with dignity
 }
 
 # Install signal handlers.
 $SIG{CHLD} = \&REAPER;
 $SIG{INT}  = \&HUNTSMAN;
 $SIG{QUIT} = \&HUNTSMAN;
-$SIG{HUP} = \&HUNTSMAN;
+$SIG{HUP}  = \&HUNTSMAN;
 $SIG{TERM} = \&HUNTSMAN;
 
 main();
 
 sub main () {
-    #preplogfile;
-    #my @hostinfo = hostname;
-    #make sure vclstaff owns authorized_keys and log file
-   if(open(AUTHFILE,"chown vclstaff:root /home/vclstaff/authorized_keys 2>&1 |")){
-      notify($ERRORS{'OK'},"main: setting vclstaff ownership of /home/vclstaff/authorized_keys");
-      close(AUTHFILE);
-   }
-   if(open(LOGFILE,"chown vclstaff:root /var/log/vclclientd.log 2>&1 |")){
-      notify($ERRORS{'OK'},"main: setting vclstaff ownership of /var/log/vclclientd.log");
-      close(LOGFILE);
-   }     
-   if(!(-r "/etc/users.local.admin")){
-      notify($ERRORS{'OK'},"main: /etc/users.local.admin does not exist creating");
-      if(open(COPY, "/bin/cp /etc/users.local /etc/users.local.admin |")){
-         close(COPY);
-         if(-r "/etc/users.local.admin"){
-            notify($ERRORS{'OK'},"main: /etc/users.local.admin exist now");
-         }
-      }
+	#preplogfile;
+	#my @hostinfo = hostname;
+	#make sure vclstaff owns authorized_keys and log file
+	if (open(AUTHFILE, "chown vclstaff:root /home/vclstaff/authorized_keys 2>&1 |")) {
+		notify($ERRORS{'OK'}, "main: setting vclstaff ownership of /home/vclstaff/authorized_keys");
+		close(AUTHFILE);
+	}
+	if (open(LOGFILE, "chown vclstaff:root /var/log/vclclientd.log 2>&1 |")) {
+		notify($ERRORS{'OK'}, "main: setting vclstaff ownership of /var/log/vclclientd.log");
+		close(LOGFILE);
+	}
+	if (!(-r "/etc/users.local.admin")) {
+		notify($ERRORS{'OK'}, "main: /etc/users.local.admin does not exist creating");
+		if (open(COPY, "/bin/cp /etc/users.local /etc/users.local.admin |")) {
+			close(COPY);
+			if (-r "/etc/users.local.admin") {
+				notify($ERRORS{'OK'}, "main: /etc/users.local.admin exist now");
+			}
+		}
 
-   }
-   #on startup check to see if someone has rebooted us. this is a hack
-   #we just need to figure out if this a reboot or a restart
-   #for now we are just going to look at the output of last -- there has
-   #to be a better way
-   if(open(LAST,"/usr/bin/last 2>&1 |")){
-      my @last =<LAST>;
-      close(LAST);
-      if($last[0] =~ /reboot/ || $last[1] =~ /reboot/){
-       if( -r "$CLIENTDATA"){
-           if(open(CLD, "$CLIENTDATA")){
-             my @file = <CLD>;
-              close(CLD);
-             if($file[0] =~ /new/){
-                if(open(FLAG, ">$VCLFLAG")){
-                   print FLAG 1;
-                   close(FLAG);
-                    notify($ERRORS{'OK'},"main: possibly a reboot setting flag to 1 for reinitializing");
-                 }#flag
-             }#new
-          }#CLD
-          else{
-              notify($ERRORS{'OK'},"main: could not open $CLIENTDATA");
-          }
-       }# readable
-      }# last -- reboot
-   }
+	} ## end if (!(-r "/etc/users.local.admin"))
+	#on startup check to see if someone has rebooted us. this is a hack
+	#we just need to figure out if this a reboot or a restart
+	#for now we are just going to look at the output of last -- there has
+	#to be a better way
+	if (open(LAST, "/usr/bin/last 2>&1 |")) {
+		my @last = <LAST>;
+		close(LAST);
+		if ($last[0] =~ /reboot/ || $last[1] =~ /reboot/) {
+			if (-r "$CLIENTDATA") {
+				if (open(CLD, "$CLIENTDATA")) {
+					my @file = <CLD>;
+					close(CLD);
+					if ($file[0] =~ /new/) {
+						if (open(FLAG, ">$VCLFLAG")) {
+							print FLAG 1;
+							close(FLAG);
+							notify($ERRORS{'OK'}, "main: possibly a reboot setting flag to 1 for reinitializing");
+						}    #flag
+					}    #new
+				}    #CLD
+				else {
+					notify($ERRORS{'OK'}, "main: could not open $CLIENTDATA");
+				}
+			}    # readable
+		}    # last -- reboot
+	} ## end if (open(LAST, "/usr/bin/last 2>&1 |"))
 
-   
-    while(1){
-       if( flag ){
-             notify($ERRORS{'OK'},"main: flag is set proceed to process");
-             #make sure clientdata is readable
-             if(-r $CLIENTDATA){
-                #process data
-                if(open(CLIENTDATA,"$CLIENTDATA")){
-                   my %request=();
-                   my @lines = <CLIENTDATA>;
-                   close(CLIENTDATA);
-                   $request{"state"}=$lines[0];
-                   $request{"unityid"}=$lines[1];
-                   $request{"remoteIP"}=$lines[2];
-                   chomp($request{"state"});
-                   chomp($request{"unityid"});
-                   chomp($request{"remoteIP"});
 
-                   make_new_child(%request) if($request{"state"} =~ /new|timeout|delete/);
-                   reboot() if($request{"state"} =~ /reboot/);
-                   fetch() if($request{"state"} =~ /fetch/);
-                   store() if($request{"state"} =~ /store/);
-                }
-                else{
-                   notify($ERRORS{'OK'},"main: could not open $CLIENTDATA: $!");
-                   
-                }
-             }  #if -r
-          } #if flag
-          else{
-            #check for any hung children
-            #kill fork process and reset flag? does this create a race condition
-            #could keep track of killed processes in children hash when number exceeds X (reboot machine?)
-            #notify($ERRORS{'OK'},"main: number of children  $children");
-             foreach my $p (keys %children) {
-                next if($p=~ /hung/);
-                notify($ERRORS{'OK'},"main: pid = $p");
-                $children{"hungtries"}{"count"}+=1;
-                if(open(KILL,"kill -9 $p 2>&1 |")){
-                   notify($ERRORS{'OK'},"main: stopping forked process in an attempt to reset");
-                   my $k = <KILL>;
-                   close(KILL);
-                   if($k =~ /No such process/){
-                      #not found maybe I was too guick to judge
-                      #let it ride
-                   }
-                   else{
-                      if($children{"hungtries"}{"count"} > 4){
-                         notify($ERRORS{'OK'},"main: hung process attempts are greater than 4 rebooting");
-                         reboot();
-                      }
-                      if(open(ECHO,"echo 1 > /home/vclstaff/flag |")){
-                        notify($ERRORS{'OK'},"main: attempt to reset initiated");
-                        close(ECHO);
-                      }
-                   }
-                }
-             }
+	while (1) {
+		if (flag) {
+			notify($ERRORS{'OK'}, "main: flag is set proceed to process");
+			#make sure clientdata is readable
+			if (-r $CLIENTDATA) {
+				#process data
+				if (open(CLIENTDATA, "$CLIENTDATA")) {
+					my %request = ();
+					my @lines   = <CLIENTDATA>;
+					close(CLIENTDATA);
+					$request{"state"}    = $lines[0];
+					$request{"unityid"}  = $lines[1];
+					$request{"remoteIP"} = $lines[2];
+					chomp($request{"state"});
+					chomp($request{"unityid"});
+					chomp($request{"remoteIP"});
 
-          }
-          sleep 5;
-      } #while
-}
+					make_new_child(%request) if ($request{"state"} =~ /new|timeout|delete/);
+					reboot()                 if ($request{"state"} =~ /reboot/);
+					fetch()                  if ($request{"state"} =~ /fetch/);
+					store()                  if ($request{"state"} =~ /store/);
+				} ## end if (open(CLIENTDATA, "$CLIENTDATA"))
+				else {
+					notify($ERRORS{'OK'}, "main: could not open $CLIENTDATA: $!");
+
+				}
+			}    #if -r
+		}    #if flag
+		else {
+			#check for any hung children
+			#kill fork process and reset flag? does this create a race condition
+			#could keep track of killed processes in children hash when number exceeds X (reboot machine?)
+			#notify($ERRORS{'OK'},"main: number of children  $children");
+			foreach my $p (keys %children) {
+				next if ($p =~ /hung/);
+				notify($ERRORS{'OK'}, "main: pid = $p");
+				$children{"hungtries"}{"count"} += 1;
+				if (open(KILL, "kill -9 $p 2>&1 |")) {
+					notify($ERRORS{'OK'}, "main: stopping forked process in an attempt to reset");
+					my $k = <KILL>;
+					close(KILL);
+					if ($k =~ /No such process/) {
+						#not found maybe I was too guick to judge
+						#let it ride
+					}
+					else {
+						if ($children{"hungtries"}{"count"} > 4) {
+							notify($ERRORS{'OK'}, "main: hung process attempts are greater than 4 rebooting");
+							reboot();
+						}
+						if (open(ECHO, "echo 1 > /home/vclstaff/flag |")) {
+							notify($ERRORS{'OK'}, "main: attempt to reset initiated");
+							close(ECHO);
+						}
+					} ## end else [ if ($k =~ /No such process/)
+				} ## end if (open(KILL, "kill -9 $p 2>&1 |"))
+			} ## end foreach my $p (keys %children)
+
+		} ## end else [ if (flag)
+		sleep 5;
+	}    #while
+} ## end sub main ()
 sub flag {
-    if(!(-e $VCLFLAG)){
-       # warning flag does not exist
-       #create it and continue
-       if(open(FLAG, ">$VCLFLAG")){
-          print FLAG 0;
-          notify($ERRORS{'OK'}, "had to create $VCLFLAG");
-          close(FLAG);
-          if(open(LOGFILE,"chown vclstaff:root /home/vclstaff/flag 2>&1 |")){
-              notify($ERRORS{'OK'},"main: setting vclstaff ownership of /home/vclstaff/flag");
-              close(LOGFILE);
-           }
-          if(open(LOGFILE,"chmod 640 /home/vclstaff/flag 2>&1 |")){
-             notify($ERRORS{'OK'},"main: setting 640 perms /home/vclstaff/flag");
-             close(LOGFILE);
-          }
-       }
-       else{
-          notify($ERRORS{'OK'},"could not create $VCLFLAG $! will try to delete");
-          unlink $VCLFLAG;
-          return 0;
-       }
-    }
-    my @lines;
-    # VCLFLAG file exists, check contents
-    if(open(FLAG, "$VCLFLAG")){
-       @lines = <FLAG>;
-       close(FLAG);
-       # clear flag
-       if(open(FLAG, ">$VCLFLAG")){
-          print FLAG 0;
-          close(FLAG);
-       }
-       else{
-          unlink $VCLFLAG;
-       }  
-       return $lines[0];
-    }
-    else{
-       notify($ERRORS{'OK'},"flag: could not open $VCLFLAG $!");
-       return 0;
-    }
-}
+	if (!(-e $VCLFLAG)) {
+		# warning flag does not exist
+		#create it and continue
+		if (open(FLAG, ">$VCLFLAG")) {
+			print FLAG 0;
+			notify($ERRORS{'OK'}, "had to create $VCLFLAG");
+			close(FLAG);
+			if (open(LOGFILE, "chown vclstaff:root /home/vclstaff/flag 2>&1 |")) {
+				notify($ERRORS{'OK'}, "main: setting vclstaff ownership of /home/vclstaff/flag");
+				close(LOGFILE);
+			}
+			if (open(LOGFILE, "chmod 640 /home/vclstaff/flag 2>&1 |")) {
+				notify($ERRORS{'OK'}, "main: setting 640 perms /home/vclstaff/flag");
+				close(LOGFILE);
+			}
+		} ## end if (open(FLAG, ">$VCLFLAG"))
+		else {
+			notify($ERRORS{'OK'}, "could not create $VCLFLAG $! will try to delete");
+			unlink $VCLFLAG;
+			return 0;
+		}
+	} ## end if (!(-e $VCLFLAG))
+	my @lines;
+	# VCLFLAG file exists, check contents
+	if (open(FLAG, "$VCLFLAG")) {
+		@lines = <FLAG>;
+		close(FLAG);
+		# clear flag
+		if (open(FLAG, ">$VCLFLAG")) {
+			print FLAG 0;
+			close(FLAG);
+		}
+		else {
+			unlink $VCLFLAG;
+		}
+		return $lines[0];
+	} ## end if (open(FLAG, "$VCLFLAG"))
+	else {
+		notify($ERRORS{'OK'}, "flag: could not open $VCLFLAG $!");
+		return 0;
+	}
+} ## end sub flag
 sub make_new_child {
-   my (%request_data) = @_; 
-   my $pid;
-   my $sigset;
-               
-   # block signal for fork
-   $sigset = POSIX::SigSet->new(SIGINT);
-   sigprocmask(SIG_BLOCK, $sigset) or die "Can't block SIGINT for fork: $!\n";
-   #die "fork: $!" unless defined ($pid = fork);
-FORK: {       
-   if ($pid = fork) {
-      # Parent records the child's birth
-      # and returns.
-      sigprocmask(SIG_UNBLOCK, $sigset) or die "Can't unblock SIGINT for fork: $!\n";
-      
-      $children{$pid} = 1;
-      $children++;
-      notify($ERRORS{'OK'},"vclclientd current number of forked kids: $children");
-      return;
-   } elsif(defined $pid) {
-      # Child can *not* return from this subroutine.
-      $SIG{INT} = 'DEFAULT';
-      # make SIGINT kill us as it did before unblock signals
-      sigprocmask(SIG_UNBLOCK, $sigset) or die "Can't unblock SIGINT for fork: $!\n";
+	my (%request_data) = @_;
+	my $pid;
+	my $sigset;
 
-      notify($ERRORS{'OK'},"processdata: new request child process $request_data{state} $request_data{unityid},$request_data{remoteIP}   ");
-     #do something that may take a long time or needs to be monitored
-     #based on the case lets do something
-     if($request_data{state} =~ /new/){ 
-        notify($ERRORS{'OK'},"processdata: new request  $request_data{unityid},$request_data{remoteIP}   ");
-         if(new_state($request_data{unityid},$request_data{remoteIP})){
-            notify($ERRORS{'OK'},"processdata: connection for $request_data{unityid}\@$request_data{remoteIP} successfully opened");
-         }
-     }
-     elsif($request_data{"state"} =~ /timeout|deleted/){
-        if(timeout_state($request_data{unityid},$request_data{remoteIP})){
-          notify($ERRORS{'OK'},"vclclientd: connection for $request_data{unityid}\@$request_data{remoteIP} successfully terminated");
-        }
-     }
+	# block signal for fork
+	$sigset = POSIX::SigSet->new(SIGINT);
+	sigprocmask(SIG_BLOCK, $sigset) or die "Can't block SIGINT for fork: $!\n";
+	#die "fork: $!" unless defined ($pid = fork);
+	FORK: {
+		if ($pid = fork) {
+			# Parent records the child's birth
+			# and returns.
+			sigprocmask(SIG_UNBLOCK, $sigset) or die "Can't unblock SIGINT for fork: $!\n";
 
-     exit;
-   } elsif ($! =~ /No more process/){
-       sleep 5;
-       redo FORK;
-   }
-   else {
-       # strange error
-      die "Can't fork: $!\n";
-   }
- }
-}
+			$children{$pid} = 1;
+			$children++;
+			notify($ERRORS{'OK'}, "vclclientd current number of forked kids: $children");
+			return;
+		} ## end if ($pid = fork)
+		elsif (defined $pid) {
+			# Child can *not* return from this subroutine.
+			$SIG{INT} = 'DEFAULT';
+			# make SIGINT kill us as it did before unblock signals
+			sigprocmask(SIG_UNBLOCK, $sigset) or die "Can't unblock SIGINT for fork: $!\n";
+
+			notify($ERRORS{'OK'}, "processdata: new request child process $request_data{state} $request_data{unityid},$request_data{remoteIP}   ");
+			#do something that may take a long time or needs to be monitored
+			#based on the case lets do something
+			if ($request_data{state} =~ /new/) {
+				notify($ERRORS{'OK'}, "processdata: new request  $request_data{unityid},$request_data{remoteIP}   ");
+				if (new_state($request_data{unityid}, $request_data{remoteIP})) {
+					notify($ERRORS{'OK'}, "processdata: connection for $request_data{unityid}\@$request_data{remoteIP} successfully opened");
+				}
+			}
+			elsif ($request_data{"state"} =~ /timeout|deleted/) {
+				if (timeout_state($request_data{unityid}, $request_data{remoteIP})) {
+					notify($ERRORS{'OK'}, "vclclientd: connection for $request_data{unityid}\@$request_data{remoteIP} successfully terminated");
+				}
+			}
+
+			exit;
+		} ## end elsif (defined $pid)  [ if ($pid = fork)
+		elsif ($! =~ /No more process/) {
+			sleep 5;
+			redo FORK;
+		}
+		else {
+			# strange error
+			die "Can't fork: $!\n";
+		}
+	} ## end FORK:
+} ## end sub make_new_child
 sub new_state {
-   my ($user,$remoteIP) =@_;
-   # assumuption user and IP are valid
-   # add user to users.local, sshd_config_vcl
-   # on acknowledgemment turn on sshd on port 22
-   my @file;
-   my $line;
-   my ($userset,$remoteIPset) = 0;
-   #test for sshd_config_vcl
-   if(!(-r "$HOME/sshd_config_vcl")){
-      #hrmm. were did sshd_config_vcl go
-      #let try to create another from the orignal
-      if(createnewssh_config_vcl){
-         notify($ERRORS{'OK'},"new_state: sshd_config_vcl missing created a new one");
-      }
-      else{
-         notify($ERRORS{'OK'},"new_state: sshd_config_vcl missing failed to create a new one");
-         return 0;
-      }
+	my ($user, $remoteIP) = @_;
+	# assumuption user and IP are valid
+	# add user to users.local, sshd_config_vcl
+	# on acknowledgemment turn on sshd on port 22
+	my @file;
+	my $line;
+	my ($userset, $remoteIPset) = 0;
+	#test for sshd_config_vcl
+	if (!(-r "$HOME/sshd_config_vcl")) {
+		#hrmm. were did sshd_config_vcl go
+		#let try to create another from the orignal
+		if (createnewssh_config_vcl) {
+			notify($ERRORS{'OK'}, "new_state: sshd_config_vcl missing created a new one");
+		}
+		else {
+			notify($ERRORS{'OK'}, "new_state: sshd_config_vcl missing failed to create a new one");
+			return 0;
+		}
 
-   }
-   if(open(CONFIG,"$HOME/sshd_config_vcl")){
-        @file = <CONFIG>;
-       close(CONFIG);
-       foreach $line (@file){
-           if($line =~ /AllowUsers/){
-            $line = "AllowUsers $user\n";
-            $userset=1;
-            notify($ERRORS{'OK'},"new_state: adding AllowUsers $user to sshd_config_vcl");
-           }
-        }
-       if(!$userset){
-          push @file, "AllowUsers $user\n";
-          notify($ERRORS{'OK'},"new_state: hrmm, had to add AllowUsers $user to sshd_config_vcl");
-       }
-       if(open(CONFIG,">$HOME/sshd_config_vcl")){
-              print CONFIG @file;
-              close(CONFIG);
-        }
-   }                           
-   # append to users.local
-   if(open(USERSLOCAL,"/etc/users.local")){
-      my @users = <USERSLOCAL>;
-      close(USERSLOCAL);
-      push @users,"\n$user\n";
-      if(open(USERSLOCAL,">/etc/users.local")){
-            print USERSLOCAL @users;
-            notify($ERRORS{'OK'},"new_state: adding $user to users.local");
-            close(USERSLOCAL);
-      }
-    }
-   else{
-      notify($ERRORS{'WARNING'},"new_state: could not open /etc/users.local $!");
-      return 0;
-   }
-   #start sshd
-   if(startsshd){
-      notify($ERRORS{'OK'},"new_state: startsshd returned and successful");
-      return 1;
-   }
-   return 0;
-}
-sub timeout_state{
-    # time to close non-admin ssh sessions and clean up users.local,
-    # sshd_config_vcl
-   my ($user,$remoteIP) =@_;
-   my $os = lc($^O);
-   #notify($ERRORS{'OK'},"timeout_state: OSname is $os");
-   my @file;
-   my $l;
-   my $sshd_admin_pid =0;
-   my ($pgrep,$pkill);
+	} ## end if (!(-r "$HOME/sshd_config_vcl"))
+	if (open(CONFIG, "$HOME/sshd_config_vcl")) {
+		@file = <CONFIG>;
+		close(CONFIG);
+		foreach $line (@file) {
+			if ($line =~ /AllowUsers/) {
+				$line    = "AllowUsers $user\n";
+				$userset = 1;
+				notify($ERRORS{'OK'}, "new_state: adding AllowUsers $user to sshd_config_vcl");
+			}
+		}
+		if (!$userset) {
+			push @file, "AllowUsers $user\n";
+			notify($ERRORS{'OK'}, "new_state: hrmm, had to add AllowUsers $user to sshd_config_vcl");
+		}
+		if (open(CONFIG, ">$HOME/sshd_config_vcl")) {
+			print CONFIG @file;
+			close(CONFIG);
+		}
+	} ## end if (open(CONFIG, "$HOME/sshd_config_vcl"))
+	# append to users.local
+	if (open(USERSLOCAL, "/etc/users.local")) {
+		my @users = <USERSLOCAL>;
+		close(USERSLOCAL);
+		push @users, "\n$user\n";
+		if (open(USERSLOCAL, ">/etc/users.local")) {
+			print USERSLOCAL @users;
+			notify($ERRORS{'OK'}, "new_state: adding $user to users.local");
+			close(USERSLOCAL);
+		}
+	} ## end if (open(USERSLOCAL, "/etc/users.local"))
+	else {
+		notify($ERRORS{'WARNING'}, "new_state: could not open /etc/users.local $!");
+		return 0;
+	}
+	#start sshd
+	if (startsshd) {
+		notify($ERRORS{'OK'}, "new_state: startsshd returned and successful");
+		return 1;
+	}
+	return 0;
+} ## end sub new_state
+sub timeout_state {
+	# time to close non-admin ssh sessions and clean up users.local,
+	# sshd_config_vcl
+	my ($user, $remoteIP) = @_;
+	my $os = lc($^O);
+	#notify($ERRORS{'OK'},"timeout_state: OSname is $os");
+	my @file;
+	my $l;
+	my $sshd_admin_pid = 0;
+	my ($pgrep, $pkill);
 
-   # get admin pid
-   if($os eq "solaris"){
-      $pgrep="/bin/pgrep";
-      $pkill="/bin/pkill";
+	# get admin pid
+	if ($os eq "solaris") {
+		$pgrep = "/bin/pgrep";
+		$pkill = "/bin/pkill";
 
-     if(open(SSH,"/local/openssh/etc/sshd.admin.pid")){
-         @file = <SSH>; 
-         close(SSH);
-         $sshd_admin_pid=$file[0];
-         notify($ERRORS{'OK'},"timeout_state: sshd_admin_pid set $sshd_admin_pid");
-       }
-       else{
-          notify($ERRORS{'OK'},"timeout_state: could not open /local/openssh/etc/sshd.admin.pid $!");
-       }
-   }
-   elsif($os eq "linux"){
-      $pgrep="/usr/bin/pgrep";
-      $pkill="/usr/bin/pkill";
-     if(open(SSH,"ps -ef \| grep /usr/sbin/sshd |")){
-         @file = <SSH>; 
-         close(SSH);
-         $sshd_admin_pid=$file[0];
-         foreach $l (@file){
-            chomp ($l);
-             next if($l =~ /grep/);
-             if($l =~ /(\/usr\/sbin\/sshd$)/){
-                my $blah;
-                ($blah,$sshd_admin_pid,$blah) = split(/\s+/,$l,3);
-                  notify($ERRORS{'OK'},"timeout_state: sshd_admin_pid set $sshd_admin_pid");
-             }
-         }
-       }
-       else{
-          notify($ERRORS{'OK'},"timeout_state: execute ps -ef $!");
-       }
-   }
-   else{
-          notify($ERRORS{'OK'},"timeout_state: $os not supported");
-          # we'll just let this ride and get a restart
-   }
-   # clean up users.local
-   # collect members of users.admin,users.base, and users.cluster
-   my @users_admin;
-   my @users_base;
-   my @users_cluster;
-   my $u;
-   #this one should exist
-   if(open(USERSLOCAL,"cat /etc/users.local.admin > /etc/users.local |")){
-       close(USERSLOCAL);
-       notify($ERRORS{'OK'},"timeout_state: dumped contents of /etc/users.local.admin /etc/users.local");
-   }
-   if(-r "/etc/users.local.base"){
-      if(open(USERSLOCAL,"cat /etc/users.local.base >> /etc/users.local |")){
-         close(USERSLOCAL);
-         notify($ERRORS{'OK'},"timeout_state: dumped contents of /etc/users.local.base /etc/users.local");
-      }
-   }
-   if(-r "/etc/users.local.cluster"){
-      if(open(USERSLOCAL,"cat /etc/users.local.cluster >> /etc/users.local |")){
-         close(USERSLOCAL);
-         notify($ERRORS{'OK'},"timeout_state: dumped contents of /etc/users.local.cluster /etc/users.local");
-      }
-   }
-   
-    
-    if(open(USERSLOCAL,"/etc/users.local")){
-       @users_admin=<USERSLOCAL>;
-       close(USERSLOCAL);
-    }
-    # check users.local add vclstaff if is does not exist
-    my $vclstaff=0; 
-    my $i;
-    for $i (@users_admin){
-      $vclstaff =1 if($i =~ "vclstaff");
+		if (open(SSH, "/local/openssh/etc/sshd.admin.pid")) {
+			@file = <SSH>;
+			close(SSH);
+			$sshd_admin_pid = $file[0];
+			notify($ERRORS{'OK'}, "timeout_state: sshd_admin_pid set $sshd_admin_pid");
+		}
+		else {
+			notify($ERRORS{'OK'}, "timeout_state: could not open /local/openssh/etc/sshd.admin.pid $!");
+		}
+	} ## end if ($os eq "solaris")
+	elsif ($os eq "linux") {
+		$pgrep = "/usr/bin/pgrep";
+		$pkill = "/usr/bin/pkill";
+		if (open(SSH, "ps -ef \| grep /usr/sbin/sshd |")) {
+			@file = <SSH>;
+			close(SSH);
+			$sshd_admin_pid = $file[0];
+			foreach $l (@file) {
+				chomp($l);
+				next if ($l =~ /grep/);
+				if ($l =~ /(\/usr\/sbin\/sshd$)/) {
+					my $blah;
+					($blah, $sshd_admin_pid, $blah) = split(/\s+/, $l, 3);
+					notify($ERRORS{'OK'}, "timeout_state: sshd_admin_pid set $sshd_admin_pid");
+				}
+			}
+		} ## end if (open(SSH, "ps -ef \| grep /usr/sbin/sshd |"...
+		else {
+			notify($ERRORS{'OK'}, "timeout_state: execute ps -ef $!");
+		}
+	} ## end elsif ($os eq "linux")  [ if ($os eq "solaris")
+	else {
+		notify($ERRORS{'OK'}, "timeout_state: $os not supported");
+		# we'll just let this ride and get a restart
+	}
+	# clean up users.local
+	# collect members of users.admin,users.base, and users.cluster
+	my @users_admin;
+	my @users_base;
+	my @users_cluster;
+	my $u;
+	#this one should exist
+	if (open(USERSLOCAL, "cat /etc/users.local.admin > /etc/users.local |")) {
+		close(USERSLOCAL);
+		notify($ERRORS{'OK'}, "timeout_state: dumped contents of /etc/users.local.admin /etc/users.local");
+	}
+	if (-r "/etc/users.local.base") {
+		if (open(USERSLOCAL, "cat /etc/users.local.base >> /etc/users.local |")) {
+			close(USERSLOCAL);
+			notify($ERRORS{'OK'}, "timeout_state: dumped contents of /etc/users.local.base /etc/users.local");
+		}
+	}
+	if (-r "/etc/users.local.cluster") {
+		if (open(USERSLOCAL, "cat /etc/users.local.cluster >> /etc/users.local |")) {
+			close(USERSLOCAL);
+			notify($ERRORS{'OK'}, "timeout_state: dumped contents of /etc/users.local.cluster /etc/users.local");
+		}
+	}
 
-    }
-    
-    if(!$vclstaff){
-       push @users_admin, "\nvclstaff\n";
-       if(open(USERSLOCAL,"> /etc/users.local")){
-         print USERSLOCAL @users_admin;
-         close(USERSLOCAL);
-       }
-    }
-   # clean up our sshd_config_vcl
-   my @SSH;
-   my $s;
-   if(open(SSHDCONFIG, "$HOME/sshd_config_vcl")){
-      @SSH = <SSHDCONFIG>;
-      close(SSHDCONFIG);
-      foreach $s (@SSH){
-         if($s =~ s/AllowUsers $user/AllowUsers/g){
-             notify($ERRORS{'OK'},"timeout_state: $user\@$remoteIP removed from sshd_config_vcl");
-         }
-      }
-      # write back out to sshd_config_vcl
-      if(open(SSHDCONFIG, ">$HOME/sshd_config_vcl")){
-         print SSHDCONFIG @SSH;
-         close (SSHDCONFIG);
-      }
-      else{
-          notify($ERRORS{'OK'},"timeout_state: could not open $HOME/sshd_config_vcl for writing");
-      }
-   }
 
-   #kill off any user processes
-   if(open(PKILL, "$pkill -9 -U $user 2>&1 |")){
-      my @pkill=<PKILL>;
-      close(PKILL);
-      notify($ERRORS{'OK'},"timeout_state: stopped user processes");
-      #check for user
-      notify($ERRORS{'OK'},"timeout_state: confirming user processes are stopped");
-      if(open(PGREP, "ps -ef \| grep $user|")){
-         my @pgrep=<PGREP>;
-         close(PGREP);
-         foreach my $pid (@pgrep){
-            next if($pid =~ /grep/);
-            my($userblah,$userpid) = split(/\s+/,$pid,3);
-            if($userpid){
-               if(open(KILL, "kill -9 $userpid |")){
-                  notify($ERRORS{'OK'},"timeout_state: killed user process $userpid");
-                  close(KILL);
-               }
-            }
-         }
-      }
-   }
-   notify($ERRORS{'OK'},"timeout_state: checking for all sshd processes");
-   # use pgrep to get all sshd pids
-   if(open(PGREP,"ps -ef \|grep sshd 2>&1|")){
-       my @pfile = <PGREP>;
-       close(PGREP);
-       foreach $l (@pfile){
-         next if($l =~ /grep/);
-         next if($l =~ /ps -ef/);
-         notify($ERRORS{'OK'},"timeout_state: pgrep sshd = $l");
+	if (open(USERSLOCAL, "/etc/users.local")) {
+		@users_admin = <USERSLOCAL>;
+		close(USERSLOCAL);
+	}
+	# check users.local add vclstaff if is does not exist
+	my $vclstaff = 0;
+	my $i;
+	for $i (@users_admin) {
+		$vclstaff = 1 if ($i =~ "vclstaff");
 
-          my ($b,$sshpid);
-          ($b,$b,$sshpid,$b) = split(/\s+/,$l,4) if($os eq "solaris");
-          ($b,$sshpid) = split(/\s+/,$l,3) if($os eq "linux");
-          next if($sshpid == $sshd_admin_pid);
-          if(open(KILL, "kill -9 $sshpid |")){
-             notify($ERRORS{'OK'},"timeout_state: killed sshd process $sshpid");
-             close(KILL);
-          }
-       }
-       notify($ERRORS{'OK'},"timeout_state: checking if I accidentially killed all sshd processes");
-      # did we kill all sshd sessions?
-       if(open(PGREP,"ps -ef \|grep sshd \|grep -v grep |")){
-         notify($ERRORS{'OK'},"timeout_state: executed ps -ef \|grep sshd \|grep -v grep");
-          @file = <PGREP>;
-          notify($ERRORS{'OK'},"timeout_state: @file");
-          close(PGREP);
-          if(!($file[0])){
-             notify($ERRORS{'OK'},"timeout_state: killed all sshd processes, will try to restart");
-             if(open(SSHD,"/etc/inet.d/sshd start |")){
-                @file = <SSHD>;
-                close(SSHD);
-                notify($ERRORS{'OK'},"timeout_state: sshd admin restarted @file");
-             }
-          }
-       }
-   }
-   else{
-       notify($ERRORS{'WARNING'},"timeout_state: could not execute /usr/bin/pgrep sshd");
-       
-   }
-   notify($ERRORS{'OK'},"timeout_state: looking for sshd_config_vcl");
-   #look for sshd_config_vcl in case we killed the sshd_admin pid
-   if(open(SSH,"ps -ef \| grep /usr/sbin/sshd |")){
-      my @sshfile = <SSH>;
-      close(SSH);
-      foreach $l (@sshfile) {
-         if($l =~ /(\/home\/vclstaff\/sshd_config_vcl\/)/){
-            # for some reason sshd with the vcl config file did not get stopped  
-            #initiate a restart/reload  
-            notify($ERRORS{'OK'},"timeout_state: sshd_config_vcl not stopped for some reason, prhaps the wrong sshd pid");
-            my ($b,$sshpid) = split(/\s+/,$l,3);
-            if($sshpid == $sshd_admin_pid){
-               notify($ERRORS{'OK'},"timeout_state: killed the wrong sshd pid");
-               #kill this pid
-               if(open(KILL, "kill -9 $sshpid |")){
-                  notify($ERRORS{'OK'},"timeout_state: killed sshd process $l");
-                  close(KILL);
-               }
-            
-               #stop and start sshd service.
-               if(open(SSHSTOP,"/etc/inet.d/sshd stop |")){
-                  @file = <SSHSTOP>;
-                  close(SSHSTOP);
-                  notify($ERRORS{'OK'},"timeout_state: sshd admin stopped @file");
-                  if(open(SSHSTART, "/etc/inet.d/sshd start |")){
-                     @file=<SSHSTART>;
-                     close(SSHSTART);
-                     notify($ERRORS{'OK'},"timeout_state: sshd admin started @file");
-                  }
-               }
-            }
-         }
-      }
-   }
+	}
 
-   if(sshdstatus){
-      notify($ERRORS{'OK'},"timeout_state: sshd core process is running");
-   }
-   else{
-      notify($ERRORS{'CRITICAL'},"timeout_state: sshd is not running or could not be restarted");
+	if (!$vclstaff) {
+		push @users_admin, "\nvclstaff\n";
+		if (open(USERSLOCAL, "> /etc/users.local")) {
+			print USERSLOCAL @users_admin;
+			close(USERSLOCAL);
+		}
+	}
+	# clean up our sshd_config_vcl
+	my @SSH;
+	my $s;
+	if (open(SSHDCONFIG, "$HOME/sshd_config_vcl")) {
+		@SSH = <SSHDCONFIG>;
+		close(SSHDCONFIG);
+		foreach $s (@SSH) {
+			if ($s =~ s/AllowUsers $user/AllowUsers/g) {
+				notify($ERRORS{'OK'}, "timeout_state: $user\@$remoteIP removed from sshd_config_vcl");
+			}
+		}
+		# write back out to sshd_config_vcl
+		if (open(SSHDCONFIG, ">$HOME/sshd_config_vcl")) {
+			print SSHDCONFIG @SSH;
+			close(SSHDCONFIG);
+		}
+		else {
+			notify($ERRORS{'OK'}, "timeout_state: could not open $HOME/sshd_config_vcl for writing");
+		}
+	} ## end if (open(SSHDCONFIG, "$HOME/sshd_config_vcl"...
 
-   }
-   return 1;
-}
+	#kill off any user processes
+	if (open(PKILL, "$pkill -9 -U $user 2>&1 |")) {
+		my @pkill = <PKILL>;
+		close(PKILL);
+		notify($ERRORS{'OK'}, "timeout_state: stopped user processes");
+		#check for user
+		notify($ERRORS{'OK'}, "timeout_state: confirming user processes are stopped");
+		if (open(PGREP, "ps -ef \| grep $user|")) {
+			my @pgrep = <PGREP>;
+			close(PGREP);
+			foreach my $pid (@pgrep) {
+				next if ($pid =~ /grep/);
+				my ($userblah, $userpid) = split(/\s+/, $pid, 3);
+				if ($userpid) {
+					if (open(KILL, "kill -9 $userpid |")) {
+						notify($ERRORS{'OK'}, "timeout_state: killed user process $userpid");
+						close(KILL);
+					}
+				}
+			} ## end foreach my $pid (@pgrep)
+		} ## end if (open(PGREP, "ps -ef \| grep $user|"))
+	} ## end if (open(PKILL, "$pkill -9 -U $user 2>&1 |"...
+	notify($ERRORS{'OK'}, "timeout_state: checking for all sshd processes");
+	# use pgrep to get all sshd pids
+	if (open(PGREP, "ps -ef \|grep sshd 2>&1|")) {
+		my @pfile = <PGREP>;
+		close(PGREP);
+		foreach $l (@pfile) {
+			next if ($l =~ /grep/);
+			next if ($l =~ /ps -ef/);
+			notify($ERRORS{'OK'}, "timeout_state: pgrep sshd = $l");
+
+			my ($b, $sshpid);
+			($b, $b, $sshpid, $b) = split(/\s+/, $l, 4) if ($os eq "solaris");
+			($b, $sshpid) = split(/\s+/, $l, 3) if ($os eq "linux");
+			next if ($sshpid == $sshd_admin_pid);
+			if (open(KILL, "kill -9 $sshpid |")) {
+				notify($ERRORS{'OK'}, "timeout_state: killed sshd process $sshpid");
+				close(KILL);
+			}
+		} ## end foreach $l (@pfile)
+		notify($ERRORS{'OK'}, "timeout_state: checking if I accidentially killed all sshd processes");
+		# did we kill all sshd sessions?
+		if (open(PGREP, "ps -ef \|grep sshd \|grep -v grep |")) {
+			notify($ERRORS{'OK'}, "timeout_state: executed ps -ef \|grep sshd \|grep -v grep");
+			@file = <PGREP>;
+			notify($ERRORS{'OK'}, "timeout_state: @file");
+			close(PGREP);
+			if (!($file[0])) {
+				notify($ERRORS{'OK'}, "timeout_state: killed all sshd processes, will try to restart");
+				if (open(SSHD, "/etc/inet.d/sshd start |")) {
+					@file = <SSHD>;
+					close(SSHD);
+					notify($ERRORS{'OK'}, "timeout_state: sshd admin restarted @file");
+				}
+			}
+		} ## end if (open(PGREP, "ps -ef \|grep sshd \|grep -v grep |"...
+	} ## end if (open(PGREP, "ps -ef \|grep sshd 2>&1|"...
+	else {
+		notify($ERRORS{'WARNING'}, "timeout_state: could not execute /usr/bin/pgrep sshd");
+
+	}
+	notify($ERRORS{'OK'}, "timeout_state: looking for sshd_config_vcl");
+	#look for sshd_config_vcl in case we killed the sshd_admin pid
+	if (open(SSH, "ps -ef \| grep /usr/sbin/sshd |")) {
+		my @sshfile = <SSH>;
+		close(SSH);
+		foreach $l (@sshfile) {
+			if ($l =~ /(\/home\/vclstaff\/sshd_config_vcl\/)/) {
+				# for some reason sshd with the vcl config file did not get stopped
+				#initiate a restart/reload
+				notify($ERRORS{'OK'}, "timeout_state: sshd_config_vcl not stopped for some reason, prhaps the wrong sshd pid");
+				my ($b, $sshpid) = split(/\s+/, $l, 3);
+				if ($sshpid == $sshd_admin_pid) {
+					notify($ERRORS{'OK'}, "timeout_state: killed the wrong sshd pid");
+					#kill this pid
+					if (open(KILL, "kill -9 $sshpid |")) {
+						notify($ERRORS{'OK'}, "timeout_state: killed sshd process $l");
+						close(KILL);
+					}
+
+					#stop and start sshd service.
+					if (open(SSHSTOP, "/etc/inet.d/sshd stop |")) {
+						@file = <SSHSTOP>;
+						close(SSHSTOP);
+						notify($ERRORS{'OK'}, "timeout_state: sshd admin stopped @file");
+						if (open(SSHSTART, "/etc/inet.d/sshd start |")) {
+							@file = <SSHSTART>;
+							close(SSHSTART);
+							notify($ERRORS{'OK'}, "timeout_state: sshd admin started @file");
+						}
+					} ## end if (open(SSHSTOP, "/etc/inet.d/sshd stop |"...
+				} ## end if ($sshpid == $sshd_admin_pid)
+			} ## end if ($l =~ /(\/home\/vclstaff\/sshd_config_vcl\/)/)
+		} ## end foreach $l (@sshfile)
+	} ## end if (open(SSH, "ps -ef \| grep /usr/sbin/sshd |"...
+
+	if (sshdstatus) {
+		notify($ERRORS{'OK'}, "timeout_state: sshd core process is running");
+	}
+	else {
+		notify($ERRORS{'CRITICAL'}, "timeout_state: sshd is not running or could not be restarted");
+
+	}
+	return 1;
+} ## end sub timeout_state
 sub reboot {
-   #simply reboot the client when called
-   my $os = lc($^O);
-   my $reboot;
-   if($os eq "solaris"){
-      $reboot = "/usr/sbin/shutdown -y -g 0 -i 6";
-   }
-   else{
-      $reboot = "/sbin/shutdown -r now";
-   }
-   notify($ERRORS{'OK'},"reboot: starting reboot sequence");
-   if(open(REBOOT,"$reboot 2>&1 |")){
-      my @reboot=<REBOOT>;
-      close(REBOOT);
-      notify($ERRORS{'OK'},"reboot: @reboot");
-      return 1;
-   }
+	#simply reboot the client when called
+	my $os = lc($^O);
+	my $reboot;
+	if ($os eq "solaris") {
+		$reboot = "/usr/sbin/shutdown -y -g 0 -i 6";
+	}
+	else {
+		$reboot = "/sbin/shutdown -r now";
+	}
+	notify($ERRORS{'OK'}, "reboot: starting reboot sequence");
+	if (open(REBOOT, "$reboot 2>&1 |")) {
+		my @reboot = <REBOOT>;
+		close(REBOOT);
+		notify($ERRORS{'OK'}, "reboot: @reboot");
+		return 1;
+	}
 
-}
+} ## end sub reboot
 sub fetch {
-   #collect host ssh keys and save for MN to pick up
-   notify($ERRORS{'OK'},"fetch: copying ssh keys to $HOME");
-   my $os = lc($^O);
-   my $sshdir;
-   if($os eq "solaris"){
-      $sshdir = "/local/openssh/etc";
-   }
-   else{
-      $sshdir = "/etc/ssh/";
-   }
+	#collect host ssh keys and save for MN to pick up
+	notify($ERRORS{'OK'}, "fetch: copying ssh keys to $HOME");
+	my $os = lc($^O);
+	my $sshdir;
+	if ($os eq "solaris") {
+		$sshdir = "/local/openssh/etc";
+	}
+	else {
+		$sshdir = "/etc/ssh/";
+	}
 
-   if(open(CP, "/bin/cp $sshdir/ssh_host\* $HOME 2>&1 |")){
-      my @cp=<CP>;
-      close(CP);
-      if(@cp){
-         notify($ERRORS{'OK'},"fetch: copy problems - @cp");
-      }
+	if (open(CP, "/bin/cp $sshdir/ssh_host\* $HOME 2>&1 |")) {
+		my @cp = <CP>;
+		close(CP);
+		if (@cp) {
+			notify($ERRORS{'OK'}, "fetch: copy problems - @cp");
+		}
 
-      if(open(CHOWN,"/bin/chown vclstaff $HOME/ssh_host\* 2>&1 |")){
-         my @chown=<CHOWN>;
-         close(CHOWN);
-         if(@chown){
-            notify($ERRORS{'OK'},"fetch: chown problems - @cp");
-         }
-      }
-   }
-   notify($ERRORS{'OK'},"fetch: fetch complete");
-   return 1;
-}
+		if (open(CHOWN, "/bin/chown vclstaff $HOME/ssh_host\* 2>&1 |")) {
+			my @chown = <CHOWN>;
+			close(CHOWN);
+			if (@chown) {
+				notify($ERRORS{'OK'}, "fetch: chown problems - @cp");
+			}
+		}
+	} ## end if (open(CP, "/bin/cp $sshdir/ssh_host\* $HOME 2>&1 |"...
+	notify($ERRORS{'OK'}, "fetch: fetch complete");
+	return 1;
+} ## end sub fetch
 sub store {
-   # take host ssh keys stored in my home directory and place them into the /etc/sshd directory
-   #create an orig directory in $sshdir
-   #copy original keys to orig dir
-   #cp given keys to proper location
-   #set correct ownership and premissions on keys
-   #unlink/remove locally stored keys from vclstaff dir
-   my $os = lc($^O);
-   my $sshdir;
-   if($os eq "solaris"){
-      $sshdir = "/local/openssh/etc";
-   }
-   else{
-      $sshdir = "/etc/ssh";
-   }    
-   notify($ERRORS{'OK'},"store: copying ssh keys to $sshdir");
+	# take host ssh keys stored in my home directory and place them into the /etc/sshd directory
+	#create an orig directory in $sshdir
+	#copy original keys to orig dir
+	#cp given keys to proper location
+	#set correct ownership and premissions on keys
+	#unlink/remove locally stored keys from vclstaff dir
+	my $os = lc($^O);
+	my $sshdir;
+	if ($os eq "solaris") {
+		$sshdir = "/local/openssh/etc";
+	}
+	else {
+		$sshdir = "/etc/ssh";
+	}
+	notify($ERRORS{'OK'}, "store: copying ssh keys to $sshdir");
 
-   my %filelist;
-   $filelist{"dsa"}="ssh_host_dsa_key";
-   $filelist{"dsapub"}="ssh_host_dsa_key.pub";
-   $filelist{"rsa"}="ssh_host_rsa_key"; 
-   $filelist{"rsapub"}="ssh_host_rsa_key.pub";
-   $filelist{"key"}="ssh_host_key";
-   $filelist{"keypub"}="ssh_host_key.pub";
+	my %filelist;
+	$filelist{"dsa"}    = "ssh_host_dsa_key";
+	$filelist{"dsapub"} = "ssh_host_dsa_key.pub";
+	$filelist{"rsa"}    = "ssh_host_rsa_key";
+	$filelist{"rsapub"} = "ssh_host_rsa_key.pub";
+	$filelist{"key"}    = "ssh_host_key";
+	$filelist{"keypub"} = "ssh_host_key.pub";
 
-    if(!(-d "$sshdir/origkeys")){
-       if(mkdir("$sshdir/origkeys", 755)){
-         notify($ERRORS{'OK'},"store: mkdir successfully created $sshdir/origkeys");
-       }
-       else{
-          notify($ERRORS{'OK'},"store: mkdir $sshdir/origkeys $! ");
-       }
-    }
-    else{
-     #hrmm $sshdir/origkeys already exists
-    }
-    #copy system generated keys to orig dir
-    #copy stored keys to ssh dir
-    #set perms,ownership,unlink local copy
-    foreach my $f(sort keys %filelist) {
-       if(!(-f "$HOME/$filelist{$f}")){
-          notify($ERRORS{'OK'},"store: does not exist $HOME/$filelist{$f}");
-          next;
-       }
-       if(open(CP,"/bin/cp $sshdir/$filelist{$f} $sshdir/origkeys 2>&1 |")){
-          my @cp=<CP>;
-          close(CP);
-          if(@cp){
-             notify($ERRORS{'OK'},"store: copy orig keys problem on $filelist{$f} - @cp");
-          }
-       }
-       #copy given keys to ssh dir
-       if(open(CP,"/bin/cp $HOME/$filelist{$f} $sshdir/$filelist{$f} 2>&1 |")){
-          my @cp=<CP>;
-          close(CP);
-          if(@cp){
-             notify($ERRORS{'OK'},"store: copy given keys problem on $filelist{$f} - @cp");
-          }
-          else{
-            notify($ERRORS{'OK'},"store: copied $filelist{$f} to $sshdir");
-            if(open(CHOWN, "/bin/chown root:root $sshdir/$filelist{$f} 2>&1 |")){
-               close(CHOWN);
-            }
-            my $p;
-            if($f =~ /pub/){
-               $p = 644;
-            }
-            else{
-               $p = 600;
-            }
-            if(open(CHMOD, "/bin/chmod $p $sshdir/$filelist{$f} 2>&1|")){
-               my @chmod=<CHMOD>;
-               close(CHMOD);
-               if(@chmod){
-                  notify($ERRORS{'OK'},"store: chmod problem on $filelist{$f} - @chmod");
-               }
-            }#chmod
-          }#else no cp problems
-       }#CP
-       #unlink
-       if(unlink "$HOME/$filelist{$f}"){
-         notify($ERRORS{'OK'},"store: deleted $HOME/$filelist{$f}");
-       }
-       else{
-         notify($ERRORS{'OK'},"store: unable to delete $HOME/$filelist{$f}");
-       }
-     }#foreach
-     #restart sshd
-     if(restartsshd){
-        notify($ERRORS{'OK'},"store: sshd restarted");
-        return 1;
-     }
-     else{
-         notify($ERRORS{'OK'},"store: sshd restart failed");
-         return 0;
-     }
-    return 1;
-}
+	if (!(-d "$sshdir/origkeys")) {
+		if (mkdir("$sshdir/origkeys", 755)) {
+			notify($ERRORS{'OK'}, "store: mkdir successfully created $sshdir/origkeys");
+		}
+		else {
+			notify($ERRORS{'OK'}, "store: mkdir $sshdir/origkeys $! ");
+		}
+	}
+	else {
+		#hrmm $sshdir/origkeys already exists
+	}
+	#copy system generated keys to orig dir
+	#copy stored keys to ssh dir
+	#set perms,ownership,unlink local copy
+	foreach my $f (sort keys %filelist) {
+		if (!(-f "$HOME/$filelist{$f}")) {
+			notify($ERRORS{'OK'}, "store: does not exist $HOME/$filelist{$f}");
+			next;
+		}
+		if (open(CP, "/bin/cp $sshdir/$filelist{$f} $sshdir/origkeys 2>&1 |")) {
+			my @cp = <CP>;
+			close(CP);
+			if (@cp) {
+				notify($ERRORS{'OK'}, "store: copy orig keys problem on $filelist{$f} - @cp");
+			}
+		}
+		#copy given keys to ssh dir
+		if (open(CP, "/bin/cp $HOME/$filelist{$f} $sshdir/$filelist{$f} 2>&1 |")) {
+			my @cp = <CP>;
+			close(CP);
+			if (@cp) {
+				notify($ERRORS{'OK'}, "store: copy given keys problem on $filelist{$f} - @cp");
+			}
+			else {
+				notify($ERRORS{'OK'}, "store: copied $filelist{$f} to $sshdir");
+				if (open(CHOWN, "/bin/chown root:root $sshdir/$filelist{$f} 2>&1 |")) {
+					close(CHOWN);
+				}
+				my $p;
+				if ($f =~ /pub/) {
+					$p = 644;
+				}
+				else {
+					$p = 600;
+				}
+				if (open(CHMOD, "/bin/chmod $p $sshdir/$filelist{$f} 2>&1|")) {
+					my @chmod = <CHMOD>;
+					close(CHMOD);
+					if (@chmod) {
+						notify($ERRORS{'OK'}, "store: chmod problem on $filelist{$f} - @chmod");
+					}
+				}    #chmod
+			}    #else no cp problems
+		}    #CP
+		     #unlink
+		if (unlink "$HOME/$filelist{$f}") {
+			notify($ERRORS{'OK'}, "store: deleted $HOME/$filelist{$f}");
+		}
+		else {
+			notify($ERRORS{'OK'}, "store: unable to delete $HOME/$filelist{$f}");
+		}
+	}    #foreach
+	     #restart sshd
+	if (restartsshd) {
+		notify($ERRORS{'OK'}, "store: sshd restarted");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'OK'}, "store: sshd restart failed");
+		return 0;
+	}
+	return 1;
+} ## end sub store
 
 sub restartsshd {
-   my $os = lc($^O);
-   notify($ERRORS{'OK'},"restartsshd: attempting to restart sshd on $os");
-   if($os eq "solaris"){
-      if(open(STOP,"/bin/pkill -f sshd_admin.cfg  2>&1 |")){
-         my @stop=<STOP>;
-         close(STOP);
-         foreach my $r (@stop) {
-            if($r =~ /failed/i){
-               notify($ERRORS{'WARNING'},"restartsshd: sshd stop failed @stop");
-            }
-         }
-         if(open(START,"/etc/init.d/sshd start 2>&1 |")){
-            my @start=<START>;
-            close(START);
-            foreach my $r (@start) {
-               #notify($ERRORS{'OK'},"restartsshd: output $r");
-               if($r =~ /failed/i){
-                  notify($ERRORS{'WARNING'},"restartsshd: sshd start failed @start");
-               } 
-               return 1 if($r =~ /ok/i);               
-            }
-         }#if start
-      } # pkill
-   }
-   elsif($os =~ /linux/){
-      if(open(RESTART,"/etc/init.d/sshd restart 2>&1 |")){
-         my @restart=<RESTART>;
-         close(RESTART);
-         foreach my $r (@restart) {
-           if($r =~ /failed/i){
-               notify($ERRORS{'WARNING'},"restartsshd: sshd restart failed $r @restart");
-            }
-            if($r =~ /Starting/){
-               return 1 if($r =~ /ok/i);
-            }
-         }
-      }
-   }
-  return 1; 
-}
-sub startsshd {                                             
-   my @lines;
-   #figure out OS solaris or linux
-   my $os= lc($^O);
-   my @output;
-   my $l;
-   if($os eq "solaris"){ 
-       if(open(SSHD,"/local/openssh/sbin/sshd -f $HOME/sshd_config_vcl 2>&1 |")){
-          notify($ERRORS{'OK'},"startsshd: starting sshd");
-          @output = <SSHD>;
-          close(SSHD);
-         foreach $l (@output){
-             notify($ERRORS{'OK'},"startsshd output: $l");
-         }
-         return 1;
-       }
-       else{
-          notify($ERRORS{'OK'},"startsshd: could not execute /local/openssh/sbin/sshd -f $HOME/sshd_config_vcl $!");
-          return 0;
-       }
-   }
-   elsif($os eq "linux"){
-      if(open(SSHD, "/usr/sbin/sshd -f $HOME/sshd_config_vcl |")){
-          notify($ERRORS{'OK'},"startsshd: starting sshd");
-          @output = <SSHD>;
-          close(SSHD);
-         foreach $l (@output){
-             notify($ERRORS{'OK'},"startsshd output: $l");
-         }
-         return 1;
-       }
-       else{
-          notify($ERRORS{'OK'},"startsshd: could not execute /usr/sbin/sshd -f $HOME/sshd_config_vcl $!");
-          return 0;
-       }
-      }
-}
+	my $os = lc($^O);
+	notify($ERRORS{'OK'}, "restartsshd: attempting to restart sshd on $os");
+	if ($os eq "solaris") {
+		if (open(STOP, "/bin/pkill -f sshd_admin.cfg  2>&1 |")) {
+			my @stop = <STOP>;
+			close(STOP);
+			foreach my $r (@stop) {
+				if ($r =~ /failed/i) {
+					notify($ERRORS{'WARNING'}, "restartsshd: sshd stop failed @stop");
+				}
+			}
+			if (open(START, "/etc/init.d/sshd start 2>&1 |")) {
+				my @start = <START>;
+				close(START);
+				foreach my $r (@start) {
+					#notify($ERRORS{'OK'},"restartsshd: output $r");
+					if ($r =~ /failed/i) {
+						notify($ERRORS{'WARNING'}, "restartsshd: sshd start failed @start");
+					}
+					return 1 if ($r =~ /ok/i);
+				}
+			}    #if start
+		}    # pkill
+	} ## end if ($os eq "solaris")
+	elsif ($os =~ /linux/) {
+		if (open(RESTART, "/etc/init.d/sshd restart 2>&1 |")) {
+			my @restart = <RESTART>;
+			close(RESTART);
+			foreach my $r (@restart) {
+				if ($r =~ /failed/i) {
+					notify($ERRORS{'WARNING'}, "restartsshd: sshd restart failed $r @restart");
+				}
+				if ($r =~ /Starting/) {
+					return 1 if ($r =~ /ok/i);
+				}
+			}
+		} ## end if (open(RESTART, "/etc/init.d/sshd restart 2>&1 |"...
+	} ## end elsif ($os =~ /linux/)  [ if ($os eq "solaris")
+	return 1;
+} ## end sub restartsshd
+sub startsshd {
+	my @lines;
+	#figure out OS solaris or linux
+	my $os = lc($^O);
+	my @output;
+	my $l;
+	if ($os eq "solaris") {
+		if (open(SSHD, "/local/openssh/sbin/sshd -f $HOME/sshd_config_vcl 2>&1 |")) {
+			notify($ERRORS{'OK'}, "startsshd: starting sshd");
+			@output = <SSHD>;
+			close(SSHD);
+			foreach $l (@output) {
+				notify($ERRORS{'OK'}, "startsshd output: $l");
+			}
+			return 1;
+		}
+		else {
+			notify($ERRORS{'OK'}, "startsshd: could not execute /local/openssh/sbin/sshd -f $HOME/sshd_config_vcl $!");
+			return 0;
+		}
+	} ## end if ($os eq "solaris")
+	elsif ($os eq "linux") {
+		if (open(SSHD, "/usr/sbin/sshd -f $HOME/sshd_config_vcl |")) {
+			notify($ERRORS{'OK'}, "startsshd: starting sshd");
+			@output = <SSHD>;
+			close(SSHD);
+			foreach $l (@output) {
+				notify($ERRORS{'OK'}, "startsshd output: $l");
+			}
+			return 1;
+		}
+		else {
+			notify($ERRORS{'OK'}, "startsshd: could not execute /usr/sbin/sshd -f $HOME/sshd_config_vcl $!");
+			return 0;
+		}
+	} ## end elsif ($os eq "linux")  [ if ($os eq "solaris")
+} ## end sub startsshd
 sub notify {
-       my ($error,$string) = @_;
-       my $currenttime = makedatestring;
-       if(open(LOGIT, ">>$LOG")){
-          if( !$error ){
-             print LOGIT "$currenttime - $$: $string\n";
-             close(LOGIT);
-             return;
-          }
-          if ($error == 2 ) {  #CRITICAL something bad happened, exiting
-             print LOGIT  "\n$string\n"; 
-             print LOGIT "exiting\n";
-             close(LOGIT);
-             exit;
-          }
-          elsif( $error == 1 ){
-             # WARNING should prompt admin to
-             # continue or exit
-             # need to disable for cron
-             print LOGIT "\n---- WARNING ---- \n$string\n";
-             close(LOGIT);
-          }
-          # mail us, this is to be used for cron jobs
-          elsif( $error == 5 ){
-             print LOGIT "\n---- sending mail -- $currenttime - - $$ $string\n";
-             my $from = "root";
-             my $to = "fapeeler\@engr.ncsu.edu";
-             my $subject = "PROBLEM -- $0";
-             my $mailer = Mail::Mailer->new("sendmail");
-             if($mailer->open({From => $from,
-                           To => $to,
-                           Subject => $subject,
-             })){
-                print $mailer "vclclientd $currenttime - - process $$ \n\n\n$string";
-                $mailer->close();
-              }
-             return 1;
-             }
-          }
-}
+	my ($error, $string) = @_;
+	my $currenttime = makedatestring;
+	if (open(LOGIT, ">>$LOG")) {
+		if (!$error) {
+			print LOGIT "$currenttime - $$: $string\n";
+			close(LOGIT);
+			return;
+		}
+		if ($error == 2) {    #CRITICAL something bad happened, exiting
+			print LOGIT "\n$string\n";
+			print LOGIT "exiting\n";
+			close(LOGIT);
+			exit;
+		}
+		elsif ($error == 1) {
+			# WARNING should prompt admin to
+			# continue or exit
+			# need to disable for cron
+			print LOGIT "\n---- WARNING ---- \n$string\n";
+			close(LOGIT);
+		}
+	} ## end if (open(LOGIT, ">>$LOG"))
+} ## end sub notify
 sub makedatestring {
-       my($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = localtime( );
-      $year += 1900; 
-      $mon++;
-      my $datestring = sprintf("%04d-%02d-%02d %02d:%02d:%02d",$year,$mon,$mday,$hour,$min,$sec);
-      return $datestring;
+	my ($sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst) = localtime();
+	$year += 1900;
+	$mon++;
+	my $datestring = sprintf("%04d-%02d-%02d %02d:%02d:%02d", $year, $mon, $mday, $hour, $min, $sec);
+	return $datestring;
 }
 sub sshdstatus {
-   my $os = lc($^O);
-   if($os eq "solaris"){
-      my $sshd_admin_pid;
-      if(open(SSH,"/local/openssh/etc/sshd.admin.pid")){
-         my @file = <SSH>; 
-         close(SSH);
-         chomp($file[0]);
-         $sshd_admin_pid=$file[0];
-       }
-       else{
-          notify($ERRORS{'OK'},"sshdstatus: could not open /local/openssh/etc/sshd.admin.pid $!");
-          return 0;
-       }
+	my $os = lc($^O);
+	if ($os eq "solaris") {
+		my $sshd_admin_pid;
+		if (open(SSH, "/local/openssh/etc/sshd.admin.pid")) {
+			my @file = <SSH>;
+			close(SSH);
+			chomp($file[0]);
+			$sshd_admin_pid = $file[0];
+		}
+		else {
+			notify($ERRORS{'OK'}, "sshdstatus: could not open /local/openssh/etc/sshd.admin.pid $!");
+			return 0;
+		}
 
-      if(open(STAT,"/bin/pgrep -f sshd  2>&1 |")){
-         my @stat=<STAT>;
-         close(STAT);
-         foreach my $r (@stat) {
-            if($r =~ /$sshd_admin_pid/){
-               #notify($ERRORS{'OK'},"sshdstatus: sshd is running");
-               return 1;
-            }
-         }
-         notify($ERRORS{'OK'},"sshdstatus: sshd is NOT running trying to restart");
-         if(open(START,"/etc/init.d/sshd start 2>&1 |")){
-            my @start=<START>;
-            close(START);
-            foreach my $r (@start) {
-               if($r =~ /failed/i){
-                  notify($ERRORS{'WARNING'},"store: sshd start failed @start");
-                  return 0;
-               }
-            }
-         }#if start
-      }#STAT
-         return 1;
-   } #os=solaris
-   elsif($os =~ /linux/){
-      my $sshd_admin_pid;
-      if(open(SSH,"/var/run/sshd.pid")){
-         my @file = <SSH>; 
-         close(SSH);
-         chomp($file[0]);
-         $sshd_admin_pid=$file[0];
-       }
-       else{
-          notify($ERRORS{'WARNING'},"sshdstatus: could not open /var/run/sshd.pid $!");
-          return 0;
-       }
-      my $running=0;
-      if(open(SSH,"pgrep -f sshd 2>&1|")){
-         my @lines = <SSH>;
-         close(SSH);
-         foreach my $l (@lines){
-            if($l =~ /$sshd_admin_pid/){
-               #ok it's running
-               $running=1; #not that this matters
-               return 1;
-            }
-        }
-      }#if pgrep
-      if(!$running){
-        #start sshd
-        notify($ERRORS{'WARNING'},"sshdstatus: not running trying to restart");
-        if(open(STAT,"/etc/init.d/sshd start 2>&1 |")){
-           my @stat = <STAT>;
-           close(STAT);
-           foreach my $s (@stat) {
-             if($s =~ /ok/i){
-                notify($ERRORS{'OK'},"sshdstatus: restarted core sshd process, @stat");
-                return 1;
-             }
-           }
-           #in case I don't return in above check
-           notify($ERRORS{'OK'},"sshdstatus: restart attempt may of had issues, @stat");
-           return 0;
-        }#if sshd start
-       }#if ! running
-      }#elsif linux
-}
+		if (open(STAT, "/bin/pgrep -f sshd  2>&1 |")) {
+			my @stat = <STAT>;
+			close(STAT);
+			foreach my $r (@stat) {
+				if ($r =~ /$sshd_admin_pid/) {
+					#notify($ERRORS{'OK'},"sshdstatus: sshd is running");
+					return 1;
+				}
+			}
+			notify($ERRORS{'OK'}, "sshdstatus: sshd is NOT running trying to restart");
+			if (open(START, "/etc/init.d/sshd start 2>&1 |")) {
+				my @start = <START>;
+				close(START);
+				foreach my $r (@start) {
+					if ($r =~ /failed/i) {
+						notify($ERRORS{'WARNING'}, "store: sshd start failed @start");
+						return 0;
+					}
+				}
+			}    #if start
+		}    #STAT
+		return 1;
+	}    #os=solaris
+	elsif ($os =~ /linux/) {
+		my $sshd_admin_pid;
+		if (open(SSH, "/var/run/sshd.pid")) {
+			my @file = <SSH>;
+			close(SSH);
+			chomp($file[0]);
+			$sshd_admin_pid = $file[0];
+		}
+		else {
+			notify($ERRORS{'WARNING'}, "sshdstatus: could not open /var/run/sshd.pid $!");
+			return 0;
+		}
+		my $running = 0;
+		if (open(SSH, "pgrep -f sshd 2>&1|")) {
+			my @lines = <SSH>;
+			close(SSH);
+			foreach my $l (@lines) {
+				if ($l =~ /$sshd_admin_pid/) {
+					#ok it's running
+					$running = 1;    #not that this matters
+					return 1;
+				}
+			}
+		}    #if pgrep
+		if (!$running) {
+			#start sshd
+			notify($ERRORS{'WARNING'}, "sshdstatus: not running trying to restart");
+			if (open(STAT, "/etc/init.d/sshd start 2>&1 |")) {
+				my @stat = <STAT>;
+				close(STAT);
+				foreach my $s (@stat) {
+					if ($s =~ /ok/i) {
+						notify($ERRORS{'OK'}, "sshdstatus: restarted core sshd process, @stat");
+						return 1;
+					}
+				}
+				#in case I don't return in above check
+				notify($ERRORS{'OK'}, "sshdstatus: restart attempt may of had issues, @stat");
+				return 0;
+			}    #if sshd start
+		}    #if ! running
+	}    #elsif linux
+} ## end sub sshdstatus
 sub createnewssh_config_vcl {
-   #check for .orig from /etc/ssh dir
-   #if orig then just need to add port 22 and AllowUsers directive
-   my ($port22,$AU,$port24)=0;
-   my @file;
-   if(-e "/etc/sshd/sshd_config.orig"){
-         #good slurp it in
-      if(open(CONFIG,"$HOME/sshd_config_vcl")){
-       @file = <CONFIG>;
-       close(CONFIG);
-       foreach my $line (@file){
-           #check for port 22 and AllowUsers
-          if($line =~ /^Port 22/){
-             $port22=1;
-          }
-          if($line =~ /^AllowUsers/){
-             $AU=1;
-          }
-          if($line =~ s/^Port 24/Port 22/g){
-             $port22=1;
-          }
-       }
-      }
-   }
-   else{
-    #ok /etc/sshd/sshd_config.orig does not exist
-    #try to create from the /etc/sshd/sshd_config
+	#check for .orig from /etc/ssh dir
+	#if orig then just need to add port 22 and AllowUsers directive
+	my ($port22, $AU, $port24) = 0;
+	my @file;
+	if (-e "/etc/sshd/sshd_config.orig") {
+		#good slurp it in
+		if (open(CONFIG, "$HOME/sshd_config_vcl")) {
+			@file = <CONFIG>;
+			close(CONFIG);
+			foreach my $line (@file) {
+				#check for port 22 and AllowUsers
+				if ($line =~ /^Port 22/) {
+					$port22 = 1;
+				}
+				if ($line =~ /^AllowUsers/) {
+					$AU = 1;
+				}
+				if ($line =~ s/^Port 24/Port 22/g) {
+					$port22 = 1;
+				}
+			} ## end foreach my $line (@file)
+		} ## end if (open(CONFIG, "$HOME/sshd_config_vcl"))
+	} ## end if (-e "/etc/sshd/sshd_config.orig")
+	else {
+		#ok /etc/sshd/sshd_config.orig does not exist
+		#try to create from the /etc/sshd/sshd_config
 
-   }
-   #write out to $HOME/sshd_config_vcl
-   if(open(SC,">$HOME/sshd_config_vcl")){
-      print SC @file;
-      close(SC);
-   }
-   else{
-      notify($ERRORS{'CRITICAL'},"createnewssh_config_vcl: sshd_config_vcl was reported to not exists, in repairing I failed to create a new $HOME/sshd_config_vcl $!");
-      return 0;
-   }
-}
+	}
+	#write out to $HOME/sshd_config_vcl
+	if (open(SC, ">$HOME/sshd_config_vcl")) {
+		print SC @file;
+		close(SC);
+	}
+	else {
+		notify($ERRORS{'CRITICAL'}, "createnewssh_config_vcl: sshd_config_vcl was reported to not exists, in repairing I failed to create a new $HOME/sshd_config_vcl $!");
+		return 0;
+	}
+} ## end sub createnewssh_config_vcl
 
 #/////////////////////////////////////////////////////////////////////////////
 
