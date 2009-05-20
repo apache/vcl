@@ -31,6 +31,9 @@
  * https://vcl.mysite.org/vcl/\n\n
  * the RPC URL would be\n\n
  * https://vcl.mysite.org/vcl/index.php?mode=xmlrpccall\n\n
+ * There is one exception - when calling the XMLRPCaffiliations function, the
+ * mode is xmlrpcaffiliations, for example:\n\n
+ * https://vcl.mysite.org/vcl/index.php?mode=xmlrpcaffiliations\n\n
  * Your application must connect using HTTPS.\n\n
  * Internal to the VCL code, "Reservations" are called "Requests"; therefore,
  * "request" is used instead of "reservation" in this documentation and in the
