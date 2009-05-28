@@ -78,6 +78,8 @@ use English '-no_match_vars';
 
 use Object::InsideOut;
 use List::Util qw(min max);
+use YAML;
+
 use VCL::utils;
 
 ##############################################################################
@@ -1404,6 +1406,303 @@ sub get_log_data {
 	
 	notify($ERRORS{'DEBUG'}, 0, "retrieved log data for log id: $request_log_id");
 	return $self->request_data->{log};
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_computer_private_ip_address
+
+ Parameters  : computer name (optional)
+ Returns     : If successful: string containing IP address
+               If failed: false
+ Description : Retrieves the IP address for a computer from the
+               management node's local /etc/hosts file.
+               
+               An optional argument can
+               be supplied containing the name of the computer for which the IP
+               address will be retrieved.
+               
+               This subroutine may or may not be called as a DataStructure
+               object method. If this subroutine is called as an object method,
+               the computer name argument is optional. If it is not called as an
+               object method, the computer name argument must be supplied.
+               
+               The first time this subroutine is called as an object method
+               without an argument, the reservation computer's IP address is
+               retrieved from the /etc/hosts file and saved in the DataStructure
+               object's data. Subsequent calls as an object method without an
+               argument will return the IP address retrieved the first time for
+               efficiency.
+
+=cut
+
+sub get_computer_private_ip_address {
+	my $self;
+	my $argument = shift;
+	my $computer_name;
+	
+	# Check if subroutine was called as an object method
+	if (ref($argument) && $argument->isa('VCL::DataStructure')) {
+		# Subroutine was called as an object method, check if an argument was specified
+		$self = $argument;
+		$argument = shift;
+		if ($argument) {
+			# Argument was specified, use this as the computer name
+			$computer_name = $argument;
+		}
+		else {
+			# Argument was not specified, check if private IP address for this reservation's computer was already retrieved from /etc/hosts
+			if (my $existing_private_ip_address = $self->request_data->{reservation}{$self->reservation_id}{computer}{privateIPaddress}) {
+				# This subroutine has already been run for the reservation computer, return IP address retrieved earlier
+				notify($ERRORS{'DEBUG'}, 0, "returning private IP address previously retrieved from /etc/hosts: $existing_private_ip_address");
+				return $existing_private_ip_address;
+			}
+			
+			# Argument was not specified and private IP address has not yet been saved in the request data
+			# Get the computer short name for this reservation
+			$computer_name = $self->get_computer_short_name();
+		}
+	}
+	elsif (ref($argument)) {
+		notify($ERRORS{'WARNING'}, 0, "subroutine was called with an illegal argument type: " . ref($argument));
+		return;
+	}
+	else {
+		# Subroutine was not called as an object method
+		$computer_name = $argument;
+	}
+	
+	# Make sure the computer name was determined either from an argument or the request data
+	if (!$computer_name) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine computer name from argument or request data");
+		return;
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "attempting to retrieve private IP address for computer: $computer_name");
+
+	# Retrieve the contents of /etc/hosts using cat
+	my ($exit_status, $output) = run_command('cat /etc/hosts', 1);
+	if (defined $exit_status && $exit_status == 0) {
+		notify($ERRORS{'DEBUG'}, 0, "retrieved contents of /etc/hosts on this management node, contains " . scalar @$output . " lines");
+	}
+	elsif (defined $exit_status) {
+		notify($ERRORS{'WARNING'}, 0, "failed to cat /etc/hosts on this management node, exit status: $exit_status, output:\n" . join("\n", @$output));
+		return;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to run command to cat /etc/hosts on this management node");
+		return;
+	}
+	
+	# Find lines containing the computer name
+	my @matching_computer_hosts_lines = grep(/\s$computer_name/i, @$output);
+	
+	# Extract matching lines which aren't commented out
+	my @uncommented_computer_hosts_lines = grep(/^\s*[^#]/, @matching_computer_hosts_lines);
+	
+	# Make sure 1 uncommented line was found
+	if (@matching_computer_hosts_lines == 0) {
+		notify($ERRORS{'WARNING'}, 0, "did not find any lines in /etc/hosts containing '$computer_name'");
+		return;
+	}
+	elsif (@uncommented_computer_hosts_lines == 0) {
+		notify($ERRORS{'WARNING'}, 0, "did not find any uncommented lines in /etc/hosts containing '$computer_name':\n" . join("\n", @matching_computer_hosts_lines));
+		return;
+	}
+	elsif (@uncommented_computer_hosts_lines > 1) {
+		notify($ERRORS{'WARNING'}, 0, "found multiple uncommented lines in /etc/hosts containing '$computer_name':\n" . join("\n", @matching_computer_hosts_lines));
+		return;
+	}
+	
+	my $matching_computer_hosts_line = $matching_computer_hosts_lines[0];
+	notify($ERRORS{'DEBUG'}, 0, "found line for '$computer_name' in /etc/hosts:\n$matching_computer_hosts_line");
+	
+	# Extract the IP address from the matching line
+	my ($ip_address) = $matching_computer_hosts_line =~ /\s*((?:[0-9]{1,3}\.?){4})\s+$computer_name/i;
+	
+	# Check if IP address was found
+	if (!$ip_address) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine IP address from line:\n$matching_computer_hosts_line");
+		return;
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "found IP address: $ip_address");
+	
+	# Update the request data if subroutine was called as an object method without an argument
+	if ($self && !$argument) {
+		$self->set_computer_private_ip_address($ip_address);
+	}
+	
+	return $ip_address;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_variable
+
+ Parameters  : $variable_name
+ Returns     : If successful: reference to the data stored in the variable table for
+                              the variable name specified
+               If failed: false
+ Description : Queries the variable table for the variable with the name specified by the subroutine argument.
+               Returns a reference to the data.
+
+=cut
+
+sub get_variable {
+	my $self = shift;
+	my $name = shift;
+	
+	# Check if subroutine was called as an object method
+	unless (ref($self) && $self->isa('VCL::DataStructure')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a VCL::DataStructure module object method");
+		return;
+	}
+	
+	# Check the arguments
+	if (!defined($name)) {
+		notify($ERRORS{'WARNING'}, 0, "variable name argument was not supplied");
+		return;
+	}
+	
+	# Construct the select statement
+my $select_statement .= <<"EOF";
+SELECT
+variable.value
+FROM
+variable
+WHERE
+variable.name = '$name'
+EOF
+	
+	# Call the database select subroutine
+	my @selected_rows = database_select($select_statement);
+
+	# Check to make 1 sure row was returned
+	if (!@selected_rows) {
+		notify($ERRORS{'WARNING'}, 0, "unable to execute select statement to retrieve variable '$name' from the database");
+		return;
+	}
+	elsif (@selected_rows == 0){
+		notify($ERRORS{'WARNING'}, 0, "variable '$name' does not exist in the database");
+		return;
+	}
+	elsif (@selected_rows > 1){
+		notify($ERRORS{'WARNING'}, 0, "multiple rows exist in the database for variable '$name':\n" . format_data(\@selected_rows));
+		return;
+	}
+	
+	# Get the serialized value from the variable row
+	my $serialized_value = $selected_rows[0]{value};
+	
+	# Attempt to deserialize the value
+	# Use eval because Load() will call die() if it encounters an error
+	my $deserialized_value;
+	eval '$deserialized_value = YAML::Load($serialized_value)';
+	if ($EVAL_ERROR) {
+		notify($ERRORS{'WARNING'}, 0, "unable to deserialize the value using YAML::Load(): $serialized_value");
+		return;
+	}
+	
+	# Display the data type of the value retrieved from the variable table
+	if (my $deserialized_data_type = ref($deserialized_value)) {
+		notify($ERRORS{'DEBUG'}, 0, "returning $deserialized_data_type reference");
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "returning scalar ($deserialized_value)");
+	}
+	
+	return $deserialized_value;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 set_variable
+
+ Parameters  : $variable_name, $variable_value
+ Returns     : If successful: true
+               If failed: false
+ Description : Inserts or updates a row in the variable table. This subroutine
+               will also update the variable.timestamp column. The
+               variable.setby column is automatically set to the filename and
+               line number which called this subroutine.
+
+=cut
+
+sub set_variable {
+	my $self = shift;
+	my $name_argument = shift;
+	my $value_argument = shift;
+	
+	# Check if subroutine was called as an object method
+	unless (ref($self) && $self->isa('VCL::DataStructure')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a VCL::DataStructure module object method");
+		return;
+	}
+	
+	# Check the arguments
+	if (!defined($name_argument)) {
+		notify($ERRORS{'WARNING'}, 0, "variable name argument was not supplied");
+		return;
+	}
+	elsif (!defined($value_argument)) {
+		notify($ERRORS{'WARNING'}, 0, "variable value argument was not supplied");
+		return;
+	}
+	
+	# Construct a string indicating where the variable was set from
+	my @caller = caller(0);
+	(my $calling_file) = $caller[1] =~ /([^\/]*)$/;
+	my $calling_line = $caller[2];
+	my $caller_string = "$calling_file:$calling_line";
+	
+	# Attempt to serialize the value using YAML::Dump()
+	# Use eval because Dump() will call die() if it encounters an error
+	my $serialized_value;
+	eval '$serialized_value = YAML::Dump($value_argument)';
+	if ($EVAL_ERROR) {
+		notify($ERRORS{'WARNING'}, 0, "unable to serialize the value using YAML::Dump(): $value_argument");
+		return;
+	}
+
+	# Escape all single quote characters with a backslash
+	#   or else the SQL statement will fail becuase it is wrapped in single quotes
+	$serialized_value =~ s/'/\\'/g;;
+	
+	# Assemble an insert statement, if the variable already exists, update the existing row
+	my $insert_statement .= <<"EOF";
+INSERT INTO variable
+(
+name,
+value,
+setby,
+timestamp
+)
+VALUES
+(
+'$name_argument',
+'$serialized_value',
+'$caller_string',
+NOW()
+)
+ON DUPLICATE KEY UPDATE
+name=VALUES(name),
+value=VALUES(value),
+setby=VALUES(setby),
+timestamp=VALUES(timestamp)
+EOF
+	
+	# Execute the insert statement, the return value should be the id of the row
+	my $inserted_id = database_execute($insert_statement);
+	if ($inserted_id) {
+		notify($ERRORS{'OK'}, 0, "set variable '$name_argument', id: $inserted_id");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to set variable '$name_argument'");
+		return;
+	}
+	
+	return 1;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
