@@ -217,20 +217,6 @@ Call script to clean up the hard drive
 	if (!$self->clean_hard_drive()) {
 		notify($ERRORS{'WARNING'}, 0, "unable to clean unnecessary files the hard drive");
 	}
-	
-#=item *
-#
-#Delete the 'System Startup Script' scheduled task
-#
-#=cut
-#	
-#	# This task must be deleted because it will conflict with the post_load.cmd Run command that is added
-#	# It also may cause problems after the reboot that occurs when the pagefile is disabled
-#	# SSH commands may fail while the networking and Cygwin scripts are running
-#	if (!$self->delete_scheduled_task('System Startup Script')) {
-#		notify($ERRORS{'WARNING'}, 0, "unable to delete 'System Startup Script' scheduled task");
-#		return 0;
-#	}
 
 =item *
 
@@ -3454,185 +3440,6 @@ sub get_current_image_name {
 	}
 } ## end sub get_current_image_name
 
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 firewall_configure
-
- Parameters  : 
- Returns     : 1 if succeeded, 0 otherwise
- Description : 
-
-=cut
-
-sub firewall_configure {
-	my $self = shift;
-	if (ref($self) !~ /windows/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-
-	my $management_node_keys = $self->data->get_management_node_keys();
-	my $computer_node_name   = $self->data->get_computer_node_name();
-
-	# Check the arguments
-	my $firewall_parameters = shift;
-	if (!defined($firewall_parameters) || !$firewall_parameters) {
-		notify($ERRORS{'WARNING'}, 0, "failed to open firewall on $computer_node_name, parameters hash reference was not passed");
-		return;
-	}
-	if ((!defined($firewall_parameters->{port}) || !$firewall_parameters->{port}) && (!defined($firewall_parameters->{type}) || !$firewall_parameters->{type})) {
-		notify($ERRORS{'WARNING'}, 0, "failed to open firewall on $computer_node_name, 'port' or 'type' hash key was not passed");
-		return;
-	}
-	if (!defined($firewall_parameters->{protocol}) || !$firewall_parameters->{protocol}) {
-		notify($ERRORS{'WARNING'}, 0, "failed to open firewall on $computer_node_name, 'protocol' hash key was not passed");
-		return;
-	}
-
-	# Add quotes around anything with a space in the parameters hash which isn't already enclosed in quotes
-	foreach my $rule_property (sort keys(%{$firewall_parameters})) {
-		$firewall_parameters->{$rule_property} =~ s/^(.*\s.*)$/\"$1\"/g;
-		#notify($ERRORS{'DEBUG'}, 0, "enclosing property in quotes: $firewall_parameters->{$rule_property}");
-	}
-
-	#	netsh firewall set portopening
-	# [ protocol = ] TCP|UDP|ALL
-	# [ port = ] 1-65535
-	# [ [ name = ] name (optional)
-	# [ mode = ] ENABLE (default)|DISABLE (optional)
-	# [ scope = ] ALL|SUBNET|CUSTOM (optional)
-	# [ addresses = ] addresses (optional)
-	# [ profile = ] CURRENT (default)|DOMAIN|STANDARD|ALL (optional)
-	# [ interface = ] name ] (optional)
-	#  Remarks: 'profile' and 'interface' may not be specified together.
-	#           'scope' and 'interface' may not be specified together.
-	#           'scope' must be 'CUSTOM' to specify 'addresses'.
-
-	# netsh firewall set icmpsetting
-	# [ type = ] 2-5|8-9|11-13|17|ALL
-	# [ [ mode = ] ENABLE (default)|DISABLE (optional)
-	# [ profile = ] CURRENT (default)|DOMAIN|STANDARD|ALL (optional)
-	# [ interface = ] name ] (optional)
-	# type - ICMP type.
-	#	2   - Allow outbound packet too big.
-	#	3   - Allow outbound destination unreachable.
-	#	4   - Allow outbound source quench.
-	#	5   - Allow redirect.
-	#	8   - Allow inbound echo request.
-	#	9   - Allow inbound router request.
-	#	11  - Allow outbound time exceeded.
-	#	12  - Allow outbound parameter problem.
-	#	13  - Allow inbound timestamp request.
-	#	17  - Allow inbound mask request.
-	#	ALL - All types.
-	# Remarks: 'profile' and 'interface' may not be specified together.
-	#		  'type' 2 and 'interface' may not be specified together.
-
-	# Assemble the command based on the keys populated in the hash
-	my $set_portopening_command;
-	if ($firewall_parameters->{protocol} =~ /icmp/i) {
-		$set_portopening_command = "netsh.exe firewall set icmpsetting";
-
-		foreach my $rule_property (sort keys(%{$firewall_parameters})) {
-			next if $rule_property !~ /^type|mode|profile|interface$/;
-			$set_portopening_command .= " $rule_property=$firewall_parameters->{$rule_property}";
-		}
-	}
-	else {
-		$set_portopening_command = "netsh.exe firewall set portopening";
-
-		foreach my $rule_property (sort keys(%{$firewall_parameters})) {
-			next if $rule_property !~ /^protocol|port|name|mode|scope|addresses|profile|interface$/;
-			$set_portopening_command .= " $rule_property=$firewall_parameters->{$rule_property}";
-		}
-	}
-
-	my ($set_portopening_exit_status, $set_portopening_output) = run_ssh_command($computer_node_name, $management_node_keys, $set_portopening_command);
-	if (defined($set_portopening_exit_status) && $set_portopening_exit_status == 0) {
-		notify($ERRORS{'OK'}, 0, "set firewall portopening: " . Dumper($firewall_parameters));
-	}
-	elsif (defined($set_portopening_exit_status)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to set firewall portopening on $computer_node_name: " . Dumper($firewall_parameters) . ", exit status: $set_portopening_exit_status, output:\n@{$set_portopening_output}");
-		return 0;
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to set firewall portopening on $computer_node_name: " . Dumper($firewall_parameters));
-		return;
-	}
-
-	return 1;
-} ## end sub firewall_configure
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 firewall_close
-
- Parameters  : 
- Returns     : 1 if succeeded, 0 otherwise
- Description : 
-
-=cut
-
-sub firewall_close {
-	my $self = shift;
-	if (ref($self) !~ /windows/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-
-	my $management_node_keys = $self->data->get_management_node_keys();
-	my $computer_node_name   = $self->data->get_computer_node_name();
-
-	# Make sure firewall parameters hash was passed
-	my $firewall_parameters = shift;
-	if (!defined($firewall_parameters) || !$firewall_parameters) {
-		notify($ERRORS{'WARNING'}, 0, "failed to close firewall on $computer_node_name, parameters hash reference was not passed");
-		return;
-	}
-
-	# Add quotes around anything with a space in the parameters hash which isn't already enclosed in quotes
-	foreach my $rule_property (sort keys(%{$firewall_parameters})) {
-		$firewall_parameters->{$rule_property} =~ s/^(.*\s.*)$/\"$1\"/g;
-		#notify($ERRORS{'DEBUG'}, 0, "enclosing '$rule_property' property in quotes: $firewall_parameters->{$rule_property}");
-	}
-
-	#	delete portopening
-	#
-	#      [ protocol = ] TCP|UDP|ALL
-	#      [ port = ] 1-65535
-	#      [ [ profile = ] CURRENT|DOMAIN|STANDARD|ALL (optional)
-	#      [ interface = ] name ] (optional)
-	#  Remarks: 'profile' and 'interface' may not be specified together.
-
-	# Assemble the command based on the keys populated in the hash
-	my $delete_portopening_command = "netsh.exe firewall delete portopening";
-	foreach my $rule_property (sort keys(%{$firewall_parameters})) {
-		next if $rule_property !~ /^protocol|port|profile|interface$/;
-		$delete_portopening_command .= " $rule_property=$firewall_parameters->{$rule_property}";
-	}
-
-	# Attempt to delete existing portopenings
-	notify($ERRORS{'DEBUG'}, 0, "attempting to delete matching firewall portopenings on $computer_node_name, command:\n$delete_portopening_command");
-	my ($delete_portopening_exit_status, $delete_portopening_output) = run_ssh_command($computer_node_name, $management_node_keys, $delete_portopening_command);
-	if (defined($delete_portopening_exit_status) && ($delete_portopening_exit_status == 0)) {
-		notify($ERRORS{'OK'}, 0, "deleted matching firewall portopenings: " . Dumper($firewall_parameters));
-		return 1;
-	}
-	elsif (defined($delete_portopening_exit_status) && ($delete_portopening_exit_status == 1)) {
-		notify($ERRORS{'OK'}, 0, "unable to delete matching firewall portopenings because none exist: " . Dumper($firewall_parameters));
-		return 1;
-	}
-	elsif (defined($delete_portopening_exit_status)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to delete matching firewall portopenings on $computer_node_name: " . Dumper($firewall_parameters) . ", exit status: $delete_portopening_exit_status, output:\n@{$delete_portopening_output}");
-		return 0;
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to delete matching firewall portopenings on $computer_node_name: " . Dumper($firewall_parameters));
-		return 0;
-	}
-} ## end sub firewall_close
-
 #/////////////////////////////////////////////////////////////////////////////
 
 =head2 firewall_enable_ping
@@ -3649,20 +3456,29 @@ sub firewall_enable_ping {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
-
 	
-	my %firewall_parameters = (protocol  => 'icmp',
-										type      => 8,
-										mode      => 'ENABLE',
-										profile   => 'ALL');
+	my $management_node_keys     = $self->data->get_management_node_keys();
+	my $computer_node_name       = $self->data->get_computer_node_name();
+	
+	my $netsh_command;
+	$netsh_command .= "netsh.exe firewall set icmpsetting";
+	$netsh_command .= " type = 8";
+	$netsh_command .= " mode = ENABLE";
+	$netsh_command .= " profile = ALL";
 
-	# Call the configure firewall subroutine, pass it the necessary parameters
-	if ($self->firewall_configure(\%firewall_parameters)) {
-		notify($ERRORS{'OK'}, 0, "opened firewall for incoming ping on all interfaces");
+	# Execute the netsh.exe command
+	my ($netsh_exit_status, $netsh_output) = run_ssh_command($computer_node_name, $management_node_keys, $netsh_command);
+	
+	if (defined($netsh_output)  && @$netsh_output[-1] =~ /Ok\./i) {
+		notify($ERRORS{'OK'}, 0, "configured firewall to allow ping");
+	}
+	elsif (defined($netsh_exit_status)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to configure firewall to allow ping, exit status: $netsh_exit_status, output:\n@{$netsh_output}");
+		return;
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to open firewall for incoming ping on all interfaces");
-		return 0;
+		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to configure firewall to allow ping");
+		return;
 	}
 
 	return 1;
@@ -3684,44 +3500,150 @@ sub firewall_enable_ping_private {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
-
-	my @private_interface_names = $self->get_private_interface_names();
-	if (!@private_interface_names) {
-		notify($ERRORS{'WARNING'}, 0, "private interface name could not be determined");
-	}
-
-	for my $private_interface_name (@private_interface_names) {
-		my %firewall_parameters = (protocol  => 'icmp',
-											type      => 8,
-											interface => $private_interface_name,
-											mode      => 'ENABLE',);
-
-		# Call the configure firewall subroutine, pass it the necessary parameters
-		if ($self->firewall_configure(\%firewall_parameters)) {
-			notify($ERRORS{'OK'}, 0, "opened firewall for incoming ping on private network");
-		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "failed to open firewall for incoming ping on private network");
-			return 0;
-		}
-	} ## end for my $private_interface_name (@private_interface_names)
 	
-	# Remove exception for all interfaces
-	my %firewall_parameters = (protocol  => 'icmp',
-										type      => 8,
-										mode      => 'DISABLE',
-										profile   => 'ALL');
-
-	# Call the configure firewall subroutine, pass it the necessary parameters
-	if ($self->firewall_configure(\%firewall_parameters)) {
-		notify($ERRORS{'OK'}, 0, "closed firewall for incoming ping on all interfaces");
+	my $management_node_keys     = $self->data->get_management_node_keys();
+	my $computer_node_name       = $self->data->get_computer_node_name();
+	
+	my $netsh_command;
+	
+	# Get the public interface name
+	# Add command to disable ping on public interface if its name is found
+	my $public_interface_name = $self->get_public_interface_name();
+	if ($public_interface_name) {
+		notify($ERRORS{'DEBUG'}, 0, "ping will be disabled on public interface: $public_interface_name");
+		
+		$netsh_command .= "netsh.exe firewall set icmpsetting";
+		$netsh_command .= " type = 8";
+		$netsh_command .= " mode = DISABLE";
+		$netsh_command .= " interface = \"$public_interface_name\"";
+		$netsh_command .= ' ;';
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to close firewall for incoming ping on all interfaces");
+		notify($ERRORS{'WARNING'}, 0, "ping will not be disabled on public interface because public interface name could not be determined");
+	}
+	
+	# Get the private interface name
+	# Add command to ensable ping on private interface if its name is found
+	my $private_interface_name = $self->get_private_interface_name();
+	if ($private_interface_name) {
+		notify($ERRORS{'DEBUG'}, 0, "ping will be enabled on private interface: $private_interface_name");
+		
+		$netsh_command .= "netsh.exe firewall set icmpsetting";
+		$netsh_command .= " type = 8";
+		$netsh_command .= " mode = DISABLE";
+		$netsh_command .= " profile = ALL";
+		$netsh_command .= ' ;';
+		
+		$netsh_command .= "netsh.exe firewall set icmpsetting";
+		$netsh_command .= " type = 8";
+		$netsh_command .= " mode = ENABLE";
+		$netsh_command .= " interface = \"$private_interface_name\"";
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "private interface name could not be determined, ping will be enabled for all profiles");
+		
+		$netsh_command .= "netsh.exe firewall set icmpsetting";
+		$netsh_command .= " type = 8";
+		$netsh_command .= " mode = ENABLE";
+		$netsh_command .= " profile = ALL";
+		$netsh_command .= ' ;';
+	}
+	
+	# Execute the netsh.exe command
+	my ($netsh_exit_status, $netsh_output) = run_ssh_command($computer_node_name, $management_node_keys, $netsh_command);
+	
+	if (defined($netsh_output)  && @$netsh_output[-1] =~ /Ok\./i) {
+		notify($ERRORS{'OK'}, 0, "configured firewall to allow ping on private interface");
+	}
+	elsif (defined($netsh_exit_status)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to configure firewall to allow ping on private interface, exit status: $netsh_exit_status, output:\n@{$netsh_output}");
+		return;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to configure firewall to allow ping on private interface");
+		return;
 	}
 	
 	return 1;
 } ## end sub firewall_enable_ping_private
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 firewall_disable_ping
+
+ Parameters  : 
+ Returns     : 1 if succeeded, 0 otherwise
+ Description : 
+
+=cut
+
+sub firewall_disable_ping {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $management_node_keys     = $self->data->get_management_node_keys();
+	my $computer_node_name       = $self->data->get_computer_node_name();
+	
+	my $netsh_command;
+	
+	# Get the private interface name
+	# Add command to disable ping on private interface if its name is found
+	my $private_interface_name = $self->get_private_interface_name();
+	if ($private_interface_name) {
+		notify($ERRORS{'DEBUG'}, 0, "retrieved private interface name: $private_interface_name");
+		
+		$netsh_command .= "netsh.exe firewall set icmpsetting";
+		$netsh_command .= " type = 8";
+		$netsh_command .= " mode = DISABLE";
+		$netsh_command .= " interface = \"$private_interface_name\"";
+		$netsh_command .= ' ;';
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "private interface name could not be determined");
+	}
+	
+	# Get the public interface name
+	# Add command to disable ping on public interface if its name is found
+	my $public_interface_name = $self->get_public_interface_name();
+	if ($public_interface_name) {
+		notify($ERRORS{'DEBUG'}, 0, "retrieved public interface name: $public_interface_name");
+		
+		$netsh_command .= "netsh.exe firewall set icmpsetting";
+		$netsh_command .= " type = 8";
+		$netsh_command .= " mode = DISABLE";
+		$netsh_command .= " interface = \"$public_interface_name\"";
+		$netsh_command .= ' ;';
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "public interface name could not be determined");
+	}
+	
+	# Add command to disable ping for all profiles
+	$netsh_command .= "netsh.exe firewall set icmpsetting";
+	$netsh_command .= " type = 8";
+	$netsh_command .= " mode = DISABLE";
+	$netsh_command .= " profile = ALL";
+	
+	# Execute the netsh.exe command
+	my ($netsh_exit_status, $netsh_output) = run_ssh_command($computer_node_name, $management_node_keys, $netsh_command);
+	
+	if (defined($netsh_output)  && @$netsh_output[-1] =~ /Ok\./i) {
+		notify($ERRORS{'OK'}, 0, "configured firewall to disallow ping");
+	}
+	elsif (defined($netsh_exit_status)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to configure firewall to disallow ping, exit status: $netsh_exit_status, output:\n@{$netsh_output}");
+		return;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to configure firewall to disallow ping");
+		return;
+	}
+	
+	return 1;
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -3739,21 +3661,75 @@ sub firewall_enable_ssh {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
+	
+	# Check if the remote IP was passed correctly as an argument
+	my $remote_ip = shift;
+	
+	my $management_node_keys     = $self->data->get_management_node_keys();
+	my $computer_node_name       = $self->data->get_computer_node_name();
 
-	my %firewall_parameters = (name      => 'Cygwin SSHD',
-										protocol  => 'TCP',
-										port      => '22',
-										mode      => 'ENABLE',
-										profile   => 'ALL',
-										scope     => 'ALL');
-
-	# Call the configure firewall subroutine, pass it the necessary parameters
-	if ($self->firewall_configure(\%firewall_parameters)) {
-		notify($ERRORS{'OK'}, 0, "opened firewall for incoming ssh via TCP port 22 on all interfaces");
+	my $netsh_command;
+	
+	# Get the public interface name
+	# Add command to disable SSH on public interface if its name is found
+	my $public_interface_name = $self->get_public_interface_name();
+	if ($public_interface_name) {
+		notify($ERRORS{'DEBUG'}, 0, "SSH will be disabled on public interface: $public_interface_name");
+		
+		$netsh_command .= "netsh.exe firewall delete portopening";
+		$netsh_command .= " protocol = TCP";
+		$netsh_command .= " port = 22";
+		$netsh_command .= " interface = \"$public_interface_name\"";
+		$netsh_command .= ' ;';
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to open firewall for incoming ssh via TCP port 22 on all interfaces");
-		return 0;
+		notify($ERRORS{'WARNING'}, 0, "SSH will not be disabled on public interface because public interface name could not be determined");
+	}
+	
+	# Get the private interface name
+	# Add command to disable SSH on private interface if its name is found
+	my $private_interface_name = $self->get_private_interface_name();
+	if ($private_interface_name) {
+		notify($ERRORS{'DEBUG'}, 0, "SSH will be disabled on private interface: $private_interface_name");
+		
+		$netsh_command .= "netsh.exe firewall delete portopening";
+		$netsh_command .= " protocol = TCP";
+		$netsh_command .= " port = 22";
+		$netsh_command .= " interface = \"$private_interface_name\"";
+		$netsh_command .= ' ;';
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "SSH will not be disabled on private interface because private interface name could not be determined");
+	}
+	
+	$netsh_command .= "netsh.exe firewall set portopening";
+	$netsh_command .= " name = \"Cygwin SSHD\"";
+	$netsh_command .= " protocol = TCP";
+	$netsh_command .= " port = 22";
+	$netsh_command .= " mode = ENABLE";
+	
+	if (!defined($remote_ip) || $remote_ip !~ /[\d\.\/]/) {
+		$remote_ip = 'all addresses'; # Set only to display in output
+		$netsh_command .= " scope = ALL";
+	}
+	else {
+		$netsh_command .= " scope = CUSTOM";
+		$netsh_command .= " addresses = $remote_ip";
+	}
+
+	# Execute the netsh.exe command
+	my ($netsh_exit_status, $netsh_output) = run_ssh_command($computer_node_name, $management_node_keys, $netsh_command);
+	
+	if (defined($netsh_output)  && @$netsh_output[-1] =~ /Ok\./i) {
+		notify($ERRORS{'OK'}, 0, "configured firewall to allow SSH from $remote_ip");
+	}
+	elsif (defined($netsh_exit_status)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to configure firewall to allow SSH from $remote_ip, exit status: $netsh_exit_status, output:\n@{$netsh_output}");
+		return;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to configure firewall to allow SSH from $remote_ip");
+		return;
 	}
 	
 	return 1;
@@ -3775,40 +3751,70 @@ sub firewall_enable_ssh_private {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
-
-	my @private_interface_names = $self->get_private_interface_names();
-	if (!@private_interface_names) {
-		notify($ERRORS{'WARNING'}, 0, "private interface name could not be determined");
-	}
-
-	for my $private_interface_name (@private_interface_names) {
-		my %firewall_parameters = (name      => 'Cygwin SSHD',
-											protocol  => 'TCP',
-											port      => '22',
-											interface => $private_interface_name,
-											mode      => 'ENABLE',);
-
-		# Call the configure firewall subroutine, pass it the necessary parameters
-		if ($self->firewall_configure(\%firewall_parameters)) {
-			notify($ERRORS{'OK'}, 0, "opened firewall for incoming ssh via TCP port 22 on private interface");
-		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "failed to open firewall for incoming ssh via TCP port 22 on private interface");
-			return 0;
-		}
-	} ## end for my $private_interface_name (@private_interface_names)
 	
-	# Remove exception for all interfaces
-	my %firewall_parameters = (protocol => 'TCP',
-										port     => '22',
-										profile  => 'ALL',);
-
-	# Call the configure firewall subroutine, pass it the necessary parameters
-	if ($self->firewall_close(\%firewall_parameters)) {
-		notify($ERRORS{'OK'}, 0, "closed firewall for incoming RDP via TCP port 22 from any address");
+	my $management_node_keys     = $self->data->get_management_node_keys();
+	my $computer_node_name       = $self->data->get_computer_node_name();
+	
+	my $netsh_command;
+	
+	# Get the public interface name
+	# Add command to disable SSH on public interface if its name is found
+	my $public_interface_name = $self->get_public_interface_name();
+	if ($public_interface_name) {
+		notify($ERRORS{'DEBUG'}, 0, "SSH will be disabled on public interface: $public_interface_name");
+		
+		$netsh_command .= "netsh.exe firewall delete portopening";
+		$netsh_command .= " protocol = TCP";
+		$netsh_command .= " port = 22";
+		$netsh_command .= " interface = \"$public_interface_name\"";
+		$netsh_command .= ' ;';
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to close firewall for incoming RDP via TCP port 22 from any address");
+		notify($ERRORS{'WARNING'}, 0, "SSH will not be disabled on public interface because public interface name could not be determined");
+	}
+	
+	# Get the private interface name
+	# Add command to ensable SSH on private interface if its name is found
+	my $private_interface_name = $self->get_private_interface_name();
+	if ($private_interface_name) {
+		notify($ERRORS{'DEBUG'}, 0, "SSH will be enabled on private interface: $private_interface_name");
+		
+		$netsh_command .= "netsh.exe firewall delete portopening";
+		$netsh_command .= " protocol = TCP";
+		$netsh_command .= " port = 22";
+		$netsh_command .= " profile = ALL";
+		$netsh_command .= ' ;';
+		
+		$netsh_command .= "netsh.exe firewall set portopening";
+		$netsh_command .= " name = \"Cygwin SSHD\"";
+		$netsh_command .= " protocol = TCP";
+		$netsh_command .= " port = 22";
+		$netsh_command .= " mode = ENABLE";
+		$netsh_command .= " interface = \"$private_interface_name\"";
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "private interface name could not be determined, SSH will be enabled for all profiles");
+		
+		$netsh_command .= "netsh.exe firewall set portopening";
+		$netsh_command .= " name = \"Cygwin SSHD\"";
+		$netsh_command .= " protocol = TCP";
+		$netsh_command .= " port = 22";
+		$netsh_command .= " profile = ALL";
+	}
+	
+	# Execute the netsh.exe command
+	my ($netsh_exit_status, $netsh_output) = run_ssh_command($computer_node_name, $management_node_keys, $netsh_command);
+	
+	if (defined($netsh_output)  && @$netsh_output[-1] =~ /Ok\./i) {
+		notify($ERRORS{'OK'}, 0, "configured firewall to allow SSH on private interface");
+	}
+	elsif (defined($netsh_exit_status)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to configure firewall to allow SSH on private interface, exit status: $netsh_exit_status, output:\n@{$netsh_output}");
+		return;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to configure firewall to allow SSH on private interface");
+		return;
 	}
 	
 	return 1;
@@ -3905,30 +3911,41 @@ sub firewall_enable_rdp {
 		return;
 	}
 
-	my %firewall_parameters = (name     => 'Remote Desktop',
-										protocol => 'TCP',
-										port     => '3389',
-										mode     => 'ENABLE',
-										profile  => 'ALL',);
-
 	# Check if the remote IP was passed correctly as an argument
 	my $remote_ip = shift;
+	
+	my $management_node_keys     = $self->data->get_management_node_keys();
+	my $computer_node_name       = $self->data->get_computer_node_name();
+
+	my $netsh_command;
+	$netsh_command .= "netsh.exe firewall set portopening";
+	$netsh_command .= " name = \"Remote Desktop\"";
+	$netsh_command .= " protocol = TCP";
+	$netsh_command .= " port = 3389";
+	$netsh_command .= " mode = ENABLE";
+	
 	if (!defined($remote_ip) || $remote_ip !~ /[\d\.\/]/) {
-		$firewall_parameters{scope} = 'ALL';
+		$remote_ip = 'all addresses'; # Set only to display in output
+		$netsh_command .= " scope = ALL";
 	}
 	else {
-		$firewall_parameters{scope}     = 'CUSTOM';
-		$firewall_parameters{addresses} = $remote_ip;
+		$netsh_command .= " scope = CUSTOM";
+		$netsh_command .= " addresses = $remote_ip";
 	}
 
-	# Call the configure firewall subroutine, pass it the necessary parameters
-	if ($self->firewall_configure(\%firewall_parameters)) {
-		notify($ERRORS{'OK'}, 0, "opened firewall for incoming RDP via TCP port 3389");
-		return 1;
+	# Execute the netsh.exe command
+	my ($netsh_exit_status, $netsh_output) = run_ssh_command($computer_node_name, $management_node_keys, $netsh_command);
+	
+	if (defined($netsh_output)  && @$netsh_output[-1] =~ /Ok\./i) {
+		notify($ERRORS{'OK'}, 0, "configured firewall to allow RDP from $remote_ip");
+	}
+	elsif (defined($netsh_exit_status)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to configure firewall to allow RDP from $remote_ip, exit status: $netsh_exit_status, output:\n@{$netsh_output}");
+		return;
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to open firewall for incoming RDP via TCP port 3389");
-		return 0;
+		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to configure firewall to allow RDP from $remote_ip");
+		return;
 	}
 } ## end sub firewall_enable_rdp
 
@@ -3948,20 +3965,66 @@ sub firewall_disable_rdp {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
-
-	my %firewall_parameters = (protocol => 'TCP',
-										port     => '3389',
-										profile  => 'ALL',);
-
-	# Call the configure firewall subroutine, pass it the necessary parameters
-	if ($self->firewall_close(\%firewall_parameters)) {
-		notify($ERRORS{'OK'}, 0, "closed firewall for incoming RDP via TCP port 3389");
-		return 1;
+	
+	my $management_node_keys     = $self->data->get_management_node_keys();
+	my $computer_node_name       = $self->data->get_computer_node_name();
+	
+	my $netsh_command;
+	
+	# Get the private interface name
+	# Add command to disable RDP on private interface if its name is found
+	my $private_interface_name = $self->get_private_interface_name();
+	if ($private_interface_name) {
+		notify($ERRORS{'DEBUG'}, 0, "RDP will be disabled on private interface: $private_interface_name");
+		
+		$netsh_command .= "netsh.exe firewall delete portopening";
+		$netsh_command .= " protocol = TCP";
+		$netsh_command .= " port = 3389";
+		$netsh_command .= " interface = \"$private_interface_name\"";
+		$netsh_command .= ' ;';
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to close firewall for incoming RDP via TCP port 3389");
-		return 0;
+		notify($ERRORS{'WARNING'}, 0, "private interface name could not be determined");
 	}
+	
+	# Get the public interface name
+	# Add command to disable RDP on public interface if its name is found
+	my $public_interface_name = $self->get_public_interface_name();
+	if ($public_interface_name) {
+		notify($ERRORS{'DEBUG'}, 0, "RDP will be disabled on public interface: $public_interface_name");
+		
+		$netsh_command .= "netsh.exe firewall delete portopening";
+		$netsh_command .= " protocol = TCP";
+		$netsh_command .= " port = 3389";
+		$netsh_command .= " interface = \"$public_interface_name\"";
+		$netsh_command .= ' ;';
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "public interface name could not be determined");
+	}
+	
+	# Add command to disable RDP for all profiles
+	$netsh_command .= "netsh.exe firewall delete portopening";
+	$netsh_command .= " protocol = TCP";
+	$netsh_command .= " port = 3389";
+	$netsh_command .= " profile = ALL";
+
+	# Execute the netsh.exe command
+	my ($netsh_exit_status, $netsh_output) = run_ssh_command($computer_node_name, $management_node_keys, $netsh_command);
+	
+	if (defined($netsh_output)  && @$netsh_output[-1] =~ /Ok\./i) {
+		notify($ERRORS{'OK'}, 0, "configured firewall to disallow RDP");
+	}
+	elsif (defined($netsh_exit_status)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to configure firewall to disallow RDP, exit status: $netsh_exit_status, output:\n@{$netsh_output}");
+		return;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to configure firewall to disallow RDP");
+		return;
+	}
+	
+	return 1;
 } ## end sub firewall_disable_rdp
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -3994,212 +4057,321 @@ sub get_network_configuration {
 
 	my $management_node_keys = $self->data->get_management_node_keys();
 	my $computer_node_name   = $self->data->get_computer_node_name();
-
-	my ($exit_status, $output) = run_ssh_command($computer_node_name, $management_node_keys, '$SYSTEMROOT/System32/ipconfig.exe /all', '', '', 1);
-	if (defined($exit_status) && $exit_status == 0) {
-		notify($ERRORS{'DEBUG'}, 0, "ran ipconfig");
-	}
-	elsif (defined($exit_status)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to run ipconfig, exit status: $exit_status, output:\n@{$output}");
-		return 0;
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to run the SSH command to run ipconfig");
+	
+	# Check if a 'public' or 'private' network type argument was specified
+	my $network_type = lc(shift());
+	if ($network_type && $network_type !~ /(public|private)/i) {
+		notify($ERRORS{'WARNING'}, 0, "network type argument can only be 'public' or 'private'");
 		return;
 	}
-
-	my %interfaces;
-	my $interface_name;
-	my $previous_dns = 0;
-	for my $line (@{$output}) {
-		# Find beginning of interface section
-		if ($line =~ /ethernet adapter (.*):/i) {
-			# Get the interface name
-			$interface_name = $1;
-
-			# Initialize hash values
-			$interfaces{$interface_name}{dhcp_enabled}    = '';
-			$interfaces{$interface_name}{description}     = '';
-			$interfaces{$interface_name}{ip_address}      = '';
-			$interfaces{$interface_name}{subnet_mask}     = '';
-			$interfaces{$interface_name}{default_gateway} = '';
-			$interfaces{$interface_name}{dns_servers}     = ();
-		} ## end if ($line =~ /ethernet adapter (.*):/i)
-
-		# Check lines, see if they contain information to be saved
-		$interfaces{$interface_name}{dhcp_enabled}    = $1 if ($line =~ /dhcp enabled[\s\.:]*(.*)/i);
-		$interfaces{$interface_name}{description}     = $1 if ($line =~ /description[\s\.:]*(.*)/i);
-		$interfaces{$interface_name}{ip_address}      = $1 if ($line =~ /ip address[\s\.:]*([\d\.]*)/i);
-		$interfaces{$interface_name}{subnet_mask}     = $1 if ($line =~ /subnet mask[\s\.:]*([\d\.]*)/i);
-		$interfaces{$interface_name}{default_gateway} = $1 if ($line =~ /default gateway[\s\.:]*([\d\.]*)/i);
-		if ($line =~ /dns servers[\s\.:]*(.*)/i || ($previous_dns && $line =~ /^\s+([\d\.]+)/)) {
-			push(@{$interfaces{$interface_name}{dns_servers}}, $1);
-			$previous_dns = 1;
+	
+	my %network_configuration;
+	if (!$self->{network_configuration}) {
+		notify($ERRORS{'DEBUG'}, 0, "attempting to retrieve network configuration");
+		
+		# Run ipconfig /all
+		my ($exit_status, $output) = run_ssh_command($computer_node_name, $management_node_keys, '$SYSTEMROOT/System32/ipconfig.exe /all', '', '', 1);
+		if (defined($exit_status) && $exit_status == 0) {
+			notify($ERRORS{'DEBUG'}, 0, "ran ipconfig");
+		}
+		elsif (defined($exit_status)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to run ipconfig, exit status: $exit_status, output:\n@{$output}");
+			return 0;
 		}
 		else {
-			$previous_dns = 0;
+			notify($ERRORS{'WARNING'}, 0, "failed to run the SSH command to run ipconfig");
+			return;
 		}
-	} ## end for my $line (@{$output})
+	
+		my $interface_name;
+		my $previous_ip = 0;
+		my $setting;
+		
+		for my $line (@{$output}) {
+			# Find beginning of interface section
+			if ($line =~ /ethernet adapter (.*):/i) {
+				# Get the interface name
+				$interface_name = $1;
+				next;
+			}
+			
+			# Skip line if interface hasn't been found yet
+			next if !$interface_name;
+			
+			# Take apart the line finding the setting name and value with a hideous regex
+			my ($line_setting, $value) = $line =~ /^[ ]{1,8}(\w[^\.]*\w)?[ \.:]+([^\r\n]*)/i;
+			
+			# If the setting was found in the line, use it
+			# Otherwise, use the last found setting
+			$setting = $line_setting if $line_setting;
+			
+			# Skip line if value wasn't found
+			next if !$value;
+			
+			# Normalize the setting format, make it lowercase, convert dashes and spaces to underscores
+			$setting = lc($setting);
+			$setting =~ s/[ -]/_/;
+			
+			# Windows 6.x includes a version indicator in IP address lines such as IPv4, remove this
+			$setting =~ s/ip(v\d)?_address/ip_address/;
+			
+			# Remove the trailing s from dns_servers
+			$setting =~ s/dns_servers/dns_server/;
+			
+			# Check which setting was found and add to hash
+			if ($setting =~ /dns_servers/) {
+				push(@{$network_configuration{$interface_name}{$setting}}, $value);
+				#notify($ERRORS{'OK'}, 0, "$interface_name:$setting = @{$network_configuration{$interface_name}{$setting}}");
+			}
+			elsif ($setting =~ /ip_address/) {
+				$value =~ s/[^\.\d]//g;
+				$network_configuration{$interface_name}{$setting}{$value} = '';
+				$previous_ip = $value;
+				#notify($ERRORS{'OK'}, 0, "$interface_name:$setting = $network_configuration{$interface_name}{$setting}{$value}");
+			}
+			elsif ($setting =~ /subnet_mask/) {
+				$network_configuration{$interface_name}{ip_address}{$previous_ip} = $value;
+				#notify($ERRORS{'OK'}, 0, "$interface_name:$setting($previous_ip) = $network_configuration{$interface_name}{ip_address}{$previous_ip}");
+			}
+			else {
+				$network_configuration{$interface_name}{$setting} = $value;
+				#notify($ERRORS{'OK'}, 0, "$interface_name:$setting = $network_configuration{$interface_name}{$setting}");
+			}
+		}
+		
+		notify($ERRORS{'DEBUG'}, 0, 'saving network configuration in $self->{network_configuration}');
+		$self->{network_configuration} = \%network_configuration;
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "network configuration has already been retrieved");
+		%network_configuration = %{$self->{network_configuration}};
+	}
 
-	return \%interfaces;
+#print "\n\n" . format_data(\%network_configuration) . "\n\n";	
+
+	# 'public' or 'private' wasn't specified, return all network interface information
+	if (!$network_type) {
+		return \%network_configuration;
+	}
+	
+	# Get the computer private IP address
+	my $computer_private_ip_address = $self->data->get_computer_private_ip_address();
+	if (!$computer_private_ip_address) {
+		notify($ERRORS{'DEBUG'}, 0, "unable to retrieve computer private IP address from reservation data");
+		return;
+	}
+	
+	my $computer_public_ip_address;
+	
+	my %public_interface;
+	
+	# Loop through all of the network interfaces found
+	foreach my $interface_name (sort keys %network_configuration) {
+		my @ip_addresses  = keys %{$network_configuration{$interface_name}{ip_address}};
+		my $description = $network_configuration{$interface_name}{description};
+		$description = '' if !$description;
+
+		# Make sure an IP address was found
+		if (!@ip_addresses) {
+			notify($ERRORS{'DEBUG'}, 0, "interface does not have an ip address: $interface_name");
+			next;
+		}
+		elsif (grep(/$computer_private_ip_address/, @ip_addresses)) {
+			# If private interface information was requested, return a hash containing only this interface
+			notify($ERRORS{'DEBUG'}, 0, "private interface found: $interface_name, description: $description, address(es): " . join (", ", @ip_addresses));
+			if ($network_type =~ /private/i) {
+				my %return_hash = ($interface_name => $network_configuration{$interface_name});
+				notify($ERRORS{'DEBUG'}, 0, "returning data for private interface: $interface_name (" . join (", ", @ip_addresses) . ")");
+				return \%return_hash;
+			}
+			else {
+				next;
+			}
+		}
+		
+		# Check if the interface should be ignored based on the name or description
+		if ($interface_name =~ /loopback|vmnet|afs/i) {
+			notify($ERRORS{'DEBUG'}, 0, "interface ignored because of name: $interface_name, description: $description, address(es): " . join (", ", @ip_addresses));
+			next;
+		}
+		elsif ($description =~ /loopback|virtual|afs/i) {
+			notify($ERRORS{'DEBUG'}, 0, "interface ignored because of description: $interface_name, description: $description, address(es): " . join (", ", @ip_addresses));
+			next;
+		}
+		
+		# Loop through the IP addresses for the interface
+		# Once a public address is found, return the data for that interface
+		for my $ip_address (@ip_addresses) {
+			# Split up the IP address being checked into its octets
+			my @octets = split(/\./, $ip_address);
+			
+			# Determine if this is a private or public address
+			# Private:
+			#   10.0.0.0    - 10.255.255.255
+			#   172.16.0.0  - 172.16.31.255.255
+			#   192.168.0.0 - 192.168.255.255
+			if (($octets[0] == 10) ||
+				 ($octets[0] != 172 && ($octets[1] >= 16 && $octets[1] <= 31)) ||
+				 ($octets[0] == 192 && $octets[1] == 168)
+				) {
+				notify($ERRORS{'DEBUG'}, 0, "interface found with private address not matching private address for reservation: $interface_name, description: $description, address(es): " . join (", ", @ip_addresses));
+				
+				if (keys(%public_interface)) {
+					notify($ERRORS{'DEBUG'}, 0, "already found another interface with a private address not matching private address for reservation, this one will be used if a public address isn't found");
+					next;
+				}
+				else {
+					notify($ERRORS{'DEBUG'}, 0, "interface will be returned if another with a public address isn't found");
+					$public_interface{$interface_name} = $network_configuration{$interface_name};
+				}
+			}
+			else {
+				notify($ERRORS{'DEBUG'}, 0, "public interface found: $interface_name, description: $description, address(es): " . join (", ", @ip_addresses));
+				my %return_hash = ($interface_name => $network_configuration{$interface_name});
+				notify($ERRORS{'DEBUG'}, 0, "returning data for public interface: $interface_name (" . join (", ", @ip_addresses) . ")");
+				return \%return_hash;
+			}
+		}
+	}
+
+	if ($network_type =~ /private/i) {
+		notify($ERRORS{'WARNING'}, 0, "did not find an interface using the private IP address for the reservation: $computer_private_ip_address\n" . format_data(\%network_configuration));
+		return;
+	}
+	elsif (keys(%public_interface)) {
+		notify($ERRORS{'OK'}, 0, "did not find a public interface using a public IP address, but found interface using private IP address not matching reservation private IP address, returning data for public interface:\n" . format_data(\%public_interface));
+		return \%public_interface;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine the public interface:\n" . format_data(\%network_configuration));
+		return;
+	}
+	
 } ## end sub get_network_configuration
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 get_private_interface_names
+=head2 get_private_interface_name
 
  Parameters  : 
- Returns     : array containing names of private interfaces
+ Returns     : 
  Description : 
 
 =cut
 
-sub get_private_interface_names {
+sub get_private_interface_name {
 	my $self = shift;
 	if (ref($self) !~ /windows/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
 
-	my $network_configuration = $self->get_network_configuration();
-
 	# Make sure network configuration was retrieved
+	my $network_configuration = $self->get_network_configuration('private');
 	if (!$network_configuration) {
-		notify($ERRORS{'WARNING'}, 0, "unable to determine private adapter name, failed to retrieve network configuration");
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve network configuration");
 		return;
 	}
-
-	my @private_interface_names;
-
-	# Loop through all of the network interfaces
-	foreach my $interface_name (sort keys %{$network_configuration}) {
-		my $ip_address  = $network_configuration->{$interface_name}{ip_address};
-		my $description = $network_configuration->{$interface_name}{description};
-		$description = '' if !$description;
-
-		# Make sure an IP address was found
-		if (!$ip_address) {
-			notify($ERRORS{'DEBUG'}, 0, "interface does not have an ip address: $interface_name");
-			next;
-		}
-		
-		# Split the ip address up
-		my @octets = split(/\./, $ip_address);
-
-		# Figure out if this is a private or public address
-
-		# Private: 10.0.0.0 10.255.255.255 16,777,216
-		if ($interface_name =~ /loopback|virtual|pseudo|vmware|afs/i) {
-			notify($ERRORS{'DEBUG'}, 0, "interface ignored because of name: $interface_name, description: $description, address: $ip_address");
-			next;
-		}
-		elsif (($octets[0] == 10) ||
-				 ($octets[0] != 172 && ($octets[1] >= 16 && $octets[1] <= 31)) ||
-				 ($octets[0] == 192 && $octets[1] == 168)
-				 ) {
-			# Check if a matching interface was already found
-			if (@private_interface_names) {
-				notify($ERRORS{'WARNING'}, 0, "multiple interfaces found with private IP address");
-			}
-
-			push(@private_interface_names, $interface_name);
-		}
-		
-	} ## end foreach my $interface_name (sort keys %{$network_configuration...
-
-	# Check if a matching interface was found
-	if (!@private_interface_names) {
-		notify($ERRORS{'WARNING'}, 0, "private interface was not found");
-		return;
-	}
-
-	notify($ERRORS{'DEBUG'}, 0, "returning private interface array: " . join(", ", @private_interface_names));
-	return @private_interface_names;
-} ## end sub get_private_interface_names
+	
+	my $interface_name = (keys(%{$network_configuration}))[0];
+	notify($ERRORS{'DEBUG'}, 0, "returning private interface name: $interface_name");
+	
+	return $interface_name;
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 get_public_interface_names
+=head2 get_public_interface_name
 
  Parameters  : 
- Returns     : array containing names of public interfaces
+ Returns     : 
  Description : 
 
 =cut
 
-sub get_public_interface_names {
+sub get_public_interface_name {
 	my $self = shift;
 	if (ref($self) !~ /windows/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
 
-	my $network_configuration = $self->get_network_configuration();
+	# Make sure network configuration was retrieved
+	my $network_configuration = $self->get_network_configuration('public');
+	if (!$network_configuration) {
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve network configuration");
+		return;
+	}
+	
+	my $interface_name = (keys(%{$network_configuration}))[0];
+	notify($ERRORS{'DEBUG'}, 0, "returning public interface name: $interface_name");
+	
+	return $interface_name;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_private_ip_addresses
+
+ Parameters  : 
+ Returns     : 
+ Description : 
+
+=cut
+
+sub get_private_ip_addresses {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
 
 	# Make sure network configuration was retrieved
+	my $network_configuration = $self->get_network_configuration('private');
 	if (!$network_configuration) {
-		notify($ERRORS{'WARNING'}, 0, "unable to determine public adapter name, failed to retrieve network configuration");
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve network configuration");
+		return;
+	}
+	
+	my $interface_name = (keys(%{$network_configuration}))[0];
+	
+	my $ip_address = $network_configuration->{$interface_name}{ip_address};
+	notify($ERRORS{'DEBUG'}, 0, "returning IP address: $ip_address");
+	
+	return $ip_address;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_public_ip_addresses
+
+ Parameters  : 
+ Returns     : 
+ Description : 
+
+=cut
+
+sub get_public_ip_addresses {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
 
-	my @public_interface_names;
-
-	# Loop through all of the network interfaces
-	foreach my $interface_name (sort keys %{$network_configuration}) {
-		my $ip_address  = $network_configuration->{$interface_name}{ip_address};
-		my $description = $network_configuration->{$interface_name}{description};
-		$description = '' if !$description;
-
-		# Make sure an IP address was found
-		if (!$ip_address) {
-			notify($ERRORS{'DEBUG'}, 0, "interface does not have an ip address: $interface_name");
-			next;
-		}
-
-		# Split the ip address up
-		my @octets = split(/\./, $ip_address);
-
-		# Figure out if this is a public or public address
-		# Igore loopback and other interface names
-		if ($interface_name =~ /loopback|virtual|pseudo|vmware|afs/i) {
-			notify($ERRORS{'DEBUG'}, 0, "interface ignored because of name: $interface_name, description: $description, address: $ip_address");
-			next;
-		}
-		# Private: 10.0.0.0 10.255.255.255 16,777,216
-		elsif ($octets[0] == 10) {
-			next;
-		}
-		# Private: 172.16.0.0 - 172.31.255.255
-		elsif ($octets[0] != 172 && ($octets[1] >= 16 && $octets[1] <= 31)) {
-			next;
-		}
-		# Private: 192.168.0.0 - 192.168.255.255
-		elsif ($octets[0] == 192 && $octets[1] == 168) {
-			next;
-		}
-		# Loopback: 127.0.0.0 to 127.255.255.255
-		elsif ($octets[0] == 127) {
-			next;
-		}
-		else {
-			# Check if a matching interface was already found
-			if (@public_interface_names) {
-				notify($ERRORS{'WARNING'}, 0, "multiple interfaces found with public IP address");
-			}
-
-			push(@public_interface_names, $interface_name);
-		}
-	} ## end foreach my $interface_name (sort keys %{$network_configuration...
-
-	# Check if a matching interface was found
-	if (!@public_interface_names) {
-		notify($ERRORS{'WARNING'}, 0, "public interface was not found");
+	# Make sure network configuration was retrieved
+	my $network_configuration = $self->get_network_configuration('public');
+	if (!$network_configuration) {
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve network configuration");
 		return;
 	}
-
-	notify($ERRORS{'DEBUG'}, 0, "returning public interface array: " . join(", ", @public_interface_names));
-	return @public_interface_names;
-} ## end sub get_public_interface_names
+	
+	my $interface_name = (keys(%{$network_configuration}))[0];
+	
+	my $ip_address = $network_configuration->{$interface_name}{ip_address};
+	notify($ERRORS{'DEBUG'}, 0, "returning IP address: $ip_address");
+	
+	return $ip_address;
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -4224,14 +4396,14 @@ sub enable_dhcp {
 	my $interface_name_argument = shift;
 	my @interface_names;
 	if (!$interface_name_argument) {
-		push(@interface_names, $self->get_public_interface_names());
-		push(@interface_names, $self->get_private_interface_names());
+		push(@interface_names, $self->get_public_interface_name());
+		push(@interface_names, $self->get_private_interface_name());
 	}
 	elsif ($interface_name_argument =~ /public/i) {
-		push(@interface_names, $self->get_public_interface_names());
+		push(@interface_names, $self->get_public_interface_name());
 	}
 	elsif ($interface_name_argument =~ /private/i) {
-		push(@interface_names, $self->get_private_interface_names());
+		push(@interface_names, $self->get_private_interface_name());
 	}
 	else {
 		push(@interface_names, $interface_name_argument);
@@ -6018,6 +6190,103 @@ EOF
 		return 0;
 	}
 
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 run_newsid_new
+
+ Parameters  : 
+ Returns     : 1 success 0 failure
+ Description : 
+
+=cut
+
+sub run_newsid_new {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $reservation_id           = $self->data->get_reservation_id();
+	my $management_node_keys     = $self->data->get_management_node_keys();
+	my $computer_node_name       = $self->data->get_computer_node_name();
+	my $computer_id              = $self->data->get_computer_id();
+	
+	my $registry_string .= <<'EOF';
+Windows Registry Editor Version 5.00
+
+; This registry file contains the entries to bypass the license agreement when newsid.exe is run
+
+[HKEY_CURRENT_USER\\Software\\Sysinternals\\NewSID]
+"EulaAccepted"=dword:00000001
+EOF
+	
+	# Import the string into the registry
+	if ($self->import_registry_string($registry_string)) {
+		notify($ERRORS{'DEBUG'}, 0, "added newsid eulaaccepted registry string");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to add newsid eulaaccepted registry string");
+	}
+	
+	# Attempt to run newsid.exe
+	# newsid.exe should automatically reboot the computer
+	# It isn't done when the process exits, newsid.exe starts working and immediately returns
+	# NewSid.exe [/a[[/n]|[/d <reboot delay (in seconds)>]]][<new computer name>]
+	# /a - run without prompts
+	# /n - Don't reboot after automatic run
+	my $newsid_command = "\"$NODE_CONFIGURATION_DIRECTORY/Utilities/newsid.exe\" /a \"$computer_node_name\"";
+	
+	my $newsid_start_processing_time = time();
+	my ($newsid_exit_status, $newsid_output) = run_ssh_command($computer_node_name, $management_node_keys, $newsid_command);
+	my $newsid_end_processing_time = time();
+	
+	if (defined($newsid_exit_status) && $newsid_exit_status == 0) {
+		notify($ERRORS{'DEBUG'}, 0, "ran newsid.exe on $computer_node_name");
+	}
+	elsif (defined($newsid_exit_status)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run newsid.exe on $computer_node_name, exit status: $newsid_exit_status, output:\n@{$newsid_output}");
+		return;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to run newsid.exe on $computer_node_name");
+		return;
+	}
+	my $newsid_processing_duration = ($newsid_end_processing_time - $newsid_start_processing_time);
+	notify($ERRORS{'DEBUG'}, 0, "newsid.exe finished processing, newsid.exe took $newsid_processing_duration seconds");
+	insertloadlog($reservation_id, $computer_id, "info", "newsid.exe processing took $newsid_processing_duration seconds");
+	
+	# After launching newsid.exe, wait for machine to become unresponsive
+	if (!$self->wait_for_no_ping(10)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run newsid.exe, $computer_node_name never became unresponsive after waiting 10 minutes");
+		return;
+	}
+	my $newsid_shutdown_time = time();
+	notify($ERRORS{'DEBUG'}, 0, "newsid.exe initiated reboot, $computer_node_name is unresponsive, reboot initialization took " . ($newsid_shutdown_time - $newsid_end_processing_time) . " seconds");
+	
+	# Wait maximum of 6 minutes for the computer to come back up
+	if (!$self->wait_for_ping(6)) {
+		notify($ERRORS{'WARNING'}, 0, "$computer_node_name never responded to ping, it never came back up");
+		return;
+	}
+	
+	my $newsid_ping_respond_time = time();
+	notify($ERRORS{'DEBUG'}, 0, "reboot nearly complete on $computer_node_name after running newsid.exe, ping response took " . ($newsid_ping_respond_time - $newsid_shutdown_time) . " seconds");
+	
+	# Ping successful, try ssh
+	notify($ERRORS{'OK'}, 0, "waiting for ssh to respond on $computer_node_name");
+	if (!$self->wait_for_ssh(3)) {
+		notify($ERRORS{'WARNING'}, 0, "newsid.exe failed, $computer_node_name rebooted but ssh never became available");
+		return;
+	}
+	my $newsid_ssh_respond_time = time();
+	my $newsid_entire_duration = ($newsid_ssh_respond_time - $newsid_start_processing_time);
+	notify($ERRORS{'OK'}, 0, "newsid.exe succeeded on $computer_node_name, entire process took $newsid_entire_duration seconds");
+	insertloadlog($reservation_id, $computer_id, "info", "entire newsid.exe process took $newsid_entire_duration seconds");
+	
 	return 1;
 }
 
