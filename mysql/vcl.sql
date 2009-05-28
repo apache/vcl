@@ -990,6 +990,22 @@ CREATE TABLE IF NOT EXISTS `userprivtype` (
 
 -- --------------------------------------------------------
 
+--
+-- Table structure for table `variable`
+--
+
+CREATE TABLE IF NOT EXISTS `variable` (
+  `id` smallint(5) unsigned NOT NULL auto_increment,
+  `name` varchar(128) NOT NULL,
+  `value` longtext NOT NULL,
+  `setby` varchar(128) default NULL,
+  `timestamp` datetime NOT NULL,
+  PRIMARY KEY  (`id`),
+  UNIQUE KEY `name` (`name`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1 AUTO_INCREMENT=1 ;
+
+-- --------------------------------------------------------
+
 -- 
 -- Table structure for table `vmhost`
 -- 
