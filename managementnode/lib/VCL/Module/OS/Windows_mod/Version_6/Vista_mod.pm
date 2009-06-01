@@ -129,7 +129,7 @@ sub pre_capture {
 			return;
 		}
 	}
-exit;
+	
 	notify($ERRORS{'OK'}, 0, "returning 1");
 	return 1;
 } ## end sub pre_capture
