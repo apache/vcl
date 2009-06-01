@@ -703,8 +703,11 @@ sub notify {
 	# Remove any spaces from the beginning or end of the string
 	$string =~ s/(^\s+)|(\s+$)//gs;
 	
-	# Remove any spaces from the beginning or end of the each line
-	$string =~ s/\s*\n\s*/\n/gs;
+	## Remove any spaces from the beginning of each line
+	#$string =~ s/\n[ \t]+/\n/gs;
+	
+	# Remove any spaces from the end of each line
+	$string =~ s/[ \t]+\n/\n/gs;
 	
 	# Replace consecutive spaces with a single space to keep log file concise as long as string doesn't contain a quote
 	if ($string !~ /[\'\"]/gs) {
