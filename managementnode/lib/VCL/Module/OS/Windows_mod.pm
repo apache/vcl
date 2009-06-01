@@ -6422,6 +6422,7 @@ sub disable_ie_configuration_page {
 Windows Registry Editor Version 5.00
 
 [HKEY_LOCAL_MACHINE\\Software\\Microsoft\\Internet Explorer\\Main]
+"DisableFirstRunCustomize"=dword:00000001
 "RunOnceHasShown"=dword:00000001
 "RunOnceComplete"=dword:00000001
 
