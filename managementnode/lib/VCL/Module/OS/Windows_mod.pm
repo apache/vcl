@@ -2837,7 +2837,6 @@ sub prepare_newsid {
 		return 0;
 	}
 	
-	exit;
 	# Shut down computer unless end_state argument was passed with a value other than 'off'
 	if ($end_state eq 'off') {
 		if (!$self->shutdown()) {

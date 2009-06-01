@@ -96,13 +96,6 @@ sub pre_capture {
 		return;
 	}
 	
-	# Get the node configuration directory
-	my $node_configuration_directory = $self->get_node_configuration_directory();
-	unless ($node_configuration_directory) {
-		notify($ERRORS{'WARNING'}, 0, "node configuration directory could not be determined");
-		return;
-	}
-	
 	notify($ERRORS{'OK'}, 0, "beginning Windows Vista image capture preparation tasks");
 	
 	# Call parent class's pre_capture() subroutine
@@ -115,19 +108,11 @@ sub pre_capture {
 		return 0;
 	}
 	
-	# Add HKLM run key to call run_newsid.cmd after the image comes up
-	if (!$self->add_hklm_run_registry_key('run_newsid.cmd', $node_configuration_directory . '/Scripts/run_newsid.cmd  >> ' . $node_configuration_directory . '/Logs/run_newsid.log')) {
-		notify($ERRORS{'WARNING'}, 0, "unable to create run key to call run_newsid.cmd");
-		return;
-	}
-
-	#Shut down computer unless end_state argument was passed with a value other than 'off'
-	my $end_state = $self->{end_state} || 'off';
-	if ($end_state eq 'off') {
-		unless ($self->shutdown()) {
-			notify($ERRORS{'WARNING'}, 0, "failed to shut down computer");
-			return;
-		}
+	# Prepare the computer for newsid.exe to be run
+	# This shuts down the computer
+	if (!$self->prepare_newsid()) {
+		notify($ERRORS{'WARNING'}, 0, "failed to prepare the computer for newsid.exe to be run");
+		return 0;
 	}
 	
 	notify($ERRORS{'OK'}, 0, "returning 1");
