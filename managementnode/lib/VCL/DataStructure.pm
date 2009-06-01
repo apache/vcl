@@ -1707,6 +1707,54 @@ EOF
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 get_image_affiliation_name
+
+ Parameters  : None.
+ Returns     : If successful: string containing affiliation name
+               If failed: false
+ Description : This subroutine determines the affiliation name for the image
+               assigned to the reservation.
+               The image affiliation is based on the affiliation of the image
+               owner.
+
+=cut
+
+sub get_image_affiliation_name {
+	my $self = shift;
+	
+	# Check if subroutine was called as an object method
+	unless (ref($self) && $self->isa('VCL::DataStructure')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a VCL::DataStructure module object method");
+		return;
+	}
+	
+	# Get the image owner id in order to determine the image affiliation
+	my $image_owner_id = $self->get_image_ownerid();
+	notify($ERRORS{'DEBUG'}, 0, "image owner id: $image_owner_id");
+	unless ($image_owner_id) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine image owner id in order to determine image affiliation");
+		return;
+	}
+	
+	# Get the data for the user who owns the image
+	my $image_owner_data = $self->retrieve_user_data($image_owner_id);
+	unless ($image_owner_data) {
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve image owner data in order to determine image affiliation");
+		return;
+	}
+	
+	# Get the affiliation name from the user data hash
+	my $image_affiliation_name = $image_owner_data->{affiliation}{name};
+	unless ($image_affiliation_name) {
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve image owner affiliation name");
+		return;
+	}
+	
+	return $image_affiliation_name;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 1;
 __END__
 
