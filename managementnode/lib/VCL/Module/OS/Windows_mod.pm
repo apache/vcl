@@ -376,6 +376,16 @@ Log off all currently logged in users
 	if (!$self->logoff_users()) {
 		notify($ERRORS{'WARNING'}, 0, "failed to log off all currently logged in users");
 	}
+
+=item *
+
+Set the Cygwin SSHD server startup mode to auto
+
+=cut
+
+	if (!$self->set_service_startup_mode('sshd', 'auto')) {
+		notify($ERRORS{'WARNING'}, 0, "unable to set sshd service startup mode to auto");
+	}
 	
 =item *
 
