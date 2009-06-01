@@ -117,11 +117,19 @@ sub pre_capture {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
+	
+	# Check if end_state argument was passed
+	if (defined $args->{end_state}) {
+		$self->{end_state} = $args->{end_state};
+	}
+	else {
+		$self->{end_state} = 'off';
+	}
 
 	my $computer_node_name = $self->data->get_computer_node_name();
 
-	notify($ERRORS{'OK'}, 0, "beginning Windows image capture preparation tasks on $computer_node_name, end state: $self->{end_state}");
-	
+	notify($ERRORS{'OK'}, 0, "beginning Windows image capture preparation tasks on $computer_node_name");
+
 =item 1
 
 Log off all currently logged in users
@@ -197,7 +205,6 @@ Disable dynamic DNS
 		notify($ERRORS{'WARNING'}, 0, "unable to disable dynamic dns");
 	}
 	
-	
 =item *
 
 Disable Internet Explorer configuration page
@@ -262,7 +269,7 @@ Configure the network adapters to use DHCP
 	
 =item *
 
-Allow users to connect remoteley
+Allow users to connect remotely
 
 =cut
 
@@ -272,12 +279,12 @@ Allow users to connect remoteley
 
 =item *
 
-Enable RDP access from private IP addresses by adding a firewall exception
+Disable RDP access from any address by adding a firewall exception
 
 =cut
 
-	if (!$self->firewall_enable_rdp('10.0.0.0/8')) {
-		notify($ERRORS{'WARNING'}, 0, "unable to enable RDP from private IP addresses");
+	if (!$self->firewall_disable_rdp()) {
+		notify($ERRORS{'WARNING'}, 0, "unable to disable RDP from all addresses");
 		return 0;
 	}
 
@@ -371,7 +378,7 @@ sub post_load {
 
 	notify($ERRORS{'OK'}, 0, "beginning Windows post-load tasks");
 
-=item *
+=item 1
 
 Log off all currently logged in users
 
@@ -380,15 +387,25 @@ Log off all currently logged in users
 	if (!$self->logoff_users()) {
 		notify($ERRORS{'WARNING'}, 0, "failed to log off all currently logged in users");
 	}
-
+	
 =item *
 
-Enable RDP access from private IP addresses by adding a firewall exception
+Set the computer name
 
 =cut
 
-	if (!$self->firewall_enable_rdp('10.0.0.0/8')) {
-		notify($ERRORS{'WARNING'}, 0, "unable to enable RDP from private IP addresses");
+	if (!$self->set_computer_name()) {
+		notify($ERRORS{'WARNING'}, 0, "failed to set the computer name");
+	}
+
+=item *
+
+Enable RDP access only from private network by adding a firewall exception
+
+=cut
+
+	if (!$self->firewall_enable_rdp_private()) {
+		notify($ERRORS{'WARNING'}, 0, "unable to enable RDP on private network");
 		return 0;
 	}
 	
@@ -422,25 +439,25 @@ Set the "My Computer" description to the image pretty name
 		notify($ERRORS{'WARNING'}, 0, "failed to rename My Computer");
 	}
 
-=item *
+#=item *
+#
+#Disable NetBIOS
+#
+#=cut
+#
+#	if (!$self->disable_netbios()) {
+#		notify($ERRORS{'WARNING'}, 0, "failed to disable NetBIOS");
+#	}
 
-Disable NetBIOS
-
-=cut
-
-	if (!$self->disable_netbios()) {
-		notify($ERRORS{'WARNING'}, 0, "failed to disable NetBIOS");
-	}
-
-=item *
-
-Disable dynamic DNS
-
-=cut
-
-	if (!$self->disable_dynamic_dns()) {
-		notify($ERRORS{'WARNING'}, 0, "failed to disable dynamic DNS");
-	}
+#=item *
+#
+#Disable dynamic DNS
+#
+#=cut
+#
+#	if (!$self->disable_dynamic_dns()) {
+#		notify($ERRORS{'WARNING'}, 0, "failed to disable dynamic DNS");
+#	}
 
 =item *
 
@@ -463,16 +480,6 @@ Randomize Administrator password
 	if (!$self->set_password('Administrator', $administrator_random_password)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to set random Administrator password");
 	}
-	
-#=item *
-#
-#Create scheduled task to run script at computer startup
-#
-#=cut
-#
-#	if (!$self->create_startup_scheduled_task('System Startup Script', 'cmd.exe /c start "system_startup.cmd" /MIN cmd.exe /c "' . $NODE_CONFIGURATION_DIRECTORY . '/Scripts/system_startup.cmd  >> ' . $NODE_CONFIGURATION_DIRECTORY . '/Logs/system_startup.log 2>&1"', 'root', $root_random_password)) {
-#		notify($ERRORS{'WARNING'}, 0, "failed to create scheduled task to run system_startup.cmd at computer startup");
-#	}
 
 =item *
 
@@ -484,7 +491,7 @@ Check if imagemeta postoption is set to reboot
 		notify($ERRORS{'OK'}, 0, "imagemeta postoption reboot is set for image, rebooting computer");
 		if (!$self->reboot()) {
 			notify($ERRORS{'WARNING'}, 0, "failed to reboot the computer");
-			return 0;
+			return;
 		}
 	}
 
@@ -577,6 +584,107 @@ sub sanitize {
 	notify($ERRORS{'OK'}, 0, "$computer_node_name has been sanitized");
 	return 1;
 } ## end sub sanitize
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 grant_access
+
+ Parameters  :
+ Returns     :
+ Description :
+
+=cut
+
+sub grant_access {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+
+	my $management_node_keys = $self->data->get_management_node_keys();
+	my $computer_node_name   = $self->data->get_computer_node_name();
+	my $remote_ip            = $self->data->get_reservation_remote_ip();
+	my $multiple_users       = $self->data->get_imagemeta_usergroupmembercount();
+	my $request_forimaging   = $self->data->get_request_forimaging();
+
+	# Check to make sure remote IP is defined
+	my $remote_ip_range;
+	if (!$remote_ip) {
+		notify($ERRORS{'WARNING'}, 0, "reservation remote IP address is not set in the data structure, opening RDP to any address");
+	}
+	elsif ($multiple_users) {
+		notify($ERRORS{'OK'}, 0, "reservation has multiple users, opening RDP to any address");
+	}
+	elsif ($remote_ip !~ /^(\d{1,3}\.?){4}$/) {
+		notify($ERRORS{'WARNING'}, 0, "reservation remote IP address format is invalid: $remote_ip, opening RDP to any address");
+	}
+	else {
+		# Assemble the IP range string in CIDR notation
+		$remote_ip_range = "$remote_ip/16";
+		notify($ERRORS{'OK'}, 0, "RDP will be allowed from $remote_ip_range on $computer_node_name");
+	}
+
+	# Set the $remote_ip_range variable to the string 'all' if it isn't already set (for display purposes)
+	$remote_ip_range = 'all' if !$remote_ip_range;
+
+	# Allow RDP connections
+	if ($self->firewall_enable_rdp($remote_ip_range)) {
+		notify($ERRORS{'OK'}, 0, "firewall was configured to allow RDP access from $remote_ip_range on $computer_node_name");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "firewall could not be configured to grant RDP access from $remote_ip_range on $computer_node_name");
+		return 0;
+	}
+
+	# If this is an imaging request, make sure the Administrator account is enabled
+	if ($request_forimaging) {
+		notify($ERRORS{'DEBUG'}, 0, "imaging request, making sure Administrator account is enabled");
+		if ($self->enable_user('Administrator')) {
+			notify($ERRORS{'OK'}, 0, "Administrator account is enabled for imaging request");
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to enable Administrator account for imaging request");
+			return 0;
+		}
+	} ## end if ($request_forimaging)
+
+	notify($ERRORS{'OK'}, 0, "access has been granted for reservation on $computer_node_name");
+	return 1;
+} ## end sub grant_access
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 revoke_access
+
+ Parameters  :
+ Returns     :
+ Description :
+
+=cut
+
+sub revoke_access {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+
+	my $management_node_keys = $self->data->get_management_node_keys();
+	my $computer_node_name   = $self->data->get_computer_node_name();
+
+	# Disallow RDP connections
+	if ($self->firewall_disable_rdp()) {
+		notify($ERRORS{'OK'}, 0, "firewall was configured to deny RDP access on $computer_node_name");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "firewall could not be configured to deny RDP access on $computer_node_name");
+		return 0;
+	}
+
+	notify($ERRORS{'OK'}, 0, "access has been revoked to $computer_node_name");
+	return 1;
+} ## end sub revoke_access
 
 ##############################################################################
 
@@ -855,6 +963,7 @@ sub delete_files_by_pattern {
 
 	my $base_directory = shift;
 	my $pattern        = shift;
+	my $max_depth      = shift || '5';
 
 	# Make sure base directory and pattern were specified
 	if (!($base_directory && $pattern)) {
@@ -865,12 +974,12 @@ sub delete_files_by_pattern {
 	# Make sure base directory has trailing / or else find will fail
 	$base_directory =~ s/[\/\\]*$/\//;
 
-	notify($ERRORS{'DEBUG'}, 0, "attempting to delete files under $base_directory matching pattern $pattern");
+	notify($ERRORS{'DEBUG'}, 0, "attempting to delete files under $base_directory matching pattern $pattern, max depth: $max_depth");
 	
 	# Assemble command
 	# Use find to locate all the files under the base directory matching the pattern specified
 	# chmod 777 each file then call rm
-	my $command = "/bin/find.exe \"$base_directory\" -mindepth 1 -iregex \"$pattern\" -exec chmod 777 {} \\; -exec rm -rvf {} \\;";
+	my $command = "/bin/find.exe \"$base_directory\" -mindepth 1 -maxdepth $max_depth -iregex \"$pattern\" -exec chmod 777 {} \\; -exec rm -rvf {} \\;";
 	my ($exit_status, $output) = run_ssh_command($computer_node_name, $management_node_keys, $command, '', '', 1);
 	if (defined($exit_status)) {
 		my @deleted = grep(/removed /, @$output);
@@ -1380,14 +1489,13 @@ sub delete_user {
  Description : 
 
 =cut
-
 sub set_password {
 	my $self = shift;
 	if (ref($self) !~ /windows/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
-
+	
 	my $management_node_keys = $self->data->get_management_node_keys();
 	my $computer_node_name   = $self->data->get_computer_node_name();
 
@@ -1431,7 +1539,7 @@ sub set_password {
 
 	# Attempt to change scheduled task passwords
 	notify($ERRORS{'DEBUG'}, 0, "changing passwords for scheduled tasks");
-	my ($schtasks_query_exit_status, $schtasks_query_output) = run_ssh_command($computer_node_name, $management_node_keys, "schtasks.exe /Query /V /FO LIST");
+	my ($schtasks_query_exit_status, $schtasks_query_output) = run_ssh_command($computer_node_name, $management_node_keys, "schtasks.exe /Query /V /FO LIST", '', '', 1);
 	if (defined($schtasks_query_exit_status) && $schtasks_query_exit_status == 0) {
 		notify($ERRORS{'DEBUG'}, 0, "queried scheduled tasks on $computer_node_name");
 	}
@@ -1446,7 +1554,6 @@ sub set_password {
 	for my $schtasks_output_line (@{$schtasks_query_output}) {
 		if ($schtasks_output_line =~ /TaskName:\s+([ \S]+)/i) {
 			$task_name = $1;
-			notify($ERRORS{'DEBUG'}, 0, "found task: " . string_to_ascii($task_name));
 		}
 		if ($schtasks_output_line =~ /Run As User.*\\$username/i) {
 			notify($ERRORS{'DEBUG'}, 0, "password needs to be updated for scheduled task: $task_name\n$schtasks_output_line");
@@ -1541,20 +1648,20 @@ sub disable_pagefile {
 	my $management_node_keys = $self->data->get_management_node_keys();
 	my $computer_node_name   = $self->data->get_computer_node_name();
 
-	my $registry_string .= <<"EOF";
-Windows Registry Editor Version 5.00
-
-[HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management]
-"PagingFiles"=""
-EOF
-
-	# Import the string into the registry
-	if ($self->import_registry_string($registry_string)) {
-		notify($ERRORS{'OK'}, 0, "set the registry key to disable the pagefile");
+	# Set the registry key to blank
+	my $memory_management_key = 'HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management';
+	my $reg_add_command = '$SYSTEMROOT/System32/reg.exe add "' . $memory_management_key . '" /v PagingFiles /d "" /t REG_MULTI_SZ /f';
+	my ($reg_add_exit_status, $reg_add_output) = run_ssh_command($computer_node_name, $management_node_keys, $reg_add_command, '', '', 1);
+	if (defined($reg_add_exit_status) && $reg_add_exit_status == 0) {
+		notify($ERRORS{'OK'}, 0, "set registry key to disable pagefile");
+	}
+	elsif (defined($reg_add_exit_status)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to set registry key to disable pagefile, exit status: $reg_add_exit_status, output:\n@{$reg_add_output}");
+		return 0;
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to set the registry key to disable the pagefile");
-		return 0;
+		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to set registry key to disable pagefile");
+		return;
 	}
 
 	# Attempt to reboot the computer in order to delete the pagefile
@@ -1594,21 +1701,21 @@ sub enable_pagefile {
 
 	my $management_node_keys = $self->data->get_management_node_keys();
 	my $computer_node_name   = $self->data->get_computer_node_name();
-
-	my $registry_string .= <<"EOF";
-Windows Registry Editor Version 5.00
-
-[HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management]
-"PagingFiles"="?:\\\\pagefile.sys"
-EOF
-
-	# Import the string into the registry
-	if ($self->import_registry_string($registry_string)) {
-		notify($ERRORS{'OK'}, 0, "set registry key to enable the pagefile");
+	
+	my $memory_management_key = 'HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management';
+	
+	my $reg_add_command = '$SYSTEMROOT/System32/reg.exe add "' . $memory_management_key . '" /v PagingFiles /d "$SYSTEMDRIVE\\pagefile.sys 0 0" /t REG_MULTI_SZ /f';
+	my ($reg_add_exit_status, $reg_add_output) = run_ssh_command($computer_node_name, $management_node_keys, $reg_add_command, '', '', 1);
+	if (defined($reg_add_exit_status) && $reg_add_exit_status == 0) {
+		notify($ERRORS{'OK'}, 0, "set registry key to enable pagefile");
+	}
+	elsif (defined($reg_add_exit_status)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to set registry key to enable pagefile, exit status: $reg_add_exit_status, output:\n@{$reg_add_output}");
+		return 0;
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to set registry key to enable the pagefile");
-		return 0;
+		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to set registry key to enable pagefile");
+		return;
 	}
 
 	return 1;
@@ -1765,9 +1872,16 @@ sub import_registry_string {
 
 	# Replace regular newlines with Windows newlines
 	$registry_string =~ s/\r?\n/\r\n/gs;
+	
+	# Remove spaces from end of file
+	$registry_string =~ s/\s+$//;
 
-	# Specify where on the node the temporary registry file will reside
-	my $temp_registry_file_path = 'C:/Cygwin/tmp/vcl_import.reg';
+	# Assemble a temporary registry file path
+	# Name the file after the sub which called this so you can tell where the .reg file was generated from
+	my @caller = caller(1);
+	my ($calling_sub) = $caller[3] =~ /([^:]+)$/;
+	my $calling_line = $caller[2];
+	my $temp_registry_file_path = "C:/Cygwin/tmp/$calling_sub\_$calling_line.reg";
 
 	# Echo the registry string to a file on the node
 	my $echo_registry_command = "rm -f $temp_registry_file_path; /usr/bin/echo.exe -E \"$registry_string\" > " . $temp_registry_file_path;
@@ -2346,6 +2460,63 @@ sub reboot {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 shutdown
+
+ Parameters  : 
+ Returns     : 
+ Description : 
+
+=cut
+
+sub shutdown {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+
+	my $management_node_keys = $self->data->get_management_node_keys();
+	my $computer_node_name   = $self->data->get_computer_node_name();
+
+	notify($ERRORS{'DEBUG'}, 0, "$computer_node_name will be shut down");
+
+	# Initiate the shutdown.exe command to reboot the computer
+	my $shutdown_command = "C:/Windows/system32/shutdown.exe -s -t 0 -f";
+	my ($shutdown_exit_status, $shutdown_output) = run_ssh_command($computer_node_name, $management_node_keys, $shutdown_command);
+	if (defined($shutdown_exit_status) && $shutdown_exit_status == 0) {
+		notify($ERRORS{'DEBUG'}, 0, "executed shutdown command on $computer_node_name");
+		
+		# Wait maximum of 3 minutes for the computer to become unresponsive
+		if ($self->wait_for_no_ping(3)) {
+			notify($ERRORS{'OK'}, 0, "computer has become unresponsive after shutdown command was issued");
+			return 1;
+		}
+		else {
+			# Computer never stopped responding to ping
+			notify($ERRORS{'WARNING'}, 0, "$computer_node_name never became unresponsive after shutdown command was issued, attempting power off");
+		}
+	}
+	elsif (defined($shutdown_exit_status)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute shutdown command on $computer_node_name, exit status: $shutdown_exit_status, output:\n@{$shutdown_output}");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute ssh command to shutdown $computer_node_name");
+	}
+	
+	# Call provisioning module's power_off() subroutine
+	if ($self->provisioner->power_off()) {
+		notify($ERRORS{'OK'}, 0, "powered off $computer_node_name");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to power off $computer_node_name");
+		return;
+	}
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 wait_for_ping
 
  Parameters  : Maximum number of minutes to wait (optional)
@@ -2643,21 +2814,12 @@ sub run_newsid {
 	my $computer_node_name   = $self->data->get_computer_node_name();
 	my $computer_id          = $self->data->get_computer_id();
 
-	# Attempt to get the computer name from the arguments
-	# If no argument was supplied, use the name specified in the DataStructure
-	my $computer_name = shift;
-	if (!(defined($computer_name))) {
-		my $image_id            = $self->data->get_image_id();
-		my $computer_short_name = $self->data->get_computer_short_name();
-		$computer_name = "$computer_short_name-$image_id";
-	}
-
-	my $registry_string .= <<"EOF";
+	my $registry_string .= <<'EOF';
 Windows Registry Editor Version 5.00
 
 ; This registry file contains the entries to bypass the license agreement when newsid.exe is run
 
-[HKEY_CURRENT_USER\\Software\\Sysinternals\\NewSID]
+[HKEY_CURRENT_USER\Software\Sysinternals\NewSID]
 "EulaAccepted"=dword:00000001
 EOF
 
@@ -2669,22 +2831,22 @@ EOF
 		notify($ERRORS{'WARNING'}, 0, "failed to add newsid eulaaccepted registry string");
 		return 0;
 	}
-
+	
 	# Attempt to run newsid.exe
 	# newsid.exe should automatically reboot the computer
 	# It isn't done when the process exits, newsid.exe starts working and immediately returns
 	# NewSid.exe [/a[[/n]|[/d <reboot delay (in seconds)>]]][<new computer name>]
 	# /a - run without prompts
 	# /n - Don't reboot after automatic run
-	my $newsid_command               = "\"$NODE_CONFIGURATION_DIRECTORY/Utilities/newsid.exe\" /a \"$computer_name\"";
+	my $newsid_command = "\"$NODE_CONFIGURATION_DIRECTORY/Utilities/NewSID/newsid.exe\" /a";
 	my $newsid_start_processing_time = time();
 	my ($newsid_exit_status, $newsid_output) = run_ssh_command($computer_node_name, $management_node_keys, $newsid_command);
 	if (defined($newsid_exit_status) && $newsid_exit_status == 0) {
-		notify($ERRORS{'OK'}, 0, "newsid.exe has been started on $computer_node_name, new computer name: $computer_name");
+		notify($ERRORS{'OK'}, 0, "newsid.exe has been started on $computer_node_name");
 	}
 	elsif (defined($newsid_exit_status)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to start newsid.exe on $computer_node_name, exit status: $newsid_exit_status, output:\n@{$newsid_output}");
-		return 0;
+		return;
 	}
 	else {
 		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to start newsid.exe on $computer_node_name");
@@ -2693,13 +2855,13 @@ EOF
 
 	my $newsid_end_processing_time = time();
 	my $newsid_processing_duration = ($newsid_end_processing_time - $newsid_start_processing_time);
-	notify($ERRORS{'OK'}, 0, "newsid.exe complete, newsid.exe took $newsid_processing_duration seconds");
-	insertloadlog($reservation_id, $computer_id, "info", "newsid.exe processing took $newsid_processing_duration seconds");
+	notify($ERRORS{'OK'}, 0, "newsid.exe execution took $newsid_processing_duration seconds");
+	insertloadlog($reservation_id, $computer_id, "info", "newsid.exe execution took $newsid_processing_duration seconds");
 
 	# After launching newsid.exe, wait for machine to become unresponsive
 	if (!$self->wait_for_no_ping(10)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to run newsid.exe, $computer_node_name never rebooted after waiting 10 minutes");
-		return 0;
+		return;
 	}
 
 	my $newsid_shutdown_time = time();
@@ -2906,8 +3068,8 @@ sub disable_scheduled_task {
 
 	# Attempt to delete the user account
 	my $schtasks_command = '$SYSTEMROOT/System32/schtasks.exe /Change /DISABLE /TN "' . $task_name . '"';
-	my ($schtasks_exit_status, $schtasks_output) = run_ssh_command($computer_node_name, $management_node_keys, $schtasks_command);
-	if (defined($schtasks_exit_status) && $schtasks_exit_status == 0) {
+	my ($schtasks_exit_status, $schtasks_output) = run_ssh_command($computer_node_name, $management_node_keys, $schtasks_command, '', '', 1);
+	if (defined($schtasks_output) && grep(/have been changed/, @$schtasks_output)) {
 		notify($ERRORS{'OK'}, 0, "$task_name scheduled task disabled on $computer_node_name");
 	}
 	elsif (defined($schtasks_exit_status)) {
@@ -3072,14 +3234,46 @@ EOF
 	}
 	else {
 		notify($ERRORS{'WARNING'}, 0, "failed to disable dynamic dns");
-		return 0;
+		return;
 	}
 
 	# Get the network configuration
 	my $network_configuration = $self->get_network_configuration();
 	if (!$network_configuration) {
 		notify($ERRORS{'WARNING'}, 0, "unable to retrieve network configuration");
-		return 0;
+		return;
+	}
+	
+	# Get the public and private interface names
+	my $public_interface_name = $self->get_public_interface_name();
+	my $private_interface_name = $self->get_private_interface_name();
+	
+	# Assemble netsh.exe commands to disable DNS registration
+	my $netsh_command;
+	$netsh_command .= "netsh.exe interface ip set dns";
+	$netsh_command .= " name = \"$public_interface_name\"";
+	$netsh_command .= " source = dhcp";
+	$netsh_command .= " register = none";
+	$netsh_command .= " ;";
+	
+	$netsh_command .= "netsh.exe interface ip set dns";
+	$netsh_command .= " name = \"$private_interface_name\"";
+	$netsh_command .= " source = dhcp";
+	$netsh_command .= " register = none";
+	$netsh_command .= " ;";
+	
+	# Execute the netsh.exe command
+	my ($netsh_exit_status, $netsh_output) = run_ssh_command($computer_node_name, $management_node_keys, $netsh_command);
+	if (defined($netsh_exit_status)  && $netsh_exit_status == 0) {
+		notify($ERRORS{'OK'}, 0, "disabled dynamic DNS registration on public and private adapters");
+	}
+	elsif (defined($netsh_exit_status)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to disable dynamic DNS registration on public and private adapters, exit status: $netsh_exit_status, output:\n@{$netsh_output}");
+		return;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to disable dynamic DNS registration on public and private adapters");
+		return;
 	}
 
 	return 1;
@@ -3252,108 +3446,6 @@ sub set_my_computer_name {
 
 	return 1;
 } ## end sub set_my_computer_name
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 grant_access
-
- Parameters  :
- Returns     :
- Description :
-
-=cut
-
-sub grant_access {
-	my $self = shift;
-	if (ref($self) !~ /windows/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-
-	my $management_node_keys = $self->data->get_management_node_keys();
-	my $computer_node_name   = $self->data->get_computer_node_name();
-	my $remote_ip            = $self->data->get_reservation_remote_ip();
-	my $multiple_users       = $self->data->get_imagemeta_usergroupmembercount();
-	my $request_forimaging   = $self->data->get_request_forimaging();
-
-	# Check to make sure remote IP is defined
-	my $remote_ip_range;
-	if (!$remote_ip) {
-		notify($ERRORS{'WARNING'}, 0, "reservation remote IP address is not set in the data structure, opening RDP to any address");
-		$remote_ip_range = '0.0.0.0/32';
-	}
-	elsif ($multiple_users) {
-		notify($ERRORS{'OK'}, 0, "reservation has multiple users, opening RDP to any address");
-		$remote_ip_range = '0.0.0.0/32';
-	}
-	elsif ($remote_ip !~ /^(\d{1,3}\.?){4}$/) {
-		notify($ERRORS{'WARNING'}, 0, "reservation remote IP address format is invalid: $remote_ip, opening RDP to any address");
-		$remote_ip_range = '0.0.0.0/32';
-	}
-	else {
-		# Assemble the IP range string in CIDR notation
-		$remote_ip_range = "$remote_ip/16";
-		notify($ERRORS{'OK'}, 0, "RDP will be allowed from $remote_ip_range on $computer_node_name");
-	}
-
-
-	# Allow RDP connections
-	if ($self->firewall_enable_rdp($remote_ip_range)) {
-		notify($ERRORS{'OK'}, 0, "firewall was configured to allow RDP access from $remote_ip_range on $computer_node_name");
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "firewall could not be configured to grant RDP access from $remote_ip_range on $computer_node_name");
-		return 0;
-	}
-
-	# If this is an imaging request, make sure the Administrator account is enabled
-	if ($request_forimaging) {
-		notify($ERRORS{'DEBUG'}, 0, "imaging request, making sure Administrator account is enabled");
-		if ($self->enable_user('Administrator')) {
-			notify($ERRORS{'OK'}, 0, "Administrator account is enabled for imaging request");
-		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "failed to enable Administrator account for imaging request");
-			return 0;
-		}
-	} ## end if ($request_forimaging)
-
-	notify($ERRORS{'OK'}, 0, "access has been granted for reservation on $computer_node_name");
-	return 1;
-} ## end sub grant_access
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 revoke_access
-
- Parameters  :
- Returns     :
- Description :
-
-=cut
-
-sub revoke_access {
-	my $self = shift;
-	if (ref($self) !~ /windows/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-
-	my $management_node_keys = $self->data->get_management_node_keys();
-	my $computer_node_name   = $self->data->get_computer_node_name();
-
-	# Disallow RDP connections
-	if ($self->firewall_disable_rdp()) {
-		notify($ERRORS{'OK'}, 0, "firewall was configured to deny RDP access on $computer_node_name");
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "firewall could not be configured to deny RDP access on $computer_node_name");
-		return 0;
-	}
-
-	notify($ERRORS{'OK'}, 0, "access has been revoked to $computer_node_name");
-	return 1;
-} ## end sub revoke_access
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -3951,6 +4043,91 @@ sub firewall_enable_rdp {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 firewall_enable_rdp_private
+
+ Parameters  : 
+ Returns     : 1 if succeeded, 0 otherwise
+ Description : 
+
+=cut
+
+sub firewall_enable_rdp_private {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $management_node_keys     = $self->data->get_management_node_keys();
+	my $computer_node_name       = $self->data->get_computer_node_name();
+	
+	my $netsh_command;
+	
+	# Get the public interface name
+	# Add command to disable RDP on public interface if its name is found
+	my $public_interface_name = $self->get_public_interface_name();
+	if ($public_interface_name) {
+		notify($ERRORS{'DEBUG'}, 0, "RDP will be disabled on public interface: $public_interface_name");
+		
+		$netsh_command .= "netsh.exe firewall delete portopening";
+		$netsh_command .= " protocol = TCP";
+		$netsh_command .= " port = 3389";
+		$netsh_command .= " interface = \"$public_interface_name\"";
+		$netsh_command .= ' ;';
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "RDP will not be disabled on public interface because public interface name could not be determined");
+	}
+	
+	# Get the private interface name
+	# Add command to ensable RDP on private interface if its name is found
+	my $private_interface_name = $self->get_private_interface_name();
+	if ($private_interface_name) {
+		notify($ERRORS{'DEBUG'}, 0, "RDP will be enabled on private interface: $private_interface_name");
+		
+		$netsh_command .= "netsh.exe firewall delete portopening";
+		$netsh_command .= " protocol = TCP";
+		$netsh_command .= " port = 3389";
+		$netsh_command .= " profile = ALL";
+		$netsh_command .= ' ;';
+		
+		$netsh_command .= "netsh.exe firewall set portopening";
+		$netsh_command .= " name = \"Remote Desktop\"";
+		$netsh_command .= " protocol = TCP";
+		$netsh_command .= " port = 3389";
+		$netsh_command .= " mode = ENABLE";
+		$netsh_command .= " interface = \"$private_interface_name\"";
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "private interface name could not be determined, RDP will be enabled for all profiles");
+		
+		$netsh_command .= "netsh.exe firewall set portopening";
+		$netsh_command .= " name = \"Remote Desktop\"";
+		$netsh_command .= " protocol = TCP";
+		$netsh_command .= " port = 3389";
+		$netsh_command .= " profile = ALL";
+	}
+	
+	# Execute the netsh.exe command
+	my ($netsh_exit_status, $netsh_output) = run_ssh_command($computer_node_name, $management_node_keys, $netsh_command);
+	
+	if (defined($netsh_output)  && @$netsh_output[-1] =~ /Ok\./i) {
+		notify($ERRORS{'OK'}, 0, "configured firewall to allow RDP on private interface");
+	}
+	elsif (defined($netsh_exit_status)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to configure firewall to allow RDP on private interface, exit status: $netsh_exit_status, output:\n@{$netsh_output}");
+		return;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to configure firewall to allow RDP on private interface");
+		return;
+	}
+	
+	return 1;
+} ## end sub firewall_enable_ssh_private
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 firewall_disable_rdp
 
  Parameters  : 
@@ -4456,6 +4633,12 @@ sub delete_capture_configuration_files {
 
 	# Remove old scripts and utilities
 	$self->delete_files_by_pattern('C:/Cygwin/home/root', '.*\(vbs\|exe\|cmd\|bat\|log\)');
+	
+	# Remove old C:\VCL directory if it exists
+	$self->delete_file('C:/VCL');
+	
+	# Delete VCL scheduled task if it exists
+	$self->delete_scheduled_task('VCL Startup Configuration');
 	
 	## Remove VCLprepare.cmd and VCLcleanup.cmd lines from scripts.ini file
 	$self->remove_group_policy_script('logon', 'VCLprepare.cmd');
@@ -5298,7 +5481,7 @@ sub run_sysprep {
 		notify($ERRORS{'WARNING'}, 0, "unable to run ssh command to clear out setupapi.log");
 		return 0;
 	}
-
+	
 	# Run Sysprep.exe, use cygstart to lauch the .exe and return immediately
 	my $sysprep_command = '/bin/cygstart.exe cmd.exe /c "C:/Sysprep/sysprep.exe /forceshutdown /quiet /reseal /mini"';
 	my ($sysprep_status, $sysprep_output) = run_ssh_command($computer_node_name, $management_node_keys, $sysprep_command);
@@ -5461,6 +5644,7 @@ sub clean_hard_drive {
 		'$SYSTEMDRIVE/RECYCLER,.*',
 		'$TEMP,.*',
 		'$TMP,.*',
+		'$SYSTEMDRIVE/cygwin/tmp,.*',
 		'$SYSTEMDRIVE/Temp,.*',
 		'$SYSTEMROOT/Temp,.*',
 		'$SYSTEMROOT/ie7updates,.*',
@@ -5468,21 +5652,21 @@ sub clean_hard_drive {
 		'$SYSTEMROOT/SoftwareDistribution/Download,.*',
 		'$SYSTEMROOT/Minidump,.*',
 		'$ALLUSERSPROFILE/Application Data/Microsoft/Dr Watson,.*',
-		'$SYSTEMROOT,.*\\.tmp',
-		'$SYSTEMROOT,.*\\$hf_mig\\$.*',
-		'$SYSTEMROOT,.*\\$NtUninstall.*',
-		'$SYSTEMROOT,.*\\$NtServicePackUninstall.*',
-		'$SYSTEMROOT,.*\\$MSI.*Uninstall.*',
+		'$SYSTEMROOT,.*\\.tmp,1',
+		'$SYSTEMROOT,.*\\$hf_mig\\$.*,1',
+		'$SYSTEMROOT,.*\\$NtUninstall.*,1',
+		'$SYSTEMROOT,.*\\$NtServicePackUninstall.*,1',
+		'$SYSTEMROOT,.*\\$MSI.*Uninstall.*,1',
 		'$SYSTEMROOT/inf,.*INFCACHE\\.1',
 		'$SYSTEMROOT/inf,.*[\\\\\\/]oem.*\\..*',
-		'$SYSTEMROOT,.*AFSCache',
-		'$SYSTEMROOT,.*afsd_init\\.log',
-		'$SYSTEMDRIVE/Documents and Settings,.*\\.log',
-		'$SYSTEMDRIVE/Documents and Settings,.*Recent\\/.*',
-		'$SYSTEMDRIVE/Documents and Settings,.*Cookies\\/.*',
-		'$SYSTEMDRIVE/Documents and Settings,.*Temp\\/.*',
-		'$SYSTEMDRIVE/Documents and Settings,.*Temporary Internet Files\\/Content.*\\/.*',
-		'$SYSTEMDRIVE,.*pagefile\\.sys',
+		'$SYSTEMROOT,.*AFSCache,1',
+		'$SYSTEMROOT,.*afsd_init\\.log,1',
+		'$SYSTEMDRIVE/Documents and Settings,.*\\.log,10',
+		'$SYSTEMDRIVE/Documents and Settings,.*Recent\\/.*,10',
+		'$SYSTEMDRIVE/Documents and Settings,.*Cookies\\/.*,10',
+		'$SYSTEMDRIVE/Documents and Settings,.*Temp\\/.*,10',
+		'$SYSTEMDRIVE/Documents and Settings,.*Temporary Internet Files\\/Content.*\\/.*,10',
+		'$SYSTEMDRIVE,.*pagefile\\.sys,1',
 	);
 
 	# Attempt to stop the AFS service, needed to delete AFS files
@@ -5491,9 +5675,9 @@ sub clean_hard_drive {
 	# Loop through the directories to empty
 	# Don't care if they aren't emptied
 	for my $base_pattern (@patterns_to_delete) {
-		my ($base_directory, $pattern) = split(',', $base_pattern);
+		my ($base_directory, $pattern, $max_depth) = split(',', $base_pattern);
 		notify($ERRORS{'DEBUG'}, 0, "attempting to delete files under $base_directory matching pattern $pattern");
-		$self->delete_files_by_pattern($base_directory, $pattern);
+		$self->delete_files_by_pattern($base_directory, $pattern, $max_depth);
 	}
 
 	# Add the cleanmgr.exe settings to the registry
@@ -5680,8 +5864,8 @@ sub stop_service {
 		notify($ERRORS{'OK'}, 0, "service is not started: $service_name");
 	}
 	elsif (defined($output) && grep(/does not exist/i, @{$output})) {
-		notify($ERRORS{'WARNING'}, 0, "service does not exist: $service_name, exit status: $status, output:\n@{$output}");
-		return 0;
+		notify($ERRORS{'OK'}, 0, "service was not stopped because it does not exist: $service_name");
+		return;
 	}
 	elsif (defined($status)) {
 		notify($ERRORS{'WARNING'}, 0, "unable to stop service: $service_name, exit status: $status, output:\n@{$output}");
@@ -6059,7 +6243,7 @@ sub apply_security_templates {
 		$inf_target_path =~ s/\//\\\\/g;
 		
 		my $secedit_command = "$secedit_exe /configure /cfg \"$inf_target_path\" /db $secedit_db /log $secedit_log /verbose";
-		my ($secedit_exit_status, $secedit_output) = run_ssh_command($computer_node_name, $management_node_keys, $secedit_command, '', '', 1);
+		my ($secedit_exit_status, $secedit_output) = run_ssh_command($computer_node_name, $management_node_keys, $secedit_command, '', '', 0);
 		if (defined($secedit_exit_status) && $secedit_exit_status == 0) {
 			notify($ERRORS{'OK'}, 0, "ran secedit.exe to apply $inf_file_name");
 		}
@@ -6195,100 +6379,80 @@ EOF
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 run_newsid_new
+=head2 get_node_configuration_directory
 
- Parameters  : 
- Returns     : 1 success 0 failure
- Description : 
+ Parameters  : None
+ Returns     : String containing filesystem path
+ Description : Retrieves the $NODE_CONFIGURATION_DIRECTORY variable value the
+               OS. This is the path on the computer's hard drive where image
+					configuration files and scripts are copied.
 
 =cut
 
-sub run_newsid_new {
+sub get_node_configuration_directory {
+	return $NODE_CONFIGURATION_DIRECTORY;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 set_computer_name
+
+ Parameters  : $computer_name
+ Returns     : If successful: true
+               If failed: false
+ Description : Sets the registry keys to set the computer name. This subroutine
+               does not attempt to reboot the computer.
+               The computer name argument is optional. If not supplied, the
+               computer's short name stored in the database will be used,
+               followed by a hyphen and the image ID that is loaded.
+
+=cut
+
+sub set_computer_name {
 	my $self = shift;
 	if (ref($self) !~ /windows/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
 	
-	my $reservation_id           = $self->data->get_reservation_id();
-	my $management_node_keys     = $self->data->get_management_node_keys();
-	my $computer_node_name       = $self->data->get_computer_node_name();
-	my $computer_id              = $self->data->get_computer_id();
-	
-	my $registry_string .= <<'EOF';
+	# Get the computer name
+	my $computer_name = shift;
+	if (!$computer_name) {
+		$computer_name = $self->data->get_computer_short_name();
+		if (!$computer_name) {
+			notify($ERRORS{'WARNING'}, 0, "computer name argument was not supplied and could not be retrieved from the reservation data");
+			return;
+		}
+		
+		# Append the image ID to the computer name
+		my $image_id = $self->data->get_image_id();
+		$computer_name .= "-$image_id" if $image_id;
+	}
+
+	my $management_node_keys = $self->data->get_management_node_keys();
+	my $computer_node_name   = $self->data->get_computer_node_name();
+
+	my $registry_string .= <<"EOF";
 Windows Registry Editor Version 5.00
 
-; This registry file contains the entries to bypass the license agreement when newsid.exe is run
+[HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\ComputerName\\ComputerName]
+"ComputerName"="$computer_name"
 
-[HKEY_CURRENT_USER\\Software\\Sysinternals\\NewSID]
-"EulaAccepted"=dword:00000001
+[HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters]
+"NV Hostname"="$computer_name"
 EOF
-	
+
 	# Import the string into the registry
 	if ($self->import_registry_string($registry_string)) {
-		notify($ERRORS{'DEBUG'}, 0, "added newsid eulaaccepted registry string");
+		notify($ERRORS{'OK'}, 0, "set registry keys to change the computer name to $computer_name");
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to add newsid eulaaccepted registry string");
-	}
-	
-	# Attempt to run newsid.exe
-	# newsid.exe should automatically reboot the computer
-	# It isn't done when the process exits, newsid.exe starts working and immediately returns
-	# NewSid.exe [/a[[/n]|[/d <reboot delay (in seconds)>]]][<new computer name>]
-	# /a - run without prompts
-	# /n - Don't reboot after automatic run
-	my $newsid_command = "\"$NODE_CONFIGURATION_DIRECTORY/Utilities/newsid.exe\" /a \"$computer_node_name\"";
-	
-	my $newsid_start_processing_time = time();
-	my ($newsid_exit_status, $newsid_output) = run_ssh_command($computer_node_name, $management_node_keys, $newsid_command);
-	my $newsid_end_processing_time = time();
-	
-	if (defined($newsid_exit_status) && $newsid_exit_status == 0) {
-		notify($ERRORS{'DEBUG'}, 0, "ran newsid.exe on $computer_node_name");
-	}
-	elsif (defined($newsid_exit_status)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to run newsid.exe on $computer_node_name, exit status: $newsid_exit_status, output:\n@{$newsid_output}");
+		notify($ERRORS{'WARNING'}, 0, "failed to set registry keys to change the computer name to $computer_name");
 		return;
 	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to run newsid.exe on $computer_node_name");
-		return;
-	}
-	my $newsid_processing_duration = ($newsid_end_processing_time - $newsid_start_processing_time);
-	notify($ERRORS{'DEBUG'}, 0, "newsid.exe finished processing, newsid.exe took $newsid_processing_duration seconds");
-	insertloadlog($reservation_id, $computer_id, "info", "newsid.exe processing took $newsid_processing_duration seconds");
-	
-	# After launching newsid.exe, wait for machine to become unresponsive
-	if (!$self->wait_for_no_ping(10)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to run newsid.exe, $computer_node_name never became unresponsive after waiting 10 minutes");
-		return;
-	}
-	my $newsid_shutdown_time = time();
-	notify($ERRORS{'DEBUG'}, 0, "newsid.exe initiated reboot, $computer_node_name is unresponsive, reboot initialization took " . ($newsid_shutdown_time - $newsid_end_processing_time) . " seconds");
-	
-	# Wait maximum of 6 minutes for the computer to come back up
-	if (!$self->wait_for_ping(6)) {
-		notify($ERRORS{'WARNING'}, 0, "$computer_node_name never responded to ping, it never came back up");
-		return;
-	}
-	
-	my $newsid_ping_respond_time = time();
-	notify($ERRORS{'DEBUG'}, 0, "reboot nearly complete on $computer_node_name after running newsid.exe, ping response took " . ($newsid_ping_respond_time - $newsid_shutdown_time) . " seconds");
-	
-	# Ping successful, try ssh
-	notify($ERRORS{'OK'}, 0, "waiting for ssh to respond on $computer_node_name");
-	if (!$self->wait_for_ssh(3)) {
-		notify($ERRORS{'WARNING'}, 0, "newsid.exe failed, $computer_node_name rebooted but ssh never became available");
-		return;
-	}
-	my $newsid_ssh_respond_time = time();
-	my $newsid_entire_duration = ($newsid_ssh_respond_time - $newsid_start_processing_time);
-	notify($ERRORS{'OK'}, 0, "newsid.exe succeeded on $computer_node_name, entire process took $newsid_entire_duration seconds");
-	insertloadlog($reservation_id, $computer_id, "info", "entire newsid.exe process took $newsid_entire_duration seconds");
-	
+
 	return 1;
-}
+} ## end sub disable_ipv6
 
 #/////////////////////////////////////////////////////////////////////////////
 

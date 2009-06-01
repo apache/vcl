@@ -96,35 +96,23 @@ sub pre_capture {
 		return;
 	}
 	
-	my $imagemeta_sysprep = $self->data->get_imagemeta_sysprep();
-	
-	# Check if end_state argument was passed
-	if (defined $args->{end_state}) {
-		$self->{end_state} = $args->{end_state};
-	}
-	else {
-		$self->{end_state} = 'off';
-	}
-	
-	notify($ERRORS{'OK'}, 0, "beginning Windows XP image capture preparation tasks, end state: $self->{end_state}");
+	notify($ERRORS{'OK'}, 0, "beginning Windows XP image capture preparation tasks");
 	
 	# Call parent class's pre_capture() subroutine
 	notify($ERRORS{'OK'}, 0, "calling parent class pre_capture() subroutine");
-	if ($self->SUPER::pre_capture()) {
+	if ($self->SUPER::pre_capture($args)) {
 		notify($ERRORS{'OK'}, 0, "successfully executed parent class pre_capture() subroutine");
 	}
 	else {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute parent class pre_capture() subroutine");
-		return 0;
+		return;
 	}
 	
 	# Check if Sysprep should be used
-	if ($imagemeta_sysprep) {
-		# Copy the Sysprep files to C:\Sysprep
-		# Call this *AFTER* calling copy_capture_configuration_files
+	if ($self->data->get_imagemeta_sysprep()) {
 		if (!$self->run_sysprep()) {
 			notify($ERRORS{'WARNING'}, 0, "capture preparation failed, failed to run Sysprep");
-			return 0;
+			return;
 		}
 	}
 	

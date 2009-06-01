@@ -80,11 +80,11 @@ sub pre_capture {
 		return;
 	}
 	
-	notify($ERRORS{'OK'}, 0, "beginning Windows version 5 image capture preparation tasks, end state: $self->{end_state}");
+	notify($ERRORS{'OK'}, 0, "beginning Windows version 5 image capture preparation tasks");
 	
 	# Call parent class's pre_capture() subroutine
 	notify($ERRORS{'OK'}, 0, "calling parent class pre_capture() subroutine");
-	if ($self->SUPER::pre_capture()) {
+	if ($self->SUPER::pre_capture($args)) {
 		notify($ERRORS{'OK'}, 0, "successfully executed parent class pre_capture() subroutine");
 	}
 	else {
