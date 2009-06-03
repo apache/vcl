@@ -71,10 +71,14 @@ $Data::Dumper::Pair   = "=>";
 
 =head2 $SOURCE_CONFIGURATION_DIRECTORY
 
- Data type   : Scalar
- Description : Location on management node of script/utilty/configuration
-               files needed to configure the OS. This is normally the
-					directory under the 'tools' directory specific to this OS.
+ Data type   : String
+ Description : Location on the management node of the files specific to this OS
+               module which are needed to configure the loaded OS on a computer.
+               This is normally the directory under 'tools' named after this OS
+               module.
+               
+               Example:
+               /usr/local/vcl/tools/Windows
 
 =cut
 
@@ -83,9 +87,14 @@ our $SOURCE_CONFIGURATION_DIRECTORY = "$TOOLS/Windows";
 
 =head2 $NODE_CONFIGURATION_DIRECTORY
 
- Data type   : Scalar
- Description : Destination location on computer of
-               script/utilty/configuration files needed to configure the OS.
+ Data type   : String
+ Description : Location on computer on which an image has been loaded where
+               configuration files reside. The files residing on the managment
+               node in the directory specified by $NODE_CONFIGURATION_DIRECTORY
+               are copied to this directory.
+               
+               Example:
+               C:\Cygwin\home\root\VCL
 
 =cut
 
@@ -101,10 +110,15 @@ our $NODE_CONFIGURATION_DIRECTORY = 'C:/Cygwin/home/root/VCL';
 
 =head2 pre_capture
 
- Parameters  : None, but must be called as an object method
- Returns     : 1 if successful, 0 if failed
- Description : Performs the steps necessary to prepare a Windows OS to be captured.
-               Called by provisioning module's capture() subroutine.
+ Parameters  : Hash containing 'end_state' key
+ Returns     : If successful: true
+               If failed: false
+ Description : Performs the steps necessary to prepare a Windows OS before an
+               image is captured.
+               This subroutine is called by a provisioning module's capture()
+               subroutine.
+               
+               The steps performed are:
 
 =over 3
 
@@ -132,7 +146,7 @@ sub pre_capture {
 
 =item 1
 
-Log off all currently logged in users
+ Log off all currently logged in users
 
 =cut
 
@@ -143,7 +157,7 @@ Log off all currently logged in users
 
 =item *
 
-Set root account password to known value
+ Set root account password to known value
 
 =cut
 
@@ -154,7 +168,7 @@ Set root account password to known value
 
 =item *
 
-Delete the users assigned to this reservation
+ Delete the users assigned to this reservation
 
 =cut
 
@@ -165,7 +179,7 @@ Delete the users assigned to this reservation
 
 =item *
 
-Copy the capture configuration files to the computer (scripts, utilities, drivers...)
+ Copy the capture configuration files to the computer (scripts, utilities, drivers...)
 
 =cut
 
@@ -176,7 +190,7 @@ Copy the capture configuration files to the computer (scripts, utilities, driver
 
 =item *
 
-Disable autoadminlogon before disabling the pagefile and rebooting
+ Disable autoadminlogon before disabling the pagefile and rebooting
 
 =cut
 
@@ -187,7 +201,7 @@ Disable autoadminlogon before disabling the pagefile and rebooting
 
 =item *
 
-Disable IPv6
+ Disable IPv6
 
 =cut
 
@@ -197,17 +211,17 @@ Disable IPv6
 
 =item *
 
-Disable dynamic DNS
+ Disable dynamic DNS
 
 =cut
 
 	if (!$self->disable_dynamic_dns()) {
 		notify($ERRORS{'WARNING'}, 0, "unable to disable dynamic dns");
 	}
-	
+
 =item *
 
-Disable Internet Explorer configuration page
+ Disable Internet Explorer configuration page
 
 =cut
 
@@ -217,7 +231,37 @@ Disable Internet Explorer configuration page
 
 =item *
 
-Call script to clean up the hard drive
+ Disable Windows Defender
+
+=cut
+
+	if (!$self->disable_windows_defender()) {
+		notify($ERRORS{'WARNING'}, 0, "unable to disable Windows Defender");
+	}
+
+=item *
+
+ Disable Automatic Updates
+
+=cut
+
+	if (!$self->disable_automatic_updates()) {
+		notify($ERRORS{'WARNING'}, 0, "unable to disable automatic updates");
+	}
+
+=item *
+
+ Disable Security Center notifications
+
+=cut
+
+	if (!$self->disable_security_center_notifications()) {
+		notify($ERRORS{'WARNING'}, 0, "unable to disable Security Center notifications");
+	}
+
+=item *
+
+ Clean up the hard drive
 
 =cut
 
@@ -227,7 +271,7 @@ Call script to clean up the hard drive
 
 =item *
 
-Apply Windows security templates
+ Apply Windows security templates
 
 =cut
 
@@ -236,16 +280,23 @@ Apply Windows security templates
 		notify($ERRORS{'WARNING'}, 0, "unable to apply security templates");
 		return 0;
 	}
+	
+=item *
+
+ Configure the network adapters to use DHCP
+
+=cut
+
+	if (!$self->enable_dhcp()) {
+		notify($ERRORS{'WARNING'}, 0, "unable to enable DHCP on the public and private interfaces");
+		return 0;
+	}
 
 =item *
 
-Disable the pagefile
-
+ Disable the pagefile, reboot, and delete pagefile.sys
+ 
  ********* node reboots *********
-
-=item *
-
-Disable the pagefile, reboot, and delete pagefile.sys
 
 =cut
 
@@ -258,18 +309,7 @@ Disable the pagefile, reboot, and delete pagefile.sys
 
 =item *
 
-Configure the network adapters to use DHCP
-
-=cut
-
-	if (!$self->enable_dhcp()) {
-		notify($ERRORS{'WARNING'}, 0, "unable to enable DHCP on the public and private interfaces");
-		return 0;
-	}
-	
-=item *
-
-Allow users to connect remotely
+ Allow users to connect remotely (this does not enable RDP, but allows general remote access)
 
 =cut
 
@@ -279,7 +319,7 @@ Allow users to connect remotely
 
 =item *
 
-Disable RDP access from any address by adding a firewall exception
+ Disable RDP access from any IP address
 
 =cut
 
@@ -290,7 +330,7 @@ Disable RDP access from any address by adding a firewall exception
 
 =item *
 
-Enable SSH access from any IP addresses by adding a firewall exception
+ Enable SSH access from any IP address
 
 =cut
 
@@ -301,7 +341,7 @@ Enable SSH access from any IP addresses by adding a firewall exception
 
 =item *
 
-Enable ping access from any IP addresses by adding a firewall exception
+ Enable ping from any IP address
 
 =cut
 
@@ -312,7 +352,7 @@ Enable ping access from any IP addresses by adding a firewall exception
 
 =item *
 
-Reenable the pagefile, this will take effect when the saved image boots
+ Reenable the pagefile
 
 =cut
 
@@ -323,7 +363,7 @@ Reenable the pagefile, this will take effect when the saved image boots
 
 =item *
 
-Set sshd service startup mode to manual
+ Set the Cygwin SSHD service startup mode to manual
 
 =cut
 
@@ -345,10 +385,16 @@ Set sshd service startup mode to manual
 
 =head2 post_load
 
- Parameters  : reference to an object of this class
- Returns     : 1 if successful, 0 if failed
- Description : Performs the steps necessary to configure a Windows OS after an image has been loaded.
-               Called by provisioning module's load() subroutine.
+ Parameters  : None.
+ Returns     : If successful: true
+               If failed: false
+ Description : Performs the steps necessary to configure a Windows OS after an
+               image has been loaded.
+               
+               This subroutine is called by a provisioning module's load()
+               subroutine.
+               
+               The steps performed are:
 
 =over 3
 
@@ -369,7 +415,10 @@ sub post_load {
 
 =item 1
 
-Log off all currently logged in users
+ Log off all currently logged on users
+
+ Do this in case autoadminlogon was enabled during the load process and the user
+ account was not properly logged off.
 
 =cut
 
@@ -379,17 +428,22 @@ Log off all currently logged in users
 
 =item *
 
-Set the Cygwin SSHD server startup mode to auto
+ Set the Cygwin SSHD service startup mode to automatic
+ 
+ The Cygwin SSHD service startup mode should be set to automatic after an image
+ has been loaded and is ready to be reserved. Access will be lost if the service
+ is not set to automatic and the computer is rebooted.
 
 =cut
 
 	if (!$self->set_service_startup_mode('sshd', 'auto')) {
 		notify($ERRORS{'WARNING'}, 0, "unable to set sshd service startup mode to auto");
+		return 0;
 	}
 	
 =item *
 
-Set the computer name
+ Set the computer name
 
 =cut
 
@@ -399,7 +453,7 @@ Set the computer name
 
 =item *
 
-Enable RDP access only from private network by adding a firewall exception
+ Enable RDP access on the private network interface
 
 =cut
 
@@ -410,7 +464,7 @@ Enable RDP access only from private network by adding a firewall exception
 	
 =item *
 
-Enable SSH access only from private IP addresses by adding a firewall exception
+ Enable SSH access on the private network interface
 
 =cut
 
@@ -420,7 +474,7 @@ Enable SSH access only from private IP addresses by adding a firewall exception
 
 =item *
 
-Enable ping access only from private IP addresses by adding a firewall exception
+ Enable ping on the private network interface
 
 =cut
 
@@ -430,7 +484,7 @@ Enable ping access only from private IP addresses by adding a firewall exception
 	
 =item *
 
-Set the "My Computer" description to the image pretty name
+ Set the "My Computer" description to the image pretty name
 
 =cut
 
@@ -460,7 +514,7 @@ Set the "My Computer" description to the image pretty name
 
 =item *
 
-Randomize root password
+ Randomize the root account password
 
 =cut
 
@@ -471,7 +525,7 @@ Randomize root password
 
 =item *
 
-Randomize Administrator password
+ Randomize the Administrator account password
 
 =cut
 
@@ -482,7 +536,7 @@ Randomize Administrator password
 
 =item *
 
-Check if imagemeta postoption is set to reboot
+ Check if the imagemeta postoption is set to reboot, reboot if necessary
 
 =cut
 
@@ -815,6 +869,9 @@ sub delete_file {
 	elsif (defined($rm_exit_status) && $rm_exit_status == 0) {
 		notify($ERRORS{'OK'}, 0, "file either deleted or does not exist on $computer_node_name: $path, output:\n@{$rm_output}");
 	}
+	elsif (defined($rm_output) && grep(/Circular directory structure/i, @{$rm_output})) {
+		notify($ERRORS{'DEBUG'}, 0, "circular directory structure found, rm can't handle this, attempting next deletion method");
+	}
 	elsif ($rm_exit_status) {
 		notify($ERRORS{'WARNING'}, 0, "failed to delete file on $computer_node_name: $path, exit status: $rm_exit_status, output:\n@{$rm_output}");
 	}
@@ -828,6 +885,8 @@ sub delete_file {
 		notify($ERRORS{'DEBUG'}, 0, "confirmed file does not exist: $path");
 		return 1;
 	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "file still exists: $path, attempting to delete it using cmd.exe /c del");
 	
 	# rm didn't get rid of the file, try del
 	# Assemble the Windows shell del command and execute it
@@ -855,6 +914,8 @@ sub delete_file {
 		notify($ERRORS{'DEBUG'}, 0, "confirmed file does not exist: $path");
 		return 1;
 	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "file still exists: $path, attempting to delete it using cmd.exe /c rmdir");
 
 	# Assemble the Windows shell rmdir command and execute it
 	my $rmdir_command = '$SYSTEMROOT/System32/cmd.exe /c "rmdir /s /q \\"' . $path . '\\""';
@@ -1021,16 +1082,19 @@ sub filesystem_entry_exists {
 		notify($ERRORS{'WARNING'}, 0, "unable to detmine if file exists, path was not specified as an argument");
 		return;
 	}
+	
+	# Replace backslashes with forward slashes
+	$path =~ s/\\+/\//;
 
 	# Assemble the ls command and execute it
-	my $ls_command = "ls -la '$path'";
+	my $ls_command = "ls -la \"$path\"";
 	my ($ls_exit_status, $ls_output) = run_ssh_command($computer_node_name, $management_node_keys, $ls_command, '', '', 1);
 	if (defined($ls_exit_status) && $ls_exit_status == 0) {
 		notify($ERRORS{'DEBUG'}, 0, "filesystem entry exists on $computer_node_name: $path");
 		return 1;
 	}
 	elsif (defined($ls_exit_status) && $ls_exit_status == 2) {
-		notify($ERRORS{'DEBUG'}, 0, "filesystem entry does NOT exist on $computer_node_name: $path");
+		notify($ERRORS{'DEBUG'}, 0, "filesystem entry does NOT exist on $computer_node_name: $path\noutput:\n" . join("\n", @$ls_output));
 		return 0;
 	}
 	elsif ($ls_exit_status) {
@@ -4663,7 +4727,7 @@ sub enable_dhcp {
 			notify($ERRORS{'OK'}, 0, "dhcp is already enabled on interface '$interface_name'");
 		}
 		elsif (defined($set_dhcp_status)) {
-			notify($ERRORS{'OK'}, 0, "unable to set interface '$interface_name' to use dhcp, exit status: $set_dhcp_status, output:\n@{$set_dhcp_output}");
+			notify($ERRORS{'WARNING'}, 0, "unable to set interface '$interface_name' to use dhcp, exit status: $set_dhcp_status, output:\n@{$set_dhcp_output}");
 			return 0;
 		}
 		else {
@@ -4671,8 +4735,56 @@ sub enable_dhcp {
 			return 0;
 		}
 	} ## end for my $interface_name (@interface_names)
-	return 1;
+	
+	# Run ipconfig /renew after setting the adapters to use DHCP
+	# The default gateway gets lost otherwise
+	return $self->ipconfig_renew();
 } ## end sub enable_dhcp
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 ipconfig_renew
+
+ Parameters  : 
+ Returns     :
+ Description : 
+
+=cut
+
+sub ipconfig_renew {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+
+	my $management_node_keys = $self->data->get_management_node_keys();
+	my $computer_node_name   = $self->data->get_computer_node_name();
+
+	my $interface_name_argument = shift;
+	
+	# Assemble the ipconfig command, include the interface name if argument was specified
+	my $ipconfig_command = '$SYSTEMROOT/System32/ipconfig.exe /renew';
+	if ($interface_name_argument) {
+		$ipconfig_command .= " \"$interface_name_argument\"";
+	}
+	
+	# Run ipconfig
+	my ($ipconfig_status, $ipconfig_output) = run_ssh_command($computer_node_name, $management_node_keys, $ipconfig_command);
+	if (defined($ipconfig_status) && $ipconfig_status == 0) {
+		notify($ERRORS{'OK'}, 0, "ran ipconfig /renew");
+	}
+	elsif (defined($ipconfig_status)) {
+		notify($ERRORS{'WARNING'}, 0, "unable to run ipconfig /renew, exit status: $ipconfig_status, output:\n@{$ipconfig_output}");
+		return 0;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unable to run ssh command to to run ipconfig /renew");
+		return 0;
+	}
+	
+	return 1;
+} 
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -6448,7 +6560,7 @@ EOF
 
 =head2 get_node_configuration_directory
 
- Parameters  : None
+ Parameters  : None.
  Returns     : String containing filesystem path
  Description : Retrieves the $NODE_CONFIGURATION_DIRECTORY variable value the
                OS. This is the path on the computer's hard drive where image
@@ -6464,7 +6576,7 @@ sub get_node_configuration_directory {
 
 =head2 set_computer_name
 
- Parameters  : $computer_name
+ Parameters  : $computer_name (optional)
  Returns     : If successful: true
                If failed: false
  Description : Sets the registry keys to set the computer name. This subroutine
@@ -6520,6 +6632,173 @@ EOF
 
 	return 1;
 } ## end sub disable_ipv6
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 disable_security_center_notifications
+
+ Parameters  : None.
+ Returns     : If successful: true
+               If failed: false
+ Description : Disables Windows Security Center notifications which are
+               displayed in the notification area (system tray).
+
+=cut
+
+sub disable_security_center_notifications {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a VCL::Module module object method");
+		return;	
+	}
+
+	my $management_node_keys = $self->data->get_management_node_keys();
+	my $computer_node_name   = $self->data->get_computer_node_name();
+
+	my $registry_string .= <<'EOF';
+Windows Registry Editor Version 5.00
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Security Center]
+"AntiSpywareDisableNotify"=dword:00000001
+"AntiVirusDisableNotify"=dword:00000001
+"FirewallDisableNotify"=dword:00000001
+"UacDisableNotify"=dword:00000001
+"UpdatesDisableNotify"=dword:00000001
+"FirstRunDisabled"=dword:00000001
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Security Center\Svc]
+"AntiVirusOverride"=dword:00000001
+"AntiSpywareOverride"=dword:00000001
+"FirewallOverride"=dword:00000001
+EOF
+
+	# Import the string into the registry
+	if ($self->import_registry_string($registry_string)) {
+		notify($ERRORS{'OK'}, 0, "set the registry keys to disable security center notifications");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to set the registry key to disable security center notifications");
+		return 0;
+	}
+
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 disable_automatic_updates
+
+ Parameters  : None
+ Returns     : If successful: true
+               If failed: false
+ Description : Disables Windows Automatic Updates by configuring a local group
+               policy:
+               HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU\NoAutoUpdate=1
+               
+               This must be done using a policy in order to prevent
+               Windows Security Center will display a warning icon in the
+               notification area. Windows Update can be disabled via the GUI
+               which configures the following key but a warning will be
+               presented to the user:
+               HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update
+
+=cut
+
+sub disable_automatic_updates {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a VCL::Module module object method");
+		return;	
+	}
+
+	my $management_node_keys = $self->data->get_management_node_keys();
+	my $computer_node_name   = $self->data->get_computer_node_name();
+
+	my $registry_string .= <<'EOF';
+Windows Registry Editor Version 5.00
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU]
+"NoAutoUpdate"=dword:00000001
+EOF
+
+	# Import the string into the registry
+	if ($self->import_registry_string($registry_string)) {
+		notify($ERRORS{'OK'}, 0, "disabled automatic updates");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to set the registry key to disable automatic updates");
+		return 0;
+	}
+
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 disable_windows_defender
+
+ Parameters  : None
+ Returns     : If successful: true
+               If failed: false
+ Description : Disables Windows Defender by doing the following:
+               -Configures local group policy to disable Windows Defender
+               -Removes HKLM...Run registry key to start Windows Defender at logon
+               -Stops the Windows Defender service
+               -Disables the Windows Defender service
+
+=cut
+
+sub disable_windows_defender {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a VCL::Module module object method");
+		return;	
+	}
+
+	my $management_node_keys = $self->data->get_management_node_keys();
+	my $computer_node_name   = $self->data->get_computer_node_name();
+
+	my $registry_string .= <<'EOF';
+Windows Registry Editor Version 5.00
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows Defender]
+"DisableAntiSpyware"=dword:00000001
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Run]
+"Windows Defender"=-
+EOF
+
+	# Import the string into the registry
+	if ($self->import_registry_string($registry_string)) {
+		notify($ERRORS{'DEBUG'}, 0, "set the registry keys to disable Windows defender");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to set the registry key to disable Windows defender");
+		return 0;
+	}
+	
+	# Stop the Windows Defender service
+	if ($self->stop_service('WinDefend')) {
+		notify($ERRORS{'DEBUG'}, 0, "stopped the Windows Defender service");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to stop the Windows Defender service");
+		return 0;
+	}
+	
+	# Disable the Windows Defender service
+	if ($self->set_service_startup_mode('WinDefend', 'disabled')) {
+		notify($ERRORS{'DEBUG'}, 0, "disabled the Windows Defender service");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to disable the Windows Defender service");
+		return 0;
+	}
+	
+	notify($ERRORS{'OK'}, 0, "disabled Windows Defender");
+
+	return 1;
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 
