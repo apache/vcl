@@ -5573,6 +5573,11 @@ sub copy_capture_configuration_files {
 		}
 	}
 	
+	# Delete any Subversion files which may have been copied
+	if (!$self->delete_files_by_pattern($NODE_CONFIGURATION_DIRECTORY, '.*\.svn.*')) {
+		notify($ERRORS{'WARNING'}, 0, "unable to delete Subversion files under: $NODE_CONFIGURATION_DIRECTORY");
+	}
+	
 	# Find any files containing a 'WINDOWS_ROOT_PASSWORD' string and replace it with the root password
 	if ($self->search_and_replace_in_files($NODE_CONFIGURATION_DIRECTORY, 'WINDOWS_ROOT_PASSWORD', $WINDOWS_ROOT_PASSWORD)) {
 		notify($ERRORS{'DEBUG'}, 0, "set the Windows root password in configuration files");
