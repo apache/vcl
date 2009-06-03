@@ -96,3 +96,27 @@ perl Makefile.PL
 make
 make test
 make install
+
+wget --directory-prefix=/usr/local/vcl/source http://www.cpan.org/modules/by-module/XML/XML-Parser-2.36.tar.gz
+tar -zxvf /usr/local/vcl/source/XML-Parser-2.36.tar.gz -C /usr/local/vcl/source
+cd /usr/local/vcl/source/XML-Parser-2.36
+perl Makefile.PL
+make
+make test
+make install
+
+wget --directory-prefix=/usr/local/vcl/source http://www.cpan.org/modules/by-module/RPC/RPC-XML-0.64.tar.gz
+tar -zxvf /usr/local/vcl/source/RPC-XML-0.64.tar.gz -C /usr/local/vcl/source
+cd /usr/local/vcl/source/RPC-XML-0.64
+perl Makefile.PL
+make
+make test
+make install
+
+wget --directory-prefix=/usr/local/vcl/source http://www.cpan.org/modules/by-module/Crypt/Crypt-SSLeay-0.57.tar.gz
+tar -zxvf /usr/local/vcl/source/Crypt-SSLeay-0.57.tar.gz -C /usr/local/vcl/source
+cd /usr/local/vcl/source/Crypt-SSLeay-0.57
+perl Makefile.PL --default
+make
+make test
+make install
