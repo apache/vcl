@@ -2803,7 +2803,11 @@ sub set_service_startup_mode {
 	# Use sc.exe to change the start mode
 	my $service_startup_command = '"$SYSTEMROOT/System32/sc.exe" config ' . "$service_name start= $startup_mode";
 	my ($service_startup_exit_status, $service_startup_output) = run_ssh_command($computer_node_name, $management_node_keys, $service_startup_command);
-	if (defined($service_startup_exit_status) && $service_startup_exit_status == 0) {
+	if (defined($service_startup_output) && grep(/service does not exist/, @$service_startup_output)) {
+		notify($ERRORS{'WARNING'}, 0, "$service_name service startup mode not set because service does not exist");
+		return;
+	}
+	elsif (defined($service_startup_exit_status) && $service_startup_exit_status == 0) {
 		notify($ERRORS{'OK'}, 0, "$service_name service startup mode set to $startup_mode");
 	}
 	elsif ($service_startup_exit_status) {
@@ -6042,7 +6046,7 @@ sub stop_service {
 		notify($ERRORS{'OK'}, 0, "service is not started: $service_name");
 	}
 	elsif (defined($output) && grep(/does not exist/i, @{$output})) {
-		notify($ERRORS{'OK'}, 0, "service was not stopped because it does not exist: $service_name");
+		notify($ERRORS{'WARNING'}, 0, "service was not stopped because it does not exist: $service_name");
 		return;
 	}
 	elsif (defined($status)) {
@@ -6056,6 +6060,55 @@ sub stop_service {
 
 	return 1;
 } ## end sub stop_service
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 service_exists
+
+ Parameters  : $service_name
+ Returns     : If service exists: 1
+               If service does not exist: 0
+               If error occurred: undefined
+ Description : Runs sc.exe query to determine if a service exists.
+
+=cut
+
+sub service_exists {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+
+	my $management_node_keys = $self->data->get_management_node_keys();
+	my $computer_node_name   = $self->data->get_computer_node_name();
+
+	my $service_name = shift;
+	if (!$service_name) {
+		notify($ERRORS{'WARNING'}, 0, "service name was not passed as an argument");
+		return;
+	}
+
+	my $command = '$SYSTEMROOT/System32/sc.exe query "' . $service_name . '"';
+	my ($status, $output) = run_ssh_command($computer_node_name, $management_node_keys, $command, '', '', 1);
+	if (defined($output) && grep(/service does not exist/i, @{$output})) {
+		notify($ERRORS{'DEBUG'}, 0, "service does not exist: $service_name");
+		return 0;
+	}
+	elsif (defined($status) && $status == 0) {
+		notify($ERRORS{'DEBUG'}, 0, "service exists: $service_name");
+	}
+	elsif (defined($status)) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine if service exists: $service_name, exit status: $status, output:\n@{$output}");
+		return;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unable to run ssh command to determine if service exists");
+		return;
+	}
+
+	return 1;
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -6777,22 +6830,25 @@ EOF
 		return 0;
 	}
 	
-	# Stop the Windows Defender service
-	if ($self->stop_service('WinDefend')) {
-		notify($ERRORS{'DEBUG'}, 0, "stopped the Windows Defender service");
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to stop the Windows Defender service");
-		return 0;
-	}
-	
-	# Disable the Windows Defender service
-	if ($self->set_service_startup_mode('WinDefend', 'disabled')) {
-		notify($ERRORS{'DEBUG'}, 0, "disabled the Windows Defender service");
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to disable the Windows Defender service");
-		return 0;
+	# Check if WinDefend service exists
+	if ($self->service_exists('WinDefend')) {	
+		# Stop the Windows Defender service
+		if ($self->stop_service('WinDefend')) {
+			notify($ERRORS{'DEBUG'}, 0, "stopped the Windows Defender service");
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to stop the Windows Defender service");
+			return 0;
+		}
+		
+		# Disable the Windows Defender service
+		if ($self->set_service_startup_mode('WinDefend', 'disabled')) {
+			notify($ERRORS{'DEBUG'}, 0, "disabled the Windows Defender service");
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to disable the Windows Defender service");
+			return 0;
+		}
 	}
 	
 	notify($ERRORS{'OK'}, 0, "disabled Windows Defender");
