@@ -135,6 +135,17 @@ Call parent class's pre_capture() subroutine
 		return 0;
 	}
 
+=item *
+
+Deactivate Windows licensing activation
+
+=cut
+
+	if (!$self->deactivate_license()) {
+		notify($ERRORS{'WARNING'}, 0, "unable to deactivate Windows licensing activation");
+		return 0;
+	}
+
 =back
 
 =cut
@@ -334,6 +345,7 @@ sub activate_license {
                If failed: false
  Description : Runs cscript.exe slmgr.vbs -ckms to clear the KMS server address
                stored on the computer.
+               Deletes existing KMS servers keys from the registry.
                Runs cscript.exe slmgr.vbs -rearm to rearm licensing on the
                computer.
 
@@ -362,6 +374,24 @@ sub deactivate_license {
 	else {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute ssh command to clear kms address");
 		return;
+	}
+	
+	my $registry_string .= <<'EOF';
+Windows Registry Editor Version 5.00
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SL]
+"KeyManagementServicePort"=-
+"KeyManagementServiceName"=-
+"SkipRearm"=dword:00000001
+EOF
+
+	# Import the string into the registry
+	if ($self->import_registry_string($registry_string)) {
+		notify($ERRORS{'DEBUG'}, 0, "removed kms keys from the registry");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to remove kms keys from the registry");
+		return 0;
 	}
 	
 	# Run slmgr.vbs -rearm
