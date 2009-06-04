@@ -1242,14 +1242,13 @@ sub capture {
 			notify($ERRORS{'WARNING'}, 0, "OS module pre_capture() failed");
 			return 0;
 		}
-
-		# Get the power status, make sure computer is off
-		my $power_status = $self->power_status();
-		notify($ERRORS{'DEBUG'}, 0, "retrieved power status: $power_status");
-		if ($power_status eq 'off') {
-			notify($ERRORS{'OK'}, 0, "verified $computer_node_name power is off");
+		
+		# The OS module should turn the computer power off
+		# Wait up to 2 minutes for the computer's power status to be off
+		if ($self->wait_for_off(2)) {
+			notify($ERRORS{'OK'}, 0, "computer $computer_node_name power is off");
 		}
-		elsif ($power_status eq 'on') {
+		else {
 			notify($ERRORS{'WARNING'}, 0, "$computer_node_name power is still on, turning computer off");
 
 			# Attempt to power off computer
@@ -1260,22 +1259,18 @@ sub capture {
 				notify($ERRORS{'WARNING'}, 0, "failed to power off $computer_node_name");
 				return 0;
 			}
-		} ## end elsif ($power_status eq 'on')  [ if ($power_status eq 'off')
-		else {
-			notify($ERRORS{'WARNING'}, 0, "failed to determine power status of $computer_node_name");
-			return 0;
 		}
 	} ## end if ($self->os->can("pre_capture"))
 	elsif ($self->os->can("capture_prepare")) {
 		notify($ERRORS{'OK'}, 0, "calling OS module's capture_prepare() subroutine");
 		if (!$self->os->capture_prepare()) {
 			notify($ERRORS{'WARNING'}, 0, "OS module capture_prepare() failed");
-			$self->image_creation_failed();
+			return 0;
 		}
 	}
 	else {
 		notify($ERRORS{'WARNING'}, 0, "OS module does not have either a pre_capture() or capture_prepare() subroutine");
-		$self->image_creation_failed();
+		return 0;
 	}
 
 
@@ -1324,12 +1319,12 @@ sub capture {
 		notify($ERRORS{'OK'}, 0, "calling OS module's capture_start() subroutine");
 		if (!$self->os->capture_start()) {
 			notify($ERRORS{'WARNING'}, 0, "OS module capture_start() failed");
-			$self->image_creation_failed();
+			return 0;
 		}
 	}
 	else {
 		notify($ERRORS{'WARNING'}, 0, "OS module does not have either a pre_capture() or capture_start() subroutine");
-		$self->image_creation_failed();
+		return 0;
 	}
 
 

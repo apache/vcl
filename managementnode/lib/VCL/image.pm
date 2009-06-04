@@ -135,11 +135,11 @@ END
 	my $image_already_exists = $self->provisioner->does_image_exist();
 	if ($image_already_exists) {
 		notify($ERRORS{'CRITICAL'}, 0, "image $image_name already exists in the repository");
-		$self->image_creation_failed();
+		$self->reservation_failed();
 	}
 	elsif (!defined($image_already_exists)) {
 		notify($ERRORS{'CRITICAL'}, 0, "image $image_name already partially exists in the repository");
-		$self->image_creation_failed();
+		$self->reservation_failed();
 	}
 	else {
 		notify($ERRORS{'OK'}, 0, "image $image_name does not exist in the repository");
@@ -164,7 +164,7 @@ END
 		}
 		else {
 			notify($ERRORS{'WARNING'}, 0, "$image_name image failed to be captured by provisioning module");
-			$self->image_creation_failed();
+			$self->reservation_failed();
 		}
 	}
 	# --- END NEW MODULARIZED METHOD ---
@@ -175,25 +175,25 @@ END
 		notify($ERRORS{'OK'}, 0, "OS modularization supported, beginning OS module capture prepare");
 		if (!$self->os->capture_prepare()) {
 			notify($ERRORS{'WARNING'}, 0, "OS module capture prepare failed");
-			$self->image_creation_failed();
+			$self->reservation_failed();
 		}
 
 		notify($ERRORS{'OK'}, 0, "beginning provisioning module capture prepare");
 		if (!$self->provisioner->capture_prepare()) {
 			notify($ERRORS{'WARNING'}, 0, "provisioning module capture prepare failed");
-			$self->image_creation_failed();
+			$self->reservation_failed();
 		}
 		
 		notify($ERRORS{'OK'}, 0, "beginning OS module capture start");
 		if (!$self->os->capture_start()) {
 			notify($ERRORS{'WARNING'}, 0, "OS module capture start failed");
-			$self->image_creation_failed();
+			$self->reservation_failed();
 		}
 
 		notify($ERRORS{'OK'}, 0, "beginning provisioning module capture monitor");
 		if (!$self->provisioner->capture_monitor()) {
 			notify($ERRORS{'WARNING'}, 0, "provisioning module capture monitor failed");
-			$self->image_creation_failed();
+			$self->reservation_failed();
 		}
 
 	} ## end if ($computer_type eq "blade" && $self->os)
@@ -210,7 +210,7 @@ END
 	}
 	else {
 		notify($ERRORS{'CRITICAL'}, 0, "unsupported computer type: $computer_type");
-		$self->image_creation_failed();
+		$self->reservation_failed();
 	}
 
 	# Image creation was successful, proceed to update database tables
@@ -268,18 +268,18 @@ END
 	# Check if image creation was successful and database tables were successfully updated
 	# Notify user and admins of the results
 	if ($create_image_result) {
-		$self->image_creation_successful($image_size);
+		$self->reservation_successful($image_size);
 	}
 
 	else {
 		notify($ERRORS{'CRITICAL'}, 0, "image creation failed, see previous log messages");
-		$self->image_creation_failed();
+		$self->reservation_failed();
 	}
 
 } ## end sub process
 #/////////////////////////////////////////////////////////////////////////////
 
-sub image_creation_successful {
+sub reservation_successful {
 	my $self           = shift;
 	my $image_size_old = shift;
 
@@ -359,11 +359,11 @@ END
 
 	notify($ERRORS{'OK'}, 0, "exiting");
 	exit;
-} ## end sub image_creation_successful
+} ## end sub reservation_successful
 
 #/////////////////////////////////////////////////////////////////////////////
 
-sub image_creation_failed {
+sub reservation_failed {
 	my $self = shift;
 
 	my $request_data               = $self->data->get_request_data();
@@ -456,7 +456,7 @@ END
 
 	notify($ERRORS{'OK'}, 0, "exiting");
 	exit;
-} ## end sub image_creation_failed
+} ## end sub reservation_failed
 
 #/////////////////////////////////////////////////////////////////////////////
 

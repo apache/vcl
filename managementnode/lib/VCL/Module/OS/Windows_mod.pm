@@ -5857,7 +5857,9 @@ sub clean_hard_drive {
 	);
 
 	# Attempt to stop the AFS service, needed to delete AFS files
-	$self->stop_service('TransarcAFSDaemon');
+	if ($self->service_exists('TransarcAFSDaemon')) {
+		$self->stop_service('TransarcAFSDaemon');
+	}
 
 	# Loop through the directories to empty
 	# Don't care if they aren't emptied
