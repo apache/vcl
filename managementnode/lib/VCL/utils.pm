@@ -67,6 +67,8 @@ use Carp;
 use Text::Wrap;
 use English;
 use List::Util qw(min max);
+use HTTP::Headers;
+use RPC::XML::Client;
 
 
 #use Date::Calc qw(Delta_DHMS Time_to_Date Date_to_Time);
@@ -95,6 +97,8 @@ our @EXPORT = qw(
   check_uptime
   checkonprocess
   clearfromblockrequest
+  clear_blockComputers
+  clear_blockTimes
   collectsshkeys
   construct_image_name
   controlVM
@@ -105,6 +109,7 @@ our @EXPORT = qw(
   del_user
   delete_computerloadlog_reservation
   delete_request
+  delete_block_request
   disablesshd
   enablesshd
   firewall_compare_update
@@ -158,6 +163,7 @@ our @EXPORT = qw(
   notify_via_msg
   notify_via_wall
   preplogfile
+  process_block_time
   remotedesktopport
   rename_vcld_process
   reservation_being_processed
@@ -180,6 +186,7 @@ our @EXPORT = qw(
   timefloor15interval
   unlockfile
   update_blockrequest_processing
+  update_blockTimes_processing
   update_cluster_info
   update_computer_address
   update_computer_state
@@ -199,6 +206,7 @@ our @EXPORT = qw(
   virtual_status_vm
   windowsroutetable
   write_currentimage_txt
+  xmlrpc_call
 
   $CONF_FILE_PATH
   $DATABASE
@@ -235,6 +243,9 @@ our @EXPORT = qw(
   $VMWAREREPOSITORY
   $WRTPASS
   $WRTUSER
+  $XMLRPC_USER
+  $XMLRPC_PASS
+  $XMLRPC_URL
   %ERRORS
   %OPTIONS
 
@@ -272,6 +283,7 @@ BEGIN {
 	our ($IMAGESERVERS, $IMAGELIBUSER, $IMAGELIBKEY);
 	our ($VMWARETYPE, $VMWARE_DISK);
 	our ($WINDOWS_ROOT_PASSWORD);
+   our ($XMLRPC_USER, $XMLRPC_PASS, $XMLRPC_URL);
 
 	# Set Getopt pass_through so this module doesn't erase parameters that other modules may use
 	Getopt::Long::Configure('pass_through');
@@ -365,6 +377,22 @@ BEGIN {
 			if ($l =~ /^rdPass=(.*)/) {
 				$rdPass = $1;
 			}
+         
+			#xmlrpc_username
+			if ($l =~ /^xmlrpc_username=(.*)/) {
+				$XMLRPC_USER = $1;
+			}
+
+			#xmlrpc_username password
+			if ($l =~ /^xmlrpc_pass=(.*)/) {
+				$XMLRPC_PASS = $1;
+			}
+         
+			#xmlrpc_url
+			if ($l =~ /^xmlrpc_url=(.*)/) {
+				$XMLRPC_URL = $1;
+			}
+
 			#is mysql ssl option enabled
 			if ($l =~ /^enable_mysql_ssl=(yes)/) {
 				$MYSQL_SSL = 1;
@@ -618,6 +646,7 @@ our $VERBOSE;
 our $TESTING;
 our $CONF_FILE_PATH;
 our $WINDOWS_ROOT_PASSWORD;
+our ($XMLRPC_USER, $XMLRPC_PASS, $XMLRPC_URL);
 
 sub makedatestring;
 
@@ -703,11 +732,8 @@ sub notify {
 	# Remove any spaces from the beginning or end of the string
 	$string =~ s/(^\s+)|(\s+$)//gs;
 	
-	## Remove any spaces from the beginning of each line
-	#$string =~ s/\n[ \t]+/\n/gs;
-	
-	# Remove any spaces from the end of each line
-	$string =~ s/[ \t]+\n/\n/gs;
+	# Remove any spaces from the beginning or end of the each line
+	$string =~ s/\s*\n\s*/\n/gs;
 	
 	# Replace consecutive spaces with a single space to keep log file concise as long as string doesn't contain a quote
 	if ($string !~ /[\'\"]/gs) {
@@ -8335,6 +8361,7 @@ sub delete_request {
 	}
 } ## end sub delete_request
 
+
 #/////////////////////////////////////////////////////////////////////////////
 
 =head2 clearfromblockrequest
@@ -8992,11 +9019,11 @@ sub firewall_compare_update {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 update_log_ending
+=head2 update_blockrequest_processing
 
  Parameters  : $blockrequest_id, $processing
  Returns     : 0 or 1
- Description : Updates the finalend and ending fields in the log table for the specified log ID
+ Description : Updates the processing flag in the blockRequest table
 
 =cut
 
@@ -9034,6 +9061,167 @@ sub update_blockrequest_processing {
 		return 0;
 	}
 } ## end sub update_blockrequest_processing
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 update_blockTimes_processing
+
+ Parameters  : $blockTimes_id, $processing
+ Returns     : 0 or 1
+ Description : Updates the processed flag in blockTimes table
+
+=cut
+
+sub update_blockTimes_processing {
+	my ($blockTimes_id, $processing) = @_;
+
+	my ($package, $filename, $line, $sub) = caller(0);
+
+	# Check the arguments
+	if (!defined($blockTimes_id)) {
+		notify($ERRORS{'WARNING'}, 0, "blockTimes ID was not specified");
+		return 0;
+	}
+	if (!defined($processing)) {
+		notify($ERRORS{'WARNING'}, 0, "processing was not specified");
+		return 0;
+	}
+
+	# Construct the update statement
+	my $update_statement = "
+      UPDATE
+		blockTimes
+		SET
+		blockTimes.processed = $processing
+		WHERE
+		blockTimes.id = $blockTimes_id
+   ";
+
+	# Call the database execute subroutine
+	if (database_execute($update_statement)) {
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unable to update blockTimes table, id=$blockTimes_id, processing=$processing");
+		return 0;
+	}
+} ## end sub update_blockTimes_processing
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 delete_block_request
+
+ Parameters  : $blockrequest_id
+ Returns     : 0 or 1
+ Description : removes blockrequest 
+
+=cut
+
+sub delete_block_request {
+	my ($blockrequest_id) = @_;
+
+	# Check the arguments
+	if (!defined($blockrequest_id)) {
+		notify($ERRORS{'WARNING'}, 0, "blockrequest ID was not specified");
+		return 0;
+	}
+	# Construct the update statement
+	my $delete_statement = "
+      DELETE
+		blockRequest
+		FROM blockRequest
+		WHERE
+		blockRequest.id = $blockrequest_id
+   ";
+
+	# Call the database execute subroutine
+	if (database_execute($delete_statement)) {
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unable to deleted blockrequest $blockrequest_id blockRequest table ");
+		return 0;
+	}
+
+}
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 clear_blockTimes
+
+ Parameters  : $blockTimes_id
+ Returns     : 0 or 1
+ Description : Removes blockTimes id from blockTimes table
+
+=cut
+
+sub clear_blockTimes {
+	my ($blockTimes_id) = @_;
+
+	my ($package, $filename, $line, $sub) = caller(0);
+
+	# Check the arguments
+	if (!defined($blockTimes_id)) {
+		notify($ERRORS{'WARNING'}, 0, "blockTimes ID was not specified");
+		return 0;
+	}
+
+	# Construct the update statement
+	my $delete_statement = "
+      DELETE
+		blockTimes
+		FROM blockTimes
+		WHERE
+		blockTimes.id = $blockTimes_id
+   ";
+
+	# Call the database execute subroutine
+	if (database_execute($delete_statement)) {
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unable to deleted blockTimes_id $blockTimes_id blockTimes table ");
+		return 0;
+	}
+} ## end sub update_blockTimes_processing
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 clear_blockComputers
+
+ Parameters  : $blockTimes_id, $processing
+ Returns     : 0 or 1
+ Description : Updates the processed flag in blockTimes table
+
+=cut
+
+sub clear_blockComputers {
+	my ($blockTimes_id) = @_;
+
+	my ($package, $filename, $line, $sub) = caller(0);
+
+	# Check the arguments
+	if (!defined($blockTimes_id)) {
+		notify($ERRORS{'WARNING'}, 0, "blockTimes ID was not specified");
+		return 0;
+	}
+
+	# Construct the update statement
+	my $delete_statement = "
+      DELETE
+		blockComputers
+		FROM blockComputers
+		WHERE
+		blockTimeid = $blockTimes_id
+   ";
+
+	# Call the database execute subroutine
+	if (database_execute($delete_statement)) {
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unable to delete blockComputers for id=$blockTimes_id, ");
+		return 0;
+	}
+} ## end sub update_blockTimes_processing
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -10581,6 +10769,88 @@ sub string_to_ascii {
 	}
 	
 	return $ascii_value_string;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 process_block_time
+
+ Parameters  : $blockTimesid
+ Returns     : hash references
+ Description : calls xmlrpc_call routine with specificed method and args
+
+=cut
+
+sub process_block_time {
+	my $blockTimesid = $_[0];
+
+	if(!$blockTimesid){
+		notify($ERRORS{'WARNING'}, 0, "blockTimesid argument was not passed");
+		return 0;
+	}
+
+	my $method = "XMLRPCprocessBlockTime";
+
+	my $xml_ret = xmlrpc_call($method, $blockTimesid);
+
+	my %info;
+	if( ref($xml_ret) =~ /STRUCT/i){
+       $info{status} = $xml_ret->value->{status};
+		 $info{allocated} = $xml_ret->value->{allocated} if(defined($xml_ret->value->{allocated})) ;
+       $info{unallocated} = $xml_ret->value->{unallocated} if(defined($xml_ret->value->{unallocated}));
+		 #error
+		 $info{errorcode} = $xml_ret->value->{errorcode} if(defined($xml_ret->value->{errorcode}));
+		 $info{errormsg} = $xml_ret->value->{errormsg} if(defined($xml_ret->value->{errormsg}));
+		 #warning
+		 $info{warningcode} = $xml_ret->value->{warningcode} if(defined($xml_ret->value->{warningcode}));
+		 $info{warningmsg} = $xml_ret->value->{warningmsg} if(defined($xml_ret->value->{warningmsg}));
+		 #$info{reqidlists} = $xml_ret->value->{requestids};
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "return argument XMLRPCprocessBlockTime was not a STRUCT as expected" . ref($xml_ret) );
+		return 0;
+
+	}
+
+	return \%info;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 xmlrpc_call
+
+ Parameters  : statement
+ Returns     : array containing hash references to rows returned
+ Description : runs xmlrpc call
+
+=cut
+sub xmlrpc_call {
+	my ($method,$args) = @_;
+
+	# Make sure method and args were passed
+	if (!$method) {
+		notify($ERRORS{'WARNING'}, 0, "method argument was not passed");
+		return 0;
+	}
+	if (!$args) {
+		notify($ERRORS{'WARNING'}, 0, "args argument was not passed");
+		return 0;
+	}
+
+	my $cli = RPC::XML::Client->new($XMLRPC_URL);
+	$cli->{'__request'}{'_headers'}->push_header('X-User' => $XMLRPC_USER);
+	$cli->{'__request'}{'_headers'}->push_header('X-Pass' => $XMLRPC_PASS);
+	$cli->{'__request'}{'_headers'}->push_header('X-APIVERSION' => 2);
+
+	my $response = $cli->send_request($method,$args);
+
+	if($response->type =~ /fault/){
+		notify($ERRORS{'WARNING'}, 0, "fault occured on $method,$args \n faultCode= $response->code->{faultCode} \n faultString= $response->string->{faultString}");
+		return 0;
+	}
+
+	return $response;
+
 }
 
 #/////////////////////////////////////////////////////////////////////////////
