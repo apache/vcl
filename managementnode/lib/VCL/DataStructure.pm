@@ -1755,6 +1755,36 @@ sub get_image_affiliation_name {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 is_blockrequest
+
+ Parameters  : None.
+ Returns     : If DataStructure contains blockrequest data: true
+               If DataStructure does not contain blockrequest data: false
+ Description : This subroutine determines whether or not the DataStructure
+               contains data for a blockrequest.
+
+=cut
+
+sub is_blockrequest {
+	my $self = shift;
+	
+	# Check if subroutine was called as an object method
+	unless (ref($self) && $self->isa('VCL::DataStructure')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a VCL::DataStructure module object method");
+		return;
+	}
+	
+	# Check if reservation_id has been set, return 1 or 0 based on that
+	if ($self->blockrequest_id) {
+		return 1;
+	}
+	else {
+		return 0;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 1;
 __END__
 

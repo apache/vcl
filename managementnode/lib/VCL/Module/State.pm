@@ -890,16 +890,23 @@ sub check_image_os {
 
 sub DESTROY {
 	my $self = shift;
-	my $reservation_id = $self->data->get_reservation_id();
 	
 	notify($ERRORS{'DEBUG'}, 0, "destructor called, ref(\$self)=" . ref($self));
 	
-	# Delete all computerloadlog rows with loadstatename = 'begin' for thie reservation
-	if (delete_computerloadlog_reservation($reservation_id, 'begin')) {
-		notify($ERRORS{'DEBUG'}, 0, "removed computerloadlog rows with loadstate=begin for reservation");
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to remove computerloadlog rows with loadstate=begin for reservation");
+	# If not a blockrequest, delete computerloadlog entry
+	if ($self && $self->data && !$self->data->is_blockrequest()) {
+		my $reservation_id = $self->data->get_reservation_id();
+		
+		# Delete all computerloadlog rows with loadstatename = 'begin' for thie reservation
+		if ($reservation_id && delete_computerloadlog_reservation($reservation_id, 'begin')) {
+			notify($ERRORS{'DEBUG'}, 0, "removed computerloadlog rows with loadstate=begin for reservation");
+		}
+		elsif (!$reservation_id) {
+			notify($ERRORS{'WARNING'}, 0, "failed to retrieve the reservation id, computerloadlog rows not removed");
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to remove computerloadlog rows with loadstate=begin for reservation");
+		}
 	}
 
 	# Print the number of database handles this process created for testing/development
