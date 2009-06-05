@@ -1307,14 +1307,7 @@ sub retrieve_user_data {
 		return;
 	}
 	
-	# If subroutine was called as an object method, replace the user key in the request data
-	if ($self) {
-		$self->request_data->{user} = $user_data_hash{user};
-		notify($ERRORS{'DEBUG'}, 0, "data has been stored for user: $user_login_id (id: $user_id)");
-	}
-	else {
-		notify($ERRORS{'DEBUG'}, 0, "data has been retrieved for user: $user_login_id (id: $user_id)");
-	}
+	notify($ERRORS{'DEBUG'}, 0, "data has been retrieved for user: $user_login_id (id: $user_id)");
 	
 	return $user_data_hash{user};
 }
