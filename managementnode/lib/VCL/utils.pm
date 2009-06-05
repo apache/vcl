@@ -136,7 +136,6 @@ our @EXPORT = qw(
   get_resource_groups
   get_managable_resource_groups
   get_vmhost_info
-  getanothermachine
   getdynamicaddress
   getimagesize
   getnewdbh
@@ -202,8 +201,6 @@ our @EXPORT = qw(
   update_request_state
   update_reservation_lastcheck
   update_sublog_ipaddress
-  virtual_status_unix
-  virtual_status_vm
   windowsroutetable
   write_currentimage_txt
   xmlrpc_call
@@ -2740,35 +2737,6 @@ sub get_next_image_default {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 setimagid
-
- Parameters  : $dbh, $computerid, $image, $imageid, $imagerevisionid
- Returns     : 1
- Description : updates imageid and imagerevisionid on provided computerid
-
-sub setimageid {
-	my ($dbh, $computerid, $image, $imageid, $imagerevisionid) = @_;
-	my ($package, $filename, $line, $sub) = caller(0);
-	notify($ERRORS{'WARNING'}, 0, "setimageid: computerid is not defined") if (!(defined($computerid)));
-	notify($ERRORS{'WARNING'}, 0, "setimageid: image is not defined")      if (!(defined($image)));
-	notify($ERRORS{'WARNING'}, 0, "setimageid: imageid is not defined")    if (!(defined($imageid)));
-	$imagerevisionid = 0 if (!(defined($imagerevisionid)));
-
-
-	my $update_statement="UPDATE computer c SET c.currentimageid = $imageid,c.imagerevisionid = $imagerevisionid WHERE c.id = $computerid" ;
-	# Call the database execute subroutine
-	if (database_execute($update_statement)) {
-		return 1;
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "unable to update preferredimageid");
-		return 0;
-	}
-} ## end sub setimageid
-=cut
-
-#/////////////////////////////////////////////////////////////////////////////
-
 =head2 setpreferredimage
 
  Parameters  : $computerid, $image
@@ -3581,98 +3549,6 @@ sub _pingnode {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 virtual_status_unix
-
- Parameters  : $hostname, $os, $mnOS, $ipaddress, $log
- Returns     : array of values - pingable,sshd,vclclientd running
- Description : runs status check on supplied node
-=cut
-
-sub virtual_status_unix {
-	my ($hostname, $os, $mnOS, $ipaddress, $log) = @_;
-	my ($package, $filename, $line, $sub) = caller(0);
-	$log = 0 if (!(defined($log)));
-	notify($ERRORS{'WARNING'}, $log, "hostname is not defined")          if (!(defined($hostname)));
-	notify($ERRORS{'WARNING'}, $log, "os is not defined")                if (!(defined($os)));
-	notify($ERRORS{'WARNING'}, $log, "ManagementNode OS is not defined") if (!(defined($mnOS)));
-	notify($ERRORS{'WARNING'}, $log, "ipaddress is not defined")         if (!(defined($ipaddress)));
-	my @status;
-	# status[0] =  pingable
-	# status[1] = port 24 accessible
-	# status[2] =  vclclientd running
-	# status[3] =
-	my @file;
-	my $p;
-	my $osname = lc($^O);
-	$mnOS = $osname;
-	notify($ERRORS{'DEBUG'}, $log, "virtual_status_unix MNos= $mnOS");
-
-
-	#is host listed in our local known_hosts file?
-	if (known_hosts($hostname, $mnOS, $ipaddress)) {
-		notify($ERRORS{'OK'}, $log, "$hostname pub key added to local known_hosts");
-	}
-	else {
-		notify($ERRORS{'OK'}, $log, "failed to add $hostname pub rsa key to local known_hosts");
-	}
-
-	#is pingable
-	$status[0] = _pingnode($ipaddress);
-
-	#is ssh open on admin port
-	my @ssh;
-	my ($n, $identity);
-
-	if ($os =~ /sun4x/) {
-		$identity = $IDENTITY_solaris_lab;
-	}
-	elsif ($os =~ /rhel/) {
-		$identity = $IDENTITY_linux_lab;
-	}
-	else {
-		notify($ERRORS{'OK'}, $log, "os $os set but not something I can handle yet, will attempt the unix identity.");
-
-		$identity = $IDENTITY_solaris_lab;
-	}
-	$status[1] = 0;
-	if (check_ssh($ipaddress, 24, $log)) {
-		my $shortname = $1 if ($hostname =~ /([-_a-zA-Z0-9]*)\./);
-		$shortname = $hostname if (!defined($shortname));
-
-		my @ssh = run_ssh_command($ipaddress, $identity, "echo testing", "vclstaff", 24);
-		foreach $n (@{$ssh[1]}) {
-			next if ($n =~ /Warning: Permanently added/);
-			notify($ERRORS{'OK'}, $log, "$n");
-			if ($n =~ /testing/) {
-				$status[1] = 1;
-				notify($ERRORS{'OK'}, $log, "SUCCESS $ipaddress port 24 is accessible");
-			}
-		}
-		if ($status[1]) {
-			#is vclclientd running
-			$status[2] = 0;
-			my @file = run_ssh_command($ipaddress, $identity, "pgrep vclclient", "vclstaff", 24);
-			foreach my $f (@{$file[1]}) {
-				chomp($f);
-				next if ($f =~ /Warning: Permanently added/);
-				if ($f =~ /[0-9]+/) {
-					#notify($ERRORS{'OK'},$log,"SUCCESS vclclientd is running on $hostname");
-					$status[2] = 1;
-				}
-			}
-		} ## end if ($status[1])
-		else {
-			# hrm -p24 is not accessible
-			# return so caller can try to get another machine
-			notify($ERRORS{'WARNING'}, $log, "FAILURE $hostname port 24 is NOT accessible ssh output @ssh");
-			$status[2] = 0;
-		}
-	} ## end if (check_ssh($ipaddress, 24, $log))
-	return @status;
-} ## end sub virtual_status_unix
-
-#/////////////////////////////////////////////////////////////////////////////
-
 =head2 getnewdbh
 
  Parameters  : none
@@ -4480,47 +4356,6 @@ sub changelinuxpassword {
 
 	} ## end else [ if ($account eq "root")
 } ## end sub changelinuxpassword
-
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 getanothermachine
-
- Parameters  : useid,imagename
- Returns     : available machine if successful or 0 on failure
- Description : NOT COMPLETED - to be used in case of a failure on reservation,
-					if the box is reloading or failed in some fashion
-					using rpc call to php on webserver
-
-=cut
-
-sub getanothermachine {
-	my ($userid, $imageid) = @_;
-	my ($package, $filename, $line, $sub) = caller(0);
-	notify($ERRORS{'WARNING'}, 0, "userid is not defined") if (!(defined($userid)));
-	notify($ERRORS{'WARNING'}, 0, "imagid is not defined") if (!(defined($imageid)));
-
-	my $function = "getUserResources";
-	#Parameters for getUserResources function :
-	#$userprivs - array of privileges to look for (such as imageAdmin, imageCheckOut, etc); don't include 'block' or 'cascade'
-	#$resourceprivs- array of privileges to look for (such as available, administer, manageGroup); don't include 'block' or 'cascade'
-	#$onlygroups - (optional) if 1, return the resource groups instead of the resources
-	#$includedeleted - (optional) included deleted resources if 1, don't if 0
-	#$userid - (optional) id from the user table, if not given, use the id of the currently logged in user
-
-	my $arg1 = "imageAdmin:imageCheckOut";
-	my $arg2 = "available:";
-	my $arg3 = 0;
-	my $arg4 = 0;
-	my $arg5 = $userid;
-
-	eval {
-		my $doc = get("https://vcl.ncsu.edu/scheduling/index.php?mode=vcldquery&key=$VCLDRPCQUERYKEY&query=$function,$arg1,$arg2,$arg3,$arg4,$arg5");
-
-	  }
-
-} ## end sub getanothermachine
-
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -10377,171 +10212,6 @@ sub reservations_ready {
 	return $ready;
 
 } ## end sub reservations_ready
-
-##/////////////////////////////////////////////////////////////////////////////
-#
-#=head2 reservations_ready
-#
-# Parameters  :  request ID
-# Returns     :  1 if all reservations are ready, 0 if any are not ready, undefined if any failed
-# Description :  
-#
-#=cut
-#
-#sub reservations_ready {
-#	my ($request_id) = @_;
-#
-#	# Make sure request ID was passed
-#	if (!$request_id) {
-#		notify($ERRORS{'WARNING'}, 0, "request ID argument was not passed");
-#		return;
-#	}
-#
-#	my $select_statement = "
-#	SELECT
-#	requeststate.name AS request_state,
-#	reservation.id AS reservation_id,
-#	computerloadstate.loadstatename,
-#	computerstate.name AS computer_state
-#	
-#	FROM
-#	request,
-#	state requeststate,
-#	reservation
-#	
-#	LEFT JOIN
-#	computerloadlog
-#	ON (
-#	computerloadlog.reservationid = reservation.id
-#	)
-#	
-#	LEFT JOIN
-#	computerloadstate
-#	ON (
-#	computerloadstate.id = computerloadlog.loadstateid
-#	),
-#
-#	computer,
-#	state computerstate
-#	
-#	WHERE
-#	request.id = $request_id
-#	AND reservation.requestid = request.id
-#	AND computer.id = reservation.computerid
-#	AND computerstate.id = computer.stateid
-#	AND requeststate.id = request.stateid
-#	";
-#
-#	# Call the database select subroutine
-#	# This will return an array of one or more rows based on the select statement
-#	my @computerloadlog_rows = database_select($select_statement);
-#
-#	# Check to make sure 1 row was returned
-#	if (scalar @computerloadlog_rows == 0) {
-#		notify($ERRORS{'WARNING'}, 0, "reservations associated with request $request_id could not be retrieved from the database, 0 rows were returned");
-#		return;
-#	}
-#
-#	my %reservation_status;
-#
-#	# Loop through the rows, check the loadstate and computer state
-#	for my $computerloadlog_row (@computerloadlog_rows) {
-#		my $reservation_id         = $computerloadlog_row->{reservation_id};
-#		my $request_state_name = $computerloadlog_row->{request_state};
-#		my $computerloadstate_name = $computerloadlog_row->{loadstatename};
-#		my $computer_state_name = $computerloadlog_row->{computer_state};
-#		
-#		# If request state has been changed to reserved or inuse, assume all reservations are ready
-#		if ($request_state_name =~ /^(reserved|inuse)$/i) {
-#			notify($ERRORS{'OK'}, 0, "assuming all reservations are ready, request state is $request_state_name");
-#			return 1;
-#		}
-#		
-#		# If request state has been changed to failed or maintenance, return fail
-#		if ($request_state_name =~ /^(failed|maintenance)$/i) {
-#			notify($ERRORS{'WARNING'}, 0, "unable to determine if all reservations are ready, request state = $request_state_name");
-#			return;
-#		}
-#		
-#		# If request been deleted, return 0
-#		if ($request_state_name =~ /^(deleted)$/i) {
-#			notify($ERRORS{'OK'}, 0, "request state = $request_state_name");
-#			return 0;
-#		}
-#		
-#		
-#		# Check for computerloadstate = failed
-#		if ($computerloadstate_name =~ /failed/i) {
-#			$reservation_status{$reservation_id} = "failed: computerloadstate = $computerloadstate_name";
-#			next;
-#		}
-#		
-#		# Check for bad computer states
-#		if ($computer_state_name =~ /^(failed|maintenance|deleted)$/i) {
-#			$reservation_status{$reservation_id} = "failed: computer state = $computer_state_name";
-#			next
-#		}
-#		
-#
-#		# Skip if loadstatename is undefined, means no computerloadlog rows exist for the reservation
-#		if (!defined($computerloadstate_name)) {
-#			$reservation_status{$reservation_id} = 'not ready: no computerloadlog entries exist';
-#			next;
-#		}
-#		
-#		# Check for loadstatnames we care about
-#		if ($computerloadstate_name =~ /^(loadimagecomplete|nodeready|reserved)$/i) {
-#			$reservation_status{$reservation_id} = "ready: computerloadstate $computerloadstate_name";
-#			next;
-#		}
-#		
-#
-#		# Check if computer state indicates it isn't ready
-#		if ($computer_state_name =~ /^(reload|reloading|available)$/i) {
-#			$reservation_status{$reservation_id} = "not ready: computer state = $computer_state_name";
-#			next;
-#		}
-#
-#		notify($ERRORS{'WARNING'}, 0, "unexpected situation: reservation $reservation_id, request state: $request_state_name, computer state: $computer_state_name, computerloadstate: $computerloadstate_name");
-#		$reservation_status{$reservation_id} = "not ready: unexpected situation";
-#		
-#	} ## end for my $computerloadlog_row (@computerloadlog_rows)
-#
-#	
-#	# Assemble a string of all of the statuses
-#	my $status_string = '';
-#	my $failed        = 0;
-#	my $ready         = 1;
-#	foreach my $reservation_check_id (sort keys(%reservation_status)) {
-#		my $reservation_check_status = $reservation_status{$reservation_check_id};
-#		$status_string .= "reservation $request_id:$reservation_check_id: $reservation_check_status\n";
-#
-#		# Set the failed flag to 1 if any reservations failed
-#		if ($reservation_check_status =~ /failed/i) {
-#			$failed = 1;
-#		}
-#
-#		# Set the ready flag to 0 if any reservations are set to 0 (matching state wasn't found)
-#		if ($reservation_check_status =~ /not ready/) {
-#			$ready = 0;
-#		}
-#	} ## end foreach my $reservation_check_id (sort keys(%reservation_status...
-#
-#	if ($failed) {
-#		notify($ERRORS{'WARNING'}, 0, "request $request_id has failed reservations, returning undefined:\n$status_string");
-#		return;
-#	}
-#
-#	if ($ready) {
-#		notify($ERRORS{'OK'}, 0, "all reservations for request $request_id are ready, returning $ready:\n$status_string");
-#	}
-#	else {
-#		notify($ERRORS{'OK'}, 0, "not all reservations for request $request_id are ready, returning $ready:\n$status_string");
-#	}
-#
-#	return $ready;
-#
-#} ## end sub reservations_ready
 
 #/////////////////////////////////////////////////////////////////////////////
 
