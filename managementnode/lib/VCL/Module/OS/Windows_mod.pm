@@ -6865,6 +6865,103 @@ EOF
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 registry_query_value
+
+ Parameters  : $key_name (required), $value_name (optional)
+ Returns     : If successful: true
+               If failed: false
+ Description : Queries the registry. If a value name is specified as the 2nd
+               argument, the value is returned. If a value name is not
+               specified, the output from reg.exe /s is returned containing the
+               subkeys and values.
+
+=cut
+
+sub registry_query_value {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a VCL::Module module object method");
+		return;	
+	}
+
+	my $management_node_keys = $self->data->get_management_node_keys();
+	my $computer_node_name   = $self->data->get_computer_node_name();
+	
+	# Get and check the arguments
+	my $key_name = shift;
+	my $value_name = shift;
+	if (!$key_name) {
+		notify($ERRORS{'WARNING'}, 0, "registry key name argument was not specified");
+		return;	
+	}
+	
+	# Assemble the query command string
+	my $reg_query_command = "\$SYSTEMROOT/System32/reg.exe QUERY \"$key_name\"";
+	
+	# Check if the value name argument was specified
+	my $query_mode;
+	if ($value_name && $value_name eq '(Default)') {
+		# Value name argument is (Default), query default value using /ve switch
+		$reg_query_command .= " /ve";
+		$query_mode = 'default';
+	}
+	elsif ($value_name) {
+		# Value name argument was specified, query it using /v switch
+		$reg_query_command .= " /v \"$value_name\"";
+		$query_mode = 'value';
+	}
+	else {
+		# Value name argument was not specified, query all subkeys and values
+		$reg_query_command .= " /s";
+		$query_mode = 'subkeys';
+	}
+	
+	# Attempt to query the registry key
+	my ($reg_query_exit_status, $reg_query_output) = run_ssh_command($computer_node_name, $management_node_keys, $reg_query_command, '', '', 1);
+	if (defined($reg_query_output) && grep(/unable to find the specified registry/i, @$reg_query_output)) {
+		notify($ERRORS{'OK'}, 0, "registry key or value does not exist");
+		return;
+	}
+	if (defined($reg_query_exit_status) && $reg_query_exit_status == 0) {
+		notify($ERRORS{'DEBUG'}, 0, "queried registry key, output:\n" . join("\n", @{$reg_query_output}));
+	}
+	elsif (defined($reg_query_exit_status)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to query registry key, exit status: $reg_query_exit_status, output:\n@{$reg_query_output}");
+		return 0;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to query registry key");
+		return;
+	}
+	
+	# Check to see if the output appears normal	
+	if (@{$reg_query_output}[0] !~ /reg\.exe version/i) {
+		notify($ERRORS{'WARNING'}, 0, "unexpected output, 1st line doesn't contain REG.EXE VERSION:\n" . join("\n", @{$reg_query_output}));
+	}
+	
+	# Check what was asked for, if subkeys, return entire query output string joined with newlines
+	if ($query_mode eq 'subkeys') {
+		return join("\n", @{$reg_query_output});
+	}
+	
+	# Find the array element containing the line with the value
+	my ($value_line) =  grep(/($value_name|no name)/i, @{$reg_query_output});
+	notify($ERRORS{'DEBUG'}, 0, "value output line: $value_line");
+	
+	# Split the line up and return the value
+	my ($retrieved_key_name, $type, $retrieved_value);
+	if ($query_mode eq 'value') {
+		($retrieved_key_name, $type, $retrieved_value) = $value_line =~ /\s*([^\s]+)\s+([^\s]+)\s+([^\s]+)/;
+	}
+	else {
+		($retrieved_key_name, $type, $retrieved_value) = $value_line =~ /\s*(<NO NAME>)\s+([^\s]+)\s+([^\s]+)/;
+	}
+	
+	return $retrieved_value;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 1;
 __END__
 
