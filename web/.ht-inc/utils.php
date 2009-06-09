@@ -3562,7 +3562,7 @@ function RPCisAvailable($imageid, $start, $end, $userid) {
 /// \b loaded - 0 or 1 - whether or not computer is loaded with desired image
 ///
 /// \brief determines a computer to use from $blockids, $currentids,
-/// $preferredids, and $computerids, looking at the arrays in that order and
+/// and $computerids, looking at the arrays in that order and
 /// tries to allocate a management node for it
 ///
 ////////////////////////////////////////////////////////////////////////////////
@@ -4095,7 +4095,8 @@ function getRequestInfo($id) {
 	       .       "rs.imageid = i.id AND "
 	       .       "rs.imagerevisionid = ir.id AND "
 	       .       "i.OSid = o.id AND "
-	       .       "rs.computerid = c.id";
+	       .       "rs.computerid = c.id "
+	       . "ORDER BY rs.id";
 	$qh = doQuery($query, 101);
 	$data["reservations"] = array();
 	while($row = mysql_fetch_assoc($qh)) {

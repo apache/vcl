@@ -246,6 +246,7 @@ function submitRequest() {
 		print $HTMLheader;
 		print "<H2>New Reservation</H2>\n";
 		newReservation();
+		print getFooter();
 		return;
 	}
 	// FIXME hack to make sure user didn't submit a request for an image he 
@@ -319,6 +320,7 @@ function submitRequest() {
 			print " Please select \"Now\" or use a time in the future.</font><br>\n";
 			$submitErr = 1;
 			newReservation();
+			print getFooter();
 			return;
 		}
 		$nowfuture = "future";
@@ -335,8 +337,10 @@ function submitRequest() {
 	if(! semLock())
 		abort(3);
 
+	$availablerc = isAvailable($images, $data["imageid"], $start, $end, $data["os"]);
+
 	$max = getMaxOverlap($user['id']);
-	if(checkOverlap($start, $end, $max)) {
+	if($availablerc != 0 && checkOverlap($start, $end, $max)) {
 		$printedHTMLheader = 1;
 		print $HTMLheader;
 		print "<H2>New Reservation</H2>\n";
@@ -360,6 +364,7 @@ function submitRequest() {
 		}
 		$submitErr = 1;
 		newReservation();
+		print getFooter();
 		return;
 	}
 	// if user is owner of the image and there is a test version of the image
@@ -417,10 +422,10 @@ function submitRequest() {
 		print "<br><INPUT type=hidden name=continuation value=\"$cont\">\n";
 		print "<INPUT type=submit value=\"Create Reservation\">\n";
 		print "</FORM>\n";
+		print getFooter();
 		return;
 	}
-	$rc = isAvailable($images, $data["imageid"], $start, $end, $data["os"]);
-	if($rc == -1) {
+	if($availablerc == -1) {
 		$printedHTMLheader = 1;
 		print $HTMLheader;
 		print "<H2>New Reservation</H2>\n";
@@ -431,8 +436,9 @@ function submitRequest() {
 		print "environment.<br>";
 		addLogEntry($nowfuture, unixToDatetime($start), 
 		            unixToDatetime($end), 0, $data["imageid"]);
+		print getFooter();
 	}
-	elseif($rc > 0) {
+	elseif($availablerc > 0) {
 		$requestid = addRequest(0, $data["revisionid"]);
 		$time = prettyLength($data["length"]);
 		if($data["time"] == "now") {
@@ -470,6 +476,7 @@ function submitRequest() {
 			print "instructions on connecting to the reserved computer.  If you ";
 			print "would like to modify your reservation, you can do that from ";
 			print "the <b>Current Reservations</b> page as well.<br>\n";
+			print getFooter();
 		}
 	}
 	else {
@@ -2238,12 +2245,8 @@ function viewRequestInfo() {
 	print "<H2>View Reservation</H2>\n";
 	print "<table summary=\"\">\n";
 	print "  <TR>\n";
-	print "    <TH align=right>Unity&nbsp;ID:</TH>\n";
+	print "    <TH align=right>User:</TH>\n";
 	print "    <TD>" . $userinfo["unityid"] . "</TD>\n";
-	print "  </TR>\n";
-	print "  <TR>\n";
-	print "    <TH align=right>Requested&nbsp;Image:</TH>\n";
-	print "    <TD>{$reservation['prettyimage']}</TD>\n";
 	print "  </TR>\n";
 	print "  <TR>\n";
 	print "    <TH align=right>Start&nbsp;Time:</TH>\n";
@@ -2260,6 +2263,19 @@ function viewRequestInfo() {
 	print "    <TD>" . prettyDatetime($request["end"]) . "</TD>\n";
 	print "  </TR>\n";
 	print "  <TR>\n";
+	print "    <TH align=right>Request&nbsp;Time:</TH>\n";
+	print "    <TD>" . prettyDatetime($request["daterequested"]) . "</TD>\n";
+	print "  </TR>\n";
+	print "  <TR>\n";
+	print "    <TH align=right>Last&nbsp;Modified:</TH>\n";
+	if(! empty($request["datemodified"])) {
+		print "    <TD>" . prettyDatetime($request["datemodified"]) . "</TD>\n";
+	}
+	else {
+		print "    <TD>Never Modified</TD>\n";
+	}
+	print "  </TR>\n";
+	print "  <TR>\n";
 	print "    <TH align=right>Current&nbsp;State:</TH>\n";
 	print "    <TD>" . $states[$request["stateid"]] . "</TD>\n";
 	print "  </TR>\n";
@@ -2274,26 +2290,39 @@ function viewRequestInfo() {
 	}
 	print "</TD>\n";
 	print "  </TR>\n";
-	foreach($request["reservations"] as $res) {
-		print "  <TR>\n";
-		print "    <TH align=right>Computer&nbsp;ID:</TH>\n";
-		print "    <TD>" . $res["computerid"] . "</TD>\n";
-		print "  </TR>\n";
-	}
 	print "  <TR>\n";
-	print "    <TH align=right>Request&nbsp;Time:</TH>\n";
-	print "    <TD>" . prettyDatetime($request["daterequested"]) . "</TD>\n";
+	print "    <TH align=right>Image:</TH>\n";
+	print "    <TD>{$reservation['prettyimage']}</TD>\n";
 	print "  </TR>\n";
 	print "  <TR>\n";
-	print "    <TH align=right>Last&nbsp;Modified:</TH>\n";
-	if(! empty($request["datemodified"])) {
-		print "    <TD>" . prettyDatetime($request["datemodified"]) . "</TD>\n";
-	}
-	else {
-		print "    <TD>Never Modified</TD>\n";
-	}
+	print "    <TH align=right>Hostname:</TH>\n";
+	print "    <TD>{$request['reservations'][0]["hostname"]}</TD>\n";
+	print "  </TR>\n";
+	print "  <TR>\n";
+	print "    <TH align=right>IP&nbsp;Address:</TH>\n";
+	print "    <TD>{$request['reservations'][0]["reservedIP"]}</TD>\n";
 	print "  </TR>\n";
 	print "</table>\n";
+	if(count($request['reservations'] > 1)) {
+		array_shift($request['reservations']);
+		print "Subimages:<br>\n";
+		print "<table>\n";
+		foreach($request["reservations"] as $res) {
+			print "  <TR>\n";
+			print "    <TH align=right>Image:</TH>\n";
+			print "    <TD>{$res["prettyimage"]}</TD>\n";
+			print "  </TR>\n";
+			print "  <TR>\n";
+			print "    <TH align=right>Hostname:</TH>\n";
+			print "    <TD>{$res["hostname"]}</TD>\n";
+			print "  </TR>\n";
+			print "  <TR>\n";
+			print "    <TH align=right>IP&nbsp;Address:</TH>\n";
+			print "    <TD>{$res["reservedIP"]}</TD>\n";
+			print "  </TR>\n";
+		}
+		print "</table>\n";
+	}
 	print "<table summary=\"\">\n";
 	print "  <TR>\n";
 	/*print "    <TD>\n";
@@ -2305,7 +2334,7 @@ function viewRequestInfo() {
 	print "    </TD>\n";*/
 	print "    <TD>\n";
 	print "      <FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
-	$cdata = array('requestid' => $requestid);
+	$cdata = array('requestid' => $requestid, 'notbyowner' => 1);
 	$cont = addContinuationsEntry('confirmDeleteRequest', $cdata, SECINDAY);
 	print "      <INPUT type=hidden name=continuation value=\"$cont\">\n";
 	print "      <INPUT type=submit value=\"Delete Reservation\">\n";
@@ -3069,6 +3098,7 @@ function submitEditRequest() {
 ////////////////////////////////////////////////////////////////////////////////
 function confirmDeleteRequest() {
 	$requestid = getContinuationVar('requestid', 0);
+	$notbyowner = getContinuationVar('notbyowner', 0);
 	$request = getRequestInfo($requestid);
 	if($request['forimaging'])
 		$reservation = $request['reservations'][0];
@@ -3082,7 +3112,7 @@ function confirmDeleteRequest() {
 	}
 	if(datetimeToUnix($request["start"]) > time()) {
 		$title = "Delete Reservation";
-		$text = "Delete your reservation for <b>" . $reservation["prettyimage"]
+		$text = "Delete reservation for <b>" . $reservation["prettyimage"]
 		      . "</b> starting " . prettyDatetime($request["start"]) . "?<br>\n";
 	}
 	else {
@@ -3092,8 +3122,16 @@ function confirmDeleteRequest() {
 		}
 		else {
 			$title = "End Reservation";
-			$text = "Are you finished with your reservation for <b>"
-					. $reservation["prettyimage"] . "</b> that started ";
+			if($notbyowner == 0) {
+				$text = "Are you finished with your reservation for <strong>"
+						. $reservation["prettyimage"] . "</strong> that started ";
+			}
+			else {
+				$userinfo = getUserInfo($request["userid"]);
+				$text = "Delete reservation by {$userinfo['unityid']}@"
+				      . "{$userinfo['affiliation']} for <strong>"
+				      . "{$reservation["prettyimage"]}</strong> that started ";
+			}
 			if(datetimeToUnix($request["start"]) <
 				datetimeToUnix($request["daterequested"])) {
 				$text .= prettyDatetime($request["daterequested"]);
@@ -3110,7 +3148,7 @@ function confirmDeleteRequest() {
 	print "  <TR valign=top>\n";
 	print "    <TD>\n";
 	print "      <FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
-	$cdata = array('requestid' => $requestid);
+	$cdata = array('requestid' => $requestid, 'notbyowner' => $notbyowner);
 	$cont = addContinuationsEntry('submitDeleteRequest', $cdata, SECINDAY, 0, 0);
 	print "      <INPUT type=hidden name=continuation value=\"$cont\">\n";
 	print "      <INPUT type=submit value=Yes>\n";
@@ -3185,13 +3223,13 @@ function submitDeleteRequest() {
 	deleteRequest($request);
 	if(datetimeToUnix($request["start"]) > time()) {
 		print "<H2>Delete Reservation</H2>";
-		print "Your reservation for <b>" . $reservation["prettyimage"];
+		print "The reservation for <b>" . $reservation["prettyimage"];
 		print "</b> starting " . prettyDatetime($request["start"]);
 		print " has been deleted.<br>\n";
 	}
 	else {
 		print "<H2>End Reservation</H2>";
-		print "Your reservation for <b>" . $reservation["prettyimage"];
+		print "The reservation for <b>" . $reservation["prettyimage"];
 		print "</b> starting ";
 		if(datetimeToUnix($request["start"]) <
 		   datetimeToUnix($request["daterequested"])) {
