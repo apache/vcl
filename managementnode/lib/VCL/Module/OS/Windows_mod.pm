@@ -4499,7 +4499,9 @@ sub get_network_configuration {
 			notify($ERRORS{'DEBUG'}, 0, "interface does not have an ip address: $interface_name");
 			next;
 		}
-		elsif (grep(/$computer_private_ip_address/, @ip_addresses)) {
+		
+		# Check if interface has private IP address assigned to it
+		if (grep(/$computer_private_ip_address/, @ip_addresses)) {
 			# If private interface information was requested, return a hash containing only this interface
 			notify($ERRORS{'DEBUG'}, 0, "private interface found: $interface_name, description: $description, address(es): " . join (", ", @ip_addresses));
 			if ($network_type =~ /private/i) {
@@ -4550,9 +4552,14 @@ sub get_network_configuration {
 			}
 			else {
 				notify($ERRORS{'DEBUG'}, 0, "public interface found: $interface_name, description: $description, address(es): " . join (", ", @ip_addresses));
-				my %return_hash = ($interface_name => $network_configuration{$interface_name});
-				notify($ERRORS{'DEBUG'}, 0, "returning data for public interface: $interface_name (" . join (", ", @ip_addresses) . ")");
-				return \%return_hash;
+				if ($network_type =~ /public/i) {
+					my %return_hash = ($interface_name => $network_configuration{$interface_name});
+					notify($ERRORS{'DEBUG'}, 0, "returning data for public interface: $interface_name (" . join (", ", @ip_addresses) . ")");
+					return \%return_hash;
+				}
+				else {
+					next;
+				}
 			}
 		}
 	}
