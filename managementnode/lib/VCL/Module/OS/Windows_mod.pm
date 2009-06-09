@@ -1586,8 +1586,12 @@ sub set_password {
 	if ($set_password_exit_status == 0) {
 		notify($ERRORS{'OK'}, 0, "password changed to '$password' for user '$username' on $computer_node_name");
 	}
-	else {
+	elsif (defined $set_password_exit_status) {
 		notify($ERRORS{'WARNING'}, 0, "failed to change password to '$password' for user '$username' on $computer_node_name, exit status: $set_password_exit_status, output:\n@{$set_password_output}");
+		return 0;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to change password to '$password' for user '$username' on $computer_node_name");
 		return 0;
 	}
 
@@ -1606,8 +1610,12 @@ sub set_password {
 	if (defined($schtasks_query_exit_status) && $schtasks_query_exit_status == 0) {
 		notify($ERRORS{'DEBUG'}, 0, "queried scheduled tasks on $computer_node_name");
 	}
-	else {
+	elsif (defined $schtasks_query_exit_status) {
 		notify($ERRORS{'WARNING'}, 0, "failed to query scheduled tasks on $computer_node_name, exit status: $schtasks_query_exit_status, output:\n@{$schtasks_query_output}");
+		return 0;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to query scheduled tasks on $computer_node_name");
 		return 0;
 	}
 
@@ -1630,8 +1638,12 @@ sub set_password {
 		if (defined($schtasks_change_exit_status) && $schtasks_change_exit_status == 0) {
 			notify($ERRORS{'OK'}, 0, "changed password for scheduled task: $task_name_to_update");
 		}
-		else {
+		elsif (defined $schtasks_change_exit_status) {
 			notify($ERRORS{'WARNING'}, 0, "failed to change password for scheduled task: $task_name_to_update, exit status: $schtasks_change_exit_status, output:\n@{$schtasks_change_output}");
+			return 0;
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to change password for scheduled task: $task_name_to_update");
 			return 0;
 		}
 	} ## end for my $task_name_to_update (@task_names_to_update)
