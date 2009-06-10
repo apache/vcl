@@ -6784,7 +6784,7 @@ sub run_scp_command {
 		notify($ERRORS{'WARNING'}, 0, "path2 was not specified");
 		return 0;
 	}
-
+	
 	# Format the identity path string
 	if ($identity_paths) {
 		$identity_paths =~ s/^\s*/-i /;
@@ -6912,6 +6912,10 @@ sub run_scp_command {
 			}
 			
 			next;
+		}
+		elsif ($scp_output =~ /permission denied/i) {
+			notify($ERRORS{'WARNING'}, 0, "scp permission denied error occurred: command: $scp_command, exit status: $scp_exit_status, output: $scp_output");
+			return 0;
 		}
 		else {
 			notify($ERRORS{'OK'}, 0, "scp successful: attempt $attempts/$max_attempts, exit status: $scp_exit_status, output: $scp_output");
@@ -10349,15 +10353,15 @@ sub run_command {
 	if ($pid = open(COMMAND, "$command 2>&1 |")) {
 		# Capture the output of the command
 		@output = <COMMAND>;
-		
+	
 		# Save the exit status
 		$exit_status = $? >> 8;
 		
-		if ($? == -1) {
-			notify($ERRORS{'OK'}, 0, "\$? is set to $?, setting exit status to 0, Perl bug likely encountered");
-			$exit_status = 0;
-		}
-		
+	if ($? == -1) {
+		notify($ERRORS{'OK'}, 0, "\$? is set to $?, setting exit status to 0, Perl bug likely encountered");
+		$exit_status = 0;
+	}
+	
 		# Close the command handle
 		close(COMMAND);
 	}
