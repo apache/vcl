@@ -44,7 +44,7 @@ use FindBin;
 use lib "$FindBin::Bin/../../..";
 
 # Configure inheritance
-use base qw(VCL::Module::Provisioning);
+use base qw(VCL::Module::Provisioning::xCAT);
 
 # Specify the version of this module
 our $VERSION = '1.00';
@@ -231,7 +231,7 @@ sub load {
 	}
 
 	# Insert a computerloadlog record and edit nodelist table
-	insertloadlog($reservation_id, $computer_id, "editnodelist", "updating nodelist table");
+	insertloadlog($reservation_id, $computer_id, "info", "updating nodelist table");
 	if ($self->_edit_nodelist($computer_node_name, 0)) {
 		notify($ERRORS{'OK'}, 0, "nodelist updated for $computer_node_name");
 	}
@@ -349,7 +349,7 @@ sub load {
 					}
 					if ($_ =~ /nodeset failure/) {
 						my $success = 0;
-						notify($ERRORS{'WARNING'}, 0, "rinstall's nodeset failed - trying nodeset directly: ($_)");
+						notify($ERRORS{'OK'}, 0, "rinstall's nodeset failed - trying nodeset directly: ($_)");
 						if (open(NODESET, "$XCAT_ROOT/sbin/nodeset $computer_node_name install 2>&1 |")) {
 							while (<NODESET>) {
 								chomp($_);
@@ -1033,10 +1033,10 @@ sub load {
 	# Perform post load tasks
 
 	# Windows specific routines
-	if ($image_os_name =~ /winvista/) {
-		# If Vista, don't perform post-load tasks here
-		# new.pm calls the Vista module's post_load() subroutine to perform the same tasks as below
-		notify($ERRORS{'OK'}, 0, "vista image, skipping OS preparation tasks in xCAT.pm, returning 1");
+	if ($self->os->can('post_load')) {
+		# If post-load has been implemented by the OS module, don't perform these tasks here
+		# new.pm calls the Windows module's post_load() subroutine to perform the same tasks as below
+		notify($ERRORS{'OK'}, 0, "post_load() has been implemented by the OS module, skipping these tasks in xCAT.pm, returning 1");
 		return 1;
 	}
 	elsif ($image_os_name =~ /winxp|wxp|win2003|winvista/) {
@@ -1301,7 +1301,7 @@ sub load {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 capture_prepare
+=head2 capture
 
  Parameters  :
  Returns     : 1 if sucessful, 0 if failed
@@ -1309,7 +1309,7 @@ sub load {
 
 =cut
 
-sub capture_prepare {
+sub capture {
 	my $self = shift;
 	if (ref($self) !~ /xCAT/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
@@ -1331,6 +1331,46 @@ sub capture_prepare {
 	else {
 		notify($ERRORS{'WARNING'}, 0, "unable to update currentimage.txt on $computer_short_name");
 	}
+	
+	# Check if pre_capture() subroutine has been implemented by the OS module
+	if ($self->os->can("pre_capture")) {
+		# Call OS pre_capture() - it should perform all OS steps necessary to capture an image
+		# pre_capture() should shut down the computer when it is done
+		notify($ERRORS{'OK'}, 0, "calling OS module's pre_capture() subroutine");
+		if (!$self->os->pre_capture({end_state => 'off'})) {
+			notify($ERRORS{'WARNING'}, 0, "OS module pre_capture() failed");
+			return 0;
+		}
+		
+		# The OS module should turn the computer power off
+		# Wait up to 2 minutes for the computer's power status to be off
+		if ($self->wait_for_off(2)) {
+			notify($ERRORS{'OK'}, 0, "computer $computer_node_name power is off");
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "$computer_node_name power is still on, turning computer off");
+
+			# Attempt to power off computer
+			if ($self->power_off()) {
+				notify($ERRORS{'OK'}, 0, "$computer_node_name was powered off");
+			}
+			else {
+				notify($ERRORS{'WARNING'}, 0, "failed to power off $computer_node_name");
+				return 0;
+			}
+		}
+	} ## end if ($self->os->can("pre_capture"))
+	elsif ($self->os->can("capture_prepare")) {
+		notify($ERRORS{'OK'}, 0, "calling OS module's capture_prepare() subroutine");
+		if (!$self->os->capture_prepare()) {
+			notify($ERRORS{'WARNING'}, 0, "OS module capture_prepare() failed");
+			return 0;
+		}
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "OS module does not have either a pre_capture() or capture_prepare() subroutine");
+		return 0;
+	}
 
 	if ($self->_edit_nodetype($computer_node_name, $image_name, 1)) {
 		notify($ERRORS{'OK'}, 0, "nodetype modified, node $computer_node_name, image name $image_name");
@@ -1348,22 +1388,47 @@ sub capture_prepare {
 		notify($ERRORS{'CRITICAL'}, 0, "could not edit nodelist for $computer_node_name");
 	}
 
-	my @Images;
-	my ($i, $imagefile);
-
-	# Get the image repository path
-	my $image_repository_path = $self->_get_image_repository_path();
-	if (!$image_repository_path) {
-		notify($ERRORS{'CRITICAL'}, 0, "xCAT image repository information could not be determined");
-		return 0;
-	}
-
 	# Call xCAT's nodeset, configure xCAT to save image on next reboot
 	if (_nodeset_option($computer_node_name, "image")) {
 		notify($ERRORS{'OK'}, 0, "$computer_node_name set to image state");
 	}
 	else {
 		notify($ERRORS{'CRITICAL'}, 0, "failed $computer_node_name set to image state");
+		return 0;
+	}
+	
+	# Check if pre_capture() subroutine has been implemented by the OS module
+	# If so, all that needs to happen is for the computer to be powered on
+	if ($self->os->can("pre_capture")) {
+		# Turn the computer on
+		if ($self->power_on()) {
+			notify($ERRORS{'OK'}, 0, "$computer_node_name was powered on");
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to turn computer on before monitoring image capture");
+			return 0;
+		}
+	} ## end if ($self->os->can("pre_capture"))
+	# If capture_start() is implemented, call it, it will initiate a reboot
+	elsif ($self->os->can("capture_start")) {
+		notify($ERRORS{'OK'}, 0, "calling OS module's capture_start() subroutine");
+		if (!$self->os->capture_start()) {
+			notify($ERRORS{'WARNING'}, 0, "OS module capture_start() failed");
+			return 0;
+		}
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "OS module does not have either a pre_capture() or capture_start() subroutine");
+		return 0;
+	}
+
+
+	# Monitor the image capture
+	if ($self->capture_monitor()) {
+		notify($ERRORS{'OK'}, 0, "image capture monitoring is complete");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "problem occurred while monitoring image capture");
 		return 0;
 	}
 
@@ -1414,7 +1479,7 @@ sub capture_monitor {
 	# check /var/log/messages file for node entries or
 	# or check nodestat for boot flag
 
-	if ($fullloopcnt > 10) {
+	if ($fullloopcnt > 30) {
 		# looped 10 times without seeing a change in file size or
 		#   change in output of nodestat, must have failed
 		notify($ERRORS{'CRITICAL'}, 0, "reached max loop cnt with no change in image file size and no change in output from nodestat, failing");
@@ -1465,24 +1530,29 @@ sub capture_monitor {
 			$status =~ s/$computer_node_name: //;
 		} ## end foreach my $l (@file)
 	} ## end if (open(NODESTAT, "$XCAT_ROOT/bin/nodestat $computer_node_name stat 2>&1 |"...
-	else {
+	#else {
 		# could not run nodestat command, fall back to watching image size
 		# Check the image size to see if it's growing
 		notify($ERRORS{'OK'}, 0, "checking size of image");
 		my $size = $self->get_image_size($image_name);
+		notify($ERRORS{'OK'}, 0, "retrieved size of image: $size");
+		
 		if ($size > $filesize) {
 			notify($ERRORS{'OK'}, 0, "image size has changed: $size, still copying");
 			$filesize    = $size;
 			$fullloopcnt = 0;
 		}
 		elsif ($size == $filesize) {
+			notify($ERRORS{'OK'}, 0, "image size has NOT changed");
 			if ($filewatchcnt > 5) {
 				notify($ERRORS{'CRITICAL'}, 0, "waited too long for file size to change for $image_name from $computer_node_name, failing");
 				return 0;
 			}
 			$filewatchcnt++;
 		}
-	} ## end else [ if (open(NODESTAT, "$XCAT_ROOT/bin/nodestat $computer_node_name stat 2>&1 |"...
+		
+	#} ## end else [ if (open(NODESTAT, "$XCAT_ROOT/bin/nodestat $computer_node_name stat 2>&1 |"...
+	
 	if ($status =~ /partimage-ng: partition/) {
 		if ($status eq $laststatus) {
 			notify($ERRORS{'DEBUG'}, 0, "nodestat status did not change from last iteration ($status)");
@@ -1499,6 +1569,7 @@ sub capture_monitor {
 		# report status
 		notify($ERRORS{'OK'}, 0, "partimage-ng running on $computer_node_name: $status");
 	} ## end if ($status =~ /partimage-ng: partition/)
+	
 	$fullloopcnt++;
 	goto CIWAITIMAGE;
 } ## end sub capture_monitor
@@ -2087,6 +2158,7 @@ sub node_status {
 	my $computer_ip_address     = 0;
 	my $image_os_name           = 0;
 	my $image_name              = 0;
+	my $image_os_type           = 0;
 
 	# Check if subroutine was called as a class method
 	if (ref($self) !~ /xcat/i) {
@@ -2489,7 +2561,7 @@ sub retrieve_image {
 		return;
 	}
 
-	# Make sure imag library functions are enabled
+	# Make sure image library functions are enabled
 	my $image_lib_enable = $self->data->get_management_node_image_lib_enable();
 	if (!$image_lib_enable) {
 		notify($ERRORS{'OK'}, 0, "image library functions are disabled");
@@ -2514,7 +2586,7 @@ sub retrieve_image {
 		notify($ERRORS{'WARNING'}, 0, "image library configuration data is missing: user=$image_lib_user, key=$image_lib_key, partners=$image_lib_partners");
 		return;
 	}
-
+	
 	# Get the image repository path
 	my $image_repository_path        = $self->_get_image_repository_path();
 	my $image_repository_path_source = $image_repository_path;
