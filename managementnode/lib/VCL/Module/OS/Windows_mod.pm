@@ -441,15 +441,15 @@ sub post_load {
 		return 0;
 	}
 	
-=item *
-
- Set the computer name
-
-=cut
-
-	if (!$self->set_computer_name()) {
-		notify($ERRORS{'WARNING'}, 0, "failed to set the computer name");
-	}
+#=item *
+#
+# Set the computer name
+#
+#=cut
+#
+#	if (!$self->set_computer_name()) {
+#		notify($ERRORS{'WARNING'}, 0, "failed to set the computer name");
+#	}
 
 =item *
 
@@ -470,6 +470,7 @@ sub post_load {
 
 	if (!$self->firewall_enable_ssh_private()) {
 		notify($ERRORS{'WARNING'}, 0, "unable to enable SSH from private IP address");
+		return 0;
 	}
 
 =item *
@@ -480,6 +481,7 @@ sub post_load {
 
 	if (!$self->firewall_enable_ping_private()) {
 		notify($ERRORS{'WARNING'}, 0, "unable to enable ping from private IP address");
+		return 0;
 	}
 	
 =item *
@@ -521,6 +523,7 @@ sub post_load {
 	my $root_random_password = getpw();
 	if (!$self->set_password('root', $root_random_password)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to set random root password");
+		return 0;
 	}
 
 =item *
@@ -532,6 +535,7 @@ sub post_load {
 	my $administrator_random_password = getpw();
 	if (!$self->set_password('Administrator', $administrator_random_password)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to set random Administrator password");
+		return 0;
 	}
 
 =item *
@@ -544,7 +548,7 @@ sub post_load {
 		notify($ERRORS{'OK'}, 0, "imagemeta postoption reboot is set for image, rebooting computer");
 		if (!$self->reboot()) {
 			notify($ERRORS{'WARNING'}, 0, "failed to reboot the computer");
-			return;
+			return 0;
 		}
 	}
 
@@ -856,7 +860,25 @@ sub delete_file {
 	# Replace backslashes with forward slashes
 	$path =~ s/\\+/\//gs;
 	
+	if (!$self->filesystem_entry_exists($path)) {
+		notify($ERRORS{'DEBUG'}, 0, "file not deleted because it does not exist: $path");
+		return 1;
+	}
+	
 	notify($ERRORS{'DEBUG'}, 0, "attempting to delete file: $path");
+	
+	# Run chmod
+	my $chmod_command = "chmod -Rv 777 \"$path\"";
+	my ($chmod_exit_status, $chmod_output) = run_ssh_command($computer_node_name, $management_node_keys, $chmod_command, '', '', 1);
+	if (defined($chmod_exit_status) && $chmod_exit_status == 0) {
+		notify($ERRORS{'DEBUG'}, 0, "set permissions to 777 on $path");
+	}
+	elsif ($chmod_exit_status) {
+		notify($ERRORS{'WARNING'}, 0, "failed to set permissions to 777 on $path, exit status: $chmod_exit_status, output:\n@{$chmod_output}");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to set permissions to 777 on $path");
+	}
 
 	# Assemble the Windows shell del command and execute it
 	my $rm_command = "rm -rfv \"$path\"";
@@ -1087,7 +1109,7 @@ sub filesystem_entry_exists {
 	$path =~ s/\\+/\//;
 
 	# Assemble the ls command and execute it
-	my $ls_command = "ls -la \"$path\"";
+	my $ls_command = "ls -lad \"$path\"";
 	my ($ls_exit_status, $ls_output) = run_ssh_command($computer_node_name, $management_node_keys, $ls_command, '', '', 1);
 	if (defined($ls_exit_status) && $ls_exit_status == 0) {
 		notify($ERRORS{'DEBUG'}, 0, "filesystem entry exists on $computer_node_name: $path");
@@ -4834,17 +4856,17 @@ sub delete_capture_configuration_files {
 
 	# Remove old scripts and utilities
 	$self->delete_files_by_pattern('C:/Cygwin/home/root', '.*\(vbs\|exe\|cmd\|bat\|log\)');
-	
+
 	# Remove old C:\VCL directory if it exists
 	$self->delete_file('C:/VCL');
-	
+
 	# Delete VCL scheduled task if it exists
 	$self->delete_scheduled_task('VCL Startup Configuration');
-	
+
 	## Remove VCLprepare.cmd and VCLcleanup.cmd lines from scripts.ini file
 	$self->remove_group_policy_script('logon', 'VCLprepare.cmd');
 	$self->remove_group_policy_script('logoff', 'VCLcleanup.cmd');
-	
+
 	# Remove old root Application Data/VCL directory
 	$self->delete_file('$SYSTEMDRIVE/Documents and Settings/root/Application Data/VCL');
 
@@ -4852,8 +4874,9 @@ sub delete_capture_configuration_files {
 	notify($ERRORS{'OK'}, 0, "attempting to remove old configuration directory if it exists: $NODE_CONFIGURATION_DIRECTORY");
 	if (!$self->delete_file($NODE_CONFIGURATION_DIRECTORY)) {
 		notify($ERRORS{'WARNING'}, 0, "unable to remove existing configuration directory: $NODE_CONFIGURATION_DIRECTORY");
+		return 0;
 	}
-
+	
 	return 1;
 }
 
@@ -6435,21 +6458,21 @@ sub apply_security_templates {
 		notify($ERRORS{'OK'}, 0, "checking if any security templates exist in: $source_configuration_directory/Security");
 		
 		# Check each source configuration directory for .inf files under a Security subdirectory
-		my $find_command = "find $source_configuration_directory/Security -name \"*.inf\" | sort -f";
+		my $find_command = "find $source_configuration_directory/Security -name \"*.inf\" 2>&1 | sort -f";
 		my ($find_exit_status, $find_output) = run_command($find_command);
-		if (defined($find_exit_status) && $find_exit_status == 0) {
+		if (defined($find_output) && grep(/No such file/i, @$find_output)) {
+			notify($ERRORS{'DEBUG'}, 0, "path does not exist: $source_configuration_directory/Security");
+		}
+		elsif (defined($find_exit_status) && $find_exit_status == 0) {
 			notify($ERRORS{'DEBUG'}, 0, "ran find, output:\n" . join("\n", @$find_output));
 			push @inf_file_paths, @$find_output;
-		}
-		elsif (defined($find_output) && grep(/No such file/i, @$find_output)) {
-			notify($ERRORS{'DEBUG'}, 0, "path does not exist: $source_configuration_directory/Security, output:\n@{$find_output}");
 		}
 		elsif (defined($find_exit_status)) {
 			notify($ERRORS{'WARNING'}, 0, "failed to run find, exit status: $find_exit_status, output:\n@{$find_output}");
 			return;
 		}
 		else {
-			notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to run find");
+			notify($ERRORS{'WARNING'}, 0, "failed to run local command to run find");
 			return;
 		}
 	}
