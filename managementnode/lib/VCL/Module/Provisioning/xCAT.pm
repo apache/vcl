@@ -2590,18 +2590,13 @@ sub node_status {
 
 		# Check the currentimage.txt file on the node
 		notify($ERRORS{'DEBUG'}, $log, "checking image specified in currentimage.txt file on $computer_short_name");
-		if ($status{nodetype} =~ /win|image/) {
-			my $status_currentimage = _getcurrentimage($computer_short_name);
-			if ($status_currentimage) {
-				notify($ERRORS{'OK'}, $log, "$computer_short_name currentimage.txt has: $status_currentimage");
-				$status{currentimage} = $status_currentimage;
-			}
-			else {
-				notify($ERRORS{'WARNING'}, $log, "$computer_short_name currentimage.txt could not be checked");
-			}
-		} ## end if ($status{nodetype} =~ /win|image/)
+		my $status_currentimage = _getcurrentimage($computer_short_name);
+		if ($status_currentimage) {
+			notify($ERRORS{'OK'}, $log, "$computer_short_name currentimage.txt has: $status_currentimage");
+			$status{currentimage} = $status_currentimage;
+		}
 		else {
-			notify($ERRORS{'OK'}, $log, "currentimage.txt can not be checked for image type: $status{nodetype}");
+			notify($ERRORS{'WARNING'}, $log, "$computer_short_name currentimage.txt could not be checked");
 		}
 	} ## end if ($sshd_status =~ /on/)
 	else {

@@ -487,6 +487,7 @@ sub reload_image {
 	my $image_project                   = $self->data->get_image_project();
 	my $image_reloadtime                = $self->data->get_image_reload_time();
 	my $image_architecture              = $self->data->get_image_architecture();
+	my $image_os_install_type				= $self->data->get_image_os_install_type();
 	my $image_os_type                   = $self->data->get_image_os_type();
 	my $imagemeta_checkuser             = $self->data->get_imagemeta_checkuser();
 	my $imagemeta_usergroupid           = $self->data->get_imagemeta_usergroupid();
@@ -700,6 +701,14 @@ sub reload_image {
 	}
 	else {
 		notify($ERRORS{'OK'}, 0, ref($self->os) . "->post_load() subroutine does not exist");
+	}
+
+	#Post operations not to be handled by provisioning modules
+	if($image_os_install_type eq "kickstart"){
+		notify($ERRORS{'OK'}, 0, "Detected kickstart install on $computer_short_name, writing current_image.txt");
+		  if(write_currentimage_txt($self->data)){
+			  notify($ERRORS{'OK'}, 0, "Successfully wrote current_image.txt on $computer_short_name");
+		  }
 	}
 
 	notify($ERRORS{'OK'}, 0, "node ready: successfully reloaded $computer_short_name with $image_name");
