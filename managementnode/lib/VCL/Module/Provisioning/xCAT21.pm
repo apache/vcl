@@ -2276,14 +2276,14 @@ sub node_status {
 
 		# Check the currentimage.txt file on the node
 		notify($ERRORS{'DEBUG'}, $log, "checking image specified in currentimage.txt file on $computer_short_name");
-		my $status_currentimage = _getcurrentimage($computer_short_name);
-		if ($status_currentimage) {
-			notify($ERRORS{'OK'}, $log, "$computer_short_name currentimage.txt has: $status_currentimage");
-			$status{currentimage} = $status_currentimage;
-		}
-		else {
-			notify($ERRORS{'WARNING'}, $log, "$computer_short_name currentimage.txt could not be checked");
-		}
+			my $status_currentimage = _getcurrentimage($computer_short_name);
+			if ($status_currentimage) {
+				notify($ERRORS{'OK'}, $log, "$computer_short_name currentimage.txt has: $status_currentimage");
+				$status{currentimage} = $status_currentimage;
+			}
+			else {
+				notify($ERRORS{'WARNING'}, $log, "$computer_short_name currentimage.txt could not be checked");
+			}
 	} ## end if ($sshd_status =~ /on/)
 	else {
 		$status{ssh} = 0;
@@ -2487,8 +2487,9 @@ sub does_image_exist {
 		}
 	} ## end if ($image_os_install_type eq 'kickstart')
 	# Check if image files exist (Partimage files)
-	elsif (!-s "$image_repository_path/$image_name.img") {
-		notify($ERRORS{'OK'}, 0, "image file $image_repository_path/$image_name.img does not exist");
+	elsif (!-s "$image_repository_path/$image_name.img" and
+	       !-s "$image_repository_path/$image_name.gz") {
+		notify($ERRORS{'OK'}, 0, "image file $image_repository_path/$image_name.(img|gz) does not exist");
 		return 0;
 	}
 
@@ -2798,7 +2799,7 @@ sub get_image_size {
 
 	# Execute the command
 	# TODO add gzip support
-	my $du_command = "du -c $image_repository_path/$image_name*.img 2>&1";
+	my $du_command = "du -c $image_repository_path/$image_name*.img $image_repository_path/$image_name*.gz* 2>&1";
 	notify($ERRORS{'DEBUG'}, 0, "du command: $du_command");
 	my $du_output = `$du_command`;
 
