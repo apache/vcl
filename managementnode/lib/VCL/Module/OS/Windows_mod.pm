@@ -5878,7 +5878,7 @@ sub prepare_drivers {
 	}
 	
 	# Copy driver files to C:/Drivers
-	my $cp_command = "mkdir -p \"$driver_directory\" && cp -rf \"$NODE_CONFIGURATION_DIRECTORY/Drivers\" \"$driver_directory\"";
+	my $cp_command = "mkdir -p \"$driver_directory\" && cp -rf -T \"$NODE_CONFIGURATION_DIRECTORY/Drivers\" \"$driver_directory\"";
 	my ($cp_status, $cp_output) = run_ssh_command($computer_node_name, $management_node_keys, $cp_command);
 	if (defined($cp_status) && $cp_status == 0) {
 		notify($ERRORS{'DEBUG'}, 0, "copied driver files to $driver_directory");
