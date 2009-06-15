@@ -5878,7 +5878,7 @@ sub prepare_drivers {
 	}
 	
 	# Copy driver files to C:/Drivers
-	my $cp_command = "cp -rf \"$NODE_CONFIGURATION_DIRECTORY/Drivers\" \"$driver_directory\"";
+	my $cp_command = "mkdir -p \"$driver_directory\" && cp -rf \"$NODE_CONFIGURATION_DIRECTORY/Drivers\" \"$driver_directory\"";
 	my ($cp_status, $cp_output) = run_ssh_command($computer_node_name, $management_node_keys, $cp_command);
 	if (defined($cp_status) && $cp_status == 0) {
 		notify($ERRORS{'DEBUG'}, 0, "copied driver files to $driver_directory");
@@ -5889,6 +5889,21 @@ sub prepare_drivers {
 	}
 	else {
 		notify($ERRORS{'WARNING'}, 0, "unable to run ssh command to drivers files to $driver_directory");
+		return 0;
+	}
+	
+	# Delete existing DevicePath key
+	my $reg_del_command = '$SYSTEMROOT/System32/reg.exe DELETE "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion" /v DevicePath /f';
+	my ($reg_del_status, $reg_del_output) = run_ssh_command($computer_node_name, $management_node_keys, $reg_del_command);
+	if (defined($reg_del_status) && $reg_del_status == 0) {
+		notify($ERRORS{'DEBUG'}, 0, "deleted existing DevicePath key");
+	}
+	elsif (defined($reg_del_status)) {
+		notify($ERRORS{'OK'}, 0, "failed to delete existing DevicePath key, exit status: $reg_del_status, output:\n@{$reg_del_output}");
+		return 0;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unable to run ssh command to delete existing DevicePath key");
 		return 0;
 	}
 
