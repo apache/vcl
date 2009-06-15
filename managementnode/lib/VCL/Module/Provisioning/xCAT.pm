@@ -740,6 +740,7 @@ sub load {
 	$sshd_start_time = time() if !$sshd_start_time;
 
 	while (!$sshdstatus) {
+		notify($ERRORS{'DEBUG'}, 0, "checking sshd status of $computer_node_name");
 		my $sshd_status = _sshd_status($computer_node_name, $image_name, $image_os_type);
 		if ($sshd_status eq "on") {
 
@@ -752,9 +753,10 @@ sub load {
 			insertloadlog($reservation_id, $computer_id, "info", "synchronizing keys");
 		} ## end if ($sshd_status eq "on")
 		else {
+			notify($ERRORS{'DEBUG'}, 0, "sshd is not responding yet");
 
 			#either sshd is off or N/A, we wait
-			if ($wait_loops >= 7) {
+			if ($wait_loops >= 14) {
 				if ($sshd_attempts < 3) {
 					goto SSHDATTEMPT;
 				}
@@ -908,7 +910,11 @@ sub load {
 		elsif ($IPCONFIGURATION eq "static") {
 			insertloadlog($reservation_id, $computer_id, "info", "setting staticIPaddress");
 
-			if (setstaticaddress($computer_node_name, $image_os_name, $computer_ip_address, $image_os_type)) {
+			if ($self->os->can("set_static_public_address") && $self->os->set_static_public_address()) {
+				notify($ERRORS{'DEBUG'}, 0, "set static public address using OS module's set_static_public_address() method");
+				insertloadlog($reservation_id, $computer_id, "staticIPaddress", "SUCCESS set static IP address on public interface");
+			}
+			elsif (setstaticaddress($computer_node_name, $image_os_name, $computer_ip_address, $image_os_type)) {
 				notify($ERRORS{'DEBUG'}, 0, "set static address on $computer_ip_address $computer_node_name ");
 				insertloadlog($reservation_id, $computer_id, "staticIPaddress", "SUCCESS set static IP address on public interface");
 			}
@@ -1975,7 +1981,11 @@ sub power_on {
 		}
 
 		_rpower($computer_node_name, 'on');
-		sleep 2;
+		
+		# Wait up to 1 minute for the computer power status to be on
+		if (wait_for_on($computer_node_name, 1)) {
+			last;
+		}
 
 		$power_status = power_status($computer_node_name);
 	} ## end while ($power_status !~ /on/)
@@ -1997,7 +2007,7 @@ sub power_on {
 sub power_off {
 	my $argument_1 = shift;
 	my $argument_2 = shift;
-
+	
 	my $computer_node_name;
 
 	# Check if subroutine was called as an object method
@@ -2033,9 +2043,14 @@ sub power_off {
 			notify($ERRORS{'WARNING'}, 0, "failed to turn $computer_node_name off, rpower status not is off after 3 attempts");
 			return;
 		}
-
+		
+		# Attempt to run rpower <node> off
 		_rpower($computer_node_name, 'off');
-		sleep 2;
+		
+		# Wait up to 1 minute for the computer power status to be off
+		if (wait_for_off($computer_node_name, 1)) {
+			last;
+		}
 
 		$power_status = power_status($computer_node_name);
 	} ## end while ($power_status !~ /off/)
@@ -2111,17 +2126,43 @@ sub power_status {
 =cut
 
 sub wait_for_on {
-	my $self = shift;
-	if (ref($self) !~ /xcat/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+	my $argument_1 = shift;
+	my $argument_2 = shift;
+	my $argument_3 = shift;
+	
+	my $self;
+	my $computer_node_name;
+	my $total_wait_minutes;
+	
+	# Check if subroutine was called as an object method
+	if (ref($argument_1) =~ /xcat/i) {
+		$self = $argument_1;
+
+		if (defined $argument_3) {
+			$computer_node_name = $argument_2;
+			$total_wait_minutes = $argument_3;
+		}
+		else {
+			$computer_node_name = $self->data->get_computer_node_name();
+			$total_wait_minutes = $argument_2;
+		}
+
+	} ## end if (ref($argument_1) =~ /xcat/i)
+	else {
+		# Subroutine was not called as an object method, 2 arguments must be specified
+		$computer_node_name = $argument_1;
+		$total_wait_minutes = $argument_2;
+	}
+
+	# Check if computer was determined
+	if (!$computer_node_name) {
+		notify($ERRORS{'WARNING'}, 0, "computer could not be determined from arguments");
 		return;
 	}
 
-	my $computer_node_name = $self->data->get_computer_node_name();
-
-	# Attempt to get the total number of minutes to wait from the arguments
-	my $total_wait_minutes = shift;
+	# Make sure total wait minutes was determined
 	if (!defined($total_wait_minutes) || $total_wait_minutes !~ /^\d+$/) {
+		notify($ERRORS{'DEBUG'}, 0, "total wait minutes argument not specified, using default of 5 minutes");
 		$total_wait_minutes = 5;
 	}
 
@@ -2141,7 +2182,7 @@ sub wait_for_on {
 			sleep $attempt_delay;
 		}
 
-		if ($self->power_status() =~ /on/i) {
+		if (power_status($computer_node_name) =~ /on/i) {
 			notify($ERRORS{'OK'}, 0, "$computer_node_name is on");
 			return 1;
 		}
@@ -2164,17 +2205,43 @@ sub wait_for_on {
 =cut
 
 sub wait_for_off {
-	my $self = shift;
-	if (ref($self) !~ /xcat/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+	my $argument_1 = shift;
+	my $argument_2 = shift;
+	my $argument_3 = shift;
+	
+	my $self;
+	my $computer_node_name;
+	my $total_wait_minutes;
+	
+	# Check if subroutine was called as an object method
+	if (ref($argument_1) =~ /xcat/i) {
+		$self = $argument_1;
+
+		if (defined $argument_3) {
+			$computer_node_name = $argument_2;
+			$total_wait_minutes = $argument_3;
+		}
+		else {
+			$computer_node_name = $self->data->get_computer_node_name();
+			$total_wait_minutes = $argument_2;
+		}
+
+	} ## end if (ref($argument_1) =~ /xcat/i)
+	else {
+		# Subroutine was not called as an object method, 2 arguments must be specified
+		$computer_node_name = $argument_1;
+		$total_wait_minutes = $argument_2;
+	}
+
+	# Check if computer was determined
+	if (!$computer_node_name) {
+		notify($ERRORS{'WARNING'}, 0, "computer could not be determined from arguments");
 		return;
 	}
 
-	my $computer_node_name = $self->data->get_computer_node_name();
-
-	# Attempt to get the total number of minutes to wait from the arguments
-	my $total_wait_minutes = shift;
+	# Make sure total wait minutes was determined
 	if (!defined($total_wait_minutes) || $total_wait_minutes !~ /^\d+$/) {
+		notify($ERRORS{'DEBUG'}, 0, "total wait minutes argument not specified, using default of 5 minutes");
 		$total_wait_minutes = 5;
 	}
 
@@ -2194,7 +2261,7 @@ sub wait_for_off {
 			sleep $attempt_delay;
 		}
 
-		if ($self->power_status() =~ /off/i) {
+		if (power_status($computer_node_name) =~ /off/i) {
 			notify($ERRORS{'OK'}, 0, "$computer_node_name is off");
 			return 1;
 		}

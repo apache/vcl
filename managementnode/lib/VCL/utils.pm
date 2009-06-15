@@ -6577,7 +6577,8 @@ sub run_ssh_command {
 	# Set default values if not passed as an argument
 	$user = "root" if (!$user);
 	$port = 22     if (!$port);
-
+	$identity_paths = $ENV{management_node_info}{keys} if (!defined $identity_paths || length($identity_paths) == 0);
+	
 	# TODO: Add ssh path to config file and set global variable
 	# Locate the path to the ssh binary
 	my $ssh_path;
@@ -6596,7 +6597,7 @@ sub run_ssh_command {
 	}
 
 	# Format the identity path string
-	if ($identity_paths) {
+	if (defined $identity_paths && length($identity_paths) > 0) {
 		# Add -i to beginning of string
 		$identity_paths = "-i $identity_paths";
 		
@@ -7125,7 +7126,7 @@ sub get_management_predictive_info {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 get_management_node_id
+=head2 get_management_node_info
 
  Parameters  : Either a management node hostname or database ID
  Returns     : Hash containing data contained in the managementnode table
@@ -7263,6 +7264,12 @@ AND managementnode.id != $management_node_id
 	# Get the OS name
 	my $os_name = lc($^O);
 	$management_node_info->{OSNAME} = $os_name;
+	
+	# Add the public IP address configuration variables
+	$management_node_info->{PUBLIC_IP_CONFIGURATION} = $IPCONFIGURATION;
+	$management_node_info->{PUBLIC_SUBNET_MASK} = $NETMASK;
+	$management_node_info->{PUBLIC_DEFAULT_GATEWAY} = $GATEWAY;
+	$management_node_info->{PUBLIC_DNS_SERVER} = $DNSserver;
 
 	notify($ERRORS{'DEBUG'}, 0, "management node info retrieved from database for $shortname");
 	return $management_node_info;

@@ -1019,7 +1019,11 @@ sub load {
 		elsif ($IPCONFIGURATION eq "static") {
 			insertloadlog($reservation_id, $computer_id, "info", "setting staticIPaddress");
 
-			if (setstaticaddress($computer_node_name, $image_os_name, $computer_ip_address, $image_os_type)) {
+			if ($self->os->can("set_static_public_address") && $self->os->set_static_public_address()) {
+				notify($ERRORS{'DEBUG'}, 0, "set static public address using OS module's set_static_public_address() method");
+				insertloadlog($reservation_id, $computer_id, "staticIPaddress", "SUCCESS set static IP address on public interface");
+			}
+			elsif (setstaticaddress($computer_node_name, $image_os_name, $computer_ip_address, $image_os_type)) {
 				notify($ERRORS{'DEBUG'}, 0, "set static address on $computer_ip_address $computer_node_name ");
 				insertloadlog($reservation_id, $computer_id, "staticIPaddress", "SUCCESS set static IP address on public interface");
 			}

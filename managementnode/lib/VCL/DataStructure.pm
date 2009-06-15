@@ -460,6 +460,11 @@ $SUBROUTINE_MAPPINGS{management_node_os_name}              = '$ENV{management_no
 $SUBROUTINE_MAPPINGS{management_node_predictive_module_id} = '$ENV{management_node_info}{predictivemoduleid}';
 $SUBROUTINE_MAPPINGS{management_node_ssh_port}             = '$ENV{management_node_info}{sshport}';
 
+$SUBROUTINE_MAPPINGS{management_node_public_ip_configuration} = '$ENV{management_node_info}{PUBLIC_IP_CONFIGURATION}';
+$SUBROUTINE_MAPPINGS{management_node_public_subnet_mask}      = '$ENV{management_node_info}{PUBLIC_SUBNET_MASK}';
+$SUBROUTINE_MAPPINGS{management_node_public_default_gateway}  = '$ENV{management_node_info}{PUBLIC_DEFAULT_GATEWAY}';
+$SUBROUTINE_MAPPINGS{management_node_public_dns_server}       = '$ENV{management_node_info}{PUBLIC_DNS_SERVER}';
+
 $SUBROUTINE_MAPPINGS{management_node_predictive_module_name}         = '$ENV{management_node_info}{predictive_name}';
 $SUBROUTINE_MAPPINGS{management_node_predictive_module_pretty_name}  = '$ENV{management_node_info}{predictive_prettyname}';
 $SUBROUTINE_MAPPINGS{management_node_predictive_module_description}  = '$ENV{management_node_info}{predictive_description}';

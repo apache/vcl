@@ -4663,7 +4663,7 @@ sub get_public_interface_name {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 get_private_ip_addresses
+=head2 get_private_ip_address
 
  Parameters  : 
  Returns     : 
@@ -4671,7 +4671,7 @@ sub get_public_interface_name {
 
 =cut
 
-sub get_private_ip_addresses {
+sub get_private_ip_address {
 	my $self = shift;
 	if (ref($self) !~ /windows/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
@@ -4686,16 +4686,15 @@ sub get_private_ip_addresses {
 	}
 	
 	my $interface_name = (keys(%{$network_configuration}))[0];
-	
-	my $ip_address = $network_configuration->{$interface_name}{ip_address};
-	notify($ERRORS{'DEBUG'}, 0, "returning IP address: $ip_address");
-	
+	my $ip_address_config = $network_configuration->{$interface_name}{ip_address};
+	my $ip_address = (keys(%$ip_address_config))[0];
+	notify($ERRORS{'DEBUG'}, 0, "returning private IP address: $ip_address");
 	return $ip_address;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 get_public_ip_addresses
+=head2 get_public_ip_address
 
  Parameters  : 
  Returns     : 
@@ -4703,7 +4702,7 @@ sub get_private_ip_addresses {
 
 =cut
 
-sub get_public_ip_addresses {
+sub get_public_ip_address {
 	my $self = shift;
 	if (ref($self) !~ /windows/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
@@ -4718,11 +4717,101 @@ sub get_public_ip_addresses {
 	}
 	
 	my $interface_name = (keys(%{$network_configuration}))[0];
-	
-	my $ip_address = $network_configuration->{$interface_name}{ip_address};
-	notify($ERRORS{'DEBUG'}, 0, "returning IP address: $ip_address");
-	
+	my $ip_address_config = $network_configuration->{$interface_name}{ip_address};
+	my $ip_address = (keys(%$ip_address_config))[0];
+	notify($ERRORS{'DEBUG'}, 0, "returning public IP address: $ip_address");
 	return $ip_address;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_public_default_gateway
+
+ Parameters  : 
+ Returns     : 
+ Description : 
+
+=cut
+
+sub get_public_default_gateway {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $default_gateway;
+
+	# Check if management node is using static public IP configuration
+	my $ip_configuration = $self->data->get_management_node_public_ip_configuration();
+	if ($ip_configuration && $ip_configuration =~ /static/i) {
+		notify($ERRORS{'DEBUG'}, 0, "retrieving static default gateway configured for management node");
+		$default_gateway = $self->data->get_management_node_public_default_gateway();
+	}
+	else {
+		if (!$ip_configuration) {
+			notify($ERRORS{'WARNING'}, 0, "management node public IP configuration could not be retrieved, retrieving dynamic default gateway currently being used on computer");
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "retrieving dynamic default gateway currently being used on computer");
+		}
+		
+		# Make sure network configuration was retrieved
+		my $network_configuration = $self->get_network_configuration('public');
+		if (!$network_configuration) {
+			notify($ERRORS{'WARNING'}, 0, "unable to retrieve network configuration");
+			return;
+		}
+		
+		my $interface_name = (keys(%{$network_configuration}))[0];
+		$default_gateway = $network_configuration->{$interface_name}{default_gateway};
+	}
+
+	if (!$default_gateway) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine default gateway");
+		return;
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "returning public default gateway address: $default_gateway");
+	return $default_gateway;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_private_subnet_mask
+
+ Parameters  : 
+ Returns     : 
+ Description : 
+
+=cut
+
+sub get_private_subnet_mask {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+		
+	# Get private network configuration
+	my $network_configuration = $self->get_network_configuration('private');
+	if (!$network_configuration) {
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve network configuration");
+		return;
+	}
+	
+	my $interface_name = (keys(%{$network_configuration}))[0];	
+	my $ip_addresses = $network_configuration->{$interface_name}{ip_address};
+	my $ip_address = (keys(%$ip_addresses))[0];
+	my $subnet_mask = $ip_addresses->{$ip_address};
+	
+	if (!$subnet_mask) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine private subnet mask, network configuration:\n" . format_data($network_configuration));
+		return;
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "returning private subnet mask: $subnet_mask");
+	return $subnet_mask;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -7000,6 +7089,271 @@ sub registry_query_value {
 	}
 	
 	return $retrieved_value;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 set_static_public_address
+
+ Parameters  : 
+ Returns     : If successful: true
+               If failed: false
+ Description : Sets a static IP address for the public interface. The IP address
+               stored in the database for the computer is used. The subnet
+					mask, default gateway, and DNS servers configured for the
+					management node are used.
+					
+					A persistent route is added to the routing table to the public
+					default gateway.
+
+=cut
+
+sub set_static_public_address {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a VCL::Module module object method");
+		return;	
+	}
+
+	# Make sure public IP configuration is static
+	my $ip_configuration = $self->data->get_management_node_public_ip_configuration() || 'undefined';
+	unless ($ip_configuration =~ /static/i) {
+		notify($ERRORS{'WARNING'}, 0, "static public address can only be set if IP configuration is static, current value: $ip_configuration");
+		return;	
+	}
+	
+	# Get the IP configuration
+	my $public_interface_name = $self->get_public_interface_name() || 'undefined';
+	my $public_ip_address = $self->data->get_computer_ip_address() || 'undefined';
+	
+	my $subnet_mask = $self->data->get_management_node_public_subnet_mask() || 'undefined';
+	my $default_gateway = $self->data->get_management_node_public_default_gateway() || 'undefined';
+	my $dns_server = $self->data->get_management_node_public_dns_server() || 'undefined';
+	
+	# Make sure required info was retrieved
+	if ("$public_interface_name $subnet_mask $default_gateway $dns_server" =~ /undefined/) {
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve required network configuration:\ninterface: $public_interface_name\npublic IP address: $public_ip_address\nsubnet mask=$subnet_mask\ndefault gateway=$default_gateway\ndns server=$dns_server");
+		return;	
+	}
+	
+	my $management_node_keys = $self->data->get_management_node_keys();
+	my $computer_node_name   = $self->data->get_computer_node_name();
+	
+	notify($ERRORS{'DEBUG'}, 0, "network configuration:\ninterface: $public_interface_name\npublic IP address: $public_ip_address\nsubnet mask=$subnet_mask\ndefault gateway=$default_gateway\ndns server=$dns_server");
+	
+	# Assemble the commands
+	my $address_command      = "netsh interface ip set address name=\"$public_interface_name\" source=static addr=$public_ip_address mask=$subnet_mask gateway=$default_gateway gwmetric=0";
+	my $dns_command          = "netsh interface ip set dns name=\"$public_interface_name\" source=static addr=$dns_server register=none";
+	
+	# Set the static public IP address
+	my ($address_exit_status, $address_output) = run_ssh_command($computer_node_name, $management_node_keys, $address_command);
+	if (defined($address_exit_status) && $address_exit_status == 0) {
+		notify($ERRORS{'DEBUG'}, 0, "set static public IP address to $public_ip_address");
+	}
+	elsif (defined($address_exit_status)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to set static public IP address to $public_ip_address, exit status: $address_exit_status, output:\n@{$address_output}");
+		return;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to set static public IP address to $public_ip_address");
+		return;
+	}
+	
+	# Set the static DNS server address
+	my ($dns_exit_status, $dns_output) = run_ssh_command($computer_node_name, $management_node_keys, $dns_command);
+	if (defined($dns_exit_status) && $dns_exit_status == 0) {
+		notify($ERRORS{'DEBUG'}, 0, "set static DNS server address to $dns_server");
+	}
+	elsif (defined($dns_exit_status)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to set static DNS server address to $dns_server, exit status: $dns_exit_status, output:\n@{$dns_output}");
+		return;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to set static DNS server address to $dns_server");
+		return;
+	}
+	
+	# Add persistent static public default route
+	if (!$self->set_public_default_route()) {
+		notify($ERRORS{'WARNING'}, 0, "failed to add persistent static public default route");
+		return;
+	}
+	
+	notify($ERRORS{'OK'}, 0, "configured static address for public interface '$public_interface_name'");
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 set_static_private_address
+
+ Parameters  : None
+ Returns     : If successful: true
+               If failed: false
+ Description : Configures the private interface to use a static IP address. The
+               address and subnet mask used will be the same as what is
+               currently configured for the computer.
+
+=cut
+
+sub set_static_private_address {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a VCL::Module module object method");
+		return;	
+	}
+	
+	# Get the IP configuration
+	my $private_interface_name = $self->get_private_interface_name() || 'undefined';
+	my $private_ip_address = $self->get_private_ip_address() || 'undefined';
+	my $private_subnet_mask = $self->get_private_subnet_mask() || 'undefined';
+	
+	# Make sure required info was retrieved
+	if ("$private_interface_name $private_ip_address $private_subnet_mask" =~ /undefined/) {
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve required network configuration:\ninterface: $private_interface_name\nprivate IP address: $private_ip_address\nsubnet mask=$private_subnet_mask");
+		return;	
+	}
+	
+	my $management_node_keys = $self->data->get_management_node_keys();
+	my $computer_node_name   = $self->data->get_computer_node_name();
+	
+	notify($ERRORS{'DEBUG'}, 0, "private network configuration:\ninterface: $private_interface_name\nprivate IP address: $private_ip_address\nsubnet mask: $private_subnet_mask");
+	
+	# Set the static private IP address
+	my $set_command = "/bin/cygstart.exe cmd.exe /c netsh interface ip set address name=\"$private_interface_name\" source=static addr=$private_ip_address mask=$private_subnet_mask";
+	my ($set_exit_status, $set_output) = run_ssh_command($computer_node_name, $management_node_keys, $set_command);
+	if (defined($set_exit_status) && $set_exit_status == 0) {
+		notify($ERRORS{'DEBUG'}, 0, "set static private IP address to $private_ip_address");
+	}
+	elsif (defined($set_exit_status)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to set static private IP address to $private_ip_address, exit status: $set_exit_status, output:\n@{$set_output}");
+		return;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to set static private IP address to $private_ip_address");
+		return;
+	}
+	
+	# Wait briefly while command is executed
+	sleep 1;
+	
+	# Show the static private IP address configuration
+	my $show_command = "netsh interface ip show address name=\"$private_interface_name\"";
+	my ($show_exit_status, $show_output) = run_ssh_command($computer_node_name, $management_node_keys, $show_command);
+	if (defined($show_exit_status) && $show_exit_status == 0) {
+		notify($ERRORS{'DEBUG'}, 0, "private IP address configuration: " . join("\n", @$show_output));
+	}
+	elsif (defined($show_exit_status)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to display private IP address configuration, exit status: $show_exit_status, output:\n@{$show_output}");
+		return;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to display private IP address configuration");
+		return;
+	}
+	
+	# Check the show address output
+	if (grep(/DHCP enabled:\s+No/i, @$show_output)) {
+		notify($ERRORS{'OK'}, 0, "configured static address for private interface '$private_interface_name'");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to configure static address for private interface '$private_interface_name'");
+		return;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 delete_default_routes
+
+ Parameters  : 
+ Returns     : If successful: true
+               If failed: false
+ Description : Deletes all default (0.0.0.0) routes.
+
+=cut
+
+sub delete_default_routes {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a VCL::Module module object method");
+		return;	
+	}
+	
+	my $management_node_keys = $self->data->get_management_node_keys();
+	my $computer_node_name   = $self->data->get_computer_node_name();
+	
+	# Delete all default routes
+	my $route_delete_command = "route delete 0.0.0.0";
+	my ($route_delete_exit_status, $route_delete_output) = run_ssh_command($computer_node_name, $management_node_keys, $route_delete_command);
+	if (defined($route_delete_exit_status) && $route_delete_exit_status == 0) {
+		notify($ERRORS{'OK'}, 0, "deleted all default routes");
+	}
+	elsif (defined($route_delete_exit_status)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to delete all default routes, exit status: $route_delete_exit_status, output:\n@{$route_delete_output}");
+		return;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to delete all default routes");
+		return;
+	}
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 set_public_default_route
+
+ Parameters  : None
+ Returns     : If successful: true
+               If failed: false
+ Description : Adds a persistent route to the default gateway for the public
+               network.
+
+=cut
+
+sub set_public_default_route {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a VCL::Module module object method");
+		return;	
+	}
+
+	# Get the default gateway address
+	my $default_gateway = $self->data->get_management_node_public_default_gateway();
+	if (!$default_gateway) {
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve default gateway address");
+		return;	
+	}
+	
+	# Delete all default routes before adding
+	# Do this only after successfully retrieving default gateway address
+	if (!$self->delete_default_routes()) {
+		notify($ERRORS{'WARNING'}, 0, "unable to delete existing default routes");
+		return;	
+	}
+	
+	my $management_node_keys = $self->data->get_management_node_keys();
+	my $computer_node_name   = $self->data->get_computer_node_name();
+	
+	# Add a persistent route to the public default gateway
+	my $route_add_command    = "route -p ADD 0.0.0.0 MASK 0.0.0.0 $default_gateway METRIC 1";
+	my ($route_add_exit_status, $route_add_output) = run_ssh_command($computer_node_name, $management_node_keys, $route_add_command);
+	if (defined($route_add_exit_status) && $route_add_exit_status == 0) {
+		notify($ERRORS{'OK'}, 0, "added persistent route to public default gateway: $default_gateway");
+	}
+	elsif (defined($route_add_exit_status)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to add persistent route to public default gateway: $default_gateway, exit status: $route_add_exit_status, output:\n@{$route_add_output}");
+		return;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to add persistent route to public default gateway: $default_gateway");
+		return;
+	}
+	
+	return 1;
 }
 
 #/////////////////////////////////////////////////////////////////////////////

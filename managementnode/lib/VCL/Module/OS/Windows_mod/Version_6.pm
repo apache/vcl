@@ -529,14 +529,11 @@ sub firewall_enable_ping_private {
 	my $computer_node_name       = $self->data->get_computer_node_name();
 	
 	# Get the computer's private IP address
-	my @private_ip_addresses = keys(%{$self->get_private_ip_addresses()});
-	if (!@private_ip_addresses) {
-		notify($ERRORS{'WARNING'}, 0, "unable to retrieve private IP addresses");
+	my $private_ip_address = $self->get_private_ip_address();
+	if (!$private_ip_address) {
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve private IP address");
 		return;
 	}
-	
-	# Join together the IP addresses in case multiple addresses are bound
-	my $private_ip_address_string = join("," , @private_ip_addresses);
 	
 	# First delete any rules which allow ping and then add a new rule
 	my $add_rule_command;
@@ -547,26 +544,26 @@ sub firewall_enable_ping_private {
 	$add_rule_command .= ' ;';
 	
 	$add_rule_command .= ' netsh.exe advfirewall firewall add rule';
-	$add_rule_command .= ' name="VCL: allow incoming ping to: ' . $private_ip_address_string . '"';
-	$add_rule_command .= ' description="Allows incoming ping (ICMP type 8) messages to: ' . $private_ip_address_string . '"';
+	$add_rule_command .= ' name="VCL: allow incoming ping to: ' . $private_ip_address . '"';
+	$add_rule_command .= ' description="Allows incoming ping (ICMP type 8) messages to: ' . $private_ip_address . '"';
 	$add_rule_command .= ' protocol=icmpv4:8,any';
 	$add_rule_command .= ' action=allow';
 	$add_rule_command .= ' enable=yes';
 	$add_rule_command .= ' dir=in';
-	$add_rule_command .= ' localip=' . $private_ip_address_string;
+	$add_rule_command .= ' localip=' . $private_ip_address;
 	
 	# Add the firewall rule
 	my ($add_rule_exit_status, $add_rule_output) = run_ssh_command($computer_node_name, $management_node_keys, $add_rule_command);
 	
 	if (defined($add_rule_output)  && @$add_rule_output[-1] =~ /Ok\./i) {
-		notify($ERRORS{'OK'}, 0, "added firewall rule to allow incoming ping to: $private_ip_address_string");
+		notify($ERRORS{'OK'}, 0, "added firewall rule to allow incoming ping to: $private_ip_address");
 	}
 	elsif (defined($add_rule_exit_status)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to add firewall rule to allow incoming ping to: $private_ip_address_string, exit status: $add_rule_exit_status, output:\n@{$add_rule_output}");
+		notify($ERRORS{'WARNING'}, 0, "failed to add firewall rule to allow incoming ping to: $private_ip_address, exit status: $add_rule_exit_status, output:\n@{$add_rule_output}");
 		return;
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to add firewall rule to allow incoming ping to: $private_ip_address_string");
+		notify($ERRORS{'WARNING'}, 0, "failed to add firewall rule to allow incoming ping to: $private_ip_address");
 		return;
 	}
 	
@@ -707,14 +704,11 @@ sub firewall_enable_rdp_private {
 	my $computer_node_name       = $self->data->get_computer_node_name();
 	
 	# Get the computer's private IP address
-	my @private_ip_addresses = keys(%{$self->get_private_ip_addresses()});
-	if (!@private_ip_addresses) {
-		notify($ERRORS{'WARNING'}, 0, "unable to retrieve private IP addresses");
+	my $private_ip_address = $self->get_private_ip_address();
+	if (!$private_ip_address) {
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve private IP address");
 		return;
 	}
-	
-	# Join together the IP addresses in case multiple addresses are bound
-	my $private_ip_address_string = join("," , @private_ip_addresses);
 	
 	# First delete any rules which allow RDP and then add a new rule
 	my $add_rule_command;
@@ -726,27 +720,27 @@ sub firewall_enable_rdp_private {
 	$add_rule_command .= ' ;';
 	
 	$add_rule_command .= ' netsh.exe advfirewall firewall add rule';
-	$add_rule_command .= ' name="VCL: allow RDP port 3389 to: ' . $private_ip_address_string . '"';
-	$add_rule_command .= ' description="Allows incoming RDP (TCP port 3389) traffic to: ' . $private_ip_address_string . '"';
+	$add_rule_command .= ' name="VCL: allow RDP port 3389 to: ' . $private_ip_address . '"';
+	$add_rule_command .= ' description="Allows incoming RDP (TCP port 3389) traffic to: ' . $private_ip_address . '"';
 	$add_rule_command .= ' protocol=TCP';
 	$add_rule_command .= ' localport=3389';
 	$add_rule_command .= ' action=allow';
 	$add_rule_command .= ' enable=yes';
 	$add_rule_command .= ' dir=in';
-	$add_rule_command .= ' localip=' . $private_ip_address_string;
+	$add_rule_command .= ' localip=' . $private_ip_address;
 	
 	# Add the firewall rule
 	my ($add_rule_exit_status, $add_rule_output) = run_ssh_command($computer_node_name, $management_node_keys, $add_rule_command);
 	
 	if (defined($add_rule_output)  && @$add_rule_output[-1] =~ /Ok\./i) {
-		notify($ERRORS{'OK'}, 0, "added firewall rule to enable RDP to: $private_ip_address_string");
+		notify($ERRORS{'OK'}, 0, "added firewall rule to enable RDP to: $private_ip_address");
 	}
 	elsif (defined($add_rule_exit_status)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to add firewall rule to enable RDP to: $private_ip_address_string, exit status: $add_rule_exit_status, output:\n@{$add_rule_output}");
+		notify($ERRORS{'WARNING'}, 0, "failed to add firewall rule to enable RDP to: $private_ip_address, exit status: $add_rule_exit_status, output:\n@{$add_rule_output}");
 		return;
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to add firewall rule to enable RDP to: $private_ip_address_string");
+		notify($ERRORS{'WARNING'}, 0, "failed to add firewall rule to enable RDP to: $private_ip_address");
 		return;
 	}
 	
@@ -881,14 +875,11 @@ sub firewall_enable_ssh_private {
 	my $computer_node_name       = $self->data->get_computer_node_name();
 	
 	# Get the computer's private IP address
-	my @private_ip_addresses = keys(%{$self->get_private_ip_addresses()});
-	if (!@private_ip_addresses) {
-		notify($ERRORS{'WARNING'}, 0, "unable to retrieve private IP addresses");
+	my $private_ip_address = $self->get_private_ip_address();
+	if (!$private_ip_address) {
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve private IP address");
 		return;
 	}
-	
-	# Join together the IP addresses in case multiple addresses are bound
-	my $private_ip_address_string = join("," , @private_ip_addresses);
 	
 	# First delete any rules which allow ping and then add a new rule
 	my $add_rule_command;
@@ -900,27 +891,27 @@ sub firewall_enable_ssh_private {
 	$add_rule_command .= ' ;';
 	
 	$add_rule_command .= ' netsh.exe advfirewall firewall add rule';
-	$add_rule_command .= ' name="VCL: allow SSH port 22 to: ' . $private_ip_address_string . '"';
-	$add_rule_command .= ' description="Allows incoming SSH (TCP port 22) traffic to: ' . $private_ip_address_string . '"';
+	$add_rule_command .= ' name="VCL: allow SSH port 22 to: ' . $private_ip_address . '"';
+	$add_rule_command .= ' description="Allows incoming SSH (TCP port 22) traffic to: ' . $private_ip_address . '"';
 	$add_rule_command .= ' protocol=TCP';
 	$add_rule_command .= ' localport=22';
 	$add_rule_command .= ' action=allow';
 	$add_rule_command .= ' enable=yes';
 	$add_rule_command .= ' dir=in';
-	$add_rule_command .= ' localip=' . $private_ip_address_string;
+	$add_rule_command .= ' localip=' . $private_ip_address;
 	
 	# Add the firewall rule
 	my ($add_rule_exit_status, $add_rule_output) = run_ssh_command($computer_node_name, $management_node_keys, $add_rule_command);
 	
 	if (defined($add_rule_output)  && @$add_rule_output[-1] =~ /Ok\./i) {
-		notify($ERRORS{'OK'}, 0, "added firewall rule to enable SSH to: $private_ip_address_string");
+		notify($ERRORS{'OK'}, 0, "added firewall rule to enable SSH to: $private_ip_address");
 	}
 	elsif (defined($add_rule_exit_status)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to add firewall rule to enable SSH to: $private_ip_address_string, exit status: $add_rule_exit_status, output:\n@{$add_rule_output}");
+		notify($ERRORS{'WARNING'}, 0, "failed to add firewall rule to enable SSH to: $private_ip_address, exit status: $add_rule_exit_status, output:\n@{$add_rule_output}");
 		return;
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to add firewall rule to enable SSH to: $private_ip_address_string");
+		notify($ERRORS{'WARNING'}, 0, "failed to add firewall rule to enable SSH to: $private_ip_address");
 		return;
 	}
 	

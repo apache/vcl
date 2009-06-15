@@ -1102,8 +1102,17 @@ sub load {
 		} ## end if ($IPCONFIGURATION eq "dynamicDHCP")
 		elsif ($IPCONFIGURATION eq "static") {
 			insertloadlog($reservation_id, $vmclient_computerid, "staticIPaddress", "setting static IP address for node");
-			if (setstaticaddress($computer_shortname, $vmclient_OSname, $vmclient_publicIPaddress, $image_os_type)) {
+			if ($self->os->can("set_static_public_address") && $self->os->set_static_public_address()) {
+				notify($ERRORS{'DEBUG'}, 0, "set static public address using OS module's set_static_public_address() method");
+				insertloadlog($reservation_id, $vmclient_computerid, "staticIPaddress", "SUCCESS set static IP address on public interface");
+			}
+			elsif (setstaticaddress($computer_shortname, $vmclient_OSname, $vmclient_publicIPaddress, $image_os_type)) {
 				# good set static address
+				insertloadlog($reservation_id, $vmclient_computerid, "staticIPaddress", "SUCCESS set static IP address on public interface");
+			}
+			else {
+				insertloadlog($reservation_id, $vmclient_computerid, "staticIPaddress", "failed to set static IP address on public interface");
+				return 0;
 			}
 		}
 	} ## end if ($IPCONFIGURATION ne "manualDHCP")
