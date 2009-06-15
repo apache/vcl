@@ -6052,7 +6052,6 @@ sub get_management_node_requests {
 
    request.id AS request_id,
    request.stateid AS request_stateid,
-   request.reservationid AS request_reservationid,
    request.laststateid AS request_laststateid,
    request.logid AS request_logid,
    request.start AS request_start,
