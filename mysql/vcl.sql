@@ -655,7 +655,6 @@ CREATE TABLE IF NOT EXISTS `querylog` (
 CREATE TABLE IF NOT EXISTS `request` (
   `id` mediumint(8) unsigned NOT NULL auto_increment,
   `stateid` tinyint(3) unsigned NOT NULL default '0',
-  `imageid` smallint(5) unsigned NOT NULL default '0',
   `userid` mediumint(8) unsigned NOT NULL default '0',
   `reservationid` mediumint(8) unsigned NOT NULL default '0',
   `laststateid` tinyint(3) unsigned NOT NULL default '0',
@@ -689,10 +688,6 @@ CREATE TABLE IF NOT EXISTS `reservation` (
   `imageid` smallint(5) unsigned NOT NULL default '0',
   `imagerevisionid` mediumint(8) unsigned NOT NULL default '0',
   `managementnodeid` smallint(5) unsigned NOT NULL default '1',
-  `start` datetime NOT NULL default '0000-00-00 00:00:00',
-  `end` datetime NOT NULL default '0000-00-00 00:00:00',
-  `daterequested` datetime NOT NULL default '0000-00-00 00:00:00',
-  `datemodified` datetime default NULL,
   `remoteIP` varchar(15) default NULL,
   `lastcheck` datetime default '0000-00-00 00:00:00',
   `pw` varchar(10) default NULL,
