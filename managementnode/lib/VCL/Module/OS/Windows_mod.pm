@@ -4455,10 +4455,13 @@ sub get_network_configuration {
 			
 			# Normalize the setting format, make it lowercase, convert dashes and spaces to underscores
 			$setting = lc($setting);
-			$setting =~ s/[ -]/_/;
+			$setting =~ s/[ -]/_/g;
 			
 			# Windows 6.x includes a version indicator in IP address lines such as IPv4, remove this
 			$setting =~ s/ip(v\d)?_address/ip_address/;
+			
+			# Autoconfiguration ip address will be displayed as "Autoconfiguration IP Address. . . : 169.x.x.x"
+			$setting =~ s/autoconfiguration_ip/ip/;
 			
 			# Remove the trailing s from dns_servers
 			$setting =~ s/dns_servers/dns_server/;
