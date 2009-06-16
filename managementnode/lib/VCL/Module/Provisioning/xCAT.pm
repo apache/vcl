@@ -3173,37 +3173,30 @@ sub get_image_size {
 	}
 
 	# Execute the command
-	my $du_command = "du -c $image_repository_path/$image_name* 2>&1";
+	my $du_command = "du -c $image_repository_path/$image_name.* 2>&1";
 	notify($ERRORS{'DEBUG'}, 0, "du command: $du_command");
 	my $du_output = `$du_command`;
 
 	# Save the exit status
 	my $du_exit_status = $? >> 8;
-
-	# Check if $? = -1, this likely means a Perl CHLD signal bug was encountered
-	if ($? == -1) {
-		notify($ERRORS{'OK'}, 0, "\$? is set to $?, setting exit status to 0, Perl bug likely encountered");
-		$du_exit_status = 0;
+	
+	# Make sure du produced output
+	if (!defined($du_output) || length($du_output) == 0) {
+		notify($ERRORS{'WARNING'}, 0, "du did not product any output, du exit status: $du_exit_status");
+		return;
 	}
-
+	
+	# Check if image doesn't exist
+	if ($du_output && $du_output =~ /No such file.*0\s+total/is) {
+		notify($ERRORS{'WARNING'}, 0, "image does not exist: $image_repository_path/$image_name.*");
+		return;
+	}
+	
 	# Check the du command output
-	if ($du_exit_status > 0) {
-		notify($ERRORS{'WARNING'}, 0, "du exit status > 0: $du_exit_status, output:\n$du_output");
-		return 0;
-	}
-	elsif ($du_output !~ /total/s) {
+	my ($size_bytes) = $du_output =~ /(\d+)\s+total/s;
+	if (!defined $size_bytes) {
 		notify($ERRORS{'WARNING'}, 0, "du command did not produce expected output, du exit staus: $du_exit_status, output:\n$du_output");
-		return 0;
-	}
-
-	# Find the du output line containing 'total'
-	$du_output =~ /(\d+)\s+total/s;
-	my $size_bytes = $1;
-
-	# Check the du command output
-	if (!$size_bytes) {
-		notify($ERRORS{'WARNING'}, 0, "du produced unexpected output: $du_exit_status, output:\n$du_output");
-		return 0;
+		return;
 	}
 
 	# Calculate the size in MB

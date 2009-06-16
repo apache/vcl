@@ -7159,32 +7159,45 @@ sub set_static_public_address {
 	
 	notify($ERRORS{'DEBUG'}, 0, "network configuration:\ninterface: $public_interface_name\npublic IP address: $public_ip_address\nsubnet mask=$subnet_mask\ndefault gateway=$default_gateway\ndns server=$dns_server");
 	
-	# Assemble the commands
-	my $address_command      = "netsh interface ip set address name=\"$public_interface_name\" source=static addr=$public_ip_address mask=$subnet_mask gateway=$default_gateway gwmetric=0";
-	my $dns_command          = "netsh interface ip set dns name=\"$public_interface_name\" source=static addr=$dns_server register=none";
-	
 	# Set the static public IP address
-	my ($address_exit_status, $address_output) = run_ssh_command($computer_node_name, $management_node_keys, $address_command);
-	if (defined($address_exit_status) && $address_exit_status == 0) {
-		notify($ERRORS{'DEBUG'}, 0, "set static public IP address to $public_ip_address");
-	}
-	elsif (defined($address_exit_status)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to set static public IP address to $public_ip_address, exit status: $address_exit_status, output:\n@{$address_output}");
-		return;
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to set static public IP address to $public_ip_address");
-		return;
+	my $address_command = "netsh interface ip set address name=\"$public_interface_name\" source=static addr=$public_ip_address mask=$subnet_mask gateway=$default_gateway gwmetric=0";
+	
+	# Set number of attempts to try netsh commands
+	my $max_attempts = 3;
+	my $address_attempts = 0;
+	while ($address_attempts < $max_attempts) {
+		$address_attempts++;
+		my ($address_exit_status, $address_output) = run_ssh_command($computer_node_name, $management_node_keys, $address_command);
+		if (defined($address_exit_status) && $address_exit_status == 0) {
+			notify($ERRORS{'DEBUG'}, 0, "set static public IP address to $public_ip_address");
+			last;
+		}
+		elsif (defined($address_exit_status)) {
+			notify($ERRORS{'WARNING'}, 0, "attempt $address_attempts/$max_attempts: failed to set static public IP address to $public_ip_address, exit status: $address_exit_status, output:\n@{$address_output}");
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "attempt $address_attempts/$max_attempts: failed to run ssh command to set static public IP address to $public_ip_address");
+			return;
+		}
+		
+		# Check if max attempts has been reached.
+		if ($address_attempts >= $max_attempts) {
+			notify($ERRORS{'WARNING'}, 0, "failed to set static public IP address after making $address_attempts attempts");
+			return 0;
+		}
+		
+		sleep 2;
 	}
 	
 	# Set the static DNS server address
+	my $dns_command = "netsh interface ip set dns name=\"$public_interface_name\" source=static addr=$dns_server register=none";
 	my ($dns_exit_status, $dns_output) = run_ssh_command($computer_node_name, $management_node_keys, $dns_command);
 	if (defined($dns_exit_status) && $dns_exit_status == 0) {
 		notify($ERRORS{'DEBUG'}, 0, "set static DNS server address to $dns_server");
 	}
 	elsif (defined($dns_exit_status)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to set static DNS server address to $dns_server, exit status: $dns_exit_status, output:\n@{$dns_output}");
-		return;
+		return 0;
 	}
 	else {
 		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to set static DNS server address to $dns_server");
