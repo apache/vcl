@@ -180,7 +180,6 @@ $SUBROUTINE_MAPPINGS{reservation_ready} = '$self->request_data->{reservation}{RE
 
 $SUBROUTINE_MAPPINGS{computer_current_image_id} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{currentimageid}';
 $SUBROUTINE_MAPPINGS{computer_deleted}          = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{deleted}';
-$SUBROUTINE_MAPPINGS{computer_department_id}    = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{deptid}';
 $SUBROUTINE_MAPPINGS{computer_drive_type}       = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{drivetype}';
 $SUBROUTINE_MAPPINGS{computer_dsa}              = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{dsa}';
 $SUBROUTINE_MAPPINGS{computer_dsa_pub}          = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{dsapub}';
@@ -255,7 +254,6 @@ $SUBROUTINE_MAPPINGS{vmhost_type_name} = '$self->request_data->{reservation}{RES
 
 $SUBROUTINE_MAPPINGS{computer_currentimage_architecture}        = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{currentimage}{architecture}';
 $SUBROUTINE_MAPPINGS{computer_currentimage_deleted}             = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{currentimage}{deleted}';
-$SUBROUTINE_MAPPINGS{computer_currentimage_deptid}              = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{currentimage}{deptid}';
 $SUBROUTINE_MAPPINGS{computer_currentimage_forcheckout}         = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{currentimage}{forcheckout}';
 $SUBROUTINE_MAPPINGS{computer_currentimage_id}                  = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{currentimage}{id}';
 $SUBROUTINE_MAPPINGS{computer_currentimage_imagemetaid}         = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{currentimage}{imagemetaid}';
@@ -286,13 +284,10 @@ $SUBROUTINE_MAPPINGS{computer_currentimagerevision_production}  = '$self->reques
 $SUBROUTINE_MAPPINGS{computer_currentimagerevision_revision}    = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{currentimagerevision}{revision}';
 $SUBROUTINE_MAPPINGS{computer_currentimagerevision_userid}      = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{currentimagerevision}{userid}';
 
-$SUBROUTINE_MAPPINGS{computer_dept_name}       = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{dept}{name}';
-$SUBROUTINE_MAPPINGS{computer_dept_prettyname} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{dept}{prettyname}';
 $SUBROUTINE_MAPPINGS{computer_platform_name}   = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{platform}{name}';
 
 $SUBROUTINE_MAPPINGS{computer_preferredimage_architecture}   = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{preferredimage}{architecture}';
 $SUBROUTINE_MAPPINGS{computer_preferredimage_deleted}        = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{preferredimage}{deleted}';
-$SUBROUTINE_MAPPINGS{computer_preferredimage_deptid}         = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{preferredimage}{deptid}';
 $SUBROUTINE_MAPPINGS{computer_preferredimage_forcheckout}    = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{preferredimage}{forcheckout}';
 $SUBROUTINE_MAPPINGS{computer_preferredimage_id}             = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{preferredimage}{id}';
 $SUBROUTINE_MAPPINGS{computer_preferredimage_imagemetaid}    = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{preferredimage}{imagemetaid}';
@@ -329,7 +324,6 @@ $SUBROUTINE_MAPPINGS{computer_state_name}    = '$self->request_data->{reservatio
 
 $SUBROUTINE_MAPPINGS{image_architecture}   = '$self->request_data->{reservation}{RESERVATION_ID}{image}{architecture}';
 $SUBROUTINE_MAPPINGS{image_deleted}        = '$self->request_data->{reservation}{RESERVATION_ID}{image}{deleted}';
-$SUBROUTINE_MAPPINGS{image_deptid}         = '$self->request_data->{reservation}{RESERVATION_ID}{image}{deptid}';
 $SUBROUTINE_MAPPINGS{image_forcheckout}    = '$self->request_data->{reservation}{RESERVATION_ID}{image}{forcheckout}';
 $SUBROUTINE_MAPPINGS{image_id}             = '$self->request_data->{reservation}{RESERVATION_ID}{image}{id}';
 $SUBROUTINE_MAPPINGS{image_identity}       = '$self->request_data->{reservation}{RESERVATION_ID}{image}{IDENTITY}';
@@ -354,8 +348,6 @@ $SUBROUTINE_MAPPINGS{image_size}            = '$self->request_data->{reservation
 $SUBROUTINE_MAPPINGS{image_test}            = '$self->request_data->{reservation}{RESERVATION_ID}{image}{test}';
 $SUBROUTINE_MAPPINGS{image_updateimagename} = '$self->request_data->{reservation}{RESERVATION_ID}{image}{UPDATEIMAGENAME}';
 
-$SUBROUTINE_MAPPINGS{image_dept_name}       = '$self->request_data->{reservation}{RESERVATION_ID}{image}{dept}{name}';
-$SUBROUTINE_MAPPINGS{image_dept_prettyname} = '$self->request_data->{reservation}{RESERVATION_ID}{image}{dept}{prettyname}';
 
 $SUBROUTINE_MAPPINGS{imagemeta_checkuser}            = '$self->request_data->{reservation}{RESERVATION_ID}{image}{imagemeta}{checkuser}';
 $SUBROUTINE_MAPPINGS{imagemeta_id}                   = '$self->request_data->{reservation}{RESERVATION_ID}{image}{imagemeta}{id}';

@@ -5478,7 +5478,6 @@ sub get_request_info {
    image.name AS image_name,
    image.prettyname AS image_prettyname,
    image.ownerid AS image_ownerid,
-   image.deptid AS image_deptid,
    image.platformid AS image_platformid,
    image.OSid AS image_OSid,
    image.imagemetaid AS image_imagemetaid,
@@ -5506,9 +5505,6 @@ sub get_request_info {
    imagerevision.production AS imagerevision_production,
    imagerevision.comments AS imagerevision_comments,
    imagerevision.imagename AS imagerevision_imagename,
-
-   imagedept.name AS imagedept_name,
-   imagedept.prettyname AS imagedept_prettyname,
 
    imageplatform.name AS imageplatform_name,
 
@@ -5559,7 +5555,6 @@ sub get_request_info {
    computer.id AS computer_id,
    computer.stateid AS computer_stateid,
    computer.ownerid AS computer_ownerid,
-   computer.deptid AS computer_deptid,
    computer.platformid AS computer_platformid,
    computer.scheduleid AS computer_scheduleid,
    computer.currentimageid AS computer_currentimageid,
@@ -5589,9 +5584,6 @@ sub get_request_info {
    computer.hostpub AS computer_hostpub,
    computer.vmhostid AS computer_vmhostid,
 
-   computerdept.name AS computerdept_name,
-   computerdept.prettyname AS computerdept_prettyname,
-
    computerplatform.name AS computerplatform_name,
 
    computerstate.name AS computerstate_name,
@@ -5615,7 +5607,6 @@ sub get_request_info {
    IMtype,
    reservation,
    image,
-   dept imagedept,
    platform imageplatform,
    imagerevision,
    OS,
@@ -5623,7 +5614,6 @@ sub get_request_info {
    computer,
 	provisioning computerprovisioning,
 	module computerprovisioningmodule,
-   dept computerdept,
    platform computerplatform,
    schedule computerschedule,
    state requeststate,
@@ -5637,13 +5627,11 @@ sub get_request_info {
    AND affiliation.id = user.affiliationid
    AND reservation.requestid = request.id
    AND image.id = imagerevision.imageid
-   AND imagedept.id = image.deptid
    AND imageplatform.id = image.platformid
    AND imagerevision.id = reservation.imagerevisionid
    AND OS.id = image.OSid
 	AND imageOSmodule.id = OS.moduleid
    AND computer.id = reservation.computerid
-   AND computerdept.id = computer.deptid
    AND computerplatform.id = computer.platformid
    AND computerschedule.id = computer.scheduleid
    AND computerstate.id = computer.stateid
@@ -5794,9 +5782,6 @@ sub get_request_info {
 			elsif ($key =~ /image_/) {
 				$request_info{reservation}{$reservation_id}{image}{$original_key} = $value;
 			}
-			elsif ($key =~ /imagedept_/) {
-				$request_info{reservation}{$reservation_id}{image}{dept}{$original_key} = $value;
-			}
 			elsif ($key =~ /imageplatform_/) {
 				$request_info{reservation}{$reservation_id}{image}{platform}{$original_key} = $value;
 			}
@@ -5820,9 +5805,6 @@ sub get_request_info {
 			}
 			elsif ($key =~ /computer_/) {
 				$request_info{reservation}{$reservation_id}{computer}{$original_key} = $value;
-			}
-			elsif ($key =~ /computerdept_/) {
-				$request_info{reservation}{$reservation_id}{computer}{dept}{$original_key} = $value;
 			}
 			elsif ($key =~ /computerplatform_/) {
 				$request_info{reservation}{$reservation_id}{computer}{platform}{$original_key} = $value;
