@@ -2,56 +2,74 @@
 chdir("..");
 require_once('.ht-inc/conf.php');
 
-header("Cache-Control: no-cache, must-revalidate");
-header("Expires: Sat, 1 Jan 2000 00:00:00 GMT");
-
-if(! array_key_exists('eppn', $_SERVER) ||
-   ! array_key_exists('mail', $_SERVER) ||
-   (! (array_key_exists('sn', $_SERVER) &&
-   array_key_exists('givenName', $_SERVER)) &&
-   ! array_key_exists('displayName', $_SERVER))) {
-
-	# check to see if any shib stuff in $_SERVER, if not redirect
-	$keys = array_keys($_SERVER);
-	$allkeys = '{' . implode('{', $keys);
-	if(! preg_match('/^\{Shib-/', $allkeys)) {
-		# no shib data, clear _shibsession cookie
-		foreach(array_keys($_COOKIE) as $key) {
-			if(preg_match('/^_shibsession[_0-9a-fA-F]+$/', $key))
-				setcookie($key, "", time() - 10, "/", $_SERVER['SERVER_NAME']);
-		}
-		# redirect to main select auth page
-		header("Location: " . BASEURL . SCRIPT . "?mode=selectauth");
-		exit;
-	}
-	print "<h2>Error with Shibboleth authentication</h2>\n";
-	print "You have attempted to log in using Shibboleth from an<br>\n";
-	print "institution that does not allow VCL to see all of these<br>\n";
-	print "attributes:<br>\n";
-	print "<ul>\n";
-	print "<li>eduPersonPrincipalName</li>\n";
-	print "<li>mail</li>\n";
-	print "</ul>\n";
-	print "and either:\n";
-	print "<ul>\n";
-	print "<li>sn and givenName</li>\n";
-	print "</ul>\n";
-	print "or:\n";
-	print "<ul>\n";
-	print "<li>displayName</li>\n";
-	print "</ul>\n";
-	print "You need to contact the administrator of your institution's<br>\n";
-	print "IdP to have all of those attributes be available to VCL in<br>\n";
-	print "order to log in using Shibboleth.\n";
-	exit;
-}
-
 require_once('.ht-inc/utils.php');
 require_once('.ht-inc/errors.php');
 function getFooter() {}
 $noHTMLwrappers = array();
 
 dbConnect();
+
+header("Cache-Control: no-cache, must-revalidate");
+header("Expires: Sat, 1 Jan 2000 00:00:00 GMT");
+
+if(! array_key_exists('eppn', $_SERVER) ||
+   (! (array_key_exists('sn', $_SERVER) &&
+   array_key_exists('givenName', $_SERVER)) &&
+   ! array_key_exists('displayName', $_SERVER))) {
+
+	# check for eppn; if there, see if it is a user we already have
+	if(array_key_exists('eppn', $_SERVER)) {
+		$tmp = explode('@', $_SERVER['eppn']);
+		$query = "SELECT u.firstname, "
+				 .        "u.lastname "
+				 . "FROM user u, "
+				 .      "affiliation a "
+				 . "WHERE u.unityid = '{$tmp[0]}' AND "
+				 .       "a.shibname = '{$tmp[1]}' AND "
+				 .       "u.affiliationid = a.id";
+		$qh = doQuery($query, 101);
+		if($row = mysql_fetch_assoc($qh)) {
+			$_SERVER['sn'] = $row['lastname'];
+			$_SERVER['givenName'] = $row['firstname'];
+		}
+		else {
+			# check to see if any shib stuff in $_SERVER, if not redirect
+			$keys = array_keys($_SERVER);
+			$allkeys = '{' . implode('{', $keys);
+			if(! preg_match('/\{Shib-/', $allkeys)) {
+				# no shib data, clear _shibsession cookie
+				foreach(array_keys($_COOKIE) as $key) {
+					if(preg_match('/^_shibsession[_0-9a-fA-F]+$/', $key))
+						setcookie($key, "", time() - 10, "/", $_SERVER['SERVER_NAME']);
+				}
+				# redirect to main select auth page
+				header("Location: " . BASEURL . SCRIPT . "?mode=selectauth");
+				dbDisconnect();
+				exit;
+			}
+			print "<h2>Error with Shibboleth authentication</h2>\n";
+			print "You have attempted to log in using Shibboleth from an<br>\n";
+			print "institution that does not allow VCL to see all of these<br>\n";
+			print "attributes:<br>\n";
+			print "<ul>\n";
+			print "<li>eduPersonPrincipalName</li>\n";
+			print "</ul>\n";
+			print "and either:\n";
+			print "<ul>\n";
+			print "<li>sn and givenName</li>\n";
+			print "</ul>\n";
+			print "or:\n";
+			print "<ul>\n";
+			print "<li>displayName</li>\n";
+			print "</ul>\n";
+			print "You need to contact the administrator of your institution's<br>\n";
+			print "IdP to have all of those attributes be available to VCL in<br>\n";
+			print "order to log in using Shibboleth.\n";
+			dbDisconnect();
+			exit;
+		}
+	}
+}
 
 // open keys
 $fp = fopen(".ht-inc/keys.pem", "r");
@@ -80,7 +98,8 @@ if(! ($row = mysql_fetch_assoc($qh))) {
 	array_pop($tmp);
 	$affilname = strtoupper(implode('', $tmp));
 	$affilname = preg_replace('/[^A-Z0-9]/', '', $affilname);
-	$query = "SELECT name "
+	$query = "SELECT name, "
+	       .        "shibname "
 	       . "FROM affiliation "
 	       . "WHERE name LIKE '$affilname%' "
 	       . "ORDER BY name DESC "
@@ -92,14 +111,18 @@ if(! ($row = mysql_fetch_assoc($qh))) {
 			$cnt++;
 			$newaffilname = $affilname . $cnt;
 		}
+		elseif($affilname != $row['name'] && $affil != $row['shibname']) {
+			$newaffilname = $affilname;
+		}
 		else {
 			$msg = "Someone tried to log in to VCL using Shibboleth from an idp "
 			     . "affiliation that could not be automatically added.\n\n"
 			     . "eppn: {$_SERVER['eppn']}\n"
 			     . "givenName: {$_SERVER['givenName']}\n"
-			     . "sn: {$_SERVER['sn']}\n"
-			     . "mail: {$_SERVER['mail']}\n\n"
-			     . "tried to add VCL affiliation name \"$affilname\" with "
+			     . "sn: {$_SERVER['sn']}\n";
+			if(array_key_exists('mail', $_SERVER))
+				$msg .= "mail: {$_SERVER['mail']}\n\n";
+			$msg .="tried to add VCL affiliation name \"$affilname\" with "
 			     . "shibname \"$affil\"";
 			$mailParams = "-f" . ENVELOPESENDER;
 			mail(ERROREMAIL, "Error with VCL pages (problem adding shib affil)", $msg, '', $mailParams);
@@ -189,13 +212,9 @@ else
 	setcookie("VCLAUTH", "{$cookie['data']}", 0, "/", COOKIEDOMAIN);
 # set skin cookie based on affiliation
 switch($affil) {
-	case 'WakeTech':
-	case 'JohnstonCC':
+	case 'Example1':
+	case 'EXAMPLE2':
 		$skin = strtoupper($affil);
-	case 'NCCU':
-	case 'ECU':
-	case 'UNCG':
-	case 'WCU':
 		setcookie("VCLSKIN", $skin, (time() + (SECINDAY * 31)), "/", COOKIEDOMAIN);
 		break;
 	default:

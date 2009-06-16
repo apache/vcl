@@ -47,7 +47,8 @@ function updateShibUser($userid) {
 		$user["lastname"] = $_SERVER['sn'];
 	else
 		$user['lastname'] = $displast;
-	$user["email"] = $_SERVER['mail'];
+	if(array_key_exists('mail', $_SERVER))
+		$user["email"] = $_SERVER['mail'];
 	$user['unityid'] = $userid;
 	$user['affilid'] = $affilid;
 
@@ -65,9 +66,10 @@ function updateShibUser($userid) {
 	$user['id'] = $row['id'];
 	$query = "UPDATE user "
 	       . "SET firstname = '{$user['firstname']}', "
-	       .     "lastname = '{$user['lastname']}', "
-	       .     "email = '{$user['email']}', " 
-	       .     "emailnotices = 0, " 
+	       .     "lastname = '{$user['lastname']}', ";
+	if(array_key_exists('email', $user))
+		$query .= "email = '{$user['email']}', ";
+	$query .=    "emailnotices = 0, " 
 	       .     "lastupdated = NOW() " 
 	       . "WHERE uid = {$user['id']}";
 	doQuery($query, 101, 'vcl', 1);
@@ -97,17 +99,19 @@ function addShibUser($user) {
 	       .        "(unityid, "
 	       .        "affiliationid, "
 	       .        "firstname, "
-	       .        "lastname, "
-	       .        "email, "
-	       .        "emailnotices, "
+	       .        "lastname, ";
+	if(array_key_exists('email', $user))
+		$query .=    "email, ";
+	$query .=       "emailnotices, "
 	       .        "lastupdated) "
 	       . "VALUES ("
 	       .        "'{$user['unityid']}', "
 	       .        "{$user['affilid']}, "
 	       .        "'{$user['firstname']}', "
-	       .        "'{$user['lastname']}', "
-	       .        "'{$user['email']}', "
-	       .        "0, "
+	       .        "'{$user['lastname']}', ";
+	if(array_key_exists('email', $user))
+		$query .=    "'{$user['email']}', ";
+	$query .=       "0, "
 	       .        "NOW())";
 	doQuery($query, 101, 'vcl', 1);
 	if(mysql_affected_rows($mysql_link_vcl)) {
