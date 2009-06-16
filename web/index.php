@@ -82,9 +82,9 @@ if($hasArg) {
 else {
 	$actionFunction();
 }
-dbDisconnect();
-
 printHTMLFooter();
+
+dbDisconnect();
 
 semUnlock();
 ?>
