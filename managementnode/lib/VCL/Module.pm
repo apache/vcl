@@ -115,7 +115,10 @@ use VCL::DataStructure;
                initialize() subroutine defined in a child class. This allows
                tasks to be automatically performed during object creation.
                Implementing an initialize() subroutine is optional.
- 
+               
+               Any arguments passed to new() will be passed unchanged to
+               initialize().
+               
                Example:
                use VCL::Module::TestModule;
                my $test_module = new VCL::Module::TestModule({data_structure => $self->data});
@@ -154,7 +157,7 @@ sub new {
 	if ($class_object->can("initialize")) {
 		# Call the initialize() subroutine, if it returns 0, return 0
 		# If it doesn't return 0, return the object reference
-		return if (!$class_object->initialize());
+		return if (!$class_object->initialize($args));
 	}
 
 	return $class_object;
