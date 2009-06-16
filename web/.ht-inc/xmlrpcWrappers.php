@@ -698,12 +698,14 @@ function XMLRPCprocessBlockTime($blockTimesid, $ignoreprivileges=0) {
 		if($rc < 1)
 			continue;
 
-		$stagCnt++;
-
 		$compid = $requestInfo['computers'][0];
 		# ...use start of block time as end of reload reservation
 		$reqid = simpleAddRequest($compid, $rqdata['imageid'], $revisionid,
 		                          $stagstart, $rqdata['start'], 19, $vclreloadid);
+		if($reqid == 0)
+			continue;
+
+		$stagCnt++;
 		$allocated++;
 		$blockCompVals[] = "($blockTimesid, $compid, {$rqdata['imageid']})";
 
