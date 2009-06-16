@@ -339,7 +339,9 @@ function checkAccess() {
 			dbDisconnect();
 			exit;
 		}
-		$xmlpass = processInputData($_SERVER['HTTP_X_PASS'], ARG_STRING, 1);
+		$xmlpass = $_SERVER['HTTP_X_PASS'];
+		if(get_magic_quotes_gpc())
+			$xmlpass = stripslashes($xmlpass);
 		$apiver = processInputData($_SERVER['HTTP_X_APIVERSION'], ARG_NUMERIC, 1);
 		/* code for version 1 should probably be removed in VCL 2.2 */
 		if($apiver == 1) {
@@ -3934,11 +3936,9 @@ function simpleAddRequest($compid, $imageid, $revisionid, $start, $end,
 			 .       "NOW())";
 	doQuery($query, 101);
 
-	$qh = doQuery("SELECT LAST_INSERT_ID() FROM request", 101);
-	if(! $row = mysql_fetch_row($qh)) {
+	$requestid = dbLastInsertID();
+	if($requestid == 0)
 		abort(135);
-	}
-	$requestid = $row[0];
 
 	# add an entry to the reservation table for each image
 	$query = "INSERT INTO reservation "
@@ -3954,6 +3954,10 @@ function simpleAddRequest($compid, $imageid, $revisionid, $start, $end,
 			 .       "$revisionid, "
 			 .       "$mgmtnodeid)";
 	doQuery($query, 101);
+	$testid = dbLastInsertID();
+	if($testid == 0)
+		abort(135);
+
 	return $requestid;
 }
 
@@ -8180,9 +8184,12 @@ function sendHeaders() {
 		case 'logout':
 			if($shibauthed) {
 				$shibdata = getShibauthData($shibauthed);
-				dbDisconnect();
-				header("Location: {$shibdata['Shib-logouturl']}");
-				exit;
+				if(array_key_exists('Shib-logouturl', $shibdata) &&
+				   ! empty($shibdata['Shib-logouturl'])) {
+					dbDisconnect();
+					header("Location: {$shibdata['Shib-logouturl']}");
+					exit;
+				}
 			}
 		case 'shiblogout':
 			setcookie("ITECSAUTH", "", time() - 10, "/", COOKIEDOMAIN);
@@ -8200,27 +8207,48 @@ function sendHeaders() {
 				doQuery("DELETE FROM shibauth WHERE id = $shibauthed", 101);
 				stopSession();
 				dbDisconnect();
-				print "<html>\n";
-				print "   <head>\n";
-				print "      <style type=\"text/css\">\n";
-				print "         .red {\n";
-				print "            color: red;\n";
-				print "         }\n";
-				print "         body{\n";
-				print "            margin:0px; color: red;\n";
-				print "         }\n";
-				print "      </style>\n";
-				print "   </head>\n";
-				print "   <body>\n";
-				print "      <span class=red>Done.</span>&nbsp;&nbsp;&nbsp;<a target=\"_top\" href=\"" . BASEURL . "/\">Return to VCL</a>\n";
-				#print "      <iframe src=\"http://{$_SERVER['SERVER_NAME']}/Shibboleth.sso/Logout\" class=hidden>\n";
-				#print "      </iframe>\n";
-				/*if($mode == 'logout') {
-					print "      <iframe src=\"{$shibdata['Shib-logouturl']}\" class=hidden>\n";
-					print "      </iframe>\n";
-				}*/
-				print "   </body>\n";
-				print "</html>\n";
+				if(array_key_exists('Shib-logouturl', $shibdata) &&
+				   ! empty($shibdata['Shib-logouturl'])) {
+					print "<html>\n";
+					print "   <head>\n";
+					print "      <style type=\"text/css\">\n";
+					print "         .red {\n";
+					print "            color: red;\n";
+					print "         }\n";
+					print "         body{\n";
+					print "            margin:0px; color: red;\n";
+					print "         }\n";
+					print "      </style>\n";
+					print "   </head>\n";
+					print "   <body>\n";
+					print "      <span class=red>Done.</span>&nbsp;&nbsp;&nbsp;<a target=\"_top\" href=\"" . BASEURL . "/\">Return to VCL</a>\n";
+					print "   </body>\n";
+					print "</html>\n";
+				}
+				else {
+					print "<html>\n";
+					print "<head>\n";
+					print "<META HTTP-EQUIV=REFRESH CONTENT=\"5;url=" . BASEURL . "\">\n";
+					print "<style type=\"text/css\">\n";
+					print "  .hidden {\n";
+					print "    display: none;\n";
+					print "  }\n";
+					print "</style>\n";
+					print "</head>\n";
+					print "<body>\n";
+					print "Logging out of VCL...";
+					print "<iframe src=\"http://{$_SERVER['SERVER_NAME']}/Shibboleth.sso/Logout\" class=hidden>\n";
+					print "</iframe>\n";
+					if(array_key_exists('Shib-Identity-Provider', $shibdata) &&
+					   ! empty($shibdata['Shib-Identity-Provider'])) {
+						$tmp = explode('/', $shibdata['Shib-Identity-Provider']);
+						$idp = "{$tmp[0]}//{$tmp[2]}";
+						print "<iframe src=\"$idp/idp/logout.jsp\" class=hidden>\n";
+						print "</iframe>\n";
+					}
+					print "</body>\n";
+					print "</html>\n";
+				}
 				exit;
 			}
 			header("Location: " . HOMEURL);
