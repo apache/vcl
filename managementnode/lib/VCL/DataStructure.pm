@@ -755,6 +755,8 @@ sub refresh {
 		notify($ERRORS{'WARNING'}, 0, "could not retrieve current request information from database");
 		return;
 	}
+	
+	return 1;
 } ## end sub refresh
 
 #/////////////////////////////////////////////////////////////////////////////
