@@ -3294,17 +3294,12 @@ function isAvailable($images, $imageid, $start, $end, $os, $requestid=0,
 		$usedComputerids = array();
 		$query = "SELECT DISTINCT rs.computerid "
 		       . "FROM reservation rs, "
-		       .      "request rq, "
-		       .      "user u "
+		       .      "request rq "
 		       . "WHERE '$startstamp' < (rq.end + INTERVAL 900 SECOND) AND "
 		       .       "'$endstamp' > rq.start AND "
 		       .       "rq.id != $requestid AND "
 		       .       "rs.requestid = rq.id AND "
-		       .       "rq.stateid != 1 AND "
-		       .       "rq.stateid != 5 AND "
-		       .       "rq.stateid != 12 AND "
-		       .       "rq.userid = u.id AND "
-		       .       "u.unityid != 'vclreload'";
+		       .       "rq.stateid NOT IN (1, 5, 12)"; # deleted, failed, complete
 		$qh = doQuery($query, 130);
 		while($row = mysql_fetch_row($qh)) {
 			array_push($usedComputerids, $row[0]);
