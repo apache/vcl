@@ -64,11 +64,15 @@ function updateShibUser($userid) {
 
 	# update user's data in db
 	$user['id'] = $row['id'];
+	$first = mysql_escape_string($user['firstname']);
+	$last = mysql_escape_string($user['lastname']);
 	$query = "UPDATE user "
-	       . "SET firstname = '{$user['firstname']}', "
-	       .     "lastname = '{$user['lastname']}', ";
-	if(array_key_exists('email', $user))
-		$query .= "email = '{$user['email']}', ";
+	       . "SET firstname = '$first', "
+	       .     "lastname = '$last', ";
+	if(array_key_exists('email', $user)) {
+		$email = mysql_escape_string($user['email']);
+		$query .= "email = '$email', ";
+	}
 	$query .=    "emailnotices = 0, " 
 	       .     "lastupdated = NOW() " 
 	       . "WHERE uid = {$user['id']}";
@@ -95,6 +99,9 @@ function updateShibUser($userid) {
 ////////////////////////////////////////////////////////////////////////////////
 function addShibUser($user) {
 	global $mysql_link_vcl;
+	$unityid = mysql_escape_string($user['unityid']);
+	$first = mysql_escape_string($user['firstname']);
+	$last = mysql_escape_string($user['lastname']);
 	$query = "INSERT INTO user "
 	       .        "(unityid, "
 	       .        "affiliationid, "
@@ -105,12 +112,14 @@ function addShibUser($user) {
 	$query .=       "emailnotices, "
 	       .        "lastupdated) "
 	       . "VALUES ("
-	       .        "'{$user['unityid']}', "
+	       .        "'$unityid', "
 	       .        "{$user['affilid']}, "
-	       .        "'{$user['firstname']}', "
-	       .        "'{$user['lastname']}', ";
-	if(array_key_exists('email', $user))
-		$query .=    "'{$user['email']}', ";
+	       .        "'$first', "
+	       .        "'$last', ";
+	if(array_key_exists('email', $user)) {
+		$email = mysql_escape_string($user['email']);
+		$query .=    "'$email', ";
+	}
 	$query .=       "0, "
 	       .        "NOW())";
 	doQuery($query, 101, 'vcl', 1);

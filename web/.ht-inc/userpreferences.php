@@ -454,8 +454,13 @@ function submitUserPrefs() {
 		$width = 0;
 		$height = 0;
 	}
-	else
+	else {
 		list($width, $height) = explode('x', $data["resolution"]);
+		if(! is_numeric($width) || ! is_numeric($height)) {
+			$width = 0;
+			$height = 0;
+		}
+	}
 	if(updateUserPrefs($user['id'], $data["preferredname"], $width, $height, 
 	                   $data["bpp"], $data["audiomode"], $data["mapdrives"],
 	                   $data["mapprinters"], $data["mapserial"])) {

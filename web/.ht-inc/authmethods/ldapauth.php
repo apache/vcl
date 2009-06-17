@@ -197,7 +197,8 @@ function updateLDAPUser($authtype, $userid) {
 	       . "WHERE u.IMtypeid = i.id AND "
 	       .       "u.adminlevelid = a.id AND "
 	       .       "af.id = $affilid AND ";
-	if(array_key_exists('numericid', $userData))
+	if(array_key_exists('numericid', $userData) &&
+	   is_numeric($userData['numericid']))
 		$query .=   "u.uid = " . $userData["numericid"];
 	else {
 		$query .=   "u.unityid = '$userid' AND "
@@ -219,7 +220,8 @@ function updateLDAPUser($authtype, $userid) {
 		       .     "lastname = '{$userData['last']}', "
 		       .     "email = '{$userData['email']}', "
 		       .     "lastupdated = '$now' ";
-		if(array_key_exists('numericid', $userData))
+		if(array_key_exists('numericid', $userData) &&
+		   is_numeric($userData['numericid']))
 			$query .= "WHERE uid = " . $userData["numericid"];
 		else
 			$query .= "WHERE unityid = '$userid' AND "
@@ -285,7 +287,11 @@ function updateLDAPUser($authtype, $userid) {
 /// \param $authtype - an array from the $authMechs table
 /// \param $userid - a userid without the affiliation part
 ///
-/// \return an array of user information
+/// \return an array of user information with the following keys:\n
+/// \b first - first name of user (escaped with mysql_escape_string)\n
+/// \b last - last name of user (escaped with mysql_escape_string)\n
+/// \b email - email address of user (escaped with mysql_escape_string)\n
+/// \b numericid - numeric id of user if $authtype is configured to include it
 ///
 /// \brief gets user information from ldap
 ///
@@ -362,11 +368,11 @@ function getLDAPUserData($authtype, $userid) {
 			$data[strtolower($auth['email'])] = $userid . $auth['defaultemail'];
 		}
 
-		$return['first'] = ereg_replace("'", "\'", $data[strtolower($auth['firstname'])]);
-		$return['last'] = ereg_replace("'", "\'", $data[strtolower($auth['lastname'])]);
-		if($donumericid)
+		$return['first'] = mysql_escape_string($data[strtolower($auth['firstname'])]);
+		$return['last'] = mysql_escape_string($data[strtolower($auth['lastname'])]);
+		if($donumericid && is_numeric($data[strtolower($auth['numericid'])]))
 			$return['numericid'] = $data[strtolower($auth['numericid'])];
-		$return['email'] = $data[strtolower($auth['email'])];
+		$return['email'] = mysql_escape_string($data[strtolower($auth['email'])]);
 		$return['emailnotices'] = 1;
 
 		return $return;

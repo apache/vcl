@@ -36,6 +36,7 @@ function addITECSUser($loginid) {
 	global $mysql_link_vcl, $ENABLE_ITECSAUTH;
 	if(! $ENABLE_ITECSAUTH)
 		return NULL;
+	$esc_loginid = mysql_escape_string($loginid);
 	$query = "SELECT id AS uid, "
 	       .        "first, " 
 	       .        "last, "
@@ -44,14 +45,15 @@ function addITECSUser($loginid) {
 	       .        "active, "
 	       .        "lockedout "
 	       . "FROM user "
-	       . "WHERE email = '$loginid'";
+	       . "WHERE email = '$esc_loginid'";
 	$qh = doQuery($query, 101, "accounts");
 	if($row = mysql_fetch_assoc($qh)) {
 		// FIXME test replacing ''s
 		// FIXME do we care if the account is active?
-		$first = ereg_replace("'", "\'", $row['first']);
-		$last = ereg_replace("'", "\'", $row['last']);
-		$loweruser = strtolower($row['email']);
+		$first = mysql_escape_string($row['first']);
+		$last = mysql_escape_string($row['last']);
+		$loweruser = mysql_escape_string(strtolower($row['email']));
+		$email = mysql_escape_string($row['email']);
 		$query = "INSERT INTO user ("
 		       .        "uid, "
 		       .        "unityid, "
@@ -67,7 +69,7 @@ function addITECSUser($loginid) {
 		       .        "2, "
 		       .        "'$first', "
 		       .        "'$last', "
-		       .        "'{$row['email']}', "
+		       .        "'$email', "
 		       .        "0, "
 		       .        "NOW())";
 		// FIXME might want this logged
@@ -190,6 +192,10 @@ function updateITECSUser($userid) {
 	// if get a row
 	//    update db
 	//    update results from select
+	$esc_userid = mysql_escape_string($userid);
+	$first = mysql_escape_string($userData['first']);
+	$last = mysql_escape_string($userData['last']);
+	$email = mysql_escape_string($userData['email']);
 	if($user = mysql_fetch_assoc($qh)) {
 		$user["unityid"] = $userid;
 		$user["firstname"] = $userData['first'];
@@ -197,10 +203,10 @@ function updateITECSUser($userid) {
 		$user["email"] = $userData["email"];
 		$user["lastupdated"] = $now;
 		$query = "UPDATE user "
-		       . "SET unityid = '$userid', "
-		       .     "firstname = '{$userData['first']}', "
-		       .     "lastname = '{$userData['last']}', "
-		       .     "email = '{$userData['email']}', "
+		       . "SET unityid = '$esc_userid', "
+		       .     "firstname = '$first', "
+		       .     "lastname = '$last', "
+		       .     "email = '$email', "
 		       .     "lastupdated = '$now' "
 		       . "WHERE uid = " . $userData["uid"];
 		doQuery($query, 256, 'vcl', 1);

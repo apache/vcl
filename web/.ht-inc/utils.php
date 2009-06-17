@@ -3015,6 +3015,8 @@ function addUser($loginid) {
 function updateUserPrefs($userid, $preferredname, $width, $height,
                          $bpp, $audio, $mapdrives, $mapprinters, $mapserial) {
 	global $mysql_link_vcl;
+	$preferredname = mysql_escape_string($preferredname);
+	$audio = mysql_escape_string($audio);
 	$query = "UPDATE user SET "
 	       .        "preferredname = '$preferredname', "
 	       .        "width = '$width', "
