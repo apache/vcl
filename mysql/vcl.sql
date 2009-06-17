@@ -878,7 +878,7 @@ CREATE TABLE IF NOT EXISTS `user` (
   UNIQUE KEY `uid` (`uid`),
   KEY `IMtypeid` (`IMtypeid`),
   KEY `affiliationid` (`affiliationid`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1 AUTO_INCREMENT=3 ;
+) ENGINE=InnoDB  DEFAULT CHARSET=latin1 AUTO_INCREMENT=4 ;
 
 -- --------------------------------------------------------
 
@@ -1198,7 +1198,8 @@ INSERT INTO `IMtype` (`id`, `name`) VALUES
 -- 
 
 INSERT INTO `localauth` (`userid`, `passhash`, `salt`, `lastupdated`, `lockedout`) VALUES 
-(1, 'd8c730cc269d3d6b6147a416fb49c2be1a70aefc', 'QwkCHLpY', '2007-05-17 09:56:01', 0);
+(1, 'd8c730cc269d3d6b6147a416fb49c2be1a70aefc', 'QwkCHLpY', '2007-05-17 09:56:01', 0),
+(3, 'da60188ee483aa16eeb82d4969a0f79d0d177d99', '8ht2Pa55', '2007-05-17 09:56:01', 0);
 
 -- 
 -- Dumping data for table `module`
@@ -1431,7 +1432,8 @@ INSERT INTO `state` (`id`, `name`) VALUES
 
 INSERT INTO `user` (`id`, `uid`, `unityid`, `affiliationid`, `firstname`, `lastname`, `preferredname`, `email`, `emailnotices`, `IMtypeid`, `IMid`, `adminlevelid`, `width`, `height`, `bpp`, `audiomode`, `mapdrives`, `mapprinters`, `mapserial`, `showallgroups`, `lastupdated`) VALUES 
 (1, 101, 'admin', 1, 'vcl', 'admin', '', 'root@localhost', 0, 1, NULL, 3, 1024, 768, 16, 'local', 1, 1, 1, 1, '2007-05-17 09:58:39'),
-(2, NULL, 'vclreload', 1, 'vcl', 'reload', NULL, '', 1, 1, NULL, 1, 1024, 768, 16, 'local', 1, 1, 0, 0, '0000-00-00 00:00:00');
+(2, NULL, 'vclreload', 1, 'vcl', 'reload', NULL, '', 0, 1, NULL, 1, 1024, 768, 16, 'local', 1, 1, 0, 0, '0000-00-00 00:00:00'),
+(3, NULL, 'vclsystem', 1, 'vcl', 'system', NULL, '', 0, 1, NULL, 1, 1024, 768, 16, 'local', 1, 1, 0, 0, '0000-00-00 00:00:00');
 
 -- 
 -- Dumping data for table `usergroup`
