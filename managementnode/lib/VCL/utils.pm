@@ -5524,7 +5524,6 @@ sub get_request_info {
    user.unityid AS user_unityid,
    user.affiliationid AS user_affiliationid,
    user.firstname AS user_firstname,
-   user.middlename AS user_middlename,
    user.lastname AS user_lastname,
    user.preferredname AS user_preferredname,
    user.email AS user_email,

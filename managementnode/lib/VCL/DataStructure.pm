@@ -416,7 +416,6 @@ $SUBROUTINE_MAPPINGS{user_lastupdated}    = '$self->request_data->{user}{lastupd
 $SUBROUTINE_MAPPINGS{user_mapdrives}      = '$self->request_data->{user}{mapdrives}';
 $SUBROUTINE_MAPPINGS{user_mapprinters}    = '$self->request_data->{user}{mapprinters}';
 $SUBROUTINE_MAPPINGS{user_mapserial}      = '$self->request_data->{user}{mapserial}';
-$SUBROUTINE_MAPPINGS{user_middlename}     = '$self->request_data->{user}{middlename}';
 $SUBROUTINE_MAPPINGS{user_preferred_name} = '$self->request_data->{user}{preferredname}';
 $SUBROUTINE_MAPPINGS{user_showallgroups}  = '$self->request_data->{user}{showallgroups}';
 $SUBROUTINE_MAPPINGS{user_standalone}     = '$self->request_data->{user}{STANDALONE}';
