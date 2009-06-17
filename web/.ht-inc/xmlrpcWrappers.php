@@ -505,6 +505,12 @@ function XMLRPCgetRequestIds() {
 ////////////////////////////////////////////////////////////////////////////////
 function XMLRPCblockAllocation($imageid, $start, $end, $requestcount,
                                $usergroupid, $ignoreprivileges=0) {
+	global $user, $xmlrpcBlockAPIUsers;
+	if(! in_array($user['id'], $xmlrpcBlockAPIUsers)) {
+		return array('status' => 'error',
+		             'errorcode' => 34,
+		             'errormsg' => 'access denied for managing block allocations');
+	}
 	$ownerid = getUserlistID('vclreload@Local');
 	$name = "API:$start";
 	$managementnodes = getManagementNodes('future');
@@ -592,7 +598,12 @@ function XMLRPCblockAllocation($imageid, $start, $end, $requestcount,
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function XMLRPCprocessBlockTime($blockTimesid, $ignoreprivileges=0) {
-	global $requestInfo;
+	global $requestInfo, $user, $xmlrpcBlockAPIUsers;
+	if(! in_array($user['id'], $xmlrpcBlockAPIUsers)) {
+		return array('status' => 'error',
+		             'errorcode' => 34,
+		             'errormsg' => 'access denied for managing block allocations');
+	}
 	$return = array('status' => 'success');
 	$query = "SELECT bt.start, "
 	       .        "bt.end, "

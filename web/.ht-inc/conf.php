@@ -55,6 +55,9 @@ $ENABLE_ITECSAUTH = 0;     // use ITECS accounts (also called "Non-NCSU" account
 $userlookupUsers = array(1, # admin
 );
 
+$xmlrpcBlockAPIUsers = array(3, # vclsystem
+);
+
 $clickThroughText =
 "<center><h2>Installer Agreement</h2></center>
 <p>As the creator of the VCL image, you are responsible for understanding and 
