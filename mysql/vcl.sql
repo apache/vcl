@@ -194,7 +194,6 @@ CREATE TABLE IF NOT EXISTS `computer` (
   `id` smallint(5) unsigned NOT NULL auto_increment,
   `stateid` tinyint(5) unsigned NOT NULL default '10',
   `ownerid` mediumint(8) unsigned default '1',
-  `deptid` tinyint(3) unsigned NOT NULL default '1',
   `platformid` tinyint(3) unsigned NOT NULL default '0',
   `scheduleid` tinyint(3) unsigned default NULL,
   `currentimageid` smallint(5) unsigned NOT NULL default '0',
@@ -231,7 +230,6 @@ CREATE TABLE IF NOT EXISTS `computer` (
   UNIQUE KEY `eth0macaddress` (`eth0macaddress`),
   KEY `ownerid` (`ownerid`),
   KEY `stateid` (`stateid`),
-  KEY `deptid` (`deptid`),
   KEY `platformid` (`platformid`),
   KEY `scheduleid` (`scheduleid`),
   KEY `currentimageid` (`currentimageid`),
@@ -313,33 +311,6 @@ CREATE TABLE IF NOT EXISTS `continuations` (
   KEY `expiretime` (`expiretime`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
--- --------------------------------------------------------
-
--- 
--- Table structure for table `curriculum`
--- 
-
-CREATE TABLE IF NOT EXISTS `curriculum` (
-  `id` smallint(5) unsigned NOT NULL auto_increment,
-  `name` varchar(30) NOT NULL default '',
-  PRIMARY KEY  (`id`),
-  UNIQUE KEY `name` (`name`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1 AUTO_INCREMENT=4 ;
-
--- --------------------------------------------------------
-
--- 
--- Table structure for table `dept`
--- 
-
-CREATE TABLE IF NOT EXISTS `dept` (
-  `id` tinyint(3) unsigned NOT NULL auto_increment,
-  `name` varchar(5) NOT NULL default '',
-  `prettyname` varchar(50) NOT NULL default '',
-  PRIMARY KEY  (`id`),
-  UNIQUE KEY `name` (`name`),
-  UNIQUE KEY `prettyname` (`prettyname`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1 AUTO_INCREMENT=3 ;
 
 -- --------------------------------------------------------
 
@@ -365,7 +336,6 @@ CREATE TABLE IF NOT EXISTS `image` (
   `name` varchar(70) NOT NULL default '',
   `prettyname` varchar(60) NOT NULL default '',
   `ownerid` mediumint(8) unsigned default '1',
-  `deptid` tinyint(3) unsigned NOT NULL default '1',
   `platformid` tinyint(3) unsigned NOT NULL default '0',
   `OSid` tinyint(3) unsigned NOT NULL default '0',
   `imagemetaid` smallint(5) unsigned default NULL,
@@ -390,7 +360,6 @@ CREATE TABLE IF NOT EXISTS `image` (
   UNIQUE KEY `name` (`name`),
   UNIQUE KEY `prettyname` (`prettyname`),
   KEY `ownerid` (`ownerid`),
-  KEY `deptid` (`deptid`),
   KEY `platformid` (`platformid`),
   KEY `OSid` (`OSid`),
   KEY `imagemetaid` (`imagemetaid`)
@@ -656,7 +625,6 @@ CREATE TABLE IF NOT EXISTS `request` (
   `id` mediumint(8) unsigned NOT NULL auto_increment,
   `stateid` tinyint(3) unsigned NOT NULL default '0',
   `userid` mediumint(8) unsigned NOT NULL default '0',
-  `reservationid` mediumint(8) unsigned NOT NULL default '0',
   `laststateid` tinyint(3) unsigned NOT NULL default '0',
   `logid` int(10) unsigned NOT NULL default '0',
   `forimaging` tinyint(1) unsigned NOT NULL default '0',
@@ -888,9 +856,7 @@ CREATE TABLE IF NOT EXISTS `user` (
   `uid` int(10) unsigned default NULL,
   `unityid` varchar(80) NOT NULL default '',
   `affiliationid` mediumint(8) unsigned NOT NULL default '1',
-  `curriculumid` smallint(5) unsigned NOT NULL default '1',
   `firstname` varchar(20) NOT NULL default '',
-  `middlename` varchar(25) default NULL,
   `lastname` varchar(25) NOT NULL default '',
   `preferredname` varchar(25) default NULL,
   `email` varchar(80) NOT NULL,
@@ -1102,21 +1068,6 @@ INSERT INTO `affiliation` (`id`, `name`, `dataUpdateText`) VALUES
 
 
 -- 
--- Dumping data for table `curriculum`
--- 
-
-INSERT INTO `curriculum` (`id`, `name`) VALUES 
-(1, 'vcl');
-
--- 
--- Dumping data for table `dept`
--- 
-
-INSERT INTO `dept` (`id`, `name`, `prettyname`) VALUES 
-(1, 'engr', 'Engineering'),
-(2, 'hpc', 'High Performance Computing');
-
--- 
 -- Dumping data for table `computerloadflow`
 -- 
 INSERT INTO `computerloadflow` (`computerloadstateid`, `nextstateid`, `type`) VALUES 
@@ -1208,16 +1159,16 @@ INSERT INTO `documentation` (`name`, `title`, `data`) VALUES
 -- Dumping data for table `image`
 -- 
 
-INSERT INTO `image` (`id`, `name`, `prettyname`, `ownerid`, `deptid`, `platformid`, `OSid`, `imagemetaid`, `minram`, `minprocnumber`, `minprocspeed`, `minnetwork`, `maxconcurrent`, `reloadtime`, `deleted`, `test`, `lastupdate`, `forcheckout`, `maxinitialtime`, `project`, `size`) VALUES 
-(1, 'winxp-base1-v0', 'No Apps (WinXP)', 1, 1, 1, 7, NULL, 0, 1, 0, 10, NULL, 14, 0, 0, '2007-04-11 16:07:38', 1, 0, 'vcl', 1045),
-(2, 'rhel4-base2-v0', 'Red Hat Enterprise Linux 4.4 Base (KS)', 1, 1, 1, 12, NULL, 1024, 1, 1024, 100, NULL, 13, 0, 0, '2007-03-02 16:33:33', 1, 0, 'vcl', 0),
-(3, 'rh4image-base3-v0', 'RHEL4 base (image)', 1, 1, 1, 13, NULL, 10, 1, 1024, 100, NULL, 10, 0, 0, '2007-01-24 15:02:07', 1, 0, 'vcl', 1450),
-(4, 'noimage', 'No Image', 1, 1, 1, 2, NULL, 0, 1, 0, 10, NULL, 0, 0, 0, NULL, 1, 0, 'vcl', 1450),
-(5, 'rhfc5-fc5base5-v0', 'Red Hat Fedora Core 5 base (KS)', 1, 1, 1, 15, NULL, 1024, 1, 1024, 100, NULL, 13, 0, 0, '2006-10-02 10:04:24', 1, 0, 'vcl', 1450),
-(6, 'fc5image-FC5baseRHFC56-v0', 'FC5base(RHFC5)', 1, 1, 1, 14, NULL, 64, 1, 500, 10, NULL, 10, 0, 0, '2006-10-02 14:13:26', 1, 0, 'vcl', 0),
-(7, 'vmwarewinxp-base7-v1', 'No Apps (WinXP vmware)', 1, 1, 1, 16, NULL, 512, 1, 1024, 100, NULL, 5, 0, 0, '2007-04-04 09:45:38', 1, 0, 'vcl', 3244),
-(8, 'rh4image-VMwareserverhostRHEL48-v3', 'VMware server host (RHEL4)', 1, 1, 1, 13, NULL, 64, 1, 500, 10, NULL, 10, 0, 0, '2007-11-26 11:23:53', 1, 0, 'vcl', 1450),
-(9, 'esx35-base-v0', 'VMware ESX 3.5 standard server', 1, 1, 1, 20, NULL, 2048, 2, 2000, 100, NULL, 9, 0, 0, '2008-03-24 14:23:54', 1, 0, 'vcl', 1450);
+INSERT INTO `image` (`id`, `name`, `prettyname`, `ownerid`, `platformid`, `OSid`, `imagemetaid`, `minram`, `minprocnumber`, `minprocspeed`, `minnetwork`, `maxconcurrent`, `reloadtime`, `deleted`, `test`, `lastupdate`, `forcheckout`, `maxinitialtime`, `project`, `size`) VALUES 
+(1, 'winxp-base1-v0', 'No Apps (WinXP)', 1, 1, 7, NULL, 0, 1, 0, 10, NULL, 14, 0, 0, '2007-04-11 16:07:38', 1, 0, 'vcl', 1045),
+(2, 'rhel4-base2-v0', 'Red Hat Enterprise Linux 4.4 Base (KS)', 1, 1, 12, NULL, 1024, 1, 1024, 100, NULL, 13, 0, 0, '2007-03-02 16:33:33', 1, 0, 'vcl', 0),
+(3, 'rh4image-base3-v0', 'RHEL4 base (image)', 1, 1, 13, NULL, 10, 1, 1024, 100, NULL, 10, 0, 0, '2007-01-24 15:02:07', 1, 0, 'vcl', 1450),
+(4, 'noimage', 'No Image', 1, 1, 2, NULL, 0, 1, 0, 10, NULL, 0, 0, 0, NULL, 1, 0, 'vcl', 1450),
+(5, 'rhfc5-fc5base5-v0', 'Red Hat Fedora Core 5 base (KS)', 1, 1, 15, NULL, 1024, 1, 1024, 100, NULL, 13, 0, 0, '2006-10-02 10:04:24', 1, 0, 'vcl', 1450),
+(6, 'fc5image-FC5baseRHFC56-v0', 'FC5base(RHFC5)', 1, 1, 14, NULL, 64, 1, 500, 10, NULL, 10, 0, 0, '2006-10-02 14:13:26', 1, 0, 'vcl', 0),
+(7, 'vmwarewinxp-base7-v1', 'No Apps (WinXP vmware)', 1, 1, 16, NULL, 512, 1, 1024, 100, NULL, 5, 0, 0, '2007-04-04 09:45:38', 1, 0, 'vcl', 3244),
+(8, 'rh4image-VMwareserverhostRHEL48-v3', 'VMware server host (RHEL4)', 1, 1, 13, NULL, 64, 1, 500, 10, NULL, 10, 0, 0, '2007-11-26 11:23:53', 1, 0, 'vcl', 1450),
+(9, 'esx35-base-v0', 'VMware ESX 3.5 standard server', 1, 1, 20, NULL, 2048, 2, 2000, 100, NULL, 9, 0, 0, '2008-03-24 14:23:54', 1, 0, 'vcl', 1450);
 
 -- 
 -- Dumping data for table `imagerevision`
@@ -1478,9 +1429,9 @@ INSERT INTO `state` (`id`, `name`) VALUES
 -- Dumping data for table `user`
 -- 
 
-INSERT INTO `user` (`id`, `uid`, `unityid`, `affiliationid`, `curriculumid`, `firstname`, `middlename`, `lastname`, `preferredname`, `email`, `emailnotices`, `IMtypeid`, `IMid`, `adminlevelid`, `width`, `height`, `bpp`, `audiomode`, `mapdrives`, `mapprinters`, `mapserial`, `showallgroups`, `lastupdated`) VALUES 
-(1, 101, 'admin', 1, 1, 'vcl', '', 'admin', '', 'root@localhost', 0, 1, NULL, 3, 1024, 768, 16, 'local', 1, 1, 1, 1, '2007-05-17 09:58:39'),
-(2, NULL, 'vclreload', 1, 1, 'vcl', NULL, 'reload', NULL, '', 1, 1, NULL, 1, 1024, 768, 16, 'local', 1, 1, 0, 0, '0000-00-00 00:00:00');
+INSERT INTO `user` (`id`, `uid`, `unityid`, `affiliationid`, `firstname`, `lastname`, `preferredname`, `email`, `emailnotices`, `IMtypeid`, `IMid`, `adminlevelid`, `width`, `height`, `bpp`, `audiomode`, `mapdrives`, `mapprinters`, `mapserial`, `showallgroups`, `lastupdated`) VALUES 
+(1, 101, 'admin', 1, 'vcl', 'admin', '', 'root@localhost', 0, 1, NULL, 3, 1024, 768, 16, 'local', 1, 1, 1, 1, '2007-05-17 09:58:39'),
+(2, NULL, 'vclreload', 1, 'vcl', 'reload', NULL, '', 1, 1, NULL, 1, 1024, 768, 16, 'local', 1, 1, 0, 0, '0000-00-00 00:00:00');
 
 -- 
 -- Dumping data for table `usergroup`
@@ -1609,7 +1560,6 @@ ALTER TABLE `computer`
   ADD CONSTRAINT `computer_ibfk_12` FOREIGN KEY (`ownerid`) REFERENCES `user` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
   ADD CONSTRAINT `computer_ibfk_30` FOREIGN KEY (`scheduleid`) REFERENCES `schedule` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
   ADD CONSTRAINT `computer_ibfk_33` FOREIGN KEY (`stateid`) REFERENCES `state` (`id`) ON UPDATE CASCADE,
-  ADD CONSTRAINT `computer_ibfk_34` FOREIGN KEY (`deptid`) REFERENCES `dept` (`id`) ON UPDATE CASCADE,
   ADD CONSTRAINT `computer_ibfk_35` FOREIGN KEY (`platformid`) REFERENCES `platform` (`id`) ON UPDATE CASCADE,
   ADD CONSTRAINT `computer_ibfk_36` FOREIGN KEY (`currentimageid`) REFERENCES `image` (`id`) ON UPDATE CASCADE;
 
@@ -1630,7 +1580,6 @@ ALTER TABLE `continuations`
 -- 
 ALTER TABLE `image`
   ADD CONSTRAINT `image_ibfk_1` FOREIGN KEY (`ownerid`) REFERENCES `user` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
-  ADD CONSTRAINT `image_ibfk_5` FOREIGN KEY (`deptid`) REFERENCES `dept` (`id`) ON UPDATE CASCADE,
   ADD CONSTRAINT `image_ibfk_6` FOREIGN KEY (`platformid`) REFERENCES `platform` (`id`) ON UPDATE CASCADE,
   ADD CONSTRAINT `image_ibfk_7` FOREIGN KEY (`OSid`) REFERENCES `OS` (`id`) ON UPDATE CASCADE;
 
