@@ -1203,6 +1203,7 @@ sub capture {
 	}
 	else {
 		notify($ERRORS{'WARNING'}, 0, "$notify_prefix unable to update currentimage.txt on $computer_shortname");
+		return 0;
 	}
 
 	# Set some vm paths and names
@@ -1885,6 +1886,10 @@ sub control_VM {
 		#common checks
 		notify($ERRORS{'OK'}, 0, "checking for base image on $hostnode $datastorepath");
 		@sshcmd = run_ssh_command($hostnode, $identity, "ls -1 $datastorepath", "root");
+		if (!@sshcmd) {
+			notify($ERRORS{'WARNING'}, 0, "failed to run ssh command: ls -1 $datastorepath");
+			return 0;
+		}
 		notify($ERRORS{'OK'}, 0, "@{ $sshcmd[1] }");
 		foreach my $l (@{$sshcmd[1]}) {
 			if ($l =~ /denied|No such/) {
@@ -1918,6 +1923,10 @@ sub control_VM {
 			##find the correct vmx file for this node -- if running
 			undef @sshcmd;
 			@sshcmd = run_ssh_command($hostnode, $identity, "vmware-cmd -l", "root");
+			if (!@sshcmd) {
+				notify($ERRORS{'WARNING'}, 0, "failed to run ssh command: vmware-cmd -l");
+				return 0;
+			}
 			foreach my $l (@{$sshcmd[1]}) {
 				chomp($l);
 				next if ($l =~ /Warning:/);
@@ -1931,12 +1940,20 @@ sub control_VM {
 
 					notify($ERRORS{'OK'}, 0, "my vmx $l_myvmx");
 					my @sshcmd_1 = run_ssh_command($hostnode, $identity, "vmware-cmd $l_myvmx getstate");
+					if (!@sshcmd_1) {
+						notify($ERRORS{'WARNING'}, 0, "failed to run ssh command: vmware-cmd $l_myvmx getstate");
+						return 0;
+					}
 					foreach my $l (@{$sshcmd_1[1]}) {
 						if ($l =~ /= off/) {
 							#good - move on
 						}
 						elsif ($l =~ /= on/) {
 							my @sshcmd_2 = run_ssh_command($hostnode, $identity, "vmware-cmd $l_myvmx stop hard");
+							if (!@sshcmd_2) {
+								notify($ERRORS{'WARNING'}, 0, "failed to run ssh command: vmware-cmd $l_myvmx stop hard");
+								return 0;
+							}
 							foreach my $l (@{$sshcmd_2[1]}) {
 								next if ($l =~ /Warning:/);
 								if ($l =~ /= 1/) {
@@ -1953,6 +1970,10 @@ sub control_VM {
 							#list processes for vmx and kill pid
 							notify($ERRORS{'OK'}, 0, "vm reported in stuck state, attempting to kill process");
 							my @ssh_pid = run_ssh_command($hostnode, $identity, "vmware-cmd -q $l_myvmx getpid");
+							if (!@ssh_pid) {
+								notify($ERRORS{'WARNING'}, 0, "failed to run ssh command: vmware-cmd -q $l_myvmx getpid");
+								return 0;
+							}
 							foreach my $p (@{$ssh_pid[1]}) {
 								if ($p =~ /(\D*)(\s*)([0-9]*)/) {
 									notify($ERRORS{'OK'}, 0, "vm pid= $3");
@@ -1970,6 +1991,10 @@ sub control_VM {
 					    #unregister
 					undef @sshcmd_1;
 					@sshcmd_1 = run_ssh_command($hostnode, $identity, "vmware-cmd -s unregister $l_myvmx ");
+					if (!@sshcmd_1) {
+						notify($ERRORS{'WARNING'}, 0, "failed to run ssh command: vmware-cmd -s unregister $l_myvmx");
+						return 0;
+					}
 					foreach my $l (@{$sshcmd_1[1]}) {
 						notify($ERRORS{'OK'}, 0, "vm $l_myvmx unregistered") if ($l =~ /= 1/);
 					}
@@ -1992,6 +2017,10 @@ sub control_VM {
 				notify($ERRORS{'OK'}, 0, "turning off $myvmx");
 				undef @sshcmd;
 				@sshcmd = run_ssh_command($hostnode, $identity, "vmware-cmd $myvmx stop hard", "root");
+				if (!@sshcmd) {
+					notify($ERRORS{'WARNING'}, 0, "failed to run ssh command: vmware-cmd $myvmx stop hard");
+					return 0;
+				}
 				foreach my $l (@{$sshcmd[1]}) {
 					if ($l) {
 						notify($ERRORS{'OK'}, 0, "$myvmx strange output $l");
@@ -2002,6 +2031,10 @@ sub control_VM {
 				#confirm
 				undef @sshcmd;
 				@sshcmd = run_ssh_command($hostnode, $identity, "vmware-cmd $myvmx getstate", "root");
+				if (!@sshcmd) {
+					notify($ERRORS{'WARNING'}, 0, "failed to run ssh command: vmware-cmd $myvmx getstate7");
+					return 0;
+				}
 				foreach my $l (@{$sshcmd[1]}) {
 					if ($l =~ /= off/) {
 						#good

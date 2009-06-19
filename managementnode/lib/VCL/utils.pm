@@ -6953,8 +6953,12 @@ sub write_currentimage_txt {
 		notify($ERRORS{'OK'}, 0, "created currentimage.txt file on $computer_node_name:\n" . join "\n", @{$ssh_output});
 		return 1;
 	}
-	else {
+	elsif (defined($ssh_output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to create currentimage.txt file on $computer_node_name:\n" . join "\n", @{$ssh_output});
+		return;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to create currentimage.txt file on $computer_node_name");
 		return;
 	}
 

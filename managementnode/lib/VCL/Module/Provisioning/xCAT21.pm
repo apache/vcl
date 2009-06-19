@@ -1334,6 +1334,7 @@ sub capture {
 	}
 	else {
 		notify($ERRORS{'WARNING'}, 0, "unable to update currentimage.txt on $computer_short_name");
+		return 0;
 	}
 	
 	# Check if pre_capture() subroutine has been implemented by the OS module
