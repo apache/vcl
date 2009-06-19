@@ -3729,7 +3729,7 @@ sub firewall_enable_ping {
 	# Execute the netsh.exe command
 	my ($netsh_exit_status, $netsh_output) = run_ssh_command($computer_node_name, $management_node_keys, $netsh_command);
 	
-	if (defined($netsh_output)  && @$netsh_output[-1] =~ /Ok\./i) {
+	if (defined($netsh_output)  && @$netsh_output[-1] =~ /(Ok|The object already exists)/i) {
 		notify($ERRORS{'OK'}, 0, "configured firewall to allow ping");
 	}
 	elsif (defined($netsh_exit_status)) {
@@ -3812,7 +3812,7 @@ sub firewall_enable_ping_private {
 	# Execute the netsh.exe command
 	my ($netsh_exit_status, $netsh_output) = run_ssh_command($computer_node_name, $management_node_keys, $netsh_command);
 	
-	if (defined($netsh_output)  && @$netsh_output[-1] =~ /Ok\./i) {
+	if (defined($netsh_output)  && @$netsh_output[-1] =~ /(Ok|The object already exists)/i) {
 		notify($ERRORS{'OK'}, 0, "configured firewall to allow ping on private interface");
 	}
 	elsif (defined($netsh_exit_status)) {
@@ -3890,7 +3890,7 @@ sub firewall_disable_ping {
 	# Execute the netsh.exe command
 	my ($netsh_exit_status, $netsh_output) = run_ssh_command($computer_node_name, $management_node_keys, $netsh_command);
 	
-	if (defined($netsh_output)  && @$netsh_output[-1] =~ /Ok\./i) {
+	if (defined($netsh_output)  && @$netsh_output[-1] =~ /(Ok|The object already exists)/i) {
 		notify($ERRORS{'OK'}, 0, "configured firewall to disallow ping");
 	}
 	elsif (defined($netsh_exit_status)) {
@@ -3980,7 +3980,7 @@ sub firewall_enable_ssh {
 	# Execute the netsh.exe command
 	my ($netsh_exit_status, $netsh_output) = run_ssh_command($computer_node_name, $management_node_keys, $netsh_command);
 	
-	if (defined($netsh_output)  && @$netsh_output[-1] =~ /Ok\./i) {
+	if (defined($netsh_output)  && @$netsh_output[-1] =~ /(Ok|The object already exists)/i) {
 		notify($ERRORS{'OK'}, 0, "configured firewall to allow SSH from $remote_ip");
 	}
 	elsif (defined($netsh_exit_status)) {
@@ -4065,7 +4065,7 @@ sub firewall_enable_ssh_private {
 	# Execute the netsh.exe command
 	my ($netsh_exit_status, $netsh_output) = run_ssh_command($computer_node_name, $management_node_keys, $netsh_command);
 	
-	if (defined($netsh_output)  && @$netsh_output[-1] =~ /Ok\./i) {
+	if (defined($netsh_output)  && @$netsh_output[-1] =~ /(Ok|The object already exists)/i) {
 		notify($ERRORS{'OK'}, 0, "configured firewall to allow SSH on private interface");
 	}
 	elsif (defined($netsh_exit_status)) {
@@ -4196,7 +4196,7 @@ sub firewall_enable_rdp {
 	# Execute the netsh.exe command
 	my ($netsh_exit_status, $netsh_output) = run_ssh_command($computer_node_name, $management_node_keys, $netsh_command);
 	
-	if (defined($netsh_output)  && @$netsh_output[-1] =~ /Ok\./i) {
+	if (defined($netsh_output)  && @$netsh_output[-1] =~ /(Ok|The object already exists)/i) {
 		notify($ERRORS{'OK'}, 0, "configured firewall to allow RDP from $remote_ip");
 	}
 	elsif (defined($netsh_exit_status)) {
@@ -4279,7 +4279,7 @@ sub firewall_enable_rdp_private {
 	# Execute the netsh.exe command
 	my ($netsh_exit_status, $netsh_output) = run_ssh_command($computer_node_name, $management_node_keys, $netsh_command);
 	
-	if (defined($netsh_output)  && @$netsh_output[-1] =~ /Ok\./i) {
+	if (defined($netsh_output)  && @$netsh_output[-1] =~ /(Ok|The object already exists)/i) {
 		notify($ERRORS{'OK'}, 0, "configured firewall to allow RDP on private interface");
 	}
 	elsif (defined($netsh_exit_status)) {
@@ -4357,7 +4357,7 @@ sub firewall_disable_rdp {
 	# Execute the netsh.exe command
 	my ($netsh_exit_status, $netsh_output) = run_ssh_command($computer_node_name, $management_node_keys, $netsh_command);
 	
-	if (defined($netsh_output)  && @$netsh_output[-1] =~ /Ok\./i) {
+	if (defined($netsh_output)  && @$netsh_output[-1] =~ /(Ok|The object already exists)/i) {
 		notify($ERRORS{'OK'}, 0, "configured firewall to disallow RDP");
 	}
 	elsif (defined($netsh_exit_status)) {

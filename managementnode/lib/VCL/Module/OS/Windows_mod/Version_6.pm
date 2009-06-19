@@ -493,7 +493,7 @@ sub firewall_enable_ping {
 	# Add the firewall rule
 	my ($add_rule_exit_status, $add_rule_output) = run_ssh_command($computer_node_name, $management_node_keys, $add_rule_command);
 	
-	if (defined($add_rule_output)  && @$add_rule_output[-1] =~ /Ok\./i) {
+	if (defined($add_rule_output)  && @$add_rule_output[-1] =~ /(Ok|The object already exists)/i) {
 		notify($ERRORS{'OK'}, 0, "added firewall rule to enable ping from any address");
 	}
 	elsif (defined($add_rule_exit_status)) {
@@ -555,7 +555,7 @@ sub firewall_enable_ping_private {
 	# Add the firewall rule
 	my ($add_rule_exit_status, $add_rule_output) = run_ssh_command($computer_node_name, $management_node_keys, $add_rule_command);
 	
-	if (defined($add_rule_output)  && @$add_rule_output[-1] =~ /Ok\./i) {
+	if (defined($add_rule_output)  && @$add_rule_output[-1] =~ /(Ok|The object already exists)/i) {
 		notify($ERRORS{'OK'}, 0, "added firewall rule to allow incoming ping to: $private_ip_address");
 	}
 	elsif (defined($add_rule_exit_status)) {
@@ -600,7 +600,7 @@ sub firewall_disable_ping {
 	# Execute the netsh.exe command
 	my ($netsh_exit_status, $netsh_output) = run_ssh_command($computer_node_name, $management_node_keys, $netsh_command);
 	
-	if (defined($netsh_output)  && @$netsh_output[-1] =~ /Ok\./i) {
+	if (defined($netsh_output)  && @$netsh_output[-1] =~ /(Ok|The object already exists)/i) {
 		notify($ERRORS{'OK'}, 0, "configured firewall to disallow ping");
 	}
 	elsif (defined($netsh_exit_status)) {
@@ -668,7 +668,7 @@ sub firewall_enable_rdp {
 	# Add the firewall rule
 	my ($add_rule_exit_status, $add_rule_output) = run_ssh_command($computer_node_name, $management_node_keys, $add_rule_command);
 	
-	if (defined($add_rule_output)  && @$add_rule_output[-1] =~ /Ok\./i) {
+	if (defined($add_rule_output)  && @$add_rule_output[-1] =~ /(Ok|The object already exists)/i) {
 		notify($ERRORS{'OK'}, 0, "added firewall rule to enable RDP from $remote_ip");
 	}
 	elsif (defined($add_rule_exit_status)) {
@@ -732,7 +732,7 @@ sub firewall_enable_rdp_private {
 	# Add the firewall rule
 	my ($add_rule_exit_status, $add_rule_output) = run_ssh_command($computer_node_name, $management_node_keys, $add_rule_command);
 	
-	if (defined($add_rule_output)  && @$add_rule_output[-1] =~ /Ok\./i) {
+	if (defined($add_rule_output)  && @$add_rule_output[-1] =~ /(Ok|The object already exists)/i) {
 		notify($ERRORS{'OK'}, 0, "added firewall rule to enable RDP to: $private_ip_address");
 	}
 	elsif (defined($add_rule_exit_status)) {
@@ -778,7 +778,7 @@ sub firewall_disable_rdp {
 	# Delete the firewall rule
 	my ($netsh_exit_status, $netsh_output) = run_ssh_command($computer_node_name, $management_node_keys, $netsh_command);
 	
-	if (defined($netsh_output)  && @$netsh_output[-1] =~ /Ok\./i) {
+	if (defined($netsh_output)  && @$netsh_output[-1] =~ /(Ok|The object already exists)/i) {
 		notify($ERRORS{'OK'}, 0, "deleted firewall rules which enable RDP");
 	}
 	elsif (defined($netsh_output)  && @$netsh_output[-1] =~ /No rules match/i) {
@@ -839,7 +839,7 @@ sub firewall_enable_ssh {
 	# Add the firewall rule
 	my ($add_rule_exit_status, $add_rule_output) = run_ssh_command($computer_node_name, $management_node_keys, $add_rule_command);
 	
-	if (defined($add_rule_output)  && @$add_rule_output[-1] =~ /Ok\./i) {
+	if (defined($add_rule_output)  && @$add_rule_output[-1] =~ /(Ok|The object already exists)/i) {
 		notify($ERRORS{'OK'}, 0, "added firewall rule to enable SSH from any address");
 	}
 	elsif (defined($add_rule_exit_status)) {
@@ -903,7 +903,7 @@ sub firewall_enable_ssh_private {
 	# Add the firewall rule
 	my ($add_rule_exit_status, $add_rule_output) = run_ssh_command($computer_node_name, $management_node_keys, $add_rule_command);
 	
-	if (defined($add_rule_output)  && @$add_rule_output[-1] =~ /Ok\./i) {
+	if (defined($add_rule_output)  && @$add_rule_output[-1] =~ /(Ok|The object already exists)/i) {
 		notify($ERRORS{'OK'}, 0, "added firewall rule to enable SSH to: $private_ip_address");
 	}
 	elsif (defined($add_rule_exit_status)) {
