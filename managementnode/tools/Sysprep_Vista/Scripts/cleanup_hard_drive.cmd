@@ -153,12 +153,6 @@ echo.
 echo -------------------------------------------------------
 echo.
 
-echo Emptying Recycle Bin...
-"%UTILITIES%\EmptyRecycleBin.exe" /q
-echo.
-
-echo.
-
 :PROFILES
 
 FOR /F "usebackq delims=," %%f in ("%SCRIPT_DIR%\delete_profile_files.txt") DO ^

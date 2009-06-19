@@ -112,10 +112,6 @@ del /A /S /Q /F "%SystemRoot%\inf\oem*.*"
 del /A /S /Q /F "%SystemRoot%\inf\infcache.1"
 echo.
 
-echo Emptying Recycle Bin...
-"%UTILITIES%\EmptyRecycleBin.exe" /q
-echo.
-
 
 :PROFILES
 echo Cleaning up user profiles...
