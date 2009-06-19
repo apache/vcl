@@ -1410,14 +1410,17 @@ sub capture_monitor {
 		my $current_image_size = $self->get_image_size($image_name);
 
 		# Check if image size is larger than the last time it was checked
-		if ($current_image_size > $image_size) {
+		if (defined $current_image_size && $current_image_size > $image_size) {
 			notify($ERRORS{'OK'}, 0, "image size has increased: $image_size -> $current_image_size, still copying");
 			$image_size = $current_image_size;
 			#reset capture_loop_count
 			$capture_loop_count = 0;
 		}
-		else {
+		elsif (defined $current_image_size) {
 			notify($ERRORS{'OK'}, 0, "image size is the same: $image_size=$current_image_size, copy may be complete");
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "unable to determine current image size");
 		}
 	} ## end for (my $capture_loop_count = 0; $capture_loop_count...
 
@@ -3154,7 +3157,7 @@ sub get_image_size {
 	my $self = shift;
 	if (ref($self) !~ /xCAT/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return 0;
+		return;
 	}
 
 	# Either use a passed parameter as the image name or use the one stored in this object's DataStructure
@@ -3162,19 +3165,19 @@ sub get_image_size {
 	$image_name = $self->data->get_image_name() if !$image_name;
 	if (!$image_name) {
 		notify($ERRORS{'CRITICAL'}, 0, "image name could not be determined");
-		return 0;
+		return;
 	}
 	notify($ERRORS{'DEBUG'}, 0, "getting size of image: $image_name");
 
 	my $image_repository_path = $self->_get_image_repository_path();
 	if (!$image_repository_path) {
 		notify($ERRORS{'CRITICAL'}, 0, "unable to determine image repository location, returning 0");
-		return 0;
+		return;
 	}
 
 	# Execute the command
 	my $du_command = "du -c $image_repository_path/$image_name.* 2>&1";
-	notify($ERRORS{'DEBUG'}, 0, "du command: $du_command");
+	#notify($ERRORS{'DEBUG'}, 0, "du command: $du_command");
 	my $du_output = `$du_command`;
 
 	# Save the exit status
@@ -3188,8 +3191,8 @@ sub get_image_size {
 	
 	# Check if image doesn't exist
 	if ($du_output && $du_output =~ /No such file.*0\s+total/is) {
-		notify($ERRORS{'WARNING'}, 0, "image does not exist: $image_repository_path/$image_name.*");
-		return;
+		notify($ERRORS{'OK'}, 0, "image does not exist: $image_repository_path/$image_name.*, returning 0");
+		return 0;
 	}
 	
 	# Check the du command output

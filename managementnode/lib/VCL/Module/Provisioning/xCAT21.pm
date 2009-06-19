@@ -1534,15 +1534,16 @@ sub capture_monitor {
 			$status =~ s/$computer_node_name: //;
 		} ## end foreach my $l (@file)
 	} ## end if (open(NODESTAT, "$XCAT_ROOT/bin/nodestat $computer_node_name stat 2>&1 |"...
-	#else {
-		# could not run nodestat command, fall back to watching image size
-		# Check the image size to see if it's growing
-		notify($ERRORS{'OK'}, 0, "checking size of image");
-		my $size = $self->get_image_size($image_name);
+	
+	# could not run nodestat command, fall back to watching image size
+	# Check the image size to see if it's growing
+	notify($ERRORS{'OK'}, 0, "checking size of image");
+	my $size = $self->get_image_size($image_name);
+	if (defined $size) {
 		notify($ERRORS{'OK'}, 0, "retrieved size of image: $size");
 		
 		if ($size > $filesize) {
-			notify($ERRORS{'OK'}, 0, "image size has changed: $size, still copying");
+			notify($ERRORS{'OK'}, 0, "image size has changed: $filesize -> $size, still copying");
 			$filesize    = $size;
 			$fullloopcnt = 0;
 		}
@@ -1554,8 +1555,10 @@ sub capture_monitor {
 			}
 			$filewatchcnt++;
 		}
-		
-	#} ## end else [ if (open(NODESTAT, "$XCAT_ROOT/bin/nodestat $computer_node_name stat 2>&1 |"...
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve current size of image");
+	}
 	
 	if ($status =~ /partimage-ng: partition/) {
 		if ($status eq $laststatus) {
