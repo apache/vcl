@@ -6666,9 +6666,15 @@ sub run_ssh_command {
 		# Strip out the key warning message from the output
 		$ssh_output =~ s/\@{10,}.*man-in-the-middle attacks\.//igs;
 		
-		# Strip out known hosts warning message
+		# Strip out known SSH warning messages
 		#    Warning: Permanently added 'blade1b2-8' (RSA) to the list of known hosts.
-		$ssh_output =~ s/Warning: Permanently added .+ to the list of known hosts\.//igs;
+		# 
+		#    Warning: the RSA host key for 'vi1-62' differs from the key for the IP address '10.25.7.62'
+		#    Offending key for IP in /root/.ssh/known_hosts:264
+		#    Matching host key in /root/.ssh/known_hosts:3977
+		$ssh_output =~ s/^Warning:.*//ig;
+		$ssh_output =~ s/^Offending key.*//ig;
+		$ssh_output =~ s/^Matching host key in.*//ig;
 		
 		# Remove any spaces from the beginning and end of the output
 		$ssh_output =~ s/(^\s+)|(\s+$)//g;
@@ -10433,7 +10439,7 @@ sub string_to_ascii {
 		}
 	}
 	
-	return $ascii_value_string;
+	return $ascii_value_string || '';
 }
 
 #/////////////////////////////////////////////////////////////////////////////
