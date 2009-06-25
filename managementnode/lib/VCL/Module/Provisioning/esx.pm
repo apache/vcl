@@ -141,33 +141,33 @@ sub load {
 	notify($ERRORS{'DEBUG'}, 0, "****************************************************");
 
 	# get various useful vars from the database
-	my $request_id     = $self->data->get_request_id;
-	my $reservation_id = $self->data->get_reservation_id;
-	my $vmhost_hostname           = $self->data->get_vmhost_hostname;
-	my $image_name     = $self->data->get_image_name;
-	my $computer_shortname  = $self->data->get_computer_short_name;
-	my $vmclient_computerid = $self->data->get_computer_id;
-	my $vmclient_imageminram      = $self->data->get_image_minram;
-	my $image_os_name  = $self->data->get_image_os_name;
-	my $image_os_type  = $self->data->get_image_os_type;
-	my $image_identity = $self->data->get_image_identity;
+	my $request_id           = $self->data->get_request_id;
+	my $reservation_id       = $self->data->get_reservation_id;
+	my $vmhost_hostname      = $self->data->get_vmhost_hostname;
+	my $image_name           = $self->data->get_image_name;
+	my $computer_shortname   = $self->data->get_computer_short_name;
+	my $vmclient_computerid  = $self->data->get_computer_id;
+	my $vmclient_imageminram = $self->data->get_image_minram;
+	my $image_os_name        = $self->data->get_image_os_name;
+	my $image_os_type        = $self->data->get_image_os_type;
+	my $image_identity       = $self->data->get_image_identity;
 
-	my $virtualswitch0    = $self->data->get_vmhost_profile_virtualswitch0;
-	my $virtualswitch1    = $self->data->get_vmhost_profile_virtualswitch1;
-	my $vmclient_eth0MAC          = $self->data->get_computer_eth0_mac_address;
-	my $vmclient_eth1MAC          = $self->data->get_computer_eth1_mac_address;
-	my $vmclient_OSname           = $self->data->get_image_os_name;
+	my $virtualswitch0   = $self->data->get_vmhost_profile_virtualswitch0;
+	my $virtualswitch1   = $self->data->get_vmhost_profile_virtualswitch1;
+	my $vmclient_eth0MAC = $self->data->get_computer_eth0_mac_address;
+	my $vmclient_eth1MAC = $self->data->get_computer_eth1_mac_address;
+	my $vmclient_OSname  = $self->data->get_image_os_name;
 
 	my $vmhost_username = $self->data->get_vmhost_profile_username();
 	my $vmhost_password = $self->data->get_vmhost_profile_password();
 
 	#Get the config datastore information from the database
-        my $datastore_ip;
+	my $datastore_ip;
 	my $datastore_share_path;
 	($datastore_ip, $datastore_share_path) = split(":", $self->data->get_vmhost_profile_datastore_path());
 
-	notify($ERRORS{'OK'}, 0, "DATASTORE IP is $datastore_ip and DATASTORE_SHARE_PATH is $datastore_share_path");
-	notify($ERRORS{'OK'}, 0, "Entered ESX module, loading $image_name on $computer_shortname (on $vmhost_hostname) for reservation $reservation_id");
+	notify($ERRORS{'OK'},    0, "DATASTORE IP is $datastore_ip and DATASTORE_SHARE_PATH is $datastore_share_path");
+	notify($ERRORS{'OK'},    0, "Entered ESX module, loading $image_name on $computer_shortname (on $vmhost_hostname) for reservation $reservation_id");
 	notify($ERRORS{'DEBUG'}, 0, "Datastore: $datastore_ip:$datastore_share_path");
 
 	# path to the inuse vm folder on the datastore (not a local path)
@@ -179,10 +179,10 @@ sub load {
 	$vminfo_command .= " --vmname $computer_shortname";
 	$vminfo_command .= " --username $vmhost_username";
 	$vminfo_command .= " --password '$vmhost_password'";
-	notify($ERRORS{'DEBUG'},0,"VM info command: $vminfo_command");
+	notify($ERRORS{'DEBUG'}, 0, "VM info command: $vminfo_command");
 	my $vminfo_output;
 	$vminfo_output = `$vminfo_command`;
-	notify($ERRORS{'DEBUG'},0,"VM info output: $vminfo_output");
+	notify($ERRORS{'DEBUG'}, 0, "VM info output: $vminfo_output");
 
 	# parse the results from the host and determine if we need to remove an old vm
 	if ($vminfo_output =~ /^Information of Virtual Machine $computer_shortname/m) {
@@ -193,10 +193,10 @@ sub load {
 		$poweroff_command .= " --operation poweroff";
 		$poweroff_command .= " --username $vmhost_username";
 		$poweroff_command .= " --password '$vmhost_password'";
-		notify($ERRORS{'DEBUG'},0,"Power off command: $poweroff_command");
+		notify($ERRORS{'DEBUG'}, 0, "Power off command: $poweroff_command");
 		my $poweroff_output;
 		$poweroff_output = `$poweroff_command`;
-		notify($ERRORS{'DEBUG'},0,"Powered off: $poweroff_output");
+		notify($ERRORS{'DEBUG'}, 0, "Powered off: $poweroff_output");
 
 		# unregister old vm from host
 		my $unregister_command = "/usr/lib/vmware-viperl/apps/vm/vmregister.pl";
@@ -214,8 +214,8 @@ sub load {
 		$unregister_output = `$unregister_command`;
 		notify($ERRORS{'DEBUG'}, 0, "Un-Registered: $unregister_output");
 
-	}
-	
+	} ## end if ($vminfo_output =~ /^Information of Virtual Machine $computer_shortname/m)
+
 	# Remove old vm folder
 	run_ssh_command($datastore_ip, $image_identity, "rm -rf $vmpath");
 	notify($ERRORS{'DEBUG'}, 0, "Removed old vm folder");
@@ -229,7 +229,7 @@ sub load {
 
 	# copy appropriate vmdk file
 	my $from = "$datastore_share_path/golden/$image_name/$image_name.vmdk";
-	my $to = "$vmpath/$image_name.vmdk";
+	my $to   = "$vmpath/$image_name.vmdk";
 	if (!run_ssh_command($datastore_ip, $image_identity, "cp $from $to")) {
 		notify($ERRORS{'CRITICAL'}, 0, "Could not copy vmdk file!");
 		return 0;
@@ -240,7 +240,7 @@ sub load {
 	# Copy the (large) -flat.vmdk file
 	# This uses ssh to do the copy locally, copying over nfs is too costly
 	$from = "$datastore_share_path/golden/$image_name/$image_name-flat.vmdk";
-	$to = "$vmpath/$image_name-flat.vmdk";
+	$to   = "$vmpath/$image_name-flat.vmdk";
 	if (!run_ssh_command($datastore_ip, $image_identity, "cp $from $to")) {
 		notify($ERRORS{'CRITICAL'}, 0, "Could not copy vmdk-flat file!");
 		return 0;
@@ -251,11 +251,11 @@ sub load {
 	my $vmxpath = "/tmp/$computer_shortname.vmx";
 
 	my $guestOS = "other";
-	$guestOS = "linux"   if ($image_os_name =~ /(fc|centos)/i);
+	$guestOS = "linux" if ($image_os_name =~ /(fc|centos)/i);
 	# FIXME Should add some more entries here
 
 	# determine adapter type by looking at vmdk file
-	my $adapter = "lsilogic"; # default
+	my $adapter = "lsilogic";    # default
 	my @output;
 	if (@output = run_ssh_command($datastore_ip, $image_identity, "grep adapterType $vmpath/$image_name.vmdk 2>&1")) {
 		my @LIST = @{$output[1]};
@@ -265,7 +265,8 @@ sub load {
 				notify($ERRORS{'OK'}, 0, "adapter= $1 ");
 			}
 		}
-	} else {
+	}
+	else {
 		notify($ERRORS{'CRITICAL'}, 0, "Could not ssh to grep the vmdk file");
 		return 0;
 	}
@@ -344,10 +345,10 @@ sub load {
 	$poweron_command .= " --operation poweron";
 	$poweron_command .= " --username $vmhost_username";
 	$poweron_command .= " --password '$vmhost_password'";
-	notify($ERRORS{'DEBUG'},0,"Power on command: $poweron_command");
+	notify($ERRORS{'DEBUG'}, 0, "Power on command: $poweron_command");
 	my $poweron_output;
 	$poweron_output = `$poweron_command`;
-	notify($ERRORS{'DEBUG'},0,"Powered on: $poweron_output");
+	notify($ERRORS{'DEBUG'}, 0, "Powered on: $poweron_output");
 
 
 	# Query the VI Perl toolkit for the mac address of our newly registered
@@ -362,7 +363,7 @@ sub load {
 	my $devices = $vm_view->config->hardware->device;
 	my $mac_addr;
 	foreach my $dev (@$devices) {
-		next unless ($dev->isa ("VirtualEthernetCard"));
+		next unless ($dev->isa("VirtualEthernetCard"));
 		notify($ERRORS{'DEBUG'}, 0, "deviceinfo->summary: $dev->deviceinfo->summary");
 		notify($ERRORS{'DEBUG'}, 0, "virtualswitch0: $virtualswitch0");
 		if ($dev->deviceInfo->summary eq $virtualswitch0) {
@@ -378,7 +379,7 @@ sub load {
 
 	# Query ARP table for $mac_addr to find the IP (waiting for machine to come up if necessary)
 	# The DHCP negotiation should add the appropriate ARP entry for us
-	my $arpstatus = 0;
+	my $arpstatus  = 0;
 	my $wait_loops = 0;
 	my $client_ip;
 	while (!$arpstatus) {
@@ -398,8 +399,8 @@ sub load {
 				notify($ERRORS{'OK'}, 0, "going to sleep 5 seconds, waiting for computer to DHCP. Try $wait_loops");
 				sleep 5;
 			}
-		}
-	}
+		} ## end else [ if ($arpoutput =~ /^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}).*?$mac_addr/mi)
+	} ## end while (!$arpstatus)
 
 
 	notify($ERRORS{'OK'}, 0, "Found IP address $client_ip");
@@ -408,7 +409,7 @@ sub load {
 	notify($ERRORS{'OK'}, 0, "Removing old hosts entry");
 	my $sedoutput = `sed -i "/.*\\b$computer_shortname\$/d" /etc/hosts`;
 	notify($ERRORS{'DEBUG'}, 0, $sedoutput);
-	
+
 	# Add new entry to /etc/hosts for $computer_shortname
 	`echo -e "$client_ip\t$computer_shortname" >> /etc/hosts`;
 
@@ -426,9 +427,9 @@ sub load {
 		else {
 			#either sshd is off or N/A, we wait
 			if ($wait_loops > 24) {
-					notify($ERRORS{'CRITICAL'}, 0, "waited acceptable amount of time for sshd to become active, please check $computer_shortname on $vmhost_hostname");
-					#need to check power, maybe reboot it. for now fail it
-					return 0;
+				notify($ERRORS{'CRITICAL'}, 0, "waited acceptable amount of time for sshd to become active, please check $computer_shortname on $vmhost_hostname");
+				#need to check power, maybe reboot it. for now fail it
+				return 0;
 			}
 			else {
 				$wait_loops++;
@@ -445,7 +446,7 @@ sub load {
 		if ($IPCONFIGURATION eq "dynamicDHCP") {
 			insertloadlog($reservation_id, $vmclient_computerid, "dynamicDHCPaddress", "collecting dynamic IP address for node");
 			notify($ERRORS{'DEBUG'}, 0, "Attempting to query vmclient for its public IP...");
-			my $assignedIPaddress = getdynamicaddress($computer_shortname, $vmclient_OSname,$image_os_type);
+			my $assignedIPaddress = getdynamicaddress($computer_shortname, $vmclient_OSname, $image_os_type);
 			if ($assignedIPaddress) {
 				#update computer table
 				notify($ERRORS{'DEBUG'}, 0, " Got dynamic address from vmclient, attempting to update database");
@@ -488,7 +489,7 @@ sub load {
 
 sub capture {
 	notify($ERRORS{'DEBUG'}, 0, "**********************************************************");
-	notify($ERRORS{'OK'}, 0, "Entering ESX Capture routine");
+	notify($ERRORS{'OK'},    0, "Entering ESX Capture routine");
 	my $self = shift;
 
 
@@ -501,14 +502,14 @@ sub capture {
 	my $request_data = shift;
 	my ($package, $filename, $line, $sub) = caller(0);
 	my $vmhost_hostname    = $self->data->get_vmhost_hostname;
-	my $new_imagename   = $self->data->get_image_name;
-	my $computer_shortname  = $self->data->get_computer_short_name;
-	my $image_identity = $self->data->get_image_identity;
-	my $vmhost_username = $self->data->get_vmhost_profile_username();
-	my $vmhost_password = $self->data->get_vmhost_profile_password();
+	my $new_imagename      = $self->data->get_image_name;
+	my $computer_shortname = $self->data->get_computer_short_name;
+	my $image_identity     = $self->data->get_image_identity;
+	my $vmhost_username    = $self->data->get_vmhost_profile_username();
+	my $vmhost_password    = $self->data->get_vmhost_profile_password();
 
 	#Get the config datastore information from the database
-        my $datastore_ip;
+	my $datastore_ip;
 	my $datastore_share_path;
 	($datastore_ip, $datastore_share_path) = split(":", $self->data->get_vmhost_profile_datastore_path());
 
@@ -532,7 +533,8 @@ sub capture {
 				$old_imagename = "$1-$2";
 			}
 		}
-	} else {
+	} ## end if (@ssh_output = run_ssh_command($datastore_ip...
+	else {
 		notify($ERRORS{'CRITICAL'}, 0, "LS failed");
 		return 0;
 	}
@@ -548,10 +550,10 @@ sub capture {
 	$poweroff_command .= " --operation poweroff";
 	$poweroff_command .= " --username $vmhost_username";
 	$poweroff_command .= " --password '$vmhost_password'";
-	notify($ERRORS{'DEBUG'},0,"Power off command: $poweroff_command");
+	notify($ERRORS{'DEBUG'}, 0, "Power off command: $poweroff_command");
 	my $poweroff_output;
 	$poweroff_output = `$poweroff_command`;
-	notify($ERRORS{'DEBUG'},0,"Powered off: $poweroff_output");
+	notify($ERRORS{'DEBUG'}, 0, "Powered off: $poweroff_output");
 
 	notify($ERRORS{'OK'}, 0, "Waiting 5 seconds for power off");
 	sleep(5);
@@ -564,7 +566,7 @@ sub capture {
 
 	# copy appropriate vmdk file
 	my $from = "$old_vmpath/$old_imagename.vmdk";
-	my $to = "$new_vmpath/$new_imagename.vmdk";
+	my $to   = "$new_vmpath/$new_imagename.vmdk";
 	if (!run_ssh_command($datastore_ip, $image_identity, "cp $from $to")) {
 		notify($ERRORS{'CRITICAL'}, 0, "Could not copy VMDK file! $!");
 		return 0;
@@ -573,7 +575,7 @@ sub capture {
 
 	# Now copy the vmx file (for debugging, vmx isn't actually used. This code can be taken out)
 	$from = "$old_vmpath/$old_imagename.vmx";
-	$to = "$new_vmpath/$new_imagename.vmx";
+	$to   = "$new_vmpath/$new_imagename.vmx";
 	if (!run_ssh_command($datastore_ip, $image_identity, "cp $from $to")) {
 		notify($ERRORS{'CRITICAL'}, 0, "Could not copy VMX file! $!");
 		return 0;
@@ -582,11 +584,11 @@ sub capture {
 
 	my $output;
 	notify($ERRORS{'OK'}, 0, "Rewriting VMDK and VMX files with new image name");
-	if (!run_ssh_command($datastore_ip, $image_identity, "sed -i \"s/$old_imagename/$new_imagename/\" $new_vmpath/$new_imagename.vmx")){
+	if (!run_ssh_command($datastore_ip, $image_identity, "sed -i \"s/$old_imagename/$new_imagename/\" $new_vmpath/$new_imagename.vmx")) {
 		notify($ERRORS{'CRITICAL'}, 0, "Sed error");
 		return 0;
 	}
-	if (!run_ssh_command($datastore_ip, $image_identity, "sed -i \"s/$old_imagename/$new_imagename/\" $new_vmpath/$new_imagename.vmdk")){
+	if (!run_ssh_command($datastore_ip, $image_identity, "sed -i \"s/$old_imagename/$new_imagename/\" $new_vmpath/$new_imagename.vmdk")) {
 		notify($ERRORS{'CRITICAL'}, 0, "Sed error");
 		return 0;
 	}
@@ -594,20 +596,21 @@ sub capture {
 	# Copy the (large) -flat.vmdk file
 	# This uses ssh to do the copy locally on the nfs server.
 	$from = "$old_vmpath/$old_imagename-flat.vmdk";
-	$to = "$new_vmpath/$new_imagename-flat.vmdk";
+	$to   = "$new_vmpath/$new_imagename-flat.vmdk";
 	notify($ERRORS{'DEBUG'}, 0, "Preparing to ssh to $datastore_ip copy vmdk-flat from $from to $to");
-	notify($ERRORS{'OK'}, 0, "SSHing to copy vmdk-flat file");
+	notify($ERRORS{'OK'},    0, "SSHing to copy vmdk-flat file");
 	if (!run_ssh_command($datastore_ip, $image_identity, "cp $from $to")) {
 		notify($ERRORS{'CRITICAL'}, 0, "Could not copy VMDK-flat file!");
 		return 0;
 	}
-	
+
 
 	return 1;
 } ## end sub capture
 
 
 #/////////////////////////////////////////////////////////////////////////
+
 =head2 node_status
 
  Parameters  : $nodename, $log
@@ -627,10 +630,13 @@ sub node_status {
 	my $vmhost_type        = 0;
 	my $vmhost_hostname    = 0;
 	my $vmhost_imagename   = 0;
-	my $image_os_type  	  = 0;
+	my $image_os_type      = 0;
 	my $vmclient_shortname = 0;
 	my $request_forimaging = 0;
-	my $identity_keys      = 0
+	my $identity_keys      = 0;
+	my $log                = 0;
+	my $computer_node_name = 0;
+
 
 	# Check if subroutine was called as a class method
 	if (ref($self) !~ /esx/i) {
@@ -650,14 +656,14 @@ sub node_status {
 			$identity_keys      = $self->{managementnode}->{keys};
 
 		} ## end if (ref($self) eq 'HASH')
-		# Check if node_status returned an array ref
+		    # Check if node_status returned an array ref
 		elsif (ref($self) eq 'ARRAY') {
 			notify($ERRORS{'DEBUG'}, $log, "self is a array reference");
 		}
 
 		$vmclient_shortname = $1 if ($computer_node_name =~ /([-_a-zA-Z0-9]*)(\.?)/);
-	}
-	else{
+	} ## end if (ref($self) !~ /esx/i)
+	else {
 
 		# try to contact vm
 		# $self->data->get_request_data;
@@ -668,12 +674,12 @@ sub node_status {
 		$vmhost_type        = $self->data->get_vmhost_type;
 		$vmhost_hostname    = $self->data->get_vmhost_hostname;
 		$vmhost_imagename   = $self->data->get_vmhost_image_name;
-		$image_os_type  = $self->data->get_image_os_type;
+		$image_os_type      = $self->data->get_image_os_type;
 		$vmclient_shortname = $self->data->get_computer_short_name;
-		$request_forimaging              = $self->data->get_request_forimaging();
-	}
+		$request_forimaging = $self->data->get_request_forimaging();
+	} ## end else [ if (ref($self) !~ /esx/i)
 
-	notify($ERRORS{'OK'}, 0, "Entering node_status, checking status of $vmclient_shortname");
+	notify($ERRORS{'OK'},    0, "Entering node_status, checking status of $vmclient_shortname");
 	notify($ERRORS{'DEBUG'}, 0, "request_for_imaging: $request_forimaging");
 	notify($ERRORS{'DEBUG'}, 0, "requeseted image name: $requestedimagename");
 
@@ -733,7 +739,7 @@ sub node_status {
 
 		notify($ERRORS{'DEBUG'}, 0, "SSH good, trying to query image name");
 
-		$status{ssh}          = 1;
+		$status{ssh} = 1;
 		my $identity = $IDENTITY_bladerhel;
 		my @sshcmd = run_ssh_command($vmclient_shortname, $identity, "cat currentimage.txt");
 		$status{currentimage} = $sshcmd[1][0];
@@ -763,7 +769,7 @@ sub node_status {
 	notify($ERRORS{'DEBUG'}, 0, "status set to $status{status}");
 
 
-	if($request_forimaging){
+	if ($request_forimaging) {
 		$status{status} = 'RELOAD';
 		notify($ERRORS{'OK'}, 0, "request_forimaging set, setting status to RELOAD");
 	}
@@ -781,10 +787,10 @@ sub does_image_exist {
 	}
 
 	my $image_identity = $self->data->get_image_identity;
-	my $image_name = $self->data->get_image_name();
+	my $image_name     = $self->data->get_image_name();
 
 	#Get the config datastore information from the database
-        my $datastore_ip;
+	my $datastore_ip;
 	my $datastore_share_path;
 	($datastore_ip, $datastore_share_path) = split(":", $self->data->get_vmhost_profile_datastore_path());
 
@@ -806,7 +812,8 @@ sub does_image_exist {
 				return 1;
 			}
 		}
-	} else {
+	} ## end if (@ssh_output = run_ssh_command($datastore_ip...
+	else {
 		notify($ERRORS{'CRITICAL'}, 0, "LS failed");
 		return 0;
 	}
@@ -834,7 +841,7 @@ sub get_image_size {
 	}
 
 	# Either use a passed parameter as the image name or use the one stored in this object's DataStructure
-	my $image_name = shift;
+	my $image_name     = shift;
 	my $image_identity = $self->data->get_image_identity;
 	$image_name = $self->data->get_image_name() if !$image_name;
 	if (!$image_name) {
@@ -844,7 +851,7 @@ sub get_image_size {
 	notify($ERRORS{'DEBUG'}, 0, "getting size of image: $image_name");
 
 	#Get the config datastore information from the database
-        my $datastore_ip;
+	my $datastore_ip;
 	my $datastore_share_path;
 	($datastore_ip, $datastore_share_path) = split(":", $self->data->get_vmhost_profile_datastore_path());
 
@@ -854,7 +861,7 @@ sub get_image_size {
 	my @output;
 	if (@output = run_ssh_command($datastore_ip, $image_identity, "/bin/ls -s1 $IMAGEREPOSITORY 2>&1")) {
 		my @filelist = @{$output[1]};
-		my $size = 0;
+		my $size     = 0;
 		foreach my $f (@filelist) {
 			if ($f =~ /$image_name-flat.vmdk/) {
 				my ($presize, $blah) = split(" ", $f);
@@ -866,7 +873,7 @@ sub get_image_size {
 			return 0;
 		}
 		return int($size / 1024);
-	}
+	} ## end if (@output = run_ssh_command($datastore_ip...
 
 	return 0;
 } ## end sub get_image_size
