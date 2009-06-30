@@ -1214,7 +1214,7 @@ sub load {
 			}
 
 		} ## end if ($image_os_name =~ /^(win2003)/)
-	} ## end elsif ($image_os_name =~ /winxp|wxp|win2003|winvista/) [ if ($image_os_name =~ /winvista/)
+	} ## end elsif ($image_os_name =~ /winxp|wxp|win2003|winvista/) [ if ($self->os->can('post_load'))
 
 
 	# Linux post-load tasks
@@ -1298,7 +1298,7 @@ sub load {
 				notify($ERRORS{'WARNING'}, 0, "failed to copy $path1 to $path2");
 			}
 		} ## end if (open(SSHDCFG, "/tmp/$computer_node_name.sshd"...
-	} ## end elsif ($image_os_type =~ /linux/i)  [ if ($image_os_name =~ /winvista/)
+	} ## end elsif ($image_os_type =~ /linux/i)  [ if ($self->os->can('post_load'))
 
 	return 1;
 } ## end sub load
@@ -1336,7 +1336,7 @@ sub capture {
 		notify($ERRORS{'WARNING'}, 0, "unable to update currentimage.txt on $computer_short_name");
 		return 0;
 	}
-	
+
 	# Check if pre_capture() subroutine has been implemented by the OS module
 	if ($self->os->can("pre_capture")) {
 		# Call OS pre_capture() - it should perform all OS steps necessary to capture an image
@@ -1346,7 +1346,7 @@ sub capture {
 			notify($ERRORS{'WARNING'}, 0, "OS module pre_capture() failed");
 			return 0;
 		}
-		
+
 		# The OS module should turn the computer power off
 		# Wait up to 2 minutes for the computer's power status to be off
 		if ($self->wait_for_off(2)) {
@@ -1363,7 +1363,7 @@ sub capture {
 				notify($ERRORS{'WARNING'}, 0, "failed to power off $computer_node_name");
 				return 0;
 			}
-		}
+		} ## end else [ if ($self->wait_for_off(2))
 	} ## end if ($self->os->can("pre_capture"))
 	elsif ($self->os->can("capture_prepare")) {
 		notify($ERRORS{'OK'}, 0, "calling OS module's capture_prepare() subroutine");
@@ -1401,7 +1401,7 @@ sub capture {
 		notify($ERRORS{'CRITICAL'}, 0, "failed $computer_node_name set to image state");
 		return 0;
 	}
-	
+
 	# Check if pre_capture() subroutine has been implemented by the OS module
 	# If so, all that needs to happen is for the computer to be powered on
 	if ($self->os->can("pre_capture")) {
@@ -1414,7 +1414,7 @@ sub capture {
 			return 0;
 		}
 	} ## end if ($self->os->can("pre_capture"))
-	# If capture_start() is implemented, call it, it will initiate a reboot
+	    # If capture_start() is implemented, call it, it will initiate a reboot
 	elsif ($self->os->can("capture_start")) {
 		notify($ERRORS{'OK'}, 0, "calling OS module's capture_start() subroutine");
 		if (!$self->os->capture_start()) {
@@ -1439,7 +1439,7 @@ sub capture {
 
 	notify($ERRORS{'OK'}, 0, "returning 1");
 	return 1;
-} ## end sub capture_prepare
+} ## end sub capture
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -1535,14 +1535,14 @@ sub capture_monitor {
 			$status =~ s/$computer_node_name: //;
 		} ## end foreach my $l (@file)
 	} ## end if (open(NODESTAT, "$XCAT_ROOT/bin/nodestat $computer_node_name stat 2>&1 |"...
-	
+
 	# could not run nodestat command, fall back to watching image size
 	# Check the image size to see if it's growing
 	notify($ERRORS{'OK'}, 0, "checking size of image");
 	my $size = $self->get_image_size($image_name);
 	if (defined $size) {
 		notify($ERRORS{'OK'}, 0, "retrieved size of image: $size");
-		
+
 		if ($size > $filesize) {
 			notify($ERRORS{'OK'}, 0, "image size has changed: $filesize -> $size, still copying");
 			$filesize    = $size;
@@ -1556,11 +1556,11 @@ sub capture_monitor {
 			}
 			$filewatchcnt++;
 		}
-	}
+	} ## end if (defined $size)
 	else {
 		notify($ERRORS{'WARNING'}, 0, "unable to retrieve current size of image");
 	}
-	
+
 	if ($status =~ /partimage-ng: partition/) {
 		if ($status eq $laststatus) {
 			notify($ERRORS{'DEBUG'}, 0, "nodestat status did not change from last iteration ($status)");
@@ -1577,7 +1577,7 @@ sub capture_monitor {
 		# report status
 		notify($ERRORS{'OK'}, 0, "partimage-ng running on $computer_node_name: $status");
 	} ## end if ($status =~ /partimage-ng: partition/)
-	
+
 	$fullloopcnt++;
 	goto CIWAITIMAGE;
 } ## end sub capture_monitor
@@ -1707,65 +1707,106 @@ sub _edit_nodetype {
 	if ($installmode || $image_os_install_type eq 'partimage') {
 		$image_os_name = 'image';
 	}
-	notify($ERRORS{'DEBUG'}, 0, "$computer_node_name, image=$image_name, os=$image_os_name, installtype=$image_os_install_type arch=$image_architecture, path=$image_os_source_path");
-	if (open(NODECH, "$XCAT_ROOT/bin/nodech $computer_node_name nodetype.os=$image_os_name 2>&1 |")) {
-		my @file = <NODECH>;
-		close(NODECH);
-		foreach my $l (@file) {
-			# no output is good
-			chomp $l;
-			if ($l =~ /\w/) {
-				notify($ERRORS{'WARNING'}, 0, "received output while setting OS for $computer_node_name: $l");
+
+	# Assemble the nodetype.tab and lock file paths
+	my $lock_file_path = "/tmp/nodetype.lockfile";
+
+	# Open the lock file
+	if (sysopen(LOCKFILE, $lock_file_path, O_RDONLY | O_CREAT)) {
+		notify($ERRORS{'DEBUG'}, 0, "opened $lock_file_path");
+
+		# Set exclusive lock on lock file
+		if (flock(LOCKFILE, LOCK_EX)) {
+			notify($ERRORS{'DEBUG'}, 0, "set exclusive lock on $lock_file_path");
+
+			notify($ERRORS{'DEBUG'}, 0, "$computer_node_name, image=$image_name, os=$image_os_name, installtype=$image_os_install_type arch=$image_architecture, path=$image_os_source_path");
+			if (open(NODECH, "$XCAT_ROOT/bin/nodech $computer_node_name nodetype.os=$image_os_name 2>&1 |")) {
+				my @file = <NODECH>;
+				close(NODECH);
+				foreach my $l (@file) {
+					# no output is good
+					chomp $l;
+					if ($l =~ /\w/) {
+						notify($ERRORS{'WARNING'}, 0, "received output while setting OS for $computer_node_name: $l");
+						close(LOCKFILE);
+						return 1;
+					}
+				}
+				notify($ERRORS{'OK'}, 0, "nodetype.os set to $image_os_name for $computer_node_name");
+			} ## end if (open(NODECH, "$XCAT_ROOT/bin/nodech $computer_node_name nodetype.os=$image_os_name 2>&1 |"...
+			else {
+				# could not run nodech command
+				notify($ERRORS{'CRITICAL'}, 0, "could not run $XCAT_ROOT/bin/nodech command to set nodetype.os");
+				close(LOCKFILE);
 				return 1;
 			}
+
+			# set architecture
+			if (open(NODECH, "$XCAT_ROOT/bin/nodech $computer_node_name nodetype.arch=$image_architecture 2>&1 |")) {
+				my @file = <NODECH>;
+				close(NODECH);
+				foreach my $l (@file) {
+					# no output is good
+					chomp $l;
+					if ($l =~ /\w/) {
+						notify($ERRORS{'WARNING'}, 0, "received output while setting arch for $computer_node_name: $l");
+						close(LOCKFILE);
+						return 0;
+					}
+				}
+				notify($ERRORS{'OK'}, 0, "nodetype.arch set to $image_architecture for $computer_node_name");
+			} ## end if (open(NODECH, "$XCAT_ROOT/bin/nodech $computer_node_name nodetype.arch=$image_architecture 2>&1 |"...
+			else {
+				# could not run nodech command
+				notify($ERRORS{'CRITICAL'}, 0, "could not run $XCAT_ROOT/bin/nodech command to set nodetype.arch");
+				close(LOCKFILE);
+				return 0;
+			}
+
+			# set profile
+			if (open(NODECH, "$XCAT_ROOT/bin/nodech $computer_node_name nodetype.profile=$image_name 2>&1 |")) {
+				my @file = <NODECH>;
+				close(NODECH);
+				foreach my $l (@file) {
+					# no output is good
+					chomp $l;
+					if ($l =~ /\w/) {
+						notify($ERRORS{'WARNING'}, 0, "received output while setting profile for $computer_node_name: $l");
+						close(LOCKFILE);
+						return 0;
+					}
+				}
+				notify($ERRORS{'OK'}, 0, "nodetype.profile set to $image_name for $computer_node_name");
+			} ## end if (open(NODECH, "$XCAT_ROOT/bin/nodech $computer_node_name nodetype.profile=$image_name 2>&1 |"...
+			else {
+				# could not run nodech command
+				notify($ERRORS{'CRITICAL'}, 0, "could not run $XCAT_ROOT/bin/nodech command to set nodetype.profile");
+				close(LOCKFILE);
+				return 0;
+			}
+
+			notify($ERRORS{'OK'}, 0, "nodetype successfully updated for $computer_node_name");
+			close(LOCKFILE);
+			return 1;
+
+		} ## end if (flock(LOCKFILE, LOCK_EX))
+		else {
+
+			# Could not open lock
+			notify($ERRORS{'CRITICAL'}, 0, "unable to get exclusive lock on $lock_file_path to edit nodetype.tab, $!");
+			close(LOCKFILE);
+			notify($ERRORS{'DEBUG'}, 0, "lock file closed");
+			return 0;
 		}
-		notify($ERRORS{'OK'}, 0, "nodetype.os set to $image_os_name for $computer_node_name");
-	} ## end if (open(NODECH, "$XCAT_ROOT/bin/nodech $computer_node_name nodetype.os=$image_os_name 2>&1 |"...
+	} ## end if (sysopen(LOCKFILE, $lock_file_path, O_RDONLY...
 	else {
-		# could not run nodech command
-		notify($ERRORS{'CRITICAL'}, 0, "could not run $XCAT_ROOT/bin/nodech command to set nodetype.os");
-		return 1;
+		# Could not open lock file
+		notify($ERRORS{'CRITICAL'}, 0, "unable to open $lock_file_path to edit nodetype.tab, $!");
+		return 0;
 	}
 
-	# set architecture
-	if (open(NODECH, "$XCAT_ROOT/bin/nodech $computer_node_name nodetype.arch=$image_architecture 2>&1 |")) {
-		my @file = <NODECH>;
-		close(NODECH);
-		foreach my $l (@file) {
-			# no output is good
-			chomp $l;
-			if ($l =~ /\w/) {
-				notify($ERRORS{'WARNING'}, 0, "received output while setting arch for $computer_node_name: $l");
-				return 1;
-			}
-		}
-		notify($ERRORS{'OK'}, 0, "nodetype.arch set to $image_architecture for $computer_node_name");
-	} ## end if (open(NODECH, "$XCAT_ROOT/bin/nodech $computer_node_name nodetype.arch=$image_architecture 2>&1 |"...
-	else {
-		# could not run nodech command
-		notify($ERRORS{'CRITICAL'}, 0, "could not run $XCAT_ROOT/bin/nodech command to set nodetype.arch");
-		return 1;
-	}
-
-	# set profile
-	if (open(NODECH, "$XCAT_ROOT/bin/nodech $computer_node_name nodetype.profile=$image_name 2>&1 |")) {
-		my @file = <NODECH>;
-		close(NODECH);
-		foreach my $l (@file) {
-			# no output is good
-			chomp $l;
-			if ($l =~ /\w/) {
-				notify($ERRORS{'WARNING'}, 0, "received output while setting profile for $computer_node_name: $l");
-				return 1;
-			}
-		}
-		notify($ERRORS{'OK'}, 0, "nodetype.profile set to $image_name for $computer_node_name");
-	} ## end if (open(NODECH, "$XCAT_ROOT/bin/nodech $computer_node_name nodetype.profile=$image_name 2>&1 |"...
-	else {
-		# could not run nodech command
-		notify($ERRORS{'CRITICAL'}, 0, "could not run $XCAT_ROOT/bin/nodech command to set nodetype.profile");
-		return 1;
-	}
+	close(LOCKFILE);
+	return 0;
 
 } ## end sub _edit_nodetype
 
@@ -1854,27 +1895,59 @@ sub _edit_nodelist {
 	}
 
 	# set groups
-	if (open(NODECH, "$XCAT_ROOT/bin/nodech $computer_node_name nodelist.groups=$newlist 2>&1 |")) {
-		my @file = <NODECH>;
-		close(NODECH);
-		foreach my $l (@file) {
-			# no output is good
-			chomp $l;
-			if ($l =~ /\w/) {
-				notify($ERRORS{'WARNING'}, 0, "received output while setting nodelist.groups for $computer_node_name: $l");
+	# Need to create a lockfile
+	my $lock_file_path = "/tmp/nodelist.lockfile";
+
+	# Open the lock file
+	if (sysopen(LOCKFILE, $lock_file_path, O_RDONLY | O_CREAT)) {
+		notify($ERRORS{'DEBUG'}, 0, "opened $lock_file_path");
+
+		# Set exclusive lock on lock file
+		if (flock(LOCKFILE, LOCK_EX)) {
+			notify($ERRORS{'DEBUG'}, 0, "set exclusive lock on $lock_file_path");
+
+			if (open(NODECH, "$XCAT_ROOT/bin/nodech $computer_node_name nodelist.groups=$newlist 2>&1 |")) {
+				my @file = <NODECH>;
+				close(NODECH);
+				foreach my $l (@file) {
+					# no output is good
+					chomp $l;
+					if ($l =~ /\w/) {
+						notify($ERRORS{'WARNING'}, 0, "received output while setting nodelist.groups for $computer_node_name: $l");
+						close(LOCKFILE);
+						return 0;
+					}
+				}
+
+				notify($ERRORS{'OK'}, 0, "nodelist.groups set to $newlist for $computer_node_name");
+				close(LOCKFILE);
 				return 1;
+
+			} ## end if (open(NODECH, "$XCAT_ROOT/bin/nodech $computer_node_name nodelist.groups=$newlist 2>&1 |"...
+			else {
+				# could not run nodech command
+				notify($ERRORS{'CRITICAL'}, 0, "could not run $XCAT_ROOT/bin/nodech command to set nodelist.groups");
+				close(LOCKFILE);
+				return 0;
 			}
+
+		} ## end if (flock(LOCKFILE, LOCK_EX))
+		else {
+
+			# Could not open lock
+			notify($ERRORS{'CRITICAL'}, 0, "unable to get exclusive lock on $lock_file_path to edit nodetype.tab, $!");
+			close(LOCKFILE);
+			notify($ERRORS{'DEBUG'}, 0, "lock file closed");
+			return 0;
 		}
-		notify($ERRORS{'OK'}, 0, "nodelist.groups set to $newlist for $computer_node_name");
-	} ## end if (open(NODECH, "$XCAT_ROOT/bin/nodech $computer_node_name nodelist.groups=$newlist 2>&1 |"...
+
+	} ## end if (sysopen(LOCKFILE, $lock_file_path, O_RDONLY...
 	else {
-		# could not run nodech command
-		notify($ERRORS{'CRITICAL'}, 0, "could not run $XCAT_ROOT/bin/nodech command to set nodelist.groups");
-		return 1;
+		# Could not open lock file
+		notify($ERRORS{'CRITICAL'}, 0, "unable to open $lock_file_path to edit nodetype.tab, $!");
+		return 0;
 	}
-
 } ## end sub _edit_nodelist
-
 #/////////////////////////////////////////////////////////////////////////////
 
 =head2 _pping
@@ -2184,7 +2257,7 @@ sub node_status {
 			$image_os_type           = $self->{image}->{OS}->{type};
 
 		} ## end if (ref($self) eq 'HASH')
-		# Check if node_status returned an array ref
+		    # Check if node_status returned an array ref
 		elsif (ref($self) eq 'ARRAY') {
 			notify($ERRORS{'DEBUG'}, 0, "self is a array reference");
 		}
@@ -2284,14 +2357,14 @@ sub node_status {
 
 		# Check the currentimage.txt file on the node
 		notify($ERRORS{'DEBUG'}, $log, "checking image specified in currentimage.txt file on $computer_short_name");
-			my $status_currentimage = _getcurrentimage($computer_short_name);
-			if ($status_currentimage) {
-				notify($ERRORS{'OK'}, $log, "$computer_short_name currentimage.txt has: $status_currentimage");
-				$status{currentimage} = $status_currentimage;
-			}
-			else {
-				notify($ERRORS{'WARNING'}, $log, "$computer_short_name currentimage.txt could not be checked");
-			}
+		my $status_currentimage = _getcurrentimage($computer_short_name);
+		if ($status_currentimage) {
+			notify($ERRORS{'OK'}, $log, "$computer_short_name currentimage.txt has: $status_currentimage");
+			$status{currentimage} = $status_currentimage;
+		}
+		else {
+			notify($ERRORS{'WARNING'}, $log, "$computer_short_name currentimage.txt could not be checked");
+		}
 	} ## end if ($sshd_status =~ /on/)
 	else {
 		$status{ssh} = 0;
@@ -2494,9 +2567,10 @@ sub does_image_exist {
 			return 0;
 		}
 	} ## end if ($image_os_install_type eq 'kickstart')
-	# Check if image files exist (Partimage files)
-	elsif (!-s "$image_repository_path/$image_name.img" and
-	       !-s "$image_repository_path/$image_name.gz") {
+	    # Check if image files exist (Partimage files)
+	elsif (    !-s "$image_repository_path/$image_name.img"
+			 and !-s "$image_repository_path/$image_name.gz")
+	{
 		notify($ERRORS{'OK'}, 0, "image file $image_repository_path/$image_name.(img|gz) does not exist");
 		return 0;
 	}
@@ -2590,7 +2664,7 @@ sub retrieve_image {
 		notify($ERRORS{'WARNING'}, 0, "image library configuration data is missing: user=$image_lib_user, key=$image_lib_key, partners=$image_lib_partners");
 		return;
 	}
-	
+
 	# Get the image repository path
 	my $image_repository_path        = $self->_get_image_repository_path();
 	my $image_repository_path_source = $image_repository_path;
