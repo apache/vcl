@@ -68,6 +68,8 @@ my @module_urls = (
 	'http://search.cpan.org/CPAN/authors/id/R/RJ/RJRAY/RPC-XML-0.64.tar.gz',
 	'http://www.cpan.org/modules/by-module/XML/XML-Parser-2.36.tar.gz',
 	'http://www.cpan.org/modules/by-module/Crypt/Crypt-SSLeay-0.57.tar.gz',
+	'http://search.cpan.org/CPAN/authors/id/P/PM/PMQS/Compress-Raw-Zlib-2.020.tar.gz',
+	'http://search.cpan.org/CPAN/authors/id/P/PM/PMQS/IO-Compress-2.020.tar.gz',
 	
 	'http://search.cpan.org/CPAN/authors/id/T/TI/TIMB/DBI-1.609.tar.gz',
 	
@@ -96,6 +98,9 @@ for my $url (@module_urls) {
 	}
 	elsif ($module_name =~ /TimeDate/) {
 		$module_package = "Date::Parse";
+	}
+	elsif ($module_name =~ /IO-Compress/) {
+		$module_package = "Compress::Zlib";
 	}
 	print "Module package: $module_package\n";
 	
