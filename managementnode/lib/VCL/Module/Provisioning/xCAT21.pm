@@ -3012,6 +3012,262 @@ sub _get_base_template_filename {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 power_reset
+
+ Parameters  : $computer_node_name (optional)
+ Returns     : 
+ Description : 
+
+=cut
+
+sub power_reset {
+	my $argument_1 = shift;
+	my $argument_2 = shift;
+
+	my $computer_node_name;
+
+	# Check if subroutine was called as an object method
+	if (ref($argument_1) =~ /xcat/i) {
+		my $self = $argument_1;
+
+		$computer_node_name = $argument_2;
+
+		# Check if computer argument was specified
+		# If not, use computer node name in the data object
+		if (!$computer_node_name) {
+			$computer_node_name = $self->data->get_computer_node_name();
+		}
+	} ## end if (ref($argument_1) =~ /xcat/i)
+	else {
+		# Subroutine was not called as an object method, 2 arguments must be specified
+		$computer_node_name = $argument_1;
+	}
+
+	# Check if computer was determined
+	if (!$computer_node_name) {
+		notify($ERRORS{'WARNING'}, 0, "computer could not be determined from arguments");
+		return;
+	}
+
+	# Turn computer off
+	my $off_attempts = 0;
+	while (!power_off($computer_node_name)) {
+		$off_attempts++;
+
+		if ($off_attempts == 3) {
+			notify($ERRORS{'WARNING'}, 0, "failed to turn $computer_node_name off, rpower status not is off after 3 attempts");
+			return;
+		}
+
+		sleep 2;
+	} ## end while (!power_off($computer_node_name))
+
+	# Turn computer on
+	my $on_attempts = 0;
+	while (!power_on($computer_node_name)) {
+		$on_attempts++;
+
+		if ($on_attempts == 3) {
+			notify($ERRORS{'WARNING'}, 0, "failed to turn $computer_node_name on, rpower status not is on after 3 attempts");
+			return;
+		}
+
+		sleep 2;
+	} ## end while (!power_on($computer_node_name))
+
+	notify($ERRORS{'OK'}, 0, "successfully reset power on $computer_node_name");
+	return 1;
+} ## end sub power_reset
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 power_on
+
+ Parameters  : $computer_node_name (optional)
+ Returns     : 
+ Description : 
+
+=cut
+
+sub power_on {
+	my $argument_1 = shift;
+	my $argument_2 = shift;
+
+	my $computer_node_name;
+
+	# Check if subroutine was called as an object method
+	if (ref($argument_1) =~ /xcat/i) {
+		my $self = $argument_1;
+
+		$computer_node_name = $argument_2;
+
+		# Check if computer argument was specified
+		# If not, use computer node name in the data object
+		if (!$computer_node_name) {
+			$computer_node_name = $self->data->get_computer_node_name();
+		}
+	} ## end if (ref($argument_1) =~ /xcat/i)
+	else {
+		# Subroutine was not called as an object method, 2 arguments must be specified
+		$computer_node_name = $argument_1;
+	}
+
+	# Check if computer was determined
+	if (!$computer_node_name) {
+		notify($ERRORS{'WARNING'}, 0, "computer could not be determined from arguments");
+		return;
+	}
+
+	# Turn computer on
+	my $on_attempts  = 0;
+	my $power_status = 'unknown';
+	while ($power_status !~ /on/) {
+		$on_attempts++;
+
+		if ($on_attempts == 3) {
+			notify($ERRORS{'WARNING'}, 0, "failed to turn $computer_node_name on, rpower status not is on after 3 attempts");
+			return;
+		}
+
+		_rpower($computer_node_name, 'on');
+		
+		# Wait up to 1 minute for the computer power status to be on
+		if (wait_for_on($computer_node_name, 1)) {
+			last;
+		}
+
+		$power_status = power_status($computer_node_name);
+	} ## end while ($power_status !~ /on/)
+
+	notify($ERRORS{'OK'}, 0, "successfully powered on $computer_node_name");
+	return 1;
+} ## end sub power_on
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 power_off
+
+ Parameters  : $computer_node_name (optional)
+ Returns     : 
+ Description : 
+
+=cut
+
+sub power_off {
+	my $argument_1 = shift;
+	my $argument_2 = shift;
+	
+	my $computer_node_name;
+
+	# Check if subroutine was called as an object method
+	if (ref($argument_1) =~ /xcat/i) {
+		my $self = $argument_1;
+
+		$computer_node_name = $argument_2;
+
+		# Check if computer argument was specified
+		# If not, use computer node name in the data object
+		if (!$computer_node_name) {
+			$computer_node_name = $self->data->get_computer_node_name();
+		}
+	} ## end if (ref($argument_1) =~ /xcat/i)
+	else {
+		# Subroutine was not called as an object method, 2 arguments must be specified
+		$computer_node_name = $argument_1;
+	}
+
+	# Check if computer was determined
+	if (!$computer_node_name) {
+		notify($ERRORS{'WARNING'}, 0, "computer could not be determined from arguments");
+		return;
+	}
+
+	# Turn computer off
+	my $power_status = 'unknown';
+	my $off_attempts = 0;
+	while ($power_status !~ /off/) {
+		$off_attempts++;
+
+		if ($off_attempts == 3) {
+			notify($ERRORS{'WARNING'}, 0, "failed to turn $computer_node_name off, rpower status not is off after 3 attempts");
+			return;
+		}
+		
+		# Attempt to run rpower <node> off
+		_rpower($computer_node_name, 'off');
+		
+		# Wait up to 1 minute for the computer power status to be off
+		if (wait_for_off($computer_node_name, 1)) {
+			last;
+		}
+
+		$power_status = power_status($computer_node_name);
+	} ## end while ($power_status !~ /off/)
+
+	notify($ERRORS{'OK'}, 0, "successfully powered off $computer_node_name");
+	return 1;
+} ## end sub power_off
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 power_status
+
+ Parameters  : $computer_node_name (optional)
+ Returns     : 
+ Description : 
+
+=cut
+
+sub power_status {
+	my $argument_1 = shift;
+	my $argument_2 = shift;
+
+	my $computer_node_name;
+
+	# Check if subroutine was called as an object method
+	if (ref($argument_1) =~ /xcat/i) {
+		my $self = $argument_1;
+
+		$computer_node_name = $argument_2;
+
+		# Check if computer argument was specified
+		# If not, use computer node name in the data object
+		if (!$computer_node_name) {
+			$computer_node_name = $self->data->get_computer_node_name();
+		}
+	} ## end if (ref($argument_1) =~ /xcat/i)
+	else {
+		# Subroutine was not called as an object method, 2 arguments must be specified
+		$computer_node_name = $argument_1;
+	}
+
+	# Check if computer was determined
+	if (!$computer_node_name) {
+		notify($ERRORS{'WARNING'}, 0, "computer could not be determined from arguments");
+		return;
+	}
+
+	# Call rpower to determine power status
+	my $rpower_stat = _rpower($computer_node_name, 'stat');
+	notify($ERRORS{'DEBUG'}, 0, "retrieved power status of $computer_node_name: $rpower_stat");
+
+	if (!$rpower_stat) {
+		notify($ERRORS{'WARNING'}, 0, "failed to determine power status, rpower subroutine returned $rpower_stat");
+		return;
+	}
+	elsif ($rpower_stat =~ /^(on|off)$/i) {
+		return lc($1);
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to determine power status, unexpected output returned from rpower: $rpower_stat");
+		return;
+	}
+} ## end sub power_status
+
+
+
+#/////////////////////////////////////////////////////////////////////////////
+
 initialize() if (!$XCAT_ROOT);
 
 #/////////////////////////////////////////////////////////////////////////////
