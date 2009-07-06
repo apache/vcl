@@ -69,8 +69,10 @@ CREATE TABLE IF NOT EXISTS `affiliation` (
 CREATE TABLE IF NOT EXISTS `blockComputers` (
   `blockTimeid` mediumint(8) unsigned NOT NULL default '0',
   `computerid` smallint(5) unsigned NOT NULL default '0',
+  `imageid` smallint(5) unsigned NOT NULL default '0',
   PRIMARY KEY  (`blockTimeid`,`computerid`),
-  KEY `computerid` (`computerid`)
+  KEY `computerid` (`computerid`),
+  KEY `imageid` (`imageid`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
