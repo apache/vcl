@@ -309,16 +309,6 @@ sub pre_capture {
 
 =item *
 
- Allow users to connect remotely (this does not enable RDP, but allows general remote access)
-
-=cut
-
-	if (!$self->allow_remote_access()) {
-		notify($ERRORS{'WARNING'}, 0, "unable to allow users to connect remotely");
-	}
-
-=item *
-
  Disable RDP access from any IP address
 
 =cut
@@ -1105,22 +1095,22 @@ sub filesystem_entry_exists {
 		return;
 	}
 	
-	# Replace backslashes with forward slashes
-	$path =~ s/\\+/\//;
+	# Replace any backslashes or forward slashes with \\
+	$path =~ s/[\\\/]+/\\/g;
 
-	# Assemble the ls command and execute it
-	my $ls_command = "ls -lad \"$path\"";
-	my ($ls_exit_status, $ls_output) = run_ssh_command($computer_node_name, $management_node_keys, $ls_command, '', '', 1);
-	if (defined($ls_exit_status) && $ls_exit_status == 0) {
-		notify($ERRORS{'DEBUG'}, 0, "filesystem entry exists on $computer_node_name: $path");
+	# Assemble the dir command and execute it
+	my $dir_command = "cmd.exe /c dir /a /b /s \"$path\"";
+	my ($dir_exit_status, $dir_output) = run_ssh_command($computer_node_name, $management_node_keys, $dir_command, '', '', 1);
+	if ((defined($dir_exit_status) && $dir_exit_status == 0) || (defined($dir_output) && grep(/$path/i, @$dir_output))) {
+		notify($ERRORS{'DEBUG'}, 0, "filesystem entry exists on $computer_node_name: $path, dir output:\n" . join("\n", @$dir_output));
 		return 1;
 	}
-	elsif (defined($ls_exit_status) && $ls_exit_status == 2) {
-		notify($ERRORS{'DEBUG'}, 0, "filesystem entry does NOT exist on $computer_node_name: $path\noutput:\n" . join("\n", @$ls_output));
+	elsif ((defined($dir_exit_status) && $dir_exit_status == 1) || (defined($dir_output) && grep(/file not found/i, @$dir_output))) {
+		notify($ERRORS{'DEBUG'}, 0, "filesystem entry does NOT exist on $computer_node_name: $path\noutput:\n" . join("\n", @$dir_output));
 		return 0;
 	}
-	elsif ($ls_exit_status) {
-		notify($ERRORS{'WARNING'}, 0, "failed to determine if filesystem entry exists on $computer_node_name: $path, exit status: $ls_exit_status, output:\n@{$ls_output}");
+	elsif ($dir_exit_status) {
+		notify($ERRORS{'WARNING'}, 0, "failed to determine if filesystem entry exists on $computer_node_name: $path, exit status: $dir_exit_status, output:\n@{$dir_output}");
 		return;
 	}
 	else {
@@ -1769,11 +1759,23 @@ sub disable_pagefile {
 		notify($ERRORS{'WARNING'}, 0, "failed to reboot computer after disabling pagefile");
 		return;
 	}
-
-	# Attempt to delete the pagefile
-	if (!$self->delete_file("C:/pagefile.sys")) {
-		notify($ERRORS{'WARNING'}, 0, "failed to delete pagefile.sys");
-		return;
+	
+	# Attempt to delete the pagefile from all drives
+	# A pagefile may reside on drives other than C: if additional volumes are configured in the image
+	my @volume_list = $self->get_volume_list();
+	if (!@volume_list || !(grep(/c/, @volume_list))) {
+		@volume_list = ('c');
+	}
+	
+	# Loop through the drive letters and attempt to delete pagefile.sys on each drive
+	for my $drive_letter (@volume_list) {
+		if ($self->delete_file("$drive_letter:/pagefile.sys")) {
+			notify($ERRORS{'DEBUG'}, 0, "deleted pagefile.sys on all $drive_letter:");
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to delete pagefile.sys on all $drive_letter:");
+			return;
+		}
 	}
 
 	return 1;
@@ -4118,44 +4120,6 @@ sub firewall_enable_sessmgr {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 allow_remote_access
-
- Parameters  : 
- Returns     : 1 if succeeded, 0 otherwise
- Description : 
-
-=cut
-
-sub allow_remote_access {
-	my $self = shift;
-	if (ref($self) !~ /windows/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-	
-	# Set the registry key that allows users to connect remotely
-	# This key is configured by the "Allow users to connect remotely to this computer" checkbox
-	my $registry_string .= <<EOF;
-Windows Registry Editor Version 5.00
-
-[HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\Terminal Server]
-"fDenyTSConnections"=dword:00000000
-EOF
-
-	# Import the string into the registry
-	if ($self->import_registry_string($registry_string)) {
-		notify($ERRORS{'OK'}, 0, "set registry key to allow users to connect remotely");
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to set registry key to allow users to connect remotely");
-		return;
-	}
-	
-	return 1;
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
 =head2 firewall_enable_rdp
 
  Parameters  : 
@@ -4178,6 +4142,11 @@ sub firewall_enable_rdp {
 	my $computer_node_name       = $self->data->get_computer_node_name();
 
 	my $netsh_command;
+	
+	# Set the key to allow remote connections whenever enabling RDP
+	# Include this in the SSH command along with the netsh.exe commands rather than calling it separately for faster execution
+	$netsh_command .= 'reg.exe ADD "HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\Terminal Server" /t REG_DWORD /v fDenyTSConnections /d 0 /f ; ';
+
 	$netsh_command .= "netsh.exe firewall set portopening";
 	$netsh_command .= " name = \"Remote Desktop\"";
 	$netsh_command .= " protocol = TCP";
@@ -4230,6 +4199,10 @@ sub firewall_enable_rdp_private {
 	my $computer_node_name       = $self->data->get_computer_node_name();
 	
 	my $netsh_command;
+	
+	# Set the key to allow remote connections whenever enabling RDP
+	# Include this in the SSH command along with the netsh.exe commands rather than calling it separately for faster execution
+	$netsh_command .= 'reg.exe ADD "HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\Terminal Server" /t REG_DWORD /v fDenyTSConnections /d 0 /f ; ';
 	
 	# Get the public interface name
 	# Add command to disable RDP on public interface if its name is found
@@ -7386,6 +7359,56 @@ sub set_public_default_route {
 	
 	return 1;
 }
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_volume_list
+
+ Parameters  : None
+ Returns     : If successful: array containing volume drive letters
+               If failed: false
+ Description : 
+
+=cut
+
+sub get_volume_list {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a VCL::Module module object method");
+		return;	
+	}
+	
+	my $management_node_keys = $self->data->get_management_node_keys();
+	my $computer_node_name   = $self->data->get_computer_node_name();
+
+	# Echo the diskpart script to a temp file on the node
+	my $for_command = 'for i in `ls /cygdrive 2>/dev/null`; do echo $i; done;';
+	my ($for_exit_status, $for_output) = run_ssh_command($computer_node_name, $management_node_keys, $for_command, '', '', 1);
+	if (defined($for_exit_status) && $for_exit_status == 0) {
+		notify($ERRORS{'OK'}, 0, "retrieved drive letter list under /cygdrive:\n" . join("\n", @$for_output));
+	}
+	elsif ($for_exit_status) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve drive letter list under /cygdrive, exit status: $for_exit_status, output:\n@{$for_output}");
+		return;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to retrieve drive letter list under /cygdrive");
+		return;
+	}
+	
+	my @drive_letters;
+	for my $for_output_line (@$for_output) {
+		if ($for_output_line =~ /^[a-z]$/) {
+			push @drive_letters, $for_output_line;
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "unexpected output from for command: $for_output_line");
+		}
+	}
+	
+	return @drive_letters;
+}
+
 
 #/////////////////////////////////////////////////////////////////////////////
 
