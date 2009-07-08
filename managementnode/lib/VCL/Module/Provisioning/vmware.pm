@@ -652,6 +652,11 @@ sub load {
 		push(@vmxfile, "ethernet1.wakeOnPcktRcv = \"false\"\n");
 	}
 	elsif ($vmtype =~ /freeserver|gsx|vmwareGSX/) {
+		# If $virtualswitch0 has been configured, set the custom connection type
+		# If it hasn't, the default bridged connection will be used
+		push(@vmxfile, "Ethernet0.connectionType = \"custom\"\n");
+		push(@vmxfile, "Ethernet0.vnet = \"$virtualswitch0\"\n");
+		
 		push(@vmxfile, "Ethernet1.connectionType = \"custom\"\n");
 		push(@vmxfile, "Ethernet1.vnet = \"$virtualswitch1\"\n");
 	}
@@ -830,18 +835,19 @@ sub load {
 					if ($l =~ /= on/) {
 						#good vm still on
 						notify($ERRORS{'OK'}, 0, "vm $computer_shortname reports on");
-
-						if ($sloop > 15) {
-							my $sshd_status = _sshd_status($computer_shortname, $requestedimagename);
-							if ($sshd_status eq "on") {
-								notify($ERRORS{'OK'}, 0, "$computer_shortname now has active sshd running, maybe we missed the READY flag setting STAGE5 flag");
-								$s5 = 1;
-								#speed this up a bit
-								close(TAIL);
-								goto VMWAREROUND2;
-							}
-						} ## end if ($sloop > 15)
-
+						
+						my $sshd_status = _sshd_status($computer_shortname, $requestedimagename);
+						if ($sshd_status eq "on") {
+							notify($ERRORS{'OK'}, 0, "$computer_shortname now has active sshd running, maybe we missed the READY flag setting STAGE5 flag");
+							$s5 = 1;
+							#speed this up a bit
+							close(TAIL);
+							goto VMWAREROUND2;
+						}
+						else {
+							notify($ERRORS{'OK'}, 0, "sshd is NOT active on $computer_shortname yet");
+						}
+						
 					} ## end if ($l =~ /= on/)
 					elsif ($l =~ /= off/) {
 						#good vm still on
@@ -1034,51 +1040,8 @@ sub load {
 	}
 
 	insertloadlog($reservation_id, $vmclient_computerid, "info", "starting post configurations on node");
-	if ($vmclient_OSname =~ /vmwarewin|vmwareesxwin/) {
-		if (changewindowspasswd($computer_shortname, "root")) {
-			notify($ERRORS{'OK'}, 0, "Successfully changed password, account $computer_shortname,root");
-		}
-
-		if (changewindowspasswd($computer_shortname, "administrator")) {
-			notify($ERRORS{'OK'}, 0, "Successfully changed password, account $computer_shortname,administrator");
-		}
-		#disable remote desktop port
-		if (remotedesktopport($computer_shortname, "DISABLE")) {
-			notify($ERRORS{'OK'}, 0, "remote desktop disabled on $computer_shortname");
-		}
-		else {
-			notify($ERRORS{'OK'}, 0, "remote desktop not disable on $computer_shortname");
-		}
-
-		# set sshd to auto
-		if (_set_sshd_startmode($computer_shortname, "auto")) {
-			notify($ERRORS{'OK'}, 0, "successfully set sshd service on $computer_shortname to start auto");
-		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "failed to set sshd service on $computer_shortname to start auto");
-		}
-
-		#check for root logged in on console and then logoff
-		notify($ERRORS{'OK'}, 0, "checking for any console users $computer_shortname");
-		undef @sshcmd;
-		@sshcmd = run_ssh_command($computer_shortname, $IDENTITY_wxp, "cmd /c qwinsta.exe", "root");
-		foreach my $r (@{$sshcmd[1]}) {
-			if ($r =~ /([>]?)([-a-zA-Z0-9]*)\s+([a-zA-Z0-9]*)\s+ ([0-9]*)\s+([a-zA-Z]*)/) {
-				my $state   = $5;
-				my $session = $2;
-				my $user    = $3;
-				if ($5 =~ /Active/) {
-					#give it sometime to finish - just in case
-					sleep 7;
-					notify($ERRORS{'OK'}, 0, "detected $user on $session still logged on $computer_shortname $r");
-					if (defined(run_ssh_command($computer_shortname, $IDENTITY_wxp, "cmd /c logoff.exe $session", "root"))) {
-						notify($ERRORS{'OK'}, 0, "logged off $user on $session on $computer_shortname $r");
-					}
-				}
-			} ## end if ($r =~ /([>]?)([-a-zA-Z0-9]*)\s+([a-zA-Z0-9]*)\s+ ([0-9]*)\s+([a-zA-Z]*)/)
-		} ## end foreach my $r (@{$sshcmd[1]})
-	} ## end if ($vmclient_OSname =~ /vmwarewin|vmwareesxwin/)
-	    #ipconfiguration
+	
+	#ipconfiguration
 	if ($IPCONFIGURATION ne "manualDHCP") {
 		#not default setting
 		if ($IPCONFIGURATION eq "dynamicDHCP") {
