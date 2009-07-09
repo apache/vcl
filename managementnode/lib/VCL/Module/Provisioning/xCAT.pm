@@ -204,23 +204,41 @@ sub load {
 	# Make sure dhcpd is started on management node
 	if (!(_checknstartservice("dhcpd"))) {
 		notify($ERRORS{'CRITICAL'}, 0, "dhcpd is not running or failed to restart");
+		return 0;
 	}
 
 	# Make sure named is started on management node
 	if (!(_checknstartservice("named"))) {
 		notify($ERRORS{'CRITICAL'}, 0, "named is not running or failed to restart");
+		return 0;
 	}
 
 	# Make sure xcatd is started on management node
 	if (!(_checknstartservice("xcatd"))) {
 		notify($ERRORS{'CRITICAL'}, 0, "xcatd is not running or failed to restart");
+		return 0;
 	}
 
 	# Make sure atftpd is started on management node
 	if (!(_checknstartservice("atftpd"))) {
 		notify($ERRORS{'CRITICAL'}, 0, "atftpd is not running or failed to restart");
+		return 0;
 	}
-
+	
+	# Make sure the image repository path can be retrieved and directory exists
+	my $image_repository_path = $self->_get_image_repository_path();
+	if (!$image_repository_path) {
+		notify($ERRORS{'CRITICAL'}, 0, "unable to determine image repository path");
+		return 0;
+	}
+	if (-d $image_repository_path) {
+		notify($ERRORS{'DEBUG'}, 0, "confirmed image repository directory exists: $image_repository_path");
+	}
+	else {
+		notify($ERRORS{'CRITICAL'}, 0, "unable to confirm image repository directory exists: $image_repository_path, no output returned from ls command");
+		return 0;
+	}
+	
 	# Insert a computerloadlog record and edit nodetype.tab
 	insertloadlog($reservation_id, $computer_id, "editnodetype", "updating nodetype file");
 	if ($self->_edit_nodetype($computer_node_name, $image_name, $image_os_name, $image_architecture)) {
@@ -228,6 +246,7 @@ sub load {
 	}
 	else {
 		notify($ERRORS{'CRITICAL'}, 0, "could not edit nodetype for $computer_node_name with $image_name");
+		return 0;
 	}
 
 	# Begin reinstallation using xCAT's rinstall
@@ -3177,7 +3196,7 @@ sub get_image_size {
 	}
 
 	# Execute the command
-	my $du_command = "du -c $image_repository_path/$image_name.* 2>&1";
+	my $du_command = "du -c $image_repository_path/$image_name* 2>&1";
 	#notify($ERRORS{'DEBUG'}, 0, "du command: $du_command");
 	my $du_output = `$du_command`;
 
