@@ -1099,7 +1099,7 @@ sub filesystem_entry_exists {
 	$path =~ s/[\\\/]+/\\/g;
 
 	# Assemble the dir command and execute it
-	my $dir_command = "cmd.exe /c dir /a /b /s \"$path\"";
+	my $dir_command = "cmd.exe /c dir /a /b \"$path\"";
 	my ($dir_exit_status, $dir_output) = run_ssh_command($computer_node_name, $management_node_keys, $dir_command, '', '', 1);
 	if ((defined($dir_exit_status) && $dir_exit_status == 0) || (defined($dir_output) && grep(/$path/i, @$dir_output))) {
 		notify($ERRORS{'DEBUG'}, 0, "filesystem entry exists on $computer_node_name: $path, dir output:\n" . join("\n", @$dir_output));
