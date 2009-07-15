@@ -97,7 +97,7 @@ sub capture_prepare {
 	my $user_id                  = $self->data->get_user_id();
 	my $user_unityid             = $self->data->get_user_login_id();
 	my $managementnode_shortname = $self->data->get_management_node_short_name();
-	my $computer_private_ip      = $self->data->get_computer_private_ip();
+	my $computer_private_ip      = $self->data->get_computer_private_ip_address();
 
 	notify($ERRORS{'OK'}, 0, "beginning Windows-specific image capture preparation tasks: $image_name on $computer_short_name");
 
@@ -552,7 +552,7 @@ sub capture_start {
 	my $user_id                  = $self->data->get_user_id();
 	my $user_unityid             = $self->data->get_user_login_id();
 	my $managementnode_shortname = $self->data->get_management_node_short_name();
-	my $computer_private_ip      = $self->data->get_computer_private_ip();
+	my $computer_private_ip      = $self->data->get_computer_private_ip_address();
 
 	notify($ERRORS{'OK'}, 0, "initiating Windows image capture: $image_name on $computer_short_name");
 

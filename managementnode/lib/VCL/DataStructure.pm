@@ -1397,10 +1397,6 @@ sub get_log_data {
 
 =cut
 
-sub get_computer_private_ip {
-	return get_computer_private_ip_address(@_);
-}
-
 sub get_computer_private_ip_address {
 	my $self;
 	my $argument = shift;
