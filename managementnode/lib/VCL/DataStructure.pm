@@ -912,36 +912,6 @@ sub get_reservation_data {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 get_computer_private_ip
-
- Parameters  : None
- Returns     : IP address string if successful, 0 if failed
- Description :
-
-=cut
-
-sub get_computer_private_ip {
-	my $self = shift;
-
-	# Get the computer short name from this DataStructure
-	my $computer_short_name = $self->get_computer_short_name();
-	if (!$computer_short_name) {
-		notify($ERRORS{'WARNING'}, 0, "computer short name could not be retrieved");
-		return 0;
-	}
-
-	# Get the node's private IP address from the hosts file
-	if (my $computer_private_ip = get_ip_address_from_hosts($computer_short_name)) {
-		return $computer_private_ip;
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "unable to locate private IP address for $computer_short_name in hosts file");
-		return 0;
-	}
-} ## end sub get_computer_private_ip
-
-#/////////////////////////////////////////////////////////////////////////////
-
 =head2 get_reservation_remote_ip
 
  Parameters  : None
@@ -1427,6 +1397,10 @@ sub get_log_data {
 
 =cut
 
+sub get_computer_private_ip {
+	return get_computer_private_ip_address(@_);
+}
+
 sub get_computer_private_ip_address {
 	my $self;
 	my $argument = shift;
@@ -1486,7 +1460,7 @@ sub get_computer_private_ip_address {
 	}
 	
 	# Find lines containing the computer name
-	my @matching_computer_hosts_lines = grep(/\s$computer_name/i, @$output);
+	my @matching_computer_hosts_lines = grep(/\s$computer_name\s*$/i, @$output);
 	
 	# Extract matching lines which aren't commented out
 	my @uncommented_computer_hosts_lines = grep(/^\s*[^#]/, @matching_computer_hosts_lines);

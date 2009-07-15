@@ -122,7 +122,6 @@ our @EXPORT = qw(
   get_image_info
   get_imagemeta_info
   get_imagerevision_info
-  get_ip_address_from_hosts
   get_management_node_blockrequests
   get_management_node_id
   get_management_node_info
@@ -145,6 +144,7 @@ our @EXPORT = qw(
   insert_reload_request
   insert_request
   insertloadlog
+  is_management_node_process_running
   is_inblockrequest
   is_request_deleted
   is_request_imaging
@@ -6673,8 +6673,8 @@ sub run_ssh_command {
 		#    Offending key for IP in /root/.ssh/known_hosts:264
 		#    Matching host key in /root/.ssh/known_hosts:3977
 		$ssh_output =~ s/^Warning:.*//ig;
-		$ssh_output =~ s/^Offending key.*//ig;
-		$ssh_output =~ s/^Matching host key in.*//ig;
+		$ssh_output =~ s/Offending key.*//ig;
+		$ssh_output =~ s/Matching host key in.*//ig;
 		
 		# Remove any spaces from the beginning and end of the output
 		$ssh_output =~ s/(^\s+)|(\s+$)//g;
@@ -8658,112 +8658,6 @@ sub switch_state {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 get_ip_address_from_hosts
-
- Parameters  : $host_name
- Returns     : IP address of specified node if successful, 0 if failed
- Description : Searches the local hosts file for a line containing the host
-               name specified. Returns the corresponding IP address.
-
-=cut
-
-sub get_ip_address_from_hosts {
-	my ($host_name) = @_;
-	my ($package, $filename, $line, $sub) = caller(0);
-
-	# Check the argument
-	if (!defined($host_name) || !$host_name) {
-		notify($ERRORS{'WARNING'}, 0, "computer host name was not specified");
-		return 0;
-	}
-
-	# Check the OS of the machine running this, set the hosts file accordingly
-	my $hosts_file_path;
-	if (lc($^O) =~ /win/i) {
-		$hosts_file_path = $ENV{SystemRoot} . '\\system32\\drivers\\etc\\hosts';
-	}
-	else {
-		$hosts_file_path = '/etc/hosts';
-	}
-
-	# Retrieve the node's private IP address from the hosts file
-	# Try to open the hosts file
-	if (open(HOSTS, $hosts_file_path)) {
-		notify($ERRORS{'OK'}, 0, "opened hosts file: $hosts_file_path") if $VERBOSE;
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "unable to open the hosts file: $hosts_file_path");
-		return 0;
-	}
-
-	# Find all lines in the hosts file containing the host name
-	# Make sure the host name has a space in front of it so that host1 != xhost1
-	# If host name being searched for is followed by a space or period, ignore rest of line
-	#   This accounts for full DNS host names, host1.unity...
-	# If host name isn't followed by space or period, make sure the end of sting is immediately following
-	#   This accounts for host1 != host1x
-	# This also accounts for the end of file immediately following the host name
-	my @hosts_matching_lines = grep(/\s$host_name([\s\.].*)*$/i, <HOSTS>);
-
-	# Close the HOSTS file
-	close HOSTS;
-
-	# Make sure only 1 line was returned
-	if (scalar @hosts_matching_lines == 0) {
-		notify($ERRORS{'WARNING'}, 0, "unable to find line containing $host_name in hosts file");
-		return 0;
-	}
-	elsif (scalar @hosts_matching_lines > 1) {
-		notify($ERRORS{'OK'}, 0, "found " . scalar @hosts_matching_lines . " lines containing $host_name in hosts file, first valid match will be used");
-	}
-
-	# Find the IP address
-	my $ip_address;
-	for (@hosts_matching_lines) {
-		my $line = $_;
-		chomp $line;
-
-		# Check for IPv4 address pattern
-		if ($line =~ /^\s*(([0-9]{1,3}\.{0,1}){4})\s/) {
-			$ip_address = $1;
-			notify($ERRORS{'OK'}, 0, "found IPv4 address: $ip_address") if $VERBOSE;
-		}
-		# Check for IPv6 address pattern
-		elsif ($line =~ /^\s*(([0-9a-f]{0,4}:{0,2}){1,8})\s/i) {
-			$ip_address = $1;
-			notify($ERRORS{'OK'}, 0, "found IPv6 address: $ip_address") if $VERBOSE;
-		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "hosts file line does not contain a valid IP address: $line");
-			next;
-		}
-
-		# Check if the line is a comment
-		if ($line =~ /^\s*#/) {
-			notify($ERRORS{'OK'}, 0, "host name found in commented line: $line");
-			# Proceed to try other matches, hoping for a non-commented match
-			next;
-		}
-		else {
-			# Line is not commented, return the IP address
-			return $ip_address;
-		}
-	} ## end for (@hosts_matching_lines)
-
-	# Check if an IP address was found
-	if ($ip_address) {
-		# This should only happen if the host name was found in a commented line
-		return $ip_address;
-	}
-	else {
-		# Address was not found
-		notify($ERRORS{'WARNING'}, 0, "unable to find any valid matching address in hosts file");
-		return 0;
-	}
-} ## end sub get_ip_address_from_hosts
-
-#/////////////////////////////////////////////////////////////////////////////
-
 =head2 firewall_compare_update
 
  Parameters  : $node,$reote_IP, $identity, $type
@@ -10522,6 +10416,51 @@ sub xmlrpc_call {
 
 	return $response;
 
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 is_management_node_process_running
+
+ Parameters  : PID or process name
+ Returns     : 0 or 1
+ Description : 
+
+=cut
+
+sub is_management_node_process_running {
+	my ($process_identifier) = @_;
+	
+	# Check the arguments
+	unless ($process_identifier) {
+		notify($ERRORS{'WARNING'}, 0, "process PID or name argument was not specified");
+		return;
+	}
+	
+	my @pids;
+	my $command = "pgrep -fl \"$process_identifier\"";
+	my ($exit_status, $output) = run_command($command, 1);
+	my @filtered_output;
+	@filtered_output = grep(!/sh -c/, @$output) if @$output;
+	if (@filtered_output) {
+		notify($ERRORS{'DEBUG'}, 0, "process is running, identifier: $process_identifier, pgrep output:\n" . join("\n", @filtered_output));
+		
+		for my $pgrep_line (@filtered_output) {
+			my ($pid) = $pgrep_line =~ /^(\d+)/;
+			push @pids, $pid;
+		}
+		
+		notify($ERRORS{'DEBUG'}, 0, "returning pid array: @pids");
+		return @pids;
+	}
+	elsif (defined($exit_status)) {
+		notify($ERRORS{'DEBUG'}, 0, "process is NOT running, identifier: $process_identifier, pgrep output:\n" . join("\n", @$output));
+		return ();
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to run command to determine if process is running");
+		return;
+	}
 }
 
 #/////////////////////////////////////////////////////////////////////////////

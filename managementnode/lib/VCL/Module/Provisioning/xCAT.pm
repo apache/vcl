@@ -2837,19 +2837,23 @@ sub _assign2project {
  Parameters  : optional: image name
  Returns     : 1 if image exists, 0 if it doesn't
  Description : Checks the management node's local image repository for the
-               existence of the requested image. This subroutine does not
-					attempt to copy the image from another management node. The
-					retrieve_image() subroutine does this. Callers of
-					does_image_exist must also call retrieve_image if image library
-					retrieval functionality is desired.
+					existence of the requested image and xCAT template (.tmpl) file.
+					If the image files exist but the .tmpl file does not, it creates
+					the .tmpl file. If a .tmpl file exists but the image files do
+					not, it deletetes the orphaned .tmpl file.
+					
+					This subroutine does not attempt to copy the image from another
+					management node. The retrieve_image() subroutine does this.
+					Callers of does_image_exist must also call retrieve_image if
+					image library retrieval functionality is desired.
 
 =cut
 
 sub does_image_exist {
 	my $self = shift;
-	if (ref($self) !~ /xCAT/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return 0;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a VCL::Module module object method");
+		return;	
 	}
 
 	# Get the image name, first try passed argument, then data
@@ -2858,6 +2862,16 @@ sub does_image_exist {
 	if (!$image_name) {
 		notify($ERRORS{'WARNING'}, 0, "unable to determine image name");
 		return;
+	}
+	
+	# Get the image install type
+	my $image_os_install_type = $self->data->get_image_os_install_type();
+	if (!$image_os_install_type) {
+		notify($ERRORS{'WARNING'}, 0, "image OS install type could not be determined");
+		return;
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "image OS install type: $image_os_install_type");
 	}
 
 	# Get the image repository path
@@ -2869,17 +2883,74 @@ sub does_image_exist {
 	else {
 		notify($ERRORS{'DEBUG'}, 0, "image repository path: $image_repository_path");
 	}
+	
+	# Make sure an scp process isn't currently running to retrieve the image
+	# This can happen if another reservation is running for the same image and the management node didn't have a copy
+	my $scp_wait_attempt = 0;
+	my $scp_wait_max_attempts = 40;
+	my $scp_wait_delay = 15;
+	while (is_management_node_process_running("scp.*$image_name")) {
+		$scp_wait_attempt++;
+		
+		notify($ERRORS{'OK'}, 0, "attempt $scp_wait_attempt/$scp_wait_max_attempts: scp process is running to retrieve $image_name, waiting for $scp_wait_delay seconds");
+		
+		if ($scp_wait_attempt == $scp_wait_max_attempts) {
+			notify($ERRORS{'WARNING'}, 0, "attempt $scp_wait_attempt/$scp_wait_max_attempts: waited maximum amount of time for scp process to terminate to retrieve $image_name");
+			return;
+		}
+		
+		sleep $scp_wait_delay;
+	}
+	notify($ERRORS{'DEBUG'}, 0, "scp process is not running to retrieve $image_name");
+	
+	# Run du to get the size of the image files if the image exists
+	my $du_command;
+	if ($image_os_install_type eq 'kickstart') {
+		$du_command = "du -c $image_repository_path 2>&1 | grep total 2>&1"
+	}
+	else {
+		$du_command = "du -c $image_repository_path/*$image_name* 2>&1 | grep total 2>&1"
+	}
+	my ($du_exit_status, $du_output) = run_command($du_command);
+	
+	# If the partner doesn't have the image, a "no such file" error should be displayed
+	my $image_files_exist;
+	if (defined(@$du_output) && grep(/no such file/i, @$du_output)) {
+		notify($ERRORS{'OK'}, 0, "$image_name does NOT exist");
+		$image_files_exist = 0;
+	}
+	elsif (defined(@$du_output) && !grep(/\d+\s+total/i, @$du_output)) {
+		notify($ERRORS{'WARNING'}, 0, "du output does not contain a total line:\n" . join("\n", @$du_output));
+		return;
+	}
+	elsif (!defined($du_exit_status)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to determine if image $image_name exists");
+		return;
+	}
+	
+	# Return 1 if the image size > 0
+	my ($image_size) = (@$du_output[0] =~ /(\d+)\s+total/);
+	if ($image_size && $image_size > 0) {
+		my $image_size_mb = int($image_size / 1024);
+		notify($ERRORS{'DEBUG'}, 0, "$image_name exists in $image_repository_path, size: $image_size_mb MB");
+		$image_files_exist = 1;
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "image does NOT exist: $image_name");
+		$image_files_exist = 0;
+	}
 
+	# Image files exist, make sure template (.tmpl) file exists
 	# Get the tmpl repository path
 	my $tmpl_repository_path = $self->_get_image_template_path();
 	if (!$tmpl_repository_path) {
-		notify($ERRORS{'WARNING'}, 0, "image template path could not be determined");
+		notify($ERRORS{'WARNING'}, 0, "image template path could not be determined for $image_name");
 		return;
 	}
 	else {
-		notify($ERRORS{'DEBUG'}, 0, "template repository path: $tmpl_repository_path");
+		notify($ERRORS{'DEBUG'}, 0, "template repository path for $image_name: $tmpl_repository_path");
 	}
-
+	
 	# Check if template file exists for the image
 	# -s File has nonzero size
 	my $tmpl_file_exists;
@@ -2891,35 +2962,12 @@ sub does_image_exist {
 		$tmpl_file_exists = 0;
 		notify($ERRORS{'DEBUG'}, 0, "template file does not exist: $tmpl_repository_path/$image_name.tmpl");
 	}
-
-	# Check if image files exist (Partimage files)
-	# Open the repository directory
-	if (!opendir(REPOSITORY, $image_repository_path)) {
-		notify($ERRORS{'WARNING'}, 0, "unable to open the image repository directory: $image_repository_path");
-		return;
-	}
-
-	# Get the list of files in the repository and close the directory
-	my @repository_files = readdir(REPOSITORY);
-	closedir(REPOSITORY);
-
-	# Check if any files exist for the image
-	my $image_files_exist;
-	if (my @image_files = grep(/$image_name/, @repository_files)) {
-		$image_files_exist = 1;
-		my $image_file_list = join(@image_files, "\n");
-		notify($ERRORS{'DEBUG'}, 0, "image files exist in repository:\n$image_file_list");
-	}
-	else {
-		$image_files_exist = 0;
-		notify($ERRORS{'DEBUG'}, 0, "image files do not exist in repository: $image_repository_path/$image_name");
-	}
-
+	
 	# Check if either tmpl file or image files exist, but not both
 	# Attempt to correct the situation:
 	#    tmpl file exists but not image files: delete tmpl file
 	#    image files exist but not tmpl file: create tmpl file
-	if ($tmpl_file_exists && !$image_files_exist) {
+	if ($tmpl_file_exists && !$image_files_exist && $image_os_install_type ne 'kickstart') {
 		notify($ERRORS{'WARNING'}, 0, "template file exists but image files do not for $image_name");
 
 		# Attempt to delete the orphaned tmpl file for the image
@@ -2932,7 +2980,7 @@ sub does_image_exist {
 			return;
 		}
 	} ## end if ($tmpl_file_exists && !$image_files_exist)
-	elsif (!$tmpl_file_exists && $image_files_exist) {
+	elsif (!$tmpl_file_exists && $image_files_exist && $image_os_install_type ne 'kickstart') {
 		notify($ERRORS{'WARNING'}, 0, "image files exist but template file does not for $image_name");
 
 		# Attempt to create the missing tmpl file for the image
@@ -2952,7 +3000,7 @@ sub does_image_exist {
 		return 1;
 	}
 	else {
-		notify($ERRORS{'DEBUG'}, 0, "image $image_name does not exist on this management node");
+		notify($ERRORS{'DEBUG'}, 0, "image $image_name does NOT exist on this management node");
 		return 0;
 	}
 
@@ -2963,8 +3011,10 @@ sub does_image_exist {
 =head2 retrieve_image
 
  Parameters  : Image name (optional)
- Returns     :
- Description : Attempts to retrieve an image from an image library partner
+ Returns     : If successful: true (1)
+               If failed: false (undefined)
+ Description : Attempts to retrieve an image from an image library partner and
+               creates an xCAT template (.tmpl) file for the image.
 
 =cut
 
@@ -2982,7 +3032,8 @@ sub retrieve_image {
 		return;
 	}
 
-	# Get the image name
+	# If an argument was specified, use it as the image name
+	# If not, get the image name from the reservation data
 	my $image_name = shift || $self->data->get_image_name();
 	if (!$image_name) {
 		notify($ERRORS{'WARNING'}, 0, "unable to determine image name from argument or reservation data");
@@ -2991,83 +3042,104 @@ sub retrieve_image {
 	
 	# Make sure image does not already exist on this management node
 	if ($self->does_image_exist($image_name)) {
-		notify($ERRORS{'WARNING'}, 0, "image $image_name already exists on this management node");
+		notify($ERRORS{'OK'}, 0, "$image_name already exists on this management node");
 		return 1;
 	}
 
-	# Get the other image library variables
-	my $image_repository_path_local = $self->_get_image_repository_path()          || 'undefined';
-	my $image_lib_partners = $self->data->get_management_node_image_lib_partners() || 'undefined';
-	
-	if ("$image_repository_path_local $image_lib_partners" =~ /undefined/) {
-		notify($ERRORS{'WARNING'}, 0, "image library configuration data is missing:
-			local image repository path=$image_repository_path_local
-			partners=$image_lib_partners
-		");
+	# Get the image library partner string
+	my $image_lib_partners = $self->data->get_management_node_image_lib_partners();
+	if (!$image_lib_partners) {
+		notify($ERRORS{'WARNING'}, 0, "image library partners could not be determined");
 		return;
 	}
-
-	# Attempt to copy image from other management nodes
-	notify($ERRORS{'OK'}, 0, "attempting to retrieve image $image_name from another management node");
-
+	
 	# Split up the partner list
 	my @partner_list = split(/,/, $image_lib_partners);
 	if ((scalar @partner_list) == 0) {
 		notify($ERRORS{'WARNING'}, 0, "image lib partners variable is not listed correctly or does not contain any information: $image_lib_partners");
 		return;
 	}
-
-	# Loop through the partners, attempt to copy
+	
+	# Get the local image repository path
+	my $image_repository_path_local = $self->_get_image_repository_path();
+	if (!$image_repository_path_local) {
+		notify($ERRORS{'WARNING'}, 0, "image repository path could not be determined");
+		return;
+	}
+	
+	# Loop through the partners
+	# Find partners which have the image
+	# Check size for each partner
+	# Retrieve image from partner with largest image
+	# It's possible that another partner (management node) is currently copying the image from another managment node
+	# This should prevent copying a partial image
+	my $largest_partner;
+	my $largest_partner_hostname;
+	my $largest_partner_image_lib_user;
+	my $largest_partner_image_lib_key;
+	my $largest_partner_ssh_port;
+	my $largest_partner_path;
+	my $largest_partner_size = 0;
+	
+	notify($ERRORS{'OK'}, 0, "attempting to find another management node that contains $image_name");
 	foreach my $partner (@partner_list) {
-		# If another management node's repo path was requested, run find via ssh
-		my $management_node_hostname = $self->data->get_management_node_hostname($partner) || '';
-		my $management_node_image_lib_user = $self->data->get_management_node_image_lib_user($partner) || '';
-		my $management_node_image_lib_key = $self->data->get_management_node_image_lib_key($partner) || '';
-		my $management_node_ssh_port = $self->data->get_management_node_ssh_port($partner) || '';
+		# Get the connection information for the partner management node
+		my $partner_hostname = $self->data->get_management_node_hostname($partner) || '';
+		my $partner_image_lib_user = $self->data->get_management_node_image_lib_user($partner) || '';
+		my $partner_image_lib_key = $self->data->get_management_node_image_lib_key($partner) || '';
+		my $partner_ssh_port = $self->data->get_management_node_ssh_port($partner) || '';
 		my $image_repository_path_remote = $self->_get_image_repository_path($partner);
 		
-		notify($ERRORS{'OK'}, 0, "checking if $management_node_hostname has image $image_name");
+		notify($ERRORS{'OK'}, 0, "checking if $partner_hostname has image $image_name");
 		notify($ERRORS{'DEBUG'}, 0, "remote image repository path on $partner: $image_repository_path_remote");
 		
-		# Use ssh to call ls on the partner management node
-		my ($ls_exit_status, $ls_output) = run_ssh_command($partner, $management_node_image_lib_key, "ls -lh $image_repository_path_remote", $management_node_image_lib_user, $management_node_ssh_port, 1);
-		if (defined($ls_output) && grep(/$image_name/, @$ls_output)) {
-			notify($ERRORS{'OK'}, 0, "image $image_name exists on $management_node_hostname");
-		}
-		elsif (defined($ls_exit_status) && $ls_exit_status == 0) {
-			notify($ERRORS{'OK'}, 0, "image $image_name does NOT exist on $management_node_hostname");
+		# Run du to get the size of the image files on the partner if the image exists
+		my ($du_exit_status, $du_output) = run_ssh_command($partner, $partner_image_lib_key, "du -c $image_repository_path_remote/*$image_name* | grep total", $partner_image_lib_user, $partner_ssh_port, 1);
+		
+		# If the partner doesn't have the image, a "no such file" error should be displayed
+		if (defined(@$du_output) && grep(/no such file/i, @$du_output)) {
+			notify($ERRORS{'OK'}, 0, "$image_name does NOT exist on $partner_hostname");
 			next;
 		}
-		elsif (defined($ls_output) && grep(/No such file or directory/, @$ls_output)) {
-			notify($ERRORS{'OK'}, 0, "image repository path '$image_repository_path_remote' does not exist on $management_node_hostname");
+		elsif (defined(@$du_output) && !grep(/\d+\s+total/i, @$du_output)) {
+			notify($ERRORS{'WARNING'}, 0, "du output does not contain a total line:\n" . join("\n", @$du_output));
 			next;
 		}
-		elsif (defined($ls_exit_status)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to determine if image $image_name exists on $management_node_hostname, exit status: $ls_exit_status, output:\n" . join("\n", @$ls_output));
-			next;
-		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to determine if image $image_name exists on $management_node_hostname");
+		elsif (!defined($du_exit_status)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to determine if image $image_name exists on $partner_hostname");
 			next;
 		}
 		
-		# Attempt copy
-		notify($ERRORS{'OK'}, 0, "copying image $image_name from $management_node_hostname");
-		if (run_scp_command("$management_node_image_lib_user\@$partner:$image_repository_path_remote/$image_name*", $image_repository_path_local, $management_node_image_lib_key, $management_node_ssh_port)) {
-			notify($ERRORS{'OK'}, 0, "image $image_name was copied from $management_node_hostname");
-		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "failed to copy image $image_name from $management_node_hostname");
-			next;
-		}
+		# Extract the image size in bytes from the du total output line
+		my ($partner_image_size) = (@$du_output[0] =~ /(\d+)\s+total/);
+		notify($ERRORS{'OK'}, 0, "$image_name exists on $partner_hostname, size: $partner_image_size bytes");
 		
-		# Create the template file for the image
-		if (!$self->_create_template()) {
-			notify($ERRORS{'WARNING'}, 0, "failed to create template file for image $image_name");
-			return;
+		# Check if the image size is larger than any previously found, if so, save the partner info
+		if ($partner_image_size > $largest_partner_size) {
+			$largest_partner = $partner;
+			$largest_partner_hostname = $partner_hostname;
+			$largest_partner_size = $partner_image_size;
+			$largest_partner_image_lib_user = $partner_image_lib_user;
+			$largest_partner_image_lib_key = $partner_image_lib_key;
+			$largest_partner_ssh_port = $partner_ssh_port;
+			$largest_partner_path = $image_repository_path_remote;
 		}
-		
-		last;
+	}
+	
+	# Check if any partner was found
+	if (!$largest_partner) {
+		notify($ERRORS{'WARNING'}, 0, "unable to find $image_name on other management nodes");
+		return;
+	}
+	
+	# Attempt copy
+	notify($ERRORS{'OK'}, 0, "attempting to retrieve $image_name from $largest_partner_hostname");
+	if (run_scp_command("$largest_partner_image_lib_user\@$largest_partner:$largest_partner_path/$image_name*", $image_repository_path_local, $largest_partner_image_lib_key, $largest_partner_ssh_port)) {
+		notify($ERRORS{'OK'}, 0, "image $image_name was copied from $largest_partner_hostname");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to copy image $image_name from $largest_partner_hostname");
+		next;
 	}
 	
 	# Make sure image was copied
@@ -3075,9 +3147,15 @@ sub retrieve_image {
 		notify($ERRORS{'WARNING'}, 0, "$image_name was not copied to this management node");
 		return 0;
 	}
-
+	
+	# Create the template file for the image
+	if (!$self->_create_template()) {
+		notify($ERRORS{'WARNING'}, 0, "failed to create template file for image: $image_name");
+		return;
+	}
+	
 	return 1;
-} ## end sub retrieve_image
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -3256,6 +3334,7 @@ sub _get_image_repository_path {
 		notify($ERRORS{'DEBUG'}, 0, "management node identifier argument was not specified");
 	}
 	
+	my $management_node_hostname = $self->data->get_management_node_hostname($management_node_identifier) || '';
 	my $management_node_install_path = $self->data->get_management_node_install_path($management_node_identifier);
 	
 	# Get required image data
@@ -3265,6 +3344,7 @@ sub _get_image_repository_path {
 	my $image_os_install_type    = $self->data->get_image_os_install_type() || 'undefined';
 	my $image_os_source_path     = $self->data->get_image_os_source_path() || 'undefined';
 	my $image_architecture       = $self->data->get_image_architecture() || 'undefined';
+	
 	if ("$image_os_name $image_os_type $image_os_install_type $image_os_source_path $image_architecture" =~ /undefined/) {
 		notify($ERRORS{'WARNING'}, 0, "some of the required data could not be retrieved: OS name=$image_os_name, OS type=$image_os_type, OS install type=$image_os_install_type, OS source path=$image_os_source_path, architecture=$image_architecture");
 		return;
@@ -3273,7 +3353,7 @@ sub _get_image_repository_path {
 	# Remove trailing / from $image_os_source_path if exists
 	$image_os_source_path =~ s/\/$//;
 	
-	notify($ERRORS{'DEBUG'}, 0, "attempting to determine repository path for image:
+	notify($ERRORS{'DEBUG'}, 0, "attempting to determine repository path for image on $management_node_hostname:
 		image id:        $image_id
 		OS name:         $image_os_name
 		OS type:         $image_os_type
@@ -3296,7 +3376,7 @@ sub _get_image_repository_path {
 	# Note: $image_install_path has a leading /
 	if ($image_os_install_type eq 'kickstart') {
 		# Kickstart installs use the xCAT path for both repo and tmpl paths
-		my $kickstart_repo_path = "$XCAT_ROOT$image_install_path/$image_architecture";
+		my $kickstart_repo_path = "$image_install_path/$image_architecture";
 		notify($ERRORS{'DEBUG'}, 0, "kickstart install type, returning $kickstart_repo_path");
 		return $kickstart_repo_path;
 	}
@@ -3315,13 +3395,11 @@ sub _get_image_repository_path {
 		}
 		else {
 			# If another management node's repo path was requested, run find via ssh
-			my $management_node_hostname = $self->data->get_management_node_hostname($management_node_identifier) || '';
 			my $management_node_image_lib_user = $self->data->get_management_node_image_lib_user($management_node_identifier) || '';
 			my $management_node_image_lib_key = $self->data->get_management_node_image_lib_key($management_node_identifier) || '';
 			my $management_node_ssh_port = $self->data->get_management_node_ssh_port($management_node_identifier) || '';
 			
-			notify($ERRORS{'DEBUG'}, 0, "attempting to find linux images under '$linux_image_repo_path' on management node:
-					 hostname=$management_node_hostname
+			notify($ERRORS{'DEBUG'}, 0, "attempting to find linux images under '$linux_image_repo_path' on $management_node_hostname:
 					 user=$management_node_image_lib_user
 					 key=$management_node_image_lib_key
 					 port=$management_node_ssh_port
@@ -3335,21 +3413,21 @@ sub _get_image_repository_path {
 		if ($find_output) {
 			my $linux_images_found = grep(/\.gz/, @$find_output);
 			if ($linux_images_found) {
-				notify($ERRORS{'DEBUG'}, 0, "found $linux_images_found images, returning $linux_image_repo_path");
+				notify($ERRORS{'DEBUG'}, 0, "found $linux_images_found images on $management_node_hostname, returning $linux_image_repo_path");
 				return $linux_image_repo_path;
 			}
 			else {
-				notify($ERRORS{'DEBUG'}, 0, "did not find any images under $linux_image_repo_path");
+				notify($ERRORS{'DEBUG'}, 0, "did not find any images under $linux_image_repo_path on $management_node_hostname");
 			}
 		}
 		else {
-			notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to run find");
+			notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to run find on $management_node_hostname");
 		}
 		
 	}
 	
 	my $repo_path = "$image_install_path/$image_architecture";
-	notify($ERRORS{'DEBUG'}, 0, "returning: $repo_path");
+	notify($ERRORS{'DEBUG'}, 0, "returning repository path for $management_node_hostname: $repo_path");
 	return $repo_path;
 } ## end sub _get_image_repository_path
 

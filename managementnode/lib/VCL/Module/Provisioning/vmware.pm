@@ -2255,42 +2255,81 @@ sub node_status {
 
 sub does_image_exist {
 	my $self = shift;
-	if (ref($self) !~ /vmware/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return 0;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a VCL::Module module object method");
+		return;	
 	}
 
-	my $image_name = $self->data->get_image_name();
+	# Get the image name, first try passed argument, then data
+	my $image_name = shift;
+	$image_name = $self->data->get_image_name() if !$image_name;
 	if (!$image_name) {
-		notify($ERRORS{'CRITICAL'}, 0, "unable to determine if image exists, unable to determine image name");
-		return 0;
+		notify($ERRORS{'WARNING'}, 0, "unable to determine image name");
+		return;
 	}
 
-	my $IMAGEREPOSITORY;
-
-	if ($image_name =~ /^(vmware)/) {
-		$IMAGEREPOSITORY = "$VMWAREREPOSITORY";
+	# Get the image repository path
+	my $image_repository_path = $self->_get_image_repository_path();
+	if (!$image_repository_path) {
+		notify($ERRORS{'WARNING'}, 0, "image repository path could not be determined");
+		return;
 	}
 	else {
-		notify($ERRORS{'CRITICAL'}, 0, "unable to determine if image exists, image name is not vmware image_name= $image_name");
+		notify($ERRORS{'DEBUG'}, 0, "image repository path: $image_repository_path");
+	}
+	
+	# Make sure an scp process isn't currently running to retrieve the image
+	# This can happen if another reservation is running for the same image and the management node didn't have a copy
+	my $scp_wait_attempt = 0;
+	my $scp_wait_max_attempts = 40;
+	my $scp_wait_delay = 15;
+	while (is_management_node_process_running("scp.*$image_name")) {
+		$scp_wait_attempt++;
+		
+		notify($ERRORS{'OK'}, 0, "attempt $scp_wait_attempt/$scp_wait_max_attempts: scp process is running to retrieve $image_name, waiting for $scp_wait_delay seconds");
+		
+		if ($scp_wait_attempt == $scp_wait_max_attempts) {
+			notify($ERRORS{'WARNING'}, 0, "attempt $scp_wait_attempt/$scp_wait_max_attempts: waited maximum amount of time for scp process to terminate to retrieve $image_name");
+			return;
+		}
+		
+		sleep $scp_wait_delay;
+	}
+	notify($ERRORS{'DEBUG'}, 0, "scp process is not running to retrieve $image_name");
+	
+	# Run du to get the size of the image files if the image exists
+	my $du_command = "du -c $image_repository_path/*$image_name* 2>&1 | grep total 2>&1";
+	my ($du_exit_status, $du_output) = run_command($du_command);
+	
+	# If the partner doesn't have the image, a "no such file" error should be displayed
+	my $image_files_exist;
+	if (defined(@$du_output) && grep(/no such file/i, @$du_output)) {
+		notify($ERRORS{'OK'}, 0, "$image_name does NOT exist");
+		$image_files_exist = 0;
+	}
+	elsif (defined(@$du_output) && !grep(/\d+\s+total/i, @$du_output)) {
+		notify($ERRORS{'WARNING'}, 0, "du output does not contain a total line:\n" . join("\n", @$du_output));
+		return;
+	}
+	elsif (!defined($du_exit_status)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to determine if image $image_name exists");
+		return;
+	}
+	
+	# Return 1 if the image size > 0
+	my ($image_size) = (@$du_output[0] =~ /(\d+)\s+total/);
+	if ($image_size && $image_size > 0) {
+		my $image_size_mb = int($image_size / 1024);
+		notify($ERRORS{'DEBUG'}, 0, "$image_name exists in $image_repository_path, size: $image_size_mb MB");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "image does NOT exist: $image_name");
 		return 0;
 	}
 
-	if (open(IMAGES, "/bin/ls -1 $IMAGEREPOSITORY 2>&1 |")) {
-		my @images = <IMAGES>;
-		close(IMAGES);
-		foreach my $i (@images) {
-			if ($i =~ /$image_name/) {
-				notify($ERRORS{'OK'}, 0, "image $image_name exists");
-				return 1;
-			}
-		}
-	} ## end if (open(IMAGES, "/bin/ls -1 $IMAGEREPOSITORY 2>&1 |"...
-
-	notify($ERRORS{'OK'}, 0, "image $IMAGEREPOSITORY/$image_name does NOT exist");
-	return 0;
-
 } ## end sub does_image_exist
+	
 #/////////////////////////////////////////////////////////////////////////////
 
 =head2 retrieve_image
@@ -2303,119 +2342,135 @@ sub does_image_exist {
 
 sub retrieve_image {
 	my $self = shift;
-	if (ref($self) !~ /vmware/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a VCL::Module module object method");
+		return;	
 	}
 
-	# Make sure imag library functions are enabled
+	# Make sure image library functions are enabled
 	my $image_lib_enable = $self->data->get_management_node_image_lib_enable();
 	if (!$image_lib_enable) {
 		notify($ERRORS{'OK'}, 0, "image library functions are disabled");
 		return;
 	}
 
-	# Get the image name
-	my $image_name = shift;
-	$image_name = $self->data->get_image_name() if !$image_name;
+	# If an argument was specified, use it as the image name
+	# If not, get the image name from the reservation data
+	my $image_name = shift || $self->data->get_image_name();
 	if (!$image_name) {
-		notify($ERRORS{'WARNING'}, 0, "unable to determine image name");
+		notify($ERRORS{'WARNING'}, 0, "unable to determine image name from argument or reservation data");
 		return;
 	}
-
-	# Get the other image library variables
-	my $image_lib_user     = $self->data->get_management_node_image_lib_user()     || 'undefined';
-	my $image_lib_key      = $self->data->get_management_node_image_lib_key()      || 'undefined';
-	my $image_lib_partners = $self->data->get_management_node_image_lib_partners() || 'undefined';
-	if ("$image_lib_user $image_lib_key $image_lib_partners" =~ /undefined/) {
-		notify($ERRORS{'WARNING'}, 0, "image library configuration data is missing: user=$image_lib_user, key=$image_lib_key, partners=$image_lib_partners");
-		return;
+	
+	# Make sure image does not already exist on this management node
+	if ($self->does_image_exist($image_name)) {
+		notify($ERRORS{'OK'}, 0, "$image_name already exists on this management node");
+		return 1;
 	}
 
-	# Get the image repository path
-	my $image_repository_path = $self->_get_image_repository_path();
-	if (!$image_repository_path) {
-		notify($ERRORS{'WARNING'}, 0, "image repository path could not be determined");
+	# Get the image library partner string
+	my $image_lib_partners = $self->data->get_management_node_image_lib_partners();
+	if (!$image_lib_partners) {
+		notify($ERRORS{'WARNING'}, 0, "image library partners could not be determined");
 		return;
 	}
-
-	# Attempt to copy image from other management nodes
-	notify($ERRORS{'OK'}, 0, "attempting to copy $image_name from other management nodes");
-
+	
 	# Split up the partner list
 	my @partner_list = split(/,/, $image_lib_partners);
 	if ((scalar @partner_list) == 0) {
 		notify($ERRORS{'WARNING'}, 0, "image lib partners variable is not listed correctly or does not contain any information: $image_lib_partners");
 		return;
 	}
-
-	# Loop through the partners, attempt to copy
+	
+	# Get the local image repository path
+	my $image_repository_path_local = $self->_get_image_repository_path();
+	if (!$image_repository_path_local) {
+		notify($ERRORS{'WARNING'}, 0, "image repository path could not be determined");
+		return;
+	}
+	
+	# Loop through the partners
+	# Find partners which have the image
+	# Check size for each partner
+	# Retrieve image from partner with largest image
+	# It's possible that another partner (management node) is currently copying the image from another managment node
+	# This should prevent copying a partial image
+	my $largest_partner;
+	my $largest_partner_hostname;
+	my $largest_partner_image_lib_user;
+	my $largest_partner_image_lib_key;
+	my $largest_partner_ssh_port;
+	my $largest_partner_path;
+	my $largest_partner_size = 0;
+	
+	notify($ERRORS{'OK'}, 0, "attempting to find another management node that contains $image_name");
 	foreach my $partner (@partner_list) {
-		notify($ERRORS{'OK'}, 0, "checking if $partner has $image_name");
-
-		# Use ssh to call ls on the partner management node
-		my ($ls_exit_status, $ls_output_array_ref) = run_ssh_command($partner, $image_lib_key, "ls -1 $image_repository_path", $image_lib_user);
-
-		# Check if the ssh command failed
-		if (!$ls_output_array_ref) {
-			notify($ERRORS{'WARNING'}, 0, "unable to run ls command via ssh on $partner");
+		# Get the connection information for the partner management node
+		my $partner_hostname = $self->data->get_management_node_hostname($partner) || '';
+		my $partner_image_lib_user = $self->data->get_management_node_image_lib_user($partner) || '';
+		my $partner_image_lib_key = $self->data->get_management_node_image_lib_key($partner) || '';
+		my $partner_ssh_port = $self->data->get_management_node_ssh_port($partner) || '';
+		my $image_repository_path_remote = $self->_get_image_repository_path($partner);
+		
+		notify($ERRORS{'OK'}, 0, "checking if $partner_hostname has image $image_name");
+		notify($ERRORS{'DEBUG'}, 0, "remote image repository path on $partner: $image_repository_path_remote");
+		
+		# Run du to get the size of the image files on the partner if the image exists
+		my ($du_exit_status, $du_output) = run_ssh_command($partner, $partner_image_lib_key, "du -c $image_repository_path_remote/*$image_name* | grep total", $partner_image_lib_user, $partner_ssh_port, 1);
+		
+		# If the partner doesn't have the image, a "no such file" error should be displayed
+		if (defined(@$du_output) && grep(/no such file/i, @$du_output)) {
+			notify($ERRORS{'OK'}, 0, "$image_name does NOT exist on $partner_hostname");
 			next;
 		}
-
-		# Convert the output array to a string
-		my $ls_output = join("\n", @{$ls_output_array_ref});
-
-		# Check the ls output for permission denied
-		if ($ls_output =~ /permission denied/i) {
-			notify($ERRORS{'CRITICAL'}, 0, "permission denied when checking if $partner has $image_name, exit status=$ls_exit_status, output:\n$ls_output");
+		elsif (defined(@$du_output) && !grep(/\d+\s+total/i, @$du_output)) {
+			notify($ERRORS{'WARNING'}, 0, "du output does not contain a total line:\n" . join("\n", @$du_output));
 			next;
 		}
-
-		# Check the ls output for the image name
-		if ($ls_output !~ /$image_name/i) {
-			notify($ERRORS{'OK'}, 0, "$image_name does not exist on $partner");
+		elsif (!defined($du_exit_status)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to determine if image $image_name exists on $partner_hostname");
 			next;
 		}
-
-		# Image exists
-		notify($ERRORS{'OK'}, 0, "$image_name exists on $partner, attempting to copy");
-
-		#set lockfile - prevent process from loading while a copy is in progress
-
-		my $lock = "$image_repository_path/$image_name.copylock";
-		if (sysopen(SEM, $lock, O_RDONLY | O_CREAT)) {
-			if (flock(SEM, LOCK_EX)) {
-				notify($ERRORS{'OK'}, 0, "set Exclusive lock on $lock");
-				# Attempt copy
-				if (run_scp_command("$image_lib_user\@$partner:$image_repository_path/$image_name*", $image_repository_path, $image_lib_key)) {
-					notify($ERRORS{'OK'}, 0, "$image_name files copied via SCP");
-					close(SEM);
-					notify($ERRORS{'OK'}, 0, "releasing exclusive lock on $lock, proceeding");
-					unlink($lock);
-					last;
-				}
-				else {
-					notify($ERRORS{'WARNING'}, 0, "unable to copy $image_name files via SCP");
-					close(SEM);
-					notify($ERRORS{'OK'}, 0, "releasing exclusive lock on $lock, proceeding");
-					unlink($lock);
-					next;
-				}
-			} ## end if (flock(SEM, LOCK_EX))
-		} ## end if (sysopen(SEM, $lock, O_RDONLY | O_CREAT...
-
-
-	} ## end foreach my $partner (@partner_list)
-
-	# Make sure image was copied
-	if ($self->does_image_exist($image_name)) {
-		notify($ERRORS{'OK'}, 0, "$image_name was copied to this management node");
-		return 1;
+		
+		# Extract the image size in bytes from the du total output line
+		my ($partner_image_size) = (@$du_output[0] =~ /(\d+)\s+total/);
+		notify($ERRORS{'OK'}, 0, "$image_name exists on $partner_hostname, size: $partner_image_size bytes");
+		
+		# Check if the image size is larger than any previously found, if so, save the partner info
+		if ($partner_image_size > $largest_partner_size) {
+			$largest_partner = $partner;
+			$largest_partner_hostname = $partner_hostname;
+			$largest_partner_size = $partner_image_size;
+			$largest_partner_image_lib_user = $partner_image_lib_user;
+			$largest_partner_image_lib_key = $partner_image_lib_key;
+			$largest_partner_ssh_port = $partner_ssh_port;
+			$largest_partner_path = $image_repository_path_remote;
+		}
+	}
+	
+	# Check if any partner was found
+	if (!$largest_partner) {
+		notify($ERRORS{'WARNING'}, 0, "unable to find $image_name on other management nodes");
+		return;
+	}
+	
+	# Attempt copy
+	notify($ERRORS{'OK'}, 0, "attempting to retrieve $image_name from $largest_partner_hostname");
+	if (run_scp_command("$largest_partner_image_lib_user\@$largest_partner:$largest_partner_path/$image_name*", $image_repository_path_local, $largest_partner_image_lib_key, $largest_partner_ssh_port)) {
+		notify($ERRORS{'OK'}, 0, "image $image_name was copied from $largest_partner_hostname");
 	}
 	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to copy image $image_name from $largest_partner_hostname");
+		next;
+	}
+	
+	# Make sure image was copied
+	if (!$self->does_image_exist($image_name)) {
 		notify($ERRORS{'WARNING'}, 0, "$image_name was not copied to this management node");
 		return 0;
 	}
+
+	return 1;
 } ## end sub retrieve_image
 
 #/////////////////////////////////////////////////////////////////////////////
