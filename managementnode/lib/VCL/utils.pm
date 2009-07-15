@@ -174,6 +174,7 @@ our @EXPORT = qw(
   run_ssh_command
   set_hash_process_id
   set_logfile_path
+  set_managementnode_state
   setimageid
   setpreferredimage
   setstaticaddress
@@ -6007,6 +6008,60 @@ sub get_request_info {
 
 	return %request_info;
 } ## end sub get_request_info
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 set_managementnode_state
+
+ Parameters  : management node info, state
+ Returns     : 1 or 0
+ Description : sets a given management node to maintenance
+
+=cut
+
+sub set_managementnode_state {
+	my ($mninfo, $state) = @_;
+
+	if(!(defined($state))){
+		notify($ERRORS{'WARNING'}, 0, "state was not specified");
+		return ();
+	}
+	if(!(defined($mninfo->{hostname}))){
+		notify($ERRORS{'WARNING'}, 0, "management node hostname was not specified");
+		return ();
+	}
+	if(!(defined($mninfo->{id}))){
+		notify($ERRORS{'WARNING'}, 0, "management node ID was not specified");
+		return ();
+	}
+
+	my $mn_ID = $mninfo->{id};
+	my $mn_hostname = $mninfo->{hostname};
+
+	# Construct the update statement
+	my $update_statement = "
+	   UPDATE
+		managementnode,
+		state
+		SET
+		managementnode.stateid = state.id
+		WHERE
+		state.name = '$state' AND 
+		managementnode.id = '$mn_ID'
+	 ";
+
+
+	# Call the database execute subroutine
+	if (database_execute($update_statement)) {
+		# Update successful, return timestamp
+		notify($ERRORS{'OK'}, 0, "Successfully updated management node $mn_hostname state to $state");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'CRITICAL'}, 0, "unable to update database, management node $mn_hostname state to $state");
+		return 0;
+	}
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 
