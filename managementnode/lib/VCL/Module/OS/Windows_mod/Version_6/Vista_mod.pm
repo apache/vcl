@@ -1,6 +1,6 @@
 #!/usr/bin/perl -w
 ###############################################################################
-# $Id: XP_mod.pm 774457 2009-05-13 18:12:08Z arkurth $
+# $Id$
 ###############################################################################
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
@@ -20,7 +20,7 @@
 
 =head1 NAME
 
-VCL::Module::OS::Windows_mod::Version_6::Vista_mod.pm - VCL module to support Windows Vista operating system
+VCL::Module::OS::Windows::Version_6::Vista.pm - VCL module to support Windows Vista operating system
 
 =head1 SYNOPSIS
 
@@ -33,14 +33,14 @@ VCL::Module::OS::Windows_mod::Version_6::Vista_mod.pm - VCL module to support Wi
 =cut
 
 ##############################################################################
-package VCL::Module::OS::Windows_mod::Version_6::Vista_mod;
+package VCL::Module::OS::Windows::Version_6::Vista;
 
 # Specify the lib path using FindBin
 use FindBin;
 use lib "$FindBin::Bin/../../../../..";
 
 # Configure inheritance
-use base qw(VCL::Module::OS::Windows_mod::Version_6);
+use base qw(VCL::Module::OS::Windows::Version_6);
 
 # Specify the version of this module
 our $VERSION = '2.00';

@@ -1,6 +1,6 @@
 #!/usr/bin/perl -w
 ###############################################################################
-# $Id: Version_5.pm 774457 2009-05-13 18:12:08Z arkurth $
+# $Id$
 ###############################################################################
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
@@ -20,7 +20,7 @@
 
 =head1 NAME
 
-VCL::Module::OS::Windows_mod::Version_6.pm - VCL module to support Windows 6.x operating systems
+VCL::Module::OS::Windows::Version_6.pm - VCL module to support Windows 6.x operating systems
 
 =head1 SYNOPSIS
 
@@ -34,14 +34,14 @@ VCL::Module::OS::Windows_mod::Version_6.pm - VCL module to support Windows 6.x o
 =cut
 
 ##############################################################################
-package VCL::Module::OS::Windows_mod::Version_6;
+package VCL::Module::OS::Windows::Version_6;
 
 # Specify the lib path using FindBin
 use FindBin;
 use lib "$FindBin::Bin/../../../..";
 
 # Configure inheritance
-use base qw(VCL::Module::OS::Windows_mod);
+use base qw(VCL::Module::OS::Windows);
 
 # Specify the version of this module
 our $VERSION = '2.00';

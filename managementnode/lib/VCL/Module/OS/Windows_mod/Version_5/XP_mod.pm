@@ -20,7 +20,7 @@
 
 =head1 NAME
 
-VCL::Module::OS::Windows_mod::Version_5::XP_mod.pm - VCL module to support Windows XP operating system
+VCL::Module::OS::Windows::Version_5::XP.pm - VCL module to support Windows XP operating system
 
 =head1 SYNOPSIS
 
@@ -33,14 +33,14 @@ VCL::Module::OS::Windows_mod::Version_5::XP_mod.pm - VCL module to support Windo
 =cut
 
 ##############################################################################
-package VCL::Module::OS::Windows_mod::Version_5::XP_mod;
+package VCL::Module::OS::Windows::Version_5::XP;
 
 # Specify the lib path using FindBin
 use FindBin;
 use lib "$FindBin::Bin/../../../../..";
 
 # Configure inheritance
-use base qw(VCL::Module::OS::Windows_mod::Version_5);
+use base qw(VCL::Module::OS::Windows::Version_5);
 
 # Specify the version of this module
 our $VERSION = '2.00';

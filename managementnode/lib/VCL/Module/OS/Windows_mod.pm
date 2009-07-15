@@ -20,7 +20,7 @@
 
 =head1 NAME
 
-VCL::Module::OS::Windows_mod - Windows OS support module
+VCL::Module::OS::Windows - Windows OS support module
 
 =head1 SYNOPSIS
 
@@ -33,7 +33,7 @@ VCL::Module::OS::Windows_mod - Windows OS support module
 =cut
 
 ##############################################################################
-package VCL::Module::OS::Windows_mod;
+package VCL::Module::OS::Windows;
 
 # Specify the lib path using FindBin
 use FindBin;

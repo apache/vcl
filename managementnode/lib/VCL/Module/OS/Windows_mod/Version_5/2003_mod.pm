@@ -1,6 +1,6 @@
 #!/usr/bin/perl -w
 ###############################################################################
-# $Id: 2003_mod.pm 780755 2009-06-01 17:51:52Z arkurth $
+# $Id$
 ###############################################################################
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
@@ -20,7 +20,7 @@
 
 =head1 NAME
 
-VCL::Module::OS::Windows_mod::Version_5::2003_mod.pm - VCL module to support Windows Server 2003 operating system
+VCL::Module::OS::Windows::Version_5::2003.pm - VCL module to support Windows Server 2003 operating system
 
 =head1 SYNOPSIS
 
@@ -33,14 +33,14 @@ VCL::Module::OS::Windows_mod::Version_5::2003_mod.pm - VCL module to support Win
 =cut
 
 ##############################################################################
-package VCL::Module::OS::Windows_mod::Version_5::2003_mod;
+package VCL::Module::OS::Windows::Version_5::2003;
 
 # Specify the lib path using FindBin
 use FindBin;
 use lib "$FindBin::Bin/../../../../..";
 
 # Configure inheritance
-use base qw(VCL::Module::OS::Windows_mod::Version_5);
+use base qw(VCL::Module::OS::Windows::Version_5);
 
 # Specify the version of this module
 our $VERSION = '2.00';
