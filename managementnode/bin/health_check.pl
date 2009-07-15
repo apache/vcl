@@ -55,7 +55,41 @@ use English qw( -no_match_vars );
 
 use VCL::utils;
 use VCL::healthcheck;
+use Getopt::Long;
 
+#------- Subroutine declarations -------
+sub main();
+sub help();
+sub print_usage(); 
+
+#----------GLOBALS--------------
+# Store the command line options in this hash
+our %OPTIONS;
+
+our $STAGE = 0;
+our $HELP = 0;
+
+
+GetOptions(\%OPTIONS, 'help', 'powerdown=s');
+
+
+# Get the remaining command line parameters
+$HELP = $OPTIONS{help} if (defined($OPTIONS{help} && $OPTIONS{help}));
+$STAGE = $OPTIONS{powerdown} if (defined($OPTIONS{powerdown} && $OPTIONS{powerdown}));
+
+if($STAGE){
+
+	unless($STAGE =~ /available|all/){ 
+		print "\nInvalid powerdown option\n\n";
+		help();
+		exit;
+	}
+
+}
+if($HELP){
+	help();
+	exit;
+}
 ##############################################################################
 
 # now just do basic monitoring
@@ -68,21 +102,65 @@ use VCL::healthcheck;
     
 =cut
 
-#----------GLOBALS--------------
-
-#------- Subroutine declarations -------
-sub main();
 
 main();
 
 sub main() {
 
 	my $check = new VCL::healthcheck();
-	$check->process;
+	$check->process($STAGE);
 	#$check->send_report;
 
 }
+#/////////////////////////////////////////////////////////////////////////////
 
+=head2 print_usage
+
+ Parameters  : 
+ Returns     : 
+ Description :
+
+=cut
+
+sub print_usage() {
+
+	my $text = sprintf("    %s \n", "Usage: healthcheck.pl  [options]" );
+	$text .= sprintf("    %s \n"," ");
+	$text .= sprintf("    %s \n", "healthcheck.pl  : without options scans nodes and" );
+	$text .= sprintf("             %s \n", "resets data in database if needed" );
+	$text .= sprintf("    %s \n"," ");
+	$text .= sprintf("    %s \n","Valid options:");
+	$text .= sprintf("    %s \n"," ");
+	$text .= sprintf("    %s \n","-powerdown=ARG  : A power down argument can be one of");
+	$text .= sprintf("           %s \n","available	shutdown available or idle blades");
+	$text .= sprintf("           %s \n","all		shutdown all nodes, notify users of pending shutdown");
+
+	print "$text\n";
+
+} ## end sub help
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 help
+
+ Parameters  : 
+ Returns     : 
+ Description :
+
+=cut
+
+sub help() {
+	my $message = <<"END";
+--------------------------------------------
+
+health_check.pl is intented to as a cmdline script or via cron
+
+END
+
+	print $message;
+	print_usage();
+	exit;
+} ## end sub help
 #/////////////////////////////////////////////////////////////////////////////
 
 1;

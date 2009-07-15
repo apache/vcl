@@ -148,9 +148,20 @@ sub _initialize {
 =cut
 
 sub process {
-	my ($info) = @_;
+	my ($info, $powerdownstage) = @_;
 	notify($ERRORS{'OK'}, $LOG, "in processing routine");
 	$info->{"globalmsg"}->{"body"} = "Summary of VCL node monitoring system:\n\n";
+
+	if($powerdownstage =~ /^(available|all)$/){
+		my $mn_hostname = $info->{managementnode}->{hostname};
+		notify($ERRORS{'OK'}, $LOG, "ALERT: powerdown stage triggered,placing MN $mn_hostname in maintenance");
+		if (set_managementnode_state($info->{managementnode}, "maintenance")) {
+			notify($ERRORS{'OK'}, $LOG, "Successfully set $mn_hostname into maintenance");
+		}
+		else{
+			notify($ERRORS{'WARNING'}, $LOG, "Failed to set $mn_hostname into maintenance");
+		}
+	}
 
 	foreach my $cid (keys %{$info->{computertable}}) {
 		#set some local variables
@@ -180,11 +191,27 @@ sub process {
 
 		# Collect current state of node - it could have changed since we started
 		if (my $comp_current_state = get_computer_current_state_name($cid)) {
+			$info->{computertable}->{$cid}->{computer}->{state}->{name} = $comp_current_state;
 			$comp_state = $comp_current_state;
 		}
 		else {
 			#could not get it, use existing data
 			notify($ERRORS{'OK'}, $LOG, "could not retrieve current computer state cid= $cid, using old data");
+		}
+
+		#check for powerdownstages
+		if($powerdownstage =~ /^(available|all)$/){
+			$info->{computertable}->{$cid}->{"powerdownstage"} = $powerdownstage;
+			if(powerdown_event($info->{computertable}->{$cid})){
+				notify($ERRORS{'OK'}, $LOG, "Successfully powered down $comp_hostname");
+			}
+			else {
+				#notify($ERRORS{'OK'}, $LOG, "Could not powerdown $comp_hostname");
+			}
+			next;
+		}
+		else {
+		 #proceed as normal
 		}
 
 		#Only preform actions on these available or failed computer states
@@ -355,6 +382,63 @@ sub _blade_investigator {
 	return $retval;
 
 } ## end sub _blade_investigator
+
+#////////////////////////////////////////////////////////////////////////////////
+
+=head2 powerdown_event 
+
+  Parameters  : hash
+  Returns     : 1,0 
+  Description : 
+
+=cut
+
+sub powerdown_event {
+	my ($self) = @_;
+
+	my $management_node_keys    = $self->{managementnode}->{keys};
+	my $computer_host_name      = $self->{computer}->{hostname};
+	my $computer_short_name     = 0;
+	my $computer_ip_address     = $self->{computer}->{IPaddress};
+	my $image_os_name           = $self->{image}->{OS}->{name};
+	my $image_name              = $self->{imagerevision}->{imagename};
+	my $image_os_type           = $self->{image}->{OS}->{type};
+	my $provisioning_perl_package = $self->{computer}->{provisioning}->{module}->{perlpackage};
+	my $comp_type                 = $self->{computer}->{type};
+	my $comp_state						= $self->{computer}->{state}->{name};
+	my $computer_node_name 			= $self->{computer}->{hostname};
+	my $power_down_stage				= $self->{powerdownstage};
+
+	$computer_short_name = $1 if ($computer_node_name =~ /([-_a-zA-Z0-9]*)(\.?)/);
+
+	#If blade or vm and available|failed|maintenance - simply power-off
+	#If blade and vmhostinuse - check vms, if available power-down all
+
+	if(($comp_type =~ /blade/) && ($comp_state =~ /^(available|failed|maintenance)/)){
+		notify($ERRORS{'OK'}, $LOG, "calling provision module $provisioning_perl_package power_off routine $computer_short_name");
+		
+		eval "use $provisioning_perl_package";
+		if ($EVAL_ERROR) {
+			notify($ERRORS{'WARNING'}, $LOG, "$provisioning_perl_package module could not be loaded");
+			notify($ERRORS{'OK'},      $LOG, "returning 0");
+			return 0;
+		}
+		my $power_off_status = eval "&$provisioning_perl_package" . '::power_off($computer_short_name);';
+		notify($ERRORS{'OK'}, $LOG, "$power_off_status ");
+		if($power_off_status){
+			notify($ERRORS{'OK'}, $LOG, "SUCCESS powered_off $computer_short_name");
+			return 1;
+		}
+		return 0;
+	}
+	else{
+		 notify($ERRORS{'OK'}, $LOG, "SKIPPING $computer_short_name comp_type= $comp_type in   comp_state= $comp_state");
+		 return 0;
+	}
+
+	
+
+}
 
 #////////////////////////////////////////////////////////////////////////////////
 
