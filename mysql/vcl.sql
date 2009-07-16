@@ -1208,17 +1208,19 @@ INSERT INTO `localauth` (`userid`, `passhash`, `salt`, `lastupdated`, `lockedout
 -- 
 
 INSERT INTO `module` (`id`, `name`, `prettyname`, `description`, `perlpackage`) VALUES 
-(1, 'provisioning_xcat', 'xCAT 1.x Provisioning Module', 'Extreme Cluster Administration Toolkit 1.x VCL support module', 'VCL::Module::Provisioning::xCAT'),
-(2, 'provisioning_vmware_server', 'VMWare Server Provisioning Module', '', 'VCL::Module::Provisioning::vmware'),
+(1, 'provisioning_xcat_13', 'xCAT 1.3 Provisioning Module', '', 'VCL::Module::Provisioning::xCAT'),
+(2, 'provisioning_vmware_gsx', 'VMware GSX Provisioning Module', '', 'VCL::Module::Provisioning::vmware'),
 (3, 'provisioning_lab', 'Computing Lab Provisioning Module', '', 'VCL::Module::Provisioning::Lab'),
-(4, 'os_windows', 'Windows Operating System Module', '', 'VCL::Module::OS::Windows'),
-(5, 'os_linux', 'Linux Operating System Module', '', 'VCL::Module::OS::Linux'),
-(6, 'os_unix', 'Unix Operating System Module', '', 'VCL::Module::OS'),
-(7, 'os_winvista', 'Windows Vista OS Module', '', 'VCL::Module::OS::Windows::Desktop::Vista'),
-(8, 'predictive_level_0', 'Predictive Loading Level 0 Module', '', 'VCL::Module::Predictive::Level_0'),
-(9, 'predictive_level_1', 'Predictive Loading Level 1 Module', '', 'VCL::Module::Predictive::Level_1'),
-(10, 'provisioning_esx_server', 'VMWare ESX Provisioning Module', '', 'VCL::Module::Provisioning::esx'),
-(11, 'provisioning_xcat_2_1', 'xCAT 2.1 Provisioning Module', 'Extreme Cluster Administration Toolkit 2.1 VCL support module', 'VCL::Module::Provisioning::xCAT21');
+(4, 'os_windows', 'Windows OS Module', '', 'VCL::Module::OS::Windows'),
+(5, 'os_linux', 'Linux OS Module', '', 'VCL::Module::OS::Linux'),
+(6, 'os_unix', 'Unix OS Module', '', 'VCL::Module::OS'),
+(7, 'os_winvista', 'Windows Vista OS Module', '', 'VCL::Module::OS::Windows::Version_6::Vista'),
+(8, 'predictive_level_0', 'Predictive Loading Module Level 0', 'Selects an image to load based on upcoming reservations.', 'VCL::Module::Predictive::Level_0'),
+(9, 'predictive_level_1', 'Predictive Loading Module Level 1', 'Selects an image to load based on historical data. Loads the most popular image that can be run on the machine that is not currently loaded and available on another node.', 'VCL::Module::Predictive::Level_1'),
+(10, 'provisioning_vmware_esx', 'VMware ESX Provisioning Module', '', 'VCL::Module::Provisioning::esx'),
+(11, 'provisioning_xcat_21', 'xCAT 2.1 Provisioning Module', '', 'VCL::Module::Provisioning::xCAT21'),
+(12, 'os_winxp', 'Windows XP OS Module', '', 'VCL::Module::OS::Windows::Version_5::XP'),
+(13, 'os_win2003', 'Windows Server 2003 OS Module', '', 'VCL::Module::OS::Windows::Version_5::2003');
 
 -- 
 -- Dumping data for table `OS`
@@ -1228,24 +1230,24 @@ INSERT INTO `OS` (`id`, `name`, `prettyname`, `type`, `installtype`, `sourcepath
 (2, 'sun4x_58', 'Solaris 5.8', 'unix', 'none', NULL, 6),
 (3, 'win2k', 'Windows 2000', 'windows', 'partimage', 'image', 4),
 (6, 'rhel3', 'Red Hat Enterprise Linux 3.0', 'linux', 'kickstart', 'rhas3', 5),
-(7, 'winxp', 'Windows XP', 'windows', 'partimage', 'image', 4),
+(7, 'winxp', 'Windows XP', 'windows', 'partimage', 'image', 12),
 (8, 'realmrhel3', 'Realm Red Hat Enterprise Linux 3.0', 'linux', 'none', NULL, 5),
 (9, 'realmrhel4', 'Realm Red Hat Enterprise Linux 4.0', 'linux', 'none', NULL, 5),
-(10, 'win2003', 'Windows 2003 Server', 'windows', 'partimage', 'image', 4),
+(10, 'win2003', 'Windows 2003 Server', 'windows', 'partimage', 'image', 13),
 (11, 'rh3image', 'RHEL 3 image', 'linux', 'partimage', 'image', 5),
 (12, 'rhel4', 'Red Hat Enterprise Linux 4', 'linux', 'kickstart', 'rhas4', 5),
 (13, 'rh4image', 'RHEL4 image', 'linux', 'partimage', 'image', 5),
 (14, 'fc5image', 'RH Fedora Core 5 image', 'linux', 'partimage', 'image', 5),
 (15, 'rhfc5', 'Red Hat Fedora Core 5', 'linux', 'kickstart', 'rhfc5', 5),
-(16, 'vmwarewinxp', 'VMware Windows XP', 'windows', 'vmware', 'vmware_images', 4),
+(16, 'vmwarewinxp', 'VMware Windows XP', 'windows', 'vmware', 'vmware_images', 12),
 (17, 'rhfc7', 'RH Fedora Core 7 KS', 'linux', 'kickstart', 'rhfc7', 5),
-(18, 'fc7image', 'RH Fedora Core image', 'linux', 'partimage', 'image', 5),
+(18, 'fc7image', 'RH Fedora Core 7 image', 'linux', 'partimage', 'image', 5),
 (19, 'rhel5', 'Red Hat Enterprise Linux 5', 'linux', 'kickstart', 'rhas5', 5),
 (20, 'esx35', 'VMware ESX 3.5', 'linux', 'kickstart', 'esx35', 5),
-(21, 'vmwareesxwinxp', 'VMware ESX Windows XP', 'windows', 'vmware', 'vmware_images', 4),
+(21, 'vmwareesxwinxp', 'VMware ESX Windows XP', 'windows', 'vmware', 'vmware_images', 12),
 (22, 'realmrhel5', 'Realm Red Hat Enterprise Linux 5.0', 'linux', 'none', NULL, 5),
 (23, 'sun4x_510  	', 'Solaris 10', 'unix', 'none', NULL, 6),
-(24, 'centos5', 'CentOS 5.1 ', 'linux', 'kickstart', 'centos5', 5),
+(24, 'centos5', 'CentOS 5', 'linux', 'kickstart', 'centos5', 5),
 (25, 'rh5image', 'RedHat Enterprise Linux 5 (rhel5 im', 'linux', 'partimage', 'image', 5),
 (26, 'rhfc9', 'RedHat Fedora Core 9 kickstart', 'linux', 'kickstart', 'rhfc9', 5),
 (27, 'fc9image', 'RedHat Fedora Core 9 image', 'linux', 'partimage', 'image', 5),
@@ -1296,11 +1298,11 @@ INSERT INTO `privnode` (`id`, `parent`, `name`) VALUES
 -- 
 
 INSERT INTO `provisioning` (`id`, `name`, `prettyname`, `moduleid`) VALUES
-(1, 'xcat', 'xCAT 1.x Provisioning', 1),
-(2, 'vmware_server', 'VMWare Server Provisioning', 2),
-(3, 'lab', 'Computing Lab Provisioning', 3),
-(4, 'esx', 'VMWare ESX', 10),
-(5, 'xcat21', 'xCAT 2.1 Provisioning', 11);
+(1, 'xcat_13', 'xCAT 1.3', 1),
+(2, 'vmware_server_gsx', 'VMware Server GSX', 2),
+(3, 'lab', 'Computing Lab', 3),
+(4, 'vmware_esx', 'VMware ESX', 10),
+(5, 'xcat_21', 'xCAT 2.1', 11);
 
 -- 
 -- Dumping data for table `resource`
@@ -1501,7 +1503,7 @@ INSERT INTO `userprivtype` (`id`, `name`) VALUES
 -- 
 
 INSERT INTO `vmprofile` (`id`, `profilename`, `vmtypeid`, `imageid`, `nasshare`, `datastorepath`, `vmpath`, `virtualswitch0`, `virtualswitch1`, `vmdisk`) VALUES
-(1, 'VMware GSX standard', 3, 8, NULL, '/var/lib/vmware/Virtual Machines', NULL, NULL, 'VMnet2', 'localdisk'),
+(1, 'VMware GSX standard', 3, 8, NULL, '/var/lib/vmware/Virtual Machines', NULL, 'VMnet0', 'VMnet2', 'localdisk'),
 (2, 'Vmware ESX standard network mounted share', 5, 9, NULL, '/vmfs/volumes/nfs1', '/vmfs/volumes/storage1', 'VM Network', 'Virtual Machine Public Network', 'networkdisk'),
 (3, 'Vmware ESX standard localdisk', 5, 9, NULL, '/vmfs/volumes/storage1', NULL, 'VM Network', 'Virtual Machine Public Network', 'localdisk'),
 (4, 'Vmware ESX SAN ', 6, 9, NULL, '/vmfs/volumes/NetApp', '/vmfs/volumes/storage1', 'Intranet2', 'MCNC Public', 'networkdisk');
@@ -1561,6 +1563,7 @@ ALTER TABLE `blockWebTime`
 -- Constraints for table `computer`
 -- 
 ALTER TABLE `computer`
+  ADD CONSTRAINT `computer_ibfk_37` FOREIGN KEY (`provisioningid`) REFERENCES `provisioning` (`id`) ON UPDATE CASCADE,
   ADD CONSTRAINT `computer_ibfk_12` FOREIGN KEY (`ownerid`) REFERENCES `user` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
   ADD CONSTRAINT `computer_ibfk_30` FOREIGN KEY (`scheduleid`) REFERENCES `schedule` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
   ADD CONSTRAINT `computer_ibfk_33` FOREIGN KEY (`stateid`) REFERENCES `state` (`id`) ON UPDATE CASCADE,
@@ -1611,15 +1614,16 @@ ALTER TABLE `log`
 -- Constraints for table `managementnode`
 -- 
 ALTER TABLE `managementnode`
-  ADD CONSTRAINT `managementnode_ibfk_3` FOREIGN KEY (`predictivemoduleid`) REFERENCES `module` (`id`),
-  ADD CONSTRAINT `managementnode_ibfk_1` FOREIGN KEY (`stateid`) REFERENCES `state` (`id`),
-  ADD CONSTRAINT `managementnode_ibfk_2` FOREIGN KEY (`imagelibgroupid`) REFERENCES `resourcegroup` (`id`);
+  ADD CONSTRAINT `managementnode_ibfk_6` FOREIGN KEY (`imagelibgroupid`) REFERENCES `resourcegroup` (`id`) ON UPDATE CASCADE,
+  ADD CONSTRAINT `managementnode_ibfk_3` FOREIGN KEY (`predictivemoduleid`) REFERENCES `module` (`id`) ON UPDATE CASCADE,
+  ADD CONSTRAINT `managementnode_ibfk_4` FOREIGN KEY (`ownerid`) REFERENCES `user` (`id`) ON UPDATE CASCADE,
+  ADD CONSTRAINT `managementnode_ibfk_5` FOREIGN KEY (`stateid`) REFERENCES `state` (`id`) ON UPDATE CASCADE;
 
 -- 
 -- Constraints for table `OS`
 --
 ALTER TABLE `OS`
-  ADD CONSTRAINT `OS_ibfk_4` FOREIGN KEY (`moduleid`) REFERENCES `module` (`id`),
+  ADD CONSTRAINT `OS_ibfk_4` FOREIGN KEY (`moduleid`) REFERENCES `module` (`id`) ON UPDATE CASCADE,
   ADD CONSTRAINT `OS_ibfk_2` FOREIGN KEY (`type`) REFERENCES `OStype` (`name`) ON UPDATE CASCADE,
   ADD CONSTRAINT `OS_ibfk_3` FOREIGN KEY (`installtype`) REFERENCES `OSinstalltype` (`name`) ON UPDATE CASCADE;
 
@@ -1628,6 +1632,12 @@ ALTER TABLE `OS`
 -- 
 ALTER TABLE `privnode`
   ADD CONSTRAINT `privnode_ibfk_1` FOREIGN KEY (`parent`) REFERENCES `privnode` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+--
+-- Constraints for table `provisioning`
+--
+ALTER TABLE `provisioning`
+  ADD CONSTRAINT `provisioning_ibfk_1` FOREIGN KEY (`moduleid`) REFERENCES `module` (`id`) ON UPDATE CASCADE;
 
 -- 
 -- Constraints for table `querylog`
@@ -1720,3 +1730,16 @@ ALTER TABLE `userpriv`
   ADD CONSTRAINT `userpriv_ibfk_2` FOREIGN KEY (`usergroupid`) REFERENCES `usergroup` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
   ADD CONSTRAINT `userpriv_ibfk_3` FOREIGN KEY (`privnodeid`) REFERENCES `privnode` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
   ADD CONSTRAINT `userpriv_ibfk_4` FOREIGN KEY (`userprivtypeid`) REFERENCES `userprivtype` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+--
+-- Constraints for table `vmhost`
+--
+ALTER TABLE `vmhost`
+  ADD CONSTRAINT `vmhost_ibfk_1` FOREIGN KEY (`computerid`) REFERENCES `computer` (`id`) ON UPDATE CASCADE;
+
+--
+-- Constraints for table `vmprofile`
+--
+ALTER TABLE `vmprofile`
+  ADD CONSTRAINT `vmprofile_ibfk_2` FOREIGN KEY (`vmtypeid`) REFERENCES `vmtype` (`id`) ON UPDATE CASCADE,
+  ADD CONSTRAINT `vmprofile_ibfk_1` FOREIGN KEY (`imageid`) REFERENCES `image` (`id`) ON UPDATE CASCADE;
