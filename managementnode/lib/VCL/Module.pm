@@ -229,16 +229,16 @@ sub data {
                package name.
                
                Example: call as object method:
-               my $os = VCL::Module::OS::Windows_mod::Version_5::XP_mod->new({data_structure => $self->data});
+               my $os = VCL::Module::OS::Windows::Version_5::XP->new({data_structure => $self->data});
                my @packages = $os->get_package_hierarchy();
                
                Example: call as class function:
-               my @packages = get_package_hierarchy("VCL::Module::OS::Windows_mod::Version_5::XP_mod");
+               my @packages = get_package_hierarchy("VCL::Module::OS::Windows::Version_5::XP");
                
                Both examples return the following array:
-               [0] = 'VCL::Module::OS::Windows_mod::Version_5::XP_mod'
-               [1] = 'VCL::Module::OS::Windows_mod::Version_5'
-               [2] = 'VCL::Module::OS::Windows_mod'
+               [0] = 'VCL::Module::OS::Windows::Version_5::XP'
+               [1] = 'VCL::Module::OS::Windows::Version_5'
+               [2] = 'VCL::Module::OS::Windows'
                [3] = 'VCL::Module::OS'
                [4] = 'VCL::Module'
 
