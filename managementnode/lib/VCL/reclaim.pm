@@ -141,7 +141,6 @@ sub process {
 		if ($request_laststate_name =~ /reserved/) {
 			notify($ERRORS{'OK'}, 0, "request laststate is $request_laststate_name, attempting to sanitize computer");
 
-			# *** BEGIN MODULARIZED OS CODE ***
 			# Attempt to get the name of the image currently loaded on the computer
 			# This should match the computer table's current image
 			if ($self->os->can("get_current_image_name")) {
@@ -180,35 +179,8 @@ sub process {
 					$self->insert_reload_and_exit();
 				}
 			}
-			# *** END MODULARIZED OS CODE ***
-	
-			# Check the image OS type and clean up computer accordingly
-			# This whole section should be removed once the original Windows.pm is replaced by Windows_mod.pm
-			elsif ($image_os_type =~ /windows/) {
-				# Loaded Windows image needs to be cleaned up
-				notify($ERRORS{'DEBUG'}, 0, "attempting steps to clean up loaded $image_os_name image");
-
-				# Remove user
-				if (del_user($computer_shortname, $user_unityid, $computer_type, $image_os_name,$image_os_type)) {
-					notify($ERRORS{'OK'}, 0, "user $user_unityid removed from $computer_shortname");
-					insertloadlog($reservation_id, $computer_id, "info", "reclaim: removed user");
-				}
-				else {
-					notify($ERRORS{'WARNING'}, 0, "could not remove user $user_unityid from $computer_shortname, computer will be reloaded");
-					$self->insert_reload_and_exit();
-				}
-
-				# Disable RDP
-				if (remotedesktopport($computer_shortname, "DISABLE")) {
-					notify($ERRORS{'OK'}, 0, "remote desktop disabled on $computer_shortname");
-					insertloadlog($reservation_id, $computer_id, "info", "reclaim: disabled RDP");
-				}
-				else {
-					notify($ERRORS{'WARNING'}, 0, "remote desktop could not be disabled on $computer_shortname, computer will be reloaded");
-					$self->insert_reload_and_exit();
-				}
-			}
-
+			
+			# TODO: The following section should be removed once sanitize() is implemented by Linux.pm
 			elsif ($image_os_type =~ /linux/){
 				# Loaded Linux image needs to be cleaned up
 				notify($ERRORS{'OK'}, 0, "attempting steps to clean up loaded $image_os_name image");
