@@ -361,7 +361,7 @@ sub pre_capture {
 		notify($ERRORS{'WARNING'}, 0, "unable to set sshd service startup mode to manual");
 		return 0;
 	}
-
+	
 =back
 
 =cut
@@ -1096,7 +1096,7 @@ sub filesystem_entry_exists {
 	}
 	
 	# Replace any backslashes or forward slashes with \\
-	$path =~ s/[\\\/]+/\\/g;
+	$path =~ s/[\\\/]+/\\\\/g;
 
 	# Assemble the dir command and execute it
 	my $dir_command = "cmd.exe /c dir /a /b \"$path\"";
@@ -2897,6 +2897,66 @@ sub defragment_hard_drive {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 prepare_post_load
+
+ Parameters  : None.
+ Returns     : If successful: true
+               If failed: false
+ Description : This subroutine should be called as the last step before an image
+               is captured if neither Sysprep nor NewSID is used. It enables
+               autoadminlogon so that root automatically logs on the next time
+               the computer is booted and creates a registry key under
+               HKLM\Software\Microsoft\Windows\CurrentVersion\Run.
+               
+               This key causes the post_load.cmd script after the image is
+               loaded when root automatically logs on. This script needs to run
+               in order to configure networking and the Cygwin SSH service.
+
+=cut
+
+sub prepare_post_load {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+
+	my $management_node_keys = $self->data->get_management_node_keys();
+	my $computer_node_name   = $self->data->get_computer_node_name();
+	my $end_state = $self->{end_state} || 'off';
+	
+	# Get the node configuration directory
+	my $node_configuration_directory = $self->get_node_configuration_directory();
+	unless ($node_configuration_directory) {
+		notify($ERRORS{'WARNING'}, 0, "node configuration directory could not be determined");
+		return;
+	}
+	
+	# Add HKLM run key to call post_load.cmd after the image comes up
+	if (!$self->add_hklm_run_registry_key('post_load.cmd', $node_configuration_directory . '/Scripts/post_load.cmd  >> ' . $node_configuration_directory . '/Logs/post_load.log')) {
+		notify($ERRORS{'WARNING'}, 0, "unable to create run key to call post_load.cmd");
+		return;
+	}
+	
+	# Enable autoadminlogon
+	if (!$self->enable_autoadminlogon()) {
+		notify($ERRORS{'WARNING'}, 0, "unable to enable autoadminlogon");
+		return 0;
+	}
+	
+	# Shut down computer unless end_state argument was passed with a value other than 'off'
+	if ($end_state eq 'off') {
+		if (!$self->shutdown()) {
+			notify($ERRORS{'WARNING'}, 0, "failed to shut down computer");
+			return;
+		}
+	}
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 prepare_newsid
 
  Parameters  : None.
@@ -2904,20 +2964,20 @@ sub defragment_hard_drive {
                If failed: false
  Description : This subroutine prepares a computer to automatically run
                newsid.exe the next time it is booted. Newsid.exe is a utility
-					which generates a new SID (security identifier) for the computer.
-					
-					This subroutine enables autoadminlogon so that root automatically
-					logs on the next time the computer is booted.
-					
-					A registry key is created under
-					HKLM\Software\Microsoft\Windows\CurrentVersion\Run.
-					This key calls the run_newsid.cmd script. This script will run
-					as root when it automatically logs on.
-					
-					The run_newsid.cmd script runs newsid.exe, removes the HKLM...Run
-					key which caused itself to be called, and configures another
-					HKLM...Run key to call post_load.cmd at next logon. The script
-					then reboots the computer.
+               which generates a new SID (security identifier) for the computer.
+               
+               This subroutine enables autoadminlogon so that root automatically
+               logs on the next time the computer is booted.
+               
+               A registry key is created under
+               HKLM\Software\Microsoft\Windows\CurrentVersion\Run.
+               This key calls the run_newsid.cmd script. This script will run
+               as root when it automatically logs on.
+               
+               The run_newsid.cmd script runs newsid.exe, removes the HKLM...Run
+               key which caused itself to be called, and configures another
+               HKLM...Run key to call post_load.cmd at next logon. The script
+               then reboots the computer.
 
 =cut
 

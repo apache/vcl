@@ -72,54 +72,6 @@ use File::Basename;
 
 our $SOURCE_CONFIGURATION_DIRECTORY = "$TOOLS/Windows_Server_2003";
 
-##############################################################################
-
-=head1 OBJECT METHODS
-
-=cut
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 pre_capture
-
- Parameters  :
- Returns     :
- Description :
-
-=cut
-
-sub pre_capture {
-	my $self = shift;
-	my $args = shift;
-	if (ref($self) !~ /windows/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-	
-	notify($ERRORS{'OK'}, 0, "beginning Windows Server 2003 image capture preparation tasks");
-	
-	# Call parent class's pre_capture() subroutine
-	notify($ERRORS{'OK'}, 0, "calling parent class pre_capture() subroutine");
-	if ($self->SUPER::pre_capture($args)) {
-		notify($ERRORS{'OK'}, 0, "successfully executed parent class pre_capture() subroutine");
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to execute parent class pre_capture() subroutine");
-		return;
-	}
-	
-	# Check if Sysprep should be used
-	if ($self->data->get_imagemeta_sysprep()) {
-		if (!$self->run_sysprep()) {
-			notify($ERRORS{'WARNING'}, 0, "capture preparation failed, failed to run Sysprep");
-			return;
-		}
-	}
-	
-	notify($ERRORS{'OK'}, 0, "returning 1");
-	return 1;
-} ## end sub pre_capture
-
 #/////////////////////////////////////////////////////////////////////////////
 
 1;
