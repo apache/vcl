@@ -1173,483 +1173,202 @@ sub capture {
 	my $vmx_directory  = "$reservation_id$computer_shortname";
 	my $vmx_image_name = "$reservation_id$computer_shortname";
 	my $vmx_path       = "$vmhost_vmpath/$vmx_directory/$vmx_image_name.vmx";
-
+	
 	my @sshcmd;
-
-	# Check the vm type
-	if ($vmtype_name =~ /vmware|vmwareESX/) {
+	
+	# Check if pre_capture() subroutine has been implemented by the OS module
+	if ($self->os->can("pre_capture")) {
+		# Call OS pre_capture() - it should perform all OS steps necessary to capture an image
+		# pre_capture() should shut down the computer when it is done
+		notify($ERRORS{'OK'}, 0, "calling OS module's pre_capture() subroutine");
 		
-		# *** BEGIN MODULARIZED CODE ***
-		# Check if pre_capture() subroutine has been implemented by the OS module
-		if ($self->os->can("pre_capture")) {
-			# Call OS pre_capture() - it should perform all OS steps necessary to capture an image
-			# pre_capture() should shut down the computer when it is done
-			notify($ERRORS{'OK'}, 0, "calling OS module's pre_capture() subroutine");
+		if (!$self->os->pre_capture({end_state => 'off'})) {
+			notify($ERRORS{'WARNING'}, 0, "OS module pre_capture() failed");
+			return 0;
+		}
+	
+		# Get the power status, make sure computer is off
+		my $power_status = $self->power_status();
+		notify($ERRORS{'DEBUG'}, 0, "retrieved power status: $power_status");
+		if ($power_status eq 'off') {
+			notify($ERRORS{'OK'}, 0, "verified $computer_nodename power is off");
+		}
+		elsif ($power_status eq 'on') {
+			notify($ERRORS{'WARNING'}, 0, "$computer_nodename power is still on, turning computer off");
 			
-			if (!$self->os->pre_capture({end_state => 'off'})) {
-				notify($ERRORS{'WARNING'}, 0, "OS module pre_capture() failed");
-				return 0;
-			}
-		
-			# Get the power status, make sure computer is off
-			my $power_status = $self->power_status();
-			notify($ERRORS{'DEBUG'}, 0, "retrieved power status: $power_status");
-			if ($power_status eq 'off') {
-				notify($ERRORS{'OK'}, 0, "verified $computer_nodename power is off");
-			}
-			elsif ($power_status eq 'on') {
-				notify($ERRORS{'WARNING'}, 0, "$computer_nodename power is still on, turning computer off");
-				
-				# Attempt to power off computer
-				if ($self->power_off()) {
-					notify($ERRORS{'OK'}, 0, "$computer_nodename was powered off");
-				}
-				else {
-					notify($ERRORS{'WARNING'}, 0, "failed to power off $computer_nodename");
-					return 0;
-				}
+			# Attempt to power off computer
+			if ($self->power_off()) {
+				notify($ERRORS{'OK'}, 0, "$computer_nodename was powered off");
 			}
 			else {
-				notify($ERRORS{'WARNING'}, 0, "failed to determine power status of $computer_nodename");
+				notify($ERRORS{'WARNING'}, 0, "failed to power off $computer_nodename");
 				return 0;
 			}
 		}
-		# *** END MODULARIZED CODE ***
-		
-
-		#if windows
-		#set sshd to mode= demand
-		# disable pagefile
-		# reboot
-		# check for and remove pagefile
-		# if sysprep-- copy sysprep files and start
-		#    delay 15 secs turn vm off
-		# if not sysprep i.e. newsid
-		#    copy appropriate files, execute and wait for shutdown signal
-		#
-		# is os windows
-		elsif ($image_name =~ /^(vmwarewinxp|vmwarewin2003|vmwareesxwin)/) {
-			#change password of root and sshd service back to default
-			# only useful on win platforms
-			# changewindowspasswd($node,$account,$passwd)
-			# needed only for sshd service on windows OS's
-			my $p = $WINDOWS_ROOT_PASSWORD;
-			if (changewindowspasswd($computer_shortname, "root", $p)) {
-				notify($ERRORS{'OK'}, 0, "$notify_prefix changed windows password $computer_shortname,root,$p");
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to determine power status of $computer_nodename");
+			return 0;
+		}
+	}
+	
+	# Check the VM profile disk type
+	if ($vmprofile_vmdisk eq "localdisk") {
+		#only copy vmdk files back to management node -- into correct directory
+		if (open(MKDIR, "/bin/mkdir $VMWAREREPOSITORY/$image_name 2>&1 |")) {
+			my @a = <MKDIR>;
+			close(MKDIR);
+			for my $l (@a) {
+				notify($ERRORS{'OK'}, 0, "possible error @a");
 			}
-			else {
-				notify($ERRORS{'OK'}, 0, "$notify_prefix failed to change windows password $computer_shortname,root,$p");
-				return 0;
-			}
-
-			#defrag before removing pagefile
-			# we do this to speed up the process
-			# defraging without a page file takes a little longer
-			notify($ERRORS{'OK'}, 0, "starting defrag on $computer_nodename");
-			@sshcmd = run_ssh_command($computer_nodename, $IDENTITY_wxp, "cmd.exe /c defrag C: -f", "root");
-			my $defragged = 0;
-			foreach my $d (@{$sshcmd[1]}) {
-				if ($d =~ /Defragmentation Report/) {
-					notify($ERRORS{'OK'}, 0, "successfully defraged $computer_nodename");
-					$defragged = 1;
+			notify($ERRORS{'OK'}, 0, "created tmp directory $VMWAREREPOSITORY/$image_name");
+		}
+		if (-d "$VMWAREREPOSITORY/$image_name") {
+		}
+		else {
+			notify($ERRORS{'CRITICAL'}, 0, "could not create tmp directory $VMWAREREPOSITORY/$image_name for $vmx_directory $!");
+			return 0;
+		}
+		#copy vmdk files
+		# confirm they were copied
+		notify($ERRORS{'OK'}, 0, "attemping to copy vmdk files to $VMWAREREPOSITORY");
+		if (run_scp_command("$hostnodename:\"$vmhost_vmpath/$vmx_directory/*.vmdk\"", "$VMWAREREPOSITORY/$image_name", $hostIdentity)) {
+			if (open(LISTFILES, "ls -s1 $VMWAREREPOSITORY/$image_name |")) {
+				my @list = <LISTFILES>;
+				close(LISTFILES);
+				my $numfiles  = @list;
+				my $imagesize = getimagesize($image_name);
+				if ($imagesize) {
+					notify($ERRORS{'OK'}, 0, "copied $numfiles vmdk files imagesize= $imagesize");
 				}
-			}
-			if (!$defragged) {
-				notify($ERRORS{'WARNING'}, 0, "defrag problem @{ $sshcmd[1] }");
-			}
-
-			#copy new auto_create_image.vbs and auto_prepare_for_image.vbs
-			#this moves(sometimes) the pagefile and reboots the box
-			#actually checks for a removes the pagefile.sys
-			my @scp;
-			if (run_scp_command("$TOOLS/auto_create_image.vbs", "$computer_nodename:auto_create_image.vbs", $IDENTITY_wxp)) {
-			}
-			else {
-				notify($ERRORS{'CRITICAL'}, 0, "failed to scp $TOOLS/auto_create_image.vbs to $computer_nodename");
-				return 0;
-			}
-
-			if (_set_sshd_startmode($computer_nodename, "auto")) {
-				notify($ERRORS{'OK'}, 0, "successfully set auto mode for sshd start");
-			}
-
-			my @list;
-			my $l;
-#execute the vbs script to disable the pagefil and reboot
-			undef @sshcmd;
-			@sshcmd = run_ssh_command($computer_nodename, $IDENTITY_wxp, "cscript.exe //Nologo auto_create_image.vbs", "root");
-			#starting process
-			foreach $l (@{$sshcmd[1]}) {
-				if ($l =~ /createimage reboot|rebooting/) {
-					notify($ERRORS{'OK'}, 0, "auto_create_image.vbs initiated, $computer_nodename rebooting, sleeping 90");
-					sleep 90;
-					next;
-				}
-				elsif ($l =~ /failed error/) {
-					notify($ERRORS{'CRITICAL'}, 0, "auto_create_image.vbs failed, @{ $sshcmd[1] }");
+				else {
+					notify($ERRORS{'OK'}, 0, "vmdk files are not copied");
 					return 0;
 				}
-			} ## end foreach $l (@{$sshcmd[1]})
-			    #wait until the reboot process has started to shutdown services.
-			notify($ERRORS{'OK'}, 0, "$computer_nodename rebooting, waiting");
-			my $socketflag = 0;
-			REBOOTEDVMWARE:
-			my $rebooted          = 1;
-			my $reboot_wait_count = 0;
-			while ($rebooted) {
-
-				if ($reboot_wait_count > 55) {
-					notify($ERRORS{'CRITICAL'}, 0, "waited $reboot_wait_count on reboot after auto_create_image on $computer_nodename");
-					return 0;
-				}
-				notify($ERRORS{'OK'}, 0, "$computer_nodename not completed reboot sleeping for 25");
-				sleep 15;
-				if (_pingnode($computer_nodename)) {
-					#it pingable check if sshd is open
-					notify($ERRORS{'OK'}, 0, "$computer_nodename is pingable, checking sshd port");
-					my $sshd = _sshd_status($computer_nodename, $image_name, $image_os_type);
-					if ($sshd =~ /on/) {
-						$rebooted = 0;
-						notify($ERRORS{'OK'}, 0, "$computer_nodename sshd is open");
-					}
-					else {
-						notify($ERRORS{'OK'}, 0, "$computer_nodename sshd NOT open yet,sleep 5");
-						sleep 5;
-					}
-				} ## end if (_pingnode($computer_nodename))
-				$reboot_wait_count++;
-			} ## end while ($rebooted)
-			    #check for recent bug
-			undef @sshcmd;
-			@sshcmd = run_ssh_command($computer_nodename, $IDENTITY_wxp, "uname -s", "root");
-			foreach my $l (@{$sshcmd[1]}) {
-				if ($l =~ /^Warning:/) {
-				}
-				if ($l =~ /^Read from socket failed:/) {
-					if ($socketflag) {
-						notify($ERRORS{'CRITICAL'}, 0, "could not login $computer_nodename via ssh socket failure");
-						return 0;
-					}
-					notify($ERRORS{'CRITICAL'}, 0, "discovered ssh read from socket failure on $computer_nodename, attempting to repair");
-					#power cycle node
-					if (defined(run_ssh_command($computer_nodename, $image_identity, "vmware-cmd $vmx_path reset hard", "root"))) {
-						notify($ERRORS{'CRITICAL'}, 0, "$computer_nodename reset cycled going to reboot check routine");
-						sleep 30;
-						$socketflag = 1;
-						goto REBOOTEDVMWARE;
-					}
-				} ## end if ($l =~ /^Read from socket failed:/)
-			} ## end foreach my $l (@{$sshcmd[1]})
-
-			#
-			#actually remove the pagefile.sys sometimes movefile.exe does not work
-			if (defined(run_ssh_command($computer_nodename, $IDENTITY_wxp, "/usr/bin/rm -v C:\/pagefile.sys", "root"))) {
-				notify($ERRORS{'OK'}, 0, "removed pagefile.sys");
-			}
-
-			# which sysprep to use
-			#TODO - store volume license keys in database
-			my $sysprep_files;
-			if ($image_name =~ /(^vmwarewinxp|vmwareesxwinxp)/) {
-				$sysprep_files = "$SYSPREP_VMWARE";
-			}
-			elsif ($image_name =~ /(^vmwarewin2003|vmwareesxwin2003)/) {
-				$sysprep_files = "$SYSPREP_VMWARE2003";
-			}
-
-			#cp sysprep to C:
-			#chmod C:\Sysprep\*
-			if (defined(run_scp_command($sysprep_files, "$computer_nodename:\"C:\/Sysprep\"", $IDENTITY_wxp))) {
-				notify($ERRORS{'OK'}, 0, "copied Sysprep directory $sysprep_files to $computer_nodename C:");
-				if (defined(run_ssh_command($computer_nodename, $IDENTITY_wxp, "/usr/bin/chmod -R 755 C:\/Sysprep", "root"))) {
-					notify($ERRORS{'OK'}, 0, "chmoded -R C:/Sysprep/ files ");
-				}
-			}
-			else {
-				notify($ERRORS{'CRITICAL'}, 0, "could not copy $sysprep_files to $computer_nodename");
-				return 0;
-			}
-
-			#set sshd to manual
-			if (_set_sshd_startmode($computer_nodename, "manual")) {
-				notify($ERRORS{'OK'}, 0, "successfully set manual mode for sshd start");
-			}
-			else {
-				notify($ERRORS{'CRITICAL'}, 0, "failed to set manual mode for sshd on $computer_nodename");
-				return 0;
-			}
-			#start sysprep
-			#after 15 time units -- kill  sysprep process
-			# in this case also stop vm using vmware-cmd
-
-			notify($ERRORS{'OK'}, 0, "starting sysprep on $computer_nodename");
-
-			my $vmisoff = 0;
-
-			if (open(SSH, "/usr/bin/ssh -x -i $IDENTITY_wxp $computer_nodename \"C:\/Sysprep\/sysprep.cmd\" 2>&1 |")) {
-				my $notstop = 1;
-				my $loop    = 0;
-				while ($notstop) {
-					notify($ERRORS{'DEBUG'}, 0, "$notify_prefix sysprep.cmd loop count: $loop");
-					$loop++;
-					my $l = <SSH>;
-					if ($l =~ /sysprep/) {
-						notify($ERRORS{'OK'}, 0, "sysprep started, sleep 45 before disconecting");
-						sleep 45;
-
-						notify($ERRORS{'DEBUG'}, 0, "attempting to kill sysprep");
-						if (_killsysprep($computer_nodename)) {
-							notify($ERRORS{'OK'}, 0, "killed sshd process for sysprep command");
-						}
-
-						$notstop = 0;
-						notify($ERRORS{'DEBUG'}, 0, "closing SSH filehandle");
-						close(SSH);
-						notify($ERRORS{'DEBUG'}, 0, "SSH filehandle closed");
-
-						$notstop = 0;
-					} ## end if ($l =~ /sysprep/)
-					elsif ($l =~ /sysprep.cmd: Permission denied/) {
-						notify($ERRORS{'CRITICAL'}, 0, "chmod 755 failed to correctly set execute on sysprep.cmd output $l");
-						close(SSH);
-						return 0;
-					}
-
-					notify($ERRORS{'DEBUG'}, 0, "sysprep cmd output: $l");
-
-					#avoid infinite loop
-					if ($loop > 80) {
-						notify($ERRORS{'OK'},    0, "sysprep executed, sleep 20 before disconecting");
-						notify($ERRORS{'DEBUG'}, 0, "sysprep executed in loop control condition, exceeded limit");
-						sleep 20;
-						notify($ERRORS{'DEBUG'}, 0, "attempting to kill sysprep");
-						if (_killsysprep($computer_nodename)) {
-							notify($ERRORS{'OK'}, 0, "killed sshd process for sysprep command");
-						}
-						notify($ERRORS{'DEBUG'}, 0, "closing SSH filehandle");
-						close(SSH);
-						notify($ERRORS{'DEBUG'}, 0, "SSH filehandle closed");
-
-						$notstop = 0;
-					} ## end if ($loop > 80)
-
-				} ## end while ($notstop)
-				    #stop vm
-				    #ping to make sure host is offline
-				my $online   = 1;
-				my $pingloop = 0;
-				notify($ERRORS{'OK'}, 0, "checking for pingable $computer_nodename");
-				while ($online) {
-					if (!(_pingnode($computer_nodename))) {
-						notify($ERRORS{'OK'}, 0, "$computer_nodename is not pingable");
-						$online = 0;
-					}
-					else {
-						notify($ERRORS{'OK'}, 0, "$computer_nodename is still pingable");
-						sleep 10;
-						$pingloop++;
-					}
-					if ($pingloop > 10) {
-						notify($ERRORS{'CRITICAL'}, 0, "failed on sysprep process for $computer_nodename");
-						return 0;
-					}
-				} ## end while ($online)
-				    # we have to stop the vm due to sysprep not shutting down the machine -- even with the forceshutdown option
-				notify($ERRORS{'OK'},    0, "stopping vm $vmx_path on $hostnodename");
-				notify($ERRORS{'DEBUG'}, 0, "stopping vm $vmx_path on hostnodename $hostnodename identity= $hostIdentity ");
-				my @vmstop = run_ssh_command($hostnodename, $hostIdentity, "vmware-cmd $vmx_path stop hard", "root");
-				foreach my $l (@{$vmstop[1]}) {
-					next if ($l =~ /Warning: Permanently/);
-					if ($l =~ /= 1/) {
-						notify($ERRORS{'OK'}, 0, "SUCCESS vmware-cmd stop worked");
-					}
-				}
-				#sleep a bit to let it shutdown
-				sleep 15;
-				#confirm
-				undef @sshcmd;
-				@sshcmd = run_ssh_command($hostnodename, $hostIdentity, "vmware-cmd $vmx_path getstate", "root");
-
-				foreach my $l (@{$sshcmd[1]}) {
-					if ($l =~ /= off/) {
-						#good
-						notify($ERRORS{'OK'}, 0, "SUCCESS turned off $vmx_path");
-						$vmisoff = 1;
-					}
-				}
-				if (!$vmisoff) {
-					notify($ERRORS{'CRITICAL'}, 0, "$vmx_path still reported on");
-					return 0;
-				}
-			}    #start sysprep command
-			else {
-				notify($ERRORS{'CRITICAL'}, 0, "failed to start sysprep on $computer_nodename $!");
-				return 0;
-			}
-
-		}    #if windows
-		     #this only applies to localdisk settings
-		if ($vmprofile_vmdisk eq "localdisk") {
-			#only copy vmdk files back to management node -- into correct directory
-			if (open(MKDIR, "/bin/mkdir $VMWAREREPOSITORY/$image_name 2>&1 |")) {
-				my @a = <MKDIR>;
-				close(MKDIR);
-				for my $l (@a) {
-					notify($ERRORS{'OK'}, 0, "possible error @a");
-				}
-				notify($ERRORS{'OK'}, 0, "created tmp directory $VMWAREREPOSITORY/$image_name");
-			}
-			if (-d "$VMWAREREPOSITORY/$image_name") {
-			}
-			else {
-				notify($ERRORS{'CRITICAL'}, 0, "could not create tmp directory $VMWAREREPOSITORY/$image_name for $vmx_directory $!");
-				return 0;
-			}
-			#copy vmdk files
-			# confirm they were copied
-			notify($ERRORS{'OK'}, 0, "attemping to copy vmdk files to $VMWAREREPOSITORY");
-			if (run_scp_command("$hostnodename:\"$vmhost_vmpath/$vmx_directory/*.vmdk\"", "$VMWAREREPOSITORY/$image_name", $hostIdentity)) {
-				if (open(LISTFILES, "ls -s1 $VMWAREREPOSITORY/$image_name |")) {
+				#renaming local vmdk files
+				notify($ERRORS{'OK'}, 0, "begin rename local disk image files to newname");
+				my $oldname;
+				if (open(LISTFILES, "ls -1 $VMWAREREPOSITORY/$image_name 2>&1 |")) {
 					my @list = <LISTFILES>;
 					close(LISTFILES);
-					my $numfiles  = @list;
-					my $imagesize = getimagesize($image_name);
-					if ($imagesize) {
-						notify($ERRORS{'OK'}, 0, "copied $numfiles vmdk files imagesize= $imagesize");
+					my $numfiles = @list;
+					#figure out old name
+					foreach my $a (@list) {
+						chomp($a);
+						if ($a =~ /([a-z_]*)-([_0-9a-zA-Z]*)-(v[0-9]*)\.vmdk/) {
+							#print "old name $1-$2-$3\n";
+							$oldname = "$1-$2-$3";
+							notify($ERRORS{'OK'}, 0, "found previous name= $oldname");
+						}
 					}
+					foreach my $b (@list) {
+						chomp($b);
+						if ($b =~ /($oldname)-(s[0-9]*)\.vmdk/) {
+							notify($ERRORS{'OK'}, 0, "moving $b to $image_name-$2.vmdk");
+							if (open(MV, "mv $VMWAREREPOSITORY/$image_name/$b $VMWAREREPOSITORY/$image_name/$image_name-$2.vmdk 2>&1 |")) {
+								my @mv = <MV>;
+								close(MV);
+								if (@mv) {
+									notify($ERRORS{'CRITICAL'}, 0, "could not move $b to $VMWAREREPOSITORY/$image_name/$image_name-$2.vmdk \n@mv");
+									return 0;
+								}
+							}
+							notify($ERRORS{'OK'}, 0, "moved $b $VMWAREREPOSITORY/$image_name/$image_name-$2.vmdk");
+						} ## end if ($b =~ /($oldname)-(s[0-9]*)\.vmdk/)
+					} ## end foreach my $b (@list)
+
+					if (open(FILE, "$VMWAREREPOSITORY/$image_name/$oldname.vmdk")) {
+						my @file = <FILE>;
+						close(FILE);
+						for my $l (@file) {
+							#RW 4192256 SPARSE "vmwarewinxp-base10009-v1-s001.vmdk"
+							if ($l =~ /([0-9A-Z\s]*)\"$oldname-(s[0-9]*).vmdk\"/) {
+								#print "$l\n";
+								$l = "$1\"$image_name-$2.vmdk\"\n";
+								#print "$l\n";
+							}
+						}
+
+						if (open(FILE, ">$VMWAREREPOSITORY/$image_name/$oldname.vmdk")) {
+							print FILE @file;
+							close(FILE);
+							if (open(MV, "mv $VMWAREREPOSITORY/$image_name/$oldname.vmdk $VMWAREREPOSITORY/$image_name/$image_name.vmdk 2>&1 |")) {
+								my @mv = <MV>;
+								close(MV);
+								if (@mv) {
+									notify($ERRORS{'CRITICAL'}, 0, "old $oldname move to new $image_name error: @mv\n");
+								}
+								notify($ERRORS{'OK'}, 0, "moved $VMWAREREPOSITORY/$image_name/$oldname.vmdk $VMWAREREPOSITORY/$image_name/$image_name.vmdk");
+							}
+						}    # write file array back to vmdk file
+					}    #read main vmdk file
 					else {
-						notify($ERRORS{'OK'}, 0, "vmdk files are not copied");
+						notify($ERRORS{'CRITICAL'}, 0, "could not read $VMWAREREPOSITORY/$image_name/$oldname.vmdk $! ");
 						return 0;
 					}
-					#renaming local vmdk files
-					notify($ERRORS{'OK'}, 0, "begin rename local disk image files to newname");
-					my $oldname;
-					if (open(LISTFILES, "ls -1 $VMWAREREPOSITORY/$image_name 2>&1 |")) {
-						my @list = <LISTFILES>;
-						close(LISTFILES);
-						my $numfiles = @list;
-						#figure out old name
-						foreach my $a (@list) {
-							chomp($a);
-							if ($a =~ /([a-z_]*)-([_0-9a-zA-Z]*)-(v[0-9]*)\.vmdk/) {
-								#print "old name $1-$2-$3\n";
-								$oldname = "$1-$2-$3";
-								notify($ERRORS{'OK'}, 0, "found previous name= $oldname");
-							}
-						}
-						foreach my $b (@list) {
-							chomp($b);
-							if ($b =~ /($oldname)-(s[0-9]*)\.vmdk/) {
-								notify($ERRORS{'OK'}, 0, "moving $b to $image_name-$2.vmdk");
-								if (open(MV, "mv $VMWAREREPOSITORY/$image_name/$b $VMWAREREPOSITORY/$image_name/$image_name-$2.vmdk 2>&1 |")) {
-									my @mv = <MV>;
-									close(MV);
-									if (@mv) {
-										notify($ERRORS{'CRITICAL'}, 0, "could not move $b to $VMWAREREPOSITORY/$image_name/$image_name-$2.vmdk \n@mv");
-										return 0;
-									}
-								}
-								notify($ERRORS{'OK'}, 0, "moved $b $VMWAREREPOSITORY/$image_name/$image_name-$2.vmdk");
-							} ## end if ($b =~ /($oldname)-(s[0-9]*)\.vmdk/)
-						} ## end foreach my $b (@list)
-
-						if (open(FILE, "$VMWAREREPOSITORY/$image_name/$oldname.vmdk")) {
-							my @file = <FILE>;
-							close(FILE);
-							for my $l (@file) {
-								#RW 4192256 SPARSE "vmwarewinxp-base10009-v1-s001.vmdk"
-								if ($l =~ /([0-9A-Z\s]*)\"$oldname-(s[0-9]*).vmdk\"/) {
-									#print "$l\n";
-									$l = "$1\"$image_name-$2.vmdk\"\n";
-									#print "$l\n";
-								}
-							}
-
-							if (open(FILE, ">$VMWAREREPOSITORY/$image_name/$oldname.vmdk")) {
-								print FILE @file;
-								close(FILE);
-								if (open(MV, "mv $VMWAREREPOSITORY/$image_name/$oldname.vmdk $VMWAREREPOSITORY/$image_name/$image_name.vmdk 2>&1 |")) {
-									my @mv = <MV>;
-									close(MV);
-									if (@mv) {
-										notify($ERRORS{'CRITICAL'}, 0, "old $oldname move to new $image_name error: @mv\n");
-									}
-									notify($ERRORS{'OK'}, 0, "moved $VMWAREREPOSITORY/$image_name/$oldname.vmdk $VMWAREREPOSITORY/$image_name/$image_name.vmdk");
-								}
-							}    # write file array back to vmdk file
-						}    #read main vmdk file
-						else {
-							notify($ERRORS{'CRITICAL'}, 0, "could not read $VMWAREREPOSITORY/$image_name/$oldname.vmdk $! ");
-							return 0;
-						}
-					} ## end if (open(LISTFILES, "ls -1 $VMWAREREPOSITORY/$image_name 2>&1 |"...
-					        #remove dir from vmhost
-					        #everything appears to have worked
-					        #remove image files from vmhost
-					if (defined(run_ssh_command($hostnodename, $hostIdentity, "vmware-cmd -s unregister $vmx_path"))) {
-						notify($ERRORS{'OK'}, 0, "unregistered $vmx_path");
-					}
-
-					if (defined(run_ssh_command($hostnodename, $hostIdentity, "/bin/rm -rf $vmhost_vmpath/$vmx_directory", "root"))) {
-						notify($ERRORS{'OK'}, 0, "removed vmhost_vmpath/$vmx_directory");
-					}
-					#set file premissions on images to 644
-					# to allow for other management nodes to fetch image if neccessary
-					# useful in a large distributed framework
-					if (open(CHMOD, "/bin/chmod -R 644 $VMWAREREPOSITORY/$image_name/\*.vmdk 2>&1 |")) {
-						close(CHMOD);
-						notify($ERRORS{'DEBUG'}, 0, "$notify_prefix recursive update file permssions 644 on $VMWAREREPOSITORY/$image_name");
-					}
-
-					return 1;
-				} ## end if (open(LISTFILES, "ls -s1 $VMWAREREPOSITORY/$image_name |"...
-			} ## end if (run_scp_command("$hostnodename:\"$vmhost_vmpath/$vmx_directory/*.vmdk\""...
-		} ## end if ($vmprofile_vmdisk eq "localdisk")
-		elsif ($vmprofile_vmdisk eq "networkdisk") {
-			#rename vmdk files
-
-			#FIXME - making local directory in our repository so does_image_exists succeeds
-			#			does_image_exists needs to figure out the datastores and search them
-			if (mkdir("$VMWAREREPOSITORY/$image_name")) {
-				notify($ERRORS{'OK'}, 0, "creating local dir for $image_name");
-			}
-
-
-			# create directory
-			my @mvdir = run_ssh_command($hostnodename, $hostIdentity, "/bin/mv $vmprofile_datastorepath/$vmx_directory $vmprofile_datastorepath/$image_name", "root");
-			for my $l (@{$mvdir[1]}) {
-				notify($ERRORS{'OK'}, 0, "possible error @{ $mvdir[1] }");
-			}
-			notify($ERRORS{'OK'}, 0, "renamed directory $vmx_directory to  $image_name");
-			#if ESX user vmkfstools to rename the image
-			if ($vmtype_name =~ /vmwareESX/) {
-				my $cmd = "vmkfstools -E $vmprofile_datastorepath/$image_name/$vmx_directory.vmdk $vmprofile_datastorepath/$image_name/$image_name.vmdk";
-				my @retarr = run_ssh_command($hostnodename, $hostIdentity, $cmd, "root");
-				foreach my $r (@{$retarr[1]}) {
-					#if any output could mean trouble - this command provides no no response if successful
-					notify($ERRORS{'OK'}, 0, "possible problem renaming vm @{ $retarr[1] }") if ($r);
+				} ## end if (open(LISTFILES, "ls -1 $VMWAREREPOSITORY/$image_name 2>&1 |"...
+						  #remove dir from vmhost
+						  #everything appears to have worked
+						  #remove image files from vmhost
+				if (defined(run_ssh_command($hostnodename, $hostIdentity, "vmware-cmd -s unregister $vmx_path"))) {
+					notify($ERRORS{'OK'}, 0, "unregistered $vmx_path");
 				}
-			}
-			#success
-			#TODO add check to confirm
-			notify($ERRORS{'OK'}, 0, "looks like vm is renamed");
-			#cleanup - unregister, and remove vm dir on vmhost local disk
-			my @cleanup = run_ssh_command($hostnodename, $hostIdentity, "vmware-cmd -s unregister $vmx_path", "root");
-			foreach my $c (@{$cleanup[1]}) {
-				notify($ERRORS{'OK'}, 0, "vm successfully unregistered") if ($c =~ /1/);
-			}
-			#remove vmx directoy from our local datastore
-			if (defined(run_ssh_command($hostnodename, $hostIdentity, "/bin/rm -rf $vmhost_vmpath/$vmx_directory", "root"))) {
-				notify($ERRORS{'OK'}, 0, "success removed $vmhost_vmpath/$vmx_directory from $hostnodename");
 
+				if (defined(run_ssh_command($hostnodename, $hostIdentity, "/bin/rm -rf $vmhost_vmpath/$vmx_directory", "root"))) {
+					notify($ERRORS{'OK'}, 0, "removed vmhost_vmpath/$vmx_directory");
+				}
+				#set file premissions on images to 644
+				# to allow for other management nodes to fetch image if neccessary
+				# useful in a large distributed framework
+				if (open(CHMOD, "/bin/chmod -R 644 $VMWAREREPOSITORY/$image_name/\*.vmdk 2>&1 |")) {
+					close(CHMOD);
+					notify($ERRORS{'DEBUG'}, 0, "$notify_prefix recursive update file permssions 644 on $VMWAREREPOSITORY/$image_name");
+				}
+
+				return 1;
+			} ## end if (open(LISTFILES, "ls -s1 $VMWAREREPOSITORY/$image_name |"...
+		} ## end if (run_scp_command("$hostnodename:\"$vmhost_vmpath/$vmx_directory/*.vmdk\""...
+	} ## end if ($vmprofile_vmdisk eq "localdisk")
+	
+	elsif ($vmprofile_vmdisk eq "networkdisk") {
+		#rename vmdk files
+
+		#FIXME - making local directory in our repository so does_image_exists succeeds
+		#			does_image_exists needs to figure out the datastores and search them
+		if (mkdir("$VMWAREREPOSITORY/$image_name")) {
+			notify($ERRORS{'OK'}, 0, "creating local dir for $image_name");
+		}
+
+
+		# create directory
+		my @mvdir = run_ssh_command($hostnodename, $hostIdentity, "/bin/mv $vmprofile_datastorepath/$vmx_directory $vmprofile_datastorepath/$image_name", "root");
+		for my $l (@{$mvdir[1]}) {
+			notify($ERRORS{'OK'}, 0, "possible error @{ $mvdir[1] }");
+		}
+		notify($ERRORS{'OK'}, 0, "renamed directory $vmx_directory to  $image_name");
+		#if ESX user vmkfstools to rename the image
+		if ($vmtype_name =~ /vmwareESX/) {
+			my $cmd = "vmkfstools -E $vmprofile_datastorepath/$image_name/$vmx_directory.vmdk $vmprofile_datastorepath/$image_name/$image_name.vmdk";
+			my @retarr = run_ssh_command($hostnodename, $hostIdentity, $cmd, "root");
+			foreach my $r (@{$retarr[1]}) {
+				#if any output could mean trouble - this command provides no no response if successful
+				notify($ERRORS{'OK'}, 0, "possible problem renaming vm @{ $retarr[1] }") if ($r);
 			}
-		} ## end elsif ($vmprofile_vmdisk eq "networkdisk")  [ if ($vmprofile_vmdisk eq "localdisk")
-		return 1;
+		}
+		#success
+		#TODO add check to confirm
+		notify($ERRORS{'OK'}, 0, "looks like vm is renamed");
+		#cleanup - unregister, and remove vm dir on vmhost local disk
+		my @cleanup = run_ssh_command($hostnodename, $hostIdentity, "vmware-cmd -s unregister $vmx_path", "root");
+		foreach my $c (@{$cleanup[1]}) {
+			notify($ERRORS{'OK'}, 0, "vm successfully unregistered") if ($c =~ /1/);
+		}
+		#remove vmx directoy from our local datastore
+		if (defined(run_ssh_command($hostnodename, $hostIdentity, "/bin/rm -rf $vmhost_vmpath/$vmx_directory", "root"))) {
+			notify($ERRORS{'OK'}, 0, "success removed $vmhost_vmpath/$vmx_directory from $hostnodename");
 
-	}    #if vmware
-	elsif ($vmtype_name eq "xen") {
-
-	}
+		}
+	} ## end elsif ($vmprofile_vmdisk eq "networkdisk")  [ if ($vmprofile_vmdisk eq "localdisk")
+	return 1;
 
 } ## end sub capture
 
