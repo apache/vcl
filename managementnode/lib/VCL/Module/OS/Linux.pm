@@ -84,7 +84,6 @@ sub capture_prepare {
 	my $management_node_keys     = $self->data->get_management_node_keys();
 	my $image_os_type            = $self->data->get_image_os_type();
 	my $image_name               = $self->data->get_image_name();
-	my $imagemeta_sysprep        = $self->data->get_imagemeta_sysprep();
 	my $computer_id              = $self->data->get_computer_id();
 	my $computer_short_name      = $self->data->get_computer_short_name();
 	my $computer_node_name       = $self->data->get_computer_node_name();

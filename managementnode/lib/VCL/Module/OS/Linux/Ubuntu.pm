@@ -33,14 +33,14 @@ VCL::Module::OS::Ubuntu.pm - VCL module to support Ubuntu operating systems
 =cut
 
 ##############################################################################
-package VCL::Module::OS::Ubuntu;
+package VCL::Module::OS::Linux::Ubuntu;
 
 # Specify the lib path using FindBin
 use FindBin;
-use lib "$FindBin::Bin/../../..";
+use lib "$FindBin::Bin/../../../..";
 
 # Configure inheritance
-use base qw(VCL::Module::OS);
+use base qw(VCL::Module::OS::Linux);
 
 # Specify the version of this module
 our $VERSION = '2.00';
@@ -84,7 +84,6 @@ sub capture_prepare {
 	my $management_node_keys     = $self->data->get_management_node_keys();
 	my $image_os_type            = $self->data->get_image_os_type();
 	my $image_name               = $self->data->get_image_name();
-	my $imagemeta_sysprep        = $self->data->get_imagemeta_sysprep();
 	my $computer_id              = $self->data->get_computer_id();
 	my $computer_short_name      = $self->data->get_computer_short_name();
 	my $computer_node_name       = $self->data->get_computer_node_name();
