@@ -476,6 +476,17 @@ sub post_load {
 	
 =item *
 
+ Set persistent public default route
+
+=cut
+
+	if (!$self->set_public_default_route()) {
+		notify($ERRORS{'WARNING'}, 0, "unable to set persistent public default route");
+		return 0;
+	}
+
+=item *
+
  Set the "My Computer" description to the image pretty name
 
 =cut
@@ -7384,12 +7395,24 @@ sub set_public_default_route {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a VCL::Module module object method");
 		return;	
 	}
-
+	
+	# Check the management node's DHCP IP configuration mode
 	# Get the default gateway address
-	my $default_gateway = $self->data->get_management_node_public_default_gateway();
+	my $default_gateway;
+	my $ip_configuration = $self->data->get_management_node_public_ip_configuration();
+	if ($ip_configuration && $ip_configuration =~ /static/i) {
+		# Static addresses used, get default gateway address configured for management node
+		$default_gateway = $self->data->get_management_node_public_default_gateway();
+	}
+	else {
+		# Dynamic addresses used, get default gateway address assigned to computer
+		$default_gateway = $self->get_public_default_gateway();
+	}
+	
+	# Make sure default gateway was retrieved
 	if (!$default_gateway) {
 		notify($ERRORS{'WARNING'}, 0, "unable to retrieve default gateway address");
-		return;	
+		return;
 	}
 	
 	# Delete all default routes before adding
