@@ -1220,7 +1220,8 @@ INSERT INTO `module` (`id`, `name`, `prettyname`, `description`, `perlpackage`) 
 (10, 'provisioning_vmware_esx', 'VMware ESX Provisioning Module', '', 'VCL::Module::Provisioning::esx'),
 (11, 'provisioning_xcat_21', 'xCAT 2.1 Provisioning Module', '', 'VCL::Module::Provisioning::xCAT21'),
 (12, 'os_winxp', 'Windows XP OS Module', '', 'VCL::Module::OS::Windows::Version_5::XP'),
-(13, 'os_win2003', 'Windows Server 2003 OS Module', '', 'VCL::Module::OS::Windows::Version_5::2003');
+(13, 'os_win2003', 'Windows Server 2003 OS Module', '', 'VCL::Module::OS::Windows::Version_5::2003'),
+(14, 'os_linux_ubuntu', 'Ubuntu Linux OS Module', '', 'VCL::Module::OS::Linux::Ubuntu');
 
 -- 
 -- Dumping data for table `OS`
@@ -1252,7 +1253,8 @@ INSERT INTO `OS` (`id`, `name`, `prettyname`, `type`, `installtype`, `sourcepath
 (26, 'rhfc9', 'RedHat Fedora Core 9 kickstart', 'linux', 'kickstart', 'rhfc9', 5),
 (27, 'fc9image', 'RedHat Fedora Core 9 image', 'linux', 'partimage', 'image', 5),
 (28, 'winvista', 'Windows Vista', 'windows', 'partimage', 'image', 7),
-(29, 'centos5image', 'centos5image', 'linux', 'partimage', 'image', 5);
+(29, 'centos5image', 'centos5image', 'linux', 'partimage', 'image', 5),
+(30, 'ubuntuimage', 'Ubuntu image', 'linux', 'partimage', 'image', 14);
 
 -- 
 -- Dumping data for table `OSinstalltype`
