@@ -198,6 +198,8 @@ sub delete_user {
 		return 0;
 	}
 
+	my $imagemeta_rootaccess = $self->data->get_imagemeta_rootaccess();
+
 	# Use userdel to delete the user
 	my $user_delete_command = "/usr/sbin/userdel $user_login_id";
 	my @user_delete_results = run_ssh_command($computer_node_name, $IDENTITY_bladerhel, $user_delete_command, "root");
@@ -208,64 +210,30 @@ sub delete_user {
 		}
 	}
 
-	# User successfully deleted
-	# Remove user from sshd config
-	my $external_sshd_config_path      = "$computer_node_name:/etc/ssh/external_sshd_config";
-	my $external_sshd_config_temp_path = "/tmp/$computer_node_name.sshd";
-
-	# Retrieve the node's external_sshd_config file
-	if (run_scp_command($external_sshd_config_path, $external_sshd_config_temp_path, $IDENTITY_bladerhel)) {
-		notify($ERRORS{'DEBUG'}, 0, "retrieved $external_sshd_config_path");
+	#Clear user from external_sshd_config
+	my $clear_extsshd = "perl -pi -e 's/^AllowUsers .*\n//' /etc/ssh/external_sshd_config";
+	if (run_ssh_command($computer_node_name, $identity, $clear_extsshd, "root")) {
+		notify($ERRORS{'DEBUG'}, 0, "cleared AllowUsers directive from external_sshd_config");
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "sshd config not cleaned up, failed to retrieve $external_sshd_config_path");
-		return 0;
+		notify($ERRORS{'CRITICAL'}, 0, "failed to add AllowUsers $user to external_sshd_config");
 	}
 
-	# Remove user from sshd config file
-	# Get the contents of the sshd config file
-	if (open(SSHD_CFG_TEMP, $external_sshd_config_temp_path)) {
-		my @external_sshd_config_lines = <SSHD_CFG_TEMP>;
-		close SSHD_CFG_TEMP;
+	#Clear user from sudoers
 
-		# Loop through the lines, clear out AllowUsers lines
-		foreach my $external_sshd_config_line (@external_sshd_config_lines) {
-			$external_sshd_config_line = "" if ($external_sshd_config_line =~ /AllowUsers/);
+	if ($imagemeta_rootaccess) {
+		#clear user from sudoers file
+		my $clear_cmd = "perl -pi -e 's/^$user_name .*\n//' /etc/sudoers";
+		if (run_ssh_command($computer_node_name, $image_identity, $clear_cmd, "root")) {
+			notify($ERRORS{'DEBUG'}, 0, "cleared $user_name from /etc/sudoers");
 		}
-
-		# Rewrite the temp sshd config file with the modified contents
-		if (open(SSHD_CFG_TEMP, ">$external_sshd_config_temp_path")) {
-			print SSHD_CFG_TEMP @external_sshd_config_lines;
-			close SSHD_CFG_TEMP;
-		}
-
-		# Copy the modified file back to the node
-		if (run_scp_command($external_sshd_config_temp_path, $external_sshd_config_path, $IDENTITY_bladerhel)) {
-			notify($ERRORS{'DEBUG'}, 0, "modified file copied back to node: $external_sshd_config_path");
-
-			# Delete the temp file
-			unlink $external_sshd_config_temp_path;
-
-			# Restart external sshd
-			if (run_ssh_command($computer_node_name, $IDENTITY_bladerhel, "/etc/init.d/ext_sshd restart")) {
-				notify($ERRORS{'DEBUG'}, 0, "restarted ext_sshd on $computer_node_name");
-			}
-
-			return 1;
-		} ## end if (run_scp_command($external_sshd_config_temp_path...
 		else {
-			notify($ERRORS{'WARNING'}, 0, "failed to copy modified file back to node: $external_sshd_config_path");
-
-			# Delete the temp file
-			unlink $external_sshd_config_temp_path;
-
-			return 0;
+			notify($ERRORS{'CRITICAL'}, 0, "failed to clear $user_name from /etc/sudoers");
 		}
-	} ## end if (open(SSHD_CFG_TEMP, $external_sshd_config_temp_path...
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to open temporary sshd config file: $external_sshd_config_temp_path");
-		return 0;
-	}
+	} ## end if ($imagemeta_rootaccess)
+
+	return 1;
+
 } ## end sub delete_user
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -279,10 +247,11 @@ sub reserve {
 
 	notify($ERRORS{'DEBUG'}, 0, "Enterered reserve() in the Ubuntu OS module");
 
-	my $user_name = $self->data->get_user_login_id();
-	my $computer_node_name = $self->data->get_computer_node_name();
-	my $image_identity = $self->data->get_image_identity;
+	my $user_name            = $self->data->get_user_login_id();
+	my $computer_node_name   = $self->data->get_computer_node_name();
+	my $image_identity       = $self->data->get_image_identity;
 	my $reservation_password = $self->data->get_reservation_password();
+	my $imagemeta_rootaccess = $self->data->get_imagemeta_rootaccess();
 
 	my $useradd_string = "/usr/sbin/useradd -d /home/$user_name -m -g admin $user_name";
 
@@ -308,27 +277,29 @@ sub reserve {
 		notify($ERRORS{'DEBUG'}, 0, "Updated the user password .... L is $l");
 	}
 
-	#FIXME: This needs to pull from imagemeta data rootaccess - if rootaccess==1 then set
-	# Add to sudoers file
-	#clear user from sudoers file
-	my $clear_cmd = "perl -pi -e 's/^$user_name .*\n//' /etc/sudoers";
-	if(run_ssh_command($computer_node_name, $image_identity, $clear_cmd, "root")) {
-		notify($ERRORS{'DEBUG'}, 0, "cleared $user_name from /etc/sudoers");
-	}
-	else {
-		notify($ERRORS{'CRITICAL'}, 0, "failed to clear $user_name from /etc/sudoers");
-	}
-	my $sudoers_cmd = "echo \"$user_name ALL= NOPASSWD: ALL\" >> /etc/sudoers";
-	if(run_ssh_command($computer_node_name, $image_identity, $sudoers_cmd, "root")) {
-		notify($ERRORS{'DEBUG'}, 0, "added $user_name to /etc/sudoers");
-	}
-	else {
-		notify($ERRORS{'CRITICAL'}, 0, "failed to add $user_name to /etc/sudoers");
-	}
+	#Check image profile for allowed root access
+	if ($imagemeta_rootaccess) {
+		# Add to sudoers file
+		#clear user from sudoers file
+		my $clear_cmd = "perl -pi -e 's/^$user_name .*\n//' /etc/sudoers";
+		if (run_ssh_command($computer_node_name, $image_identity, $clear_cmd, "root")) {
+			notify($ERRORS{'DEBUG'}, 0, "cleared $user_name from /etc/sudoers");
+		}
+		else {
+			notify($ERRORS{'CRITICAL'}, 0, "failed to clear $user_name from /etc/sudoers");
+		}
+		my $sudoers_cmd = "echo \"$user_name ALL= NOPASSWD: ALL\" >> /etc/sudoers";
+		if (run_ssh_command($computer_node_name, $image_identity, $sudoers_cmd, "root")) {
+			notify($ERRORS{'DEBUG'}, 0, "added $user_name to /etc/sudoers");
+		}
+		else {
+			notify($ERRORS{'CRITICAL'}, 0, "failed to add $user_name to /etc/sudoers");
+		}
+	} ## end if ($imagemeta_rootaccess)
 
 
 	return 1;
-}
+} ## end sub reserve
 
 sub grant_access {
 	my $self = shift;
@@ -337,14 +308,14 @@ sub grant_access {
 		return 0;
 	}
 
-	my $user = $self->data->get_user_login_id();
+	my $user               = $self->data->get_user_login_id();
 	my $computer_node_name = $self->data->get_computer_node_name();
-	my $identity = $self->data->get_image_identity;
+	my $identity           = $self->data->get_image_identity;
 
 	notify($ERRORS{'OK'}, 0, "In grant_access routine $user,$computer_node_name");
 	my @sshcmd;
 	my $clear_extsshd = "perl -pi -e 's/^AllowUsers .*\n//' /etc/ssh/external_sshd_config";
-	if(run_ssh_command($computer_node_name, $identity, $clear_extsshd, "root")) {
+	if (run_ssh_command($computer_node_name, $identity, $clear_extsshd, "root")) {
 		notify($ERRORS{'DEBUG'}, 0, "cleared AllowUsers directive from external_sshd_config");
 	}
 	else {
@@ -372,7 +343,7 @@ sub grant_access {
 	}    #foreach
 	notify($ERRORS{'OK'}, 0, "started ext_sshd on $computer_node_name");
 	return 1;
-}
+} ## end sub grant_access
 
 #/////////////////////////////////////////////////////////////////////////////
 
