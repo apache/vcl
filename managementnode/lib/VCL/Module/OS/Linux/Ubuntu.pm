@@ -284,7 +284,7 @@ sub reserve {
 	my $image_identity = $self->data->get_image_identity;
 	my $reservation_password = $self->data->get_reservation_password();
 
-	my $useradd_string = "/usr/sbin/useradd -d /home/$user_name -m -g users $user_name";
+	my $useradd_string = "/usr/sbin/useradd -d /home/$user_name -m -g admin $user_name";
 
 	my @sshcmd = run_ssh_command($computer_node_name, $image_identity, $useradd_string, "root");
 	foreach my $l (@{$sshcmd[1]}) {
@@ -308,6 +308,25 @@ sub reserve {
 		notify($ERRORS{'DEBUG'}, 0, "Updated the user password .... L is $l");
 	}
 
+	#FIXME: This needs to pull from imagemeta data rootaccess - if rootaccess==1 then set
+	# Add to sudoers file
+	#clear user from sudoers file
+	my $clear_cmd = "perl -pi -e 's/^$user_name .*\n//' /etc/sudoers";
+	if(run_ssh_command($computer_node_name, $image_identity, $clear_cmd, "root")) {
+		notify($ERRORS{'DEBUG'}, 0, "cleared $user_name from /etc/sudoers");
+	}
+	else {
+		notify($ERRORS{'CRITICAL'}, 0, "failed to clear $user_name from /etc/sudoers");
+	}
+	my $sudoers_cmd = "echo \"$user_name ALL= NOPASSWD: ALL\" >> /etc/sudoers";
+	if(run_ssh_command($computer_node_name, $image_identity, $sudoers_cmd, "root")) {
+		notify($ERRORS{'DEBUG'}, 0, "added $user_name to /etc/sudoers");
+	}
+	else {
+		notify($ERRORS{'CRITICAL'}, 0, "failed to add $user_name to /etc/sudoers");
+	}
+
+
 	return 1;
 }
 
@@ -324,7 +343,7 @@ sub grant_access {
 
 	notify($ERRORS{'OK'}, 0, "In grant_access routine $user,$computer_node_name");
 	my @sshcmd;
-	my $clear_extsshd = "perl -pi -e \'s/^AllowUsers .*\n//' /etc/ssh/external_sshd_config";
+	my $clear_extsshd = "perl -pi -e 's/^AllowUsers .*\n//' /etc/ssh/external_sshd_config";
 	if(run_ssh_command($computer_node_name, $identity, $clear_extsshd, "root")) {
 		notify($ERRORS{'DEBUG'}, 0, "cleared AllowUsers directive from external_sshd_config");
 	}
