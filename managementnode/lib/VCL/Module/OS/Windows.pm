@@ -482,7 +482,6 @@ sub post_load {
 
 	if (!$self->set_public_default_route()) {
 		notify($ERRORS{'WARNING'}, 0, "unable to set persistent public default route");
-		return 0;
 	}
 
 =item *
@@ -7407,6 +7406,9 @@ sub set_public_default_route {
 	else {
 		# Dynamic addresses used, get default gateway address assigned to computer
 		$default_gateway = $self->get_public_default_gateway();
+		if (!$default_gateway) {
+			$default_gateway = $self->data->get_management_node_public_default_gateway();
+		}
 	}
 	
 	# Make sure default gateway was retrieved
