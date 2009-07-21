@@ -318,6 +318,40 @@ sub grant_access {
 		return 0;
 	}
 
+	my $user = $self->data->get_user_login_id();
+	my $computer_node_name = $self->data->get_computer_node_name();
+	my $identity = $self->data->get_image_identity;
+
+	notify($ERRORS{'OK'}, 0, "In grant_access routine $user,$computer_node_name");
+	my @sshcmd;
+	my $clear_extsshd = "perl -pi -e \'s/^AllowUsers .*\n//' /etc/ssh/external_sshd_config";
+	if(run_ssh_command($computer_node_name, $identity, $clear_extsshd, "root")) {
+		notify($ERRORS{'DEBUG'}, 0, "cleared AllowUsers directive from external_sshd_config");
+	}
+	else {
+		notify($ERRORS{'CRITICAL'}, 0, "failed to add AllowUsers $user to external_sshd_config");
+	}
+
+	my $cmd = "echo \"AllowUsers $user\" >> /etc/ssh/external_sshd_config";
+	if (run_ssh_command($computer_node_name, $identity, $cmd, "root")) {
+		notify($ERRORS{'DEBUG'}, 0, "added AllowUsers $user to external_sshd_config");
+	}
+	else {
+		notify($ERRORS{'CRITICAL'}, 0, "failed to add AllowUsers $user to external_sshd_config");
+		return 0;
+	}
+	undef @sshcmd;
+	@sshcmd = run_ssh_command($computer_node_name, $identity, "/etc/init.d/ext_sshd restart", "root");
+
+	foreach my $l (@{$sshcmd[1]}) {
+		if ($l =~ /Stopping ext_sshd:/i) {
+			#notify($ERRORS{'OK'},0,"stopping sshd on $computer_node_name ");
+		}
+		if ($l =~ /Starting ext_sshd:[  OK  ]/i) {
+			notify($ERRORS{'OK'}, 0, "ext_sshd on $computer_node_name started");
+		}
+	}    #foreach
+	notify($ERRORS{'OK'}, 0, "started ext_sshd on $computer_node_name");
 	return 1;
 }
 
