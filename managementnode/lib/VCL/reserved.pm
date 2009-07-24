@@ -212,54 +212,8 @@ sub process {
 			# group access M-N-K -- multiple users need access
 			# standard with no connection checks
 			
-			if ($image_os_name =~ /win|vmwarewin/) {
-				notify($ERRORS{'OK'}, 0, "Windows image detected: $image_os_name");
-				
-				# Determine whether to open RDP port for single IP or group access
-				if ($user_group_member_count > 0) {
-					# Imagemeta user group defined and member count is > 0
-					notify($ERRORS{'OK'}, 0, "group set in imagemeta has members");
-					if (remotedesktopport($nodename, "ENABLE")) {
-						notify($ERRORS{'OK'}, 0, "remote desktop enabled on $nodename for group access");
-					}
-					else {
-						notify($ERRORS{'WARNING'}, 0, "remote desktop not group enabled on $nodename");
-						$retval_conn = "failed";
-						goto RETVALCONN;
-					}
-				}    # Close imagemeta user group defined and member count is > 0
-				else {
-					# Imagemeta user group undefined or member count is 0
-					notify($ERRORS{'OK'}, 0, "either group not set in imagemeta or has 0 members");
-					if (remotedesktopport($nodename, "ENABLE", $remote_ip)) {
-						insertloadlog($reservation_id, $computer_id, "info", "reserved: opening remote access port for $remote_ip");
-						notify($ERRORS{'OK'}, 0, "remote desktop enabled on $nodename");
-					}
-					else {
-						notify($ERRORS{'WARNING'}, 0, "remote desktop not enabled on $nodename");
-						$retval_conn = "failed";
-						goto RETVALCONN;
-					}
-				}    # Close imagemeta user group undefined or member count is 0
-
-				# Check if forimaging is set on the request
-				if (!$request_forimaging) {
-					## Don't care to monitor any imaging reservations
-					#notify($ERRORS{'OK'}, 0, "this is not a forimaging request, check for ITM monitoring");
-					#if (system_monitoring($nodename, $image_name, "start", "ITM")) {
-					#	notify($ERRORS{'OK'}, 0, "ITM monitoring enabled");
-					#	insertloadlog($reservation_id, $computer_id, "info", "reserved: ITM detected starting system monitoring");
-					#}
-					#else {
-					#	# Don't care at this time
-					#	notify($ERRORS{'OK'}, 0, "ITM monitoring is not enabled");
-					#}
-				}    # Close if request forimaging
-
-			}    # Close if OS name is win or vmware
-
 			# Check if linux image
-			elsif ($image_os_type =~  /linux/){
+			if ($image_os_type =~  /linux/){
 				notify($ERRORS{'OK'}, 0, "Linux image detected: $image_os_name");
 
 				# adduser ; this adds user and restarts sshd
