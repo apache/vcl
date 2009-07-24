@@ -430,16 +430,6 @@ sub post_load {
 		notify($ERRORS{'WARNING'}, 0, "unable to set sshd service startup mode to auto");
 		return 0;
 	}
-	
-#=item *
-#
-# Set the computer name
-#
-#=cut
-#
-#	if (!$self->set_computer_name()) {
-#		notify($ERRORS{'WARNING'}, 0, "failed to set the computer name");
-#	}
 
 =item *
 
@@ -482,6 +472,16 @@ sub post_load {
 
 	if (!$self->set_public_default_route()) {
 		notify($ERRORS{'WARNING'}, 0, "unable to set persistent public default route");
+	}
+	
+=item *
+
+ Configure and synchronize time
+
+=cut
+
+	if (!$self->configure_time_synchronization()) {
+		notify($ERRORS{'WARNING'}, 0, "unable to configure and synchronize time");
 	}
 
 =item *
@@ -7494,6 +7494,71 @@ sub get_volume_list {
 	return @drive_letters;
 }
 
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 configure_time_synchronization
+
+ Parameters  : None
+ Returns     : If successful: true
+               If failed: false
+ Description : Configures the Windows Time service and synchronizes the time.
+
+=cut
+
+sub configure_time_synchronization {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a VCL::Module module object method");
+		return;	
+	}
+	
+	my $management_node_keys = $self->data->get_management_node_keys();
+	my $computer_node_name   = $self->data->get_computer_node_name();
+	
+	my $time_source = "time.nist.gov time-a.nist.gov time-b.nist.gov time.windows.com";
+	
+	# Assemble the time command
+	my $time_command;
+	
+	# Kill d4.exe if it's running, this will prevent Windows built-in time synchronization from working
+	$time_command .= "taskkill.exe /IM d4.exe /F 2>/dev/null ; ";
+	
+	# Register the w32time service
+	$time_command .= "w32tm.exe /register ; ";
+	
+	# Start the service and configure it
+	$time_command .= "net start w32time 2>/dev/null ; ";
+	$time_command .= "w32tm.exe /config /manualpeerlist:\"$time_source\" /syncfromflags:manual /update ; ";
+	$time_command .= "net stop w32time && net start w32time ; ";
+	
+	# Synchronize the time
+	$time_command .= "w32tm.exe /resync /nowait";
+	
+	# Run the assembled command
+	my ($time_exit_status, $time_output) = run_ssh_command($computer_node_name, $management_node_keys, $time_command);
+	if (defined($time_output)  && @$time_output[-1] =~ /The command completed successfully/i) {
+		notify($ERRORS{'DEBUG'}, 0, "configured and synchronized Windows time");
+	}
+	elsif (defined($time_exit_status)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to configure configure and synchronize Windows time, exit status: $time_exit_status, output:\n@{$time_output}");
+		return;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to configure and synchronize Windows time");
+		return;
+	}
+	
+	# Set the w32time service startup mode to auto
+	if ($self->set_service_startup_mode('w32time', 'auto')) {
+		notify($ERRORS{'DEBUG'}, 0, "set w32time service startup mode to auto");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to set w32time service startup mode to auto");
+		return;
+	}
+	
+	return 1;
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 
