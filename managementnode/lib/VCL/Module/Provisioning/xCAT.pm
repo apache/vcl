@@ -2711,10 +2711,17 @@ sub does_image_exist {
 	
 	# Make sure an scp process isn't currently running to retrieve the image
 	# This can happen if another reservation is running for the same image and the management node didn't have a copy
+	# Be careful with the pattern of the SCP process to check for
+	# The VMware module may be copying an image via SCP to a VM host, don't want to detect this
+	# Only want to detect an image being copied to this management node's image repository
+	# pgrep -fl output for image retrieval processes look like this:
+	# [root@mn]# pgrep -fl "scp.*winxp-base1-v27\* /install/image/x86"
+	# 32578 sh -c /usr/bin/scp -B -i /etc/vcl/vcl.key -P 22 -p -r vcl@10.1.1.1:/install/image/x86/winxp-base1-v27* /install/image/x86 2>&1
+	# 32579 /usr/bin/scp -B -i /etc/vcl/vcl.key -P 22 -p -r vcl 10.1.1.1 /install/image/x86/winxp-base1-v27* /install/image/x86
 	my $scp_wait_attempt = 0;
 	my $scp_wait_max_attempts = 40;
 	my $scp_wait_delay = 15;
-	while (is_management_node_process_running("scp.*$image_name")) {
+	while (is_management_node_process_running('scp.*$image_name\* $image_repository_path')) {
 		$scp_wait_attempt++;
 		
 		notify($ERRORS{'OK'}, 0, "attempt $scp_wait_attempt/$scp_wait_max_attempts: scp process is running to retrieve $image_name, waiting for $scp_wait_delay seconds");
@@ -2864,6 +2871,15 @@ sub retrieve_image {
 		notify($ERRORS{'WARNING'}, 0, "unable to determine image name from argument or reservation data");
 		return;
 	}
+	
+	# Get the last digit of the reservation ID and sleep that number of seconds
+	# This is done in case 2 reservations for the same image were started at the same time
+	# Both may attempt to retrieve an image and execute the SCP command at nearly the same time
+	# does_image_exist() may not catch this and allow 2 SCP retrieval processes to start
+	# It's likely that the reservation IDs are consecutive and the the last digits will be different
+	my ($pre_retrieval_sleep) = $self->data->get_reservation_id() =~ /(\d)$/;
+	notify($ERRORS{'DEBUG'}, 0, "sleeping for $pre_retrieval_sleep seconds to prevent multiple SCP image retrieval processes");
+	sleep $pre_retrieval_sleep;
 	
 	# Make sure image does not already exist on this management node
 	if ($self->does_image_exist($image_name)) {
