@@ -1938,55 +1938,6 @@ sub makesshgkh {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 _rpower
-
- Parameters  : $node, $option
- Returns     : 1 connected 0 not connected
- Description : xCAT specific command -  hard power cycle the blade
-
-=cut
-
-sub _rpower {
-	my ($node, $option) = @_;
-
-	#make sure node and option are defined
-	notify($ERRORS{'WARNING'}, 0, "_rpower: node is not defined")
-	  if (!(defined($node)));
-	notify($ERRORS{'WARNING'}, 0, "_rpower: option is not defined setting to cycle")
-	  if (!(defined($option)));
-	return 0 if (!(defined($node)));
-
-	$option = "cycle" if (!(defined($option)));
-
-	my $l;
-	my @file;
-	RPOWER:
-	if (open(RPOWER, "$XCAT_ROOT/bin/rpower $node $option |")) {
-		@file = <RPOWER>;
-		close(RPOWER);
-		foreach $l (@file) {
-			# TODO make sure 'not in bay' still exists
-			if ($l =~ /not in bay/) {
-				# not in bay problem
-				if (_fix_rpower($node)) {
-					goto RPOWER;    #try again
-				}
-			}
-			if ($l =~ /$node:\s+(on|off)/) {
-				return $1;
-			}
-		} ## end foreach $l (@file)
-		return 0;
-	} ## end if (open(RPOWER, "$XCAT_ROOT/bin/rpower $node $option |"...
-	else {
-		notify($ERRORS{'WARNING'}, 0, "_rpower: could not run $XCAT_ROOT/bin/rpower $node $option $!");
-		return 0;
-	}
-
-} ## end sub _rpower
-
-#/////////////////////////////////////////////////////////////////////////////
-
 =head2 _fix_rpower
 
  Parameters  : nodename
@@ -2159,7 +2110,7 @@ sub node_status {
 
 	# Check the rpower status
 	notify($ERRORS{'DEBUG'}, $log, "checking $computer_short_name xCAT rpower status");
-	my $rpower_status = _rpower($computer_short_name, "stat");
+	my $rpower_status = $self->_rpower($computer_short_name, "stat");
 	if ($rpower_status =~ /on/i) {
 		$status{rpower} = 1;
 	}
@@ -2332,275 +2283,6 @@ sub _assign2project {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 does_image_exist
-
- Parameters  : optional: image name
- Returns     : 1 if image exists, 0 if it doesn't
- Description : Checks the management node's local image repository for the
-               existence of the requested image. This subroutine does not
-					attempt to copy the image from another management node. The
-					retrieve_image() subroutine does this. Callers of
-					does_image_exist must also call retrieve_image if image library
-					retrieval functionality is desired.
-
-=cut
-
-sub does_image_exist {
-	my $self = shift;
-	if (ref($self) !~ /xCAT/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return 0;
-	}
-
-	my $image_os_install_type = $self->data->get_image_os_install_type();
-
-	# Get the image name, first try passed argument, then data
-	my $image_name = shift;
-	$image_name = $self->data->get_image_name() if !$image_name;
-	if (!$image_name) {
-		notify($ERRORS{'WARNING'}, 0, "unable to determine image name");
-		return;
-	}
-
-	# Get the image repository path
-	my $image_repository_path = $self->_get_image_repository_path();
-	if (!$image_repository_path) {
-		notify($ERRORS{'WARNING'}, 0, "image repository path could not be determined");
-		return;
-	}
-	else {
-		notify($ERRORS{'DEBUG'}, 0, "image repository path: $image_repository_path");
-	}
-
-	# Get the tmpl repository path
-	my $tmpl_repository_path = $self->_get_image_template_path();
-	if (!$tmpl_repository_path) {
-		notify($ERRORS{'WARNING'}, 0, "image template path could not be determined");
-		return;
-	}
-	else {
-		notify($ERRORS{'DEBUG'}, 0, "template repository path: $tmpl_repository_path");
-	}
-
-	my @parts = split('-', $image_name);
-	#if ($parts[0] !~ /image/) {
-	if ($image_os_install_type eq 'kickstart') {
-		# Check if template file exists for the image
-		# -s File has nonzero size
-		if (-s "$tmpl_repository_path/$image_name.tmpl") {
-			notify($ERRORS{'DEBUG'}, 0, "template file exists: $image_name.tmpl");
-		}
-		else {
-			notify($ERRORS{'OK'}, 0, "template file does not exist: $tmpl_repository_path/$image_name.tmpl");
-			return 0;
-		}
-	} ## end if ($image_os_install_type eq 'kickstart')
-	    # Check if image files exist (Partimage files)
-	elsif (    !-s "$image_repository_path/$image_name.img"
-			 and !-s "$image_repository_path/$image_name.gz")
-	{
-		notify($ERRORS{'OK'}, 0, "image file $image_repository_path/$image_name.(img|gz) does not exist");
-		return 0;
-	}
-
-
-=pod
-	# Open the repository directory
-	if (!opendir(REPOSITORY, $image_repository_path)) {
-		notify($ERRORS{'WARNING'}, 0, "unable to open the image repository directory: $image_repository_path");
-		return;
-	}
-
-	# Get the list of files in the repository and close the directory
-	my @repository_files = readdir(REPOSITORY);
-	closedir(REPOSITORY);
-
-	# Check if any files exist for the image
-	if (scalar @repository_files > 0) {
-		notify($ERRORS{'DEBUG'}, 0, "repo files exist: $image_name");
-	}
-	else {
-		notify($ERRORS{'OK'}, 0, "repo files do not exist: $image_repository_path/$image_name");
-		return 0;
-	}
-
-
-	# Check if any mbr files exist for the image
-	if (grep(/$image_name[\.\-].*mbr/, @repository_files)) {
-		notify($ERRORS{'DEBUG'}, 0, "mbr file exists: $image_name*.mbr");
-	}
-	else {
-		notify($ERRORS{'OK'}, 0, "mbr file does not exist: $image_repository_path/$image_name*.mbr");
-		return 0;
-	}
-
-	# Check if any sfdisk files exist for the image
-	if (grep(/$image_name[\.\-].*sfdisk/, @repository_files)) {
-		notify($ERRORS{'DEBUG'}, 0, "sfdisk file exists: $image_name*.sfdisk");
-	}
-	else {
-		notify($ERRORS{'OK'}, 0, "sfdisk file does not exist: $image_repository_path/$image_name*.sfdisk");
-		return 0;
-	}
-=cut
-
-	# Image files found
-	notify($ERRORS{'OK'}, 0, "image exists on this management node: $image_name");
-	return 1;
-
-} ## end sub does_image_exist
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 retrieve_image
-
- Parameters  :
- Returns     :
- Description : Attempts to retrieve an image from an image library partner
-
-=cut
-
-sub retrieve_image {
-	my $self = shift;
-	if (ref($self) !~ /xCAT/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-
-	# Make sure image library functions are enabled
-	my $image_lib_enable = $self->data->get_management_node_image_lib_enable();
-	if (!$image_lib_enable) {
-		notify($ERRORS{'OK'}, 0, "image library functions are disabled");
-		return;
-	}
-
-	# Get the image name
-	my $image_name = shift;
-	$image_name = $self->data->get_image_name() if !$image_name;
-	if (!$image_name) {
-		notify($ERRORS{'WARNING'}, 0, "unable to determine image name");
-		return;
-	}
-
-	# Get the other image library variables
-	my $image_lib_user = $self->data->get_management_node_image_lib_user()
-	  || 'undefined';
-	my $image_lib_key = $self->data->get_management_node_image_lib_key()
-	  || 'undefined';
-	my $image_lib_partners = $self->data->get_management_node_image_lib_partners() || 'undefined';
-	if ("$image_lib_user $image_lib_key $image_lib_partners" =~ /undefined/) {
-		notify($ERRORS{'WARNING'}, 0, "image library configuration data is missing: user=$image_lib_user, key=$image_lib_key, partners=$image_lib_partners");
-		return;
-	}
-
-	# Get the image repository path
-	my $image_repository_path        = $self->_get_image_repository_path();
-	my $image_repository_path_source = $image_repository_path;
-	if (!$image_repository_path) {
-		notify($ERRORS{'WARNING'}, 0, "image repository path could not be determined");
-		return;
-	}
-
-	# Fix for Linux images on henry4
-	my $management_node_hostname = $self->data->get_management_node_hostname();
-	my $image_os_type            = $self->data->get_image_os_type();
-	my $image_os_source_path     = $self->data->get_image_os_source_path();
-	if ($management_node_hostname =~ /henry4/i && $image_os_type =~ /linux/i && $image_os_source_path eq 'image') {
-		$image_repository_path_source =~ s/linux_image/image/;
-		notify($ERRORS{'DEBUG'}, 0, "fixed retrieval Linux image path for henry4: linux_image --> image: $image_repository_path_source");
-	}
-
-	# Get the tmpl repository path
-	my $tmpl_repository_path = $self->_get_image_template_path();
-	if (!$tmpl_repository_path) {
-		notify($ERRORS{'WARNING'}, 0, "image template path could not be determined");
-		return;
-	}
-
-	# Check if template file exists for the image
-	# -s File has nonzero size
-	if (-s "$tmpl_repository_path/$image_name.tmpl") {
-		notify($ERRORS{'OK'}, 0, "template file already exists: $image_name.tmpl");
-	}
-	else {
-		# Get the name of the base tmpl file
-		my $basetmpl = $self->_get_base_template_filename();
-
-		# Template file doesn't exist, try to make a copy of the base template file
-		if (copy("$tmpl_repository_path/$basetmpl", "$tmpl_repository_path/$image_name.tmpl")) {
-			notify($ERRORS{'OK'}, 0, "template file copied: $basetmpl --> $image_name.tmpl");
-		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "template file could not be copied copied: $basetmpl --> $image_name.tmpl, $!");
-			return;
-		}
-	} ## end else [ if (-s "$tmpl_repository_path/$image_name.tmpl")
-
-	# Attempt to copy image from other management nodes
-	notify($ERRORS{'OK'}, 0, "attempting to copy $image_name from other management nodes");
-
-	# Split up the partner list
-	my @partner_list = split(/,/, $image_lib_partners);
-	if ((scalar @partner_list) == 0) {
-		notify($ERRORS{'WARNING'}, 0, "image lib partners variable is not listed correctly or does not contain any information: $image_lib_partners");
-		return;
-	}
-
-	# Loop through the partners, attempt to copy
-	foreach my $partner (@partner_list) {
-		notify($ERRORS{'OK'}, 0, "checking if $partner has $image_name");
-
-		# Use ssh to call ls on the partner management node
-		my ($ls_exit_status, $ls_output_array_ref) = run_ssh_command($partner, $image_lib_key, "ls -1 $image_repository_path_source", $image_lib_user, '', 1);
-
-		# Check if the ssh command failed
-		if (!$ls_output_array_ref) {
-			notify($ERRORS{'WARNING'}, 0, "unable to run ls command via ssh on $partner");
-			next;
-		}
-
-		# Convert the output array to a string
-		my $ls_output = join("\n", @{$ls_output_array_ref});
-
-		# Check the ls output for permission denied
-		if ($ls_output =~ /permission denied/i) {
-			notify($ERRORS{'CRITICAL'}, 0, "permission denied when checking if $partner has $image_name, exit status=$ls_exit_status, output:\n$ls_output");
-			next;
-		}
-
-		# Check the ls output for the image name
-		if ($ls_output !~ /$image_name[\.\-]/i) {
-			notify($ERRORS{'OK'}, 0, "$image_name does not exist on $partner");
-			next;
-		}
-
-		# Image exists
-		notify($ERRORS{'OK'}, 0, "$image_name exists on $partner, attempting to copy");
-
-		# Attempt copy
-		if (run_scp_command("$image_lib_user\@$partner:$image_repository_path_source/$image_name*", $image_repository_path, $image_lib_key)) {
-			notify($ERRORS{'OK'}, 0, "$image_name files copied via SCP");
-			last;
-		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "unable to copy $image_name files via SCP");
-			next;
-		}
-	} ## end foreach my $partner (@partner_list)
-
-	# Make sure image was copied
-	if ($self->does_image_exist($image_name)) {
-		notify($ERRORS{'OK'}, 0, "$image_name was copied to this management node");
-		return 1;
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "$image_name was not copied to this management node");
-		return 0;
-	}
-} ## end sub retrieve_image
-
-#/////////////////////////////////////////////////////////////////////////////
-
 =head2 _check_pxe_grub_file
 
  Parameters  : imagename
@@ -2677,117 +2359,65 @@ sub _check_pxe_grub_files {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 _get_image_repository_path
-
- Parameters  : none, must be called as an xCAT object method
- Returns     :
- Description :
-
-=cut
-
-sub _get_image_repository_path {
-	my $self                 = shift;
-	my $return_template_path = shift;
-
-	if (ref($self) !~ /xCAT/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return 0;
-	}
-
-	# Get the required variables from the DataStructure
-	my $management_node_id       = $self->data->get_management_node_id();
-	my $management_node_hostname = $self->data->get_management_node_hostname();
-	my $install_path             = $self->data->get_management_node_install_path();
-	my $image_os_name            = $self->data->get_image_os_name();
-	my $image_os_type            = $self->data->get_image_os_type();
-	my $image_os_install_type    = $self->data->get_image_os_install_type();
-	my $image_os_source_path     = $self->data->get_image_os_source_path();
-	my $image_architecture       = $self->data->get_image_architecture();
-
-	if (!(defined($image_os_name) && defined($image_os_type) && defined($image_os_install_type) && defined($image_os_source_path) && defined($image_architecture))) {
-		notify($ERRORS{'CRITICAL'}, 0, "some of the required data could not be retrieved");
-		return 0;
-	}
-
-	$return_template_path = 0 if !defined($return_template_path);
-
-	notify($ERRORS{'DEBUG'}, 0, "OS=$image_os_name, OS type=$image_os_type, OS install type=$image_os_install_type, OS source=$image_os_source_path");
-
-	if ($image_os_name =~ /image/) {
-		$image_os_source_path = "image";
-	}
-
-	# Fix for Linux images on henry4
-	if (   $management_node_hostname =~ /henry4/i
-		 && $image_os_type =~ /linux/i
-		 && $image_os_source_path eq 'image')
-	{
-		$image_os_source_path = 'linux_image';
-		notify($ERRORS{'DEBUG'}, 0, "fixed Linux image path for henry4: image --> linux_image");
-	}
-
-	# Remove trailing / from $image_os_source_path if exists
-	$image_os_source_path =~ s/\/$//;
-
-	# If image OS source path has a leading /, assume it was meant to be absolute
-	# Otherwise, prepend the install path
-	my $image_install_path;
-	if ($image_os_source_path =~ /^\//) {
-		# If $image_os_source_path = '/centos5', use '/centos5'
-		$image_install_path = $image_os_source_path;
-	}
-	else {
-		# If $image_os_source_path = 'centos5', use '/install/centos5'
-		# Note: $install_path has a leading /
-		$image_install_path = "$install_path/$image_os_source_path";
-	}
-
-	# Note: $XCAT_ROOT has a leading /
-	# Note: $image_install_path has a leading /
-
-	# Check $return_template_path, either return repo path or template directory path
-	# This is done because the code to figure out the paths is mostly the same
-	# _get_image_repository_path calls this subroutine with the $return_template_path flag set
-	my $return_path;
-	if ($return_template_path) {
-		my $tmplpath = $image_os_source_path;
-		$tmplpath =~ s/\d+$//;
-		$tmplpath =~ s/^rh.*/rh/;
-		$return_path = "$XCAT_ROOT/share/xcat/install/$tmplpath";
-		notify($ERRORS{'DEBUG'}, 0, "template path: $return_path");
-		return $return_path;
-	}
-	elsif ($image_os_install_type eq 'kickstart') {
-		$return_path = "/install/$image_os_source_path/$image_architecture";
-		notify($ERRORS{'DEBUG'}, 0, "kickstart path: $return_path");
-		return $return_path;
-	}
-	else {
-		# Imaging installs use the xCAT path for the tmpl path, and the install path for the repo path
-		$return_path = "$image_install_path/$image_architecture";
-		notify($ERRORS{'DEBUG'}, 0, "repository path: $return_path");
-		return $return_path;
-	}
-} ## end sub _get_image_repository_path
-
-#/////////////////////////////////////////////////////////////////////////////
-
 =head2 _get_image_template_path
 
- Parameters  : none, must be called as an xCAT object method
- Returns     :
+ Parameters  : management node identifier (optional)
+ Returns     : Successful: string containing filesystem path
+               Failed:     false
  Description :
 
 =cut
 
 sub _get_image_template_path {
 	my $self = shift;
-	if (ref($self) !~ /xCAT/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return 0;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a VCL::Module module object method");
+		return;	
 	}
+	
+	# Check if a management node identifier argument was passed
+	my $management_node_identifier = shift;
+	if ($management_node_identifier) {
+		notify($ERRORS{'DEBUG'}, 0, "management node identifier argument was specified: $management_node_identifier");
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "management node identifier argument was not specified");
+	}
+	
+	my $management_node_install_path = $self->data->get_management_node_install_path($management_node_identifier);
+	
+	# Get required image data
+	my $image_name = $self->data->get_image_name();
+	my $image_os_source_path = $self->data->get_image_os_source_path();
+	my $image_os_install_type = $self->data->get_image_os_install_type();
+	if (!$image_name || !$image_os_source_path || !$image_os_install_type) {
+		notify($ERRORS{'WARNING'}, 0, "required image data could not be retrieved");
+		return;
+	}
+	
+	# Remove trailing / from $XCAT_ROOT if exists
+	(my $xcat_root = $XCAT_ROOT) =~ s/\/$//;
+	
+	# Remove trailing / from $image_os_source_path if exists
+	$image_os_source_path =~ s/\/$//;
+	
+	# Fix the image OS source path for xCAT 2.x
+	my $xcat2_image_os_source_path = $image_os_source_path;
+	# centos5 --> centos
+	$xcat2_image_os_source_path =~ s/\d+$//;
+	# rhas5 --> rh
+	$xcat2_image_os_source_path =~ s/^rh.*/rh/;
+	
+	notify($ERRORS{'DEBUG'}, 0, "attempting to determine template path for image:
+      image name:               $image_name
+		OS install type:          $image_os_install_type
+		OS source path:           $image_os_source_path
+		xCAT 2.x OS source path:  $xcat2_image_os_source_path
+	");
 
-	return $self->_get_image_repository_path(1);
+	my $image_template_path = "$xcat_root/share/xcat/install/$xcat2_image_os_source_path";
+	notify($ERRORS{'DEBUG'}, 0, "returning: $image_template_path");
+	return $image_template_path;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -2837,262 +2467,6 @@ sub _get_base_template_filename {
 		return 0;
 	}
 } ## end sub _get_base_template_filename
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 power_reset
-
- Parameters  : $computer_node_name (optional)
- Returns     : 
- Description : 
-
-=cut
-
-sub power_reset {
-	my $argument_1 = shift;
-	my $argument_2 = shift;
-
-	my $computer_node_name;
-
-	# Check if subroutine was called as an object method
-	if (ref($argument_1) =~ /xcat/i) {
-		my $self = $argument_1;
-
-		$computer_node_name = $argument_2;
-
-		# Check if computer argument was specified
-		# If not, use computer node name in the data object
-		if (!$computer_node_name) {
-			$computer_node_name = $self->data->get_computer_node_name();
-		}
-	} ## end if (ref($argument_1) =~ /xcat/i)
-	else {
-		# Subroutine was not called as an object method, 2 arguments must be specified
-		$computer_node_name = $argument_1;
-	}
-
-	# Check if computer was determined
-	if (!$computer_node_name) {
-		notify($ERRORS{'WARNING'}, 0, "computer could not be determined from arguments");
-		return;
-	}
-
-	# Turn computer off
-	my $off_attempts = 0;
-	while (!power_off($computer_node_name)) {
-		$off_attempts++;
-
-		if ($off_attempts == 3) {
-			notify($ERRORS{'WARNING'}, 0, "failed to turn $computer_node_name off, rpower status not is off after 3 attempts");
-			return;
-		}
-
-		sleep 2;
-	} ## end while (!power_off($computer_node_name))
-
-	# Turn computer on
-	my $on_attempts = 0;
-	while (!power_on($computer_node_name)) {
-		$on_attempts++;
-
-		if ($on_attempts == 3) {
-			notify($ERRORS{'WARNING'}, 0, "failed to turn $computer_node_name on, rpower status not is on after 3 attempts");
-			return;
-		}
-
-		sleep 2;
-	} ## end while (!power_on($computer_node_name))
-
-	notify($ERRORS{'OK'}, 0, "successfully reset power on $computer_node_name");
-	return 1;
-} ## end sub power_reset
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 power_on
-
- Parameters  : $computer_node_name (optional)
- Returns     : 
- Description : 
-
-=cut
-
-sub power_on {
-	my $argument_1 = shift;
-	my $argument_2 = shift;
-
-	my $computer_node_name;
-
-	# Check if subroutine was called as an object method
-	if (ref($argument_1) =~ /xcat/i) {
-		my $self = $argument_1;
-
-		$computer_node_name = $argument_2;
-
-		# Check if computer argument was specified
-		# If not, use computer node name in the data object
-		if (!$computer_node_name) {
-			$computer_node_name = $self->data->get_computer_node_name();
-		}
-	} ## end if (ref($argument_1) =~ /xcat/i)
-	else {
-		# Subroutine was not called as an object method, 2 arguments must be specified
-		$computer_node_name = $argument_1;
-	}
-
-	# Check if computer was determined
-	if (!$computer_node_name) {
-		notify($ERRORS{'WARNING'}, 0, "computer could not be determined from arguments");
-		return;
-	}
-
-	# Turn computer on
-	my $on_attempts  = 0;
-	my $power_status = 'unknown';
-	while ($power_status !~ /on/) {
-		$on_attempts++;
-
-		if ($on_attempts == 3) {
-			notify($ERRORS{'WARNING'}, 0, "failed to turn $computer_node_name on, rpower status not is on after 3 attempts");
-			return;
-		}
-
-		_rpower($computer_node_name, 'on');
-		
-		# Wait up to 1 minute for the computer power status to be on
-		if (wait_for_on($computer_node_name, 1)) {
-			last;
-		}
-
-		$power_status = power_status($computer_node_name);
-	} ## end while ($power_status !~ /on/)
-
-	notify($ERRORS{'OK'}, 0, "successfully powered on $computer_node_name");
-	return 1;
-} ## end sub power_on
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 power_off
-
- Parameters  : $computer_node_name (optional)
- Returns     : 
- Description : 
-
-=cut
-
-sub power_off {
-	my $argument_1 = shift;
-	my $argument_2 = shift;
-	
-	my $computer_node_name;
-
-	# Check if subroutine was called as an object method
-	if (ref($argument_1) =~ /xcat/i) {
-		my $self = $argument_1;
-
-		$computer_node_name = $argument_2;
-
-		# Check if computer argument was specified
-		# If not, use computer node name in the data object
-		if (!$computer_node_name) {
-			$computer_node_name = $self->data->get_computer_node_name();
-		}
-	} ## end if (ref($argument_1) =~ /xcat/i)
-	else {
-		# Subroutine was not called as an object method, 2 arguments must be specified
-		$computer_node_name = $argument_1;
-	}
-
-	# Check if computer was determined
-	if (!$computer_node_name) {
-		notify($ERRORS{'WARNING'}, 0, "computer could not be determined from arguments");
-		return;
-	}
-
-	# Turn computer off
-	my $power_status = 'unknown';
-	my $off_attempts = 0;
-	while ($power_status !~ /off/) {
-		$off_attempts++;
-
-		if ($off_attempts == 3) {
-			notify($ERRORS{'WARNING'}, 0, "failed to turn $computer_node_name off, rpower status not is off after 3 attempts");
-			return;
-		}
-		
-		# Attempt to run rpower <node> off
-		_rpower($computer_node_name, 'off');
-		
-		# Wait up to 1 minute for the computer power status to be off
-		if (wait_for_off($computer_node_name, 1)) {
-			last;
-		}
-
-		$power_status = power_status($computer_node_name);
-	} ## end while ($power_status !~ /off/)
-
-	notify($ERRORS{'OK'}, 0, "successfully powered off $computer_node_name");
-	return 1;
-} ## end sub power_off
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 power_status
-
- Parameters  : $computer_node_name (optional)
- Returns     : 
- Description : 
-
-=cut
-
-sub power_status {
-	my $argument_1 = shift;
-	my $argument_2 = shift;
-
-	my $computer_node_name;
-
-	# Check if subroutine was called as an object method
-	if (ref($argument_1) =~ /xcat/i) {
-		my $self = $argument_1;
-
-		$computer_node_name = $argument_2;
-
-		# Check if computer argument was specified
-		# If not, use computer node name in the data object
-		if (!$computer_node_name) {
-			$computer_node_name = $self->data->get_computer_node_name();
-		}
-	} ## end if (ref($argument_1) =~ /xcat/i)
-	else {
-		# Subroutine was not called as an object method, 2 arguments must be specified
-		$computer_node_name = $argument_1;
-	}
-
-	# Check if computer was determined
-	if (!$computer_node_name) {
-		notify($ERRORS{'WARNING'}, 0, "computer could not be determined from arguments");
-		return;
-	}
-
-	# Call rpower to determine power status
-	my $rpower_stat = _rpower($computer_node_name, 'stat');
-	notify($ERRORS{'DEBUG'}, 0, "retrieved power status of $computer_node_name: $rpower_stat");
-
-	if (!$rpower_stat) {
-		notify($ERRORS{'WARNING'}, 0, "failed to determine power status, rpower subroutine returned $rpower_stat");
-		return;
-	}
-	elsif ($rpower_stat =~ /^(on|off)$/i) {
-		return lc($1);
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to determine power status, unexpected output returned from rpower: $rpower_stat");
-		return;
-	}
-} ## end sub power_status
-
-
 
 #/////////////////////////////////////////////////////////////////////////////
 
