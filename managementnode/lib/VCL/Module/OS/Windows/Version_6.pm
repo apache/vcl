@@ -664,6 +664,13 @@ sub firewall_enable_rdp {
 	
 	# First delete any rules which allow ping and then add a new rule
 	my $add_rule_command;
+	
+	# Set the key to allow remote connections whenever enabling RDP
+	$add_rule_command .= 'reg.exe ADD "HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\Terminal Server" /t REG_DWORD /v fDenyTSConnections /d 0 /f ; ';
+	
+	# Set the key to allow connections from computers running any version of Remote Desktop
+	$add_rule_command .= 'reg.exe ADD "HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\Terminal Server\\WinStations\\RDP-Tcp" /t REG_DWORD /v UserAuthentication /d 0 /f ; ';
+	
 	$add_rule_command .= 'netsh.exe advfirewall firewall delete rule';
 	$add_rule_command .= ' name=all';
 	$add_rule_command .= ' dir=in';
@@ -729,6 +736,13 @@ sub firewall_enable_rdp_private {
 	
 	# First delete any rules which allow RDP and then add a new rule
 	my $add_rule_command;
+	
+	# Set the key to allow remote connections whenever enabling RDP
+	$add_rule_command .= 'reg.exe ADD "HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\Terminal Server" /t REG_DWORD /v fDenyTSConnections /d 0 /f ; ';
+	
+	# Set the key to allow connections from computers running any version of Remote Desktop
+	$add_rule_command .= 'reg.exe ADD "HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\Terminal Server\\WinStations\\RDP-Tcp" /t REG_DWORD /v UserAuthentication /d 0 /f ; ';
+	
 	$add_rule_command .= 'netsh.exe advfirewall firewall delete rule';
 	$add_rule_command .= ' name=all';
 	$add_rule_command .= ' dir=in';
