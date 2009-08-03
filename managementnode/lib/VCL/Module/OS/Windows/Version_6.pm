@@ -58,6 +58,23 @@ use File::Basename;
 
 ##############################################################################
 
+=head1 CLASS VARIABLES
+
+=cut
+
+=head2 $SOURCE_CONFIGURATION_DIRECTORY
+
+ Data type   : Scalar
+ Description : Location on management node of script/utilty/configuration
+               files needed to configure the OS. This is normally the
+               directory under the 'tools' directory specific to this OS.
+
+=cut
+
+our $SOURCE_CONFIGURATION_DIRECTORY = "$TOOLS/Windows_Version_6";
+
+##############################################################################
+
 =head1 INTERFACE OBJECT METHODS
 
 =cut
