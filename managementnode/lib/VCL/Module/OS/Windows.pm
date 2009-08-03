@@ -4216,7 +4216,7 @@ sub firewall_enable_rdp {
 	# Set the key to allow remote connections whenever enabling RDP
 	# Include this in the SSH command along with the netsh.exe commands rather than calling it separately for faster execution
 	$netsh_command .= 'reg.exe ADD "HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\Terminal Server" /t REG_DWORD /v fDenyTSConnections /d 0 /f ; ';
-
+	
 	$netsh_command .= "netsh.exe firewall set portopening";
 	$netsh_command .= " name = \"Remote Desktop\"";
 	$netsh_command .= " protocol = TCP";
@@ -5634,7 +5634,7 @@ sub search_and_replace_in_files {
 	}
 	
 	# Run grep to find files matching pattern
-	my $grep_command = "/bin/grep -ilr \"$search_pattern\" \"$base_directory\"";
+	my $grep_command = "/bin/grep -ilr \"$search_pattern\" \"$base_directory\" 2>&1 | grep -Ev \"\.(exe|dll)\"";
 	my ($grep_status, $grep_output) = run_ssh_command($computer_node_name, $management_node_keys, $grep_command);
 	if (!defined($grep_status)) {
 		notify($ERRORS{'WARNING'}, 0, "unable to run ssh command to run grep on directory: $base_directory, pattern: $search_pattern");
