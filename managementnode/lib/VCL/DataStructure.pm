@@ -453,7 +453,7 @@ $SUBROUTINE_MAPPINGS{management_node_ssh_port}             = '$ENV{management_no
 
 $SUBROUTINE_MAPPINGS{management_node_public_ip_configuration} = '$ENV{management_node_info}{PUBLIC_IP_CONFIGURATION}';
 $SUBROUTINE_MAPPINGS{management_node_public_subnet_mask}      = '$ENV{management_node_info}{PUBLIC_SUBNET_MASK}';
-$SUBROUTINE_MAPPINGS{management_node_public_default_gateway}  = '$ENV{management_node_info}{PUBLIC_DEFAULT_GATEWAY}';
+#$SUBROUTINE_MAPPINGS{management_node_public_default_gateway}  = '$ENV{management_node_info}{PUBLIC_DEFAULT_GATEWAY}';
 $SUBROUTINE_MAPPINGS{management_node_public_dns_server}       = '$ENV{management_node_info}{PUBLIC_DNS_SERVER}';
 
 $SUBROUTINE_MAPPINGS{management_node_predictive_module_name}         = '$ENV{management_node_info}{predictive_name}';
@@ -1742,6 +1742,102 @@ sub is_blockrequest {
 	else {
 		return 0;
 	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_management_node_public_default_gateway
+
+ Parameters  : None
+ Returns     : If successful: string containing IP address
+               If failed: false
+ Description : Returns the management node's default gateway IP address. This
+               subroutine will return the address configured on the "GATEWAY="
+               line in the vcld.conf file if configured.
+               
+               Otherwise it uses the "route -n" command and attempts to
+               locate a single line beginning with 0.0.0.0.
+               
+               If it fails to determine the default gateway using the route
+               command, the dhcpd.conf file is checked for an "option routers"
+               line containing a valid public IP address.
+
+=cut
+
+sub get_management_node_public_default_gateway {
+	my $default_gateway;
+	
+	# Attempt to retrieve the default gateway explicitly configured for this management node
+	$default_gateway = $ENV{management_node_info}{PUBLIC_DEFAULT_GATEWAY};
+	if ($default_gateway && is_valid_ip_address($default_gateway)) {
+		notify($ERRORS{'DEBUG'}, 0, "returning default gateway configured in vcld.conf: $default_gateway");
+		return $default_gateway;
+	}
+	
+	# Attempt to retrieve the gateway from the route command
+	my ($route_exit_statux, $route_output) = run_command('route -n', 1);
+	if ($route_output && (my @route_gateway_lines = grep(/^0.0.0.0/, @$route_output))) {
+		if (scalar @route_gateway_lines == 1) {
+			($default_gateway) = $route_gateway_lines[0] =~ /^[\d\.]+\s+([\d\.]+)/;
+			if (is_valid_ip_address($default_gateway)) {
+				notify($ERRORS{'DEBUG'}, 0, "returning default gateway from route command: $default_gateway");
+				return $default_gateway;
+			}
+			else {
+				notify($ERRORS{'WARNING'}, 0, "unable to determine default gateway valid IP address from route command output:\n" . join("\n", @route_gateway_lines));
+			}
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "multiple default gateway lines found in route command output:\n" . join("\n", @route_gateway_lines));
+		}
+	}
+	
+	# Attempt to retrieve the gateway from the "option routers" line in dhcpd.conf
+	my @dhcpd_conf_lines = read_file_to_array('/etc/dhcpd.conf');
+	if (@dhcpd_conf_lines) {
+		my @option_routers_lines = grep(/\s*[^#]\s*option\s+routers/, @dhcpd_conf_lines);
+		notify($ERRORS{'DEBUG'}, 0, "dhcpd.conf option routers lines:\n" . join("\n", @option_routers_lines));
+		
+		# Store public IP addresses found on "option routers" lines as hash keys to ignore duplicates
+		my %public_option_routers_addresses;
+		
+		# Loop through any "option routers" lines found in dhcpd.conf
+		for my $option_routers_line (@option_routers_lines) {
+			# Extract the IP address from the "option routers" line
+			my ($option_routers_ip) = $option_routers_line =~ /option\s+routers\s+([\d\.]+)/;
+			
+			# Check if IP address was found, is valid, and is public
+			if (!$option_routers_ip) {
+				notify($ERRORS{'DEBUG'}, 0, "option routers line does not contain an IP address: $option_routers_line");
+				next;
+			}
+			if (!is_valid_ip_address($option_routers_ip)) {
+				notify($ERRORS{'DEBUG'}, 0, "option routers line does not contain a valid IP address: $option_routers_line");
+				next;
+			}
+			if (!is_public_ip_address($option_routers_ip)) {
+				notify($ERRORS{'DEBUG'}, 0, "option routers line contains a non-public address: $option_routers_line");
+				next;
+			}
+			notify($ERRORS{'DEBUG'}, 0, "public option routers IP address found in dhcpd.conf: $option_routers_ip");
+			$public_option_routers_addresses{$option_routers_ip} = 1;
+		}
+		
+		# Check if only 1 "option routers" line was found containing a valid public IP address
+		if (scalar keys(%public_option_routers_addresses) == 1) {
+			my $default_gateway = (keys(%public_option_routers_addresses))[0];
+			notify($ERRORS{'DEBUG'}, 0, "returning default gateway found in dhcpd.conf: $default_gateway");
+			return $default_gateway;
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "multiple public option routers IP addresses found in dhcpd.conf: " . keys(%public_option_routers_addresses));
+		}
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve dhcpd.conf contents");
+	}
+	
+	return;
 }
 
 #/////////////////////////////////////////////////////////////////////////////

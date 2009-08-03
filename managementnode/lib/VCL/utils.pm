@@ -80,15 +80,11 @@ our @EXPORT = qw(
   _checknstartservice
   _getcurrentimage
   _is_user_added
-  _killsysprep
   _machine_os
   _pingnode
-  _set_sshd_startmode
   _sshd_status
   add_user
-  add_users_by_group
   changelinuxpassword
-  changewindowspasswd
   check_blockrequest_time
   check_connection
   check_endtimenotice_interval
@@ -146,8 +142,10 @@ our @EXPORT = qw(
   insertloadlog
   is_management_node_process_running
   is_inblockrequest
+  is_public_ip_address
   is_request_deleted
   is_request_imaging
+  is_valid_ip_address
   isconnected
   isfilelocked
   kill_reservation_process
@@ -163,7 +161,7 @@ our @EXPORT = qw(
   notify_via_wall
   preplogfile
   process_block_time
-  remotedesktopport
+  read_file_to_array
   rename_vcld_process
   reservation_being_processed
   reservations_ready
@@ -181,7 +179,6 @@ our @EXPORT = qw(
   string_to_ascii
   switch_state
   switch_vmhost_id
-  system_monitoring
   time_exceeded
   timefloor15interval
   unlockfile
@@ -202,7 +199,6 @@ our @EXPORT = qw(
   update_request_state
   update_reservation_lastcheck
   update_sublog_ipaddress
-  windowsroutetable
   write_currentimage_txt
   xmlrpc_call
 
@@ -232,8 +228,6 @@ our @EXPORT = qw(
   $WINDOWS_ROOT_PASSWORD
   $SERVER
   $SYSADMIN
-  $SYSPREP
-  $SYSPREP_2003
   $TESTING
   $THROTTLE
   $TOOLS
@@ -251,14 +245,6 @@ our @EXPORT = qw(
   $IMAGELIBUSER
   $IMAGELIBKEY
   $IMAGESERVERS
-
-  $TOOLS
-  $VMWAREREPOSITORY
-  $SYSPREP_2003
-  $SYSPREP
-  $SYSPREP_VMWARE
-  $SYSPREP_VMWARE2003
-  $VERBOSE
 );
 
 #our %ERRORS=('DEPENDENT'=>4,'UNKNOWN'=>3,'OK'=>0,'WARNING'=>1,'CRITICAL'=>2,'MAILMASTERS'=>5);
@@ -636,10 +622,6 @@ our $IDENTITY_newwxp    = "$FindBin::Bin/../lib/VCL/newwinxp_blade.key";
 our $XCATROOT           = "/opt/xcat";
 our $TOOLS              = "$FindBin::Bin/../tools";
 our $VMWAREREPOSITORY   = "/install/vmware_images";
-our $SYSPREP_2003       = "$TOOLS/Sysprep_2003";
-our $SYSPREP            = "$TOOLS/Sysprep";
-our $SYSPREP_VMWARE     = "$TOOLS/Sysprep_vmware";
-our $SYSPREP_VMWARE2003 = "$TOOLS/Sysprep_vmware2003";
 our $VERBOSE;
 our $TESTING;
 our $CONF_FILE_PATH;
@@ -1346,7 +1328,7 @@ sub mail {
 =cut
 
 sub setstaticaddress {
-	my ($node, $osname, $image_os_type, $IPaddress) = @_;
+	my ($node, $osname, $IPaddress, $image_os_type) = @_;
 	my ($package, $filename, $line, $sub) = caller(0);
 	notify($ERRORS{'OK'},       0, "nodename not set")  if (!defined($node));
 	notify($ERRORS{'OK'},       0, "osname not set")    if (!defined($osname));
@@ -1554,108 +1536,6 @@ sub setstaticaddress {
 			notify($ERRORS{'WARNING'}, 0, "pulling resolve.conf from $node failed output= @{ $sshcmd[1] }");
 		}
 	} ## end if 
-	#elsif ($osname =~ 
-	elsif ($image_os_type =~ /windows/i) {
-		$identity = $IDENTITY_wxp;
-		#scan adapter list to figure out which adapter is public
-		# run netsh command to set the public adapter to static
-		# correct the route table
-
-		my $myadapter;
-		my %ip;
-		my ($privateadapter, $publicadapter);
-		undef @sshcmd;
-		@sshcmd = run_ssh_command($node, $identity, "ipconfig -all", "root");
-		# build hash of needed info and set the correct private adapter.
-		my $id = 1;
-		foreach my $a (@{$sshcmd[1]}) {
-			if ($a =~ /Ethernet adapter (.*):/) {
-				$myadapter                 = $1;
-				$ip{$myadapter}{"id"}      = $id;
-				$ip{$myadapter}{"private"} = 0;
-			}
-			if ($a =~ /IP Address([\s.]*): $privateIP/) {
-				$ip{$myadapter}{"private"} = 1;
-			}
-			if ($a =~ /Physical Address([\s.]*): ([-0-9]*)/) {
-				$ip{$myadapter}{"MACaddress"} = $2;
-			}
-
-			$id++;
-		} ## end foreach my $a (@{$sshcmd[1]})
-
-
-		foreach my $key (keys %ip) {
-			if (defined($ip{$key}{private})) {
-				if (!($ip{$key}{private})) {
-					$publicadapter = "\"$key\"";
-				}
-			}
-		}
-
-		#Make sure we have publicadapter defined
-		if (!defined($publicadapter)) {
-			notify($ERRORS{'WARNING'}, 0, "publicadapter not detected from $node");
-			return 0;
-		}
-
-		#setting publicadapter to static
-		notify($ERRORS{'OK'}, 0, "executing netsh interface ip set address name=\\\"$publicadapter\\\" source=static addr=$IPaddress mask=$NETMASK gateway=$GATEWAY gwmetric=2\n");
-		undef @sshcmd;
-		my $cmdstring = "netsh interface ip set address name=\\\"$publicadapter\\\" source=static addr=$IPaddress mask=$NETMASK gateway=$GATEWAY gwmetric=2";
-		@sshcmd = run_ssh_command($node, $identity, $cmdstring, "root");
-		foreach my $l (@{$sshcmd[1]}) {
-			if ($l =~ /Ok/) {
-				notify($ERRORS{'OK'}, 0, "successfully set  $publicadapter to static");
-			}
-		}
-
-		#set dns
-		my ($s1, $s2, $s3);
-		if ($DNSserver =~ /,/) {
-			($s1, $s2, $s3) = split(/,/, $DNSserver);
-		}
-		else {
-			$s1 = $DNSserver;
-		}
-		notify($ERRORS{'OK'}, 0, "executing setting DNS netsh interface ip set dns name=\\\"$publicadapter\\\" source=static addr=$s1 register=none\n");
-		undef @sshcmd;
-		$cmdstring = "netsh interface ip set dns name=\\\"$publicadapter\\\" source=static addr=$s1 register=none";
-		@sshcmd = run_ssh_command($node, $identity, $cmdstring, "root");
-		foreach my $l (@{$sshcmd[1]}) {
-			if ($l =~ /Ok/) {
-				notify($ERRORS{'OK'}, 0, "successfully set dns $publicadapter ");
-			}
-		}
-
-		#correct route table - delete old default and add new in same line
-		undef @sshcmd;
-		@sshcmd = run_ssh_command($node, $identity, "route del 0.0.0.0", "root");
-		#should be empty
-		foreach my $l (@{$sshcmd[1]}) {
-			if ($l) {
-				#potential problem
-				notify($ERRORS{'OK'}, 0, "possible problem with route del default $l");
-			}
-		}
-
-		notify($ERRORS{'OK'}, 0, "Setting default route");
-		undef @sshcmd;
-		@sshcmd = run_ssh_command($node, $identity, "route -p ADD 0.0.0.0 MASK 0.0.0.0 $GATEWAY METRIC 2", "root");
-		#should be empty
-		foreach my $l (@{$sshcmd[1]}) {
-			if ($l) {
-				#potential problem
-				notify($ERRORS{'OK'}, 0, "possible problem with route add default gw $GATEWAY metric 0 $ETHDEVICE");
-			}
-		}
-
-	} ## end elsif 
-	else {
-
-		# osname not defined
-	}
-
 
 } ## end sub setstaticaddress
 
@@ -1738,38 +1618,6 @@ sub getdynamicaddress {
 	return $dynaIPaddress;
 
 } ## end sub getdynamicaddress
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 _set_sshd_startmode
-
- Parameters  : $node, $mode
- Returns     : 1 or 0
- Description : sets the sshd service on winxp images to auto or manual
-=cut
-
-sub _set_sshd_startmode {
-	my ($node, $mode) = @_;
-	my ($package, $filename, $line, $sub) = caller(0);
-	notify($ERRORS{'OK'}, 0, "nodename not set")  if (!defined($node));
-	notify($ERRORS{'OK'}, 0, "ipaddress not set") if (!defined($mode));
-
-	#specific to sc command
-	$mode = "demand" if ($mode eq "manual");
-
-	# start using sc to change the start mode
-	my $cmd = "cmd /c C:\/WINDOWS\/system32\/sc config sshd start= $mode";
-	my @SC = run_ssh_command($node, $IDENTITY_wxp, $cmd);
-	for my $line (@{$SC[1]}) {
-		if ($line =~ /ChangeServiceConfig SUCCESS/) {
-			notify($ERRORS{'OK'}, 0, "successfully set sshd on $node to $mode");
-			return 1;
-		}
-	}
-	notify($ERRORS{'WARNING'}, 0, "_set_sshd_startmode failed return status $SC[0] array= @{ $SC[1] }");
-
-	return 0;
-} ## end sub _set_sshd_startmode
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -2959,15 +2807,7 @@ sub _is_user_added {
 
 	if ($type =~ /blade|virtualmachine/) {
 
-		if ($image_os_type =~ /windows/i) {
-			undef @SSHCMD;
-			@SSHCMD = run_ssh_command($node, $IDENTITY_wxp, "cscript.exe //Nologo list_users.vbs", "root");
-			foreach $l (@{$SSHCMD[1]}) {
-				return 1 if ($l =~ /$user/);
-			}
-			return 0;
-		}
-		elsif ($image_os_type =~ /linux/i) {
+		if ($image_os_type =~ /linux/i) {
 			undef @SSHCMD;
 			@SSHCMD = run_ssh_command($node, $IDENTITY_bladerhel, "cat /etc/passwd", "root");
 			foreach $l (@{$SSHCMD[1]}) {
@@ -3016,47 +2856,14 @@ sub add_user {
 
 	my $identity;
 
-	if ($image_os_type =~ /windows/i) {
-       $identity = $IDENTITY_wxp;
-   }
-   elsif ($image_os_type =~ /linux/i) {
+	if ($image_os_type =~ /linux/i) {
          $identity = $IDENTITY_bladerhel;
    }
    else {
          $identity = $IDENTITY_bladerhel;
    }
 
-	
-
-	if ($image_os_type =~ /windows/i) {
-		my @sshcmd1 = run_ssh_command($node, $identity, "cscript.exe //Nologo add_user.vbs $user $passwd", "root");
-		my $delete_user = 0;
-		foreach my $l (@{$sshcmd1[1]}) {
-			if ($l =~ /The filename, directory name, or volume label syntax is incorrect/) {
-				#ok, user is already there must have been a problem earlier
-				#let delete the user and continue
-				$delete_user = 1;
-			}
-
-		}
-		if ($delete_user) {
-			notify($ERRORS{'OK'}, 0, "error $user may already be listed");
-			if (del_user($node, $user, "blade", $os, $image_os_type)) {
-				notify($ERRORS{'OK'}, 0, "$user deleted");
-			}
-
-			#rerun command
-			if (run_ssh_command($node, $identity, "cscript.exe //Nologo add_user.vbs $user $passwd", "root")) {
-				#good
-			}
-		} ## end if ($delete_user)
-
-		return _is_user_added($node, $user, "blade", $os, $image_os_type);
-
-		notify($ERRORS{'OK'}, 0, "prep $node $user $passwd");
-
-	} ## end if ($os =~ /win|vmwarewin/)
-	elsif ($image_os_type =~ /linux/i) {
+	if ($image_os_type =~ /linux/i) {
 		# set common linux useradd string
 		my $useradd_string;
 		if (!(defined($uid))) {    # check for uid if not let OS set one
@@ -3165,44 +2972,6 @@ sub add_user {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 add_users_by_group
-
- Parameters  : computer_short_name,pw,computer_hostname,OSname,%usergrpmembers
- Returns     : 1 sucess,0 failed
- Description : adds a group users to remote machine
-
-=cut
-
-sub add_users_by_group {
-	my ($computer_short_name, $passwd, $computer_hostname, $OSname,$image_os_type, %usermembers) = @_;
-	my ($package, $filename, $line, $sub) = caller(0);
-	notify($ERRORS{'WARNING'}, 0, "computer_short_name is not defined") if (!(defined($computer_short_name)));
-	notify($ERRORS{'WARNING'}, 0, "pw is not defined")                  if (!(defined($passwd)));
-	notify($ERRORS{'WARNING'}, 0, "computer_hostname is not defined")   if (!(defined($computer_hostname)));
-	notify($ERRORS{'WARNING'}, 0, "OSname is not defined")              if (!(defined($OSname)));
-
-	#make sure we have something in our hash
-	if (scalar keys %usermembers < 2) {
-		notify($ERRORS{'WARNING'}, 0, "the supplied user group had 1 or less member");
-	}
-
-	foreach my $user (keys %usermembers) {
-		#if ($OSname =~ /win|vmwarewin/) {
-		if ($image_os_type =~ /windows/i) {
-			my $cmd = "cscript.exe //Nologo add_user.vbs $usermembers{$user}{username} $passwd";
-			my @cmdout = run_ssh_command($computer_short_name, $IDENTITY_wxp, $cmd, "root");
-			foreach my $line (@{$cmdout[1]}) {
-				#check for errors
-				notify($ERRORS{'DEBUG'}, 0, "return status $cmdout[0] output= $line");
-			}
-		}
-	} ## end foreach my $user (keys %usermembers)
-
-	return 1;
-} ## end sub add_users_by_group
-
-#/////////////////////////////////////////////////////////////////////////////
-
 =head2 del_user
 
  Parameters  : $node, $user, $type, $osname
@@ -3224,37 +2993,7 @@ sub del_user {
 	my @sshcmd;
 	if ($type =~ /blade|virtualmachine/) {
 		#my $os = _machine_os($node);
-		if ($image_os_type =~ /windows/i) {
-			$cmd = "cscript.exe //Nologo del_user.vbs $user";
-			@sshcmd = run_ssh_command($node, $IDENTITY_wxp, $cmd, "root");
-			foreach my $l (@{$sshcmd[1]}) {
-				if ($l =~ /The filename, directory name, or volume label syntax is incorrect/) {
-					# user account not listed. no need to confirm
-					return 1;
-				}
-
-			}
-			notify($ERRORS{'DEBUG'}, 0, "cscript.exe //Nologo del_user.vbs $user produced output: " . join("\n", @{$sshcmd[1]}));
-
-			if (!(_is_user_added($node, $user, $type, $osname, $image_os_type))) {
-				return 1;
-			}
-			else {
-				return 0;
-			}
-
-			#make sure user home dir is deleted
-			undef $cmd;
-			undef @sshcmd;
-			$cmd = "/bin/rm -rf /cygdrive/c/Documents\ and\ Settings/$user";
-			@sshcmd = run_ssh_command($node, $IDENTITY_wxp, $cmd, "root");
-			foreach my $l (@{$sshcmd[1]}) {
-				#shouldn't have any output  - report if necessary
-				notify($ERRORS{'DEBUG'}, 0, "$cmd produced output $l");
-			}
-
-		} ## end if ($osname =~ /wxp|win|vmware/)
-		elsif ($image_os_type =~ /linux/i) {
+		if ($image_os_type =~ /linux/i) {
 			#remove user from machine
 			my @file;
 			my $l;
@@ -3886,245 +3625,6 @@ sub getpw {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 changewindowspasswd
-
- Parameters  : node, account
- Returns     : 0 or 1
- Description : changes windows password on given node for given account
-
-=cut
-
-sub changewindowspasswd {
-	# change the privileged account passwords on the blade images
-	my ($node, $account, $passwd) = @_;
-	my ($package, $filename, $line, $sub) = caller(0);
-	notify($ERRORS{'WARNING'}, 0, "node is not defined")    if (!(defined($node)));
-	notify($ERRORS{'WARNING'}, 0, "account is not defined") if (!(defined($account)));
-
-
-	#copy setpass.vbs to blade
-	#set password for root and administrator accounts
-	#remove setpass.vbs from blade
-	my @ssh;
-	my $l;
-	my @sshcmd;
-	#if not a predefined password, get one!
-	if (!(defined($passwd))) {
-		$passwd = getpw(15);
-	}
-	if (run_scp_command("$TOOLS/setpass.vbs", "$node:setpass.vbs", $IDENTITY_wxp)) {
-		undef @sshcmd;
-		@sshcmd = run_ssh_command($node, $IDENTITY_wxp, "cscript.exe //Nologo setpass.vbs $account $passwd", "root");
-		for $l (@{$sshcmd[1]}) {
-			if ($l =~ /Input Error/) {
-				notify($ERRORS{'WARNING'}, 0, "$node: could not run setpass.vbs");
-				return 0;
-			}
-		}
-		if ($account eq "root") {
-			#must set sshd service password also...
-			my $cmd = "cmd /c C:\/WINDOWS\/system32\/sc config sshd password= $passwd";
-			undef @sshcmd;
-			@sshcmd = run_ssh_command($node, $IDENTITY_wxp, "$cmd", "root");
-			foreach $l (@{$sshcmd[1]}) {
-				if ($l =~ /ChangeServiceConfig SUCCESS/) {
-					notify($ERRORS{'OK'}, 0, "$node: serviceConfig sshd password change success");
-				}
-				else {
-					notify($ERRORS{'OK'}, 0, "$node: serviceConfig $l");
-				}
-			}
-		} ## end if ($account eq "root")
-		    #remove setpass.vbs
-		if (run_ssh_command($node, $IDENTITY_wxp, "/bin/rm -v setpass.vbs", "root")) {
-			#good removed setpass.vbs
-		}
-		return 1;
-	} ## end if (run_scp_command("$TOOLS/setpass.vbs", ...
-	return 0;
-} ## end sub changewindowspasswd
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 _killsysprep
-
- Parameters  : node
- Returns     : 0 failed or 1 success
- Description : stops ssh initiated sysprep command,
-					because the the box reboots and the command hangs
-
-=cut
-
-sub _killsysprep {
-	my $node = $_[0];
-	if (open(PS, "ps -ef |")) {
-		notify($ERRORS{'DEBUG'}, 0, "_killsysprep: listing processes sysprep for $node");
-		my @ps = <PS>;
-		close(PS);
-		foreach my $p (@ps) {
-			if (($p =~ /sysprep.cmd/) && ($p =~ /$node/)) {
-				notify($ERRORS{'DEBUG'}, 0, "_killsysprep: found sysprep.cmd on $node");
-				if ($p =~ /(root)\s+([0-9]*)/) {
-					notify($ERRORS{'DEBUG'}, 0, "_killsysprep: located pid $2");
-					if (open(KILLIT, "kill -9 $2 |")) {
-						close(KILLIT);
-						notify($ERRORS{'OK'}, 0, "killed -9 $2 : $p");
-						return 1;
-					}
-					else {
-						notify($ERRORS{'WARNING'}, 0, "could not execute kill -9 $!");
-					}
-				} ## end if ($p =~ /(root)\s+([0-9]*)/)
-			} ## end if (($p =~ /sysprep.cmd/) && ($p =~ /$node/...
-		} ## end foreach my $p (@ps)
-
-	} ## end if (open(PS, "ps -ef |"))
-	else {
-		notify($ERRORS{'WARNING'}, 0, "could not execute ps $!");
-	}
-
-	return 1;
-
-} ## end sub _killsysprep
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 remotedesktopport
-
- Parameters  : node,state,remoteaddress
- Returns     : 0 failed or 1 success
- Description : routine to enable or disable remotedesktop port on xp blades
-		 		  only currently works with windows XP service pack 2
-=cut
-
-sub remotedesktopport {
-	my ($node, $state, $remoteaddress) = @_;
-	my ($package, $filename, $line, $sub) = caller(0);
-	notify($ERRORS{'CRITICAL'}, 0, "$node is not defined")  if (!(defined($node)));
-	notify($ERRORS{'CRITICAL'}, 0, "$state is not defined") if (!(defined($state)));
-
-
-	#machine must have the ability to edit firewall service using netsh firewall set service...
-	my @list;
-	my $RDopen = 0;
-	my @sshcmd = run_ssh_command($node, $IDENTITY_wxp, "netsh firewall show state", "root");
-	if (!($sshcmd[0])) {
-		#notify($ERRORS{'WARNING'}, 0, "failed to run netsh firewall show state on $node");
-	}
-	for my $l (@{$sshcmd[1]}) {
-		if ($l =~ /The following command was not found: firewall show/) {
-			notify($ERRORS{'OK'}, 0, "firewall support is not available on $node returning true");
-			return 1;
-		}
-		if ($l =~ /3389/) {
-			#it's open
-			$RDopen = 1;
-		}
-	} ## end for my $l (@{$sshcmd[1]})
-
-	if ($state eq "ENABLE") {
-		my ($netsh, $breakdown);
-		if (defined($remoteaddress)) {
-			# if(open(HOST,"/usr/bin/host $remoteaddress 2>&1 |")){
-			#    my @host =<HOST>;
-			#    close(HOST);
-			#    foreach my $h (@host) {
-			#          #sas environment users make http reservation through load-balanced set of outgoing servers but
-			#          # connection is attempted through a nat server with different address
-			#          # this could be the case at other locations as well
-			#           $breakdown=1 if($h =~ /sas.com/);
-			#   }
-			# }
-			if (!($remoteaddress)) {
-				#should really check if a valid address
-				#it's defined but equals 0 just open
-				#no address was provided, just open it
-				#$netsh = "netsh firewall set service REMOTEDESKTOP ENABLE";
-				$netsh = "netsh firewall set portopening TCP 3389 RDP enable ALL";
-				notify($ERRORS{'OK'}, 0, "no address provided, $node remotedesktop port enable executing");
-			}
-			else {
-				$breakdown = 1;
-				if ($breakdown) {
-					#break down address
-					my ($q1, $q2, $q3, $q4) = split(/[.]/, $remoteaddress);
-					if ($q1) {
-						$remoteaddress = "$q1.$q2.0.0/255.255.0.0";
-						notify($ERRORS{'OK'}, 0, "enabling broad scope address $remoteaddress");
-						$netsh = "netsh firewall set portopening TCP 3389 RDP enable CUSTOM $remoteaddress";
-					}
-					else {
-						notify($ERRORS{'WARNING'}, 0, "detected sas.com but could not break appart $remoteaddress, leaving empty");
-						$netsh = "netsh firewall set portopening TCP 3389 RDP enable ALL";
-					}
-				} ## end if ($breakdown)
-				else {
-					$netsh = "netsh firewall set portopening TCP 3389 RDP enable CUSTOM $remoteaddress";
-					#$netsh = "netsh firewall set service REMOTEDESKTOP ENABLE CUSTOM $remoteaddress";
-					notify($ERRORS{'OK'}, 0, "$node remotedesktop port enable custom address $remoteaddress executing");
-				}
-			} ## end else [ if (!($remoteaddress))
-		} ## end if (defined($remoteaddress))
-		else {
-			#no address was provided, just open it
-			#$netsh = "netsh firewall set service REMOTEDESKTOP ENABLE";
-			$netsh = "netsh firewall set portopening TCP 3389 RDP enable ALL";
-			notify($ERRORS{'OK'}, 0, "no address provided, $node remotedesktop port enable executing");
-		}
-
-		my $RDopen = 0;
-		my @enable = run_ssh_command($node, $IDENTITY_wxp, $netsh, "root");
-		foreach my $e (@{$enable[1]}) {
-			if ($e =~ /Ok/i) {
-				notify($ERRORS{'DEBUG'}, 0, "netsh command $netsh executed ");
-			}
-		}
-		#dbl check
-		@sshcmd = run_ssh_command($node, $IDENTITY_wxp, "netsh firewall show state", "root");
-		for my $l (@{$sshcmd[1]}) {
-			$RDopen = 1 if ($l =~ /3389/);
-		}
-		if ($RDopen) {
-			notify($ERRORS{'OK'}, 0, "$node remotedesktop port opened");
-			return 1;
-		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "$node remotedesktop port not opened");
-			return 0;
-		}
-	} ## end if ($state eq "ENABLE")
-	if ($state eq "DISABLE") {
-		if ($RDopen) {
-			$RDopen = 0;
-			#Disable it
-			undef @sshcmd;
-			if (run_ssh_command($node, $IDENTITY_wxp, "netsh firewall set service REMOTEDESKTOP DISABLE", "root")) {
-				notify($ERRORS{'OK'}, 0, "$node remotedesktop port disabled");
-			}
-			#dbl check
-			undef @sshcmd;
-			@sshcmd = run_ssh_command($node, $IDENTITY_wxp, "netsh firewall show state", "root");
-			if (!@sshcmd) {
-				notify($ERRORS{'WARNING'}, 0, "failed to run netsh firewall show state on $node");
-			}
-			for my $l (@{$sshcmd[1]}) {
-				$RDopen = 1 if ($l =~ /3389/);
-			}
-		} ## end if ($RDopen)
-		    #is it closed or open
-		if ($RDopen) {
-			notify($ERRORS{'OK'}, 0, "$node remotedesktop port still open");
-			return 0;
-		}
-		else {
-			notify($ERRORS{'OK'}, 0, "$node remotedesktop port closed");
-			return 1;
-		}
-	} ## end if ($state eq "DISABLE")
-} ## end sub remotedesktopport
-
-#/////////////////////////////////////////////////////////////////////////////
-
 =head2 hostname
 
  Parameters  : NA
@@ -4290,8 +3790,6 @@ sub changelinuxpassword {
 	notify($ERRORS{'WARNING'}, 0, "node is not defined")    if (!(defined($node)));
 	notify($ERRORS{'WARNING'}, 0, "account is not defined") if (!(defined($account)));
 
-	#set password for root and administrator accounts
-	#remove setpass.vbs from blade
 	my @ssh;
 	my $l;
 	if ($account eq "root") {
@@ -4852,87 +4350,6 @@ sub timefloor15interval {
 	return $datestring;
 
 } ## end sub timefloor15interval
-
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2  system_monitoring
-
- Parameters  : $nodename, $imagename, $action, $type
- Returns     : 0 or 1
- Description : primarily used for ITM -
-					if windows ITM servicce exist start or stop it
-
-=cut
-
-sub system_monitoring {
-	my ($nodename, $imagename, $action, $type) = @_;
-	my ($package,  $filename,  $line,   $sub)  = caller(0);
-	notify($ERRORS{'WARNING'}, 0, "nodename is not defined")  if (!(defined($nodename)));
-	notify($ERRORS{'WARNING'}, 0, "imagename is not defined") if (!(defined($imagename)));
-	notify($ERRORS{'WARNING'}, 0, "action is not defined")    if (!(defined($action)));
-	notify($ERRORS{'WARNING'}, 0, "type is not defined")      if (!(defined($type)));
-
-	my ($identity, $imagetype, $l);
-	my @out;
-	if ($imagename =~ /^(win|vmware)/) {
-		$imagetype = "windows";
-		$identity  = $IDENTITY_wxp;
-	}
-	elsif ($imagename =~ /^(rh|fc[0-9]image|esx)/) {
-		$imagetype = "linux";
-		$identity  = $IDENTITY_bladerhel;
-	}
-	else {
-		notify($ERRORS{'CRITICAL'}, 0, "could not determin OS for $imagename : $type monitoring on $nodename for $imagename");
-		return 0;
-	}
-	my @sshcmd;
-	if ($type eq "ITM" && $imagetype eq "windows") {
-		#check and start monitoring for ITM
-		my $exists = 0;
-		@sshcmd = run_ssh_command($nodename, $identity, "cmd /c C:\/WINDOWS\/system32\/sc qc KNTCMA_Primary", "root");
-		foreach $l (@{$sshcmd[1]}) {
-			next if ($l =~ /Warning: Permanently added/);
-			if ($l =~ /The specified service does not exist/) {
-				#not there skip and return
-				return 0;
-			}
-			if ($l =~ /SERVICE_NAME: KNTCMA_Primary/) {
-				$exists = 1;
-			}
-		} ## end foreach $l (@{$sshcmd[1]})
-
-		#preform action
-		if ($action =~ /start|stop/) {
-			undef @sshcmd;
-			@sshcmd = run_ssh_command($nodename, $identity, "cmd /c C:\/WINDOWS\/system32\/sc $action KNTCMA_Primary", "root");
-			foreach $l (@{$sshcmd[1]}) {
-				next if ($l =~ /Warning: Permanently added/);
-				if ($l =~ /SERVICE_NAME: KNTCMA_Primary/) {
-					return 1;
-				}
-				if ($l =~ /The service has not been started/) {
-					return 1 if ($action eq "stop");
-				}
-				if ($l =~ /service is already running/) {
-					return 1 if ($action eq "start");
-				}
-				#can run more checks to determine if it is running, stopped or start|stop pending
-				#
-			} ## end foreach $l (@{$sshcmd[1]})
-		} ## end if ($action =~ /start|stop/)
-		else {
-			notify($ERRORS{'CRITICAL'}, 0, "skipping start up, $action not a supported action  for ITM service KNTCMA_Primary");
-			return 0;
-		}
-	} ## end if ($type eq "ITM" && $imagetype eq "windows")
-	elsif ($imagetype eq "linux") {
-		#TODO - insert code for Linux related monitoring agents
-	}
-	return 0;
-
-} ## end sub system_monitoring
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -5648,7 +5065,7 @@ sub get_request_info {
 	# Call the database select subroutine
 	# This will return an array of one or more rows based on the select statement
 	my @selected_rows = database_select($select_statement);
-
+	
 	# Check to make sure 1 or more rows were returned
 	if (scalar @selected_rows == 0) {
 		notify($ERRORS{'WARNING'}, 0, "request id $request_id information could not be retrieved");
@@ -7231,11 +6648,11 @@ AND ";
 		# Assume hostname was specified
 		$select_statement .= "managementnode.hostname like \'$management_node_identifier%\'";
 	}
-
+	
 	# Call the database select subroutine
 	# This will return an array of one or more rows based on the select statement
 	my @selected_rows = database_select($select_statement);
-
+	
 	# Check to make sure 1 row was returned
 	if (scalar @selected_rows == 0) {
 		notify($ERRORS{'WARNING'}, 0, "zero rows were returned from database select, management node identifier may be invalid: '$management_node_identifier'\n$select_statement");
@@ -8022,84 +7439,6 @@ sub update_image_name {
 		return 0;
 	}
 } ## end sub update_image_name
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 windowsroutetable
-
- Parameters  : $node, $identity, $privateIP, $clearallPersistent
- Returns     : 0 or 1
- Description : scan route table and remove inactive persistent routes
-					if clearallPersistent 1 remove all persistent routes
-
-=cut
-
-sub windowsroutetable {
-	my ($node, $identity, $privateIP, $clearallPersistent) = @_;
-	my ($package, $filename, $line, $sub) = caller(0);
-
-	$clearallPersistent = 0 if (!defined($clearallPersistent));
-	my ($myadapter, $publicgateway);
-	my %ip;
-	my $id = 0;
-	my ($privateadapter, $publicadapter);
-	my @ssh = run_ssh_command($node, $identity, "ipconfig", "root");
-	foreach my $a (@{$ssh[1]}) {
-		if ($a =~ /Ethernet adapter (.*):/) {
-			$myadapter                 = $1;
-			$ip{$myadapter}{"id"}      = $id;
-			$ip{$myadapter}{"private"} = 0;
-		}
-		if ($a =~ /IP Address([\s.]*): $privateIP/) {
-			$ip{$myadapter}{"private"} = 1;
-			print "privateadapter $a\n";
-		}
-		if ($a =~ /Default Gateway([\s.]*): ([.0-9]*)/) {
-			$ip{$myadapter}{"gateway"} = $2;
-		}
-		$id++;
-	} ## end foreach my $a (@{$ssh[1]})
-	    #get public gateway
-	foreach my $key (keys %ip) {
-		if (!($ip{$key}{private})) {
-			if (defined($ip{$key}{gateway})) {
-				$publicgateway = $ip{$key}{gateway};
-				notify($ERRORS{'OK'}, 0, "setting publicgateway= $publicgateway");
-			}
-			else {
-				notify($ERRORS{'WARNING'}, 0, "warning no gateway for $key");
-				return 0;
-			}
-		} ## end if (!($ip{$key}{private}))
-	} ## end foreach my $key (keys %ip)
-	my @proutes;
-	my @rte = run_ssh_command($node, $identity, "route print", "root");
-	my $inproute = 0;
-	foreach my $r (@{$rte[1]}) {
-		$inproute = 1 if ($r =~ /Persistent Routes:/);
-		if ($inproute) {
-			if ($r =~ /\s+(0.0.0.0)\s+(0.0.0.0)\s+([0-9\..]*)\s+([0-9]+)/) {
-				if (($3 != $publicgateway) || ($clearallPersistent)) {
-					my $cmd = "route -p DELETE $1 MASK $2 $3 METRIC $4";
-					my @rtedel = run_ssh_command($node, $identity, "$cmd", "root");
-					notify($ERRORS{'OK'}, 0, "found inactive persistent route deleting $3");
-					foreach my $line (@{$rtedel[1]}) {
-						if ($line =~ /A matching persistent route was deleted/) {
-							notify($ERRORS{'OK'}, 0, "$3 was successfully deleted");
-							return 1;
-						}
-						if ($line =~ /The route specified was not found/) {
-							notify($ERRORS{'OK'}, 0, "no route was found $cmd");
-							return 0;
-						}
-					} ## end foreach my $line (@{$rtedel[1]})
-				} ## end if (($3 != $publicgateway) || ($clearallPersistent...
-			} ## end if ($r =~ /\s+(0.0.0.0)\s+(0.0.0.0)\s+([0-9\..]*)\s+([0-9]+)/)
-		} ## end if ($inproute)
-	} ## end foreach my $r (@{$rte[1]})
-	notify($ERRORS{'OK'}, 0, "no inactive persistent routes found");
-	return 1;
-} ## end sub windowsroutetable
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -10515,6 +9854,173 @@ sub is_management_node_process_running {
 	else {
 		notify($ERRORS{'WARNING'}, 0, "failed to run command to determine if process is running");
 		return;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 read_file_to_array
+
+ Parameters  : File path
+ Returns     : If successful: array containing lines in file
+               If failed: false
+ Description : Returns the contents of the file specified by the argument in an
+               array. Each array element contains a line from the file.
+
+=cut
+
+sub read_file_to_array {
+	my $file_path = shift;
+	if (!$file_path) {
+		notify($ERRORS{'WARNING'}, 0, "file path argument was not specified");
+		return;
+	}
+	
+	unless (open(FILE, $file_path)) {
+		notify($ERRORS{'WARNING'}, 0, "unable to open file: $file_path, reason: $!");
+		return;
+	}
+   
+	my @file_contents = <FILE>;
+	close FILE;
+	
+	return @file_contents;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 is_valid_ip_address
+
+ Parameters  : IP address string
+ Returns     : If valid: true
+               If not valid: false
+ Description : Determines if the argument is a valid IP address.
+
+=cut
+
+sub is_valid_ip_address {
+	my $ip_address = shift;
+	if (!$ip_address) {
+		notify($ERRORS{'WARNING'}, 0, "IP address argument was not specified");
+		return;
+	}
+	
+	# Split up the IP address being checked into its octets
+	my @octets = split(/\./, $ip_address);
+	
+	# Make sure 4 octets were found
+	if (scalar @octets != 4) {
+		notify($ERRORS{'WARNING'}, 0, "IP address does not contain 4 octets: $ip_address, octets:\n" . join("\n", @octets));
+		return 0;
+	}
+	
+	# Make sure address only contains digits
+	if (grep(/\D/, @octets)) {
+		notify($ERRORS{'WARNING'}, 0, "IP address contains a non-digit: $ip_address");
+		return 0;
+	}
+	
+	# Make sure none of the octets is > 255
+	if ($octets[0] > 255 || $octets[0] > 255 || $octets[0] > 255 || $octets[0] > 255) {
+		notify($ERRORS{'WARNING'}, 0, "IP address contains an octet > 255: $ip_address");
+		return 0;
+	}
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 is_public_ip_address
+
+ Parameters  : IP address string
+ Returns     : If public: true
+               If not public: false
+ Description : Determines if the argument is a valid public IP address. It will
+               return true if the IP address is valid and not in any of the
+               following ranges:
+               Private:
+                  10.0.0.0 - 10.255.255.255
+                  172.16.0.0 - 172.16.31.255.255
+                  192.168.0.0 - 192.168.255.255
+               Loopback:
+                  127.0.0.0 - 127.255.255.255
+               Reserved:
+                  0.0.0.0
+                  169.254.0.1 - 169.254.255.254
+                  191.255.0.0
+                  223.255.255.0
+                  240.0.0.0 - 255.255.255.254
+               Multicast:
+                  224.0.0.0 - 239.255.255.255
+               Broadcast:
+                  255.255.255.255
+=cut
+
+sub is_public_ip_address {
+	my $ip_address = shift;
+	if (!$ip_address) {
+		notify($ERRORS{'WARNING'}, 0, "IP address argument was not specified");
+		return;
+	}
+	
+	# Split up the IP address being checked into its octets
+	my @octets = split(/\./, $ip_address);
+	
+	# Make sure the address is valid
+	unless (is_valid_ip_address($ip_address)) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine if IP address is private, the address is not valid: $ip_address");
+		return 1;
+	}
+	
+	# Determine the type of address address
+	# Private:
+	# 10.0.0.0 - 10.255.255.255
+	# 172.16.0.0 - 172.16.31.255.255
+	# 192.168.0.0 - 192.168.255.255
+	if (($octets[0] == 10) ||
+		 ($octets[0] == 172 && ($octets[1] >= 16 && $octets[1] <= 31)) ||
+		 ($octets[0] == 192 && $octets[1] == 168)
+		) {
+		notify($ERRORS{'DEBUG'}, 0, "private IP address: $ip_address, returning 0");
+		return 0;
+	}
+	# Loopback:
+	# 127.0.0.0 - 127.255.255.255
+	elsif ($ip_address =~ /^127/) {
+		notify($ERRORS{'DEBUG'}, 0, "loopback IP address: $ip_address, returning 0");
+		return 0;
+	}
+	# Reserved:
+	# 0.0.0.0
+	# 169.254.0.1 - 169.254.255.254
+	# 191.255.0.0
+	# 223.255.255.0
+	# 240.0.0.0 - 255.255.255.254
+	elsif (($ip_address eq '0.0.0.0') ||
+			 ($ip_address =~ /^169\.254/) ||
+			 ($ip_address eq '191.255.0.0') ||
+			 ($ip_address eq '223.255.255.0') ||
+			 ($octets[0] >= 240 && $octets[0] <= 255)
+			 ) {
+		notify($ERRORS{'DEBUG'}, 0, "reserved IP address: $ip_address, returning 0");
+		return 0;
+	}
+	# Multicast:
+	# 224.0.0.0 - 239.255.255.255
+	elsif ($octets[0] >= 224 && $octets[0] <= 239) {
+		notify($ERRORS{'DEBUG'}, 0, "multicast IP address: $ip_address, returning 0");
+		return 0;
+	}
+	# Broadcast:
+	# 255.255.255.255
+	elsif ($ip_address eq '255.255.255.255') {
+		notify($ERRORS{'DEBUG'}, 0, "broadcast IP address: $ip_address, returning 0");
+		return 0;
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "public IP address: $ip_address, returning 1");
+		return 1;
 	}
 }
 

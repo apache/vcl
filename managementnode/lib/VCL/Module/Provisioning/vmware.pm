@@ -626,7 +626,7 @@ sub load {
 	notify($ERRORS{'OK'}, 0, "adapter= $adapter drivetype $vmclient_drivetype");
 	my $guestOS;
 	$guestOS = "winxppro" if ($requestedimagename =~ /(winxp)/i);
-	$guestOS = "win2003"  if ($requestedimagename =~ /(win2003)/i);
+	$guestOS = "winnetenterprise"  if ($requestedimagename =~ /(win2003|win2008)/i);
 	$guestOS = "ubuntu"   if ($requestedimagename =~ /(ubuntu)/i);
 
 
@@ -1251,7 +1251,7 @@ sub capture {
 					#figure out old name
 					foreach my $a (@list) {
 						chomp($a);
-						if ($a =~ /([a-z_]*)-([_0-9a-zA-Z]*)-(v[0-9]*)\.vmdk/) {
+						if ($a =~ /([0-9a-z_]*)-([_0-9a-zA-Z]*)-(v[0-9]*)\.vmdk/) {
 							#print "old name $1-$2-$3\n";
 							$oldname = "$1-$2-$3";
 							notify($ERRORS{'OK'}, 0, "found previous name= $oldname");

@@ -4477,9 +4477,10 @@ sub get_network_configuration {
 		
 		for my $line (@{$output}) {
 			# Find beginning of interface section
-			if ($line =~ /ethernet adapter (.*):/i) {
+			if ($line =~ /\A[^\s].*adapter (.*):\s*\Z/i) {
 				# Get the interface name
 				$interface_name = $1;
+				notify($ERRORS{'DEBUG'}, 0, "found interface: $interface_name");
 				next;
 			}
 			
@@ -4583,11 +4584,11 @@ sub get_network_configuration {
 		}
 		
 		# Check if the interface should be ignored based on the name or description
-		if ($interface_name =~ /loopback|vmnet|afs/i) {
+		if ($interface_name =~ /loopback|vmnet|afs|tunnel/i) {
 			notify($ERRORS{'DEBUG'}, 0, "interface ignored because of name: $interface_name, description: $description, address(es): " . join (", ", @ip_addresses));
 			next;
 		}
-		elsif ($description =~ /loopback|virtual|afs/i) {
+		elsif ($description =~ /loopback|virtual|afs|tunnel|pseudo|6to4|isatap/i) {
 			notify($ERRORS{'DEBUG'}, 0, "interface ignored because of description: $interface_name, description: $description, address(es): " . join (", ", @ip_addresses));
 			next;
 		}
@@ -4730,7 +4731,7 @@ sub get_private_ip_address {
 		notify($ERRORS{'WARNING'}, 0, "unable to retrieve network configuration");
 		return;
 	}
-	
+
 	my $interface_name = (keys(%{$network_configuration}))[0];
 	my $ip_address_config = $network_configuration->{$interface_name}{ip_address};
 	my $ip_address = (keys(%$ip_address_config))[0];
@@ -4773,9 +4774,11 @@ sub get_public_ip_address {
 
 =head2 get_public_default_gateway
 
- Parameters  : 
- Returns     : 
- Description : 
+ Parameters  : None
+ Returns     : If successful: string containing IP address
+               If failed: false
+ Description : Returns the default gateway currently configured for the
+               computer's public interface.
 
 =cut
 
@@ -4786,40 +4789,46 @@ sub get_public_default_gateway {
 		return;
 	}
 	
+	my $computer_nodename = $self->data->get_computer_node_name() || 'node';
+	
 	my $default_gateway;
-
-	# Check if management node is using static public IP configuration
+	
+	# Check the management node's DHCP IP configuration mode (static or dynamic)
 	my $ip_configuration = $self->data->get_management_node_public_ip_configuration();
-	if ($ip_configuration && $ip_configuration =~ /static/i) {
-		notify($ERRORS{'DEBUG'}, 0, "retrieving static default gateway configured for management node");
-		$default_gateway = $self->data->get_management_node_public_default_gateway();
-	}
-	else {
-		if (!$ip_configuration) {
-			notify($ERRORS{'WARNING'}, 0, "management node public IP configuration could not be retrieved, retrieving dynamic default gateway currently being used on computer");
+	notify($ERRORS{'DEBUG'}, 0, "IP configuration mode in use: $ip_configuration");
+	if ($ip_configuration !~ /static/i) {
+		# Management node is using dynamic public IP addresses
+		# Retrieve public network configuration currently in use on computer
+		my $network_configuration = $self->get_network_configuration('public');
+		if ($network_configuration) {
+			# Get the default gateway out of the network configuration currently being used
+			my $interface_name = (keys(%{$network_configuration}))[0];
+			$default_gateway = $network_configuration->{$interface_name}{default_gateway};
+			if ($default_gateway) {
+				notify($ERRORS{'DEBUG'}, 0, "returning default gateway currently in use on $computer_nodename: $default_gateway");
+				return $default_gateway;
+			}
+			else {
+				notify($ERRORS{'WARNING'}, 0, "unable to determine default gateway currently in use on $computer_nodename");
+			}
 		}
 		else {
-			notify($ERRORS{'DEBUG'}, 0, "retrieving dynamic default gateway currently being used on computer");
+			notify($ERRORS{'WARNING'}, 0, "unable to retrieve public network configuration currently in use on $computer_nodename");
 		}
-		
-		# Make sure network configuration was retrieved
-		my $network_configuration = $self->get_network_configuration('public');
-		if (!$network_configuration) {
-			notify($ERRORS{'WARNING'}, 0, "unable to retrieve network configuration");
-			return;
-		}
-		
-		my $interface_name = (keys(%{$network_configuration}))[0];
-		$default_gateway = $network_configuration->{$interface_name}{default_gateway};
-	}
-
-	if (!$default_gateway) {
-		notify($ERRORS{'WARNING'}, 0, "unable to determine default gateway");
-		return;
 	}
 	
-	notify($ERRORS{'DEBUG'}, 0, "returning public default gateway address: $default_gateway");
-	return $default_gateway;
+	# Static addresses used, get default gateway address configured for management node
+	$default_gateway = $self->data->get_management_node_public_default_gateway();
+	
+	# Make sure default gateway was retrieved
+	if ($default_gateway) {
+		notify($ERRORS{'DEBUG'}, 0, "returning management node's default gateway address: $default_gateway");
+		return $default_gateway;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve management node's default gateway address");
+		return;
+	}
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -7188,7 +7197,7 @@ sub set_static_public_address {
 	my $public_ip_address = $self->data->get_computer_ip_address() || 'undefined';
 	
 	my $subnet_mask = $self->data->get_management_node_public_subnet_mask() || 'undefined';
-	my $default_gateway = $self->data->get_management_node_public_default_gateway() || 'undefined';
+	my $default_gateway = $self->get_public_default_gateway() || 'undefined';
 	my $dns_server = $self->data->get_management_node_public_dns_server() || 'undefined';
 	
 	# Make sure required info was retrieved
@@ -7255,86 +7264,6 @@ sub set_static_public_address {
 	
 	notify($ERRORS{'OK'}, 0, "configured static address for public interface '$public_interface_name'");
 	return 1;
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 set_static_private_address
-
- Parameters  : None
- Returns     : If successful: true
-               If failed: false
- Description : Configures the private interface to use a static IP address. The
-               address and subnet mask used will be the same as what is
-               currently configured for the computer.
-
-=cut
-
-sub set_static_private_address {
-	my $self = shift;
-	unless (ref($self) && $self->isa('VCL::Module')) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a VCL::Module module object method");
-		return;	
-	}
-	
-	# Get the IP configuration
-	my $private_interface_name = $self->get_private_interface_name() || 'undefined';
-	my $private_ip_address = $self->get_private_ip_address() || 'undefined';
-	my $private_subnet_mask = $self->get_private_subnet_mask() || 'undefined';
-	
-	# Make sure required info was retrieved
-	if ("$private_interface_name $private_ip_address $private_subnet_mask" =~ /undefined/) {
-		notify($ERRORS{'WARNING'}, 0, "unable to retrieve required network configuration:\ninterface: $private_interface_name\nprivate IP address: $private_ip_address\nsubnet mask=$private_subnet_mask");
-		return;	
-	}
-	
-	my $management_node_keys = $self->data->get_management_node_keys();
-	my $computer_node_name   = $self->data->get_computer_node_name();
-	
-	notify($ERRORS{'DEBUG'}, 0, "private network configuration:\ninterface: $private_interface_name\nprivate IP address: $private_ip_address\nsubnet mask: $private_subnet_mask");
-	
-	# Set the static private IP address
-	my $set_command = "/bin/cygstart.exe cmd.exe /c netsh interface ip set address name=\"$private_interface_name\" source=static addr=$private_ip_address mask=$private_subnet_mask";
-	my ($set_exit_status, $set_output) = run_ssh_command($computer_node_name, $management_node_keys, $set_command);
-	if (defined($set_exit_status) && $set_exit_status == 0) {
-		notify($ERRORS{'DEBUG'}, 0, "set static private IP address to $private_ip_address");
-	}
-	elsif (defined($set_exit_status)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to set static private IP address to $private_ip_address, exit status: $set_exit_status, output:\n@{$set_output}");
-		return;
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to set static private IP address to $private_ip_address");
-		return;
-	}
-	
-	# Wait briefly while command is executed
-	sleep 1;
-	
-	# Show the static private IP address configuration
-	my $show_command = "netsh interface ip show address name=\"$private_interface_name\"";
-	my ($show_exit_status, $show_output) = run_ssh_command($computer_node_name, $management_node_keys, $show_command);
-	if (defined($show_exit_status) && $show_exit_status == 0) {
-		notify($ERRORS{'DEBUG'}, 0, "private IP address configuration: " . join("\n", @$show_output));
-	}
-	elsif (defined($show_exit_status)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to display private IP address configuration, exit status: $show_exit_status, output:\n@{$show_output}");
-		return;
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to display private IP address configuration");
-		return;
-	}
-	
-	# Check the show address output
-	if (grep(/DHCP enabled:\s+No/i, @$show_output)) {
-		notify($ERRORS{'OK'}, 0, "configured static address for private interface '$private_interface_name'");
-		return 1;
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to configure static address for private interface '$private_interface_name'");
-		return;
-	}
 }
 
 #/////////////////////////////////////////////////////////////////////////////
