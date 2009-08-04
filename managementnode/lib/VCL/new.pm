@@ -1050,20 +1050,22 @@ sub reserve_computer {
 		
 		insertloadlog($reservation_id, $computer_id, "info", "node ready adding user account");
 		
-		# Create a random password for the reservation
-		my $reservation_password = getpw();
-		
-		# Update the password in the reservation table
-		if (update_request_password($reservation_id, $reservation_password)) {
-			notify($ERRORS{'DEBUG'}, 0, "updated password in the reservation table");
+		# Create a random password and update the reservation table unless the reservation if for a Linux non-standalone image
+		unless ($image_os_type =~ /linux/ && !$user_standalone) {
+			# Create a random password for the reservation
+			my $reservation_password = getpw();
+			
+			# Update the password in the reservation table
+			if (update_request_password($reservation_id, $reservation_password)) {
+				notify($ERRORS{'DEBUG'}, 0, "updated password in the reservation table");
+			}
+			else {
+				$self->reservation_failed("failed to update password in the reservation table");
+			}
+			
+			# Set the password in the DataStructure object
+			$self->data->set_reservation_password($reservation_password);
 		}
-		else {
-			$self->reservation_failed("failed to update password in the reservation table");
-		}
-		
-		# Set the password in the DataStructure object
-		$self->data->set_reservation_password($reservation_password);
-		
 		
 		# Check if OS module implements a reserve() subroutine
 		if ($self->os->can('reserve')) {
