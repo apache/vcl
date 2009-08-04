@@ -702,7 +702,7 @@ sub reload_image {
 	else {
 		notify($ERRORS{'OK'}, 0, ref($self->os) . "->post_load() subroutine does not exist");
 	}
-
+	
 	#Post operations not to be handled by provisioning modules
 	if($image_os_install_type eq "kickstart"){
 		notify($ERRORS{'OK'}, 0, "Detected kickstart install on $computer_short_name, writing current_image.txt");
@@ -710,7 +710,7 @@ sub reload_image {
 			  notify($ERRORS{'OK'}, 0, "Successfully wrote current_image.txt on $computer_short_name");
 		  }
 	}
-
+	
 	notify($ERRORS{'OK'}, 0, "node ready: successfully reloaded $computer_short_name with $image_name");
 	insertloadlog($reservation_id, $computer_id, "nodeready", "$computer_short_name was reloaded with $image_name");
 
@@ -1026,154 +1026,59 @@ sub reserve_computer {
 	}
 
 	if ($computer_type =~ /blade|virtualmachine/) {
-		# if dynamicDHCP update or dble check address in table
-		#ipconfiguration
-		if ($IPCONFIGURATION ne "manualDHCP") {
-			#not default setting
-			if ($IPCONFIGURATION eq "dynamicDHCP") {
-				my $assignedIPaddress = getdynamicaddress($computer_short_name, $image_os_name,$image_os_type);
-
-				if ($assignedIPaddress) {
-					#$IPaddressforlog = $assignedIPaddress;
-					#update computer table
-					if (update_computer_address($computer_id, $assignedIPaddress)) {
-						notify($ERRORS{'OK'}, 0, "dynamic address collect $assignedIPaddress -- updating computer table");
-					}
-					#change our local and hash variables
-					$self->data->set_computer_ip_address($assignedIPaddress);
-					$computer_ip_address = $assignedIPaddress;
-				} ## end if ($assignedIPaddress)
-				else {
-					notify($ERRORS{'CRITICAL'}, 0, "could not fetch dynamic address from $computer_short_name $image_name");
-					insertloadlog($reservation_id, $computer_id, "failed", "node problem could not collect IP address form $computer_short_name");
-					return 0;
+		# If dynamic DHCP is used, update the public IP address in the computer table
+		if ($IPCONFIGURATION eq "dynamicDHCP") {
+			$computer_ip_address = getdynamicaddress($computer_short_name, $image_os_name, $image_os_type);
+			if ($computer_ip_address) {
+				notify($ERRORS{'DEBUG'}, 0, "retrieved dynamic DHCP IP address from $computer_ip_address: $computer_ip_address");
+				
+				# Update the reservation data
+				$self->data->set_computer_ip_address($computer_ip_address);
+				
+				# Update the public IP address in the computer table
+				if (update_computer_address($computer_id, $computer_ip_address)) {
+					notify($ERRORS{'DEBUG'}, 0, "updated IP address in computer table");
 				}
-			} ## end if ($IPCONFIGURATION eq "dynamicDHCP")
-		} ## end if ($IPCONFIGURATION ne "manualDHCP")
-
-
-		insertloadlog($reservation_id, $computer_id, "info", "node ready adding user account");
-
-		if ($image_os_type =~ /windows/ || ($image_os_type =~ /linux/ && $user_standalone)) {
-			# Get a random password
-			my $reservation_password = getpw();
-
-			# Update pw in reservation table
-			if (update_request_password($reservation_id, $reservation_password)) {
-				notify($ERRORS{'OK'}, 0, "updated password entry reservation_id $reservation_id");
+				else {
+					$self->reservation_failed("failed to update IP address in computer table");
+				}
 			}
 			else {
-				notify($ERRORS{'CRITICAL'}, 0, "failed to update password entry reservation_id $reservation_id");
+				$self->reservation_failed("failed to retrieve dynamic DHCP IP address from $computer_short_name");
 			}
-			
-			# Set the password in the DataStructure object
-			$self->data->set_reservation_password($reservation_password);
-			
-			# Check if OS module had implemented a reserve() subroutine
-			# This is only true for modularized OS modules
-			if ($self->os->can('reserve')) {
-				# Call the OS module's reserve() subroutine
-				notify($ERRORS{'DEBUG'}, 0, "calling OS module's reserve() subroutine");
-				if ($self->os->reserve()) {
-					notify($ERRORS{'DEBUG'}, 0, "OS module successfully reserved resources for this reservation");
-				}
-				else {
-					$self->reservation_failed("OS module failed to reserve resources for this reservation");
-				}
-			}
-			
-			# Windows Vista reservation tasks
-			# Much of this subroutine will be rearranged once other OS's are modularized
-			elsif ($image_os_name =~ /winvista/) {
-				if ($request_forimaging) {
-					# Set the Administrator password
-					notify($ERRORS{'OK'}, 0, "attempting to set Administrator password to $reservation_password on $computer_short_name");
-					if (!$self->os->set_password('Administrator', $reservation_password)) {
-						notify($ERRORS{'WARNING'}, 0, "reserve computer failed: unable to set password for administrator account on $computer_short_name");
-						return 0;
-					}
-				}
-				else {
-					# Add the users to the computer
-					# OS add_users() subroutine will add the primary reservation user and any imagemeta group users
-					notify($ERRORS{'OK'}, 0, "attempting to add users to $computer_short_name");
-					if (!$self->os->add_users()) {
-						notify($ERRORS{'WARNING'}, 0, "reserve computer failed: unable to add users to $computer_short_name");
-						return 0;
-					}
-				}
-			}
-
-			elsif ($image_os_type =~ /windows/ && $request_forimaging) {
-				if (changewindowspasswd($computer_short_name, "administrator", $reservation_password)) {
-					notify($ERRORS{'OK'}, 0, "password changed for administrator account on $computer_short_name to $reservation_password");
-				}
-				else {
-					notify($ERRORS{'CRITICAL'}, 0, "unable to change password for administrator account on $computer_short_name to $reservation_password");
-					return 0;
-				}
-			}
-			elsif ($image_os_type =~ /windows/) {
-				# Add user to computer
-				# Linux user addition is handled in reserve.pm
-				notify($ERRORS{'OK'}, 0, "attempting to add user $user_unityid to $computer_short_name");
-				insertloadlog($reservation_id, $computer_id, "addinguser", "adding user account $user_unityid");
-
-				# Add the request user to the computer
-				if (add_user($computer_short_name, $user_unityid, $user_uid, $reservation_password, $computer_host_name, $image_os_name,$image_os_type, 0, 0, 0)) {
-					notify($ERRORS{'OK'}, 0, "user $user_unityid added to $computer_short_name");
-				}
-				else {
-					# check for deletion
-					if (is_request_deleted($request_id)) {
-						notify($ERRORS{'OK'}, 0, "unable to add user $user_unityid to $computer_short_name due to deleted requested ");
-						#return 0 and let process routine handle reset computer state
-						return 0;
-					}
-					notify($ERRORS{'CRITICAL'}, 0, "unable to add user $user_unityid to $computer_short_name");
-					return 0;
-				} ## end else [ if (add_user($computer_short_name, $user_unityid...
-
-				# If imagemeta has user group members, add them to the computer
-				if ($imagemeta_usergroupmembercount) {
-					notify($ERRORS{'OK'}, 0, "multiple users detected");
-
-					insertloadlog($reservation_id, $computer_id, "info", "multiple user accounts flagged adding additional users");
-
-					if (add_users_by_group($computer_short_name, $reservation_password, $computer_host_name, $image_os_name,$image_os_type, $imagemeta_usergroupmembers)) {
-						notify($ERRORS{'OK'}, 0, "successfully added multiple users");
-					}
-					else {
-						notify($ERRORS{'CRITICAL'}, 0, "failed to add multiple users");
-						return 0;
-					}
-					notify($ERRORS{'OK'}, 0, "users from group $imagemeta_usergroupid added");
-
-				} ## end if ($imagemeta_usergroupmembercount)
-
-			} ## end elsif ($image_os_type =~ /windows/)  [ if ($image_os_type =~ /windows/ && $request_forimaging)
-		} ## end if ($image_os_type =~ /windows/ || ($image_os_type...
-		elsif ($image_os_type =~ /linux/) {
-			if ($user_standalone) {
-				# Get a random password
-				my $reservation_password = getpw();
-
-				# Update pw in reservation table
-				if (update_request_password($reservation_id, $reservation_password)) {
-					notify($ERRORS{'OK'}, 0, "updated password entry reservation_id $reservation_id");
-				}
-				else {
-					notify($ERRORS{'CRITICAL'}, 0, "failed to update password entry reservation_id $reservation_id");
-				}
-			} ## end if ($user_standalone)
-		} ## end elsif ($image_os_type =~ /linux/)  [ if ($image_os_type =~ /windows/ || ($image_os_type...
-		else {
-			notify($ERRORS{'CRITICAL'}, 0, "password set failed, unsupported image OS type: $image_os_type");
-			return 0;
 		}
-
+		
+		insertloadlog($reservation_id, $computer_id, "info", "node ready adding user account");
+		
+		# Create a random password for the reservation
+		my $reservation_password = getpw();
+		
+		# Update the password in the reservation table
+		if (update_request_password($reservation_id, $reservation_password)) {
+			notify($ERRORS{'DEBUG'}, 0, "updated password in the reservation table");
+		}
+		else {
+			$self->reservation_failed("failed to update password in the reservation table");
+		}
+		
+		# Set the password in the DataStructure object
+		$self->data->set_reservation_password($reservation_password);
+		
+		
+		# Check if OS module implements a reserve() subroutine
+		if ($self->os->can('reserve')) {
+			# Call the OS module's reserve() subroutine
+			notify($ERRORS{'DEBUG'}, 0, "calling OS module's reserve() subroutine");
+			if ($self->os->reserve()) {
+				notify($ERRORS{'DEBUG'}, 0, "OS module successfully reserved resources for this reservation");
+			}
+			else {
+				$self->reservation_failed("OS module failed to reserve resources for this reservation");
+			}
+		}
+		
+		# Check if this is a parent reservation, only the parent reservation handles notifications
 		if (!$reservation_is_parent) {
-			#sub image; parent handles notification
 			return 1;
 		}
 
