@@ -1921,22 +1921,13 @@ sub import_registry_file {
 		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to echo registry file contents to $temp_registry_file_path");
 		return;
 	}
-
+	
 	# Run reg.exe IMPORT
-	my $import_registry_command .= '"$SYSTEMROOT/System32/reg.exe" IMPORT ' . $temp_registry_file_path;
-	my ($import_registry_exit_status, $import_registry_output) = run_ssh_command($computer_node_name, $management_node_keys, $import_registry_command, '', '', 1);
-	if (defined($import_registry_exit_status) && $import_registry_exit_status == 0) {
-		notify($ERRORS{'OK'}, 0, "registry file contents imported from $temp_registry_file_path");
-	}
-	elsif ($import_registry_exit_status) {
-		notify($ERRORS{'WARNING'}, 0, "failed to import registry file contents from $temp_registry_file_path, exit status: $import_registry_exit_status, output:\n@{$import_registry_output}");
+	if (!$self->reg_import($temp_registry_file_path)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to import registry string contents from $temp_registry_file_path");
 		return;
 	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to import registry file contents from $temp_registry_file_path");
-		return;
-	}
-
+	
 	return 1;
 } ## end sub import_registry_file
 
@@ -2008,17 +1999,8 @@ sub import_registry_string {
 	}
 
 	# Run reg.exe IMPORT
-	my $import_registry_command .= '"$SYSTEMROOT/System32/reg.exe" IMPORT ' . $temp_registry_file_path;
-	my ($import_registry_exit_status, $import_registry_output) = run_ssh_command($computer_node_name, $management_node_keys, $import_registry_command, '', '', 1);
-	if (defined($import_registry_exit_status) && $import_registry_exit_status == 0) {
-		notify($ERRORS{'DEBUG'}, 0, "registry string contents imported from $temp_registry_file_path");
-	}
-	elsif ($import_registry_exit_status) {
-		notify($ERRORS{'WARNING'}, 0, "failed to import registry string contents from $temp_registry_file_path, exit status: $import_registry_exit_status, output:\n@{$import_registry_output}");
-		return;
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to import registry string contents from $temp_registry_file_path");
+	if (!$self->reg_import($temp_registry_file_path)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to import registry string contents from $temp_registry_file_path");
 		return;
 	}
 	
@@ -2029,6 +2011,51 @@ sub import_registry_string {
 
 	return 1;
 } ## end sub import_registry_string
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 reg_import
+
+ Parameters  :
+ Returns     :
+ Description :
+
+=cut
+
+sub reg_import {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+
+	my $management_node_keys = $self->data->get_management_node_keys();
+	my $computer_node_name   = $self->data->get_computer_node_name();
+	
+	# Get the registry file path argument
+	my $registry_file_path = shift;
+	if (!defined($registry_file_path) || !$registry_file_path) {
+		notify($ERRORS{'WARNING'}, 0, "registry file path was not passed correctly as an argument");
+		return;
+	}
+	
+	# Run reg.exe IMPORT
+	my $import_registry_command .= '"//$COMPUTERNAME/c$/WINDOWS/system32/reg.exe" IMPORT ' . $registry_file_path;
+	my ($import_registry_exit_status, $import_registry_output) = run_ssh_command($computer_node_name, $management_node_keys, $import_registry_command, '', '', 1);
+	if (defined($import_registry_exit_status) && $import_registry_exit_status == 0) {
+		notify($ERRORS{'DEBUG'}, 0, "imported registry file: $registry_file_path");
+	}
+	elsif ($import_registry_exit_status) {
+		notify($ERRORS{'WARNING'}, 0, "failed to import registry file: $registry_file_path, exit status: $import_registry_exit_status, output:\n@{$import_registry_output}");
+		return;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to import registry file: $registry_file_path");
+		return;
+	}
+	
+	return 1;
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -3031,105 +3058,6 @@ sub prepare_newsid {
 	
 	return 1;
 }
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 run_newsid
-
- Parameters  : 
- Returns     : 1 success 0 failure
- Description : 
-
-=cut
-
-sub run_newsid {
-	my $self = shift;
-	if (ref($self) !~ /windows/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-
-	my $reservation_id       = $self->data->get_reservation_id();
-	my $management_node_keys = $self->data->get_management_node_keys();
-	my $computer_node_name   = $self->data->get_computer_node_name();
-	my $computer_id          = $self->data->get_computer_id();
-
-	my $registry_string .= <<'EOF';
-Windows Registry Editor Version 5.00
-
-; This registry file contains the entries to bypass the license agreement when newsid.exe is run
-
-[HKEY_CURRENT_USER\Software\Sysinternals\NewSID]
-"EulaAccepted"=dword:00000001
-EOF
-
-	# Import the string into the registry
-	if ($self->import_registry_string($registry_string)) {
-		notify($ERRORS{'DEBUG'}, 0, "added newsid eulaaccepted registry string");
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to add newsid eulaaccepted registry string");
-		return 0;
-	}
-	
-	# Attempt to run newsid.exe
-	# newsid.exe should automatically reboot the computer
-	# It isn't done when the process exits, newsid.exe starts working and immediately returns
-	# NewSid.exe [/a[[/n]|[/d <reboot delay (in seconds)>]]][<new computer name>]
-	# /a - run without prompts
-	# /n - Don't reboot after automatic run
-	my $newsid_command = "\"$NODE_CONFIGURATION_DIRECTORY/Utilities/NewSID/newsid.exe\" /a";
-	my $newsid_start_processing_time = time();
-	my ($newsid_exit_status, $newsid_output) = run_ssh_command($computer_node_name, $management_node_keys, $newsid_command);
-	if (defined($newsid_exit_status) && $newsid_exit_status == 0) {
-		notify($ERRORS{'OK'}, 0, "newsid.exe has been started on $computer_node_name");
-	}
-	elsif (defined($newsid_exit_status)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to start newsid.exe on $computer_node_name, exit status: $newsid_exit_status, output:\n@{$newsid_output}");
-		return;
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to start newsid.exe on $computer_node_name");
-		return;
-	}
-
-	my $newsid_end_processing_time = time();
-	my $newsid_processing_duration = ($newsid_end_processing_time - $newsid_start_processing_time);
-	notify($ERRORS{'OK'}, 0, "newsid.exe execution took $newsid_processing_duration seconds");
-	insertloadlog($reservation_id, $computer_id, "info", "newsid.exe execution took $newsid_processing_duration seconds");
-
-	# After launching newsid.exe, wait for machine to become unresponsive
-	if (!$self->wait_for_no_ping(10)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to run newsid.exe, $computer_node_name never rebooted after waiting 10 minutes");
-		return;
-	}
-
-	my $newsid_shutdown_time = time();
-	notify($ERRORS{'OK'}, 0, "newsid.exe initiated reboot, $computer_node_name is unresponsive, reboot initialization took " . ($newsid_shutdown_time - $newsid_end_processing_time) . " seconds");
-
-	# Wait maximum of 6 minutes for the computer to come back up
-	if (!$self->wait_for_ping(6)) {
-		notify($ERRORS{'WARNING'}, 0, "$computer_node_name never responded to ping, it never came back up");
-		return 0;
-	}
-
-	my $newsid_ping_respond_time = time();
-	notify($ERRORS{'OK'}, 0, "reboot nearly complete on $computer_node_name after running newsid.exe, ping response took " . ($newsid_ping_respond_time - $newsid_shutdown_time) . " seconds");
-
-	# Ping successful, try ssh
-	notify($ERRORS{'OK'}, 0, "waiting for ssh to respond on $computer_node_name");
-	if (!$self->wait_for_ssh(3)) {
-		notify($ERRORS{'WARNING'}, 0, "newsid.exe failed, $computer_node_name rebooted but ssh never became available");
-		return 0;
-	}
-
-	my $newsid_ssh_respond_time = time();
-	my $newsid_entire_duration  = ($newsid_ssh_respond_time - $newsid_start_processing_time);
-	notify($ERRORS{'OK'}, 0, "newsid.exe succeeded on $computer_node_name, entire process took $newsid_entire_duration seconds");
-	insertloadlog($reservation_id, $computer_id, "info", "entire newsid.exe process took $newsid_entire_duration seconds");
-
-	return 1;
-} ## end sub run_newsid
 
 #/////////////////////////////////////////////////////////////////////////////
 
