@@ -211,7 +211,7 @@ sub delete_user {
 	}
 
 	#Clear user from external_sshd_config
-	my $clear_extsshd = "perl -pi -e 's/^AllowUsers .*\n//' /etc/ssh/external_sshd_config";
+	my $clear_extsshd = "sed -ie \"/^AllowUsers .*/d\" /etc/ssh/external_sshd_config";
 	if (run_ssh_command($computer_node_name, $identity, $clear_extsshd, "root")) {
 		notify($ERRORS{'DEBUG'}, 0, "cleared AllowUsers directive from external_sshd_config");
 	}
@@ -223,7 +223,7 @@ sub delete_user {
 
 	if ($imagemeta_rootaccess) {
 		#clear user from sudoers file
-		my $clear_cmd = "perl -pi -e 's/^$user_name .*\n//' /etc/sudoers";
+		my $clear_cmd = "sed -ie \"/^$user_name .*/d\" /etc/sudoers";
 		if (run_ssh_command($computer_node_name, $image_identity, $clear_cmd, "root")) {
 			notify($ERRORS{'DEBUG'}, 0, "cleared $user_name from /etc/sudoers");
 		}
@@ -281,7 +281,7 @@ sub reserve {
 	if ($imagemeta_rootaccess) {
 		# Add to sudoers file
 		#clear user from sudoers file
-		my $clear_cmd = "perl -pi -e 's/^$user_name .*\n//' /etc/sudoers";
+		my $clear_cmd = "sed -ie \"/^$user_name .*/d\" /etc/sudoers";
 		if (run_ssh_command($computer_node_name, $image_identity, $clear_cmd, "root")) {
 			notify($ERRORS{'DEBUG'}, 0, "cleared $user_name from /etc/sudoers");
 		}
@@ -314,7 +314,7 @@ sub grant_access {
 
 	notify($ERRORS{'OK'}, 0, "In grant_access routine $user,$computer_node_name");
 	my @sshcmd;
-	my $clear_extsshd = "perl -pi -e 's/^AllowUsers .*\n//' /etc/ssh/external_sshd_config";
+	my $clear_extsshd = "sed -ie \"/^AllowUsers .*/d\" /etc/ssh/external_sshd_config";
 	if (run_ssh_command($computer_node_name, $identity, $clear_extsshd, "root")) {
 		notify($ERRORS{'DEBUG'}, 0, "cleared AllowUsers directive from external_sshd_config");
 	}
