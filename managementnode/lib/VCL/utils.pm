@@ -2867,10 +2867,10 @@ sub add_user {
 		# set common linux useradd string
 		my $useradd_string;
 		if (!(defined($uid))) {    # check for uid if not let OS set one
-			$useradd_string = "/usr/sbin/useradd -d /home/$user -m $user -g ncsu";
+			$useradd_string = "/usr/sbin/useradd -d /home/$user -m $user";
 		}
 		else {
-			$useradd_string = "/usr/sbin/useradd -u $uid -d /home/$user -m $user -g ncsu";
+			$useradd_string = "/usr/sbin/useradd -u $uid -d /home/$user -m $user";
 		}
 
 		# two methods: single user or group of users
@@ -2881,7 +2881,7 @@ sub add_user {
 			foreach my $u (@group) {
 				#$u in form of  unity:uid
 				my ($user_unityid, $uid) = split(":", $u);
-				my $cmd = "/usr/sbin/useradd -u $uid -d /home/$user_unityid -m $user_unityid -g ncsu";
+				my $cmd = "/usr/sbin/useradd -u $uid -d /home/$user_unityid -m $user_unityid";
 				if (run_ssh_command($node, $identity, $cmd, "root")) {
 					notify($ERRORS{'OK'}, 0, "added user $user_unityid to $node");
 				}
@@ -2889,6 +2889,7 @@ sub add_user {
 					notify($ERRORS{'WARNING'}, 0, "failed to execute $cmd");
 					return 0;
 				}
+
 				#append to ssh string
 				$allowuserstring .= " $user_unityid";
 			} ## end foreach my $u (@group)
@@ -2933,6 +2934,24 @@ sub add_user {
 				} ## end if ($l =~ /user $user exists/)
 
 			} ## end foreach my $l (@{$sshcmd[1]})
+
+			#SETUP sudoers file
+			#clear user from sudoers file first
+			my $clear_cmd = "sed -ie \"/^$user .*/d\" /etc/sudoers";
+			if (run_ssh_command($node, $identity, $clear_cmd, "root")) {
+				notify($ERRORS{'DEBUG'}, 0, "cleared $user from /etc/sudoers");
+			}
+			else {
+				notify($ERRORS{'CRITICAL'}, 0, "failed to clear $user from /etc/sudoers");
+			}
+			my $sudoers_cmd = "echo \"$user ALL= NOPASSWD: ALL\" >> /etc/sudoers";
+			if (run_ssh_command($node, $identity, $sudoers_cmd, "root")) {
+				notify($ERRORS{'DEBUG'}, 0, "added $user to /etc/sudoers");
+			}
+			else {
+				notify($ERRORS{'CRITICAL'}, 0, "failed to add $user to /etc/sudoers");
+			}
+
 			if (_is_user_added($node, $user, "blade", $os, $image_os_type)) {
 				notify($ERRORS{'OK'}, 0, "added user account $user to $node");
 				undef @sshcmd;
@@ -2944,6 +2963,7 @@ sub add_user {
 					notify($ERRORS{'CRITICAL'}, 0, "failed to add AllowUsers $user to external_sshd_config");
 					return 0;
 				}
+
 				undef @sshcmd;
 				@sshcmd = run_ssh_command($node, $identity, "/etc/init.d/ext_sshd restart", "root");
 
@@ -2964,6 +2984,8 @@ sub add_user {
 			}
 			# add user to external_sshd config
 		}    # grpflag true
+
+
 	}    # rhel
 	else {
 		return 0;
@@ -3047,6 +3069,17 @@ sub del_user {
 					return 0;
 				}
 			} ## end if (open(SSHDCFG, "/tmp/$node.sshd"))
+
+			#CLEAR sudoers file
+			my $clear_cmd = "sed -ie \"/^$user .*/d\" /etc/sudoers";
+			if (run_ssh_command($node, $IDENTITY_bladerhel, $clear_cmd, "root")) {
+				notify($ERRORS{'DEBUG'}, 0, "cleared $user from /etc/sudoers");
+			}
+			else {
+				notify($ERRORS{'CRITICAL'}, 0, "failed to clear $user from /etc/sudoers");
+			}
+
+
 		} ## end elsif 
 		else {
 			notify($ERRORS{'WARNING'}, 0, "$osname does not exist ");
