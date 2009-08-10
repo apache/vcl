@@ -101,6 +101,12 @@ sub capture_prepare {
 	if ($self->delete_user()) {
 		notify($ERRORS{'OK'}, 0, "$user_unityid deleted from $computer_node_name");
 	}
+
+	# try to clear /tmp
+	if (run_ssh_command($computer_node_name, $management_node_keys, "/usr/sbin/tmpwatch -f 0 /tmp; /bin/cp /dev/null /var/log/wtmp", "root")) {
+		notify($ERRORS{'DEBUG'}, 0, "cleartmp precapture $computer_node_name ");
+	}
+
 	if ($IPCONFIGURATION eq "static") {
 		#so we don't have conflicts we should set the public adapter back to dhcp
 		# reset ifcfg-eth1 back to dhcp
@@ -164,6 +170,243 @@ sub capture_start {
 	return 1;
 } ## end sub capture_start
 
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 post_load
+
+ Parameters  :
+ Returns     :
+ Description :
+
+=cut
+
+sub post_load {
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return 0;
+	}
+
+	my $management_node_keys = $self->data->get_management_node_keys();
+	my $image_name           = $self->data->get_image_name();
+	my $computer_short_name  = $self->data->get_computer_short_name();
+	my $computer_node_name   = $self->data->get_computer_node_name();
+
+	notify($ERRORS{'OK'}, 0, "initiating Linux post_load: $image_name on $computer_short_name");
+
+	# Change password
+	if (_changepasswd($computer_node_name, "root")) {
+		notify($ERRORS{'OK'}, 0, "successfully changed root password on $computer_node_name");
+		#insertloadlog($reservation_id, $computer_id, "info", "SUCCESS randomized roots password");
+	}
+	else {
+		notify($ERRORS{'OK'}, 0, "failed to edit root password on $computer_node_name");
+	}
+	#disable ext_sshd
+	my @stopsshd = run_ssh_command($computer_short_name, $management_node_keys, "/etc/init.d/ext_sshd stop", "root");
+	foreach my $l (@{$stopsshd[1]}) {
+		if ($l =~ /Stopping ext_sshd/) {
+			notify($ERRORS{'OK'}, 0, "ext sshd stopped on $computer_node_name");
+			last;
+		}
+	}
+
+	#Clear user from external_sshd_config
+	my $clear_extsshd = "sed -ie \"/^AllowUsers .*/d\" /etc/ssh/external_sshd_config";
+	if (run_ssh_command($computer_node_name, $management_node_keys, $clear_extsshd, "root")) {
+		notify($ERRORS{'DEBUG'}, 0, "cleared AllowUsers directive from external_sshd_config");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'CRITICAL'}, 0, "failed to clear AllowUsers from external_sshd_config");
+	}
+	return 1;
+
+} ## end sub post_load
+
+sub set_static_public_address {
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return 0;
+	}
+	# Make sure public IP configuration is static
+	my $ip_configuration = $self->data->get_management_node_public_ip_configuration() || 'undefined';
+	unless ($ip_configuration =~ /static/i) {
+		notify($ERRORS{'WARNING'}, 0, "static public address can only be set if IP configuration is static, current value: $ip_configuration");
+		return;
+	}
+
+	# Get the IP configuration
+	my $public_interface_name = $self->get_public_interface_name()     || 'undefined';
+	my $public_ip_address     = $self->data->get_computer_ip_address() || 'undefined';
+
+	my $subnet_mask     = $self->data->get_management_node_public_subnet_mask() || 'undefined';
+	my $default_gateway = $self->get_public_default_gateway()                   || 'undefined';
+	my $dns_server      = $self->data->get_management_node_public_dns_server()  || 'undefined';
+
+	# Make sure required info was retrieved
+	if ("$public_interface_name $subnet_mask $default_gateway $dns_server" =~ /undefined/) {
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve required network configuration:\ninterface: $public_interface_name\npublic IP address: $public_ip_address\nsubnet mask=$subnet_mask\ndefault gateway=$default_gateway\ndns server=$dns_server");
+		return;
+	}
+
+	my $management_node_keys = $self->data->get_management_node_keys();
+	my $image_name           = $self->data->get_image_name();
+	my $computer_short_name  = $self->data->get_computer_short_name();
+	my $computer_node_name   = $self->data->get_computer_node_name();
+
+	notify($ERRORS{'OK'}, 0, "initiating Linux set_static_public_address on $computer_short_name");
+	my @eth1file;
+	my $tmpfile = "/tmp/ifcfg-eth_device-$computer_short_name";
+	push(@eth1file, "DEVICE=eth1\n");
+	push(@eth1file, "BOOTPROTO=static\n");
+	push(@eth1file, "IPADDR=$public_ip_address\n");
+	push(@eth1file, "NETMASK=$subnet_mask\n");
+	push(@eth1file, "STARTMODE=onboot\n");
+	push(@eth1file, "ONBOOT=yes\n");
+
+	#write to tmpfile
+	if (open(TMP, ">$tmpfile")) {
+		print TMP @eth1file;
+		close(TMP);
+	}
+	else {
+		#print "could not write $tmpfile $!\n";
+
+	}
+	my @sshcmd = run_ssh_command($computer_short_name, $management_node_keys, "/etc/sysconfig/network-scripts/ifdown $public_interface_name", "root");
+	foreach my $l (@{$sshcmd[1]}) {
+		if ($l) {
+			#potential problem
+			notify($ERRORS{'OK'}, 0, "sshcmd output ifdown $computer_short_name $l");
+		}
+	}
+	#copy new ifcfg-Device
+	if (run_scp_command($tmpfile, "$computer_short_name:/etc/sysconfig/network-scripts/ifcfg-$public_interface_name", $management_node_keys)) {
+
+		#confirm it got there
+		undef @sshcmd;
+		@sshcmd = run_ssh_command($computer_short_name, $management_node_keys, "cat /etc/sysconfig/network-scripts/ifcfg-$ETHDEVICE", "root");
+		my $success = 0;
+		foreach my $i (@{$sshcmd[1]}) {
+			if ($i =~ /$public_ip_address/) {
+				notify($ERRORS{'OK'}, 0, "SUCCESS - copied ifcfg_$public_interface_name\n");
+				$success = 1;
+			}
+		}
+		if (unlink($tmpfile)) {
+			notify($ERRORS{'OK'}, 0, "unlinking $tmpfile");
+		}
+
+		if (!$success) {
+			notify($ERRORS{'WARNING'}, 0, "unable to copy $tmpfile to $computer_short_name file ifcfg-$public_interface_name did get updated with $public_ip_address ");
+			return 0;
+		}
+	} ## end if (run_scp_command($tmpfile, "$computer_short_name:/etc/sysconfig/network-scripts/ifcfg-$public_interface_name"...
+
+	#bring device up
+	@sshcmd = run_ssh_command($computer_short_name, $management_node_keys, "/etc/sysconfig/network-scripts/ifup $public_interface_name", "root");
+	#should be empty
+	foreach my $l (@{$sshcmd[1]}) {
+		if ($l) {
+			#potential problem
+			notify($ERRORS{'OK'}, 0, "possible problem with ifup $public_interface_name $l");
+		}
+	}
+	#correct route table - delete old default and add new in same line
+	undef @sshcmd;
+	@sshcmd = run_ssh_command($computer_short_name, $management_node_keys, "/sbin/route del default", "root");
+	#should be empty
+	foreach my $l (@{$sshcmd[1]}) {
+		if ($l =~ /Usage:/) {
+			#potential problem
+			notify($ERRORS{'OK'}, 0, "possible problem with route del default $l");
+		}
+		if ($l =~ /No such process/) {
+			notify($ERRORS{'OK'}, 0, "$l - ok  just no default route since we downed eth device");
+		}
+	}
+
+	notify($ERRORS{'OK'}, 0, "Setting default route");
+	undef @sshcmd;
+	@sshcmd = run_ssh_command($computer_short_name, $management_node_keys, "/sbin/route add default gw $default_gateway metric 0 $public_interface_name", "root");
+	#should be empty
+	foreach my $l (@{$sshcmd[1]}) {
+		if ($l =~ /Usage:/) {
+			#potential problem
+			notify($ERRORS{'OK'}, 0, "possible problem with route add default gw $default_gateway metric 0 $public_interface_name");
+		}
+		if ($l =~ /No such process/) {
+			notify($ERRORS{'CRITICAL'}, 0, "problem with $computer_short_name $l add default gw $default_gateway metric 0 $public_interface_name");
+			return 0;
+		}
+	} ## end foreach my $l (@{$sshcmd[1]})
+
+	#correct external sshd file
+
+	if (run_ssh_command($computer_short_name, $management_node_keys, "sed -ie \"/ListenAddress .*/d \" /etc/ssh/external_sshd_config", "root")) {
+		notify($ERRORS{'OK'}, 0, "Cleared ListenAddress from external_sshd_config");
+	}
+
+	# Add correct ListenAddress
+	if (run_ssh_command($computer_short_name, $management_node_keys, "echo \"ListenAddress $public_ip_address\" >> /etc/ssh/external_sshd_config", "root")) {
+		notify($ERRORS{'OK'}, 0, "appended ListenAddress $public_ip_address to external_sshd_config");
+	}
+
+	#modify /etc/resolve.conf
+	my $search;
+	undef @sshcmd;
+	@sshcmd = run_ssh_command($computer_short_name, $management_node_keys, "cat /etc/resolv.conf", "root");
+	foreach my $l (@{$sshcmd[1]}) {
+		chomp($l);
+		if ($l =~ /search/) {
+			$search = $l;
+		}
+	}
+
+	if (defined($search)) {
+		my @resolvconf;
+		push(@resolvconf, "$search\n");
+		my ($s1, $s2, $s3);
+		if ($dns_server =~ /,/) {
+			($s1, $s2, $s3) = split(/,/, $dns_server);
+		}
+		else {
+			$s1 = $dns_server;
+		}
+		push(@resolvconf, "nameserver $s1\n");
+		push(@resolvconf, "nameserver $s2\n") if (defined($s2));
+		push(@resolvconf, "nameserver $s3\n") if (defined($s3));
+		my $rtmpfile = "/tmp/resolvconf$computer_short_name";
+		if (open(RES, ">$rtmpfile")) {
+			print RES @resolvconf;
+			close(RES);
+		}
+		else {
+			notify($ERRORS{'OK'}, 0, "could not write to $rtmpfile $!");
+		}
+		#put resolve.conf  file back on node
+		notify($ERRORS{'OK'}, 0, "copying in new resolv.conf");
+		if (run_scp_command($rtmpfile, "$computer_short_name:/etc/resolv.conf", $management_node_keys)) {
+			notify($ERRORS{'OK'}, 0, "SUCCESS copied new resolv.conf to $computer_short_name");
+		}
+		else {
+			notify($ERRORS{'OK'}, 0, "FALIED to copied new resolv.conf to $computer_short_name");
+			return 0;
+		}
+
+		if (unlink($rtmpfile)) {
+			notify($ERRORS{'OK'}, 0, "unlinking $rtmpfile");
+		}
+	} ## end if (defined($search))
+	else {
+		notify($ERRORS{'WARNING'}, 0, "pulling resolve.conf from $computer_short_name failed output= @{ $sshcmd[1] }");
+	}
+
+
+	return 1;
+} ## end sub set_static_public_address
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -198,10 +441,17 @@ sub delete_user {
 		return 0;
 	}
 
+	#Make sure the identity key was passed
+	my $image_identity = shift;
+	$image_identity = $self->data->get_image_identity() if (!$image_identity);
+	if (!$image_identity) {
+		notify($ERRORS{'WARNING'}, 0, "image identity keys could not be determined");
+		return 0;
+	}
 	# Use userdel to delete the user
 	# Do not use userdel -r, it will affect HPC user storage for HPC installs
 	my $user_delete_command = "/usr/sbin/userdel $user_login_id";
-	my @user_delete_results = run_ssh_command($computer_node_name, $IDENTITY_bladerhel, $user_delete_command, "root");
+	my @user_delete_results = run_ssh_command($computer_node_name, $image_identity, $user_delete_command, "root");
 	foreach my $user_delete_line (@{$user_delete_results[1]}) {
 		if ($user_delete_line =~ /currently logged in/) {
 			notify($ERRORS{'WARNING'}, 0, "user not deleted, $user_login_id currently logged in");
@@ -209,65 +459,384 @@ sub delete_user {
 		}
 	}
 
-	# User successfully deleted
-	# Remove user from sshd config
-	my $external_sshd_config_path      = "$computer_node_name:/etc/ssh/external_sshd_config";
-	my $external_sshd_config_temp_path = "/tmp/$computer_node_name.sshd";
+	my $imagemeta_rootaccess = $self->data->get_imagemeta_rootaccess();
 
-	# Retrieve the node's external_sshd_config file
-	if (run_scp_command($external_sshd_config_path, $external_sshd_config_temp_path, $IDENTITY_bladerhel)) {
-		notify($ERRORS{'DEBUG'}, 0, "retrieved $external_sshd_config_path");
+	#Clear user from external_sshd_config
+	#my $clear_extsshd = "perl -pi -e \'s/^AllowUsers .*//\' /etc/ssh/external_sshd_config";
+	my $clear_extsshd = "sed -ie \"/^AllowUsers .*/d\" /etc/ssh/external_sshd_config";
+	if (run_ssh_command($computer_node_name, $image_identity, $clear_extsshd, "root")) {
+		notify($ERRORS{'DEBUG'}, 0, "cleared AllowUsers directive from external_sshd_config");
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "sshd config not cleaned up, failed to retrieve $external_sshd_config_path");
+		notify($ERRORS{'CRITICAL'}, 0, "failed to add AllowUsers $user_login_id to external_sshd_config");
+	}
+
+	#Clear user from sudoers
+
+	if ($imagemeta_rootaccess) {
+		#clear user from sudoers file
+		my $clear_cmd = "sed -ie \"/^$user_login_id .*/d\" /etc/sudoers";
+		if (run_ssh_command($computer_node_name, $image_identity, $clear_cmd, "root")) {
+			notify($ERRORS{'DEBUG'}, 0, "cleared $user_login_id from /etc/sudoers");
+		}
+		else {
+			notify($ERRORS{'CRITICAL'}, 0, "failed to clear $user_login_id from /etc/sudoers");
+		}
+	} ## end if ($imagemeta_rootaccess)
+
+	return 1;
+
+} ## end sub delete_user
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 reserve
+
+ Parameters  : called as an object
+ Returns     : 1 - success , 0 - failure
+ Description : adds user 
+
+=cut
+
+sub reserve {
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return 0;
 	}
 
-	# Remove user from sshd config file
-	# Get the contents of the sshd config file
-	if (open(SSHD_CFG_TEMP, $external_sshd_config_temp_path)) {
-		my @external_sshd_config_lines = <SSHD_CFG_TEMP>;
-		close SSHD_CFG_TEMP;
+	notify($ERRORS{'DEBUG'}, 0, "Enterered reserve() in the Linux OS module");
 
-		# Loop through the lines, clear out AllowUsers lines
-		foreach my $external_sshd_config_line (@external_sshd_config_lines) {
-			$external_sshd_config_line = "" if ($external_sshd_config_line =~ /AllowUsers/);
+	my $user_name            = $self->data->get_user_login_id();
+	my $computer_node_name   = $self->data->get_computer_node_name();
+	my $image_identity       = $self->data->get_image_identity;
+	my $imagemeta_rootaccess = $self->data->get_imagemeta_rootaccess();
+	my $user_standalone      = $self->data->get_user_standalone();
+
+	my $useradd_string = "/usr/sbin/useradd -d /home/$user_name -m $user_name";
+
+	my @sshcmd = run_ssh_command($computer_node_name, $image_identity, $useradd_string, "root");
+	foreach my $l (@{$sshcmd[1]}) {
+		if ($l =~ /user $user_name exists/) {
+			notify($ERRORS{'OK'}, 0, "detected user already has account");
 		}
+	}
 
-		# Rewrite the temp sshd config file with the modified contents
-		if (open(SSHD_CFG_TEMP, ">$external_sshd_config_temp_path")) {
-			print SSHD_CFG_TEMP @external_sshd_config_lines;
-			close SSHD_CFG_TEMP;
+	if ($user_standalone) {
+		notify($ERRORS{'DEBUG'}, 0, "Standalone user setting single-use password");
+		my $reservation_password = $self->data->get_reservation_password();
+
+		#Set password
+		if (_changelinuxpassword($computer_node_name, $user_name, $reservation_password, $image_identity)) {
+			notify($ERRORS{'OK'}, 0, "Successfully set password on useracct: $user_name on $computer_node_name");
 		}
-
-		# Copy the modified file back to the node
-		if (run_scp_command($external_sshd_config_temp_path, $external_sshd_config_path, $IDENTITY_bladerhel)) {
-			notify($ERRORS{'DEBUG'}, 0, "modified file copied back to node: $external_sshd_config_path");
-
-			# Delete the temp file
-			unlink $external_sshd_config_temp_path;
-
-			# Restart external sshd
-			if (run_ssh_command($computer_node_name, $IDENTITY_bladerhel, "/etc/init.d/ext_sshd restart")) {
-				notify($ERRORS{'DEBUG'}, 0, "restarted ext_sshd on $computer_node_name");
-			}
-
-			return 1;
-		} ## end if (run_scp_command($external_sshd_config_temp_path...
 		else {
-			notify($ERRORS{'WARNING'}, 0, "failed to copy modified file back to node: $external_sshd_config_path");
-
-			# Delete the temp file
-			unlink $external_sshd_config_temp_path;
-
+			notify($ERRORS{'CRITICAL'}, 0, "Failed to set password on useracct: $user_name on $computer_node_name");
 			return 0;
 		}
-	} ## end if (open(SSHD_CFG_TEMP, $external_sshd_config_temp_path...
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to open temporary sshd config file: $external_sshd_config_temp_path");
+	} ## end if ($user_standalone)
+
+
+	#Check image profile for allowed root access
+	if ($imagemeta_rootaccess) {
+		# Add to sudoers file
+		#clear user from sudoers file to prevent dups
+		my $clear_cmd = "sed -ie \"/^$user_name .*/d\" /etc/sudoers";
+		if (run_ssh_command($computer_node_name, $image_identity, $clear_cmd, "root")) {
+			notify($ERRORS{'DEBUG'}, 0, "cleared $user_name from /etc/sudoers");
+		}
+		else {
+			notify($ERRORS{'CRITICAL'}, 0, "failed to clear $user_name from /etc/sudoers");
+		}
+		my $sudoers_cmd = "echo \"$user_name ALL= NOPASSWD: ALL\" >> /etc/sudoers";
+		if (run_ssh_command($computer_node_name, $image_identity, $sudoers_cmd, "root")) {
+			notify($ERRORS{'DEBUG'}, 0, "added $user_name to /etc/sudoers");
+		}
+		else {
+			notify($ERRORS{'CRITICAL'}, 0, "failed to add $user_name to /etc/sudoers");
+		}
+	} ## end if ($imagemeta_rootaccess)
+
+
+	return 1;
+} ## end sub reserve
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 grant_access
+
+ Parameters  : called as an object
+ Returns     : 1 - success , 0 - failure
+ Description :  adds username to external_sshd_config and and starts sshd with custom config
+
+=cut
+
+sub grant_access {
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return 0;
 	}
-} ## end sub delete_user
+
+	my $user               = $self->data->get_user_login_id();
+	my $computer_node_name = $self->data->get_computer_node_name();
+	my $identity           = $self->data->get_image_identity;
+
+	notify($ERRORS{'OK'}, 0, "In grant_access routine $user,$computer_node_name");
+	my @sshcmd;
+	my $clear_extsshd = "sed -ie \"/^AllowUsers .*/d\" /etc/ssh/external_sshd_config";
+	if (run_ssh_command($computer_node_name, $identity, $clear_extsshd, "root")) {
+		notify($ERRORS{'DEBUG'}, 0, "cleared AllowUsers directive from external_sshd_config");
+	}
+	else {
+		notify($ERRORS{'CRITICAL'}, 0, "failed to add AllowUsers $user to external_sshd_config");
+	}
+
+	my $cmd = "echo \"AllowUsers $user\" >> /etc/ssh/external_sshd_config";
+	if (run_ssh_command($computer_node_name, $identity, $cmd, "root")) {
+		notify($ERRORS{'DEBUG'}, 0, "added AllowUsers $user to external_sshd_config");
+	}
+	else {
+		notify($ERRORS{'CRITICAL'}, 0, "failed to add AllowUsers $user to external_sshd_config");
+		return 0;
+	}
+	undef @sshcmd;
+	@sshcmd = run_ssh_command($computer_node_name, $identity, "/etc/init.d/ext_sshd restart", "root");
+
+	foreach my $l (@{$sshcmd[1]}) {
+		if ($l =~ /Stopping ext_sshd:/i) {
+			#notify($ERRORS{'OK'},0,"stopping sshd on $computer_node_name ");
+		}
+		if ($l =~ /Starting ext_sshd:[  OK  ]/i) {
+			notify($ERRORS{'OK'}, 0, "ext_sshd on $computer_node_name started");
+		}
+	}    #foreach
+	notify($ERRORS{'OK'}, 0, "started ext_sshd on $computer_node_name");
+	return 1;
+} ## end sub grant_access
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 _changepasswd
+
+ Parameters  : called as an object
+ Returns     : 1 - success , 0 - failure
+ Description : changes or sets password for given account
+
+=cut
+
+sub _changepasswd {
+	# change the privileged account passwords on the blade images
+	my ($node,    $account,  $passwd, $identity_key) = @_;
+	my ($package, $filename, $line,   $sub)          = caller(0);
+	notify($ERRORS{'WARNING'}, 0, "node is not defined")    if (!(defined($node)));
+	notify($ERRORS{'WARNING'}, 0, "account is not defined") if (!(defined($account)));
+
+	my @ssh;
+	my $l;
+	if ($account eq "root") {
+
+		#if not a predefined password, get one!
+		$passwd = getpw(15) if (!(defined($passwd)));
+		notify($ERRORS{'OK'}, 0, "password for $node is $passwd");
+
+		if (open(OPENSSL, "openssl passwd -1 $passwd 2>&1 |")) {
+			$passwd = <OPENSSL>;
+			chomp $passwd;
+			close(OPENSSL);
+			if ($passwd =~ /command not found/) {
+				notify($ERRORS{'CRITICAL'}, 0, "failed $passwd ");
+				return 0;
+			}
+			my $tmpfile = "/tmp/shadow.$node";
+			if (open(TMP, ">$tmpfile")) {
+				print TMP "$account:$passwd:13061:0:99999:7:::\n";
+				close(TMP);
+				if (run_ssh_command($node, $identity_key, "cat /etc/shadow \|grep -v $account >> $tmpfile", "root")) {
+					notify($ERRORS{'DEBUG'}, 0, "collected /etc/shadow file from $node");
+					if (run_scp_command($tmpfile, "$node:/etc/shadow", $identity_key)) {
+						notify($ERRORS{'DEBUG'}, 0, "copied updated /etc/shadow file to $node");
+						if (run_ssh_command($node, $identity_key, "chmod 600 /etc/shadow", "root")) {
+							notify($ERRORS{'DEBUG'}, 0, "updated permissions to 600 on /etc/shadow file on $node");
+							unlink $tmpfile;
+							return 1;
+						}
+						else {
+							notify($ERRORS{'WARNING'}, 0, "failed to change file permissions on $node /etc/shadow");
+							unlink $tmpfile;
+							return 0;
+						}
+					} ## end if (run_scp_command($tmpfile, "$node:/etc/shadow"...
+					else {
+						notify($ERRORS{'WARNING'}, 0, "failed to copy contents of shadow file on $node ");
+					}
+				} ## end if (run_ssh_command($node, $identity_key, ...
+				else {
+					notify($ERRORS{'WARNING'}, 0, "failed to copy contents of shadow file on $node ");
+					unlink $tmpfile;
+					return 0;
+				}
+			} ## end if (open(TMP, ">$tmpfile"))
+			else {
+				notify($ERRORS{'OK'}, 0, "failed could open $tmpfile $!");
+			}
+		} ## end if (open(OPENSSL, "openssl passwd -1 $passwd 2>&1 |"...
+		return 0;
+	} ## end if ($account eq "root")
+	else {
+		#actual user
+		#push it through passwd cmd stdin
+		# not all distros' passwd command support stdin
+		my @sshcmd = run_ssh_command($node, $identity_key, "echo $passwd \| /usr/bin/passwd -f $account --stdin", "root");
+		foreach my $l (@{$sshcmd[1]}) {
+			if ($l =~ /authentication tokens updated successfully/) {
+				notify($ERRORS{'OK'}, 0, "successfully changed local password account $account");
+				return 1;
+			}
+		}
+
+	} ## end else [ if ($account eq "root")
+
+} ## end sub _changepasswd
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 sanitize
+
+ Parameters  :
+ Returns     :
+ Description :
+
+=cut
+
+sub sanitize {
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+
+	my $computer_node_name = $self->data->get_computer_node_name();
+
+	# Make sure user is not connected
+	if ($self->is_connected()) {
+		notify($ERRORS{'WARNING'}, 0, "user is connected to $computer_node_name, computer will be reloaded");
+		#return false - reclaim will reload
+		return 0;
+	}
+
+	# Revoke access
+	if (!$self->revoke_access()) {
+		notify($ERRORS{'WARNING'}, 0, "failed to revoke access to $computer_node_name");
+		#relcaim will reload
+		return 0;
+	}
+
+	# Delete all user associated with the reservation
+	if ($self->delete_user()) {
+		notify($ERRORS{'OK'}, 0, "users have been deleted from $computer_node_name");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to delete users from $computer_node_name");
+		return 0;
+	}
+
+	notify($ERRORS{'OK'}, 0, "$computer_node_name has been sanitized");
+	return 1;
+} ## end sub sanitize
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 revoke_access
+
+ Parameters  :
+ Returns     :
+ Description :
+
+=cut
+
+sub revoke_access {
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+
+	my $management_node_keys = $self->data->get_management_node_keys();
+	my $computer_node_name   = $self->data->get_computer_node_name();
+
+	if ($self->stop_external_sshd()) {
+		notify($ERRORS{'OK'}, 0, "stopped external sshd");
+	}
+
+	notify($ERRORS{'OK'}, 0, "access has been revoked to $computer_node_name");
+	return 1;
+} ## end sub revoke_access
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 stop_external_sshd
+
+ Parameters  :
+ Returns     :
+ Description :
+
+=cut
+
+sub stop_external_sshd {
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+
+	my $management_node_keys = $self->data->get_management_node_keys();
+	my $computer_node_name   = $self->data->get_computer_node_name();
+	my $identity             = $self->data->get_image_identity;
+
+	my @sshcmd = run_ssh_command($computer_node_name, $identity, "pkill -fx \"/usr/sbin/sshd -f /etc/ssh/external_sshd_config\"", "root");
+
+	foreach my $l (@{$sshcmd[1]}) {
+		if ($l) {
+			notify($ERRORS{'DEBUG'}, 0, "output detected: $l");
+		}
+	}
+
+	notify($ERRORS{'DEBUG'}, 0, "ext_sshd on $computer_node_name stopped");
+	return 1;
+
+} ## end sub stop_external_sshd
+
+sub is_connected {
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+
+	my $computer_node_name = $self->data->get_computer_node_name();
+	my $identity           = $self->data->get_image_identity;
+	my $remote_ip          = $self->data->get_reservation_remote_ip();
+	my $computer_ipaddress = $self->data->get_computer_ip_address();
+
+	my @SSHCMD = run_ssh_command($computer_node_name, $identity, "netstat -an", "root", 22, 1);
+	foreach my $line (@{$SSHCMD[1]}) {
+		chomp($line);
+		next if ($line =~ /Warning/);
+
+		if ($line =~ /Connection refused/) {
+			notify($ERRORS{'WARNING'}, 0, "$line");
+			return 1;
+		}
+		if ($line =~ /tcp\s+([0-9]*)\s+([0-9]*)\s($computer_ipaddress:22)\s+([.0-9]*):([0-9]*)(.*)(ESTABLISHED)/) {
+			return 1;
+		}
+	} ## end foreach my $line (@{$SSHCMD[1]})
+
+	return 0;
+
+} ## end sub is_connected
 
 #/////////////////////////////////////////////////////////////////////////////
 
