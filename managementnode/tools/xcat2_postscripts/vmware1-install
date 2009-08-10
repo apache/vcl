@@ -1,0 +1,22 @@
+#!/bin/ksh
+#
+# Install additional rpms
+#
+
+logger -t xcat "Install: vmware-install"
+
+if [ -r /etc/vmware1 ]; then
+	mkdir /post
+	mount -r -o nolock ${MASTER}:/install/post /post 2>&1 | logger -t xcat
+	cd /post/otherrpms/VMware/
+	rpm -ihv *.rpm 2>&1 | logger -t xcat
+	cd /
+	rm -rf /etc/vmware /etc/vmware1
+	cp -r /post/otherrpms/VMware/vmware /etc/vmware
+	/bin/chmod 755 /etc/vmware
+	logger -t xcat "Install: injecting vmware-config.pl --d into rc.local"
+	echo "vmware-config.pl --d" >> /etc/rc.local
+	echo "/sbin/chkconfig --levels 2345 vmware on" >> /etc/rc.local
+	umount /post
+	rmdir /post
+fi
