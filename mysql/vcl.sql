@@ -1221,19 +1221,20 @@ INSERT INTO `module` (`id`, `name`, `prettyname`, `description`, `perlpackage`) 
 (11, 'provisioning_xcat_21', 'xCAT 2.1 Provisioning Module', '', 'VCL::Module::Provisioning::xCAT21'),
 (12, 'os_winxp', 'Windows XP OS Module', '', 'VCL::Module::OS::Windows::Version_5::XP'),
 (13, 'os_win2003', 'Windows Server 2003 OS Module', '', 'VCL::Module::OS::Windows::Version_5::2003'),
-(14, 'os_linux_ubuntu', 'Ubuntu Linux OS Module', '', 'VCL::Module::OS::Linux::Ubuntu');
+(14, 'os_linux_ubuntu', 'Ubuntu Linux OS Module', '', 'VCL::Module::OS::Linux::Ubuntu'),
+(15, 'os_unix_lab', 'Unix Lab Module', 'Unix Lab OS support module', 'VCL::Module::OS::Linux::UnixLab');
 
 -- 
 -- Dumping data for table `OS`
 -- 
 
 INSERT INTO `OS` (`id`, `name`, `prettyname`, `type`, `installtype`, `sourcepath`, `moduleid`) VALUES
-(2, 'sun4x_58', 'Solaris 5.8', 'unix', 'none', NULL, 6),
+(2, 'sun4x_58', 'Solaris 5.8', 'unix', 'none', NULL, 15),
 (3, 'win2k', 'Windows 2000', 'windows', 'partimage', 'image', 4),
 (6, 'rhel3', 'Red Hat Enterprise Linux 3.0', 'linux', 'kickstart', 'rhas3', 5),
 (7, 'winxp', 'Windows XP', 'windows', 'partimage', 'image', 12),
-(8, 'realmrhel3', 'Realm Red Hat Enterprise Linux 3.0', 'linux', 'none', NULL, 5),
-(9, 'realmrhel4', 'Realm Red Hat Enterprise Linux 4.0', 'linux', 'none', NULL, 5),
+(8, 'realmrhel3', 'Realm Red Hat Enterprise Linux 3.0', 'linux', 'none', NULL, 15),
+(9, 'realmrhel4', 'Realm Red Hat Enterprise Linux 4.0', 'linux', 'none', NULL, 15),
 (10, 'win2003', 'Windows 2003 Server', 'windows', 'partimage', 'image', 13),
 (11, 'rh3image', 'RHEL 3 image', 'linux', 'partimage', 'image', 5),
 (12, 'rhel4', 'Red Hat Enterprise Linux 4', 'linux', 'kickstart', 'rhas4', 5),
@@ -1246,8 +1247,8 @@ INSERT INTO `OS` (`id`, `name`, `prettyname`, `type`, `installtype`, `sourcepath
 (19, 'rhel5', 'Red Hat Enterprise Linux 5', 'linux', 'kickstart', 'rhas5', 5),
 (20, 'esx35', 'VMware ESX 3.5', 'linux', 'kickstart', 'esx35', 5),
 (21, 'vmwareesxwinxp', 'VMware ESX Windows XP', 'windows', 'vmware', 'vmware_images', 12),
-(22, 'realmrhel5', 'Realm Red Hat Enterprise Linux 5.0', 'linux', 'none', NULL, 5),
-(23, 'sun4x_510  	', 'Solaris 10', 'unix', 'none', NULL, 6),
+(22, 'realmrhel5', 'Realm Red Hat Enterprise Linux 5.0', 'linux', 'none', NULL, 15),
+(23, 'sun4x_510  	', 'Solaris 10', 'unix', 'none', NULL, 15),
 (24, 'centos5', 'CentOS 5', 'linux', 'kickstart', 'centos5', 5),
 (25, 'rh5image', 'RedHat Enterprise Linux 5 (rhel5 im', 'linux', 'partimage', 'image', 5),
 (26, 'rhfc9', 'RedHat Fedora Core 9 kickstart', 'linux', 'kickstart', 'rhfc9', 5),
