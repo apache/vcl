@@ -1070,62 +1070,7 @@ sub load {
 			}
 		} ## end if ($image_os_name =~ /^(esx[0-9]*)/)
 		                #FIXME - could be an issue for esx servers
-		if (changelinuxpassword($computer_node_name, "root")) {
-			notify($ERRORS{'OK'}, 0, "successfully changed root password on $computer_node_name");
-			#insertloadlog($reservation_id, $computer_id, "info", "SUCCESS randomized roots password");
-		}
-		else {
-			notify($ERRORS{'OK'}, 0, "failed to edit root password on $computer_node_name");
-		}
-		#disable ext_sshd
-		my @stopsshd = run_ssh_command($computer_node_name, $IDENTITY_bladerhel, "/etc/init.d/ext_sshd stop", "root");
-		foreach my $l (@{$stopsshd[1]}) {
-			if ($l =~ /Stopping ext_sshd/) {
-				notify($ERRORS{'OK'}, 0, "ext sshd stopped on $computer_node_name");
-				last;
-			}
-		}
-		#if an image, clear wtmp and krb token files
-		# FIXME - move to createimage
-		if ($image_os_type =~ /linux/i) {
-			my @cleartmp = run_ssh_command($computer_node_name, $IDENTITY_bladerhel, "/usr/sbin/tmpwatch -f 0 /tmp; /bin/cp /dev/null /var/log/wtmp", "root");
-			foreach my $l (@{$cleartmp[1]}) {
-				notify($ERRORS{'DEBUG'}, 0, "output from cleartmp post load $computer_node_name $l");
-			}
-		}
 
-		# clear external_sshd file of any AllowUsers string
-		my $path1 = "$computer_node_name:/etc/ssh/external_sshd_config";
-		my $path2 = "/tmp/$computer_node_name.sshd";
-		if (run_scp_command($path1, $path2, $IDENTITY_bladerhel)) {
-			notify($ERRORS{'DEBUG'}, 0, "scp success retrieved $path1");
-		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "failed to retrieve $path1");
-		}
-		#remove from sshd
-		if (open(SSHDCFG, "/tmp/$computer_node_name.sshd")) {
-			my @file = <SSHDCFG>;
-			close SSHDCFG;
-			foreach my $l (@file) {
-				$l = "" if ($l =~ /AllowUsers/);
-			}
-			if (open(SCP, ">/tmp/$computer_node_name.sshd")) {
-				print SCP @file;
-				close SCP;
-			}
-			undef $path1;
-			undef $path2;
-			$path1 = "/tmp/$computer_node_name.sshd";
-			$path2 = "$computer_node_name:/etc/ssh/external_sshd_config";
-			if (run_scp_command($path1, $path2, $IDENTITY_bladerhel)) {
-				notify($ERRORS{'DEBUG'}, 0, "scp success copied $path1 to $path2");
-				unlink $path1;
-			}
-			else {
-				notify($ERRORS{'WARNING'}, 0, "failed to copy $path1 to $path2");
-			}
-		} ## end if (open(SSHDCFG, "/tmp/$computer_node_name.sshd"...
 	} ## end elsif ($image_os_type =~ /linux/i)  [ if ($self->os->can('post_load'))
 
 	return 1;
