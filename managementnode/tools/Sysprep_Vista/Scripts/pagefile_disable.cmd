@@ -1,4 +1,0 @@
-rem http://support.microsoft.com/kb/892104
-rem This registry setting makes Windows delete the paging file when you shut down Windows. You can then use the method that you want to create an image of the partition where Windows is installed and to deploy the image to the destination computers. The first time that the destination computer is restarted after you deploy the image, the paging file is resized to match the memory model of the destination computer. 
-
-"%SystemRoot%\system32\reg.exe" add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management" /v "PagingFiles" /t REG_SZ /d "C:\pagefile.sys 0 0" /f

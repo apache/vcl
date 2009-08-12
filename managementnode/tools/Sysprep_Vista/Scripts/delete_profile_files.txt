@@ -1,5 +1,0 @@
-Cookies
-Local Settings\Temp
-Recent
-Local Settings\Recent
-Local Settings\Temporary Internet Files

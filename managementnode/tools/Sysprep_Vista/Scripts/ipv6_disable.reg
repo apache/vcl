@@ -1,7 +1,0 @@
-Windows Registry Editor Version 5.00
-
-; This registry file contains the entries to disable all IPv6 components 
-; http://support.microsoft.com/kb/929852
-
-[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\Tcpip6\Parameters]
-"DisabledComponents"=dword:ffffffff
