@@ -15,15 +15,6 @@
   limitations under the License.
 */
 
--- phpMyAdmin SQL Dump
--- version 2.10.1
--- http://www.phpmyadmin.net
--- 
--- Host: mysql.eos.ncsu.edu:3306
--- Generation Time: Apr 08, 2008 at 03:26 PM
--- Server version: 5.0.45
--- PHP Version: 5.2.0
-
 SET SQL_MODE="NO_AUTO_VALUE_ON_ZERO";
 
 -- 
@@ -41,7 +32,7 @@ CREATE TABLE IF NOT EXISTS `adminlevel` (
   `name` varchar(10) NOT NULL default '',
   PRIMARY KEY  (`id`),
   UNIQUE KEY `name` (`name`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1 AUTO_INCREMENT=4 ;
+) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -58,7 +49,7 @@ CREATE TABLE IF NOT EXISTS `affiliation` (
   `helpaddress` varchar(32) default NULL,
   `shibonly` tinyint(1) unsigned NOT NULL default '0',
   PRIMARY KEY  (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1 AUTO_INCREMENT=2 ;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -97,7 +88,7 @@ CREATE TABLE IF NOT EXISTS `blockRequest` (
   KEY `imageid` (`imageid`),
   KEY `groupid` (`groupid`),
   KEY `ownerid` (`ownerid`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1 AUTO_INCREMENT=1 ;
+) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -115,7 +106,7 @@ CREATE TABLE IF NOT EXISTS `blockTimes` (
   KEY `start` (`start`),
   KEY `end` (`end`),
   KEY `blockRequestid` (`blockRequestid`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1 AUTO_INCREMENT=1 ;
+) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -167,7 +158,7 @@ CREATE TABLE IF NOT EXISTS `changelog` (
   `timestamp` datetime NOT NULL default '0000-00-00 00:00:00',
   PRIMARY KEY  (`id`),
   KEY `logid` (`logid`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1 AUTO_INCREMENT=1 ;
+) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -241,7 +232,7 @@ CREATE TABLE IF NOT EXISTS `computer` (
   KEY `deleted` (`deleted`),
   KEY `nextimageid` (`nextimageid`),
   KEY `provisioningid` (`provisioningid`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1 AUTO_INCREMENT=1 ;
+) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -274,7 +265,7 @@ CREATE TABLE IF NOT EXISTS `computerloadlog` (
   PRIMARY KEY  (`id`),
   KEY `reservationid` (`reservationid`),
   KEY `loadstateid` (`loadstateid`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1 AUTO_INCREMENT=1 ;
+) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -289,7 +280,7 @@ CREATE TABLE IF NOT EXISTS `computerloadstate` (
   `est` tinyint(2) unsigned default NULL,
   PRIMARY KEY  (`id`),
   UNIQUE KEY `loadstatename` (`loadstatename`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1 AUTO_INCREMENT=55 ;
+) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -365,7 +356,7 @@ CREATE TABLE IF NOT EXISTS `image` (
   KEY `platformid` (`platformid`),
   KEY `OSid` (`OSid`),
   KEY `imagemetaid` (`imagemetaid`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1 AUTO_INCREMENT=10 ;
+) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -384,7 +375,7 @@ CREATE TABLE IF NOT EXISTS `imagemeta` (
   `rootaccess` tinyint(1) unsigned NOT NULL default '1',
   PRIMARY KEY  (`id`),
   KEY `usergroupid` (`usergroupid`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1 AUTO_INCREMENT=1 ;
+) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -407,7 +398,7 @@ CREATE TABLE IF NOT EXISTS `imagerevision` (
   UNIQUE KEY `production` (`production`,`imagename`),
   UNIQUE KEY `imageid` (`imageid`,`revision`),
   KEY `userid` (`userid`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1 AUTO_INCREMENT=10 ;
+) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -420,7 +411,7 @@ CREATE TABLE IF NOT EXISTS `IMtype` (
   `name` varchar(20) NOT NULL default '',
   PRIMARY KEY  (`id`),
   UNIQUE KEY `name` (`name`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1 AUTO_INCREMENT=3 ;
+) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -465,7 +456,7 @@ CREATE TABLE IF NOT EXISTS `log` (
   KEY `finalend` (`finalend`),
   KEY `start` (`start`),
   KEY `wasavailable` (`wasavailable`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1 AUTO_INCREMENT=1 ;
+) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -495,7 +486,7 @@ CREATE TABLE IF NOT EXISTS `managementnode` (
   KEY `imagelibgroupid` (`imagelibgroupid`),
   KEY `IPaddress` (`IPaddress`),
   KEY `predictivemoduleid` (`predictivemoduleid`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1 AUTO_INCREMENT=1 ;
+) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -511,7 +502,7 @@ CREATE TABLE IF NOT EXISTS `module` (
   `perlpackage` varchar(150) NOT NULL,
   PRIMARY KEY  (`id`),
   KEY `name` (`name`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1 AUTO_INCREMENT=9 ;
+) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -533,7 +524,7 @@ CREATE TABLE IF NOT EXISTS `OS` (
   KEY `type` (`type`),
   KEY `installtype` (`installtype`),
   KEY `moduleid` (`moduleid`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1 AUTO_INCREMENT=29 ;
+) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -546,7 +537,7 @@ CREATE TABLE IF NOT EXISTS `OSinstalltype` (
   `name` varchar(30) NOT NULL,
   PRIMARY KEY  (`id`),
   UNIQUE KEY `name` (`name`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1 AUTO_INCREMENT=5 ;
+) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -559,7 +550,7 @@ CREATE TABLE IF NOT EXISTS `OStype` (
   `name` varchar(30) NOT NULL,
   PRIMARY KEY  (`id`),
   UNIQUE KEY `name` (`name`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1 AUTO_INCREMENT=4 ;
+) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -572,7 +563,7 @@ CREATE TABLE IF NOT EXISTS `platform` (
   `name` varchar(20) NOT NULL default '',
   PRIMARY KEY  (`id`),
   UNIQUE KEY `name` (`name`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1 AUTO_INCREMENT=5 ;
+) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -586,7 +577,7 @@ CREATE TABLE IF NOT EXISTS `privnode` (
   `name` varchar(50) NOT NULL default '',
   PRIMARY KEY  (`id`),
   UNIQUE KEY `parent` (`parent`,`name`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1 COMMENT='nodes for privilege tree' AUTO_INCREMENT=6 ;
+) ENGINE=InnoDB  DEFAULT CHARSET=latin1 COMMENT='nodes for privilege tree';
 
 -- --------------------------------------------------------
 
@@ -601,7 +592,7 @@ CREATE TABLE IF NOT EXISTS `provisioning` (
   `moduleid` smallint(5) unsigned NOT NULL,
   PRIMARY KEY  (`id`),
   KEY `moduleid` (`moduleid`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1 AUTO_INCREMENT=4 ;
+) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -643,7 +634,7 @@ CREATE TABLE IF NOT EXISTS `request` (
   KEY `logid` (`logid`),
   KEY `start` (`start`),
   KEY `end` (`end`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1 AUTO_INCREMENT=1;
+) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -667,7 +658,7 @@ CREATE TABLE IF NOT EXISTS `reservation` (
   KEY `requestid` (`requestid`),
   KEY `computerid` (`computerid`),
   KEY `imagerevisionid` (`imagerevisionid`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1 AUTO_INCREMENT=1 ;
+) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -681,7 +672,7 @@ CREATE TABLE IF NOT EXISTS `resource` (
   `subid` mediumint(8) unsigned NOT NULL default '0',
   PRIMARY KEY  (`id`),
   UNIQUE KEY `resourcetypeid` (`resourcetypeid`,`subid`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1 AUTO_INCREMENT=11 ;
+) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -697,7 +688,7 @@ CREATE TABLE IF NOT EXISTS `resourcegroup` (
   PRIMARY KEY  (`id`),
   UNIQUE KEY `resourcetypeid` (`resourcetypeid`,`name`),
   KEY `ownerusergroupid` (`ownerusergroupid`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1 AUTO_INCREMENT=11 ;
+) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -743,7 +734,7 @@ CREATE TABLE IF NOT EXISTS `resourcepriv` (
   PRIMARY KEY  (`id`),
   UNIQUE KEY `resourcegroupid` (`resourcegroupid`,`privnodeid`,`type`),
   KEY `privnodeid` (`privnodeid`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1 AUTO_INCREMENT=17 ;
+) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -756,7 +747,7 @@ CREATE TABLE IF NOT EXISTS `resourcetype` (
   `name` varchar(50) NOT NULL default '',
   PRIMARY KEY  (`id`),
   UNIQUE KEY `name` (`name`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1 AUTO_INCREMENT=17 ;
+) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -771,7 +762,7 @@ CREATE TABLE IF NOT EXISTS `schedule` (
   PRIMARY KEY  (`id`),
   UNIQUE KEY `name` (`name`),
   KEY `ownerid` (`ownerid`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1 AUTO_INCREMENT=2 ;
+) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -799,7 +790,7 @@ CREATE TABLE IF NOT EXISTS `shibauth` (
   `sessid` varchar(80) NOT NULL,
   `data` text NOT NULL,
   PRIMARY KEY  (`id`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1 AUTO_INCREMENT=1 ;
+) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -812,7 +803,7 @@ CREATE TABLE IF NOT EXISTS `state` (
   `name` varchar(20) NOT NULL default '',
   PRIMARY KEY  (`id`),
   UNIQUE KEY `name` (`name`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1 AUTO_INCREMENT=22 ;
+) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -880,7 +871,7 @@ CREATE TABLE IF NOT EXISTS `user` (
   UNIQUE KEY `uid` (`uid`),
   KEY `IMtypeid` (`IMtypeid`),
   KEY `affiliationid` (`affiliationid`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1 AUTO_INCREMENT=4 ;
+) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -904,7 +895,7 @@ CREATE TABLE IF NOT EXISTS `usergroup` (
   UNIQUE KEY `name` (`name`,`affiliationid`),
   KEY `ownerid` (`ownerid`),
   KEY `editusergroupid` (`editusergroupid`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1 AUTO_INCREMENT=6 ;
+) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -936,7 +927,7 @@ CREATE TABLE IF NOT EXISTS `userpriv` (
   KEY `privnodeid` (`privnodeid`),
   KEY `usergroupid` (`usergroupid`),
   KEY `userprivtypeid` (`userprivtypeid`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1 AUTO_INCREMENT=20 ;
+) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -949,7 +940,7 @@ CREATE TABLE IF NOT EXISTS `userprivtype` (
   `name` varchar(50) NOT NULL default '',
   PRIMARY KEY  (`id`),
   UNIQUE KEY `name` (`name`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1 AUTO_INCREMENT=14 ;
+) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -965,7 +956,7 @@ CREATE TABLE IF NOT EXISTS `variable` (
   `timestamp` datetime NOT NULL,
   PRIMARY KEY  (`id`),
   UNIQUE KEY `name` (`name`)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1 AUTO_INCREMENT=1 ;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -982,7 +973,7 @@ CREATE TABLE IF NOT EXISTS `vmhost` (
   `vmwaredisk` enum('localdisk','networkdisk') NOT NULL default 'localdisk',
   PRIMARY KEY  (`id`),
   UNIQUE KEY `computerid` (`computerid`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1 AUTO_INCREMENT=1 ;
+) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -1004,7 +995,7 @@ CREATE TABLE IF NOT EXISTS `vmprofile` (
   `username` varchar(32) NULL default NULL,
   `password` varchar(128) NULL default NULL,
   PRIMARY KEY  (`id`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1 AUTO_INCREMENT=5 ;
+) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -1016,7 +1007,7 @@ CREATE TABLE IF NOT EXISTS `vmtype` (
   `id` tinyint(3) unsigned NOT NULL auto_increment,
   `name` varchar(30) NOT NULL,
   PRIMARY KEY  (`id`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1 AUTO_INCREMENT=6 ;
+) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -1031,7 +1022,7 @@ CREATE TABLE IF NOT EXISTS `xmlrpcKey` (
   `active` tinyint(1) NOT NULL default '1',
   `created` datetime NOT NULL default '0000-00-00 00:00:00',
   PRIMARY KEY  (`id`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1 AUTO_INCREMENT=1 ;
+) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
