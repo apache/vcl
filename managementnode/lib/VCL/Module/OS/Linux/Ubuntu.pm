@@ -199,6 +199,7 @@ sub delete_user {
 	}
 
 	my $imagemeta_rootaccess = $self->data->get_imagemeta_rootaccess();
+	my $management_node_keys = $self->data->get_management_node_keys();
 
 	# Use userdel to delete the user
 	my $user_delete_command = "/usr/sbin/userdel $user_login_id";
@@ -212,23 +213,23 @@ sub delete_user {
 
 	#Clear user from external_sshd_config
 	my $clear_extsshd = "sed -ie \"/^AllowUsers .*/d\" /etc/ssh/external_sshd_config";
-	if (run_ssh_command($computer_node_name, $identity, $clear_extsshd, "root")) {
+	if (run_ssh_command($computer_node_name, $management_node_keys, $clear_extsshd, "root")) {
 		notify($ERRORS{'DEBUG'}, 0, "cleared AllowUsers directive from external_sshd_config");
 	}
 	else {
-		notify($ERRORS{'CRITICAL'}, 0, "failed to add AllowUsers $user to external_sshd_config");
+		notify($ERRORS{'CRITICAL'}, 0, "failed to add AllowUsers $user_login_id to external_sshd_config");
 	}
 
 	#Clear user from sudoers
 
 	if ($imagemeta_rootaccess) {
 		#clear user from sudoers file
-		my $clear_cmd = "sed -ie \"/^$user_name .*/d\" /etc/sudoers";
-		if (run_ssh_command($computer_node_name, $image_identity, $clear_cmd, "root")) {
-			notify($ERRORS{'DEBUG'}, 0, "cleared $user_name from /etc/sudoers");
+		my $clear_cmd = "sed -ie \"/^$user_login_id .*/d\" /etc/sudoers";
+		if (run_ssh_command($computer_node_name, $management_node_keys, $clear_cmd, "root")) {
+			notify($ERRORS{'DEBUG'}, 0, "cleared $user_login_id from /etc/sudoers");
 		}
 		else {
-			notify($ERRORS{'CRITICAL'}, 0, "failed to clear $user_name from /etc/sudoers");
+			notify($ERRORS{'CRITICAL'}, 0, "failed to clear $user_login_id from /etc/sudoers");
 		}
 	} ## end if ($imagemeta_rootaccess)
 
