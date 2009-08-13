@@ -410,6 +410,22 @@ sub set_static_public_address {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 get_public_interface_name
+
+ Parameters  :
+ Returns     :
+ Description :
+
+=cut
+
+sub get_public_interface_name {
+
+	#global varible pulled from vcld.conf
+	return $ETHDEVICE;
+
+}
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 delete_user
 
  Parameters  :
