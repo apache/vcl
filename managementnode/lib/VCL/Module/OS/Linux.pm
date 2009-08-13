@@ -527,7 +527,7 @@ sub reserve {
 		my $reservation_password = $self->data->get_reservation_password();
 
 		#Set password
-		if (_changelinuxpassword($computer_node_name, $user_name, $reservation_password, $image_identity)) {
+		if (_changepasswd($computer_node_name, $user_name, $reservation_password, $image_identity)) {
 			notify($ERRORS{'OK'}, 0, "Successfully set password on useracct: $user_name on $computer_node_name");
 		}
 		else {
