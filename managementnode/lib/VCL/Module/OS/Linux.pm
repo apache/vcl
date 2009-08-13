@@ -424,6 +424,24 @@ sub get_public_interface_name {
 	return $ETHDEVICE;
 
 }
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_public_default_gateway
+
+ Parameters  :
+ Returns     :
+ Description :
+
+=cut
+
+sub get_public_default_gateway {
+
+	#global varible pulled from vcld.conf
+	return $GATEWAY;
+}
+
+
 #/////////////////////////////////////////////////////////////////////////////
 
 =head2 delete_user
