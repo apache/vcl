@@ -624,11 +624,12 @@ sub load {
 	}
 
 	notify($ERRORS{'OK'}, 0, "adapter= $adapter drivetype $vmclient_drivetype");
-	my $guestOS;
+	my $guestOS = "other";
 	$guestOS = "winxppro" if ($requestedimagename =~ /(winxp)/i);
 	$guestOS = "winnetenterprise"  if ($requestedimagename =~ /(win2003|win2008)/i);
 	$guestOS = "ubuntu"   if ($requestedimagename =~ /(ubuntu)/i);
 	$guestOS = "winvista"   if ($requestedimagename =~ /(vista)/i);
+	$guestOS = "linux"   if ($vmclient_OSname =~ /(linux)/i);
 
 	my @vmxfile;
 	my $tmpfile = "/tmp/$myvmdir/$myvmdir.vmx";
