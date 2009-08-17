@@ -546,13 +546,15 @@ sub reserve {
 	my $image_identity       = $self->data->get_image_identity;
 	my $imagemeta_rootaccess = $self->data->get_imagemeta_rootaccess();
 	my $user_standalone      = $self->data->get_user_standalone();
+	my $user_uid				 = $self->data->get_user_uid();
 
-	my $useradd_string = "/usr/sbin/useradd -d /home/$user_name -m $user_name";
+	my $useradd_string = "/usr/sbin/useradd -u $user_uid -d /home/$user_name -m $user_name";
 
 	my @sshcmd = run_ssh_command($computer_node_name, $image_identity, $useradd_string, "root");
 	foreach my $l (@{$sshcmd[1]}) {
 		if ($l =~ /user $user_name exists/) {
 			notify($ERRORS{'OK'}, 0, "detected user already has account");
+
 		}
 	}
 
