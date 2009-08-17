@@ -96,6 +96,9 @@ my $IMAGE_LIB_USER    = $IMAGELIBUSER;
 my $IMAGE_LIB_KEY     = $IMAGELIBKEY;
 my $IMAGE_LIB_SERVERS = $IMAGESERVERS;
 
+our $VMTOOL_ROOT;
+our $VMTOOLKIT_VERSION;
+
 ##############################################################################
 
 =head1 OBJECT METHODS
@@ -113,6 +116,27 @@ my $IMAGE_LIB_SERVERS = $IMAGESERVERS;
 =cut
 
 sub initialize {
+	# Check for known vmware toolkit paths
+	if(-d '/usr/lib/vmware-vcli/apps/vm'){
+		$VMTOOL_ROOT = '/usr/lib/vmware-vcli/apps/vm';
+		$VMTOOLKIT_VERSION = "vsphere4";
+	}
+	elsif(-d '/usr/lib/vmware-viperl/apps/vm'){
+		$VMTOOL_ROOT = '/usr/lib/vmware-viperl/apps/vm';
+		$VMTOOLKIT_VERSION = "vmtoolkit1";
+	}
+	else {
+		notify($ERRORS{'CRITICAL'}, 0, "unable to initialize esx module, neither of the vmware toolkit paths were found: /usr/lib/vmware-vcli/apps/vm /usr/lib/vmware-viperl/apps/vm");
+		return;
+	}
+
+	# Check to make sure one of the expected executables is where it should be
+	if (!-x "$VMTOOL_ROOT/vmregister.pl") {
+		notify($ERRORS{'WARNING'}, 0, "unable to initialize esx module, expected executable was not found: $VMTOOL_ROOT/vmregister.pl");
+		return;
+	}
+	notify($ERRORS{'DEBUG'}, 0, "esx vmware toolkit root path found: $VMTOOL_ROOT");
+
 	notify($ERRORS{'DEBUG'}, 0, "vmware ESX module initialized");
 	return 1;
 }
@@ -161,6 +185,10 @@ sub load {
 	my $vmhost_username = $self->data->get_vmhost_profile_username();
 	my $vmhost_password = $self->data->get_vmhost_profile_password();
 
+	$vmhost_hostname =~ /([-_a-zA-Z0-9]*)(\.?)/;
+	my $vmhost_shortname = $1; 
+
+
 	#Get the config datastore information from the database
 	my $datastore_ip;
 	my $datastore_share_path;
@@ -174,8 +202,8 @@ sub load {
 	my $vmpath = "$datastore_share_path/inuse/$computer_shortname";
 
 	# query the host to see if the vm currently exists
-	my $vminfo_command = "/usr/lib/vmware-viperl/apps/vm/vminfo.pl";
-	$vminfo_command .= " --server '$vmhost_hostname'";
+	my $vminfo_command = "$VMTOOL_ROOT/vminfo.pl";
+	$vminfo_command .= " --server '$vmhost_shortname'";
 	$vminfo_command .= " --vmname $computer_shortname";
 	$vminfo_command .= " --username $vmhost_username";
 	$vminfo_command .= " --password '$vmhost_password'";
@@ -187,8 +215,8 @@ sub load {
 	# parse the results from the host and determine if we need to remove an old vm
 	if ($vminfo_output =~ /^Information of Virtual Machine $computer_shortname/m) {
 		# Power off this vm
-		my $poweroff_command = "/usr/lib/vmware-viperl/apps/vm/vmcontrol.pl";
-		$poweroff_command .= " --server '$vmhost_hostname'";
+		my $poweroff_command = "$VMTOOL_ROOT/vmcontrol.pl";
+		$poweroff_command .= " --server '$vmhost_shortname'";
 		$poweroff_command .= " --vmname $computer_shortname";
 		$poweroff_command .= " --operation poweroff";
 		$poweroff_command .= " --username $vmhost_username";
@@ -199,15 +227,15 @@ sub load {
 		notify($ERRORS{'DEBUG'}, 0, "Powered off: $poweroff_output");
 
 		# unregister old vm from host
-		my $unregister_command = "/usr/lib/vmware-viperl/apps/vm/vmregister.pl";
-		$unregister_command .= " --server '$vmhost_hostname'";
+		my $unregister_command = "$VMTOOL_ROOT/vmregister.pl";
+		$unregister_command .= " --server '$vmhost_shortname'";
 		$unregister_command .= " --username $vmhost_username";
 		$unregister_command .= " --password '$vmhost_password'";
 		$unregister_command .= " --vmxpath '[VCL]/inuse/$computer_shortname/$image_name.vmx'";
 		$unregister_command .= " --operation unregister";
 		$unregister_command .= " --vmname $computer_shortname";
 		$unregister_command .= " --pool Resources";
-		$unregister_command .= " --hostname '$vmhost_hostname'";
+		$unregister_command .= " --hostname '$vmhost_shortname'";
 		$unregister_command .= " --datacenter 'ha-datacenter'";
 		notify($ERRORS{'DEBUG'}, 0, "Un-Register Command: $unregister_command");
 		my $unregister_output;
@@ -251,7 +279,12 @@ sub load {
 	my $vmxpath = "/tmp/$computer_shortname.vmx";
 
 	my $guestOS = "other";
+	$guestOS = "winxppro" if ($image_os_name =~ /(winxp)/i);
+	$guestOS = "winnetenterprise"  if ($image_os_name =~ /(win2003|win2008)/i);
 	$guestOS = "linux" if ($image_os_name =~ /(fc|centos)/i);
+	$guestOS = "linux" if ($image_os_name =~ /(linux)/i);
+	$guestOS = "winvista" if ($image_os_name =~ /(vista)/i);
+
 	# FIXME Should add some more entries here
 
 	# determine adapter type by looking at vmdk file
@@ -323,15 +356,15 @@ sub load {
 	}
 
 	# Register new vm on host
-	my $register_command = "/usr/lib/vmware-viperl/apps/vm/vmregister.pl";
-	$register_command .= " --server '$vmhost_hostname'";
+	my $register_command = "$VMTOOL_ROOT/vmregister.pl";
+	$register_command .= " --server '$vmhost_shortname'";
 	$register_command .= " --username $vmhost_username";
 	$register_command .= " --password '$vmhost_password'";
 	$register_command .= " --vmxpath '[VCL]/inuse/$computer_shortname/$image_name.vmx'";
 	$register_command .= " --operation register";
 	$register_command .= " --vmname $computer_shortname";
 	$register_command .= " --pool Resources";
-	$register_command .= " --hostname '$vmhost_hostname'";
+	$register_command .= " --hostname '$vmhost_shortname'";
 	$register_command .= " --datacenter 'ha-datacenter'";
 	notify($ERRORS{'DEBUG'}, 0, "Register Command: $register_command");
 	my $register_output;
@@ -339,8 +372,8 @@ sub load {
 	notify($ERRORS{'DEBUG'}, 0, "Registered: $register_output");
 
 	# Turn new vm on
-	my $poweron_command = "/usr/lib/vmware-viperl/apps/vm/vmcontrol.pl";
-	$poweron_command .= " --server '$vmhost_hostname'";
+	my $poweron_command = "$VMTOOL_ROOT/vmcontrol.pl";
+	$poweron_command .= " --server '$vmhost_shortname'";
 	$poweron_command .= " --vmname $computer_shortname";
 	$poweron_command .= " --operation poweron";
 	$poweron_command .= " --username $vmhost_username";
@@ -353,7 +386,23 @@ sub load {
 
 	# Query the VI Perl toolkit for the mac address of our newly registered
 	# machine
-	Vim::login(service_url => "https://$vmhost_hostname/sdk", user_name => $vmhost_username, password => $vmhost_password);
+
+	my $url; 
+
+	if($VMTOOLKIT_VERSION =~ /vsphere4/){
+		$url = "https://$vmhost_shortname/sdk/vimService";
+
+	}
+	elsif($VMTOOLKIT_VERSION =~ /vmtoolkit1/){
+		$url = "https://$vmhost_shortname/sdk";
+	}
+	else{
+		notify($ERRORS{'CRITICAL'}, 0, "Could not determine VMTOOLKIT_VERSION $VMTOOLKIT_VERSION");
+		return 0;
+	}
+	
+	Vim::login(service_url => "https://$vmhost_shortname/sdk", user_name => $vmhost_username, password => $vmhost_password);
+	Vim::login(service_url => $url, user_name => $vmhost_username, password => $vmhost_password);
 	my $vm_view = Vim::find_entity_view(view_type => 'VirtualMachine', filter => {'config.name' => "$computer_shortname"});
 	if (!$vm_view) {
 		notify($ERRORS{'CRITICAL'}, 0, "Could not query for VM in VI PERL API");
@@ -391,7 +440,7 @@ sub load {
 		}
 		else {
 			if ($wait_loops > 24) {
-				notify($ERRORS{'CRITICAL'}, 0, "waited acceptable amount of time for dhcp, please check $computer_shortname on $vmhost_hostname");
+				notify($ERRORS{'CRITICAL'}, 0, "waited acceptable amount of time for dhcp, please check $computer_shortname on $vmhost_shortname");
 				return 0;
 			}
 			else {
@@ -427,7 +476,7 @@ sub load {
 		else {
 			#either sshd is off or N/A, we wait
 			if ($wait_loops > 24) {
-				notify($ERRORS{'CRITICAL'}, 0, "waited acceptable amount of time for sshd to become active, please check $computer_shortname on $vmhost_hostname");
+				notify($ERRORS{'CRITICAL'}, 0, "waited acceptable amount of time for sshd to become active, please check $computer_shortname on $vmhost_shortname");
 				#need to check power, maybe reboot it. for now fail it
 				return 0;
 			}
@@ -508,6 +557,9 @@ sub capture {
 	my $vmhost_username    = $self->data->get_vmhost_profile_username();
 	my $vmhost_password    = $self->data->get_vmhost_profile_password();
 
+	$vmhost_hostname =~ /([-_a-zA-Z0-9]*)(\.?)/;
+	my $vmhost_shortname = $1;
+
 	#Get the config datastore information from the database
 	my $datastore_ip;
 	my $datastore_share_path;
@@ -544,8 +596,8 @@ sub capture {
 	# XXX SHOULD INSTEAD USE write_currentimage_txt IN utils.pm
 	my @sshcmd = run_ssh_command($computer_shortname, $image_identity, "echo $new_imagename > /root/currentimage.txt");
 
-	my $poweroff_command = "/usr/lib/vmware-viperl/apps/vm/vmcontrol.pl";
-	$poweroff_command .= " --server '$vmhost_hostname'";
+	my $poweroff_command = "$VMTOOL_ROOT/vmcontrol.pl";
+	$poweroff_command .= " --server '$vmhost_shortname'";
 	$poweroff_command .= " --vmname $computer_shortname";
 	$poweroff_command .= " --operation poweroff";
 	$poweroff_command .= " --username $vmhost_username";
