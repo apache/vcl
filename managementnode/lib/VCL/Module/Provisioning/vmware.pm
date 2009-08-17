@@ -628,7 +628,7 @@ sub load {
 	$guestOS = "winxppro" if ($requestedimagename =~ /(winxp)/i);
 	$guestOS = "winnetenterprise"  if ($requestedimagename =~ /(win2003|win2008)/i);
 	$guestOS = "ubuntu"   if ($requestedimagename =~ /(ubuntu)/i);
-
+	$guestOS = "winvista"   if ($requestedimagename =~ /(vista)/i);
 
 	my @vmxfile;
 	my $tmpfile = "/tmp/$myvmdir/$myvmdir.vmx";
