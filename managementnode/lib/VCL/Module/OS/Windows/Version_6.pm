@@ -158,7 +158,7 @@ Deactivate Windows licensing activation
 
 =cut
 
-	if (!$self->deactivate_license()) {
+	if (!$self->deactivate()) {
 		notify($ERRORS{'WARNING'}, 0, "unable to deactivate Windows licensing activation");
 		return 0;
 	}
@@ -195,16 +195,8 @@ sub post_load {
 	}
 	
 	notify($ERRORS{'DEBUG'}, 0, "beginning Windows version 6 (Vista, Server 2008) post-load tasks");
-	
+
 =item 1
-
-Activate Windows license
-
-=cut
-
-	$self->activate_license();
-
-=item *
 
 Call parent class's post_load() subroutine
 
@@ -218,6 +210,14 @@ Call parent class's post_load() subroutine
 		notify($ERRORS{'WARNING'}, 0, "failed to execute parent class post_load() subroutine");
 		return;
 	}
+
+=item *
+
+Activate Windows license
+
+=cut
+
+	$self->activate();
 
 =back
 
@@ -236,7 +236,7 @@ Call parent class's post_load() subroutine
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 activate_license
+=head2 activate
 
  Parameters  : None
  Returns     : If successful: true
@@ -248,7 +248,7 @@ Call parent class's post_load() subroutine
 
 =cut
 
-sub activate_license {
+sub activate {
 	my $self = shift;
 	if (ref($self) !~ /windows/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
@@ -257,6 +257,7 @@ sub activate_license {
 	
 	my $management_node_keys     = $self->data->get_management_node_keys();
 	my $computer_node_name       = $self->data->get_computer_node_name();
+	my $product_name             = $self->get_product_name();
 	
 	# Get the image affiliation name
 	my $image_affiliation_name = $self->data->get_image_affiliation_name();
@@ -306,69 +307,133 @@ sub activate_license {
 			my $kms_port = $activation_config->{port} || 1688;
 			notify($ERRORS{'DEBUG'}, 0, "attempting to set kms server: $kms_address, port: $kms_port");
 			
-			# Run slmgr.vbs -skms
-			my $kms_command = '$SYSTEMROOT/System32/cscript.exe //NoLogo $SYSTEMROOT/System32/slmgr.vbs -skms ' . "$kms_address:$kms_port";
-			my ($kms_exit_status, $kms_output) = run_ssh_command($computer_node_name, $management_node_keys, $kms_command);
-			if (defined($kms_exit_status) && $kms_exit_status == 0 && grep(/successfully/i, @$kms_output)) {
-				notify($ERRORS{'OK'}, 0, "set kms server to $kms_address:$kms_port");
-			}
-			elsif (defined($kms_exit_status)) {
-				notify($ERRORS{'WARNING'}, 0, "failed to set kms server to $kms_address:$kms_port, exit status: $kms_exit_status, output:\n@{$kms_output}");
-				next;
+			# Attempt to install the KMS client product key
+			# This must be done or else the slmgr.vbs -skms option won't be available
+			if ($self->install_kms_client_product_key()) {
+				notify($ERRORS{'DEBUG'}, 0, "installed the KMS client product key");
 			}
 			else {
-				notify($ERRORS{'WARNING'}, 0, "failed to execute ssh command to set kms server to $kms_address:$kms_port");
+				notify($ERRORS{'WARNING'}, 0, "failed to install the KMS client product key");
 				next;
 			}
 			
-			# KMS server successfully set, run slmgr.vbs -ato
-			my $activate_command = '$SYSTEMROOT/System32/cscript.exe //NoLogo $SYSTEMROOT/System32/slmgr.vbs -ato';
-			my ($activate_exit_status, $activate_output) = run_ssh_command($computer_node_name, $management_node_keys, $activate_command);
-			if (defined($activate_exit_status)  && $activate_exit_status == 0 && grep(/successfully/i, @$activate_output)) {
-				notify($ERRORS{'OK'}, 0, "license activated using kms server: $kms_address");
-				return 1;
-			}
-			elsif (defined($activate_exit_status)) {
-				notify($ERRORS{'WARNING'}, 0, "failed to activate license using kms server: $kms_address, exit status: $activate_exit_status, output:\n@{$activate_output}");
-				next;
+			# Run slmgr.vbs -skms to configure the computer to use the KMS server
+			if ($self->set_kms($kms_address, $kms_port)) {
+				notify($ERRORS{'DEBUG'}, 0, "set KMS address");
 			}
 			else {
-				notify($ERRORS{'WARNING'}, 0, "failed to activate license using kms server: $kms_address");
+				notify($ERRORS{'WARNING'}, 0, "failed to set KMS address");
 				next;
 			}
 		}
-		
 		elsif ($activation_method =~ /mak/i) {
-			notify($ERRORS{'WARNING'}, 0, "MAK activation method is not supported yet");
-			next;
+			my $mak_key = $activation_config->{key};
+			my $mak_product = $activation_config->{product};
+			
+			if ($mak_product eq $product_name) {
+				notify($ERRORS{'DEBUG'}, 0, "attempting to set install MAK key for $mak_product: $mak_key");
+			}
+			else {
+				notify($ERRORS{'DEBUG'}, 0, "MAK key product ($mak_product) does not match installed version of Windows ($product_name)");
+				next;
+			}
+			
+			# Attempt to install the MAK product key
+			if ($self->install_product_key($mak_key)) {
+				notify($ERRORS{'DEBUG'}, 0, "installed MAK product key: $mak_key");
+			}
+			else {
+				notify($ERRORS{'WARNING'}, 0, "failed to install MAK product key: $mak_key");
+				next;
+			}
 		}
-		
 		else  {
 			notify($ERRORS{'WARNING'}, 0, "unsupported activation method: $activation_method");
 			next;
 		}
+		
+		# Attempt to activate the license
+		if ($self->activate_license()) {
+			notify($ERRORS{'OK'}, 0, "activated license");
+			return 1;
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to activate license");
+			next;
+		}
 	}
 	
-	notify($ERRORS{'WARNING'}, 0, "failed to activate license on $computer_node_name using any configured kms servers");
+	notify($ERRORS{'WARNING'}, 0, "failed to activate license on $computer_node_name using any configured method");
 	return;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 deactivate_license
+=head2 install_kms_client_product_key
 
  Parameters  : None
  Returns     : If successful: true
                If failed: false
- Description : Runs cscript.exe slmgr.vbs -ckms to clear the KMS server address
-               stored on the computer.
-               Deletes existing KMS servers keys from the registry.
-               Runs cscript.exe slmgr.vbs -rearm to rearm licensing on the
-               computer.
+ Description : 
 
 =cut
 
-sub deactivate_license {
+sub install_kms_client_product_key {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Create a hash of KMS setup product keys
+	# These are publically available from Microsoft's Volume Activation 2.0 Deployment Guide
+	my %kms_product_keys = (
+		'Windows Vista (R) Business'                         => 'YFKBB-PQJJV-G996G-VWGXY-2V3X8',
+		'Windows Vista (R) Business N'                       => 'HMBQG-8H2RH-C77VX-27R82-VMQBT',
+		'Windows Vista (R) Enterprise'                       => 'VKK3X-68KWM-X2YGT-QR4M6-4BWMV',
+		'Windows Vista (R) Enterprise N'                     => 'VTC42-BM838-43QHV-84HX6-XJXKV',
+		'Windows Server (R) 2008 Datacenter'                 => '7M67G-PC374-GR742-YH8V4-TCBY3',
+		'Windows Server (R) 2008 Datacenter without Hyper-V' => '22XQ2-VRXRG-P8D42-K34TD-G3QQC',
+		'Windows Server (R) 2008 for Itanium-Based Systems'  => '4DWFP-JF3DJ-B7DTH-78FJB-PDRHK',
+		'Windows Server (R) 2008 Enterprise'                 => 'YQGMW-MPWTJ-34KDK-48M3W-X4Q6V',
+		'Windows Server (R) 2008 Enterprise without Hyper-V' => '39BXF-X8Q23-P2WWT-38T2F-G3FPG',
+		'Windows Server (R) 2008 Standard'                   => 'TM24T-X9RMF-VWXK6-X8JC9-BFGM2',
+		'Windows Server (R) 2008 Standard without Hyper-V'   => 'W7VD6-7JFBR-RX26B-YKQ3Y-6FFFJ',
+		'Windows Web Server (R) 2008'                        => 'WYR28-R7TFJ-3X2YQ-YCY4H-M249D',
+	);
+	
+	# Get the KMS setup product key from the hash
+	my $product_name = $self->get_product_name();
+	my $product_key = $kms_product_keys{$product_name};
+	if (!$product_key) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve KMS setup key for Windows product: $product_name");
+		return;
+	}
+	notify($ERRORS{'DEBUG'}, 0, "KMS client setup key for $product_name: $product_key");
+	
+	# Install the KMS client product key
+	if ($self->install_product_key($product_key)) {
+		notify($ERRORS{'OK'}, 0, "installed KMS client product key");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to install KMS client product key");
+		return;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 install_product_key
+
+ Parameters  : None
+ Returns     : If successful: true
+               If failed: false
+ Description : 
+
+=cut
+
+sub install_product_key {
 	my $self = shift;
 	if (ref($self) !~ /windows/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
@@ -378,20 +443,141 @@ sub deactivate_license {
 	my $management_node_keys     = $self->data->get_management_node_keys();
 	my $computer_node_name       = $self->data->get_computer_node_name();
 	
-	# Run slmgr.vbs -ckms
-	my $ckms_command = '$SYSTEMROOT/System32/cscript.exe //NoLogo $SYSTEMROOT/System32/slmgr.vbs -ckms';
-	my ($ckms_exit_status, $ckms_output) = run_ssh_command($computer_node_name, $management_node_keys, $ckms_command);
-	if (defined($ckms_exit_status) && $ckms_exit_status == 0 && grep(/successfully/i, @$ckms_output)) {
-		notify($ERRORS{'OK'}, 0, "cleared kms address");
+	# Get the arguments
+	my $product_key = shift;
+	if (!defined($product_key) || !$product_key) {
+		notify($ERRORS{'WARNING'}, 0, "product key was not passed correctly as an argument");
+		return;
 	}
-	elsif (defined($ckms_exit_status)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to clear kms address, exit status: $ckms_exit_status, output:\n@{$ckms_output}");
+	
+	# Run cscript.exe slmgr.vbs -ipk to install the product key
+	my $ipk_command = 'cscript.exe //NoLogo $SYSTEMROOT/System32/slmgr.vbs -ipk ' . $product_key;
+	my ($ipk_exit_status, $ipk_output) = run_ssh_command($computer_node_name, $management_node_keys, $ipk_command);
+	if (defined($ipk_exit_status) && $ipk_exit_status == 0 && grep(/successfully/i, @$ipk_output)) {
+		notify($ERRORS{'OK'}, 0, "installed product key: $product_key");
+	}
+	elsif (defined($ipk_exit_status)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to install product key: $product_key, exit status: $ipk_exit_status, output:\n@{$ipk_output}");
+		next;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute ssh command to install product key: $product_key");
+		next;
+	}
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 set_kms
+
+ Parameters  : None
+ Returns     : If successful: true
+               If failed: false
+ Description : 
+
+=cut
+
+sub set_kms {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $management_node_keys     = $self->data->get_management_node_keys();
+	my $computer_node_name       = $self->data->get_computer_node_name();
+	
+	# Get the KMS address argument
+	my $kms_address = shift;
+	if (!$kms_address) {
+		notify($ERRORS{'WARNING'}, 0, "KMS address was not passed correctly as an argument");
+		return;
+	}
+	
+	# Get the KMS port argument or use the default port
+	my $kms_port = shift || 1688;
+	
+	# Run slmgr.vbs -skms to configure the computer to use the KMS server
+	my $skms_command = 'cscript.exe //NoLogo $SYSTEMROOT/System32/slmgr.vbs -skms ' . "$kms_address:$kms_port";
+	my ($skms_exit_status, $skms_output) = run_ssh_command($computer_node_name, $management_node_keys, $skms_command);
+	if (defined($skms_exit_status) && $skms_exit_status == 0 && grep(/successfully/i, @$skms_output)) {
+		notify($ERRORS{'OK'}, 0, "set kms server to $kms_address:$kms_port");
+	}
+	elsif (defined($skms_exit_status)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to set kms server to $kms_address:$kms_port, exit status: $skms_exit_status, output:\n@{$skms_output}");
 		return;
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to execute ssh command to clear kms address");
+		notify($ERRORS{'WARNING'}, 0, "failed to execute ssh command to set kms server to $kms_address:$kms_port");
 		return;
 	}
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 activate_license
+
+ Parameters  : None
+ Returns     : If successful: true
+               If failed: false
+ Description : 
+
+=cut
+
+sub activate_license {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $management_node_keys     = $self->data->get_management_node_keys();
+	my $computer_node_name       = $self->data->get_computer_node_name();
+	
+	# Run cscript.exe slmgr.vbs -ato to install the product key
+	my $ato_command = 'cscript.exe //NoLogo $SYSTEMROOT/System32/slmgr.vbs -ato';
+	my ($ato_exit_status, $ato_output) = run_ssh_command($computer_node_name, $management_node_keys, $ato_command);
+	if (defined($ato_exit_status) && $ato_exit_status == 0 && grep(/successfully/i, @$ato_output)) {
+		notify($ERRORS{'OK'}, 0, "activated license");
+	}
+	elsif (defined($ato_exit_status)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to activate license, exit status: $ato_exit_status, output:\n@{$ato_output}");
+		return;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute ssh command to activate license");
+		return;
+	}
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 deactivate
+
+ Parameters  : None
+ Returns     : If successful: true
+               If failed: false
+ Description : Deletes existing KMS servers keys from the registry.
+               Runs cscript.exe slmgr.vbs -rearm to rearm licensing on the
+               computer.
+
+=cut
+
+sub deactivate {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $management_node_keys     = $self->data->get_management_node_keys();
+	my $computer_node_name       = $self->data->get_computer_node_name();
 	
 	my $registry_string .= <<'EOF';
 Windows Registry Editor Version 5.00
@@ -412,7 +598,7 @@ EOF
 	}
 	
 	# Run slmgr.vbs -rearm
-	my $rearm_command = '$SYSTEMROOT/System32/cscript.exe //NoLogo $SYSTEMROOT/System32/slmgr.vbs -rearm';
+	my $rearm_command = 'cscript.exe //NoLogo $SYSTEMROOT/System32/slmgr.vbs -rearm';
 	my ($rearm_exit_status, $rearm_output) = run_ssh_command($computer_node_name, $management_node_keys, $rearm_command);
 	if (defined($rearm_exit_status) && $rearm_exit_status == 0 && grep(/successfully/i, @$rearm_output)) {
 		notify($ERRORS{'OK'}, 0, "rearmed licensing");
@@ -1043,6 +1229,103 @@ sub add_kms_server {
 		return;
 	}
 	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 run_sysprep
+
+ Parameters  : None
+ Returns     : 1 if successful, 0 otherwise
+ Description :
+
+=cut
+
+sub run_sysprep {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+
+	my $management_node_keys = $self->data->get_management_node_keys();
+	my $computer_node_name   = $self->data->get_computer_node_name();
+	my $system32_path = $self->get_system32_path();
+	my $system32_path_dos = $system32_path;
+	$system32_path_dos =~ s/\//\\/g;
+	
+	# Delete existing setupapi files (log files generated by Sysprep)
+	if (!$self->delete_file('C:/Windows/inf/setupapi*')) {
+		notify($ERRORS{'WARNING'}, 0, "unable to delete setupapi log files, Sysprep will proceed");
+	}
+
+	# Delete existing Sysprep_succeeded.tag file
+	if (!$self->delete_file("$system32_path/sysprep/Sysprep*.tag")) {
+		notify($ERRORS{'WARNING'}, 0, "unable to delete Sysprep_succeeded.tag log file, Sysprep will proceed");
+	}
+
+	# Delete existing Panther directory, contains Sysprep log files
+	if (!$self->delete_file("$system32_path/sysprep/Panther")) {
+		notify($ERRORS{'WARNING'}, 0, "unable to delete Sysprep Panther directory, Sysprep will proceed");
+	}
+
+	# Delete existing Panther directory, contains Sysprep log files
+	if (!$self->delete_file("$system32_path/sysprep/Unattend.xml")) {
+		notify($ERRORS{'WARNING'}, 0, "unable to delete Sysprep Unattend.xml file, Sysprep will NOT proceed");
+		return;
+	}
+
+	# Copy Unattend.xml file to sysprep directory
+	my $node_configuration_directory = $self->get_node_configuration_directory();
+	my $cp_command = "cp -f $node_configuration_directory/Utilities/Sysprep/Unattend.xml $system32_path/sysprep/Unattend.xml";
+	my ($cp_status, $cp_output) = run_ssh_command($computer_node_name, $management_node_keys, $cp_command);
+	if (defined($cp_status) && $cp_status == 0) {
+		notify($ERRORS{'DEBUG'}, 0, "copied Unattend.xml to $system32_path/sysprep");
+	}
+	elsif (defined($cp_status)) {
+		notify($ERRORS{'OK'}, 0, "failed to copy copy Unattend.xml to $system32_path/sysprep, exit status: $cp_status, output:\n@{$cp_output}");
+		return;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unable to run ssh command to copy Unattend.xml to $system32_path/sysprep");
+		return;
+	}
+
+	# Run Sysprep.exe, use cygstart to lauch the .exe and return immediately
+	my $sysprep_command = '/bin/cygstart.exe cmd.exe /c "' . $system32_path_dos . '\\sysprep\\sysprep.exe /generalize /oobe /shutdown /quiet"';
+	my ($sysprep_status, $sysprep_output) = run_ssh_command($computer_node_name, $management_node_keys, $sysprep_command);
+	if (defined($sysprep_status) && $sysprep_status == 0) {
+		notify($ERRORS{'OK'}, 0, "initiated Sysprep.exe, waiting for $computer_node_name to become unresponsive");
+	}
+	elsif (defined($sysprep_status)) {
+		notify($ERRORS{'OK'}, 0, "failed to initiate Sysprep.exe, exit status: $sysprep_status, output:\n@{$sysprep_output}");
+		return 0;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unable to run ssh command to initiate Sysprep.exe");
+		return 0;
+	}
+	
+	# Wait maximum of 5 minutes for the computer to become unresponsive
+	if (!$self->wait_for_no_ping(5)) {
+		# Computer never stopped responding to ping
+		notify($ERRORS{'WARNING'}, 0, "$computer_node_name never became unresponsive to ping");
+		return 0;
+	}
+	
+	# Wait for 3 minutes then call provisioning module's power_off() subroutine
+	# Sysprep does not always shut down the computer when it is done
+	notify($ERRORS{'OK'}, 0, "sleeping for 3 minutes to allow Sysprep.exe to finish");
+	sleep 180;
+
+	# Call power_off() to make sure computer is shut down
+	if (!$self->provisioner->power_off()) {
+		# Computer could not be shut off
+		notify($ERRORS{'WARNING'}, 0, "unable to power off $computer_node_name");
+		return 0;
+	}
+
 	return 1;
 }
 

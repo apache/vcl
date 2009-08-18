@@ -857,8 +857,8 @@ sub delete_file {
 		return;
 	}
 	
-	# Replace backslashes with forward slashes
-	$path =~ s/\\+/\//gs;
+	my $path_unix = $self->format_path_unix($path);
+	my $path_dos = $self->format_path_dos($path);
 	
 	if (!$self->filesystem_entry_exists($path)) {
 		notify($ERRORS{'DEBUG'}, 0, "file not deleted because it does not exist: $path");
@@ -868,37 +868,37 @@ sub delete_file {
 	notify($ERRORS{'DEBUG'}, 0, "attempting to delete file: $path");
 	
 	# Run chmod
-	my $chmod_command = "chmod -Rv 777 \"$path\"";
+	my $chmod_command = "chmod -Rv 777 $path_unix";
 	my ($chmod_exit_status, $chmod_output) = run_ssh_command($computer_node_name, $management_node_keys, $chmod_command, '', '', 1);
 	if (defined($chmod_exit_status) && $chmod_exit_status == 0) {
-		notify($ERRORS{'DEBUG'}, 0, "set permissions to 777 on $path");
+		notify($ERRORS{'DEBUG'}, 0, "set permissions to 777 on $path_unix");
 	}
 	elsif ($chmod_exit_status) {
-		notify($ERRORS{'WARNING'}, 0, "failed to set permissions to 777 on $path, exit status: $chmod_exit_status, output:\n@{$chmod_output}");
+		notify($ERRORS{'WARNING'}, 0, "failed to set permissions to 777 on $path_unix, exit status: $chmod_exit_status, output:\n@{$chmod_output}");
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to set permissions to 777 on $path");
+		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to set permissions to 777 on $path_unix");
 	}
 
 	# Assemble the Windows shell del command and execute it
-	my $rm_command = "rm -rfv \"$path\"";
+	my $rm_command = "rm -rfv $path_unix";
 	my ($rm_exit_status, $rm_output) = run_ssh_command($computer_node_name, $management_node_keys, $rm_command, '', '', 1);
 	if ($rm_output && grep(/removed/i, @{$rm_output})) {
 		my $files_deleted = grep(/removed \W/i, @{$rm_output});
 		my $directories_deleted = grep(/removed directory/i, @{$rm_output});
-		notify($ERRORS{'OK'}, 0, "deleted $path using rm, files deleted: $files_deleted, directories deleted: $directories_deleted");
+		notify($ERRORS{'OK'}, 0, "deleted $path_unix using rm, files deleted: $files_deleted, directories deleted: $directories_deleted");
 	}
 	elsif (defined($rm_exit_status) && $rm_exit_status == 0) {
-		notify($ERRORS{'OK'}, 0, "file either deleted or does not exist on $computer_node_name: $path, output:\n@{$rm_output}");
+		notify($ERRORS{'OK'}, 0, "file either deleted or does not exist on $computer_node_name: $path_unix, output:\n@{$rm_output}");
 	}
 	elsif (defined($rm_output) && grep(/Circular directory structure/i, @{$rm_output})) {
 		notify($ERRORS{'DEBUG'}, 0, "circular directory structure found, rm can't handle this, attempting next deletion method");
 	}
 	elsif ($rm_exit_status) {
-		notify($ERRORS{'WARNING'}, 0, "failed to delete file on $computer_node_name: $path, exit status: $rm_exit_status, output:\n@{$rm_output}");
+		notify($ERRORS{'WARNING'}, 0, "failed to delete file on $computer_node_name: $path_unix, exit status: $rm_exit_status, output:\n@{$rm_output}");
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to delete file on $computer_node_name: $path");
+		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to delete file on $computer_node_name: $path_unix");
 	}
 
 	# Check if file was deleted
@@ -912,22 +912,22 @@ sub delete_file {
 	
 	# rm didn't get rid of the file, try del
 	# Assemble the Windows shell del command and execute it
-	my $del_command = '$SYSTEMROOT/System32/cmd.exe /c "del /s /q /f /a \\"' . $path . '\\""';
+	my $del_command = '$SYSTEMROOT/System32/cmd.exe /c "del /s /q /f /a \\"' . $path_dos . '\\""';
 	my ($del_exit_status, $del_output) = run_ssh_command($computer_node_name, $management_node_keys, $del_command, '', '', 1);
 	if ($del_output && (my $deleted_count = grep(/deleted file/i, @{$del_output}))) {
-		notify($ERRORS{'OK'}, 0, "deleted $path using del, files deleted: $deleted_count");
+		notify($ERRORS{'OK'}, 0, "deleted $path_dos using del, files deleted: $deleted_count");
 	}
 	elsif (defined($del_exit_status) && $del_exit_status == 0) {
-		notify($ERRORS{'DEBUG'}, 0, "file does not exist on $computer_node_name: $path, output:\n@{$del_output}");
+		notify($ERRORS{'DEBUG'}, 0, "file does not exist on $computer_node_name: $path_dos, output:\n@{$del_output}");
 	}
 	elsif ($del_output && grep(/cannot find/, @{$del_output})) {
-		notify($ERRORS{'DEBUG'}, 0, "file not found on $computer_node_name: $path, exit status: $del_exit_status, output:\n@{$del_output}");
+		notify($ERRORS{'DEBUG'}, 0, "file not found on $computer_node_name: $path_dos, exit status: $del_exit_status, output:\n@{$del_output}");
 	}
 	elsif ($del_exit_status) {
-		notify($ERRORS{'WARNING'}, 0, "failed to delete file on $computer_node_name: $path, exit status: $del_exit_status, output:\n@{$del_output}");
+		notify($ERRORS{'WARNING'}, 0, "failed to delete file on $computer_node_name: $path_dos, exit status: $del_exit_status, output:\n@{$del_output}");
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to delete file on $computer_node_name: $path");
+		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to delete file on $computer_node_name: $path_dos");
 	}
 	
 	# Check if file was deleted
@@ -940,20 +940,20 @@ sub delete_file {
 	notify($ERRORS{'DEBUG'}, 0, "file still exists: $path, attempting to delete it using cmd.exe /c rmdir");
 
 	# Assemble the Windows shell rmdir command and execute it
-	my $rmdir_command = '$SYSTEMROOT/System32/cmd.exe /c "rmdir /s /q \\"' . $path . '\\""';
+	my $rmdir_command = '$SYSTEMROOT/System32/cmd.exe /c "rmdir /s /q \\"' . $path_dos . '\\""';
 	my ($rmdir_exit_status, $rmdir_output) = run_ssh_command($computer_node_name, $management_node_keys, $rmdir_command, '', '', 1);
 	if (defined($rmdir_exit_status) && $rmdir_exit_status == 0) {
-		notify($ERRORS{'DEBUG'}, 0, "directory deleted using rmdir on $computer_node_name: $path, output:\n@{$rmdir_output}");
+		notify($ERRORS{'DEBUG'}, 0, "directory deleted using rmdir on $computer_node_name: $path_dos, output:\n@{$rmdir_output}");
 	}
 	elsif (defined($rmdir_output) && grep(/cannot find the/, @{$rmdir_output})) {
 		# Exit status 2 should mean the directory was not found
-		notify($ERRORS{'DEBUG'}, 0, "directory to be deleted was not found on $computer_node_name: $path, exit status: $rmdir_exit_status, output:\n@{$rmdir_output}");
+		notify($ERRORS{'DEBUG'}, 0, "directory to be deleted was not found on $computer_node_name: $path_dos, exit status: $rmdir_exit_status, output:\n@{$rmdir_output}");
 	}
 	elsif ($rmdir_exit_status) {
-		notify($ERRORS{'WARNING'}, 0, "failed to delete directory on $computer_node_name: $path, exit status: $rmdir_exit_status, output:\n@{$rmdir_output}");
+		notify($ERRORS{'WARNING'}, 0, "failed to delete directory on $computer_node_name: $path_dos, exit status: $rmdir_exit_status, output:\n@{$rmdir_output}");
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to delete directory on $computer_node_name: $path");
+		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to delete directory on $computer_node_name: $path_dos");
 	}
 	
 	# Check if file was deleted
@@ -1106,7 +1106,7 @@ sub filesystem_entry_exists {
 	}
 	
 	# Replace any backslashes or forward slashes with \\
-	$path =~ s/[\\\/]+/\\\\/g;
+	$path =~ s/[\\\/]/\\\\/g;
 
 	# Assemble the dir command and execute it
 	my $dir_command = "cmd.exe /c dir /a /b \"$path\"";
@@ -2014,6 +2014,122 @@ sub import_registry_string {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 reg_query
+
+ Parameters  : registry key, registry value
+ Returns     :
+ Description :
+
+=cut
+
+sub reg_query {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+
+	my $management_node_keys = $self->data->get_management_node_keys();
+	my $computer_node_name   = $self->data->get_computer_node_name();
+	
+	# Get the arguments
+	my $registry_key = shift;
+	if (!defined($registry_key) || !$registry_key) {
+		notify($ERRORS{'WARNING'}, 0, "registry key was not passed correctly as an argument");
+		return;
+	}
+	
+	my $registry_value = shift;
+	if (!defined($registry_value) || !$registry_value) {
+		notify($ERRORS{'WARNING'}, 0, "registry value was not passed correctly as an argument");
+		return;
+	}
+	
+	# Replace forward slashes with backslashes in registry key
+	$registry_key =~ s/\//\\\\/g;
+	
+	# Run reg.exe QUERY
+	my $query_registry_command .= $self->get_system32_path() . "/reg.exe QUERY \"$registry_key\" /v \"$registry_value\"";
+	my ($query_registry_exit_status, $query_registry_output) = run_ssh_command($computer_node_name, $management_node_keys, $query_registry_command, '', '', 1);
+	if (defined($query_registry_exit_status) && $query_registry_exit_status == 0) {
+		notify($ERRORS{'DEBUG'}, 0, "queried registry key: $registry_key, value: $registry_value, output:\n" . join("\n", @$query_registry_output));
+	}
+	elsif ($query_registry_exit_status) {
+		notify($ERRORS{'WARNING'}, 0, "failed to query registry key: $registry_key, value: $registry_value, exit status: $query_registry_exit_status, output:\n@{$query_registry_output}");
+		return;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to query registry key: $registry_key, value: $registry_value");
+		return;
+	}
+	
+	my ($output_line) = grep(/^\s*$registry_value/i, @$query_registry_output);
+	#notify($ERRORS{'DEBUG'}, 0, "output line: $output_line");
+	
+	my ($output_value, $output_type, $output_data) = $output_line =~ /\s*($registry_value)\s+([\w_]+)\s+(.*)/;
+	notify($ERRORS{'DEBUG'}, 0, "output:\nvalue: '$output_value'\ntype: '$output_type'\ndata: '$output_data'");
+	
+	return $output_data;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 reg_delete
+
+ Parameters  : registry key, registry value
+ Returns     :
+ Description :
+
+=cut
+
+sub reg_delete {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+
+	my $management_node_keys = $self->data->get_management_node_keys();
+	my $computer_node_name   = $self->data->get_computer_node_name();
+	
+	# Get the arguments
+	my $registry_key = shift;
+	if (!defined($registry_key) || !$registry_key) {
+		notify($ERRORS{'WARNING'}, 0, "registry key was not passed correctly as an argument");
+		return;
+	}
+	my $registry_value = shift;
+	
+	# Replace forward slashes with backslashes in registry key
+	$registry_key =~ s/\//\\\\/g;
+	
+	# Run reg.exe DELETE
+	my $delete_registry_command;
+	if ($registry_value) {
+		$delete_registry_command = $self->get_system32_path() . "/reg.exe DELETE \"$registry_key\" /v \"$registry_value\" /f";
+	}
+	else {
+		$delete_registry_command = $self->get_system32_path() . "/reg.exe DELETE \"$registry_key\" /f";
+		$registry_value = '*';
+	}
+	my ($delete_registry_exit_status, $delete_registry_output) = run_ssh_command($computer_node_name, $management_node_keys, $delete_registry_command, '', '', 1);
+	if (defined($delete_registry_exit_status) && $delete_registry_exit_status == 0) {
+		notify($ERRORS{'DEBUG'}, 0, "deleted registry key: $registry_key, value: $registry_value, output:\n" . join("\n", @$delete_registry_output));
+	}
+	elsif ($delete_registry_exit_status) {
+		notify($ERRORS{'WARNING'}, 0, "failed to delete registry key: $registry_key, value: $registry_value, exit status: $delete_registry_exit_status, output:\n@{$delete_registry_output}");
+		return;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to delete registry key: $registry_key, value: $registry_value");
+		return;
+	}
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 reg_import
 
  Parameters  :
@@ -2040,7 +2156,7 @@ sub reg_import {
 	}
 	
 	# Run reg.exe IMPORT
-	my $import_registry_command .= '"//$COMPUTERNAME/c$/WINDOWS/system32/reg.exe" IMPORT ' . $registry_file_path;
+	my $import_registry_command .= $self->get_system32_path() . "/reg.exe IMPORT $registry_file_path";
 	my ($import_registry_exit_status, $import_registry_output) = run_ssh_command($computer_node_name, $management_node_keys, $import_registry_command, '', '', 1);
 	if (defined($import_registry_exit_status) && $import_registry_exit_status == 0) {
 		notify($ERRORS{'DEBUG'}, 0, "imported registry file: $registry_file_path");
@@ -2120,7 +2236,7 @@ EOF
 	}
 	
 	# Attempt to query the registry key to make sure it was added
-	my $reg_query_command = '$SYSTEMROOT/System32/reg.exe query "HKLM\\SOFTWARE\\Microsoft\Windows\\\CurrentVersion\\Run"';
+	my $reg_query_command = $self->get_system32_path() . '/reg.exe query "HKLM\\SOFTWARE\\Microsoft\Windows\\\CurrentVersion\\Run"';
 	my ($reg_query_exit_status, $reg_query_output) = run_ssh_command($computer_node_name, $management_node_keys, $reg_query_command, '', '', 1);
 	if (defined($reg_query_exit_status) && $reg_query_exit_status == 0) {
 		notify($ERRORS{'DEBUG'}, 0, "queried '$command_name' registry key:\n" . join("\n", @{$reg_query_output}));
@@ -2166,7 +2282,7 @@ sub delete_hklm_run_registry_key {
 	}
 	
 	# Attempt to query the registry key to make sure it was added
-	my $reg_delete_command = '$SYSTEMROOT/System32/reg.exe delete "HKLM\\SOFTWARE\\Microsoft\Windows\\\CurrentVersion\\Run" /v "' . $key_name . '" /F';
+	my $reg_delete_command = $self->get_system32_path() . '/reg.exe delete "HKLM\\SOFTWARE\\Microsoft\Windows\\\CurrentVersion\\Run" /v "' . $key_name . '" /F';
 	my ($reg_delete_exit_status, $reg_delete_output) = run_ssh_command($computer_node_name, $management_node_keys, $reg_delete_command, '', '', 1);
 	if (defined($reg_delete_exit_status) && $reg_delete_exit_status == 0) {
 		notify($ERRORS{'OK'}, 0, "deleted '$key_name' run registry key:\n" . join("\n", @{$reg_delete_output}));
@@ -3468,7 +3584,7 @@ sub disable_netbios {
 	my $computer_node_name   = $self->data->get_computer_node_name();
 
 	# Attempt to query the registry for the NetBT service parameters
-	my $reg_query_command = '$SYSTEMROOT/System32/reg.exe query "HKLM\SYSTEM\CurrentControlSet\Services\NetBT\Parameters\Interfaces" /s';
+	my $reg_query_command = $self->get_system32_path() . '/reg.exe query "HKLM\SYSTEM\CurrentControlSet\Services\NetBT\Parameters\Interfaces" /s';
 	my ($reg_query_exit_status, $reg_query_output) = run_ssh_command($computer_node_name, $management_node_keys, $reg_query_command, '', '', 1);
 	if (defined($reg_query_exit_status) && $reg_query_exit_status == 0) {
 		notify($ERRORS{'DEBUG'}, 0, "queried NetBT parameters registry keys");
@@ -3493,7 +3609,7 @@ sub disable_netbios {
 
 		if ($query_line =~ /NetbiosOptions/i) {
 			# Attempt to set the NetbiosOptions key
-			my $reg_add_command = '$SYSTEMROOT/System32/reg.exe add "' . $interface_key . '" /v NetbiosOptions /d 2 /t REG_DWORD /f';
+			my $reg_add_command = $self->get_system32_path() . '/reg.exe add "' . $interface_key . '" /v NetbiosOptions /d 2 /t REG_DWORD /f';
 			my ($reg_add_exit_status, $reg_add_output) = run_ssh_command($computer_node_name, $management_node_keys, $reg_add_command, '', '', 1);
 			if (defined($reg_add_exit_status) && $reg_add_exit_status == 0) {
 				notify($ERRORS{'OK'}, 0, "disabled NetBIOS under: $interface_key");
@@ -3598,7 +3714,7 @@ sub set_my_computer_name {
 	my $value = shift;
 	$value = $image_prettyname if !$value;
 
-	my $add_registry_command .= "\"\$SYSTEMROOT/System32/reg.exe\" add \"HKCR\\CLSID\\{20D04FE0-3AEA-1069-A2D8-08002B30309D}\" /v LocalizedString /t REG_EXPAND_SZ /d \"$value\" /f";
+	my $add_registry_command .= $self->get_system32_path() . "/reg.exe add \"HKCR\\CLSID\\{20D04FE0-3AEA-1069-A2D8-08002B30309D}\" /v LocalizedString /t REG_EXPAND_SZ /d \"$value\" /f";
 	my ($add_registry_exit_status, $add_registry_output) = run_ssh_command($computer_node_name, $management_node_keys, $add_registry_command, '', '', 1);
 	if (defined($add_registry_exit_status) && $add_registry_exit_status == 0) {
 		notify($ERRORS{'OK'}, 0, "my computer name changed to '$value'");
@@ -5876,7 +5992,7 @@ sub prepare_drivers {
 	}
 	
 	# Delete existing DevicePath key
-	my $reg_del_command = '$SYSTEMROOT/System32/reg.exe DELETE "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion" /v DevicePath /f';
+	my $reg_del_command = $self->get_system32_path() . '/reg.exe DELETE "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion" /v DevicePath /f';
 	my ($reg_del_status, $reg_del_output) = run_ssh_command($computer_node_name, $management_node_keys, $reg_del_command);
 	if (defined($reg_del_status) && $reg_del_status == 0) {
 		notify($ERRORS{'DEBUG'}, 0, "deleted existing DevicePath key");
@@ -5906,7 +6022,7 @@ sub prepare_drivers {
 	}
 	
 	# Query the DevicePath registry value in order to save it in the log for troubleshooting
-	my $reg_query_command = '$SYSTEMROOT/System32/reg.exe QUERY "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion" /v DevicePath';
+	my $reg_query_command = $self->get_system32_path() . '/reg.exe QUERY "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion" /v DevicePath';
 	my ($reg_query_status, $reg_query_output) = run_ssh_command($computer_node_name, $management_node_keys, $reg_query_command, '', '', 1);
 	if (defined($reg_query_status) && $reg_query_status == 0) {
 		notify($ERRORS{'DEBUG'}, 0, "queried DevicePath registry key:\n" . join("\n", @{$reg_query_output}));
@@ -6284,7 +6400,7 @@ sub get_installed_applications {
 	}
 
 	# Attempt to query the registry for installed applications
-	my $reg_query_command = '$SYSTEMROOT/System32/reg.exe QUERY "HKLM\Software\Microsoft\Windows\CurrentVersion\Uninstall" /s';
+	my $reg_query_command = $self->get_system32_path() . '/reg.exe QUERY "HKLM\Software\Microsoft\Windows\CurrentVersion\Uninstall" /s';
 	my ($reg_query_exit_status, $reg_query_output) = run_ssh_command($computer_node_name, $management_node_keys, $reg_query_command, '', '', 1);
 	if (defined($reg_query_exit_status) && $reg_query_exit_status == 0) {
 		notify($ERRORS{'DEBUG'}, 0, "queried Uninstall registry keys");
@@ -7025,7 +7141,7 @@ sub registry_query_value {
 	}
 	
 	# Assemble the query command string
-	my $reg_query_command = "\$SYSTEMROOT/System32/reg.exe QUERY \"$key_name\"";
+	my $reg_query_command = $self->get_system32_path() . "/reg.exe QUERY \"$key_name\"";
 	
 	# Check if the value name argument was specified
 	my $query_mode;
@@ -7415,6 +7531,220 @@ sub configure_time_synchronization {
 	}
 	
 	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 is_64_bit
+
+ Parameters  : None
+ Returns     : If 64-bit: true
+               If 32-bit: false
+ Description : Determines if Windows OS is 64 or 32-bit.
+
+=cut
+
+sub is_64_bit {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a VCL::Module module object method");
+		return;	
+	}
+	
+	# Check if architecture has previously been determined
+	if (defined($self->{OS_ARCHITECTURE}) && $self->{OS_ARCHITECTURE} eq '64') {
+		notify($ERRORS{'DEBUG'}, 0, '64-bit Windows OS previously detected');
+		return 1;
+	}
+	elsif (defined($self->{OS_ARCHITECTURE}) && $self->{OS_ARCHITECTURE} eq '32') {
+		notify($ERRORS{'DEBUG'}, 0, '32-bit Windows OS previously detected');
+		return 0;
+	}
+	
+	my $management_node_keys = $self->data->get_management_node_keys();
+	my $computer_node_name   = $self->data->get_computer_node_name();
+	
+	# Get the PROCESSOR_IDENTIFIER environment variable to determine if OS is 32 or 64-bit
+	my ($set_exit_status, $set_output) = run_ssh_command($computer_node_name, $management_node_keys, 'set', '', '', 1);
+	if (defined($set_exit_status) && $set_exit_status == 0) {
+		notify($ERRORS{'OK'}, 0, "executed set command to determine architecture on $computer_node_name");
+	}
+	elsif (defined($set_exit_status)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute set command to determine architecture on $computer_node_name, exit status: $set_exit_status, output:\n@{$set_output}");
+		return;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute ssh command to set command to determine architecture on $computer_node_name");
+		return;
+	}
+	
+	# Get the line containing PROCESSOR_IDENTIFIER
+	my ($processor_identifier_line) = grep(/PROCESSOR_IDENTIFIER=/, @$set_output);
+	if (!$processor_identifier_line) {
+		notify($ERRORS{'WARNING'}, 0, "failed to locate PROCESSOR_IDENTIFIER in set output:\n" . join("\n", @$set_output));
+		return;
+	}
+	notify($ERRORS{'DEBUG'}, 0, "PROCESSOR_IDENTIFIER environment variable: $processor_identifier_line");
+	
+	# Check if the environment variable contains 64, otherwise assume 32-bit OS is being used
+	if ($processor_identifier_line =~ /64/) {
+		$self->{OS_ARCHITECTURE} = 64;
+		notify($ERRORS{'DEBUG'}, 0, '64-bit Windows OS detected');
+		return 1;
+	}
+	else {
+		$self->{OS_ARCHITECTURE} = 32;
+		notify($ERRORS{'DEBUG'}, 0, '32-bit Windows OS detected');
+		return 0;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_system32
+
+ Parameters  : None
+ Returns     : If 64-bit: true
+               If 32-bit: false
+ Description : 
+
+=cut
+
+sub get_system32_path {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a VCL::Module module object method");
+		return;	
+	}
+	
+	# Check if architecture has previously been determined
+	# If not, check if OS is 32 or 64-bit
+	if ($self->{SYSTEM32_PATH}) {
+		notify($ERRORS{'DEBUG'}, 0, "System32 string previously detected: $self->{SYSTEM32_PATH}");
+	}
+	elsif ($self->is_64_bit()) {
+		$self->{SYSTEM32_PATH} = 'C:/Windows/Sysnative';
+		notify($ERRORS{'DEBUG'}, 0, "64-bit Windows OS, using $self->{SYSTEM32_PATH}");
+	}
+	else {
+		$self->{SYSTEM32_PATH} = 'C:/Windows/System32';
+		notify($ERRORS{'DEBUG'}, 0, "32-bit Windows OS, using $self->{SYSTEM32_PATH}");
+	}
+	
+	return $self->{SYSTEM32_PATH};
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_product_name
+
+ Parameters  : None
+ Returns     : If successful: string containing Windows product name
+               If failed: false
+ Description : Retrieves the Windows product name from the registry. This is
+               stored at:
+               HKLM\Software\Microsoft\Windows NT\CurrentVersion\ProductName
+
+=cut
+
+sub get_product_name {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a VCL::Module module object method");
+		return;	
+	}
+	
+	# Check if product name has previously been retrieved from registry
+	if ($self->{PRODUCT_NAME}) {
+		notify($ERRORS{'DEBUG'}, 0, "Windows product name previously retrieved: $self->{PRODUCT_NAME}");
+		return $self->{PRODUCT_NAME};
+	}
+	
+	my $management_node_keys = $self->data->get_management_node_keys();
+	my $computer_node_name   = $self->data->get_computer_node_name();
+	
+	# Get the Windows product name from the registry
+	my $product_name = $self->reg_query('HKLM/Software/Microsoft/Windows NT/CurrentVersion', 'ProductName');
+	if ($product_name) {
+		notify($ERRORS{'DEBUG'}, 0, "retrieved Windows product name: $product_name");
+		$self->{PRODUCT_NAME} = $product_name;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve Windows product name from registry");
+		return;
+	}
+	
+	return $self->{PRODUCT_NAME};
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 format_path_unix
+
+ Parameters  : path
+ Returns     : If successful: path formatted for Unix
+               If failed: false
+ Description : 
+
+=cut
+
+sub format_path_unix {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a VCL::Module module object method");
+		return;	
+	}
+	
+	# Get the path argument
+	my $path = shift;
+	if (!$path) {
+		notify($ERRORS{'WARNING'}, 0, "path argument was not specified");
+		return;	
+	}
+	
+	# Replace all backslashes with forward slashes
+	$path =~ s/\\+/\//g;
+	
+	# Replace multiple forward slashes with a single forward slash
+	$path =~ s/\/+/\//g;
+	
+	# Escape all spaces
+	$path =~ s/ /\\ /g;
+	
+	notify($ERRORS{'DEBUG'}, 0, "formatted path for Unix: $path");
+	return $path;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 format_path_dos
+
+ Parameters  : path
+ Returns     : If successful: path formatted for DOS
+               If failed: false
+ Description : 
+
+=cut
+
+sub format_path_dos {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a VCL::Module module object method");
+		return;	
+	}
+	
+	# Get the path argument
+	my $path = shift;
+	if (!$path) {
+		notify($ERRORS{'WARNING'}, 0, "path argument was not specified");
+		return;	
+	}
+	
+	# Replace all forward slashes with 2 backslashes
+	$path =~ s/\//\\\\/g;
+	
+	notify($ERRORS{'DEBUG'}, 0, "formatted path for DOS: $path");
+	return $path;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
