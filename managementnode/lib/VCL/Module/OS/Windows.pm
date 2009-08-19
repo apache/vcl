@@ -7487,6 +7487,7 @@ sub configure_time_synchronization {
 	
 	my $management_node_keys = $self->data->get_management_node_keys();
 	my $computer_node_name   = $self->data->get_computer_node_name();
+	my $system32_path = $self->get_system32_path();
 	
 	my $time_source = "time.nist.gov time-a.nist.gov time-b.nist.gov time.windows.com";
 	
@@ -7494,18 +7495,18 @@ sub configure_time_synchronization {
 	my $time_command;
 	
 	# Kill d4.exe if it's running, this will prevent Windows built-in time synchronization from working
-	$time_command .= "taskkill.exe /IM d4.exe /F 2>/dev/null ; ";
+	$time_command .= "$system32_path/taskkill.exe /IM d4.exe /F 2>/dev/null ; ";
 	
 	# Register the w32time service
-	$time_command .= "w32tm.exe /register ; ";
+	$time_command .= "$system32_path/w32tm.exe /register ; ";
 	
 	# Start the service and configure it
 	$time_command .= "net start w32time 2>/dev/null ; ";
-	$time_command .= "w32tm.exe /config /manualpeerlist:\"$time_source\" /syncfromflags:manual /update ; ";
+	$time_command .= "$system32_path/w32tm.exe /config /manualpeerlist:\"$time_source\" /syncfromflags:manual /update ; ";
 	$time_command .= "net stop w32time && net start w32time ; ";
 	
 	# Synchronize the time
-	$time_command .= "w32tm.exe /resync /nowait";
+	$time_command .= "$system32_path/w32tm.exe /resync /nowait";
 	
 	# Run the assembled command
 	my ($time_exit_status, $time_output) = run_ssh_command($computer_node_name, $management_node_keys, $time_command);
