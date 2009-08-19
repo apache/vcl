@@ -213,6 +213,14 @@ Call parent class's post_load() subroutine
 
 =item *
 
+Ignore default routes configured for the private interface
+
+=cut
+
+	$self->ignore_private_default_routes();
+
+=item *
+
 Activate Windows license
 
 =cut
@@ -1326,6 +1334,60 @@ sub run_sysprep {
 		return 0;
 	}
 
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 ignore_private_default_routes
+
+ Parameters  : None
+ Returns     : If successful: true
+               If failed: false
+ Description : Configures computer to ignore default routes configured for the
+               private network interface. This is necessary in order for traffic
+               to be correctly routed out of the computer. If default routes are
+               configured for both the public and private interfaces and the
+               metric for the private default route is equal to or less than the
+               metric for the public route, traffic originating from the
+               computer to the Internet will fail because it will be routed on
+               the private interface.
+
+=cut
+
+sub ignore_private_default_routes {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a VCL::Module module object method");
+		return;	
+	}
+	
+	# Get required data
+	my $management_node_keys = $self->data->get_management_node_keys();
+	my $computer_node_name   = $self->data->get_computer_node_name();
+	
+	# Get the private interface name
+	my $private_interface_name = $self->get_private_interface_name();
+	if (!$private_interface_name) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine private interface name");
+		return;	
+	}
+	
+	# Run netsh.exe to configure any default routes configured for the private interface to be ignored
+	my $netsh_command = "netsh.exe interface ip set interface \"$private_interface_name\" ignoredefaultroutes=enabled";
+	my ($netsh_exit_status, $netsh_output) = run_ssh_command($computer_node_name, $management_node_keys, $netsh_command);
+	if (defined($netsh_exit_status) && $netsh_exit_status == 0) {
+		notify($ERRORS{'OK'}, 0, "configured interface \"$private_interface_name\" to ignore default routes");
+	}
+	elsif (defined($netsh_exit_status)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to configure interface \"$private_interface_name\" to ignore default routes, exit status: $netsh_exit_status, output:\n@{$netsh_output}");
+		return;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to configure interface \"$private_interface_name\" to ignore default routes");
+		return;
+	}
+	
 	return 1;
 }
 
