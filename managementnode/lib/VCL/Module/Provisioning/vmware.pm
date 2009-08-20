@@ -260,7 +260,14 @@ sub load {
 			notify($ERRORS{'OK'}, 0, "listing datestore $datastorepath ");
 			undef @sshcmd;
 			@sshcmd = run_ssh_command($hostnode, $identity, "ls -1 $datastorepath", "root");
-			notify($ERRORS{'OK'}, 0, "@{ $sshcmd[1] }");
+			if (!defined(@{$sshcmd[1]})) {
+				notify($ERRORS{'CRITICAL'}, 0, "failed to list data store contents $datastorepath on vm host");
+				insertloadlog($reservation_id, $vmclient_computerid, "failed", "failed to list data store contents $datastorepath on vm host");
+				close(TMPLOCK);
+				unlink($tmplockfile);
+				return 0;
+			}
+			notify($ERRORS{'OK'}, 0, "data store contents $datastorepath on vm host:\n@{ $sshcmd[1] }");
 			foreach my $l (@{$sshcmd[1]}) {
 				if ($l =~ /denied|No such/) {
 					notify($ERRORS{'CRITICAL'}, 0, "node $hostnode output @{ $sshcmd[1] }");
