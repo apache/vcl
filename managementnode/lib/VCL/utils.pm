@@ -6178,9 +6178,11 @@ sub run_ssh_command {
 		#    Warning: the RSA host key for 'vi1-62' differs from the key for the IP address '10.25.7.62'
 		#    Offending key for IP in /root/.ssh/known_hosts:264
 		#    Matching host key in /root/.ssh/known_hosts:3977
+		#    Address x.x.x.x maps to y.y.org, but this does not map back to the address - POSSIBLE BREAK-IN ATTEMPT!
 		$ssh_output =~ s/^Warning:.*//ig;
 		$ssh_output =~ s/Offending key.*//ig;
 		$ssh_output =~ s/Matching host key in.*//ig;
+		$ssh_output =~ s/.*POSSIBLE BREAK-IN ATTEMPT.*//ig;
 		
 		# Remove any spaces from the beginning and end of the output
 		$ssh_output =~ s/(^\s+)|(\s+$)//g;
