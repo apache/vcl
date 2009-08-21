@@ -1249,7 +1249,8 @@ INSERT INTO `OS` (`id`, `name`, `prettyname`, `type`, `installtype`, `sourcepath
 (29, 'centos5image', 'centos5image', 'linux', 'partimage', 'image', 5),
 (30, 'ubuntuimage', 'Ubuntu image', 'linux', 'partimage', 'image', 14),
 (31, 'vmwarewin2008', 'VMware Windows Server 2008', 'windows', 'vmware', 'vmware_images', 16),
-(32, 'win2008', 'Windows Server 2008', 'windows', 'partimage', 'image', 16);
+(32, 'win2008', 'Windows Server 2008', 'windows', 'partimage', 'image', 16),
+(33, 'vmwarewinvista', 'VMware Windows Vista', 'windows', 'vmware', 'vmware_images', 7);
 
 -- 
 -- Dumping data for table `OSinstalltype`
