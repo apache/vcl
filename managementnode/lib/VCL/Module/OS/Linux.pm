@@ -107,6 +107,11 @@ sub capture_prepare {
 		notify($ERRORS{'DEBUG'}, 0, "cleartmp precapture $computer_node_name ");
 	}
 
+	#Clear ssh idenity keys from /root/.ssh 
+	if (!$self->clear_private_keys()) {
+		notify($ERRORS{'WARNING'}, 0, "unable to clear known identity keys");
+	}
+
 	if ($IPCONFIGURATION eq "static") {
 		#so we don't have conflicts we should set the public adapter back to dhcp
 		# reset ifcfg-eth1 back to dhcp
@@ -222,6 +227,26 @@ sub post_load {
 	}
 
 	#Clear ssh idenity keys from /root/.ssh 
+	if (!$self->clear_private_keys()) {
+		notify($ERRORS{'WARNING'}, 0, "unable to clear known identity keys");
+	}
+
+	return 1;
+
+} ## end sub post_load
+
+sub clear_private_keys {
+	my $self = shift;
+		unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a VCL::Module module object method");
+		return;	
+	}
+
+	my $management_node_keys = $self->data->get_management_node_keys();
+	my $computer_short_name  = $self->data->get_computer_short_name();
+	my $computer_node_name   = $self->data->get_computer_node_name();
+
+	#Clear ssh idenity keys from /root/.ssh 
 	my $clear_private_keys = "/bin/rm -f /root/.ssh/id_rsa /root/.ssh/id_rsa.pub";
 	if (run_ssh_command($computer_node_name, $management_node_keys, $clear_private_keys, "root")) {
 		notify($ERRORS{'DEBUG'}, 0, "cleared any id_rsa keys from /root/.ssh");
@@ -231,10 +256,7 @@ sub post_load {
 		notify($ERRORS{'CRITICAL'}, 0, "failed to clear any id_rsa keys from /root/.ssh");
 	}
 
-	return 1;
-
-} ## end sub post_load
-
+}
 sub set_static_public_address {
 	my $self = shift;
 	if (ref($self) !~ /linux/i) {
