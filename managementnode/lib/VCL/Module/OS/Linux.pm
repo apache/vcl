@@ -220,6 +220,17 @@ sub post_load {
 	else {
 		notify($ERRORS{'CRITICAL'}, 0, "failed to clear AllowUsers from external_sshd_config");
 	}
+
+	#Clear ssh idenity keys from /root/.ssh 
+	my $clear_private_keys = "/bin/rm -f /root/.ssh/id_rsa /root/.ssh/id_rsa.pub";
+	if (run_ssh_command($computer_node_name, $management_node_keys, $clear_private_keys, "root")) {
+		notify($ERRORS{'DEBUG'}, 0, "cleared any id_rsa keys from /root/.ssh");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'CRITICAL'}, 0, "failed to clear any id_rsa keys from /root/.ssh");
+	}
+
 	return 1;
 
 } ## end sub post_load
