@@ -234,6 +234,8 @@ our @EXPORT = qw(
   $TOOLS
   $VERBOSE
   $VMWAREREPOSITORY
+  $VMWARE_MAC_ETH0_GENERATED
+  $VMWARE_MAC_ETH1_GENERATED
   $WRTPASS
   $WRTUSER
   $XMLRPC_USER
@@ -266,7 +268,7 @@ BEGIN {
 	our ($IDENTITY_linux_lab, $IDENTITY_solaris_lab, $IDENTITY_wxp, $IDENTITY_newwxp, $IDENTITY_bladerhel);
 	our ($IMAGELIBENABLE) = 0;
 	our ($IMAGESERVERS, $IMAGELIBUSER, $IMAGELIBKEY);
-	our ($VMWARETYPE, $VMWARE_DISK);
+	our ($VMWARETYPE, $VMWARE_DISK,$VMWARE_MAC_ETH0_GENERATED, $VMWARE_MAC_ETH1_GENERATED);
 	our ($WINDOWS_ROOT_PASSWORD);
    our ($XMLRPC_USER, $XMLRPC_PASS, $XMLRPC_URL);
 
@@ -505,6 +507,18 @@ BEGIN {
 			if ($l =~ /^VMWARE_DISK=(localdisk|networkdisk)/) {
 				$VMWARE_DISK = $1;
 			}
+
+			#$VMWARE_MAC_ETHO_GENERATED
+			if ($l =~ /^VMWARE_MAC_ETH0_GENERATED=(yes|no)/i) {
+				$VMWARE_MAC_ETH0_GENERATED = 1 if ($1 =~ /yes/i);
+				$VMWARE_MAC_ETH0_GENERATED = 0 if ($1 =~ /no/i);
+			}
+
+			#$VMWARE_MAC_ETH1_GENERATED
+			if ($l =~ /^VMWARE_MAC_ETH1_GENERATED=(yes|no)/i) {
+				$VMWARE_MAC_ETH1_GENERATED = 1 if ($1 =~ /yes/i);
+				$VMWARE_MAC_ETH1_GENERATED = 0 if ($1 =~ /no/i);
+			}
 			
 			if ($l =~ /^windows_root_password=(.*)/i) {
 				$WINDOWS_ROOT_PASSWORD = $1;
@@ -591,6 +605,15 @@ BEGIN {
 		import Net::Jabber qw(client);
 	}
 
+	# Check ETH0 Generated
+	if(!defined($VMWARE_MAC_ETH0_GENERATED)){
+		$VMWARE_MAC_ETH0_GENERATED = 0;
+	}
+	# Check ETH1 Generated
+	if(!defined($VMWARE_MAC_ETH1_GENERATED)){
+		$VMWARE_MAC_ETH1_GENERATED = 0;
+	}
+
 	# Get the remaining command line parameters
 	$VERBOSE = $OPTIONS{verbose} if (defined($OPTIONS{verbose} && $OPTIONS{verbose}));
 	$TESTING = $OPTIONS{testing} if (defined($OPTIONS{testing} && $OPTIONS{testing}));
@@ -623,6 +646,7 @@ our $IDENTITY_newwxp    = "$FindBin::Bin/../lib/VCL/newwinxp_blade.key";
 our $XCATROOT           = "/opt/xcat";
 our $TOOLS              = "$FindBin::Bin/../tools";
 our $VMWAREREPOSITORY   = "/install/vmware_images";
+our $VMWARE_MAC_GENERATED;
 our $VERBOSE;
 our $TESTING;
 our $CONF_FILE_PATH;
