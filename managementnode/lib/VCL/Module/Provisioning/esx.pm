@@ -117,12 +117,12 @@ our $VMTOOLKIT_VERSION;
 
 sub initialize {
 	# Check for known vmware toolkit paths
-	if(-d '/usr/lib/vmware-vcli/apps/vm'){
-		$VMTOOL_ROOT = '/usr/lib/vmware-vcli/apps/vm';
+	if (-d '/usr/lib/vmware-vcli/apps') {
+		$VMTOOL_ROOT       = '/usr/lib/vmware-vcli/apps';
 		$VMTOOLKIT_VERSION = "vsphere4";
 	}
-	elsif(-d '/usr/lib/vmware-viperl/apps/vm'){
-		$VMTOOL_ROOT = '/usr/lib/vmware-viperl/apps/vm';
+	elsif (-d '/usr/lib/vmware-viperl/apps') {
+		$VMTOOL_ROOT       = '/usr/lib/vmware-viperl/apps';
 		$VMTOOLKIT_VERSION = "vmtoolkit1";
 	}
 	else {
@@ -131,7 +131,7 @@ sub initialize {
 	}
 
 	# Check to make sure one of the expected executables is where it should be
-	if (!-x "$VMTOOL_ROOT/vmregister.pl") {
+	if (!-x "$VMTOOL_ROOT/vm/vmregister.pl") {
 		notify($ERRORS{'WARNING'}, 0, "unable to initialize esx module, expected executable was not found: $VMTOOL_ROOT/vmregister.pl");
 		return;
 	}
@@ -139,7 +139,7 @@ sub initialize {
 
 	notify($ERRORS{'DEBUG'}, 0, "vmware ESX module initialized");
 	return 1;
-}
+} ## end sub initialize
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -186,7 +186,20 @@ sub load {
 	my $vmhost_password = $self->data->get_vmhost_profile_password();
 
 	$vmhost_hostname =~ /([-_a-zA-Z0-9]*)(\.?)/;
-	my $vmhost_shortname = $1; 
+	my $vmhost_shortname = $1;
+
+
+	#Collect the proper hostname of the ESX server through the vmware tool kit
+	notify($ERRORS{'DEBUG'}, 0, "Calling get_vmware_host_info");
+	my $vmhost_hostname_value = $self->get_vmware_host_info("hostname");
+
+	if ($vmhost_hostname_value) {
+		notify($ERRORS{'DEBUG'}, 0, "Collected $vmhost_hostname_value for vmware host name");
+		$vmhost_hostname = $vmhost_hostname_value;
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "Unable to collect hostname_value for vmware host name using hostname from database");
+	}
 
 
 	#Get the config datastore information from the database
@@ -202,7 +215,7 @@ sub load {
 	my $vmpath = "$datastore_share_path/inuse/$computer_shortname";
 
 	# query the host to see if the vm currently exists
-	my $vminfo_command = "$VMTOOL_ROOT/vminfo.pl";
+	my $vminfo_command = "$VMTOOL_ROOT/vm/vminfo.pl";
 	$vminfo_command .= " --server '$vmhost_shortname'";
 	$vminfo_command .= " --vmname $computer_shortname";
 	$vminfo_command .= " --username $vmhost_username";
@@ -215,7 +228,7 @@ sub load {
 	# parse the results from the host and determine if we need to remove an old vm
 	if ($vminfo_output =~ /^Information of Virtual Machine $computer_shortname/m) {
 		# Power off this vm
-		my $poweroff_command = "$VMTOOL_ROOT/vmcontrol.pl";
+		my $poweroff_command = "$VMTOOL_ROOT/vm/vmcontrol.pl";
 		$poweroff_command .= " --server '$vmhost_shortname'";
 		$poweroff_command .= " --vmname $computer_shortname";
 		$poweroff_command .= " --operation poweroff";
@@ -227,7 +240,7 @@ sub load {
 		notify($ERRORS{'DEBUG'}, 0, "Powered off: $poweroff_output");
 
 		# unregister old vm from host
-		my $unregister_command = "$VMTOOL_ROOT/vmregister.pl";
+		my $unregister_command = "$VMTOOL_ROOT/vm/vmregister.pl";
 		$unregister_command .= " --server '$vmhost_shortname'";
 		$unregister_command .= " --username $vmhost_username";
 		$unregister_command .= " --password '$vmhost_password'";
@@ -235,7 +248,7 @@ sub load {
 		$unregister_command .= " --operation unregister";
 		$unregister_command .= " --vmname $computer_shortname";
 		$unregister_command .= " --pool Resources";
-		$unregister_command .= " --hostname '$vmhost_shortname'";
+		$unregister_command .= " --hostname '$vmhost_hostname'";
 		$unregister_command .= " --datacenter 'ha-datacenter'";
 		notify($ERRORS{'DEBUG'}, 0, "Un-Register Command: $unregister_command");
 		my $unregister_output;
@@ -279,11 +292,11 @@ sub load {
 	my $vmxpath = "/tmp/$computer_shortname.vmx";
 
 	my $guestOS = "other";
-	$guestOS = "winxppro" if ($image_os_name =~ /(winxp)/i);
-	$guestOS = "winnetenterprise"  if ($image_os_name =~ /(win2003|win2008)/i);
-	$guestOS = "linux" if ($image_os_name =~ /(fc|centos)/i);
-	$guestOS = "linux" if ($image_os_name =~ /(linux)/i);
-	$guestOS = "winvista" if ($image_os_name =~ /(vista)/i);
+	$guestOS = "winxppro"         if ($image_os_name =~ /(winxp)/i);
+	$guestOS = "winnetenterprise" if ($image_os_name =~ /(win2003|win2008)/i);
+	$guestOS = "linux"            if ($image_os_name =~ /(fc|centos)/i);
+	$guestOS = "linux"            if ($image_os_name =~ /(linux)/i);
+	$guestOS = "winvista"         if ($image_os_name =~ /(vista)/i);
 
 	# FIXME Should add some more entries here
 
@@ -319,10 +332,29 @@ sub load {
 	push(@vmxfile, "ethernet0.wakeOnPcktRcv = \"false\"\n");
 	push(@vmxfile, "ethernet1.wakeOnPcktRcv = \"false\"\n");
 
-	#push(@vmxfile, "ethernet0.address = \"$vmclient_eth0MAC\"\n");
-	#push(@vmxfile, "ethernet1.address = \"$vmclient_eth1MAC\"\n");
-	push(@vmxfile, "ethernet0.addressType = \"generated\"\n");
-	push(@vmxfile, "ethernet1.addressType = \"generated\"\n");
+	if ($VMWARE_MAC_ETH0_GENERATED) {
+		# Let vmware host define the MAC addresses
+		notify($ERRORS{'OK'}, 0, "eth0 MAC address set for vmware generated");
+		push(@vmxfile, "ethernet0.addressType = \"generated\"\n");
+	}
+	else {
+		# We set a registered MAC
+		notify($ERRORS{'OK'}, 0, "eth0 MAC address set for vcl assigned");
+		push(@vmxfile, "ethernet0.address = \"$vmclient_eth0MAC\"\n");
+		push(@vmxfile, "ethernet0.addressType = \"static\"\n");
+	}
+	if ($VMWARE_MAC_ETH1_GENERATED) {
+		# Let vmware host define the MAC addresses
+		notify($ERRORS{'OK'}, 0, "eth1 MAC address set for vmware generated $vmclient_eth0MAC");
+		push(@vmxfile, "ethernet1.addressType = \"generated\"\n");
+	}
+	else {
+		# We set a registered MAC
+		notify($ERRORS{'OK'}, 0, "eth1 MAC address set for vcl assigned $vmclient_eth1MAC");
+		push(@vmxfile, "ethernet1.address = \"$vmclient_eth1MAC\"\n");
+		push(@vmxfile, "ethernet1.addressType = \"static\"\n");
+	}
+
 	push(@vmxfile, "gui.exitOnCLIHLT = \"FALSE\"\n");
 	push(@vmxfile, "snapshot.disabled = \"TRUE\"\n");
 	push(@vmxfile, "floppy0.present = \"FALSE\"\n");
@@ -356,7 +388,7 @@ sub load {
 	}
 
 	# Register new vm on host
-	my $register_command = "$VMTOOL_ROOT/vmregister.pl";
+	my $register_command = "$VMTOOL_ROOT/vm/vmregister.pl";
 	$register_command .= " --server '$vmhost_shortname'";
 	$register_command .= " --username $vmhost_username";
 	$register_command .= " --password '$vmhost_password'";
@@ -364,7 +396,7 @@ sub load {
 	$register_command .= " --operation register";
 	$register_command .= " --vmname $computer_shortname";
 	$register_command .= " --pool Resources";
-	$register_command .= " --hostname '$vmhost_shortname'";
+	$register_command .= " --hostname '$vmhost_hostname'";
 	$register_command .= " --datacenter 'ha-datacenter'";
 	notify($ERRORS{'DEBUG'}, 0, "Register Command: $register_command");
 	my $register_output;
@@ -372,7 +404,7 @@ sub load {
 	notify($ERRORS{'DEBUG'}, 0, "Registered: $register_output");
 
 	# Turn new vm on
-	my $poweron_command = "$VMTOOL_ROOT/vmcontrol.pl";
+	my $poweron_command = "$VMTOOL_ROOT/vm/vmcontrol.pl";
 	$poweron_command .= " --server '$vmhost_shortname'";
 	$poweron_command .= " --vmname $computer_shortname";
 	$poweron_command .= " --operation poweron";
@@ -387,81 +419,91 @@ sub load {
 	# Query the VI Perl toolkit for the mac address of our newly registered
 	# machine
 
-	my $url; 
+	my $url;
 
-	if($VMTOOLKIT_VERSION =~ /vsphere4/){
+	if ($VMTOOLKIT_VERSION =~ /vsphere4/) {
 		$url = "https://$vmhost_shortname/sdk/vimService";
 
 	}
-	elsif($VMTOOLKIT_VERSION =~ /vmtoolkit1/){
+	elsif ($VMTOOLKIT_VERSION =~ /vmtoolkit1/) {
 		$url = "https://$vmhost_shortname/sdk";
 	}
-	else{
+	else {
 		notify($ERRORS{'CRITICAL'}, 0, "Could not determine VMTOOLKIT_VERSION $VMTOOLKIT_VERSION");
 		return 0;
 	}
-	
-	Vim::login(service_url => "https://$vmhost_shortname/sdk", user_name => $vmhost_username, password => $vmhost_password);
-	Vim::login(service_url => $url, user_name => $vmhost_username, password => $vmhost_password);
-	my $vm_view = Vim::find_entity_view(view_type => 'VirtualMachine', filter => {'config.name' => "$computer_shortname"});
-	if (!$vm_view) {
-		notify($ERRORS{'CRITICAL'}, 0, "Could not query for VM in VI PERL API");
-		Vim::logout();
-		return 0;
-	}
-	my $devices = $vm_view->config->hardware->device;
-	my $mac_addr;
-	foreach my $dev (@$devices) {
-		next unless ($dev->isa("VirtualEthernetCard"));
-		notify($ERRORS{'DEBUG'}, 0, "deviceinfo->summary: $dev->deviceinfo->summary");
-		notify($ERRORS{'DEBUG'}, 0, "virtualswitch0: $virtualswitch0");
-		if ($dev->deviceInfo->summary eq $virtualswitch0) {
-			$mac_addr = $dev->macAddress;
-		}
-	}
-	Vim::logout();
-	if (!$mac_addr) {
-		notify($ERRORS{'CRITICAL'}, 0, "Failed to find MAC address");
-		return 0;
-	}
-	notify($ERRORS{'OK'}, 0, "Queried MAC address is $mac_addr");
 
-	# Query ARP table for $mac_addr to find the IP (waiting for machine to come up if necessary)
-	# The DHCP negotiation should add the appropriate ARP entry for us
-	my $arpstatus  = 0;
+	#Set some variable
 	my $wait_loops = 0;
+	my $arpstatus  = 0;
 	my $client_ip;
-	while (!$arpstatus) {
-		my $arpoutput = `arp -n`;
-		if ($arpoutput =~ /^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}).*?$mac_addr/mi) {
-			$client_ip = $1;
-			$arpstatus = 1;
-			notify($ERRORS{'OK'}, 0, "$computer_shortname now has ip $client_ip");
+
+	if ($VMWARE_MAC_ETH0_GENERATED) {
+		# allowing vmware to generate the MAC address
+		# find out what MAC got assigned
+		# find out what IP address is assigned to this MAC
+		Vim::login(service_url => "https://$vmhost_shortname/sdk", user_name => $vmhost_username, password => $vmhost_password);
+		Vim::login(service_url => $url, user_name => $vmhost_username, password => $vmhost_password);
+		my $vm_view = Vim::find_entity_view(view_type => 'VirtualMachine', filter => {'config.name' => "$computer_shortname"});
+		if (!$vm_view) {
+			notify($ERRORS{'CRITICAL'}, 0, "Could not query for VM in VI PERL API");
+			Vim::logout();
+			return 0;
 		}
-		else {
-			if ($wait_loops > 24) {
-				notify($ERRORS{'CRITICAL'}, 0, "waited acceptable amount of time for dhcp, please check $computer_shortname on $vmhost_shortname");
-				return 0;
+		my $devices = $vm_view->config->hardware->device;
+		my $mac_addr;
+		foreach my $dev (@$devices) {
+			next unless ($dev->isa("VirtualEthernetCard"));
+			notify($ERRORS{'DEBUG'}, 0, "deviceinfo->summary: $dev->deviceinfo->summary");
+			notify($ERRORS{'DEBUG'}, 0, "virtualswitch0: $virtualswitch0");
+			if ($dev->deviceInfo->summary eq $virtualswitch0) {
+				$mac_addr = $dev->macAddress;
+			}
+		}
+		Vim::logout();
+		if (!$mac_addr) {
+			notify($ERRORS{'CRITICAL'}, 0, "Failed to find MAC address");
+			return 0;
+		}
+		notify($ERRORS{'OK'}, 0, "Queried MAC address is $mac_addr");
+
+		# Query ARP table for $mac_addr to find the IP (waiting for machine to come up if necessary)
+		# The DHCP negotiation should add the appropriate ARP entry for us
+		while (!$arpstatus) {
+			my $arpoutput = `arp -n`;
+			if ($arpoutput =~ /^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}).*?$mac_addr/mi) {
+				$client_ip = $1;
+				$arpstatus = 1;
+				notify($ERRORS{'OK'}, 0, "$computer_shortname now has ip $client_ip");
 			}
 			else {
-				$wait_loops++;
-				notify($ERRORS{'OK'}, 0, "going to sleep 5 seconds, waiting for computer to DHCP. Try $wait_loops");
-				sleep 5;
-			}
-		} ## end else [ if ($arpoutput =~ /^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}).*?$mac_addr/mi)
-	} ## end while (!$arpstatus)
+				if ($wait_loops > 24) {
+					notify($ERRORS{'CRITICAL'}, 0, "waited acceptable amount of time for dhcp, please check $computer_shortname on $vmhost_shortname");
+					return 0;
+				}
+				else {
+					$wait_loops++;
+					notify($ERRORS{'OK'}, 0, "going to sleep 5 seconds, waiting for computer to DHCP. Try $wait_loops");
+					sleep 5;
+				}
+			} ## end else [ if ($arpoutput =~ /^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}).*?$mac_addr/mi)
+		} ## end while (!$arpstatus)
 
 
-	notify($ERRORS{'OK'}, 0, "Found IP address $client_ip");
 
-	# Delete existing entry for $computer_shortname in /etc/hosts (if any)
-	notify($ERRORS{'OK'}, 0, "Removing old hosts entry");
-	my $sedoutput = `sed -i "/.*\\b$computer_shortname\$/d" /etc/hosts`;
-	notify($ERRORS{'DEBUG'}, 0, $sedoutput);
+		notify($ERRORS{'OK'}, 0, "Found IP address $client_ip");
 
-	# Add new entry to /etc/hosts for $computer_shortname
-	`echo -e "$client_ip\t$computer_shortname" >> /etc/hosts`;
+		# Delete existing entry for $computer_shortname in /etc/hosts (if any)
+		notify($ERRORS{'OK'}, 0, "Removing old hosts entry");
+		my $sedoutput = `sed -i "/.*\\b$computer_shortname\$/d" /etc/hosts`;
+		notify($ERRORS{'DEBUG'}, 0, $sedoutput);
 
+		# Add new entry to /etc/hosts for $computer_shortname
+		`echo -e "$client_ip\t$computer_shortname" >> /etc/hosts`;
+	} ## end if ($VMWARE_MAC_ETH0_GENERATED)
+	else {
+		notify($ERRORS{'OK'}, 0, "IP is known for $computer_shortname");
+	}
 	# Start waiting for SSH to come up
 	my $sshdstatus = 0;
 	$wait_loops = 0;
@@ -475,7 +517,7 @@ sub load {
 		}
 		else {
 			#either sshd is off or N/A, we wait
-			if ($wait_loops > 24) {
+			if ($wait_loops > 50) {
 				notify($ERRORS{'CRITICAL'}, 0, "waited acceptable amount of time for sshd to become active, please check $computer_shortname on $vmhost_shortname");
 				#need to check power, maybe reboot it. for now fail it
 				return 0;
@@ -522,6 +564,17 @@ sub load {
 			#}
 		}
 	} ## end if ($IPCONFIGURATION ne "manualDHCP")
+
+	# Perform post load tasks
+
+	# Check if OS module has implemented a post_load() subroutine
+	if ($self->os->can('post_load')) {
+		# If post-load has been implemented by the OS module, don't perform these tasks here
+		# new.pm calls the OS module's post_load() subroutine
+		notify($ERRORS{'DEBUG'}, 0, "post_load() has been implemented by the OS module, returning 1");
+		return 1;
+	}
+
 	return 1;
 
 } ## end sub load
@@ -596,7 +649,7 @@ sub capture {
 	# XXX SHOULD INSTEAD USE write_currentimage_txt IN utils.pm
 	my @sshcmd = run_ssh_command($computer_shortname, $image_identity, "echo $new_imagename > /root/currentimage.txt");
 
-	my $poweroff_command = "$VMTOOL_ROOT/vmcontrol.pl";
+	my $poweroff_command = "$VMTOOL_ROOT/vm/vmcontrol.pl";
 	$poweroff_command .= " --server '$vmhost_shortname'";
 	$poweroff_command .= " --vmname $computer_shortname";
 	$poweroff_command .= " --operation poweroff";
@@ -929,6 +982,50 @@ sub get_image_size {
 
 	return 0;
 } ## end sub get_image_size
+
+sub get_vmware_host_info {
+	my $self = shift;
+
+
+	#check to make sure this call is for the esx module
+	if (ref($self) !~ /esx/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return 0;
+	}
+
+	#Get passed arguement
+	my $field = shift;
+	if (!$field) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine passed field arguement");
+		return 0;
+	}
+
+	# Get additional information
+	my $vmhost_hostname = $self->data->get_vmhost_hostname;
+	my $vmhost_username = $self->data->get_vmhost_profile_username();
+	my $vmhost_password = $self->data->get_vmhost_profile_password();
+
+	$vmhost_hostname =~ /([-_a-zA-Z0-9]*)(\.?)/;
+	my $vmhost_shortname = $1;
+
+
+	my $vmhost_info_cmd = "$VMTOOL_ROOT/host/hostinfo.pl --username $vmhost_username --password $vmhost_password --server $vmhost_shortname --fields $field";
+	my @info_output     = `$vmhost_info_cmd`;
+	notify($ERRORS{'DEBUG'}, 0, "host info output for $vmhost_shortname @info_output");
+
+	#Parse output
+
+	foreach my $l (@info_output) {
+		if ($l =~ /([a-zA-Z1-9]*):\s*([-_.a-zA-Z1-9]*)/) {
+			notify($ERRORS{'DEBUG'}, 0, "found hostname_value= $2");
+			return $2;
+		}
+	}
+
+	notify($ERRORS{'WARNING'}, 0, "no value found for $field output= @info_output");
+	return 0;
+
+} ## end sub get_vmware_host_info
 
 initialize();
 
