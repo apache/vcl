@@ -102,10 +102,25 @@ sub pre_capture {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a VCL::Module object method");
 		return;
 	}
+
+=item 1
+
+Call parent class's pre_capture() subroutine
+
+=cut
+
+	notify($ERRORS{'OK'}, 0, "calling parent class pre_capture() subroutine");
+	if ($self->SUPER::pre_capture($args)) {
+		notify($ERRORS{'OK'}, 0, "successfully executed parent class pre_capture() subroutine");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute parent class pre_capture() subroutine");
+		return 0;
+	}
 	
 	notify($ERRORS{'OK'}, 0, "beginning Windows version 6 image pre-capture tasks");
 
-=item 1
+=item *
 
 Disable defrag scheduled task
 
@@ -136,21 +151,6 @@ Disable customer improvement program opt-in notification scheduled task
 =cut
 
 	$self->disable_scheduled_task('\Microsoft\Windows\Customer Experience Improvement Program\OptinNotification');
-
-=item *
-
-Call parent class's pre_capture() subroutine
-
-=cut
-
-	notify($ERRORS{'OK'}, 0, "calling parent class pre_capture() subroutine");
-	if ($self->SUPER::pre_capture($args)) {
-		notify($ERRORS{'OK'}, 0, "successfully executed parent class pre_capture() subroutine");
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to execute parent class pre_capture() subroutine");
-		return 0;
-	}
 
 =item *
 
@@ -1394,6 +1394,24 @@ sub ignore_private_default_routes {
 		return;
 	}
 	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 defragment_hard_drive
+
+ Parameters  : None
+ Returns     : 1
+ Description : Hard drive defragmentation is skipped for Windows version 6.x
+               (Vista and Server 2008) because it takes a very long time. This
+               subroutine always returns 1.
+
+=cut
+
+sub defragment_hard_drive {
+	# Skip hard drive defragmentation because it takes a very long time for Windows 6.x (Vista, 2008)
+	notify($ERRORS{'OK'}, 0, "skipping hard drive defragmentation for Windows 6.x because it takes too long, returning 1");
 	return 1;
 }
 

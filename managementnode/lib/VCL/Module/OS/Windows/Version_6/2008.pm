@@ -99,8 +99,6 @@ sub pre_capture {
 	# Get required data
 	my $imagemeta_sysprep = $self->data->get_imagemeta_sysprep();
 	
-	notify($ERRORS{'OK'}, 0, "beginning Windows Server 2008 image capture preparation tasks");
-	
 	# Call parent class's pre_capture() subroutine
 	notify($ERRORS{'OK'}, 0, "calling parent class pre_capture() subroutine");
 	if ($self->SUPER::pre_capture($args)) {
@@ -110,6 +108,8 @@ sub pre_capture {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute parent class pre_capture() subroutine");
 		return 0;
 	}
+	
+	notify($ERRORS{'OK'}, 0, "beginning Windows Server 2008 image capture preparation tasks");
 	
 	# Check if Sysprep is to be used
 	if ($imagemeta_sysprep) {

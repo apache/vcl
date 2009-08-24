@@ -96,8 +96,6 @@ sub pre_capture {
 		return;
 	}
 	
-	notify($ERRORS{'OK'}, 0, "beginning Windows Vista image capture preparation tasks");
-	
 	# Call parent class's pre_capture() subroutine
 	notify($ERRORS{'OK'}, 0, "calling parent class pre_capture() subroutine");
 	if ($self->SUPER::pre_capture($args)) {
@@ -107,6 +105,8 @@ sub pre_capture {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute parent class pre_capture() subroutine");
 		return 0;
 	}
+	
+	notify($ERRORS{'OK'}, 0, "beginning Windows Vista image capture preparation tasks");
 	
 	# Prepare the computer for newsid.exe to be run
 	# This shuts down the computer

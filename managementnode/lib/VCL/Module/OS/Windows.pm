@@ -56,13 +56,6 @@ use English '-no_match_vars';
 use VCL::utils;
 use File::Basename;
 
-# Use Data::Dumper to print variables
-use Data::Dumper;
-$Data::Dumper::Indent = 0;
-$Data::Dumper::Terse  = 1;
-$Data::Dumper::Pair   = "=>";
-
-
 ##############################################################################
 
 =head1 CLASS VARIABLES
@@ -290,6 +283,16 @@ sub pre_capture {
 	if (!$self->enable_dhcp()) {
 		notify($ERRORS{'WARNING'}, 0, "unable to enable DHCP on the public and private interfaces");
 		return 0;
+	}
+
+=item *
+
+ Defragment hard drive
+
+=cut
+
+	if (!$self->defragment_hard_drive()) {
+		notify($ERRORS{'WARNING'}, 0, "unable to defragment the hard drive");
 	}
 
 =item *

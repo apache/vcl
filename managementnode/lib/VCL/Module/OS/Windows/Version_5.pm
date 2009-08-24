@@ -80,15 +80,6 @@ sub pre_capture {
 		return;
 	}
 	
-	notify($ERRORS{'OK'}, 0, "beginning Windows version 5 image capture preparation tasks");
-	
-	# Defragment the hard drive
-	# Do this in Version_5.pm because defrag works well enough on XP and 2003
-	# Version 6 OS's (Vista) take a very long time to run defrag
-	if (!$self->defragment_hard_drive()) {
-		notify($ERRORS{'WARNING'}, 0, "unable to defragment the hard drive");
-	}
-
 	# Call parent class's pre_capture() subroutine
 	notify($ERRORS{'OK'}, 0, "calling parent class pre_capture() subroutine");
 	if ($self->SUPER::pre_capture($args)) {
@@ -98,6 +89,8 @@ sub pre_capture {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute parent class pre_capture() subroutine");
 		return 0;
 	}
+	
+	notify($ERRORS{'OK'}, 0, "beginning Windows version 5 image capture preparation tasks");
 	
 	# Check if Sysprep should be used
 	if ($self->data->get_imagemeta_sysprep()) {
