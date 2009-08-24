@@ -396,22 +396,26 @@ sub install_kms_client_product_key {
 	# Create a hash of KMS setup product keys
 	# These are publically available from Microsoft's Volume Activation 2.0 Deployment Guide
 	my %kms_product_keys = (
-		'Windows Vista (R) Business'                         => 'YFKBB-PQJJV-G996G-VWGXY-2V3X8',
-		'Windows Vista (R) Business N'                       => 'HMBQG-8H2RH-C77VX-27R82-VMQBT',
-		'Windows Vista (R) Enterprise'                       => 'VKK3X-68KWM-X2YGT-QR4M6-4BWMV',
-		'Windows Vista (R) Enterprise N'                     => 'VTC42-BM838-43QHV-84HX6-XJXKV',
-		'Windows Server (R) 2008 Datacenter'                 => '7M67G-PC374-GR742-YH8V4-TCBY3',
-		'Windows Server (R) 2008 Datacenter without Hyper-V' => '22XQ2-VRXRG-P8D42-K34TD-G3QQC',
-		'Windows Server (R) 2008 for Itanium-Based Systems'  => '4DWFP-JF3DJ-B7DTH-78FJB-PDRHK',
-		'Windows Server (R) 2008 Enterprise'                 => 'YQGMW-MPWTJ-34KDK-48M3W-X4Q6V',
-		'Windows Server (R) 2008 Enterprise without Hyper-V' => '39BXF-X8Q23-P2WWT-38T2F-G3FPG',
-		'Windows Server (R) 2008 Standard'                   => 'TM24T-X9RMF-VWXK6-X8JC9-BFGM2',
-		'Windows Server (R) 2008 Standard without Hyper-V'   => 'W7VD6-7JFBR-RX26B-YKQ3Y-6FFFJ',
-		'Windows Web Server (R) 2008'                        => 'WYR28-R7TFJ-3X2YQ-YCY4H-M249D',
+		'Windows Vista Business'                        => 'YFKBB-PQJJV-G996G-VWGXY-2V3X8',
+		'Windows Vista Business N'                      => 'HMBQG-8H2RH-C77VX-27R82-VMQBT',
+		'Windows Vista Enterprise'                      => 'VKK3X-68KWM-X2YGT-QR4M6-4BWMV',
+		'Windows Vista Enterprise N'                    => 'VTC42-BM838-43QHV-84HX6-XJXKV',
+		'Windows Server 2008 Datacenter'                 => '7M67G-PC374-GR742-YH8V4-TCBY3',
+		'Windows Server 2008 Datacenter without Hyper-V' => '22XQ2-VRXRG-P8D42-K34TD-G3QQC',
+		'Windows Server 2008 for Itanium-Based Systems'  => '4DWFP-JF3DJ-B7DTH-78FJB-PDRHK',
+		'Windows Server 2008 Enterprise'                 => 'YQGMW-MPWTJ-34KDK-48M3W-X4Q6V',
+		'Windows Server 2008 Enterprise without Hyper-V' => '39BXF-X8Q23-P2WWT-38T2F-G3FPG',
+		'Windows Server 2008 Standard'                   => 'TM24T-X9RMF-VWXK6-X8JC9-BFGM2',
+		'Windows Server 2008 Standard without Hyper-V'   => 'W7VD6-7JFBR-RX26B-YKQ3Y-6FFFJ',
+		'Windows Web Server 2008'                        => 'WYR28-R7TFJ-3X2YQ-YCY4H-M249D',
 	);
 	
 	# Get the KMS setup product key from the hash
 	my $product_name = $self->get_product_name();
+	
+	# Remove (TM) or (R) from the product name
+	$product_name =~ s/ \([tmr]*\)//ig;
+	
 	my $product_key = $kms_product_keys{$product_name};
 	if (!$product_key) {
 		notify($ERRORS{'WARNING'}, 0, "failed to retrieve KMS setup key for Windows product: $product_name");
@@ -1042,7 +1046,8 @@ sub firewall_enable_ssh {
 	my $computer_node_name       = $self->data->get_computer_node_name();
 	
 	# First delete any rules which allow ping and then add a new rule
-	my $add_rule_command;
+	my $add_rule_command = '/bin/cygstart.exe ';
+	
 	$add_rule_command .= 'netsh.exe advfirewall firewall delete rule';
 	$add_rule_command .= ' name=all';
 	$add_rule_command .= ' dir=in';
@@ -1107,7 +1112,8 @@ sub firewall_enable_ssh_private {
 	}
 	
 	# First delete any rules which allow ping and then add a new rule
-	my $add_rule_command;
+	my $add_rule_command = '/bin/cygstart.exe ';
+	
 	$add_rule_command .= 'netsh.exe advfirewall firewall delete rule';
 	$add_rule_command .= ' name=all';
 	$add_rule_command .= ' dir=in';
