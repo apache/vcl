@@ -214,6 +214,16 @@ sub pre_capture {
 
 =item *
 
+ Disable System Restore
+
+=cut
+
+	if (!$self->disable_system_restore()) {
+		notify($ERRORS{'WARNING'}, 0, "unable to disable system restore");
+	}
+
+=item *
+
  Disable Internet Explorer configuration page
 
 =cut
@@ -7749,6 +7759,46 @@ sub format_path_dos {
 	
 	notify($ERRORS{'DEBUG'}, 0, "formatted path for DOS: $path");
 	return $path;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 disable_system_restore
+
+ Parameters  : None
+ Returns     : If successful: true
+               If failed: false
+ Description : Sets registry key to disable Windows System Restore. Disabling
+               System Restore helps reduce the image size.
+
+=cut
+
+sub disable_system_restore {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+
+	my $management_node_keys = $self->data->get_management_node_keys();
+	my $computer_node_name   = $self->data->get_computer_node_name();
+
+	my $registry_string .= <<"EOF";
+Windows Registry Editor Version 5.00
+
+[HKEY_LOCAL_MACHINE\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\SystemRestore]
+"DisableConfig"=dword:00000001
+EOF
+
+	# Import the string into the registry
+	if ($self->import_registry_string($registry_string)) {
+		notify($ERRORS{'OK'}, 0, "disabled system restore");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to disable system restore");
+		return 0;
+	}
 }
 
 #/////////////////////////////////////////////////////////////////////////////
