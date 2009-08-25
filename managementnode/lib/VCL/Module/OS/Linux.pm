@@ -200,7 +200,7 @@ sub post_load {
 	notify($ERRORS{'OK'}, 0, "initiating Linux post_load: $image_name on $computer_short_name");
 
 	# Change password
-	if (_changepasswd($computer_node_name, "root")) {
+	if ($self->changepasswd($computer_node_name, "root")) {
 		notify($ERRORS{'OK'}, 0, "successfully changed root password on $computer_node_name");
 		#insertloadlog($reservation_id, $computer_id, "info", "SUCCESS randomized roots password");
 	}
@@ -225,10 +225,11 @@ sub post_load {
 	else {
 		notify($ERRORS{'CRITICAL'}, 0, "failed to clear AllowUsers from external_sshd_config");
 	}
-
+	
+	notify($ERRORS{'DEBUG'}, 0, "calling clear_private_keys");
 	#Clear ssh idenity keys from /root/.ssh 
-	if (!$self->clear_private_keys()) {
-		notify($ERRORS{'WARNING'}, 0, "unable to clear known identity keys");
+	if ($self->clear_private_keys()) {
+		notify($ERRORS{'OK'}, 0, "cleared known identity keys");
 	}
 
 	return 1;
@@ -242,6 +243,7 @@ sub clear_private_keys {
 		return;	
 	}
 
+	notify($ERRORS{'DEBUG'}, 0, "perparing to clear known identity keys");
 	my $management_node_keys = $self->data->get_management_node_keys();
 	my $computer_short_name  = $self->data->get_computer_short_name();
 	my $computer_node_name   = $self->data->get_computer_node_name();
@@ -254,6 +256,7 @@ sub clear_private_keys {
 	}
 	else {
 		notify($ERRORS{'CRITICAL'}, 0, "failed to clear any id_rsa keys from /root/.ssh");
+		return 0;
 	}
 
 }
@@ -596,7 +599,7 @@ sub reserve {
 		my $reservation_password = $self->data->get_reservation_password();
 
 		#Set password
-		if (_changepasswd($computer_node_name, $user_name, $reservation_password, $image_identity)) {
+		if ($self->changepasswd($computer_node_name, $user_name, $reservation_password)) {
 			notify($ERRORS{'OK'}, 0, "Successfully set password on useracct: $user_name on $computer_node_name");
 		}
 		else {
@@ -686,7 +689,7 @@ sub grant_access {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 _changepasswd
+=head2 changepasswd
 
  Parameters  : called as an object
  Returns     : 1 - success , 0 - failure
@@ -694,10 +697,20 @@ sub grant_access {
 
 =cut
 
-sub _changepasswd {
+sub changepasswd {
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return 0;
+	}
+
+	my $management_node_keys = $self->data->get_management_node_keys();
+
 	# change the privileged account passwords on the blade images
-	my ($node,    $account,  $passwd, $identity_key) = @_;
-	my ($package, $filename, $line,   $sub)          = caller(0);
+	my $node = shift; 
+	my $account = shift;  
+	my $passwd = shift; 
+
 	notify($ERRORS{'WARNING'}, 0, "node is not defined")    if (!(defined($node)));
 	notify($ERRORS{'WARNING'}, 0, "account is not defined") if (!(defined($account)));
 
@@ -721,11 +734,11 @@ sub _changepasswd {
 			if (open(TMP, ">$tmpfile")) {
 				print TMP "$account:$passwd:13061:0:99999:7:::\n";
 				close(TMP);
-				if (run_ssh_command($node, $identity_key, "cat /etc/shadow \|grep -v $account >> $tmpfile", "root")) {
+				if (run_ssh_command($node, $management_node_keys, "cat /etc/shadow \|grep -v $account >> $tmpfile", "root")) {
 					notify($ERRORS{'DEBUG'}, 0, "collected /etc/shadow file from $node");
-					if (run_scp_command($tmpfile, "$node:/etc/shadow", $identity_key)) {
+					if (run_scp_command($tmpfile, "$node:/etc/shadow", $management_node_keys)) {
 						notify($ERRORS{'DEBUG'}, 0, "copied updated /etc/shadow file to $node");
-						if (run_ssh_command($node, $identity_key, "chmod 600 /etc/shadow", "root")) {
+						if (run_ssh_command($node, $management_node_keys, "chmod 600 /etc/shadow", "root")) {
 							notify($ERRORS{'DEBUG'}, 0, "updated permissions to 600 on /etc/shadow file on $node");
 							unlink $tmpfile;
 							return 1;
@@ -756,7 +769,7 @@ sub _changepasswd {
 		#actual user
 		#push it through passwd cmd stdin
 		# not all distros' passwd command support stdin
-		my @sshcmd = run_ssh_command($node, $identity_key, "echo $passwd \| /usr/bin/passwd -f $account --stdin", "root");
+		my @sshcmd = run_ssh_command($node, $management_node_keys, "echo $passwd \| /usr/bin/passwd -f $account --stdin", "root");
 		foreach my $l (@{$sshcmd[1]}) {
 			if ($l =~ /authentication tokens updated successfully/) {
 				notify($ERRORS{'OK'}, 0, "successfully changed local password account $account");
@@ -766,7 +779,7 @@ sub _changepasswd {
 
 	} ## end else [ if ($account eq "root")
 
-} ## end sub _changepasswd
+} ## end sub changepasswd
 
 #/////////////////////////////////////////////////////////////////////////////
 
