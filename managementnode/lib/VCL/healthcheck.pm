@@ -152,15 +152,28 @@ sub process {
 	notify($ERRORS{'OK'}, $LOG, "in processing routine");
 	$info->{"globalmsg"}->{"body"} = "Summary of VCL node monitoring system:\n\n";
 
+	my $mn_hostname = $info->{managementnode}->{hostname};
+
 	if($powerdownstage =~ /^(available|all)$/){
-		my $mn_hostname = $info->{managementnode}->{hostname};
-		notify($ERRORS{'OK'}, $LOG, "ALERT: powerdown stage triggered,placing MN $mn_hostname in maintenance");
+		notify($ERRORS{'CRITICAL'}, $LOG, "ALERT: powerdown stage triggered,placing MN $mn_hostname in maintenance");
 		if (set_managementnode_state($info->{managementnode}, "maintenance")) {
 			notify($ERRORS{'OK'}, $LOG, "Successfully set $mn_hostname into maintenance");
 		}
 		else{
 			notify($ERRORS{'WARNING'}, $LOG, "Failed to set $mn_hostname into maintenance");
 		}
+	}
+	elsif($powerdownstage =~ /^restore/){
+		notify($ERRORS{'CRITICAL'}, $LOG, "ALERT: Environment OK: restoring state of MN $mn_hostname in available");
+		if (set_managementnode_state($info->{managementnode}, "available")) {
+			notify($ERRORS{'OK'}, $LOG, "Successfully set $mn_hostname into available");
+		}
+		else{
+			notify($ERRORS{'WARNING'}, $LOG, "Failed to set $mn_hostname into available");
+		}
+	}
+	else{
+		#proceed standard checks
 	}
 
 	foreach my $cid (keys %{$info->{computertable}}) {
