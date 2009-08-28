@@ -62,7 +62,7 @@ use VCL::utils;
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 capture_prepare
+=head2 pre_capture
 
  Parameters  :
  Returns     :
@@ -70,7 +70,7 @@ use VCL::utils;
 
 =cut
 
-sub capture_prepare {
+sub pre_capture {
 	my $self = shift;
 	if (ref($self) !~ /linux/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
