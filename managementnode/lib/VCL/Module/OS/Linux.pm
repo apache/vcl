@@ -97,6 +97,11 @@ sub pre_capture {
 
 	my @sshcmd;
 
+	# Force user off computer 
+	if ($self->logoff_user()){
+		notify($ERRORS{'OK'}, 0, "forced $user_unityid off $computer_node_name");
+	}
+
 	# Remove user and clean external ssh file
 	if ($self->delete_user()) {
 		notify($ERRORS{'OK'}, 0, "$user_unityid deleted from $computer_node_name");
@@ -477,6 +482,47 @@ sub get_public_default_gateway {
 	return $GATEWAY;
 }
 
+sub logoff_user {
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return 0;
+	}
+
+	# Make sure the user login ID was passed
+	my $user_login_id = shift;
+	$user_login_id = $self->data->get_user_login_id() if (!$user_login_id);
+	if (!$user_login_id) {
+		notify($ERRORS{'WARNING'}, 0, "user could not be determined");
+		return 0;
+	}
+
+	# Make sure the user login ID was passed
+	my $computer_node_name = shift;
+	$computer_node_name = $self->data->get_computer_node_name() if (!$computer_node_name);
+	if (!$computer_node_name) {
+		notify($ERRORS{'WARNING'}, 0, "computer node name could not be determined");
+		return 0;
+	}
+
+	#Make sure the identity key was passed
+	my $image_identity = shift;
+	$image_identity = $self->data->get_image_identity() if (!$image_identity);
+	if (!$image_identity) {
+		notify($ERRORS{'WARNING'}, 0, "image identity keys could not be determined");
+		return 0;
+	}
+
+	my $logoff_cmd = "pkill -KILL -u $user_login_id";
+	if (run_ssh_command($computer_node_name, $image_identity, $logoff_cmd, "root")) {
+			notify($ERRORS{'DEBUG'}, 0, "logged off $user_login_id from $computer_node_name");
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "failed to log off $user_login_id from $computer_node_name");
+	}
+
+	return 1;
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 
