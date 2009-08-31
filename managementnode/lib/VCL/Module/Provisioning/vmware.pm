@@ -2201,7 +2201,7 @@ sub retrieve_image {
 	}
 	else {
 		notify($ERRORS{'WARNING'}, 0, "failed to copy image $image_name from $largest_partner_hostname");
-		next;
+		return 0;
 	}
 	
 	# Make sure image was copied
