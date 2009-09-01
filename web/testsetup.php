@@ -414,9 +414,9 @@ print "</ul>\n";
 title("Checking value of PHP display_errors");
 $a = ini_get('display_errors');
 print "<ul>\n";
-if($a == 'Off')
+if($a == 'Off' || $a == 'off' || $a = '')
 	print "<li>display_errors: <strong>disabled</strong></li>\n";
-elseif($a == 'On')
+elseif($a == 'On' || $a == 'on' || $a == 1)
 	print "<li>display_errors: <strong>enabled</strong></li>\n";
 else
 	fail("failed to determine value of display_errors");
