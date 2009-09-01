@@ -418,6 +418,16 @@ sub post_load {
 
 =item 1
 
+ Wait for root to log off
+
+=cut
+
+	if (!$self->wait_for_logoff('root', 2)) {
+		notify($ERRORS{'WARNING'}, 0, "root account never logged off");
+	}
+
+=item *
+
  Log off all currently logged on users
 
  Do this in case autoadminlogon was enabled during the load process and the user
@@ -3017,7 +3027,7 @@ sub set_service_startup_mode {
 		return;
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to set $service_name service startup mode to $startup_mode, exit status: $service_startup_exit_status, output:\n@{$service_startup_output}");
+		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to set $service_name service startup mode to $startup_mode");
 		return;
 	}
 
@@ -7799,6 +7809,134 @@ EOF
 		notify($ERRORS{'WARNING'}, 0, "failed to disable system restore");
 		return 0;
 	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 user_logged_in
+
+ Parameters  : 
+ Returns     : 
+ Description : 
+
+=cut
+
+sub user_logged_in {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+
+	my $management_node_keys = $self->data->get_management_node_keys();
+	my $computer_node_name   = $self->data->get_computer_node_name();
+
+	# Attempt to get the username from the arguments
+	# If no argument was supplied, use the user specified in the DataStructure
+	my $username = shift;
+	
+	# Remove spaces from beginning and end of username argument
+	# Fixes problem if string containing only spaces is passed
+	$username =~ s/(^\s+|\s+$)//g if $username;
+	
+	# Check if username argument was passed
+	if (!$username) {
+		$username = $self->data->get_user_login_id();
+	}
+	notify($ERRORS{'DEBUG'}, 0, "checking if $username is logged in to $computer_node_name");
+
+	# Run qwinsta.exe to display terminal session information
+	my ($exit_status, $output) = run_ssh_command($computer_node_name, $management_node_keys, "qwinsta.exe");
+	if ($exit_status > 0) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run qwinsta.exe on $computer_node_name, exit status: $exit_status, output:\n@{$output}");
+		return;
+	}
+	elsif (!defined($exit_status)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run qwinsta.exe SSH command on $computer_node_name");
+		return;
+	}
+	
+	# Find lines in qwinsta.exe output indicating a logged in user, lines may look like this:
+	# ' rdp-tcp#2         root                      2  Active  rdpwd'
+	# '>console           root                      0  Active  wdcon'
+	my @user_connection_lines = grep(/[\s>]+(\S+)\s+($username)\s+(\d+)\s+(Active)/, @{$output});
+	if (@user_connection_lines) {
+		notify($ERRORS{'OK'}, 0, "$username appears to be logged in on $computer_node_name:\n" . join("\n", @user_connection_lines));
+		return 1;
+	}
+	else {
+		notify($ERRORS{'OK'}, 0, "$username does NOT appear to be logged in on $computer_node_name");
+		return 0;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 wait_for_logoff
+
+ Parameters  : Username (optional), maximum number of minutes to wait (optional)
+ Returns     : True if user is not logged in
+               False if user is still logged in after waiting
+ Description : Waits the specified amount of time for the user to log off. The
+               default username is the reservation user and the default time to
+               wait is 2 minutes.
+
+=cut
+
+sub wait_for_logoff {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+
+	my $computer_node_name = $self->data->get_computer_node_name();
+	
+	# Attempt to get the username from the arguments
+	# If no argument was supplied, use the user specified in the DataStructure
+	my $username = shift;
+	
+	# Remove spaces from beginning and end of username argument
+	# Fixes problem if string containing only spaces is passed
+	$username =~ s/(^\s+|\s+$)//g if $username;
+	
+	# Check if username argument was passed
+	if (!$username) {
+		$username = $self->data->get_user_login_id();
+	}
+
+	# Attempt to get the total number of minutes to wait from the arguments
+	my $total_wait_minutes = shift;
+	if (!defined($total_wait_minutes) || $total_wait_minutes !~ /^\d+$/) {
+		$total_wait_minutes = 2;
+	}
+
+	# Looping configuration variables
+	# Seconds to wait in between loop attempts
+	my $attempt_delay = 5;
+	# Total loop attempts made
+	# Add 1 to the number of attempts because if you're waiting for x intervals, you check x+1 times including at 0
+	my $attempts = ($total_wait_minutes * 12) + 1;
+
+	notify($ERRORS{'DEBUG'}, 0, "waiting for $username to logoff, maximum of $total_wait_minutes minutes");
+
+	# Loop until computer is user is not logged in
+	for (my $attempt = 1; $attempt <= $attempts; $attempt++) {
+		if ($attempt > 1) {
+			notify($ERRORS{'OK'}, 0, "attempt " . ($attempt - 1) . "/" . ($attempts - 1) . ": $username is logged in, sleeping for $attempt_delay seconds");
+			sleep $attempt_delay;
+		}
+
+		if (!$self->user_logged_in($username)) {
+			notify($ERRORS{'OK'}, 0, "$username is NOT logged in to $computer_node_name, returning 1");
+			return 1;
+		}
+	}
+
+	# Calculate how long this waited
+	my $total_wait = ($attempts * $attempt_delay);
+	notify($ERRORS{'WARNING'}, 0, "$username is still logged in to $computer_node_name after waiting for $total_wait seconds");
+	return 0;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
