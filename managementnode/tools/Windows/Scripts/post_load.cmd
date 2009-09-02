@@ -46,23 +46,6 @@ echo *** %SCRIPT_FILENAME% start: *** >> %LOGS_DIR%\debug_info.log
 start "debug_info.cmd" /WAIT cmd.exe /c "%SCRIPT_DIR%\debug_info.cmd >> %LOGS_DIR%\debug_info.log 2>&1"
 echo.
 
-
-echo ----------------------------------------------------------------------
-
-echo %TIME%: Calling %SCRIPT_DIR%\configure_networking.vbs...
-start "configure_networking.vbs" /WAIT cmd.exe /c "C:\Windows\system32\cscript.exe //NoLogo %SCRIPT_DIR%\configure_networking.vbs >> %LOGS_DIR%\configure_networking.log 2>&1"
-echo ERRORLEVEL: %ERRORLEVEL%
-set /A STATUS+=%ERRORLEVEL%
-echo.
-
-echo ----------------------------------------------------------------------
-
-echo %TIME%: Calling %SCRIPT_DIR%\update_cygwin.cmd...
-start "update_cygwin.cmd" /WAIT cmd.exe /c "%SCRIPT_DIR%\update_cygwin.cmd >> %LOGS_DIR%\update_cygwin.log 2>&1"
-echo ERRORLEVEL: %ERRORLEVEL%
-set /A STATUS+=%ERRORLEVEL%
-echo.
-
 echo ----------------------------------------------------------------------
 
 echo %TIME%: Calling %SCRIPT_DIR%\autologon_disable.cmd...
@@ -81,9 +64,17 @@ echo.
 
 echo ----------------------------------------------------------------------
 
+echo %TIME%: Calling %SCRIPT_DIR%\configure_networking.vbs...
+start "configure_networking.vbs" /WAIT cmd.exe /c "C:\Windows\system32\cscript.exe //NoLogo %SCRIPT_DIR%\configure_networking.vbs >> %LOGS_DIR%\configure_networking.log 2>&1"
+echo ERRORLEVEL: %ERRORLEVEL%
+set /A STATUS+=%ERRORLEVEL%
+echo.
+
+echo ----------------------------------------------------------------------
+
 if exist "%SystemRoot%\post_load_custom.cmd" goto POST_LOAD_CUSTOM
 echo Custom post-load script does not exist: "%SystemRoot%\post_load_custom.cmd"
-goto EVENT_CREATE
+goto UPDATE_CYGWIN
 
 :POST_LOAD_CUSTOM
 echo %TIME%: Executing %SystemRoot%\post_load_custom.cmd...
@@ -92,7 +83,15 @@ echo ERRORLEVEL: %ERRORLEVEL%
 set /A STATUS+=%ERRORLEVEL%
 echo.
 
-:EVENT_CREATE
+echo ----------------------------------------------------------------------
+
+:UPDATE_CYGWIN
+echo %TIME%: Calling %SCRIPT_DIR%\update_cygwin.cmd...
+start "update_cygwin.cmd" /WAIT cmd.exe /c "%SCRIPT_DIR%\update_cygwin.cmd >> %LOGS_DIR%\update_cygwin.log 2>&1"
+echo ERRORLEVEL: %ERRORLEVEL%
+set /A STATUS+=%ERRORLEVEL%
+echo.
+
 echo ----------------------------------------------------------------------
 
 echo %TIME%: Generating application event log entry: %COMPUTERNAME% is READY...
