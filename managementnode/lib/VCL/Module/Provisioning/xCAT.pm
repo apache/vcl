@@ -2718,22 +2718,22 @@ sub does_image_exist {
 	# [root@mn]# pgrep -fl "scp.*winxp-base1-v27\* /install/image/x86"
 	# 32578 sh -c /usr/bin/scp -B -i /etc/vcl/vcl.key -P 22 -p -r vcl@10.1.1.1:/install/image/x86/winxp-base1-v27* /install/image/x86 2>&1
 	# 32579 /usr/bin/scp -B -i /etc/vcl/vcl.key -P 22 -p -r vcl 10.1.1.1 /install/image/x86/winxp-base1-v27* /install/image/x86
-	my $scp_wait_attempt = 0;
-	my $scp_wait_max_attempts = 40;
-	my $scp_wait_delay = 15;
-	while (is_management_node_process_running('scp.*$image_name\* $image_repository_path')) {
-		$scp_wait_attempt++;
-		
-		notify($ERRORS{'OK'}, 0, "attempt $scp_wait_attempt/$scp_wait_max_attempts: scp process is running to retrieve $image_name, waiting for $scp_wait_delay seconds");
-		
-		if ($scp_wait_attempt == $scp_wait_max_attempts) {
-			notify($ERRORS{'WARNING'}, 0, "attempt $scp_wait_attempt/$scp_wait_max_attempts: waited maximum amount of time for scp process to terminate to retrieve $image_name");
-			return;
-		}
-		
-		sleep $scp_wait_delay;
-	}
-	notify($ERRORS{'DEBUG'}, 0, "scp process is not running to retrieve $image_name");
+	#my $scp_wait_attempt = 0;
+	#my $scp_wait_max_attempts = 40;
+	#my $scp_wait_delay = 15;
+	#while (is_management_node_process_running('scp.*$image_name\* $image_repository_path')) {
+	#	$scp_wait_attempt++;
+	#	
+	#	notify($ERRORS{'OK'}, 0, "attempt $scp_wait_attempt/$scp_wait_max_attempts: scp process is running to retrieve $image_name, waiting for $scp_wait_delay seconds");
+	#	
+	#	if ($scp_wait_attempt == $scp_wait_max_attempts) {
+	#		notify($ERRORS{'WARNING'}, 0, "attempt $scp_wait_attempt/$scp_wait_max_attempts: waited maximum amount of time for scp process to terminate to retrieve $image_name");
+	#		return;
+	#	}
+	#	
+	#	sleep $scp_wait_delay;
+	#}
+	#notify($ERRORS{'DEBUG'}, 0, "scp process is not running to retrieve $image_name");
 	
 	# Run du to get the size of the image files if the image exists
 	my $du_command;
