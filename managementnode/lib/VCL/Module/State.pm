@@ -256,24 +256,30 @@ sub reservation_failed {
 	}
 
 	# Get the required data
-	my $request_id             = $self->data->get_request_id();
-	my $request_logid          = $self->data->get_request_log_id();
-	my $reservation_id         = $self->data->get_reservation_id();
-	my $computer_id            = $self->data->get_computer_id();
-	my $computer_short_name    = $self->data->get_computer_short_name();
-	my $request_state_name     = $self->data->get_request_state_name();
-	my $request_laststate_name = $self->data->get_request_laststate_name();
+	my $request_id                  = $self->data->get_request_id();
+	my $request_logid               = $self->data->get_request_log_id();
+	my $reservation_id              = $self->data->get_reservation_id();
+	my $computer_id                 = $self->data->get_computer_id();
+	my $computer_short_name         = $self->data->get_computer_short_name();
+	my $request_state_name          = $self->data->get_request_state_name();
+	my $request_laststate_name      = $self->data->get_request_laststate_name();
+	my $computer_state_name         = $self->data->get_computer_state_name();
 
 	# Check if the request has been deleted
 	if (is_request_deleted($request_id)) {
 		notify($ERRORS{'OK'}, 0, "request has been deleted, setting computer state to available and exiting");
 
 		# Update the computer state to available
-		if (update_computer_state($computer_id, "available")) {
-			notify($ERRORS{'OK'}, 0, "$computer_short_name ($computer_id) state set to 'available'");
+		if ($computer_state_name !~ /^(maintenance)/){
+			if (update_computer_state($computer_id, "available")) {
+				notify($ERRORS{'OK'}, 0, "$computer_short_name ($computer_id) state set to 'available'");
+			}
+			else {
+				notify($ERRORS{'OK'}, 0, "failed to set $computer_short_name ($computer_id) state to 'available'");
+			}
 		}
 		else {
-			notify($ERRORS{'OK'}, 0, "failed to set $computer_short_name ($computer_id) state to 'available'");
+			notify($ERRORS{'WARNING'}, 0, "computer $computer_short_name ($computer_id) state NOT set to available because the current state is $computer_state_name");
 		}
 
 		notify($ERRORS{'OK'}, 0, "exiting 0");
@@ -292,7 +298,7 @@ sub reservation_failed {
 	}
 	
 	
-	if($request_state_name =~ /^(new|reserved|inuse|image)/){
+	if ($request_state_name =~ /^(new|reserved|inuse|image)/){
 		# Update log table ending column to failed for this request
 		if (update_log_ending($request_logid, "failed")) {
 			notify($ERRORS{'OK'}, 0, "updated log ending value to 'failed', logid=$request_logid");
@@ -302,12 +308,17 @@ sub reservation_failed {
 		}
 	}
 
-	# Update the computer state to failed
-	if (update_computer_state($computer_id, "failed")) {
-		notify($ERRORS{'OK'}, 0, "computer $computer_short_name ($computer_id) state set to failed");
+	# Update the computer state to failed as long as it's not currently maintenance
+	if ($computer_state_name !~ /^(maintenance)/){
+		if (update_computer_state($computer_id, "failed")) {
+			notify($ERRORS{'OK'}, 0, "computer $computer_short_name ($computer_id) state set to failed");
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "unable to set computer $computer_short_name ($computer_id) state to failed");
+		}
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "unable to set computer $computer_short_name ($computer_id) state to failed");
+		notify($ERRORS{'WARNING'}, 0, "computer $computer_short_name ($computer_id) state NOT set to failed because the current state is $computer_state_name");
 	}
 
 	# Update the request state to failed

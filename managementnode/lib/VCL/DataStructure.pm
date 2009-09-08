@@ -1842,6 +1842,97 @@ sub get_management_node_public_default_gateway {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 get_computer_state_name
+
+ Parameters  : computer name (optional
+ Returns     : String containing state name for a particular computer
+ Description : Queries database for current computer state and returns the
+               state name. The database is queried rather than simply returning
+               the value in the data structure in case the computer state
+               changed by some other process after the reservation process
+               began. This is mainly done for safety in case the computer state
+               gets set to maintenance.
+
+=cut
+
+
+sub get_computer_state_name {
+	my $self;
+	my $argument = shift;
+	my $computer_name;
+	
+	# Check if subroutine was called as an object method
+	if (ref($argument) && $argument->isa('VCL::DataStructure')) {
+		# Subroutine was called as an object method, check if an argument was specified
+		$self = $argument;
+		$argument = shift;
+		if ($argument) {
+			# Argument was specified, use this as the computer name
+			$computer_name = $argument;
+		}
+		else {
+			# Argument was not specified, get the computer short name for this reservation
+			$computer_name = $self->get_computer_short_name();
+		}
+	}
+	elsif (ref($argument)) {
+		notify($ERRORS{'WARNING'}, 0, "subroutine was called with an illegal argument type: " . ref($argument));
+		return;
+	}
+	else {
+		# Subroutine was not called as an object method
+		$computer_name = $argument;
+	}
+	
+	# Make sure the computer name was determined either from an argument or the request data
+	if (!$computer_name) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine computer name from argument or request data");
+		return;
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "attempting to retrieve current state of computer $computer_name from the database");
+
+	# Create the select statement
+	my $select_statement = "
+   SELECT DISTINCT
+	state.name AS name
+	FROM
+	state,
+	computer
+	WHERE
+	computer.stateid = state.id
+	AND computer.hostname LIKE '$computer_name%'
+   ";
+
+	# Call the database select subroutine
+	# This will return an array of one or more rows based on the select statement
+	my @selected_rows = database_select($select_statement);
+
+	# Check to make sure 1 row was returned
+	if (scalar @selected_rows == 0) {
+		notify($ERRORS{'WARNING'}, 0, "zero rows were returned from database select");
+		return ();
+	}
+	elsif (scalar @selected_rows > 1) {
+		notify($ERRORS{'WARNING'}, 0, scalar @selected_rows . " rows were returned from database select");
+		return ();
+	}
+
+	# Make sure we return undef if the column wasn't found
+	if (defined $selected_rows[0]{name}) {
+		my $computer_state_name = $selected_rows[0]{name};
+		notify($ERRORS{'DEBUG'}, 0, "retrieved current state of computer $computer_name from the database: $computer_state_name");
+		$self->set_computer_state_name($computer_state_name);
+		return $computer_state_name;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve current state of computer $computer_name from the database");
+		return undef;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 1;
 __END__
 
