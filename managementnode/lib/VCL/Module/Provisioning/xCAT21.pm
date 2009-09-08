@@ -261,7 +261,7 @@ sub load {
 				my $maxload = 1;
 				while ($maxload) {
 					notify($ERRORS{'DEBUG'}, 0, "running 'nodeset all stat' to determine number of nodes currently being loaded");
-					if (open(NODESET, "$XCAT_ROOT/bin/nodeset all stat \| grep install 2>&1 | ")) {
+					if (open(NODESET, "$XCAT_ROOT/bin/nodeset all stat \| egrep \'install\|image\' 2>&1 | ")) {
 						my @nodesetout = <NODESET>;
 						close(NODESET);
 						my $ld = @nodesetout;
