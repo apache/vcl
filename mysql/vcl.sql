@@ -1513,7 +1513,7 @@ INSERT INTO `vmprofile` (`id`, `profilename`, `vmtypeid`, `imageid`, `nasshare`,
 (1, 'VMware GSX standard', 3, 8, NULL, '/var/lib/vmware/Virtual Machines', NULL, 'VMnet0', 'VMnet2', 'localdisk'),
 (2, 'Vmware ESX standard network mounted share', 5, 9, NULL, '/vmfs/volumes/nfs1', '/vmfs/volumes/storage1', 'VM Network', 'Virtual Machine Public Network', 'networkdisk'),
 (3, 'Vmware ESX standard localdisk', 5, 9, NULL, '/vmfs/volumes/storage1', NULL, 'VM Network', 'Virtual Machine Public Network', 'localdisk'),
-(4, 'Vmware ESX SAN ', 6, 9, NULL, '/vmfs/volumes/NetApp', '/vmfs/volumes/storage1', 'Intranet2', 'MCNC Public', 'networkdisk');
+(4, 'Vmware ESX SAN', 5, 9, NULL, '/vmfs/volumes/NetApp', '/vmfs/volumes/storage1', 'Intranet2', 'MCNC Public', 'networkdisk');
 
 -- 
 -- Dumping data for table `vmtype`
