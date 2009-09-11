@@ -256,7 +256,7 @@ CREATE TABLE IF NOT EXISTS `computerloadflow` (
 -- 
 
 CREATE TABLE IF NOT EXISTS `computerloadlog` (
-  `id` mediumint(12) unsigned NOT NULL auto_increment,
+  `id` int(12) unsigned NOT NULL auto_increment,
   `reservationid` mediumint(8) unsigned NOT NULL,
   `computerid` smallint(8) unsigned NOT NULL,
   `loadstateid` smallint(8) unsigned default NULL,
@@ -992,9 +992,11 @@ CREATE TABLE IF NOT EXISTS `vmprofile` (
   `virtualswitch0` varchar(80) NOT NULL default 'VMnet0',
   `virtualswitch1` varchar(80) NOT NULL default 'VMnet2',
   `vmdisk` enum('localdisk','networkdisk') NOT NULL default 'localdisk',
-  `username` varchar(32) NULL default NULL,
-  `password` varchar(128) NULL default NULL,
-  PRIMARY KEY  (`id`)
+  `username` varchar(80) NULL default NULL,
+  `password` varchar(256) NULL default NULL,
+  PRIMARY KEY  (`id`),
+  KEY `vmtypeid` (`vmtypeid`,`imageid`),
+  KEY `imageid` (`imageid`)
 ) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
@@ -1495,6 +1497,13 @@ INSERT INTO `userprivtype` (`id`, `name`) VALUES
 (10, 'resourceGrant'),
 (12, 'scheduleAdmin'),
 (7, 'userGrant');
+
+-- 
+-- Dumping data for table `variable`
+-- 
+
+INSERT INTO `variable` (`id`, `name`, `serialization`, `value`) VALUES
+(1, 'schema-version', 'none', '1');
 
 -- 
 -- Dumping data for table `vmprofile`
