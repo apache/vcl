@@ -409,16 +409,28 @@ sub load {
 								my @sshcmd_3 = run_ssh_command($hostnode, $identity, "ls -1 $datastorepath", "root");
 								foreach my $d (@{$sshcmd_3[1]}) {
 									next if ($d =~ /Warning: /);
+									
+									# Ignore VMs which aren't named vmware*, these are imaging reservations
+									if ($d !~ /vmware[^\/]+$/) {
+										notify($ERRORS{'OK'}, 0, "disk cleanup - ignoring image capture VM: $d");
+										next;
+									}
+									else {
+										notify($ERRORS{'DEBUG'}, 0, "disk cleanup - NOT an image capture VM: $d, proceeding with additional cleanup checks");
+									}
+									
 									chomp($d);
 									my $save = 0;
-									foreach my $v (%vmlist) {
+									foreach my $v (keys %vmlist) {
 										#print "checking if $d is part of a running vm of $v\n";
 										if ($vmlist{$v}{path} =~ /$d/) {
 											if ($vmlist{$v}{state} eq "on") {
 												$save = 1;
+												notify($ERRORS{'DEBUG'}, 0, "VM is on, it will be saved: $vmlist{$v}{path}");
 											}
 											elsif ($vmlist{$v}{state} eq "off") {
-												$save = 0;
+												#$save = 0;
+												notify($ERRORS{'DEBUG'}, 0, "VM is off, it will NOT be saved: $vmlist{$v}{path}");
 												if (defined(run_ssh_command($hostnode, $identity, "vmware-cmd -s unregister $vmlist{$v}{path}", "root"))) {
 													notify($ERRORS{'DEBUG'}, 0, "unregistered $vmlist{$v}{path}");
 												}
@@ -1332,6 +1344,10 @@ sub capture {
 				return 1;
 			} ## end if (open(LISTFILES, "ls -s1 $VMWAREREPOSITORY/$image_name |"...
 		} ## end if (run_scp_command("$hostnodename:\"$vmhost_vmpath/$vmx_directory/*.vmdk\""...
+		else {
+			notify($ERRORS{'CRITICAL'}, 0, "failed to copy .vmdk files to image repository");
+			return 0;
+		}
 	} ## end if ($vmprofile_vmdisk eq "localdisk")
 	
 	elsif ($vmprofile_vmdisk eq "networkdisk") {
