@@ -2630,6 +2630,20 @@ sub reboot {
 		if (defined($shutdown_exit_status) && $shutdown_exit_status == 0) {
 			notify($ERRORS{'OK'}, 0, "executed reboot command on $computer_node_name");
 		}
+		elsif (defined($shutdown_output) && grep(/processing another action/, @$shutdown_output)) {
+			# The following message may be displayed causing the reboot to fail:
+			# The computer is processing another action and thus cannot be shut down. Wait until the computer has finished its action, and then try again.(21) 
+			notify($ERRORS{'WARNING'}, 0, "unable to reboot because of processing another action error on $computer_node_name, computer will be forcefully restarted, exit status: $shutdown_exit_status, output:\n@{$shutdown_output}");
+			
+			# Call provisioning module's power_reset() subroutine
+			if ($self->provisioner->power_reset()) {
+				notify($ERRORS{'OK'}, 0, "initiated power reset on $computer_node_name");
+			}
+			else {
+				notify($ERRORS{'WARNING'}, 0, "reboot failed, failed to initiate power reset on $computer_node_name");
+				return 0;
+			}
+		}
 		elsif (defined($shutdown_exit_status)) {
 			notify($ERRORS{'WARNING'}, 0, "failed to execute reboot command on $computer_node_name, exit status: $shutdown_exit_status, output:\n@{$shutdown_output}");
 			return 0;
