@@ -951,6 +951,7 @@ CREATE TABLE IF NOT EXISTS `userprivtype` (
 CREATE TABLE IF NOT EXISTS `variable` (
   `id` smallint(5) unsigned NOT NULL auto_increment,
   `name` varchar(128) NOT NULL,
+  `serialization` enum('none','yaml','phpserialize') NOT NULL default 'none',
   `value` longtext NOT NULL,
   `setby` varchar(128) default NULL,
   `timestamp` datetime NOT NULL,
