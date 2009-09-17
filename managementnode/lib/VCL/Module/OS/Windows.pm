@@ -165,9 +165,9 @@ sub pre_capture {
 
 =cut
 
-	if (!$self->delete_users()) {
-		notify($ERRORS{'WARNING'}, 0, "unable to delete users");
-		return 0;
+	my $deleted_users = $self->delete_users();
+	if (!$deleted_users) {
+		notify($ERRORS{'WARNING'}, 0, "unable to delete users, will try again after reboot");
 	}
 
 =item *
@@ -317,6 +317,17 @@ sub pre_capture {
 	# Calls the reboot() subroutine, which makes sure ssh service is set to auto and firewall is open for ssh
 	if (!$self->disable_pagefile()) {
 		notify($ERRORS{'WARNING'}, 0, "unable to disable pagefile");
+		return 0;
+	}
+
+=item *
+
+ Delete the users assigned to this reservation if attempt before reboot failed
+
+=cut
+
+	if (!$deleted_users && !$self->delete_users()) {
+		notify($ERRORS{'WARNING'}, 0, "unable to delete users after reboot");
 		return 0;
 	}
 
