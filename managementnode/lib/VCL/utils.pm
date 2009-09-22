@@ -110,6 +110,7 @@ our @EXPORT = qw(
   enablesshd
   firewall_compare_update
   format_data
+  get_block_request_image_info
   get_computer_current_state_name
   get_computer_grp_members
   get_computer_info
@@ -10082,6 +10083,66 @@ sub is_public_ip_address {
 		notify($ERRORS{'DEBUG'}, 0, "public IP address: $ip_address, returning 1");
 		return 1;
 	}
+}
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_block_request_image_info
+
+ Parameters  :  computer ID
+ Returns     :  imagename imageid imagerevisionid
+ Description :  Checks the blockcomputers table matching computer id
+
+=cut
+#/////////////////////////////////////////////////////////////////////////////
+
+sub get_block_request_image_info {
+	my ($computerid) = @_;
+
+	my ($package, $filename, $line, $sub) = caller(0);
+
+	# Check the passed parameters
+	if (!(defined($computerid))) {
+		notify($ERRORS{'WARNING'}, 0, "computer ID was not specified");
+		return ();
+	}
+	# Construct the select statement
+	my $select_statement = "
+	SELECT DISTINCT
+	image.name AS image_name,
+	image.id AS image_id,
+	imagerevision.id AS imagerevision_id,
+	blockTimes.start AS starttime
+	FROM
+	image,
+	imagerevision,
+	blockComputers,
+	blockTimes
+	WHERE
+	blockComputers.imageid = image.id
+	AND imagerevision.imageid = image.id 
+   AND imagerevision.production = 1
+	AND blockTimes.id = blockComputers.blockTimeid
+	AND blockComputers.computerid = $computerid 
+	ORDER BY blockTimes.start LIMIT 1
+	";
+
+	# Call the database select subroutine
+	# This will return an array of one or more rows based on the select statement
+	my @block_image_info = database_select($select_statement);
+
+	# Check to make sure 1 row was returned
+	if (scalar @block_image_info == 0) {
+		notify($ERRORS{'WARNING'}, 0, "no block reservation image information existed for $computerid, 0 rows were returned");
+		return;
+	}
+
+	if (scalar @block_image_info == 1) {
+		my @ret_array;
+		push (@ret_array, $block_image_info[0]{image_name},$block_image_info[0]{image_id},$block_image_info[0]{imagerevision_id});
+		return @ret_array;
+	}
+
+	return;
 }
 
 #/////////////////////////////////////////////////////////////////////////////

@@ -85,9 +85,25 @@ sub get_next_image {
 	my $computer_id         = $self->data->get_computer_id();
 	my $computer_short_name = $self->data->get_computer_short_name();
 
+	my @ret_array;
 	my $notify_prefix = "predictive_reload_Level_1 :";
 
 	notify($ERRORS{'OK'}, 0, "$notify_prefix starting predictive_reload_level_1 for $computer_id");
+
+	#check if node is part of block reservation 
+	if(is_inblockrequest($computer_id)){
+		notify($ERRORS{'DEBUG'}, 0, "computer id $computer_id is in blockComputers table");
+		 my @block_ret_array = get_block_request_image_info($computer_id);
+
+		if(defined($block_ret_array[0]) && $block_ret_array[0]){
+			return @block_ret_array;
+		}
+		else{
+			notify($ERRORS{'WARNING'}, 0, "computer $computer_id is part of blockComputers, failed to return image info"); 
+		}
+
+	}
+
 
 	my $select_statement = "
 		  SELECT DISTINCT
@@ -113,7 +129,7 @@ sub get_next_image {
 	# Call the database select subroutine
 	# This will return an array of one or more rows based on the select statement
 	my @selected_rows = database_select($select_statement);
-	my @ret_array;
+	
 
 	# Check to make sure 1 or more rows were returned
 	if (scalar @selected_rows > 0) {

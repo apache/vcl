@@ -89,6 +89,20 @@ sub get_next_image {
 
 	notify($ERRORS{'OK'}, 0, "$notify_prefix for $computer_id");
 
+	#check if node is part of block reservation 
+	if(is_inblockrequest($computer_id)){
+		notify($ERRORS{'DEBUG'}, 0, "computer id $computer_id is in blockComputers table");
+		 my @block_ret_array = get_block_request_image_info($computer_id);
+
+		if(defined($block_ret_array[0]) && $block_ret_array[0]){
+			return @block_ret_array;
+		}
+		else{
+			notify($ERRORS{'WARNING'}, 0, "computer $computer_id is part of blockComputers, failed to return image info"); 
+		}
+
+	}
+
 	my $select_statement = "
 	SELECT DISTINCT
 	req.start AS starttime,
