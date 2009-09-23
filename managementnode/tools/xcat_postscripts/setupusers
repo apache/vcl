@@ -1,5 +1,0 @@
-#!/bin/ksh
-
-logger -t xcat "Install: adding user(s)"
-groupadd -g 91 staff
-groupadd ncsu

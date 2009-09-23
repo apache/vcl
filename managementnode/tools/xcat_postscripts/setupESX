@@ -1,6 +1,0 @@
-#!/bin/ksh
-
-logger -t xcat "Install: configuring vmware ESX"
-
-logger -t xcat "Config ESX: enable firewall ntpClient"
-esxcfg-firewall --enableService ntpClient

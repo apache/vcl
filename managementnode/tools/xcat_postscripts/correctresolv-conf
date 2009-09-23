@@ -1,5 +1,0 @@
-#!/bin/ksh
-
-logger -t xcat "Install: updating resolv.conf"
-echo "search your.domain
-nameserver your name server" > /etc/resolv.conf
