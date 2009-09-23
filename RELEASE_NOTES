@@ -1,0 +1,70 @@
+VCL 2.1
+
+I. Intro and Description
+
+VCL, Virtual Computing Lab. The VCL can be many things, first and foremost it is
+a open-source system used to dynamically provision and broker remote access to a
+dedicated compute environment for an end-user. The provisioned computers are
+typically housed in a data center and may be physical blade servers, traditional
+rack mounted servers, or virtual machines. VCL can also broker access to
+standalone machines such as a lab computers on a university campus.
+
+One of the primary goals of VCL is to deliver a dedicated compute environment to
+a user for a limited time through a web interface. This compute environment can
+range from something as simple as a virtual machine running productivity
+software to a machine room blade running high end software (i.e. a CAD, GIS,
+statistical package or an Enterprise level application) to a cluster of
+interconnected physical (bare metal) compute nodes.
+
+Also using the scheduling API it can be used to automate the provisioning of
+servers in a server farm or HPC cluster.
+
+II. VCL Roadmap
+
+III. Getting Involved in the ASF VCL Community
+
+There are five ways to become involved in the ASF VCL community.
+
+* Join the mailing lists and participate in discussion
+  There are two mailing lists: vcl-user@incubator.apache.org and 
+  vcl-dev@incubator.apache.org. To join vcl-user, send an empty message to
+  vcl-user-subscribe@incubator.apache.org. To join vcl-dev, send an empty
+  message to vcl-dev-subscribe@incubator.apache.org.
+
+* Submit bug reports and feature requests to our JIRA bug tracking system.
+  See section IV below for more information on doing this.
+
+* Create documentation on our Confluence site. Create an account at
+  http://cwiki.apache.org/confluence/display/VCL/Index and just start adding
+  content. (Note to current community: we should create a page explaining
+  the layout so new people will know where to add content better)
+
+* Submit patches through the vcl-dev mailing list and via the JIRA bug
+  tracking system. Once you have become familiar with VCL, you can begin
+  assisting with the development of it by picking a JIRA issue to fix or by
+  adding a feature needed at your site. Then, contribute a patch of your
+  changes through the JIRA tracking system and send a message to the vcl-dev
+  list explaining what you have done.
+
+* Become an official committer to the project. Once you have shown that you have
+  a good grasp of the project by submitting patches, you can further join the
+  development work by submitting a contributor license agreement (CLA) to ASF
+  and having a committer account created to directly contribute code to the
+  project.
+
+IV. How to Submit Bugs and Feature Requests
+
+If you find a bug, please submit a bug report to our JIRA bug tracking system at
+http://issues.apache.org/jira/browse/VCL (you will need to set up an account
+there if you haven't already done so - it's free to anyone). Also, we would
+appreciate it if you mentioned that you filed a bug on the vcl-dev list to make
+sure we don't miss it.
+
+If you would like to requrest a new feature, you can also submit that in the
+same way through JIRA (just select "New Feature" or "Improvement" as the Issue
+Type). Again, it would be helpful if you mentioned that you filed a feature
+request on the vcl-dev list.
+
+After you have created a JIRA issue, you have the option to vote on it to help
+us know how to prioritize issues. You can also "watch" the issue to see when
+activity related to it is submitted.
