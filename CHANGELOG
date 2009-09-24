@@ -1,0 +1,105 @@
+ASF VCL 2.1
+
+** Sub-task
+    * [VCL-67] - Allow OS, provisioning engine, and other module objects to access each other
+
+** Bug
+    * [VCL-14] - xCAT.pm's capture_monitor output always displays "attempt 1/80"
+    * [VCL-26] - get_reservation_remote_ip subroutine redefined warning
+    * [VCL-34] - When adding computers, missing requirement for the provisioning module 
+    * [VCL-51] - user groups that have a name that is a number cause problems on the privilege page
+    * [VCL-54] - disable LDAP referrals for all LDAP connections to handle firewalls
+    * [VCL-55] - processBulkComputerInput in computers.php not always setting startpripaddress, endpripaddress, startmac
+    * [VCL-61] - blockrequest and the reload state
+    * [VCL-62] - Calls to _rpower in Windows.pm cause reservation processes to die
+    * [VCL-64] - EmptyRecycleBin.exe utility causes problems during image capture
+    * [VCL-69] - Unknown column 'af.shibonly' in 'field list'
+    * [VCL-71] - Reservation processes being killed unexpectedly
+    * [VCL-73] - new.pm::computer_not_being_used hangs occasionally
+    * [VCL-74] - Reservation may fail if user's UID value is null
+    * [VCL-75] - Bug in Perl 5.8.0 causes exit status to be reported incorrectly
+    * [VCL-76] - form tags outside of td tags on Edit Image Profiles page
+    * [VCL-79] - error in how the end time for schedule times is computed
+    * [VCL-81] - Image retrieval does not verify if it was successful
+    * [VCL-85] - watchInFlight error appears if image description contains special characters
+    * [VCL-88] - vclreload account assumed to match the default affiliation
+    * [VCL-90] - Image reservation for sub-image with "nousercheckout" flag set
+    * [VCL-91] - edit reservation allows saving/updaing image for cluster reservations
+    * [VCL-96] - < and > in user's passwords not handled properly
+    * [VCL-101] - forimaging flag causes wrong user when imaging linux in reserved.pm
+    * [VCL-103] - vclreload account has invalid curiculumid
+    * [VCL-108] - apostrophe in image name causes AJAX updates to privilege page to break
+    * [VCL-109] - viewing requests from timetable not using continuations
+    * [VCL-111] - missing default values for vmtype table
+    * [VCL-119] - Reservations insert log.ending = EOR when they shouldn't
+    * [VCL-126] - get_new_dbh() doesn't return correct value if different database is specified
+    * [VCL-129] - LockerWrtUser doesn't work with usernames containing underscores
+    * [VCL-131] - utils getdynamicaddress routine - bad regex
+    * [VCL-136] - missing perlpackage for id 6 in module table
+    * [VCL-143] - need to drop allowing new reservations to take priority over reload reservations
+    * [VCL-151] - apostrophe in last name can cause an error when adding user to database
+    * [VCL-166] - Windows firewall subs not catching "Object already exists" in netsh.exe output
+    * [VCL-167] - run_ssh_command not catching host key differs warning messages
+    * [VCL-172] - xCAT21.pm - xcat database is locked at dbdimp.c error
+    * [VCL-186] - Windows images losing default gateway
+    * [VCL-187] - Ubuntu.pm - not  completed
+    * [VCL-191] - path changes in vshpere SDK vmware perl toolkit
+    * [VCL-207] - Predictive reload modules not accounting for machines in block computers table
+    * [VCL-213] - Bug in retrieve_image sub in vmware.pm and xCAT.pm calls next instead of return
+    * [VCL-218] - vmware.pm may delete image being captured by cleanup process
+    * [VCL-226] - Windows reboot fails - processing another action error
+
+** Improvement
+    * [VCL-3] - clean up database
+    * [VCL-6] - update healthcheck.pl to use modularized code
+    * [VCL-15] - modify blockrequest module to use frontend API for scheduling
+    * [VCL-20] - Configuration of sshd port for image retrieval
+    * [VCL-23] - Modularize Windows OS code
+    * [VCL-63] - Remove critical notification if image is configured with a user group containing 0 members
+    * [VCL-65] - Remove pagefile from all drives during image capture
+    * [VCL-72] - die and warning signals are not handled by the backend code
+    * [VCL-84] - Prevent users from starting create image until computer is in inuse state
+    * [VCL-105] - an image cannot have itself as a subimage
+    * [VCL-106] - mail notifications notify routine
+    * [VCL-107] - User email notifications
+    * [VCL-110] - 2 second deley in vcld may cause problems with imaging
+    * [VCL-112] - Provide access to image affiliation data via DataStructure.pm
+    * [VCL-115] - allow user groups with the same name but different affiliations
+    * [VCL-118] - Add delay to run_ssh_command() & run_scp_command() retry attempts
+    * [VCL-120] - Add subroutine to set IE's runonce registry keys so user isn't presented with it
+    * [VCL-124] - locally affiliated users need a way to change their password
+    * [VCL-128] - Update reclaim.pm
+    * [VCL-132] - vcld check_time 
+    * [VCL-156] - insert current_image.txt file on kickstart based nodes
+    * [VCL-157] - Add support for xCAT 2.1 partimage format
+    * [VCL-173] - add power_off,power_on,power_reset,power_status routines to xCAT21 module
+    * [VCL-175] - Set virtual switch 0 from database value for VMware GSX
+    * [VCL-176] - Prevent vmware.pm from looping 15 times before checking ssh during load
+    * [VCL-177] - Remove Windows OS post-load configuration tasks from vmware.pm
+    * [VCL-183] - DataStructure.pm contains duplicate subroutines: get_computer_private_ip and get_computer_private_ip_address
+    * [VCL-184] - Update database schema for 2.1 release
+    * [VCL-185] - Modularize Linux OS Code
+    * [VCL-188] - Document Windows tools dependencies
+    * [VCL-190] - Add time configuration and synchronization commands to Windows post_load
+    * [VCL-205] - allow esx provisioing module to set MAC addresses
+    * [VCL-217] - xcat modules - Throttle control
+    * [VCL-228] - Windows image capture fails to delete user profiles because file is open
+
+** New Feature
+    * [VCL-1] - xCAT 2.0 module
+    * [VCL-4] - add support for Shibboleth authentication
+    * [VCL-7] - modify healthcheck.pl to monitor vms
+    * [VCL-18] - allow dynamic change of predictive loading module
+    * [VCL-19] - add configuration of v2 fields for management nodes
+    * [VCL-21] - add check for existance of image libraries
+    * [VCL-29] - author an ESX and ESX 3i provisioning module (using netboot)
+    * [VCL-33] - add user group management to XML RPC API
+    * [VCL-78] - API for backend to allocate computers for block reservations via the frontend
+    * [VCL-123] - add Ubuntu Support using the new OS Module framework
+    * [VCL-209] - create a page that will test for required php modules and correct configuration
+
+** Task
+    * [VCL-70] - Create a basic helloworld.pm provisioning module
+    * [VCL-95] - Set Subversion properties for files in repository
+    * [VCL-135] - remove all references to ncsu
+    * [VCL-198] - Release tasks
