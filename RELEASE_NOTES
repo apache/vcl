@@ -3,8 +3,8 @@ VCL 2.1
 I. Intro and Description
 
 VCL, Virtual Computing Lab. The VCL can be many things, first and foremost it is
-a open-source system used to dynamically provision and broker remote access to a
-dedicated compute environment for an end-user. The provisioned computers are
+an open-source system used to dynamically provision and broker remote access to
+a dedicated compute environment for an end-user. The provisioned computers are
 typically housed in a data center and may be physical blade servers, traditional
 rack mounted servers, or virtual machines. VCL can also broker access to
 standalone machines such as a lab computers on a university campus.
@@ -21,6 +21,34 @@ servers in a server farm or HPC cluster.
 
 II. VCL Roadmap
 
+VCL 2.1 (this release)
+  * completed modularization of vcld
+  * xCAT 2.1 support
+  * Shibboleth authentication
+  * VMWare management via VMWare toolkit
+  * ESXi with thin provisioning on a NetApp
+
+VCL 2.2
+  * power management
+  * support for xCAT 2.2
+  * improve cluster reservations
+  * improve block reservations
+
+VCL 2.3
+  * improve hypervisor support
+    * dynamic provisioning of host servers
+    * VMWare Free Server 2.0
+    * possibly XEN or KVM
+
+VCL 2.4
+  * develop tools for managing both system and user storage
+
+With each release, we'll be working toward making VCL easier to install. As
+part of our move to development at the Apache Software Foundation, it is an
+obvious goal to create a community of users and more developers around VCL.
+Bringing in more developers should become easier as VCL becomes easier to
+install.
+
 III. Getting Involved in the ASF VCL Community
 
 There are five ways to become involved in the ASF VCL community.
@@ -36,8 +64,8 @@ There are five ways to become involved in the ASF VCL community.
 
 * Create documentation on our Confluence site. Create an account at
   http://cwiki.apache.org/confluence/display/VCL/Index and just start adding
-  content. (Note to current community: we should create a page explaining
-  the layout so new people will know where to add content better)
+  content. (Note to current community: We should create a page explaining
+  the layout so new people will know where to add content better.)
 
 * Submit patches through the vcl-dev mailing list and via the JIRA bug
   tracking system. Once you have become familiar with VCL, you can begin
