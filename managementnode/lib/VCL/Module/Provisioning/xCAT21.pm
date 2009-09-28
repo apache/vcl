@@ -1437,17 +1437,6 @@ sub _edit_nodetype {
 	my $image_os_source_path  = $self->data->get_image_os_source_path();
 	my $image_os_install_type = $self->data->get_image_os_install_type();
 
-	# Fix for Linux images on henry4
-	my $management_node_hostname = $self->data->get_management_node_hostname();
-	my $image_os_type            = $self->data->get_image_os_type();
-	if (   $management_node_hostname =~ /henry4/i
-		 && $image_os_type =~ /linux/i
-		 && $image_os_source_path eq 'image')
-	{
-		$image_os_source_path = 'linux_image';
-		notify($ERRORS{'DEBUG'}, 0, "fixed Linux image path for henry4: image --> linux_image");
-	}
-
 	# Check to make sure the variables are populated
 	if (!$computer_node_name) {
 		notify($ERRORS{'CRITICAL'}, 0, "computer node name is not defined");
