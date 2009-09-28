@@ -330,19 +330,6 @@ sub insert_reload_and_exit {
 1;
 __END__
 
-=head1 AUTHOR
-
- Aaron Peeler <aaron_peeler@ncsu.edu>
- Andy Kurth <andy_kurth@ncsu.edu>
-
-=head1 COPYRIGHT
-
- Apache VCL incubator project
- Copyright 2009 The Apache Software Foundation
- 
- This product includes software developed at
- The Apache Software Foundation (http://www.apache.org/).
-
 =head1 SEE ALSO
 
 L<http://cwiki.apache.org/VCL/>
