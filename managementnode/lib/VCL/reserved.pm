@@ -251,7 +251,8 @@ sub process {
 				}
 
 				# Check if user was set to standalone
-				# Occurs if affiliation is not NCSU or if vcladmin is the user
+				# Occurs if affiliation is not specified in the NOT_STANDALONE property in vcld.conf
+				# or if vcladmin is the user or if the user's UID is >= 1,000,000
 				if ($user_standalone) {
 					if (changelinuxpassword($computer_short_name, $user_unityid, $reservation_password)) {
 						# Password successfully changed
