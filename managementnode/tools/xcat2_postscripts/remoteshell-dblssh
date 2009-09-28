@@ -38,15 +38,6 @@ then
 		chmod 600 /root/.ssh/*
 fi
 
-
-logger -t xcat "Install: adding group for sudoers"
-groupadd ncsu
-
-logger -t xcat "Install: setup sudoers"
-cp /etc/sudoers /etc/sudoers.ORIG
-echo "%ncsu   ALL = NOPASSWD: ALL" >> /etc/sudoers
-
-
 logger -t xcat "Install: writing rc.local"
 # make rc.local to change "ListenAddress" in sshd's configs accordingly to network interfaces values
 # so it will happen on reboot
