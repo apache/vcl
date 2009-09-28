@@ -225,6 +225,7 @@ our @EXPORT = qw(
   $LOGFILE
   $MYSQL_SSL
   $MYSQL_SSL_CERT
+  $NOT_STANDALONE
   $PIDFILE
   $PROCESSNAME
   $WINDOWS_ROOT_PASSWORD
@@ -281,6 +282,9 @@ BEGIN {
 
 	# Set the TESTING flag to 0 by default
 	our ($TESTING) = 0;
+	
+	# Set the NOT_STANDALONE flag to an empty string by default
+	our $NOT_STANDALONE = "";
 
 	# Use the default configuration file path if -conf isn't specified on the command line
 	our $BIN_PATH = $FindBin::Bin;
@@ -532,6 +536,10 @@ BEGIN {
 			if ($l =~ /^test=(.*)/i) {
 				$TESTING = $1;
 			}
+			
+			if ($l =~ /^NOT_STANDALONE=(.*)/i) {
+				$NOT_STANDALONE = $1;
+			}
 		}    # Close foreach line in conf file
 	}    # Close open conf file
 
@@ -653,6 +661,7 @@ our $TESTING;
 our $CONF_FILE_PATH;
 our $WINDOWS_ROOT_PASSWORD;
 our ($XMLRPC_USER, $XMLRPC_PASS, $XMLRPC_URL);
+our $NOT_STANDALONE;
 
 sub makedatestring;
 
@@ -3423,7 +3432,7 @@ sub getnewdbh {
 			# It's up to other modules to determine if $ENV{dbh} is defined, they must initialize it
 			if (defined $ENV{dbh}) {
 				$ENV{dbh} = $dbh;
-				notify($ERRORS{'DEBUG'}, 0, "database handle stored in \$ENV{dbh} ($ENV{dbh_count})");
+				notify($ERRORS{'DEBUG'}, 0, "database handle stored in \$ENV{dbh}");
 			}
 
 			return $dbh;
@@ -5335,21 +5344,26 @@ sub get_request_info {
 	if (!defined($request_info{user}{IMid}) || !$request_info{user}{IMid}) {
 		$request_info{user}{IMid} = '';
 	}
-
-	# Fix the unityid if non-NCSU account
+	
+	# Affiliation specific changes
+	# Check if the user's affiliation is listed in the $NOT_STANDALONE variable
+	if (grep(/$request_info{user}{affiliation}{name}/, split(/,/, $NOT_STANDALONE))) {
+		notify($ERRORS{'DEBUG'}, 0, "non-standalone affiliation found: $request_info{user}{affiliation}{name}");
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "standalone affiliation found: $request_info{user}{affiliation}{name}");
+		$request_info{user}{STANDALONE} = 1;
+	}
+	
+	# Fix the unityid if if the user's UID is >= 1000000
+	# Remove the domain section if the user's unityid contains @...
 	if ($request_info{user}{uid} >= 1000000) {
 		my ($correct_unity_id, $user_domain) = split /@/, $request_info{user}{unityid};
-		notify($ERRORS{'OK'}, 0, "non-NCSU user found: $request_info{user}{unityid}, $correct_unity_id from $user_domain");
 		$request_info{user}{unityid}    = $correct_unity_id;
 		$request_info{user}{STANDALONE} = 1;
+		notify($ERRORS{'OK'}, 0, "standalone user found: $request_info{user}{unityid}, uid: $request_info{user}{uid}");
 	}
-
-	# Affiliation specific changes
-	if ($request_info{user}{affiliation}{name} ne "NCSU") {
-		notify($ERRORS{'OK'}, 0, "non-NCSU user affiliation found: $request_info{user}{affiliation}{name}");
-		$request_info{user}{STANDALONE} = 1;
-	}
-
+	
 	# For test account only
 	if ($request_info{user}{unityid} =~ /vcladmin/) {
 		$request_info{user}{STANDALONE} = 1;
@@ -5362,8 +5376,6 @@ sub get_request_info {
 	if (!defined($request_info{user}{affiliation}{helpaddress}) || !$request_info{user}{affiliation}{helpaddress}) {
 		$request_info{user}{affiliation}{helpaddress} = 'vcl-user@incubator.apache.org';
 	}
-
-
 
 	# Loop through all the reservations
 	foreach my $reservation_id (keys %{$request_info{reservation}}) {
