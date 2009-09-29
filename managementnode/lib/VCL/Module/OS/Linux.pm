@@ -144,9 +144,9 @@ sub pre_capture {
 	} ## end if ($IPCONFIGURATION eq "static")
 
 	#shutdown node
-	notify($ERRORS{'OK'}, 0, "initating reboot for Linux imaging sequence");
-	run_ssh_command($computer_node_name, $management_node_keys, "/sbin/shutdown -r now", "root");
-	notify($ERRORS{'OK'}, 0, "sleeping for 60 seconds while machine shuts down and reboots");
+	notify($ERRORS{'OK'}, 0, "shutting down node for Linux imaging sequence");
+	run_ssh_command($computer_node_name, $management_node_keys, "/sbin/shutdown -h now", "root");
+	notify($ERRORS{'OK'}, 0, "sleeping for 60 seconds while machine shuts down");
 	sleep 60;
 
 	notify($ERRORS{'OK'}, 0, "returning 1");
