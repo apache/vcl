@@ -143,42 +143,15 @@ sub pre_capture {
 		}
 	} ## end if ($IPCONFIGURATION eq "static")
 
+	#shutdown node
+	notify($ERRORS{'OK'}, 0, "initating reboot for Linux imaging sequence");
+	run_ssh_command($computer_node_name, $management_node_keys, "/sbin/shutdown -r now", "root");
+	notify($ERRORS{'OK'}, 0, "sleeping for 60 seconds while machine shuts down and reboots");
+	sleep 60;
+
 	notify($ERRORS{'OK'}, 0, "returning 1");
 	return 1;
 } ## end sub capture_prepare
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 capture_start
-
- Parameters  :
- Returns     :
- Description :
-
-=cut
-
-sub capture_start {
-	my $self = shift;
-	if (ref($self) !~ /linux/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return 0;
-	}
-
-	my $management_node_keys = $self->data->get_management_node_keys();
-	my $image_name           = $self->data->get_image_name();
-	my $computer_short_name  = $self->data->get_computer_short_name();
-	my $computer_node_name   = $self->data->get_computer_node_name();
-
-	notify($ERRORS{'OK'}, 0, "initiating Linux image capture: $image_name on $computer_short_name");
-
-	notify($ERRORS{'OK'}, 0, "initating reboot for Linux imaging sequence");
-	run_ssh_command($computer_node_name, $management_node_keys, "/sbin/shutdown -r now", "root");
-	notify($ERRORS{'OK'}, 0, "sleeping for 90 seconds while machine shuts down and reboots");
-	sleep 90;
-
-	notify($ERRORS{'OK'}, 0, "returning 1");
-	return 1;
-} ## end sub capture_start
 
 #/////////////////////////////////////////////////////////////////////////////
 
