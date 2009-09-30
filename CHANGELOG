@@ -1,5 +1,15 @@
 ASF VCL 2.1
 
+Dependency changes:
+
+web frontend:
+-no testing with PHP 4 was done. VCL may work under PHP 4, but PHP 5 was assumed during development.
+
+database:
+no changes
+
+backend:
+
 ** Sub-task
     * [VCL-67] - Allow OS, provisioning engine, and other module objects to access each other
 
