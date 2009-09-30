@@ -548,6 +548,12 @@ sub delete_user {
 		}
 	}
 
+	# Delete the group
+	my $user_group_cmd = "/usr/sbin/groupdel $user_login_id";
+	if(run_ssh_command($computer_node_name, $image_identity, $user_delete_command, "root")){
+		notify($ERRORS{'DEBUG'}, 0, "attempted to delete usergroup for $user_login_id");
+	}
+
 	my $imagemeta_rootaccess = $self->data->get_imagemeta_rootaccess();
 
 	#Clear user from external_sshd_config
@@ -607,9 +613,11 @@ sub reserve {
 
 	my @sshcmd = run_ssh_command($computer_node_name, $image_identity, $useradd_string, "root");
 	foreach my $l (@{$sshcmd[1]}) {
-		if ($l =~ /user $user_name exists/) {
+		if ($l =~ /$user_name exists/) {
 			notify($ERRORS{'OK'}, 0, "detected user already has account");
-
+			if ($self->delete_user()) {
+				notify($ERRORS{'OK'}, 0, "user has been deleted from $computer_node_name");
+			}
 		}
 	}
 
