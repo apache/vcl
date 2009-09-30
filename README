@@ -8,3 +8,24 @@ stability of the code, it does indicate that the project has yet to be fully
 endorsed by the ASF.
 
 Dependencies:
+
+web frontend:
+Apache HTTP Server v1.3 or v2.x with SSL enabled
+php 5.0 or later
+php modules (some of these may be built in for your distro):
+- php-gd
+- php-json
+- php-mcrypt
+- php-mysql
+- php-openssl
+- php-sysvsem
+- php-xml
+- php-xmlrpc
+libmcrypt and mcrypt libraries installed for php-mcrypt
+Dojo Toolkit 0.4.0
+Dojo Toolkit 1.1.0
+
+database:
+MySQL 5.0 or later
+
+backend:
