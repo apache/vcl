@@ -9081,8 +9081,8 @@ sub insert_reload_request {
 	my $managementnode_id      = $request_data->{reservation}{$reservation_id}{managementnode}{id};
 	my $request_logid          = $request_data->{logid};
 	my $user_unityid           = $request_data->{user}{unityid};
-	my $image_id               = $request_data->{reservation}{$reservation_id}{imageid};
-	my $imagerevision_id       = $request_data->{reservation}{$reservation_id}{imagerevisionid};
+	my $image_id               = $request_data->{reservation}{$reservation_id}{image}{id};
+	my $imagerevision_id       = $request_data->{reservation}{$reservation_id}{imagerevision}{id};
 
 	# Assemble a consistent prefix for notify messages
 	my $notify_prefix = "req=$request_id:";
