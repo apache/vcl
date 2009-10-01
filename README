@@ -32,6 +32,8 @@ backend:
 Tested on CentOS5, Red Hat Advanced Server 4,5, RedHat Fedora Core
 MySQL 5 client
 Nmap - security scanner
+openssh client
+DHCP service q
 Perl 5.8.0 or later
 perl modules (some of these may be built in for your distro):
 - MailTools-2.04
@@ -56,3 +58,8 @@ perl modules (some of these may be built in for your distro):
 - DBI-1.609.tar.gz',
 - libwww-perl-5.827
 - HTTP-Headers
+
+Backend Conditional Dependencies:
+xCAT 1.3,2.1 - used for provisioning bare-metal machines, using the xcat modules
+vmware toolkit - for provisioning virtual machines on ESX and ESXi
+Sysprep - for loading correct device drivers for Windows based environments
