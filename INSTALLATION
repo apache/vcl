@@ -1,16 +1,165 @@
-           Virtual Computing Laboratory
-   North Carolina State University, Raleigh, NC 27695, USA
-   2004-2007 by NC State University. All Rights Reserved.
-                  http://vcl.ncsu.edu
+Installing VCL 2.1
 
-                INSTALLATION: V3/Jun07
+Contents:
 
-Please read the README file.
-For use license and copyright information see LICENSE and COPYRIGHT files.
+  I. Web (frontend)
+ II. Database (MySQL)
+III. Management Node (backend)
+ IV. Adding extra local accounts
+  V. Adding LDAP authentication
+
+I. Web (frontend)
+
+Prerequisites:
+Your web server should meet the following criteria before installing the VCL Frontend Code:
+
+   * Apache HTTP Server v1.3 or v2.x with SSL enabled - while VCL may run under another webserver capable of running PHP code, it has only been tested to work with Apache HTTP Server
+   * PHP 5
+   * php modules that should be installed (depending on your Linux distro, some of these may be compiled in to php instead of being a separate module):
+      - php-gd
+      - php-json
+      - php-mcrypt
+      - php-mysql
+      - php-openssl
+      - php-sysvsem
+      - php-xml
+      - php-xmlrpc
+   * useful to have the server set up to be able to send debugging emails
+   * php-mcrypt requires libmcrypt and mcrypt libraries as dependencies. These may need to be installed first.
+
+Installation:
+
+1. move the web directory somewhere that your web server can access it (you'll probably also want to rename it to 'vcl')
+
+   ex: mv web /var/www/html/vcl
+
+2. modify vcl/.ht-inc/secrets.php
+   * set $vclhost, $vcldb, $vclusername, and $vclpassword to match your database setup
+   * create random passwords for $mcryptkey, $mcryptiv, and $pemkey - $mcryptiv must be 8 hex characters
+
+3. run the genkeys.sh script from within vcl/.ht-inc and give it $pemkey from secrets.php as the passphrase (3 times, copy/paste is a good idea here)
+
+4. modify vcl/.ht-inc/conf.php to match your site - COOKIEDOMAIN needs to be the domain name your web server is using, or left blank if you are accessing it by IP only
+
+5. *NOTICE* JpGraph 2.x is no longer available. JpGraph 3.x is released under a dual license. QPL 1.0 (Qt Free Licensee). Free for non-commercial, open-source or educational use (JpGraph Professional License for commercial use). If you are planning to use this for commercial use and don't want to pay for JpGraph, you can safely skip this step with the only side effect of not being able to display a few graphs on the statistics page.
+   Download JpGraph from http://www.aditus.nu/jpgraph/jpdownload.php
+   * For PHP5, download the 3.x series, extract it, and copy the src directory from it to vcl/.ht-inc/jpgraph
+
+6. download version 0.4.0 of Dojo Toolkit: http://download.dojotoolkit.org/release-0.4.0/dojo-0.4.0-ajax.tar.gz
+   * extract it under the vcl directory and rename "dojo-0.4.0-ajax" to "dojoAjax"
+
+7. download version 1.1.0 of Dojo Toolkit: http://download.dojotoolkit.org/release-1.1.0/dojo-release-1.1.0.tar.gz
+   * extract it under the vcl directory and rename "dojo-release-1.1.0" to "dojo"
+
+8. go into the themes directory (vcl/themes) and run "./copydojocss.sh default" to copy parts of dojo's css into the "default" theme
+
+9. if you want to be able to edit any of the documentation that comes bundled with the vcl web code, download fckeditor from http://www.fckeditor.net/download (most people can skip this step)
+       * extract it under the vcl directory
+
+10. open a browser and open the testsetup.php page
+       * i.e. if you set up your site to be https://my.server.org/vcl/ open https://my.server.org/vcl/testsetup.php
+
+11. debug any issues reported by testsetup.php
+
+12. now, open the index.php page in your browser
+
+13. select Local Account and use 'admin' as the user and 'adminVc1passw0rd' as the password
+
+14. click the "Management Nodes" link
+
+15. enter the hostname and IP of your management node
+
+16. click Add
+
+17. fill in "Install Path" - this is parent directory under which image files will be stored
+
+18. click "Confirm Management Node"
+
+19. click Submit
+
+20. click the "Management Nodes" link
+
+21. select "Edit Management Node Grouping"
+
+22. click Submit
+
+23. select the checkbox for your management node
+
+24. click Submit
+
+25. click "Manage Computers"
+
+26. select the "Add Single Computer" radio button
+
+27. click the Submit
+
+28. fill in Hostname, IP Address, owner (admin@Local), RAM, Proc Speed, Network Speed, select "blade" for Type, select "xCAT 1.x Provisioning" for "Provisioning Engine", and click the checkbox under "allcomputers", and "newimages"
+       Note: if using using vmware, select "virtualmachine" for Type and "VMWare Server Provisioning" for "Provisioning Engine"
+
+29. click Confirm Computer
+
+30. click Submit (don't worry about the fact that the computer you just added isn't listed after clicking Submit)
+
+31. after you've configured your image library and your management node has started checking in, you should be able to make a reservation
 
 
-3 directories web, mysql, managementnode
 
+II. Database (MySQL)
+
+Prerequisites:
+MySQL 5 installed and running
+
+Installation:
+
+1.  create a database in mysql named for use with VCL
+
+   CREATE DATABASE vcl;
+
+2. create a user with SELECT, INSERT, UPDATE, and DELETE privileges on the database you just created
+
+   ** NOTE: Replace vcluserpassword with your own password!
+
+   GRANT SELECT,INSERT,UPDATE,DELETE ON vcl.* TO 'vcluser'@'localhost' IDENTIFIED BY 'vcluserpassword';
+
+3. import vcl.sql file into database
+
+   mysql vcl < vcl.sql
+
+
+
+III. Management Node (backend)
+
+
+
+IV. Adding extra local accounts
+
+There's not currently a tool for this.  You will need to add entries directly to the database.
+1) add entry to user table
+INSERT INTO user (unityid, firstname, lastname, email, lastupdated) VALUES ('myusername', 'myfirstname', 'mylastname', 'myemailaddr', NOW());
+2) find out the id generated for that user
+SELECT id, unityid FROM user WHERE unityid = 'myusername';
+3) add entry to the localauth table
+INSERT INTO localauth (userid, salt, passhash, lastupdated) VALUES ('place1', 'place2', 'place3', NOW())
+with place1 = id from step 2
+     place2 = an 8 char random string
+     place3 = sha1sum( desired password with place2 stuck on the end )
+              this can be generated under linux like this (using 'thedog' as the password and 11111111 as place2):
+                 echo -n 'thedog11111111' | sha1sum
+Once a user has been added, the user can go to User Preferences to change his/her password
+
+
+
+V. Adding LDAP authentication
+
+1) fill in the necessary information in vcl/.ht-inc/conf.php
+2) add an entry to the affiliation table and use the id for that entry as 'affiliationid' for your new entry in vcl/.ht-inc/conf.php
+3) uncomment the 'require_once(".ht-inc/authmethods/ldapauth.php");' line in in vcl/.ht-inc/conf.php
+
+
+
+
+
+___________________________________________________________
 prerequisites:
 for single server environment.
 Linux Host - tested RH Enterprise/Advanced Server 4
@@ -53,45 +202,6 @@ get started.
 ************************
 
 
-Importing/configuring database and web application:
-
-1) create a database in mysql named vcl
-   (CREATE DATABASE vcl;)
-2) create a user with SELECT, INSERT, UPDATE, and DELETE privileges on the database from #1
-   (GRANT SELECT,INSERT,UPDATE,DELETE ON vcl.* TO '<insert user here>'@'localhost' IDENTIFIED BY '<insert pwd here>';)
-3) import mysql/vcl.sql file into database
-   (mysql vcl < vcl.sql)
-4) copy web somewhere under webroot
-   (cp -R web /var/www/html/vcl)
-5) modify vcl/.ht-inc/secrets.php to match your database setup; also create random passwords for $mcryptkey, $mcryptiv, and $pemkey
-6) run the genkeys.sh script from within vcl/.ht-inc and give it $pemkey from secrets.php as the passphrase (3 times)
-7) modify vcl/.ht-inc/conf.php to match your site
-8) download jpgraph from http://www.aditus.nu/jpgraph/jpdownload.php
-	if you are using PHP5, download the 2.x series, extract it, and copy the src directory from it to vcl/.ht-inc/jpgraph
-	if you are using PHP4, download the 1.x series, extract it, and copy the src directory from it to vcl/.ht-inc/jpgraph.old
-9) download version 0.4.0 of Dojo Toolkit: http://download.dojotoolkit.org/release-0.4.0/dojo-0.4.0-ajax.tar.gz
-	extract it under the vcl directory and rename "dojo-0.4.0-ajax" to "dojoAjax"
-10) download version 1.1.0 of Dojo Toolkit: http://download.dojotoolkit.org/release-1.1.0/dojo-release-1.1.0.tar.gz
-	extract it under the vcl directory and rename "dojo-release-1.1.0" to "dojo"
-11) if you want to be able to edit any of the documentation that comes bundled with the vcl web code, download fckeditor from http://www.fckeditor.net/download
-	extract it under the vcl directory
-12) open a browser and go to the URL you set up; use 'admin' as the user and 'adminVc1passw0rd' as the password
-13) click the "Management Nodes" link
-14) enter the hostname and IP of your management node
-15) click Add
-16) click Submit
-17) click the "Management Nodes" link
-18) select "Edit Management Node Grouping"
-19) click Submit
-20) select the checkbox for your management node
-21) click Submit
-22) click "Manage Computers"
-23) click the 'Add' button
-24) fill in Hostname, IP Address, RAM, Proc Speed, Network Speed, select "blade" for Type, select "xCAT 1.x Provisioning" for "Provisioning Engine", and click the checkbox under "allcomputers", and "newimages"
-	Note: if using using vmware, select "virtualmachine" for Type and "VMWare Server Provisioning" for "Provisioning Engine"
-25) click Confirm
-26) click Submit (don't worry about the fact that the computer you just added isn't listed)
-27) after you've configured your image library and your management node has started checking in, you should be able to make a reservations
 
 Management node - vcld
 28) To install the perl code extract the vcl.tar.gz , any
@@ -112,23 +222,3 @@ The images listed in the VCL menu are only placeholders.
 Images/Environments need to be created.
 For information on creating images, please visit:
 http://vcl.ncsu.edu/node/16
-
-
-Adding extra local accounts
-There's not currently a tool for this.  You will need to add entries directly to the database.
-1) add entry to user table
-INSERT INTO user (unityid, firstname, lastname, email, lastupdated) VALUES ('myusername', 'myfirstname', 'mylastname', 'myemailaddr', NOW());
-2) find out the id generated for that user
-SELECT id, unityid FROM user WHERE unityid = 'myusername';
-3) add entry to the localauth table
-INSERT INTO localauth (userid, salt, passhash, lastupdated) VALUES ('place1', 'place2', 'place3', NOW())
-with place1 = id from step 2
-     place2 = an 8 char random string
-	  place3 = sha1sum( desired password with place2 stuck on the end )
-	           this can be generated under linux like this (using 'thedog' as the password and 11111111 as place2):
-				     echo -n 'thedog11111111' | sha1sum
-
-Adding LDAP authentication
-1) fill in the necessary information in vcl/.ht-inc/conf.php
-2) modify the user table in the vcl database and change the 'vcladmin' user's information to match information of the main site admin
-3) uncomment the 'require_once(".ht-inc/authmethods/ldapauth.php");' line in in vcl/.ht-inc/cconf.php
