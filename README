@@ -62,4 +62,9 @@ perl modules (some of these may be built in for your distro):
 Backend Conditional Dependencies:
 xCAT 1.3,2.1 - used for provisioning bare-metal machines, using the xcat modules
 vmware toolkit - for provisioning virtual machines on ESX and ESXi
+Provisioning Windows OS:
 Sysprep - for loading correct device drivers for Windows based environments
+NewSID - Windows SID Changing Utility
+SPDrvScn - Windows Driver Scanning Utility
+WSName - Workstation Name Changing Utility
+
