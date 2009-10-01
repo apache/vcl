@@ -617,9 +617,11 @@ sub reserve {
 			notify($ERRORS{'OK'}, 0, "detected user already has account");
 			if ($self->delete_user()) {
 				notify($ERRORS{'OK'}, 0, "user has been deleted from $computer_node_name");
+				@sshcmd = run_ssh_command($computer_node_name, $image_identity, $useradd_string, "root");
 			}
 		}
 	}
+
 
 	if ($user_standalone) {
 		notify($ERRORS{'DEBUG'}, 0, "Standalone user setting single-use password");
