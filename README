@@ -36,25 +36,25 @@ openssh client - All tested OS's had this installed by default
 Perl 5.8.0 or later
 perl modules (some of these may be built in for your distro):
 - MailTools-2.04
-- Class-Data-Inheritable-0.08.tar.gz',
-- Devel-StackTrace-1.20.tar.gz',
-- Exception-Class-1.26.tar.gz',
-- Object-InsideOut-3.52.tar.gz',
-- Module-Build-0.30.tar.gz',
-- Net-XMPP-1.02.tar.gz',
-- GSSAPI-0.26.tar.gz',
-- Digest-SHA1-2.12.tar.gz',
-- Digest-HMAC-1.01.tar.gz',
-- GBARR/Authen-SASL-2.12.tar.gz',
-- XML-Stream-1.22.tar.gz',
-- Net-Jabber-2.0.tar.gz',
-- YAML-0.68.tar.gz',
-- RPC-XML-0.64.tar.gz',
-- XML-Parser-2.36.tar.gz',
-- Crypt-SSLeay-0.57.tar.gz',
-- Compress-Raw-Zlib-2.020.tar.gz',
-- IO-Compress-2.020.tar.gz',
-- DBI-1.609.tar.gz',
+- Class-Data-Inheritable-0.08
+- Devel-StackTrace-1.20
+- Exception-Class-1.26
+- Object-InsideOut-3.52
+- Module-Build-0.30
+- Net-XMPP-1.02
+- GSSAPI-0.26
+- Digest-SHA1-2.12
+- Digest-HMAC-1.01
+- GBARR/Authen-SASL-2.12
+- XML-Stream-1.22
+- Net-Jabber-2.0
+- YAML-0.68
+- RPC-XML-0.64
+- XML-Parser-2.36
+- Crypt-SSLeay-0.57
+- Compress-Raw-Zlib-2.020
+- IO-Compress-2.020
+- DBI-1.609
 - libwww-perl-5.827
 - HTTP-Headers
 
