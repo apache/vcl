@@ -238,6 +238,18 @@ Installation:
 
       2009-06-16 16:57:15|15792|vcld:main(165)|lastcheckin time updated for management node 18: 2009-06-16 16:57:15
 
+6. Provisioning Engines and Hypervisors
+                        
+VCL supports the following, please see the related site for installation and setup.
+xCAT - 
+Extreme Cluster Administration Tool versions 1.3 and 2.1.
+http://xcat.sourceforge.net/
+
+VMware - 
+Free server 1.x, ESX standard Server, ESXi
+http://www.vmware.com
+Vmware toolkit - http://www.vmware.com/support/developer/viperltoolkit/ 
+
 
 
 IV. Adding extra local accounts
