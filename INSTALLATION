@@ -129,6 +129,115 @@ Installation:
 
 III. Management Node (backend)
 
+Tested on CentOS5, Red Hat Advanced Server 4,5, RedHat Fedora Core Operating systems.
+
+Prerequisites:
+MySQL 5 client
+Nmap - security scanner
+openssh clent - All distros usually have this installed by default.
+Perl 5.8.0 or later
+perl modules SEE STEP 2 below in Installation (some of these may be built in for your distro):
+- MailTools-2.04
+- Class-Data-Inheritable-0.08
+- Devel-StackTrace-1.20
+- Exception-Class-1.26
+- Object-InsideOut-3.52
+- Module-Build-0.30
+- Net-XMPP-1.02
+- GSSAPI-0.26
+- Digest-SHA1-2.12
+- Digest-HMAC-1.01
+- GBARR/Authen-SASL-2.12
+- XML-Stream-1.22
+- Net-Jabber-2.0
+- YAML-0.68
+- RPC-XML-0.64
+- XML-Parser-2.36
+- Crypt-SSLeay-0.57
+- Compress-Raw-Zlib-2.020
+- IO-Compress-2.020
+- DBI-1.609
+- libwww-perl-5.827
+- HTTP-Headers
+
+Installation:
+
+1. move the managementnode directory to /usr/local/ and rename it to vcl.
+
+	ex. mv managementnode /usr/local/vcl
+
+2. Install Required perl modules.
+
+	A script is provided in the VCL repository called install_perl_libs.pl which will attempt to download and install the required perl libraries.  Run the script:
+
+	perl /usr/local/vcl/bin/install_perl_libs.pl
+
+	A large amount of output will be displayed on the console the first time the script is run.  It will pause if any of the module installations ask for configuration information. Accept all of the defaults by pressing enter when this happens.
+
+	Run the script a 2nd time to check if all of the modules the script is configured to install were successfully installed. Output similar to the following should be displayed for each module:
+
+	==============================================================================
+	URL: http://search.cpan.org/CPAN/authors/id/T/TI/TIMB/DBI-1.609.tar.gz
+	Module filename: DBI-1.609.tar.gz
+	Module name: DBI-1.609
+	Module package: DBI
+	Checking if DBI is installed
+	Module is already installed: DBI
+	==============================================================================
+	
+	Additional output will be displayed if a module has not been successfully installed.  You will need to troubleshoot if any modules were not installed successfully.
+
+3. Configure vcld.conf
+
+   1. Create the /etc/vcl directory:
+      mkdir /etc/vcl 
+   2. Copy the generic vcld.conf file to /etc/vcl:
+      cp /usr/local/vcl/etc/vcl/vcld.conf /etc/vcl
+   3. Edit the /etc/vcl/vcld.conf file:
+      vi /etc/vcl/vcld.conf
+      The following lines must be configured in order to start the VCL daemon (vcld) and allow it to check in to the database:
+          * FQDN - the fully qualified name of the management node, this should match the name that was configured for the management node in the database
+          * server - the IP address or FQDN of the database server
+          * LockerWrtUser - database user account with write privileges
+          * wrtPass - database user password
+   4. Save the vcld.conf file
+
+4. Install the VCL Daemon (vcld) Service
+
+   1. Copy the vcld service script to /etc/init.d and name it vcld:
+      cp /usr/local/vcl/bin/S99vcld.linux /etc/init.d/vcld
+   2. Add the vcld service using chkconfig:
+      /sbin/chkconfig --add vcld
+   3. Configure the vcld service to automatically run at runtime levels 3-5:
+      /sbin/chkconfig --level 345 vcld on
+
+5. Start and Check the vcld Service
+
+   1. Start the vcld service:
+      /sbin/service vcld start
+      You should see output similar to the following:
+
+      Starting vcld daemon: BIN PATH: /usr/local/vcl/bin
+      pre-execution: config file being used: /etc/vcl/vcld.conf
+      FQDN is not listed
+      pre-execution: process name is set to: vcld
+      pre-execution: verbose mode is set to: 1
+      pre-execution: testing mode is set to: 0
+      pre-execution: log file being used: /var/log/vcld.log
+      pre-execution: PID file being used: /var/run/vcld.pid
+      Created process 23696 renamed to vcld ...
+                                                                 [  OK  ]
+      Note: the vcld service can also be started by running the service script directly:
+      /etc/init.d/vcld start
+
+   2. Check the vcld service by monitoring the vcld.log file:
+
+      tail -f /var/log/vcld.log
+
+      You should see the following being added to the log file every few seconds if the management node is checking in with the database:
+
+      2009-06-16 16:57:15|15792|vcld:main(165)|lastcheckin time updated for management node 18: 2009-06-16 16:57:15
+
 
 
 IV. Adding extra local accounts
@@ -154,71 +263,3 @@ V. Adding LDAP authentication
 1) fill in the necessary information in vcl/.ht-inc/conf.php
 2) add an entry to the affiliation table and use the id for that entry as 'affiliationid' for your new entry in vcl/.ht-inc/conf.php
 3) uncomment the 'require_once(".ht-inc/authmethods/ldapauth.php");' line in in vcl/.ht-inc/conf.php
-
-
-
-
-
-___________________________________________________________
-prerequisites:
-for single server environment.
-Linux Host - tested RH Enterprise/Advanced Server 4
- - apache httpd with SSL configured
- - mysql 5.X with SSL configured
- - PHP 5.X with php-mcrypt module
- - Perl 5.8
-
- - DHCP (The dhcp service is should be running on a private network.
-   This is needed to statically assign addresses to the machines.)
-        
-         
- NOTE: from the redhat install CD it's easiest to select the install everything
- option. With RH package selection, select "Custom", then scroll down to
- the bottom and select "Everything".
-
- If using xCAT <xcat.org>
- - see install documentation http://xcat.org/doc
-
-VCL is orginally developed in a blade environment using IBM blades and
-xcat.
- 
-The blade configuration is using:
-BladeCenter chassis
-two network Layer 2/3 Copper GigE switch modules
-HS21 blades
-
-The blades have two network adapters, eth0,eth1
-eth0 ideally should be on private network so as to not allow pxe booting
-on public or internal campus network.
- 
-In a single blade chassis environment a public switch is needed. For
-multiple chassis's two switches are needed:
-one public
-one for interconnecting chassis on private network.
-
-******* WARNING *********
-Detailed documentation is still in progress, the below steps should be enough to
-get started.
-************************
-
-
-
-Management node - vcld
-28) To install the perl code extract the vcl.tar.gz , any
-location should be fine (/usr/local/, /root, ... etc)
-29) cd to the lib directory /PATH/vcl/lib/VCL
-30) copy configuration directory file to /etc: cp -r <PATH>/vcl/etc/vcl /etc
-31) modify /etc/vcl/vcld.conf
-    at a minimum you'll need to add the database information:
-    database,server,User,user's password
-32) Modify the startup script. S99vcld.linux to include the installation
-path.
-33) run the S99vcld.linux script i.e. S99vcld.linux start
-34) drivers for loading Windows images onto different hardware than they were created on can be extracted under the Drivers directory of each Sysprep type under the tools directory
-
-
-Image creation:
-The images listed in the VCL menu are only placeholders.
-Images/Environments need to be created.
-For information on creating images, please visit:
-http://vcl.ncsu.edu/node/16
