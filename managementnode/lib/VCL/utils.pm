@@ -6495,6 +6495,12 @@ sub write_currentimage_txt {
 
 	my $current_image_contents = join('\\r\\n', @current_image_lines);
 
+	#Make sure currentimage.txt writable
+	my $chown_command = "chown root currentimage.txt; chmod 777 currentimage.txt";
+	if(run_ssh_command($computer_node_name, $image_identity, $chown_command)){
+		notify($ERRORS{'OK'}, 0, "updated ownership and permissions  on currentimage.txt");
+	}
+
 	my $command = 'echo -e "' . $current_image_contents . '" > currentimage.txt & cat currentimage.txt';
 
 	# Copy the temp file to the node as currentimage.txt
