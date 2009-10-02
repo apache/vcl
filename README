@@ -35,6 +35,8 @@ Nmap - security scanner
 openssh client - All tested OS's had this installed by default
 Perl 5.8.0 or later
 perl modules (some of these may be built in for your distro):
+NOTE:A script is provided which attempts to install the perl-modules, please
+see Section III step 2 "Installing Required perl modules" of the INSTALLATION file.
 - MailTools-2.04
 - Class-Data-Inheritable-0.08
 - Devel-StackTrace-1.20
