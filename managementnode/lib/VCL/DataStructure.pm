@@ -694,7 +694,7 @@ sub _automethod : Automethod {
 		# Make sure the value was set in the hash
 		my $check_value = eval $hash_path;
 		if ($check_value eq $set_data) {
-			notify($ERRORS{'DEBUG'}, 0, "data structure updated: $data_identifier = $set_data");
+			notify($ERRORS{'DEBUG'}, 0, "data structure updated: $hash_path\n$data_identifier = $set_data");
 			return sub {1;};
 		}
 		else {
@@ -1501,18 +1501,22 @@ sub get_computer_private_ip_address {
 
 =head2 get_variable
 
- Parameters  : $variable_name
- Returns     : If successful: reference to the data stored in the variable table for
-                              the variable name specified
+ Parameters  : variable name
+ Returns     : If successful: data stored in the variable table for the variable name specified
                If failed: false
- Description : Queries the variable table for the variable with the name specified by the subroutine argument.
-               Returns a reference to the data.
+ Description : Queries the variable table for the variable with the name
+					specified by the argument. Returns the data stored for the
+					variable. Values are deserialized before being returned if the
+					value stored was a reference.
+					
+					Undefined is returned if the variable name does not exist in the
+					variable table.
 
 =cut
 
 sub get_variable {
 	my $self = shift;
-	my $name = shift;
+	my $variable_name = shift;
 	
 	# Check if subroutine was called as an object method
 	unless (ref($self) && $self->isa('VCL::DataStructure')) {
@@ -1521,7 +1525,7 @@ sub get_variable {
 	}
 	
 	# Check the arguments
-	if (!defined($name)) {
+	if (!defined($variable_name)) {
 		notify($ERRORS{'WARNING'}, 0, "variable name argument was not supplied");
 		return;
 	}
@@ -1529,50 +1533,66 @@ sub get_variable {
 	# Construct the select statement
 my $select_statement .= <<"EOF";
 SELECT
-variable.value
+variable.value,
+variable.serialization
 FROM
 variable
 WHERE
-variable.name = '$name'
+variable.name = '$variable_name'
 EOF
 	
 	# Call the database select subroutine
 	my @selected_rows = database_select($select_statement);
 
 	# Check to make 1 sure row was returned
-	if (!@selected_rows) {
-		notify($ERRORS{'WARNING'}, 0, "unable to execute select statement to retrieve variable '$name' from the database");
-		return;
-	}
-	elsif (@selected_rows == 0){
-		notify($ERRORS{'WARNING'}, 0, "variable '$name' does not exist in the database");
+	if (!@selected_rows){
+		notify($ERRORS{'WARNING'}, 0, "unable to get value of variable '$variable_name', it does not exist in the database");
 		return;
 	}
 	elsif (@selected_rows > 1){
-		notify($ERRORS{'WARNING'}, 0, "multiple rows exist in the database for variable '$name':\n" . format_data(\@selected_rows));
+		notify($ERRORS{'WARNING'}, 0, "unable to get value of variable '$variable_name', multiple rows exist in the database for variable:\n" . format_data(\@selected_rows));
 		return;
 	}
 	
 	# Get the serialized value from the variable row
-	my $serialized_value = $selected_rows[0]{value};
-	
-	# Attempt to deserialize the value
-	# Use eval because Load() will call die() if it encounters an error
+	my $serialization_type = $selected_rows[0]{serialization};
+	my $database_value = $selected_rows[0]{value};
 	my $deserialized_value;
-	eval '$deserialized_value = YAML::Load($serialized_value)';
-	if ($EVAL_ERROR) {
-		notify($ERRORS{'WARNING'}, 0, "unable to deserialize the value using YAML::Load(): $serialized_value");
+	
+	# Deserialize the variable value if necessary
+	if ($serialization_type eq 'none') {
+		$deserialized_value = $database_value;
+	}
+	elsif ($serialization_type eq 'yaml') {
+		# Attempt to deserialize the value
+		# Use eval because Load() will call die() if it encounters an error
+		eval '$deserialized_value = YAML::Load($database_value)';
+		if ($EVAL_ERROR) {
+			notify($ERRORS{'WARNING'}, 0, "unable to get value of variable '$variable_name', unable to deserialize value using YAML::Load(): $database_value");
+			return;
+		}
+		
+		# Display the data type of the value retrieved from the variable table
+		if (my $deserialized_data_type = ref($deserialized_value)) {
+			notify($ERRORS{'DEBUG'}, 0, "data type of variable '$variable_name': $deserialized_data_type reference");
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "data type of variable '$variable_name': scalar");
+		}
+	}
+	elsif ($serialization_type eq 'phpserialize') {
+		# TODO: find Perl module to handle PHP serialized data
+		# Add module to list of dependencies
+		# Add code here to call PHP deserialize function
+		notify($ERRORS{'CRITICAL'}, 0, "unable to get value of variable '$variable_name', PHP serialized data is NOT supported yet by the VCL backend, returning null");
+		return;
+	}
+	else {
+		notify($ERRORS{'CRITICAL'}, 0, "unable to get value of variable '$variable_name', serialization type '$serialization_type' is NOT supported by the VCL backend, returning null");
 		return;
 	}
 	
-	# Display the data type of the value retrieved from the variable table
-	if (my $deserialized_data_type = ref($deserialized_value)) {
-		notify($ERRORS{'DEBUG'}, 0, "returning $deserialized_data_type reference");
-	}
-	else {
-		notify($ERRORS{'DEBUG'}, 0, "returning scalar ($deserialized_value)");
-	}
-	
+	notify($ERRORS{'DEBUG'}, 0, "retrieved variable '$variable_name', serialization: $serialization_type");
 	return $deserialized_value;
 }
 
@@ -1580,20 +1600,33 @@ EOF
 
 =head2 set_variable
 
- Parameters  : $variable_name, $variable_value
+ Parameters  : variable name, variable value
  Returns     : If successful: true
                If failed: false
- Description : Inserts or updates a row in the variable table. This subroutine
-               will also update the variable.timestamp column. The
-               variable.setby column is automatically set to the filename and
-               line number which called this subroutine.
+ Description : Inserts or updates a row in the variable table. The variable name
+               and value arguments must be specified.
+               
+               The value can be a simple scalar such as a string or a reference
+               to a complex data structure such as an array of hashes.
+               
+               Simple scalar values are stored in the variable.value column
+               as-is and the variable.serialization column will be set to
+               'none'.
+               
+               References are serialized using YAML before being stored. The
+               variable.value column will contain the YAML representation of the
+               data and the variable.serialization column will be set to 'yaml'.
+               
+               This subroutine will also update the variable.timestamp column.
+               The variable.setby column is automatically set to the filename
+               and line number which called this subroutine.
 
 =cut
 
 sub set_variable {
 	my $self = shift;
-	my $name_argument = shift;
-	my $value_argument = shift;
+	my $variable_name = shift;
+	my $variable_value = shift;
 	
 	# Check if subroutine was called as an object method
 	unless (ref($self) && $self->isa('VCL::DataStructure')) {
@@ -1602,13 +1635,23 @@ sub set_variable {
 	}
 	
 	# Check the arguments
-	if (!defined($name_argument)) {
+	if (!defined($variable_name)) {
 		notify($ERRORS{'WARNING'}, 0, "variable name argument was not supplied");
 		return;
 	}
-	elsif (!defined($value_argument)) {
+	elsif (!defined($variable_value)) {
 		notify($ERRORS{'WARNING'}, 0, "variable value argument was not supplied");
 		return;
+	}
+	
+	# Set serialization type to yaml if the value being stored is a reference
+	# Otherwise, a simple scalar is being stored and serialization is not necessary
+	my $serialization_type;
+	if (ref($variable_value)) {
+		$serialization_type = 'yaml';
+	}
+	else {
+		$serialization_type = 'none';
 	}
 	
 	# Construct a string indicating where the variable was set from
@@ -1617,37 +1660,47 @@ sub set_variable {
 	my $calling_line = $caller[2];
 	my $caller_string = "$calling_file:$calling_line";
 	
-	# Attempt to serialize the value using YAML::Dump()
-	# Use eval because Dump() will call die() if it encounters an error
-	my $serialized_value;
-	eval '$serialized_value = YAML::Dump($value_argument)';
-	if ($EVAL_ERROR) {
-		notify($ERRORS{'WARNING'}, 0, "unable to serialize the value using YAML::Dump(): $value_argument");
-		return;
+	# Attempt to serialize the value if necessary
+	my $database_value;
+	if ($serialization_type eq 'none') {
+		$database_value = $variable_value;
 	}
-
+	else {
+		# Attempt to serialize the value using YAML::Dump()
+		# Use eval because Dump() will call die() if it encounters an error
+		
+		eval '$database_value = YAML::Dump($variable_value)';
+		if ($EVAL_ERROR) {
+			notify($ERRORS{'WARNING'}, 0, "unable to serialize variable '$variable_name' using YAML::Dump(), value: $variable_value");
+			return;
+		}
+	}
+	
 	# Escape all single quote characters with a backslash
 	#   or else the SQL statement will fail becuase it is wrapped in single quotes
-	$serialized_value =~ s/'/\\'/g;;
+	$database_value =~ s/'/\\'/g;;
 	
 	# Assemble an insert statement, if the variable already exists, update the existing row
 	my $insert_statement .= <<"EOF";
 INSERT INTO variable
 (
 name,
+serialization,
 value,
 setby,
 timestamp
 )
 VALUES
 (
-'$name_argument',
-'$serialized_value',
+'$variable_name',
+'$serialization_type',
+'$database_value',
 '$caller_string',
 NOW()
 )
 ON DUPLICATE KEY UPDATE
 name=VALUES(name),
+serialization=VALUES(serialization),
 value=VALUES(value),
 setby=VALUES(setby),
 timestamp=VALUES(timestamp)
@@ -1656,10 +1709,10 @@ EOF
 	# Execute the insert statement, the return value should be the id of the row
 	my $inserted_id = database_execute($insert_statement);
 	if ($inserted_id) {
-		notify($ERRORS{'OK'}, 0, "set variable '$name_argument', id: $inserted_id");
+		notify($ERRORS{'OK'}, 0, "set variable '$variable_name', variable id: $inserted_id, serialization: $serialization_type");
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to set variable '$name_argument'");
+		notify($ERRORS{'WARNING'}, 0, "failed to set variable '$variable_name', serialization: $serialization_type");
 		return;
 	}
 	
