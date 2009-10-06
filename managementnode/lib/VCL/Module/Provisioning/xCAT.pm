@@ -687,7 +687,7 @@ sub load {
 				for (;;) {
 					notify($ERRORS{'OK'}, 0, "$computer_node_name checking for READY FLAG loop count is $readycount of 10");
 					while (<TAIL>) {
-						if ($_ =~ /READY|ready|Starting firstboot:  succeeded/) {
+						if ($_ =~ /READY/) {
 							$ready = 1 if ($_ =~ /$computer_node_name/);
 						}
 						if ($image_os_type =~ /linux/i) {

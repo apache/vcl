@@ -919,7 +919,7 @@ sub load {
 						}
 					}
 					if (!$s5) {
-						if ($_ =~ /$computer_shortname (.*) READY/i) {
+						if ($_ =~ /$computer_shortname is READY\./) {
 							$s5 = 1;
 							notify($ERRORS{'OK'}, 0, "$computer_shortname STAGE 5 set found READY flag");
 							insertloadlog($reservation_id, $vmclient_computerid, "vmstage5", "detected READY flag proceeding to post configuration");
