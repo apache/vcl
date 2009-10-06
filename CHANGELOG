@@ -6,9 +6,19 @@ web frontend:
 -no testing with PHP 4 was done. VCL may work under PHP 4, but PHP 5 was assumed during development.
 
 database:
-no changes
+removed department table and deptid references in other tables
+added variable table
 
 backend:
+Modularize OS and Provisioning modules
+Created Datastructure - to provide ease of passing or fetching relevant
+data with modules,routines.
+Support for xCAT2.1
+Support for Linux Virtual machines
+Support for VMware ESXi using vsphere toolkit
+
+
+Bug/Feature issues exported from JIRA
 
 ** Sub-task
     * [VCL-67] - Allow OS, provisioning engine, and other module objects to access each other
