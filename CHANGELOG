@@ -6,16 +6,24 @@ web frontend:
 -no testing with PHP 4 was done. VCL may work under PHP 4, but PHP 5 was assumed during development.
 
 database:
-removed department table and deptid references in other tables
-added variable table
+none
 
 backend:
-Modularize OS and Provisioning modules
-Created Datastructure - to provide ease of passing or fetching relevant
-data with modules,routines.
-Support for xCAT2.1
-Support for Linux Virtual machines
-Support for VMware ESXi using vsphere toolkit
+Perl modules
+- Class-Data-Inheritable-0.08
+- Devel-StackTrace-1.20
+- Exception-Class-1.26
+- Object-InsideOut-3.52
+- Module-Build-0.30
+- XML-Stream-1.22
+- YAML-0.68
+- RPC-XML-0.64
+- XML-Parser-2.36
+- Crypt-SSLeay-0.57
+- Compress-Raw-Zlib-2.020
+- IO-Compress-2.020
+- libwww-perl-5.827
+- HTTP-Headers
 
 
 Bug/Feature issues exported from JIRA
