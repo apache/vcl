@@ -64,15 +64,31 @@ modules" section of the INSTALLATION file.
 - HTTP-Headers
 
 Management Node Backend Conditional Dependencies:
-- xCAT 1.3 - used for provisioning bare metal machines using the xCAT.pm module
-- xCAT 2.1 - used for provisioning bare metal machines using the xCAT21.pm
-  module
-- VMware toolkit - for provisioning virtual machines on ESX and ESXi using the
-  esx.pm module
-- DHCP service installed and running for managinging IP's on the private network
+Both bare-metal and virtual machine provisioning require a dhcp server
+running on the management node listening on the private network.
+
+Physical/Bare-metal provisioning.
+If you want to provision bare-metal or pysical computers such as
+blades. You will need xCAT setup and working. This release supports
+either xCAT 1.3 or xCAT 2.1. This is useful for very large setups, very
+custom environments, HPC intergration, automating vmhost servers eith
+ESX standard or VMWare Free Server.
+
+VMware Virtual machine provisioing.
+If you want to provision virtual machines on ESX or ESXi, you will need
+the VMware vsphere toolkit. This toolkit can be obtained from:
+http://www.vmware.com/support/developer/viperltoolkit/
+This toolkit is a set of perl modules.
+The toolkit is not required if using Vmware Free server 1.x.
+
+Windows XP/2003/Vista/2008
+If provisioning Windows OS, you will need the following:
 - Sysprep - used for preparing Windows environments before an image is captured
 - NewSID - used for preparing Windows environments before an image is captured
 - SPDrvScn - used for scanning device drivers for Windows environments before an
   image is captured
 - WSName - used to change the computer name of a Windows environment during the
   load process
+You will need to copy these files to the <vcl/tools/> directory per the
+install instructions in the INSTALLATION file.
+  
