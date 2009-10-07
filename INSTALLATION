@@ -117,7 +117,7 @@ Installation:
 27. click the Submit
 
 28. fill in Hostname, IP Address, owner (admin@Local), RAM, Proc Speed, Network Speed, select "blade" for Type, select "xCAT 1.x Provisioning" for "Provisioning Engine", and click the checkbox under "allcomputers", and "newimages"
-       Note: if using using vmware, select "virtualmachine" for Type and "VMWare Server Provisioning" for "Provisioning Engine"
+       Note: if using using VMware, select "virtualmachine" for Type and "VMWare Server Provisioning" for "Provisioning Engine"
 
 29. click Confirm Computer
 
@@ -134,41 +134,41 @@ Tested on CentOS5, Red Hat Advanced Server 4,5, RedHat Fedora Core Operating sys
 Prerequisites:
 MySQL 5 client
 Nmap - security scanner
-openssh clent - All distros usually have this installed by default.
+OpenSSH client - All distros usually have this installed by default
 Perl 5.8.0 or later
-perl modules SEE STEP 2 below in Installation (some of these may be built in for your distro):
-- MailTools-2.04
-- Class-Data-Inheritable-0.08
-- Devel-StackTrace-1.20
-- Exception-Class-1.26
-- Object-InsideOut-3.52
-- Module-Build-0.30
-- Net-XMPP-1.02
-- GSSAPI-0.26
-- Digest-SHA1-2.12
-- Digest-HMAC-1.01
-- GBARR/Authen-SASL-2.12
-- XML-Stream-1.22
-- Net-Jabber-2.0
-- YAML-0.68
-- RPC-XML-0.64
-- XML-Parser-2.36
-- Crypt-SSLeay-0.57
-- Compress-Raw-Zlib-2.020
-- IO-Compress-2.020
-- DBI-1.609
-- libwww-perl-5.827
+Perl modules SEE STEP 2 below in Installation (some of these may be built in for your distro):
+- MailTools 2.04
+- Class-Data-Inheritable 0.08
+- Devel-StackTrace 1.20
+- Exception-Class 1.26
+- Object-InsideOut 3.52
+- Module-Build 0.30
+- Net-XMPP 1.02
+- GSSAPI 0.26
+- Digest-SHA1 2.12
+- Digest-HMAC 1.01
+- GBARR/Authen-SASL 2.12
+- XML-Stream 1.22
+- Net-Jabber 2.0
+- YAML 0.68
+- RPC-XML 0.64
+- XML-Parser 2.36
+- Crypt-SSLeay 0.57
+- Compress-Raw-Zlib 2.020
+- IO-Compress 2.020
+- DBI 1.609
+- libwww-perl 5.827
 - HTTP-Headers
 
 Installation:
 
-1. move the managementnode directory to /usr/local/ and rename it to vcl.
+1. Move the managementnode directory to /usr/local/ and rename it to vcl.
 
 	ex. mv managementnode /usr/local/vcl
 
-2. Install Required perl modules.
+2. Install Required Perl modules.
 
-	A script is provided in the VCL repository called install_perl_libs.pl which will attempt to download and install the required perl libraries.  Run the script:
+	A script is provided in the VCL repository called install_perl_libs.pl which will attempt to download and install the required Perl libraries.  Run the script:
 
 	perl /usr/local/vcl/bin/install_perl_libs.pl
 
@@ -238,7 +238,65 @@ Installation:
 
       2009-06-16 16:57:15|15792|vcld:main(165)|lastcheckin time updated for management node 18: 2009-06-16 16:57:15
 
-6. Provisioning Engines and Hypervisors
+6. Download and Configure Windows Dependencies
+
+   If you plan to capture Windows images, the following dependencies need to be downloaded to the locations specified below and the sysprep.inf files need to be configured.
+
+   1. Windows XP and Server 2003 Deployment Tools (Sysprep)
+      
+      The Windows XP and Server 2003 Deployment Tools are available from Microsoft and are required in order for the capture of Windows XP and Server 2003 VCL images to work.  The Sysprep.exe utility is included in the Deployment Tools.  You do not need to download Sysprep for Windows Vista or Server 2008 because it is included in the operating system.
+
+      (note: if the following links do not work, search microsoft.com for Sysprep download)
+
+      Download the Windows XP Service Pack 3 Deployment Tools:
+      http://www.microsoft.com/downloads/details.aspx?FamilyID=673a1019-8e3e-4be0-ac31-70dd21b5afa7&displaylang=en
+      
+      Download the System Preparation tool for Windows Server 2003 Service Pack 2 Deployment:
+      http://www.microsoft.com/downloads/details.aspx?familyid=93F20BB1-97AA-4356-8B43-9584B7E72556&displaylang=en
+      
+      The packages you download are in Microsoft's .cab format and need to be extracted.  It is easiest to extract the files on a Windows computer.  Windows Explorer is able to open the .cab file and then the files contained within can be copied elsewhere.
+
+      (Note: The Sysprep directories mentioned below should already exist on the management node and should contain a sysprep.inf file.  Copy the downloaded files into the Sysprep directories leaving the sysprep.inf file in place.)
+       
+      Copy the extracted Windows XP Sysprep files to the following directory on the management node after they have been extracted:
+      /usr/local/vcl/tools/Windows_XP/Utilities/Sysprep
+
+      Copy the extracted Windows Server 2003 Sysprep files to the following directory on the management node after they have been extracted: 
+      /usr/local/vcl/tools/Windows_Server_2003/Utilities/Sysprep
+
+      Your Windows product keys need to be entered into the sysprep.inf files:
+
+      Find the ProductKey line in the following file and replace WIN_XP_PRO_KEY with your product key: 
+      /usr/local/vcl/tools/Windows_XP/Utilities/Sysprep/sysprep.inf
+
+      Find the ProductKey line in the following file and replace WIN_2003_ENT_KEY with your product key: 
+      /usr/local/vcl/tools/Windows_Server_2003/Utilities/Sysprep/sysprep.inf
+
+   2. WSName.exe - Workstation Name Changing Utility
+
+      The WSName.exe utility is used to change the name of the computer while it is being installed.  Download the WSName.exe utility from the following website:
+      http://mystuff.clarke.co.nz/MyStuff/wsname.asp
+
+      Save the WSName.exe utility in the following location on the management node:
+      /usr/local/vcl/tools/Windows/Utilities/WSName/wsname.exe
+
+   3. NewSID - Windows SID Changing Utility
+
+      NewSID.exe is used to change the SID of a Windows computer if Sysprep is not used.  VCL currently uses NewSID.exe during the load process for Windows Vista images.  Download the NewSID.exe utility:
+      http://technet.microsoft.com/en-us/sysinternals/bb897418.aspx
+
+      Save the NewSID.exe utility in the following location on the management node:
+      /usr/local/vcl/tools/Windows/Utilities/NewSID/newsid.exe
+
+   4. SPDrvScn.exe - Windows Driver Scanning Utility
+
+      SPDrvScn.exe is used before an image is captured to enter the paths of drivers to the Windows registry so that they are loaded when Sysprep attempts to install devices.  Download the SPDrvScn.exe utility from the link on the following webpage:
+      http://vernalex.com/tools/spdrvscn/
+
+      Save SPDrvScn.exe in the following location on the management node:
+      /usr/local/vcl/tools/Windows/Utilities/SPDrvScn/spdrvscn.exe
+
+7. Provisioning Engines and Hypervisors
                         
 VCL supports the following, please see the related site for installation and setup.
 xCAT - 
@@ -248,7 +306,7 @@ http://xcat.sourceforge.net/
 VMware - 
 Free server 1.x, ESX standard Server, ESXi
 http://www.vmware.com
-Vmware toolkit - http://www.vmware.com/support/developer/viperltoolkit/ 
+VMware toolkit - http://www.vmware.com/support/developer/viperltoolkit/ 
 
 
 
