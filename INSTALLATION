@@ -2,13 +2,36 @@ Installing VCL 2.1
 
 Contents:
 
-  I. Web (frontend)
- II. Database (MySQL)
+  I. Database (MySQL)
+ II. Web (frontend)
 III. Management Node (backend)
  IV. Adding extra local accounts
   V. Adding LDAP authentication
 
-I. Web (frontend)
+I. Database (MySQL)
+
+Prerequisites:
+MySQL 5 installed and running
+
+Installation:
+
+1.  create a database in mysql named for use with VCL
+
+   CREATE DATABASE vcl;
+
+2. create a user with SELECT, INSERT, UPDATE, and DELETE privileges on the database you just created
+
+   ** NOTE: Replace vcluserpassword with your own password!
+
+   GRANT SELECT,INSERT,UPDATE,DELETE ON vcl.* TO 'vcluser'@'localhost' IDENTIFIED BY 'vcluserpassword';
+
+3. import vcl.sql file into database
+
+   mysql vcl < vcl.sql
+
+
+
+II. Web (frontend)
 
 Prerequisites:
 Your web server should meet the following criteria before installing the VCL Frontend Code:
@@ -101,29 +124,6 @@ Installation:
 30. click Submit (don't worry about the fact that the computer you just added isn't listed after clicking Submit)
 
 31. after you've configured your image library and your management node has started checking in, you should be able to make a reservation
-
-
-
-II. Database (MySQL)
-
-Prerequisites:
-MySQL 5 installed and running
-
-Installation:
-
-1.  create a database in mysql named for use with VCL
-
-   CREATE DATABASE vcl;
-
-2. create a user with SELECT, INSERT, UPDATE, and DELETE privileges on the database you just created
-
-   ** NOTE: Replace vcluserpassword with your own password!
-
-   GRANT SELECT,INSERT,UPDATE,DELETE ON vcl.* TO 'vcluser'@'localhost' IDENTIFIED BY 'vcluserpassword';
-
-3. import vcl.sql file into database
-
-   mysql vcl < vcl.sql
 
 
 
