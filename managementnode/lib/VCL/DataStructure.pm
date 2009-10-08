@@ -1954,7 +1954,7 @@ sub get_computer_state_name {
 	computer
 	WHERE
 	computer.stateid = state.id
-	AND computer.hostname LIKE '$computer_name.%'
+	AND (computer.hostname LIKE '$computer_name.%' OR computer.hostname = '$computer_name')
    ";
 
 	# Call the database select subroutine
