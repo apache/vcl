@@ -1,0 +1,83 @@
+Pre-Installation:
+
+You need to install the VMware VI Perl toolkit installed on any management node using the esxthin module
+
+Each vmware ESX hypervisor you want VCL to provision to requires the NetApp image library volume to be connected and named 'VCL'
+
+Ensure your NetApp volume (ie: /vol/image_library) is exported via NFS and that it has the following structure.  Note: all images use the name image.vmdk and image-flat.vmdk explicitly inside the folders which are each named differently by the image name.
+[VCL]
+	/inuse  (required)
+	/golden  (required)
+		/imagename (a folder in golden for each image in the library)
+			image.vmdk
+			image-flat.vmdk
+		...
+
+Image requirements:
+	All images used by this module must have names in the form of esx3-<anything you want>-v#    (where # is the image revision number)
+	ssh must be set to start on boot
+	ssh keys must be setup so that VCL can ssh into it (put another way, the /root/.ssh/id_rsa.pub key from a VCL management node must be added to each image's authorized_keys file)
+	The image needs two NICs (eth0 is private, eth1 is public)
+	The IP addressing of the private (eth0) interface must be set to DHCP on boot
+
+The VCL management node acts as a dhcp server for the private (eth0) NICs of the virtual machines that will be provisioned.  Configure your management node's private interface eth1 (10.0.0.1) to hand out valid IP addresses on the network 10.0.0.0/16 by configuring your /etc/dhcpd.conf and turning on dhcp.  Use the following entry as a guide:
+
+         subnet 10.0.0.0 netmask 255.255.0.0 {
+                max-lease-time                  43200;
+                min-lease-time                  43200;
+                default-lease-time              43200;
+                option subnet-mask              255.255.0.0;
+                option nis-domain               "NA";
+                option nis-servers      noip;
+                option time-offset              -5;
+                range 10.0.0.2 10.0.255.255;
+
+
+
+Customizing the ESX module for your hypervisors:
+
+Update the database record in the 'vmprofile' table where vmprofile.id=6 with information specific to your environment
+
+	datastorepath: <ipaddress>:<NFS mount path>  for example a valid entry could be  (152.14.17.112:/mnt/export)
+	virtualswitch0: <name of your private virtual machine port group> 
+	virtualswitch1: <name of your public virtual machine port group>
+	username: <name of a valid user on your ESX hypervisors>
+	password: <password for the ESX hypervisor user>
+
+
+
+For each ESX hypervisor which VCL will provision machines on, do the following:
+
+1)  Create an entry for that hypervisor by going to Manage Computers -> Edit Computer Information -> Add
+	Hostname <your ESX's hostname>
+	IP <your ESX's IP>
+	Type "blade"
+	Provisioning Engine:  This doesn't matter
+	Computer Groups:  Don't add the hypervisors to any computer groups
+
+2)  For each ESX hypervisor, manually create an entry in the 'vmhost' database table with the following guidelines:
+	computerid: the id of the computer created in step 1
+	vmlimit: the max number of vms to have on this hypervisor (ie: 5)
+	vmprofileid: the id of the vmprofile entry created in step 4 of the above section labeled "Install the module"
+
+
+
+Assigning VMs to your hypervisors:
+
+1)  Create a virtual machine placeholder for each VM you would like to concurrently run.  Do so by going to Manage Computers -> Edit Computer Information -> Add
+	Hostname: <the hostname of the vm when it is provisioned and turned on>
+	IP: this doesn't matter, our module will populate this field
+	Type: virtualmachine
+	Provisioning Engine: VMware ESX Thin
+	Computer Groups:  allComputers
+
+2) 'assign' these computer placeholders (and their hostnames) to hypervisors by using the 'Virtual Hosts' area of your web interface.
+
+Now your hypervisors and virtual machines are setup.  Add an image:
+
+1)  Create an entry in the image table.
+	name:  esx3-<what you want>-v0
+	OSid:  link to the correct operating system entry in the OS table
+2)  Create an image revision table with the imageid from the entry created in the image table  and the imagename used in that same entry
+3)  Create an image in the resource table with resource.type=13 and resource.subid=<your image's image.subid>
+4)  Add the image revision to the allImages and allVMimages groups
