@@ -87,8 +87,6 @@ If provisioning Windows OS, you will need the following:
 - NewSID - used for preparing Windows environments before an image is captured
 - SPDrvScn - used for scanning device drivers for Windows environments before an
   image is captured
-- WSName - used to change the computer name of a Windows environment during the
-  load process
 You will need to copy these files to the <vcl/tools/> directory per the
 install instructions in the INSTALLATION file.
   

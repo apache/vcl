@@ -13,6 +13,13 @@
 ' See the License for the specific language governing permissions and
 ' limitations under the License.
 
+' NOTICE: This script relies on the wsname.exe utility which is no longer
+' available. This script will be rewritten for the 2.2 release of VCL. In the
+' meantime, this script is being left intact in case you have a previously
+' released version of wsname.exe or are able to obtain it from another source. You
+' should not encounter problems if you do not have wsname.exe, however, computers
+' will be given random names. This script only applies to Windows images.
+
 strCurrentImagePath = "C:\Cygwin\home\root\currentimage.txt"
 strSetnameLogfile = "C:\Cygwin\home\root\VCL\Logs\sysprep_cmdlines\wsname_output.log"
 strWSNamePath = "C:\Cygwin\home\root\VCL\Utilities\WSName\wsname.exe"

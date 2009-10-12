@@ -272,15 +272,7 @@ Installation:
       Find the ProductKey line in the following file and replace WIN_2003_ENT_KEY with your product key: 
       /usr/local/vcl/tools/Windows_Server_2003/Utilities/Sysprep/sysprep.inf
 
-   2. WSName.exe - Workstation Name Changing Utility
-
-      The WSName.exe utility is used to change the name of the computer while it is being installed.  Download the WSName.exe utility from the following website:
-      http://mystuff.clarke.co.nz/MyStuff/wsname.asp
-
-      Save the WSName.exe utility in the following location on the management node:
-      /usr/local/vcl/tools/Windows/Utilities/WSName/wsname.exe
-
-   3. NewSID - Windows SID Changing Utility
+   2. NewSID - Windows SID Changing Utility
 
       NewSID.exe is used to change the SID of a Windows computer if Sysprep is not used.  VCL currently uses NewSID.exe during the load process for Windows Vista images.  Download the NewSID.exe utility:
       http://technet.microsoft.com/en-us/sysinternals/bb897418.aspx
@@ -288,7 +280,7 @@ Installation:
       Save the NewSID.exe utility in the following location on the management node:
       /usr/local/vcl/tools/Windows/Utilities/NewSID/newsid.exe
 
-   4. SPDrvScn.exe - Windows Driver Scanning Utility
+   3. SPDrvScn.exe - Windows Driver Scanning Utility
 
       SPDrvScn.exe is used before an image is captured to enter the paths of drivers to the Windows registry so that they are loaded when Sysprep attempts to install devices.  Download the SPDrvScn.exe utility from the link on the following webpage:
       http://vernalex.com/tools/spdrvscn/
