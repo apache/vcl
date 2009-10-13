@@ -13,6 +13,15 @@ Ensure your NetApp volume (ie: /vol/image_library) is exported via NFS and that 
 			image-flat.vmdk
 		...
 
+The Config File:
+Place a config file named esxthin.conf in the same directory as esxthin.pm (<location of vcld>/../lib/Module/Provisioning/esxthin.conf)  Each line of this config file has the form key=value.  There are 4 possible keys to use {'ip','user','pass','https'}  'ip', 'user', and 'pass' should each be set to the correct string, but https only accepts values 'on' and 'off'  Here is an example config file:
+
+ip=10.0.3.4
+user=vclnetappuser
+pass=f84uhkgh8
+https=on
+
+
 Image requirements:
 	All images used by this module must have names in the form of esx3-<anything you want>-v#    (where # is the image revision number)
 	ssh must be set to start on boot
@@ -38,7 +47,7 @@ Customizing the ESX module for your hypervisors:
 
 Update the database record in the 'vmprofile' table where vmprofile.id=6 with information specific to your environment
 
-	datastorepath: <ipaddress>:<NFS mount path>  for example a valid entry could be  (152.14.17.112:/mnt/export)
+	datastorepath: <NFS mount path>  for example a valid entry could be  (/vol/images)
 	virtualswitch0: <name of your private virtual machine port group> 
 	virtualswitch1: <name of your public virtual machine port group>
 	username: <name of a valid user on your ESX hypervisors>

@@ -35,7 +35,6 @@ which works only when supproted with NetApp hardware
  http://www.vmware.com
 
  TODO list:
- Refactor all run_ssh_command calls to check the return code and fail if not 0
 
 =cut
 
@@ -170,7 +169,6 @@ sub load {
 
 	my $request_data = shift;
 	my ($package, $filename, $line, $sub) = caller(0);
-	notify($ERRORS{'DEBUG'}, 0, "****************************************************");
 
 	# get various useful vars from the database
 	my $request_id           = $self->data->get_request_id;
@@ -209,18 +207,11 @@ sub load {
 		notify($ERRORS{'DEBUG'}, 0, "Unable to collect hostname_value for vmware host name using hostname from database");
 	}
 
+	notify($ERRORS{'OK'},    0, "Entered ESX module, loading $image_name on $computer_shortname (on $vmhost_hostname) for reservation $reservation_id");
 
 	#Get the config datastore information from the database
-	my $datastore_ip;
-	my $datastore_share_path;
-	($datastore_ip, $datastore_share_path) = split(":", $self->data->get_vmhost_profile_datastore_path());
-
-	notify($ERRORS{'OK'},    0, "DATASTORE IP is $datastore_ip and DATASTORE_SHARE_PATH is $datastore_share_path");
-	notify($ERRORS{'OK'},    0, "Entered ESX module, loading $image_name on $computer_shortname (on $vmhost_hostname) for reservation $reservation_id");
-	notify($ERRORS{'DEBUG'}, 0, "Datastore: $datastore_ip:$datastore_share_path");
-
-	# path to the inuse vm folder on the datastore (not a local path)
-	my $vmpath = "$datastore_share_path/inuse/$computer_shortname";
+	my $volume_path = $self->data->get_vmhost_profile_datastore_path();
+	notify($ERRORS{'OK'},    0, "Current image library is hosted at $volume_path");
 
 	# authenticate with the netapp filer
 	my $s = netapp_login();
@@ -269,55 +260,22 @@ sub load {
 	} ## end if ($vminfo_output =~ /^Information of Virtual Machine $computer_shortname/m)
 
 	# Remove old vm folder
-	# RRRRRRRRRRR
-	netapp_delete_dir($s,"/vol/images/inuse/$computer_shortname");
-
-	# Remove old vm folder
-	run_ssh_command($datastore_ip, $image_identity, "rm -rf $vmpath");
-	notify($ERRORS{'DEBUG'}, 0, "Removed old vm folder");
+	netapp_delete_dir($s,"$volume_path/inuse/$computer_shortname");
 
 	# Create new folder for this vm
-	if (!run_ssh_command($datastore_ip, $image_identity, "mkdir $vmpath")) {
-		notify($ERRORS{'CRITICAL'}, 0, "Could not create new directory");
-		return 0;
-	}
-
-	# Create new folder for this vm
-	#RRRRRRR
-	netapp_create_dir($s,"/vol/images/inuse/$computer_shortname",'0755');
-
-
-	# copy appropriate vmdk file
-	my $from = "$datastore_share_path/golden/$image_name/image.vmdk";
-	my $to   = "$vmpath/image.vmdk";
-	if (!run_ssh_command($datastore_ip, $image_identity, "cp $from $to")) {
-		notify($ERRORS{'CRITICAL'}, 0, "Could not copy vmdk file!");
-		return 0;
-	}
-	notify($ERRORS{'DEBUG'}, 0, "COPIED VMDK SUCCESSFULLY");
+	netapp_create_dir($s,"$volume_path/inuse/$computer_shortname",'0755');
 
 	# clone vmdk file from golden to inuse
-	#RRRRRRRR
-	my $from = "/vol/images/golden/$image_name/image.vmdk";
-	my $to   = "/vol/images/inuse/$computer_shortname/image.vmdk";
+	my $from = "$volume_path/golden/$image_name/image.vmdk";
+	my $to   = "$volume_path/inuse/$computer_shortname/image.vmdk";
 	netapp_fileclone($s,$from,$to);
 
 	# Copy the (large) -flat.vmdk file
-	# This uses ssh to do the copy locally, copying over nfs is too costly
-	$from = "$datastore_share_path/golden/$image_name/image-flat.vmdk";
-	$to   = "$vmpath/image-flat.vmdk";
-	if (!run_ssh_command($datastore_ip, $image_identity, "cp $from $to")) {
-		notify($ERRORS{'CRITICAL'}, 0, "Could not copy vmdk-flat file!");
-		return 0;
-	}
-
-	# Copy the (large) -flat.vmdk file
-	#RRRRRRRRR
-	$from = "/vol/images/golden/$image_name/image-flat.vmdk";
-	$to   = "/vol/images/inuse/$computer_shortname/image-flat.vmdk";
+	$from = "$volume_path/golden/$image_name/image-flat.vmdk";
+	$to   = "$volume_path/inuse/$computer_shortname/image-flat.vmdk";
 	netapp_fileclone($s,$from,$to);
 
-	# Author new VMX file, output to temporary file (will scp it below)
+	# Author new VMX file, output to temporary file (will file-write-file it below)
 	my @vmxfile;
 	my $vmxpath = "/tmp/$computer_shortname.vmx";
 
@@ -332,18 +290,13 @@ sub load {
 
 	# determine adapter type by looking at vmdk file
 	my $adapter = "lsilogic";    # default
-	my @output;
-	if (@output = run_ssh_command($datastore_ip, $image_identity, "grep adapterType $vmpath/image.vmdk 2>&1")) {
-		my @LIST = @{$output[1]};
-		foreach (@LIST) {
-			if ($_ =~ /(ide|buslogic|lsilogic)/) {
-				$adapter = $1;
-				notify($ERRORS{'OK'}, 0, "adapter= $1 ");
-			}
-		}
+	my $vmdk_meta = netapp_read_file($s,"$volume_path/golden/$image_name/image.vmdk");
+	if ($vmdk_meta =~ /(ide|buslogic|lsilogic)/) {
+		$adapter = $1;
+		notify($ERRORS{'OK'}, 0, "adapter= $1 ");
 	}
 	else {
-		notify($ERRORS{'CRITICAL'}, 0, "Could not ssh to grep the vmdk file");
+		notify($ERRORS{'CRITICAL'}, 0, "Could not determine ssh to grep the vmdk file");
 		return 0;
 	}
 
@@ -405,24 +358,11 @@ sub load {
 	}
 
 	# Write the VMX file to the NetApp
-	#RRRRRR
-	netapp_write_file($s,$ascii_vmx_file,"/vol/images/inuse/$computer_shortname/image.vmx");
-
-	# write vmx to temp file
-	if (open(TMP, ">$vmxpath")) {
-		print TMP @vmxfile;
-		close(TMP);
-		notify($ERRORS{'OK'}, 0, "wrote vmxarray to $vmxpath");
-	}
-	else {
-		notify($ERRORS{'CRITICAL'}, 0, "could not write vmxarray to $vmxpath");
-		insertloadlog($reservation_id, $vmclient_computerid, "failed", "could not write vmx file to local tmp file");
-		return 0;
-	}
-
-	# scp $vmxpath to $vmpath/image.vmx
-	if (!run_scp_command($vmxpath, "$datastore_ip:$vmpath/image.vmx", $image_identity)) {
-		notify($ERRORS{'CRITICAL'}, 0, "could not scp vmx file to $datastore_ip");
+	if (netapp_write_file($s,$ascii_vmx_file,"$volume_path/inuse/$computer_shortname/image.vmx")) {
+		notify($ERRORS{'OK'}, 0, "Successfully wrote VMX file");
+	} else {
+		notify($ERRORS{'CRITICAL'}, 0, "Could not write VMX file");
+		insertloadlog($reservation_id, $vmclient_computerid, "failed", "could not write vmx file to netapp");
 		return 0;
 	}
 
@@ -630,9 +570,26 @@ sub load {
 
 sub ascii_to_hex ($)
 	{
-		## Convert each ASCII character to a two-digit hex number.
+		## Convert each ASCII character to a two-digit hex number
 		(my $str = shift) =~ s/(.|\n)/sprintf("%02lx", ord $1)/eg;
-			return $str;
+		return $str;
+	}
+
+#/////////////////////////////////////////////////////////////////////////
+
+=head2 hex_to_ascii
+
+ Parameters  : a single hex string
+ Returns     : a single ASCII string
+ Description : Converts hex to ASCII
+
+=cut
+
+sub hex_to_ascii ($)
+	{
+		## Convert each two-digit hex character to an ascii character
+		(my $str = shift) =~ s/([a-fA-F0-9]{2})/chr(hex $1)/eg;
+		return $str;
 	}
 
 #/////////////////////////////////////////////////////////////////////////
@@ -647,23 +604,46 @@ sub ascii_to_hex ($)
 
 sub netapp_login
 {
-	my $s = NaServer->new ('10.4.0.20',1,3);
-#TODO: make the ip not hardcoded
+	my $username = 'root';
+	my $password;
+	my $ip;
+	my $use_https = 'off';
+
+        open(NETAPPCONF, "$FindBin::Bin/../lib/VCL/Module/Provisioning/esxthin.conf");
+	while (<NETAPPCONF>)
+	{
+		chomp($_);
+		if ($_ =~ /^ip=(.*)/) {
+			$ip = $1;
+		} elsif ($_ =~ /^user=(.*)/) { 
+			$username = $1;
+		} elsif ($_ =~ /^pass=(.*)/) { 
+			$password = $1;
+		} elsif ($_ =~ /^https=(.*)/) { 
+			$use_https = $1;
+		}
+	}
+	close(NETAPPCONF);
+
+	my $s = NaServer->new ($ip,1,3);
 	my $resp = $s->set_style("LOGIN");
 	if (ref ($resp) eq "NaElement" && $resp->results_errno != 0) {
 		my $r = $resp->results_reason();
 		notify($ERRORS{'CRITICAL'}, 0, "Failed to set authentication style $r\n");
 		exit 2;
 	}
-	$s->set_admin_user('vcltestuser', 'd8k3hg6g8s9h');
-#TODO: make the user/pass not hardcoded
-    
-	$resp = $s->set_transport_type("HTTP");
-	if (ref ($resp) eq "NaElement" && $resp->results_errno != 0) {
-		my $r = $resp->results_reason();
-		notify($ERRORS{'CRITICAL'}, 0, "Unable to set HTTP transport $r\n");
-		exit 2;
+	$s->set_admin_user($username, $password);
+
+	# Use https if the config file says to do so
+	if ($use_https eq 'on') {
+		$resp = $s->set_transport_type("HTTPS");
+		if (ref ($resp) eq "NaElement" && $resp->results_errno != 0) {
+			my $r = $resp->results_reason();
+			notify($ERRORS{'CRITICAL'}, 0, "Unable to set HTTPS transport $r\n");
+			exit 2;
+		}
 	}
+
 	return $s
 }
 
@@ -734,6 +714,33 @@ sub netapp_create_dir
 	}
 }
 
+#/////////////////////////////////////////////////////////////////////////
+
+=head2 netapp_read_file
+
+ Parameters  : $s, $path
+ Returns     : $ascii_data
+ Description : return the contents of $path on the NetApp backing $s in
+               ASCII format.
+
+=cut
+
+sub netapp_read_file
+{
+	my $s = $_[0];
+	my $path = $_[1];
+
+	#my $hex_data = ascii_to_hex($ascii_data);
+	my $out = $s->invoke( "file-read-file","length",1048576,"offset",0,"path",$path );
+ 	
+	if($out->results_status() eq "failed") {
+		notify($ERRORS{'CRITICAL'}, 0, $out->results_reason() ."\n");
+		return 0;
+	} else {
+		notify($ERRORS{'DEBUG'}, 0, "Read ASCII data from file $path on netapp");
+		return hex_to_ascii($out->child_get_string("data"));
+	}
+}
 #/////////////////////////////////////////////////////////////////////////
 
 =head2 netapp_write_file
@@ -1011,7 +1018,6 @@ sub netapp_fileclone
 =cut
 
 sub capture {
-	notify($ERRORS{'DEBUG'}, 0, "**********************************************************");
 	notify($ERRORS{'OK'},    0, "Entering ESX Capture routine");
 	my $self = shift;
 
@@ -1035,16 +1041,11 @@ sub capture {
 	my $vmhost_shortname = $1;
 
 	#Get the config datastore information from the database
-	my $datastore_ip;
-	my $datastore_share_path;
-	($datastore_ip, $datastore_share_path) = split(":", $self->data->get_vmhost_profile_datastore_path());
+	my $volume_path = $self->data->get_vmhost_profile_datastore_path();
+	notify($ERRORS{'OK'},    0, "Current image library is hosted at $volume_path");
 
-	my $old_vmpath = "$datastore_share_path/inuse/$computer_shortname";
-	my $new_vmpath = "$datastore_share_path/golden/$new_imagename";
-
-	#RRRRRRRRR
-	my $old_vmpath = "/vol/images/inuse/$computer_shortname";
-	my $new_vmpath = "/vol/images/golden/$new_imagename";
+	my $old_vmpath = "$volume_path/inuse/$computer_shortname";
+	my $new_vmpath = "$volume_path/golden/$new_imagename";
 
 	# These three vars are useful:
 	# $old_vmpath, $new_vmpath, $new_imagename
@@ -1063,9 +1064,6 @@ sub capture {
 	my $poweroff_output;
 	$poweroff_output = `$poweroff_command`;
 	notify($ERRORS{'DEBUG'}, 0, "Powered off: $poweroff_output");
-
-	notify($ERRORS{'OK'}, 0, "Waiting 5 seconds for power off");
-	sleep(5);
 
 	my $s = netapp_login();
 	netapp_rename_dir($s,$old_vmpath,$new_vmpath);
@@ -1255,9 +1253,8 @@ sub does_image_exist {
 	my $image_name     = $self->data->get_image_name();
 
 	#Get the config datastore information from the database
-	my $datastore_ip;
-	my $datastore_share_path;
-	($datastore_ip, $datastore_share_path) = split(":", $self->data->get_vmhost_profile_datastore_path());
+	my $volume_path = $self->data->get_vmhost_profile_datastore_path();
+	notify($ERRORS{'OK'},    0, "Current image library is hosted at $volume_path");
 
 	if (!$image_name) {
 		notify($ERRORS{'CRITICAL'}, 0, "unable to determine if image exists, unable to determine image name");
@@ -1266,8 +1263,7 @@ sub does_image_exist {
 
 	my $s = netapp_login();
 
-	#RRRRRRRRR
-	if (netapp_is_dir($s,"/vol/images/golden/$image_name") == 1) {
+	if (netapp_is_dir($s,"$volume_path/golden/$image_name") == 1) {
 		notify($ERRORS{'DEBUG'}, 0, "Image $image_name exists");
 		return 1;
 	} else {
@@ -1304,14 +1300,10 @@ sub get_image_size {
 	notify($ERRORS{'DEBUG'}, 0, "getting size of image: $image_name");
 
 	#Get the config datastore information from the database
-	my $datastore_ip;
-	my $datastore_share_path;
-	($datastore_ip, $datastore_share_path) = split(":", $self->data->get_vmhost_profile_datastore_path());
+	my $volume_path = $self->data->get_vmhost_profile_datastore_path();
+	notify($ERRORS{'OK'},    0, "Current image library is hosted at $volume_path");
 
-	my $IMAGEREPOSITORY = "$datastore_share_path/golden/$image_name";
-
-	#RRRRRRRRRRRR
-	my $IMAGEREPOSITORY = "/vol/images/golden/$image_name/image-flat.vmdk";
+	my $IMAGEREPOSITORY = "$volume_path/golden/$image_name/image-flat.vmdk";
 	my $s = netapp_login();
 	return int(netapp_get_size($s,$IMAGEREPOSITORY) / 1024);
 } ## end sub get_image_size
