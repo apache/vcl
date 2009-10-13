@@ -434,7 +434,7 @@ print "</ul>\n";
 title("Checking value of PHP display_errors");
 $a = ini_get('display_errors');
 print "<ul>\n";
-if($a == 'Off' || $a == 'off' || $a = '')
+if($a == 'Off' || $a == 'off' || $a == '')
 	print "<li>display_errors: <strong>disabled</strong></li>\n";
 elseif($a == 'On' || $a == 'on' || $a == 1)
 	print "<li>display_errors: <strong>enabled</strong></li>\n";
