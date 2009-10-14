@@ -76,34 +76,54 @@ if(isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] == "on")
 	$myurl = "https://";
 $myurl .= $_SERVER['HTTP_HOST'] . $_SERVER['REQUEST_URI'];
 
-# test including secrets.php
-$data = '';
-if($fp = fopen("$myurl?includesecretstest=1", 'r')) {
-	$data = fread($fp, 100);
-	fclose($fp);
-}
 $includesecrets = 1;
 $includeconf = 1;
-#$allowurlopen = ini_get('allow_url_fopen');
-$allowurlopen = 0;
-if($allowurlopen && (empty($data) || $data == 'unreadable')) {
+
+if(! ip2long(getHostbyname($_SERVER['HTTP_HOST']))) {
 	print $header;
 	# php version
 	print "PHP version: " . phpversion() . "<br><br>\n";
-	title("Including .ht-inc/secrets.php");
+	title("Trying to resolve my hostname ({$_SERVER['HTTP_HOST']})");
 	print "<ul>\n";
-	if($data == 'unreadable')
-		fail("unable to read .ht-inc/secrets.php - check the permissions of the file");
-	else
-		fail("unable to include .ht-inc/secrets.php - this is probably due to a syntax error in .ht-inc/secrets.php");
-	fail("skipping tests for contents of .ht-inc/secrets.php");
+	fail("unable to resolve my hostname; ensure {$_SERVER['HTTP_HOST']} is in DNS or create an entry for it in /etc/hosts");
 	print "</ul>\n";
 	$includesecrets = 0;
 	$includeconf = 0;
 }
 
-# conf.php test
+# test including secrets.php
+$allowurlopen = ini_get('allow_url_fopen');
 if($includesecrets) {
+	$data = '';
+	if($fp = fopen("$myurl?includesecretstest=1", 'r')) {
+		$data = fread($fp, 100);
+		fclose($fp);
+	}
+	if($allowurlopen && (empty($data) || $data == 'unreadable')) {
+		print $header;
+		# php version
+		print "PHP version: " . phpversion() . "<br><br>\n";
+		title("Including .ht-inc/secrets.php");
+		print "<ul>\n";
+		if($data == 'unreadable')
+			fail("unable to read .ht-inc/secrets.php - check the permissions of the file");
+		else
+			fail("unable to include .ht-inc/secrets.php - this is probably due to a syntax error in .ht-inc/secrets.php");
+		fail("skipping tests for contents of .ht-inc/secrets.php");
+		print "</ul>\n";
+		$includesecrets = 0;
+		$includeconf = 0;
+	}
+}
+else {
+	title("Including .ht-inc/secrets.php");
+	print "<ul>\n";
+	fail("cannot include .ht-inc/secrets.php when hostname resolution fails");
+	print "</ul>\n";
+}
+
+# conf.php test
+if($includeconf) {
 	$data = '';
 	if($fp = fopen("$myurl?includeconftest=1", 'r')) {
 		$data = fread($fp, 100);
@@ -316,7 +336,7 @@ if(in_array('mcrypt', $exts)) {
 			fail("Failed to encrypt data with mcrypt");
 		}
 	}
-	elseif(strlen($mcryptiv) != 8)
+	elseif($includesecrets && strlen($mcryptiv) != 8)
 		fail("Cannot test encryption when \$mcryptiv is not exactly 8 characters");
 	else
 		fail("Cannot test encryption without \$mcryptkey and \$mcryptiv from .ht-inc/secrets.php");
