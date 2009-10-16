@@ -1,6 +1,7 @@
-##############################################################################
-# $Id: $
-##############################################################################
+#!/bin/bash
+###############################################################################
+# $Id$
+###############################################################################
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.
@@ -17,35 +18,18 @@
 # limitations under the License.
 ###############################################################################
 # DESCRIPTION
-# Configures the Cygwin SSHD service installed in a Windows image.
+# Configures the Cygwin SSHD service installed on a Windows computer.
 # Cygwin and the sshd component must be installed prior to running this script.
-# This script should be run on a node which has been installed with a base
-# image. After running this script, gen-node-key.sh should be run on a
-# management node.
-# This script does the following:
-# * Stops any running sshd processes and servicies
-# * Deletes an existing sshd user account if it exists
-# * Deletes existing /etc/ssh* files
-# * Sets the correct owner and permissions on several files and directories
-# * Recreates the /etc/passwd and /etc/group files
-# * Configures the correct system mount points
-# * Runs ssh-host-config
-# * Sets the following options in /etc/sshd_config:
-#   LogLevel=VERBOSE
-#   MaxAuthTries=12
-#   PasswordAuthentication=yes
-#   Banner=none
-#   UsePrivilegeSeparation=yes
-#   StrictModes=no
-#   LoginGraceTime=10
-#   Compression=no
-# * Configures the sshd service to log to /var/log/sshd.log
-# * Grants the log on as a service permission to root
-# * Configures the sshd service to run as root
-# * Configures the firewall to allow port 22
-# * Starts the sshd service
-
-# -----------------------------------------------------------------------------
+# This script must be run as root on the Windows computer. The root account's
+# password must be supplied as the 1st and only argument to this script. Enclose
+# the password in single quotes if it contains special characters. After this
+# script completes successfully, the sshd service should be running on the
+# Windows computer. After running this script, gen-node-key.sh must be run on a
+# management node with the Windows computer's hostname or IP address specified as the 1st
+# argument. This will copy root's public SSH identity key to the
+# authorized_hosts file on the Windows computer and disable password
+# authentication.
+###############################################################################
 # Name        : set_config
 # Parameters  : [config_file] [keyword] [value]
 # Returns     : always 1
@@ -73,117 +57,194 @@ function set_config {
 	echo Setting $keyword to $value in $config_file
 	sed -i -r -e "s/^[ #]*($keyword).*/\1 $value/" $config_file
 	grep -i -r "^[ #]*$keyword" $config_file
-	echo ----------
+	print_hr
 	
 	return 1;
 }
 
-# -----------------------------------------------------------------------------
+#------------------------------------------------------------------------------
+function print_hr {
+	echo "----------------------------------------------------------------------"
+}
 
+#------------------------------------------------------------------------------
+function help {
+	print_hr
+	echo "Usage: $0 '<root password>'"
+	print_hr
+	exit 1
+}
+
+#------------------------------------------------------------------------------
+function die {
+   exit_status=$?
+	message=$1
+	
+	print_hr
+	echo "ERROR: ($exit_status)"
+	
+	if [ "$message" != "" ]
+	then
+		echo $message
+	fi
+	
+	print_hr
+	exit 1
+}
+
+###############################################################################
+# Get the Windows root account password argument
 if [ $# -ne 1 ]
 then
-  echo "Usage: $0 '<root password>'"
-  exit 1
+  help
 fi
 PASSWORD=$1
 
+print_hr
+
+# Stop and kill all sshd processes
 echo Stopping sshd service if it is running
 net stop sshd 2>/dev/null
-echo ----------
+print_hr
 
+echo Killing any sshd.exe processes
+taskkill.exe /IM sshd.exe /F 2>/dev/null
+print_hr
+
+echo Killing any cygrunsrv.exe processes
+taskkill.exe /IM cygrunsrv.exe /F 2>/dev/null
+print_hr
+
+# Delete the sshd service if it already exists
 echo Deleting sshd service if it already exists
 $SYSTEMROOT/system32/sc.exe delete sshd
-echo ----------
+print_hr
 
+# Make sure sshd service registry key is gone
+# sc.exe may have set a pending deletion registry key under sshd
+# This prevents the service from being reinstalled
+echo Deleting sshd service registry key
+reg.exe DELETE 'HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\sshd' /f
+print_hr
+
+# Delete sshd user, a new account will be created
 echo Deleting the sshd user if it already exists
 net user sshd /DELETE
-echo ----------
+print_hr
 
+# Delete any existing ssh configuration or key files
 echo Deleting '/etc/ssh*'
 rm -fv /etc/ssh*
-echo ----------
+print_hr
 
+# Delete existing ssh log file
 echo Deleting /var/log/sshd.log if it exists
 rm -fv /var/log/sshd.log
-echo ----------
+print_hr
 
+# ssh-host-config requires several permissions to be set in order for it to complete
 echo Setting root:Administrators as owner of '/etc' and '/var'
 chown -R root:Administrators /etc /var
-echo ----------
+print_hr
 
 echo Adding ug+rwx permissions to '/etc' and '/var'
 chmod -v ug+rwx /etc /var
-echo ----------
+print_hr
 
 echo Adding read permission on /etc/passwd and /etc/group
 chmod -v +r /etc/passwd /etc/group
-echo ----------
+print_hr
 
 echo Adding ug+w permission on /etc/passwd and /etc/group
 chmod -v ug+w /etc/passwd /etc/group
-echo ----------
+print_hr
 
+# Recreate Cygwin's group and passwd files so they match current computer accounts
 echo Recreating /etc/group
 mkgroup -l > /etc/group
-echo ----------
+if [ $? -ne 0 ]; then die "failed to recreate /etc/group"; fi;
+print_hr
 
 echo Recreating /etc/passwd
 mkpasswd -l > /etc/passwd
-echo ----------
+if [ $? -ne 0 ]; then die "failed to recreate /etc/passwd"; fi;
+print_hr
 
+# ssh-host-config will fail if the mount points are configured as user instead of system
 echo Configuring mount points
-umount -u /usr/bin 2>/dev/nul
+umount -u /usr/bin 2>/dev/null
 mount -f -s -b C:/cygwin/bin /usr/bin
-umount -u /usr/lib 2>/dev/nul
+umount -u /usr/lib 2>/dev/null
 mount -f -s -b C:/cygwin/lib /usr/lib
-umount -u / 2>/dev/nul
+umount -u / 2>/dev/null
 mount -f -s -b C:/cygwin /
-echo ----------
+print_hr
 
 echo Adding execute permission on /var
 chmod -v +x /var
-echo ----------
+print_hr
 
+# Delete existing SSH settings and files in root's home directory
+echo Deleting /home/root/.ssh directory if it exists
+rm -rfv /home/root/.ssh
+print_hr
+
+# Run ssh-user-config, this creates the .ssh directory in root's home directory
+echo Running ssh-user-config
+ssh-user-config -n
+if [ $? -ne 0 ]; then die "failed to run ssh-host-config"; fi;
+print_hr
+
+# Make sure root owns everything in its home directory
+echo Setting root:None as the owner of /home/root
+chown -R root:None /home/root
+print_hr
+
+# Run ssh-host-config, this is the main sshd service configuration utility
 echo Running ssh-host-config
-ssh-host-config -y
-echo ----------
+ssh-host-config -y -c ntsec -w "$PASSWORD"
+if [ $? -ne 0 ]; then die "failed to run ssh-host-config"; fi;
+print_hr
 
+# sshd service requires some directories under /var to be configured as follows in order to start
 echo Creating /var/empty directory if it does not exist
 mkdir /var/empty 2>/dev/NULL
-echo ----------
+print_hr
 
 echo Setting root:Administrators as owner of /var/empty
 chown -Rv root:Administrators /var/empty
-echo ----------
+print_hr
 
 echo Setting permissions to 755 on /var/empty
 chmod -Rv 755 /var/empty
-echo ----------
+print_hr
 
 echo Setting permissions to 775 on /var/log
 chmod -Rv 775 /var/log
-echo ----------
+print_hr
 
 echo Creating /var/log/sshd.log file if it does not exist
 touch /var/log/sshd.log
-echo ----------
+print_hr
 
 echo Setting root:Administrators as owner of '/etc/ssh*' and /var/log/sshd.log
 chown -Rv root:Administrators /etc/ssh* /var/log/sshd.log
-echo ----------
+print_hr
 
 echo Setting permissions to ug+rw on '/etc/ssh*' and /var/log/sshd.log
 chmod -Rv ug+rw /etc/ssh* /var/log/sshd.log
-echo ----------
+print_hr
 
+# Make sure host key permissions are correct
 echo Setting permissions to 600 on '/etc/ssh*key'
 chmod -v 600 /etc/ssh*key
-echo ----------
+print_hr
 
 echo Setting permissions to ug+rwx on /etc
 chmod -v ug+rwx /etc
-echo ----------
+print_hr
 
+# Configure the sshd_config file
 echo Configuring /etc/sshd_config
 set_config '/etc/sshd_config' 'LogLevel'               'VERBOSE'
 set_config '/etc/sshd_config' 'MaxAuthTries'           '12'
@@ -191,17 +252,25 @@ set_config '/etc/sshd_config' 'PasswordAuthentication' 'yes'
 set_config '/etc/sshd_config' 'Banner'                 'none'
 set_config '/etc/sshd_config' 'UsePrivilegeSeparation' 'yes'
 set_config '/etc/sshd_config' 'StrictModes'            'no'
-set_config '/etc/sshd_config' 'LoginGraceTime'         '10'
+set_config '/etc/sshd_config' 'LoginGraceTime'         '30'
 set_config '/etc/sshd_config' 'Compression'            'no'
+set_config '/etc/sshd_config' 'IgnoreUserKnownHosts'   'yes'
+set_config '/etc/sshd_config' 'PrintLastLog'           'no'
+set_config '/etc/sshd_config' 'RSAAuthentication'      'no'
+set_config '/etc/sshd_config' 'UseDNS'                 'no'
+set_config '/etc/sshd_config' 'PermitRootLogin'        'no'
 
+# Add switches to the sshd service startup command so that it logs to a file
 echo Configuring the sshd service to log to /var/log/sshd.log
 reg.exe ADD "HKLM\SYSTEM\CurrentControlSet\Services\sshd\Parameters" /v AppArgs /d "-D -e" /t REG_SZ /f
-echo ----------
+print_hr
 
+# Configure the sshd service to run as root
 echo Configuring the sshd service to use the root account: $PASSWORD
 $SYSTEMROOT/system32/sc.exe config sshd obj= ".\root" password= "$PASSWORD"
-echo ----------
+print_hr
 
+# Run secedit.exe to grant root the right to logon as a service
 # Assemble the paths secedit needs
 secedit_exe="C:\\WINDOWS\\system32\\secedit.exe"
 secedit_inf='C:\\WINDOWS\\security\\templates\\root_logon_service.inf'
@@ -217,22 +286,32 @@ SeServiceLogonRight = root
 signature="\$WINDOWS NT\$"
 EOF
 
+# Make sure security .inf file is formatted for DOS
 unix2dos $secedit_inf
 
 echo Running secedit.exe to grant root the right to logon as a service
 cmd.exe /c $secedit_exe /configure /cfg "$secedit_inf" /db $secedit_db /log $secedit_log /verbose
-echo ----------
+print_hr
 
-echo Configuring firewall port 22 exception
+# Create firewall exception for sshd TCP port 22 traffic
+echo Configuring sshd firewall port 22 exception
 netsh firewall set portopening name = "Cygwin SSHD" protocol = TCP port = 22 mode = ENABLE profile = ALL scope = ALL
-echo ----------
+if [ $? -ne 0 ]; then die "failed to configure sshd firewall port 22 exception"; fi;
+print_hr
 
 echo Starting the sshd service
 net start sshd
-echo ----------
+if [ $? -ne 0 ]; then die "failed to starting the sshd service"; fi;
+print_hr
 
+# Print the end of the sshd.log file, this is only for debugging
 echo /var/log/sshd.log ending:
 tail -n 10 /var/log/sshd.log
-echo ----------
+print_hr
 
-echo Done
+echo "SUCCESS: $0 done."
+echo
+echo "IMPORTANT! Now run gen-node-key.sh on the management node,"
+echo "specify this computer's hostname or IP address as the 1st argument."
+
+exit 0

@@ -1,6 +1,7 @@
-##############################################################################
-# $Id: $
-##############################################################################
+#!/bin/bash
+###############################################################################
+# $Id$
+###############################################################################
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.
@@ -17,84 +18,134 @@
 # limitations under the License.
 ###############################################################################
 # DESCRIPTION
-# Configures a VCL management node to be able to control a remote node using SSH
-# keys. The IP address or hostname of a remote node which has already been
-# configured to respond to SSH must be supplied as an argument. This script does
-# the following:
-# * Generates an 1024 bit RSA SSH public/private key pair if it doesn't already
-#   exist. Location:
-#   Private key: /etc/vcl/vcl.key
-#   Public key: /etc/vcl/vcl.key.pub
-# * Configures the ssh_config file on the management node to use the following
-#   options:
-#   StrictHostKeyChecking=no
-# * Removes any existing entries in the known_hosts file for the node specified
-# * Adds the current host key of the node specified to the known_hosts file
-# * Adds the vcl.key.pub public key to the authorized_keys file on the specified
-#   host
-# * Configures the sshd_config file on the specified host with the following
-#   options:
-#   PermitRootLogin=no
-#   PasswordAuthentication=no
-# * Restarts the sshd service on the specified node
+# Configures the root account on a VCL management node to be able to log on to a
+# Windows computer via SSH using an identity key. The IP address or hostname of
+# the Windows computer must be supplied as the first argument. An SSH private
+# key path can optionally be specified as the 2nd argument. If the 2nd argument
+# isn't supplied, the SSH identity key file used is /etc/vcl/vcl.key. The SSH
+# identity key files will be created if they don't already exist. Enter the
+# Windows computer's root accounts password when prompted.
+###############################################################################
+function print_hr {
+	echo "----------------------------------------------------------------------"
+}
 
-if [ $# -ne 1 ]
+#------------------------------------------------------------------------------
+function help {
+	print_hr
+	echo "Usage:"
+	echo "$0 <IP or hostname> [SSH identity key path]"
+	print_hr
+	exit 1
+}
+
+#------------------------------------------------------------------------------
+function die {
+	message=$1
+	
+	print_hr
+	echo "ERROR:"
+	
+	if [ "$message" != "" ]
+	then
+		echo $message
+	fi
+	
+	print_hr
+	exit 1
+}
+
+###############################################################################
+# Get the arguments
+if [ $# == 0 -o $# -gt 2 ];
 then
-  echo "Usage: $0 <node>"
-  exit 1
+  help
 fi
 NODE=$1
+KEY_PATH=$2
+
+# Make sure root is running this script
+if [ `env |grep -ic "^USERNAME=root$"` -ne 1 ];
+then
+	die "this script must be run as root"
+fi
+
+SSH_OPTIONS="-o CheckHostIP=no -o StrictHostKeyChecking=no -o BatchMode=no"
+
+print_hr
+
+# Set the default key path if argument not specified
+if [ "$KEY_PATH" == "" ]
+then
+  KEY_PATH='/etc/vcl/vcl.key'
+  echo Using default SSH identity key path: $KEY_PATH
+else
+  echo Using specified SSH identity key path: $KEY_PATH
+fi
 
 # Check if vcl.key already exists, create it if it doesn't
-echo ----------
-if [ -f '/etc/vcl/vcl.key' ];
+print_hr
+if [ -f "$KEY_PATH" ];
 then
-  echo SSH key already exists on this management node: '/etc/vcl/vcl.key'
+  echo SSH key already exists on this management node: "$KEY_PATH"
 else
-  echo Creating SSH keys on management node: '/etc/vcl/vcl.key(.pub)'
-  mkdir -p /etc/vcl
-  ssh-keygen -t rsa -f /etc/vcl/vcl.key -N '' -b 1024 -C 'root on VCL management node'
-  echo "IdentityFile /etc/vcl/vcl.key" >> /etc/ssh/ssh_config
+  echo Creating SSH keys on management node: "$KEY_PATH"
+  ssh-keygen -t rsa -f "$KEY_PATH" -N '' -b 1024 -C 'VCL root account'
+  if [ $? -ne 0 ]; then die "failed to generate SSH keys"; fi;
+  echo "IdentityFile $KEY_PATH" >> /etc/ssh/ssh_config
 fi
-echo ----------
-
-echo Setting StrictHostKeyChecking to no in ssh_config on this management node
-sed -i -r -e "s/^[ #]*(StrictHostKeyChecking).*/\1 no/" /etc/ssh/ssh_config
-grep -i -r "^[ #]*StrictHostKeyChecking" /etc/ssh/ssh_config
-echo ----------
+print_hr
  
 # Remove existing entries for the node from known_hosts for the node specified by the argument
-if [ `grep -ic $NODE /root/.ssh/known_hosts` -ne 0 ];
+if [ `grep -ic "^$NODE " /root/.ssh/known_hosts` -ne 0 ];
 then
   echo Removing $C entries for $NODE from '/root/.ssh/known_hosts'
-  sed -i -r -e "s/.*$NODE.*//" /root/.ssh/known_hosts
+  sed -i -r -e "s/^$NODE .*//" /root/.ssh/known_hosts
 else
   echo Entry does not exist for $NODE in '/root/.ssh/known_hosts'
 fi
-echo ----------
+print_hr
 
-echo Scanning host key for $NODE and adding it to '/root/.ssh/known_hosts'
-ssh-keyscan -t rsa $NODE >> /root/.ssh/known_hosts
+# Remove existing entries for the node from xCAT gkh file
+if [ `grep -ic "^$NODE " /opt/xcat/etc/gkh` -ne 0 ];
+then
+  echo Removing $C entries for $NODE from '/opt/xcat/etc/gkh'
+  sed -i -r -e "s/^$NODE .*//" /opt/xcat/etc/gkh
+else
+  echo Entry does not exist for $NODE in '/opt/xcat/etc/gkh'
+fi
+print_hr
+
+# Add the node's key to the known hosts file
+which makesshgkh
+if [ $? == 0 ];
+then
+	echo Running xCAT makesshgkh utility for $NODE
+	makesshgkh $NODE
+else
+	echo Scanning host key for $NODE and adding it to '/root/.ssh/known_hosts'
+	ssh-keyscan -t rsa $NODE >> /root/.ssh/known_hosts
+fi
+print_hr
 
 echo Copying public key to authorized_keys on $NODE
-ssh-copy-id -i /etc/vcl/vcl.key.pub $NODE
-echo ----------
-
-echo Setting PermitRootLogin to no in sshd_config on $NODE
-ssh -i /etc/vcl/vcl.key root@$NODE 'sed -i -r -e "s/^[ #]*(PermitRootLogin).*/\1 no/" /etc/sshd_config'
-ssh -i /etc/vcl/vcl.key root@$NODE 'grep "^[ #]*PermitRootLogin" /etc/sshd_config'
-echo ----------
+scp $SSH_OPTIONS $KEY_PATH.pub root@$NODE:.ssh/authorized_keys
+if [ $? -ne 0 ]; then die "failed to copy $KEY_PATH.pub to $NODE:.ssh/authorized_keys"; fi;
+print_hr
 
 echo Setting PasswordAuthentication to no in sshd_config on $NODE
-ssh -i /etc/vcl/vcl.key root@$NODE 'sed -i -r -e "s/^[ #]*(PasswordAuthentication).*/\1 no/" /etc/sshd_config'
-ssh -i /etc/vcl/vcl.key root@$NODE 'grep "^[ #]*PasswordAuthentication" /etc/sshd_config'
-echo ----------
+ssh $SSH_OPTIONS -i $KEY_PATH root@$NODE 'sed -i -r -e "s/^[ #]*(PasswordAuthentication).*/\1 no/" /etc/sshd_config'
+ssh $SSH_OPTIONS -i $KEY_PATH root@$NODE 'grep "^[ #]*PasswordAuthentication" /etc/sshd_config'
+print_hr
 
 echo Restarting the sshd service on $NODE
-ssh -i /etc/vcl/vcl.key root@$NODE 'net stop sshd ; net start sshd'
-echo ----------
+ssh $SSH_OPTIONS -i $KEY_PATH root@$NODE 'net stop sshd ; net start sshd'
+if [ $? -ne 0 ]; then die "failed to restart the sshd service on $NODE"; fi;
+print_hr
 
-echo Done, the following command should work:
-echo "ssh -i /etc/vcl/vcl.key $NODE"
+echo "SUCCESS: $0 done."
+echo
+echo "Try to run the following command, it should NOT prompt for a password:"
+echo "ssh $SSH_OPTIONS -i $KEY_PATH $NODE"
 
 exit 0
