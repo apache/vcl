@@ -102,6 +102,27 @@ PASSWORD=$1
 
 print_hr
 
+# Configure Cygwin mount points
+# ssh-host-config will fail if the mount points are configured as user instead of system
+echo Configuring mount points
+C:/cygwin/bin/umount.exe -u /usr/bin 2>/dev/null
+C:/cygwin/bin/mount.exe -f -s -b C:/cygwin/bin /usr/bin
+ls /usr/bin >/dev/null
+if [ $? -ne 0 ]; then die "failed to configure /usr/bin mount point"; fi;
+
+C:/cygwin/bin/umount.exe -u /usr/lib 2>/dev/null
+C:/cygwin/bin/mount.exe -f -s -b C:/cygwin/lib /usr/lib
+ls /usr/lib >/dev/null
+if [ $? -ne 0 ]; then die "failed to configure /usr/lib mount point"; fi;
+
+C:/cygwin/bin/umount.exe -u / 2>/dev/null
+C:/cygwin/bin/mount.exe -f -s -b C:/cygwin /
+ls / >/dev/null
+if [ $? -ne 0 ]; then die "failed to configure / mount point"; fi;
+
+mount
+print_hr
+
 # Stop and kill all sshd processes
 echo Stopping sshd service if it is running
 net stop sshd 2>/dev/null
@@ -170,18 +191,13 @@ mkpasswd -l > /etc/passwd
 if [ $? -ne 0 ]; then die "failed to recreate /etc/passwd"; fi;
 print_hr
 
-# ssh-host-config will fail if the mount points are configured as user instead of system
-echo Configuring mount points
-umount -u /usr/bin 2>/dev/null
-mount -f -s -b C:/cygwin/bin /usr/bin
-umount -u /usr/lib 2>/dev/null
-mount -f -s -b C:/cygwin/lib /usr/lib
-umount -u / 2>/dev/null
-mount -f -s -b C:/cygwin /
-print_hr
-
 echo Adding execute permission on /var
 chmod -v +x /var
+print_hr
+
+# Make sure root owns everything in its home directory
+echo Setting root:None as the owner of /home/root
+chown -R root:None /home/root
 print_hr
 
 # Delete existing SSH settings and files in root's home directory
@@ -193,11 +209,6 @@ print_hr
 echo Running ssh-user-config
 ssh-user-config -n
 if [ $? -ne 0 ]; then die "failed to run ssh-host-config"; fi;
-print_hr
-
-# Make sure root owns everything in its home directory
-echo Setting root:None as the owner of /home/root
-chown -R root:None /home/root
 print_hr
 
 # Run ssh-host-config, this is the main sshd service configuration utility
