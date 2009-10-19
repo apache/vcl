@@ -65,7 +65,7 @@ NODE=$1
 KEY_PATH=$2
 
 # Make sure root is running this script
-if [ `env |grep -ic "^USERNAME=root$"` -ne 1 ];
+if [ `whoami | grep -ic "root"` -ne 1 ];
 then
 	die "this script must be run as root"
 fi
