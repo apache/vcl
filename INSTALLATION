@@ -288,8 +288,118 @@ Installation:
       Save SPDrvScn.exe in the following location on the management node:
       /usr/local/vcl/tools/Windows/Utilities/SPDrvScn/spdrvscn.exe
 
+   4. Download Drivers
+
+      Drivers which aren't included with Windows must be downloaded and saved to the management node.  The drivers required will vary greatly depending on the hardware.  The only way to know what additional drivers you need is to install Windows on a computer and check for missing drivers.  The drivers must be copied to the appropriate directory on the management node.  The VCL image capture process copies the driver directories to the computer before an image is captured.  Drivers from multiple directories will be copied based on the version of Windows being captured.  There are driver directories under tools for each version of Windows (Windows XP, Windows Vista, ...) and for each version group of Windows (5, 6, ...).  This allows drivers which are common to multiple versions of Windows to be shared in the management node tools directory structure.
+
+      For example, if a chipset driver works for all versions of Windows, it can be saved in:
+      tools/Windows/Drivers/Chipset
+
+      If Windows XP and Windows Server 2003 both use the same network driver, it can be saved in:
+      tools/Windows_Version_5/Drivers/Network
+
+      If a storage driver only works for Windows XP, it should be saved in:
+      tools/Windows_XP/Drivers/Storage
+
+      During the image capture process, each Windows version directory is copied to the computer under C:\Cygwin\home\root\VCL. The order in which the Windows version directories are copied goes from most general to most specific.  In the example above, the order would be:
+      1. (Windows) tools/Windows/Drivers/Chipset
+      2. (Windows Version 5) tools/Windows_Version_5/Drivers/Network
+      3. (Windows XP) tools/Windows_XP/Drivers/Storage
+
+      The resulting directory structure on the Windows computer will be:
+      C:\Cygwin\home\root\VCL\Drivers
+         \Chipset - driver works for all versions of windows
+         \Network - driver works for Windows XP and Server 2003
+         \Storage - driver only works for Windows XP
+
+      The following list shows which driver files should be saved in the driver directories:
+      - tools/Windows/Drivers - drivers common to all versions of Windows
+      - tools/Windows_Version_5/Drivers - drivers used by Windows XP and Server 2003
+      - tools/Windows_Version_XP/Drivers - drivers only used by Windows XP
+      - tools/Windows_Version_Server_2003/Drivers - drivers only used by Windows Server 2003
+      - tools/Windows_Version_6/Drivers - drivers used by Windows Vista and Server 2008
+      - tools/Windows_Vista/Drivers - drivers only used by Windows Vista
+      - tools/Windows_Server_2008/Drivers - drivers only used by Windows Server 2008
+
+      The directory structure under each Drivers directory does not matter, though it is helpful to organize each directory by driver class and to organize each directory using the same theme.  For example:
+      tools/Windows_Version_XP/Drivers
+         /Chipset
+         /Network
+         /Storage
+         /Video
+
+      3rd party mass storage hardware IDs and driver .inf file paths must be added to the SysprepMassStorage section in sysprep.inf for Windows XP and Windows Server 2003 in order for the saved image to boot properly on different hardware.
+
+      - Identify the mass storage drivers required for your hardware which aren't native to Windows 
+      - Download drivers for your hardware 
+      - Each driver will have 1 or more .inf files. Examine the .inf files. Find all lines in this format containing a PnP device ID:
+        %DevDescD1% = SYMMPI_Inst, PCI\VEN_1000&DEV_0054&SUBSYS_1F041028
+        The PnP device ID in the example above is:
+        PCI\VEN_1000&DEV_0054&SUBSYS_1F041028 
+      - Each PnP device ID must be added to the sysprep.inf file under the [SysprepMassStorage] section using the following format:
+        ID = "C:\Sysprep\Drivers\<driver directory>\<.inf file path>" 
+
+      Example: LSI SAS drivers commonly need to be downloaded and the hardware IDs need to be added to the sysprep.inf files in order for computers with LSI SAS controllers to boot.
+      - Download the LSI SAS driver from ibm.com: ibm_dd_mptsas_1.30.02.00_windows_32-64.exe 
+      - Extract the ZIP file (it's a self-extracting zip; you can unzip it with whatever unzip tool you prefer) 
+      - Copy the files from the 32 bit XP directory (image/xp-32) to the appropriate directory on the management node:
+        tools/Windows/Drivers/Storage/LSI-SAS 
+      - Locate the .inf file included with the driver is:
+        tools/Windows/Drivers/Storage/LSI-SAS/symmpi.inf 
+      - Locate the PnP ID lines in the .inf file:
+        [LSI]
+        %DevDesc2% = SYMMPI_Inst, PCI\VEN_1000&DEV_0622
+        %DevDesc3% = SYMMPI_Inst, PCI\VEN_1000&DEV_0624
+        %DevDesc4% = SYMMPI_Inst, PCI\VEN_1000&DEV_0626
+        %DevDesc5% = SYMMPI_Inst, PCI\VEN_1000&DEV_0628
+        %DevDesc6% = SYMMPI_Inst, PCI\VEN_1000&DEV_0030
+        %DevDesc7% = SYMMPI_Inst, PCI\VEN_1000&DEV_0032
+        %DevDesc8% = SYMMPI_Inst, PCI\VEN_1000&DEV_0050
+        %DevDesc9% = SYMMPI_Inst, PCI\VEN_1000&DEV_0054
+        %DevDesc10% = SYMMPI_Inst, PCI\VEN_1000&DEV_0058
+        %DevDesc11% = SYMMPI_Inst, PCI\VEN_1000&DEV_0056
+        %DevDesc12% = SYMMPI_Inst, PCI\VEN_1000&DEV_0640
+        %DevDesc13% = SYMMPI_Inst, PCI\VEN_1000&DEV_0646
+        %DevDesc14% = SYMMPI_Inst, PCI\VEN_1000&DEV_0062
+        [DELL]
+        %DevDescD1% = SYMMPI_Inst, PCI\VEN_1000&DEV_0054&SUBSYS_1F041028
+        %DevDescD2% = SYMMPI_Inst, PCI\VEN_1000&DEV_0054&SUBSYS_1F051028
+        %DevDescD3% = SYMMPI_Inst, PCI\VEN_1000&DEV_0054&SUBSYS_1F061028
+        %DevDescD4% = SYMMPI_Inst, PCI\VEN_1000&DEV_0054&SUBSYS_1F071028
+        %DevDescD5% = SYMMPI_Inst, PCI\VEN_1000&DEV_0054&SUBSYS_1F081028
+        %DevDescD6% = SYMMPI_Inst, PCI\VEN_1000&DEV_0054&SUBSYS_1F091028
+        %DevDescD7% = SYMMPI_Inst, PCI\VEN_1000&DEV_0058&SUBSYS_1F0E1028
+        %DevDescD8% = SYMMPI_Inst, PCI\VEN_1000&DEV_0058&SUBSYS_1F0F1028
+        %DevDescD9% = SYMMPI_Inst, PCI\VEN_1000&DEV_0058&SUBSYS_1F101028
+      - Based on the contents of the .inf file, added the following to the Windows XP and Windows Server 2003 sysprep.inf files under [SysprepMassStorage]: PCI\VEN_1000&DEV_0622 = "C:\Sysprep\Drivers\Storage\LSI-SAS\symmpi.inf"
+        PCI\VEN_1000&DEV_0624 = "C:\Sysprep\Drivers\Storage\LSI-SAS\symmpi.inf"
+        PCI\VEN_1000&DEV_0626 = "C:\Sysprep\Drivers\Storage\LSI-SAS\symmpi.inf"
+        PCI\VEN_1000&DEV_0628 = "C:\Sysprep\Drivers\Storage\LSI-SAS\symmpi.inf"
+        PCI\VEN_1000&DEV_0030 = "C:\Sysprep\Drivers\Storage\LSI-SAS\symmpi.inf"
+        PCI\VEN_1000&DEV_0032 = "C:\Sysprep\Drivers\Storage\LSI-SAS\symmpi.inf"
+        PCI\VEN_1000&DEV_0050 = "C:\Sysprep\Drivers\Storage\LSI-SAS\symmpi.inf"
+        PCI\VEN_1000&DEV_0054 = "C:\Sysprep\Drivers\Storage\LSI-SAS\symmpi.inf"
+        PCI\VEN_1000&DEV_0058 = "C:\Sysprep\Drivers\Storage\LSI-SAS\symmpi.inf"
+        PCI\VEN_1000&DEV_0056 = "C:\Sysprep\Drivers\Storage\LSI-SAS\symmpi.inf"
+        PCI\VEN_1000&DEV_0640 = "C:\Sysprep\Drivers\Storage\LSI-SAS\symmpi.inf"
+        PCI\VEN_1000&DEV_0646 = "C:\Sysprep\Drivers\Storage\LSI-SAS\symmpi.inf"
+        PCI\VEN_1000&DEV_0062 = "C:\Sysprep\Drivers\Storage\LSI-SAS\symmpi.inf"
+        PCI\VEN_1000&DEV_0054&SUBSYS_1F041028 = "C:\Sysprep\Drivers\Storage\LSI-SAS\symmpi.inf"
+        PCI\VEN_1000&DEV_0054&SUBSYS_1F051028 = "C:\Sysprep\Drivers\Storage\LSI-SAS\symmpi.inf"
+        PCI\VEN_1000&DEV_0054&SUBSYS_1F061028 = "C:\Sysprep\Drivers\Storage\LSI-SAS\symmpi.inf"
+        PCI\VEN_1000&DEV_0054&SUBSYS_1F071028 = "C:\Sysprep\Drivers\Storage\LSI-SAS\symmpi.inf"
+        PCI\VEN_1000&DEV_0054&SUBSYS_1F081028 = "C:\Sysprep\Drivers\Storage\LSI-SAS\symmpi.inf"
+        PCI\VEN_1000&DEV_0054&SUBSYS_1F091028 = "C:\Sysprep\Drivers\Storage\LSI-SAS\symmpi.inf"
+        PCI\VEN_1000&DEV_0058&SUBSYS_1F0E1028 = "C:\Sysprep\Drivers\Storage\LSI-SAS\symmpi.inf"
+        PCI\VEN_1000&DEV_0058&SUBSYS_1F0F1028 = "C:\Sysprep\Drivers\Storage\LSI-SAS\symmpi.inf"
+        PCI\VEN_1000&DEV_0058&SUBSYS_1F101028 = "C:\Sysprep\Drivers\Storage\LSI-SAS\symmpi.inf"
+
+      If you have hardware using an LSI SAS controller (IBM HS21 blades), the section above can be copied and pasted into your sysprep.inf files:
+      /usr/local/vcl/tools/Windows_XP/Utilities/Sysprep/sysprep.inf
+      /usr/local/vcl/tools/Windows_Server_2003/Utilities/Sysprep/sysprep.inf
+
 7. Provisioning Engines and Hypervisors
-                        
+
 VCL supports the following, please see the related site for installation and setup.
 xCAT - 
 Extreme Cluster Administration Tool versions 1.3 and 2.1.
