@@ -21,8 +21,8 @@ define("ONLINEDEBUG", 1);     // 1 to display errors to screen, 0 to email error
 
 ################   Things in this section must be modified #####################
 
-define("BASEURL", "https://vcl.example.org");   // no trailing slash
-define("SCRIPT", "/index.php");
+define("BASEURL", "https://vcl.example.org");   // no trailing slash - all of the URL except /index.php
+define("SCRIPT", "/index.php");                 // this should only be "/index.php" unless you rename index.php to something else
 define("HELPURL", "https://vcl.example.org/help/");
 define("HELPFAQURL", "http://vcl.example.org/help-faq/");
 define("HELPEMAIL", "vcl_help@example.org");
