@@ -76,6 +76,10 @@ Bug/Feature issues exported from JIRA
     * [VCL-213] - Bug in retrieve_image sub in vmware.pm and xCAT.pm calls next instead of return
     * [VCL-218] - vmware.pm may delete image being captured by cleanup process
     * [VCL-226] - Windows reboot fails - processing another action error
+    * [VCL-238] - Linux.pm  pre-capture routine not shuting down OS
+    * [VCL-240] - utils.pm - insert_reload_request
+    * [VCL-246] - READY flag check for VMware and xCAT is being thrown off by other processes running on machines
+    * [VCL-247] - computer with shortname  only in database not being reloaded after being used
 
 ** Improvement
     * [VCL-3] - clean up database
@@ -110,6 +114,7 @@ Bug/Feature issues exported from JIRA
     * [VCL-188] - Document Windows tools dependencies
     * [VCL-190] - Add time configuration and synchronization commands to Windows post_load
     * [VCL-205] - allow esx provisioing module to set MAC addresses
+    * [VCL-212] - Add code to set SysprepStatus registry keys for Windows 6
     * [VCL-217] - xcat modules - Throttle control
     * [VCL-228] - Windows image capture fails to delete user profiles because file is open
 
