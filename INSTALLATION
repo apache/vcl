@@ -96,34 +96,36 @@ Installation:
 
 17. fill in "Install Path" - this is parent directory under which image files will be stored
 
-18. click "Confirm Management Node"
+18. enter "/etc/vcl/vcl.key" for "End Node SSH Identity Key Files"
 
-19. click Submit
+19. click "Confirm Management Node"
 
-20. click the "Management Nodes" link
+20. click Submit
 
-21. select "Edit Management Node Grouping"
+21. click the "Management Nodes" link
 
-22. click Submit
+22. select "Edit Management Node Grouping"
 
-23. select the checkbox for your management node
+23. click Submit
 
-24. click Submit
+24. select the checkbox for your management node
 
-25. click "Manage Computers"
+25. click Submit
 
-26. select the "Add Single Computer" radio button
+26. click "Manage Computers"
 
-27. click the Submit
+27. select the "Add Single Computer" radio button
 
-28. fill in Hostname, IP Address, owner (admin@Local), RAM, Proc Speed, Network Speed, select "blade" for Type, select "xCAT 1.x Provisioning" for "Provisioning Engine", and click the checkbox under "allcomputers", and "newimages"
+28. click the Submit
+
+29. fill in Hostname, IP Address, owner (admin@Local), RAM, Proc Speed, Network Speed, select "blade" for Type, select "xCAT 1.x Provisioning" for "Provisioning Engine", and click the checkbox under "allcomputers", and "newimages"
        Note: if using using VMware, select "virtualmachine" for Type and "VMWare Server Provisioning" for "Provisioning Engine"
 
-29. click Confirm Computer
+30. click Confirm Computer
 
-30. click Submit (don't worry about the fact that the computer you just added isn't listed after clicking Submit)
+31. click Submit (don't worry about the fact that the computer you just added isn't listed after clicking Submit)
 
-31. after you've configured your image library and your management node has started checking in, you should be able to make a reservation
+32. after you've configured your image library and your management node has started checking in, you should be able to make a reservation
 
 
 
