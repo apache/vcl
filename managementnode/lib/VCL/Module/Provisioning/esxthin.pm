@@ -259,6 +259,15 @@ sub load {
 
 	} ## end if ($vminfo_output =~ /^Information of Virtual Machine $computer_shortname/m)
 
+	my $density_percentage = netapp_get_vol_density_percentage($s,$volume_path);
+	if ($density_percentage > 0.9) {
+		notify($ERRORS{'CRITICAL'}, 0, "The image library volume $volume_path is too dense, and requires administrative attention IMMEDIATELY!!!");
+		notify($ERRORS{'CRITICAL'}, 0, "The volume $volume_path is currently $density_percentage % dense");
+		#mail($to,$subject,$mailstring, $from)
+	} else {
+		notify($ERRORS{'DEBUG'}, 0, "The image library volume $volume_path is $density_percentage % dense");
+	}
+
 	# Remove old vm folder
 	netapp_delete_dir($s,"$volume_path/inuse/$computer_shortname");
 
@@ -268,12 +277,48 @@ sub load {
 	# clone vmdk file from golden to inuse
 	my $from = "$volume_path/golden/$image_name/image.vmdk";
 	my $to   = "$volume_path/inuse/$computer_shortname/image.vmdk";
-	netapp_fileclone($s,$from,$to);
+	# Call the fileclone.  The 1 at the end tells the function to ignore a slow, thick copy (should it need to be a thick copy)
+	netapp_fileclone($s,$from,$to,1);
 
 	# Copy the (large) -flat.vmdk file
-	$from = "$volume_path/golden/$image_name/image-flat.vmdk";
 	$to   = "$volume_path/inuse/$computer_shortname/image-flat.vmdk";
-	netapp_fileclone($s,$from,$to);
+	my $continue = "true";
+	for (my $count = 0; $continue eq "true"; $count++) {
+		# Setup the $from to try to pack the clones densely from the parent goldens
+		if ($count == 0) {
+			$from = "$volume_path/golden/$image_name/image-flat.vmdk";
+		} else {
+			$from = "$volume_path/golden/$image_name/image-flat$count.vmdk/image-flat$count.vmdk";
+		}
+
+		# Make the Clone request
+		my $clone_status = netapp_fileclone($s,$from,$to,0);
+
+		if ($clone_status == 0) {
+			# A Clone error occured.  Provisioning cannot continue
+			return 0;
+		} elsif ($clone_status == -1) {
+			# The clone was thick and was cancelled.
+			# Now, check if the next one exists
+			my $next_count = $count + 1;
+			my $next_path = "$volume_path/golden/$image_name/image-flat$next_count.vmdk/image-flat.vmdk";
+			if (netapp_is_file($s,$next_path) != 1) {
+				# The next clone parent file needs to be created
+				# TODO: Fix the race condition on this copy if multiple threads do an ndmpcopy over each other
+				my $copy_from = "$volume_path/golden/$image_name/image-flat.vmdk";
+				my $copy_to = "$volume_path/golden/$image_name/image-flat$next_count.vmdk";
+				notify($ERRORS{'DEBUG'}, 0, "Going to thick copy $copy_from to $copy_to");
+				netapp_copy($s,$copy_from,$copy_to,$image_identity);
+			} else {
+				notify($ERRORS{'DEBUG'}, 0, "Parent $next_path exists, the clone will use it.");
+			}
+		} elsif ($clone_status == 1) {
+			# The thin-clone has been successfully completed
+			notify($ERRORS{'DEBUG'}, 0, "$to has been thinly cloned successfully");
+			$continue = "false";
+		}
+	}
+	# Call the fileclone.  The 0 at the end will cause the clone opeartion to stop with a -1 return code if the clone becomes thick.
 
 	# Author new VMX file, output to temporary file (will file-write-file it below)
 	my @vmxfile;
@@ -885,6 +930,40 @@ sub netapp_is_dir
 
 #/////////////////////////////////////////////////////////////////////////
 
+=head2 netapp_is_file
+
+ Parameters  : $s, $file_path
+ Returns     : 1($file_path exists) or 0($file_path doesn't exist)
+ Description : Determines if the file $file_path exists on the NetApp
+               backed by $s.  Note, $file_path must begin with /vol and
+               should no contain a trailing slash.
+
+=cut
+
+sub netapp_is_file
+{
+	my $s = $_[0];
+	my $file_path = $_[1];
+
+	# Check if $file_path a directory or a file
+	my $in = NaElement->new("file-get-file-info");
+	$in->child_add_string("path",$file_path);
+	my $out = $s->invoke_elem($in);
+	if($out->results_status() eq "failed") {
+		#notify($ERRORS{'CRITICAL'}, 0, $out->results_reason() ."\n");
+		return 0;
+	} else {
+		my $file_type = $out->child_get("file-info")->child_get_string("file-type");
+		# Is this a file?
+		if ($file_type eq "file") {
+			return 1;
+		}
+	}
+	return 0;
+}
+
+#/////////////////////////////////////////////////////////////////////////
+
 =head2 netapp_get_size
 
  Parameters  : $s, $path
@@ -912,6 +991,42 @@ sub netapp_get_size
 	}
 }
 
+#/////////////////////////////////////////////////////////////////////////
+
+=head2 netapp_get_vol_density_percentage
+
+ Parameters  : $s, $vol
+ Returns     : A float between 0.0 <= 1.0 representing percentage
+               of density this volume currently experiences
+ Description : Determines the percentage of indirection $vol already has on
+               the NetApp backed by $s.  The percentage is calculculated against
+               32TB (14293651161088 Bytes).  If percentage goes to 1.0 bad things
+               happen.  This function calculates density according to the formula:
+               density = <volume-info><size-used> + <volume-info><sis><size-shared>
+               NOTE: $vol must start with /vol/ and must not contain a trailing slash.
+
+=cut
+
+sub netapp_get_vol_density_percentage
+{
+	my $s = $_[0];
+	my $vol = $_[1];
+
+	# Check if $path a directory or a file
+	my $in = NaElement->new("volume-list-info");
+	$in->child_add_string("volume",$vol);
+	my $out = $s->invoke_elem($in);
+	if($out->results_status() eq "failed") {
+		#notify($ERRORS{'CRITICAL'}, 0, $out->results_reason() ."\n");
+		return 0;
+	} else {
+		my $size_used = $out->child_get("volumes")->child_get("volume-info")->child_get_string("size-used");
+		my $sis_size_shared = $out->child_get("volumes")->child_get("volume-info")->child_get("sis")->child_get("sis-info")->child_get_string("size-shared");
+		my $total = $size_used + $sis_size_shared;
+		my $percent = $total / 14293651161088;
+		return $percent;
+	}
+}
 #/////////////////////////////////////////////////////////////////////////
 
 =head2 netapp_delete_empty_dir
@@ -974,12 +1089,53 @@ sub netapp_delete_file
 
 #/////////////////////////////////////////////////////////////////////////
 
+=head2 netapp_copy
+
+ Parameters  : $s, $from_path, $to_path, $netapp_identity_file
+ Returns     : 1(success) or 0(failure)
+ Description : copies the item at $from_path to $to_path on the NetApp
+               backing $s.  The identity_file should be passed in from above
+               and likelky comes from $self->data->get_image_identity
+               NOTE:  The to_path actually names the directory for the thick
+               copy to live in.  The file is located inside this directory
+               by its same name.
+
+=cut
+
+sub netapp_copy
+{
+	my $s = $_[0];
+	my $from_path = $_[1];
+	my $to_path = $_[2];
+	my $netapp_identity_file = $_[3];
+
+	my $user = $s->{user};
+	my $netapp_ip = $s->{server};
+	
+	notify($ERRORS{'DEBUG'}, 0, "Doing an ndmpcopy on NetApp ($netapp_ip) of $from_path to $to_path");
+	if (!run_ssh_command($netapp_ip, $netapp_identity_file, "ndmpcopy $from_path $to_path", $user)) {
+		notify($ERRORS{'CRITICAL'}, 0, "Could not copy file on NetApp via SSH!");
+		return 0;
+	}
+	return 1;
+
+}
+
+#/////////////////////////////////////////////////////////////////////////
+
 =head2 netapp_fileclone
 
- Parameters  : $s, $source_path, $dest_path
- Returns     : 1(success) or 0(failure)
+ Parameters  : $s, $source_path, $dest_path, $ignore_thick (boolean)
+ Returns     : 1(success), 0(general failure), or -1 (clone was cancelled
+               because it was thick)
  Description : clones the file $source_path to $dest_path on a NetApp
-               storage system backing $s
+               storage system backing $s.  This is a blocking call, it waits
+               for the clone operation to indicate the clone is 'complete'
+               before returning '1'  Also, while $ignore_thick is true
+               if the clone copies any thick blocks then the function
+               stops the clone operation and returns '-1'  Note: $ignore_thick
+               is 0 by default making the function cancel thick file copies
+               the default behavior.
 
 =cut
 
@@ -988,23 +1144,81 @@ sub netapp_fileclone
 	my $s = $_[0];
 	my $source_path = $_[1];
 	my $dest_path = $_[2];
-
-	my $in = NaElement->new("clone-start");
-	$in->child_add_string("source-path",$source_path);
-	$in->child_add_string("destination-path",$dest_path);
-	$in->child_add_string("no-snap","false");
-
-	# 
-    # Invoke clone-start API
-	# 
-	my $out = $s->invoke_elem($in);
- 	
-	if($out->results_status() eq "failed") {
-		notify($ERRORS{'CRITICAL'}, 0, $out->results_reason() ."\n");
-		return 0;
-	} else {
-		return 1;
+	my $ignore_thick = 0;
+	if (defined($_[3])) {
+		$ignore_thick = $_[3];
 	}
+
+	#The number of seconds to sleep before retrying if there are too many clones occurring
+	my $retry = 5;
+
+	my $too_many_clones_occurring = 0;
+	do {
+		my $in = NaElement->new("clone-start");
+		$in->child_add_string("source-path",$source_path);
+		$in->child_add_string("destination-path",$dest_path);
+		$in->child_add_string("no-snap","false");
+
+		my $out = $s->invoke_elem($in);
+		
+		if($out->results_status() eq "failed") {
+			if ($out->results_errno() == 14611) {
+				notify($ERRORS{'DEBUG'}, 0, "Too Many Clones Currently Occuring ... will try again in $retry seconds");
+				sleep($retry);
+				$too_many_clones_occurring = 1;
+			} else {
+				notify($ERRORS{'CRITICAL'}, 0, $out->results_reason() ."\n");
+				return 0;
+			}
+		} else {
+			# The clone operation has begun
+			my $clone_status = "";
+			# Grab the volume uuid and clone_op_id specifying this clone operation
+			my $volume_uuid = $out->child_get("clone-id")->child_get("clone-id-info")->child_get_string("volume-uuid");
+			my $clone_op_id = $out->child_get("clone-id")->child_get("clone-id-info")->child_get_string("clone-op-id");
+
+			# Bundle a new clone-list-status request about the current clone operation
+			my $in = NaElement->new("clone-list-status");
+			my $clone_id = NaElement->new("clone-id");
+			my $clone_id_info = NaElement->new("clone-id-info");
+			$clone_id_info->child_add_string("clone-op-id",$clone_op_id);
+			$clone_id_info->child_add_string("volume-uuid",$volume_uuid);
+			$clone_id->child_add($clone_id_info);
+			$in->child_add($clone_id);
+			# send the clone-list-status request
+			my $out = $s->invoke_elem($in);
+			while($out->child_get("status")->child_get("ops-info")->child_get_string("clone-state") ne "completed") {
+				notify($ERRORS{'DEBUG'}, 0, "Waiting for clone $dest_path to finish...");
+				if($ignore_thick == 0 && $out->child_get("status")->child_get("ops-info")->child_get_string("blocks-copied") != 0) {
+					if($out->child_get("status")->child_get("ops-info")->child_get_string("percent-done") < 99) {
+						#cancel clone operation
+						notify($ERRORS{'DEBUG'}, 0, "The clone $dest_path is being inneficiently copied instead of being cloned...");
+						notify($ERRORS{'DEBUG'}, 0, "The clone for $dest_path will now be cancelled");
+						# Bundle a new clone-stop request to stop the current clone operation
+						my $stop_in = NaElement->new("clone-stop");
+						my $stop_clone_id = NaElement->new("clone-id");
+						my $stop_clone_id_info = NaElement->new("clone-id-info");
+						$stop_clone_id_info->child_add_string("clone-op-id",$clone_op_id);
+						$stop_clone_id_info->child_add_string("volume-uuid",$volume_uuid);
+						$stop_clone_id->child_add($stop_clone_id_info);
+						$stop_in->child_add($stop_clone_id);
+						# send the clone-stop request
+						my $stop_output = $s->invoke_elem($stop_in);
+						if($stop_output->results_status() eq "failed") {
+							notify($ERRORS{'CRITICAL'}, 0, $stop_output->results_reason() ."\n");
+							return 0;
+						} else {
+							notify($ERRORS{'DEBUG'}, 0, "The clone for $dest_path has successfully been cancelled");
+							return -1;
+						}
+					}
+				}
+				sleep(2);
+				$out = $s->invoke_elem($in);
+			}
+			return 1;
+		}
+	} while($too_many_clones_occurring);
 }
 
 #/////////////////////////////////////////////////////////////////////////////
