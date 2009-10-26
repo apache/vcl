@@ -1,4 +1,4 @@
-ASF Inubation Disclaimer: Apache VCL is an effort undergoing incubation at the
+ASF Incubation Disclaimer: Apache VCL is an effort undergoing incubation at the
 Apache Software Foundation (ASF), sponsored by the Apache Incubator PMC.
 Incubation is required of all newly accepted projects until a further review
 indicates that the infrastructure, communications, and decision making process
@@ -113,22 +113,22 @@ Required Perl modules" section of the INSTALLATION file.
   License: Perl (Artistic and GPL)
 
 Management Node Backend Conditional Dependencies:
-Both bare-metal and virtual machine provisioning require a dhcp server
+Both bare-metal and virtual machine provisioning require a DHCP server
 running on the management node listening on the private network.
 
 Physical/Bare-metal provisioning.
-If you want to provision bare-metal or pysical computers such as
+If you want to provision bare-metal or physical computers such as
 blades. You will need xCAT setup and working. This release supports
 either xCAT 1.3 or xCAT 2.1. This is useful for very large setups, very
-custom environments, HPC intergration, automating vmhost servers eith
-ESX standard or VMWare Free Server.
+custom environments, HPC integration, automating VM host servers either
+ESX standard or VMware Free Server.
 
-VMware Virtual machine provisioing.
+VMware Virtual machine provisioning.
 If you want to provision virtual machines on ESX or ESXi, you will need
-the VMware vsphere toolkit. This toolkit can be obtained from:
+the VMware vSphere toolkit. This toolkit can be obtained from:
 http://www.vmware.com/support/developer/viperltoolkit/
-This toolkit is a set of perl modules.
-The toolkit is not required if using Vmware Free server 1.x.
+This toolkit is a set of Perl modules.
+The toolkit is not required if using VMware Free server 1.x.
 
 Windows XP/2003/Vista/2008
 If provisioning Windows OS, you will need the following:
