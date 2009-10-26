@@ -31,37 +31,86 @@ MySQL 5.0 or later
 Management Node Backend:
 - OS - tested on CentOS 5, RedHat Advanced Server 4&5, RedHat Fedora Core
 - MySQL 5 client
+- perl-DBD-MySQL
 - Nmap - security scanner
 - OpenSSH client - all tested OS's had this installed by default
 - Perl 5.8.0 or later
 
 Management Node Perl Modules:
-The following Perl modules are available from CPAN (www.cpan.org). Some of the
-required modules may be built into your Perl distribution. A script is provided
-which attempts to install the Perl modules. See the "Installing Required Perl
-modules" section of the INSTALLATION file.
-- MailTools 2.04
-- Class-Data-Inheritable 0.08
-- Devel-StackTrace 1.20
-- Exception-Class 1.26
-- Object-InsideOut 3.52
-- Module-Build 0.30
-- Net-XMPP 1.02
-- GSSAPI 0.26
-- Digest-SHA1 2.12
-- Digest-HMAC 1.01
-- GBARR/Authen-SASL 2.12
-- XML-Stream 1.22
-- Net-Jabber 2.0
-- YAML 0.68
-- RPC-XML 0.64
-- XML-Parser 2.36
-- Crypt-SSLeay 0.57
-- Compress-Raw-Zlib 2.020
-- IO-Compress 2.020
-- DBI 1.609
-- libwww-perl 5.827
-- HTTP-Headers
+The Perl modules listed below are available from CPAN (www.cpan.org) and are
+distributed under one or more of the following licenses:
+- The "Artistic License"
+- GNU General Public License (GPL)
+- GNU Library or "Lesser" General Public License (LGPL)
+Some of the required modules may be built into your distribution. A script is
+provided which attempts to install the Perl modules. See the "Installing
+Required Perl modules" section of the INSTALLATION file.
+- MailTools
+  http://search.cpan.org/~markov/MailTools-2.04/
+  License: Perl (Artistic and GPL)
+- Class-Data-Inheritable
+  http://search.cpan.org/~tmtm/Class-Data-Inheritable-0.08/
+  License: Perl (Artistic and GPL)
+- Devel-StackTrace
+  http://search.cpan.org/~drolsky/Devel-StackTrace-1.22/
+  License: Perl (Artistic and GPL)
+- Exception-Class
+  http://search.cpan.org/~drolsky/Exception-Class-1.29/
+  License: Perl (Artistic and GPL)
+- Object-InsideOut
+  http://search.cpan.org/~jdhedden/Object-InsideOut-3.56/
+  License: Perl (Artistic and GPL)
+- Module-Build
+  http://search.cpan.org/~dagolden/Module-Build-0.35/
+  License: Perl (Artistic and GPL)
+- Net-XMPP
+  http://search.cpan.org/~hacker/Net-XMPP-1.02/
+  License: (LGPL)
+- GSSAPI
+  http://search.cpan.org/~agrolms/GSSAPI-0.26/
+  License: Perl (Artistic and GPL)
+- Digest-SHA1
+  http://search.cpan.org/~gaas/Digest-SHA1-2.12/
+  License: Perl (Artistic and GPL)
+- Authen-SASL
+  http://search.cpan.org/~gbarr/Authen-SASL-2.13/
+  License: Perl (Artistic and GPL)
+- XML-Stream
+  http://search.cpan.org/~reatmon/XML-Stream-1.22/
+  License: Perl (Artistic and GPL)
+- Net-Jabber
+  http://search.cpan.org/~reatmon/Net-Jabber-2.0/
+  License: Perl (Artistic and GPL)
+- YAML
+  http://search.cpan.org/~adamk/YAML-0.70/
+  License: Perl (Artistic and GPL)
+- RPC-XML
+  http://search.cpan.org/~rjray/RPC-XML-0.69/
+  License: Perl (Artistic and LGPL)
+- XML-Parser
+  http://search.cpan.org/~msergeant/XML-Parser-2.36/
+  License: Perl (Artistic and GPL)
+- Crypt-SSLeay
+  http://search.cpan.org/~dland/Crypt-SSLeay-0.57/
+  License: Perl (Artistic and GPL)
+- Compress-Raw-Zlib
+  http://search.cpan.org/~pmqs/Compress-Raw-Zlib-2.021/
+  License: Perl (Artistic and GPL)
+- IO-Compress
+  http://search.cpan.org/~pmqs/IO-Compress-2.022/
+  License: Perl (Artistic and GPL) 
+- DBI
+  http://search.cpan.org/~timb/DBI-1.609/
+  License: Perl (Artistic and GPL) 
+- libwww-perl
+  http://search.cpan.org/~gaas/libwww-perl-5.833/
+  License: Perl (Artistic and GPL)
+- URI
+  http://search.cpan.org/~gaas/URI-1.40/
+  License: Perl (Artistic and GPL)
+- Scalar-List-Utils
+  http://search.cpan.org/~gbarr/Scalar-List-Utils-1.21/
+  License: Perl (Artistic and GPL)
 
 Management Node Backend Conditional Dependencies:
 Both bare-metal and virtual machine provisioning require a dhcp server
