@@ -14,12 +14,18 @@ Ensure your NetApp volume (ie: /vol/image_library) is exported via NFS and that 
 		...
 
 The Config File:
-Place a config file named esxthin.conf in the same directory as esxthin.pm (<location of vcld>/../lib/Module/Provisioning/esxthin.conf)  Each line of this config file has the form key=value.  There are 4 possible keys to use {'ip','user','pass','https'}  'ip', 'user', and 'pass' should each be set to the correct string, but https only accepts values 'on' and 'off'  Here is an example config file:
+Place a config file named esxthin.conf in the same directory as esxthin.pm (<location of vcld binary>/../lib/Module/Provisioning/esxthin.conf)  Each line of this config file has the form key=value.  There are 8 possible keys to use {'ip','user','pass','https','admin_email','density_limit','density_alert_threshold','block_copy_limit'}  'ip', 'user', and 'pass' should each be set to the correct string.  'https' only accepts values 'on' and 'off.'  Admin E-mail should be set to the storage administrator or VCL administrator's e-mail.  'density_limit' is measured in blocks, and specifies the number maximum density allowed on a given volume.  Volume density are a per-controller, NetApp variable which you should ask NetApp what the correct value is for your hardware.
+
+Here is an example config file:
 
 ip=10.0.3.4
 user=vclnetappuser
 pass=f84uhkgh8
 https=on
+admin_email=bmbouter@gmail.com
+density_limit=14293651161088
+density_alert_threshold=0.9
+block_copy_limit=64
 
 
 Image requirements:

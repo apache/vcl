@@ -75,6 +75,9 @@ use lib "$FindBin::Bin/../lib/NetApp";
 use NaServer;
 use NaElement;
 
+# The below variable indicates the full path to the NetApp config file
+my $NETAPP_CONFIG_PATH = "$FindBin::Bin/../lib/VCL/Module/Provisioning/esxthin.conf";
+
 ##############################################################################
 
 =head1 CLASS ATTRIBUTES
@@ -259,11 +262,37 @@ sub load {
 
 	} ## end if ($vminfo_output =~ /^Information of Virtual Machine $computer_shortname/m)
 
-	my $density_percentage = netapp_get_vol_density_percentage($s,$volume_path);
-	if ($density_percentage > 0.9) {
+	
+	# Read the config file for configs used in the density calculation
+	my $storage_admin_email;
+	my $density_limit = 14293651161088;
+	my $density_alert_threshold = 0.9;
+	my $block_copy_limit = 0;
+
+        open(NETAPPCONF, $NETAPP_CONFIG_PATH);
+	while (<NETAPPCONF>)
+	{
+		chomp($_);
+		if ($_ =~ /^admin_email=(.*)/) {
+			$storage_admin_email = $1;
+		} elsif ($_ =~ /^density_limit=(.*)/) { 
+			$density_limit = int $1;
+		} elsif ($_ =~ /^density_alert_threshold=(.*)/) { 
+			$density_alert_threshold = $1;
+		} elsif ($_ =~ /^block_copy_limit=(.*)/) { 
+			$block_copy_limit = int $1;
+		}
+	}
+	close(NETAPPCONF);
+
+	my $dense_blocks = netapp_get_vol_density($s,$volume_path);
+	my $density_percentage = $dense_blocks / $density_limit;
+	if ($density_percentage >= $density_alert_threshold) {
 		notify($ERRORS{'CRITICAL'}, 0, "The image library volume $volume_path is too dense, and requires administrative attention IMMEDIATELY!!!");
-		notify($ERRORS{'CRITICAL'}, 0, "The volume $volume_path is currently $density_percentage % dense");
-		#mail($to,$subject,$mailstring, $from)
+		notify($ERRORS{'CRITICAL'}, 0, "The image library volume $volume_path is $density_percentage % dense");
+		my $netapp_ip = $s->{server};
+		my $mailmessage = "The Volume $volume_path on NetApp at $netapp_ip is dangerously dense with $density_percentage above the set alert threshold.  A VCL installation relies on this volume.  ACTION REQUIRED: administrativly create and configure another VCL image library volume to distribute the density demands of the VCL installation.";
+		mail($storage_admin_email,"Volume $volume_path on NetApp at $netapp_ip Dangerously Dense: Administrative Action Required!!!",$mailmessage, "vcl\@localhost.com");
 	} else {
 		notify($ERRORS{'DEBUG'}, 0, "The image library volume $volume_path is $density_percentage % dense");
 	}
@@ -278,47 +307,58 @@ sub load {
 	my $from = "$volume_path/golden/$image_name/image.vmdk";
 	my $to   = "$volume_path/inuse/$computer_shortname/image.vmdk";
 	# Call the fileclone.  The 1 at the end tells the function to ignore a slow, thick copy (should it need to be a thick copy)
-	netapp_fileclone($s,$from,$to,1);
+	netapp_fileclone($s,$from,$to,1,$block_copy_limit);
 
 	# Copy the (large) -flat.vmdk file
+	# See esxthin.README for some explanation of the logic implemented in this section
 	$to   = "$volume_path/inuse/$computer_shortname/image-flat.vmdk";
 	my $continue = "true";
 	for (my $count = 0; $continue eq "true"; $count++) {
 		# Setup the $from to try to pack the clones densely from the parent goldens
 		if ($count == 0) {
 			$from = "$volume_path/golden/$image_name/image-flat.vmdk";
+			# Call the fileclone.
+			# The 0 at the end will cause the clone opeartion to stop with a -1 return code if the clone becomes thick.
+			my $clone_status = netapp_fileclone($s,$from,$to,0,$block_copy_limit);
+			if ($clone_status == 0) {
+				# A Clone error occured.  Provisioning cannot continue
+				return 0;
+			} elsif ($clone_status == -1) {
+				# The original vmdk parent is fully saturated
+				notify($ERRORS{'DEBUG'}, 0, "The original vmdk parent $from is saturated in its ability to produce new clones");
+			} elsif ($clone_status == 1) {
+				# The thin-clone has been successfully completed
+				notify($ERRORS{'DEBUG'}, 0, "$to has been thinly cloned successfully");
+				$continue = "false";
+			}
 		} else {
-			$from = "$volume_path/golden/$image_name/image-flat$count.vmdk/image-flat$count.vmdk";
-		}
-
-		# Make the Clone request
-		my $clone_status = netapp_fileclone($s,$from,$to,0);
-
-		if ($clone_status == 0) {
-			# A Clone error occured.  Provisioning cannot continue
-			return 0;
-		} elsif ($clone_status == -1) {
-			# The clone was thick and was cancelled.
-			# Now, check if the next one exists
-			my $next_count = $count + 1;
-			my $next_path = "$volume_path/golden/$image_name/image-flat$next_count.vmdk/image-flat.vmdk";
-			if (netapp_is_file($s,$next_path) != 1) {
+			my $parent = "$volume_path/golden/$image_name/image-flat1.vmdk/image-flat.vmdk";
+			# Determine if parent file exists
+			if (netapp_is_file($s,$parent) != 1) {
 				# The next clone parent file needs to be created
 				# TODO: Fix the race condition on this copy if multiple threads do an ndmpcopy over each other
-				my $copy_from = "$volume_path/golden/$image_name/image-flat.vmdk";
-				my $copy_to = "$volume_path/golden/$image_name/image-flat$next_count.vmdk";
-				notify($ERRORS{'DEBUG'}, 0, "Going to thick copy $copy_from to $copy_to");
-				netapp_copy($s,$copy_from,$copy_to,$image_identity);
-			} else {
-				notify($ERRORS{'DEBUG'}, 0, "Parent $next_path exists, the clone will use it.");
+				notify($ERRORS{'DEBUG'}, 0, "Thick copying $from to $parent");
+				my $ndmpcopy_to = "$volume_path/golden/$image_name/image-flat1.vmdk";
+				netapp_copy($s,$from,$ndmpcopy_to,$image_identity);
 			}
-		} elsif ($clone_status == 1) {
-			# The thin-clone has been successfully completed
-			notify($ERRORS{'DEBUG'}, 0, "$to has been thinly cloned successfully");
-			$continue = "false";
+			# Call the fileclone.
+			# The 0 at the end will cause the clone opeartion to stop with a -1 return code if the clone becomes thick.
+			my $clone_status = netapp_fileclone($s,$parent,$to,0,$block_copy_limit);
+			if ($clone_status == 0) {
+				# A Clone error occured.  Provisioning cannot continue
+				return 0;
+			} elsif ($clone_status == -1) {
+				# Clones of this $parent are coming out thick.  The parent needs to be removed
+				notify($ERRORS{'DEBUG'}, 0, "The thick, temporary cloning parent $parent is saturated in its ability to produce new thin clones");
+				notify($ERRORS{'DEBUG'}, 0, "$parent must be deleted");
+				netapp_delete_dir($s,"$volume_path/golden/$image_name/image-flat1.vmdk");
+			} elsif ($clone_status == 1) {
+				# The thin-clone has been successfully completed
+				notify($ERRORS{'DEBUG'}, 0, "$to has been thinly cloned successfully");
+				$continue = "false";
+			}
 		}
 	}
-	# Call the fileclone.  The 0 at the end will cause the clone opeartion to stop with a -1 return code if the clone becomes thick.
 
 	# Author new VMX file, output to temporary file (will file-write-file it below)
 	my @vmxfile;
@@ -654,7 +694,7 @@ sub netapp_login
 	my $ip;
 	my $use_https = 'off';
 
-        open(NETAPPCONF, "$FindBin::Bin/../lib/VCL/Module/Provisioning/esxthin.conf");
+        open(NETAPPCONF, $NETAPP_CONFIG_PATH);
 	while (<NETAPPCONF>)
 	{
 		chomp($_);
@@ -838,7 +878,7 @@ sub netapp_delete_dir
 	$in->child_add_string("path",$dir_path);
 	my $out = $s->invoke_elem($in);
 	if($out->results_status() eq "failed") {
-		notify($ERRORS{'CRITICAL'}, 0, $out->results_reason() ."\n");
+		notify($ERRORS{'DEBUG'}, 0, $out->results_reason() ."\n");
 		return 0;
 	} else {
 		my $file_type = $out->child_get("file-info")->child_get_string("file-type");
@@ -993,21 +1033,19 @@ sub netapp_get_size
 
 #/////////////////////////////////////////////////////////////////////////
 
-=head2 netapp_get_vol_density_percentage
+=head2 netapp_get_vol_density
 
  Parameters  : $s, $vol
- Returns     : A float between 0.0 <= 1.0 representing percentage
-               of density this volume currently experiences
- Description : Determines the percentage of indirection $vol already has on
-               the NetApp backed by $s.  The percentage is calculculated against
-               32TB (14293651161088 Bytes).  If percentage goes to 1.0 bad things
-               happen.  This function calculates density according to the formula:
+ Returns     : The number of dense blocks currently on the volume
+ Description : Reports the number of dense blocks volume $vol already has on
+               the NetApp backed by $s.  This function calculates density
+               according to the formula:
                density = <volume-info><size-used> + <volume-info><sis><size-shared>
                NOTE: $vol must start with /vol/ and must not contain a trailing slash.
 
 =cut
 
-sub netapp_get_vol_density_percentage
+sub netapp_get_vol_density
 {
 	my $s = $_[0];
 	my $vol = $_[1];
@@ -1022,9 +1060,7 @@ sub netapp_get_vol_density_percentage
 	} else {
 		my $size_used = $out->child_get("volumes")->child_get("volume-info")->child_get_string("size-used");
 		my $sis_size_shared = $out->child_get("volumes")->child_get("volume-info")->child_get("sis")->child_get("sis-info")->child_get_string("size-shared");
-		my $total = $size_used + $sis_size_shared;
-		my $percent = $total / 14293651161088;
-		return $percent;
+		return $size_used + $sis_size_shared;
 	}
 }
 #/////////////////////////////////////////////////////////////////////////
@@ -1125,17 +1161,20 @@ sub netapp_copy
 
 =head2 netapp_fileclone
 
- Parameters  : $s, $source_path, $dest_path, $ignore_thick (boolean)
+ Parameters  : $s, $source_path, $dest_path, $ignore_thick (boolean),
+               $block_copy_limit (int)
  Returns     : 1(success), 0(general failure), or -1 (clone was cancelled
                because it was thick)
  Description : clones the file $source_path to $dest_path on a NetApp
                storage system backing $s.  This is a blocking call, it waits
                for the clone operation to indicate the clone is 'complete'
                before returning '1'  Also, while $ignore_thick is true
-               if the clone copies any thick blocks then the function
-               stops the clone operation and returns '-1'  Note: $ignore_thick
-               is 0 by default making the function cancel thick file copies
-               the default behavior.
+               if the clone copies at least $block_copy_limit number of
+               thick blocks then the function stops the clone operation and
+               returns '-1'  Note: $ignore_thick is optional and 0 by default
+               making the function cancel thick file copies the default
+               behavior. $block_copy_limit is 0 by defualt, and sets the threshold
+               of thick blocks copied before a thin clone is considered thick to 0.
 
 =cut
 
@@ -1147,6 +1186,10 @@ sub netapp_fileclone
 	my $ignore_thick = 0;
 	if (defined($_[3])) {
 		$ignore_thick = $_[3];
+	}
+	my $block_copy_limit = 0;
+	if (defined($_[4])) {
+		$block_copy_limit = $_[4];
 	}
 
 	#The number of seconds to sleep before retrying if there are too many clones occurring
@@ -1189,7 +1232,7 @@ sub netapp_fileclone
 			my $out = $s->invoke_elem($in);
 			while($out->child_get("status")->child_get("ops-info")->child_get_string("clone-state") ne "completed") {
 				notify($ERRORS{'DEBUG'}, 0, "Waiting for clone $dest_path to finish...");
-				if($ignore_thick == 0 && $out->child_get("status")->child_get("ops-info")->child_get_string("blocks-copied") != 0) {
+				if($ignore_thick == 0 && $out->child_get("status")->child_get("ops-info")->child_get_string("blocks-copied") > $block_copy_limit) {
 					if($out->child_get("status")->child_get("ops-info")->child_get_string("percent-done") < 99) {
 						#cancel clone operation
 						notify($ERRORS{'DEBUG'}, 0, "The clone $dest_path is being inneficiently copied instead of being cloned...");
