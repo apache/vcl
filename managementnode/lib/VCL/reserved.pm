@@ -189,6 +189,13 @@ sub process {
 		# User has acknowledged
 		notify($ERRORS{'OK'}, 0, "user acknowledged, remote IP: $remote_ip");
 
+		#if cluster reservation - populate parent node with child node information
+		if ($reservation_count > 1) {
+			notify($ERRORS{'OK'}, 0, "cluster reservation, attempting to populate nodes with cluster_info data");
+			if (update_cluster_info($request_data)) {
+				notify($ERRORS{'OK'}, 0, "updated cluster nodes with cluster infomation");
+			}
+		}
 		# Attempt to call modularized OS module's grant_access() subroutine
 		if ($self->os->can("grant_access")) {
 			# If grant_access() has been implemented by OS module,
@@ -269,13 +276,7 @@ sub process {
 					notify($ERRORS{'OK'}, 0, "password not changed on $computer_short_name for non-standalone user $user_unityid");
 				}
 
-				#if cluster reservation - populate parent node with child node information
-				if ($request_data->{RESERVATIONCOUNT} > 1) {
-					notify($ERRORS{'OK'}, 0, "cluster reservation, attempting to populate nodes with cluster_info data");
-					if (update_cluster_info($request_data)) {
-						notify($ERRORS{'OK'}, 0, "updated cluster nodes with cluster infomation");
-					}
-				}
+				
 
 			}    # Close elseif linux computer
 
