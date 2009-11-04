@@ -609,7 +609,11 @@ sub reserve {
 	my $user_standalone      = $self->data->get_user_standalone();
 	my $user_uid				 = $self->data->get_user_uid();
 
-	my $useradd_string = "/usr/sbin/useradd -u $user_uid -d /home/$user_name -m $user_name";
+	if($self->add_vcl_usergroup()){
+
+	}
+
+	my $useradd_string = "/usr/sbin/useradd -u $user_uid -d /home/$user_name -m $user_name -g vcl";
 
 	my @sshcmd = run_ssh_command($computer_node_name, $image_identity, $useradd_string, "root");
 	foreach my $l (@{$sshcmd[1]}) {
@@ -918,7 +922,34 @@ sub stop_external_sshd {
 	return 1;
 
 } ## end sub stop_external_sshd
+#/////////////////////////////////////////////////////////////////////////////
 
+=head2 add_vcl_usergroup
+
+ Parameters  : 
+ Returns     : 1
+ Description : step to add a user group to avoid group errors from useradd cmd 
+
+=cut
+
+sub add_vcl_usergroup {
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+
+	my $management_node_keys = $self->data->get_management_node_keys();
+	my $computer_node_name   = $self->data->get_computer_node_name();
+	my $identity             = $self->data->get_image_identity;
+
+	if(run_ssh_command($computer_node_name, $identity, "groupadd vcl", "root")){
+		notify($ERRORS{'DEBUG'}, 0, "successfully added the vcl user group");
+	}
+
+	return 1;
+
+} 
 sub is_connected {
 	my $self = shift;
 	if (ref($self) !~ /linux/i) {
