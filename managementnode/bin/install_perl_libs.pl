@@ -24,12 +24,18 @@ install_perl_libs.pl - Script to install VCL Perl module dependencies
 
 =head1 SYNOPSIS
 
+Run this script from the command line:
+ 
  perl install_perl_libs.pl
 
 =head1 DESCRIPTION
 
  This script downloads and installs the Perl modules which are required for the
- VCL management node code to run.
+ backend VCL management node code. The modules which are automatically
+ downloaded and installed by this script are licensed under the Artistic
+ license, GPL, and LGPL. A disclaimer is displayed before this script downloads
+ any modules notifying you of the modules' licenses. You must type YES in order
+ for the script to proceed.
  
  Module source packages (.tar.gz files) are downloaded to /tmp/perl-modules.
 
@@ -75,28 +81,39 @@ my $download_directory= '/tmp/perl-modules';
 mkdir $download_directory;
 
 my @module_urls = (
+	# MailTools is used to send email messages
 	'http://search.cpan.org/CPAN/authors/id/M/MA/MARKOV/MailTools-2.04.tar.gz',
+	
+	# Object-InsideOut is used by DataStructure.pm for data encapsulation
+	# The other modules listed are dependencies for Object-InsideOut
 	'http://search.cpan.org/CPAN/authors/id/T/TM/TMTM/Class-Data-Inheritable-0.08.tar.gz',
-	'http://search.cpan.org/CPAN/authors/id/D/DR/DROLSKY/Devel-StackTrace-1.22.tar.gz',
-	'http://search.cpan.org/CPAN/authors/id/D/DR/DROLSKY/Exception-Class-1.29.tar.gz',
-	'http://search.cpan.org/CPAN/authors/id/J/JD/JDHEDDEN/Object-InsideOut-3.56.tar.gz',
-	'http://search.cpan.org/CPAN/authors/id/D/DA/DAGOLDEN/Module-Build-0.35.tar.gz',
-	'http://search.cpan.org/CPAN/authors/id/H/HA/HACKER/Net-XMPP-1.02.tar.gz',
-	'http://search.cpan.org/CPAN/authors/id/A/AG/AGROLMS/GSSAPI-0.26.tar.gz',
-	'http://search.cpan.org/CPAN/authors/id/G/GA/GAAS/Digest-SHA1-2.12.tar.gz',
-	'http://search.cpan.org/CPAN/authors/id/G/GB/GBARR/Authen-SASL-2.13.tar.gz',
-	'http://search.cpan.org/CPAN/authors/id/R/RE/REATMON/XML-Stream-1.22.tar.gz',
-	'http://search.cpan.org/CPAN/authors/id/R/RE/REATMON/Net-Jabber-2.0.tar.gz',
-	'http://search.cpan.org/CPAN/authors/id/A/AD/ADAMK/YAML-0.70.tar.gz',
-	'http://search.cpan.org/CPAN/authors/id/R/RJ/RJRAY/RPC-XML-0.69.tar.gz',
+	'http://search.cpan.org/CPAN/authors/id/D/DR/DROLSKY/Devel-StackTrace-1.20.tar.gz',
+	'http://search.cpan.org/CPAN/authors/id/D/DR/DROLSKY/Exception-Class-1.26.tar.gz',
+	'http://search.cpan.org/CPAN/authors/id/J/JD/JDHEDDEN/Object-InsideOut-3.52.tar.gz',
+	
+	# YAML is used to serialize data stored in the database
+	'http://search.cpan.org/CPAN/authors/id/I/IN/INGY/YAML-0.68.tar.gz',
+	
+	# RPC-XML is used to interact with the scheduling interface provided by the web frontend
+	# The other modules listed are dependencies for RPC-XML
+	'http://search.cpan.org/CPAN/authors/id/R/RJ/RJRAY/RPC-XML-0.64.tar.gz',
 	'http://www.cpan.org/modules/by-module/XML/XML-Parser-2.36.tar.gz',
 	'http://www.cpan.org/modules/by-module/Crypt/Crypt-SSLeay-0.57.tar.gz',
+	'http://search.cpan.org/CPAN/authors/id/G/GA/GAAS/HTML-Parser-3.64.tar.gz',
+	'http://search.cpan.org/CPAN/authors/id/G/GA/GAAS/libwww-perl-5.827.tar.gz',
 	'http://search.cpan.org/CPAN/authors/id/P/PM/PMQS/Compress-Raw-Zlib-2.021.tar.gz',
 	'http://search.cpan.org/CPAN/authors/id/P/PM/PMQS/IO-Compress-2.022.tar.gz',
+	
+	# DBI is used to communicate with the database
 	'http://search.cpan.org/CPAN/authors/id/T/TI/TIMB/DBI-1.609.tar.gz',
-	'http://search.cpan.org/CPAN/authors/id/G/GA/GAAS/libwww-perl-5.833.tar.gz',
-	'http://search.cpan.org/CPAN/authors/id/G/GA/GAAS/URI-1.40.tar.gz',
-	'http://search.cpan.org/CPAN/authors/id/G/GB/GBARR/Scalar-List-Utils-1.21.tar.gz'
+	
+	# Jabber support is optional.  It is used to send IMs to users
+	'http://search.cpan.org/CPAN/authors/id/D/DA/DAGOLDEN/Module-Build-0.35.tar.gz',
+	'http://search.cpan.org/CPAN/authors/id/G/GB/GBARR/Authen-SASL-2.13.tar.gz',
+	'http://search.cpan.org/CPAN/authors/id/R/RE/REATMON/XML-Stream-1.22.tar.gz',
+	'http://search.cpan.org/CPAN/authors/id/G/GA/GAAS/Digest-SHA1-2.12.tar.gz',
+	'http://search.cpan.org/CPAN/authors/id/H/HA/HACKER/Net-XMPP-1.02.tar.gz',
+	'http://search.cpan.org/CPAN/authors/id/R/RE/REATMON/Net-Jabber-2.0.tar.gz',
 );
 
 # Loop through each URL
@@ -122,10 +139,6 @@ for my $url (@module_urls) {
 	elsif ($module_name =~ /IO-Compress/) {
 		$module_package = "Compress::Zlib";
 	}
-	elsif ($module_name =~ /Scalar-List-Utils/) {
-		$module_package = "Scalar::Util";
-	}
-	
 	print "Module package: $module_package\n";
 	
 	if (!module_installed($module_package)) {
