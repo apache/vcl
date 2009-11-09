@@ -29,12 +29,13 @@ Database:
 MySQL 5.0 or later
 
 Management Node Backend:
-- OS - tested on CentOS 5, RedHat Advanced Server 4&5, RedHat Fedora Core
+- OS - tested on CentOS 5, RedHat Advanced Server 4 and 5, RedHat Fedora Core 7
+  and 9
 - MySQL 5 client
 - perl-DBD-MySQL
-- Nmap - security scanner
-- OpenSSH client - all tested OS's had this installed by default
-- Perl 5.8.0 or later
+- Nmap security scanner
+- OpenSSH client
+- Perl 5.8.x
 
 Management Node Perl Modules:
 The Perl modules listed below are available from CPAN (www.cpan.org) and are
@@ -42,100 +43,91 @@ distributed under one or more of the following licenses:
 - The "Artistic License"
 - GNU General Public License (GPL)
 - GNU Library or "Lesser" General Public License (LGPL)
-Some of the required modules may be built into your distribution. A script is
-provided which attempts to install the Perl modules. See the "Installing
+Some of the required Perl modules may be built into your distribution. A script
+is provided which attempts to install the Perl modules. See the "Installing
 Required Perl modules" section of the INSTALLATION file.
-- MailTools
-  http://search.cpan.org/~markov/MailTools-2.04/
-  License: Perl (Artistic and GPL)
-- Class-Data-Inheritable
-  http://search.cpan.org/~tmtm/Class-Data-Inheritable-0.08/
-  License: Perl (Artistic and GPL)
-- Devel-StackTrace
-  http://search.cpan.org/~drolsky/Devel-StackTrace-1.22/
-  License: Perl (Artistic and GPL)
-- Exception-Class
-  http://search.cpan.org/~drolsky/Exception-Class-1.29/
-  License: Perl (Artistic and GPL)
-- Object-InsideOut
-  http://search.cpan.org/~jdhedden/Object-InsideOut-3.56/
-  License: Perl (Artistic and GPL)
-- Module-Build
-  http://search.cpan.org/~dagolden/Module-Build-0.35/
-  License: Perl (Artistic and GPL)
-- Net-XMPP
-  http://search.cpan.org/~hacker/Net-XMPP-1.02/
-  License: (LGPL)
-- GSSAPI
-  http://search.cpan.org/~agrolms/GSSAPI-0.26/
-  License: Perl (Artistic and GPL)
-- Digest-SHA1
-  http://search.cpan.org/~gaas/Digest-SHA1-2.12/
-  License: Perl (Artistic and GPL)
-- Authen-SASL
-  http://search.cpan.org/~gbarr/Authen-SASL-2.13/
-  License: Perl (Artistic and GPL)
-- XML-Stream
-  http://search.cpan.org/~reatmon/XML-Stream-1.22/
-  License: Perl (Artistic and GPL)
-- Net-Jabber
-  http://search.cpan.org/~reatmon/Net-Jabber-2.0/
-  License: Perl (Artistic and GPL)
-- YAML
-  http://search.cpan.org/~adamk/YAML-0.70/
-  License: Perl (Artistic and GPL)
-- RPC-XML
-  http://search.cpan.org/~rjray/RPC-XML-0.69/
-  License: Perl (Artistic and LGPL)
-- XML-Parser
-  http://search.cpan.org/~msergeant/XML-Parser-2.36/
-  License: Perl (Artistic and GPL)
-- Crypt-SSLeay
-  http://search.cpan.org/~dland/Crypt-SSLeay-0.57/
-  License: Perl (Artistic and GPL)
-- Compress-Raw-Zlib
-  http://search.cpan.org/~pmqs/Compress-Raw-Zlib-2.021/
-  License: Perl (Artistic and GPL)
-- IO-Compress
-  http://search.cpan.org/~pmqs/IO-Compress-2.022/
-  License: Perl (Artistic and GPL) 
-- DBI
-  http://search.cpan.org/~timb/DBI-1.609/
-  License: Perl (Artistic and GPL) 
-- libwww-perl
-  http://search.cpan.org/~gaas/libwww-perl-5.833/
-  License: Perl (Artistic and GPL)
-- URI
-  http://search.cpan.org/~gaas/URI-1.40/
-  License: Perl (Artistic and GPL)
-- Scalar-List-Utils
-  http://search.cpan.org/~gbarr/Scalar-List-Utils-1.21/
-  License: Perl (Artistic and GPL)
+- Crypt-SSLeay  
+  http://search.cpan.org/dist/Crypt-SSLeay/
+  License: Perl Artistic & GPL
+- DBI  
+  http://search.cpan.org/dist/DBI/
+  License: Perl Artistic & GPL
+- Devel-StackTrace  
+  http://search.cpan.org/dist/Devel-StackTrace/
+  License: Perl Artistic & GPL
+- Exception-Class  
+  http://search.cpan.org/dist/Exception-Class/
+  License: Perl Artistic & GPL
+- HTML-Parser  
+  http://search.cpan.org/dist/HTML-Parser/
+  License: Perl Artistic & GPL
+- IO-Compress  
+  http://search.cpan.org/dist/IO-Compress/
+  License: Perl Artistic & GPL
+- libwww-perl  
+  http://search.cpan.org/dist/libwww-perl/
+  License: Perl Artistic & GPL
+- MailTools  
+  http://search.cpan.org/dist/MailTools/
+  License: Perl Artistic & GPL
+- Object-InsideOut  
+  http://search.cpan.org/dist/Object-InsideOut/
+  License: Perl Artistic & GPL
+- RPC-XML  
+  http://search.cpan.org/dist/RPC-XML/
+  License: Perl Artistic & LGPL
+- XML-Parser  
+  http://search.cpan.org/dist/XML-Parser/
+  License: Perl Artistic & GPL
+- YAML  
+  http://search.cpan.org/dist/YAML/
+  License: Perl Artistic & GPL
 
 Management Node Backend Conditional Dependencies:
-Both bare-metal and virtual machine provisioning require a DHCP server
-running on the management node listening on the private network.
+- Bare-metal and virtual machine provisioning
+  Both bare-metal and virtual machine provisioning require a DHCP server running
+  on the management node listening on the private network.
+- Bare-metal provisioning
+  If you want to provision bare-metal or physical computers such as blades. You
+  will need xCAT setup and working. This release supports either xCAT 1.3 or
+  xCAT 2.1. This is useful for very large setups, very custom environments, HPC
+  integration, automating VM host servers either ESX standard or VMware Free
+  Server.
+- VMware virtual machine provisioning
+  If you want to provision virtual machines on ESX or ESXi, you will need the
+  VMware vSphere toolkit. This toolkit can be obtained from:
+  http://www.vmware.com/support/developer/viperltoolkit/
+  This toolkit is a set of Perl modules. The toolkit is not required if using
+  VMware Free server 1.x.
+- Windows XP/2003/Vista/2008
+  If provisioning Windows OS, you will need the following:
+  - Sysprep - used for preparing Windows environments before an image is
+	 captured
+  - NewSID - used for preparing Windows environments before an image is captured
+  - SPDrvScn - used for scanning device drivers for Windows environments before
+	 an image is captured
+- Jabber Instant Message Notifications
+  VCL has the ability to send instant message notifications using Jabber. This
+  feature is optional and can be enabled or disabled by configuring the
+  "jabber=[yes|no]" property in the vcld.conf file. If Jabber notification
+  feature is enabled, the following Perl modules need to be installed:
+  - Net-Jabber
+    http://search.cpan.org/dist/Net-Jabber/
+    License: Perl Artistic and GPL
+  - Net-XMPP
+    http://search.cpan.org/dist/Net-XMPP/
+    License: LGPL
+  - Module-Build
+    http://search.cpan.org/dist/Module-Build/
+    License: Perl Artistic and GPL
+  - XML-Stream
+    http://search.cpan.org/dist/XML-Stream/
+    License: Perl Artistic and GPL
+  - Authen-SASL
+    http://search.cpan.org/dist/Authen-SASL/
+    License: Perl Artistic and GPL
+  - Digest::SHA1 
+    http://search.cpan.org/dist/Digest-SHA1/
+    License: Perl Artistic and GPL
 
-Physical/Bare-metal provisioning.
-If you want to provision bare-metal or physical computers such as
-blades. You will need xCAT setup and working. This release supports
-either xCAT 1.3 or xCAT 2.1. This is useful for very large setups, very
-custom environments, HPC integration, automating VM host servers either
-ESX standard or VMware Free Server.
-
-VMware Virtual machine provisioning.
-If you want to provision virtual machines on ESX or ESXi, you will need
-the VMware vSphere toolkit. This toolkit can be obtained from:
-http://www.vmware.com/support/developer/viperltoolkit/
-This toolkit is a set of Perl modules.
-The toolkit is not required if using VMware Free server 1.x.
-
-Windows XP/2003/Vista/2008
-If provisioning Windows OS, you will need the following:
-- Sysprep - used for preparing Windows environments before an image is captured
-- NewSID - used for preparing Windows environments before an image is captured
-- SPDrvScn - used for scanning device drivers for Windows environments before an
-  image is captured
-You will need to copy these files to the <vcl/tools/> directory per the
-install instructions in the INSTALLATION file.
   
