@@ -7,7 +7,7 @@ incubation status is not necessarily a reflection of the completeness or
 stability of the code, it does indicate that the project has yet to be fully
 endorsed by the ASF.
 
-Dependencies:
+System Requirements:
 
 Web Frontend:
 Apache HTTP Server v1.3 or v2.x with SSL enabled
@@ -83,7 +83,7 @@ Required Perl modules" section of the INSTALLATION file.
   http://search.cpan.org/dist/YAML/
   License: Perl Artistic & GPL
 
-Management Node Backend Conditional Dependencies:
+Management Node Backend Conditional System Requirements:
 - Bare-metal and virtual machine provisioning
   Both bare-metal and virtual machine provisioning require a DHCP server running
   on the management node listening on the private network.
@@ -129,5 +129,6 @@ Management Node Backend Conditional Dependencies:
   - Digest::SHA1 
     http://search.cpan.org/dist/Digest-SHA1/
     License: Perl Artistic and GPL
+
 
   
