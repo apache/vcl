@@ -80,6 +80,7 @@ Bug/Feature issues exported from JIRA
     * [VCL-240] - utils.pm - insert_reload_request
     * [VCL-246] - READY flag check for VMware and xCAT is being thrown off by other processes running on machines
     * [VCL-247] - computer with shortname  only in database not being reloaded after being used
+    * [VCL-263] - Linux.pm - add default vcl user group
 
 ** Improvement
     * [VCL-3] - clean up database
@@ -136,3 +137,4 @@ Bug/Feature issues exported from JIRA
     * [VCL-95] - Set Subversion properties for files in repository
     * [VCL-135] - remove all references to ncsu
     * [VCL-198] - Release tasks
+    * [VCL-264] - VCL 2.1 RC2 todo items
