@@ -29,18 +29,21 @@ VCL 2.1 (this release)
   * ESXi with thin provisioning on a NetApp
 
 VCL 2.2
-  * power management
-  * support for xCAT 2.2
+  * support for xCAT 2.3
   * improve cluster reservations
-  * improve block reservations
+  * improve block reservations(rename to block allocations)
 
 VCL 2.3
-  * improve hypervisor support
-    * dynamic provisioning of host servers
-    * VMWare Free Server 2.0
-    * possibly XEN or KVM
+  * Service deployments 
+  * power management
+  * VMWare Free Server 2.x
 
 VCL 2.4
+  * improve hypervisor support
+  * dynamic provisioning of host servers
+  * possibly XEN or KVM
+
+VCL 2.5
   * develop tools for managing both system and user storage
 
 With each release, we'll be working toward making VCL easier to install. As
