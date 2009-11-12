@@ -434,6 +434,9 @@ Once a user has been added, the user can go to User Preferences to change his/he
 
 V. Adding LDAP authentication
 
+Prerequisites:
+make sure you have php-ldap installed
+
 1) fill in the necessary information in vcl/.ht-inc/conf.php
 2) add an entry to the affiliation table and use the id for that entry as 'affiliationid' for your new entry in vcl/.ht-inc/conf.php
 3) uncomment the 'require_once(".ht-inc/authmethods/ldapauth.php");' line in in vcl/.ht-inc/conf.php
