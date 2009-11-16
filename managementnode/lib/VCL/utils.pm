@@ -9154,17 +9154,33 @@ sub update_cluster_info {
 	my $reservation_id      = $request_data->{RESERVATIONID};
 	my $computer_short_name = $request_data->{reservation}{$reservation_id}{computer}{SHORTNAME};
 	my $image_OS_type       = $request_data->{reservation}{$reservation_id}{image}{OS}{type};
+   my $is_cluster_parent	= $request_data->{PARENTIMAGE};
+	my $is_cluster_child		= $request_data->{SUBIMAGE};
 
 	my $cluster_info   = "/tmp/$computer_short_name.cluster_info";
 	my @cluster_string = "";
+
+
+
+	my @reservation_ids = sort keys %{$request_data->{reservation}};
+
+	# parent reservation id lowest
+	my $parent_reservation_id = min @reservation_ids;
+	notify($ERRORS{'DEBUG'}, 0, "$computer_short_name is_cluster_parent = $is_cluster_parent ");
+	notify($ERRORS{'DEBUG'}, 0, "$computer_short_name is_cluster_child = $is_cluster_child ");
+	notify($ERRORS{'DEBUG'}, 0, "parent_reservation_id = $parent_reservation_id ");
+
 	foreach my $rid (keys %{$request_data->{reservation}}) {
-		if ($rid == $reservation_id) {
+		if ($rid == $parent_reservation_id) {
 			push(@cluster_string, "parent= $request_data->{reservation}{$rid}{computer}{IPaddress}" . "\n");
+			notify($ERRORS{'DEBUG'}, 0, "writing parent=  $request_data->{reservation}{$rid}{computer}{IPaddress}");
 		}
 		else {
 			push(@cluster_string, "child= $request_data->{reservation}{$rid}{computer}{IPaddress}" . "\n");
+			notify($ERRORS{'DEBUG'}, 0, "writing child=  $request_data->{reservation}{$rid}{computer}{IPaddress}");
 		}
 	}
+
 
 	if (open(CLUSTERFILE, ">$cluster_info")) {
 		print CLUSTERFILE @cluster_string;
