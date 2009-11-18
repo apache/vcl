@@ -4556,8 +4556,8 @@ sub monitorloading {
 			}
 		}
 		if (!$s8) {
-			if ($row[0] =~ /loadimagecomplete|nodeready/) {
-				notify($ERRORS{'OK'}, 0, "detected $row[0] returning to calling process");
+			if ($row[0] =~ /nodeready/) {
+				notify($ERRORS{'OK'}, 0, "detected $row[0] for $nodename, returning to calling process");
 				$s8 = 1;
 				#ready to return
 				return 1;
@@ -4999,6 +4999,7 @@ sub get_request_info {
 	OS.type AS OS_type,
 	OS.installtype AS OS_installtype,
 	OS.sourcepath AS OS_sourcepath,
+	OS.moduleid AS OS_moduleid,
 
 	imageOSmodule.name AS imageOSmodule_name,
 	imageOSmodule.prettyname AS imageOSmodule_prettyname,
@@ -6501,7 +6502,7 @@ sub write_currentimage_txt {
 		notify($ERRORS{'OK'}, 0, "updated ownership and permissions  on currentimage.txt");
 	}
 
-	my $command = 'echo -e "' . $current_image_contents . '" > currentimage.txt & cat currentimage.txt';
+	my $command = 'echo -e "' . $current_image_contents . '" > currentimage.txt && cat currentimage.txt';
 
 	# Copy the temp file to the node as currentimage.txt
 	my ($ssh_exit_status, $ssh_output) = run_ssh_command($computer_node_name, $image_identity, $command);
