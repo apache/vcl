@@ -172,6 +172,17 @@ sub pre_capture {
 
 =item *
 
+ Set root as the owner of /home/root
+
+=cut
+
+	if (!$self->set_file_owner('/home/root', 'root')) {
+		notify($ERRORS{'WARNING'}, 0, "unable to set root as the owner of /home/root");
+		return 0;
+	}
+
+=item *
+
  Copy the capture configuration files to the computer (scripts, utilities, drivers...)
 
 =cut
@@ -189,6 +200,17 @@ sub pre_capture {
 
 	if (!$self->disable_autoadminlogon()) {
 		notify($ERRORS{'WARNING'}, 0, "unable to disable autoadminlogon");
+		return 0;
+	}
+
+=item *
+
+ Disable ntsyslog service if it exists on the computer - it can prevent Cygwin sshd from working
+
+=cut
+
+	if ($self->service_exists('ntsyslog') && !$self->set_service_startup_mode('ntsyslog', 'disabled')) {
+		notify($ERRORS{'WARNING'}, 0, "unable to set ntsyslog service startup mode to disabled");
 		return 0;
 	}
 
@@ -448,6 +470,16 @@ sub post_load {
 
 	if (!$self->logoff_users()) {
 		notify($ERRORS{'WARNING'}, 0, "failed to log off all currently logged in users");
+	}
+
+=item *
+
+ Set root as the owner of /home/root
+
+=cut
+
+	if (!$self->set_file_owner('/home/root', 'root')) {
+		notify($ERRORS{'WARNING'}, 0, "unable to set root as the owner of /home/root");
 	}
 
 =item *
@@ -1145,13 +1177,13 @@ sub filesystem_entry_exists {
 	# Assemble the dir command and execute it
 	my $dir_command = "cmd.exe /c dir /a /b \"$path\"";
 	my ($dir_exit_status, $dir_output) = run_ssh_command($computer_node_name, $management_node_keys, $dir_command, '', '', 1);
-	if ((defined($dir_exit_status) && $dir_exit_status == 0) || (defined($dir_output) && grep(/$path/i, @$dir_output))) {
+	if (defined($dir_output) && grep(/file not found/i, @$dir_output)) {
+		notify($ERRORS{'DEBUG'}, 0, "filesystem entry does NOT exist on $computer_node_name: $path");
+		return 0;
+	}
+	elsif ((defined($dir_exit_status) && $dir_exit_status == 0) || (defined($dir_output) && grep(/$path/i, @$dir_output))) {
 		notify($ERRORS{'DEBUG'}, 0, "filesystem entry exists on $computer_node_name: $path, dir output:\n" . join("\n", @$dir_output));
 		return 1;
-	}
-	elsif ((defined($dir_exit_status) && $dir_exit_status == 1) || (defined($dir_output) && grep(/file not found/i, @$dir_output))) {
-		notify($ERRORS{'DEBUG'}, 0, "filesystem entry does NOT exist on $computer_node_name: $path\noutput:\n" . join("\n", @$dir_output));
-		return 0;
 	}
 	elsif ($dir_exit_status) {
 		notify($ERRORS{'WARNING'}, 0, "failed to determine if filesystem entry exists on $computer_node_name: $path, exit status: $dir_exit_status, output:\n@{$dir_output}");
@@ -1162,6 +1194,69 @@ sub filesystem_entry_exists {
 		return;
 	}
 } ## end sub filesystem_entry_exists
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 set_file_owner
+
+ Parameters  : file path, owner
+ Returns     : If successful: true
+               If failed: false
+ Description : Recursively sets the owner of the file path.  The file path can
+               be a file or directory. The owner must be a valid user account. A
+               group can optionally be specified by appending a semicolon and
+               the group name to the owner.
+               Examples:
+               set_file_owner('/home/root', 'root')
+               set_file_owner('/home/root', 'root:Administrators')
+
+=cut
+
+sub set_file_owner {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get the file path argument
+	my $file_path = shift;
+	if (!$file_path) {
+		notify($ERRORS{'WARNING'}, 0, "file path argument was not specified");
+		return;
+	}
+	
+	# Get the owner argument
+	my $owner = shift;
+	if (!$owner) {
+		notify($ERRORS{'WARNING'}, 0, "owner argument was not specified");
+		return;
+	}
+
+	my $management_node_keys = $self->data->get_management_node_keys();
+	my $computer_node_name   = $self->data->get_computer_node_name();
+	
+	# Run chown
+	my ($chown_exit_status, $chown_output) = run_ssh_command($computer_node_name, $management_node_keys, "/usr/bin/chown.exe -R \"$owner\" \"$file_path\"", '', '', 0);
+	my @chown_errors = grep(/(chown:|cannot access|no such file|failed to)/ig, @$chown_output) if @$chown_output;
+	if (defined($chown_exit_status) && $chown_exit_status == 0 && !@chown_errors) {
+		notify($ERRORS{'OK'}, 0, "set $owner as the owner of $file_path");
+	}
+	elsif (@chown_errors) {
+		notify($ERRORS{'WARNING'}, 0, "error occurred setting $owner as the owner of $file_path, error output:\n" . join("\n", @chown_errors));
+		return;
+	}
+	elsif ($chown_output) {
+		notify($ERRORS{'WARNING'}, 0, "error occurred setting $owner as the owner of $file_path, exit status: $chown_exit_status, output:\n@{$chown_output}");
+		return;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to set $owner as the owner of $file_path");
+		return;
+	}
+	
+	return 1;
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -1192,41 +1287,37 @@ sub logoff_users {
 		notify($ERRORS{'WARNING'}, 0, "failed to run qwinsta.exe SSH command on $computer_node_name");
 		return;
 	}
-
-	my @active_user_lines = grep(/Active/, @{$output});
-
-	return 1 if !@active_user_lines;
-
-	notify($ERRORS{'OK'}, 0, "users are currently logged in on $computer_node_name:\n@active_user_lines");
-	#>rdp-tcp#1 root 0 Active rdpwd
-	foreach my $active_user_line (@active_user_lines) {
-		$active_user_line =~ /[\s>]*(\S+)\s+(.*\w)\s*(\d+)\s+Active.*/;
-		my $session_name = $1;
-		my $username     = $2;
-		my $session_id   = $3;
-
-		notify($ERRORS{'DEBUG'}, 0, "user logged in: $username, session name: $session_name, session id: $session_id");
-		#$ logoff /?
-		#Terminates a session.
+	
+	# Find lines with the state = Active or Disc
+	# Disc will occur if the user disconnected the RDP session but didn't logoff
+	my @connection_lines = grep(/(Active|Disc)/, @{$output});
+	return 1 if !@connection_lines;
+	
+	#notify($ERRORS{'OK'}, 0, "connections on $computer_node_name:\n@connection_lines");
+	#  SESSIONNAME        USERNAME                 ID  STATE   TYPE        DEVICE
+	# '>                  root                      0  Disc    rdpwd               '
+	# '>rdp-tcp#24        root                      0  Active  rdpwd               '
+	foreach my $connection_line (@connection_lines) {
+		my ($session_id) = $connection_line =~ /(\d+)\s+(?:Active|Listen|Conn|Disc)/g;
+		notify($ERRORS{'DEBUG'}, 0, "qwinsta.exe output:\nline: '$connection_line'\nsession id: '$session_id'");
+		
 		#LOGOFF [sessionname | sessionid] [/SERVER:servername] [/V]
 		#  sessionname         The name of the session.
 		#  sessionid           The ID of the session.
 		#  /SERVER:servername  Specifies the Terminal server containing the user
 		#							 session to log off (default is current).
 		#  /V                  Displays information about the actions performed.
-
-		# Call logoff.exe, pass it the session name
-		# Session ID fails if the ID is 0
-		my ($logoff_exit_status, $logoff_output) = run_ssh_command($computer_node_name, $management_node_keys, "logoff.exe $session_name /V");
+		# Call logoff.exe, pass it the session
+		my ($logoff_exit_status, $logoff_output) = run_ssh_command($computer_node_name, $management_node_keys, "logoff.exe \"$session_id\" /V");
 		if ($logoff_exit_status == 0) {
-			notify($ERRORS{'OK'}, 0, "logged off user: $username");
+			notify($ERRORS{'OK'}, 0, "logged off session ID: $session_id, output:\n" . join("\n", @$logoff_output));
 		}
 		else {
-			notify($ERRORS{'WARNING'}, 0, "failed to log off user: $username, exit status: $logoff_exit_status, output:\n@{$logoff_output}");
+			notify($ERRORS{'WARNING'}, 0, "failed to log off session ID: $session_id, exit status: $logoff_exit_status, output:\n@{$logoff_output}");
 		}
-	} ## end foreach my $active_user_line (@active_user_lines)
+	}
 	return 1;
-} ## end sub logoff_users
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -2797,8 +2888,8 @@ sub reboot {
 		notify($ERRORS{'DEBUG'}, 0, "$computer_node_name reboot has begun, sleeping for 15 seconds");
 		sleep 15;
 
-		# Wait maximum of 4 minutes for the computer to come back up
-		if (!$self->wait_for_ping(4)) {
+		# Wait maximum of 6 minutes for the computer to come back up
+		if (!$self->wait_for_ping(6)) {
 			# Check if the computer was ever offline, it should have been or else reboot never happened
 			notify($ERRORS{'WARNING'}, 0, "$computer_node_name never responded to ping");
 			next WAIT_ATTEMPT;
@@ -5912,6 +6003,12 @@ sub copy_capture_configuration_files {
 
 	# Copy configuration files
 	for my $source_configuration_directory (@source_configuration_directories) {
+		# Check if source configuration directory exists on this management node
+		unless (-d "$source_configuration_directory") {
+			notify($ERRORS{'OK'}, 0, "source directory does not exist on this management node: $source_configuration_directory");
+			next;
+		}
+		
 		notify($ERRORS{'OK'}, 0, "copying image capture configuration files from $source_configuration_directory to $computer_node_name");
 		if (run_scp_command("$source_configuration_directory/*", "$computer_node_name:$NODE_CONFIGURATION_DIRECTORY", $management_node_keys)) {
 			notify($ERRORS{'OK'}, 0, "copied $source_configuration_directory directory to $computer_node_name:$NODE_CONFIGURATION_DIRECTORY");
@@ -6227,6 +6324,7 @@ sub clean_hard_drive {
 		'$SYSTEMDRIVE/Documents and Settings,.*Temp\\/.*,10',
 		'$SYSTEMDRIVE/Documents and Settings,.*Temporary Internet Files\\/Content.*\\/.*,10',
 		'$SYSTEMDRIVE,.*pagefile\\.sys,1',
+		'$SYSTEMDRIVE/cygwin/home/root,.*%USERPROFILE%,1',
 	);
 
 	# Attempt to stop the AFS service, needed to delete AFS files
@@ -6836,7 +6934,7 @@ sub apply_security_templates {
 			notify($ERRORS{'DEBUG'}, 0, "copied file: $computer_node_name:$inf_target_path");
 	
 			# Set permission on the copied file
-			if (!run_ssh_command($computer_node_name, $management_node_keys, "/usr/bin/chmod.exe -R 644 $inf_target_path", '', '', 1)) {
+			if (!run_ssh_command($computer_node_name, $management_node_keys, "/usr/bin/chmod.exe -R 644 $inf_target_path", '', '', 0)) {
 				notify($ERRORS{'WARNING'}, 0, "could not set permissions on $inf_target_path");
 			}
 		}
@@ -6850,16 +6948,22 @@ sub apply_security_templates {
 		my $secedit_db = '$SYSTEMROOT/security/Database/' . "$inf_count\_$inf_file_root.sdb";
 		my $secedit_log = '$SYSTEMROOT/security/Logs/' . "$inf_count\_$inf_file_root.log";
 		
+		# Attempt to delete an existing log file
+		$self->delete_file($secedit_log);
+		
 		# The inf path must use backslashes or secedit.exe will fail
 		$inf_target_path =~ s/\//\\\\/g;
 		
-		my $secedit_command = "$secedit_exe /configure /cfg \"$inf_target_path\" /db $secedit_db /log $secedit_log /verbose";
+		# Run secedit.exe
+		# Note: secedit.exe returns exit status 3 if a warning occurs, this will appear in the log file:
+		# Task is completed. Warnings occurred for some attributes during this operation. It's ok to ignore.
+		my $secedit_command = "$secedit_exe /configure /cfg \"$inf_target_path\" /db $secedit_db /log $secedit_log /overwrite /quiet";
 		my ($secedit_exit_status, $secedit_output) = run_ssh_command($computer_node_name, $management_node_keys, $secedit_command, '', '', 0);
-		if (defined($secedit_exit_status) && $secedit_exit_status == 0) {
+		if (defined($secedit_exit_status) && ($secedit_exit_status == 0 || $secedit_exit_status == 3)) {
 			notify($ERRORS{'OK'}, 0, "ran secedit.exe to apply $inf_file_name");
 		}
 		elsif (defined($secedit_exit_status)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to run secedit.exe to apply $inf_target_path, exit status: $secedit_exit_status, output:\n@{$secedit_output}");
+			notify($ERRORS{'WARNING'}, 0, "failed to run secedit.exe to apply $inf_target_path, exit status: $secedit_exit_status, output:\n" . join("\n", @$secedit_output));
 			$error_occurred++;
 		}
 		else {
