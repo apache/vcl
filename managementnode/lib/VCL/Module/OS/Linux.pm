@@ -613,7 +613,14 @@ sub reserve {
 
 	}
 
-	my $useradd_string = "/usr/sbin/useradd -u $user_uid -d /home/$user_name -m $user_name -g vcl";
+	my $useradd_string; 
+	if(defined($user_uid) && $user_uid != 0){
+		$useradd_string = "/usr/sbin/useradd -u $user_uid -d /home/$user_name -m $user_name -g vcl";
+	}
+	else{
+		$useradd_string = "/usr/sbin/useradd -d /home/$user_name -m $user_name -g vcl";
+	}
+
 
 	my @sshcmd = run_ssh_command($computer_node_name, $image_identity, $useradd_string, "root");
 	foreach my $l (@{$sshcmd[1]}) {
@@ -705,6 +712,7 @@ sub grant_access {
 		notify($ERRORS{'CRITICAL'}, 0, "failed to add AllowUsers $user to external_sshd_config");
 		return 0;
 	}
+
 	undef @sshcmd;
 	@sshcmd = run_ssh_command($computer_node_name, $identity, "/etc/init.d/ext_sshd restart", "root");
 

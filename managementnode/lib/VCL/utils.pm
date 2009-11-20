@@ -83,7 +83,6 @@ our @EXPORT = qw(
   _machine_os
   _pingnode
   _sshd_status
-  add_user
   changelinuxpassword
   check_blockrequest_time
   check_connection
@@ -102,12 +101,9 @@ our @EXPORT = qw(
   convert_to_epoch_seconds
   database_execute
   database_select
-  del_user
   delete_computerloadlog_reservation
   delete_request
   delete_block_request
-  disablesshd
-  enablesshd
   firewall_compare_update
   format_data
   get_block_request_image_info
@@ -2863,433 +2859,6 @@ sub _is_user_added {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 add_user
-
- Parameters  : $node, $user, $uid, $passwd, $hostname, $os, $remoteip, $grpflag, @group
- Returns     : 1 success, 0 failed
- Description : logs into remote node adds supplied user account
-
-=cut
-
-sub add_user {
-	my ($node, $user, $uid, $passwd, $hostname, $os, $image_os_type,$remoteip, $grpflag, @group) = @_;
-	my ($package, $filename, $line, $sub) = caller(0);
-	notify($ERRORS{'WARNING'}, 0, "node is not defined")     if (!(defined($node)));
-	notify($ERRORS{'WARNING'}, 0, "user is not defined")     if (!(defined($user)));
-	notify($ERRORS{'OK'},      0, "uid is not defined")      if (!(defined($uid)));
-	notify($ERRORS{'WARNING'}, 0, "passwd is not defined")   if (!(defined($passwd)));
-	notify($ERRORS{'WARNING'}, 0, "os is not defined")       if (!(defined($os)));
-	notify($ERRORS{'OK'},      0, "remoteip is not defined") if (!(defined($remoteip)));
-	notify($ERRORS{'OK'},      0, "grpflag is not defined")  if (!(defined($grpflag)));
-
-	if (!(defined($grpflag))) {
-		$grpflag = 0;
-	}
-	elsif ($grpflag > 0) {
-		notify($ERRORS{'OK'}, 0, "group access memberlist= @group ");
-	}
-
-	my $identity;
-
-	if ($image_os_type =~ /linux/i) {
-         $identity = $IDENTITY_bladerhel;
-   }
-   else {
-         $identity = $IDENTITY_bladerhel;
-   }
-
-	if ($image_os_type =~ /linux/i) {
-		# set common linux useradd string
-		my $useradd_string;
-		if (!(defined($uid))) {    # check for uid if not let OS set one
-			$useradd_string = "/usr/sbin/useradd -d /home/$user -m $user";
-		}
-		else {
-			$useradd_string = "/usr/sbin/useradd -u $uid -d /home/$user -m $user";
-		}
-
-		# two methods: single user or group of users
-		if ($grpflag) {
-			#assumes owner is already member of group
-			#ok group flag set proceed
-			my $allowuserstring = "AllowUsers";
-			foreach my $u (@group) {
-				#$u in form of  unity:uid
-				my ($user_unityid, $uid) = split(":", $u);
-				my $cmd = "/usr/sbin/useradd -u $uid -d /home/$user_unityid -m $user_unityid";
-				if (run_ssh_command($node, $identity, $cmd, "root")) {
-					notify($ERRORS{'OK'}, 0, "added user $user_unityid to $node");
-				}
-				else {
-					notify($ERRORS{'WARNING'}, 0, "failed to execute $cmd");
-					return 0;
-				}
-
-				#append to ssh string
-				$allowuserstring .= " $user_unityid";
-			} ## end foreach my $u (@group)
-
-			# modify external_sshd config
-			my $cmdstring = "echo \"$allowuserstring\" >> /etc/ssh/external_sshd_config";
-			my @sshcmd;
-			if (run_ssh_command($node, $identity, $cmdstring, "root")) {
-				notify($ERRORS{'OK'}, 0, "adding user string to sshd conf $allowuserstring");
-				undef @sshcmd;
-				@sshcmd = run_ssh_command($node, $identity, "/etc/init.d/ext_sshd restart", "root");
-				foreach my $l (@{$sshcmd[1]}) {
-					if ($l =~ /Stopping ext_sshd:/i) {
-						#notify($ERRORS{'OK'},0,"stopping sshd on $node ");
-					}
-					if ($l =~ /Starting ext_sshd:[  OK  ]/i) {
-						notify($ERRORS{'OK'}, 0, "ext_sshd on $node started");
-					}
-				}    #foreach
-				notify($ERRORS{'OK'}, 0, "started ext_sshd on $node");
-				return 1;
-			} ## end if (run_ssh_command($node, $IDENTITY_bladerhel...
-			else {
-				notify($ERRORS{'CRITICAL'}, 0, "failed to add $allowuserstring to external_sshd_config on $node ");
-				return 0;
-			}
-
-		} ## end if ($grpflag)
-		else {
-			#single user proceed
-			my @sshcmd = run_ssh_command($node, $identity, $useradd_string, "root");
-			foreach my $l (@{$sshcmd[1]}) {
-				if ($l =~ /user $user exists/) {
-					notify($ERRORS{'OK'}, 0, "detected user already has account, deleting");
-					#FIXME - if type or project is not  HPC related.
-					if (del_user($node, $user, "blade", $os, $image_os_type)) {
-						notify($ERRORS{'OK'}, 0, "$user deleted");
-					}
-					if (run_ssh_command($node, $identity, $useradd_string, "root")) {
-						notify($ERRORS{'OK'}, 0, "user $user added");
-					}
-				} ## end if ($l =~ /user $user exists/)
-
-			} ## end foreach my $l (@{$sshcmd[1]})
-
-			#SETUP sudoers file
-			#clear user from sudoers file first
-			my $clear_cmd = "sed -ie \"/^$user .*/d\" /etc/sudoers";
-			if (run_ssh_command($node, $identity, $clear_cmd, "root")) {
-				notify($ERRORS{'DEBUG'}, 0, "cleared $user from /etc/sudoers");
-			}
-			else {
-				notify($ERRORS{'CRITICAL'}, 0, "failed to clear $user from /etc/sudoers");
-			}
-			my $sudoers_cmd = "echo \"$user ALL= NOPASSWD: ALL\" >> /etc/sudoers";
-			if (run_ssh_command($node, $identity, $sudoers_cmd, "root")) {
-				notify($ERRORS{'DEBUG'}, 0, "added $user to /etc/sudoers");
-			}
-			else {
-				notify($ERRORS{'CRITICAL'}, 0, "failed to add $user to /etc/sudoers");
-			}
-
-			if (_is_user_added($node, $user, "blade", $os, $image_os_type)) {
-				notify($ERRORS{'OK'}, 0, "added user account $user to $node");
-				undef @sshcmd;
-				my $cmd = "echo \"AllowUsers $user\" >> /etc/ssh/external_sshd_config";
-				if (run_ssh_command($node, $identity, $cmd, "root")) {
-					notify($ERRORS{'DEBUG'}, 0, "added AllowUsers $user to external_sshd_config");
-				}
-				else {
-					notify($ERRORS{'CRITICAL'}, 0, "failed to add AllowUsers $user to external_sshd_config");
-					return 0;
-				}
-
-				undef @sshcmd;
-				@sshcmd = run_ssh_command($node, $identity, "/etc/init.d/ext_sshd restart", "root");
-
-				foreach my $l (@{$sshcmd[1]}) {
-					if ($l =~ /Stopping ext_sshd:/i) {
-						#notify($ERRORS{'OK'},0,"stopping sshd on $node ");
-					}
-					if ($l =~ /Starting ext_sshd:[  OK  ]/i) {
-						notify($ERRORS{'OK'}, 0, "ext_sshd on $node started");
-					}
-				}    #foreach
-				notify($ERRORS{'OK'}, 0, "started ext_sshd on $node");
-				return 1;
-			} ## end if (_is_user_added($node, $user, "blade", ...
-			else {
-				notify($ERRORS{'CRITICAL'}, 0, "PROBLEM added user $user to $node @{ $sshcmd[1] }");
-				return 0;
-			}
-			# add user to external_sshd config
-		}    # grpflag true
-
-
-	}    # rhel
-	else {
-		return 0;
-	}
-} ## end sub add_user
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 del_user
-
- Parameters  : $node, $user, $type, $osname
- Returns     : 1 success 0 failure
- Description : removes user account from specificed node
-
-=cut
-
-sub del_user {
-	my ($node, $user, $type, $osname, $image_os_type) = @_;
-	my ($package, $filename, $line, $sub)    = caller(0);
-	notify($ERRORS{'WARNING'}, 0, "node is not defined")   if (!(defined($node)));
-	notify($ERRORS{'WARNING'}, 0, "user is not defined")   if (!(defined($user)));
-	notify($ERRORS{'WARNING'}, 0, "type is not defined")   if (!(defined($type)));
-	notify($ERRORS{'WARNING'}, 0, "osname is not defined") if (!(defined($osname)));
-	notify($ERRORS{'WARNING'}, 0, "image_os_type is not defined") if (!(defined($image_os_type)));
-	#set variables to use
-	my $cmd;
-	my @sshcmd;
-	if ($type =~ /blade|virtualmachine/) {
-		#my $os = _machine_os($node);
-		if ($image_os_type =~ /linux/i) {
-			#remove user from machine
-			my @file;
-			my $l;
-			undef $cmd;
-			undef @sshcmd;
-			# do not currently use userdel -r  will affect HPC user storage for HPC installs
-			$cmd = "/usr/sbin/userdel $user";
-			@sshcmd = run_ssh_command($node, $IDENTITY_bladerhel, $cmd, "root");
-			foreach my $l (@{$sshcmd[1]}) {
-				if ($l =~ /currently logged in/) {
-					notify($ERRORS{'WARNING'}, 0, "$user currently logged in returning 0");
-					return 0;
-				}
-			}
-			#user successfully deleted
-			my $path1 = "$node:/etc/ssh/external_sshd_config";
-			my $path2 = "/tmp/$node.sshd";
-			if (run_scp_command($path1, $path2, $IDENTITY_bladerhel)) {
-				notify($ERRORS{'DEBUG'}, 0, "scp success retrieved $path1");
-			}
-			else {
-				notify($ERRORS{'WARNING'}, 0, "failed to retrieve $path1");
-				return 0;
-			}
-			#remove from sshd
-			if (open(SSHDCFG, "/tmp/$node.sshd")) {
-				@file = <SSHDCFG>;
-				close SSHDCFG;
-				foreach $l (@file) {
-					$l = "" if ($l =~ /AllowUsers/);
-				}
-				if (open(SCP, ">/tmp/$node.sshd")) {
-					print SCP @file;
-					close SCP;
-				}
-				undef $path1;
-				undef $path2;
-				$path1 = "/tmp/$node.sshd";
-				$path2 = "$node:/etc/ssh/external_sshd_config";
-				if (run_scp_command($path1, $path2, $IDENTITY_bladerhel)) {
-					notify($ERRORS{'DEBUG'}, 0, "scp success copied $path1 to $path2");
-					unlink $path1;
-					#turn off external sshd
-					if (run_ssh_command($node, $IDENTITY_bladerhel, "/etc/init.d/ext_sshd stop")) {
-						notify($ERRORS{'DEBUG'}, 0, "turned off ext_sshd on $node");
-					}
-					return 1;
-				}
-				else {
-					notify($ERRORS{'WARNING'}, 0, "failed to copy $path1 to $path2");
-					return 0;
-				}
-			} ## end if (open(SSHDCFG, "/tmp/$node.sshd"))
-
-			#CLEAR sudoers file
-			my $clear_cmd = "sed -ie \"/^$user .*/d\" /etc/sudoers";
-			if (run_ssh_command($node, $IDENTITY_bladerhel, $clear_cmd, "root")) {
-				notify($ERRORS{'DEBUG'}, 0, "cleared $user from /etc/sudoers");
-			}
-			else {
-				notify($ERRORS{'CRITICAL'}, 0, "failed to clear $user from /etc/sudoers");
-			}
-
-
-		} ## end elsif 
-		else {
-			notify($ERRORS{'WARNING'}, 0, "$osname does not exist ");
-			return 0;
-		}
-	} ## end if ($type =~ /blade|virtualmachine/)
-
-} ## end sub del_user
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 disablesshd
-
- Parameters  : $hostname, $unityname, $remoteIP, $state, $osname, $log
- Returns     : 1 success 0 failure
- Description : using ssh identity key log into remote lab machine
-					and set flag for vclclientd to disable sshd for  remote user
-
-=cut
-
-sub disablesshd {
-	my ($hostname, $unityname, $remoteIP, $state, $osname, $log) = @_;
-	my ($package, $filename, $line, $sub) = caller(0);
-	$log = 0 if (!(defined($log)));
-	notify($ERRORS{'WARNING'}, $log, "hostname is not defined")  if (!(defined($hostname)));
-	notify($ERRORS{'WARNING'}, $log, "unityname is not defined") if (!(defined($unityname)));
-	notify($ERRORS{'WARNING'}, $log, "remoteIP is not defined")  if (!(defined($remoteIP)));
-	notify($ERRORS{'WARNING'}, $log, "state is not defined")     if (!(defined($state)));
-	notify($ERRORS{'WARNING'}, $log, "osname is not defined")    if (!(defined($osname)));
-
-	if (!(defined($remoteIP))) {
-		$remoteIP = "127.0.0.1";
-	}
-	my @lines;
-	my $l;
-	my $identity;
-	if ($osname =~ /sun4x_/) {
-		$identity = $IDENTITY_solaris_lab;
-	}
-	elsif ($osname =~ /rhel/) {
-		$identity = $IDENTITY_linux_lab;
-	}
-	else {
-		#if all else fails
-		$identity = $IDENTITY_solaris_lab;
-	}
-	# create clientdata file
-	my $clientdata = "/tmp/clientdata.$hostname";
-	if (open(CLIENTDATA, ">$clientdata")) {
-		print CLIENTDATA "$state\n";
-		print CLIENTDATA "$unityname\n";
-		print CLIENTDATA "$remoteIP\n";
-		close CLIENTDATA;
-
-		# scp to hostname
-		my $target = "vclstaff\@$hostname:/home/vclstaff/clientdata";
-		if (run_scp_command($clientdata, $target, $identity, "24")) {
-			notify($ERRORS{'OK'}, $log, "Success copied $clientdata to $target");
-			unlink($clientdata);
-
-			# send flag to activate changes
-			my @sshcmd = run_ssh_command($hostname, $identity, "echo 1 > /home/vclstaff/flag", "vclstaff", "24");
-			notify($ERRORS{'OK'}, $log, "setting flag to 1 on $hostname");
-
-			my $nmapchecks = 0;
-			# return nmap check
-
-			NMAPPORT:
-			if (!(nmap_port($hostname, 22))) {
-				return 1;
-			}
-			else {
-				if ($nmapchecks < 5) {
-					$nmapchecks++;
-					sleep 1;
-					notify($ERRORS{'OK'}, $log, "port 22 not closed yet calling NMAPPORT code block");
-					goto NMAPPORT;
-				}
-				else {
-					notify($ERRORS{'WARNING'}, $log, "port 22 never closed on client $hostname");
-					return 0;
-				}
-			} ## end else [ if (!(nmap_port($hostname, 22)))
-		} ## end if (run_scp_command($clientdata, $target, ...
-		else {
-			notify($ERRORS{'OK'}, $log, "could not copy src=$clientdata to target=$target");
-			return 0;
-		}
-	} ## end if (open(CLIENTDATA, ">$clientdata"))
-	else {
-		notify($ERRORS{'WARNING'}, $log, "could not open /tmp/clientdata.$hostname $! ");
-		return 0;
-	}
-} ## end sub disablesshd
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 enablesshd
-
- Parameters  : $hostname, $unityname, $remoteIP, $state, $osname, $log
- Returns     : 1 success 0 failure
- Description : using ssh identity key log into remote lab machine
-					and set flag for vclclientd to enable ssh access for remote user
-
-=cut
-
-sub enablesshd {
-	my ($hostname, $unityname, $remoteIP, $state, $osname, $log) = @_;
-	my ($package, $filename, $line, $sub) = caller(0);
-	$log = 0 if (!(defined($log)));
-	notify($ERRORS{'WARNING'}, $log, "hostname is not defined")  if (!(defined($hostname)));
-	notify($ERRORS{'WARNING'}, $log, "unityname is not defined") if (!(defined($unityname)));
-	notify($ERRORS{'WARNING'}, $log, "remoteIP is not defined")  if (!(defined($remoteIP)));
-	notify($ERRORS{'WARNING'}, $log, "state is not defined")     if (!(defined($state)));
-	notify($ERRORS{'WARNING'}, $log, "osname is not defined")    if (!(defined($osname)));
-	my $identity;
-
-	if ($osname =~ /sun4x_/) {
-		$identity = $IDENTITY_solaris_lab;
-	}
-	elsif ($osname =~ /rhel/) {
-		$identity = $IDENTITY_linux_lab;
-	}
-	# create clientdata file
-	my $clientdata = "/tmp/clientdata.$hostname";
-	if (open(CLIENTDATA, ">$clientdata")) {
-		print CLIENTDATA "$state\n";
-		print CLIENTDATA "$unityname\n";
-		print CLIENTDATA "$remoteIP\n";
-		close CLIENTDATA;
-
-		# scp to hostname
-		my $target = "vclstaff\@$hostname:/home/vclstaff/clientdata";
-		if (run_scp_command($clientdata, $target, $identity, "24")) {
-			notify($ERRORS{'OK'}, $log, "Success copied $clientdata to $target");
-			unlink($clientdata);
-
-			# send flag to activate changes
-			my @sshcmd = run_ssh_command($hostname, $identity, "echo 1 > /home/vclstaff/flag", "vclstaff", "24");
-			notify($ERRORS{'OK'}, $log, "setting flag to 1 on $hostname");
-
-			my $nmapchecks = 0;
-			# return nmap check
-
-			NMAPPORT:
-			if (nmap_port($hostname, 22)) {
-				notify($ERRORS{'OK'}, $log, "sshd opened");
-				return 1;
-			}
-			else {
-				if ($nmapchecks < 6) {
-					$nmapchecks++;
-					sleep 1;
-					#notify($ERRORS{'OK'},0,"calling NMAPPORT code block");
-					goto NMAPPORT;
-				}
-				else {
-					notify($ERRORS{'WARNING'}, $log, "port 22 never opened on client $hostname");
-					return 0;
-				}
-			} ## end else [ if (nmap_port($hostname, 22))
-		} ## end if (run_scp_command($clientdata, $target, ...
-		else {
-			notify($ERRORS{'WARNING'}, $log, "could not copy src=$clientdata to target= $target");
-			return 0;
-		}
-	} ## end if (open(CLIENTDATA, ">$clientdata"))
-	else {
-		notify($ERRORS{'WARNING'}, $log, "could not open /tmp/clientdata.$hostname $! ");
-		return 0;
-	}
-} ## end sub enablesshd
-
-#/////////////////////////////////////////////////////////////////////////////
-
 =head2 nmap_port
 
  Parameters  : $hostname, $port
@@ -5336,9 +4905,9 @@ sub get_request_info {
 		$request_info{user}{preferredname} = $request_info{user}{firstname};
 	}
 
-	# Set the user's uid to to the VCL user ID if it's NULL
+	## Set the user's uid to to the VCL user ID if it's NULL
 	if (!defined($request_info{user}{uid}) || !$request_info{user}{uid}) {
-		$request_info{user}{uid} = $request_info{user}{id};
+		$request_info{user}{uid} = 0;
 	}
 
 	# Set the user's IMid to '' if it's NULL
@@ -5355,14 +4924,22 @@ sub get_request_info {
 		notify($ERRORS{'DEBUG'}, 0, "standalone affiliation found: $request_info{user}{affiliation}{name}");
 		$request_info{user}{STANDALONE} = 1;
 	}
-	
+
+	#if uid is 0 set STANDALONE
+	if($request_info{user}{uid} == 0) {
+		$request_info{user}{STANDALONE} = 1;
+		notify($ERRORS{'OK'}, 0, "found NULL uid setting standalone flag: $request_info{user}{unityid}, uid: NULL");
+	}
+
 	# Fix the unityid if if the user's UID is >= 1000000
 	# Remove the domain section if the user's unityid contains @...
-	if ($request_info{user}{uid} >= 1000000) {
-		my ($correct_unity_id, $user_domain) = split /@/, $request_info{user}{unityid};
-		$request_info{user}{unityid}    = $correct_unity_id;
-		$request_info{user}{STANDALONE} = 1;
-		notify($ERRORS{'OK'}, 0, "standalone user found: $request_info{user}{unityid}, uid: $request_info{user}{uid}");
+	if(defined($request_info{user}{uid})) {
+		if ($request_info{user}{uid} >= 1000000 ) {
+			my ($correct_unity_id, $user_domain) = split /@/, $request_info{user}{unityid};
+			$request_info{user}{unityid}    = $correct_unity_id;
+			$request_info{user}{STANDALONE} = 1;
+			notify($ERRORS{'OK'}, 0, "standalone user found: $request_info{user}{unityid}, uid: $request_info{user}{uid}");
+		}
 	}
 	
 	# For test account only

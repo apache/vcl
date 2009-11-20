@@ -110,7 +110,6 @@ sub process {
 	my $image_os_type        = $self->data->get_image_os_type();
 	my $request_forimaging   = $self->data->get_request_forimaging;
 	my $image_name           = $self->data->get_image_name();
-	my $user_uid             = $self->data->get_user_uid();
 	my $user_unityid         = $self->data->get_user_login_id();
 	my $user_standalone      = $self->data->get_user_standalone();
 	my $imagemeta_checkuser  = $self->data->get_imagemeta_checkuser();
@@ -156,7 +155,7 @@ sub process {
 	}
 
 	notify($ERRORS{'OK'}, 0, "computer info: id=$computer_id, type=$computer_type, hostname=$nodename");
-	notify($ERRORS{'OK'}, 0, "user info: uid=$user_uid, unity id=$user_unityid, standalone=$user_standalone");
+	notify($ERRORS{'OK'}, 0, "user info: login_id id=$user_unityid, standalone=$user_standalone");
 	notify($ERRORS{'OK'}, 0, "imagemeta checkuser set to: $imagemeta_checkuser");
 	notify($ERRORS{'OK'}, 0, "formimaging set to: $request_forimaging");
 
@@ -209,107 +208,12 @@ sub process {
 				notify($ERRORS{'WARNING'}, 0, "failed to grant OS access on $nodename");
 			}
 		}
+		else{
+			notify($ERRORS{'CRITICAL'}, 0,"failed to grant access" . ref($self->os) . "::grant_access() subroutine not implemented");
+			insertloadlog($reservation_id, $computer_id, "failed", "failed to grant access, grant_access ");
+			return;
+		}
 		
-		# Older style code, remove below once all OS's have been modularized
-		# Check if computer type is blade
-		elsif ($computer_type =~ /blade|virtualmachine/) {
-			notify($ERRORS{'OK'}, 0, "blade or virtual machine detected: $computer_type");
-			# different senerios
-			# standard -- 1-1-1 with connection checks
-			# group access M-N-K -- multiple users need access
-			# standard with no connection checks
-			
-			# Check if linux image
-			if ($image_os_type =~  /linux/){
-				notify($ERRORS{'OK'}, 0, "Linux image detected: $image_os_name");
-
-				# adduser ; this adds user and restarts sshd
-				# check for group access
-
-				my $grpflag = 0;
-				my @group;
-
-				if ($imagemeta_usergroupid ne '') {
-					notify($ERRORS{'OK'}, 0, "group access groupid $imagemeta_usergroupid");
-
-					# Check group membership count
-					if ($user_group_member_count > 0) {
-						# Good, at least something is listed
-						notify($ERRORS{'OK'}, 0, "imagemeta group acess membership is $user_group_member_count");
-						$grpflag = $user_group_member_count;
-						@group   = @user_group_members;
-					}
-					else {
-						notify($ERRORS{'OK'}, 0, "image claims group access but membership is 0, usergrouid: $imagemeta_usergroupid, only adding requester");
-					}
-
-				}    # Close imagemeta user group defined and member count is > 0
-
-				# Try to add the user account to the linux computer
-				if (add_user($computer_short_name, $user_unityid, $user_uid, 0, $computer_hostname, $image_os_name, $image_os_type, $remote_ip, $grpflag, @group)) {
-					notify($ERRORS{'OK'}, 0, "user $user_unityid added to $computer_short_name");
-					insertloadlog($reservation_id, $computer_id, "info", "reserved: adding user and opening remote access port for $remote_ip");
-				}
-				else {
-					notify($ERRORS{'WARNING'}, 0, "could not add user $user_unityid to $computer_short_name");
-					insertloadlog($reservation_id, $computer_id, "failed", "reserved: could not add user to node");
-					$retval_conn = "failed";
-					goto RETVALCONN;
-				}
-
-				# Check if user was set to standalone
-				# Occurs if affiliation is not specified in the NOT_STANDALONE property in vcld.conf
-				# or if vcladmin is the user or if the user's UID is >= 1,000,000
-				if ($user_standalone) {
-					if (changelinuxpassword($computer_short_name, $user_unityid, $reservation_password)) {
-						# Password successfully changed
-						notify($ERRORS{'OK'}, 0, "password changed on $computer_short_name for standalone user $user_unityid");
-					}
-					else {
-						notify($ERRORS{'WARNING'}, 0, "could not change linux password for $user_unityid on $computer_short_name");
-						insertloadlog($reservation_id, $computer_id, "failed", "reserved: could not change user password on node");
-						$retval_conn = "failed";
-						goto RETVALCONN;
-					}
-				}    # Close if standalone
-				else {
-					notify($ERRORS{'OK'}, 0, "password not changed on $computer_short_name for non-standalone user $user_unityid");
-				}
-
-				
-
-			}    # Close elseif linux computer
-
-		}    # Close if computer type is blade
-
-		# Check if computer type is lab
-		elsif ($computer_type eq "lab") {
-			notify($ERRORS{'OK'}, 0, "lab computer detected");
-
-			# Check if Solaris or RHEL
-			if ($image_os_name =~ /sun4x_|rhel/) {
-				notify($ERRORS{'OK'}, 0, "Sun or RHEL lab computer detected");
-				if (enablesshd($computer_ip_address, $user_unityid, $remote_ip, "new", $image_os_name)) {
-					notify($ERRORS{'OK'}, 0, "SSHD enabled on $computer_hostname $computer_ip_address");
-				}
-				else {
-					# Could not enable SSHD
-					# Add code to better handle this such as fetch another machine
-					notify($ERRORS{'WARNING'}, 0, "could not enable SSHD on $computer_hostname");
-
-					# Update the computer state to failed
-					if (update_computer_state($computer_id, "failed", "new")) {
-						notify($ERRORS{'OK'}, 0, "setting computer ID $computer_id into failed state");
-					}
-
-					insertloadlog($reservation_id, $computer_id, "failed", "reserved: could not enable access port on remote machine");
-					$retval_conn = "failed";
-					goto RETVALCONN;
-				} ## end else [ if (enablesshd($computer_ip_address, $user_unityid...
-			}    # Close if Solaris or RHEL
-
-		}    # Close elsif computer type is lab
-
 	}    # close if defined remoteIP
 
 	elsif ($acknowledge_attempts < 180) {
