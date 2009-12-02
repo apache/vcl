@@ -6072,6 +6072,9 @@ sub write_currentimage_txt {
 	push @current_image_lines, "computer_hostname=$computer_host_name";
 
 	my $current_image_contents = join('\\r\\n', @current_image_lines);
+	
+	# Remove single quotes - they cause echo command to break
+	$current_image_contents =~ s/'//g;
 
 	#Make sure currentimage.txt writable
 	my $chown_command = "chown root currentimage.txt; chmod 777 currentimage.txt";
