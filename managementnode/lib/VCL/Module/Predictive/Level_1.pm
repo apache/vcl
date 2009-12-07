@@ -13,7 +13,7 @@
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.                                  
 # See the License for the specific language governing permissions and
 # limitations under the License.
 ###############################################################################
@@ -211,14 +211,30 @@ sub get_next_image {
 	}
 	my $avail = $data[0]{cnt};
 
-	# check if > 75% usage, look at past 2 days, otherwise, look at past 6 months
+	# check if > X% usage, look at past X days, otherwise, look at past 2 months
 	my $timeframe;
-	if (($avail / $online) > 0.75) {
+	my $notavail = ($online - $avail);
+	if (($notavail / $online) > 0.75) {
 		$timeframe = '2 DAY';
 	}
-	else {
-		$timeframe = '6 MONTH';
+	elsif(($notavail / $online) > 0.55) {
+		$timeframe = '5 DAY';
 	}
+	elsif(($notavail / $online) > 0.45) {
+		$timeframe = '10 DAY';
+	}
+	elsif(($notavail / $online) > 0.35) {
+		$timeframe = '20 DAY';
+	}
+	elsif(($notavail / $online) > 0.25) {
+		$timeframe = '30 DAY';
+	}
+	else {
+		$timeframe = '2 MONTH';
+	}
+
+	notify($ERRORS{'OK'}, 0, "$notify_prefix computer_short_name= $computer_short_name type= $type");
+   notify($ERRORS{'OK'}, 0, "$notify_prefix avail= $avail notavail= $notavail online= $online timeframe= $timeframe");
 
 	# what images map to this computer
 	my $select_mapped_images = "
@@ -318,6 +334,8 @@ sub get_next_image {
 		my %row = %{$_};
 		push(@imgids, $row{subid});
 	}
+	my $numselected_imagids = @imgids;
+	notify($ERRORS{'OK'}, 0, "$notify_prefix $numselected_imagids of available images that can go on $computer_short_name");
 
 	# which of those are loaded
 	$inlist = join(',', @imgids);
@@ -338,6 +356,8 @@ sub get_next_image {
 		my %row = %{$_};
 		push(@loaded, $row{currentimageid});
 	}
+	my $already_loaded_once = @loaded;
+	notify($ERRORS{'OK'}, 0, "$notify_prefix $already_loaded_once of available images $numselected_imagids already loaded at least once");
 
 	# which of those are not loaded (find difference of @imagids and @loaded)
 	my (@intersection, @notloaded, $element);
@@ -347,6 +367,9 @@ sub get_next_image {
 	foreach $element (keys %count) {
 		push @{$count{$element} > 1 ? \@intersection : \@notloaded}, $element;
 	}
+
+	my $not_loaded = @notloaded;
+	notify($ERRORS{'OK'}, 0, "$notify_prefix $not_loaded of available images $numselected_imagids that are not loaded at least once");
 
 	# get the most popular in $timeframe
 	$inlist = join(',', @notloaded);
@@ -369,6 +392,8 @@ sub get_next_image {
 		return 0;
 	}
 	my $imageid = $data[0]{imageid};
+
+	notify($ERRORS{'OK'}, 0, "$notify_prefix  imageid= $imageid is most popular image duing last $timeframe");
 
 	# get extra data about the image
 	my $select_extra = "
