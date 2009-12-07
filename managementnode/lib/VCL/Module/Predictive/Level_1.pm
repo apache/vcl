@@ -369,7 +369,7 @@ sub get_next_image {
 	}
 
 	my $not_loaded = @notloaded;
-	notify($ERRORS{'OK'}, 0, "$notify_prefix $not_loaded images not loaded of $numselected_imagids total images that are available for selection");
+	notify($ERRORS{'OK'}, 0, "$notify_prefix $not_loaded of $numselected_imagids total images that are available for selection");
 
 	# get the most popular in $timeframe
 	$inlist = join(',', @notloaded);
