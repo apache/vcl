@@ -335,7 +335,7 @@ sub get_next_image {
 		push(@imgids, $row{subid});
 	}
 	my $numselected_imagids = @imgids;
-	notify($ERRORS{'OK'}, 0, "$notify_prefix $numselected_imagids of available images that can go on $computer_short_name");
+	notify($ERRORS{'OK'}, 0, "$notify_prefix $numselected_imagids available images can go on $computer_short_name");
 
 	# which of those are loaded
 	$inlist = join(',', @imgids);
@@ -357,7 +357,7 @@ sub get_next_image {
 		push(@loaded, $row{currentimageid});
 	}
 	my $already_loaded_once = @loaded;
-	notify($ERRORS{'OK'}, 0, "$notify_prefix $already_loaded_once of available images $numselected_imagids already loaded at least once");
+	notify($ERRORS{'OK'}, 0, "$notify_prefix $already_loaded_once of $numselected_imagids available images already loaded at least once");
 
 	# which of those are not loaded (find difference of @imagids and @loaded)
 	my (@intersection, @notloaded, $element);
@@ -369,7 +369,7 @@ sub get_next_image {
 	}
 
 	my $not_loaded = @notloaded;
-	notify($ERRORS{'OK'}, 0, "$notify_prefix $not_loaded of available images $numselected_imagids that are not loaded at least once");
+	notify($ERRORS{'OK'}, 0, "$notify_prefix $not_loaded images not loaded of $numselected_imagids total images that are available for selection");
 
 	# get the most popular in $timeframe
 	$inlist = join(',', @notloaded);
