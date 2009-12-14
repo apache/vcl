@@ -56,6 +56,38 @@ use VCL::utils;
 
 ##############################################################################
 
+=head1 CLASS VARIABLES
+
+=cut
+
+=head2 $NODE_CONFIGURATION_DIRECTORY
+
+ Data type   : String
+ Description : Location on computer on which an image has been loaded where
+               configuration files reside.
+
+=cut
+
+our $NODE_CONFIGURATION_DIRECTORY = '/root/VCL';
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_node_configuration_directory
+
+ Parameters  : None.
+ Returns     : String containing filesystem path
+ Description : Retrieves the $NODE_CONFIGURATION_DIRECTORY variable value the
+               OS. This is the path on the computer's hard drive where image
+					configuration files and scripts are copied.
+
+=cut
+
+sub get_node_configuration_directory {
+	return $NODE_CONFIGURATION_DIRECTORY;
+}
+
+##############################################################################
+
 =head1 OBJECT METHODS
 
 =cut
@@ -198,7 +230,6 @@ sub post_load {
 	my $clear_extsshd = "sed -ie \"/^AllowUsers .*/d\" /etc/ssh/external_sshd_config";
 	if (run_ssh_command($computer_node_name, $management_node_keys, $clear_extsshd, "root")) {
 		notify($ERRORS{'DEBUG'}, 0, "cleared AllowUsers directive from external_sshd_config");
-		return 1;
 	}
 	else {
 		notify($ERRORS{'CRITICAL'}, 0, "failed to clear AllowUsers from external_sshd_config");
@@ -209,10 +240,25 @@ sub post_load {
 	if ($self->clear_private_keys()) {
 		notify($ERRORS{'OK'}, 0, "cleared known identity keys");
 	}
+	
+	# Check if post_load_custom script exists and execute it
+	if (!$self->call_post_load_custom()) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute post_load_custom script");
+	}
 
 	return 1;
 
 } ## end sub post_load
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 clear_private_keys
+
+ Parameters  :
+ Returns     :
+ Description :
+
+=cut
 
 sub clear_private_keys {
 	my $self = shift;
@@ -238,6 +284,17 @@ sub clear_private_keys {
 	}
 
 }
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 set_static_public_address
+
+ Parameters  :
+ Returns     :
+ Description :
+
+=cut
+
 sub set_static_public_address {
 	my $self = shift;
 	if (ref($self) !~ /linux/i) {
@@ -454,6 +511,16 @@ sub get_public_default_gateway {
 	#global varible pulled from vcld.conf
 	return $GATEWAY;
 }
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 logoff_user
+
+ Parameters  :
+ Returns     :
+ Description :
+
+=cut
 
 sub logoff_user {
 	my $self = shift;
@@ -957,7 +1024,18 @@ sub add_vcl_usergroup {
 
 	return 1;
 
-} 
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 is_connected
+
+ Parameters  :
+ Returns     :
+ Description :
+
+=cut
+
 sub is_connected {
 	my $self = shift;
 	if (ref($self) !~ /linux/i) {
@@ -987,6 +1065,176 @@ sub is_connected {
 	return 0;
 
 } ## end sub is_connected
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 call_post_load_custom
+
+ Parameters  : none
+ Returns     : If successfully ran post_load_custom script: 1
+               If post_load_custom script does not exist: 1
+               If error occurred: false
+ Description : Checks if /etc/init.d/post_load_custom script exists on the
+               Linux node and attempts to run it. This script can be created by
+					the image creator and will run when the image is loaded.
+
+=cut
+
+sub call_post_load_custom {
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Check if post_load_custom exists
+	my $post_load_custom_path = '/etc/init.d/post_load_custom';
+	if ($self->filesystem_entry_exists($post_load_custom_path)) {
+		notify($ERRORS{'DEBUG'}, 0, "post_load_custom script exists: $post_load_custom_path");
+	}
+	else {
+		notify($ERRORS{'OK'}, 0, "post_load_custom script does NOT exist: $post_load_custom_path");
+		return 1;
+	}
+	
+	# Get the node configuration directory, make sure it exists, create if necessary
+	my $node_log_directory = $self->get_node_configuration_directory() . '/Logs';
+	if (!$self->create_directory($node_log_directory)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to create node log file directory: $node_log_directory");
+		return;
+	}
+	
+	my $management_node_keys = $self->data->get_management_node_keys();
+	my $computer_node_name   = $self->data->get_computer_node_name();
+	
+	# Assemble the log file path
+	my $post_load_custom_log_path = $node_log_directory . "/post_load_custom.log";
+	
+	# Assemble the command
+	my $post_load_custom_command;
+	# Make sure the script is readable and executable
+	$post_load_custom_command .= "chmod +rx \"$post_load_custom_path\"";
+	# Redirect the script output to the log file path
+	$post_load_custom_command .= " && \"$post_load_custom_path\" >> \"$post_load_custom_log_path\" 2>&1";
+	
+	# Execute the command
+	my ($post_load_custom_exit_status, $post_load_custom_output) = run_ssh_command($computer_node_name, $management_node_keys, $post_load_custom_command, '', '', 1);
+	if (defined($post_load_custom_exit_status) && $post_load_custom_exit_status == 0) {
+		notify($ERRORS{'OK'}, 0, "executed $post_load_custom_path, exit status: $post_load_custom_exit_status");
+	}
+	elsif (defined($post_load_custom_exit_status)) {
+		notify($ERRORS{'WARNING'}, 0, "$post_load_custom_path returned a non-zero exit status: $post_load_custom_exit_status, output:\n@{$post_load_custom_output}");
+		return 0;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to execute $post_load_custom_path");
+		return;
+	}
+
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 create_directory
+
+ Parameters  : directory path
+ Returns     : If successful: true
+               If failed: false
+ Description : Creates a directory on the Linux node. If a multi-level
+               directory path is specified, parent directories are also created
+					if they do not exist.
+
+=cut
+
+sub create_directory {
+	my $self = shift;
+	if (ref($self) !~ /module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Make sure path argument was specified
+	my $path = shift;
+	if (!$path) {
+		notify($ERRORS{'WARNING'}, 0, "directory path argument was not specified");
+		return;
+	}
+	
+	my $management_node_keys = $self->data->get_management_node_keys();
+	my $computer_node_name   = $self->data->get_computer_node_name();
+
+	# Assemble the mkdir command and execute it
+	my $mkdir_command = "mkdir -p \"$path\" && ls -d \"$path\"";
+	my ($mkdir_exit_status, $mkdir_output) = run_ssh_command($computer_node_name, $management_node_keys, $mkdir_command, '', '', 1);
+	if (defined($mkdir_output) && grep(/ls: /, @$mkdir_output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to create directory on $computer_node_name: $path, exit status: $mkdir_exit_status, output:\n@{$mkdir_output}");
+		return;
+	}
+	elsif (defined($mkdir_exit_status)) {
+		notify($ERRORS{'OK'}, 0, "directory created on $computer_node_name: $path, output:\n@{$mkdir_output}");
+		return 1;
+	}
+	elsif (defined($mkdir_exit_status)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to create directory on $computer_node_name: $path, exit status: $mkdir_exit_status, output:\n@{$mkdir_output}");
+		return;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to delete file on $computer_node_name: $path");
+		return;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 filesystem_entry_exists
+
+ Parameters  : filesystem path
+ Returns     : If entry exists: 1
+               If entry does not exist: 0
+					If error occurred: undefined
+ Description : Checks if a filesystem entry (file or directory) exists on the
+					Linux node.
+
+=cut
+
+sub filesystem_entry_exists {
+	my $self = shift;
+	if (ref($self) !~ /module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get the path from the subroutine arguments and make sure it was passed
+	my $path = shift;
+	if (!$path) {
+		notify($ERRORS{'WARNING'}, 0, "unable to detmine if file exists, path was not specified as an argument");
+		return;
+	}
+	
+	my $management_node_keys = $self->data->get_management_node_keys();
+	my $computer_node_name   = $self->data->get_computer_node_name();
+	
+	# Assemble the dir command and execute it
+	my $ls_command = "ls -l \"$path\"";
+	my ($ls_exit_status, $ls_output) = run_ssh_command($computer_node_name, $management_node_keys, $ls_command, '', '', 1);
+	if (defined($ls_output) && grep(/no such file/i, @$ls_output)) {
+		notify($ERRORS{'DEBUG'}, 0, "filesystem entry does NOT exist on $computer_node_name: $path");
+		return 0;
+	}
+	elsif ((defined($ls_exit_status) && $ls_exit_status == 0) || (defined($ls_output) && grep(/$path/i, @$ls_output))) {
+		notify($ERRORS{'DEBUG'}, 0, "filesystem entry exists on $computer_node_name: $path, dir output:\n" . join("\n", @$ls_output));
+		return 1;
+	}
+	elsif ($ls_exit_status) {
+		notify($ERRORS{'WARNING'}, 0, "failed to determine if filesystem entry exists on $computer_node_name: $path, exit status: $ls_exit_status, output:\n@{$ls_output}");
+		return;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to determine if filesystem entry exists on $computer_node_name: $path");
+		return;
+	}
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 
