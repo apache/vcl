@@ -104,6 +104,7 @@ our @EXPORT = qw(
   delete_computerloadlog_reservation
   delete_request
   delete_block_request
+  disablesshd
   firewall_compare_update
   format_data
   get_block_request_image_info
@@ -111,6 +112,9 @@ our @EXPORT = qw(
   get_computer_grp_members
   get_computer_info
   get_computers_controlled_by_MN
+  get_current_file_name
+  get_current_package_name
+  get_current_subroutine_name
   get_highest_imagerevision_info
   get_image_info
   get_imagemeta_info
@@ -120,6 +124,7 @@ our @EXPORT = qw(
   get_management_node_info
   get_management_node_requests
   get_management_predictive_info
+  get_module_info
   get_next_image_default
   get_production_imagerevision_info
   get_request_by_computerid
@@ -133,6 +138,7 @@ our @EXPORT = qw(
   getnewdbh
   getpw
   getusergroupmembers
+  help
   hostname
   insert_reload_request
   insert_request
@@ -200,6 +206,7 @@ our @EXPORT = qw(
   xmlrpc_call
 
   $CONF_FILE_PATH
+  $DAEMON_MODE
   $DATABASE
   $DEFAULTHELPEMAIL
   $DEFAULTURL
@@ -226,8 +233,8 @@ our @EXPORT = qw(
   $PROCESSNAME
   $WINDOWS_ROOT_PASSWORD
   $SERVER
+  $SETUP_MODE
   $SYSADMIN
-  $TESTING
   $THROTTLE
   $TOOLS
   $VERBOSE
@@ -250,9 +257,14 @@ our @EXPORT = qw(
 
 #our %ERRORS=('DEPENDENT'=>4,'UNKNOWN'=>3,'OK'=>0,'WARNING'=>1,'CRITICAL'=>2,'MAILMASTERS'=>5);
 
-BEGIN {
-	#parse config file and set globals
+INIT {
+	print STDOUT <<"END";
+======================================================================
+VCL Management Node Daemon (vcld)
+======================================================================
+END
 
+	# Parse config file and set globals
 	our ($JABBER, $jabServer, $jabUser, $jabPass, $jabResource, $jabPort) = 0;
 	our ($LOGFILE, $PIDFILE, $PROCESSNAME) = 0;
 	our ($DATABASE, $SERVER, $WRTUSER, $WRTPASS, $LockerRdUser, $rdPass) = 0;
@@ -274,17 +286,21 @@ BEGIN {
 	Getopt::Long::Configure('pass_through');
 
 	# Set the VERBOSE flag to 0 by default
-	our ($VERBOSE) = 0;
-
-	# Set the TESTING flag to 0 by default
-	our ($TESTING) = 0;
+	our $VERBOSE = 0;
 	
 	# Set the NOT_STANDALONE flag to an empty string by default
 	our $NOT_STANDALONE = "";
+	
+	# Set the SETUP_MODE flag to 0 by default
+	our $SETUP_MODE = 0;
+	
+	# Set the SETUP_MODE flag to 1 by default
+	our $DAEMON_MODE = 1;
 
 	# Use the default configuration file path if -conf isn't specified on the command line
 	our $BIN_PATH = $FindBin::Bin;
-	print STDOUT "BIN PATH: $BIN_PATH\n";
+	
+	# Set a default config file path
 	our ($CONF_FILE_PATH) = 'C:/vcldev.conf';
 	if (!-f $CONF_FILE_PATH) {
 		if ($BIN_PATH =~ /dev/) {
@@ -295,15 +311,22 @@ BEGIN {
 		}
 	}
 
-	# Store the command line options in this hash
+	# Store the command line options in hash
 	our %OPTIONS;
-
-	GetOptions(\%OPTIONS, 'verbose', 'testing', 'config=s', 'logfile=s');
-
-	# Get the command line parameters
-	$CONF_FILE_PATH = $OPTIONS{config} if (defined($OPTIONS{config} && $OPTIONS{config}));
-
-	print STDOUT "pre-execution: config file being used: $CONF_FILE_PATH\n";
+	GetOptions(\%OPTIONS,
+				  'config=s' => \$CONF_FILE_PATH,
+				  'daemon!' => \$DAEMON_MODE,
+				  'logfile=s' => \$LOGFILE,
+				  'help' => \&help,
+				  'setup!' => \$SETUP_MODE,
+				  'verbose!' => \$VERBOSE,
+	);
+	
+	# Make sure the config file exists
+	if (!-f $CONF_FILE_PATH) {
+		print STDOUT "ERROR: config file being does not exist: $CONF_FILE_PATH\n";
+		help();
+	}
 
 	if (open(CONF, $CONF_FILE_PATH)) {
 		my @conf = <CONF>;
@@ -525,12 +548,8 @@ BEGIN {
 				$WINDOWS_ROOT_PASSWORD = $1;
 			}
 
-			if ($l =~ /^verbose=(.*)/i) {
+			if ($l =~ /^verbose=(.*)/i && !$VERBOSE) {
 				$VERBOSE = $1;
-			}
-
-			if ($l =~ /^test=(.*)/i) {
-				$TESTING = $1;
 			}
 			
 			if ($l =~ /^NOT_STANDALONE=(.*)/i) {
@@ -620,15 +639,22 @@ BEGIN {
 	}
 
 	# Get the remaining command line parameters
-	$VERBOSE = $OPTIONS{verbose} if (defined($OPTIONS{verbose} && $OPTIONS{verbose}));
-	$TESTING = $OPTIONS{testing} if (defined($OPTIONS{testing} && $OPTIONS{testing}));
-	$LOGFILE = $OPTIONS{logfile} if (defined($OPTIONS{logfile} && $OPTIONS{logfile}));
+	#$VERBOSE = $OPTIONS{verbose} if (defined($OPTIONS{verbose} && $OPTIONS{verbose}));
+	#$LOGFILE = $OPTIONS{logfile} if (defined($OPTIONS{logfile} && $OPTIONS{logfile}));
+	#$SETUP_MODE = $OPTIONS{setup} if (defined($OPTIONS{setup} && $OPTIONS{setup}));
 
-	print STDOUT "pre-execution: process name is set to: $PROCESSNAME\n";
-	print STDOUT "pre-execution: verbose mode is set to: $VERBOSE\n";
-	print STDOUT "pre-execution: testing mode is set to: $TESTING\n";
-	print STDOUT "pre-execution: log file being used: $LOGFILE\n";
-	print STDOUT "pre-execution: PID file being used: $PIDFILE\n";
+	print STDOUT <<EOF
+bin path:     $BIN_PATH
+process name: $PROCESSNAME
+config file:  $CONF_FILE_PATH
+log file:     $LOGFILE
+pid file:     $PIDFILE
+daemon mode:  $DAEMON_MODE
+setup mode:   $SETUP_MODE
+verbose mode: $VERBOSE
+======================================================================
+EOF
+
 } ## end BEGIN
 
 
@@ -653,13 +679,41 @@ our $TOOLS              = "$FindBin::Bin/../tools";
 our $VMWAREREPOSITORY   = "/install/vmware_images";
 our $VMWARE_MAC_GENERATED;
 our $VERBOSE;
-our $TESTING;
 our $CONF_FILE_PATH;
 our $WINDOWS_ROOT_PASSWORD;
 our ($XMLRPC_USER, $XMLRPC_PASS, $XMLRPC_URL);
 our $NOT_STANDALONE;
+our $SETUP_MODE;
 
 sub makedatestring;
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 help
+
+ Parameters  : None
+ Returns     : Nothing, terminates program
+ Description : Displays a help message and exits.
+
+=cut
+
+sub help {
+	my $message = <<"END";
+Please read the README and INSTALLATION files in the source directory.
+Documentation is available at http://cwiki.apache.org/VCL.
+
+Command line options:
+-setup       | Run management node setup
+-conf=<path> | Specify vcld configuration file
+-verbose     | Run vcld in verbose mode
+-debug       | Run vcld in non-daemon mode
+-help        | Display this help information
+======================================================================
+END
+
+	print $message;
+	exit;
+} ## end sub help
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -702,6 +756,9 @@ sub notify {
 
 	# Get the current time
 	my $currenttime = makedatestring();
+
+	open(ORIGOUT, ">&STDOUT");
+	open(ORIGERR, ">&STDERR");
 
 	# Redirect STDOUT and STDERR to the log file
 	$LOG = $LOGFILE if (!$LOG);
@@ -841,6 +898,15 @@ END
 
 	# Print the log message to the log file
 	print STDOUT "$log_message\n";
+	
+	close(STDOUT);
+	close(STDERR);
+	
+	open(STDERR, ">&ORIGERR");
+	open(STDOUT, ">&ORIGOUT");
+	
+	close (ORIGERR);
+	close (ORIGOUT);
 
 } ## end sub notify
 
@@ -9759,6 +9825,217 @@ sub get_block_request_image_info {
 
 	return;
 }
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_module_info
+
+ Parameters  : Module ID (optional)
+ Returns     : Array
+ Description : Returns a hash reference containing information from the module
+               table.
+               
+               An optional module ID argument can be supplied. If supplied, only
+               the information for the specified module is returned.
+               
+               A hash reference is returned. The keys of the hash are the module IDs.
+               Example showing the format of the data structure returned:
+               
+               my $module_info = get_module_info();
+               $module_info->{15}
+                  |--{description} = 'Provides OS support for standalone Unix lab machines'
+                  |--{name} = 'os_unix_lab'
+                  |--{perlpackage} = 'VCL::Module::OS::Linux::UnixLab'
+                  |--{prettyname} = 'Unix Lab OS Module'
+               $module_info->{15}
+                  |--{description} = ''
+                  |--{name} = 'os_win2008'
+                  |--{perlpackage} = 'VCL::Module::OS::Windows::Version_6::2008'
+                  |--{prettyname} = 'Windows Server 2008 OS Module'
+
+=cut
+
+sub get_module_info {
+	# Create the select statement
+	my $select_statement = "
+   SELECT
+	*
+	FROM
+	module
+	";
+	
+	# Append a WHERE clause if a module ID argument was supplied
+	my $module_id = shift;
+	if ($module_id) {
+		$select_statement .= "WHERE id = $module_id";
+	}
+
+	# Call the database select subroutine
+	my @selected_rows = database_select($select_statement);
+
+	# Check to make sure rows were returned
+	if (!@selected_rows) {
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve rows from module table");
+		return;
+	}
+	
+	# Transform the array of database rows into a hash
+	my %module_info_hash;
+	for my $row (@selected_rows) {
+		my $module_id = $row->{id};
+		
+		for my $key (keys %$row) {
+			next if $key eq 'id';
+			my $value = $row->{$key};
+			$module_info_hash{$module_id}{$key} = $value;
+		}
+	}
+	
+	#notify($ERRORS{'DEBUG'}, 0, "retrieved module info:\n" . format_data(\%module_info_hash));
+	return \%module_info_hash;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_current_package_name
+
+ Parameters  : None
+ Returns     : String
+ Description : Returns a string containing the name of the Perl package which
+               called get_current_package_name.
+
+=cut
+
+sub get_current_package_name {
+	my $package_name = (caller(0))[0];
+	return $package_name;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_current_file_name
+
+ Parameters  : None
+ Returns     : String
+ Description : Returns a string containing the name of the file which
+               called get_current_file_name.
+
+=cut
+
+sub get_current_file_name {
+	my $file_name = (caller(0))[1];
+	
+	# Remove path leaving only file name
+	$file_name =~ s/.*\///g;
+	
+	return $file_name;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_current_subroutine_name
+
+ Parameters  : None
+ Returns     : String
+ Description : Returns a string containing the name of the subroutine which
+               called get_current_subroutine_name.
+
+=cut
+
+sub get_current_subroutine_name {
+	my $subroutine_name = (caller(1))[3];
+	
+	# Remove path leaving only sub name
+	$subroutine_name =~ s/.*:://g;
+	
+	return $subroutine_name;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 disablesshd
+
+ Parameters  : $hostname, $unityname, $remoteIP, $state, $osname, $log
+ Returns     : 1 success 0 failure
+ Description : using ssh identity key log into remote lab machine
+					and set flag for vclclientd to disable sshd for  remote user
+
+=cut
+
+sub disablesshd {
+	my ($hostname, $unityname, $remoteIP, $state, $osname, $log) = @_;
+	my ($package, $filename, $line, $sub) = caller(0);
+	$log = 0 if (!(defined($log)));
+	notify($ERRORS{'WARNING'}, $log, "hostname is not defined")  if (!(defined($hostname)));
+	notify($ERRORS{'WARNING'}, $log, "unityname is not defined") if (!(defined($unityname)));
+	notify($ERRORS{'WARNING'}, $log, "remoteIP is not defined")  if (!(defined($remoteIP)));
+	notify($ERRORS{'WARNING'}, $log, "state is not defined")     if (!(defined($state)));
+	notify($ERRORS{'WARNING'}, $log, "osname is not defined")    if (!(defined($osname)));
+
+	if (!(defined($remoteIP))) {
+		$remoteIP = "127.0.0.1";
+	}
+	my @lines;
+	my $l;
+	my $identity;
+	if ($osname =~ /sun4x_/) {
+		$identity = $IDENTITY_solaris_lab;
+	}
+	elsif ($osname =~ /rhel/) {
+		$identity = $IDENTITY_linux_lab;
+	}
+	else {
+		#if all else fails
+		$identity = $IDENTITY_solaris_lab;
+	}
+	# create clientdata file
+	my $clientdata = "/tmp/clientdata.$hostname";
+	if (open(CLIENTDATA, ">$clientdata")) {
+		print CLIENTDATA "$state\n";
+		print CLIENTDATA "$unityname\n";
+		print CLIENTDATA "$remoteIP\n";
+		close CLIENTDATA;
+
+		# scp to hostname
+		my $target = "vclstaff\@$hostname:/home/vclstaff/clientdata";
+		if (run_scp_command($clientdata, $target, $identity, "24")) {
+			notify($ERRORS{'OK'}, $log, "Success copied $clientdata to $target");
+			unlink($clientdata);
+
+			# send flag to activate changes
+			my @sshcmd = run_ssh_command($hostname, $identity, "echo 1 > /home/vclstaff/flag", "vclstaff", "24");
+			notify($ERRORS{'OK'}, $log, "setting flag to 1 on $hostname");
+
+			my $nmapchecks = 0;
+			# return nmap check
+
+			NMAPPORT:
+			if (!(nmap_port($hostname, 22))) {
+				return 1;
+			}
+			else {
+				if ($nmapchecks < 5) {
+					$nmapchecks++;
+					sleep 1;
+					notify($ERRORS{'OK'}, $log, "port 22 not closed yet calling NMAPPORT code block");
+					goto NMAPPORT;
+				}
+				else {
+					notify($ERRORS{'WARNING'}, $log, "port 22 never closed on client $hostname");
+					return 0;
+				}
+			} ## end else [ if (!(nmap_port($hostname, 22)))
+		} ## end if (run_scp_command($clientdata, $target, ...
+		else {
+			notify($ERRORS{'OK'}, $log, "could not copy src=$clientdata to target=$target");
+			return 0;
+		}
+	} ## end if (open(CLIENTDATA, ">$clientdata"))
+	else {
+		notify($ERRORS{'WARNING'}, $log, "could not open /tmp/clientdata.$hostname $! ");
+		return 0;
+	}
+} ## end sub disablesshd
 
 #/////////////////////////////////////////////////////////////////////////////
 
