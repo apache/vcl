@@ -84,7 +84,7 @@ use warnings;
 use diagnostics;
 use English '-no_match_vars';
 
-use VCL::utils qw($VERBOSE %ERRORS &notify &getnewdbh format_data);
+use VCL::utils qw($SETUP_MODE $VERBOSE %ERRORS &notify &getnewdbh format_data);
 use VCL::DataStructure;
 
 ##############################################################################
@@ -153,8 +153,8 @@ sub new {
 	bless $class_object, $class;
 	notify($ERRORS{'DEBUG'}, 0, "$class object created");
 
-	# Check if an initialize() subroutine is defined for this module
-	if ($class_object->can("initialize")) {
+	# Check if not running in setup mode and if initialize() subroutine is defined for this module
+	if (!$SETUP_MODE && $class_object->can("initialize")) {
 		# Call the initialize() subroutine, if it returns 0, return 0
 		# If it doesn't return 0, return the object reference
 		return if (!$class_object->initialize($args));
