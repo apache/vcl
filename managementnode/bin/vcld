@@ -64,14 +64,16 @@ use VCL::DataStructure;
 # Turn on autoflush
 $| = 1;
 
-# Get the command line options
-our $opt_d = '';
-Getopt::Long::Configure('bundling', 'no_ignore_case');
-GetOptions('d|debug' => \$opt_d,
-			  'h|help'  => \&help);
+# Rename this process
+rename_vcld_process();
+
+# Check if -setup argument was specified
+if ($SETUP_MODE) {
+	&setup_management_node();
+};
 
 # Call daemonize if -d (debug) wasn't specified
-if (!$opt_d) {
+if ($DAEMON_MODE) {
 	&daemonize;
 }
 
@@ -114,9 +116,6 @@ sub main () {
 	# Set the vcld environment variable to 0 so other subroutines know if this is the vcld or child process
 	$ENV{vcld} = 1;
 	notify($ERRORS{'DEBUG'}, $LOGFILE, "vcld environment variable set to $ENV{vcld} for this process");
-
-	# Rename this process
-	rename_vcld_process();
 
 	# Create a hash to store all of the program state information
 	my %info;
@@ -779,8 +778,8 @@ sub daemonize {
 	#$0 = "vcldev";
 	#production
 	#$0 = "vcld";
-	$0 = $PROCESSNAME;
-	print "Created process $$ renamed to $0 ...\n";
+	#$0 = $PROCESSNAME;
+	print "Created process $$ \"$0\"\n";
 	setsid or die "Can't start a new session: $!";
 	open STDIN,  '/dev/null'  or die "Can't read /dev/null $!";
 	open STDOUT, ">>$LOGFILE" or die "Can't write $LOGFILE $!";
@@ -794,24 +793,87 @@ sub daemonize {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 help
+=head2 setup_management_node
 
- Parameters  : 
+ Parameters  : None.
  Returns     : 
- Description :
+ Description : Checks each module in the module table for
+					the existance of a subroutine named "setup". Calls the setup
+					subroutine for each module which contains one.
+					
+					The program terminates if a module's setup subroutine returns
+					false. The program continues if a module's setup subroutine
+					returns true.
+					
+					STDOUT "print" statements are printed to the screen. Messages
+					sent to the "notify" subroutine are printed to the logfile.
 
 =cut
 
-sub help {
-	my $message = <<"END";
---------------------------------------------
-
-vcld is intented to run in daemon mode.
-
-Please read the INSTALLATION file in the source directory.
-END
-
-	print $message;
+sub setup_management_node {
+	print "VCL Management Node Setup\n\n";
+	
+	# Always use verbose mode when running in setup mode
+	$VERBOSE = 1;
+	
+	# Create a DataStructure object which will be passed to modules when they are instantiated
+	# The creation of this DataStructure object collects the management node information
+	my $data_structure = new VCL::DataStructure();
+	if (!$data_structure) {
+		die "unable to create DataStructure object";
+	}
+	notify($ERRORS{'DEBUG'}, 0, "created DataStructure object to be used for vcld setup");
+	
+	# Get the information from the module table
+	my $module_info = get_module_info();
+	#print "retrieved module table info:\n" . format_data($module_info) . "\n";
+	
+	# Loop through the entries in the data from the module table
+	for my $module_id (keys %$module_info) {
+		# Get the module's Perl package and name
+		my $module_name = $module_info->{$module_id}{name};
+		my $module_perl_package = $module_info->{$module_id}{perlpackage};
+		notify($ERRORS{'DEBUG'}, 0, "checking if setup() subroutine has been implemented by '$module_name' module");
+		
+		# Attempt to load the module
+		eval "use $module_perl_package";
+		if ($EVAL_ERROR) {
+			notify($ERRORS{'WARNING'}, 0, "$module_name module (" . $module_perl_package . ") could not be loaded, error message:\n$EVAL_ERROR");
+			print "ERROR: '$module_name' module could not be loaded, see log file\n";
+			next;
+		}
+		
+		# Create a new VCL state object, passing it the reservation data
+		my $module_object;
+		unless ($module_object = ($module_perl_package)->new({data_structure => $data_structure})) {
+			notify($ERRORS{'WARNING'}, 0, "$module_name module (" . $module_perl_package . ") object could not be created, error message:\n$!");
+			print "ERROR: '$module_name' object could not be created, see log file";
+			next;
+		}
+		
+		# Check if module has implemented a "setup" subroutine
+		if ($module_object->can('setup')) {
+			notify($ERRORS{'DEBUG'}, 0, "setup subroutine has been implemented by '$module_name'");
+			
+			print "----------------------------------------------------------------------\n";
+			print "Beginning setup for '$module_name' module...\n\n";
+			
+			# Call the setup subroutine and check it's return value
+			my $setup_status = $module_object->setup();
+			notify($ERRORS{'DEBUG'}, 0, "module '$module_name' setup() returned $setup_status");
+			if ($setup_status) {
+				print "\nSetup for '$module_name' module complete\n";
+			}
+			else {
+				die "\nERROR: Setup did not complete successfully for '$module_name' module";
+			}
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "setup subroutine has NOT been implemented by '$module_name' module");
+		}
+	}
+	
+	print "======================================================================\n";
 	exit;
 } ## end sub help
 
