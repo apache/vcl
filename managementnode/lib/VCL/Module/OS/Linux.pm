@@ -241,14 +241,60 @@ sub post_load {
 		notify($ERRORS{'OK'}, 0, "cleared known identity keys");
 	}
 	
-	# Check if post_load_custom script exists and execute it
-	if (!$self->call_post_load_custom()) {
-		notify($ERRORS{'WARNING'}, 0, "failed to execute post_load_custom script");
+	# Run the vcl_post_load script if it exists in the image
+	my $script_path = '/etc/init.d/vcl_post_load';
+	my $result = $self->run_script($script_path);
+	if (!defined($result)) {
+		notify($ERRORS{'WARNING'}, 0, "error occurred running $script_path");
+	}
+	elsif ($result == 0) {
+		notify($ERRORS{'DEBUG'}, 0, "$script_path does not exist in image: $image_name");
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "ran $script_path");
 	}
 
 	return 1;
 
 } ## end sub post_load
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 post_reserve
+
+ Parameters  :
+ Returns     :
+ Description :
+
+=cut
+
+sub post_reserve {
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return 0;
+	}
+	
+	my $image_name           = $self->data->get_image_name();
+	my $computer_short_name  = $self->data->get_computer_short_name();
+	
+	notify($ERRORS{'OK'}, 0, "initiating Linux post_reserve: $image_name on $computer_short_name");
+	
+	# Run the vcl_post_reserve script if it exists in the image
+	my $script_path = '/etc/init.d/vcl_post_reserve';
+	my $result = $self->run_script($script_path);
+	if (!defined($result)) {
+		notify($ERRORS{'WARNING'}, 0, "error occurred running $script_path");
+	}
+	elsif ($result == 0) {
+		notify($ERRORS{'DEBUG'}, 0, "$script_path does not exist in image: $image_name");
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "ran $script_path");
+	}
+	
+	return 1;
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -1128,6 +1174,79 @@ sub call_post_load_custom {
 	}
 	else {
 		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to execute $post_load_custom_path");
+		return;
+	}
+
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 run_script
+
+ Parameters  : script path
+ Returns     : If successfully ran  script: 1
+               If  script does not exist: 0
+               If error occurred: undefined
+ Description : Checks if script exists on the Linux node and attempts to run it.
+
+=cut
+
+sub run_script {
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get the script path argument
+	my $script_path = shift;
+	if (!$script_path) {
+		notify($ERRORS{'WARNING'}, 0, "script path argument was not specified");
+		return;
+	}
+	
+	# Check if script exists
+	if ($self->filesystem_entry_exists($script_path)) {
+		notify($ERRORS{'DEBUG'}, 0, "script exists: $script_path");
+	}
+	else {
+		notify($ERRORS{'OK'}, 0, "script does NOT exist: $script_path");
+		return 0;
+	}
+	
+	# Determine the script name
+	my ($script_name) = $script_path =~ /\/([^\/]+)$/;
+	notify($ERRORS{'DEBUG'}, 0, "script name: $script_name");
+	
+	# Get the node configuration directory, make sure it exists, create if necessary
+	my $node_log_directory = $self->get_node_configuration_directory() . '/Logs';
+	if (!$self->create_directory($node_log_directory)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to create node log file directory: $node_log_directory");
+		return;
+	}
+	
+	my $management_node_keys = $self->data->get_management_node_keys();
+	my $computer_node_name   = $self->data->get_computer_node_name();
+	
+	# Assemble the log file path
+	my $log_file_path = $node_log_directory . "/$script_name.log";
+	notify($ERRORS{'DEBUG'}, 0, "script log file path: $log_file_path");
+	
+	# Assemble the command
+	my $command = "chmod +rx \"$script_path\" && \"$script_path\" >> \"$log_file_path\" 2>&1";
+	
+	# Execute the command
+	my ($exit_status, $output) = run_ssh_command($computer_node_name, $management_node_keys, $command, '', '', 1);
+	if (defined($exit_status) && $exit_status == 0) {
+		notify($ERRORS{'OK'}, 0, "executed $script_path, exit status: $exit_status");
+	}
+	elsif (defined($exit_status)) {
+		notify($ERRORS{'WARNING'}, 0, "$script_path returned a non-zero exit status: $exit_status");
+		return;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to execute $script_path");
 		return;
 	}
 

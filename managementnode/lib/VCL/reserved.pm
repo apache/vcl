@@ -214,6 +214,26 @@ sub process {
 			return;
 		}
 		
+		# Check if OS module's post_reserve() subroutine exists
+		if ($self->os->can("post_reserve")) {
+			notify($ERRORS{'DEBUG'}, 0, ref($self->os) . "->post_reserve() subroutine exists");
+		
+			# Call OS module's post_reserve() subroutine
+			notify($ERRORS{'DEBUG'}, 0, "calling " . ref($self->os) . "->post_reserve() subroutine");
+			insertloadlog($reservation_id, $computer_id, "info", "calling " . ref($self->os) . "->post_reserve() subroutine");
+			if ($self->os->post_reserve()) {
+				notify($ERRORS{'OK'}, 0, "performed OS post_reserve tasks for $image_name on $computer_short_name");
+				insertloadlog($reservation_id, $computer_id, "info", "performed OS post_reserve tasks for $image_name on $computer_short_name");
+			}
+			else {
+				notify($ERRORS{'CRITICAL'}, 0, "failed to perform OS post_reserve tasks for $image_name on $computer_short_name");
+				insertloadlog($reservation_id, $computer_id, "info", "failed to perform OS post_reserve tasks for $image_name on $computer_short_name");
+			}
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, ref($self->os) . "->post_reserve() not implemented by " . ref($self->os));
+		}
+		
 	}    # close if defined remoteIP
 
 	elsif ($acknowledge_attempts < 180) {
