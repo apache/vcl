@@ -2485,6 +2485,9 @@ sub power_reset {
 		return;	
 	}
 	
+	# Get the powerop mode argument if supplied
+	my $powerop_mode = shift || 'trysoft';
+	
 	## Get necessary data
 	my $vmhost_hostname    = $self->data->get_vmhost_hostname();
 	my ($vmdk_name, $vmx_path, $vm_directory, $base_vm_directory) = $self->get_vm_paths();
@@ -2519,8 +2522,12 @@ sub power_reset {
 	# received. This error often occurs because the state of the virtual machine
 	# changed before it received the request.
 	
-	notify($ERRORS{'DEBUG'}, 0, "attempting to reset vm using trysoft mode: $vm_directory");
-	my ($exit_status, $output) = run_ssh_command($vmhost_hostname, '', "vmware-cmd $vmx_path reset trysoft", '', '', '1');
+	# Error: VMware tools not running, exit status = 231
+	# VMControl error -999: Unknown error: SoapError: ServerFaultCode(0) :
+	# (Operation failed since VMware tools are not running in this virtual machine.)
+	
+	notify($ERRORS{'DEBUG'}, 0, "attempting to reset vm using $powerop_mode mode: $vm_directory");
+	my ($exit_status, $output) = run_ssh_command($vmhost_hostname, '', "vmware-cmd $vmx_path reset $powerop_mode", '', '', '1');
 	if (defined($exit_status) && $exit_status == 0 && grep(/reset\(\w*\) = 1/i, @$output)) {
 		notify($ERRORS{'OK'}, 0, "$vm_directory vm was reset");
 	}
@@ -2528,8 +2535,19 @@ sub power_reset {
 		notify($ERRORS{'WARNING'}, 0, "unable to reset $vm_directory vm because it is turned off, attempting to start vm");
 		return $self->power_on();
 	}
+	elsif (defined($output) && grep(/VMControl error -999.*VMware tools are not running/i, @$output)) {
+		if ($powerop_mode ne 'hard') {
+			notify($ERRORS{'WARNING'}, 0, "unable to reset $vm_directory vm because VMware tools are not running, attempting hard reset");
+			return $self->power_reset('hard');
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "unable to reset $vm_directory vm because VMware tools are not running, attempted hard reset");
+			return;
+		}
+	}
 	elsif (defined($exit_status)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to run vmware-cmd reset on $vm_directory, exit status: $exit_status, output:\n@{$output}");
+		return;
 	}
 	else {
 		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to run vmware-cmd reset on $vm_directory");
