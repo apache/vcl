@@ -240,6 +240,11 @@ sub post_load {
 	if ($self->clear_private_keys()) {
 		notify($ERRORS{'OK'}, 0, "cleared known identity keys");
 	}
+
+	#Update Hostname to match Public assigned name
+   if($self->update_public_hostname()){
+      notify($ERRORS{'OK'}, 0, "Updated hostname");
+   }
 	
 	# Run the vcl_post_load script if it exists in the image
 	my $script_path = '/etc/init.d/vcl_post_load';
@@ -296,6 +301,61 @@ sub post_reserve {
 	return 1;
 }
 
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 update_public_hostname
+
+ Parameters  :
+ Returns     : 1,0 success or failure
+ Description : To be used for nodes that have both private and public addresses. 
+                                        Set hostname to that of the public address.
+
+=cut
+
+sub update_public_hostname {
+     my $self = shift;
+     unless (ref($self) && $self->isa('VCL::Module')) {
+        notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a VCL::Module module object method");
+        return; 
+     }
+         
+     my $management_node_keys = $self->data->get_management_node_keys();
+     my $computer_node_name   = $self->data->get_computer_node_name();
+     my $image_os_type        = $self->data->get_image_os_type();
+     my $image_os_name        = $self->data->get_image_os_name();
+     my $computer_short_name             = $self->data->get_computer_short_name();
+     my $public_hostname;
+
+        #Get the IP address of the public adapter
+
+ my $public_IP_address = getdynamicaddress($computer_short_name, $image_os_name, $image_os_type);
+        if (!($public_IP_address)) {
+                notify($ERRORS{'WARNING'}, 0, "Unable to get public IP address");
+                return 0;
+        }
+
+        #Get the hostname for the public IP address
+        my $get_public_hostname = "/bin/ipcalc --hostname $public_IP_address";
+        my ($ipcalc_status, $ipcalc_output) = run_ssh_command($computer_short_name, $management_node_keys,$get_public_hostname);
+        if (!defined($ipcalc_status)) {
+                notify($ERRORS{'WARNING'}, 0, "unable to run ssh cmd $get_public_hostname on $computer_short_name");
+                return 0;
+        }
+        elsif ("@$ipcalc_output" =~ /HOSTNAME=(.*)/i) {
+                $public_hostname = $1;
+                notify($ERRORS{'DEBUG'}, 0, "collected public hostname= $public_hostname");
+        }
+
+        #Set the node's hostname to public hostname
+        my ($set_hostname_status, $set_hostname_output) = run_ssh_command($computer_short_name, $management_node_keys,"hostname -v $public_hostname"); 
+        unless (defined($set_hostname_status) && $set_hostname_status == 0) {
+			notify($ERRORS{'OK'}, 0, "failed to set public_hostname on $computer_short_name output: @${set_hostname_output}");
+        }
+
+        notify($ERRORS{'OK'}, 0, "successfully set public_hostname on $computer_short_name output: @${set_hostname_output}");
+        return 1;
+
+}
 #/////////////////////////////////////////////////////////////////////////////
 
 =head2 clear_private_keys
