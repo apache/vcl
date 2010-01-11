@@ -1014,6 +1014,32 @@ CREATE TABLE IF NOT EXISTS `vmtype` (
 
 -- --------------------------------------------------------
 
+--
+-- Table structure for table `winKMS`
+--
+
+CREATE TABLE IF NOT EXISTS `winKMS` (
+  `affiliationid` mediumint(8) unsigned NOT NULL,
+  `address` varchar(50) NOT NULL,
+  `port` smallint(5) unsigned NOT NULL default '1688',
+  UNIQUE KEY `affiliationid_address` (`affiliationid`,`address`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `winProductKey`
+--
+
+CREATE TABLE IF NOT EXISTS `winProductKey` (
+  `affiliationid` mediumint(8) unsigned NOT NULL,
+  `productname` varchar(100) NOT NULL,
+  `productkey` varchar(100) NOT NULL,
+  UNIQUE KEY `affiliationid_productname` (`affiliationid`,`productname`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+
+-- --------------------------------------------------------
+
 -- 
 -- Table structure for table `xmlrpcKey`
 -- 
@@ -1060,8 +1086,8 @@ INSERT INTO `adminlevel` (`id`, `name`) VALUES
 -- 
 
 INSERT INTO `affiliation` (`id`, `name`, `dataUpdateText`) VALUES 
-(1, 'Local', '');
-
+(1, 'Local', ''),
+(2, 'Global', '');
 
 -- 
 -- Dumping data for table `computerloadflow`
@@ -1754,3 +1780,15 @@ ALTER TABLE `vmhost`
 ALTER TABLE `vmprofile`
   ADD CONSTRAINT `vmprofile_ibfk_2` FOREIGN KEY (`vmtypeid`) REFERENCES `vmtype` (`id`) ON UPDATE CASCADE,
   ADD CONSTRAINT `vmprofile_ibfk_1` FOREIGN KEY (`imageid`) REFERENCES `image` (`id`) ON UPDATE CASCADE;
+
+--
+-- Constraints for table `winKMS`
+--
+ALTER TABLE `winKMS`
+  ADD CONSTRAINT `winKMS_ibfk_1` FOREIGN KEY (`affiliationid`) REFERENCES `affiliation` (`id`) ON UPDATE CASCADE;
+
+--
+-- Constraints for table `winProductKey`
+--
+ALTER TABLE `winProductKey`
+  ADD CONSTRAINT `winProductKey_ibfk_1` FOREIGN KEY (`affiliationid`) REFERENCES `affiliation` (`id`) ON UPDATE CASCADE;
