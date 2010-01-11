@@ -8150,6 +8150,462 @@ sub wait_for_logoff {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 get_product_key
+
+ Parameters  : $affiliation_identifier (optional), $product_name (optional)
+ Returns     : If successful: string containing product key
+               If failed: false
+ Description : Retrieves the Windows product key from the database. This is
+               stored in the winProductKey table.
+               
+               Optional affiliation identifier and product name arguments may be
+               passed. Either both arguments must be passed or none. The
+               affiliation identifier may either be an affiliation ID or name.
+               If passed, the only data returned will be the data matching that
+               specific identifier. Global affiliation data will not be
+               returned.
+               
+               If the affiliation identifier argument is not passed, the
+               affiliation is determined by the affiliation of the owner of the
+               image for the reservation. If a product key has not been
+               configured for that specific affiliation, the product key
+               configured for the Global affiliation is returned.
+
+=cut
+
+sub get_product_key {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Remember if this sub was called with arguments
+	# Used to determine whether or not Global activation data will be checked
+	# If affiliation ID argument is specified, assume caller only wants the data for that affiliation and not the Global data
+	my $include_global;
+	if (scalar(@_) == 2) {
+		$include_global = 0;
+		notify($ERRORS{'DEBUG'}, 0, "subroutine was called with arguments, global affiliation data will be ignored");
+	}
+	elsif (scalar(@_) == 0) {
+		$include_global = 1;
+		notify($ERRORS{'DEBUG'}, 0, "subroutine was NOT called with arguments, global affiliation data will be included");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "subroutine argument count = " . scalar(@_) . ", it must only be called with 0 or 2 arguments");
+		return;
+	}
+	
+	# Get the affiliation identifer, may be ID or name
+	my $affiliation_identifier = shift;
+	if (!defined($affiliation_identifier)) {
+		$affiliation_identifier = $self->data->get_image_affiliation_id();
+	}
+	if (!defined($affiliation_identifier)) {
+		notify($ERRORS{'WARNING'}, 0, "affiliation identifier argument was not passed and could not be determined from image");
+		return;
+	}
+	
+	# Get the product name, could be:
+	# "Microsoft Windows XP"
+	# "Microsoft Windows Server 2003"
+	my $product_name = shift || $self->get_product_name();
+	if ($product_name) {
+		notify($ERRORS{'DEBUG'}, 0, "product name: $product_name");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "product name argument was not passed and could not be determined from computer");
+		return;
+	}
+	
+	# Create the affiliation-specific select statement
+	# Check if the affiliation identifier is a number or word
+	# If a number, use affiliation.id directly
+	# If a word, reference affiliation.name
+	my $affiliation_select_statement;
+	if ($affiliation_identifier =~ /^\d+$/) {
+		notify($ERRORS{'DEBUG'}, 0, "affiliation identifier is a number, retrieving winProductKey.affiliationid=$affiliation_identifier");
+		$affiliation_select_statement = <<EOF;
+SELECT
+winProductKey.*
+FROM
+winProductKey
+WHERE
+winProductKey.productname LIKE '$product_name'
+AND winProductKey.affiliationid = $affiliation_identifier
+EOF
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "affiliation identifier is NOT a number, retrieving affiliation.name=$affiliation_identifier");
+		$affiliation_select_statement = <<EOF;
+SELECT
+winProductKey.*
+FROM
+winProductKey,
+affiliation
+WHERE
+winProductKey.productname LIKE '$product_name'
+AND winProductKey.affiliationid = affiliation.id
+AND affiliation.name LIKE '$affiliation_identifier'
+EOF
+	}
+	
+	# Create the select statement
+	my $global_select_statement = <<EOF;
+SELECT
+winProductKey.*
+FROM
+winProductKey,
+affiliation
+WHERE
+winProductKey.productname LIKE '$product_name'
+AND winProductKey.affiliationid = affiliation.id
+AND affiliation.name LIKE 'Global'
+EOF
+	
+	# Call the database select subroutine
+	my @affiliation_rows = database_select($affiliation_select_statement);
+	
+	# Get the rows for the Global affiliation if this subroutine wasn't called with arguments
+	my @global_rows = ();
+	if ($include_global) {
+		@global_rows = database_select($global_select_statement);
+	}
+	
+	# Create an array containing the combined rows
+	my @combined_rows = (@affiliation_rows, @global_rows);
+
+	# Check to make sure rows were returned
+	if (!@combined_rows) {
+		notify($ERRORS{'WARNING'}, 0, "0 rows were retrieved from winProductKey table for affiliation=$affiliation_identifier, product=$product_name");
+		return;
+	}
+	notify($ERRORS{'DEBUG'}, 0, "retrieved rows from winProductKey table for affiliation=$affiliation_identifier, product=$product_name:\n" . format_data(\@combined_rows));
+	
+	my $product_key = $combined_rows[0]->{productkey};
+	notify($ERRORS{'DEBUG'}, 0, "returning product key: $product_key");
+	
+	return $product_key;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 set_product_key
+
+ Parameters  : $affiliation_id, $product_name, $product_key
+ Returns     : If successful: true
+               If failed: false
+ Description : Inserts or updates a row in the winKMS table in the database.
+
+=cut
+
+sub set_product_key {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get and check the arguments
+	my ($affiliation_identifier, $product_name, $product_key) = @_;
+	if (!defined($affiliation_identifier) || !defined($product_name) || !defined($product_key)) {
+		notify($ERRORS{'WARNING'}, 0, "affiliation ID, product name, and product key arguments not passed correctly");
+		return;
+	}
+	
+	# Create the insert statement
+	# Check if the affiliation identifier is a number or word
+	# If a number, set affiliation.id directly
+	# If a word, reference affiliation.name
+	my $insert_statement;
+	if ($affiliation_identifier =~ /^\d+$/) {
+		notify($ERRORS{'DEBUG'}, 0, "affiliation identifier is a number, setting winProductKey.affiliationid=$affiliation_identifier");
+		$insert_statement = <<"EOF";
+INSERT INTO winProductKey
+(
+affiliationid,
+productname,
+productkey
+)
+VALUES
+(
+'$affiliation_identifier',
+'$product_name',
+'$product_key'
+)
+ON DUPLICATE KEY UPDATE
+affiliationid=VALUES(affiliationid),
+productname=VALUES(productname),
+productkey=VALUES(productkey)
+EOF
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "affiliation identifier is NOT a number, setting affiliation.name=$affiliation_identifier");
+		$insert_statement = <<"EOF";
+INSERT INTO winProductKey
+(
+affiliationid,
+productname,
+productkey
+)
+VALUES
+(
+(SELECT id FROM affiliation WHERE name='$affiliation_identifier'),
+'$product_name',
+'$product_key'
+)
+ON DUPLICATE KEY UPDATE
+affiliationid=VALUES(affiliationid),
+productname=VALUES(productname),
+productkey=VALUES(productkey)
+EOF
+	}
+	
+	# Execute the insert statement, the return value should be the id of the row
+	my $insert_result = database_execute($insert_statement);
+	if (defined($insert_result)) {
+		notify($ERRORS{'DEBUG'}, 0, "set product key in database:\naffiliation ID: $affiliation_identifier\nproduct name: $product_name\nproduct key: $product_key");
+	
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to set product key in database:\naffiliation ID: $affiliation_identifier\nproduct name: $product_name\nproduct key: $product_key");
+		return;
+	}
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_kms_servers
+
+ Parameters  : $affiliation_identifier (optional)
+ Returns     : If successful: reference to array of hashes
+               If failed: false
+ Description : Retrieves the KMS server data from the database. This is
+               stored in the winKMS table.
+               
+               An optional affiliation identifier argument may be passed. This
+               may either be an affiliation ID or name. If passed, the only data
+               returned will be the data matching that specific identifier.
+               Global affiliation data will not be returned.
+               
+               If the affiliation identifier argument is not passed, the
+               affiliation is determined by the affiliation of the owner of the
+               image for the reservation. If a KMS server has not been
+               configured for that specific affiliation, the KMS server
+               configured for the Global affiliation is returned.
+               
+               This subroutine returns an array reference. Each array element
+               contains a hash reference representing a row in the winKMS table.
+               
+               Example of returned data:
+               @{$kms_servers}[0] =
+                  |--{address} = 'kms.affiliation.edu'
+                  |--{affiliationid} = '1'
+                  |--{port} = '1688'
+               @{$kms_servers}[1] =
+                  |--{address} = 'kms.global.edu'
+                  |--{affiliationid} = '0'
+                  |--{port} = '1688'
+                  
+               Example usage:
+               my $kms_servers = $self->os->get_kms_servers();
+               my $kms_address = @{$kms_servers[0]}->{address};
+
+=cut
+
+sub get_kms_servers {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Remember if this sub was called with arguments
+	# Used to determine whether or not global affiliation data will be checked
+	my $include_global;
+	if (scalar(@_) == 1) {
+		$include_global = 0;
+		notify($ERRORS{'DEBUG'}, 0, "subroutine was called with an affiliation argument, global affiliation data will be ignored");
+	}
+	elsif (scalar(@_) == 0) {
+		$include_global = 1;
+		notify($ERRORS{'DEBUG'}, 0, "subroutine was NOT called with arguments, global affiliation data will be included");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "subroutine argument count = " . scalar(@_) . ", it must only be called with 0 or 1 arguments");
+		return;
+	}
+	
+	# Get the image affiliation identifier, may be ID or name
+	my $affiliation_identifier = shift;
+	if (!defined($affiliation_identifier)) {
+		$affiliation_identifier = $self->data->get_image_affiliation_id();
+	}
+	if (!defined($affiliation_identifier)) {
+		notify($ERRORS{'WARNING'}, 0, "affiliation argument was not passed and could not be determined from image");
+		return;
+	}
+	
+	# Create the affiliation-specific select statement
+	# Check if the affiliation identifier is a number or word
+	# If a number, use affiliation.id directly
+	# If a word, reference affiliation.name
+	my $affiliation_select_statement;
+	if ($affiliation_identifier =~ /^\d+$/) {
+		notify($ERRORS{'DEBUG'}, 0, "affiliation identifier is a number, retrieving winKMS.affiliationid=$affiliation_identifier");
+		$affiliation_select_statement = <<EOF;
+SELECT
+winKMS.*
+FROM
+winKMS
+WHERE
+winKMS.affiliationid = $affiliation_identifier
+EOF
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "affiliation identifier is NOT a number, retrieving affiliation.name=$affiliation_identifier");
+		$affiliation_select_statement .= <<EOF;
+SELECT
+winKMS.*
+FROM
+winKMS,
+affiliation
+WHERE
+winKMS.affiliationid = affiliation.id
+AND affiliation.name LIKE '$affiliation_identifier'
+EOF
+	}
+	
+	# Create the Global affiliation select statement
+	my $global_select_statement .= <<EOF;
+SELECT
+winKMS.*
+FROM
+winKMS,
+affiliation
+WHERE
+winKMS.affiliationid = affiliation.id
+AND affiliation.name LIKE 'Global'
+EOF
+
+	# Call the database select subroutine
+	my @affiliation_rows = database_select($affiliation_select_statement);
+	
+	# Get the rows for the Global affiliation if this subroutine wasn't called with arguments
+	my @global_rows = ();
+	if ($include_global) {
+		@global_rows = database_select($global_select_statement);
+	}
+	
+	# Create an array containing the combined rows
+	my @combined_rows = (@affiliation_rows, @global_rows);
+
+	# Check to make sure rows were returned
+	if (!@combined_rows) {
+		notify($ERRORS{'WARNING'}, 0, "0 rows were retrieved from winKMS table for affiliation=$affiliation_identifier");
+		return;
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "returning row array from winKMS table for affiliation=$affiliation_identifier:\n" . format_data(\@combined_rows));
+	return \@combined_rows;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 set_kms_server
+
+ Parameters  : $affiliation_id, $address, $port (optional)
+ Returns     : If successful: true
+               If failed: false
+ Description : Inserts or updates a row in the winKMS table in the database.
+
+=cut
+
+sub set_kms_server {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get and check the arguments
+	my ($affiliation_identifier, $address, $port) = @_;
+	if (!defined($affiliation_identifier) || !defined($address)) {
+		notify($ERRORS{'WARNING'}, 0, "affiliation ID and KMS address arguments not passed correctly");
+		return;
+	}
+	
+	# Set the default port if argument wasn't passed
+	if (!defined($port)) {
+		$port = 1688;
+	}
+	
+		# Create the insert statement
+	# Check if the affiliation identifier is a number or word
+	# If a number, set affiliation.id directly
+	# If a word, reference affiliation.name
+	my $insert_statement;
+	if ($affiliation_identifier =~ /^\d+$/) {
+		notify($ERRORS{'DEBUG'}, 0, "affiliation identifier is a number, setting winKMS.affiliationid=$affiliation_identifier");
+		$insert_statement = <<"EOF";
+INSERT INTO winKMS
+(
+affiliationid,
+address,
+port
+)
+VALUES
+(
+'$affiliation_identifier',
+'$address',
+'$port'
+)
+ON DUPLICATE KEY UPDATE
+affiliationid=VALUES(affiliationid),
+address=VALUES(address),
+port=VALUES(port)
+EOF
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "affiliation identifier is NOT a number, setting affiliation.name=$affiliation_identifier");
+		$insert_statement = <<"EOF";
+INSERT INTO winKMS
+(
+affiliationid,
+address,
+port
+)
+VALUES
+(
+(SELECT id FROM affiliation WHERE name='$affiliation_identifier'),
+'$address',
+'$port'
+)
+ON DUPLICATE KEY UPDATE
+affiliationid=VALUES(affiliationid),
+address=VALUES(address),
+port=VALUES(port)
+EOF
+	}
+
+	# Execute the insert statement, the return value should be the id of the row
+	my $insert_result = database_execute($insert_statement);
+	if (defined($insert_result)) {
+		notify($ERRORS{'OK'}, 0, "set KMS address in database:\naffiliation ID: $affiliation_identifier\naddress: $address\nport: $port");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to set KMS address in database:\naffiliation ID: $affiliation_identifier\naddress: $address\nport: $port");
+		return;
+	}
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 1;
 __END__
 
