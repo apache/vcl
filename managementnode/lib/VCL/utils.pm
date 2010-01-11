@@ -107,6 +107,7 @@ our @EXPORT = qw(
   disablesshd
   firewall_compare_update
   format_data
+  get_affiliation_info
   get_block_request_image_info
   get_computer_current_state_name
   get_computer_grp_members
@@ -10036,6 +10037,80 @@ sub disablesshd {
 		return 0;
 	}
 } ## end sub disablesshd
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_affiliation_info
+
+ Parameters  : Affiliation ID (optional)
+ Returns     : Array
+ Description : Returns a hash reference containing information from the affiliation
+               table.
+               
+               An optional affiliation ID argument can be supplied. If supplied, only
+               the information for the specified affiliation is returned.
+               
+               A hash reference is returned. The keys of the hash are the affiliation IDs.
+               Example showing the format of the data structure returned:
+               
+               my $affiliation_info = get_affiliation_info();
+					$affiliation_info->{0}
+						|--{dataUpdateText} = ''
+						|--{helpaddress} = NULL
+						|--{name} = 'Global'
+						|--{shibname} = NULL
+						|--{shibonly} = '0'
+						|--{sitewwwaddress} = NULL
+					$affiliation_info->{1}
+						|--{dataUpdateText} = '<font size="-2">* To update any of these fields, follow the appropriate<br>link under <strong>Related Tools</strong> at the Campus Directory</font>'
+						|--{helpaddress} = 'vcl_help@blah.edu'
+						|--{name} = 'University of Blah'
+						|--{shibname} = 'blah.edu'
+						|--{shibonly} = '0'
+						|--{sitewwwaddress} = 'http://vcl.blah.edu'
+
+
+=cut
+
+sub get_affiliation_info {
+	# Create the select statement
+	my $select_statement = "
+   SELECT
+	*
+	FROM
+	affiliation
+	";
+	
+	# Append a WHERE clause if a affiliation ID argument was supplied
+	my $affiliation_id = shift;
+	if ($affiliation_id) {
+		$select_statement .= "WHERE id = $affiliation_id";
+	}
+
+	# Call the database select subroutine
+	my @selected_rows = database_select($select_statement);
+
+	# Check to make sure rows were returned
+	if (!@selected_rows) {
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve rows from affiliation table");
+		return;
+	}
+	
+	# Transform the array of database rows into a hash
+	my %affiliation_info_hash;
+	for my $row (@selected_rows) {
+		my $affiliation_id = $row->{id};
+		
+		for my $key (keys %$row) {
+			next if $key eq 'id';
+			my $value = $row->{$key};
+			$affiliation_info_hash{$affiliation_id}{$key} = $value;
+		}
+	}
+	
+	#notify($ERRORS{'DEBUG'}, 0, "retrieved affiliation info:\n" . format_data(\%affiliation_info_hash));
+	return \%affiliation_info_hash;
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 

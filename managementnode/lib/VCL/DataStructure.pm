@@ -1499,6 +1499,71 @@ sub get_computer_private_ip_address {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 is_variable_set
+
+ Parameters  : variable name
+ Returns     : If variable is set: 1
+               If variable is not set: 0
+               If an error occurred: undefined
+ Description : Queries the variable table for the variable with the name
+               specified by the argument. Returns true if the variable is set,
+               false otherwise.
+
+=cut
+
+sub is_variable_set {
+	my $variable_name = shift;
+	
+	# Check if 1st argument is a reference meaning this was called as an object method
+	# If so, ignore 1st reference argument and call shift again
+	if (ref($variable_name)) {
+		$variable_name = shift;
+	}
+	
+	# Check the argument
+	if (!defined($variable_name)) {
+		notify($ERRORS{'WARNING'}, 0, "variable name argument was not supplied");
+		return;
+	}
+	
+	# Construct the select statement
+my $select_statement .= <<"EOF";
+SELECT
+variable.value
+FROM
+variable
+WHERE
+variable.name = '$variable_name'
+EOF
+	
+	# Call the database select subroutine
+	my @selected_rows = database_select($select_statement);
+
+	# Check to make 1 sure row was returned
+	if (!@selected_rows){
+		notify($ERRORS{'DEBUG'}, 0, "variable is NOT set: $variable_name");
+		return 0;
+	}
+	elsif (@selected_rows > 1){
+		notify($ERRORS{'WARNING'}, 0, "unable to get value of variable '$variable_name', multiple rows exist in the database for variable:\n" . format_data(\@selected_rows));
+		return;
+	}
+	
+	# Get the serialized value from the variable row
+	my $database_value = $selected_rows[0]{value};
+	
+	if (defined($database_value)) {
+		notify($ERRORS{'DEBUG'}, 0, "variable is set: $variable_name");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unable to get value of variable '$variable_name', row returned:\n" . format_data(\@selected_rows));
+		return;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 get_variable
 
  Parameters  : variable name
@@ -1515,16 +1580,12 @@ sub get_computer_private_ip_address {
 =cut
 
 sub get_variable {
-	my $self = shift;
+	# Check if 1st argument is a reference meaning this was called as an object method
+	# If so, ignore 1st reference argument
+	shift @_ if ($_[0] && ref($_[0]) && ref($_[0]) =~ /VCL/);
+	
+	# Check the argument
 	my $variable_name = shift;
-	
-	# Check if subroutine was called as an object method
-	unless (ref($self) && $self->isa('VCL::DataStructure')) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a VCL::DataStructure module object method");
-		return;
-	}
-	
-	# Check the arguments
 	if (!defined($variable_name)) {
 		notify($ERRORS{'WARNING'}, 0, "variable name argument was not supplied");
 		return;
@@ -1546,8 +1607,8 @@ EOF
 
 	# Check to make 1 sure row was returned
 	if (!@selected_rows){
-		notify($ERRORS{'WARNING'}, 0, "unable to get value of variable '$variable_name', it does not exist in the database");
-		return;
+		notify($ERRORS{'OK'}, 0, "variable '$variable_name' is not set in the database");
+		return 0;
 	}
 	elsif (@selected_rows > 1){
 		notify($ERRORS{'WARNING'}, 0, "unable to get value of variable '$variable_name', multiple rows exist in the database for variable:\n" . format_data(\@selected_rows));
@@ -1565,10 +1626,9 @@ EOF
 	}
 	elsif ($serialization_type eq 'yaml') {
 		# Attempt to deserialize the value
-		# Use eval because Load() will call die() if it encounters an error
-		eval '$deserialized_value = YAML::Load($database_value)';
-		if ($EVAL_ERROR) {
-			notify($ERRORS{'WARNING'}, 0, "unable to get value of variable '$variable_name', unable to deserialize value using YAML::Load(): $database_value");
+		$deserialized_value = yaml_deserialize($database_value);
+		if (!defined($deserialized_value)) {
+			notify($ERRORS{'WARNING'}, 0, "unable to deserialize variable '$variable_name' using YAML");
 			return;
 		}
 		
@@ -1624,15 +1684,14 @@ EOF
 =cut
 
 sub set_variable {
-	my $self = shift;
-	my $variable_name = shift;
-	my $variable_value = shift;
+	# Check if 1st argument is a reference meaning this was called as an object method
+	# If so, ignore 1st reference argument
+	shift @_ if ($_[0] && ref($_[0]) && ref($_[0]) =~ /VCL/);
 	
-	# Check if subroutine was called as an object method
-	unless (ref($self) && $self->isa('VCL::DataStructure')) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a VCL::DataStructure module object method");
-		return;
-	}
+	my $variable_name = shift;
+	
+	# Get the 2nd argument containing the variable value
+	my $variable_value = shift;
 	
 	# Check the arguments
 	if (!defined($variable_name)) {
@@ -1643,6 +1702,8 @@ sub set_variable {
 		notify($ERRORS{'WARNING'}, 0, "variable value argument was not supplied");
 		return;
 	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "attempting to set variable: $variable_name");
 	
 	# Set serialization type to yaml if the value being stored is a reference
 	# Otherwise, a simple scalar is being stored and serialization is not necessary
@@ -1666,19 +1727,20 @@ sub set_variable {
 		$database_value = $variable_value;
 	}
 	else {
-		# Attempt to serialize the value using YAML::Dump()
-		# Use eval because Dump() will call die() if it encounters an error
-		
-		eval '$database_value = YAML::Dump($variable_value)';
-		if ($EVAL_ERROR) {
-			notify($ERRORS{'WARNING'}, 0, "unable to serialize variable '$variable_name' using YAML::Dump(), value: $variable_value");
+		# Attempt to serialize the value using YAML
+		$database_value = yaml_serialize($variable_value);
+		if (!defined($database_value)) {
+			notify($ERRORS{'WARNING'}, 0, "unable to serialize variable '$variable_name' using YAML, value:\n" . format_data($variable_value));
 			return;
 		}
 	}
 	
+	# Escape all backslashes
+	$database_value =~ s/\\/\\\\/g;
+	
 	# Escape all single quote characters with a backslash
 	#   or else the SQL statement will fail becuase it is wrapped in single quotes
-	$database_value =~ s/'/\\'/g;;
+	$database_value =~ s/'/\\'/g;
 	
 	# Assemble an insert statement, if the variable already exists, update the existing row
 	my $insert_statement .= <<"EOF";
@@ -1717,6 +1779,83 @@ EOF
 	}
 	
 	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 yaml_serialize
+
+ Parameters  : Data
+ Returns     : If successful: string containing serialized representation of data
+               If failed: false
+ Description : 
+
+=cut
+
+sub yaml_serialize {
+	# Check if 1st argument is a reference meaning this was called as an object method
+	# If so, ignore 1st reference argument
+	shift @_ if ($_[0] && ref($_[0]) && ref($_[0]) =~ /VCL/);
+	
+	# Check to make sure argument was passed
+	my $data_argument = shift;
+	if (!defined($data_argument)) {
+		notify($ERRORS{'WARNING'}, 0, "data argument was not passed");
+		return;
+	}
+	
+	# Attempt to serialize the value using YAML::Dump()
+	# Use eval because Dump() will call die() if it encounters an error
+	my $serialized_data;
+	eval '$serialized_data = YAML::Dump($data_argument)';
+	if ($EVAL_ERROR) {
+		notify($ERRORS{'WARNING'}, 0, "unable to serialize data using YAML::Dump(), data value: $data_argument");
+		return;
+	}
+	
+	# Escape all backslashes
+	$serialized_data =~ s/\\/\\\\/g;
+	
+	# Escape all single quote characters with a backslash
+	#   or else the SQL statement will fail becuase it is wrapped in single quotes
+	$serialized_data =~ s/'/\\'/g;
+	
+	return $serialized_data;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 yaml_deserialize
+
+ Parameters  : Data
+ Returns     : If successful: data structure
+               If failed: false
+ Description : 
+
+=cut
+
+sub yaml_deserialize {
+	# Check if 1st argument is a reference meaning this was called as an object method
+	# If so, ignore 1st reference argument and call shift again
+	my $yaml_data_argument = shift;
+	if (ref($yaml_data_argument)) {
+		$yaml_data_argument = shift;
+	}
+	
+	# Check to make sure argument was passed
+	if (!defined($yaml_data_argument)) {
+		notify($ERRORS{'WARNING'}, 0, "data argument was not passed");
+		return;
+	}
+	
+	my $deserialized_value;
+	eval '$deserialized_value = YAML::Load($yaml_data_argument)';
+	if ($EVAL_ERROR) {
+		notify($ERRORS{'WARNING'}, 0, "unable to deserialize data using YAML::Load(), data value: $yaml_data_argument");
+		return;
+	}
+	
+	return $deserialized_value;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -1765,6 +1904,54 @@ sub get_image_affiliation_name {
 	}
 	
 	return $image_affiliation_name;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_image_affiliation_id
+
+ Parameters  : None.
+ Returns     : If successful: string containing affiliation id
+               If failed: false
+ Description : This subroutine determines the affiliation id for the image
+               assigned to the reservation.
+               The image affiliation is based on the affiliation of the image
+               owner.
+
+=cut
+
+sub get_image_affiliation_id {
+	my $self = shift;
+	
+	# Check if subroutine was called as an object method
+	unless (ref($self) && $self->isa('VCL::DataStructure')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a VCL::DataStructure module object method");
+		return;
+	}
+	
+	# Get the image owner id in order to determine the image affiliation
+	my $image_owner_id = $self->get_image_ownerid();
+	notify($ERRORS{'DEBUG'}, 0, "image owner id: $image_owner_id");
+	if (!defined($image_owner_id)) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine image owner id in order to determine image affiliation");
+		return;
+	}
+	
+	# Get the data for the user who owns the image
+	my $image_owner_data = $self->retrieve_user_data($image_owner_id);
+	unless ($image_owner_data) {
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve image owner data in order to determine image affiliation");
+		return;
+	}
+	
+	# Get the affiliation id from the user data hash
+	my $image_affiliation_id = $image_owner_data->{affiliation}{id};
+	unless ($image_affiliation_id) {
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve image owner affiliation id");
+		return;
+	}
+	
+	return $image_affiliation_id;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
