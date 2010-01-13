@@ -1237,22 +1237,34 @@ sub set_file_owner {
 	my $computer_node_name   = $self->data->get_computer_node_name();
 	
 	# Run chown
-	my ($chown_exit_status, $chown_output) = run_ssh_command($computer_node_name, $management_node_keys, "/usr/bin/chown.exe -R \"$owner\" \"$file_path\"", '', '', 0);
-	my @chown_errors = grep(/(chown:|cannot access|no such file|failed to)/ig, @$chown_output) if @$chown_output;
-	if (defined($chown_exit_status) && $chown_exit_status == 0 && !@chown_errors) {
-		notify($ERRORS{'OK'}, 0, "set $owner as the owner of $file_path");
-	}
-	elsif (@chown_errors) {
-		notify($ERRORS{'WARNING'}, 0, "error occurred setting $owner as the owner of $file_path, error output:\n" . join("\n", @chown_errors));
-		return;
-	}
-	elsif ($chown_output) {
-		notify($ERRORS{'WARNING'}, 0, "error occurred setting $owner as the owner of $file_path, exit status: $chown_exit_status, output:\n@{$chown_output}");
-		return;
-	}
-	else {
+	my ($chown_exit_status, $chown_output) = run_ssh_command($computer_node_name, $management_node_keys, "/usr/bin/chown.exe -cR \"$owner\" \"$file_path\"", '', '', 0);
+	
+	# Check if exit status is defined - if not, SSH command failed
+	if (!defined($chown_exit_status)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to set $owner as the owner of $file_path");
 		return;
+	}
+	
+	# Make sure some output was returned
+	if (!defined(@$chown_output)) {
+		notify($ERRORS{'WARNING'}, 0, "error occurred setting $owner as the owner of $file_path, chown output was not returned, exit status: $chown_exit_status");
+		return;
+	}
+	
+	# Check if any known error lines exist in the chown output
+	my @chown_error_lines = grep(/(chown:|cannot access|no such file|failed to)/ig, @$chown_output);
+	if (@chown_error_lines) {
+		notify($ERRORS{'WARNING'}, 0, "error occurred setting $owner as the owner of $file_path, error output:\n" . join("\n", @chown_error_lines));
+		return;
+	}
+	
+	# Make sure an "ownership of" line exists in the chown output
+	my @chown_success_lines = grep(/(ownership of)/ig, @$chown_output);
+	if (@chown_success_lines) {
+		notify($ERRORS{'OK'}, 0, "set $owner as the owner of $file_path, files and directories modified: " . scalar(@chown_success_lines));
+	}
+	else {
+		notify($ERRORS{'OK'}, 0, "$owner is already the owner of $file_path");
 	}
 	
 	return 1;
@@ -1299,7 +1311,23 @@ sub logoff_users {
 	# '>rdp-tcp#24        root                      0  Active  rdpwd               '
 	foreach my $connection_line (@connection_lines) {
 		my ($session_id) = $connection_line =~ /(\d+)\s+(?:Active|Listen|Conn|Disc)/g;
-		notify($ERRORS{'DEBUG'}, 0, "qwinsta.exe output:\nline: '$connection_line'\nsession id: '$session_id'");
+		my ($session_name) = $connection_line =~ /^\s?>?([^ ]+)/g;
+		
+		# Determine if the session ID or name will be used to kill the session
+		# logoff.exe has trouble killing sessions with ID=0
+		# Use the ID if it's > 0, otherwise use the session name
+		my $session_identifier;
+		if ($session_id) {
+			$session_identifier = $session_id;
+		}
+		elsif ($session_name) {
+			$session_identifier = $session_name;
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "session ID or name could not be determined from line:\n$connection_line");
+			next;
+		}
+		notify($ERRORS{'DEBUG'}, 0, "attempting to kill connection:\nline: '$connection_line'\nsession identifier: $session_identifier");
 		
 		#LOGOFF [sessionname | sessionid] [/SERVER:servername] [/V]
 		#  sessionname         The name of the session.
@@ -1308,12 +1336,12 @@ sub logoff_users {
 		#							 session to log off (default is current).
 		#  /V                  Displays information about the actions performed.
 		# Call logoff.exe, pass it the session
-		my ($logoff_exit_status, $logoff_output) = run_ssh_command($computer_node_name, $management_node_keys, "logoff.exe \"$session_id\" /V");
+		my ($logoff_exit_status, $logoff_output) = run_ssh_command($computer_node_name, $management_node_keys, "logoff.exe $session_identifier /V");
 		if ($logoff_exit_status == 0) {
-			notify($ERRORS{'OK'}, 0, "logged off session ID: $session_id, output:\n" . join("\n", @$logoff_output));
+			notify($ERRORS{'OK'}, 0, "logged off session: $session_identifier, output:\n" . join("\n", @$logoff_output));
 		}
 		else {
-			notify($ERRORS{'WARNING'}, 0, "failed to log off session ID: $session_id, exit status: $logoff_exit_status, output:\n@{$logoff_output}");
+			notify($ERRORS{'WARNING'}, 0, "failed to log off session: $session_identifier, exit status: $logoff_exit_status, output:\n@{$logoff_output}");
 		}
 	}
 	return 1;
