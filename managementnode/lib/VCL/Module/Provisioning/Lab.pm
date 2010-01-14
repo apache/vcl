@@ -63,7 +63,7 @@ use VCL::utils;
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 initialize
+=head2 load
 
  Parameters  :
  Returns     :
@@ -71,7 +71,7 @@ use VCL::utils;
 
 =cut
 
-sub initialize {
+sub load {
 	my $self                  = shift;
 	my $request_id            = $self->data->get_request_id();
 	my $reservation_id        = $self->data->get_reservation_id();
@@ -79,7 +79,7 @@ sub initialize {
 	my $request_check_time    = $self->data->get_request_check_time();
 	my $computer_id           = $self->data->get_computer_id();
 
-	notify($ERRORS{'OK'}, 0, "initializing Lab module, computer id: $computer_id, is parent reservation: $reservation_is_parent");
+	notify($ERRORS{'OK'}, 0, "computer id: $computer_id, is parent reservation: $reservation_is_parent");
 
 	# Check if this is a preload request
 	# Nothing needs to be done for lab preloads
@@ -109,7 +109,7 @@ sub initialize {
 	else {
 		notify($ERRORS{'OK'}, 0, "check_time result is $request_check_time, reservation will be processed");
 	}
-} ## end sub initialize
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 

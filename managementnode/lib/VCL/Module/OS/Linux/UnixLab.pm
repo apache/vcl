@@ -287,6 +287,38 @@ sub sanitize {
 	notify($ERRORS{'OK'}, 0, "$computer_node_name has been sanitized");
 	return 1;
 } ## end sub sanitize
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_current_image_name
+
+ Parameters  : None
+ Returns     : If successful: string
+               If failed: 0
+ Description : Returns the name of the reservation image. This is used in
+               reclaim.pm to determine if a computer needs to be reloaded or
+					sanitized. Lab machines should always be sanitized.
+
+=cut
+
+sub get_current_image_name {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+
+	my $image_name = $self->data->get_image_name();
+	if ($image_name) {
+		notify($ERRORS{'DEBUG'}, 0, "returning reservation image name: $image_name");
+		return $image_name;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve reservation image name");
+		return 0;
+	}
+}
+
 #/////////////////////////////////////////////////////////////////////////////
 
 1;

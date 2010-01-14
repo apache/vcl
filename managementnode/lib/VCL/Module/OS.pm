@@ -169,6 +169,96 @@ sub get_source_configuration_directories {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 get_currentimage_txt_contents
+
+ Parameters  : None
+ Returns     : If successful: array
+               If failed: false
+ Description : Reads the currentimage.txt file on a computer and returns its
+               contents as an array. Each array element represents a line in
+               the file.
+
+=cut
+
+sub get_currentimage_txt_contents {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+
+	my $management_node_keys = $self->data->get_management_node_keys();
+	my $computer_node_name   = $self->data->get_computer_node_name();
+
+	# Attempt to retrieve the contents of currentimage.txt
+	my $cat_command = "cat ~/currentimage.txt";
+	my ($cat_exit_status, $cat_output) = run_ssh_command($computer_node_name, $management_node_keys, $cat_command, '', '', 0);
+	if (defined($cat_exit_status) && $cat_exit_status == 0) {
+		notify($ERRORS{'DEBUG'}, 0, "retrieved currentimage.txt contents from $computer_node_name");
+	}
+	elsif (defined($cat_exit_status)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve currentimage.txt from $computer_node_name, exit status: $cat_exit_status, output:\n@{$cat_output}");
+		return;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to failed to retrieve currentimage.txt from $computer_node_name");
+		return;
+	}
+
+	notify($ERRORS{'DEBUG'}, 0, "found " . @{$cat_output} . " lines in currentimage.txt on $computer_node_name");
+
+	return @{$cat_output};
+} ## end sub get_currentimage_txt_contents
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_current_image_name
+
+ Parameters  : None
+ Returns     : If successful: string
+               If failed: false
+ Description : Reads the currentimage.txt file on a computer and returns a
+               string containing the name of the loaded image.
+
+=cut
+
+sub get_current_image_name {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+
+	my $computer_node_name = $self->data->get_computer_node_name();
+
+	# Get the contents of the currentimage.txt file
+	my @current_image_txt_contents;
+	if (@current_image_txt_contents = $self->get_currentimage_txt_contents()) {
+		notify($ERRORS{'DEBUG'}, 0, "retrieved currentimage.txt contents from $computer_node_name");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve currentimage.txt contents from $computer_node_name");
+		return;
+	}
+
+	# Make sure an empty array wasn't returned
+	if (defined $current_image_txt_contents[0]) {
+		my $current_image_name = $current_image_txt_contents[0];
+
+		# Remove any line break characters
+		$current_image_name =~ s/[\r\n]*//g;
+
+		notify($ERRORS{'DEBUG'}, 0, "name of image currently loaded on $computer_node_name: $current_image_name");
+		return $current_image_name;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "empty array was returned when currentimage.txt contents were retrieved from $computer_node_name");
+		return;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 1;
 __END__
 
