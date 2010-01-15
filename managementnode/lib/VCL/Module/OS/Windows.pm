@@ -5990,231 +5990,6 @@ sub copy_capture_configuration_files {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 run_sysprep
-
- Parameters  : None
- Returns     : 1 if successful, 0 otherwise
- Description : -Calls subroutine to prepare the hardware drivers
-               -Copies Sysprep files to C:\Sysprep
-					-Clears out the setupapi.log file
-					-Calls Sysprep.exe with the options to seal and shutdown the computer
-					-Waits for computer to become unresponsive
-					-Waits 3 additional minutes
-					-Calls provisioning module's power_off() subroutine to make sure the computer is powered off
-
-=cut
-
-sub run_sysprep {
-	my $self = shift;
-	if (ref($self) !~ /windows/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-
-	my $management_node_keys = $self->data->get_management_node_keys();
-	my $computer_node_name   = $self->data->get_computer_node_name();
-
-	# Remove old C:\Sysprep directory if it exists
-	notify($ERRORS{'DEBUG'}, 0, "attempting to remove old C:/Sysprep directory if it exists");
-	if (!$self->delete_file('C:/Sysprep')) {
-		notify($ERRORS{'WARNING'}, 0, "unable to remove existing C:/Sysprep directory");
-		return 0;
-	}
-
-	# Fix the path, xcopy.exe requires backslashes
-	(my $node_configuration_directory = $NODE_CONFIGURATION_DIRECTORY) =~ s/\//\\/g;
-
-	# Copy Sysprep files to C:\Sysprep
-	my $xcopy_command = "xcopy.exe /E /C /I /Q /H /K /O /Y \"$node_configuration_directory\\Utilities\\Sysprep\" \"C:\\Sysprep\"";
-	my ($xcopy_status, $xcopy_output) = run_ssh_command($computer_node_name, $management_node_keys, $xcopy_command);
-	if (defined($xcopy_status) && $xcopy_status == 0) {
-		notify($ERRORS{'OK'}, 0, "copied Sysprep files to C:/Sysprep");
-	}
-	elsif (defined($xcopy_status)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to copy Sysprep files to C:/Sysprep, exit status: $xcopy_status, output:\n@{$xcopy_output}");
-		return 0;
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "unable to run ssh command to copy Sysprep files to C:/Sysprep");
-		return 0;
-	}
-	
-	# Copy and scan drivers
-	notify($ERRORS{'DEBUG'}, 0, "attempting to copy and scan drivers");
-	if (!$self->prepare_drivers()) {
-		notify($ERRORS{'WARNING'}, 0, "unable to copy and scan drivers");
-		return 0;
-	}
-	
-	# Configure the firewall to allow the sessmgr.exe program
-	# Sysprep may hang with a dialog box asking to allow this program
-	if (!$self->firewall_enable_sessmgr()) {
-		notify($ERRORS{'WARNING'}, 0, "unable to configure firewall to allow sessmgr.exe program, Sysprep may hang");
-		return 0;
-	}
-
-	# Clear out setupapi.log
-	my $setupapi_command = "/bin/cat C:/Windows/setupapi.log >> C:/Windows/setupapi_save.log && /bin/cp /dev/null C:/Windows/setupapi.log";
-	my ($setupapi_status, $setupapi_output) = run_ssh_command($computer_node_name, $management_node_keys, $setupapi_command);
-	if (defined($setupapi_status) && $setupapi_status == 0) {
-		notify($ERRORS{'OK'}, 0, "cleared out setupapi.log");
-	}
-	elsif (defined($setupapi_status)) {
-		notify($ERRORS{'OK'}, 0, "failed to clear out setupapi.log, exit status: $setupapi_status, output:\n@{$setupapi_output}");
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "unable to run ssh command to clear out setupapi.log");
-		return 0;
-	}
-	
-	# Run Sysprep.exe, use cygstart to lauch the .exe and return immediately
-	my $sysprep_command = '/bin/cygstart.exe cmd.exe /c "C:/Sysprep/sysprep.exe /forceshutdown /quiet /reseal /mini"';
-	my ($sysprep_status, $sysprep_output) = run_ssh_command($computer_node_name, $management_node_keys, $sysprep_command);
-	if (defined($sysprep_status) && $sysprep_status == 0) {
-		notify($ERRORS{'OK'}, 0, "initiated Sysprep.exe, waiting for $computer_node_name to become unresponsive");
-	}
-	elsif (defined($sysprep_status)) {
-		notify($ERRORS{'OK'}, 0, "failed to initiate Sysprep.exe, exit status: $sysprep_status, output:\n@{$sysprep_output}");
-		return 0;
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "unable to run ssh command to initiate Sysprep.exe");
-		return 0;
-	}
-
-	# Wait maximum of 5 minutes for the computer to become unresponsive
-	if (!$self->wait_for_no_ping(5)) {
-		# Computer never stopped responding to ping
-		notify($ERRORS{'WARNING'}, 0, "$computer_node_name never became unresponsive to ping");
-		return 0;
-	}
-
-	# Wait for 3 minutes then call provisioning module's power_off() subroutine
-	# Sysprep does not always shut down the computer when it is done
-	notify($ERRORS{'OK'}, 0, "sleeping for 3 minutes to allow Sysprep.exe to finish");
-	sleep 180;
-
-	# Call power_off() to make sure computer is shut down
-	if (!$self->provisioner->power_off()) {
-		# Computer could not be shut off
-		notify($ERRORS{'WARNING'}, 0, "unable to power off $computer_node_name");
-		return 0;
-	}
-
-	return 1;
-} ## end sub run_sysprep
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 prepare_drivers
-
- Parameters  : 
- Returns     :
- Description : 
-
-=cut
-
-sub prepare_drivers {
-	my $self = shift;
-	if (ref($self) !~ /windows/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-
-	my $management_node_keys = $self->data->get_management_node_keys();
-	my $computer_node_name   = $self->data->get_computer_node_name();
-	my $imagemeta_sysprep = $self->data->get_imagemeta_sysprep();
-	
-	my $driver_directory;
-	if ($imagemeta_sysprep) {
-		$driver_directory = 'C:/Sysprep/Drivers';
-	}
-	else {
-		$driver_directory = 'C:/Drivers';
-	}
-	
-
-	# Remove old driver directories if they exists
-	notify($ERRORS{'DEBUG'}, 0, "attempting to remove old C:/Sysprep\\Drivers directory if it exists");
-	if (!$self->delete_file("C:/Sysprep/Drivers")) {
-		notify($ERRORS{'WARNING'}, 0, "unable to remove existing C:/Sysprep/Drivers directory");
-	}
-	notify($ERRORS{'DEBUG'}, 0, "attempting to remove old C:/Drivers directory if it exists");
-	if (!$self->delete_file("C:/Drivers")) {
-		notify($ERRORS{'WARNING'}, 0, "unable to remove existing C:/Drivers directory");
-	}
-	
-	# Copy driver files to C:/Drivers
-	my $cp_command = "mkdir -p \"$driver_directory\" && cp -rf -T \"$NODE_CONFIGURATION_DIRECTORY/Drivers\" \"$driver_directory\"";
-	my ($cp_status, $cp_output) = run_ssh_command($computer_node_name, $management_node_keys, $cp_command);
-	if (defined($cp_status) && $cp_status == 0) {
-		notify($ERRORS{'DEBUG'}, 0, "copied driver files to $driver_directory");
-	}
-	elsif (defined($cp_status)) {
-		notify($ERRORS{'OK'}, 0, "failed to copy driver files to $driver_directory, exit status: $cp_status, output:\n@{$cp_output}");
-		return 0;
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "unable to run ssh command to drivers files to $driver_directory");
-		return 0;
-	}
-	
-	# Delete existing DevicePath key
-	my $reg_del_command = $self->get_system32_path() . '/reg.exe DELETE "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion" /v DevicePath /f';
-	my ($reg_del_status, $reg_del_output) = run_ssh_command($computer_node_name, $management_node_keys, $reg_del_command);
-	if (defined($reg_del_status) && $reg_del_status == 0) {
-		notify($ERRORS{'DEBUG'}, 0, "deleted existing DevicePath key");
-	}
-	elsif (defined($reg_del_status)) {
-		notify($ERRORS{'OK'}, 0, "failed to delete existing DevicePath key, exit status: $reg_del_status, output:\n@{$reg_del_output}");
-		return 0;
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "unable to run ssh command to delete existing DevicePath key");
-		return 0;
-	}
-
-	# Run spdrvscn.exe
-	my $spdrvscn_command = "$NODE_CONFIGURATION_DIRECTORY/Utilities/SPDrvScn/spdrvscn.exe /p \"$driver_directory\" /e inf /d \$SYSTEMROOT\\\\inf /a /s /q";
-	my ($spdrvscn_status, $spdrvscn_output) = run_ssh_command($computer_node_name, $management_node_keys, $spdrvscn_command);
-	if (defined($spdrvscn_status) && $spdrvscn_status == 0) {
-		notify($ERRORS{'OK'}, 0, "executed spdrvscn.exe");
-	}
-	elsif (defined($spdrvscn_status)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to execute spdrvscn.exe, exit status: $spdrvscn_status, output:\n@{$spdrvscn_output}");
-		return 0;
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "unable to run ssh command to execute spdrvscn.exe");
-		return 0;
-	}
-	
-	# Query the DevicePath registry value in order to save it in the log for troubleshooting
-	my $reg_query_command = $self->get_system32_path() . '/reg.exe QUERY "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion" /v DevicePath';
-	my ($reg_query_status, $reg_query_output) = run_ssh_command($computer_node_name, $management_node_keys, $reg_query_command, '', '', 1);
-	if (defined($reg_query_status) && $reg_query_status == 0) {
-		notify($ERRORS{'DEBUG'}, 0, "queried DevicePath registry key:\n" . join("\n", @{$reg_query_output}));
-	}
-	elsif (defined($reg_query_status)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to query DevicePath registry key, exit status: $reg_query_status, output:\n@{$reg_query_output}");
-		return 0;
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "unable to run ssh command to query DevicePath registry key");
-		return 0;
-	}
-	
-	# Format the string for the log output
-	my ($device_path_string) = grep(/devicepath\s+(reg_.*sz)/i, @{$reg_query_output});
-	$device_path_string =~ s/.*(devicepath\s+reg_.*sz)\s*/$1\n/i;
-	$device_path_string =~ s/;/\n/g;
-	notify($ERRORS{'OK'}, 0, "device path string: $device_path_string");
-	
-	return 1;
-} ## end sub prepare_drivers
-
-#/////////////////////////////////////////////////////////////////////////////
-
 =head2 clean_hard_drive
 
  Parameters  : 
@@ -7743,7 +7518,7 @@ sub is_64_bit {
 	# Get the PROCESSOR_IDENTIFIER environment variable to determine if OS is 32 or 64-bit
 	my ($set_exit_status, $set_output) = run_ssh_command($computer_node_name, $management_node_keys, 'set', '', '', 1);
 	if (defined($set_exit_status) && $set_exit_status == 0) {
-		notify($ERRORS{'OK'}, 0, "executed set command to determine architecture on $computer_node_name");
+		notify($ERRORS{'DEBUG'}, 0, "executed set command to determine architecture on $computer_node_name");
 	}
 	elsif (defined($set_exit_status)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute set command to determine architecture on $computer_node_name, exit status: $set_exit_status, output:\n@{$set_output}");
@@ -7820,6 +7595,14 @@ sub get_system32_path {
  Description : Retrieves the Windows product name from the registry. This is
                stored at:
                HKLM\Software\Microsoft\Windows NT\CurrentVersion\ProductName
+               
+               The product name stored in the registry is used in the
+               winProductKey table to match a product key up with a product. It
+               must match exactly. Known strings for some versions of Windows:
+               "Microsoft Windows XP"
+               "Microsoft Windows Server 2003"
+               "Windows Server (R) 2008 Datacenter"
+               "Windows Vista (TM) Enterprise"
 
 =cut
 
@@ -8150,14 +7933,9 @@ sub get_product_key {
 		return;
 	}
 	
-	# Get the product name, could be:
-	# "Microsoft Windows XP"
-	# "Microsoft Windows Server 2003"
+	# Get the product name from the registry on the computer
 	my $product_name = shift || $self->get_product_name();
-	if ($product_name) {
-		notify($ERRORS{'DEBUG'}, 0, "product name: $product_name");
-	}
-	else {
+	if (!$product_name) {
 		notify($ERRORS{'WARNING'}, 0, "product name argument was not passed and could not be determined from computer");
 		return;
 	}

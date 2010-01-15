@@ -249,10 +249,11 @@ Activate Windows license
  Parameters  : None
  Returns     : If successful: true
                If failed: false
- Description : Runs cscript.exe slmgr.vbs -skms to set the KMS server address
-               stored on the computer.
-               Runs cscript.exe slmgr.vbs -ato to activate licensing on the
-               computer.
+ Description : Activates Microsoft Windows. A first attempt is made using a
+               MAK key if one has been configured in the winProductKey table
+               for the version of Windows installed on the computer. If unable
+               to activate using a MAK key, activation is attempting using a
+               KMS server configured in the winKMS table.
 
 =cut
 
@@ -263,135 +264,179 @@ sub activate {
 		return;
 	}
 	
-	my $management_node_keys     = $self->data->get_management_node_keys();
-	my $computer_node_name       = $self->data->get_computer_node_name();
-	my $product_name             = $self->get_product_name();
-	
-	# Get the image affiliation name
-	my $image_affiliation_name = $self->data->get_image_affiliation_name();
-	if ($image_affiliation_name) {
-		notify($ERRORS{'DEBUG'}, 0, "image affiliation name: $image_affiliation_name");
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "image affiliation name could not be retrieved, using default licensing configuration");
-		$image_affiliation_name = 'default';
+	# Check if Windows has already been activated
+	my $license_status = $self->get_license_status();
+	if ($license_status && $license_status =~ /licensed/i) {
+		notify($ERRORS{'OK'}, 0, "Windows has already been activated");
+		return 1;
 	}
 	
-	# Get the Windows activation data from the windows-activation variable
-	my $activation_data = $self->data->get_variable('windows-activation');
-	if ($activation_data) {
-		notify($ERRORS{'DEBUG'}, 0, "activation data:\n" . format_data($activation_data));
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "activation data could not be retrieved");
-		return;
-	}
+	## Attempt to activate using MAK product key
+	#return 1 if $self->activate_mak();
 	
-	# Get the activation data specific to the image affiliation
-	my $affiliation_config = $activation_data->{$image_affiliation_name};
-	if ($affiliation_config) {
-		notify($ERRORS{'DEBUG'}, 0, "$image_affiliation_name affiliation activation configuration:\n" . format_data($affiliation_config));
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "activation configuration does not exist for affiliation: $image_affiliation_name, attempting to retrieve default configuration");
-		
-		$affiliation_config = $activation_data->{'default'};
-		if ($affiliation_config) {
-			notify($ERRORS{'DEBUG'}, 0, "default activation configuration:\n" . format_data($affiliation_config));
-		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "default activation configuration does not exist");
-			return;
-		}
-	}
+	# Attempt to activate using KMS server
+	return 1 if $self->activate_kms();
 	
-	
-	# Loop through the activation methods for the affiliation
-	for my $activation_config (@$affiliation_config) {
-		my $activation_method = $activation_config->{method};
-		
-		if ($activation_method =~ /kms/i) {
-			my $kms_address = $activation_config->{address};
-			my $kms_port = $activation_config->{port} || 1688;
-			notify($ERRORS{'DEBUG'}, 0, "attempting to set kms server: $kms_address, port: $kms_port");
-			
-			# Attempt to install the KMS client product key
-			# This must be done or else the slmgr.vbs -skms option won't be available
-			if ($self->install_kms_client_product_key()) {
-				notify($ERRORS{'DEBUG'}, 0, "installed the KMS client product key");
-			}
-			else {
-				notify($ERRORS{'WARNING'}, 0, "failed to install the KMS client product key");
-				next;
-			}
-			
-			# Run slmgr.vbs -skms to configure the computer to use the KMS server
-			if ($self->set_kms($kms_address, $kms_port)) {
-				notify($ERRORS{'DEBUG'}, 0, "set KMS address");
-			}
-			else {
-				notify($ERRORS{'WARNING'}, 0, "failed to set KMS address");
-				next;
-			}
-		}
-		elsif ($activation_method =~ /mak/i) {
-			my $mak_key = $activation_config->{key};
-			my $mak_product = $activation_config->{product};
-			
-			if ($mak_product eq $product_name) {
-				notify($ERRORS{'DEBUG'}, 0, "attempting to set install MAK key for $mak_product: $mak_key");
-			}
-			else {
-				notify($ERRORS{'DEBUG'}, 0, "MAK key product ($mak_product) does not match installed version of Windows ($product_name)");
-				next;
-			}
-			
-			# Attempt to install the MAK product key
-			if ($self->install_product_key($mak_key)) {
-				notify($ERRORS{'DEBUG'}, 0, "installed MAK product key: $mak_key");
-			}
-			else {
-				notify($ERRORS{'WARNING'}, 0, "failed to install MAK product key: $mak_key");
-				next;
-			}
-		}
-		else  {
-			notify($ERRORS{'WARNING'}, 0, "unsupported activation method: $activation_method");
-			next;
-		}
-		
-		# Attempt to activate the license
-		if ($self->activate_license()) {
-			notify($ERRORS{'OK'}, 0, "activated license");
-			return 1;
-		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "failed to activate license");
-			next;
-		}
-	}
-	
-	notify($ERRORS{'WARNING'}, 0, "failed to activate license on $computer_node_name using any configured method");
+	notify($ERRORS{'WARNING'}, 0, "failed to activate Windows using MAK or KMS methods");
 	return;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 install_kms_client_product_key
+=head2 activate_mak
 
  Parameters  : None
  Returns     : If successful: true
                If failed: false
- Description : 
+ Description : Attempts to activate Windows using a MAK key stored in the
+               winProductKey table.
 
 =cut
 
-sub install_kms_client_product_key {
+sub activate_mak {
 	my $self = shift;
 	if (ref($self) !~ /windows/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
+	
+	# Attempt to get the product key stored in the winProductKey table
+	# This will return the correct key for the affiliation and version of Windows installed on the computer
+	my $product_key = $self->get_product_key();
+	if ($product_key) {
+		notify($ERRORS{'DEBUG'}, 0, "retrieved MAK product key from the winProductKey table: $product_key");
+	}
+	else {
+		notify($ERRORS{'OK'}, 0, "MAK product key could not be retrieved from the winProductKey table");
+		return;
+	}
+	
+	# Attempt to install the MAK product key
+	if ($self->run_slmgr_ipk($product_key)) {
+		notify($ERRORS{'DEBUG'}, 0, "installed MAK product key: $product_key");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to install MAK product key: $product_key");
+		return;
+	}
+	
+	# Attempt to activate the license
+	if ($self->run_slmgr_ato()) {
+		notify($ERRORS{'OK'}, 0, "activated Windows using MAK product key: $product_key");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to activate Windows using MAK product key: $product_key");
+		return;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 activate_kms
+
+ Parameters  : None
+ Returns     : If successful: true
+               If failed: false
+ Description : Attempts to activate Windows using a KMS server configured in
+               the winKMS table.
+
+=cut
+
+sub activate_kms {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get the KMS server info from the winKMS table
+	my $kms_server_info = $self->get_kms_servers();
+	if (!$kms_server_info) {
+		notify($ERRORS{'WARNING'}, 0, "KMS server information could not be retrieved");
+		return;
+	}
+	
+	# Attempt to get the KMS client product key
+	# This is a publically available key that needs to be installed in order to activate via KMS
+	my $product_key = $self->get_kms_client_product_key();
+	if ($product_key) {
+		notify($ERRORS{'DEBUG'}, 0, "retrieved KMS client product key: $product_key");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "KMS client product key could not be retrieved");
+		return;
+	}
+	
+	# Attempt to install the KMS client product key
+	if ($self->run_slmgr_ipk($product_key)) {
+		notify($ERRORS{'DEBUG'}, 0, "installed KMS client product key: $product_key");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to install KMS client product key: $product_key");
+		return;
+	}
+	
+	# Loop through the KMS servers, set KMS server, attempt to activate
+	for my $kms_server (@{$kms_server_info}) {
+		my $kms_address = $kms_server->{address};
+		my $kms_port = $kms_server->{port};
+		notify($ERRORS{'DEBUG'}, 0, "attempting to set KMS server: $kms_address:$kms_port");
+		
+		# Run slmgr.vbs -skms to configure the computer to use the KMS server
+		if ($self->run_slmgr_skms($kms_address, $kms_port)) {
+			notify($ERRORS{'OK'}, 0, "set KMS server: $kms_address:$kms_port");
+			
+			# Attempt to activate the license
+			if ($self->run_slmgr_ato()) {
+				notify($ERRORS{'OK'}, 0, "activated Windows using KMS server: $kms_address:$kms_port");
+				return 1;
+			}
+			else {
+				notify($ERRORS{'WARNING'}, 0, "failed to activate Windows using KMS server: $kms_address:$kms_port");
+				next;
+			}
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to set KMS server: $kms_address:$kms_port");
+			next;
+		}
+	}
+	
+	notify($ERRORS{'WARNING'}, 0, "failed to activate Windows using any KMS servers configured in the winKMS table");
+	return;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_kms_client_product_key
+
+ Parameters  : $product_name (optional
+ Returns     : If successful: string
+               If failed: false
+ Description : Returns a KMS client product key based on the version of Windows
+               either specified as an argument or installed on the computer. A
+               KMS client product key is a publically shared product key which
+               must be installed before activating using a KMS server.
+
+=cut
+
+sub get_kms_client_product_key {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get the product name
+	my $product_name = shift || $self->get_product_name();
+	if (!$product_name) {
+		notify($ERRORS{'WARNING'}, 0, "product name was not passed as an argument and could not be retrieved from computer");
+		return;
+	}
+	
+	# Remove (TM) or (R) from the product name
+	$product_name =~ s/ \([tmr]*\)//ig;
 	
 	# Create a hash of KMS setup product keys
 	# These are publically available from Microsoft's Volume Activation 2.0 Deployment Guide
@@ -410,42 +455,28 @@ sub install_kms_client_product_key {
 		'Windows Web Server 2008'                        => 'WYR28-R7TFJ-3X2YQ-YCY4H-M249D',
 	);
 	
-	# Get the KMS setup product key from the hash
-	my $product_name = $self->get_product_name();
-	
-	# Remove (TM) or (R) from the product name
-	$product_name =~ s/ \([tmr]*\)//ig;
-	
+	# Get the matching product key from the hash for the product name
 	my $product_key = $kms_product_keys{$product_name};
 	if (!$product_key) {
-		notify($ERRORS{'WARNING'}, 0, "failed to retrieve KMS setup key for Windows product: $product_name");
+		notify($ERRORS{'WARNING'}, 0, "unsupported product name: $product_name, KMS client product key is not known");
 		return;
 	}
-	notify($ERRORS{'DEBUG'}, 0, "KMS client setup key for $product_name: $product_key");
-	
-	# Install the KMS client product key
-	if ($self->install_product_key($product_key)) {
-		notify($ERRORS{'OK'}, 0, "installed KMS client product key");
-		return 1;
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to install KMS client product key");
-		return;
-	}
+	notify($ERRORS{'DEBUG'}, 0, "returning KMS client setup key for $product_name: $product_key");
+	return $product_key;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 install_product_key
+=head2 run_slmgr_ipk
 
  Parameters  : None
  Returns     : If successful: true
                If failed: false
- Description : 
+ Description : Runs slmgr.vbs -ipk to install a product key.
 
 =cut
 
-sub install_product_key {
+sub run_slmgr_ipk {
 	my $self = shift;
 	if (ref($self) !~ /windows/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
@@ -454,6 +485,7 @@ sub install_product_key {
 	
 	my $management_node_keys     = $self->data->get_management_node_keys();
 	my $computer_node_name       = $self->data->get_computer_node_name();
+	my $system32_path = $self->get_system32_path();
 	
 	# Get the arguments
 	my $product_key = shift;
@@ -463,7 +495,7 @@ sub install_product_key {
 	}
 	
 	# Run cscript.exe slmgr.vbs -ipk to install the product key
-	my $ipk_command = 'cscript.exe //NoLogo $SYSTEMROOT/System32/slmgr.vbs -ipk ' . $product_key;
+	my $ipk_command = "$system32_path/cmd.exe /c cscript.exe //NoLogo C:/Windows/System32/slmgr.vbs -ipk $product_key";
 	my ($ipk_exit_status, $ipk_output) = run_ssh_command($computer_node_name, $management_node_keys, $ipk_command);
 	if (defined($ipk_exit_status) && $ipk_exit_status == 0 && grep(/successfully/i, @$ipk_output)) {
 		notify($ERRORS{'OK'}, 0, "installed product key: $product_key");
@@ -482,16 +514,16 @@ sub install_product_key {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 set_kms
+=head2 run_slmgr_skms
 
  Parameters  : None
  Returns     : If successful: true
                If failed: false
- Description : 
+ Description : Runs slmgr.vbs -skms to set the KMS server on a Windows client.
 
 =cut
 
-sub set_kms {
+sub run_slmgr_skms {
 	my $self = shift;
 	if (ref($self) !~ /windows/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
@@ -500,6 +532,7 @@ sub set_kms {
 	
 	my $management_node_keys     = $self->data->get_management_node_keys();
 	my $computer_node_name       = $self->data->get_computer_node_name();
+	my $system32_path = $self->get_system32_path();
 	
 	# Get the KMS address argument
 	my $kms_address = shift;
@@ -512,7 +545,8 @@ sub set_kms {
 	my $kms_port = shift || 1688;
 	
 	# Run slmgr.vbs -skms to configure the computer to use the KMS server
-	my $skms_command = 'cscript.exe //NoLogo $SYSTEMROOT/System32/slmgr.vbs -skms ' . "$kms_address:$kms_port";
+	# slmgr.vbs must be run in a command shell using the correct System32 path or the task it's supposed to do won't really take effect
+	my $skms_command = "$system32_path/cmd.exe /c cscript.exe //NoLogo C:/Windows/System32/slmgr.vbs -skms $kms_address:$kms_port";
 	my ($skms_exit_status, $skms_output) = run_ssh_command($computer_node_name, $management_node_keys, $skms_command);
 	if (defined($skms_exit_status) && $skms_exit_status == 0 && grep(/successfully/i, @$skms_output)) {
 		notify($ERRORS{'OK'}, 0, "set kms server to $kms_address:$kms_port");
@@ -531,16 +565,16 @@ sub set_kms {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 activate_license
+=head2 run_slmgr_ato
 
  Parameters  : None
  Returns     : If successful: true
                If failed: false
- Description : 
+ Description : Runs slmgr.vbs -ato to activate Windows.
 
 =cut
 
-sub activate_license {
+sub run_slmgr_ato {
 	my $self = shift;
 	if (ref($self) !~ /windows/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
@@ -549,9 +583,10 @@ sub activate_license {
 	
 	my $management_node_keys     = $self->data->get_management_node_keys();
 	my $computer_node_name       = $self->data->get_computer_node_name();
+	my $system32_path = $self->get_system32_path();
 	
 	# Run cscript.exe slmgr.vbs -ato to install the product key
-	my $ato_command = 'cscript.exe //NoLogo $SYSTEMROOT/System32/slmgr.vbs -ato';
+	my $ato_command = "$system32_path/cmd.exe /c cscript.exe //NoLogo C:/Windows/System32/slmgr.vbs -ato";
 	my ($ato_exit_status, $ato_output) = run_ssh_command($computer_node_name, $management_node_keys, $ato_command);
 	if (defined($ato_exit_status) && $ato_exit_status == 0 && grep(/successfully/i, @$ato_output)) {
 		notify($ERRORS{'OK'}, 0, "activated license");
@@ -566,6 +601,50 @@ sub activate_license {
 	}
 	
 	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_license_status
+
+ Parameters  : None
+ Returns     : If successful: string
+               If failed: false
+ Description : Runs slmgr.vbs -dlv to determine the licensing status. The value
+               of the "License Status" line is returned.
+
+=cut
+
+sub get_license_status {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $management_node_keys     = $self->data->get_management_node_keys();
+	my $computer_node_name       = $self->data->get_computer_node_name();
+	my $system32_path = $self->get_system32_path();
+	
+	# Run cscript.exe slmgr.vbs -dlv to get the activation status
+	my $dlv_command = "$system32_path/cmd.exe /c cscript.exe //NoLogo C:/Windows/System32/slmgr.vbs -dlv";
+	my ($dlv_exit_status, $dlv_output) = run_ssh_command($computer_node_name, $management_node_keys, $dlv_command, '', '', 0);
+	if ($dlv_output && grep(/License Status/i, @$dlv_output)) {
+		#notify($ERRORS{'DEBUG'}, 0, "retrieved license information");
+	}
+	elsif (defined($dlv_exit_status)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve activation status, exit status: $dlv_exit_status, output:\n@{$dlv_output}");
+		return;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute ssh command to retrieve activation status");
+		return;
+	}
+	
+	my ($license_status_line) = grep(/License Status/i, @$dlv_output);
+	my ($license_status) = $license_status_line =~ /: (\w+)/;
+	notify($ERRORS{'DEBUG'}, 0, "retrieved license status: $license_status");
+	return $license_status;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -590,6 +669,7 @@ sub deactivate {
 	
 	my $management_node_keys     = $self->data->get_management_node_keys();
 	my $computer_node_name       = $self->data->get_computer_node_name();
+	my $system32_path = $self->get_system32_path();
 	
 	my $registry_string .= <<'EOF';
 Windows Registry Editor Version 5.00
@@ -610,7 +690,7 @@ EOF
 	}
 	
 	# Run slmgr.vbs -rearm
-	my $rearm_command = 'cscript.exe //NoLogo $SYSTEMROOT/System32/slmgr.vbs -rearm';
+	my $rearm_command = "$system32_path/cmd.exe /c cscript.exe //NoLogo C:/Windows/System32/slmgr.vbs -rearm";
 	my ($rearm_exit_status, $rearm_output) = run_ssh_command($computer_node_name, $management_node_keys, $rearm_command);
 	if (defined($rearm_exit_status) && $rearm_exit_status == 0 && grep(/successfully/i, @$rearm_output)) {
 		notify($ERRORS{'OK'}, 0, "rearmed licensing");
@@ -1154,97 +1234,6 @@ sub firewall_enable_ssh_private {
 =head1 UTILITY FUNCTIONS
 
 =cut
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 add_kms_server
-
- Parameters  : $affiliation_name, $kms_address, $kms_port
- Returns     : If successful: true
-               If failed: false
- Description : Adds a kms server to the windows-activation variable for the
-               specified affiliation name.
-               If a KMS server with the same address is already saved in the
-               windows-activation variable, it is deleted and the KMS server
-               specified in the subroutine arguments is added to the end of the
-               configuration list.
-
-=cut
-
-sub add_kms_server {
-	my ($affiliation_name, $kms_address, $kms_port) = @_;
-	
-	# Check the arguments
-	unless ($affiliation_name && $kms_address) {
-		notify($ERRORS{'WARNING'}, 0, "affiliation name and kms server address must be specified as arguments");
-		return;
-	}
-	
-	# Set the default KMS port to 1688 if the argument was not specified
-	$kms_port = 1688 unless $kms_port;
-	
-	# Get a new DataStructure object
-	my $data = VCL::DataStructure->new();
-	if ($data) {
-		notify($ERRORS{'DEBUG'}, 0, "created new DataStructure object");
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "unable to create new DataStructure object");
-		return;
-	}
-	
-	# Get the Windows activation data from the windows-activation variable
-	my $activation_data = $data->get_variable('windows-activation');
-	if ($activation_data) {
-		notify($ERRORS{'DEBUG'}, 0, "existing activation data:\n" . format_data($activation_data));
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "activation data could not be retrieved, hopefully this is the first entry being added");
-	}
-	
-	# Loop through the existing configurations for the affiliation
-	for (my $i=0; $i<(@{$activation_data->{$affiliation_name}}); $i++) {
-		my $affiliation_configuration = @{$activation_data->{$affiliation_name}}[$i];
-		
-		# Remove the configuration if it's not defined
-		if (!defined $affiliation_configuration) {
-			splice @{$activation_data->{$affiliation_name}}, $i--, 1;
-			next;
-		}
-		
-		# Check if an identical existing address already exists, if so, delete it
-		my $existing_affiliation_kms_address = $affiliation_configuration->{address};
-		if ($existing_affiliation_kms_address eq $kms_address) {
-			splice @{$activation_data->{$affiliation_name}}, $i--, 1;
-			notify($ERRORS{'DEBUG'}, 0, "deleted identical existing address for $affiliation_name: $existing_affiliation_kms_address");
-		}
-		else {
-			notify($ERRORS{'DEBUG'}, 0, "found existing address for $affiliation_name: $existing_affiliation_kms_address");
-		}
-	}
-	
-	# Add the KMS configuration to the activation data
-	push @{$activation_data->{$affiliation_name}}, {
-																method => 'kms',
-																address => $kms_address,
-																port => $kms_port,
-															  };
-	
-	# Set the variable with the updated data
-	$data->set_variable('windows-activation', $activation_data);
-	
-	# Retrieve the updated configuration data
-	$activation_data = $data->get_variable('windows-activation');
-	if ($activation_data) {
-		notify($ERRORS{'DEBUG'}, 0, "updated activation data:\n" . format_data($activation_data));
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "updated activation data could not be retrieved");
-		return;
-	}
-	
-	return 1;
-}
 
 #/////////////////////////////////////////////////////////////////////////////
 
