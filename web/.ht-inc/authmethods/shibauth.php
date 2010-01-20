@@ -55,7 +55,7 @@ function updateShibUser($userid) {
 		else {
 			$names = explode(' ', $_SERVER['displayName']);
 			$displast = array_pop($names);
-			$user['firstname'] = implode(' ', $names);
+			$user['firstname'] = array_shift($names);
 		}
 	}
 	else
@@ -177,6 +177,13 @@ function updateShibGroups($usernid, $groups) {
 		$grp = mysql_escape_string("shib-" . $name);
 		array_push($newusergroups, getUserGroupID($grp, $affilid));
 	}
+	/*if($shibaffil == 'example1.edu') {
+		$query = "SELECT id FROM affiliation WHERE shibname = '$shibaffil'";
+		$qh = doQuery($query, 101);
+		$row = mysql_fetch_assoc($qh);
+		$affilid = $row['id'];
+		array_push($newusergroups, getUserGroupID('All Example1 users', $affilid));
+	}*/
 	$newusergroups = array_unique($newusergroups);
 	if(! empty($newusergroups))
 		updateGroups($newusergroups, $usernid);
