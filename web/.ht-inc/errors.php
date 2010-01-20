@@ -47,6 +47,7 @@ $ERRORS = array (
 	"50"  => "received invalid input",
 	"51"  => "userid in continuation does not match logged in user",
 	"52"  => "tried to add a user with the same uid as an existing user",
+	"53"  => "No nodes to show on privilege tree",
 	"101" => "General MySQL error",
 	"104" => "Failed to select database",
 	"105" => "Failed to execute query 1 in getUserInfo",
