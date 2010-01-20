@@ -127,7 +127,15 @@ function readAuthCookie() {
 function selectAuth() {
 	global $HTMLheader, $printedHTMLheader, $authMechs, $skin;
 	$authtype = getContinuationVar('authtype', processInputVar("authtype", ARG_STRING));
+	if($authtype == '' && array_key_exists('VCLAUTHSEL', $_COOKIE))
+		$authtype = $_COOKIE['VCLAUTHSEL'];
+	if(array_key_exists('clearselection', $_GET) && $_GET['clearselection'] == 1) {
+		setcookie("VCLAUTHSEL", '', time() - 10, "/", COOKIEDOMAIN);
+		unset($authtype);
+	}
 	if(array_key_exists($authtype, $authMechs)) {
+		if(array_key_exists('remsel', $_POST) && $_POST['remsel'] == 1)
+			setcookie("VCLAUTHSEL", $authtype, time() + SECINYEAR, "/", COOKIEDOMAIN);
 		if($authMechs[$authtype]['type'] == 'redirect') {
 			header("Location: {$authMechs[$authtype]['URL']}");
 			dbDisconnect();
@@ -160,7 +168,9 @@ function selectAuth() {
 	else*/
 		printSelectInput("authtype", $methods, -1, 0, 0, '', 'tabindex=1');
 	print "<br><INPUT type=hidden name=mode value=selectauth>\n";
-	print "<INPUT type=submit value=\"Proceed to Login\" tabindex=2 name=userid>\n";
+	print "<input type=checkbox id=remsel name=remsel value=1 tabindex=2>\n";
+	print "<label for=remsel>Remember my selection</label><br>\n";
+	print "<INPUT type=submit value=\"Proceed to Login\" tabindex=3 name=userid>\n";
 	print "</FORM>\n";
 	print "</TD>\n";
 	print "<TD>\n";
@@ -177,14 +187,16 @@ function selectAuth() {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn printLoginPageWithSkin($authtype)
+/// \fn printLoginPageWithSkin($authtype, $servertimeout)
 ///
 /// \param $authtype - and authentication type
+/// \param $servertimeout - (optional, default=0) - set to 1 if calling because
+/// connection to authentication server timed out, 0 otherwise
 ///
 /// \brief sets up the skin for the page correctly, then calls printLoginPage
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function printLoginPageWithSkin($authtype) {
+function printLoginPageWithSkin($authtype, $servertimeout=0) {
 	global $authMechs, $HTMLheader, $skin, $printedHTMLheader;
 	switch(getAffiliationName($authMechs[$authtype]['affiliationid'])) {
 		case 'EXAMPLE1':
@@ -202,20 +214,25 @@ function printLoginPageWithSkin($authtype) {
 	printHTMLHeader();
 	print $HTMLheader;
 	$printedHTMLheader = 1;
-	printLoginPage();
+	printLoginPage($servertimeout);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn printLoginPage()
+/// \fn printLoginPage($servertimeout)
+///
+/// \param $servertimeout - (optional, default=0) - set to 1 if calling because
+/// connection to authentication server timed out, 0 otherwise
 ///
 /// \brief prints a page for a user to login
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function printLoginPage() {
+function printLoginPage($servertimeout=0) {
 	global $authMechs, $skin, $user;
 	$user['id'] = 0;
 	$authtype = getContinuationVar("authtype", processInputVar("authtype", ARG_STRING));
+	if($authtype == '' && array_key_exists('VCLAUTHSEL', $_COOKIE))
+		$authtype = $_COOKIE['VCLAUTHSEL'];
 	$userid = processInputVar('userid', ARG_STRING, '');
 	if($userid == 'Proceed to Login')
 		$userid = '';
@@ -224,6 +241,9 @@ function printLoginPage() {
 		dbDisconnect();
 		exit;
 	}
+	$extrafailedmsg = '';
+	if($servertimeout)
+		$extrafailedmsg = " (unable to connect to authentication server)";
 	/*if($skin == 'example1') {
 		$useridLabel = 'Pirateid';
 		$passLabel = 'Passphrase';
@@ -234,7 +254,7 @@ function printLoginPage() {
 		print "<br>";
 		print "<FORM action=\"" . BASEURL . SCRIPT . "\" method=post name=loginform>\n";
 		if(strlen($userid))
-			print "<font color=red>Login failed</font>\n";
+			print "<font color=red>Login failed $extrafailedmsg</font>\n";
 		print "<TABLE width=\"250\">\n";
 		print "  <TR>\n";
 		print "    <TH align=right>Key Account:</TH>\n";
@@ -269,7 +289,7 @@ function printLoginPage() {
 	print "<H2 style=\"display: block\">$text1</H2>\n";
 	print "<FORM action=\"" . BASEURL . SCRIPT . "\" method=post name=loginform>\n";
 	if(strlen($userid))
-		print "<font color=red>Login failed</font>\n";
+		print "<font color=red>Login failed $extrafailedmsg</font>\n";
 	print "<TABLE>\n";
 	print "  <TR>\n";
 	print "    <TH align=right>$useridLabel:</TH>\n";
@@ -336,8 +356,14 @@ function submitLogin() {
 ////////////////////////////////////////////////////////////////////////////////
 function ldapLogin($authtype, $userid, $passwd) {
 	global $HTMLheader, $printedHTMLheader, $authMechs, $phpVer;
+	if(! $fh = fsockopen($authMechs[$authtype]['server'], 636, $errno, $errstr, 5)) {
+		printLoginPageWithSkin($authtype, 1);
+		return;
+	}
+	fclose($fh);
 	$ds = ldap_connect("ldaps://{$authMechs[$authtype]['server']}/");
 	if(! $ds) {
+		addLoginLog($userid, $authtype, $authMechs[$authtype]['affiliationid'], 0);
 		print $HTMLheader;
 		$printedHTMLheader = 1;
 		selectAuth();
@@ -352,6 +378,7 @@ function ldapLogin($authtype, $userid, $passwd) {
 		$res = ldap_bind($ds, $auth['masterlogin'],
 		                 $auth['masterpwd']);
 		if(! $res) {
+			addLoginLog($userid, $authtype, $authMechs[$authtype]['affiliationid'], 0);
 			printLoginPageWithSkin($authtype);
 			return;
 		}
@@ -368,6 +395,7 @@ function ldapLogin($authtype, $userid, $passwd) {
 			$ldapuser = $tmpdata[0]['dn'];
 		}
 		else {
+			addLoginLog($userid, $authtype, $authMechs[$authtype]['affiliationid'], 0);
 			printLoginPageWithSkin($authtype);
 			return;
 		}
@@ -377,6 +405,7 @@ function ldapLogin($authtype, $userid, $passwd) {
 		$auth = $authMechs[$authtype];
 		$res = ldap_bind($ds);
 		if(! $res) {
+			addLoginLog($userid, $authtype, $authMechs[$authtype]['affiliationid'], 0);
 			printLoginPageWithSkin($authtype);
 			return;
 		}
@@ -387,12 +416,14 @@ function ldapLogin($authtype, $userid, $passwd) {
 		if($search) {
 			$tmpdata = ldap_get_entries($ds, $search);
 			if(! $tmpdata['count'] || ! array_key_exists('dn', $tmpdata[0])) {
+				addLoginLog($userid, $authtype, $authMechs[$authtype]['affiliationid'], 0);
 				printLoginPageWithSkin($authtype);
 				return;
 			}
 			$ldapuser = $tmpdata[0]['dn'];
 		}
 		else {
+			addLoginLog($userid, $authtype, $authMechs[$authtype]['affiliationid'], 0);
 			printLoginPageWithSkin($authtype);
 			return;
 		}
@@ -402,10 +433,12 @@ function ldapLogin($authtype, $userid, $passwd) {
 	$res = ldap_bind($ds, $ldapuser, $passwd);
 	if(! $res) {
 		// login failed
+		addLoginLog($userid, $authtype, $authMechs[$authtype]['affiliationid'], 0);
 		printLoginPageWithSkin($authtype);
 		return;
 	}
 	else {
+		addLoginLog($userid, $authtype, $authMechs[$authtype]['affiliationid'], 1);
 		// see if user in our db
 		$query = "SELECT id "
 		       . "FROM user "
@@ -453,6 +486,7 @@ function ldapLogin($authtype, $userid, $passwd) {
 function localLogin($userid, $passwd) {
 	global $HTMLheader, $phpVer;
 	if(validateLocalAccount($userid, $passwd)) {
+		addLoginLog($userid, $authtype, $authMechs[$authtype]['affiliationid'], 1);
 		//set cookie
 		$cookie = getAuthCookieData("$userid@local");
 		if(version_compare(PHP_VERSION, "5.2", ">=") == true)
@@ -466,6 +500,7 @@ function localLogin($userid, $passwd) {
 		exit;
 	}
 	else {
+		addLoginLog($userid, $authtype, $authMechs[$authtype]['affiliationid'], 0);
 		printLoginPageWithSkin('Local Account');
 		printHTMLFooter();
 		dbDisconnect();
@@ -514,6 +549,34 @@ function validateLocalAccount($user, $pass) {
 		return 1;
 	else
 		return 0;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn addLoginLog($login, $mech, $affiliationid, $passfail)
+///
+/// \param $login - user id entered in login screen
+/// \param $mech - authentication mechanism used
+/// \param $affiliationid - affiliation id of authentication mechanism
+/// \param $passfail - 1 for successful login, 0 for failed login
+///
+/// \brief adds an entry to the loginlog table
+///
+////////////////////////////////////////////////////////////////////////////////
+function addLoginLog($login, $mech, $affiliationid, $passfail) {
+	$query = "INSERT INTO loginlog "
+	       .        "(user, "
+	       .        "authmech, "
+	       .        "affiliationid, "
+	       .        "passfail, "
+	       .        "remoteIP) "
+	       . "VALUES "
+	       .        "('$login', "
+	       .        "'$mech', "
+	       .        "$affiliationid, "
+	       .        "$passfail, "
+	       .        "'{$_SERVER['REMOTE_ADDR']}')";
+	doQuery($query, 101);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
