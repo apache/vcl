@@ -3072,63 +3072,61 @@ function processBulkComputerInput($checks=1) {
 		                          . "w, x, y, and z being between 1 and 255 (inclusive)";
 	}
 	$endpraddrArr = array();
-	if($viewmode == ADMIN_DEVELOPER) {
-		if(! empty($return['startpripaddress']) ||
-		   ! empty($return['endpripaddress'])) {
-			$startpraddrArr = explode('.', $return["startpripaddress"]);
-			if(! ereg('^(([0-9]){1,3}\.){3}([0-9]){1,3}$', $return["startpripaddress"]) ||
-				$startpraddrArr[0] < 1 || $startpraddrArr[0] > 255 ||
-				$startpraddrArr[1] < 0 || $startpraddrArr[1] > 255 ||
-				$startpraddrArr[2] < 0 || $startpraddrArr[2] > 255 ||
-				$startpraddrArr[3] < 1 || $startpraddrArr[3] > 255) {
-				$submitErr |= IPADDRERR3;
-				$submitErrMsg[IPADDRERR3] = "Invalid IP address. Must be w.x.y.z with each of "
-				                          . "w, x, y, and z being between 1 and 255 (inclusive)";
-			}
-			$endpraddrArr = explode('.', $return["endpripaddress"]);
-			if(! ereg('^(([0-9]){1,3}\.){3}([0-9]){1,3}$', $return["endpripaddress"]) ||
-				$endpraddrArr[0] < 1 || $endpraddrArr[0] > 255 ||
-				$endpraddrArr[1] < 0 || $endpraddrArr[1] > 255 ||
-				$endpraddrArr[2] < 0 || $endpraddrArr[2] > 255 ||
-				$endpraddrArr[3] < 1 || $endpraddrArr[3] > 255) {
-				$submitErr |= IPADDRERR4;
-				$submitErrMsg[IPADDRERR4] = "Invalid IP address. Must be w.x.y.z with each of "
-				                          . "w, x, y, and z being between 1 and 255 (inclusive)";
-			}
+	if(! empty($return['startpripaddress']) ||
+		! empty($return['endpripaddress'])) {
+		$startpraddrArr = explode('.', $return["startpripaddress"]);
+		if(! ereg('^(([0-9]){1,3}\.){3}([0-9]){1,3}$', $return["startpripaddress"]) ||
+			$startpraddrArr[0] < 1 || $startpraddrArr[0] > 255 ||
+			$startpraddrArr[1] < 0 || $startpraddrArr[1] > 255 ||
+			$startpraddrArr[2] < 0 || $startpraddrArr[2] > 255 ||
+			$startpraddrArr[3] < 1 || $startpraddrArr[3] > 255) {
+			$submitErr |= IPADDRERR3;
+			$submitErrMsg[IPADDRERR3] = "Invalid IP address. Must be w.x.y.z with each of "
+			                          . "w, x, y, and z being between 1 and 255 (inclusive)";
 		}
-		if(! empty($return['startmac'])) {
-		   if(! ereg('^(([A-Fa-f0-9]){2}:){5}([A-Fa-f0-9]){2}$', $return["startmac"])) {
-				$submitErr |= MACADDRERR;
-				$submitErrMsg[MACADDRERR] = "Invalid MAC address.  Must be XX:XX:XX:XX:XX:XX "
-				                          . "with each pair of XX being from 00 to FF (inclusive)";
+		$endpraddrArr = explode('.', $return["endpripaddress"]);
+		if(! ereg('^(([0-9]){1,3}\.){3}([0-9]){1,3}$', $return["endpripaddress"]) ||
+			$endpraddrArr[0] < 1 || $endpraddrArr[0] > 255 ||
+			$endpraddrArr[1] < 0 || $endpraddrArr[1] > 255 ||
+			$endpraddrArr[2] < 0 || $endpraddrArr[2] > 255 ||
+			$endpraddrArr[3] < 1 || $endpraddrArr[3] > 255) {
+			$submitErr |= IPADDRERR4;
+			$submitErrMsg[IPADDRERR4] = "Invalid IP address. Must be w.x.y.z with each of "
+			                          . "w, x, y, and z being between 1 and 255 (inclusive)";
+		}
+	}
+	if(! empty($return['startmac'])) {
+		if(! ereg('^(([A-Fa-f0-9]){2}:){5}([A-Fa-f0-9]){2}$', $return["startmac"])) {
+			$submitErr |= MACADDRERR;
+			$submitErrMsg[MACADDRERR] = "Invalid MAC address.  Must be XX:XX:XX:XX:XX:XX "
+			                          . "with each pair of XX being from 00 to FF (inclusive)";
+		}
+		elseif(! $submitErr) {
+			$tmp = explode(':', $return['startmac']);
+			$topdec = hexdec($tmp[0] . $tmp[1] . $tmp[2]);
+			$botdec = hexdec($tmp[3] . $tmp[4] . $tmp[5]);
+			$topmac = "{$tmp[0]}:{$tmp[1]}:{$tmp[2]}";
+			$topplus = implode(':', str_split(dechex($topdec + 1), 2));
+			$start = $botdec;
+			$return['macs'] = array();
+			$end = $start + (($endaddrArr[3] - $startaddrArr[3] + 1) * 2);
+			for($i = $start; $i < $end; $i++) {
+				if($i > 16777215) {
+					$val = $i - 16777216;
+					$tmp = sprintf('%06x', $val);
+					$tmp2 = str_split($tmp, 2);
+					$return['macs'][] = $topplus . ':' . implode(':', $tmp2);
+				}
+				else {
+					$tmp = sprintf('%06x', $i);
+					$tmp2 = str_split($tmp, 2);
+					$return['macs'][] = $topmac . ':' . implode(':', $tmp2);
+				}
 			}
-			elseif(! $submitErr) {
-				$tmp = explode(':', $return['startmac']);
-				$topdec = hexdec($tmp[0] . $tmp[1] . $tmp[2]);
-				$botdec = hexdec($tmp[3] . $tmp[4] . $tmp[5]);
-				$topmac = "{$tmp[0]}:{$tmp[1]}:{$tmp[2]}";
-				$topplus = implode(':', str_split(dechex($topdec + 1), 2));
-				$start = $botdec;
-				$return['macs'] = array();
-				$end = $start + (($endaddrArr[3] - $startaddrArr[3] + 1) * 2);
-				for($i = $start; $i < $end; $i++) {
-					if($i > 16777215) {
-						$val = $i - 16777216;
-						$tmp = sprintf('%06x', $val);
-						$tmp2 = str_split($tmp, 2);
-						$return['macs'][] = $topplus . ':' . implode(':', $tmp2);
-					}
-					else {
-						$tmp = sprintf('%06x', $i);
-						$tmp2 = str_split($tmp, 2);
-						$return['macs'][] = $topmac . ':' . implode(':', $tmp2);
-					}
-				}
-				if($i > 16777215 && $topdec == 16777215) {
-					$submitErr |= MACADDRERR;
-					$submitErrMsg[MACADDRERR] = "Starting MAC address too large for given "
-					                          . "given number of machines";
-				}
+			if($i > 16777215 && $topdec == 16777215) {
+				$submitErr |= MACADDRERR;
+				$submitErrMsg[MACADDRERR] = "Starting MAC address too large for given "
+				                          . "given number of machines";
 			}
 		}
 	}
