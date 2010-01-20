@@ -364,16 +364,23 @@ function getLDAPUserData($authtype, $userid) {
 				$data[strtolower($auth['lastname'])] = '';
 			}
 		}
+		$return['emailnotices'] = 1;
 		if(! array_key_exists($auth['email'], $data)) {
 			$data[strtolower($auth['email'])] = $userid . $auth['defaultemail'];
+			$return['emailnotices'] = 0;
 		}
 
-		$return['first'] = mysql_escape_string($data[strtolower($auth['firstname'])]);
-		$return['last'] = mysql_escape_string($data[strtolower($auth['lastname'])]);
+		if(array_key_exists(strtolower($auth['firstname']), $data))
+			$return['first'] = mysql_escape_string($data[strtolower($auth['firstname'])]);
+		else
+			$return['first'] = '';
+		if(array_key_exists(strtolower($auth['lastname']), $data))
+			$return['last'] = mysql_escape_string($data[strtolower($auth['lastname'])]);
+		else
+			$return['last'] = '';
 		if($donumericid && is_numeric($data[strtolower($auth['numericid'])]))
 			$return['numericid'] = $data[strtolower($auth['numericid'])];
 		$return['email'] = mysql_escape_string($data[strtolower($auth['email'])]);
-		$return['emailnotices'] = 1;
 
 		return $return;
 	}
