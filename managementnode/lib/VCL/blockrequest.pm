@@ -155,26 +155,47 @@ sub process {
 			notify($ERRORS{'OK'}, 0, "updated process flag on blocktime_id= $blocktime_id");
 		}
 
-		my $xmlcall = process_block_time($blocktime_id);
+		my $completed = 0;
+		my $loop_control = 0;
+		my $xmlcall;
 
-		if ($xmlcall->{status} =~ /success/) {
-			notify($ERRORS{'OK'}, 0, "success blockTimes id $blocktime_id processed and allocated $xmlcall->{allocated} nodes");
-		}
-		elsif ($xmlcall->{status} =~ /completed/) {
-			notify($ERRORS{'OK'}, 0, "success blockTimes id $blocktime_id already processed");
-		}
-		elsif ($xmlcall->{status} =~ /warning/) {
-			my $warningmsg  = $xmlcall->{warningmsg}  if (defined($xmlcall->{warningmsg}));
-			my $allocated   = $xmlcall->{allocated}   if (defined($xmlcall->{allocated}));
-			my $unallocated = $xmlcall->{unallocated} if (defined($xmlcall->{unallocated}));
-			notify($ERRORS{'CRITICAL'}, 0, "xmlrpc warning: $warningmsg allocated= $allocated unallocated= $unallocated");
-		}
-		elsif ($xmlcall->{status} =~ /error/) {
-			my $errormsg = $xmlcall->{errormsg} if (defined($xmlcall->{errormsg}));
-			notify($ERRORS{'CRITICAL'}, 0, "xmlrpc error on blockrequest_id=$blockrequest_id blocktime_id=$blocktime_id : $errormsg");
-		}
-		else {
-			notify($ERRORS{'CRITICAL'}, 0, "xmlrpc status unknown status=  $xmlcall->{status} blockrequest_id=$blockrequest_id blocktime_id=$blocktime_id");
+		my($allocated,$unallocated) = 0;
+
+		while(!($completed)){
+			if($loop_control < 6){
+				$loop_control++;
+				notify($ERRORS{'DEBUG'}, 0, "processing blocktime_id= $blocktime_id  pass $loop_control");
+				$xmlcall = process_block_time($blocktime_id);
+			}
+			else{
+				$completed=1;
+				notify($ERRORS{'CRITICAL'}, 0, "attempted $loop_control passes to complete block_request $blockrequest_id\n allocated= $allocated \nblockrequest_number_machines= $blockrequest_number_machines");
+				last;
+			}
+
+			$allocated   = $xmlcall->{allocated}   if (defined($xmlcall->{allocated}));
+			$unallocated = $xmlcall->{unallocated} if (defined($xmlcall->{unallocated}));
+
+			if($allocated >= $blockrequest_number_machines){
+				$completed=1;
+				notify($ERRORS{'OK'}, 0, "success blockTimes id $blocktime_id processed and allocated $xmlcall->{allocated} nodes \nstatus= $xmlcall->{status}");
+				last;
+			}
+
+			if ($xmlcall->{status} =~ /warning|fault/) {
+				my $warningmsg  = $xmlcall->{warningmsg}  if (defined($xmlcall->{warningmsg}));
+				notify($ERRORS{'CRITICAL'}, 0, "xmlrpc warning: $warningmsg allocated= $allocated unallocated= $unallocated");
+			}
+			if ($xmlcall->{status} =~ /error/) {
+				my $errormsg = $xmlcall->{errormsg} if (defined($xmlcall->{errormsg}));
+				notify($ERRORS{'CRITICAL'}, 0, "xmlrpc error on blockrequest_id=$blockrequest_id blocktime_id=$blocktime_id : $errormsg");
+			}
+			if ($xmlcall->{status} =~ /completed/) {
+				$completed=1;
+				notify($ERRORS{'OK'}, 0, "success blockTimes id $blocktime_id already processed");
+			}
+
+			sleep 5 if(!$completed);
 		}
 
 		#pause
@@ -227,6 +248,219 @@ sub process {
 	return 1;
 
 } ## end sub process
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 process_block_time
+
+ Parameters  : $blockTimesid
+ Returns     : hash references
+ Description : calls xmlrpc_call routine with specificed method and args
+
+=cut
+
+sub process_block_time {
+	my $blockTimesid = $_[0];
+
+	if(!$blockTimesid){
+		notify($ERRORS{'WARNING'}, 0, "blockTimesid argument was not passed");
+		return 0;
+	}
+
+	my $method = "XMLRPCprocessBlockTime";
+	my $ignoreprivileges = 1;
+	my @argument_string = ($method,$blockTimesid, $ignoreprivileges); 
+
+	my $xml_ret = xmlrpc_call(@argument_string);
+
+	my %info;
+	if( ref($xml_ret) =~ /STRUCT/i){
+       $info{status} = $xml_ret->value->{status};
+		 $info{allocated} = $xml_ret->value->{allocated} if(defined($xml_ret->value->{allocated})) ;
+       $info{unallocated} = $xml_ret->value->{unallocated} if(defined($xml_ret->value->{unallocated}));
+		 #error
+		 $info{errorcode} = $xml_ret->value->{errorcode} if(defined($xml_ret->value->{errorcode}));
+		 $info{errormsg} = $xml_ret->value->{errormsg} if(defined($xml_ret->value->{errormsg}));
+		 #warning
+		 $info{warningcode} = $xml_ret->value->{warningcode} if(defined($xml_ret->value->{warningcode}));
+		 $info{warningmsg} = $xml_ret->value->{warningmsg} if(defined($xml_ret->value->{warningmsg}));
+		 #$info{reqidlists} = $xml_ret->value->{requestids};
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "return argument XMLRPCprocessBlockTime was not a STRUCT as expected" . ref($xml_ret) );
+		if(ref($xml_ret) =~ /fault/){
+			$info{status} = "fault";
+		}
+		else {
+		 $info{status} = ref($xml_ret);
+		}
+	}
+
+	return \%info;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 update_blockTimes_processing
+
+ Parameters  : $blockTimes_id, $processing
+ Returns     : 0 or 1
+ Description : Updates the processed flag in blockTimes table
+
+=cut
+
+sub update_blockTimes_processing {
+	my ($blockTimes_id, $processing) = @_;
+
+	my ($package, $filename, $line, $sub) = caller(0);
+
+	# Check the arguments
+	if (!defined($blockTimes_id)) {
+		notify($ERRORS{'WARNING'}, 0, "blockTimes ID was not specified");
+		return 0;
+	}
+	if (!defined($processing)) {
+		notify($ERRORS{'WARNING'}, 0, "processing was not specified");
+		return 0;
+	}
+
+	# Construct the update statement
+	my $update_statement = "
+      UPDATE
+		blockTimes
+		SET
+		blockTimes.processed = $processing
+		WHERE
+		blockTimes.id = $blockTimes_id
+   ";
+
+	# Call the database execute subroutine
+	if (database_execute($update_statement)) {
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unable to update blockTimes table, id=$blockTimes_id, processing=$processing");
+		return 0;
+	}
+} ## end sub update_blockTimes_processing
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 delete_block_request
+
+ Parameters  : $blockrequest_id
+ Returns     : 0 or 1
+ Description : removes an expired blockrequest from the blockrequest table 
+
+=cut
+
+sub delete_block_request {
+	my ($blockrequest_id) = @_;
+
+	# Check the arguments
+	if (!defined($blockrequest_id)) {
+		notify($ERRORS{'WARNING'}, 0, "blockrequest ID was not specified");
+		return 0;
+	}
+	# Construct the update statement
+	my $delete_statement = "
+      DELETE
+		blockRequest
+		FROM blockRequest
+		WHERE
+		blockRequest.id = $blockrequest_id
+   ";
+
+	# Call the database execute subroutine
+	if (database_execute($delete_statement)) {
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unable to deleted blockrequest $blockrequest_id blockRequest table ");
+		return 0;
+	}
+
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 clear_blockTimes
+
+ Parameters  : $blockTimes_id
+ Returns     : 0 or 1
+ Description : Removes blockTimes id from blockTimes table
+
+=cut
+
+sub clear_blockTimes {
+	my ($blockTimes_id) = @_;
+
+	my ($package, $filename, $line, $sub) = caller(0);
+
+	# Check the arguments
+	if (!defined($blockTimes_id)) {
+		notify($ERRORS{'WARNING'}, 0, "blockTimes ID was not specified");
+		return 0;
+	}
+
+	# Construct the update statement
+	my $delete_statement = "
+      DELETE
+		blockTimes
+		FROM blockTimes
+		WHERE
+		blockTimes.id = $blockTimes_id
+   ";
+
+	# Call the database execute subroutine
+	if (database_execute($delete_statement)) {
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unable to deleted blockTimes_id $blockTimes_id blockTimes table ");
+		return 0;
+	}
+} ## end sub clear_blockTimes
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 clear_blockComputers
+
+ Parameters  : $blockTimes_id, $processing
+ Returns     : 0 or 1
+ Description : Clears blockcomputers from an expired BlockTimesid
+
+=cut
+
+sub clear_blockComputers {
+	my ($blockTimes_id) = @_;
+
+	my ($package, $filename, $line, $sub) = caller(0);
+
+	# Check the arguments
+	if (!defined($blockTimes_id)) {
+		notify($ERRORS{'WARNING'}, 0, "blockTimes ID was not specified");
+		return 0;
+	}
+
+	# Construct the update statement
+	my $delete_statement = "
+      DELETE
+		blockComputers
+		FROM blockComputers
+		WHERE
+		blockTimeid = $blockTimes_id
+   ";
+
+	# Call the database execute subroutine
+	if (database_execute($delete_statement)) {
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unable to delete blockComputers for id=$blockTimes_id, ");
+		return 0;
+	}
+} ## end sub clear_blockComputers
 
 =pod
 ////////////////////////////////////////////////////////////////////////////////
