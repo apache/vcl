@@ -484,9 +484,9 @@ function ldapLogin($authtype, $userid, $passwd) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function localLogin($userid, $passwd) {
-	global $HTMLheader, $phpVer;
+	global $HTMLheader, $phpVer, $authMechs;
 	if(validateLocalAccount($userid, $passwd)) {
-		addLoginLog($userid, $authtype, $authMechs[$authtype]['affiliationid'], 1);
+		addLoginLog($userid, 'Local', $authMechs['Local Account']['affiliationid'], 1);
 		//set cookie
 		$cookie = getAuthCookieData("$userid@local");
 		if(version_compare(PHP_VERSION, "5.2", ">=") == true)
@@ -500,7 +500,7 @@ function localLogin($userid, $passwd) {
 		exit;
 	}
 	else {
-		addLoginLog($userid, $authtype, $authMechs[$authtype]['affiliationid'], 0);
+		addLoginLog($userid, 'Local', $authMechs['Local Account']['affiliationid'], 0);
 		printLoginPageWithSkin('Local Account');
 		printHTMLFooter();
 		dbDisconnect();
