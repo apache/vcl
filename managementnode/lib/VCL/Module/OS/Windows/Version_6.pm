@@ -1302,7 +1302,7 @@ sub run_sysprep {
 		notify($ERRORS{'DEBUG'}, 0, "copied Unattend.xml to $system32_path/sysprep");
 	}
 	elsif (defined($cp_status)) {
-		notify($ERRORS{'OK'}, 0, "failed to copy copy Unattend.xml to $system32_path/sysprep, exit status: $cp_status, output:\n@{$cp_output}");
+		notify($ERRORS{'WARNING'}, 0, "failed to copy copy Unattend.xml to $system32_path/sysprep, exit status: $cp_status, output:\n@{$cp_output}");
 		return;
 	}
 	else {
