@@ -698,8 +698,11 @@ function XMLRPCprocessBlockTime($blockTimesid, $ignoreprivileges=0) {
 	# allocated based on the ones with machines available; this seems like odd
 	# behavior
 	$stagCnt = 0;
+	$stagTime = 60;        # stagger reload reservations by 1 min
+	if($imgLoadTime > 840) // if estimated load time is > 14 min
+		$stagTime = 120;    #    stagger reload reservations by 2 min 
 	for($i = 0; $i < $reqToAlloc; $i++) {
-		$stagunixstart = $unixstart - $loadtime - ($stagCnt * 60);
+		$stagunixstart = $unixstart - $loadtime - ($stagCnt * $stagTime);
 		$stagstart = unixToDatetime($stagunixstart);
 		if(! $ignoreprivileges)
 			$userid = array_pop($userids);
