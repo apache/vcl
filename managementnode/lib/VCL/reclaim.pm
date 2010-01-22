@@ -97,26 +97,13 @@ sub process {
 	my $computer_shortname                  = $self->data->get_computer_short_name();
 	my $computer_state_name                 = $self->data->get_computer_state_name();
 	my $computer_currentimage_name          = $self->data->get_computer_currentimage_name();
-	my $os_current_image_name               = $self->os->get_current_image_name();
 	
 	# Insert into computerloadlog if request state = timeout
 	if ($request_state_name =~ /timeout|deleted/) {
 		insertloadlog($reservation_id, $computer_id, $request_state_name, "reclaim: starting $request_state_name process");
 	}
 	
-	# Make sure computer current image name was retrieved from the database
-	if (!$computer_currentimage_name) {
-		notify($ERRORS{'WARNING'}, 0, "failed to retrieve computer current image name from the database, computer will be reloaded");
-		$self->insert_reload_and_exit();
-	}
-	
-	# Reload the computer if unable to retrieve the current image name
-	if (!$os_current_image_name) {
-		notify($ERRORS{'WARNING'}, 0, "failed to retrieve name of image currently loaded on $computer_shortname, computer will be reloaded");
-		$self->insert_reload_and_exit();
-	}
-	
-	notify($ERRORS{'DEBUG'}, 0, "beginning to reclaim $computer_shortname:\nrequest state: $request_state_name\nrequest laststate: $request_laststate_name\ncomputer state: $computer_state_name\ncomputer type: $computer_type\ncomputer current image name in database: $computer_currentimage_name\nimage loaded on computer: $os_current_image_name");
+	notify($ERRORS{'DEBUG'}, 0, "beginning to reclaim $computer_shortname:\nrequest state: $request_state_name\nrequest laststate: $request_laststate_name\ncomputer state: $computer_state_name\ncomputer type: $computer_type");
 	
 	# Don't attempt to do anything to machines that are currently reloading
 	if ($computer_state_name =~ /maintenance|reloading/) {
@@ -135,6 +122,21 @@ sub process {
 	# Make sure image loaded on computer (currentimage.txt) matches what's set in computer.currentimageid
 	elsif ($request_laststate_name =~ /reserved/) {
 		notify($ERRORS{'DEBUG'}, 0, "request laststate is $request_laststate_name, checking if computer table current image matches image currently loaded on $computer_shortname");
+		
+		# Make sure computer current image name was retrieved from the database
+		if (!$computer_currentimage_name) {
+			notify($ERRORS{'WARNING'}, 0, "failed to retrieve computer current image name from the database, computer will be reloaded");
+			$self->insert_reload_and_exit();
+		}
+		
+		# Reload the computer if unable to retrieve the current image name
+		my $os_current_image_name = $self->os->get_current_image_name();
+		if (!$os_current_image_name) {
+			notify($ERRORS{'WARNING'}, 0, "failed to retrieve name of image currently loaded on $computer_shortname, computer will be reloaded");
+			$self->insert_reload_and_exit();
+		}
+		
+		# Compare the database current image value with what's on the computer
 		if ($computer_currentimage_name eq $os_current_image_name) {
 			notify($ERRORS{'OK'}, 0, "computer table current image name ($computer_currentimage_name) matches image name on computer ($os_current_image_name), computer will be sanitized");
 			$self->call_os_sanitize();
