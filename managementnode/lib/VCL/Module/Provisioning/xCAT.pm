@@ -649,187 +649,42 @@ sub load {
 	}
 
 	ROUND3:
-
-	my $nodeset_status;
-
-	# Round 3 checks, machine has been installed we wait here for boot process which could include sysprep
-	# we are checking for the boot state in the OS status
+	
 	insertloadlog($reservation_id, $computer_id, "xcatround3", "starting round 3 checks - finishing post configuration");
-	$wait_loops = 0;
-	while (!$bootstatus) {
-		my $nodeset_status = _nodeset($computer_node_name);
-
-		if ($nodeset_status =~ /boot/) {
-			$bootstatus = 1;
-			notify($ERRORS{'OK'}, 0, "$computer_node_name has been reinstalled with $image_name");
-			notify($ERRORS{'OK'}, 0, "xcat has set the boot flag");
-			if ($image_os_type =~ /windows/i) {
-				notify($ERRORS{'OK'}, 0, "waiting 3 minutes to allow OS to reboot and initialize machine");
-				sleep 180;
-			}
-
-			elsif ($image_os_type =~ /linux/i) {
-				notify($ERRORS{'OK'}, 0, "waiting 65 sec to allow OS to reboot and initialize machine");
-				sleep 65;
-			}
-			else {
-				notify($ERRORS{'OK'}, 0, "waiting 3 minutes to allow OS to reboot and initialize machine");
-				sleep 180;
-			}
-			my ($readycount, $ready) = 0;
-			READYFLAG:
-
-			#check /var/log/messages file for READY
-
-			# Wait for READY flag
-			if (open(TAIL, "</var/log/messages")) {
-				seek TAIL, -1, 2;
-				for (;;) {
-					notify($ERRORS{'OK'}, 0, "$computer_node_name checking for READY FLAG loop count is $readycount of 10");
-					while (<TAIL>) {
-						if ($_ =~ /READY/) {
-							$ready = 1 if ($_ =~ /$computer_node_name/);
-						}
-						if ($image_os_type =~ /linux/i) {
-							if ($_ =~ /$computer_node_name|$computer_node_name kernel/) {
-								notify($ERRORS{'OK'}, 0, "$computer_node_name booting up");
-								sleep 5;
-								$ready = 1;
-								close(TAIL);
-								goto SSHDATTEMPT;
-							}
-						}
-					}    #while
-
-					if ($readycount > 10) {
-						notify($ERRORS{'OK'}, 0, "taking longer than expected, readycount==$readycount moving to next set of checks");
-						$ready = 1;
-						close(TAIL);
-						goto SSHDATTEMPT;
-					}
-					#if ($readycount > 2) {
-
-					#check ssh status just in case we missed the flag
-					my $sshd = _sshd_status($computer_node_name, $image_name, $image_os_type);
-					if ($sshd eq "on") {
-						$ready = 1;
-						notify($ERRORS{'OK'}, 0, "we may have missed start flag going next stage");
-						close(TAIL);
-						goto SSHDATTEMPT;
-					}
-					#} ## end if ($readycount > 2)
-					if (!$ready) {
-						notify($ERRORS{'OK'}, 0, "$computer_node_name not ready yet, sleeping for 40 seconds");
-						sleep 40;
-						seek TAIL, 0, 1;
-					}
-					else {
-						notify($ERRORS{'OK'}, 0, "/var/log/messages reports $computer_node_name is ready");
-						insertloadlog($reservation_id, $computer_id, "xcatREADY", "detected ready signal from node - proceeding");
-						close(TAIL);
-						goto SSHDATTEMPT;
-					}
-
-					#placing out side of if statements for loop control
-					$readycount++;
-				}    #for
-			} ## end if (open(TAIL, "</var/log/messages"))
-			else {
-				notify($ERRORS{'CRITICAL'}, 0, "could not open messages at READYFLAG $!");
-			}
-			notify($ERRORS{'OK'}, 0, "proceeding for sync sshd active");
-		} ## end if ($nodeset_status =~ /boot/)
-		else {
-
-			# check for strange states
-
+	
+	if ($self->os->can("post_load")) {
+		notify($ERRORS{'DEBUG'}, 0, "calling " . ref($self->os) . "->post_load()");
+		my $post_load_result = $self->os->post_load($rinstall_attempts);
+		
+		if (!defined $post_load_result) {
+			notify($ERRORS{'WARNING'}, 0, "post_load returned undefined");
+			return;
 		}
-	} ## end while (!$bootstatus)
-
-	# we need to wait for sshd to become active
-	my $sshd_attempts = 0;
-	SSHDATTEMPT:
-	my $sshdstatus = 0;
-	$wait_loops = 0;
-	$sshd_attempts++;
-	my $sshd_status = "off";
-
-	# Set the sshd start time to now if it hasn't been set already
-	# This is used to report how long sshd took to become active
-	$sshd_start_time = time() if !$sshd_start_time;
-
-	while (!$sshdstatus) {
-		notify($ERRORS{'DEBUG'}, 0, "checking sshd status of $computer_node_name");
-		my $sshd_status = _sshd_status($computer_node_name, $image_name, $image_os_type);
-		if ($sshd_status eq "on") {
-
-			# Set the sshd end time to now to capture how long it took sshd to become active
-			$sshd_end_time = time();
-			my $sshd_duration = $sshd_end_time - $sshd_start_time;
-
-			$sshdstatus = 1;
-			notify($ERRORS{'OK'}, 0, "$computer_node_name sshd has become active, took $sshd_duration secs, ok to proceed to sync ssh keys");
-			insertloadlog($reservation_id, $computer_id, "info", "synchronizing keys");
-		} ## end if ($sshd_status eq "on")
-		else {
-			notify($ERRORS{'DEBUG'}, 0, "sshd is not responding yet");
-
-			#either sshd is off or N/A, we wait
-			if ($wait_loops >= 14) {
-				if ($sshd_attempts < 3) {
-					goto SSHDATTEMPT;
-				}
-				else {
-
-					# Waited long enough for sshd to become active
-
-					# Set the sshd end time to now to capture how long process waited for sshd to become active
-					$sshd_end_time = time();
-					my $sshd_duration = $sshd_end_time - $sshd_start_time;
-
-					notify($ERRORS{'WARNING'}, 0, "$computer_node_name waited acceptable amount of time for sshd to become active, $sshd_duration secs");
-
-					#need to check power, maybe reboot it. for now fail it
-					#try to reinstall it once
-					if ($rinstall_attempts < 2) {
-						my $debugging_message = "*reservation has NOT failed yet*\n";
-						$debugging_message .= "this notice is for debugging purposes so that node can be watched during 2nd rinstall attempt\n";
-						$debugging_message .= "sshd did not become active on $computer_node_name after first rinstall attempt\n\n";
-
-						$debugging_message .= "management node:     " . $self->data->get_management_node_hostname() . "\n";
-						$debugging_message .= "pid:                 " . $PID . "\n";
-						$debugging_message .= "request:             " . $self->data->get_request_id() . "\n";
-						$debugging_message .= "reservation:         " . $self->data->get_reservation_id() . "\n";
-						$debugging_message .= "state/laststate:     " . $self->data->get_request_state_name() . "/" . $self->data->get_request_laststate_name() . "\n";
-						$debugging_message .= "computer:            " . $self->data->get_computer_host_name() . " (id: " . $self->data->get_computer_id() . ")\n";
-						$debugging_message .= "user:                " . $self->data->get_user_login_id() . " (id: " . $self->data->get_user_id() . ")\n";
-						$debugging_message .= "image:               " . $self->data->get_image_name() . " (id: " . $self->data->get_image_id() . ")\n";
-						$debugging_message .= "image prettyname:    " . $self->data->get_image_prettyname() . "\n";
-						$debugging_message .= "image size:          " . $self->data->get_image_size() . "\n";
-						$debugging_message .= "reload time:         " . $self->data->get_image_reload_time() . "\n";
-
-						notify($ERRORS{'CRITICAL'}, 0, "$debugging_message");
-						insertloadlog($reservation_id, $computer_id, "repeat", "starting install process");
-						close(TAIL);
-						goto XCATRINSTALL;
-					} ## end if ($rinstall_attempts < 2)
-					else {
-						notify($ERRORS{'WARNING'}, 0, "$computer_node_name: sshd never became active after 2 rinstall attempts");
-						insertloadlog($reservation_id, $computer_id, "failed", "exceeded maximum install attempts");
-						return 0;
-					}
-				} ## end else [ if ($sshd_attempts < 3)
-			} ## end if ($wait_loops >= 7)
-			else {
-				$wait_loops++;
-
-				# to give post config a chance
-				notify($ERRORS{'OK'}, 0, "going to sleep 15 seconds, waiting for post config to finish");
-				sleep 15;
+		elsif (!$post_load_result) {
+			notify($ERRORS{'WARNING'}, 0, "post_load subroutine returned $post_load_result");
+			
+			if ($rinstall_attempts < 2) {
+				my $debugging_message = "*reservation has NOT failed yet*\n";
+				$debugging_message .= "this notice is for debugging purposes so that node can be watched during 2nd rinstall attempt\n";
+				$debugging_message .= "sshd did not become active on $computer_node_name after first rinstall attempt\n\n";
+				$debugging_message .= $self->data->get_reservation_info_string();
+				notify($ERRORS{'CRITICAL'}, 0, "$debugging_message");
+				
+				goto XCATRINSTALL;
 			}
-		}    # else
-	}    #while
-
+			else {
+				return;
+			}
+		}
+		else {
+			notify($ERRORS{'OK'}, 0, "post_load subroutine returned $post_load_result");
+		}
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, ref($self->os) . "::post_load() has not been implemented");
+	}
+	
+	
 	# Clear ssh public keys from /root/.ssh/known_hosts
 	my $known_hosts = "/root/.ssh/known_hosts";
 	my @file;
@@ -945,107 +800,8 @@ sub load {
 	} ## end if ($IPCONFIGURATION ne "manualDHCP")
 
 	# Perform post load tasks
-
-	# Check if OS module has implemented a post_load() subroutine
-	if ($self->os->can('post_load')) {
-		# If post-load has been implemented by the OS module, don't perform these tasks here
-		# new.pm calls the OS module's post_load() subroutine
-		notify($ERRORS{'DEBUG'}, 0, "post_load() has been implemented by the OS module, returning 1");
-		return 1;
-	}
 	
-	# Linux post-load tasks
-	# TODO: The following should be removed once Linux.pm post_load() has been implemented
-	elsif ($image_os_type =~ /linux/i) {
 
-		#linux specfic routines
-		#FIXME move to generic post options on per image basis
-		if ($image_os_name =~ /^(esx[0-9]*)/) {
-
-			#esx specific post
-			my $cmdstring = "/usr/sbin/esxcfg-vswitch -a vSwitch1;/usr/sbin/esxcfg-vswitch -L vmnic1 vSwitch1;/usr/sbin/esxcfg-vswitch -A \"Virtual Machine Public Network\" vSwitch1";
-
-			my @sshd = run_ssh_command($computer_node_name, $IDENTITY_bladerhel, $cmdstring, "root");
-			foreach my $l (@{$sshd[1]}) {
-
-				#any response is a potential  problem
-				notify($ERRORS{'DEBUG'}, 0, "esxcfg-vswitch output: $l");
-			}
-
-			#restart mgmt-vmware
-			sleep(8);    # sleep briefly before attemping to restart
-			             # restart needs to include "&" for some reason it doesn't return but completes - dunno?
-			@sshd = run_ssh_command($computer_node_name, $IDENTITY_bladerhel, "/etc/init.d/mgmt-vmware restart &", "root");
-			foreach my $l (@sshd) {
-				if ($l =~ /failed/i) {
-					notify($ERRORS{'WARNING'}, 0, "failed to restart mgmt-vmware @sshd");
-					return 0;
-				}
-			}
-		} ## end if ($image_os_name =~ /^(esx[0-9]*)/)
-		                #FIXME - could be an issue for esx servers
-		if (changelinuxpassword($computer_node_name, "root")) {
-			notify($ERRORS{'OK'}, 0, "successfully changed root password on $computer_node_name");
-
-#insertloadlog($reservation_id, $computer_id, "info", "SUCCESS randomized roots password");
-		}
-		else {
-			notify($ERRORS{'OK'}, 0, "failed to edit root password on $computer_node_name");
-		}
-
-		#disable ext_sshd
-		my @stopsshd = run_ssh_command($computer_node_name, $IDENTITY_bladerhel, "/etc/init.d/ext_sshd stop", "root");
-		foreach my $l (@{$stopsshd[1]}) {
-			if ($l =~ /Stopping ext_sshd/) {
-				notify($ERRORS{'OK'}, 0, "ext sshd stopped on $computer_node_name");
-				last;
-			}
-		}
-
-		#if an image, clear wtmp and krb token files
-		# FIXME - move to createimage
-		if ($image_os_type =~ /linux/i) {
-			my @cleartmp = run_ssh_command($computer_node_name, $IDENTITY_bladerhel, "/usr/sbin/tmpwatch -f 0 /tmp; /bin/cp /dev/null /var/log/wtmp", "root");
-			foreach my $l (@{$cleartmp[1]}) {
-				notify($ERRORS{'DEBUG'}, 0, "output from cleartmp post load $computer_node_name $l");
-			}
-		}
-
-		# clear external_sshd file of any AllowUsers string
-		my $path1 = "$computer_node_name:/etc/ssh/external_sshd_config";
-		my $path2 = "/tmp/$computer_node_name.sshd";
-		if (run_scp_command($path1, $path2, $IDENTITY_bladerhel)) {
-			notify($ERRORS{'DEBUG'}, 0, "scp success retrieved $path1");
-		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "failed to retrieve $path1");
-		}
-		#remove from sshd
-		if (open(SSHDCFG, "/tmp/$computer_node_name.sshd")) {
-			@file = <SSHDCFG>;
-			close SSHDCFG;
-			foreach my $l (@file) {
-				$l = "" if ($l =~ /AllowUsers/);
-			}
-			if (open(SCP, ">/tmp/$computer_node_name.sshd")) {
-				print SCP @file;
-				close SCP;
-			}
-			undef $path1;
-			undef $path2;
-			$path1 = "/tmp/$computer_node_name.sshd";
-			$path2 = "$computer_node_name:/etc/ssh/external_sshd_config";
-			if (run_scp_command($path1, $path2, $IDENTITY_bladerhel)) {
-				notify($ERRORS{'DEBUG'}, 0, "scp success copied $path1 to $path2");
-				unlink $path1;
-			}
-			else {
-				notify($ERRORS{'WARNING'}, 0, "failed to copy $path1 to $path2");
-			}
-		} ## end if (open(SSHDCFG, "/tmp/$computer_node_name.sshd"...
-
-
-	} ## end elsif ($image_os_type =~ /linux/i)  [ if ($self->os->can('post_load'))
 
 	return 1;
 } ## end sub load

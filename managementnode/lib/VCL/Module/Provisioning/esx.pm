@@ -504,32 +504,21 @@ sub load {
 	else {
 		notify($ERRORS{'OK'}, 0, "IP is known for $computer_shortname");
 	}
-	# Start waiting for SSH to come up
-	my $sshdstatus = 0;
-	$wait_loops = 0;
-	my $sshd_status = "off";
-	notify($ERRORS{'DEBUG'}, 0, "Waiting for ssh to come up on $computer_shortname");
-	while (!$sshdstatus) {
-		my $sshd_status = _sshd_status($computer_shortname, $image_name, $image_os_type);
-		if ($sshd_status eq "on") {
-			$sshdstatus = 1;
-			notify($ERRORS{'OK'}, 0, "$computer_shortname now has active sshd running");
+	
+	# Call OS module's post_load() subroutine
+	if ($self->os->can("post_load")) {
+		notify($ERRORS{'DEBUG'}, 0, "calling " . ref($self->os) . "->post_load()");
+		if ($self->os->post_load()) {
+			notify($ERRORS{'DEBUG'}, 0, "successfully ran OS post_load subroutine");
 		}
 		else {
-			#either sshd is off or N/A, we wait
-			if ($wait_loops > 50) {
-				notify($ERRORS{'CRITICAL'}, 0, "waited acceptable amount of time for sshd to become active, please check $computer_shortname on $vmhost_shortname");
-				#need to check power, maybe reboot it. for now fail it
-				return 0;
-			}
-			else {
-				$wait_loops++;
-				# to give post config a chance
-				notify($ERRORS{'OK'}, 0, "going to sleep 5 seconds, waiting for computer to start SSH. Try $wait_loops");
-				sleep 5;
-			}
-		}    # else
-	}    #while
+			notify($ERRORS{'WARNING'}, 0, "failed to run OS post_load subroutine");
+			return;
+		}
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, ref($self->os) . "::post_load() has not been implemented");
+	}
 
 	# Set IP info
 	if ($IPCONFIGURATION ne "manualDHCP") {

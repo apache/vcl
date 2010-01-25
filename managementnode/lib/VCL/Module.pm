@@ -312,6 +312,116 @@ sub get_package_hierarchy {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 code_loop_timeout
+
+ Parameters  : 1: code reference
+               2: array reference containing arguments to pass to code reference
+               3: message to display when attempting to execute code reference
+               4: timeout seconds, maximum number of seconds to attempt to execute code until it returns true
+               5: seconds to wait in between code execution attempts
+ Returns     : If code returns true: 1
+               If code never returns true: 0
+ Description : Executes the code contained in the code reference argument until
+               it returns true or until the timeout is reached.
+               
+               Example:
+               Call the _pingnode subroutine, pass it a single argument,
+               continue calling _pingnode until 20 seconds have passed, wait 4
+               seconds in between attempts:
+               $self->os->code_loop_timeout(\&_pingnode, ['vclh3-8'], 'checking ping', 20, 4);
+
+=cut
+
+sub code_loop_timeout {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get the start time
+	my $start_time = time();
+	
+	my $computer_node_name = $self->data->get_computer_node_name();
+	
+	# Check the argument count and get the arguments
+	if (scalar(@_) != 5) {
+		notify($ERRORS{'WARNING'}, 0, scalar(@_) . " arguments were passed, argument count must be 5");
+		return;
+	}
+	my ($code_ref, $args_array_ref, $message, $total_wait_seconds, $attempt_delay_seconds) = @_;
+	
+	# Make sure the code reference argument was passed correctly
+	if (!defined($code_ref)) {
+		notify($ERRORS{'WARNING'}, 0, "code reference argument is undefined");
+		return;
+	}
+	elsif (ref($code_ref) ne 'CODE') {
+		notify($ERRORS{'WARNING'}, 0, "1st argument must be a code reference, not " . ref($code_ref));
+		return;
+	}
+	
+	if (!defined($args_array_ref)) {
+		notify($ERRORS{'WARNING'}, 0, "2nd argument (arguments to pass to code reference) is undefined");
+		return;
+	}
+	elsif (!ref($args_array_ref) || ref($args_array_ref) ne 'ARRAY') {
+		notify($ERRORS{'WARNING'}, 0, "2nd argument (arguments to pass to code reference) is not an array reference");
+		return;
+	}
+	
+	if (!defined($message)) {
+		notify($ERRORS{'WARNING'}, 0, "3nd argument (message to display) is undefined");
+		return;
+	}
+	elsif (!$message) {
+		$message = 'executing code reference';
+	}
+	
+	if (!defined($total_wait_seconds) || $total_wait_seconds !~ /^\d+$/) {
+		notify($ERRORS{'WARNING'}, 0, "4th argument (total wait seconds) was not passed correctly");
+		return;
+	}
+	
+	if (!defined($attempt_delay_seconds) || $attempt_delay_seconds !~ /^\d+$/) {
+		notify($ERRORS{'WARNING'}, 0, "5th argument (attempt delay) was not passed correctly");
+		return;
+	}
+	
+	
+	# Calculate total seconds to wait and end time
+	my $end_time = $start_time + $total_wait_seconds;
+	notify($ERRORS{'OK'}, 0, "$message, maximum of $total_wait_seconds seconds");
+	
+	# Loop until code returns true
+	# Loop once if the wait time is 0
+	my $attempt_count = 0;
+	my $current_time;
+	while (($current_time = time()) < $end_time || ($total_wait_seconds == 0 && $attempt_count == 0)) {
+		$attempt_count++;
+		
+		if ($attempt_count > 1) {
+			my $seconds_elapsed = $current_time - $start_time;
+			my $seconds_remaining = $end_time - $current_time;
+			
+			notify($ERRORS{'OK'}, 0, "attempt " . ($attempt_count-1) . ": code returned false, seconds elapsed/remaining: $seconds_elapsed/$seconds_remaining, sleeping for $attempt_delay_seconds seconds");
+			sleep $attempt_delay_seconds;
+		}
+		
+		notify($ERRORS{'OK'}, 0, "attempt $attempt_count: $message");
+		
+		if (&$code_ref(@{$args_array_ref})) {
+			notify($ERRORS{'OK'}, 0, "$message, code returned true");
+			return 1;
+		}
+	}
+
+	notify($ERRORS{'OK'}, 0, "$message, code did not return true after waiting $total_wait_seconds seconds");
+	return 0;
+} ## end sub code_loop_timeout
+
+#/////////////////////////////////////////////////////////////////////////////
+
 1;
 __END__
 

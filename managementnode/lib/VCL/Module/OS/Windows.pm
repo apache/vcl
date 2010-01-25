@@ -442,14 +442,24 @@ sub post_load {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
-
-	my $management_node_keys = $self->data->get_management_node_keys();
+	
 	my $computer_node_name   = $self->data->get_computer_node_name();
 	my $imagemeta_postoption = $self->data->get_imagemeta_postoption();
-
-	notify($ERRORS{'OK'}, 0, "beginning Windows post-load tasks");
+	
+	notify($ERRORS{'OK'}, 0, "beginning Windows post-load tasks on $computer_node_name");
 
 =item 1
+
+ Wait for computer to respond to SSH
+
+=cut
+
+	if (!$self->wait_for_response(120, 600)) {
+		notify($ERRORS{'WARNING'}, 0, "$computer_node_name never responded to SSH");
+		return 0;
+	}
+
+=item *
 
  Wait for root to log off
 
@@ -1302,7 +1312,7 @@ sub logoff_users {
 	
 	# Find lines with the state = Active or Disc
 	# Disc will occur if the user disconnected the RDP session but didn't logoff
-	my @connection_lines = grep(/(Active|Disc)/, @{$output});
+	my @connection_lines = grep(/(Active)/, @{$output});
 	return 1 if !@connection_lines;
 	
 	#notify($ERRORS{'OK'}, 0, "connections on $computer_node_name:\n@connection_lines");
@@ -2905,7 +2915,7 @@ sub reboot {
 		} ## end if ($wait_attempt > 1)
 
 		# Wait maximum of 3 minutes for the computer to become unresponsive
-		if (!$self->wait_for_no_ping(3)) {
+		if (!$self->wait_for_no_ping(180)) {
 			# Computer never stopped responding to ping
 			notify($ERRORS{'WARNING'}, 0, "$computer_node_name never became unresponsive to ping");
 			next WAIT_ATTEMPT;
@@ -2917,7 +2927,7 @@ sub reboot {
 		sleep 15;
 
 		# Wait maximum of 6 minutes for the computer to come back up
-		if (!$self->wait_for_ping(6)) {
+		if (!$self->wait_for_ping(360)) {
 			# Check if the computer was ever offline, it should have been or else reboot never happened
 			notify($ERRORS{'WARNING'}, 0, "$computer_node_name never responded to ping");
 			next WAIT_ATTEMPT;
@@ -2926,7 +2936,7 @@ sub reboot {
 		notify($ERRORS{'DEBUG'}, 0, "$computer_node_name is pingable, waiting for ssh to respond");
 
 		# Wait maximum of 3 minutes for ssh to respond
-		if (!$self->wait_for_ssh(3)) {
+		if (!$self->wait_for_ssh(180)) {
 			notify($ERRORS{'WARNING'}, 0, "ssh never responded on $computer_node_name");
 			next WAIT_ATTEMPT;
 		}
@@ -2940,7 +2950,7 @@ sub reboot {
 		#sleep 20;
 		#
 		## Wait maximum of 2 minutes for ssh to respond
-		#if (!$self->wait_for_ssh(2)) {
+		#if (!$self->wait_for_ssh(120)) {
 		#	notify($ERRORS{'WARNING'}, 0, "ssh responded then stopped responding on $computer_node_name");
 		#	next WAIT_ATTEMPT;
 		#}
@@ -2986,7 +2996,7 @@ sub shutdown {
 		notify($ERRORS{'DEBUG'}, 0, "executed shutdown command on $computer_node_name");
 		
 		# Wait maximum of 3 minutes for the computer to become unresponsive
-		if ($self->wait_for_no_ping(3)) {
+		if ($self->wait_for_no_ping(180)) {
 			notify($ERRORS{'OK'}, 0, "computer has become unresponsive after shutdown command was issued");
 			return 1;
 		}
@@ -3013,190 +3023,6 @@ sub shutdown {
 	
 	return 1;
 }
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 wait_for_ping
-
- Parameters  : Maximum number of minutes to wait (optional)
- Returns     : 1 if computer is pingable, 0 otherwise
- Description : Attempts to ping the computer specified in the DataStructure
-               for the current reservation. It will wait up to a maximum number
-					of minutes. This can be specified by passing the subroutine an
-					integer value or the default value of 5 minutes will be used.
-
-=cut
-
-sub wait_for_ping {
-	my $self = shift;
-	if (ref($self) !~ /windows/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-
-	my $computer_node_name = $self->data->get_computer_node_name();
-
-	# Attempt to get the total number of minutes to wait from the command line
-	my $total_wait_minutes = shift;
-	if (!defined($total_wait_minutes) || $total_wait_minutes !~ /^\d+$/) {
-		$total_wait_minutes = 5;
-	}
-
-	# Looping configuration variables
-	# Seconds to wait in between loop attempts
-	my $attempt_delay = 5;
-	# Total loop attempts made
-	# Add 1 to the number of attempts because if you're waiting for x intervals, you check x+1 times including at 0
-	my $attempts = ($total_wait_minutes * 12) + 1;
-
-	notify($ERRORS{'OK'}, 0, "waiting for $computer_node_name to respond to ping, maximum of $total_wait_minutes minutes");
-
-	# Loop until computer is pingable
-	for (my $attempt = 1; $attempt <= $attempts; $attempt++) {
-		if ($attempt > 1) {
-			notify($ERRORS{'OK'}, 0, "attempt " . ($attempt - 1) . "/" . ($attempts - 1) . ": $computer_node_name is not pingable, sleeping for $attempt_delay seconds");
-			sleep $attempt_delay;
-		}
-
-		if (_pingnode($computer_node_name)) {
-			notify($ERRORS{'OK'}, 0, "$computer_node_name is pingable");
-			return 1;
-		}
-	} ## end for (my $attempt = 1; $attempt <= $attempts...
-
-	# Calculate how long this waited
-	my $total_wait = ($attempts * $attempt_delay);
-	notify($ERRORS{'WARNING'}, 0, "$computer_node_name is NOT pingable after waiting for $total_wait seconds");
-	return 0;
-} ## end sub wait_for_ping
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 wait_for_no_ping
-
- Parameters  : Maximum number of minutes to wait (optional)
- Returns     : 1 if computer is not pingable, 0 otherwise
- Description : Attempts to ping the computer specified in the DataStructure
-               for the current reservation. It will wait up to a maximum number
-					of minutes for ping to fail.
-
-=cut
-
-sub wait_for_no_ping {
-	my $self = shift;
-	if (ref($self) !~ /windows/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-
-	my $computer_node_name = $self->data->get_computer_node_name();
-
-	# Attempt to get the total number of minutes to wait from the command line
-	my $total_wait_minutes = shift;
-	if (!defined($total_wait_minutes) || $total_wait_minutes !~ /^\d+$/) {
-		$total_wait_minutes = 5;
-	}
-
-	# Looping configuration variables
-	# Seconds to wait in between loop attempts
-	my $attempt_delay = 5;
-	# Total loop attempts made
-	# Add 1 to the number of attempts because if you're waiting for x intervals, you check x+1 times including at 0
-	my $attempts = ($total_wait_minutes * 12) + 1;
-
-	notify($ERRORS{'OK'}, 0, "waiting for $computer_node_name to become unresponsive, maximum of $total_wait_minutes minutes");
-
-	# Loop until computer is offline
-	for (my $attempt = 1; $attempt <= $attempts; $attempt++) {
-		if ($attempt > 1) {
-			notify($ERRORS{'OK'}, 0, "attempt " . ($attempt - 1) . "/" . ($attempts - 1) . ": $computer_node_name is still pingable, sleeping for $attempt_delay seconds");
-			sleep $attempt_delay;
-		}
-
-		if (!_pingnode($computer_node_name)) {
-			notify($ERRORS{'OK'}, 0, "$computer_node_name is not pingable, returning 1");
-			return 1;
-		}
-	} ## end for (my $attempt = 1; $attempt <= $attempts...
-
-	# Calculate how long this waited
-	my $total_wait = ($attempts * $attempt_delay);
-	notify($ERRORS{'WARNING'}, 0, "$computer_node_name is still pingable after waiting for $total_wait seconds");
-	return 0;
-} ## end sub wait_for_no_ping
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 wait_for_ssh
-
- Parameters  : Maximum number of minutes to wait (optional)
- Returns     : 1 if ssh succeeded to computer, 0 otherwise
- Description : Attempts to communicate to the computer specified in the
-               DataStructure for the current reservation via SSH. It will wait
-					up to a maximum number of minutes. This can be specified by
-					passing the subroutine an integer value or the default value
-					of 5 minutes will be used.
-
-=cut
-
-sub wait_for_ssh {
-	my $self = shift;
-	if (ref($self) !~ /windows/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-
-	my $management_node_keys = $self->data->get_management_node_keys();
-	my $computer_node_name   = $self->data->get_computer_node_name();
-
-	# Attempt to get the total number of minutes to wait from the arguments
-	# If not specified, use default value
-	my $total_wait_minutes = shift;
-	if (!defined($total_wait_minutes) || $total_wait_minutes !~ /^\d+$/) {
-		$total_wait_minutes = 5;
-	}
-
-	# Looping configuration variables
-	# Seconds to wait in between loop attempts
-	my $attempt_delay = 5;
-	# Total loop attempts made
-	# Add 1 to the number of attempts because if you're waiting for x intervals, you check x+1 times including at 0
-	my $attempts = ($total_wait_minutes * 12) + 1;
-
-	notify($ERRORS{'OK'}, 0, "waiting for $computer_node_name to respond to ssh, maximum of $total_wait_minutes minutes");
-
-	# Loop until ssh is available
-	my $ssh_result = 0;
-	for (my $attempt = 1; $attempt <= $attempts; $attempt++) {
-		if ($attempt > 1) {
-			notify($ERRORS{'OK'}, 0, "attempt " . ($attempt - 1) . "/" . ($attempts - 1) . ": $computer_node_name did not respond to ssh, sleeping for $attempt_delay seconds");
-			sleep $attempt_delay;
-		}
-
-		# Try nmap to see if any of the ssh ports are open before attempting to run a test command
-		if (!nmap_port($computer_node_name, 22) && !nmap_port($computer_node_name, 24)) {
-			notify($ERRORS{'DEBUG'}, 0, "ports 22 and 24 are closed on $computer_node_name according to nmap");
-			next;
-		}
-
-		# Run a test SSH command
-		my ($exit_status, $output) = run_ssh_command({
-			node => $computer_node_name,
-			command => "echo testing ssh on $computer_node_name",
-			max_attempts => 1,
-			output_level => 0,
-		});
-		
-		# The exit status will be 0 if the command succeeded
-		if (defined($exit_status) && $exit_status == 0) {
-			notify($ERRORS{'OK'}, 0, "$computer_node_name is responding to ssh");
-			return 1;
-		}
-	} ## end for (my $attempt = 1; $attempt <= $attempts...
-
-	notify($ERRORS{'WARNING'}, 0, "$computer_node_name is not available via ssh");
-	return 0;
-} ## end sub wait_for_ssh
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -8319,6 +8145,142 @@ EOF
 	}
 	else {
 		notify($ERRORS{'WARNING'}, 0, "failed to set KMS address in database:\naffiliation ID: $affiliation_identifier\naddress: $address\nport: $port");
+		return;
+	}
+	
+	return 1;
+}
+
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_driver_inf_paths
+
+ Parameters  : Driver class (optional)
+ Returns     : Array containing driver .inf paths
+ Description : This subroutine searches the node configuration drivers directory
+               on the computer for .inf files and returns an array containing
+               the paths of the .inf files. The node configuration drivers
+               directory is: C:\cygwin\home\root\VCL\Drivers
+               
+               An optional driver class argument can be supplied which will
+               cause this subroutine to only return drivers matching the class
+               specified. Each driver .inf file should have a Class= line which
+               specified the type of device the driver is intended for. This
+               argument can be a regular expression. For example, to search for
+               all storage drivers, pass the following string to this
+               subroutine:
+               (scsiadapter|hdc)
+               
+               The driver paths are formatted with forward slashes.
+
+=cut
+
+sub get_driver_inf_paths {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $management_node_keys = $self->data->get_management_node_keys();
+	my $computer_node_name   = $self->data->get_computer_node_name();
+	
+	# Check if a driver class argument was specified
+	my $driver_class = shift;
+	if ($driver_class) {
+		notify($ERRORS{'DEBUG'}, 0, "attempting to locate driver .inf paths matching class: $driver_class");
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "attempting to locate driver .inf paths matching any class");
+	}
+	
+	my $drivers_directory = $self->get_node_configuration_directory() . '/Drivers';
+	
+	# Find the paths of .inf files in the drivers directory with a Class=SCSIAdapter or HDC line
+	# These are the storage driver .inf files
+	my @inf_paths;
+	my $grep_command .= '/usr/bin/grep.exe -Eirl --include="*.[iI][nN][fF]" ';
+	if ($driver_class) {
+		$grep_command .= '"class[ ]*=[ ]*' . $driver_class . '" ';
+	}
+	else {
+		$grep_command .= '".*" ';
+	}
+	$grep_command .= $drivers_directory;
+	
+	my ($grep_exit_status, $grep_output) = run_ssh_command($computer_node_name, $management_node_keys, $grep_command, '', '', 1);
+	if (defined($grep_exit_status) && $grep_exit_status == 0) {
+		@inf_paths = @$grep_output;
+		notify($ERRORS{'DEBUG'}, 0, "found " . scalar(@inf_paths) . " driver .inf paths");
+	}
+	elsif ($grep_exit_status) {
+		notify($ERRORS{'WARNING'}, 0, "failed to find driver paths, exit status: $grep_exit_status, output:\n@{$grep_output}");
+		return;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to find driverpaths");
+		return;
+	}
+	
+	return @inf_paths;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 set_device_path_key
+
+ Parameters  : None
+ Returns     : If successful: true
+               If failed: false
+ Description : Determines the paths to all of the driver .inf files copied to
+               the computer and sets the following Windows registry key:
+               HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\DevicePath
+               
+               This key contains paths to driver .inf files. Windows searches
+               these files when attempting to load a device driver.
+
+=cut
+
+sub set_device_path_key {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $management_node_keys = $self->data->get_management_node_keys();
+	my $computer_node_name   = $self->data->get_computer_node_name();
+	
+	# Find the paths of .inf files in the drivers directory
+	my @inf_paths = $self->get_driver_inf_paths();
+	if (!@inf_paths) {
+		notify($ERRORS{'WARNING'}, 0, "failed to locate driver .inf paths");
+		return;
+	}
+	
+	# Remove the .inf filenames from the paths
+	map(s/\/[^\/]*$//, @inf_paths);
+	
+	# Remove duplicate paths
+	my %inf_path_hash;
+	my @inf_paths_unique = grep { !$inf_path_hash{$_}++ } @inf_paths;
+	
+	# Assemble the device path value
+	my $device_path_value = '%SystemRoot%\\inf;' . join(";", @inf_paths_unique);
+	
+	# Replace forward slashes with backslashes
+	$device_path_value =~ s/\//\\/g;
+	
+	notify($ERRORS{'DEBUG'}, 0, "device path value: $device_path_value");
+	
+	# Attempt to set the DevicePath key
+	my $registry_key = 'HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion';
+	if ($self->reg_add($registry_key, 'DevicePath', 'REG_EXPAND_SZ', $device_path_value)) {
+		notify($ERRORS{'OK'}, 0, "set the DevicePath registry key");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to set the DevicePath registry key");
 		return;
 	}
 	

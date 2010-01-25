@@ -2973,6 +2973,10 @@ sub nmap_port {
 
 sub _pingnode {
 	my ($hostname) = $_[0];
+	if (!$hostname) {
+		notify($ERRORS{'WARNING'}, 0, "hostname argument was not supplied");
+		return;
+	}
 
 	my $p = Net::Ping->new("icmp");
 	my $result = $p->ping($hostname, 1);
@@ -5888,7 +5892,9 @@ sub run_ssh_command {
 
 		# Check the exit status
 		# ssh exits with the exit status of the remote command or with 255 if an error occurred.
-		if ($exit_status == 255 || $ssh_output_formatted =~ /lost connection|reset by peer|no route to host|connection refused|connection timed out/i) {
+		# Check for vmware-cmd usage message, it returns 255 if the vmware-cmd usage output is returned
+		if (($exit_status == 255 && $ssh_output_formatted !~ /usage.*vmware-cmd/i) ||
+			 $ssh_output_formatted =~ /lost connection|reset by peer|no route to host|connection refused|connection timed out/i) {
 			notify($ERRORS{'WARNING'}, 0, "attempt $attempts/$max_attempts: failed to execute SSH command on $node: $command, exit status: $exit_status, SSH exits with the exit status of the remote command or with 255 if an error occurred, output:\n$ssh_output_formatted") if $output_level;
 			next;
 		}

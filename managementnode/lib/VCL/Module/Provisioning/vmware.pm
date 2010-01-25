@@ -841,143 +841,6 @@ sub load {
 	} ## end for my $l (@{$sshcmd[1]})
 	my $sloop = 0;
 	if ($s1) {
-		#stage1 complete monitor local messages log for boot up info
-		if (open(TAIL, "</var/log/messages")) {
-			seek TAIL, -1, 2;    #
-			for (;;) {
-				notify($ERRORS{'OK'}, 0, "$computer_shortname ROUND 1 checks loop $sloop of 40");
-
-				# re-check state of vm
-				my @vmstate = run_ssh_command($hostnode, $identity, "vmware-cmd $myvmx getstate", "root");
-				notify($ERRORS{'OK'}, 0, "rechecking state of vm $computer_shortname $myvmx");
-				for my $l (@{$vmstate[1]}) {
-					next if ($l =~ /Warning:/);
-					if ($l =~ /= on/) {
-						#good vm still on
-						notify($ERRORS{'OK'}, 0, "vm $computer_shortname reports on");
-						
-						my $sshd_status = _sshd_status($computer_shortname, $requestedimagename);
-						if ($sshd_status eq "on") {
-							notify($ERRORS{'OK'}, 0, "$computer_shortname now has active sshd running, maybe we missed the READY flag setting STAGE5 flag");
-							$s5 = 1;
-							#speed this up a bit
-							close(TAIL);
-							goto VMWAREROUND2;
-						}
-						else {
-							notify($ERRORS{'OK'}, 0, "sshd is NOT active on $computer_shortname yet");
-						}
-						
-					} ## end if ($l =~ /= on/)
-					elsif ($l =~ /= off/) {
-						#good vm still on
-						notify($ERRORS{'CRITICAL'}, 0, "state of vm $computer_shortname reports off after pass number $sloop attempting to restart: start attempts $vmware_starts");
-						close(TAIL);
-						goto VMWARESTART;
-					}
-					elsif ($l =~ /= stuck/) {
-						notify($ERRORS{'CRITICAL'}, 0, "vm $computer_shortname reports stuck on pass $sloop attempting to kill pid and restart: restart attempts $vmware_starts");
-						close(TAIL);
-						#kill stuck process
-						#list processes for vmx and kill pid
-						notify($ERRORS{'OK'}, 0, "vm reported in stuck state, attempting to kill process");
-						my @ssh_pid = run_ssh_command($hostnode, $identity, "vmware-cmd -q $myvmx getpid");
-						foreach my $p (@{$ssh_pid[1]}) {
-							if ($p =~ /(\D*)(\s*)([0-9]*)/) {
-								my $vmpid = $3;
-								if (defined(run_ssh_command($hostnode, $identity, "kill -9 $vmpid"))) {
-									notify($ERRORS{'OK'}, 0, "killed $vmpid $myvmx");
-								}
-							}
-						}
-					} ## end elsif ($l =~ /= stuck/)  [ if ($l =~ /= on/)
-				} ## end for my $l (@{$vmstate[1]})
-
-				while (<TAIL>) {
-					if ($_ =~ /$vmclient_eth0MAC|$vmclient_privateIPaddress|$computer_shortname/) {
-						notify($ERRORS{'DEBUG'}, 0, "DEBUG output for $computer_shortname $_");
-					}
-					if (!$s2) {
-						if ($_ =~ /dhcpd: DHCPDISCOVER from $vmclient_eth0MAC/) {
-							$s2 = 1;
-							insertloadlog($reservation_id, $vmclient_computerid, "vmstage2", "detected DHCP request for node");
-							notify($ERRORS{'OK'}, 0, "$computer_shortname STAGE 2 set DHCPDISCOVER from $vmclient_eth0MAC");
-						}
-					}
-					if (!$s3) {
-						if ($_ =~ /dhcpd: DHCPACK on $vmclient_privateIPaddress to $vmclient_eth0MAC/) {
-							$s3 = 1;
-							insertloadlog($reservation_id, $vmclient_computerid, "vmstage3", "detected DHCPACK for node");
-							notify($ERRORS{'OK'}, 0, "$computer_shortname STAGE 3 set DHCPACK on $vmclient_privateIPaddress to $vmclient_eth0MAC}");
-						}
-					}
-					if (!$s4) {
-						if ($_ =~ /dhcpd: DHCPACK on $vmclient_privateIPaddress to $vmclient_eth0MAC/) {
-							$s4 = 1;
-							insertloadlog($reservation_id, $vmclient_computerid, "vmstage4", "detected 2nd DHCPACK for node");
-							notify($ERRORS{'OK'}, 0, "$computer_shortname STAGE 4 set another DHCPACK on $vmclient_privateIPaddress to $vmclient_eth0MAC");
-						}
-					}
-					if (!$s5) {
-						if ($_ =~ /$computer_shortname is READY\./) {
-							$s5 = 1;
-							notify($ERRORS{'OK'}, 0, "$computer_shortname STAGE 5 set found READY flag");
-							insertloadlog($reservation_id, $vmclient_computerid, "vmstage5", "detected READY flag proceeding to post configuration");
-							#speed this up a bit
-							close(TAIL);
-							goto VMWAREROUND2;
-						}
-
-					} ## end if (!$s5)
-					if ($sloop > 20) {
-						#are we getting close
-						if ($_ =~ /DHCPACK on $vmclient_privateIPaddress to $vmclient_eth0MAC}/) {
-							#getting close -- extend it a bit
-							notify($ERRORS{'OK'}, 0, "$computer_shortname is getting close extending wait time");
-							insertloadlog($reservation_id, $vmclient_computerid, "info", "getting close node is booting");
-							$sloop = $sloop - 8;
-						}
-						if ($_ =~ /$computer_shortname sshd/) {
-							#getting close -- extend it a bit
-							notify($ERRORS{'OK'}, 0, "$computer_shortname is getting close sshd is starting extending wait time");
-							insertloadlog($reservation_id, $vmclient_computerid, "info", "getting close services are starting on node");
-							$sloop = $sloop - 5;
-						}
-
-						my $sshd_status = _sshd_status($computer_shortname, $requestedimagename, $image_os_type);
-						if ($sshd_status eq "on") {
-							notify($ERRORS{'OK'}, 0, "$computer_shortname now has active sshd running, maybe we missed the READY flag setting STAGE5 flag");
-							$s5 = 1;
-							#speed this up a bit
-							close(TAIL);
-							goto VMWAREROUND2;
-						}
-					} ## end if ($sloop > 20)
-
-				}    #while
-
-				if ($s5) {
-					#good
-					close(TAIL);
-					goto VMWAREROUND2;
-				}
-				elsif ($sloop > 65) {
-					#taken too long -- do something different or fail it
-
-					notify($ERRORS{'CRITICAL'}, 0, "could not load $myvmx on $computer_shortname on host $hostnode");
-					insertloadlog($reservation_id, $vmclient_computerid, "failed", "could not load vmx on $hostnode");
-					close(TAIL);
-					return 0;
-
-				}
-				else {
-					#keep check the log
-					$sloop++;
-					sleep 10;
-					seek TAIL, 0, 1;
-				}
-			}    # for loop
-		}    #if tail
 	}    #if stage1
 	else {
 		notify($ERRORS{'CRITICAL'}, 0, "stage1 not confirmed, could not determine if $computer_shortname was turned on on host $hostnode");
@@ -987,43 +850,24 @@ sub load {
 	my $sshd_attempts = 0;
 
 	VMWAREROUND2:
-
-	#READY flag set
-	#attempt to login via ssh
+	
 	insertloadlog($reservation_id, $vmclient_computerid, "vmround2", "waiting for ssh to become active");
-	notify($ERRORS{'OK'}, 0, "READY flag set for $myvmx, proceeding");
-	my $sshdstatus = 0;
-	my $wait_loops = 0;
-	$sshd_attempts++;
-	my $sshd_status = "off";
-	while (!$sshdstatus) {
-		my $sshd_status = _sshd_status($computer_shortname, $requestedimagename, $image_os_type);
-		if ($sshd_status eq "on") {
-			$sshdstatus = 1;
-			notify($ERRORS{'OK'}, 0, "$computer_shortname now has active sshd running, ok to proceed to sync ssh keys");
+	
+	if ($self->os->can("post_load")) {
+		notify($ERRORS{'DEBUG'}, 0, "calling " . ref($self->os) . "->post_load()");
+		if ($self->os->post_load()) {
+			notify($ERRORS{'DEBUG'}, 0, "successfully ran OS post_load subroutine");
 		}
 		else {
-			#either sshd is off or N/A, we wait
-			if ($wait_loops > 5) {
-				if ($sshd_attempts < 3) {
-					goto VMWAREROUND2;
-				}
-				else {
-					notify($ERRORS{'WARNING'}, 0, "waited acceptable amount of time for sshd to become active, please check $computer_shortname on $hostnode");
-					insertloadlog($reservation_id, $vmclient_computerid, "failed", "waited acceptable amout of time for core services to start on $hostnode");
-					#need to check power, maybe reboot it. for now fail it
-					return 0;
-				}
-			} ## end if ($wait_loops > 5)
-			else {
-				$wait_loops++;
-				# to give post config a chance
-				notify($ERRORS{'OK'}, 0, "going to sleep 5 seconds, waiting for post config to finish");
-				sleep 5;
-			}
-		}    # else
-	}    #while
-
+			my $vm_state = $self->power_status() || 'unknown';
+			notify($ERRORS{'WARNING'}, 0, "failed to run OS post_load subroutine, VM state: $vm_state");
+			return;
+		}
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, ref($self->os) . "::post_load() has not been implemented");
+	}
+	
 	#clear ssh public keys from /root/.ssh/known_hosts
 	my $known_hosts = "/root/.ssh/known_hosts";
 	my $ssh_keyscan = "/usr/bin/ssh-keyscan";
@@ -1458,41 +1302,6 @@ sub _vmwareclone {
 		return 0;
 	}
 } ## end sub _vmwareclone
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 vmrun_cmd
-
- Parameters  : hostnode, hostnode type,full vmx path,cmd
- Returns     : 0 or 1
- Description : execute specific vmware-cmd cmd
-
-=cut
-
-sub _vmrun_cmd {
-	my ($hostnode, $hosttype, $hostidentity, $vmx, $cmd) = @_;
-	my ($package, $filename, $line, $sub) = caller(0);
-	notify($ERRORS{'WARNING'}, 0, "hostnode is not defined")     if (!(defined($hostnode)));
-	notify($ERRORS{'WARNING'}, 0, "hosttype is not defined")     if (!(defined($hosttype)));
-	notify($ERRORS{'WARNING'}, 0, "hostidentity is not defined") if (!(defined($hostidentity)));
-	notify($ERRORS{'WARNING'}, 0, "vmx is not defined")          if (!(defined($vmx)));
-	notify($ERRORS{'WARNING'}, 0, "cmd is not defined")          if (!(defined($cmd)));
-
-	if ($hosttype eq "blade") {
-
-		if ($cmd eq "off") {
-			notify($ERRORS{'OK'}, 0, "$hostnode,$hosttype,$hostidentity,$vmx,$cmd");
-			my @sshcmd = run_ssh_command($hostnode, $hostidentity, "vmware-cmd $vmx stop hard", "root");
-			foreach my $l (@{$sshcmd[1]}) {
-				next if ($l =~ /Warning: Permanently added/);
-				if ($l =~ /Error/) {
-					notify($ERRORS{'CRITICAL'}, 0, "$l output for $hostnode,$hosttype,$hostidentity,$vmx,$cmd");
-					return 0;
-				}
-			}
-		} ## end if ($cmd eq "off")
-	} ## end if ($hosttype eq "blade")
-	return 1;
-} ## end sub _vmrun_cmd
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -1762,7 +1571,7 @@ sub control_VM {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2  getimagesize
+=head2  get_image_size
 
  Parameters  : imagename
  Returns     : 0 failure or size of image

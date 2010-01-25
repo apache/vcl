@@ -1324,6 +1324,13 @@ sub run_sysprep {
 		notify($ERRORS{'WARNING'}, 0, "failed to add Installation Sources registry key");
 	}
 	
+	# Set the DevicePath registry key
+	# This is used to locate device drivers
+	if (!$self->set_device_path_key()) {
+		notify($ERRORS{'WARNING'}, 0, "failed to set the DevicePath registry key");
+		return;
+	}
+	
 	# Reset the Windows setup registry keys
 	# If Sysprep fails it will set keys which make running Sysprep again impossible
 	# These keys never get reset, Microsoft instructs you to reinstall the OS
@@ -1366,7 +1373,7 @@ EOF
 	}
 	
 	# Wait maximum of 5 minutes for the computer to become unresponsive
-	if (!$self->wait_for_no_ping(5)) {
+	if (!$self->wait_for_no_ping(300)) {
 		# Computer never stopped responding to ping
 		notify($ERRORS{'WARNING'}, 0, "$computer_node_name never became unresponsive to ping");
 		return 0;
@@ -1461,6 +1468,41 @@ sub defragment_hard_drive {
 	# Skip hard drive defragmentation because it takes a very long time for Windows 6.x (Vista, 2008)
 	notify($ERRORS{'OK'}, 0, "skipping hard drive defragmentation for Windows 6.x because it takes too long, returning 1");
 	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 wait_for_response
+
+ Parameters  : None
+ Returns     : If successful: true
+               If failed: false
+ Description : Waits for the reservation computer to respond to SSH after it
+               has been loaded.
+
+=cut
+
+sub wait_for_response {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $initial_delay_seconds;
+	my $ssh_response_timeout_seconds;
+	
+	if ($self->data->get_imagemeta_sysprep()) {
+		$initial_delay_seconds = 240;
+		$ssh_response_timeout_seconds = 1800; 
+	}
+	else {
+		$initial_delay_seconds = 180;
+		$ssh_response_timeout_seconds = 600; 
+	}
+	
+	# Call parent class's wait_for_response subroutine
+	return $self->SUPER::wait_for_response($initial_delay_seconds, $ssh_response_timeout_seconds);
 }
 
 #/////////////////////////////////////////////////////////////////////////////

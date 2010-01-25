@@ -682,27 +682,6 @@ sub reload_image {
 	}
 	
 	
-	# Check if OS module's post_load() subroutine exists
-	if ($self->os->can("post_load")) {
-		notify($ERRORS{'OK'}, 0, ref($self->os) . "->post_load() subroutine exists");
-	
-		# Call OS module's post_load() subroutine
-		notify($ERRORS{'OK'}, 0, "calling " . ref($self->os) . "->post_load() subroutine");
-		insertloadlog($reservation_id, $computer_id, "info", "calling " . ref($self->os) . "->post_load() subroutine");
-		if ($self->os->post_load()) {
-			notify($ERRORS{'OK'}, 0, "successfully performed OS post-load tasks for $image_name on $computer_short_name");
-			insertloadlog($reservation_id, $computer_id, "info", "performed OS post-load tasks for $image_name on $computer_short_name");
-		}
-		else {
-			notify($ERRORS{'CRITICAL'}, 0, "failed to perform OS post-load tasks for $image_name on $computer_short_name, returning");
-			insertloadlog($reservation_id, $computer_id, "loadimagefailed", "failed to perform OS post-load tasks for $image_name on $computer_short_name");
-			return;
-		}
-	}
-	else {
-		notify($ERRORS{'OK'}, 0, ref($self->os) . "->post_load() subroutine does not exist");
-	}
-	
 	#Post operations not to be handled by provisioning modules
 	if($image_os_install_type eq "kickstart"){
 		notify($ERRORS{'OK'}, 0, "Detected kickstart install on $computer_short_name, writing current_image.txt");

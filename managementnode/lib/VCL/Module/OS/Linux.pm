@@ -209,6 +209,12 @@ sub post_load {
 
 	notify($ERRORS{'OK'}, 0, "initiating Linux post_load: $image_name on $computer_short_name");
 
+	# Wait for computer to respond to SSH
+	if (!$self->wait_for_response(60, 600)) {
+		notify($ERRORS{'WARNING'}, 0, "$computer_node_name never responded to SSH");
+		return 0;
+	}
+
 	# Change password
 	if ($self->changepasswd($computer_node_name, "root")) {
 		notify($ERRORS{'OK'}, 0, "successfully changed root password on $computer_node_name");

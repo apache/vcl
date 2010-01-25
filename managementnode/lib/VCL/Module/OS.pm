@@ -259,6 +259,238 @@ sub get_current_image_name {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 wait_for_ping
+
+ Parameters  : Maximum number of seconds to wait (optional), delay between attempts (optional)
+ Returns     : If computer is pingable before the maximum amount of time has elapsed: 1
+               If computer never responds to ping before the maximum amount of time has elapsed: 0
+ Description : Attempts to ping the computer specified in the DataStructure
+               for the current reservation. It will wait up to a maximum number
+               of seconds. This can be specified by passing the subroutine an
+               integer value or the default value of 300 seconds will be used. The
+               delay between attempts can be specified as the 2nd argument in
+               seconds. The default value is 15 seconds.
+
+=cut
+
+sub wait_for_ping {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Attempt to get the total number of seconds to wait from the arguments
+	my $total_wait_seconds = shift;
+	if (!defined($total_wait_seconds) || $total_wait_seconds !~ /^\d+$/) {
+		$total_wait_seconds = 300;
+	}
+	
+	# Seconds to wait in between loop attempts
+	my $attempt_delay_seconds = shift;
+	if (!defined($attempt_delay_seconds) || $attempt_delay_seconds !~ /^\d+$/) {
+		$attempt_delay_seconds = 15;
+	}
+	
+	my $computer_node_name = $self->data->get_computer_node_name();
+	
+	my $message = "waiting for $computer_node_name to respond to ping";
+	
+	# Call code_loop_timeout, specifify that it should call _pingnode with the computer name as the argument
+	return $self->code_loop_timeout(\&_pingnode, [$computer_node_name], $message, $total_wait_seconds, $attempt_delay_seconds);
+} ## end sub wait_for_ping
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 wait_for_no_ping
+
+ Parameters  : Maximum number of seconds to wait (optional), seconds to delay between attempts (optional)
+ Returns     : 1 if computer is not pingable, 0 otherwise
+ Description : Attempts to ping the computer specified in the DataStructure
+               for the current reservation. It will wait up to a maximum number
+               of seconds for ping to fail. The delay between attempts can be
+               specified as the 2nd argument in seconds. The default value is 15
+               seconds.
+
+=cut
+
+sub wait_for_no_ping {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Attempt to get the total number of seconds to wait from the arguments
+	my $total_wait_seconds = shift;
+	if (!defined($total_wait_seconds) || $total_wait_seconds !~ /^\d+$/) {
+		$total_wait_seconds = 300;
+	}
+	
+	# Seconds to wait in between loop attempts
+	my $attempt_delay_seconds = shift;
+	if (!defined($attempt_delay_seconds) || $attempt_delay_seconds !~ /^\d+$/) {
+		$attempt_delay_seconds = 15;
+	}
+	
+	my $computer_node_name = $self->data->get_computer_node_name();
+	
+	my $message = "waiting for $computer_node_name to NOT respond to ping";
+	
+	# Call code_loop_timeout and invert the result, specifify that it should call _pingnode with the computer name as the argument
+	return $self->code_loop_timeout(sub{return !_pingnode(@_)}, [$computer_node_name], $message, $total_wait_seconds, $attempt_delay_seconds);
+} ## end sub wait_for_no_ping
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 wait_for_ssh
+
+ Parameters  : Seconds to wait (optional), seconds to delay between attempts (optional)
+ Returns     : 
+ Description : Attempts to communicate to the reservation computer via SSH.
+               SSH attempts are made until the maximum number of seconds has
+               elapsed. The maximum number of seconds can be specified as the
+               first argument. If an argument isn't supplied, a default value of
+               300 seconds will be used.
+               
+               A delay occurs between attempts. This can be specified by passing
+               a 2nd argument. If a 2nd argument isn't supplied, a default value
+               of 15 seconds will be used.
+
+=cut
+
+sub wait_for_ssh {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Attempt to get the total number of seconds to wait from the arguments
+	my $total_wait_seconds = shift;
+	if (!defined($total_wait_seconds) || $total_wait_seconds !~ /^\d+$/) {
+		$total_wait_seconds = 300;
+	}
+	
+	# Seconds to wait in between loop attempts
+	my $attempt_delay_seconds = shift;
+	if (!defined($attempt_delay_seconds) || $attempt_delay_seconds !~ /^\d+$/) {
+		$attempt_delay_seconds = 15;
+	}
+	
+	my $computer_node_name = $self->data->get_computer_node_name();
+	
+	# Call the "can" function, it returns a code reference to the subroutine specified
+	# This is passed to code_loop_timeout which will then execute the code until it returns true
+	my $sub_ref = $self->can("is_ssh_responding");
+	
+	my $message = "waiting for $computer_node_name to respond to SSH";
+
+	return $self->code_loop_timeout($sub_ref, [$self], $message, $total_wait_seconds, $attempt_delay_seconds);
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 is_ssh_responding
+
+ Parameters  : None
+ Returns     : If computer responds to SSH: 1
+               If computer never responds to SSH: 0
+ Description : Checks if the reservation computer is responding to SSH.
+
+=cut
+
+sub is_ssh_responding {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $computer_node_name = $self->data->get_computer_node_name();
+	
+	# Try nmap to see if any of the ssh ports are open before attempting to run a test command
+	if (!nmap_port($computer_node_name, 22) && !nmap_port($computer_node_name, 24)) {
+		notify($ERRORS{'DEBUG'}, 0, "$computer_node_name is NOT responding to SSH, port 22 or 24 are not open");
+		return 0;
+	}
+	
+	# Run a test SSH command
+	my ($exit_status, $output) = run_ssh_command({
+		node => $computer_node_name,
+		command => "echo testing ssh on $computer_node_name",
+		max_attempts => 1,
+		output_level => 0,
+	});
+	
+	# The exit status will be 0 if the command succeeded
+	if (defined($exit_status) && $exit_status == 0) {
+		notify($ERRORS{'DEBUG'}, 0, "$computer_node_name is responding to SSH");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "$computer_node_name is NOT responding to SSH, SSH command failed");
+		return 0;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 wait_for_response
+
+ Parameters  : Initial delay seconds (optional), SSH response timeout seconds (optional)
+ Returns     : If successful: true
+               If failed: false
+ Description : Waits for the reservation computer to respond to SSH after it
+               has been loaded.
+
+=cut
+
+sub wait_for_response {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $start_time = time();
+	
+	my $computer_node_name = $self->data->get_computer_node_name();
+	
+	my $initial_delay_seconds = shift;
+	if (!defined $initial_delay_seconds) {
+		$initial_delay_seconds = 120;
+	}
+	
+	my $ssh_response_timeout_seconds = shift;
+	if (!defined $ssh_response_timeout_seconds) {
+		$ssh_response_timeout_seconds = 600;
+	}
+	
+	# Sleep for the initial delay value if it has been set
+	# Check SSH once to bypass the initial delay if SSH is already responding
+	if ($initial_delay_seconds && !$self->is_ssh_responding()) {
+		notify($ERRORS{'OK'}, 0, "waiting $initial_delay_seconds seconds for $computer_node_name to boot");
+		sleep $initial_delay_seconds;
+		notify($ERRORS{'OK'}, 0, "waited $initial_delay_seconds seconds for $computer_node_name to boot");
+	}
+	
+	# Wait for SSH to respond, loop until timeout is reached
+	notify($ERRORS{'OK'}, 0, "waiting for $computer_node_name to respond to SSH, maximum of $ssh_response_timeout_seconds seconds");
+	if (!$self->wait_for_ssh($ssh_response_timeout_seconds)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to connect to $computer_node_name via SSH after $ssh_response_timeout_seconds seconds");
+		return;
+	}
+	
+	my $end_time = time();
+	my $duration = ($end_time - $start_time);
+	
+	notify($ERRORS{'OK'}, 0, "$computer_node_name is responding to SSH after $duration seconds");
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 1;
 __END__
 

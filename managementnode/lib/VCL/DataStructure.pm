@@ -566,7 +566,9 @@ sub _initialize : Init {
  Description : This subroutine is automatically invoked when an class method is
                called on a DataStructure object but the method isn't explicitly
                defined. Function names are mapped to data stored in the request
-               data hash. This subroutine returns the requested data.
+               data hash. This subroutine returns the requested data. An
+               optional argument can be specified with a value of 1 to suppress
+               warnings if data is not initialized for the value requested.
 
 =cut
 
@@ -586,6 +588,9 @@ sub _automethod : Automethod {
 	else {
 		return;
 	}
+	
+	# Determines whether or not warnings are shown if data is not initialized
+	my $show_warnings = 1;
 
 	# If set, make sure an argument was passed
 	my $set_data;
@@ -595,6 +600,9 @@ sub _automethod : Automethod {
 	elsif ($mode =~ /set/) {
 		notify($ERRORS{'WARNING'}, 0, "data structure set function was called without an argument");
 		return;
+	}
+	elsif ($mode =~ /get/ && defined $args[0] && !$args[0]) {
+		$show_warnings = 0;
 	}
 
 	# Check if the sub name is defined in the subroutine mappings hash
@@ -636,7 +644,7 @@ sub _automethod : Automethod {
 			if ($self->get_log_data()) {
 				# Log data was retrieved, check if requested data is now populated
 				if (!eval "defined $hash_path") {
-					notify($ERRORS{'WARNING'}, 0, "log data was retrieved but corresponding data has not been initialized for $method_name: $hash_path", $self->request_data);
+					notify($ERRORS{'WARNING'}, 0, "log data was retrieved but corresponding data has not been initialized for $method_name: $hash_path", $self->request_data) if $show_warnings;
 					return sub { };
 				}
 			}
@@ -672,7 +680,7 @@ sub _automethod : Automethod {
 			$return_value = eval $hash_path;
 		}
 		elsif (!$key_defined) {
-			notify($ERRORS{'WARNING'}, 0, "corresponding data has not been initialized for $method_name: $hash_path", $self->request_data);
+			notify($ERRORS{'WARNING'}, 0, "corresponding data has not been initialized for $method_name: $hash_path", $self->request_data) if $show_warnings;
 			return sub { };
 		}
 		else {
@@ -681,7 +689,7 @@ sub _automethod : Automethod {
 		}
 
 		if (!defined $return_value) {
-			notify($ERRORS{'WARNING'}, 0, "corresponding data is undefined for $method_name: $hash_path", $self->request_data);
+			notify($ERRORS{'WARNING'}, 0, "corresponding data is undefined for $method_name: $hash_path", $self->request_data) if $show_warnings;
 			return sub { };
 		}
 
@@ -1413,7 +1421,9 @@ sub get_computer_private_ip_address {
 		}
 		else {
 			# Argument was not specified, check if private IP address for this reservation's computer was already retrieved from /etc/hosts
-			if (my $existing_private_ip_address = $self->request_data->{reservation}{$self->reservation_id}{computer}{privateIPaddress}) {
+			if (defined $self->request_data->{reservation}{$self->reservation_id}{computer}{PRIVATE_IP_ADDRESS_ETC_HOSTS}) {
+				my $existing_private_ip_address = $self->request_data->{reservation}{$self->reservation_id}{computer}{PRIVATE_IP_ADDRESS_ETC_HOSTS};
+				
 				# This subroutine has already been run for the reservation computer, return IP address retrieved earlier
 				notify($ERRORS{'DEBUG'}, 0, "returning private IP address previously retrieved from /etc/hosts: $existing_private_ip_address");
 				return $existing_private_ip_address;
@@ -1491,7 +1501,7 @@ sub get_computer_private_ip_address {
 	
 	# Update the request data if subroutine was called as an object method without an argument
 	if ($self && !$argument) {
-		$self->set_computer_private_ip_address($ip_address);
+		$self->request_data->{reservation}{$self->reservation_id}{computer}{PRIVATE_IP_ADDRESS_ETC_HOSTS} = $ip_address;
 	}
 	
 	return $ip_address;
@@ -2169,6 +2179,63 @@ sub get_computer_state_name {
 		notify($ERRORS{'WARNING'}, 0, "unable to retrieve current state of computer $computer_name from the database");
 		return undef;
 	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_reservation_info_string
+
+ Parameters  : None.
+ Returns     : String
+ Description : Assembles a string containing reservation information for
+               debugging purposes.
+
+=cut
+
+sub get_reservation_info_string {
+	my $self = shift;
+	
+	# Check if subroutine was called as an object method
+	unless (ref($self) && $self->isa('VCL::DataStructure')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a VCL::DataStructure module object method");
+		return;
+	}
+
+	my $string;
+	$string .= "request: " . $self->get_request_id() . "\n";
+	$string .= "reservation: " . $self->get_reservation_id() . "\n";
+	$string .= "state/laststate: " . $self->get_request_state_name() . "/" . $self->get_request_laststate_name() . "\n";
+	$string .= "\n";
+	
+	$string .= "management node: " . $self->get_management_node_hostname() . "\n";
+	$string .= "PID: $PID\n";
+	$string .= "\n";
+	
+	$string .= "computer name: " . $self->get_computer_host_name() . " (id: " . $self->get_computer_id() . ")\n";
+	my $computer_type = $self->get_computer_type();
+	$string .= "computer type: $computer_type\n";
+	$string .= "\n";
+	
+	if ($computer_type eq 'virtualmachine') {
+		$string .= "vm host: " . $self->get_vmhost_hostname() . " (vmhost id: " . $self->get_vmhost_id() . ")\n";
+		$string .= "vm host profile: " . $self->get_vmhost_profile_name() . "\n";
+		$string .= "\n";
+	}
+	
+	$string .= "user name: " . $self->get_user_login_id() . " (id: " . $self->get_user_id() . ")\n";
+	$string .= "user affiliation: " . $self->get_user_affiliation_name() . "\n";
+	$string .= "\n";
+	
+	$string .= "image: " . $self->get_image_name() . " (id: " . $self->get_image_id() . ")\n";
+	$string .= "image prettyname: " . $self->get_image_prettyname() . "\n";
+	$string .= "image size: " . $self->get_image_size() . "\n";
+	$string .= "image affiliation: " . $self->get_image_affiliation_name() . "\n";
+	$string .= "image revision ID: " . $self->get_imagerevision_id() . "\n";
+	$string .= "image revision comments: " . ($self->get_imagerevision_comments(0) || 'none') . "\n";
+	$string .= "image revision created: " . $self->get_imagerevision_date_created() . "\n";
+	$string .= "image revision production: " . $self->get_imagerevision_production();
+	
+	return $string;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
