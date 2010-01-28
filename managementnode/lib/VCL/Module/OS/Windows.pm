@@ -194,6 +194,18 @@ sub pre_capture {
 
 =item *
 
+ Apply Windows security templates
+
+=cut
+
+	# This find any .inf security template files configured for the OS and run secedit.exe to apply them
+	if (!$self->apply_security_templates()) {
+		notify($ERRORS{'WARNING'}, 0, "unable to apply security templates");
+		return 0;
+	}
+
+=item *
+
  Disable autoadminlogon before disabling the pagefile and rebooting
 
 =cut
@@ -292,18 +304,6 @@ sub pre_capture {
 
 	if (!$self->clean_hard_drive()) {
 		notify($ERRORS{'WARNING'}, 0, "unable to clean unnecessary files the hard drive");
-	}
-
-=item *
-
- Apply Windows security templates
-
-=cut
-
-	# This find any .inf security template files configured for the OS and run secedit.exe to apply them
-	if (!$self->apply_security_templates()) {
-		notify($ERRORS{'WARNING'}, 0, "unable to apply security templates");
-		return 0;
 	}
 	
 =item *
@@ -2573,15 +2573,15 @@ sub delete_scheduled_task {
 	if (defined($delete_task_exit_status) && $delete_task_exit_status == 0) {
 		notify($ERRORS{'OK'}, 0, "deleted existing scheduled task '$task_name' on $computer_node_name");
 	}
-	elsif (defined($delete_task_output) && grep(/task.*does not exist/i, @{$delete_task_output})) {
-		notify($ERRORS{'DEBUG'}, 0, "scheduled task '$task_name' does not already exist on $computer_node_name");
+	elsif (defined($delete_task_output) && grep(/(task.*does not exist|cannot find the file specified)/i, @{$delete_task_output})) {
+		notify($ERRORS{'DEBUG'}, 0, "scheduled task '$task_name' does not exist on $computer_node_name");
 	}
 	elsif (defined($delete_task_exit_status)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to deleted existing scheduled task '$task_name' on $computer_node_name, exit status: $delete_task_exit_status, output:\n@{$delete_task_output}");
+		notify($ERRORS{'WARNING'}, 0, "failed to delete existing scheduled task '$task_name' on $computer_node_name, exit status: $delete_task_exit_status, output:\n@{$delete_task_output}");
 		return 0;
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to execute ssh command deleted existing scheduled task '$task_name' on $computer_node_name");
+		notify($ERRORS{'WARNING'}, 0, "failed to execute ssh command to delete existing scheduled task '$task_name' on $computer_node_name");
 		return;
 	}
 	
@@ -3151,6 +3151,13 @@ sub prepare_post_load {
 	my $computer_node_name   = $self->data->get_computer_node_name();
 	my $end_state = $self->{end_state} || 'off';
 	
+	# Set the DevicePath registry key
+	# This is used to locate device drivers
+	if (!$self->set_device_path_key()) {
+		notify($ERRORS{'WARNING'}, 0, "failed to set the DevicePath registry key");
+		return;
+	}
+	
 	# Get the node configuration directory
 	my $node_configuration_directory = $self->get_node_configuration_directory();
 	unless ($node_configuration_directory) {
@@ -3211,6 +3218,13 @@ sub prepare_newsid {
 	my $self = shift;
 	if (ref($self) !~ /windows/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Set the DevicePath registry key
+	# This is used to locate device drivers
+	if (!$self->set_device_path_key()) {
+		notify($ERRORS{'WARNING'}, 0, "failed to set the DevicePath registry key");
 		return;
 	}
 
@@ -6712,7 +6726,7 @@ EOF
 	}
 
 	return 1;
-} ## end sub disable_ipv6
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 
