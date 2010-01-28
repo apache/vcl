@@ -173,6 +173,9 @@ Disable the following services:
 	for my $service (@services) {
 		$self->set_service_startup_mode($service, 'disabled');
 	}
+	
+	notify($ERRORS{'OK'}, 0, "returning 1");
+	return 1;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
