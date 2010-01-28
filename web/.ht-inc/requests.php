@@ -57,7 +57,7 @@ define("ADMINGROUPIDERR", 1 << 13);
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function newReservation() {
-	global $submitErr, $user;
+	global $submitErr, $user, $mode;
 	$timestamp = processInputVar("stamp", ARG_NUMERIC);
 	$imageid = processInputVar("imageid", ARG_STRING, getUsersLastImage($user['id']));
 	$length = processInputVar("length", ARG_NUMERIC);
@@ -65,12 +65,29 @@ function newReservation() {
 	$hour = processInputVar("hour", ARG_NUMERIC);
 	$minute = processInputVar("minute", ARG_NUMERIC);
 	$meridian = processInputVar("meridian", ARG_STRING);
+	$imaging = getContinuationVar('imaging', processInputVar('imaging', ARG_NUMERIC, 0));
 
-	if(! $submitErr)
-		print "<H2>New Reservation</H2><br>\n";
+	if(! $submitErr) {
+		if($imaging)
+			print "<H2>Create / Update an Image</H2>\n";
+		else
+			print "<H2>New Reservation</H2><br>\n";
+	}
 
-	$resources = getUserResources(array("imageAdmin", "imageCheckOut"));
-	$resources["image"] = removeNoCheckout($resources["image"]);
+	if($imaging) {
+		$resources = getUserResources(array("imageAdmin"));
+		if(empty($resources['image'])) {
+			print "You don't have access to any base images from which to create ";
+			print "new images.<br>\n";
+			return;
+		}
+		if($length == '')
+			$length = 480;
+	}
+	else {
+		$resources = getUserResources(array("imageAdmin", "imageCheckOut"));
+		$resources["image"] = removeNoCheckout($resources["image"]);
+	}
 
 	if((! in_array("imageCheckOut", $user["privileges"]) &&
 	   ! in_array("imageAdmin", $user["privileges"])) ||
@@ -79,27 +96,35 @@ function newReservation() {
 		print "make any reservations.<br>\n";
 		return;
 	}
-	print "Please select the environment you want to use from the list:<br>\n";
-
-	$OSs = getOSList();
+	if($imaging) {
+		print "Please select the environment you will be updating or using as a ";
+		print "base for a new image:<br>\n";
+	}
+	else
+		print "Please select the environment you want to use from the list:<br>\n";
 
 	$images = getImages();
 	$maxTimes = getUserMaxTimes();
-	print "<script language=javascript>\n";
-	print "var defaultMaxTime = {$maxTimes['initial']};\n";
-	print "var maxTimes = {\n";
-	foreach(array_keys($resources['image']) as $imgid) {
-		if(array_key_exists($imgid, $images))
-			print "   $imgid: {$images[$imgid]['maxinitialtime']},\n";
+	if(! $imaging) {
+		print "<script language=javascript>\n";
+		print "var defaultMaxTime = {$maxTimes['initial']};\n";
+		print "var maxTimes = {\n";
+		foreach(array_keys($resources['image']) as $imgid) {
+			if(array_key_exists($imgid, $images))
+				print "   $imgid: {$images[$imgid]['maxinitialtime']},\n";
+		}
+		print "   0: 0\n"; // this is because IE doesn't like the last item having a ',' after it
+		print "};\n";
+		print "</script>\n";
 	}
-	print "   0: 0\n"; // this is because IE doesn't like the last item having a ',' after it
-	print "};\n";
-	print "</script>\n";
 
 	print "<FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
 	// list of images
 	uasort($resources["image"], "sortKeepIndex");
-	printSelectInput("imageid", $resources["image"], $imageid, 1, 0, 'imagesel', "onChange=\"selectEnvironment();\" tabIndex=1");
+	if($imaging)
+		printSelectInput("imageid", $resources["image"], $imageid, 1, 0, 'imagesel', "onChange=\"updateWaitTime(1);\" tabIndex=1");
+	else
+		printSelectInput("imageid", $resources["image"], $imageid, 1, 0, 'imagesel', "onChange=\"selectEnvironment();\" tabIndex=1");
 	print "<br><br>\n";
 
 	$imagenotes = getImageNotes($imageid);
@@ -112,11 +137,15 @@ function newReservation() {
 	print "<div id=imgdesc>$desc</div>\n";
 
 	print "<fieldset id=whenuse class=whenusefieldset>\n";
-	print "<legend>When would you like to use the application?</legend>\n";
+	if($imaging)
+		print "<legend>When would you like to start the imaging process?</legend>\n";
+	else
+		print "<legend>When would you like to use the application?</legend>\n";
 	print "&nbsp;&nbsp;&nbsp;<INPUT type=radio name=time id=timenow ";
-	print "onclick='updateWaitTime(0);' value=now>Now<br>\n";
+	print "onclick='updateWaitTime(0);' value=now checked>Now<br>\n";
 	print "&nbsp;&nbsp;&nbsp;<INPUT type=radio name=time value=future ";
-	print "onclick='updateWaitTime(0);' checked>Later:\n";
+	print "onclick='updateWaitTime(0);'>Later:\n";
+	$maxlen = $images[$imageid]['maxinitialtime'];
 	if($submitErr) {
 		$hour24 = $hour;
 		if($hour24 == 12) {
@@ -130,24 +159,26 @@ function newReservation() {
 		list($month, $day, $year) = explode('/', $day);
 		$stamp = datetimeToUnix("$year-$month-$day $hour24:$minute:00");
 		$day = date('l', $stamp);
-		printReserveItems(1, $day, $hour, $minute, $meridian, $length);
-	}
-	elseif(empty($timestamp)) {
-		printReserveItems();
+		printReserveItems(1, $imaging, $length, $maxlen, $day, $hour, $minute, $meridian);
 	}
 	else {
+		if(empty($timestamp))
+			$timestamp = unixFloor15(time() + 4500);
 		$timeArr = explode(',', date('l,g,i,a', $timestamp));
-		printReserveItems(1, $timeArr[0], $timeArr[1], $timeArr[2], $timeArr[3], $length);
+		printReserveItems(1, $imaging, $length, $maxlen, $timeArr[0], $timeArr[1], $timeArr[2], $timeArr[3]);
 	}
 	print "</fieldset>\n";
 
 	print "<div id=waittime class=hidden></div><br>\n";
-	$cont = addContinuationsEntry('submitRequest');
+	$cont = addContinuationsEntry('submitRequest', array('imaging' => $imaging));
 	print "<INPUT type=hidden name=continuation value=\"$cont\">\n";
-	print "<INPUT id=newsubmit type=submit value=\"Create Reservation\">\n";
+	if($imaging)
+		print "<INPUT id=newsubmit type=submit value=\"Create Imaging Reservation\">\n";
+	else
+		print "<INPUT id=newsubmit type=submit value=\"Create Reservation\">\n";
 	print "<INPUT type=hidden id=testjavascript value=0>\n";
 	print "</FORM>\n";
-	$cont = addContinuationsEntry('AJupdateWaitTime');
+	$cont = addContinuationsEntry('AJupdateWaitTime', array('imaging' => $imaging));
 	print "<INPUT type=hidden name=waitcontinuation id=waitcontinuation value=\"$cont\">\n";
 }
 
@@ -164,19 +195,16 @@ function AJupdateWaitTime() {
 	# proccess length
 	$length = processInputVar('length', ARG_NUMERIC);
 	$times = getUserMaxTimes();
-	if(empty($length) || $length > $times['initial']) {
-		dbDisconnect();
-		exit;
-	}
+	if(empty($length) || $length > $times['initial'])
+		return;
 	# process imageid
 	$imageid = processInputVar('imageid', ARG_NUMERIC);
 	$resources = getUserResources(array("imageAdmin", "imageCheckOut"));
 	$validImageids = array_keys($resources['image']);
-	if(! in_array($imageid, $validImageids)) {
-		dbDisconnect();
-		exit;
-	}
+	if(! in_array($imageid, $validImageids))
+		return;
 
+	$imaging = getContinuationVar('imaging');
 	$desconly = processInputVar('desconly', ARG_NUMERIC, 1);
 
 	$imagenotes = getImageNotes($imageid);
@@ -188,8 +216,13 @@ function AJupdateWaitTime() {
 		print "$desc<br><br>'; ";
 	}
 
-	if($desconly)
+	if($desconly) {
+		if($imaging)
+			print "if(dojo.byId('newsubmit')) dojo.byId('newsubmit').value = 'Create Imaging Reservation';";
+		else
+			print "if(dojo.byId('newsubmit')) dojo.byId('newsubmit').value = 'Create Reservation';";
 		return;
+	}
 
 	$images = getImages();
 	$now = time();
@@ -215,6 +248,12 @@ function AJupdateWaitTime() {
 		else
 			printf("'Estimated load time: &lt; %2.0f minutes';", $loadtime + 1);
 	}
+	if($rc > 0) {
+		if($imaging)
+			print "if(dojo.byId('newsubmit')) dojo.byId('newsubmit').value = 'Create Imaging Reservation';";
+		else
+			print "if(dojo.byId('newsubmit')) dojo.byId('newsubmit').value = 'Create Reservation';";
+	}
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -239,18 +278,23 @@ function submitRequest() {
 			}
 		}
 	}
-	else
+	else {
 		$data = processRequestInput(1);
+	}
+	$imaging = $data['imaging'];
 	if($submitErr) {
 		$printedHTMLheader = 1;
 		print $HTMLheader;
-		print "<H2>New Reservation</H2>\n";
+		if($imaging)
+			print "<H2>Create / Update an Image</H2>\n";
+		else
+			print "<H2>New Reservation</H2>\n";
 		newReservation();
 		print getFooter();
 		return;
 	}
-	// FIXME hack to make sure user didn't submit a request for an image he 
-	// doesn't have access to
+	// if user attempts to make a reservation for an image he does not have
+	//   access to, just make it for the first one he does have access to
 	$resources = getUserResources(array("imageAdmin", "imageCheckOut"));
 	$validImageids = array_keys($resources['image']);
 	if(! in_array($data['imageid'], $validImageids))
@@ -315,7 +359,10 @@ function submitRequest() {
 		if($start < time()) {
 			$printedHTMLheader = 1;
 			print $HTMLheader;
-			print "<H2>New Reservation</H2>\n";
+			if($imaging)
+				print "<H2>Create / Update an Image</H2>\n";
+			else
+				print "<H2>New Reservation</H2>\n";
 			print "<font color=\"#ff0000\">The time you requested is in the past.";
 			print " Please select \"Now\" or use a time in the future.</font><br>\n";
 			$submitErr = 1;
@@ -337,13 +384,16 @@ function submitRequest() {
 	if(! semLock())
 		abort(3);
 
-	$availablerc = isAvailable($images, $data["imageid"], $start, $end, $data["os"]);
+	$availablerc = isAvailable($images, $data["imageid"], $start, $end, $data["os"], 0, 0, 0, $imaging);
 
 	$max = getMaxOverlap($user['id']);
 	if($availablerc != 0 && checkOverlap($start, $end, $max)) {
 		$printedHTMLheader = 1;
 		print $HTMLheader;
-		print "<H2>New Reservation</H2>\n";
+		if($imaging)
+			print "<H2>Create / Update an Image</H2>\n";
+		else
+			print "<H2>New Reservation</H2>\n";
 		if($max == 0) {
 			print "<font color=\"#ff0000\">The time you requested overlaps with ";
 			print "another reservation you currently have.  You are only allowed ";
@@ -374,7 +424,10 @@ function submitRequest() {
 		#unset($data["testprod"]);
 		$printedHTMLheader = 1;
 		print $HTMLheader;
-		print "<H2>New Reservation</H2>\n";
+		if($imaging)
+			print "<H2>Create / Update an Image</H2>\n";
+		else
+			print "<H2>New Reservation</H2>\n";
 		if($subimages) {
 			print "This is a cluster environment. At least one image in the ";
 			print "cluster has more than one version available. Please select ";
@@ -420,7 +473,10 @@ function submitRequest() {
 		}
 		$cont = addContinuationsEntry('submitTestProd', $data);
 		print "<br><INPUT type=hidden name=continuation value=\"$cont\">\n";
-		print "<INPUT type=submit value=\"Create Reservation\">\n";
+		if($imaging)
+			print "<INPUT type=submit value=\"Create Imaging Reservation\">\n";
+		else
+			print "<INPUT type=submit value=\"Create Reservation\">\n";
 		print "</FORM>\n";
 		print getFooter();
 		return;
@@ -428,7 +484,10 @@ function submitRequest() {
 	if($availablerc == -1) {
 		$printedHTMLheader = 1;
 		print $HTMLheader;
-		print "<H2>New Reservation</H2>\n";
+		if($imaging)
+			print "<H2>Create / Update an Image</H2>\n";
+		else
+			print "<H2>New Reservation</H2>\n";
 		print "You have requested an environment that is limited in the number ";
 		print "of concurrent reservations that can be made. No further ";
 		print "reservations for the environment can be made for the time you ";
@@ -439,23 +498,24 @@ function submitRequest() {
 		print getFooter();
 	}
 	elseif($availablerc > 0) {
-		$requestid = addRequest(0, $data["revisionid"]);
-		$time = prettyLength($data["length"]);
+		$requestid = addRequest($imaging, $data["revisionid"]);
 		if($data["time"] == "now") {
 			$cdata = array('lengthchanged' => $data['lengthchanged']);
 			$cont = addContinuationsEntry('viewRequests', $cdata);
 			header("Location: " . BASEURL . SCRIPT . "?continuation=$cont");
-			dbDisconnect();
-			exit;
+			return;
 		}
 		else {
-			if($data["minute"] == 0) {
+			if($data["minute"] == 0)
 				$data["minute"] = "00";
-			}
 			$printedHTMLheader = 1;
 			print $HTMLheader;
-			print "<H2>New Reservation</H2>\n";
+			if($imaging)
+				print "<H2>Create / Update an Image</H2>\n";
+			else
+				print "<H2>New Reservation</H2>\n";
 			if($data["ending"] == "length") {
+				$time = prettyLength($data["length"]);
 				if($data['testjavascript'] == 0 && $data['lengthchanged']) {
 					print "<font color=red>NOTE: The maximum allowed reservation ";
 					print "length for this environment is $time, and the length of ";
@@ -482,7 +542,8 @@ function submitRequest() {
 	else {
 		$cdata = array('imageid' => $data['imageid'],
 		               'length' => $data['length'],
-		               'showmessage' => 1);
+		               'showmessage' => 1,
+		               'imaging' => $imaging);
 		$cont = addContinuationsEntry('selectTimeTable', $cdata);
 		addLogEntry($nowfuture, unixToDatetime($start), 
 		            unixToDatetime($end), 0, $data["imageid"]);
@@ -503,16 +564,37 @@ function submitRequest() {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function blockRequest() {
+	global $viewmode, $user;
 	print "<H2>Block Reservation</H2>\n";
-	print "<FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
-	$cont = addContinuationsEntry('newBlockRequest');
-	print "<INPUT type=radio id=newblock name=continuation value=\"$cont\">\n";
-	print "<label for=newblock>New Block Reservation</label><br>\n";
-	$cont = addContinuationsEntry('selectEditBlockRequest');
-	print "<INPUT type=radio id=editblock name=continuation value=\"$cont\" checked>\n";
-	print "<label for=editblock>Edit/Delete Block Reservation</label><br>\n";
-	print "<INPUT type=submit value=Submit>\n";
-	print "</FORM>\n";
+	if($viewmode == ADMIN_DEVELOPER) {
+		print "<FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
+		$cont = addContinuationsEntry('newBlockRequest');
+		print "<INPUT type=radio id=newblock name=continuation value=\"$cont\">\n";
+		print "<label for=newblock>New Block Reservation</label><br>\n";
+		$cont = addContinuationsEntry('selectEditBlockRequest');
+		print "<INPUT type=radio id=editblock name=continuation value=\"$cont\" checked>\n";
+		print "<label for=editblock>Edit/Delete Block Reservation</label><br>\n";
+		print "<INPUT type=submit value=Submit>\n";
+		print "</FORM><br>\n";
+	}
+	$blockids = getBlockRequestIDs($user);
+	if(! count($blockids))
+		return;
+	$inids = implode(',', $blockids);
+	$query = "SELECT id, "
+	       .        "name "
+	       . "FROM blockRequest "
+	       . "WHERE id in ($inids)";
+	$qh = doQuery($query, 101);
+	while($row = mysql_fetch_assoc($qh))
+		$blocks[$row['id']] = $row['name'];
+	print "You are currently a member of the following Block Reservations.<br>\n";
+	print "Click an item to view its current status.<br>\n";
+	foreach($blocks as $id => $name) {
+		$cont = addContinuationsEntry('viewBlockStatus', array('id' => $id));
+		print "<a href=\"" . BASEURL . SCRIPT . "?continuation=$cont\">";
+		print "$name</a><br>\n";
+	}
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -564,7 +646,6 @@ function newBlockRequest() {
 
 	print "What user group should be allowed to check out machines in this ";
 	print "block request?<br>\n";
-	// FIXME should we limit the course groups that show up?
 	$groups = getUserGroups(0, $user['affiliationid']);
 	if(array_key_exists(82, $groups))
 		unset($groups[82]); # remove None group
@@ -845,16 +926,26 @@ function selectEditBlockRequest() {
 	$qh = doQuery($query, 101);
 	while($row = mysql_fetch_assoc($qh)) {
 		$blockrequest[$row['id']] = $row;
-		$query2 = "SELECT DATE_FORMAT(start, '%c/%e/%y<br>%l:%i %p') AS start1 "
+		$query2 = "SELECT DATE_FORMAT(start, '%c/%e/%y<br>%l:%i %p') AS start1, "
+		        .        "UNIX_TIMESTAMP(start) AS unixstart, "
+		        .        "UNIX_TIMESTAMP(end) AS unixend "
 		        . "FROM blockTimes "
 		        . "WHERE blockRequestid = {$row['id']} "
 		        . "ORDER BY start "
 		        . "LIMIT 1";
 		$qh2 = doQuery($query2, 101);
-		if($row2 = mysql_fetch_assoc($qh2))
+		if($row2 = mysql_fetch_assoc($qh2)) {
 			$blockrequest[$row['id']]['nextstart'] = $row2['start1'];
-		else
+			if(time() > ($row2['unixstart'] - 1800) &&
+			   time() < $row2['unixend'])
+				$blockrequest[$row['id']]['nextstartactive'] = 1;
+			else
+				$blockrequest[$row['id']]['nextstartactive'] = 0;
+		}
+		else {
 			$blockrequest[$row['id']]['nextstart'] = "none found";
+			$blockrequest[$row['id']]['nextstartactive'] = 0;
+		}
 	}
 	print "<h2>Edit Block Reservation</h2>\n";
 	if(empty($blockrequest)) {
@@ -1004,7 +1095,13 @@ function selectEditBlockRequest() {
 		else
 			print "    <TD>{$request['admingroup']}</TD>\n";
 		print "    <TD>{$request['available']}</TD>\n";
-		print "    <TD>{$request['nextstart']}</TD>\n";
+		if($request['nextstartactive']) {
+			$cont = addContinuationsEntry('viewBlockStatus', array('id' => $request['id']));
+			print "    <TD><a href=\"" . BASEURL . SCRIPT . "?continuation=$cont\">";
+			print "{$request['nextstart']}</a></TD>\n";
+		}
+		else
+			print "    <TD>{$request['nextstart']}</TD>\n";
 		print "  </TR>\n";
 	}
 	print "</table>\n";
@@ -1026,7 +1123,6 @@ function confirmBlockRequest() {
 		return;
 	}
 	$images = getImages();
-	// FIXME should we limit the course groups that show up?
 	$groups = getUserGroups(0, $user['affiliationid']);
 	if(! array_key_exists($data['usergroupid'], $groups))
 		$groups[$data['usergroupid']] =
@@ -1187,7 +1283,7 @@ function submitBlockRequest() {
 	}
 
 	# FIXME need to handle creation of a block time that we're currently in the
-	#    middle of if there wasn't already on we're in the middle of
+	#    middle of if there wasn't already one we're in the middle of
 	if($data['state'] == 1) {
 		# get blockTime entry for this request if we're in the middle of one
 		$checkCurBlockTime = 0;
@@ -1598,6 +1694,200 @@ print "</script>\n";
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
+/// \fn viewBlockStatus()
+///
+/// \brief prints a page with information about an active block reservation
+///
+////////////////////////////////////////////////////////////////////////////////
+function viewBlockStatus() {
+	$blockid = getContinuationVar('id');
+	print "<H2>Block Reservation</H2>\n";
+	$data = getBlockRequestStatus($blockid);
+	if(is_null($data)) {
+		print "The selected Block Request no longer exists.";
+		return;
+	}
+	$startunix = datetimeToUnix($data['start']);
+	$endunix = datetimeToUnix($data['end']);
+	$start = date('g:ia n/j/Y', $startunix);
+	$end = date('g:ia n/j/Y', $endunix);
+	print "<div id=statusdiv>\n";
+	print "<table class=blockStatusData summary=\"lists attributes of block reservation\">\n";
+	print "  <tr>\n";
+	print "    <th>Name:</th>\n";
+	print "    <td>{$data['name']}</td>\n";
+	print "  </tr>\n";
+	print "  <tr>\n";
+	print "    <th>Image:</th>\n";
+	print "    <td>{$data['image']}</td>\n";
+	print "  </tr>\n";
+	print "  <tr>\n";
+	print "    <th>Resources:</th>\n";
+	if($data['subimages'])
+		print "    <td>{$data['numMachines']} clusters</td>\n";
+	else
+		print "    <td>{$data['numMachines']} computers</td>\n";
+	print "  </tr>\n";
+	print "  <tr>\n";
+	print "    <th>Starting:</th>\n";
+	print "    <td>$start</td>\n";
+	print "  </tr>\n";
+	print "  <tr>\n";
+	print "    <th>Ending:</th>\n";
+	print "    <td>$end</td>\n";
+	print "  </tr>\n";
+	print "</table><br>\n";
+	if(! $data['subimages']) {
+		$available = 0;
+		$reloading = 0;
+		$used = 0;
+		foreach($data['comps'] as $id => $comp) {
+			if($comp['state'] == 'available')
+				$available++;
+			elseif($comp['state'] == 'reloading')
+				$reloading++;
+			elseif($comp['state'] == 'reserved' ||
+			       $comp['state'] == 'inuse')
+				$used++;
+		}
+		$failed = $data['numMachines'] - $available - $reloading - $used;
+		print "Current status of computers:<br>\n";
+	}
+	else {
+		$imgdata = getImages(0, $data['imageid']);
+		$imageids = $imgdata[$data['imageid']]['subimages'];
+		array_unshift($imageids, $data['imageid']);
+		$imgavailable = array();
+		$imgreloading = array();
+		$imgused = array();
+		$imgfailed = array();
+		foreach($imageids AS $id) {
+			$imgavailable[$id] = 0;
+			$imgreloading[$id] = 0;
+			$imgused[$id] = 0;
+			$imgfailed[$id] = 0;
+		}
+		foreach($data['comps'] as $id => $comp) {
+			if($comp['state'] == 'available')
+				$imgavailable[$comp['designatedimageid']]++;
+			elseif($comp['state'] == 'reloading')
+				$imgreloading[$comp['designatedimageid']]++;
+			elseif($comp['state'] == 'reserved' ||
+			       $comp['state'] == 'inuse')
+				$imgused[$comp['designatedimageid']]++;
+		}
+		$failed = 0;
+		$available = $data['numMachines'];
+		$used = $imgused[$data['imageid']];
+		foreach($imageids AS $id) {
+			$imgfailed[$id] = $data['numMachines'] - $imgavailable[$id] - $imgreloading[$id] - $used;
+			if($failed < $imgfailed[$id])
+				$failed = $imgfailed[$id];
+			if($available > $imgavailable[$id])
+				$available = $imgavailable[$id];
+		}
+		$reloading = $data['numMachines'] - $available - $used - $failed;
+		print "Current status of clusters:<br>\n";
+	}
+	print "<table class=blockStatusData summary=\"lists status of block reservation\">\n";
+	print "  <tr>\n";
+	print "    <th><font color=green>Available:</th>\n";
+	print "    <td id=available>$available</td>\n";
+	print "  </tr>\n";
+	print "  <tr>\n";
+	print "    <th>Reloading:</th>\n";
+	print "    <td id=reloading>$reloading</td>\n";
+	print "  </tr>\n";
+	print "  <tr>\n";
+	print "    <th nowrap><font color=#e58304>Reserved/In use:</th>\n";
+	print "    <td id=used>$used</td>\n";
+	print "  </tr>\n";
+	print "  <tr>\n";
+	print "    <th><font color=red>Failed:</th>\n";
+	print "    <td id=failed>$failed</td>\n";
+	print "  </tr>\n";
+	print "</table>\n";
+	print "</div>\n";
+	$cont = addContinuationsEntry('AJupdateBlockStatus', array('id' => $blockid));
+	print "<input type=hidden id=updatecont value=\"$cont\">\n";
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn AJupdateBlockStatus()
+///
+/// \brief 
+///
+////////////////////////////////////////////////////////////////////////////////
+function AJupdateBlockStatus() {
+	$id = getContinuationVar('id');
+	$data = getBlockRequestStatus($id);
+	if(is_null($data)) {
+		$arr = array('status' => 'gone');
+		header('Content-Type: text/json-comment-filtered; charset=utf-8');
+		print '/*{"items":' . json_encode($arr) . '}*/';
+		return;
+	}
+	if(! $data['subimages']) {
+		$available = 0;
+		$reloading = 0;
+		$used = 0;
+		foreach($data['comps'] as $id => $comp) {
+			if($comp['state'] == 'available')
+				$available++;
+			elseif($comp['state'] == 'reloading')
+				$reloading++;
+			elseif($comp['state'] == 'reserved' ||
+					 $comp['state'] == 'inuse')
+				$used++;
+		}
+		$failed = $data['numMachines'] - $available - $reloading - $used;
+	}
+	else {
+		$imgdata = getImages(0, $data['imageid']);
+		$imageids = $imgdata[$data['imageid']]['subimages'];
+		array_unshift($imageids, $data['imageid']);
+		$imgavailable = array();
+		$imgreloading = array();
+		$imgused = array();
+		$imgfailed = array();
+		foreach($imageids AS $id) {
+			$imgavailable[$id] = 0;
+			$imgreloading[$id] = 0;
+			$imgused[$id] = 0;
+			$imgfailed[$id] = 0;
+		}
+		foreach($data['comps'] as $id => $comp) {
+			if($comp['state'] == 'available')
+				$imgavailable[$comp['designatedimageid']]++;
+			elseif($comp['state'] == 'reloading')
+				$imgreloading[$comp['designatedimageid']]++;
+			elseif($comp['state'] == 'reserved' ||
+			       $comp['state'] == 'inuse')
+				$imgused[$comp['designatedimageid']]++;
+		}
+		$failed = 0;
+		$available = $data['numMachines'];
+		$used = $imgused[$data['imageid']];
+		foreach($imageids AS $id) {
+			$imgfailed[$id] = $data['numMachines'] - $imgavailable[$id] - $imgreloading[$id] - $used;
+			if($failed < $imgfailed[$id])
+				$failed = $imgfailed[$id];
+			if($available > $imgavailable[$id])
+				$available = $imgavailable[$id];
+		}
+		$reloading = $data['numMachines'] - $available - $used - $failed;
+	}
+	$arr = array('available' => $available,
+	             'reloading' => $reloading,
+	             'used' => $used,
+	             'failed' => $failed);
+	header('Content-Type: text/json-comment-filtered; charset=utf-8');
+	print '/*{"items":' . json_encode($arr) . '}*/';
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
 /// \fn viewRequests
 ///
 /// \brief prints user's reservations
@@ -1748,7 +2038,7 @@ function viewRequests() {
 					$text .= "      <span class=scriptonly>\n";
 					$text .= "      <span class=compstatelink><i>";
 					$text .= "<a onClick=\"showResStatusPane({$requests[$i]['id']}); ";
-					$text .= "return false;\" href=\"#\">Pending...</a></i></span>";
+					$text .= "return false;\" href=\"#\">Pending...</a></i></span>\n";
 					$text .= "      </span>\n";
 					$text .= "      <noscript>\n";
 					$text .= "      <span class=scriptoff>\n";
@@ -1952,22 +2242,25 @@ function viewRequests() {
 	$text .= "</div>\n";
 	if($mode != 'AJviewRequests') {
 		if($refresh || $failed) {
-			$text .= "<div dojoType=FloatingPane\n";
+			$text .= "<div dojoType=dojox.layout.FloatingPane\n";
 			$text .= "      id=resStatusPane\n";
-			$text .= "      constrainToContainer=false\n";
-			$text .= "      hasShadow=true\n";
 			$text .= "      resizable=true\n";
-			$text .= "      windowState=minimized\n";
-			$text .= "      displayMinimizeAction=true\n";
-			$text .= "      style=\"width: 350px; height: 280px; position: absolute; left: 130; top: 0px;\"\n";
+			$text .= "      closable=false\n";
+			$text .= "      title=\"Detailed Reservation Status\"\n";
+			$text .= "      style=\"width: 350px; ";
+			$text .=               "height: 280px; ";
+			$text .=               "position: absolute; ";
+			$text .=               "left: 0px; ";
+			$text .=               "top: 0px; ";
+			$text .=               "visibility: hidden; ";
+			$text .=               "border: solid 1px #7EABCD;\"\n";
 			$text .= ">\n";
+			$text .= "<script type=\"dojo/method\" event=minimize>\n";
+			$text .= "  this.hide();\n";
+			$text .= "</script>\n";
 			$text .= "<div id=resStatusText></div>\n";
 			$text .= "<input type=hidden id=detailreqid value=0>\n";
 			$text .= "</div>\n";
-			$text .= "<script type=\"text/javascript\">\n";
-			$text .= "dojo.addOnLoad(showScriptOnly);\n";
-			$text .= "dojo.byId('resStatusPane').title = \"Detailed Reservation Status\";\n";
-			$text .= "</script>\n";
 		}
 		print $text;
 	}
@@ -2040,7 +2333,12 @@ function detailStatusHTML($reqid) {
 	$now = time();
 	$text = "<table summary=\"displays a list of states the reservation must "
 	      . "go through to become ready and how long each state will take or "
-			. "has already taken\">";
+			. "has already taken\" id=resStatusTable>";
+	$text .= "<colgroup>";
+	$text .= "<col class=resStatusColState />";
+	$text .= "<col class=resStatusColEst />";
+	$text .= "<col class=resStatusColTotal />";
+	$text .= "</colgroup>";
 	$text .= "<tr>";
 	$text .= "<th align=right><br>State</th>";
 	$text .= "<th>Est/Act<br>Time</th>";
@@ -2306,7 +2604,7 @@ function viewRequestInfo() {
 	if(count($request['reservations'] > 1)) {
 		array_shift($request['reservations']);
 		print "Subimages:<br>\n";
-		print "<table>\n";
+		print "<table summary=\"\">\n";
 		foreach($request["reservations"] as $res) {
 			print "  <TR>\n";
 			print "    <TH align=right>Image:</TH>\n";
@@ -2404,19 +2702,38 @@ function editRequest() {
 				print "immediately following yours. Therefore, you cannot extend ";
 				print "your reservation because it would overlap with the next ";
 				print "one.<br>\n";
+				printEditNewUpdate($request, $reservation);
 				return;
 			}
 			$timeToNext = timeToNextReservation($request);
 		}
+		if($timeToNext >= 15)
+			$timeToNext -= 15;
 		$started = 1;
-		print "Because this reservation has already started, you can only ";
-		print "extend the length of the reservation. ";
 		if(! $openend) {
-			print "If there are no reservations following yours, ";
-			print "you can extend your reservation ";
-			print "by up to " . minToHourMin($maxtimes["extend"]) . ", but not ";
-			print "exceeding " . minToHourMin($maxtimes["total"]) . " for your ";
-			print "total reservation time.<br><br>\n";
+			if($timeToNext == -1) {
+				print "Because this reservation has already started, you can only ";
+				print "extend the length of the reservation. ";
+				print "You can extend this reservation ";
+				print "by up to " . minToHourMin($maxtimes["extend"]) . ", but not ";
+				print "exceeding " . minToHourMin($maxtimes["total"]) . " for your ";
+				print "total reservation time.<br><br>\n";
+			}
+			elseif($timeToNext < 15) {
+				print "The computer you are using has another reservation ";
+				print "immediately following yours. Therefore, you cannot extend ";
+				print "your reservation because it would overlap with the next ";
+				print "one.<br>\n";
+				printEditNewUpdate($request, $reservation);
+				return;
+			}
+			else {
+				print "Because this reservation has already started, you can only ";
+				print "extend the length of the reservation. ";
+				print "The computer you are using has another reservation following ";
+				print "yours. Therefore, you can only extend this reservation for ";
+				print "another " . prettyLength($timeToNext) . ".<br><br>\n";
+			}
 		}
 	}
 	print "Modify reservation for <b>" . $reservation["prettyimage"];
@@ -2473,6 +2790,8 @@ function editRequest() {
 				$lengths["15"] = "15 minutes";
 			if($timeToNext >= 30 && (($reslen + 30) <= $maxtimes["total"]) && (30 <= $maxtimes["extend"]))
 				$lengths["30"] = "30 minutes";
+			if($timeToNext >= 45 && (($reslen + 45) <= $maxtimes["total"]) && (45 <= $maxtimes["extend"]))
+				$lengths["45"] = "45 minutes";
 			if($timeToNext >= 60 && (($reslen + 60) <= $maxtimes["total"]) && (60 <= $maxtimes["extend"]))
 				$lengths["60"] = "1 hour";
 			for($i = 120; ($i <= $timeToNext) && (($reslen + $i) <= $maxtimes["total"]) && ($i <= $maxtimes["extend"]); $i += 60) {
@@ -2528,8 +2847,10 @@ function editRequest() {
 		$cdata['started'] = 1;
 	}
 	else {
+		$imgdata = getImages(1, $reservation['imageid']);
+		$maxlen = $imgdata[$reservation['imageid']]['maxinitialtime'];
 		print "<FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
-		printReserveItems(1, $startArr[0], $startArr[1], $startArr[2], $startArr[3], $len, 1);
+		printReserveItems(1, 0, $len, $maxlen, $startArr[0], $startArr[1], $startArr[2], $startArr[3], 1);
 		$cdata['started'] = 0;
 	}
 	print "<br>\n";
@@ -2983,7 +3304,7 @@ function submitEditRequest() {
 				print "has been accepted.<br><br>\n";
 			}
 			else {
-				$remaining = ($end - time()) / 60;
+				$remaining = (int)(($end - time()) / 60);
 				print "Your request to extend your reservation for <b>";
 				print "{$data["prettyimage"]}</b> by " . prettyLength($data["extend"]);
 				print " has been accepted.<br><br>\n";
@@ -3244,25 +3565,29 @@ function submitDeleteRequest() {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn printReserveItems($modifystart, $day, $hour, $minute, 
-///                                $meridian, $length, $oneline, $nolength)
+/// \fn printReserveItems($modifystart, $imaging, $length, $maxlength, $day,
+///                       $hour, $minute, $meridian, $oneline)
 ///
 /// \param $modifystart - (optional) 1 to print form for modifying start time, 
 /// 0 not to
+/// \param $imaging - (optional) 1 if imaging reservation, 0 if not
+/// \param $length - (optional) initial length (in minutes)
+/// \param $maxlength - (optional) max initial length (in minutes)
 /// \param $day - (optional) initial day of week (Sunday - Saturday)
 /// \param $hour - (optional) initial hour (1-12)
 /// \param $minute - (optional) initial minute (00-59)
 /// \param $meridian - (optional) initial meridian (am/pm)
-/// \param $length - (optional) initial length (in minutes)
 /// \param $oneline - (optional) print all items on one line
-/// \param $nolength - (optional) 0 to print length, 1 not to
 ///
 /// \brief prints reserve form data
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function printReserveItems($modifystart=1, $day=NULL, $hour=NULL, $minute=NULL, 
-                          $meridian=NULL, $length=60, $oneline=0, $nolength=0) {
+function printReserveItems($modifystart=1, $imaging=0, $length=60, $maxlength=0,
+                           $day=NULL, $hour=NULL, $minute=NULL, $meridian=NULL,
+                           $oneline=0) {
 	global $user;
+	if(! is_numeric($length))
+		$length = 60;
 	$enddate = processInputVar("enddate", ARG_STRING);
 	$groupid = getUserGroupID('Specify End Time', 1);
 	$members = getUserGroupMembers($groupid);
@@ -3303,13 +3628,11 @@ function printReserveItems($modifystart=1, $day=NULL, $hour=NULL, $minute=NULL,
 			print "<br><br>";
 		/*else
 			print "&nbsp;&nbsp;";*/
-		if(! $nolength) {
-			if($openend) {
-				print "&nbsp;&nbsp;&nbsp;<INPUT type=radio name=ending ";
-				print "onclick='updateWaitTime(0);' value=length checked>";
-			}
-			print "Duration:&nbsp;\n";
+		if($openend) {
+			print "&nbsp;&nbsp;&nbsp;<INPUT type=radio name=ending ";
+			print "onclick='updateWaitTime(0);' value=length checked>";
 		}
+		print "Duration:&nbsp;\n";
 	}
 	else {
 		print "<INPUT type=hidden name=day value=$inputday>\n";
@@ -3331,27 +3654,28 @@ function printReserveItems($modifystart=1, $day=NULL, $hour=NULL, $minute=NULL,
 
 	# create an array of usage times based on the user's max times
 	$maxtimes = getUserMaxTimes("initialmaxtime");
+	if($maxlength > 0 && $maxlength < $maxtimes['initial'])
+		$maxtimes['initial'] = $maxlength;
+	if($imaging && $maxtimes['initial'] < 720) # make sure at least 12 hours available for imaging reservations
+		$maxtimes['initial'] = 720;
 	$lengths = array();
 	if($maxtimes["initial"] >= 30)
 		$lengths["30"] = "30 minutes";
 	if($maxtimes["initial"] >= 60)
 		$lengths["60"] = "1 hour";
-	for($i = 120; $i <= $maxtimes["initial"]; $i += 120) {
+	for($i = 120; $i <= $maxtimes["initial"] && $i < 2880; $i += 120)
 		$lengths[$i] = $i / 60 . " hours";
-	}
+	for($i = 2880; $i <= $maxtimes["initial"]; $i += 1440)
+		$lengths[$i] = $i / 1440 . " days";
 
-	if($nolength)
-		print "Reservation will be for 8 hours<br>\n";
-	else {
-		printSelectInput("length", $lengths, $length, 0, 0, 'reqlength', "onChange='updateWaitTime(0);'");
+	printSelectInput("length", $lengths, $length, 0, 0, 'reqlength', "onChange='updateWaitTime(0);'");
+	print "<br>\n";
+	if($openend) {
+		print "&nbsp;&nbsp;&nbsp;<INPUT type=radio name=ending id=openend ";
+		print "onclick='updateWaitTime(0);' value=date>Until\n";
+		print "<INPUT type=text name=enddate size=20 value=\"$enddate\">(YYYY-MM-DD HH:MM:SS)\n";
+		printSubmitErr(ENDDATEERR);
 		print "<br>\n";
-		if($openend) {
-			print "&nbsp;&nbsp;&nbsp;<INPUT type=radio name=ending id=openend ";
-			print "onclick='updateWaitTime(0);' value=date>Until\n";
-			print "<INPUT type=text name=enddate size=20 value=\"$enddate\">(YYYY-MM-DD HH:MM:SS)\n";
-			printSubmitErr(ENDDATEERR);
-			print "<br>\n";
-		}
 	}
 }
 
@@ -3394,8 +3718,8 @@ function connectRequest() {
 			print "Remote Desktop program to connect to the ";
 			print "system. If you did not click on the <b>Connect!</b> button from ";
 			print "the computer you will be using to access the VCL system, you ";
-			print "will need to cancel this reservation, request a new one, and ";
-			print "make sure you click the <strong>Connect!</strong> button in ";
+			print "will need to return to the <strong>Current Reservations</strong> ";
+			print "page and click the <strong>Connect!</strong> button from ";
 			print "a web browser running on the same computer from which you will ";
 			print "be connecting to the VCL system. Otherwise, you may be denied ";
 			print "access to the remote computer.<br><br>\n";
@@ -3449,9 +3773,10 @@ function connectRequest() {
 			print "You will need to have an ";
 			print "X server running on your local computer and use an ";
 			print "ssh client to connect to the system. If you did not ";
-			print "click on the <b>Connect!</b> button from the computer you will ";
-			print "need to cancel this reservation, request a new one, and ";
-			print "make sure you click the <strong>Connect!</strong> button in ";
+			print "click on the <b>Connect!</b> button from ";
+			print "the computer you will be using to access the VCL system, you ";
+			print "will need to return to the <strong>Current Reservations</strong> ";
+			print "page and click the <strong>Connect!</strong> button from ";
 			print "a web browser running on the same computer from which you will ";
 			print "be connecting to the VCL system. Otherwise, you may be denied ";
 			print "access to the remote computer.<br><br>\n";
@@ -3501,7 +3826,7 @@ function connectRequest() {
 			print "<UL>\n";
 			print "<LI><b>Platform</b>: {$res["OS"]}</LI>\n";
 			print "<LI><b>Remote Computer</b>: {$res["reservedIP"]}</LI>\n";
-			print "<LI><b>User ID</b>: " . $user['unityid'] . "</LI>\n";
+			print "<LI><b>User ID</b>: " . $user['login'] . "</LI>\n";
 			if(eregi("windows", $res["OS"])) {
 				if(strlen($res['password'])) {
 					print "<LI><b>Password</b>: {$res['password']}<br></LI>\n";
@@ -3706,6 +4031,7 @@ function processRequestInput($checks=1) {
 	$return["enddate"] = processInputVar("enddate", ARG_STRING);
 	$return["extend"] = processInputVar("extend", ARG_NUMERIC);
 	$return["testjavascript"] = processInputVar("testjavascript", ARG_NUMERIC, 0);
+	$return['imaging'] = getContinuationVar('imaging');
 	$return['lengthchanged'] = 0;
 
 	if($return["minute"] == 0) {
@@ -3760,14 +4086,26 @@ function processRequestInput($checks=1) {
 	// make sure user hasn't submitted something longer than their allowed max length
 	$imageData = getImages(0, $return['imageid']);
 	$maxtimes = getUserMaxTimes();
-	if($maxtimes['initial'] < $return['length']) {
-		$return['lengthchanged'] = 1;
-		$return['length'] = $maxtimes['initial'];
+	if($mode != 'confirmEditRequest') {
+		if($return['imaging']) {
+			if($maxtimes['initial'] < 720) # make sure at least 12 hours available for imaging reservations
+				$maxtimes['initial'] = 720;
+		}
+		if($maxtimes['initial'] < $return['length']) {
+			$return['lengthchanged'] = 1;
+			$return['length'] = $maxtimes['initial'];
+		}
+		if($imageData[$return['imageid']]['maxinitialtime'] > 0 &&
+			$imageData[$return['imageid']]['maxinitialtime'] < $return['length']) {
+			$return['lengthchanged'] = 1;
+			$return['length'] = $imageData[$return['imageid']]['maxinitialtime'];
+		}
 	}
-	if($imageData[$return['imageid']]['maxinitialtime'] > 0 &&
-	   $imageData[$return['imageid']]['maxinitialtime'] < $return['length']) {
-		$return['lengthchanged'] = 1;
-		$return['length'] = $imageData[$return['imageid']]['maxinitialtime'];
+	else {
+		if($maxtimes['extend'] < $return['length']) {
+			$return['lengthchanged'] = 1;
+			$return['length'] = $maxtimes['extend'];
+		}
 	}
 
 	if($return["ending"] != "length") {
@@ -3903,7 +4241,6 @@ function processBlockRequestInput($checks=1) {
 		$submitErrMsg[BLOCKCNTERR] = "You cannot request more than " . MAX_BLOCK_MACHINES . " machines";
 	}
 
-	// FIXME should we limit the course groups that show up?
 	$groups = getUserGroups();
 	if(! array_key_exists($return['usergroupid'], $groups)) {
 		$submitErr |= USERGROUPIDERR;
@@ -4087,4 +4424,93 @@ function processBlockRequestInput($checks=1) {
 	}
 	return $return;
 }
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn getBlockRequestStatus($id)
+///
+/// \param $id - id of a block request
+///
+/// \return if $id, an array with these keys (NULL otherwise):\n
+/// \b name - name of block request\n
+/// \b imageid - id of image\n
+/// \b image - pretty name of image\n
+/// \b subimages - 0 or 1; if image has subimages\n
+/// \b numMachines - number of machines allocated for block request\n
+/// \b groupid - id of group associated with block request\n
+/// \b group - name of group associated with block request\n
+/// \b processing - flag from table\n
+/// \b timeid - id of associated block time having earliest start time\n
+/// \b start - start time of associated block time (datetime)\n
+/// \b end - end time of associated block time (datetime)\n
+/// \b processed - flag from table\n
+/// \b comps - array of data from blockComputers with these keys:\n
+/// \b id - id of computer\n
+/// \b state - state of computer\n
+/// \b currentimageid - current imageid of computer\n
+/// \b curentimage - current image of computer\n
+/// \b designatedimageid - id of image to be loaded on computer\n
+/// \b designatedimage - image to be loaded on computer\n
+/// \b hostname - hostname of computer\n
+/// \b type - the computer type
+///
+/// \brief gets status information about the passed in block request id
+///
+////////////////////////////////////////////////////////////////////////////////
+function getBlockRequestStatus($id) {
+	$query = "SELECT r.name, "
+	       .        "r.imageid, "
+	       .        "i.prettyname AS image, "
+	       .        "im.subimages, "
+	       .        "r.numMachines, "
+	       .        "r.groupid, "
+	       .        "g.name AS 'group', "
+	       .        "r.processing, "
+	       .        "t.id AS timeid, "
+	       .        "t.start, "
+	       .        "t.end, "
+	       .        "t.processed "
+	       . "FROM blockRequest r, "
+	       .      "blockTimes t, "
+	       .      "usergroup g, "
+	       .      "image i "
+	       . "LEFT JOIN imagemeta im ON (i.imagemetaid = im.id) "
+	       . "WHERE t.blockRequestid = $id AND "
+	       .       "r.id = $id AND "
+	       .       "r.imageid = i.id AND "
+	       .       "r.groupid = g.id "
+	       . "ORDER BY t.start "
+	       . "LIMIT 1";
+	$qh = doQuery($query, 101);
+	if($data = mysql_fetch_assoc($qh)) {
+		if(! is_numeric($data['subimages']))
+			$data['subimages'] = 0;
+		$query = "SELECT c.id, "
+		       .        "s.name AS state, "
+		       .        "c.currentimageid, "
+		       .        "ci.prettyname AS curentimage, "
+		       .        "bc.imageid AS designatedimageid, "
+		       .        "di.prettyname AS designatedimage, "
+		       .        "c.hostname, "
+		       .        "c.type "
+		       . "FROM blockComputers bc, "
+		       .      "computer c, "
+		       .      "state s, "
+		       .      "image ci, "
+		       .      "image di "
+		       . "WHERE bc.blockTimeid = {$data['timeid']} AND "
+		       .       "bc.computerid = c.id AND "
+		       .       "c.currentimageid = ci.id AND "
+		       .       "bc.imageid = di.id AND "
+		       .       "c.stateid = s.id";
+		$qh = doQuery($query, 101);
+		$data['comps'] = array();
+		while($row = mysql_fetch_assoc($qh))
+			$data['comps'][$row['id']] = $row;
+		return $data;
+	}
+	else
+		return NULL;
+}
+
 ?>
