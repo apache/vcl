@@ -120,37 +120,24 @@ Call parent class's pre_capture() subroutine
 	
 	notify($ERRORS{'OK'}, 0, "beginning Windows version 6 image pre-capture tasks");
 
-=item *
+=item 1
 
-Disable defrag scheduled task
+Disable the following scheduled tasks:
 
-=cut
+ * ScheduledDefrag - This task defragments the computers hard disk drives
+ * SR - This task creates regular system protection points
+ * Consolidator - If the user has consented to participate in the Windows Customer Experience Improvement Program, this job collects and sends usage data to Microsoft
 
-	$self->disable_scheduled_task('\Microsoft\Windows\Defrag\ScheduledDefrag');
+=cut	
 
-=item *
-
-Disable system restore scheduled task
-
-=cut
-
-	$self->disable_scheduled_task('\Microsoft\Windows\SystemRestore\SR');
-
-=item *
-
-Disable customer improvement program consolidator scheduled task
-
-=cut
-
-	$self->disable_scheduled_task('\Microsoft\Windows\Customer Experience Improvement Program\Consolidator');
-
-=item *
-
-Disable customer improvement program opt-in notification scheduled task
-
-=cut
-
-	$self->disable_scheduled_task('\Microsoft\Windows\Customer Experience Improvement Program\OptinNotification');
+	my @scheduled_tasks = (
+		'\Microsoft\Windows\Defrag\ScheduledDefrag',
+		'\Microsoft\Windows\SystemRestore\SR',
+		'\Microsoft\Windows\Customer Experience Improvement Program\Consolidator',
+	);
+	for my $scheduled_task (@scheduled_tasks) {
+		$self->disable_scheduled_task($scheduled_task);
+	}
 
 =item *
 
@@ -213,11 +200,11 @@ Call parent class's post_load() subroutine
 
 =item *
 
-Ignore default routes configured for the private interface
+Ignore default routes configured for the private interface and use default routes configured for the public interface
 
 =cut
 
-	$self->ignore_private_default_routes();
+	$self->set_ignore_default_routes();
 
 =item *
 
@@ -441,18 +428,31 @@ sub get_kms_client_product_key {
 	# Create a hash of KMS setup product keys
 	# These are publically available from Microsoft's Volume Activation 2.0 Deployment Guide
 	my %kms_product_keys = (
-		'Windows Vista Business'                        => 'YFKBB-PQJJV-G996G-VWGXY-2V3X8',
-		'Windows Vista Business N'                      => 'HMBQG-8H2RH-C77VX-27R82-VMQBT',
-		'Windows Vista Enterprise'                      => 'VKK3X-68KWM-X2YGT-QR4M6-4BWMV',
-		'Windows Vista Enterprise N'                    => 'VTC42-BM838-43QHV-84HX6-XJXKV',
-		'Windows Server 2008 Datacenter'                 => '7M67G-PC374-GR742-YH8V4-TCBY3',
-		'Windows Server 2008 Datacenter without Hyper-V' => '22XQ2-VRXRG-P8D42-K34TD-G3QQC',
-		'Windows Server 2008 for Itanium-Based Systems'  => '4DWFP-JF3DJ-B7DTH-78FJB-PDRHK',
-		'Windows Server 2008 Enterprise'                 => 'YQGMW-MPWTJ-34KDK-48M3W-X4Q6V',
-		'Windows Server 2008 Enterprise without Hyper-V' => '39BXF-X8Q23-P2WWT-38T2F-G3FPG',
-		'Windows Server 2008 Standard'                   => 'TM24T-X9RMF-VWXK6-X8JC9-BFGM2',
-		'Windows Server 2008 Standard without Hyper-V'   => 'W7VD6-7JFBR-RX26B-YKQ3Y-6FFFJ',
-		'Windows Web Server 2008'                        => 'WYR28-R7TFJ-3X2YQ-YCY4H-M249D',
+		'Windows Vista Business'                           => 'YFKBB-PQJJV-G996G-VWGXY-2V3X8',
+		'Windows Vista Business N'                         => 'HMBQG-8H2RH-C77VX-27R82-VMQBT',
+		'Windows Vista Enterprise'                         => 'VKK3X-68KWM-X2YGT-QR4M6-4BWMV',
+		'Windows Vista Enterprise N'                       => 'VTC42-BM838-43QHV-84HX6-XJXKV',
+		'Windows Server 2008 Datacenter'                   => '7M67G-PC374-GR742-YH8V4-TCBY3',
+		'Windows Server 2008 Datacenter without Hyper-V'   => '22XQ2-VRXRG-P8D42-K34TD-G3QQC',
+		'Windows Server 2008 for Itanium-Based Systems'    => '4DWFP-JF3DJ-B7DTH-78FJB-PDRHK',
+		'Windows Server 2008 Enterprise'                   => 'YQGMW-MPWTJ-34KDK-48M3W-X4Q6V',
+		'Windows Server 2008 Enterprise without Hyper-V'   => '39BXF-X8Q23-P2WWT-38T2F-G3FPG',
+		'Windows Server 2008 Standard'                     => 'TM24T-X9RMF-VWXK6-X8JC9-BFGM2',
+		'Windows Server 2008 Standard without Hyper-V'     => 'W7VD6-7JFBR-RX26B-YKQ3Y-6FFFJ',
+		'Windows Web Server 2008'                          => 'WYR28-R7TFJ-3X2YQ-YCY4H-M249D',
+		'Windows Server 2008 HPC'                          => 'RCTX3-KWVHP-BR6TB-RB6DM-6X7HP',
+		'Windows 7 Professional'                           => 'FJ82H-XT6CR-J8D7P-XQJJ2-GPDD4',
+		'Windows 7 Professional N'                         => 'MRPKT-YTG23-K7D7T-X2JMM-QY7MG',
+		'Windows 7 Professional E'                         => 'W82YF-2Q76Y-63HXB-FGJG9-GF7QX',
+		'Windows 7 Enterprise'                             => '33PXH-7Y6KF-2VJC9-XBBR8-HVTHH',
+		'Windows 7 Enterprise N'                           => 'YDRBP-3D83W-TY26F-D46B2-XCKRJ',
+		'Windows 7 Enterprise E'                           => 'C29WB-22CC8-VJ326-GHFJW-H9DH4',
+		'Windows Server 2008 R2 Web'                       => '6TPJF-RBVHG-WBW2R-86QPH-6RTM4',
+		'Windows Server 2008 R2 HPC edition'               => 'FKJQ8-TMCVP-FRMR7-4WR42-3JCD7',
+		'Windows Server 2008 R2 Standard'                  => 'YC6KT-GKW9T-YTKYR-T4X34-R7VHC',
+		'Windows Server 2008 R2 Enterprise'                => '489J6-VHDMP-X63PK-3K798-CPX3Y',
+		'Windows Server 2008 R2 Datacenter'                => '74YFP-3QFB3-KQT8W-PMXWJ-7M648',
+		'Windows Server 2008 R2 for Itanium-based Systems' => 'GT63C-RJFQ3-4GMB6-BRFB9-CB83V',
 	);
 	
 	# Get the matching product key from the hash for the product name
@@ -502,11 +502,11 @@ sub run_slmgr_ipk {
 	}
 	elsif (defined($ipk_exit_status)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to install product key: $product_key, exit status: $ipk_exit_status, output:\n@{$ipk_output}");
-		next;
+		return;
 	}
 	else {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute ssh command to install product key: $product_key");
-		next;
+		return;
 	}
 	
 	return 1;
@@ -1400,23 +1400,24 @@ EOF
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 ignore_private_default_routes
+=head2 set_ignore_default_routes
 
- Parameters  : None
+ Parameters  : Interface type (public or private), mode (enabled or disabled)
  Returns     : If successful: true
                If failed: false
- Description : Configures computer to ignore default routes configured for the
-               private network interface. This is necessary in order for traffic
-               to be correctly routed out of the computer. If default routes are
-               configured for both the public and private interfaces and the
-               metric for the private default route is equal to or less than the
-               metric for the public route, traffic originating from the
-               computer to the Internet will fail because it will be routed on
-               the private interface.
+ Description : Configures the public interface with "ignore default routes =
+					disabled" and the private interface with "ignore default routes =
+					enabled". This is necessary in order for traffic to be correctly
+					routed out of the computer. If default routes are configured for
+					both the public and private interfaces and the metric for the
+					private default route is equal to or less than the metric for the
+					public route, traffic originating from the computer to the
+					Internet will fail because it will be routed on the private
+					interface.
 
 =cut
 
-sub ignore_private_default_routes {
+sub set_ignore_default_routes {
 	my $self = shift;
 	unless (ref($self) && $self->isa('VCL::Module')) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a VCL::Module module object method");
@@ -1435,17 +1436,39 @@ sub ignore_private_default_routes {
 	}
 	
 	# Run netsh.exe to configure any default routes configured for the private interface to be ignored
-	my $netsh_command = "netsh.exe interface ip set interface \"$private_interface_name\" ignoredefaultroutes=enabled";
-	my ($netsh_exit_status, $netsh_output) = run_ssh_command($computer_node_name, $management_node_keys, $netsh_command);
-	if (defined($netsh_exit_status) && $netsh_exit_status == 0) {
-		notify($ERRORS{'OK'}, 0, "configured interface \"$private_interface_name\" to ignore default routes");
+	my $private_netsh_command = "netsh.exe interface ip set interface \"$private_interface_name\" ignoredefaultroutes=enabled";
+	my ($private_netsh_exit_status, $private_netsh_output) = run_ssh_command($computer_node_name, $management_node_keys, $private_netsh_command);
+	if (defined($private_netsh_exit_status) && $private_netsh_exit_status == 0) {
+		notify($ERRORS{'OK'}, 0, "configured interface \"$private_interface_name\": ignore default routes = enabled");
 	}
-	elsif (defined($netsh_exit_status)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to configure interface \"$private_interface_name\" to ignore default routes, exit status: $netsh_exit_status, output:\n@{$netsh_output}");
+	elsif (defined($private_netsh_exit_status)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to configure interface \"$private_interface_name\": ignore default routes = enabled, exit status: $private_netsh_exit_status, output:\n@{$private_netsh_output}");
 		return;
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to configure interface \"$private_interface_name\" to ignore default routes");
+		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to configure interface \"$private_interface_name\": ignore default routes = enabled");
+		return;
+	}
+	
+	# Get the public interface name
+	my $public_interface_name = $self->get_public_interface_name();
+	if (!$private_interface_name) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine public interface name");
+		return;	
+	}
+	
+	# Run netsh.exe to configure any default routes configured for the public interface to be used
+	my $public_netsh_command = "netsh.exe interface ip set interface \"$public_interface_name\" ignoredefaultroutes=disabled";
+	my ($public_netsh_exit_status, $public_netsh_output) = run_ssh_command($computer_node_name, $management_node_keys, $public_netsh_command);
+	if (defined($public_netsh_exit_status) && $public_netsh_exit_status == 0) {
+		notify($ERRORS{'OK'}, 0, "configured interface \"$public_interface_name\": ignore default routes = disabled");
+	}
+	elsif (defined($public_netsh_exit_status)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to configure interface \"$public_interface_name\": ignore default routes = disabled, exit status: $public_netsh_exit_status, output:\n@{$public_netsh_output}");
+		return;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to configure interface \"$public_interface_name\": ignore default routes = disabled");
 		return;
 	}
 	

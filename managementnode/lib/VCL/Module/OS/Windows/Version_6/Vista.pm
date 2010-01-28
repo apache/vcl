@@ -107,8 +107,28 @@ sub pre_capture {
 	}
 	
 	notify($ERRORS{'OK'}, 0, "beginning Windows Vista image capture preparation tasks");
-	
-	# Prepare the computer for newsid.exe to be run
+
+=item 1
+
+Disable the following scheduled tasks:
+
+ * OptinNotification - This scheduled task prompts the Microsoft Windows Software Quality Metrics opt-in notification
+
+=cut	
+
+	my @scheduled_tasks = (
+		'\Microsoft\Windows\Customer Experience Improvement Program\OptinNotification',
+	);
+	for my $scheduled_task (@scheduled_tasks) {
+		$self->disable_scheduled_task($scheduled_task);
+	}
+
+=item *
+
+Prepare the computer for newsid.exe to be run
+
+=cut
+
 	# This shuts down the computer
 	if (!$self->prepare_newsid()) {
 		notify($ERRORS{'WARNING'}, 0, "failed to prepare the computer for newsid.exe to be run");
