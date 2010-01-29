@@ -1243,7 +1243,8 @@ INSERT INTO `module` (`id`, `name`, `prettyname`, `description`, `perlpackage`) 
 (13, 'os_win2003', 'Windows Server 2003 OS Module', '', 'VCL::Module::OS::Windows::Version_5::2003'),
 (14, 'os_linux_ubuntu', 'Ubuntu Linux OS Module', '', 'VCL::Module::OS::Linux::Ubuntu'),
 (15, 'os_unix_lab', 'Unix Lab Module', 'Unix Lab OS support module', 'VCL::Module::OS::Linux::UnixLab'),
-(16, 'os_win2008', 'Windows Server 2008 OS Module', '', 'VCL::Module::OS::Windows::Version_6::2008');
+(16, 'os_win2008', 'Windows Server 2008 OS Module', '', 'VCL::Module::OS::Windows::Version_6::2008'),
+(17, 'os_win7', 'Windows 7 OS Module', '', 'VCL::Module::OS::Windows::Version_7::7');
 
 -- 
 -- Dumping data for table `OS`
@@ -1280,8 +1281,8 @@ INSERT INTO `OS` (`id`, `name`, `prettyname`, `type`, `installtype`, `sourcepath
 (31, 'vmwarewin2008', 'VMware Windows Server 2008', 'windows', 'vmware', 'vmware_images', 16),
 (32, 'win2008', 'Windows Server 2008', 'windows', 'partimage', 'image', 16),
 (33, 'vmwarewinvista', 'VMware Windows Vista', 'windows', 'vmware', 'vmware_images', 7),
-(34, 'win7', 'Windows 7', 'windows', 'partimage', 'image', 7),
-(35, 'vmwarewincw7vista', 'VMware Windows 7', 'windows', 'vmware', 'vmware_images', 7),
+(34, 'win7', 'Windows 7', 'windows', 'partimage', 'image', 17),
+(35, 'vmwarewin7', 'VMware Windows 7', 'windows', 'vmware', 'vmware_images', 17),
 (36, 'vmwarelinux', 'VMware Generic Linux', 'linux', 'vmware', 'vmware_images', 5);
 
 -- 
