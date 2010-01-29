@@ -258,8 +258,8 @@ sub activate {
 		return 1;
 	}
 	
-	## Attempt to activate using MAK product key
-	#return 1 if $self->activate_mak();
+	# Attempt to activate using MAK product key
+	return 1 if $self->activate_mak();
 	
 	# Attempt to activate using KMS server
 	return 1 if $self->activate_kms();
@@ -514,6 +514,88 @@ sub run_slmgr_ipk {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 run_slmgr_ckms
+
+ Parameters  : None
+ Returns     : If successful: true
+               If failed: false
+ Description : Runs slmgr.vbs -ckms to clear the KMS server on a Windows client.
+
+=cut
+
+sub run_slmgr_ckms {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $management_node_keys     = $self->data->get_management_node_keys();
+	my $computer_node_name       = $self->data->get_computer_node_name();
+	my $system32_path = $self->get_system32_path();
+	
+	# Run slmgr.vbs -ckms to clear an existing KMS server from a computer
+	# slmgr.vbs must be run in a command shell using the correct System32 path or the task it's supposed to do won't really take effect
+	my $skms_command = "$system32_path/cmd.exe /c cscript.exe //NoLogo C:/Windows/System32/slmgr.vbs -ckms";
+	my ($skms_exit_status, $skms_output) = run_ssh_command($computer_node_name, $management_node_keys, $skms_command);
+	if (defined($skms_exit_status) && $skms_exit_status == 0 && grep(/successfully/i, @$skms_output)) {
+		notify($ERRORS{'OK'}, 0, "cleared kms server");
+	}
+	elsif (defined($skms_exit_status)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to clear kms server, exit status: $skms_exit_status, output:\n@{$skms_output}");
+		return;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute ssh command to clear kms server");
+		return;
+	}
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 run_slmgr_cpky
+
+ Parameters  : None
+ Returns     : If successful: true
+               If failed: false
+ Description : Runs slmgr.vbs -cpky to clear the KMS server on a Windows client.
+
+=cut
+
+sub run_slmgr_cpky {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $management_node_keys     = $self->data->get_management_node_keys();
+	my $computer_node_name       = $self->data->get_computer_node_name();
+	my $system32_path = $self->get_system32_path();
+	
+	# Run slmgr.vbs -cpky to clear an existing product key from a computer
+	# slmgr.vbs must be run in a command shell using the correct System32 path or the task it's supposed to do won't really take effect
+	my $skms_command = "$system32_path/cmd.exe /c cscript.exe //NoLogo C:/Windows/System32/slmgr.vbs -cpky";
+	my ($skms_exit_status, $skms_output) = run_ssh_command($computer_node_name, $management_node_keys, $skms_command);
+	if (defined($skms_exit_status) && $skms_exit_status == 0 && grep(/successfully/i, @$skms_output)) {
+		notify($ERRORS{'OK'}, 0, "cleared product key");
+	}
+	elsif (defined($skms_exit_status)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to clear product key, exit status: $skms_exit_status, output:\n@{$skms_output}");
+		return;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute ssh command to clear product key");
+		return;
+	}
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 run_slmgr_skms
 
  Parameters  : None
@@ -642,7 +724,7 @@ sub get_license_status {
 	}
 	
 	my ($license_status_line) = grep(/License Status/i, @$dlv_output);
-	my ($license_status) = $license_status_line =~ /: (\w+)/;
+	my ($license_status) = $license_status_line =~ /: (.+)/;
 	notify($ERRORS{'DEBUG'}, 0, "retrieved license status: $license_status");
 	return $license_status;
 }
@@ -689,20 +771,9 @@ EOF
 		return 0;
 	}
 	
-	# Run slmgr.vbs -rearm
-	my $rearm_command = "$system32_path/cmd.exe /c cscript.exe //NoLogo C:/Windows/System32/slmgr.vbs -rearm";
-	my ($rearm_exit_status, $rearm_output) = run_ssh_command($computer_node_name, $management_node_keys, $rearm_command);
-	if (defined($rearm_exit_status) && $rearm_exit_status == 0 && grep(/successfully/i, @$rearm_output)) {
-		notify($ERRORS{'OK'}, 0, "rearmed licensing");
-	}
-	elsif (defined($rearm_exit_status)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to rearm licensing, exit status: $rearm_exit_status, output:\n@{$rearm_output}");
-		return;
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to execute ssh command to rearm licensing");
-		return;
-	}
+	$self->run_slmgr_cpky();
+	
+	$self->run_slmgr_ckms();
 	
 	return 1;
 }
@@ -1288,6 +1359,24 @@ sub run_sysprep {
 		notify($ERRORS{'WARNING'}, 0, "unable to delete Sysprep_succeeded.tag log file, Sysprep will proceed");
 	}
 	
+	# Delete existing MSDTC.LOG file
+	if (!$self->delete_file("$system32_path/MsDtc/MSTTC.LOG")) {
+		notify($ERRORS{'WARNING'}, 0, "unable to delete MSTTC.LOG file, Sysprep will proceed");
+	}
+	
+	# Uninstall and reinstall MsDTC
+	my $msdtc_command = "msdtc.exe -uninstall ; msdtc.exe -install";
+	my ($msdtc_status, $msdtc_output) = run_ssh_command($computer_node_name, $management_node_keys, $msdtc_command);
+	if (defined($msdtc_status) && $msdtc_status == 0) {
+		notify($ERRORS{'DEBUG'}, 0, "reinstalled MsDtc");
+	}
+	elsif (defined($msdtc_status)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to reinstall MsDtc, exit status: $msdtc_status, output:\n@{$msdtc_output}");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unable to run ssh command to reinstall MsDtc");
+	}
+	
 	# Delete existing Unattend.xml file
 	if (!$self->delete_file("$system32_path/sysprep/Unattend.xml")) {
 		notify($ERRORS{'WARNING'}, 0, "unable to delete Sysprep Unattend.xml file, Sysprep will NOT proceed");
@@ -1302,7 +1391,7 @@ sub run_sysprep {
 		notify($ERRORS{'DEBUG'}, 0, "copied Unattend.xml to $system32_path/sysprep");
 	}
 	elsif (defined($cp_status)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to copy copy Unattend.xml to $system32_path/sysprep, exit status: $cp_status, output:\n@{$cp_output}");
+		notify($ERRORS{'WARNING'}, 0, "failed to copy Unattend.xml to $system32_path/sysprep, exit status: $cp_status, output:\n@{$cp_output}");
 		return;
 	}
 	else {
