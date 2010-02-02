@@ -140,7 +140,7 @@ function initGlobals() {
 	# the user table corresponding to the user you want
 	# logged in
 
-	# start auth check
+  	# start auth check
 	$authed = 0;
 	if(array_key_exists("VCLAUTH", $_COOKIE)) {
 		$userid = readAuthCookie();
@@ -453,7 +453,7 @@ function checkAccess() {
 						}
 						break;
 					case 'blockRequest':
-						if($viewmode != ADMIN_DEVELOPER) {
+						if($viewmode != ADMIN_DEVELOPER && $user['memberCurrentBlock'] == 0) {
 							$mode = "";
 							$actionFunction = "main";
 							return;
@@ -698,7 +698,7 @@ function main() {
 		else {
 			print "You do not have any current reservations.<br>\n";
 		}
-		print "Please make a selection from the menu on the left to continue.<br>\n";
+		print "Please make a selection from the menu to continue.<br>\n";
 	}
 	else {
 		print "Click the <b>Log in to VCL</b> button at the top right part of ";
@@ -813,6 +813,13 @@ function validateUserid($loginid) {
 	$qh = doQuery($query, 101);
 	if(mysql_num_rows($qh))
 		return 1;
+	
+	$query = "SELECT shibonly FROM affiliation WHERE id = $affilid";
+	$qh = doQuery($query, 101);
+	if(! $row = mysql_fetch_assoc($qh))
+		return 0;
+	if($row['shibonly'] == 1)
+		return 0;
 
 	$valfunc = $affilValFunc[$affilid];
 	if(array_key_exists($affilid, $affilValFuncArgs))
@@ -940,13 +947,17 @@ function doQuery($query, $errcode, $db="vcl", $nolog=0) {
 		if((! $nolog) && ereg('^(UPDATE|INSERT|DELETE)', $query)) {
 			$logquery = str_replace("'", "\'", $query);
 			$logquery = str_replace('"', '\"', $logquery);
+			if(isset($user['id']))
+				$id = $user['id'];
+			else
+				$id = 0;
 			$q = "INSERT INTO querylog "
 			   .        "(userid, "
 			   .        "timestamp, "
 			   .        "mode, "
 			   .        "query) "
 			   . "VALUES "
-			   .        "(" . $user["id"] . ", "
+			   .        "($id, "
 			   .        "NOW(), "
 			   .        "'$mode', "
 			   .        "'$logquery')";
@@ -2856,12 +2867,20 @@ function getUserInfo($id) {
 			else
 				$user['login'] = $user['unityid'];
 
+			$blockids = getBlockRequestIDs($user);
+			$user['memberCurrentBlock'] = count($blockids);
 			return $user;
 		}
 	}
 	if(is_numeric($id))
-		return updateUserData($id, "numeric");
-	return updateUserData($id, "loginid", $affilid);
+		$user = updateUserData($id, "numeric");
+	else
+		$user = updateUserData($id, "loginid", $affilid);
+	if(! is_null($user)) {
+		$blockids = getBlockRequestIDs($user);
+		$user['memberCurrentBlock'] = count($blockids);
+	}
+	return $user;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -3062,6 +3081,37 @@ function getOverallUserPrivs($userid) {
 		array_push($privileges, $row[0]);
 	}
 	return $privileges;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn getBlockRequestIDs($user)
+///
+/// \param $user - array of user data
+///
+/// \return array of block request ids that are currently active for $user
+///
+/// \brief checks to see if $user is a member of a active block request (active
+/// also includes requests starting within 15 minutes)
+///
+////////////////////////////////////////////////////////////////////////////////
+function getBlockRequestIDs($user) {
+	$groupids = array_keys($user['groups']);
+	if(empty($groupids))
+		return array();
+	$inids = implode(',', $groupids);
+	$query = "SELECT r.id "
+	       . "FROM blockRequest r, "
+	       .      "blockTimes t "
+	       . "WHERE t.blockRequestid = r.id AND "
+	       .       "t.start <= DATE_ADD(NOW(), INTERVAL 15 MINUTE) AND "
+	       .       "t.end > NOW() AND "
+	       .       "r.groupid IN ($inids)";
+	$ids = array();
+	$qh = doQuery($query, 101);
+	while($row = mysql_fetch_assoc($qh))
+		$ids[] = $row['id'];
+	return $ids;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -5313,6 +5363,7 @@ function pickTimeTable() {
 ////////////////////////////////////////////////////////////////////////////////
 function showTimeTable($links) {
 	global $mode, $viewmode, $user;
+	$imaging = getContinuationVar('imaging', 0);
 	if($links == 1) {
 		$imageid = getContinuationVar('imageid');
 		$length = getContinuationVar('length');
@@ -5434,7 +5485,8 @@ function showTimeTable($links) {
 		               'requestid' => $requestid,
 		               'length' => $length,
 		               'platforms' => $platforms,
-		               'schedules' => $schedules);
+		               'schedules' => $schedules,
+		               'imaging' => $imaging);
 		$cont = addContinuationsEntry($mode, $cdata, SECINDAY);
 		print "<INPUT type=hidden name=continuation value=\"$cont\">\n";
 		print "<INPUT type=submit value=Previous>\n";
@@ -5452,7 +5504,8 @@ function showTimeTable($links) {
 		               'requestid' => $requestid,
 		               'length' => $length,
 		               'platforms' => $platforms,
-		               'schedules' => $schedules);
+		               'schedules' => $schedules,
+		               'imaging' => $imaging);
 		$cont = addContinuationsEntry($mode, $cdata, SECINDAY);
 		print "<INPUT type=hidden name=continuation value=\"$cont\">\n";
 		print "<INPUT type=submit value=Next>\n";
@@ -5529,7 +5582,7 @@ function showTimeTable($links) {
 			elseif($timeslots[$id][$stamp]["available"]) {
 				if($links) {
 					print "          <TD bgcolor=\"#00ff00\"><a href=\"" . BASEURL . SCRIPT;
-					print "?mode=newRequest&stamp=$stamp&imageid=$imageid&length=$length\"><img ";
+					print "?mode=newRequest&stamp=$stamp&imageid=$imageid&length=$length&imaging=$imaging\"><img ";
 					print "src=images/green.jpg alt=free border=0></a></TD>\n";
 				}
 				else {
@@ -5570,7 +5623,8 @@ function showTimeTable($links) {
 		               'requestid' => $requestid,
 		               'length' => $length,
 		               'platforms' => $platforms,
-		               'schedules' => $schedules);
+		               'schedules' => $schedules,
+		               'imaging' => $imaging);
 		$cont = addContinuationsEntry($mode, $cdata, SECINDAY);
 		print "<INPUT type=hidden name=continuation value=\"$cont\">\n";
 		print "<INPUT type=submit value=Previous>\n";
@@ -5588,7 +5642,8 @@ function showTimeTable($links) {
 		               'requestid' => $requestid,
 		               'length' => $length,
 		               'platforms' => $platforms,
-		               'schedules' => $schedules);
+		               'schedules' => $schedules,
+		               'imaging' => $imaging);
 		$cont = addContinuationsEntry($mode, $cdata, SECINDAY);
 		print "<INPUT type=hidden name=continuation value=\"$cont\">\n";
 		print "<INPUT type=submit value=Next>\n";
@@ -7348,7 +7403,7 @@ function semUnlock() {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function setAttribute($objid, $attrib, $data) {
-	return "if(dojo.byId('$objid')) {dojo.byId('$objid').$attrib = '$data';};\n";
+	return "if(dojo.byId('$objid')) {dojo.byId('$objid').$attrib = '$data';}; ";
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -8075,6 +8130,20 @@ function json_encode($a=false) {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
+/// \fn sendJSON($arr)
+///
+/// \param $arr - an array of data
+///
+/// \brief sets the content type and sends $arr in json format
+///
+////////////////////////////////////////////////////////////////////////////////
+function sendJSON($arr) {
+	header('Content-Type: text/json; charset=utf-8');
+	print '{} && {"items":' . json_encode($arr) . '}';
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
 /// \fn vcldquery()
 ///
 /// \brief this function is a sort of wrapper for a web API for vcld\n
@@ -8374,7 +8443,7 @@ function getNavMenu($inclogout, $inchome, $homeurl=HOMEURL) {
 		$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=viewRequests\">";
 		$rt .= "Current Reservations</a></li>\n";
 	}
-	if($viewmode == ADMIN_DEVELOPER) {
+	if($viewmode == ADMIN_DEVELOPER || $user['memberCurrentBlock']) {
 		$rt .= menulistLI('blockReservations');
 		$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=blockRequest\">";
 		$rt .= "Block Reservations</a></li>\n";
@@ -8461,6 +8530,29 @@ function getNavMenu($inclogout, $inchome, $homeurl=HOMEURL) {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
+/// \fn getExtraCSS()
+///
+/// \return an array of extra css files to include
+///
+/// \brief this function is to be called from the theme page.php files to get
+/// a list of extra css files to be included based on the current mode
+///
+////////////////////////////////////////////////////////////////////////////////
+function getExtraCSS() {
+	global $mode;
+	switch($mode) {
+		case 'viewNodes':
+		case 'changeUserPrivs':
+		case 'submitAddResourcePriv':
+		case 'changeResourcePrivs':
+			return array('privileges.css');
+		case 'viewdocs':
+			return array('doxygen.css');
+	}
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
 /// \fn getDojoHTML($refresh)
 ///
 /// \param $refresh - 1 to set page to refresh, 0 not to
@@ -8477,28 +8569,27 @@ function getDojoHTML($refresh) {
 		case 'changeUserPrivs':
 		case 'submitAddResourcePriv':
 		case 'changeResourcePrivs':
-			$dojoRequires = array('dojo.io.*',
-			                      'dojo.lfx.*',
-			                      'dojo.html.*',
-			                      'dojo.widget.*',
-			                      'dojo.widget.Button',
-			                      'dojo.widget.Tree',
-			                      'dojo.widget.TreeSelector',
-			                      'dojo.widget.FloatingPane');
+			$dojoRequires = array('dojo.data.ItemFileWriteStore',
+			                      'dijit.Tree',
+			                      'dijit.form.Button',
+			                      'dijit.form.CheckBox',
+			                      'dijit.form.TextBox',
+			                      'dijit.Tooltip',
+			                      'dijit.Dialog',
+			                      'dojo.parser');
 			break;
 		case 'newRequest':
 		case 'submitRequest':
 		case 'createSelectImage':
 		case 'submitCreateImage':
-			$dojoRequires = array('dojo.io.*',
-			                      'dojo.widget.*',
-			                      'dojo.html.*');
+			$dojoRequires = array('dojo.parser');
 			break;
 		case 'viewRequests':
-			$dojoRequires = array('dojo.io.*',
-			                      'dojo.html.*',
-			                      'dojo.widget.*',
-			                      'dojo.widget.FloatingPane');
+			$dojoRequires = array('dojo.parser',
+			                      'dojox.layout.FloatingPane');
+			break;
+		case 'viewBlockStatus':
+			$dojoRequires = array('dojo.parser');
 			break;
 		case 'viewImages':
 			/*$dojoRequires = array('dojo.data.ItemFileWriteStore',
@@ -8570,6 +8661,74 @@ function getDojoHTML($refresh) {
 	if(empty($dojoRequires))
 		return '';
 	switch($mode) {
+		case "viewRequests":
+			$rt .= "<style type=\"text/css\">\n";
+			$rt .= "   @import \"themes/$skin/css/dojo/$skin.css\";\n";
+			#$rt .= "   @import \"dojo/dojo/resources/dojo.css\";\n";
+			$rt .= "   @import \"dojo/dojox/layout/resources/FloatingPane.css\";\n";
+			$rt .= "   @import \"dojo/dojox/layout/resources/ResizeHandle.css\";\n";
+			$rt .= "</style>\n";
+			$rt .= "<script type=\"text/javascript\" src=\"js/requests.js\"></script>\n";
+			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
+			$rt .= "   djConfig=\"parseOnLoad: true\">\n";
+			$rt .= "</script>\n";
+			$rt .= "<script type=\"text/javascript\">\n";
+			$rt .= "   dojo.addOnLoad(function() {\n";
+			foreach($dojoRequires as $req) {
+				$rt .= "   dojo.require(\"$req\");\n";
+			}
+			$rt .= "      testJS();\n";
+			$rt .= "      document.onmousemove = updateMouseXY;\n";
+			$rt .= "      showScriptOnly();\n";
+			$rt .= "   });\n";
+			if($refresh)
+				$rt .= "   refresh_timer = setTimeout(resRefresh, 12000);\n";
+			$rt .= "</script>\n";
+			return $rt;
+
+		case "viewBlockStatus":
+			$rt .= "<style type=\"text/css\">\n";
+			$rt .= "   @import \"themes/$skin/css/dojo/$skin.css\";\n";
+			#$rt .= "   @import \"dojo/dojo/resources/dojo.css\";\n";
+			$rt .= "</style>\n";
+			$rt .= "<script type=\"text/javascript\" src=\"js/requests.js\"></script>\n";
+			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
+			$rt .= "   djConfig=\"parseOnLoad: true\">\n";
+			$rt .= "</script>\n";
+			$rt .= "<script type=\"text/javascript\">\n";
+			$rt .= "   dojo.addOnLoad(function() {\n";
+			foreach($dojoRequires as $req) {
+				$rt .= "   dojo.require(\"$req\");\n";
+			}
+			$rt .= "   });\n";
+			$rt .= "   setTimeout(updateBlockStatus, 30000);\n";
+			$rt .= "</script>\n";
+			return $rt;
+
+		case 'newRequest':
+		case 'submitRequest':
+		case 'createSelectImage':
+		case 'submitCreateImage':
+			$rt .= "<style type=\"text/css\">\n";
+			$rt .= "   @import \"themes/$skin/css/dojo/$skin.css\";\n";
+			#$rt .= "   @import \"dojo/dojo/resources/dojo.css\";\n";
+			$rt .= "</style>\n";
+			$rt .= "<script type=\"text/javascript\" src=\"js/requests.js\"></script>\n";
+			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
+			$rt .= "   djConfig=\"parseOnLoad: true\">\n";
+			$rt .= "</script>\n";
+			$rt .= "<script type=\"text/javascript\">\n";
+			$rt .= "   dojo.addOnLoad(function() {\n";
+			foreach($dojoRequires as $req) {
+				$rt .= "   dojo.require(\"$req\");\n";
+			}
+			# TODO check flow of which modes should call updateWaitTime
+			if($mode == 'newRequest')
+				$rt .= "     updateWaitTime(0);\n";
+			$rt .= "   });\n";
+			$rt .= "</script>\n";
+			return $rt;
+
 		case "viewImageGrouping":
 		case "submitImageGroups":
 		case "viewImageMapping":
@@ -8732,66 +8891,27 @@ function getDojoHTML($refresh) {
 			}*/
 			$rt .= "</script>\n";
 			return $rt;
+		case "viewNodes":
+			$rt .= "<style type=\"text/css\">\n";
+			$rt .= "   @import \"themes/$skin/css/dojo/$skin.css\";\n";
+			#$rt .= "   @import \"dojo/dijit/themes/tundra/tundra.css\";\n";
+			#$rt .= "   @import \"dojo/dojo/resources/dojo.css\";\n";
+			$rt .= "</style>\n";
+			$rt .= "<script type=\"text/javascript\" src=\"js/privileges.js\"></script>\n";
+			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
+			$rt .= "   djConfig=\"parseOnLoad: true\">\n";
+			$rt .= "</script>\n";
+			$rt .= "<script type=\"text/javascript\">\n";
+			$rt .= "   dojo.addOnLoad(function() {\n";
+			foreach($dojoRequires as $req) {
+				$rt .= "   dojo.require(\"$req\");\n";
+			}
+			$rt .= "      document.onmousemove = updateMouseXY;\n";
+			$rt .= "   });\n";
+			$rt .= "</script>\n";
+			return $rt;
 	}
-	$rt .= "<script type=\"text/javascript\" src=\"dojoAjax/dojo.js\"></script>";
-	$rt .= "<script type=\"text/javascript\">\n";
-	foreach($dojoRequires as $req) {
-		$rt .= "   dojo.require(\"$req\");\n";
-	}
-	$rt .= "   function RPCwrapper(data, callback) {\n";
-	$rt .= "      dojo.io.bind({\n";
-	$rt .= "         url: \"" . BASEURL . SCRIPT . "\",\n";
-	$rt .= "         method: \"post\",\n";
-	$rt .= "         content: data,\n";
-	$rt .= "         load: callback,\n";
-	$rt .= "         error: errorHandler\n";
-	$rt .= "      });\n";
-	$rt .= "   }\n";
-	if($actions['pages'][$mode] == 'privileges') {
-		$rt .= "   var treeListener = {\n";
-		$rt .= "      nodeExpand: function(message) {\n";
-		$rt .= "         var nodes = dojo.io.cookie.get('VCLNODES');\n";
-		$rt .= "         if(nodes) {\n";
-		$rt .= "            var nodesArr = nodes.split(':');\n";
-		$rt .= "            if(! nodesArr.inArray(message.source.widgetId)) {\n";
-		$rt .= "               nodesArr.push(message.source.widgetId);\n";
-		$rt .= "               nodes = nodesArr.join(':');\n";
-		$rt .= "            }\n";
-		$rt .= "         }\n";
-		$rt .= "         else {\n";
-		$rt .= "            nodes = message.source.widgetId;\n";
-		$rt .= "         }\n";
-		$rt .= "         dojo.io.cookie.set('VCLNODES', nodes, 365, '/', '" . COOKIEDOMAIN . "');\n";
-		$rt .= "      },\n";
-		$rt .= "      nodeCollapse: function(message) {\n";
-		$rt .= "         checkSelectParent(message);\n";
-		$rt .= "         var nodes = dojo.io.cookie.get('VCLNODES');\n";
-		$rt .= "         var nodesArr = nodes.split(':');\n";
-		$rt .= "         var index;\n";
-		$rt .= "         if(index = nodesArr.search(message.source.widgetId)) {\n";
-		$rt .= "            nodesArr.splice(index, 1);\n";
-		$rt .= "            nodes = nodesArr.join(':');\n";
-		$rt .= "            dojo.io.cookie.set('VCLNODES', nodes, 365, '/', '" . COOKIEDOMAIN . "');\n";
-		$rt .= "         }\n";
-		$rt .= "      }\n";
-		$rt .= "   };\n";
-	}
-	$rt .= "   dojo.addOnLoad(function() {\n";
-	$rt .= "      testJS();\n";
-	$rt .= "      document.onmousemove = updateMouseXY;\n";
-	if($actions['pages'][$mode] == 'privileges')
-		$rt .= "      initPrivTree();\n";
-	if($mode == 'newRequest' || $mode == 'submitRequest') {
-		$rt .= "   if(dojo.byId('waittime'))\n";
-		$rt .= "      dojo.byId('waittime').className = 'shown';\n";
-	}
-	if($refresh && $mode == 'viewRequests') {
-		$rt .= "   setTimeout(function() {if(! dojo.widget.byId('resStatusPane')) {AJdojoCreate('resStatusPane');}}, 1200);\n";
-		$rt .= "   refresh_timer = setTimeout(resRefresh, 20000);\n";
-	}
-	$rt .= "   });\n";
-	$rt .= "</script>\n";
-	return $rt;
+	return '';
 }
 
 ////////////////////////////////////////////////////////////////////////////////
