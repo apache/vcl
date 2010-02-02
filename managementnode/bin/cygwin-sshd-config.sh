@@ -153,6 +153,11 @@ echo Deleting the sshd user if it already exists
 net user sshd /DELETE
 print_hr
 
+# Delete cyg_server user, a new account will be created
+echo Deleting the cyg_server user if it already exists
+net user cyg_server /DELETE
+print_hr
+
 # Delete any existing ssh configuration or key files
 echo Deleting '/etc/ssh*'
 rm -fv /etc/ssh*
@@ -208,7 +213,7 @@ print_hr
 # Run ssh-user-config, this creates the .ssh directory in root's home directory
 echo Running ssh-user-config
 ssh-user-config -n
-if [ $? -ne 0 ]; then die "failed to run ssh-host-config"; fi;
+if [ $? -ne 0 ]; then die "failed to run ssh-user-config"; fi;
 print_hr
 
 # Run ssh-host-config, this is the main sshd service configuration utility
@@ -234,7 +239,7 @@ echo Setting permissions to 775 on /var/log
 chmod -Rv 775 /var/log
 print_hr
 
-echo Creating /var/log/sshd.log file if it does not exist
+echo Creating /var/log/sshd.log
 touch /var/log/sshd.log
 print_hr
 
@@ -304,25 +309,80 @@ echo Running secedit.exe to grant root the right to logon as a service
 cmd.exe /c $secedit_exe /configure /cfg "$secedit_inf" /db $secedit_db /log $secedit_log /verbose
 print_hr
 
+# Get the Windows version
+WINDOWS_VERSION=`/cygdrive/c/Windows/system32/cmd.exe /c ver`
+[[ $WINDOWS_VERSION =~ ([0-9\.]+) ]]
+WINDOWS_VERSION=${BASH_REMATCH[0]}
+echo Windows version: $WINDOWS_VERSION
+
 # Create firewall exception for sshd TCP port 22 traffic
-echo Configuring sshd firewall port 22 exception
-netsh firewall set portopening name = "Cygwin SSHD" protocol = TCP port = 22 mode = ENABLE profile = ALL scope = ALL
+if [[ $WINDOWS_VERSION =~ ^6\. ]]; then
+	echo Configuring sshd firewall port 22 exception for Windows 6.x
+	netsh.exe advfirewall firewall delete rule name=all dir=in protocol=TCP localport=22
+	netsh.exe advfirewall firewall add rule name="VCL: allow SSH port 22 from any address" description="Allows incoming SSH (TCP port 22) traffic from any address" protocol=TCP localport=22 action=allow enable=yes dir=in localip=any remoteip=any
+else
+ echo Configuring sshd firewall port 22 exception for Windows 5.x
+	netsh.exe firewall set portopening name = "Cygwin SSHD" protocol = TCP port = 22 mode = ENABLE profile = ALL scope = ALL
+fi
+
 if [ $? -ne 0 ]; then die "failed to configure sshd firewall port 22 exception"; fi;
 print_hr
 
-echo Starting the sshd service
+# Generate a batch file which kills all Cygwin processes and runs rebaseall
+# All Cygwin processes must be killed in order to run rebaseall
+# The batch file causes the Cygwin bash process running this script to die
+REBASEALL_PATH_CYGWIN=/home/root/cygwin-rebaseall.cmd
+REBASEALL_PATH_DOS=C:\\cygwin\\home\\root\\cygwin-rebaseall.cmd
+
+echo Generating $REBASEALL_PATH_CYGWIN
+rm -f $REBASEALL_PATH_CYGWIN
+
+(cat -v <<'EOF'
+@echo off
+
+set SCRIPT_NAME=%~n0
+set SCRIPT_FILENAME=%~nx0
+set SCRIPT_DIR=%~dp0
+rem Remove trailing slash from SCRIPT_DIR
+set SCRIPT_DIR=%SCRIPT_DIR:~0,-1%
+
+echo ======================================================================
+echo %SCRIPT_FILENAME% beginning to run at: %DATE% %TIME%
+echo Directory %SCRIPT_FILENAME% is running from: %SCRIPT_DIR%
+echo.
+
+echo Killing Cygwin processes in order to run rebaseall
+taskkill.exe /F /FI "IMAGENAME eq cyg*" 2>NUL
+taskkill.exe /F /FI "IMAGENAME eq bash*" 2>NUL
+taskkill.exe /F /FI "IMAGENAME eq ssh*" 2>NUL
+echo.
+
+echo Waiting 3 seconds for processes to die
+ping localhost -n 1 -w 30000 >NUL
+echo.
+
+echo Running /usr/bin/rebaseall in the ash shell
+C:\cygwin\bin\ash.exe -c '/usr/bin/rebaseall'
+echo rebaseall exit status: %ERRORLEVEL%
+IF ERRORLEVEL 1 exit /b %ERRORLEVEL%
+echo.
+
+echo Starting Cygwin SSHD service
 net start sshd
-if [ $? -ne 0 ]; then die "failed to starting the sshd service"; fi;
-print_hr
+IF ERRORLEVEL 1 exit /b %ERRORLEVEL%
 
-# Print the end of the sshd.log file, this is only for debugging
 echo /var/log/sshd.log ending:
-tail -n 10 /var/log/sshd.log
-print_hr
+C:\cygwin\bin\tail.exe -n 10 /var/log/sshd.log
 
-echo "SUCCESS: $0 done."
-echo
-echo "IMPORTANT! Now run gen-node-key.sh on the management node,"
-echo "specify this computer's hostname or IP address as the 1st argument."
+echo ======================================================================
+echo SUCCESS: %SCRIPT_FILENAME% done.
+echo.
+echo IMPORTANT! Now run gen-node-key.sh on the management node,
+echo specify this computer's hostname or IP address as the 1st argument.
+EOF
+) > $REBASEALL_PATH_CYGWIN
+
+echo Calling $REBASEALL_PATH_DOS
+/cygdrive/C/Windows/System32/cmd.exe /k "$REBASEALL_PATH_DOS"
 
 exit 0
