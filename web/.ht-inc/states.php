@@ -68,13 +68,12 @@ $noHTMLwrappers = array('sendRDPfile',
                         'AJchangeResourcePrivs',
                         'AJsubmitAddChildNode',
                         'AJsubmitDeleteNode',
+                        'AJsubmitRenameNode',
                         'AJupdateWaitTime',
                         'AJviewRequests',
                         'submitRequest',
                         'submitTestProd',
                         'selectauth',
-                        'submitCreateImage',
-                        'submitCreateTestProd',
                         'submitLogin',
                         'submitgeneralprefs',
                         'AJupdateImage',
@@ -116,6 +115,10 @@ $noHTMLwrappers = array('sendRDPfile',
                         'AJupdateRevisionProduction',
                         'AJupdateRevisionComments',
                         'AJdeleteRevisions',
+                        'AJupdateBlockStatus',
+                        'JSONprivnodelist',
+                        'jsonGetUserGroupMembers',
+                        'jsonGetResourceGroupMembers',
 );
 
 # main
@@ -168,6 +171,8 @@ $actions['mode']['submitBlockRequest'] = "submitBlockRequest";
 $actions['mode']['selectEditBlockRequest'] = "selectEditBlockRequest";
 $actions['mode']['editBlockRequest'] = "editBlockRequest";
 $actions['mode']['submitDeleteBlockRequest'] = "submitDeleteBlockRequest";
+$actions['mode']['viewBlockStatus'] = "viewBlockStatus";
+$actions['mode']['AJupdateBlockStatus'] = "AJupdateBlockStatus";
 $actions['pages']['blockRequest'] = "blockReservations";
 $actions['pages']['newBlockRequest'] = "blockReservations";
 $actions['pages']['confirmBlockRequest'] = "blockReservations";
@@ -175,6 +180,8 @@ $actions['pages']['submitBlockRequest'] = "blockReservations";
 $actions['pages']['selectEditBlockRequest'] = "blockReservations";
 $actions['pages']['editBlockRequest'] = "blockReservations";
 $actions['pages']['submitDeleteBlockRequest'] = "blockReservations";
+$actions['pages']['viewBlockStatus'] = "blockReservations";
+$actions['pages']['AJupdateBlockStatus'] = "blockReservations";
 
 # user preferences
 $actions['mode']['userpreferences'] = "userpreferences"; # entry
@@ -222,9 +229,6 @@ $actions['mode']['selectImageOption'] = "selectImageOption"; # entry
 $actions['mode']['viewImages'] = "viewImages";
 $actions['mode']['viewImageGrouping'] = "viewImageGrouping";
 $actions['mode']['viewImageMapping'] = "viewImageMapping";
-$actions['mode']['createSelectImage'] = "createSelectImage";
-$actions['mode']['submitCreateImage'] = "submitCreateImage";
-$actions['mode']['submitCreateTestProd'] = "submitCreateImage";
 $actions['mode']['newImage'] = "editOrAddImage";
 $actions['args']['newImage'] = "1";
 $actions['mode']['startImage'] = "startImage";
@@ -264,9 +268,6 @@ $actions['pages']['selectImageOption'] = "manageImages";
 $actions['pages']['viewImages'] = "manageImages";
 $actions['pages']['viewImageGrouping'] = "manageImages";
 $actions['pages']['viewImageMapping'] = "manageImages";
-$actions['pages']['createSelectImage'] = "manageImages";
-$actions['pages']['submitCreateImage'] = "manageImages";
-$actions['pages']['submitCreateTestProd'] = "manageImages";
 $actions['pages']['newImage'] = "manageImages";
 $actions['pages']['startImage'] = "manageImages";
 $actions['pages']['updateExistingImageComments'] = "manageImages";
@@ -448,12 +449,11 @@ $actions['pages']['submitAdminEditRequest'] = "timeTable";
 
 # privileges
 $actions['mode']['viewNodes'] = "viewNodes"; # entry
-$actions['mode']['addChildNode'] = "addChildNode";
 $actions['mode']['submitAddChildNode'] = "submitAddChildNode";
 $actions['mode']['AJsubmitAddChildNode'] = "AJsubmitAddChildNode";
-$actions['mode']['deleteNode'] = "deleteNode";
 $actions['mode']['submitDeleteNode'] = "submitDeleteNode";
 $actions['mode']['AJsubmitDeleteNode'] = "AJsubmitDeleteNode";
+$actions['mode']['AJsubmitRenameNode'] = "AJsubmitRenameNode";
 $actions['mode']['viewNodePrivs'] = "viewNodePrivs";
 $actions['mode']['selectNode'] = "selectNode";
 $actions['mode']['changeUserPrivs'] = "changeUserPrivs";
@@ -471,13 +471,15 @@ $actions['mode']['submitAddResourcePriv'] = "submitAddResourcePriv";
 $actions['mode']['AJsubmitAddResourcePriv'] = "AJsubmitAddResourcePriv";
 $actions['mode']['changeResourcePrivs'] = "changeResourcePrivs";
 $actions['mode']['AJchangeResourcePrivs'] = "AJchangeResourcePrivs";
+$actions['mode']['JSONprivnodelist'] = "JSONprivnodelist";
+$actions['mode']['jsonGetUserGroupMembers'] = "jsonGetUserGroupMembers";
+$actions['mode']['jsonGetResourceGroupMembers'] = "jsonGetResourceGroupMembers";
 $actions['pages']['viewNodes'] = "privileges";
-$actions['pages']['addChildNode'] = "privileges";
 $actions['pages']['submitAddChildNode'] = "privileges";
 $actions['pages']['AJsubmitAddChildNode'] = "privileges";
-$actions['pages']['deleteNode'] = "privileges";
 $actions['pages']['submitDeleteNode'] = "privileges";
 $actions['pages']['AJsubmitDeleteNode'] = "privileges";
+$actions['pages']['AJsubmitRenameNode'] = "privileges";
 $actions['pages']['viewNodePrivs'] = "privileges";
 $actions['pages']['selectNode'] = "privileges";
 $actions['pages']['changeUserPrivs'] = "privileges";
@@ -495,6 +497,9 @@ $actions['pages']['submitAddResourcePriv'] = "privileges";
 $actions['pages']['AJsubmitAddResourcePriv'] = "privileges";
 $actions['pages']['changeResourcePrivs'] = "privileges";
 $actions['pages']['AJchangeResourcePrivs'] = "privileges";
+$actions['pages']['JSONprivnodelist'] = "privileges";
+$actions['pages']['jsonGetUserGroupMembers'] = "privileges";
+$actions['pages']['jsonGetResourceGroupMembers'] = "privileges";
 
 # user lookup
 $actions['mode']['userLookup'] = "userLookup"; # entry
