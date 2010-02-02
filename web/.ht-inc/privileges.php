@@ -36,62 +36,84 @@ define("ADDUSERNOPRIVS", 1 << 1);
 ////////////////////////////////////////////////////////////////////////////////
 function viewNodes() {
 	global $user;
-	# FIXME change activeNode if current one has been deleted
-	$mode = processInputVar("mode", ARG_STRING);
-	$tmp = processInputVar("openNodes", ARG_STRING);
-	if($tmp != "")
-		$openNodes = explode(":", $tmp);
+	if(! empty($_COOKIE["VCLACTIVENODE"]) &&
+		nodeExists($_COOKIE['VCLACTIVENODE']))
+		$activeNode = $_COOKIE["VCLACTIVENODE"];
 	else {
-		if(! empty($_COOKIE["VCLNODES"]))
-			$openNodes = explode(":", $_COOKIE["VCLNODES"]);
-		else
-			$openNodes = array(DEFAULT_PRIVNODE);
-	}
-	$topNodes = getChildNodes();
-	if(count($topNodes)) {
+		$topNodes = getChildNodes();
+		if(! count($topNodes))
+			abort(53);
 		$keys = array_keys($topNodes);
 		$defaultActive = array_shift($keys);
+		$activeNode = $defaultActive;
 	}
-	$activeNode = processInputVar("activeNode", ARG_NUMERIC);
-	if(empty($activeNode))
-		if(! empty($_COOKIE["VCLACTIVENODE"]) &&
-		   nodeExists($_COOKIE['VCLACTIVENODE']))
-			$activeNode = $_COOKIE["VCLACTIVENODE"];
-		else
-			$activeNode = $defaultActive;
 
 	$hasNodeAdmin = checkUserHasPriv("nodeAdmin", $user["id"], $activeNode);
 
 	# tree
 	print "<H2>Privilege Tree</H2>\n";
-	/*if($mode == "submitAddChildNode") {
-		print "<font color=\"#008000\">Node successfully added to tree";
-		print "</font><br><br>\n";
-	}
-	if($mode == "submitDeleteNode") {
-		print "<font color=\"#008000\">Nodes successfully deleted from tree";
-		print "</font><br><br>\n";
-	}*/
-	print "<dojo:TreeSelector widgetId=treeSelector eventNames=select:nodeSelected></dojo:TreeSelector>\n";
-	#print "<dojo:TreeRPCController RPCUrl=local widgetId=treeController></dojo:TreeRPCController>\n";
-	print "<div dojoType=Tree widgetId=privTree selector=treeSelector>\n";
-	recursivePrintNodes2($topNodes, $openNodes, $activeNode);
+	$cont = addContinuationsEntry('JSONprivnodelist');
+	print "<div dojoType=\"dojo.data.ItemFileWriteStore\" url=\"" . BASEURL . SCRIPT . "?continuation=$cont\" jsid=\"nodestore\" id=\"nodestore\"></div>\n";
+	print "<div dojoType=\"dijit.Tree\" store=\"nodestore\" showRoot=\"false\" id=privtree>\n";
+	#print "  <script type=\"dojo/method\" event=\"getIconClass\" args=\"item, opened\">\n";
+	##print "    return getTreeIcon(item, opened);\n";
+	#print "    return '';\n";
+	#print "  </script>\n";
+	#print "  <script type=\"dojo/method\" event=\"onClick\" args=\"item, node\">\n";
+	#print "    nodeSelect(item, node);\n";
+	#print "  </script>\n";
+	print "  <script type=\"dojo/connect\" event=\"focusNode\" args=\"node\">\n";
+	print "    nodeSelect(node);\n";
+	print "  </script>\n";
+	print "  <script type=\"dojo/method\" event=\"_onExpandoClick\" args=\"message\">\n";
+	print "    var node = message.node;\n";
+	print "    var addclass = 0;\n";
+	print "    var focusid = node.tree.lastFocused.item.name;\n";
+	print "    if(node.isExpanded){\n";
+	print "      if(isChildFocused(focusid, node.item.children)) {\n";
+	print "        this.focusNode(node);\n";
+	print "        addclass = 1;\n";
+	print "      }\n";
+	print "      this._collapseNode(node);\n";
+	print "    }else{\n";
+	print "      this._expandNode(node);\n";
+	print "    }\n";
+	print "    if(addclass || node.item.name == focusid)\n";
+	print "      dojo.addClass(node.labelNode, 'privtreeselected');\n";
+	print "  </script>\n";
+	print "  <script type=\"dojo/connect\" event=\"startup\" args=\"item\">\n";
+	print "    focusFirstNode($activeNode);\n";
+	print "  </script>\n";
 	print "</div>\n";
-
 	print "<div id=treebuttons>\n";
 	if($hasNodeAdmin) {
-		$openNodes = implode(":", $openNodes);
-		print "<TABLE>\n";
+		print "<TABLE summary=\"\" cellspacing=\"\" cellpadding=\"\">\n";
 		print "  <TR valign=top>\n";
 		print "    <TD><FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
-		print "    <button id=addNodeBtn dojoType=Button ";
-		print "onClick=\"showAddNodePane(); return false;\">";
-		print "Add Child</button>\n";
+		print "    <button id=addNodeBtn dojoType=\"dijit.form.Button\">\n";
+		print "      Add Child\n";
+		print "	    <script type=\"dojo/method\" event=onClick>\n";
+		print "        showPrivPane('addNodePane');\n";
+		print "      </script>\n";
+		print "    </button>\n";
 		print "    </FORM></TD>\n";
 		print "    <TD><FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
-		print "    <button id=deleteNodeBtn dojoType=Button onClick=\"dojo.widget.byId('deleteDialog').show();\">";
-		print "Delete Node and Children</button>\n";
+		print "    <button id=deleteNodeBtn dojoType=\"dijit.form.Button\">\n";
+		print "      Delete Node and Children\n";
+		print "	    <script type=\"dojo/method\" event=onClick>\n";
+		print "        dijit.byId('deleteDialog').show();\n";
+		print "      </script>\n";
+		print "    </button>\n";
 		print "    </FORM></TD>\n";
+		print "    <TD><FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
+		print "    <button id=renameNodeBtn dojoType=\"dijit.form.Button\">\n";
+		print "      Rename Node\n";
+		print "	    <script type=\"dojo/method\" event=onClick>\n";
+		print "        dijit.byId('renameDialog').show();\n";
+		print "      </script>\n";
+		print "    </button>\n";
+		print "    </FORM></TD>\n";
+		print "    <td></td>\n";
 		print "  </TR>\n";
 		print "</TABLE>\n";
 	}
@@ -102,8 +124,6 @@ function viewNodes() {
 	# privileges
 	print "<H2>Privileges at Selected Node</H2>\n";
 	$node = $activeNode;
-	if($openNodes == "")
-		$openNodes = DEFAULT_PRIVNODE;
 
 	$nodeInfo = getNodeInfo($node);
 	$privs = getNodePrivileges($node);
@@ -153,8 +173,13 @@ function viewNodes() {
 		print "There are no user privileges at the selected node.<br>\n";
 	}
 	if($hasUserGrant) {
-		print "<BUTTON id=addUserBtn dojoType=Button onclick=\"showAddUserPane(); return false;\">";
-		print "Add User</button>\n";
+		print "<button id=addUserBtn dojoType=\"dijit.form.Button\">\n";
+		print "  Add User\n";
+		print "	<script type=\"dojo/method\" event=onClick>\n";
+		print "    showPrivPane('addUserPane');\n";
+		print "    return false;\n";
+		print "  </script>\n";
+		print "</button>\n";
 	}
 	print "</FORM>\n";
 	print "</div>\n";
@@ -170,11 +195,7 @@ function viewNodes() {
 		print "  <TR>\n";
 		print "    <TD></TD>\n";
 		print "    <TH bgcolor=gray style=\"color: black;\">Block<br>Cascaded<br>Rights</TH>\n";
-		#$img = getImageText("Block Cascaded Rights");
-		#print "    <TD>$img</TD>\n";
 		print "    <TH bgcolor=\"#008000\" style=\"color: black;\">Cascade<br>to Child<br>Nodes</TH>\n";
-		#$img = getImageText("Cascade to Child Nodes");
-		#print "    <TD>$img</TD>\n";
 		foreach($usertypes["users"] as $type) {
 			$img = getImageText($type);
 			print "    <TH>$img</TH>\n";
@@ -194,14 +215,21 @@ function viewNodes() {
 			$cont = addContinuationsEntry('AJchangeUserGroupPrivs');
 			print "<INPUT type=hidden id=changeusergroupprivcont value=\"$cont\">\n";
 		}
+		$cont = addContinuationsEntry('jsonGetUserGroupMembers');
+		print "<INPUT type=hidden id=ugmcont value=\"$cont\">\n";
 	}
 	else {
 		print "There are no user group privileges at the selected node.<br>\n";
 		$groups = array();
 	}
 	if($hasUserGrant) {
-		print "<BUTTON id=addGroupBtn dojoType=Button onclick=\"showAddUserGroupPane(); return false;\">";
-		print "Add Group</button>\n";
+		print "<button id=addGroupBtn dojoType=\"dijit.form.Button\">\n";
+		print "  Add Group\n";
+		print "	<script type=\"dojo/method\" event=onClick>\n";
+		print "    showPrivPane('addUserGroupPane');\n";
+		print "    return false;\n";
+		print "  </script>\n";
+		print "</button>\n";
 	}
 	print "</FORM>\n";
 	print "</div>\n";
@@ -240,27 +268,35 @@ function viewNodes() {
 			$cont = addContinuationsEntry('AJchangeResourcePrivs');
 			print "<INPUT type=hidden id=changeresourceprivcont value=\"$cont\">\n";
 		}
+		$cont = addContinuationsEntry('jsonGetResourceGroupMembers');
+		print "<INPUT type=hidden id=rgmcont value=\"$cont\">\n";
 	}
 	else {
 		print "There are no resource group privileges at the selected node.<br>\n";
 		$resources = array();
 	}
 	if($hasResourceGrant) {
-		print "<BUTTON id=addResourceBtn dojoType=Button onclick=\"showAddResourceGroupPane(); return false;\">";
-		print "Add Resource Group</button>\n";
+		print "<button id=addResourceBtn dojoType=\"dijit.form.Button\">\n";
+		print "  Add Resource Group\n";
+		print "	<script type=\"dojo/method\" event=onClick>\n";
+		print "    showPrivPane('addResourceGroupPane');\n";
+		print "    return false;\n";
+		print "  </script>\n";
+		print "</button>\n";
 	}
 	print "</FORM>\n";
 	print "</div>\n";
 	print "</div>\n";
 
-	print "<div dojoType=FloatingPane\n";
+	# ----------------------------- dialogs ----------------------------
+	print "<div dojoType=dijit.Dialog\n";
 	print "      id=addUserPane\n";
 	print "      title=\"Add User Permission\"\n";
-	print "      constrainToContainer=false\n";
-	print "      hasShadow=true\n";
-	print "      resizable=true\n";
-	print "      style=\"width: 520px; height: 410px; position: absolute; left: 15; top: 250px; display: none\"\n";
-	print ">\n";
+	print "      duration=250\n";
+	print "      draggable=true>\n";
+	print "	  <script type=\"dojo/connect\" event=onCancel>\n";
+	print "      addUserPaneHide();\n";
+	print "    </script>\n";
 	print "<H2>Add User</H2>\n";
 	print "<div id=addPaneNodeName></div>\n";
 	print "<TABLE border=1 summary=\"\">\n";
@@ -280,41 +316,53 @@ function viewNodes() {
 	# block rights
 	$count = count($usertypes) + 1;
 	print "    <TD align=center bgcolor=gray><INPUT type=checkbox ";
-	print "dojoType=Checkbox id=blockchk name=block></TD>\n";
+	print "dojoType=dijit.form.CheckBox id=blockchk name=block></TD>\n";
 
 	#cascade rights
 	print "    <TD align=center bgcolor=\"#008000\" id=usercell0:0>";
-	print "<INPUT type=checkbox dojoType=Checkbox id=userck0:0 name=cascade ";
-	print "></TD>\n";
+	print "<INPUT type=checkbox dojoType=dijit.form.CheckBox id=userck0:0 ";
+	print "name=cascade></TD>\n";
 
 	# normal rights
 	$j = 1;
 	foreach($usertypes["users"] as $type) {
 		print "    <TD align=center id=usercell0:$j><INPUT type=checkbox ";
-		print "dojoType=Checkbox name=\"$type\" id=userck0:$j></TD>\n";
+		print "dojoType=dijit.form.CheckBox name=\"$type\" id=userck0:$j></TD>\n";
 		$j++;
 	}
 	print "  </TR>\n";
 	print "</TABLE>\n";
 	print "<div id=addUserPrivStatus></div>\n";
 	print "<TABLE summary=\"\"><TR>\n";
-	print "<TD><button id=submitAddUserBtn dojoType=Button onclick=\"submitAddUser();\">";
-	print "Submit New User</button></TD>\n";
-	print "<TD><button id=cancelAddUserBtn dojoType=Button onclick=\"addUserPaneHide();\">";
-	print "Cancel</button></TD>\n";
+	print "<TD>\n";
+	print "  <button id=submitAddUserBtn dojoType=\"dijit.form.Button\">\n";
+	print "    Submit New User\n";
+	print "	  <script type=\"dojo/method\" event=onClick>\n";
+	print "      submitAddUser();\n";
+	print "    </script>\n";
+	print "  </button>\n";
+	print "</TD>\n";
+	print "<TD>\n";
+	print "  <button id=cancelAddUserBtn dojoType=\"dijit.form.Button\">\n";
+	print "    Cancel\n";
+	print "	  <script type=\"dojo/method\" event=onClick>\n";
+	print "      addUserPaneHide();\n";
+	print "    </script>\n";
+	print "  </button>\n";
+	print "</TD>\n";
 	print "</TR></TABLE>\n";
 	$cont = addContinuationsEntry('AJsubmitAddUserPriv');
 	print "<INPUT type=hidden id=addusercont value=\"$cont\">\n";
 	print "</div>\n";
 
-	print "<div dojoType=FloatingPane\n";
+	print "<div dojoType=dijit.Dialog\n";
 	print "      id=addUserGroupPane\n";
 	print "      title=\"Add User Group Permission\"\n";
-	print "      constrainToContainer=false\n";
-	print "      hasShadow=true\n";
-	print "      resizable=true\n";
-	print "      style=\"width: 520px; height: 410px; position: absolute; left: 15; top: 450px; display: none\"\n";
-	print ">\n";
+	print "      duration=250\n";
+	print "      draggable=true>\n";
+	print "	  <script type=\"dojo/connect\" event=onCancel>\n";
+	print "      addUserGroupPaneHide();\n";
+	print "    </script>\n";
 	print "<H2>Add User Group</H2>\n";
 	print "<div id=addGroupPaneNodeName></div>\n";
 	print "<TABLE border=1 summary=\"\">\n";
@@ -338,41 +386,53 @@ function viewNodes() {
 
 	# block rights
 	print "    <TD align=center bgcolor=gray><INPUT type=checkbox ";
-	print "dojoType=Checkbox id=blockgrpchk name=blockgrp></TD>\n";
+	print "dojoType=dijit.form.CheckBox id=blockgrpchk name=blockgrp></TD>\n";
 
 	#cascade rights
 	print "    <TD align=center bgcolor=\"#008000\" id=grpcell0:0>";
-	print "<INPUT type=checkbox dojoType=Checkbox id=usergrpck0:0 ";
+	print "<INPUT type=checkbox dojoType=dijit.form.CheckBox id=usergrpck0:0 ";
 	print "name=cascadegrp></TD>\n";
 
 	# normal rights
 	$j = 1;
 	foreach($usertypes["users"] as $type) {
 		print "    <TD align=center id=usergrpcell0:$j><INPUT type=checkbox ";
-		print "dojoType=Checkbox name=\"$type\" id=usergrpck0:$j></TD>\n";
+		print "dojoType=dijit.form.CheckBox name=\"$type\" id=usergrpck0:$j></TD>\n";
 		$j++;
 	}
 	print "  </TR>\n";
 	print "</TABLE>\n";
 	print "<div id=addUserGroupPrivStatus></div>\n";
 	print "<TABLE summary=\"\"><TR>\n";
-	print "<TD><button id=submitAddGroupBtn dojoType=Button onclick=\"submitAddUserGroup();\">";
-	print "Submit New User Group</button></TD>\n";
-	print "<TD><button id=cancelAddGroupBtn dojoType=Button onclick=\"addUserGroupPaneHide();\">";
-	print "Cancel</button></TD>\n";
+	print "<TD>\n";
+	print "  <button id=submitAddGroupBtn dojoType=\"dijit.form.Button\">\n";
+	print "    Submit New User Group\n";
+	print "	  <script type=\"dojo/method\" event=onClick>\n";
+	print "      submitAddUserGroup();\n";
+	print "    </script>\n";
+	print "  </button>\n";
+	print "</TD>\n";
+	print "<TD>\n";
+	print "  <button id=cancelAddGroupBtn dojoType=\"dijit.form.Button\">\n";
+	print "    Cancel\n";
+	print "	  <script type=\"dojo/method\" event=onClick>\n";
+	print "      addUserGroupPaneHide();\n";
+	print "    </script>\n";
+	print "  </button>\n";
+	print "</TD>\n";
 	print "</TR></TABLE>\n";
 	$cont = addContinuationsEntry('AJsubmitAddUserGroupPriv');
 	print "<INPUT type=hidden id=addusergroupcont value=\"$cont\">\n";
 	print "</div>\n";
 
-	print "<div dojoType=FloatingPane\n";
+	print "<div dojoType=dijit.Dialog\n";
 	print "      id=addResourceGroupPane\n";
 	print "      title=\"Add Resource Group Permission\"\n";
-	print "      constrainToContainer=false\n";
-	print "      hasShadow=true\n";
-	print "      resizable=true\n";
-	print "      style=\"width: 520px; height: 410px; position: absolute; left: 15; top: 450px; display: none\"\n";
-	print ">\n";
+	print "      duration=250\n";
+	print "      draggable=true>\n";
+	print "	  <script type=\"dojo/connect\" event=onCancel>\n";
+	print "      addResourceGroupPaneHide();\n";
+	print "    </script>\n";
 	print "<H2>Add Resource Group</H2>\n";
 	print "<div id=addResourceGroupPaneNodeName></div>\n";
 	print "<TABLE border=1 summary=\"\">\n";
@@ -401,64 +461,109 @@ function viewNodes() {
 
 	# block rights
 	print "    <TD align=center bgcolor=gray><INPUT type=checkbox ";
-	print "dojoType=Checkbox id=blockresgrpck name=blockresgrp></TD>\n";
+	print "dojoType=dijit.form.CheckBox id=blockresgrpck name=blockresgrp></TD>\n";
 
 	#cascade rights
 	print "    <TD align=center bgcolor=\"#008000\" id=resgrpcell0:0>";
-	print "<INPUT type=checkbox dojoType=Checkbox id=resgrpck0:0 ";
+	print "<INPUT type=checkbox dojoType=dijit.form.CheckBox id=resgrpck0:0 ";
 	print "name=cascaderesgrp></TD>\n";
 
 	# normal rights
 	print "    <TD align=center id=resgrpcell0:1><INPUT type=checkbox ";
-	print "dojoType=Checkbox name=available id=resgrpck0:1></TD>\n";
+	print "dojoType=dijit.form.CheckBox name=available id=resgrpck0:1></TD>\n";
 	print "    <TD align=center id=resgrpcell0:2><INPUT type=checkbox ";
-	print "dojoType=Checkbox name=administer id=resgrpck0:2></TD>\n";
+	print "dojoType=dijit.form.CheckBox name=administer id=resgrpck0:2></TD>\n";
 	print "    <TD align=center id=resgrpcell0:3><INPUT type=checkbox ";
-	print "dojoType=Checkbox name=manageGroup id=resgrpck0:3></TD>\n";
+	print "dojoType=dijit.form.CheckBox name=manageGroup id=resgrpck0:3></TD>\n";
 	print "  </TR>\n";
 	print "</TABLE>\n";
 	print "<div id=addResourceGroupPrivStatus></div>\n";
 	print "<TABLE summary=\"\"><TR>\n";
-	print "<TD><button dojoType=Button onclick=\"submitAddResourceGroup();\">";
-	print "Submit New Resource Group</button></TD>\n";
-	print "<TD><button dojoType=Button onclick=\"addResourceGroupPaneHide();\">";
-	print "Cancel</button></TD>\n";
+	print "<TD>\n";
+	print "  <button dojoType=\"dijit.form.Button\">\n";
+	print "    Submit New Resource Group\n";
+	print "	  <script type=\"dojo/method\" event=onClick>\n";
+	print "      submitAddResourceGroup();\n";
+	print "    </script>\n";
+	print "  </button>\n";
+	print "</TD>\n";
+	print "<TD>\n";
+	print "  <button dojoType=\"dijit.form.Button\">\n";
+	print "    Cancel\n";
+	print "	  <script type=\"dojo/method\" event=onClick>\n";
+	print "      addResourceGroupPaneHide();\n";
+	print "    </script>\n";
+	print "  </button>\n";
+	print "</TD>\n";
 	print "</TR></TABLE>\n";
 	$cont = addContinuationsEntry('AJsubmitAddResourcePriv');
 	print "<INPUT type=hidden id=addresourcegroupcont value=\"$cont\">\n";
 	print "</div>\n";
 
-	print "<div dojoType=FloatingPane\n";
-	print "      id=addNodePane\n";
-	print "      title=\"Add Child Node\"\n";
-	print "      constrainToContainer=false\n";
-	print "      hasShadow=true\n";
-	print "      resizable=true\n";
-	print "      style=\"width: 280px; height: 200px; position: absolute; left: 15; top: 150px; display: none\"\n";
-	print ">\n";
+	print "<div dojoType=dijit.Dialog\n";
+	print "     id=addNodePane\n";
+	print "     title=\"Add Child Node\"\n";
+	print "     duration=250\n";
+	print "     draggable=true>\n";
 	print "<H2>Add Child Node</H2>\n";
 	print "<div id=addChildNodeName></div>\n";
-	print "<strong>New Node:</strong> <INPUT type=text id=childNodeName>\n";
+	print "<strong>New Node:</strong>\n";
+	print "<input type=text id=childNodeName dojoType=dijit.form.TextBox>\n";
+	print "	<script type=\"dojo/connect\" event=onKeyPress args=\"e\">\n";
+	print "    if(e.keyCode == dojo.keys.ENTER) {\n";
+	print "      submitAddChildNode();\n";
+	print "    }\n";
+	print "  </script>\n";
+	print "</input>\n";
 	print "<div id=addChildNodeStatus></div>\n";
 	print "<TABLE summary=\"\"><TR>\n";
-	print "<TD><button id=submitAddNodeBtn dojoType=Button onclick=\"submitAddChildNode();\">";
-	print "Create Child</button></TD>\n";
-	print "<TD><button id=cancelAddNodeBtn dojoType=Button onclick=\"addNodePaneHide();\">";
-	print "Cancel</button></TD>\n";
+	print "<TD>\n";
+	print "  <button id=submitAddNodeBtn dojoType=\"dijit.form.Button\">\n";
+	print "    Create Child\n";
+	print "	  <script type=\"dojo/method\" event=onClick>\n";
+	print "      submitAddChildNode();\n";
+	print "    </script>\n";
+	print "  </button>\n";
+	print "</TD>\n";
+	print "<TD>\n";
+	print "  <button id=cancelAddNodeBtn dojoType=\"dijit.form.Button\">\n";
+	print "    Cancel\n";
+	print "	  <script type=\"dojo/method\" event=onClick>\n";
+	print "      dojo.byId('childNodeName').value = '';\n";
+	print "      dojo.byId('addChildNodeStatus').innerHTML = '';\n";
+	print "      dijit.byId('addNodePane').hide();\n";
+	print "    </script>\n";
+	print "  </button>\n";
+	print "</TD>\n";
 	print "</TR></TABLE>\n";
 	$cont = addContinuationsEntry('AJsubmitAddChildNode');
 	print "<INPUT type=hidden id=addchildcont value=\"$cont\"\n>";
 	print "</div>\n";
 
-	print "<div dojoType=dialog id=deleteDialog bgColor=white bgOpacity=0.5 toggle=fade toggleDuration=250>\n";
+	print "<div dojoType=dijit.Dialog\n";
+	print "     id=deleteDialog\n";
+	print "     title=\"Delete Node(s)\"\n";
+	print "     duration=250\n";
+	print "     draggable=true>\n";
 	print "Delete the following node and all of its children?<br><br>\n";
 	print "<div id=deleteNodeName></div><br>\n";
 	print "<div align=center>\n";
 	print "<TABLE summary=\"\"><TR>\n";
-	print "<TD><button id=submitDeleteNodeBtn dojoType=Button onClick=\"deleteNode();\">";
-	print "Delete Nodes</button></TD>\n";
-	print "<TD><button id=cancelDeleteNodeBtn dojoType=Button ";
-	print "onClick=\"dojo.widget.byId('deleteDialog').hide();\">Cancel</button>";
+	print "<TD>\n";
+	print "  <button id=submitDeleteNodeBtn dojoType=\"dijit.form.Button\">\n";
+	print "    Delete Nodes\n";
+	print "	  <script type=\"dojo/method\" event=onClick>\n";
+	print "      deleteNodes();\n";
+	print "    </script>\n";
+	print "  </button>\n";
+	print "</TD>\n";
+	print "<TD>\n";
+	print "  <button id=cancelDeleteNodeBtn dojoType=\"dijit.form.Button\">\n";
+	print "    Cancel\n";
+	print "	  <script type=\"dojo/method\" event=onClick>\n";
+	print "      dijit.byId('deleteDialog').hide();\n";
+	print "    </script>\n";
+	print "  </button>\n";
 	print "</TD>\n";
 	print "</TR></TABLE>\n";
 	$cont = addContinuationsEntry('AJsubmitDeleteNode');
@@ -466,8 +571,51 @@ function viewNodes() {
 	print "</div>\n";
 	print "</div>\n";
 
-	print "<div dojoType=dialog id=workingDialog bgColor=white bgOpacity=0.5 toggle=fade toggleDuration=250>\n";
+	print "<div dojoType=dijit.Dialog\n";
+	print "     id=renameDialog\n";
+	print "     title=\"Rename Node\"\n";
+	print "     duration=250\n";
+	print "     draggable=true>\n";
+	print "Enter a new name for the selected node:<br><br>\n";
+	print "<div id=renameNodeName></div><br>\n";
+	print "<strong>New Name:</strong>\n";
+	print "<input type=text id=newNodeName dojoType=dijit.form.TextBox>\n";
+	print "	<script type=\"dojo/connect\" event=onKeyPress args=\"e\">\n";
+	print "    if(e.keyCode == dojo.keys.ENTER) {\n";
+	print "      renameNode();\n";
+	print "    }\n";
+	print "  </script>\n";
+	print "</input>\n";
+	print "<div id=renameNodeStatus></div>\n";
+	print "<div align=center>\n";
+	print "<TABLE summary=\"\"><TR>\n";
+	print "<TD>\n";
+	print "  <button id=submitRenameNodeBtn dojoType=\"dijit.form.Button\">\n";
+	print "    Rename Node\n";
+	print "	  <script type=\"dojo/method\" event=onClick>\n";
+	print "      renameNode();\n";
+	print "    </script>\n";
+	print "  </button>\n";
+	print "</TD>\n";
+	print "<TD>\n";
+	print "  <button id=cancelRenameNodeBtn dojoType=\"dijit.form.Button\">\n";
+	print "    Cancel\n";
+	print "	  <script type=\"dojo/method\" event=onClick>\n";
+	print "      dijit.byId('renameDialog').hide();\n";
+	print "    </script>\n";
+	print "  </button>\n";
+	print "</TD>\n";
+	print "</TR></TABLE>\n";
+	$cont = addContinuationsEntry('AJsubmitRenameNode');
+	print "<INPUT type=hidden id=renamecont value=\"$cont\"\n>";
+	print "</div>\n";
+	print "</div>\n";
+
+	print "<div dojoType=dijit.Dialog id=workingDialog duration=250 refocus=False>\n";
 	print "Loading...\n";
+	print "	<script type=\"dojo/connect\" event=_setup>\n";
+	print "    dojo.addClass(dijit.byId('workingDialog').titleBar, 'hidden');\n";
+	print "  </script>\n";
 	print "</div>\n";
 }
 
@@ -482,14 +630,8 @@ function viewNodes() {
 function selectNode() {
 	global $user;
 	$node = processInputVar("node", ARG_NUMERIC);
-	if(! empty($_COOKIE["VCLNODES"]))
-		$openNodes = $_COOKIE["VCLNODES"];
-	else
-		$openNodes = DEFAULT_PRIVNODE;
-	if(empty($node)) {
-		dbDisconnect();
-		exit;
-	}
+	if(empty($node))
+		return;
 	$return = "";
 	$text = "";
 	$js = "";
@@ -508,27 +650,45 @@ function selectNode() {
 		$text .= "<TABLE>";
 		$text .= "  <TR valign=top>";
 		$text .= "    <TD><FORM action=\"" . BASEURL . SCRIPT . "\" method=post>";
-		$text .= "    <button id=addNodeBtn dojoType=Button ";
-		$text .= "onClick=\"showAddNodePane(); return false;\">";
-		$text .= "Add Child</button>";
+		$text .= "    <button id=addNodeBtn dojoType=\"dijit.form.Button\">";
+		$text .= "      Add Child";
+		$text .= "	    <script type=\"dojo/method\" event=onClick>";
+		$text .= "        showPrivPane(\"addNodePane\");";
+		$text .= "      </script>";
+		$text .= "    </button>";
 		$text .= "    </FORM></TD>";
 		$text .= "    <TD><FORM action=\"" . BASEURL . SCRIPT . "\" method=post>";
-		$text .= "    <button id=deleteNodeBtn dojoType=Button onClick=\"showDeleteNodeDialog();\">";
-		$text .= "Delete Node and Children</button>";
+		$text .= "    <button id=deleteNodeBtn dojoType=\"dijit.form.Button\">";
+		$text .= "      Delete Node and Children";
+		$text .= "	    <script type=\"dojo/method\" event=onClick>";
+		$text .= "        dijit.byId(\"deleteDialog\").show();";
+		$text .= "      </script>";
+		$text .= "    </button>";
+		$text .= "    </FORM></TD>";
+		$text .= "    <TD><FORM action=\"" . BASEURL . SCRIPT . "\" method=post>";
+		$text .= "    <button id=renameNodeBtn dojoType=\"dijit.form.Button\">";
+		$text .= "      Rename Node";
+		$text .= "	    <script type=\"dojo/method\" event=onClick>";
+		$text .= "        dijit.byId(\"renameDialog\").show();";
+		$text .= "      </script>";
+		$text .= "    </button>";
 		$text .= "    </FORM></TD>";
 		$text .= "  </TR>";
 		$text .= "</TABLE>";
 	}
+	$return .= "if(dijit.byId('addNodeBtn')) dijit.byId('addNodeBtn').destroy();";
+	$return .= "if(dijit.byId('deleteNodeBtn')) dijit.byId('deleteNodeBtn').destroy();";
+	$return .= "if(dijit.byId('renameNodeBtn')) dijit.byId('renameNodeBtn').destroy();";
 	$return .= setAttribute('treebuttons', 'innerHTML', $text);
 	$return .= "AJdojoCreate('treebuttons');";
 
-
 	# privileges
+	$return .= "dojo.query('*', 'nodePerms').forEach(function(item){if(dijit.byId(item.id)) dijit.byId(item.id).destroy();});";
 	$text = "";
 	$text .= "<H3>Users</H3>";
-	$text .= "<FORM id=usersform action=\"" . BASEURL . SCRIPT . "#users\" method=post>";
 	$users = array();
 	if(count($privs["users"]) || count($cascadePrivs["users"])) {
+		$text .= "<FORM id=usersform action=\"" . BASEURL . SCRIPT . "#users\" method=post>";
 		$text .= "<TABLE border=1 summary=\"\">";
 		$text .= "  <TR>";
 		$text .= "    <TD></TD>";
@@ -561,8 +721,12 @@ function selectNode() {
 		$text .= "There are no user privileges at the selected node.<br>";
 	}
 	if($hasUserGrant) {
-		$text .= "<BUTTON id=addUserBtn dojoType=Button onClick=\"showAddUserPane(); return false;\">";
-		$text .= "Add User</button>";
+		$text .= "<button id=addUserBtn dojoType=\"dijit.form.Button\">";
+		$text .= "  Add User";
+		$text .= "  <script type=\"dojo/method\" event=onClick>";
+		$text .= "    showPrivPane(\"addUserPane\");";
+		$text .= "  </script>";
+		$text .= "</button>";
 	}
 	$text .= "</FORM>";
 	$return .= setAttribute('usersDiv', 'innerHTML', $text);
@@ -578,11 +742,7 @@ function selectNode() {
 		$text .= "  <TR>";
 		$text .= "    <TD></TD>";
 		$text .= "    <TH bgcolor=gray style=\"color: black;\">Block<br>Cascaded<br>Rights</TH>";
-		#$img = getImageText("Block Cascaded Rights");
-		#$text .= "    <TD>$img</TD>";
 		$text .= "    <TH bgcolor=\"#008000\" style=\"color: black;\">Cascade<br>to Child<br>Nodes</TH>";
-		#$img = getImageText("Cascade to Child Nodes");
-		#$text .= "    <TD>$img</TD>";
 		foreach($usertypes["users"] as $type) {
 			$img = getImageText($type);
 			$text .= "    <TH>$img</TH>";
@@ -605,14 +765,21 @@ function selectNode() {
 			$cont = addContinuationsEntry('AJchangeUserGroupPrivs');
 			$text .= "<INPUT type=hidden id=changeusergroupprivcont value=\"$cont\">";
 		}
+		$cont = addContinuationsEntry('jsonGetUserGroupMembers');
+		$text .= "<INPUT type=hidden id=ugmcont value=\"$cont\">";
 	}
 	else {
 		$text .= "There are no user group privileges at the selected node.<br>";
 		$groups = array();
 	}
 	if($hasUserGrant) {
-		$text .= "<BUTTON id=addGroupBtn dojoType=Button onclick=\"showAddUserGroupPane(); return false;\">";
-		$text .= "Add Group</button>";
+		$text .= "<button id=addGroupBtn dojoType=\"dijit.form.Button\">";
+		$text .= "  Add Group";
+		$text .= "	<script type=\"dojo/method\" event=onClick>";
+		$text .= "    showPrivPane(\"addUserGroupPane\");";
+		$text .= "    return false;";
+		$text .= "  </script>";
+		$text .= "</button>";
 	}
 	$text .= "</FORM>";
 	$return .= setAttribute('usergroupsDiv', 'innerHTML', $text);
@@ -653,224 +820,70 @@ function selectNode() {
 			$cont = addContinuationsEntry('AJchangeResourcePrivs');
 			$text .= "<INPUT type=hidden id=changeresourceprivcont value=\"$cont\">";
 		}
+		$cont = addContinuationsEntry('jsonGetResourceGroupMembers');
+		$text .= "<INPUT type=hidden id=rgmcont value=\"$cont\">";
 	}
 	else {
 		$text .= "There are no resource group privileges at the selected node.<br>";
 		$resources = array();
 	}
 	if($hasResourceGrant) {
-		$text .= "<BUTTON id=addResourceBtn dojoType=Button onclick=\"showAddResourceGroupPane(); return false;\">";
-		$text .= "Add Resource Group</button>";
+		$text .= "<button id=addResourceBtn dojoType=\"dijit.form.Button\">";
+		$text .= "  Add Resource Group";
+		$text .= "	<script type=\"dojo/method\" event=onClick>";
+		$text .= "    showPrivPane(\"addResourceGroupPane\");";
+		$text .= "    return false;";
+		$text .= "  </script>";
+		$text .= "</button>";
 	}
 	$text .= "</FORM>";
 	$return .= setAttribute('resourcesDiv', 'innerHTML', $text);
 	$return .= "AJdojoCreate('resourcesDiv');";
 
-	$return .= "showPrivileges();";
 	print $return;
 	print $js;
-	dbDisconnect();
-	exit;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn recursivePrintNodes($nodelist, $openNodes, $activeNode)
+/// \fn JSONprivnodelist()
 ///
-/// \param $nodelist - array of nodes to print
-/// \param $openNodes - array of nodes whose children should be printed
-/// \param $activeNode - (optional) a selected node
-///
-/// \brief prints all nodes in $nodelist and any children of nodes in
-/// $openNodes, if $activeNode is given, it is printed in red
+/// \brief prints a json list of privilege nodes
 ///
 ////////////////////////////////////////////////////////////////////////////////
-/*function recursivePrintNodes($nodelist, $openNodes, $activeNode="") {
-	print "<UL>\n";
-	foreach(array_keys($nodelist) as $id) {
-		$children = getChildNodes($id);
-		if(is_array($openNodes)) {
-			$openNodes_enc = implode(":", $openNodes);
-			if(! in_array($id, $openNodes))
-				$openNodesNew = implode(":", $openNodes) . ":$id";
-			else {
-				$tmp = $openNodes;
-				unset_by_val($id, $tmp);
-				$openNodesNew = implode(":", $tmp);
-			}
-		}
-		if(! is_array($openNodes) && $openNodes == "all") {
-			print "  <img border=0 src=images/node.png> ";
-			print $nodelist[$id]["name"] . "<br>\n";
-		}
-		elseif(count($children)) {
-			if(in_array($id, $openNodes)) {
-				print "  <a href=\"" . BASEURL . SCRIPT . "?mode=viewNodes&";
-				print "activeNode=$activeNode&openNodes=$openNodesNew\">";
-				print "<img border=0 src=images/collapse.png></a> ";
-			}
-			else {
-				print "  <a href=\"" . BASEURL . SCRIPT . "?mode=viewNodes&";
-				print "activeNode=$activeNode&openNodes=$openNodesNew\">";
-				print "<img border=0 src=images/expand.png></a> ";
-			}
-			if($id == $activeNode) {
-				print "<font color=red>" . $nodelist[$id]["name"] . "</font><br>\n";
-			}
-			else {
-				print "<a href=\"" . BASEURL . SCRIPT . "?mode=viewNodes&";
-				print "activeNode=$id&openNodes=$openNodes_enc\">";
-				print "<font color=black>" . $nodelist[$id]["name"];
-				print "</font></a><br>\n";
-			}
-		}
-		else {
-			print "  <img border=0 src=images/node.png> ";
-			if($id == $activeNode) {
-				print "<font color=red>" . $nodelist[$id]["name"] . "</font><br>\n";
-			}
-			else {
-				print "<a href=\"" . BASEURL . SCRIPT . "?mode=viewNodes&";
-				print "activeNode=$id&openNodes=$openNodes_enc\">";
-				print "<font color=black>" . $nodelist[$id]["name"];
-				print "</font></a><br>\n";
-			}
-		}
-		if((! is_array($openNodes) && $openNodes == "all") || 
-		   in_array($id, $openNodes)) {
-			if(count($children)) {
-				recursivePrintNodes($children, $openNodes, $activeNode);
-			}
-		}
-	}
-	print "</UL>\n";
-}*/
+function JSONprivnodelist() {
+	$nodes = getChildNodes();
+	$data = JSONprivnodelist2($nodes);
+	header('Content-Type: text/json; charset=utf-8');
+	$data = "{} && {label:'display',identifier:'name',items:[$data]}";
+	print $data;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn recursivePrintNodes2($nodelist, $openNodes, $activeNode)
+/// \fn JSONprivnodelist2($nodelist)
 ///
-/// \param $nodelist - array of nodes to print
-/// \param $openNodes - array of nodes whose children should be printed
-/// \param $activeNode - (optional) a selected node
+/// \param $nodelist - an array of nodes as returned from getChildNodes
 ///
-/// \brief prints all nodes in $nodelist and any children of nodes in
-/// $openNodes, if $activeNode is given, it is printed in red
+/// \return partial json data to build list for JSONprivnodelist
+///
+/// \brief sub function for JSONprivnodelist to help build json node data
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function recursivePrintNodes2($nodelist, $openNodes, $activeNode="") {
+function JSONprivnodelist2($nodelist) {
+	$data = '';
 	foreach(array_keys($nodelist) as $id) {
-		$opentext = "";
-		if(in_array($id, $openNodes))
-			$opentext = "expandLevel=1";
-		print "  <div dojoType=\"TreeNode\" title=\"{$nodelist[$id]['name']}\" widgetId=$id $opentext>\n";
+		$data .= "{name:'$id', display:'{$nodelist[$id]['name']}' ";
 		$children = getChildNodes($id);
 		if(count($children))
-			recursivePrintNodes2($children, $openNodes);
-		print "  </div>\n";
+			$data .= ", children: [ " . JSONprivnodelist2($children) . "]},";
+		else
+			$data .= "},";
 	}
-	return;
+	$data = rtrim($data, ',');
+	return $data;
 }
-
-////////////////////////////////////////////////////////////////////////////////
-///
-/// \fn addChildNode()
-///
-/// \brief prints a page for adding a child node
-///
-////////////////////////////////////////////////////////////////////////////////
-/*function addChildNode() {
-	global $submitErr;
-	$parent = processInputVar("activeNode", ARG_NUMERIC);
-	$nodeInfo = getNodeInfo($parent);
-	$newnode = processInputVar("newnode", ARG_STRING);
-	$openNodes = processInputVar("openNodes", ARG_STRING);
-	print "<H2>Add Child Node</H2>\n";
-	print "Add child to " . $nodeInfo["name"] . ":<br><br>\n";
-	print "<FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
-	print "<TABLE>\n";
-	print "  <TR>\n";
-	print "    <TH align=right>New Node:</TH>\n";
-	print "    <TD><INPUT type=text name=newnode value=\"$newnode\"></TD>\n";
-	print "    <TD>";
-	printSubmitErr($submitErr);
-	print "</TD>";
-	print "  </TR>\n";
-	print "  <TR>\n";
-	print "    <TD colspan=2 align=right><INPUT type=submit value=Submit>";
-	print "</TD>\n";
-	print "  <TD></TD>\n";
-	print "  </TR>\n";
-	print "</TABLE>\n";
-	print "<INPUT type=hidden name=mode value=submitAddChildNode>\n";
-	print "<INPUT type=hidden name=openNodes value=$openNodes>\n";
-	print "<INPUT type=hidden name=activeNode value=$parent>\n";
-	print "</FORM>\n";
-}*/
-
-////////////////////////////////////////////////////////////////////////////////
-///
-/// \fn submitAddChildNode()
-///
-/// \brief processes input for adding a child node; if all is ok, adds node
-/// to privnode table; checks to see if submitting user has nodeAdmin,
-/// userGrant, and resourceGrant cascaded to the node; adds any of the privs
-/// that aren't cascaded; calls viewNodes when finished
-///
-////////////////////////////////////////////////////////////////////////////////
-/*function submitAddChildNode() {
-	global $submitErr, $submitErrMsg, $user, $nodechildren;
-	$parent = processInputVar("activeNode", ARG_NUMERIC);
-	$nodeInfo = getNodeInfo($parent);
-	$newnode = processInputVar("newnode", ARG_STRING);
-	$openNodes = processInputVar("openNodes", ARG_STRING);
-	if(! ereg('^[-A-Za-z0-9_. ]+$', $newnode)) {
-		$submitErr |= NEWNODENAMEERR;
-		$submitErrMsg[NEWNODENAMEERR] = "You can only use letters, numbers, "
-		      . "spaces, dashes(-), dots(.), underscores(_), and spaces.";
-	}
-
-	# check to see if a node with the submitted name already exists
-	$query = "SELECT id "
-	       . "FROM privnode "
-	       . "WHERE name = '$newnode' AND "
-	       .       "parent = $parent";
-	$qh = doQuery($query, 335);
-	if(mysql_num_rows($qh)) {
-		$submitErr |= NEWNODENAMEERR;
-		$submitErrMsg[NEWNODENAMEERR] = "A node of that name already exists "
-		                              . "under " . $nodeInfo["name"];
-	}
-	if($submitErr) {
-		addChildNode();
-		return;
-	}
-	$query = "INSERT INTO privnode "
-	       .         "(parent, "
-	       .         "name) "
-	       . "VALUES "
-	       .         "($parent, "
-	       .         "'$newnode')";
-	doQuery($query, 336);
-
-	$qh = doQuery("SELECT LAST_INSERT_ID() FROM privnode", 101);
-	if(! $row = mysql_fetch_row($qh)) {
-		abort(101);
-	}
-	$nodeid = $row[0];
-
-	$privs = array();
-	foreach(array("nodeAdmin", "userGrant", "resourceGrant") as $type) {
-		if(! checkUserHasPriv($type, $user["id"], $nodeid))
-			array_push($privs, $type);
-	}
-	if(count($privs))
-		array_push($privs, "cascade");
-	updateUserOrGroupPrivs($user["id"], $nodeid, $privs, array(), "user");
-	$_POST["openNodes"] .= ":$parent";
-	$nodechildren = array();
-	viewNodes();
-}*/
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
@@ -887,18 +900,18 @@ function AJsubmitAddChildNode() {
 	$parent = processInputVar("activeNode", ARG_NUMERIC);
 	if(! checkUserHasPriv("nodeAdmin", $user["id"], $parent)) {
 		$text = "You do not have rights to add children to this node.";
+		print "dojo.byId('childNodeName').value = ''; ";
+		print "dijit.byId('addNodePane').hide(); ";
 		print "alert('$text');";
-		dbDisconnect();
-		exit;
+		return;
 	}
 	$nodeInfo = getNodeInfo($parent);
 	$newnode = processInputVar("newnode", ARG_STRING);
 	if(! ereg('^[-A-Za-z0-9_. ]+$', $newnode)) {
-		$text = "You can only use letters, numbers, "
-		      . "spaces, dashes(-), dots(.), underscores(_), and spaces.";
-		print "alert('$text');";
-		dbDisconnect();
-		exit;
+		$text = "You can only use letters, numbers, spaces,<br>"
+		      . "dashes(-), dots(.), and underscores(_).";
+		print "dojo.byId('addChildNodeStatus').innerHTML = '$text';";
+		return;
 	}
 
 	# check to see if a node with the submitted name already exists
@@ -910,9 +923,8 @@ function AJsubmitAddChildNode() {
 	if(mysql_num_rows($qh)) {
 		$text = "A node of that name already exists "
 		      . "under " . $nodeInfo["name"];
-		print "alert('$text');";
-		dbDisconnect();
-		exit;
+		print "dojo.byId('addChildNodeStatus').innerHTML = '$text';";
+		return;
 	}
 	$query = "INSERT INTO privnode "
 	       .         "(parent, "
@@ -923,9 +935,8 @@ function AJsubmitAddChildNode() {
 	doQuery($query, 336);
 
 	$qh = doQuery("SELECT LAST_INSERT_ID() FROM privnode", 101);
-	if(! $row = mysql_fetch_row($qh)) {
+	if(! $row = mysql_fetch_row($qh))
 		abort(101);
-	}
 	$nodeid = $row[0];
 
 	$privs = array();
@@ -937,8 +948,6 @@ function AJsubmitAddChildNode() {
 		array_push($privs, "cascade");
 	updateUserOrGroupPrivs($user["id"], $nodeid, $privs, array(), "user");
 	print "addChildNode('$newnode', $nodeid);";
-	dbDisconnect();
-	exit;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -963,72 +972,6 @@ function nodeExists($node) {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn deleteNode()
-///
-/// \brief prompts user for confirmation on deleting a node and its children
-///
-////////////////////////////////////////////////////////////////////////////////
-/*function deleteNode() {
-	$activeNode = processInputVar("activeNode", ARG_NUMERIC);
-	$openNodes = processInputVar("openNodes", ARG_STRING);
-	$nodeInfo = getNodeInfo($activeNode);
-	$children = getChildNodes($activeNode);
-	print "<H2>Delete Node and Children</H2>\n";
-	if(count($children)) {
-		print "Delete the following part of the privilege tree?<br><br>\n";
-		recursivePrintNodes(array($activeNode => $nodeInfo), "all");
-	}
-	else {
-		print "Delete " . $nodeInfo["name"] . " from the privilege ";
-		print "tree?<br><br>\n";
-	}
-	print "<FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
-	print "<TABLE>\n";
-	print "  <TR valign=top>\n";
-	print "    <TD>\n";
-	print "      <FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
-	print "      <INPUT type=hidden name=mode value=submitDeleteNode>\n";
-	print "      <INPUT type=hidden name=activeNode value=$activeNode>\n";
-	print "      <INPUT type=hidden name=openNodes value=$openNodes>\n";
-	print "      <INPUT type=submit value=Submit>\n";
-	print "      </FORM>\n";
-	print "    </TD>\n";
-	print "    <TD>\n";
-	print "      <FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
-	print "      <INPUT type=hidden name=mode value=viewNodes>\n";
-	print "      <INPUT type=hidden name=openNodes value=$openNodes>\n";
-	print "      <INPUT type=submit value=Cancel>\n";
-	print "      </FORM>\n";
-	print "    </TD>\n";
-	print "  </TR>\n";
-	print "</TABLE>\n";
-}*/
-
-////////////////////////////////////////////////////////////////////////////////
-///
-/// \fn submitDeleteNode()
-///
-/// \brief deletes a node and its children; calls viewNodes when finished
-///
-////////////////////////////////////////////////////////////////////////////////
-/*function submitDeleteNode() {
-	global $nodechildren;
-	$activeNode = processInputVar("activeNode", ARG_NUMERIC);
-	$nodeinfo = getNodeInfo($activeNode);
-	$_POST["activeNode"] = $nodeinfo["parent"];
-	$nodes = recurseGetChildren($activeNode);
-	array_push($nodes, $activeNode);
-	$deleteNodes = implode(',', $nodes);
-	$query = "DELETE FROM privnode "
-	       . "WHERE id IN ($deleteNodes)";
-	doQuery($query, 345);
-	$nodechildren = array();
-	clearPrivCache();
-	viewNodes();
-}*/
-
-////////////////////////////////////////////////////////////////////////////////
-///
 /// \fn AJsubmitDeleteNode()
 ///
 /// \brief deletes a node and its children; calls viewNodes when finished
@@ -1037,15 +980,12 @@ function nodeExists($node) {
 function AJsubmitDeleteNode() {
 	global $user;
 	$activeNode = processInputVar("activeNode", ARG_NUMERIC);
-	if(empty($activeNode)) {
-		dbDisconnect();
-		exit;
-	}
+	if(empty($activeNode))
+		return;
 	if(! checkUserHasPriv("nodeAdmin", $user["id"], $activeNode)) {
 		$text = "You do not have rights to delete this node.";
 		print "alert('$text');";
-		dbDisconnect();
-		exit;
+		return;
 	}
 	clearPrivCache();
 	$nodes = recurseGetChildren($activeNode);
@@ -1056,12 +996,51 @@ function AJsubmitDeleteNode() {
 	$query = "DELETE FROM privnode "
 	       . "WHERE id IN ($deleteNodes)";
 	doQuery($query, 345);
-	print "var obj = dojo.widget.byId('$activeNode'); ";
-	print "dojo.widget.byId('$parent').removeNode(obj); ";
 	print "setSelectedPrivNode('$parent'); ";
-	print "refreshPerms(); ";
-	dbDisconnect();
-	exit;
+	print "removeNodesFromTree('$deleteNodes'); ";
+	print "dijit.byId('deleteDialog').hide(); ";
+	print "var workingobj = dijit.byId('workingDialog'); ";
+	print "dojo.connect(workingobj._fadeOut, 'onEnd', dijit.byId('deleteDialog'), 'hide'); ";
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn AJsubmitRenameNode()
+///
+/// \brief deletes a node and its children; calls viewNodes when finished
+///
+////////////////////////////////////////////////////////////////////////////////
+function AJsubmitRenameNode() {
+	global $user;
+	$activeNode = processInputVar("activeNode", ARG_NUMERIC);
+	if(empty($activeNode))
+		return;
+	if(! checkUserHasPriv("nodeAdmin", $user["id"], $activeNode)) {
+		$msg = "You do not have rights to rename this node.";
+		$arr = array('error' => 1, 'message' => $msg);
+		sendJSON($arr);
+		return;
+	}
+	# check if node matching new name already exists at parent
+	$newname = processInputVar('newname', ARG_STRING);
+	$query = "SELECT id "
+	       . "FROM privnode "
+	       . "WHERE parent = (SELECT parent FROM privnode WHERE id = $activeNode) AND "
+	       .       "name = '$newname'";
+	$qh = doQuery($query, 101);
+	if(mysql_num_rows($qh)) {
+		$msg = "A sibling node of that name currently exists";
+		$arr = array('error' => 2, 'message' => $msg);
+		sendJSON($arr);
+		return;
+	}
+
+	$query = "UPDATE privnode "
+	       . "SET name = '$newname' " 
+	       . "WHERE id = $activeNode";
+	doQuery($query, 101);
+	$arr = array('newname' => $newname, 'node' => $activeNode);
+	sendJSON($arr);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1074,6 +1053,7 @@ function AJsubmitDeleteNode() {
 function userLookup() {
 	global $user, $viewmode;
 	$userid = processInputVar("userid", ARG_STRING);
+	$force = processInputVar('force', ARG_NUMERIC, 0);
 	print "<div align=center>\n";
 	print "<H2>User Lookup</H2>\n";
 	print "<FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
@@ -1081,6 +1061,12 @@ function userLookup() {
 	print "  <TR>\n";
 	print "    <TH>User ID:</TH>\n";
 	print "    <TD><INPUT type=text name=userid value=\"$userid\" size=25></TD>\n";
+	print "  </TR>\n";
+	print "  <TR>\n";
+	print "    <TD colspan=2>\n";
+	print "      <input type=checkbox id=force name=force value=1>\n";
+	print "      <label for=force>Attempt forcing an update from LDAP</label>\n";
+	print "    </TD>\n";
 	print "  </TR>\n";
 	print "  <TR>\n";
 	print "    <TD></TD>\n";
@@ -1094,7 +1080,7 @@ function userLookup() {
 		$loginid = $userid;
 		getAffilidAndLogin($loginid, $affilid);
 		if(empty($affilid)) {
-			print "{$matches[2]} is an unknown affiliation<br>\n";
+			print "specified affiliation is unknown<br>\n";
 			return;
 		}
 		if($viewmode != ADMIN_DEVELOPER &&
@@ -1109,6 +1095,12 @@ function userLookup() {
 		$qh = doQuery($query, 101);
 		if(! mysql_num_rows($qh))
 			print "<font color=red>$userid not currently found in VCL user database, will try to add...</font><br>\n";
+		elseif($force) {
+			$row = mysql_fetch_assoc($qh);
+			$newtime = unixToDatetime(time() - SECINDAY - 5);
+			$query = "UPDATE user SET lastupdated = '$newtime' WHERE id = {$row['id']}";
+			doQuery($query, 101);
+		}
 
 		$userdata = getUserInfo($userid);
 		if(is_null($userdata)) {
@@ -1245,8 +1237,8 @@ function userLookup() {
 		print "</table>\n";
 
 		$requests = array();
-		$query = "SELECT l.start AS start, "
-		       .        "l.finalend AS end, "
+		$query = "SELECT DATE_FORMAT(l.start, '%W, %b %D, %Y, %h:%i %p') AS start, "
+		       .        "DATE_FORMAT(l.finalend, '%W, %b %D, %Y, %h:%i %p') AS end, "
 		       .        "c.hostname, "
 		       .        "i.prettyname AS prettyimage, "
 		       .        "l.ending "
@@ -1269,10 +1261,6 @@ function userLookup() {
 			print "<table>\n";
 			$first = 1;
 			foreach($requests as $req) {
-				$thisstart = str_replace('&nbsp;', ' ', 
-				      prettyDatetime($req["start"]));
-				$thisend = str_replace('&nbsp;', ' ', 
-				      prettyDatetime($req["end"]));
 				if($first)
 					$first = 0;
 				else {
@@ -1290,11 +1278,11 @@ function userLookup() {
 				print "  </tr>\n";
 				print "  <tr>\n";
 				print "    <th align=right>Start:</th>\n";
-				print "    <td>$thisstart</td>\n";
+				print "    <td>{$req['start']}</td>\n";
 				print "  </tr>\n";
 				print "  <tr>\n";
 				print "    <th align=right>End:</th>\n";
-				print "    <td>$thisend</td>\n";
+				print "    <td>{$req['end']}</td>\n";
 				print "  </tr>\n";
 				print "  <tr>\n";
 				print "    <th align=right>Ending:</th>\n";
@@ -1352,10 +1340,17 @@ function printUserPrivRow($privname, $rownum, $privs, $types,
                           $cascadeprivs, $usergroup, $disabled) {
 	$allprivs = $cascadeprivs + $privs;
 	print "  <TR>\n";
-	if($usergroup == 'group' && ! empty($allprivs[$privname]['affiliation']))
-		print "    <TH>$privname@{$allprivs[$privname]['affiliation']}</TH>\n";
+	if($usergroup == 'group') {
+		$id = $allprivs[$privname]['id'];
+		print "    <TH><span id=\"usergrp$id\" onmouseover=getGroupMembers(";
+		print "\"$id\",\"usergrp$id\",\"ugmcont\"); onmouseout=";
+		print "getGroupMembersCancel(\"usergrp$id\");>$privname";
+		if($usergroup == 'group' && ! empty($allprivs[$privname]['affiliation']))
+			print "@{$allprivs[$privname]['affiliation']}";
+		print "</span></TH>\n";
+	}
 	else
-		print "    <TH>$privname</TH>\n";
+		print "<TH>$privname</TH>\n";
 
 	if($disabled)
 		$disabled = 'disabled=disabled';
@@ -1384,10 +1379,10 @@ function printUserPrivRow($privname, $rownum, $privs, $types,
 		$usergroup = 2;
 		$name = "privrow[{$allprivs[$privname]['id']}:block]";
 	}
-	print "    <TD align=center bgcolor=gray><INPUT type=checkbox ";
-	print "dojoType=Checkbox id=ck$rownum:block name=\"$name\" $checked ";
-	print "onClick=\"javascript:changeCascadedRights(this.checked, $rownum, ";
-	print "$count, 1, $usergroup);\" $disabled></TD>\n";
+	print "    <TD align=center bgcolor=gray>\n";
+	print "<INPUT type=checkbox dojoType=dijit.form.CheckBox id=ck$rownum:block ";
+	print "name=\"$name\" onClick=\"changeCascadedRights(this.checked, $rownum, ";
+	print "$count, 1, $usergroup);\" $checked $disabled></TD>\n";
 
 	#cascade rights
 	if(array_key_exists($privname, $privs) && 
@@ -1403,7 +1398,7 @@ function printUserPrivRow($privname, $rownum, $privs, $types,
 	else
 		$name = "privrow[{$allprivs[$privname]['id']}:cascade]";
 	print "    <TD align=center bgcolor=\"#008000\" id=cell$rownum:0>";
-	print "<INPUT type=checkbox dojoType=Checkbox id=ck$rownum:0 ";
+	print "<INPUT type=checkbox dojoType=dijit.form.CheckBox id=ck$rownum:0 ";
 	print "name=\"$name\" onClick=\"privChange(this.checked, $rownum, 0, ";
 	print "$usergroup);\" $checked $disabled></TD>\n";
 
@@ -1442,10 +1437,10 @@ function printUserPrivRow($privname, $rownum, $privs, $types,
 		else
 			$name = "privrow[{$allprivs[$privname]['id']}:$type]";
 		print "    <TD align=center id=cell$rownum:$j $bgcolor><INPUT ";
-		print "type=checkbox dojoType=Checkbox name=\"$name\" id=ck$rownum:$j ";
-		print "$checked $value $disabled ";
-		print "onClick=\"javascript:nodeCheck(this.checked, $rownum, $j, $usergroup)\" ";
-		print "onBlur=\"javascript:nodeCheck(this.checked, $rownum, $j, $usergroup)\">";
+		print "type=checkbox dojoType=dijit.form.CheckBox name=\"$name\" ";
+		print "id=ck$rownum:$j $checked $value $disabled ";
+		print "onClick=\"nodeCheck(this.checked, $rownum, $j, $usergroup)\">";
+		#print "onBlur=\"nodeCheck(this.checked, $rownum, $j, $usergroup)\">";
 		print "</TD>\n";
 		$j++;
 	}
@@ -1482,11 +1477,18 @@ function getUserPrivRowHTML($privname, $rownum, $privs, $types,
 	$allprivs = $cascadeprivs + $privs;
 	$text = "";
 	$js = "";
-	$text .= "  <TR>";
-	if($usergroup == 'group' && ! empty($allprivs[$privname]['affiliation']))
-		$text .= "    <TH>$privname@{$allprivs[$privname]['affiliation']}</TH>";
+	$text .= "<TR>";
+	if($usergroup == 'group') {
+		$id = $allprivs[$privname]['id'];
+		$text .= "<TH><span id=\"usergrp$id\" onmouseover=getGroupMembers(";
+		$text .= "\"$id\",\"usergrp$id\",\"ugmcont\"); onmouseout=";
+		$text .= "getGroupMembersCancel(\"usergrp$id\");>$privname";
+		if($usergroup == 'group' && ! empty($allprivs[$privname]['affiliation']))
+			$text .= "@{$allprivs[$privname]['affiliation']}";
+		$text .= "</span></TH>";
+	}
 	else
-		$text .= "    <TH>$privname</TH>";
+		$text .= "<TH>$privname</TH>";
 
 	if($disabled)
 		$disabled = 'disabled=disabled';
@@ -1516,9 +1518,9 @@ function getUserPrivRowHTML($privname, $rownum, $privs, $types,
 		$name = "privrow[{$allprivs[$privname]['id']}:block]";
 	}
 	$text .= "    <TD align=center bgcolor=gray><INPUT type=checkbox ";
-	$text .= "dojoType=Checkbox id=ck$rownum:block name=\"$name\" $checked ";
-	$text .= "$disabled onClick=\"javascript:";
-	$text .= "changeCascadedRights(this.checked, $rownum, $count, 1, $usergroup)\"></TD>";
+	$text .= "dojoType=dijit.form.CheckBox id=ck$rownum:block name=\"$name\" ";
+	$text .= "$checked $disabled onClick=\"changeCascadedRights";
+	$text .= "(this.checked, $rownum, $count, 1, $usergroup)\"></TD>";
 
 	#cascade rights
 	if(array_key_exists($privname, $privs) && 
@@ -1534,9 +1536,9 @@ function getUserPrivRowHTML($privname, $rownum, $privs, $types,
 	else
 		$name = "privrow[{$allprivs[$privname]['id']}:cascade]";
 	$text .= "    <TD align=center bgcolor=\"#008000\" id=cell$rownum:0>";
-	$text .= "<INPUT type=checkbox dojoType=Checkbox id=ck$rownum:0 name=\"$name\" ";
-	$text .= "onClick=\"privChange(this.checked, $rownum, 0, $usergroup);\" ";
-	$text .= "$checked $disabled></TD>";
+	$text .= "<INPUT type=checkbox dojoType=dijit.form.CheckBox id=ck$rownum:0 ";
+	$text .= "name=\"$name\" onClick=\"privChange(this.checked, $rownum, 0, ";
+	$text .= "$usergroup);\" $checked $disabled></TD>";
 
 	# normal rights
 	$j = 1;
@@ -1573,10 +1575,10 @@ function getUserPrivRowHTML($privname, $rownum, $privs, $types,
 		else
 			$name = "privrow[{$allprivs[$privname]['id']}:$type]";
 		$text .= "    <TD align=center id=cell$rownum:$j $bgcolor><INPUT ";
-		$text .= "type=checkbox dojoType=Checkbox name=\"$name\" ";
+		$text .= "type=checkbox dojoType=dijit.form.CheckBox name=\"$name\" ";
 		$text .= "id=ck$rownum:$j $checked $value $disabled ";
-		$text .= "onClick=\"javascript:nodeCheck(this.checked, $rownum, $j, $usergroup)\" ";
-		$text .= "onBlur=\"javascript:nodeCheck(this.checked, $rownum, $j, $usergroup)\">";
+		$text .= "onClick=\"nodeCheck(this.checked, $rownum, $j, $usergroup)\">";
+		#$text .= "onBlur=\"nodeCheck(this.checked, $rownum, $j, $usergroup)\">";
 		$text .= "</TD>";
 		$j++;
 	}
@@ -1587,6 +1589,50 @@ function getUserPrivRowHTML($privname, $rownum, $privs, $types,
 	}
 	return array('html' => $text,
 	             'javascript' => $js);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn jsonGetUserGroupMembers()
+///
+/// \brief accepts a user group id and dom id and prints a json array with 2
+/// elements: members - a <br> separated string of user group members, and
+/// domid - the passed in domid
+///
+////////////////////////////////////////////////////////////////////////////////
+function jsonGetUserGroupMembers() {
+	global $user;
+	$usergrpid = processInputVar('groupid', ARG_NUMERIC);
+	$domid = processInputVar('domid', ARG_STRING);
+	$query = "SELECT g.ownerid, "
+	       .        "g2.name AS editgroup "
+	       . "FROM usergroup g "
+	       . "LEFT JOIN usergroup g2 ON (g.editusergroupid = g2.id) "
+	       . "WHERE g.id = $usergrpid";
+	$qh = doQuery($query, 101);
+	if(! ($grpdata = mysql_fetch_assoc($qh))) {
+		# problem getting group members
+		$msg = 'failed to fetch group members';
+		$arr = array('members' => $msg, 'domid' => $domid);
+		sendJSON($arr);
+		return;
+	}
+	if($grpdata["ownerid"] != $user["id"] && ! (in_array($grpdata["editgroup"], $user["groups"]))) {
+		# user doesn't have access to view membership
+		$msg = '(not authorized to view membership)';
+		$arr = array('members' => $msg, 'domid' => $domid);
+		sendJSON($arr);
+		return;
+	}
+
+	$grpmembers = getUserGroupMembers($usergrpid);
+	$members = '';
+	foreach($grpmembers as $group)
+		$members .= "$group<br>";
+	if($members == '')
+		$members = '(empty group)';
+	$arr = array('members' => $members, 'domid' => $domid);
+	sendJSON($arr);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1614,18 +1660,10 @@ function printResourcePrivRow($privname, $rownum, $privs, $types,
 	print "  <TR>\n";
 	list($type, $name, $id) = split('/', $privname);
 	print "    <TH>\n";
-	print "      <span id=\"resgrp$id\">$name</span>\n";
-	print "      <span dojoType=\"tooltip\" connectId=\"resgrp$id\">\n";
-	if(array_key_exists($id, $resgroupmembers[$type]) &&
-	   is_array($resgroupmembers[$type][$id])) {
-		foreach($resgroupmembers[$type][$id] as $resource)
-			print "        {$resource['name']}<br>\n";
-	}
-	else
-		print "(empty group)\n";
-	print "      </span>\n";
+	print "      <span id=\"resgrp$id\" onmouseover=getGroupMembers(\"$id\",";
+	print "\"resgrp$id\",\"rgmcont\"); onmouseout=getGroupMembersCancel";
+	print "(\"resgrp$id\");>$name</span>\n";
 	print "    </TH>\n";
-	//print "    <TH>$name</TH>\n";
 	print "    <TH>$type</TH>\n";
 
 	if($disabled)
@@ -1646,8 +1684,8 @@ function printResourcePrivRow($privname, $rownum, $privs, $types,
 	$count = count($types) + 1;
 	$name = "privrow[" . $privname . ":block]";
 	print "    <TD align=center bgcolor=gray><INPUT type=checkbox ";
-	print "dojoType=Checkbox id=ck$rownum:block name=\"$name\" $checked ";
-	print "$disabled onClick=\"javascript:";
+	print "dojoType=dijit.form.CheckBox id=ck$rownum:block name=\"$name\" ";
+	print "$checked $disabled onClick=\"";
 	print "changeCascadedRights(this.checked, $rownum, $count, 1, 3)\"></TD>\n";
 
 	#cascade rights
@@ -1658,9 +1696,9 @@ function printResourcePrivRow($privname, $rownum, $privs, $types,
 		$checked = "";
 	$name = "privrow[" . $privname . ":cascade]";
 	print "    <TD align=center bgcolor=\"#008000\" id=cell$rownum:0>";
-	print "<INPUT type=checkbox dojoType=Checkbox id=ck$rownum:0 name=\"$name\" ";
+	print "<INPUT type=checkbox dojoType=dijit.form.CheckBox id=ck$rownum:0 ";
 	print "onClick=\"privChange(this.checked, $rownum, 0, 3);\" ";
-	print "$checked $disabled></TD>\n";
+	print "name=\"$name\" $checked $disabled></TD>\n";
 
 	# normal rights
 	$j = 1;
@@ -1696,10 +1734,10 @@ function printResourcePrivRow($privname, $rownum, $privs, $types,
 		else {
 			$name = "privrow[" . $privname . ":" . $type . "]";
 			print "    <TD align=center id=cell$rownum:$j $bgcolor><INPUT ";
-			print "type=checkbox dojoType=Checkbox name=\"$name\" ";
+			print "type=checkbox dojoType=dijit.form.CheckBox name=\"$name\" ";
 			print "id=ck$rownum:$j $checked $value $disabled ";
-			print "onClick=\"javascript:nodeCheck(this.checked, $rownum, $j, 3)\" ";
-			print "onBlur=\"javascript:nodeCheck(this.checked, $rownum, $j, 3)\">";
+			print "onClick=\"nodeCheck(this.checked, $rownum, $j, 3);\">";
+			#print "onBlur=\"nodeCheck(this.checked, $rownum, $j, 3);\">";
 			print "</TD>\n";
 		}
 		$j++;
@@ -1742,16 +1780,9 @@ function getResourcePrivRowHTML($privname, $rownum, $privs, $types,
 	$text .= "  <TR>";
 	list($type, $name, $id) = split('/', $privname);
 	$text .= "    <TH>";
-	$text .= "      <span id=\"resgrp$id\">$name</span>";
-	$text .= "      <span dojoType=\"tooltip\" connectId=\"resgrp$id\">";
-	if(array_key_exists($type, $resgroupmembers) &&
-	   array_key_exists($id, $resgroupmembers[$type]) &&
-	   is_array($resgroupmembers[$type][$id])) {
-		foreach($resgroupmembers[$type][$id] as $resource) {
-			$text .= "        {$resource['name']}<br>";
-		}
-	}
-	$text .= "      </span>";
+	$text .= "      <span id=\"resgrp$id\" onmouseover=getGroupMembers(\"$id\",";
+	$text .= "\"resgrp$id\",\"rgmcont\"); onmouseout=getGroupMembersCancel";
+	$text .= "(\"resgrp$id\");>$name</span>";
 	$text .= "    </TH>";
 	//$text .= "    <TH>$name</TH>";
 	$text .= "    <TH>$type</TH>";
@@ -1774,9 +1805,9 @@ function getResourcePrivRowHTML($privname, $rownum, $privs, $types,
 	$count = count($types) + 1;
 	$name = "privrow[" . $privname . ":block]";
 	$text .= "    <TD align=center bgcolor=gray><INPUT type=checkbox ";
-	$text .= "dojoType=Checkbox id=ck$rownum:block name=\"$name\" $checked ";
-	$text .= "$disabled onClick=\"javascript:";
-	$text .= "changeCascadedRights(this.checked, $rownum, $count, 1, 3)\"></TD>";
+	$text .= "dojoType=dijit.form.CheckBox id=ck$rownum:block name=\"$name\" ";
+	$text .= "$checked $disabled onClick=\"changeCascadedRights";
+	$text .= "(this.checked, $rownum, $count, 1, 3)\"></TD>";
 
 	#cascade rights
 	if(array_key_exists($privname, $privs) && 
@@ -1786,9 +1817,9 @@ function getResourcePrivRowHTML($privname, $rownum, $privs, $types,
 		$checked = "";
 	$name = "privrow[" . $privname . ":cascade]";
 	$text .= "    <TD align=center bgcolor=\"#008000\" id=cell$rownum:0>";
-	$text .= "<INPUT type=checkbox dojoType=Checkbox id=ck$rownum:0 name=\"$name\" ";
+	$text .= "<INPUT type=checkbox dojoType=dijit.form.CheckBox id=ck$rownum:0 ";
 	$text .= "onClick=\"privChange(this.checked, $rownum, 0, 3);\" ";
-	$text .= "$checked $disabled></TD>";
+	$text .= "name=\"$name\" $checked $disabled></TD>";
 
 	# normal rights
 	$j = 1;
@@ -1824,10 +1855,10 @@ function getResourcePrivRowHTML($privname, $rownum, $privs, $types,
 		else {
 			$name = "privrow[" . $privname . ":" . $type . "]";
 			$text .= "    <TD align=center id=cell$rownum:$j $bgcolor><INPUT ";
-			$text .= "type=checkbox dojoType=Checkbox name=\"$name\" ";
+			$text .= "type=checkbox dojoType=dijit.form.CheckBox name=\"$name\" ";
 			$text .= "id=ck$rownum:$j $checked $value $disabled ";
-			$text .= "onClick=\"javascript:nodeCheck(this.checked, $rownum, $j, 3)\" ";
-			$text .= "onBlur=\"javascript:nodeCheck(this.checked, $rownum, $j, 3)\">";
+			$text .= "onClick=\"nodeCheck(this.checked, $rownum, $j, 3)\">";
+			#$text .= "onBlur=\"nodeCheck(this.checked, $rownum, $j, 3)\">";
 			$text .= "</TD>";
 		}
 		$j++;
@@ -1840,6 +1871,55 @@ function getResourcePrivRowHTML($privname, $rownum, $privs, $types,
 	$text = preg_replace("/'/", '&#39;', $text);
 	return array('html' => $text,
 	             'javascript' => $js);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn jsonGetResourceGroupMembers()
+///
+/// \brief accepts a resource group id and dom id and prints a json array with 2
+/// elements: members - a <br> separated string of resource group members, and
+/// domid - the passed in domid
+///
+////////////////////////////////////////////////////////////////////////////////
+function jsonGetResourceGroupMembers() {
+	$resgrpid = processInputVar('groupid', ARG_NUMERIC);
+	$domid = processInputVar('domid', ARG_STRING);
+	$query = "SELECT rt.name "
+	       . "FROM resourcegroup rg, "
+	       .      "resourcetype rt "
+	       . "WHERE rg.id = $resgrpid AND "
+	       .       "rg.resourcetypeid = rt.id";
+	$qh = doQuery($query, 101);
+	if($row = mysql_fetch_assoc($qh)) {
+		$type = $row['name'];
+		if($type == 'computer' || $type == 'managementnode')
+			$field = 'hostname';
+		elseif($type == 'image')
+			$field = 'prettyname';
+		elseif($type == 'schedule')
+			$field = 'name';
+		$query = "SELECT t.$field AS item "
+		       . "FROM $type t, "
+		       .      "resource r, "
+		       .      "resourcegroupmembers rgm "
+		       . "WHERE rgm.resourcegroupid = $resgrpid AND "
+		       .       "rgm.resourceid = r.id AND "
+		       .       "r.subid = t.id";
+		$qh = doQuery($query, 101);
+		$members = '';
+		while($row = mysql_fetch_assoc($qh))
+			$members .= "{$row['item']}<br>";
+		if($members == '')
+			$members = '(empty group)';
+		$arr = array('members' => $members, 'domid' => $domid);
+		sendJSON($arr);
+	}
+	else {
+		$members = '(failed to lookup members)';
+		$arr = array('members' => $members, 'domid' => $domid);
+		sendJSON($arr);
+	}
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -2196,7 +2276,7 @@ function getNodeCascadePrivileges($node, $type="all", $privs=0) {
 /// \fn AJchangeUserPrivs()
 ///
 /// \brief processes input for changes in users' privileges at a specific node,
-/// submits the changes to the database returns a call to refreshPerms()
+/// submits the changes to the database
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function AJchangeUserPrivs() {
@@ -2205,8 +2285,7 @@ function AJchangeUserPrivs() {
 	if(! checkUserHasPriv("userGrant", $user["id"], $node)) {
 		$text = "You do not have rights to modify user privileges at this node.";
 		print "alert('$text');";
-		dbDisconnect();
-		exit;
+		return;
 	}
 	$newuser = processInputVar("item", ARG_STRING);
 	$newpriv = processInputVar('priv', ARG_STRING);
@@ -2220,10 +2299,8 @@ function AJchangeUserPrivs() {
 	//   cascaded to it, do nothing
 	if($newprivval == 'true') {
 		if(array_key_exists($newuser, $cascadePrivs['users']) &&
-		   in_array($newpriv, $cascadePrivs['users'][$newuser])) {
-			dbDisconnect();
-			exit;
-		}
+		   in_array($newpriv, $cascadePrivs['users'][$newuser]))
+			return;
 		// add priv
 		$adds = array($newpriv);
 		$removes = array();
@@ -2235,8 +2312,6 @@ function AJchangeUserPrivs() {
 	}
 	updateUserOrGroupPrivs($newuser, $node, $adds, $removes, "user");
 	$_SESSION['dirtyprivs'] = 1;
-	dbDisconnect();
-	exit;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -2253,8 +2328,7 @@ function AJchangeUserGroupPrivs() {
 	if(! checkUserHasPriv("userGrant", $user["id"], $node)) {
 		$text = "You do not have rights to modify user privileges at this node.";
 		print "alert('$text');";
-		dbDisconnect();
-		exit;
+		return;
 	}
 	$newusergrpid = processInputVar("item", ARG_NUMERIC);
 	$newusergrp = getUserGroupName($newusergrpid);
@@ -2269,10 +2343,8 @@ function AJchangeUserGroupPrivs() {
 	//   cascaded to it, do nothing
 	if($newprivval == 'true') {
 		if(array_key_exists($newusergrp, $cascadePrivs['usergroups']) &&
-		   in_array($newpriv, $cascadePrivs['usergroups'][$newusergrp]['privs'])) {
-			dbDisconnect();
-			exit;
-		}
+		   in_array($newpriv, $cascadePrivs['usergroups'][$newusergrp]['privs']))
+			return;
 		// add priv
 		$adds = array($newpriv);
 		$removes = array();
@@ -2284,8 +2356,6 @@ function AJchangeUserGroupPrivs() {
 	}
 	updateUserOrGroupPrivs($newusergrpid, $node, $adds, $removes, "group");
 	$_SESSION['dirtyprivs'] = 1;
-	dbDisconnect();
-	exit;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -2302,8 +2372,7 @@ function AJchangeResourcePrivs() {
 	if(! checkUserHasPriv("resourceGrant", $user["id"], $node)) {
 		$text = "You do not have rights to modify resource privileges at this node.";
 		print "alert('$text');";
-		dbDisconnect();
-		exit;
+		return;
 	}
 	$resourcegrp = processInputVar("item", ARG_STRING);
 	$newpriv = processInputVar('priv', ARG_STRING);
@@ -2317,10 +2386,8 @@ function AJchangeResourcePrivs() {
 	//   cascaded to it, do nothing
 	if($newprivval == 'true') {
 		if(array_key_exists($resourcegrp, $cascadePrivs['resources']) &&
-		   in_array($newpriv, $cascadePrivs['resources'][$resourcegrp])) {
-			dbDisconnect();
-			exit;
-		}
+		   in_array($newpriv, $cascadePrivs['resources'][$resourcegrp]))
+			return;
 		// add priv
 		$adds = array($newpriv);
 		$removes = array();
@@ -2333,143 +2400,30 @@ function AJchangeResourcePrivs() {
 	$tmpArr = explode('/', $resourcegrp);
 	updateResourcePrivs($tmpArr[2], $node, $adds, $removes);
 	$_SESSION['dirtyprivs'] = 1;
-	dbDisconnect();
-	exit;
 }
-////////////////////////////////////////////////////////////////////////////////
-///
-/// \fn addUserPriv()
-///
-/// \brief prints a page for adding privileges to a node for a user
-///
-////////////////////////////////////////////////////////////////////////////////
-/*function addUserPriv() {
-	global $submitErr;
-	$node = processInputVar("activeNode", ARG_NUMERIC);
-	$newuser = processInputVar("newuser", ARG_STRING);
-	$tmp = processInputVar("openNodes", ARG_STRING);
-	if($tmp != "")
-		$openNodes = explode(":", $tmp);
-	else
-		$openNodes = array(DEFAULT_PRIVNODE);
-	$usertypes = getTypes("users");
-
-	$topNodes = getChildNodes();
-	print "<H2>Add User</H2>\n";
-	recursivePrintNodes($topNodes, $openNodes, $node);
-	printSubmitErr(NEWUSERERR);
-	printSubmitErr(ADDUSERNOPRIVS);
-	print "<FORM action=\"" . BASEURL . SCRIPT . "#users\" method=post>\n";
-	print "<TABLE border=1>\n";
-	print "  <TR>\n";
-	print "    <TD></TD>\n";
-	print "    <TH bgcolor=gray>Block<br>Cascaded<br>Rights</TH>\n";
-	print "    <TH bgcolor=\"#008000\">Cascade<br>to Child<br>Nodes</TH>\n";
-	foreach($usertypes["users"] as $type) {
-		$img = getImageText($type);
-		print "    <TD>$img</TD>\n";
-	}
-	print "  </TR>\n";
-	print "  <TR>\n";
-	print "    <TD><INPUT type=text name=newuser value=\"$newuser\" size=8 ";
-	print "maxlength=8></TD>\n";
-
-	# block rights
-	$count = count($usertypes) + 1;
-	print "    <TD align=center bgcolor=gray><INPUT type=checkbox ";
-	print "name=block></TD>\n";
-
-	#cascade rights
-	print "    <TD align=center bgcolor=\"#008000\" id=usercell0:0>";
-	print "<INPUT type=checkbox id=userck0:0 name=cascade ";
-	print "></TD>\n";
-
-	# normal rights
-	$j = 1;
-	foreach($usertypes["users"] as $type) {
-		print "    <TD align=center id=usercell0:$j><INPUT type=checkbox ";
-		print "name=\"$type\" id=userck0:$j></TD>\n";
-		$j++;
-	}
-	print "  </TR>\n";
-	print "</TABLE>\n";
-	$openNodes = implode(':', $openNodes);
-	print "<TABLE>\n";
-	print "  <TR>\n";
-	print "    <TD><INPUT type=submit value=\"Submit New User\"></TD>\n";
-	print "  </TR>\n";
-	# FIXME add javascript to reset button
-	print "</TABLE>\n";
-	print "<INPUT type=hidden name=mode value=submitAddUserPriv>\n";
-	print "<INPUT type=hidden name=activeNode value=$node>\n";
-	print "<INPUT type=hidden name=openNodes value=\"$openNodes \">\n";
-	print "</FORM>\n";
-}*/
-
-////////////////////////////////////////////////////////////////////////////////
-///
-/// \fn submitAddUserPriv()
-///
-/// \brief processes input for adding privileges to a node for a user; adds the
-/// privileges; calls viewNodes
-///
-////////////////////////////////////////////////////////////////////////////////
-/*function submitAddUserPriv() {
-	global $submitErr, $submitErrMsg;
-	$newuser = processInputVar("newuser", ARG_STRING);
-	if(! validateUserid($newuser)) {
-		$submitErr |= NEWUSERERR;
-		$submitErrMsg[NEWUSERERR] = "<strong>$newuser was not found</strong>";
-		addUserPriv();
-		return;
-	}
-	$usertypes = getTypes("users");
-	array_push($usertypes["users"], "block");
-	array_push($usertypes["users"], "cascade");
-	$newuserprivs = array();
-	foreach($usertypes["users"] as $type) {
-		$tmp = processInputVar($type, ARG_STRING);
-		if($tmp == "on")
-			array_push($newuserprivs, $type);
-	}
-	if(empty($newuserprivs) || (count($newuserprivs) == 1 && 
-	   in_array("cascade", $newuserprivs))) {
-		$submitErr |= ADDUSERNOPRIVS;
-		$submitErrMsg[ADDUSERNOPRIVS] = "No user privileges were specified";
-		addUserPriv();
-		return;
-	}
-
-	$node = processInputVar("activeNode", ARG_NUMERIC);
-	updateUserOrGroupPrivs($newuser, $node, $newuserprivs, array(), "user");
-	clearPrivCache();
-	viewNodes();
-}*/
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
 /// \fn AJsubmitAddUserPriv()
 ///
 /// \brief processes input for adding privileges to a node for a user; adds the
-/// privileges; returns call to refreshPerms()
+/// privileges
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function AJsubmitAddUserPriv() {
-	global $submitErr, $submitErrMsg, $user;
+	global $user;
 	$node = processInputVar("activeNode", ARG_NUMERIC);
 	if(! checkUserHasPriv("userGrant", $user["id"], $node)) {
 		$text = "You do not have rights to add new users at this node.";
 		print "addUserPaneHide(); ";
 		print "alert('$text');";
-		dbDisconnect();
-		exit;
+		return;
 	}
 	$newuser = processInputVar("newuser", ARG_STRING);
 	if(! validateUserid($newuser)) {
 		$text = "<font color=red>$newuser is not a valid userid</font>";
 		print setAttribute('addUserPrivStatus', 'innerHTML', $text);
-		dbDisconnect();
-		exit;
+		return;
 	}
 
 	$perms = explode(':', processInputVar('perms', ARG_STRING));
@@ -2485,120 +2439,14 @@ function AJsubmitAddUserPriv() {
 	   in_array("cascade", $newuserprivs))) {
 		$text = "<font color=red>No user privileges were specified</font>";
 		print setAttribute('addUserPrivStatus', 'innerHTML', $text);
-		dbDisconnect();
-		exit;
-	}
-	$node = processInputVar("activeNode", ARG_NUMERIC);
-
-	updateUserOrGroupPrivs($newuser, $node, $newuserprivs, array(), "user");
-	clearPrivCache();
-	print "refreshPerms();";
-	dbDisconnect();
-	exit;
-}
-
-////////////////////////////////////////////////////////////////////////////////
-///
-/// \fn addUserGroupPriv()
-///
-/// \brief prints a page for adding privileges to a node for a user group
-///
-////////////////////////////////////////////////////////////////////////////////
-/*function addUserGroupPriv() {
-	global $submitErr;
-	$node = processInputVar("activeNode", ARG_NUMERIC);
-	$newgroup = processInputVar("newgroup", ARG_STRING);
-	$tmp = processInputVar("openNodes", ARG_STRING);
-	if($tmp != "")
-		$openNodes = explode(":", $tmp);
-	else
-		$openNodes = array(DEFAULT_PRIVNODE);
-	$usertypes = getTypes("users");
-
-	$groups = getUserGroups();
-	unset($groups["82"]);   // remove the "None" group
-
-	$topNodes = getChildNodes();
-	print "<H2>Add User Group</H2>\n";
-	recursivePrintNodes($topNodes, $openNodes, $node);
-	printSubmitErr(ADDUSERNOPRIVS);
-	print "<FORM action=\"" . BASEURL . SCRIPT . "#groups\" method=post>\n";
-	print "<TABLE border=1>\n";
-	print "  <TR>\n";
-	print "    <TD></TD>\n";
-	print "    <TH bgcolor=gray>Block<br>Cascaded<br>Rights</TH>\n";
-	print "    <TH bgcolor=\"#008000\">Cascade<br>to Child<br>Nodes</TH>\n";
-	foreach($usertypes["users"] as $type) {
-		$img = getImageText($type);
-		print "    <TD>$img</TD>\n";
-	}
-	print "  </TR>\n";
-	print "  <TR>\n";
-	print "    <TD>\n";
-	printSelectInput("newgroupid", $groups);
-	print "    </TD>\n";
-	#print "</TD>\n";
-
-	# block rights
-	print "    <TD align=center bgcolor=gray><INPUT type=checkbox ";
-	print "name=block></TD>\n";
-
-	#cascade rights
-	print "    <TD align=center bgcolor=\"#008000\"><INPUT type=checkbox ";
-	print "name=cascade></TD>\n";
-
-	# normal rights
-	foreach($usertypes["users"] as $type) {
-		print "    <TD align=center><INPUT type=checkbox ";
-		print "name=\"$type\"></TD>\n";
-	}
-	print "  </TR>\n";
-	print "</TABLE>\n";
-	$openNodes = implode(':', $openNodes);
-	print "<TABLE>\n";
-	print "  <TR>\n";
-	print "    <TD><INPUT type=submit value=\"Submit New Group\"></TD>\n";
-	print "  </TR>\n";
-	print "</TABLE>\n";
-	print "<INPUT type=hidden name=mode value=submitAddUserGroupPriv>\n";
-	print "<INPUT type=hidden name=activeNode value=$node>\n";
-	print "<INPUT type=hidden name=openNodes value=\"$openNodes \">\n";
-	print "</FORM>\n";
-}*/
-
-////////////////////////////////////////////////////////////////////////////////
-///
-/// \fn submitAddUserGroupPriv()
-///
-/// \brief processes input for adding privileges to a node for a user group;
-/// adds the privileges; calls viewNodes
-///
-////////////////////////////////////////////////////////////////////////////////
-/*function submitAddUserGroupPriv() {
-	global $submitErr, $submitErrMsg;
-	$newgroupid = processInputVar("newgroupid", ARG_NUMERIC);
-	$usertypes = getTypes("users");
-	array_push($usertypes["users"], "block");
-	array_push($usertypes["users"], "cascade");
-	$newgroupprivs = array();
-	foreach($usertypes["users"] as $type) {
-		$tmp = processInputVar($type, ARG_STRING);
-		if($tmp == "on")
-			array_push($newgroupprivs, $type);
-	}
-	if(empty($newgroupprivs) || (count($newgroupprivs) == 1 && 
-	   in_array("cascade", $newgroupprivs))) {
-		$submitErr |= ADDUSERNOPRIVS;
-		$submitErrMsg[ADDUSERNOPRIVS] = "No user group privileges were specified";
-		addUserGroupPriv();
 		return;
 	}
 
-	$node = processInputVar("activeNode", ARG_NUMERIC);
-	updateUserOrGroupPrivs($newgroupid, $node, $newgroupprivs, array(), "group");
+	updateUserOrGroupPrivs($newuser, $node, $newuserprivs, array(), "user");
 	clearPrivCache();
-	viewNodes();
-}*/
+	print "refreshPerms(); ";
+	print "addUserPaneHide(); ";
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
@@ -2615,8 +2463,7 @@ function AJsubmitAddUserGroupPriv() {
 		$text = "You do not have rights to add new user groups at this node.";
 		print "addUserGroupPaneHide(); ";
 		print "alert('$text');";
-		dbDisconnect();
-		exit;
+		return;
 	}
 	$newgroupid = processInputVar("newgroupid", ARG_NUMERIC);
 	# FIXME validate newgroupid
@@ -2634,16 +2481,13 @@ function AJsubmitAddUserGroupPriv() {
 	   in_array("cascade", $newgroupprivs))) {
 		$text = "<font color=red>No user group privileges were specified</font>";
 		print setAttribute('addUserGroupPrivStatus', 'innerHTML', $text);
-		dbDisconnect();
-		exit;
+		return;
 	}
 
 	updateUserOrGroupPrivs($newgroupid, $node, $newgroupprivs, array(), "group");
 	clearPrivCache();
-	print "addUserGroupPaneHide(); ";
 	print "refreshPerms(); ";
-	dbDisconnect();
-	exit;
+	print "addUserGroupPaneHide(); ";
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -2659,13 +2503,23 @@ function AJsubmitAddResourcePriv() {
 	$node = processInputVar("activeNode", ARG_NUMERIC);
 	if(! checkUserHasPriv("resourceGrant", $user["id"], $node)) {
 		$text = "You do not have rights to add new resource groups at this node.";
-		print "addUserGroupPaneHide(); ";
+		print "addResourceGroupPaneHide(); ";
 		print "alert('$text');";
-		dbDisconnect();
-		exit;
+		return;
 	}
 	$newgroupid = processInputVar("newgroupid", ARG_NUMERIC);
-	# FIXME validate newgroupid
+	$privs = array("computerAdmin","mgmtNodeAdmin",  "imageAdmin", "scheduleAdmin");
+	$resourcesgroups = getUserResources($privs, array("manageGroup"), 1);
+
+	if(! array_key_exists($newgroupid, $resourcesgroups['image']) &&
+	   ! array_key_exists($newgroupid, $resourcesgroups['computer']) &&
+	   ! array_key_exists($newgroupid, $resourcesgroups['managementnode']) &&
+	   ! array_key_exists($newgroupid, $resourcesgroups['schedule'])) {
+		$text = "You do not have rights manage the specified resource group.";
+		print "addResourceGroupPaneHide(); ";
+		print "alert('$text');";
+		return;
+	}
 
 	$perms = explode(':', processInputVar('perms', ARG_STRING));
 	$privtypes = array("block", "cascade", "available", "administer", "manageGroup");
@@ -2678,16 +2532,13 @@ function AJsubmitAddResourcePriv() {
 	   in_array("cascade", $newgroupprivs))) {
 		$text = "<font color=red>No resource group privileges were specified</font>";
 		print setAttribute('addResourceGroupPrivStatus', 'innerHTML', $text);
-		dbDisconnect();
-		exit;
+		return;
 	}
 
 	updateResourcePrivs($newgroupid, $node, $newgroupprivs, array());
 	clearPrivCache();
-	print "addResourceGroupPaneHide(); ";
 	print "refreshPerms(); ";
-	dbDisconnect();
-	exit;
+	print "addResourceGroupPaneHide(); ";
 }
 
 ////////////////////////////////////////////////////////////////////////////////
