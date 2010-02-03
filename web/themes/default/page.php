@@ -35,8 +35,6 @@ function getHeader($refresh) {
 	$rt .= "<title>VCL :: Virtual Computing Lab</title>\n";
 	$rt .= "<link rel=stylesheet type=\"text/css\" href=\"css/vcl.css\">\n";
 	$rt .= "<link rel=stylesheet type=\"text/css\" href=\"themes/default/css/vcl.css\">\n";
-	if($mode == 'viewdocs')
-		$rt .= "<link rel=stylesheet type=\"text/css\" href=\"css/doxygen.css\" />\n";
 	$rt .= "<script src=\"js/code.js\" type=\"text/javascript\"></script>\n";
 	$rt .= "<script type=\"text/javascript\">\n";
 	$rt .= "var cookiedomain = '" . COOKIEDOMAIN . "';\n";
@@ -44,8 +42,11 @@ function getHeader($refresh) {
 	$rt .= getDojoHTML($refresh);
 	if($refresh)
 		$rt .= "<noscript><META HTTP-EQUIV=REFRESH CONTENT=20></noscript>\n";
+	$extracss = getExtraCSS();
+	foreach($extracss as $file)
+		$rt .= "<link rel=stylesheet type=\"text/css\" href=\"css/$file\">\n";
 	$rt .= "</head>\n\n";
-	$rt .= "<body>\n\n";
+	$rt .= "<body class=default>\n\n";
 	$rt .= "<a class=hidden href=\"#content\" accesskey=2>Skip to content</a>\n";
 	$rt .= "<table border=0 cellpadding=0 cellspacing=0 summary=\"\">\n";
 	$rt .= "  <TR>\n";
@@ -83,7 +84,7 @@ function getHeader($refresh) {
 	$rt .= "</div>\n";
 	$rt .= "        </TD>\n";
 	$rt .= "        <TD width=\"100%\" style=\"align: left; background: #ffffff;\">\n";
-	$rt .= "<div id=content class=default>\n";
+	$rt .= "<div id=content>\n";
 	return $rt;
 }
 
