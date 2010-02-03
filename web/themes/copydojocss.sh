@@ -52,16 +52,23 @@ fi
 
 cd $path/$skin/css/dojo
 mv tundra.css $skin.css
-mv tundra.css.commented.css $skin.css.commented.css
+if [[ -r tundra.css.commented.css ]]; then
+	mv tundra.css.commented.css $skin.css.commented.css
+fi
 mv tundra_rtl.css ${skin}_rtl.css
-mv tundra_rtl.css.commented.css ${skin}_rtl.css.commented.css
-
-if ! sed -i "s/tundra/$skin/g" $skin.css; then
-	echo failed to change string \"tundra\" to \"$skin\" in $path/$skin/css/dojo/$skin.css
-	echo remove $path/$skin/css/dojo before retrying
-	exit 5
+if [[ -r tundra_rtl.css.commented.css ]]; then
+	mv tundra_rtl.css.commented.css ${skin}_rtl.css.commented.css
 fi
 
+for f in $(grep -l '\.tundra' *.css); do
+	if ! sed -i "s/\.tundra/\.$skin/g" $f; then
+		echo failed to change string \"tundra\" to \"$skin\" in $path/$skin/css/dojo/$f
+		echo remove $path/$skin/css/dojo before retrying
+		exit 5
+	fi
+done
+
+cp $skin.css $skin.css.save
 if ! sed -i "s/\.\.\/dijit.css/..\/..\/..\/..\/dojo\/dijit\/themes\/dijit.css/" $skin.css; then
 	echo failed to change path to dijit.css in $path/$skin/css/dojo/$skin.css
 	echo remove $path/$skin/css/dojo before retrying
