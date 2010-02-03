@@ -51,6 +51,7 @@ umask 077
 
 start() {
  	echo -n $"Starting $DAEMON daemon: "
+	echo
 	daemon $DAEMON_PATH/$DAEMON $DAEMON_OPTIONS
 	RETVAL=$?
 	echo
