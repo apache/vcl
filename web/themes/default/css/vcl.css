@@ -114,15 +114,6 @@ form {
 	overflow: visible;
 }
 
-#header {
-	display: block;
-	background: transparent;
-	height: 100px;
-	margin: 0;
-	padding: 0;
-	border: 0;
-}
-
 #bar {
 	background: url(../images/bar_bg.jpg) repeat-x left top;
 	display: block;
@@ -240,40 +231,41 @@ form {
 	color: black;
 }
 
-#content {
+.default {
 	margin: 0px 0px 0px 10px;
 	display: block;
 	text-align: left;
-	overflow: visible;
+	/*overflow: visible;*/
 }
 
-#content h2 {
+.default h2 {
 	display: block;
 	font-family: arial, helvetica, sans;	
 	text-shadow: #ccc 0 0 2px;
 	color: #111;
 }
 
+.default #content {
+	margin-left: 8px;
+}
 
-#content table {
+.default #content table {
 	background: #ffffff;
 	border-spacing: 1px;
 	margin: 10px 10px 10px 0;
 	padding: 0;
 }
 
-#content table th {
+.default #content table th {
 	margin: 0;
 	padding: 3px;
 	vertical-align: top;
 }
 
-#content table td {
+.default #content table td {
 	margin: 0;
 	padding: 3px;
-
 }
-
 
 #ext {
 	clear: left;
