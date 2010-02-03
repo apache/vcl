@@ -454,7 +454,7 @@ sub post_load {
 
 =cut
 
-	if (!$self->wait_for_response(120, 600)) {
+	if (!$self->wait_for_response(120, 900)) {
 		notify($ERRORS{'WARNING'}, 0, "$computer_node_name never responded to SSH");
 		return 0;
 	}
@@ -7411,7 +7411,7 @@ sub get_system32_path {
 	# Check if architecture has previously been determined
 	# If not, check if OS is 32 or 64-bit
 	if ($self->{SYSTEM32_PATH}) {
-		notify($ERRORS{'DEBUG'}, 0, "System32 string previously detected: $self->{SYSTEM32_PATH}");
+		#notify($ERRORS{'DEBUG'}, 0, "System32 string previously detected: $self->{SYSTEM32_PATH}");
 	}
 	elsif ($self->is_64_bit()) {
 		$self->{SYSTEM32_PATH} = 'C:/Windows/Sysnative';
