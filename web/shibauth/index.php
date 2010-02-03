@@ -180,6 +180,9 @@ if($row['shibonly']) {
 else
 	$usernid = getUserlistID($userid);
 
+$affilid = getAffiliationID($affil);
+addLoginLog($userid, 'shibboleth', $affilid, 1);
+
 # save data to shibauth table
 $shibdata = array('Shib-Application-ID' => $_SERVER['Shib-Application-ID'],
                   'Shib-Identity-Provider' => $_SERVER['Shib-Identity-Provider'],
