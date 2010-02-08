@@ -256,6 +256,21 @@ sub grant_access {
 
 } ## end sub grant_access
 
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 post_reserve
+
+ Parameters  : 
+ Returns     : 0,1
+ Description : currently empty to prevent Linux.pm form trying to login 
+		different user
+
+=cut
+sub post_reserve {
+	return 1;
+}
+
 #/////////////////////////////////////////////////////////////////////////////
 
 =head2 sanitize
