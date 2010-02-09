@@ -32,6 +32,23 @@ define("ENVELOPESENDER", "webserver@example.org");   // email address for envelo
 define("COOKIEDOMAIN", ".example.org");       // domain in which cookies are set
 define("HOMEURL", "http://vcl.example.org/"); // url to go to when someone clicks HOME or Logout
 
+$clickThroughText =
+"<center><h2>Installer Agreement</h2></center>
+<p>As the creator of the VCL image, you are responsible for understanding and 
+complying with the terms and conditions of the license agreement(s) for all 
+software installed within the VCL image.</p>
+
+<p>Please note that many licenses for instructional use do not allow research 
+or other use. You should be familiar with these license terms and 
+conditions, and limit the use of your image accordingly.</p>
+
+%s
+
+<p>** If you have software licensing questions or would like assistance 
+regarding specific terms and conditions, please contact 
+<a href=mailto:software@example.org>software@example.org</a>.</p>";
+
+
 #######################   end required modifications ###########################
 
 
@@ -57,22 +74,6 @@ $userlookupUsers = array(1, # admin
 
 $xmlrpcBlockAPIUsers = array(3, # vclsystem
 );
-
-$clickThroughText =
-"<center><h2>Installer Agreement</h2></center>
-<p>As the creator of the VCL image, you are responsible for understanding and 
-complying with the terms and conditions of the license agreement(s) for all 
-software installed within the VCL image.</p>
-
-<p>Please note that many licenses for instructional use do not allow research 
-or other use. You should be familiar with these license terms and 
-conditions, and limit the use of your image accordingly.</p>
-
-%s
-
-<p>** If you have software licensing questions or would like assistance 
-regarding specific terms and conditions, please contact 
-<a href=mailto:software@example.org>software@example.org</a>.</p>";
 
 @require_once(".ht-inc/secrets.php");
 
