@@ -150,13 +150,11 @@ Disable the following scheduled tasks:
 
 Disable the following services:
 
- * IP Helper (iphlpsvc) - Provides tunnel connectivity using IPv6 transition technologies (6to4, ISATAP, Port Proxy, and Teredo), and IP-HTTPS
  * Function Discovery Resource Publication (FDResPub) - Publishes this computer and resources attached to this computer so they can be discovered over the network.  If this service is stopped, network resources will no longer be published and they will not be discovered by other computers on the network.
 
 =cut	
 
 	my @services = (
-		'iphlpsvc',
 		'FDResPub',
 	);
 	for my $service (@services) {

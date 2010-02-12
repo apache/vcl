@@ -29,7 +29,8 @@ VCL::Module::OS::Windows::Version_6.pm - VCL module to support Windows 6.x opera
 =head1 DESCRIPTION
 
  This module provides VCL support for Windows version 6.x operating systems.
- Version 6.x Windows OS's include Windows Vista and Windows Server 2008.
+ Version 6.x Windows OS's include Windows Vista, Windows Server 2008, and
+ Windows 7.
 
 =cut
 
@@ -181,7 +182,7 @@ sub post_load {
 		return;
 	}
 	
-	notify($ERRORS{'DEBUG'}, 0, "beginning Windows version 6 (Vista, Server 2008) post-load tasks");
+	notify($ERRORS{'DEBUG'}, 0, "beginning Windows version 6 post-load tasks");
 
 =item 1
 
@@ -218,7 +219,7 @@ Activate Windows license
 
 =cut
 
-	notify($ERRORS{'DEBUG'}, 0, "Windows version 6 (Vista, Server 2008) post-load tasks complete");
+	notify($ERRORS{'DEBUG'}, 0, "Windows version 6 post-load tasks complete");
 	return 1;
 }
 
@@ -847,8 +848,8 @@ sub firewall_enable_ping {
 	$add_rule_command .= ' ;';
 	
 	$add_rule_command .= ' netsh.exe advfirewall firewall add rule';
-	$add_rule_command .= ' name="VCL: allow ping from any address"';
-	$add_rule_command .= ' description="Allows incoming ping (ICMP type 8) messages from any address"';
+	$add_rule_command .= ' name="VCL: allow ping to/from any address"';
+	$add_rule_command .= ' description="Allows incoming ping (ICMP type 8) messages to/from any address"';
 	$add_rule_command .= ' protocol=icmpv4:8,any';
 	$add_rule_command .= ' action=allow';
 	$add_rule_command .= ' enable=yes';
@@ -910,8 +911,8 @@ sub firewall_enable_ping_private {
 	$add_rule_command .= ' ;';
 	
 	$add_rule_command .= ' netsh.exe advfirewall firewall add rule';
-	$add_rule_command .= ' name="VCL: allow incoming ping to: ' . $private_ip_address . '"';
-	$add_rule_command .= ' description="Allows incoming ping (ICMP type 8) messages to: ' . $private_ip_address . '"';
+	$add_rule_command .= ' name="VCL: allow ping to ' . $private_ip_address . '"';
+	$add_rule_command .= ' description="Allows incoming ping (ICMP type 8) messages to ' . $private_ip_address . '"';
 	$add_rule_command .= ' protocol=icmpv4:8,any';
 	$add_rule_command .= ' action=allow';
 	$add_rule_command .= ' enable=yes';
@@ -966,8 +967,11 @@ sub firewall_disable_ping {
 	# Execute the netsh.exe command
 	my ($netsh_exit_status, $netsh_output) = run_ssh_command($computer_node_name, $management_node_keys, $netsh_command);
 	
-	if (defined($netsh_output)  && @$netsh_output[-1] =~ /(Ok|The object already exists)/i) {
+	if (defined($netsh_output)  && @$netsh_output[-1] =~ /Ok/i) {
 		notify($ERRORS{'OK'}, 0, "configured firewall to disallow ping");
+	}
+	elsif (defined($netsh_output)  && @$netsh_output[-1] =~ /No rules match/i) {
+		notify($ERRORS{'OK'}, 0, "no firewall rules exist which enable ping");
 	}
 	elsif (defined($netsh_exit_status)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to configure firewall to disallow ping, exit status: $netsh_exit_status, output:\n@{$netsh_output}");
@@ -985,9 +989,18 @@ sub firewall_disable_ping {
 
 =head2 firewall_enable_rdp
 
- Parameters  : 
+ Parameters  : Remote IP address (optional) or 'private' (optional)
  Returns     : 1 if succeeded, 0 otherwise
- Description : 
+ Description : Adds Windows firewall rules to allow RDP traffic. There are 3
+               modes:
+               1. No argument is passed: RDP is allowed to/from any IP address
+               
+               2. IP address argument is passed: RDP is allowed from the remote
+               IP address specified and to the local private IP address. The
+               argument can be a single IP address or in CIDR format.
+               
+               3. The string 'private' is passed: RDP is allowed only to the
+               local private IP address.
 
 =cut
 
@@ -998,20 +1011,49 @@ sub firewall_enable_rdp {
 		return;
 	}
 	
-	# Check if the remote IP was passed as an argument
-	my $remote_ip = shift;
-	if (!defined($remote_ip)) {
-		$remote_ip = 'any';
-	}
-	elsif ($remote_ip !~ /[\d\.\/]/) {
-		notify($ERRORS{'WARNING'}, 0, "remote IP address argument is not a valid IP address: $remote_ip");
-		$remote_ip = 'any';
-	}
-	
 	my $management_node_keys     = $self->data->get_management_node_keys();
 	my $computer_node_name       = $self->data->get_computer_node_name();
 	
-	# First delete any rules which allow ping and then add a new rule
+	my $remote_ip;
+	my $rule_name;
+	my $rule_description;
+	
+	# Check if 'private' or IP address argument was passed
+	my $argument = shift;
+	if ($argument) {
+		# Check if argument is an IP address
+		if ($argument =~ /^[\d\.\/]+$/) {
+			$remote_ip = $argument;
+			notify($ERRORS{'DEBUG'}, 0, "opening RDP for remote IP address: $remote_ip");
+			$rule_name = "VCL: allow RDP port 3389 from $remote_ip";
+			$rule_description = "Allows incoming TCP port 3389 traffic from $remote_ip";
+		}
+		elsif ($argument eq 'private') {
+			notify($ERRORS{'DEBUG'}, 0, "opening RDP for private IP address only");
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "argument may only be 'private' or an IP address in the form xxx.xxx.xxx.xxx or xxx.xxx.xxx.xxx/yy");
+			return;
+		}
+	}
+	else {
+		# No argument was passed, RDP will be opened to/from any address
+		notify($ERRORS{'DEBUG'}, 0, "opening RDP to/from any IP address");
+		$remote_ip = 'any';
+		$rule_name = "VCL: allow RDP port 3389 to/from any address";
+		$rule_description = "Allows incoming TCP port 3389 traffic to/from any address";
+	}
+	
+	# Get the computer's private IP address
+	my $private_ip_address = $self->get_private_ip_address();
+	if (!$private_ip_address) {
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve private IP address");
+		if ($argument && $argument eq 'private') {
+			notify($ERRORS{'WARNING'}, 0, "failed to add firewall rule to enable RDP to private IP address");
+			return;
+		}
+	}
+	
 	my $add_rule_command;
 	
 	# Set the key to allow remote connections whenever enabling RDP
@@ -1020,27 +1062,48 @@ sub firewall_enable_rdp {
 	# Set the key to allow connections from computers running any version of Remote Desktop
 	$add_rule_command .= 'reg.exe ADD "HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\Terminal Server\\WinStations\\RDP-Tcp" /t REG_DWORD /v UserAuthentication /d 0 /f ; ';
 	
-	$add_rule_command .= 'netsh.exe advfirewall firewall delete rule';
-	$add_rule_command .= ' name=all';
-	$add_rule_command .= ' dir=in';
-	$add_rule_command .= ' protocol=TCP';
-	$add_rule_command .= ' localport=3389';
-	$add_rule_command .= ' ;';
+	# First delete any rules which allow ping and then add a new rule
+	$add_rule_command .= "netsh.exe advfirewall firewall delete rule";
+	$add_rule_command .= " name=all";
+	$add_rule_command .= " dir=in";
+	$add_rule_command .= " protocol=TCP";
+	$add_rule_command .= " localport=3389";
+	$add_rule_command .= " ;";
 	
-	$add_rule_command .= ' netsh.exe advfirewall firewall add rule';
-	$add_rule_command .= ' name="VCL: allow RDP from address: ' . $remote_ip . '"';
-	$add_rule_command .= ' description="Allows incoming TCP port 3389 traffic from address: ' . $remote_ip . '"';
-	$add_rule_command .= ' protocol=TCP';
-	$add_rule_command .= ' action=allow';
-	$add_rule_command .= ' enable=yes';
-	$add_rule_command .= ' dir=in';
-	$add_rule_command .= ' localip=any';
-	$add_rule_command .= ' localport=3389';
-	$add_rule_command .= ' remoteip=' . $remote_ip;
+	# Add the rule to open RDP for the private IP address if the private IP address was found
+	# No need to add the rule if the remote IP is any because it will be opened universally
+	if ($private_ip_address && (!$remote_ip || ($remote_ip && $remote_ip ne 'any'))) {
+		$add_rule_command .= " netsh.exe advfirewall firewall add rule";
+		$add_rule_command .= " name=\"VCL: allow RDP port 3389 to $private_ip_address\"";
+		$add_rule_command .= " description=\"Allows incoming RDP (TCP port 3389) traffic to $private_ip_address\"";
+		$add_rule_command .= " protocol=TCP";
+		$add_rule_command .= " localport=3389";
+		$add_rule_command .= " action=allow";
+		$add_rule_command .= " enable=yes";
+		$add_rule_command .= " dir=in";
+		$add_rule_command .= " localip=$private_ip_address";
+		$add_rule_command .= " ;";
+	}
+	
+	# Add the rule to open RDP for the remote public IP address
+	if ($remote_ip) {
+		$add_rule_command .= " netsh.exe advfirewall firewall add rule";
+		$add_rule_command .= " name=\"$rule_name\"";
+		$add_rule_command .= " description=\"$rule_description\"";
+		$add_rule_command .= " protocol=TCP";
+		$add_rule_command .= " action=allow";
+		$add_rule_command .= " enable=yes";
+		$add_rule_command .= " dir=in";
+		$add_rule_command .= " localip=any";
+		$add_rule_command .= " localport=3389";
+		$add_rule_command .= " remoteip=" . $remote_ip;
+	}
+	
+	# Set $remote_ip for output messages if it isn't defined
+	$remote_ip = 'private only' if !$remote_ip;
 	
 	# Add the firewall rule
 	my ($add_rule_exit_status, $add_rule_output) = run_ssh_command($computer_node_name, $management_node_keys, $add_rule_command);
-	
 	if (defined($add_rule_output)  && @$add_rule_output[-1] =~ /(Ok|The object already exists)/i) {
 		notify($ERRORS{'OK'}, 0, "added firewall rule to enable RDP from $remote_ip");
 	}
@@ -1073,58 +1136,7 @@ sub firewall_enable_rdp_private {
 		return;
 	}
 	
-	my $management_node_keys     = $self->data->get_management_node_keys();
-	my $computer_node_name       = $self->data->get_computer_node_name();
-	
-	# Get the computer's private IP address
-	my $private_ip_address = $self->get_private_ip_address();
-	if (!$private_ip_address) {
-		notify($ERRORS{'WARNING'}, 0, "unable to retrieve private IP address");
-		return;
-	}
-	
-	# First delete any rules which allow RDP and then add a new rule
-	my $add_rule_command;
-	
-	# Set the key to allow remote connections whenever enabling RDP
-	$add_rule_command .= 'reg.exe ADD "HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\Terminal Server" /t REG_DWORD /v fDenyTSConnections /d 0 /f ; ';
-	
-	# Set the key to allow connections from computers running any version of Remote Desktop
-	$add_rule_command .= 'reg.exe ADD "HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\Terminal Server\\WinStations\\RDP-Tcp" /t REG_DWORD /v UserAuthentication /d 0 /f ; ';
-	
-	$add_rule_command .= 'netsh.exe advfirewall firewall delete rule';
-	$add_rule_command .= ' name=all';
-	$add_rule_command .= ' dir=in';
-	$add_rule_command .= ' protocol=TCP';
-	$add_rule_command .= ' localport=3389';
-	$add_rule_command .= ' ;';
-	
-	$add_rule_command .= ' netsh.exe advfirewall firewall add rule';
-	$add_rule_command .= ' name="VCL: allow RDP port 3389 to: ' . $private_ip_address . '"';
-	$add_rule_command .= ' description="Allows incoming RDP (TCP port 3389) traffic to: ' . $private_ip_address . '"';
-	$add_rule_command .= ' protocol=TCP';
-	$add_rule_command .= ' localport=3389';
-	$add_rule_command .= ' action=allow';
-	$add_rule_command .= ' enable=yes';
-	$add_rule_command .= ' dir=in';
-	$add_rule_command .= ' localip=' . $private_ip_address;
-	
-	# Add the firewall rule
-	my ($add_rule_exit_status, $add_rule_output) = run_ssh_command($computer_node_name, $management_node_keys, $add_rule_command);
-	
-	if (defined($add_rule_output)  && @$add_rule_output[-1] =~ /(Ok|The object already exists)/i) {
-		notify($ERRORS{'OK'}, 0, "added firewall rule to enable RDP to: $private_ip_address");
-	}
-	elsif (defined($add_rule_exit_status)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to add firewall rule to enable RDP to: $private_ip_address, exit status: $add_rule_exit_status, output:\n@{$add_rule_output}");
-		return;
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to add firewall rule to enable RDP to: $private_ip_address");
-		return;
-	}
-	
-	return 1;
+	return $self->firewall_enable_rdp('private');
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -1193,43 +1205,97 @@ sub firewall_enable_ssh {
 		return;
 	}
 	
+	# Check if 'private' argument was passed
+	my $enable_private = shift;
+	if ($enable_private && $enable_private !~ /private/i) {
+		notify($ERRORS{'WARNING'}, 0, "argument may only be the string 'private': $enable_private");
+		return;
+	}
+	
+	my $rule_name;
+	my $rule_description;
+	my $rule_localip;
+	if ($enable_private) {
+		# Get the computer's private IP address
+		my $private_ip_address = $self->get_private_ip_address();
+		if (!$private_ip_address) {
+			notify($ERRORS{'WARNING'}, 0, "unable to retrieve private IP address");
+			return;
+		}
+		
+		$rule_name = "VCL: allow SSH port 22 to $private_ip_address";
+		$rule_description = "Allows incoming SSH (TCP port 22) traffic to $private_ip_address";
+		$rule_localip = $private_ip_address;
+	}
+	else {
+		$rule_name = "VCL: allow SSH port 22 to/from any address";
+		$rule_description = "Allows incoming SSH (TCP port 22) traffic to/from any address";
+		$rule_localip = "any";
+	}
+	
 	my $management_node_keys     = $self->data->get_management_node_keys();
 	my $computer_node_name       = $self->data->get_computer_node_name();
 	
-	# First delete any rules which allow ping and then add a new rule
-	my $add_rule_command = '/bin/cygstart.exe ';
+	# Assemble a chain of commands
+	my $add_rule_command;
 	
-	$add_rule_command .= 'netsh.exe advfirewall firewall delete rule';
-	$add_rule_command .= ' name=all';
-	$add_rule_command .= ' dir=in';
-	$add_rule_command .= ' protocol=TCP';
-	$add_rule_command .= ' localport=22';
-	$add_rule_command .= ' ;';
+	# Get the firewall state - "ON" or "OFF"
+	# Turn firewall off before altering SSH exceptions or command may hang
+	my $firewall_state = $self->get_firewall_state() || 'ON';
+	if ($firewall_state eq 'ON') {
+		notify($ERRORS{'DEBUG'}, 0, "firewall is on, it will be turned off while SSH port exceptions are altered");
+		$add_rule_command .= 'netsh.exe advfirewall set currentprofile state off ; sleep 1 ; ';
+	}
 	
-	$add_rule_command .= ' netsh.exe advfirewall firewall add rule';
-	$add_rule_command .= ' name="VCL: allow SSH port 22 from any address"';
-	$add_rule_command .= ' description="Allows incoming SSH (TCP port 22) traffic from any address"';
-	$add_rule_command .= ' protocol=TCP';
-	$add_rule_command .= ' localport=22';
-	$add_rule_command .= ' action=allow';
-	$add_rule_command .= ' enable=yes';
-	$add_rule_command .= ' dir=in';
-	$add_rule_command .= ' localip=any';
-	$add_rule_command .= ' remoteip=any';
+	# The existing matching rules must be deleted first or they will remain in effect
+	$add_rule_command .= "netsh.exe advfirewall firewall delete rule";
+	$add_rule_command .= " name=all";
+	$add_rule_command .= " dir=in";
+	$add_rule_command .= " protocol=TCP";
+	$add_rule_command .= " localport=22";
+	$add_rule_command .= " ;";
+	
+	$add_rule_command .= " netsh.exe advfirewall firewall add rule";
+	$add_rule_command .= " name=\"$rule_name\"";
+	$add_rule_command .= " description=\"$rule_description\"";
+	$add_rule_command .= " protocol=TCP";
+	$add_rule_command .= " localport=22";
+	$add_rule_command .= " action=allow";
+	$add_rule_command .= " enable=yes";
+	$add_rule_command .= " dir=in";
+	$add_rule_command .= " localip=$rule_localip";
+	$add_rule_command .= " remoteip=any";
 	
 	# Add the firewall rule
 	my ($add_rule_exit_status, $add_rule_output) = run_ssh_command($computer_node_name, $management_node_keys, $add_rule_command);
 	
 	if (defined($add_rule_output)  && @$add_rule_output[-1] =~ /(Ok|The object already exists)/i) {
-		notify($ERRORS{'OK'}, 0, "added firewall rule to enable SSH from any address");
+		notify($ERRORS{'OK'}, 0, "added firewall rule to enable SSH to address: $rule_localip");
 	}
 	elsif (defined($add_rule_exit_status)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to add firewall rule to enable SSH from any address, exit status: $add_rule_exit_status, output:\n@{$add_rule_output}");
+		notify($ERRORS{'WARNING'}, 0, "failed to add firewall rule to enable SSH to address: $rule_localip, exit status: $add_rule_exit_status, output:\n@{$add_rule_output}");
 		return;
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to add firewall rule to enable SSH from any address");
+		notify($ERRORS{'WARNING'}, 0, "failed to add firewall rule to enable SSH to address: $rule_localip");
 		return;
+	}
+	
+	# Turn the firewall back on after SSH exceptions are set
+	if ($firewall_state eq 'ON') {
+		my $firewall_enable_command = 'netsh.exe advfirewall set currentprofile state on';
+		my ($firewall_enable_exit_status, $firewall_enable_output) = run_ssh_command($computer_node_name, $management_node_keys, $firewall_enable_command);
+		if (defined($firewall_enable_output)  && @$firewall_enable_output[-1] =~ /Ok/i) {
+			notify($ERRORS{'OK'}, 0, "turned on firewall after turning it off to alter SSH port exceptions");
+		}
+		elsif (defined($firewall_enable_exit_status)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to turn on firewall after turning it off to alter SSH port exceptions, exit status: $firewall_enable_exit_status, output:\n@{$firewall_enable_output}");
+			return;
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to turn on firewall after turning it off to alter SSH port exceptions");
+			return;
+		}
 	}
 	
 	return 1;
@@ -1252,59 +1318,70 @@ sub firewall_enable_ssh_private {
 		return;
 	}
 	
+	return $self->firewall_enable_ssh('private');
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_firewall_state
+
+ Parameters  : None
+ Returns     : If successful: string "ON" or "OFF"
+ Description : Determines if the Windows firewall is on or off.  Returns "ON"
+               if either the Public or Private firewall profile is on. Returns
+               "OFF" only if all current firewall profiles are off.
+
+=cut
+
+sub get_firewall_state {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
 	my $management_node_keys     = $self->data->get_management_node_keys();
 	my $computer_node_name       = $self->data->get_computer_node_name();
 	
-	# Get the computer's private IP address
-	my $private_ip_address = $self->get_private_ip_address();
-	if (!$private_ip_address) {
-		notify($ERRORS{'WARNING'}, 0, "unable to retrieve private IP address");
-		return;
+	# Run netsh.exe to get the state of the current firewall profile
+	my $netsh_command = 'netsh.exe advfirewall show currentprofile state';
+	my ($netsh_exit_status, $netsh_output) = run_ssh_command($computer_node_name, $management_node_keys, $netsh_command, '', '', 0);
+	if (defined($netsh_output)) {
+		notify($ERRORS{'DEBUG'}, 0, "retrieved firewall state");
 	}
-	
-	# First delete any rules which allow ping and then add a new rule
-	my $add_rule_command = '/bin/cygstart.exe ';
-	
-	$add_rule_command .= 'netsh.exe advfirewall firewall delete rule';
-	$add_rule_command .= ' name=all';
-	$add_rule_command .= ' dir=in';
-	$add_rule_command .= ' protocol=TCP';
-	$add_rule_command .= ' localport=22';
-	$add_rule_command .= ' ;';
-	
-	$add_rule_command .= ' netsh.exe advfirewall firewall add rule';
-	$add_rule_command .= ' name="VCL: allow SSH port 22 to: ' . $private_ip_address . '"';
-	$add_rule_command .= ' description="Allows incoming SSH (TCP port 22) traffic to: ' . $private_ip_address . '"';
-	$add_rule_command .= ' protocol=TCP';
-	$add_rule_command .= ' localport=22';
-	$add_rule_command .= ' action=allow';
-	$add_rule_command .= ' enable=yes';
-	$add_rule_command .= ' dir=in';
-	$add_rule_command .= ' localip=' . $private_ip_address;
-	
-	# Add the firewall rule
-	my ($add_rule_exit_status, $add_rule_output) = run_ssh_command($computer_node_name, $management_node_keys, $add_rule_command);
-	
-	if (defined($add_rule_output)  && @$add_rule_output[-1] =~ /(Ok|The object already exists)/i) {
-		notify($ERRORS{'OK'}, 0, "added firewall rule to enable SSH to: $private_ip_address");
-	}
-	elsif (defined($add_rule_exit_status)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to add firewall rule to enable SSH to: $private_ip_address, exit status: $add_rule_exit_status, output:\n@{$add_rule_output}");
+	elsif (defined($netsh_exit_status)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve firewall state, exit status: $netsh_exit_status, output:\n@{$netsh_output}");
 		return;
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to add firewall rule to enable SSH to: $private_ip_address");
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve firewall state");
 		return;
 	}
 	
-	return 1;
+	# Get the lines containing 'State'
+	# There are multiple for the Private and Public profiles
+	my @state_lines = grep(/State/, @$netsh_output);
+	if (!@state_lines) {
+		notify($ERRORS{'WARNING'}, 0, "unable to find 'State' line in output:\n" . join("\n", @$netsh_output));
+		return;
+	}
+	
+	# Loop through lines, if any contain "ON", return "ON"
+	for my $state_line (@state_lines) {
+		if ($state_line =~ /on/i) {
+			notify($ERRORS{'OK'}, 0, "returning firewall state: ON");
+			return "ON";
+		}
+		elsif ($state_line !~ /off/i) {
+			notify($ERRORS{'WARNING'}, 0, "firewall state line does not contain ON or OFF");
+			return;
+		}
+	}
+	
+	# No state lines were found containing "ON", return "OFF"
+	notify($ERRORS{'OK'}, 0, "returning firewall state: OFF");
+	return "OFF";
 }
-
-##############################################################################
-
-=head1 UTILITY FUNCTIONS
-
-=cut
 
 #/////////////////////////////////////////////////////////////////////////////
 

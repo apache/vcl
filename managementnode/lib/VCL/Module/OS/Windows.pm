@@ -258,6 +258,26 @@ sub pre_capture {
 
 =item *
 
+ Disable hibernation
+
+=cut
+
+	if (!$self->disable_hibernation()) {
+		notify($ERRORS{'WARNING'}, 0, "unable to disable hibernation");
+	}
+
+=item *
+
+ Disable Windows Customer Experience Improvement program
+
+=cut
+
+	if (!$self->disable_ceip()) {
+		notify($ERRORS{'WARNING'}, 0, "unable to disable Windows Customer Experience Improvement program");
+	}
+
+=item *
+
  Disable Internet Explorer configuration page
 
 =cut
@@ -2280,7 +2300,7 @@ sub reg_add {
 	}
 	
 	my $registry_data = shift;
-	if (!defined($registry_data) || !$registry_data) {
+	if (!defined($registry_data)) {
 		notify($ERRORS{'WARNING'}, 0, "registry data was not passed correctly as an argument");
 		return;
 	}
@@ -3315,7 +3335,7 @@ sub set_service_credentials {
 
 =head2 get_service_list
 
- Parameters  : $service_name, $username, $password
+ Parameters  : 
  Returns     : 
  Description : 
 
@@ -7573,6 +7593,7 @@ Windows Registry Editor Version 5.00
 
 [HKEY_LOCAL_MACHINE\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\SystemRestore]
 "DisableConfig"=dword:00000001
+"DisableSR"=dword:00000001
 EOF
 
 	# Import the string into the registry
@@ -8295,6 +8316,93 @@ sub set_device_path_key {
 	}
 	else {
 		notify($ERRORS{'WARNING'}, 0, "failed to set the DevicePath registry key");
+		return;
+	}
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 disable_hibernation
+
+ Parameters  : None
+ Returns     : If successful: true
+               If failed: false
+ Description : Disables hibernation mode.
+
+=cut
+
+sub disable_hibernation {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a VCL::Module module object method");
+		return;	
+	}
+	
+	my $management_node_keys = $self->data->get_management_node_keys();
+	my $computer_node_name   = $self->data->get_computer_node_name();
+
+	# Run powercfg.exe to disable hibernation
+	my $powercfg_command = 'powercfg.exe -HIBERNATE OFF';
+	my ($powercfg_exit_status, $powercfg_output) = run_ssh_command($computer_node_name, $management_node_keys, $powercfg_command, '', '', 1);
+	if (defined($powercfg_exit_status) && $powercfg_exit_status == 0) {
+		notify($ERRORS{'OK'}, 0, "disabled hibernation");
+	}
+	elsif ($powercfg_exit_status) {
+		notify($ERRORS{'WARNING'}, 0, "failed to disable hibernation, exit status: $powercfg_exit_status, output:\n" . join("\n", @$powercfg_output));
+		return;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to disable hibernation");
+		return;
+	}
+	
+	# Delete hiberfil.sys
+	if (!$self->delete_file('$SYSTEMDRIVE/hiberfil.sys')) {
+		notify($ERRORS{'WARNING'}, 0, "failed to disable hibernation, hiberfil.sys could not be deleted");
+		return;
+	}
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 disable_ceip
+
+ Parameters  : None
+ Returns     : If successful: true
+               If failed: false
+ Description : Disables the Windows Customer Experience Improvement Program
+               features.
+
+=cut
+
+sub disable_ceip {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Attempt to set the CEIPEnable key
+	my $registry_key_software = 'HKEY_LOCAL_MACHINE\\Software\\Microsoft\\SQMClient\\Windows';
+	if ($self->reg_add($registry_key_software, 'CEIPEnable', 'REG_DWORD', 0)) {
+		notify($ERRORS{'OK'}, 0, "set the CEIPEnable software registry key to 0");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to set the CEIPEnable registry key to 0");
+		return;
+	}
+	
+	# Attempt to set the CEIPEnable policy key
+	my $registry_key_policy = 'HKEY_LOCAL_MACHINE\\Software\\Policies\\Microsoft\\SQMClient\\Windows';
+	if ($self->reg_add($registry_key_policy, 'CEIPEnable', 'REG_DWORD', 0)) {
+		notify($ERRORS{'OK'}, 0, "set the CEIPEnable policy registry key to 0");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to set the CEIPEnable policy registry key to 0");
 		return;
 	}
 	
