@@ -460,6 +460,23 @@ CREATE TABLE IF NOT EXISTS `log` (
 
 -- --------------------------------------------------------
 
+--
+-- Table structure for table `loginlog`
+--
+
+CREATE TABLE IF NOT EXISTS `loginlog` (
+  `user` varchar(50) NOT NULL,
+  `authmech` varchar(30) NOT NULL,
+  `affiliationid` mediumint(8) unsigned NOT NULL,
+  `timestamp` timestamp NOT NULL default CURRENT_TIMESTAMP,
+  `passfail` tinyint(1) unsigned NOT NULL default '0',
+  `remoteIP` varchar(15) NOT NULL,
+  KEY `user` (`user`),
+  KEY `affiliationid` (`affiliationid`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+
+-- --------------------------------------------------------
+
 -- 
 -- Table structure for table `managementnode`
 -- 
