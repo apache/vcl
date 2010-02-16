@@ -1,0 +1,17 @@
+.dijitTreeLabel {
+	margin: 0;
+}
+.default .dijitTreeIcon {
+	width: 0;
+	height: 0;
+}
+.default .dijitFolderOpened {
+	background-image: none;
+}
+.default .dijitFolderClosed {
+	background-image: none;
+}
+.default .dijitTreeNodeSelected .dijitTreeLabel {
+	background-color: #678DB2;
+	color: white;
+}
