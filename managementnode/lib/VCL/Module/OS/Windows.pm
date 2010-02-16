@@ -4312,6 +4312,8 @@ sub firewall_enable_rdp {
 		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to configure firewall to allow RDP from $remote_ip");
 		return;
 	}
+	
+	return 1;
 } ## end sub firewall_enable_rdp
 
 #/////////////////////////////////////////////////////////////////////////////
