@@ -86,7 +86,8 @@ function isChildFocused(focusid, nodes) {
 		if(nodes[i].name == focusid)
 			return 1;
 		else if(nodes[i].children)
-			return isChildFocused(focusid, nodes[i].children);
+			if(isChildFocused(focusid, nodes[i].children))
+				return 1;
 	}
 	return 0;
 }
