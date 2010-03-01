@@ -248,6 +248,16 @@ sub pre_capture {
 
 =item *
 
+ Disable Shutdown Event Tracker
+
+=cut
+
+	if (!$self->disable_shutdown_event_tracker()) {
+		notify($ERRORS{'WARNING'}, 0, "unable to disable shutdown event tracker");
+	}
+
+=item *
+
  Disable System Restore
 
 =cut
@@ -4525,25 +4535,36 @@ sub get_network_configuration {
 	if (!$self->{network_configuration}) {
 		notify($ERRORS{'DEBUG'}, 0, "attempting to retrieve network configuration");
 		
-		# Run ipconfig /all
-		my ($exit_status, $output) = run_ssh_command($computer_node_name, $management_node_keys, '$SYSTEMROOT/System32/ipconfig.exe /all', '', '', 1);
-		if (defined($exit_status) && $exit_status == 0) {
-			notify($ERRORS{'DEBUG'}, 0, "ran ipconfig");
-		}
-		elsif (defined($exit_status)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to run ipconfig, exit status: $exit_status, output:\n@{$output}");
-			return 0;
-		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "failed to run the SSH command to run ipconfig");
-			return;
+		# Run ipconfig /all, try twice in case it fails the first time
+		my $ipconfig_attempt = 0;
+		my $ipconfig_attempt_limit = 2;
+		my ($ipconfig_exit_status, $ipconfig_output);
+		while (++$ipconfig_attempt) {
+			($ipconfig_exit_status, $ipconfig_output) = run_ssh_command($computer_node_name, $management_node_keys, '$SYSTEMROOT/System32/ipconfig.exe /all', '', '', 1);
+			if (defined($ipconfig_exit_status) && $ipconfig_exit_status == 0) {
+				notify($ERRORS{'DEBUG'}, 0, "ran ipconfig");
+				last;
+			}
+			elsif (defined($ipconfig_exit_status)) {
+				notify($ERRORS{'WARNING'}, 0, "attempt $ipconfig_attempt: failed to run ipconfig, exit status: $ipconfig_exit_status, output:\n@{$ipconfig_output}");
+			}
+			else {
+				notify($ERRORS{'WARNING'}, 0, "attempt $ipconfig_attempt: failed to run the SSH command to run ipconfig");
+			}
+			
+			if ($ipconfig_attempt >= $ipconfig_attempt_limit) {
+				notify($ERRORS{'WARNING'}, 0, "failed to get network configuration, made $ipconfig_attempt attempts to run ipconfig");
+				return;
+			}
+			
+			sleep 2;
 		}
 	
 		my $interface_name;
 		my $previous_ip = 0;
 		my $setting;
 		
-		for my $line (@{$output}) {
+		for my $line (@{$ipconfig_output}) {
 			# Find beginning of interface section
 			if ($line =~ /\A[^\s].*adapter (.*):\s*\Z/i) {
 				# Get the interface name
@@ -4587,15 +4608,12 @@ sub get_network_configuration {
 				$value =~ s/[^\.\d]//g;
 				$network_configuration{$interface_name}{$setting}{$value} = '';
 				$previous_ip = $value;
-				#notify($ERRORS{'OK'}, 0, "$interface_name:$setting = $network_configuration{$interface_name}{$setting}{$value}");
 			}
 			elsif ($setting =~ /subnet_mask/) {
 				$network_configuration{$interface_name}{ip_address}{$previous_ip} = $value;
-				#notify($ERRORS{'OK'}, 0, "$interface_name:$setting($previous_ip) = $network_configuration{$interface_name}{ip_address}{$previous_ip}");
 			}
 			else {
 				$network_configuration{$interface_name}{$setting} = $value;
-				#notify($ERRORS{'OK'}, 0, "$interface_name:$setting = $network_configuration{$interface_name}{$setting}");
 			}
 		}
 		
@@ -4607,10 +4625,11 @@ sub get_network_configuration {
 		%network_configuration = %{$self->{network_configuration}};
 	}
 
-#print "\n\n" . format_data(\%network_configuration) . "\n\n";	
-
 	# 'public' or 'private' wasn't specified, return all network interface information
 	if (!$network_type) {
+		for my $interface_name (keys(%network_configuration)) {
+			notify($ERRORS{'DEBUG'}, 0, "interface: $interface_name\n" . format_data($network_configuration{$interface_name}{ip_address}));
+		}
 		return \%network_configuration;
 	}
 	
@@ -7085,7 +7104,6 @@ sub set_static_public_address {
 		}
 		else {
 			notify($ERRORS{'WARNING'}, 0, "attempt $address_attempts/$max_attempts: failed to run ssh command to set static public IP address to $public_ip_address");
-			return;
 		}
 		
 		# Check if max attempts has been reached.
@@ -8405,6 +8423,41 @@ sub disable_ceip {
 	}
 	else {
 		notify($ERRORS{'WARNING'}, 0, "failed to set the CEIPEnable policy registry key to 0");
+		return;
+	}
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 disable_shutdown_event_tracker
+
+ Parameters  : None
+ Returns     : If successful: true
+               If failed: false
+ Description : Disables the Shutdown Event Tracker. This is enabled by default
+					on Windows Server 2003. It is what causes a box to appear which
+					asks for a reason when the computer is shutdown or rebooted. The
+					box also appears during login if the computer is shut down
+					unexpectedly. This causes the autologon sequence to break.
+
+=cut
+
+sub disable_shutdown_event_tracker {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Attempt to set the ShutdownReasonOn key
+	my $registry_key_software = 'HKEY_LOCAL_MACHINE\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\Reliability';
+	if ($self->reg_add($registry_key_software, 'ShutdownReasonOn', 'REG_DWORD', 0)) {
+		notify($ERRORS{'OK'}, 0, "set the ShutdownReasonOn software registry key to 0");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to set the ShutdownReasonOn registry key to 0");
 		return;
 	}
 	
