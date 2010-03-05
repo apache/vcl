@@ -254,15 +254,9 @@ our @EXPORT = qw(
 #our %ERRORS=('DEPENDENT'=>4,'UNKNOWN'=>3,'OK'=>0,'WARNING'=>1,'CRITICAL'=>2,'MAILMASTERS'=>5);
 
 INIT {
-	print STDOUT <<"END";
-======================================================================
-VCL Management Node Daemon (vcld)
-======================================================================
-END
-
 	# Parse config file and set globals
 	our ($JABBER, $jabServer, $jabUser, $jabPass, $jabResource, $jabPort) = 0;
-	our ($LOGFILE, $PIDFILE, $PROCESSNAME) = 0;
+	our ($LOGFILE, $PIDFILE, $PROCESSNAME);
 	our ($DATABASE, $SERVER, $WRTUSER, $WRTPASS, $LockerRdUser, $rdPass) = 0;
 	our ($SYSADMIN, $SHARED_MAILBOX, $DEFAULTURL, $DEFAULTHELPEMAIL, $RETURNPATH) = 0;
 	our ($XCATROOT) = 0;
@@ -333,7 +327,7 @@ END
 			$l =~ s/[\r\n]*$//;
 			
 			#logfile
-			if ($l =~ /^log=(.*)/ && (!defined($LOGFILE) || !($LOGFILE))) {
+			if ($l =~ /^log=(.*)/ && (!defined($LOGFILE))) {
 				chomp($l);
 				$LOGFILE = $1;
 			}
@@ -633,25 +627,11 @@ END
 	if(!defined($VMWARE_MAC_ETH1_GENERATED)){
 		$VMWARE_MAC_ETH1_GENERATED = 0;
 	}
+	
+	# Can't be both daemon mode and setup mode, use setup if both are set
+	$DAEMON_MODE = 0 if ($DAEMON_MODE && $SETUP_MODE);
 
-	# Get the remaining command line parameters
-	#$VERBOSE = $OPTIONS{verbose} if (defined($OPTIONS{verbose} && $OPTIONS{verbose}));
-	#$LOGFILE = $OPTIONS{logfile} if (defined($OPTIONS{logfile} && $OPTIONS{logfile}));
-	#$SETUP_MODE = $OPTIONS{setup} if (defined($OPTIONS{setup} && $OPTIONS{setup}));
-
-	print STDOUT <<EOF
-bin path:     $BIN_PATH
-process name: $PROCESSNAME
-config file:  $CONF_FILE_PATH
-log file:     $LOGFILE
-pid file:     $PIDFILE
-daemon mode:  $DAEMON_MODE
-setup mode:   $SETUP_MODE
-verbose mode: $VERBOSE
-======================================================================
-EOF
-
-} ## end BEGIN
+} ## end INIT
 
 
 #use Net::Jabber qw(Client);
@@ -679,7 +659,9 @@ our $CONF_FILE_PATH;
 our $WINDOWS_ROOT_PASSWORD;
 our ($XMLRPC_USER, $XMLRPC_PASS, $XMLRPC_URL);
 our $NOT_STANDALONE;
+our $DAEMON_MODE;
 our $SETUP_MODE;
+our $BIN_PATH;
 
 sub makedatestring;
 
@@ -695,6 +677,7 @@ sub makedatestring;
 
 sub help {
 	my $message = <<"END";
+============================================================================
 Please read the README and INSTALLATION files in the source directory.
 Documentation is available at http://cwiki.apache.org/VCL.
 
@@ -704,7 +687,7 @@ Command line options:
 -verbose     | Run vcld in verbose mode
 -debug       | Run vcld in non-daemon mode
 -help        | Display this help information
-======================================================================
+============================================================================
 END
 
 	print $message;
@@ -723,12 +706,31 @@ END
 
 sub preplogfile {
 	my $currenttime = makedatestring();
-	my ($package, $filename, $line, $sub) = caller(0);
-	$filename =~ s(^.*/)();    #remove leading path from filename
-	                           # print initial info to log file
-	print STDERR "===========================================================\n";
-	print STDERR "OUTPUT for $filename run on $currenttime\n";
-	print STDERR "===========================================================\n";
+	
+	#Print the vcld process info
+	my $process_info = <<EOF;
+============================================================================
+VCL Management Node Daemon (vcld) | $currenttime
+============================================================================
+bin path:      $BIN_PATH
+config file:   $CONF_FILE_PATH
+log file:      $LOGFILE
+pid file:      $PIDFILE
+daemon mode:   $DAEMON_MODE
+setup mode:    $SETUP_MODE
+verbose mode:  $VERBOSE
+============================================================================
+EOF
+
+	if ($LOGFILE) {
+		if (!open(LOGFILE, ">>$LOGFILE")) {
+			die "Failed to open log file: $LOGFILE";
+		}
+		print LOGFILE $process_info;
+		close(LOGFILE);
+	}
+
+	print STDOUT $process_info;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -743,7 +745,7 @@ sub preplogfile {
 
 sub notify {
 	my $error  = shift;
-	my $LOG    = shift;
+	my $log    = shift;
 	my $string = shift;
 	my @data   = @_;
 
@@ -752,15 +754,11 @@ sub notify {
 
 	# Get the current time
 	my $currenttime = makedatestring();
-
-	open(ORIGOUT, ">&STDOUT");
-	open(ORIGERR, ">&STDERR");
-
-	# Redirect STDOUT and STDERR to the log file
-	$LOG = $LOGFILE if (!$LOG);
-	open(STDOUT, ">>$LOG") if $LOG;
-	open(STDERR, ">>$LOG") if $LOG;
-
+	
+	# Open the log file for writing if passed as an argument or set globally
+	# If not, print to STDOUT
+	$log = $LOGFILE if (!$log);
+	
 	# Get info about the subroutine which called this subroutine
 	my ($package, $filename, $line, $sub) = caller(0);
 
@@ -822,11 +820,11 @@ sub notify {
 
 	# Assemble an email message body if CRITICAL
 	my $body;
-	if ($error == 2 ) {
+	if ($error == 2) {
 		# Get the previous several log file entries for this process
 		my $log_history_count = 100;
 		my $log_history       = "RECENT LOG ENTRIES FOR THIS PROCESS:\n";
-		$log_history .= `grep "|$PID|" $LOG | tail -n $log_history_count`;
+		$log_history .= `grep "|$PID|" $log | tail -n $log_history_count` if $log;
 		chomp $log_history;
 
 		# Assemble the e-mail message body
@@ -891,19 +889,17 @@ END
 	# Add the process identifier to every line of the log message
 	chomp $log_message;
 	$log_message =~ s/\n([^\n])/\n|$process_identifier| $1/g;
-
-	# Print the log message to the log file
-	print STDOUT "$log_message\n";
 	
-	close(STDOUT);
-	close(STDERR);
-	
-	open(STDERR, ">&ORIGERR");
-	open(STDOUT, ">&ORIGOUT");
-	
-	close (ORIGERR);
-	close (ORIGOUT);
-
+	# Check if the logfile path has been set and not running in daemon mode and redirect output to log file
+	# No need to redirect in daemon mode because STDOUT is redirected by vcld
+	if (!$DAEMON_MODE && $log) {
+		open(OUTPUT, ">>$log");
+		print OUTPUT "$log_message\n";
+		close OUTPUT;
+	}
+	else {
+		print STDOUT "$log_message\n";
+	}
 } ## end sub notify
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -5894,7 +5890,7 @@ sub run_ssh_command {
 		# ssh exits with the exit status of the remote command or with 255 if an error occurred.
 		# Check for vmware-cmd usage message, it returns 255 if the vmware-cmd usage output is returned
 		if (($exit_status == 255 && $ssh_output_formatted !~ /usage.*vmware-cmd/i) ||
-			 $ssh_output_formatted =~ /lost connection|reset by peer|no route to host|connection refused|connection timed out/i) {
+			 $ssh_output_formatted =~ /(lost connection|reset by peer|no route to host|connection refused|connection timed out|resource temporarily unavailable)/i) {
 			notify($ERRORS{'WARNING'}, 0, "attempt $attempts/$max_attempts: failed to execute SSH command on $node: $command, exit status: $exit_status, SSH exits with the exit status of the remote command or with 255 if an error occurred, output:\n$ssh_output_formatted") if $output_level;
 			next;
 		}
