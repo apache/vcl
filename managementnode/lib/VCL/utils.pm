@@ -7523,30 +7523,28 @@ sub rename_vcld_process {
 	# Begin assembling a new process name
 	my $new_process_name = "$PROCESSNAME";
 
-	# Append the class name or file name to the process name
-	if (defined($ENV{class_name})) {
-		$new_process_name .= (" " . $ENV{class_name});
-	}
-	elsif ($filename) {
-		$new_process_name .= " $filename";
-	}
-
 	# Check if DataStructure, assemble process name with additional information
 	if (defined $data_structure) {
 		my $state_name = $data_structure->get_state_name();
 
 		if ($state_name ne 'blockrequest') {
 			my $request_id            = $data_structure->get_request_id();
-			my $request_state_name    = $data_structure->get_request_state_name();
 			my $reservation_id        = $data_structure->get_reservation_id();
+			my $request_state_name    = $data_structure->get_request_state_name();
+			my $computer_short_name   = $data_structure->get_computer_short_name();
+			my $image_name            = $data_structure->get_image_name();
+			my $user_login_id         = $data_structure->get_user_login_id();
 			my $request_forimaging    = $data_structure->get_request_forimaging();
 			my $reservation_count     = $data_structure->get_reservation_count();
 			my $reservation_is_parent = $data_structure->is_parent_reservation();
-
+			
 			# Append the request and reservation IDs if they are set
 			$new_process_name .= " $request_id:$reservation_id";
-			$new_process_name .= " $request_state_name" if $request_state_name;
-			$new_process_name .= " imaging" if $request_forimaging;
+			$new_process_name .= " $request_state_name" if ($request_state_name);
+			$new_process_name .= " $computer_short_name" if ($computer_short_name);
+			$new_process_name .= " $image_name" if ($image_name);
+			$new_process_name .= " $user_login_id" if ($user_login_id);
+			$new_process_name .= " (imaging)" if $request_forimaging;
 
 			# Append cluster if there are multiple reservations for this request
 			notify($ERRORS{'DEBUG'}, 0, "reservation count: $reservation_count");
@@ -7555,12 +7553,12 @@ sub rename_vcld_process {
 				if ($reservation_is_parent) {
 					$data_structure->get_request_data->{PARENTIMAGE} = 1;
 					$data_structure->get_request_data->{SUBIMAGE}    = 0;
-					$new_process_name .= " cluster=parent";
+					$new_process_name .= " (cluster=parent)";
 				}
 				else {
 					$data_structure->get_request_data->{PARENTIMAGE} = 0;
 					$data_structure->get_request_data->{SUBIMAGE}    = 1;
-					$new_process_name .= " cluster=child";
+					$new_process_name .= " (cluster=child)";
 				}
 			} ## end if ($reservation_count > 1)
 			else {

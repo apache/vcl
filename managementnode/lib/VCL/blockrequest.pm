@@ -88,9 +88,6 @@ sub initialize {
 		notify($ERRORS{'WARNING'}, 0, "unable to obtain a database handle for this state process");
 	}
 
-	# Store the name of this class in an environment variable
-	$ENV{class_name} = ref($self);
-
 	# Rename this process to include some request info
 	rename_vcld_process($self->data);
 

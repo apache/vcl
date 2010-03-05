@@ -102,9 +102,6 @@ sub initialize {
 	my $os_perl_package           = $self->data->get_image_os_module_perl_package();
 	#my $predictive_perl_package   = $self->data->get_management_node_predictive_module_perl_package();
 
-	# Store the name of this class in an environment variable
-	$ENV{class_name} = ref($self);
-
 	# Rename this process to include some request info
 	rename_vcld_process($self->data);
 
