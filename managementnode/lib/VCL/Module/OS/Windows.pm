@@ -8254,7 +8254,7 @@ sub get_driver_inf_paths {
 	
 	# Find the paths of .inf files in the drivers directory with a Class=SCSIAdapter or HDC line
 	# These are the storage driver .inf files
-	my @inf_paths;
+	my @inf_paths = ();
 	my $grep_command .= '/usr/bin/grep.exe -Eirl --include="*.[iI][nN][fF]" ';
 	if ($driver_class) {
 		$grep_command .= '"class[ ]*=[ ]*' . $driver_class . '" ';
@@ -8265,11 +8265,21 @@ sub get_driver_inf_paths {
 	$grep_command .= $drivers_directory;
 	
 	my ($grep_exit_status, $grep_output) = run_ssh_command($computer_node_name, $management_node_keys, $grep_command, '', '', 1);
-	if (defined($grep_exit_status) && $grep_exit_status == 0) {
-		@inf_paths = @$grep_output;
-		notify($ERRORS{'DEBUG'}, 0, "found " . scalar(@inf_paths) . " driver .inf paths");
+	if (defined($grep_exit_status) && $grep_exit_status > 1) {
+		notify($ERRORS{'WARNING'}, 0, "failed to find driver paths, exit status: $grep_exit_status, output:\n@{$grep_output}");
+		return;
 	}
-	elsif ($grep_exit_status) {
+	elsif (defined($grep_output)) {
+		my @inf_paths = grep(/:[\\\/]/, @$grep_output);
+		notify($ERRORS{'DEBUG'}, 0, "found " . scalar(@inf_paths) . " driver .inf paths, grep output:\n". join("\n", @$grep_output));
+		if (@inf_paths) {
+			return @inf_paths;
+		}
+		else {
+			return 0;
+		}
+	}
+	elsif (defined($grep_exit_status)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to find driver paths, exit status: $grep_exit_status, output:\n@{$grep_output}");
 		return;
 	}
@@ -8277,8 +8287,6 @@ sub get_driver_inf_paths {
 		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to find driverpaths");
 		return;
 	}
-	
-	return @inf_paths;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -8307,25 +8315,34 @@ sub set_device_path_key {
 	my $management_node_keys = $self->data->get_management_node_keys();
 	my $computer_node_name   = $self->data->get_computer_node_name();
 	
+	my $device_path_value;
+	
 	# Find the paths of .inf files in the drivers directory
 	my @inf_paths = $self->get_driver_inf_paths();
 	if (!@inf_paths) {
 		notify($ERRORS{'WARNING'}, 0, "failed to locate driver .inf paths");
 		return;
 	}
-	
-	# Remove the .inf filenames from the paths
-	map(s/\/[^\/]*$//, @inf_paths);
-	
-	# Remove duplicate paths
-	my %inf_path_hash;
-	my @inf_paths_unique = grep { !$inf_path_hash{$_}++ } @inf_paths;
-	
-	# Assemble the device path value
-	my $device_path_value = '%SystemRoot%\\inf;' . join(";", @inf_paths_unique);
-	
-	# Replace forward slashes with backslashes
-	$device_path_value =~ s/\//\\/g;
+	elsif ($inf_paths[0] eq '0') {
+		# No driver paths were found, just use the inf path
+		$device_path_value = '%SystemRoot%\\inf';
+		notify($ERRORS{'DEBUG'}, 0, "no driver .inf paths were found");
+	}
+	else {
+		# Remove the .inf filenames from the paths
+		map(s/\/[^\/]*$//, @inf_paths);
+		
+		# Remove duplicate paths, occurs if a directory has more than 1 .inf file
+		my %inf_path_hash;
+		my @inf_paths_unique = grep { !$inf_path_hash{$_}++ } @inf_paths;
+		notify($ERRORS{'DEBUG'}, 0, "found " . scalar(@inf_paths_unique) . " unique driver .inf paths");
+		
+		# Assemble the device path value
+		$device_path_value = '%SystemRoot%\\inf;' . join(";", @inf_paths_unique);
+		
+		# Replace forward slashes with backslashes
+		$device_path_value =~ s/\//\\/g;
+	}
 	
 	notify($ERRORS{'DEBUG'}, 0, "device path value: $device_path_value");
 	
