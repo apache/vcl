@@ -138,7 +138,7 @@ MySQL 5 client
 Nmap - security scanner
 OpenSSH client - All distros usually have this installed by default
 Perl 5.8.0 or later
-Perl modules SEE STEP 2 below in Installation (some of these may be built in for your distro):
+Perl modules SEE STEP 2 below in Installation (some of these may be built in for your distro or not even required if your not using jabber)
 - MailTools 2.04
 - Class-Data-Inheritable 0.08
 - Devel-StackTrace 1.20
