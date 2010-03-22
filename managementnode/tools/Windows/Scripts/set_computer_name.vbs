@@ -105,23 +105,21 @@ end if
 WScript.Quit
 '----------------------------------------------------------
 Function GetKeyValue(strFilePath, strKey, strDeliminator)
-
-   Set objFSO = CreateObject("Scripting.FileSystemObject")
-   On Error Resume Next
-   Set objInputFile = objFSO.OpenTextFile(strCurrentImagePath)
-   
+   Set objShell = WScript.CreateObject("WScript.Shell")
+	strCommand = "%comspec% /c type " & strFilePath
+	Set objExecObject = objShell.Exec(strCommand)
+	
    if not err.number=0 then 
-      WScript.Echo "Error opening " & strCurrentImagePath & ", " & err.Description
+      WScript.Echo "Error running command: " & strCommand & ", " & err.Description
       vbCritical err.clear
       GetKeyValue = ""
    else
       strPattern = "^" & strKey & strDeliminator & "(.*)$"
-      Do While Not (objInputFile.atEndOfStream) And Len(strValue)=0
-         strLine = objInputFile.ReadLine
-         strValue = RegExpVal(strPattern, strLine, 0)
-      Loop
-   
-      objInputFile.Close
+		
+		Do While Not (objExecObject.StdOut.atEndOfStream) And Len(strValue)=0
+			strLine = objExecObject.StdOut.ReadLine()
+			strValue = RegExpVal(strPattern, strLine, 0)
+		Loop
    
       GetKeyValue = strValue
    end if
@@ -130,19 +128,17 @@ End Function
 
 '----------------------------------------------------------
 Function GetImageName(strFilePath)
+	Set objShell = WScript.CreateObject("WScript.Shell")
+	strCommand = "%comspec% /c type " & strFilePath
+	Set objExecObject = objShell.Exec(strCommand)
 
-   Set objFSO = CreateObject("Scripting.FileSystemObject")
-   On Error Resume Next
-   Set objInputFile = objFSO.OpenTextFile(strCurrentImagePath)
-   
    if not err.number=0 then 
-      WScript.Echo "Error opening " & strCurrentImagePath & ", " & err.Description
+      WScript.Echo "Error running command: " & strCommand & ", " & err.Description
       vbCritical err.clear
       GetKeyValue = ""
    else
-      strLine = objInputFile.ReadLine
-      objInputFile.Close
-      GetImageName = strLine
+	   strLine = objExecObject.StdOut.ReadLine
+	   GetImageName = strLine
    end if
 
 End Function
