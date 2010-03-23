@@ -160,6 +160,7 @@ sub load {
 	my $computer_id           = $self->data->get_computer_id();
 	my $computer_node_name    = $self->data->get_computer_node_name();
 	my $computer_ip_address   = $self->data->get_computer_ip_address();
+	my $computer_private_ip_address   = $self->data->get_computer_private_ip_address();
 	my $image_os_install_type = $self->data->get_image_os_install_type();
 
 	notify($ERRORS{'OK'}, 0, "nodename not set")
@@ -261,7 +262,7 @@ sub load {
 				my $maxload = 1;
 				while ($maxload) {
 					notify($ERRORS{'DEBUG'}, 0, "running 'nodeset all stat' to determine number of nodes currently being loaded");
-					if (open(NODESET, "$XCAT_ROOT/bin/nodeset all stat \| egrep \'install\|image\' 2>&1 | ")) {
+					if (open(NODESET, "$XCAT_ROOT/sbin/nodeset all stat \| egrep \'install\|image\' 2>&1 | ")) {
 						my @nodesetout = <NODESET>;
 						close(NODESET);
 						my $ld = @nodesetout;
@@ -274,7 +275,7 @@ sub load {
 							notify($ERRORS{'OK'}, 0, "current nodes loading=$ld, throttle=$THROTTLE, must wait, sleeping for 10 seconds");
 							sleep 10;
 						}
-					} ## end if (open(NODESET, "$XCAT_ROOT/bin/nodeset all stat \| grep install 2>&1 | "...
+					} ## end if (open(NODESET, "$XCAT_ROOT/sbin/nodeset all stat \| grep install 2>&1 | "...
 					else {
 						notify($ERRORS{'WARNING'}, 0, "failed to run 'nodeset all stat' to determine number of nodes currently being loaded");
 					}
@@ -426,7 +427,7 @@ sub load {
 
 	# Check progress, locate MAC and IP address for this node, monitor /var/log/messages for communication from node
 	# dhcp req/ack, xcat calls, etc
-	my ($eth0MACaddress, $privateIP);
+	my ($eth0MACaddress);
 
 	# get MAC address
 	if (open(NODELS, "$XCAT_ROOT/bin/nodels $computer_node_name mac.mac 2>&1 |")) {
@@ -448,21 +449,6 @@ sub load {
 		notify($ERRORS{'WARNING'}, 0, "MAC address not found for $computer_node_name , possible issue with regex");
 	}
 
-	#should also store/pull private address from the database
-	if (open(HOSTS, "/etc/hosts")) {
-		my @hosts = <HOSTS>;
-		close(HOSTS);
-		foreach my $line (@hosts) {
-			if ($line =~ /([0-9]*.[0-9]*.[0-9]*.[0-9]*)\s+($computer_node_name)/) {
-				$privateIP = $1;
-				notify($ERRORS{'OK'}, 0, "PrivateIP address for $computer_node_name collected $privateIP");
-				last;
-			}
-		}
-	} ## end if (open(HOSTS, "/etc/hosts"))
-	if (!defined($privateIP)) {
-		notify($ERRORS{'WARNING'}, 0, "private IP address not found for $computer_node_name, possible issue with regex");
-	}
 	my ($s1, $s2, $s3, $s4, $s5) = 0;
 	my $sloop = 0;
 	#insertloadlog($reservation_id,$computer_id,"info","SUCCESS initiated install process");
@@ -473,7 +459,7 @@ sub load {
 	my $t;
 	my $maxloops = 45;
 
-	if ($eth0MACaddress && $privateIP) {
+	if ($eth0MACaddress && $computer_private_ip_address) {
 		@TAILLOG = 0;
 		$t       = 0;
 		if (open(TAIL, "</var/log/messages")) {
@@ -489,14 +475,14 @@ sub load {
 						}
 					}
 					if (!$s2) {
-						if ($_ =~ /dhcpd: DHCPACK on $privateIP to $eth0MACaddress/) {
+						if ($_ =~ /dhcpd: DHCPACK on $computer_private_ip_address to $eth0MACaddress/) {
 							$s2 = 1;
-							notify($ERRORS{'OK'}, 0, "$computer_node_name  STAGE 2 set DHCPACK on $privateIP to $eth0MACaddress");
+							notify($ERRORS{'OK'}, 0, "$computer_node_name  STAGE 2 set DHCPACK on $computer_private_ip_address to $eth0MACaddress");
 							insertloadlog($reservation_id, $computer_id, "xcatstage2", "SUCCESS stage2 detected dhcp ack for node");
 						}
 					}
 					if (!$s3) {
-						if ($_ =~ /Serving pxelinux.0 to $privateIP:/) {
+						if ($_ =~ /Serving pxelinux.0 to $computer_private_ip_address:/) {
 							$s3 = 1;
 							chomp($_);
 							notify($ERRORS{'OK'}, 0, "$computer_node_name STAGE 3 set $_");
@@ -504,7 +490,7 @@ sub load {
 						}
 					}
 					if (!$s4) {
-						if ($_ =~ /Serving xcat\/\w+\/x86(_64)?\/initrd.img to $privateIP:/) {
+						if ($_ =~ /Serving xcat\/\w+\/x86(_64)?\/initrd.img to $computer_private_ip_address:/) {
 							$s4 = 1;
 							chomp($_);
 							notify($ERRORS{'OK'}, 0, "$computer_node_name STAGE 4 set $_");
@@ -581,9 +567,9 @@ sub load {
 		else {
 			notify($ERRORS{'CRITICAL'}, 0, "could not open /var/log/messages to  $!");
 		}
-	} ## end if ($eth0MACaddress && $privateIP)
+	} ## end if ($eth0MACaddress && $computer_private_ip_address)
 	else {
-		notify($ERRORS{'CRITICAL'}, 0, "eth0MACaddress $eth0MACaddress && privateIP $privateIP  are not set not able to use these checks");
+		notify($ERRORS{'CRITICAL'}, 0, "eth0MACaddress $eth0MACaddress && privateIP $computer_private_ip_address  are not set not able to use these checks");
 		insertloadlog($reservation_id, $computer_id, "failed", "FAILED could not locate private IP and MAC addresses in XCAT files failing reservation");
 		return 0;
 	}
