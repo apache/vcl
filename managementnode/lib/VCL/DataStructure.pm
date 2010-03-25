@@ -586,7 +586,8 @@ sub _automethod : Automethod {
 		$data_identifier = $2;
 	}
 	else {
-		return;
+		notify($ERRORS{'WARNING'}, 0, "illegal subroutine name: $method_name");
+		return sub { };
 	}
 	
 	# Determines whether or not warnings are shown if data is not initialized
@@ -1465,8 +1466,8 @@ sub get_computer_private_ip_address {
 		return;
 	}
 	
-	# Find lines containing the computer name
-	my @matching_computer_hosts_lines = grep(/\s$computer_name\s*$/i, @$output);
+	# Find lines containing the computer name followed by a space or period
+	my @matching_computer_hosts_lines = grep(/\s$computer_name[\s\.]/i, @$output);
 	
 	# Extract matching lines which aren't commented out
 	my @uncommented_computer_hosts_lines = grep(/^\s*[^#]/, @matching_computer_hosts_lines);
