@@ -1538,8 +1538,8 @@ EOF
 		return 0;
 	}
 	
-	# Wait maximum of 5 minutes for the computer to become unresponsive
-	if (!$self->wait_for_no_ping(300)) {
+	# Wait maximum of 12 minutes for the computer to become unresponsive
+	if (!$self->wait_for_no_ping(720)) {
 		# Computer never stopped responding to ping
 		notify($ERRORS{'WARNING'}, 0, "$computer_node_name never became unresponsive to ping");
 		return 0;
