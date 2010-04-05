@@ -36,18 +36,18 @@ echo.
 
 echo ----------------------------------------------------------------------
 
-echo %TIME%: Killing any cygrunsrv.exe processes...
-"%SystemRoot%\System32\taskkill.exe" /F /IM cygrunsrv.exe 2>&1
+echo %TIME%: Killing any cyg* processes...
+"%SystemRoot%\System32\taskkill.exe" /F /FI "IMAGENAME eq cyg*" 2>NUL
 echo ERRORLEVEL: %ERRORLEVEL%
 echo.
 
-echo %TIME%: Killing any sshd.exe processes...
-"%SystemRoot%\System32\taskkill.exe" /F /IM sshd.exe 2>&1
+echo %TIME%: Killing any ssh* processes...
+"%SystemRoot%\System32\taskkill.exe" /F /FI "IMAGENAME eq ssh*" 2>NUL
 echo ERRORLEVEL: %ERRORLEVEL%
 echo.
 
-echo %TIME%: Stopping the Cygwin sshd service...
-"%SystemRoot%\System32\net.exe" stop sshd  2>&1
+echo %TIME%: Killing any bash* processes...
+"%SystemRoot%\System32\taskkill.exe" /F /FI "IMAGENAME eq bash*" 2>NUL
 echo ERRORLEVEL: %ERRORLEVEL%
 echo.
 
@@ -128,6 +128,14 @@ echo.
 
 echo %TIME%: Regenerating /etc/ssh_host_dsa_key...
 C:\Cygwin\bin\ssh-keygen.exe -t dsa -f /etc/ssh_host_dsa_key -N "" 2>&1
+echo ERRORLEVEL: %ERRORLEVEL%
+set /A STATUS+=%ERRORLEVEL%
+echo.
+
+echo ----------------------------------------------------------------------
+
+echo %TIME%: Running /usr/bin/rebaseall in the ash.exe shell
+C:\cygwin\bin\ash.exe -c '/usr/bin/rebaseall' 2>&1
 echo ERRORLEVEL: %ERRORLEVEL%
 set /A STATUS+=%ERRORLEVEL%
 echo.
