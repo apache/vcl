@@ -133,7 +133,7 @@ function validateLDAPUser($type, $loginid) {
 	if(! $res)
 		return -1;
 
-	$return = array($auth['email']);
+	$return = array('dn');
 
 	$search = ldap_search($ds,
 	                      $auth['binddn'], 
@@ -431,3 +431,4 @@ function updateEXAMPLE1Groups($user) {
 	$newusergroups = array_unique($newusergroups);
 	updateGroups($newusergroups, $user["id"]);
 }
+?>
