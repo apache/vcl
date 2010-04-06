@@ -54,6 +54,7 @@ function viewNodes() {
 	print "<H2>Privilege Tree</H2>\n";
 	$cont = addContinuationsEntry('JSONprivnodelist');
 	print "<div dojoType=\"dojo.data.ItemFileWriteStore\" url=\"" . BASEURL . SCRIPT . "?continuation=$cont\" jsid=\"nodestore\" id=\"nodestore\"></div>\n";
+	print "<div class=privtreediv>\n";
 	print "<div dojoType=\"dijit.Tree\" store=\"nodestore\" showRoot=\"false\" id=privtree>\n";
 	#print "  <script type=\"dojo/method\" event=\"getIconClass\" args=\"item, opened\">\n";
 	##print "    return getTreeIcon(item, opened);\n";
@@ -85,6 +86,7 @@ function viewNodes() {
 	print "    focusFirstNode($activeNode);\n";
 	print "  </script>\n";
 	print "</div>\n";
+	print "</div>\n";
 	print "<div id=treebuttons>\n";
 	if($hasNodeAdmin) {
 		print "<TABLE summary=\"\" cellspacing=\"\" cellpadding=\"\">\n";
@@ -94,6 +96,7 @@ function viewNodes() {
 		print "      Add Child\n";
 		print "	    <script type=\"dojo/method\" event=onClick>\n";
 		print "        showPrivPane('addNodePane');\n";
+		print "        return false;\n";
 		print "      </script>\n";
 		print "    </button>\n";
 		print "    </FORM></TD>\n";
@@ -102,6 +105,7 @@ function viewNodes() {
 		print "      Delete Node and Children\n";
 		print "	    <script type=\"dojo/method\" event=onClick>\n";
 		print "        dijit.byId('deleteDialog').show();\n";
+		print "        return false;\n";
 		print "      </script>\n";
 		print "    </button>\n";
 		print "    </FORM></TD>\n";
@@ -110,6 +114,7 @@ function viewNodes() {
 		print "      Rename Node\n";
 		print "	    <script type=\"dojo/method\" event=onClick>\n";
 		print "        dijit.byId('renameDialog').show();\n";
+		print "        return false;\n";
 		print "      </script>\n";
 		print "    </button>\n";
 		print "    </FORM></TD>\n";
@@ -654,6 +659,7 @@ function selectNode() {
 		$text .= "      Add Child";
 		$text .= "	    <script type=\"dojo/method\" event=onClick>";
 		$text .= "        showPrivPane(\"addNodePane\");";
+		$text .= "        return false;";
 		$text .= "      </script>";
 		$text .= "    </button>";
 		$text .= "    </FORM></TD>";
@@ -662,6 +668,7 @@ function selectNode() {
 		$text .= "      Delete Node and Children";
 		$text .= "	    <script type=\"dojo/method\" event=onClick>";
 		$text .= "        dijit.byId(\"deleteDialog\").show();";
+		$text .= "        return false;";
 		$text .= "      </script>";
 		$text .= "    </button>";
 		$text .= "    </FORM></TD>";
@@ -670,6 +677,7 @@ function selectNode() {
 		$text .= "      Rename Node";
 		$text .= "	    <script type=\"dojo/method\" event=onClick>";
 		$text .= "        dijit.byId(\"renameDialog\").show();";
+		$text .= "        return false;";
 		$text .= "      </script>";
 		$text .= "    </button>";
 		$text .= "    </FORM></TD>";
@@ -725,6 +733,7 @@ function selectNode() {
 		$text .= "  Add User";
 		$text .= "  <script type=\"dojo/method\" event=onClick>";
 		$text .= "    showPrivPane(\"addUserPane\");";
+		$text .= "    return false;";
 		$text .= "  </script>";
 		$text .= "</button>";
 	}
