@@ -106,10 +106,6 @@ Array.prototype.search = function(data) {
 	return false;
 }
 
-function hideResStatusPane() {
-	dojo.widget.byId('resStatusPane').minimizeWindow();
-}
-
 var genericCB = function(type, data, evt) {
 	unsetLoading();
 	var regex = new RegExp('^<!DOCTYPE html');
