@@ -195,8 +195,12 @@ function AJupdateWaitTime() {
 	# proccess length
 	$length = processInputVar('length', ARG_NUMERIC);
 	$times = getUserMaxTimes();
-	if(empty($length) || $length > $times['initial'])
+	$imaging = getContinuationVar('imaging');
+	if(empty($length) ||
+	   ($length > $times['initial'] && ! $imaging ) ||
+		($length > $times['initial'] && $imaging && $length > 720)) {
 		return;
+	}
 	# process imageid
 	$imageid = processInputVar('imageid', ARG_NUMERIC);
 	$resources = getUserResources(array("imageAdmin", "imageCheckOut"));
@@ -204,7 +208,6 @@ function AJupdateWaitTime() {
 	if(! in_array($imageid, $validImageids))
 		return;
 
-	$imaging = getContinuationVar('imaging');
 	$desconly = processInputVar('desconly', ARG_NUMERIC, 1);
 
 	$imagenotes = getImageNotes($imageid);
@@ -4512,5 +4515,4 @@ function getBlockRequestStatus($id) {
 	else
 		return NULL;
 }
-
 ?>
