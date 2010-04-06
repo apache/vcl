@@ -52,7 +52,7 @@ function viewSchedules() {
 		print "<font color=\"#008000\">Schedule successfully deleted";
 		print "</font><br><br>\n";
 	}
-	print "<TABLE border=1>\n";
+	print "<TABLE border=1 id=layouttable summary=\"list of schedules\">\n";
 	print "  <TR>\n";
 	print "    <TD></TD>\n";
 	print "    <TD></TD>\n";
@@ -113,7 +113,7 @@ function viewSchedules() {
 			print "</font><br><br>\n";
 		}
 		print "<FORM action=\"" . BASEURL . SCRIPT . "#grouping\" method=post>\n";
-		print "<TABLE border=1>\n";
+		print "<TABLE border=1 id=layouttable summary=\"\">\n";
 		print "  <TR>\n";
 		print "    <TH rowspan=2>Schedules</TH>\n";
 		print "    <TH colspan=" . count($schedulegroups) . ">Groups</TH>\n";

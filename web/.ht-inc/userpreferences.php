@@ -63,7 +63,7 @@ function userpreferences() {
 		print "<font color=green>User preferences successfully updated</font><br>\n";
 	}
 	print "</div>\n";
-	print "<table id=layouttable summary=\"\">\n";
+	print "<table summary=\"\">\n";
 	print "  <TR>\n";
 	print "    <TD>\n";
 	print "      <div id=preflinks class=hidden>\n";

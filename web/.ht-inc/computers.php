@@ -91,7 +91,7 @@ function selectComputers() {
 		print "     style=\"width:300px;height:275px\">\n";
 		# by platform/schedule
 		print "<div id=\"platsch\" dojoType=\"dijit.layout.ContentPane\" title=\"Platforms/Schedules\">\n";
-		print "<TABLE id=layouttable summary=\"\">\n";
+		print "<TABLE summary=\"\">\n";
 		print "  <TR>\n";
 		if($platform_cnt > 1)
 			print "    <TH>Platforms:</TH>\n";
@@ -1830,7 +1830,7 @@ function compGroupingGrid() {
 		print "</font><br><br>\n";
 	}
 	print "<FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
-	print "<TABLE border=1>\n";
+	print "<TABLE border=1 id=layouttable summary=\"\">\n";
 	print "  <col>\n";
 	if($bygroups) {
 		foreach($groups as $id) {
@@ -2068,7 +2068,7 @@ function computerUtilities() {
 
 	print "<H2>Computer Utilities</H2>\n";
 	print "<FORM action=\"" . BASEURL . SCRIPT . "\" method=post id=utilform>\n";
-	print "<TABLE border=1>\n";
+	print "<TABLE border=1 id=layouttable summary=\"information about selected computers\">\n";
 	print "  <TR>\n";
 	print "    <TD></TD>\n";
 	print "    <TH>Hostname</TH>\n";

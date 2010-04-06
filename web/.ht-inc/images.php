@@ -140,7 +140,7 @@ function viewImages() {
 		print "<font color=\"#008000\">Image successfully updated";
 		print "</font><br><br>\n";
 	}
-	print "<TABLE border=1>\n";
+	print "<TABLE border=1 id=layouttable summary=\"information about images\">\n";
 	print "  <TR>\n";
 	print "    <TD></TD>\n";
 	print "    <TH><img src=images/blank.gif width=100 height=1><br>Name</TH>\n";
@@ -386,7 +386,7 @@ function imageGroupingGrid() {
 	uasort($resources["image"], "sortKeepIndex");
 
 	print "<FORM id=gridform action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
-	print "<TABLE border=1 summary=\"\">\n";
+	print "<TABLE border=1 summary=\"\" id=layouttable>\n";
 	print "  <col>\n";
 	foreach(array_keys($imagegroups) as $id) {
 		print "  <col id=imggrp$id>\n";
@@ -628,7 +628,7 @@ function imageMappingGrid() {
 	}
 
 	print "<FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
-	print "<TABLE border=1>\n";
+	print "<TABLE border=1 id=layouttable summary=\"\">\n";
 	print "  <col>\n";
 	foreach(array_keys($compgroups) as $id) {
 		print "  <col id=compgrp$id>\n";

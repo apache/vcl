@@ -113,24 +113,57 @@
 	border-right: 1px solid #000000;
 }
 
+.usergrouptable {
+	empty-cells: hide;
+	border-spacing: 0px;
+	border-collapse: collapse;
+}
+
 .usergrouptable form {
 	margin: 0;
 }
 
 .usergrouptable td {
 	padding-left: 1px;
+	border: solid 1px #000000;
+}
+
+.usergrouptable th {
+	border: solid 1px #000000;
 }
 
 .resourcegrouptable form {
 	margin: 0;
 }
 
-.resourcegrouptable td {
-	padding-left: 1px;
+.resourcegrouptable {
+	border-spacing: 0px;
+	border-collapse: collapse;
 }
 
-#layouttable td {
+.resourcegrouptable th {
+	border: solid 1px #000000;
+}
+
+.resourcegrouptable td {
+	padding-left: 1px;
+	border: solid 1px #000000;
+}
+
+#layouttable {
+	border: solid 1px #000000;
+	border-spacing: 0px;
+	border-collapse: collapse;
+}
+
+#layouttable td, #layouttable th {
 	vertical-align: top;
+	border: solid 1px #000000;
+}
+
+#ttlayout {
+	border-spacing: 0px;
+	border-collapse: collapse;
 }
 
 #ttlayout td {

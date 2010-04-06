@@ -122,7 +122,7 @@ function viewMgmtnodes() {
 		print "<font color=\"#008000\">Management node successfully deleted";
 		print "</font><br><br>\n";
 	}
-	print "<TABLE border=1>\n";
+	print "<TABLE border=1 id=layouttable summary=\"information about selected management nodes\">\n";
 	print "  <TR>\n";
 	print "    <TD></TD>\n";
 	print "    <TD></TD>\n";
@@ -656,7 +656,7 @@ function viewMgmtnodeGrouping() {
 			print "</font><br><br>\n";
 		}
 		print "<FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
-		print "<TABLE border=1>\n";
+		print "<TABLE border=1 id=layouttable summary=\"\">\n";
 		print "  <TR>\n";
 		print "    <TH rowspan=2>Management Node</TH>\n";
 		print "    <TH colspan=" . count($mgmtnodegroups) . ">Groups</TH>\n";
@@ -838,7 +838,7 @@ function viewMgmtnodeMapping($mngroups=0) {
 			print "</font><br><br>\n";
 		}
 		print "<FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
-		print "<TABLE border=1>\n";
+		print "<TABLE border=1 id=layouttable summary=\"\">\n";
 		print "  <col>\n";
 		foreach(array_keys($compgroups) as $id) {
 			print "  <col id=compgrp$id>\n";
