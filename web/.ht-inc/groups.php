@@ -204,7 +204,7 @@ function viewGroups() {
 	print "    <TH>Name</TH>\n";
 	print "    <TH>Owning User Group</TH>\n";
 	print "    <TD><a onmouseover=\"mouseoverHelp();\" ";
-	print "onmouseout=\"clearGroupPopups();\">";
+	print "onmouseout=\"showGroupInfoCancel(0);\" id=listicon0>";
 	print "<img alt=\"\" src=\"images/list.gif\"></a></TD>\n";
 	print "  </TR>\n";
 	if(! empty($dispUserGrpIDs)) {
@@ -216,7 +216,7 @@ function viewGroups() {
 		printSelectInput("resourcetypeid", $resourcetypes["resources"]);
 		print "    </TD>\n";
 		print "    <TD><INPUT type=text name=name maxlength=30 size=10></TD>\n";
-		print "    <TD>\n";
+		print "    <TD colspan=2>\n";
 		# remove the "None" group
 		unset($usergroups[82]);
 		# find a custom group the user is in and make it the default
@@ -262,13 +262,12 @@ function viewGroups() {
 		print "    <TD>" . $resources[$id]["name"] . "</TD>\n";
 		print "    <TD>" . $resources[$id]["owner"] . "</TD>\n";
 		print "    <TD><a onmouseover=\"getGroupInfo('$jscont', $id);\" ";
-		print "onmouseout=\"clearGroupPopups();\">";
+		print "onmouseout=\"showGroupInfoCancel($id);\" id=listicon$id>";
 		print "<img alt=\"mouseover for list of resources in the group\" ";
 		print "title=\"\" src=\"images/list.gif\"></a></TD>\n";
 		print "  </TR>\n";
 	}
 	print "</TABLE>\n";
-	print "<div id=listitems onmouseover=\"blockClear();\" onmouseout=\"clearGroupPopups2(0);\"></div>\n";
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1111,23 +1110,23 @@ function jsonGetGroupInfo() {
 		}
 	}
 	if(! $found || $mousex < 0 || $mousex > 5000 || $mousey < 0 || $mousey > 500000) {
-		header('Content-Type: text/json-comment-filtered; charset=utf-8');
-		print '/*{"items":' . json_encode(array()) . '}*/';
+		header('Content-Type: text/json; charset=utf-8');
+		print '{} && {"items":' . json_encode(array()) . '}';
 		return;
 	}
 	$members = getResourceGroupMembers($type);
-	$data = array();
+	$data = '';
 	if(! empty($members[$type][$groupid])) {
 		uasort($members[$type][$groupid], "sortKeepIndex");
 		foreach($members[$type][$groupid] as $mem) {
-			$data[] = $mem['name'];
+			$data .= "{$mem['name']}<br>";
 		}
 	}
 	else
-		$data[] = '(empty group)';
-	$arr = array('members' => $data, 'x' => $mousex, 'y' => $mousey);
+		$data = '(empty group)';
+	$arr = array('members' => $data, 'x' => $mousex, 'y' => $mousey, 'groupid' => $groupid);
 	header('Content-Type: text/json-comment-filtered; charset=utf-8');
-	print '/*{"items":' . json_encode($arr) . '}*/';
+	print '{} && {"items":' . json_encode($arr) . '}';
 }
 
 ?>
