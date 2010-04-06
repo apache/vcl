@@ -106,8 +106,6 @@ function initGlobals() {
 	$days = array('Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday');
 	$phpVerArr = explode('.', phpversion());
 	$phpVer = $phpVerArr[0];
-	if($phpVer == 5)
-		require_once(".ht-inc/php5extras.php");
 
 	$passwdArray = array('A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K',
 	                     'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V',
@@ -5332,7 +5330,7 @@ function pickTimeTable() {
 	print "<H2 align=center>Time Table</H2>\n";
 	print "Select the criteria for the computers you want to have in the timetable:\n";
 	print "<FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
-	print "<table id=layouttable summary=\"\">\n";
+	print "<table summary=\"\">\n";
 	print "  <TR>\n";
 	print "    <TH>Platforms:</TH>\n";
 	print "    <TH>Schedules:</TH>\n";
@@ -8632,7 +8630,8 @@ function getDojoHTML($refresh) {
 		case 'submitEditGroup':
 		case 'submitAddGroup':
 		case 'submitDeleteGroup':
-			$dojoRequires = array('dojo.parser');
+			$dojoRequires = array('dojo.parser',
+			                      'dijit.Tooltip');
 			break;
 		case 'editMgmtNode':
 		case 'addMgmtNode':
