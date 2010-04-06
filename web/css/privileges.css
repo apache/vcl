@@ -1,17 +1,17 @@
 .dijitTreeLabel {
 	margin: 0;
 }
-.default .dijitTreeIcon {
+.privtreediv .dijitTreeIcon {
 	width: 0;
 	height: 0;
 }
-.default .dijitFolderOpened {
+.privtreediv .dijitFolderOpened {
 	background-image: none;
 }
-.default .dijitFolderClosed {
+.privtreediv .dijitFolderClosed {
 	background-image: none;
 }
-.default .dijitTreeNodeSelected .dijitTreeLabel {
+.privtreediv .dijitTreeNodeSelected .dijitTreeLabel {
 	background-color: #678DB2;
 	color: white;
 }
