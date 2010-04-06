@@ -688,6 +688,46 @@ sub run_slmgr_ato {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 run_slmgr_dlv
+
+ Parameters  : None
+ Returns     : If successful: true
+               If failed: false
+ Description : Runs slmgr.vbs -dlv to display licensing information.
+
+=cut
+
+sub run_slmgr_dlv {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $management_node_keys     = $self->data->get_management_node_keys();
+	my $computer_node_name       = $self->data->get_computer_node_name();
+	my $system32_path = $self->get_system32_path();
+	
+	# Run cscript.exe slmgr.vbs -dlv to install the product key
+	my $dlv_command = "$system32_path/cmd.exe /c cscript.exe //NoLogo C:/Windows/System32/slmgr.vbs -dlv";
+	my ($dlv_exit_status, $dlv_output) = run_ssh_command($computer_node_name, $management_node_keys, $dlv_command, '', '', 0);
+	if (defined($dlv_exit_status) && $dlv_exit_status == 0) {
+		notify($ERRORS{'OK'}, 0, "licensing information:\n" . join("\n", @$dlv_output));
+	}
+	elsif (defined($dlv_exit_status)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve licensing information, exit status: $dlv_exit_status, output:\n@{$dlv_output}");
+		return;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute ssh command to retrieve licensing information");
+		return;
+	}
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 get_license_status
 
  Parameters  : None
@@ -750,16 +790,20 @@ sub deactivate {
 		return;
 	}
 	
-	my $management_node_keys     = $self->data->get_management_node_keys();
-	my $computer_node_name       = $self->data->get_computer_node_name();
-	my $system32_path = $self->get_system32_path();
+	# Clear the product key from the registry
+	$self->run_slmgr_cpky();
 	
+	# Clear the KMS address from the registry
+	$self->run_slmgr_ckms();
+	
+	# Set SkipRearm=1 so the rearm count isn't decremented
 	my $registry_string .= <<'EOF';
 Windows Registry Editor Version 5.00
 
 [HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SL]
-"KeyManagementServicePort"=-
-"KeyManagementServiceName"=-
+"SkipRearm"=dword:00000001
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SoftwareProtectionPlatform]
 "SkipRearm"=dword:00000001
 EOF
 
@@ -771,10 +815,6 @@ EOF
 		notify($ERRORS{'WARNING'}, 0, "failed to remove kms keys from the registry");
 		return 0;
 	}
-	
-	$self->run_slmgr_cpky();
-	
-	$self->run_slmgr_ckms();
 	
 	return 1;
 }
@@ -1511,9 +1551,12 @@ Windows Registry Editor Version 5.00
 [HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Setup\\State]
 "ImageState"="IMAGE_STATE_COMPLETE"
 
+[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Setup\\Sysprep\\Generalize]
+"{82468857-ad9b-1a37-533f-7db889fff253}"=-
+
 [-HKEY_LOCAL_MACHINE\\SYSTEM\\Setup\\Status]
 EOF
-	
+
 	# Import the string into the registry
 	if ($self->import_registry_string($registry_string)) {
 		notify($ERRORS{'OK'}, 0, "reset Windows setup state in the registry");
@@ -1522,6 +1565,9 @@ EOF
 		notify($ERRORS{'WARNING'}, 0, "failed to reset the Windows setup state in the registry");
 		return 0;
 	}
+	
+	# Display licensing information
+	$self->run_slmgr_dlv();
 	
 	# Run Sysprep.exe, use cygstart to lauch the .exe and return immediately
 	my $sysprep_command = '/bin/cygstart.exe cmd.exe /c "' . $system32_path_dos . '\\sysprep\\sysprep.exe /generalize /oobe /shutdown /quiet"';
