@@ -43,9 +43,20 @@ function printHelpForm() {
 		$email = processInputVar("email", ARG_STRING);
 		$summary = processInputVar("summary", ARG_STRING);
 		$text = processInputVar("comments", ARG_STRING);
+		if(get_magic_quotes_gpc()) {
+			$name = stripslashes($name);
+			$name = preg_replace(array('/"/', '/>/'), array('&quot;', '&gt;'), $name);
+			$summary = stripslashes($summary);
+			$summary = preg_replace(array('/"/', '/>/'), array('&quot;', '&gt;'), $summary);
+			$text = stripslashes($text);
+		}
 	}
 	else {
-		$name = $user["firstname"] . " " . $user["lastname"];
+		$name = '';
+		if(! empty($user['lastname']) && ! empty($user['preferredname']))
+			$name = "{$user["preferredname"]} {$user['lastname']}";
+		elseif(! empty($user['lastname']) && ! empty($user['preferredname']))
+			$name = "{$user["firstname"]} {$user['lastname']}";
 		$email = $user["email"];
 		$summary = "";
 		$text = "";
@@ -114,9 +125,12 @@ function submitHelpForm() {
 	$summary = processInputVar("summary", ARG_STRING);
 	$text = processInputVar("comments", ARG_STRING);
 
-	if(! ereg('^([A-Za-z]{1,}( )([A-Za-z]){2,})$', $name)) {
+	$testname = $name;
+	if(get_magic_quotes_gpc())
+		$testname = stripslashes($name);
+	if(! ereg('^([-A-Za-z \']{1,} [-A-Za-z \']{2,})*$', $testname)) {
 		$submitErr |= NAMEERR;
-		$submitErrMsg[NAMEERR] = "You must submit your first and last name";
+		$submitErrMsg[NAMEERR] = "Name can only contain letters, spaces, apostrophes ('), and dashes (-)";
 	}
 	if(! eregi('^[_a-z0-9-]+(\.[_a-z0-9-]+)*@[a-z0-9-]+(\.[a-z0-9-]+)*(\.[a-z]{2,3})$',
 	   $email)) {
@@ -158,7 +172,7 @@ function submitHelpForm() {
 		$text = stripslashes($text);
 	$message = "Problem report submitted from VCL web form:\n\n"
 	         . "User: " . $user["unityid"] . "\n"
-	         . "Name: " . $name . "\n"
+	         . "Name: " . $testname . "\n"
 	         . "Email: " . $email . "\n"
 	         . "Problem description:\n\n$text\n\n";
 	$end = time();
@@ -190,6 +204,8 @@ function submitHelpForm() {
 	if(! $indrupal)
 		print "<H2>VCL Help</H2>\n";
 	$mailParams = "-f" . ENVELOPESENDER;
+	if(get_magic_quotes_gpc())
+		$summary = stripslashes($summary);
 	if(! mail(HELPEMAIL, "$summary", $message,
 	   "From: $from\r\nReply-To: $email\r\n", $mailParams)){
 		print "The Server was unable to send mail at this time. Please e-mail ";

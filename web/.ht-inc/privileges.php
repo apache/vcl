@@ -1117,22 +1117,30 @@ function userLookup() {
 			return;
 		}
 		print "<TABLE>\n";
-		print "  <TR>\n";
-		print "    <TH align=right>First Name:</TH>\n";
-		print "    <TD>{$userdata["firstname"]}</TD>\n";
-		print "  </TR>\n";
-		print "  <TR>\n";
-		print "    <TH align=right>Last Name:</TH>\n";
-		print "    <TD>{$userdata["lastname"]}</TD>\n";
-		print "  </TR>\n";
-		print "  <TR>\n";
-		print "    <TH align=right>Preferred Name:</TH>\n";
-		print "    <TD>{$userdata["preferredname"]}</TD>\n";
-		print "  </TR>\n";
-		print "  <TR>\n";
-		print "    <TH align=right>Email:</TH>\n";
-		print "    <TD>{$userdata["email"]}</TD>\n";
-		print "  </TR>\n";
+		if(! empty($userdata['firstname'])) {
+			print "  <TR>\n";
+			print "    <TH align=right>First Name:</TH>\n";
+			print "    <TD>{$userdata["firstname"]}</TD>\n";
+			print "  </TR>\n";
+		}
+		if(! empty($userdata['lastname'])) {
+			print "  <TR>\n";
+			print "    <TH align=right>Last Name:</TH>\n";
+			print "    <TD>{$userdata["lastname"]}</TD>\n";
+			print "  </TR>\n";
+		}
+		if(! empty($userdata['preferredname'])) {
+			print "  <TR>\n";
+			print "    <TH align=right>Preferred Name:</TH>\n";
+			print "    <TD>{$userdata["preferredname"]}</TD>\n";
+			print "  </TR>\n";
+		}
+		if(! empty($userdata['email'])) {
+			print "  <TR>\n";
+			print "    <TH align=right>Email:</TH>\n";
+			print "    <TD>{$userdata["email"]}</TD>\n";
+			print "  </TR>\n";
+		}
 		print "  <TR>\n";
 		print "    <TH align=right>Admin Level:</TH>\n";
 		print "    <TD>{$userdata["adminlevel"]}</TD>\n";

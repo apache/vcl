@@ -668,14 +668,10 @@ function main() {
 	global $user, $authed, $mode, $skin;
 	print "<H2>Welcome to the Virtual Computing Lab</H2>\n";
 	if($authed) {
-		print "Hello ";
-		if(! empty($user["preferredname"])) {
-			print $user["preferredname"] . " ";
-		}
-		else {
-			print $user["firstname"] . " ";
-		}
-		print $user["lastname"] . "<br><br>\n";
+		if(! empty($user['lastname']) && ! empty($user['preferredname']))
+			print "Hello {$user["preferredname"]} {$user['lastname']}<br><br>\n";
+		elseif(! empty($user['lastname']) && ! empty($user['preferredname']))
+			print "Hello {$user["firstname"]} {$user['lastname']}<br><br>\n";
 		$tmp = array_values($user['groups']);
 		if(count($tmp) == 1 && $tmp[0] == 'nodemo') {
 			print "Your account is a demo account that has expired. ";
@@ -3010,8 +3006,8 @@ function addUser($loginid) {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn updateUserPrefs($userid, $preferredname, $width, $height, $bpp, 
-///                              $audio, $mapdrives, $mapprinters, $mapserial)
+/// \fn updateUserPrefs($userid, $preferredname, $width, $height, $bpp, $audio,
+///                     $mapdrives, $mapprinters, $mapserial)
 ///
 /// \param $userid - id from user table
 /// \param $preferredname - user's preferred name
@@ -3029,8 +3025,8 @@ function addUser($loginid) {
 /// \brief updates the preferences for the user
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function updateUserPrefs($userid, $preferredname, $width, $height,
-                         $bpp, $audio, $mapdrives, $mapprinters, $mapserial) {
+function updateUserPrefs($userid, $preferredname, $width, $height, $bpp, $audio,
+                         $mapdrives, $mapprinters, $mapserial) {
 	global $mysql_link_vcl;
 	$preferredname = mysql_escape_string($preferredname);
 	$audio = mysql_escape_string($audio);

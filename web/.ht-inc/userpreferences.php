@@ -65,12 +65,17 @@ function userpreferences() {
 	print "</div>\n";
 	print "<table summary=\"\">\n";
 	print "  <TR>\n";
-	print "    <TD>\n";
+	print "    <TD valign=top>\n";
 	print "      <div id=preflinks class=hidden>\n";
 	print "      <ul class=preferenceslist>\n";
-	print "      <li><a href=#personal onclick=\"";
-	print "show('personal'); return false;\">Personal&nbsp;Information</a>";
-	print "</li>\n";
+	$showpersonal = 0;
+	if(! empty($user['firstname']) || ! empty($user['lastname']) || ! empty($user['email']) ||
+	   $user['affiliation'] == 'Local') {
+		$showpersonal = 1;
+		print "      <li><a href=#personal onclick=\"";
+		print "show('personal'); return false;\">Personal&nbsp;Information</a>";
+		print "</li>\n";
+	}
 	print "      <li><a href=#rdpfile onclick=\"";
 	print "show('rdpfile'); return false;\">RDP&nbsp;File&nbsp;Preferences</a>";
 	print "</li>\n";
@@ -85,81 +90,97 @@ function userpreferences() {
 	print "    </TD>\n";
 	print "    <TD rowspan=2 width=50px></TD>\n";
 	print "    <TD rowspan=2>\n";
-	print "      <fieldset id=personal class=shown>\n";
-	print "      <legend>Personal</legend>\n";
-	print "      <FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
-	print "      <table summary=\"displays your personal information\">\n";
-	print "        <TR>\n";
-	print "          <TH align=right>First Name<a href=#updateinfo>*</a>:</TH>\n";
-	print "          <TD>" . $user["firstname"] . "</TD>\n";
-	print "          <TD></TD>\n";
-	print "        </TR>\n";
-	print "        <TR>\n";
-	print "          <TH align=right>Last Name<a href=#updateinfo>*</a>:</TH>\n";
-	print "          <TD>" . $user["lastname"] . "</TD>\n";
-	print "          <TD></TD>\n";
-	print "        </TR>\n";
-	print "        <TR>\n";
-	print "          <TH align=right>Preferred Name:</TH>\n";
-	print "          <TD><label class=hidden for=preferredname>Preferred Name</label>\n";
-	print "              <INPUT type=text name=preferredname maxlength=100 ";
-	print "size=15 value=\"" . $data["preferredname"] . "\"></TD>\n";
-	print "          <TD>";
-	printSubmitErr(PREFNAMEERR);
-	print "</TD>\n";
-	print "        </TR>\n";
-	print "        <TR>\n";
-	print "          <TH align=right>Email Address<a href=#updateinfo>*</a>:</TH>\n";
-	print "          <TD>" . $user["email"] . "</TD>\n";
-	print "          <TD></TD>\n";
-	print "        </TR>\n";
-	if($user['affiliation'] == 'Local') {
-		print "        <TR>\n";
-		print "          <TD colspan=3 align=center><h3>Change Password</h3></TD>\n";
-		print "        </TR>\n";
-		print "        <TR>\n";
-		print "          <TH align=right>Current Password:</TH>\n";
-		print "          <TD>\n";
-		print "            <label class=hidden for=currentpassword>Current Password</label>\n";
-		print "            <INPUT type=password name=currentpassword maxlength=100 size=15>\n";
-		print "          </TD>\n";
-		print "          <TD>";
-		printSubmitErr(LOCALPASSWORDERR);
-		print "</TD>\n";
-		print "        </TR>\n";
-		print "        <TR>\n";
-		print "          <TH align=right>New Password:</TH>\n";
-		print "          <TD>\n";
-		print "            <label class=hidden for=newpassword>New Password</label>\n";
-		print "            <INPUT type=password name=newpassword maxlength=100 ";
-		print "id=newpassword onkeyup=\"checkNewLocalPassword();\" size=15>\n";
-		print "          </TD>\n";
-		print "          <TD></TD>\n";
-		print "        </TR>\n";
-		print "        <TR>\n";
-		print "          <TH align=right>Confirm Password:</TH>\n";
-		print "          <TD>\n";
-		print "            <label class=hidden for=confirmpassword>Confirm Password</label>\n";
-		print "            <INPUT type=password name=confirmpassword maxlength=100 ";
-		print "id=confirmpassword onkeyup=\"checkNewLocalPassword();\" size=15>\n";
-		print "          </TD>\n";
-		print "          <TD><span id=pwdstatus></span></TD>\n";
-		print "        </TR>\n";
+	if($showpersonal) {
+		print "      <fieldset id=personal class=shown>\n";
+		print "      <legend>Personal</legend>\n";
+		print "      <FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
+		print "      <table summary=\"displays your personal information\">\n";
+		$showsubmit = 0;
+		if(! empty($user['firstname'])) {
+			print "        <TR>\n";
+			print "          <TH align=right>First Name<a href=#updateinfo>*</a>:</TH>\n";
+			print "          <TD>" . $user["firstname"] . "</TD>\n";
+			print "          <TD></TD>\n";
+			print "        </TR>\n";
+		}
+		if(! empty($user['lastname'])) {
+			print "        <TR>\n";
+			print "          <TH align=right>Last Name<a href=#updateinfo>*</a>:</TH>\n";
+			print "          <TD>" . $user["lastname"] . "</TD>\n";
+			print "          <TD></TD>\n";
+			print "        </TR>\n";
+		}
+		# preferred name is stored locally; allow setting preferred name if a firstname is defined
+		if(! empty($user['firstname'])) {
+			print "        <TR>\n";
+			print "          <TH align=right>Preferred Name:</TH>\n";
+			print "          <TD><label class=hidden for=preferredname>Preferred Name</label>\n";
+			print "              <INPUT type=text name=preferredname maxlength=100 ";
+			print "size=15 value=\"" . $data["preferredname"] . "\"></TD>\n";
+			print "          <TD>";
+			printSubmitErr(PREFNAMEERR);
+			print "</TD>\n";
+			print "        </TR>\n";
+			$showsubmit = 1;
+		}
+		if(! empty($user['email'])) {
+			print "        <TR>\n";
+			print "          <TH align=right>Email Address<a href=#updateinfo>*</a>:</TH>\n";
+			print "          <TD>" . $user["email"] . "</TD>\n";
+			print "          <TD></TD>\n";
+			print "        </TR>\n";
+		}
+		if($user['affiliation'] == 'Local') {
+			print "        <TR>\n";
+			print "          <TD colspan=3 align=center><h3>Change Password</h3></TD>\n";
+			print "        </TR>\n";
+			print "        <TR>\n";
+			print "          <TH align=right>Current Password:</TH>\n";
+			print "          <TD>\n";
+			print "            <label class=hidden for=currentpassword>Current Password</label>\n";
+			print "            <INPUT type=password name=currentpassword maxlength=100 size=15>\n";
+			print "          </TD>\n";
+			print "          <TD>";
+			printSubmitErr(LOCALPASSWORDERR);
+			print "</TD>\n";
+			print "        </TR>\n";
+			print "        <TR>\n";
+			print "          <TH align=right>New Password:</TH>\n";
+			print "          <TD>\n";
+			print "            <label class=hidden for=newpassword>New Password</label>\n";
+			print "            <INPUT type=password name=newpassword maxlength=100 ";
+			print "id=newpassword onkeyup=\"checkNewLocalPassword();\" size=15>\n";
+			print "          </TD>\n";
+			print "          <TD></TD>\n";
+			print "        </TR>\n";
+			print "        <TR>\n";
+			print "          <TH align=right>Confirm Password:</TH>\n";
+			print "          <TD>\n";
+			print "            <label class=hidden for=confirmpassword>Confirm Password</label>\n";
+			print "            <INPUT type=password name=confirmpassword maxlength=100 ";
+			print "id=confirmpassword onkeyup=\"checkNewLocalPassword();\" size=15>\n";
+			print "          </TD>\n";
+			print "          <TD><span id=pwdstatus></span></TD>\n";
+			print "        </TR>\n";
+			$showsubmit = 1;
+		}
+		print "      </table>\n";
+		$updateText = getAffiliationDataUpdateText($user['affiliationid']);
+		print "<a name=updateinfo></a>\n";
+		if(! empty($updateText[$user['affiliationid']]))
+			print "{$updateText[$user['affiliationid']]}<br><br>";
+		if($showsubmit) {
+			$cont = addContinuationsEntry('confirmpersonalprefs', array(), SECINDAY, 1, 1, 1);
+			print "      <INPUT type=hidden name=continuation value=\"$cont\">\n";
+			print "      <div align=center>\n";
+			print "      <INPUT type=submit value=\"Submit Changes\">\n";
+			print "      </div>\n";
+		}
+		print "      </FORM>\n";
+		print "      </fieldset>\n";
 	}
-	print "      </table>\n";
-	$updateText = getAffiliationDataUpdateText($user['affiliationid']);
-	print "<a name=updateinfo></a>\n";
-	if(! empty($updateText[$user['affiliationid']]))
-		print "{$updateText[$user['affiliationid']]}<br><br>";
-	$cont = addContinuationsEntry('confirmpersonalprefs', array(), SECINDAY, 1, 1, 1);
-	print "      <INPUT type=hidden name=continuation value=\"$cont\">\n";
-	print "      <div align=center>\n";
-	print "      <INPUT type=submit value=\"Submit Changes\">\n";
-	print "      </div>\n";
-	print "      </FORM>\n";
-	print "      </fieldset>\n";
 
-	print "      <fieldset id=rdpfile class=visible>\n";
+	print "      <fieldset id=rdpfile class=shown>\n";
 	print "      <legend>RDP</legend>\n";
 	print "      <FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
 	print "      <table summary=\"lists adjustable preferences for the RDP ";
@@ -239,7 +260,7 @@ function userpreferences() {
 	print "      </FORM>\n";
 	print "      </fieldset>\n";
 
-	print "      <div id=uiprefs class=visible>\n";
+	print "      <div id=uiprefs class=shown>\n";
 	print "      <fieldset>\n";
 	print "      <legend>General Preferences</legend>\n";
 	print "      <FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
@@ -615,11 +636,15 @@ function printUserprefJavascript() {
 	print <<<HTMLdone
 <script type="text/javascript">
 function show(id) {
-	document.getElementById("personal").className = "hidden";
+	var obj = document.getElementById("personal");
+	if(obj)
+		obj.className = "hidden";
 	document.getElementById("rdpfile").className = "hidden";
 	document.getElementById("uiprefs").className = "hidden";
 	document.getElementById("viewmode").className = "hidden";
 	document.getElementById("status").className = "hidden";
+	if(id == 'personal' && ! obj)
+		id = 'rdpfile';
 	document.getElementById(id).className = "shown";
 }
 show("personal");
