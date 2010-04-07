@@ -45,11 +45,11 @@ function printHelpForm() {
 		$text = processInputVar("comments", ARG_STRING);
 		if(get_magic_quotes_gpc()) {
 			$name = stripslashes($name);
-			$name = preg_replace(array('/"/', '/>/'), array('&quot;', '&gt;'), $name);
 			$summary = stripslashes($summary);
-			$summary = preg_replace(array('/"/', '/>/'), array('&quot;', '&gt;'), $summary);
 			$text = stripslashes($text);
 		}
+		$name = preg_replace(array('/"/', '/>/'), array('&quot;', '&gt;'), $name);
+		$summary = preg_replace(array('/"/', '/>/'), array('&quot;', '&gt;'), $summary);
 	}
 	else {
 		$name = '';
