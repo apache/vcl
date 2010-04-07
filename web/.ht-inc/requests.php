@@ -1918,6 +1918,8 @@ function viewRequests() {
 	$normal = '';
 	$imaging = '';
 	$long = '';
+	if($viewmode == ADMIN_DEVELOPER)
+		$nodes = getManagementNodes();
 	if($count = count($requests)) {
 		$now = time();
 		for($i = 0, $noedit = 0, $text = '';
@@ -2112,6 +2114,7 @@ function viewRequests() {
 			if($viewmode == ADMIN_DEVELOPER) {
 				$text .= "    <TD align=center>" . $requests[$i]["id"] . "</TD>\n";
 				$text .= "    <TD align=center>" . $requests[$i]["computerid"] . "</TD>\n";
+				$text .= "    <TD align=center>" . $nodes[$requests[$i]["managementnodeid"]]['hostname'] . "</TD>\n";
 				$text .= "    <TD>" . $requests[$i]["IPaddress"] . "</TD>\n";
 				$text .= "    <TD align=center>" . $requests[$i]["currstateid"];
 				$text .= "</TD>\n";
@@ -2152,6 +2155,7 @@ function viewRequests() {
 		if($viewmode == ADMIN_DEVELOPER) {
 			$text .= "    <TH>Req ID</TH>\n";
 			$text .= "    <TH>Comp ID</TH>\n";
+			$text .= "    <TH>Management Node</TH>\n";
 			$text .= "    <TH>IP address</TH>\n";
 			$text .= "    <TH>Current State</TH>\n";
 			$text .= "    <TH>Last State</TH>\n";
@@ -2176,6 +2180,7 @@ function viewRequests() {
 		if($viewmode == ADMIN_DEVELOPER) {
 			$text .= "    <TH>Req ID</TH>\n";
 			$text .= "    <TH>Comp ID</TH>\n";
+			$text .= "    <TH>Management Node</TH>\n";
 			$text .= "    <TH>IP address</TH>\n";
 			$text .= "    <TH>Current State</TH>\n";
 			$text .= "    <TH>Last State</TH>\n";
@@ -2200,6 +2205,7 @@ function viewRequests() {
 		if($viewmode == ADMIN_DEVELOPER) {
 			$text .= "    <TH>Req ID</TH>\n";
 			$text .= "    <TH>Comp ID</TH>\n";
+			$text .= "    <TH>Management Node</TH>\n";
 			$text .= "    <TH>IP address</TH>\n";
 			$text .= "    <TH>Current State</TH>\n";
 			$text .= "    <TH>Last State</TH>\n";
