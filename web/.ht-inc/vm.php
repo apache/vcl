@@ -580,10 +580,17 @@ function AJvmFromHost() {
 			// if no reservations on computer, submit reload 
 			#    reservation so vm gets stopped on host
 			$reqid = simpleAddRequest($compid, 4, 3, $start, $end, 18, $vclreloadid);
-			$rems[] = array('id' => $compid,
-			                'hostname' => $compdata[$compid]['hostname'],
-			                'reqid' => $reqid,
-			                'time' => 'immediately');
+			if($reqid == 0) {
+				$fails[] = array('id' => $compid,
+				                 'name' => $compdata[$compid]['hostname'],
+				                 'reason' => 'nomgtnode');
+			}
+			else {
+				$rems[] = array('id' => $compid,
+				                'hostname' => $compdata[$compid]['hostname'],
+				                'reqid' => $reqid,
+				                'time' => 'immediately');
+			}
 		}
 		else {
 			# existing reservation on computer, find end time and prompt user
@@ -632,14 +639,17 @@ function AJvmFromHost() {
 function AJvmFromHostDelayed() {
 	$data = getContinuationVar();
 	$vclreloadid = getUserlistID('vclreload@Local');
+	$fails = array();
 	foreach($data as $comp) {
 		$end = datetimeToUnix($comp['end2']) + SECINMONTH;
 		$end = unixToDatetime($end);
-		simpleAddRequest($comp['id'], 4, 3, $comp['end2'], $end, 18, $vclreloadid);
+		if(! simpleAddRequest($comp['id'], 4, 3, $comp['end2'], $end, 18, $vclreloadid))
+			$fails[] = array('name' => $comp['hostname'],
+			                 'reason' => 'nomgtnode');
 	}
 	header('Content-Type: text/json-comment-filtered; charset=utf-8');
 	$cont = addContinuationsEntry('vmhostdata');
-	$arr = array('msg' => 'SUCCESS', 'cont' => $cont);
+	$arr = array('msg' => 'SUCCESS', 'cont' => $cont, 'fails' => $fails);
 	print '/*{"items":' . json_encode($arr) . '}*/';
 }
 

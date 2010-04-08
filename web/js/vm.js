@@ -431,11 +431,18 @@ function vmFromHostCB(data, ioArgs) {
 	}
 
 	if(fails.length) {
-		var msg = 'You do not have access to remove the following vm(s):\n\n';
+		var msg1 = '';
+		var msg2 = '';
 		for(var i = 0; i < fails.length; i++) {
-			msg += fails[i].name + '\n';
+			if(fails[i].reason == 'noaccess')
+				msg1 += fails[i].name + '\n';
+			else if(fails[i].reason == 'nomgtnode')
+				msg2 += fails[i].name + '\n';
 		}
-		alert(msg);
+		if(msg1.length)
+			alert('You do not have access to remove the following vm(s):\n\n' + msg1);
+		if(msg2.length)
+			alert('The following vms could not be removed because no management node was available for them:\n\n' + msg2);
 	}
 
 	var checks = data.items.checks;
@@ -471,12 +478,19 @@ function reloadVMhostCB(data, ioArgs) {
 		document.body.style.cursor = 'default';
 		return;
 	}
-	if(data.items.failed && data.items.fails.length) {
-		var msg = 'You do not have access to remove the following vm(s):\n\n';
+	if(data.items.fails.length) {
+		var msg1 = '';
+		var msg2 = '';
 		for(var i = 0; i < data.items.fails.length; i++) {
-			msg += data.items.fails[i].name + '\n';
+			if(data.items.fails[i].reason == 'noaccess')
+				msg1 += data.items.fails[i].name + '\n';
+			else if(data.items.fails[i].reason == 'nomgtnode')
+				msg2 += data.items.fails[i].name + '\n';
 		}
-		alert(msg);
+		if(msg1.length)
+			alert('You do not have access to remove the following vm(s):\n\n' + msg1);
+		if(msg2.length)
+			alert('No management node was available to move the following VMs off of this host; therefore, nothing will be done at this time:\n\n' + msg2);
 	}
 	if(data.items.msg == 'SUCCESS')
 		getVMHostData(data.items.cont);

@@ -2453,9 +2453,6 @@ function submitCompStateChange() {
 		$data["notes"] = $user["unityid"] . " " . unixToDatetime(time()) . "@"
 		               . $data["notes"];
 		$vclreloadid = getUserlistID('vclreload@Local');
-		// get semaphore lock
-		if(! semLock())
-			abort(3);
 		$noaction = array();
 		$changenow = array();
 		$changeasap = array();
@@ -2468,6 +2465,9 @@ function submitCompStateChange() {
 		}
 		$passes = array();
 		$fails = array();
+		// get semaphore lock
+		if(! semLock())
+			abort(3);
 		foreach($changeasap as $compid) {
 			# TODO what about blockComputers?
 			# try to move future reservations off of computer
@@ -2550,7 +2550,7 @@ function submitCompStateChange() {
 		}
 		if(count($fails)) {
 			print "The following computers currently have reservations on them ";
-			print "but no functional management node was found for them. Nothing ";
+			print "but no functional management node was found for them. Nothing will ";
 			print "be done with them at this time:\n";
 			print "<TABLE>\n";
 			print "  <TR>\n";
@@ -2585,16 +2585,20 @@ function submitCompStateChange() {
 			$keys = array_keys($data['profiles']);
 			$profileid = $keys[0];
 		}
+		$vclreloadid = getUserlistID('vclreload@Local');
+		$imagerevisionid = getProductionRevisionid($data['profiles'][$profileid]['imageid']);
 		$noaction = array();
 		$changenow = array();
 		$changeasap = array();
 		$changetimes = array();
+		$fails = array();
 		foreach($data['computerids'] as $compid) {
 			if($computers[$compid]['state'] == 'vmhostinuse')
 				array_push($noaction, $compid);
 			else
 				array_push($changeasap, $compid);
 		}
+		// get semaphore lock
 		if(! semLock())
 			abort(3);
 		foreach($changeasap as $compid) {
@@ -2625,12 +2629,13 @@ function submitCompStateChange() {
 				$end = $start + SECINYEAR; # don't want anyone making a future reservation for this machine
 				$start = unixToDatetime($start);
 				$end = unixToDatetime($end);
-				$imagerevisionid = getProductionRevisionid($data['profiles'][$profileid]['imageid']);
-				$vclreloadid = getUserlistID('vclreload@Local');
-				simpleAddRequest($compid, $data['profiles'][$profileid]['imageid'],
-				                 $imagerevisionid, $start, $end, 21, $vclreloadid);
+				if(simpleAddRequest($compid, $data['profiles'][$profileid]['imageid'],
+				                    $imagerevisionid, $start, $end, 21, $vclreloadid)) {
+					$changenow[] = $compid;
+				}
+				else
+					$fails[] = $compid;
 				unset_by_val($compid, $changeasap);
-				array_push($changenow, $compid);
 
 				# check for existing vmhost entry
 				$query = "SELECT id, "
@@ -2669,6 +2674,19 @@ function submitCompStateChange() {
 			foreach($changenow as $compid) {
 				print "  <TR>\n";
 				print "    <TD><font color=\"#008000\">{$computers[$compid]['hostname']}</font></TD>\n";
+				print "  </TR>\n";
+			}
+			print "</TABLE>\n";
+			print "<br>\n";
+		}
+		if(count($fails)) {
+			print "The following computers had no reservations on them but no ";
+			print "functional management node was found to reload them with the ";
+			print "VM host image. Nothing will be done with them at this time:\n";
+			print "<TABLE>\n";
+			foreach($passes as $compid) {
+				print "  <TR>\n";
+				print "    <TD align=center><font color=\"ff0000\">{$computers[$compid]['hostname']}</font></TD>\n";
 				print "  </TR>\n";
 			}
 			print "</TABLE>\n";
