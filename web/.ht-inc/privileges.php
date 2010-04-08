@@ -1113,8 +1113,11 @@ function userLookup() {
 
 		$userdata = getUserInfo($userid);
 		if(is_null($userdata)) {
-			print "<font color=red>$userid not found in any known systems</font><br>\n";
-			return;
+			$userdata = getUserInfo($userid, 1);
+			if(is_null($userdata)) {
+				print "<font color=red>$userid not found in any known systems</font><br>\n";
+				return;
+			}
 		}
 		print "<TABLE>\n";
 		if(! empty($userdata['firstname'])) {

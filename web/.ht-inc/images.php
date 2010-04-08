@@ -2508,7 +2508,7 @@ function addImage($data) {
 	$data['description'] = mysql_escape_string($data['description']);
 	$data['usage'] = mysql_escape_string($data['usage']);
 
-	$ownerdata = getUserInfo($data['owner']);
+	$ownerdata = getUserInfo($data['owner'], 1);
 	$ownerid = $ownerdata['id'];
 	if(empty($data['maxconcurrent']) || ! is_numeric($data['maxconcurrent']))
 		$data['maxconcurrent'] = 'NULL';

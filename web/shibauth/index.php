@@ -177,8 +177,11 @@ if($row['shibonly']) {
 	updateShibGroups($userdata['id'], $_SERVER['affiliation']);
 	$usernid = $userdata['id'];
 }
-else
-	$usernid = getUserlistID($userid);
+else {
+	$usernid = getUserlistID($userid, 1);
+	if(is_null($usernid))
+		$usernid = updateShibUser($userid);
+}
 
 $affilid = getAffiliationID($affil);
 addLoginLog($userid, 'shibboleth', $affilid, 1);

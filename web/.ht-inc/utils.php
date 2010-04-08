@@ -211,14 +211,17 @@ function initGlobals() {
 	else {
 		# get info about user
 		if(! $user = getUserInfo($userid)) {
-			$ERRORS[1] = "Failed to get user info from database.  userid was $userid";
-			abort(1);
+			// if first call to getUserInfo fails, try calling with $noupdate set
+			if(! $user = getUserInfo($userid, 1)) {
+				$ERRORS[1] = "Failed to get user info from database.  userid was $userid";
+				abort(1);
+			}
 		}
 		if($user['adminlevel'] == 'developer' &&
 			array_key_exists('VCLTESTUSER', $_COOKIE)) {
 			$userid = $_COOKIE['VCLTESTUSER'];
 			if($userid != "{$user['unityid']}@{$user['affiliation']}") {
-				if($testuser = getUserInfo($userid))
+				if($testuser = getUserInfo($userid, 1))
 					$user = $testuser;
 			}
 		}
@@ -333,9 +336,12 @@ function checkAccess() {
 		}
 		$xmluser = processInputData($_SERVER['HTTP_X_USER'], ARG_STRING, 1);
 		if(! $user = getUserInfo($xmluser)) {
-			printXMLRPCerror(3);   # access denied
-			dbDisconnect();
-			exit;
+			// if first call to getUserInfo fails, try calling with $noupdate set
+			if(! $user = getUserInfo($xmluser, 1)) {
+				printXMLRPCerror(3);   # access denied
+				dbDisconnect();
+				exit;
+			}
 		}
 		$xmlpass = $_SERVER['HTTP_X_PASS'];
 		if(get_magic_quotes_gpc())
@@ -670,7 +676,7 @@ function main() {
 	if($authed) {
 		if(! empty($user['lastname']) && ! empty($user['preferredname']))
 			print "Hello {$user["preferredname"]} {$user['lastname']}<br><br>\n";
-		elseif(! empty($user['lastname']) && ! empty($user['preferredname']))
+		elseif(! empty($user['lastname']) && ! empty($user['firstname']))
 			print "Hello {$user["firstname"]} {$user['lastname']}<br><br>\n";
 		$tmp = array_values($user['groups']);
 		if(count($tmp) == 1 && $tmp[0] == 'nodemo') {
@@ -1675,7 +1681,7 @@ function addOwnedResources(&$resources, $includedeleted, $userid) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function addOwnedResourceGroups(&$resourcegroups, $userid) {
-	$user = getUserInfo($userid);
+	$user = getUserInfo($userid, 1);
 	$userid = $user["id"];
 	$groupids = implode(',', array_keys($user["groups"]));
 	if(empty($groupids))
@@ -2761,9 +2767,11 @@ function processInputData($data, $type, $addslashes=0, $defaultvalue=NULL) {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn getUserInfo($id)
+/// \fn getUserInfo($id, $noupdate)
 ///
 /// \param $id - unity ID for the user or user's id from database
+/// \param $noupdate - (optional, default=0) specify 1 to skip updating user's
+/// data if lastupdated timestamp is expired
 ///
 /// \return 0 if fail to fetch data or $user - an array with these elements:\n
 /// \b unityid - unity ID for the user\n
@@ -2799,7 +2807,7 @@ function processInputData($data, $type, $addslashes=0, $defaultvalue=NULL) {
 /// their name and unity id; fix information in db based on numeric unity id
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function getUserInfo($id) {
+function getUserInfo($id, $noupdate=0) {
 	$affilid = DEFAULT_AFFILID;
 	if(! is_numeric($id))
 		getAffilidAndLogin($id, $affilid);
@@ -2845,7 +2853,8 @@ function getUserInfo($id) {
 		if((datetimeToUnix($user["lastupdated"]) > time() - SECINDAY) ||
 		   $user['unityid'] == 'vclreload' ||
 		   $user['affiliation'] == 'Local' ||
-		   $user['shibonly']) {
+		   $user['shibonly'] ||
+		   $noupdate) {
 			# get user's groups
 			$user["groups"] = getUsersGroups($user["id"], 1);
 
