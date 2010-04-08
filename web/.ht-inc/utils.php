@@ -181,7 +181,6 @@ function initGlobals() {
 		require_once(".ht-inc/requests.php");
 		if($mode != "logout" &&
 			$mode != "shiblogout" &&
-			$mode != "vcldquery" &&
 			$mode != "xmlrpccall" &&
 			$mode != "xmlrpcaffiliations" &&
 			$mode != "selectauth" &&
@@ -189,7 +188,7 @@ function initGlobals() {
 			$oldmode = $mode;
 			$mode = "auth";
 		}
-		if($mode == "vcldquery" || $mode == 'xmlrpccall' || $mode == 'xmlrpcaffiliations') {
+		if($mode == 'xmlrpccall' || $mode == 'xmlrpcaffiliations') {
 			// get the semaphore id
 			if(! ($semid = sem_get(SEMKEY, 1, 0666, 1)))
 				abort(2);
@@ -316,18 +315,10 @@ function initGlobals() {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function checkAccess() {
-	global $mode, $user, $viewmode, $actionFunction, $vcldquerykey, $authMechs;
+	global $mode, $user, $viewmode, $actionFunction, $authMechs;
 	global $itecsauthkey, $ENABLE_ITECSAUTH, $actions, $noHTMLwrappers;
 	global $inContinuation, $docreaders, $userlookupUsers;
-	if($mode == "vcldquery") {
-		$key = processInputVar("key", ARG_STRING);
-		if($key != $vcldquerykey) {
-			print "Access denied\n";
-			dbDisconnect();
-			exit;
-		}
-	}
-	elseif($mode == 'xmlrpccall') {
+	if($mode == 'xmlrpccall') {
 		// double check for SSL
 		if(! isset($_SERVER['HTTPS']) || $_SERVER['HTTPS'] != "on") {
 			printXMLRPCerror(4);   # must have SSL enabled
@@ -8146,69 +8137,6 @@ function sendJSON($arr) {
 	print '{} && {"items":' . json_encode($arr) . '}';
 }
 
-////////////////////////////////////////////////////////////////////////////////
-///
-/// \fn vcldquery()
-///
-/// \brief this function is a sort of wrapper for a web API for vcld\n
-/// \n
-/// This allows the vcld daemon to call this web code so code does not
-/// have to be developed in both perl and php.  The perl code needs to use
-/// the \b LWP::Simple and \b WDDX libraries.  Data returned from the called function
-/// is returned in a WDDX serialized structure.  To call a function, use the 
-/// perl \c get function from \b LWP::Simple, calling \c index.php with \c mode=vcldquery,
-/// \c key=&lt;shared \c key&gt;, \c query=&lt;comma \c delimited \c list&gt; where the first
-/// item in the list is the function to call and the rest of the items in the
-/// list are the arguments to the function.  If an argument needs to be an
-/// array, use a colon delimited list for the elements of the array.  If you
-/// need the array to have 0 or 1 items, either use just a : or add a : at the
-/// end of the first element. Example:\n
-/// \code
-/// my $doc = get("http://..../index.php?mode=vcldquery&key=<key>&query=getOverallUserPrivs,1");
-/// my $doc_id = new WDDX;
-/// my $wddk_obj = $doc_id->deserialize($doc);
-/// my $value = $wddx_obj->as_hasref();
-/// $value->{"data"}; # will contain what the php function (getOverallUserPrivs) returned
-/// \endcode
-///
-////////////////////////////////////////////////////////////////////////////////
-
-/* /// \example vcldphpcall.pl */
-function vcldquery() {
-	$query = processInputVar("query", ARG_STRING);
-	$arr = explode(',', $query);
-	$function = array_shift($arr);
-	$args = array();
-	foreach($arr as $item) {
-		if(ereg(':', $item)) {
-			$item = array_diff(explode(':', $item), array(""));
-		}
-		array_push($args, $item);
-	}
-	require_once(".ht-inc/groups.php");
-	require_once(".ht-inc/privileges.php");
-	require_once(".ht-inc/requests.php");
-	require_once(".ht-inc/schedules.php");
-	require_once(".ht-inc/statistics.php");
-	require_once(".ht-inc/userpreferences.php");
-
-	if(count($args) == 0)
-		$data = $function();
-	elseif(count($args) == 1)
-		$data = $function($args[0]);
-	elseif(count($args) == 2)
-		$data = $function($args[0], $args[1]);
-	elseif(count($args) == 3)
-		$data = $function($args[0], $args[1], $args[2]);
-	elseif(count($args) == 4)
-		$data = $function($args[0], $args[1], $args[2], $args[3]);
-	elseif(count($args) == 5)
-		$data = $function($args[0], $args[1], $args[2], $args[3], $args[4]);
-	elseif(count($args) == 6)
-		$data = $function($args[0], $args[1], $args[2], $args[3], $args[4], $args[5]);
-
-	print wddx_serialize_vars("data");
-}
 
 ////////////////////////////////////////////////////////////////////////////////
 ///

@@ -56,7 +56,6 @@ $actions["entry"] = array('main',
 );
 
 $noHTMLwrappers = array('sendRDPfile',
-                        'vcldquery',
                         'xmlrpccall',
                         'xmlrpcaffiliations',
                         'selectNode',
@@ -575,10 +574,8 @@ $actions['pages']['AJnewProfile'] = "vm";
 $actions['pages']['AJdelProfile'] = "vm";
 
 # RPC
-$actions['mode']['vcldquery'] = "vcldquery";
 $actions['mode']['xmlrpccall'] = "xmlrpccall";
 $actions['mode']['xmlrpcaffiliations'] = "xmlrpcgetaffiliations";
-$actions['pages']['vcldquery'] = "RPC";
 $actions['pages']['xmlrpccall'] = "RPC";
 $actions['pages']['xmlrpcaffiliations'] = "RPC";
 
