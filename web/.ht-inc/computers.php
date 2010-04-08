@@ -2453,6 +2453,8 @@ function submitCompStateChange() {
 		$data["notes"] = $user["unityid"] . " " . unixToDatetime(time()) . "@"
 		               . $data["notes"];
 		$vclreloadid = getUserlistID('vclreload@Local');
+		$imageid = getImageId('noimage');
+		$imagerevisionid = getProductionRevisionid($imageid);
 		$noaction = array();
 		$changenow = array();
 		$changeasap = array();
@@ -2488,7 +2490,7 @@ function submitCompStateChange() {
 				$changetimes[$compid] = $start;
 				$end = datetimeToUnix($start) + SECINWEEK; // hopefully keep future reservations off of it
 				$end = unixToDatetime($end);
-				if(simpleAddRequest($compid, 4, 3, $start, $end, 18, $vclreloadid))
+				if(simpleAddRequest($compid, $imageid, $imagerevisionid, $start, $end, 18, $vclreloadid))
 					$passes[] = $compid;
 				else
 					$fails[] = $compid;
@@ -2553,10 +2555,7 @@ function submitCompStateChange() {
 			print "but no functional management node was found for them. Nothing will ";
 			print "be done with them at this time:\n";
 			print "<TABLE>\n";
-			print "  <TR>\n";
-			print "    <TH>Computer</TH>\n";
-			print "  </TR>\n";
-			foreach($passes as $compid) {
+			foreach($fails as $compid) {
 				print "  <TR>\n";
 				print "    <TD align=center><font color=\"ff0000\">{$computers[$compid]['hostname']}</font></TD>\n";
 				print "  </TR>\n";
@@ -2684,7 +2683,7 @@ function submitCompStateChange() {
 			print "functional management node was found to reload them with the ";
 			print "VM host image. Nothing will be done with them at this time:\n";
 			print "<TABLE>\n";
-			foreach($passes as $compid) {
+			foreach($fails as $compid) {
 				print "  <TR>\n";
 				print "    <TD align=center><font color=\"ff0000\">{$computers[$compid]['hostname']}</font></TD>\n";
 				print "  </TR>\n";
