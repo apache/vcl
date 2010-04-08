@@ -4471,6 +4471,7 @@ function getUserRequests($type, $id=0) {
 	       .        "c.type AS comptype, "
 	       .        "rq.forimaging, "
 	       .        "i.forcheckout, "
+	       .        "rs.managementnodeid, "
 	       .        "rq.test "
 	       . "FROM request rq, "
 	       .      "reservation rs, "
