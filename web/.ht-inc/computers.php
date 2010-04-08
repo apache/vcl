@@ -875,7 +875,7 @@ function confirmEditOrAddComputer($state) {
 	print "  <TR>\n";
 	print "    <TD>\n";
 	print "      <FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
-	if($data['stateid'] == 10)
+	if(! $state && $data['stateid'] == 10)
 		$cont = addContinuationsEntry('computerAddMaintenanceNote', $data, SECINDAY, 0);
 	else
 		$cont = addContinuationsEntry($nextmode, $data, SECINDAY, 0, 0);
@@ -3335,7 +3335,14 @@ function updateComputer($data) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function addComputer($data) {
+	global $user;
 	$ownerid = getUserlistID($data["owner"]);
+	if($data['stateid'] == 10) {
+		$now = unixToDatetime(time());
+		$notes = "'{$user['unityid']} $now@in maintenance state when added to database'";
+	}
+	else
+		$notes = 'NULL';
 	$query = "INSERT INTO computer "
 	       .        "(stateid, "
 	       .        "ownerid, "
@@ -3349,6 +3356,7 @@ function addComputer($data) {
 	       .        "hostname, "
 	       .        "IPaddress, "
 	       .        "type, "
+	       .        "notes, "
 	       .        "provisioningid) "
 	       . "VALUES (" . $data["stateid"] . ", "
 	       .         "$ownerid, "
@@ -3362,6 +3370,7 @@ function addComputer($data) {
 	       .         "'" . $data["hostname"] . "', "
 	       .         "'" . $data["ipaddress"] . "', "
 	       .         "'" . $data["type"] . "', "
+	       .         "$notes, "
 	       .         "'" . $data["provisioningid"] . "')";
 	doQuery($query, 195);
 
