@@ -90,9 +90,8 @@ function updateShibUser($userid) {
 		$email = mysql_escape_string($user['email']);
 		$query .= "email = '$email', ";
 	}
-	$query .=    "emailnotices = 0, " 
-	       .     "lastupdated = NOW() " 
-	       . "WHERE uid = {$user['id']}";
+	$query .=    "lastupdated = NOW() " 
+	       . "WHERE id = {$user['id']}";
 	doQuery($query, 101, 'vcl', 1);
 	return $user;
 }
