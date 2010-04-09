@@ -2688,7 +2688,7 @@ function editRequest() {
 		$openend = 0;
 	$unixstart = datetimeToUnix($request["start"]);
 	$unixend = datetimeToUnix($request["end"]);
-	$maxtimes = getUserMaxTimes("initialmaxtime");
+	$maxtimes = getUserMaxTimes();
 	$timeToNext = timeToNextReservation($request);
 
 	print "<H2>Modify Reservation</H2>\n";
@@ -3407,7 +3407,7 @@ function printReserveItems($modifystart=1, $imaging=0, $length=60, $maxlength=0,
 		return;
 
 	# create an array of usage times based on the user's max times
-	$maxtimes = getUserMaxTimes("initialmaxtime");
+	$maxtimes = getUserMaxTimes();
 	if($maxlength > 0 && $maxlength < $maxtimes['initial'])
 		$maxtimes['initial'] = $maxlength;
 	if($imaging && $maxtimes['initial'] < 720) # make sure at least 12 hours available for imaging reservations
