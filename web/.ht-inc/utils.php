@@ -4104,6 +4104,7 @@ function getRequestInfo($id) {
 	       . "WHERE id = $id";
 	$qh = doQuery($query, 165);
 	if(! ($data = mysql_fetch_assoc($qh))) {
+		# FIXME handle XMLRPC cases
 		if(! $printedHTMLheader) 
 			print $HTMLheader;
 		print "<h1>OOPS! - Reservation Has Expired</h1>\n";
@@ -7768,8 +7769,11 @@ function xmlrpccall() {
 	xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCtest", "xmlRPChandler");
 	xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCgetImages", "xmlRPChandler");
 	xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCaddRequest", "xmlRPChandler");
+	xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCaddRequestWithEnding", "xmlRPChandler");
 	xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCgetRequestStatus", "xmlRPChandler");
 	xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCgetRequestConnectData", "xmlRPChandler");
+	xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCextendRequest", "xmlRPChandler");
+	xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCsetRequestEnding", "xmlRPChandler");
 	xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCendRequest", "xmlRPChandler");
 	xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCgetRequestIds", "xmlRPChandler");
 	xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCblockAllocation", "xmlRPChandler");

@@ -167,7 +167,7 @@ function XMLRPCaddRequest($imageid, $start, $length, $foruser='') {
 	if($start != 'now' && ! is_numeric($start)) {
 		return array('status' => 'error',
 		             'errorcode' => 4,
-		             'errormsg' => "received invalid input");
+		             'errormsg' => "received invalid input for start");
 	}
 
 	# validate $length
@@ -190,6 +190,113 @@ function XMLRPCaddRequest($imageid, $start, $length, $foruser='') {
 			             'errormsg' => "start time is in the past");
 	$start = unixFloor15($start);
 	$end = $start + $length * 60;
+	if($end % (15 * 60))
+		$end = unixFloor15($end) + (15 * 60);
+
+	$max = getMaxOverlap($user['id']);
+	if(checkOverlap($start, $end, $max)) {
+		return array('status' => 'error',
+		             'errorcode' => 7,
+		             'errormsg' => "reservation overlaps with another one you "
+		                         . "have, and you are allowed $max "
+		                         . "overlapping reservations at a time");
+	}
+
+	$images = getImages();
+	$rc = isAvailable($images, $imageid, $start, $end, '');
+	if($rc < 1) {
+		addLogEntry($nowfuture, unixToDatetime($start), 
+		            unixToDatetime($end), 0, $imageid);
+		return array('status' => 'notavailable');
+	}
+	$return['requestid']= addRequest();
+	$return['status'] = 'success';
+	return $return;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn XMLRPCaddRequestWithEnding($imageid, $start, $end, $foruser)
+///
+/// \param $imageid - id of an image
+/// \param $start - "now" or unix timestamp for start of reservation; will
+/// use a floor function to round down to the nearest 15 minute increment
+/// for actual reservation
+/// \param $end - unix timestamp for end of reservation; will be rounded up to
+/// the nearest 15 minute increment
+/// \param $foruser - (optional) login to be used when setting up the account
+/// on the reserved machine - CURRENTLY, THIS IS UNSUPPORTED
+///
+/// \return an array with at least one index named '\b status' which will have
+/// one of these values:\n
+/// \b error - error occurred; there will be 2 additional elements in the array:
+/// \li \b errorcode - error number\n
+/// \li \b errormsg - error string\n
+///
+/// \b notavailable - no computers were available for the request\n
+/// \b success - there will be an additional element in the array:
+/// \li \b requestid - identifier that should be passed to later calls when
+/// acting on the request
+///
+/// \brief tries to make a request with the specified ending time
+///
+////////////////////////////////////////////////////////////////////////////////
+function XMLRPCaddRequestWithEnding($imageid, $start, $end, $foruser='') {
+	global $user;
+	$imageid = processInputData($imageid, ARG_NUMERIC);
+	$start = processInputData($start, ARG_STRING, 1);
+	$end = processInputData($end, ARG_STRING);
+	#$foruser = processInputData($foruser, ARG_STRING, 1);
+
+	// make sure user is a member of the 'Specify End Time' group
+	$groupid = getUserGroupID('Specify End Time');
+	$members = getUserGroupMembers($groupid);
+	if(! array_key_exists($user['id'], $members)) {
+		return array('status' => 'error',
+		             'errorcode' => 35,
+		             'errormsg' => "access denied to specify end time");
+	}
+
+	// make sure user didn't submit a request for an image he
+	// doesn't have access to
+	$resources = getUserResources(array("imageAdmin", "imageCheckOut"));
+	$validImageids = array_keys($resources['image']);
+	if(! in_array($imageid, $validImageids)) {
+		return array('status' => 'error',
+		             'errorcode' => 3,
+		             'errormsg' => "access denied to $imageid");
+	}
+
+	# validate $start
+	if($start != 'now' && ! is_numeric($start)) {
+		return array('status' => 'error',
+		             'errorcode' => 4,
+		             'errormsg' => "received invalid input for start");
+	}
+
+	# validate $end
+	if(! is_numeric($end)) {
+		return array('status' => 'error',
+		             'errorcode' => 36,
+		             'errormsg' => "received invalid input for end");
+	}
+	if($start >= $end) {
+		return array('status' => 'error',
+		             'errorcode' => 37,
+		             'errormsg' => "start must be greater than end");
+	}
+
+	$nowfuture = 'future';
+	if($start == 'now') {
+		$start = time();
+		$nowfuture = 'now';
+	}
+	else
+		if($start < (time() - 30))
+			return array('status' => 'error',
+			             'errorcode' => 5,
+			             'errormsg' => "start time is in the past");
+	$start = unixFloor15($start);
 	if($end % (15 * 60))
 		$end = unixFloor15($end) + (15 * 60);
 
@@ -376,6 +483,258 @@ function XMLRPCgetRequestConnectData($requestid, $remoteIP) {
 		             'password' => $passwd);
 	}
 	return array('status' => 'notready');
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn XMLRPCextendRequest($requestid, $extendtime)
+///
+/// \param $requestid - id of a request
+/// \param $extendtime - time in minutes to extend reservation
+///
+/// \return an array with at least one index named 'status' which will have
+/// one of these values\n
+/// \b error - error occurred; there will be 2 additional elements in the array:
+/// \li \b errorcode - error number\n
+/// \li \b errormsg - error string\n
+///
+/// \b success - request was successfully extended\n
+///
+/// \brief extends the length of an active request; if a request that has not
+/// started needs to be extended, delete the request and submit a new one
+///
+////////////////////////////////////////////////////////////////////////////////
+function XMLRPCextendRequest($requestid, $extendtime) {
+	global $user;
+	$requestid = processInputData($requestid, ARG_NUMERIC);
+	$extendtime = processInputData($extendtime, ARG_NUMERIC);
+
+	$userRequests = getUserRequests('all', $user['id']);
+	$found = 0;
+	foreach($userRequests as $req) {
+		if($req['id'] == $requestid) {
+			$request = getRequestInfo($requestid);
+			$found = 1;
+			break;
+		}
+	}
+	if(! $found)
+		return array('status' => 'error',
+		             'errorcode' => 1,
+		             'errormsg' => 'unknown requestid');
+
+	$startts = datetimeToUnix($request['start']);
+	$endts = datetimeToUnix($request['end']);
+	$newendts = $endts + ($extendtime * 60);
+	if($newendts % (15 * 60))
+		$newendts= unixFloor15($newendts) + (15 * 60);
+
+	// check that reservation has started
+	if($startts > time()) {
+		return array('status' => 'error',
+		             'errorcode' => 38,
+		             'errormsg' => 'reservation has not started');
+	}
+
+	// check for allowed extension length
+	$maxtimes = getUserMaxTimes();
+	if($extendtime > $maxtimes['extend']) {
+		return array('status' => 'error',
+		             'errorcode' => 39,
+		             'errormsg' => 'extendtime exceeds allowable extension',
+		             'allowed' => $maxtimes['extend']);
+	}
+	$newlength = ($endts - $startts) / 60 + $extendtime;
+	if($newlength > $maxtimes['total']) {
+		return array('status' => 'error',
+		             'errorcode' => 40,
+		             'errormsg' => 'new reservation length exceeds allowable length',
+		             'allowed' => $maxtimes['total']);
+	}
+
+	// check for overlap
+	$max = getMaxOverlap($user['id']);
+	if(checkOverlap($startts, $newendts, $max, $requestid)) {
+		return array('status' => 'error',
+		             'errorcode' => 41,
+		             'errormsg' => 'overlapping reservation restriction',
+		             'maxoverlap' => $max);
+	}
+
+	// check for computer being available for extended time?
+	$timeToNext = timeToNextReservation($request);
+	$movedall = 1;
+	if($timeToNext > -1) {
+		foreach($request["reservations"] as $res) {
+			if(! moveReservationsOffComputer($res["computerid"])) {
+				$movedall = 0;
+				break;
+			}
+		}
+	}
+	if(! $movedall) {
+		$timeToNext = timeToNextReservation($request);
+		if($timeToNext >= 15)
+			$timeToNext -= 15;
+		// reservation immediately after this one, cannot extend
+		if($timeToNext < 15) {
+			return array('status' => 'error',
+			             'errorcode' => 42,
+			             'errormsg' => 'cannot extend due to another reservation immediately after this one');
+		}
+		// check that requested extension < $timeToNext
+		elseif($extendtime > $timeToNext) {
+			$extra = $timeToNext - ($timeToNext % 15);
+			return array('status' => 'error',
+			             'errorcode' => 43,
+			             'errormsg' => 'cannot extend by requested amount',
+			             'availablelength' => $extra);
+		}
+	}
+	$rc = isAvailable(getImages(), $request['reservations'][0]["imageid"],
+	                  $startts, $newendts, '', $requestid);
+	// concurrent license overlap
+	if($rc == -1) {
+		addChangeLogEntry($request["logid"], NULL, unixToDatetime($newendts),
+		                  $request['start'], NULL, NULL, 0);
+		return array('status' => 'error',
+		             'errorcode' => 44,
+		             'errormsg' => 'concurrent license restriction');
+	}
+	// could not extend for some other reason
+	elseif($rc == 0) {
+		addChangeLogEntry($request["logid"], NULL, unixToDatetime($newendts),
+		                  $request['start'], NULL, NULL, 0);
+		return array('status' => 'error',
+		             'errorcode' => 45,
+		             'errormsg' => 'cannot extend at this time');
+	}
+	// success
+	updateRequest($requestid);
+	return array('status' => 'success');
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn XMLRPCsetRequestEnding($requestid, $end)
+///
+/// \param $requestid - id of a request
+/// \param $end - unix timestamp for end of reservation; will be rounded up to
+/// the nearest 15 minute increment
+///
+/// \return an array with at least one index named 'status' which will have
+/// one of these values\n
+/// \b error - error occurred; there will be 2 additional elements in the array:
+/// \li \b errorcode - error number\n
+/// \li \b errormsg - error string\n
+///
+/// \b success - request was successfully extended\n
+///
+/// \brief modifies the end time of an active request; if a request that has not
+/// started needs to be modifed, delete the request and submit a new one
+///
+////////////////////////////////////////////////////////////////////////////////
+function XMLRPCsetRequestEnding($requestid, $end) {
+	global $user;
+
+	// make sure user is a member of the 'Specify End Time' group
+	$groupid = getUserGroupID('Specify End Time');
+	$members = getUserGroupMembers($groupid);
+	if(! array_key_exists($user['id'], $members)) {
+		return array('status' => 'error',
+		             'errorcode' => 35,
+		             'errormsg' => "access denied to specify end time");
+	}
+
+	$requestid = processInputData($requestid, ARG_NUMERIC);
+	$end = processInputData($end, ARG_NUMERIC);
+
+	$userRequests = getUserRequests('all', $user['id']);
+	$found = 0;
+	foreach($userRequests as $req) {
+		if($req['id'] == $requestid) {
+			$request = getRequestInfo($requestid);
+			$found = 1;
+			break;
+		}
+	}
+	if(! $found)
+		return array('status' => 'error',
+		             'errorcode' => 1,
+		             'errormsg' => 'unknown requestid');
+
+	$startts = datetimeToUnix($request['start']);
+	if($end % (15 * 60))
+		$end= unixFloor15($end) + (15 * 60);
+
+	// check that reservation has started
+	if($startts > time()) {
+		return array('status' => 'error',
+		             'errorcode' => 38,
+		             'errormsg' => 'reservation has not started');
+	}
+
+	// check for overlap
+	$max = getMaxOverlap($user['id']);
+	if(checkOverlap($startts, $end, $max, $requestid)) {
+		return array('status' => 'error',
+		             'errorcode' => 41,
+		             'errormsg' => 'overlapping reservation restriction',
+		             'maxoverlap' => $max);
+	}
+
+	// check for computer being available for extended time?
+	$timeToNext = timeToNextReservation($request);
+	$movedall = 1;
+	if($timeToNext > -1) {
+		foreach($request["reservations"] as $res) {
+			if(! moveReservationsOffComputer($res["computerid"])) {
+				$movedall = 0;
+				break;
+			}
+		}
+	}
+	if(! $movedall) {
+		$timeToNext = timeToNextReservation($request);
+		if($timeToNext >= 15)
+			$timeToNext -= 15;
+		$oldendts = datetimeToUnix($request['end']);
+		// reservation immediately after this one, cannot extend
+		if($timeToNext < 15) {
+			return array('status' => 'error',
+			             'errorcode' => 42,
+			             'errormsg' => 'cannot extend due to another reservation immediately after this one');
+		}
+		// check that requested extension < $timeToNext
+		elseif((($end - $oldendts) / 60) > $timeToNext) {
+			$maxend = $oldendts + ($timeToNext * 60);
+			return array('status' => 'error',
+			             'errorcode' => 43,
+			             'errormsg' => 'cannot extend by requested amount due to another reservation',
+			             'maxend' => $maxend);
+		}
+	}
+	$rc = isAvailable(getImages(), $request['reservations'][0]["imageid"],
+	                  $startts, $end, '', $requestid);
+	// concurrent license overlap
+	if($rc == -1) {
+		addChangeLogEntry($request["logid"], NULL, unixToDatetime($end),
+		                  $request['start'], NULL, NULL, 0);
+		return array('status' => 'error',
+		             'errorcode' => 44,
+		             'errormsg' => 'concurrent license restriction');
+	}
+	// could not extend for some other reason
+	elseif($rc == 0) {
+		addChangeLogEntry($request["logid"], NULL, unixToDatetime($end),
+		                  $request['start'], NULL, NULL, 0);
+		return array('status' => 'error',
+		             'errorcode' => 45,
+		             'errormsg' => 'cannot extend at this time');
+	}
+	// success
+	updateRequest($requestid);
+	return array('status' => 'success');
 }
 
 ////////////////////////////////////////////////////////////////////////////////
