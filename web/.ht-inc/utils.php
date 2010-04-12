@@ -5921,10 +5921,13 @@ function getCompLoadLog($resid) {
 	$qh = doQuery($query, 101);
 	if(! $row = mysql_fetch_assoc($qh))
 		abort(113);
-	if($row['start'] < $row['reqtime'])
-		$firststart = $row['reqtime'];
+	if($row['start'] < $row['reqtime']) {
+		# now
+		$reqtime = $row['reqtime'];
+		$future = 0;
+	}
 	else
-		$firststart = $row['start'];
+		$future = 1;
 	$flow = getCompStateFlow($row['computerid']);
 	$instates = implode(',', $flow['stateids']);
 	$query = "SELECT id, "
@@ -5941,8 +5944,13 @@ function getCompLoadLog($resid) {
 	$data = array();
 	while($row = mysql_fetch_assoc($qh)) {
 		$data[$row['id']] = $row;
-		if(empty($last))
-			$data[$row['id']]['time'] = $row['ts'] - $firststart;
+		if(empty($last)) {
+			if($future)
+				# just set to 10 sec for first state since we don't know when a preload started
+				$data[$row['id']]['time'] = 10;
+			else
+				$data[$row['id']]['time'] = $row['ts'] - $reqtime;
+		}
 		else
 			$data[$row['id']]['time'] = $row['ts'] - $last['ts'];
 		$last = $row;
