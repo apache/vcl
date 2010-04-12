@@ -40,7 +40,9 @@
 ////////////////////////////////////////////////////////////////////////////////
 function updateShibUser($userid) {
 	global $mysql_link_vcl;
-	getAffilidAndLogin($userid, $affilid);
+	$rc = getAffilidAndLogin($userid, $affilid);
+	if($rc == -1)
+		return NULL;
 
 	if(array_key_exists('displayName', $_SERVER) &&
 	   ! empty($_SERVER['displayName'])) {

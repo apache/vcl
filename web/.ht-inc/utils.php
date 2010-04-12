@@ -364,11 +364,11 @@ function checkAccess() {
 					break;
 				}
 			}
-			/*if(empty($authtype)) {
+			if(empty($authtype)) {
 				print "No authentication mechanism found for passed in X-User";
 				dbDisconnect();
 				exit;
-			}*/
+			}
 			if($authMechs[$authtype]['type'] == 'ldap') {
 				$ds = ldap_connect("ldaps://{$authMechs[$authtype]['server']}/");
 				if(! $ds) {
@@ -792,7 +792,9 @@ function validateUserid($loginid) {
 	if(empty($loginid))
 		return 0;
 	
-	getAffilidAndLogin($loginid, $affilid);
+	$rc = getAffilidAndLogin($loginid, $affilid);
+	if($rc == -1)
+		return 0;
 
 	if(empty($affilid))
 		return 0;
@@ -826,7 +828,9 @@ function validateUserid($loginid) {
 /// \param $login - login for user, may include \@affiliation
 /// \param $affilid - variable in which to stick the affiliation id
 ///
-/// \return 1 if $affilid set by a registered function, 0 if set to default
+/// \return 1 if $affilid set by a registered function, 0 if set to default,
+/// -1 if @affiliation was part of $login but did not contain a known
+/// affiliation
 ///
 /// \brief tries registered affiliation lookup functions to determine the
 /// affiliation id of the user; if it finds it, sticks the affiliationid in
@@ -836,8 +840,9 @@ function validateUserid($loginid) {
 function getAffilidAndLogin(&$login, &$affilid) {
 	global $findAffilFuncs;
 	foreach($findAffilFuncs as $func) {
-		if($func($login, $affilid))
-			return 1;
+		$rc = $func($login, $affilid);
+		if($rc)
+			return $rc;
 	}
 	$affilid = DEFAULT_AFFILID;
 	return 0;
@@ -1672,7 +1677,8 @@ function addOwnedResources(&$resources, $includedeleted, $userid) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function addOwnedResourceGroups(&$resourcegroups, $userid) {
-	$user = getUserInfo($userid, 1);
+	if(! $user = getUserInfo($userid, 1))
+		return;
 	$userid = $user["id"];
 	$groupids = implode(',', array_keys($user["groups"]));
 	if(empty($groupids))
@@ -2795,13 +2801,17 @@ function processInputData($data, $type, $addslashes=0, $defaultvalue=NULL) {
 ///
 /// \brief gets the user's information from the db and puts it into an array;
 /// if the user is not in the db, query ldap and add them; if the user changed
-/// their name and unity id; fix information in db based on numeric unity id
+/// their name and unity id; fix information in db based on numeric unity id;
+/// returns NULL if could not get information about the user
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function getUserInfo($id, $noupdate=0) {
 	$affilid = DEFAULT_AFFILID;
-	if(! is_numeric($id))
-		getAffilidAndLogin($id, $affilid);
+	if(! is_numeric($id)) {
+		$rc = getAffilidAndLogin($id, $affilid);
+		if($rc == -1)
+			return NULL;
+	}
 
 	$user = array();
 	$query = "SELECT u.unityid AS unityid, "

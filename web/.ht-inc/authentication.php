@@ -654,7 +654,8 @@ function checkExpiredDemoUser($userid, $groups=0) {
 /// \param $login - (pass by ref) a login id with affiliation
 /// \param $affilid - (pass by ref) gets overwritten
 ///
-/// \return - 1 if successfully found affiliation id, 0 if failed 
+/// \return - 1 if successfully found known affiliation id in $login, 0 if
+/// failed, -1 if found an unknown affilation in $login
 ///
 /// \brief changes $login to be without affiliation and sticks the associated
 /// affiliation id in $affilid
@@ -664,6 +665,8 @@ function testGeneralAffiliation(&$login, &$affilid) {
 	if(preg_match('/^([^@]+)@([^@\.]*)$/', $login, $matches)) {
 		$login = $matches[1];
 		$affilid = getAffiliationID($matches[2]);
+		if(is_null($affilid))
+			return -1;
 		return 1;
 	}
 	return 0;

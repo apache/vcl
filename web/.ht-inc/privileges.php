@@ -2583,8 +2583,11 @@ function checkUserHasPriv($priv, $uid, $node, $privs=0, $cascadePrivs=0) {
 	$key = getKey(array($priv, $uid, $node, $privs, $cascadePrivs));
 	if(array_key_exists($key, $_SESSION['userhaspriv']))
 		return $_SESSION['userhaspriv'][$key];
-	if($user["id"] != $uid)
+	if($user["id"] != $uid) {
 		$_user = getUserInfo($uid);
+		if(is_null($user))
+			return 0;
+	}
 	else
 		$_user = $user;
 	$affilUserid = "{$_user['unityid']}@{$_user['affiliation']}";
