@@ -774,14 +774,36 @@ function addGroup($data) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function checkForGroupUsage($groupid, $type) {
-	if($type == "user")
+	if($type == "user") {
+		$query = "SELECT id FROM resourcegroup WHERE ownerusergroupid = $groupid";
+		$qh = doQuery($query, 310);
+		if(mysql_num_rows($qh))
+			return 1;
+		$query = "SELECT id "
+		       . "FROM blockRequest "
+		       . "WHERE groupid = $groupid "
+		       .    "OR admingroupid = $groupid";
+		$qh = doQuery($query, 311);
+		if(mysql_num_rows($qh))
+			return 1;
+		$query = "SELECT id FROM imagemeta WHERE usergroupid = $groupid";
+		$qh = doQuery($query, 312);
+		if(mysql_num_rows($qh))
+			return 1;
+		$query = "SELECT id "
+		       . "FROM usergroup "
+				 . "WHERE editusergroupid = $groupid "
+				 .   "AND id != $groupid";
+		$qh = doQuery($query, 313);
+		if(mysql_num_rows($qh))
+			return 1;
 		$query = "SELECT id FROM userpriv WHERE usergroupid = $groupid";
+	}
 	else
 		$query = "SELECT id FROM resourcepriv WHERE resourcegroupid = $groupid";
-	$qh = doQuery($query, 310);
-	if(mysql_num_rows($qh)) {
+	$qh = doQuery($query, 314);
+	if(mysql_num_rows($qh))
 		return 1;
-	}
 	return 0;
 }
 
@@ -969,12 +991,17 @@ function confirmDeleteGroup() {
 
 	if($type == "user") {
 		$title = "Delete User Group";
+		$usemsg = "This group is currently in use.  You cannot delete it until "
+		        . "it is no longer being used.";
 		$question = "Delete the following user group?";
 		$name = $usergroups[$groupid]["name"];
 		$target = "";
 	}
 	else {
 		$title = "Delete Resource Group";
+		$usemsg = "This group is currently assigned to at least one node in the "
+		        . "privilege tree.  You cannot delete it until it is no longer "
+		        . "in use.";
 		$question = "Delete the following resource group?";
 		list($resourcetype, $name) = 
 			split('/', $resourcegroups[$groupid]["name"]);
@@ -983,9 +1010,7 @@ function confirmDeleteGroup() {
 
 	if(checkForGroupUsage($groupid, $type)) {
 		print "<H2 align=center>$title</H2>\n";
-		print "This group is currently assigned to at least one node in the ";
-		print "privilege tree.  You cannot delete it until it is no longer ";
-		print "in use.";
+		print $usemsg;
 		return;
 	}
 
