@@ -3324,7 +3324,8 @@ function isAvailable($images, $imageid, $start, $end, $os, $requestid=0,
 			       .       "c.RAM >= i.minram AND "
 			       .       "c.procnumber >= i.minprocnumber AND "
 			       .       "c.procspeed >= i.minprocspeed AND "
-			       .       "c.network >= i.minnetwork AND ";
+			       .       "c.network >= i.minnetwork AND "
+			       .       "(c.type != 'virtualmachine' OR c.vmhostid IS NOT NULL) AND ";
 			if(! $ignoreprivileges)
 				$query .=   "c.id IN ($usercomputers) AND ";
 			$query .=      "c.id IN ($mappedcomputers) AND "

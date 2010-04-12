@@ -42,6 +42,8 @@ define("IPADDRERR3", 1 << 8);
 define("IPADDRERR4", 1 << 9);
 /// signifies an error with the submitted start mac address
 define("MACADDRERR", 1 << 10);
+/// signifies an error with the submitted machine type/state combination
+define("VMAVAILERR", 1 << 11);
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
@@ -653,6 +655,9 @@ function editOrAddComputer($state) {
 	print "    <TD>\n";
 	printSelectInput("stateid", $states, $data["stateid"]);
 	print "    </TD>\n";
+	print "    <TD>";
+	printSubmitErr(VMAVAILERR);
+	print "</TD>\n";
 	print "  </TR>\n";
 	print "  <TR>\n";
 	print "    <TH align=right>Owner:</TH>\n";
@@ -2943,6 +2948,10 @@ function processComputerInput($checks=1) {
 	if($mode != 'viewComputers' && ! validateUserid($return["owner"])) {
 	   $submitErr |= OWNERERR;
 	   $submitErrMsg[OWNERERR] = "Submitted ID is not valid";
+	}
+	if($return['type'] == 'virtualmachine' && $return['stateid'] == 2) {
+	   $submitErr |= VMAVAILERR;
+	   $submitErrMsg[VMAVAILERR] = "Virtual machines can only be added in the maintenance state.";
 	}
 	return $return;
 }
