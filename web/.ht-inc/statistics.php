@@ -227,6 +227,7 @@ function viewStatistics() {
 	$imagehours = array();
 	$imageload2less = array();
 	$imageload2more = array();
+	$imagefails = array();
 	$lengths = array("30min" => 0,
 	                 "1hour" => 0,
 	                 "2hours" => 0,
@@ -300,6 +301,12 @@ function viewStatistics() {
 			$imagehours[$row["prettyname"]] = 0;
 		$imagehours[$row["prettyname"]] += ($length / 3600);
 
+		# imagefails
+		if(! array_key_exists($row["prettyname"], $imagefails))
+			$imagefails[$row["prettyname"]] = 0;
+		if($row['ending'] == 'failed')
+			$imagefails[$row["prettyname"]] += 1;
+
 		# total hours
 		$totalhours += ($length / 3600);
 
@@ -361,6 +368,7 @@ function viewStatistics() {
 	if($viewmode >= ADMIN_FULL) {
 		print "    <TH>&lt; 2 min load time</TH>\n";
 		print "    <TH>&gt;= 2 min load time</TH>\n";
+		print "    <TH>Failures</TH>\n";
 	}
 	print "  </TR>\n";
 	foreach($imagecount as $key => $value) {
@@ -375,6 +383,17 @@ function viewStatistics() {
 		if($viewmode >= ADMIN_FULL) {
 			print "    <TD align=center>{$imageload2less[$key]}</TD>\n";
 			print "    <TD align=center>{$imageload2more[$key]}</TD>\n";
+			if($imagefails[$key]) {
+				$percent = $imagefails[$key] * 100 / $value;
+				if($percent < 1)
+					$percent = sprintf('%.1f%%', $percent);
+				else
+					$percent = sprintf('%d%%', $percent);
+				print "    <TD align=center><font color=red>{$imagefails[$key]} ";
+				print "($percent)</font></TD>\n";
+			}
+			else
+				print "    <TD align=center>{$imagefails[$key]}</TD>\n";
 		}
 		print "  </TR>\n";
 	}
