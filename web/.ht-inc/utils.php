@@ -7151,12 +7151,18 @@ function getNodeInfo($nodeid) {
 function sortKeepIndex($a, $b) {
 	if(is_array($a)) {
 		if(array_key_exists("prettyname", $a)) {
-			if(preg_match('/[0-9]-[0-9]/', $a['prettyname']))
+			if(preg_match('/[0-9]-[0-9]/', $a['prettyname']) ||
+			   preg_match('/\.edu$|\.com$|\.net$|\.org$/', $a['prettyname']) ||
+			   preg_match('/[0-9]-[0-9]/', $b['prettyname']) ||
+			   preg_match('/\.edu$|\.com$|\.net$|\.org$/', $b['prettyname']))
 				return compareDashedNumbers($a["prettyname"], $b["prettyname"]);
 			return strcasecmp($a["prettyname"], $b["prettyname"]);
 		}
 		elseif(array_key_exists("name", $a)) {
-			if(preg_match('/[0-9]-[0-9]/', $a['name']))
+			if(preg_match('/[0-9]-[0-9]/', $a['name']) ||
+			   preg_match('/\.edu$|\.com$|\.net$|\.org$/', $a['name']) ||
+			   preg_match('/[0-9]-[0-9]/', $b['name']) ||
+			   preg_match('/\.edu$|\.com$|\.net$|\.org$/', $b['name']))
 				return compareDashedNumbers($a["name"], $b["name"]);
 			return strcasecmp($a["name"], $b["name"]);
 		}
@@ -7183,12 +7189,12 @@ function compareDashedNumbers($a, $b) {
 	# get hostname and first part of domain name
 	$tmp = explode('.', $a);
 	$h1 = array_shift($tmp);
-	$domain1 = array_shift($tmp);
+	$domain1 = implode('.', $tmp);
 	$letters1 = preg_replace('([^a-zA-Z])', '', $h1);
 
 	$tmp = explode('.', $b);
 	$h2 = array_shift($tmp);
-	$domain2 = array_shift($tmp);
+	$domain2 = implode('.', $tmp);
 	$letters2 = preg_replace('([^a-zA-Z])', '', $h2);
 
 	// if different domain names, return based on that

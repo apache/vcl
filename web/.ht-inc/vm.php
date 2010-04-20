@@ -397,13 +397,10 @@ function getVMHostData($id='') {
 	       .        "c.hostname, "
 	       .        "vh.vmlimit, "
 	       .        "vh.vmprofileid, "
-	       #.        "vp.profilename, "
 	       .        "vh.vmkernalnic "
 	       . "FROM vmhost vh, " 
-	       .      "vmprofile vp, "
 	       .      "computer c "
-	       . "WHERE vh.vmprofileid = vp.id AND "
-	       .       "vh.computerid = c.id";
+	       . "WHERE vh.computerid = c.id";
 	if(! empty($id))
 		$query .= " AND vh.id = $id";
 	$qh = doQuery($query, 101);
