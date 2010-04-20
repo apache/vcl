@@ -118,6 +118,9 @@ $noHTMLwrappers = array('sendRDPfile',
                         'JSONprivnodelist',
                         'jsonGetUserGroupMembers',
                         'jsonGetResourceGroupMembers',
+                        'subimageDialogContent',
+                        'AJaddSubimage',
+                        'AJremSubimage',
 );
 
 # main
@@ -241,7 +244,6 @@ $actions['mode']['AJupdateImage'] = "AJupdateImage";
 $actions['mode']['submitEditImageButtons'] = "submitEditImageButtons";
 $actions['mode']['imageClickThroughAgreement'] = "imageClickThroughAgreement";
 $actions['mode']['submitAddImage'] = "submitAddImage";
-$actions['mode']['submitAddSubimage'] = "submitAddSubimage";
 $actions['mode']['submitImageGroups'] = "submitImageGroups";
 $actions['mode']['submitImageMapping'] = "submitImageMapping";
 $actions['mode']['submitDeleteImage'] = "submitDeleteImage";
@@ -263,6 +265,9 @@ $actions['mode']['imageMappingGrid'] = "imageMappingGrid";
 $actions['mode']['AJupdateRevisionProduction'] = "AJupdateRevisionProduction";
 $actions['mode']['AJupdateRevisionComments'] = "AJupdateRevisionComments";
 $actions['mode']['AJdeleteRevisions'] = "AJdeleteRevisions";
+$actions['mode']['subimageDialogContent'] = "subimageDialogContent";
+$actions['mode']['AJaddSubimage'] = "AJaddSubimage";
+$actions['mode']['AJremSubimage'] = "AJremSubimage";
 $actions['pages']['selectImageOption'] = "manageImages";
 $actions['pages']['viewImages'] = "manageImages";
 $actions['pages']['viewImageGrouping'] = "manageImages";
@@ -278,7 +283,6 @@ $actions['pages']['submitEditImage'] = "manageImages";
 $actions['pages']['submitEditImageButtons'] = "manageImages";
 $actions['pages']['imageClickThroughAgreement'] = "manageImages";
 $actions['pages']['submitAddImage'] = "manageImages";
-$actions['pages']['submitAddSubimage'] = "manageImages";
 $actions['pages']['submitImageGroups'] = "manageImages";
 $actions['pages']['submitImageMapping'] = "manageImages";
 $actions['pages']['submitDeleteImage'] = "manageImages";
@@ -301,6 +305,9 @@ $actions['pages']['imageMappingGrid'] = "manageImages";
 $actions['pages']['AJupdateRevisionProduction'] = "manageImages";
 $actions['pages']['AJupdateRevisionComments'] = "manageImages";
 $actions['pages']['AJdeleteRevisions'] = "manageImages";
+$actions['pages']['subimageDialogContent'] = "manageImages";
+$actions['pages']['AJaddSubimage'] = "manageImages";
+$actions['pages']['AJremSubimage'] = "manageImages";
 
 # manage schedules
 $actions['mode']['viewSchedules'] = "viewSchedules"; # entry

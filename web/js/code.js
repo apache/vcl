@@ -272,3 +272,17 @@ function checkNewLocalPassword() {
 		stat.innerHTML = '<font color="red">no match</font>';
 	}
 }
+
+function sortSelect(selobj) {
+	var values = new Array();
+	var texts = new Array();
+	for(var i = 0; i < selobj.options.length; i++) {
+		values[selobj.options[i].text] = selobj.options[i].value;
+		texts[i] = selobj.options[i].text;
+	}
+	texts.sort();
+	for(var i = 0; i < selobj.options.length; i++) {
+		selobj.options[i].text = texts[i];
+		selobj.options[i].value = values[texts[i]];
+	}
+}

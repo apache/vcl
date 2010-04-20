@@ -1106,24 +1106,27 @@ function getImages($includedeleted=0, $imageid=0) {
 			        . "LEFT JOIN affiliation a ON (u.affiliationid = a.id) "
 			        . "WHERE i.id = {$row["imagemetaid"]}";
 			$qh2 = doQuery($query2, 101);
-			$row2 = mysql_fetch_assoc($qh2);
-			$imagelist[$row["id"]]["checkuser"] = $row2["checkuser"];
-			$imagelist[$row["id"]]["usergroupid"] = $row2["usergroupid"];
-			if(! empty($row2['affiliation']))
-				$imagelist[$row["id"]]["usergroup"] = "{$row2["usergroup"]}@{$row2['affiliation']}";
-			else
-				$imagelist[$row["id"]]["usergroup"] = $row2["usergroup"];
-			$imagelist[$row['id']]['sysprep'] = $row2['sysprep'];
-			$imagelist[$row["id"]]["subimages"] = array();
-			if($row2["subimages"]) {
-				$query2 = "SELECT imageid "
-				        . "FROM subimages "
-				        . "WHERE imagemetaid = {$row["imagemetaid"]}";
-				$qh2 = doQuery($query2, 101);
-				while($row2 = mysql_fetch_assoc($qh2)) {
-					array_push($imagelist[$row["id"]]["subimages"], $row2["imageid"]);
+			if($row2 = mysql_fetch_assoc($qh2)) {
+				$imagelist[$row["id"]]["checkuser"] = $row2["checkuser"];
+				$imagelist[$row["id"]]["usergroupid"] = $row2["usergroupid"];
+				if(! empty($row2['affiliation']))
+					$imagelist[$row["id"]]["usergroup"] = "{$row2["usergroup"]}@{$row2['affiliation']}";
+				else
+					$imagelist[$row["id"]]["usergroup"] = $row2["usergroup"];
+				$imagelist[$row['id']]['sysprep'] = $row2['sysprep'];
+				$imagelist[$row["id"]]["subimages"] = array();
+				if($row2["subimages"]) {
+					$query2 = "SELECT imageid "
+							  . "FROM subimages "
+							  . "WHERE imagemetaid = {$row["imagemetaid"]}";
+					$qh2 = doQuery($query2, 101);
+					while($row2 = mysql_fetch_assoc($qh2)) {
+						array_push($imagelist[$row["id"]]["subimages"], $row2["imageid"]);
+					}
 				}
 			}
+			else
+				$row["imagemetaid"] = NULL;
 		}
 		$query3 = "SELECT i.id, "
 		        .        "i.revision, "
@@ -8572,6 +8575,10 @@ function getDojoHTML($refresh) {
 			$dojoRequires = array('dojo.parser',
 			                      'dijit.InlineEditBox',
 			                      'dijit.form.Textarea',
+			                      'dijit.form.DropDownButton',
+			                      'dijit.form.FilteringSelect',
+			                      'dijit.form.Button',
+			                      'dijit.Dialog',
 			                      'dijit.TitlePane');
 			break;
 		case 'selectComputers':

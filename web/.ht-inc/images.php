@@ -114,7 +114,7 @@ function viewImages() {
 
 	if($showdeleted) {
 		$images = getImages(1);
-		$resources = getUserResources(array("imageAdmin"), 
+		$resources = getUserResources(array("imageAdmin"),
 		                              array("administer"), 0, 1);
 	}
 	else {
@@ -222,7 +222,7 @@ function viewImages() {
 ////////////////////////////////////////////////////////////////////////////////
 function viewImageGrouping() {
 	global $mode;
-	$resources = getUserResources(array("imageAdmin"), 
+	$resources = getUserResources(array("imageAdmin"),
 	                              array("manageGroup"));
 	if(! count($resources["image"])) {
 		print "<H2>Image Grouping</H2>\n";
@@ -377,9 +377,9 @@ function viewImageGrouping() {
 function imageGroupingGrid() {
 	global $mode;
 	$imagemembership = getResourceGroupMemberships("image");
-	$resources = getUserResources(array("imageAdmin"), 
+	$resources = getUserResources(array("imageAdmin"),
 	                              array("manageGroup"));
-	$tmp = getUserResources(array("imageAdmin"), 
+	$tmp = getUserResources(array("imageAdmin"),
 	                        array("manageGroup"), 1);
 	$imagegroups = $tmp["image"];
 	uasort($imagegroups, "sortKeepIndex");
@@ -447,7 +447,7 @@ function imageGroupingGrid() {
 ////////////////////////////////////////////////////////////////////////////////
 function viewImageMapping() {
 	global $mode;
-	$tmp = getUserResources(array("imageAdmin"), 
+	$tmp = getUserResources(array("imageAdmin"),
                            array("manageGroup"), 1);
 	$imagegroups = $tmp["image"];
 	uasort($imagegroups, "sortKeepIndex");
@@ -611,7 +611,7 @@ function viewImageMapping() {
 ////////////////////////////////////////////////////////////////////////////////
 function imageMappingGrid() {
 	global $mode;
-	$tmp = getUserResources(array("imageAdmin"), 
+	$tmp = getUserResources(array("imageAdmin"),
                            array("manageGroup"), 1);
 	$imagegroups = $tmp["image"];
 	uasort($imagegroups, "sortKeepIndex");
@@ -733,7 +733,7 @@ function startImage() {
 ///
 /// \fn submitImageButton
 ///
-/// \brief wrapper for confirmDeleteImage, editOrAddImage(0), and 
+/// \brief wrapper for confirmDeleteImage, editOrAddImage(0), and
 /// viewImageDetails
 ///
 ////////////////////////////////////////////////////////////////////////////////
@@ -782,8 +782,6 @@ function editOrAddImage($state) {
 			$data["osid"] = $imagedata[$requestdata["reservations"][0]["imageid"]]["osid"];
 		}
 	}
-	elseif($mode == 'submitAddSubimage')
-		$data = getContinuationVar();
 	else {
 		$id = getContinuationVar("imageid");
 		$data = $images[$id];
@@ -949,7 +947,7 @@ function editOrAddImage($state) {
 		if(! empty($data["usergroupid"])) {
 			$default = $data["usergroupid"];
 			if(! array_key_exists($default, $groups)) {
-				if($submitErr || $mode == 'submitEditImageButtons' || $mode == 'submitAddSubimage')
+				if($submitErr || $mode == 'submitEditImageButtons')
 					$groups[$data['usergroupid']] = array('name' => $images[$data['imageid']]['usergroup']);
 				else
 					$groups[$data['usergroupid']] = array('name' => $data['usergroup']);
@@ -962,23 +960,7 @@ function editOrAddImage($state) {
 		print "    </TD>\n";
 		print "  </TR>\n";
 	}
-	if(! $state) {
-		print "  <TR>\n";
-		print "    <TH style=\"vertical-align:top; text-align:right;\">Subimages:</TH>\n";
-		print "    <TD>\n";
-		if(array_key_exists("subimages", $images[$data["imageid"]]) &&
-			count($images[$data["imageid"]]["subimages"])) {
-			foreach($images[$data["imageid"]]["subimages"] as $imgid) {
-				print "<INPUT type=checkbox name=\"removeimgid[$imgid]\" value=$imgid>\n";
-				print "{$images[$imgid]["prettyname"]}<br>\n";
-			}
-			print "<INPUT type=submit name=submode value=\"Remove Selected\"><br>\n"; # Remove Selected
-		}
-		print "    <INPUT type=submit name=submode value=\"Add Subimage\">\n"; # Add Subimage
-		print "    </TD>\n";
-		print "  </TR>\n";
-	}
-	else {
+	if($state) {
 		if(array_key_exists("sysprep", $data) && ! $data["sysprep"])
 			$default = 0;
 		else
@@ -994,6 +976,15 @@ function editOrAddImage($state) {
 	print "    <TD colspan=3 id=hide3><hr></TD>\n";
 	print "  </TR>\n";
 	print "</TABLE>\n";
+	if(! $state) {
+		$cont = addContinuationsEntry('subimageDialogContent', array('imageid' => $data['imageid']));
+		print "<div dojoType=\"dijit.form.DropDownButton\" id=\"subimagebtn\">";
+		print "  <span>Manage Subimages</span>\n";
+		$url = BASEURL . SCRIPT . "?continuation=$cont";
+		print "  <div dojoType=\"dijit.TooltipDialog\" id=\"subimagedlg\" href=\"$url\"></div>\n";
+		print "</div>\n";
+
+	}
 	print "</div>\n";
 	print "<TABLE>\n";
 	print "  <TR valign=top>\n";
@@ -1110,6 +1101,248 @@ function getRevisionHTML($imageid) {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
+/// \fn subimageDialogContent()
+///
+/// \brief prints content to fill in the dojo dialog for managing subimages
+///
+////////////////////////////////////////////////////////////////////////////////
+function subimageDialogContent() {
+	$imageid = getContinuationVar('imageid');
+	$images = getImages(0);
+	$image = $images[$imageid];
+
+	$resources = getUserResources(array("imageAdmin"));
+	if(empty($resources['image'])) {
+		print "You do not have access to add any subimages to this image.";
+		return;
+	}
+
+	$content  = "<h3>Add New Subimage</h3>";
+	$content .= "<select dojoType=\"dijit.form.FilteringSelect\" id=addsubimagesel>";
+	foreach($resources['image'] as $id => $name)
+		$content .= "<option value=$id>$name</option>";
+	$content .= "</select>";
+	$content .= "<button dojoType=\"dijit.form.Button\" id=addbtn>";
+	$content .= "Add Subimage";
+	$content .= "<script type=\"dojo/method\" event=onClick>";
+	$content .= "addSubimage();";
+	$content .= "</script>";
+	$content .= "</button><br>";
+	$content .= "<h3>Current Subimages</h3>";
+	$subimgcnt = 0;
+	if(array_key_exists("subimages", $image) && count($image["subimages"])) {
+		$subimages = array();
+		foreach($image["subimages"] as $imgid)
+			$subimages[$imgid] = $images[$imgid]['prettyname'];
+		uasort($subimages, "sortKeepIndex");
+		$content .= "<select id=cursubimagesel multiple size=10>";
+		foreach($subimages as $imgid => $name) {
+			$content .= "<option value=$imgid>$name</option>";
+			$subimgcnt++;
+		}
+	}
+	else {
+		$content .= "<select id=cursubimagesel multiple size=10 disabled>";
+		$image['subimages'] = array();
+		$content .= "<option value=none>(None)</option>";
+	}
+	$content .= "</select><br>";
+	$content .= "total subimages: <span id=subimgcnt>$subimgcnt</span><br>";
+	$content .= "<button dojoType=\"dijit.form.Button\" id=rembtn>";
+	$content .= "Remove Selected Subimage(s)";
+	$content .= "<script type=\"dojo/method\" event=onClick>";
+	$content .= "remSubimages();";
+	$content .= "</script>";
+	$content .= "</button><br>";
+	$adminimages = getUserResources(array("imageAdmin"), array("administer"));
+	$adminids = array_keys($adminimages["image"]);
+	$data = array('imageid' => $imageid,
+	              'adminids' => $adminids,
+	              'imagemetaid' => $image['imagemetaid'],
+	              'userimages' => $resources['image'],
+	              'subimages' => $image['subimages']);
+	$cont = addContinuationsEntry('AJaddSubimage', $data);
+	$content .= "<INPUT type=hidden id=addsubimagecont value=\"$cont\">";
+	$cont = addContinuationsEntry('AJremSubimage', $data);
+	$content .= "<INPUT type=hidden id=remsubimagecont value=\"$cont\">";
+	$content .= "NOTE: Subimage changes take effect immediately; you do<br>";
+	$content .= "<strong>not</strong> need to click \"Confirm Changes\" to submit them.";
+	print $content;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn AJaddSubimage()
+///
+/// \brief adds a subimage to an image
+///
+////////////////////////////////////////////////////////////////////////////////
+function AJaddSubimage() {
+	$imageid = getContinuationVar('imageid');
+	$adminids = getContinuationVar('adminids');
+	$userimages = getContinuationVar('userimages');
+	$subimages = getContinuationVar('subimages');
+	$imagemetaid = getContinuationVar('imagemetaid');
+	if(! array_key_exists($imageid, $adminids)) {
+		$arr = array('error' => 'noimageaccess',
+	                'msg' => 'You do not have access to manage this image.');
+		sendJSON($arr);
+		return;
+	}
+	$newid = processInputVar('imageid', ARG_NUMERIC);
+	if(! array_key_exists($newid, $userimages)) {
+		$arr = array('error' => 'nosubimageaccess',
+	                'msg' => 'You do not have access to add this subimage.');
+		sendJSON($arr);
+		return;
+	}
+	if(is_null($imagemetaid)) {
+		$query = "INSERT INTO imagemeta "
+		       .        "(subimages) "
+		       . "VALUES (1)";
+		doQuery($query, 101);
+		$imagemetaid = dbLastInsertID();
+		$query = "UPDATE image "
+		       . "SET imagemetaid = $imagemetaid "
+		       . "WHERE id = $imageid";
+		doQuery($query, 101);
+	}
+	elseif(! count($subimages)) {
+		$query = "UPDATE imagemeta "
+		       . "SET subimages = 1 "
+		       . "WHERE id = $imagemetaid";
+		doQuery($query, 101);
+	}
+	$query = "INSERT INTO subimages "
+	       .        "(imagemetaid, "
+	       .        "imageid) "
+	       . "VALUES ($imagemetaid, "
+	       .        "$newid)";
+	doQuery($query, 101);
+	$subimages[] = $newid;
+	$data = array('imageid' => $imageid,
+	              'adminids' => $adminids,
+	              'imagemetaid' => $imagemetaid,
+	              'userimages' => $userimages,
+	              'subimages' => $subimages);
+	$addcont = addContinuationsEntry('AJaddSubimage', $data);
+	$remcont = addContinuationsEntry('AJremSubimage', $data);
+	$image = getImages(0, $newid);
+	$name = $image[$newid]['prettyname'];
+	$arr = array('newid' => $newid,
+	             'name' => $name,
+	             'addcont' => $addcont,
+	             'remcont' => $remcont);
+	sendJSON($arr);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn AJremSubimage()
+///
+/// \brief removes subimages from an image
+///
+////////////////////////////////////////////////////////////////////////////////
+function AJremSubimage() {
+	$imageid = getContinuationVar('imageid');
+	$adminids = getContinuationVar('adminids');
+	$userimages = getContinuationVar('userimages');
+	$subimages = getContinuationVar('subimages');
+	$imagemetaid = getContinuationVar('imagemetaid');
+	if(! array_key_exists($imageid, $adminids)) {
+		$arr = array('error' => 'noimageaccess',
+	                'msg' => 'You do not have access to manage this image.');
+		sendJSON($arr);
+		return;
+	}
+	$remids = processInputVar('imageids', ARG_STRING);
+	$remids = explode(',', $remids);
+	foreach($remids as $id) {
+		if(! is_numeric($id)) {
+			$arr = array('error' => 'invalidinput',
+			             'msg' => 'Non-numeric data was submitted for an image id.');
+			sendJSON($arr);
+			return;
+		}
+	}
+	if(is_null($imagemetaid)) {
+		$arr = array('error' => 'nullimagemetaid',
+	                'msg' => 'Invalid infomation id database. Contact your system administrator.');
+		sendJSON($arr);
+		return;
+	}
+	foreach($remids as $id) {
+		$query = "DELETE FROM subimages "
+		       . "WHERE imagemetaid = $imagemetaid AND "
+		       .       "imageid = $id "
+		       . "LIMIT 1";
+		doQuery($query, 101);
+	}
+	# check to see if any subimages left; if not, update imagemeta table
+	$query = "SELECT COUNT(imageid) "
+			 . "FROM subimages "
+			 . "WHERE imagemetaid = $imagemetaid";
+	$qh = doQuery($query, 101);
+	$row = mysql_fetch_row($qh);
+	if($row[0] == 0) {
+		# get defaults for imagemeta table
+		$query = "DESC imagemeta";
+		$qh = doQuery($query, 101);
+		$defaults = array();
+		while($row = mysql_fetch_assoc($qh))
+			$defaults[$row['Field']] = $row['Default'];
+		# get imagemeta data
+		$query = "SELECT * FROM imagemeta WHERE id = $imagemetaid";
+		$qh = doQuery($query, 101);
+		$row = mysql_fetch_assoc($qh);
+		$alldefaults = 1;
+		foreach($row as $field => $val) {
+			if($field == 'id' || $field == 'subimages')
+				continue;
+			if($defaults[$field] != $val) {
+				$alldefaults = 0;
+				break;
+			}
+		}
+		// if all default values, delete imagemeta entry
+		if($alldefaults) {
+			$query = "DELETE FROM imagemeta WHERE id = $imagemetaid";
+			doQuery($query, 101);
+			$query = "UPDATE image SET imagemetaid = NULL WHERE id = $imageid";
+			doQuery($query, 101);
+			$imagemetaid = NULL;
+			$subimages = array();
+		}
+		# otherwise, just set subimages to 0
+		else {
+			$query = "UPDATE imagemeta SET subimages = 0 WHERE id = $imagemetaid";
+			doQuery($query, 101);
+			$subimages = array();
+		}
+	}
+	# rebuild list of subimages
+	else {
+		$query = "SELECT imageid FROM subimages WHERE imagemetaid = $imagemetaid";
+		$qh = doQuery($query, 101);
+		$subimages = array();
+		while($row = mysql_fetch_assoc($qh))
+			$subimages[] = $row['imageid'];
+	}
+
+	$data = array('imageid' => $imageid,
+	              'adminids' => $adminids,
+	              'imagemetaid' => $imagemetaid,
+	              'userimages' => $userimages,
+	              'subimages' => $subimages);
+	$addcont = addContinuationsEntry('AJaddSubimage', $data);
+	$remcont = addContinuationsEntry('AJremSubimage', $data);
+	$arr = array('addcont' => $addcont,
+	             'remcont' => $remcont);
+	sendJSON($arr);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
 /// \fn submitEditImageButtons()
 ///
 /// \brief wrapper for confirmEditOrAddImage, addSubimage, and removeSubimages
@@ -1121,10 +1354,6 @@ function submitEditImageButtons() {
 		confirmEditOrAddImage(1);
 	elseif($submode == "Confirm Changes") # confirmEditImage
 		confirmEditOrAddImage(0);
-	elseif($submode == "Remove Selected")
-		removeSubImages();
-	elseif($submode == "Add Subimage")
-		printAddSubimage();
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1483,123 +1712,6 @@ function submitAddImage() {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn removeSubImages()
-///
-/// \brief removes submitted subimages and calls editOrAddImage
-///
-////////////////////////////////////////////////////////////////////////////////
-function removeSubImages() {
-	$removeimgids = processInputVar("removeimgid", ARG_MULTINUMERIC);
-	$imageid = getContinuationVar("imageid");
-	$data = getImages(0, $imageid);
-	if(count($removeimgids)) {
-		# remove selected images
-		$rmids = implode(',', $removeimgids);
-		$query = "DELETE FROM subimages "
-		       . "WHERE imagemetaid = {$data[$imageid]["imagemetaid"]} AND "
-		       .       "imageid IN ($rmids)";
-		doQuery($query, 101);
-
-		# check to see if any subimages left; if not, set subimages to 0
-		$query = "SELECT COUNT(imageid) "
-		       . "FROM subimages "
-		       . "WHERE imagemetaid = {$data[$imageid]["imagemetaid"]}";
-		$qh = doQuery($query, 101);
-		$row = mysql_fetch_row($qh);
-		if($row[0] == 0) {
-			$query = "UPDATE imagemeta "
-			       . "SET subimages = 0 "
-			       . "WHERE id = {$data[$imageid]["imagemetaid"]}";
-			doQuery($query, 101);
-		}
-	}
-
-	editOrAddImage(0);
-}
-
-////////////////////////////////////////////////////////////////////////////////
-///
-/// \fn printAddSubimage()
-///
-/// \brief prints a page to add a subimage to an image
-///
-////////////////////////////////////////////////////////////////////////////////
-function printAddSubimage() {
-	# FIXME need to pass on form data so if something is changed in the edit
-	# page, it remains changed when we get back there
-	$imageid = getContinuationVar("imageid");
-	$images = getImages();
-	$data = processImageInput(0);
-	print "<H2>Add Subimage</H2>\n";
-	if(array_key_exists("subimages", $images[$imageid]) &&
-	   count($images[$imageid]["subimages"])) {
-		print "Current subimages for <strong>{$images[$imageid]["prettyname"]}:";
-		print "</strong><br><br>\n";
-		foreach($images[$imageid]["subimages"] as $imgid) {
-			print "<img src=images/blank.gif width=25 height=1>\n";
-			print "{$images[$imgid]["prettyname"]}<br>\n";
-		}
-		print "<br>Add additional subimage:<br><br>\n";
-	}
-	else {
-		print "There are currently no subimages for <strong>";
-		print "{$images[$imageid]["prettyname"]}</strong>.<br><br>";
-	}
-	print "<FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
-	printSelectInput("addimageid", $images, -1, 1);
-	$cdata = $data;
-	$cdata['imageid'] = $imageid;
-	$cont = addContinuationsEntry('submitAddSubimage', $cdata, SECINDAY, 0, 1, 1);
-	print "<INPUT type=hidden name=continuation value=\"$cont\">\n";
-	print "<br><INPUT type=submit value=Add>\n";
-	print "</FORM>\n";
-}
-
-////////////////////////////////////////////////////////////////////////////////
-///
-/// \fn submitAddSubimage()
-///
-/// \brief adds a subimage to submitted image and calls editOrAddImage
-///
-////////////////////////////////////////////////////////////////////////////////
-function submitAddSubimage() {
-	$imageid = getContinuationVar("imageid");
-	$addimageid = processInputVar("addimageid", ARG_NUMERIC);
-	$data = getImages(0, $imageid);
-	if(empty($data[$imageid]["imagemetaid"])) {
-		$query = "INSERT INTO imagemeta "
-		       .        "(subimages) "
-		       . "VALUES (1)";
-		doQuery($query, 101);
-		$qh = doQuery("SELECT LAST_INSERT_ID() FROM imagemeta", 101);
-		if(! $row = mysql_fetch_row($qh))
-			abort(101);
-		$imagemetaid = $row[0];
-		$query = "UPDATE image "
-		       . "SET imagemetaid = $imagemetaid "
-		       . "WHERE id = $imageid";
-		doQuery($query, 101);
-	}
-	else {
-		$imagemetaid = $data[$imageid]["imagemetaid"];
-		if(! count($data[$imageid]["subimages"])) {
-			$query = "UPDATE imagemeta "
-			       . "SET subimages = 1 "
-			       . "WHERE id = $imagemetaid";
-			doQuery($query, 101);
-		}
-	}
-	$query = "INSERT INTO subimages "
-	       .        "(imagemetaid, "
-	       .        "imageid) "
-	       . "VALUES ($imagemetaid, "
-	       .        "$addimageid)";
-	doQuery($query, 101);
-	editOrAddImage(0);
-}
-
-////////////////////////////////////////////////////////////////////////////////
-///
 /// \fn updateExistingImageComments()
 ///
 /// \brief prints a page for getting install comments about the revision before
@@ -1822,7 +1934,7 @@ function setImageProduction() {
 ///
 /// \fn submitSetImageProduction()
 ///
-/// \brief sets request state to 'makeproduction', notifies user that 
+/// \brief sets request state to 'makeproduction', notifies user that
 /// "productioning" process has started
 ///
 ////////////////////////////////////////////////////////////////////////////////
@@ -2107,7 +2219,7 @@ function submitImageGroups() {
 	# build an array of memberships currently in the db
 	$tmp = getUserResources(array("imageAdmin"), array("manageGroup"), 1);
 	$imagegroupsIDs = array_keys($tmp["image"]);  // ids of groups that user can manage
-	$resources = getUserResources(array("imageAdmin"), 
+	$resources = getUserResources(array("imageAdmin"),
 	                              array("manageGroup"));
 	$userImageIDs = array_keys($resources["image"]); // ids of images that user can manage
 	$imagemembership = getResourceGroupMemberships("image");
@@ -2165,7 +2277,7 @@ function submitImageGroups() {
 		// adds are groupids that are in $newmembers, but not in $imagegroups
 		$adds[$id] = array_diff($newmembers[$imageid], $imagegroups[$imageid]);
 		if(count($adds[$id]) == 0) {
-			unset($adds[$id]); 
+			unset($adds[$id]);
 		}
 		// removes are groupids that are in $imagegroups, but not in $newmembers
 		$removes[$id] = array_diff($imagegroups[$imageid], $newmembers[$imageid]);
@@ -2206,7 +2318,7 @@ function submitImageMapping() {
 	$mapinput = processInputVar("mapping", ARG_MULTINUMERIC);
 
 	# build an array of memberships currently in the db
-	$tmp = getUserResources(array("imageAdmin"), 
+	$tmp = getUserResources(array("imageAdmin"),
 									array("manageGroup"), 1);
 	$imagegroups = $tmp["image"];
 	$tmp = getUserResources(array("computerAdmin"),
@@ -2249,7 +2361,7 @@ function submitImageMapping() {
 		// adds are groupids that are in $newmembers, but not in $mapping
 		$adds[$imageid] = array_diff($newmembers[$imageid], $mapping[$imageid]);
 		if(count($adds[$imageid]) == 0) {
-			unset($adds[$imageid]); 
+			unset($adds[$imageid]);
 		}
 		// removes are groupids that are in $mapping, but not in $newmembers
 		$removes[$imageid] = array_diff($mapping[$imageid], $newmembers[$imageid]);
@@ -2347,7 +2459,7 @@ function processImageInput($checks=1) {
 	   $submitErr |= NAMEERR;
 	   $submitErrMsg[NAMEERR] = "Short Name must be from 2 to 30 characters";
 	}
-	if(! ($submitErr & NAMEERR) && 
+	if(! ($submitErr & NAMEERR) &&
 	   checkForImageName($return["name"], "short", $return["imageid"])) {
 	   $submitErr |= NAMEERR;
 	   $submitErrMsg[NAMEERR] = "An image already exists with this name.";
@@ -2358,7 +2470,7 @@ function processImageInput($checks=1) {
 	   $submitErrMsg[PRETTYNAMEERR] = "Long Name must be from 2 to 60 characters "
 		                             . "and cannot contain any dashes (-).";
 	}
-	if(! ($submitErr & PRETTYNAMEERR) && 
+	if(! ($submitErr & PRETTYNAMEERR) &&
 	   checkForImageName($return["prettyname"], "long", $return["imageid"])) {
 	   $submitErr |= PRETTYNAMEERR;
 	   $submitErrMsg[PRETTYNAMEERR] = "An image already exists with this name.";
@@ -2581,7 +2693,7 @@ function addImage($data) {
 
 	// create name from pretty name, os, and last insert id
 	$OSs = getOSList();
-	$name = $OSs[$data["osid"]]["name"] . "-" . 
+	$name = $OSs[$data["osid"]]["name"] . "-" .
 	        preg_replace('/\W/', '', $data["prettyname"]) . $imageid . "-v0";
 	if($imagemetaid) {
 		$query = "UPDATE image "
@@ -2799,7 +2911,7 @@ function jsonImageGroupingImages() {
 	foreach($resources['image'] as $id => $image) {
 		if($image == 'No Image')
 			continue;
-		if(array_key_exists($id, $memberships['image']) && 
+		if(array_key_exists($id, $memberships['image']) &&
 			in_array($groupid, $memberships['image'][$id])) {
 			$all[] = array('inout' => 1, 'id' => $id, 'name' => $image);
 			$in[] = array('name' => $image, 'id' => $id);
@@ -2837,7 +2949,7 @@ function jsonImageGroupingGroups() {
 	$out = array();
 	$all = array();
 	foreach($groups['image'] as $id => $group) {
-		if(array_key_exists($imageid, $memberships['image']) && 
+		if(array_key_exists($imageid, $memberships['image']) &&
 			in_array($id, $memberships['image'][$imageid])) {
 			$all[] = array('inout' => 1, 'id' => $id, 'name' => $group);
 			$in[] = array('name' => $group, 'id' => $id);
@@ -2857,7 +2969,7 @@ function jsonImageGroupingGroups() {
 ///
 /// \brief accepts a image groupid via form input and prints a json array with 3
 /// arrays: an array of computer groups that are mapped to the group, an array
-/// of computer groups not mapped to it, and an array of all computer groups 
+/// of computer groups not mapped to it, and an array of all computer groups
 /// the user has access to
 ///
 ////////////////////////////////////////////////////////////////////////////////
@@ -2876,7 +2988,7 @@ function jsonImageMapCompGroups() {
 	$out = array();
 	$all = array();
 	foreach($compgroups['computer'] as $id => $group) {
-		if(array_key_exists($imagegrpid, $mapping) && 
+		if(array_key_exists($imagegrpid, $mapping) &&
 			in_array($id, $mapping[$imagegrpid])) {
 			$all[] = array('inout' => 1, 'id' => $id, 'name' => $group);
 			$in[] = array('name' => $group, 'id' => $id);
@@ -2896,7 +3008,7 @@ function jsonImageMapCompGroups() {
 ///
 /// \brief accepts a computer groupid via form input and prints a json array
 /// with 3 arrays: an array of image groups that are mapped to the group, an
-/// array of image groups not mapped to it, and an array of all image groups 
+/// array of image groups not mapped to it, and an array of all image groups
 /// the user has access to
 ///
 ////////////////////////////////////////////////////////////////////////////////
@@ -2915,7 +3027,7 @@ function jsonImageMapImgGroups() {
 	$out = array();
 	$all = array();
 	foreach($imagegroups['image'] as $id => $group) {
-		if(array_key_exists($compgrpid, $mapping) && 
+		if(array_key_exists($compgrpid, $mapping) &&
 			in_array($id, $mapping[$compgrpid])) {
 			$all[] = array('inout' => 1, 'id' => $id, 'name' => $group);
 			$in[] = array('name' => $group, 'id' => $id);
@@ -2984,7 +3096,7 @@ function AJaddImageToGroup() {
 /// \fn AJremImageFromGroup()
 ///
 /// \brief accepts a groupid and a comma delimited list of image ids to be
-/// removed from the group; removes them and returns an array of image ids 
+/// removed from the group; removes them and returns an array of image ids
 /// that were removed
 ///
 ////////////////////////////////////////////////////////////////////////////////
@@ -3082,7 +3194,7 @@ function AJaddGroupToImage() {
 /// \fn AJremGroupFromImage()
 ///
 /// \brief accepts an image id and a comma delimited list of group ids that
-/// the image should be removed from; removes it from them and returns an 
+/// the image should be removed from; removes it from them and returns an
 /// array of groups it was removed from
 ///
 ////////////////////////////////////////////////////////////////////////////////

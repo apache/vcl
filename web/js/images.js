@@ -508,3 +508,81 @@ function deleteRevisionsCB(data, ioArgs) {
 	var obj = document.getElementById('revisiondiv');
 	obj.innerHTML = data.items.html;
 }
+
+function addSubimage() {
+	dijit.byId('addbtn').attr('label', 'Working...');
+	dojo.xhrPost({
+		url: 'index.php',
+		handleAs: "json",
+		load: addSubimageCB,
+		error: errorHandler,
+		content: {continuation: dojo.byId('addsubimagecont').value,
+					 imageid: dijit.byId('addsubimagesel').value},
+		timeout: 15000
+	});
+}
+
+function addSubimageCB(data, ioArgs) {
+	if(data.items.error) {
+		dijit.byId('addbtn').attr('label', 'Add Subimage');
+		alert(data.items.msg);
+		return;
+	}
+	var obj = dojo.byId('cursubimagesel');
+	if(obj.options[0].text == '(None)') {
+		obj.disabled = false;
+		obj.remove(0);
+	}
+	dojo.byId('addsubimagecont').value = data.items.addcont;
+	dojo.byId('remsubimagecont').value = data.items.remcont;
+	var index = obj.options.length;
+	obj.options[index] = new Option(data.items.name, data.items.newid, false, false);
+	sortSelect(obj);
+	dojo.byId('subimgcnt').innerHTML = obj.options.length;
+	dijit.byId('addbtn').attr('label', 'Add Subimage');
+}
+
+function remSubimages() {
+	var obj = dojo.byId('cursubimagesel');
+	var imgids = new Array();
+	for(var i = obj.options.length - 1; i >= 0; i--) {
+		if(obj.options[i].selected)
+			imgids.push(obj.options[i].value);
+	}
+	if(! imgids.length)
+		return;
+	var ids = imgids.join(',');
+	dijit.byId('rembtn').attr('label', 'Working...');
+	dojo.xhrPost({
+		url: 'index.php',
+		handleAs: "json",
+		load: remSubimagesCB,
+		error: errorHandler,
+		content: {continuation: dojo.byId('remsubimagecont').value,
+					 imageids: ids},
+		timeout: 15000
+	});
+}
+
+function remSubimagesCB(data, ioArgs) {
+	if(data.items.error) {
+		dijit.byId('rembtn').attr('label', 'Remove Selected Subimage(s)');
+		alert(data.items.msg);
+		return;
+	}
+	var obj = dojo.byId('cursubimagesel');
+	for(var i = obj.options.length - 1; i >= 0; i--) {
+		if(obj.options[i].selected)
+			obj.remove(i);
+	}
+	if(! obj.options.length) {
+		obj.disabled = true;
+		obj.options[0] = new Option('(None)', 'none', false, false);
+		dojo.byId('subimgcnt').innerHTML = 0;
+	}
+	else
+		dojo.byId('subimgcnt').innerHTML = obj.options.length;
+	dojo.byId('addsubimagecont').value = data.items.addcont;
+	dojo.byId('remsubimagecont').value = data.items.remcont;
+	dijit.byId('rembtn').attr('label', 'Remove Selected Subimage(s)');
+}
