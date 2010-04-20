@@ -1161,9 +1161,9 @@ function subimageDialogContent() {
 	              'imagemetaid' => $image['imagemetaid'],
 	              'userimages' => $resources['image'],
 	              'subimages' => $image['subimages']);
-	$cont = addContinuationsEntry('AJaddSubimage', $data);
+	$cont = addContinuationsEntry('AJaddSubimage', $data, SECINDAY, 1, 0);
 	$content .= "<INPUT type=hidden id=addsubimagecont value=\"$cont\">";
-	$cont = addContinuationsEntry('AJremSubimage', $data);
+	$cont = addContinuationsEntry('AJremSubimage', $data, SECINDAY, 1, 0);
 	$content .= "<INPUT type=hidden id=remsubimagecont value=\"$cont\">";
 	$content .= "NOTE: Subimage changes take effect immediately; you do<br>";
 	$content .= "<strong>not</strong> need to click \"Confirm Changes\" to submit them.";
@@ -1225,8 +1225,8 @@ function AJaddSubimage() {
 	              'imagemetaid' => $imagemetaid,
 	              'userimages' => $userimages,
 	              'subimages' => $subimages);
-	$addcont = addContinuationsEntry('AJaddSubimage', $data);
-	$remcont = addContinuationsEntry('AJremSubimage', $data);
+	$addcont = addContinuationsEntry('AJaddSubimage', $data, SECINDAY, 1, 0);
+	$remcont = addContinuationsEntry('AJremSubimage', $data, SECINDAY, 1, 0);
 	$image = getImages(0, $newid);
 	$name = $image[$newid]['prettyname'];
 	$arr = array('newid' => $newid,
@@ -1334,8 +1334,8 @@ function AJremSubimage() {
 	              'imagemetaid' => $imagemetaid,
 	              'userimages' => $userimages,
 	              'subimages' => $subimages);
-	$addcont = addContinuationsEntry('AJaddSubimage', $data);
-	$remcont = addContinuationsEntry('AJremSubimage', $data);
+	$addcont = addContinuationsEntry('AJaddSubimage', $data, SECINDAY, 1, 0);
+	$remcont = addContinuationsEntry('AJremSubimage', $data, SECINDAY, 1, 0);
 	$arr = array('addcont' => $addcont,
 	             'remcont' => $remcont);
 	sendJSON($arr);
