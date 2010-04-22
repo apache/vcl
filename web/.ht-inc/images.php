@@ -936,6 +936,16 @@ function editOrAddImage($state) {
 	printSelectInput("checkuser", $yesno, $default);
 	print "    </TD>\n";
 	print "  </TR>\n";
+	print "  <TR>\n";
+	print "    <TH align=right>Users have administrative access:</TH>\n";
+	if(array_key_exists("rootaccess", $data) && ! $data["rootaccess"])
+		$default = 0;
+	else
+		$default = 1;
+	print "    <TD>\n";
+	printSelectInput("rootaccess", $yesno, $default);
+	print "    </TD>\n";
+	print "  </TR>\n";
 	# finally just limited access so only high level access people see this
 	# because it confused too many people
 	if($user["adminlevel"] == "developer") {
@@ -1133,11 +1143,12 @@ function subimageDialogContent() {
 	if(array_key_exists("subimages", $image) && count($image["subimages"])) {
 		$subimages = array();
 		foreach($image["subimages"] as $imgid)
-			$subimages[$imgid] = $images[$imgid]['prettyname'];
+			$subimages[] = array('id' => $imgid,
+			                     'name' => $images[$imgid]['prettyname']);
 		uasort($subimages, "sortKeepIndex");
 		$content .= "<select id=cursubimagesel multiple size=10>";
-		foreach($subimages as $imgid => $name) {
-			$content .= "<option value=$imgid>$name</option>";
+		foreach($subimages as $img) {
+			$content .= "<option value={$img['id']}>{$img['name']}</option>";
 			$subimgcnt++;
 		}
 	}
@@ -1285,40 +1296,14 @@ function AJremSubimage() {
 	$qh = doQuery($query, 101);
 	$row = mysql_fetch_row($qh);
 	if($row[0] == 0) {
-		# get defaults for imagemeta table
-		$query = "DESC imagemeta";
-		$qh = doQuery($query, 101);
-		$defaults = array();
-		while($row = mysql_fetch_assoc($qh))
-			$defaults[$row['Field']] = $row['Default'];
-		# get imagemeta data
-		$query = "SELECT * FROM imagemeta WHERE id = $imagemetaid";
-		$qh = doQuery($query, 101);
-		$row = mysql_fetch_assoc($qh);
-		$alldefaults = 1;
-		foreach($row as $field => $val) {
-			if($field == 'id' || $field == 'subimages')
-				continue;
-			if($defaults[$field] != $val) {
-				$alldefaults = 0;
-				break;
-			}
-		}
-		// if all default values, delete imagemeta entry
-		if($alldefaults) {
-			$query = "DELETE FROM imagemeta WHERE id = $imagemetaid";
-			doQuery($query, 101);
-			$query = "UPDATE image SET imagemetaid = NULL WHERE id = $imageid";
-			doQuery($query, 101);
+		$rc = checkClearImageMeta($imagemetaid, $imageid, 'subimages');
+		if($rc)
 			$imagemetaid = NULL;
-			$subimages = array();
-		}
-		# otherwise, just set subimages to 0
 		else {
 			$query = "UPDATE imagemeta SET subimages = 0 WHERE id = $imagemetaid";
 			doQuery($query, 101);
-			$subimages = array();
 		}
+		$subimages = array();
 	}
 	# rebuild list of subimages
 	else {
@@ -1486,6 +1471,13 @@ function confirmEditOrAddImage($state) {
 	print "  <TR>\n";
 	print "    <TH align=right>Check for logged in user:</TH>\n";
 	if($data["checkuser"])
+		print "    <TD>Yes</TD>\n";
+	else
+		print "    <TD>No</TD>\n";
+	print "  </TR>\n";
+	print "  <TR>\n";
+	print "    <TH align=right>Users have administrative access:</TH>\n";
+	if($data["rootaccess"])
 		print "    <TD>Yes</TD>\n";
 	else
 		print "    <TD>No</TD>\n";
@@ -2163,15 +2155,22 @@ function viewImageDetails() {
 	else
 		print "    <TD>no</TD>\n";
 	print "  </TR>\n";
-	if(array_key_exists("checkuser", $images[$imageid])) {
-		print "  <TR>\n";
-		print "    <TH align=right>Check for logged in user:</TH>\n";
-		if($images[$imageid]["checkuser"])
-			print "    <TD>yes</TD>\n";
-		else
-			print "    <TD>no</TD>\n";
-		print "  </TR>\n";
-	}
+	print "  <TR>\n";
+	print "    <TH align=right>Check for logged in user:</TH>\n";
+	if(array_key_exists("checkuser", $images[$imageid]) &&
+		$images[$imageid]["checkuser"] == 0)
+		print "    <TD>no</TD>\n";
+	else
+		print "    <TD>yes</TD>\n";
+	print "  </TR>\n";
+	print "  <TR>\n";
+	print "    <TH align=right>Users have administrative access:</TH>\n";
+	if(array_key_exists("rootaccess", $images[$imageid]) &&
+		$images[$imageid]["rootaccess"] == 0)
+		print "    <TD>no</TD>\n";
+	else
+		print "    <TD>yes</TD>\n";
+	print "  </TR>\n";
 	if(! empty($images[$imageid]["usergroupid"])) {
 		print "  <TR>\n";
 		print "    <TH align=right>User group allowed to log in:</TH>\n";
@@ -2431,6 +2430,7 @@ function processImageInput($checks=1) {
 	$return["reloadtime"] = processInputVar("reloadtime", ARG_NUMERIC, 10);
 	$return["forcheckout"] = processInputVar("forcheckout", ARG_NUMERIC, 1);
 	$return["checkuser"] = processInputVar("checkuser", ARG_NUMERIC, 1);
+	$return["rootaccess"] = processInputVar("rootaccess", ARG_NUMERIC, 1);
 	$return["usergroupid"] = processInputVar("usergroupid", ARG_NUMERIC);
 	$return["sysprep"] = processInputVar("sysprep", ARG_NUMERIC, 1);
 	$return["description"] = processInputVar("description", ARG_STRING);
@@ -2568,14 +2568,18 @@ function updateImage($data) {
 	$qh = doQuery($query, 200);
 	$return = mysql_affected_rows($GLOBALS["mysql_link_vcl"]);
 	if(empty($imgdata[$data["imageid"]]["imagemetaid"]) &&
-	   ($data["checkuser"] == 0 || $data["usergroupid"] != 0)) {
+	   ($data["checkuser"] == 0 ||
+	   $data["usergroupid"] != 0 ||
+	   $data['rootaccess'] == 0)) {
 		if($data["usergroupid"] == 0)
 			$data["usergroupid"] = "NULL";
 		$query = "INSERT INTO imagemeta "
 		       .        "(checkuser, "
-		       .        "usergroupid) "
+		       .        "usergroupid, "
+		       .        "rootaccess) "
 		       . "VALUES ({$data["checkuser"]}, "
-		       .        "{$data["usergroupid"]})";
+		       .        "{$data["usergroupid"]}, "
+		       .        "{$data["rootaccess"]})";
 		doQuery($query, 101);
 		$qh = doQuery("SELECT LAST_INSERT_ID() FROM imagemeta", 101);
 		if(! $row = mysql_fetch_row($qh))
@@ -2586,16 +2590,20 @@ function updateImage($data) {
 		       . "WHERE id = {$data["imageid"]}";
 		doQuery($query, 101);
 	}
-	elseif(! empty($imgdata[$data["imageid"]]["imagemetaid"]) &&
-	   ($data["checkuser"] != $imgdata[$data["imageid"]]["checkuser"] ||
-	   $data["usergroupid"] != $imgdata[$data["imageid"]]["usergroupid"])) {
-		if($data["usergroupid"] == 0)
-			$data["usergroupid"] = "NULL";
-		$query = "UPDATE imagemeta "
-		       . "SET checkuser = {$data["checkuser"]}, "
-		       .     "usergroupid = {$data["usergroupid"]} "
-		       . "WHERE id = {$imgdata[$data["imageid"]]["imagemetaid"]}";
-		doQuery($query, 101);
+	elseif(! empty($imgdata[$data["imageid"]]["imagemetaid"])) {
+	  if($data["checkuser"] != $imgdata[$data["imageid"]]["checkuser"] ||
+	   $data["rootaccess"] != $imgdata[$data["imageid"]]["rootaccess"] ||
+	   $data["usergroupid"] != $imgdata[$data["imageid"]]["usergroupid"]) {
+			if($data["usergroupid"] == 0)
+				$data["usergroupid"] = "NULL";
+			$query = "UPDATE imagemeta "
+			       . "SET checkuser = {$data["checkuser"]}, "
+			       .     "rootaccess = {$data["rootaccess"]}, "
+			       .     "usergroupid = {$data["usergroupid"]} "
+			       . "WHERE id = {$imgdata[$data["imageid"]]["imagemetaid"]}";
+			doQuery($query, 101);
+		}
+	  checkClearImageMeta($imgdata[$data['imageid']]['imagemetaid'], $data['imageid']);
 	}
 	return $return;
 }
@@ -2666,19 +2674,24 @@ function addImage($data) {
 	$imagemetaid = 0;
 	if($data['checkuser'] != 0 && $data['checkuser'] != 1)
 		$data['checkuser'] = 1;
+	if($data['rootaccess'] != 0 && $data['rootaccess'] != 1)
+		$data['rootaccess'] = 1;
 	if(! is_numeric($data['usergroupid']) || $data['usergroupid'] <= 0)
 		$data['usergroupid'] = "NULL";
 	if($data['sysprep'] != 0 && $data['sysprep'] != 1)
 		$data['sysprep'] = 1;
 	if($data['checkuser'] == 0 ||
+	   $data['rootaccess'] == 0 ||
 	   (is_numeric($data['usergroupid']) && $data['usergroupid'] > 0) ||
 	   $data['sysprep'] == 0) {
 		$query = "INSERT INTO imagemeta "
 		       .        "(checkuser, "
+		       .        "rootaccess, "
 		       .        "usergroupid, "
 		       .        "sysprep) "
 		       . "VALUES "
 		       .        "({$data['checkuser']}, "
+		       .        "{$data['rootaccess']}, "
 		       .        "{$data['usergroupid']}, "
 		       .        "{$data['sysprep']})";
 		doQuery($query, 101);

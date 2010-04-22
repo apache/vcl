@@ -1096,6 +1096,7 @@ function getImages($includedeleted=0, $imageid=0) {
 		$imagelist[$row["id"]] = $row;
 		if($row["imagemetaid"] != NULL) {
 			$query2 = "SELECT i.checkuser, "
+			        .        "i.rootaccess, "
 			        .        "i.subimages, "
 			        .        "i.usergroupid, "
 			        .        "u.name AS usergroup, "
@@ -1108,6 +1109,7 @@ function getImages($includedeleted=0, $imageid=0) {
 			$qh2 = doQuery($query2, 101);
 			if($row2 = mysql_fetch_assoc($qh2)) {
 				$imagelist[$row["id"]]["checkuser"] = $row2["checkuser"];
+				$imagelist[$row["id"]]["rootaccess"] = $row2["rootaccess"];
 				$imagelist[$row["id"]]["usergroupid"] = $row2["usergroupid"];
 				if(! empty($row2['affiliation']))
 					$imagelist[$row["id"]]["usergroup"] = "{$row2["usergroup"]}@{$row2['affiliation']}";
@@ -1224,6 +1226,52 @@ function getImageNotes($imageid) {
 		return $row;
 	else
 		return array('description' => '', 'usage' => '');
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn checkClearImageMeta($imagemetaid, $imageid, $ignorefield)
+///
+/// \param $imagemetaid - id from imagemeta table
+/// \param $imageid - id from image table
+/// \param $ignorefield - (optional, default='') field to ignore being different
+/// from default
+///
+/// \return 0 if imagemeta entry was not deleted, 1 if it was
+///
+/// \brief checks to see if all values of the imagemeta table are defaults, and
+/// if so, deletes the entry and sets imagemetaid to NULL in image table
+///
+////////////////////////////////////////////////////////////////////////////////
+function checkClearImageMeta($imagemetaid, $imageid, $ignorefield='') {
+	# get defaults for imagemeta table
+	$query = "DESC imagemeta";
+	$qh = doQuery($query, 101);
+	$defaults = array();
+	while($row = mysql_fetch_assoc($qh))
+		$defaults[$row['Field']] = $row['Default'];
+	# get imagemeta data
+	$query = "SELECT * FROM imagemeta WHERE id = $imagemetaid";
+	$qh = doQuery($query, 101);
+	$row = mysql_fetch_assoc($qh);
+	$alldefaults = 1;
+	foreach($row as $field => $val) {
+		if($field == 'id' || $field == $ignorefield)
+			continue;
+		if($defaults[$field] != $val) {
+			$alldefaults = 0;
+			break;
+		}
+	}
+	// if all default values, delete imagemeta entry
+	if($alldefaults) {
+		$query = "DELETE FROM imagemeta WHERE id = $imagemetaid";
+		doQuery($query, 101);
+		$query = "UPDATE image SET imagemetaid = NULL WHERE id = $imageid";
+		doQuery($query, 101);
+		return 1;
+	}
+	return 0;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
