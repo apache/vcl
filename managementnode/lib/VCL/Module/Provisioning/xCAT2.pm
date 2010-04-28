@@ -858,6 +858,15 @@ sub capture {
 		return 0;
 	}    # Close _edit_nodetype failed
 
+	# Create the tmpl file for the image
+        if ($self->_create_template()) {
+                notify($ERRORS{'OK'}, 0, "created .tmpl file for $image_name");
+        }
+        else {
+                notify($ERRORS{'WARNING'}, 0, "failed to create .tmpl file for $image_name");
+                return 0;
+        }
+
 	# edit nodelist table
 	if ($self->_edit_nodelist($computer_node_name, 1)) {
 		notify($ERRORS{'OK'}, 0, "nodelist updated for $computer_node_name");
@@ -1054,6 +1063,78 @@ sub capture_monitor {
 	$fullloopcnt++;
 	goto CIWAITIMAGE;
 } ## end sub capture_monitor
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 _create_template
+ Parameters  : image name (optional)
+ Returns     : true if successful, false if failed
+ Description : Creates a template file for the image specified for the reservation.
+
+=cut
+
+sub _create_template {
+        my $self = shift;        
+	if (ref($self) !~ /xCAT/i) {
+                notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+                return;
+        }
+
+        # Get the image name
+        my $image_name = shift;
+        $image_name = $self->data->get_image_name() if !$image_name;
+        if (!$image_name) {
+                notify($ERRORS{'WARNING'}, 0, "failed to create template file, image name could not be retrieved");
+                return 0;
+        }
+
+        notify($ERRORS{'DEBUG'}, 0, "attempting to create tmpl file for image: $image_name");
+
+        # Get the image template repository path
+        my $tmpl_repository_path = $self->_get_image_template_path();
+        if (!$tmpl_repository_path) {
+                notify($ERRORS{'WARNING'}, 0, "xCAT template repository information could not be determined") ;
+                return 0;
+        }
+
+        # Get the base template filename
+        my $basetmpl = $self->_get_base_template_filename();
+        if (!$basetmpl) {
+                notify($ERRORS{'WARNING'}, 0, "base template filename could not be determined");                
+		return 0;
+        }
+        # Make a copy of the base template file
+        my $cp_output      = `/bin/cp -fv  $tmpl_repository_path/$basetmpl $tmpl_repository_path/$image_name.tmpl 2>&1`;
+        my $cp_exit_status = $? >> 8;
+
+        # Check if $? = -1, this likely means a Perl CHLD signal bug was encountered
+        if ($? == -1) {
+                notify($ERRORS{'OK'}, 0, "\$? is set to $?, setting exit status to 0, Perl bug likely encountered");
+                $cp_exit_status = 0;
+        }
+
+        if ($cp_exit_status == 0) {
+                notify($ERRORS{'DEBUG'}, 0, "copied $basetmpl to $tmpl_repository_path/$image_name.tmpl, output:\n$cp_output");
+        }
+        else {
+                notify($ERRORS{'WARNING'}, 0, "failed to copy $basetmpl to $tmpl_repository_path/$image_name.tmpl, returning undefined, exit status: $cp_exit_status, output:\n$cp_output");
+                return;
+        }
+
+        # Make sure template file was created
+        # -s File has nonzero size
+        my $tmpl_file_exists;
+        if (-s "$tmpl_repository_path/$image_name.tmpl") {
+                notify($ERRORS{'DEBUG'}, 0, "confirmed template file exists: $tmpl_repository_path/$image_name.tmpl");
+        }
+        else {
+                notify($ERRORS{'WARNING'}, 0, "template file should have been copied but does not exist: $tmpl_repository_path/$image_name.tmpl, returning undefined");
+                return;
+        }
+
+        notify($ERRORS{'OK'}, 0, "successfully created template file: $image_name.tmpl");
+        return 1;
+} ## end sub _create_template
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -1296,9 +1377,19 @@ sub _edit_nodelist {
 	# Get the rest of the variables
 	$computer_node_name = $self->data->get_computer_node_name() if !$computer_node_name;
 	my $image_os_install_type = $self->data->get_image_os_install_type();
+	my $image_project         = $self->data->get_image_project();
+
 	# FIXME undo hardcode
 	if ($installmode) {
 		$image_os_install_type = 'partimage';
+	}
+		
+	# Set postscript group name.
+	# vcl = compute
+	# vclhpc = vclhpc, should have xCAT group for specific postscripts
+	my $postscript_project = $image_project;
+	if($image_project eq "vcl"){
+		$postscript_project = "compute";
 	}
 
 	# Check to make sure the variables are populated
@@ -1312,6 +1403,7 @@ sub _edit_nodelist {
 	}
 
 	notify($ERRORS{'DEBUG'}, 0, "$computer_node_name, installtype=$image_os_install_type");
+	notify($ERRORS{'DEBUG'}, 0, "$computer_node_name, postscript_project=$postscript_project");
 
 	my $oldlist = '';
 	my $newlist = '';
@@ -1326,26 +1418,12 @@ sub _edit_nodelist {
 			$oldlist = $l;
 			notify($ERRORS{'DEBUG'}, 0, "l is $l");
 			if ($image_os_install_type eq 'partimage') {
-				# want 'image' to be in the list
-				if ($newlist !~ /image/) {
-					$newlist = "$newlist,image";
-				}
-				# do not want 'compute' to be in the list
-				if ($newlist =~ /compute/) {
-					$newlist =~ s/compute(,)?//;
-					$newlist =~ s/,$//;
-				}
+				#this is a partimage based install
+				$newlist = "all,blade,image";
 			} ## end if ($image_os_install_type eq 'partimage')
 			else {
-				# do not want 'image' to be in the list
-				if ($newlist =~ /image/) {
-					$newlist =~ s/image(,)?//;
-					$newlist =~ s/,$//;
-				}
-				# want 'compute' to be in the list
-				if ($newlist !~ /compute/) {
-					$newlist = "$newlist,compute";
-				}
+				# this is a kickstart based install
+				$newlist = "all,blade,$postscript_project";
 			} ## end else [ if ($image_os_install_type eq 'partimage')
 		} ## end foreach my $l (@file)
 		notify($ERRORS{'DEBUG'}, 0, "old nodelist.groups=$oldlist, new nodelist.groups=$newlist");
