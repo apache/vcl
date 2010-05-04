@@ -59,31 +59,6 @@ use Fcntl qw(:DEFAULT :flock);
 
 ##############################################################################
 
-=head1 CLASS ATTRIBUTES
-
-=cut
-
-=head2 %VMWARE_CONFIG
-
- Data type   : hash
- Description : %VMWARE_CONFIG is a hash containing the general VMWARE configuration
-               for the management node this code is running on. Since the data is
-					the same for every instance of the VMWARE class, a class attribute
-					is used and the hash is shared among all instances. This also
-					means that the data only needs to be retrieved from the database
-					once.
-
-=cut
-
-#my %VMWARE_CONFIG;
-
-# Class attributes to store VMWWARE configuration details
-# This data also resides in the %VMWARE_CONFIG hash
-# Extract hash data to scalars for ease of use
-my $IMAGE_LIB_ENABLE  = $IMAGELIBENABLE;
-my $IMAGE_LIB_USER    = $IMAGELIBUSER;
-my $IMAGE_LIB_KEY     = $IMAGELIBKEY;
-my $IMAGE_LIB_SERVERS = $IMAGESERVERS;
 
 ##############################################################################
 
