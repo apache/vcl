@@ -245,10 +245,6 @@ our @EXPORT = qw(
   %ERRORS
   %OPTIONS
 
-  $IMAGELIBENABLE
-  $IMAGELIBUSER
-  $IMAGELIBKEY
-  $IMAGESERVERS
 );
 
 #our %ERRORS=('DEPENDENT'=>4,'UNKNOWN'=>3,'OK'=>0,'WARNING'=>1,'CRITICAL'=>2,'MAILMASTERS'=>5);
@@ -266,8 +262,6 @@ INIT {
 	our ($LINUX_IMAGE,     $THROTTLE);
 	our ($CORE_IMAGEREPOSITORY, $WIN_IMAGEREPOSITORY, $LINUX_IMAGEREPOSITORY);
 	our ($IDENTITY_linux_lab, $IDENTITY_solaris_lab, $IDENTITY_wxp, $IDENTITY_newwxp, $IDENTITY_bladerhel);
-	our ($IMAGELIBENABLE) = 0;
-	our ($IMAGESERVERS, $IMAGELIBUSER, $IMAGELIBKEY);
 	our ($VMWARETYPE, $VMWARE_DISK,$VMWARE_MAC_ETH0_GENERATED, $VMWARE_MAC_ETH1_GENERATED);
 	our ($WINDOWS_ROOT_PASSWORD);
    our ($XMLRPC_USER, $XMLRPC_PASS, $XMLRPC_URL);
@@ -499,23 +493,6 @@ INIT {
 				$IDENTITY_linux_lab = $1;
 			}
 
-			#image library share - sync images across multiple management nodes
-			# $IMAGELIBENABLE,$IMAGESERVERS,$IMAGELIBUSER,$IMAGELIBKEY
-			if ($l =~ /^IMAGELIBENABLE=(yes)/) {
-				$IMAGELIBENABLE = 1;
-			}
-			elsif ($l =~ /^IMAGELIBENABLE=(no)/) {
-				$IMAGELIBENABLE = 0;
-			}
-			if ($l =~ /^imageservers=(.*)/) {
-				$IMAGESERVERS = $1;
-			}
-			if ($l =~ /^imagelibuser=(.*)/) {
-				$IMAGELIBUSER = $1;
-			}
-			if ($l =~ /^imagelibidkey=(.*)/) {
-				$IMAGELIBKEY = $1;
-			}
 			#vmware settings
 			# localdisk
 			if ($l =~ /^VMWARE_DISK=(localdisk|networkdisk)/) {
@@ -647,7 +624,6 @@ our ($IPCONFIGURATION, $DNSserver, $GATEWAY, $NETMASK, $ETHDEVICE);
 our ($LINUX_IMAGE,     $THROTTLE);
 our ($FQDN);
 our ($IDENTITY_linux_lab, $IDENTITY_solaris_lab, $IDENTITY_wxp, $IDENTITY_bladerhel);
-our ($IMAGELIBENABLE,     $IMAGESERVERS,         $IMAGELIBUSER, $IMAGELIBKEY);
 our ($VMWARE_DISK);
 our $IDENTITY_newwxp    = "$FindBin::Bin/../lib/VCL/newwinxp_blade.key";
 our $XCATROOT           = "/opt/xcat";
