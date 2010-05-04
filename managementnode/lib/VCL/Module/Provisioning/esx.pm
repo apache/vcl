@@ -72,6 +72,8 @@ use VMware::VILib;
 
 =head1 Local GLOBAL VARIABLES
 
+=cut
+
 our $VMTOOL_ROOT;
 our $VMTOOLKIT_VERSION;
 
