@@ -749,13 +749,14 @@ sub node_status {
 		$image_os_type      = $self->data->get_image_os_type;
 		$vmclient_shortname = $self->data->get_computer_short_name;
 		$request_forimaging = $self->data->get_request_forimaging();
+		$identity_keys      = $self->data->get_management_node_keys;
 	} ## end else [ if (ref($self) !~ /esx/i)
 
 	notify($ERRORS{'OK'},    0, "Entering node_status, checking status of $vmclient_shortname");
 	notify($ERRORS{'DEBUG'}, 0, "request_for_imaging: $request_forimaging");
 	notify($ERRORS{'DEBUG'}, 0, "requeseted image name: $requestedimagename");
 
-	my ($hostnode, $identity);
+	my ($hostnode);
 
 	# Create a hash to store status components
 	my %status;
@@ -770,17 +771,12 @@ sub node_status {
 
 	if ($vmhost_type eq "blade") {
 		$hostnode = $1 if ($vmhost_hostname =~ /([-_a-zA-Z0-9]*)(\.?)/);
-		$identity = $IDENTITY_bladerhel;    #if($vm{vmhost}{imagename} =~ /^(rhel|rh3image|rh4image|fc|rhfc)/);
 	}
 	else {
 		#using FQHN
 		$hostnode = $vmhost_hostname;
-		$identity = $IDENTITY_linux_lab if ($vmhost_imagename =~ /^(realmrhel)/);
 	}
 
-	if (!$identity) {
-		notify($ERRORS{'CRITICAL'}, 0, "could not set ssh identity variable for image $vmhost_imagename type= $vmhost_type host= $vmhost_hostname");
-	}
 
 	# Check if node is pingable
 	notify($ERRORS{'DEBUG'}, 0, "checking if $vmclient_shortname is pingable");
@@ -812,8 +808,7 @@ sub node_status {
 		notify($ERRORS{'DEBUG'}, 0, "SSH good, trying to query image name");
 
 		$status{ssh} = 1;
-		my $identity = $IDENTITY_bladerhel;
-		my @sshcmd = run_ssh_command($vmclient_shortname, $identity, "cat currentimage.txt");
+		my @sshcmd = run_ssh_command($vmclient_shortname, $identity_keys, "cat currentimage.txt");
 		$status{currentimage} = $sshcmd[1][0];
 
 		notify($ERRORS{'DEBUG'}, 0, "Image name: $status{currentimage}");

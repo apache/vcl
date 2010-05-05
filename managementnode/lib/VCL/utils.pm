@@ -209,10 +209,6 @@ our @EXPORT = qw(
   $ETHDEVICE
   $GATEWAY
   $FQDN
-  $IDENTITY_bladerhel
-  $IDENTITY_wxp
-  $IDENTITY_linux_lab
-  $IDENTITY_solaris_lab
   $IPCONFIGURATION
   $jabPass
   $jabPort
@@ -261,7 +257,6 @@ INIT {
 	our ($IPCONFIGURATION, $DNSserver, $GATEWAY, $NETMASK, $ETHDEVICE) = 0;
 	our ($LINUX_IMAGE,     $THROTTLE);
 	our ($CORE_IMAGEREPOSITORY, $WIN_IMAGEREPOSITORY, $LINUX_IMAGEREPOSITORY);
-	our ($IDENTITY_linux_lab, $IDENTITY_solaris_lab, $IDENTITY_wxp, $IDENTITY_newwxp, $IDENTITY_bladerhel);
 	our ($VMWARETYPE, $VMWARE_DISK,$VMWARE_MAC_ETH0_GENERATED, $VMWARE_MAC_ETH1_GENERATED);
 	our ($WINDOWS_ROOT_PASSWORD);
    our ($XMLRPC_USER, $XMLRPC_PASS, $XMLRPC_URL);
@@ -479,20 +474,6 @@ INIT {
 				$THROTTLE = $1;
 			}
 
-			#ssh private keys
-			if ($l =~ /^IDENTITY_blade_linux=(.*)/) {
-				$IDENTITY_bladerhel = $1;
-			}
-			if ($l =~ /^IDENTITY_blade_win=(.*)/) {
-				$IDENTITY_wxp = $1;
-			}
-			if ($l =~ /^IDENTITY_solaris_lab=(.*)/) {
-				$IDENTITY_solaris_lab = $1;
-			}
-			if ($l =~ /^IDENTITY_linux_lab=(.*)/) {
-				$IDENTITY_linux_lab = $1;
-			}
-
 			#vmware settings
 			# localdisk
 			if ($l =~ /^VMWARE_DISK=(localdisk|networkdisk)/) {
@@ -541,17 +522,6 @@ INIT {
 		$THROTTLE = 0;
 	}
 
-	if (!$IDENTITY_bladerhel) {
-
-	}
-	if (!$IDENTITY_wxp) {
-
-	}
-	if (!$IDENTITY_solaris_lab) {
-	}
-	if (!$IDENTITY_linux_lab) {
-	}
-	
 	if (!$WINDOWS_ROOT_PASSWORD) {
 		$WINDOWS_ROOT_PASSWORD = "clOudy";
 	}
@@ -623,9 +593,7 @@ our ($MYSQL_SSL,       $MYSQL_SSL_CERT);
 our ($IPCONFIGURATION, $DNSserver, $GATEWAY, $NETMASK, $ETHDEVICE);
 our ($LINUX_IMAGE,     $THROTTLE);
 our ($FQDN);
-our ($IDENTITY_linux_lab, $IDENTITY_solaris_lab, $IDENTITY_wxp, $IDENTITY_bladerhel);
 our ($VMWARE_DISK);
-our $IDENTITY_newwxp    = "$FindBin::Bin/../lib/VCL/newwinxp_blade.key";
 our $XCATROOT           = "/opt/xcat";
 our $TOOLS              = "$FindBin::Bin/../tools";
 our $VMWAREREPOSITORY   = "/install/vmware_images";
@@ -1419,10 +1387,9 @@ sub setstaticaddress {
 
 	}
 
-	my $identity;
+	my $identity = $ENV{management_node_info}{keys};
 	my @sshcmd;
 	if ($image_os_type =~ /linux/i) {
-		$identity = $IDENTITY_bladerhel;
 		#create local tmp file
 		# down interface
 		#copy tmpfile to  /etc/sysconfig/network-scripts/ifcfg-eth1
@@ -1641,13 +1608,12 @@ sub getdynamicaddress {
 		notify($ERRORS{'WARNING'}, 0, "private IP address not found for $node, possible issue with regex");
 	}
 
-	my $identity;
+	my $identity_keys = $ENV{management_node_info}{keys};
 	my $dynaIPaddress = 0;
 	my $ip_address;
 	if ($image_os_type =~ /windows/i) {
-		$identity = $IDENTITY_wxp;
 
-		@sshcmd = run_ssh_command($node, $identity, "ipconfig", "root");
+		@sshcmd = run_ssh_command($node, $identity_keys, "ipconfig", "root");
 		for my $l (@{$sshcmd[1]}) {
 			# skip class a,b,c private addresses
                         next if ($l !~ /IP(.*)?Address[\s\.:]*([\d\.]*)/);
@@ -1660,9 +1626,9 @@ sub getdynamicaddress {
 
 	} ## end if ($osname =~ /windows/)
 	elsif ($image_os_type =~ /linux/) {
-		$identity = $IDENTITY_bladerhel;
+		#$identity = $ENV{management_node_info}{keys};
 		undef @sshcmd;
-		@sshcmd = run_ssh_command($node, $identity, "/sbin/ifconfig \|grep inet", "root");
+		@sshcmd = run_ssh_command($node, $identity_keys, "/sbin/ifconfig \|grep inet", "root");
 		for my $l (@{$sshcmd[1]}) {
 			# skip class a,b,c private addresses
 			next if ($l !~ /inet addr:([\d\.]*)/);
@@ -1774,16 +1740,8 @@ sub check_connection {
 	my $ret_val       = "no";
 
 	$dbh = getnewdbh() if !$dbh;
-	my $identity;
-	if ($image_os_type =~ /windows/i) {
-		$identity = $IDENTITY_wxp;
-	}
-	elsif ($image_os_type =~ /linux/i) {
-		$identity = $IDENTITY_bladerhel;
-	}
-	else {
-		$identity = $IDENTITY_bladerhel;
-	}
+	my $identity_keys = $ENV{management_node_info}{keys};
+
 	# Figure out number of loops for log messates
 	my $maximum_loops = $time_limit * 2;
 	my $loop_count    = 0;
@@ -1828,7 +1786,7 @@ sub check_connection {
 				$shortnodename = $1 if ($nodename =~ /([-_a-zA-Z0-9]*)\./);
 				if ($image_os_type =~ /windows/i) {
 					undef @SSHCMD;
-					@SSHCMD = run_ssh_command($shortnodename, $identity, "netstat -an", "root", 22, 1);
+					@SSHCMD = run_ssh_command($shortnodename, $identity_keys, "netstat -an", "root", 22, 1);
 					foreach my $line (@{$SSHCMD[1]}) {
 						#check for rdp and ssh connections
 						# rdp:3389,ssh:22
@@ -1866,7 +1824,7 @@ sub check_connection {
 					# 2:simply check who ouput
 					my @lines;
 					undef @SSHCMD;
-					@SSHCMD = run_ssh_command($shortnodename, $identity, "netstat -an", "root", 22, 1);
+					@SSHCMD = run_ssh_command($shortnodename, $identity_keys, "netstat -an", "root", 22, 1);
 					foreach my $line (@{$SSHCMD[1]}) {
 						if ($line =~ /Connection refused|Permission denied/) {
 							chomp($line);
@@ -1894,7 +1852,7 @@ sub check_connection {
 					}    #foreach
 					     #who; too make sure we didn't miss it through netstat
 					undef @SSHCMD;
-					@SSHCMD = run_ssh_command($shortnodename, $identity, "who", "root");
+					@SSHCMD = run_ssh_command($shortnodename, $identity_keys, "who", "root");
 					foreach my $w (@{$SSHCMD[1]}) {
 						if ($w =~ /$user/) {
 							$break = 1;
@@ -1907,19 +1865,8 @@ sub check_connection {
 				} ## end elsif ($image_os_type =~ /linux/) [ if ($osname =~ /windows/)
 			} ## end if ($type =~ /blade|virtualmachine/)
 			elsif ($type eq "lab") {
-				my $identity;
-				if ($osname =~ /sun4x_/) {
-					$identity = $IDENTITY_solaris_lab;
-				}
-				elsif ($osname =~ /rhel/) {
-					$identity = $IDENTITY_linux_lab;
-				}
-				else {
-					#if all else fails
-					$identity = $IDENTITY_solaris_lab;
-				}
 				undef @SSHCMD;
-				@SSHCMD = run_ssh_command($nodename, $identity, "netstat -an", "vclstaff", 24, 1);
+				@SSHCMD = run_ssh_command($nodename, $identity_keys, "netstat -an", "vclstaff", 24, 1);
 				foreach my $line (@{$SSHCMD[1]}) {
 					chomp($line);
 					if ($line =~ /Connection refused|Permission denied/) {
@@ -2001,17 +1948,7 @@ sub isconnected {
 	notify($ERRORS{'OK'}, 0, "image_os_type not set")    if (!defined($image_os_type));
 	notify($ERRORS{'OK'}, 0, "ipaddress not set") if (!defined($ipaddress));
 
-	my $identity;
-
-	if ($image_os_type =~ /windows/i) {
-		$identity = $IDENTITY_wxp;
-	}
-	elsif ($image_os_type =~ /linux/i) {
-		$identity = $IDENTITY_bladerhel;
-	}
-	else {
-		$identity = $IDENTITY_bladerhel;
-	}
+	my $identity= $ENV{management_node_info}{keys};
 
 	my @netstat;
 	my @SSHCMD;
@@ -2071,18 +2008,6 @@ sub isconnected {
 		return 0;
 	} ## end if ($type =~ /blade|virtualmachine/)
 	elsif ($type eq "lab") {
-		my $identity;
-		if ($osname =~ /sun4x_/) {
-			$identity = $IDENTITY_solaris_lab;
-		}
-		elsif ($osname =~ /realmrhel/) {
-			$identity = $IDENTITY_linux_lab;
-		}
-		else {
-			#if all else fails
-			notify($ERRORS{'OK'}, 0, "osname $osname not found setting identity file to default");
-			$identity = $IDENTITY_solaris_lab;
-		}
 		undef @SSHCMD;
 		@SSHCMD = run_ssh_command($nodename, $identity, "netstat -an", "vclstaff", 24, 1);
 		foreach my $line (@{$SSHCMD[1]}) {
@@ -2692,7 +2617,7 @@ sub _getcurrentimage {
 	my ($package, $filename, $line, $sub) = caller(0);
 	notify($ERRORS{'WARNING'}, 0, "node is not defined") if (!(defined($node)));
 	# TODO - loop through the available ssh keys to figure out which one works
-	my $identity = $IDENTITY_bladerhel;
+	my $identity = $ENV{management_node_info}{keys};
 	my @sshcmd = run_ssh_command($node, $identity, "cat currentimage.txt");
 	foreach my $s (@{$sshcmd[1]}) {
 		if ($s =~ /Warning: /) {
@@ -2770,17 +2695,7 @@ sub _sshd_status {
 		return "off";
 	}
 
-	my $identity;
-
-	if ($image_os_type =~ /windows/i) {
-		$identity = $IDENTITY_wxp;
-	}
-	elsif ($image_os_type =~ /linux/i) {
-		$identity = $IDENTITY_bladerhel;
-	}
-	else {
-		$identity = $IDENTITY_bladerhel;
-	}
+	my $identity = $ENV{management_node_info}{keys};
 
 	my @sshcmd = run_ssh_command($node, $identity, "uname -s", "root");
 	
@@ -2815,13 +2730,7 @@ sub _machine_os {
 		notify($ERRORS{'OK'}, 0, "ssh port not open cannot check $node OS");
 		return 0;
 	}
-	my $identity;
-	if (defined($imagename)) {
-		$identity = $IDENTITY_bladerhel if ($imagename =~ /^(rhel|rh3image|fc|rh|esx)/);
-	}
-	else {
-		$identity = $IDENTITY_wxp;
-	}
+	my $identity = $ENV{management_node_info}{keys};
 	my @sshcmd = run_ssh_command($node, $identity, "uname -s", "root");
 	foreach my $l (@{$sshcmd[1]}) {
 		if ($l =~ /CYGWIN_NT-5\.1/) {
@@ -2874,7 +2783,7 @@ sub _is_user_added {
 
 		if ($image_os_type =~ /linux/i) {
 			undef @SSHCMD;
-			@SSHCMD = run_ssh_command($node, $IDENTITY_bladerhel, "cat /etc/passwd", "root");
+			@SSHCMD = run_ssh_command($node, $ENV{management_node_info}{keys}, "cat /etc/passwd", "root");
 			foreach $l (@{$SSHCMD[1]}) {
 				return 1 if ($l =~ /$user/);
 			}
@@ -3108,29 +3017,20 @@ sub notify_via_wall {
 	else {
 		notify($ERRORS{'WARNING'}, 0, "could not open tmp file $!");
 	}
+	my $identity_keys = $ENV{management_node_info}{keys};
 	if ($type eq "blade") {
 		#this is only going to be rhel
-		if (run_scp_command("/tmp/wall.$hostname", "$hostname:/root/wall.txt", $IDENTITY_bladerhel)) {
+		if (run_scp_command("/tmp/wall.$hostname", "$hostname:/root/wall.txt", $identity_keys)) {
 			unlink "/tmp/wall.$hostname";
-			if (run_ssh_command($hostname, $IDENTITY_bladerhel, " cat /root/wall.txt \| wall; /bin/rm -v /root/wall.txt", "root")) {
+			if (run_ssh_command($hostname, $identity_keys, " cat /root/wall.txt \| wall; /bin/rm -v /root/wall.txt", "root")) {
 				notify($ERRORS{'OK'}, 0, "successfully sent wall notification to $hostname");
 				return 1;
 			}
 		}
 	} ## end if ($type eq "blade")
 	elsif ($type eq "lab") {
-		if ($OSname =~ /sun4x_/) {
-			$identity = $IDENTITY_solaris_lab;
-		}
-		elsif ($OSname =~ /rhel/) {
-			$identity = $IDENTITY_linux_lab;
-		}
-		else {
-			#all else fails
-			$identity = $IDENTITY_solaris_lab;
-		}
-
-		if (run_scp_command("/tmp/wall.$hostname", "vclstaff\@$hostname:/home/vclstaff/wall.txt", $identity, 24)) {
+		
+		if (run_scp_command("/tmp/wall.$hostname", "vclstaff\@$hostname:/home/vclstaff/wall.txt", $identity_keys, 24)) {
 			unlink "/tmp/wall.$hostname";
 		}
 		else {
@@ -3138,7 +3038,7 @@ sub notify_via_wall {
 		}
 
 		if ($OSname =~ /sun4x_/) {
-			if (run_ssh_command($hostname, $identity, "wall -a /home/vclstaff/wall.txt; /bin/rm -v /home/vclstaff/wall.txt", "vclstaff", "24")) {
+			if (run_ssh_command($hostname, $identity_keys, "wall -a /home/vclstaff/wall.txt; /bin/rm -v /home/vclstaff/wall.txt", "vclstaff", "24")) {
 				notify($ERRORS{'OK'}, 0, "successfully sent wall notification to $hostname");
 				return 1;
 			}
@@ -3147,7 +3047,7 @@ sub notify_via_wall {
 			}
 		}
 		elsif ($OSname =~ /rhel/) {
-			if (run_ssh_command($hostname, $identity, "cat /home/vclstaff/wall.txt \| wall ; /bin/rm -v /home/vclstaff/wall.txt", "vclstaff", "24")) {
+			if (run_ssh_command($hostname, $identity_keys, "cat /home/vclstaff/wall.txt \| wall ; /bin/rm -v /home/vclstaff/wall.txt", "vclstaff", "24")) {
 				notify($ERRORS{'OK'}, 0, "successfully sent wall notification to $hostname");
 				return 1;
 			}
@@ -3263,7 +3163,7 @@ sub notify_via_msg {
 
 	my $command = "msg $user /TIME:180 '$message'";
 
-	if (run_ssh_command($node, $IDENTITY_wxp, $command)) {
+	if (run_ssh_command($node, $ENV{management_node_info}{keys}, $command)) {
 		notify($ERRORS{'OK'}, 0, "successfully sent message to Windows user $user on $node");
 		return 1;
 	}
@@ -3467,6 +3367,7 @@ sub changelinuxpassword {
 
 	my @ssh;
 	my $l;
+	my $identity_keys = $ENV{management_node_info}{keys};
 	if ($account eq "root") {
 
 
@@ -3486,11 +3387,11 @@ sub changelinuxpassword {
 			if (open(TMP, ">$tmpfile")) {
 				print TMP "$account:$passwd:13061:0:99999:7:::\n";
 				close(TMP);
-				if (run_ssh_command($node, $IDENTITY_bladerhel, "cat /etc/shadow \|grep -v $account >> $tmpfile", "root")) {
+				if (run_ssh_command($node, $identity_keys, "cat /etc/shadow \|grep -v $account >> $tmpfile", "root")) {
 					notify($ERRORS{'DEBUG'}, 0, "collected /etc/shadow file from $node");
-					if (run_scp_command($tmpfile, "$node:/etc/shadow", $IDENTITY_bladerhel)) {
+					if (run_scp_command($tmpfile, "$node:/etc/shadow", $identity_keys)) {
 						notify($ERRORS{'DEBUG'}, 0, "copied updated /etc/shadow file to $node");
-						if (run_ssh_command($node, $IDENTITY_bladerhel, "chmod 600 /etc/shadow", "root")) {
+						if (run_ssh_command($node, $identity_keys, "chmod 600 /etc/shadow", "root")) {
 							notify($ERRORS{'DEBUG'}, 0, "updated permissions to 600 on /etc/shadow file on $node");
 							unlink $tmpfile;
 							return 1;
@@ -3504,7 +3405,7 @@ sub changelinuxpassword {
 					else {
 						notify($ERRORS{'WARNING'}, 0, "failed to copy contents of shadow file on $node ");
 					}
-				} ## end if (run_ssh_command($node, $IDENTITY_bladerhel...
+				} ## end if (run_ssh_command($node, $identity_keys...
 				else {
 					notify($ERRORS{'WARNING'}, 0, "failed to copy contents of shadow file on $node ");
 					unlink $tmpfile;
@@ -3520,7 +3421,7 @@ sub changelinuxpassword {
 	else {
 		#actual user
 		#push it through passwd cmd stdin
-		my @sshcmd = run_ssh_command($node, $IDENTITY_bladerhel, "echo $passwd \| /usr/bin/passwd -f $account --stdin", "root");
+		my @sshcmd = run_ssh_command($node, $identity_keys, "echo $passwd \| /usr/bin/passwd -f $account --stdin", "root");
 		foreach my $l (@{$sshcmd[1]}) {
 			if ($l =~ /authentication tokens updated successfully/) {
 				notify($ERRORS{'OK'}, 0, "successfully changed local password account $account");
@@ -3677,15 +3578,8 @@ sub collectsshkeys {
 	}
 
 	#what identity do we use
-	my $key;
-	if ($type =~ /lab/) {
-		if ($osname =~ /rhel/) {
-			$key = $IDENTITY_linux_lab;
-		}
-		else {
-			$key = $IDENTITY_solaris_lab;
-		}
-	}
+	my $key = $ENV{management_node_info}{keys};
+
 	#send fetch keys flag to node
 	my @sshcmd = run_ssh_command($ipaddress, $key, "echo fetch > /home/vclstaff/clientdata; echo 1 > /home/vclstaff/flag", "vclstaff", "24");
 	foreach my $l (@{$sshcmd[1]}) {
@@ -3943,16 +3837,8 @@ sub check_uptime {
 	notify($ERRORS{'WARNING'}, $log, "type is not defined")      if (!(defined($type)));
 
 	if ($type eq "lab") {
-		my $identity;
-		if ($OSname =~ /sun4x/) {
-			$identity = $IDENTITY_solaris_lab;
-		}
-		elsif ($OSname =~ /rhel/) {
-			$identity = $IDENTITY_linux_lab;
-		}
-		else {
-			return (0, "failure : OSname not match");
-		}
+		my $identity = $ENV{management_node_info}{keys};
+
 		my @sshcmd = run_ssh_command($node, $identity, "uptime", "vclstaff", "24");
 		my $l;
 		foreach $l (@{$sshcmd[1]}) {
@@ -5047,35 +4933,7 @@ sub get_request_info {
 		my $imagerevision_imagename = $request_info{reservation}{$reservation_id}{imagerevision}{imagename};
 		my $image_os_type = $request_info{reservation}{$reservation_id}{image}{OS}{type};
 
-		my $identity_file_path;
-		if($computer_type =~ /blade|virtualmachine/){
-			if($image_os_type =~ /windows/i){
-				$identity_file_path = $IDENTITY_wxp;
-			}
-			elsif ($image_os_type =~ /linux/i){
-				$identity_file_path = $IDENTITY_bladerhel;
-			}
-			else{
-				notify($ERRORS{'WARNING'}, 0, "computer_type=$computer_type is of an unknown or unusual image_os_type=$image_os_type type=$computer_type");
-			}
-		}
-		elsif($computer_type eq "lab"){
-			if ($imagerevision_imagename =~ /realmrh|i386_linux26/) {
-				$identity_file_path = $IDENTITY_linux_lab;
-			}
-			elsif ($imagerevision_imagename =~ /sun/) {
-				$identity_file_path = $IDENTITY_solaris_lab;
-			}
-			elsif ($imagerevision_imagename =~ /^mpls/) {
-				notify($ERRORS{'OK'}, 0, "MPLS reservation: $request_id:$reservation_id");
-			}
-			else {
-				notify($ERRORS{'WARNING'}, 0, "unsupported image type: '$imagerevision_imagename'");
-			}
-		}
-		else{
-			notify($ERRORS{'WARNING'}, 0, "computer=$computer_id is of an unknown or unusual type=$computer_type");
-		}
+		my $identity_file_path = $ENV{management_node_info}{keys};
 
 		$request_info{reservation}{$reservation_id}{image}{IDENTITY} = $identity_file_path;
 
@@ -9742,17 +9600,7 @@ sub disablesshd {
 	}
 	my @lines;
 	my $l;
-	my $identity;
-	if ($osname =~ /sun4x_/) {
-		$identity = $IDENTITY_solaris_lab;
-	}
-	elsif ($osname =~ /rhel/) {
-		$identity = $IDENTITY_linux_lab;
-	}
-	else {
-		#if all else fails
-		$identity = $IDENTITY_solaris_lab;
-	}
+	my $identity = $ENV{management_node_info}{keys};
 	# create clientdata file
 	my $clientdata = "/tmp/clientdata.$hostname";
 	if (open(CLIENTDATA, ">$clientdata")) {

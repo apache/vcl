@@ -109,6 +109,8 @@ sub load {
 	my $request_id     = $self->data->get_request_id;
 	my $reservation_id = $self->data->get_reservation_id;
 	my $persistent     = $self->data->get_request_forimaging;
+	
+	my $management_node_keys     = $self->data->get_management_node_keys();
 
 	my $image_id       = $self->data->get_image_id;
 	my $image_os_name  = $self->data->get_image_os_name;
@@ -145,8 +147,10 @@ sub load {
 	my $vmclient_privateIPaddress = $self->data->get_computer_ip_address;
 	my $vmclient_publicIPaddress  = $self->data->get_computer_private_ip_address;
 	my $vmclient_OSname           = $self->data->get_image_os_name;
+
 	# Assemble a consistent prefix for notify messages
 	my $notify_prefix = "req=$request_id, res=$reservation_id:";
+
 
 	#$VMWARErepository
 	#if (!($vm{vmhost}{ok})) {
@@ -162,10 +166,9 @@ sub load {
 	#$vm{"vmclient"}{"project"} = "vcl" if (!defined($vm{"vmclient"}{"project"}));
 
 
-	my ($hostnode, $identity);
+	my ($hostnode);
 	if ($host_type eq "blade") {
 		$hostnode = $1 if ($vmhost_hostname =~ /([-_a-zA-Z0-9]*)(\.?)/);
-		$identity = $IDENTITY_bladerhel;
 
 		# assign2project is only for blades - and not all blades
 		#if (VCL::Module::Provisioning::xCAT::_assign2project($hostnode, $project)) {
@@ -180,15 +183,13 @@ sub load {
 	else {
 		#using FQHN
 		$hostnode = $vmhost_hostname;
-		$identity = $IDENTITY_linux_lab if ($vmhost_imagename =~ /^(realmrhel)/);
 	}
 
-	if (!(defined($identity))) {
+	if (!(defined($management_node_keys))) {
 		notify($ERRORS{'CRITICAL'}, 0, "identity variiable not definted, setting to blade identity file vmhost variable set to $vmhost_imagename");
-		$identity = $IDENTITY_bladerhel;
 	}
 
-	notify($ERRORS{'OK'}, 0, "identity file set $identity  vmhost imagename $vmhost_imagename bladekey $IDENTITY_bladerhel");
+	notify($ERRORS{'OK'}, 0, "identity file set $management_node_keys  vmhost imagename $vmhost_imagename bladekey ");
 	#setup flags
 	my $baseexists   = 0;
 	my $dirstructure = 0;
@@ -234,7 +235,7 @@ sub load {
 			notify($ERRORS{'OK'}, 0, "owning exclusive lock on $tmplockfile");
 			notify($ERRORS{'OK'}, 0, "listing datestore $datastorepath ");
 			undef @sshcmd;
-			@sshcmd = run_ssh_command($hostnode, $identity, "ls -1 $datastorepath", "root");
+			@sshcmd = run_ssh_command($hostnode, $management_node_keys, "ls -1 $datastorepath", "root");
 			if (!defined(@{$sshcmd[1]})) {
 				notify($ERRORS{'CRITICAL'}, 0, "failed to list data store contents $datastorepath on vm host");
 				insertloadlog($reservation_id, $vmclient_computerid, "failed", "failed to list data store contents $datastorepath on vm host");
@@ -274,7 +275,7 @@ sub load {
 				notify($ERRORS{'DEBUG'}, 0, "requestedimagenamebase and persistent are both true, attempting to detect status for move of base image instead of full copy");
 				#Confirm base is not inuse then simply rename the directory to match our needs
 				my $okforMOVE = 0;
-				my @sshcmd = run_ssh_command($hostnode, $identity, "vmware-cmd -l", "root");
+				my @sshcmd = run_ssh_command($hostnode, $management_node_keys, "vmware-cmd -l", "root");
 				foreach my $vm (@{$sshcmd[1]}) {
 					chomp($vm);
 					next if ($vm =~ /Warning:/);
@@ -287,7 +288,7 @@ sub load {
 						$localmyvmdir =~ s/(\s+)/\\ /g;
 
 						notify($ERRORS{'OK'}, 0, "my vmx $localmyvmx");
-						my @sshcmd_1 = run_ssh_command($hostnode, $identity, "vmware-cmd $localmyvmx getstate");
+						my @sshcmd_1 = run_ssh_command($hostnode, $management_node_keys, "vmware-cmd $localmyvmx getstate");
 						foreach my $l (@{$sshcmd_1[1]}) {
 							if ($l =~ /= off/) {
 								#Good
@@ -335,7 +336,7 @@ sub load {
 				notify($ERRORS{'DEBUG'}, 0, "file size $myvmdkfilesize of $requestedimagename");
 				notify($ERRORS{'OK'},    0, "checking space on $hostnode $vmhost_vmpath");
 				undef @sshcmd;
-				@sshcmd = run_ssh_command($hostnode, $identity, "df -k $vmhost_vmpath", "root");
+				@sshcmd = run_ssh_command($hostnode, $management_node_keys, "df -k $vmhost_vmpath", "root");
 				foreach my $l (@{$sshcmd[1]}) {
 					next if ($l =~ /Warning: Permanently/);
 					next if ($l =~ /^Filesystem/);
@@ -350,7 +351,7 @@ sub load {
 								notify($ERRORS{'OK'}, 0, "detected space issue on $hostnode, attempting to free up space");
 								#remove stuff
 								my %vmlist = ();
-								my @sshcmd_1 = run_ssh_command($hostnode, $identity, "vmware-cmd -l", "root");
+								my @sshcmd_1 = run_ssh_command($hostnode, $management_node_keys, "vmware-cmd -l", "root");
 								my $i;
 								foreach my $r (@{$sshcmd_1[1]}) {
 									$i++;
@@ -366,7 +367,7 @@ sub load {
 								foreach my $v (keys %vmlist) {
 									#handle any spaces in the path
 									$vmlist{$v}{path} =~ s/(\s+)/\\ /g;
-									my @sshcmd_2 = run_ssh_command($hostnode, $identity, "vmware-cmd -q $vmlist{$v}{path} getstate", "root");
+									my @sshcmd_2 = run_ssh_command($hostnode, $management_node_keys, "vmware-cmd -q $vmlist{$v}{path} getstate", "root");
 									foreach $a (@{$sshcmd_2[1]}) {
 										next if ($a =~ /^Warning: /);
 										chomp($a);
@@ -381,7 +382,7 @@ sub load {
 									} ## end foreach $a (@{$sshcmd_2[1]})
 								} ## end foreach my $v (keys %vmlist)
 								notify($ERRORS{'OK'}, 0, "ls datastorepath $datastorepath ");
-								my @sshcmd_3 = run_ssh_command($hostnode, $identity, "ls -1 $datastorepath", "root");
+								my @sshcmd_3 = run_ssh_command($hostnode, $management_node_keys, "ls -1 $datastorepath", "root");
 								foreach my $d (@{$sshcmd_3[1]}) {
 									next if ($d =~ /Warning: /);
 									
@@ -406,7 +407,7 @@ sub load {
 											elsif ($vmlist{$v}{state} eq "off") {
 												#$save = 0;
 												notify($ERRORS{'DEBUG'}, 0, "VM is off, it will NOT be saved: $vmlist{$v}{path}");
-												if (defined(run_ssh_command($hostnode, $identity, "vmware-cmd -s unregister $vmlist{$v}{path}", "root"))) {
+												if (defined(run_ssh_command($hostnode, $management_node_keys, "vmware-cmd -s unregister $vmlist{$v}{path}", "root"))) {
 													notify($ERRORS{'DEBUG'}, 0, "unregistered $vmlist{$v}{path}");
 												}
 											}
@@ -424,7 +425,7 @@ sub load {
 									}
 									else {
 										notify($ERRORS{'OK'}, 0, "disk cleanup - REMOVING $datastorepath/$d");
-										if (defined(run_ssh_command($hostnode, $identity, "/bin/rm -rf $datastorepath/$d\*", "root"))) {
+										if (defined(run_ssh_command($hostnode, $management_node_keys, "/bin/rm -rf $datastorepath/$d\*", "root"))) {
 											notify($ERRORS{'DEBUG'}, 0, "disk cleanup - REMOVED $datastorepath/$d\*");
 										}
 									}    #else not save
@@ -439,10 +440,10 @@ sub load {
 				}    # start foreach df -k
 				if ($vmprofile_vmdisk eq "localdisk") {
 					notify($ERRORS{'OK'}, 0, "copying base image files $requestedimagename to $hostnode");
-					if (run_scp_command("$VMWAREREPOSITORY/$requestedimagename", "$hostnode:\"$datastorepath/$mybasedirname\"", $identity)) {
+					if (run_scp_command("$VMWAREREPOSITORY/$requestedimagename", "$hostnode:\"$datastorepath/$mybasedirname\"", $management_node_keys)) {
 						#recheck host server for files - the  scp output is not being captured
 						undef @sshcmd;
-						@sshcmd = run_ssh_command($hostnode, $identity, "ls -1 $datastorepath", "root");
+						@sshcmd = run_ssh_command($hostnode, $management_node_keys, "ls -1 $datastorepath", "root");
 						foreach my $l (@{$sshcmd[1]}) {
 							if ($l =~ /denied|No such/) {
 								notify($ERRORS{'CRITICAL'}, 0, "node $hostnode output @{ $sshcmd[1] }");
@@ -474,7 +475,7 @@ sub load {
 						my $dstDir  = "$datastorepath/$mybasedirname";
 
 						#create a clone -
-						if (_vmwareclone($hostnode, $identity, $srcDisk, $dstDisk, $dstDir)) {
+						if (_vmwareclone($hostnode, $management_node_keys, $srcDisk, $dstDisk, $dstDir)) {
 							$baseexists = 1;
 							insertloadlog($reservation_id, $vmclient_computerid, "transfervm", "cloning base image files");
 						}
@@ -512,13 +513,13 @@ sub load {
 		#clean-up
 		#make sure vm is off, it should be
 		undef @sshcmd;
-		@sshcmd = run_ssh_command($hostnode, $identity, "vmware-cmd $myvmx getstate", "root");
+		@sshcmd = run_ssh_command($hostnode, $management_node_keys, "vmware-cmd $myvmx getstate", "root");
 		foreach my $l (@{$sshcmd[1]}) {
 			if ($l =~ /= off/) {
 				#good
 			}
 			elsif ($l =~ /= on/) {
-				my @sshcmd_1 = run_ssh_command($hostnode, $identity, "vmware-cmd $myvmx stop hard", "root");
+				my @sshcmd_1 = run_ssh_command($hostnode, $management_node_keys, "vmware-cmd $myvmx stop hard", "root");
 				foreach my $a (@{$sshcmd_1[1]}) {
 					next if ($a =~ /Warning:/);
 					if ($a =~ /= 1/) {
@@ -533,7 +534,7 @@ sub load {
 		} ## end foreach my $l (@{$sshcmd[1]})
 		    #if registered -  unregister vm
 		undef @sshcmd;
-		@sshcmd = run_ssh_command($hostnode, $identity, "vmware-cmd -s unregister $myvmx", "root");
+		@sshcmd = run_ssh_command($hostnode, $management_node_keys, "vmware-cmd -s unregister $myvmx", "root");
 		foreach my $l (@{$sshcmd[1]}) {
 			if ($l =~ /No such virtual machine/) {
 				#not registered
@@ -545,7 +546,7 @@ sub load {
 		}
 		#delete directory -- clean slate
 		# if in persistent mode - imaging or otherwise we may not want to rm this directory
-		if (defined(run_ssh_command($hostnode, $identity, "/bin/rm -rf $vmhost_vmpath/$myvmdir", "root"))) {
+		if (defined(run_ssh_command($hostnode, $management_node_keys, "/bin/rm -rf $vmhost_vmpath/$myvmdir", "root"))) {
 			notify($ERRORS{'OK'}, 0, "success rm -rf $vmhost_vmpath/$myvmdir on $hostnode ");
 		}
 
@@ -704,10 +705,10 @@ sub load {
 
 	#scp vmx file to vmdir on vmhost
 	insertloadlog($reservation_id, $vmclient_computerid, "vmconfigcopy", "transferring vmx file to $hostnode");
-	if (run_scp_command($tmpdir, "$hostnode:\"$vmhost_vmpath\"", $identity)) {
+	if (run_scp_command($tmpdir, "$hostnode:\"$vmhost_vmpath\"", $management_node_keys)) {
 		my $copied = 0;
 		undef @sshcmd;
-		@sshcmd = run_ssh_command($hostnode, $identity, "ls -1 $vmhost_vmpath/$myvmdir;chmod 755 $myvmx", "root");
+		@sshcmd = run_ssh_command($hostnode, $management_node_keys, "ls -1 $vmhost_vmpath/$myvmdir;chmod 755 $myvmx", "root");
 		foreach my $l (@{$sshcmd[1]}) {
 			if ($l =~ /$myvmdir.vmx/) {
 				notify($ERRORS{'OK'}, 0, "successfully copied vmx file to $hostnode");
@@ -739,7 +740,7 @@ sub load {
 	#register vmx on vmhost
 	my $registered = 0;
 	undef @sshcmd;
-	@sshcmd = run_ssh_command($hostnode, $identity, "vmware-cmd -s register $myvmx", "root");
+	@sshcmd = run_ssh_command($hostnode, $management_node_keys, "vmware-cmd -s register $myvmx", "root");
 	foreach my $l (@{$sshcmd[1]}) {
 		if ($l =~ /No such virtual machine/) {
 			#not registered
@@ -776,7 +777,7 @@ sub load {
 	}
 
 	undef @sshcmd;
-	@sshcmd = run_ssh_command($hostnode, $identity, "vmware-cmd $myvmx start", "root");
+	@sshcmd = run_ssh_command($hostnode, $management_node_keys, "vmware-cmd $myvmx start", "root");
 	for my $l (@{$sshcmd[1]}) {
 		next if ($l =~ /Warning:/);
 		#if successful -- this cmd does not appear to return any ouput so anything could be a failure
@@ -802,7 +803,7 @@ sub load {
 	sleep 20;
 	my ($s1, $s2, $s3, $s4, $s5) = 0;    #setup stage flags
 	undef @sshcmd;
-	@sshcmd = run_ssh_command($hostnode, $identity, "vmware-cmd $myvmx getstate", "root");
+	@sshcmd = run_ssh_command($hostnode, $management_node_keys, "vmware-cmd $myvmx getstate", "root");
 	notify($ERRORS{'OK'}, 0, "checking state of vm $computer_shortname");
 	for my $l (@{$sshcmd[1]}) {
 		next if ($l =~ /Warning:/);
@@ -955,6 +956,7 @@ sub capture {
 	# Store some hash variables into local variables
 	my $request_id     = $self->data->get_request_id;
 	my $reservation_id = $self->data->get_reservation_id;
+	my $management_node_keys     = $self->data->get_management_node_keys();
 
 	my $image_id       = $self->data->get_image_id;
 	my $image_os_name  = $self->data->get_image_os_name;
@@ -976,15 +978,13 @@ sub capture {
 	my $host_type               = $self->data->get_vmhost_type;
 	my $vmhost_imagename        = $self->data->get_vmhost_image_name;
 
-	my ($hostIdentity, $hostnodename);
+	my ( $hostnodename);
 	if ($host_type eq "blade") {
 		$hostnodename = $1 if ($vmhost_hostname =~ /([-_a-zA-Z0-9]*)(\.?)/);
-		$hostIdentity = $IDENTITY_bladerhel;
 	}
 	else {
 		#using FQHN
 		$hostnodename = $vmhost_hostname;
-		$hostIdentity = $IDENTITY_linux_lab if ($vmhost_imagename =~ /^(realmrhel)/);
 	}
 	# Assemble a consistent prefix for notify messages
 	my $notify_prefix = "req=$request_id, res=$reservation_id:";
@@ -1067,7 +1067,7 @@ sub capture {
 		#copy vmdk files
 		# confirm they were copied
 		notify($ERRORS{'OK'}, 0, "attemping to copy vmdk files to $VMWAREREPOSITORY");
-		if (run_scp_command("$hostnodename:\"$vmhost_vmpath/$vmx_directory/*.vmdk\"", "$VMWAREREPOSITORY/$image_name", $hostIdentity)) {
+		if (run_scp_command("$hostnodename:\"$vmhost_vmpath/$vmx_directory/*.vmdk\"", "$VMWAREREPOSITORY/$image_name", $management_node_keys)) {
 			if (open(LISTFILES, "ls -s1 $VMWAREREPOSITORY/$image_name |")) {
 				my @list = <LISTFILES>;
 				close(LISTFILES);
@@ -1145,11 +1145,11 @@ sub capture {
 						  #remove dir from vmhost
 						  #everything appears to have worked
 						  #remove image files from vmhost
-				if (defined(run_ssh_command($hostnodename, $hostIdentity, "vmware-cmd -s unregister $vmx_path"))) {
+				if (defined(run_ssh_command($hostnodename, $management_node_keys, "vmware-cmd -s unregister $vmx_path"))) {
 					notify($ERRORS{'OK'}, 0, "unregistered $vmx_path");
 				}
 
-				if (defined(run_ssh_command($hostnodename, $hostIdentity, "/bin/rm -rf $vmhost_vmpath/$vmx_directory", "root"))) {
+				if (defined(run_ssh_command($hostnodename, $management_node_keys, "/bin/rm -rf $vmhost_vmpath/$vmx_directory", "root"))) {
 					notify($ERRORS{'OK'}, 0, "removed vmhost_vmpath/$vmx_directory");
 				}
 				#set file premissions on images to 644
@@ -1180,7 +1180,7 @@ sub capture {
 
 
 		# create directory
-		my @mvdir = run_ssh_command($hostnodename, $hostIdentity, "/bin/mv $vmprofile_datastorepath/$vmx_directory $vmprofile_datastorepath/$image_name", "root");
+		my @mvdir = run_ssh_command($hostnodename, $management_node_keys, "/bin/mv $vmprofile_datastorepath/$vmx_directory $vmprofile_datastorepath/$image_name", "root");
 		for my $l (@{$mvdir[1]}) {
 			notify($ERRORS{'OK'}, 0, "possible error @{ $mvdir[1] }");
 		}
@@ -1188,7 +1188,7 @@ sub capture {
 		#if ESX user vmkfstools to rename the image
 		if ($vmtype_name =~ /vmwareESX/) {
 			my $cmd = "vmkfstools -E $vmprofile_datastorepath/$image_name/$vmx_directory.vmdk $vmprofile_datastorepath/$image_name/$image_name.vmdk";
-			my @retarr = run_ssh_command($hostnodename, $hostIdentity, $cmd, "root");
+			my @retarr = run_ssh_command($hostnodename, $management_node_keys, $cmd, "root");
 			foreach my $r (@{$retarr[1]}) {
 				#if any output could mean trouble - this command provides no no response if successful
 				notify($ERRORS{'OK'}, 0, "possible problem renaming vm @{ $retarr[1] }") if ($r);
@@ -1198,12 +1198,12 @@ sub capture {
 		#TODO add check to confirm
 		notify($ERRORS{'OK'}, 0, "looks like vm is renamed");
 		#cleanup - unregister, and remove vm dir on vmhost local disk
-		my @cleanup = run_ssh_command($hostnodename, $hostIdentity, "vmware-cmd -s unregister $vmx_path", "root");
+		my @cleanup = run_ssh_command($hostnodename, $management_node_keys, "vmware-cmd -s unregister $vmx_path", "root");
 		foreach my $c (@{$cleanup[1]}) {
 			notify($ERRORS{'OK'}, 0, "vm successfully unregistered") if ($c =~ /1/);
 		}
 		#remove vmx directoy from our local datastore
-		if (defined(run_ssh_command($hostnodename, $hostIdentity, "/bin/rm -rf $vmhost_vmpath/$vmx_directory", "root"))) {
+		if (defined(run_ssh_command($hostnodename, $management_node_keys, "/bin/rm -rf $vmhost_vmpath/$vmx_directory", "root"))) {
 			notify($ERRORS{'OK'}, 0, "success removed $vmhost_vmpath/$vmx_directory from $hostnodename");
 
 		}
@@ -1323,6 +1323,8 @@ sub control_VM {
 	my $vmhost_shortname    = $1 if ($vmhost_fullhostname =~ /([-_a-zA-Z0-9]*)(\.?)/);
 	my $vmhost_imagename    = $self->data->get_vmhost_image_name;
 	my $vmhost_type         = $self->data->get_vmhost_type;
+	my $management_node_keys     = $self->data->get_management_node_keys();
+
 
 	my ($myvmdir, $myvmx, $mybasedirname, $myimagename);
 
@@ -1343,7 +1345,7 @@ sub control_VM {
 		$myimagename   = $currentimage;
 	}
 
-	my ($hostnode, $identity);
+	my ($hostnode);
 	if ($vmhost_type eq "blade") {
 
 		if (defined($vmhost_shortname)) {
@@ -1352,17 +1354,14 @@ sub control_VM {
 		else {
 			$hostnode = $1 if ($vmhost_shortname =~ /([-_a-zA-Z0-9]*)(\.?)/);
 		}
-		$identity = $IDENTITY_bladerhel;
 	} ## end if ($vmhost_type eq "blade")
 	else {
 		#using FQHN
 		$hostnode = $vmhost_fullhostname;
-		$identity = $IDENTITY_linux_lab if ($vmhost_imagename =~ /^(realmrhel)/);
 	}
 	if (!$identity) {
 		notify($ERRORS{'WARNING'}, 0, "could not set ssh identity variable for image $vmhost_imagename type= $vmhost_type host= $vmhost_fullhostname");
 		notify($ERRORS{'OK'},      0, "setting to default identity key");
-		$identity = $IDENTITY_bladerhel;
 	}
 	#setup flags
 	my $baseexists   = 0;
@@ -1372,7 +1371,7 @@ sub control_VM {
 	if ($vmtype =~ /vmware|vmwareGSX|vmwareESX/) {
 		#common checks
 		notify($ERRORS{'OK'}, 0, "checking for base image on $hostnode $datastorepath");
-		@sshcmd = run_ssh_command($hostnode, $identity, "ls -1 $datastorepath", "root");
+		@sshcmd = run_ssh_command($hostnode, $management_node_keys, "ls -1 $datastorepath", "root");
 		if (!@sshcmd) {
 			notify($ERRORS{'WARNING'}, 0, "failed to run ssh command: ls -1 $datastorepath");
 			return 0;
@@ -1380,7 +1379,7 @@ sub control_VM {
 		notify($ERRORS{'OK'}, 0, "@{ $sshcmd[1] }");
 		foreach my $l (@{$sshcmd[1]}) {
 			if ($l =~ /denied|No such/) {
-				notify($ERRORS{'CRITICAL'}, 0, "node $hostnode output @{ $sshcmd[1] } $identity $hostnode");
+				notify($ERRORS{'CRITICAL'}, 0, "node $hostnode output @{ $sshcmd[1] } $management_node_keys $hostnode");
 				return 0;
 			}
 			if ($l =~ /Warning: Permanently/) {
@@ -1409,7 +1408,7 @@ sub control_VM {
 
 			##find the correct vmx file for this node -- if running
 			undef @sshcmd;
-			@sshcmd = run_ssh_command($hostnode, $identity, "vmware-cmd -l", "root");
+			@sshcmd = run_ssh_command($hostnode, $management_node_keys, "vmware-cmd -l", "root");
 			if (!@sshcmd) {
 				notify($ERRORS{'WARNING'}, 0, "failed to run ssh command: vmware-cmd -l");
 				return 0;
@@ -1426,7 +1425,7 @@ sub control_VM {
 					$l_myvmdir =~ s/(\s+)/\\ /g;
 
 					notify($ERRORS{'OK'}, 0, "my vmx $l_myvmx");
-					my @sshcmd_1 = run_ssh_command($hostnode, $identity, "vmware-cmd $l_myvmx getstate");
+					my @sshcmd_1 = run_ssh_command($hostnode, $management_node_keys, "vmware-cmd $l_myvmx getstate");
 					if (!@sshcmd_1) {
 						notify($ERRORS{'WARNING'}, 0, "failed to run ssh command: vmware-cmd $l_myvmx getstate");
 						return 0;
@@ -1436,7 +1435,7 @@ sub control_VM {
 							#good - move on
 						}
 						elsif ($l =~ /= on/) {
-							my @sshcmd_2 = run_ssh_command($hostnode, $identity, "vmware-cmd $l_myvmx stop hard");
+							my @sshcmd_2 = run_ssh_command($hostnode, $management_node_keys, "vmware-cmd $l_myvmx stop hard");
 							if (!@sshcmd_2) {
 								notify($ERRORS{'WARNING'}, 0, "failed to run ssh command: vmware-cmd $l_myvmx stop hard");
 								return 0;
@@ -1456,7 +1455,7 @@ sub control_VM {
 						elsif ($l =~ /= stuck/) {
 							#list processes for vmx and kill pid
 							notify($ERRORS{'OK'}, 0, "vm reported in stuck state, attempting to kill process");
-							my @ssh_pid = run_ssh_command($hostnode, $identity, "vmware-cmd -q $l_myvmx getpid");
+							my @ssh_pid = run_ssh_command($hostnode, $management_node_keys, "vmware-cmd -q $l_myvmx getpid");
 							if (!@ssh_pid) {
 								notify($ERRORS{'WARNING'}, 0, "failed to run ssh command: vmware-cmd -q $l_myvmx getpid");
 								return 0;
@@ -1465,7 +1464,7 @@ sub control_VM {
 								if ($p =~ /(\D*)(\s*)([0-9]*)/) {
 									notify($ERRORS{'OK'}, 0, "vm pid= $3");
 									my $vmpid = $3;
-									if (defined(run_ssh_command($hostnode, $identity, "kill -9 $vmpid"))) {
+									if (defined(run_ssh_command($hostnode, $management_node_keys, "kill -9 $vmpid"))) {
 										notify($ERRORS{'OK'}, 0, "killed $vmpid $l_myvmx");
 									}
 								}
@@ -1477,7 +1476,7 @@ sub control_VM {
 					} ## end foreach my $l (@{$sshcmd_1[1]})
 					    #unregister
 					undef @sshcmd_1;
-					@sshcmd_1 = run_ssh_command($hostnode, $identity, "vmware-cmd -s unregister $l_myvmx ");
+					@sshcmd_1 = run_ssh_command($hostnode, $management_node_keys, "vmware-cmd -s unregister $l_myvmx ");
 					if (!@sshcmd_1) {
 						notify($ERRORS{'WARNING'}, 0, "failed to run ssh command: vmware-cmd -s unregister $l_myvmx");
 						return 0;
@@ -1489,7 +1488,7 @@ sub control_VM {
 			} ## end foreach my $l (@{$sshcmd[1]})
 			if ($control eq "remove") {
 				#delete directory -- clean slate
-				if (defined(run_ssh_command($hostnode, $identity, "/bin/rm -rf $l_myvmdir", "root"))) {
+				if (defined(run_ssh_command($hostnode, $management_node_keys, "/bin/rm -rf $l_myvmdir", "root"))) {
 					notify($ERRORS{'OK'}, 0, "removed $l_myvmdir from $hostnode");
 					return 1;
 				}
@@ -1503,7 +1502,7 @@ sub control_VM {
 			if ($vmison) {
 				notify($ERRORS{'OK'}, 0, "turning off $myvmx");
 				undef @sshcmd;
-				@sshcmd = run_ssh_command($hostnode, $identity, "vmware-cmd $myvmx stop hard", "root");
+				@sshcmd = run_ssh_command($hostnode, $management_node_keys, "vmware-cmd $myvmx stop hard", "root");
 				if (!@sshcmd) {
 					notify($ERRORS{'WARNING'}, 0, "failed to run ssh command: vmware-cmd $myvmx stop hard");
 					return 0;
@@ -1517,7 +1516,7 @@ sub control_VM {
 				sleep 15;
 				#confirm
 				undef @sshcmd;
-				@sshcmd = run_ssh_command($hostnode, $identity, "vmware-cmd $myvmx getstate", "root");
+				@sshcmd = run_ssh_command($hostnode, $management_node_keys, "vmware-cmd $myvmx getstate", "root");
 				if (!@sshcmd) {
 					notify($ERRORS{'WARNING'}, 0, "failed to run ssh command: vmware-cmd $myvmx getstate7");
 					return 0;

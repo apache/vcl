@@ -203,7 +203,7 @@ sub delete_user {
 
 	# Use userdel to delete the user
 	my $user_delete_command = "/usr/sbin/userdel $user_login_id";
-	my @user_delete_results = run_ssh_command($computer_node_name, $IDENTITY_bladerhel, $user_delete_command, "root");
+	my @user_delete_results = run_ssh_command($computer_node_name, $management_node_keys, $user_delete_command, "root");
 	foreach my $user_delete_line (@{$user_delete_results[1]}) {
 		if ($user_delete_line =~ /currently logged in/) {
 			notify($ERRORS{'WARNING'}, 0, "user not deleted, $user_login_id currently logged in");
