@@ -542,14 +542,12 @@ sub _initialize : Init {
 	my ($self, $args) = @_;
 	my ($package, $filename, $line, $sub) = caller(0);
 
-	if (!defined($ENV{management_node_info}) || !$ENV{management_node_info}) {
-		my $management_node_info = get_management_node_info();
-		if (!$management_node_info) {
-			notify($ERRORS{'WARNING'}, 0, "unable to obtain management node info for this node");
-			return 0;
-		}
-		$ENV{management_node_info} = $management_node_info;
+	my $management_node_info = get_management_node_info();
+	if (!$management_node_info) {
+		notify($ERRORS{'WARNING'}, 0, "unable to obtain management node info for this node");
+		return 0;
 	}
+	$ENV{management_node_info} = $management_node_info;
 
 	# TODO: add checks to make sure req data is valid if it was passed and rsvp is set
 
