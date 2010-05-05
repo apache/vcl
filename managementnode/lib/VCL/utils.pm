@@ -216,7 +216,6 @@ our @EXPORT = qw(
   $jabServer
   $jabUser
   $LINUX_IMAGE
-  $LINUX_IMAGEREPOSITORY
   $LOGFILE
   $MYSQL_SSL
   $MYSQL_SSL_CERT
@@ -256,7 +255,6 @@ INIT {
 	our ($MYSQL_SSL,       $MYSQL_SSL_CERT);
 	our ($IPCONFIGURATION, $DNSserver, $GATEWAY, $NETMASK, $ETHDEVICE) = 0;
 	our ($LINUX_IMAGE,     $THROTTLE);
-	our ($CORE_IMAGEREPOSITORY, $WIN_IMAGEREPOSITORY, $LINUX_IMAGEREPOSITORY);
 	our ($VMWARETYPE, $VMWARE_DISK,$VMWARE_MAC_ETH0_GENERATED, $VMWARE_MAC_ETH1_GENERATED);
 	our ($WINDOWS_ROOT_PASSWORD);
    our ($XMLRPC_USER, $XMLRPC_PASS, $XMLRPC_URL);
@@ -462,11 +460,6 @@ INIT {
 			# linux kernal 2.4 - we had to modify xcat to load from seperate install tree.
 			if ($l =~ /^LINUXIMAGEid=(image|linux_image)/) {
 				$LINUX_IMAGE = $1;
-			}
-
-			#Linux_imagerepository
-			if ($l =~ /^LINUX_IMAGEREPOSITORY=([\/a-zA-Z0-9]*)/) {
-				$LINUX_IMAGEREPOSITORY = $1;
 			}
 
 			#throttle
