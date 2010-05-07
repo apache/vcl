@@ -1359,10 +1359,6 @@ sub control_VM {
 		#using FQHN
 		$hostnode = $vmhost_fullhostname;
 	}
-	if (!$identity) {
-		notify($ERRORS{'WARNING'}, 0, "could not set ssh identity variable for image $vmhost_imagename type= $vmhost_type host= $vmhost_fullhostname");
-		notify($ERRORS{'OK'},      0, "setting to default identity key");
-	}
 	#setup flags
 	my $baseexists   = 0;
 	my $dirstructure = 0;
