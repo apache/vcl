@@ -1694,7 +1694,6 @@ sub node_status {
 	}
 	else {
 		notify($ERRORS{'OK'}, $log, "$vmclient_shortname is not pingable ($status{ping})");
-		$status{status} = 'RELOAD';
 		$status{ping}         = 0;
 	}
 
