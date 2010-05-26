@@ -1413,7 +1413,6 @@ sub node_status {
 	}
 	else {
 		notify($ERRORS{'OK'}, 0, "$vmclient_shortname is not pingable ($status{ping})");
-		$status{status} = 'RELOAD';
 		return $status{status};
 	}
 
