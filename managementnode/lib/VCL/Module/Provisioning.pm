@@ -78,6 +78,22 @@ sub set_os {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 set_vmhost_os
+
+ Parameters  : None
+ Returns     : Process's VM host OS object
+ Description : Sets the VM host OS object for the provisioner module to access.
+
+=cut
+
+sub set_vmhost_os {
+	my $self = shift;
+	my $vmhost_os = shift;
+	$self->{vmhost_os} = $vmhost_os;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 os
 
  Parameters  : None
@@ -96,6 +112,29 @@ sub os {
 	}
 	else {
 		return $self->{os};
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 vmhost_os
+
+ Parameters  : None
+ Returns     : Process's VM host OS object
+ Description : Allows provisioning modules to access the reservation's VM host OS
+               object.
+
+=cut
+
+sub vmhost_os {
+	my $self = shift;
+	
+	if (!$self->{vmhost_os}) {
+		notify($ERRORS{'WARNING'}, 0, "unable to return VM host OS object, \$self->{vmhost_os} is not set");
+		return;
+	}
+	else {
+		return $self->{vmhost_os};
 	}
 }
 
