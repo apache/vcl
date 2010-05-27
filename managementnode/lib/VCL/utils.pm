@@ -69,7 +69,7 @@ use English;
 use List::Util qw(min max);
 use HTTP::Headers;
 use RPC::XML::Client;
-
+use Scalar::Util 'blessed';
 
 #use Date::Calc qw(Delta_DHMS Time_to_Date Date_to_Time);
 
@@ -97,6 +97,7 @@ our @EXPORT = qw(
   controlVM
   convert_to_datetime
   convert_to_epoch_seconds
+  create_management_node_directory
   database_execute
   database_select
   delete_computerloadlog_reservation
@@ -104,6 +105,7 @@ our @EXPORT = qw(
   disablesshd
   firewall_compare_update
   format_data
+  format_number
   get_affiliation_info
   get_block_request_image_info
   get_computer_current_state_name
@@ -835,6 +837,7 @@ END
 		close OUTPUT;
 	}
 	else {
+		open(STDOUT, ">>$log");
 		print STDOUT "$log_message\n";
 	}
 } ## end sub notify
@@ -1590,7 +1593,7 @@ sub getdynamicaddress {
 		my @hosts = <HOSTS>;
 		close(HOSTS);
 		foreach my $line (@hosts) {
-			if ($line =~ /([0-9]*.[0-9]*.[0-9]*.[0-9]*)\s+($node)/) {
+			if ($line =~ /([0-9]*.[0-9]*.[0-9]*.[0-9]*)\s+($node)(\s\.)/) {
 				$privateIP = $1;
 				notify($ERRORS{'OK'}, 0, "PrivateIP address for $node collected $privateIP");
 				last;
@@ -5141,8 +5144,7 @@ sub get_management_node_requests {
 
 sub get_image_info {
 	my ($image_id) = @_;
-	my ($package, $filename, $line, $sub) = caller(0);
-
+	
 	# Check the passed parameter
 	if (!(defined($image_id))) {
 		notify($ERRORS{'WARNING'}, 0, "image ID was not specified");
@@ -5151,13 +5153,35 @@ sub get_image_info {
 
 	# If imagemetaid isnt' NULL, perform another query to get the meta info
 	my $select_statement = "
-   SELECT
-   image.*
-   FROM
-   image
-   WHERE
-   image.id = '$image_id'
-   ";
+	SELECT
+	image.*,
+	
+	imageplatform.name AS imageplatform_name,
+	
+	OS.name AS OS_name,
+	OS.prettyname AS OS_prettyname,
+	OS.type AS OS_type,
+	OS.installtype AS OS_installtype,
+	OS.sourcepath AS OS_sourcepath,
+	OS.moduleid AS OS_moduleid,
+	
+	imageOSmodule.name AS imageOSmodule_name,
+	imageOSmodule.prettyname AS imageOSmodule_prettyname,
+	imageOSmodule.description AS imageOSmodule_description,
+	imageOSmodule.perlpackage AS imageOSmodule_perlpackage
+	
+	FROM
+	image,
+	platform imageplatform,
+	OS,
+	module imageOSmodule
+	
+	WHERE
+	image.id = $image_id
+	AND imageplatform.id = image.platformid
+	AND OS.id = image.OSid
+	AND imageOSmodule.id = OS.moduleid
+	";
 
 	# Call the database select subroutine
 	# This will return an array of one or more rows based on the select statement
@@ -5172,10 +5196,33 @@ sub get_image_info {
 		notify($ERRORS{'WARNING'}, 0, "" . scalar @selected_rows . " rows were returned from database select");
 		return ();
 	}
+	
+	# Loop through all the columns returned for the reservation
+	my %image_info;
+	my %image_row = %{$selected_rows[0]};
+	foreach my $key (keys %image_row) {
+		my $value = $image_row{$key};
 
-	# A single row was returned (good)
+		# Create another variable by stripping off the column_ part of each key
+		# This variable stores the original (correct) column name
+		(my $original_key = $key) =~ s/^.+_//;
+		
+		if ($key =~ /imageplatform_/) {
+			$image_info{platform}{$original_key} = $value;
+		}
+		elsif ($key =~ /OS_/) {
+			$image_info{OS}{$original_key} = $value;
+		}
+		elsif ($key =~ /imageOSmodule_/) {
+			$image_info{OS}{module}{$original_key} = $value;
+		}
+		else {
+			$image_info{$original_key} = $value;
+		}
+	}  
+
 	# Return the hash
-	return %{$selected_rows[0]};
+	return %image_info;
 } ## end sub get_image_info
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -5403,6 +5450,7 @@ sub get_vmhost_info {
    vmhost.vmkernalnic AS vmhost_vmkernalnic,
 
    vmprofile.id AS vmprofile_id,
+	vmprofile.imageid AS vmprofile_imageid,
    vmprofile.profilename AS vmprofile_profilename,
    vmprofile.vmtypeid AS vmprofile_vmtypeid,
    vmprofile.nasshare AS vmprofile_nasshare,
@@ -5418,6 +5466,7 @@ sub get_vmhost_info {
 	vmtype.name AS vmtype_name,
 
    state.name AS vmhost_state,
+	image.id AS vmhost_imageid,
 	image.name AS vmhost_imagename,
    computer.RAM AS vmhost_RAM,
 	computer.hostname AS vmhost_hostname,
@@ -5692,7 +5741,7 @@ sub run_ssh_command {
 		$ssh_output =~ s/(^\s+)|(\s+$)//g;
 
 		# Set the output string to none if no output was produced
-		$ssh_output = 'none' if !$ssh_output;
+		$ssh_output = '' if !$ssh_output;
 
 		# Replace line breaks in the output with \n$pid| SSH output:
 		my $pid = $$;
@@ -5786,6 +5835,10 @@ sub run_scp_command {
 		return 0;
 	}
 	
+	# Escape spaces in the paths if they aren't already escaped
+	$path1 =~ s/([^\\]) /$1\\ /g;
+	$path2 =~ s/([^\\]) /$1\\ /g;
+	
 	# Format the identity path string
 	if ($identity_paths) {
 		$identity_paths =~ s/^\s*/-i /;
@@ -5820,7 +5873,7 @@ sub run_scp_command {
 	if (defined($options)) {
 		$scp_path .= " $options ";
 	}
-
+	
 	# Print the configuration if $VERBOSE
 	if ($VERBOSE) {
 		#notify($ERRORS{'OK'}, 0, "path1: $path1, path2: $path2 identity file path: $identity_path, port: $port");
@@ -5879,6 +5932,7 @@ sub run_scp_command {
 		# Strip out the key warning message
 		$scp_output =~ s/\@{10,}.*man-in-the-middle attacks\.//igs;
 		$scp_output =~ s/^\s+|\s+$//g;
+		$scp_output =~ s/Warning:.*known hosts.*//ig;
 		
 		if ($scp_output && length($scp_output) > 0) {
 			# Add a newline to the beginning of the output if something was generated
@@ -5887,7 +5941,7 @@ sub run_scp_command {
 		}
 		else {
 			# Indicate there was no output if it is blank
-			$scp_output = 'none';
+			$scp_output = '';
 		}
 		
 		# Get a slice of the SCP output if there are many lines
@@ -5902,7 +5956,11 @@ sub run_scp_command {
 		# Check the output for known error messages
 		# Check the exit status
 		# scp exits with 0 on success or >0 if an error occurred
-		if ($scp_exit_status > 0 || $scp_output =~ /lost connection|failed|reset by peer|no route to host|no such file|ambiguous target/i) {
+		if ($scp_output =~ /permission denied|no such file|ambiguous target/i) {
+			notify($ERRORS{'WARNING'}, 0, "failed to copy file, scp error occurred: command: $scp_command, exit status: $scp_exit_status, output: $scp_output");
+			return 0;
+		}
+		elsif ($scp_exit_status > 0 || $scp_output =~ /lost connection|failed|reset by peer|no route to host/i) {
 			notify($ERRORS{'WARNING'}, 0, "scp error occurred: attempt $attempts/$max_attempts, command: $scp_command, exit status: $scp_exit_status, output: $scp_output");
 			
 			# Temporary fix for problem of nodes using different ports
@@ -5913,10 +5971,6 @@ sub run_scp_command {
 			}
 			
 			next;
-		}
-		elsif ($scp_output =~ /permission denied/i) {
-			notify($ERRORS{'WARNING'}, 0, "scp permission denied error occurred: command: $scp_command, exit status: $scp_exit_status, output: $scp_output");
-			return 0;
 		}
 		else {
 			notify($ERRORS{'OK'}, 0, "scp successful: attempt $attempts/$max_attempts, exit status: $scp_exit_status, output: $scp_output");
@@ -8082,19 +8136,19 @@ sub get_computer_info {
 
 	my $select_statement = "
 	SELECT DISTINCT
-   computer.id AS computer_id,
-   computer.ownerid AS computer_ownerid,
-   computer.platformid AS computer_platformid,
-   computer.currentimageid AS computer_currentimageid,
-   computer.imagerevisionid AS computer_imagerevisionid,
-   computer.RAM AS computer_RAM,
-   computer.procnumber AS computer_procnumber,
-   computer.procspeed AS computer_procspeed,
-   computer.hostname AS computer_hostname,
-   computer.IPaddress AS computer_IPaddress,
-   computer.privateIPaddress AS computer_privateIPaddress,
-   computer.eth0macaddress AS computer_eth0macaddress,
-   computer.eth1macaddress AS computer_eth1macaddress,
+	computer.id AS computer_id,
+	computer.ownerid AS computer_ownerid,
+	computer.platformid AS computer_platformid,
+	computer.currentimageid AS computer_currentimageid,
+	computer.imagerevisionid AS computer_imagerevisionid,
+	computer.RAM AS computer_RAM,
+	computer.procnumber AS computer_procnumber,
+	computer.procspeed AS computer_procspeed,
+	computer.hostname AS computer_hostname,
+	computer.IPaddress AS computer_IPaddress,
+	computer.privateIPaddress AS computer_privateIPaddress,
+	computer.eth0macaddress AS computer_eth0macaddress,
+	computer.eth1macaddress AS computer_eth1macaddress,
 	computer.type AS computer_type,
 	computer.provisioningid AS computer_provisioningid,
 	computer.drivetype AS computer_drivetype,
@@ -8105,7 +8159,7 @@ sub get_computer_info {
 	computer.vmhostid AS computer_vmhostid,
 	computerplatform.name AS computerplatform_name,
 	computerstate.name AS computerstate_name,
-
+	
 	computerprovisioning.name AS computerprovisioning_name,
 	computerprovisioning.prettyname AS computerprovisioning_prettyname,
 	computerprovisioning.moduleid AS computerprovisioning_moduleid,
@@ -8117,7 +8171,7 @@ sub get_computer_info {
 	imagerevision.id AS imagerevision_id,
 	imagerevision.revision AS imagerevision_revision,
 	imagerevision.imagename AS imagerevision_imagename,
-
+	
 	image.id AS image_id,
 	image.name AS image_name,
 	image.prettyname AS image_prettyname,
@@ -8125,17 +8179,17 @@ sub get_computer_info {
 	image.OSid AS image_OSid,
 	image.imagemetaid AS image_imagemetaid,
 	image.architecture AS image_architecture,
-
+	
 	imageplatform.name AS imageplatform_name,
-
+	
 	OS.name AS OS_name,
-   OS.prettyname AS OS_prettyname,
-   OS.type AS OS_type,
-   OS.installtype AS OS_installtype,
-   OS.sourcepath AS OS_sourcepath,
+	OS.prettyname AS OS_prettyname,
+	OS.type AS OS_type,
+	OS.installtype AS OS_installtype,
+	OS.sourcepath AS OS_sourcepath,
 	imageOSmodule.name AS imageOSmodule_name,
 	imageOSmodule.perlpackage AS imageOSmodule_perlpackage
-
+	
 	FROM
 	computer,
 	platform computerplatform,
@@ -8147,7 +8201,7 @@ sub get_computer_info {
 	OS,
 	imagerevision,
 	module imageOSmodule
-   
+	
 	WHERE
 	computerplatform.id = computer.platformid
 	AND computerstate.id = computer.stateid
@@ -8180,70 +8234,92 @@ sub get_computer_info {
 	# Build the hash
    my %comp_info;
 
-   for (@selected_rows) {
-        my %computer_row = %{$_};
-		  # Check if the computer associated with this reservation has a vmhostid set
-        if ($computer_row{computer_vmhostid}) {
-            my %vmhost_info = get_vmhost_info($computer_row{computer_vmhostid});
-            # Make sure vmhost was located if vmhostid was specified for the image
-            if (!%vmhost_info) {
-               notify($ERRORS{'WARNING'}, 0, "vmhostid=" . $computer_row{computer_vmhostid} . " was specified for computer id=" . $computer_row{computer_id} . " but vmhost could not be found");
-            }
-            else {
-               # Image meta data found, add it to the hash
-               $comp_info{vmhost} = \%vmhost_info;
-            }
-        } ## end if ($reservation_row{computer_vmhostid})
+	my %computer_row = %{$selected_rows[0]};
+	
+	# Check if the computer associated with this reservation has a vmhostid set
+	if ($computer_row{computer_vmhostid}) {
+		 my %vmhost_info = get_vmhost_info($computer_row{computer_vmhostid});
+		 # Make sure vmhost was located if vmhostid was specified for the image
+		 if (!%vmhost_info) {
+			 notify($ERRORS{'WARNING'}, 0, "vmhostid=" . $computer_row{computer_vmhostid} . " was specified for computer id=" . $computer_row{computer_id} . " but vmhost could not be found");
+		 }
+		 else {
+			 # Image meta data found, add it to the hash
+			 $comp_info{vmhost} = \%vmhost_info;
+		 }
+	} ## end if ($reservation_row{computer_vmhostid})
 
 
-		  # Loop through all the columns returned for the reservation
-		  foreach my $key (keys %computer_row) {
-           my $value = $computer_row{$key};
-			  # Create another variable by stripping off the column_ part of each key
-           # This variable stores the original (correct) column name
-           (my $original_key = $key) =~ s/^.+_//;
+	# Loop through all the columns returned for the reservation
+	foreach my $key (keys %computer_row) {
+		my $value = $computer_row{$key};
+		# Create another variable by stripping off the column_ part of each key
+		# This variable stores the original (correct) column name
+		(my $original_key = $key) =~ s/^.+_//;
 
-			  if ($key =~ /computer_/) {
-               $comp_info{computer}{$original_key} = $value;
-           }
-			  elsif ($key =~ /computerplatform_/) {
-				  $comp_info{computer}{platform}{$original_key} = $value;
-			  }
-			  elsif ($key =~ /computerstate_/) {
-				  $comp_info{computer}{state}{$original_key} = $value;
-			  }
-			  elsif ($key =~ /computerprovisioning_/) {
-				  $comp_info{computer}{provisioning}{$original_key} = $value;
-			  }
-			  elsif ($key =~ /computerprovisioningmodule_/) {
-				  $comp_info{computer}{provisioning}{module}{$original_key} = $value;
-			  }
-			  elsif ($key =~ /image_/) {
-				  $comp_info{image}{$original_key} = $value;
-			  }
-			  elsif ($key =~ /imageplatform_/) {
-				  $comp_info{platform}{$original_key} = $value;
-			  }
-			  elsif ($key =~ /imagerevision_/) {
-				  $comp_info{imagerevision}{$original_key} = $value;
-			  }
-			  elsif ($key =~ /OS_/) {
-				  $comp_info{image}{OS}{$original_key} = $value;
-			  }
-			  elsif ($key =~ /imageOSmodule_/) {
-				  $comp_info{image}{OS}{module}{$original_key} = $value;
-			  }
-			  elsif ($key =~ /user_/) {
-				  $comp_info{user}{$original_key} = $value;
-			  }
-			  else {
-				  notify($ERRORS{'WARNING'}, 0, "unknown key found in SQL data: $key");
-			  }
-
-		  }	
-
+		if ($key =~ /computer_/) {
+			 $comp_info{computer}{$original_key} = $value;
+		}
+		elsif ($key =~ /computerplatform_/) {
+			$comp_info{computer}{platform}{$original_key} = $value;
+		}
+		elsif ($key =~ /computerstate_/) {
+			$comp_info{computer}{state}{$original_key} = $value;
+		}
+		elsif ($key =~ /computerprovisioning_/) {
+			$comp_info{computer}{provisioning}{$original_key} = $value;
+		}
+		elsif ($key =~ /computerprovisioningmodule_/) {
+			$comp_info{computer}{provisioning}{module}{$original_key} = $value;
+		}
+		elsif ($key =~ /image_/) {
+			$comp_info{image}{$original_key} = $value;
+		}
+		elsif ($key =~ /imageplatform_/) {
+			$comp_info{platform}{$original_key} = $value;
+		}
+		elsif ($key =~ /imagerevision_/) {
+			$comp_info{imagerevision}{$original_key} = $value;
+		}
+		elsif ($key =~ /OS_/) {
+			$comp_info{image}{OS}{$original_key} = $value;
+		}
+		elsif ($key =~ /imageOSmodule_/) {
+			$comp_info{image}{OS}{module}{$original_key} = $value;
+		}
+		elsif ($key =~ /user_/) {
+			$comp_info{user}{$original_key} = $value;
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "unknown key found in SQL data: $key");
+		}
 	}
-
+	
+	# Set the short name of the computer based on the hostname
+	my $computer_hostname = $comp_info{computer}{hostname};
+	$computer_hostname =~ /([-_a-zA-Z0-9]*)(\.?)/;
+	my $computer_shortname = $1;
+	$comp_info{computer}{SHORTNAME} = $computer_shortname;
+	
+	# Set the node name based on the type of computer
+	my $computer_type = $comp_info{computer}{type};
+	
+	# Figure out the nodename based on the type of computer
+	my $computer_nodename;
+	if ($computer_type eq "blade") {
+		$computer_nodename = $computer_shortname;
+	}
+	elsif ($computer_type eq "lab") {
+		$computer_nodename = $computer_hostname;
+	}
+	elsif ($computer_type eq "virtualmachine") {
+		$computer_nodename = $computer_shortname;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "computer=$computer_id is of an unknown or unusual type=$computer_type");
+	}
+	$comp_info{computer}{NODENAME} = $computer_nodename;
+	
 	return \%comp_info;
 
 }
@@ -8548,12 +8624,12 @@ sub format_data {
 	my $type;
 	my $data;
 
-	if (ref($_[0]) eq "HASH") {
+	if (ref($_[0]) eq "HASH" || (blessed($_[0]) && $_[0]->isa("HASH"))) {
 		$data = $_[0];
 		$type = '%';
 		return "%<empty>" if (keys(%{$_[0]}) == 0);
 	}
-	elsif (ref($_[0]) eq "ARRAY") {
+	elsif (ref($_[0]) eq "ARRAY" || (blessed($_[0]) && $_[0]->isa("ARRAY"))) {
 		my $index = 0;
 		for (@{$_[0]}) {
 			$data->{$index} = $_;
@@ -8587,7 +8663,7 @@ sub format_data {
 		$value = 'NULL' if (!defined $value);
 
 		for (my $count = 0; $count < $level; $count++) {
-			$return_string .= "   " if ($count < $level);
+			$return_string .= "..." if ($count < $level);
 		}
 		$return_string .= "|--";
 
@@ -8603,7 +8679,7 @@ sub format_data {
 				$return_string .= "[$key] = $value\n";
 			}
 			elsif ($type eq '%') {
-				$return_string .= "{$key} = $value\n";
+				$return_string .= "[$name]{$key} = $value\n";
 			}
 		}
 		else {
@@ -9715,6 +9791,73 @@ sub get_affiliation_info {
 	
 	#notify($ERRORS{'DEBUG'}, 0, "retrieved affiliation info:\n" . format_data(\%affiliation_info_hash));
 	return \%affiliation_info_hash;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 format_number
+
+ Parameters  : $number, $decimal_places (optional)
+ Returns     : string
+ Description : Formats a number with commas and rounds it to a number of
+               decimal places.  The default number of decimal places is 0 so
+               that numbers are rounded to the nearest integer.
+
+=cut
+
+sub format_number {
+	my ($number, $decimal_places) = @_;
+	$decimal_places = 0 if !$decimal_places;
+	$number = sprintf("%." . $decimal_places . "f", $number);
+	
+	$number = reverse($number);
+	$number =~ s/(\d\d\d)(?=\d)(?!\d*\.)/$1,/g;
+	
+	return scalar reverse $number;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 create_management_node_directory
+
+ Parameters  : $directory_path
+ Returns     : boolean
+ Description : Creates a directory on the management node.
+
+=cut
+
+sub create_management_node_directory {
+	my ($directory_path) = @_;
+	
+	# Check if the directory already exists
+	if (-d $directory_path) {
+		notify($ERRORS{'OK'}, 0, "directory already exists on management node: $directory_path");
+		return 1;
+	}
+	
+	# Attempt to create the directory
+	my $command = "mkdir -p -v \"$directory_path\" 2>&1 && ls -1d \"$directory_path\"";
+	my ($exit_status, $output) = run_command($command, 1);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run command to create directory on management node: $directory_path\ncommand: $command");
+		return;
+	}
+	elsif (grep(/created directory/i, @$output)) {
+		notify($ERRORS{'OK'}, 0, "created directory on management node: $directory_path");
+		return 1;
+	}
+	elsif (grep(/mkdir: /i, @$output)) {
+		notify($ERRORS{'WARNING'}, 0, "error occurred attempting to create directory on management node: $directory_path:\ncommand: $command\nexit status: $exit_status\noutput:\n" . join("\n", @$output));
+		return;
+	}
+	elsif (grep(/^$directory_path/, @$output)) {
+		notify($ERRORS{'OK'}, 0, "directory already exists on management node: $directory_path");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unexpected output returned from command to create directory on management node: $directory_path:\ncommand: $command\nexit status: $exit_status\noutput:\n" . join("\n", @$output));
+		return;
+	}
 }
 
 #/////////////////////////////////////////////////////////////////////////////
