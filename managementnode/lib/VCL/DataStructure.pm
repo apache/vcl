@@ -79,6 +79,7 @@ use English '-no_match_vars';
 use Object::InsideOut;
 use List::Util qw(min max);
 use YAML;
+use Storable qw(dclone);
 
 use VCL::utils;
 
@@ -178,6 +179,7 @@ $SUBROUTINE_MAPPINGS{reservation_password}  = '$self->request_data->{reservation
 #$SUBROUTINE_MAPPINGS{reservation_requestid} = '$self->request_data->{reservation}{RESERVATION_ID}{requestid}';
 $SUBROUTINE_MAPPINGS{reservation_ready} = '$self->request_data->{reservation}{RESERVATION_ID}{READY}';
 
+$SUBROUTINE_MAPPINGS{computer_data}             = '$self->request_data->{reservation}{RESERVATION_ID}{computer}';
 $SUBROUTINE_MAPPINGS{computer_current_image_id} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{currentimageid}';
 $SUBROUTINE_MAPPINGS{computer_deleted}          = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{deleted}';
 $SUBROUTINE_MAPPINGS{computer_drive_type}       = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{drivetype}';
@@ -208,11 +210,11 @@ $SUBROUTINE_MAPPINGS{computer_rsa}                = '$self->request_data->{reser
 $SUBROUTINE_MAPPINGS{computer_rsa_pub}            = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{rsapub}';
 $SUBROUTINE_MAPPINGS{computer_schedule_id}        = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{scheduleid}';
 $SUBROUTINE_MAPPINGS{computer_short_name}         = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{SHORTNAME}';
-#$SUBROUTINE_MAPPINGS{computer_state_id} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{stateid}';
+$SUBROUTINE_MAPPINGS{computer_state_id} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{stateid}';
 $SUBROUTINE_MAPPINGS{computer_state_name}      = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{state}{name}';
 $SUBROUTINE_MAPPINGS{computer_type}            = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{type}';
 $SUBROUTINE_MAPPINGS{computer_provisioning_id} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{provisioningid}';
-#$SUBROUTINE_MAPPINGS{computer_vmhostid} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhostid}';
+$SUBROUTINE_MAPPINGS{computer_vmhost_id} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhostid}';
 
 $SUBROUTINE_MAPPINGS{computer_provisioning_name}        = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{provisioning}{name}';
 $SUBROUTINE_MAPPINGS{computer_provisioning_pretty_name} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{provisioning}{prettyname}';
@@ -223,9 +225,10 @@ $SUBROUTINE_MAPPINGS{computer_provisioning_module_pretty_name}  = '$self->reques
 $SUBROUTINE_MAPPINGS{computer_provisioning_module_description}  = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{provisioning}{module}{description}';
 $SUBROUTINE_MAPPINGS{computer_provisioning_module_perl_package} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{provisioning}{module}{perlpackage}';
 
-#$SUBROUTINE_MAPPINGS{vm_computerid} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{computerid}';
+$SUBROUTINE_MAPPINGS{vmhost_computer_id} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{computerid}';
 $SUBROUTINE_MAPPINGS{vmhost_hostname}   = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{hostname}';
 $SUBROUTINE_MAPPINGS{vmhost_id}         = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{id}';
+$SUBROUTINE_MAPPINGS{vmhost_image_id} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{imageid}';
 $SUBROUTINE_MAPPINGS{vmhost_image_name} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{imagename}';
 $SUBROUTINE_MAPPINGS{vmhost_ram}        = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{RAM}';
 $SUBROUTINE_MAPPINGS{vmhost_state}      = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{state}';
@@ -239,6 +242,7 @@ $SUBROUTINE_MAPPINGS{vmhost_type}       = '$self->request_data->{reservation}{RE
 $SUBROUTINE_MAPPINGS{vmhost_profile_datastore_path}     = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{vmprofile}{datastorepath}';
 $SUBROUTINE_MAPPINGS{vmhost_profile_datastorepath_4vmx} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{vmprofile}{datastorepath4vmx}';
 #$SUBROUTINE_MAPPINGS{vmhost_profile_id} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{vmprofile}{id}';
+$SUBROUTINE_MAPPINGS{vmhost_profile_image_id} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{vmprofile}{imageid}';
 $SUBROUTINE_MAPPINGS{vmhost_profile_nas_share}      = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{vmprofile}{nasshare}';
 $SUBROUTINE_MAPPINGS{vmhost_profile_name}           = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{vmprofile}{profilename}';
 $SUBROUTINE_MAPPINGS{vmhost_profile_virtualswitch0} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{vmprofile}{virtualswitch0}';
@@ -511,7 +515,7 @@ my @blocktime_id : Field : Arg('Name' => 'blocktime_id') : Type(scalar) : Get('N
 
 =cut
 
-my @request_data : Field : Arg('Name' => 'request_data', 'Default' => {}) : Get('Name' => 'request_data', 'Private' => 1) : Set('Name' => 'refresh_request_data', 'Private' => 1);
+my @request_data : Field : Deep : Arg('Name' => 'request_data', 'Default' => {}) : Get('Name' => 'request_data', 'Private' => 1) : Set('Name' => 'refresh_request_data', 'Private' => 1);
 
 =head3 @blockrequest_data
 
@@ -521,6 +525,24 @@ my @request_data : Field : Arg('Name' => 'request_data', 'Default' => {}) : Get(
 =cut
 
 my @blockrequest_data : Field : Arg('Name' => 'blockrequest_data', 'Default' => {}) : Get('Name' => 'blockrequest_data', 'Private' => 1);
+
+=head3 @computer_id
+
+ Data type   : array of scalars
+ Description :
+
+=cut
+
+my @computer_id : Field : Arg('Name' => 'computer_id') : Type(scalar) : Get('Name' => 'computer_id', 'Private' => 1);
+
+=head3 @image_id
+
+ Data type   : array of scalars
+ Description :
+
+=cut
+
+my @image_id : Field : Arg('Name' => 'image_id') : Type(scalar) : Get('Name' => 'image_id', 'Private' => 1);
 
 ##############################################################################
 
@@ -540,20 +562,63 @@ my @blockrequest_data : Field : Arg('Name' => 'blockrequest_data', 'Default' => 
 
 sub _initialize : Init {
 	my ($self, $args) = @_;
-	my ($package, $filename, $line, $sub) = caller(0);
-
+	
+	# Get the management node info and add it to %ENV
 	my $management_node_info = get_management_node_info();
 	if (!$management_node_info) {
 		notify($ERRORS{'WARNING'}, 0, "unable to obtain management node info for this node");
-		return 0;
+		return;
 	}
 	$ENV{management_node_info} = $management_node_info;
+	
+	# Replace the request data with a deep copy if itself
+	# This creates entirely separate copies in case multiple DataStructure objects are used
+	# If not deep copied, the separate objects will alter each other's data
+	$self->refresh_request_data(dclone($self->request_data)) if $self->request_data;
+	
+	# Get the computer info if the computer_id argument was specified and add it to this object
+	if ($self->computer_id) {
+		my $vmhost_info_save = $self->request_data->{reservation}{$self->reservation_id}{computer}{vmhost};
+		
+		notify($ERRORS{'DEBUG'}, 0, "computer ID argument was specified, retrieving data for computer ID: " . $self->computer_id);
+		my $computer_info = get_computer_info($self->computer_id);
+		if (!$computer_info) {
+			notify($ERRORS{'WARNING'}, 0, "DataStructure object could not be initialized, failed to retrieve data for computer ID: " . $self->computer_id);
+			return;
+		}
+		
+		# Check if the new computer info doesn't contain VM host info but the original data does
+		# Add the VM host info to the new hash so that it's available
+		if (!$computer_info->{computer}{vmhost} && $vmhost_info_save) {
+			$computer_info->{computer}{vmhost} = $vmhost_info_save;
+		}
+		
+		$self->request_data->{reservation}{$self->reservation_id}{computer} = $computer_info->{computer};
+	}
+	
+	# Get the image and imagerevision info if the image_id argument was specified
+	if ($self->image_id) {
+		my %image_info = get_image_info($self->image_id);
+		if (%image_info) {
+			$self->request_data->{reservation}{$self->reservation_id}{image} = \%image_info;
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "DataStructure object could not be initialized, failed to retrieve data for image ID: " . $self->image_id);
+			return;
+		}
+		
+		my %imagerevision_info = get_production_imagerevision_info($self->image_id);
+		if (%imagerevision_info) {
+			$self->request_data->{reservation}{$self->reservation_id}{imagerevision} = \%imagerevision_info;
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "DataStructure object could not be initialized, failed to retrieve production imagerevision data for image ID: " . $self->image_id);
+			return;
+		}
+	}
 
-	# TODO: add checks to make sure req data is valid if it was passed and rsvp is set
-
-	#notify($ERRORS{'DEBUG'}, 0, "object initialized");
 	return 1;
-} ## end sub _initialize :
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 
