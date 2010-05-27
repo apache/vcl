@@ -546,6 +546,45 @@ sub get_sysprep_inf_mass_storage_section {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 firewall_enable_sessmgr
+
+ Parameters  : 
+ Returns     : 1 if succeeded, 0 otherwise
+ Description : 
+
+=cut
+
+sub firewall_enable_sessmgr {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $management_node_keys = $self->data->get_management_node_keys();
+	my $computer_node_name   = $self->data->get_computer_node_name();
+	
+	my $sessmgr_path = $self->get_system32_path() . "/sessmgr.exe";
+	$sessmgr_path =~ s/\//\\\\/g;
+
+	# Configure the firewall to allow the sessmgr.exe program
+	my $netsh_command = 'netsh firewall set allowedprogram name = "Microsoft Remote Desktop Help Session Manager" mode = ENABLE scope = ALL profile = ALL program = "' . $sessmgr_path . '"';
+	my ($netsh_status, $netsh_output) = run_ssh_command($computer_node_name, $management_node_keys, $netsh_command);
+	if (defined($netsh_status) && $netsh_status == 0) {
+		notify($ERRORS{'DEBUG'}, 0, "configured firewall to allow sessmgr.exe");
+	}
+	elsif (defined($netsh_status)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to configure firewall to allow sessmgr.exe, exit status: $netsh_status, output:\n@{$netsh_output}");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unable to run ssh command to configure firewall to allow sessmgr.exe");
+	}
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 1;
 __END__
 

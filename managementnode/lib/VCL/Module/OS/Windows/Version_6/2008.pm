@@ -120,9 +120,9 @@ sub pre_capture {
 		}
 	}
 	else {
-		# Prepare the computer for newsid.exe to be run and shut down the computer
-		if (!$self->prepare_newsid()) {
-			notify($ERRORS{'WARNING'}, 0, "failed to prepare the computer for newsid.exe to be run");
+		# Prepare the computer for post_load.cmd to be run and shut down the computer
+		if (!$self->prepare_post_load()) {
+			notify($ERRORS{'WARNING'}, 0, "failed to prepare the computer for post_load.cmd to be run");
 			return 0;
 		}
 	}

@@ -226,15 +226,15 @@ sub pre_capture {
 		return 0;
 	}
 
-=item *
-
- Disable IPv6
-
-=cut
-
-	if (!$self->disable_ipv6()) {
-		notify($ERRORS{'WARNING'}, 0, "unable to disable IPv6");
-	}
+#=item *
+#
+# Disable IPv6
+#
+#=cut
+#
+#	if (!$self->disable_ipv6()) {
+#		notify($ERRORS{'WARNING'}, 0, "unable to disable IPv6");
+#	}
 
 =item *
 
@@ -534,6 +534,27 @@ sub post_load {
 
 	if (!$self->set_service_startup_mode('sshd', 'auto')) {
 		notify($ERRORS{'WARNING'}, 0, "unable to set sshd service startup mode to auto");
+		return 0;
+	}
+
+=item *
+
+ Update the SSH known_hosts file on the management node
+
+=cut
+
+	if (!$self->update_ssh_known_hosts()) {
+		notify($ERRORS{'WARNING'}, 0, "unable to update the SSH known_hosts file on the management node");
+	}
+
+=item *
+
+ Update the private IP address
+
+=cut
+
+	if (!$self->update_public_ip_address()) {
+		notify($ERRORS{'WARNING'}, 0, "unable to update the private IP address");
 		return 0;
 	}
 
@@ -898,7 +919,7 @@ sub create_directory {
 		notify($ERRORS{'DEBUG'}, 0, "attempting to create directory: $path");
 
 		# Assemble the Windows shell mkdir command and execute it
-		my $mkdir_command = '$SYSTEMROOT/System32/cmd.exe /c "mkdir \\"' . $path . '\\""';
+		my $mkdir_command = $self->get_system32_path() . '/cmd.exe /c "mkdir \\"' . $path . '\\""';
 		my ($mkdir_exit_status, $mkdir_output) = run_ssh_command($computer_node_name, $management_node_keys, $mkdir_command, '', '', 1);
 		if (defined($mkdir_exit_status) && $mkdir_exit_status == 0) {
 			notify($ERRORS{'OK'}, 0, "directory created on $computer_node_name: $path, output:\n@{$mkdir_output}");
@@ -1018,7 +1039,7 @@ sub delete_file {
 	
 	# rm didn't get rid of the file, try del
 	# Assemble the Windows shell del command and execute it
-	my $del_command = '$SYSTEMROOT/System32/cmd.exe /c "del /s /q /f /a \\"' . $path_dos . '\\""';
+	my $del_command = $self->get_system32_path() . '/cmd.exe /c "del /s /q /f /a \\"' . $path_dos . '\\""';
 	my ($del_exit_status, $del_output) = run_ssh_command($computer_node_name, $management_node_keys, $del_command, '', '', 1);
 	if ($del_output && (my $deleted_count = grep(/deleted file/i, @{$del_output}))) {
 		notify($ERRORS{'OK'}, 0, "deleted $path_dos using del, files deleted: $deleted_count");
@@ -1046,7 +1067,7 @@ sub delete_file {
 	notify($ERRORS{'DEBUG'}, 0, "file still exists: $path, attempting to delete it using cmd.exe /c rmdir");
 
 	# Assemble the Windows shell rmdir command and execute it
-	my $rmdir_command = '$SYSTEMROOT/System32/cmd.exe /c "rmdir /s /q \\"' . $path_dos . '\\""';
+	my $rmdir_command = $self->get_system32_path() . '/cmd.exe /c "rmdir /s /q \\"' . $path_dos . '\\""';
 	my ($rmdir_exit_status, $rmdir_output) = run_ssh_command($computer_node_name, $management_node_keys, $rmdir_command, '', '', 1);
 	if (defined($rmdir_exit_status) && $rmdir_exit_status == 0) {
 		notify($ERRORS{'DEBUG'}, 0, "directory deleted using rmdir on $computer_node_name: $path_dos, output:\n@{$rmdir_output}");
@@ -1159,7 +1180,10 @@ sub delete_files_by_pattern {
 		return;
 	}
 	
-	# Make sure base directory has trailing / or else find will fail
+	# Check if the path begins with an environment variable and extract it
+	my ($base_directory_variable) = $base_directory =~ /(\$[^\/\\]*)/g;
+	
+	# Remove trailing slashes from base directory
 	$base_directory =~ s/[\/\\]*$/\//;
 
 	notify($ERRORS{'DEBUG'}, 0, "attempting to delete files under $base_directory matching pattern $pattern, max depth: $max_depth");
@@ -1168,19 +1192,39 @@ sub delete_files_by_pattern {
 	# Use find to locate all the files under the base directory matching the pattern specified
 	# chmod 777 each file then call rm
 	my $command = "/bin/find.exe \"$base_directory\" -mindepth 1 -maxdepth $max_depth -iregex \"$pattern\" -exec chmod 777 {} \\; -exec rm -rvf {} \\;";
+	
+	# If the path begins with an environment variable, check if the variable is defined by passing it to cygpath.exe
+	# Unintended files will be deleted if the environment variable is not defined because the base directory would change from "$TEMP/" to "/"
+	if ($base_directory_variable) {
+		$command = "/bin/cygpath.exe \"$base_directory_variable\" && $command";
+	}
+	
 	my ($exit_status, $output) = run_ssh_command($computer_node_name, $management_node_keys, $command, '', '', 1);
-	if (defined($exit_status)) {
+	
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to delete files under $base_directory matching pattern $pattern, command: $command");
+		return;
+	}
+	elsif (grep(/cygpath:/i, @$output)) {
+		notify($ERRORS{'OK'}, 0, "files not deleted because environment variable is not set: $base_directory_variable");
+		return;
+	}
+	elsif (grep(/find:.*no such file/i, @$output)) {
+		notify($ERRORS{'OK'}, 0, "files not deleted because base directory does not exist: $base_directory");
+		return;
+	}
+	elsif (grep(/(^Usage:)/i, @$output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to delete files under $base_directory matching pattern $pattern\ncommand: $command\noutput:\n" . join("\n", @$output));
+		return;
+	}
+	else {
 		my @deleted = grep(/removed /, @$output);
 		my @not_deleted = grep(/cannot remove/, @$output);
 		notify($ERRORS{'OK'}, 0, scalar @deleted . "/" . scalar @not_deleted . " files deleted deleted under '$base_directory' matching '$pattern'");
 		notify($ERRORS{'DEBUG'}, 0, "files/directories which were deleted:\n" . join("\n", @deleted)) if @deleted;
 		notify($ERRORS{'DEBUG'}, 0, "files/directories which were NOT deleted:\n" . join("\n", @not_deleted)) if @not_deleted;
 	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to delete files under $base_directory matching pattern $pattern");
-		return;
-	}
-
+	
 	return 1;
 } ## end sub delete_files_by_pattern
 
@@ -1277,7 +1321,7 @@ sub set_file_owner {
 	my $computer_node_name   = $self->data->get_computer_node_name();
 	
 	# Run chown
-	my ($chown_exit_status, $chown_output) = run_ssh_command($computer_node_name, $management_node_keys, "/usr/bin/chown.exe -cR \"$owner\" \"$file_path\"", '', '', 0);
+	my ($chown_exit_status, $chown_output) = run_ssh_command($computer_node_name, $management_node_keys, "/usr/bin/chown.exe -vR \"$owner\" \"$file_path\"", '', '', 0);
 	
 	# Check if exit status is defined - if not, SSH command failed
 	if (!defined($chown_exit_status)) {
@@ -1940,7 +1984,7 @@ sub disable_pagefile {
 
 	# Set the registry key to blank
 	my $memory_management_key = 'HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management';
-	my $reg_add_command = '$SYSTEMROOT/System32/reg.exe add "' . $memory_management_key . '" /v PagingFiles /d "" /t REG_MULTI_SZ /f';
+	my $reg_add_command = $self->get_system32_path() . '/reg.exe add "' . $memory_management_key . '" /v PagingFiles /d "" /t REG_MULTI_SZ /f';
 	my ($reg_add_exit_status, $reg_add_output) = run_ssh_command($computer_node_name, $management_node_keys, $reg_add_command, '', '', 1);
 	if (defined($reg_add_exit_status) && $reg_add_exit_status == 0) {
 		notify($ERRORS{'OK'}, 0, "set registry key to disable pagefile");
@@ -2006,7 +2050,7 @@ sub enable_pagefile {
 	
 	my $memory_management_key = 'HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management';
 	
-	my $reg_add_command = '$SYSTEMROOT/System32/reg.exe add "' . $memory_management_key . '" /v PagingFiles /d "$SYSTEMDRIVE\\pagefile.sys 0 0" /t REG_MULTI_SZ /f';
+	my $reg_add_command = $self->get_system32_path() . '/reg.exe add "' . $memory_management_key . '" /v PagingFiles /d "$SYSTEMDRIVE\\pagefile.sys 0 0" /t REG_MULTI_SZ /f';
 	my ($reg_add_exit_status, $reg_add_output) = run_ssh_command($computer_node_name, $management_node_keys, $reg_add_command, '', '', 1);
 	if (defined($reg_add_exit_status) && $reg_add_exit_status == 0) {
 		notify($ERRORS{'OK'}, 0, "set registry key to enable pagefile");
@@ -2022,6 +2066,48 @@ sub enable_pagefile {
 
 	return 1;
 } ## end sub enable_pagefile
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 enable_ipv6
+
+ Parameters  :
+ Returns     :
+ Description :
+
+=cut
+
+sub enable_ipv6 {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+
+	my $management_node_keys = $self->data->get_management_node_keys();
+	my $computer_node_name   = $self->data->get_computer_node_name();
+
+	my $registry_string .= <<"EOF";
+Windows Registry Editor Version 5.00
+
+; This registry file contains the entries to disable all IPv6 components 
+; http://support.microsoft.com/kb/929852
+
+[HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Services\\Tcpip6\\Parameters]
+"DisabledComponents"=dword:00000000
+EOF
+
+	# Import the string into the registry
+	if ($self->import_registry_string($registry_string)) {
+		notify($ERRORS{'OK'}, 0, "set registry keys to enable IPv6");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to set the registry keys to enable IPv6");
+		return 0;
+	}
+
+	return 1;
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -2803,7 +2889,7 @@ sub create_eventlog_entry {
 	}
 
 	# Run eventcreate.exe to create an event log entry
-	my $eventcreate_command = '$SYSTEMROOT/System32/eventcreate.exe /T INFORMATION /L APPLICATION /SO VCL /ID 555 /D "' . $message . '"';
+	my $eventcreate_command = $self->get_system32_path() . '/eventcreate.exe /T INFORMATION /L APPLICATION /SO VCL /ID 555 /D "' . $message . '"';
 	my ($eventcreate_exit_status, $eventcreate_output) = run_ssh_command($computer_node_name, $management_node_keys, $eventcreate_command);
 	if (defined($eventcreate_exit_status) && $eventcreate_exit_status == 0) {
 		notify($ERRORS{'OK'}, 0, "created event log entry on $computer_node_name: $message");
@@ -2875,7 +2961,7 @@ sub reboot {
 		}
 
 		# Initiate the shutdown.exe command to reboot the computer
-		my $shutdown_command = "C:/Windows/system32/shutdown.exe -r -t 0 -f";
+		my $shutdown_command = $self->get_system32_path() . "/shutdown.exe -r -t 0 -f";
 		my ($shutdown_exit_status, $shutdown_output) = run_ssh_command($computer_node_name, $management_node_keys, $shutdown_command);
 		if (defined($shutdown_exit_status) && $shutdown_exit_status == 0) {
 			notify($ERRORS{'OK'}, 0, "executed reboot command on $computer_node_name");
@@ -2922,10 +3008,6 @@ sub reboot {
 		return 1;
 	}
 
-	# Wait for reboot is true
-	notify($ERRORS{'OK'}, 0, "sleeping for 5 seconds while $computer_node_name begins to reboot");
-	sleep 5;
-
 	# Make multiple attempts to wait for the reboot to complete
 	my $wait_attempt_limit = 2;
 	WAIT_ATTEMPT:
@@ -2945,19 +3027,19 @@ sub reboot {
 		} ## end if ($wait_attempt > 1)
 
 		# Wait maximum of 3 minutes for the computer to become unresponsive
-		if (!$self->wait_for_no_ping(180)) {
+		if (!$self->wait_for_no_ping(180, 3)) {
 			# Computer never stopped responding to ping
 			notify($ERRORS{'WARNING'}, 0, "$computer_node_name never became unresponsive to ping");
 			next WAIT_ATTEMPT;
 		}
 
 		# Computer is unresponsive, reboot has begun
-		# Wait for 15 seconds before beginning to check if computer is back online
-		notify($ERRORS{'DEBUG'}, 0, "$computer_node_name reboot has begun, sleeping for 15 seconds");
-		sleep 15;
+		# Wait for 5 seconds before beginning to check if computer is back online
+		notify($ERRORS{'DEBUG'}, 0, "$computer_node_name reboot has begun, sleeping for 5 seconds");
+		sleep 5;
 
 		# Wait maximum of 6 minutes for the computer to come back up
-		if (!$self->wait_for_ping(360)) {
+		if (!$self->wait_for_ping(360, 5)) {
 			# Check if the computer was ever offline, it should have been or else reboot never happened
 			notify($ERRORS{'WARNING'}, 0, "$computer_node_name never responded to ping");
 			next WAIT_ATTEMPT;
@@ -2966,7 +3048,7 @@ sub reboot {
 		notify($ERRORS{'DEBUG'}, 0, "$computer_node_name is pingable, waiting for ssh to respond");
 
 		# Wait maximum of 3 minutes for ssh to respond
-		if (!$self->wait_for_ssh(180)) {
+		if (!$self->wait_for_ssh(180, 5)) {
 			notify($ERRORS{'WARNING'}, 0, "ssh never responded on $computer_node_name");
 			next WAIT_ATTEMPT;
 		}
@@ -3020,29 +3102,46 @@ sub shutdown {
 	notify($ERRORS{'DEBUG'}, 0, "$computer_node_name will be shut down");
 
 	# Initiate the shutdown.exe command to reboot the computer
-	my $shutdown_command = "C:/Windows/system32/shutdown.exe -s -t 0 -f";
-	my ($shutdown_exit_status, $shutdown_output) = run_ssh_command($computer_node_name, $management_node_keys, $shutdown_command);
-	if (defined($shutdown_exit_status) && $shutdown_exit_status == 0) {
-		notify($ERRORS{'DEBUG'}, 0, "executed shutdown command on $computer_node_name");
+	my $shutdown_command = 'cmd.exe /c "' . $self->get_system32_path() . '/shutdown.exe -s -t 0 -f"';
+	
+	my $attempt_count = 0;
+	my $attempt_limit = 12;
+	while ($attempt_count < $attempt_limit) {
+		$attempt_count++;
+		if ($attempt_count > 1) {
+			notify($ERRORS{'DEBUG'}, 0, "sleeping for 10 seconds before making next shutdown attempt");
+			sleep 10;
+		}
 		
-		# Wait maximum of 3 minutes for the computer to become unresponsive
-		if ($self->wait_for_no_ping(180)) {
-			notify($ERRORS{'OK'}, 0, "computer has become unresponsive after shutdown command was issued");
-			return 1;
+		my ($shutdown_exit_status, $shutdown_output) = run_ssh_command($computer_node_name, $management_node_keys, $shutdown_command);
+		if (defined($shutdown_exit_status) && $shutdown_exit_status == 0) {
+			notify($ERRORS{'DEBUG'}, 0, "attempt $attempt_count/$attempt_limit: executed shutdown command on $computer_node_name");
+			
+			# Wait maximum of 3 minutes for the computer to become unresponsive
+			if ($self->wait_for_no_ping(180)) {
+				notify($ERRORS{'OK'}, 0, "attempt $attempt_count/$attempt_limit: computer has become unresponsive after shutdown command was issued");
+				return 1;
+			}
+			else {
+				# Computer never stopped responding to ping
+				notify($ERRORS{'WARNING'}, 0, "attempt $attempt_count/$attempt_limit: $computer_node_name never became unresponsive after shutdown command was issued, attempting power off");
+			}
+		}
+		elsif (defined($shutdown_output) && grep(/processing another action/i, @$shutdown_output)) {
+			notify($ERRORS{'WARNING'}, 0, "attempt $attempt_count/$attempt_limit: failed to execute shutdown command on $computer_node_name, exit status: $shutdown_exit_status, output:\n@{$shutdown_output}");
+			next;
+		}
+		elsif (defined($shutdown_output)) {
+			notify($ERRORS{'WARNING'}, 0, "attempt $attempt_count/$attempt_limit: failed to execute shutdown command on $computer_node_name, exit status: $shutdown_exit_status, output:\n@{$shutdown_output}");
 		}
 		else {
-			# Computer never stopped responding to ping
-			notify($ERRORS{'WARNING'}, 0, "$computer_node_name never became unresponsive after shutdown command was issued, attempting power off");
+			notify($ERRORS{'WARNING'}, 0, "failed to execute ssh command to shutdown $computer_node_name");
 		}
-	}
-	elsif (defined($shutdown_exit_status)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to execute shutdown command on $computer_node_name, exit status: $shutdown_exit_status, output:\n@{$shutdown_output}");
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to execute ssh command to shutdown $computer_node_name");
+		last;
 	}
 	
 	# Call provisioning module's power_off() subroutine
+	notify($ERRORS{'OK'}, 0, "failed to shutdown $computer_node_name using shutdown.exe, calling provisioning module's power_off subroutine");
 	if ($self->provisioner->power_off()) {
 		notify($ERRORS{'OK'}, 0, "powered off $computer_node_name");
 	}
@@ -3093,7 +3192,7 @@ sub set_service_startup_mode {
 	$startup_mode = "demand" if ($startup_mode eq "manual");
 
 	# Use sc.exe to change the start mode
-	my $service_startup_command = '"$SYSTEMROOT/System32/sc.exe" config ' . "$service_name start= $startup_mode";
+	my $service_startup_command = $self->get_system32_path() . '/sc.exe config ' . "$service_name start= $startup_mode";
 	my ($service_startup_exit_status, $service_startup_output) = run_ssh_command($computer_node_name, $management_node_keys, $service_startup_command);
 	if (defined($service_startup_output) && grep(/service does not exist/, @$service_startup_output)) {
 		notify($ERRORS{'WARNING'}, 0, "$service_name service startup mode not set because service does not exist");
@@ -3136,7 +3235,7 @@ sub defragment_hard_drive {
 
 	# Defragment the hard drive
 	notify($ERRORS{'OK'}, 0, "beginning to defragment the hard drive on $computer_node_name");
-	my ($defrag_exit_status, $defrag_output) = run_ssh_command($computer_node_name, $management_node_keys, '$SYSTEMROOT/System32/defrag.exe $SYSTEMDRIVE -v');
+	my ($defrag_exit_status, $defrag_output) = run_ssh_command($computer_node_name, $management_node_keys, $self->get_system32_path() . '/defrag.exe $SYSTEMDRIVE -v');
 	if (defined($defrag_exit_status) && $defrag_exit_status == 0) {
 		notify($ERRORS{'OK'}, 0, "hard drive defragmentation complete on $computer_node_name");
 		return 1;
@@ -3324,7 +3423,7 @@ sub set_service_credentials {
 	}
 
 	# Attempt to set the service logon user name and password
-	my $service_logon_command = '$SYSTEMROOT/System32/sc.exe config ' . $service_name . ' obj= ".\\' . $username . '" password= "' . $password . '"';
+	my $service_logon_command = $self->get_system32_path() . '/sc.exe config ' . $service_name . ' obj= ".\\' . $username . '" password= "' . $password . '"';
 	my ($service_logon_exit_status, $service_logon_output) = run_ssh_command($computer_node_name, $management_node_keys, $service_logon_command);
 	if (defined($service_logon_exit_status) && $service_logon_exit_status == 0) {
 		notify($ERRORS{'OK'}, 0, "changed logon credentials for '$service_name' service to $username ($password) on $computer_node_name");
@@ -3362,7 +3461,7 @@ sub get_service_list {
 	my $computer_node_name   = $self->data->get_computer_node_name();
 
 	# Attempt to delete the user account
-	my $sc_query_command = "\$SYSTEMROOT/System32/sc.exe query | grep SERVICE_NAME | cut --fields=2 --delimiter=' '";
+	my $sc_query_command = $self->get_system32_path() . "/sc.exe query | grep SERVICE_NAME | cut --fields=2 --delimiter=' '";
 	my ($sc_query_exit_status, $sc_query_output) = run_ssh_command($computer_node_name, $management_node_keys, $sc_query_command);
 	if (defined($sc_query_exit_status) && $sc_query_exit_status == 0) {
 		notify($ERRORS{'OK'}, 0, "retrieved service list on $computer_node_name");
@@ -3417,7 +3516,7 @@ sub get_services_using_login_id {
 	my @services_using_login_id;
 	for my $service_name (@service_list) {
 		# Attempt to get the service start name using sc.exe qc
-		my $sc_qc_command = "\$SYSTEMROOT/System32/sc.exe qc $service_name | grep SERVICE_START_NAME | cut --fields=2 --delimiter='\\'";
+		my $sc_qc_command = $self->get_system32_path() . "/sc.exe qc $service_name | grep SERVICE_START_NAME | cut --fields=2 --delimiter='\\'";
 		my ($sc_qc_exit_status, $sc_qc_output) = run_ssh_command($computer_node_name, $management_node_keys, $sc_qc_command);
 		if (defined($sc_qc_exit_status) && $sc_qc_exit_status == 0) {
 			notify($ERRORS{'OK'}, 0, "retrieved $service_name service start name from $computer_node_name");
@@ -3468,19 +3567,23 @@ sub disable_scheduled_task {
 	}
 
 	# Attempt to delete the user account
-	my $schtasks_command = '$SYSTEMROOT/System32/schtasks.exe /Change /DISABLE /TN "' . $task_name . '"';
+	my $schtasks_command = $self->get_system32_path() . '/schtasks.exe /Change /DISABLE /TN "' . $task_name . '"';
 	my ($schtasks_exit_status, $schtasks_output) = run_ssh_command($computer_node_name, $management_node_keys, $schtasks_command, '', '', 1);
-	if (defined($schtasks_output) && grep(/have been changed/, @$schtasks_output)) {
-		notify($ERRORS{'OK'}, 0, "$task_name scheduled task disabled on $computer_node_name");
-	}
-	elsif (defined($schtasks_exit_status)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to disable $task_name scheduled task on $computer_node_name, exit status: $schtasks_exit_status, output:\n@{$schtasks_output}");
-		return 0;
-	}
-	else {
+	if (!defined($schtasks_output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to disable $task_name scheduled task on $computer_node_name");
 		return;
 	}
+	elsif (grep(/have been changed/, @$schtasks_output)) {
+		notify($ERRORS{'OK'}, 0, "$task_name scheduled task disabled on $computer_node_name");
+	}
+	elsif (grep(/does not exist/, @$schtasks_output)) {
+		notify($ERRORS{'OK'}, 0, "$task_name was not disabled on $computer_node_name because it does not exist");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to disable $task_name scheduled task on $computer_node_name, exit status: $schtasks_exit_status, output:\n@{$schtasks_output}");
+		return 0;
+	}
+	
 
 	return 1;
 } ## end sub disable_scheduled_task
@@ -3537,7 +3640,7 @@ sub get_scheduled_tasks {
 	my $computer_node_name   = $self->data->get_computer_node_name();
 
 	# Attempt to retrieve scheduled task information
-	my $schtasks_command = '$SYSTEMROOT/System32/schtasks.exe /Query /NH /V /FO CSV';
+	my $schtasks_command = $self->get_system32_path() . '/schtasks.exe /Query /NH /V /FO CSV';
 	my ($schtasks_exit_status, $schtasks_output) = run_ssh_command($computer_node_name, $management_node_keys, $schtasks_command);
 	if (defined($schtasks_exit_status) && $schtasks_exit_status == 0) {
 		notify($ERRORS{'OK'}, 0, "retrieved scheduled task information");
@@ -4230,42 +4333,6 @@ sub firewall_enable_ssh_private {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 firewall_enable_sessmgr
-
- Parameters  : 
- Returns     : 1 if succeeded, 0 otherwise
- Description : 
-
-=cut
-
-sub firewall_enable_sessmgr {
-	my $self = shift;
-	if (ref($self) !~ /windows/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-	
-	my $management_node_keys = $self->data->get_management_node_keys();
-	my $computer_node_name   = $self->data->get_computer_node_name();
-
-	# Configure the firewall to allow the sessmgr.exe program
-	my $netsh_command = "netsh firewall set allowedprogram name = \"Microsoft Remote Desktop Help Session Manager\" mode = ENABLE scope = ALL profile = ALL program = \"\$SYSTEMROOT\\system32\\sessmgr.exe\"";
-	my ($netsh_status, $netsh_output) = run_ssh_command($computer_node_name, $management_node_keys, $netsh_command);
-	if (defined($netsh_status) && $netsh_status == 0) {
-		notify($ERRORS{'DEBUG'}, 0, "configured firewall to allow sessmgr.exe");
-	}
-	elsif (defined($netsh_status)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to configure firewall to allow sessmgr.exe, exit status: $netsh_status, output:\n@{$netsh_output}");
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "unable to run ssh command to configure firewall to allow sessmgr.exe");
-	}
-	
-	return 1;
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
 =head2 firewall_enable_rdp
 
  Parameters  : 
@@ -4540,9 +4607,8 @@ sub get_network_configuration {
 		my $ipconfig_attempt_limit = 2;
 		my ($ipconfig_exit_status, $ipconfig_output);
 		while (++$ipconfig_attempt) {
-			($ipconfig_exit_status, $ipconfig_output) = run_ssh_command($computer_node_name, $management_node_keys, '$SYSTEMROOT/System32/ipconfig.exe /all', '', '', 1);
+			($ipconfig_exit_status, $ipconfig_output) = run_ssh_command($computer_node_name, $management_node_keys, $self->get_system32_path() . '/ipconfig.exe /all', '', '', 1);
 			if (defined($ipconfig_exit_status) && $ipconfig_exit_status == 0) {
-				notify($ERRORS{'DEBUG'}, 0, "ran ipconfig");
 				last;
 			}
 			elsif (defined($ipconfig_exit_status)) {
@@ -4575,6 +4641,11 @@ sub get_network_configuration {
 			
 			# Skip line if interface hasn't been found yet
 			next if !$interface_name;
+			
+			# Check if the interface should be ignored based on the name or description
+			if ($interface_name =~ /loopback|vmnet|afs|tunnel|6to4|isatap|teredo/i) {
+				next;
+			}
 			
 			# Take apart the line finding the setting name and value with a hideous regex
 			my ($line_setting, $value) = $line =~ /^[ ]{1,8}(\w[^\.]*\w)?[ \.:]+([^\r\n]*)/i;
@@ -4612,7 +4683,7 @@ sub get_network_configuration {
 			elsif ($setting =~ /subnet_mask/) {
 				$network_configuration{$interface_name}{ip_address}{$previous_ip} = $value;
 			}
-			else {
+			elsif ($setting) {
 				$network_configuration{$interface_name}{$setting} = $value;
 			}
 		}
@@ -4624,12 +4695,10 @@ sub get_network_configuration {
 		notify($ERRORS{'DEBUG'}, 0, "network configuration has already been retrieved");
 		%network_configuration = %{$self->{network_configuration}};
 	}
-
+	
 	# 'public' or 'private' wasn't specified, return all network interface information
 	if (!$network_type) {
-		for my $interface_name (keys(%network_configuration)) {
-			notify($ERRORS{'DEBUG'}, 0, "interface: $interface_name\n" . format_data($network_configuration{$interface_name}{ip_address}));
-		}
+		notify($ERRORS{'DEBUG'}, 0, "retrieved network configuration:\n" . format_data(\%network_configuration));
 		return \%network_configuration;
 	}
 	
@@ -4671,7 +4740,7 @@ sub get_network_configuration {
 		}
 		
 		# Check if the interface should be ignored based on the name or description
-		if ($interface_name =~ /loopback|vmnet|afs|tunnel/i) {
+		if ($interface_name =~ /loopback|vmnet|afs|tunnel|6to4|isatap|teredo/i) {
 			notify($ERRORS{'DEBUG'}, 0, "interface ignored because of name: $interface_name, description: $description, address(es): " . join (", ", @ip_addresses));
 			next;
 		}
@@ -4793,6 +4862,66 @@ sub get_public_interface_name {
 	notify($ERRORS{'DEBUG'}, 0, "returning public interface name: $interface_name");
 	
 	return $interface_name;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_private_mac_address
+
+ Parameters  : 
+ Returns     : 
+ Description : 
+
+=cut
+
+sub get_private_mac_address {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+
+	# Make sure network configuration was retrieved
+	my $network_configuration = $self->get_network_configuration('private');
+	if (!$network_configuration) {
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve network configuration");
+		return;
+	}
+
+	my $interface_name = (keys(%{$network_configuration}))[0];
+	my $mac_address = $network_configuration->{$interface_name}{physical_address};
+	notify($ERRORS{'DEBUG'}, 0, "returning private MAC address: $mac_address");
+	return $mac_address;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_public_mac_address
+
+ Parameters  : 
+ Returns     : 
+ Description : 
+
+=cut
+
+sub get_public_mac_address {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+
+	# Make sure network configuration was retrieved
+	my $network_configuration = $self->get_network_configuration('public');
+	if (!$network_configuration) {
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve network configuration");
+		return;
+	}
+
+	my $interface_name = (keys(%{$network_configuration}))[0];
+	my $mac_address = $network_configuration->{$interface_name}{physical_address};
+	notify($ERRORS{'DEBUG'}, 0, "returning public MAC address: $mac_address");
+	return $mac_address;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -4994,7 +5123,7 @@ sub enable_dhcp {
 
 	for my $interface_name (@interface_names) {
 		# Use netsh to set the NIC to use DHCP
-		my $set_dhcp_command = '$SYSTEMROOT/System32/netsh.exe interface ip set address name="' . $interface_name . '" source=dhcp';
+		my $set_dhcp_command = $self->get_system32_path() . '/netsh.exe interface ip set address name="' . $interface_name . '" source=dhcp';
 		my ($set_dhcp_status, $set_dhcp_output) = run_ssh_command($computer_node_name, $management_node_keys, $set_dhcp_command);
 		if (defined($set_dhcp_status) && $set_dhcp_status == 0) {
 			notify($ERRORS{'OK'}, 0, "set interface '$interface_name' to use dhcp");
@@ -5040,7 +5169,7 @@ sub ipconfig_renew {
 	my $interface_name_argument = shift;
 	
 	# Assemble the ipconfig command, include the interface name if argument was specified
-	my $ipconfig_command = '$SYSTEMROOT/System32/ipconfig.exe /renew';
+	my $ipconfig_command = $self->get_system32_path() . '/ipconfig.exe /renew';
 	if ($interface_name_argument) {
 		$ipconfig_command .= " \"$interface_name_argument\"";
 	}
@@ -5083,7 +5212,7 @@ sub delete_capture_configuration_files {
 	my $computer_node_name   = $self->data->get_computer_node_name();
 
 	# Remove old logon and logoff scripts
-	$self->delete_files_by_pattern('$SYSTEMROOT/system32/GroupPolicy/User/Scripts', '.*\(Prepare\|prepare\|Cleanup\|cleanup\|post_load\).*');
+	$self->delete_files_by_pattern($self->get_system32_path() . '/GroupPolicy/User/Scripts', '.*\(Prepare\|prepare\|Cleanup\|cleanup\|post_load\).*');
 
 	# Remove old scripts and utilities
 	$self->delete_files_by_pattern('C:/Cygwin/home/root', '.*\(vbs\|exe\|cmd\|bat\|log\)');
@@ -5161,7 +5290,7 @@ sub add_group_policy_script {
 	}
 
 	# Path to scripts.ini file
-	my $scripts_ini = '$SYSTEMROOT/system32/GroupPolicy/User/Scripts/scripts.ini';
+	my $scripts_ini = $self->get_system32_path() . '/GroupPolicy/User/Scripts/scripts.ini';
 	
 	# Set the owner of scripts.ini to root
 	my $chown_command = "touch $scripts_ini && chown root $scripts_ini";
@@ -5406,7 +5535,7 @@ sub remove_group_policy_script {
 	}
 
 	# Path to scripts.ini file
-	my $scripts_ini = '$SYSTEMROOT/system32/GroupPolicy/User/Scripts/scripts.ini';
+	my $scripts_ini = $self->get_system32_path() . '/GroupPolicy/User/Scripts/scripts.ini';
 	
 	# Set the owner of scripts.ini to root
 	my $chown_command = "touch $scripts_ini && chown root $scripts_ini";
@@ -5621,7 +5750,7 @@ sub run_gpupdate {
 	my $computer_node_name   = $self->data->get_computer_node_name();
 	
 	# Set the owner of scripts.ini to root
-	my $gpupdate_command = 'cmd.exe /c $SYSTEMROOT/system32/gpupdate.exe /Force';
+	my $gpupdate_command = 'cmd.exe /c ' . $self->get_system32_path() . '/gpupdate.exe /Force';
 	my ($gpupdate_status, $gpupdate_output) = run_ssh_command($computer_node_name, $management_node_keys, $gpupdate_command);
 	if (defined($gpupdate_output) && !grep(/error/i, @{$gpupdate_output})) {
 		notify($ERRORS{'OK'}, 0, "ran gpupdate /force");
@@ -5938,7 +6067,7 @@ sub clean_hard_drive {
 		notify($ERRORS{'DEBUG'}, 0, "attempting to delete files under $base_directory matching pattern $pattern");
 		$self->delete_files_by_pattern($base_directory, $pattern, $max_depth);
 	}
-
+	
 	# Add the cleanmgr.exe settings to the registry
 	my $registry_string .= <<"EOF";
 Windows Registry Editor Version 5.00
@@ -6023,9 +6152,9 @@ EOF
 	else {
 		notify($ERRORS{'WARNING'}, 0, "failed to set registry settings to configure the disk cleanup utility");
 	}
-
+	
 	# Run cleanmgr.exe
-	my $command = '$SYSTEMROOT/System32/cleanmgr.exe /SAGERUN:01';
+	my $command = $self->get_system32_path() . '/cleanmgr.exe /SAGERUN:01';
 	my ($status_cleanmgr, $output_cleanmgr) = run_ssh_command($computer_node_name, $management_node_keys, $command);
 	if (defined($status_cleanmgr) && $status_cleanmgr == 0) {
 		notify($ERRORS{'OK'}, 0, "ran cleanmgr.exe");
@@ -6068,7 +6197,7 @@ sub start_service {
 		return;
 	}
 
-	my $command = '$SYSTEMROOT/System32/net.exe start "' . $service_name . '"';
+	my $command = $self->get_system32_path() . '/net.exe start "' . $service_name . '"';
 	my ($status, $output) = run_ssh_command($computer_node_name, $management_node_keys, $command);
 	if (defined($status) && $status == 0) {
 		notify($ERRORS{'OK'}, 0, "started service: $service_name");
@@ -6114,7 +6243,7 @@ sub stop_service {
 		return;
 	}
 
-	my $command = '$SYSTEMROOT/System32/net.exe stop "' . $service_name . '"';
+	my $command = $self->get_system32_path() . '/net.exe stop "' . $service_name . '"';
 	my ($status, $output) = run_ssh_command($computer_node_name, $management_node_keys, $command);
 	if (defined($status) && $status == 0) {
 		notify($ERRORS{'OK'}, 0, "stopped service: $service_name");
@@ -6166,7 +6295,7 @@ sub service_exists {
 		return;
 	}
 
-	my $command = '$SYSTEMROOT/System32/sc.exe query "' . $service_name . '"';
+	my $command = $self->get_system32_path() . '/sc.exe query "' . $service_name . '"';
 	my ($status, $output) = run_ssh_command($computer_node_name, $management_node_keys, $command, '', '', 1);
 	if (defined($output) && grep(/service does not exist/i, @{$output})) {
 		notify($ERRORS{'DEBUG'}, 0, "service does not exist: $service_name");
@@ -6369,7 +6498,7 @@ sub get_task_list {
 	my $computer_node_name   = $self->data->get_computer_node_name();
 
 	# Attempt to run tasklist.exe with /NH for no header
-	my $tasklist_command = '$SYSTEMROOT/System32/tasklist.exe /NH /V';
+	my $tasklist_command = $self->get_system32_path() . '/tasklist.exe /NH /V';
 	my ($tasklist_exit_status, $tasklist_output) = run_ssh_command($computer_node_name, $management_node_keys, $tasklist_command, '', '', 1);
 	if (defined($tasklist_exit_status) && $tasklist_exit_status == 0) {
 		notify($ERRORS{'DEBUG'}, 0, "ran tasklist.exe");
@@ -6543,7 +6672,7 @@ sub apply_security_templates {
 		}
 		
 		# Assemble the paths secedit needs
-		my $secedit_exe = '$SYSTEMROOT/System32/secedit.exe';
+		my $secedit_exe = $self->get_system32_path() . '/secedit.exe';
 		my $secedit_db = '$SYSTEMROOT/security/Database/' . "$inf_count\_$inf_file_root.sdb";
 		my $secedit_log = '$SYSTEMROOT/security/Logs/' . "$inf_count\_$inf_file_root.log";
 		
@@ -6622,7 +6751,7 @@ sub kill_process {
 	# ERROR: The search filter cannot be recognized.
 	
 	# Attempt to kill task
-	my $taskkill_command = "\$SYSTEMROOT/system32/taskkill.exe /F /T /FI \"IMAGENAME eq $task_pattern\"";
+	my $taskkill_command = $self->get_system32_path() . "/taskkill.exe /F /T /FI \"IMAGENAME eq $task_pattern\"";
 	my ($taskkill_exit_status, $taskkill_output) = run_ssh_command($computer_node_name, $management_node_keys, $taskkill_command, '', '', '1');
 	if (defined($taskkill_exit_status) && $taskkill_exit_status == 0 && (my @killed = grep(/SUCCESS/, @$taskkill_output))) {
 		notify($ERRORS{'OK'}, 0, scalar @killed . "processe(s) killed matching pattern: $task_pattern\n" . join("\n", @killed));
@@ -7395,38 +7524,39 @@ sub is_64_bit {
 	my $management_node_keys = $self->data->get_management_node_keys();
 	my $computer_node_name   = $self->data->get_computer_node_name();
 	
-	# Get the PROCESSOR_IDENTIFIER environment variable to determine if OS is 32 or 64-bit
-	my ($set_exit_status, $set_output) = run_ssh_command($computer_node_name, $management_node_keys, 'set', '', '', 1);
-	if (defined($set_exit_status) && $set_exit_status == 0) {
-		notify($ERRORS{'DEBUG'}, 0, "executed set command to determine architecture on $computer_node_name");
-	}
-	elsif (defined($set_exit_status)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to execute set command to determine architecture on $computer_node_name, exit status: $set_exit_status, output:\n@{$set_output}");
-		return;
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to execute ssh command to set command to determine architecture on $computer_node_name");
+	my $registry_key = 'HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Session Manager\Environment';
+	my $registry_value = 'PROCESSOR_IDENTIFIER';
+	
+	# Run reg.exe QUERY
+	my $query_registry_command .= "reg.exe QUERY \"$registry_key\" /v \"$registry_value\"";
+	my ($query_registry_exit_status, $query_registry_output) = run_ssh_command($computer_node_name, $management_node_keys, $query_registry_command, '', '', 0);
+	
+	if (!defined($query_registry_output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to query registry key: $registry_key, value: $registry_value");
 		return;
 	}
 	
-	# Get the line containing PROCESSOR_IDENTIFIER
-	my ($processor_identifier_line) = grep(/PROCESSOR_IDENTIFIER=/, @$set_output);
-	if (!$processor_identifier_line) {
-		notify($ERRORS{'WARNING'}, 0, "failed to locate PROCESSOR_IDENTIFIER in set output:\n" . join("\n", @$set_output));
+	my ($output_line) = grep(/^\s*$registry_value/i, @$query_registry_output);
+	if (!$output_line) {
+		notify($ERRORS{'WARNING'}, 0, "unable to find registry value line in reg.exe output:\n" . join("\n", @$query_registry_output));
 		return;
 	}
-	notify($ERRORS{'DEBUG'}, 0, "PROCESSOR_IDENTIFIER environment variable: $processor_identifier_line");
 	
-	# Check if the environment variable contains 64, otherwise assume 32-bit OS is being used
-	if ($processor_identifier_line =~ /64/) {
+	my ($registry_data) = $output_line =~ /\s*$registry_value\s+[\w_]+\s+(.*)/;
+	
+	if ($registry_data && $registry_data =~ /64/) {
 		$self->{OS_ARCHITECTURE} = 64;
-		notify($ERRORS{'DEBUG'}, 0, '64-bit Windows OS detected');
+		notify($ERRORS{'DEBUG'}, 0, "64-bit Windows OS detected, PROCESSOR_IDENTIFIER: $registry_data");
 		return 1;
 	}
-	else {
+	elsif ($registry_value) {
 		$self->{OS_ARCHITECTURE} = 32;
-		notify($ERRORS{'DEBUG'}, 0, '32-bit Windows OS detected');
+		notify($ERRORS{'DEBUG'}, 0, "32-bit Windows OS detected, PROCESSOR_IDENTIFIER: $registry_data");
 		return 0;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine if OS is 32 or 64-bit, failed to query PROCESSOR_IDENTIFIER registry key, reg.exe output:\n" . join("\n", @$query_registry_output));
+		return;
 	}
 }
 
