@@ -410,8 +410,10 @@ sub is_ssh_responding {
 	my $computer_node_name = $self->data->get_computer_node_name();
 	
 	# Try nmap to see if any of the ssh ports are open before attempting to run a test command
-	if (!nmap_port($computer_node_name, 22) && !nmap_port($computer_node_name, 24)) {
-		notify($ERRORS{'DEBUG'}, 0, "$computer_node_name is NOT responding to SSH, port 22 or 24 are not open");
+	my $port_22_status = nmap_port($computer_node_name, 22) ? "open" : "closed";
+	my $port_24_status = nmap_port($computer_node_name, 24) ? "open" : "closed";
+	if ($port_22_status ne 'open' && $port_24_status ne 'open') {
+		notify($ERRORS{'DEBUG'}, 0, "$computer_node_name is NOT responding to SSH, ports 22 or 24 are both closed");
 		return 0;
 	}
 	
@@ -425,11 +427,11 @@ sub is_ssh_responding {
 	
 	# The exit status will be 0 if the command succeeded
 	if (defined($exit_status) && $exit_status == 0) {
-		notify($ERRORS{'DEBUG'}, 0, "$computer_node_name is responding to SSH");
+		notify($ERRORS{'DEBUG'}, 0, "$computer_node_name is responding to SSH, port 22: $port_22_status, port 24: $port_24_status");
 		return 1;
 	}
 	else {
-		notify($ERRORS{'DEBUG'}, 0, "$computer_node_name is NOT responding to SSH, SSH command failed");
+		notify($ERRORS{'DEBUG'}, 0, "$computer_node_name is NOT responding to SSH, SSH command failed, port 22: $port_22_status, port 24: $port_24_status");
 		return 0;
 	}
 }
@@ -455,6 +457,8 @@ sub wait_for_response {
 	
 	my $start_time = time();
 	
+	my $reservation_id = $self->data->get_reservation_id();
+	my $computer_id = $self->data->get_computer_id();
 	my $computer_node_name = $self->data->get_computer_node_name();
 	
 	my $initial_delay_seconds = shift;
@@ -485,7 +489,189 @@ sub wait_for_response {
 	my $end_time = time();
 	my $duration = ($end_time - $start_time);
 	
+	#insertloadlog($reservation_id, $computer_id, "osrespond", "$computer_node_name is responding to SSH after $duration seconds");
 	notify($ERRORS{'OK'}, 0, "$computer_node_name is responding to SSH after $duration seconds");
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 update_ssh_known_hosts
+
+ Parameters  : $known_hosts_path (optional)
+ Returns     : boolean
+ Description : Removes lines from the known_hosts file matching the computer
+               name or private IP address, then runs ssh-keyscan to add the
+               current keys to the known_hosts file.
+
+=cut
+
+sub update_ssh_known_hosts {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $known_hosts_path = shift || "/root/.ssh/known_hosts";
+	
+	my $computer_short_name = $self->data->get_computer_short_name();
+	
+	# Get the computer private IP address
+	my $computer_private_ip_address;
+	if ($self->can("get_private_ip_address") && ($computer_private_ip_address = $self->get_private_ip_address())) {
+		notify($ERRORS{'DEBUG'}, 0, "retrieved private IP address for $computer_short_name using OS module: $computer_private_ip_address");
+	}
+	elsif ($computer_private_ip_address = $self->data->get_computer_private_ip_address()) {
+		notify($ERRORS{'DEBUG'}, 0, "retrieved private IP address for $computer_short_name from database: $computer_private_ip_address");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve private IP address for $computer_short_name using OS module or from database");
+	}
+	
+	# Open the file, read the contents into an array, then close it
+	my @known_hosts_lines_original;
+	if (open FILE, "<", $known_hosts_path) {
+		@known_hosts_lines_original = <FILE>;
+		close FILE;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unable to open file for reading: $known_hosts_path");
+		return;
+	}
+	
+	
+	# Loop through the lines
+	my @known_hosts_lines_modified;
+	for my $line (@known_hosts_lines_original) {
+		chomp $line;
+		next if (!$line);
+		
+		# Check if line matches the computer name or private IP address
+		if ($line =~ /(^|[\s,])$computer_short_name[\s,]/i) {
+			# Don't add the line to the array which will be added back to the file
+			notify($ERRORS{'DEBUG'}, 0, "removing line from $known_hosts_path matching computer name: $computer_short_name\n$line");
+			next;
+		}
+		elsif ($line =~ /(^|[\s,])$computer_private_ip_address[\s,]/i) {
+			notify($ERRORS{'DEBUG'}, 0, "removing line from $known_hosts_path matching computer private IP address:$computer_private_ip_address\n$line");
+			next;
+		}
+		
+		# Line doesn't match, add it to the array of lines for the new file
+		push @known_hosts_lines_modified, "$line\n";
+	}
+	
+	
+	# Write the modified contents to the file
+	if (open FILE, ">", "$known_hosts_path") {
+		print FILE @known_hosts_lines_modified;
+		close FILE;
+		notify($ERRORS{'DEBUG'}, 0, "removed lines from $known_hosts_path matching $computer_short_name or $computer_private_ip_address");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unable to open file for writing: $known_hosts_path");
+		return;
+	}
+	
+	# Run ssh-keyscan
+	run_command("ssh-keyscan -t rsa '$computer_short_name' '$computer_private_ip_address' 2>&1 | grep -v '^#' >> $known_hosts_path");
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 update_public_ip_address
+
+ Parameters  : none
+ Returns     : If successful: true
+               If failed: false
+ Description : Checks the IP configuration mode for the management node -
+               dynamic DHCP, manual DHCP, or static.  If DHCP is used, the
+               public IP address is retrieved from the computer and the IP
+               address in the computer table is updated if necessary.  If
+               static public IP addresses are used, the computer is configured
+               to use the public IP address stored in the computer table.
+
+=cut
+
+sub update_public_ip_address {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $reservation_id = $self->data->get_reservation_id() || return;
+	my $computer_id = $self->data->get_computer_id() || return;
+	my $computer_node_name = $self->data->get_computer_node_name() || return;
+	my $image_os_name = $self->data->get_image_os_name() || return;
+	my $image_os_type = $self->data->get_image_os_type() || return;
+	my $computer_ip_address = $self->data->get_computer_ip_address();
+	my $public_ip_configuration = $self->data->get_management_node_public_ip_configuration() || return;
+	
+	if ($public_ip_configuration =~ /dhcp/i) {
+		notify($ERRORS{'DEBUG'}, 0, "IP configuration is set to $public_ip_configuration, attempting to retrieve dynamic public IP address from $computer_node_name");
+		
+		my $public_ip_address;
+		
+		# Try to retrieve the public IP address from the OS module
+		if ($self->can("get_public_ip_address") && ($public_ip_address = $self->get_public_ip_address())) {
+			notify($ERRORS{'DEBUG'}, 0, "retrieved public IP address from $computer_node_name using the OS module: $public_ip_address");
+		}
+		elsif ($public_ip_address = getdynamicaddress($computer_node_name, $image_os_name, $image_os_type)) {
+			notify($ERRORS{'DEBUG'}, 0, "retrieved public IP address from $computer_node_name using utils.pm::getdynamicaddress: $public_ip_address");
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to retrieve dynamic public IP address from $computer_node_name");
+			insertloadlog($reservation_id, $computer_id, "dynamicDHCPaddress", "failed to retrieve dynamic public IP address from $computer_node_name");
+			return;
+		}
+		
+		# Update the computer table if the retrieved IP address does not match what is in the database
+		if ($computer_ip_address ne $public_ip_address) {
+			if (update_computer_address($computer_id, $public_ip_address)) {
+				notify($ERRORS{'OK'}, 0, "updated dynamic public IP address in computer table for $computer_node_name, $public_ip_address");
+				insertloadlog($reservation_id, $computer_id, "dynamicDHCPaddress", "updated dynamic public IP address in computer table for $computer_node_name, $public_ip_address");
+			}
+			else {
+				notify($ERRORS{'WARNING'}, 0, "failed to update dynamic public IP address in computer table for $computer_node_name, $public_ip_address");
+				insertloadlog($reservation_id, $computer_id, "dynamicDHCPaddress", "failed to update dynamic public IP address in computer table for $computer_node_name, $public_ip_address");
+				return;
+			}
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "public IP address in computer table is already correct for $computer_node_name: $computer_ip_address");
+		}
+		
+	}
+	
+	elsif ($public_ip_configuration =~ /static/i) {
+		notify($ERRORS{'DEBUG'}, 0, "IP configuration is set to $public_ip_configuration, attempting to set public IP address");
+		
+		# Try to set the static public IP address using the OS module
+		if ($self->can("set_static_public_address") && $self->set_static_public_address()) {
+			notify($ERRORS{'DEBUG'}, 0, "set static public IP address on $computer_node_name using OS module's set_static_public_address() method");
+		}
+		else {
+			# Unable to set the static address using the OS module, try using utils.pm
+			if (setstaticaddress($computer_node_name, $image_os_name, $computer_ip_address, $image_os_type)) {
+				notify($ERRORS{'DEBUG'}, 0, "set static public IP address on $computer_node_name using utils.pm::setstaticaddress()");
+			}
+			else {
+				notify($ERRORS{'WARNING'}, 0, "failed to set static public IP address on $computer_node_name");
+				insertloadlog($reservation_id, $computer_id, "staticIPaddress", "failed to set static public IP address on $computer_node_name");
+				return;
+			}
+		}
+		insertloadlog($reservation_id, $computer_id, "staticIPaddress", "set static public IP address on $computer_node_name");
+	}
+	
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "IP configuration is set to $public_ip_configuration, no public IP address updates necessary");
+	}
+	
 	return 1;
 }
 
