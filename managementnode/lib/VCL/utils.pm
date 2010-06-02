@@ -103,6 +103,7 @@ our @EXPORT = qw(
   delete_computerloadlog_reservation
   delete_request
   disablesshd
+  escape_file_path
   firewall_compare_update
   format_data
   format_number
@@ -158,10 +159,12 @@ our @EXPORT = qw(
   makedatestring
   monitorloading
   nmap_port
+  normalize_file_path
   notify
   notify_via_IM
   notify_via_msg
   notify_via_wall
+  parent_directory_path
   preplogfile
   read_file_to_array
   rename_vcld_process
@@ -5956,7 +5959,7 @@ sub run_scp_command {
 		# Check the output for known error messages
 		# Check the exit status
 		# scp exits with 0 on success or >0 if an error occurred
-		if ($scp_output =~ /permission denied|no such file|ambiguous target/i) {
+		if ($scp_output =~ /permission denied|no such file|ambiguous target|is a directory/i) {
 			notify($ERRORS{'WARNING'}, 0, "failed to copy file, scp error occurred: command: $scp_command, exit status: $scp_exit_status, output: $scp_output");
 			return 0;
 		}
@@ -9858,6 +9861,94 @@ sub create_management_node_directory {
 		notify($ERRORS{'WARNING'}, 0, "unexpected output returned from command to create directory on management node: $directory_path:\ncommand: $command\nexit status: $exit_status\noutput:\n" . join("\n", @$output));
 		return;
 	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 normalize_file_path
+
+ Parameters  : $path
+ Returns     : string
+ Description : Normalizes a file or directory path:
+               -spaces from the beginning and end of the path are removed
+					-quotes from the beginning and end of the path are removed
+					-trailing slashes are removed
+					-escaped spaces are unescaped
+
+=cut
+
+sub normalize_file_path {
+	# Get the path argument
+	my $path = shift;
+	if (!$path) {
+		notify($ERRORS{'WARNING'}, 0, "path argument was not specified");
+		return;
+	}
+	
+	# Remove any spaces and quotes from the beginning and end of the path
+	# Remove any slashes from the end of the path
+	$path =~ s/(^['"\s]*|['"\s\\\/]*$)//g;
+	
+	# Unescape any spaces
+	$path =~ s/\\+(\s)/$1/g;
+	
+	return $path;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 escape_file_path
+
+ Parameters  : $path
+ Returns     : string
+ Description : Escapes special characters in a file or directory path with
+               backslashes:
+               -spaces are escaped
+
+=cut
+
+sub escape_file_path {
+	# Get the path argument
+	my $path = shift;
+	if (!$path) {
+		notify($ERRORS{'WARNING'}, 0, "path argument was not specified");
+		return;
+	}
+	
+	$path = normalize_file_path($path);
+	
+	# Add a backslash before each space
+	# Also check for spaces that already have a leading backslash
+	$path =~ s/\\*(\s)/\\$1/g;
+	
+	return $path;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 parent_directory_path
+
+ Parameters  : $path
+ Returns     : string
+ Description : Returns the parent directory path of the path argument. The path
+               returned is normalized.
+
+=cut
+
+sub parent_directory_path {
+	# Get the path argument
+	my $path = shift;
+	if (!$path) {
+		notify($ERRORS{'WARNING'}, 0, "path argument was not specified");
+		return;
+	}
+	
+	$path = normalize_file_path($path);
+	
+	# Remove everthing after the last forward or backslash
+	$path =~ s/\/[^\/\\]+$//g;
+	
+	return $path;
 }
 
 #/////////////////////////////////////////////////////////////////////////////

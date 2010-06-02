@@ -51,6 +51,7 @@ use 5.008000;
 use strict;
 use warnings;
 use diagnostics;
+no warnings 'redefine';
 
 use VCL::utils;
 
@@ -63,8 +64,8 @@ use VCL::utils;
 =head2 $NODE_CONFIGURATION_DIRECTORY
 
  Data type   : String
- Description : Location on computer on which an image has been loaded where
-               configuration files reside.
+ Description : Location on computer loaded with a VCL image where configuration
+               files and scripts reside.
 
 =cut
 
@@ -74,11 +75,11 @@ our $NODE_CONFIGURATION_DIRECTORY = '/root/VCL';
 
 =head2 get_node_configuration_directory
 
- Parameters  : None.
- Returns     : String containing filesystem path
- Description : Retrieves the $NODE_CONFIGURATION_DIRECTORY variable value the
-               OS. This is the path on the computer's hard drive where image
-					configuration files and scripts are copied.
+ Parameters  : none
+ Returns     : string
+ Description : Retrieves the $NODE_CONFIGURATION_DIRECTORY variable value for
+               the OS. This is the path on the computer's hard drive where image
+               configuration files and scripts are copied.
 
 =cut
 
@@ -96,8 +97,8 @@ sub get_node_configuration_directory {
 
 =head2 pre_capture
 
- Parameters  :
- Returns     :
+ Parameters  : none
+ Returns     : boolean
  Description :
 
 =cut
@@ -293,7 +294,7 @@ sub post_reserve {
 	notify($ERRORS{'OK'}, 0, "initiating Linux post_reserve: $image_name on $computer_short_name");
 	
 	# Check if script exists
-	if (!$self->filesystem_entry_exists($script_path)) {
+	if (!$self->file_exists($script_path)) {
 		notify($ERRORS{'DEBUG'}, 0, "script does NOT exist: $script_path");
 		return 1;
 	}
@@ -1207,7 +1208,7 @@ sub call_post_load_custom {
 	
 	# Check if post_load_custom exists
 	my $post_load_custom_path = '/etc/init.d/post_load_custom';
-	if ($self->filesystem_entry_exists($post_load_custom_path)) {
+	if ($self->file_exists($post_load_custom_path)) {
 		notify($ERRORS{'DEBUG'}, 0, "post_load_custom script exists: $post_load_custom_path");
 	}
 	else {
@@ -1254,12 +1255,57 @@ sub call_post_load_custom {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 execute
+
+ Parameters  : $command, $display_output (optional)
+ Returns     : array ($exit_status, $output)
+ Description : Executes a command on the Linux computer via SSH.
+
+=cut
+
+sub execute {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as an object method");
+		return;
+	}
+	
+	# Get the command argument
+	my $command = shift;
+	if (!$command) {
+		notify($ERRORS{'WARNING'}, 0, "command argument was not specified");
+		return;
+	}
+	
+	# Get 2nd display output argument if supplied, or set default value
+	my $display_output = shift || '0';
+	
+	# Get the computer hostname
+	my $computer_hostname = $self->data->get_computer_hostname() || return;
+	
+	# Get the identity keys used by the management node
+	my $management_node_keys = $self->data->get_management_node_keys() || '';
+	
+	# Run the command via SSH
+	my ($exit_status, $output) = run_ssh_command($computer_hostname, $management_node_keys, $command, '', '', $display_output);
+	if (defined($exit_status) && defined($output)) {
+		if ($display_output) {
+			notify($ERRORS{'OK'}, 0, "executed command: '$command', exit status: $exit_status, output:\n" . join("\n", @$output));
+		}
+		return ($exit_status, $output);
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to run command on $computer_hostname: $command");
+		return;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 run_script
 
  Parameters  : script path
- Returns     : If successfully ran  script: 1
-               If  script does not exist: 0
-               If error occurred: undefined
+ Returns     : boolean
  Description : Checks if script exists on the Linux node and attempts to run it.
 
 =cut
@@ -1279,7 +1325,7 @@ sub run_script {
 	}
 	
 	# Check if script exists
-	if ($self->filesystem_entry_exists($script_path)) {
+	if ($self->file_exists($script_path)) {
 		notify($ERRORS{'DEBUG'}, 0, "script exists: $script_path");
 	}
 	else {
@@ -1327,14 +1373,132 @@ sub run_script {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 file_exists
+
+ Parameters  : $path
+ Returns     : boolean
+ Description : Checks if a file or directory exists on the Linux computer.
+
+=cut
+
+sub file_exists {
+	my $self = shift;
+	if (ref($self) !~ /module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get the path from the subroutine arguments and make sure it was passed
+	my $path = shift;
+	if (!$path) {
+		notify($ERRORS{'WARNING'}, 0, "path argument was not specified");
+		return;
+	}
+	
+	# Remove any quotes from the beginning and end of the path
+	$path = normalize_file_path($path);
+	
+	# Escape all spaces in the path
+	my $escaped_path = escape_file_path($path);
+	
+	# Copy the path and replace any *'s with .* to be used with grep
+	# This string will be used to check the output
+	my $grep_path = $escaped_path;
+	$grep_path =~ s/\*/\.\*/g;
+	
+	my $computer_short_name = $self->data->get_computer_short_name();
+	
+	# Check if the file or directory exists
+	# Do not enclose the path in quotes or else wildcards won't work
+	my $command = "ls -1d $escaped_path";
+	my ($exit_status, $output) = $self->execute($command);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run command to determine if file or directory exists on $computer_short_name:\npath: '$path'\ncommand: '$command'");
+		return;
+	}
+	elsif (my @matching_file_paths = grep(/^$grep_path/i, @$output)) {
+		notify($ERRORS{'DEBUG'}, 0, "file or directory exists on $computer_short_name: '$path', matching paths:\n" . join("\n", @matching_file_paths));
+		return 1;
+	}
+	elsif (grep(/ls: /i, @$output) && !grep(/no such file/i, @$output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to determine if file or directory exists on $computer_short_name:\npath: '$path'\ncommand: '$command'\nexit status: $exit_status, output:\n" . join("\n", @$output));
+		return;
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "file or directory does NOT exist on $computer_short_name: '$path'");
+		return 0;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 delete_file
+
+ Parameters  : $path
+ Returns     : boolean
+ Description : Deletes files or directories on the Linux computer.
+
+=cut
+
+sub delete_file {
+	my $self = shift;
+	if (ref($self) !~ /module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get the path argument
+	my $path = shift;
+	if (!$path) {
+		notify($ERRORS{'WARNING'}, 0, "path argument were not specified");
+		return;
+	}
+	
+	# Remove any quotes from the beginning and end of the path
+	$path = normalize_file_path($path);
+	
+	# Escape all spaces in the path
+	my $escaped_path = escape_file_path($path);
+	
+	my $computer_short_name = $self->data->get_computer_short_name();
+	
+	# Delete the file
+	my $command = "rm -rv $escaped_path";
+	my ($exit_status, $output) = $self->execute($command);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run command to delete file or directory on $computer_short_name:\npath: '$path'\ncommand: '$command'");
+		return;
+	}
+	elsif (!grep(/rm: /i, @$output) && (my @file_paths_deleted = grep(/^removed/i, @$output))) {
+		@file_paths_deleted = map { $_ =~ /removed \W(.*)\W$/} @file_paths_deleted;
+		notify($ERRORS{'OK'}, 0, "deleted '$path' on $computer_short_name, files or directories deleted: " . scalar(@file_paths_deleted) . "\n" . join("\n", @file_paths_deleted));
+	}
+	elsif (grep(/(cannot access|no such file)/i, @$output)) {
+		notify($ERRORS{'OK'}, 0, "file or directory not deleted because it does not exist on $computer_short_name: $path");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "error occurred attempting to delete file or directory on $computer_short_name: '$path':\ncommand: '$command'\nexit status: $exit_status\noutput:\n" . join("\n", @$output));
+	}
+	
+	# Make sure the path does not exist
+	my $host_file_exists = $self->file_exists($path);
+	if (!defined($host_file_exists)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to confirm file doesn't exist on $computer_short_name: '$path'");
+		return;
+	}
+	return !$host_file_exists;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 create_directory
 
- Parameters  : directory path
- Returns     : If successful: true
-               If failed: false
- Description : Creates a directory on the Linux node. If a multi-level
-               directory path is specified, parent directories are also created
-					if they do not exist.
+ Parameters  : $directory_path, $mode (optional)
+ Returns     : boolean
+ Description : Creates a directory on the Linux computer as indicated by the
+               $directory_path argument. A 2nd argument specifying the file mode
+               (as in chmod) can be specified. The default file mode is 755
+               (drwxr-xr-x).
 
 =cut
 
@@ -1345,86 +1509,502 @@ sub create_directory {
 		return;
 	}
 	
-	# Make sure path argument was specified
-	my $path = shift;
-	if (!$path) {
-		notify($ERRORS{'WARNING'}, 0, "directory path argument was not specified");
+	# Get the directory path argument
+	my $directory_path = shift;
+	if (!$directory_path) {
+		notify($ERRORS{'WARNING'}, 0, "directory path argument was not supplied");
 		return;
 	}
 	
-	my $management_node_keys = $self->data->get_management_node_keys();
-	my $computer_node_name   = $self->data->get_computer_node_name();
-
-	# Assemble the mkdir command and execute it
-	my $mkdir_command = "mkdir -p \"$path\" && ls -d \"$path\"";
-	my ($mkdir_exit_status, $mkdir_output) = run_ssh_command($computer_node_name, $management_node_keys, $mkdir_command, '', '', 1);
-	if (defined($mkdir_output) && grep(/ls: /, @$mkdir_output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to create directory on $computer_node_name: $path, exit status: $mkdir_exit_status, output:\n@{$mkdir_output}");
+	# Remove any quotes from the beginning and end of the path
+	$directory_path = normalize_file_path($directory_path);
+	
+	# Get the mode argument or set the default value
+	my $mode = shift || 755;
+	
+	my $computer_short_name = $self->data->get_computer_short_name();
+	
+	# Attempt to create the directory
+	my $command = "mkdir -p -v --mode=$mode \"$directory_path\" 2>&1 && ls -1d \"$directory_path\"";
+	my ($exit_status, $output) = $self->execute($command);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run command to create directory on $computer_short_name:\npath: '$directory_path'\ncommand: '$command'");
 		return;
 	}
-	elsif (defined($mkdir_exit_status)) {
-		notify($ERRORS{'OK'}, 0, "directory created on $computer_node_name: $path, output:\n@{$mkdir_output}");
+	elsif (grep(/created directory/i, @$output)) {
+		notify($ERRORS{'OK'}, 0, "created directory on $computer_short_name: '$directory_path', mode: $mode");
 		return 1;
 	}
-	elsif (defined($mkdir_exit_status)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to create directory on $computer_node_name: $path, exit status: $mkdir_exit_status, output:\n@{$mkdir_output}");
+	elsif (grep(/mkdir: /i, @$output)) {
+		notify($ERRORS{'WARNING'}, 0, "error occurred attempting to create directory on $computer_short_name: '$directory_path':\ncommand: '$command'\nexit status: $exit_status\noutput:\n" . join("\n", @$output));
 		return;
 	}
+	elsif (grep(/^$directory_path/, @$output)) {
+		notify($ERRORS{'OK'}, 0, "directory already exists on $computer_short_name: '$directory_path'");
+		return 1;
+	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to delete file on $computer_node_name: $path");
+		notify($ERRORS{'WARNING'}, 0, "unexpected output returned from command to create directory on $computer_short_name: '$directory_path':\ncommand: '$command'\nexit status: $exit_status\noutput:\n" . join("\n", @$output) . "\nlast line:\n" . @$output[-1]);
 		return;
 	}
 }
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 filesystem_entry_exists
+=head2 move_file
 
- Parameters  : filesystem path
- Returns     : If entry exists: 1
-               If entry does not exist: 0
-					If error occurred: undefined
- Description : Checks if a filesystem entry (file or directory) exists on the
-					Linux node.
+ Parameters  : $source_path, $destination_path
+ Returns     : boolean
+ Description : Moves or renames a file on a Linux computer.
 
 =cut
 
-sub filesystem_entry_exists {
+sub move_file {
 	my $self = shift;
 	if (ref($self) !~ /module/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
 	
-	# Get the path from the subroutine arguments and make sure it was passed
-	my $path = shift;
-	if (!$path) {
-		notify($ERRORS{'WARNING'}, 0, "unable to detmine if file exists, path was not specified as an argument");
+	# Get the path arguments
+	my $source_path = shift;
+	my $destination_path = shift;
+	if (!$source_path || !$destination_path) {
+		notify($ERRORS{'WARNING'}, 0, "source and destination path arguments were not specified");
 		return;
 	}
 	
-	my $management_node_keys = $self->data->get_management_node_keys();
-	my $computer_node_name   = $self->data->get_computer_node_name();
+	# Remove any quotes from the beginning and end of the path
+	$source_path = normalize_file_path($source_path);
+	$destination_path = normalize_file_path($destination_path);
 	
-	# Assemble the dir command and execute it
-	my $ls_command = "ls -l \"$path\"";
-	my ($ls_exit_status, $ls_output) = run_ssh_command($computer_node_name, $management_node_keys, $ls_command, '', '', 1);
-	if (defined($ls_output) && grep(/no such file/i, @$ls_output)) {
-		notify($ERRORS{'DEBUG'}, 0, "filesystem entry does NOT exist on $computer_node_name: $path");
-		return 0;
+	# Escape all spaces in the path
+	my $escaped_source_path = escape_file_path($source_path);
+	my $escaped_destination_path = escape_file_path($destination_path);
+	
+	my $computer_short_name = $self->data->get_computer_short_name();
+	
+	# Execute the command to move the file
+	my $command = "mv -fv $escaped_source_path $escaped_destination_path";
+	my ($exit_status, $output) = $self->execute($command);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run command to move file on $computer_short_name:\nsource path: '$source_path'\ndestination path: '$destination_path'\ncommand: '$command'");
+		return;
 	}
-	elsif ((defined($ls_exit_status) && $ls_exit_status == 0) || (defined($ls_output) && grep(/$path/i, @$ls_output))) {
-		notify($ERRORS{'DEBUG'}, 0, "filesystem entry exists on $computer_node_name: $path, dir output:\n" . join("\n", @$ls_output));
+	elsif (grep(/^mv: /i, @$output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to move file on $computer_short_name:\nsource path: '$source_path'\ndestination path: '$destination_path'\ncommand: '$command'\noutput:\n" . join("\n", @$output));
+		return;
+	}
+	elsif (grep(/->/i, @$output)) {
+		notify($ERRORS{'OK'}, 0, "moved file on $computer_short_name:\n'$source_path' --> '$destination_path'");
 		return 1;
 	}
-	elsif ($ls_exit_status) {
-		notify($ERRORS{'WARNING'}, 0, "failed to determine if filesystem entry exists on $computer_node_name: $path, exit status: $ls_exit_status, output:\n@{$ls_output}");
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unexpected output returned from command to move file on $computer_short_name:\nsource path: '$source_path'\ndestination path: '$destination_path'\ncommand: '$command'\noutput:\n" . join("\n", @$output));
+		return;
+	}
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_file_contents
+
+ Parameters  : $file_path
+ Returns     : array
+ Description : Returns an array containing the contents of the file specified by
+               the file path argument. Each array element contains a line from
+               the file.
+
+=cut
+
+sub get_file_contents {
+	my $self = shift;
+	if (ref($self) !~ /module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get the path argument
+	my $path = shift;
+	if (!$path) {
+		notify($ERRORS{'WARNING'}, 0, "path argument was not specified");
+		return;
+	}
+	
+	my $computer_short_name = $self->data->get_computer_short_name();
+	
+	# Run cat to retrieve the contents of the file
+	my $command = "cat \"$path\"";
+	my ($exit_status, $output) = $self->execute($command);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run command to read file on $computer_short_name:\n path: '$path'\ncommand: '$command'");
+		return;
+	}
+	elsif (grep(/^cat: /, @$output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to read contents of file on $computer_short_name: '$path', exit status: $exit_status, output:\n" . join("\n", @$output));
 		return;
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to determine if filesystem entry exists on $computer_node_name: $path");
+		notify($ERRORS{'DEBUG'}, 0, "retrieved " . scalar(@$output) . " lines from file on $computer_short_name: '$path'");
+		return @$output;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_available_space
+
+ Parameters  : none
+ Returns     : integer
+ Description : Returns the bytes available in the path specified by the
+               argument.
+
+=cut
+
+sub get_available_space {
+	my $self = shift;
+	if (ref($self) !~ /module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
+	
+	# Get the path argument
+	my $path = shift;
+	if (!$path) {
+		notify($ERRORS{'WARNING'}, 0, "path argument was not specified");
+		return;
+	}
+	
+	my $computer_short_name = $self->data->get_computer_short_name();
+	
+	# Run df specifying the path as an argument if specified
+	my $command = "df \"$path\"";
+	my ($exit_status, $output) = $self->execute($command);
+	return if !defined($output);
+	
+	if (grep(/^df: /i, @$output)) {
+		notify($ERRORS{'WARNING'}, 0, "error occurred running df command on $computer_short_name:\n" . join("\n", @$output));
+		return;
+	}
+	
+	my @path_lines = grep(!/^Filesystem/i, @$output);
+	if (scalar(@path_lines) == 0) {
+		notify($ERRORS{'WARNING'}, 0, "unable to find filesystem data line in df output:\n" . join("\n", @$output));
+		return;
+	}
+	elsif (scalar(@path_lines) > 1) {
+		notify($ERRORS{'WARNING'}, 0, "found multiple filesystem data lines in df output:\n" . join("\n", @$output));
+		return;
+	}
+	
+	my ($filesystem, $blocks_total, $blocks_used, $blocks_available, $percent_used, $mounted_on) = split(/\s+/, $path_lines[0]);
+	if (!$mounted_on) {
+		notify($ERRORS{'WARNING'}, 0, "failed to parse df output line:\n$path_lines[0]\noutput:\n" . join("\n", @$output));
+		return;
+	}
+	
+	my $bytes_available = ($blocks_available * 1024);
+	my $mb_available = format_number(($bytes_available / 1024 / 1024), 2);
+	my $gb_available = format_number(($bytes_available / 1024 / 1024 / 1024), 1);
+	
+	notify($ERRORS{'DEBUG'}, 0, "bytes available in '$path' on $computer_short_name: " . format_number($bytes_available) . " bytes ($mb_available MB, $gb_available GB)");
+	return $bytes_available;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 copy_file_from
+
+ Parameters  : $source_file_path, $destination_file_path
+ Returns     : boolean
+ Description : Copies file(s) from the Linux computer to the management node.
+
+=cut
+
+sub copy_file_from {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get the source and destination arguments
+	my ($source_file_path, $destination_file_path) = @_;
+	if (!$source_file_path || !$destination_file_path) {
+		notify($ERRORS{'WARNING'}, 0, "source and destination file path arguments were not specified");
+		return;
+	}
+	
+	# Get the computer name
+	my $computer_node_name = $self->data->get_computer_node_name() || return;
+	
+	# Get the destination parent directory path and create the directory on the management node
+	my $destination_directory_path = parent_directory_path($destination_file_path);
+	if (!$destination_directory_path) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine destination parent directory path: $destination_file_path");
+		return;
+	}
+	create_management_node_directory($destination_directory_path) || return;
+	
+	# Get the identity keys used by the management node
+	my $management_node_keys = $self->data->get_management_node_keys() || '';
+	
+	# Run the SCP command
+	if (run_scp_command("$computer_node_name:\"$source_file_path\"", $destination_file_path, $management_node_keys)) {
+		notify($ERRORS{'DEBUG'}, 0, "copied file from $computer_node_name to management node: $computer_node_name:'$source_file_path' --> '$destination_file_path'");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to copy file from $computer_node_name to management node: $computer_node_name:'$source_file_path' --> '$destination_file_path'");
+		return;
+	}
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 copy_file_to
+
+ Parameters  : $source_path, $destination_path
+ Returns     : boolean
+ Description : Copies file(s) from the management node to the Linux computer.
+               Wildcards are allowed in the source path.
+
+=cut
+
+sub copy_file_to {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get the source and destination arguments
+	my ($source_path, $destination_path) = @_;
+	if (!$source_path || !$destination_path) {
+		notify($ERRORS{'WARNING'}, 0, "source and destination path arguments were not specified");
+		return;
+	}
+	
+	# Get the computer short and hostname
+	my $computer_node_name = $self->data->get_computer_node_name() || return;
+	
+	# Get the destination parent directory path and create the directory
+	my $destination_directory_path = parent_directory_path($destination_path);
+	if (!$destination_directory_path) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine destination parent directory path: $destination_path");
+		return;
+	}
+	$self->create_directory($destination_directory_path) || return;
+	
+	# Get the identity keys used by the management node
+	my $management_node_keys = $self->data->get_management_node_keys() || '';
+	
+	# Run the SCP command
+	if (run_scp_command($source_path, "$computer_node_name:\"$destination_path\"", $management_node_keys)) {
+		notify($ERRORS{'DEBUG'}, 0, "copied file from management node to $computer_node_name: '$source_path' --> $computer_node_name:'$destination_path'");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to copy file from management node to $computer_node_name: '$source_path' --> $computer_node_name:'$destination_path'");
+		return;
+	}
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 copy_file
+
+ Parameters  : $source_file_path, $destination_file_path
+ Returns     : boolean
+ Description : Copies a single file on the Linux computer to another location on
+               the computer. The source and destination file path arguments may
+               not be directory paths nor may they contain wildcards. 
+
+=cut
+
+sub copy_file {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get the path arguments
+	my $source_file_path = shift;
+	my $destination_file_path = shift;
+	if (!$source_file_path || !$destination_file_path) {
+		notify($ERRORS{'WARNING'}, 0, "source and destination file path arguments were not specified");
+		return;
+	}
+	
+	# Normalize the source and destination paths
+	$source_file_path = normalize_file_path($source_file_path);
+	$destination_file_path = normalize_file_path($destination_file_path);
+	
+	# Escape all spaces in the path
+	my $escaped_source_path = escape_file_path($source_file_path);
+	my $escaped_destination_path = escape_file_path($destination_file_path);
+	
+	# Make sure the source and destination paths are different
+	if ($escaped_source_path eq $escaped_destination_path) {
+		notify($ERRORS{'WARNING'}, 0, "unable to copy file, source and destination file path arguments are the same: $escaped_source_path");
+		return;
+	}
+	
+	# Get the destination parent directory path and create the directory if it does not exist
+	my $destination_directory_path = parent_directory_path($destination_file_path);
+	if (!$destination_directory_path) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine destination parent directory path: $destination_file_path");
+		return;
+	}
+	$self->create_directory($destination_directory_path) || return;
+	
+	my $computer_node_name = $self->data->get_computer_node_name();
+	
+	# Execute the command to copy the file
+	my $command = "cp -fvr $escaped_source_path $escaped_destination_path";
+	notify($ERRORS{'DEBUG'}, 0, "attempting to copy file on $computer_node_name: '$source_file_path' -> '$destination_file_path'");
+	my ($exit_status, $output) = $self->execute($command);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run command to copy file on $computer_node_name:\nsource path: '$source_file_path'\ndestination path: '$destination_file_path'\ncommand: '$command'");
+		return;
+	}
+	elsif (grep(/^cp: /i, @$output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to copy file on $computer_node_name:\nsource path: '$source_file_path'\ndestination path: '$destination_file_path'\ncommand: '$command'\noutput:\n" . join("\n", @$output));
+		return;
+	}
+	elsif (grep(/->/i, @$output)) {
+		notify($ERRORS{'OK'}, 0, "copied file on $computer_node_name: '$source_file_path' --> '$destination_file_path'");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unexpected output returned from command to copy file on $computer_node_name:\nsource path: '$source_file_path'\ndestination path: '$destination_file_path'\ncommand: '$command'\noutput:\n" . join("\n", @$output));
+		return;
+	}
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_file_size
+
+ Parameters  : $file_path
+ Returns     : integer
+ Description : Determines the size of the file or directory specified by the
+               file path argument in bytes. The file path argument may be a
+               directory path or contain wildcards.
+
+=cut
+
+sub get_file_size {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get the path argument
+	my $file_path = shift;
+	if (!$file_path) {
+		notify($ERRORS{'WARNING'}, 0, "path argument was not specified");
+		return;
+	}
+	
+	# Normalize the file path
+	$file_path = normalize_file_path($file_path);
+	
+	# Escape all spaces in the path
+	my $escaped_file_path = escape_file_path($file_path);
+	
+	# Get the computer name
+	my $computer_node_name = $self->data->get_computer_node_name() || return;
+	
+	# Run du specifying the path as an argument
+	my $command = "du -bc $escaped_file_path";
+	my ($exit_status, $output) = $self->execute($command);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run command to determine file size on $computer_node_name: $file_path\ncommand: $command");
+		return;
+	}
+	elsif (grep(/^du: /i, @$output)) {
+		notify($ERRORS{'WARNING'}, 0, "error occurred attempting to determine file size on $computer_node_name: $file_path\ncommand: $command\noutput:\n" . join("\n", @$output));
+		return;
+	}
+	
+	# Find the line containing 'total'
+	my ($total_line) = grep(/total/, @$output);
+	if (!$total_line) {
+		notify($ERRORS{'WARNING'}, 0, "unable to find total line in du output on $computer_node_name: $file_path, output:\n" . join("\n", @$output));
+		return;
+	}
+	
+	# Extract the blocks used number from the total line
+	my ($bytes_used) = $total_line =~ /(\d+)/g;
+	if (!defined($bytes_used) || length($bytes_used) == 0) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine bytes used from the total line in du output on $computer_node_name: $file_path\ncommand: $command\ntotal line: $total_line\noutput:\n" . join("\n", @$output));
+		return;
+	}
+	
+	my $kb_used = ($bytes_used / 1024);
+	my $mb_used = ($bytes_used / 1024 / 1024);
+	my $gb_used = ($bytes_used / 1024 / 1024 / 1024);
+	
+	notify($ERRORS{'DEBUG'}, 0, "size of $file_path: " . format_number($bytes_used) . " bytes (" . format_number($kb_used, 2) . " KB, " . format_number($mb_used, 2) . " MB, " . format_number($gb_used, 2) . " GB)");
+	return $bytes_used;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 find_files
+
+ Parameters  : $base_directory_path, $file_pattern
+ Returns     : array
+ Description : Finds files under the base directory and any subdirectories path
+               matching the file pattern. The search is not case sensitive. An
+               array is returned containing matching file paths.
+
+=cut
+
+sub find_files {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get the arguments
+	my ($base_directory_path, $file_pattern) = @_;
+	if (!$base_directory_path || !$file_pattern) {
+		notify($ERRORS{'WARNING'}, 0, "base directory path and file pattern arguments were not specified");
+		return;
+	}
+	
+	# Normalize the arguments
+	$base_directory_path = normalize_file_path($base_directory_path);
+	$file_pattern = normalize_file_path($file_pattern);
+	
+	# Get the computer short and hostname
+	my $computer_node_name = $self->data->get_computer_node_name() || return;
+	
+	# Run the find command
+	my $command = "find \"$base_directory_path\" -type f -iname \"$file_pattern\"";
+	my ($exit_status, $output) = $self->execute($command);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run command to find files on $computer_node_name, base directory path: '$base_directory_path', pattern: $file_pattern, command:\n$command");
+		return;
+	}
+	elsif (grep(/^find: /i, @$output)) {
+		notify($ERRORS{'WARNING'}, 0, "error occurred attempting to find files on $computer_node_name\nbase directory path:\n$base_directory_path\npattern: $file_pattern\ncommand: $command\noutput:\n" . join("\n", @$output));
+		return;
+	}
+	
+	# Return the file list
+	return @$output;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
