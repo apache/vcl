@@ -240,6 +240,7 @@ sub load {
 	my $rpower_fixes      = 0;
 	my $bootstatus        = 0;
 	my $wait_loops        = 0;
+	my $xcat_throttle     = 0;
 	my @status;
 
 	# Check to see if management node throttle is configured
@@ -247,15 +248,17 @@ sub load {
         my $variable_name = $self->data->get_management_node_hostname() . "|xcat|throttle";
         if($self->data->is_variable_set($variable_name)){
                 notify($ERRORS{'DEBUG'}, 0, "throttle is  set for $variable_name");
+		#fetch variable
+		$xcat_throttle = $self->data->get_variable($variable_name);
         
         }
         else{
                 notify($ERRORS{'DEBUG'}, 0, "throttle is not set for $variable_name");
-                $THROTTLE = 0;
+                $xcat_throttle = 0;
         }
 
-	if ($THROTTLE) {
-		notify($ERRORS{'DEBUG'}, 0, "throttle is set to $THROTTLE");
+	if ($xcat_throttle) {
+		notify($ERRORS{'DEBUG'}, 0, "throttle is set to $xcat_throttle");
 		my $lckloadfile = "/tmp/nodeloading.lockfile";
 		notify($ERRORS{'DEBUG'}, 0, "attempting to open node loading lockfile for throttling: $lckloadfile");
 		if (sysopen(SEM, $lckloadfile, O_RDONLY | O_CREAT)) {
@@ -270,12 +273,12 @@ sub load {
 						close(NODESET);
 						my $ld = @nodesetout;
 						notify($ERRORS{'DEBUG'}, 0, "current number of nodes loading: $ld");
-						if ($ld < $THROTTLE) {
+						if ($ld < $xcat_throttle) {
 							notify($ERRORS{'OK'}, 0, "current nodes loading is less than throttle, ok to proceed");
 							$maxload = 0;
 						}
 						else {
-							notify($ERRORS{'OK'}, 0, "current nodes loading=$ld, throttle=$THROTTLE, must wait, sleeping for 10 seconds");
+							notify($ERRORS{'OK'}, 0, "current nodes loading=$ld, throttle=$xcat_throttle, must wait, sleeping for 10 seconds");
 							sleep 10;
 						}
 					} ## end if (open(NODESET, "$XCAT_ROOT/sbin/nodeset all stat \| grep install 2>&1 | "...
@@ -296,7 +299,7 @@ sub load {
 			notify($ERRORS{'WARNING'}, 0, "failed to open node loading lockfile");
 		}
 
-	} ## end if ($THROTTLE)
+	} ## end if ($xcat_throttle)
 	else {
 		notify($ERRORS{'DEBUG'}, 0, "throttle is NOT set");
 	}
