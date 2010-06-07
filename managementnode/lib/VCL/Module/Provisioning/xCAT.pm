@@ -259,6 +259,19 @@ sub load {
 	my $wait_loops        = 0;
 	my @status;
 
+	#get Throttle value from database if set
+	my $variable_name = $self->data->get_management_node_hostname() . "|xcat|throttle";
+	if($self->data->is_variable_set($variable_name)){
+		notify($ERRORS{'DEBUG'}, 0, "throttle is  set for $variable_name");
+	
+	}
+	else{
+		notify($ERRORS{'DEBUG'}, 0, "throttle is not set for $variable_name");
+		$THROTTLE = 0;
+	}
+	
+	
+
 	# Check to see if management node throttle is configured
 	if ($THROTTLE) {
 		notify($ERRORS{'DEBUG'}, 0, "throttle is set to $THROTTLE");
