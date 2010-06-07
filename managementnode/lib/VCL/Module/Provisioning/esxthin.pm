@@ -458,7 +458,6 @@ sub load {
 	$poweron_output = `$poweron_command`;
 	notify($ERRORS{'DEBUG'}, 0, "Powered on: $poweron_output");
 
-
 	# Query the VI Perl toolkit for the mac address of our newly registered
 	# machine
 
@@ -547,32 +546,14 @@ sub load {
 	else {
 		notify($ERRORS{'OK'}, 0, "IP is known for $computer_shortname");
 	}
-	# Start waiting for SSH to come up
-	my $sshdstatus = 0;
-	$wait_loops = 0;
-	my $sshd_status = "off";
-	notify($ERRORS{'DEBUG'}, 0, "Waiting for ssh to come up on $computer_shortname");
-	while (!$sshdstatus) {
-		my $sshd_status = _sshd_status($computer_shortname, $image_name, $image_os_type);
-		if ($sshd_status eq "on") {
-			$sshdstatus = 1;
-			notify($ERRORS{'OK'}, 0, "$computer_shortname now has active sshd running");
-		}
-		else {
-			#either sshd is off or N/A, we wait
-			if ($wait_loops > 50) {
-				notify($ERRORS{'CRITICAL'}, 0, "waited acceptable amount of time for sshd to become active, please check $computer_shortname on $vmhost_shortname");
-				#need to check power, maybe reboot it. for now fail it
-				return 0;
-			}
-			else {
-				$wait_loops++;
-				# to give post config a chance
-				notify($ERRORS{'OK'}, 0, "going to sleep 5 seconds, waiting for computer to start SSH. Try $wait_loops");
-				sleep 5;
-			}
-		}    # else
-	}    #while
+	
+	# Check if OS module has implemented a post_load() subroutine
+	if ($self->os->can('post_load')) {
+		# If post-load has been implemented by the OS module, don't perform these tasks here
+		# new.pm calls the OS module's post_load() subroutine
+		notify($ERRORS{'DEBUG'}, 0, "post_load() has been implemented by the OS module, returning 1");
+		return 1;
+	}
 
 	# Set IP info
 	if ($IPCONFIGURATION ne "manualDHCP") {
@@ -607,17 +588,7 @@ sub load {
 			#}
 		}
 	} ## end if ($IPCONFIGURATION ne "manualDHCP")
-
-	# Perform post load tasks
-
-	# Check if OS module has implemented a post_load() subroutine
-	if ($self->os->can('post_load')) {
-		# If post-load has been implemented by the OS module, don't perform these tasks here
-		# new.pm calls the OS module's post_load() subroutine
-		notify($ERRORS{'DEBUG'}, 0, "post_load() has been implemented by the OS module, returning 1");
-		return 1;
-	}
-
+	
 	return 1;
 
 } ## end sub load
