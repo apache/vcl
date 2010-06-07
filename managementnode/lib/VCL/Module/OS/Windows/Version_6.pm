@@ -1570,7 +1570,7 @@ EOF
 	$self->run_slmgr_dlv();
 	
 	# Run Sysprep.exe, use cygstart to lauch the .exe and return immediately
-	my $sysprep_command = '/bin/cygstart.exe cmd.exe /c "' . $system32_path_dos . '\\sysprep\\sysprep.exe /generalize /oobe /shutdown /quiet"';
+	my $sysprep_command = "/bin/cygstart.exe cmd.exe /c \"$system32_path_dos\\sysprep\\sysprep.exe /generalize /oobe /shutdown /quiet /unattend:$system32_path_dos\\sysprep\\Unattend.xml\"";
 	my ($sysprep_status, $sysprep_output) = run_ssh_command($computer_node_name, $management_node_keys, $sysprep_command);
 	if (defined($sysprep_status) && $sysprep_status == 0) {
 		notify($ERRORS{'OK'}, 0, "initiated Sysprep.exe, waiting for $computer_node_name to become unresponsive");
@@ -1591,20 +1591,11 @@ EOF
 		return 0;
 	}
 	
-	# Wait for Sysprep to power off the computer
-	# If Sysprep fails to power off the computer, forcefully power it off
-	if ($self->provisioner->wait_for_off(3)) {
-		notify($ERRORS{'DEBUG'}, 0, "$computer_node_name was powered off by Sysprep");
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "$computer_node_name was NOT powered off by Sysprep");
-		
-		# Call power_off() to make sure computer is shut down
-		if (!$self->provisioner->power_off()) {
-			# Computer could not be shut off
-			notify($ERRORS{'WARNING'}, 0, "unable to power off $computer_node_name");
-			return 0;
-		}
+	# Call power_off() to make sure computer is shut down
+	if (!$self->provisioner->power_off()) {
+		# Computer could not be shut off
+		notify($ERRORS{'WARNING'}, 0, "unable to power off $computer_node_name");
+		return 0;
 	}
 	
 	return 1;
