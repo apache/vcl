@@ -1261,7 +1261,8 @@ INSERT INTO `module` (`id`, `name`, `prettyname`, `description`, `perlpackage`) 
 (14, 'os_linux_ubuntu', 'Ubuntu Linux OS Module', '', 'VCL::Module::OS::Linux::Ubuntu'),
 (15, 'os_unix_lab', 'Unix Lab Module', 'Unix Lab OS support module', 'VCL::Module::OS::Linux::UnixLab'),
 (16, 'os_win2008', 'Windows Server 2008 OS Module', '', 'VCL::Module::OS::Windows::Version_6::2008'),
-(17, 'os_win7', 'Windows 7 OS Module', '', 'VCL::Module::OS::Windows::Version_7::7');
+(17, 'os_win7', 'Windows 7 OS Module', '', 'VCL::Module::OS::Windows::Version_7::7'),
+(20, 'provisioning_xCAT_2x', 'xCAT 2x provisioning module', '', 'VCL::Module::Provisioning::xCAT2');
 
 -- 
 -- Dumping data for table `OS`
@@ -1350,7 +1351,8 @@ INSERT INTO `provisioning` (`id`, `name`, `prettyname`, `moduleid`) VALUES
 (2, 'vmware_server_gsx', 'VMware Server GSX', 2),
 (3, 'lab', 'Computing Lab', 3),
 (4, 'vmware_esx', 'VMware ESX', 10),
-(5, 'xcat_21', 'xCAT 2.1', 11);
+(5, 'xcat_21', 'xCAT 2.1', 11),
+(7, 'xCAT_2x', 'xCAT 2.x', 20);
 
 -- 
 -- Dumping data for table `resource`
