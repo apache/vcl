@@ -1205,7 +1205,7 @@ INSERT INTO `image` (`id`, `name`, `prettyname`, `ownerid`, `platformid`, `OSid`
 (4, 'noimage', 'No Image', 1, 1, 2, NULL, 0, 1, 0, 10, NULL, 0, 0, 0, NULL, 1, 0, 'vcl', 1450),
 (5, 'rhfc5-fc5base5-v0', 'Red Hat Fedora Core 5 base (KS)', 1, 1, 15, NULL, 1024, 1, 1024, 100, NULL, 13, 0, 0, '2006-10-02 10:04:24', 1, 0, 'vcl', 1450),
 (6, 'fc5image-FC5baseRHFC56-v0', 'FC5base(RHFC5)', 1, 1, 14, NULL, 64, 1, 500, 10, NULL, 10, 0, 0, '2006-10-02 14:13:26', 1, 0, 'vcl', 0),
-(7, 'vmwarewinxp-base7-v1', 'No Apps (WinXP vmware)', 1, 1, 16, NULL, 512, 1, 1024, 100, NULL, 5, 0, 0, '2007-04-04 09:45:38', 1, 0, 'vcl', 3244),
+(7, 'vmwarewinxp-base7-v0', 'No Apps (WinXP vmware)', 1, 1, 16, NULL, 512, 1, 1024, 100, NULL, 5, 0, 0, '2007-04-04 09:45:38', 1, 0, 'vcl', 3244),
 (8, 'rh4image-VMwareserverhostRHEL48-v3', 'VMware server host (RHEL4)', 1, 1, 13, NULL, 64, 1, 500, 10, NULL, 10, 0, 0, '2007-11-26 11:23:53', 1, 0, 'vcl', 1450),
 (9, 'esx35-base-v0', 'VMware ESX 3.5 standard server', 1, 1, 20, NULL, 2048, 2, 2000, 100, NULL, 9, 0, 0, '2008-03-24 14:23:54', 1, 0, 'vcl', 1450);
 
