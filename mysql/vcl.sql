@@ -1009,6 +1009,8 @@ CREATE TABLE IF NOT EXISTS `vmprofile` (
   `vmpath` varchar(128) default NULL,
   `virtualswitch0` varchar(80) NOT NULL default 'VMnet0',
   `virtualswitch1` varchar(80) NOT NULL default 'VMnet2',
+  `virtualswitch2` varchar(80) NULL default NULL,
+  `virtualswitch3` varchar(80) NULL default NULL,
   `vmdisk` enum('localdisk','networkdisk') NOT NULL default 'localdisk',
   `username` varchar(80) NULL default NULL,
   `password` varchar(256) NULL default NULL,
