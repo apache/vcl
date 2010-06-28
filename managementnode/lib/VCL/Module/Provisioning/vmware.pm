@@ -130,6 +130,8 @@ sub load {
 	my $datastorepath4vmx = $self->data->get_vmhost_profile_datastorepath_4vmx;
 	my $virtualswitch0    = $self->data->get_vmhost_profile_virtualswitch0;
 	my $virtualswitch1    = $self->data->get_vmhost_profile_virtualswitch1;
+	my $virtualswitch2    = $self->data->get_vmhost_profile_virtualswitch2;
+	my $virtualswitch3    = $self->data->get_vmhost_profile_virtualswitch3;
 	my $vmtype            = $vmtype_name;
 
 	my $requestedimagename = $self->data->get_image_name;
@@ -150,6 +152,21 @@ sub load {
 
 	# Assemble a consistent prefix for notify messages
 	my $notify_prefix = "req=$request_id, res=$reservation_id:";
+
+	my $vmware_throttle             = 0;
+
+        #get Throttle value from database if set
+        my $variable_name = $self->data->get_management_node_hostname() . "|vmware|throttle";
+        if($self->data->is_variable_set($variable_name)){
+                notify($ERRORS{'DEBUG'}, 0, "throttle is  set for $variable_name");
+                #fetch variable
+                $vmware_throttle = $self->data->get_variable($variable_name);
+        
+        }
+        else{
+                notify($ERRORS{'DEBUG'}, 0, "throttle is not set for $variable_name");
+                $vmware_throttle = 0;
+        }
 
 
 	#$VMWARErepository
@@ -655,6 +672,17 @@ sub load {
 		
 		push(@vmxfile, "Ethernet1.connectionType = \"custom\"\n");
 		push(@vmxfile, "Ethernet1.vnet = \"$virtualswitch1\"\n");
+		
+		if(defined($virtualswitch2) && ($virtualswitch2)){
+			push(@vmxfile, "Ethernet2.present = \"TRUE\"\n");
+			push(@vmxfile, "Ethernet2.connectionType = \"custom\"\n");
+                	push(@vmxfile, "Ethernet2.vnet = \"$virtualswitch2\"\n");	
+		}
+		if(defined($virtualswitch3) && ($virtualswitch3)){
+			push(@vmxfile, "Ethernet3.present = \"TRUE\"\n");
+			push(@vmxfile, "Ethernet3.connectionType = \"custom\"\n");
+                	push(@vmxfile, "Ethernet3.vnet = \"$virtualswitch3\"\n");	
+		}
 	}
 
 	push(@vmxfile, "ethernet0.address = \"$vmclient_eth0MAC\"\n");

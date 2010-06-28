@@ -5461,6 +5461,8 @@ sub get_vmhost_info {
    vmprofile.vmpath AS vmprofile_vmpath,
    vmprofile.virtualswitch0 AS vmprofile_virtualswitch0,
    vmprofile.virtualswitch1 AS vmprofile_virtualswitch1,
+   vmprofile.virtualswitch2 AS vmprofile_virtualswitch2,
+   vmprofile.virtualswitch3 AS vmprofile_virtualswitch3,
    vmprofile.vmdisk AS vmprofile_vmdisk,
    vmprofile.username AS vmprofile_username,
    vmprofile.password AS vmprofile_password,
