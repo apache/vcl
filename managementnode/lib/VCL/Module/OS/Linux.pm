@@ -176,6 +176,24 @@ sub pre_capture {
 		}
 	} ## end if ($IPCONFIGURATION eq "static")
 
+	#Write /etc/rc.local script
+	if(!$self->generate_rc_local()){
+		notify($ERRORS{'WARNING'}, 0, "unable to generate /etc/rc.local script on $computer_node_name");
+		return 0;
+	}
+
+	#Generate external_sshd_config
+	if(!$self->generate_ext_sshd_config()){
+		notify($ERRORS{'WARNING'}, 0, "unable to generate /etc/ssh/external_sshd_config on $computer_node_name");
+		return 0;
+	}
+
+	#Generate ext_sshd init script
+	if(!$self->generate_ext_sshd_init()){
+		notify($ERRORS{'WARNING'}, 0, "unable to generate /etc/init.d/ext_sshd on $computer_node_name");
+		return 0;
+	}
+
 	#shutdown node
 	notify($ERRORS{'OK'}, 0, "shutting down node for Linux imaging sequence");
 	run_ssh_command($computer_node_name, $management_node_keys, "/sbin/shutdown -h now", "root");
@@ -2006,7 +2024,288 @@ sub find_files {
 	# Return the file list
 	return @$output;
 }
+	
+#/////////////////////////////////////////////////////////////////////////////
 
+=head2 generate_rc_local
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Generate a rc.local file locally, copy to node and make executable.
+
+=cut
+
+sub generate_rc_local {
+        my $self = shift;
+        if (ref($self) !~ /linux/i) {
+                notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+                return 0;
+        }
+	
+	my $request_id               = $self->data->get_request_id();
+        my $management_node_keys     = $self->data->get_management_node_keys();
+        my $computer_short_name      = $self->data->get_computer_short_name();
+        my $computer_node_name       = $self->data->get_computer_node_name();
+	
+	my @array2print;
+
+	push(@array2print, '#!/bin/sh' . "\n");
+	push(@array2print, '#' . "\n");
+        push(@array2print, '# This script will be executed after all the other init scripts.' . "\n");
+	push(@array2print, '#' . "\n");
+        push(@array2print, '# WARNING --- VCL IMAGE CREATORS --- WARNING' . "\n");
+	push(@array2print, '#' . "\n");
+        push(@array2print, '# This file will get overwritten during image capture. Any customizations' . "\n");
+        push(@array2print, '# should be put into /etc/init.d/vcl_post_reserve or /etc/init.d/vcl_post_load' . "\n");
+        push(@array2print, '# Note these files do not exist by default.' . "\n");
+        push(@array2print, "\n");
+        push(@array2print, 'touch /var/lock/subsys/local' . "\n");
+        push(@array2print, "\n");
+        push(@array2print, 'IP0=$(ifconfig eth0 | grep inet | awk \'{print $2}\' | awk -F: \'{print $2}\')' . "\n");
+        push(@array2print, 'IP1=$(ifconfig eth1 | grep inet | awk \'{print $2}\' | awk -F: \'{print $2}\')' . "\n");
+        push(@array2print, 'sed -i \'/.*AllowUsers .*$/d\' /etc/ssh/sshd_config' . "\n");
+        push(@array2print, 'sed -i \'/.*ListenAddress .*/d\' /etc/ssh/sshd_config' . "\n");
+        push(@array2print, 'sed -i \'/.*ListenAddress .*/d\' /etc/ssh/external_sshd_config' . "\n");
+        push(@array2print, 'echo "AllowUsers root" >> /etc/ssh/sshd_config' . "\n");
+        push(@array2print, 'echo "ListenAddress $IP0" >> /etc/ssh/sshd_config' . "\n");
+        push(@array2print, 'echo "ListenAddress $IP1" >> /etc/ssh/external_sshd_config' . "\n");
+        push(@array2print, '/etc/rc.d/init.d/ext_sshd stop' . "\n");
+        push(@array2print, '/etc/rc.d/init.d/sshd stop' . "\n");
+        push(@array2print, 'sleep 2' . "\n");
+        push(@array2print, '/etc/rc.d/init.d/sshd start' . "\n");
+        push(@array2print, '/etc/rc.d/init.d/ext_sshd start' . "\n");
+
+	#write to tmpfile
+	my $tmpfile = "/tmp/$request_id.rc.local";
+        if (open(TMP, ">$tmpfile")) {
+            print TMP @array2print;
+            close(TMP);
+         }
+         else {
+             #print "could not write $tmpfile $!\n";
+             notify($ERRORS{'OK'}, 0, "could not write $tmpfile $!");
+		return 0;
+         }
+         #copy to node
+         if (run_scp_command($tmpfile, "$computer_node_name:/etc/rc.local", $management_node_keys)) {
+         }
+	else{
+		return 0;
+	}
+	
+	# Assemble the command
+        my $command = "chmod +rx /etc/rc.local";
+        
+        # Execute the command
+        my ($exit_status, $output) = run_ssh_command($computer_node_name, $management_node_keys, $command, '', '', 1);
+        if (defined($exit_status) && $exit_status == 0) {
+                notify($ERRORS{'OK'}, 0, "executed $command, exit status: $exit_status");
+        }
+        elsif (defined($exit_status)) {
+                notify($ERRORS{'WARNING'}, 0, "setting rx on /etc/rc.local returned a non-zero exit status: $exit_status");
+                return;
+        }
+        else {
+                notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to execute script_path");
+                return 0;
+        }
+
+        unlink($tmpfile);
+
+	return 1;
+	
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 generate_ext_sshd_config
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Copy default sshd config and edit key values
+
+=cut
+
+sub generate_ext_sshd_config {
+        my $self = shift;
+        if (ref($self) !~ /linux/i) {
+                notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+                return 0;
+        }
+
+	my $request_id               = $self->data->get_request_id();
+        my $management_node_keys     = $self->data->get_management_node_keys();
+        my $computer_short_name      = $self->data->get_computer_short_name();
+        my $computer_node_name       = $self->data->get_computer_node_name();
+	
+	#check for and copy /etc/ssh/sshd_config file
+
+	#Copy node's /etc/ssh/sshd_config to local /tmp for processing
+	my $tmpfile = "/tmp/$request_id.external_sshd_config";
+	if (run_scp_command("$computer_node_name:/etc/ssh/sshd_config", $tmpfile, $management_node_keys)) {
+		notify($ERRORS{'DEBUG'}, 0, "copied sshd_config from $computer_node_name for local processing");
+        }
+        else{
+		notify($ERRORS{'WARNING'}, 0, "failed to copied sshd_config from $computer_node_name for local processing");
+                return 0;
+        }
+	
+	my @ext_sshd_config = read_file_to_array($tmpfile);	
+	
+	foreach my $l (@ext_sshd_config) {
+		#clear any unwanted lines - could be multiples
+		if($l =~ /^(.)?PidFile/ ){
+			$l = "";
+		}
+		if($l =~ /^(.)?PermitRootLogin/){
+			$l = "";
+		} 
+		if($l =~ /^(.)?AllowUsers root/){
+			$l = "";
+		}
+		if($l =~ /^(.)?UseDNS/){
+			$l = "";
+		}
+		if($l =~ /^(.)?X11Forwarding/){
+			$l = "";
+		}
+	}
+
+	push(@ext_sshd_config, "PidFile /var/run/ext_sshd.pid\n");
+	push(@ext_sshd_config, "PermitRootLogin no\n");
+	push(@ext_sshd_config, "UseDNS no\n");
+	push(@ext_sshd_config, "X11Forwarding yes\n");
+	
+	#clear temp file
+	unlink($tmpfile);
+
+	#write_array to file
+	if(open(FILE, ">$tmpfile")){
+		print FILE @ext_sshd_config;
+		close FILE;
+	}
+	
+	#copy temp file to node
+	if (run_scp_command($tmpfile, "$computer_node_name:/etc/ssh/external_sshd_config", $management_node_keys)) {
+		notify($ERRORS{'DEBUG'}, 0, "copied $tmpfile to $computer_node_name:/etc/ssh/external_sshd_config");
+        }
+        else{
+		notify($ERRORS{'WARNING'}, 0, "failed to copied $tmpfile to $computer_node_name:/etc/ssh/external_sshd_config");
+                return 0;
+        }	
+	unlink($tmpfile);
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 generate_ext_sshd_init
+
+ Parameters  : none
+ Returns     : boolean
+ Description :
+
+=cut
+
+sub generate_ext_sshd_init {
+        my $self = shift;
+        if (ref($self) !~ /linux/i) {
+                notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+                return 0;
+        }
+
+	my $request_id               = $self->data->get_request_id();
+        my $management_node_keys     = $self->data->get_management_node_keys();
+        my $computer_short_name      = $self->data->get_computer_short_name();
+        my $computer_node_name       = $self->data->get_computer_node_name();
+
+	#copy /etc/init.d/sshd to local /tmp for processing
+	my $tmpfile = "/tmp/$request_id.ext_sshd";
+        if (run_scp_command("$computer_node_name:/etc/init.d/sshd", $tmpfile, $management_node_keys)) {
+                notify($ERRORS{'DEBUG'}, 0, "copied sshd init script from $computer_node_name for local processing");
+        }
+        else{
+                notify($ERRORS{'WARNING'}, 0, "failed to copied sshd init script from $computer_node_name for local processing");
+                return 0;
+        }
+	
+	my @ext_sshd_init = read_file_to_array($tmpfile);
+       
+	 notify($ERRORS{'DEBUG'}, 0, "read file $tmpfile into array ");
+	
+	foreach my $l (@ext_sshd_init) {
+		if($l =~ /PID_FILE=/){
+			$l = "PID_FILE=/var/run/ext_sshd.pid" . "\n" . "OPTIONS=\'-f /etc/ssh/external_sshd_config\'\n";
+		}	
+		if($l =~ /prog=/){
+			$l="prog=\"ext_sshd\"" . "\n";
+		}
+		
+		my $string = '\[ "\$RETVAL" = 0 \] && touch \/var\/lock\/subsys\/sshd';	
+		if($l =~ /$string/){
+			$l = "[ \"\$RETVAL\" = 0 ] && touch /var/lock/subsys/ext_sshd" . "\n";
+		}
+		if($l =~ /if \[ -f \/var\/lock\/subsys\/sshd \] ; then/){
+			$l = "if [ -f /var/lock/subsys/ext_sshd ] ; then" . "\n";
+		}
+        }
+
+        #clear temp file
+        unlink($tmpfile);
+
+        #write_array to file
+        if(open(FILE, ">$tmpfile")){
+                print FILE @ext_sshd_init;
+                close(FILE);
+        }
+
+	my $sshd_data;
+	
+	#slurp/read the file to scalar
+	my $sshd_data = do { local( @ARGV, $/ ) = $tmpfile ; <> } ;
+		
+	#notify($ERRORS{'DEBUG'}, 0, "sshd_data after read= $sshd_data");
+	
+	#write new stop block
+	my $new_stop_block = "stop()\n";
+	$new_stop_block .= "{\n";
+	$new_stop_block .= "        echo -n \$\"Stopping \$prog:\"\n";
+	$new_stop_block .= "        killproc \$prog -TERM\n";
+	$new_stop_block .= "        RETVAL=$?\n";
+	$new_stop_block .= "        [ \"\$RETVAL\" = 0 ] && rm -f /var/lock/subsys/ext_sshd\n";
+	$new_stop_block .= "        echo\n";	
+	$new_stop_block .= "}\n";	
+
+
+	#edit the stop block
+	$sshd_data =~ s/stop\(\).*?\}/$new_stop_block/s;
+
+		
+	#save to file
+	if(open(WRITEFILE,">$tmpfile")){
+		print WRITEFILE $sshd_data;
+		close(WRITEFILE);
+	}
+
+        #copy temp file to node
+        if (run_scp_command($tmpfile, "$computer_node_name:/etc/init.d/ext_sshd", $management_node_keys)) {
+                notify($ERRORS{'DEBUG'}, 0, "copied $tmpfile to $computer_node_name:/etc/init.d/ext_sshd");
+		if(run_ssh_command($computer_node_name, $management_node_keys, "chmod +rx /etc/init.d/ext_sshd", '', '', 1)){
+                	notify($ERRORS{'DEBUG'}, 0, "setting  $computer_node_name:/etc/init.d/ext_sshd executable");
+		}
+        }
+        else{
+                notify($ERRORS{'WARNING'}, 0, "failed to copied $tmpfile to $computer_node_name:/etc/init.d/ext_sshd");
+                return 0;
+        }
+
+	#delete local tmpfile
+	unlink($tmpfile);
+
+        return 1;
+
+}
 #/////////////////////////////////////////////////////////////////////////////
 
 1;
