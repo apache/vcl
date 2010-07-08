@@ -79,7 +79,6 @@ our @ISA = qw(Exporter);
 our @EXPORT = qw(
   _checknstartservice
   _getcurrentimage
-  _is_user_added
   _machine_os
   _pingnode
   _sshd_status
@@ -2755,49 +2754,6 @@ sub _machine_os {
 		}
 	} ## end foreach my $l (@{$sshcmd[1]})
 } ## end sub _machine_os
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 _is_user_added
-
- Parameters  : $node,    $user,     $type, $os
- Returns     : 1 yes user exists - 0 no
- Description : logs into remote node checks to see if
-					supplied user account exists
-=cut
-
-sub _is_user_added {
-	my ($node,    $user,     $type, $os,$image_os_type)  = @_;
-	my ($package, $filename, $line, $sub) = caller(0);
-	notify($ERRORS{'WARNING'}, 0, "node is not defined") if (!(defined($node)));
-	notify($ERRORS{'WARNING'}, 0, "user is not defined") if (!(defined($user)));
-	notify($ERRORS{'WARNING'}, 0, "type is not defined") if (!(defined($type)));
-	notify($ERRORS{'WARNING'}, 0, "os is not defined")   if (!(defined($os)));
-
-	my @lines;
-	my $l;
-	my @SSHCMD;
-
-	if ($type =~ /blade|virtualmachine/) {
-
-		if ($image_os_type =~ /linux/i) {
-			undef @SSHCMD;
-			@SSHCMD = run_ssh_command($node, $ENV{management_node_info}{keys}, "cat /etc/passwd", "root");
-			foreach $l (@{$SSHCMD[1]}) {
-				return 1 if ($l =~ /$user/);
-			}
-			return 0;
-		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "osname is not defined or supported $os");
-			return 0;
-		}
-	} ## end if ($type =~ /blade|virtualmachine/)
-	elsif ($type eq "lab") {
-		#tobe done later
-
-	}
-} ## end sub _is_user_added
 
 #/////////////////////////////////////////////////////////////////////////////
 
