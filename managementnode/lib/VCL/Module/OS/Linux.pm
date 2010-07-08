@@ -2260,8 +2260,6 @@ sub generate_ext_sshd_init {
                 close(FILE);
         }
 
-	my $sshd_data;
-	
 	#slurp/read the file to scalar
 	my $sshd_data = do { local( @ARGV, $/ ) = $tmpfile ; <> } ;
 		
