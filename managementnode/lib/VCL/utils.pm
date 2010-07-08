@@ -1617,7 +1617,7 @@ sub getdynamicaddress {
 			# skip class a,b,c private addresses
                         next if ($l !~ /IP(.*)?Address[\s\.:]*([\d\.]*)/);
                         my $ip_address_found = $2;
-                        next if ($ip_address && $ip_address_found =~ /^(10|127|192\.168|172\.(1[6-9]|2[0-9]|3[0-1]))\./);
+                        next if ($ip_address_found =~ /^(10|127|192\.168|172\.(1[6-9]|2[0-9]|3[0-1]))\./);
                         next if ($ip_address_found =~ /$privateIP/);
                         $ip_address = $ip_address_found;
                 }
@@ -1632,7 +1632,7 @@ sub getdynamicaddress {
 			# skip class a,b,c private addresses
 			next if ($l !~ /inet addr:([\d\.]*)/);
                         my $ip_address_found = $1;
-                        next if ($ip_address && $ip_address_found =~ /^(10|127|192\.168|172\.(1[6-9]|2[0-9]|3[0-1]))\./);
+                        next if ($ip_address_found =~ /^(10|127|192\.168|172\.(1[6-9]|2[0-9]|3[0-1]))\./);
                         next if ($ip_address_found =~ /$privateIP/);
                         $ip_address = $ip_address_found;
 		}
