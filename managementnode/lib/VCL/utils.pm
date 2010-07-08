@@ -1596,7 +1596,7 @@ sub getdynamicaddress {
 		my @hosts = <HOSTS>;
 		close(HOSTS);
 		foreach my $line (@hosts) {
-			if ($line =~ /([0-9]*.[0-9]*.[0-9]*.[0-9]*)\s+($node)(\s\.)/) {
+			if ($line =~ /(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\s+($node)/) {
 				$privateIP = $1;
 				notify($ERRORS{'OK'}, 0, "PrivateIP address for $node collected $privateIP");
 				last;
