@@ -1118,9 +1118,8 @@ sub capture {
 					#figure out old name
 					foreach my $a (@list) {
 						chomp($a);
-						if ($a =~ /([0-9a-z_]*)-([_0-9a-zA-Z]*)-(v[0-9]*)\.vmdk/) {
-							#print "old name $1-$2-$3\n";
-							$oldname = "$1-$2-$3";
+						if ($a =~ /(.*)-(v[0-9]*)\.vmdk/) {
+							$oldname = "$1-$2";
 							notify($ERRORS{'OK'}, 0, "found previous name= $oldname");
 						}
 					}
