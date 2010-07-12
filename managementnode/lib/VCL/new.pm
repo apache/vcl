@@ -103,8 +103,8 @@ sub process {
 	my $computer_type                   = $self->data->get_computer_type();
 	my $computer_ip_address             = $self->data->get_computer_ip_address();
 	my $computer_state_name             = $self->data->get_computer_state_name();
-	my $computer_preferred_image_id     = $self->data->get_computer_preferredimage_id();
-	my $computer_preferred_image_name   = $self->data->get_computer_preferredimage_name();
+	my $computer_next_image_id	    = $self->data->get_computer_nextimage_id();
+	my $computer_next_image_name        = $self->data->get_computer_nextimage_name();
 	my $image_id                        = $self->data->get_image_id();
 	my $image_os_name                   = $self->data->get_image_os_name();
 	my $image_name                      = $self->data->get_image_name();
@@ -174,18 +174,18 @@ sub process {
 		# Computer is not available, not a new request (most likely a simple reload)
 		notify($ERRORS{'WARNING'}, 0, "request state=$request_state_name, $computer_short_name is NOT available");
 
-		# Set the computer preferred image so it gets loaded if/when other reservations are complete
-		if ($image_name ne $computer_preferred_image_name) {
-			notify($ERRORS{'OK'}, 0, "$computer_short_name is not available, setting computer preferred image to $image_name");
-			if (setpreferredimage($computer_id, $image_id)) {
-				notify($ERRORS{'OK'}, 0, "$computer_short_name preferred image set to $image_name");
+		# Set the computer next image so it gets loaded if/when other reservations are complete
+		if (!defined($computer_next_image_name) || $image_name ne $computer_next_image_name) {
+			notify($ERRORS{'OK'}, 0, "$computer_short_name is not available, setting computer next image to $image_name");
+			if (setnextimage($computer_id, $image_id)) {
+				notify($ERRORS{'OK'}, 0, "$computer_short_name next image set to $image_name");
 			}
 			else {
-				notify($ERRORS{'WARNING'}, 0, "failed to set $computer_short_name preferred image to $image_name");
+				notify($ERRORS{'WARNING'}, 0, "failed to set $computer_short_name next image to $image_name");
 			}
 		}
 		else {
-			notify($ERRORS{'OK'}, 0, "$computer_short_name is not available, computer preferred image is already set to $image_name");
+			notify($ERRORS{'OK'}, 0, "$computer_short_name is not available, computer next image is already set to $image_name");
 		}
 
 		# Update request state to complete
@@ -203,18 +203,18 @@ sub process {
 		# Computer is not available, preload only = true
 		notify($ERRORS{'WARNING'}, 0, "preload reservation, $computer_short_name is NOT available");
 
-		# Set the computer preferred image so it gets loaded if/when other reservations are complete
-		if ($image_name ne $computer_preferred_image_name) {
-			notify($ERRORS{'OK'}, 0, "preload only request, $computer_short_name is not available, setting computer preferred image to $image_name");
-			if (setpreferredimage($computer_id, $image_id)) {
-				notify($ERRORS{'OK'}, 0, "$computer_short_name preferred image set to $image_name");
+		# Set the computer next image so it gets loaded if/when other reservations are complete
+		if (!defined($computer_next_image_name) || $image_name ne $computer_next_image_name) {
+			notify($ERRORS{'OK'}, 0, "preload only request, $computer_short_name is not available, setting computer next image to $image_name");
+			if (setnextimage($computer_id, $image_id)) {
+				notify($ERRORS{'OK'}, 0, "$computer_short_name next image set to $image_name");
 			}
 			else {
-				notify($ERRORS{'WARNING'}, 0, "failed to set $computer_short_name preferred image to $image_name");
+				notify($ERRORS{'WARNING'}, 0, "failed to set $computer_short_name next image to $image_name");
 			}
 		}
 		else {
-			notify($ERRORS{'OK'}, 0, "preload only request, $computer_short_name is not available, computer preferred image is already set to $image_name");
+			notify($ERRORS{'OK'}, 0, "preload only request, $computer_short_name is not available, computer next image is already set to $image_name");
 		}
 
 		# Only the parent reservation  is allowed to modify the request state in this module
@@ -346,17 +346,17 @@ sub process {
 	# Attempt to reserve the computer if this is a 'new' reservation
 	# These steps are not done for simple reloads
 	if ($request_state_name eq 'new') {
-		# Set the computer preferred image to the one for this reservation
-		if ($image_name ne $computer_preferred_image_name) {
-			if (setpreferredimage($computer_id, $image_id)) {
-				notify($ERRORS{'OK'}, 0, "$computer_short_name preferred image set to $image_name");
+		# Set the computer next image to the one for this reservation
+		if (!defined($computer_next_image_name) || $image_name ne $computer_next_image_name) {
+			if (setnextimage($computer_id, $image_id)) {
+				notify($ERRORS{'OK'}, 0, "$computer_short_name next image set to $image_name");
 			}
 			else {
-				notify($ERRORS{'WARNING'}, 0, "failed to set $computer_short_name preferred image to $image_name");
+				notify($ERRORS{'WARNING'}, 0, "failed to set $computer_short_name next image to $image_name");
 			}
 		}
 		else {
-			notify($ERRORS{'OK'}, 0, "$computer_short_name preferred image is already set to $image_name");
+			notify($ERRORS{'OK'}, 0, "$computer_short_name next image is already set to $image_name");
 		}
 
 		if ($request_preload_only) {
@@ -477,9 +477,9 @@ sub reload_image {
 	my $computer_type                   = $self->data->get_computer_type();
 	my $computer_ip_address             = $self->data->get_computer_ip_address();
 	my $computer_state_name             = $self->data->get_computer_state_name();
-	my $computer_preferred_image_id     = $self->data->get_computer_preferredimage_id();
-	my $computer_preferred_image_name   = $self->data->get_computer_preferredimage_name();
-	my $computer_currentimage_name 		= $self->data->get_computer_currentimage_name();
+	my $computer_next_image_id	    = $self->data->get_computer_nextimage_id();
+	my $computer_next_image_name   	    = $self->data->get_computer_nextimage_name();
+	my $computer_currentimage_name 	    = $self->data->get_computer_currentimage_name();
 	my $image_id                        = $self->data->get_image_id();
 	my $image_os_name                   = $self->data->get_image_os_name();
 	my $image_name                      = $self->data->get_image_name();
@@ -487,7 +487,7 @@ sub reload_image {
 	my $image_project                   = $self->data->get_image_project();
 	my $image_reloadtime                = $self->data->get_image_reload_time();
 	my $image_architecture              = $self->data->get_image_architecture();
-	my $image_os_install_type				= $self->data->get_image_os_install_type();
+	my $image_os_install_type  	    = $self->data->get_image_os_install_type();
 	my $image_os_type                   = $self->data->get_image_os_type();
 	my $imagemeta_checkuser             = $self->data->get_imagemeta_checkuser();
 	my $imagemeta_usergroupid           = $self->data->get_imagemeta_usergroupid();
@@ -726,8 +726,8 @@ sub computer_not_being_used {
 	my $computer_type                   = $self->data->get_computer_type();
 	my $computer_ip_address             = $self->data->get_computer_ip_address();
 	my $computer_state_name             = $self->data->get_computer_state_name();
-	my $computer_preferred_image_id     = $self->data->get_computer_preferredimage_id();
-	my $computer_preferred_image_name   = $self->data->get_computer_preferredimage_name();
+	my $computer_next_image_id          = $self->data->get_computer_nextimage_id();
+	my $computer_next_image_name        = $self->data->get_computer_nextimage_name();
 	my $image_id                        = $self->data->get_image_id();
 	my $image_os_name                   = $self->data->get_image_os_name();
 	my $image_name                      = $self->data->get_image_name();
@@ -965,8 +965,8 @@ sub reserve_computer {
 	my $computer_type                   = $self->data->get_computer_type();
 	my $computer_ip_address             = $self->data->get_computer_ip_address();
 	my $computer_state_name             = $self->data->get_computer_state_name();
-	my $computer_preferred_image_id     = $self->data->get_computer_preferredimage_id();
-	my $computer_preferred_image_name   = $self->data->get_computer_preferredimage_name();
+	my $computer_next_image_id     	    = $self->data->get_computer_nextimage_id();
+	my $computer_next_image_name        = $self->data->get_computer_nextimage_name();
 	my $image_id                        = $self->data->get_image_id();
 	my $image_os_name                   = $self->data->get_image_os_name();
 	my $image_name                      = $self->data->get_image_name();

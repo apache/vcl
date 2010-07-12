@@ -155,8 +155,8 @@ sub get_next_image {
 		} ## end for (@selected_rows)
 	} ## end if (scalar @selected_rows > 0)
 
-	# No upcoming reservations - fetch preferred image information
-	my $select_preferredimage = "
+	# No upcoming reservations - fetch next image information
+	my $select_nextimage = "
 	SELECT DISTINCT
 	imagerevision.imagename AS imagename,
 	imagerevision.id AS imagerevisionid,
@@ -166,27 +166,27 @@ sub get_next_image {
 	computer,
 	imagerevision
    WHERE
-	imagerevision.imageid = computer.preferredimageid
+	imagerevision.imageid = computer.nextimageid
 	AND imagerevision.production = 1
-	AND computer.preferredimageid = image.id
+	AND computer.nextimageid = image.id
 	AND computer.id = $computer_id
 	";
 
 	# Call the database select subroutine
 	# This will return an array of one or more rows based on the select statement
-	my @preferred_selected_rows = database_select($select_preferredimage);
+	my @next_selected_rows = database_select($select_nextimage);
 
 	# Check to make sure at least 1 row were returned
-	if (scalar @preferred_selected_rows == 0) {
-		notify($ERRORS{'WARNING'}, 0, "$notify_prefix failed to fetch preferred image for computerid $computer_id");
+	if (scalar @next_selected_rows == 0) {
+		notify($ERRORS{'WARNING'}, 0, "$notify_prefix failed to fetch next image for computerid $computer_id");
 		return 0;
 	}
-	elsif (scalar @preferred_selected_rows > 1) {
-		notify($ERRORS{'WARNING'}, 0, "" . scalar @preferred_selected_rows . " rows were returned from database select");
+	elsif (scalar @next_selected_rows > 1) {
+		notify($ERRORS{'WARNING'}, 0, "" . scalar @next_selected_rows . " rows were returned from database select");
 		return 0;
 	}
-	notify($ERRORS{'OK'}, 0, "$notify_prefix returning preferredimage image=$preferred_selected_rows[0]{imagename} imageid=$preferred_selected_rows[0]{imageid}");
-	push(@ret_array, $preferred_selected_rows[0]{imagename}, $preferred_selected_rows[0]{imageid}, $preferred_selected_rows[0]{imagerevisionid});
+	notify($ERRORS{'OK'}, 0, "$notify_prefix returning nextimage image=$next_selected_rows[0]{imagename} imageid=$next_selected_rows[0]{imageid}");
+	push(@ret_array, $next_selected_rows[0]{imagename}, $next_selected_rows[0]{imageid}, $next_selected_rows[0]{imagerevisionid});
 	return @ret_array;
 
 } ## end sub get_next_image_revision

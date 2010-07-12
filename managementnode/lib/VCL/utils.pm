@@ -178,7 +178,7 @@ our @EXPORT = qw(
   set_logfile_path
   set_managementnode_state
   setimageid
-  setpreferredimage
+  setnextimage
   setstaticaddress
   string_to_ascii
   switch_state
@@ -2472,7 +2472,7 @@ sub is_request_imaging {
  Description : Looks for any upcoming reservations
 					for supplied computerid, if starttime is
 					within 50 minutes return that imageid. Else
-					fetch and return preferred image
+					fetch and return next image
 =cut
 
 sub get_next_image_default {
@@ -2536,8 +2536,8 @@ sub get_next_image_default {
 		} ## end for (@selected_rows)
 	} ## end if (scalar @selected_rows > 0)
 
-	# No upcoming reservations - fetch preferred image information
-	my $select_preferredimage = "
+	# No upcoming reservations - fetch next image information
+	my $select_nextimage = "
 	SELECT DISTINCT
 	imagerevision.imagename AS imagename,
 	imagerevision.id AS imagerevisionid,
@@ -2547,57 +2547,57 @@ sub get_next_image_default {
 	computer,
 	imagerevision
    WHERE
-	imagerevision.imageid = computer.preferredimageid
+	imagerevision.imageid = computer.nextimageid
 	AND imagerevision.production = 1
-	AND computer.preferredimageid = image.id
+	AND computer.nextimageid = image.id
 	AND computer.id = $computerid
 	";
 
 	# Call the database select subroutine
 	# This will return an array of one or more rows based on the select statement
-	my @preferred_selected_rows = database_select($select_preferredimage);
+	my @next_selected_rows = database_select($select_nextimage);
 
 	# Check to make sure at least 1 row were returned
-	if (scalar @preferred_selected_rows == 0) {
-		notify($ERRORS{'WARNING'}, 0, "get_next_image_default failed to fetch preferred image for computerid $computerid");
+	if (scalar @next_selected_rows == 0) {
+		notify($ERRORS{'WARNING'}, 0, "get_next_image_default failed to fetch next image for computerid $computerid");
 		return 0;
 	}
-	elsif (scalar @preferred_selected_rows > 1) {
-		notify($ERRORS{'WARNING'}, 0, "" . scalar @preferred_selected_rows . " rows were returned from database select");
+	elsif (scalar @next_selected_rows > 1) {
+		notify($ERRORS{'WARNING'}, 0, "" . scalar @next_selected_rows . " rows were returned from database select");
 		return 0;
 	}
-	notify($ERRORS{'OK'}, 0, "get_next_image_default : returning preferredimage image=$preferred_selected_rows[0]{imagename} imageid=$preferred_selected_rows[0]{imageid}");
-	push(@ret_array, $preferred_selected_rows[0]{imagename}, $preferred_selected_rows[0]{imageid}, $preferred_selected_rows[0]{imagerevisionid});
+	notify($ERRORS{'OK'}, 0, "get_next_image_default : returning next image=$next_selected_rows[0]{imagename} imageid=$next_selected_rows[0]{imageid}");
+	push(@ret_array, $next_selected_rows[0]{imagename}, $next_selected_rows[0]{imageid}, $next_selected_rows[0]{imagerevisionid});
 	return @ret_array;
 
 } ## end sub get_next_image
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 setpreferredimage
+=head2 setnextimage
 
  Parameters  : $computerid, $image
  Returns     : 1 success, 0 failed
- Description : updates preferredimageid on provided computerid
+ Description : updates nextimageid on provided computerid
 =cut
 
-sub setpreferredimage {
+sub setnextimage {
 	my ($computerid, $imageid) = @_;
 	my ($package, $filename, $line, $sub) = caller(0);
 	notify($ERRORS{'WARNING'}, 0, "computerid: node is not defined") if (!(defined($computerid)));
 	notify($ERRORS{'WARNING'}, 0, "imageid: node is not defined")    if (!(defined($imageid)));
 
-	my $update_statement = " UPDATE computer SET preferredimageid = $imageid WHERE id = $computerid ";
+	my $update_statement = " UPDATE computer SET nextimageid = $imageid WHERE id = $computerid ";
 
 	# Call the database execute subroutine
 	if (database_execute($update_statement)) {
 		return 1;
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "unable to update preferredimageid");
+		notify($ERRORS{'WARNING'}, 0, "unable to update nextimageid");
 		return 0;
 	}
-} ## end sub setpreferredimage
+} ## end sub setnextimage
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -4492,7 +4492,7 @@ sub get_request_info {
    computer.platformid AS computer_platformid,
    computer.scheduleid AS computer_scheduleid,
    computer.currentimageid AS computer_currentimageid,
-   computer.preferredimageid AS computer_preferredimageid,
+   computer.nextimageid AS computer_nextimageid,
    computer.imagerevisionid AS computer_imagerevisionid,
    computer.RAM AS computer_RAM,
    computer.procnumber AS computer_procnumber,
@@ -4643,28 +4643,28 @@ sub get_request_info {
 			notify($ERRORS{'WARNING'}, 0, "currentimageid is not set for computer id=" . $reservation_row{computer_id});
 		}
 
-		# Get the computer's preferred image information
-		if ($reservation_row{computer_preferredimageid}) {
-			my %computer_preferredimage_info;
-			if (%computer_preferredimage_info = get_image_info($reservation_row{computer_preferredimageid})) {
-				$request_info{reservation}{$reservation_id}{computer}{preferredimage} = \%computer_preferredimage_info;
+		# Get the computer's next image information
+		if ($reservation_row{computer_nextimageid}) {
+			my %computer_nextimage_info;
+			if (%computer_nextimage_info = get_image_info($reservation_row{computer_nextimageid})) {
+				$request_info{reservation}{$reservation_id}{computer}{nextimage} = \%computer_nextimage_info;
 
-				# For preferred imageid get the production imagerevision info
-				my %preferred_imagerevision_info;
-				if (%preferred_imagerevision_info = get_production_imagerevision_info($reservation_row{computer_preferredimageid})) {
-					$request_info{reservation}{$reservation_id}{computer}{preferredimagerevision} = \%preferred_imagerevision_info;
+				# For next imageid get the production imagerevision info
+				my %next_imagerevision_info;
+				if (%next_imagerevision_info = get_production_imagerevision_info($reservation_row{computer_nextimageid})) {
+					$request_info{reservation}{$reservation_id}{computer}{nextimagerevision} = \%next_imagerevision_info;
 				}
 				else {
-					notify($ERRORS{'WARNING'}, 0, "unable to get preferred image revision info for computer, image revision ID is not set, tried to get production image for image ID " . $reservation_row{computer_preferredimageid});
+					notify($ERRORS{'WARNING'}, 0, "unable to get next image revision info for computer, image revision ID is not set, tried to get production image for image ID " . $reservation_row{computer_nextimageid});
 				}
-			} ## end if (%computer_preferredimage_info = get_image_info...
+			} ## end if (%computer_nextimage_info = get_image_info...
 			else {
-				notify($ERRORS{'WARNING'}, 0, "unable to get preferredimage image info for computer");
+				notify($ERRORS{'WARNING'}, 0, "unable to get nextimage image info for computer");
 			}
-		} ## end if ($reservation_row{computer_preferredimageid...
+		} ## end if ($reservation_row{computer_nextimageid...
 		else {
 			# currentimageid wasn't set for the computer
-			notify($ERRORS{'WARNING'}, 0, "preferredimageid is not set for computer id=" . $reservation_row{computer_id});
+			notify($ERRORS{'WARNING'}, 0, "nextimageid is not set for computer id=" . $reservation_row{computer_id});
 		}
 
 		# Get the computer's current imagemeta information
@@ -6357,14 +6357,14 @@ sub update_computer_imagename {
 
 =head2 update_currentimage
 
- Parameters  : $computerid, $imageid, $imagerevisionid, $preferredimagid(optional)
+ Parameters  : $computerid, $imageid, $imagerevisionid, $nextimagid(optional)
  Returns     : 0 failed or 1 success
- Description : Updates currentimage on a node, preferredimageid = optional
+ Description : Updates currentimage on a node, nextimageid = optional
 
 =cut
 
 sub update_currentimage {
-	my ($computerid, $imageid,  $imagerevisionid, $preferredimagid) = @_;
+	my ($computerid, $imageid,  $imagerevisionid, $nextimagid) = @_;
 	my ($package,    $filename, $line,            $sub)             = caller(0);
 
 	# Check the passed parameters
@@ -6384,7 +6384,7 @@ sub update_currentimage {
 	notify($ERRORS{'OK'}, 0, "updating computer $computerid: image=$imageid, imagerevision=$imagerevisionid");
 
 	# Construct the update statement
-	# If $preferredimageid defined and set build slightly different statement
+	# If $nextimageid defined and set build slightly different statement
 	my $update_statement = "
 	    UPDATE
 		computer c, image i
@@ -6395,18 +6395,18 @@ sub update_currentimage {
 		c.id = $computerid
 	 ";
 
-	if (defined($preferredimagid) && ($preferredimagid)) {
+	if (defined($nextimagid) && ($nextimagid)) {
 		$update_statement = "
 			UPDATE
 			computer c, image i
 			SET
 			c.currentimageid = $imageid,
-			c.preferredimageid = $imageid,
+			c.nextimageid = $imageid,
 			c.imagerevisionid= $imagerevisionid
 			WHERE
 			c.id = $computerid
 			";
-	} ## end if (defined($preferredimagid) && ($preferredimagid...
+	} ## end if (defined($nextimagid) && ($nextimagid...
 
 	# Call the database execute subroutine
 	if (database_execute($update_statement)) {
