@@ -190,7 +190,6 @@ CREATE TABLE IF NOT EXISTS `computer` (
   `platformid` tinyint(3) unsigned NOT NULL default '0',
   `scheduleid` tinyint(3) unsigned default NULL,
   `currentimageid` smallint(5) unsigned NOT NULL default '0',
-  `preferredimageid` smallint(5) unsigned NOT NULL default '0',
   `nextimageid` smallint(5) unsigned NOT NULL default '0',
   `imagerevisionid` mediumint(8) unsigned NOT NULL default '0',
   `RAM` smallint(5) unsigned NOT NULL default '0',
