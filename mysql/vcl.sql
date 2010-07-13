@@ -643,6 +643,7 @@ CREATE TABLE IF NOT EXISTS `request` (
   `end` datetime NOT NULL default '0000-00-00 00:00:00',
   `daterequested` datetime NOT NULL default '0000-00-00 00:00:00',
   `datemodified` datetime default NULL,
+  `checkuser` tinyint(1) unsigned NOT NULL default '0',
   PRIMARY KEY  (`id`),
   KEY `userid` (`userid`),
   KEY `stateid` (`stateid`),
