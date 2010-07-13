@@ -4393,6 +4393,7 @@ sub get_request_info {
    request.end AS request_end,
    request.daterequested AS request_daterequested,
    request.datemodified AS request_datemodified,
+   request.checkuser AS request_checkuser,
 
    requeststate.name AS requeststate_name,
 
@@ -4613,6 +4614,12 @@ sub get_request_info {
 		else {
 			# Image meta data found, add it to the hash
 			$request_info{reservation}{$reservation_id}{image}{imagemeta} = \%imagemeta_info;
+
+			# If request_checkuser flag is set to 0 then disable user checks here by setting imagemetacheckuser to 0
+			unless ($reservation_row{request_checkuser}){
+				notify($ERRORS{'DEBUG'}, 0, "request checkuser flag is set to $reservation_row{request_checkuser}");
+				$request_info{reservation}{$reservation_id}{image}{imagemeta}{checkuser} = $reservation_row{request_checkuser};
+			}
 		}
 
 		# Check if the computer associated with this reservation has a vmhostid set
