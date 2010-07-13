@@ -527,7 +527,6 @@ sub _notify_user_timeout {
 
 	my $request_id                 = $self->data->get_request_id();
 	my $reservation_id             = $self->data->get_reservation_id();
-	my $user_preferredname         = $self->data->get_user_preferred_name();
 	my $user_email                 = $self->data->get_user_email();
 	my $user_emailnotices          = $self->data->get_user_emailnotices();
 	my $user_im_name               = $self->data->get_user_imtype_name();
@@ -537,9 +536,8 @@ sub _notify_user_timeout {
 	my $image_prettyname           = $self->data->get_image_prettyname();
 	my $computer_ip_address        = $self->data->get_computer_ip_address();
 
-	#my ($emailaddress,$firstname,$type,$ipaddress,$imagename,$url,$IMname,$IMid) = @_;
 	my $message = <<"EOF";
-$user_preferredname,
+
 Your reservation has timed out for image $image_prettyname at address $computer_ip_address because no initial connection was made.
 
 To make another reservation, please revisit $affiliation_sitewwwaddress.

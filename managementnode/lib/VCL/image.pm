@@ -91,7 +91,6 @@ sub process {
 	my $reservation_id             = $self->data->get_reservation_id();
 	my $user_id                    = $self->data->get_user_id();
 	my $user_unityid               = $self->data->get_user_login_id();
-	my $user_preferredname         = $self->data->get_user_preferred_name();
 	my $user_email                 = $self->data->get_user_email();
 	my $affiliation_sitewwwaddress = $self->data->get_user_affiliation_sitewwwaddress();
 	my $affiliation_helpaddress    = $self->data->get_user_affiliation_helpaddress();
@@ -288,7 +287,6 @@ sub reservation_successful {
 	my $reservation_id             = $self->data->get_reservation_id();
 	my $user_id                    = $self->data->get_user_id();
 	my $user_unityid               = $self->data->get_user_login_id();
-	my $user_preferredname         = $self->data->get_user_preferred_name();
 	my $user_email                 = $self->data->get_user_email();
 	my $affiliation_sitewwwaddress = $self->data->get_user_affiliation_sitewwwaddress();
 	my $affiliation_helpaddress    = $self->data->get_user_affiliation_helpaddress();
@@ -305,7 +303,7 @@ sub reservation_successful {
 
 	# Send image creation successful email to user
 	my $body_user = <<"END";
-$user_preferredname,
+
 Your VCL image creation request for $image_prettyname has
 succeeded.  Please visit $affiliation_sitewwwaddress and
 you should see an image called $image_prettyname.
@@ -371,7 +369,6 @@ sub reservation_failed {
 	my $reservation_id             = $self->data->get_reservation_id();
 	my $user_id                    = $self->data->get_user_id();
 	my $user_unityid               = $self->data->get_user_login_id();
-	my $user_preferredname         = $self->data->get_user_preferred_name();
 	my $user_email                 = $self->data->get_user_email();
 	my $affiliation_sitewwwaddress = $self->data->get_user_affiliation_sitewwwaddress();
 	my $affiliation_helpaddress    = $self->data->get_user_affiliation_helpaddress();
@@ -391,7 +388,7 @@ sub reservation_failed {
 
 	# Send mail to user
 	my $body_user = <<"END";
-$user_preferredname,
+
 We apologize for the inconvenience.
 Your image creation of $image_prettyname has been delayed
 due to a system issue that prevented the automatic completion.

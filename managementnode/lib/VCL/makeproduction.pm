@@ -207,7 +207,6 @@ sub notify_imagerevision_to_production {
 	my $image_prettyname                = $self->data->get_image_prettyname();
 	my $imagerevision_id                = $self->data->get_imagerevision_id();
 	my $imagerevision_revision          = $self->data->get_imagerevision_revision();
-	my $user_preferredname              = $self->data->get_user_preferred_name();
 	my $user_affiliation_helpaddress    = $self->data->get_user_affiliation_helpaddress();
 	my $user_email                      = $self->data->get_user_email();
 	
@@ -217,7 +216,7 @@ sub notify_imagerevision_to_production {
 	
 	# Assemble the message body
 	my $body = <<"END";
-$user_preferredname,
+
 Revision $imagerevision_revision of your VCL '$image_prettyname' image has been made production.  Any new reservations for the image will receive this revision by default.
 
 If you have any questions, please contact $user_affiliation_helpaddress.

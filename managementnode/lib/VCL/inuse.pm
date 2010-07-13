@@ -569,7 +569,6 @@ sub _notify_user_endtime {
 	# Store hash variables into local variables
 	my $request_id                 = $request_data->{id};
 	my $reservation_id             = $request_data->{RESERVATIONID};
-	my $user_preferredname         = $request_data->{user}{preferredname};
 	my $user_email                 = $request_data->{user}{email};
 	my $user_emailnotices          = $request_data->{user}{emailnotices};
 	my $user_im_name               = $request_data->{user}{IMtype}{name};
@@ -584,7 +583,7 @@ sub _notify_user_endtime {
 	my $computer_shortname         = $request_data->{reservation}{$reservation_id}{computer}{SHORTNAME};
 
 	my $message = <<"EOF";
-$user_preferredname,
+
 You have $notice_interval until the end of your reservation for image $image_prettyname.
 
 Reservation extensions are available if the machine you are on does not have a reservation immediately following.
@@ -655,7 +654,6 @@ sub _notify_user_disconnect {
 	# Store hash variables into local variables
 	my $request_id                 = $request_data->{id};
 	my $reservation_id             = $request_data->{RESERVATIONID};
-	my $user_preferredname         = $request_data->{user}{preferredname};
 	my $user_email                 = $request_data->{user}{email};
 	my $user_emailnotices          = $request_data->{user}{emailnotices};
 	my $user_im_name               = $request_data->{user}{IMtype}{name};
@@ -682,7 +680,7 @@ sub _notify_user_disconnect {
 	}
 
 	my $message = <<"EOF";
-$user_preferredname,
+
 You have $disconnect_string until the end of your reservation for image $image_prettyname, please save all work and prepare to exit.
 
 Reservation extensions are available if the machine you are on does not have a reservation immediately following.
@@ -706,7 +704,7 @@ To disable email notices
 ******************************************************************
 EOF
 
-	my $short_message = "$user_preferredname, You have $disconnect_string until the end of your reservation. Please save all work and prepare to log off.";
+	my $short_message = "You have $disconnect_string until the end of your reservation. Please save all work and prepare to log off.";
 
 	my $subject = "VCL -- $disconnect_string until end of reservation";
 
@@ -759,7 +757,6 @@ sub _notify_user_timeout {
 
 	# Store some hash variables into local variables
 	my $reservation_id             = $request_data->{RESERVATIONID};
-	my $user_preferredname         = $request_data->{user}{preferredname};
 	my $user_email                 = $request_data->{user}{email};
 	my $user_emailnotices          = $request_data->{user}{emailnotices};
 	my $user_im_name               = $request_data->{user}{IMtype}{name};
@@ -770,7 +767,7 @@ sub _notify_user_timeout {
 	my $computer_ipaddress         = $request_data->{reservation}{$reservation_id}{computer}{IPaddress};
 
 	my $message = <<"EOF";
-$user_preferredname,
+
 Your reservation has timed out due to inactivity for image $image_prettyname at address $computer_ipaddress.
 
 To make another reservation, please revisit:
@@ -828,7 +825,6 @@ sub _notify_user_request_ended {
 
 	# Store some hash variables into local variables
 	my $reservation_id             = $request_data->{RESERVATIONID};
-	my $user_preferredname         = $request_data->{user}{preferredname};
 	my $user_email                 = $request_data->{user}{email};
 	my $user_emailnotices          = $request_data->{user}{emailnotices};
 	my $user_im_name               = $request_data->{user}{IMtype}{name};
@@ -840,7 +836,7 @@ sub _notify_user_request_ended {
 	my $subject = "VCL -- End of reservation";
 
 	my $message = <<"EOF";
-$user_preferredname,
+
 Your reservation of $image_prettyname has ended. Thank you for using $affiliation_sitewwwaddress.
 
 Regards,

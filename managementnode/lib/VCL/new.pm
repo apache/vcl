@@ -122,7 +122,6 @@ sub process {
 	my $managementnode_hostname         = $self->data->get_management_node_hostname();
 	my $user_unityid                    = $self->data->get_user_login_id();
 	my $user_uid                        = $self->data->get_user_uid();
-	my $user_preferredname              = $self->data->get_user_preferred_name();
 	my $user_affiliation_sitewwwaddress = $self->data->get_user_affiliation_sitewwwaddress();
 	my $user_affiliation_helpaddress    = $self->data->get_user_affiliation_helpaddress();
 	my $user_standalone                 = $self->data->get_user_standalone();
@@ -498,7 +497,6 @@ sub reload_image {
 	my $managementnode_hostname         = $self->data->get_management_node_hostname();
 	my $user_unityid                    = $self->data->get_user_login_id();
 	my $user_uid                        = $self->data->get_user_uid();
-	my $user_preferredname              = $self->data->get_user_preferred_name();
 	my $user_affiliation_sitewwwaddress = $self->data->get_user_affiliation_sitewwwaddress();
 	my $user_affiliation_helpaddress    = $self->data->get_user_affiliation_helpaddress();
 	my $user_standalone                 = $self->data->get_user_standalone();
@@ -745,7 +743,6 @@ sub computer_not_being_used {
 	my $managementnode_hostname         = $self->data->get_management_node_hostname();
 	my $user_unityid                    = $self->data->get_user_login_id();
 	my $user_uid                        = $self->data->get_user_uid();
-	my $user_preferredname              = $self->data->get_user_preferred_name();
 	my $user_affiliation_sitewwwaddress = $self->data->get_user_affiliation_sitewwwaddress();
 	my $user_affiliation_helpaddress    = $self->data->get_user_affiliation_helpaddress();
 	my $user_standalone                 = $self->data->get_user_standalone();
@@ -984,7 +981,6 @@ sub reserve_computer {
 	my $managementnode_hostname         = $self->data->get_management_node_hostname();
 	my $user_unityid                    = $self->data->get_user_login_id();
 	my $user_uid                        = $self->data->get_user_uid();
-	my $user_preferredname              = $self->data->get_user_preferred_name();
 	my $user_affiliation_sitewwwaddress = $self->data->get_user_affiliation_sitewwwaddress();
 	my $user_affiliation_helpaddress    = $self->data->get_user_affiliation_helpaddress();
 	my $user_standalone                 = $self->data->get_user_standalone();
@@ -1077,14 +1073,14 @@ sub reserve_computer {
 		# Assemble the message body
 		if ($request_forimaging) {
 			$mailstring = <<"EOF";
-$user_preferredname,
+
 The resources for your VCL image creation request have been successfully reserved.
 
 EOF
 		}
 		else {
 			$mailstring = <<"EOF";
-$user_preferredname,
+
 The resources for your VCL request have been successfully reserved.
 
 EOF
@@ -1163,7 +1159,7 @@ EOF
 			$subject = "VCL -- $image_prettyname reservation";
 
 			$mailstring = <<"EOF";
-$user_preferredname,
+
 A machine with $image_prettyname has been reserved. Use ssh to connect to $computer_ip_address.
 
 Username: your Unity ID
