@@ -774,16 +774,34 @@ sub daemonize {
 	chdir '/' or die "Can't chdir to /: $!";
 	defined(my $pid = fork) or die "Can't fork $!";
 	exit if $pid;
-	print "Created VCL daemon process: $$\n";
-	setsid or die "Can't start a new session: $!";
-	open STDIN,  '/dev/null'  or die "Can't read /dev/null $!";
-	open STDOUT, ">>$LOGFILE" or die "Can't write $LOGFILE $!";
-	open STDERR, ">>$LOGFILE" or die "Can't write $LOGFILE $!";
-	setsid or die "Can't start a new session: $!";
-	umask 0;
-	open(PIDFILE, ">" . $PIDFILE) or notify($ERRORS{'WARNING'}, $LOGFILE, "unable to open PID file: $PIDFILE, $!");    # so I can kill myself easily
-	print PIDFILE $$;
-	close(PIDFILE);
+	
+	#Create EX lock on lockfile
+        my $subsys_lock = "/var/lock/subsys/$PROCESSNAME";
+        sysopen(LOCKFILE, $subsys_lock, O_RDONLY | O_CREAT ) or die "unable to open lock file: $PIDFILE \n";
+
+        unless(flock(LOCKFILE, LOCK_EX|LOCK_NB)){
+		#write to log file
+                notify($ERRORS{'WARNING'}, $LOGFILE, " An process instance of $PROCESSNAME is already running ");
+		# print to STDERR
+                print STDERR "\nFailed to start.\n\nAn instance of $PROCESSNAME is already running\n\n";
+                exit;
+        }
+
+        umask 0;
+        setsid or die "Can't start a new session: $!";
+
+        # write pid to pidfile
+        open(PIDFILE, ">" . $PIDFILE) or notify($ERRORS{'WARNING'}, $LOGFILE, "unable to open PID file: $PIDFILE, $!");
+        print PIDFILE $$ ;
+        close(PIDFILE);
+
+        #Redirect STDIN,STDOUT,STDERR
+        open STDIN,  '/dev/null'  or die "Can't read /dev/null $!";
+        open STDOUT, ">>$LOGFILE" or die "Can't write $LOGFILE $!";
+        open STDERR, ">>$LOGFILE" or die "Can't write $LOGFILE $!";
+
+        print "Created VCL daemon process: $$\n";
+
 } ## end sub daemonize
 
 #/////////////////////////////////////////////////////////////////////////////
