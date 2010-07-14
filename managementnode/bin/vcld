@@ -50,12 +50,13 @@ use 5.008000;
 
 use strict;
 use warnings;
-use diagnostics;
+#use diagnostics;
 
 use Symbol;
 use POSIX;
 use Getopt::Long;
 use English qw( -no_match_vars );
+use Fcntl qw(:DEFAULT :flock);
 
 use VCL::utils;
 use VCL::DataStructure;
@@ -136,7 +137,10 @@ sub main () {
 
 	# Set environment variables for global management node information
 	$ENV{management_node_id} = $management_node_id;
+	#$ENV{management_node_hostname} = $management_node_hostname;
+	#$ENV{management_node_info} = $info{managementnode};
 	notify($ERRORS{'DEBUG'}, $LOGFILE, "management_node_id environment variable set: $management_node_id");
+	#notify($ERRORS{'DEBUG'}, $LOGFILE, "management_node_hostname environment variable set: $management_node_hostname");
 	
 	# Get the management node checkin interval from the database if defined
 	# Otherwise, the default is 12 seconds
@@ -771,37 +775,37 @@ sub REAPER {
 =cut
 
 sub daemonize {
+	#Create EX lock on lockfile
+	my $subsys_lock = "/var/lock/subsys/$PROCESSNAME";
+	sysopen(LOCKFILE, $subsys_lock, O_RDONLY | O_CREAT ) or die "unable to open lock file: $PIDFILE \n";   
+	unless(flock(LOCKFILE, LOCK_EX|LOCK_NB)){ 
+		notify($ERRORS{'WARNING'}, $LOGFILE, " An process instance of $PROCESSNAME is already running ");
+		print STDOUT "\nFailed to start.\n\nAn instance of $PROCESSNAME is already running\n\n";
+		print STDERR "\nFailed to start.\n\nAn instance of $PROCESSNAME is already running\n\n";
+		exit; 
+	}
+
+
 	chdir '/' or die "Can't chdir to /: $!";
 	defined(my $pid = fork) or die "Can't fork $!";
 	exit if $pid;
+
+
+	umask 0;
+	setsid or die "Can't start a new session: $!";
+
+	# write pid to pidfile
+	open(PIDFILE, ">" . $PIDFILE) or notify($ERRORS{'WARNING'}, $LOGFILE, "unable to open PID file: $PIDFILE, $!");   
+	print PIDFILE $$ ;
+	close(PIDFILE);
 	
-	#Create EX lock on lockfile
-        my $subsys_lock = "/var/lock/subsys/$PROCESSNAME";
-        sysopen(LOCKFILE, $subsys_lock, O_RDONLY | O_CREAT ) or die "unable to open lock file: $PIDFILE \n";
+	#Redirect STDIN,STDOUT,STDERR 
+	open STDIN,  '/dev/null'  or die "Can't read /dev/null $!";
+	open STDOUT, ">>$LOGFILE" or die "Can't write $LOGFILE $!";
+	open STDERR, ">>$LOGFILE" or die "Can't write $LOGFILE $!";
 
-        unless(flock(LOCKFILE, LOCK_EX|LOCK_NB)){
-		#write to log file
-                notify($ERRORS{'WARNING'}, $LOGFILE, " An process instance of $PROCESSNAME is already running ");
-		# print to STDERR
-                print STDERR "\nFailed to start.\n\nAn instance of $PROCESSNAME is already running\n\n";
-                exit;
-        }
-
-        umask 0;
-        setsid or die "Can't start a new session: $!";
-
-        # write pid to pidfile
-        open(PIDFILE, ">" . $PIDFILE) or notify($ERRORS{'WARNING'}, $LOGFILE, "unable to open PID file: $PIDFILE, $!");
-        print PIDFILE $$ ;
-        close(PIDFILE);
-
-        #Redirect STDIN,STDOUT,STDERR
-        open STDIN,  '/dev/null'  or die "Can't read /dev/null $!";
-        open STDOUT, ">>$LOGFILE" or die "Can't write $LOGFILE $!";
-        open STDERR, ">>$LOGFILE" or die "Can't write $LOGFILE $!";
-
-        print "Created VCL daemon process: $$\n";
-
+	print "Created VCL daemon process: $$\n";
+	
 } ## end sub daemonize
 
 #/////////////////////////////////////////////////////////////////////////////
