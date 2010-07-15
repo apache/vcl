@@ -65,7 +65,6 @@ use VCL::DataStructure;
 # Turn on autoflush
 $| = 1;
 
-preplogfile();
 
 # Check if -setup argument was specified
 if ($SETUP_MODE) {
@@ -782,7 +781,7 @@ sub daemonize {
 		notify($ERRORS{'WARNING'}, $LOGFILE, " An process instance of $PROCESSNAME is already running ");
 		print STDOUT "\nFailed to start.\n\nAn instance of $PROCESSNAME is already running\n\n";
 		print STDERR "\nFailed to start.\n\nAn instance of $PROCESSNAME is already running\n\n";
-		exit; 
+		exit(1); 
 	}
 
 
@@ -799,12 +798,14 @@ sub daemonize {
 	print PIDFILE $$ ;
 	close(PIDFILE);
 	
+	preplogfile();
+	print "Created VCL daemon process: $$\n";
+	
 	#Redirect STDIN,STDOUT,STDERR 
 	open STDIN,  '/dev/null'  or die "Can't read /dev/null $!";
 	open STDOUT, ">>$LOGFILE" or die "Can't write $LOGFILE $!";
 	open STDERR, ">>$LOGFILE" or die "Can't write $LOGFILE $!";
 
-	print "Created VCL daemon process: $$\n";
 	
 } ## end sub daemonize
 
