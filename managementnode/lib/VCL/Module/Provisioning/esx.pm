@@ -162,6 +162,8 @@ sub load {
 
 	my $vmhost_username = $self->data->get_vmhost_profile_username();
 	my $vmhost_password = $self->data->get_vmhost_profile_password();
+	my $vmhost_eth0generated = $self->data->get_vmhost_profile_eth0generated();
+	my $vmhost_eth1generated = $self->data->get_vmhost_profile_eth1generated();
 
 	$vmhost_hostname =~ /([-_a-zA-Z0-9]*)(\.?)/;
 	my $vmhost_shortname = $1;
@@ -310,7 +312,7 @@ sub load {
 	push(@vmxfile, "ethernet0.wakeOnPcktRcv = \"false\"\n");
 	push(@vmxfile, "ethernet1.wakeOnPcktRcv = \"false\"\n");
 
-	if ($VMWARE_MAC_ETH0_GENERATED) {
+	if ($vmhost_eth0generated) {
 		# Let vmware host define the MAC addresses
 		notify($ERRORS{'OK'}, 0, "eth0 MAC address set for vmware generated");
 		push(@vmxfile, "ethernet0.addressType = \"generated\"\n");
@@ -321,7 +323,7 @@ sub load {
 		push(@vmxfile, "ethernet0.address = \"$vmclient_eth0MAC\"\n");
 		push(@vmxfile, "ethernet0.addressType = \"static\"\n");
 	}
-	if ($VMWARE_MAC_ETH1_GENERATED) {
+	if (vmhost_eth1generated) {
 		# Let vmware host define the MAC addresses
 		notify($ERRORS{'OK'}, 0, "eth1 MAC address set for vmware generated $vmclient_eth0MAC");
 		push(@vmxfile, "ethernet1.addressType = \"generated\"\n");
@@ -416,7 +418,7 @@ sub load {
 	my $arpstatus  = 0;
 	my $client_ip;
 
-	if ($VMWARE_MAC_ETH0_GENERATED) {
+	if ($vmhost_eth0generated) {
 		# allowing vmware to generate the MAC address
 		# find out what MAC got assigned
 		# find out what IP address is assigned to this MAC
@@ -478,7 +480,7 @@ sub load {
 
 		# Add new entry to /etc/hosts for $computer_shortname
 		`echo -e "$client_ip\t$computer_shortname" >> /etc/hosts`;
-	} ## end if ($VMWARE_MAC_ETH0_GENERATED)
+	} ## end if ($vmhost_eth0generated)
 	else {
 		notify($ERRORS{'OK'}, 0, "IP is known for $computer_shortname");
 	}

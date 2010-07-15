@@ -231,8 +231,6 @@ our @EXPORT = qw(
   $SYSADMIN
   $TOOLS
   $VERBOSE
-  $VMWARE_MAC_ETH0_GENERATED
-  $VMWARE_MAC_ETH1_GENERATED
   $WRTPASS
   $WRTUSER
   $XMLRPC_USER
@@ -255,7 +253,6 @@ INIT {
 	our ($FQDN)     = 0;
 	our ($MYSQL_SSL,       $MYSQL_SSL_CERT);
 	our ($IPCONFIGURATION, $DNSserver, $GATEWAY, $NETMASK, $ETHDEVICE) = 0;
-	our ($VMWARE_MAC_ETH0_GENERATED, $VMWARE_MAC_ETH1_GENERATED);
 	our ($WINDOWS_ROOT_PASSWORD);
    our ($XMLRPC_USER, $XMLRPC_PASS, $XMLRPC_URL);
 
@@ -456,20 +453,7 @@ INIT {
 				$PROCESSNAME = $1;
 			}
 
-			#vmware settings
 
-			#$VMWARE_MAC_ETHO_GENERATED
-			if ($l =~ /^VMWARE_MAC_ETH0_GENERATED=(yes|no)/i) {
-				$VMWARE_MAC_ETH0_GENERATED = 1 if ($1 =~ /yes/i);
-				$VMWARE_MAC_ETH0_GENERATED = 0 if ($1 =~ /no/i);
-			}
-
-			#$VMWARE_MAC_ETH1_GENERATED
-			if ($l =~ /^VMWARE_MAC_ETH1_GENERATED=(yes|no)/i) {
-				$VMWARE_MAC_ETH1_GENERATED = 1 if ($1 =~ /yes/i);
-				$VMWARE_MAC_ETH1_GENERATED = 0 if ($1 =~ /no/i);
-			}
-			
 			if ($l =~ /^windows_root_password=(.*)/i) {
 				$WINDOWS_ROOT_PASSWORD = $1;
 			}
@@ -5346,6 +5330,8 @@ sub get_vmhost_info {
    vmprofile.vmdisk AS vmprofile_vmdisk,
    vmprofile.username AS vmprofile_username,
    vmprofile.password AS vmprofile_password,
+   vmprofile.vmware_mac_eth0_generated AS vmprofile_eth0generated,
+   vmprofile.vmware_mac_eth1_generated AS vmprofile_eth1generated,
 
    vmtype.id AS vmtype_id,
 	vmtype.name AS vmtype_name,
