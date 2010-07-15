@@ -219,7 +219,6 @@ our @EXPORT = qw(
   $jabResource
   $jabServer
   $jabUser
-  $LINUX_IMAGE
   $LOGFILE
   $MYSQL_SSL
   $MYSQL_SSL_CERT
@@ -256,8 +255,7 @@ INIT {
 	our ($FQDN)     = 0;
 	our ($MYSQL_SSL,       $MYSQL_SSL_CERT);
 	our ($IPCONFIGURATION, $DNSserver, $GATEWAY, $NETMASK, $ETHDEVICE) = 0;
-	our ($LINUX_IMAGE);
-	our ($VMWARETYPE, $VMWARE_DISK,$VMWARE_MAC_ETH0_GENERATED, $VMWARE_MAC_ETH1_GENERATED);
+	our ($VMWARETYPE, $VMWARE_MAC_ETH0_GENERATED, $VMWARE_MAC_ETH1_GENERATED);
 	our ($WINDOWS_ROOT_PASSWORD);
    our ($XMLRPC_USER, $XMLRPC_PASS, $XMLRPC_URL);
 
@@ -458,17 +456,7 @@ INIT {
 				$PROCESSNAME = $1;
 			}
 
-			#xcat linux image path
-			# linux kernal 2.4 - we had to modify xcat to load from seperate install tree.
-			if ($l =~ /^LINUXIMAGEid=(image|linux_image)/) {
-				$LINUX_IMAGE = $1;
-			}
-
 			#vmware settings
-			# localdisk
-			if ($l =~ /^VMWARE_DISK=(localdisk|networkdisk)/) {
-				$VMWARE_DISK = $1;
-			}
 
 			#$VMWARE_MAC_ETHO_GENERATED
 			if ($l =~ /^VMWARE_MAC_ETH0_GENERATED=(yes|no)/i) {
@@ -539,10 +527,6 @@ INIT {
 		}
 	} ## end elsif ($IPCONFIGURATION eq "static")  [ if (!$IPCONFIGURATION)
 
-	if (!$LINUX_IMAGE) {
-		$LINUX_IMAGE = "image";
-	}
-
 	if ($JABBER) {
 		#jabber is enabled - import required jabber module
 		# todo - check if Jabber module is installed
@@ -577,9 +561,7 @@ our ($LOGFILE, $PIDFILE, $VCLDRPCQUERYKEY);
 our ($SERVER, $DATABASE, $WRTUSER, $WRTPASS);
 our ($MYSQL_SSL,       $MYSQL_SSL_CERT);
 our ($IPCONFIGURATION, $DNSserver, $GATEWAY, $NETMASK, $ETHDEVICE);
-our ($LINUX_IMAGE);
 our ($FQDN);
-our ($VMWARE_DISK);
 our $XCATROOT           = "/opt/xcat";
 our $TOOLS              = "$FindBin::Bin/../tools";
 our $VMWARE_MAC_GENERATED;
