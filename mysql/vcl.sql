@@ -1014,8 +1014,8 @@ CREATE TABLE IF NOT EXISTS `vmprofile` (
   `vmdisk` enum('localdisk','networkdisk') NOT NULL default 'localdisk',
   `username` varchar(80) NULL default NULL,
   `password` varchar(256) NULL default NULL,
-  `vmware_mac_eth0_generated` varchar(3) NOT NULL default 'no',
-  `vmware_mac_eth1_generated` varchar(3) NOT NULL default 'no',
+  `vmware_mac_eth0_generated` tinyint(1) NOT NULL default '0',
+  `vmware_mac_eth1_generated` tinyint(1) NOT NULL default '0',
   PRIMARY KEY  (`id`),
   KEY `vmtypeid` (`vmtypeid`,`imageid`),
   KEY `imageid` (`imageid`)
