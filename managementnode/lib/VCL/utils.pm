@@ -230,7 +230,6 @@ our @EXPORT = qw(
   $SERVER
   $SETUP_MODE
   $SYSADMIN
-  $THROTTLE
   $TOOLS
   $VERBOSE
   $VMWAREREPOSITORY
@@ -258,7 +257,7 @@ INIT {
 	our ($FQDN)     = 0;
 	our ($MYSQL_SSL,       $MYSQL_SSL_CERT);
 	our ($IPCONFIGURATION, $DNSserver, $GATEWAY, $NETMASK, $ETHDEVICE) = 0;
-	our ($LINUX_IMAGE,     $THROTTLE);
+	our ($LINUX_IMAGE);
 	our ($VMWARETYPE, $VMWARE_DISK,$VMWARE_MAC_ETH0_GENERATED, $VMWARE_MAC_ETH1_GENERATED);
 	our ($WINDOWS_ROOT_PASSWORD);
    our ($XMLRPC_USER, $XMLRPC_PASS, $XMLRPC_URL);
@@ -466,11 +465,6 @@ INIT {
 				$LINUX_IMAGE = $1;
 			}
 
-			#throttle
-			if ($l =~ /^THROTTLE=([0-9]*)/) {
-				$THROTTLE = $1;
-			}
-
 			#vmware settings
 			# localdisk
 			if ($l =~ /^VMWARE_DISK=(localdisk|networkdisk)/) {
@@ -513,10 +507,6 @@ INIT {
 	if (!($LOGFILE) && $LOGFILE ne '0') {
 		#set default
 		$LOGFILE = "/var/log/$PROCESSNAME.log";
-	}
-
-	if (!$THROTTLE) {
-		$THROTTLE = 0;
 	}
 
 	if (!$WINDOWS_ROOT_PASSWORD) {
@@ -588,7 +578,7 @@ our ($LOGFILE, $PIDFILE, $VCLDRPCQUERYKEY);
 our ($SERVER, $DATABASE, $WRTUSER, $WRTPASS);
 our ($MYSQL_SSL,       $MYSQL_SSL_CERT);
 our ($IPCONFIGURATION, $DNSserver, $GATEWAY, $NETMASK, $ETHDEVICE);
-our ($LINUX_IMAGE,     $THROTTLE);
+our ($LINUX_IMAGE);
 our ($FQDN);
 our ($VMWARE_DISK);
 our $XCATROOT           = "/opt/xcat";
