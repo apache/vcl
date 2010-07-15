@@ -232,7 +232,6 @@ our @EXPORT = qw(
   $SYSADMIN
   $TOOLS
   $VERBOSE
-  $VMWAREREPOSITORY
   $VMWARE_MAC_ETH0_GENERATED
   $VMWARE_MAC_ETH1_GENERATED
   $WRTPASS
@@ -583,7 +582,6 @@ our ($FQDN);
 our ($VMWARE_DISK);
 our $XCATROOT           = "/opt/xcat";
 our $TOOLS              = "$FindBin::Bin/../tools";
-our $VMWAREREPOSITORY   = "/install/vmware_images";
 our $VMWARE_MAC_GENERATED;
 our $VERBOSE;
 our $CONF_FILE_PATH;
@@ -3430,59 +3428,6 @@ sub getusergroupmembers {
 	return @retarray;
 
 } ## end sub getusergroupmembers
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2  getimagesize
-
- Parameters  : imagename
- Returns     : 0 failure or size of image
- Description : in size of Kilobytes
-
-=cut
-
-sub getimagesize {
-	my $imagename = $_[0];
-	my ($package, $filename, $line, $sub) = caller(0);
-	notify($ERRORS{'WARNING'}, 0, "imagename is not defined") if (!(defined($imagename)));
-
-	if (!(defined($imagename))) {
-		return 0;
-	}
-	my $IMAGEREPOSITORY;
-	if ($imagename =~ /^(win|rh3image)/) {
-		$IMAGEREPOSITORY = "/install/image/x86";
-	}
-	elsif ($imagename =~ /^(rh([0-9])image|fc([0-9])image)/) {
-		$IMAGEREPOSITORY = "/install/$LINUX_IMAGE/x86";
-	}
-	elsif ($imagename =~ /^(vmware)/) {
-		$IMAGEREPOSITORY = "$VMWAREREPOSITORY/$imagename";
-	}
-	else {
-		return 0;
-	}
-
-	#list files in image directory, account for main .gz file and any .gz.00X files
-	if (open(FILELIST, "/bin/ls -s1 $IMAGEREPOSITORY 2>&1 |")) {
-		my @filelist = <FILELIST>;
-		close(FILELIST);
-		my $size = 0;
-		foreach my $f (@filelist) {
-			if ($f =~ /$imagename.gz|vmdk/) {
-				my ($presize, $blah) = split(" ", $f);
-				$size += $presize;
-			}
-		}
-		if ($size == 0) {
-			#strange imagename not found
-			return 0;
-		}
-		return int($size / 1024);
-	} ## end if (open(FILELIST, "/bin/ls -s1 $IMAGEREPOSITORY 2>&1 |"...
-
-	return 0;
-} ## end sub getimagesize
 
 #/////////////////////////////////////////////////////////////////////////////
 

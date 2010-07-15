@@ -149,6 +149,8 @@ sub load {
 	my $vmclient_privateIPaddress = $self->data->get_computer_ip_address;
 	my $vmclient_publicIPaddress  = $self->data->get_computer_private_ip_address;
 	my $vmclient_OSname           = $self->data->get_image_os_name;
+	
+	my $image_repository_path     = $self->_get_image_repository_path();
 
 	# Assemble a consistent prefix for notify messages
 	my $notify_prefix = "req=$request_id, res=$reservation_id:";
@@ -333,13 +335,13 @@ sub load {
 
 				insertloadlog($reservation_id, $vmclient_computerid, "info", "image files do not exist on host server, preparing to copy");
 				my $myvmdkfilesize = 0;
-				if (open(SIZE, "du -k $VMWAREREPOSITORY/$requestedimagename 2>&1 |")) {
+				if (open(SIZE, "du -k $image_repository_path/$requestedimagename 2>&1 |")) {
 					my @du = <SIZE>;
 					close(SIZE);
 					foreach my $d (@du) {
 						if ($d =~ /No such file or directory/) {
 							insertloadlog($reservation_id, $vmclient_computerid, "failed", "could not collect size of local image files");
-							notify($ERRORS{'CRITICAL'}, 0, "problem checking local vm file size on $VMWAREREPOSITORY/$requestedimagename");
+							notify($ERRORS{'CRITICAL'}, 0, "problem checking local vm file size on $image_repository_path/$requestedimagename");
 							close(TMPLOCK);
 							unlink($tmplockfile);
 							return 0;
@@ -348,7 +350,7 @@ sub load {
 							$myvmdkfilesize += $1;
 						}
 					} ## end foreach my $d (@du)
-				} ## end if (open(SIZE, "du -k $VMWAREREPOSITORY/$requestedimagename 2>&1 |"...
+				} ## end if (open(SIZE, "du -k $image_repository_path/$requestedimagename 2>&1 |"...
 
 				notify($ERRORS{'DEBUG'}, 0, "file size $myvmdkfilesize of $requestedimagename");
 				notify($ERRORS{'OK'},    0, "checking space on $hostnode $vmhost_vmpath");
@@ -457,7 +459,7 @@ sub load {
 				}    # start foreach df -k
 				if ($vmprofile_vmdisk eq "localdisk") {
 					notify($ERRORS{'OK'}, 0, "copying base image files $requestedimagename to $hostnode");
-					if (run_scp_command("$VMWAREREPOSITORY/$requestedimagename", "$hostnode:\"$datastorepath/$mybasedirname\"", $management_node_keys)) {
+					if (run_scp_command("$image_repository_path/$requestedimagename", "$hostnode:\"$datastorepath/$mybasedirname\"", $management_node_keys)) {
 						#recheck host server for files - the  scp output is not being captured
 						undef @sshcmd;
 						@sshcmd = run_ssh_command($hostnode, $management_node_keys, "ls -1 $datastorepath", "root");
@@ -476,7 +478,7 @@ sub load {
 							}
 						} ## end foreach my $l (@{$sshcmd[1]})
 
-					} ## end if (run_scp_command("$VMWAREREPOSITORY/$requestedimagename"...
+					} ## end if (run_scp_command("$image_repository_path/$requestedimagename"...
 					else {
 						notify($ERRORS{'CRITICAL'}, 0, "problems scp vm files to $hostnode $!");
 						close(TMPLOCK);
@@ -620,7 +622,7 @@ sub load {
 
 	my $listedadapter = 0;
 	#scan vmdk file
-	if (open(RE, "grep adapterType $VMWAREREPOSITORY/$requestedimagename/$requestedimagename.vmdk 2>&1 |")) {
+	if (open(RE, "grep adapterType $image_repository_path/$requestedimagename/$requestedimagename.vmdk 2>&1 |")) {
 		my @LIST = <RE>;
 		close(RE);
 		foreach my $a (@LIST) {
@@ -629,7 +631,7 @@ sub load {
 				notify($ERRORS{'OK'}, 0, "listedadapter= $1 ");
 			}
 		}
-	} ## end if (open(RE, "grep adapterType $VMWAREREPOSITORY/$requestedimagename/$requestedimagename.vmdk 2>&1 |"...
+	} ## end if (open(RE, "grep adapterType $image_repository_path/$requestedimagename/$requestedimagename.vmdk 2>&1 |"...
 
 	if ($listedadapter) {
 		$adapter = $listedadapter;
@@ -1005,6 +1007,8 @@ sub capture {
 	my $vmhost_hostname         = $self->data->get_vmhost_hostname;
 	my $host_type               = $self->data->get_vmhost_type;
 	my $vmhost_imagename        = $self->data->get_vmhost_image_name;
+	
+	my $image_repository_path   = $self->_get_image_repository_path();
 
 	my ( $hostnodename);
 	if ($host_type eq "blade") {
@@ -1078,29 +1082,29 @@ sub capture {
 	# Check the VM profile disk type
 	if ($vmprofile_vmdisk eq "localdisk") {
 		#only copy vmdk files back to management node -- into correct directory
-		if (open(MKDIR, "/bin/mkdir $VMWAREREPOSITORY/$image_name 2>&1 |")) {
+		if (open(MKDIR, "/bin/mkdir $image_repository_path/$image_name 2>&1 |")) {
 			my @a = <MKDIR>;
 			close(MKDIR);
 			for my $l (@a) {
 				notify($ERRORS{'OK'}, 0, "possible error @a");
 			}
-			notify($ERRORS{'OK'}, 0, "created tmp directory $VMWAREREPOSITORY/$image_name");
+			notify($ERRORS{'OK'}, 0, "created tmp directory $image_repository_path/$image_name");
 		}
-		if (-d "$VMWAREREPOSITORY/$image_name") {
+		if (-d "$image_repository_path/$image_name") {
 		}
 		else {
-			notify($ERRORS{'CRITICAL'}, 0, "could not create tmp directory $VMWAREREPOSITORY/$image_name for $vmx_directory $!");
+			notify($ERRORS{'CRITICAL'}, 0, "could not create tmp directory $image_repository_path/$image_name for $vmx_directory $!");
 			return 0;
 		}
 		#copy vmdk files
 		# confirm they were copied
-		notify($ERRORS{'OK'}, 0, "attemping to copy vmdk files to $VMWAREREPOSITORY");
-		if (run_scp_command("$hostnodename:\"$vmhost_vmpath/$vmx_directory/*.vmdk\"", "$VMWAREREPOSITORY/$image_name", $management_node_keys)) {
-			if (open(LISTFILES, "ls -s1 $VMWAREREPOSITORY/$image_name |")) {
+		notify($ERRORS{'OK'}, 0, "attemping to copy vmdk files to $image_repository_path");
+		if (run_scp_command("$hostnodename:\"$vmhost_vmpath/$vmx_directory/*.vmdk\"", "$image_repository_path/$image_name", $management_node_keys)) {
+			if (open(LISTFILES, "ls -s1 $image_repository_path/$image_name |")) {
 				my @list = <LISTFILES>;
 				close(LISTFILES);
 				my $numfiles  = @list;
-				my $imagesize = getimagesize($image_name);
+				my $imagesize = $self->get_image_size();
 				if ($imagesize) {
 					notify($ERRORS{'OK'}, 0, "copied $numfiles vmdk files imagesize= $imagesize");
 				}
@@ -1111,7 +1115,7 @@ sub capture {
 				#renaming local vmdk files
 				notify($ERRORS{'OK'}, 0, "begin rename local disk image files to newname");
 				my $oldname;
-				if (open(LISTFILES, "ls -1 $VMWAREREPOSITORY/$image_name 2>&1 |")) {
+				if (open(LISTFILES, "ls -1 $image_repository_path/$image_name 2>&1 |")) {
 					my @list = <LISTFILES>;
 					close(LISTFILES);
 					my $numfiles = @list;
@@ -1127,19 +1131,19 @@ sub capture {
 						chomp($b);
 						if ($b =~ /($oldname)-(s[0-9]*)\.vmdk/) {
 							notify($ERRORS{'OK'}, 0, "moving $b to $image_name-$2.vmdk");
-							if (open(MV, "mv $VMWAREREPOSITORY/$image_name/$b $VMWAREREPOSITORY/$image_name/$image_name-$2.vmdk 2>&1 |")) {
+							if (open(MV, "mv $image_repository_path/$image_name/$b $image_repository_path/$image_name/$image_name-$2.vmdk 2>&1 |")) {
 								my @mv = <MV>;
 								close(MV);
 								if (@mv) {
-									notify($ERRORS{'CRITICAL'}, 0, "could not move $b to $VMWAREREPOSITORY/$image_name/$image_name-$2.vmdk \n@mv");
+									notify($ERRORS{'CRITICAL'}, 0, "could not move $b to $image_repository_path/$image_name/$image_name-$2.vmdk \n@mv");
 									return 0;
 								}
 							}
-							notify($ERRORS{'OK'}, 0, "moved $b $VMWAREREPOSITORY/$image_name/$image_name-$2.vmdk");
+							notify($ERRORS{'OK'}, 0, "moved $b $image_repository_path/$image_name/$image_name-$2.vmdk");
 						} ## end if ($b =~ /($oldname)-(s[0-9]*)\.vmdk/)
 					} ## end foreach my $b (@list)
 
-					if (open(FILE, "$VMWAREREPOSITORY/$image_name/$oldname.vmdk")) {
+					if (open(FILE, "$image_repository_path/$image_name/$oldname.vmdk")) {
 						my @file = <FILE>;
 						close(FILE);
 						for my $l (@file) {
@@ -1151,24 +1155,24 @@ sub capture {
 							}
 						}
 
-						if (open(FILE, ">$VMWAREREPOSITORY/$image_name/$oldname.vmdk")) {
+						if (open(FILE, ">$image_repository_path/$image_name/$oldname.vmdk")) {
 							print FILE @file;
 							close(FILE);
-							if (open(MV, "mv $VMWAREREPOSITORY/$image_name/$oldname.vmdk $VMWAREREPOSITORY/$image_name/$image_name.vmdk 2>&1 |")) {
+							if (open(MV, "mv $image_repository_path/$image_name/$oldname.vmdk $image_repository_path/$image_name/$image_name.vmdk 2>&1 |")) {
 								my @mv = <MV>;
 								close(MV);
 								if (@mv) {
 									notify($ERRORS{'CRITICAL'}, 0, "old $oldname move to new $image_name error: @mv\n");
 								}
-								notify($ERRORS{'OK'}, 0, "moved $VMWAREREPOSITORY/$image_name/$oldname.vmdk $VMWAREREPOSITORY/$image_name/$image_name.vmdk");
+								notify($ERRORS{'OK'}, 0, "moved $image_repository_path/$image_name/$oldname.vmdk $image_repository_path/$image_name/$image_name.vmdk");
 							}
 						}    # write file array back to vmdk file
 					}    #read main vmdk file
 					else {
-						notify($ERRORS{'CRITICAL'}, 0, "could not read $VMWAREREPOSITORY/$image_name/$oldname.vmdk $! ");
+						notify($ERRORS{'CRITICAL'}, 0, "could not read $image_repository_path/$image_name/$oldname.vmdk $! ");
 						return 0;
 					}
-				} ## end if (open(LISTFILES, "ls -1 $VMWAREREPOSITORY/$image_name 2>&1 |"...
+				} ## end if (open(LISTFILES, "ls -1 $image_repository_path/$image_name 2>&1 |"...
 						  #remove dir from vmhost
 						  #everything appears to have worked
 						  #remove image files from vmhost
@@ -1182,13 +1186,13 @@ sub capture {
 				#set file premissions on images to 644
 				# to allow for other management nodes to fetch image if neccessary
 				# useful in a large distributed framework
-				if (open(CHMOD, "/bin/chmod -R 644 $VMWAREREPOSITORY/$image_name/\*.vmdk 2>&1 |")) {
+				if (open(CHMOD, "/bin/chmod -R 644 $image_repository_path/$image_name/\*.vmdk 2>&1 |")) {
 					close(CHMOD);
-					notify($ERRORS{'DEBUG'}, 0, "$notify_prefix recursive update file permssions 644 on $VMWAREREPOSITORY/$image_name");
+					notify($ERRORS{'DEBUG'}, 0, "$notify_prefix recursive update file permssions 644 on $image_repository_path/$image_name");
 				}
 
 				return 1;
-			} ## end if (open(LISTFILES, "ls -s1 $VMWAREREPOSITORY/$image_name |"...
+			} ## end if (open(LISTFILES, "ls -s1 $image_repository_path/$image_name |"...
 		} ## end if (run_scp_command("$hostnodename:\"$vmhost_vmpath/$vmx_directory/*.vmdk\""...
 		else {
 			notify($ERRORS{'CRITICAL'}, 0, "failed to copy .vmdk files to image repository");
@@ -1201,7 +1205,7 @@ sub capture {
 
 		#FIXME - making local directory in our repository so does_image_exists succeeds
 		#			does_image_exists needs to figure out the datastores and search them
-		if (mkdir("$VMWAREREPOSITORY/$image_name")) {
+		if (mkdir("$image_repository_path/$image_name")) {
 			notify($ERRORS{'OK'}, 0, "creating local dir for $image_name");
 		}
 
@@ -1585,12 +1589,14 @@ sub get_image_size {
 
 	# Either use a passed parameter as the image name or use the one stored in this object's DataStructure
 	my $image_name = shift;
+	my $image_repository_path = $self->_get_image_repository_path();
 	$image_name = $self->data->get_image_name() if !$image_name;
 	if (!$image_name) {
 		notify($ERRORS{'CRITICAL'}, 0, "image name could not be determined");
 		return 0;
 	}
 	notify($ERRORS{'DEBUG'}, 0, "getting size of image: $image_name");
+	
 
 	#my $imagename = $_[0];
 	#my ($package, $filename, $line, $sub) = caller(0);
@@ -1599,7 +1605,7 @@ sub get_image_size {
 	#if (!(defined($imagename))) {
 	#	return 0;
 	#}
-	my $IMAGEREPOSITORY = "$VMWAREREPOSITORY/$image_name";
+	my $IMAGEREPOSITORY = "$image_repository_path/$image_name";
 
 	#list files in image directory, account for main .gz file and any .gz.00X files
 	if (open(FILELIST, "/bin/ls -s1 $IMAGEREPOSITORY 2>&1 |")) {

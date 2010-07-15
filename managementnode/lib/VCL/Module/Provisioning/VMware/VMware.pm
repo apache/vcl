@@ -1874,12 +1874,7 @@ sub get_repository_vmdk_base_directory_path {
 	return $self->{repository_base_directory} if (defined $self->{repository_base_directory});
 	
 	my $repository_vmdk_base_directory;
-	# Return $VMWAREREPOSITORY if it's set (comes from VMWARE_IMAGEREPOSITORY value in vcld.conf)
-	if ($VMWAREREPOSITORY) {
-		$repository_vmdk_base_directory = $VMWAREREPOSITORY;
-		notify($ERRORS{'DEBUG'}, 0, "using VMWARE_IMAGEREPOSITORY value from vcld.conf: $repository_vmdk_base_directory");
-	}
-	elsif (my $management_node_install_path = $self->data->get_management_node_install_path()) {
+	if (my $management_node_install_path = $self->data->get_management_node_install_path()) {
 		$repository_vmdk_base_directory = "$management_node_install_path/vmware_images";
 		notify($ERRORS{'DEBUG'}, 0, "using managementnode installpath database value: $repository_vmdk_base_directory");
 	}
