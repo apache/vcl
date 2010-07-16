@@ -213,7 +213,6 @@ our @EXPORT = qw(
   $ETHDEVICE
   $GATEWAY
   $FQDN
-  $IPCONFIGURATION
   $jabPass
   $jabPort
   $jabResource
@@ -252,7 +251,6 @@ INIT {
 	our ($XCATROOT) = 0;
 	our ($FQDN)     = 0;
 	our ($MYSQL_SSL,       $MYSQL_SSL_CERT);
-	our ($IPCONFIGURATION, $DNSserver, $GATEWAY, $NETMASK, $ETHDEVICE) = 0;
 	our ($WINDOWS_ROOT_PASSWORD);
    our ($XMLRPC_USER, $XMLRPC_PASS, $XMLRPC_URL);
 
@@ -391,23 +389,6 @@ INIT {
 				$MYSQL_SSL_CERT = $1;
 			}
 
-			#ipconfiguration
-			if ($l =~ /^ipconfiguration=(static|manualDHCP|dynamicDHCP)/) {
-				$IPCONFIGURATION = $1;
-			}
-
-			if ($l =~ /^DNSserver=([,.0-9]*)/) {
-				$DNSserver = $1;
-			}
-			if ($l =~ /^GATEWAY=([.0-9]*)/) {
-				$GATEWAY = $1;
-			}
-			if ($l =~ /^NETMASK=([.0-9]*)/) {
-				$NETMASK = $1;
-			}
-			if ($l =~ /^ETHDEVICE=(eth[0-9])/) {
-				$ETHDEVICE = $1;
-			}
 			#Sysadmin list
 			if ($l =~ /^sysadmin=([,-.\@a-zA-Z0-9_]*)/) {
 				$SYSADMIN = $1;
@@ -494,22 +475,6 @@ INIT {
 	if (!($RETURNPATH)){
 		$RETURNPATH="";
 	}
-	if (!$IPCONFIGURATION) {
-		#default
-		$IPCONFIGURATION = "manualDHCP";
-	}
-	elsif ($IPCONFIGURATION eq "static") {
-		#check for dependiencies
-		if (!$DNSserver) {
-			print STDOUT "pre-execution: ipconfiguration is $IPCONFIGURATION dnsserver setting is missing in configuration file\n";
-		}
-		if (!$GATEWAY) {
-			print STDOUT "pre-execution: ipconfiguration is $IPCONFIGURATION gateway setting is missing in configuration file\n";
-		}
-		if (!$NETMASK) {
-			print STDOUT "pre-execution: ipconfiguration is $IPCONFIGURATION netmask setting is missing in configuration file\n";
-		}
-	} ## end elsif ($IPCONFIGURATION eq "static")  [ if (!$IPCONFIGURATION)
 
 	if ($JABBER) {
 		#jabber is enabled - import required jabber module
@@ -520,15 +485,6 @@ INIT {
 		import Net::Jabber qw(client);
 	}
 
-	# Check ETH0 Generated
-	if(!defined($VMWARE_MAC_ETH0_GENERATED)){
-		$VMWARE_MAC_ETH0_GENERATED = 0;
-	}
-	# Check ETH1 Generated
-	if(!defined($VMWARE_MAC_ETH1_GENERATED)){
-		$VMWARE_MAC_ETH1_GENERATED = 0;
-	}
-	
 	# Can't be both daemon mode and setup mode, use setup if both are set
 	$DAEMON_MODE = 0 if ($DAEMON_MODE && $SETUP_MODE);
 
@@ -544,7 +500,6 @@ our ($vcldquerykey,  $SYSADMIN, $SHARED_MAILBOX, $DEFAULTURL, $DEFAULTHELPEMAIL,
 our ($LOGFILE, $PIDFILE, $VCLDRPCQUERYKEY);
 our ($SERVER, $DATABASE, $WRTUSER, $WRTPASS);
 our ($MYSQL_SSL,       $MYSQL_SSL_CERT);
-our ($IPCONFIGURATION, $DNSserver, $GATEWAY, $NETMASK, $ETHDEVICE);
 our ($FQDN);
 our $XCATROOT           = "/opt/xcat";
 our $TOOLS              = "$FindBin::Bin/../tools";
@@ -1318,6 +1273,10 @@ sub setstaticaddress {
 	notify($ERRORS{'OK'},       0, "nodename not set")  if (!defined($node));
 	notify($ERRORS{'OK'},       0, "osname not set")    if (!defined($osname));
 	notify($ERRORS{'CRITICAL'}, 0, "IPaddress not set") if (!defined($IPaddress));
+
+	my $subnetmask = $ENV{management_node_info}{PUBLIC_SUBNET_MASK};
+	my $default_gateway = $ENV{management_node_info}{PUBLIC_DEFAULT_GATEWAY}; 
+
 	#collect private address -- read hosts file only useful if running
 	# xcat setup and private addresses are listsed in the local
 	# /etc/hosts file
@@ -1352,7 +1311,7 @@ sub setstaticaddress {
 		push(@eth1file, "DEVICE=eth1\n");
 		push(@eth1file, "BOOTPROTO=static\n");
 		push(@eth1file, "IPADDR=$IPaddress\n");
-		push(@eth1file, "NETMASK=$NETMASK\n");
+		push(@eth1file, "NETMASK=$subnetmask\n");
 		push(@eth1file, "STARTMODE=onboot\n");
 		push(@eth1file, "ONBOOT=yes\n");
 
@@ -1421,15 +1380,15 @@ sub setstaticaddress {
 
 		notify($ERRORS{'OK'}, 0, "Setting default route");
 		undef @sshcmd;
-		@sshcmd = run_ssh_command($node, $identity, "/sbin/route add default gw $GATEWAY metric 0 $ETHDEVICE", "root");
+		@sshcmd = run_ssh_command($node, $identity, "/sbin/route add default gw $default_gateway metric 0 $ETHDEVICE", "root");
 		#should be empty
 		foreach my $l (@{$sshcmd[1]}) {
 			if ($l =~ /Usage:/) {
 				#potential problem
-				notify($ERRORS{'OK'}, 0, "possible problem with route add default gw $GATEWAY metric 0 $ETHDEVICE");
+				notify($ERRORS{'OK'}, 0, "possible problem with route add default gw $default_gateway metric 0 $ETHDEVICE");
 			}
 			if ($l =~ /No such process/) {
-				notify($ERRORS{'CRITICAL'}, 0, "problem with $node $l add default gw $GATEWAY metric 0 $ETHDEVICE ");
+				notify($ERRORS{'CRITICAL'}, 0, "problem with $node $l add default gw $default_gateway metric 0 $ETHDEVICE ");
 				return 0;
 			}
 		} ## end foreach my $l (@{$sshcmd[1]})
@@ -6204,11 +6163,12 @@ AND managementnode.id != $management_node_id
 	$management_node_info->{OSNAME} = $os_name;
 	
 	# Add the public IP address configuration variables
-	$management_node_info->{PUBLIC_IP_CONFIGURATION} = $IPCONFIGURATION;
-	$management_node_info->{PUBLIC_SUBNET_MASK} = $NETMASK;
-	$management_node_info->{PUBLIC_DEFAULT_GATEWAY} = $GATEWAY;
-	$management_node_info->{PUBLIC_DNS_SERVER} = $DNSserver;
+	$management_node_info->{PUBLIC_IP_CONFIGURATION} = $management_node_info->{publicIPconfiguration};
+	$management_node_info->{PUBLIC_SUBNET_MASK} = $management_node_info->{publicSubnetMmask};
+	$management_node_info->{PUBLIC_DEFAULT_GATEWAY} = $management_node_info->{publicDefaultGateway};
+	$management_node_info->{PUBLIC_DNS_SERVER} = $management_node_info->{publicDNSserver};
 
+	notify($ERRORS{'DEBUG'}, 0, "management node info $management_node_info->{PUBLIC_IP_CONFIGURATION}");
 	notify($ERRORS{'DEBUG'}, 0, "management node info retrieved from database for $shortname");
 	return $management_node_info;
 } ## end sub get_management_node_info

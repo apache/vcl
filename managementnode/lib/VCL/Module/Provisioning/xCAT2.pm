@@ -162,6 +162,7 @@ sub load {
 	my $computer_ip_address   = $self->data->get_computer_ip_address();
 	my $computer_private_ip_address   = $self->data->get_computer_private_ip_address();
 	my $image_os_install_type = $self->data->get_image_os_install_type();
+	my $ip_configuration         = $self->data->get_management_node_public_ip_configuration();
 
 	notify($ERRORS{'OK'}, 0, "nodename not set") if (!defined($computer_node_name));
 	notify($ERRORS{'OK'}, 0, "imagename not set") if (!defined($image_name));
@@ -744,11 +745,11 @@ sub load {
 
 
 	# IP configuration
-	if ($IPCONFIGURATION ne "manualDHCP") {
+	if ($ip_configuration ne "manualDHCP") {
 		insertloadlog($reservation_id, $computer_id, "info", "detected change required in IP address configuration on node");
 
 		#not default setting
-		if ($IPCONFIGURATION eq "dynamicDHCP") {
+		if ($ip_configuration eq "dynamicDHCP") {
 			my $assignedIPaddress = getdynamicaddress($computer_node_name, $image_os_name, $image_os_type);
 			if ($assignedIPaddress) {
 
@@ -768,8 +769,8 @@ sub load {
 				insertloadlog($reservation_id, $computer_id, "dynamicDHCPaddress", "FAILED to collected dynamicDHCP address failing reservation");
 				return 0;
 			}
-		} ## end if ($IPCONFIGURATION eq "dynamicDHCP")
-		elsif ($IPCONFIGURATION eq "static") {
+		} ## end if ($ip_configuration eq "dynamicDHCP")
+		elsif ($ip_configuration eq "static") {
 			insertloadlog($reservation_id, $computer_id, "info", "setting staticIPaddress");
 
 			if ($self->os->can("set_static_public_address") && $self->os->set_static_public_address()) {
@@ -784,8 +785,8 @@ sub load {
 				insertloadlog($reservation_id, $computer_id, "staticIPaddress", "failed to set static IP address on public interface");
 				return 0;
 			}
-		} ## end elsif ($IPCONFIGURATION eq "static")  [ if ($IPCONFIGURATION eq "dynamicDHCP")
-	} ## end if ($IPCONFIGURATION ne "manualDHCP")
+		} ## end elsif ($ip_configuration eq "static")  [ if ($ip_configuration eq "dynamicDHCP")
+	} ## end if ($ip_configuration ne "manualDHCP")
 
 	return 1;
 } ## end sub load

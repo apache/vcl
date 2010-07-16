@@ -164,6 +164,7 @@ sub load {
 	my $vmhost_password = $self->data->get_vmhost_profile_password();
 	my $vmhost_eth0generated = $self->data->get_vmhost_profile_eth0generated();
 	my $vmhost_eth1generated = $self->data->get_vmhost_profile_eth1generated();
+	my $ip_configuration         = $self->data->get_management_node_public_ip_configuration();
 
 	$vmhost_hostname =~ /([-_a-zA-Z0-9]*)(\.?)/;
 	my $vmhost_shortname = $1;
@@ -501,9 +502,9 @@ sub load {
 	}
 
 	# Set IP info
-	if ($IPCONFIGURATION ne "manualDHCP") {
+	if ($ip_configuration ne "manualDHCP") {
 		#not default setting
-		if ($IPCONFIGURATION eq "dynamicDHCP") {
+		if ($ip_configuration eq "dynamicDHCP") {
 			insertloadlog($reservation_id, $vmclient_computerid, "dynamicDHCPaddress", "collecting dynamic IP address for node");
 			notify($ERRORS{'DEBUG'}, 0, "Attempting to query vmclient for its public IP...");
 			my $assignedIPaddress = getdynamicaddress($computer_shortname, $vmclient_OSname, $image_os_type);
@@ -523,8 +524,8 @@ sub load {
 				insertloadlog($reservation_id, $vmclient_computerid, "failed", "could not collect dynamic IP address for node");
 				return 0;
 			}
-		} ## end if ($IPCONFIGURATION eq "dynamicDHCP")
-		elsif ($IPCONFIGURATION eq "static") {
+		} ## end if ($ip_configuration eq "dynamicDHCP")
+		elsif ($ip_configuration eq "static") {
 			notify($ERRORS{'CRITICAL'}, 0, "STATIC ASSIGNMENT NOT SUPPORTED. See vcld.conf");
 			return 0;
 			#insertloadlog($reservation_id, $vmclient_computerid, "staticIPaddress", "setting static IP address for node");
@@ -532,7 +533,7 @@ sub load {
 			#	# good set static address
 			#}
 		}
-	} ## end if ($IPCONFIGURATION ne "manualDHCP")
+	} ## end if ($ip_configuration ne "manualDHCP")
 
 	# Perform post load tasks
 

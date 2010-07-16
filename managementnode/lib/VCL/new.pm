@@ -988,6 +988,7 @@ sub reserve_computer {
 	my $user_emailnotices               = $self->data->get_user_emailnotices();
 	my $user_imtype_name                = $self->data->get_user_imtype_name();
 	my $user_im_id                      = $self->data->get_user_im_id();
+	my $ip_configuration         = $self->data->get_management_node_public_ip_configuration();
 
 	notify($ERRORS{'OK'}, 0, "user_standalone=$user_standalone, image OS type=$image_os_type");
 
@@ -1002,7 +1003,7 @@ sub reserve_computer {
 
 	if ($computer_type =~ /blade|virtualmachine/) {
 		# If dynamic DHCP is used, update the public IP address in the computer table
-		if ($IPCONFIGURATION eq "dynamicDHCP") {
+		if ($ip_configuration eq "dynamicDHCP") {
 			$computer_ip_address = getdynamicaddress($computer_short_name, $image_os_name, $image_os_type);
 			if ($computer_ip_address) {
 				notify($ERRORS{'DEBUG'}, 0, "retrieved dynamic DHCP IP address from $computer_ip_address: $computer_ip_address");

@@ -125,6 +125,7 @@ sub pre_capture {
 	my $user_unityid             = $self->data->get_user_login_id();
 	my $managementnode_shortname = $self->data->get_management_node_short_name();
 	my $computer_private_ip      = $self->data->get_computer_private_ip_address();
+	my $ip_configuration 	     = $self->data->get_management_node_public_ip_configuration();
 
 	notify($ERRORS{'OK'}, 0, "beginning Linux-specific image capture preparation tasks: $image_name on $computer_short_name");
 
@@ -150,7 +151,7 @@ sub pre_capture {
 		notify($ERRORS{'WARNING'}, 0, "unable to clear known identity keys");
 	}
 
-	if ($IPCONFIGURATION eq "static") {
+	if ($ip_configuration eq "static") {
 		#so we don't have conflicts we should set the public adapter back to dhcp
 		# reset ifcfg-eth1 back to dhcp
 		# when boot strap it will be set to dhcp
@@ -174,7 +175,7 @@ sub pre_capture {
 		}
 		if (unlink($tmpfile)) {
 		}
-	} ## end if ($IPCONFIGURATION eq "static")
+	} ## end if ($ip_configuration eq "static")
 
 	#Write /etc/rc.local script
 	if(!$self->generate_rc_local()){

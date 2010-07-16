@@ -92,6 +92,7 @@ sub capture_prepare {
 	my $user_unityid             = $self->data->get_user_login_id();
 	my $managementnode_shortname = $self->data->get_management_node_short_name();
 	my $computer_private_ip      = $self->data->get_computer_private_ip_address();
+	my $ip_configuration = $self->data->get_management_node_public_ip_configuration();
 
 	notify($ERRORS{'OK'}, 0, "beginning Ubuntu-specific image capture preparation tasks: $image_name on $computer_short_name");
 
@@ -101,7 +102,7 @@ sub capture_prepare {
 	if ($self->delete_user()) {
 		notify($ERRORS{'OK'}, 0, "$user_unityid deleted from $computer_node_name");
 	}
-	if ($IPCONFIGURATION eq "static") {
+	if ($ip_configuration eq "static") {
 		#so we don't have conflicts we should set the public adapter back to dhcp
 		# reset ifcfg-eth1 back to dhcp
 		# when boot strap it will be set to dhcp
@@ -125,7 +126,7 @@ sub capture_prepare {
 		}
 		if (unlink($tmpfile)) {
 		}
-	} ## end if ($IPCONFIGURATION eq "static")
+	} ## end if ($ip_configuration eq "static")
 
 	notify($ERRORS{'OK'}, 0, "returning 1");
 	return 1;

@@ -151,6 +151,8 @@ sub load {
 	my $vmclient_OSname           = $self->data->get_image_os_name;
 	
 	my $image_repository_path     = $self->_get_image_repository_path();
+	
+	my $ip_configuration         = $self->data->get_management_node_public_ip_configuration();
 
 	# Assemble a consistent prefix for notify messages
 	my $notify_prefix = "req=$request_id, res=$reservation_id:";
@@ -912,9 +914,9 @@ sub load {
 	insertloadlog($reservation_id, $vmclient_computerid, "info", "starting post configurations on node");
 	
 	#ipconfiguration
-	if ($IPCONFIGURATION ne "manualDHCP") {
+	if ($ip_configuration ne "manualDHCP") {
 		#not default setting
-		if ($IPCONFIGURATION eq "dynamicDHCP") {
+		if ($ip_configuration eq "dynamicDHCP") {
 			insertloadlog($reservation_id, $vmclient_computerid, "dynamicDHCPaddress", "collecting dynamic IP address for node");
 			my $assignedIPaddress = getdynamicaddress($computer_shortname, $vmclient_OSname, $image_os_type);
 			if ($assignedIPaddress) {
@@ -932,8 +934,8 @@ sub load {
 				insertloadlog($reservation_id, $vmclient_computerid, "failed", "could not collect dynamic IP address for node");
 				return 0;
 			}
-		} ## end if ($IPCONFIGURATION eq "dynamicDHCP")
-		elsif ($IPCONFIGURATION eq "static") {
+		} ## end if ($ip_configuration eq "dynamicDHCP")
+		elsif ($ip_configuration eq "static") {
 			insertloadlog($reservation_id, $vmclient_computerid, "staticIPaddress", "setting static IP address for node");
 			if ($self->os->can("set_static_public_address") && $self->os->set_static_public_address()) {
 				notify($ERRORS{'DEBUG'}, 0, "set static public address using OS module's set_static_public_address() method");
@@ -948,7 +950,7 @@ sub load {
 				return 0;
 			}
 		}
-	} ## end if ($IPCONFIGURATION ne "manualDHCP")
+	} ## end if ($ip_configuration ne "manualDHCP")
 	    #
 	insertloadlog($reservation_id, $vmclient_computerid, "vmwareready", "preformed post config on node");
 	return 1;
