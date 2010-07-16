@@ -252,7 +252,7 @@ form {
 .default #content table {
 	background: #ffffff;
 	border-spacing: 1px;
-	margin: 10px 10px 10px 0;
+	/*margin: 10px 10px 10px 0;*/
 	padding: 0;
 }
 

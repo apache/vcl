@@ -28,7 +28,7 @@ $actions["nextmodes"] = array();
 $actions["entry"] = array('main',
                           'newRequest',
                           'viewRequests',
-                          'blockRequest',
+                          'blockAllocations',
                           'userpreferences',
                           'viewGroups',
                           'selectImageOption',
@@ -53,6 +53,7 @@ $actions["entry"] = array('main',
                           'auth',
                           'editVMInfo',
                           'continuationsError',
+                          'requestBlockAllocation',
 );
 
 $noHTMLwrappers = array('sendRDPfile',
@@ -121,6 +122,14 @@ $noHTMLwrappers = array('sendRDPfile',
                         'subimageDialogContent',
                         'AJaddSubimage',
                         'AJremSubimage',
+                        'AJblockAllocationSubmit',
+                        'AJpopulateBlockStore',
+                        'AJdeleteBlockAllocationConfirm',
+                        'AJdeleteBlockAllocationSubmit',
+                        'AJacceptBlockAllocationConfirm',
+                        'AJacceptBlockAllocationSubmit',
+                        'AJrejectBlockAllocationConfirm',
+                        'AJrejectBlockAllocationSubmit',
 );
 
 # main
@@ -165,25 +174,35 @@ $actions['pages']['sendRDPfile'] = "currentReservations";
 #$actions['pages']['connectMindterm'] = "currentReservations";
 #$actions['pages']['connectRDPapplet'] = "currentReservations";
 
-# block reservations
-$actions['mode']['blockRequest'] = "blockRequest"; # entry
-$actions['mode']['newBlockRequest'] = "newBlockRequest";
-$actions['mode']['confirmBlockRequest'] = "confirmBlockRequest";
-$actions['mode']['submitBlockRequest'] = "submitBlockRequest";
-$actions['mode']['selectEditBlockRequest'] = "selectEditBlockRequest";
-$actions['mode']['editBlockRequest'] = "editBlockRequest";
-$actions['mode']['submitDeleteBlockRequest'] = "submitDeleteBlockRequest";
+# block allocations
+$actions['mode']['blockAllocations'] = "blockAllocations"; # entry
+$actions['mode']['newBlockAllocation'] = "blockAllocationForm";
+$actions['mode']['editBlockAllocation'] = "blockAllocationForm";
+$actions['mode']['requestBlockAllocation'] = "blockAllocationForm";
+$actions['mode']['AJblockAllocationSubmit'] = "AJblockAllocationSubmit";
+$actions['mode']['AJdeleteBlockAllocationConfirm'] = "AJdeleteBlockAllocationConfirm";
+$actions['mode']['AJdeleteBlockAllocationSubmit'] = "AJdeleteBlockAllocationSubmit";
+$actions['mode']['AJacceptBlockAllocationConfirm'] = "AJacceptBlockAllocationConfirm";
+$actions['mode']['AJacceptBlockAllocationSubmit'] = "AJacceptBlockAllocationSubmit";
+$actions['mode']['AJrejectBlockAllocationConfirm'] = "AJrejectBlockAllocationConfirm";
+$actions['mode']['AJrejectBlockAllocationSubmit'] = "AJrejectBlockAllocationSubmit";
 $actions['mode']['viewBlockStatus'] = "viewBlockStatus";
 $actions['mode']['AJupdateBlockStatus'] = "AJupdateBlockStatus";
-$actions['pages']['blockRequest'] = "blockReservations";
-$actions['pages']['newBlockRequest'] = "blockReservations";
-$actions['pages']['confirmBlockRequest'] = "blockReservations";
-$actions['pages']['submitBlockRequest'] = "blockReservations";
-$actions['pages']['selectEditBlockRequest'] = "blockReservations";
-$actions['pages']['editBlockRequest'] = "blockReservations";
-$actions['pages']['submitDeleteBlockRequest'] = "blockReservations";
-$actions['pages']['viewBlockStatus'] = "blockReservations";
-$actions['pages']['AJupdateBlockStatus'] = "blockReservations";
+$actions['mode']['AJpopulateBlockStore'] = "AJpopulateBlockStore";
+$actions['pages']['blockAllocations'] = "blockAllocations";
+$actions['pages']['newBlockAllocation'] = "blockAllocations";
+$actions['pages']['editBlockAllocation'] = "blockAllocations";
+$actions['pages']['requestBlockAllocation'] = "blockAllocations";
+$actions['pages']['AJblockAllocationSubmit'] = "blockAllocations";
+$actions['pages']['AJdeleteBlockAllocationConfirm'] = "blockAllocations";
+$actions['pages']['AJdeleteBlockAllocationSubmit'] = "blockAllocations";
+$actions['pages']['AJacceptBlockAllocationConfirm'] = "blockAllocations";
+$actions['pages']['AJacceptBlockAllocationSubmit'] = "blockAllocations";
+$actions['pages']['AJrejectBlockAllocationConfirm'] = "blockAllocations";
+$actions['pages']['AJrejectBlockAllocationSubmit'] = "blockAllocations";
+$actions['pages']['viewBlockStatus'] = "blockAllocations";
+$actions['pages']['AJupdateBlockStatus'] = "blockAllocations";
+$actions['pages']['AJpopulateBlockStore'] = "blockAllocations";
 
 # user preferences
 $actions['mode']['userpreferences'] = "userpreferences"; # entry

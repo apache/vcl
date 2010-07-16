@@ -58,6 +58,7 @@ $ERRORS = array (
 	"111" => "Failed to execute query 2 in showTimeTable",
 	"112" => "Failed to execute query 3 in showTimeTable",
 	"113" => "Failed to get reservation data in getCompLoadLog",
+	"114" => "Failed to get start date in getPendingBlockHTML",
 	"115" => "Failed to execute query 1 in getOSList",
 	"120" => "Failed to execute query 1 in getImages",
 	"125" => "Failed to execute query 1 in isAvailable",

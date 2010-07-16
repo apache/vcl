@@ -35,6 +35,9 @@ define("HOMEURL", "http://vcl.example.org/"); // url to go to when someone click
 date_default_timezone_set('America/New_York'); // set this to your timezone; a list of available values can
                                                // be found at http://php.net/manual/en/timezones.php
 
+$blockNotifyUsers = "adminuser@example.org"; // comma delimited list of email addresses to which
+                                             // a notification will be sent when new block allocation
+                                             // requests are submitted and awaiting approval
 $clickThroughText =
 "<center><h2>Installer Agreement</h2></center>
 <p>As the creator of the VCL image, you are responsible for understanding and 

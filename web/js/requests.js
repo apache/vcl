@@ -25,26 +25,6 @@ function generalReqCB(data, ioArgs) {
 	document.body.style.cursor = 'default';
 }
 
-function updateBlockStatus() {
-	var cont = document.getElementById('updatecont').value;
-	xhrobj = dojo.xhrPost({
-		url: 'index.php',
-		load: updateBlockStatusCB,
-		handleAs: "json-comment-filtered",
-		error: errorHandler,
-		content: {continuation: cont},
-		timeout: 15000
-	});
-}
-
-function updateBlockStatusCB(data, ioArgs) {
-		document.getElementById('available').innerHTML = data.items.available;
-		document.getElementById('reloading').innerHTML = data.items.reloading;
-		document.getElementById('used').innerHTML = data.items.used;
-		document.getElementById('failed').innerHTML = data.items.failed;
-	setTimeout(updateBlockStatus, 30000);
-}
-
 function selectEnvironment() {
 	var imageid = dojo.byId('imagesel').value;
 	if(maxTimes[imageid])

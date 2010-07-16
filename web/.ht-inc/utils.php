@@ -269,6 +269,9 @@ function initGlobals() {
 
 	# include appropriate files
 	switch($actions['pages'][$mode]) {
+		case 'blockAllocations':
+			require_once(".ht-inc/blockallocations.php");
+			break;
 		case 'manageComputers':
 			require_once(".ht-inc/computers.php");
 			break;
@@ -447,7 +450,7 @@ function checkAccess() {
 							return;
 						}
 						break;
-					case 'blockRequest':
+					case 'blockAllocations':
 						if($viewmode != ADMIN_DEVELOPER && $user['memberCurrentBlock'] == 0) {
 							$mode = "";
 							$actionFunction = "main";
@@ -889,22 +892,20 @@ function dbConnect() {
 	global $accthost, $acctusername, $acctpassword, $mysql_link_acct;
 	global $ENABLE_ITECSAUTH;
 
+	if($ENABLE_ITECSAUTH) {
+		// open a connection to mysql server for accounts
+		if($mysql_link_acct = mysql_connect_plus($accthost, $acctusername, $acctpassword))
+			mysql_select_db("accounts", $mysql_link_acct);
+		else
+			$ENABLE_ITECSAUTH = 0;
+	}
+
 	// open a connection to mysql server for vcl
 	if(! $mysql_link_vcl = mysql_connect_plus($vclhost, $vclusername, $vclpassword)) {
 		die("Error connecting to $vclhost.<br>\n");
 	}
 	// select the vcl database
 	mysql_select_db($vcldb, $mysql_link_vcl) or abort(104);
-
-	if($ENABLE_ITECSAUTH) {
-		// open a connection to mysql server for accounts
-		if(! $mysql_link_acct = mysql_connect_plus($accthost, $acctusername, $acctpassword)) {
-			$ENABLE_ITECSAUTH = 0;
-			return;
-		}
-		// select the accounts database
-		mysql_select_db("accounts", $mysql_link_acct);# or safeExit($RC["ERROR"], "Failed to select vcl database");
-	}
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1294,6 +1295,27 @@ function getProductionRevisionid($imageid) {
 	$qh = doQuery($query, 101);
 	$row = mysql_fetch_assoc($qh);
 	return $row['id'];
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn removeNoCheckout($images)
+///
+/// \param $images - an array of images
+///
+/// \return an array of images with the images that have forcheckout == 0
+/// removed
+///
+/// \brief removes any images in $images that have forcheckout == 0
+///
+////////////////////////////////////////////////////////////////////////////////
+function removeNoCheckout($images) {
+	$allimages = getImages();
+	foreach(array_keys($images) as $id) {
+		if(array_key_exists($id, $allimages) && ! $allimages[$id]["forcheckout"])
+			unset($images[$id]);
+	}
+	return $images;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -2922,7 +2944,7 @@ function getUserInfo($id, $noupdate=0) {
 			else
 				$user['login'] = $user['unityid'];
 
-			$blockids = getBlockRequestIDs($user);
+			$blockids = getBlockAllocationIDs($user);
 			$user['memberCurrentBlock'] = count($blockids);
 			return $user;
 		}
@@ -2932,7 +2954,7 @@ function getUserInfo($id, $noupdate=0) {
 	else
 		$user = updateUserData($id, "loginid", $affilid);
 	if(! is_null($user)) {
-		$blockids = getBlockRequestIDs($user);
+		$blockids = getBlockAllocationIDs($user);
 		$user['memberCurrentBlock'] = count($blockids);
 	}
 	return $user;
@@ -3140,17 +3162,17 @@ function getOverallUserPrivs($userid) {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn getBlockRequestIDs($user)
+/// \fn getBlockAllocationIDs($user)
 ///
 /// \param $user - array of user data
 ///
-/// \return array of block request ids that are currently active for $user
+/// \return array of block allocation ids that are currently active for $user
 ///
-/// \brief checks to see if $user is a member of a active block request (active
-/// also includes requests starting within 15 minutes)
+/// \brief checks to see if $user is a member of an active block allocation
+/// (active also includes allocations starting within 15 minutes)
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function getBlockRequestIDs($user) {
+function getBlockAllocationIDs($user) {
 	$groupids = array_keys($user['groups']);
 	if(empty($groupids))
 		return array();
@@ -3159,6 +3181,7 @@ function getBlockRequestIDs($user) {
 	       . "FROM blockRequest r, "
 	       .      "blockTimes t "
 	       . "WHERE t.blockRequestid = r.id AND "
+	       .       "r.status = 'accepted' AND "
 	       .       "t.start <= DATE_ADD(NOW(), INTERVAL 15 MINUTE) AND "
 	       .       "t.end > NOW() AND "
 	       .       "r.groupid IN ($inids)";
@@ -3391,7 +3414,7 @@ function isAvailable($images, $imageid, $start, $end, $os, $requestid=0,
 					array_push($currentids, $row['id']);
 				}
 			}
-			# get computer ids available from block reservations
+			# get computer ids available from block allocations
 			$blockids = getAvailableBlockComputerids($imageid, $start, $end,
 			                                         $allocatedcompids);
 		}
@@ -3415,7 +3438,7 @@ function isAvailable($images, $imageid, $start, $end, $os, $requestid=0,
 		$currentids = array_diff($currentids, $usedComputerids);
 		$blockids = array_diff($blockids, $usedComputerids);
 
-		# remove computers from list that are allocated to block reservations
+		# remove computers from list that are allocated to block allocations
 		if(! count($blockids) && ! $skipRemoveUsedBlock) {
 			$usedBlockCompids = getUsedBlockComputerids($start, $end);
 			$computerids = array_diff($computerids, $usedBlockCompids);
@@ -3609,7 +3632,7 @@ function RPCisAvailable($imageid, $start, $end, $userid) {
 				array_push($currentids, $row['id']);
 			}
 		}
-		# get computer ids available from block reservations
+		# get computer ids available from block allocations
 		$blockids = getAvailableBlockComputerids($imageid, $start, $end,
 		                                         $allocatedcompids);
 
@@ -4792,6 +4815,31 @@ function hour12to24($hour, $meridian) {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
+/// \fn hour24to12($hour) {
+///
+/// \param $hour - hour of day in 24 hour format
+///
+/// \return array with two elements where the first item is the hour and the
+//  second item is either 'am' or 'pm'
+///
+/// \brief converts 24 hour to 12 hour + am/pm
+///
+////////////////////////////////////////////////////////////////////////////////
+function hour24to12($hour) {
+	$m = 'am';
+	if($hour == 0)
+		$hour = 12;
+	elseif($hour == 12)
+		$m = 'pm';
+	elseif($hour > 12) {
+		$m = 'pm';
+		$hour -= 12;
+	}
+	return array($hour, $m);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
 /// \fn getDepartmentName($id)
 ///
 /// \param $id - id for a department in the department table
@@ -5267,18 +5315,18 @@ function getTimeSlots($compids, $end=0, $start=0) {
 				print "end - " . unixToDatetime($times[$id][$count]["end"]) . "<br>\n";
 			}
 			print "-----------------------------------------------------<br>\n";*/
-			$reserveInfo[$id][$current]['blockRequest'] = 0;
+			$reserveInfo[$id][$current]['blockAllocation'] = 0;
 			if(scheduleClosed($id, $current, $schedules[$scheduleids[$id]])) {
 				$reserveInfo[$id][$current]["available"] = 0;
 				$reserveInfo[$id][$current]["scheduleclosed"] = 1;
 				continue;
 			}
-			if($blockid = isBlockRequestTime($id, $current, $blockData)) {
-				$reserveInfo[$id][$current]['blockRequest'] = 1;
-				$reserveInfo[$id][$current]['blockRequestInfo']['groupid'] = $blockData[$blockid]['groupid'];
-				$reserveInfo[$id][$current]['blockRequestInfo']['imageid'] = $blockData[$blockid]['imageid'];
-				$reserveInfo[$id][$current]['blockRequestInfo']['name'] = $blockData[$blockid]['name'];
-				$reserveInfo[$id][$current]['blockRequestInfo']['image'] = $blockData[$blockid]['image'];
+			if($blockid = isBlockAllocationTime($id, $current, $blockData)) {
+				$reserveInfo[$id][$current]['blockAllocation'] = 1;
+				$reserveInfo[$id][$current]['blockInfo']['groupid'] = $blockData[$blockid]['groupid'];
+				$reserveInfo[$id][$current]['blockInfo']['imageid'] = $blockData[$blockid]['imageid'];
+				$reserveInfo[$id][$current]['blockInfo']['name'] = $blockData[$blockid]['name'];
+				$reserveInfo[$id][$current]['blockInfo']['image'] = $blockData[$blockid]['image'];
 			}
 			$reserveInfo[$id][$current]["scheduleclosed"] = 0;
 			//if computer not in $reservedComputerids, it is free
@@ -5306,7 +5354,7 @@ function getTimeSlots($compids, $end=0, $start=0) {
 				if($first) {
 					# set the previous 15 minute block to show as busy to allow for load time
 					$first = 0;
-					$reserveInfo[$id][$current - 900]['blockRequest'] = 0;
+					$reserveInfo[$id][$current - 900]['blockAllocation'] = 0;
 					$reserveInfo[$id][$current - 900]["scheduleclosed"] = 0;
 					$reserveInfo[$id][$current - 900]["available"] = 0;
 					$reserveInfo[$id][$current - 900]["requestid"] = $times[$id][$count]["requestid"];
@@ -5620,20 +5668,20 @@ function showTimeTable($links) {
 				print "          <TD bgcolor=\"#a0a0a0\"><img src=images/gray.jpg ";
 				print "alt=maintenance border=0></TD>\n";
 			}
-			# computer is reserved for a block request that doesn't match this
-			elseif($timeslots[$id][$stamp]['blockRequest'] &&
-			   ($timeslots[$id][$stamp]['blockRequestInfo']['imageid'] != $imageid ||  # this line threw an error at one point, but we couldn't recreate it later
-			   (! in_array($timeslots[$id][$stamp]['blockRequestInfo']['groupid'], array_keys($user['groups'])))) &&
+			# computer is reserved for a block allocation that doesn't match this
+			elseif($timeslots[$id][$stamp]['blockAllocation'] &&
+			   ($timeslots[$id][$stamp]['blockInfo']['imageid'] != $imageid ||  # this line threw an error at one point, but we couldn't recreate it later
+			   (! in_array($timeslots[$id][$stamp]['blockInfo']['groupid'], array_keys($user['groups'])))) &&
 				$timeslots[$id][$stamp]['available']) {
 				if($links) {
 					print "          <TD bgcolor=\"#ff0000\"><img src=images/red.jpg ";
-					print "alt=blockrequest border=0></TD>\n";
+					print "alt=blockallocation border=0></TD>\n";
 				}
 				else {
 					print "          <TD bgcolor=\"#e58304\"><img src=images/orange.jpg ";
-					$title = "Block Request: {$timeslots[$id][$stamp]['blockRequestInfo']['name']}\n"
-					       . "Image: {$timeslots[$id][$stamp]['blockRequestInfo']['image']}";
-					print "alt=blockrequest border=0 title=\"$title\"></TD>\n";
+					$title = "Block Allocation: {$timeslots[$id][$stamp]['blockInfo']['name']}\n"
+					       . "Image: {$timeslots[$id][$stamp]['blockInfo']['image']}";
+					print "alt=blockallocation border=0 title=\"$title\"></TD>\n";
 				}
 			}
 			# computer is free
@@ -6139,11 +6187,11 @@ function sortComputers($a, $b) {
 /// \param $start - starting time in unix timestamp form
 /// \param $end - ending time in unix timestamp form
 /// \param $allocatedcompids - array of computer ids that have already been
-/// allocated while processing this request
+/// allocated while processing this block allocation
 ///
 /// \return an array of computer ids
 ///
-/// \brief gets all computer ids that are part of a block reservation the logged
+/// \brief gets all computer ids that are part of a block allocation the logged
 /// in user is a part of that are available between $start and $end
 ///
 ////////////////////////////////////////////////////////////////////////////////
@@ -6163,6 +6211,7 @@ function getAvailableBlockComputerids($imageid, $start, $end, $allocatedcompids)
 	       .      "state s, "
 	       .      "computer c2 "
 	       . "WHERE r.groupid IN ($groupids) AND "
+	       .       "r.status = 'accepted' AND "
 	       .       "c.computerid = c2.id AND "
 	       .       "c2.currentimageid = $imageid AND "
 	       .       "r.expireTime > NOW() AND "
@@ -6191,7 +6240,7 @@ function getAvailableBlockComputerids($imageid, $start, $end, $allocatedcompids)
 /// \return array of computer ids
 ///
 /// \brief gets a list of all computerids that are allocated to block
-/// reservations during the given times
+/// allocations during the given times
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function getUsedBlockComputerids($start, $end) {
@@ -6220,16 +6269,32 @@ function getUsedBlockComputerids($start, $end) {
 /// \param $end - (optional) end time of blockTimes to get in unix timestamp
 /// form
 ///
-/// \return an array of block request data where each index in a blockTime id
+/// \return an array of block allocation data where each index in a blockTime id
 /// and the value is an array with these elements:\n
-/// \b 
+/// \b blockid - id of block allocation\n
+/// \b name - name of block allocation\n
+/// \b imageid - id of selected image\n
+/// \b image - name of selected image\n
+/// \b numMachines - number of machines allocated\n
+/// \b groupid - user group associated with allocation\n
+/// \b repeating - weekly, monthly, or list\n
+/// \b ownerid - id from user table of the owner\n
+/// \b admingroupid - admin user group associated with allocation\n
+/// \b managementnodeid - id of management node handling allocation\n
+/// \b expireTime - time at which the allocation will be completely finished\n
+/// \b timeid - id of blockTimes entry\n
+/// \b start - dattime for starting time of block time\n
+/// \b end - dattime for ending time of block time\n
+/// \b unixstart - unix timestamp for starting time of block time\n
+/// \b unixend - unix timestamp for ending time of block time\n
+/// \b computerids - array of computer ids allocated for the block time
 ///
-/// \brief builds an array of block request data
+/// \brief builds an array of block allocation data
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function getBlockTimeData($start="", $end="") {
 	$return = array();
-	$query = "SELECT r.id AS requestid, "
+	$query = "SELECT r.id AS blockid, "
 	       .        "r.name, "
 	       .        "r.imageid, "
 	       .        "i.prettyname AS image, "
@@ -6247,6 +6312,7 @@ function getBlockTimeData($start="", $end="") {
 	       .      "blockTimes t, "
 	       .      "image i "
 	       . "WHERE r.id = t.blockRequestid AND "
+	       .       "r.status = 'accepted' AND "
 	       .       "r.imageid = i.id";
 	if(! empty($start))
 		$query .= " AND t.start < '" . unixToDatetime($end) . "'";
@@ -6271,7 +6337,7 @@ function getBlockTimeData($start="", $end="") {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn isBlockRequestTime($compid, $ts, $blockData)
+/// \fn isBlockAllocationTime($compid, $ts, $blockData)
 ///
 /// \param $compid - a computer id
 /// \param $ts - a timestamp
@@ -6283,7 +6349,7 @@ function getBlockTimeData($start="", $end="") {
 /// \brief determines if $ts falls into a block time $compid is part of
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function isBlockRequestTime($compid, $ts, $blockData) {
+function isBlockAllocationTime($compid, $ts, $blockData) {
 	foreach(array_keys($blockData) as $timeid) {
 		if(in_array($compid, $blockData[$timeid]['computerids']) &&
 		   $ts >= $blockData[$timeid]['unixstart'] &&
@@ -8456,9 +8522,9 @@ function getNavMenu($inclogout, $inchome, $homeurl=HOMEURL) {
 		$rt .= "Current Reservations</a></li>\n";
 	}
 	if($viewmode == ADMIN_DEVELOPER || $user['memberCurrentBlock']) {
-		$rt .= menulistLI('blockReservations');
-		$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=blockRequest\">";
-		$rt .= "Block Reservations</a></li>\n";
+		$rt .= menulistLI('blockAllocations');
+		$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=blockAllocations\">";
+		$rt .= "Block Allocations</a></li>\n";
 	}
 	$rt .= menulistLI('userPreferences');
 	$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=userpreferences\">";
@@ -8600,6 +8666,32 @@ function getDojoHTML($refresh) {
 			$dojoRequires = array('dojo.parser',
 			                      'dojox.layout.FloatingPane');
 			break;
+		case 'blockAllocations':
+			$dojoRequires = array('dojo.parser',
+			                      'dijit.form.Button',
+			                      'dijit.form.ValidationTextBox',
+			                      'dijit.form.FilteringSelect',
+			                      'dijit.form.Textarea',
+			                      'dijit.Dialog');
+			break;
+		case 'requestBlockAllocation':
+		case 'newBlockAllocation':
+		case 'editBlockAllocation':
+			$dojoRequires = array('dojo.parser',
+			                      'dijit.layout.StackContainer',
+			                      'dijit.layout.ContentPane',
+			                      'dijit.form.DateTextBox',
+			                      'dijit.form.TimeTextBox',
+			                      'vcldojo.TimeTextBoxEnd',
+			                      'dijit.form.Textarea',
+			                      'dijit.form.FilteringSelect',
+			                      'dijit.form.NumberSpinner',
+			                      'dojox.grid.DataGrid',
+			                      'dojox.string.sprintf',
+			                      'dijit.Tooltip',
+			                      'dijit.Dialog',
+			                      'dojo.data.ItemFileWriteStore');
+			break;
 		case 'viewBlockStatus':
 			$dojoRequires = array('dojo.parser');
 			break;
@@ -8703,25 +8795,6 @@ function getDojoHTML($refresh) {
 			$rt .= "</script>\n";
 			return $rt;
 
-		case "viewBlockStatus":
-			$rt .= "<style type=\"text/css\">\n";
-			$rt .= "   @import \"themes/$skin/css/dojo/$skin.css\";\n";
-			#$rt .= "   @import \"dojo/dojo/resources/dojo.css\";\n";
-			$rt .= "</style>\n";
-			$rt .= "<script type=\"text/javascript\" src=\"js/requests.js\"></script>\n";
-			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
-			$rt .= "   djConfig=\"parseOnLoad: true\">\n";
-			$rt .= "</script>\n";
-			$rt .= "<script type=\"text/javascript\">\n";
-			$rt .= "   dojo.addOnLoad(function() {\n";
-			foreach($dojoRequires as $req) {
-				$rt .= "   dojo.require(\"$req\");\n";
-			}
-			$rt .= "   });\n";
-			$rt .= "   setTimeout(updateBlockStatus, 30000);\n";
-			$rt .= "</script>\n";
-			return $rt;
-
 		case 'newRequest':
 		case 'submitRequest':
 		case 'createSelectImage':
@@ -8743,6 +8816,53 @@ function getDojoHTML($refresh) {
 			if($mode == 'newRequest')
 				$rt .= "     updateWaitTime(0);\n";
 			$rt .= "   });\n";
+			$rt .= "</script>\n";
+			return $rt;
+
+		case 'requestBlockAllocation':
+		case 'newBlockAllocation':
+		case 'editBlockAllocation':
+		case 'blockAllocations':
+			$rt .= "<style type=\"text/css\">\n";
+			$rt .= "   @import \"themes/$skin/css/dojo/$skin.css\";\n";
+			$rt .= "   @import \"dojo/dojox/grid/resources/Grid.css\";\n";
+			#$rt .= "   @import \"dojo/dojox/grid/resources/tundra/Grid.css\";\n";
+			$rt .= "</style>\n";
+			$rt .= "<script type=\"text/javascript\" src=\"js/blockallocations.js\"></script>\n";
+			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
+			$rt .= "   djConfig=\"parseOnLoad: true\">\n";
+			$rt .= "</script>\n";
+			$rt .= "<script type=\"text/javascript\">\n";
+			$rt .= "   dojo.addOnLoad(function() {\n";
+			$rt .= "   dojo.registerModulePath(\"vcldojo\", \"../../js/vcldojo\");\n";
+			foreach($dojoRequires as $req) {
+				$rt .= "   dojo.require(\"$req\");\n";
+			}
+			if($mode == 'editBlockAllocation') {
+				$blockid = getContinuationVar('blockid');
+				$cont = addContinuationsEntry('AJpopulateBlockStore', array('blockid' => $blockid), SECINDAY, 1, 0);
+				$rt .= "   populateBlockStore('$cont');\n";
+			}
+			$rt .= "   });\n";
+			$rt .= "</script>\n";
+			return $rt;
+
+		case "viewBlockStatus":
+			$rt .= "<style type=\"text/css\">\n";
+			$rt .= "   @import \"themes/$skin/css/dojo/$skin.css\";\n";
+			#$rt .= "   @import \"dojo/dojo/resources/dojo.css\";\n";
+			$rt .= "</style>\n";
+			$rt .= "<script type=\"text/javascript\" src=\"js/blockallocations.js\"></script>\n";
+			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
+			$rt .= "   djConfig=\"parseOnLoad: true\">\n";
+			$rt .= "</script>\n";
+			$rt .= "<script type=\"text/javascript\">\n";
+			$rt .= "   dojo.addOnLoad(function() {\n";
+			foreach($dojoRequires as $req) {
+				$rt .= "   dojo.require(\"$req\");\n";
+			}
+			$rt .= "   });\n";
+			$rt .= "   setTimeout(updateBlockStatus, 30000);\n";
 			$rt .= "</script>\n";
 			return $rt;
 
@@ -8924,6 +9044,22 @@ function getDojoHTML($refresh) {
 				$rt .= "   dojo.require(\"$req\");\n";
 			}
 			$rt .= "      document.onmousemove = updateMouseXY;\n";
+			$rt .= "   });\n";
+			$rt .= "</script>\n";
+			return $rt;
+
+		default:
+			$rt .= "<style type=\"text/css\">\n";
+			$rt .= "   @import \"themes/$skin/css/dojo/$skin.css\";\n";
+			$rt .= "</style>\n";
+			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
+			$rt .= "   djConfig=\"parseOnLoad: true\">\n";
+			$rt .= "</script>\n";
+			$rt .= "<script type=\"text/javascript\">\n";
+			$rt .= "   dojo.addOnLoad(function() {\n";
+			foreach($dojoRequires as $req) {
+				$rt .= "   dojo.require(\"$req\");\n";
+			}
 			$rt .= "   });\n";
 			$rt .= "</script>\n";
 			return $rt;
