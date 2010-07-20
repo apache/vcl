@@ -1420,32 +1420,37 @@ sub file_exists {
 	# Escape all spaces in the path
 	my $escaped_path = escape_file_path($path);
 	
-	# Copy the path and replace any *'s with .* to be used with grep
-	# This string will be used to check the output
-	my $grep_path = $escaped_path;
-	$grep_path =~ s/\*/\.\*/g;
-	
 	my $computer_short_name = $self->data->get_computer_short_name();
 	
 	# Check if the file or directory exists
 	# Do not enclose the path in quotes or else wildcards won't work
-	my $command = "ls -1d $escaped_path";
+	my $command = "stat $escaped_path";
 	my ($exit_status, $output) = $self->execute($command);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to run command to determine if file or directory exists on $computer_short_name:\npath: '$path'\ncommand: '$command'");
 		return;
 	}
-	elsif (my @matching_file_paths = grep(/^$grep_path/i, @$output)) {
-		notify($ERRORS{'DEBUG'}, 0, "file or directory exists on $computer_short_name: '$path', matching paths:\n" . join("\n", @matching_file_paths));
-		return 1;
+	elsif (grep(/no such file/i, @$output)) {
+		notify($ERRORS{'DEBUG'}, 0, "file or directory does not exist on $computer_short_name: '$path'");
+		return 0;
 	}
-	elsif (grep(/ls: /i, @$output) && !grep(/no such file/i, @$output)) {
+	elsif (grep(/stat: /i, @$output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to determine if file or directory exists on $computer_short_name:\npath: '$path'\ncommand: '$command'\nexit status: $exit_status, output:\n" . join("\n", @$output));
 		return;
 	}
+	
+	# Count the lines beginning with "Size:" and ending with "file", "directory", or "link" to determine how many files and/or directories were found
+	my $files_found = grep(/^\s*Size:.*file$/i, @$output);
+	my $directories_found = grep(/^\s*Size:.*directory$/i, @$output);
+	my $links_found = grep(/^\s*Size:.*link$/i, @$output);
+	
+	if ($files_found || $directories_found || $links_found) {
+		notify($ERRORS{'DEBUG'}, 0, "'$path' exists on $computer_short_name, files: $files_found, directories: $directories_found, links: $links_found");
+		return 1;
+	}
 	else {
-		notify($ERRORS{'DEBUG'}, 0, "file or directory does NOT exist on $computer_short_name: '$path'");
-		return 0;
+		notify($ERRORS{'WARNING'}, 0, "unexpected output returned while attempting to determine if file or directory exists on $computer_short_name: '$path'\ncommand: '$command'\nexit status: $exit_status, output:\n" . join("\n", @$output));
+		return;
 	}
 }
 
@@ -1488,24 +1493,30 @@ sub delete_file {
 		notify($ERRORS{'WARNING'}, 0, "failed to run command to delete file or directory on $computer_short_name:\npath: '$path'\ncommand: '$command'");
 		return;
 	}
-	elsif (!grep(/rm: /i, @$output) && (my @file_paths_deleted = grep(/^removed/i, @$output))) {
-		@file_paths_deleted = map { $_ =~ /removed \W(.*)\W$/} @file_paths_deleted;
-		notify($ERRORS{'OK'}, 0, "deleted '$path' on $computer_short_name, files or directories deleted: " . scalar(@file_paths_deleted) . "\n" . join("\n", @file_paths_deleted));
-	}
 	elsif (grep(/(cannot access|no such file)/i, @$output)) {
 		notify($ERRORS{'OK'}, 0, "file or directory not deleted because it does not exist on $computer_short_name: $path");
 	}
-	else {
+	elsif (grep(/rm: /i, @$output)) {
 		notify($ERRORS{'WARNING'}, 0, "error occurred attempting to delete file or directory on $computer_short_name: '$path':\ncommand: '$command'\nexit status: $exit_status\noutput:\n" . join("\n", @$output));
+	}
+	else {
+		notify($ERRORS{'OK'}, 0, "deleted '$path' on $computer_short_name");
 	}
 	
 	# Make sure the path does not exist
-	my $host_file_exists = $self->file_exists($path);
-	if (!defined($host_file_exists)) {
+	my $file_exists = $self->file_exists($path);
+	if (!defined($file_exists)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to confirm file doesn't exist on $computer_short_name: '$path'");
 		return;
 	}
-	return !$host_file_exists;
+	elsif ($file_exists) {
+		notify($ERRORS{'WARNING'}, 0, "file was not deleted, it still exists on $computer_short_name: '$path'");
+		return;
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "confirmed file does not exist on $computer_short_name: '$path'");
+		return 1;
+	}
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -1515,9 +1526,7 @@ sub delete_file {
  Parameters  : $directory_path, $mode (optional)
  Returns     : boolean
  Description : Creates a directory on the Linux computer as indicated by the
-               $directory_path argument. A 2nd argument specifying the file mode
-               (as in chmod) can be specified. The default file mode is 755
-               (drwxr-xr-x).
+               $directory_path argument.
 
 =cut
 
@@ -1538,28 +1547,25 @@ sub create_directory {
 	# Remove any quotes from the beginning and end of the path
 	$directory_path = normalize_file_path($directory_path);
 	
-	# Get the mode argument or set the default value
-	my $mode = shift || 755;
-	
 	my $computer_short_name = $self->data->get_computer_short_name();
 	
 	# Attempt to create the directory
-	my $command = "mkdir -p -v --mode=$mode \"$directory_path\" 2>&1 && ls -1d \"$directory_path\"";
+	my $command = "mkdir -p \"$directory_path\" 2>&1 && ls -1d \"$directory_path\"";
 	my ($exit_status, $output) = $self->execute($command);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to run command to create directory on $computer_short_name:\npath: '$directory_path'\ncommand: '$command'");
 		return;
 	}
 	elsif (grep(/created directory/i, @$output)) {
-		notify($ERRORS{'OK'}, 0, "created directory on $computer_short_name: '$directory_path', mode: $mode");
+		notify($ERRORS{'OK'}, 0, "created directory on $computer_short_name: '$directory_path'");
 		return 1;
 	}
-	elsif (grep(/mkdir: /i, @$output)) {
+	elsif (grep(/(mkdir|ls):/i, @$output)) {
 		notify($ERRORS{'WARNING'}, 0, "error occurred attempting to create directory on $computer_short_name: '$directory_path':\ncommand: '$command'\nexit status: $exit_status\noutput:\n" . join("\n", @$output));
 		return;
 	}
 	elsif (grep(/^$directory_path/, @$output)) {
-		notify($ERRORS{'OK'}, 0, "directory already exists on $computer_short_name: '$directory_path'");
+		notify($ERRORS{'OK'}, 0, "directory either created or already exists on $computer_short_name: '$directory_path'");
 		return 1;
 	}
 	else {
@@ -1604,7 +1610,7 @@ sub move_file {
 	my $computer_short_name = $self->data->get_computer_short_name();
 	
 	# Execute the command to move the file
-	my $command = "mv -fv $escaped_source_path $escaped_destination_path";
+	my $command = "mv -f $escaped_source_path $escaped_destination_path";
 	my ($exit_status, $output) = $self->execute($command);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to run command to move file on $computer_short_name:\nsource path: '$source_path'\ndestination path: '$destination_path'\ncommand: '$command'");
@@ -1614,16 +1620,10 @@ sub move_file {
 		notify($ERRORS{'WARNING'}, 0, "failed to move file on $computer_short_name:\nsource path: '$source_path'\ndestination path: '$destination_path'\ncommand: '$command'\noutput:\n" . join("\n", @$output));
 		return;
 	}
-	elsif (grep(/->/i, @$output)) {
+	else {
 		notify($ERRORS{'OK'}, 0, "moved file on $computer_short_name:\n'$source_path' --> '$destination_path'");
 		return 1;
 	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "unexpected output returned from command to move file on $computer_short_name:\nsource path: '$source_path'\ndestination path: '$destination_path'\ncommand: '$command'\noutput:\n" . join("\n", @$output));
-		return;
-	}
-	
-	return 1;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -1676,9 +1676,11 @@ sub get_file_contents {
 =head2 get_available_space
 
  Parameters  : none
- Returns     : integer
+ Returns     : If successful: integer
+               If failed: undefined
  Description : Returns the bytes available in the path specified by the
-               argument.
+               argument. 0 is returned if no space is available. Undefined is
+               returned if an error occurred.
 
 =cut
 
@@ -1698,38 +1700,44 @@ sub get_available_space {
 	
 	my $computer_short_name = $self->data->get_computer_short_name();
 	
-	# Run df specifying the path as an argument if specified
-	my $command = "df \"$path\"";
+	# Run stat -f specifying the path as an argument
+	# Don't use df because you can't specify a path under ESX and parsing would be difficult
+	my $command = "stat -f \"$path\"";
 	my ($exit_status, $output) = $self->execute($command);
-	return if !defined($output);
-	
-	if (grep(/^df: /i, @$output)) {
-		notify($ERRORS{'WARNING'}, 0, "error occurred running df command on $computer_short_name:\n" . join("\n", @$output));
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run command to determine available space on $computer_short_name:\ncommand: $command\noutput:\n" . join("\n", @$output));
+		return;
+	}
+	elsif (grep(/^stat: /i, @$output)) {
+		notify($ERRORS{'WARNING'}, 0, "error occurred running command to determine available space on $computer_short_name\ncommand: $command\noutput:\n" . join("\n", @$output));
 		return;
 	}
 	
-	my @path_lines = grep(!/^Filesystem/i, @$output);
-	if (scalar(@path_lines) == 0) {
-		notify($ERRORS{'WARNING'}, 0, "unable to find filesystem data line in df output:\n" . join("\n", @$output));
-		return;
-	}
-	elsif (scalar(@path_lines) > 1) {
-		notify($ERRORS{'WARNING'}, 0, "found multiple filesystem data lines in df output:\n" . join("\n", @$output));
-		return;
-	}
+	# Create an output string from the array of lines for easier regex parsing
+	my $output_string = join("\n", @$output);
 	
-	my ($filesystem, $blocks_total, $blocks_used, $blocks_available, $percent_used, $mounted_on) = split(/\s+/, $path_lines[0]);
-	if (!$mounted_on) {
-		notify($ERRORS{'WARNING'}, 0, "failed to parse df output line:\n$path_lines[0]\noutput:\n" . join("\n", @$output));
+	# Extract the block size value
+	# Search case sensitive for 'Block size:' because the line may also contain "Fundamental block size:"
+	my ($block_size) = $output_string =~ /Block size: (\d+)/;
+	if (!$block_size) {
+		notify($ERRORS{'WARNING'}, 0, "unable to locate 'Block size:' value in stat output:\ncommand: $command\noutput:\n" . join("\n", @$output));
 		return;
 	}
 	
-	my $bytes_available = ($blocks_available * 1024);
-	my $mb_available = format_number(($bytes_available / 1024 / 1024), 2);
-	my $gb_available = format_number(($bytes_available / 1024 / 1024 / 1024), 1);
+	# Extract the blocks free value
+	my ($blocks_free) = $output_string =~ /Blocks:[^\n]*Free: (\d+)/;
+	if (!$blocks_free) {
+		notify($ERRORS{'WARNING'}, 0, "unable to locate blocks free value in stat output:\ncommand: $command\noutput:\n" . join("\n", @$output));
+		return;
+	}
 	
-	notify($ERRORS{'DEBUG'}, 0, "bytes available in '$path' on $computer_short_name: " . format_number($bytes_available) . " bytes ($mb_available MB, $gb_available GB)");
-	return $bytes_available;
+	# Calculate the bytes free
+	my $bytes_free = ($block_size * $blocks_free);
+	my $mb_free = format_number(($bytes_free / 1024 / 1024), 2);
+	my $gb_free = format_number(($bytes_free / 1024 / 1024 / 1024), 1);
+	
+	notify($ERRORS{'DEBUG'}, 0, "bytes free in '$path' on $computer_short_name: " . format_number($bytes_free) . " bytes ($mb_free MB, $gb_free GB)");
+	return $bytes_free;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -1885,7 +1893,7 @@ sub copy_file {
 	my $computer_node_name = $self->data->get_computer_node_name();
 	
 	# Execute the command to copy the file
-	my $command = "cp -fvr $escaped_source_path $escaped_destination_path";
+	my $command = "cp -fr $escaped_source_path $escaped_destination_path";
 	notify($ERRORS{'DEBUG'}, 0, "attempting to copy file on $computer_node_name: '$source_file_path' -> '$destination_file_path'");
 	my ($exit_status, $output) = $self->execute($command);
 	if (!defined($output)) {
@@ -1896,7 +1904,7 @@ sub copy_file {
 		notify($ERRORS{'WARNING'}, 0, "failed to copy file on $computer_node_name:\nsource path: '$source_file_path'\ndestination path: '$destination_file_path'\ncommand: '$command'\noutput:\n" . join("\n", @$output));
 		return;
 	}
-	elsif (grep(/->/i, @$output)) {
+	elsif (!@$output || grep(/->/i, @$output)) {
 		notify($ERRORS{'OK'}, 0, "copied file on $computer_node_name: '$source_file_path' --> '$destination_file_path'");
 		return 1;
 	}
@@ -1914,9 +1922,9 @@ sub copy_file {
 
  Parameters  : $file_path
  Returns     : integer
- Description : Determines the size of the file or directory specified by the
-               file path argument in bytes. The file path argument may be a
-               directory path or contain wildcards.
+ Description : Determines the size of the file specified by the file path
+               argument in bytes. The file path argument may contain wildcards.
+					If the path argument is a directory, 0 will be returned.
 
 =cut
 
@@ -1943,38 +1951,36 @@ sub get_file_size {
 	# Get the computer name
 	my $computer_node_name = $self->data->get_computer_node_name() || return;
 	
-	# Run du specifying the path as an argument
-	my $command = "du -bc $escaped_file_path";
+	# Run stat rather than du because du is not available on VMware ESX
+	my $command = 'stat -c "%F:%s:%n" ' . $escaped_file_path;
 	my ($exit_status, $output) = $self->execute($command);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to run command to determine file size on $computer_node_name: $file_path\ncommand: $command");
 		return;
 	}
-	elsif (grep(/^du: /i, @$output)) {
+	elsif (grep(/^stat:/i, @$output)) {
 		notify($ERRORS{'WARNING'}, 0, "error occurred attempting to determine file size on $computer_node_name: $file_path\ncommand: $command\noutput:\n" . join("\n", @$output));
 		return;
 	}
 	
-	# Find the line containing 'total'
-	my ($total_line) = grep(/total/, @$output);
-	if (!$total_line) {
-		notify($ERRORS{'WARNING'}, 0, "unable to find total line in du output on $computer_node_name: $file_path, output:\n" . join("\n", @$output));
-		return;
+	# Loop through the stat output lines
+	my $total_bytes = 0;
+	for my $line (@$output) {
+		# Take the stat output line apart
+		my ($type, $file_bytes, $path) = split(/:/, $line);
+		if (!defined($type) || !defined($file_bytes) || !defined($path)) {
+			notify($ERRORS{'WARNING'}, 0, "unexpected output returned from stat, line: $line\ncommand: $command\noutput:\n" . join("\n", @$output));
+			return;
+		}
+		
+		# Add the size to the total if the type is file
+		if ($type =~ /file/) {
+			$total_bytes += $file_bytes;
+		}
 	}
 	
-	# Extract the blocks used number from the total line
-	my ($bytes_used) = $total_line =~ /(\d+)/g;
-	if (!defined($bytes_used) || length($bytes_used) == 0) {
-		notify($ERRORS{'WARNING'}, 0, "unable to determine bytes used from the total line in du output on $computer_node_name: $file_path\ncommand: $command\ntotal line: $total_line\noutput:\n" . join("\n", @$output));
-		return;
-	}
-	
-	my $kb_used = ($bytes_used / 1024);
-	my $mb_used = ($bytes_used / 1024 / 1024);
-	my $gb_used = ($bytes_used / 1024 / 1024 / 1024);
-	
-	notify($ERRORS{'DEBUG'}, 0, "size of $file_path: " . format_number($bytes_used) . " bytes (" . format_number($kb_used, 2) . " KB, " . format_number($mb_used, 2) . " MB, " . format_number($gb_used, 2) . " GB)");
-	return $bytes_used;
+	notify($ERRORS{'DEBUG'}, 0, "size of $file_path on $computer_node_name: " . format_number($total_bytes) . " bytes");
+	return $total_bytes;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -2007,11 +2013,16 @@ sub find_files {
 	$base_directory_path = normalize_file_path($base_directory_path);
 	$file_pattern = normalize_file_path($file_pattern);
 	
+	# The base directory path must have a trailing slash or find won't work
+	$base_directory_path .= '/';
+	
 	# Get the computer short and hostname
 	my $computer_node_name = $self->data->get_computer_node_name() || return;
 	
 	# Run the find command
 	my $command = "find \"$base_directory_path\" -type f -iname \"$file_pattern\"";
+	notify($ERRORS{'DEBUG'}, 0, "attempting to find files on $computer_node_name, base directory path: '$base_directory_path', pattern: $file_pattern, command: $command");
+	
 	my ($exit_status, $output) = $self->execute($command);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to run command to find files on $computer_node_name, base directory path: '$base_directory_path', pattern: $file_pattern, command:\n$command");
@@ -2023,7 +2034,9 @@ sub find_files {
 	}
 	
 	# Return the file list
-	return @$output;
+	my @file_paths = @$output;
+	notify($ERRORS{'DEBUG'}, 0, "matching file count: " . scalar(@file_paths));
+	return @file_paths;
 }
 	
 #/////////////////////////////////////////////////////////////////////////////
