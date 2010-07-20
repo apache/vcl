@@ -251,6 +251,7 @@ INIT {
 	our ($XCATROOT) = 0;
 	our ($FQDN)     = 0;
 	our ($MYSQL_SSL,       $MYSQL_SSL_CERT);
+	our ($ETHDEVICE) = 0;
 	our ($WINDOWS_ROOT_PASSWORD);
    our ($XMLRPC_USER, $XMLRPC_PASS, $XMLRPC_URL);
 
@@ -388,6 +389,10 @@ INIT {
 			if ($l =~ /^mysql_ssl_cert=(.*)/) {
 				$MYSQL_SSL_CERT = $1;
 			}
+	
+			if ($l =~ /^ETHDEVICE=(eth[0-9])/) {
+                                $ETHDEVICE = $1;
+                        }
 
 			#Sysadmin list
 			if ($l =~ /^sysadmin=([,-.\@a-zA-Z0-9_]*)/) {
@@ -500,6 +505,7 @@ our ($vcldquerykey,  $SYSADMIN, $SHARED_MAILBOX, $DEFAULTURL, $DEFAULTHELPEMAIL,
 our ($LOGFILE, $PIDFILE, $VCLDRPCQUERYKEY);
 our ($SERVER, $DATABASE, $WRTUSER, $WRTPASS);
 our ($MYSQL_SSL,       $MYSQL_SSL_CERT);
+our ($ETHDEVICE);
 our ($FQDN);
 our $XCATROOT           = "/opt/xcat";
 our $TOOLS              = "$FindBin::Bin/../tools";
@@ -1276,6 +1282,7 @@ sub setstaticaddress {
 
 	my $subnetmask = $ENV{management_node_info}{PUBLIC_SUBNET_MASK};
 	my $default_gateway = $ENV{management_node_info}{PUBLIC_DEFAULT_GATEWAY}; 
+	my $dns_server	    = $ENV{management_node_info}{PUBLIC_DNS_SERVER};
 
 	#collect private address -- read hosts file only useful if running
 	# xcat setup and private addresses are listsed in the local
@@ -1439,16 +1446,18 @@ sub setstaticaddress {
 				$search = $l;
 			}
 		}
+		
+		
 
 		if (defined($search)) {
 			my @resolvconf;
 			push(@resolvconf, "$search\n");
 			my ($s1, $s2, $s3);
-			if ($DNSserver =~ /,/) {
-				($s1, $s2, $s3) = split(/,/, $DNSserver);
+			if ( $dns_server =~ /,/) {
+				($s1, $s2, $s3) = split(/,/, $dns_server);
 			}
 			else {
-				$s1 = $DNSserver;
+				$s1 = $dns_server;
 			}
 			push(@resolvconf, "nameserver $s1\n");
 			push(@resolvconf, "nameserver $s2\n") if (defined($s2));
