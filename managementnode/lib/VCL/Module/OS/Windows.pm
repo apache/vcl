@@ -1152,7 +1152,7 @@ sub move_file {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 delete_directory_contents
+=head2 delete_files_by_pattern
 
  Parameters  :
  Returns     :
@@ -1324,14 +1324,8 @@ sub set_file_owner {
 	my ($chown_exit_status, $chown_output) = run_ssh_command($computer_node_name, $management_node_keys, "/usr/bin/chown.exe -vR \"$owner\" \"$file_path\"", '', '', 0);
 	
 	# Check if exit status is defined - if not, SSH command failed
-	if (!defined($chown_exit_status)) {
+	if (!defined($chown_output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to set $owner as the owner of $file_path");
-		return;
-	}
-	
-	# Make sure some output was returned
-	if (!defined(@$chown_output)) {
-		notify($ERRORS{'WARNING'}, 0, "error occurred setting $owner as the owner of $file_path, chown output was not returned, exit status: $chown_exit_status");
 		return;
 	}
 	
@@ -6042,11 +6036,8 @@ sub clean_hard_drive {
 		'$SYSTEMROOT,.*\\$NtUninstall.*,1',
 		'$SYSTEMROOT,.*\\$NtServicePackUninstall.*,1',
 		'$SYSTEMROOT,.*\\$MSI.*Uninstall.*,1',
-		'$SYSTEMROOT/inf,.*INFCACHE\\.1',
-		'$SYSTEMROOT/inf,.*[\\\\\\/]oem.*\\..*',
 		'$SYSTEMROOT,.*AFSCache,1',
 		'$SYSTEMROOT,.*afsd_init\\.log,1',
-		'$SYSTEMDRIVE/Documents and Settings,.*\\.log,10',
 		'$SYSTEMDRIVE/Documents and Settings,.*Recent\\/.*,10',
 		'$SYSTEMDRIVE/Documents and Settings,.*Cookies\\/.*,10',
 		'$SYSTEMDRIVE/Documents and Settings,.*Temp\\/.*,10',
