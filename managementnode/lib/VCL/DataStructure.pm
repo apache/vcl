@@ -240,6 +240,7 @@ $SUBROUTINE_MAPPINGS{vmhost_profile_id} = '$self->request_data->{reservation}{RE
 $SUBROUTINE_MAPPINGS{vmhost_type}       = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{type}';
 #$SUBROUTINE_MAPPINGS{vmhost_type_id} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{vmtypeid}';
 
+$SUBROUTINE_MAPPINGS{vmhost_profile_repository_path}    = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{vmprofile}{repositorypath}';
 $SUBROUTINE_MAPPINGS{vmhost_profile_datastore_path}     = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{vmprofile}{datastorepath}';
 $SUBROUTINE_MAPPINGS{vmhost_profile_datastorepath_4vmx} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{vmprofile}{datastorepath4vmx}';
 #$SUBROUTINE_MAPPINGS{vmhost_profile_id} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{vmprofile}{id}';
@@ -589,6 +590,8 @@ sub _initialize : Init {
 		my $computer_info = get_computer_info($self->computer_id);
 		if (!$computer_info) {
 			notify($ERRORS{'WARNING'}, 0, "DataStructure object could not be initialized, failed to retrieve data for computer ID: " . $self->computer_id);
+			
+			Exception::Class::Base->throw( error => "DataStructure object could not be initialized, failed to retrieve data for computer ID: " . $self->computer_id);
 			return;
 		}
 		
@@ -609,6 +612,8 @@ sub _initialize : Init {
 		}
 		else {
 			notify($ERRORS{'WARNING'}, 0, "DataStructure object could not be initialized, failed to retrieve data for image ID: " . $self->image_id);
+			
+			Exception::Class::Base->throw( error => "DataStructure object could not be initialized, failed to retrieve data for image ID: " . $self->image_id);
 			return;
 		}
 		
@@ -618,6 +623,8 @@ sub _initialize : Init {
 		}
 		else {
 			notify($ERRORS{'WARNING'}, 0, "DataStructure object could not be initialized, failed to retrieve production imagerevision data for image ID: " . $self->image_id);
+			
+			Exception::Class::Base->throw( error => "DataStructure object could not be initialized, failed to retrieve production imagerevision data for image ID: " . $self->image_id);
 			return;
 		}
 	}
