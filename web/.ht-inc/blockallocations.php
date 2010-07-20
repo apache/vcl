@@ -139,10 +139,12 @@ function blockAllocationForm() {
 	print "    <td>\n";
 	print "      <select dojoType=\"dijit.form.FilteringSelect\" id=groupsel style=\"width: 300px\">\n";
 	$groups = getUserGroups(0, $user['affiliationid']);
+	$extragroups = array();
 	if($mode == 'requestBlockAllocation')
 		print "        <option value=\"0\">(group not listed)</option>\n";
 	if(! empty($data['usergroupid']) && ! array_key_exists($data['usergroupid'], $groups)) {
 		$groups[$data['usergroupid']] = array('name' => getUserGroupName($data['usergroupid'], 1));
+		$extragroups[$data['usergroupid']] = array('name' => getUserGroupName($data['usergroupid'], 1));
 		uasort($groups, "sortKeepIndex");
 	}
 	foreach($groups as $id => $group) {
@@ -158,6 +160,7 @@ function blockAllocationForm() {
 	if($mode != 'requestBlockAllocation') {
 		if(! empty($data['admingroupid']) && ! array_key_exists($data['admingroupid'], $groups)) {
 			$groups[$data['admingroupid']] = array('name' => getUserGroupName($data['admingroupid'], 1));
+			$extragroups[$data['admingroupid']] = array('name' => getUserGroupName($data['admingroupid'], 1));
 			uasort($groups, "sortKeepIndex");
 		}
 		print "  <tr>\n";
@@ -434,8 +437,7 @@ function blockAllocationForm() {
 	print "  </tr>\n";
 	print "</table>\n";
 	print "<span id=\"commentsnote\" class=\"hidden\">Your additional comments will be submitted.<br><br></span>\n";
-	$data = array('images' => $resources['image'],
-	              'groups' => $groups);
+	$data = array('extragroups' => $extragroups);
 	if($mode == 'newBlockAllocation')
 		$data['method'] = 'new';
 	elseif($mode == 'editBlockAllocation') {
@@ -558,8 +560,7 @@ function AJblockAllocationSubmit() {
 			print "alert('Error encountered while trying to create block allocation:\\n";
 			print "no active management nodes were found. Please try\\n";
 			print "creating the block allocation at a later time.');";
-			$data = array('images' => getContinuationVar('images'),
-			              'groups' => getContinuationVar('groups'),
+			$data = array('extragroups' => getContinuationVar('extragroups'),
 			              'method' => $method);
 			if($method == 'edit')
 				$data['blockid'] = getContinuationVar('blockid');
@@ -1447,7 +1448,6 @@ function getPendingBlockHTML($listonly=0) {
 		$d .= "      <button dojoType=\"dijit.form.Button\" type=\"button\">\n";
 		$d .= "        Accept...\n";
 		$d .= "        <script type=\"dojo/method\" event=\"onClick\">\n";
-		$row['groups'] = $groups;
 		$cont = addContinuationsEntry('AJacceptBlockAllocationConfirm', $row);
 		$d .= "          acceptBlockConfirm('$cont');\n";
 		$d .= "        </script>\n";
@@ -1826,7 +1826,6 @@ function AJacceptBlockAllocationConfirm() {
 		$cdata['setusergroup'] = 1;
 	else
 		$cdata['setusergroup'] = 0;
-	$cdata['groups'] = $data['groups'];
 	$cdata['validemail'] = $rt['validemail'];
 	$cdata['emailuser'] = $data['email'];
 	$cdata['repeating'] = $data['repeating'];
@@ -1861,7 +1860,7 @@ function AJacceptBlockAllocationConfirm() {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function AJacceptBlockAllocationSubmit() {
-	global $mysql_link_vcl;
+	global $mysql_link_vcl, $user;
 	$blockid = getContinuationVar('blockid');
 	$comments = getContinuationVar('comments');
 	$validemail = getContinuationVar('validemail');
@@ -1869,7 +1868,6 @@ function AJacceptBlockAllocationSubmit() {
 	$setusergroup = getContinuationVar('setusergroup');
 	if($setusergroup)
 		$usergroupid = processInputVar('groupid', ARG_NUMERIC);
-	$groups = getContinuationVar('groups');
 	$name = processInputVar('brname', ARG_STRING);
 	$admingroupid = processInputVar('admingroupid', ARG_NUMERIC);
 	$emailtext = processInputVar('emailtext', ARG_STRING);
@@ -1891,6 +1889,7 @@ function AJacceptBlockAllocationSubmit() {
 			$err = 1;
 		}
 	}
+	$groups = getUserGroups(0, $user['affiliationid']);
 	if(! $err && $admingroupid != 0 && ! array_key_exists($admingroupid, $groups)) {
 		$errmsg = "Invalid managing user group submitted.";
 		$err = 1;
@@ -2358,10 +2357,9 @@ function AJupdateBlockStatus() {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function processBlockAllocationInput() {
+	global $user;
 	$return = array();
 	$method = getContinuationVar('method');
-	$images = getContinuationVar('images');
-	$groups = getContinuationVar('groups');
 	$return['name'] = processInputVar('name', ARG_STRING);
 	$return['imageid'] = processInputVar('imageid', ARG_NUMERIC);
 	$return['seats'] = processInputVar('seats', ARG_NUMERIC);
@@ -2370,15 +2368,24 @@ function processBlockAllocationInput() {
 	$type = processInputVar('type', ARG_STRING);
 	$err = 0;
 	if($method != 'request' && ! preg_match('/^([-a-zA-Z0-9\. \(\)]){3,80}$/', $return['name'])) {
-	   $errmsg = "The name can only contain letters, numbers, spaces, dashes(-),<br>and periods(.) and can be from 3 to 80 characters long";
+		$errmsg = "The name can only contain letters, numbers, spaces, dashes(-),<br>and periods(.) and can be from 3 to 80 characters long";
 		$err = 1;
 	}
-	if(! array_key_exists($return['imageid'], $images)) {
+	$resources = getUserResources(array("imageAdmin", "imageCheckOut"));
+	$resources["image"] = removeNoCheckout($resources["image"]);
+	if(! array_key_exists($return['imageid'], $resources['image'])) {
 		$errmsg = 'The submitted image is invalid.';
 		$err = 1;
 	}
-	if(! $err && ! array_key_exists($return['groupid'], $groups) && $return['groupid'] != 0) {
+	$groups = getUserGroups(0, $user['affiliationid']);
+	$extragroups = getContinuationVar('extragroups');
+	if(! $err && ! array_key_exists($return['groupid'], $groups) &&
+	   ! array_key_exists($return['groupid'], $extragroups) &&
+	   $return['groupid'] != 0) {
 		$errmsg = 'The submitted user group is invalid.';
+		print "/*";
+		print_r($groups);
+		print "*/";
 		$err = 1;
 	}
 	if(! $err && $method != 'request' && ! array_key_exists($return['admingroupid'], $groups) && $return['admingroupid'] != 0) {
@@ -2387,12 +2394,12 @@ function processBlockAllocationInput() {
 	}
 	if(! $err && ($return['seats'] < MIN_BLOCK_MACHINES || $return['seats'] > MAX_BLOCK_MACHINES)) {
 		$errmsg = 'The submitted number of seats must be between ' . MIN_BLOCK_MACHINES
-		     . ' and ' . MAX_BLOCK_MACHINES . '.';
+		        . ' and ' . MAX_BLOCK_MACHINES . '.';
 		$err = 1;
 	}
 	if(! $err && $type != 'weekly' && $type != 'monthly' && $type != 'list') {
 		$errmsg = 'You must select one of "Repeating Weekly", "Repeating Monthly", '
-		     . 'or "List of Dates/Times".';
+		        . 'or "List of Dates/Times".';
 		$err = 1;
 	}
 	if(! $err) {
@@ -2514,8 +2521,7 @@ function processBlockAllocationInput() {
 	if($err) {
 		print "clearHideConfirmForm();";
 		print "alert('$errmsg');";
-		$data = array('images' => $images,
-		              'groups' => $groups,
+		$data = array('extragroups' => $extragroups,
 		              'method' => $method);
 		if($method == 'edit')
 			$data['blockid'] = getContinuationVar('blockid');
