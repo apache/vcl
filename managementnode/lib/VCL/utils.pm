@@ -6177,8 +6177,6 @@ AND managementnode.id != $management_node_id
 	$management_node_info->{PUBLIC_DEFAULT_GATEWAY} = $management_node_info->{publicDefaultGateway};
 	$management_node_info->{PUBLIC_DNS_SERVER} = $management_node_info->{publicDNSserver};
 
-	notify($ERRORS{'DEBUG'}, 0, "management node info $management_node_info->{PUBLIC_IP_CONFIGURATION}");
-	notify($ERRORS{'DEBUG'}, 0, "management node info retrieved from database for $shortname");
 	return $management_node_info;
 } ## end sub get_management_node_info
 
