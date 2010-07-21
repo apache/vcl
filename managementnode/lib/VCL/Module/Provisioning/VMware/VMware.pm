@@ -59,9 +59,6 @@ use File::Temp qw( tempfile );
 
 use VCL::utils;
 
-use VCL::Module::Provisioning::VMware::vSphere_SDK;
-use VCL::Module::Provisioning::VMware::VIX_API;
-
 ##############################################################################
 
 =head1 CLASS VARIABLES
@@ -71,8 +68,8 @@ use VCL::Module::Provisioning::VMware::VIX_API;
 =head2 %VM_OS_CONFIGURATION
 
  Data type   : hash
- Description : Maps OS names to the appropriate guestOS and Ethernet virtualDev
-               values to be used in the vmx file.
+ Description : Maps OS names to the appropriate guestOS, Ethernet, and SCSI
+					virtualDev values to be used in the vmx file.
 
 =cut
 
@@ -81,69 +78,85 @@ our %VM_OS_CONFIGURATION = (
 	"linux-x86" => {
 		"guestOS" => "otherlinux",
 		"ethernet-virtualDev" => "vlance",
+		"scsi-virtualDev" => "busLogic",
 	},
 	"linux-x86_64" => {
 		"guestOS" => "otherlinux-64",
 		"ethernet-virtualDev" => "e1000",
+		"scsi-virtualDev" => "lsiLogic",
 	},
 	# Windows configurations:
 	"xp-x86" => {
 		"guestOS" => "winXPPro",
 		"ethernet-virtualDev" => "vlance",
+		"scsi-virtualDev" => "busLogic",
 	},
 	"xp-x86_64" => {
 		"guestOS" => "winXPPro-64",
 		"ethernet-virtualDev" => "e1000",
+		"scsi-virtualDev" => "lsiLogic",
 	},
 	"vista-x86" => {
 		"guestOS" => "winvista",
 		"ethernet-virtualDev" => "e1000",
+		"scsi-virtualDev" => "lsiLogic",
 	},
 	"vista-x86_64" => {
 		"guestOS" => "winvista-64",
 		"ethernet-virtualDev" => "e1000",
+		"scsi-virtualDev" => "lsiLogic",
 	}, 
 	"7-x86" => {
 		"guestOS" => "winvista",
 		"ethernet-virtualDev" => "e1000",
+		"scsi-virtualDev" => "lsiLogic",
 	},
 	"7-x86_64" => {
 		"guestOS" => "winvista-64",
 		"ethernet-virtualDev" => "e1000",
+		"scsi-virtualDev" => "lsiLogic",
 	}, 
 	"2003-x86" => {
 		"guestOS" => "winNetEnterprise",
 		"ethernet-virtualDev" => "vlance",
+		"scsi-virtualDev" => "lsiLogic",
 	},
 	"2003-x86_64" => {
 		"guestOS" => "winNetEnterprise-64",
 		"ethernet-virtualDev" => "e1000",
+		"scsi-virtualDev" => "lsiLogic",
 	},
 	"2008-x86" => {
 		"guestOS" => "winServer2008Enterprise-32",
 		"ethernet-virtualDev" => "e1000",
+		"scsi-virtualDev" => "lsiLogic",
 	},
 	"2008-x86_64" => {
 		"guestOS" => "winServer2008Enterprise-64",
 		"ethernet-virtualDev" => "e1000",
+		"scsi-virtualDev" => "lsiLogic",
 	},
 	# Default Windows configuration if Windows version isn't found above:
 	"windows-x86" => {
 		"guestOS" => "winXPPro",
 		"ethernet-virtualDev" => "vlance",
+		"scsi-virtualDev" => "busLogic",
 	},
 	"windows-x86_64" => {
 		"guestOS" => "winXPPro-64",
 		"ethernet-virtualDev" => "e1000",
+		"scsi-virtualDev" => "lsiLogic",
 	},
 	# Default configuration if OS is not Windows or Linux:
 	"default-x86" => {
 		"guestOS" => "other",
 		"ethernet-virtualDev" => "vlance",
+		"scsi-virtualDev" => "busLogic",
 	},
 	"default-x86_64" => {
 		"guestOS" => "other-64",
 		"ethernet-virtualDev" => "e1000",
+		"scsi-virtualDev" => "lsiLogic",
 	},
 );
 
@@ -164,6 +177,15 @@ our $VSPHERE_SDK_PACKAGE = 'VCL::Module::Provisioning::VMware::vSphere_SDK';
 =cut
 
 our $VIX_API_PACKAGE = 'VCL::Module::Provisioning::VMware::VIX_API';
+
+=head2 $VIM_SSH_PACKAGE
+
+ Data type   : string
+ Description : Perl package name for the VIM SSH command module.
+
+=cut
+
+our $VIM_SSH_PACKAGE = 'VCL::Module::Provisioning::VMware::VIM_SSH';
 
 ##############################################################################
 
@@ -199,46 +221,59 @@ sub initialize {
 	my $vmhost_os;
 	
 	# Create an API object which will be used to control the VM (register, power on, etc.)
-	if (($vmware_api = $self->get_vsphere_sdk_object()) && !$vmware_api->is_restricted()) {
-		notify($ERRORS{'DEBUG'}, 0, "vSphere SDK object will be used to control the VM: $vm_computer_name, and to control the OS of the VM host: $vmhost_computer_name");
-		$vmhost_os = $vmware_api;
-	}
-	elsif (($vmware_api = $self->get_vix_api_object()) && !$vmware_api->is_restricted()) {
-		notify($ERRORS{'DEBUG'}, 0, "VIX API object will be used to control the VM: $vm_computer_name");
-	}
-	# Add code here to create an API object to control free ESXi via SSH once the utility module has been implemented
-	# elsif (...) {
-	# }
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to create an API object to control the VM: $vm_computer_name");
-		return;
+	if ($vmware_api = $self->get_vmhost_api_object($VSPHERE_SDK_PACKAGE)) {
+		if ($vmware_api->is_restricted()) {
+			undef $vmware_api;
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "vSphere SDK object will be used to control the VM: $vm_computer_name, and to control the OS of the VM host: $vmhost_computer_name");
+			$vmhost_os = $vmware_api;
+		}
 	}
 	
-	# Create a VM host OS object if the vSphere SDK can't be used to control the VM host OS
 	if (!$vmhost_os) {
+		# vSphere SDK is not available, SSH access to the VM host is required
 		# Get a DataStructure object containing the VM host's data and get the VM host OS module Perl package name
 		my $vmhost_image_name = $vmhost_data->get_image_name();
 		my $vmhost_os_module_package = $vmhost_data->get_image_os_module_perl_package();
 		
 		notify($ERRORS{'DEBUG'}, 0, "attempting to create OS object for the image currently loaded on the VM host: $vmhost_computer_name\nimage name: $vmhost_image_name\nOS module: $vmhost_os_module_package");
-		
 		if ($vmhost_os = $self->get_vmhost_os_object($vmhost_os_module_package)) {
-			if ($vmhost_os->is_ssh_responding()) {
-				notify($ERRORS{'DEBUG'}, 0, "OS of VM host $vmhost_computer_name will be controlled via SSH using OS object: " . ref($vmhost_os));
-			}
-			else {
-				notify($ERRORS{'WARNING'}, 0, "unable to control OS of VM host $vmhost_computer_name using OS object: " . ref($vmhost_os) . ", VM host is not responding to SSH");
-				return;
-			}
+			notify($ERRORS{'DEBUG'}, 0, "created OS object to control the OS of VM host: $vmhost_computer_name");
 		}
 		else {
 			notify($ERRORS{'WARNING'}, 0, "failed to create OS object to control the OS of VM host: $vmhost_computer_name");
 			return;
 		}
+		
+		# Check if SSH is responding
+		if ($vmhost_os->is_ssh_responding()) {
+			notify($ERRORS{'DEBUG'}, 0, "OS of VM host $vmhost_computer_name will be controlled via SSH using OS object: " . ref($vmhost_os));
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "unable to control OS of VM host $vmhost_computer_name using OS object: " . ref($vmhost_os) . ", VM host is not responding to SSH");
+			return;
+		}
 	}
 	
-	# Store the VM host and API objects in this object
+	# Store the VM host OS object in this object
 	$self->{vmhost_os} = $vmhost_os;
+	
+	
+	if (!$vmware_api) {
+		if ($vmware_api = $self->get_vmhost_api_object($VIM_SSH_PACKAGE)) {
+			notify($ERRORS{'DEBUG'}, 0, "VIM SSH command object will be used to control the VM: $vm_computer_name");
+		}
+		#elsif (($vmware_api = $self->get_vmhost_api_object($VIX_API_PACKAGE)) && !$vmware_api->is_restricted()) {
+		#	notify($ERRORS{'DEBUG'}, 0, "VIX API object will be used to control the VM: $vm_computer_name");
+		#}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to create an API object to control the VM: $vm_computer_name");
+			return;
+		}
+	}
+	
+	# Store the VM host API object in this object
 	$self->{api} = $vmware_api;
 	
 	# Make sure the vmx and vmdk base directories can be accessed
@@ -623,6 +658,12 @@ sub vmhost_os {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
+	
+	if (!$self->{vmhost_os}) {
+		notify($ERRORS{'WARNING'}, 0, "VM host OS object is not defined");
+		return;
+	}
+	
 	return $self->{vmhost_os};
 }
 
@@ -679,14 +720,25 @@ sub get_vmhost_datastructure {
 	my $vmhost_profile_image_id = $self->data->get_vmhost_profile_image_id() || return;
 	
 	# Create a DataStructure object containing computer data for the VM host
-	my $vmhost_data = new VCL::DataStructure({request_data => $request_data,
+	my $vmhost_data;
+	eval {
+		$vmhost_data= new VCL::DataStructure({request_data => $request_data,
 																		 reservation_id => $reservation_id,
 																		 computer_id => $vmhost_computer_id,
 																		 image_id => $vmhost_profile_image_id});
-	if (!$vmhost_data) {
-		notify($ERRORS{'WARNING'}, 0, "unable to create DataStructure object for VM host");
+	};
+	
+	if ($EVAL_ERROR) {
+		notify($ERRORS{'WARNING'}, 0, "unable to create DataStructure object for VM host, exception thrown, error: $EVAL_ERROR");
 		return;
 	}
+	
+	elsif (!$vmhost_data) {
+		notify($ERRORS{'WARNING'}, 0, "unable to create DataStructure object for VM host, DataStructure object is not defined");
+		return;
+	}
+	
+	notify($ERRORS{'OK'}, 0, "\$vmhost_data: $vmhost_data, ref(\$vmhost_data): " . ref($vmhost_data));
 	
 	# Get the VM host nodename from the DataStructure object which was created for it
 	# This acts as a test to make sure the DataStructure object is working
@@ -766,19 +818,25 @@ sub get_vmhost_os_object {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 get_vsphere_sdk_object
+=head2 get_vmhost_api_object
 
  Parameters  : none
- Returns     : vSphere SDK object
- Description : Creates and returns a vSphere SDK object which can be used to
-               control VMs on a VM host.
+ Returns     : VMware API object
+ Description : 
 
 =cut
 
-sub get_vsphere_sdk_object {
+sub get_vmhost_api_object {
 	my $self = shift;
 	if (ref($self) !~ /vmware/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get the Perl package argument
+	my $api_perl_package = shift;
+	if (!$api_perl_package) {
+		notify($ERRORS{'WARNING'}, 0, "API Perl package argument was not specified");
 		return;
 	}
 	
@@ -793,59 +851,28 @@ sub get_vsphere_sdk_object {
 		return;
 	}
 	
-	# Create a vSphere SDK object
-	my $vsphere_sdk;
-	eval { $vsphere_sdk = VCL::Module::Provisioning::VMware::vSphere_SDK->new({data_structure => $vmhost_datastructure}) };
-	if (!$vsphere_sdk) {
+	# Load the VMware control module
+	notify($ERRORS{'DEBUG'}, 0, "attempting to load VMware control module: $api_perl_package");
+	eval "use $api_perl_package";
+	if ($EVAL_ERROR) {
+		notify($ERRORS{'WARNING'}, 0, "failed to load VMware control module: $api_perl_package");
+		return 0;
+	}
+	notify($ERRORS{'DEBUG'}, 0, "loaded VMware control module: $api_perl_package");
+	
+	# Create an API object to control the VM host and VMs
+	my $api;
+	eval { $api = ($api_perl_package)->new({data_structure => $vmhost_datastructure, vmhost_os => $self->{vmhost_os}}) };
+	if (!$api) {
 		my $error = $EVAL_ERROR || 'no eval error';
-		notify($ERRORS{'WARNING'}, 0, "vSphere SDK object could not be created, VM host: $vmhost_nodename, $error");
+		notify($ERRORS{'WARNING'}, 0, "API object could not be created: $api_perl_package, $error");
 		return;
 	}
 	
-	notify($ERRORS{'DEBUG'}, 0, "created vSphere SDK object, VM host: $vmhost_nodename");
-	return $vsphere_sdk;
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 get_vix_api_object
-
- Parameters  : none
- Returns     : VIX API object reference
- Description : Creates and returns a VMware VIX API object which may be used to
-               control the VMs on a VM host.
-
-=cut
-
-sub get_vix_api_object {
-	my $self = shift;
-	if (ref($self) !~ /vmware/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
+	$api->{api} = $api;
 	
-	# Get a DataStructure object containing the VM host's data
-	my $vmhost_datastructure = $self->get_vmhost_datastructure() || return;
-	
-	# Get the VM host nodename from the DataStructure object which was created for it
-	# This acts as a test to make sure the DataStructure object is working
-	my $vmhost_nodename = $vmhost_datastructure->get_computer_node_name();
-	if (!$vmhost_nodename) {
-		notify($ERRORS{'WARNING'}, 0, "unable to determine VM host node name from DataStructure object created for VM host");
-		return;
-	}
-	
-	# Create a VIX API object
-	my $vix_api;
-	eval { $vix_api = VCL::Module::Provisioning::VMware::VIX_API->new({data_structure => $vmhost_datastructure}) };
-	if (!$vix_api) {
-		my $error = $EVAL_ERROR || 'no eval error';
-		notify($ERRORS{'WARNING'}, 0, "VIX API object could not be created, VM host: $vmhost_nodename, $error");
-		return;
-	}
-	
-	notify($ERRORS{'OK'}, 0, "created VIX API object, VM host: $vmhost_nodename");
-	return $vix_api;
+	notify($ERRORS{'DEBUG'}, 0, "created API object: $api_perl_package");
+	return $api;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -892,7 +919,7 @@ sub prepare_vmx {
 	my $vm_hardware_version      = $self->get_vm_virtual_hardware_version() || return;
 	my $vm_persistent            = $self->is_vm_persistent();
 	my $guest_os                 = $self->get_vm_guest_os() || return;
-
+	
 	## Figure out how much additional space is required for the vmx directory for the VM for this reservation
 	## This is the number of additional bytes which have not already been allocated the VM will likely use
 	#my $vm_additional_vmx_bytes_required = $self->get_vm_additional_vmx_bytes_required();
@@ -915,7 +942,10 @@ sub prepare_vmx {
 	# Get a hash containing info about all the .vmx files that exist on the VM host
 	# Check the VMs on the host to see if any match the computer assigned to this reservation
 	my $host_vmx_info = $self->get_vmx_info();
+	
 	for my $host_vmx_path (keys %$host_vmx_info) {
+		notify($ERRORS{'DEBUG'}, 0, "checking existing vmx file on VM host: $host_vmx_path");
+		
 		my $host_vmx_computer_id = $host_vmx_info->{$host_vmx_path}{computer_id} || 'unknown';
 		
 		# If existing VM is for this computer, delete it
@@ -925,6 +955,9 @@ sub prepare_vmx {
 				notify($ERRORS{'WARNING'}, 0, "failed to delete VM: $host_vmx_path");
 				return;
 			}
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "found vmx file on VM host with different computer id: $host_vmx_path\ncomputer id in file: $host_vmx_computer_id\nreservation computer id: $computer_id");
 		}
 	}
 	
@@ -960,18 +993,20 @@ sub prepare_vmx {
 	my $vm_disk_mode;
 	my $vm_disk_write_through;
 	if ($vm_persistent) {
-		$display_name = "$computer_name (persistent: $image_name)";
+		$display_name = "$computer_name:$image_name (persistent)";
 		$vm_disk_mode = 'independent-persistent';
 		$vm_disk_write_through = "TRUE";
 	}
 	else {
-		$display_name = "$computer_name (nonpersistent: $image_name)";
+		$display_name = "$computer_name:$image_name (nonpersistent)";
 		$vm_disk_mode = "independent-nonpersistent";
 		#$vm_disk_mode = "undoable";
 		$vm_disk_write_through = "FALSE";
 	}
 	
 	notify($ERRORS{'DEBUG'}, 0, "vm info:
+			 display name: $display_name
+			 
 			 image ID: $image_id
 			 imagerevision ID: $imagerevision_id
 			 
@@ -1017,21 +1052,15 @@ sub prepare_vmx {
 		
 		"ethernet0.address" => "$vm_eth0_mac",
 		"ethernet0.addressType" => "static",
-		"ethernet0.allowGuestConnectionControl" => "FALSE",
-		"ethernet0.connectionType" => "custom",
 		"ethernet0.present" => "TRUE",
 		"ethernet0.virtualDev" => "$vm_ethernet_adapter_type",
-		"ethernet0.vnet" => "$virtual_switch_0",
-		"ethernet0.wakeOnPcktRcv" => "FALSE",
+		"ethernet0.networkName" => "$virtual_switch_0",
 		
 		"ethernet1.address" => "$vm_eth1_mac",
 		"ethernet1.addressType" => "static",
-		"ethernet1.allowGuestConnectionControl" => "FALSE",
-		"ethernet1.connectionType" => "custom",
 		"ethernet1.present" => "TRUE",
 		"ethernet1.virtualDev" => "$vm_ethernet_adapter_type",
-		"ethernet1.vnet" => "$virtual_switch_1",
-		"ethernet1.wakeOnPcktRcv" => "FALSE",
+		"ethernet1.networkName" => "$virtual_switch_1",
 		
 		"floppy0.present" => "FALSE",
 		
@@ -1136,12 +1165,14 @@ sub prepare_vmdk {
 	}
 	
 	my $host_vmdk_directory_path = $self->get_vmdk_directory_path() || return;
+	my $host_vmdk_file_path = $self->get_vmdk_file_path() || return;
+	my $host_vmdk_file_path_nonpersistent = $self->get_vmdk_file_path_nonpersistent() || return;
+	
 	my $repository_vmdk_directory_path = $self->get_repository_vmdk_directory_path() || return;
 	my $image_name = $self->data->get_image_name() || return;
 	my $vmhost_hostname = $self->data->get_vmhost_hostname() || return;
 	
 	# Check if the first .vmdk file exists on the host
-	my $host_vmdk_file_path = $self->get_vmdk_file_path() || return;
 	if ($self->vmhost_os->file_exists($host_vmdk_file_path)) {
 		notify($ERRORS{'DEBUG'}, 0, ".vmdk file exists on VM host: $host_vmdk_file_path");
 		return $self->check_vmdk_disk_type();
@@ -1173,30 +1204,39 @@ sub prepare_vmdk {
 	
 	# Check if the VM is persistent, if so, attempt to copy files locally from the nonpersistent directory if they exist
 	if ($self->is_vm_persistent()) {
-		my $host_vmdk_directory_path_nonpersistent = $self->get_vmdk_directory_path_nonpersistent() || return;
 		
-		if (my @vmdk_nonpersistent_file_paths = $self->vmhost_os->find_files($host_vmdk_directory_path_nonpersistent, '*.vmdk')) {
-			my $start_time = time;
-			
-			# Loop through the files, copy each file from the non-persistent directory to the persistent directory
-			for my $vmdk_nonpersistent_file_path (sort @vmdk_nonpersistent_file_paths) {
-				# Extract the file name from the path
-				my ($vmdk_copy_file_name) = $vmdk_nonpersistent_file_path =~ /([^\/]+)$/g;
-				
-				# Attempt to copy the file on the VM host
-				if (!$self->vmhost_os->copy_file($vmdk_nonpersistent_file_path, "$host_vmdk_directory_path/$vmdk_copy_file_name")) {
-					notify($ERRORS{'WARNING'}, 0, "failed to copy vmdk file from the non-persistent to the persistent directory on the VM host:\n'$vmdk_nonpersistent_file_path' --> '$host_vmdk_directory_path/$vmdk_copy_file_name'");
-					return;
-				}
-			}
-			
-			# All vmdk files were copied
-			my $duration = (time - $start_time);
-			notify($ERRORS{'OK'}, 0, "copied vmdk files from nonpersistent to persistent directory on VM host, took " . format_number($duration) . " seconds");
+		if ($self->api->can('copy_virtual_disk') && $self->api->copy_virtual_disk($host_vmdk_file_path_nonpersistent, $host_vmdk_file_path)) {
+			notify($ERRORS{'OK'}, 0, "copied vmdk files from nonpersistent to persistent directory on VM host");
 			return $self->check_vmdk_disk_type();
 		}
 		else {
-			notify($ERRORS{'DEBUG'}, 0, "non-persistent set of vmdk files does not exist: '$host_vmdk_directory_path_nonpersistent'");
+			my $host_vmdk_directory_path_nonpersistent = $self->get_vmdk_directory_path_nonpersistent() || return;
+			
+			my $vmdk_file_prefix = $self->get_vmdk_file_prefix() || return;
+			
+			if (my @vmdk_nonpersistent_file_paths = $self->vmhost_os->find_files($host_vmdk_directory_path_nonpersistent, "$vmdk_file_prefix*.vmdk")) {
+				my $start_time = time;
+				
+				# Loop through the files, copy each file from the non-persistent directory to the persistent directory
+				for my $vmdk_nonpersistent_file_path (sort @vmdk_nonpersistent_file_paths) {
+					# Extract the file name from the path
+					my ($vmdk_copy_file_name) = $vmdk_nonpersistent_file_path =~ /([^\/]+)$/g;
+					
+					# Attempt to copy the file on the VM host
+					if (!$self->vmhost_os->copy_file($vmdk_nonpersistent_file_path, "$host_vmdk_directory_path/$vmdk_copy_file_name")) {
+						notify($ERRORS{'WARNING'}, 0, "failed to copy vmdk file from the non-persistent to the persistent directory on the VM host:\n'$vmdk_nonpersistent_file_path' --> '$host_vmdk_directory_path/$vmdk_copy_file_name'");
+						return;
+					}
+				}
+				
+				# All vmdk files were copied
+				my $duration = (time - $start_time);
+				notify($ERRORS{'OK'}, 0, "copied vmdk files from nonpersistent to persistent directory on VM host, took " . format_number($duration) . " seconds");
+				return $self->check_vmdk_disk_type();
+			}
+			else {
+				notify($ERRORS{'DEBUG'}, 0, "non-persistent set of vmdk files does not exist: '$host_vmdk_directory_path_nonpersistent'");
+			}
 		}
 	}
 	
@@ -1252,9 +1292,9 @@ sub prepare_vmdk {
                using ESX and the disk type is not flat, a copy of the vmdk is
                created using the thin virtual disk type in the same directory as
                the incompatible vmdk directory. The name of the copied vmdk file
-               is the same as the incompatible vmdk file with '-thin' inserted
-               before '.vmdk'. Example:
-               'vmwarewinxp-base1-v0.vmdk' --> 'vmwarewinxp-base1-v0-thin.vmdk'
+               is the same as the incompatible vmdk file with 'thin_' inserted
+               at the beginning. Example:
+               'vmwarewinxp-base1-v0.vmdk' --> 'thin_vmwarewinxp-base1-v0.vmdk'
                
                This subroutine returns true unless ESX is being used, the
                virtual disk type is not flat, and a thin copy cannot be created.
@@ -1271,20 +1311,20 @@ sub check_vmdk_disk_type {
 	my $vmdk_file_path = $self->get_vmdk_file_path() || return;
 	
 	# Check if the API object implements the required subroutines
-	unless ($self->api->can("get_vmware_product_name")
-			  && $self->api->can("get_virtual_disk_type")
-			  && $self->api->can("copy_virtual_disk")
-			  && $self->api->can("get_virtual_disk_controller_type")) {
+	unless ($self->api->can("get_virtual_disk_type")
+			  && $self->api->can("copy_virtual_disk")) {
 		notify($ERRORS{'DEBUG'}, 0, "skipping vmdk disk type check because required subroutines are not implemented by the API object");
 		return 1;
 	}
 	
-	# Retrieve the VMware product name and virtual disk type from the API object
-	my $vmware_product_name = $self->api->get_vmware_product_name();
+	# Retrieve the VMware product name
+	my $vmware_product_name = $self->get_vmhost_product_name();
 	if (!$vmware_product_name) {
 		notify($ERRORS{'DEBUG'}, 0, "skipping vmdk disk type check because VMware product name could not be retrieved from the API object");
 		return 1;
 	}
+	
+	# Retrieve the virtual disk type from the API object
 	my $virtual_disk_type = $self->api->get_virtual_disk_type($vmdk_file_path);
 	if (!$vmware_product_name) {
 		notify($ERRORS{'DEBUG'}, 0, "skipping vmdk disk type check because virtual disk type could not be retrieved from the API object");
@@ -1298,7 +1338,9 @@ sub check_vmdk_disk_type {
 			my $vmdk_file_path = $self->get_vmdk_file_path() || return;
 			my $vmdk_directory_path = $self->get_vmdk_directory_path() || return;
 			my $vmdk_file_prefix = $self->get_vmdk_file_prefix() || return;
-			my $thin_vmdk_file_path = "$vmdk_directory_path/$vmdk_file_prefix-thin.vmdk";
+			my $thin_vmdk_file_path = "$vmdk_directory_path/thin_$vmdk_file_prefix.vmdk";
+			
+			my $vm_disk_adapter_type = $self->get_vm_disk_adapter_type() || return;
 			
 			if ($self->vmhost_os->file_exists($thin_vmdk_file_path)) {
 				notify($ERRORS{'DEBUG'}, 0, "thin virtual disk already exists: $thin_vmdk_file_path");
@@ -1306,15 +1348,8 @@ sub check_vmdk_disk_type {
 			else {
 				notify($ERRORS{'DEBUG'}, 0, "attempting to create a copy of the virtual disk using the thin virtual disk type: $thin_vmdk_file_path");
 				
-				# Get the controller type from the incompatible vmdk file, use it to create the copy
-				my $virtual_disk_controller_type = $self->api->get_virtual_disk_controller_type($vmdk_file_path);
-				if (!$virtual_disk_controller_type) {
-					notify($ERRORS{'WARNING'}, 0, "unable to create a copy of the virtual disk using the thin virtual disk type because the controller type used by the original vmdk file cannot be retrieved");
-					return;
-				}
-				
 				# Attempt to create a thin copy of the virtual disk
-				if ($self->api->copy_virtual_disk($vmdk_file_path, $thin_vmdk_file_path, $virtual_disk_controller_type, 'thin')) {
+				if ($self->api->copy_virtual_disk($vmdk_file_path, $thin_vmdk_file_path, 'thin', $vm_disk_adapter_type)) {
 					notify($ERRORS{'DEBUG'}, 0, "created a copy of the virtual disk using the thin virtual disk type: $thin_vmdk_file_path");
 				}
 				else {
@@ -1856,7 +1891,8 @@ sub get_vmdk_file_path {
  Returns     : string
  Description : Returns the image repository directory path on the management
                node under which the vmdk directories for all of the images
-               reside.  Example:
+               reside.  The preferred database value to use is vmprofile.repositorypath. If this is not available, managementnode.installpath is retrieved and "/vmware_images" is appended. If this is not available, "/install/vmware
+					Example:
                repository vmdk file path: /install/vmware_images/vmwarewinxp-base234-v12/vmwarewinxp-base234-v12.vmdk
                repository vmdk base directory path: /install/vmware_images
 					
@@ -1871,21 +1907,27 @@ sub get_repository_vmdk_base_directory_path {
 	}
 	
 	# Return the path stored in this object if it has already been determined
-	return $self->{repository_base_directory} if (defined $self->{repository_base_directory});
+	return $self->{repository_base_directory_path} if (defined $self->{repository_base_directory_path});
 	
-	my $repository_vmdk_base_directory;
-	if (my $management_node_install_path = $self->data->get_management_node_install_path()) {
-		$repository_vmdk_base_directory = "$management_node_install_path/vmware_images";
-		notify($ERRORS{'DEBUG'}, 0, "using managementnode installpath database value: $repository_vmdk_base_directory");
+	my $repository_vmdk_base_directory_path;
+	
+	# Attempt the retrieve vmhost.repositorypath
+	if ($repository_vmdk_base_directory_path = $self->data->get_vmhost_profile_repository_path()) {
+		$repository_vmdk_base_directory_path = normalize_file_path($repository_vmdk_base_directory_path);
+		notify($ERRORS{'DEBUG'}, 0, "retrieved VM profile repository path: $repository_vmdk_base_directory_path");
+	}
+	elsif ($repository_vmdk_base_directory_path = $self->data->get_management_node_install_path()) {
+		$repository_vmdk_base_directory_path = normalize_file_path($repository_vmdk_base_directory_path) . "/vmware_images";
+		notify($ERRORS{'DEBUG'}, 0, "VM profile repository path is not set in the database, using management node install path: $repository_vmdk_base_directory_path");
 	}
 	else {
-		$repository_vmdk_base_directory = "install/vmware_images";
-		notify($ERRORS{'DEBUG'}, 0, "using hard-coded path: $repository_vmdk_base_directory");
+		$repository_vmdk_base_directory_path = '/install/vmware_images';
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve VM profile repository path or management node install path from the database, returning '/install/vmware_images'");
 	}
 	
-	# Set a value in this object so this doesn't have to be figured out more than once
-	$self->{repository_base_directory} = $repository_vmdk_base_directory;
-	return $repository_vmdk_base_directory;
+	# Set a value in this object so this doesn't have to be retrieved more than once
+	$self->{repository_base_directory_path} = $repository_vmdk_base_directory_path;
+	return $self->{repository_base_directory_path};
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -2023,7 +2065,8 @@ sub get_image_size {
 	
 	my $vmhost_hostname = $self->data->get_vmhost_hostname() || return;
 	my $vmprofile_vmdisk = $self->data->get_vmhost_profile_vmdisk() || return;
-
+	my $image_name = $self->data->get_image_name() || return;
+	
 	# Attempt to get the vmdk file path argument
 	# If not supplied, use the default vmdk file path for this reservation
 	my $vmdk_file_path = shift;
@@ -2051,7 +2094,7 @@ sub get_image_size {
 				if ($bytes_used =~ /^\d+$/) {
 					my $mb_used = format_number(($bytes_used / 1024 / 1024), 1);
 					my $gb_used = format_number(($bytes_used / 1024 / 1024 / 1024), 2);
-					notify($ERRORS{'DEBUG'}, 0, "size of vmdk directory in image repository $repository_vmdk_directory_path: " . format_number($bytes_used) . " bytes ($mb_used MB, $gb_used GB)");
+					notify($ERRORS{'DEBUG'}, 0, "size of $image_name image in image repository: " . format_number($bytes_used) . " bytes ($mb_used MB, $gb_used GB)");
 					return $bytes_used;
 				}
 				else {
@@ -2086,7 +2129,7 @@ sub get_image_size {
 		return;
 	}
 	
-	notify($ERRORS{'DEBUG'}, 0, "size of vmdk file on VM host $vmhost_hostname $vmdk_file_path: " . format_number($vmdk_size) . " bytes");
+	notify($ERRORS{'DEBUG'}, 0, "size of $image_name image on VM host $vmhost_hostname: " . format_number($vmdk_size) . " bytes");
 	return $vmdk_size;
 }
 
@@ -2171,15 +2214,18 @@ sub get_vmdk_parameter_value {
 		return;
 	}
 	
+	my $vmdk_file_path = $self->get_vmdk_file_path() || return;
 	my $image_repository_vmdk_file_path = $self->get_repository_vmdk_file_path() || return;
-	notify($ERRORS{'DEBUG'}, 0, "attempting to locate $vmdk_parameter value in $image_repository_vmdk_file_path");
 	
 	# Open the vmdk file for reading
-	if (open FILE, "<", $image_repository_vmdk_file_path) {
-		notify($ERRORS{'DEBUG'}, 0, "opened vmdk file for reading: $image_repository_vmdk_file_path");
+	if (open FILE, "<", $vmdk_file_path) {
+		notify($ERRORS{'DEBUG'}, 0, "attempting to locate $vmdk_parameter value in vmdk file: $vmdk_file_path");
+	}
+	elsif (open FILE, "<", $image_repository_vmdk_file_path) {
+		notify($ERRORS{'DEBUG'}, 0, "attempting to locate $vmdk_parameter value in vmdk file: $image_repository_vmdk_file_path");
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "unable to open vmdk file for reading: $image_repository_vmdk_file_path");
+		notify($ERRORS{'WARNING'}, 0, "unable to open either vmdk file for reading: $vmdk_file_path, $image_repository_vmdk_file_path");
 		return;
 	}
 	
@@ -2239,11 +2285,34 @@ sub get_vm_disk_adapter_type {
 		return;
 	}
 	
+	my $vm_host_product_name = $self->get_vmhost_product_name() || return;
+	
+	my $vmdk_controller_type;
 	if ($self->api->can("get_virtual_disk_controller_type")) {
-		return $self->api->get_virtual_disk_controller_type($self->get_vmdk_file_path());
+		$vmdk_controller_type = $self->api->get_virtual_disk_controller_type($self->get_vmdk_file_path());
+		notify($ERRORS{'DEBUG'}, 0, "retrieved vm disk adapter type from api object: $vmdk_controller_type");
+	}
+	elsif ($vmdk_controller_type = $self->get_vmdk_parameter_value('adapterType')) {
+		notify($ERRORS{'DEBUG'}, 0, "retrieved vm disk adapter type from vmdk file: $vmdk_controller_type");
+	}
+	elsif (!$vmdk_controller_type || ($vm_host_product_name =~ /esx/i && $vmdk_controller_type =~ /ide/i)) {
+		
+		my $vm_os_configuration = $self->get_vm_os_configuration();
+		if (!$vm_os_configuration) {
+			notify($ERRORS{'WARNING'}, 0, "unable to determine vm disk adapter type because unable to retrieve default VM OS configuration");
+			return;
+		}
+		
+		$vmdk_controller_type = $vm_os_configuration->{"scsi-virtualDev"};
+	}
+	
+	if ($vmdk_controller_type) {
+		notify($ERRORS{'DEBUG'}, 0, "retrieved vm disk adapter type: $vmdk_controller_type");
+		return $vmdk_controller_type;
 	}
 	else {
-		return $self->get_vmdk_parameter_value('adapterType');
+		notify($ERRORS{'WARNING'}, 0, "unable to determine vm disk adapter type");
+		return;
 	}
 }
 
@@ -2550,10 +2619,12 @@ sub get_vmx_file_paths {
 		return;
 	}
 	
+	notify($ERRORS{'DEBUG'}, 0, "attempting to find existing vmx files on the VM host");
+	
 	my $vmx_base_directory_path = $self->get_vmx_base_directory_path() || return;
 	
-	(my @vmx_paths = $self->vmhost_os->find_files($vmx_base_directory_path, "*.vmx")) || return;
-	notify($ERRORS{'DEBUG'}, 0, "found " . scalar(@vmx_paths) . " vmx files on VM host:\n" . join("\n", @vmx_paths));
+	my @vmx_paths = $self->vmhost_os->find_files($vmx_base_directory_path, "*.vmx");
+	notify($ERRORS{'DEBUG'}, 0, "found " . scalar(@vmx_paths) . " vmx files on VM host");
 	return @vmx_paths;
 }
 
@@ -3064,29 +3135,56 @@ sub rename_vmdk {
 	
 	# Check if the VM host OS object implements an execute subroutine and attempt to run vmware-vdiskmanager
 	if ($self->vmhost_os->can("execute")) {
+		
+		# Try vmware-vdiskmanager
 		notify($ERRORS{'OK'}, 0, "attempting to rename vmdk file using vmware-vdiskmanager: $source_vmdk_file_path --> $destination_vmdk_file_path");
-		
-		my $command = "vmware-vdiskmanager -n \"$source_vmdk_file_path\" \"$destination_vmdk_file_path\"";
-		my ($exit_status, $output) = $self->vmhost_os->execute($command);
-		
-		if (!defined($output)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to execute 'vmware-vdiskmanager' command on VM host to rename vmdk file:\n$command");
+		my $vdisk_command = "vmware-vdiskmanager -n \"$source_vmdk_file_path\" \"$destination_vmdk_file_path\"";
+		my ($vdisk_exit_status, $vdisk_output) = $self->vmhost_os->execute($vdisk_command);
+		if (!defined($vdisk_output)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to execute 'vmware-vdiskmanager' command on VM host to rename vmdk file:\n$vdisk_command");
 		}
-		elsif (grep(/success/i, @$output)) {
-			notify($ERRORS{'OK'}, 0, "renamed vmdk file by executing 'vmware-vdiskmanager' command on VM host:\ncommand: $command\noutput: " . join("\n", @$output));
+		elsif (grep(/success/i, @$vdisk_output)) {
+			notify($ERRORS{'OK'}, 0, "renamed vmdk file by executing 'vmware-vdiskmanager' command on VM host:\ncommand: $vdisk_command\noutput: " . join("\n", @$vdisk_output));
 			return 1;
 		}
-		elsif (grep(/command not found/i, @$output)) {
+		elsif (grep(/command not found/i, @$vdisk_output)) {
 			notify($ERRORS{'DEBUG'}, 0, "unable to rename vmdk using 'vmware-vdiskmanager' because the command is not available on VM host");
 		}
 		else {
-			notify($ERRORS{'WARNING'}, 0, "failed to execute 'vmware-vdiskmanager' command on VM host to rename vmdk file:\n$command\noutput:\n" . join("\n", @$output));
+			notify($ERRORS{'WARNING'}, 0, "failed to execute 'vmware-vdiskmanager' command on VM host to rename vmdk file:\n$vdisk_command\noutput:\n" . join("\n", @$vdisk_output));
+		}
+		
+		
+		# Try vmkfstools
+		notify($ERRORS{'OK'}, 0, "attempting to rename vmdk file using vmkfstools: $source_vmdk_file_path --> $destination_vmdk_file_path");
+		my $vmkfs_command = "vmkfstools -E \"$source_vmdk_file_path\" \"$destination_vmdk_file_path\"";
+		my ($vmkfs_exit_status, $vmkfs_output) = $self->vmhost_os->execute($vmkfs_command);
+		
+		# There is no output if the command succeeded
+		# Check to make sure the source file doesn't exist and the destination file does exist
+		if (!defined($vmkfs_output)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to execute 'vmkfstools' command on VM host: $vmkfs_command");
+		}
+		elsif (grep(/command not found/i, @$vmkfs_output)) {
+			notify($ERRORS{'DEBUG'}, 0, "unable to rename vmdk using 'vmkfstools' because the command is not available on VM host");
+		}
+		elsif ($self->vmhost_os->file_exists($source_vmdk_file_path)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to rename vmdk file using vmkfstools, source file still exists: '$source_vmdk_file_path' --> '$destination_vmdk_file_path'");
+		}
+		elsif (!$self->vmhost_os->file_exists($destination_vmdk_file_path)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to rename vmdk file using vmkfstools, destination file does not exist: '$source_vmdk_file_path' --> '$destination_vmdk_file_path'");
+		}
+		else {
+			notify($ERRORS{'OK'}, 0, "rename vmdk file using vmkfstools: '$source_vmdk_file_path' --> '$destination_vmdk_file_path'");
+			return 1;
 		}
 	}
 	else {
-		notify($ERRORS{'DEBUG'}, 0, "unable to execute 'vmware-vdiskmanager' on VM host because 'execute' subroutine has not been implemented by the VM host OS: " . ref($self->vmhost_os));
+		notify($ERRORS{'DEBUG'}, 0, "unable to execute 'vmware-vdiskmanager' or 'vmkfstools' on VM host because 'execute' subroutine has not been implemented by the VM host OS: " . ref($self->vmhost_os));
 	}
 	
+	# Unable to rename vmdk file using any VMware utilities or APIs
+	# Attempt to manually rename the files
 	
 	# Determine the source vmdk directory path
 	my ($source_vmdk_directory_path) = $source_vmdk_file_path =~ /(.+)\/[^\/]+\.vmdk$/;
@@ -3238,6 +3336,47 @@ sub rename_vmdk {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 mount_repository_datastore
+
+ Parameters  : 
+ Returns     : boolean
+ Description : 
+
+=cut
+
+sub mount_repository_datastore {
+	my $self = shift;
+	if (ref($self) !~ /vmware/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $datastore_name = 'vcl-repository';
+	
+	my $management_node_short_name = $self->data->get_management_node_short_name();
+	if (!$management_node_short_name) {
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve management short name");
+		return;
+	}
+	
+	my $repository_vmdk_base_directory_path = $self->get_repository_vmdk_base_directory_path();
+	if (!$repository_vmdk_base_directory_path) {
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve repository vmdk base directory path");
+		return;
+	}
+	
+	if ($self->api->can("create_nfs_datastore")) {
+		if ($self->api->create_nfs_datastore($datastore_name, '10.25.0.245', $repository_vmdk_base_directory_path)) {
+			notify($ERRORS{'OK'}, 0, "repository datastore mounted on VM host: $datastore_name");
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "unable to mount repository datastore on VM host: $datastore_name");
+		}
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 power_on
 
  Parameters  : none
@@ -3317,6 +3456,55 @@ sub power_status {
 	}
 	
 	return $self->api->get_vm_power_state($self->get_vmx_file_path());
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_vmhost_product_name
+
+ Parameters  : none
+ Returns     : string
+ Description : Returns a string containing the full VMware product name being
+               used on the VM host. 
+
+=cut
+
+sub get_vmhost_product_name {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $vmhost_computer_name = $self->data->get_vmhost_hostname() || return;
+	my $product_name;
+	
+	# Attempt to retrieve the product name using the API object
+	if ($self->api->can("get_vmware_product_name") && ($product_name = $self->api->get_vmware_product_name())) {
+		return $product_name;
+	}
+	
+	# Attempt to retrieve the product name by running 'vmware -v' on the VM host
+	elsif ($self->vmhost_os->can("execute")) {
+		my $command = "vmware -v";
+		my ($exit_status, $output) = $self->vmhost_os->execute($command);
+		if (!defined($output)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to execute 'vmware -v' command on VM host $vmhost_computer_name to retrieve the VMware product name, command: $command");
+		}
+		elsif (my ($product_name) = grep(/vmware/i, @$output)) {
+			notify($ERRORS{'OK'}, 0, "VMware product being used on VM host $vmhost_computer_name: '$product_name'");
+			return $product_name;
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to execute 'vmware -v' command on VM host $vmhost_computer_name to retrieve the VMware product name, command: $command\noutput:\n" . join("\n", @$output));
+		}
+	}
+	
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve VMware product name being used on VM host $vmhost_computer_name using the API or VM host OS object");
+	}
+	
+	return;
 }
 
 #/////////////////////////////////////////////////////////////////////////////

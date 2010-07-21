@@ -195,7 +195,7 @@ sub get_registered_vms {
 	
 	# Convert the vmx paths back to the normal non-VIX format
 	for (my $i=0; $i<scalar(@registered_vms); $i++) {
-		$registered_vms[$i] =~ s/\s*\[standard\]\s*/$vmx_base_directory_path\//ig;
+		$registered_vms[$i] =~ s/\s*\[.+\]\s*/$vmx_base_directory_path\//ig;
 	}
 	return @registered_vms;
 }
@@ -802,9 +802,9 @@ sub _get_properties {
 
 =head2 _get_datastore_path
 
- Parameters  : $vmx_file_path
+ Parameters  : $file_path
  Returns     : string
- Description : Converts the vmx file path argument to a datastore path.
+ Description : Converts the file path argument to a datastore path.
 
 =cut
 
@@ -815,7 +815,7 @@ sub _get_datastore_path {
 		return;
 	}
 	
-	# Get the path argument if supplied
+	# Get the file path argument
 	my $path = shift;
 	if (!$path) {
 		notify($ERRORS{'WARNING'}, 0, "path argument was not supplied");

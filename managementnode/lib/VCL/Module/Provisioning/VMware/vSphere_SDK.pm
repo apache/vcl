@@ -363,7 +363,7 @@ sub get_vm_power_state {
 
 =head2 copy_virtual_disk
 
- Parameters  : $source_vmdk_file_path, $destination_vmdk_file_path, $adapter_type (optional), $disk_type (optional)
+ Parameters  : $source_vmdk_file_path, $destination_vmdk_file_path, $disk_type (optional), $adapter_type (optional)
  Returns     : boolean
  Description : Copies a virtual disk (set of vmdk files). This subroutine allows
                a virtual disk to be converted to a different disk type or
@@ -439,11 +439,11 @@ sub copy_virtual_disk {
 	
 	# Get the adapter type and disk type arguments if they were specified
 	# If not specified, set the default values
+	my $destination_disk_type = shift || 'thin';
 	my $destination_adapter_type = shift || 'busLogic';
-	my $destination_disk_type = shift || 'sparseMonolithic';
 	
 	# Check the adapter type argument, the string must match exactly or the copy will fail
-	my @valid_adapter_types = qw( busLogic lsiLogic ide);
+	my @valid_adapter_types = qw( busLogic lsiLogic ide );
 	if (!grep(/^$destination_adapter_type$/, @valid_adapter_types)) {
 		notify($ERRORS{'WARNING'}, 0, "adapter type argument is not valid: '$destination_adapter_type', it must exactly match (case sensitive) one of the following strings:\n" . join("\n", @valid_adapter_types));
 		return;
@@ -494,7 +494,9 @@ sub copy_virtual_disk {
 	notify($ERRORS{'DEBUG'}, 0, "attempting to copy file: '$source_path' --> '$destination_path'
 			 adapter type: $source_adapter_type --> $destination_adapter_type
 			 disk type: $source_disk_type --> $destination_disk_type
-			 source file size: " . format_number($source_file_size_bytes));
+			 source file size: " . format_number($source_file_size_bytes) .
+			 "disk spec:\n" . format_data($virtual_disk_spec));
+	
 	my $start_time = time;
 	eval { $virtual_disk_manager->CopyVirtualDisk(sourceName => $source_path,
 																 destName => $destination_path,
@@ -737,6 +739,7 @@ sub create_nfs_datastore {
 	local $SIG{__DIE__} = sub{};
 	
 	# Attempt to cretae the NAS datastore
+	notify($ERRORS{'DEBUG'}, 0, "attempting to create NAS datastore:\n" . format_data($host_nas_volume_spec));
 	eval { $datastore_system->CreateNasDatastore(spec => $host_nas_volume_spec); };
 	if (my $fault = $@) {
 		notify($ERRORS{'WARNING'}, 0, "failed to create NAS datastore on VM host:\ndatastore name: $datastore_name\nremote host: $remote_host\nremote path: $remote_path\nerror:\n$@");
@@ -790,20 +793,23 @@ sub get_virtual_disk_controller_type {
 	}
 	
 	my $controller_type = $vmdk_file_info->{controllerType};
-	notify($ERRORS{'DEBUG'}, 0, "retrieved controllerType value from vmdk file info: $controller_type");
 	
+	my $return_controller_type;
 	if ($controller_type =~ /lsi/i) {
-		return 'lsiLogic';
+		$return_controller_type = 'lsiLogic';
 	}
 	elsif ($controller_type =~ /bus/i) {
-		return 'busLogic';
+		$return_controller_type = 'busLogic';
 	}
 	elsif ($controller_type =~ /ide/i) {
-		return 'ide';
+		$return_controller_type = 'ide';
 	}
 	else {
-		return $controller_type;
+		$return_controller_type = $controller_type;
 	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "retrieved controllerType value from vmdk file info: $return_controller_type($controller_type)");
+	return $return_controller_type;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -908,8 +914,10 @@ sub get_virtual_disk_hardware_version {
 
  Parameters  : none
  Returns     : string
- Description : Returns the VMware product name installed on the VM host.
-               Example: 'VMware ESXi'
+ Description : Returns the full VMware product name installed on the VM host.
+               Examples:
+					VMware Server 2.0.2 build-203138
+					VMware ESXi 4.0.0 build-208167
 
 =cut
 
@@ -926,15 +934,15 @@ sub get_vmware_product_name {
 	
 	# Get the host view
 	my $host_view = VIExt::get_host_view(1);
-	my $product_name = $host_view->config->product->name;
+	my $product_name = $host_view->config->product->fullName;
 	
 	if ($product_name) {
-		notify($ERRORS{'DEBUG'}, 0, "retrieved product name for VM host $computer_name: $product_name");
+		notify($ERRORS{'DEBUG'}, 0, "VMware product being used on VM host $computer_name: '$product_name'");
 		$self->{product_name} = $product_name;
 		return $self->{product_name};
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "unable to retrieve product name for VM host $computer_name");
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve VMware product name being used on VM host $computer_name");
 		return;
 	}
 }
@@ -974,6 +982,36 @@ sub get_vmware_product_version {
 		notify($ERRORS{'WARNING'}, 0, "unable to retrieve product version for VM host $computer_name");
 		return;
 	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_network_names
+
+ Parameters  : none
+ Returns     : array
+ Description : Retrieves the network names configured on the VM host.
+
+=cut
+
+sub get_network_names {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get the host view
+	my $host_view = VIExt::get_host_view(1);
+	
+	# Retrieve the network info, check if each network is accessible
+	my @network_names;
+	for my $network (@{Vim::get_views(mo_ref_array => $host_view->network)}) {
+		push @network_names, $network->name;
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "retrieved network names:\n" . join("\n", @network_names));
+	return @network_names;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -1053,6 +1091,9 @@ sub create_directory {
 	
 	# Get and check the directory path argument
 	my $directory_path = $self->get_datastore_path(shift) || return;
+	
+	# Check if the directory already exists
+	return 1 if $self->file_exists($directory_path);
 	
 	# Get the VM host name
 	my $computer_node_name = $self->data->get_computer_node_name() || return;
@@ -1350,6 +1391,8 @@ sub get_file_contents {
 		return;
 	}
 	
+	# TODO: add file size check before retrieving file in case file is huge
+	
 	# Get the source and destination arguments
 	my ($path) = shift;
 	if (!$path) {
@@ -1472,6 +1515,7 @@ sub file_exists {
 	
 	# Get and check the file path argument
 	my $file_path = $self->get_datastore_path(shift) || return;
+	notify($ERRORS{'DEBUG'}, 0, "checking if file exists: $file_path");
 	
 	# Check if the path argument is the root of a datastore
 	if ($file_path =~ /^\[(.+)\]$/) {
@@ -1626,7 +1670,7 @@ sub find_files {
 	}
 	
 	@file_paths = sort @file_paths;
-	notify($ERRORS{'DEBUG'}, 0, "found " . scalar(@file_paths) . " matching files");
+	notify($ERRORS{'DEBUG'}, 0, "matching file count: " . scalar(@file_paths));
 	return @file_paths;
 }
 
