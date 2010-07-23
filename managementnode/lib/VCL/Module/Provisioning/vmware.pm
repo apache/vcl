@@ -1207,13 +1207,18 @@ sub capture {
 
 		#FIXME - making local directory in our repository so does_image_exists succeeds
 		#			does_image_exists needs to figure out the datastores and search them
+		#This is a stub in case the vmprofile_datastorepath is not mounted locally
 		if (mkdir("$image_repository_path/$image_name")) {
 			notify($ERRORS{'OK'}, 0, "creating local dir for $image_name");
 		}
-
+	
+		#Now we have to make sure $vmprofile_datastorepath/$vmx_directory exists
+		if(run_ssh_command($hostnodename, $management_node_keys, "/bin/mkdir $vmprofile_datastorepath/$image_name", "root")){
+	
+		}	
 
 		# create directory
-		my @mvdir = run_ssh_command($hostnodename, $management_node_keys, "/bin/mv $vmprofile_datastorepath/$vmx_directory $vmprofile_datastorepath/$image_name", "root");
+		my @mvdir = run_ssh_command($hostnodename, $management_node_keys, "/bin/mv $vmprofile_datastorepath/$vmx_directory/\*.vmdk $vmprofile_datastorepath/$image_name", "root");
 		for my $l (@{$mvdir[1]}) {
 			notify($ERRORS{'OK'}, 0, "possible error @{ $mvdir[1] }");
 		}
