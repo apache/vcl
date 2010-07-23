@@ -103,7 +103,7 @@ sub process {
 	my $computer_type                   = $self->data->get_computer_type();
 	my $computer_ip_address             = $self->data->get_computer_ip_address();
 	my $computer_state_name             = $self->data->get_computer_state_name();
-	my $computer_next_image_id	    = $self->data->get_computer_nextimage_id();
+	my $computer_next_image_id	         = $self->data->get_computer_nextimage_id();
 	my $computer_next_image_name        = $self->data->get_computer_nextimage_name();
 	my $image_id                        = $self->data->get_image_id();
 	my $image_os_name                   = $self->data->get_image_os_name();
@@ -478,7 +478,7 @@ sub reload_image {
 	my $computer_state_name             = $self->data->get_computer_state_name();
 	my $computer_next_image_id	    = $self->data->get_computer_nextimage_id();
 	my $computer_next_image_name   	    = $self->data->get_computer_nextimage_name();
-	my $computer_currentimage_name 	    = $self->data->get_computer_currentimage_name();
+	my $computer_currentimage_name 		= $self->data->get_computer_currentimage_name();
 	my $image_id                        = $self->data->get_image_id();
 	my $image_os_name                   = $self->data->get_image_os_name();
 	my $image_name                      = $self->data->get_image_name();
@@ -486,7 +486,7 @@ sub reload_image {
 	my $image_project                   = $self->data->get_image_project();
 	my $image_reloadtime                = $self->data->get_image_reload_time();
 	my $image_architecture              = $self->data->get_image_architecture();
-	my $image_os_install_type  	    = $self->data->get_image_os_install_type();
+	my $image_os_install_type				= $self->data->get_image_os_install_type();
 	my $image_os_type                   = $self->data->get_image_os_type();
 	my $imagemeta_checkuser             = $self->data->get_imagemeta_checkuser();
 	my $imagemeta_usergroupid           = $self->data->get_imagemeta_usergroupid();
@@ -504,7 +504,7 @@ sub reload_image {
 	my $user_emailnotices               = $self->data->get_user_emailnotices();
 	my $user_imtype_name                = $self->data->get_user_imtype_name();
 	my $user_im_id                      = $self->data->get_user_im_id();
-
+	
 	# Try to get the node status if the provisioning engine has implemented a node_status() subroutine
 	my $node_status;
 	my $node_status_string = '';
@@ -580,97 +580,95 @@ sub reload_image {
 		# node_status returned 'ready'
 		notify($ERRORS{'OK'}, 0, "node_status returned '$node_status_string', $computer_short_name will not be reloaded");
 		insertloadlog($reservation_id, $computer_id, "info", "node status is $node_status_string, $computer_short_name will not be reloaded");
-
-		if($image_name ne $computer_currentimage_name){
-			notify($ERRORS{'OK'}, 0, "request image_name does not match computer_current_image name, updating computer record");
-			#update computer to reflect correct image name 
-			if (update_currentimage($computer_id, $image_id, $imagerevision_id, $image_id)) {
-			 notify($ERRORS{'OK'}, 0, "updated computer table for $computer_short_name: currentimageid=$image_id");
-			}
-			else {
-			 notify($ERRORS{'WARNING'}, 0, "failed to update computer table for $computer_short_name: currentimageid=$image_id");
-			}
-
-		}
-		notify($ERRORS{'OK'}, 0, "returning 1");
-		return 1;
 	}
 	
 	# node_status did not return 'ready'
-	notify($ERRORS{'OK'}, 0, "node status is $node_status_string, $computer_short_name will be reloaded");
-	insertloadlog($reservation_id, $computer_id, "loadimageblade", "$computer_short_name must be reloaded with $image_name");
-
-	# Make sure provisioning module's load() subroutine exists
-	if (!$self->provisioner->can("load")) {
-		notify($ERRORS{'CRITICAL'}, 0, ref($self->provisioner) . "->load() subroutine does not exist, returning");
-		insertloadlog($reservation_id, $computer_id, "failed", ref($self->provisioner) . "->load() subroutine does not exist");
-		return;
-	}
-
-
-	# Make sure the image exists on this management node's local disks
-	# Attempt to retrieve it if necessary
-	if ($self->provisioner->can("does_image_exist")) {
-		notify($ERRORS{'DEBUG'}, 0, "calling " . ref($self->provisioner) . "->does_image_exist()");
-
-		if ($self->provisioner->does_image_exist($image_name)) {
-			notify($ERRORS{'OK'}, 0, "$image_name exists on this management node");
-			insertloadlog($reservation_id, $computer_id, "doesimageexists", "confirmed image exists");
+	else {
+		notify($ERRORS{'OK'}, 0, "node status is $node_status_string, $computer_short_name will be reloaded");
+		insertloadlog($reservation_id, $computer_id, "loadimageblade", "$computer_short_name must be reloaded with $image_name");
+		
+		# Make sure provisioning module's load() subroutine exists
+		if (!$self->provisioner->can("load")) {
+			notify($ERRORS{'CRITICAL'}, 0, ref($self->provisioner) . "->load() subroutine does not exist, returning");
+			insertloadlog($reservation_id, $computer_id, "failed", ref($self->provisioner) . "->load() subroutine does not exist");
+			return;
 		}
-		else {
-			notify($ERRORS{'OK'}, 0, "$image_name does not exist on this management node");
-
-			# Try to retrieve the image files from another management node
-			if ($self->provisioner->can("retrieve_image")) {
-				notify($ERRORS{'DEBUG'}, 0, "calling " . ref($self->provisioner) . "->retrieve_image()");
-
-				if ($self->provisioner->retrieve_image($image_name)) {
-					notify($ERRORS{'OK'}, 0, "$image_name was retrieved from another management node");
-				}
+		
+		
+		# Make sure the image exists on this management node's local disks
+		# Attempt to retrieve it if necessary
+		if ($self->provisioner->can("does_image_exist")) {
+			notify($ERRORS{'DEBUG'}, 0, "calling " . ref($self->provisioner) . "->does_image_exist()");
+			
+			if ($self->provisioner->does_image_exist($image_name)) {
+				notify($ERRORS{'OK'}, 0, "$image_name exists on this management node");
+				insertloadlog($reservation_id, $computer_id, "doesimageexists", "confirmed image exists");
+			}
+			else {
+				notify($ERRORS{'OK'}, 0, "$image_name does not exist on this management node");
+				
+				# Try to retrieve the image files from another management node
+				if ($self->provisioner->can("retrieve_image")) {
+					notify($ERRORS{'DEBUG'}, 0, "calling " . ref($self->provisioner) . "->retrieve_image()");
+					
+					if ($self->provisioner->retrieve_image($image_name)) {
+						notify($ERRORS{'OK'}, 0, "$image_name was retrieved from another management node");
+					}
+					else {
+						notify($ERRORS{'CRITICAL'}, 0, "$image_name does not exist on management node and could not be retrieved");
+						insertloadlog($reservation_id, $computer_id, "failed", "requested image does not exist on management node and could not be retrieved");
+						return;
+					}
+				} ## end if ($self->provisioner->can("retrieve_image"...
 				else {
-					notify($ERRORS{'CRITICAL'}, 0, "$image_name does not exist on management node and could not be retrieved");
-					insertloadlog($reservation_id, $computer_id, "failed", "requested image does not exist on management node and could not be retrieved");
+					notify($ERRORS{'CRITICAL'}, 0, "unable to retrieve image from another management node, retrieve_image() is not implemented by " . ref($self->provisioner));
+					insertloadlog($reservation_id, $computer_id, "failed", "failed requested image does not exist on management node, retrieve_image() is not implemented");
 					return;
 				}
-			} ## end if ($self->provisioner->can("retrieve_image"...
-			else {
-				notify($ERRORS{'CRITICAL'}, 0, "unable to retrieve image from another management node, retrieve_image() is not implemented by " . ref($self->provisioner));
-				insertloadlog($reservation_id, $computer_id, "failed", "failed requested image does not exist on management node, retrieve_image() is not implemented");
-				return;
-			}
-		} ## end else [ if ($self->provisioner->does_image_exist($image_name...
-	} ## end if ($self->provisioner->can("does_image_exist"...
-	else {
-		notify($ERRORS{'OK'}, 0, "unable to check if image exists, does_image_exist() not implemented by " . ref($self->provisioner));
+			} ## end else [ if ($self->provisioner->does_image_exist($image_name...
+		} ## end if ($self->provisioner->can("does_image_exist"...
+		else {
+			notify($ERRORS{'OK'}, 0, "unable to check if image exists, does_image_exist() not implemented by " . ref($self->provisioner));
+		}
+		
+		
+		# Update the computer state to reloading
+		if (update_computer_state($computer_id, "reloading")) {
+			notify($ERRORS{'OK'}, 0, "computer $computer_short_name state set to reloading");
+			insertloadlog($reservation_id, $computer_id, "info", "computer state updated to reloading");
+		}
+		else {
+			notify($ERRORS{'CRITICAL'}, 0, "unable to set $computer_short_name into reloading state, returning");
+			insertloadlog($reservation_id, $computer_id, "failed", "unable to set computer $computer_short_name state to reloading");
+			return;
+		}
+		
+		
+		# Call provisioning module's load() subroutine
+		notify($ERRORS{'OK'}, 0, "calling " . ref($self->provisioner) . "->load() subroutine");
+		insertloadlog($reservation_id, $computer_id, "info", "calling " . ref($self->provisioner) . "->load() subroutine");
+		if ($self->provisioner->load($node_status)) {
+			notify($ERRORS{'OK'}, 0, "$image_name was successfully reloaded on $computer_short_name");
+			insertloadlog($reservation_id, $computer_id, "loadimagecomplete", "$image_name was successfully reloaded on $computer_short_name");
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "$image_name failed to load on $computer_short_name, returning");
+			insertloadlog($reservation_id, $computer_id, "loadimagefailed", "$image_name failed to load on $computer_short_name");
+			return;
+		}
+		
+		#Post operations not to be handled by provisioning modules
+		if($image_os_install_type eq "kickstart"){
+			notify($ERRORS{'OK'}, 0, "Detected kickstart install on $computer_short_name, writing current_image.txt");
+			  if(write_currentimage_txt($self->data)){
+				  notify($ERRORS{'OK'}, 0, "Successfully wrote current_image.txt on $computer_short_name");
+			  }
+		}
+		
+		notify($ERRORS{'OK'}, 0, "node ready: successfully reloaded $computer_short_name with $image_name");
+		insertloadlog($reservation_id, $computer_id, "nodeready", "$computer_short_name was reloaded with $image_name");
 	}
-
-
-	# Update the computer state to reloading
-	if (update_computer_state($computer_id, "reloading")) {
-		notify($ERRORS{'OK'}, 0, "computer $computer_short_name state set to reloading");
-		insertloadlog($reservation_id, $computer_id, "info", "computer state updated to reloading");
-	}
-	else {
-		notify($ERRORS{'CRITICAL'}, 0, "unable to set $computer_short_name into reloading state, returning");
-		insertloadlog($reservation_id, $computer_id, "failed", "unable to set computer $computer_short_name state to reloading");
-		return;
-	}
-
-
-	# Call provisioning module's load() subroutine
-	notify($ERRORS{'OK'}, 0, "calling " . ref($self->provisioner) . "->load() subroutine");
-	insertloadlog($reservation_id, $computer_id, "info", "calling " . ref($self->provisioner) . "->load() subroutine");
-	if ($self->provisioner->load($node_status)) {
-		notify($ERRORS{'OK'}, 0, "$image_name was successfully reloaded on $computer_short_name");
-		insertloadlog($reservation_id, $computer_id, "loadimagecomplete", "$image_name was successfully reloaded on $computer_short_name");
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "$image_name failed to load on $computer_short_name, returning");
-		insertloadlog($reservation_id, $computer_id, "loadimagefailed", "$image_name failed to load on $computer_short_name");
-		return;
-	}
-
-
+	
 	# Update the current image ID in the computer table
 	if (update_currentimage($computer_id, $image_id, $imagerevision_id, $image_id)) {
 		notify($ERRORS{'OK'}, 0, "updated computer table for $computer_short_name: currentimageid=$image_id");
@@ -679,18 +677,6 @@ sub reload_image {
 		notify($ERRORS{'WARNING'}, 0, "failed to update computer table for $computer_short_name: currentimageid=$image_id");
 	}
 	
-	
-	#Post operations not to be handled by provisioning modules
-	if($image_os_install_type eq "kickstart"){
-		notify($ERRORS{'OK'}, 0, "Detected kickstart install on $computer_short_name, writing current_image.txt");
-		  if(write_currentimage_txt($self->data)){
-			  notify($ERRORS{'OK'}, 0, "Successfully wrote current_image.txt on $computer_short_name");
-		  }
-	}
-	
-	notify($ERRORS{'OK'}, 0, "node ready: successfully reloaded $computer_short_name with $image_name");
-	insertloadlog($reservation_id, $computer_id, "nodeready", "$computer_short_name was reloaded with $image_name");
-
 	notify($ERRORS{'OK'}, 0, "returning 1");
 	return 1;
 } ## end sub reload_image
@@ -1002,26 +988,9 @@ sub reserve_computer {
 	}
 
 	if ($computer_type =~ /blade|virtualmachine/) {
-		# If dynamic DHCP is used, update the public IP address in the computer table
-		if ($ip_configuration eq "dynamicDHCP") {
-			$computer_ip_address = getdynamicaddress($computer_short_name, $image_os_name, $image_os_type);
-			if ($computer_ip_address) {
-				notify($ERRORS{'DEBUG'}, 0, "retrieved dynamic DHCP IP address from $computer_ip_address: $computer_ip_address");
-				
-				# Update the reservation data
-				$self->data->set_computer_ip_address($computer_ip_address);
-				
-				# Update the public IP address in the computer table
-				if (update_computer_address($computer_id, $computer_ip_address)) {
-					notify($ERRORS{'DEBUG'}, 0, "updated IP address in computer table");
-				}
-				else {
-					$self->reservation_failed("failed to update IP address in computer table");
-				}
-			}
-			else {
-				$self->reservation_failed("failed to retrieve dynamic DHCP IP address from $computer_short_name");
-			}
+		
+		if (!$self->os->update_public_ip_address()) {
+			$self->reservation_failed("failed to update private IP address");
 		}
 		
 		insertloadlog($reservation_id, $computer_id, "info", "node ready adding user account");

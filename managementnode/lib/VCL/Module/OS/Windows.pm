@@ -484,7 +484,7 @@ sub post_load {
 
 =cut
 
-	if (!$self->wait_for_response(120, 900)) {
+	if (!$self->wait_for_response(15, 900)) {
 		notify($ERRORS{'WARNING'}, 0, "$computer_node_name never responded to SSH");
 		return 0;
 	}
@@ -545,17 +545,6 @@ sub post_load {
 
 	if (!$self->update_ssh_known_hosts()) {
 		notify($ERRORS{'WARNING'}, 0, "unable to update the SSH known_hosts file on the management node");
-	}
-
-=item *
-
- Update the private IP address
-
-=cut
-
-	if (!$self->update_public_ip_address()) {
-		notify($ERRORS{'WARNING'}, 0, "unable to update the private IP address");
-		return 0;
 	}
 
 =item *
@@ -4594,7 +4583,7 @@ sub get_network_configuration {
 	
 	my %network_configuration;
 	if (!$self->{network_configuration}) {
-		notify($ERRORS{'DEBUG'}, 0, "attempting to retrieve network configuration");
+		notify($ERRORS{'DEBUG'}, 0, "attempting to retrieve network configuration information from $computer_node_name");
 		
 		# Run ipconfig /all, try twice in case it fails the first time
 		my $ipconfig_attempt = 0;
