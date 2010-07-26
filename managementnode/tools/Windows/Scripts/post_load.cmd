@@ -64,14 +64,6 @@ echo.
 
 echo ----------------------------------------------------------------------
 
-echo %TIME%: Calling %SCRIPT_DIR%\configure_networking.vbs...
-start "configure_networking.vbs" /WAIT cmd.exe /c "C:\Windows\system32\cscript.exe //NoLogo %SCRIPT_DIR%\configure_networking.vbs >> %LOGS_DIR%\configure_networking.log 2>&1"
-echo ERRORLEVEL: %ERRORLEVEL%
-set /A STATUS+=%ERRORLEVEL%
-echo.
-
-echo ----------------------------------------------------------------------
-
 if exist "%SystemRoot%\post_load_custom.cmd" goto POST_LOAD_CUSTOM
 echo Custom post-load script does not exist: "%SystemRoot%\post_load_custom.cmd"
 goto UPDATE_CYGWIN
