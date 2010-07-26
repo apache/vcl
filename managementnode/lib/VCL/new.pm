@@ -86,7 +86,7 @@ use VCL::utils;
 
 sub process {
 	my $self = shift;
-
+	
 	my $request_data                    = $self->data->get_request_data();
 	my $request_id                      = $self->data->get_request_id();
 	my $request_logid                   = $self->data->get_request_log_id();
@@ -659,7 +659,7 @@ sub reload_image {
 		
 		#Post operations not to be handled by provisioning modules
 		if($image_os_install_type eq "kickstart"){
-			notify($ERRORS{'OK'}, 0, "Detected kickstart install on $computer_short_name, writing current_image.txt");
+			notify($ERRORS{'OK'}, 0, "detected kickstart install on $computer_short_name, writing current_image.txt");
 			  if(write_currentimage_txt($self->data)){
 				  notify($ERRORS{'OK'}, 0, "Successfully wrote current_image.txt on $computer_short_name");
 			  }
@@ -676,6 +676,9 @@ sub reload_image {
 	else {
 		notify($ERRORS{'WARNING'}, 0, "failed to update computer table for $computer_short_name: currentimageid=$image_id");
 	}
+	
+	# Add the vcld_post_load line to currentimage.txt
+	$self->os->set_vcld_post_load_status();
 	
 	notify($ERRORS{'OK'}, 0, "returning 1");
 	return 1;
@@ -988,6 +991,20 @@ sub reserve_computer {
 	}
 
 	if ($computer_type =~ /blade|virtualmachine/) {
+		
+		# Check if the OS module implements a post_load subroutine and that post_load has been run
+		if ($self->os->can('post_load') && !$self->os->get_vcld_post_load_status()) {
+			# The OS module's post_load() tasks have not run
+			notify($ERRORS{'DEBUG'}, 0, "calling OS module's post_load() subroutine because currentimage.txt does not contain a vcld_post_load= line");
+			
+			# Call OS::post_load()
+			if ($self->os->post_load()) {
+				# Add the vcld_post_load line to currentimage.txt
+				$self->os->set_vcld_post_load_status();}
+			else {
+				notify($ERRORS{'WARNING'}, 0, "failed to execute OS module's post_load() subroutine");
+			}
+		}
 		
 		if (!$self->os->update_public_ip_address()) {
 			$self->reservation_failed("failed to update private IP address");

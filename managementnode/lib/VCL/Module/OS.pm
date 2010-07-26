@@ -677,6 +677,114 @@ sub update_public_ip_address {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 get_vcld_post_load_status
+
+ Parameters  : None
+ Returns     : If vcld_post_load line exists: 1
+               If vcld_post_load line exists: 0
+               If an error occurred: undefined
+ Description : Checks the currentimage.txt file on the computer for a line
+               beginning with 'vcld_post_load='. Returns 1 if this line is found
+               indicating that the OS module's post_load tasks have successfully
+               run. Returns 0 if the line is not found, and undefined if an
+               error occurred.
+
+=cut
+
+sub get_vcld_post_load_status {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $management_node_keys = $self->data->get_management_node_keys();
+	my $computer_node_name   = $self->data->get_computer_node_name();
+	
+	# Add a line to the end of currentimage.txt
+	my $command = "grep vcld_post_load= currentimage.txt";
+	
+	
+	my ($exit_status, $output) = run_ssh_command($computer_node_name, $management_node_keys, $command, '', '', 0);
+	if (defined($output)) {
+		if (my ($status_line) = grep(/vcld_post_load=/, @$output)) {
+			notify($ERRORS{'DEBUG'}, 0, "vcld post load tasks have run on $computer_node_name: $status_line");
+			return 1;
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "vcld post load tasks have NOT run on $computer_node_name");
+			return 0;
+		}
+	}
+	elsif ($exit_status) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve vcld_post_load status line from currentimage.txt on $computer_node_name, exit status: $exit_status, output:\n" . join("\n", @$output));
+		return;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to retrieve vcld_post_load status line from currentimage.txt on $computer_node_name");
+		return;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 set_vcld_post_load_status
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Adds a line to currentimage.txt indicating the vcld OS post_load
+               tasks have run. The format of the line added is:
+               vcld_post_load=success (<time>)
+               
+               This line is checked when a computer is reserved to make sure the
+               post_load tasks have run. A computer may be loaded but the
+               post_load tasks may not run if it is loaded manually or by some
+               other means not controlled by vcld.
+
+=cut
+
+sub set_vcld_post_load_status {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $management_node_keys = $self->data->get_management_node_keys();
+	my $computer_node_name   = $self->data->get_computer_node_name();
+	
+	my $time = localtime;
+	
+	my $post_load_line = "vcld_post_load=success ($time)";
+	
+	# Assemble the command
+	my $command;
+	
+	# Remove existing lines beginning with vcld_post_load
+	$command .= "sed -ie \"/^vcld_post_load.*/d\" currentimage.txt";
+	
+	# Add a line to the end of currentimage.txt
+	$command .= " && echo -E \"$post_load_line\" >> currentimage.txt";
+	
+	my ($exit_status, $output) = run_ssh_command($computer_node_name, $management_node_keys, $command, '', '', 1);
+	if (defined($exit_status) && $exit_status == 0) {
+		notify($ERRORS{'DEBUG'}, 0, "added line to currentimage.txt on $computer_node_name: $post_load_line");
+	}
+	elsif ($exit_status) {
+		notify($ERRORS{'WARNING'}, 0, "failed to add line to currentimage.txt on $computer_node_name: $post_load_line, exit status: $exit_status, output:\n" . join("\n", @$output));
+		return;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to add line to currentimage.txt on $computer_node_name");
+		return;
+	}
+	
+	return 1;
+}
+
+
+#/////////////////////////////////////////////////////////////////////////////
+
 1;
 __END__
 
