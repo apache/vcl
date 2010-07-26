@@ -1445,7 +1445,7 @@ sub file_exists {
 	my $links_found = grep(/^\s*Size:.*link$/i, @$output);
 	
 	if ($files_found || $directories_found || $links_found) {
-		notify($ERRORS{'DEBUG'}, 0, "'$path' exists on $computer_short_name, files: $files_found, directories: $directories_found, links: $links_found");
+		#notify($ERRORS{'DEBUG'}, 0, "'$path' exists on $computer_short_name, files: $files_found, directories: $directories_found, links: $links_found");
 		return 1;
 	}
 	else {
@@ -2028,15 +2028,19 @@ sub find_files {
 		notify($ERRORS{'WARNING'}, 0, "failed to run command to find files on $computer_node_name, base directory path: '$base_directory_path', pattern: $file_pattern, command:\n$command");
 		return;
 	}
+	elsif (grep(/^find:.*No such file or directory/i, @$output)) {
+		notify($ERRORS{'DEBUG'}, 0, "base directory does not exist on $computer_node_name: $base_directory_path");
+		@$output = ();
+	}
 	elsif (grep(/^find: /i, @$output)) {
-		notify($ERRORS{'WARNING'}, 0, "error occurred attempting to find files on $computer_node_name\nbase directory path:\n$base_directory_path\npattern: $file_pattern\ncommand: $command\noutput:\n" . join("\n", @$output));
+		notify($ERRORS{'WARNING'}, 0, "error occurred attempting to find files on $computer_node_name\nbase directory path: $base_directory_path\npattern: $file_pattern\ncommand: $command\noutput:\n" . join("\n", @$output));
 		return;
 	}
 	
 	# Return the file list
 	my @file_paths = @$output;
 	notify($ERRORS{'DEBUG'}, 0, "matching file count: " . scalar(@file_paths));
-	return @file_paths;
+	return sort @file_paths;
 }
 	
 #/////////////////////////////////////////////////////////////////////////////

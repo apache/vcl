@@ -4765,7 +4765,6 @@ sub get_request_info {
 		my $image_os_type = $request_info{reservation}{$reservation_id}{image}{OS}{type};
 
 		my $identity_file_path = $ENV{management_node_info}{keys};
-
 		$request_info{reservation}{$reservation_id}{image}{IDENTITY} = $identity_file_path;
 
 		# Set some non-database defaults
@@ -5288,7 +5287,7 @@ sub get_vmhost_info {
 	vmprofile.imageid AS vmprofile_imageid,
    vmprofile.profilename AS vmprofile_profilename,
    vmprofile.vmtypeid AS vmprofile_vmtypeid,
-   vmprofile.nasshare AS vmprofile_nasshare,
+   vmprofile.repositorypath AS vmprofile_repositorypath,
    vmprofile.datastorepath AS vmprofile_datastorepath,
    vmprofile.vmpath AS vmprofile_vmpath,
    vmprofile.virtualswitch0 AS vmprofile_virtualswitch0,
@@ -5604,7 +5603,7 @@ sub run_ssh_command {
 		# Check the exit status
 		# ssh exits with the exit status of the remote command or with 255 if an error occurred.
 		# Check for vmware-cmd usage message, it returns 255 if the vmware-cmd usage output is returned
-		if (($exit_status == 255 && $ssh_output_formatted !~ /usage.*vmware-cmd/i) ||
+		if (($exit_status == 255 && $ssh_output_formatted !~ /(vmware-cmd|vim-cmd|vmkfstools)/i) ||
 			 $ssh_output_formatted =~ /(lost connection|reset by peer|no route to host|connection refused|connection timed out|resource temporarily unavailable)/i) {
 			notify($ERRORS{'WARNING'}, 0, "attempt $attempts/$max_attempts: failed to execute SSH command on $node: $command, exit status: $exit_status, SSH exits with the exit status of the remote command or with 255 if an error occurred, output:\n$ssh_output_formatted") if $output_level;
 			next;
@@ -6041,18 +6040,15 @@ sub get_management_predictive_info {
 =cut
 
 sub get_management_node_info {
-	my ($management_node_identifier) = @_;
-
-	my ($package, $filename, $line, $sub) = caller(0);
-
-	# Check the passed parameter
-	if (!(defined($management_node_identifier))) {
-		# If nothing was passed, assume management node is this machine
-		# Try to get the hostname of this machine
-		unless ($management_node_identifier = (hostname())[0]) {
-			notify($ERRORS{'WARNING'}, 0, "management node hostname or ID was not specified and hostname could not be determined");
-			return ();
-		}
+	# Get the hostname of the computer this is running on
+	my $hostname = (hostname())[0];
+	
+	# Get the management node identifier argument
+	# If argument was not passed, assume management node is this machine
+	my $management_node_identifier = shift || $hostname;
+	if (!$management_node_identifier) {
+		notify($ERRORS{'WARNING'}, 0, "management node hostname or ID was not specified and hostname could not be determined");
+		return;
 	}
 
 	my $select_statement = "
@@ -6176,6 +6172,10 @@ AND managementnode.id != $management_node_id
 	$management_node_info->{PUBLIC_SUBNET_MASK} = $management_node_info->{publicSubnetMmask};
 	$management_node_info->{PUBLIC_DEFAULT_GATEWAY} = $management_node_info->{publicDefaultGateway};
 	$management_node_info->{PUBLIC_DNS_SERVER} = $management_node_info->{publicDNSserver};
+
+	
+	# Set the management_node_info environment variable if the info was retrieved for this computer
+	$ENV{management_node_info} = $management_node_info if ($management_node_identifier eq $hostname);
 
 	return $management_node_info;
 } ## end sub get_management_node_info
@@ -7972,88 +7972,100 @@ sub get_computer_info {
 		return 0;
 	}
 
-	my $select_statement = "
-	SELECT DISTINCT
-	computer.id AS computer_id,
-	computer.ownerid AS computer_ownerid,
-	computer.platformid AS computer_platformid,
-	computer.currentimageid AS computer_currentimageid,
-	computer.imagerevisionid AS computer_imagerevisionid,
-	computer.RAM AS computer_RAM,
-	computer.procnumber AS computer_procnumber,
-	computer.procspeed AS computer_procspeed,
-	computer.hostname AS computer_hostname,
-	computer.IPaddress AS computer_IPaddress,
-	computer.privateIPaddress AS computer_privateIPaddress,
-	computer.eth0macaddress AS computer_eth0macaddress,
-	computer.eth1macaddress AS computer_eth1macaddress,
-	computer.type AS computer_type,
-	computer.provisioningid AS computer_provisioningid,
-	computer.drivetype AS computer_drivetype,
-	computer.deleted AS computer_deleted,
-	computer.notes AS computer_notes,
-	computer.lastcheck AS computer_lastcheck,
-	computer.location AS computer_location,
-	computer.vmhostid AS computer_vmhostid,
-	computerplatform.name AS computerplatform_name,
-	computerstate.name AS computerstate_name,
-	
-	computerprovisioning.name AS computerprovisioning_name,
-	computerprovisioning.prettyname AS computerprovisioning_prettyname,
-	computerprovisioning.moduleid AS computerprovisioning_moduleid,
-	
-	computerprovisioningmodule.name AS computerprovisioningmodule_name,
-	computerprovisioningmodule.prettyname AS computerprovisioningmodule_prettyname,
-	computerprovisioningmodule.perlpackage AS computerprovisioningmodule_perlpackage,
-	
-	imagerevision.id AS imagerevision_id,
-	imagerevision.revision AS imagerevision_revision,
-	imagerevision.imagename AS imagerevision_imagename,
-	
-	image.id AS image_id,
-	image.name AS image_name,
-	image.prettyname AS image_prettyname,
-	image.platformid AS image_platformid,
-	image.OSid AS image_OSid,
-	image.imagemetaid AS image_imagemetaid,
-	image.architecture AS image_architecture,
-	
-	imageplatform.name AS imageplatform_name,
-	
-	OS.name AS OS_name,
-	OS.prettyname AS OS_prettyname,
-	OS.type AS OS_type,
-	OS.installtype AS OS_installtype,
-	OS.sourcepath AS OS_sourcepath,
-	imageOSmodule.name AS imageOSmodule_name,
-	imageOSmodule.perlpackage AS imageOSmodule_perlpackage
-	
-	FROM
-	computer,
-	platform computerplatform,
-	platform imageplatform,
-	state computerstate,
+	my $select_statement = <<EOF;
+SELECT DISTINCT
+computer.id AS computer_id,
+computer.ownerid AS computer_ownerid,
+computer.platformid AS computer_platformid,
+computer.currentimageid AS computer_currentimageid,
+computer.imagerevisionid AS computer_imagerevisionid,
+computer.RAM AS computer_RAM,
+computer.procnumber AS computer_procnumber,
+computer.procspeed AS computer_procspeed,
+computer.hostname AS computer_hostname,
+computer.IPaddress AS computer_IPaddress,
+computer.privateIPaddress AS computer_privateIPaddress,
+computer.eth0macaddress AS computer_eth0macaddress,
+computer.eth1macaddress AS computer_eth1macaddress,
+computer.type AS computer_type,
+computer.provisioningid AS computer_provisioningid,
+computer.drivetype AS computer_drivetype,
+computer.deleted AS computer_deleted,
+computer.notes AS computer_notes,
+computer.lastcheck AS computer_lastcheck,
+computer.location AS computer_location,
+computer.vmhostid AS computer_vmhostid,
+
+computerstate.name AS computerstate_name,
+
+computerplatform.name AS computerplatform_name,
+
+computerprovisioning.name AS computerprovisioning_name,
+computerprovisioning.prettyname AS computerprovisioning_prettyname,
+computerprovisioning.moduleid AS computerprovisioning_moduleid,
+
+computerprovisioningmodule.name AS computerprovisioningmodule_name,
+computerprovisioningmodule.prettyname AS computerprovisioningmodule_prettyname,
+computerprovisioningmodule.perlpackage AS computerprovisioningmodule_perlpackage,
+
+image.id AS image_id,
+image.name AS image_name,
+image.prettyname AS image_prettyname,
+image.platformid AS image_platformid,
+image.OSid AS image_OSid,
+image.imagemetaid AS image_imagemetaid,
+image.architecture AS image_architecture,
+
+imagerevision.id AS imagerevision_id,
+imagerevision.revision AS imagerevision_revision,
+imagerevision.imagename AS imagerevision_imagename,
+
+imageplatform.name AS imageplatform_name,
+
+OS.name AS OS_name,
+OS.prettyname AS OS_prettyname,
+OS.type AS OS_type,
+OS.installtype AS OS_installtype,
+OS.sourcepath AS OS_sourcepath,
+
+imageOSmodule.name AS imageOSmodule_name,
+imageOSmodule.perlpackage AS imageOSmodule_perlpackage
+
+FROM
+computer
+
+LEFT JOIN (state computerstate) ON (computerstate.id = computer.stateid)
+
+LEFT JOIN (platform computerplatform) ON (computerplatform.id = computer.platformid)
+
+LEFT JOIN (
 	provisioning computerprovisioning,
-	module computerprovisioningmodule,
+	module computerprovisioningmodule
+)
+ON (
+	computerprovisioning.id = computer.provisioningid
+	AND computerprovisioningmodule.id = computerprovisioning.moduleid
+)
+
+LEFT JOIN (
+	imagerevision,
 	image,
 	OS,
-	imagerevision,
-	module imageOSmodule
-	
-	WHERE
-	computerplatform.id = computer.platformid
-	AND computerstate.id = computer.stateid
-	AND computerprovisioning.id = computer.provisioningid
-	AND computerprovisioningmodule.id = computerprovisioning.moduleid 
-	AND imagerevision.id = computer.imagerevisionid
+	module imageOSmodule,
+	platform imageplatform
+)
+ON (
+	computer.imagerevisionid = imagerevision.id
 	AND image.id = imagerevision.imageid
 	AND OS.id = image.OSid
-	AND imageplatform.id = image.platformid
 	AND imageOSmodule.id = OS.moduleid
-	AND computer.deleted != '1'
-	AND computer.id =  $computer_id;
-	";
+	AND imageplatform.id = image.platformid
+)
 
+WHERE
+computer.id = $computer_id
+AND computer.deleted != '1'
+EOF
 
 	# Call the database select subroutine
 	# This will return an array of one or more rows based on the select statement
@@ -8114,7 +8126,7 @@ sub get_computer_info {
 			$comp_info{image}{$original_key} = $value;
 		}
 		elsif ($key =~ /imageplatform_/) {
-			$comp_info{platform}{$original_key} = $value;
+			$comp_info{image}{platform}{$original_key} = $value;
 		}
 		elsif ($key =~ /imagerevision_/) {
 			$comp_info{imagerevision}{$original_key} = $value;

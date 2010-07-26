@@ -381,80 +381,24 @@ sub capture {
 	my $image_name = $self->data->get_image_name() || return;
 	my $vmhost_profile_datastore_path = $self->data->get_vmhost_profile_datastore_path();
 	
-	# Get the MAC addresses being used by the running VM for this imaging reservation
-	my @vm_mac_addresses = ($self->os->get_private_mac_address(), $self->os->get_public_mac_address());
-	if (!@vm_mac_addresses) {
-		notify($ERRORS{'WARNING'}, 0, "unable to retrieve the private or public MAC address being used by the VM, needed to determine which vmx to capture");
+	# Check if VM is responding to SSH before proceeding
+	if (!$self->os->is_ssh_responding()) {
+		notify($ERRORS{'WARNING'}, 0, "unable to capture image, VM $computer_name is not responding to SSH");
 		return;
 	}
 	
-	# Remove the colons from the MAC addresses and convert to lower case so they can be compared
-	map { s/[^\w]//g; $_ = lc($_) } (@vm_mac_addresses);
-	
-	# Get the details of all the vmx files on the VM host
-	my $host_vmx_info = $self->get_vmx_info() || return;
-	
-	# Check the vmx files on the VM host, find any with matching MAC addresses
-	my @matching_host_vmx_paths;
-	for my $host_vmx_path (sort keys %$host_vmx_info) {
-		my $vmx_file_name = $host_vmx_info->{$host_vmx_path}{"vmx_file_name"} || '';
-		
-		# Ignore the vmx file if it is not registered
-		if (!$self->is_vm_registered($host_vmx_path)) {
-			notify($ERRORS{'OK'}, 0, "ignoring vmx file because the VM is not registered: $host_vmx_path");
-			next;
-		}
-		
-		# Ignore the vmx file if the VM is powered on
-		my $power_state = $self->api->get_vm_power_state($host_vmx_path) || 'unknown';
-		if ($power_state !~ /on/i) {
-			notify($ERRORS{'DEBUG'}, 0, "ignoring vmx file because the VM is not powered on: $host_vmx_path");
-			next;
-		}
-		
-		notify($ERRORS{'DEBUG'}, 0, "checking if vmx file is the one being used by $computer_name: $host_vmx_path");
-		
-		# Create an array containing the values of any ethernetx.address or ethernetx.generatedaddress lines
-		my @vmx_mac_addresses;
-		for my $vmx_property (keys %{$host_vmx_info->{$host_vmx_path}}) {
-			if ($vmx_property =~ /^ethernet\d+\.(generated)?address$/i) {
-				push @vmx_mac_addresses, $host_vmx_info->{$host_vmx_path}{$vmx_property};
-			}
-		}
-		
-		# Remove the colons from the MAC addresses and convert to lowercase so they can be compared
-		map { s/[^\w]//g; $_ = lc($_) } (@vmx_mac_addresses);
-		
-		# Check if any elements of the VM MAC address array intersect with the vmx MAC address array
-		notify($ERRORS{'DEBUG'}, 0, "comparing MAC addresses\nused by $computer_name:\n" . join("\n", sort(@vm_mac_addresses)) . "\nconfigured in $host_vmx_path:\n" . join("\n", sort(@vmx_mac_addresses)));
-		my @matching_mac_addresses = map { my $vm_mac_address = $_; grep(/$vm_mac_address/i, @vmx_mac_addresses) } @vm_mac_addresses;
-		if (@matching_mac_addresses) {
-			notify($ERRORS{'DEBUG'}, 0, "found matching MAC address between $computer_name and $vmx_file_name:\n" . join("\n", sort(@matching_mac_addresses)));
-			push @matching_host_vmx_paths, $host_vmx_path;
-		}
-		else {
-			notify($ERRORS{'DEBUG'}, 0, "did NOT find matching MAC address between $computer_name and $vmx_file_name");
-		}
-	}
-	
-	# Check if any matching vmx files were found
-	if (!@matching_host_vmx_paths) {
-		notify($ERRORS{'WARNING'}, 0, "did not find any vmx files on the VM host containing a MAC address matching $computer_name");
+	# Determine the vmx file path actively being used by the VM
+	my $vmx_file_path = $self->get_active_vmx_file_path();
+	if (!$vmx_file_path) {
+		notify($ERRORS{'WARNING'}, 0, "unable to capture image, failed to determine the vmx file path being used by $computer_name");
 		return;
 	}
-	elsif (scalar(@matching_host_vmx_paths) > 1) {
-		notify($ERRORS{'WARNING'}, 0, "found multiple vmx files on the VM host containing a MAC address matching $computer_name:\n" . join("\n", @matching_host_vmx_paths));
-		return
-	}
-	
-	my $vmx_file_path = $matching_host_vmx_paths[0];
-	notify($ERRORS{'OK'}, 0, "found vmx file being used by $computer_name: $vmx_file_path");
-	
+
 	# Set the vmx file path in this object so that it overrides the default value that would normally be constructed
 	$self->set_vmx_file_path($vmx_file_path) || return;
 	
 	# Get the information contained within the vmx file
-	my $vmx_info = $host_vmx_info->{$vmx_file_path};
+	my $vmx_info = $self->get_vmx_info($vmx_file_path);
 	notify($ERRORS{'DEBUG'}, 0, "vmx info for VM to be captured:\n" . format_data($vmx_info));
 	
 	# Get the vmdk info from the vmx info
@@ -572,6 +516,131 @@ sub capture {
 	}
 	
 	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_active_vmx_file_path
+
+ Parameters  : none
+ Returns     : string
+ Description : Determines the path to the vmx file being used by the VM assigned
+               to the reservation. It essentually does a reverse lookup to
+               locate the VM's vmx file given a running VM. This is accomplished
+               by retrieving the MAC addresses being used by the VM according to
+               the OS. The MAC addresses configured within the vmx files on the
+               host are then checked to locate a match. This allows an image
+               capture to work if the VM was created by hand with a different
+               vmx directory name or file name. This is useful to make base
+               image capture easier with fewer restrictions.
+
+=cut
+
+sub get_active_vmx_file_path {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $computer_name = $self->data->get_computer_short_name();
+	
+	# Get the normal, expected vmx file path for this reservation
+	my $vmx_file_path = $self->get_vmx_file_path();
+	if (!$vmx_file_path) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine normal vmx file path");
+		return;
+	}
+	
+	# Get the MAC addresses being used by the running VM for this reservation
+	my @vm_mac_addresses = ($self->os->get_private_mac_address(), $self->os->get_public_mac_address());
+	if (!@vm_mac_addresses) {
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve the private and public MAC address being used by VM $computer_name");
+		return;
+	}
+	
+	# Remove the colons from the MAC addresses and convert to lower case so they can be compared
+	map { s/[^\w]//g; $_ = lc($_) } (@vm_mac_addresses);
+
+	# Get an array containing the existing vmx file paths on the VM host
+	my @host_vmx_file_paths = $self->get_vmx_file_paths();
+
+	# Remove the normal vmx file from the array and add it to the beginning
+	# This causes it to be checked first
+	@host_vmx_file_paths = grep($_ ne $vmx_file_path, @host_vmx_file_paths);
+	unshift @host_vmx_file_paths, $vmx_file_path;
+
+	notify($ERRORS{'DEBUG'}, 0, "retrieved vmx file paths currently residing on the VM host:\n" . join("\n", @host_vmx_file_paths));
+
+	# Loop through the vmx files found on the VM host
+	# Check if the MAC addresses in the vmx file match the MAC addresses currently in use on the VM to be captured
+	my @matching_host_vmx_paths;
+	for my $host_vmx_path (@host_vmx_file_paths) {
+		# Get the info from the existing vmx file on the VM host
+		my $host_vmx_info = $self->get_vmx_info($host_vmx_path);
+		if (!$host_vmx_info) {
+			notify($ERRORS{'WARNING'}, 0, "unable to retrieve the info from existing vmx file on VM host: $host_vmx_path");
+			next;
+		}
+		
+		my $vmx_file_name = $host_vmx_info->{"vmx_file_name"} || '';
+		
+		# Create an array containing the values of any ethernetx.address or ethernetx.generatedaddress lines
+		my @vmx_mac_addresses;
+		for my $vmx_property (keys %{$host_vmx_info}) {
+			if ($vmx_property =~ /^ethernet\d+\.(generated)?address$/i) {
+				push @vmx_mac_addresses, $host_vmx_info->{$vmx_property};
+			}
+		}
+		
+		# Remove the colons from the MAC addresses and convert to lowercase so they can be compared
+		map { s/[^\w]//g; $_ = lc($_) } (@vmx_mac_addresses);
+		
+		# Check if any elements of the VM MAC address array intersect with the vmx MAC address array
+		notify($ERRORS{'DEBUG'}, 0, "comparing MAC addresses\nused by $computer_name:\n" . join("\n", sort(@vm_mac_addresses)) . "\nconfigured in $vmx_file_name:\n" . join("\n", sort(@vmx_mac_addresses)));
+		my @matching_mac_addresses = map { my $vm_mac_address = $_; grep(/$vm_mac_address/i, @vmx_mac_addresses) } @vm_mac_addresses;
+		
+		if (@matching_mac_addresses) {
+			push @matching_host_vmx_paths, $host_vmx_path;
+			notify($ERRORS{'DEBUG'}, 0, "found matching MAC addresses: $computer_name <==> $vmx_file_name (" . join(", ", @matching_mac_addresses) . ")");
+			last if ($vmx_file_path eq $host_vmx_path && scalar(@matching_host_vmx_paths) == 1);
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "ignoring $vmx_file_name because MAC addresses do not match the ones being used by $computer_name");
+			next;
+		}
+		
+		# Ignore the vmx file if it is not registered
+		if (!$self->is_vm_registered($host_vmx_path)) {
+			notify($ERRORS{'OK'}, 0, "ignoring $vmx_file_name because the VM is not registered");
+			next;
+		}
+		
+		# Ignore the vmx file if the VM is powered on
+		my $power_state = $self->api->get_vm_power_state($host_vmx_path) || 'unknown';
+		if ($power_state !~ /on/i) {
+			notify($ERRORS{'DEBUG'}, 0, "ignoring $vmx_file_name because the VM is not powered on");
+			next;
+		}
+		
+		
+		notify($ERRORS{'DEBUG'}, 0, "found matching MAC address between $computer_name and $vmx_file_name:\n" . join("\n", sort(@matching_mac_addresses)));
+		push @matching_host_vmx_paths, $host_vmx_path;
+	}
+	
+	# Check if any matching vmx files were found
+	if (!@matching_host_vmx_paths) {
+		notify($ERRORS{'WARNING'}, 0, "did not find any vmx files on the VM host containing a MAC address matching $computer_name");
+		return;
+	}
+	elsif (scalar(@matching_host_vmx_paths) > 1) {
+		notify($ERRORS{'WARNING'}, 0, "found multiple vmx files on the VM host containing a MAC address matching $computer_name:\n" . join("\n", @matching_host_vmx_paths));
+		return
+	}
+	
+	my $matching_vmx_file_path = $matching_host_vmx_paths[0];
+	notify($ERRORS{'OK'}, 0, "found vmx file being used by $computer_name: $matching_vmx_file_path");
+	return $matching_vmx_file_path;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -732,13 +801,10 @@ sub get_vmhost_datastructure {
 		notify($ERRORS{'WARNING'}, 0, "unable to create DataStructure object for VM host, exception thrown, error: $EVAL_ERROR");
 		return;
 	}
-	
 	elsif (!$vmhost_data) {
 		notify($ERRORS{'WARNING'}, 0, "unable to create DataStructure object for VM host, DataStructure object is not defined");
 		return;
 	}
-	
-	notify($ERRORS{'OK'}, 0, "\$vmhost_data: $vmhost_data, ref(\$vmhost_data): " . ref($vmhost_data));
 	
 	# Get the VM host nodename from the DataStructure object which was created for it
 	# This acts as a test to make sure the DataStructure object is working
@@ -941,43 +1007,57 @@ sub prepare_vmx {
 	
 	# Get a hash containing info about all the .vmx files that exist on the VM host
 	# Check the VMs on the host to see if any match the computer assigned to this reservation
-	my $host_vmx_info = $self->get_vmx_info();
 	
-	for my $host_vmx_path (keys %$host_vmx_info) {
-		notify($ERRORS{'DEBUG'}, 0, "checking existing vmx file on VM host: $host_vmx_path");
-		
-		my $host_vmx_computer_id = $host_vmx_info->{$host_vmx_path}{computer_id} || 'unknown';
-		
-		# If existing VM is for this computer, delete it
-		if ($computer_id eq $host_vmx_computer_id) {
-			notify($ERRORS{'DEBUG'}, 0, "found vmx file on VM host with matching computer id: $computer_id, $host_vmx_path");
-			if (!$self->delete_vm($host_vmx_path)) {
-				notify($ERRORS{'WARNING'}, 0, "failed to delete VM: $host_vmx_path");
-				return;
+	# Get an array containing the existing vmx file paths on the VM host
+	my @vmx_file_paths = $self->get_vmx_file_paths();
+	
+	# Get a list of the registered VMs
+	my @registered_vmx_paths = $self->api->get_registered_vms();
+	
+	# Loop through all registered vmx file paths
+	# Make sure the vmx file actually exists for the registered VM
+	# A VM will remain in the registered list if the vmx file is deleted while it is registered
+	for my $registered_vmx_path (@registered_vmx_paths) {
+		if (!grep { $_ eq $registered_vmx_path } @vmx_file_paths) {
+			notify($ERRORS{'WARNING'}, 0, "VM is registered but the vmx file does not exist: $registered_vmx_path");
+			
+			# Unregister the zombie VM
+			if (!$self->api->vm_unregister($registered_vmx_path)) {
+				notify($ERRORS{'WARNING'}, 0, "failed to unregister zombie VM: $registered_vmx_path");
 			}
-		}
-		else {
-			notify($ERRORS{'DEBUG'}, 0, "found vmx file on VM host with different computer id: $host_vmx_path\ncomputer id in file: $host_vmx_computer_id\nreservation computer id: $computer_id");
 		}
 	}
 	
-	# Get a list of the registered VMs
-	# Make sure the .vmx file actually exists for the registered VM
-	# A VM will remain in the registered list if the .vmx is deleted while it is registered
-	# Unregister any VMs which are missing .vmx files
-	my @registered_vmx_paths = $self->api->get_registered_vms();
-	for my $registered_vmx_path (@registered_vmx_paths) {
-		if (!$self->vmhost_os->file_exists($registered_vmx_path)) {
-			notify($ERRORS{'WARNING'}, 0, "vmx is registered but vmx file does not exist: $registered_vmx_path");
-			if (!$self->api->vm_unregister($registered_vmx_path)) {
-				if ($registered_vmx_path eq $vmx_file_path) {
-					notify($ERRORS{'WARNING'}, 0, "failed to unregister orphaned VM using the same vmx path as the VM for this reservation: $registered_vmx_path");
-					return;
-				}
-				else {
-					notify($ERRORS{'WARNING'}, 0, "failed to unregister orphaned VM using different vmx path than this reservation: $registered_vmx_path");
-				}
+	# Loop through the existing vmx file paths found, check if it matches the VM for this reservation
+	for my $vmx_file_path (@vmx_file_paths) {
+		# Parse the vmx file name from the path
+		my ($vmx_directory_name, $vmx_file_name) = $vmx_file_path =~ /([^\/]+)\/([^\/]+\.vmx)$/i;
+		if (!$vmx_directory_name || !$vmx_file_name) {
+			notify($ERRORS{'WARNING'}, 0, "unable to determine vmx directory and file name from vmx file path: $vmx_file_path");
+			next;
+		}
+		
+		# Check if the vmx directory name matches the pattern:
+		# <computer_short_name>_<image id>-v<imagerevision revision>
+		# <computer_short_name>_<image id>-v<imagerevision revision>_<request id>
+		if ($vmx_directory_name =~ /^$computer_name\_\d+-v\d+(_\d+)?$/i) {
+			notify($ERRORS{'DEBUG'}, 0, "found existing vmx directory with that appears to match $computer_name: $vmx_file_path");
+			
+			# Get the info from the vmx file
+			my $vmx_info = $self->get_vmx_info($vmx_file_path);
+			if (!$vmx_info) {
+				notify($ERRORS{'WARNING'}, 0, "unable to retrieve info from existing vmx file on VM host: $vmx_file_path");
+				next;
 			}
+			
+			# Delete the existing VM from the VM host
+			if (!$self->delete_vm($vmx_file_path)) {
+				notify($ERRORS{'WARNING'}, 0, "failed to delete existing VM: $vmx_file_path");
+			}
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "ignoring existing vmx file: $vmx_file_path");
+			next;
 		}
 	}
 	
@@ -1174,11 +1254,11 @@ sub prepare_vmdk {
 	
 	# Check if the first .vmdk file exists on the host
 	if ($self->vmhost_os->file_exists($host_vmdk_file_path)) {
-		notify($ERRORS{'DEBUG'}, 0, ".vmdk file exists on VM host: $host_vmdk_file_path");
+		notify($ERRORS{'DEBUG'}, 0, "vmdk file exists on VM host: $host_vmdk_file_path");
 		return $self->check_vmdk_disk_type();
 	}
 	else {
-		notify($ERRORS{'DEBUG'}, 0, ".vmdk file does NOT exist on VM host: $host_vmdk_file_path");
+		notify($ERRORS{'DEBUG'}, 0, "vmdk file does NOT exist on VM host: $host_vmdk_file_path");
 	}
 	
 	## Figure out how much additional space is required for the vmdk directory for the VM for this reservation
@@ -1275,7 +1355,7 @@ sub prepare_vmdk {
 		}
 	}
 	my $duration = (time - $start_time);
-	notify($ERRORS{'OK'}, 0, "copied .vmdk files from management node image repository to the VM host, took " . format_number($duration) . " seconds");
+	notify($ERRORS{'OK'}, 0, "copied vmdk files from management node image repository to the VM host, took " . format_number($duration) . " seconds");
 	
 	return $self->check_vmdk_disk_type();
 }
@@ -1333,7 +1413,7 @@ sub check_vmdk_disk_type {
 	
 	if ($vmware_product_name =~ /esx/i) {
 		if ($virtual_disk_type !~ /flat/i) {
-			notify($ERRORS{'DEBUG'}, 0, "virtual disk type is NOT compatible with $vmware_product_name: $virtual_disk_type");
+			notify($ERRORS{'DEBUG'}, 0, "virtual disk type is not compatible with $vmware_product_name: $virtual_disk_type");
 			
 			my $vmdk_file_path = $self->get_vmdk_file_path() || return;
 			my $vmdk_directory_path = $self->get_vmdk_directory_path() || return;
@@ -1368,7 +1448,7 @@ sub check_vmdk_disk_type {
 			}
 		}
 		else {
-			notify($ERRORS{'DEBUG'}, 0, "virtual disk does not need to be converted for $vmware_product_name: $virtual_disk_type");
+			notify($ERRORS{'DEBUG'}, 0, "flat virtual disk ($virtual_disk_type) does not need to be converted for $vmware_product_name");
 			return 1;
 		}
 	}
@@ -1914,15 +1994,15 @@ sub get_repository_vmdk_base_directory_path {
 	# Attempt the retrieve vmhost.repositorypath
 	if ($repository_vmdk_base_directory_path = $self->data->get_vmhost_profile_repository_path()) {
 		$repository_vmdk_base_directory_path = normalize_file_path($repository_vmdk_base_directory_path);
-		notify($ERRORS{'DEBUG'}, 0, "retrieved VM profile repository path: $repository_vmdk_base_directory_path");
+		notify($ERRORS{'DEBUG'}, 0, "retrieved repository path from the VM profile: $repository_vmdk_base_directory_path");
 	}
 	elsif ($repository_vmdk_base_directory_path = $self->data->get_management_node_install_path()) {
 		$repository_vmdk_base_directory_path = normalize_file_path($repository_vmdk_base_directory_path) . "/vmware_images";
-		notify($ERRORS{'DEBUG'}, 0, "VM profile repository path is not set in the database, using management node install path: $repository_vmdk_base_directory_path");
+		notify($ERRORS{'DEBUG'}, 0, "repository path is not set for the VM profile, using management node install path: $repository_vmdk_base_directory_path");
 	}
 	else {
 		$repository_vmdk_base_directory_path = '/install/vmware_images';
-		notify($ERRORS{'WARNING'}, 0, "unable to retrieve VM profile repository path or management node install path from the database, returning '/install/vmware_images'");
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve repository path from VM profile or management node install path, returning '/install/vmware_images'");
 	}
 	
 	# Set a value in this object so this doesn't have to be retrieved more than once
@@ -2032,12 +2112,12 @@ sub is_vm_registered {
 	
 	my @registered_vmx_file_paths = $self->api->get_registered_vms();
 	
-	if (grep(/$vmx_file_path/, @registered_vmx_file_paths)) {
-		notify($ERRORS{'DEBUG'}, 0, "vmx file is registered: $vmx_file_path");
+	if (grep { $_ eq $vmx_file_path } @registered_vmx_file_paths) {
+		notify($ERRORS{'DEBUG'}, 0, "VM is registered: $vmx_file_path");
 		return 1;
 	}
 	else {
-		notify($ERRORS{'DEBUG'}, 0, "vmx file is not registered: $vmx_file_path");
+		notify($ERRORS{'DEBUG'}, 0, "VM is not registered: $vmx_file_path");
 		return 0;
 	}
 }
@@ -2156,34 +2236,48 @@ sub does_image_exist {
 	
 	my $vmprofile_vmdisk = $self->data->get_vmhost_profile_vmdisk() || return;
 	
-	# Check if the VM host is using local or network-based disk
-	if ($vmprofile_vmdisk eq "localdisk") {
-		# Local disk - check size of directory in image repository
-		my $repository_vmdk_file_path = $self->get_repository_vmdk_file_path() || return;
-		notify($ERRORS{'DEBUG'}, 0, "vm disk type is $vmprofile_vmdisk, checking if vmdk file exists in image repository: $repository_vmdk_file_path");
-		
-		# Remove any trailing slashes and separate the directory path and name pattern
-		$repository_vmdk_file_path =~ s/\/*$//g;
-		my ($directory_path, $name_pattern) = $repository_vmdk_file_path =~ /^(.*)\/([^\/]*)/g;
-		
-		# Check if the file or directory exists
-		(my ($exit_status, $output) = run_command("find \"$directory_path\" -iname \"$name_pattern\"")) || return;
-		if (!grep(/find: /i, @$output) && grep(/$directory_path/i, @$output)) {
-			notify($ERRORS{'DEBUG'}, 0, "file exists in repository: $repository_vmdk_file_path");
-			return 1;
-		}
-		elsif (grep(/find: /i, @$output) && !grep(/no such file/i, @$output)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to determine if file exists in repository: $repository_vmdk_file_path, output:\n" . join("\n", @$output));
-			return;
-		}
-		else {
-			notify($ERRORS{'DEBUG'}, 0, "file does NOT exist in image repository: $repository_vmdk_file_path");
-			return 0;
-		}
+	# Get the non-persistent vmdk file path used on the VM host
+	my $vmhost_vmdk_file_path_nonpersistent = $self->get_vmdk_file_path_nonpersistent();
+	if (!$vmhost_vmdk_file_path_nonpersistent) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine non-persistent vmdk file path on the VM host");
+		return;
+	}
+	
+	# Check if the vmdk file already exists on the VM host
+	if ($self->vmhost_os->file_exists($vmhost_vmdk_file_path_nonpersistent)) {
+		notify($ERRORS{'OK'}, 0, "image exists in the non-persistent directory on the VM host: $vmhost_vmdk_file_path_nonpersistent");
+		return 1;
 	}
 	else {
-		notify($ERRORS{'DEBUG'}, 0, "vm disk type is $vmprofile_vmdisk, checking if file exists on VM host");
-		return $self->vmhost_os->file_exists($self->get_vmdk_file_path_nonpersistent());
+		notify($ERRORS{'DEBUG'}, 0, "image does not exist in the non-persistent directory on the VM host, checking the image repository");
+	}
+	
+	
+	# Get the image repository file path
+	my $repository_vmdk_file_path = $self->get_repository_vmdk_file_path();
+	if (!$repository_vmdk_file_path) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine image repository vmdk file path");
+		return;
+	}
+	
+	
+	# Remove any trailing slashes and separate the directory path and name pattern
+	$repository_vmdk_file_path =~ s/\/*$//g;
+	my ($directory_path, $name_pattern) = $repository_vmdk_file_path =~ /^(.*)\/([^\/]*)/g;
+	
+	# Check if the file exists
+	(my ($exit_status, $output) = run_command("find \"$directory_path\" -iname \"$name_pattern\"")) || return;
+	if (!grep(/find: /i, @$output) && grep(/$directory_path/i, @$output)) {
+		notify($ERRORS{'OK'}, 0, "image exists in the image repository: $repository_vmdk_file_path");
+		return 1;
+	}
+	elsif (grep(/find: /i, @$output) && !grep(/no such file/i, @$output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to determine if file exists in repository: $repository_vmdk_file_path, output:\n" . join("\n", @$output));
+		return;
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "image does not exist in image repository: $repository_vmdk_file_path");
+		return 0;
 	}
 }
 
@@ -2290,28 +2384,28 @@ sub get_vm_disk_adapter_type {
 	my $vmdk_controller_type;
 	if ($self->api->can("get_virtual_disk_controller_type")) {
 		$vmdk_controller_type = $self->api->get_virtual_disk_controller_type($self->get_vmdk_file_path());
-		notify($ERRORS{'DEBUG'}, 0, "retrieved vm disk adapter type from api object: $vmdk_controller_type");
+		notify($ERRORS{'DEBUG'}, 0, "retrieved VM disk adapter type from api object: $vmdk_controller_type");
 	}
 	elsif ($vmdk_controller_type = $self->get_vmdk_parameter_value('adapterType')) {
-		notify($ERRORS{'DEBUG'}, 0, "retrieved vm disk adapter type from vmdk file: $vmdk_controller_type");
+		notify($ERRORS{'DEBUG'}, 0, "retrieved VM disk adapter type from vmdk file: $vmdk_controller_type");
 	}
 	elsif (!$vmdk_controller_type || ($vm_host_product_name =~ /esx/i && $vmdk_controller_type =~ /ide/i)) {
 		
 		my $vm_os_configuration = $self->get_vm_os_configuration();
 		if (!$vm_os_configuration) {
-			notify($ERRORS{'WARNING'}, 0, "unable to determine vm disk adapter type because unable to retrieve default VM OS configuration");
+			notify($ERRORS{'WARNING'}, 0, "unable to determine VM disk adapter type because unable to retrieve default VM OS configuration");
 			return;
 		}
 		
 		$vmdk_controller_type = $vm_os_configuration->{"scsi-virtualDev"};
+		notify($ERRORS{'DEBUG'}, 0, "retrieved default VM disk adapter type for VM OS: $vmdk_controller_type");
 	}
 	
 	if ($vmdk_controller_type) {
-		notify($ERRORS{'DEBUG'}, 0, "retrieved vm disk adapter type: $vmdk_controller_type");
 		return $vmdk_controller_type;
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "unable to determine vm disk adapter type");
+		notify($ERRORS{'WARNING'}, 0, "unable to determine VM disk adapter type");
 		return;
 	}
 }
@@ -2391,11 +2485,11 @@ sub get_vm_os_configuration {
 	# Retrieve the information from the hash, set an object variable
 	$self->{vm_os_configuration} = $VM_OS_CONFIGURATION{$vm_os_configuration_key};
 	if ($self->{vm_os_configuration}) {
-		notify($ERRORS{'DEBUG'}, 0, "found vm OS configuration ($vm_os_configuration_key):\n" . format_data($self->{vm_os_configuration}));
+		notify($ERRORS{'DEBUG'}, 0, "retrieved default VM configuration for OS: $vm_os_configuration_key\n" . format_data($self->{vm_os_configuration}));
 		return $self->{vm_os_configuration};
 	}
 	else {
-		notify($ERRORS{'DEBUG'}, 0, "failed to find vm OS configuration for $vm_os_configuration_key");
+		notify($ERRORS{'DEBUG'}, 0, "failed to find default VM configuration for OS: $vm_os_configuration_key");
 		return;
 	}
 }
@@ -2632,33 +2726,33 @@ sub get_vmx_file_paths {
 
 =head2 get_vmx_info
 
- Parameters  : none
+ Parameters  : $vmx_file_path
  Returns     : hash
- Description : Finds vmx files under the vmx base directory on the VM host,
-               parses each vmx file, and returns a hash containing the info for
-               each vmx file found. The hash keys are the vmx file paths.  Example:
-               |--{/vmfs/volumes/nfs-vmpath/vm-ark-mcnc-9_1635-v0/vm-ark-mcnc-9_1635-v0.vmx}{computer_id} = '2008'
-               |--{/vmfs/volumes/nfs-vmpath/vm-ark-mcnc-9_1635-v0/vm-ark-mcnc-9_1635-v0.vmx}{displayname} = 'vm-ark-mcnc-9 (nonpersistent: vmwarewin2008-enterprisex86_641635-v0)'
-               |--{/vmfs/volumes/nfs-vmpath/vm-ark-mcnc-9_1635-v0/vm-ark-mcnc-9_1635-v0.vmx}{ethernet0.address} = '00:50:56:03:54:11'
-               |--{/vmfs/volumes/nfs-vmpath/vm-ark-mcnc-9_1635-v0/vm-ark-mcnc-9_1635-v0.vmx}{ethernet0.addresstype} = 'static'
-               |--{/vmfs/volumes/nfs-vmpath/vm-ark-mcnc-9_1635-v0/vm-ark-mcnc-9_1635-v0.vmx}{ethernet0.virtualdev} = 'e1000'
-               |--{/vmfs/volumes/nfs-vmpath/vm-ark-mcnc-9_1635-v0/vm-ark-mcnc-9_1635-v0.vmx}{ethernet0.vnet} = 'Private'
-               |--{/vmfs/volumes/nfs-vmpath/vm-ark-mcnc-9_1635-v0/vm-ark-mcnc-9_1635-v0.vmx}{guestos} = 'winserver2008enterprise-32'
-               |--{/vmfs/volumes/nfs-vmpath/vm-ark-mcnc-9_1635-v0/vm-ark-mcnc-9_1635-v0.vmx}{scsi0.present} = 'TRUE'
-               |--{/vmfs/volumes/nfs-vmpath/vm-ark-mcnc-9_1635-v0/vm-ark-mcnc-9_1635-v0.vmx}{scsi0.virtualdev} = 'lsiLogic'
-               |--{/vmfs/volumes/nfs-vmpath/vm-ark-mcnc-9_1635-v0/vm-ark-mcnc-9_1635-v0.vmx}{scsi0:0.devicetype} = 'scsi-hardDisk'
-               |--{/vmfs/volumes/nfs-vmpath/vm-ark-mcnc-9_1635-v0/vm-ark-mcnc-9_1635-v0.vmx}{scsi0:0.filename} = '/vmfs/volumes/nfs-datastore/vmwarewin2008-enterprisex86_641635-v0/vmwarewin2008-enterprisex86_641635-v0.vmdk'
-               |--{/vmfs/volumes/nfs-vmpath/vm-ark-mcnc-9_1635-v0/vm-ark-mcnc-9_1635-v0.vmx}{scsi0:0.mode} = 'independent-nonpersistent'
-               |--{/vmfs/volumes/nfs-vmpath/vm-ark-mcnc-9_1635-v0/vm-ark-mcnc-9_1635-v0.vmx}{scsi0:0.present} = 'TRUE'
-               |--{/vmfs/volumes/nfs-vmpath/vm-ark-mcnc-9_1635-v0/vm-ark-mcnc-9_1635-v0.vmx}{virtualhw.version} = '4'
-               |--{/vmfs/volumes/nfs-vmpath/vm-ark-mcnc-9_1635-v0/vm-ark-mcnc-9_1635-v0.vmx}{vmx_directory} = '/vmfs/volumes/nfs-vmpath/vm-ark-mcnc-9_1635-v0'
-               |--{/vmfs/volumes/nfs-vmpath/vm-ark-mcnc-9_1635-v0/vm-ark-mcnc-9_1635-v0.vmx}{vmx_file_name} = 'vm-ark-mcnc-9_1635-v0.vmx'
-                  |--{/vmfs/volumes/nfs-vmpath/vm-ark-mcnc-9_1635-v0/vm-ark-mcnc-9_1635-v0.vmx}{vmdk}{scsi0:0}{devicetype} = 'scsi-hardDisk'
-                  |--{/vmfs/volumes/nfs-vmpath/vm-ark-mcnc-9_1635-v0/vm-ark-mcnc-9_1635-v0.vmx}{vmdk}{scsi0:0}{mode} = 'independent-nonpersistent'
-                  |--{/vmfs/volumes/nfs-vmpath/vm-ark-mcnc-9_1635-v0/vm-ark-mcnc-9_1635-v0.vmx}{vmdk}{scsi0:0}{present} = 'TRUE'
-                  |--{/vmfs/volumes/nfs-vmpath/vm-ark-mcnc-9_1635-v0/vm-ark-mcnc-9_1635-v0.vmx}{vmdk}{scsi0:0}{vmdk_directory_path} = '/vmfs/volumes/nfs-datastore/vmwarewin2008-enterprisex86_641635-v0'
-                  |--{/vmfs/volumes/nfs-vmpath/vm-ark-mcnc-9_1635-v0/vm-ark-mcnc-9_1635-v0.vmx}{vmdk}{scsi0:0}{vmdk_file_name} = 'vmwarewin2008-enterprisex86_641635-v0'
-                  |--{/vmfs/volumes/nfs-vmpath/vm-ark-mcnc-9_1635-v0/vm-ark-mcnc-9_1635-v0.vmx}{vmdk}{scsi0:0}{vmdk_file_path} = '/vmfs/volumes/nfs-datastore/vmwarewin2008-enterprisex86_641635-v0/vmwarewin2008-enterprisex86_641635-v0.vmdk'
+ Description : Reads the contents of the vmx file indicated by the
+               $vmx_file_path argument and returns a hash containing the info:
+               Example:
+               |--{computer_id} = '2008'
+               |--{displayname} = 'vm-ark-mcnc-9 (nonpersistent: vmwarewin2008-enterprisex86_641635-v0)'
+               |--{ethernet0.address} = '00:50:56:03:54:11'
+               |--{ethernet0.addresstype} = 'static'
+               |--{ethernet0.virtualdev} = 'e1000'
+               |--{ethernet0.vnet} = 'Private'
+               |--{guestos} = 'winserver2008enterprise-32'
+               |--{scsi0.present} = 'TRUE'
+               |--{scsi0.virtualdev} = 'lsiLogic'
+               |--{scsi0:0.devicetype} = 'scsi-hardDisk'
+               |--{scsi0:0.filename} = '/vmfs/volumes/nfs-datastore/vmwarewin2008-enterprisex86_641635-v0/vmwarewin2008-enterprisex86_641635-v0.vmdk'
+               |--{scsi0:0.mode} = 'independent-nonpersistent'
+               |--{scsi0:0.present} = 'TRUE'
+               |--{virtualhw.version} = '4'
+               |--{vmx_directory} = '/vmfs/volumes/nfs-vmpath/vm-ark-mcnc-9_1635-v0'
+               |--{vmx_file_name} = 'vm-ark-mcnc-9_1635-v0.vmx'
+                  |--{vmdk}{scsi0:0}{devicetype} = 'scsi-hardDisk'
+                  |--{vmdk}{scsi0:0}{mode} = 'independent-nonpersistent'
+                  |--{vmdk}{scsi0:0}{present} = 'TRUE'
+                  |--{vmdk}{scsi0:0}{vmdk_directory_path} = '/vmfs/volumes/nfs-datastore/vmwarewin2008-enterprisex86_641635-v0'
+                  |--{vmdk}{scsi0:0}{vmdk_file_name} = 'vmwarewin2008-enterprisex86_641635-v0'
+                  |--{vmdk}{scsi0:0}{vmdk_file_path} = '/vmfs/volumes/nfs-datastore/vmwarewin2008-enterprisex86_641635-v0/vmwarewin2008-enterprisex86_641635-v0.vmdk'
 
 =cut
 
@@ -2669,78 +2763,98 @@ sub get_vmx_info {
 		return;
 	}
 	
-	# Get the .vmx paths on the VM host
-	my @vmx_file_paths = @_;
-	@vmx_file_paths = $self->get_vmx_file_paths() if !@vmx_file_paths;
-	return if !@vmx_file_paths;
+	# Get the vmx file path argument
+	my $vmx_file_path = shift;
+	if (!$vmx_file_path) {
+		notify($ERRORS{'WARNING'}, 0, "vmx file path argument was not specified");
+		return;
+	}
+	
+	# Return previously retrieved data if defined
+	if ($self->{vmx_info}{$vmx_file_path}) {
+		notify($ERRORS{'DEBUG'}, 0, "returning previously retrieved info from vmx file: $vmx_file_path");
+		return $self->{vmx_info}{$vmx_file_path};
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "attempting to retrieve info from vmx file: $vmx_file_path");
 	
 	my %vmx_info;
-	for my $vmx_file_path (@vmx_file_paths) {
-		(my @vmx_contents = $self->vmhost_os->get_file_contents($vmx_file_path)) || next;
+	
+	my @vmx_file_contents = $self->vmhost_os->get_file_contents($vmx_file_path);
+	if (!@vmx_file_contents) {
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve the contents of vmx file: $vmx_file_path");
+		return;
+	}
+	
+	for my $vmx_line (@vmx_file_contents) {
+		# Ignore lines that don't contain a =
+		next if $vmx_line !~ /=/;
 		
-		for my $vmx_line (@vmx_contents) {
-			next if $vmx_line !~ /=/;
-			my ($property, $value) = $vmx_line =~ /[#\s"]*(.*[^\s])[\s"]*=[\s"]*(.*)"/g;
-			$vmx_info{$vmx_file_path}{lc($property)} = $value;
-			
-			if ($property =~ /((?:ide|scsi)\d+:\d+)\.(.*)/) {
-				$vmx_info{$vmx_file_path}{vmdk}{lc($1)}{lc($2)} = $value;
-			}
-		}
+		# Parse the property name and value from the vmx file line
+		my ($property, $value) = $vmx_line =~ /[#\s"]*(.*[^\s])[\s"]*=[\s"]*(.*)"/g;
 		
-		# Get the vmx file name and directory from the full path
-		($vmx_info{$vmx_file_path}{vmx_file_name}) = $vmx_file_path =~ /([^\/]+)$/;
-		($vmx_info{$vmx_file_path}{vmx_directory}) = $vmx_file_path =~ /(.*)\/[^\/]+$/;
+		# Add the property and value to the vmx info hash
+		$vmx_info{lc($property)} = $value;
 		
-		# Loop through the storage identifiers (idex:x or scsix:x lines found)
-		# Find the ones with a fileName property set to a .vmdk path
-		for my $storage_identifier (keys %{$vmx_info{$vmx_file_path}{vmdk}}) {
-			my $vmdk_file_path = $vmx_info{$vmx_file_path}{vmdk}{$storage_identifier}{filename};
-			if (!$vmdk_file_path) {
-				notify($ERRORS{'DEBUG'}, 0, "ignoring $storage_identifier, filename property not set");
-				delete $vmx_info{$vmx_file_path}{vmdk}{$storage_identifier};
-				next;
-			}
-			elsif ($vmdk_file_path !~ /\.vmdk$/i) {
-				notify($ERRORS{'DEBUG'}, 0, "ignoring $storage_identifier, filename property does not end with .vmdk: $vmdk_file_path");
-				delete $vmx_info{$vmx_file_path}{vmdk}{$storage_identifier};
-				next;
-			}
-			
-			# Check if mode is set
-			my $vmdk_mode = $vmx_info{$vmx_file_path}{vmdk}{$storage_identifier}{mode};
-			if (!$vmdk_mode) {
-				notify($ERRORS{'DEBUG'}, 0, "$storage_identifier mode property not set, setting default value: persistent");
-				$vmx_info{$vmx_file_path}{vmdk}{$storage_identifier}{mode} = 'persistent';
-			}
-			
-			# Check if the vmdk path begins with a /, if not, prepend the .vmx directory path
-			if ($vmdk_file_path !~ /^\//) {
-				my $vmdk_file_path_original = $vmdk_file_path;
-				$vmx_info{$vmx_file_path}{vmdk}{$storage_identifier}{filename} = "$vmx_info{$vmx_file_path}{vmx_directory}\/$vmdk_file_path";
-				$vmdk_file_path = $vmx_info{$vmx_file_path}{vmdk}{$storage_identifier}{filename};
-				notify($ERRORS{'DEBUG'}, 0, "vmdk path appears to be relative: $vmdk_file_path_original, prepending the vmx directory: $vmdk_file_path");
-			}
-			
-			# Get the directory path
-			my ($vmdk_directory_path) = $vmdk_file_path =~ /(.*)\/[^\/]+$/;
-			if (!$vmdk_directory_path) {
-				notify($ERRORS{'DEBUG'}, 0, "unable to determine vmdk directory from path: $vmdk_file_path");
-				delete $vmx_info{$vmx_file_path}{vmdk}{$storage_identifier};
-				next;
-			}
-			else {
-				$vmx_info{$vmx_file_path}{vmdk}{$storage_identifier}{vmdk_directory_path} = $vmdk_directory_path;
-			}
-			
-			$vmx_info{$vmx_file_path}{vmdk}{$storage_identifier}{vmdk_file_path} = $vmdk_file_path;
-			delete $vmx_info{$vmx_file_path}{vmdk}{$storage_identifier}{filename};
-			($vmx_info{$vmx_file_path}{vmdk}{$storage_identifier}{vmdk_file_name}) = $vmdk_file_path =~ /([^\/]+)\.vmdk$/i;
+		# Check if the line is a storage identifier, add it to a special hash key
+		if ($property =~ /((?:ide|scsi)\d+:\d+)\.(.*)/) {
+			$vmx_info{vmdk}{lc($1)}{lc($2)} = $value;
 		}
 	}
 	
-	$self->{host_vmx_info} = \%vmx_info;
-	return \%vmx_info;
+	# Get the vmx file name and directory from the full path
+	($vmx_info{vmx_file_name}) = $vmx_file_path =~ /([^\/]+)$/;
+	($vmx_info{vmx_directory}) = $vmx_file_path =~ /(.*)\/[^\/]+$/;
+	
+	# Loop through the storage identifiers (idex:x or scsix:x lines found)
+	# Find the ones with a fileName property set to a .vmdk path
+	for my $storage_identifier (keys %{$vmx_info{vmdk}}) {
+		my $vmdk_file_path = $vmx_info{vmdk}{$storage_identifier}{filename};
+		if (!$vmdk_file_path) {
+			notify($ERRORS{'DEBUG'}, 0, "ignoring $storage_identifier, filename property not set");
+			delete $vmx_info{vmdk}{$storage_identifier};
+			next;
+		}
+		elsif ($vmdk_file_path !~ /\.vmdk$/i) {
+			notify($ERRORS{'DEBUG'}, 0, "ignoring $storage_identifier, filename property does not end with .vmdk: $vmdk_file_path");
+			delete $vmx_info{vmdk}{$storage_identifier};
+			next;
+		}
+		
+		# Check if mode is set
+		my $vmdk_mode = $vmx_info{vmdk}{$storage_identifier}{mode};
+		if (!$vmdk_mode) {
+			notify($ERRORS{'DEBUG'}, 0, "$storage_identifier mode property not set, setting default value: persistent");
+			$vmx_info{vmdk}{$storage_identifier}{mode} = 'persistent';
+		}
+		
+		# Check if the vmdk path begins with a /, if not, prepend the .vmx directory path
+		if ($vmdk_file_path !~ /^\//) {
+			my $vmdk_file_path_original = $vmdk_file_path;
+			$vmx_info{vmdk}{$storage_identifier}{filename} = "$vmx_info{vmx_directory}\/$vmdk_file_path";
+			$vmdk_file_path = $vmx_info{vmdk}{$storage_identifier}{filename};
+			notify($ERRORS{'DEBUG'}, 0, "vmdk path appears to be relative: $vmdk_file_path_original, prepending the vmx directory: $vmdk_file_path");
+		}
+		
+		# Get the directory path
+		my ($vmdk_directory_path) = $vmdk_file_path =~ /(.*)\/[^\/]+$/;
+		if (!$vmdk_directory_path) {
+			notify($ERRORS{'DEBUG'}, 0, "unable to determine vmdk directory from path: $vmdk_file_path");
+			delete $vmx_info{vmdk}{$storage_identifier};
+			next;
+		}
+		else {
+			$vmx_info{vmdk}{$storage_identifier}{vmdk_directory_path} = $vmdk_directory_path;
+		}
+		
+		$vmx_info{vmdk}{$storage_identifier}{vmdk_file_path} = $vmdk_file_path;
+		delete $vmx_info{vmdk}{$storage_identifier}{filename};
+		($vmx_info{vmdk}{$storage_identifier}{vmdk_file_name}) = $vmdk_file_path =~ /([^\/]+)\.vmdk$/i;
+	}
+	
+	# Store the vmx file info so it doesn't have to be retrieved again
+	$self->{vmx_info}{$vmx_file_path} = \%vmx_info;
+	return $self->{vmx_info}{$vmx_file_path};
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -2769,8 +2883,15 @@ sub delete_vm {
 		return;
 	}
 	
+	notify($ERRORS{'OK'}, 0, "attempting to delete VM: $vmx_file_path");
+	
 	# Get the vmx info
-	my $vmx_info = $self->get_vmx_info($vmx_file_path)->{$vmx_file_path} || return;
+	my $vmx_info = $self->get_vmx_info($vmx_file_path);
+	if (!$vmx_info) {
+		notify($ERRORS{'WARNING'}, 0, "failed to delete VM, vmx info could not be retrieved: $vmx_file_path");
+		return;
+	}
+	
 	my $vmx_directory_path = $vmx_info->{vmx_directory};
 	
 	# Unregister the VM
@@ -2785,30 +2906,41 @@ sub delete_vm {
 		my $vmdk_directory_path = $vmx_info->{vmdk}{$storage_identifier}{vmdk_directory_path};
 		my $vmdk_mode = $vmx_info->{vmdk}{$storage_identifier}{mode};
 		
-		notify($ERRORS{'DEBUG'}, 0, "$storage_identifier:\n
-				 vmdk file name: $vmdk_file_name
+		notify($ERRORS{'DEBUG'}, 0, "checking if existing VM's vmdk file should be deleted:
 				 vmdk file path: $vmdk_file_path
-				 vmdk directory path: $vmdk_directory_path
-				 mode: $vmdk_mode");
+				 vmx storage identier key: $storage_identifier
+				 disk mode: $vmdk_mode");
 		
 		if ($vmdk_mode =~ /^(independent-)?persistent/) {
-			notify($ERRORS{'DEBUG'}, 0, "mode of vmdk files for VM $vmx_file_path is $vmdk_mode, vmdk directory will be deleted: $vmdk_directory_path");
+			notify($ERRORS{'DEBUG'}, 0, "mode of vmdk file: $vmdk_mode, existing vmdk directory will be deleted");
 			$self->vmhost_os->delete_file($vmdk_directory_path) || return;
 		}
 		else {
-			notify($ERRORS{'DEBUG'}, 0, "mode of vmdk files for VM $vmx_file_path is $vmdk_mode, vmdk directory will NOT be deleted: $vmdk_directory_path");
+			notify($ERRORS{'DEBUG'}, 0, "mode of vmdk file: $vmdk_mode, vmdk directory will NOT be deleted");
 		}
 	}
 	
 	# Delete the vmx directory
-	notify($ERRORS{'DEBUG'}, 0, "attempting to delete vmx directory: $vmx_directory_path");
-	if (!$self->vmhost_os->delete_file($vmx_directory_path)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to delete VM: $vmx_file_path, vmx directory could not be deleted: $vmx_directory_path");
-		return;
+	my $attempt = 0;
+	my $attempt_limit = 5;
+	while ($attempt++ < $attempt_limit) {
+		if ($attempt > 1) {
+			notify($ERRORS{'DEBUG'}, 0, "sleeping for 5 seconds before making next attempt to delete vmx directory");
+			sleep 3;
+		}
+		
+		notify($ERRORS{'DEBUG'}, 0, "attempt $attempt/$attempt_limit: attempting to delete vmx directory: $vmx_directory_path");
+		if ($self->vmhost_os->delete_file($vmx_directory_path)) {
+			notify($ERRORS{'DEBUG'}, 0, "deleted VM: $vmx_file_path");
+			return 1;
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "attempt $attempt/$attempt_limit: failed to delete vmx directory: $vmx_directory_path");
+		}
 	}
 	
-	notify($ERRORS{'DEBUG'}, 0, "deleted VM: $vmx_file_path");
-	return 1;
+	notify($ERRORS{'WARNING'}, 0, "failed to delete VM, unable to delete vmx directory after $attempt_limit attempts: $vmx_directory_path");
+	return;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -3147,7 +3279,7 @@ sub rename_vmdk {
 			notify($ERRORS{'OK'}, 0, "renamed vmdk file by executing 'vmware-vdiskmanager' command on VM host:\ncommand: $vdisk_command\noutput: " . join("\n", @$vdisk_output));
 			return 1;
 		}
-		elsif (grep(/command not found/i, @$vdisk_output)) {
+		elsif (grep(/not found/i, @$vdisk_output)) {
 			notify($ERRORS{'DEBUG'}, 0, "unable to rename vmdk using 'vmware-vdiskmanager' because the command is not available on VM host");
 		}
 		else {
@@ -3175,7 +3307,7 @@ sub rename_vmdk {
 			notify($ERRORS{'WARNING'}, 0, "failed to rename vmdk file using vmkfstools, destination file does not exist: '$source_vmdk_file_path' --> '$destination_vmdk_file_path'");
 		}
 		else {
-			notify($ERRORS{'OK'}, 0, "rename vmdk file using vmkfstools: '$source_vmdk_file_path' --> '$destination_vmdk_file_path'");
+			notify($ERRORS{'OK'}, 0, "renamed vmdk file using vmkfstools: '$source_vmdk_file_path' --> '$destination_vmdk_file_path'");
 			return 1;
 		}
 	}

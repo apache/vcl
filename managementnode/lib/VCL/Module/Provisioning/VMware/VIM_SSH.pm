@@ -141,16 +141,36 @@ sub _run_vim_cmd {
 		return;
 	}
 	
+	my $vmhost_computer_name = $self->vmhost_os->data->get_computer_short_name();
+	
 	my $command = "vim-cmd $vim_arguments";
-	notify($ERRORS{'DEBUG'}, 0, "attempting to execute command on VM host: $command");
-	my ($exit_status, $output) = $self->vmhost_os->execute($command);
-	if (!defined($output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to run VIM command on VM host: $command");
-		return;
+	
+	my $attempt = 0;
+	my $attempt_limit = 5;
+	
+	while ($attempt++ < $attempt_limit) {
+		my ($exit_status, $output) = $self->vmhost_os->execute($command);
+		if (!defined($output)) {
+			notify($ERRORS{'WARNING'}, 0, "attempt $attempt/$attempt_limit: failed to run VIM command on VM host $vmhost_computer_name: $command");
+		}
+		elsif (grep(/(failed to connect|error connecting)/i, @$output)) {
+			notify($ERRORS{'OK'}, 0, "attempt $attempt/$attempt_limit: failed to connect to VM host $vmhost_computer_name to run command: $command, output:\n" . join("\n", @$output));
+		}
+		else {
+			# vim-cmd command was executed
+			notify($ERRORS{'DEBUG'}, 0, "attempt $attempt/$attempt_limit: executed command on VM host $vmhost_computer_name: $command") if ($attempt > 1);
+			return ($exit_status, $output);
+		}
+		
+		# Wait before making next attempt
+		# Progressively wait longer in case VM host is under heavy load
+		my $wait_seconds = ($attempt * 2);
+		notify($ERRORS{'OK'}, 0, "sleeping $wait_seconds seconds before making next vim-cmd attempt");
+		sleep $wait_seconds;
 	}
-	else {
-		return ($exit_status, $output);
-	}
+	
+	notify($ERRORS{'WARNING'}, 0, "failed to run vim-cmd on VM host $vmhost_computer_name, made $attempt_limit attempts: $command");
+	return;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -208,13 +228,7 @@ sub _get_vm_list {
 		$vms{$vm_id} = $vmx_normal_path;
 	}
 	
-	if (%vms) {
-		notify($ERRORS{'DEBUG'}, 0, "retrieved VM list:\n" . format_data(\%vms));
-	}
-	else {
-		notify($ERRORS{'DEBUG'}, 0, "did not find any registered VMs");
-	}
-	
+	#notify($ERRORS{'DEBUG'}, 0, "registered VMs IDs found: " . keys(%vms));
 	return \%vms;
 }
 
@@ -388,6 +402,9 @@ sub _get_datastore_names {
 		return;
 	}
 	
+	# Return previously retrieved datastore name array if it is defined in this object
+	return @{$self->{datastore_names}} if $self->{datastore_names};
+	
 	my $vim_cmd_arguments = "hostsvc/datastore/listsummary";
 	my ($exit_status, $output) = $self->_run_vim_cmd($vim_cmd_arguments);
 	return if !$output;
@@ -426,8 +443,11 @@ sub _get_datastore_names {
 	
 	# Parse the output to get the datastore names
 	my @datastore_names = map(/^\s*name\s*=\s*"(.+)"/, @$output);
+	
+	# Store the array in this object so the datastore names don't have to be retrieved again
+	$self->{datastore_names} = \@datastore_names;
 
-	notify($ERRORS{'DEBUG'}, 0, "datastore names:\n" . join("\n", @datastore_names));
+	notify($ERRORS{'DEBUG'}, 0, "retrieved datastore names: " . join(", ", @datastore_names));
 	return @datastore_names;
 }
 
@@ -458,11 +478,11 @@ sub _get_datastore_normal_path {
 	# This is done to reduce the number of vim-cmd calls to improve performance
 	my $datastore_normal_path;
 	if ($datastore_normal_path = $self->{datastore}{$datastore_name}{normal_path}) {
-		notify($ERRORS{'DEBUG'}, 0, "returning previously retrieved normal path for $datastore_name datastore: $datastore_normal_path");
+		#notify($ERRORS{'DEBUG'}, 0, "returning previously retrieved normal path for $datastore_name datastore: $datastore_normal_path");
 		return $datastore_normal_path;
 	}
 	
-	my $vim_cmd_arguments = "hostsvc/datastore/summary $datastore_name";
+	my $vim_cmd_arguments = "hostsvc/datastore/summary \"$datastore_name\"";
 	my ($exit_status, $output) = $self->_run_vim_cmd($vim_cmd_arguments);
 	return if !$output;
 	
@@ -545,7 +565,7 @@ sub _get_datastore_path {
 	my $datastore_path = "[$datastore_name]";
 	$datastore_path .= " $relative_datastore_path" if $relative_datastore_path;
 	
-	notify($ERRORS{'DEBUG'}, 0, "converted to datastore path: '$path' --> '$datastore_path'");
+	#notify($ERRORS{'DEBUG'}, 0, "converted to datastore path: '$path' --> '$datastore_path'");
 	return $datastore_path;
 }
 
@@ -645,12 +665,12 @@ sub _get_task_id {
 		return;
 	}
 	
-	notify($ERRORS{'DEBUG'}, 0, "task list output:\n" . join("\n", @$output));
+	#notify($ERRORS{'DEBUG'}, 0, "task list output:\n" . join("\n", @$output));
 	
 	# Reverse the output array so the newest tasks are listed first
 	my @reversed_output = reverse(@$output);
 	
-	notify($ERRORS{'DEBUG'}, 0, "reversed task list output:\n" . join("\n", @reversed_output));
+	#notify($ERRORS{'DEBUG'}, 0, "reversed task list output:\n" . join("\n", @reversed_output));
 	
 	my ($task_id) = grep(/haTask-$vm_id-.+$task_type-/, @reversed_output);
 	
@@ -664,7 +684,7 @@ sub _get_task_id {
 	# This should not be included when passing the task ID to other vim-cmd functions
 	$task_id =~ s/(^.*vim\.Task:|[^\d]*$)//ig;
 
-	notify($ERRORS{'DEBUG'}, 0, "task id: '$task_id'");
+	#notify($ERRORS{'DEBUG'}, 0, "task id: '$task_id'");
 	return $task_id;
 }
 
@@ -854,7 +874,7 @@ sub get_registered_vms {
 	# Get the vmx path values for each VM
 	my @vmx_paths = values(%$vm_list);
 	
-	notify($ERRORS{'DEBUG'}, 0, "registered VMs:\n" . join("\n", @vmx_paths));
+	#notify($ERRORS{'DEBUG'}, 0, "found " . scalar(@vmx_paths) . " registered VMs");
 	return @vmx_paths;
 }
 
@@ -1101,7 +1121,7 @@ sub vm_register {
 		return 1;
 	}
 	
-	my $vim_cmd_arguments = "solo/registervm $vmx_file_path";
+	my $vim_cmd_arguments = "solo/registervm \"$vmx_file_path\"";
 	my ($exit_status, $output) = $self->_run_vim_cmd($vim_cmd_arguments);
 	return if !$output;
 	
@@ -1169,7 +1189,7 @@ sub vm_unregister {
 		}
 	}
 	
-	my $vim_cmd_arguments = "vmsvc/unregister $vmx_file_path";
+	my $vim_cmd_arguments = "vmsvc/unregister \"$vmx_file_path\"";
 	my ($exit_status, $output) = $self->_run_vim_cmd($vim_cmd_arguments);
 	return if !$output;
 	
@@ -1181,7 +1201,7 @@ sub vm_unregister {
 	# }
 	
 	if (grep(/fault/i, @$output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to unregister VM: $vmx_file_path, vim-cmd $vim_cmd_arguments output:\n" . join("\n", @$output));
+		notify($ERRORS{'WARNING'}, 0, "failed to unregister VM: $vmx_file_path\ncommand: vim-cmd $vim_cmd_arguments\noutput:\n" . join("\n", @$output));
 		return;
 	}
 	
@@ -1309,7 +1329,7 @@ sub get_virtual_disk_type {
 		# Remove everything but "FlatVer2"
 		$disk_type =~ s/(^.*\.|BackingInfo$)//g;
 		
-		notify($ERRORS{'DEBUG'}, 0, "disk path: $disk_path, type: $disk_type");
+		notify($ERRORS{'DEBUG'}, 0, "$disk_path disk type: $disk_type");
 		return $disk_type;
 	}
 	
