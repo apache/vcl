@@ -876,6 +876,8 @@ sub load {
 		notify($ERRORS{'DEBUG'}, 0, ref($self->os) . "::post_load() has not been implemented");
 	}
 	
+	insertloadlog($reservation_id, $vmclient_computerid, "info", "starting post configurations on node");
+	
 	#clear ssh public keys from /root/.ssh/known_hosts
 	my $known_hosts = "/root/.ssh/known_hosts";
 	my $ssh_keyscan = "/usr/bin/ssh-keyscan";
@@ -911,47 +913,6 @@ sub load {
 		notify($ERRORS{'OK'}, 0, "could not open $known_hosts for editing the $computer_shortname public ssh key");
 	}
 
-	insertloadlog($reservation_id, $vmclient_computerid, "info", "starting post configurations on node");
-	
-	#ipconfiguration
-	if ($ip_configuration ne "manualDHCP") {
-		#not default setting
-		if ($ip_configuration eq "dynamicDHCP") {
-			insertloadlog($reservation_id, $vmclient_computerid, "dynamicDHCPaddress", "collecting dynamic IP address for node");
-			my $assignedIPaddress = getdynamicaddress($computer_shortname, $vmclient_OSname, $image_os_type);
-			if ($assignedIPaddress) {
-				#update computer table
-				if (update_computer_address($vmclient_computerid, $assignedIPaddress)) {
-					notify($ERRORS{'DEBUG'}, 0, " succesfully updated IPaddress of node $computer_shortname");
-				}
-				else {
-					notify($ERRORS{'CRITICAL'}, 0, "could not update dynamic address $assignedIPaddress for $computer_shortname $requestedimagename");
-					return 0;
-				}
-			} ## end if ($assignedIPaddress)
-			else {
-				notify($ERRORS{'CRITICAL'}, 0, "could not fetch dynamic address from $computer_shortname $requestedimagename");
-				insertloadlog($reservation_id, $vmclient_computerid, "failed", "could not collect dynamic IP address for node");
-				return 0;
-			}
-		} ## end if ($ip_configuration eq "dynamicDHCP")
-		elsif ($ip_configuration eq "static") {
-			insertloadlog($reservation_id, $vmclient_computerid, "staticIPaddress", "setting static IP address for node");
-			if ($self->os->can("set_static_public_address") && $self->os->set_static_public_address()) {
-				notify($ERRORS{'DEBUG'}, 0, "set static public address using OS module's set_static_public_address() method");
-				insertloadlog($reservation_id, $vmclient_computerid, "staticIPaddress", "SUCCESS set static IP address on public interface");
-			}
-			elsif (setstaticaddress($computer_shortname, $vmclient_OSname, $vmclient_publicIPaddress, $image_os_type)) {
-				# good set static address
-				insertloadlog($reservation_id, $vmclient_computerid, "staticIPaddress", "SUCCESS set static IP address on public interface");
-			}
-			else {
-				insertloadlog($reservation_id, $vmclient_computerid, "staticIPaddress", "failed to set static IP address on public interface");
-				return 0;
-			}
-		}
-	} ## end if ($ip_configuration ne "manualDHCP")
-	    #
 	insertloadlog($reservation_id, $vmclient_computerid, "vmwareready", "preformed post config on node");
 	return 1;
 

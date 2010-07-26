@@ -772,54 +772,6 @@ sub load {
 		notify($ERRORS{'CRITICAL'}, 0, "could not execute $XCAT_ROOT/sbin/makesshgkh $computer_node_name $!");
 	}
 
-	# IP configuration
-	if ($ip_configuration ne "manualDHCP") {
-		insertloadlog($reservation_id, $computer_id, "info", "detected change required in IP address configuration on node");
-
-		#not default setting
-		if ($ip_configuration eq "dynamicDHCP") {
-			my $assignedIPaddress = getdynamicaddress($computer_node_name, $image_os_name, $image_os_type);
-			if ($assignedIPaddress) {
-
-				#update computer table
-				if (update_computer_address($computer_id, $assignedIPaddress)) {
-					notify($ERRORS{'OK'}, 0, "dynamic address collected $assignedIPaddress -- updated computer table");
-					insertloadlog($reservation_id, $computer_id, "dynamicDHCPaddress", "SUCCESS collected dynamicDHCP address");
-				}
-				else {
-					notify($ERRORS{'OK'}, 0, "failed to update dynamic address $assignedIPaddress for$computer_id $computer_node_name ");
-					insertloadlog($reservation_id, $computer_id, "dynamicDHCPaddress", "FAILED to update dynamicDHCP address failing reservation");
-					return 0;
-				}
-			} ## end if ($assignedIPaddress)
-			else {
-				notify($ERRORS{'CRITICAL'}, 0, "could not fetch dynamic address from $computer_node_name $image_name");
-				insertloadlog($reservation_id, $computer_id, "dynamicDHCPaddress", "FAILED to collected dynamicDHCP address failing reservation");
-				return 0;
-			}
-		} ## end if ($ip_configuration eq "dynamicDHCP")
-		elsif ($ip_configuration eq "static") {
-			insertloadlog($reservation_id, $computer_id, "info", "setting staticIPaddress");
-
-			if ($self->os->can("set_static_public_address") && $self->os->set_static_public_address()) {
-				notify($ERRORS{'DEBUG'}, 0, "set static public address using OS module's set_static_public_address() method");
-				insertloadlog($reservation_id, $computer_id, "staticIPaddress", "SUCCESS set static IP address on public interface");
-			}
-			elsif (setstaticaddress($computer_node_name, $image_os_name, $computer_ip_address, $image_os_type)) {
-				notify($ERRORS{'DEBUG'}, 0, "set static address on $computer_ip_address $computer_node_name ");
-				insertloadlog($reservation_id, $computer_id, "staticIPaddress", "SUCCESS set static IP address on public interface");
-			}
-			else {
-				insertloadlog($reservation_id, $computer_id, "staticIPaddress", "failed to set static IP address on public interface");
-				return 0;
-			}
-		} ## end elsif ($ip_configuration eq "static")  [ if ($ip_configuration eq "dynamicDHCP")
-	} ## end if ($ip_configuration ne "manualDHCP")
-
-	# Perform post load tasks
-	
-
-
 	return 1;
 } ## end sub load
 

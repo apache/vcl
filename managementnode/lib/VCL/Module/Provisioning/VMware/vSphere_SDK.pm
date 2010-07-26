@@ -494,8 +494,7 @@ sub copy_virtual_disk {
 	notify($ERRORS{'DEBUG'}, 0, "attempting to copy file: '$source_path' --> '$destination_path'
 			 adapter type: $source_adapter_type --> $destination_adapter_type
 			 disk type: $source_disk_type --> $destination_disk_type
-			 source file size: " . format_number($source_file_size_bytes) .
-			 "disk spec:\n" . format_data($virtual_disk_spec));
+			 source file size: " . format_number($source_file_size_bytes));
 	
 	my $start_time = time;
 	eval { $virtual_disk_manager->CopyVirtualDisk(sourceName => $source_path,

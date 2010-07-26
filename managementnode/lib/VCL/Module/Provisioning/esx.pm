@@ -501,50 +501,6 @@ sub load {
 		notify($ERRORS{'DEBUG'}, 0, ref($self->os) . "::post_load() has not been implemented");
 	}
 
-	# Set IP info
-	if ($ip_configuration ne "manualDHCP") {
-		#not default setting
-		if ($ip_configuration eq "dynamicDHCP") {
-			insertloadlog($reservation_id, $vmclient_computerid, "dynamicDHCPaddress", "collecting dynamic IP address for node");
-			notify($ERRORS{'DEBUG'}, 0, "Attempting to query vmclient for its public IP...");
-			my $assignedIPaddress = getdynamicaddress($computer_shortname, $vmclient_OSname, $image_os_type);
-			if ($assignedIPaddress) {
-				#update computer table
-				notify($ERRORS{'DEBUG'}, 0, " Got dynamic address from vmclient, attempting to update database");
-				if (update_computer_address($vmclient_computerid, $assignedIPaddress)) {
-					notify($ERRORS{'DEBUG'}, 0, " succesfully updated IPaddress of node $computer_shortname");
-				}
-				else {
-					notify($ERRORS{'CRITICAL'}, 0, "could not update dynamic address $assignedIPaddress for $computer_shortname $image_name");
-					return 0;
-				}
-			} ## end if ($assignedIPaddress)
-			else {
-				notify($ERRORS{'CRITICAL'}, 0, "could not fetch dynamic address from $computer_shortname $image_name");
-				insertloadlog($reservation_id, $vmclient_computerid, "failed", "could not collect dynamic IP address for node");
-				return 0;
-			}
-		} ## end if ($ip_configuration eq "dynamicDHCP")
-		elsif ($ip_configuration eq "static") {
-			notify($ERRORS{'CRITICAL'}, 0, "STATIC ASSIGNMENT NOT SUPPORTED. See vcld.conf");
-			return 0;
-			#insertloadlog($reservation_id, $vmclient_computerid, "staticIPaddress", "setting static IP address for node");
-			#if (setstaticaddress($computer_shortname, $vmclient_OSname, $vmclient_publicIPaddress)) {
-			#	# good set static address
-			#}
-		}
-	} ## end if ($ip_configuration ne "manualDHCP")
-
-	# Perform post load tasks
-
-	# Check if OS module has implemented a post_load() subroutine
-	if ($self->os->can('post_load')) {
-		# If post-load has been implemented by the OS module, don't perform these tasks here
-		# new.pm calls the OS module's post_load() subroutine
-		notify($ERRORS{'DEBUG'}, 0, "post_load() has been implemented by the OS module, returning 1");
-		return 1;
-	}
-
 	return 1;
 
 } ## end sub load
