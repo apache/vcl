@@ -623,10 +623,12 @@ sub load {
 			}
 		} ## end if (!$s1)
 		if ($s1 && !$s2) {
-			if ($status =~ /installing|unknown/){
-				notify($ERRORS{'OK'}, 0, "$computer_node_name is still installing: $status");
+			my $nodeset_status = _nodeset_option($computer_node_name, "stat");
+			if ($status =~ /installing|unknown/ || $nodeset_status =~ /install/){
+				notify($ERRORS{'OK'}, 0, "$computer_node_name is still installing, nodestat: $status");
 			}
-			if ($status =~ /ping boot|noping/ || $status =~ /partimage-ng: complete/) {
+			
+			if ($nodeset_status =~ /boot/ || $status =~ /partimage-ng: complete/) {
 				notify($ERRORS{'OK'}, 0, "$computer_node_name is finished installing: $status");
 				insertloadlog($reservation_id, $computer_id, "bootstate", "node in boot state completed imaging process - proceeding to next round");
 				$s2 = 2;
