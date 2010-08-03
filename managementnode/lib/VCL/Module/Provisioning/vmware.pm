@@ -1067,14 +1067,6 @@ sub capture {
 				my @list = <LISTFILES>;
 				close(LISTFILES);
 				my $numfiles  = @list;
-				my $imagesize = $self->get_image_size();
-				if ($imagesize) {
-					notify($ERRORS{'OK'}, 0, "copied $numfiles vmdk files imagesize= $imagesize");
-				}
-				else {
-					notify($ERRORS{'OK'}, 0, "vmdk files are not copied");
-					return 0;
-				}
 				#renaming local vmdk files
 				notify($ERRORS{'OK'}, 0, "begin rename local disk image files to newname");
 				my $oldname;
@@ -1152,6 +1144,15 @@ sub capture {
 				if (open(CHMOD, "/bin/chmod -R 644 $image_repository_path/$image_name/\*.vmdk 2>&1 |")) {
 					close(CHMOD);
 					notify($ERRORS{'DEBUG'}, 0, "$notify_prefix recursive update file permssions 644 on $image_repository_path/$image_name");
+				}
+
+				my $imagesize = $self->get_image_size();
+				if ($imagesize) {
+					notify($ERRORS{'OK'}, 0, "copied $numfiles vmdk files imagesize= $imagesize");
+				}
+				else {
+					notify($ERRORS{'OK'}, 0, "vmdk files are not copied");
+					return 0;
 				}
 
 				return 1;
