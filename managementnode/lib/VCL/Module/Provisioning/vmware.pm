@@ -770,13 +770,14 @@ sub load {
 
 
 	#register vmx on vmhost
-	my $registered = 0;
+	my $registered = 1;
 	undef @sshcmd;
 	@sshcmd = run_ssh_command($hostnode, $management_node_keys, "vmware-cmd -s register $myvmx", "root");
 	foreach my $l (@{$sshcmd[1]}) {
 		if ($l =~ /No such virtual machine/) {
 			#not registered
 			notify($ERRORS{'CRITICAL'}, 0, "vm $myvmx vmx does not exist on $hostnode");
+			$registered = 0;
 		}
 		if ($l =~ /= 1/) {
 			notify($ERRORS{'OK'}, 0, "vm $myvmx registered");
@@ -2126,19 +2127,19 @@ sub power_on {
 	
 	notify($ERRORS{'DEBUG'}, 0, "attempting to start vm using trysoft mode: $vm_directory");
 	my ($exit_status, $output) = run_ssh_command($vmhost_hostname, '', "vmware-cmd $vmx_path start trysoft", '', '', '1');
-	if (defined($exit_status) && $exit_status == 0 && grep(/start\(\w*\) = 1/i, @$output)) {
-		notify($ERRORS{'OK'}, 0, "$vm_directory vm was turned on");
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to run vmware-cmd start on $vm_directory");
+		return;
 	}
-	elsif (defined($output) && grep(/VMControl error -8.*virtual machine \("on"\)/i, @$output)) {
+	elsif (grep(/VMControl error -8.*virtual machine \("on"\)/i, @$output)) {
 		notify($ERRORS{'OK'}, 0, "$vm_directory vm is already turned on");
 	}
-	elsif (defined($exit_status)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to run vmware-cmd start on $vm_directory, exit status: $exit_status, output:\n@{$output}");
+	elsif (grep(/error/i, @$output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run vmware-cmd start on $vm_directory, exit status: $exit_status, output:\n" . join("\n", $output));
 		return;
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to run vmware-cmd start on $vm_directory");
-		return;
+		notify($ERRORS{'OK'}, 0, "$vm_directory vm was turned on");
 	}
 	
 	return 1;
@@ -2201,51 +2202,53 @@ sub power_off {
 	# Attempt to stop vm using soft mode
 	notify($ERRORS{'DEBUG'}, 0, "attempting to stop vm using soft mode: $vm_directory");
 	my ($exit_status, $output) = run_ssh_command($vmhost_hostname, '', "vmware-cmd $vmx_path stop soft", '', '', '1');
-	if (defined($exit_status) && $exit_status == 0 && grep(/stop\(\w*\) = 1/i, @$output)) {
-		notify($ERRORS{'OK'}, 0, "$vm_directory vm was turned off");
-		return 1;
-	}
-	elsif (defined($output) && grep(/VMControl error -8.*Tools are running/i, @$output)) {
-		notify($ERRORS{'OK'}, 0, "unable to perform soft stop of $vm_directory vm because vm tools are not running, attempting hard stop");
-	}
-	elsif (defined($output) && grep(/VMControl error -8.*virtual machine \("off"\)/i, @$output)) {
-		notify($ERRORS{'OK'}, 0, "$vm_directory vm is already turned off");
-		return 1;
-	}
-	elsif (defined($output) && grep(/VMControl error -7.*Timeout/i, @$output)) {
-		notify($ERRORS{'WARNING'}, 0, "vm stop trysoft timed out on $vm_directory vm, attempting hard stop");
-	}
-	elsif (defined($exit_status)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to run vmware-cmd stop trysoft on $vm_directory, exit status: $exit_status, output:\n@{$output}");
-	}
-	else {
+	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to run vmware-cmd stop trysoft on $vm_directory");
 		return;
 	}
+	elsif (grep(/VMControl error -8.*Tools are running/i, @$output)) {
+		notify($ERRORS{'OK'}, 0, "unable to perform soft stop of $vm_directory vm because vm tools are not running, attempting hard stop");
+	}
+	elsif (grep(/VMControl error -8.*virtual machine \("off"\)/i, @$output)) {
+		notify($ERRORS{'OK'}, 0, "$vm_directory vm is already turned off");
+		return 1;
+	}
+	elsif (grep(/VMControl error -7.*Timeout/i, @$output)) {
+		notify($ERRORS{'WARNING'}, 0, "vm stop trysoft timed out on $vm_directory vm, attempting hard stop");
+	}
+	elsif (grep(/error/i, @$output)) {
+		notify($ERRORS{'WARNING'}, 0, "vm stop trysoft failed on $vm_directory vm, attempting hard stop, output:\n" . join("\n", @$output));
+	}
+	else {
+		notify($ERRORS{'OK'}, 0, "$vm_directory vm was turned off");
+		return 1;
+	}
+	
 	
 	# Soft stop failed, attempt to stop vm using hard mode
 	notify($ERRORS{'DEBUG'}, 0, "attempting to stop vm using hard mode: $vm_directory");
 	my ($hard_exit_status, $hard_output) = run_ssh_command($vmhost_hostname, '', "vmware-cmd $vmx_path stop hard", '', '', '1');
-	if (defined($hard_exit_status) && $hard_exit_status == 0 && grep(/stop\(\w*\) = 1/i, @$hard_output)) {
-		notify($ERRORS{'OK'}, 0, "$vm_directory vm was turned off");
-		return 1;
-	}
-	elsif (defined($hard_output) && grep(/VMControl error -8.*virtual machine \("off"\)/i, @$hard_output)) {
-		notify($ERRORS{'OK'}, 0, "$vm_directory vm is already turned off");
-		return 1;
-	}
-	elsif (defined($hard_output) && grep(/VMControl error -7.*Timeout/i, @$hard_output)) {
-		notify($ERRORS{'WARNING'}, 0, "$vm_directory vm stop hard timed out");
-		return;
-	}
-	elsif (defined($hard_exit_status)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to run vmware-cmd stop hard on $vm_directory, exit status: $hard_exit_status, output:\n@{$hard_output}");
-		return;
-	}
-	else {
+	if (!defined($hard_output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to run vmware-cmd stop hard on $vm_directory");
 		return;
 	}
+	elsif (grep(/VMControl error -8.*virtual machine \("off"\)/i, @$hard_output)) {
+		notify($ERRORS{'OK'}, 0, "$vm_directory vm is already turned off");
+		return 1;
+	}
+	elsif (grep(/VMControl error -7.*Timeout/i, @$hard_output)) {
+		notify($ERRORS{'WARNING'}, 0, "$vm_directory vm stop hard timed out");
+		return;
+	}
+	elsif (grep(/error/i, @$hard_output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run vmware-cmd stop hard on $vm_directory, exit status: $hard_exit_status, output:\n" . join("\n", @$hard_output));
+		return;
+	}
+	else {
+		notify($ERRORS{'OK'}, 0, "$vm_directory vm was turned off");
+		return 1;
+	}
+	
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -2308,14 +2311,15 @@ sub power_reset {
 	
 	notify($ERRORS{'DEBUG'}, 0, "attempting to reset vm using $powerop_mode mode: $vm_directory");
 	my ($exit_status, $output) = run_ssh_command($vmhost_hostname, '', "vmware-cmd $vmx_path reset $powerop_mode", '', '', '1');
-	if (defined($exit_status) && $exit_status == 0 && grep(/reset\(\w*\) = 1/i, @$output)) {
-		notify($ERRORS{'OK'}, 0, "$vm_directory vm was reset");
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to run vmware-cmd reset on $vm_directory");
+		return;
 	}
-	elsif (defined($output) && grep(/VMControl error -8.*virtual machine \("off"\)/i, @$output)) {
+	elsif (grep(/VMControl error -8.*virtual machine \("off"\)/i, @$output)) {
 		notify($ERRORS{'WARNING'}, 0, "unable to reset $vm_directory vm because it is turned off, attempting to start vm");
 		return $self->power_on();
 	}
-	elsif (defined($output) && grep(/VMControl error -999.*VMware tools are not running/i, @$output)) {
+	elsif (grep(/VMControl error -999.*VMware tools are not running/i, @$output)) {
 		if ($powerop_mode ne 'hard') {
 			notify($ERRORS{'WARNING'}, 0, "unable to reset $vm_directory vm because VMware tools are not running, attempting hard reset");
 			return $self->power_reset('hard');
@@ -2325,16 +2329,14 @@ sub power_reset {
 			return;
 		}
 	}
-	elsif (defined($exit_status)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to run vmware-cmd reset on $vm_directory, exit status: $exit_status, output:\n@{$output}");
+	elsif (grep(/error/i, @$output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run vmware-cmd reset on $vm_directory, exit status: $exit_status, output:\n" . join("\n", @$output));
 		return;
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to run vmware-cmd reset on $vm_directory");
-		return;
+		notify($ERRORS{'OK'}, 0, "reset power on vm: $vm_directory");
+		return 1;
 	}
-	
-	return 1;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
