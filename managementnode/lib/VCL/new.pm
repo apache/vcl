@@ -147,19 +147,15 @@ sub process {
 			notify($ERRORS{'OK'}, 0, "$computer_short_name set to maintenance");
 		}
 
-		# Set vmhostid to null
-		if (switch_vmhost_id($computer_id, 'NULL')) {
-			notify($ERRORS{'OK'}, 0, "$computer_short_name vmhostid removed");
 
-			if ($self->provisioner->can("post_maintenance_action")) {
-				if ($self->provisioner->post_maintenance_action()) {
-					notify($ERRORS{'OK'}, 0, "post action completed $computer_short_name");
-				}
+		if ($self->provisioner->can("post_maintenance_action")) {
+			if ($self->provisioner->post_maintenance_action()) {
+				notify($ERRORS{'OK'}, 0, "post action completed $computer_short_name");
 			}
-			else {
-				notify($ERRORS{'OK'}, 0, "post action skipped, post_maintenance_action not implemented by " . ref($self->provisioner) . ", assuming no steps required");
-			}
-		} ## end if (switch_vmhost_id($computer_id, 'NULL'))
+		}
+		else {
+			notify($ERRORS{'OK'}, 0, "post action skipped, post_maintenance_action not implemented by " . ref($self->provisioner) . ", assuming no steps required");
+		}
 
 		notify($ERRORS{'OK'}, 0, "exiting");
 		exit;
