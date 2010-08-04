@@ -3227,90 +3227,6 @@ sub known_hosts {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 changelinuxpassword
-
- Parameters  : $node, $account, $passwd
- Returns     : 0 or 1
- Description : changes linux root password on stock blade installs
-
-=cut
-
-sub changelinuxpassword {
-# change the privileged account passwords on the blade images
-	my ($node, $account, $passwd) = @_;
-	my ($package, $filename, $line, $sub) = caller(0);
-	notify($ERRORS{'WARNING'}, 0, "node is not defined")    if (!(defined($node)));
-	notify($ERRORS{'WARNING'}, 0, "account is not defined") if (!(defined($account)));
-
-	my @ssh;
-	my $l;
-	my $identity_keys = $ENV{management_node_info}{keys};
-	if ($account eq "root") {
-
-
-		#if not a predefined password, get one!
-		$passwd = getpw(15) if (!(defined($passwd)));
-		notify($ERRORS{'OK'}, 0, "password for $node is $passwd");
-
-		if (open(OPENSSL, "openssl passwd -1 $passwd 2>&1 |")) {
-			$passwd = <OPENSSL>;
-			chomp $passwd;
-			close(OPENSSL);
-			if ($passwd =~ /command not found/) {
-				notify($ERRORS{'CRITICAL'}, 0, "failed $passwd ");
-				return 0;
-			}
-			my $tmpfile = "/tmp/shadow.$node";
-			if (open(TMP, ">$tmpfile")) {
-				print TMP "$account:$passwd:13061:0:99999:7:::\n";
-				close(TMP);
-				if (run_ssh_command($node, $identity_keys, "cat /etc/shadow \|grep -v $account >> $tmpfile", "root")) {
-					notify($ERRORS{'DEBUG'}, 0, "collected /etc/shadow file from $node");
-					if (run_scp_command($tmpfile, "$node:/etc/shadow", $identity_keys)) {
-						notify($ERRORS{'DEBUG'}, 0, "copied updated /etc/shadow file to $node");
-						if (run_ssh_command($node, $identity_keys, "chmod 600 /etc/shadow", "root")) {
-							notify($ERRORS{'DEBUG'}, 0, "updated permissions to 600 on /etc/shadow file on $node");
-							unlink $tmpfile;
-							return 1;
-						}
-						else {
-							notify($ERRORS{'WARNING'}, 0, "failed to change file permissions on $node /etc/shadow");
-							unlink $tmpfile;
-							return 0;
-						}
-					} ## end if (run_scp_command($tmpfile, "$node:/etc/shadow"...
-					else {
-						notify($ERRORS{'WARNING'}, 0, "failed to copy contents of shadow file on $node ");
-					}
-				} ## end if (run_ssh_command($node, $identity_keys...
-				else {
-					notify($ERRORS{'WARNING'}, 0, "failed to copy contents of shadow file on $node ");
-					unlink $tmpfile;
-					return 0;
-				}
-			} ## end if (open(TMP, ">$tmpfile"))
-			else {
-				notify($ERRORS{'OK'}, 0, "failed could open $tmpfile $!");
-			}
-		} ## end if (open(OPENSSL, "openssl passwd -1 $passwd 2>&1 |"...
-		return 0;
-	} ## end if ($account eq "root")
-	else {
-		#actual user
-		#push it through passwd cmd stdin
-		my @sshcmd = run_ssh_command($node, $identity_keys, "echo $passwd \| /usr/bin/passwd -f $account --stdin", "root");
-		foreach my $l (@{$sshcmd[1]}) {
-			if ($l =~ /authentication tokens updated successfully/) {
-				notify($ERRORS{'OK'}, 0, "successfully changed local password account $account");
-				return 1;
-			}
-		}
-
-	} ## end else [ if ($account eq "root")
-} ## end sub changelinuxpassword
-
-#/////////////////////////////////////////////////////////////////////////////
-
 =head2 getusergroupmembers
 
  Parameters  : usergroupid
@@ -8885,51 +8801,20 @@ sub reservation_being_processed {
 		$computerloadlog_exists = 0;
 	}
 	
-	# Check for any running processes
-	#my $ps_command = "ps -ef";
-	#notify($ERRORS{'DEBUG'}, 0, "executing ps -ef command: $ps_command");
-	#my ($ps_exit_status, $ps_output) = run_command($ps_command);
-	#if (defined $ps_exit_status && $ps_exit_status == 0) {
-	#	notify($ERRORS{'DEBUG'}, 0, "ps exit status=$ps_exit_status, output:\n@{$ps_output}");
-	#	
-	#	my @matching_processes = grep {/VCL::.*:$reservation_id/} @{$ps_output};
-	#	notify($ERRORS{'DEBUG'}, 0, "matching processes: @matching_processes, count: " . scalar @matching_processes);
-	#}
-	#else {
-	#	notify($ERRORS{'WARNING'}, 0, "failed to execute ps command");
-	#}
-	
-	my $process_running = 0;
-
-	#my $process_running;
-	#if (defined($pgrep_exit_status) && @{$pgrep_output} > 0) {
-	#	notify($ERRORS{'DEBUG'}, 0, "reservation is being processed by:\n@{$pgrep_output}");
-	#	$process_running = 1;
-	#}
-	#elsif (defined($pgrep_exit_status) && @{$pgrep_output} == 0) {
-	#	notify($ERRORS{'DEBUG'}, 0, "did not find any running processes for reservation");
-	#	$process_running = 0;
-	#}
-	#elsif (defined($pgrep_exit_status))  {
-	#	notify($ERRORS{'WARNING'}, 0, "error occurred running command: $pgrep_command, exit status: $pgrep_exit_status, output:\n@{$pgrep_output}");
-	#	$process_running = 0;
-	#}
-	#else {
-	#	notify($ERRORS{'WARNING'}, 0, "command could not be executed: $pgrep_command");
-	#	$process_running = 0;
-	#}
+	# Check if a vcld process is running matching for this reservation
+	my @processes_running = is_management_node_process_running("$PROCESSNAME [0-9]+:$reservation_id ");
 	
 	# Check the results and return
-	if ($computerloadlog_exists && $process_running) {
-		notify($ERRORS{'DEBUG'}, 0, "reservation is currently being processed");
+	if ($computerloadlog_exists && @processes_running) {
+		notify($ERRORS{'DEBUG'}, 0, "reservation is currently being processed, computerloadlog 'begin' entry exists and running process was found: @processes_running");
 		return 1;
 	}
-	elsif (!$computerloadlog_exists && $process_running) {
-		notify($ERRORS{'WARNING'}, 0, "computerloadlog 'begin' entry does NOT exist but running process was found, returning 1");
+	elsif (!$computerloadlog_exists && @processes_running) {
+		notify($ERRORS{'WARNING'}, 0, "computerloadlog 'begin' entry does NOT exist but running process was found: @processes_running, assuming reservation is currently being processed");
 		return 1;
 	}
-	elsif ($computerloadlog_exists && !$process_running) {
-		notify($ERRORS{'WARNING'}, 0, "computerloadlog 'begin' entry exists but running process was NOT found, returning 0");
+	elsif ($computerloadlog_exists && !@processes_running) {
+		notify($ERRORS{'WARNING'}, 0, "computerloadlog 'begin' entry exists but running process was NOT found, assuming reservation is NOT currently being processed");
 		return 0;
 	}
 	else {
@@ -9115,28 +9000,46 @@ sub is_management_node_process_running {
 		return;
 	}
 	
-	my @pids;
-	my $command = "pgrep -fl \"$process_identifier\"";
-	my ($exit_status, $output) = run_command($command, 1);
-	my @filtered_output;
-	@filtered_output = grep(!/sh -c/, @$output) if @$output;
-	if (@filtered_output) {
-		notify($ERRORS{'DEBUG'}, 0, "process is running, identifier: $process_identifier, pgrep output:\n" . join("\n", @filtered_output));
-		
-		for my $pgrep_line (@filtered_output) {
-			my ($pid) = $pgrep_line =~ /^(\d+)/;
-			push @pids, $pid;
-		}
-		
-		notify($ERRORS{'DEBUG'}, 0, "returning pid array: @pids");
-		return @pids;
+	my $command = "pgrep -fl '$process_identifier'";
+	my ($exit_status, $output) = run_command($command, 0);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run command to determine if process is running: $command");
+		return;
 	}
-	elsif (defined($exit_status)) {
-		notify($ERRORS{'DEBUG'}, 0, "process is NOT running, identifier: $process_identifier, pgrep output:\n" . join("\n", @$output));
-		return ();
+	
+	my @processes_running;
+	for my $line (@$output) {
+		my ($pid) = $line =~ /^(\d+)/;
+		
+		if (!defined($pid)) {
+			notify($ERRORS{'DEBUG'}, 0, "ignoring pgrep output line, it does not begin with a number: $line");
+			next;
+		}
+		elsif ($pid eq $PID) {
+			notify($ERRORS{'DEBUG'}, 0, "ignoring pgrep output line for the currently running process: $line");
+			next;
+		}
+		elsif ($line =~ /pgrep -fl/) {
+			notify($ERRORS{'DEBUG'}, 0, "ignoring pgrep output line containing for pgrep command: $line");
+			next;
+		}
+		elsif ($line =~ /sh -c/) {
+			# Ignore lines containing 'sh -c', probably indicating a duplicate process of a command run remotely
+			notify($ERRORS{'DEBUG'}, 0, "ignoring pgrep output line containing 'sh -c': $line");
+			next;
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "found matching process: $line");
+			push @processes_running, $pid;
+		}
+	}
+	
+	if (@processes_running) {
+		notify($ERRORS{'DEBUG'}, 0, "process is running, identifier: '$process_identifier', returning array containing PIDs: @processes_running");
+		return @processes_running;
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to run command to determine if process is running");
+		notify($ERRORS{'DEBUG'}, 0, "process is NOT running, identifier: '$process_identifier'");
 		return;
 	}
 }

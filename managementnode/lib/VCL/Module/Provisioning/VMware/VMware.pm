@@ -545,13 +545,6 @@ sub get_active_vmx_file_path {
 	
 	my $computer_name = $self->data->get_computer_short_name();
 	
-	# Get the normal, expected vmx file path for this reservation
-	my $vmx_file_path = $self->get_vmx_file_path();
-	if (!$vmx_file_path) {
-		notify($ERRORS{'WARNING'}, 0, "unable to determine normal vmx file path");
-		return;
-	}
-	
 	# Get the MAC addresses being used by the running VM for this reservation
 	my @vm_mac_addresses = ($self->os->get_private_mac_address(), $self->os->get_public_mac_address());
 	if (!@vm_mac_addresses) {
@@ -564,18 +557,22 @@ sub get_active_vmx_file_path {
 
 	# Get an array containing the existing vmx file paths on the VM host
 	my @host_vmx_file_paths = $self->get_vmx_file_paths();
-
-	# Remove the normal vmx file from the array and add it to the beginning
-	# This causes it to be checked first
-	@host_vmx_file_paths = grep($_ ne $vmx_file_path, @host_vmx_file_paths);
-	unshift @host_vmx_file_paths, $vmx_file_path;
-
 	notify($ERRORS{'DEBUG'}, 0, "retrieved vmx file paths currently residing on the VM host:\n" . join("\n", @host_vmx_file_paths));
-
+	
+	# Sort the vmx file path list so that paths containing the computer name are checked first
+	my @ordered_host_vmx_file_paths;
+	push @ordered_host_vmx_file_paths, grep(/$computer_name\_/, @host_vmx_file_paths);
+	push @ordered_host_vmx_file_paths, grep(!/$computer_name\_/, @host_vmx_file_paths);
+	@host_vmx_file_paths = @ordered_host_vmx_file_paths;
+	notify($ERRORS{'DEBUG'}, 0, "sorted vmx file paths so that directories containing $computer_name are checked first:\n" . join("\n", @host_vmx_file_paths));
+	
 	# Loop through the vmx files found on the VM host
 	# Check if the MAC addresses in the vmx file match the MAC addresses currently in use on the VM to be captured
 	my @matching_host_vmx_paths;
 	for my $host_vmx_path (@host_vmx_file_paths) {
+		# Quit checking if a match has already been found and the vmx path being checked doesn't contain the computer name
+		last if (@matching_host_vmx_paths && $host_vmx_path !~ /$computer_name/);
+		
 		# Get the info from the existing vmx file on the VM host
 		my $host_vmx_info = $self->get_vmx_info($host_vmx_path);
 		if (!$host_vmx_info) {
@@ -600,12 +597,7 @@ sub get_active_vmx_file_path {
 		notify($ERRORS{'DEBUG'}, 0, "comparing MAC addresses\nused by $computer_name:\n" . join("\n", sort(@vm_mac_addresses)) . "\nconfigured in $vmx_file_name:\n" . join("\n", sort(@vmx_mac_addresses)));
 		my @matching_mac_addresses = map { my $vm_mac_address = $_; grep(/$vm_mac_address/i, @vmx_mac_addresses) } @vm_mac_addresses;
 		
-		if (@matching_mac_addresses) {
-			push @matching_host_vmx_paths, $host_vmx_path;
-			notify($ERRORS{'DEBUG'}, 0, "found matching MAC addresses: $computer_name <==> $vmx_file_name (" . join(", ", @matching_mac_addresses) . ")");
-			last if ($vmx_file_path eq $host_vmx_path && scalar(@matching_host_vmx_paths) == 1);
-		}
-		else {
+		if (!@matching_mac_addresses) {
 			notify($ERRORS{'DEBUG'}, 0, "ignoring $vmx_file_name because MAC addresses do not match the ones being used by $computer_name");
 			next;
 		}
@@ -964,6 +956,7 @@ sub prepare_vmx {
 	# Get the required data to configure the .vmx file
 	my $image_id                 = $self->data->get_image_id() || return;
 	my $imagerevision_id         = $self->data->get_imagerevision_id() || return;
+	my $image_project            = $self->data->get_image_project() || return;
 	my $computer_id              = $self->data->get_computer_id() || return;
 	my $vmx_file_name            = $self->get_vmx_file_name() || return;
 	my $vmx_file_path            = $self->get_vmx_file_path() || return;
@@ -1193,6 +1186,45 @@ sub prepare_vmx {
 			"scsi0:0.writeThrough" => "$vm_disk_write_through",
 		));
 	}
+	
+	# Add additional Ethernet interfaces if the image project name is not vcl
+	if ($image_project !~ /^vcl$/i) {
+		notify($ERRORS{'DEBUG'}, 0, "image project is: $image_project, checking if additional network adapters should be configured");
+		
+		# Get a list of all the network names configured on the VMware host
+		my @network_names = $self->api->get_network_names();
+		notify($ERRORS{'DEBUG'}, 0, "retrieved network names configured on the VM host: " . join(", ", @network_names));
+		
+		# Check each network name
+		# Begin the index at 2 for additional interfaces added because ethernet0 and ethernet1 have already been added
+		my $interface_index = 2;
+		for my $network_name (@network_names) {
+			# Ignore network names which have already been added
+			if ($network_name =~ /^($virtual_switch_0|$virtual_switch_1)$/) {
+				notify($ERRORS{'DEBUG'}, 0, "ignoring network name because it is already being used for the private or public interface: $network_name");
+				next;
+			}
+			elsif ($network_name =~ /$image_project/i || $image_project =~ /$network_name/i) {
+				notify($ERRORS{'DEBUG'}, 0, "network name ($network_name) and image project name ($image_project) intersect, adding network interface to VM for network $network_name");
+				
+				$vmx_parameters{"ethernet$interface_index.addressType"} = "generated";
+				$vmx_parameters{"ethernet$interface_index.present"} = "TRUE";
+				$vmx_parameters{"ethernet$interface_index.virtualDev"} = "$vm_ethernet_adapter_type";
+				$vmx_parameters{"ethernet$interface_index.networkName"} = "$network_name";
+				
+				$interface_index++;
+			}
+			else {
+				notify($ERRORS{'DEBUG'}, 0, "network name ($network_name) and image project name ($image_project) do not intersect, network interface will not be added to VM for network $network_name");
+			}
+		}
+		
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "image project is: $image_project, additional network adapters will not be configured");
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "vmx parameters:\n" . format_data(\%vmx_parameters));
 	
 	# Create a string from the hash
 	my $vmx_contents = "#!/usr/bin/vmware\n";

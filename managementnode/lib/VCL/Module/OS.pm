@@ -782,6 +782,153 @@ sub set_vcld_post_load_status {
 	return 1;
 }
 
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_private_interface_name
+
+ Parameters  : none
+ Returns     : string
+ Description : Determines the private interface name based on the information in
+               the network configuration hash returned by
+               get_network_configuration. The interface which is assigned the
+               private IP address for the reservation computer is returned.
+
+=cut
+
+sub get_private_interface_name {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get the network configuration hash reference
+	my $network_configuration = $self->get_network_configuration();
+	if (!$network_configuration) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine private interface name, failed to retrieve network configuration");
+		return;
+	}
+	
+	# Get the computer private IP address
+	my $computer_private_ip_address = $self->data->get_computer_private_ip_address();
+	if (!$computer_private_ip_address) {
+		notify($ERRORS{'DEBUG'}, 0, "unable to retrieve computer private IP address from reservation data");
+		return;
+	}
+	
+	# Loop through all of the network interfaces found
+	foreach my $interface_name (sort keys %$network_configuration) {
+		# Get the interface IP addresses and make sure an IP address was found
+		my @ip_addresses  = keys %{$network_configuration->{$interface_name}{ip_address}};
+		if (!@ip_addresses) {
+			notify($ERRORS{'DEBUG'}, 0, "interface is not assigned an IP address: $interface_name");
+			next;
+		}
+		
+		# Check if interface has the private IP address assigned to it
+		if (grep { $_ eq $computer_private_ip_address } @ip_addresses) {
+			notify($ERRORS{'DEBUG'}, 0, "determined private interface name: $interface_name (" . join (", ", @ip_addresses) . ")");
+			return $interface_name;
+		}
+	}
+
+	notify($ERRORS{'WARNING'}, 0, "failed to determined private interface name, no interface is assigned the private IP address for the reservation: $computer_private_ip_address\n" . format_data($network_configuration));
+	return;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_public_interface_name
+
+ Parameters  : none
+ Returns     : string
+ Description : Determines the public interface name based on the information in
+               the network configuration hash returned by
+               get_network_configuration.
+
+=cut
+
+sub get_public_interface_name {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get the network configuration hash reference
+	my $network_configuration = $self->get_network_configuration();
+	if (!$network_configuration) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine public interface name, failed to retrieve network configuration");
+		return;
+	}
+	
+	# Get the computer private IP address
+	my $computer_private_ip_address = $self->data->get_computer_private_ip_address();
+	if (!$computer_private_ip_address) {
+		notify($ERRORS{'DEBUG'}, 0, "unable to retrieve computer private IP address from reservation data");
+		return;
+	}
+	
+	my $public_interface_name;
+	
+	# Loop through all of the network interfaces found
+	foreach my $interface_name (sort keys %$network_configuration) {
+		# Get the interface IP addresses and make sure an IP address was found
+		my @ip_addresses  = keys %{$network_configuration->{$interface_name}{ip_address}};
+		if (!@ip_addresses) {
+			notify($ERRORS{'DEBUG'}, 0, "interface is not assigned an IP address: $interface_name");
+			next;
+		}
+		
+		# Check if interface has private IP address assigned to it
+		if (grep { $_ eq $computer_private_ip_address } @ip_addresses) {
+			notify($ERRORS{'DEBUG'}, 0, "ignoring private interface: $interface_name (" . join (", ", @ip_addresses) . ")");
+			next;
+		}
+		
+		my $description = $network_configuration->{$interface_name}{description} || '';
+		
+		# Check if the interface should be ignored based on the name or description
+		if ($interface_name =~ /(^lo|loopback|vmnet|afs|tunnel|6to4|isatap|teredo)/i) {
+			notify($ERRORS{'DEBUG'}, 0, "interface ignored because of name: $interface_name (" . join (", ", @ip_addresses) . ")");
+			next;
+		}
+		elsif ($description =~ /loopback|virtual|afs|tunnel|pseudo|6to4|isatap/i) {
+			notify($ERRORS{'DEBUG'}, 0, "interface ignored because of description: $interface_name, description: $description (" . join (", ", @ip_addresses) . ")");
+			next;
+		}
+		
+		# Loop through the IP addresses for the interface
+		# Try to find a public address
+		for my $ip_address (@ip_addresses) {
+			
+			if (is_public_ip_address($ip_address)) {
+				notify($ERRORS{'DEBUG'}, 0, "determined public interface name: $interface_name (" . join (", ", @ip_addresses) . ")");
+				return $interface_name;
+			}
+			else {
+				notify($ERRORS{'DEBUG'}, 0, "found interface assigned a private address not matching private address for reservation: $interface_name (" . join(", ", @ip_addresses) . ")");
+				
+				if ($public_interface_name) {
+					notify($ERRORS{'DEBUG'}, 0, "already found another interface with a private address not matching private address for reservation: $public_interface_name, the first one found will be used if an interface with a public address isn't found");
+				}
+				else {
+					$public_interface_name = $interface_name;
+					notify($ERRORS{'DEBUG'}, 0, "assuming interface is public if another interface with a public address isn't found: $public_interface_name");
+				}
+			}
+		}
+	}
+
+	if ($public_interface_name) {
+		notify($ERRORS{'DEBUG'}, 0, "did not find any interfaces assigned a public IP address, returning interface assigned a private IP address not matching the private IP address assigned to the reservation computer: $public_interface_name");
+		return $public_interface_name;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to determine the public interface from the network configuration:\n" . format_data($network_configuration));
+		return;
+	}
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 

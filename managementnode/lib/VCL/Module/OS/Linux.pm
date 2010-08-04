@@ -284,6 +284,9 @@ sub post_load {
 	else {
 		notify($ERRORS{'DEBUG'}, 0, "ran $script_path");
 	}
+	
+	# Attempt to generate ifcfg-eth* files and ifup any interfaces which the file does not exist
+	$self->activate_interfaces();
 
 	return 1;
 
@@ -339,54 +342,52 @@ sub post_reserve {
 
  Parameters  :
  Returns     : 1,0 success or failure
- Description : To be used for nodes that have both private and public addresses. 
-                                        Set hostname to that of the public address.
+ Description : To be used for nodes that have both private and public addresses.
+               Set hostname to that of the public address.
 
 =cut
 
 sub update_public_hostname {
-     my $self = shift;
-     unless (ref($self) && $self->isa('VCL::Module')) {
-        notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a VCL::Module module object method");
-        return; 
-     }
-         
-     my $management_node_keys = $self->data->get_management_node_keys();
-     my $computer_node_name   = $self->data->get_computer_node_name();
-     my $image_os_type        = $self->data->get_image_os_type();
-     my $image_os_name        = $self->data->get_image_os_name();
-     my $computer_short_name             = $self->data->get_computer_short_name();
-     my $public_hostname;
-
-        #Get the IP address of the public adapter
-
- my $public_IP_address = getdynamicaddress($computer_short_name, $image_os_name, $image_os_type);
-        if (!($public_IP_address)) {
-                notify($ERRORS{'WARNING'}, 0, "Unable to get public IP address");
-                return 0;
-        }
-
-        #Get the hostname for the public IP address
-        my $get_public_hostname = "/bin/ipcalc --hostname $public_IP_address";
-        my ($ipcalc_status, $ipcalc_output) = run_ssh_command($computer_short_name, $management_node_keys,$get_public_hostname);
-        if (!defined($ipcalc_status)) {
-                notify($ERRORS{'WARNING'}, 0, "unable to run ssh cmd $get_public_hostname on $computer_short_name");
-                return 0;
-        }
-        elsif ("@$ipcalc_output" =~ /HOSTNAME=(.*)/i) {
-                $public_hostname = $1;
-                notify($ERRORS{'DEBUG'}, 0, "collected public hostname= $public_hostname");
-        }
-
-        #Set the node's hostname to public hostname
-        my ($set_hostname_status, $set_hostname_output) = run_ssh_command($computer_short_name, $management_node_keys,"hostname -v $public_hostname"); 
-        unless (defined($set_hostname_status) && $set_hostname_status == 0) {
-			notify($ERRORS{'OK'}, 0, "failed to set public_hostname on $computer_short_name output: @${set_hostname_output}");
-        }
-
-        notify($ERRORS{'OK'}, 0, "successfully set public_hostname on $computer_short_name output: @${set_hostname_output}");
-        return 1;
-
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a VCL::Module module object method");
+		return; 
+	}
+	
+	my $management_node_keys = $self->data->get_management_node_keys();
+	my $computer_node_name   = $self->data->get_computer_node_name();
+	my $image_os_type        = $self->data->get_image_os_type();
+	my $image_os_name        = $self->data->get_image_os_name();
+	my $computer_short_name  = $self->data->get_computer_short_name();
+	my $public_hostname;
+	
+	# Get the IP address of the public adapter
+	my $public_IP_address = getdynamicaddress($computer_short_name, $image_os_name, $image_os_type);
+	if (!($public_IP_address)) {
+		notify($ERRORS{'WARNING'}, 0, "Unable to get public IP address");
+		return 0;
+	}
+	
+	# Get the hostname for the public IP address
+	my $get_public_hostname = "/bin/ipcalc --hostname $public_IP_address";
+	my ($ipcalc_status, $ipcalc_output) = run_ssh_command($computer_short_name, $management_node_keys,$get_public_hostname);
+	if (!defined($ipcalc_status)) {
+		notify($ERRORS{'WARNING'}, 0, "unable to run ssh cmd $get_public_hostname on $computer_short_name");
+		return 0;
+	}
+	elsif ("@$ipcalc_output" =~ /HOSTNAME=(.*)/i) {
+		$public_hostname = $1;
+		notify($ERRORS{'DEBUG'}, 0, "collected public hostname= $public_hostname");
+	}
+	
+	#Set the node's hostname to public hostname
+	my ($set_hostname_status, $set_hostname_output) = run_ssh_command($computer_short_name, $management_node_keys,"hostname -v $public_hostname"); 
+	unless (defined($set_hostname_status) && $set_hostname_status == 0) {
+		notify($ERRORS{'OK'}, 0, "failed to set public_hostname on $computer_short_name output: @${set_hostname_output}");
+	}
+	
+	notify($ERRORS{'OK'}, 0, "successfully set public_hostname on $computer_short_name output: @${set_hostname_output}");
+	return 1;
 }
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -420,7 +421,6 @@ sub clear_private_keys {
 		notify($ERRORS{'CRITICAL'}, 0, "failed to clear any id_rsa keys from /root/.ssh");
 		return 0;
 	}
-
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -616,23 +616,6 @@ sub set_static_public_address {
 
 	return 1;
 } ## end sub set_static_public_address
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 get_public_interface_name
-
- Parameters  :
- Returns     :
- Description :
-
-=cut
-
-sub get_public_interface_name {
-
-	#global varible pulled from vcld.conf
-	return $ETHDEVICE;
-
-}
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -959,73 +942,17 @@ sub changepasswd {
 
 	notify($ERRORS{'WARNING'}, 0, "node is not defined")    if (!(defined($node)));
 	notify($ERRORS{'WARNING'}, 0, "account is not defined") if (!(defined($account)));
-
-	my @ssh;
-	my $l;
-	if ($account eq "root") {
-
-		#if not a predefined password, get one!
-		$passwd = getpw(15) if (!(defined($passwd)));
-		notify($ERRORS{'OK'}, 0, "password for $node is $passwd");
-
-		if (open(OPENSSL, "openssl passwd -1 $passwd 2>&1 |")) {
-			$passwd = <OPENSSL>;
-			chomp $passwd;
-			close(OPENSSL);
-			if ($passwd =~ /command not found/) {
-				notify($ERRORS{'CRITICAL'}, 0, "failed $passwd ");
-				return 0;
-			}
-			my $tmpfile = "/tmp/shadow.$node";
-			if (open(TMP, ">$tmpfile")) {
-				print TMP "$account:$passwd:13061:0:99999:7:::\n";
-				close(TMP);
-				if (run_ssh_command($node, $management_node_keys, "cat /etc/shadow \|grep -v $account >> $tmpfile", "root")) {
-					notify($ERRORS{'DEBUG'}, 0, "collected /etc/shadow file from $node");
-					if (run_scp_command($tmpfile, "$node:/etc/shadow", $management_node_keys)) {
-						notify($ERRORS{'DEBUG'}, 0, "copied updated /etc/shadow file to $node");
-						if (run_ssh_command($node, $management_node_keys, "chmod 600 /etc/shadow", "root")) {
-							notify($ERRORS{'DEBUG'}, 0, "updated permissions to 600 on /etc/shadow file on $node");
-							unlink $tmpfile;
-							return 1;
-						}
-						else {
-							notify($ERRORS{'WARNING'}, 0, "failed to change file permissions on $node /etc/shadow");
-							unlink $tmpfile;
-							return 0;
-						}
-					} ## end if (run_scp_command($tmpfile, "$node:/etc/shadow"...
-					else {
-						notify($ERRORS{'WARNING'}, 0, "failed to copy contents of shadow file on $node ");
-					}
-				} ## end if (run_ssh_command($node, $identity_key, ...
-				else {
-					notify($ERRORS{'WARNING'}, 0, "failed to copy contents of shadow file on $node ");
-					unlink $tmpfile;
-					return 0;
-				}
-			} ## end if (open(TMP, ">$tmpfile"))
-			else {
-				notify($ERRORS{'OK'}, 0, "failed could open $tmpfile $!");
-			}
-		} ## end if (open(OPENSSL, "openssl passwd -1 $passwd 2>&1 |"...
-		return 0;
-	} ## end if ($account eq "root")
-	else {
-		#actual user
-		#push it through passwd cmd stdin
-		# not all distros' passwd command support stdin
-		my @sshcmd = run_ssh_command($node, $management_node_keys, "echo $passwd \| /usr/bin/passwd -f $account --stdin", "root");
-		foreach my $l (@{$sshcmd[1]}) {
-			if ($l =~ /authentication tokens updated successfully/) {
-				notify($ERRORS{'OK'}, 0, "successfully changed local password account $account");
-				return 1;
-			}
-		}
-
-	} ## end else [ if ($account eq "root")
-
-} ## end sub changepasswd
+	
+	$passwd = getpw(15) if (!(defined($passwd)));
+	
+	my ($exit_status, $output) = run_ssh_command($node, $management_node_keys, "echo $passwd \| /usr/bin/passwd -f $account --stdin", "root");
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to set password for account: $account");
+		return;
+	}
+	notify($ERRORS{'OK'}, 0, "changed password for account: $account, output:\n" . join("\n", @$output));
+	return 1;
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -1299,14 +1226,14 @@ sub execute {
 	# Get 2nd display output argument if supplied, or set default value
 	my $display_output = shift || '0';
 	
-	# Get the computer hostname
-	my $computer_hostname = $self->data->get_computer_hostname() || return;
+	# Get the computer node name
+	my $computer_name = $self->data->get_computer_node_name() || return;
 	
 	# Get the identity keys used by the management node
 	my $management_node_keys = $self->data->get_management_node_keys() || '';
 	
 	# Run the command via SSH
-	my ($exit_status, $output) = run_ssh_command($computer_hostname, $management_node_keys, $command, '', '', $display_output);
+	my ($exit_status, $output) = run_ssh_command($computer_name, $management_node_keys, $command, '', '', $display_output);
 	if (defined($exit_status) && defined($output)) {
 		if ($display_output) {
 			notify($ERRORS{'OK'}, 0, "executed command: '$command', exit status: $exit_status, output:\n" . join("\n", @$output));
@@ -1314,7 +1241,7 @@ sub execute {
 		return ($exit_status, $output);
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to run command on $computer_hostname: $command");
+		notify($ERRORS{'WARNING'}, 0, "failed to run command on $computer_name: $command");
 		return;
 	}
 }
@@ -2322,6 +2249,315 @@ sub generate_ext_sshd_init {
         return 1;
 
 }
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 activate_interfaces
+
+ Parameters  : none
+ Returns     : true
+ Description : Finds all networking interfaces with an active link. Checks if an
+               ifcfg-eth* file exists for the interface. An ifcfg-eth* file is
+               generated if it does not exist using DHCP and the interface is
+               brought up via ifup. This is useful if additional interfaces are
+               added by the provisioning module when an image is loaded. 
+
+=cut
+
+sub activate_interfaces {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return 0;
+	}
+	
+	# Run 'ip link' to find all interfaces with links
+	my $command = "ip link";
+	notify($ERRORS{'DEBUG'}, 0, "attempting to find network interfaces with an active link");
+	my ($exit_status, $output) = $self->execute($command, 1);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run command to find network interfaces with an active link:\n$command");
+		return;
+	}
+	
+	# Extract the interface names from the 'ip link' output
+	my @interface_names = grep { /^\d+:\s+(eth\d+)/ ; $_ = $1 } @$output;
+	notify($ERRORS{'DEBUG'}, 0, "found interface names:\n" . join("\n", @interface_names));
+	
+	# Find existing ifcfg-eth* files
+	my $ifcfg_directory = '/etc/sysconfig/network-scripts';
+	my @ifcfg_paths = $self->find_files($ifcfg_directory, 'ifcfg-eth*');
+	notify($ERRORS{'DEBUG'}, 0, "found existing ifcfg-eth* files:\n" . join("\n", @ifcfg_paths));
+	
+	# Loop through the linked interfaces
+	for my $interface_name (@interface_names) {
+		my $ifcfg_path = "$ifcfg_directory/ifcfg-$interface_name";
+		
+		# Check if an ifcfg-eth* file already exists for the interface
+		if (grep(/$ifcfg_path/, @ifcfg_paths)) {
+			notify($ERRORS{'DEBUG'}, 0, "ifcfg file already exists for $interface_name");
+			next;
+		}
+		
+		notify($ERRORS{'DEBUG'}, 0, "ifcfg file does not exist for $interface_name");
+		
+		# Assemble the contents of the ifcfg-eth* file for the interface
+		my $ifcfg_contents = <<EOF;
+DEVICE=$interface_name
+BOOTPROTO=dhcp
+STARTMODE=onboot
+ONBOOT=yes
+EOF
+		
+		# Create the ifcfg-eth* file and attempt to call ifup on the interface
+		my $echo_command = "echo \E \"$ifcfg_contents\" > $ifcfg_path && ifup $interface_name";
+		notify($ERRORS{'DEBUG'}, 0, "attempting to echo contents to $ifcfg_path:\n$ifcfg_contents");
+		my ($echo_exit_status, $echo_output) = $self->execute($echo_command, 1);
+		if (!defined($echo_output)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to run command to echo contents to $ifcfg_path");
+			return;
+		}
+		elsif (grep(/done\./, @$echo_output)) {
+			notify($ERRORS{'OK'}, 0, "created $ifcfg_path and enabled interface: $interface_name, output:\n" . join("\n", @$echo_output));
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to create $ifcfg_path and enable interface: $interface_name, output:\n" . join("\n", @$echo_output));
+		}
+	}
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_network_configuration
+
+ Parameters  : $network_type (optional)
+ Returns     : hash reference
+ Description : Retrieves the network configuration on the Linux computer and
+					constructs a hash. A $network_type argument can be supplied
+					containing either 'private' or 'public'. If the $network_type
+					argument is not supplied, the hash keys are the network interface
+					names and the hash reference returned is formatted as follows:
+					|--%{eth0}
+					   |--%{eth0}{ip_address}
+					      |--{eth0}{ip_address}{10.10.4.35} = '255.255.240.0'
+					   |--{eth0}{name} = 'eth0'
+					   |--{eth0}{physical_address} = '00:50:56:08:00:f8'
+					|--%{eth1}
+					   |--%{eth1}{ip_address}
+					      |--{eth1}{ip_address}{152.1.14.200} = '255.255.255.0'
+					   |--{eth1}{name} = 'eth1'
+					   |--{eth1}{physical_address} = '00:50:56:08:00:f9'
+					|--%{eth2}
+					   |--%{eth2}{ip_address}
+					      |--{eth2}{ip_address}{10.1.2.33} = '255.255.240.0'
+					   |--{eth2}{name} = 'eth2'
+					   |--{eth2}{physical_address} = '00:0c:29:ba:c1:77'
+					|--%{lo}
+					   |--%{lo}{ip_address}
+					      |--{lo}{ip_address}{127.0.0.1} = '255.0.0.0'
+					   |--{lo}{name} = 'lo'
+						
+					If the $network_type argument is supplied, a hash reference is
+					returned containing only the configuration for the specified
+					interface:
+					|--%{ip_address}
+						|--{ip_address}{10.1.2.33} = '255.255.240.0'
+					|--{name} = 'eth2'
+					|--{physical_address} = '00:0c:29:ba:c1:77'
+
+=cut
+
+sub get_network_configuration {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Check if a 'public' or 'private' network type argument was specified
+	my $network_type = lc(shift());
+	if ($network_type && $network_type !~ /(public|private)/i) {
+		notify($ERRORS{'WARNING'}, 0, "network type argument can only be 'public' or 'private'");
+		return;
+	}
+	
+	my %network_configuration;
+	
+	# Check if the network configuration has already been retrieved and saved in this object
+	if (!$self->{network_configuration}) {
+		# Run ipconfig
+		my $command = "ifconfig -a";
+		my ($exit_status, $output) = $self->execute($command);
+		if (!defined($output)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to run command to retrieve network configuration: $command");
+			return;
+		}
+		
+		# Loop through the ifconfig output lines
+		my $interface_name;
+		for my $line (@$output) {
+			# Extract the interface name from the Link line:
+			# eth2      Link encap:Ethernet  HWaddr 00:0C:29:78:77:AB
+			if ($line =~ /^([^\s]+).*Link/) {
+				$interface_name = $1;
+				$network_configuration{$interface_name}{name} = $interface_name;
+			}
+			
+			# Skip to the next line if the interface name has not been determined yet
+			next if !$interface_name;
+			
+			# Parse the HWaddr line:
+			# eth2      Link encap:Ethernet  HWaddr 00:0C:29:78:77:AB
+			if ($line =~ /HWaddr\s+([\w:]+)/) {
+				$network_configuration{$interface_name}{physical_address} = lc($1);
+			}
+			
+			# Parse the IP address line:
+			# inet addr:10.10.4.35  Bcast:10.10.15.255  Mask:255.255.240.0
+			if ($line =~ /inet addr:([\d\.]+).*Mask:([\d\.]+)/) {
+				$network_configuration{$interface_name}{ip_address}{$1} = $2;
+			}
+		}
+		
+		$self->{network_configuration} = \%network_configuration;
+		notify($ERRORS{'DEBUG'}, 0, "retrieved network configuration:\n" . format_data(\%network_configuration));
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "network configuration has already been retrieved");
+		%network_configuration = %{$self->{network_configuration}};
+	}
+	
+	# 'public' or 'private' wasn't specified, return all network interface information
+	if (!$network_type) {
+		return \%network_configuration;
+	}
+	
+	# Determine either the private or public interface name based on the $network_type argument
+	my $interface_name;
+	if ($network_type =~ /private/i) {
+		$interface_name = $self->get_private_interface_name();
+	}
+	else {
+		$interface_name = $self->get_public_interface_name();
+	}
+	if (!$interface_name) {
+		notify($ERRORS{'WARNING'}, 0, "failed to determine the $network_type interface name");
+		return;
+	}
+	
+	# Extract the network configuration specific to the public or private interface
+	my $return_network_configuration = $network_configuration{$interface_name};
+	if (!$return_network_configuration) {
+		notify($ERRORS{'WARNING'}, 0, "network configuration does not exist for interface: $interface_name, network configuration:\n" . format_data(\%network_configuration));
+		return;
+	}
+	notify($ERRORS{'DEBUG'}, 0, "returning $network_type network configuration");
+	return $return_network_configuration;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_private_mac_address
+
+ Parameters  : none
+ Returns     : string
+ Description : Returns the MAC address of the interface assigned the private IP
+               address.
+
+=cut
+
+sub get_private_mac_address {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $private_network_configuration = $self->get_network_configuration('private');
+	if (!$private_network_configuration) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve private network configuration");
+		return;
+	}
+
+	my $private_mac_address = $private_network_configuration->{physical_address};
+	if (!$private_mac_address) {
+		notify($ERRORS{'WARNING'}, 0, "'physical_address' key is not set in the private network configuration hash:\n" . format_data($private_network_configuration));
+		return;
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "retrieved private MAC address: $private_mac_address");
+	return $private_mac_address;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_public_mac_address
+
+ Parameters  : none
+ Returns     : string
+ Description : Returns the MAC address of the interface assigned the public IP
+               address.
+
+=cut
+
+sub get_public_mac_address {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $public_network_configuration = $self->get_network_configuration('public');
+	if (!$public_network_configuration) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve public network configuration");
+		return;
+	}
+
+	my $public_mac_address = $public_network_configuration->{physical_address};
+	if (!$public_mac_address) {
+		notify($ERRORS{'WARNING'}, 0, "'physical_address' key is not set in the public network configuration hash:\n" . format_data($public_network_configuration));
+		return;
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "retrieved public MAC address: $public_mac_address");
+	return $public_mac_address;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_public_ip_address
+
+ Parameters  : none
+ Returns     : string
+ Description : Returns the public IP address assigned to the computer.
+
+=cut
+
+sub get_public_ip_address {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $public_network_configuration = $self->get_network_configuration('public');
+	if (!$public_network_configuration) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve public network configuration");
+		return;
+	}
+	
+	my $public_ip_address = (keys %{$public_network_configuration->{ip_address}})[0];
+	if (!$public_ip_address) {
+		notify($ERRORS{'WARNING'}, 0, "'ip_address' key is not set in the public network configuration hash:\n" . format_data($public_network_configuration));
+		return;
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "retrieved public IP address: $public_ip_address");
+	return $public_ip_address;
+}
+
 #/////////////////////////////////////////////////////////////////////////////
 
 1;
