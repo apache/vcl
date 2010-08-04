@@ -209,7 +209,6 @@ our @EXPORT = qw(
   $DAEMON_MODE
   $DATABASE
   $DEFAULTHELPEMAIL
-  $ETHDEVICE
   $GATEWAY
   $FQDN
   $jabPass
@@ -250,7 +249,6 @@ INIT {
 	our ($XCATROOT) = 0;
 	our ($FQDN)     = 0;
 	our ($MYSQL_SSL,       $MYSQL_SSL_CERT);
-	our ($ETHDEVICE) = 0;
 	our ($WINDOWS_ROOT_PASSWORD);
    our ($XMLRPC_USER, $XMLRPC_PASS, $XMLRPC_URL);
 
@@ -385,10 +383,6 @@ INIT {
 				$MYSQL_SSL_CERT = $1;
 			}
 	
-			if ($l =~ /^ETHDEVICE=(eth[0-9])/) {
-                                $ETHDEVICE = $1;
-                        }
-
 			#Sysadmin list
 			if ($l =~ /^sysadmin=([,-.\@a-zA-Z0-9_]*)/) {
 				$SYSADMIN = $1;
@@ -500,7 +494,6 @@ our ($vcldquerykey,  $SYSADMIN, $SHARED_MAILBOX, $DEFAULTHELPEMAIL,$RETURNPATH);
 our ($LOGFILE, $PIDFILE, $VCLDRPCQUERYKEY);
 our ($SERVER, $DATABASE, $WRTUSER, $WRTPASS);
 our ($MYSQL_SSL,       $MYSQL_SSL_CERT);
-our ($ETHDEVICE);
 our ($FQDN);
 our $XCATROOT           = "/opt/xcat";
 our $TOOLS              = "$FindBin::Bin/../tools";
@@ -1326,7 +1319,7 @@ sub setstaticaddress {
 			#print "could not write $tmpfile $!\n";
 
 		}
-		@sshcmd = run_ssh_command($node, $identity, "/etc/sysconfig/network-scripts/ifdown $ETHDEVICE", "root");
+		@sshcmd = run_ssh_command($node, $identity, "/etc/sysconfig/network-scripts/ifdown eth1", "root");
 		foreach my $l (@{$sshcmd[1]}) {
 			if ($l) {
 				#potential problem
@@ -1334,15 +1327,15 @@ sub setstaticaddress {
 			}
 		}
 		#copy new ifcfg-Device
-		if (run_scp_command($tmpfile, "$node:/etc/sysconfig/network-scripts/ifcfg-$ETHDEVICE", $identity)) {
+		if (run_scp_command($tmpfile, "$node:/etc/sysconfig/network-scripts/ifcfg-eth1", $identity)) {
 
 			#confirm it got there
 			undef @sshcmd;
-			@sshcmd = run_ssh_command($node, $identity, "cat /etc/sysconfig/network-scripts/ifcfg-$ETHDEVICE", "root");
+			@sshcmd = run_ssh_command($node, $identity, "cat /etc/sysconfig/network-scripts/ifcfg-eth1", "root");
 			my $success = 0;
 			foreach my $i (@{$sshcmd[1]}) {
 				if ($i =~ /$IPaddress/) {
-					notify($ERRORS{'OK'}, 0, "SUCCESS - copied ifcfg_$ETHDEVICE\n");
+					notify($ERRORS{'OK'}, 0, "SUCCESS - copied ifcfg_eth1\n");
 					$success = 1;
 				}
 			}
@@ -1351,19 +1344,19 @@ sub setstaticaddress {
 			}
 
 			if (!$success) {
-				notify($ERRORS{'WARNING'}, 0, "unable to copy $tmpfile to $node file ifcfg-$ETHDEVICE did get updated with $IPaddress ");
+				notify($ERRORS{'WARNING'}, 0, "unable to copy $tmpfile to $node file ifcfg-eth1 did get updated with $IPaddress ");
 				return 0;
 			}
-		} ## end if (run_scp_command($tmpfile, "$node:/etc/sysconfig/network-scripts/ifcfg-$ETHDEVICE"...
+		} ## end if (run_scp_command($tmpfile, "$node:/etc/sysconfig/network-scripts/ifcfg-eth1"...
 
 		#bring device up
 		undef @sshcmd;
-		@sshcmd = run_ssh_command($node, $identity, "/etc/sysconfig/network-scripts/ifup $ETHDEVICE", "root");
+		@sshcmd = run_ssh_command($node, $identity, "/etc/sysconfig/network-scripts/ifup eth1", "root");
 		#should be empty
 		foreach my $l (@{$sshcmd[1]}) {
 			if ($l) {
 				#potential problem
-				notify($ERRORS{'OK'}, 0, "possible problem with ifup $ETHDEVICE $l");
+				notify($ERRORS{'OK'}, 0, "possible problem with ifup eth1 $l");
 			}
 		}
 		#correct route table - delete old default and add new in same line
@@ -1382,15 +1375,15 @@ sub setstaticaddress {
 
 		notify($ERRORS{'OK'}, 0, "Setting default route");
 		undef @sshcmd;
-		@sshcmd = run_ssh_command($node, $identity, "/sbin/route add default gw $default_gateway metric 0 $ETHDEVICE", "root");
+		@sshcmd = run_ssh_command($node, $identity, "/sbin/route add default gw $default_gateway metric 0 eth1", "root");
 		#should be empty
 		foreach my $l (@{$sshcmd[1]}) {
 			if ($l =~ /Usage:/) {
 				#potential problem
-				notify($ERRORS{'OK'}, 0, "possible problem with route add default gw $default_gateway metric 0 $ETHDEVICE");
+				notify($ERRORS{'OK'}, 0, "possible problem with route add default gw $default_gateway metric 0 eth1");
 			}
 			if ($l =~ /No such process/) {
-				notify($ERRORS{'CRITICAL'}, 0, "problem with $node $l add default gw $default_gateway metric 0 $ETHDEVICE ");
+				notify($ERRORS{'CRITICAL'}, 0, "problem with $node $l add default gw $default_gateway metric 0 eth1 ");
 				return 0;
 			}
 		} ## end foreach my $l (@{$sshcmd[1]})

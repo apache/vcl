@@ -152,29 +152,9 @@ sub pre_capture {
 	}
 
 	if ($ip_configuration eq "static") {
-		#so we don't have conflicts we should set the public adapter back to dhcp
-		# reset ifcfg-eth1 back to dhcp
-		# when boot strap it will be set to dhcp
-		my @ifcfg;
-		my $tmpfile = "/tmp/createifcfg$computer_node_name";
-		push(@ifcfg, "DEVICE=eth1\n");
-		push(@ifcfg, "BOOTPROTO=dhcp\n");
-		push(@ifcfg, "STARTMODE=onboot\n");
-		push(@ifcfg, "ONBOOT=yes\n");
-		#write to tmpfile
-		if (open(TMP, ">$tmpfile")) {
-			print TMP @ifcfg;
-			close(TMP);
-		}
-		else {
-			#print "could not write $tmpfile $!\n";
-			notify($ERRORS{'OK'}, 0, "could not write $tmpfile $!");
-		}
-		#copy to node
-		if (run_scp_command($tmpfile, "$computer_node_name:/etc/sysconfig/network-scripts/ifcfg-$ETHDEVICE", $management_node_keys)) {
-		}
-		if (unlink($tmpfile)) {
-		}
+		if ($self->can("set_static_public_address") && $self->set_static_public_address()) {
+                        notify($ERRORS{'DEBUG'}, 0, "set static public IP address on $computer_node_name using set_static_public_address() method");
+                }
 	} ## end if ($ip_configuration eq "static")
 
 	#Write /etc/rc.local script
@@ -468,7 +448,7 @@ sub set_static_public_address {
 	notify($ERRORS{'OK'}, 0, "initiating Linux set_static_public_address on $computer_short_name");
 	my @eth1file;
 	my $tmpfile = "/tmp/ifcfg-eth_device-$computer_short_name";
-	push(@eth1file, "DEVICE=eth1\n");
+	push(@eth1file, "DEVICE=$public_interface_name\n");
 	push(@eth1file, "BOOTPROTO=static\n");
 	push(@eth1file, "IPADDR=$public_ip_address\n");
 	push(@eth1file, "NETMASK=$subnet_mask\n");
@@ -496,7 +476,7 @@ sub set_static_public_address {
 
 		#confirm it got there
 		undef @sshcmd;
-		@sshcmd = run_ssh_command($computer_short_name, $management_node_keys, "cat /etc/sysconfig/network-scripts/ifcfg-$ETHDEVICE", "root");
+		@sshcmd = run_ssh_command($computer_short_name, $management_node_keys, "cat /etc/sysconfig/network-scripts/ifcfg-$public_interface_name", "root");
 		my $success = 0;
 		foreach my $i (@{$sshcmd[1]}) {
 			if ($i =~ /$public_ip_address/) {

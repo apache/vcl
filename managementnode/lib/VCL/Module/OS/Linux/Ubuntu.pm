@@ -103,30 +103,36 @@ sub capture_prepare {
 		notify($ERRORS{'OK'}, 0, "$user_unityid deleted from $computer_node_name");
 	}
 	if ($ip_configuration eq "static") {
-		#so we don't have conflicts we should set the public adapter back to dhcp
-		# reset ifcfg-eth1 back to dhcp
-		# when boot strap it will be set to dhcp
-		my @ifcfg;
-		my $tmpfile = "/tmp/createifcfg$computer_node_name";
-		push(@ifcfg, "DEVICE=eth1\n");
-		push(@ifcfg, "BOOTPROTO=dhcp\n");
-		push(@ifcfg, "STARTMODE=onboot\n");
-		push(@ifcfg, "ONBOOT=yes\n");
-		#write to tmpfile
-		if (open(TMP, ">$tmpfile")) {
-			print TMP @ifcfg;
-			close(TMP);
-		}
-		else {
-			#print "could not write $tmpfile $!\n";
-			notify($ERRORS{'OK'}, 0, "could not write $tmpfile $!");
-		}
-		#copy to node
-		if (run_scp_command($tmpfile, "$computer_node_name:/etc/sysconfig/network-scripts/ifcfg-$ETHDEVICE", $management_node_keys)) {
-		}
-		if (unlink($tmpfile)) {
-		}
+		if ($self->can("set_static_public_address") && $self->set_static_public_address()) {
+                        notify($ERRORS{'DEBUG'}, 0, "set static public IP address on $computer_node_name using set_static_public_address() method");
+                }
 	} ## end if ($ip_configuration eq "static")
+	
+	#Write /etc/rc.local script
+        if(!$self->generate_rc_local()){
+                notify($ERRORS{'WARNING'}, 0, "unable to generate /etc/rc.local script on $computer_node_name");
+                return 0;
+        }
+
+        #Generate external_sshd_config
+        if(!$self->generate_ext_sshd_config()){
+                notify($ERRORS{'WARNING'}, 0, "unable to generate /etc/ssh/external_sshd_config on $computer_node_name");
+                return 0;
+        }
+
+        #Generate ext_sshd init script
+        if(!$self->generate_ext_sshd_init()){
+                notify($ERRORS{'WARNING'}, 0, "unable to generate /etc/init.d/ext_sshd on $computer_node_name");
+                return 0;
+        }
+
+        #shutdown node
+        notify($ERRORS{'OK'}, 0, "shutting down node for Linux imaging sequence");
+        run_ssh_command($computer_node_name, $management_node_keys, "/sbin/shutdown -h now", "root");
+        notify($ERRORS{'OK'}, 0, "sleeping for 60 seconds while machine shuts down");
+        sleep 60;
+	
+	
 
 	notify($ERRORS{'OK'}, 0, "returning 1");
 	return 1;
