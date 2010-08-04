@@ -209,7 +209,6 @@ our @EXPORT = qw(
   $DAEMON_MODE
   $DATABASE
   $DEFAULTHELPEMAIL
-  $DEFAULTURL
   $ETHDEVICE
   $GATEWAY
   $FQDN
@@ -247,7 +246,7 @@ INIT {
 	our ($JABBER, $jabServer, $jabUser, $jabPass, $jabResource, $jabPort) = 0;
 	our ($LOGFILE, $PIDFILE, $PROCESSNAME);
 	our ($DATABASE, $SERVER, $WRTUSER, $WRTPASS, $LockerRdUser, $rdPass) = 0;
-	our ($SYSADMIN, $SHARED_MAILBOX, $DEFAULTURL, $DEFAULTHELPEMAIL, $RETURNPATH) = 0;
+	our ($SYSADMIN, $SHARED_MAILBOX, $DEFAULTHELPEMAIL, $RETURNPATH) = 0;
 	our ($XCATROOT) = 0;
 	our ($FQDN)     = 0;
 	our ($MYSQL_SSL,       $MYSQL_SSL_CERT);
@@ -318,10 +317,6 @@ INIT {
 			if ($l =~ /^pidfile=(.*)/) {
 				chomp($l);
 				$PIDFILE = $1;
-			}
-
-			if ($l =~ /^DEFAULTURL=(.*)/) {
-				$DEFAULTURL = $1;
 			}
 
 			if ($l =~ /^DEFAULTHELPEMAIL=(.*)/) {
@@ -501,7 +496,7 @@ our ($JABBER, $PROCESSNAME);
 our %ERRORS = ('DEPENDENT' => 4, 'UNKNOWN' => 3, 'OK' => 0, 'WARNING' => 1, 'CRITICAL' => 2, 'MAILMASTERS' => 5, 'DEBUG' => 6);
 our ($LockerWrtUser, $wrtPass,  $database,       $server);
 our ($jabServer,     $jabUser,  $jabPass,        $jabResource, $jabPort);
-our ($vcldquerykey,  $SYSADMIN, $SHARED_MAILBOX, $DEFAULTURL, $DEFAULTHELPEMAIL,$RETURNPATH);
+our ($vcldquerykey,  $SYSADMIN, $SHARED_MAILBOX, $DEFAULTHELPEMAIL,$RETURNPATH);
 our ($LOGFILE, $PIDFILE, $VCLDRPCQUERYKEY);
 our ($SERVER, $DATABASE, $WRTUSER, $WRTPASS);
 our ($MYSQL_SSL,       $MYSQL_SSL_CERT);

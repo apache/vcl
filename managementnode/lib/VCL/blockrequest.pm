@@ -131,6 +131,9 @@ sub process {
 	my $blocktime_processed          = $self->data->get_blocktime_processed();
 	my $blocktime_start              = $self->data->get_blocktime_start();
 	my $blocktime_end                = $self->data->get_blocktime_end();
+	my $blockrequest_name            = $self->data->get_blockrequest_name();
+	my $blockrequest_owner_id	 = $self->data->get_blockrequest_owner_id();
+
 
 	#Set local timer
 	my $localtimer = convert_to_epoch_seconds();
@@ -155,6 +158,7 @@ sub process {
 		my $completed = 0;
 		my $loop_control = 0;
 		my $xmlcall;
+		my ($warningmsg, $errormsg);
 
 		my($allocated,$unallocated) = 0;
 
@@ -166,7 +170,7 @@ sub process {
 			}
 			else{
 				$completed=1;
-				notify($ERRORS{'CRITICAL'}, 0, "attempted $loop_control passes to complete block_request $blockrequest_id\n allocated= $allocated \nblockrequest_number_machines= $blockrequest_number_machines");
+				notify($ERRORS{'DEBUG'}, 0, "attempted $loop_control passes to complete block_request $blockrequest_id\n allocated= $allocated \nblockrequest_number_machines= $blockrequest_number_machines");
 				last;
 			}
 
@@ -180,12 +184,12 @@ sub process {
 			}
 
 			if ($xmlcall->{status} =~ /warning|fault/) {
-				my $warningmsg  = $xmlcall->{warningmsg}  if (defined($xmlcall->{warningmsg}));
-				notify($ERRORS{'CRITICAL'}, 0, "xmlrpc warning: $warningmsg allocated= $allocated unallocated= $unallocated");
+				$warningmsg  = $xmlcall->{warningmsg}  if (defined($xmlcall->{warningmsg}));
+				notify($ERRORS{'DEBUG'}, 0, "xmlrpc warning: $warningmsg allocated= $allocated unallocated= $unallocated");
 			}
 			if ($xmlcall->{status} =~ /error/) {
-				my $errormsg = $xmlcall->{errormsg} if (defined($xmlcall->{errormsg}));
-				notify($ERRORS{'CRITICAL'}, 0, "xmlrpc error on blockrequest_id=$blockrequest_id blocktime_id=$blocktime_id : $errormsg");
+				$errormsg = $xmlcall->{errormsg} if (defined($xmlcall->{errormsg}));
+				notify($ERRORS{'DEBUG'}, 0, "xmlrpc error on blockrequest_id=$blockrequest_id blocktime_id=$blocktime_id : $errormsg");
 			}
 			if ($xmlcall->{status} =~ /completed/) {
 				$completed=1;
@@ -193,6 +197,24 @@ sub process {
 			}
 
 			sleep 5 if(!$completed);
+		}
+		
+		my $body;
+	
+		if(defined($warningmsg) || defined($errormsg) || ($allocated < $blockrequest_number_machines)){
+			$body .= "Problem processing block allocation \n\n";
+			$body .= "Block id		= $blockrequest_id\n";
+			$body .= "Block name		= $blockrequest_name\n";
+			$body .= "Block	start time	= $blocktime_start\n";
+			$body .= "Block end time	= $blocktime_end\n";
+			$body .= "Allocated		= $allocated\n";	
+			$body .= "Block requested 	= $blockrequest_number_machines\n"; 
+			$body .= "xmlrpc warn msg	= $warningmsg\n" if(defined($warningmsg));
+			$body .= "xmlrpc error msg	= $errormsg\n" if(defined($errormsg));
+			$body .= "\n";
+
+			notify($ERRORS{'CRITICAL'}, 0, "$body");
+		
 		}
 
 		#pause
