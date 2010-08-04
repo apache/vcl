@@ -696,7 +696,7 @@ function editOrAddComputer($state) {
 	}
 	print "  <TR>\n";
 	print "    <TH align=right>RAM (MB):</TH>\n";
-	print "    <TD><INPUT type=text name=ram maxlength=5 value=";
+	print "    <TD><INPUT type=text name=ram maxlength=6 value=";
 	print $data["ram"] . "></TD>\n";
 	print "    <TD>";
 	printSubmitErr(RAMERR);
@@ -1215,7 +1215,7 @@ function bulkAddComputer() {
 	print "  </TR>\n";
 	print "  <TR>\n";
 	print "    <TH align=right nowrap>RAM (MB)*:</TH>\n";
-	print "    <TD><INPUT type=text name=ram maxlength=5 value=";
+	print "    <TD><INPUT type=text name=ram maxlength=6 value=";
 	print $data["ram"] . "></TD>\n";
 	print "    <TD>";
 	printSubmitErr(RAMERR);
@@ -2928,9 +2928,9 @@ function processComputerInput($checks=1) {
 	   $submitErr |= IPADDRERR;
 	   $submitErrMsg[IPADDRERR] = "There is already a computer with this IP address.";
 	}*/
-	if($return["ram"] < 32 || $return["ram"] > 20480) {
+	if($return["ram"] < 32 || $return["ram"] > 512000) {
 	   $submitErr |= RAMERR;
-	   $submitErrMsg[RAMERR] = "RAM must be between 32 and 20480";
+	   $submitErrMsg[RAMERR] = "RAM must be between 32 and 512000";
 	}
 	if($return["procspeed"] < 500 || $return["procspeed"] > 20000) {
 	   $submitErr |= PROCSPEEDERR;
@@ -3156,9 +3156,9 @@ function processBulkComputerInput($checks=1) {
 			}
 		}
 	}
-	if($return["ram"] < 32 || $return["ram"] > 20480) {
+	if($return["ram"] < 32 || $return["ram"] > 512000) {
 	   $submitErr |= RAMERR;
-	   $submitErrMsg[RAMERR] = "RAM must be between 32 and 20480";
+	   $submitErrMsg[RAMERR] = "RAM must be between 32 and 512000";
 	}
 	if($return["procspeed"] < 500 || $return["procspeed"] > 20000) {
 	   $submitErr |= PROCSPEEDERR;
