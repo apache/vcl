@@ -1198,7 +1198,7 @@ function viewRequestInfo() {
 		}
 	}
 	$states = getStates();
-	$userinfo = getUserInfo($request["userid"], 1);
+	$userinfo = getUserInfo($request["userid"], 1, 1);
 	print "<DIV align=center>\n";
 	print "<H2>View Reservation</H2>\n";
 	print "<table summary=\"\">\n";
@@ -1853,7 +1853,7 @@ function confirmDeleteRequest() {
 						. $reservation["prettyimage"] . "</strong> that started ";
 			}
 			else {
-				$userinfo = getUserInfo($request["userid"], 1);
+				$userinfo = getUserInfo($request["userid"], 1, 1);
 				$text = "Delete reservation by {$userinfo['unityid']}@"
 				      . "{$userinfo['affiliation']} for <strong>"
 				      . "{$reservation["prettyimage"]}</strong> that started ";

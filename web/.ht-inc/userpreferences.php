@@ -502,7 +502,7 @@ function submitUserPrefs() {
 		       . "WHERE userid = {$user['id']}";
 		doQuery($query, 101);
 	}
-	$user = getUserInfo($user["id"], 1);
+	$user = getUserInfo($user["id"], 1, 1);
 	$_SESSION['user'] = $user;
 	userpreferences();
 }

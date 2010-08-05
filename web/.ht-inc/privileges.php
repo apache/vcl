@@ -2584,7 +2584,7 @@ function checkUserHasPriv($priv, $uid, $node, $privs=0, $cascadePrivs=0) {
 	if(array_key_exists($key, $_SESSION['userhaspriv']))
 		return $_SESSION['userhaspriv'][$key];
 	if($user["id"] != $uid) {
-		$_user = getUserInfo($uid);
+		$_user = getUserInfo($uid, 0, 1);
 		if(is_null($user))
 			return 0;
 	}

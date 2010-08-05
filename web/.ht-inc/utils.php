@@ -384,10 +384,12 @@ function checkAccess() {
 				$ldapuser = sprintf($authMechs[$authtype]['userid'], $user['unityid']);
 				$res = ldap_bind($ds, $ldapuser, $xmlpass);
 				if(! $res) {
+					addLoginLog($user['unityid'], $authtype, $user['affiliationid'], 0);
 					printXMLRPCerror(3);   # access denied
 					dbDisconnect();
 					exit;
 				}
+				addLoginLog($user['unityid'], $authtype, $user['affiliationid'], 1);
 			}
 			elseif($ENABLE_ITECSAUTH &&
 			   $authMechs[$authtype]['affiliationid'] == getAffiliationID('ITECS')) {
@@ -1120,12 +1122,11 @@ function getImages($includedeleted=0, $imageid=0) {
 				$imagelist[$row["id"]]["subimages"] = array();
 				if($row2["subimages"]) {
 					$query2 = "SELECT imageid "
-							  . "FROM subimages "
-							  . "WHERE imagemetaid = {$row["imagemetaid"]}";
+					        . "FROM subimages "
+					        . "WHERE imagemetaid = {$row["imagemetaid"]}";
 					$qh2 = doQuery($query2, 101);
-					while($row2 = mysql_fetch_assoc($qh2)) {
+					while($row2 = mysql_fetch_assoc($qh2))
 						array_push($imagelist[$row["id"]]["subimages"], $row2["imageid"]);
-					}
 				}
 			}
 			else
@@ -1750,7 +1751,7 @@ function addOwnedResources(&$resources, $includedeleted, $userid) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function addOwnedResourceGroups(&$resourcegroups, $userid) {
-	if(! $user = getUserInfo($userid, 1))
+	if(! $user = getUserInfo($userid, 1, 1))
 		return;
 	$userid = $user["id"];
 	$groupids = implode(',', array_keys($user["groups"]));
@@ -2878,9 +2879,9 @@ function processInputData($data, $type, $addslashes=0, $defaultvalue=NULL) {
 /// returns NULL if could not get information about the user
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function getUserInfo($id, $noupdate=0) {
+function getUserInfo($id, $noupdate=0, $numeric=0) {
 	$affilid = DEFAULT_AFFILID;
-	if(! is_numeric($id)) {
+	if(! $numeric)) {
 		$rc = getAffilidAndLogin($id, $affilid);
 		if($rc == -1)
 			return NULL;
@@ -2917,7 +2918,7 @@ function getUserInfo($id, $noupdate=0) {
 	       . "WHERE u.IMtypeid = i.id AND "
 	       .       "u.adminlevelid = a.id AND "
 	       .       "u.affiliationid = af.id AND ";
-	if(is_numeric($id))
+	if($numeric)
 		$query .= "u.id = $id";
 	else
 		$query .= "u.unityid = '$id' AND af.id = $affilid";
@@ -2949,7 +2950,7 @@ function getUserInfo($id, $noupdate=0) {
 			return $user;
 		}
 	}
-	if(is_numeric($id))
+	if($numeric)
 		$user = updateUserData($id, "numeric");
 	else
 		$user = updateUserData($id, "loginid", $affilid);
