@@ -102,10 +102,30 @@ function newReservation() {
 	print "<FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
 	// list of images
 	uasort($resources["image"], "sortKeepIndex");
-	if($imaging)
-		printSelectInput("imageid", $resources["image"], $imageid, 1, 0, 'imagesel', "onChange=\"updateWaitTime(1);\" tabIndex=1");
-	else
-		printSelectInput("imageid", $resources["image"], $imageid, 1, 0, 'imagesel', "onChange=\"selectEnvironment();\" tabIndex=1");
+	if($imaging) {
+		print "      <select dojoType=\"dijit.form.FilteringSelect\" id=imagesel ";
+		print "onChange=\"updateWaitTime(1);\" tabIndex=1 style=\"width: 400px\" ";
+		print "queryExpr=\"*\${0}*\" highlightMatch=\"all\" autoComplete=\"false\" ";
+		print "name=imageid>\n";
+		foreach($resources['image'] as $id => $image)
+			if($id == $imageid)
+				print "        <option value=\"$id\" selected>$image</option>\n";
+			else
+				print "        <option value=\"$id\">$image</option>\n";
+		print "      </select>\n";
+	}
+	else {
+		print "      <select dojoType=\"dijit.form.FilteringSelect\" id=imagesel ";
+		print "onChange=\"selectEnvironment();\" tabIndex=1 style=\"width: 400px\" ";
+		print "queryExpr=\"*\${0}*\" highlightMatch=\"all\" autoComplete=\"false\" ";
+		print "name=imageid>\n";
+		foreach($resources['image'] as $id => $image)
+			if($id == $imageid)
+				print "        <option value=\"$id\" selected>$image</option>\n";
+			else
+				print "        <option value=\"$id\">$image</option>\n";
+		print "      </select>\n";
+	}
 	print "<br><br>\n";
 
 	$imagenotes = getImageNotes($imageid);

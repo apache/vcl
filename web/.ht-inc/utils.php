@@ -2838,11 +2838,13 @@ function processInputData($data, $type, $addslashes=0, $defaultvalue=NULL) {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn getUserInfo($id, $noupdate)
+/// \fn getUserInfo($id, $noupdate, $numeric)
 ///
 /// \param $id - unity ID for the user or user's id from database
 /// \param $noupdate - (optional, default=0) specify 1 to skip updating user's
 /// data if lastupdated timestamp is expired
+/// \param $numeric - (optional, default=0) 1 specifies $id corresponds to the
+/// id field from the user table; 0 otherwise
 ///
 /// \return 0 if fail to fetch data or $user - an array with these elements:\n
 /// \b unityid - unity ID for the user\n
@@ -2881,7 +2883,7 @@ function processInputData($data, $type, $addslashes=0, $defaultvalue=NULL) {
 ////////////////////////////////////////////////////////////////////////////////
 function getUserInfo($id, $noupdate=0, $numeric=0) {
 	$affilid = DEFAULT_AFFILID;
-	if(! $numeric)) {
+	if(! $numeric) {
 		$rc = getAffilidAndLogin($id, $affilid);
 		if($rc == -1)
 			return NULL;
@@ -8661,7 +8663,8 @@ function getDojoHTML($refresh) {
 		case 'submitRequest':
 		case 'createSelectImage':
 		case 'submitCreateImage':
-			$dojoRequires = array('dojo.parser');
+			$dojoRequires = array('dojo.parser',
+			                      'dijit.form.FilteringSelect');
 			break;
 		case 'viewRequests':
 			$dojoRequires = array('dojo.parser',
@@ -8815,7 +8818,7 @@ function getDojoHTML($refresh) {
 			}
 			# TODO check flow of which modes should call updateWaitTime
 			if($mode == 'newRequest')
-				$rt .= "     updateWaitTime(0);\n";
+				$rt .= "     setTimeout(function() {updateWaitTime(0);}, 1000);\n";
 			$rt .= "   });\n";
 			$rt .= "</script>\n";
 			return $rt;

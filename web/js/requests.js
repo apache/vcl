@@ -26,7 +26,7 @@ function generalReqCB(data, ioArgs) {
 }
 
 function selectEnvironment() {
-	var imageid = dojo.byId('imagesel').value;
+	var imageid = dijit.byId('imagesel').value;
 	if(maxTimes[imageid])
 		setMaxRequestLength(maxTimes[imageid]);
 	else
@@ -48,7 +48,7 @@ function updateWaitTime(cleardesc) {
 		dojo.byId('waittime').className = 'hidden';
 		desconly = 1;
 	}
-	var imageid = dojo.byId('imagesel').value;
+	var imageid = dijit.byId('imagesel').value;
 	if(dojo.byId('reqlength'))
 		var length = dojo.byId('reqlength').value;
 	else
