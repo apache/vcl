@@ -592,7 +592,7 @@ function processUserPrefsInput($checks=1) {
 	   $submitErr |= PREFNAMEERR;
 	   $submitErrMsg[PREFNAMEERR] = "Preferred name can only be up to 25 characters";
 	}
-	if(! ereg('^[a-zA-Z ]*$', $return["preferredname"])) {
+	if(! preg_match('/^[a-zA-Z ]*$/', $return["preferredname"])) {
 	   $submitErr |= PREFNAMEERR;
 	   $submitErrMsg[PREFNAMEERR] = "Preferred name can only contain letters and spaces";
 	}

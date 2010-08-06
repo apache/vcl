@@ -806,7 +806,7 @@ function AJupdateVMprofileItem() {
 	else {
 		if(get_magic_quotes_gpc())
 			$newvalue = stripslashes($newvalue);
-		$newvalue2 = mysql_escape_string($newvalue);
+		$newvalue2 = mysql_real_escape_string($newvalue);
 		$newvalue2 = "'$newvalue2'";
 	}
 
@@ -837,7 +837,7 @@ function AJnewProfile() {
 	$newprofile = processInputVar('newname', ARG_STRING);
 	if(get_magic_quotes_gpc()) {
 		$newprofile = stripslashes($newprofile);
-		$newprofile = mysql_escape_string($newprofile);
+		$newprofile = mysql_real_escape_string($newprofile);
 	}
 	# TODO add check for existing name
 	$query = "SELECT id FROM vmprofile WHERE profilename = '$newprofile'";

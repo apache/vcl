@@ -592,7 +592,7 @@ function processGroupInput($checks=1) {
 		return $return;
 	}
 	
-	if(! ereg('^[-a-zA-Z0-9_\.: ]{3,30}$', $return["name"])) {
+	if(! preg_match('/^[-a-zA-Z0-9_\.: ]{3,30}$/', $return["name"])) {
 	   $submitErr |= GRPNAMEERR;
 	   $submitErrMsg[GRPNAMEERR] = "Name must be between 3 and 30 characters "
 		                       . "and can only contain letters, numbers, and "
@@ -1004,7 +1004,7 @@ function confirmDeleteGroup() {
 		        . "in use.";
 		$question = "Delete the following resource group?";
 		list($resourcetype, $name) = 
-			split('/', $resourcegroups[$groupid]["name"]);
+			explode('/', $resourcegroups[$groupid]["name"]);
 		$target = "#resources";
 	}
 

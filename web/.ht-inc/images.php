@@ -1523,9 +1523,9 @@ function confirmEditOrAddImage($state) {
 	print "<TABLE>\n";
 	print "  <TR valign=top>\n";
 	print "    <TD>\n";
-	$data['description'] = mysql_escape_string($data['description']);
-	$data['usage'] = mysql_escape_string($data['usage']);
-	$data['comments'] = mysql_escape_string($data['comments']);
+	$data['description'] = mysql_real_escape_string($data['description']);
+	$data['usage'] = mysql_real_escape_string($data['usage']);
+	$data['comments'] = mysql_real_escape_string($data['comments']);
 
 	if($state) {
 		$data['nextmode'] = 'submitAddImage';
@@ -1775,7 +1775,7 @@ function updateExistingImage() {
 	$comments = preg_replace("/\n/", '', $comments);
 	if(get_magic_quotes_gpc())
 		$comments = stripslashes($comments);
-	$comments = mysql_escape_string($comments);
+	$comments = mysql_real_escape_string($comments);
 
 	$data = getRequestInfo($requestid);
 	foreach($data["reservations"] as $res) {
@@ -1939,21 +1939,8 @@ function submitSetImageProduction() {
 			break;
 		}
 	}
-	/*$regs = array();
-	if(ereg('(.*)-v([0-9]){1,2}$', $data["image"], $regs)) {
-		$newname = $regs[1] . "-v" . ++$regs[2];
-		print "newname - $newname<br>\n";
-	}
-	else {
-		$newname = $data["image"] . "-v0";
-	}
-	$query = "UPDATE image "
-	       . "SET name = '$newname', "
-	       .     "test = 0 "
-	       . "WHERE id = " . $data["imageid"];*/
 	$query = "UPDATE request SET stateid = 17 WHERE id = $requestid";
 	doQuery($query, 101);
-	//deleteRequest($data);
 	print "<H2>Change Test Image to Production</H2>\n";
 	print "<b>$prettyimage</b> is in the process of being ";
 	print "updated to use the newly created image.<br>\n";
@@ -2464,7 +2451,7 @@ function processImageInput($checks=1) {
 	   $submitErr |= NAMEERR;
 	   $submitErrMsg[NAMEERR] = "An image already exists with this name.";
 	}*/
-	if(ereg('-', $return["prettyname"]) ||
+	if(preg_match('/-/', $return["prettyname"]) ||
 		strlen($return["prettyname"]) > 60 || strlen($return["prettyname"]) < 2) {
 	   $submitErr |= PRETTYNAMEERR;
 	   $submitErrMsg[PRETTYNAMEERR] = "Long Name must be from 2 to 60 characters "
@@ -2625,8 +2612,8 @@ function addImage($data) {
 		$data['description'] = stripslashes($data['description']);
 		$data['usage'] = stripslashes($data['usage']);
 	}
-	$data['description'] = mysql_escape_string($data['description']);
-	$data['usage'] = mysql_escape_string($data['usage']);
+	$data['description'] = mysql_real_escape_string($data['description']);
+	$data['usage'] = mysql_real_escape_string($data['usage']);
 
 	$ownerdata = getUserInfo($data['owner'], 1);
 	$ownerid = $ownerdata['id'];
@@ -3480,7 +3467,7 @@ function AJupdateRevisionComments() {
 	$comments = htmlspecialchars($comments);
 	if(get_magic_quotes_gpc())
 		$comments = stripslashes($comments);
-	$comments = mysql_escape_string($comments);
+	$comments = mysql_real_escape_string($comments);
 	$query = "UPDATE imagerevision "
 	       . "SET comments = '$comments' "
 	       . "WHERE id = $revisionid";

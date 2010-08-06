@@ -916,7 +916,7 @@ function AJsubmitAddChildNode() {
 	}
 	$nodeInfo = getNodeInfo($parent);
 	$newnode = processInputVar("newnode", ARG_STRING);
-	if(! ereg('^[-A-Za-z0-9_. ]+$', $newnode)) {
+	if(! preg_match('/^[-A-Za-z0-9_. ]+$/', $newnode)) {
 		$text = "You can only use letters, numbers, spaces,<br>"
 		      . "dashes(-), dots(.), and underscores(_).";
 		print "dojo.byId('addChildNodeStatus').innerHTML = '$text';";
@@ -1678,7 +1678,7 @@ function printResourcePrivRow($privname, $rownum, $privs, $types,
                               $disabled) {
 	global $user;
 	print "  <TR>\n";
-	list($type, $name, $id) = split('/', $privname);
+	list($type, $name, $id) = explode('/', $privname);
 	print "    <TH>\n";
 	print "      <span id=\"resgrp$id\" onmouseover=getGroupMembers(\"$id\",";
 	print "\"resgrp$id\",\"rgmcont\"); onmouseout=getGroupMembersCancel";
@@ -1798,7 +1798,7 @@ function getResourcePrivRowHTML($privname, $rownum, $privs, $types,
 	$text = "";
 	$js = "";
 	$text .= "  <TR>";
-	list($type, $name, $id) = split('/', $privname);
+	list($type, $name, $id) = explode('/', $privname);
 	$text .= "    <TH>";
 	$text .= "      <span id=\"resgrp$id\" onmouseover=getGroupMembers(\"$id\",";
 	$text .= "\"resgrp$id\",\"rgmcont\"); onmouseout=getGroupMembersCancel";

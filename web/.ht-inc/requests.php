@@ -2138,7 +2138,7 @@ function connectRequest() {
 		$serverIP = $requestData["reservations"][0]["reservedIP"];
 		$osname = $requestData["reservations"][0]["OS"];
 		$passwd = $requestData["reservations"][0]["password"];
-		if(eregi("windows", $osname)) {
+		if(preg_match("/windows/i", $osname)) {
 			print "You will need to use a ";
 			print "Remote Desktop program to connect to the ";
 			print "system. If you did not click on the <b>Connect!</b> button from ";
@@ -2226,7 +2226,7 @@ function connectRequest() {
 			print "<strong><big>NOTE:</big> You cannot use the Windows Remote ";
 			print "Desktop Connection to connect to this computer. You must use an ";
 			print "ssh client.</strong>\n";
-			/*if(eregi("windows", $_SERVER["HTTP_USER_AGENT"])) {
+			/*if(preg_match("/windows/i", $_SERVER["HTTP_USER_AGENT"])) {
 				print "<br><br><h3>NEW!</h3>\n";
 				print "Connect to the server using a java applet:<br>\n";
 				print "<FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
@@ -2252,7 +2252,7 @@ function connectRequest() {
 			print "<LI><b>Platform</b>: {$res["OS"]}</LI>\n";
 			print "<LI><b>Remote Computer</b>: {$res["reservedIP"]}</LI>\n";
 			print "<LI><b>User ID</b>: " . $user['login'] . "</LI>\n";
-			if(eregi("windows", $res["OS"])) {
+			if(preg_match("/windows/i", $res["OS"])) {
 				if(strlen($res['password'])) {
 					print "<LI><b>Password</b>: {$res['password']}<br></LI>\n";
 					print "</UL>\n";
@@ -2293,7 +2293,7 @@ function connectRequest() {
 					print "<LI><b>Password</b>: (use your campus password)</LI>\n";
 					print "</UL>\n";
 				}
-				/*if(eregi("windows", $_SERVER["HTTP_USER_AGENT"])) {
+				/*if(preg_match("/windows/i", $_SERVER["HTTP_USER_AGENT"])) {
 					print "Connect to the server using a java applet:<br>\n";
 					print "<FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
 					print "<INPUT type=submit value=\"Connect with Applet\">\n";
@@ -2458,7 +2458,7 @@ function processRequestInput($checks=1) {
 			$submitErr |= STARTDAYERR;
 			$submitErrMsg[STARTDAYERR] = "The submitted start date is invalid. ";
 		}
-		if(! ereg('^((0?[1-9])|(1[0-2]))$', $return["hour"], $regs)) {
+		if(! preg_match('/^((0?[1-9])|(1[0-2]))$/', $return["hour"], $regs)) {
 			$submitErr |= STARTHOURERR;
 			$submitErrMsg[STARTHOURERR] = "The submitted hour must be from 1 to 12.";
 		}
@@ -2481,7 +2481,7 @@ function processRequestInput($checks=1) {
 			$submitErr |= ENDDAYERR;
 			$submitErrMsg[ENDDAYERR] = "The submitted end date is invalid. ";
 		}
-		if(! ereg('^((0?[1-9])|(1[0-2]))$', $return["endhour"])) {
+		if(! preg_match('/^((0?[1-9])|(1[0-2]))$/', $return["endhour"])) {
 			$submitErr |= ENDHOURERR;
 			$submitErrMsg[ENDHOURERR] = "The submitted hour must be from 1 to 12.";
 		}
@@ -2513,7 +2513,7 @@ function processRequestInput($checks=1) {
 	}
 
 	if($return["ending"] != "length") {
-		if(! ereg('^(20[0-9]{2})-([0-1][0-9])-([0-3][0-9]) (([0-1][0-9])|(2[0-3])):([0-5][0-9]):([0-5][0-9])$', $return["enddate"], $regs)) {
+		if(! preg_match('/^(20[0-9]{2})-([0-1][0-9])-([0-3][0-9]) (([0-1][0-9])|(2[0-3])):([0-5][0-9]):([0-5][0-9])$/', $return["enddate"], $regs)) {
 			$submitErr |= ENDDATEERR;
 			$submitErrMsg[ENDDATEERR] = "The submitted date/time is invalid.";
 		}

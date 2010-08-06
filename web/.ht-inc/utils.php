@@ -943,7 +943,7 @@ function doQuery($query, $errcode, $db="vcl", $nolog=0) {
 	global $totalQueries, $queryTimes;
 	$totalQueries++;
 	if($db == "vcl") {
-		if((! $nolog) && ereg('^(UPDATE|INSERT|DELETE)', $query)) {
+		if((! $nolog) && preg_match('/^(UPDATE|INSERT|DELETE)/', $query)) {
 			$logquery = str_replace("'", "\'", $query);
 			$logquery = str_replace('"', '\"', $logquery);
 			if(isset($user['id']))
@@ -1414,7 +1414,7 @@ function getUserResources($userprivs, $resourceprivs=array("available"),
 		foreach(array_keys($nodeprivs[$nodeid]["resources"]) as $resourceid) {
 			foreach($resourceprivs as $priv) {
 				if(in_array($priv, $nodeprivs[$nodeid]["resources"][$resourceid])) {
-					list($type, $name, $id) = split('/', $resourceid);
+					list($type, $name, $id) = explode('/', $resourceid);
 					if(! array_key_exists($type, $resourcegroups))
 						$resourcegroups[$type] = array();
 					if(! in_array($name, $resourcegroups[$type]))
@@ -1428,7 +1428,7 @@ function getUserResources($userprivs, $resourceprivs=array("available"),
 				if(in_array($priv, $nodeprivs[$nodeid]["cascaderesources"][$resourceid]) &&
 					! (array_key_exists($resourceid, $nodeprivs[$nodeid]["resources"]) &&
 					in_array("block", $nodeprivs[$nodeid]["resources"][$resourceid]))) {
-					list($type, $name, $id) = split('/', $resourceid);
+					list($type, $name, $id) = explode('/', $resourceid);
 					if(! array_key_exists($type, $resourcegroups))
 						$resourcegroups[$type] = array();
 					if(! in_array($name, $resourcegroups[$type]))
@@ -3114,8 +3114,8 @@ function addUser($loginid) {
 function updateUserPrefs($userid, $preferredname, $width, $height, $bpp, $audio,
                          $mapdrives, $mapprinters, $mapserial) {
 	global $mysql_link_vcl;
-	$preferredname = mysql_escape_string($preferredname);
-	$audio = mysql_escape_string($audio);
+	$preferredname = mysql_real_escape_string($preferredname);
+	$audio = mysql_real_escape_string($audio);
 	$query = "UPDATE user SET "
 	       .        "preferredname = '$preferredname', "
 	       .        "width = '$width', "
@@ -7189,7 +7189,7 @@ function getUserMaxTimes($uid=0) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function getResourceGroupID($groupdname) {
-	list($type, $name) = split('/', $groupdname);
+	list($type, $name) = explode('/', $groupdname);
 	$query = "SELECT g.id "
 	       . "FROM resourcegroup g, "
 	       .      "resourcetype t "
@@ -7674,7 +7674,7 @@ function addContinuationsEntry($nextmode, $data=array(), $duration=SECINWEEK,
 		$data['______parent'] = $continuationid;
 	$serdata = serialize($data);
 	$contid = md5($mode . $nextmode . $serdata . $user['id']);
-	$serdata = mysql_escape_string($serdata);
+	$serdata = mysql_real_escape_string($serdata);
 	$expiretime = unixToDatetime(time() + $duration);
 	$query = "SELECT id, "
 	       .        "parentid "
@@ -7984,7 +7984,7 @@ function xmlRPChandler($function, $args, $blah) {
 	else
 		$keyid = $user['id'];
 	if(function_exists($function)) {
-		$saveargs = mysql_escape_string(serialize($args));
+		$saveargs = mysql_real_escape_string(serialize($args));
 		$query = "INSERT INTO xmlrpcLog "
 		       .        "(xmlrpcKeyid, " 
 		       .        "timestamp, "
@@ -8157,7 +8157,7 @@ function validateAPIgroupInput($items, $exists) {
 	}
 	# affiliation
 	if(array_key_exists('affiliation', $items)) {
-		$esc_affiliation = mysql_escape_string($items['affiliation']);
+		$esc_affiliation = mysql_real_escape_string($items['affiliation']);
 		$affilid = getAffiliationID($esc_affiliation);
 		if(is_null($affilid)) {
 			return array('status' => 'error',
@@ -8168,14 +8168,14 @@ function validateAPIgroupInput($items, $exists) {
 	}
 	# name
 	if(array_key_exists('name', $items)) {
-		if(! ereg('^[-a-zA-Z0-9_\.: ]{3,30}$', $items['name'])) {
+		if(! preg_match('/^[-a-zA-Z0-9_\.: ]{3,30}$/', $items['name'])) {
 			return array('status' => 'error',
 			             'errorcode' => 19,
 			             'errormsg' => 'Name must be between 3 and 30 characters '
 			                         . 'and can only contain letters, numbers, and '
 			                         . 'these characters: - _ . :');
 		}
-		$esc_name = mysql_escape_string($items['name']);
+		$esc_name = mysql_real_escape_string($items['name']);
 		$doesexist = checkForGroupName($esc_name, 'user', '', $affilid);
 		if($exists && ! $doesexist) {
 			return array('status' => 'error',
@@ -8193,7 +8193,7 @@ function validateAPIgroupInput($items, $exists) {
 	}
 	# owner
 	if(array_key_exists('owner', $items)) {
-		if(! validateUserid(mysql_escape_string($items['owner']))) {
+		if(! validateUserid(mysql_real_escape_string($items['owner']))) {
 			return array('status' => 'error',
 			             'errorcode' => 20,
 			             'errormsg' => 'submitted owner is invalid');
@@ -8207,8 +8207,8 @@ function validateAPIgroupInput($items, $exists) {
 			             'errorcode' => 24,
 			             'errormsg' => 'submitted managingGroup is invalid');
 		}
-		$esc_mgName = mysql_escape_string($parts[0]);
-		$esc_mgAffil = mysql_escape_string($parts[1]);
+		$esc_mgName = mysql_real_escape_string($parts[0]);
+		$esc_mgAffil = mysql_real_escape_string($parts[1]);
 		$mgaffilid = getAffiliationID($esc_mgAffil);
 		if(! checkForGroupName($esc_mgName, 'user', '', $mgaffilid)) {
 			return array('status' => 'error',

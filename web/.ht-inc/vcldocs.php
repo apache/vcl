@@ -280,7 +280,7 @@ function submitEditDoc() {
 	}
 	$title = getContinuationVar('title');
 	$data = rawurldecode(getContinuationVar('data'));
-	$name = ereg_replace('[^-A-Za-z0-9_]', '', $title);
+	$name = preg_replace('/[^-A-Za-z0-9_]/', '', $title);
 	$query = "SELECT name FROM documentation WHERE name = '$name'";
 	$qh = doQuery($query, 101);
 	$count = 1;

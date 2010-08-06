@@ -701,8 +701,8 @@ function processScheduleInput($checks=1) {
 	   $submitErrMsg[SCHOWNERERR] = "The submitted unity ID is invalid.";
 	}
 	for($i = 0; $i < $return["count"]; $i++) {
-		if((! ereg('^((0?[1-9])|(1[0-2])):([0-5][0-9]) (am|pm)$', $return["startTime"][$i])) ||
-		   (! ereg('^((0?[1-9])|(1[0-2])):([0-5][0-9]) (am|pm)$', $return["endTime"][$i]))) {
+		if((! preg_match('/^((0?[1-9])|(1[0-2])):([0-5][0-9]) (am|pm)$/', $return["startTime"][$i])) ||
+		   (! preg_match('/^((0?[1-9])|(1[0-2])):([0-5][0-9]) (am|pm)$/', $return["endTime"][$i]))) {
 			$submitErr |= (1 << $i);
 			$submitErrMsg[1 << $i] = "Time must be of the form [H]H:MM&nbsp;am/pm";
 		}
@@ -979,7 +979,7 @@ function submitScheduleTime() {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function daytimeToMin($day, $time, $startend) {
-	if(! ereg('^(((0)?([1-9]))|(1([0-2]))):([0-5][0-9]) ((am)|(pm))', $time))
+	if(! preg_match('/^(((0)?([1-9]))|(1([0-2]))):([0-5][0-9]) ((am)|(pm))/', $time))
 		return -1;
 	list($hour, $other) = explode(':', $time);
 	list($min, $meridian) = explode(' ', $other);

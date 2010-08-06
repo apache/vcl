@@ -998,12 +998,12 @@ function submitMgmtnodeMapping() {
 ////////////////////////////////////////////////////////////////////////////////
 function updateMgmtnode($data) {
 	$ownerid = getUserlistID($data["owner"]);
-	$data['installpath'] = mysql_escape_string($data['installpath']);
-	$data['keys'] = mysql_escape_string($data['keys']);
-	$data['imagelibuser'] = mysql_escape_string($data['imagelibuser']);
+	$data['installpath'] = mysql_real_escape_string($data['installpath']);
+	$data['keys'] = mysql_real_escape_string($data['keys']);
+	$data['imagelibuser'] = mysql_real_escape_string($data['imagelibuser']);
 	if($data['imagelibuser'] != 'NULL')
 		$data['imagelibuser'] = "'{$data['imagelibuser']}'";
-	$data['imagelibkey'] = mysql_escape_string($data['imagelibkey']);
+	$data['imagelibkey'] = mysql_real_escape_string($data['imagelibkey']);
 	if($data['imagelibkey'] != 'NULL')
 		$data['imagelibkey'] = "'{$data['imagelibkey']}'";
 	if($data['imagelibenable'] != 1)
@@ -1044,12 +1044,12 @@ function updateMgmtnode($data) {
 ////////////////////////////////////////////////////////////////////////////////
 function addMgmtnode($data) {
 	$ownerid = getUserlistID($data["owner"]);
-	$data['installpath'] = mysql_escape_string($data['installpath']);
-	$data['keys'] = mysql_escape_string($data['keys']);
-	$data['imagelibuser'] = mysql_escape_string($data['imagelibuser']);
+	$data['installpath'] = mysql_real_escape_string($data['installpath']);
+	$data['keys'] = mysql_real_escape_string($data['keys']);
+	$data['imagelibuser'] = mysql_real_escape_string($data['imagelibuser']);
 	if($data['imagelibuser'] != 'NULL')
 		$data['imagelibuser'] = "'{$data['imagelibuser']}'";
-	$data['imagelibkey'] = mysql_escape_string($data['imagelibkey']);
+	$data['imagelibkey'] = mysql_real_escape_string($data['imagelibkey']);
 	if($data['imagelibkey'] != 'NULL')
 		$data['imagelibkey'] = "'{$data['imagelibkey']}'";
 	if($data['imagelibenable'] != 1)
@@ -1155,7 +1155,7 @@ function processMgmtnodeInput($checks=1) {
 	if(! $checks)
 		return $return;
 	
-	if(! ereg('^[a-zA-Z0-9_][-a-zA-Z0-9_\.]{1,49}$', $return["hostname"])) {
+	if(! preg_match('/^[a-zA-Z0-9_][-a-zA-Z0-9_\.]{1,49}$/', $return["hostname"])) {
 	   $submitErr |= MNHOSTNAMEERR;
 	   $submitErrMsg[MNHOSTNAMEERR] = "Hostname can only contain letters, numbers, dashes(-), periods(.), and underscores(_). It can be from 1 to 50 characters long";
 	}
@@ -1166,7 +1166,7 @@ function processMgmtnodeInput($checks=1) {
 		$submitErrMsg[MNHOSTNAMEERR] = "A node already exists with this hostname.";
 	}
 	$ipaddrArr = explode('.', $return["IPaddress"]);
-	if(! ereg('^(([0-9]){1,3}\.){3}([0-9]){1,3}$', $return["IPaddress"]) ||
+	if(! preg_match('/^(([0-9]){1,3}\.){3}([0-9]){1,3}$/', $return["IPaddress"]) ||
 	   $ipaddrArr[0] < 1 || $ipaddrArr[0] > 255 ||
 	   $ipaddrArr[1] < 0 || $ipaddrArr[1] > 255 ||
 	   $ipaddrArr[2] < 0 || $ipaddrArr[2] > 255 ||

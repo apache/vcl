@@ -36,7 +36,7 @@ function addITECSUser($loginid) {
 	global $mysql_link_vcl, $ENABLE_ITECSAUTH;
 	if(! $ENABLE_ITECSAUTH)
 		return NULL;
-	$esc_loginid = mysql_escape_string($loginid);
+	$esc_loginid = mysql_real_escape_string($loginid);
 	$query = "SELECT id AS uid, "
 	       .        "first, " 
 	       .        "last, "
@@ -50,10 +50,10 @@ function addITECSUser($loginid) {
 	if($row = mysql_fetch_assoc($qh)) {
 		// FIXME test replacing ''s
 		// FIXME do we care if the account is active?
-		$first = mysql_escape_string($row['first']);
-		$last = mysql_escape_string($row['last']);
-		$loweruser = mysql_escape_string(strtolower($row['email']));
-		$email = mysql_escape_string($row['email']);
+		$first = mysql_real_escape_string($row['first']);
+		$last = mysql_real_escape_string($row['last']);
+		$loweruser = mysql_real_escape_string(strtolower($row['email']));
+		$email = mysql_real_escape_string($row['email']);
 		$query = "INSERT INTO user ("
 		       .        "uid, "
 		       .        "unityid, "
@@ -192,10 +192,10 @@ function updateITECSUser($userid) {
 	// if get a row
 	//    update db
 	//    update results from select
-	$esc_userid = mysql_escape_string($userid);
-	$first = mysql_escape_string($userData['first']);
-	$last = mysql_escape_string($userData['last']);
-	$email = mysql_escape_string($userData['email']);
+	$esc_userid = mysql_real_escape_string($userid);
+	$first = mysql_real_escape_string($userData['first']);
+	$last = mysql_real_escape_string($userData['last']);
+	$email = mysql_real_escape_string($userData['email']);
 	if($user = mysql_fetch_assoc($qh)) {
 		$user["unityid"] = $userid;
 		$user["firstname"] = $userData['first'];

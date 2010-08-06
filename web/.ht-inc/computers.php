@@ -1603,7 +1603,7 @@ function generateDHCP() {
 	$mnipaddr = processInputVar('mnipaddr', ARG_STRING);
 	$data = getContinuationVar();
 	$addrArr = explode('.', $mnipaddr);
-	if(! ereg('^(([0-9]){1,3}\.){3}([0-9]){1,3}$', $mnipaddr) ||
+	if(! preg_match('/^(([0-9]){1,3}\.){3}([0-9]){1,3}$/', $mnipaddr) ||
 		$addrArr[0] < 1 || $addrArr[0] > 255 ||
 		$addrArr[1] < 0 || $addrArr[1] > 255 ||
 		$addrArr[2] < 0 || $addrArr[2] > 255 ||
@@ -2454,7 +2454,7 @@ function submitCompStateChange() {
 		$data['notes'] = processInputVar('notes', ARG_STRING);
 		if(get_magic_quotes_gpc())
 			$data['notes'] = stripslashes($data['notes']);
-		$data['notes'] = mysql_escape_string($data['notes']);
+		$data['notes'] = mysql_real_escape_string($data['notes']);
 		$data["notes"] = $user["unityid"] . " " . unixToDatetime(time()) . "@"
 		               . $data["notes"];
 		$vclreloadid = getUserlistID('vclreload@Local');
@@ -2914,7 +2914,7 @@ function processComputerInput($checks=1) {
 	}
 
 	$ipaddressArr = explode('.', $return["ipaddress"]);
-	if(! ereg('^(([0-9]){1,3}\.){3}([0-9]){1,3}$', $return["ipaddress"]) ||
+	if(! preg_match('/^(([0-9]){1,3}\.){3}([0-9]){1,3}$/', $return["ipaddress"]) ||
 		$ipaddressArr[0] < 1 || $ipaddressArr[0] > 255 ||
 		$ipaddressArr[1] < 0 || $ipaddressArr[1] > 255 ||
 		$ipaddressArr[2] < 0 || $ipaddressArr[2] > 255 ||
@@ -2936,7 +2936,7 @@ function processComputerInput($checks=1) {
 	   $submitErr |= PROCSPEEDERR;
 	   $submitErrMsg[PROCSPEEDERR] = "Processor Speed must be between 500 and 20000";
 	}
-	if(! ereg('^[a-zA-Z0-9_][-a-zA-Z0-9_.]{1,35}$', $return["hostname"])) {
+	if(! preg_match('/^[a-zA-Z0-9_][-a-zA-Z0-9_.]{1,35}$/', $return["hostname"])) {
 	   $submitErr |= HOSTNAMEERR;
 	   $submitErrMsg[HOSTNAMEERR] = "Hostname must be <= 36 characters";
 	}
@@ -3078,7 +3078,7 @@ function processBulkComputerInput($checks=1) {
 	}
 
 	$startaddrArr = explode('.', $return["startipaddress"]);
-	if(! ereg('^(([0-9]){1,3}\.){3}([0-9]){1,3}$', $return["startipaddress"]) ||
+	if(! preg_match('/^(([0-9]){1,3}\.){3}([0-9]){1,3}$/', $return["startipaddress"]) ||
 		$startaddrArr[0] < 1 || $startaddrArr[0] > 255 ||
 		$startaddrArr[1] < 0 || $startaddrArr[1] > 255 ||
 		$startaddrArr[2] < 0 || $startaddrArr[2] > 255 ||
@@ -3088,7 +3088,7 @@ function processBulkComputerInput($checks=1) {
 		                         . "w, x, y, and z being between 1 and 255 (inclusive)";
 	}
 	$endaddrArr = explode('.', $return["endipaddress"]);
-	if(! ereg('^(([0-9]){1,3}\.){3}([0-9]){1,3}$', $return["endipaddress"]) ||
+	if(! preg_match('/^(([0-9]){1,3}\.){3}([0-9]){1,3}$/', $return["endipaddress"]) ||
 		$endaddrArr[0] < 1 || $endaddrArr[0] > 255 ||
 		$endaddrArr[1] < 0 || $endaddrArr[1] > 255 ||
 		$endaddrArr[2] < 0 || $endaddrArr[2] > 255 ||
@@ -3101,7 +3101,7 @@ function processBulkComputerInput($checks=1) {
 	if(! empty($return['startpripaddress']) ||
 		! empty($return['endpripaddress'])) {
 		$startpraddrArr = explode('.', $return["startpripaddress"]);
-		if(! ereg('^(([0-9]){1,3}\.){3}([0-9]){1,3}$', $return["startpripaddress"]) ||
+		if(! preg_match('/^(([0-9]){1,3}\.){3}([0-9]){1,3}$/', $return["startpripaddress"]) ||
 			$startpraddrArr[0] < 1 || $startpraddrArr[0] > 255 ||
 			$startpraddrArr[1] < 0 || $startpraddrArr[1] > 255 ||
 			$startpraddrArr[2] < 0 || $startpraddrArr[2] > 255 ||
@@ -3111,7 +3111,7 @@ function processBulkComputerInput($checks=1) {
 			                          . "w, x, y, and z being between 1 and 255 (inclusive)";
 		}
 		$endpraddrArr = explode('.', $return["endpripaddress"]);
-		if(! ereg('^(([0-9]){1,3}\.){3}([0-9]){1,3}$', $return["endpripaddress"]) ||
+		if(! preg_match('/^(([0-9]){1,3}\.){3}([0-9]){1,3}$/', $return["endpripaddress"]) ||
 			$endpraddrArr[0] < 1 || $endpraddrArr[0] > 255 ||
 			$endpraddrArr[1] < 0 || $endpraddrArr[1] > 255 ||
 			$endpraddrArr[2] < 0 || $endpraddrArr[2] > 255 ||
@@ -3122,7 +3122,7 @@ function processBulkComputerInput($checks=1) {
 		}
 	}
 	if(! empty($return['startmac'])) {
-		if(! ereg('^(([A-Fa-f0-9]){2}:){5}([A-Fa-f0-9]){2}$', $return["startmac"])) {
+		if(! preg_match('/^(([A-Fa-f0-9]){2}:){5}([A-Fa-f0-9]){2}$/', $return["startmac"])) {
 			$submitErr |= MACADDRERR;
 			$submitErrMsg[MACADDRERR] = "Invalid MAC address.  Must be XX:XX:XX:XX:XX:XX "
 			                          . "with each pair of XX being from 00 to FF (inclusive)";
@@ -3164,7 +3164,7 @@ function processBulkComputerInput($checks=1) {
 	   $submitErr |= PROCSPEEDERR;
 	   $submitErrMsg[PROCSPEEDERR] = "Processor Speed must be between 500 and 20000";
 	}
-	if(! ereg('^[a-zA-Z0-9_%][-a-zA-Z0-9_.%]{1,35}$', $return["hostname"])) {
+	if(! preg_match('/^[a-zA-Z0-9_%][-a-zA-Z0-9_.%]{1,35}$/', $return["hostname"])) {
 	   $submitErr |= HOSTNAMEERR;
 	   $submitErrMsg[HOSTNAMEERR] = "Hostname must be <= 36 characters";
 	}

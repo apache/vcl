@@ -288,9 +288,9 @@ function updateLDAPUser($authtype, $userid) {
 /// \param $userid - a userid without the affiliation part
 ///
 /// \return an array of user information with the following keys:\n
-/// \b first - first name of user (escaped with mysql_escape_string)\n
-/// \b last - last name of user (escaped with mysql_escape_string)\n
-/// \b email - email address of user (escaped with mysql_escape_string)\n
+/// \b first - first name of user (escaped with mysql_real_escape_string)\n
+/// \b last - last name of user (escaped with mysql_real_escape_string)\n
+/// \b email - email address of user (escaped with mysql_real_escape_string)\n
 /// \b numericid - numeric id of user if $authtype is configured to include it
 ///
 /// \brief gets user information from ldap
@@ -371,16 +371,16 @@ function getLDAPUserData($authtype, $userid) {
 		}
 
 		if(array_key_exists(strtolower($auth['firstname']), $data))
-			$return['first'] = mysql_escape_string($data[strtolower($auth['firstname'])]);
+			$return['first'] = mysql_real_escape_string($data[strtolower($auth['firstname'])]);
 		else
 			$return['first'] = '';
 		if(array_key_exists(strtolower($auth['lastname']), $data))
-			$return['last'] = mysql_escape_string($data[strtolower($auth['lastname'])]);
+			$return['last'] = mysql_real_escape_string($data[strtolower($auth['lastname'])]);
 		else
 			$return['last'] = '';
 		if($donumericid && is_numeric($data[strtolower($auth['numericid'])]))
 			$return['numericid'] = $data[strtolower($auth['numericid'])];
-		$return['email'] = mysql_escape_string($data[strtolower($auth['email'])]);
+		$return['email'] = mysql_real_escape_string($data[strtolower($auth['email'])]);
 
 		return $return;
 	}

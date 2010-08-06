@@ -128,11 +128,11 @@ function submitHelpForm() {
 	$testname = $name;
 	if(get_magic_quotes_gpc())
 		$testname = stripslashes($name);
-	if(! ereg('^([-A-Za-z \']{1,} [-A-Za-z \']{2,})*$', $testname)) {
+	if(! preg_match('/^([-A-Za-z \']{1,} [-A-Za-z \']{2,})*$/', $testname)) {
 		$submitErr |= NAMEERR;
 		$submitErrMsg[NAMEERR] = "Name can only contain letters, spaces, apostrophes ('), and dashes (-)";
 	}
-	if(! eregi('^[_a-z0-9-]+(\.[_a-z0-9-]+)*@[a-z0-9-]+(\.[a-z0-9-]+)*(\.[a-z]{2,3})$',
+	if(! preg_match('/^[_a-z0-9-]+(\.[_a-z0-9-]+)*@[a-z0-9-]+(\.[a-z0-9-]+)*(\.[a-z]{2,3})$/i',
 	   $email)) {
 		$submitErr |= EMAILERR;
 		$submitErrMsg[EMAILERR] = "Invalid email address, please correct";

@@ -1423,7 +1423,7 @@ function XMLRPCeditUserGroup($name, $affiliation, $newName, $newAffiliation,
 		                  'affiliation' => $affiliation);
 		if(! empty($newName)) {
 			$validate['name'] = $newName;
-			$tmp = mysql_escape_string($newName);
+			$tmp = mysql_real_escape_string($newName);
 			$updates[] = "name = '$tmp'";
 		}
 		if(! empty($newAffiliation))
@@ -1441,7 +1441,7 @@ function XMLRPCeditUserGroup($name, $affiliation, $newName, $newAffiliation,
 	}
 
 	if(! empty($newOwner)) {
-		$newownerid = getUserlistID(mysql_escape_string($newOwner));
+		$newownerid = getUserlistID(mysql_real_escape_string($newOwner));
 		$updates[] = "ownerid = $newownerid";
 	}
 	if(! empty($newManagingGroup)) {
@@ -1585,7 +1585,7 @@ function XMLRPCaddUsersToGroup($name, $affiliation, $users) {
 	foreach($users as $_user) {
 		if(empty($_user))
 			continue;
-		$esc_user = mysql_escape_string($_user);
+		$esc_user = mysql_real_escape_string($_user);
 		if(validateUserid($esc_user) == 1)
 			addUserGroupMember($esc_user, $rc['id']);
 		else
@@ -1666,7 +1666,7 @@ function XMLRPCremoveUsersFromGroup($name, $affiliation, $users) {
 	foreach($users as $_user) {
 		if(empty($_user))
 			continue;
-		$esc_user = mysql_escape_string($_user);
+		$esc_user = mysql_real_escape_string($_user);
 		# check that affiliation of user can be determined because getUserlistID
 		#   will abort if it can't find it
 		$affilok = 0;

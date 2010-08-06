@@ -83,13 +83,13 @@ function updateShibUser($userid) {
 
 	# update user's data in db
 	$user['id'] = $row['id'];
-	$first = mysql_escape_string($user['firstname']);
-	$last = mysql_escape_string($user['lastname']);
+	$first = mysql_real_escape_string($user['firstname']);
+	$last = mysql_real_escape_string($user['lastname']);
 	$query = "UPDATE user "
 	       . "SET firstname = '$first', "
 	       .     "lastname = '$last', ";
 	if(array_key_exists('email', $user)) {
-		$email = mysql_escape_string($user['email']);
+		$email = mysql_real_escape_string($user['email']);
 		$query .= "email = '$email', ";
 	}
 	$query .=    "lastupdated = NOW() " 
@@ -117,9 +117,9 @@ function updateShibUser($userid) {
 ////////////////////////////////////////////////////////////////////////////////
 function addShibUser($user) {
 	global $mysql_link_vcl;
-	$unityid = mysql_escape_string($user['unityid']);
-	$first = mysql_escape_string($user['firstname']);
-	$last = mysql_escape_string($user['lastname']);
+	$unityid = mysql_real_escape_string($user['unityid']);
+	$first = mysql_real_escape_string($user['firstname']);
+	$last = mysql_real_escape_string($user['lastname']);
 	$query = "INSERT INTO user "
 	       .        "(unityid, "
 	       .        "affiliationid, "
@@ -135,7 +135,7 @@ function addShibUser($user) {
 	       .        "'$first', "
 	       .        "'$last', ";
 	if(array_key_exists('email', $user)) {
-		$email = mysql_escape_string($user['email']);
+		$email = mysql_real_escape_string($user['email']);
 		$query .=    "'$email', ";
 	}
 	$query .=       "0, "
@@ -175,7 +175,7 @@ function updateShibGroups($usernid, $groups) {
 		$row = mysql_fetch_assoc($qh);
 		$affilid = $row['id'];
 		# prepend shib- and escape it for mysql
-		$grp = mysql_escape_string("shib-" . $name);
+		$grp = mysql_real_escape_string("shib-" . $name);
 		array_push($newusergroups, getUserGroupID($grp, $affilid));
 	}
 	/*if($shibaffil == 'example1.edu') {
