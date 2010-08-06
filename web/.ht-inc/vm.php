@@ -872,6 +872,23 @@ function AJdelProfile() {
 		return;
 	}
 	$profileid = processInputVar('profileid', ARG_NUMERIC);
+	# check to see if profile is in use
+	$query = "SELECT vh.computerid, "
+	       .        "s.name "
+	       . "FROM vmhost vh, "
+	       .      "computer c, "
+	       .      "state s "
+	       . "WHERE vh.computerid = c.id AND " 
+	       .       "c.stateid = s.id AND "
+	       .       "s.name IN ('vmhostinuse', 'tovmhostinuse') AND " 
+	       .       "vh.vmprofileid = $profileid";
+	$qh = doQuery($query, 101);
+	if($row = mysql_fetch_assoc($qh)) {
+		$arr = array('failed' => 'inuse');
+		header('Content-Type: text/json-comment-filtered; charset=utf-8');
+		print '/*{"items":' . json_encode($arr) . '}*/';
+		return;
+	}
 	$query = "DELETE FROM vmprofile WHERE id = $profileid";
 	doQuery($query, 101);
 	header('Content-Type: text/json-comment-filtered; charset=utf-8');

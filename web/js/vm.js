@@ -698,7 +698,12 @@ function delProfile(cont) {
 
 function delProfileCB(data, ioArgs) {
 	if(data.items.failed) {
-		alert('You do not have access to manage this vm profile.');
+		if(data.items.failed == 'noaccess') {
+			alert('You do not have access to manage this vm profile.');
+		}
+		else if(data.items.failed == 'inuse') {
+			alert('This profile is currently in use on a vmhost. You must reload\nthe host with another profile to delete this one.');
+		}
 		dijit.byId('messages').hide();
 		document.body.style.cursor = 'default';
 		return;
