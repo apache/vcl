@@ -1859,7 +1859,7 @@ sub get_file_size {
 	my $computer_node_name = $self->data->get_computer_node_name() || return;
 	
 	# Run stat rather than du because du is not available on VMware ESX
-	my $command = 'stat -c "%F:%s:%n" ' . $escaped_file_path;
+	my $command = 'stat -c "%F:%s:%b:%B:%n" ' . $escaped_file_path;
 	my ($exit_status, $output) = $self->execute($command);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to run command to determine file size on $computer_node_name: $file_path\ncommand: $command");
@@ -1871,23 +1871,25 @@ sub get_file_size {
 	}
 	
 	# Loop through the stat output lines
-	my $total_bytes = 0;
+	my $total_bytes_used = 0;
+	my $total_bytes_allocated = 0;
 	for my $line (@$output) {
 		# Take the stat output line apart
-		my ($type, $file_bytes, $path) = split(/:/, $line);
-		if (!defined($type) || !defined($file_bytes) || !defined($path)) {
+		my ($type, $file_bytes, $file_blocks, $block_size, $path) = split(/:/, $line);
+		if (!defined($type) || !defined($file_bytes) || !defined($file_blocks) || !defined($block_size) || !defined($path)) {
 			notify($ERRORS{'WARNING'}, 0, "unexpected output returned from stat, line: $line\ncommand: $command\noutput:\n" . join("\n", @$output));
 			return;
 		}
 		
 		# Add the size to the total if the type is file
 		if ($type =~ /file/) {
-			$total_bytes += $file_bytes;
+			$total_bytes_used += ($file_blocks * $block_size);
+			$total_bytes_allocated += $file_bytes;
 		}
 	}
 	
-	notify($ERRORS{'DEBUG'}, 0, "size of $file_path on $computer_node_name: " . format_number($total_bytes) . " bytes");
-	return $total_bytes;
+	notify($ERRORS{'DEBUG'}, 0, "size of $file_path on $computer_node_name: " . format_number($total_bytes_used) . " bytes, (" . format_number($total_bytes_allocated) . " bytes allocated)");
+	return $total_bytes_used;
 }
 
 #/////////////////////////////////////////////////////////////////////////////

@@ -86,6 +86,7 @@ use English '-no_match_vars';
 
 use VCL::utils qw($SETUP_MODE $VERBOSE %ERRORS &notify &getnewdbh format_data);
 use VCL::DataStructure;
+use VCL::Module::Semaphore;
 
 ##############################################################################
 
@@ -130,10 +131,10 @@ sub new {
 	my $args  = shift;
 
 	notify($ERRORS{'DEBUG'}, 0, "constructor called, class=$class");
-
+	
 	# Create a variable to store the newly created class object
 	my $class_object;
-
+	
 	# Make sure the data structure was passed as an argument called 'data_structure'
 	if (!defined $args->{data_structure}) {
 		notify($ERRORS{'CRITICAL'}, 0, "required 'data_structure' argument was not passed");
@@ -145,7 +146,7 @@ sub new {
 		notify($ERRORS{'CRITICAL'}, 0, "'data_structure' argument passed is not a reference to a VCL::DataStructure object");
 		return;
 	}
-
+	
 	# Add the DataStructure reference to the class object
 	$class_object->{data} = $args->{data_structure};
 
@@ -334,7 +335,7 @@ sub get_package_hierarchy {
 
 sub code_loop_timeout {
 	my $self = shift;
-	if (ref($self) !~ /VCL::Module/i) {
+	unless (ref($self) && $self->isa('VCL::Module')) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
@@ -419,6 +420,82 @@ sub code_loop_timeout {
 	notify($ERRORS{'OK'}, 0, "$message, code did not return true after waiting $total_wait_seconds seconds");
 	return 0;
 } ## end sub code_loop_timeout
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_semaphore
+
+ Parameters  : $file_path, $total_wait_seconds (optional), $attempt_delay_seconds (optional)
+ Returns     : VCL::Module::Semaphore object
+ Description : This subroutine is used to ensure that only 1 process performs a
+               particular task at a time. An example would be the retrieval of
+               an image from another management node. If multiple reservations
+               are being processed for the same image, each reservation may
+               attempt to retrieve it via SCP at the same time. This subroutine
+               can be used to only allow 1 process to retrieve the image. The
+               others will wait until the semaphore is released by the
+               retrieving process.
+               
+               Attempts to open and obtain an exclusive lock on the file
+               specified by the file path argument. If unable to obtain an
+               exclusive lock, it will wait up to the value specified by the
+               total wait seconds argument (default: 30 seconds). The number of
+               seconds to wait in between retries can be specified (default: 15
+               seconds).
+               
+               A semaphore object is returned. The exclusive lock will be
+               retained as long as the semaphore object remains defined. Once
+               undefined, the exclusive lock is released and the file is
+               deleted.
+               
+               Examples:
+               
+               Semaphore is released when it is undefined:
+               my $semaphore = $self->get_semaphore('/tmp/test.lock');
+               ... <exclusive lock is in place>
+               undef $semaphore;
+               ... <exclusive lock released>
+               
+               Semaphore is released when it goes out of scope:
+               if (blah) {
+                  my $semaphore = $self->get_semaphore('/tmp/test.lock');
+                  ... <exclusive lock is in place>
+               }
+               ... <exclusive lock released>
+
+=cut
+
+sub get_semaphore {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get the file path argument
+	my ($file_path, $total_wait_seconds, $attempt_delay_seconds) = @_;
+	if (!$file_path) {
+		notify($ERRORS{'WARNING'}, 0, "file path argument was not supplied");
+		return;
+	}
+	
+	# Attempt to create a new semaphore object
+	my $semaphore = VCL::Module::Semaphore->new({'data_structure' => $self->data});
+	if (!$semaphore) {
+		notify($ERRORS{'WARNING'}, 0, "failed to create semaphore object");
+		return;
+	}
+	
+	# Attempt to open and exclusively lock the file
+	if ($semaphore->get_lockfile($file_path, $total_wait_seconds, $attempt_delay_seconds)) {
+		# Return the semaphore object
+		return $semaphore;
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "failed to open and optain exclusive lock on file: $file_path");
+		return;
+	}
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 

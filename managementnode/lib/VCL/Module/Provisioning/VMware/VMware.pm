@@ -276,6 +276,9 @@ sub initialize {
 	# Store the VM host API object in this object
 	$self->{api} = $vmware_api;
 	
+	# Make sure the VMware product name can be retrieved
+	$self->get_vmhost_product_name() || return;
+	
 	# Make sure the vmx and vmdk base directories can be accessed
 	my $vmx_base_directory_path = $self->get_vmx_base_directory_path() || return;
 	if (!$vmhost_os->file_exists($vmx_base_directory_path)) {
@@ -460,9 +463,6 @@ sub capture {
 		# Sleep for 5 seconds to make sure the power off is complete
 		sleep 5;
 	}
-	
-	## Get a lockfile so that only 1 process is operating on VM host files at any one time
-	#my $lockfile = $self->get_lockfile("/tmp/$vmhost_hostname.lock", (60 * 10)) || return;
 	
 	# Rename the vmdk files on the VM host and change the vmdk directory name to the image name
 	# This ensures that the vmdk and vmx files now reside in different directories
@@ -1997,13 +1997,77 @@ sub get_vmdk_file_path {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 get_image_repository_path
+
+ Parameters  : $management_node_identifier (optional)
+ Returns     : 
+ Description :
+
+=cut
+
+sub get_image_repository_path {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a VCL::Module module object method");
+		return;
+	}
+	
+	return $self->get_repository_vmdk_directory_path();
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_image_repository_search_paths
+
+ Parameters  : 
+ Returns     : 
+ Description : 
+
+=cut
+
+sub get_image_repository_search_paths {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $management_node_identifier = shift || $self->data->get_management_node_hostname();
+	
+	my $image_name = $self->data->get_image_name();
+	
+	my @repository_search_paths;
+	
+	if (my $vmhost_profile_repository_path = $self->data->get_vmhost_profile_repository_path()) {
+		push @repository_search_paths, "$vmhost_profile_repository_path/$image_name/$image_name*.vmdk";
+	}
+	
+	if (my $management_node_install_path = $self->data->get_management_node_install_path($management_node_identifier)) {
+		push @repository_search_paths, "$management_node_install_path/vmware_images/$image_name/$image_name*.vmdk";
+		push @repository_search_paths, "$management_node_install_path/$image_name/$image_name*.vmdk";
+	}
+	
+	push @repository_search_paths, "/install/vmware_images/$image_name/$image_name*.vmdk";
+	
+	my %seen;
+	@repository_search_paths = grep { !$seen{$_}++ } @repository_search_paths; 
+	#notify($ERRORS{'DEBUG'}, 0, "repository search paths on $management_node_identifier:\n" . join("\n", @repository_search_paths));
+	return @repository_search_paths;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 get_repository_vmdk_base_directory_path
 
  Parameters  : none
  Returns     : string
  Description : Returns the image repository directory path on the management
-               node under which the vmdk directories for all of the images
-               reside.  The preferred database value to use is vmprofile.repositorypath. If this is not available, managementnode.installpath is retrieved and "/vmware_images" is appended. If this is not available, "/install/vmware
+					node under which the vmdk directories for all of the images
+					reside. The preferred database value to use is
+					vmprofile.repositorypath. If this is not available,
+					managementnode.installpath is retrieved and "/vmware_images" is
+					appended. If this is not available, "/install/vmware_images" is
+					returned.
 					Example:
                repository vmdk file path: /install/vmware_images/vmwarewinxp-base234-v12/vmwarewinxp-base234-v12.vmdk
                repository vmdk base directory path: /install/vmware_images
@@ -2017,9 +2081,6 @@ sub get_repository_vmdk_base_directory_path {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
-	
-	# Return the path stored in this object if it has already been determined
-	return $self->{repository_base_directory_path} if (defined $self->{repository_base_directory_path});
 	
 	my $repository_vmdk_base_directory_path;
 	
@@ -2037,9 +2098,7 @@ sub get_repository_vmdk_base_directory_path {
 		notify($ERRORS{'WARNING'}, 0, "unable to retrieve repository path from VM profile or management node install path, returning '/install/vmware_images'");
 	}
 	
-	# Set a value in this object so this doesn't have to be retrieved more than once
-	$self->{repository_base_directory_path} = $repository_vmdk_base_directory_path;
-	return $self->{repository_base_directory_path};
+	return $repository_vmdk_base_directory_path;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -2098,7 +2157,8 @@ sub get_repository_vmdk_file_path {
  Parameters  : none
  Returns     : boolean
  Description : Determines if a VM should be persistent or not based on whether
-               or not the reservation is an imaging reservation.
+               or not the reservation is an imaging reservation or if the end
+               time is more than 24 hours in the future.
 
 =cut
 
@@ -2113,9 +2173,17 @@ sub is_vm_persistent {
 	if ($request_forimaging) {
 		return 1;
 	}
-	else {
-		return 0;
+	
+	# Return true if the request end time is more than 24 hours in the future
+	my $end_epoch = convert_to_epoch_seconds($self->data->get_request_end_time());
+	my $now_epoch = time();
+	my $end_hours = (($end_epoch - $now_epoch) / 60 / 60);
+	if ($end_hours >= 24) {
+		notify($ERRORS{'DEBUG'}, 0, "request end time is " . format_number($end_hours, 1) . " hours in the future, returning true");
+		return 1;
 	}
+	
+	return 0;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -2158,7 +2226,7 @@ sub is_vm_registered {
 
 =head2 get_image_size
 
- Parameters  : $vmdk_file_path (optional)
+ Parameters  : $image_name (optional)
  Returns     : integer
  Description : Returns the size of the image in bytes. If the vmdk file path
                argument is not supplied and the VM disk type in the VM profile
@@ -2176,73 +2244,67 @@ sub get_image_size {
 	}
 	
 	my $vmhost_hostname = $self->data->get_vmhost_hostname() || return;
-	my $vmprofile_vmdisk = $self->data->get_vmhost_profile_vmdisk() || return;
-	my $image_name = $self->data->get_image_name() || return;
 	
-	# Attempt to get the vmdk file path argument
-	# If not supplied, use the default vmdk file path for this reservation
-	my $vmdk_file_path = shift;
+	# Attempt to get the image name argument
+	my $image_name = shift;
+	if (!$image_name) {
+		$image_name = $self->data->get_image_name() || return;
+	}
 	
-	# Try to retrieve the image size from the repository if an argument was not supplied and localdisk is being used
-	if (!$vmdk_file_path && $vmprofile_vmdisk eq "localdisk") {
-		my $repository_vmdk_directory_path = $self->get_repository_vmdk_directory_path() || return;
-		notify($ERRORS{'DEBUG'}, 0, "vm disk type is $vmprofile_vmdisk, checking size of vmdk directory in image repository: $repository_vmdk_directory_path");
+	my $image_size_bytes;
+	
+	# Try to retrieve the image size from the repository if localdisk is being used
+	if (my $repository_vmdk_base_directory_path = $self->get_repository_vmdk_base_directory_path()) {
+		
+		my $search_path = "$repository_vmdk_base_directory_path/$image_name/$image_name*.vmdk";
+		
+		notify($ERRORS{'DEBUG'}, 0, "checking size of image in image repository: $search_path");
 		
 		# Run du specifying image repository directory as an argument
-		my ($exit_status, $output) = run_command("du -bc \"$repository_vmdk_directory_path\"", 1);
+		my ($exit_status, $output) = run_command("du -bc $search_path", 1);
 		if (!defined($output)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to run command to determine size of vmdk directory in image repository: $repository_vmdk_directory_path");
+			notify($ERRORS{'WARNING'}, 0, "failed to run command to determine size of image in image repository: $search_path");
+		}
+		elsif (grep(/no such file/i, @$output)) {
+			notify($ERRORS{'DEBUG'}, 0, "image does not exist in image repository");
 		}
 		elsif (grep(/du: /i, @$output)) {
-			notify($ERRORS{'WARNING'}, 0, "error occurred attempting to determine size of vmdk directory in image repository: $repository_vmdk_directory_path, output:\n" . join("\n", @$output));
+			notify($ERRORS{'WARNING'}, 0, "error occurred attempting to determine size of image in image repository: $search_path, output:\n" . join("\n", @$output));
 		}
-		else {
-			my ($total_line) = grep(/total/, @$output);
-			if (!$total_line) {
-				notify($ERRORS{'WARNING'}, 0, "unable to locate 'total' line in du output while attempting to determine size of vmdk directory in image repository: $repository_vmdk_directory_path, output:\n" . join("\n", @$output));
+		elsif (my ($total_line) = grep(/total/, @$output)) {
+			($image_size_bytes) = $total_line =~ /(\d+)/;
+			if (defined($image_size_bytes)) {
+				notify($ERRORS{'DEBUG'}, 0, "retrieved size of image in image repository: $image_size_bytes");
 			}
 			else {
-				my ($bytes_used) = $total_line =~ /(\d+)/;
-				if ($bytes_used =~ /^\d+$/) {
-					my $mb_used = format_number(($bytes_used / 1024 / 1024), 1);
-					my $gb_used = format_number(($bytes_used / 1024 / 1024 / 1024), 2);
-					notify($ERRORS{'DEBUG'}, 0, "size of $image_name image in image repository: " . format_number($bytes_used) . " bytes ($mb_used MB, $gb_used GB)");
-					return $bytes_used;
-				}
-				else {
-					notify($ERRORS{'WARNING'}, 0, "failed to parse du output to determine size of vmdk directory in image repository: $repository_vmdk_directory_path, output:\n" . join("\n", @$output));
-					return;
-				}
+				notify($ERRORS{'WARNING'}, 0, "failed to parse du output to determine size of vmdk directory in image repository: $search_path, output:\n" . join("\n", @$output));
 			}
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "unable to locate 'total' line in du output while attempting to determine size of vmdk directory in image repository: $search_path, output:\n" . join("\n", @$output));
 		}
 	}
 	
-	# Get the vmdk file path if not specified as an argument
-	if (!$vmdk_file_path) {
-		$vmdk_file_path = $self->get_vmdk_file_path() || return;
+	# Unable to determine the image size from the image repository, attempt to retrieve size from VM host
+	if (!defined($image_size_bytes)) {
+		# Assemble a search path
+		my $vmdk_base_directory_path = $self->get_vmdk_base_directory_path() || return;
+		my $search_path = "$vmdk_base_directory_path/$image_name/$image_name*.vmdk";
+		
+		# Get the size of the files on the VM host
+		$image_size_bytes = $self->vmhost_os->get_file_size($search_path);
 	}
 	
-	# Extract the directory path and file prefix from the vmdk file path
-	my ($vmdk_directory_path, $vmdk_file_prefix) = $vmdk_file_path =~ /^(.+)\/([^\/]+)\.vmdk$/;
-	if (!$vmdk_directory_path || !$vmdk_file_prefix) {
-		notify($ERRORS{'WARNING'}, 0, "unable to determine vmdk directory path and vmdk file prefix from vmdk file path: $vmdk_file_path");
+	
+	if (!defined($image_size_bytes)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to determine the size of image in image repository or on VM host");
 		return;
 	}
 	
-	# Assemble a search path
-	my $vmdk_search_path = "$vmdk_directory_path/$vmdk_file_prefix*.vmdk";
-	
-	# Get the size of the files on the VM host
-	my $vmdk_size = $self->vmhost_os->get_file_size($vmdk_search_path);
-	if (!defined($vmdk_size)) {
-		notify($ERRORS{'WARNING'}, 0, "unable to determine the size of vmdk file on VM host $vmhost_hostname:
-			 vmdk file path: $vmdk_file_path
-			 search path: $vmdk_search_path");
-		return;
-	}
-	
-	notify($ERRORS{'DEBUG'}, 0, "size of $image_name image on VM host $vmhost_hostname: " . format_number($vmdk_size) . " bytes");
-	return $vmdk_size;
+	my $mb_used = format_number(($image_size_bytes / 1024 / 1024));
+	my $gb_used = format_number(($image_size_bytes / 1024 / 1024 / 1024), 2);
+	notify($ERRORS{'DEBUG'}, 0, "size of $image_name image: " . format_number($image_size_bytes) . " bytes ($mb_used MB, $gb_used GB)");
+	return $image_size_bytes;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -2414,15 +2476,15 @@ sub get_vm_disk_adapter_type {
 	my $vm_host_product_name = $self->get_vmhost_product_name() || return;
 	
 	my $vmdk_controller_type;
-	if ($self->api->can("get_virtual_disk_controller_type")) {
-		$vmdk_controller_type = $self->api->get_virtual_disk_controller_type($self->get_vmdk_file_path());
+	
+	if ($self->api->can("get_virtual_disk_controller_type") && ($vmdk_controller_type = $self->api->get_virtual_disk_controller_type($self->get_vmdk_file_path()))) {
 		notify($ERRORS{'DEBUG'}, 0, "retrieved VM disk adapter type from api object: $vmdk_controller_type");
 	}
 	elsif ($vmdk_controller_type = $self->get_vmdk_parameter_value('adapterType')) {
 		notify($ERRORS{'DEBUG'}, 0, "retrieved VM disk adapter type from vmdk file: $vmdk_controller_type");
 	}
-	elsif (!$vmdk_controller_type || ($vm_host_product_name =~ /esx/i && $vmdk_controller_type =~ /ide/i)) {
-		
+	
+	if (!$vmdk_controller_type || ($vm_host_product_name =~ /esx/i && $vmdk_controller_type =~ /ide/i)) {
 		my $vm_os_configuration = $self->get_vm_os_configuration();
 		if (!$vm_os_configuration) {
 			notify($ERRORS{'WARNING'}, 0, "unable to determine VM disk adapter type because unable to retrieve default VM OS configuration");
@@ -2618,113 +2680,6 @@ sub get_vm_ram {
 	}
 	
 	return $image_minram_mb;
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 get_lockfile
-
- Parameters  : $file_path, $total_wait_seconds (optional), $attempt_delay_seconds (optional)
- Returns     : filehandle
- Description : Attempts to open and obtain an exclusive lock on the file
-               specified by the file path argument. If unable to obtain an
-               exclusive lock, it will wait up to the value specified by the
-               total wait seconds argument (default: 30 seconds). The number of
-               seconds to wait in between retries can be specified (default: 15
-               seconds).
-
-=cut
-
-sub get_lockfile {
-	my $self = shift;
-	if (ref($self) !~ /Module/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-	
-	# Get the file path argument
-	my ($file_path, $total_wait_seconds, $attempt_delay_seconds) = @_;
-	if (!$file_path) {
-		notify($ERRORS{'WARNING'}, 0, "file path argument was not supplied");
-		return;
-	}
-	
-	# Set the wait defaults if not supplied as arguments
-	$total_wait_seconds = 30 if !$total_wait_seconds;
-	$attempt_delay_seconds = 5 if !$attempt_delay_seconds;
-	
-	# Attempt to open the file
-	notify($ERRORS{'DEBUG'}, 0, "attempting to open file to be exclusively locked: $file_path");
-	my $file_handle = new IO::File($file_path, O_RDONLY | O_CREAT);
-	if (!$file_handle) {
-		notify($ERRORS{'WARNING'}, 0, "failed to open file to be exclusively locked: $file_path, reason: $!");
-		return;
-	}
-	my $fileno = $file_handle->fileno;
-	notify($ERRORS{'DEBUG'}, 0, "opened file to be exclusively locked: $file_path");
-	
-	# Store the fileno and path in %ENV so we can retrieve the path later on
-	$ENV{fileno}{$fileno} = $file_path;
-	
-	# Attempt to lock the file
-	my $wait_message = "attempting to obtain lock on file: $file_path";
-	if ($self->code_loop_timeout(sub{flock($file_handle, LOCK_EX|LOCK_NB)}, [], $wait_message, $total_wait_seconds, $attempt_delay_seconds)) {
-		notify($ERRORS{'DEBUG'}, 0, "obtained an exclusive lock on file: $file_path");
-	}
-	else {
-		notify($ERRORS{'DEBUG'}, 0, "failed to obtain lock on file: $file_path");
-		return;
-	}
-	
-	# Store the file handle as a variable and return it
-	return $file_handle;
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 release_lockfile
-
- Parameters  : $file_handle
- Returns     : boolean
- Description : Closes the lockfile handle specified by the argument.
-
-=cut
-
-sub release_lockfile {
-	my $self = shift;
-	if (ref($self) !~ /Module/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-	
-	# Get the file handle argument
-	my ($file_handle) = @_;
-	if (!$file_handle) {
-		notify($ERRORS{'WARNING'}, 0, "file handle argument was not supplied");
-		return;
-	}
-	
-	# Make sure the file handle is opened
-	my $fileno = $file_handle->fileno;
-	if (!$fileno) {
-		notify($ERRORS{'WARNING'}, 0, "file handle is not opened");
-		return;
-	}
-	
-	# Get the file path previously stored in %ENV
-	my $file_path = $ENV{fileno}{$fileno} || 'unknown';
-	
-	# Close the file
-	if (close($file_handle)) {
-		notify($ERRORS{'DEBUG'}, 0, "closed file handle: $file_path");
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to close file handle: $file_path, reason: $!");
-		return;
-	}
-	
-	delete $ENV{fileno}{$fileno};
-	return 1;
 }
 
 #/////////////////////////////////////////////////////////////////////////////

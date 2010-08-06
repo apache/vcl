@@ -426,7 +426,7 @@ sub is_ssh_responding {
 	});
 	
 	# The exit status will be 0 if the command succeeded
-	if (defined($exit_status) && $exit_status == 0) {
+	if (defined($output) && grep(/testing/, @$output)) {
 		notify($ERRORS{'DEBUG'}, 0, "$computer_node_name is responding to SSH, port 22: $port_22_status, port 24: $port_24_status");
 		return 1;
 	}

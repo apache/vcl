@@ -5404,11 +5404,8 @@ sub run_ssh_command {
 	# -p <port>, Port to connect to on the remote host.
 	# -x, Disables X11 forwarding.
 	# Dont use: -q, Quiet mode.  Causes all warning and diagnostic messages to be suppressed.
-	my $ssh_command = "$ssh_path $identity_paths -l $user -p $port -x $node '$command'";
-
-	# Redirect standard output and error output so all messages are captured
-	$ssh_command .= ' 2>&1';
-
+	my $ssh_command = "$ssh_path $identity_paths -l $user -p $port -x $node '$command 2>&1' 2>&1";
+	
 	# Execute the command
 	my $ssh_output;
 	my $ssh_output_formatted;
@@ -5443,10 +5440,10 @@ sub run_ssh_command {
 		else {
 			notify($ERRORS{'DEBUG'}, 0, "attempt $attempts/$max_attempts: executing SSH command on $node:\n$ssh_command") if $output_level;
 		}
-
+		
 		# Execute the command
 		$ssh_output = `$ssh_command`;
-		
+
 		# Bits 0-7 of $? are set to the signal the child process received that caused it to die
 		my $signal_number = $? & 127;
 		
