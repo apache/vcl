@@ -219,7 +219,6 @@ our @EXPORT = qw(
   $LOGFILE
   $MYSQL_SSL
   $MYSQL_SSL_CERT
-  $NOT_STANDALONE
   $PIDFILE
   $PROCESSNAME
   $WINDOWS_ROOT_PASSWORD
@@ -256,9 +255,6 @@ INIT {
 
 	# Set the VERBOSE flag to 0 by default
 	our $VERBOSE = 0;
-	
-	# Set the NOT_STANDALONE flag to an empty string by default
-	our $NOT_STANDALONE = "";
 	
 	# Set the SETUP_MODE flag to 0 by default
 	our $SETUP_MODE = 0;
@@ -426,9 +422,6 @@ INIT {
 				$VERBOSE = $1;
 			}
 			
-			if ($l =~ /^NOT_STANDALONE=(.*)/i) {
-				$NOT_STANDALONE = $1;
-			}
 		}    # Close foreach line in conf file
 	}    # Close open conf file
 
@@ -491,7 +484,6 @@ our $VERBOSE;
 our $CONF_FILE_PATH;
 our $WINDOWS_ROOT_PASSWORD;
 our ($XMLRPC_USER, $XMLRPC_PASS, $XMLRPC_URL);
-our $NOT_STANDALONE;
 our $DAEMON_MODE;
 our $SETUP_MODE;
 our $BIN_PATH;
@@ -4582,7 +4574,11 @@ sub get_request_info {
 	
 	# Affiliation specific changes
 	# Check if the user's affiliation is listed in the $NOT_STANDALONE variable
-	if (grep(/$request_info{user}{affiliation}{name}/, split(/,/, $NOT_STANDALONE))) {
+	my $not_standalone_list = "";
+	if(defined($ENV{management_node_info}{NOT_STANDALONE}) && $ENV{management_node_info}{NOT_STANDALONE}){
+		$not_standalone_list = $ENV{management_node_info}{NOT_STANDALONE};
+	} 
+	if (grep(/$request_info{user}{affiliation}{name}/, split(/,/, $not_standalone_list))) {
 		notify($ERRORS{'DEBUG'}, 0, "non-standalone affiliation found: $request_info{user}{affiliation}{name}");
 	}
 	else {
@@ -6086,6 +6082,9 @@ AND managementnode.id != $management_node_id
 	# Add sysadmin and sharedMailBox email address values
 	$management_node_info->{SYSADMIN_EMAIL} = $management_node_info->{sysadminEmailAddress};
 	$management_node_info->{SHARED_EMAIL_BOX} = $management_node_info->{sharedMailBox};
+	
+	# Add affiliations that are not to use the standalone passwords
+	$management_node_info->{NOT_STANDALONE}	= $management_node_info->{NOT_STANDALONE};
 	
 	# Set the management_node_info environment variable if the info was retrieved for this computer
 	$ENV{management_node_info} = $management_node_info if ($management_node_identifier eq $hostname);

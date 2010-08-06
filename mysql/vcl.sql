@@ -502,6 +502,7 @@ CREATE TABLE IF NOT EXISTS `managementnode` (
   `publicDNSserver` varchar(56) default NULL,
   `sysadminEmailAddress` varchar(128) default NULL,
   `sharedMailBox` varchar(128) default NULL,
+  `NOT_STANDALONE` varchar(128) default NULL,
   PRIMARY KEY  (`id`),
   KEY `stateid` (`stateid`),
   KEY `ownerid` (`ownerid`),

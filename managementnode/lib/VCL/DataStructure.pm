@@ -468,6 +468,7 @@ $SUBROUTINE_MAPPINGS{management_node_public_dns_server}       = '$ENV{management
 
 $SUBROUTINE_MAPPINGS{management_node_sysadmin_email}	= '$ENV{management_node_info}{SYSADMIN_EMAIL}';
 $SUBROUTINE_MAPPINGS{management_node_shared_email_box}    = '$ENV{management_node_info}{SHARED_EMAIL_BOX}';
+$SUBROUTINE_MAPPINGS{management_node_not_standalone}    = '$ENV{management_node_info}{NOT_STANDALONE}';
 
 $SUBROUTINE_MAPPINGS{management_node_predictive_module_name}         = '$ENV{management_node_info}{predictive_name}';
 $SUBROUTINE_MAPPINGS{management_node_predictive_module_pretty_name}  = '$ENV{management_node_info}{predictive_prettyname}';
