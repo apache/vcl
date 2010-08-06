@@ -543,6 +543,8 @@ sub _image_revision_check {
 
 sub send_report {
 	my ($hck) = @_;
+	
+	my $sysadmin_email = $ENV{management_node_info}{SYSADMIN_EMAIL};
 
 	#notify($ERRORS{'OK'},$LOG,"$hck->{globalmsg}->{body}\n\n $hck->{globalmsg}->{failedbody}\n");
 	if (defined($hck->{computercount})) {
@@ -572,7 +574,7 @@ sub send_report {
 		$hck->{globalmsg}->{body} .= "\nAll nodes report ok";
 
 	}
-	mail($SYSADMIN, "VCL node monitoring report", "$hck->{globalmsg}->{body}");
+	mail($sysadmin_email, "VCL node monitoring report", "$hck->{globalmsg}->{body}");
 } ## end sub send_report
 
 #/////////////////////////////////////////////////////////////////////////////

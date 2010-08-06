@@ -500,6 +500,8 @@ CREATE TABLE IF NOT EXISTS `managementnode` (
   `publicSubnetMask` varchar(56) default NULL,
   `publicDefaultGateway` varchar(56) default NULL,
   `publicDNSserver` varchar(56) default NULL,
+  `sysadminEmailAddress` varchar(128) default NULL,
+  `sharedMailBox` varchar(128) default NULL,
   PRIMARY KEY  (`id`),
   KEY `stateid` (`stateid`),
   KEY `ownerid` (`ownerid`),

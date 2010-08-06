@@ -225,7 +225,6 @@ our @EXPORT = qw(
   $WINDOWS_ROOT_PASSWORD
   $SERVER
   $SETUP_MODE
-  $SYSADMIN
   $TOOLS
   $VERBOSE
   $WRTPASS
@@ -245,7 +244,7 @@ INIT {
 	our ($JABBER, $jabServer, $jabUser, $jabPass, $jabResource, $jabPort) = 0;
 	our ($LOGFILE, $PIDFILE, $PROCESSNAME);
 	our ($DATABASE, $SERVER, $WRTUSER, $WRTPASS, $LockerRdUser, $rdPass) = 0;
-	our ($SYSADMIN, $SHARED_MAILBOX, $DEFAULTHELPEMAIL, $RETURNPATH) = 0;
+	our ($DEFAULTHELPEMAIL, $RETURNPATH) = 0;
 	our ($XCATROOT) = 0;
 	our ($FQDN)     = 0;
 	our ($MYSQL_SSL,       $MYSQL_SSL_CERT);
@@ -383,19 +382,9 @@ INIT {
 				$MYSQL_SSL_CERT = $1;
 			}
 	
-			#Sysadmin list
-			if ($l =~ /^sysadmin=([,-.\@a-zA-Z0-9_]*)/) {
-				$SYSADMIN = $1;
-			}
-
 			#Sendmail Envelope Sender 
 			if ($l =~ /^RETURNPATH=([,-.\@a-zA-Z0-9_]*)/) {
 				$RETURNPATH = $1;
-			}
-
-			#sharedmailbox
-			if ($l =~ /^sharedmailbox=([,-.\@a-zA-Z0-9_]*)/) {
-				$SHARED_MAILBOX = $1;
 			}
 
 			#jabber - stuff
@@ -490,7 +479,7 @@ our ($JABBER, $PROCESSNAME);
 our %ERRORS = ('DEPENDENT' => 4, 'UNKNOWN' => 3, 'OK' => 0, 'WARNING' => 1, 'CRITICAL' => 2, 'MAILMASTERS' => 5, 'DEBUG' => 6);
 our ($LockerWrtUser, $wrtPass,  $database,       $server);
 our ($jabServer,     $jabUser,  $jabPass,        $jabResource, $jabPort);
-our ($vcldquerykey,  $SYSADMIN, $SHARED_MAILBOX, $DEFAULTHELPEMAIL,$RETURNPATH);
+our ($vcldquerykey, $DEFAULTHELPEMAIL,$RETURNPATH);
 our ($LOGFILE, $PIDFILE, $VCLDRPCQUERYKEY);
 our ($SERVER, $DATABASE, $WRTUSER, $WRTPASS);
 our ($MYSQL_SSL,       $MYSQL_SSL_CERT);
@@ -595,6 +584,18 @@ sub notify {
 
 	# Just return if DEBUG and verbose isn't enabled
 	return if ($error == 6 && !$VERBOSE);
+
+	# Confirm sysadmin address exists
+	my $sysadmin = 0;
+	if(defined($ENV{management_node_info}{SYSADMIN_EMAIL}) && $ENV{management_node_info}{SYSADMIN_EMAIL}){
+		$sysadmin = $ENV{management_node_info}{SYSADMIN_EMAIL};
+	}
+	
+	# Confirm shared mail box exists
+	my $shared_mail_box = 0;
+	if(defined($ENV{management_node_info}{SHARED_EMAIL_BOX}) && $ENV{management_node_info}{SHARED_EMAIL_BOX}){
+		my $shared_mail_box = $ENV{management_node_info}{SHARED_EMAIL_BOX};
+	}
 
 	# Get the current time
 	my $currenttime = makedatestring();
@@ -706,14 +707,14 @@ END
 		$log_message .= "\n";
 
 		my $from    = "root\@$FQDN";
-		my $to      = $SYSADMIN;
+		my $to      = $sysadmin;
 		my $subject = "PROBLEM -- $filename";
 		mail($to, $subject, $body, $from);
 	} ## end elsif ($error == 2)  [ if ($error == 1)
 
 	# MAILMASTERS - only for email notifications
-	elsif ($error == 5 && $SHARED_MAILBOX) {
-		my $to      = $SHARED_MAILBOX;
+	elsif ($error == 5 && $shared_mail_box) {
+		my $to      = $shared_mail_box;
 		my $from    = "root\@$FQDN";
 		my $subject = "Informational -- $filename";
 
@@ -1221,9 +1222,14 @@ sub mail {
 	}
 	my $localreturnpath = "-f $RETURNPATH";
 	my $mailer = Mail::Mailer->new("sendmail", $localreturnpath);
+	
+	my $shared_mail_box = 0;
+	if(defined($ENV{management_node_info}{SHARED_EMAIL_BOX}) && $ENV{management_node_info}{SHARED_EMAIL_BOX}){
+		my $shared_mail_box = $ENV{management_node_info}{SHARED_EMAIL_BOX};
+	}
 
-	if ($SHARED_MAILBOX) {
-		my $bcc = $SHARED_MAILBOX;
+	if ($shared_mail_box) {
+		my $bcc = $shared_mail_box;
 		if ($mailer->open({From    => $from,
 								 To      => $to,
 								 Bcc     => $bcc,
@@ -1236,7 +1242,7 @@ sub mail {
 		else {
 			notify($ERRORS{'WARNING'}, 0, "NOTICE --  Problem sending mail to: $to From");
 		}
-	} ## end if ($SHARED_MAILBOX)
+	} ## end if ($shared_mail_box)
 	else {
 		if ($mailer->open({From    => $from,
 								 To      => $to,
@@ -1249,7 +1255,7 @@ sub mail {
 		else {
 			notify($ERRORS{'WARNING'}, 0, "NOTICE --  Problem sending mail to: $to From");
 		}
-	} ## end else [ if ($SHARED_MAILBOX)
+	} ## end else [ if ($shared_mail_box)
 } ## end sub mail
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -6076,7 +6082,10 @@ AND managementnode.id != $management_node_id
 	$management_node_info->{PUBLIC_SUBNET_MASK} = $management_node_info->{publicSubnetMmask};
 	$management_node_info->{PUBLIC_DEFAULT_GATEWAY} = $management_node_info->{publicDefaultGateway};
 	$management_node_info->{PUBLIC_DNS_SERVER} = $management_node_info->{publicDNSserver};
-
+	
+	# Add sysadmin and sharedMailBox email address values
+	$management_node_info->{SYSADMIN_EMAIL} = $management_node_info->{sysadminEmailAddress};
+	$management_node_info->{SHARED_EMAIL_BOX} = $management_node_info->{sharedMailBox};
 	
 	# Set the management_node_info environment variable if the info was retrieved for this computer
 	$ENV{management_node_info} = $management_node_info if ($management_node_identifier eq $hostname);

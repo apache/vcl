@@ -466,6 +466,9 @@ $SUBROUTINE_MAPPINGS{management_node_public_subnet_mask}      = '$ENV{management
 #$SUBROUTINE_MAPPINGS{management_node_public_default_gateway}  = '$ENV{management_node_info}{PUBLIC_DEFAULT_GATEWAY}';
 $SUBROUTINE_MAPPINGS{management_node_public_dns_server}       = '$ENV{management_node_info}{PUBLIC_DNS_SERVER}';
 
+$SUBROUTINE_MAPPINGS{management_node_sysadmin_email}	= '$ENV{management_node_info}{SYSADMIN_EMAIL}';
+$SUBROUTINE_MAPPINGS{management_node_shared_email_box}    = '$ENV{management_node_info}{SHARED_EMAIL_BOX}';
+
 $SUBROUTINE_MAPPINGS{management_node_predictive_module_name}         = '$ENV{management_node_info}{predictive_name}';
 $SUBROUTINE_MAPPINGS{management_node_predictive_module_pretty_name}  = '$ENV{management_node_info}{predictive_prettyname}';
 $SUBROUTINE_MAPPINGS{management_node_predictive_module_description}  = '$ENV{management_node_info}{predictive_description}';
