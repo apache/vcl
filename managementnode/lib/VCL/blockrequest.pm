@@ -241,8 +241,8 @@ sub process {
 		if ($status eq "expire") {
 			#fork start processing
 			notify($ERRORS{'OK'}, 0, "Block Request $blockrequest_id has expired");
-			if (delete_block_request($blockrequest_id)) {
-				notify($ERRORS{'OK'}, 0, "Removed blockRequest id $blockrequest_id");
+			if(udpate_block_request_status($blockrequest_id,"completed"){
+				notify($ERRORS{'OK'}, 0, "Updated status of blockRequest id $blockrequest_id to completed");
 			}
 			return 1;
 		}
@@ -398,6 +398,49 @@ sub delete_block_request {
 		notify($ERRORS{'WARNING'}, 0, "unable to deleted blockrequest $blockrequest_id blockRequest table ");
 		return 0;
 	}
+
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 udpate_block_request_status
+
+ Parameters  : $blockrequest_id
+ Returns     : 0 or 1
+ Description : update the status of a blockrequest from the blockrequest table
+
+=cut
+
+sub udpate_block_request_status {
+        my ($blockrequest_id,$status) = @_;
+
+        # Check the arguments
+        if (!defined($blockrequest_id)) {
+                notify($ERRORS{'WARNING'}, 0, "blockrequest ID was not specified");
+                return 0;
+        }
+        if (!defined($status)) {
+                notify($ERRORS{'WARNING'}, 0, "status was not specified for blockrequest_id $blockrequest_id ");
+                return 0;
+        }
+
+        # Construct the update statement
+        my $update_statement = "
+      UPDATE
+      blockRequest
+      SET blockRequest.status = $status
+      WHERE
+      blockRequest.id = $blockrequest_id
+   ";
+
+        # Call the database execute subroutine
+        if (database_execute($update_statement)) {
+                return 1;
+        }
+        else {
+                notify($ERRORS{'WARNING'}, 0, "unable to updated blockrequest $blockrequest_id blockRequest table ");
+                return 0;
+        }
 
 }
 

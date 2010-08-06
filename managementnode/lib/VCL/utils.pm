@@ -7573,6 +7573,7 @@ sub get_management_node_blockrequests {
 	blockRequest.managementnodeid AS blockRequest_managementnodeid,
 	blockRequest.expireTime AS blockRequest_expireTime,
 	blockRequest.processing AS blockRequest_processing,
+	blockRequest.status AS blockRequest_status,
 	
 	blockTimes.id AS blockTimes_id,
 	blockTimes.blockRequestid AS blockTimes_blockRequestid,
@@ -7585,7 +7586,8 @@ sub get_management_node_blockrequests {
 	
 	LEFT JOIN
 	blockTimes ON (
-		blockRequest.id = blockTimes.blockRequestid
+		blockRequest.id = blockTimes.blockRequestid AND
+        	blockRequest.status = 'accepted'
 	)
 	
 	WHERE
