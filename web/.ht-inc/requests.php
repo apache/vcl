@@ -1927,6 +1927,17 @@ function confirmDeleteRequestProduction($request) {
 	print	"Are you satisfied that this environment is ready to be made production ";
 	print "and replace the current production version, or would you just like to ";
 	print "end this reservation and test it again later?\n";
+
+	if(isImageBlockTimeActive($request['reservations'][0]['imageid'])) {
+		print "<br><br><font color=\"red\">WARNING: This environment is part of ";
+		print "an active block allocation. Changing the production version of ";
+		print "the environment at this time will result in new reservations ";
+		print "under the block allocation to have full reload times instead of ";
+		print "a &lt; 1 minutes wait. You can change the production version ";
+		print "later by going to Manage Images-&gt;Edit Image Profiles and ";
+		print "clicking Edit for this environment.</font><br>\n";
+	}
+
 	print "<FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
 
 	$cont = addContinuationsEntry('setImageProduction', $cdata, SECINDAY, 0, 1);

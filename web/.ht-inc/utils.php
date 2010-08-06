@@ -6369,6 +6369,35 @@ function isBlockAllocationTime($compid, $ts, $blockData) {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
+/// \fn isImageBlockTimeActive($imageid)
+///
+/// \param $imageid - id of an image
+///
+/// \return 1 if a block time for a block allocation for $imageid has had the
+/// processed flag set and the end time has not been reached; 0 otherwise
+///
+/// \brief checks to see if a block time for $imageid has been processed but not
+/// yet ended
+///
+////////////////////////////////////////////////////////////////////////////////
+function isImageBlockTimeActive($imageid) {
+	$now = time();
+	$nowdt = unixToDatetime($now);
+	$query = "SELECT bt.id "
+	       . "FROM blockTimes bt, "
+	       .      "blockRequest br "
+	       . "WHERE bt.blockRequestid = br.id AND "
+	       .       "bt.processed = 1 AND "
+	       .       "bt.end > '$nowdt' AND "
+	       .       "br.imageid = $imageid";
+	$qh = doQuery($query, 101);
+	if($row = mysql_fetch_assoc($qh))
+		return 1;
+	return 0;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
 /// \fn printSelectInput($name, $dataArr, $selectedid, $skip, $multiple, $domid,
 ///                      $extra)
 ///

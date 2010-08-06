@@ -1046,9 +1046,17 @@ function editOrAddImage($state) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function getRevisionHTML($imageid) {
+	$revisions = getImageRevisions($imageid);
 	$rt = '';
 	$rt .= "<h3>Revisions of this Image</h3>\n";
 	$rt .= "<table summary=\"\"><tr><td>\n";
+	if(count($revisions) > 1 && isImageBlockTimeActive($imageid)) {
+		$rt .= "<font color=\"red\">WARNING: This image is part of an active ";
+		$rt .= "block allocation. Changing the production revision of the image ";
+		$rt .= "at this time will result in new reservations under the block ";
+		$rt .= "allocation to have full reload times instead of a &lt; 1 minutes ";
+		$rt .= "wait.</font><br><br>\n";
+	}
 	$rt .= "<table summary=\"\" id=\"revisiontable\">\n";
 	$rt .= "  <tr>\n";
 	$rt .= "    <td></td>\n";
@@ -1058,7 +1066,6 @@ function getRevisionHTML($imageid) {
 	$rt .= "    <th nowrap>In Production</th>\n";
 	$rt .= "    <th>Comments (click to edit)</th>\n";
 	$rt .= "  </tr>\n";
-	$revisions = getImageRevisions($imageid);
 	foreach($revisions AS $rev) {
 		$rt .= "  <tr>\n";
 		$rt .= "    <td><INPUT type=checkbox\n";
