@@ -3700,6 +3700,11 @@ function RPCisAvailable($imageid, $start, $end, $userid) {
 function allocComputer($blockids, $currentids, $computerids, $start,
                        $nowfuture) {
 	$ret = array();
+	if(SCHEDULER_ALLOCATE_RANDOM_COMPUTER) {
+		shuffle($blockids);
+		shuffle($currentids);
+		shuffle($computerids);
+	}
 	foreach($blockids as $compid) {
 		$mgmtnodeid = findManagementNode($compid, $start, $nowfuture);
 		if($mgmtnodeid == 0)

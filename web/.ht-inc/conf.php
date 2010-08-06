@@ -67,6 +67,9 @@ define("DEFAULT_AFFILID", 1);
 define("DAYSAHEAD", 4);       // number of days after today that can be scheduled
 define("DEFAULT_PRIVNODE", 2);
 define("MAXVMLIMIT", 100);
+define("SCHEDULER_ALLOCATE_RANDOM_COMPUTER", 0); // set this to 1 to have the scheduler assign a randomly allocated
+                                                 // computer of those available; set to 0 to assign the computer with
+                                                 // the best combination of specs
 define("PRIV_CACHE_TIMEOUT", 15); // time (in minutes) that we cache privileges in a session before reloading them
 /// defines the min number of block request machines
 define("MIN_BLOCK_MACHINES", 5);
