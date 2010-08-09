@@ -65,6 +65,8 @@ use VCL::DataStructure;
 # Turn on autoflush
 $| = 1;
 
+# Retrieve the management node configuration info from the database
+get_management_node_info();
 
 # Check if -setup argument was specified
 if ($SETUP_MODE) {
@@ -112,7 +114,7 @@ sub main () {
 	# BEGIN NEW CODE
 	# This section does some prep work before looping
 	my ($package, $filename, $line, $sub) = caller(0);
-
+	
 	# Set the vcld environment variable to 0 so other subroutines know if this is the vcld or child process
 	$ENV{vcld} = 1;
 	notify($ERRORS{'DEBUG'}, $LOGFILE, "vcld environment variable set to $ENV{vcld} for this process");
@@ -136,10 +138,7 @@ sub main () {
 
 	# Set environment variables for global management node information
 	$ENV{management_node_id} = $management_node_id;
-	#$ENV{management_node_hostname} = $management_node_hostname;
-	#$ENV{management_node_info} = $info{managementnode};
 	notify($ERRORS{'DEBUG'}, $LOGFILE, "management_node_id environment variable set: $management_node_id");
-	#notify($ERRORS{'DEBUG'}, $LOGFILE, "management_node_hostname environment variable set: $management_node_hostname");
 	
 	# Get the management node checkin interval from the database if defined
 	# Otherwise, the default is 12 seconds
@@ -596,7 +595,7 @@ sub make_new_child {
 				$state_object->process();
 			}
 			else {
-				notify($ERRORS{'CRITICAL'}, $LOGFILE, "$state_module object could not be created and initialized, $!");
+				notify($ERRORS{'CRITICAL'}, $LOGFILE, "$state_module object could not be created and initialized");
 				switch_state($request_data, 'failed', '', 'failed', 1);
 			}
 			
@@ -664,7 +663,7 @@ sub die_handler {
 	notify($ERRORS{'CRITICAL'}, $LOGFILE, "@_");
 	
 	# Reinstall the signal handler in case of unreliable signals
-	$SIG{__DIE__} = \&warning_handler;
+	$SIG{__DIE__} = \&die_handler;
 	
 	exit;
 }
@@ -743,7 +742,7 @@ sub REAPER {
 		# Check if the child PID hash contains the pid of the process which just died
 		if (exists $child_pids{$dead_pid}) {
 			my $dead_reservation_id = $child_pids{$dead_pid};
-			notify($ERRORS{'DEBUG'}, 0, "VCL process exited for reservation $dead_reservation_id");
+			notify($ERRORS{'DEBUG'}, 0, "VCL process exited for reservation $dead_reservation_id, signal: $signal");
 			
 			# Child which died was a VCL state process since its pid is in the hash
 			$child_count--;
