@@ -8632,7 +8632,7 @@ function getNavMenu($inclogout, $inchome, $homeurl=HOMEURL) {
 		in_array("nodeAdmin", $user["privileges"]) ||
 		in_array($user['id'], $docreaders)) {
 		$rt .= menulistLI('codeDocumentation');
-		$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=viewdocs\">";
+		$rt .= "<a href=\"" . DOCUMENTATIONURL . "\">";
 		$rt .= "Documentation</a></li>\n";
 	}
 	if($inclogout) {

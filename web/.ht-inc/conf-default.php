@@ -75,6 +75,8 @@ define("PRIV_CACHE_TIMEOUT", 15); // time (in minutes) that we cache privileges 
 define("MIN_BLOCK_MACHINES", 5);
 /// defines the max number of block request machines
 define("MAX_BLOCK_MACHINES", 70);
+/// defines the URL used for the Documentation link in the navigation list
+define("DOCUMENTATIONURL", "https://cwiki.apache.org/VCLDOCS/");
 
 $ENABLE_ITECSAUTH = 0;     // use ITECS accounts (also called "Non-NCSU" accounts)
 
