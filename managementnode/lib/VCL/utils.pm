@@ -5404,7 +5404,7 @@ sub run_ssh_command {
 	# -p <port>, Port to connect to on the remote host.
 	# -x, Disables X11 forwarding.
 	# Dont use: -q, Quiet mode.  Causes all warning and diagnostic messages to be suppressed.
-	my $ssh_command = "$ssh_path $identity_paths -l $user -p $port -x $node '$command 2>&1' 2>&1";
+	my $ssh_command = "$ssh_path $identity_paths -l $user -p $port -x $node '$command' 2>&1";
 	
 	# Execute the command
 	my $ssh_output;
