@@ -7589,9 +7589,8 @@ sub get_management_node_blockrequests {
 	WHERE
 	blockRequest.managementnodeid = $managementnode_id AND
         blockRequest.status = 'accepted' AND
-	blockTimes.skip = '0' AND
-        (blockTimes.start < (NOW() + INTERVAL 360 MINUTE ) OR
-        blockTimes.end < NOW() )
+	(blockTimes.skip = '0' AND blockTimes.start < (NOW() + INTERVAL 360 MINUTE )) OR
+        blockTimes.end < NOW() 
    ";
 
 	# Call the database select subroutine
