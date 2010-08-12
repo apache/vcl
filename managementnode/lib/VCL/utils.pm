@@ -7583,12 +7583,15 @@ sub get_management_node_blockrequests {
 	
 	LEFT JOIN
 	blockTimes ON (
-		blockRequest.id = blockTimes.blockRequestid AND
-        	blockRequest.status = 'accepted'
+		blockRequest.id = blockTimes.blockRequestid 
 	)
 	
 	WHERE
-	blockRequest.managementnodeid = $managementnode_id
+	blockRequest.managementnodeid = $managementnode_id AND
+        blockRequest.status = 'accepted' AND
+	blockTimes.skip = '0' AND
+        (blockTimes.start < (NOW() + INTERVAL 360 MINUTE ) OR
+        blockTimes.end < NOW() )
    ";
 
 	# Call the database select subroutine
