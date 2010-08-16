@@ -115,6 +115,7 @@ our @EXPORT = qw(
   get_current_file_name
   get_current_package_name
   get_current_subroutine_name
+  get_group_name
   get_highest_imagerevision_info
   get_image_info
   get_imagemeta_info
@@ -133,6 +134,7 @@ our @EXPORT = qw(
   get_resource_groups
   get_managable_resource_groups
   get_vmhost_info
+  get_user_info
   getdynamicaddress
   getimagesize
   getnewdbh
@@ -996,15 +998,8 @@ sub check_blockrequest_time {
 	#notify($ERRORS{'DEBUG'}, 0, "start:  $start_datetime,  epoch: $start_time_epoch_seconds,  delta: $start_delta_minutes minutes");
 	#notify($ERRORS{'DEBUG'}, 0, "end:    $end_datetime,    epoch: $end_time_epoch_seconds,    delta: $end_delta_minutes minutes");
 
-	# 4:00 to 4:15 hours in advance: start assigning resources
-	if ($start_delta_minutes >= (4 * 60) && $start_delta_minutes <= (4 * 60 + 10)) {
-		# Block request within start window
-		notify($ERRORS{'OK'}, 0, "block request start time is within start window ($start_delta_minutes minutes from now), returning 'start'");
-		return "start";
-	}
-
-	# 2:00 to 2:15 hours in advance: start assigning resources
-	if ($start_delta_minutes >= (2 * 60) && $start_delta_minutes <= (2 * 60 + 10)) {
+	# if 30min to 6 hrs in advance: start assigning resources
+	if ($start_delta_minutes >= (30) && $start_delta_minutes <= (6 * 60)) {
 		# Block request within start window
 		notify($ERRORS{'OK'}, 0, "block request start time is within start window ($start_delta_minutes minutes from now), returning 'start'");
 		return "start";
@@ -4877,6 +4872,7 @@ sub get_management_node_requests {
 	return %requests;
 } ## end sub get_management_node_requests
 
+
 #/////////////////////////////////////////////////////////////////////////////
 
 =head2  get_image_info
@@ -7595,6 +7591,7 @@ sub get_management_node_blockrequests {
 	WHERE
 	blockRequest.managementnodeid = $managementnode_id AND
         blockRequest.status = 'accepted' AND
+	blockTimes.processed = '0' AND
 	(blockTimes.skip = '0' AND blockTimes.start < (NOW() + INTERVAL 360 MINUTE )) OR
         blockTimes.end < NOW() 
    ";
@@ -7631,6 +7628,9 @@ sub get_management_node_blockrequests {
 
 			if ($key =~ /blockRequest_/) {
 				$blockrequests{$blockrequest_id}{$original_key} = $value;
+				if($key =~ /_groupid/){
+					$blockrequests{$blockrequest_id}{groupname} = get_group_name($value);
+				}
 			}
 			elsif ($key =~ /blockTimes_/) {
 				$blockrequests{$blockrequest_id}{blockTimes}{$blocktimes_id}{$original_key} = $value;
@@ -7871,6 +7871,115 @@ sub get_computer_grp_members {
    }
    return \%return_hash;
 
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_user_info
+
+ Parameters  : $user_id
+ Returns     : scalar - group name
+ Description :
+
+=cut
+
+sub get_user_info {
+        my ($user_id) = @_;
+
+
+        if(!defined($user_id)){
+                notify($ERRORS{'WARNING'}, $LOGFILE, "user_id was not supplied");
+                return 0;
+        }
+
+        my $select_statement = <<EOF;
+SELECT DISTINCT
+user.*,
+affiliation.sitewwwaddress AS sitewwwaddress,
+affiliation.helpaddress AS helpaddress
+FROM
+user,
+affiliation
+WHERE
+user.id = $user_id AND
+affiliation.id = user.affiliationid
+EOF
+
+	# Call the database select subroutine
+        # This will return an array of one or more rows based on the select statement
+        my @selected_rows = database_select($select_statement);
+	
+	# Check to make sure 1 row was returned
+        if (scalar @selected_rows == 0) {
+                notify($ERRORS{'OK'}, 0, "user id $user_id was not found in the database, 0 rows were returned");
+                return ();
+        }
+        elsif (scalar @selected_rows > 1) {
+                notify($ERRORS{'WARNING'}, 0, "" . scalar @selected_rows . " rows were returned from database select");
+                return ();
+        }
+
+        # A single row was returned (good)
+        # Return the hash
+        return %{$selected_rows[0]};
+
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_group_name
+
+ Parameters  : $group_id
+ Returns     : scalar - group name
+ Description :
+
+=cut
+
+sub get_group_name {
+	my ($group_id) = @_;
+	
+	
+	if(!defined($group_id)){
+		notify($ERRORS{'WARNING'}, $LOGFILE, "group_id was not supplied");
+		return 0;
+	}
+
+	my $select_statement = <<EOF;
+SELECT DISTINCT
+usergroup.name
+FROM
+usergroup
+WHERE
+usergroup.id = $group_id
+EOF
+
+
+ # Call the database select subroutine
+        # This will return an array of one or more rows based on the select statement
+        my @selected_rows = database_select($select_statement);
+
+        # Check to make sure 1 row was returned
+        if (scalar @selected_rows == 0) {
+                notify($ERRORS{'WARNING'}, 0, "zero rows were returned from database select");
+                return ();
+        }
+        elsif (scalar @selected_rows > 1) {
+                notify($ERRORS{'WARNING'}, 0, "" . scalar @selected_rows . " rows were returned from database select");
+                return ();
+        }
+
+        # Get the single returned row
+        # It contains a hash
+        my $end;
+
+        # Make sure we return undef if the column wasn't found
+        if (defined $selected_rows[0]{name}) {
+                my $groupname = $selected_rows[0]{name};
+                return $groupname;
+        }
+        else {
+                return undef;
+        }
 }
 
 #/////////////////////////////////////////////////////////////////////////////

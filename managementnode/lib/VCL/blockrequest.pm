@@ -133,8 +133,21 @@ sub process {
 	my $blocktime_end                = $self->data->get_blocktime_end();
 	my $blockrequest_name            = $self->data->get_blockrequest_name();
 	my $blockrequest_owner_id	 = $self->data->get_blockrequest_owner_id();
+	my $block_group_id		 = $self->data->get_blockrequest_group_id();
+	my $block_group_name		 = $self->data->get_blockrequest_group_name();
 
+	# Get user info	
+	my %info;
+	my $owner_affiliation_sitewwwaddress;
+	my $owner_affiliation_helpaddress;
+	my $owner_email;
 
+	if( %info = get_user_info($blockrequest_owner_id)){
+		$owner_email = $info{email};
+		$owner_affiliation_helpaddress = $info{helpaddress};
+		$owner_affiliation_sitewwwaddress = $info{sitewwwaddress};
+	}
+		
 	#Set local timer
 	my $localtimer = convert_to_epoch_seconds();
 
@@ -146,7 +159,9 @@ sub process {
 	notify($ERRORS{'DEBUG'}, 0, "blocktime id: $blocktime_id");
 	notify($ERRORS{'DEBUG'}, 0, "blocktime processed: $blocktime_processed");
 	notify($ERRORS{'DEBUG'}, 0, "blocktime start: $blocktime_start");
-	notify($ERRORS{'DEBUG'}, 0, "blocktime end: $blocktime_end");
+	notify($ERRORS{'DEBUG'}, 0, "owner email: $owner_email");
+	notify($ERRORS{'DEBUG'}, 0, "help address: $owner_email");
+	notify($ERRORS{'DEBUG'}, 0, "owner www addr: $owner_affiliation_sitewwwaddress");
 
 	if ($blockrequest_mode eq "start") {
 
@@ -217,14 +232,41 @@ sub process {
 		
 		}
 
-		#pause
-		if (pauseprocessing($localtimer)) {
-			notify($ERRORS{'OK'}, 0, "past check window for this request, -- ok to proceed");
+		# Notify block request owner for given time slot has been processed.
+	
+		if($completed){
+			
+			my $subject = "VCL Block allocation results for $blockrequest_name";
+			my $mailstring .= <<"EOF";
+The block allocation for $blockrequest_name was processed with the following results:
+
+Block allocation name	= $blockrequest_name
+Machines allocated	= $allocated
+Machines requested	= $blockrequest_number_machines
+Block Start time	= $blocktime_start
+Block End time		= $blocktime_end
+User Group		= $block_group_name
+
+The machines for this block allocation will be loaded up to an hour before the actual start time. 
+Once loaded the users listed in the user group $block_group_name will be able to login up to 15 minutes 
+before the start time.
+
+To make changes or to view the status of this block allocation. Please visit,
+$owner_affiliation_sitewwwaddress/scheduling/index.php?mode=blockAllocations
+
+EOF
+			if(defined($owner_email)){
+				mail($owner_email, $subject, $mailstring, $owner_affiliation_helpaddress);
+			}	
+		
 		}
+	
+		sleep 10;
 
 		if (update_blockrequest_processing($blockrequest_id, 0)) {
 			notify($ERRORS{'OK'}, 0, "Removed processing flag on blockrequest_id $blockrequest_id");
 		}
+		
 
 	} ## end if ($blockrequest_mode eq "start")
 	elsif ($blockrequest_mode eq "end") {
@@ -241,7 +283,7 @@ sub process {
 		if ($status eq "expire") {
 			#fork start processing
 			notify($ERRORS{'OK'}, 0, "Block Request $blockrequest_id has expired");
-			if(udpate_block_request_status($blockrequest_id,"completed"){
+			if(udpate_block_request_status($blockrequest_id,"completed")){
 				notify($ERRORS{'OK'}, 0, "Updated status of blockRequest id $blockrequest_id to completed");
 			}
 			return 1;
