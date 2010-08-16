@@ -761,7 +761,7 @@ sub set_vcld_post_load_status {
 	my $command;
 	
 	# Remove existing lines beginning with vcld_post_load
-	$command .= "sed -ie \"/^vcld_post_load.*/d\" currentimage.txt";
+	$command .= "sed -i -e \"/^vcld_post_load.*/d\" currentimage.txt";
 	
 	# Add a line to the end of currentimage.txt
 	$command .= " && echo -E \"$post_load_line\" >> currentimage.txt";

@@ -233,7 +233,7 @@ sub post_load {
 	}
 
 	#Clear user from external_sshd_config
-	my $clear_extsshd = "sed -ie \"/^AllowUsers .*/d\" /etc/ssh/external_sshd_config";
+	my $clear_extsshd = "sed -i -e \"/^AllowUsers .*/d\" /etc/ssh/external_sshd_config";
 	if (run_ssh_command($computer_node_name, $management_node_keys, $clear_extsshd, "root")) {
 		notify($ERRORS{'DEBUG'}, 0, "cleared AllowUsers directive from external_sshd_config");
 	}
@@ -534,7 +534,7 @@ sub set_static_public_address {
 
 	#correct external sshd file
 
-	if (run_ssh_command($computer_short_name, $management_node_keys, "sed -ie \"/ListenAddress .*/d \" /etc/ssh/external_sshd_config", "root")) {
+	if (run_ssh_command($computer_short_name, $management_node_keys, "sed -i -e \"/ListenAddress .*/d \" /etc/ssh/external_sshd_config", "root")) {
 		notify($ERRORS{'OK'}, 0, "Cleared ListenAddress from external_sshd_config");
 	}
 
@@ -726,7 +726,7 @@ sub delete_user {
 
 	#Clear user from external_sshd_config
 	#my $clear_extsshd = "perl -pi -e \'s/^AllowUsers .*//\' /etc/ssh/external_sshd_config";
-	my $clear_extsshd = "sed -ie \"/^AllowUsers .*/d\" /etc/ssh/external_sshd_config";
+	my $clear_extsshd = "sed -i -e \"/^AllowUsers .*/d\" /etc/ssh/external_sshd_config";
 	if (run_ssh_command($computer_node_name, $image_identity, $clear_extsshd, "root")) {
 		notify($ERRORS{'DEBUG'}, 0, "cleared AllowUsers directive from external_sshd_config");
 	}
@@ -738,7 +738,7 @@ sub delete_user {
 
 	if ($imagemeta_rootaccess) {
 		#clear user from sudoers file
-		my $clear_cmd = "sed -ie \"/^$user_login_id .*/d\" /etc/sudoers";
+		my $clear_cmd = "sed -i -e \"/^$user_login_id .*/d\" /etc/sudoers";
 		if (run_ssh_command($computer_node_name, $image_identity, $clear_cmd, "root")) {
 			notify($ERRORS{'DEBUG'}, 0, "cleared $user_login_id from /etc/sudoers");
 		}
@@ -821,7 +821,7 @@ sub reserve {
 	if ($imagemeta_rootaccess) {
 		# Add to sudoers file
 		#clear user from sudoers file to prevent dups
-		my $clear_cmd = "sed -ie \"/^$user_name .*/d\" /etc/sudoers";
+		my $clear_cmd = "sed -i -e \"/^$user_name .*/d\" /etc/sudoers";
 		if (run_ssh_command($computer_node_name, $image_identity, $clear_cmd, "root")) {
 			notify($ERRORS{'DEBUG'}, 0, "cleared $user_name from /etc/sudoers");
 		}
@@ -864,7 +864,7 @@ sub grant_access {
 
 	notify($ERRORS{'OK'}, 0, "In grant_access routine $user,$computer_node_name");
 	my @sshcmd;
-	my $clear_extsshd = "sed -ie \"/^AllowUsers .*/d\" /etc/ssh/external_sshd_config";
+	my $clear_extsshd = "sed -i -e \"/^AllowUsers .*/d\" /etc/ssh/external_sshd_config";
 	if (run_ssh_command($computer_node_name, $identity, $clear_extsshd, "root")) {
 		notify($ERRORS{'DEBUG'}, 0, "cleared AllowUsers directive from external_sshd_config");
 	}
@@ -1990,9 +1990,9 @@ sub generate_rc_local {
         push(@array2print, "\n");
         push(@array2print, 'IP0=$(ifconfig eth0 | grep inet | awk \'{print $2}\' | awk -F: \'{print $2}\')' . "\n");
         push(@array2print, 'IP1=$(ifconfig eth1 | grep inet | awk \'{print $2}\' | awk -F: \'{print $2}\')' . "\n");
-        push(@array2print, 'sed -i \'/.*AllowUsers .*$/d\' /etc/ssh/sshd_config' . "\n");
-        push(@array2print, 'sed -i \'/.*ListenAddress .*/d\' /etc/ssh/sshd_config' . "\n");
-        push(@array2print, 'sed -i \'/.*ListenAddress .*/d\' /etc/ssh/external_sshd_config' . "\n");
+        push(@array2print, 'sed -i -e \'/.*AllowUsers .*$/d\' /etc/ssh/sshd_config' . "\n");
+        push(@array2print, 'sed -i -e \'/.*ListenAddress .*/d\' /etc/ssh/sshd_config' . "\n");
+        push(@array2print, 'sed -i -e \'/.*ListenAddress .*/d\' /etc/ssh/external_sshd_config' . "\n");
         push(@array2print, 'echo "AllowUsers root" >> /etc/ssh/sshd_config' . "\n");
         push(@array2print, 'echo "ListenAddress $IP0" >> /etc/ssh/sshd_config' . "\n");
         push(@array2print, 'echo "ListenAddress $IP1" >> /etc/ssh/external_sshd_config' . "\n");
