@@ -281,6 +281,9 @@ sub main () {
 				if (%request_info = get_request_info($request_id)) {
 					notify($ERRORS{'DEBUG'}, $LOGFILE, "retrieved request information from database");
 
+					# Add the reservation ID to be processed to the hash
+					$request_info{RESERVATIONID} = $reservation_id;
+				
 					# Set request variables that may have changed by other processes to their original values
 					# They may change if this is a cluster reservation
 					$request_info{state}{name}     = $request_state_name;
@@ -295,6 +298,13 @@ sub main () {
 				# Add the check_time result to the hash
 				$request_info{CHECKTIME} = $check_time_result;
 
+				# Check if preload was returned by check_time and that preload flag is 0
+				# The preload flag will be set to 1 by new.pm module after it's done
+				if ($check_time_result =~ /preload/ && !($request_info{preload})) {
+					notify($ERRORS{'OK'}, $LOGFILE, "request start time within 25-35 minute window and preload flag is 0, processing preload request");
+					$request_info{PRELOADONLY} = 1;
+				}
+				
 				# Get a new data structure object
 				my $data_structure;
 				eval {$data_structure = new VCL::DataStructure({request_data => \%request_info, reservation_id => $reservation_id});};
@@ -302,17 +312,7 @@ sub main () {
 					notify($ERRORS{'CRITICAL'}, 0, "unable to create DataStructure object" . $e->message);
 					next RESERVATION;
 				}
-
-				# Check if preload was returned by check_time and that preload flag is 0
-				# The preload flag will be set to 1 by new.pm module after it's done
-				if ($check_time_result =~ /preload/ && !($request_info{preload})) {
-					notify($ERRORS{'OK'}, $LOGFILE, "request start time within 25-35 minute window and preload flag is 0, processing preload request");
-					$request_info{PRELOADONLY} = 1;
-				}
-
-				# Add the reservation ID to be processed to the hash
-				$request_info{RESERVATIONID} = $reservation_id;
-
+				
 				# Update the request state to pending, laststate to next state
 				# Pending is set now so vcld doesn't try to process it again
 				# The previous state is already in the hash as the laststate value
@@ -828,7 +828,7 @@ sub daemonize {
 =cut
 
 sub setup_management_node {
-	print "VCL Management Node Setup\n\n";
+	print "VCL Management Node Setup\n";
 	
 	# Always use verbose mode when running in setup mode
 	$VERBOSE = 1;
@@ -843,9 +843,9 @@ sub setup_management_node {
 	
 	# Get the information from the module table
 	my $module_info = get_module_info();
-	#print "retrieved module table info:\n" . format_data($module_info) . "\n";
 	
 	# Loop through the entries in the data from the module table
+	my %setup_module_objects;
 	for my $module_id (keys %$module_info) {
 		# Get the module's Perl package and name
 		my $module_name = $module_info->{$module_id}{name};
@@ -856,7 +856,13 @@ sub setup_management_node {
 		eval "use $module_perl_package";
 		if ($EVAL_ERROR) {
 			notify($ERRORS{'WARNING'}, 0, "$module_name module (" . $module_perl_package . ") could not be loaded, error message:\n$EVAL_ERROR");
-			print "ERROR: '$module_name' module could not be loaded, see log file\n";
+			print "ERROR: '$module_name' module could not be loaded:\n$EVAL_ERROR\n";
+			next;
+		}
+		
+		# Check if the module implements a setup subroutine
+		# Don't use 'can' or else the same setup subroutine will be called multiple times due to inheritance
+		if (!defined(&{$module_perl_package . "::setup"})) {
 			next;
 		}
 		
@@ -864,35 +870,42 @@ sub setup_management_node {
 		my $module_object;
 		unless ($module_object = ($module_perl_package)->new({data_structure => $data_structure})) {
 			notify($ERRORS{'WARNING'}, 0, "$module_name module (" . $module_perl_package . ") object could not be created, error message:\n$!");
-			print "ERROR: '$module_name' object could not be created, see log file";
+			print "ERROR: '$module_name' object could not be created, see log file, $!";
 			next;
 		}
 		
-		# Check if module has implemented a "setup" subroutine
-		if ($module_object->can('setup')) {
-			notify($ERRORS{'DEBUG'}, 0, "setup subroutine has been implemented by '$module_name'");
-			
-			print "----------------------------------------------------------------------------\n";
-			print "Beginning setup for '$module_name' module...\n\n";
-			
-			# Call the setup subroutine and check it's return value
-			my $setup_status = $module_object->setup();
-			notify($ERRORS{'DEBUG'}, 0, "module '$module_name' setup() returned $setup_status");
-			if ($setup_status) {
-				print "\nSetup for '$module_name' module complete\n";
-			}
-			else {
-				die "\nERROR: Setup did not complete successfully for '$module_name' module";
-			}
+		# Save the object and last part of the package name in the %setup_module_objects hash
+		($setup_module_objects{$module_perl_package}{name}) = $module_perl_package =~ /([^:]+)$/;
+		$setup_module_objects{$module_perl_package}{object} = $module_object;
+	}
+	
+	# Set the setup_path environment variable to anonymous array containing 'vcld'
+	# This is used to display the location in the menu hierarchy
+	# strings added/removed to the array cause the location to change
+	$ENV{setup_path} = ['vcld'];
+	
+	# Loop until the user selects 'c' to cancel
+	while (1) {
+		print '-' x 76 . "\n";
+		
+		# Display a menu to the user listing the modules that were found containing setup subroutines
+		print "Select a module to configure:\n";
+		my $module_perl_package = setup_get_hash_choice(\%setup_module_objects, 'name');
+		last if (!defined($module_perl_package));
+		
+		# Retrieve the module object already created
+		my $module_object = $setup_module_objects{$module_perl_package}{object};
+		if (!$module_object) {
+			die "Module object is not defined: $module_perl_package";
 		}
-		else {
-			notify($ERRORS{'DEBUG'}, 0, "setup subroutine has NOT been implemented by '$module_name' module");
-		}
+		
+		# Call the setup subroutine
+		$module_object->setup();
 	}
 	
 	print "============================================================================\n";
 	exit;
-} ## end sub help
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 
