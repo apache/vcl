@@ -382,7 +382,7 @@ sub capture {
 	my $vmhost_hostname = $self->data->get_vmhost_hostname() || return;
 	my $vmprofile_vmdisk = $self->data->get_vmhost_profile_vmdisk() || return;
 	my $image_name = $self->data->get_image_name() || return;
-	my $vmhost_profile_datastore_path = $self->data->get_vmhost_profile_datastore_path();
+	my $vmhost_profile_datastore_path = normalize_file_path($self->data->get_vmhost_profile_datastore_path());
 	
 	# Check if VM is responding to SSH before proceeding
 	if (!$self->os->is_ssh_responding()) {
@@ -969,9 +969,7 @@ sub prepare_vmx {
 	my $vm_cpu_count             = $self->data->get_image_minprocnumber() || 1;
 	my $vm_ethernet_adapter_type = $self->get_vm_ethernet_adapter_type() || return;
 	my $vm_eth0_mac              = $self->data->get_computer_eth0_mac_address() || return;
-	my $vm_eth1_mac              = $self->data->get_computer_eth1_mac_address() || return;
-	my $vm_private_ip_address    = $self->data->get_computer_ip_address() || return;
-	my $vm_public_ip_address     = $self->data->get_computer_private_ip_address()  || return;
+	my $vm_eth1_mac              = $self->data->get_computer_eth1_mac_address() || return;	
 	my $virtual_switch_0         = $self->data->get_vmhost_profile_virtualswitch0() || return;
 	my $virtual_switch_1         = $self->data->get_vmhost_profile_virtualswitch1() || return;
 	my $vm_disk_adapter_type     = $self->get_vm_disk_adapter_type() || return;
@@ -1100,11 +1098,9 @@ sub prepare_vmx {
 			 
 			 virtual switch 0: $virtual_switch_0
 			 eth0 MAC address: $vm_eth0_mac
-			 private IP address: $vm_private_ip_address
 			 
 			 virtual switch 1: $virtual_switch_1
 			 eth1 MAC address: $vm_eth1_mac
-			 public IP address: $vm_public_ip_address
 			 
 			 disk adapter type: $vm_disk_adapter_type
 			 disk mode: $vm_disk_mode
@@ -1514,15 +1510,14 @@ sub get_vmx_base_directory_path {
 	
 	my $vmx_base_directory_path;
 	
-	my $vmhost_profile_vmpath = $self->data->get_vmhost_profile_vmpath();
+	my $vmhost_profile_vmpath = normalize_file_path($self->data->get_vmhost_profile_vmpath());
 	if ($vmhost_profile_vmpath) {
 		$vmhost_profile_vmpath =~ s/\\//g;
 		$vmx_base_directory_path = $vmhost_profile_vmpath;
 	}
 	else {
-		my $vmhost_profile_datastore_path = $self->data->get_vmhost_profile_datastore_path();
+		my $vmhost_profile_datastore_path = normalize_file_path($self->data->get_vmhost_profile_datastore_path());
 		if ($vmhost_profile_datastore_path) {
-			$vmhost_profile_datastore_path =~ s/\\//g;
 			$vmx_base_directory_path = $vmhost_profile_datastore_path;
 		}
 		else {
@@ -1707,7 +1702,7 @@ sub get_vmdk_base_directory_path {
 	}
 	else {
 		# Get the VM host profile datastore path
-		my $vmhost_profile_datastore_path = $self->data->get_vmhost_profile_datastore_path();
+		my $vmhost_profile_datastore_path = normalize_file_path($self->data->get_vmhost_profile_datastore_path());
 		if (!$vmhost_profile_datastore_path) {
 			notify($ERRORS{'WARNING'}, 0, "unable to retrieve VM host profile datastore path");
 			return;

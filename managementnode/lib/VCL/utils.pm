@@ -148,6 +148,7 @@ our @EXPORT = qw(
   is_public_ip_address
   is_request_deleted
   is_request_imaging
+  is_valid_dns_host_name
   is_valid_ip_address
   isconnected
   isfilelocked
@@ -180,6 +181,11 @@ our @EXPORT = qw(
   setimageid
   setnextimage
   setstaticaddress
+  setup_confirm
+  setup_get_array_choice
+  setup_get_hash_choice
+  setup_get_input_string
+  setup_print_wrap
   string_to_ascii
   switch_state
   switch_vmhost_id
@@ -8870,6 +8876,9 @@ sub run_command {
 		notify($ERRORS{'DEBUG'}, 0, "executed command: $command, pid: $pid, exit status: $exit_status, output:\n@output");
 	}
 	
+	# Remove newlines from output lines
+	map { chomp $_ } @output;
+	
 	return ($exit_status, \@output);
 }
 	
@@ -9094,22 +9103,75 @@ sub is_valid_ip_address {
 	
 	# Make sure 4 octets were found
 	if (scalar @octets != 4) {
-		notify($ERRORS{'WARNING'}, 0, "IP address does not contain 4 octets: $ip_address, octets:\n" . join("\n", @octets));
+		notify($ERRORS{'DEBUG'}, 0, "IP address does not contain 4 octets: $ip_address, octets:\n" . join("\n", @octets));
 		return 0;
 	}
 	
 	# Make sure address only contains digits
 	if (grep(/\D/, @octets)) {
-		notify($ERRORS{'WARNING'}, 0, "IP address contains a non-digit: $ip_address");
+		notify($ERRORS{'DEBUG'}, 0, "IP address contains a non-digit: $ip_address");
 		return 0;
 	}
 	
 	# Make sure none of the octets is > 255
 	if ($octets[0] > 255 || $octets[0] > 255 || $octets[0] > 255 || $octets[0] > 255) {
-		notify($ERRORS{'WARNING'}, 0, "IP address contains an octet > 255: $ip_address");
+		notify($ERRORS{'DEBUG'}, 0, "IP address contains an octet > 255: $ip_address");
 		return 0;
 	}
 	
+	notify($ERRORS{'DEBUG'}, 0, "IP address is valid: $ip_address");
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 is_valid_dns_host_name
+
+ Parameters  : $dns_host_name
+ Returns     : If valid: true
+               If not valid: false
+ Description : Determines if the argument is a valid DNS host name.
+
+=cut
+
+sub is_valid_dns_host_name {
+	my $dns_host_name = shift;
+	if (!$dns_host_name) {
+		notify($ERRORS{'WARNING'}, 0, "DNS host name argument was not specified");
+		return;
+	}
+	
+	if (!$dns_host_name) {
+		notify($ERRORS{'DEBUG'}, 0, "DNS host name argument was not specified");
+		return 0;
+	}
+	
+	if ((my $length = length($dns_host_name)) > 255) {
+		notify($ERRORS{'DEBUG'}, 0, "DNS host name is too long ($length characters): $dns_host_name");
+		return 0;
+	}
+	
+	if (my @illegal_characters = $dns_host_name =~ /([^\da-z\.\-])/i) {
+		notify($ERRORS{'DEBUG'}, 0, "DNS host name contains illegal characters: " . join(" ", @illegal_characters));
+		return 0;
+	}
+	
+	if ($dns_host_name =~ /\.\./i) {
+		notify($ERRORS{'DEBUG'}, 0, "DNS host name contains contiguous periods: $dns_host_name");
+		return 0;
+	}
+	
+	if ($dns_host_name !~ /^[\da-z]/i) {
+		notify($ERRORS{'DEBUG'}, 0, "DNS host name does not begin with a letter or digit: " . string_to_ascii($dns_host_name));
+		return 0;
+	}
+	
+	if (grep(/^\d+$/, split(/\./, $dns_host_name))) {
+		notify($ERRORS{'DEBUG'}, 0, "DNS host name contains a section comprised only of digits: $dns_host_name");
+		return 0;
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "DNS host name is valid: $dns_host_name");
 	return 1;
 }
 
@@ -9539,7 +9601,7 @@ sub get_affiliation_info {
 		}
 	}
 	
-	#notify($ERRORS{'DEBUG'}, 0, "retrieved affiliation info:\n" . format_data(\%affiliation_info_hash));
+	notify($ERRORS{'DEBUG'}, 0, "retrieved affiliation info:\n" . format_data(\%affiliation_info_hash));
 	return \%affiliation_info_hash;
 }
 
@@ -9696,6 +9758,176 @@ sub parent_directory_path {
 	$path =~ s/\/[^\/\\]+$//g;
 	
 	return $path;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 setup_get_array_choice
+
+ Parameters  :
+ Returns     :
+ Description :
+
+=cut
+
+sub setup_get_array_choice {
+	my (@choices) = @_;
+	notify($ERRORS{'DEBUG'}, 0, "choices argument:\n" . join("\n", @choices));
+	
+	my $choice_count = scalar(@choices);
+	
+	while (1) {
+		for (my $i=1; $i<=$choice_count; $i++) {
+			print "$i. $choices[$i-1]\n";
+		}
+		print "\n[" . join("/", @{$ENV{setup_path}}) . "]\n";
+		print "Make a selection (1";
+		print "-$choice_count" if ($choice_count > 1);
+		print ", 'c' to cancel): ";
+		
+		my $choice = <STDIN>;
+		chomp $choice;
+		
+		if ($choice =~ /^c$/i) {
+			return;
+		}
+		if ($choice !~ /^\d+$/ || $choice < 1 || $choice > $choice_count) {
+			print "\n*** Choice must be an integer between 1 and $choice_count ***\n\n";
+		}
+		else {
+			return ($choice - 1);
+		}
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 setup_get_input_string
+
+ Parameters  :
+ Returns     :
+ Description :
+
+=cut
+
+sub setup_get_input_string {
+	my ($message, $default_value) = @_;
+	if ($default_value) {
+		print "$message [$default_value]: ";
+	}
+	else {
+		print "$message ('c' to cancel): ";
+	}
+	
+	my $input = <STDIN>;
+	chomp $input;
+	if ($input =~ /^c$/i) {
+		return;
+	}
+	elsif ($default_value && !length($input)) {
+		return $default_value;
+	}
+	else {
+		return $input;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 setup_get_hash_choice
+
+ Parameters  : $hash_ref, $display_key ()
+ Returns     :
+ Description :
+
+=cut
+
+sub setup_get_hash_choice {
+	my ($hash_ref, $display_key) = @_;
+	
+	my $choice_count = scalar(keys %$hash_ref);
+	
+	my %choices;
+	for my $key (keys %$hash_ref) {
+		my $display_name;
+		if ($display_key) {
+			$display_name = $hash_ref->{$key}{$display_key};
+		}
+		else {
+			$display_name = $key;
+		}
+		
+		if ($choices{$display_name}) {
+			notify($ERRORS{'WARNING'}, 0, "duplicate hash keys containing the value '$display_key' = '$display_name', hash argument:\n" . format_data($hash_ref));
+		}
+		
+		$choices{$display_name} = $key;
+	}
+	
+	my $choice_index = setup_get_array_choice(sort keys %choices);
+	return if (!defined($choice_index));
+	
+	my $choice_name = (sort keys %choices)[$choice_index];
+	return $choices{$choice_name};
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 setup_confirm
+
+ Parameters  : $message
+ Returns     : boolean
+ Description : Displays the message to the user and loops until they enter Y or
+               N.
+
+=cut
+
+sub setup_confirm {
+	my ($message) = @_;
+	
+	while (1) {
+		print "$message (Y/N)? ";
+		my $input = <STDIN>;
+		if ($input =~ /^y(es)?$/i) {
+			return 1;
+		}
+		elsif ($input =~ /^n(o)?$/i) {
+			return 0;
+		}
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 setup_print_wrap
+
+ Parameters  : $message, $columns (optional)
+ Returns     :
+ Description : Prints a message to STDOUT formatted to the column width. 76 is
+               the default column value.
+
+=cut
+
+sub setup_print_wrap {
+	my ($message, $columns) = @_;
+	$columns = 76 if !defined($columns);
+	
+	return if !$message;
+	
+	# Save the leading and trailing lines then remove them from the string
+	# This is done so wrap doesn't lose them
+	my ($leading_newlines) = $message =~ /^(\n+)/;
+	$message =~ s/^\n+//g;
+	my ($trailing_newlines) = $message =~ /(\n+)$/;
+	$message =~ s/\n+$//g;
+	
+	# Wrap text for lines
+	local($Text::Wrap::columns) = $columns;
+	print $leading_newlines if $leading_newlines;
+	print wrap('', '', $message);
+	print $trailing_newlines if $trailing_newlines;
+	
+	return 1;
 }
 
 #/////////////////////////////////////////////////////////////////////////////

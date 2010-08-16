@@ -1744,6 +1744,19 @@ sub initialize {
 	my $vmhost_username = $self->data->get_vmhost_profile_username();
 	my $vmhost_password = $self->data->get_vmhost_profile_password();
 	
+	if (!$vmhost_hostname) {
+		notify($ERRORS{'WARNING'}, 0, "VM host name could not be retrieved");
+		return;
+	}
+	elsif (!$vmhost_hostname) {
+		notify($ERRORS{'WARNING'}, 0, "VM host username is not configured in the database for the VM profile");
+		return;
+	}
+	elsif (!$vmhost_password) {
+		notify($ERRORS{'WARNING'}, 0, "VM host password is not configured in the database for the VM profile");
+		return;
+	}
+	
 	Opts::set_option('username', $vmhost_username);
 	Opts::set_option('password', $vmhost_password);
 	
@@ -1755,6 +1768,13 @@ sub initialize {
 		"https://$vmhost_hostname/sdk",
 		"https://$vmhost_hostname:8333/sdk",
 	);
+	
+	# Also add URLs containing the short host name if the VM hostname is a full DNS name
+	if ($vmhost_hostname =~ /\./) {
+		my ($vmhost_short_name) = $vmhost_hostname =~ /^([^\.]+)/;
+		push @possible_vmhost_urls, "https://$vmhost_short_name/sdk";
+		push @possible_vmhost_urls, "https://$vmhost_short_name:8333/sdk";
+	}
 	
 	# Call HostConnect, check how long it takes to connect
 	for my $host_url (@possible_vmhost_urls) {
@@ -2196,7 +2216,7 @@ sub get_normal_path {
 	
 	# Check if path argument is a normal path - does not contain brackets
 	if ($path !~ /\[/) {
-		return $path;
+		return normalize_file_path($path);
 	}
 	
 	# Extract the datastore name from the path
@@ -2252,13 +2272,12 @@ sub get_datastore_name {
 		return;
 	}
 	
-	# Remove any spaces from the beginning and end of the path
-	$path =~ s/(^\s+|\s+$)//g;
-	
 	# Check if path is a datastore path, datastore name will be in brackets
 	if ($path =~ /^\[(.+)\]/) {
 		return $1;
 	}
+	
+	$path = $self->get_normal_path($path);
 	
 	# Get the datastore summary information
 	my $datastore_summaries = $self->get_datastore_summaries();

@@ -7931,6 +7931,18 @@ sub get_product_key {
 		return;
 	}
 	
+	# Normalize the product name string from the registry
+	# Remove Microsoft from the beginning - some products have this and some don't
+	$product_name =~ s/Microsoft//ig;
+	# Remove anything in parenthesis such as (R) or (TM)
+	$product_name =~ s/\(.*\)//ig;
+	# Replace spaces with %
+	$product_name =~ s/\s/%/ig;
+	# Add % to the beginning and end
+	$product_name = "%$product_name%";
+	# Replace multiple % characters with a single %
+	$product_name =~ s/%+/%/ig;
+	
 	# Create the affiliation-specific select statement
 	# Check if the affiliation identifier is a number or word
 	# If a number, use affiliation.id directly
@@ -8003,12 +8015,87 @@ EOF
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 get_product_key_info
+
+ Parameters  : none
+ Returns     : hash reference
+ Description : Returns the contents of the winProductKey table as a hash
+               reference. The hash keys are the affiliation IDs.
+
+=cut
+
+sub get_product_key_info {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Create the select statement
+	my $select_statement = <<EOF;
+SELECT
+*
+FROM
+winProductKey
+EOF
+	
+	# Call the database select subroutine
+	my @selected_rows = database_select($select_statement);
+	
+	# Transform the array of database rows into a hash
+	my %product_key_info;
+	map { $product_key_info{$_->{affiliationid}}{$_->{productname}} = $_->{productkey} } @selected_rows;
+	
+	notify($ERRORS{'DEBUG'}, 0, "retrieved product key info:\n" . format_data(\%product_key_info));
+	return \%product_key_info;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_kms_server_info
+
+ Parameters  : none
+ Returns     : hash reference
+ Description : Returns the contents of the winKMS table as a hash
+               reference. The hash keys are the affiliation IDs.
+
+=cut
+
+sub get_kms_server_info {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Create the select statement
+	my $select_statement = <<EOF;
+SELECT
+*
+FROM
+winKMS
+EOF
+	
+	# Call the database select subroutine
+	my @selected_rows = database_select($select_statement);
+	
+	# Transform the array of database rows into a hash
+	my %kms_server_info;
+	map { $kms_server_info{$_->{affiliationid}}{$_->{address}} = $_->{port} } @selected_rows;
+	
+	notify($ERRORS{'DEBUG'}, 0, "retrieved KMS server info:\n" . format_data(\%kms_server_info));
+	return \%kms_server_info;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 set_product_key
 
  Parameters  : $affiliation_id, $product_name, $product_key
  Returns     : If successful: true
                If failed: false
- Description : Inserts or updates a row in the winKMS table in the database.
+ Description : Inserts or updates a row in the winProductKey table in the
+               database.
 
 =cut
 
@@ -8082,6 +8169,103 @@ EOF
 	}
 	else {
 		notify($ERRORS{'WARNING'}, 0, "failed to set product key in database:\naffiliation ID: $affiliation_identifier\nproduct name: $product_name\nproduct key: $product_key");
+		return;
+	}
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 delete_product_key
+
+ Parameters  : $affiliation_id, $product_name
+ Returns     : If successful: true
+               If failed: false
+ Description : Deletes a row from the winProductKey table in the database.
+
+=cut
+
+sub delete_product_key {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get and check the arguments
+	my ($affiliation_id, $product_name, $product_key) = @_;
+	if (!defined($affiliation_id) || !defined($product_name) || !defined($product_key)) {
+		notify($ERRORS{'WARNING'}, 0, "affiliation ID, product name, and product key arguments not passed correctly");
+		return;
+	}
+	
+	# Construct the delete statement
+	my $delete_statement = <<"EOF";
+DELETE FROM
+winProductKey
+WHERE
+affiliationid = $affiliation_id
+AND productname = '$product_name'
+AND productkey = '$product_key'
+EOF
+
+	# Execute the delete statement
+	my $delete_result = database_execute($delete_statement);
+	if (defined($delete_result)) {
+		notify($ERRORS{'DEBUG'}, 0, "deleted product key from database:\naffiliation ID: $affiliation_id\nproduct name: $product_name\nproduct key: $product_key, result: $delete_result");
+	
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to delete product key from database:\naffiliation ID: $affiliation_id\nproduct name: $product_name\nproduct key: $product_key");
+		return;
+	}
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 delete_kms_server
+
+ Parameters  : $affiliation_id, $address
+ Returns     : If successful: true
+               If failed: false
+ Description : Deletes a row from the winKMS table in the database.
+
+=cut
+
+sub delete_kms_server {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get and check the arguments
+	my ($affiliation_id, $address) = @_;
+	if (!defined($affiliation_id) || !defined($address)) {
+		notify($ERRORS{'WARNING'}, 0, "affiliation ID and KMS server address arguments not passed correctly");
+		return;
+	}
+	
+	# Construct the delete statement
+	my $delete_statement = <<"EOF";
+DELETE FROM
+winKMS
+WHERE
+affiliationid = $affiliation_id
+AND address = '$address'
+EOF
+
+	# Execute the delete statement
+	my $delete_result = database_execute($delete_statement);
+	if (defined($delete_result)) {
+		notify($ERRORS{'DEBUG'}, 0, "deleted KMS server from database:\naffiliation ID: $affiliation_id\naddress: $address, result: $delete_result");
+	
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to delete product key from database:\naffiliation ID: $affiliation_id\naddress: $address");
 		return;
 	}
 	
@@ -8589,6 +8773,558 @@ sub disable_shutdown_event_tracker {
 	}
 	
 	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 setup
+
+ Parameters  : none
+ Returns     : 
+ Description : Presents a command-line menu interface to the user to configure
+               the Windows OS modules when vcld is run in setup mode.
+
+=cut
+
+sub setup {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	push @{$ENV{setup_path}}, 'Windows';
+	
+	my @operation_choices = (
+		'Configure Product Keys',
+		'Configure KMS Servers',
+	);
+	
+	my @setup_path = @{$ENV{setup_path}};
+	OPERATION: while (1) {
+		@{$ENV{setup_path}} = @setup_path;
+		
+		print '-' x 76 . "\n";
+		
+		$self->setup_check();
+		
+		print "Choose an operation:\n";
+		my $operation_choice_index = setup_get_array_choice(@operation_choices);
+		last if (!defined($operation_choice_index));
+		my $operation_name = $operation_choices[$operation_choice_index];
+		print "\n";
+		
+		push @{$ENV{setup_path}}, $operation_name;
+		
+		if ($operation_name =~ /product keys/i) {
+			$self->setup_product_keys();
+		}
+		elsif ($operation_name =~ /kms/i) {
+			$self->setup_kms_servers();
+		}
+	}
+	
+	pop @{$ENV{setup_path}};
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 setup_check
+
+ Parameters  : none
+ Returns     :
+ Description : Checks various configuration settings and displays a message to
+					the user if any important settings are not configured. This gets
+					called every time Windows.pm::setup() is called.
+
+=cut
+
+sub setup_check {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my @messages;
+	
+	# Get a hash containing all of the information from the affiliation table
+	my $affiliation_info = get_affiliation_info();
+	if (!$affiliation_info) {
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve affiliation info");
+		return;
+	}
+	
+	my ($global_affiliation_id) = grep { $affiliation_info->{$_}{name} =~ /^global$/i } (keys %$affiliation_info);
+	if (!defined($global_affiliation_id)) {
+		print "ERROR: unable to determine global affiliation ID:\n" . format_data($affiliation_info) . "\n";
+		return;
+	}
+	
+	# Get the product key information from the database
+	my $product_key_info = $self->get_product_key_info();
+	if (!defined($product_key_info)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve product key information from the database");
+		return;
+	}
+	
+	my @product_names = keys %{$product_key_info->{$global_affiliation_id}};
+	
+	if (!grep(/Windows XP/, @product_names)) {
+		push @messages, "A Windows XP product key is not configured for the Global affiliation. Captured Windows XP images using Sysprep may fail to load if the product key is not configured.";
+	}
+	if (!grep(/Server 2003/, @product_names)) {
+		push @messages, "A Windows Server 2003 product key is not configured for the Global affiliation. Captured Windows Server 2003 images using Sysprep may fail to load if the product key is not configured.";
+	}
+	
+	for my $message (@messages) {
+		chomp $message;
+		setup_print_wrap("*** $message ***\n\n");
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 setup_product_keys
+
+ Parameters  : none
+ Returns     : nothing
+ Description : Used to list, set, and delete product keys from the winProductKey
+               table in the database when vcld is run in setup mode.
+
+=cut
+
+sub setup_product_keys {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get a hash containing all of the information from the affiliation table
+	my $affiliation_info = get_affiliation_info();
+	if (!$affiliation_info) {
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve affiliation info");
+		return;
+	}
+	
+	my @product_names = (
+		'Windows XP',
+		'Windows Server 2003',
+		'Windows Vista Business',
+		'Windows Vista Business N',
+		'Windows Vista Enterprise',
+		'Windows Vista Enterprise N',
+		'Windows Server 2008 Datacenter',
+		'Windows Server 2008 Datacenter without Hyper-V',
+		'Windows Server 2008 for Itanium-Based Systems',
+		'Windows Server 2008 Enterprise',
+		'Windows Server 2008 Enterprise without Hyper-V',
+		'Windows Server 2008 Standard',
+		'Windows Server 2008 Standard without Hyper-V',
+		'Windows Web Server 2008',
+		'Windows Server 2008 HPC',
+		'Windows 7 Professional',
+		'Windows 7 Professional N',
+		'Windows 7 Professional E',
+		'Windows 7 Enterprise',
+		'Windows 7 Enterprise N',
+		'Windows 7 Enterprise E',
+		'Windows Server 2008 R2 Web',
+		'Windows Server 2008 R2 HPC edition',
+		'Windows Server 2008 R2 Standard',
+		'Windows Server 2008 R2 Enterprise',
+		'Windows Server 2008 R2 Datacenter',
+		'Windows Server 2008 R2 for Itanium-based Systems',
+		'Other',
+	);
+	
+	my @operation_choices = (
+		'List Product Keys',
+		'Add Product Key',
+		'Delete Product Key',
+	);
+	
+	my @setup_path = @{$ENV{setup_path}};
+	OPERATION: while (1) {
+		@{$ENV{setup_path}} = @setup_path;
+		
+		print '-' x 76 . "\n";
+		
+		print "Choose an operation:\n";
+		my $operation_choice_index = setup_get_array_choice(@operation_choices);
+		last if (!defined($operation_choice_index));
+		my $operation_name = $operation_choices[$operation_choice_index];
+		print "\n";
+		
+		push @{$ENV{setup_path}}, $operation_name;
+		
+		if ($operation_name =~ /list/i) {
+			$self->setup_display_product_key_info();
+			print "\n";
+		}
+		
+		elsif ($operation_name =~ /add/i) {
+			print "Choose an affiliation:\n";
+			my $affiliation_id = setup_get_hash_choice($affiliation_info, 'name');
+			next if (!defined($affiliation_id));
+			my $affiliation_name = $affiliation_info->{$affiliation_id}{name};
+			print "Selected affiliation: $affiliation_name\n\n";
+			
+			$self->setup_display_product_key_info($affiliation_id);
+			print "\n";
+			
+			print "Choose a Windows product:\n";
+			my $product_choice_index = setup_get_array_choice(@product_names);
+			next OPERATION if (!defined($product_choice_index));
+			
+			my $product_name = $product_names[$product_choice_index];
+			if ($product_name eq 'Other') {
+				$product_name = setup_get_input_string("Enter a product name");
+				next OPERATION if (!defined($product_name));
+			}
+			print "Windows product: $product_name\n\n";
+			
+			my $product_key;
+			while (!$product_key) {
+				$product_key = setup_get_input_string("Enter the product key xxxxx-xxxxx-xxxxx-xxxxx-xxxxx");
+				next OPERATION if (!defined($product_key));
+				if ($product_key !~ /(\w{5}-?){5}/) {
+					print "Product key is not in the correct format: $product_key\n";
+					$product_key = 0;
+				}
+			}
+			$product_key = uc($product_key);
+			print "\n";
+			
+			# Attempt to set the product key in the database
+			if ($self->set_product_key($affiliation_id, $product_name, $product_key)) {
+				print "Product key has been saved to the database:\nAffiliation: $affiliation_name\nProduct name: $product_name\nProduct key: $product_key\n";
+			}
+			else {
+				print "ERROR: failed to save product key to the database:\nAffiliation: $affiliation_name\nProduct name: $product_name\nProduct key: $product_key\n";
+			}
+		}
+		
+		elsif ($operation_name =~ /delete/i) {
+			# Get the product key information from the database
+			my $product_key_info = $self->get_product_key_info();
+			if (!defined($product_key_info)) {
+				notify($ERRORS{'WARNING'}, 0, "failed to retrieve product key information from the database");
+				return;
+			}
+			
+			my %product_keys;
+			for my $affiliation_id (keys %$product_key_info) {
+				my $affiliation_name = $affiliation_info->{$affiliation_id}{name};
+				
+				for my $product_name (keys %{$product_key_info->{$affiliation_id}}) {
+					my $product_key = $product_key_info->{$affiliation_id}{$product_name};
+					
+					my $product_key_choice_name = "$affiliation_name: '$product_name' ($product_key)";
+					
+					$product_keys{$product_key_choice_name}{affiliation_id} = $affiliation_id;
+					$product_keys{$product_key_choice_name}{product_name} = $product_name;
+					$product_keys{$product_key_choice_name}{product_key} = $product_key;
+				}
+			}
+			
+			# Choose an affiliation with populated product keys
+			print "Choose a product key to delete:\n";
+			my $product_key_choice_name = setup_get_hash_choice(\%product_keys);
+			next if (!defined($product_key_choice_name));
+			print "\n";
+			
+			my $affiliation_id = $product_keys{$product_key_choice_name}{affiliation_id};
+			my $affiliation_name = $affiliation_info->{$affiliation_id}{name};
+			my $product_name = $product_keys{$product_key_choice_name}{product_name};
+			my $product_key = $product_keys{$product_key_choice_name}{product_key};
+			
+			# Attempt to delete the product key from the database
+			if ($self->delete_product_key($affiliation_id, $product_name, $product_key)) {
+				print "Product key for has been deleted from the database:\nAffiliation: $affiliation_name\nProduct name: $product_name\nProduct key: $product_key\n";
+			}
+			else {
+				print "ERROR: failed to delete product key from the database:\nAffiliation: $affiliation_name\nProduct name: $product_name\nProduct key: $product_key\n";
+			}
+		}
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 setup_display_product_key_info
+
+ Parameters  : $affiliation_id (optional)
+ Returns     :
+ Description : Displays the product keys configured in the winProductKey table
+               in the database. If an affiliation ID argument is specified, only
+               the information for that affiliation is displayed.
+
+=cut
+
+sub setup_display_product_key_info {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get a hash containing all of the information from the affiliation table
+	my $affiliation_info = get_affiliation_info();
+	if (!$affiliation_info) {
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve affiliation info");
+		return;
+	}
+	
+	# Get the affiliation ID argument if it was specified
+	my $affiliation_id_argument = shift;
+	if ($affiliation_id_argument && !defined($affiliation_info->{$affiliation_id_argument})) {
+		notify($ERRORS{'WARNING'}, 0, "affiliation does not exist for affiliation ID argument: $affiliation_id_argument");
+		return;
+	}
+	
+	# Get the product key information from the database
+	my $product_key_info = $self->get_product_key_info();
+	if (!defined($product_key_info)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve product key information from the database");
+		return;
+	}
+	
+	# Print the title
+	if ($affiliation_id_argument) {
+		my $affiliation_name = $affiliation_info->{$affiliation_id_argument}{name};
+		print "Product key configuration for $affiliation_name ($affiliation_id_argument):\n";
+	}
+	else {
+		print "Product key configuration for all affiliations:\n";
+	}
+	
+	
+	my $product_key_info_string;
+	for my $affiliation_id (sort { $a <=> $b } keys %$product_key_info) {
+		
+		if (defined($affiliation_id_argument) && $affiliation_id ne $affiliation_id_argument) {
+			next;
+		}
+		
+		my $affiliation_name = $affiliation_info->{$affiliation_id}{name};
+		
+		$product_key_info_string .= "$affiliation_name ($affiliation_id):\n";
+		for my $product_name (keys %{$product_key_info->{$affiliation_id}}) {
+			my $product_key = $product_key_info->{$affiliation_id}{$product_name};
+			$product_key_info_string .= "   $product_name: $product_key\n";
+		}
+	}
+	
+	$product_key_info_string = "<not configured>\n" if !$product_key_info_string;
+	print "$product_key_info_string";
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 setup_kms_servers
+
+ Parameters  : none
+ Returns     : nothing
+ Description : Configures KMS servers in the winKMS table in the database when
+               vcld is run in setup mode.
+
+=cut
+
+sub setup_kms_servers {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get a hash containing all of the information from the affiliation table
+	my $affiliation_info = get_affiliation_info();
+	if (!$affiliation_info) {
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve affiliation info");
+		return;
+	}
+	
+	my @operation_choices = (
+		'List KMS Servers',
+		'Add KMS Server',
+		'Delete KMS Server',
+	);
+	
+	my @setup_path = @{$ENV{setup_path}};
+	OPERATION: while (1) {
+		@{$ENV{setup_path}} = @setup_path;
+		print '-' x 76 . "\n";
+		
+		print "Choose an operation:\n";
+		my $operation_choice_index = setup_get_array_choice(@operation_choices);
+		last if (!defined($operation_choice_index));
+		my $operation_name = $operation_choices[$operation_choice_index];
+		print "\n";
+		
+		push @{$ENV{setup_path}}, $operation_name;
+		
+		if ($operation_name =~ /list/i) {
+			$self->setup_display_kms_server_info();
+			print "\n";
+		}
+		
+		elsif ($operation_name =~ /add/i) {
+			print "Choose an affiliation:\n";
+			my $affiliation_id = setup_get_hash_choice($affiliation_info, 'name');
+			next if (!defined($affiliation_id));
+			my $affiliation_name = $affiliation_info->{$affiliation_id}{name};
+			print "Selected affiliation: $affiliation_name\n\n";
+			
+			$self->setup_display_kms_server_info($affiliation_id);
+			print "\n";
+			
+			my $address;
+			while (!$address) {
+				$address = setup_get_input_string("Enter the KMS server host name or address");
+				next OPERATION if (!defined($address));
+				if (!is_valid_dns_host_name($address) && !is_valid_ip_address($address)) {
+					print "Address is not a valid DNS host name or IP address: $address\n";
+					$address = '';
+				}
+			}
+			print "\n";
+			
+			my $port;
+			while (!$port) {
+				$port = setup_get_input_string("Enter the KMS server port", 1688);
+				next OPERATION if (!defined($port));
+				if ($port !~ /^\d+$/) {
+					print "Port must be an integer: $port\n";
+					$port = '';
+				}
+			}
+			
+			print "\n";
+			
+			# Attempt to set the KMS server in the database
+			if ($self->set_kms_server($affiliation_id, $address, $port)) {
+				print "KMS server added to the database:\nAffiliation: $affiliation_name\nAddress: $address\nPort: $port\n";
+			}
+			else {
+				print "ERROR: failed to save product key to the database:\nAffiliation: $affiliation_name\nAddress: $address\nPort: $port\n";
+			}
+		}
+		
+		elsif ($operation_name =~ /delete/i) {
+			# Get the KMS server information from the database
+			my $kms_server_info = $self->get_kms_server_info();
+			if (!defined($kms_server_info)) {
+				notify($ERRORS{'WARNING'}, 0, "failed to retrieve KMS server information from the database");
+				return;
+			}
+			
+			my %kms_servers;
+			for my $affiliation_id (keys %$kms_server_info) {
+				my $affiliation_name = $affiliation_info->{$affiliation_id}{name};
+				
+				for my $address (keys %{$kms_server_info->{$affiliation_id}}) {
+					my $port = $kms_server_info->{$affiliation_id}{$address};
+					
+					my $kms_server_choice_name = "$affiliation_name: $address:$port";
+					
+					$kms_servers{$kms_server_choice_name}{affiliation_id} = $affiliation_id;
+					$kms_servers{$kms_server_choice_name}{address} = $address;
+					$kms_servers{$kms_server_choice_name}{port} = $port;
+				}
+			}
+			
+			# Choose an affiliation populated with a KMS server
+			print "Choose a KMS server to delete:\n";
+			my $kms_server_choice_name = setup_get_hash_choice(\%kms_servers);
+			next if (!defined($kms_server_choice_name));
+			print "\n";
+			
+			my $affiliation_id = $kms_servers{$kms_server_choice_name}{affiliation_id};
+			my $affiliation_name = $affiliation_info->{$affiliation_id}{name};
+			my $address = $kms_servers{$kms_server_choice_name}{address};
+			my $port = $kms_servers{$kms_server_choice_name}{port};
+			
+			## Attempt to delete the product key from the database
+			if ($self->delete_kms_server($affiliation_id, $address)) {
+				print "KMS server has been deleted from the database:\nAffiliation: $affiliation_name\nAddress: $address\nPort: $port\n";
+			}
+			else {
+				print "ERROR: failed to delete product key from the database:\nAffiliation: $affiliation_name\nAddress: $address\nPort: $port\n";
+			}
+		}
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 setup_display_kms_server_info
+
+ Parameters  : $affiliation_id (optional)
+ Returns     :
+ Description : Displays the KMS server configuration stored in the winKMS table
+               in the database to STDOUT.
+
+=cut
+
+sub setup_display_kms_server_info {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get a hash containing all of the information from the affiliation table
+	my $affiliation_info = get_affiliation_info();
+	if (!$affiliation_info) {
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve affiliation info");
+		return;
+	}
+	
+	# Get the affiliation ID argument if it was specified
+	my $affiliation_id_argument = shift;
+	if ($affiliation_id_argument && !defined($affiliation_info->{$affiliation_id_argument})) {
+		notify($ERRORS{'WARNING'}, 0, "affiliation does not exist for affiliation ID argument: $affiliation_id_argument");
+		return;
+	}
+	
+	# Get the KMS server information from the database
+	my $kms_server_info = $self->get_kms_server_info();
+	if (!defined($kms_server_info)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve KMS server information from the database");
+		return;
+	}
+	
+	# Print the title
+	if ($affiliation_id_argument) {
+		my $affiliation_name = $affiliation_info->{$affiliation_id_argument}{name};
+		print "KMS server configuration for $affiliation_name ($affiliation_id_argument):\n";
+	}
+	else {
+		print "KMS server configuration for all affiliations:\n";
+	}
+	
+	# Print the KMS serer information
+	my $kms_server_info_string;
+	for my $affiliation_id (sort { $a <=> $b } keys %$kms_server_info) {
+		# Ignore non-matching affiliations if the affiliation ID argument was specified
+		if (defined($affiliation_id_argument) && $affiliation_id ne $affiliation_id_argument) {
+			next;
+		}
+		
+		my $affiliation_name = $affiliation_info->{$affiliation_id}{name};
+		
+		$kms_server_info_string .= "$affiliation_name ($affiliation_id):\n";
+		for my $address (keys %{$kms_server_info->{$affiliation_id}}) {
+			my $port = $kms_server_info->{$affiliation_id}{$address};
+			$kms_server_info_string .= "   $address:$port\n";
+		}
+	}
+	
+	$kms_server_info_string = "<not configured>\n" if !$kms_server_info_string;
+	print "$kms_server_info_string";
 }
 
 #/////////////////////////////////////////////////////////////////////////////
