@@ -263,10 +263,6 @@ EOF
 	
 		sleep 10;
 
-		if (update_blockrequest_processing($blockrequest_id, 0)) {
-			notify($ERRORS{'OK'}, 0, "Removed processing flag on blockrequest_id $blockrequest_id");
-		}
-		
 
 	} ## end if ($blockrequest_mode eq "start")
 	elsif ($blockrequest_mode eq "end") {
@@ -286,26 +282,26 @@ EOF
 			if(udpate_block_request_status($blockrequest_id,"completed")){
 				notify($ERRORS{'OK'}, 0, "Updated status of blockRequest id $blockrequest_id to completed");
 			}
-			return 1;
 		}
 
-		##remove processing flag
-		if (update_blockrequest_processing($blockrequest_id, 0)) {
-			notify($ERRORS{'OK'}, 0, "Removed processing flag on blockrequest_id $blockrequest_id");
-		}
 
 	} ## end elsif ($blockrequest_mode eq "end")  [ if ($blockrequest_mode eq "start")
 	elsif ($blockrequest_mode eq "expire") {
 		notify($ERRORS{'OK'}, 0, "Block Request $blockrequest_id has expired");
-		if (delete_block_request($blockrequest_id)) {
-			notify($ERRORS{'OK'}, 0, "Removed blockRequest id $blockrequest_id");
+		if(udpate_block_request_status($blockrequest_id,"completed")){
+			notify($ERRORS{'OK'}, 0, "Updated status of blockRequest id $blockrequest_id to completed");
 		}
-		return 1;
 	}
 	else {
 		#should not of hit this
 		notify($ERRORS{'CRITICAL'}, 0, "mode not determined mode= $blockrequest_mode");
 	}
+
+	##remove processing flag
+	if (update_blockrequest_processing($blockrequest_id, 0)) {
+		notify($ERRORS{'OK'}, 0, "Removed processing flag on blockrequest_id $blockrequest_id");
+	}
+
 	return 1;
 
 } ## end sub process
@@ -470,7 +466,7 @@ sub udpate_block_request_status {
         my $update_statement = "
       UPDATE
       blockRequest
-      SET blockRequest.status = $status
+      SET blockRequest.status = '$status'
       WHERE
       blockRequest.id = $blockrequest_id
    ";
