@@ -7602,7 +7602,46 @@ sub get_management_node_blockrequests {
 
 	# Check to make sure 1 or more rows were returned
 	if (scalar @selected_rows == 0) {
-		return 0;
+		#Lets check to see if we have blockRequests that have expired and don't have any time ids
+		$select_statement = "
+   		SELECT
+        	blockRequest.id AS blockRequest_id,
+        	blockRequest.name AS blockRequest_name,
+        	blockRequest.imageid AS blockRequest_imageid,
+        	blockRequest.numMachines AS blockRequest_numMachines,
+        	blockRequest.groupid AS blockRequest_groupid,
+        	blockRequest.repeating AS blockRequest_repeating,
+        	blockRequest.ownerid AS blockRequest_ownerid,
+        	blockRequest.admingroupid AS blockRequest_admingroupid,
+        	blockRequest.managementnodeid AS blockRequest_managementnodeid,
+        	blockRequest.expireTime AS blockRequest_expireTime,
+        	blockRequest.processing AS blockRequest_processing,
+        	blockRequest.status AS blockRequest_status,
+	
+		blockTimes.id AS blockTimes_id,
+        	blockTimes.blockRequestid AS blockTimes_blockRequestid,
+        	blockTimes.start AS blockTimes_start,
+        	blockTimes.end AS blockTimes_end,
+        	blockTimes.processed AS blockTimes_processed
+		
+		FROM
+		blockRequest
+		LEFT JOIN
+        	blockTimes ON (
+                blockRequest.id = blockTimes.blockRequestid
+        	)
+
+		WHERE
+		blockRequest.managementnodeid = $managementnode_id AND
+        	blockRequest.status = 'accepted' AND
+		blockRequest.expireTime < NOW()
+		";
+		
+		@selected_rows = database_select($select_statement);
+		
+		if (scalar @selected_rows == 0) {
+			return 0;
+		}
 	}
 
 	# Build the hash
