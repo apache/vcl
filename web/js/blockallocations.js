@@ -198,13 +198,23 @@ function blockFormAddWeeklyTime() {
 	            end.getHours(),
 	            end.getMinutes());
 
-	var startts = s.getTime();
-	var endts = end.getTime();
+	var tmp = s;
+	tmp.setFullYear(2000, 0, 1);
+	var startts = tmp.getTime();
+	tmp = end;
+	tmp.setFullYear(2000, 0, 1);
+	var endts = tmp.getTime();
 	var items = requestBlockAddWeeklyStore._getItemsArray();
 	var len = items.length;
 	for(var i = 0; i < len; i++) {
-		if(startts < items[i].end[0].getTime() &&
-		   endts > items[i].start2[0].getTime()) {
+		var testend = items[i].end[0];
+		testend.setFullYear(2000, 0, 1);
+		testend = testend.getTime();
+		var teststart = items[i].start2[0];
+		teststart.setFullYear(2000, 0, 1);
+		teststart = teststart.getTime();
+		if(startts < testend &&
+		   endts > teststart) {
 			alert('These times overlap with an existing time slot');
 			return;
 		}
@@ -282,13 +292,8 @@ function blockFormAddListSlot() {
 	var start = startobj.value;
 	var end = endobj.value;
 
-	var year = d.getYear();
-	if(year < 100)
-		year = "20" + year;
-	else
-		year = 1900 + year;
 	var date1 = dojox.string.sprintf('%d%02d%02d%02d%02d%02d%02d',
-	            year,
+	            d.getFullYear(),
 	            (d.getMonth() + 1),
 	            d.getDate(),
 	            start.getHours(),
@@ -352,8 +357,8 @@ function blockFormRemoveListSlot(id) {
 
 function blockFormConfirm(mode) {
 	if(! dijit.byId('machinecnt').isValid() ||
-	   ! dijit.byId('imagesel').isValid() ||
-	   ! dijit.byId('groupsel').isValid() ||
+	   (dijit.byId('imagesel') && ! dijit.byId('imagesel').isValid()) ||
+	   (dijit.byId('groupsel') && ! dijit.byId('groupsel').isValid()) ||
 		(dijit.byId('brname') && ! dijit.byId('brname').isValid())) {
 		alert('Please fix invalid values before submitting.');
 		return;
@@ -431,7 +436,11 @@ function blockFormVerifyWeekly(mode) {
 		alert('At least one start/end combination must be entered when using "Repeating Weekly"');
 		return;
 	}
-	if(mode == 'request' && dijit.byId('groupsel').value == 0 &&
+	if(dijit.byId('groupsel'))
+		var groupselobj = dijit.byId('groupsel');
+	else
+		var groupselobj = dojo.byId('groupsel');
+	if(mode == 'request' && groupselobj.value == 0 &&
 	   dijit.byId('comments').value.length == 0) {
 		alert('When submitting "(group not listed)" as the user group, information must be included in the comments about what group needs to be created.');
 		return;
@@ -440,15 +449,15 @@ function blockFormVerifyWeekly(mode) {
 		dojo.byId('confnametitle').innerHTML = 'Name:';
 		dojo.byId('confname').innerHTML = dijit.byId('brname').textbox.value;
 	}
-	dojo.byId('confimage').innerHTML = dijit.byId('imagesel').textbox.value;
+	dojo.byId('confimage').innerHTML = getSelectText('imagesel');
 	dojo.byId('confseats').innerHTML = dijit.byId('machinecnt').value;
-	if(dijit.byId('groupsel').value == 0)
+	if(groupselobj.value == 0)
 		dojo.byId('confgroup').innerHTML = 'specified in comments';
 	else
-		dojo.byId('confgroup').innerHTML = dijit.byId('groupsel').textbox.value;
+		dojo.byId('confgroup').innerHTML = getSelectText('groupsel');
 	if(mode != 'request') {
 		dojo.byId('confadmintitle').innerHTML = 'Managing User Group:';
-		dojo.byId('confadmingroup').innerHTML = dijit.byId('admingroupsel').textbox.value;
+		dojo.byId('confadmingroup').innerHTML = getSelectText('admingroupsel');
 	}
 	dojo.byId('confrepeat').innerHTML = 'Weekly';
 	dojo.byId('conftitle1').innerHTML = 'First Date:';
@@ -505,27 +514,17 @@ function blockFormSubmitWeekly(mode) {
 		times.push(a);
 	}
 	var alltimes = times.join(',');
-	var imageid = dijit.byId('imagesel').value;
+	var imageid = getSelectValue('imagesel');
 	var seats = dijit.byId('machinecnt').value;
-	var groupid = dijit.byId('groupsel').value;
+	var groupid = getSelectValue('groupsel');
 	var obj = dijit.byId('wkfirstdate').value;
-	var year = obj.getYear();
-	if(year < 100)
-		year = "20" + year;
-	else
-		year = 1900 + year;
 	var startdate = dojox.string.sprintf('%d%02d%02d',
-	                year,
+	                obj.getFullYear(),
 	                (obj.getMonth() + 1),
 	                obj.getDate());
 	obj = dijit.byId('wklastdate').value;
-	year = obj.getYear();
-	if(year < 100)
-		year = "20" + year;
-	else
-		year = 1900 + year;
 	var enddate = dojox.string.sprintf('%d%02d%02d',
-	              year,
+	              obj.getFullYear(),
 	              (obj.getMonth() + 1),
 	              obj.getDate());
 	var days2 = days.join(',');
@@ -540,7 +539,7 @@ function blockFormSubmitWeekly(mode) {
 	            days: days2};
 	if(mode != 'request') {
 		data.name = dijit.byId('brname').value;
-		data.admingroupid = dijit.byId('admingroupsel').value;
+		data.admingroupid = getSelectValue('admingroupsel');
 	}
 	else
 		data.comments = dijit.byId('comments').value;
@@ -579,7 +578,11 @@ function blockFormVerifyMonthly(mode) {
 		alert('At least one start/end combination must be entered when using "Repeating Monthly"');
 		return;
 	}
-	if(mode == 'request' && dijit.byId('groupsel').value == 0 &&
+	if(dijit.byId('groupsel'))
+		var groupselobj = dijit.byId('groupsel');
+	else
+		var groupselobj = dojo.byId('groupsel');
+	if(mode == 'request' && groupselobj.value == 0 &&
 	   dijit.byId('comments').value.length == 0) {
 		alert('When submitting "(group not listed)" as the user group, information must be included in the comments about what group needs to be created.');
 		return;
@@ -588,15 +591,15 @@ function blockFormVerifyMonthly(mode) {
 		dojo.byId('confnametitle').innerHTML = 'Name:';
 		dojo.byId('confname').innerHTML = dijit.byId('brname').textbox.value;
 	}
-	dojo.byId('confimage').innerHTML = dijit.byId('imagesel').textbox.value;
+	dojo.byId('confimage').innerHTML = getSelectText('imagesel');
 	dojo.byId('confseats').innerHTML = dijit.byId('machinecnt').value;
-	if(dijit.byId('groupsel').value == 0)
+	if(groupselobj.value == 0)
 		dojo.byId('confgroup').innerHTML = 'specified in comments';
 	else
-		dojo.byId('confgroup').innerHTML = dijit.byId('groupsel').textbox.value;
+		dojo.byId('confgroup').innerHTML = getSelectText('groupsel');
 	if(mode != 'request') {
 		dojo.byId('confadmintitle').innerHTML = 'Managing User Group:';
-		dojo.byId('confadmingroup').innerHTML = dijit.byId('admingroupsel').textbox.value;
+		dojo.byId('confadmingroup').innerHTML = getSelectText('admingroupsel');
 	}
 	dojo.byId('confrepeat').innerHTML = 'Monthly';
 	dojo.byId('conftitle1').innerHTML = 'First Date:';
@@ -644,27 +647,17 @@ function blockFormSubmitMonthly(mode) {
 		times.push(a + '|' + b);
 	}
 	var alltimes = times.join(',');
-	var imageid = dijit.byId('imagesel').value;
+	var imageid = getSelectValue('imagesel');
 	var seats = dijit.byId('machinecnt').value;
-	var groupid = dijit.byId('groupsel').value;
+	var groupid = getSelectValue('groupsel');
 	var obj = dijit.byId('mnfirstdate').value;
-	var year = obj.getYear();
-	if(year < 100)
-		year = "20" + year;
-	else
-		year = 1900 + year;
 	var startdate = dojox.string.sprintf('%d%02d%02d',
-	                year,
+	                obj.getFullYear(),
 	                (obj.getMonth() + 1),
 	                obj.getDate());
 	obj = dijit.byId('mnlastdate').value;
-	year = obj.getYear();
-	if(year < 100)
-		year = "20" + year;
-	else
-		year = 1900 + year;
 	var enddate = dojox.string.sprintf('%d%02d%02d',
-	              year,
+	              obj.getFullYear(),
 	              (obj.getMonth() + 1),
 	              obj.getDate());
 	var data = {continuation: dojo.byId('submitcont').value,
@@ -679,7 +672,7 @@ function blockFormSubmitMonthly(mode) {
 	            times: alltimes};
 	if(mode != 'request') {
 		data.name = dijit.byId('brname').value;
-		data.admingroupid = dijit.byId('admingroupsel').value;
+		data.admingroupid = getSelectValue('admingroupsel');
 	}
 	else
 		data.comments = dijit.byId('comments').value;
@@ -693,7 +686,11 @@ function blockFormVerifyList(mode) {
 		alert('At least one date/start/end combination must be entered when using "List of Dates/Times"');
 		return;
 	}
-	if(dijit.byId('groupsel').value == 0 && dijit.byId('comments').value.length == 0) {
+	if(dijit.byId('groupsel'))
+		var groupselobj = dijit.byId('groupsel');
+	else
+		var groupselobj = dojo.byId('groupsel');
+	if(groupselobj.value == 0 && dijit.byId('comments').value.length == 0) {
 		alert('When submitting "(group not listed)" as the user group, information must be included in the comments about what group needs to be created.');
 		return;
 	}
@@ -701,15 +698,15 @@ function blockFormVerifyList(mode) {
 		dojo.byId('confnametitle').innerHTML = 'Name:';
 		dojo.byId('confname').innerHTML = dijit.byId('brname').textbox.value;
 	}
-	dojo.byId('confimage').innerHTML = dijit.byId('imagesel').textbox.value;
+	dojo.byId('confimage').innerHTML = getSelectText('imagesel');
 	dojo.byId('confseats').innerHTML = dijit.byId('machinecnt').value;
-	if(dijit.byId('groupsel').value == 0)
+	if(groupselobj.value == 0)
 		dojo.byId('confgroup').innerHTML = 'specified in comments';
 	else
-		dojo.byId('confgroup').innerHTML = dijit.byId('groupsel').textbox.value;
+		dojo.byId('confgroup').innerHTML = getSelectText('groupsel');
 	if(mode != 'request') {
 		dojo.byId('confadmintitle').innerHTML = 'Managing User Group:';
-		dojo.byId('confadmingroup').innerHTML = dijit.byId('admingroupsel').textbox.value;
+		dojo.byId('confadmingroup').innerHTML = getSelectText('admingroupsel');
 	}
 	dojo.byId('confrepeat').innerHTML = 'List of Dates/Times';
 	dojo.byId('conftitle1').innerHTML = 'Repeat on:';
@@ -751,9 +748,9 @@ function blockFormSubmitList(mode) {
 		slots.push(date1 + '|' + start + '|' + end);
 	}
 	var allslots = slots.join(',');
-	var imageid = dijit.byId('imagesel').value;
+	var imageid = getSelectValue('imagesel');
 	var seats = dijit.byId('machinecnt').value;
-	var groupid = dijit.byId('groupsel').value;
+	var groupid = getSelectValue('groupsel');
 	var data = {continuation: dojo.byId('submitcont').value,
 	            imageid: imageid,
 	            seats: seats,
@@ -762,7 +759,7 @@ function blockFormSubmitList(mode) {
 	            slots: allslots};
 	if(mode != 'request') {
 		data.name = dijit.byId('brname').value;
-		data.admingroupid = dijit.byId('admingroupsel').value;
+		data.admingroupid = getSelectValue('admingroupsel');
 	}
 	else
 		data.comments = dijit.byId('comments').value;
@@ -809,6 +806,23 @@ function clearHideConfirmDelete() {
 	dojo.byId('confvalue4').innerHTML = '';
 }
 
+function clearHideView() {
+	dijit.byId('viewDialog').hide();
+	dojo.byId('confname').innerHTML = '';
+	dojo.byId('confimage').innerHTML = '';
+	dojo.byId('confseats').innerHTML = '';
+	dojo.byId('confgroup').innerHTML = '';
+	dojo.byId('confrepeat').innerHTML = '';
+	dojo.byId('conftitle1').innerHTML = '';
+	dojo.byId('confvalue1').innerHTML = '';
+	dojo.byId('conftitle2').innerHTML = '';
+	dojo.byId('confvalue2').innerHTML = '';
+	dojo.byId('conftitle3').innerHTML = '';
+	dojo.byId('confvalue3').innerHTML = '';
+	dojo.byId('conftitle4').innerHTML = '';
+	dojo.byId('confvalue4').innerHTML = '';
+}
+
 function clearHideConfirmAccept() {
 	dijit.byId('acceptDialog').hide();
 	dojo.byId('acceptimage').innerHTML = '';
@@ -825,9 +839,15 @@ function clearHideConfirmAccept() {
 	dojo.byId('acceptvalue4').innerHTML = '';
 	dojo.byId('accepttitle5').innerHTML = '';
 	dojo.byId('acceptvalue5').innerHTML = '';
-	dijit.byId('groupsel').attr('displayedValue', dijit.byId('groupsel').focusNode.defaultValue);
+	if(dijit.byId('groupsel'))
+		dijit.byId('groupsel').attr('displayedValue', dijit.byId('groupsel').focusNode.defaultValue);
+	else
+		dojo.byId('groupsel').value = 0;
 	dojo.byId('brname').value = '';
-	dijit.byId('admingroupsel').attr('displayedValue', 'None (owner only)');
+	if(dijit.byId('admingroupsel'))
+		dijit.byId('admingroupsel').attr('displayedValue', 'None (owner only)');
+	else
+		dojo.byId('admingroupsel').value = 0;
 	dojo.byId('acceptemailuser').innerHTML = '';
 	dijit.byId('acceptemailtext').attr('value', '');
 }
@@ -913,6 +933,56 @@ function deleteBlockSubmit() {
 	RPCwrapper(data, generalReqCB);
 }
 
+function viewBlockAllocation(cont) {
+	var data = {continuation: cont};
+   document.body.style.cursor = 'wait';
+	RPCwrapper(data, viewBlockAllocationCB, 1);
+}
+
+function viewBlockAllocationCB(data, ioArgs) {
+	if(data.items.repeating == 'weekly') {
+		dojo.byId('confname').innerHTML = data.items.name;
+		dojo.byId('confimage').innerHTML = data.items.image;
+		dojo.byId('confseats').innerHTML = data.items.seats;
+		dojo.byId('confgroup').innerHTML = data.items.usergroup;
+		dojo.byId('confrepeat').innerHTML = 'Weekly';
+		dojo.byId('conftitle1').innerHTML = 'First Date:';
+		dojo.byId('confvalue1').innerHTML = data.items.startdate;
+		dojo.byId('conftitle2').innerHTML = 'Last Date:';
+		dojo.byId('confvalue2').innerHTML = data.items.lastdate;
+		dojo.byId('conftitle3').innerHTML = 'Repeating on these days:';
+		dojo.byId('confvalue3').innerHTML = data.items.days.join('<br>');
+		dojo.byId('conftitle4').innerHTML = 'During these times:';
+		dojo.byId('confvalue4').innerHTML = data.items.times.join('<br>');
+	}
+	else if(data.items.repeating == 'monthly') {
+		dojo.byId('confname').innerHTML = data.items.name;
+		dojo.byId('confimage').innerHTML = data.items.image;
+		dojo.byId('confseats').innerHTML = data.items.seats;
+		dojo.byId('confgroup').innerHTML = data.items.usergroup;
+		dojo.byId('confrepeat').innerHTML = 'Monthly';
+		dojo.byId('conftitle1').innerHTML = 'First Date:';
+		dojo.byId('confvalue1').innerHTML = data.items.startdate;
+		dojo.byId('conftitle2').innerHTML = 'Last Date:';
+		dojo.byId('confvalue2').innerHTML = data.items.lastdate;
+		dojo.byId('conftitle3').innerHTML = 'Repeat on:';
+		dojo.byId('confvalue3').innerHTML = data.items.date1 + " of each month";
+		dojo.byId('conftitle4').innerHTML = 'During these times:';
+		dojo.byId('confvalue4').innerHTML = data.items.times.join('<br>');
+	}
+	else if(data.items.repeating == 'list') {
+		dojo.byId('confname').innerHTML = data.items.name;
+		dojo.byId('confimage').innerHTML = data.items.image;
+		dojo.byId('confseats').innerHTML = data.items.seats;
+		dojo.byId('confgroup').innerHTML = data.items.usergroup;
+		dojo.byId('confrepeat').innerHTML = 'List of Dates/Times';
+		dojo.byId('conftitle1').innerHTML = 'Repeat on:';
+		dojo.byId('confvalue1').innerHTML = data.items.slots.join('<br>');
+	}
+	document.body.style.cursor = 'default';
+	dijit.byId('viewDialog').show();
+}
+
 function acceptBlockConfirm(cont) {
 	var data = {continuation: cont};
    document.body.style.cursor = 'wait';
@@ -982,9 +1052,9 @@ function acceptBlockConfirmCB(data, ioArgs) {
 function acceptBlockSubmit() {
 	var cont = dojo.byId('submitacceptcont').value;
 	var data = {continuation: cont,
-	            groupid: dijit.byId('groupsel').value,
+	            groupid: getSelectValue('groupsel'),
 	            brname: dijit.byId('brname').value,
-	            admingroupid: dijit.byId('admingroupsel').value,
+	            admingroupid: getSelectValue('admingroupsel'),
 	            emailtext: dijit.byId('acceptemailtext').attr('value')};
    document.body.style.cursor = 'wait';
 	RPCwrapper(data, generalReqCB);
@@ -1056,9 +1126,9 @@ function rejectBlockConfirmCB(data, ioArgs) {
 function rejectBlockSubmit() {
 	var cont = dojo.byId('submitrejectcont').value;
 	var data = {continuation: cont,
-	            groupid: dijit.byId('groupsel').value,
+	            groupid: getSelectValue('groupsel'),
 	            brname: dijit.byId('brname').value,
-	            admingroupid: dijit.byId('admingroupsel').value,
+	            admingroupid: getSelectValue('admingroupsel'),
 	            emailtext: dijit.byId('rejectemailtext').attr('value')};
    document.body.style.cursor = 'wait';
 	RPCwrapper(data, generalReqCB);
@@ -1096,4 +1166,94 @@ function formatHourMin(hour, min) {
 	if(hour == 12)
 		return 12 + ":" + min + " PM";
 	return (hour - 12) + ":" + min + " PM";
+}
+
+function viewBlockTimes(cont) {
+	var data = {continuation: cont};
+	document.body.style.cursor = 'wait';
+	RPCwrapper(data, viewBlockTimesCB, 1);
+}
+
+function viewBlockTimesCB(data, ioArgs) {
+	document.body.style.cursor = 'default';
+	var cont = data.items.cont;
+	dojo.byId('toggletimecont').value = cont;
+	var items = data.items.items;
+	for(var i = 0; i < items.length; i++) {
+		if(items[i].skip == 0)
+			var label = 'Skip';
+		else
+			var label = 'Use';
+		var btn = new dijit.form.Button({
+			label: label,
+			onClick: createRemoveFunc(toggleBlockTime, items[i].id)
+		});
+		var foo = 'bar';
+		items[i].delbtn = btn;
+	}
+	var newdata = new Object;
+	newdata.items = items;
+	var newstore = new dojo.data.ItemFileWriteStore({data: newdata});
+	var oldstore = blockTimesGrid.store;
+	blockTimesGrid.setStore(newstore);
+	if(oldstore)
+		delete oldstore;
+	dijit.byId('viewtimesDialog').show();
+	blockTimesGrid.render();
+}
+
+function toggleBlockTime(id) {
+	var cont = dojo.byId('toggletimecont').value;
+	var data = {blocktimeid: id,
+	            continuation: cont};
+	document.body.style.cursor = 'wait';
+	RPCwrapper(data, toggleBlockTimeCB, 1);
+}
+
+function toggleBlockTimeCB(data, ioArgs) {
+	document.body.style.cursor = 'default';
+	if(data.items.error) {
+		alert(data.items.error);
+		return;
+	}
+	blockTimesGrid.store.fetch({query: {id: data.items.timeid}, onComplete:
+			function(items, request) {
+				items[0].skip[0] = data.items.newval;
+				if(data.items.newval == 1)
+					items[0].delbtn[0].setLabel('Use');
+				else
+					items[0].delbtn[0].setLabel('Skip');
+				blockTimesGrid.update();
+			}
+	});
+}
+
+function blockTimeRowStyle(row) {
+	var item = blockTimesGrid.getItem(row.index);
+	if(item) {
+	  var skip = blockTimesGrid.store.getValue(item, 'skip');
+	  if(skip == 1)
+	    row.customStyles += "background-color: red;";
+	}
+	blockTimesGrid.focus.styleRow(row);
+	blockTimesGrid.edit.styleRow(row);
+}
+
+function blockTimesGridDate(val) {
+	var year = val.substr(0, 4);
+	var month = val.substr(5, 2);
+	var day = val.substr(8, 2);
+	return dojox.string.sprintf('%s/%s/%s', month, day, year);
+}
+
+function blockTimesGridStart(val) {
+	var hour = parseInt(val.substr(11, 2), 10);
+	var min = parseInt(val.substr(14, 2), 10);
+	return formatHourMin(hour, min);
+}
+
+function blockTimesGridEnd(val) {
+	var hour = parseInt(val.substr(11, 2), 10);
+	var min = parseInt(val.substr(14, 2), 10);
+	return formatHourMin(hour, min);
 }

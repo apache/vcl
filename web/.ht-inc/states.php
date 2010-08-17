@@ -130,6 +130,9 @@ $noHTMLwrappers = array('sendRDPfile',
                         'AJacceptBlockAllocationSubmit',
                         'AJrejectBlockAllocationConfirm',
                         'AJrejectBlockAllocationSubmit',
+                        'AJviewBlockAllocation',
+                        'AJviewBlockAllocationTimes',
+                        'AJtoggleBlockTime',
 );
 
 # main
@@ -186,9 +189,12 @@ $actions['mode']['AJacceptBlockAllocationConfirm'] = "AJacceptBlockAllocationCon
 $actions['mode']['AJacceptBlockAllocationSubmit'] = "AJacceptBlockAllocationSubmit";
 $actions['mode']['AJrejectBlockAllocationConfirm'] = "AJrejectBlockAllocationConfirm";
 $actions['mode']['AJrejectBlockAllocationSubmit'] = "AJrejectBlockAllocationSubmit";
+$actions['mode']['AJviewBlockAllocation'] = "AJviewBlockAllocation";
 $actions['mode']['viewBlockStatus'] = "viewBlockStatus";
 $actions['mode']['AJupdateBlockStatus'] = "AJupdateBlockStatus";
 $actions['mode']['AJpopulateBlockStore'] = "AJpopulateBlockStore";
+$actions['mode']['AJviewBlockAllocationTimes'] = "AJviewBlockAllocationTimes";
+$actions['mode']['AJtoggleBlockTime'] = "AJtoggleBlockTime";
 $actions['pages']['blockAllocations'] = "blockAllocations";
 $actions['pages']['newBlockAllocation'] = "blockAllocations";
 $actions['pages']['editBlockAllocation'] = "blockAllocations";
@@ -203,6 +209,9 @@ $actions['pages']['AJrejectBlockAllocationSubmit'] = "blockAllocations";
 $actions['pages']['viewBlockStatus'] = "blockAllocations";
 $actions['pages']['AJupdateBlockStatus'] = "blockAllocations";
 $actions['pages']['AJpopulateBlockStore'] = "blockAllocations";
+$actions['pages']['AJviewBlockAllocationTimes'] = "blockAllocations";
+$actions['pages']['AJtoggleBlockTime'] = "blockAllocations";
+$actions['pages']['AJviewBlockAllocation'] = "blockAllocations";
 
 # user preferences
 $actions['mode']['userpreferences'] = "userpreferences"; # entry

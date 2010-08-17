@@ -40,6 +40,7 @@ function blockAllocations() {
 		print "    location.href = '" . BASEURL . SCRIPT . "?mode=requestBlockAllocation';\n";
 		print "  </script>\n";
 		print "</button>\n";
+		print getUserCurrentBlockHTML();
 	}
 	else {
 		print "<h2>Manage Block Allocations</h2>\n";
@@ -124,7 +125,12 @@ function blockAllocationForm() {
 	print "  <tr>\n";
 	print "    <th align=right>Environment:</th>\n";
 	print "    <td>\n";
-	print "      <select dojoType=\"dijit.form.FilteringSelect\" id=imagesel style=\"width: 300px\">\n";
+	if(USEFILTERINGSELECT && count($resources['image']) < FILTERINGSELECTTHRESHOLD) {
+		print "      <select dojoType=\"dijit.form.FilteringSelect\" id=imagesel style=\"width: 300px\" ";
+		print "queryExpr=\"*\${0}*\" highlightMatch=\"all\" autoComplete=\"false\">\n";
+	}
+	else
+		print "      <select id=imagesel>";
 	foreach($resources['image'] as $id => $name) {
 		if($id == $data['imageid'])
 			print "        <option value=\"$id\" selected>$name</option>\n";
@@ -137,8 +143,13 @@ function blockAllocationForm() {
 	print "  <tr>\n";
 	print "    <th align=right>User group:</th>\n";
 	print "    <td>\n";
-	print "      <select dojoType=\"dijit.form.FilteringSelect\" id=groupsel style=\"width: 300px\">\n";
 	$groups = getUserGroups(0, $user['affiliationid']);
+	if(USEFILTERINGSELECT && count($groups) < FILTERINGSELECTTHRESHOLD) {
+		print "      <select dojoType=\"dijit.form.FilteringSelect\" id=groupsel style=\"width: 300px\" ";
+		print "queryExpr=\"*\${0}*\" highlightMatch=\"all\" autoComplete=\"false\">\n";
+	}
+	else
+		print "      <select id=groupsel>";
 	$extragroups = array();
 	if($mode == 'requestBlockAllocation')
 		print "        <option value=\"0\">(group not listed)</option>\n";
@@ -148,6 +159,8 @@ function blockAllocationForm() {
 		uasort($groups, "sortKeepIndex");
 	}
 	foreach($groups as $id => $group) {
+		if($group['name'] == ' None@')
+			continue;
 		if($id == $data['usergroupid'])
 			print "        <option value=\"$id\" selected>{$group['name']}</option>\n";
 		else
@@ -166,9 +179,16 @@ function blockAllocationForm() {
 		print "  <tr>\n";
 		print "    <th align=right>Managing User Group</th>\n";
 		print "    <td>\n";
-		print "      <select dojoType=\"dijit.form.FilteringSelect\" id=admingroupsel style=\"width: 300px\">\n";
+		if(USEFILTERINGSELECT && count($groups) < FILTERINGSELECTTHRESHOLD) {
+			print "      <select dojoType=\"dijit.form.FilteringSelect\" id=admingroupsel style=\"width: 300px\" ";
+			print "queryExpr=\"*\${0}*\" highlightMatch=\"all\" autoComplete=\"false\">\n";
+		}
+		else
+			print "      <select id=admingroupsel>\n";
 		print "        <option value=\"0\">None (owner only)</option>\n";
 		foreach($groups as $id => $group) {
+			if($group['name'] == ' None@')
+				continue;
 			if($id == $data['admingroupid'])
 				print "        <option value=\"$id\" selected>{$group['name']}</option>\n";
 			else
@@ -237,10 +257,11 @@ function blockAllocationForm() {
 	print "</td>\n";
 	print "<td>\n";
 
-	print "Start:<input type=\"text\" id=\"weeklyaddstart\" dojoType=\"dijit.form.TimeTextBox\" ";
-	print "required=\"true\" onChange=\"blockFormWeeklyAddBtnCheck(1);\" />\n";
-	print "End:<input type=\"text\" id=\"weeklyaddend\" dojoType=\"vcldojo.TimeTextBoxEnd\" ";
-	print "required=\"true\" onChange=\"blockFormWeeklyAddBtnCheck(0);\" startid=\"weeklyaddstart\" />\n";
+	print "Start:<div type=\"text\" id=\"weeklyaddstart\" dojoType=\"dijit.form.TimeTextBox\" ";
+	print "required=\"true\" onChange=\"blockFormWeeklyAddBtnCheck(1);\" style=\"width: 70px\"></div>\n";
+	print "End:<div type=\"text\" id=\"weeklyaddend\" dojoType=\"vcldojo.TimeTextBoxEnd\" ";
+	print "required=\"true\" onChange=\"blockFormWeeklyAddBtnCheck(0);\" startid=\"weeklyaddstart\" ";
+	print "style=\"width: 70px\"></div>\n";
 	print "<button dojoType=\"dijit.form.Button\" type=\"button\" disabled=\"true\" ";
 	print "id=\"requestBlockWeeklyAddBtn\">\n";
 	print "  Add\n";
@@ -251,12 +272,12 @@ function blockAllocationForm() {
 	print "<div dojoType=\"dojo.data.ItemFileWriteStore\" jsId=\"requestBlockAddWeeklyStore\" ";
 	print "data=\"blockFormAddWeeklyData\"></div>\n";
 	print "<table dojoType=\"dojox.grid.DataGrid\" jsId=\"requestBlockAddWeeklyGrid\" sortInfo=1 ";
-	print "store=\"requestBlockAddWeeklyStore\" style=\"width: 330px; height: 130px;\">\n";
+	print "store=\"requestBlockAddWeeklyStore\" style=\"width: 314px; height: 120px;\">\n";
 	print "<thead>\n";
 	print "<tr>\n";
-	print "<th field=\"start\" width=\"115px\" formatter=\"gridTimePrimary\">Start</th>\n";
-	print "<th field=\"end\" width=\"108px\" formatter=\"timeFromTextBox\">End</th>\n";
-	print "<th field=\"remove\" width=\"60px\">Remove</th>\n";
+	print "<th field=\"start\" width=\"94px\" formatter=\"gridTimePrimary\">Start</th>\n";
+	print "<th field=\"end\" width=\"94px\" formatter=\"timeFromTextBox\">End</th>\n";
+	print "<th field=\"remove\" width=\"80px\">Remove</th>\n";
 	print "</tr>\n";
 	print "</thead>\n";
 	print "</table>\n";
@@ -302,10 +323,11 @@ function blockAllocationForm() {
 	printSelectInput('weeknum', $weeknumArr, $data['mnweeknumid'], 0, 0, 'mnweeknum');
 	printSelectInput('day', $dayArr, $data['mndayid'], 0, 0, 'mnday');
 	print " of every month<br><br>\n";
-	print "Start:<input type=\"text\" id=\"monthlyaddstart\" dojoType=\"dijit.form.TimeTextBox\" ";
-	print "required=\"true\" onChange=\"blockFormMonthlyAddBtnCheck(1)\" />\n";
-	print "End:<input type=\"text\" id=\"monthlyaddend\" dojoType=\"vcldojo.TimeTextBoxEnd\" ";
-	print "required=\"true\" onChange=\"blockFormMonthlyAddBtnCheck(0)\" startid=\"monthlyaddstart\" />\n";
+	print "Start:<div type=\"text\" id=\"monthlyaddstart\" dojoType=\"dijit.form.TimeTextBox\" ";
+	print "required=\"true\" onChange=\"blockFormMonthlyAddBtnCheck(1)\" style=\"width: 70px\"></div>\n";
+	print "End:<div type=\"text\" id=\"monthlyaddend\" dojoType=\"vcldojo.TimeTextBoxEnd\" ";
+	print "required=\"true\" onChange=\"blockFormMonthlyAddBtnCheck(0)\" startid=\"monthlyaddstart\" ";
+	print "style=\"width: 70px\"></div>\n";
 	print "<button dojoType=\"dijit.form.Button\" type=\"button\" disabled=\"true\" ";
 	print "id=\"requestBlockMonthlyAddBtn\">\n";
 	print "  Add\n";
@@ -317,12 +339,12 @@ function blockAllocationForm() {
 	print "<div dojoType=\"dojo.data.ItemFileWriteStore\" jsId=\"requestBlockAddMonthlyStore\" ";
 	print "data=\"blockFormAddMonthlyData\"></div>\n";
 	print "<table dojoType=\"dojox.grid.DataGrid\" jsId=\"requestBlockAddMonthlyGrid\" sortInfo=1 ";
-	print "store=\"requestBlockAddMonthlyStore\" style=\"width: 330px; height: 130px;\">\n";
+	print "store=\"requestBlockAddMonthlyStore\" style=\"width: 314px; height: 120px;\">\n";
 	print "<thead>\n";
 	print "<tr>\n";
-	print "<th field=\"start\" width=\"115px\" formatter=\"gridTimePrimary\">Start</th>\n";
-	print "<th field=\"end\" width=\"108px\" formatter=\"timeFromTextBox\">End</th>\n";
-	print "<th field=\"remove\" width=\"60px\">Remove</th>\n";
+	print "<th field=\"start\" width=\"94px\" formatter=\"gridTimePrimary\">Start</th>\n";
+	print "<th field=\"end\" width=\"94px\" formatter=\"timeFromTextBox\">End</th>\n";
+	print "<th field=\"remove\" width=\"80px\">Remove</th>\n";
 	print "</tr>\n";
 	print "</thead>\n";
 	print "</table>\n";
@@ -330,8 +352,8 @@ function blockAllocationForm() {
 
 	# list of times
 	print "<div id=\"listtab\" dojoType=\"dijit.layout.ContentPane\" title=\"List of Times\" {$data['type2']['list']}>\n";
-	print "Date:<input type=\"text\" id=\"listadddate\" dojoType=\"dijit.form.DateTextBox\" ";
-	print "required=\"true\" onChange=\"blockFormListAddBtnCheck\" />\n";
+	print "Date:<div type=\"text\" id=\"listadddate\" dojoType=\"dijit.form.DateTextBox\" ";
+	print "required=\"true\" onChange=\"blockFormListAddBtnCheck\" style=\"width: 80px\"></div>\n";
 	print "Start:<input type=\"text\" id=\"listaddstart\" dojoType=\"dijit.form.TimeTextBox\" ";
 	print "required=\"true\" onChange=\"blockFormListAddBtnCheck\" />\n";
 	print "End:<input type=\"text\" id=\"listaddend\" dojoType=\"vcldojo.TimeTextBoxEnd\" ";
@@ -348,13 +370,13 @@ function blockAllocationForm() {
 	print "data=\"blockFormAddListData\"></div>\n";
 	print "<div>\n"; # grid wrapper
 	print "<table dojoType=\"dojox.grid.DataGrid\" jsId=\"requestBlockAddListGrid\" sortInfo=1 ";
-	print "store=\"requestBlockAddListStore\" style=\"width: 530px; height: 200px;\">\n";
+	print "store=\"requestBlockAddListStore\" style=\"width: 450px; height: 200px;\">\n";
 	print "<thead>\n";
 	print "<tr>\n";
-	print "<th field=\"date1\" width=\"185px\" formatter=\"gridDateTimePrimary\">Date</th>\n";
+	print "<th field=\"date1\" width=\"100px\" formatter=\"gridDateTimePrimary\">Date</th>\n";
 	print "<th field=\"start\" width=\"115px\" formatter=\"timeFromTextBox\">Start</th>\n";
 	print "<th field=\"end\" width=\"108px\" formatter=\"timeFromTextBox\">End</th>\n";
-	print "<th field=\"remove\" width=\"60px\">Remove</th>\n";
+	print "<th field=\"remove\" width=\"80px\">Remove</th>\n";
 	print "</tr>\n";
 	print "</thead>\n";
 	print "</table>\n";
@@ -616,7 +638,8 @@ function AJblockAllocationSubmit() {
 		# delete entries from blockTimes that start later than now
 		$query = "DELETE FROM blockTimes "
 		       . "WHERE blockRequestid = $blockreqid AND "
-		       .       "start > NOW()";
+		       .       "start > NOW() AND "
+		       .       "skip = 0";
 		doQuery($query, 101);
 		# delete entries from blockWebDate and blockWebTime
 		$query = "DELETE FROM blockWebDate WHERE blockRequestid = $blockreqid";
@@ -793,7 +816,6 @@ function AJblockAllocationSubmit() {
 		print "scroll(0, 0);";
 		return;
 	}
-	# TODO test cross browser functionality
 	print "window.location.href = '" . BASEURL . SCRIPT . "?mode=blockAllocations';";
 }
 
@@ -839,6 +861,7 @@ function createWeeklyBlockTimes($blockid, $startts, $endts, $daymask, $times) {
 	       .        "end) "
 	       . "VALUES $allvals";
 	doQuery($query, 101);
+	deleteBlockSkipDuplicates($blockid);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -894,6 +917,7 @@ function createMonthlyBlockTimes($blockid, $startts, $endts, $dayweek, $weeknum,
 			 .        "end) "
 			 . "VALUES $allvals";
 	doQuery($query, 101);
+	deleteBlockSkipDuplicates($blockid);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -979,7 +1003,51 @@ function createListBlockData($blockid, $slots, $method) {
 				 .        "end) "
 				 . "VALUES $allbtvals";
 		doQuery($query, 101);
+		deleteBlockSkipDuplicates($blockid);
 	}
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn deleteBlockSkipDuplicates($blockid)
+///
+/// \param $blockid - id of a block allocation
+///
+/// \brief deletes any block times without skip set for which there is a
+/// matching block time with skip set; deletes any with skip set where there is
+/// not a matching time without skip set
+///
+////////////////////////////////////////////////////////////////////////////////
+function deleteBlockSkipDuplicates($blockid) {
+	$query = "SELECT id, "
+	       .        "start, "
+	       .        "end, "
+	       .        "skip "
+	       . "FROM blockTimes "
+	       . "WHERE blockRequestid = $blockid";
+	$qh = doQuery($query, 101);
+	$skips = array();
+	$noskips = array();
+	while($row = mysql_fetch_assoc($qh)) {
+		$key = "{$row['start']}:{$row['end']}";
+		if($row['skip'])
+			$skips[$key] = $row['id'];
+		else
+			$noskips[$key] = $row['id'];
+	}
+	$deleteids = array();
+	foreach($skips as $key => $id) {
+		if(array_key_exists($key, $noskips))
+			$deleteids[] = $noskips[$key];
+		else
+			$deleteids[] = $id;
+	}
+	if(empty($deleteids))
+		return;
+	$inids = implode(',', $deleteids);
+	$query = "DELETE FROM blockTimes "
+	       . "WHERE id IN ($inids)";
+	doQuery($query, 101);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1156,7 +1224,7 @@ function getCurrentBlockHTML($listonly=0) {
 	$rt = '';
 	$rt .= "<table summary=\"lists current block allocations\">\n";
 	$rt .= "  <TR align=center>\n";
-	$rt .= "    <TD colspan=2></TD>\n";
+	$rt .= "    <TD colspan=3></TD>\n";
 	$rt .= "    <TH>Name</TH>\n";
 	$rt .= "    <TH>Environment</TH>\n";
 	$rt .= "    <TH>Reserved<br>Machines</TH>\n";
@@ -1182,6 +1250,15 @@ function getCurrentBlockHTML($listonly=0) {
 		$rt .= "        <script type=\"dojo/method\" event=\"onClick\">\n";
 		$cont = addContinuationsEntry('AJdeleteBlockAllocationConfirm', $block, SECINDAY);
 		$rt .= "          deleteBlockConfirm('$cont');\n";
+		$rt .= "        </script>\n";
+		$rt .= "      </button>\n";
+		$rt .= "    </TD>\n";
+		$rt .= "    <TD>\n";
+		$rt .= "      <button dojoType=\"dijit.form.Button\" type=\"button\">\n";
+		$rt .= "        View Times\n";
+		$rt .= "        <script type=\"dojo/method\" event=\"onClick\">\n";
+		$cont = addContinuationsEntry('AJviewBlockAllocationTimes', array('blockid' => $block['id']), SECINDAY);
+		$rt .= "          viewBlockTimes('$cont');\n";
 		$rt .= "        </script>\n";
 		$rt .= "      </button>\n";
 		$rt .= "    </TD>\n";
@@ -1266,6 +1343,295 @@ function getCurrentBlockHTML($listonly=0) {
 	$rt .= "</button>\n";
 	$rt .= "<input type=hidden id=submitdeletecont>\n";
 	$rt .= "</div>\n"; # confirm dialog
+
+	$rt .= "<div id=\"viewtimesDialog\" dojoType=\"dijit.Dialog\" title=\"Block Allocation Times\">\n";
+	$rt .= "<h2>Block Allocation Times</h2>\n";
+	$rt .= "<table dojoType=\"dojox.grid.DataGrid\" jsId=\"blockTimesGrid\" sortInfo=1 ";
+	$rt .= "style=\"width: 278px; height: 200px;\">\n";
+	$rt .= "<script type=\"dojo/method\" event=\"onStyleRow\" args=\"row\">\n";
+	$rt .= "blockTimeRowStyle(row);\n";
+	$rt .= "</script>\n";
+	$rt .= "<thead>\n";
+	$rt .= "<tr>\n";
+	$rt .= "<th field=\"start\" width=\"60px\" formatter=\"blockTimesGridDate\">Date</th>\n";
+	$rt .= "<th field=\"start\" width=\"54px\" formatter=\"blockTimesGridStart\">Start</th>\n";
+	$rt .= "<th field=\"end\" width=\"54px\" formatter=\"blockTimesGridEnd\">End</th>\n";
+	$rt .= "<th field=\"delbtn\" width=\"60px\">Skip</th>\n";
+	$rt .= "</tr>\n";
+	$rt .= "</thead>\n";
+	$rt .= "</table>\n";
+	$rt .= "<div align=\"center\">\n";
+	$rt .= "<button dojoType=\"dijit.form.Button\" type=\"button\">\n";
+	$rt .= "  Close\n";
+	$rt .= "  <script type=\"dojo/method\" event=\"onClick\">\n";
+	$rt .= "    dijit.byId('viewtimesDialog').hide();\n";
+	$rt .= "  </script>\n";
+	$rt .= "</button>\n";
+	$rt .= "</div>\n";
+	$rt .= "<input type=hidden id=toggletimecont>\n";
+	$rt .= "</div>\n"; # times dialog
+	return $rt;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn getUserCurrentBlockHTML($listonly)
+///
+/// \param $listonly (optional, default=0) - 0 to return everything, 1 to only
+/// return the table of block allocations (i.e. don't include the delete dialog)
+///
+/// \return HTML to display current block allocations
+///
+/// \brief generates the HTML to display a list of the current block allocations
+/// and a dojo dialog for deleting them
+///
+////////////////////////////////////////////////////////////////////////////////
+function getUserCurrentBlockHTML($listonly=0) {
+	global $user, $days;
+	$query = "SELECT b.id, "
+	       .        "b.name AS blockname, "
+	       .        "i.prettyname AS image, "
+	       .        "b.numMachines AS machinecnt, "
+	       .        "CONCAT(g.name, '@', a.name) AS `group`, "
+	       .        "b.repeating AS available, "
+	       .        "b.status "
+	       . "FROM image i, "
+	       .      "usergroup g, "
+	       .      "affiliation a, "
+	       .      "blockRequest b "
+	       . "WHERE b.ownerid = {$user['id']} AND "
+	       .       "b.imageid = i.id AND "
+	       .       "b.status IN ('accepted', 'requested') AND "
+	       .       "b.groupid = g.id AND "
+	       .       "g.affiliationid = a.id "
+	       . "ORDER BY b.name";
+	$qh = doQuery($query, 101);
+	$blocks = array();
+	while($row = mysql_fetch_assoc($qh))
+		$blocks[$row['id']] = $row;
+	if(empty($blocks))
+		return;
+
+	foreach($blocks as $id => $request) {
+		if($request['available'] == 'weekly') {
+			$query = "SELECT DATE_FORMAT(start, '%m/%d/%y') AS swdate, "
+			       .        "DATE_FORMAT(end, '%m/%d/%y')AS ewdate, " 
+			       .        "days "
+			       . "FROM blockWebDate "
+			       . "WHERE blockRequestid = $id";
+			$qh = doQuery($query, 101);
+			if(! $row = mysql_fetch_assoc($qh))
+				abort(101);
+			$blocks[$id] = array_merge($request, $row);
+			$wdays = array();
+			for($i = 0; $i < 7; $i++) {
+				if($row['days'] & (1 << $i))
+					array_push($wdays, $days[$i]);
+			}
+			unset($blocks[$id]['days']);
+			$blocks[$id]['wdays'] = $wdays;
+			$query = "SELECT starthour, "
+			       .        "startminute, "
+			       .        "startmeridian, "
+			       .        "endhour, "
+			       .        "endminute, "
+			       .        "endmeridian, "
+			       .        "`order` "
+			       . "FROM blockWebTime "
+			       . "WHERE blockRequestid = {$request['id']}";
+			$qh = doQuery($query, 101);
+			while($row = mysql_fetch_assoc($qh)) {
+				$blocks[$id]['swhour'][$row['order']] = $row['starthour'];
+				$blocks[$id]['swminute'][$row['order']] = $row['startminute'];
+				$blocks[$id]['swmeridian'][$row['order']] = $row['startmeridian'];
+				$blocks[$id]['ewhour'][$row['order']] = $row['endhour'];
+				$blocks[$id]['ewminute'][$row['order']] = $row['endminute'];
+				$blocks[$id]['ewmeridian'][$row['order']] = $row['endmeridian'];
+			}
+		}
+		elseif($request['available'] == 'monthly') {
+			$query = "SELECT DATE_FORMAT(start, '%m/%d/%y') AS smdate, "
+			       .        "DATE_FORMAT(end, '%m/%d/%y')AS emdate, " 
+			       .        "days AS day, "
+			       .        "weeknum "
+			       . "FROM blockWebDate "
+			       . "WHERE blockRequestid = $id";
+			$qh = doQuery($query, 101);
+			if(! $row = mysql_fetch_assoc($qh))
+				abort(101);
+			$blocks[$id] = array_merge($request, $row);
+			$query = "SELECT starthour, "
+			       .        "startminute, "
+			       .        "startmeridian, "
+			       .        "endhour, "
+			       .        "endminute, "
+			       .        "endmeridian, "
+			       .        "`order` "
+			       . "FROM blockWebTime "
+			       . "WHERE blockRequestid = {$request['id']}";
+			$qh = doQuery($query, 101);
+			while($row = mysql_fetch_assoc($qh)) {
+				$blocks[$id]['smhour'][$row['order']] = $row['starthour'];
+				$blocks[$id]['smminute'][$row['order']] = $row['startminute'];
+				$blocks[$id]['smmeridian'][$row['order']] = $row['startmeridian'];
+				$blocks[$id]['emhour'][$row['order']] = $row['endhour'];
+				$blocks[$id]['emminute'][$row['order']] = $row['endminute'];
+				$blocks[$id]['emmeridian'][$row['order']] = $row['endmeridian'];
+			}
+		}
+		elseif($request['available'] == 'list') {
+			$query = "SELECT DATE_FORMAT(start, '%m/%d/%y') AS date, "
+			       .        "days AS `order` "
+			       . "FROM blockWebDate "
+			       . "WHERE blockRequestid = $id";
+			$qh = doQuery($query, 101);
+			while($row = mysql_fetch_assoc($qh)) {
+				if($row['date'] == '00/00/00')
+					$blocks[$id]['date'][$row['order']] = '';
+				else
+					$blocks[$id]['date'][$row['order']] = $row['date'];
+			}
+			$query = "SELECT starthour, "
+			       .        "startminute, "
+			       .        "startmeridian, "
+			       .        "endhour, "
+			       .        "endminute, "
+			       .        "endmeridian, "
+			       .        "`order` "
+			       . "FROM blockWebTime "
+			       . "WHERE blockRequestid = {$request['id']}";
+			$qh = doQuery($query, 101);
+			while($row = mysql_fetch_assoc($qh)) {
+				$blocks[$id]['slhour'][$row['order']] = $row['starthour'];
+				$blocks[$id]['slminute'][$row['order']] = $row['startminute'];
+				$blocks[$id]['slmeridian'][$row['order']] = $row['startmeridian'];
+				$blocks[$id]['elhour'][$row['order']] = $row['endhour'];
+				$blocks[$id]['elminute'][$row['order']] = $row['endminute'];
+				$blocks[$id]['elmeridian'][$row['order']] = $row['endmeridian'];
+			}
+		}
+	}
+	$rt = '';
+	$rt .= "<h2>Manage Block Allocations</h2>\n";
+	$rt .= "<div id=\"blocklist\">\n";
+	$rt .= "<table summary=\"lists current block allocations\">\n";
+	$rt .= "  <TR align=center>\n";
+	$rt .= "    <TD colspan=2></TD>\n";
+	$rt .= "    <TH>Name</TH>\n";
+	$rt .= "    <TH>Environment</TH>\n";
+	$rt .= "    <TH>Reserved<br>Machines</TH>\n";
+	$rt .= "    <TH>Reserved<br>For</TH>\n";
+	$rt .= "    <TH>Repeating</TH>\n";
+	$rt .= "  </TR>\n";
+	foreach($blocks as $block) {
+		$rt .= "  <TR align=center>\n";
+		$rt .= "    <TD>\n";
+		$rt .= "      <button dojoType=\"dijit.form.Button\" type=\"button\">\n";
+		$rt .= "        View\n";
+		$rt .= "        <script type=\"dojo/method\" event=\"onClick\">\n";
+		$cont = addContinuationsEntry('AJviewBlockAllocation', $block, SECINDAY);
+		$rt .= "          viewBlockAllocation('$cont');\n";
+		$rt .= "        </script>\n";
+		$rt .= "      </button>\n";
+		$rt .= "    </TD>\n";
+		$rt .= "    <TD>\n";
+		if($block['status'] == 'accepted') {
+			$rt .= "      <button dojoType=\"dijit.form.Button\" type=\"button\">\n";
+			$rt .= "        View Times\n";
+			$rt .= "        <script type=\"dojo/method\" event=\"onClick\">\n";
+			$cont = addContinuationsEntry('AJviewBlockAllocationTimes', array('blockid' => $block['id']), SECINDAY);
+			$rt .= "          viewBlockTimes('$cont');\n";
+			$rt .= "        </script>\n";
+			$rt .= "      </button>\n";
+		}
+		$rt .= "    </TD>\n";
+		$rt .= "    <TD>{$block['blockname']}</TD>\n";
+		$rt .= "    <TD>{$block['image']}</TD>\n";
+		$rt .= "    <TD>{$block['machinecnt']}</TD>\n";
+		$rt .= "    <TD>{$block['group']}</TD>\n";
+		$rt .= "    <TD>{$block['available']}</TD>\n";
+		$rt .= "  </TR>\n";
+	}
+	$rt .= "</table>\n";
+	$rt .= "</div>\n";
+	if($listonly)
+		return $rt;
+
+	$rt .= "<div id=\"viewDialog\" dojoType=\"dijit.Dialog\" title=\"Block Allocation\">\n";
+	$rt .= "<table summary=\"\">\n";
+	$rt .= "  <tr>\n";
+	$rt .= "    <th align=\"right\">Name:</th>\n";
+	$rt .= "    <td><span id=\"confname\"></span></td>\n";
+	$rt .= "  </tr>\n";
+	$rt .= "  <tr>\n";
+	$rt .= "    <th align=\"right\">Environment:</th>\n";
+	$rt .= "    <td><span id=\"confimage\"></span></td>\n";
+	$rt .= "  </tr>\n";
+	$rt .= "  <tr>\n";
+	$rt .= "    <th align=\"right\">User Group:</th>\n";
+	$rt .= "    <td><span id=\"confgroup\"></span></td>\n";
+	$rt .= "  </tr>\n";
+	$rt .= "  <tr>\n";
+	$rt .= "    <th align=\"right\">Seats:</th>\n";
+	$rt .= "    <td><span id=\"confseats\"></span></td>\n";
+	$rt .= "  </tr>\n";
+	$rt .= "  <tr>\n";
+	$rt .= "    <th align=\"right\">Repeating:</th>\n";
+	$rt .= "    <td><span id=\"confrepeat\"></span></td>\n";
+	$rt .= "  </tr>\n";
+	$rt .= "  <tr valign=\"top\">\n";
+	$rt .= "    <th align=\"right\"><span id=\"conftitle1\"></span></th>\n";
+	$rt .= "    <td><span id=\"confvalue1\"></span></td>\n";
+	$rt .= "  </tr>\n";
+	$rt .= "  <tr valign=\"top\">\n";
+	$rt .= "    <th align=\"right\"><span id=\"conftitle2\"></span></th>\n";
+	$rt .= "    <td><span id=\"confvalue2\"></span></td>\n";
+	$rt .= "  </tr>\n";
+	$rt .= "  <tr valign=\"top\">\n";
+	$rt .= "    <th align=\"right\"><span id=\"conftitle3\"></span></th>\n";
+	$rt .= "    <td><span id=\"confvalue3\"></span></td>\n";
+	$rt .= "  </tr>\n";
+	$rt .= "  <tr valign=\"top\">\n";
+	$rt .= "    <th align=\"right\"><span id=\"conftitle4\"></span></th>\n";
+	$rt .= "    <td><span id=\"confvalue4\"></span></td>\n";
+	$rt .= "  </tr>\n";
+	$rt .= "</table>\n";
+	$rt .= "<div align=\"center\">\n";
+	$rt .= "<button dojoType=\"dijit.form.Button\" type=\"button\">\n";
+	$rt .= "  Close\n";
+	$rt .= "  <script type=\"dojo/method\" event=\"onClick\">\n";
+	$rt .= "    clearHideView();\n";
+	$rt .= "  </script>\n";
+	$rt .= "</button>\n";
+	$rt .= "</div>\n";
+	$rt .= "</div>\n"; # confirm dialog
+
+	$rt .= "<div id=\"viewtimesDialog\" dojoType=\"dijit.Dialog\" title=\"Block Allocation Times\">\n";
+	$rt .= "<h2>Block Allocation Times</h2>\n";
+	$rt .= "<table dojoType=\"dojox.grid.DataGrid\" jsId=\"blockTimesGrid\" sortInfo=1 ";
+	$rt .= "style=\"width: 278px; height: 200px;\">\n";
+	$rt .= "<script type=\"dojo/method\" event=\"onStyleRow\" args=\"row\">\n";
+	$rt .= "blockTimeRowStyle(row);\n";
+	$rt .= "</script>\n";
+	$rt .= "<thead>\n";
+	$rt .= "<tr>\n";
+	$rt .= "<th field=\"start\" width=\"60px\" formatter=\"blockTimesGridDate\">Date</th>\n";
+	$rt .= "<th field=\"start\" width=\"54px\" formatter=\"blockTimesGridStart\">Start</th>\n";
+	$rt .= "<th field=\"end\" width=\"54px\" formatter=\"blockTimesGridEnd\">End</th>\n";
+	$rt .= "<th field=\"delbtn\" width=\"60px\">Skip</th>\n";
+	$rt .= "</tr>\n";
+	$rt .= "</thead>\n";
+	$rt .= "</table>\n";
+	$rt .= "<div align=\"center\">\n";
+	$rt .= "<button dojoType=\"dijit.form.Button\" type=\"button\">\n";
+	$rt .= "  Close\n";
+	$rt .= "  <script type=\"dojo/method\" event=\"onClick\">\n";
+	$rt .= "    dijit.byId('viewtimesDialog').hide();\n";
+	$rt .= "  </script>\n";
+	$rt .= "</button>\n";
+	$rt .= "</div>\n";
+	$rt .= "<input type=hidden id=toggletimecont>\n";
+	$rt .= "</div>\n"; # times dialog
 	return $rt;
 }
 
@@ -1527,9 +1893,17 @@ function getPendingBlockHTML($listonly=0) {
 	$rt .= "  <tr id=\"editusergroup\" class=\"hidden\">\n";
 	$rt .= "    <th align=right>User Group:</th>\n";
 	$rt .= "    <td>\n";
-	$rt .= "      <select dojoType=\"dijit.form.FilteringSelect\" id=groupsel>\n";
-	foreach($groups as $id => $group)
+	if(USEFILTERINGSELECT && count($groups) < FILTERINGSELECTTHRESHOLD) {
+		$rt .= "      <select dojoType=\"dijit.form.FilteringSelect\" id=groupsel ";
+		$rt .= "queryExpr=\"*\${0}*\" highlightMatch=\"all\" autoComplete=\"false\">\n";
+	}
+	else
+		$rt .= "      <select id=groupsel>\n";
+	foreach($groups as $id => $group) {
+		if($group['name'] == ' None@')
+			continue;
 		$rt .= "        <option value=\"$id\">{$group['name']}</option>\n";
+	}
 	$rt .= "      </select>\n";
 	$rt .= "    </td>\n";
 	$rt .= "  </tr>\n";
@@ -1545,10 +1919,18 @@ function getPendingBlockHTML($listonly=0) {
 	$rt .= "  <tr>\n";
 	$rt .= "    <th align=right>Managing User Group:</th>\n";
 	$rt .= "    <td>\n";
-	$rt .= "      <select dojoType=\"dijit.form.FilteringSelect\" id=admingroupsel>\n";
+	if(USEFILTERINGSELECT && count($groups) < FILTERINGSELECTTHRESHOLD) {
+		$rt .= "      <select dojoType=\"dijit.form.FilteringSelect\" id=admingroupsel ";
+		$rt .= "queryExpr=\"*\${0}*\" highlightMatch=\"none\" autoComplete=\"false\">\n";
+	}
+	else
+		$rt .= "      <select id=admingroupsel>\n";
 	$rt .= "        <option value=\"0\">None (owner only)</option>\n";
-	foreach($groups as $id => $group)
+	foreach($groups as $id => $group) {
+		if($group['name'] == ' None@')
+			continue;
 		$rt .= "        <option value=\"$id\">{$group['name']}</option>\n";
+	}
 	$rt .= "      </select>\n";
 	$rt .= "    </td>\n";
 	$rt .= "  </tr>\n";
@@ -1748,6 +2130,74 @@ function AJdeleteBlockAllocationSubmit() {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
+/// \fn AJviewBlockAllocation()
+///
+/// \brief ajax function to generate JSON data with information about a block
+/// allocation to be used when filling in the delete confirmation dialog
+///
+////////////////////////////////////////////////////////////////////////////////
+function AJviewBlockAllocation() {
+	global $days;
+	$data = getContinuationVar();
+	if($data['available'] == 'weekly') {
+		$rt = array('name' => $data['blockname'],
+		            'image' => $data['image'],
+		            'seats' => $data['machinecnt'],
+		            'usergroup' => $data['group'],
+		            'repeating' => $data['available'],
+		            'startdate' => $data['swdate'],
+		            'lastdate' => $data['ewdate'],
+		            'days' => $data['wdays']);
+		$rt['times'] = array();
+		foreach(array_keys($data['swhour']) as $key) {
+			$rt['times'][] = sprintf("%d:%02d %s - %d:%02d %s", $data['swhour'][$key],
+			                   $data['swminute'][$key], $data['swmeridian'][$key],
+			                   $data['ewhour'][$key], $data['ewminute'][$key],
+			                   $data['ewmeridian'][$key]);
+		}
+	}
+	elseif($data['available'] == 'monthly') {
+		$rt = array('name' => $data['blockname'],
+		            'image' => $data['image'],
+		            'seats' => $data['machinecnt'],
+		            'usergroup' => $data['group'],
+		            'repeating' => $data['available'],
+		            'startdate' => $data['smdate'],
+		            'lastdate' => $data['emdate']);
+		$weeknumArr = array(1 => "1st",
+		                    2 => "2nd",
+		                    3 => "3rd",
+		                    4 => "4th",
+		                    5 => "5th");
+		$rt['date1'] = "{$weeknumArr[$data['weeknum']]} {$days[($data['day'] - 1)]}";
+		$rt['times'] = array();
+		foreach(array_keys($data['smhour']) as $key) {
+			$rt['times'][] = sprintf("%d:%02d %s - %d:%02d %s", $data['smhour'][$key],
+			                   $data['smminute'][$key], $data['smmeridian'][$key],
+			                   $data['emhour'][$key], $data['emminute'][$key],
+			                   $data['emmeridian'][$key]);
+		}
+	}
+	elseif($data['available'] == 'list') {
+		$rt = array('name' => $data['blockname'],
+		            'image' => $data['image'],
+		            'seats' => $data['machinecnt'],
+		            'usergroup' => $data['group'],
+		            'repeating' => $data['available']);
+		$slots = array();
+		foreach($data['date'] as $key => $val) {
+			$slots[] = sprintf("%s %d:%02d %s - %d:%02d %s", $val, $data['slhour'][$key],
+			                   $data['slminute'][$key], $data['slmeridian'][$key],
+			                   $data['elhour'][$key], $data['elminute'][$key],
+			                   $data['elmeridian'][$key]);
+		}
+		$rt['slots'] = $slots;
+	}
+	sendJSON($rt);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
 /// \fn AJacceptBlockAllocationConfirm()
 ///
 /// \brief ajax function to generate JSON data with information about a block
@@ -1898,7 +2348,14 @@ function AJacceptBlockAllocationSubmit() {
 		$errmsg = "Invalid user group submitted.";
 		$err = 1;
 	}
-
+	$managementnodes = getManagementNodes('future');
+	if(empty($managementnodes)) {
+		$errmsg  = "Error encountered while trying to create block allocation:\\n\\n";
+		$errmsg .= "No active management nodes were found. Please try\\n";
+		$errmsg .= "accepting the block allocation at a later time.";
+		$err = 1;
+	}
+	$mnid = array_rand($managementnodes);
 	if(! $err) {
 		# update values for block allocation
 		if($validemail)
@@ -1911,7 +2368,8 @@ function AJacceptBlockAllocationSubmit() {
 		if($setusergroup)
 			$query .= "groupid = $usergroupid, ";
 		$query .=    "status = 'accepted', "
-			    .     "comments = '$esccomments' "
+			    .     "comments = '$esccomments', "
+			    .     "managementnodeid = '$mnid' "
 		       . "WHERE id = $blockid";
 		doQuery($query, 101);
 		if(! mysql_affected_rows($mysql_link_vcl)) {
@@ -2135,6 +2593,81 @@ function AJrejectBlockAllocationSubmit() {
 	$html = preg_replace("/>\s*</", "><", $html);
 	print setAttribute('pendinglist', 'innerHTML', $html);
 	print "AJdojoCreate('pendinglist');";
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn AJviewBlockAllocationTimes()
+///
+/// \brief gets start/end data about a block time and sends it in json format
+///
+////////////////////////////////////////////////////////////////////////////////
+function AJviewBlockAllocationTimes() {
+	$blockid = getContinuationVar('blockid');
+	$query = "SELECT id, "
+	       .        "start, "
+	       .        "end, "
+	       .        "skip "
+	       . "FROM blockTimes "
+	       . "WHERE blockRequestid = $blockid AND "
+	       .       "end > NOW() "
+	       . "ORDER BY start";
+	$qh = doQuery($query, 101);
+	$data = array();
+	$items = array();
+	while($row = mysql_fetch_assoc($qh))
+		$items[] = $row;
+	$cont = addContinuationsEntry('AJtoggleBlockTime', array('blockid' => $blockid));
+	$data['cont'] = $cont;
+	$data['items'] = $items;
+	sendJSON($data);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn AJtoggleBlockTime()
+///
+/// \brief toggles the skip flag for a block time
+///
+////////////////////////////////////////////////////////////////////////////////
+function AJtoggleBlockTime() {
+	$blockid = getContinuationVar('blockid');
+	$timeid = processInputVar('blocktimeid', ARG_NUMERIC);
+	$query = "SELECT blockRequestid, "
+	       .        "end, "
+	       .        "skip "
+	       . "FROM blockTimes "
+	       . "WHERE id = $timeid";
+	$qh = doQuery($query, 101);
+	if(! ($row = mysql_fetch_assoc($qh)) || $row['blockRequestid'] != $blockid) {
+		$data['error'] = 'Invalid block time submitted';
+		sendJSON($data);
+		return;
+	}
+	if(datetimeToUnix($row['end']) <= time()) {
+		$data['error'] = "The end time for the submitted block allocation time\nhas passed. Therefore, it can no longer be modified.";
+		sendJSON($data);
+		return;
+	}
+	$query = "UPDATE request "
+	       . "SET stateid = 1 "
+	       . "WHERE id IN "
+	       .    "(SELECT DISTINCT reloadrequestid "
+	       .    "FROM blockComputers " 
+	       .    "WHERE blockTimeid = $timeid)";
+	doQuery($query, 101);
+	$query = "DELETE FROM blockComputers "
+	       . "WHERE blockTimeid = $timeid";
+	doQuery($query, 101);
+
+	$skip = $row['skip'] ^ 1;
+	$query = "UPDATE blockTimes "
+	       . "SET skip = $skip "
+	       . "WHERE id = $timeid";
+	doQuery($query, 101);
+	$data['newval'] = $skip;
+	$data['timeid'] = $timeid;
+	sendJSON($data);
 }
 
 ////////////////////////////////////////////////////////////////////////////////

@@ -77,6 +77,9 @@ define("MIN_BLOCK_MACHINES", 5);
 define("MAX_BLOCK_MACHINES", 70);
 /// defines the URL used for the Documentation link in the navigation list
 define("DOCUMENTATIONURL", "https://cwiki.apache.org/VCLDOCS/");
+define("USEFILTERINGSELECT", 1); // set to 1 to use a dojo filteringselect on the new reservation page
+                                 // the filteringselect can be a little slow for a large number of items
+define("FILTERINGSELECTTHRESHOLD", 300); // if USEFILTERINGSELECT = 1, only use them for selects up to this size
 
 $ENABLE_ITECSAUTH = 0;     // use ITECS accounts (also called "Non-NCSU" accounts)
 

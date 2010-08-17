@@ -286,3 +286,16 @@ function sortSelect(selobj) {
 		selobj.options[i].value = values[texts[i]];
 	}
 }
+
+function getSelectText(objid) {
+	if(dijit.byId(objid))
+		return dijit.byId(objid).textbox.value;
+	var obj = dojo.byId(objid);
+	return obj.options[obj.selectedIndex].text;
+}
+
+function getSelectValue(objid) {
+	if(dijit.byId(objid))
+		return dijit.byId(objid).value;
+	return dojo.byId(objid).value;
+}

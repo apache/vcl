@@ -29,6 +29,8 @@ define("STARTHOURERR", 1 << 1);
 //define("ENDHOURERR", 1 << 3);
 /// signifies an error with the submitted endding date and time
 define("ENDDATEERR", 1 << 4);
+/// signifies an error with the submitted image id
+define("IMAGEIDERR", 1 << 5);
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
@@ -102,29 +104,40 @@ function newReservation() {
 	print "<FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
 	// list of images
 	uasort($resources["image"], "sortKeepIndex");
+	printSubmitErr(IMAGEIDERR);
+	if($submitErr & IMAGEIDERR)
+		print "<br>\n";
 	if($imaging) {
-		print "      <select dojoType=\"dijit.form.FilteringSelect\" id=imagesel ";
-		print "onChange=\"updateWaitTime(1);\" tabIndex=1 style=\"width: 400px\" ";
-		print "queryExpr=\"*\${0}*\" highlightMatch=\"all\" autoComplete=\"false\" ";
-		print "name=imageid>\n";
-		foreach($resources['image'] as $id => $image)
-			if($id == $imageid)
-				print "        <option value=\"$id\" selected>$image</option>\n";
-			else
-				print "        <option value=\"$id\">$image</option>\n";
-		print "      </select>\n";
+		if(USEFILTERINGSELECT && count($resources['image']) < FILTERINGSELECTTHRESHOLD) {
+			print "      <select dojoType=\"dijit.form.FilteringSelect\" id=imagesel ";
+			print "onChange=\"updateWaitTime(1);\" tabIndex=1 style=\"width: 400px\" ";
+			print "queryExpr=\"*\${0}*\" highlightMatch=\"all\" autoComplete=\"false\" ";
+			print "name=imageid>\n";
+			foreach($resources['image'] as $id => $image)
+				if($id == $imageid)
+					print "        <option value=\"$id\" selected>$image</option>\n";
+				else
+					print "        <option value=\"$id\">$image</option>\n";
+			print "      </select>\n";
+		}
+		else
+			printSelectInput('imageid', $resources['image'], $imageid, 1, 0, 'imagesel', "onChange=\"updateWaitTime(1);\"");
 	}
 	else {
-		print "      <select dojoType=\"dijit.form.FilteringSelect\" id=imagesel ";
-		print "onChange=\"selectEnvironment();\" tabIndex=1 style=\"width: 400px\" ";
-		print "queryExpr=\"*\${0}*\" highlightMatch=\"all\" autoComplete=\"false\" ";
-		print "name=imageid>\n";
-		foreach($resources['image'] as $id => $image)
-			if($id == $imageid)
-				print "        <option value=\"$id\" selected>$image</option>\n";
-			else
-				print "        <option value=\"$id\">$image</option>\n";
-		print "      </select>\n";
+		if(USEFILTERINGSELECT && count($resources['image']) < FILTERINGSELECTTHRESHOLD) {
+			print "      <select dojoType=\"dijit.form.FilteringSelect\" id=imagesel ";
+			print "onChange=\"selectEnvironment();\" tabIndex=1 style=\"width: 400px\" ";
+			print "queryExpr=\"*\${0}*\" highlightMatch=\"all\" autoComplete=\"false\" ";
+			print "name=imageid>\n";
+			foreach($resources['image'] as $id => $image)
+				if($id == $imageid)
+					print "        <option value=\"$id\" selected>$image</option>\n";
+				else
+					print "        <option value=\"$id\">$image</option>\n";
+			print "      </select>\n";
+		}
+		else
+			printSelectInput('imageid', $resources['image'], $imageid, 1, 0, 'imagesel', "onChange=\"selectEnvironment();\"");
 	}
 	print "<br><br>\n";
 
@@ -174,9 +187,10 @@ function newReservation() {
 	$cont = addContinuationsEntry('submitRequest', array('imaging' => $imaging));
 	print "<INPUT type=hidden name=continuation value=\"$cont\">\n";
 	if($imaging)
-		print "<INPUT id=newsubmit type=submit value=\"Create Imaging Reservation\">\n";
+		print "<INPUT id=newsubmit type=submit value=\"Create Imaging Reservation\" ";
 	else
-		print "<INPUT id=newsubmit type=submit value=\"Create Reservation\">\n";
+		print "<INPUT id=newsubmit type=submit value=\"Create Reservation\" ";
+	print "onClick=\"return checkValidImage();\">\n";
 	print "<INPUT type=hidden id=testjavascript value=0>\n";
 	print "</FORM>\n";
 	$cont = addContinuationsEntry('AJupdateWaitTime', array('imaging' => $imaging));
@@ -2460,6 +2474,13 @@ function processRequestInput($checks=1) {
 		return $return;
 	}
 
+	$noimage = 0;
+	if(empty($return['imageid'])) {
+		$submitErr |= IMAGEIDERR;
+		$submitErrMsg[IMAGEIDERR] = "Please select a valid environment";
+		$noimage = 1;
+	}
+
 	if(! $return["started"]) {
 		$checkdateArr = explode('/', $return["day"]);
 		if(! is_numeric($checkdateArr[0]) ||
@@ -2499,7 +2520,6 @@ function processRequestInput($checks=1) {
 	}*/
 
 	// make sure user hasn't submitted something longer than their allowed max length
-	$imageData = getImages(0, $return['imageid']);
 	$maxtimes = getUserMaxTimes();
 	if($mode != 'confirmEditRequest') {
 		if($return['imaging']) {
@@ -2510,10 +2530,13 @@ function processRequestInput($checks=1) {
 			$return['lengthchanged'] = 1;
 			$return['length'] = $maxtimes['initial'];
 		}
-		if($imageData[$return['imageid']]['maxinitialtime'] > 0 &&
-			$imageData[$return['imageid']]['maxinitialtime'] < $return['length']) {
-			$return['lengthchanged'] = 1;
-			$return['length'] = $imageData[$return['imageid']]['maxinitialtime'];
+		if(! $noimage) {
+			$imageData = getImages(0, $return['imageid']);
+			if($imageData[$return['imageid']]['maxinitialtime'] > 0 &&
+			   $imageData[$return['imageid']]['maxinitialtime'] < $return['length']) {
+				$return['lengthchanged'] = 1;
+				$return['length'] = $imageData[$return['imageid']]['maxinitialtime'];
+			}
 		}
 	}
 	else {

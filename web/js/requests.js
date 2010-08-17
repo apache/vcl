@@ -26,7 +26,7 @@ function generalReqCB(data, ioArgs) {
 }
 
 function selectEnvironment() {
-	var imageid = dijit.byId('imagesel').value;
+	var imageid = getSelectValue('imagesel');
 	if(maxTimes[imageid])
 		setMaxRequestLength(maxTimes[imageid]);
 	else
@@ -48,7 +48,7 @@ function updateWaitTime(cleardesc) {
 		dojo.byId('waittime').className = 'hidden';
 		desconly = 1;
 	}
-	var imageid = dijit.byId('imagesel').value;
+	var imageid = getSelectValue('imagesel');
 	if(dojo.byId('reqlength'))
 		var length = dojo.byId('reqlength').value;
 	else
@@ -63,6 +63,16 @@ function updateWaitTime(cleardesc) {
 	//setLoading();
    document.body.style.cursor = 'wait';
 	RPCwrapper(data, generalReqCB);
+}
+
+function checkValidImage() {
+	if(! dijit.byId('imagesel'))
+		return;
+	if(! dijit.byId('imagesel').isValid()) {
+		alert('Please select a valid environment.');
+		return false;
+	}
+	return true;
 }
 
 function setMaxRequestLength(minutes) {

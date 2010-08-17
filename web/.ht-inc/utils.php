@@ -8710,7 +8710,10 @@ function getDojoHTML($refresh) {
 			                      'dijit.form.ValidationTextBox',
 			                      'dijit.form.FilteringSelect',
 			                      'dijit.form.Textarea',
-			                      'dijit.Dialog');
+			                      'dojox.grid.DataGrid',
+			                      'dijit.Dialog',
+			                      'dojox.string.sprintf',
+			                      'dojo.data.ItemFileWriteStore');
 			break;
 		case 'requestBlockAllocation':
 		case 'newBlockAllocation':

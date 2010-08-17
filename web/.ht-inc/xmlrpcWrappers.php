@@ -1086,7 +1086,7 @@ function XMLRPCprocessBlockTime($blockTimesid, $ignoreprivileges=0) {
 
 		$stagCnt++;
 		$allocated++;
-		$blockCompVals[] = "($blockTimesid, $compid, {$rqdata['imageid']})";
+		$blockCompVals[] = "($blockTimesid, $compid, {$rqdata['imageid']}, $reqid)";
 
 		# process any subimages
 		for($key = 1; $key < count($requestInfo['computers']); $key++) {
@@ -1094,7 +1094,7 @@ function XMLRPCprocessBlockTime($blockTimesid, $ignoreprivileges=0) {
 			$subrevid = getProductionRevisionid($subimageid);
 			$compid = $requestInfo['computers'][$key];
 			$mgmtnodeid = $requestInfo['mgmtnodes'][$key];
-			$blockCompVals[] = "($blockTimesid, $compid, $subimageid)";
+			$blockCompVals[] = "($blockTimesid, $compid, $subimageid, $reqid)";
 
 			$query = "INSERT INTO reservation "
 					 .        "(requestid, "
@@ -1113,7 +1113,7 @@ function XMLRPCprocessBlockTime($blockTimesid, $ignoreprivileges=0) {
 		semUnlock();
 		$blockComps = implode(',', $blockCompVals);
 		$query = "INSERT INTO blockComputers "
-		       .        "(blockTimeid, computerid, imageid) "
+		       .        "(blockTimeid, computerid, imageid, reloadrequestid) "
 		       . "VALUES $blockComps";
 		doQuery($query, 101);
 		$blockCompVals = array();
