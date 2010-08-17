@@ -1547,44 +1547,47 @@ sub get_computer_private_ip_address {
 	}
 	
 	# Find lines containing the computer name followed by a space or period
-	my @matching_computer_hosts_lines = grep(/\s$computer_name[\s\.]/i, @$output);
+	my %matching_computer_ip_addresses;
 	
-	# Extract matching lines which aren't commented out
-	my @uncommented_computer_hosts_lines = grep(/^\s*[^#]/, @matching_computer_hosts_lines);
+	for my $line (@$output) {
+		# Ignore commented lines
+		next if ($line =~ /^\s*#/);
+		
+		# Ignore lines which don't contain the computer name
+		next if ($line !~ /$computer_name($|\.|\s)/i);
+		
+		# Extract the IP address from the matching line
+		my ($ip_address) = $line =~ /\s*((?:[0-9]{1,3}\.?){4})\s/i;
 	
+		if (!$ip_address) {
+			notify($ERRORS{'WARNING'}, 0, "unable to extract IP address from line: $line");
+			next;
+		}
+		
+		# Add the IP address and line to the hash
+		$matching_computer_ip_addresses{$ip_address} = $line;
+	}
+
+	# Check the hash, it should contain 1 key
 	# Make sure 1 uncommented line was found
-	if (@matching_computer_hosts_lines == 0) {
+	my $found_count = scalar keys %matching_computer_ip_addresses;
+	if ($found_count == 0) {
 		notify($ERRORS{'WARNING'}, 0, "did not find any lines in /etc/hosts containing '$computer_name'");
 		return;
 	}
-	elsif (@uncommented_computer_hosts_lines == 0) {
-		notify($ERRORS{'WARNING'}, 0, "did not find any uncommented lines in /etc/hosts containing '$computer_name':\n" . join("\n", @matching_computer_hosts_lines));
-		return;
-	}
-	elsif (@uncommented_computer_hosts_lines > 1) {
-		notify($ERRORS{'WARNING'}, 0, "found multiple uncommented lines in /etc/hosts containing '$computer_name':\n" . join("\n", @matching_computer_hosts_lines));
+	elsif ($found_count > 1) {
+		notify($ERRORS{'WARNING'}, 0, "found multiple lines in /etc/hosts containing '$computer_name' with different IP addresses:\n" . join("\n", values(%matching_computer_ip_addresses)));
 		return;
 	}
 	
-	my $matching_computer_hosts_line = $matching_computer_hosts_lines[0];
-	notify($ERRORS{'DEBUG'}, 0, "found line for '$computer_name' in /etc/hosts:\n$matching_computer_hosts_line");
-	
-	# Extract the IP address from the matching line
-	my ($ip_address) = $matching_computer_hosts_line =~ /\s*((?:[0-9]{1,3}\.?){4})\s+$computer_name/i;
-	
-	# Check if IP address was found
-	if (!$ip_address) {
-		notify($ERRORS{'WARNING'}, 0, "unable to determine IP address from line:\n$matching_computer_hosts_line");
-		return;
-	}
-	
-	notify($ERRORS{'DEBUG'}, 0, "found IP address: $ip_address");
+	my $ip_address = (keys %matching_computer_ip_addresses)[0];
 	
 	# Update the request data if subroutine was called as an object method without an argument
 	if ($self && !$argument) {
 		$self->request_data->{reservation}{$self->reservation_id}{computer}{PRIVATE_IP_ADDRESS_ETC_HOSTS} = $ip_address;
 	}
 	
+	notify($ERRORS{'DEBUG'}, 0, "returning IP address from /etc/hosts file: $ip_address");
 	return $ip_address;
 }
 
