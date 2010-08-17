@@ -324,7 +324,7 @@ sub load {
 		push(@vmxfile, "ethernet0.address = \"$vmclient_eth0MAC\"\n");
 		push(@vmxfile, "ethernet0.addressType = \"static\"\n");
 	}
-	if (vmhost_eth1generated) {
+	if ($vmhost_eth1generated) {
 		# Let vmware host define the MAC addresses
 		notify($ERRORS{'OK'}, 0, "eth1 MAC address set for vmware generated $vmclient_eth0MAC");
 		push(@vmxfile, "ethernet1.addressType = \"generated\"\n");
