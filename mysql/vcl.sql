@@ -61,6 +61,7 @@ CREATE TABLE IF NOT EXISTS `blockComputers` (
   `blockTimeid` mediumint(8) unsigned NOT NULL default '0',
   `computerid` smallint(5) unsigned NOT NULL default '0',
   `imageid` smallint(5) unsigned NOT NULL default '0',
+  `reloadrequestid` mediumint(8) unsigned NOT NULL default '0',
   PRIMARY KEY  (`blockTimeid`,`computerid`),
   KEY `computerid` (`computerid`),
   KEY `imageid` (`imageid`)
@@ -84,6 +85,7 @@ CREATE TABLE IF NOT EXISTS `blockRequest` (
   `managementnodeid` smallint(5) unsigned NOT NULL,
   `expireTime` datetime NOT NULL,
   `processing` tinyint(1) unsigned NOT NULL,
+  `status` enum('requested','accepted','completed','rejected','deleted') NOT NULL DEFAULT 'accepted',
   PRIMARY KEY  (`id`),
   KEY `imageid` (`imageid`),
   KEY `groupid` (`groupid`),
@@ -102,6 +104,7 @@ CREATE TABLE IF NOT EXISTS `blockTimes` (
   `start` datetime NOT NULL,
   `end` datetime NOT NULL,
   `processed` tinyint(1) unsigned NOT NULL default '0',
+  `skip` tinyint(1) unsigned NOT NULL default '0',
   PRIMARY KEY  (`id`),
   KEY `start` (`start`),
   KEY `end` (`end`),
@@ -189,9 +192,9 @@ CREATE TABLE IF NOT EXISTS `computer` (
   `ownerid` mediumint(8) unsigned default '1',
   `platformid` tinyint(3) unsigned NOT NULL default '0',
   `scheduleid` tinyint(3) unsigned default NULL,
-  `currentimageid` smallint(5) unsigned NOT NULL default '0',
-  `nextimageid` smallint(5) unsigned NOT NULL default '0',
-  `imagerevisionid` mediumint(8) unsigned NOT NULL default '0',
+  `currentimageid` smallint(5) unsigned NOT NULL default '4',
+  `nextimageid` smallint(5) unsigned NOT NULL default '4',
+  `imagerevisionid` mediumint(8) unsigned NOT NULL default '4',
   `RAM` smallint(5) unsigned NOT NULL default '0',
   `procnumber` tinyint(5) unsigned NOT NULL default '1',
   `procspeed` smallint(5) unsigned NOT NULL default '0',
@@ -230,7 +233,8 @@ CREATE TABLE IF NOT EXISTS `computer` (
   KEY `vmtypeid` (`vmtypeid`),
   KEY `deleted` (`deleted`),
   KEY `nextimageid` (`nextimageid`),
-  KEY `provisioningid` (`provisioningid`)
+  KEY `provisioningid` (`provisioningid`),
+  KEY `imagerevisionid` (`imagerevisionid`)
 ) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
@@ -993,11 +997,12 @@ CREATE TABLE IF NOT EXISTS `vmhost` (
   `id` smallint(5) unsigned NOT NULL auto_increment,
   `computerid` smallint(5) unsigned NOT NULL,
   `vmlimit` tinyint(3) unsigned NOT NULL,
-  `vmprofileid` tinyint(5) unsigned NOT NULL default '1',
+  `vmprofileid` smallint(5) unsigned NOT NULL,
   `vmkernalnic` varchar(15) default NULL,
   `vmwaredisk` enum('localdisk','networkdisk') NOT NULL default 'localdisk',
   PRIMARY KEY  (`id`),
-  UNIQUE KEY `computerid` (`computerid`)
+  UNIQUE KEY `computerid` (`computerid`),
+  KEY `vmprofileid` (`vmprofileid`)
 ) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
@@ -1011,7 +1016,7 @@ CREATE TABLE IF NOT EXISTS `vmprofile` (
   `profilename` varchar(56) NOT NULL,
   `vmtypeid` tinyint(3) unsigned NOT NULL,
   `imageid` smallint(5) unsigned NOT NULL,
-  `nasshare` varchar(128) default NULL,
+  `repositorypath` varchar(128) default NULL,
   `datastorepath` varchar(128) NOT NULL,
   `vmpath` varchar(128) default NULL,
   `virtualswitch0` varchar(80) NOT NULL default 'VMnet0',
@@ -1272,8 +1277,9 @@ INSERT INTO `module` (`id`, `name`, `prettyname`, `description`, `perlpackage`) 
 (14, 'os_linux_ubuntu', 'Ubuntu Linux OS Module', '', 'VCL::Module::OS::Linux::Ubuntu'),
 (15, 'os_unix_lab', 'Unix Lab Module', 'Unix Lab OS support module', 'VCL::Module::OS::Linux::UnixLab'),
 (16, 'os_win2008', 'Windows Server 2008 OS Module', '', 'VCL::Module::OS::Windows::Version_6::2008'),
-(17, 'os_win7', 'Windows 7 OS Module', '', 'VCL::Module::OS::Windows::Version_7::7'),
-(20, 'provisioning_xCAT_2x', 'xCAT 2x provisioning module', '', 'VCL::Module::Provisioning::xCAT2');
+(17, 'os_win7', 'Windows 7 OS Module', '', 'VCL::Module::OS::Windows::Version_6::7'),
+(20, 'provisioning_xCAT_2x', 'xCAT 2.x Provisioning Module', '', 'VCL::Module::Provisioning::xCAT2'),
+(21, 'provisioning_vmware_vsphere', 'VMware vSphere Provisioning Module', '', 'VCL::Module::Provisioning::VMware::VMware');
 
 -- 
 -- Dumping data for table `OS`
@@ -1312,7 +1318,8 @@ INSERT INTO `OS` (`id`, `name`, `prettyname`, `type`, `installtype`, `sourcepath
 (33, 'vmwarewinvista', 'VMware Windows Vista', 'windows', 'vmware', 'vmware_images', 7),
 (34, 'win7', 'Windows 7', 'windows', 'partimage', 'image', 17),
 (35, 'vmwarewin7', 'VMware Windows 7', 'windows', 'vmware', 'vmware_images', 17),
-(36, 'vmwarelinux', 'VMware Generic Linux', 'linux', 'vmware', 'vmware_images', 5);
+(36, 'vmwarelinux', 'VMware Generic Linux', 'linux', 'vmware', 'vmware_images', 5),
+(37, 'vmwarewin2003', 'VMware Windows 2003 Server', 'windows', 'vmware', 'vmware_images', 13);
 
 -- 
 -- Dumping data for table `OSinstalltype`
@@ -1359,11 +1366,12 @@ INSERT INTO `privnode` (`id`, `parent`, `name`) VALUES
 
 INSERT INTO `provisioning` (`id`, `name`, `prettyname`, `moduleid`) VALUES
 (1, 'xcat_13', 'xCAT 1.3', 1),
-(2, 'vmware_server_gsx', 'VMware Server GSX', 2),
+(2, 'vmware_server_1', 'VMware Server 1.x', 2),
 (3, 'lab', 'Computing Lab', 3),
 (4, 'vmware_esx', 'VMware ESX', 10),
 (5, 'xcat_21', 'xCAT 2.1', 11),
-(7, 'xCAT_2x', 'xCAT 2.x', 20);
+(6, 'xcat_2x', 'xCAT 2.x', 20),
+(7, 'vmware_vsphere', 'VMware vSphere', 21);
 
 -- 
 -- Dumping data for table `resource`
@@ -1570,11 +1578,13 @@ INSERT INTO `variable` (`id`, `name`, `serialization`, `value`) VALUES
 -- Dumping data for table `vmprofile`
 -- 
 
-INSERT INTO `vmprofile` (`id`, `profilename`, `vmtypeid`, `imageid`, `nasshare`, `datastorepath`, `vmpath`, `virtualswitch0`, `virtualswitch1`, `vmdisk`) VALUES
-(1, 'VMware GSX standard', 3, 8, NULL, '/var/lib/vmware/Virtual Machines', NULL, 'VMnet0', 'VMnet2', 'localdisk'),
-(2, 'Vmware ESX standard network mounted share', 5, 9, NULL, '/vmfs/volumes/nfs1', '/vmfs/volumes/storage1', 'VM Network', 'Virtual Machine Public Network', 'networkdisk'),
-(3, 'Vmware ESX standard localdisk', 5, 9, NULL, '/vmfs/volumes/storage1', NULL, 'VM Network', 'Virtual Machine Public Network', 'localdisk'),
-(4, 'Vmware ESX SAN', 5, 9, NULL, '/vmfs/volumes/NetApp', '/vmfs/volumes/storage1', 'Intranet2', 'MCNC Public', 'networkdisk');
+INSERT INTO `vmprofile` (`id`, `profilename`, `vmtypeid`, `imageid`, `repositorypath`, `datastorepath`, `vmpath`, `virtualswitch0`, `virtualswitch1`, `vmdisk`) VALUES
+(1, 'VMware Server 1.x - local storage', 1, 4, NULL, '/var/lib/vmware/Virtual Machines', NULL, 'VMnet0', 'VMnet2', 'localdisk'),
+(2, 'VMware Server 2.x - local storage', 1, 4, NULL, '/var/lib/vmware/Virtual Machines', NULL, 'Bridged', 'Bridged (2)', 'localdisk'),
+(3, 'VMware Server 2.x - network storage', 1, 4, NULL, '/vmfs/volumes/nfs-datastore', '/var/lib/vmware/Virtual Machines', 'Bridged', 'Bridged (2)', 'networkdisk'),
+(4, 'VMware ESX - local storage', 5, 4, NULL, '/vmfs/volumes/local-datastore', NULL, 'Private', 'Public', 'localdisk'),
+(5, 'VMware ESX - network storage', 5, 4, NULL, '/vmfs/volumes/nfs-datastore', NULL, 'Private', 'Public', 'networkdisk'),
+(6, 'VMware ESX - local & network storage', 5, 4, NULL, '/vmfs/volumes/nfs-datastore1', '/vmfs/volumes/local-datastore', 'Private', 'Public', 'networkdisk');
 
 -- 
 -- Dumping data for table `vmtype`
@@ -1803,6 +1813,7 @@ ALTER TABLE `userpriv`
 -- Constraints for table `vmhost`
 --
 ALTER TABLE `vmhost`
+  ADD CONSTRAINT `vmhost_ibfk_2` FOREIGN KEY (`vmprofileid`) REFERENCES `vmprofile` (`id`) ON UPDATE CASCADE,
   ADD CONSTRAINT `vmhost_ibfk_1` FOREIGN KEY (`computerid`) REFERENCES `computer` (`id`) ON UPDATE CASCADE;
 
 --
