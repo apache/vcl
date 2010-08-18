@@ -2464,6 +2464,7 @@ function submitCompStateChange() {
 		$changenow = array();
 		$changeasap = array();
 		$changetimes = array();
+		$changetimes2 = array();
 		foreach($data['computerids'] as $compid) {
 			if($computers[$compid]['state'] == 'maintenance')
 				array_push($noaction, $compid);
@@ -2472,11 +2473,12 @@ function submitCompStateChange() {
 		}
 		$passes = array();
 		$fails = array();
+		$blockallocs = array();
+		$blockfails = array();
 		// get semaphore lock
 		if(! semLock())
 			abort(3);
 		foreach($changeasap as $compid) {
-			# TODO what about blockComputers?
 			# try to move future reservations off of computer
 			moveReservationsOffComputer($compid);
 			# get end time of last reservation
@@ -2489,6 +2491,15 @@ function submitCompStateChange() {
 			       . "ORDER BY end DESC "
 			       . "LIMIT 1";
 			$qh = doQuery($query, 101);
+			$query2 = "SELECT t.end "
+			        . "FROM blockComputers c, "
+			        .      "blockTimes t "
+			        . "WHERE c.computerid = $compid AND "
+			        .       "c.blockTimeid = t.id AND "
+			        .       "t.end > NOW() "
+			        . "ORDER BY t.end DESC "
+			        . "LIMIT 1";
+			$qh2 = doQuery($query2, 101);
 			# create a really long reservation starting at that time in state tomaintenance
 			if($row = mysql_fetch_assoc($qh)) {
 				$start = $row['end'];
@@ -2499,6 +2510,18 @@ function submitCompStateChange() {
 					$passes[] = $compid;
 				else
 					$fails[] = $compid;
+			}
+			// if part of a block allocation, create a really long reservation
+			#   starting at the block allocation end time in state tomaintenance
+			elseif($row = mysql_fetch_assoc($qh2)) {
+				$start = $row['end'];
+				$changetimes2[$compid] = $start;
+				$end = datetimeToUnix($start) + SECINWEEK; // hopefully keep future reservations off of it
+				$end = unixToDatetime($end);
+				if(simpleAddRequest($compid, $imageid, $imagerevisionid, $start, $end, 18, $vclreloadid))
+					$blockallocs[] = $compid;
+				else
+					$blockfails[] = $compid;
 			}
 			# change to maintenance state and save in $changenow
 			// if we wait and put them all in maintenance at the same time,
@@ -2568,6 +2591,38 @@ function submitCompStateChange() {
 			print "</TABLE>\n";
 			print "<br>\n";
 		}
+		if(count($blockallocs)) {
+			print "The following computers are part of an upcoming block allocation ";
+			print "and will be placed in the maintenance state at the time listed ";
+			print "for each computer:\n";
+			print "<TABLE>\n";
+			print "  <TR>\n";
+			print "    <TH>Computer</TH>\n";
+			print "    <TH>Maintenance time</TH>\n";
+			print "  </TR>\n";
+			foreach($blockallocs as $compid) {
+				print "  <TR>\n";
+				print "    <TD align=center><font color=\"ff8c00\">{$computers[$compid]['hostname']}</font></TD>\n";
+				$time = date('n/j/y g:i a', datetimeToUnix($changetimes2[$compid]));
+				print "    <TD align=center>$time</TD>\n";
+				print "  </TR>\n";
+			}
+			print "</TABLE>\n";
+			print "<br>\n";
+		}
+		if(count($blockfails)) {
+			print "The following computers currently have reservations on them ";
+			print "but no functional management node was found for them. Nothing will ";
+			print "be done with them at this time:\n";
+			print "<TABLE>\n";
+			foreach($blockfails as $compid) {
+				print "  <TR>\n";
+				print "    <TD align=center><font color=\"ff0000\">{$computers[$compid]['hostname']}</font></TD>\n";
+				print "  </TR>\n";
+			}
+			print "</TABLE>\n";
+			print "<br>\n";
+		}
 		if(count($noaction)) {
 			print "The following computers were already in the maintenance ";
 			print "state and had their notes on being in the maintenance state ";
@@ -2594,6 +2649,7 @@ function submitCompStateChange() {
 		$noaction = array();
 		$changenow = array();
 		$changeasap = array();
+		$blockalloc = array();
 		$changetimes = array();
 		$fails = array();
 		foreach($data['computerids'] as $compid) {
@@ -2606,7 +2662,6 @@ function submitCompStateChange() {
 		if(! semLock())
 			abort(3);
 		foreach($changeasap as $compid) {
-			# TODO what about blockComputers?
 			moveReservationsOffComputer($compid);
 			# get end time of last reservation
 			$query = "SELECT rq.end "
@@ -2618,9 +2673,22 @@ function submitCompStateChange() {
 			       . "ORDER BY end DESC "
 			       . "LIMIT 1";
 			$qh = doQuery($query, 101);
+			$query2 = "SELECT c.computerid "
+			        . "FROM blockComputers c, "
+			        .      "blockTimes t "
+			        . "WHERE c.computerid = $compid AND "
+			        .       "c.blockTimeid = t.id AND "
+			        .       "t.end > NOW()";
+			$qh2 = doQuery($query2, 101);
 			if($row = mysql_fetch_assoc($qh)) {
 				// if there is a reservation, leave in $changeasap so we can
 				#   notify that we can't change this one
+			}
+			// if computer allocated to block allocation remove from $changeasap
+			#    and add to $blockalloc
+			elseif($row = mysql_fetch_assoc($qh2)) {
+				unset_by_val($compid, $changeasap);
+				$blockalloc[] = $compid;
 			}
 			# change to vmhostinuse state and save in $changenow
 			// if we wait and put them all in vmhostinuse at the same time,
@@ -2708,6 +2776,18 @@ function submitCompStateChange() {
 			print "</TABLE>\n";
 			print "<br>\n";
 		}
+		if(count($blockalloc)) {
+			print "The following computers are part of an upcoming block allocation ";
+			print "and cannot be placed in the vmhostinuse state at this time:\n";
+			print "<TABLE>\n";
+			foreach($blockalloc as $compid) {
+				print "  <TR>\n";
+				print "    <TD><font color=\"ff0000\">{$computers[$compid]['hostname']}</font></TD>\n";
+				print "  </TR>\n";
+			}
+			print "</TABLE>\n";
+			print "<br>\n";
+		}
 		if(count($noaction)) {
 			print "The following computers were already in the vmhostinuse ";
 			print "state:\n";
@@ -2726,6 +2806,7 @@ function submitCompStateChange() {
 		$noaction = array();
 		$changenow = array();
 		$changeasap = array();
+		$blockalloc = array();
 		$changetimes = array();
 		foreach($data['computerids'] as $compid) {
 			if($computers[$compid]['state'] == 'hpc')
@@ -2736,7 +2817,6 @@ function submitCompStateChange() {
 		if(! semLock())
 			abort(3);
 		foreach($changeasap as $compid) {
-			# TODO what about blockComputers?
 			moveReservationsOffComputer($compid);
 			# get end time of last reservation
 			$query = "SELECT rq.end "
@@ -2748,9 +2828,22 @@ function submitCompStateChange() {
 			       . "ORDER BY end DESC "
 			       . "LIMIT 1";
 			$qh = doQuery($query, 101);
+			$query2 = "SELECT c.computerid "
+			        . "FROM blockComputers c, "
+			        .      "blockTimes t "
+			        . "WHERE c.computerid = $compid AND "
+			        .       "c.blockTimeid = t.id AND "
+			        .       "t.end > NOW()";
+			$qh2 = doQuery($query2, 101);
 			if($row = mysql_fetch_assoc($qh)) {
 				// if there is a reservation, leave in $changeasap so we can
 				#   notify that we can't change this one
+			}
+			// if computer allocated to block allocation remove from $changeasap
+			#    and add to $blockalloc
+			elseif($row = mysql_fetch_assoc($qh2)) {
+				unset_by_val($compid, $changeasap);
+				$blockalloc[] = $compid;
 			}
 			# change to hpc state and save in $changenow
 			// if we wait and put them all in hpc at the same time,
@@ -2784,6 +2877,18 @@ function submitCompStateChange() {
 			print "and cannot be placed in the hpc state at this time:\n";
 			print "<TABLE>\n";
 			foreach($changeasap as $compid) {
+				print "  <TR>\n";
+				print "    <TD><font color=\"ff0000\">{$computers[$compid]['hostname']}</font></TD>\n";
+				print "  </TR>\n";
+			}
+			print "</TABLE>\n";
+			print "<br>\n";
+		}
+		if(count($blockalloc)) {
+			print "The following computers are part of an upcoming block allocation ";
+			print "and cannot be placed in the hpc state at this time:\n";
+			print "<TABLE>\n";
+			foreach($blockalloc as $compid) {
 				print "  <TR>\n";
 				print "    <TD><font color=\"ff0000\">{$computers[$compid]['hostname']}</font></TD>\n";
 				print "  </TR>\n";
