@@ -138,14 +138,12 @@ sub process {
 
 	# Get user info	
 	my %info;
-	my $owner_affiliation_sitewwwaddress;
 	my $owner_affiliation_helpaddress;
 	my $owner_email;
 
 	if( %info = get_user_info($blockrequest_owner_id)){
 		$owner_email = $info{email};
 		$owner_affiliation_helpaddress = $info{helpaddress};
-		$owner_affiliation_sitewwwaddress = $info{sitewwwaddress};
 	}
 		
 	#Set local timer
@@ -161,7 +159,6 @@ sub process {
 	notify($ERRORS{'DEBUG'}, 0, "blocktime start: $blocktime_start");
 	notify($ERRORS{'DEBUG'}, 0, "owner email: $owner_email");
 	notify($ERRORS{'DEBUG'}, 0, "help address: $owner_email");
-	notify($ERRORS{'DEBUG'}, 0, "owner www addr: $owner_affiliation_sitewwwaddress");
 
 	if ($blockrequest_mode eq "start") {
 
@@ -174,6 +171,12 @@ sub process {
 		my $loop_control = 0;
 		my $xmlcall;
 		my ($warningmsg, $errormsg);
+		
+		my $urla = $XMLRPC_URL;
+		my $blockAlloc_URL;
+		if($urla =~ /(.*)(=xmlrpccall)/){
+			$blockAlloc_URL = $1 . "=blockallocations";
+		}
 
 		my($allocated,$unallocated) = 0;
 
@@ -215,6 +218,8 @@ sub process {
 		}
 		
 		my $body;
+		my $subject = "VCL Block allocation results for $blockrequest_name";
+		my $mailstring;
 	
 		if(defined($warningmsg) || defined($errormsg) || ($allocated < $blockrequest_number_machines)){
 			$body .= "Problem processing block allocation \n\n";
@@ -229,16 +234,41 @@ sub process {
 			$body .= "\n";
 
 			notify($ERRORS{'CRITICAL'}, 0, "$body");
+
+			if($allocated < $blockrequest_number_machines){
+			$subject = "VCL Block allocation warning for $blockrequest_name";
+	
+			$mailstring .= << "EOF";
+WARNING - The block allocation for $blockrequest_name was not successfully processed for the following session.
+
+REASON: machines allocated were less than requested
+
+Block allocation name   = $blockrequest_name
+Machines allocated      = $allocated
+Machines requested      = $blockrequest_number_machines
+Block Start time        = $blocktime_start
+Block End time          = $blocktime_end
+User Group              = $block_group_name
+
+
+The VCL staff have been notified to attempt to correct the issue.
+
+If you wish to cancel this session or make changes to future sessions. Please visit
+the VCL site: $blockAlloc_URL
+
+EOF
+                        	if(defined($owner_email)){
+                                	mail($owner_email, $subject, $mailstring, $owner_affiliation_helpaddress);
+                        	}
+			}
+			
 		
 		}
-
+		elsif($completed){
 		# Notify block request owner for given time slot has been processed.
-	
-		if($completed){
 			
-			my $subject = "VCL Block allocation results for $blockrequest_name";
 			my $mailstring .= <<"EOF";
-The block allocation for $blockrequest_name was processed with the following results:
+The block allocation for $blockrequest_name was processed successfully with the following results:
 
 Block allocation name	= $blockrequest_name
 Machines allocated	= $allocated
@@ -251,8 +281,8 @@ The machines for this block allocation will be loaded up to an hour before the a
 Once loaded the users listed in the user group $block_group_name will be able to login up to 15 minutes 
 before the start time.
 
-To make changes or to view the status of this block allocation. Please visit,
-$owner_affiliation_sitewwwaddress/scheduling/index.php?mode=blockAllocations
+If you wish to cancel this session or need to make changes to future sessions. Please visit 
+the VCL site: $blockAlloc_URL
 
 EOF
 			if(defined($owner_email)){
