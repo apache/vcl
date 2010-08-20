@@ -226,16 +226,6 @@ sub pre_capture {
 		return 0;
 	}
 
-#=item *
-#
-# Disable IPv6
-#
-#=cut
-#
-#	if (!$self->disable_ipv6()) {
-#		notify($ERRORS{'WARNING'}, 0, "unable to disable IPv6");
-#	}
-
 =item *
 
  Disable dynamic DNS
@@ -334,17 +324,6 @@ sub pre_capture {
 
 	if (!$self->clean_hard_drive()) {
 		notify($ERRORS{'WARNING'}, 0, "unable to clean unnecessary files the hard drive");
-	}
-	
-=item *
-
- Configure the network adapters to use DHCP
-
-=cut
-
-	if (!$self->enable_dhcp()) {
-		notify($ERRORS{'WARNING'}, 0, "unable to enable DHCP on the public and private interfaces");
-		return 0;
 	}
 
 =item *
@@ -3078,14 +3057,40 @@ sub shutdown {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
+	
+	# Get the argument that determines whether or not to disable DHCP before shutting down computer
+	my $disable_dhcp = shift;
 
 	my $management_node_keys = $self->data->get_management_node_keys();
 	my $computer_node_name   = $self->data->get_computer_node_name();
-
-	notify($ERRORS{'DEBUG'}, 0, "$computer_node_name will be shut down");
-
+	
+	my $system32_path = $self->get_system32_path();
+	my $shutdown_command = "/bin/cygstart.exe cmd.exe /c \"";
+	
+	if ($disable_dhcp) {
+		notify($ERRORS{'DEBUG'}, 0, "enabling DHCP and shutting down $computer_node_name");
+		
+		my $private_interface_name = $self->get_private_interface_name();
+		my $public_interface_name = $self->get_public_interface_name();
+		if (!$private_interface_name || !$public_interface_name) {
+			notify($ERRORS{'WARNING'}, 0, "unable to determine private and public interface names, failed to enable DHCP and shut down $computer_node_name");
+			return;
+		}
+		
+		$shutdown_command .= "$system32_path/netsh.exe interface ip set address name=\\\"$private_interface_name\\\" source=dhcp & ";
+		$shutdown_command .= "$system32_path/netsh.exe interface ip set dnsservers name=\\\"$private_interface_name\\\" source=dhcp & ";
+		
+		$shutdown_command .= "$system32_path/netsh.exe interface ip set address name=\\\"$public_interface_name\\\" source=dhcp & ";
+		$shutdown_command .= "$system32_path/netsh.exe interface ip set dnsservers name=\\\"$public_interface_name\\\" source=dhcp & ";
+		
+		$shutdown_command .= "$system32_path/route.exe DELETE 0.0.0.0 MASK 0.0.0.0 & ";
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "shutting down $computer_node_name");
+	}
+	
 	# Initiate the shutdown.exe command to reboot the computer
-	my $shutdown_command = 'cmd.exe /c "' . $self->get_system32_path() . '/shutdown.exe -s -t 0 -f"';
+	$shutdown_command .= "$system32_path/shutdown.exe -s -t 0 -f\"";
 	
 	my $attempt_count = 0;
 	my $attempt_limit = 12;
@@ -3097,30 +3102,28 @@ sub shutdown {
 		}
 		
 		my ($shutdown_exit_status, $shutdown_output) = run_ssh_command($computer_node_name, $management_node_keys, $shutdown_command);
-		if (defined($shutdown_exit_status) && $shutdown_exit_status == 0) {
-			notify($ERRORS{'DEBUG'}, 0, "attempt $attempt_count/$attempt_limit: executed shutdown command on $computer_node_name");
-			
-			# Wait maximum of 3 minutes for the computer to become unresponsive
-			if ($self->wait_for_no_ping(180)) {
-				notify($ERRORS{'OK'}, 0, "attempt $attempt_count/$attempt_limit: computer has become unresponsive after shutdown command was issued");
-				return 1;
-			}
-			else {
-				# Computer never stopped responding to ping
-				notify($ERRORS{'WARNING'}, 0, "attempt $attempt_count/$attempt_limit: $computer_node_name never became unresponsive after shutdown command was issued, attempting power off");
-			}
+		if (!defined($shutdown_output)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to execute ssh command to shutdown $computer_node_name");
+			last;
 		}
-		elsif (defined($shutdown_output) && grep(/processing another action/i, @$shutdown_output)) {
+		elsif (grep(/(processing another action)/i, @$shutdown_output)) {
 			notify($ERRORS{'WARNING'}, 0, "attempt $attempt_count/$attempt_limit: failed to execute shutdown command on $computer_node_name, exit status: $shutdown_exit_status, output:\n@{$shutdown_output}");
 			next;
 		}
-		elsif (defined($shutdown_output)) {
-			notify($ERRORS{'WARNING'}, 0, "attempt $attempt_count/$attempt_limit: failed to execute shutdown command on $computer_node_name, exit status: $shutdown_exit_status, output:\n@{$shutdown_output}");
-		}
 		else {
-			notify($ERRORS{'WARNING'}, 0, "failed to execute ssh command to shutdown $computer_node_name");
+			notify($ERRORS{'DEBUG'}, 0, "attempt $attempt_count/$attempt_limit: executed shutdown command on $computer_node_name");
+			last;
 		}
-		last;
+	}
+	
+	# Wait maximum of 3 minutes for the computer to become unresponsive
+	if ($self->wait_for_no_ping(180)) {
+		notify($ERRORS{'OK'}, 0, "attempt $attempt_count/$attempt_limit: computer has become unresponsive after shutdown command was issued");
+		return 1;
+	}
+	else {
+		# Computer never stopped responding to ping
+		notify($ERRORS{'WARNING'}, 0, "$computer_node_name did not become unresponsive after shutdown command was issued, attempting power off");
 	}
 	
 	# Call provisioning module's power_off() subroutine
@@ -3291,7 +3294,7 @@ sub prepare_post_load {
 	
 	# Shut down computer unless end_state argument was passed with a value other than 'off'
 	if ($end_state eq 'off') {
-		if (!$self->shutdown()) {
+		if (!$self->shutdown(1)) {
 			notify($ERRORS{'WARNING'}, 0, "failed to shut down computer");
 			return;
 		}
@@ -4670,6 +4673,9 @@ sub get_network_configuration {
 				$network_configuration{$interface_name}{$setting} = $value;
 			}
 		}
+		
+		
+		
 		
 		notify($ERRORS{'DEBUG'}, 0, 'saving network configuration in $self->{network_configuration}');
 		$self->{network_configuration} = \%network_configuration;

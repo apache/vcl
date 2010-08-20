@@ -324,6 +324,12 @@ sub load {
 	
 	insertloadlog($reservation_id, $computer_id, "startload", "$computer_name $image_name");
 	
+	# Remove existing VMs which were created for the reservation computer
+	if (!$self->remove_existing_vms()) {
+		notify($ERRORS{'WARNING'}, 0, "failed to remove existing VMs created for computer $computer_name on VM host: $vmhost_hostname");
+		return;
+	}
+	
 	# Check if the .vmdk files exist, copy them if necessary
 	if (!$self->prepare_vmdk()) {
 		notify($ERRORS{'WARNING'}, 0, "failed to prepare vmdk file for $computer_name on VM host: $vmhost_hostname");
@@ -391,17 +397,27 @@ sub capture {
 	}
 	
 	# Determine the vmx file path actively being used by the VM
-	my $vmx_file_path = $self->get_active_vmx_file_path();
-	if (!$vmx_file_path) {
-		notify($ERRORS{'WARNING'}, 0, "unable to capture image, failed to determine the vmx file path being used by $computer_name");
+	my $vmx_file_path_capture = $self->get_active_vmx_file_path();
+	if (!$vmx_file_path_capture) {
+		notify($ERRORS{'WARNING'}, 0, "failed to determine the vmx file path actively being used by $computer_name");
 		return;
 	}
 
 	# Set the vmx file path in this object so that it overrides the default value that would normally be constructed
-	$self->set_vmx_file_path($vmx_file_path) || return;
+	if (!$self->set_vmx_file_path($vmx_file_path_capture)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to set the vmx file to the path that was determined to be in use by the VM being captured: $vmx_file_path_capture");
+		return;
+	}
+	
+	# Get the vmx directory path of the VM being captured
+	my $vmx_directory_path_capture = $self->get_vmx_directory_path();
+	if (!$vmx_directory_path_capture) {
+		notify($ERRORS{'WARNING'}, 0, "failed to determine the vmx directory path of the VM being captured");
+		return;
+	}
 	
 	# Get the information contained within the vmx file
-	my $vmx_info = $self->get_vmx_info($vmx_file_path);
+	my $vmx_info = $self->get_vmx_info($vmx_file_path_capture);
 	notify($ERRORS{'DEBUG'}, 0, "vmx info for VM to be captured:\n" . format_data($vmx_info));
 	
 	# Get the vmdk info from the vmx info
@@ -415,13 +431,13 @@ sub capture {
 		return;
 	}
 	
-	# Get the vmdk file path from the vmx information
-	my $vmdk_file_path = $vmx_info->{vmdk}{$vmdk_identifiers[0]}{vmdk_file_path};
-	if (!$vmdk_file_path) {
-		notify($ERRORS{'WARNING'}, 0, "vmdk file path was not found in the vmx info:\n" . format_data($vmx_info));
+	# Get the vmdk file path to be captured from the vmx information
+	my $vmdk_file_path_capture = $vmx_info->{vmdk}{$vmdk_identifiers[0]}{vmdk_file_path};
+	if (!$vmdk_file_path_capture) {
+		notify($ERRORS{'WARNING'}, 0, "vmdk file path to be captured was not found in the vmx file info:\n" . format_data($vmx_info));
 		return;	
 	}
-	notify($ERRORS{'DEBUG'}, 0, "vmdk file path used by the VM: $vmdk_file_path");
+	notify($ERRORS{'DEBUG'}, 0, "vmdk file path used by the VM to be captured: $vmdk_file_path_capture");
 	
 	# Get the vmdk mode from the vmx information and make sure it's persistent
 	my $vmdk_mode = $vmx_info->{vmdk}{$vmdk_identifiers[0]}{mode};
@@ -429,70 +445,96 @@ sub capture {
 		notify($ERRORS{'WARNING'}, 0, "vmdk mode was not found in the vmx info:\n" . format_data($vmx_info));
 		return;	
 	}
-	elsif ($vmdk_mode !~ /(independent-)?persistent/i) {
-		notify($ERRORS{'WARNING'}, 0, "vmdk mode is not persistent: $vmdk_mode");
+	elsif ($vmdk_mode !~ /^(independent-)?persistent/i) {
+		notify($ERRORS{'WARNING'}, 0, "mode of vmdk '$vmdk_file_path_capture': $vmdk_mode, the mode must be persistent in order to be captured");
 		return;	
 	}
-	notify($ERRORS{'DEBUG'}, 0, "vmdk mode is valid: $vmdk_mode");
+	notify($ERRORS{'DEBUG'}, 0, "mode of vmdk to be captured is valid: $vmdk_mode");
 	
 	# Set the vmdk file path in this object so that it overrides the default value that would normally be constructed
-	$self->set_vmdk_file_path($vmdk_file_path) || return;
+	if (!$self->set_vmdk_file_path($vmdk_file_path_capture)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to set the vmdk file to the path that was determined to be in use by the VM being captured: $vmdk_file_path_capture");
+		return;
+	}
 	
 	# Construct the vmdk file path where the captured image will be saved to
-	my $vmdk_renamed_file_path = "$vmhost_profile_datastore_path/$image_name/$image_name.vmdk";
+	my $vmdk_file_path_renamed = "$vmhost_profile_datastore_path/$image_name/$image_name.vmdk";
 	
 	# Make sure the vmdk file path for the captured image doesn't already exist
-	if ($vmdk_file_path ne $vmdk_renamed_file_path && $self->vmhost_os->file_exists($vmdk_renamed_file_path)) {
-		notify($ERRORS{'WARNING'}, 0, "vmdk file for captured image already exists: $vmdk_renamed_file_path");
+	# Do this before calling pre_capture and shutting down the VM
+	if ($vmdk_file_path_capture ne $vmdk_file_path_renamed && $self->vmhost_os->file_exists($vmdk_file_path_renamed)) {
+		notify($ERRORS{'WARNING'}, 0, "vmdk file that captured image will be renamed to already exists: $vmdk_file_path_renamed");
 		return;
 	}
 	
 	# Write the details about the new image to ~/currentimage.txt
-	write_currentimage_txt($self->data) || return;
+	if (!write_currentimage_txt($self->data)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to create the currentimage.txt file on the VM being captured");
+		return;
+	}
 	
 	# Call the OS module's pre_capture() subroutine if implemented
-	if ($self->os->can("pre_capture")) {
-		$self->os->pre_capture({end_state => 'off'}) || return;
+	if ($self->os->can("pre_capture") && !$self->os->pre_capture({end_state => 'off'})) {
+		notify($ERRORS{'WARNING'}, 0, "failed to complete OS module's pre_capture tasks");
+		return;
 	}
 	
 	# Power off the VM if it's not already off
-	my $vm_power_state = $self->api->get_vm_power_state($vmx_file_path) || return;
-	if ($vm_power_state !~ /off/i) {
-		$self->api->vm_power_off($vmx_file_path) || return;
-		
-		# Sleep for 5 seconds to make sure the power off is complete
-		sleep 5;
+	my $vm_power_state = $self->api->get_vm_power_state($vmx_file_path_capture);
+	if (!defined($vm_power_state)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve the power state of the VM being captured after the OS module's pre_capture tasks were completed");
+		return;
+	}
+	elsif ($vm_power_state !~ /off/i) {
+		if ($self->api->vm_power_off($vmx_file_path_capture)) {
+			# Sleep for 5 seconds to make sure the power off is complete
+			sleep 5;
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to power off the VM being captured after the OS module's pre_capture tasks were completed, VM power state: $vm_power_state");
+			return;
+		}
 	}
 	
 	# Rename the vmdk files on the VM host and change the vmdk directory name to the image name
-	# This ensures that the vmdk and vmx files now reside in different directories
-	#   so that the vmdk files can't be deleted when the vmx directory is deleted later on
-	if ($vmdk_file_path ne $vmdk_renamed_file_path) {
-		$self->rename_vmdk($vmdk_file_path, $vmdk_renamed_file_path) || return;
-		$self->set_vmdk_file_path($vmdk_renamed_file_path) || return;
+	if ($vmx_file_path_capture ne $vmdk_file_path_renamed) {
+		if (!$self->rename_vmdk($vmdk_file_path_capture, $vmdk_file_path_renamed)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to rename the vmdk files after the VM was powered off: '$vmdk_file_path_capture' --> '$vmdk_file_path_renamed'");
+			return;
+		}
+		
+		if (!$self->set_vmdk_file_path($vmdk_file_path_renamed)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to set the vmdk file to the path after renaming the vmdk files: $vmdk_file_path_renamed");
+			return;
+		}
 	}
 	else {
-		notify($ERRORS{'DEBUG'}, 0, "vmdk file does not need to be renamed: $vmdk_file_path");
+		notify($ERRORS{'DEBUG'}, 0, "vmdk file does not need to be renamed: $vmx_file_path_capture");
 	}
+	
+	# Get the renamed vmdk directory path
+	my $vmdk_directory_path_renamed = $self->get_vmdk_directory_path();
 	
 	# Check if the VM host is using local or network-based disk to store vmdk files
 	# Don't have to do anything else for network disk because the vmdk directory has already been renamed
 	if ($vmprofile_vmdisk eq "localdisk") {
-		# Get the vmdk directory path
-		my $vmdk_directory_path = $self->get_vmdk_directory_path() || return;
-		
 		# Copy the vmdk directory from the VM host to the image repository
-		my @vmdk_copy_paths = $self->vmhost_os->find_files($vmdk_directory_path, '*.vmdk');
+		my @vmdk_copy_paths = $self->vmhost_os->find_files($vmdk_directory_path_renamed, '*.vmdk');
 		if (!@vmdk_copy_paths) {
-			notify($ERRORS{'WARNING'}, 0, "unable to find vmdk file paths on VM host to copy back to the managment node, vmdk directory path: $vmdk_directory_path, pattern: *.vmdk");
+			notify($ERRORS{'WARNING'}, 0, "failed to find the renamed vmdk files on VM host to copy back to the managment node's image repository");
 			return;
 		}
 		
-		my $repository_directory_path = $self->get_repository_vmdk_directory_path() || return;
+		# Get the image repository directory path on this management node
+		my $repository_directory_path = $self->get_repository_vmdk_directory_path();
+		if (!$repository_directory_path) {
+			notify($ERRORS{'WARNING'}, 0, "failed to retrieve management node's image repository path");
+			return;
+		}
 		
 		# Loop through the files, copy each to the management node's repository directory
 		for my $vmdk_copy_path (@vmdk_copy_paths) {
-			my ($vmdk_copy_name) = $vmdk_copy_path =~ /([^\/]+)$/g;
+			my ($vmdk_copy_name) = $vmdk_copy_path =~ /([^\/]+)$/;
 			if (!$self->vmhost_os->copy_file_from($vmdk_copy_path, "$repository_directory_path/$vmdk_copy_name")) {
 				notify($ERRORS{'WARNING'}, 0, "failed to copy vmdk file from the VM host to the management node:\n '$vmdk_copy_path' --> '$repository_directory_path/$vmdk_copy_name'");
 				return;
@@ -500,19 +542,40 @@ sub capture {
 		}
 		
 		# Delete the vmdk directory on the VM host
-		$self->vmhost_os->delete_file($vmdk_directory_path) || return;
+		if ($vmdk_directory_path_renamed eq $vmx_directory_path_capture) {
+			notify($ERRORS{'DEBUG'}, 0, "renamed vmdk directory will not be deleted yet because it matches the vmx directory path and the VM has not been unregistered yet: $vmdk_directory_path_renamed");
+		}
+		else {
+			if ($self->vmhost_os->delete_file($vmdk_directory_path_renamed)) {
+				notify($ERRORS{'OK'}, 0, "deleted the vmdk directory after files were copied to the image repository: $vmdk_directory_path_renamed");
+			}
+			else {
+				notify($ERRORS{'WARNING'}, 0, "failed to delete the vmdk directory after files were copied to the image repository: $vmdk_directory_path_renamed");
+			}
+		}
 	}
+	
 	
 	# Unregister the VM
-	$self->api->vm_unregister($vmx_file_path) || return;
-	
-	# Delete the vmx directory
-	if ($self->get_vmx_directory_path() ne $self->get_vmdk_directory_path()) {
-		$self->vmhost_os->delete_file($self->get_vmx_directory_path()) || return;
+	if ($self->api->vm_unregister($vmx_file_path_capture)) {
+		notify($ERRORS{'OK'}, 0, "unregistered the VM being captured: $vmx_file_path_capture");
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "vmx directory not deleted because it matches the vmdk directory, this should never happen: " . $self->get_vmdk_directory_path());
-		return;
+		notify($ERRORS{'WARNING'}, 0, "failed to unregister the VM being captured: $vmx_file_path_capture");
+	}
+	
+	
+	# Delete the vmx directory
+	if ($vmprofile_vmdisk eq "networkdisk" && $vmx_directory_path_capture eq $vmdk_directory_path_renamed) {
+		notify($ERRORS{'DEBUG'}, 0, "vmx directory will not be deleted because the VM disk mode is '$vmprofile_vmdisk' and the vmx directory path is the same as the vmdk directory path for the captured image: '$vmdk_directory_path_renamed'");
+	}
+	else {
+		if ($self->vmhost_os->delete_file($vmx_directory_path_capture)) {
+			notify($ERRORS{'OK'}, 0, "deleted the vmx directory after the image was captured: $vmx_directory_path_capture");
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to delete the vmx directory that was captured: $vmx_directory_path_capture");
+		}
 	}
 	
 	return 1;
@@ -935,6 +998,90 @@ sub get_vmhost_api_object {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 remove_existing_vms
+
+ Parameters  : none
+ Returns     : boolean
+ Description : 
+
+=cut
+
+sub remove_existing_vms {
+	my $self = shift;
+	if (ref($self) !~ /vmware/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $computer_name = $self->data->get_computer_short_name() || return;
+	
+	# Check the VMs on the host to see if any match the computer assigned to this reservation
+	# Get an array containing the existing vmx file paths on the VM host
+	my @vmx_file_paths = $self->get_vmx_file_paths();
+	
+	# Get a list of the registered VMs
+	my @registered_vmx_paths = $self->api->get_registered_vms();
+	
+	# Loop through all registered vmx file paths
+	# Make sure the vmx file actually exists for the registered VM
+	# A VM will remain in the registered list if the vmx file is deleted while it is registered
+	for my $registered_vmx_path (@registered_vmx_paths) {
+		if (!grep { $_ eq $registered_vmx_path } @vmx_file_paths) {
+			notify($ERRORS{'WARNING'}, 0, "VM is registered but the vmx file does not exist: $registered_vmx_path");
+			
+			# Unregister the zombie VM
+			if (!$self->api->vm_unregister($registered_vmx_path)) {
+				notify($ERRORS{'WARNING'}, 0, "failed to unregister zombie VM: $registered_vmx_path");
+			}
+		}
+	}
+	
+	# Loop through the existing vmx file paths found, check if it matches the VM for this reservation
+	my $vmx_base_directory_path = $self->get_vmx_base_directory_path();
+	for my $vmx_file_path (@vmx_file_paths) {
+		# Parse the vmx file name from the path
+		my ($vmx_directory_name, $vmx_file_name) = $vmx_file_path =~ /([^\/]+)\/([^\/]+\.vmx)$/i;
+		if (!$vmx_directory_name || !$vmx_file_name) {
+			notify($ERRORS{'WARNING'}, 0, "unable to determine vmx directory and file name from vmx file path: $vmx_file_path");
+			next;
+		}
+		
+		# Ignore file if it does not begin with the base directory path
+		# get_vmx_file_paths() will return all vmx files it finds under the base directory path and all registered vmx files
+		# It's possible for a vmx file to be registered that resided on some other datastore
+		if ($vmx_file_path !~ /^$vmx_base_directory_path/) {
+			notify($ERRORS{'DEBUG'}, 0, "ignoring existing vmx file '$vmx_file_path' because it does not begin with the base directory path: '$vmx_base_directory_path'");
+			next;
+		}
+		
+		# Check if the vmx directory name matches the pattern:
+		# <computer_short_name>_<image id>-v<imagerevision revision>
+		# <computer_short_name>_<image id>-v<imagerevision revision>_<request id>
+		if ($vmx_directory_name =~ /^$computer_name\_\d+-v\d+(_\d+)?$/i) {
+			notify($ERRORS{'DEBUG'}, 0, "found existing vmx directory with that appears to match $computer_name: $vmx_file_path");
+			
+			# Get the info from the vmx file
+			my $vmx_info = $self->get_vmx_info($vmx_file_path);
+			if (!$vmx_info) {
+				notify($ERRORS{'WARNING'}, 0, "unable to retrieve info from existing vmx file on VM host: $vmx_file_path");
+				next;
+			}
+			
+			# Delete the existing VM from the VM host
+			if (!$self->delete_vm($vmx_file_path)) {
+				notify($ERRORS{'WARNING'}, 0, "failed to delete existing VM: $vmx_file_path");
+			}
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "ignoring existing vmx directory: $vmx_directory_name");
+			next;
+		}
+	}
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 prepare_vmx
 
  Parameters  : none
@@ -995,62 +1142,6 @@ sub prepare_vmx {
 	#else {
 	#	notify($ERRORS{'DEBUG'}, 0, "enough space is available for the vmx files on the VM host");
 	#}
-	
-	# Get a hash containing info about all the .vmx files that exist on the VM host
-	# Check the VMs on the host to see if any match the computer assigned to this reservation
-	
-	# Get an array containing the existing vmx file paths on the VM host
-	my @vmx_file_paths = $self->get_vmx_file_paths();
-	
-	# Get a list of the registered VMs
-	my @registered_vmx_paths = $self->api->get_registered_vms();
-	
-	# Loop through all registered vmx file paths
-	# Make sure the vmx file actually exists for the registered VM
-	# A VM will remain in the registered list if the vmx file is deleted while it is registered
-	for my $registered_vmx_path (@registered_vmx_paths) {
-		if (!grep { $_ eq $registered_vmx_path } @vmx_file_paths) {
-			notify($ERRORS{'WARNING'}, 0, "VM is registered but the vmx file does not exist: $registered_vmx_path");
-			
-			# Unregister the zombie VM
-			if (!$self->api->vm_unregister($registered_vmx_path)) {
-				notify($ERRORS{'WARNING'}, 0, "failed to unregister zombie VM: $registered_vmx_path");
-			}
-		}
-	}
-	
-	# Loop through the existing vmx file paths found, check if it matches the VM for this reservation
-	for my $vmx_file_path (@vmx_file_paths) {
-		# Parse the vmx file name from the path
-		my ($vmx_directory_name, $vmx_file_name) = $vmx_file_path =~ /([^\/]+)\/([^\/]+\.vmx)$/i;
-		if (!$vmx_directory_name || !$vmx_file_name) {
-			notify($ERRORS{'WARNING'}, 0, "unable to determine vmx directory and file name from vmx file path: $vmx_file_path");
-			next;
-		}
-		
-		# Check if the vmx directory name matches the pattern:
-		# <computer_short_name>_<image id>-v<imagerevision revision>
-		# <computer_short_name>_<image id>-v<imagerevision revision>_<request id>
-		if ($vmx_directory_name =~ /^$computer_name\_\d+-v\d+(_\d+)?$/i) {
-			notify($ERRORS{'DEBUG'}, 0, "found existing vmx directory with that appears to match $computer_name: $vmx_file_path");
-			
-			# Get the info from the vmx file
-			my $vmx_info = $self->get_vmx_info($vmx_file_path);
-			if (!$vmx_info) {
-				notify($ERRORS{'WARNING'}, 0, "unable to retrieve info from existing vmx file on VM host: $vmx_file_path");
-				next;
-			}
-			
-			# Delete the existing VM from the VM host
-			if (!$self->delete_vm($vmx_file_path)) {
-				notify($ERRORS{'WARNING'}, 0, "failed to delete existing VM: $vmx_file_path");
-			}
-		}
-		else {
-			notify($ERRORS{'DEBUG'}, 0, "ignoring existing vmx file: $vmx_file_path");
-			next;
-		}
-	}
 	
 	# Create the .vmx directory on the host
 	if (!$self->vmhost_os->create_directory($vmx_directory_path)) {
@@ -1117,6 +1208,8 @@ sub prepare_vmx {
 		
 		"config.version" => "8",
 		
+		"disk.locking" => "false",
+		
 		"displayName" => "$display_name",
 		
 		"ethernet0.address" => "$vm_eth0_mac",
@@ -1180,6 +1273,25 @@ sub prepare_vmx {
 			"scsi0:0.mode" => "$vm_disk_mode",
 			"scsi0:0.present" => "TRUE",
 			"scsi0:0.writeThrough" => "$vm_disk_write_through",
+		));
+	}
+	
+	if ($vm_hardware_version >= 7) {
+		%vmx_parameters = (%vmx_parameters, (
+			"pciBridge0.present" => "TRUE",
+			"pciBridge4.present" => "TRUE",
+			"pciBridge4.virtualDev" => "pcieRootPort",
+			"pciBridge4.functions" => "8",
+			"pciBridge5.present" => "TRUE",
+			"pciBridge5.virtualDev" => "pcieRootPort",
+			"pciBridge5.functions" => "8",
+			"pciBridge6.present" => "TRUE",
+			"pciBridge6.virtualDev" => "pcieRootPort",
+			"pciBridge6.functions" => "8",
+			"pciBridge7.present" => "TRUE",
+			"pciBridge7.virtualDev" => "pcieRootPort",
+			"pciBridge7.functions" => "8",
+			"vmci0.present" => "TRUE",
 		));
 	}
 	
@@ -1280,10 +1392,24 @@ sub prepare_vmdk {
 	my $image_name = $self->data->get_image_name() || return;
 	my $vmhost_hostname = $self->data->get_vmhost_hostname() || return;
 	
+	my $is_vm_persistent = $self->is_vm_persistent();
+	
 	# Check if the first .vmdk file exists on the host
 	if ($self->vmhost_os->file_exists($host_vmdk_file_path)) {
-		notify($ERRORS{'DEBUG'}, 0, "vmdk file exists on VM host: $host_vmdk_file_path");
-		return $self->check_vmdk_disk_type();
+		
+		if ($is_vm_persistent) {
+			notify($ERRORS{'DEBUG'}, 0, "VM is persistent and vmdk file already exists on VM host: $host_vmdk_file_path, vmdk file will be deleted and a new copy will be used");
+			exit;
+			if (!$self->vmhost_os->delete_file($host_vmdk_file_path)) {
+				notify($ERRORS{'WARNING'}, 0, "failed to deleted existing vmdk file: ");
+				return;
+			}
+		}
+		else {
+			# vmdk file exists and not persistent
+			# No copying necessary, proceed to check the disk type
+			return $self->check_vmdk_disk_type();
+		}
 	}
 	else {
 		notify($ERRORS{'DEBUG'}, 0, "vmdk file does NOT exist on VM host: $host_vmdk_file_path");
@@ -1311,7 +1437,7 @@ sub prepare_vmdk {
 	#}
 	
 	# Check if the VM is persistent, if so, attempt to copy files locally from the nonpersistent directory if they exist
-	if ($self->is_vm_persistent()) {
+	if ($is_vm_persistent) {
 		
 		if ($self->api->can('copy_virtual_disk') && $self->api->copy_virtual_disk($host_vmdk_file_path_nonpersistent, $host_vmdk_file_path)) {
 			notify($ERRORS{'OK'}, 0, "copied vmdk files from nonpersistent to persistent directory on VM host");
@@ -1419,8 +1545,7 @@ sub check_vmdk_disk_type {
 	my $vmdk_file_path = $self->get_vmdk_file_path() || return;
 	
 	# Check if the API object implements the required subroutines
-	unless ($self->api->can("get_virtual_disk_type")
-			  && $self->api->can("copy_virtual_disk")) {
+	unless ($self->api->can("get_virtual_disk_type") && $self->api->can("copy_virtual_disk")) {
 		notify($ERRORS{'DEBUG'}, 0, "skipping vmdk disk type check because required subroutines are not implemented by the API object");
 		return 1;
 	}
@@ -1448,8 +1573,6 @@ sub check_vmdk_disk_type {
 			my $vmdk_file_prefix = $self->get_vmdk_file_prefix() || return;
 			my $thin_vmdk_file_path = "$vmdk_directory_path/thin_$vmdk_file_prefix.vmdk";
 			
-			my $vm_disk_adapter_type = $self->get_vm_disk_adapter_type() || return;
-			
 			if ($self->vmhost_os->file_exists($thin_vmdk_file_path)) {
 				notify($ERRORS{'DEBUG'}, 0, "thin virtual disk already exists: $thin_vmdk_file_path");
 			}
@@ -1457,7 +1580,7 @@ sub check_vmdk_disk_type {
 				notify($ERRORS{'DEBUG'}, 0, "attempting to create a copy of the virtual disk using the thin virtual disk type: $thin_vmdk_file_path");
 				
 				# Attempt to create a thin copy of the virtual disk
-				if ($self->api->copy_virtual_disk($vmdk_file_path, $thin_vmdk_file_path, 'thin', $vm_disk_adapter_type)) {
+				if ($self->api->copy_virtual_disk($vmdk_file_path, $thin_vmdk_file_path, 'thin')) {
 					notify($ERRORS{'DEBUG'}, 0, "created a copy of the virtual disk using the thin virtual disk type: $thin_vmdk_file_path");
 				}
 				else {
@@ -1490,14 +1613,50 @@ sub check_vmdk_disk_type {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 get_vmx_file_path
+
+ Parameters  : none
+ Returns     : string
+ Description : Returns the path to the vmx file being used for the reservation.
+               Example:
+               /vmfs/volumes/local-datastore/vclv1-29_vmwarewin7-Test75321-v0/vclv1-29_vmwarewin7-Test75321-v0.vmx
+
+=cut
+
+sub get_vmx_file_path {
+	my $self = shift;
+	if (ref($self) !~ /vmware/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	return $ENV{vmx_file_path} if $ENV{vmx_file_path};
+	
+	my $vmx_base_directory_path = $self->get_vmx_base_directory_path();
+	if (!$vmx_base_directory_path) {
+		notify($ERRORS{'WARNING'}, 0, "unable to construct vmx file path, vmx base directory path could not be determined");
+		return;
+	}
+	
+	my $vmx_directory_name = $self->get_vmx_directory_name();
+	if (!$vmx_directory_name) {
+		notify($ERRORS{'WARNING'}, 0, "unable to construct vmx file path, vmx directory name could not be determined");
+		return;
+	}
+	
+	return "$vmx_base_directory_path/$vmx_directory_name/$vmx_directory_name.vmx";
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 get_vmx_base_directory_path
 
  Parameters  : none
  Returns     : string
  Description : Returns the path on the VM host under which the vmx directory is
-               located.  Example:
-               vmx file path: /vmfs/volumes/nfs-vmpath/vm1-6-987-v0/vm1-6-987-v0.vmx
-               vmx base directory path: /vmfs/volumes/nfs-vmpath
+               located.
+               Example:
+               /vmfs/volumes/local-datastore
 
 =cut
 
@@ -1510,25 +1669,29 @@ sub get_vmx_base_directory_path {
 	
 	my $vmx_base_directory_path;
 	
-	my $vmhost_profile_vmpath = normalize_file_path($self->data->get_vmhost_profile_vmpath());
-	if ($vmhost_profile_vmpath) {
-		$vmhost_profile_vmpath =~ s/\\//g;
-		$vmx_base_directory_path = $vmhost_profile_vmpath;
-	}
-	else {
-		my $vmhost_profile_datastore_path = normalize_file_path($self->data->get_vmhost_profile_datastore_path());
-		if ($vmhost_profile_datastore_path) {
-			$vmx_base_directory_path = $vmhost_profile_datastore_path;
+	# Check if vmx_file_path environment variable has been set
+	# If set, parse the path to return the directory name preceding the vmx file name and directory name
+	# /<vmx base directory path>/<vmx directory name>/<vmx file name>
+	if ($ENV{vmx_file_path}) {
+		($vmx_base_directory_path) = $ENV{vmx_file_path} =~ /(.+)\/[^\/]+\/[^\/]+.vmx$/i;
+		if ($vmx_base_directory_path) {
+			return $vmx_base_directory_path;
 		}
 		else {
-			notify($ERRORS{'WARNING'}, 0, "unable to determine the vmdk base directory, could not determine VM path or datastore path from the database");
+			notify($ERRORS{'WARNING'}, 0, "vmx base directory path could not be determined from vmx file path: '$ENV{vmx_file_path}'");
 			return;
 		}
 	}
 	
-	# Remove any trailing slashes
-	$vmx_base_directory_path =~ s/\/$//g;
-	return $vmx_base_directory_path;
+	# Get the vmprofile.vmpath
+	# If this is not set, use vmprofile.datastorepath
+	$vmx_base_directory_path = $self->data->get_vmhost_profile_vmpath() || $self->data->get_vmhost_profile_datastore_path();
+	if (!$vmx_base_directory_path) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine the vmdk base directory path, failed to retrieve either the VM path or datastore path for the VM profile");
+		return;
+	}
+	
+	return normalize_file_path($vmx_base_directory_path);
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -1540,8 +1703,8 @@ sub get_vmx_base_directory_path {
  Description : Returns the name of the directory in which the .vmx file is
                located.  The name differs depending on whether or not the VM
                is persistent.
-               If not persistent: <computer name>_<image ID>-<revision>
-               If persistent: <computer name>_<image ID>-<revision>_<request ID>
+               If not persistent: <computer name>_<image name>
+               If persistent: <computer name>_<image name>_<request ID>
 
 =cut
 
@@ -1553,44 +1716,106 @@ sub get_vmx_directory_name {
 	}
 	
 	my $vmx_directory_name;
-
+	
+	# Check if vmx_file_path environment variable has been set
+	# If set, parse the path to return the directory name preceding the vmx file name
+	# /<vmx base directory path>/<vmx directory name>/<vmx file name>
 	if ($ENV{vmx_file_path}) {
-		my $vmx_base_directory_path = $self->get_vmx_base_directory_path() || return;
-		($vmx_directory_name) = $ENV{vmx_file_path} =~ /^$vmx_base_directory_path\/(.+)\/[^\/]+.vmx$/;
-		return $vmx_directory_name;
+		($vmx_directory_name) = $ENV{vmx_file_path} =~ /([^\/]+)\/[^\/]+.vmx$/i;
+		if ($vmx_directory_name) {
+			return $vmx_directory_name;
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "vmx directory name could not be determined from vmx file path: '$ENV{vmx_file_path}'");
+			return;
+		}
 	}
 	
-	# Get the computer name, image ID, and revision number
+	if ($self->is_vm_persistent()) {
+		return $self->get_vmx_directory_name_persistent();
+	}
+	else {
+		return $self->get_vmx_directory_name_nonpersistent();
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_vmx_directory_name_persistent
+
+ Parameters  : none
+ Returns     : string
+ Description : Returns the name of the directory in which the .vmx file is
+               located if the VM is persistent. Example:
+					<computer name>_<image name>
+
+=cut
+
+sub get_vmx_directory_name_persistent {
+	my $self = shift;
+	if (ref($self) !~ /vmware/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $vmx_directory_name_nonpersistent = $self->get_vmx_directory_name_nonpersistent();
+	if (!$vmx_directory_name_nonpersistent) {
+		notify($ERRORS{'WARNING'}, 0, "unable to assemble the persistent vmx directory name, failed to retrieve the nonpersistent vmx directory name on which the persistent vmx directory name is based");
+		return;
+	}
+	
+	my $request_id = $self->data->get_request_id();
+	if (!defined($request_id)) {
+		notify($ERRORS{'WARNING'}, 0, "unable to assemble the persistent vmx directory name, failed to retrieve request ID");
+		return;
+	}
+	
+	return "$vmx_directory_name_nonpersistent\_$request_id";
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_vmx_directory_name_nonpersistent
+
+ Parameters  : none
+ Returns     : string
+ Description : Returns the name of the directory in which the .vmx file is
+               located if the VM is not persistent.
+               Example:
+               <computer name>_<image name>_<request ID>
+
+=cut
+
+sub get_vmx_directory_name_nonpersistent {
+	my $self = shift;
+	if (ref($self) !~ /vmware/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get the computer name
 	my $computer_short_name = $self->data->get_computer_short_name();
 	if (!$computer_short_name) {
-		notify($ERRORS{'WARNING'}, 0, "unable to retrieve computer short name");
+		notify($ERRORS{'WARNING'}, 0, "unable to assemble the nonpersistent vmx directory name, failed to retrieve computer short name");
 		return;
 	}
+	
+	# Get the image ID
 	my $image_id = $self->data->get_image_id();
 	if (!defined($image_id)) {
-		notify($ERRORS{'WARNING'}, 0, "unable to retrieve image ID");
+		notify($ERRORS{'WARNING'}, 0, "unable to assemble the nonpersistent vmx directory name, failed to retrieve image ID");
 		return;
 	}
-	my $imagerevision_revision = $self->data->get_imagerevision_revision();
-	if (!defined($imagerevision_revision)) {
-		notify($ERRORS{'WARNING'}, 0, "unable to retrieve imagerevision revision");
+	
+	# Get the image revision number
+	my $image_revision = $self->data->get_imagerevision_revision();
+	if (!defined($image_revision)) {
+		notify($ERRORS{'WARNING'}, 0, "unable to assemble the nonpersistent vmx directory name, failed to retrieve image revision");
 		return;
 	}
 	
 	# Assemble the directory name
-	$vmx_directory_name = "$computer_short_name\_$image_id-v$imagerevision_revision";
-	
-	# If persistent, append the request ID
-	if ($self->is_vm_persistent()) {
-		my $request_id = $self->data->get_request_id();
-		if (!defined($request_id)) {
-			notify($ERRORS{'WARNING'}, 0, "unable to retrieve request ID");
-			return;
-		}
-		$vmx_directory_name .= "\_$request_id";
-	}
-	
-	return $vmx_directory_name;
+	return "$computer_short_name\_$image_id-v$image_revision";
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -1613,10 +1838,22 @@ sub get_vmx_directory_path {
 		return;
 	}
 	
-	my $vmx_base_directory_path = $self->get_vmx_base_directory_path() || return;
-	my $vmx_directory_name = $self->get_vmx_directory_name() || return;
+	# Get the vmx file path
+	my $vmx_file_path = $self->get_vmx_file_path();
+	if (!$vmx_file_path) {
+		notify($ERRORS{'WARNING'}, 0, "vmx directory path could not be determined because vmx file path could not be retrieved");
+		return;
+	}
 	
-	return "$vmx_base_directory_path/$vmx_directory_name";
+	# Parse the vmx file path, return the path preceding the vmx file name
+	my ($vmx_directory_path) = $vmx_file_path =~ /(.+)\/[^\/]+.vmx$/i;
+	if ($vmx_directory_path) {
+		return $vmx_directory_path;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "vmx directory path could not be determined from vmx file path: '$vmx_file_path'");
+		return;
+	}
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -1638,37 +1875,181 @@ sub get_vmx_file_name {
 		return;
 	}
 	
-	if ($ENV{vmx_file_path}) {
-		my ($vmx_file_name) = $ENV{vmx_file_path} =~ /([^\/]+.vmx)$/g;
+	# Get the vmx file path
+	my $vmx_file_path = $self->get_vmx_file_path();
+	if (!$vmx_file_path) {
+		notify($ERRORS{'WARNING'}, 0, "vmx directory path could not be determined because vmx file path could not be retrieved");
+		return;
 	}
 	
-	my $vmx_directory_name = $self->get_vmx_directory_name() || return;
-	return "$vmx_directory_name.vmx";
+	# Parse the vmx file path, return the path preceding the vmx file name
+	my ($vmx_file_name) = $vmx_file_path =~ /\/([^\/]+.vmx)$/i;
+	if ($vmx_file_name) {
+		return $vmx_file_name;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "vmx file name could not be determined from vmx file path: '$vmx_file_path'");
+		return;
+	}
 }
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 get_vmx_file_path
+=head2 set_vmx_file_path
 
- Parameters  : none
- Returns     : string
- Description : Returns the path to the .vmx file.  Example:
-               vmx file path: /vmfs/volumes/nfs-vmpath/vm1-6-987-v0/vm1-6-987-v0.vmx
+ Parameters  : $vmx_file_path
+ Returns     : boolean
+ Description : Sets the vmx path into %ENV so that the default values are
+               overridden when the various get_vmx_ subroutines are called. This
+               is useful when a base image is being captured. The vmx file does
+               not need to be in the expected directory nor does it need to be
+               named anything particular. The code locates the vmx file and then
+               saves the non-default path in this object so that capture works
+               regardless of the vmx path/name.
 
 =cut
 
-sub get_vmx_file_path {
+sub set_vmx_file_path {
 	my $self = shift;
 	if (ref($self) !~ /vmware/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
 	
-	return $ENV{vmx_file_path} if $ENV{vmx_file_path};
+	# Get the vmx file path argument
+	my $vmx_file_path_argument = shift;
+	if (!$vmx_file_path_argument) {
+		notify($ERRORS{'WARNING'}, 0, "vmx file path argument was not supplied");
+		return;
+	}
 	
-	my $vmx_directory_path = $self->get_vmx_directory_path() || return;
-	my $vmx_file_name = $self->get_vmx_file_name() || return;
-	return "$vmx_directory_path/$vmx_file_name";
+	$vmx_file_path_argument = normalize_file_path($vmx_file_path_argument);
+	
+	# Make sure the vmx file path format is valid
+	if ($vmx_file_path_argument !~ /^\/.+\/.+\/[^\/]+\.vmx$/i) {
+		notify($ERRORS{'WARNING'}, 0, "unable to override vmx file path because the path format is invalid: '$vmx_file_path_argument'");
+		return;
+	}
+	
+	$ENV{vmx_file_path} = $vmx_file_path_argument;
+	
+	# Check all of the vmx file path components
+	if ($self->check_file_paths('vmx')) {
+		# Set the vmx_file_path environment variable
+		notify($ERRORS{'OK'}, 0, "set overridden vmx file path: '$vmx_file_path_argument'");
+		return 1;
+	}
+	else {
+		delete $ENV{vmx_file_path};
+		notify($ERRORS{'WARNING'}, 0, "failed to set overridden vmx file path: '$vmx_file_path_argument'");
+		return;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_vmdk_file_path
+
+ Parameters  : none
+ Returns     : string
+ Description : Returns the path of the vmdk file. Example:
+               vmdk file path: /vmfs/volumes/nfs-datastore/vmwarewinxp-base234-v12/vmwarewinxp-base234-v12.vmdk
+
+=cut
+
+sub get_vmdk_file_path {
+	my $self = shift;
+	if (ref($self) !~ /vmware/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	return $ENV{vmdk_file_path} if $ENV{vmdk_file_path};
+	
+	if ($self->is_vm_persistent()) {
+		return $self->get_vmdk_file_path_persistent();
+	}
+	else {
+		return $self->get_vmdk_file_path_nonpersistent();
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_vmdk_file_path_persistent
+
+ Parameters  : none
+ Returns     : string
+ Description : Returns the vmdk file path for a persistent VM. This is
+               useful when checking the image size on a VM host using
+               network-based disks. It returns the vmdk file path that would be
+               used for nonperistent VMs.
+
+=cut
+
+sub get_vmdk_file_path_persistent {
+	my $self = shift;
+	if (ref($self) !~ /vmware/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get the vmprofile.datastorepath
+	my $vmdk_base_directory_path = $self->data->get_vmhost_profile_datastore_path();
+	if (!$vmdk_base_directory_path) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine the persistent vmdk file path, failed to retrieve datastore path for the VM profile");
+		return;
+	}
+	
+	my $vmdk_directory_name_persistent = $self->get_vmdk_directory_name_persistent();
+	if (!$vmdk_directory_name_persistent) {
+		notify($ERRORS{'WARNING'}, 0, "unable to construct vmdk file path, vmdk directory name could not be determined");
+		return;
+	}
+	
+	my $image_name = $self->data->get_image_name();
+	if (!$image_name) {
+		notify($ERRORS{'WARNING'}, 0, "unable to construct vmdk file path, image name could not be determined");
+		return;
+	}
+	
+	return "$vmdk_base_directory_path/$vmdk_directory_name_persistent/$image_name.vmdk";
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_vmdk_file_path_nonpersistent
+
+ Parameters  : none
+ Returns     : string
+ Description : Returns the vmdk file path for a nonpersistent VM. This is
+               useful when checking the image size on a VM host using
+               network-based disks. It returns the vmdk file path that would be
+               used for nonperistent VMs.
+
+=cut
+
+sub get_vmdk_file_path_nonpersistent {
+	my $self = shift;
+	if (ref($self) !~ /vmware/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get the vmprofile.datastorepath
+	my $vmdk_base_directory_path = $self->data->get_vmhost_profile_datastore_path();
+	if (!$vmdk_base_directory_path) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine the nonpersistent vmdk file path, failed to retrieve datastore path for the VM profile");
+		return;
+	}
+	
+	my $vmdk_directory_name_nonpersistent = $self->get_vmdk_directory_name_nonpersistent();
+	if (!$vmdk_directory_name_nonpersistent) {
+		notify($ERRORS{'WARNING'}, 0, "unable to construct vmdk file path, vmdk directory name could not be determined");
+		return;
+	}
+	
+	return "$vmdk_base_directory_path/$vmdk_directory_name_nonpersistent/$vmdk_directory_name_nonpersistent.vmdk";
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -1691,24 +2072,30 @@ sub get_vmdk_base_directory_path {
 		return;
 	}
 	
-	# Check if $ENV{vmdk_file_path} is set, parse this path if it is set
-	if (my $vmdk_file_path = $ENV{vmdk_file_path}) {
-		my ($vmdk_base_directory_path) = $vmdk_file_path =~ /^(.+)\/[^\/]+\/[^\/]+\.vmdk$/g;
-		if (!$vmdk_base_directory_path) {
-			notify($ERRORS{'WARNING'}, 0, "unable to determine vmdk base directory path from vmdk file path: $vmdk_file_path");
+	my $vmdk_base_directory_path;
+	
+	# Check if vmdk_file_path environment variable has been set
+	# If set, parse the path to return the directory name preceding the vmdk file name and directory name
+	# /<vmdk base directory path>/<vmdk directory name>/<vmdk file name>
+	if ($ENV{vmdk_file_path}) {
+		($vmdk_base_directory_path) = $ENV{vmdk_file_path} =~ /(.+)\/[^\/]+\/[^\/]+.vmdk$/i;
+		if ($vmdk_base_directory_path) {
+			return $vmdk_base_directory_path;
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "vmdk base directory path could not be determined from vmdk file path: '$ENV{vmdk_file_path}'");
 			return;
 		}
-		return $vmdk_base_directory_path;
 	}
-	else {
-		# Get the VM host profile datastore path
-		my $vmhost_profile_datastore_path = normalize_file_path($self->data->get_vmhost_profile_datastore_path());
-		if (!$vmhost_profile_datastore_path) {
-			notify($ERRORS{'WARNING'}, 0, "unable to retrieve VM host profile datastore path");
-			return;
-		}
-		return $vmhost_profile_datastore_path;
+	
+	# Get the vmprofile.datastorepath
+	$vmdk_base_directory_path = $self->data->get_vmhost_profile_datastore_path();
+	if (!$vmdk_base_directory_path) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine the vmdk base directory path, failed to retrieve either the datastore path for the VM profile");
+		return;
 	}
+	
+	return normalize_file_path($vmdk_base_directory_path);
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -1733,6 +2120,20 @@ sub get_vmdk_directory_name {
 	if (ref($self) !~ /vmware/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
+	}
+	
+	# Check if vmdk_file_path environment variable has been set
+	# If set, parse the path to return the directory name preceding the vmdk file name
+	# /<vmdk base directory path>/<vmdk directory name>/<vmdk file name>
+	if ($ENV{vmdk_file_path}) {
+		my ($vmdk_directory_name) = $ENV{vmdk_file_path} =~ /([^\/]+)\/[^\/]+.vmdk$/i;
+		if ($vmdk_directory_name) {
+			return $vmdk_directory_name;
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "vmdk directory name could not be determined from vmdk file path: '$ENV{vmdk_file_path}'");
+			return;
+		}
 	}
 	
 	if ($self->is_vm_persistent()) {
@@ -1762,19 +2163,15 @@ sub get_vmdk_directory_name_persistent {
 		return;
 	}
 	
-	if ($ENV{vmdk_file_path}) {
-		my $vmdk_base_directory_path = $self->get_vmdk_base_directory_path() || return;
-		my ($vmdk_directory_name) = $ENV{vmdk_file_path} =~ /^$vmdk_base_directory_path\/(.+)\/[^\/]+.vmdk$/;
-		if ($vmdk_directory_name) {
-			return $vmdk_directory_name;
-		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "unable to parse vmdk directory name from vmdk file path: $ENV{vmdk_file_path}");
-			return;
-		}
+	# Use the same name that's used for the persistent vmx directory name
+	my $vmdk_directory_name_persistent = $self->get_vmx_directory_name_persistent();
+	if ($vmdk_directory_name_persistent) {
+		return $vmdk_directory_name_persistent;
 	}
-	
-	return $self->get_vmx_directory_name();
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine persistent vmdk directory name because persistent vmx directory name could not be retrieved");
+		return;
+	}
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -1796,25 +2193,15 @@ sub get_vmdk_directory_name_nonpersistent {
 		return;
 	}
 	
-	if ($ENV{vmdk_file_path}) {
-		my $vmdk_base_directory_path = $self->get_vmdk_base_directory_path() || return;
-		my ($vmdk_directory_name) = $ENV{vmdk_file_path} =~ /^$vmdk_base_directory_path\/(.+)\/[^\/]+.vmdk$/;
-		
-		if ($vmdk_directory_name) {
-			return $vmdk_directory_name;
-		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "unable to parse vmdk directory name from vmdk file path: $ENV{vmdk_file_path}");
-			return;
-		}
-	}
-	
+	# Use the image name for the vmdk directory name
 	my $image_name = $self->data->get_image_name();
-	if (!$image_name) {
-		notify($ERRORS{'WARNING'}, 0, "unable determine vmdk directory name because unable to retrieve image name");
+	if ($image_name) {
+		return $image_name;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unable determine vmdk nonpersistent vmdk directory name because image name could not be retrieved");
 		return;
 	}
-	return $image_name;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -1837,19 +2224,60 @@ sub get_vmdk_directory_path {
 		return;
 	}
 	
-	my $vmdk_base_directory_path = $self->get_vmdk_base_directory_path();
+	# Check if vmdk_file_path environment variable has been set
+	# If set, parse the path to return the directory name preceding the vmdk file name
+	# /<vmdk base directory path>/<vmdk directory name>/<vmdk file name>
+	if ($ENV{vmdk_file_path}) {
+		my ($vmdk_directory_path) = $ENV{vmdk_file_path} =~ /(.+)\/[^\/]+.vmdk$/i;
+		if ($vmdk_directory_path) {
+			return $vmdk_directory_path;
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "vmdk directory name could not be determined from vmdk file path: '$ENV{vmdk_file_path}'");
+			return;
+		}
+	}
+	
+	if ($self->is_vm_persistent()) {
+		return $self->get_vmdk_directory_path_persistent();
+	}
+	else {
+		return $self->get_vmdk_directory_path_nonpersistent();
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_vmdk_directory_path_persistent
+
+ Parameters  : none
+ Returns     : string
+ Description : Returns the directory path under which the .vmdk files are
+               located for persistent VMs.
+
+=cut
+
+sub get_vmdk_directory_path_persistent {
+	my $self = shift;
+	if (ref($self) !~ /vmware/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get the vmprofile.datastorepath
+	my $vmdk_base_directory_path = $self->data->get_vmhost_profile_datastore_path();
 	if (!$vmdk_base_directory_path) {
-		notify($ERRORS{'WARNING'}, 0, "unable to determine vmdk directory path because vmdk base directory path could not be determined");
+		notify($ERRORS{'WARNING'}, 0, "unable to determine the persistent vmdk base directory path, failed to retrieve datastore path for the VM profile");
 		return;
 	}
 	
-	my $vmdk_directory_name = $self->get_vmdk_directory_name() || return;
-	if (!$vmdk_directory_name) {
-		notify($ERRORS{'WARNING'}, 0, "unable to determine vmdk directory path because vmdk directory name could not be determined");
+	my $vmdk_directory_name_persistent = $self->get_vmdk_directory_name_persistent();
+	if (!$vmdk_directory_name_persistent) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine persistent vmdk directory path because persistent vmdk directory name could not be determined");
 		return;
 	}
 	
-	return "$vmdk_base_directory_path/$vmdk_directory_name";
+	return "$vmdk_base_directory_path/$vmdk_directory_name_persistent";
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -1870,19 +2298,20 @@ sub get_vmdk_directory_path_nonpersistent {
 		return;
 	}
 	
-	my $vmdk_base_directory_path = $self->get_vmdk_base_directory_path() || return;
+	# Get the vmprofile.datastorepath
+	my $vmdk_base_directory_path = $self->data->get_vmhost_profile_datastore_path();
 	if (!$vmdk_base_directory_path) {
-		notify($ERRORS{'WARNING'}, 0, "unable to determine nonpersistent vmdk directory path because vmdk base directory path could not be determined");
+		notify($ERRORS{'WARNING'}, 0, "unable to determine the nonpersistent vmdk base directory path, failed to retrieve datastore path for the VM profile");
 		return;
 	}
 	
-	my $vmdk_directory_name = $self->get_vmdk_directory_name_nonpersistent() || return;
-	if (!$vmdk_directory_name) {
+	my $vmdk_directory_name_nonpersistent = $self->get_vmdk_directory_name_nonpersistent();
+	if (!$vmdk_directory_name_nonpersistent) {
 		notify($ERRORS{'WARNING'}, 0, "unable to determine nonpersistent vmdk directory path because nonpersistent vmdk directory name could not be determined");
 		return;
 	}
 	
-	return "$vmdk_base_directory_path/$vmdk_directory_name";
+	return "$vmdk_base_directory_path/$vmdk_directory_name_nonpersistent";
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -1905,13 +2334,22 @@ sub get_vmdk_file_prefix {
 		return;
 	}
 	
-	if ($ENV{vmdk_file_path}) {
-		my ($vmdk_file_prefix) = $ENV{vmdk_file_path} =~ /([^\/]+).vmdk$/g;
-		return $vmdk_file_prefix;
+	# Get the vmdk file path
+	my $vmdk_file_path = $self->get_vmdk_file_path();
+	if (!$vmdk_file_path) {
+		notify($ERRORS{'WARNING'}, 0, "vmdk directory path could not be determined because vmdk file path could not be retrieved");
+		return;
 	}
 	
-	my $image_name = $self->data->get_image_name() || return;
-	return $image_name;
+	# Parse the vmdk file path, return the path preceding the vmdk file name
+	my ($vmdk_file_name) = $vmdk_file_path =~ /\/([^\/]+)\.vmdk$/i;
+	if ($vmdk_file_name) {
+		return $vmdk_file_name;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "vmdk file name could not be determined from vmdk file path: '$vmdk_file_path'");
+		return;
+	}
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -1933,61 +2371,133 @@ sub get_vmdk_file_name {
 		return;
 	}
 	
-	my $vmdk_file_prefix = $self->get_vmdk_file_prefix() || return;
-	if (!$vmdk_file_prefix) {
-		notify($ERRORS{'WARNING'}, 0, "unable to determine vmdk file name because vmdk file prefix could not be determined");
+	# Get the vmdk file path
+	my $vmdk_file_path = $self->get_vmdk_file_path();
+	if (!$vmdk_file_path) {
+		notify($ERRORS{'WARNING'}, 0, "vmdk directory path could not be determined because vmdk file path could not be retrieved");
 		return;
 	}
 	
-	return "$vmdk_file_prefix.vmdk";
+	# Parse the vmdk file path, return the path preceding the vmdk file name
+	my ($vmdk_file_name) = $vmdk_file_path =~ /\/([^\/]+\.vmdk)$/i;
+	if ($vmdk_file_name) {
+		return $vmdk_file_name;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "vmdk file name could not be determined from vmdk file path: '$vmdk_file_path'");
+		return;
+	}
 }
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 get_vmdk_file_path_nonpersistent
+=head2 set_vmdk_file_path
 
- Parameters  : none
- Returns     : string
- Description : Returns the vmdk file path for a nonpersistent VM. This is
-               useful when checking the image size on a VM host using
-               network-based disks. It returns the vmdk file path that would be
-               used for nonperistent VMs.
+ Parameters  : $vmx_file_path
+ Returns     : 
+ Description : Sets the vmdk path into %ENV so that the default values are
+               overridden when the various get_vmdk_... subroutines are called.
+               This is useful for base image imaging reservations if the
+               code detects the vmdk path is not in the expected place.
 
 =cut
 
-sub get_vmdk_file_path_nonpersistent {
+sub set_vmdk_file_path {
 	my $self = shift;
 	if (ref($self) !~ /vmware/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
 	
-	my $vmdk_directory_path_nonpersistent = $self->get_vmdk_directory_path_nonpersistent() || return;
-	my $vmdk_file_name = $self->get_vmdk_file_name() || return;
-	return "$vmdk_directory_path_nonpersistent/$vmdk_file_name";
+	# Get the vmdk file path argument
+	my $vmdk_file_path_argument = shift;
+	if (!$vmdk_file_path_argument) {
+		notify($ERRORS{'WARNING'}, 0, "vmdk file path argument was not supplied");
+		return;
+	}
+	
+	$vmdk_file_path_argument = normalize_file_path($vmdk_file_path_argument);
+	
+	# Make sure the vmdk file path format is valid
+	if ($vmdk_file_path_argument !~ /^\/.+\/.+\/[^\/]+\.vmdk$/i) {
+		notify($ERRORS{'WARNING'}, 0, "unable to override vmdk file path because the path format is invalid: '$vmdk_file_path_argument'");
+		return;
+	}
+	
+	$ENV{vmdk_file_path} = $vmdk_file_path_argument;
+	
+	# Check all of the vmdk file path components
+	if ($self->check_file_paths('vmdk')) {
+		# Set the vmdk_file_path environment variable
+		notify($ERRORS{'OK'}, 0, "set overridden vmdk file path: '$vmdk_file_path_argument'");
+		return 1;
+	}
+	else {
+		delete $ENV{vmdk_file_path};
+		notify($ERRORS{'WARNING'}, 0, "failed to set overridden vmdk file path: '$vmdk_file_path_argument'");
+		return;
+	}
 }
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 get_vmdk_file_path
+=head2 check_file_paths
 
  Parameters  : none
- Returns     : string
- Description : Returns the path of the vmdk file. Example:
-               vmdk file path: /vmfs/volumes/nfs-datastore/vmwarewinxp-base234-v12/vmwarewinxp-base234-v12.vmdk
+ Returns     : 
+ Description : 
 
 =cut
 
-sub get_vmdk_file_path {
+sub check_file_paths {
 	my $self = shift;
-	if (ref($self) !~ /vmware/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a VCL::Module module object method");
 		return;
 	}
 	
-	my $vmdk_directory_path = $self->get_vmdk_directory_path() || return;
-	my $vmdk_file_name = $self->get_vmdk_file_name() || return;
-	return "$vmdk_directory_path/$vmdk_file_name";
+	my $file_type = shift || 'all';
+	
+	# Check to make sure all of the vmdk file path components can be retrieved
+	my $undefined_string = "<undefined>";
+	
+	# Assemble a string of all of the components
+	my $check_paths_string;
+	
+	if ($file_type !~ /vmdk/i) {
+		$check_paths_string .= "vmx file path:                     '" . ($self->get_vmx_file_path() || $undefined_string) . "'\n";
+		$check_paths_string .= "vmx directory path:                '" . ($self->get_vmx_directory_path() || $undefined_string) . "'\n";
+		$check_paths_string .= "vmx base directory path:           '" . ($self->get_vmx_base_directory_path() || $undefined_string) . "'\n";
+		$check_paths_string .= "vmx directory name:                '" . ($self->get_vmx_directory_name() || $undefined_string) . "'\n";
+		$check_paths_string .= "vmx file name:                     '" . ($self->get_vmx_file_name() || $undefined_string) . "'\n";
+		$check_paths_string .= "persistent vmx directory name:     '" . ($self->get_vmx_directory_name_persistent() || $undefined_string) . "'\n";
+		$check_paths_string .= "nonpersistent vmx directory name:  '" . ($self->get_vmx_directory_name_nonpersistent() || $undefined_string) . "'\n";
+	}
+	
+	if ($file_type !~ /vmx/i) {
+		$check_paths_string .= "vmdk file path:                    '" . ($self->get_vmdk_file_path() || $undefined_string) . "'\n";
+		$check_paths_string .= "vmdk directory path:               '" . ($self->get_vmdk_directory_path() || $undefined_string) . "'\n";
+		$check_paths_string .= "vmdk base directory path:          '" . ($self->get_vmdk_base_directory_path() || $undefined_string) . "'\n";
+		$check_paths_string .= "vmdk directory name:               '" . ($self->get_vmdk_directory_name() || $undefined_string) . "'\n";
+		$check_paths_string .= "vmdk file name:                    '" . ($self->get_vmdk_file_name() || $undefined_string) . "'\n";
+		$check_paths_string .= "vmdk file prefix:                  '" . ($self->get_vmdk_file_prefix() || $undefined_string) . "'\n";
+		$check_paths_string .= "persistent vmdk file path:         '" . ($self->get_vmdk_file_path_persistent() || $undefined_string) . "'\n";
+		$check_paths_string .= "persistent vmdk directory path:    '" . ($self->get_vmdk_directory_path_persistent() || $undefined_string) . "'\n";
+		$check_paths_string .= "persistent vmdk directory name:    '" . ($self->get_vmdk_directory_name_persistent() || $undefined_string) . "'\n";
+		$check_paths_string .= "nonpersistent vmdk file path:      '" . ($self->get_vmdk_file_path_nonpersistent() || $undefined_string) . "'\n";
+		$check_paths_string .= "nonpersistent vmdk directory path: '" . ($self->get_vmdk_directory_path_nonpersistent() || $undefined_string) . "'\n";
+		$check_paths_string .= "nonpersistent vmdk directory name: '" . ($self->get_vmdk_directory_name_nonpersistent() || $undefined_string) . "'\n";
+	}
+	
+	if ($check_paths_string =~ /$undefined_string/) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve $file_type file path components:\n$check_paths_string");
+		return;
+	}
+	else {
+		# Set the vmdk_file_path environment variable
+		notify($ERRORS{'OK'}, 0, "successfully retrieved $file_type file path components:\n$check_paths_string");
+		return 1;
+	}
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -2699,9 +3209,16 @@ sub get_vmx_file_paths {
 	
 	my $vmx_base_directory_path = $self->get_vmx_base_directory_path() || return;
 	
-	my @vmx_paths = $self->vmhost_os->find_files($vmx_base_directory_path, "*.vmx");
-	notify($ERRORS{'DEBUG'}, 0, "found " . scalar(@vmx_paths) . " vmx files on VM host");
-	return @vmx_paths;
+	# Get a list of all the vmx files under the normal vmx base directory
+	my @found_vmx_paths = $self->vmhost_os->find_files($vmx_base_directory_path, "*.vmx");
+	
+	# Get a list of the registered VMs in case a VM is registered and the vmx file does not reside under the normal vmx base directory
+	my @registered_vmx_paths = $self->api->get_registered_vms();
+	
+	my %vmx_file_paths = map { $_ => 1 } (@found_vmx_paths, @registered_vmx_paths);
+	notify($ERRORS{'DEBUG'}, 0, "found " . scalar(keys %vmx_file_paths) . " unique vmx files on VM host:\n" . join("\n", sort keys %vmx_file_paths));
+	
+	return sort keys %vmx_file_paths;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -3015,167 +3532,6 @@ sub get_vm_additional_vmx_bytes_required {
 	my $additional_gb_required = format_number($additional_bytes_required / 1024 / 1024 / 1024);
 	notify($ERRORS{'DEBUG'}, 0, "VM requires appoximately $additional_bytes_required additional bytes ($additional_mb_required MB, $additional_gb_required GB) of disk space on the VM host for the vmx directory");
 	return $additional_bytes_required;
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 set_vmx_file_path
-
- Parameters  : $vmx_file_path
- Returns     : boolean
- Description : Sets the vmx path into %ENV so that the default values are
-               overridden when the various get_vmx_ subroutines are called. This
-               is useful when a base image is being captured. The vmx file does
-               not need to be in the expected directory nor does it need to be
-               named anything particular. The code locates the vmx file and then
-               saves the non-default path in this object so that capture works
-               regardless of the vmx path/name.
-
-=cut
-
-sub set_vmx_file_path {
-	my $self = shift;
-	if (ref($self) !~ /vmware/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-	
-	# Get the vmx file path argument
-	my $vmx_file_path = shift;
-	if (!$vmx_file_path) {
-		notify($ERRORS{'WARNING'}, 0, "vmx file path argument was not supplied");
-		return;
-	}
-	
-	delete $ENV{vmx_file_path};
-	
-	if ($vmx_file_path ne $self->get_vmx_file_path()) {
-		notify($ERRORS{'DEBUG'}, 0, "vmx file path will be overridden, it does not match the expected path:
-				 argument: $vmx_file_path
-				 expected: " . $self->get_vmx_file_path());
-	}
-	else {
-		return 1;
-	}
-	
-	# Make sure the vmx file path begins with the vmx base directory
-	my $vmx_base_directory_path = $self->get_vmx_base_directory_path() || return;
-	if ($vmx_file_path !~ /^$vmx_base_directory_path/) {
-		notify($ERRORS{'WARNING'}, 0, "unable to override vmx file path $vmx_file_path, it does not begin with the vmx base directory path: $vmx_base_directory_path");
-		return;
-	}
-	
-	# Make sure the vmx file path ends with .vmx
-	if ($vmx_file_path !~ /\.vmx$/) {
-		notify($ERRORS{'WARNING'}, 0, "unable to override vmx file path $vmx_file_path, it does not end with .vmx");
-		return;
-	}
-	
-	# Make sure the vmx file path contains a file name
-	if ($vmx_file_path !~ /\/[^\/]+\.vmx$/) {
-		notify($ERRORS{'WARNING'}, 0, "unable to override vmx file path $vmx_file_path, it does not contain a file name");
-		return;
-	}
-	
-	# Make sure the vmx file path contains an intermediate path
-	if ($vmx_file_path !~ /^$vmx_base_directory_path\/.+\/[^\/]+\.vmx$/) {
-		notify($ERRORS{'WARNING'}, 0, "unable to override vmx file path $vmx_file_path, it does not contain an intermediate path");
-		return;
-	}
-	
-	$ENV{vmx_file_path} = $vmx_file_path;
-	notify($ERRORS{'OK'}, 0, "set overridden vmx location:\n" .
-			 "vmx file path: $vmx_file_path\n" .
-			 "vmx base directory path: " . $self->get_vmx_base_directory_path() . "\n" .
-			 "vmx directory name: " . $self->get_vmx_directory_name() . "\n" .
-			 "vmx directory path: " . $self->get_vmx_directory_path() . "\n" .
-			 "vmx file name: " . $self->get_vmx_file_name() . "\n" .
-			 "vmx file path: " . $self->get_vmx_file_path());
-	
-	return 1;
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 set_vmdk_file_path
-
- Parameters  : $vmx_file_path
- Returns     : 
- Description : Sets the vmdk path into %ENV so that the default values are
-               overridden when the various get_vmdk_... subroutines are called.
-               This is useful for base image imaging reservations if the
-               code detects the vmdk path is not in the expected place.
-
-=cut
-
-sub set_vmdk_file_path {
-	my $self = shift;
-	if (ref($self) !~ /vmware/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-	
-	# Get the vmdk file path argument
-	my $vmdk_file_path_argument = shift;
-	if (!$vmdk_file_path_argument) {
-		notify($ERRORS{'WARNING'}, 0, "vmdk file path argument was not supplied");
-		return;
-	}
-	
-	delete $ENV{vmdk_file_path};
-	
-	if ($vmdk_file_path_argument ne $self->get_vmdk_file_path()) {
-		notify($ERRORS{'DEBUG'}, 0, "vmdk file path will be overridden, it does not match the expected path:
-				 argument: $vmdk_file_path_argument
-				 expected: " . $self->get_vmdk_file_path());
-	}
-	else {
-		notify($ERRORS{'DEBUG'}, 0, "vmdk file path does not need to overridden, it matches the expected path: $vmdk_file_path_argument");
-		return 1;
-	}
-	
-	# Make sure the vmdk file path ends with .vmdk
-	if ($vmdk_file_path_argument !~ /\.vmdk$/) {
-		notify($ERRORS{'WARNING'}, 0, "unable to override vmdk file path $vmdk_file_path_argument, it does not end with .vmdk");
-		return;
-	}
-	
-	# Make sure the vmdk file path contains a file name
-	if ($vmdk_file_path_argument !~ /\/[^\/]+\.vmdk$/) {
-		notify($ERRORS{'WARNING'}, 0, "unable to override vmdk file path $vmdk_file_path_argument, it does not contain a file name");
-		return;
-	}
-	
-	$ENV{vmdk_file_path} = $vmdk_file_path_argument;
-	
-	my $vmdk_file_path = $self->get_vmdk_file_path() || 'UNAVAILABLE';
-	my $vmdk_base_directory_path = $self->get_vmdk_base_directory_path() || 'UNAVAILABLE';
-	my $vmdk_directory_name = $self->get_vmdk_directory_name() || 'UNAVAILABLE';
-	my $vmdk_directory_path = $self->get_vmdk_directory_path() || 'UNAVAILABLE';
-	my $vmdk_file_name = $self->get_vmdk_file_name() || 'UNAVAILABLE';
-	
-	if (grep(/UNAVAILABLE/, ($vmdk_file_path, $vmdk_base_directory_path, $vmdk_directory_name, $vmdk_directory_path, $vmdk_file_name))) {
-		notify($ERRORS{'WARNING'}, 0, "failed to override vmdk location, some path components are unavailable:\n" .
-			 "vmdk file path argument: $vmdk_file_path_argument\n" .
-			 "vmdk file path: $vmdk_file_path\n" .
-			 "vmdk base directory path: $vmdk_base_directory_path\n" .
-			 "vmdk directory name: $vmdk_directory_name\n" .
-			 "vmdk directory path: $vmdk_directory_path\n" .
-			 "vmdk file name: $vmdk_file_name\n" .
-			 "vmdk file path: $vmdk_file_path");
-		return;
-	}
-	
-	notify($ERRORS{'OK'}, 0, "set overridden vmdk location:\n" .
-			 "vmdk file path argument: $vmdk_file_path_argument\n" .
-			 "vmdk file path: $vmdk_file_path\n" .
-			 "vmdk base directory path: $vmdk_base_directory_path\n" .
-			 "vmdk directory name: $vmdk_directory_name\n" .
-			 "vmdk directory path: $vmdk_directory_path\n" .
-			 "vmdk file name: $vmdk_file_name\n" .
-			 "vmdk file path: $vmdk_file_path");
-	
-	return 1;
 }
 
 #/////////////////////////////////////////////////////////////////////////////

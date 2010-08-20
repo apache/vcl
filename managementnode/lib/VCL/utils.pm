@@ -108,8 +108,10 @@ our @EXPORT = qw(
   format_number
   get_affiliation_info
   get_block_request_image_info
+  get_caller_trace
   get_computer_current_state_name
   get_computer_grp_members
+  get_computer_ids
   get_computer_info
   get_computers_controlled_by_MN
   get_current_file_name
@@ -127,12 +129,14 @@ our @EXPORT = qw(
   get_management_predictive_info
   get_module_info
   get_next_image_default
+  get_os_info
   get_production_imagerevision_info
   get_request_by_computerid
   get_request_end
   get_request_info
   get_resource_groups
   get_managable_resource_groups
+  get_user_info
   get_vmhost_info
   get_user_info
   getdynamicaddress
@@ -8243,6 +8247,50 @@ EOF
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 get_computer_ids
+
+ Parameters  : $computer_identifier
+ Returns     : array
+ Description : Queries the computer table for computers matching the
+               $computer_identifier argument. The argument may contain either
+               the computer's hostname or IP address. An array containing the
+               computer IDs is returned.
+
+=cut
+
+sub get_computer_ids {
+	my ($computer_identifier) = @_;
+
+	if(!defined($computer_identifier)){
+		notify($ERRORS{'WARNING'}, $LOGFILE, "computer identifier argument was not supplied");
+		return;
+	}
+
+	my $select_statement = <<EOF;
+SELECT
+*
+FROM
+computer
+WHERE
+hostname LIKE '$computer_identifier'
+OR hostname LIKE '$computer_identifier.%'
+OR IPaddress = '$computer_identifier'
+OR privateIPaddress = '$computer_identifier'
+EOF
+
+	my @selected_rows = database_select($select_statement);
+	if (!@selected_rows) {
+		notify($ERRORS{'DEBUG'}, 0, "no computers were found matching identifier: $computer_identifier");
+		return ();
+	}
+
+	my @computer_ids = map { $_->{id} } @selected_rows;
+	notify($ERRORS{'DEBUG'}, 0, "found computers matching identifier: $computer_identifier, IDs: @computer_ids");
+	return sort @computer_ids;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 insert_request
 
  Parameters  : $managementnode_id, $request_state_name, $request_laststate_name, $end_minutes_in_future, $user_unityid, $computer_id, $image_id, $imagerevision_id
@@ -9549,6 +9597,64 @@ sub get_module_info {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 get_user_info
+
+ Parameters  : $user_identifier
+ Returns     : hash reference
+ Description : Retrieves information from the database for the user specified by
+               the $user_identifier argument. The $user_identifier argument can
+               either be a user ID or login name.
+
+=cut
+
+sub get_user_info {
+	my ($user_identifier) = @_;
+	if (!defined($user_identifier)) {
+		notify($ERRORS{'WARNING'}, 0, "user identifier argument was not specified");
+		return;
+	}
+	
+	my $select_statement = <<EOF;
+SELECT
+*
+FROM
+user
+WHERE
+EOF
+	
+	if ($user_identifier =~ /^\d+$/) {
+		$select_statement .= "id = $user_identifier";
+	}
+	else {
+		$select_statement .= "unityid = '$user_identifier'";
+	}
+	
+	# Call the database select subroutine
+	my @selected_rows = database_select($select_statement);
+
+	# Check to make sure rows were returned
+	if (!@selected_rows) {
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve rows from user table");
+		return;
+	}
+	
+	# Transform the array of database rows into a hash
+	my %info_hash;
+	for my $row (@selected_rows) {
+		my $user_id = $row->{id};
+		
+		for my $key (keys %$row) {
+			my $value = $row->{$key};
+			$info_hash{$user_id}{$key} = $value;
+		}
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "retrieved user info:\n" . format_data(\%info_hash));
+	return \%info_hash;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 get_current_package_name
 
  Parameters  : None
@@ -10076,6 +10182,58 @@ sub setup_print_wrap {
 	print $trailing_newlines if $trailing_newlines;
 	
 	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_os_info
+
+ Parameters  : none
+ Returns     : hash reference
+ Description : Returns the contents of the OS table as a hash reference. The
+               hash keys are the OS IDs.
+
+=cut
+
+sub get_os_info {
+	# Create the select statement
+	my $select_statement = <<EOF;
+SELECT
+OS.*,
+module.name AS module_name,
+module.prettyname AS module_prettyname,
+module.perlpackage AS module_perlpackage
+FROM
+OS,
+module
+WHERE
+OS.moduleid = module.id
+EOF
+	
+	# Call the database select subroutine
+	my @selected_rows = database_select($select_statement);
+	
+	my %info;
+	
+	for my $row (@selected_rows) {
+		my $os_id = $row->{id};
+		
+		foreach my $key (keys %$row) {
+			my $value = $row->{$key};
+			
+			(my $original_key = $key) =~ s/^.+_//;
+	
+			if ($key =~ /module_/) {
+				 $info{$os_id}{module}{$original_key} = $value;
+			}
+			else {
+				$info{$os_id}{$original_key} = $value;
+			}
+		}
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "retrieved OS info:\n" . format_data(\%info));
+	return \%info;
 }
 
 #/////////////////////////////////////////////////////////////////////////////

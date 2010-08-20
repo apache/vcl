@@ -368,11 +368,7 @@ sub get_vm_power_state {
  Description : Copies a virtual disk (set of vmdk files). This subroutine allows
                a virtual disk to be converted to a different disk type or
                adapter type. The source and destination vmdk file path arguments
-               are required. The adapter type argument is optional and may be
-               one of the following values:
-               -busLogic (default)
-               -ide
-               -lsiLogic
+               are required.
                
                The disk type argument is optional and may be one of the
                following values:
@@ -423,6 +419,16 @@ sub get_vm_power_state {
                   -not usable for disk creation
                -thin (default)
                   -space required for thin-provisioned virtual disk is allocated and zeroed on demand as the space is used
+                  
+               The adapter type argument is optional and may be one of the
+               following values:
+               -busLogic
+               -ide
+               -lsiLogic
+               
+               If the adapter type argument is not specified an attempt will be
+               made to retrieve it from the source vmdk file. If this fails,
+               lsiLogic will be used.
 
 =cut
 
@@ -440,7 +446,17 @@ sub copy_virtual_disk {
 	# Get the adapter type and disk type arguments if they were specified
 	# If not specified, set the default values
 	my $destination_disk_type = shift || 'thin';
-	my $destination_adapter_type = shift || 'busLogic';
+	my $destination_adapter_type = shift;
+	
+	# If the adapter type was not specified, retrieve it from the source vmdk file
+	if (!$destination_adapter_type) {
+		$destination_adapter_type = $self->get_virtual_disk_controller_type($source_path);
+		
+		if (!$destination_adapter_type) {
+			notify($ERRORS{'WARNING'}, 0, "destination adapter type argument was not specifed and unable to retrieve adapter type from source vmdk file: $source_path, using lsiLogic");
+			$destination_adapter_type = 'lsiLogic';
+		}
+	}
 	
 	# Check the adapter type argument, the string must match exactly or the copy will fail
 	my @valid_adapter_types = qw( busLogic lsiLogic ide );
@@ -518,7 +534,7 @@ sub copy_virtual_disk {
 	my $bits_per_second = ($source_file_size_bytes * 8 / $duration_seconds);
 	my $mb_per_second = ($source_file_size_bytes / $duration_seconds / 1024 / 1024);
 	my $mbit_per_second = ($source_file_size_bytes * 8 / $duration_seconds / 1024 / 1024);
-	my $gbit_per_minute = ($source_file_size_bytes * 8 / $duration_seconds / 1024 / 1024 * 60);
+	my $gbyte_per_minute = ($source_file_size_bytes / $duration_seconds / 1024 / 1024 / 1024 * 60);
 	
 	notify($ERRORS{'OK'}, 0, "copied vmdk: '$source_path' --> '$destination_path'" .
 			 "source file bytes: " . format_number($source_file_size_bytes) . "\n" .
@@ -527,7 +543,7 @@ sub copy_virtual_disk {
 			 "b/s: " . format_number($bits_per_second) . "\n" .
 			 "MB/s: " . format_number($mb_per_second, 2) . "\n" .
 			 "Mb/s: " . format_number($mbit_per_second, 2) . "\n" .
-			 "Gb/m: " . format_number($gbit_per_minute, 2));
+			 "GB/m: " . format_number($gbyte_per_minute, 2));
 	return 1;
 }
 
@@ -1514,7 +1530,6 @@ sub file_exists {
 	
 	# Get and check the file path argument
 	my $file_path = $self->get_datastore_path(shift) || return;
-	notify($ERRORS{'DEBUG'}, 0, "checking if file exists: $file_path");
 	
 	# Check if the path argument is the root of a datastore
 	if ($file_path =~ /^\[(.+)\]$/) {

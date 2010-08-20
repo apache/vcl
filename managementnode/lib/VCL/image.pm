@@ -65,6 +65,7 @@ use 5.008000;
 use strict;
 use warnings;
 use diagnostics;
+use English '-no_match_vars';
 
 use VCL::utils;
 
@@ -106,8 +107,9 @@ sub process {
 	my $managementnode_shortname   = $self->data->get_management_node_short_name();
 	my $sysadmin_mail_address      = $self->data->get_management_node_sysadmin_email();
 
-	# Notify administrators that image creation is starting
-	my $body = <<"END";
+	if ($sysadmin_mail_address) {
+		# Notify administrators that image creation is starting
+		my $body = <<"END";
 VCL Image Creation Started
 
 Request ID: $request_id
@@ -129,8 +131,9 @@ Computer name: $computer_shortname
 
 Use Sysprep: $imagemeta_sysprep
 END
-	mail($sysadmin_mail_address, "VCL IMAGE Creation Started: $image_name", $body, $affiliation_helpaddress);
-
+		mail($sysadmin_mail_address, "VCL IMAGE Creation Started: $image_name", $body, $affiliation_helpaddress);
+	}
+	
 	# Make sure image does not exist in the repository
 	my $image_already_exists = $self->provisioner->does_image_exist();
 	if ($image_already_exists) {
@@ -457,6 +460,321 @@ END
 	notify($ERRORS{'OK'}, 0, "exiting");
 	exit;
 } ## end sub reservation_failed
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 setup
+
+ Parameters  : none
+ Returns     : 
+ Description : This subroutine is used when vcld is run in setup mode. It
+               presents a menu for the image module.
+
+=cut
+
+sub setup {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	push @{$ENV{setup_path}}, 'Image';
+	
+	my @operation_choices = (
+		'Capture Base Image',
+	);
+	
+	my @setup_path = @{$ENV{setup_path}};
+	OPERATION: while (1) {
+		@{$ENV{setup_path}} = @setup_path;
+		
+		print '-' x 76 . "\n";
+		
+		print "Choose an operation:\n";
+		my $operation_choice_index = setup_get_array_choice(@operation_choices);
+		last if (!defined($operation_choice_index));
+		my $operation_name = $operation_choices[$operation_choice_index];
+		print "\n";
+		
+		push @{$ENV{setup_path}}, $operation_name;
+		
+		if ($operation_name =~ /capture/i) {
+			$self->setup_capture_base_image();
+		}
+	}
+	
+	pop @{$ENV{setup_path}};
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 setup_capture_base_image
+
+ Parameters  : none
+ Returns     : 
+ Description : This subroutine is used when vcld is run in setup mode. It
+               inserts the database entries necessary to capture a base image.
+               Several questions are presented to the user via the command line.
+
+=cut
+
+sub setup_capture_base_image {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get the management node id, needed to insert a reservation row later on
+	my $management_node_id = $self->data->get_management_node_id();
+	if (!$management_node_id) {
+		print "ERROR: failed to determine the management node ID\n";
+		return;
+	}
+	
+	# Get the user who the reservation and image will belong to
+	my $user_id;
+	my $username;
+	while (!$user_id) {
+		my $user_identifier = setup_get_input_string("Enter the VCL login name or ID of the user who will own the image:", 'admin');
+		return if (!defined($user_identifier));
+		my $user_info = get_user_info($user_identifier);
+		if (!$user_info) {
+			print "User was not found: $user_identifier\n";
+		}
+		else {
+			$user_id = (keys %$user_info)[0];
+			$username = $user_info->{$user_id}{unityid};
+		}
+	}
+	print "\nUser who will own the image: $username (ID: $user_id)\n\n";
+	
+	# Determine the computer ID
+	my $computer_id;
+	my %computer_info;
+	while (!$computer_id) {
+		my $computer_identifier = setup_get_input_string("Enter the hostname or IP address of the computer to be captured:");
+		return if (!defined($computer_identifier));
+		
+		# Search the computer table for a match
+		my @computer_ids = get_computer_ids($computer_identifier);
+		if (!@computer_ids) {
+			print "No VCL computers were found with the name or IP address: $computer_identifier\n";
+			next;
+		}
+		
+		# Get information from the database for all of the computers found
+		for my $computer_id (@computer_ids) {
+			$computer_info{$computer_id} = get_computer_info($computer_id)->{computer};
+			if (!$computer_info{$computer_id}) {
+				print "ERROR: unable to retrieve information for computer ID: $computer_id\n";
+				return;
+			}
+		}
+	
+		if (scalar(@computer_ids) > 1) {
+			print "Multiple VCL computers were found with the name or IP address: '$computer_identifier' (@computer_ids)\n\n";
+			print "Choose a computer:\n";
+			$computer_id = setup_get_hash_choice(\%computer_info, 'hostname');
+			return if (!defined($computer_id));
+		}
+		else {
+			$computer_id = (keys %computer_info)[0];
+		}
+	}
+	
+	my $computer_hostname = $computer_info{$computer_id}{hostname};
+	my $computer_state_name = $computer_info{$computer_id}{state}{name};
+	my $computer_provisioning_module_name = $computer_info{$computer_id}{provisioning}{module}{name};
+	
+	my $install_type;
+	if ($computer_provisioning_module_name =~ /vm/i) {
+		$install_type = 'vmware';
+	}
+	else {
+		$install_type = 'partimage';
+	}
+	
+	print "\nComputer to be captured: $computer_hostname (ID: $computer_id)\n";
+	print "Provisioning module: $computer_provisioning_module_name\n";
+	print "Install type: $install_type\n";
+	print "\n";
+	
+	# Make sure the computer state is valid
+	if ($computer_state_name =~ /(maintenance|deleted)/i) {
+		print "ERROR: state of $computer_hostname is $computer_state_name\n";
+		return;
+	}
+	
+	
+	# Get the OS table contents from the database
+	my $os_info = get_os_info();
+	if (!$os_info) {
+		print "ERROR: failed to retrieve OS info from the database\n";
+		return;
+	}
+
+	# Loop through the OS table info
+	for my $os_id (keys %$os_info) {
+		# Remove keys which don't match the selected computer type
+		# Remove keys where the name begins with esx - deprecated OS type
+		if ($os_info->{$os_id}{installtype} ne $install_type || $os_info->{$os_id}{name} =~ /^vmwareesx/i) {
+			delete $os_info->{$os_id};
+		}
+	}
+
+	print "Select the OS to be captured (install type: $install_type):\n";
+	my $os_id = setup_get_hash_choice($os_info, 'prettyname');
+	return if (!defined($os_id));
+	my $os_prettyname = $os_info->{$os_id}{prettyname};
+	my $os_module_perl_package = $os_info->{$os_id}{module}{perlpackage};
+	my $os_type = $os_info->{$os_id}{type};
+	print "\nSelected OS: $os_prettyname\n\n";
+	
+	# If Windows, ask if Sysprep should be used
+	my $use_sysprep = 1;
+	if ($os_type =~ /windows/i) {
+		my @yes_no_choices = (
+			'Yes',
+			'No',
+		);
+		
+		print "Use Sysprep:\n";
+		my $sysprep_choice_index = setup_get_array_choice(@yes_no_choices);
+		last if (!defined($sysprep_choice_index));
+		my $use_sysprep_choice = $yes_no_choices[$sysprep_choice_index];
+		print "\nUse Sysprep: $use_sysprep_choice\n\n";
+		
+		if ($use_sysprep_choice =~ /no/i) {
+			$use_sysprep = 0;
+		}
+	}
+	
+	my $image_prettyname;
+	while (!$image_prettyname) {
+		$image_prettyname = setup_get_input_string("Enter the name of the image to be captured:");
+		return if (!defined($image_prettyname));
+		#if ($image_prettyname =~ //) {
+		#	print "Image name is not valid: $image_prettyname\n";
+		#	$image_prettyname = 0;
+		#}
+	}
+	
+	my $image_name = $image_prettyname;
+	$image_name =~ s/[\s\W]//g;
+	$image_name = $os_info->{$os_id}{name} . "-$image_name-v0";
+	
+	my $insert_imagemeta_statement = <<EOF;
+INSERT INTO imagemeta
+(sysprep)
+VALUES
+('$use_sysprep')
+EOF
+	
+	my $imagemeta_id = database_execute($insert_imagemeta_statement);
+	if (!defined($imagemeta_id)) {
+		print "ERROR: failed to insert into imagemeta table\n";
+		return;
+	}
+	
+	
+	my $insert_image_statement = <<EOF;
+INSERT INTO image (name, prettyname, ownerid, platformid, OSid, imagemetaid, deleted, lastupdate, size, architecture, basedoffrevisionid)
+VALUES ('$image_name', '$image_prettyname', '$user_id', '1', $os_id, $imagemeta_id, '1', NOW( ), '1450', 'x86', '4')
+EOF
+	
+	my $image_id = database_execute($insert_image_statement);
+	if (!defined($image_id)) {
+		print "ERROR: failed to insert into image table\n";
+		return;
+	}
+	
+	# Add the newly inserted image ID to the image name
+	$image_name =~ s/-v0$/$image_id-v0/;
+	
+	# Upadate the name in the image table
+	my $update_image_statement = <<EOF;
+UPDATE image
+SET name = '$image_name'
+WHERE
+id = $image_id
+EOF
+	if (!database_execute($update_image_statement)) {
+		print "ERROR: failed to update the image table with the correct image name: $image_name\n";
+		return;
+	}
+	
+	
+	my $insert_imagerevision_statement = <<EOF;
+INSERT INTO imagerevision
+(imageid, revision, userid, datecreated, deleted, production, imagename)
+VALUES
+($image_id, '0', '$user_id', NOW( ), '1', '1', '$image_name')
+EOF
+
+	my $imagerevision_id = database_execute($insert_imagerevision_statement);
+	if (!defined($imagerevision_id)) {
+		print "ERROR: failed to insert into imagerevision table\n";
+		return;
+	}
+
+	my $insert_resource_statement = <<EOF;
+INSERT INTO resource
+(resourcetypeid, subid)
+VALUES ('13', '$image_id')
+EOF
+
+	my $resource_id = database_execute($insert_resource_statement);
+	if (!defined($resource_id)) {
+		print "ERROR: failed to insert into resource table\n";
+		return;
+	}
+	
+	print "\nAdded new image to database: '$image_prettyname'\n";
+	print "   image.name: $image_name\n";
+	print "   image.id: $image_id\n";
+	print "   imagerevision.id: $imagerevision_id\n";
+	print "   imagemeta.id: $imagemeta_id\n";
+	print "   resource.id: $resource_id\n\n";
+	
+	
+	my ($request_id, $reservation_id) = insert_request($management_node_id, 'image', 'image', 0, $username, $computer_id, $image_id, $imagerevision_id, 0, 60);
+	if (!defined($request_id) || !defined($reservation_id)) {
+		print "ERROR: failed to insert new imaging request\n";
+		return;
+	}
+	
+	my $message = <<EOF;
+Inserted imaging request to the database:
+request ID: $request_id
+reservation ID: $reservation_id
+
+This process will now display the contents of the vcld.log file if the vcld
+daemon is running. If you do not see many lines of additional output, exit this
+process, start the vcld daemon, and monitor the image capture process by running
+the command:
+tail -f $LOGFILE | grep '$request_id:$reservation_id'
+
+EOF
+	
+	print '-' x 76 . "\n";
+	print "$message";
+	print '-' x 76 . "\n";
+	
+	# Pipe the command output to a file handle
+	# The open function returns the pid of the process
+	if (open(COMMAND, "tail -f $LOGFILE 2>&1 |")) {
+		# Capture the output of the command
+		
+		while (my $output = <COMMAND>) {
+			print $output if ($output =~ /$reservation_id/);
+		}
+	}
+	
+	exit;
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 
