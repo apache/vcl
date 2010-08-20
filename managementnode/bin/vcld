@@ -846,6 +846,7 @@ sub setup_management_node {
 	
 	# Loop through the entries in the data from the module table
 	my %setup_module_objects;
+	
 	for my $module_id (keys %$module_info) {
 		# Get the module's Perl package and name
 		my $module_name = $module_info->{$module_id}{name};
@@ -874,9 +875,19 @@ sub setup_management_node {
 			next;
 		}
 		
-		# Save the object and last part of the package name in the %setup_module_objects hash
-		($setup_module_objects{$module_perl_package}{name}) = $module_perl_package =~ /([^:]+)$/;
+		# Store the module object in a hash
 		$setup_module_objects{$module_perl_package}{object} = $module_object;
+		
+		# Determine the name to display for the module
+		my $module_display_name = $module_info->{$module_id}{prettyname};
+		if (!$module_display_name) {
+			# Use the last part of the module's Perl package path if the pretty name isn't set
+			($module_display_name) = $module_perl_package =~ /([^:]+)$/;
+			
+			# Capitalize the first letter
+			$module_display_name =~ s/\b([a-z])(\w+)\b/\u$1$2/g;
+		}
+		$setup_module_objects{$module_perl_package}{display_name} = $module_display_name;
 	}
 	
 	# Set the setup_path environment variable to anonymous array containing 'vcld'
@@ -890,7 +901,7 @@ sub setup_management_node {
 		
 		# Display a menu to the user listing the modules that were found containing setup subroutines
 		print "Select a module to configure:\n";
-		my $module_perl_package = setup_get_hash_choice(\%setup_module_objects, 'name');
+		my $module_perl_package = setup_get_hash_choice(\%setup_module_objects, 'display_name');
 		last if (!defined($module_perl_package));
 		
 		# Retrieve the module object already created
