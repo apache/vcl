@@ -169,7 +169,10 @@ function editVMInfo() {
 		return;
 	print "<div id=\"vmprofiles\" dojoType=\"dijit.layout.ContentPane\" title=\"VM Host Profiles\">\n";
 	print "<br>Select a profile to configure:<br>\n";
-	printSelectInput("profileid", $profiles, -1, 0, 0, 'profileid');
+	print "<select name=\"profileid\" id=\"profileid\">\n";
+	foreach($profiles as $id => $item)
+		print "  <option value=\"$id\">{$item['profilename']}</option>\n";
+	print "</select>\n";
 	$cont = addContinuationsEntry('AJprofiledata');
 	print "<button dojoType=\"dijit.form.Button\" id=\"fetchProfilesBtn\">\n";
 	print "	Configure Profile\n";
@@ -200,7 +203,7 @@ function editVMInfo() {
 	print "<table summary=\"\">\n";
 	print "  <tr>\n";
 	print "    <th align=right>Name:</th>\n";
-	print "    <td><span id=pname dojoType=\"dijit.InlineEditBox\" onChange=\"updateProfile('pname', 'name');\"></span></td>\n";
+	print "    <td><span id=pname dojoType=\"dijit.InlineEditBox\" onChange=\"updateProfile('pname', 'profilename');\"></span></td>\n";
 	print "  </tr>\n";
 	print "  <tr>\n";
 	print "    <th align=right>Type:</th>\n";
@@ -232,7 +235,21 @@ function editVMInfo() {
 	print "  </tr>\n";
 	print "  <tr>\n";
 	print "    <th align=right>VM Disk:</th>\n";
-	print "    <td><select id=pvmdisk dojoType=\"dijit.form.FilteringSelect\" searchAttr=\"name\" onchange=\"updateProfile('pvmdisk', 'vmdisk');\"></span></td>\n";
+	print "    <td><select id=pvmdisk dojoType=\"dijit.form.FilteringSelect\" searchAttr=\"name\" onchange=\"updateProfile('pvmdisk', 'vmdisk');\"></select></td>\n";
+	print "  </tr>\n";
+	print "  <tr>\n";
+	print "    <th align=right>Generate eth0 MAC:</th>\n";
+	print "    <td><select id=pgenmac0 dojoType=\"dijit.form.Select\" searchAttr=\"name\" onchange=\"updateProfile('pgenmac0', 'vmware_mac_eth0_generated');\">\n";
+	print "    <option value=\"1\">Yes</option>\n";
+	print "    <option value=\"0\">No</option>\n";
+	print "    </select></td>\n";
+	print "  </tr>\n";
+	print "  <tr>\n";
+	print "    <th align=right>Generate eth1 MAC:</th>\n";
+	print "    <td><select id=pgenmac1 dojoType=\"dijit.form.Select\" searchAttr=\"name\" onchange=\"updateProfile('pgenmac1', 'vmware_mac_eth1_generated');\">\n";
+	print "    <option value=\"1\">Yes</option>\n";
+	print "    <option value=\"0\">No</option>\n";
+	print "    </select></td>\n";
 	print "  </tr>\n";
 	print "  <tr>\n";
 	print "    <th align=right>Username:</th>\n";
@@ -283,9 +300,7 @@ function vmhostdata() {
 
 	$resources = getUserResources(array("computerAdmin"), array("administer"));
 	if(! array_key_exists($data[$vmhostid]['computerid'], $resources['computer'])) {
-		$arr = array('failed' => 'noaccess');
-		header('Content-Type: text/json-comment-filtered; charset=utf-8');
-		print '/*{"items":' . json_encode($arr) . '}*/';
+		sendJSON(array('failed' => 'noaccess'));
 		return;
 	}
 
@@ -365,8 +380,7 @@ function vmhostdata() {
 	             'currvms' => $currvms,
 	             'freevms' => $freevms,
 	             'movevms' => $movevms);
-	header('Content-Type: text/json-comment-filtered; charset=utf-8');
-	print '/*{"items":' . json_encode($arr) . '}*/';
+	sendJSON($arr);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -460,9 +474,7 @@ function AJvmToHost() {
 	$hostdata = getVMHostData($hostid);
 	$resources = getUserResources(array("computerAdmin"), array("administer"));
 	if(! array_key_exists($hostdata[$hostid]['computerid'], $resources['computer'])) {
-		$arr = array('failed' => 'nohostaccess');
-		header('Content-Type: text/json-comment-filtered; charset=utf-8');
-		print '/*{"items":' . json_encode($arr) . '}*/';
+		sendJSON(array('failed' => 'nohostaccess'));
 		return;
 	}
 
@@ -473,9 +485,7 @@ function AJvmToHost() {
 	$qh = doQuery($query, 101);
 	$row = mysql_fetch_row($qh);
 	if($row[0] >= $hostdata[$hostid]['vmlimit']) {
-		$arr = array('failed' => 'vmlimit');
-		header('Content-Type: text/json-comment-filtered; charset=utf-8');
-		print '/*{"items":' . json_encode($arr) . '}*/';
+		sendJSON(array('failed' => 'vmlimit'));
 		return;
 	}
 
@@ -520,9 +530,8 @@ function AJvmToHost() {
 		else
 			$fails[] = array('id' => $compid, 'name' => $vmdata[$compid]['hostname'], 'reason' => 'otherhost');
 	}
-	header('Content-Type: text/json-comment-filtered; charset=utf-8');
 	$arr = array('vms' => $adds, 'fails' => $fails, 'addrem' => 1);
-	print '/*{"items":' . json_encode($arr) . '}*/';
+	sendJSON($arr);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -545,9 +554,7 @@ function AJvmFromHost() {
 	$hostdata = getVMHostData($hostid);
 	$resources = getUserResources(array("computerAdmin"), array("administer"));
 	if(! array_key_exists($hostdata[$hostid]['computerid'], $resources['computer'])) {
-		$arr = array('failed' => 'nohostaccess');
-		header('Content-Type: text/json-comment-filtered; charset=utf-8');
-		print '/*{"items":' . json_encode($arr) . '}*/';
+		sendJSON(array('failed' => 'nohostaccess'));
 		return;
 	}
 
@@ -616,13 +623,12 @@ function AJvmFromHost() {
 		$cont = addContinuationsEntry('AJvmFromHostDelayed', $checks, 120, 1, 0);
 	else
 		$cont = '';
-	header('Content-Type: text/json-comment-filtered; charset=utf-8');
 	$arr = array('vms' => $rems,
 	             'checks' => $checks,
 	             'fails' => $fails,
 	             'addrem' => 0,
 	             'cont' => $cont);
-	print '/*{"items":' . json_encode($arr) . '}*/';
+	sendJSON($arr);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -644,10 +650,9 @@ function AJvmFromHostDelayed() {
 			$fails[] = array('name' => $comp['hostname'],
 			                 'reason' => 'nomgtnode');
 	}
-	header('Content-Type: text/json-comment-filtered; charset=utf-8');
 	$cont = addContinuationsEntry('vmhostdata');
 	$arr = array('msg' => 'SUCCESS', 'cont' => $cont, 'fails' => $fails);
-	print '/*{"items":' . json_encode($arr) . '}*/';
+	sendJSON($arr);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -666,10 +671,9 @@ function AJchangeVMprofile() {
 	// if no reservations on any vms, create reload reservation
 	# else try to create reservation to handle in future
 	# else return error message
-	header('Content-Type: text/json-comment-filtered; charset=utf-8');
 	$cont = addContinuationsEntry('AJchangeVMprofile', array(), 3600, 1, 0);
 	$arr = array('msg' => 'function not implemented', 'continuation' => $cont);
-	print '/*{"items":' . json_encode($arr) . '}*/';
+	sendJSON($arr);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -686,9 +690,7 @@ function AJcancelVMmove() {
 	$hostdata = getVMHostData($hostid);
 	$resources = getUserResources(array("computerAdmin"), array("administer"));
 	if(! array_key_exists($hostdata[$hostid]['computerid'], $resources['computer'])) {
-		$arr = array('failed' => 'nohostaccess');
-		header('Content-Type: text/json-comment-filtered; charset=utf-8');
-		print '/*{"items":' . json_encode($arr) . '}*/';
+		sendJSON(array('failed' => 'nohostaccess'));
 		return;
 	}
 
@@ -721,15 +723,14 @@ function AJcancelVMmove() {
 		$msg = 'SUCCESS';
 	}
 	
-	header('Content-Type: text/json-comment-filtered; charset=utf-8');
 	$cont = addContinuationsEntry('vmhostdata');
 	$arr = array('msg' => $msg, 'cont' => $cont, 'fails' => $fails);
-	print '/*{"items":' . json_encode($arr) . '}*/';
+	sendJSON($arr);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn AJprofiledata()
+/// \fn AJprofileData()
 ///
 /// \param $profileid - (optional) id of a vm profile
 ///
@@ -744,9 +745,7 @@ function AJcancelVMmove() {
 function AJprofileData($profileid="") {
 	global $viewmode;
 	if($viewmode != ADMIN_DEVELOPER) {
-		$arr = array('failed' => 'noaccess');
-		header('Content-Type: text/json-comment-filtered; charset=utf-8');
-		print '/*{"items":' . json_encode($arr) . '}*/';
+		sendJSON(array('failed' => 'noaccess'));
 		return;
 	}
 	$profileid = processInputVar('profileid', ARG_NUMERIC, $profileid);
@@ -772,13 +771,12 @@ function AJprofileData($profileid="") {
 	$vmdiskitems[] = array('id' => 'localdisk', 'name' => 'localdisk');
 	$vmdiskitems[] = array('id' => 'networkdisk', 'name' => 'networkdisk');
 	$vmdisk = array('identifier' => 'id', 'items' => $vmdiskitems);
-	
-	header('Content-Type: text/json-comment-filtered; charset=utf-8');
+
 	$arr = array('profile' => $profiledata[$profileid],
 	             'types' => $typedata,
 	             'vmdisk' => $vmdisk,
 	             'images' => $imagedata);
-	print '/*{"items":' . json_encode($arr) . '}*/';
+	sendJSON($arr);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -797,7 +795,16 @@ function AJupdateVMprofileItem() {
 	}
 	$profileid = processInputVar('profileid', ARG_NUMERIC);
 	$item = processInputVar('item', ARG_STRING);
-	if($item == 'password')
+	if(! preg_match('/^(profilename|vmtypeid|imageid|nasshare|datastorepath|vmpath|virtualswitch0|virtualswitch1|vmdisk|username|password|vmware_mac_eth0_generated|vmware_mac_eth1_generated)$/', $item)) {
+		print "alert('Invalid data submitted.');";
+		return;
+	}
+	if(preg_match('/^vmware_mac_eth[01]_generated$/', $item)) {
+		$newvalue = processInputVar('newvalue', ARG_NUMERIC);
+		if($newvalue != 0 && $newvalue != 1)
+			$newvalue = 0;
+	}
+	elseif($item == 'password')
 		$newvalue = $_POST['newvalue'];
 	else
 		$newvalue = processInputVar('newvalue', ARG_STRING);
@@ -810,6 +817,7 @@ function AJupdateVMprofileItem() {
 		$newvalue2 = "'$newvalue2'";
 	}
 
+	$item = mysql_real_escape_string($item);
 	$profile = getVMProfiles($profileid);
 	if($profile[$profileid][$item] == $newvalue)
 		return;
@@ -843,9 +851,7 @@ function AJnewProfile() {
 	$query = "SELECT id FROM vmprofile WHERE profilename = '$newprofile'";
 	$qh = doQuery($query, 101);
 	if($row = mysql_fetch_assoc($qh)) {
-		header('Content-Type: text/json-comment-filtered; charset=utf-8');
-		$arr = array('failed' => 'exists');
-		print '/*{"items":' . json_encode($arr) . '}*/';
+		sendJSON(array('failed' => 'exists'));
 		return;
 	}
 	$query = "INSERT INTO vmprofile (profilename) VALUES ('$newprofile')";
@@ -866,9 +872,7 @@ function AJnewProfile() {
 function AJdelProfile() {
 	global $viewmode;
 	if($viewmode != ADMIN_DEVELOPER) {
-		$arr = array('failed' => 'noaccess');
-		header('Content-Type: text/json-comment-filtered; charset=utf-8');
-		print '/*{"items":' . json_encode($arr) . '}*/';
+		sendJSON(array('failed' => 'noaccess'));
 		return;
 	}
 	$profileid = processInputVar('profileid', ARG_NUMERIC);
@@ -884,16 +888,12 @@ function AJdelProfile() {
 	       .       "vh.vmprofileid = $profileid";
 	$qh = doQuery($query, 101);
 	if($row = mysql_fetch_assoc($qh)) {
-		$arr = array('failed' => 'inuse');
-		header('Content-Type: text/json-comment-filtered; charset=utf-8');
-		print '/*{"items":' . json_encode($arr) . '}*/';
+		sendJSON(array('failed' => 'inuse'));
 		return;
 	}
 	$query = "DELETE FROM vmprofile WHERE id = $profileid";
 	doQuery($query, 101);
-	header('Content-Type: text/json-comment-filtered; charset=utf-8');
-	$arr = array('SUCCESS');
-	print '/*{"items":' . json_encode($arr) . '}*/';
+	sendJSON(array('SUCCESS'));
 }
 
 ?>

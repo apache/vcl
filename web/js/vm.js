@@ -44,7 +44,7 @@ function getVMHostData(cont) {
 	dojo.xhrPost({
 		url: 'index.php',
 		load: VMHostDataCB,
-		handleAs: "json-comment-filtered",
+		handleAs: "json",
 		error: errorHandler,
 		content: {continuation: cont,
 					 vmhostid: hostid},
@@ -73,7 +73,7 @@ function VMHostDataCB(data, ioArgs) {
 	}*/
 	var profile = data.items.profile;
 	var obj = dijit.byId('vmprofile');
-	obj.setTitle(profile.name);
+	obj.setTitle(profile.profilename);
 	var ct = '<table>';
 	ct += '<tr><th align=right>VM type:</th><td>' + profile.type + '</td></tr>';
 	ct += '<tr><th align=right>Image:</th><td>' + profile.image + '</td></tr>';
@@ -187,7 +187,7 @@ function submitChangeProfile() {
 	dojo.xhrPost({
 		url: 'index.php',
 		load: submitChangeProfileCB,
-		handleAs: "json-comment-filtered",
+		handleAs: "json",
 		error: errorHandler,
 		content: {continuation: cont,
 					 vmhostid: hostid,
@@ -232,7 +232,7 @@ function vmToHost(cont) {
 	dojo.xhrPost({
 		url: 'index.php',
 		load: vmToHostCB,
-		handleAs: "json-comment-filtered",
+		handleAs: "json",
 		error: errorHandler,
 		content: {continuation: cont,
 					 listids: listids.join(','),
@@ -360,7 +360,7 @@ function vmFromHost(cont) {
 	dojo.xhrPost({
 		url: 'index.php',
 		load: vmFromHostCB,
-		handleAs: "json-comment-filtered",
+		handleAs: "json",
 		error: errorHandler,
 		content: {continuation: cont,
 					 listids: listids.join(','),
@@ -465,7 +465,7 @@ function vmFromHostDelayed(cont) {
 	dojo.xhrPost({
 		url: 'index.php',
 		load: reloadVMhostCB,
-		handleAs: "json-comment-filtered",
+		handleAs: "json",
 		error: errorHandler,
 		content: {continuation: cont},
 		timeout: 15000
@@ -525,7 +525,7 @@ function cancelVMmove(cont) {
 	dojo.xhrPost({
 		url: 'index.php',
 		load: reloadVMhostCB,
-		handleAs: "json-comment-filtered",
+		handleAs: "json",
 		error: errorHandler,
 		content: {continuation: cont,
 					 listids: listids.join(','),
@@ -542,7 +542,7 @@ function getVMprofileData(cont) {
 	dojo.xhrPost({
 		url: 'index.php',
 		load: getVMprofileDataCB,
-		handleAs: "json-comment-filtered",
+		handleAs: "json",
 		error: errorHandler,
 		content: {continuation: cont,
 					 profileid: profileid},
@@ -560,17 +560,20 @@ function getVMprofileDataCB(data, ioArgs) {
 	var obj = dijit.byId('ptype');
 	var store = new dojo.data.ItemFileReadStore({data: data.items.types});
 	obj.store = store;
-	obj.setValue(curprofile.vmtypeid);
+	if(curprofile.vmtypeid != 0)
+		obj.setValue(curprofile.vmtypeid);
 
 	var obj = dijit.byId('pimage');
 	var store = new dojo.data.ItemFileReadStore({data: data.items.images});
 	obj.store = store;
-	obj.setValue(curprofile.imageid);
+	if(curprofile.imageid != 0)
+		obj.setValue(curprofile.imageid);
 
 	var obj = dijit.byId('pvmdisk');
 	var store = new dojo.data.ItemFileReadStore({data: data.items.vmdisk});
 	obj.store = store;
-	obj.setValue(curprofile.vmdisk);
+	if(curprofile.vmdisk != 0)
+		obj.setValue(curprofile.vmdisk);
 
 	dijit.byId('pname').noValueIndicator = '(empty)';
 	dijit.byId('pnasshare').noValueIndicator = '(empty)';
@@ -580,13 +583,15 @@ function getVMprofileDataCB(data, ioArgs) {
 	dijit.byId('pvs1').noValueIndicator = '(empty)';
 	dijit.byId('pusername').noValueIndicator = '(empty)';
 
-	dijit.byId('pname').setValue(curprofile.name);
+	dijit.byId('pname').setValue(curprofile.profilename);
 	dijit.byId('pnasshare').setValue(curprofile.nasshare);
 	dijit.byId('pdspath').setValue(curprofile.datastorepath);
 	dijit.byId('pvmpath').setValue(curprofile.vmpath);
 	dijit.byId('pvs0').setValue(curprofile.virtualswitch0);
 	dijit.byId('pvs1').setValue(curprofile.virtualswitch1);
 	dijit.byId('pusername').setValue(curprofile.username);
+	dijit.byId('pgenmac0').setValue(curprofile.vmware_mac_eth0_generated);
+	dijit.byId('pgenmac1').setValue(curprofile.vmware_mac_eth1_generated);
 	document.getElementById('ppassword').value = curprofile.password;
 	document.getElementById('ppwdconfirm').value = curprofile.password;
 	checkProfilePassword();
@@ -611,7 +616,7 @@ function newProfile(cont) {
 		dojo.xhrPost({
 			url: 'index.php',
 			load: newProfileCB,
-			handleAs: "json-comment-filtered",
+			handleAs: "json",
 			error: errorHandler,
 			content: {continuation: cont,
 						 newname: newname},
@@ -630,7 +635,7 @@ function newProfileCB(data, ioArgs) {
 	dijit.byId('messages').hide();
 	alert('Be sure to finish configuring this profile');
 	var obj = document.getElementById('profileid');
-	obj.options[obj.options.length] = new Option(data.items.profile.name, data.items.profile.id);
+	obj.options[obj.options.length] = new Option(data.items.profile.profilename, data.items.profile.id);
 	obj.options[obj.options.length - 1].selected = true;
 	// TODO insert new entry in correct order
 	getVMprofileDataCB(data, ioArgs);
@@ -643,7 +648,7 @@ function delProfile(cont) {
 	content += "<table summary=\"\">";
 	content += "<tr>";
 	content += "<th align=right>Name:</th>";
-	content += "<td>" + curprofile.name + "</td>";
+	content += "<td>" + curprofile.profilename + "</td>";
 	content += "</tr>";
 	content += "<tr>";
 	content += "<th align=right>Type:</th>";
@@ -677,6 +682,20 @@ function delProfile(cont) {
 	content += "<th align=right>VM Disk:</th>";
 	content += "<td>" + curprofile.vmdisk + "</td>";
 	content += "</tr>";
+	content += "<tr>";
+	content += "<th align=right>Generate eth0 MAC:</th>";
+	if(curprofile.vmware_mac_eth0_generated == 0)
+		content += "<td>No</td>";
+	else
+		content += "<td>Yes</td>";
+	content += "</tr>";
+	content += "<tr>";
+	content += "<th align=right>Generate eth1 MAC:</th>";
+	if(curprofile.vmware_mac_eth1_generated == 0)
+		content += "<td>No</td>";
+	else
+		content += "<td>Yes</td>";
+	content += "</tr>";
 	content += "</table>";
 	var func = function() {
 		var profileid = document.getElementById('profileid').value;
@@ -686,7 +705,7 @@ function delProfile(cont) {
 		dojo.xhrPost({
 			url: 'index.php',
 			load: delProfileCB,
-			handleAs: "json-comment-filtered",
+			handleAs: "json",
 			error: errorHandler,
 			content: {continuation: cont,
 						 profileid: profileid},

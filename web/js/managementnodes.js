@@ -14,42 +14,6 @@
 * See the License for the specific language governing permissions and
 * limitations under the License.
 */
-var xhrobj;
-var blockHide = 0;
-var timeout = 0;
-
-function showHelp(msg, id) {
-	if(timeout)
-		clearTimeout(timeout);
-	var obj = document.getElementById(id);
-	var x = findPosX(obj);
-	var y = findPosY(obj) - 10;
-	obj = document.getElementById('helpbox');
-	obj.innerHTML = msg;
-	obj.style.left = x + "px";
-	obj.style.top = y + "px";
-	obj.style.zIndex = 10;
-}
-
-function clearHelpbox() {
-	if(timeout)
-		clearTimeout(timeout);
-	timeout = setTimeout(function() {clearHelpbox2(1);}, 50);
-}
-
-function clearHelpbox2(fromicon) {
-	if(fromicon && blockHide)
-		return;
-	blockHide = 0;
-	var obj = document.getElementById('helpbox');
-	obj.innerHTML = '';
-	obj.style.zIndex = -10;
-}
-
-function blockClear() {
-	blockHide = 1;
-}
-
 function toggleImageLibrary() {
 	var obj = document.getElementById('imagelibenable');
 	if(obj.checked) {
@@ -67,5 +31,18 @@ function toggleImageLibrary() {
 		document.getElementById('imagelibgroupid').disabled = true;
 		document.getElementById('imagelibuser').disabled = true;
 		document.getElementById('imagelibkey').disabled = true;
+	}
+}
+
+function togglePublic() {
+	if(dojo.byId('publicIPconfig').value == 'static') {
+		dojo.byId('publicnetmask').disabled = false;
+		dojo.byId('publicgateway').disabled = false;
+		dojo.byId('publicdnsserver').disabled = false;
+	}
+	else {
+		dojo.byId('publicnetmask').disabled = true;
+		dojo.byId('publicgateway').disabled = true;
+		dojo.byId('publicdnsserver').disabled = true;
 	}
 }

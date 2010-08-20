@@ -38,6 +38,16 @@ define("MNSSHPORTERR", 1 << 6);
 define("MNSSHIDKEYSERR", 1 << 7);
 /// signifies an error with submitted image library group id
 define("MNIMGLIBGRPIDERR", 1 << 8);
+/// signifies an error with submitted public netmask
+define("MNPUBLICNETMASKERR", 1 << 9);
+/// signifies an error with submitted public gateway
+define("MNPUBLICGATEWAYERR", 1 << 10);
+/// signifies an error with submitted public dns server
+define("MNPUBLICDNSSERVERERR", 1 << 11);
+/// signifies an error with submitted sysadmin email address list
+define("MNSYSADMINEMAILERR", 1 << 12);
+/// signifies an error with submitted shared email address
+define("MNSHAREDMAILBOXERR", 1 << 13);
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -220,15 +230,23 @@ function editOrAddMgmtnode($state) {
 		else
 			$data['imagelibenable'] = "";
 		$data['imagelibgroupid'] = $mgmtnodes[$id]['imagelibgroupid'];
-		$data['imagelibgroup'] = $mgmtnodes[$id]['imagelibgroup']; # TODO this can be removed
 		$data['imagelibuser'] = $mgmtnodes[$id]['imagelibuser'];
 		$data['imagelibkey'] = $mgmtnodes[$id]['imagelibkey'];
 		$data['keys'] = $mgmtnodes[$id]['keys'];
 		$data['sshport'] = $mgmtnodes[$id]['sshport'];
+		$data['publicIPconfig'] = $mgmtnodes[$id]['publicIPconfig'];
+		$data['publicnetmask'] = $mgmtnodes[$id]['publicnetmask'];
+		$data['publicgateway'] = $mgmtnodes[$id]['publicgateway'];
+		$data['publicdnsserver'] = $mgmtnodes[$id]['publicdnsserver'];
+		$data['sysadminemail'] = $mgmtnodes[$id]['sysadminemail'];
+		$data['sharedmailbox'] = $mgmtnodes[$id]['sharedmailbox'];
 	}
 	$disabled = '';
 	if(! $data['imagelibenable'])
 		$disabled = 'disabled';
+	$disabled2 = '';
+	if($data['publicIPconfig'] != 'static')
+		$disabled2 = 'disabled';
 
 	print "<FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
 	print "<DIV align=center>\n";
@@ -271,20 +289,37 @@ function editOrAddMgmtnode($state) {
 	printSelectInput("stateid", $mgmtnodestates, $data["stateid"]);
 	print "    </TD>\n";
 	print "  </TR>\n";
+	# sysadmin email
+	print "  <TR>\n";
+	print "    <TH align=right>SysAdmin Email Address(es):</TH>\n";
+	print "    <TD><INPUT type=text name=sysadminemail value=\"";
+	print $data["sysadminemail"] . "\" maxlength=128 id=sysadminemail>";
+	print "<img src=\"images/helpicon.png\" id=\"sysadminemailhelp\" /></TD>\n";
+	print "    <TD>";
+	printSubmitErr(MNSYSADMINEMAILERR);
+	print "</TD>\n";
+	print "  </TR>\n";
+	# shared mailbox
+	print "  <TR>\n";
+	print "    <TH align=right>Address for Shadow Emails:</TH>\n";
+	print "    <TD><INPUT type=text name=sharedmailbox value=\"";
+	print $data["sharedmailbox"] . "\" maxlength=128 id=sharedmailbox>";
+	print "<img src=\"images/helpicon.png\" id=\"sharedmailboxhelp\" /></TD>\n";
+	print "    <TD>";
+	printSubmitErr(MNSHAREDMAILBOXERR);
+	print "</TD>\n";
+	print "  </TR>\n";
 	print "  <TR>\n";
 	print "    <TH align=right>Predictive Loading Module:</TH>\n";
-	print "    <TD>\n";
+	print "    <TD nowrap>\n";
 	printSelectInput("premoduleid", $premodules, $data["premoduleid"]);
+	print "    <img src=\"images/helpicon.png\" id=\"predictivehelp\" />\n";
 	print "    </TD>\n";
 	print "  </TR>\n";
 
 	# checkininterval
 	print "  <TR>\n";
-	print "    <TH id=th1 align=right\n";
-	print "        onmouseover=\"showHelp('interval between database checks for new tasks', 'th1');\"\n";
-	print "        onmouseout=\"clearHelpbox();\">\n";
-	print "      Check-in Interval (sec):\n";
-	print "    </TH>\n";
+	print "    <TH align=right>Check-in Interval (sec):</TH>\n";
 	print "    <TD>\n";
 	print "      <input dojoType=\"dijit.form.NumberSpinner\"\n";
 	print "                value=\"{$data['checkininterval']}\"\n";
@@ -292,40 +327,32 @@ function editOrAddMgmtnode($state) {
 	print "                maxlength=\"2\"\n";
 	print "                id=\"checkininterval\"\n";
 	print "                name=\"checkininterval\">\n";
+	print "    <img src=\"images/helpicon.png\" id=\"checkinhelp\" />\n";
 	print "    </TD>\n";
-	print "    <TD></TD>";
 	print "  </TR>\n";
 	# installpath
 	print "  <TR>\n";
-	print "    <TH id=th2 align=right\n";
-	print "        onmouseover=\"showHelp('path to parent directory of image repository directories', 'th2');\"\n";
-	print "        onmouseout=\"clearHelpbox();\">\n";
-	print "      Install Path:</TH>\n";
+	print "    <TH align=right>Install Path:</TH>\n";
 	print "    <TD><INPUT type=text name=installpath value=\"";
-	print $data["installpath"] . "\" maxlength=100></TD>\n";
+	print $data["installpath"] . "\" maxlength=100>";
+	print "<img src=\"images/helpicon.png\" id=\"installpathhelp\" /></TD>\n";
 	print "    <TD>";
 	printSubmitErr(MNINSTPATHERR);
 	print "</TD>\n";
 	print "  </TR>\n";
 	# keys
 	print "  <TR>\n";
-	print "    <TH id=th5 align=right\n";
-	print "        onmouseover=\"showHelp('comma delimited list of full paths to ssh identity keys to try when connecting to end nodes (optional)', 'th5');\"\n";
-	print "        onmouseout=\"clearHelpbox();\">\n";
-	print "      End Node SSH Identity Key Files:</TH>\n";
+	print "    <TH align=right>End Node SSH Identity Key Files:</TH>\n";
 	print "    <TD><INPUT type=text name=keys value=\"";
-	print $data["keys"] . "\" maxlength=1024></TD>\n";
+	print $data["keys"] . "\" maxlength=1024>";
+	print "<img src=\"images/helpicon.png\" id=\"identityhelp\" /></TD>\n";
 	print "    <TD>";
 	printSubmitErr(MNSSHIDKEYSERR);
 	print "</TD>\n";
 	print "  </TR>\n";
 	# sshport
 	print "  <TR>\n";
-	print "    <TH id=th6 align=right\n";
-	print "        onmouseover=\"showHelp('SSH port this node is listening on for image file transfers', 'th6');\"\n";
-	print "        onmouseout=\"clearHelpbox();\">\n";
-	print "      SSH Port for this node:\n";
-	print "    </TH>\n";
+	print "    <TH align=right>SSH Port for this node:</TH>\n";
 	print "    <TD>\n";
 	print "      <input dojoType=\"dijit.form.NumberSpinner\"\n";
 	print "                value=\"{$data['sshport']}\"\n";
@@ -333,6 +360,7 @@ function editOrAddMgmtnode($state) {
 	print "                maxlength=\"5\"\n";
 	print "                id=\"sshport\"\n";
 	print "                name=\"sshport\">\n";
+	print "    <img src=\"images/helpicon.png\" id=\"sshporthelp\" />\n";
 	print "    </TD>\n";
 	print "    <TD>";
 	printSubmitErr(MNSSHPORTERR);
@@ -340,27 +368,23 @@ function editOrAddMgmtnode($state) {
 	print "  </TR>\n";
 	# imagelibenable
 	print "  <TR>\n";
-	print "    <TH id=th7 align=right\n";
-	print "        onmouseover=\"showHelp('path to parent directory of image repository directories', 'th7');\"\n";
-	print "        onmouseout=\"clearHelpbox();\">\n";
-	print "      Enable Image Library:</TH>\n";
+	print "    <TH align=right>Enable Image Library:</TH>\n";
 	print "    <TD><input type=checkbox name=imagelibenable value=1 ";
-	print $data["imagelibenable"] . " onchange=\"toggleImageLibrary();\" \n";
+	print $data["imagelibenable"] . " onchange=\"toggleImageLibrary();\" ";
 	if($data['imagelibenable'])
-		print "id=imagelibenable checked></TD>\n";
+		print "id=imagelibenable checked>";
 	else
-		print "id=imagelibenable></TD>\n";
-	print "    <TD></TD>\n";
+		print "id=imagelibenable>";
+	print "<img src=\"images/helpicon.png\" id=\"imagelibhelp\" /></TD>\n";
 	print "  </TR>\n";
 	# imagelibgroupid
 	print "  <TR>\n";
-	print "    <TH id=th8 align=right\n";
-	print "        onmouseover=\"showHelp('this management node will try to get image files from other nodes in the selected group', 'th8');\"\n";
-	print "        onmouseout=\"clearHelpbox();\">\n";
-	print "      Image Library Management Node Group:</TH>\n";
+	print "    <TH align=right>Image Library Management Node Group:</TH>\n";
 	print "    <TD>";
 	$mgmtnodegroups = getUserResources(array('mgmtNodeAdmin'), array("manageGroup"), 1);
-	printSelectInput("imagelibgroupid", $mgmtnodegroups['managementnode'], -1, 0, 0, 'imagelibgroupid', $disabled);
+	printSelectInput("imagelibgroupid", $mgmtnodegroups['managementnode'],
+	                 $data['imagelibgroupid'], 0, 0, 'imagelibgroupid', $disabled);
+	print "    <img src=\"images/helpicon.png\" id=\"imagelibgrouphelp\" />\n";
 	print "    </TD>\n";
 	print "    <TD>";
 	printSubmitErr(MNIMGLIBGRPIDERR);
@@ -368,26 +392,64 @@ function editOrAddMgmtnode($state) {
 	print "  </TR>\n";
 	# imagelibuser
 	print "  <TR>\n";
-	print "    <TH id=th3 align=right\n";
-	print "        onmouseover=\"showHelp('userid to use when scp\'ing image files from another management node', 'th3');\"\n";
-	print "        onmouseout=\"clearHelpbox();\">\n";
-	print "      Image Library User:</TH>\n";
+	print "    <TH align=right>Image Library User:</TH>\n";
 	print "    <TD><INPUT type=text name=imagelibuser value=\"";
-	print $data["imagelibuser"] . "\" $disabled id=imagelibuser></TD>\n";
+	print $data["imagelibuser"] . "\" $disabled id=imagelibuser>";
+	print "<img src=\"images/helpicon.png\" id=\"imagelibuserhelp\" /></TD>\n";
 	print "    <TD>";
 	printSubmitErr(MNIMGLIBUSERERR);
 	print "</TD>\n";
 	print "  </TR>\n";
 	# imagelibkey
 	print "  <TR>\n";
-	print "    <TH id=th4 align=right\n";
-	print "        onmouseover=\"showHelp('path to ssh identity key file to use when scp\'ing image files from another management node', 'th4');\"\n";
-	print "        onmouseout=\"clearHelpbox();\">\n";
-	print "      Image Library SSH Identity Key File:</TH>\n";
+	print "    <TH align=right>Image Library SSH Identity Key File:</TH>\n";
 	print "    <TD><INPUT type=text name=imagelibkey value=\"";
-	print $data["imagelibkey"] . "\" maxlength=100 $disabled id=imagelibkey></TD>\n";
+	print $data["imagelibkey"] . "\" maxlength=100 $disabled id=imagelibkey>";
+	print "<img src=\"images/helpicon.png\" id=\"imagelibkeyhelp\" /></TD>\n";
 	print "    <TD>";
 	printSubmitErr(MNIMGLIBKEYERR);
+	print "</TD>\n";
+	print "  </TR>\n";
+	# publicIPconfig
+	print "  <TR>\n";
+	print "    <TH align=right>Public NIC configuration method:</TH>\n";
+	print "    <TD>";
+	$publicipconfigs = array('dynamicDHCP' => 'Dynamic DHCP',
+	                         'manualDHCP' => 'Manual DHCP',
+	                         'static' => 'Static');
+	printSelectInput("publicIPconfig", $publicipconfigs, $data['publicIPconfig'],
+	                 0, 0, 'publicIPconfig', "onChange=\"togglePublic();\"");
+	print "    <img src=\"images/helpicon.png\" id=\"ipconfighelp\" />\n";
+	print "    </TD>\n";
+	print "  </TR>\n";
+	# public netmask
+	print "  <TR>\n";
+	print "    <TH align=right>Public Netmask:</TH>\n";
+	print "    <TD><INPUT type=text name=publicnetmask value=\"";
+	print $data["publicnetmask"] . "\" maxlength=15 $disabled2 id=publicnetmask>";
+	print "<img src=\"images/helpicon.png\" id=\"netmaskhelp\" /></TD>\n";
+	print "    <TD>";
+	printSubmitErr(MNPUBLICNETMASKERR);
+	print "</TD>\n";
+	print "  </TR>\n";
+	# public gateway
+	print "  <TR>\n";
+	print "    <TH align=right>Public Gateway:</TH>\n";
+	print "    <TD><INPUT type=text name=publicgateway value=\"";
+	print $data["publicgateway"] . "\" maxlength=56 $disabled2 id=publicgateway>";
+	print "<img src=\"images/helpicon.png\" id=\"gatewayhelp\" /></TD>\n";
+	print "    <TD>";
+	printSubmitErr(MNPUBLICGATEWAYERR);
+	print "</TD>\n";
+	print "  </TR>\n";
+	# public dnsserver
+	print "  <TR>\n";
+	print "    <TH align=right>Public DNS Server:</TH>\n";
+	print "    <TD><INPUT type=text name=publicdnsserver value=\"";
+	print $data["publicdnsserver"] . "\" maxlength=56 $disabled2 id=publicdnsserver>";
+	print "<img src=\"images/helpicon.png\" id=\"dnsserverhelp\" /></TD>\n";
+	print "    <TD>";
+	printSubmitErr(MNPUBLICDNSSERVERERR);
 	print "</TD>\n";
 	print "  </TR>\n";
 
@@ -396,14 +458,16 @@ function editOrAddMgmtnode($state) {
 	print "  <TR valign=top>\n";
 	print "    <TD>\n";
 	if($state) {
-		$cdata = array('mgmtgroups' => $mgmtnodegroups['managementnode']);
+		$cdata = array('mgmtgroups' => $mgmtnodegroups['managementnode'],
+		               'publicipconfigs' => $publicipconfigs);
 		$cont = addContinuationsEntry('confirmAddMgmtnode', $cdata, SECINDAY, 0, 1, 1);
 		print "      <INPUT type=hidden name=continuation value=\"$cont\">\n";
 		print "      <INPUT type=submit value=\"Confirm Management Node\">\n";
 	}
 	else {
 		$cdata = array('mgmtnodeid' => $data['mgmtnodeid'],
-		               'mgmtgroups' => $mgmtnodegroups['managementnode']);
+		               'mgmtgroups' => $mgmtnodegroups['managementnode'],
+		               'publicipconfigs' => $publicipconfigs);
 		$cont = addContinuationsEntry('confirmEditMgmtnode', $cdata, SECINDAY, 0, 1, 1);
 		print "      <INPUT type=hidden name=continuation value=\"$cont\">\n";
 		print "      <INPUT type=submit value=\"Confirm Changes\">\n";
@@ -420,6 +484,79 @@ function editOrAddMgmtnode($state) {
 	print "  </TR>\n";
 	print "</TABLE>\n";
 	print "<div id=helpbox onmouseover=\"blockClear();\" onmouseout=\"clearHelpbox2(0);\"></div>\n";
+
+	# tooltips
+	print <<<END
+<div dojoType="dijit.Tooltip" connectId="sysadminemailhelp">
+Comma delimited list of email addresses for sysadmins<br>
+who should receive error emails from this management<br>
+node. Leave empty to disable this feature.
+</div>
+<div dojoType="dijit.Tooltip" connectId="sharedmailboxhelp">
+Single email address to which copies of all user<br>
+emails should be sent. This is a high traffic set<br>
+of emails. Leave empty to disable this feature.
+</div>
+<div dojoType="dijit.Tooltip" connectId="predictivehelp">
+This is the method used to determine which image should<br>
+be loaded on a computer at the end of a reservation.
+</div>
+<div dojoType="dijit.Tooltip" connectId="checkinhelp">
+the number of seconds that this management node<br>
+will wait before checking the database for tasks.
+</div>
+<div dojoType="dijit.Tooltip" connectId="installpathhelp">
+path to parent directory of image repository<br>
+directories (typically /install)
+</div>
+<div dojoType="dijit.Tooltip" connectId="identityhelp">
+comma delimited list of full paths to ssh identity<br>
+keys to try when connecting to end nodes (optional)
+</div>
+<div dojoType="dijit.Tooltip" connectId="sshporthelp">
+SSH port this node is listening on for image file transfers
+</div>
+<div dojoType="dijit.Tooltip" connectId="imagelibhelp">
+Enable sharing of images between management nodes. This allows<br>
+a management node to attempt fetching files for a requested<br>
+image from other management nodes if it does not have them.
+</div>
+<div dojoType="dijit.Tooltip" connectId="imagelibgrouphelp">
+This management node will try to get image<br>
+files from other nodes in the selected group.
+</div>
+<div dojoType="dijit.Tooltip" connectId="imagelibuserhelp">
+userid to use for scp when copying image<br>
+files from another management node
+</div>
+<div dojoType="dijit.Tooltip" connectId="imagelibkeyhelp">
+path to ssh identity key file to use for scp when<br>
+copying image files from another management node
+</div>
+<div dojoType="dijit.Tooltip" connectId="ipconfighelp">
+Method by which public NIC on nodes controlled by<br>
+this management node recive their network configuration
+<ul>
+<li>Dynamic DHCP - nodes receive an address<br>
+    via DHCP from a pool of addresses</li>
+<li>Manual DHCP - nodes always receive the<br>
+    same address via DHCP</li>
+<li>Static - VCL will configure the public<br>
+    address of the node</li>
+</ul>
+</div>
+<div dojoType="dijit.Tooltip" connectId="netmaskhelp">
+Netmask for public NIC
+</div>
+<div dojoType="dijit.Tooltip" connectId="gatewayhelp">
+IP address of gateway for public NIC
+</div>
+<div dojoType="dijit.Tooltip" connectId="dnsserverhelp">
+comma delimited list of IP addresses of DNS servers for public network
+</div>
+<div dojoType="dijit.Tooltip" connectId="wkdayshelp">
+</div>
+END;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -436,6 +573,7 @@ function confirmEditOrAddMgmtnode($state) {
 
 	$data = processMgmtnodeInput(1);
 	$premodules = getPredictiveModules();
+	$publicipconfigs = getContinuationVar('publicipconfigs');
 
 	if($submitErr) {
 		editOrAddMgmtnode($state);
@@ -473,6 +611,20 @@ function confirmEditOrAddMgmtnode($state) {
 	print "  <TR>\n";
 	print "    <TH align=right>State:</TH>\n";
 	print "    <TD>{$mgmtnodestates[$data["stateid"]]}</TD>\n";
+	print "  </TR>\n";
+	print "  <TR>\n";
+	print "    <TH align=right>SysAdmin Email Address(es):</TH>\n";
+	if(empty($data['sysadminemail']))
+		print "    <TD>(SysAdmin emails disabled)</TD>\n";
+	else
+		print "    <TD>{$data["sysadminemail"]}</TD>\n";
+	print "  </TR>\n";
+	print "  <TR>\n";
+	print "    <TH align=right>Address for Shadow Emails:</TH>\n";
+	if(empty($data['sharedmailbox']))
+		print "    <TD>(Shadow emails disabled)</TD>\n";
+	else
+		print "    <TD>{$data["sharedmailbox"]}</TD>\n";
 	print "  </TR>\n";
 	print "  <TR>\n";
 	print "    <TH align=right>Predictive Loading Module:</TH>\n";
@@ -517,6 +669,24 @@ function confirmEditOrAddMgmtnode($state) {
 		print "  <TR>\n";
 		print "    <TH align=right>Image Library:</TH>\n";
 		print "    <TD>disabled</TD>\n";
+		print "  </TR>\n";
+	}
+	print "  <TR>\n";
+	print "    <TH align=right>Public NIC configuration method:</TH>\n";
+	print "    <TD>{$publicipconfigs[$data["publicIPconfig"]]}</TD>\n";
+	print "  </TR>\n";
+	if($data['publicIPconfig'] == 'static') {
+		print "  <TR>\n";
+		print "    <TH align=right>Public Netmask:</TH>\n";
+		print "    <TD>{$data["publicnetmask"]}</TD>\n";
+		print "  </TR>\n";
+		print "  <TR>\n";
+		print "    <TH align=right>Public Gateway:</TH>\n";
+		print "    <TD>{$data["publicgateway"]}</TD>\n";
+		print "  </TR>\n";
+		print "  <TR>\n";
+		print "    <TH align=right>Public DNS Server:</TH>\n";
+		print "    <TD>{$data["publicdnsserver"]}</TD>\n";
 		print "  </TR>\n";
 	}
 	print "</TABLE>\n";
@@ -716,7 +886,7 @@ function submitMgmtnodeGroups() {
 	$mgmtnodes = getManagementNodes();
 
 	# build an array of memberships currently in the db
-	$tmp = getUserResources(array("groupAdmin"), array("manageGroup"), 1);
+	$tmp = getUserResources(array("mgmtNodeAdmin"), array("manageGroup"), 1);
 	$mgmtnodegroupsIDs = array_keys($tmp["managementnode"]);  // ids of groups that user can manage
 	$resources = getUserResources(array("mgmtNodeAdmin"), 
 	                              array("manageGroup"));
@@ -997,6 +1167,14 @@ function submitMgmtnodeMapping() {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function updateMgmtnode($data) {
+	if(empty($data['sysadminemail']))
+		$data['sysadminemail'] = 'NULL';
+	else
+		$data['sysadminemail'] = "'" . mysql_real_escape_string($data['sysadminemail']) . "'";
+	if(empty($data['sharedmailbox']))
+		$data['sharedmailbox'] = 'NULL';
+	else
+		$data['sharedmailbox'] = "'" . mysql_real_escape_string($data['sharedmailbox']) . "'";
 	$ownerid = getUserlistID($data["owner"]);
 	$data['installpath'] = mysql_real_escape_string($data['installpath']);
 	$data['keys'] = mysql_real_escape_string($data['keys']);
@@ -1012,6 +1190,16 @@ function updateMgmtnode($data) {
 		$data['keys'] = 'NULL';
 	else
 		$data['keys'] = "'{$data['keys']}'";
+	if($data['publicIPconfig'] != 'static') {
+		$data['publicnetmask'] = 'NULL';
+		$data['publicgateway'] = 'NULL';
+		$data['publicdnsserver'] = 'NULL';
+	}
+	else {
+		$data['publicnetmask'] = "'" . mysql_real_escape_string($data['publicnetmask']) . "'";
+		$data['publicgateway'] = "'" . mysql_real_escape_string($data['publicgateway']) . "'";
+		$data['publicdnsserver'] = "'" . mysql_real_escape_string($data['publicdnsserver']) . "'";
+	}
 	$query = "UPDATE managementnode "
 	       . "SET hostname = '{$data["hostname"]}', "
 	       .     "IPaddress = '{$data["IPaddress"]}', "
@@ -1025,7 +1213,13 @@ function updateMgmtnode($data) {
 	       .     "imagelibenable = {$data["imagelibenable"]}, "
 	       .     "imagelibgroupid = {$data["imagelibgroupid"]}, "
 	       .     "imagelibuser = {$data["imagelibuser"]}, "
-	       .     "imagelibkey = {$data["imagelibkey"]} "
+	       .     "imagelibkey = {$data["imagelibkey"]}, "
+	       .     "publicIPconfiguration = '{$data["publicIPconfig"]}', "
+	       .     "publicSubnetMask = {$data["publicnetmask"]}, "
+	       .     "publicDefaultGateway = {$data["publicgateway"]}, "
+	       .     "publicDNSserver = {$data["publicdnsserver"]}, "
+	       .     "sysadminEmailAddress = {$data["sysadminemail"]}, "
+	       .     "sharedMailBox = {$data["sharedmailbox"]} "
 	       . "WHERE id = " . $data["mgmtnodeid"];
 	$qh = doQuery($query, 101);
 	return mysql_affected_rows($GLOBALS["mysql_link_vcl"]);
@@ -1044,6 +1238,14 @@ function updateMgmtnode($data) {
 ////////////////////////////////////////////////////////////////////////////////
 function addMgmtnode($data) {
 	$ownerid = getUserlistID($data["owner"]);
+	if(empty($data['sysadminemail']))
+		$data['sysadminemail'] = 'NULL';
+	else
+		$data['sysadminemail'] = "'" . mysql_real_escape_string($data['sysadminemail']) . "'";
+	if(empty($data['sharedmailbox']))
+		$data['sharedmailbox'] = 'NULL';
+	else
+		$data['sharedmailbox'] = "'" . mysql_real_escape_string($data['sharedmailbox']) . "'";
 	$data['installpath'] = mysql_real_escape_string($data['installpath']);
 	$data['keys'] = mysql_real_escape_string($data['keys']);
 	$data['imagelibuser'] = mysql_real_escape_string($data['imagelibuser']);
@@ -1058,6 +1260,16 @@ function addMgmtnode($data) {
 		$data['keys'] = 'NULL';
 	else
 		$data['keys'] = "'{$data['keys']}'";
+	if($data['publicIPconfig'] != 'static') {
+		$data['publicnetmask'] = 'NULL';
+		$data['publicgateway'] = 'NULL';
+		$data['publicdnsserver'] = 'NULL';
+	}
+	else {
+		$data['publicnetmask'] = "'" . mysql_real_escape_string($data['publicnetmask']) . "'";
+		$data['publicgateway'] = "'" . mysql_real_escape_string($data['publicgateway']) . "'";
+		$data['publicdnsserver'] = "'" . mysql_real_escape_string($data['publicdnsserver']) . "'";
+	}
 	$query = "INSERT INTO managementnode "
 	       .         "(hostname, "
 	       .         "IPaddress, "
@@ -1071,7 +1283,13 @@ function addMgmtnode($data) {
 	       .         "imagelibkey, "
 	       .         "`keys`, "
 	       .         "predictivemoduleid, "
-	       .         "sshport) "
+	       .         "sshport, "
+	       .         "publicIPconfiguration, "
+	       .         "publicSubnetMask, "
+	       .         "publicDefaultGateway, "
+	       .         "publiDNSserver, "
+	       .         "sysadminEmailAddress, "
+	       .         "sharedMailBox "
 	       . "VALUES ('{$data["hostname"]}', "
 	       .         "'{$data["IPaddress"]}', "
 	       .         "$ownerid, "
@@ -1084,7 +1302,13 @@ function addMgmtnode($data) {
 	       .         "{$data["imagelibkey"]}, "
 	       .         "{$data["keys"]}, "
 	       .         "{$data["premoduleid"]}, "
-	       .         "{$data["sshport"]}) ";
+	       .         "{$data["sshport"]}, "
+	       .         "'{$data["publicIPconfig"]}', "
+	       .         "{$data["publicnetmask"]}, "
+	       .         "{$data["publicgateway"]}, "
+	       .         "{$data["publicdnsserver"]}, "
+			 .         "{$data["sysadminemail"]}, "
+	       .         "{$data["sharedmailbox"]})";
 	doQuery($query, 205);
 
 	// get last insert id
@@ -1137,6 +1361,13 @@ function processMgmtnodeInput($checks=1) {
 	$return["imagelibgroupid"] = getContinuationVar("imagelibgroupid", processInputVar("imagelibgroupid", ARG_NUMERIC));
 	$return["imagelibuser"] = getContinuationVar("imagelibuser", processInputVar("imagelibuser", ARG_STRING));
 	$return["imagelibkey"] = getContinuationVar("imagelibkey", processInputVar("imagelibkey", ARG_STRING));
+
+	$return['publicIPconfig'] = getContinuationVar("publicIPconfig", processInputVar("publicIPconfig", ARG_STRING));
+	$return['publicnetmask'] = getContinuationVar("publicnetmask", processInputVar("publicnetmask", ARG_STRING));
+	$return['publicgateway'] = getContinuationVar("publicgateway", processInputVar("publicgateway", ARG_STRING));
+	$return['publicdnsserver'] = getContinuationVar("publicdnsserver", processInputVar("publicdnsserver", ARG_STRING));
+	$return['sysadminemail'] = getContinuationVar("sysadminemail", processInputVar("sysadminemail", ARG_STRING));
+	$return['sharedmailbox'] = getContinuationVar("sharedmailbox", processInputVar("sharedmailbox", ARG_STRING));
 
 	if($return['checkininterval'] < 5)
 		$return['checkininterval'] = 5;
@@ -1214,6 +1445,73 @@ function processMgmtnodeInput($checks=1) {
 		$return["imagelibgroupid"] = 'NULL';
 		$return["imagelibuser"] = 'NULL';
 		$return["imagelibkey"] = 'NULL';
+	}
+
+	if(! preg_match('/^(dynamicDHCP|manualDHCP|static)$/', $return['publicIPconfig']))
+		$return['publicIPconfig'] = 'dynamicDHCP';
+
+	if($return['publicIPconfig'] == 'static') {
+		if(! preg_match('/^([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})$/', $return['publicnetmask'], $matches) ||
+		   $matches[1] < 0 || $matches[1] > 255 ||
+		   $matches[2] < 0 || $matches[2] > 255 ||
+		   $matches[3] < 0 || $matches[3] > 255 ||
+		   $matches[4] < 0 || $matches[4] > 255) {
+			$submitErr |= MNPUBLICNETMASKERR;
+			$submitErrMsg[MNPUBLICNETMASKERR] = "Invalid subnet mask entered";
+		}
+		if(preg_match('/^([0-9]{1,3}(\.?))+$/', $return['publicgateway'])) {
+			if(preg_match('/^([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})$/', $return['publicgateway'], $matches)) {
+				if($matches[1] < 0 || $matches[1] > 255 ||
+				   $matches[2] < 0 || $matches[2] > 255 ||
+				   $matches[3] < 0 || $matches[3] > 255 ||
+					$matches[4] < 0 || $matches[4] > 255) {
+					$submitErr |= MNPUBLICGATEWAYERR;
+					$submitErrMsg[MNPUBLICGATEWAYERR] = "Invalid ip address entered";
+				}
+			}
+			else {
+				$submitErr |= MNPUBLICGATEWAYERR;
+				$submitErrMsg[MNPUBLICGATEWAYERR] = "Invalid ip address entered";
+			}
+		}
+		elseif(! preg_match('/^[a-zA-Z0-9_][-a-zA-Z0-9_\.]{1,56}$/', $return["publicgateway"], $matches)) {
+			$submitErr |= MNPUBLICGATEWAYERR;
+			$submitErrMsg[MNPUBLICGATEWAYERR] = "Public gateway must be an IP address or a hostname containing only letters, numbers, dashes(-), periods(.), and underscores(_). It can be up to 56 characters long";
+		}
+		$servers = explode(',', $return['publicdnsserver']);
+		if(empty($servers)) {
+			$submitErr |= MNPUBLICDNSSERVERERR;
+			$submitErrMsg[MNPUBLICDNSSERVERERR] = "Please enter at least one dns server";
+		}
+		else {
+			foreach($servers as $server) {
+				if(! preg_match('/^([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})+$/', $server, $matches) ||
+				   $matches[1] < 0 || $matches[1] > 255 ||
+				   $matches[2] < 0 || $matches[2] > 255 ||
+				   $matches[3] < 0 || $matches[3] > 255 ||
+				   $matches[4] < 0 || $matches[4] > 255) {
+					$submitErr |= MNPUBLICDNSSERVERERR;
+					$submitErrMsg[MNPUBLICDNSSERVERERR] = "Invalid ip address entered";
+				}
+			}
+		}
+	}
+	else {
+		$return['publicnetmask'] = '';
+		$return['publicgateway'] = '';
+		$return['publicdnsserver'] = '';
+	}
+	if(strlen($return['sysadminemail']) &&
+	   (! preg_match('/^([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,4}(,?))+$/i', $return['sysadminemail']) ||
+		strlen($return['sysadminemail']) > 128)) {
+		$submitErr |= MNSYSADMINEMAILERR;
+		$submitErrMsg[MNSYSADMINEMAILERR] = "Invalid email address(es) entered or field too long (128 char max)";
+	}
+	if(strlen($return['sharedmailbox']) &&
+		(! preg_match('/^([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,4})$/i', $return['sharedmailbox']) ||
+		strlen($return['sharedmailbox']) > 128)) {
+		$submitErr |= MNSHAREDMAILBOXERR;
+		$submitErrMsg[MNSHAREDMAILBOXERR] = "Invalid email address entered";
 	}
 
 	return $return;

@@ -5103,6 +5103,12 @@ function getManagementNodes($alive="neither") {
 	       .        "m.imagelibkey, "
 	       .        "m.keys, "
 	       .        "m.sshport, "
+	       .        "m.publicIPconfiguration AS publicIPconfig, "
+	       .        "m.publicSubnetMask AS publicnetmask, "
+	       .        "m.publicDefaultGateway AS publicgateway, "
+	       .        "m.publicDNSserver AS publicdnsserver, "
+	       .        "m.sysadminEmailAddress AS sysadminemail, "
+	       .        "m.sharedMailBox AS sharedmailbox, "
 	       .        "r.id as resourceid, "
 	       .        "m.predictivemoduleid, "
 	       .        "mo.prettyname AS predictivemodule "
@@ -7608,7 +7614,7 @@ function generateString($length=8) {
 ///
 /// \return an array of profiles where each key is the profile id and each 
 /// element is an array with these keys:\n
-/// \b name - name of profile\n
+/// \b profilename - name of profile\n
 /// \b type - name of vm type\n
 /// \b typeid - id of vm type\n
 /// \b image - name of image used for this profile\n
@@ -7628,7 +7634,7 @@ function generateString($length=8) {
 ////////////////////////////////////////////////////////////////////////////////
 function getVMProfiles($id="") {
 	$query = "SELECT vp.id, "
-	       .        "vp.profilename AS name, "
+	       .        "vp.profilename, "
 	       .        "vt.name AS type, "
 	       .        "vp.vmtypeid, "
 	       .        "i.prettyname AS image, "
@@ -7640,7 +7646,9 @@ function getVMProfiles($id="") {
 	       .        "vp.virtualswitch1, "
 	       .        "vp.vmdisk, "
 	       .        "vp.username, "
-	       .        "vp.password "
+	       .        "vp.password, "
+	       .        "vp.vmware_mac_eth0_generated, "
+	       .        "vp.vmware_mac_eth1_generated "
 	       . "FROM vmprofile vp "
 	       . "LEFT JOIN vmtype vt ON (vp.vmtypeid = vt.id) "
 	       . "LEFT JOIN image i ON (vp.imageid = i.id)";
@@ -8788,8 +8796,9 @@ function getDojoHTML($refresh) {
 		case 'addMgmtNode':
 		case 'confirmEditMgmtnode':
 		case 'confirmAddMgmtnode':
-			$dojoRequires = array('dojo.parser');
-			$dojoRequires = array('dijit.form.NumberSpinner');
+			$dojoRequires = array('dojo.parser',
+			                      'dijit.Tooltip',
+			                      'dijit.form.NumberSpinner');
 			break;
 		case 'selectauth':
 			$dojoRequires = array('dojo.parser');
@@ -8801,6 +8810,7 @@ function getDojoHTML($refresh) {
 			                      'dijit.form.Button',
 			                      'dijit.form.TextBox',
 			                      'dijit.form.FilteringSelect',
+			                      'dijit.form.Select',
 			                      'dijit.TitlePane',
 			                      'dijit.layout.ContentPane',
 			                      'dijit.layout.TabContainer',
