@@ -1201,7 +1201,7 @@ function AJaddSubimage() {
 	$userimages = getContinuationVar('userimages');
 	$subimages = getContinuationVar('subimages');
 	$imagemetaid = getContinuationVar('imagemetaid');
-	if(! array_key_exists($imageid, $adminids)) {
+	if(! in_array($imageid, $adminids)) {
 		$arr = array('error' => 'noimageaccess',
 	                'msg' => 'You do not have access to manage this image.');
 		sendJSON($arr);
@@ -1267,7 +1267,7 @@ function AJremSubimage() {
 	$userimages = getContinuationVar('userimages');
 	$subimages = getContinuationVar('subimages');
 	$imagemetaid = getContinuationVar('imagemetaid');
-	if(! array_key_exists($imageid, $adminids)) {
+	if(! in_array($imageid, $adminids)) {
 		$arr = array('error' => 'noimageaccess',
 	                'msg' => 'You do not have access to manage this image.');
 		sendJSON($arr);
