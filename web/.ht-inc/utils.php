@@ -6850,9 +6850,10 @@ function sendRDPfile() {
 	# for more info on this file, see 
 	# http://dev.remotenetworktechnology.com/ts/rdpfile.htm
 	$requestid = getContinuationVar("requestid");
+	$resid = getContinuationVar("resid");
 	$request = getRequestInfo("$requestid");
 	foreach($request["reservations"] as $res) {
-		if($res["forcheckout"]) {
+		if($res['reservationid'] == $resid) {
 			$ipaddress = $res["reservedIP"];
 			$passwd = $res["password"];
 			break;

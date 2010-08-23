@@ -2208,7 +2208,8 @@ function connectRequest() {
 			print "  <TR>\n";
 			print "    <TD>\n";
 			print "      <FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
-			$cdata = array('requestid' => $requestid);
+			$cdata = array('requestid' => $requestid,
+				            'resid' => $requestData['reservations'][0]['reservationid']);
 			$expire = datetimeToUnix($requestData['end']) -
 			          datetimeToUnix($requestData['start']) + 1800; # reservation time plus 30 min
 			$cont = addContinuationsEntry('sendRDPfile', $cdata, $expire);
@@ -2298,6 +2299,7 @@ function connectRequest() {
 				print "Automatic connection using an RDP file:<br>\n";
 				print "<FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
 				$cdata = array('requestid' => $requestid,
+				               'resid' => $res['reservationid'],
 				               'reservedIP' => $res['reservedIP']);
 				$expire = datetimeToUnix($requestData['end']) -
 				          datetimeToUnix($requestData['start']) + 1800; # reservation time plus 30 min
