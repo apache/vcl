@@ -172,6 +172,8 @@ sub run_sysprep {
 	my $node_working_sysprep_directory = 'C:/Sysprep';
 	my $node_working_sysprep_exe_path = 'C:\\Sysprep\\sysprep.exe';
 	
+	my $system32_path = $self->get_system32_path();
+	
 	# Get the sysprep.inf file contents
 	my $sysprep_contents = $self->get_sysprep_inf_contents();
 	if (!$sysprep_contents) {
@@ -265,8 +267,32 @@ sub run_sysprep {
 		notify($ERRORS{'WARNING'}, 0, "unable to configure firewall to allow sessmgr.exe program, Sysprep may hang");
 	}
 	
+	# Assemble the Sysprep command
 	# Run Sysprep.exe, use cygstart to lauch the .exe and return immediately
-	my $sysprep_command = '/bin/cygstart.exe cmd.exe /c "' . $node_working_sysprep_exe_path . ' /quiet /reseal /mini /forceshutdown"';
+	my $sysprep_command = "/bin/cygstart.exe cmd.exe /c \"";
+	
+	# First enable DHCP on the private and public interfaces and delete the default route
+	my $private_interface_name = $self->get_private_interface_name();
+	my $public_interface_name = $self->get_public_interface_name();
+	if (!$private_interface_name || !$public_interface_name) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine private and public interface names, failed to enable DHCP and shut down $computer_node_name");
+		return;
+	}
+	$sysprep_command .= "$system32_path/netsh.exe interface ip set address name=\\\"$private_interface_name\\\" source=dhcp & ";
+	$sysprep_command .= "$system32_path/netsh.exe interface ip set dns name=\\\"$private_interface_name\\\" source=dhcp & ";
+	$sysprep_command .= "$system32_path/netsh.exe interface ip set address name=\\\"$public_interface_name\\\" source=dhcp & ";
+	$sysprep_command .= "$system32_path/netsh.exe interface ip set dns name=\\\"$public_interface_name\\\" source=dhcp & ";
+	
+	# Delete the default route
+	$sysprep_command .= "$system32_path/route.exe DELETE 0.0.0.0 MASK 0.0.0.0 & ";
+	
+	# Run Sysprep.exe
+	$sysprep_command .= "C:/Sysprep/sysprep.exe /quiet /reseal /mini /forceshutdown & ";
+	
+	# Shutdown the computer - Sysprep does not always shut the computer down
+	$sysprep_command .= "$system32_path/shutdown.exe -s -t 0 -f";
+	$sysprep_command .= "\"";
+	
 	my ($sysprep_status, $sysprep_output) = run_ssh_command($computer_node_name, $management_node_keys, $sysprep_command);
 	if (defined($sysprep_status) && $sysprep_status == 0) {
 		notify($ERRORS{'OK'}, 0, "initiated Sysprep.exe, waiting for $computer_node_name to become unresponsive");
