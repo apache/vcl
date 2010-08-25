@@ -495,7 +495,7 @@ our $DAEMON_MODE;
 our $SETUP_MODE;
 our $BIN_PATH;
 
-our $DEFAULTHELPEMAIL = "vcl_help@example.org"; # default value if affiliation helpaddress is not set
+our $DEFAULTHELPEMAIL = "vcl_help\@example.org"; # default value if affiliation helpaddress is not set
 
 sub makedatestring;
 
