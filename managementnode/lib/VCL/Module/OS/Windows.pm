@@ -3083,6 +3083,8 @@ sub shutdown {
 		$shutdown_command .= "$system32_path/netsh.exe interface ip set address name=\\\"$public_interface_name\\\" source=dhcp & ";
 		$shutdown_command .= "$system32_path/netsh.exe interface ip set dnsservers name=\\\"$public_interface_name\\\" source=dhcp & ";
 		
+		$shutdown_command .= "$system32_path/ipconfig.exe /release & ";
+		
 		$shutdown_command .= "$system32_path/route.exe DELETE 0.0.0.0 MASK 0.0.0.0 & ";
 	}
 	else {
