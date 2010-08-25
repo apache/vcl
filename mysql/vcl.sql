@@ -48,7 +48,8 @@ CREATE TABLE IF NOT EXISTS `affiliation` (
   `sitewwwaddress` varchar(56) default NULL,
   `helpaddress` varchar(32) default NULL,
   `shibonly` tinyint(1) unsigned NOT NULL default '0',
-  PRIMARY KEY  (`id`)
+  PRIMARY KEY  (`id`),
+  UNIQUE KEY `name` (`name`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
@@ -528,7 +529,7 @@ CREATE TABLE IF NOT EXISTS `module` (
   `description` varchar(255) NOT NULL,
   `perlpackage` varchar(150) NOT NULL,
   PRIMARY KEY  (`id`),
-  KEY `name` (`name`)
+  UNIQUE KEY `name` (`name`)
 ) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
@@ -618,7 +619,8 @@ CREATE TABLE IF NOT EXISTS `provisioning` (
   `prettyname` varchar(70) NOT NULL,
   `moduleid` smallint(5) unsigned NOT NULL,
   PRIMARY KEY  (`id`),
-  KEY `moduleid` (`moduleid`)
+  KEY `moduleid` (`moduleid`),
+  UNIQUE KEY `name` (`name`)
 ) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
@@ -1215,30 +1217,14 @@ INSERT INTO `documentation` (`name`, `title`, `data`) VALUES
 -- 
 
 INSERT INTO `image` (`id`, `name`, `prettyname`, `ownerid`, `platformid`, `OSid`, `imagemetaid`, `minram`, `minprocnumber`, `minprocspeed`, `minnetwork`, `maxconcurrent`, `reloadtime`, `deleted`, `test`, `lastupdate`, `forcheckout`, `maxinitialtime`, `project`, `size`) VALUES 
-(1, 'winxp-base1-v0', 'No Apps (WinXP)', 1, 1, 7, NULL, 0, 1, 0, 10, NULL, 14, 0, 0, '2007-04-11 16:07:38', 1, 0, 'vcl', 1045),
-(2, 'rhel4-base2-v0', 'Red Hat Enterprise Linux 4.4 Base (KS)', 1, 1, 12, NULL, 1024, 1, 1024, 100, NULL, 13, 0, 0, '2007-03-02 16:33:33', 1, 0, 'vcl', 0),
-(3, 'rh4image-base3-v0', 'RHEL4 base (image)', 1, 1, 13, NULL, 10, 1, 1024, 100, NULL, 10, 0, 0, '2007-01-24 15:02:07', 1, 0, 'vcl', 1450),
-(4, 'noimage', 'No Image', 1, 1, 2, NULL, 0, 1, 0, 10, NULL, 0, 0, 0, NULL, 1, 0, 'vcl', 1450),
-(5, 'rhfc5-fc5base5-v0', 'Red Hat Fedora Core 5 base (KS)', 1, 1, 15, NULL, 1024, 1, 1024, 100, NULL, 13, 0, 0, '2006-10-02 10:04:24', 1, 0, 'vcl', 1450),
-(6, 'fc5image-FC5baseRHFC56-v0', 'FC5base(RHFC5)', 1, 1, 14, NULL, 64, 1, 500, 10, NULL, 10, 0, 0, '2006-10-02 14:13:26', 1, 0, 'vcl', 0),
-(7, 'vmwarewinxp-base7-v0', 'No Apps (WinXP vmware)', 1, 1, 16, NULL, 512, 1, 1024, 100, NULL, 5, 0, 0, '2007-04-04 09:45:38', 1, 0, 'vcl', 3244),
-(8, 'rh4image-VMwareserverhostRHEL48-v3', 'VMware server host (RHEL4)', 1, 1, 13, NULL, 64, 1, 500, 10, NULL, 10, 0, 0, '2007-11-26 11:23:53', 1, 0, 'vcl', 1450),
-(9, 'esx35-base-v0', 'VMware ESX 3.5 standard server', 1, 1, 20, NULL, 2048, 2, 2000, 100, NULL, 9, 0, 0, '2008-03-24 14:23:54', 1, 0, 'vcl', 1450);
+(4, 'noimage', 'No Image', 1, 1, 2, NULL, 0, 1, 0, 10, NULL, 0, 0, 0, NULL, 1, 0, 'vcl', 1450);
 
 -- 
 -- Dumping data for table `imagerevision`
 -- 
 
 INSERT INTO `imagerevision` (`id`, `imageid`, `revision`, `userid`, `datecreated`, `deleted`, `production`, `comments`, `imagename`) VALUES 
-(1, 1, 0, 1, '2007-03-01 14:46:26', 0, 1, NULL, 'winxp-base1-v0'),
-(2, 2, 0, 1, '2006-09-22 16:33:24', 0, 1, NULL, 'rhel4-base2-v0'),
-(3, 3, 0, 1, '2007-01-24 15:04:11', 0, 1, NULL, 'rh4image-base3-v0'),
-(4, 4, 0, 1, '1980-01-01 00:00:00', 0, 1, NULL, 'noimage'),
-(5, 5, 0, 1, '2006-10-02 10:04:24', 0, 1, NULL, 'rhfc5-fc5base5-v0'),
-(6, 6, 0, 1, '2006-10-02 14:13:26', 0, 1, NULL, 'fc5image-FC5baseRHFC56-v0'),
-(7, 7, 0, 1, '2007-04-03 11:24:12', 0, 1, NULL, 'vmwarewinxp-base7-v0'),
-(8, 8, 0, 1, '2007-01-30 10:50:56', 0, 1, NULL, 'rh4image-VMwareserverhostRHEL48-v0'),
-(9, 9, 0, 1, '2008-03-24 14:23:54', 0, 1, NULL, 'esx35-base-v0');
+(4, 4, 0, 1, '1980-01-01 00:00:00', 0, 1, NULL, 'noimage');
 
 -- 
 -- Dumping data for table `IMtype`
@@ -1262,7 +1248,7 @@ INSERT INTO `localauth` (`userid`, `passhash`, `salt`, `lastupdated`, `lockedout
 
 INSERT INTO `module` (`id`, `name`, `prettyname`, `description`, `perlpackage`) VALUES 
 (1, 'provisioning_xcat_13', 'xCAT 1.3 Provisioning Module', '', 'VCL::Module::Provisioning::xCAT'),
-(2, 'provisioning_vmware_gsx', 'VMware GSX Provisioning Module', '', 'VCL::Module::Provisioning::vmware'),
+(2, 'provisioning_vmware_gsx', 'VMware Server 1.x Provisioning Module', '', 'VCL::Module::Provisioning::vmware'),
 (3, 'provisioning_lab', 'Computing Lab Provisioning Module', '', 'VCL::Module::Provisioning::Lab'),
 (4, 'os_windows', 'Windows OS Module', '', 'VCL::Module::OS::Windows'),
 (5, 'os_linux', 'Linux OS Module', '', 'VCL::Module::OS::Linux'),
@@ -1275,7 +1261,7 @@ INSERT INTO `module` (`id`, `name`, `prettyname`, `description`, `perlpackage`) 
 (12, 'os_winxp', 'Windows XP OS Module', '', 'VCL::Module::OS::Windows::Version_5::XP'),
 (13, 'os_win2003', 'Windows Server 2003 OS Module', '', 'VCL::Module::OS::Windows::Version_5::2003'),
 (14, 'os_linux_ubuntu', 'Ubuntu Linux OS Module', '', 'VCL::Module::OS::Linux::Ubuntu'),
-(15, 'os_unix_lab', 'Unix Lab Module', 'Unix Lab OS support module', 'VCL::Module::OS::Linux::UnixLab'),
+(15, 'os_unix_lab', 'Unix Lab OS Module', 'Unix Lab OS support module', 'VCL::Module::OS::Linux::UnixLab'),
 (16, 'os_win2008', 'Windows Server 2008 OS Module', '', 'VCL::Module::OS::Windows::Version_6::2008'),
 (17, 'os_win7', 'Windows 7 OS Module', '', 'VCL::Module::OS::Windows::Version_6::7'),
 (20, 'provisioning_xCAT_2x', 'xCAT 2.x Provisioning Module', '', 'VCL::Module::Provisioning::xCAT2'),
@@ -1367,7 +1353,7 @@ INSERT INTO `privnode` (`id`, `parent`, `name`) VALUES
 
 INSERT INTO `provisioning` (`id`, `name`, `prettyname`, `moduleid`) VALUES
 (1, 'xcat_13', 'xCAT 1.3', 1),
-(2, 'vmware_server_1', 'VMware Server 1.x', 2),
+(2, 'vmware_server_gsx', 'VMware Server 1.x', 2),
 (3, 'lab', 'Computing Lab', 3),
 (4, 'vmware_esx', 'VMware ESX', 10),
 (5, 'xcat_21', 'xCAT 2.1', 11),
@@ -1379,16 +1365,8 @@ INSERT INTO `provisioning` (`id`, `name`, `prettyname`, `moduleid`) VALUES
 -- 
 
 INSERT INTO `resource` (`id`, `resourcetypeid`, `subid`) VALUES 
-(1, 13, 1),
-(2, 13, 2),
-(3, 13, 3),
 (4, 13, 4),
-(5, 13, 5),
-(6, 13, 6),
-(7, 13, 7),
-(8, 15, 1),
-(9, 13, 8),
-(10, 13, 9);
+(8, 15, 1);
 
 -- 
 -- Dumping data for table `resourcegroup`
@@ -1408,15 +1386,7 @@ INSERT INTO `resourcegroup` (`id`, `name`, `ownerusergroupid`, `resourcetypeid`)
 -- 
 
 INSERT INTO `resourcegroupmembers` (`resourceid`, `resourcegroupid`) VALUES 
-(1, 2),
-(2, 2),
-(3, 2),
-(5, 2),
-(6, 2),
-(7, 10),
-(8, 4),
-(9, 2),
-(10, 2);
+(8, 4);
 
 -- 
 -- Dumping data for table `resourcemap`
