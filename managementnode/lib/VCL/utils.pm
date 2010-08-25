@@ -324,10 +324,6 @@ INIT {
 				$PIDFILE = $1;
 			}
 
-			if ($l =~ /^DEFAULTHELPEMAIL=(.*)/) {
-				$DEFAULTHELPEMAIL = $1;
-			}
-
 			#FQDN - to many issues trying to figure out my FQDN so just tell me
 			if ($l =~ /^FQDN=([-.a-zA-Z0-9]*)/) {
 				$FQDN = $1;
@@ -479,7 +475,6 @@ INIT {
 } ## end INIT
 
 
-#use Net::Jabber qw(Client);
 our ($JABBER, $PROCESSNAME);
 our %ERRORS = ('DEPENDENT' => 4, 'UNKNOWN' => 3, 'OK' => 0, 'WARNING' => 1, 'CRITICAL' => 2, 'MAILMASTERS' => 5, 'DEBUG' => 6);
 our ($LockerWrtUser, $wrtPass,  $database,       $server);
@@ -499,6 +494,8 @@ our ($XMLRPC_USER, $XMLRPC_PASS, $XMLRPC_URL);
 our $DAEMON_MODE;
 our $SETUP_MODE;
 our $BIN_PATH;
+
+our $DEFAULTHELPEMAIL = "vcl_help@example.org"; # default value if affiliation helpaddress is not set
 
 sub makedatestring;
 
