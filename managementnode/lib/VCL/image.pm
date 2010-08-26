@@ -545,8 +545,8 @@ sub setup_capture_base_image {
 			print "User was not found: $user_identifier\n";
 		}
 		else {
-			$user_id = (keys %$user_info)[0];
-			$username = $user_info->{$user_id}{unityid};
+			$user_id = $user_info->{id};
+			$username = $user_info->{unityid};
 		}
 	}
 	print "\nUser who will own the image: $username (ID: $user_id)\n\n";

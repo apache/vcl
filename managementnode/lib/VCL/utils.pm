@@ -138,7 +138,6 @@ our @EXPORT = qw(
   get_managable_resource_groups
   get_user_info
   get_vmhost_info
-  get_user_info
   getdynamicaddress
   getimagesize
   getnewdbh
@@ -479,7 +478,7 @@ our ($JABBER, $PROCESSNAME);
 our %ERRORS = ('DEPENDENT' => 4, 'UNKNOWN' => 3, 'OK' => 0, 'WARNING' => 1, 'CRITICAL' => 2, 'MAILMASTERS' => 5, 'DEBUG' => 6);
 our ($LockerWrtUser, $wrtPass,  $database,       $server);
 our ($jabServer,     $jabUser,  $jabPass,        $jabResource, $jabPort);
-our ($vcldquerykey, $DEFAULTHELPEMAIL,$RETURNPATH);
+our ($vcldquerykey, $RETURNPATH);
 our ($LOGFILE, $PIDFILE, $VCLDRPCQUERYKEY);
 our ($SERVER, $DATABASE, $WRTUSER, $WRTPASS);
 our ($MYSQL_SSL,       $MYSQL_SSL_CERT);
@@ -5518,7 +5517,7 @@ sub run_ssh_command {
 			# SSH command was executed successfully, actual command on node may have succeeded or failed
 			
 			# Split the output up into an array of lines
-			my @output_lines = split(/\n/, $ssh_output);
+			my @output_lines = split(/[\r\n]+/, $ssh_output);
 			
 			# Print the output unless no_output is set
 			notify($ERRORS{'DEBUG'}, 0, "run_ssh_command output:\n" . join("\n", @output_lines)) if $output_level > 1;
@@ -7917,52 +7916,116 @@ sub get_computer_grp_members {
 
 =head2 get_user_info
 
- Parameters  : $user_id
- Returns     : scalar - group name
- Description :
+ Parameters  : $user_identifier
+ Returns     : hash reference
+ Description : Retrieves user information from the database. The user identifier
+               argument can either be a user ID or unityid. A hash reference is
+               returned. Example:
+               my $user_info = user_info('vclreload');
+               
+               %{$user_info->{adminlevel}}
+                  |---$user_info->{adminlevel}{name} = 'none'
+               $user_info->{adminlevelid} = '1'
+               %{$user_info->{affiliation}}
+                  |---$user_info->{affiliation}{dataUpdateText} = ''
+                  |---$user_info->{affiliation}{helpaddress} = NULL
+                  |---$user_info->{affiliation}{name} = 'Local'
+                  |---$user_info->{affiliation}{shibname} = NULL
+                  |---$user_info->{affiliation}{shibonly} = '0'
+                  |---$user_info->{affiliation}{sitewwwaddress} = 'http://vcl.ncsu.edu'
+               $user_info->{affiliationid} = '4'
+               $user_info->{audiomode} = 'local'
+               $user_info->{bpp} = '16'
+               $user_info->{email} = ''
+               $user_info->{emailnotices} = '0'
+               $user_info->{firstname} = 'vcl'
+               $user_info->{height} = '768'
+               $user_info->{id} = '2'
+               $user_info->{IMid} = NULL
+               %{$user_info->{IMtype}}
+                  |---$user_info->{IMtype}{name} = 'none'
+               $user_info->{IMtypeid} = '1'
+               $user_info->{lastname} = 'reload'
+               $user_info->{lastupdated} = '0000-00-00 00:00:00'
+               $user_info->{mapdrives} = '1'
+               $user_info->{mapprinters} = '1'
+               $user_info->{mapserial} = '0'
+               $user_info->{preferredname} = NULL
+               $user_info->{showallgroups} = '0'
+               $user_info->{uid} = NULL
+               $user_info->{unityid} = 'vclreload'
+               $user_info->{width} = '1024'
 
 =cut
 
 sub get_user_info {
-        my ($user_id) = @_;
+   my ($user_identifier) = @_;
+	if (!defined($user_identifier)) {
+		notify($ERRORS{'WARNING'}, 0, "user identifier argument was not specified");
+		return;
+	}
 
-
-        if(!defined($user_id)){
-                notify($ERRORS{'WARNING'}, $LOGFILE, "user_id was not supplied");
-                return 0;
-        }
-
-        my $select_statement = <<EOF;
+   my $select_statement = <<EOF;
 SELECT DISTINCT
 user.*,
-affiliation.sitewwwaddress AS sitewwwaddress,
-affiliation.helpaddress AS helpaddress
+adminlevel.name AS adminlevel_name,
+affiliation.name AS affiliation_name,
+affiliation.shibname AS affiliation_shibname,
+affiliation.dataUpdateText AS affiliation_dataUpdateText,
+affiliation.sitewwwaddress AS affiliation_sitewwwaddress,
+affiliation.helpaddress AS affiliation_helpaddress,
+affiliation.helpaddress AS affiliation_helpaddress,
+affiliation.shibonly AS affiliation_shibonly,
+IMtype.name AS IMtype_name
 FROM
-user,
-affiliation
+user
+LEFT JOIN (adminlevel) ON (adminlevel.id = user.adminlevelid)
+LEFT JOIN (affiliation) ON (affiliation.id = user.affiliationid)
+LEFT JOIN (IMtype) ON (IMtype.id = user.IMtypeid)
 WHERE
-user.id = $user_id AND
-affiliation.id = user.affiliationid
 EOF
 
+	if ($user_identifier =~ /^\d+$/) {
+		$select_statement .= "user.id = $user_identifier";
+	}
+	else {
+		$select_statement .= "user.unityid = '$user_identifier'";
+	}
+
 	# Call the database select subroutine
-        # This will return an array of one or more rows based on the select statement
-        my @selected_rows = database_select($select_statement);
+	# This will return an array of one or more rows based on the select statement
+	my @selected_rows = database_select($select_statement);
 	
 	# Check to make sure 1 row was returned
-        if (scalar @selected_rows == 0) {
-                notify($ERRORS{'OK'}, 0, "user id $user_id was not found in the database, 0 rows were returned");
-                return ();
-        }
-        elsif (scalar @selected_rows > 1) {
-                notify($ERRORS{'WARNING'}, 0, "" . scalar @selected_rows . " rows were returned from database select");
-                return ();
-        }
-
-        # A single row was returned (good)
-        # Return the hash
-        return %{$selected_rows[0]};
-
+	if (scalar @selected_rows == 0) {
+		notify($ERRORS{'OK'}, 0, "user was not found in the database: $user_identifier, 0 rows were returned");
+		return;
+	}
+	elsif (scalar @selected_rows > 1) {
+		notify($ERRORS{'WARNING'}, 0, "" . scalar @selected_rows . " rows were returned from database select for user: $user_identifier");
+		return;
+	}
+	
+	my %row = %{$selected_rows[0]};
+	
+	my %user_info;
+	
+	# Loop through all the columns returned
+	foreach my $key (keys %row) {
+		my $value = $row{$key};
+		
+		# Create another variable by stripping off the column_ part of each key
+		# This variable stores the original (correct) column name
+		(my $original_key = $key) =~ s/^.+_//;
+		
+		if ($key =~ /^(.+)_/) {
+			 $user_info{$1}{$original_key} = $value;
+		}
+		else {
+			$user_info{$original_key} = $value;
+		}
+	}
+	return \%user_info;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -9590,64 +9653,6 @@ sub get_module_info {
 	
 	#notify($ERRORS{'DEBUG'}, 0, "retrieved module info:\n" . format_data(\%module_info_hash));
 	return \%module_info_hash;
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 get_user_info
-
- Parameters  : $user_identifier
- Returns     : hash reference
- Description : Retrieves information from the database for the user specified by
-               the $user_identifier argument. The $user_identifier argument can
-               either be a user ID or login name.
-
-=cut
-
-sub get_user_info {
-	my ($user_identifier) = @_;
-	if (!defined($user_identifier)) {
-		notify($ERRORS{'WARNING'}, 0, "user identifier argument was not specified");
-		return;
-	}
-	
-	my $select_statement = <<EOF;
-SELECT
-*
-FROM
-user
-WHERE
-EOF
-	
-	if ($user_identifier =~ /^\d+$/) {
-		$select_statement .= "id = $user_identifier";
-	}
-	else {
-		$select_statement .= "unityid = '$user_identifier'";
-	}
-	
-	# Call the database select subroutine
-	my @selected_rows = database_select($select_statement);
-
-	# Check to make sure rows were returned
-	if (!@selected_rows) {
-		notify($ERRORS{'WARNING'}, 0, "unable to retrieve rows from user table");
-		return;
-	}
-	
-	# Transform the array of database rows into a hash
-	my %info_hash;
-	for my $row (@selected_rows) {
-		my $user_id = $row->{id};
-		
-		for my $key (keys %$row) {
-			my $value = $row->{$key};
-			$info_hash{$user_id}{$key} = $value;
-		}
-	}
-	
-	notify($ERRORS{'DEBUG'}, 0, "retrieved user info:\n" . format_data(\%info_hash));
-	return \%info_hash;
 }
 
 #/////////////////////////////////////////////////////////////////////////////

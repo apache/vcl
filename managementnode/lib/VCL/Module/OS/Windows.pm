@@ -1827,7 +1827,7 @@ sub set_password {
 
 	# Attempt to change scheduled task passwords
 	notify($ERRORS{'DEBUG'}, 0, "changing passwords for scheduled tasks");
-	my ($schtasks_query_exit_status, $schtasks_query_output) = run_ssh_command($computer_node_name, $management_node_keys, "schtasks.exe /Query /V /FO LIST", '', '', 1);
+	my ($schtasks_query_exit_status, $schtasks_query_output) = run_ssh_command($computer_node_name, $management_node_keys, "schtasks.exe /Query /V /FO LIST", '', '', 0);
 	if (defined($schtasks_query_exit_status) && $schtasks_query_exit_status == 0) {
 		notify($ERRORS{'DEBUG'}, 0, "queried scheduled tasks on $computer_node_name");
 	}
@@ -1844,31 +1844,42 @@ sub set_password {
 	my $task_name;
 	my @task_names_to_update;
 	for my $schtasks_output_line (@{$schtasks_query_output}) {
-		if ($schtasks_output_line =~ /TaskName:\s+([ \S]+)/i) {
+		if ($schtasks_output_line =~ /TaskName:\s+(.+)/i) {
 			$task_name = $1;
 		}
-		if ($schtasks_output_line =~ /Run As User.*\\$username/i) {
-			notify($ERRORS{'DEBUG'}, 0, "password needs to be updated for scheduled task: $task_name\n$schtasks_output_line");
+		if ($schtasks_output_line =~ /Run As User.*[\W]$username\s*$/) {
+			notify($ERRORS{'DEBUG'}, 0, "password needs to be updated for scheduled task: '$task_name'");
 			push @task_names_to_update, $task_name;
 		}
-	} ## end for my $schtasks_output_line (@{$schtasks_query_output...
+	}
 
 	# Loop through the scheduled tasks configured to run as the user, update the password
 	for my $task_name_to_update (@task_names_to_update) {
-		my ($schtasks_change_exit_status, $schtasks_change_output) = run_ssh_command($computer_node_name, $management_node_keys, "schtasks.exe /Change /RP \"$password\" /TN \"$task_name_to_update\"");
-		if (defined($schtasks_change_exit_status) && $schtasks_change_exit_status == 0) {
+		my $schtasks_command = "schtasks.exe /Change /RU \"$username\" /RP \"$password\" /TN \"$task_name_to_update\"";
+		my ($schtasks_change_exit_status, $schtasks_change_output) = run_ssh_command($computer_node_name, $management_node_keys, $schtasks_command, '', '', 0);
+		if (!defined($schtasks_change_output)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to change password for scheduled task: $task_name_to_update");
+			return;
+		}
+		elsif (grep (/^SUCCESS:/, @$schtasks_change_output)) {
 			notify($ERRORS{'OK'}, 0, "changed password for scheduled task: $task_name_to_update");
 		}
-		elsif (defined $schtasks_change_exit_status) {
-			notify($ERRORS{'WARNING'}, 0, "failed to change password for scheduled task: $task_name_to_update, exit status: $schtasks_change_exit_status, output:\n@{$schtasks_change_output}");
-			return 0;
+		elsif (grep (/The parameter is incorrect/, @$schtasks_change_output)) {
+			notify($ERRORS{'WARNING'}, 0, "encountered Windows bug while attempting to change password for scheduled task: $task_name_to_update, output:\n@{$schtasks_change_output}");
+			# Don't return - There is a bug in Windows 7
+			# If a scheduled task is created using the GUI using a schedule the password cannot be set via schtasks.exe
+			# schtasks.exe displays: ERROR: The parameter is incorrect.
+			# If the same task is changed to run on an event such as logon it works
+		}
+		elsif (grep (/^ERROR:/, @$schtasks_change_output)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to change password for scheduled task: $task_name_to_update, command:\n$schtasks_command\noutput:\n@{$schtasks_change_output}");
 		}
 		else {
-			notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to change password for scheduled task: $task_name_to_update");
-			return 0;
+			notify($ERRORS{'WARNING'}, 0, "unexpected output returned while attempting to change password for scheduled task: $task_name_to_update, command:\n$schtasks_command\noutput:\n@{$schtasks_change_output}");
 		}
-	} ## end for my $task_name_to_update (@task_names_to_update)
-
+	}
+	
+	notify($ERRORS{'OK'}, 0, "changed password for user: $username");
 	return 1;
 } ## end sub set_password
 

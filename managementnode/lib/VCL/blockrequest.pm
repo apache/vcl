@@ -137,15 +137,15 @@ sub process {
 	my $block_group_name		 = $self->data->get_blockrequest_group_name();
 
 	# Get user info	
-	my %info;
+	my $user_info;
 	my $owner_affiliation_helpaddress;
 	my $owner_email;
 
-	if( %info = get_user_info($blockrequest_owner_id)){
-		$owner_email = $info{email};
-		$owner_affiliation_helpaddress = $info{helpaddress};
+	if ($user_info = get_user_info($blockrequest_owner_id)) {
+		$owner_email = $user_info->{email};
+		$owner_affiliation_helpaddress = $user_info->{affiliation}{helpaddress};
 	}
-		
+	
 	#Set local timer
 	my $localtimer = convert_to_epoch_seconds();
 
