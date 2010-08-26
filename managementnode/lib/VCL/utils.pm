@@ -7974,7 +7974,6 @@ affiliation.shibname AS affiliation_shibname,
 affiliation.dataUpdateText AS affiliation_dataUpdateText,
 affiliation.sitewwwaddress AS affiliation_sitewwwaddress,
 affiliation.helpaddress AS affiliation_helpaddress,
-affiliation.helpaddress AS affiliation_helpaddress,
 affiliation.shibonly AS affiliation_shibonly,
 IMtype.name AS IMtype_name
 FROM
