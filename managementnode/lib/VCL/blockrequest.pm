@@ -138,6 +138,8 @@ sub process {
 
 	# Get user info	
 	my $user_info;
+	my %image_info;
+        my $image_prettyname;
 	my $owner_affiliation_helpaddress;
 	my $owner_email;
 
@@ -145,6 +147,12 @@ sub process {
 		$owner_email = $user_info->{email};
 		$owner_affiliation_helpaddress = $user_info->{affiliation}{helpaddress};
 	}
+
+	#Get image info
+        if(%image_info = get_image_info($blockrequest_image_id)){
+                $image_prettyname = $image_info{prettyname};
+
+        }
 	
 	#Set local timer
 	my $localtimer = convert_to_epoch_seconds();
@@ -158,7 +166,7 @@ sub process {
 	notify($ERRORS{'DEBUG'}, 0, "blocktime processed: $blocktime_processed");
 	notify($ERRORS{'DEBUG'}, 0, "blocktime start: $blocktime_start");
 	notify($ERRORS{'DEBUG'}, 0, "owner email: $owner_email");
-	notify($ERRORS{'DEBUG'}, 0, "help address: $owner_email");
+	notify($ERRORS{'DEBUG'}, 0, "help address: $owner_affiliation_helpaddress");
 
 	if ($blockrequest_mode eq "start") {
 
@@ -227,6 +235,7 @@ sub process {
 			$body .= "Block name		= $blockrequest_name\n";
 			$body .= "Block	start time	= $blocktime_start\n";
 			$body .= "Block end time	= $blocktime_end\n";
+			$body .= "Environment name      = $image_prettyname\n";
 			$body .= "Allocated		= $allocated\n";	
 			$body .= "Block requested 	= $blockrequest_number_machines\n"; 
 			$body .= "xmlrpc warn msg	= $warningmsg\n" if(defined($warningmsg));
@@ -249,6 +258,7 @@ Machines requested      = $blockrequest_number_machines
 Block Start time        = $blocktime_start
 Block End time          = $blocktime_end
 User Group              = $block_group_name
+Environment name        = $image_prettyname
 
 
 The VCL staff have been notified to attempt to correct the issue.
@@ -270,12 +280,13 @@ EOF
 			my $mailstring .= <<"EOF";
 The block allocation for $blockrequest_name was processed successfully with the following results:
 
-Block allocation name	= $blockrequest_name
-Machines allocated	= $allocated
-Machines requested	= $blockrequest_number_machines
-Block Start time	= $blocktime_start
-Block End time		= $blocktime_end
-User Group		= $block_group_name
+Block allocation name    = $blockrequest_name
+Machines allocated       = $allocated
+Machines requested       = $blockrequest_number_machines
+Block Start time         = $blocktime_start
+Block End time           = $blocktime_end
+User Group               = $block_group_name
+Environment name         = $image_prettyname
 
 The machines for this block allocation will be loaded up to an hour before the actual start time. 
 Once loaded the users listed in the user group $block_group_name will be able to login up to 15 minutes 
