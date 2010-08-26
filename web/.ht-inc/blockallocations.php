@@ -1078,22 +1078,26 @@ function getCurrentBlockHTML($listonly=0) {
 	       .        "CONCAT(ga.name, '@', aa.name) AS `admingroup`, "
 	       .        "b.repeating AS available "
 	       . "FROM image i, "
-	       .      "usergroup g, "
-	       .      "affiliation a, "
 	       .      "blockRequest b "
+	       . "LEFT JOIN usergroup g ON (b.groupid = g.id) "
+	       . "LEFT JOIN affiliation a ON (g.affiliationid = a.id) "
 	       . "LEFT JOIN usergroup ga ON (b.admingroupid = ga.id) "
 	       . "LEFT JOIN affiliation aa ON (ga.affiliationid = aa.id) "
 	       . "WHERE (b.ownerid = {$user['id']} ";
 	if(! empty($groupids))
 		$query .=   "OR b.admingroupid IN ($groupids) ";
 	$query .=      ") AND b.imageid = i.id AND "
-	       .       "b.status = 'accepted' AND "
-	       .       "b.groupid = g.id AND "
-	       .       "g.affiliationid = a.id "
+	       .       "b.status = 'accepted' "
 	       . "ORDER BY b.name";
 	$allblockids = array();
 	$qh = doQuery($query, 101);
 	while($row = mysql_fetch_assoc($qh)) {
+		if($row['group'] == '') {
+			$query3 = "SELECT name FROM usergroup WHERE id = {$row['usergroupid']}";
+			$qh3 = doQuery($query3, 101);
+			if($row3 = mysql_fetch_assoc($qh3))
+				$row['group'] = $row3['name'];
+		}
 		$allblockids[] = $row['id'];
 		$blocks[$row['id']] = $row;
 		$query2 = "SELECT DATE_FORMAT(start, '%c/%e/%y<br>%l:%i %p') AS start1, "
