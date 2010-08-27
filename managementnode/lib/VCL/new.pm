@@ -160,6 +160,27 @@ sub process {
 		notify($ERRORS{'OK'}, 0, "exiting");
 		exit;
 	} ## end if ($request_state_name =~ /tomaintenance/)
+
+	#If reload state is not new (reload) and computer is part of block allocation
+	#confirm imagerevisionid is the production image.
+	if($request_state_name ne 'new') {
+		notify($ERRORS{'OK'}, 0, "request_state_name is not new");
+		if(is_inblockrequest($computer_id)){
+			notify($ERRORS{'OK'}, 0, "computer_id $computer_id is in blockrequest");
+			my %imagerev_info = get_production_imagerevision_info($image_id);
+			unless($imagerevision_id == $imagerev_info{id}){
+				notify($ERRORS{'OK'}, 0, "imagerevision_id does not match imagerevision_id= $imagerevision_id imagerev_info $imagerev_info{id}");	
+				$self->data->set_imagerevision_id($imagerev_info{id});
+				$self->data->set_sublog_imagerevisionid($imagerev_info{id});
+				$self->data->set_image_name($imagerev_info{imagename});
+				$self->data->set_imagerevision_revision($imagerev_info{revision});
+				
+				#reset variables in this scope
+				$imagerevision_id = $imagerev_info{id};
+				$image_name = $imagerev_info{imagename};
+			}
+		}
+	}
 	
 	# Confirm requested computer is available
 	if ($self->computer_not_being_used()) {
