@@ -741,8 +741,8 @@ sub REAPER {
 		
 		# Check if the child PID hash contains the pid of the process which just died
 		if (exists $child_pids{$dead_pid}) {
-			my $dead_reservation_id = $child_pids{$dead_pid};
-			notify($ERRORS{'DEBUG'}, 0, "VCL process exited for reservation $dead_reservation_id, signal: $signal");
+			my $dead_reservation_id = $child_pids{$dead_pid} || "<unknown>";
+			notify($ERRORS{'DEBUG'}, 0, "VCL process exited for reservation $dead_reservation_id, PID: $dead_pid, signal: $signal");
 			
 			# Child which died was a VCL state process since its pid is in the hash
 			$child_count--;
