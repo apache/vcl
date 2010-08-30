@@ -1218,7 +1218,7 @@ sub mail {
 	
 	my $shared_mail_box = 0;
 	if(defined($ENV{management_node_info}{SHARED_EMAIL_BOX}) && $ENV{management_node_info}{SHARED_EMAIL_BOX}){
-		my $shared_mail_box = $ENV{management_node_info}{SHARED_EMAIL_BOX};
+		$shared_mail_box = $ENV{management_node_info}{SHARED_EMAIL_BOX};
 	}
 
 	if ($shared_mail_box) {
