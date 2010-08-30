@@ -7203,6 +7203,11 @@ sub set_static_public_address {
 	my $default_gateway = $self->get_public_default_gateway() || 'undefined';
 	my $dns_server = $self->data->get_management_node_public_dns_server() || 'undefined';
 	
+	# Windows does not handle comma delimited dns servers. 
+	# We will split and if we have > 1 dns servers we will add them as alternates.
+
+	my ($dns_server_primary, $dns_server_alt1, $dns_server_alt2) = split(",",$dns_server);
+	
 	# Make sure required info was retrieved
 	if ("$public_interface_name $subnet_mask $default_gateway $dns_server" =~ /undefined/) {
 		notify($ERRORS{'WARNING'}, 0, "unable to retrieve required network configuration:\ninterface: $public_interface_name\npublic IP address: $public_ip_address\nsubnet mask=$subnet_mask\ndefault gateway=$default_gateway\ndns server=$dns_server");
@@ -7244,18 +7249,33 @@ sub set_static_public_address {
 	}
 	
 	# Set the static DNS server address
-	my $dns_command = "netsh interface ip set dns name=\"$public_interface_name\" source=static addr=$dns_server register=none";
+	my $dns_command = "netsh interface ip set dns name=\"$public_interface_name\" source=static addr=$dns_server_primary register=none";
 	my ($dns_exit_status, $dns_output) = run_ssh_command($computer_node_name, $management_node_keys, $dns_command);
 	if (defined($dns_exit_status) && $dns_exit_status == 0) {
-		notify($ERRORS{'DEBUG'}, 0, "set static DNS server address to $dns_server");
+		notify($ERRORS{'DEBUG'}, 0, "set static DNS server address to $dns_server_primary");
 	}
 	elsif (defined($dns_exit_status)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to set static DNS server address to $dns_server, exit status: $dns_exit_status, output:\n@{$dns_output}");
+		notify($ERRORS{'WARNING'}, 0, "failed to set static DNS server address to $dns_server_primary, exit status: $dns_exit_status, output:\n@{$dns_output}");
 		return 0;
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to set static DNS server address to $dns_server");
+		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to set static DNS server address to $dns_server_primary");
 		return;
+	}
+	
+	# We are only going to set up alternate dns server		
+	if(defined($dns_server_alt1) && $dns_server_alt1){
+		my $dns_alt1_command = "netsh interface ip add dns name=\"$public_interface_name\" addr=$dns_server_alt1";
+        	my ($dns_a_exit_status, $dns_a_output) = run_ssh_command($computer_node_name, $management_node_keys, $dns_alt1_command);
+        	if (defined($dns_a_exit_status) && $dns_a_exit_status == 0) {
+                	notify($ERRORS{'DEBUG'}, 0, "set static DNS server address to $dns_server_alt1");
+        	}	
+        	elsif (defined($dns_a_exit_status)) {
+                	notify($ERRORS{'WARNING'}, 0, "failed to set static DNS server address to $dns_server_alt1, exit status: $dns_a_exit_status, output:\n@{$dns_a_output}");
+        	}
+        	else {
+                	notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to set static DNS server address to $dns_server_alt1");
+        	}
 	}
 	
 	# Add persistent static public default route
