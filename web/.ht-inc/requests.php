@@ -251,6 +251,10 @@ function AJupdateWaitTime() {
 	$rc = isAvailable($images, $imageid, $start, $end, '');
 	semUnlock();
 	print "dojo.byId('waittime').innerHTML = ";
+	if($rc == -2) {
+		print "'<font color=red>Selection not currently available due to scheduled system downtime for maintenance</font>'; ";
+		print "if(dojo.byId('newsubmit')) dojo.byId('newsubmit').value = 'View Time Table';";
+	}
 	if($rc < 1) {
 		print "'<font color=red>Selection not currently available</font>'; ";
 		print "if(dojo.byId('newsubmit')) dojo.byId('newsubmit').value = 'View Time Table';";
@@ -1840,8 +1844,13 @@ function submitEditRequest() {
 		               'length' => $data['length'],
 		               'requestid' => $data['requestid']);
 		$cont = addContinuationsEntry('selectTimeTable', $cdata);
-		print "The time you have requested is not available. You may ";
-		print "<a href=\"" . BASEURL . SCRIPT . "?continuation=$cont\">";
+		if($rc == -2) {
+			print "The time you have requested is not available due to scheduled ";
+			print "system downtime for maintenance. ";
+		}
+		else
+			print "The time you have requested is not available. ";
+		print "You may <a href=\"" . BASEURL . SCRIPT . "?continuation=$cont\">";
 		print "view a timetable</a> of free and reserved times to find ";
 		print "a time that will work for you.<br>\n";
 		addChangeLogEntry($request["logid"], NULL, unixToDatetime($end),

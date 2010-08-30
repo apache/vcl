@@ -230,6 +230,39 @@ if($includeconf && include('.ht-inc/conf.php')) {
 			fail("SCRIPT does not appear to be set correctly");
 	}
 	print "</ul>\n";
+
+	# check for existance of maintenance directory
+	title("Checking that .ht-inc/maintenance directory exists");
+	print "<ul>\n";
+	$file = preg_replace('|/testsetup.php|', '', $_SERVER['SCRIPT_FILENAME']);
+	$file .= "/.ht-inc/maintenance";
+	if(! is_dir($file))
+		fail("/.ht-inc/maintenance directory does not exist. Please create it.");
+	else {
+		pass("/.ht-inc/maintenance directory exists");
+		print "</ul>\n";
+		# check that we can write files to maintenance directory
+		title("Checking that .ht-inc/maintenance directory is writable");
+		print "<ul>\n";
+		if(! is_writable("$file"))
+			fail("Maintenance directory is not writable");
+		else {
+			if(! $fh = @fopen("$file/testfile", 'w'))
+				fail("Failed to open file in maintenance directory");
+			else {
+				if(! fwrite($fh, 'test') || ! fclose($fh))
+					fail("Failed to write to file in maintenance directory");
+				else {
+					# check that we can remove files from maintenance directory
+					if(! unlink("$file/testfile"))
+						fail("Failed to remove file from maintenance directory");
+					else
+						pass("Maintenance directory is writable");
+				}
+			}
+		}
+	}
+	print "</ul>\n";
 }
 
 # required extentions

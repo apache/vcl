@@ -54,6 +54,7 @@ $actions["entry"] = array('main',
                           'editVMInfo',
                           'continuationsError',
                           'requestBlockAllocation',
+                          'siteMaintenance',
 );
 
 $noHTMLwrappers = array('sendRDPfile',
@@ -133,6 +134,11 @@ $noHTMLwrappers = array('sendRDPfile',
                         'AJviewBlockAllocation',
                         'AJviewBlockAllocationTimes',
                         'AJtoggleBlockTime',
+                        'AJcreateSiteMaintenance',
+                        'AJgetSiteMaintenanceData',
+                        'AJgetDelSiteMaintenanceData',
+                        'AJeditSiteMaintenance',
+                        'AJdeleteSiteMaintenance',
 );
 
 # main
@@ -607,6 +613,20 @@ $actions['pages']['AJprofiledata'] = "vm";
 $actions['pages']['AJupdateVMprofileItem'] = "vm";
 $actions['pages']['AJnewProfile'] = "vm";
 $actions['pages']['AJdelProfile'] = "vm";
+
+# site maintenance
+$actions['mode']['siteMaintenance'] = "siteMaintenance";
+$actions['mode']['AJcreateSiteMaintenance'] = "AJcreateSiteMaintenance";
+$actions['mode']['AJgetSiteMaintenanceData'] = "AJgetSiteMaintenanceData";
+$actions['mode']['AJgetDelSiteMaintenanceData'] = "AJgetDelSiteMaintenanceData";
+$actions['mode']['AJeditSiteMaintenance'] = "AJeditSiteMaintenance";
+$actions['mode']['AJdeleteSiteMaintenance'] = "AJdeleteSiteMaintenance";
+$actions['pages']['siteMaintenance'] = "sitemaintenance";
+$actions['pages']['AJcreateSiteMaintenance'] = "sitemaintenance";
+$actions['pages']['AJgetSiteMaintenanceData'] = "sitemaintenance";
+$actions['pages']['AJgetDelSiteMaintenanceData'] = "sitemaintenance";
+$actions['pages']['AJeditSiteMaintenance'] = "sitemaintenance";
+$actions['pages']['AJdeleteSiteMaintenance'] = "sitemaintenance";
 
 # RPC
 $actions['mode']['xmlrpccall'] = "xmlrpccall";

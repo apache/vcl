@@ -301,6 +301,9 @@ function initGlobals() {
 		case 'userLookup':
 			require_once(".ht-inc/privileges.php");
 			break;
+		case 'sitemaintenance':
+			require_once(".ht-inc/sitemaintenance.php");
+			break;
 		case 'vm':
 			require_once(".ht-inc/vm.php");
 			break;
@@ -539,6 +542,124 @@ function checkAccess() {
 						break;
 				}
 			}
+		}
+	}
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn maintenanceCheck()
+///
+/// \brief checks for site being in maintenance; if so, read user message from
+/// current maintenance file; print site header, maintenance message, and site
+/// foother; then exit; also removes any old maintenance files
+///
+////////////////////////////////////////////////////////////////////////////////
+function maintenanceCheck() {
+	global $authed, $mode, $user;
+	$now = time();
+	$reg = "|" . SCRIPT . "$|";
+	$search = preg_replace($reg, '', $_SERVER['SCRIPT_FILENAME']);
+	$search .= "/.ht-inc/maintenance/";
+	$files = glob("$search*");
+	$inmaintenance = 0;
+	foreach($files as $file) {
+		if(! preg_match("|^$search([0-9]{4})([0-9]{2})([0-9]{2})([0-9]{2})([0-9]{2})$|", $file, $matches))
+			continue;
+		#YYYYMMDDHHMM
+		$tmp = "{$matches[1]}-{$matches[2]}-{$matches[3]} {$matches[4]}:{$matches[5]}:00";
+		$start = datetimeToUnix($tmp);
+		if($start < $now) {
+			# check to see if end time has been reached
+			$fh = fopen($file, 'r');
+			$msg = '';
+			while($line = fgetss($fh)) {
+				if(preg_match("/^END=([0-9]{4})([0-9]{2})([0-9]{2})([0-9]{2})([0-9]{2})$/", $line, $matches)) {
+					$tmp = "{$matches[1]}-{$matches[2]}-{$matches[3]} {$matches[4]}:{$matches[5]}:00";
+					$end = datetimeToUnix($tmp);
+					if($end < $now) {
+						fclose($fh);
+						unlink($file);
+						$_SESSION['usersessiondata'] = array();
+						return;
+					}
+					else
+						$inmaintenance = 1;
+				}
+				else
+					$msg .= $line;
+			}
+			fclose($fh);
+			if($inmaintenance)
+				break;
+		}
+	}
+	if($inmaintenance) {
+		$authed = 0;
+		$mode = 'inmaintenance';
+		$user = array();
+		if(array_key_exists('VCLSKIN', $_COOKIE))
+			$skin = strtolower($_COOKIE['VCLSKIN']);
+		else
+			$skin = DEFAULTTHEME;
+		require_once("themes/$skin/page.php");
+		printHTMLHeader();
+		print "<h2>Site Currently Under Maintenance</h2>\n";
+		if(! empty($msg)) {
+			$msg = htmlentities($msg);
+			$msg = preg_replace("/\n/", "<br>\n", $msg);
+			print "$msg<br>\n";
+		}
+		else
+			print "This site is currently in maintenance.<br>\n";
+		$niceend = date('l, F jS, Y \a\t g:i A', $end);
+		print "The maintenance is scheduled to end <b>$niceend</b>.<br><br><br>\n";
+		printHTMLFooter();
+		exit;
+	}
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn maintenanceNotice()
+///
+/// \brief checks nformhoursahead for upcoming maintenance items and prints
+/// message about upcoming maintenance if currently within warning window
+///
+////////////////////////////////////////////////////////////////////////////////
+function maintenanceNotice() {
+	$items = getMaintItems();
+	foreach($items as $item) {
+		$start = datetimeToUnix($item['start']);
+		$file = date('YmdHi', $start);
+		$secahead = $item['informhoursahead'] * 3600;
+		if($start - $secahead < time()) {
+			$reg = "|" . SCRIPT . "$|";
+			$search = preg_replace($reg, '', $_SERVER['SCRIPT_FILENAME']);
+			$search .= "/.ht-inc/maintenance/$file";
+			$files = glob("$search");
+			if(empty($files)) {
+				$_SESSION['usersessiondata'] = array();
+				return;
+			}
+			$nicestart = date('g:i A \o\n l, F jS, Y', $start);
+			$niceend = date('g:i A \o\n l, F jS, Y', datetimeToUnix($item['end']));
+			print "<div id=\"maintenancenotice\">\n";
+			print "<b>NOTICE</b>: This site will be down for maintenance during ";
+			print "the following times:<br><br>\n";
+			print	"Start: $nicestart<br>\n";
+			print "End: $niceend.<br><br>\n";
+			if($item['allowreservations']) {
+				print "You will be able to access your reserved machines during ";
+				print "this maintenance. However, you will not be able to access ";
+				print "information on how to connect to them.<br>\n";
+			}
+			else {
+				print "You will not be able to access any of your reservations ";
+				print "during this maintenance.<br>\n";
+			}
+			print "</div>\n";
+			return;
 		}
 	}
 }
@@ -3232,6 +3353,9 @@ function isAvailable($images, $imageid, $start, $end, $os, $requestid=0,
 	$requestInfo["imageid"] = $imageid;
 	$allocatedcompids = array(0);
 
+	if(schCheckMaintenance($start, $end))
+		return -2;
+
 	if($requestInfo["start"] <= time()) {
 		$now = 1;
 		$nowfuture = 'now';
@@ -3673,6 +3797,33 @@ function RPCisAvailable($imageid, $start, $end, $userid) {
 	semUnlock();
 
 	return $return;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn schCheckMaintenance($start, $end)
+///
+/// \param $start - unix timestamp for start of reservation
+/// \param $end - unix timestamp for end of reservation
+///
+/// \return true if time window conflicts with maintenance window; false if not
+///
+/// \brief checks to see if the specified window conflicts with a maintenance
+/// window
+///
+////////////////////////////////////////////////////////////////////////////////
+function schCheckMaintenance($start, $end) {
+	$startdt = unixToDatetime($start);
+	$enddt = unixToDatetime($end);
+	$query = "SELECT id "
+	       . "FROM sitemaintenance "
+			 . "WHERE (allowreservations = 0 AND "
+			 .       "(('$enddt' > start) AND ('$startdt' < end))) OR "
+	       .       "(('$startdt' > (start - INTERVAL 30 MINUTE)) AND ('$startdt' < end))";
+	$qh = doQuery($query, 101);
+	if($row = mysql_fetch_row($qh))
+		return true;
+	return false;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -4715,6 +4866,27 @@ function unixToDatetime($timestamp) {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
+/// \fn numdatetimeToDatetime($numtime)
+///
+/// \param $numtime - date and time in YYYYMMDDHHMMSS format
+///
+/// \return a mysql datetime formatted string (YYYY-MM-DD HH:MM:SS)
+///
+/// \brief converts numeric date and time into datetime format
+///
+////////////////////////////////////////////////////////////////////////////////
+function numdatetimeToDatetime($numtime) {
+	$year = substr($numtime, 0, 4);
+	$month = substr($numtime, 4, 2);
+	$day = substr($numtime, 6, 2);
+	$hour = substr($numtime, 8, 2);
+	$min = substr($numtime, 10, 2);
+	$sec = substr($numtime, 12, 2);
+	return "$year-$month-$day $hour:$min:$sec";
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
 /// \fn minuteOfDay($hour, $min)
 ///
 /// \param $hour - hour of the day (0 - 23)
@@ -5313,6 +5485,7 @@ function getTimeSlots($compids, $end=0, $start=0) {
 	}
 
 	$blockData = getBlockTimeData($start, $endtime);
+	$maintItems = getMaintItemsForTimeTable($start, $endtime);
 	$reserveInfo = array();    // 0 = reserved, 1 = available
 	foreach($computerids as $id) {
 		$reserveInfo[$id] = array();
@@ -5330,9 +5503,15 @@ function getTimeSlots($compids, $end=0, $start=0) {
 			}
 			print "-----------------------------------------------------<br>\n";*/
 			$reserveInfo[$id][$current]['blockAllocation'] = 0;
+			$reserveInfo[$id][$current]["inmaintenance"] = 0;
 			if(scheduleClosed($id, $current, $schedules[$scheduleids[$id]])) {
 				$reserveInfo[$id][$current]["available"] = 0;
 				$reserveInfo[$id][$current]["scheduleclosed"] = 1;
+				continue;
+			}
+			if(checkInMaintenanceForTimeTable($current, $current + 900, $maintItems)) {
+				$reserveInfo[$id][$current]["available"] = 0;
+				$reserveInfo[$id][$current]["inmaintenance"] = 1;
 				continue;
 			}
 			if($blockid = isBlockAllocationTime($id, $current, $blockData)) {
@@ -5672,8 +5851,13 @@ function showTimeTable($links) {
 			   $computerData[$id]["stateid"] == 5)) {
 				continue;
 			}
+			# maintenance window
+			if($timeslots[$id][$stamp]["inmaintenance"] == 1) {
+				print "          <TD bgcolor=\"#a0a0a0\"><img src=images/gray.jpg ";
+				print "alt=sitemaintenance border=0></TD>\n";
+			}
 			# computer's schedule is currently closed
-			if($timeslots[$id][$stamp]["scheduleclosed"] == 1) {
+			elseif($timeslots[$id][$stamp]["scheduleclosed"] == 1) {
 				print "          <TD bgcolor=\"#a0a0a0\"><img src=images/gray.jpg ";
 				print "alt=scheduleclosed border=0></TD>\n";
 			}
@@ -6705,6 +6889,29 @@ function scheduleClosed($computerid, $timestamp, $schedule) {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
+/// \fn checkInMaintenanceForTimeTable($start, $end, $items)
+///
+/// \param $start - start time in unix timestamp format
+/// \param $end - end time in unix timestamp format
+/// \param $items - list of maintenance items as returned by
+///                 getMaintItemsForTimeTable
+///
+/// \return 1 if specified time period falls in an maintenance window, 0 if not
+///
+/// \brief checks if the specified time period overlaps with a scheduled
+/// maintenance window
+///
+////////////////////////////////////////////////////////////////////////////////
+function checkInMaintenanceForTimeTable($start, $end, $items) {
+	foreach($items as $item) {
+		if($item['start'] < $end && $item['end'] > $start)
+			return 1;
+	}
+	return 0;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
 /// \fn updateGroups($newusergroups, $userid)
 ///
 /// \param $newusergroups - array of $userid's current set of user groups
@@ -6820,6 +7027,97 @@ function getUserGroupName($id, $incAffil=0) {
 	if($row = mysql_fetch_row($qh))
 		return $row[0];
 	return 0;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn getMaintItems($id)
+///
+/// \param $id (optional) - if specified, id of maintenance item to get info
+///                         about
+///
+/// \return array of maintenance items where each id is a maintenance id and
+/// each element is an array with these keys:\n
+/// \b id - id of maintenance item\n
+/// \b start - start of maintenance item (datetime)\n
+/// \b end - end of maintenance item (datetime)\n
+/// \b ownerid - id from user table of owner of this maintenance item\n
+/// \b owner - unityid@affiliation of owner\n
+/// \b created - date/time entry was created (or last modified)\n
+/// \b reason - reason viewable by sysadmins for maintenance item\n
+/// \b usermessage - message viewable by all users for maintenance item\n
+/// \b informhoursahead - number of hours before start that a message will be
+///    displayed to all site users about the upcoming maintenance\n
+/// \b allowreservations - whether or not reservations can extend into this
+///    maintenance window (0 or 1)
+///
+/// \brief builds a list of current maintenance items and returns them
+///
+////////////////////////////////////////////////////////////////////////////////
+function getMaintItems($id=0) {
+	$key = getKey(array('getMaintItems', $id));
+	if(isset($_SESSION) && array_key_exists($key, $_SESSION['usersessiondata']))
+		return $_SESSION['usersessiondata'][$key];
+	$query = "SELECT m.id, "
+	       .        "m.start, "
+	       .        "m.end, "
+	       .        "m.ownerid, "
+	       .        "CONCAT(u.unityid, '@', a.name) AS owner, "
+	       .        "m.created, "
+	       .        "m.reason, "
+	       .        "m.usermessage, "
+	       .        "m.informhoursahead, "
+	       .        "m.allowreservations "
+	       . "FROM sitemaintenance m, "
+	       .      "user u, "
+	       .      "affiliation a "
+	       . "WHERE m.ownerid = u.id AND "
+	       .       "u.affiliationid = a.id AND "
+	       .       "m.end > NOW() ";
+	if($id)
+		$query .= "AND m.id = $id ";
+	$query .= "ORDER BY m.start";
+	$qh = doQuery($query, 101);
+	$data = array();
+	while($row = mysql_fetch_assoc($qh))
+		$data[$row['id']] = $row;
+	$_SESSION['usersessiondata'][$key] = $data;
+	return $data;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn getMaintItemsForTimeTable($start, $end)
+///
+/// \param $start - start time in unix timestamp format
+/// \param $end - end time in unix timestamp format
+///
+/// \return array of maintenance items that overlap with $start and $end where
+/// each item has 2 keys:\n
+/// \b start - start time in unix timestamp format\n
+/// \b end - end time in unix timestamp format
+///
+/// \brief builds a simple list of maintenance items and returns them
+///
+////////////////////////////////////////////////////////////////////////////////
+function getMaintItemsForTimeTable($start, $end) {
+	$key = getKey(array('getMaintItemsForTimeTable', $start, $end));
+	if(array_key_exists($key, $_SESSION['usersessiondata']))
+		return $_SESSION['usersessiondata'][$key];
+	$startdt = unixToDatetime($start);
+	$enddt = unixToDatetime($end);
+	$query = "SELECT UNIX_TIMESTAMP(start - INTERVAL 30 MINUTE) AS start, "
+	       .        "UNIX_TIMESTAMP(end) AS end "
+	       . "FROM sitemaintenance "
+	       . "WHERE end > '$startdt' AND "
+	       .       "start < '$enddt' "
+	       . "ORDER BY start";
+	$qh = doQuery($query, 101);
+	$data = array();
+	while($row = mysql_fetch_assoc($qh))
+		$data[] = $row;
+	$_SESSION['usersessiondata'][$key] = $data;
+	return $data;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -8527,6 +8825,8 @@ function printHTMLHeader() {
 
 	if(! in_array($mode, $noHTMLwrappers)) {
 		print $HTMLheader;
+		if($mode != 'inmaintenance')
+			print maintenanceNotice();
 		$printedHTMLheader = 1;
 	}
 }
@@ -8624,6 +8924,11 @@ function getNavMenu($inclogout, $inchome, $homeurl=HOMEURL) {
 		$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=editVMInfo\">";
 		$rt .= "Virtual Hosts</a></li>\n";
 	}
+	if($viewmode == ADMIN_DEVELOPER) {
+		$rt .= menulistLI('sitemaintenance');
+		$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=siteMaintenance\">";
+		$rt .= "Site Maintenance</a></li>\n";
+	}
 	$rt .= menulistLI('statistics');
 	$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=selectstats\">";
 	$rt .= "Statistics</a></li>\n";
@@ -8673,6 +8978,7 @@ function getExtraCSS() {
 		case 'viewdocs':
 			return array('doxygen.css');
 	}
+	return array();
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -8816,6 +9122,19 @@ function getDojoHTML($refresh) {
 			                      'dijit.layout.ContentPane',
 			                      'dijit.layout.TabContainer',
 			                      'dojo.data.ItemFileReadStore',
+			                      'dijit.Dialog');
+			break;
+		case 'siteMaintenance':
+			$dojoRequires = array('dojo.parser',
+			                      'dijit.form.Button',
+			                      'dijit.form.NumberSpinner',
+			                      'dijit.form.DateTextBox',
+			                      'dijit.form.TimeTextBox',
+			                      'dijit.form.TextBox',
+			                      'dijit.form.Select',
+			                      'dijit.form.Textarea',
+			                      'dojox.string.sprintf',
+			                      'dijit.Tooltip',
 			                      'dijit.Dialog');
 			break;
 	}
@@ -9096,6 +9415,22 @@ function getDojoHTML($refresh) {
 				$rt .= "   dojo.require(\"$req\");\n";
 			}
 			$rt .= "      document.onmousemove = updateMouseXY;\n";
+			$rt .= "   });\n";
+			$rt .= "</script>\n";
+			return $rt;
+		case "siteMaintenance":
+			$rt .= "<style type=\"text/css\">\n";
+			$rt .= "   @import \"themes/$skin/css/dojo/$skin.css\";\n";
+			$rt .= "</style>\n";
+			$rt .= "<script type=\"text/javascript\" src=\"js/sitemaintenance.js\"></script>\n";
+			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
+			$rt .= "   djConfig=\"parseOnLoad: true\">\n";
+			$rt .= "</script>\n";
+			$rt .= "<script type=\"text/javascript\">\n";
+			$rt .= "   dojo.addOnLoad(function() {\n";
+			foreach($dojoRequires as $req) {
+				$rt .= "   dojo.require(\"$req\");\n";
+			}
 			$rt .= "   });\n";
 			$rt .= "</script>\n";
 			return $rt;

@@ -48,6 +48,8 @@ require_once('.ht-inc/errors.php');
 
 require_once('.ht-inc/utils.php');
 
+maintenanceCheck();
+
 dbConnect();
 
 initGlobals();

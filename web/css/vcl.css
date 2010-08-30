@@ -248,3 +248,11 @@
 	background-color: #678db2;
 	color: white;
 }
+
+#maintenancenotice {
+	width: 450px;
+	padding: 3px;
+	margin: 5px;
+	border: 1px solid;
+	background-color: #f3f3f3;
+}

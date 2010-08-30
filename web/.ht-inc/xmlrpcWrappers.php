@@ -593,8 +593,16 @@ function XMLRPCextendRequest($requestid, $extendtime) {
 	}
 	$rc = isAvailable(getImages(), $request['reservations'][0]["imageid"],
 	                  $startts, $newendts, '', $requestid);
+	// conflicts with scheduled maintenance
+	if($rc == -2) {
+		addChangeLogEntry($request["logid"], NULL, unixToDatetime($newendts),
+		                  $request['start'], NULL, NULL, 0);
+		return array('status' => 'error',
+		             'errorcode' => 46,
+		             'errormsg' => 'requested time is during a maintenance window');
+	}
 	// concurrent license overlap
-	if($rc == -1) {
+	elseif($rc == -1) {
 		addChangeLogEntry($request["logid"], NULL, unixToDatetime($newendts),
 		                  $request['start'], NULL, NULL, 0);
 		return array('status' => 'error',
@@ -716,8 +724,16 @@ function XMLRPCsetRequestEnding($requestid, $end) {
 	}
 	$rc = isAvailable(getImages(), $request['reservations'][0]["imageid"],
 	                  $startts, $end, '', $requestid);
+	// conflicts with scheduled maintenance
+	if($rc == -2) {
+		addChangeLogEntry($request["logid"], NULL, unixToDatetime($end),
+		                  $request['start'], NULL, NULL, 0);
+		return array('status' => 'error',
+		             'errorcode' => 46,
+		             'errormsg' => 'requested time is during a maintenance window');
+	}
 	// concurrent license overlap
-	if($rc == -1) {
+	elseif($rc == -1) {
 		addChangeLogEntry($request["logid"], NULL, unixToDatetime($end),
 		                  $request['start'], NULL, NULL, 0);
 		return array('status' => 'error',
