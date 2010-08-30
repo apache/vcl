@@ -9233,9 +9233,13 @@ sub xmlrpc_call {
 
 	my $response = $cli->send_request(@argument_string);
 
-	if($response->type =~ /fault/){
-		notify($ERRORS{'WARNING'}, 0, "fault occured on @argument_string \n faultCode= $response->code->{faultCode} \n faultString= $response->string->{faultString}");
-		return 0;
+	if ($response->type =~ /fault/){
+		notify($ERRORS{'WARNING'}, 0, "fault occured:\n" .
+		" Response class = ".(ref $response)."\n".
+   		" Response type = ".$response->type."\n".
+   		" Response string = ".$response->as_string."\n".
+   		" Response value = ".$response->value."\n"
+		);
 	}
 
 	return $response;
