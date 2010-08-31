@@ -139,6 +139,8 @@ $noHTMLwrappers = array('sendRDPfile',
                         'AJgetDelSiteMaintenanceData',
                         'AJeditSiteMaintenance',
                         'AJdeleteSiteMaintenance',
+                        'AJgetScheduleTimesData',
+                        'AJsaveScheduleTimes',
 );
 
 # main
@@ -356,7 +358,8 @@ $actions['mode']['submitAddSchedule'] = "submitAddSchedule";
 $actions['mode']['confirmDeleteSchedule'] = "confirmDeleteSchedule";
 $actions['mode']['submitDeleteSchedule'] = "submitDeleteSchedule";
 $actions['mode']['submitScheduleGroups'] = "submitScheduleGroups";
-$actions['mode']['submitScheduleTime'] = "submitScheduleTime";
+$actions['mode']['AJgetScheduleTimesData'] = "AJgetScheduleTimesData";
+$actions['mode']['AJsaveScheduleTimes'] = "AJsaveScheduleTimes";
 $actions['pages']['viewSchedules'] = "manageSchedules";
 $actions['pages']['editSchedule'] = "manageSchedules";
 $actions['pages']['confirmEditSchedule'] = "manageSchedules";
@@ -366,7 +369,8 @@ $actions['pages']['submitAddSchedule'] = "manageSchedules";
 $actions['pages']['confirmDeleteSchedule'] = "manageSchedules";
 $actions['pages']['submitDeleteSchedule'] = "manageSchedules";
 $actions['pages']['submitScheduleGroups'] = "manageSchedules";
-$actions['pages']['submitScheduleTime'] = "manageSchedules";
+$actions['pages']['AJgetScheduleTimesData'] = "manageSchedules";
+$actions['pages']['AJsaveScheduleTimes'] = "manageSchedules";
 
 # manage computers
 $actions['mode']['selectComputers'] = "selectComputers"; # entry

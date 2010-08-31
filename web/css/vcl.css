@@ -256,3 +256,7 @@
 	border: 1px solid;
 	background-color: #f3f3f3;
 }
+
+#savestatus {
+	color: #008000;
+}

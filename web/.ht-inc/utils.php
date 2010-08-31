@@ -9051,6 +9051,17 @@ function getDojoHTML($refresh) {
 		case 'viewBlockStatus':
 			$dojoRequires = array('dojo.parser');
 			break;
+		case 'editSchedule':
+		case 'submitAddSchedule':
+			// TODO remove any unneeded items
+			$dojoRequires = array('dojo.parser',
+			                      'dijit.form.TimeTextBox',
+			                      'dojox.grid.DataGrid',
+			                      'dojox.string.sprintf',
+			                      #'dijit.form.FilteringSelect',
+			                      #'dijit.Tooltip',
+			                      'dijit.form.Button',
+			                      'dojo.data.ItemFileWriteStore');
 		case 'viewImages':
 			/*$dojoRequires = array('dojo.data.ItemFileWriteStore',
 			                      'dojox.grid.Grid',
@@ -9234,6 +9245,29 @@ function getDojoHTML($refresh) {
 			}
 			$rt .= "   });\n";
 			$rt .= "   setTimeout(updateBlockStatus, 30000);\n";
+			$rt .= "</script>\n";
+			return $rt;
+
+		case "editSchedule":
+		case "submitAddSchedule":
+			$rt .= "<style type=\"text/css\">\n";
+			$rt .= "   @import \"themes/$skin/css/dojo/$skin.css\";\n";
+			$rt .= "   @import \"dojo/dojox/grid/resources/Grid.css\";\n";
+			$rt .= "</style>\n";
+			$rt .= "<script type=\"text/javascript\" src=\"js/schedules.js\"></script>\n";
+			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
+			$rt .= "   djConfig=\"parseOnLoad: true\">\n";
+			$rt .= "</script>\n";
+			$rt .= "<script type=\"text/javascript\">\n";
+			$rt .= "   dojo.addOnLoad(function() {\n";
+			foreach($dojoRequires as $req) {
+				$rt .= "   dojo.require(\"$req\");\n";
+			}
+			$id = getContinuationVar("scheduleid");
+			$cont = addContinuationsEntry('AJgetScheduleTimesData', array('id' => $id), SECINDAY, 1, 0);
+			$rt .= "   populateTimeStore('$cont');\n";
+			#$rt .= "   setTimeout(function() {populateTimeStore('$cont');}, 1000);\n";
+			$rt .= "   });\n";
 			$rt .= "</script>\n";
 			return $rt;
 

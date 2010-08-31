@@ -170,14 +170,12 @@ function viewSchedules() {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function editOrAddSchedule($state) {
-	global $submitErr, $mode, $submitErrMsg;
+	global $submitErr, $mode, $submitErrMsg, $days;
 
 	$schedules = getSchedules();
-	$days = array("Sunday", "Monday", "Tuesday", "Wednesday", "Thursday",
-	              "Friday", "Saturday");
 
 	$newcont = 0;
-	if($submitErr || $mode == "submitScheduleTime" || $mode == "submitAddSchedule") {
+	if($submitErr || $mode == "submitAddSchedule") {
 		$data = processScheduleInput(0);
 		$newcont = 1; # continuation to get here was deleted; so, we'll need to set
 		              #   deletefromself true this time
@@ -187,9 +185,7 @@ function editOrAddSchedule($state) {
 		$id = $data["scheduleid"];
 		$data["name"] = $schedules[$id]["name"];
 		$data["owner"] = $schedules[$id]["owner"];
-		$data["submode"] = processInputVar("submode", ARG_STRING);
 	}
-	$schedules = getSchedules();
 	print "<FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
 	print "<DIV align=center>\n";
 	if($state) {
@@ -250,121 +246,56 @@ function editOrAddSchedule($state) {
 	print "    </TD>\n";
 	print "  </TR>\n";
 	print "</TABLE>\n";
+	print "</div>\n";
 	if($state)
 		return;
 	print "The start and end day/times are based on a week's time period with ";
 	print "the start/end point being 'Sunday 12:00&nbsp;am'. i.e. The earliest ";
 	print "start day/time is 'Sunday 12:00&nbsp;am' and the latest end day/";
 	print "time is 'Sunday 12:00&nbsp;am'<br><br>\n";
-	if(! $submitErr && $mode == "submitScheduleTime" && $data["submode"] == "Save changes") {
-		print "<font color=green>Changes saved</font><br>\n";
-	}
-	printSubmitErr(OVERLAPERR);
-	print "<FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
-	print "<TABLE>\n";
-	print "  <TR>\n";
-	print "    <TD></TD>\n";
-	print "    <TH>Start</TH>\n";
-	print "    <TD></TD>\n";
-	print "    <TH>End</TH>\n";
-	print "    <TD></TD>\n";
-	print "  </TR>\n";
-	$addrow = 0;
-	if($mode == "submitScheduleTime") {
-		$addrow = 1;
-	}
-	print "<TR><TD colspan=5>";
-	print "</TD></TR>\n";
-	$doaddrow = 0;
-	if($mode == "submitScheduleTime") {
-		if($data["selrow"] == "")
-			$end = $data["count"];
-		elseif($data["submode"] == "Insert before selected row") {
-			$doaddrow = 1;
-			$addrow = $data["selrow"];
-			$end = $data["count"] + 1;
-		}
-		elseif($data["submode"] == "Insert after selected row") {
-			$doaddrow = 1;
-			$addrow = $data["selrow"] + 1;
-			$end = $data["count"] + 1;
-		}
-		else
-			$end = $data["count"];
-	}
-	else
-		$end = count($schedules[$data["scheduleid"]]["times"]);
-	if($end == 0) {
-		$doaddrow = 1;
-		$addrow = 0;
-		$end = 1;
-	}
-	reset($schedules[$data["scheduleid"]]["times"]);
-	$index = 0;
-	for($count = 0; $count < $end; $count++) {
-		// if mode == submitScheduleTime, print submitted times
-		if($mode == "submitScheduleTime") {
-			if($doaddrow && $count == $addrow) {
-				$startday = "";
-				$starttime = "";
-				$endday = "";
-				$endtime = "";
-				$doaddrow = 0;
-				$index--;
-			}
-			else {
-				$startday = $data["startDay"][$index];
-				$starttime = $data["startTime"][$index];
-				$endday = $data["endDay"][$index];
-				$endtime = $data["endTime"][$index];
-			}
-			print "  <TR>\n";
-			print "    <TD align=right><INPUT type=radio name=selrow value=$count></TD>\n";
-			printStartEndTimeForm2($startday, $starttime, $count, "start");
-			print "    <TD>&nbsp;&nbsp;</TD>\n";
-			printStartEndTimeForm2($endday, $endtime, $count, "end");
-		}
-		// otherwise, print times from database
-		else {
-			$time = current($schedules[$data["scheduleid"]]["times"]);
-			print "  <TR>\n";
-			print "    <TD align=right><INPUT type=radio name=selrow value=$count></TD>\n";
-			printStartEndTimeForm($time["start"], $count, "start");
-			print "    <TD>&nbsp;&nbsp;</TD>\n";
-			printStartEndTimeForm($time["end"], $count, "end");
-			next($schedules[$data["scheduleid"]]["times"]);
-		}
-		print "    <TD width=70>";
-		if($data["submode"] == "Save changes")
-			printSubmitErr(1 << $count);
-		print "</TD>";
-		print "  </TR>\n";
-		$index++;
-	}
-	$colspan = 5;
-	print "  <TR>\n";
-	print "    <TD align=center colspan=$colspan><INPUT type=submit name=submode value=\"Delete selected row\"></TD>\n";
-	print "  <TR>\n";
-	print "  </TR>\n";
-	print "    <TD align=center colspan=$colspan><INPUT type=submit name=submode value=\"Insert before selected row\"></TD>\n";
-	print "  <TR>\n";
-	print "  </TR>\n";
-	print "    <TD align=center colspan=$colspan><INPUT type=submit name=submode value=\"Insert after selected row\"></TD>\n";
-	print "  <TR>\n";
-	print "  </TR>\n";
-	print "    <TD align=center colspan=$colspan><INPUT type=submit name=submode value=\"Save changes\"></TD>\n";
-	print "  </TR>\n";
-	print "</TABLE>\n";
-	$cdata = array('scheduleid' => $data['scheduleid'],
-	               'count' => $count,
-	               'name' => $data['name'],
-	               'owner' => $data['owner']);
-	if($newcont)
-		$cont = addContinuationsEntry('submitScheduleTime', $cdata, SECINDAY, 1, 0);
-	else
-		$cont = addContinuationsEntry('submitScheduleTime', $cdata, SECINDAY, 0, 0);
-	print "<INPUT type=hidden name=continuation value=\"$cont\">\n";
-	print "</FORM>\n";
+
+
+	print "Start:";
+	printSelectInput('startday', $days, -1, 0, 0, 'startday');
+	print "<input type=\"text\" id=\"starttime\" dojoType=\"dijit.form.TimeTextBox\" ";
+	print "required=\"true\" />\n";
+	print "End:";
+	printSelectInput('endday', $days, -1, 0, 0, 'endday');
+	print "<input type=\"text\" id=\"endtime\" dojoType=\"dijit.form.TimeTextBox\" ";
+	print "required=\"true\" />\n";
+	print "<button dojoType=\"dijit.form.Button\" type=\"button\" ";
+	print "id=\"addTimeBtn\">\n";
+	print "  Add\n";
+	print "  <script type=\"dojo/method\" event=\"onClick\">\n";
+	print "    addTime();\n";
+	print "  </script>\n";
+	print "</button>\n";
+	print "<div dojoType=\"dojo.data.ItemFileWriteStore\" jsId=\"scheduleStore\" ";
+	print "data=\"scheduleTimeData\"></div>\n";
+	print "<table dojoType=\"dojox.grid.DataGrid\" jsId=\"scheduleGrid\" sortInfo=1 ";
+	print "store=\"scheduleStore\" style=\"width: 524px; height: 165px;\">\n";
+	print "<thead>\n";
+	print "<tr>\n";
+	print "<th field=\"startday\" width=\"94px\" formatter=\"formatDay\">Start Day</th>\n";
+	print "<th field=\"startday\" width=\"94px\" formatter=\"formatTime\">Start Time</th>\n";
+	print "<th field=\"endday\" width=\"94px\" formatter=\"formatDay\">End Day</th>\n";
+	print "<th field=\"endday\" width=\"94px\" formatter=\"formatTime\">End Time</th>\n";
+	print "<th field=\"remove\" width=\"80px\">Remove</th>\n";
+	print "</tr>\n";
+	print "</thead>\n";
+	print "</table>\n";
+
+	print "<div align=\"center\">\n";
+	print "<div id=\"savestatus\"></div>\n";
+	print "<button dojoType=\"dijit.form.Button\" type=\"button\" id=\"saveTimesBtn\">\n";
+	print "  Save Schedule Times\n";
+	print "  <script type=\"dojo/method\" event=\"onClick\">\n";
+	$cdata = array('id' => $data['scheduleid']);
+	$cont = addContinuationsEntry('AJsaveScheduleTimes', $cdata);
+	print "    saveTimes('$cont');\n";
+	print "  </script>\n";
+	print "</button>\n";
+	print "</div>\n";
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -466,6 +397,39 @@ function submitAddSchedule() {
 	else {
 		abort(10);
 	}
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn AJgetScheduleTimesData()
+///
+/// \brief gets start/end times for a schedule and sends in JSON format
+///
+////////////////////////////////////////////////////////////////////////////////
+function AJgetScheduleTimesData() {
+	$id = getContinuationVar('id');
+	$query = "SELECT start, "
+	       .        "end "
+	       . "FROM scheduletimes "
+	       . "WHERE scheduleid = $id "
+	       . "ORDER BY start";
+	$qh = doQuery($query, 101);
+	$times = array();
+	while($row = mysql_fetch_assoc($qh)) {
+		$smin = $row['start'] % 1440;
+		$sday = (int)($row['start'] / 1440);
+		if($sday > 6)
+			$sday = 0;
+		$emin = $row['end'] % 1440;
+		$eday = (int)($row['end'] / 1440);
+		if($eday > 6)
+			$eday = 0;
+		$times[] = array('smin' => $smin,
+		                 'sday' => $sday,
+		                 'emin' => $emin,
+		                 'eday' => $eday);
+	}
+	sendJSON($times);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -659,8 +623,7 @@ function submitScheduleGroups() {
 /// \param $checks - (optional) 1 to perform validation, 0 not to
 ///
 /// \return an array with the following indexes:\n
-/// scheduleid, name, owner, submode, selrow, count, startDay, startTime,
-/// endDay, endTime
+/// scheduleid, name, owner
 ///
 /// \brief validates input from the previous form; if anything was improperly
 /// submitted, sets submitErr and submitErrMsg
@@ -669,23 +632,12 @@ function submitScheduleGroups() {
 function processScheduleInput($checks=1) {
 	global $submitErr, $submitErrMsg;
 	$return = array();
-	$return["start"] = array();
-	$return["end"] = array();
-
 	$return["scheduleid"] = getContinuationVar("scheduleid", processInputVar("scheduleid" , ARG_NUMERIC));
 	$return["name"] = getContinuationVar("name", processInputVar("name", ARG_STRING));
 	$return["owner"] = getContinuationVar("owner", processInputVar("owner", ARG_STRING));
-	$return["submode"] = processInputVar("submode", ARG_STRING);
-	$return["selrow"] = processInputVar("selrow", ARG_NUMERIC);
-	$return["count"] = getContinuationVar("count", processInputVar("count", ARG_NUMERIC, 0));
-	$return["startDay"] = processInputVar("startDay", ARG_MULTINUMERIC);
-	$return["startTime"] = processInputVar("startTime", ARG_MULTISTRING);
-	$return["endDay"] = processInputVar("endDay", ARG_MULTINUMERIC);
-	$return["endTime"] = processInputVar("endTime", ARG_MULTISTRING);
 
-	if(! $checks) {
+	if(! $checks)
 		return $return;
-	}
 	
 	if(strlen($return["name"]) > 25 || strlen($return["name"]) < 2) {
 	   $submitErr |= SCHNAMEERR;
@@ -699,30 +651,6 @@ function processScheduleInput($checks=1) {
 	if(! validateUserid($return["owner"])) {
 	   $submitErr |= SCHOWNERERR;
 	   $submitErrMsg[SCHOWNERERR] = "The submitted unity ID is invalid.";
-	}
-	for($i = 0; $i < $return["count"]; $i++) {
-		if((! preg_match('/^((0?[1-9])|(1[0-2])):([0-5][0-9]) (am|pm)$/', $return["startTime"][$i])) ||
-		   (! preg_match('/^((0?[1-9])|(1[0-2])):([0-5][0-9]) (am|pm)$/', $return["endTime"][$i]))) {
-			$submitErr |= (1 << $i);
-			$submitErrMsg[1 << $i] = "Time must be of the form [H]H:MM&nbsp;am/pm";
-		}
-		elseif(daytimeToMin($return["startDay"][$i], $return["startTime"][$i], "start") >=
-		       daytimeToMin($return["endDay"][$i], $return["endTime"][$i], "end")) {
-			$submitErr |= (1 << $i);
-			$submitErrMsg[1 << $i] = "The start day/time must be before the end day/time";
-		}
-	}
-	for($i = 0; $i < $return["count"] - 1; $i++) {
-		for($j = $i + 1; $j < $return["count"]; $j++) {
-			if(daytimeToMin($return["startDay"][$i], $return["startTime"][$i], "start") <
-			   daytimeToMin($return["endDay"][$j], $return["endTime"][$j], "end") &&
-			   daytimeToMin($return["endDay"][$i], $return["endTime"][$i], "end") >
-			   daytimeToMin($return["startDay"][$j], $return["startTime"][$j], "start")) {
-				$submitErr |= OVERLAPERR;
-				$submitErrMsg[OVERLAPERR] = "At least 2 of the time periods overlap. Please combine them into a single entry.";
-				break(2);
-			}
-		}
 	}
 	return $return;
 }
@@ -810,157 +738,42 @@ function addSchedule($data) {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn printStartEndTimeForm($min, $count, $startend)
+/// \fn AJsaveScheduleTimes()
 ///
-/// \param $min - minute in the week, pass empty string to get an empty text
-/// entry field
-/// \param $count - counter value - used to keep track of which row this is
-/// \param $startend - "start" or "end"
-///
-/// \brief prints a select input for the day of week and a text entry field
-/// for the time to be entered
+/// \brief saves the submitted time for the schedule and notifies the user
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function printStartEndTimeForm($min, $count, $startend) {
-	$days = array("Sunday", "Monday", "Tuesday", "Wednesday", "Thursday",
-	              "Friday", "Saturday");
-	if($min == "") {
-		print "    <TD>\n";
-		printSelectInput("$startend" . "Day[$count]", $days);
-		$name = $startend . "Time[$count]";
-		print "      <INPUT type=text name=$name size=8 mazlength=8>\n";
-		print "    </TD>\n";
+function AJsaveScheduleTimes() {
+	$id = getContinuationVar('id');
+	$tmp = processInputVar('times', ARG_STRING);
+	if(! preg_match('/^([0-9]+:[0-9]+,)*([0-9]+:[0-9]+){1}$/', $tmp)) {
+		print "alert('invalid data submitted');";
 		return;
 	}
-	$time = minuteToTime($min % 1440);
-	if((int)($min / 1440) == 0) {
-		$day = 0;
-	}
-	elseif((int)($min / 1440) == 1) {
-		$day = 1;
-	}
-	elseif((int)($min / 1440) == 2) {
-		$day = 2;
-	}
-	elseif((int)($min / 1440) == 3) {
-		$day = 3;
-	}
-	elseif((int)($min / 1440) == 4) {
-		$day = 4;
-	}
-	elseif((int)($min / 1440) == 5) {
-		$day = 5;
-	}
-	elseif((int)($min / 1440) == 6) {
-		$day = 6;
-	}
-	elseif((int)($min / 1440) > 6) {
-		$day = 0;
-	}
-	print "    <TD>\n";
-	printSelectInput("$startend" . "Day[$count]", $days, $day);
-	$name = $startend . "Time[$count]";
-	print "      <INPUT type=text name=$name value=\"$time\" size=8 maxlength=8>\n";
-	print "    </TD>\n";
-}
-
-////////////////////////////////////////////////////////////////////////////////
-///
-/// \fn printStartEndTimeForm2($day, $time, $count, $startend)
-///
-/// \param $day - numeric day of week with Sunday being 0
-/// \param $time - time of day in string format HH:MM am/pm
-/// \param $count - counter value - used to keep track of which row this is
-/// \param $startend - "start" or "end"
-///
-/// \brief prints a select input for the day of week and a text entry field
-/// for the time to be entered
-///
-////////////////////////////////////////////////////////////////////////////////
-function printStartEndTimeForm2($day, $time, $count, $startend) {
-	$days = array("Sunday", "Monday", "Tuesday", "Wednesday", "Thursday",
-	              "Friday", "Saturday");
-	print "    <TD>\n";
-	printSelectInput("$startend" . "Day[$count]", $days, $day);
-	$name = $startend . "Time[$count]";
-	print "      <INPUT type=text name=$name value=\"$time\" size=8 maxlength=8>\n";
-	print "    </TD>\n";
-}
-
-////////////////////////////////////////////////////////////////////////////////
-///
-/// \fn submitScheduleTime()
-///
-/// \brief handles submitting date/time form for schedule times and calls
-/// editOrAddSchedule(0) again
-///
-////////////////////////////////////////////////////////////////////////////////
-function submitScheduleTime() {
-	global $submitErr, $contdata;
-
-	if($_POST["submode"] == "Save changes") {
-		$data = processScheduleInput(1);
-		if($submitErr) {
-			editOrAddSchedule(0);
-			return;
-		}
-	}
-	else {
-		$data = processScheduleInput(0);
-		if($data["selrow"] == "") {
-			editOrAddSchedule(0);
-			return;
-		}
-	}
-
-	if($data["submode"] == "Delete selected row") {
-		// delete entry from db
-		$start = daytimeToMin($data["startDay"][$data["selrow"]], $data["startTime"][$data["selrow"]], "start");
-		$end = daytimeToMin($data["endDay"][$data["selrow"]], $data["endTime"][$data["selrow"]], "end");
-		$query = "DELETE FROM scheduletimes "
-		       . "WHERE scheduleid = {$data["scheduleid"]} AND "
-		       .       "start = $start AND "
-		       .       "end = $end";
-		doQuery($query, 101);
-		// decrease all values by 1 that are > deleted row
-		for($i = 0; $i < $data["count"] - 1; $i++) {
-			if($i >= $data["selrow"]) {
-				$_POST["startDay"][$i] = $_POST["startDay"][$i + 1];
-				$_POST["startTime"][$i] = $_POST["startTime"][$i + 1];
-				$_POST["endDay"][$i] = $_POST["endDay"][$i + 1];
-				$_POST["endTime"][$i] = $_POST["endTime"][$i + 1];
+	$times = explode(',', $tmp);
+	$newtimes = array();
+	$qvals = array();
+	foreach($times as $pair) {
+		list($start, $end) = explode(':', $pair);
+		foreach($newtimes as $check) {
+			if($start < $check['end'] && $end > $check['start']) {
+				print "alert('Two sets of times are overlapping;\nplease correct and save again.');";
+				return;
 			}
 		}
-		unset($_POST["startDay"][$i]);
-		unset($_POST["startTime"][$i]);
-		unset($_POST["endDay"][$i]);
-		unset($_POST["endTime"][$i]);
-		$contdata["count"]--;
-		editOrAddSchedule(0);
+		$newtimes[] = array('start' => $start, 'end' => $end);
+		$qvals[] = "($id, $start, $end)";
 	}
-	elseif($data["submode"] == "Insert before selected row") {
-		editOrAddSchedule(0);
-	}
-	elseif($data["submode"] == "Insert after selected row") {
-		editOrAddSchedule(0);
-	}
-	elseif($data["submode"] == "Save changes") {
-		$query = "DELETE FROM scheduletimes WHERE scheduleid = {$data["scheduleid"]}";
-		doQuery($query, 101);
-		for($i = 0; $i < $data["count"]; $i++) {
-			$start = daytimeToMin($data["startDay"][$i], $data["startTime"][$i], "start");
-			$end = daytimeToMin($data["endDay"][$i], $data["endTime"][$i], "end");
-			$query = "INSERT INTO scheduletimes "
-			       .        "(scheduleid, "
-			       .        "start, "
-			       .        "end) "
-			       . "VALUES ({$data["scheduleid"]}, "
-			       .        "$start, "
-			       .        "$end)";
-			doQuery($query, 101);
-		}
-		editOrAddSchedule(0);
-	}
+	$query = "DELETE FROM scheduletimes WHERE scheduleid = $id";
+	doQuery($query, 101);
+	$allvals = implode(',', $qvals);
+	$query = "INSERT INTO scheduletimes "
+	       .        "(scheduleid, start, end) "
+			 . "VALUES $allvals";
+	doQuery($query, 101);
+	print "dijit.byId('saveTimesBtn').attr('disabled', false);";
+	print "dojo.byId('savestatus').innerHTML = 'Schedule times successfully saved';";
+	print "setTimeout(function() {dojo.byId('savestatus').innerHTML = '';}, 8000);";
 }
 
 ////////////////////////////////////////////////////////////////////////////////
