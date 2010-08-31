@@ -105,7 +105,6 @@ function populateBlockStoreCB(data, ioArgs) {
 			date2.setDate(data.items.days[i]);
 			date2.setFullYear(data.items.years[i]);
 			date2.setMonth(data.items.months[i] - 1);
-			// todo finish this
 			var start = new Date(0);
 			start.setHours(data.items.starths[i]);
 			start.setMinutes(data.items.startms[i]);
