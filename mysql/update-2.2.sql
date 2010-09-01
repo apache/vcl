@@ -415,6 +415,14 @@ CALL AddConstraintIfNotExists('winKMS', 'affiliationid', 'affiliation', 'id');
 --
 
 CALL AddConstraintIfNotExists('winProductKey', 'affiliationid', 'affiliation', 'id');
+ 
+-- --------------------------------------------------------
+
+--
+-- remove table xmlrpcKey
+--
+
+DROP TABLE IF EXISTS `xmlrpcKey`
 
 -- --------------------------------------------------------
 

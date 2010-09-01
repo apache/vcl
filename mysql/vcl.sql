@@ -1076,21 +1076,6 @@ CREATE TABLE IF NOT EXISTS `winProductKey` (
 -- --------------------------------------------------------
 
 -- 
--- Table structure for table `xmlrpcKey`
--- 
-
-CREATE TABLE IF NOT EXISTS `xmlrpcKey` (
-  `id` smallint(5) unsigned NOT NULL auto_increment,
-  `ownerid` mediumint(8) unsigned NOT NULL default '0',
-  `key` varchar(255) NOT NULL default '',
-  `active` tinyint(1) NOT NULL default '1',
-  `created` datetime NOT NULL default '0000-00-00 00:00:00',
-  PRIMARY KEY  (`id`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
-
--- --------------------------------------------------------
-
--- 
 -- Table structure for table `xmlrpcLog`
 -- 
 
