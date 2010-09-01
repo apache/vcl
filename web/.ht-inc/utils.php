@@ -344,23 +344,10 @@ function checkAccess() {
 		if(get_magic_quotes_gpc())
 			$xmlpass = stripslashes($xmlpass);
 		$apiver = processInputData($_SERVER['HTTP_X_APIVERSION'], ARG_NUMERIC, 1);
-		/* code for version 1 should probably be removed in VCL 2.2 */
 		if($apiver == 1) {
-			$query = "SELECT x.id "
-			       . "FROM xmlrpcKey x, "
-			       .      "user u "
-			       . "WHERE x.ownerid = u.id AND "
-			       .       "u.unityid = '$xmluser' AND "
-			       .       "x.key = '$xmlpass' AND "
-			       .       "x.active = 1";
-			$qh = doQuery($query, 101);
-			if(! (mysql_num_rows($qh) == 1)) {
-				printXMLRPCerror(3);   # access denied
-				dbDisconnect();
-				exit;
-			}
-			$row = mysql_fetch_assoc($qh);
-			$user['xmlrpckeyid'] = $row['id'];
+			printXMLRPCerror(8);   # unsupported API version
+			dbDisconnect();
+			exit;
 		}
 		elseif($apiver == 2) {
 			$authtype = "";
@@ -430,7 +417,12 @@ function checkAccess() {
 			exit;
 		}
 		$apiver = processInputData($_SERVER['HTTP_X_APIVERSION'], ARG_NUMERIC, 1);
-		if($apiver != 1 && $apiver != 2) {
+		if($apiver == 1) {
+			printXMLRPCerror(8);   # unsupported API version
+			dbDisconnect();
+			exit;
+		}
+		elseif($apiver != 2) {
 			printXMLRPCerror(7);    # unknown API version
 			dbDisconnect();
 			exit;
@@ -8317,11 +8309,8 @@ function xmlrpcgetaffiliations() {
 function xmlRPChandler($function, $args, $blah) {
 	global $user, $remoteIP;
 	header("Content-type: text/xml");
-	$apiversion = processInputData($_SERVER['HTTP_X_APIVERSION'], ARG_NUMERIC);
 	if($function == 'XMLRPCaffiliations')
 		$keyid = 0;
-	elseif($apiversion == 1)
-		$keyid = $user['xmlrpckeyid'];
 	else
 		$keyid = $user['id'];
 	if(function_exists($function)) {

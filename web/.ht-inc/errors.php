@@ -208,6 +208,7 @@ $XMLRPCERRORS = array(
 	5 => 'Failed to connect to authentication server',
 	6 => 'Unable to authenticate passed in X-User',
 	7 => 'Unknown API version, cannot continue',
+	8 => 'Unsupported API version, cannot continue',
 	100 => 'overwrite this with a custom error message',
 );
 

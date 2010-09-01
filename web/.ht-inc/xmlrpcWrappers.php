@@ -55,21 +55,6 @@
  * \b X-APIVERSION - set this to 2\n\n
  * The X-User and X-Pass HTTP headers do not need to be passed to call the
  * XMLRPCaffiliations() function.
- * 
- * <h2>API Version 1</h2>
- * \b NOTICE: API version 1 will probably be removed in VCL 2.2.  If you are
- * still using API version 1, you need to update your code to use version 2.\n\n
- * This version is being phased out in favor of version 2. Documentation is
- * provided for those currently using version 1 who are not ready to switch
- * to using version 2.\n\n
- * 
- * Authentication is handled by 2 additional HTTP headers you will need to
- * send:\n
- * \b X-User - use the same id you would use to log in to the VCL site\n
- * \b X-Pass - the key mentioned above\n
- * \n
- * There is one other additional HTTP header you must send:\n
- * \b X-APIVERSION - set this to 1\n
  */
 
 /// \example xmlrpc_example.php
