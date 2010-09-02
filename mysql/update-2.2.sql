@@ -299,6 +299,28 @@ CALL AddUniqueIndex('provisioning', 'name');
 
 -- --------------------------------------------------------
 
+--
+-- Table structure for table `sitemaintenance`
+--
+
+CREATE TABLE IF NOT EXISTS `sitemaintenance` (
+  `id` smallint(5) unsigned NOT NULL auto_increment,
+  `start` datetime NOT NULL,
+  `end` datetime NOT NULL,
+  `ownerid` mediumint(8) unsigned NOT NULL,
+  `created` datetime NOT NULL,
+  `reason` text,
+  `usermessage` text NOT NULL,
+  `informhoursahead` smallint(5) unsigned NOT NULL,
+  `allowreservations` tinyint(1) unsigned NOT NULL,
+  PRIMARY KEY  (`id`),
+  KEY `start` (`start`),
+  KEY `end` (`end`),
+  KEY `ownerid` (`ownerid`)
+) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
+
+-- --------------------------------------------------------
+
 -- 
 -- Table structure change for table `request`
 -- 
