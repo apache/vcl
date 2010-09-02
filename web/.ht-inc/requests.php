@@ -248,7 +248,8 @@ function AJupdateWaitTime() {
 	$end = $start + $length * 60;
 	if($start < $now)
 		$end += 15 * 60;
-	$rc = isAvailable($images, $imageid, $start, $end, '');
+	$imagerevisionid = getProductionRevisionid($imageid);
+	$rc = isAvailable($images, $imageid, $imagerevisionid, $start, $end);
 	semUnlock();
 	print "dojo.byId('waittime').innerHTML = ";
 	if($rc == -2) {
@@ -406,7 +407,13 @@ function submitRequest() {
 	if(! semLock())
 		abort(3);
 
-	$availablerc = isAvailable($images, $data["imageid"], $start, $end, $data["os"], 0, 0, 0, $imaging);
+	if(array_key_exists('revisionid', $data) &&
+		array_key_exists($data['imageid'], $data['revisionid']))
+		$revisionid = $data['revisionid'][$data['imageid']];
+	else
+		$revisionid = getProductionRevisionid($data['imageid']);
+	$availablerc = isAvailable($images, $data["imageid"], $revisionid, $start,
+	                           $end, 0, 0, 0, $imaging);
 
 	$max = getMaxOverlap($user['id']);
 	if($availablerc != 0 && checkOverlap($start, $end, $max)) {
@@ -1718,8 +1725,8 @@ function confirmEditRequest() {
 	print "    <TD>\n";
 	$cdata = array_merge($data, $cdata);
 	$cdata['imageid'] = $reservation['imageid'];
+	$cdata['imagerevisionid'] = $reservation['imagerevisionid'];
 	$cdata['prettyimage'] = $reservation['prettyimage'];
-	$cdata['os'] = $reservation['OS'];
 	if($submitErr)
 		$cont = addContinuationsEntry('submitEditRequest', $cdata, SECINDAY, 1, 0);
 	else
@@ -1797,7 +1804,8 @@ function submitEditRequest() {
 		editRequest();
 		return;
 	}
-	$rc = isAvailable(getImages(), $data["imageid"], $start, $end, $data["os"], $data["requestid"]);
+	$rc = isAvailable(getImages(), $data["imageid"], $data['imagerevisionid'],
+	                  $start, $end, $data["requestid"]);
 	if($rc == -1) {
 		print "You have requested an environment that is limited in the number ";
 		print "of concurrent reservations that can be made. No further ";

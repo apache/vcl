@@ -3310,14 +3310,14 @@ function getBlockAllocationIDs($user) {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn isAvailable($images, $imageid, $start, $end, $os, $requestid,
-///                          $userid, $ignoreprivileges, $forimaging)
+/// \fn isAvailable($images, $imageid, $imagerevisionid, $start, $end,
+///                 $requestid, $userid, $ignoreprivileges, $forimaging)
 ///
 /// \param $images - array as returned from getImages
 /// \param $imageid - imageid from the image table
+/// \param $imagerevisionid - id of revision of image from imagerevision table
 /// \param $start - unix timestamp for start of reservation
 /// \param $end - unix timestamp for end of reservation
-/// \param $os - preferred OS that matches a name entry in the OS table
 /// \param $requestid - (optional) a requestid; if checking for an available
 /// timeslot to update a request, pass the request id that will be updated;
 /// otherwise, don't pass this argument
@@ -3337,8 +3337,8 @@ function getBlockAllocationIDs($user) {
 /// \brief checks that the passed in arguments constitute an available request
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function isAvailable($images, $imageid, $start, $end, $os, $requestid=0,
-                     $userid=0, $ignoreprivileges=0, $forimaging=0) {
+function isAvailable($images, $imageid, $imagerevisionid, $start, $end,
+                  $requestid=0, $userid=0, $ignoreprivileges=0, $forimaging=0) {
 	global $requestInfo;
 	$requestInfo["start"] = $start;
 	$requestInfo["end"] = $end;
@@ -3416,7 +3416,6 @@ function isAvailable($images, $imageid, $start, $end, $os, $requestid=0,
 	$startstamp = unixToDatetime($start);
 	$endstamp = unixToDatetime($end + 900);
 	foreach($requestInfo["images"] as $key => $imageid) {
-		#$osid = getOSid($os);
 		# check for max concurrent usage of image
 		if($images[$imageid]['maxconcurrent'] != NULL) {
 			$query = "SELECT COUNT(rs.imageid) AS currentusage "
@@ -3497,7 +3496,8 @@ function isAvailable($images, $imageid, $start, $end, $os, $requestid=0,
 			$schedules = implode(',', $scheduleids);
 
 			$query = "SELECT DISTINCT c.id, "
-			       .                 "c.currentimageid "
+			       .                 "c.currentimageid, "
+			       .                 "c.imagerevisionid "
 			       . "FROM computer c, "
 			       .      "image i, "
 			       .      "state s "
@@ -3529,7 +3529,8 @@ function isAvailable($images, $imageid, $start, $end, $os, $requestid=0,
 			$qh = doQuery($query, 129);
 			while($row = mysql_fetch_assoc($qh)) {
 				array_push($computerids, $row['id']);
-				if($row['currentimageid'] == $imageid) {
+				if($row['currentimageid'] == $imageid &&
+				   $row['imagerevisionid'] == $imagerevisionid) {
 					array_push($currentids, $row['id']);
 				}
 			}
@@ -3577,218 +3578,6 @@ function isAvailable($images, $imageid, $start, $end, $os, $requestid=0,
 	}
 
 	return 1;
-}
-
-////////////////////////////////////////////////////////////////////////////////
-///
-/// \fn RPCisAvailable($imageid, $start, $end, $userid)
-///
-/// \param $imageid - imageid from the image table
-/// \param $start - unix timestamp for start of reservation
-/// \param $end - unix timestamp for end of reservation
-/// \param $userid - id from user table
-///
-/// \return a computer id
-///
-/// \brief checks that the passed in arguments constitute an available request
-///
-////////////////////////////////////////////////////////////////////////////////
-function RPCisAvailable($imageid, $start, $end, $userid) {
-	#FIXME this function doesn't properly handle cluster reservations
-	global $requestInfo;
-	$images = getImages();
-
-	$requestInfo["start"] = $start;
-	$requestInfo["end"] = $end;
-	$requestInfo["imageid"] = $imageid;
-	$allocatedcompids = array(0);
-
-	if($requestInfo["start"] <= time())
-		$now = 1;
-	else
-		$now = 0;
-
-	# get list of schedules
-	$starttime = minuteOfWeek($start);
-	$endtime = minuteOfWeek($end);
-
-	# request is within a single week
-	if(weekOfYear($start) == weekOfYear($end)) {
-		$query = "SELECT scheduleid "
-		       . "FROM scheduletimes "
-		       . "WHERE start <= $starttime AND "
-		       .       "end >= $endtime";
-	}
-	# request covers at least a week's worth of time
-	elseif($end - $start >= SECINDAY * 7) {
-		$query = "SELECT scheduleid "
-		       . "FROM scheduletimes "
-		       . "WHERE start = 0 AND "
-		       .       "end = 10080";
-	}
-	# request starts in one week and ends in the following week
-	else {
-		$query = "SELECT s1.scheduleid "
-		       . "FROM scheduletimes s1, "
-		       .      "scheduletimes s2 "
-		       . "WHERE s1.scheduleid = s2.scheduleid AND "
-		       .       "s1.start <= $starttime AND "
-		       .       "s1.end = 10080 AND "
-		       .       "s2.start = 0 AND "
-		       .       "s2.end >= $endtime";
-	}
-
-	$scheduleids = array();
-	$qh = doQuery($query, 127);
-	while($row = mysql_fetch_row($qh)) {
-		array_push($scheduleids, $row[0]);
-	}
-
-	$requestInfo["computers"] = array();
-	$requestInfo["computers"][0] = 0;
-	$requestInfo["images"][0] = $imageid;
-
-	# loop to check for available computers for all needed images
-	if($images[$imageid]["imagemetaid"] != NULL) {
-		$count = 1;
-		foreach($images[$imageid]["subimages"] as $imgid) {
-			$requestInfo['computers'][$count] = 0;
-			$requestInfo['images'][$count] = $imgid;
-			$count++;
-		}
-	}
-
-	// get semaphore lock
-	if(! semLock())
-		abort(3);
-
-	$startstamp = unixToDatetime($start);
-	$endstamp = unixToDatetime($end + 900);
-	foreach($requestInfo["images"] as $key => $imageid) {
-		#$osid = getOSid($os);
-		# check for max concurrent usage of image
-		if($images[$imageid]['maxconcurrent'] != NULL) {
-			$query = "SELECT COUNT(rs.imageid) AS currentusage "
-			       . "FROM reservation rs, "
-			       .      "request rq "
-			       . "WHERE '$startstamp' < rq.end AND "
-			       .       "'$endstamp' > (rq.start - INTERVAL 900 SECOND) AND "
-			       .       "rs.requestid = rq.id AND "
-			       .       "rs.imageid = $imageid AND "
-			       .       "rq.stateid NOT IN (1,5,11,12,16,17)";
-			$qh = doQuery($query, 101);
-			if(! $row = mysql_fetch_assoc($qh)) {
-				semUnlock();
-				return 0;
-			}
-			if($row['currentusage'] >= $images[$imageid]['maxconcurrent']) {
-				semUnlock();
-				return -1;
-			}
-		}
-
-		# get platformid that matches $imageid
-		$query = "SELECT platformid FROM image WHERE id = $imageid";
-		$qh = doQuery($query, 125);
-		if(! $row = mysql_fetch_row($qh)) {
-			semUnlock();
-			return 0;
-		}
-		$platformid = $row[0];
-
-		# get computers $imageid maps to
-		$tmp = getMappedResources($imageid, "image", "computer");
-		if(! count($tmp)) {
-			semUnlock();
-			return 0;
-		}
-		$mappedcomputers = implode(',', $tmp);
-
-		# get computers for available schedules and platforms
-		$computerids = array();
-		$currentids = array();
-		$blockids = array();
-		# get list of available computers
-		$resources = getUserResources(array("imageAdmin", "imageCheckOut"),
-												array("available"), 0, 0, $userid);
-		$computers = implode("','", array_keys($resources["computer"]));
-		$computers = "'$computers'";
-		$alloccompids = implode(",", $allocatedcompids);
-
-		$schedules = implode(',', $scheduleids);
-
-		$query = "SELECT DISTINCT c.id, "
-		       .                 "c.currentimageid "
-		       . "FROM computer c, "
-		       .      "image i, "
-		       .      "state s "
-		       . "WHERE c.scheduleid IN ($schedules) AND "
-		       .       "c.platformid = $platformid AND "
-		       .       "c.stateid = s.id AND "
-		       .       "s.name != 'maintenance' AND "
-		       .       "s.name != 'vmhostinuse' AND "
-		       .       "s.name != 'hpc' AND "
-		       .       "s.name != 'failed' AND ";
-		if($now)
-			$query .=   "s.name != 'reloading' AND "
-			       .    "s.name != 'timeout' AND "
-			       .    "s.name != 'inuse' AND ";
-		$query .=      "i.id = $imageid AND "
-		       .       "c.RAM >= i.minram AND "
-		       .       "c.procnumber >= i.minprocnumber AND "
-		       .       "c.procspeed >= i.minprocspeed AND "
-		       .       "c.network >= i.minnetwork AND "
-		       .       "c.id IN ($computers) AND "
-		       .       "c.id IN ($mappedcomputers) AND "
-		       .       "c.id NOT IN ($alloccompids) "
-		       . "ORDER BY (c.procspeed * c.procnumber) DESC, "
-		       .          "RAM DESC, "
-		       .          "network DESC";
-		$qh = doQuery($query, 129);
-		while($row = mysql_fetch_assoc($qh)) {
-			array_push($computerids, $row['id']);
-			if($row['currentimageid'] == $imageid) {
-				array_push($currentids, $row['id']);
-			}
-		}
-		# get computer ids available from block allocations
-		$blockids = getAvailableBlockComputerids($imageid, $start, $end,
-		                                         $allocatedcompids);
-
-		# remove computers from list that are already scheduled
-		$usedComputerids = array();
-		$query = "SELECT DISTINCT rs.computerid "
-		       . "FROM reservation rs, "
-		       .      "request rq, "
-		       .      "user u "
-		       . "WHERE '$startstamp' < rq.end AND "
-		       .       "'$endstamp' > (rq.start - INTERVAL 900 SECOND) AND "
-		       .       "rs.requestid = rq.id AND "
-		       .       "rq.stateid != 1 AND "
-		       .       "rq.stateid != 5 AND "
-		       .       "rq.stateid != 12 AND "
-		       .       "rq.userid = u.id AND "
-		       .       "u.unityid != 'vclreload'";
-		$qh = doQuery($query, 130);
-		while($row = mysql_fetch_row($qh)) {
-			array_push($usedComputerids, $row[0]);
-		}
-
-		$computerids = array_diff($computerids, $usedComputerids);
-		$currentids = array_diff($currentids, $usedComputerids);
-		$blockids = array_diff($blockids, $usedComputerids);
-
-		if(count($currentids))
-			$return = array_shift($currentids);
-		elseif(count($computerids))
-			$return = array_shift($computerids);
-		else {
-			$return = 0;
-		}
-	}
-	semUnlock();
-
-	return $return;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -4581,6 +4370,7 @@ function moveReservationsOffComputer($compid=0, $count=0) {
 	$query = "SELECT rs.id, "
 	       .        "rs.requestid, "
 	       .        "rs.imageid, "
+	       .        "rs.imagerevisionid, "
 	       .        "rq.logid, "
 	       .        "rq.userid, "
 	       .        "rq.start, "
@@ -4603,8 +4393,9 @@ function moveReservationsOffComputer($compid=0, $count=0) {
 	$images = getImages();
 	$allmovable = 1;
 	foreach($resInfo as $res) {
-		$rc = isAvailable($images, $res["imageid"], datetimeToUnix($res["start"]),
-		      datetimeToUnix($res["end"]), "dummy", 0, $res["userid"]);
+		$rc = isAvailable($images, $res["imageid"], $res['imagerevisionid'], 
+		      datetimeToUnix($res["start"]), datetimeToUnix($res["end"]), 0,
+		      $res["userid"]);
 		if($rc < 1) {
 			$allmovable = 0;
 			break;
@@ -4613,8 +4404,9 @@ function moveReservationsOffComputer($compid=0, $count=0) {
 	if(! $allmovable)
 		return 0;
 	foreach($resInfo as $res) {
-		$rc = isAvailable($images, $res["imageid"], datetimeToUnix($res["start"]),
-		      datetimeToUnix($res["end"]), "dummy", 0, $res["userid"]);
+		$rc = isAvailable($images, $res["imageid"], $res['imagerevisionid'],
+		      datetimeToUnix($res["start"]), datetimeToUnix($res["end"]), 0, 
+		      $res["userid"]);
 		if($rc > 0) {
 			$newcompid = array_shift($requestInfo["computers"]);
 			# get mgmt node for computer
@@ -4651,6 +4443,7 @@ function moveReservationsOffComputer($compid=0, $count=0) {
 /// for each entry where forcheckout == 1 for the image:\n
 /// \b id - id of the request\n
 /// \b imageid - id of requested image\n
+/// \b imagerevisionid - revision id of requested image\n
 /// \b image - name of requested image\n
 /// \b prettyimage - pretty name of requested image\n
 /// \b OS - name of the requested os\n
@@ -4673,6 +4466,7 @@ function moveReservationsOffComputer($compid=0, $count=0) {
 /// for each subimage:\n
 /// \b resid - id of reservation\n
 /// \b imageid - id of requested image\n
+/// \b imagerevisionid - revision id of requested image\n
 /// \b image - name of requested image\n
 /// \b prettyname - pretty name of requested image\n
 /// \b OS - name of the requested os\n
@@ -4709,6 +4503,7 @@ function getUserRequests($type, $id=0) {
 	       .        "rq.forimaging, "
 	       .        "i.forcheckout, "
 	       .        "rs.managementnodeid, "
+	       .        "rs.imagerevisionid, "
 	       .        "rq.test "
 	       . "FROM request rq, "
 	       .      "reservation rs, "
@@ -4735,6 +4530,7 @@ function getUserRequests($type, $id=0) {
 	        .        "i.name AS image, "
 	        .        "i.prettyname, "
 	        .        "i.id AS imageid, "
+	        .        "rs.imagerevisionid, "
 	        .        "o.prettyname as OS, "
 	        .        "rs.computerid, "
 	        .        "c.currentimageid AS compimageid, "
@@ -4790,12 +4586,12 @@ function getUserRequests($type, $id=0) {
 function isComputerLoading($request, $computers) {
 	if($computers[$request["computerid"]]["stateid"] == 6 ||
 	   ($computers[$request["computerid"]]["stateid"] == 2 &&
-	   $computers[$request["computerid"]]["currentimgid"] != $request["imageid"]))
+	   $computers[$request["computerid"]]["imagerevisionid"] != $request["imagerevisionid"]))
 		return 1;
 	foreach($request["reservations"] as $res) {
 		if($computers[$res["computerid"]]["stateid"] == 6 ||
 		   ($computers[$res["computerid"]]["stateid"] == 2 &&
-		   $computers[$res["computerid"]]["currentimgid"] != $res["imageid"]))
+		   $computers[$res["computerid"]]["imagerevisionid"] != $res["imagerevisionid"]))
 			return 1;
 	}
 	return 0;
@@ -5971,6 +5767,7 @@ function showTimeTable($links) {
 /// \b scheduleid - id of computer's schedule\n
 /// \b currentimg - computer's current image\n
 /// \b currentimgid - id of computer's current image\n
+/// \b imagerevisionid - revision id of computer's current image\n
 /// \b nextimg - computer's next image\n
 /// \b nextimgid - id of computer's next image\n
 /// \b nextimg - computer's next image\n
@@ -6004,6 +5801,7 @@ function getComputers($sort=0, $includedeleted=0, $compid="") {
 	       .        "c.scheduleid AS scheduleid, "
 	       .        "cur.name AS currentimg, "
 	       .        "c.currentimageid AS currentimgid, "
+	       .        "c.imagerevisionid, "
 	       .        "next.name AS nextimg, "
 	       .        "c.nextimageid AS nextimgid, "
 	       .        "c.RAM AS ram, "
@@ -8309,6 +8107,7 @@ function xmlrpcgetaffiliations() {
 function xmlRPChandler($function, $args, $blah) {
 	global $user, $remoteIP;
 	header("Content-type: text/xml");
+	$apiversion = processInputData($_SERVER['HTTP_X_APIVERSION'], ARG_NUMERIC);
 	if($function == 'XMLRPCaffiliations')
 		$keyid = 0;
 	else

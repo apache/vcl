@@ -188,7 +188,8 @@ function XMLRPCaddRequest($imageid, $start, $length, $foruser='') {
 	}
 
 	$images = getImages();
-	$rc = isAvailable($images, $imageid, $start, $end, '');
+	$revisionid = getProductionRevisionid($imageid);
+	$rc = isAvailable($images, $imageid, $revisionid, $start, $end);
 	if($rc < 1) {
 		addLogEntry($nowfuture, unixToDatetime($start), 
 		            unixToDatetime($end), 0, $imageid);
@@ -265,10 +266,10 @@ function XMLRPCaddRequestWithEnding($imageid, $start, $end, $foruser='') {
 		             'errorcode' => 36,
 		             'errormsg' => "received invalid input for end");
 	}
-	if($start >= $end) {
+	if($start != 'now' && $start >= $end) {
 		return array('status' => 'error',
 		             'errorcode' => 37,
-		             'errormsg' => "start must be greater than end");
+		             'errormsg' => "start must be less than end");
 	}
 
 	$nowfuture = 'future';
@@ -295,7 +296,8 @@ function XMLRPCaddRequestWithEnding($imageid, $start, $end, $foruser='') {
 	}
 
 	$images = getImages();
-	$rc = isAvailable($images, $imageid, $start, $end, '');
+	$revisionid = getProductionRevisionid($imageid);
+	$rc = isAvailable($images, $imageid, $revisionid, $start, $end);
 	if($rc < 1) {
 		addLogEntry($nowfuture, unixToDatetime($start), 
 		            unixToDatetime($end), 0, $imageid);
@@ -577,7 +579,8 @@ function XMLRPCextendRequest($requestid, $extendtime) {
 		}
 	}
 	$rc = isAvailable(getImages(), $request['reservations'][0]["imageid"],
-	                  $startts, $newendts, '', $requestid);
+	                  $request['reservations'][0]['imagerevisionid'],
+	                  $startts, $newendts, $requestid);
 	// conflicts with scheduled maintenance
 	if($rc == -2) {
 		addChangeLogEntry($request["logid"], NULL, unixToDatetime($newendts),
@@ -708,7 +711,8 @@ function XMLRPCsetRequestEnding($requestid, $end) {
 		}
 	}
 	$rc = isAvailable(getImages(), $request['reservations'][0]["imageid"],
-	                  $startts, $end, '', $requestid);
+	                  $request['reservations'][0]['imagerevisionid'],
+	                  $startts, $end, $requestid);
 	// conflicts with scheduled maintenance
 	if($rc == -2) {
 		addChangeLogEntry($request["logid"], NULL, unixToDatetime($end),
@@ -1073,8 +1077,8 @@ function XMLRPCprocessBlockTime($blockTimesid, $ignoreprivileges=0) {
 		if(! $ignoreprivileges)
 			$userid = array_pop($userids);
 		# use end of block time to find available computers, but...
-		$rc = isAvailable($images, $rqdata['imageid'], $stagunixstart,
-		                  $unixend, 0, 0, $userid, $ignoreprivileges);
+		$rc = isAvailable($images, $rqdata['imageid'], $revisionid, $stagunixstart,
+		                  $unixend, 0, $userid, $ignoreprivileges);
 		if($rc < 1)
 			continue;
 
