@@ -444,7 +444,7 @@ CALL AddConstraintIfNotExists('winProductKey', 'affiliationid', 'affiliation', '
 -- remove table xmlrpcKey
 --
 
-DROP TABLE IF EXISTS `xmlrpcKey`
+DROP TABLE IF EXISTS `xmlrpcKey`;
 
 -- --------------------------------------------------------
 
