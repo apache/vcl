@@ -633,6 +633,16 @@ sub setup_capture_base_image {
 	my $os_type = $os_info->{$os_id}{type};
 	print "\nSelected OS: $os_prettyname\n\n";
 	
+	my @architecture_choices = (
+		'x86',
+		'x86_64',
+	);
+	print "Image architecture:\n";
+	my $architecture_choice_index = setup_get_array_choice(@architecture_choices);
+	last if (!defined($architecture_choice_index));
+	my $architecture_choice = $architecture_choices[$architecture_choice_index];
+	print "\nImage architecture: $architecture_choice\n\n";
+	
 	# If Windows, ask if Sysprep should be used
 	my $use_sysprep = 1;
 	if ($os_type =~ /windows/i) {
@@ -682,7 +692,7 @@ EOF
 	
 	my $insert_image_statement = <<EOF;
 INSERT INTO image (name, prettyname, ownerid, platformid, OSid, imagemetaid, deleted, lastupdate, size, architecture, basedoffrevisionid)
-VALUES ('$image_name', '$image_prettyname', '$user_id', '1', $os_id, $imagemeta_id, '1', NOW( ), '1450', 'x86', '4')
+VALUES ('$image_name', '$image_prettyname', '$user_id', '1', $os_id, $imagemeta_id, '1', NOW( ), '1450', '$architecture_choice', '4')
 EOF
 	
 	my $image_id = database_execute($insert_image_statement);
