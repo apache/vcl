@@ -121,6 +121,14 @@ function blockAllocationForm() {
 		print "postCreate=\"dijit.byId('brname').focus();\">\n";
 		print "    </td>\n";
 		print "  </tr>\n";
+		print "  <tr>\n";
+		print "    <th align=right>Owner:</th>\n";
+		print "    <td>\n";
+		print "      <input type=\"text\" value=\"{$data['owner']}\" dojoType=\"dijit.form.ValidationTextBox\" ";
+		print "id=\"browner\" required=\"true\" invalidMessage=\"Unknown user\" style=\"width: 300px\" ";
+		print "validator=\"checkOwner\" onFocus=\"ownerFocus\">\n";
+		print "    </td>\n";
+		print "  </tr>\n";
 	}
 	print "  <tr>\n";
 	print "    <th align=right>Environment:</th>\n";
@@ -258,10 +266,10 @@ function blockAllocationForm() {
 	print "<td>\n";
 
 	print "Start:<div type=\"text\" id=\"weeklyaddstart\" dojoType=\"dijit.form.TimeTextBox\" ";
-	print "required=\"true\" onChange=\"blockFormWeeklyAddBtnCheck(1);\" style=\"width: 70px\"></div>\n";
+	print "required=\"true\" onChange=\"blockFormWeeklyAddBtnCheck(1);\" style=\"width: 78px\"></div>\n";
 	print "End:<div type=\"text\" id=\"weeklyaddend\" dojoType=\"vcldojo.TimeTextBoxEnd\" ";
 	print "required=\"true\" onChange=\"blockFormWeeklyAddBtnCheck(0);\" startid=\"weeklyaddstart\" ";
-	print "style=\"width: 70px\"></div>\n";
+	print "style=\"width: 78px\"></div>\n";
 	print "<button dojoType=\"dijit.form.Button\" type=\"button\" disabled=\"true\" ";
 	print "id=\"requestBlockWeeklyAddBtn\">\n";
 	print "  Add\n";
@@ -272,11 +280,11 @@ function blockAllocationForm() {
 	print "<div dojoType=\"dojo.data.ItemFileWriteStore\" jsId=\"requestBlockAddWeeklyStore\" ";
 	print "data=\"blockFormAddWeeklyData\"></div>\n";
 	print "<table dojoType=\"dojox.grid.DataGrid\" jsId=\"requestBlockAddWeeklyGrid\" sortInfo=1 ";
-	print "store=\"requestBlockAddWeeklyStore\" style=\"width: 314px; height: 120px;\">\n";
+	print "store=\"requestBlockAddWeeklyStore\" style=\"width: 330px; height: 120px;\">\n";
 	print "<thead>\n";
 	print "<tr>\n";
-	print "<th field=\"start\" width=\"94px\" formatter=\"gridTimePrimary\">Start</th>\n";
-	print "<th field=\"end\" width=\"94px\" formatter=\"timeFromTextBox\">End</th>\n";
+	print "<th field=\"start\" width=\"102px\" formatter=\"gridTimePrimary\">Start</th>\n";
+	print "<th field=\"end\" width=\"102px\" formatter=\"timeFromTextBox\">End</th>\n";
 	print "<th field=\"remove\" width=\"80px\">Remove</th>\n";
 	print "</tr>\n";
 	print "</thead>\n";
@@ -324,10 +332,10 @@ function blockAllocationForm() {
 	printSelectInput('day', $dayArr, $data['mndayid'], 0, 0, 'mnday');
 	print " of every month<br><br>\n";
 	print "Start:<div type=\"text\" id=\"monthlyaddstart\" dojoType=\"dijit.form.TimeTextBox\" ";
-	print "required=\"true\" onChange=\"blockFormMonthlyAddBtnCheck(1)\" style=\"width: 70px\"></div>\n";
+	print "required=\"true\" onChange=\"blockFormMonthlyAddBtnCheck(1)\" style=\"width: 78px\"></div>\n";
 	print "End:<div type=\"text\" id=\"monthlyaddend\" dojoType=\"vcldojo.TimeTextBoxEnd\" ";
 	print "required=\"true\" onChange=\"blockFormMonthlyAddBtnCheck(0)\" startid=\"monthlyaddstart\" ";
-	print "style=\"width: 70px\"></div>\n";
+	print "style=\"width: 78px\"></div>\n";
 	print "<button dojoType=\"dijit.form.Button\" type=\"button\" disabled=\"true\" ";
 	print "id=\"requestBlockMonthlyAddBtn\">\n";
 	print "  Add\n";
@@ -339,11 +347,11 @@ function blockAllocationForm() {
 	print "<div dojoType=\"dojo.data.ItemFileWriteStore\" jsId=\"requestBlockAddMonthlyStore\" ";
 	print "data=\"blockFormAddMonthlyData\"></div>\n";
 	print "<table dojoType=\"dojox.grid.DataGrid\" jsId=\"requestBlockAddMonthlyGrid\" sortInfo=1 ";
-	print "store=\"requestBlockAddMonthlyStore\" style=\"width: 314px; height: 120px;\">\n";
+	print "store=\"requestBlockAddMonthlyStore\" style=\"width: 330px; height: 120px;\">\n";
 	print "<thead>\n";
 	print "<tr>\n";
-	print "<th field=\"start\" width=\"94px\" formatter=\"gridTimePrimary\">Start</th>\n";
-	print "<th field=\"end\" width=\"94px\" formatter=\"timeFromTextBox\">End</th>\n";
+	print "<th field=\"start\" width=\"102px\" formatter=\"gridTimePrimary\">Start</th>\n";
+	print "<th field=\"end\" width=\"102px\" formatter=\"timeFromTextBox\">End</th>\n";
 	print "<th field=\"remove\" width=\"80px\">Remove</th>\n";
 	print "</tr>\n";
 	print "</thead>\n";
@@ -353,7 +361,7 @@ function blockAllocationForm() {
 	# list of times
 	print "<div id=\"listtab\" dojoType=\"dijit.layout.ContentPane\" title=\"List of Times\" {$data['type2']['list']}>\n";
 	print "Date:<div type=\"text\" id=\"listadddate\" dojoType=\"dijit.form.DateTextBox\" ";
-	print "required=\"true\" onChange=\"blockFormListAddBtnCheck\" style=\"width: 80px\"></div>\n";
+	print "required=\"true\" onChange=\"blockFormListAddBtnCheck\" style=\"width: 95px\"></div>\n";
 	print "Start:<input type=\"text\" id=\"listaddstart\" dojoType=\"dijit.form.TimeTextBox\" ";
 	print "required=\"true\" onChange=\"blockFormListAddBtnCheck\" />\n";
 	print "End:<input type=\"text\" id=\"listaddend\" dojoType=\"vcldojo.TimeTextBoxEnd\" ";
@@ -370,10 +378,10 @@ function blockAllocationForm() {
 	print "data=\"blockFormAddListData\"></div>\n";
 	print "<div>\n"; # grid wrapper
 	print "<table dojoType=\"dojox.grid.DataGrid\" jsId=\"requestBlockAddListGrid\" sortInfo=1 ";
-	print "store=\"requestBlockAddListStore\" style=\"width: 450px; height: 200px;\">\n";
+	print "store=\"requestBlockAddListStore\" style=\"width: 465px; height: 200px;\">\n";
 	print "<thead>\n";
 	print "<tr>\n";
-	print "<th field=\"date1\" width=\"100px\" formatter=\"gridDateTimePrimary\">Date</th>\n";
+	print "<th field=\"date1\" width=\"115px\" formatter=\"gridDateTimePrimary\">Date</th>\n";
 	print "<th field=\"start\" width=\"115px\" formatter=\"timeFromTextBox\">Start</th>\n";
 	print "<th field=\"end\" width=\"108px\" formatter=\"timeFromTextBox\">End</th>\n";
 	print "<th field=\"remove\" width=\"80px\">Remove</th>\n";
@@ -412,6 +420,8 @@ function blockAllocationForm() {
 	print "    blockFormConfirm('$arg');\n";
 	print "  </script>\n";
 	print "</button>\n";
+	$cont = addContinuationsEntry('AJvalidateUserid');
+	print "<input type=\"hidden\" id=\"valuseridcont\" value=\"$cont\">\n";
 
 	print "<div id=\"confirmDialog\" dojoType=\"dijit.Dialog\" title=\"Confirm Block Allocation\">\n";
 	print "<h2>Confirm Block Allocation</h2>\n";
@@ -420,6 +430,10 @@ function blockAllocationForm() {
 	print "  <tr>\n";
 	print "    <th align=\"right\"><span id=\"confnametitle\"></span></th>\n";
 	print "    <td><span id=\"confname\"></span></td>\n";
+	print "  </tr>\n";
+	print "  <tr>\n";
+	print "    <th align=\"right\"><span id=\"confownertitle\"></span></th>\n";
+	print "    <td><span id=\"confowner\"></span></td>\n";
 	print "  </tr>\n";
 	print "  <tr>\n";
 	print "    <th align=\"right\">Environment:</th>\n";
@@ -609,7 +623,7 @@ function AJblockAllocationSubmit() {
 		       .        "{$data['seats']}, "
 		       .        "{$data['groupid']}, "
 		       .        "'{$data['type']}', "
-		       .        "{$user['id']}, "
+		       .        "{$data['ownerid']}, "
 		       .        "{$data['admingroupid']}, "
 		       .        "$mnid, "
 		       .        "'{$data['expiretime']}', "
@@ -653,7 +667,7 @@ function AJblockAllocationSubmit() {
 		       .     "imageid = {$data['imageid']}, "
 		       .     "numMachines = {$data['seats']}, "
 		       .     "groupid = {$data['groupid']}, "
-		       .     "ownerid = {$user['id']}, "
+		       .     "ownerid = {$data['ownerid']}, "
 		       .     "admingroupid = {$data['admingroupid']}, "
 		       .     "repeating = '{$data['type']}', "
 		       .     "expireTime = '{$data['expiretime']}' "
@@ -1069,6 +1083,8 @@ function getCurrentBlockHTML($listonly=0) {
 	$groupids = implode(',', array_keys($groups));
 	$query = "SELECT b.id, "
 	       .        "b.name AS blockname, "
+	       .        "b.ownerid, "
+	       .        "CONCAT(u.unityid, '@', ua.name) AS owner, "
 	       .        "b.imageid, "
 	       .        "i.prettyname AS image, "
 	       .        "b.numMachines AS machinecnt, "
@@ -1083,6 +1099,8 @@ function getCurrentBlockHTML($listonly=0) {
 	       . "LEFT JOIN affiliation a ON (g.affiliationid = a.id) "
 	       . "LEFT JOIN usergroup ga ON (b.admingroupid = ga.id) "
 	       . "LEFT JOIN affiliation aa ON (ga.affiliationid = aa.id) "
+	       . "LEFT JOIN user u ON (b.ownerid = u.id) "
+	       . "LEFT JOIN affiliation ua ON (u.affiliationid = ua.id) "
 	       . "WHERE (b.ownerid = {$user['id']} ";
 	if(! empty($groupids))
 		$query .=   "OR b.admingroupid IN ($groupids) ";
@@ -1297,6 +1315,10 @@ function getCurrentBlockHTML($listonly=0) {
 	$rt .= "    <td><span id=\"confname\"></span></td>\n";
 	$rt .= "  </tr>\n";
 	$rt .= "  <tr>\n";
+	$rt .= "    <th align=\"right\">Owner:</th>\n";
+	$rt .= "    <td><span id=\"confowner\"></span></td>\n";
+	$rt .= "  </tr>\n";
+	$rt .= "  <tr>\n";
 	$rt .= "    <th align=\"right\">Environment:</th>\n";
 	$rt .= "    <td><span id=\"confimage\"></span></td>\n";
 	$rt .= "  </tr>\n";
@@ -1394,6 +1416,8 @@ function getUserCurrentBlockHTML($listonly=0) {
 	global $user, $days;
 	$query = "SELECT b.id, "
 	       .        "b.name AS blockname, "
+	       .        "b.ownerid, "
+	       .        "CONCAT(u.unityid, '@', ua.name) AS owner, "
 	       .        "i.prettyname AS image, "
 	       .        "b.numMachines AS machinecnt, "
 	       .        "CONCAT(g.name, '@', a.name) AS `group`, "
@@ -1403,6 +1427,8 @@ function getUserCurrentBlockHTML($listonly=0) {
 	       .      "usergroup g, "
 	       .      "affiliation a, "
 	       .      "blockRequest b "
+	       . "LEFT JOIN user u ON (b.ownerid = u.id) "
+	       . "LEFT JOIN affiliation ua ON (u.affiliationid = ua.id) "
 	       . "WHERE b.ownerid = {$user['id']} AND "
 	       .       "b.imageid = i.id AND "
 	       .       "b.status IN ('accepted', 'requested') AND "
@@ -1566,6 +1592,10 @@ function getUserCurrentBlockHTML($listonly=0) {
 	$rt .= "  <tr>\n";
 	$rt .= "    <th align=\"right\">Name:</th>\n";
 	$rt .= "    <td><span id=\"confname\"></span></td>\n";
+	$rt .= "  </tr>\n";
+	$rt .= "  <tr>\n";
+	$rt .= "    <th align=\"right\">Owner:</th>\n";
+	$rt .= "    <td><span id=\"confowner\"></span></td>\n";
 	$rt .= "  </tr>\n";
 	$rt .= "  <tr>\n";
 	$rt .= "    <th align=\"right\">Environment:</th>\n";
@@ -2047,6 +2077,8 @@ function AJdeleteBlockAllocationConfirm() {
 	$data = getContinuationVar();
 	if($data['available'] == 'weekly') {
 		$rt = array('name' => $data['blockname'],
+		            'ownerid' => $data['ownerid'],
+		            'owner' => $data['owner'],
 		            'image' => $data['image'],
 		            'seats' => $data['machinecnt'],
 		            'usergroup' => $data['group'],
@@ -2065,6 +2097,8 @@ function AJdeleteBlockAllocationConfirm() {
 	}
 	elseif($data['available'] == 'monthly') {
 		$rt = array('name' => $data['blockname'],
+		            'ownerid' => $data['ownerid'],
+		            'owner' => $data['owner'],
 		            'image' => $data['image'],
 		            'seats' => $data['machinecnt'],
 		            'usergroup' => $data['group'],
@@ -2088,6 +2122,8 @@ function AJdeleteBlockAllocationConfirm() {
 	}
 	elseif($data['available'] == 'list') {
 		$rt = array('name' => $data['blockname'],
+		            'ownerid' => $data['ownerid'],
+		            'owner' => $data['owner'],
 		            'image' => $data['image'],
 		            'seats' => $data['machinecnt'],
 		            'usergroup' => $data['group'],
@@ -2145,6 +2181,8 @@ function AJviewBlockAllocation() {
 	$data = getContinuationVar();
 	if($data['available'] == 'weekly') {
 		$rt = array('name' => $data['blockname'],
+		            'ownerid' => $data['ownerid'],
+		            'owner' => $data['owner'],
 		            'image' => $data['image'],
 		            'seats' => $data['machinecnt'],
 		            'usergroup' => $data['group'],
@@ -2162,6 +2200,8 @@ function AJviewBlockAllocation() {
 	}
 	elseif($data['available'] == 'monthly') {
 		$rt = array('name' => $data['blockname'],
+		            'ownerid' => $data['ownerid'],
+		            'owner' => $data['owner'],
 		            'image' => $data['image'],
 		            'seats' => $data['machinecnt'],
 		            'usergroup' => $data['group'],
@@ -2184,6 +2224,8 @@ function AJviewBlockAllocation() {
 	}
 	elseif($data['available'] == 'list') {
 		$rt = array('name' => $data['blockname'],
+		            'ownerid' => $data['ownerid'],
+		            'owner' => $data['owner'],
 		            'image' => $data['image'],
 		            'seats' => $data['machinecnt'],
 		            'usergroup' => $data['group'],
@@ -2898,6 +2940,7 @@ function processBlockAllocationInput() {
 	$return = array();
 	$method = getContinuationVar('method');
 	$return['name'] = processInputVar('name', ARG_STRING);
+	$return['owner'] = processInputVar('owner', ARG_STRING);
 	$return['imageid'] = processInputVar('imageid', ARG_NUMERIC);
 	$return['seats'] = processInputVar('seats', ARG_NUMERIC);
 	$return['groupid'] = processInputVar('groupid', ARG_NUMERIC);
@@ -2914,6 +2957,12 @@ function processBlockAllocationInput() {
 		$errmsg = 'The submitted image is invalid.';
 		$err = 1;
 	}
+	if(! $err && $method != 'request' && ! validateUserid($return['owner'])) {
+		$errmsg = 'The submitted owner is invalid.';
+		$err = 1;
+	}
+	else
+		$return['ownerid'] = getUserlistID($return['owner']);
 	$groups = getUserGroups(0, $user['affiliationid']);
 	$extragroups = getContinuationVar('extragroups');
 	if(! $err && ! array_key_exists($return['groupid'], $groups) &&
@@ -3168,6 +3217,8 @@ function getBlockAllocationStatus($id) {
 /// \b name - name of block allocation\n
 /// \b imageid - id of image\n
 /// \b seats - number of machines allocated for block allocation\n
+/// \b ownerid - id from user table of block allocation owner\n
+/// \b owner - block allocation owner\n
 /// \b usergroupid - id of group associated with block allocation\n
 /// \b admingroupid - id of admin group associated with block allocation\n
 /// \b repeating - weekly, monthly, or list\n
@@ -3192,6 +3243,8 @@ function getBlockAllocationData($blockid) {
 	$rt = array('name' => '',
 	            'imageid' => '',
 	            'seats' => MIN_BLOCK_MACHINES,
+	            'ownerid' => '',
+	            'owner' => '',
 	            'usergroupid' => '',
 	            'admingroupid' => '',
 	            'repeating' => '',
@@ -3215,6 +3268,8 @@ function getBlockAllocationData($blockid) {
 	$query = "SELECT b.name, "
 	       .        "b.imageid, "
 	       .        "b.numMachines AS seats, "
+	       .        "b.ownerid, "
+	       .        "CONCAT(u.unityid, '@', a.name) AS owner, "
 	       .        "b.groupid AS usergroupid, "
 	       .        "b.admingroupid, "
 	       .        "b.repeating, "
@@ -3226,6 +3281,8 @@ function getBlockAllocationData($blockid) {
 	       .        "d.weeknum AS mnweeknumid "
 	       . "FROM blockWebDate d, "
 	       .      "blockRequest b "
+	       . "LEFT JOIN user u ON (b.ownerid = u.id) "
+	       . "LEFT JOIN affiliation a ON (u.affiliationid = a.id) "
 	       . "WHERE b.id = d.blockRequestid AND "
 	       .       "b.id = $blockid";
 	$qh = doQuery($query, 101);

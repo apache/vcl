@@ -1,3 +1,6 @@
+var timeout = null;
+var ownervalid = true;
+
 var blockFormAddWeeklyData = {
 	identifier: 'id',
 	items: []
@@ -358,7 +361,8 @@ function blockFormConfirm(mode) {
 	if(! dijit.byId('machinecnt').isValid() ||
 	   (dijit.byId('imagesel') && ! dijit.byId('imagesel').isValid()) ||
 	   (dijit.byId('groupsel') && ! dijit.byId('groupsel').isValid()) ||
-		(dijit.byId('brname') && ! dijit.byId('brname').isValid())) {
+		(dijit.byId('brname') && ! dijit.byId('brname').isValid()) ||
+		(dijit.byId('browner') && ! dijit.byId('browner').isValid())) {
 		alert('Please fix invalid values before submitting.');
 		return;
 	}
@@ -447,6 +451,8 @@ function blockFormVerifyWeekly(mode) {
 	if(mode != 'request') {
 		dojo.byId('confnametitle').innerHTML = 'Name:';
 		dojo.byId('confname').innerHTML = dijit.byId('brname').textbox.value;
+		dojo.byId('confownertitle').innerHTML = 'Owner:';
+		dojo.byId('confowner').innerHTML = dijit.byId('browner').textbox.value;
 	}
 	dojo.byId('confimage').innerHTML = getSelectText('imagesel');
 	dojo.byId('confseats').innerHTML = dijit.byId('machinecnt').value;
@@ -538,6 +544,7 @@ function blockFormSubmitWeekly(mode) {
 	            days: days2};
 	if(mode != 'request') {
 		data.name = dijit.byId('brname').value;
+		data.owner = dijit.byId('browner').value;
 		data.admingroupid = getSelectValue('admingroupsel');
 	}
 	else
@@ -589,6 +596,8 @@ function blockFormVerifyMonthly(mode) {
 	if(mode != 'request') {
 		dojo.byId('confnametitle').innerHTML = 'Name:';
 		dojo.byId('confname').innerHTML = dijit.byId('brname').textbox.value;
+		dojo.byId('confownertitle').innerHTML = 'Owner:';
+		dojo.byId('confowner').innerHTML = dijit.byId('browner').textbox.value;
 	}
 	dojo.byId('confimage').innerHTML = getSelectText('imagesel');
 	dojo.byId('confseats').innerHTML = dijit.byId('machinecnt').value;
@@ -671,6 +680,7 @@ function blockFormSubmitMonthly(mode) {
 	            times: alltimes};
 	if(mode != 'request') {
 		data.name = dijit.byId('brname').value;
+		data.owner = dijit.byId('browner').value;
 		data.admingroupid = getSelectValue('admingroupsel');
 	}
 	else
@@ -696,6 +706,8 @@ function blockFormVerifyList(mode) {
 	if(mode != 'request') {
 		dojo.byId('confnametitle').innerHTML = 'Name:';
 		dojo.byId('confname').innerHTML = dijit.byId('brname').textbox.value;
+		dojo.byId('confownertitle').innerHTML = 'Owner:';
+		dojo.byId('confowner').innerHTML = dijit.byId('browner').textbox.value;
 	}
 	dojo.byId('confimage').innerHTML = getSelectText('imagesel');
 	dojo.byId('confseats').innerHTML = dijit.byId('machinecnt').value;
@@ -758,6 +770,7 @@ function blockFormSubmitList(mode) {
 	            slots: allslots};
 	if(mode != 'request') {
 		data.name = dijit.byId('brname').value;
+		data.owner = dijit.byId('browner').value;
 		data.admingroupid = getSelectValue('admingroupsel');
 	}
 	else
@@ -770,6 +783,7 @@ function clearHideConfirmForm() {
 	dijit.byId('confirmDialog').hide();
 	dojo.byId('confnametitle').innerHTML = '';
 	dojo.byId('confname').innerHTML = '';
+	dojo.byId('confowner').innerHTML = '';
 	dojo.byId('confimage').innerHTML = '';
 	dojo.byId('confseats').innerHTML = '';
 	dojo.byId('confgroup').innerHTML = '';
@@ -790,6 +804,7 @@ function clearHideConfirmForm() {
 function clearHideConfirmDelete() {
 	dijit.byId('confirmDialog').hide();
 	dojo.byId('confname').innerHTML = '';
+	dojo.byId('confowner').innerHTML = '';
 	dojo.byId('confimage').innerHTML = '';
 	dojo.byId('confseats').innerHTML = '';
 	dojo.byId('confgroup').innerHTML = '';
@@ -808,6 +823,7 @@ function clearHideConfirmDelete() {
 function clearHideView() {
 	dijit.byId('viewDialog').hide();
 	dojo.byId('confname').innerHTML = '';
+	dojo.byId('confowner').innerHTML = '';
 	dojo.byId('confimage').innerHTML = '';
 	dojo.byId('confseats').innerHTML = '';
 	dojo.byId('confgroup').innerHTML = '';
@@ -880,6 +896,7 @@ function deleteBlockConfirm(cont) {
 function deleteBlockConfirmCB(data, ioArgs) {
 	if(data.items.repeating == 'weekly') {
 		dojo.byId('confname').innerHTML = data.items.name;
+		dojo.byId('confowner').innerHTML = data.items.owner;
 		dojo.byId('confimage').innerHTML = data.items.image;
 		dojo.byId('confseats').innerHTML = data.items.seats;
 		dojo.byId('confgroup').innerHTML = data.items.usergroup;
@@ -896,6 +913,7 @@ function deleteBlockConfirmCB(data, ioArgs) {
 	}
 	else if(data.items.repeating == 'monthly') {
 		dojo.byId('confname').innerHTML = data.items.name;
+		dojo.byId('confowner').innerHTML = data.items.owner;
 		dojo.byId('confimage').innerHTML = data.items.image;
 		dojo.byId('confseats').innerHTML = data.items.seats;
 		dojo.byId('confgroup').innerHTML = data.items.usergroup;
@@ -912,6 +930,7 @@ function deleteBlockConfirmCB(data, ioArgs) {
 	}
 	else if(data.items.repeating == 'list') {
 		dojo.byId('confname').innerHTML = data.items.name;
+		dojo.byId('confowner').innerHTML = data.items.owner;
 		dojo.byId('confimage').innerHTML = data.items.image;
 		dojo.byId('confseats').innerHTML = data.items.seats;
 		dojo.byId('confgroup').innerHTML = data.items.usergroup;
@@ -941,6 +960,7 @@ function viewBlockAllocation(cont) {
 function viewBlockAllocationCB(data, ioArgs) {
 	if(data.items.repeating == 'weekly') {
 		dojo.byId('confname').innerHTML = data.items.name;
+		dojo.byId('confowner').innerHTML = data.items.owner;
 		dojo.byId('confimage').innerHTML = data.items.image;
 		dojo.byId('confseats').innerHTML = data.items.seats;
 		dojo.byId('confgroup').innerHTML = data.items.usergroup;
@@ -956,6 +976,7 @@ function viewBlockAllocationCB(data, ioArgs) {
 	}
 	else if(data.items.repeating == 'monthly') {
 		dojo.byId('confname').innerHTML = data.items.name;
+		dojo.byId('confowner').innerHTML = data.items.owner;
 		dojo.byId('confimage').innerHTML = data.items.image;
 		dojo.byId('confseats').innerHTML = data.items.seats;
 		dojo.byId('confgroup').innerHTML = data.items.usergroup;
@@ -971,6 +992,7 @@ function viewBlockAllocationCB(data, ioArgs) {
 	}
 	else if(data.items.repeating == 'list') {
 		dojo.byId('confname').innerHTML = data.items.name;
+		dojo.byId('confowner').innerHTML = data.items.owner;
 		dojo.byId('confimage').innerHTML = data.items.image;
 		dojo.byId('confseats').innerHTML = data.items.seats;
 		dojo.byId('confgroup').innerHTML = data.items.usergroup;
@@ -1255,4 +1277,39 @@ function blockTimesGridEnd(val) {
 	var hour = parseInt(val.substr(11, 2), 10);
 	var min = parseInt(val.substr(14, 2), 10);
 	return formatHourMin(hour, min);
+}
+
+function ownerFocus() {
+	if(! dijit.byId('browner')._hasBeenBlurred)
+		dijit.byId('browner')._hasBeenBlurred = true;
+}
+
+function checkOwner(val, constraints) {
+	if(! dijit.byId('browner')._hasBeenBlurred)
+		return true;
+	if(timeout != null)
+		clearTimeout(timeout);
+	timeout = setTimeout(checkOwner2, 700);
+	return ownervalid;
+}
+
+function checkOwner2() {
+	var data = {user: dijit.byId('browner').textbox.value,
+	            continuation: dojo.byId('valuseridcont').value};
+	RPCwrapper(data, checkOwnerCB, 1);
+}
+
+function checkOwnerCB(data, ioArgs) {
+	var obj = dijit.byId('browner');
+	if(data.items.status && data.items.status == 'invalid') {
+		obj.attr('state', 'Error');
+		obj._setStateClass();
+		obj.displayMessage(obj.getErrorMessage('Unknown user'));
+		ownervalid = false;
+	}
+	else {
+		dijit.byId('browner').attr('valid', true);
+		obj._setStateClass();
+		ownervalid = true;
+	}
 }
