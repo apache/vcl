@@ -917,9 +917,10 @@ function validateUserid($loginid) {
 	if(empty($affilid))
 		return 0;
 
+	$escloginid = mysql_real_escape_string($loginid);
 	$query = "SELECT id "
 	       . "FROM user "
-	       . "WHERE unityid = '$loginid' AND "
+	       . "WHERE unityid = '$escloginid' AND "
 	       .       "affiliationid = $affilid";
 	$qh = doQuery($query, 101);
 	if(mysql_num_rows($qh))
@@ -937,6 +938,21 @@ function validateUserid($loginid) {
 		return $valfunc($affilValFuncArgs[$affilid], $loginid);
 	else
 		return $valfunc($loginid);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn AJvalidateUserid()
+///
+/// \brief checks to see if submitted userid is valid
+///
+////////////////////////////////////////////////////////////////////////////////
+function AJvalidateUserid() {
+	$user = processInputVar('user', ARG_STRING);
+	if(validateUserid($user))
+		sendJSON(array('status' => 'valid'));
+	else
+		sendJSON(array('status' => 'invalid'));
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -2667,6 +2683,7 @@ function getUserUnityID($userid) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function getAffiliationID($affil) {
+	$affil = mysql_real_escape_string($affil);
 	$query = "SELECT id FROM affiliation WHERE name = '$affil'";
 	$qh = doQuery($query, 101);
 	if(mysql_num_rows($qh)) {
@@ -8841,13 +8858,10 @@ function getDojoHTML($refresh) {
 			break;
 		case 'editSchedule':
 		case 'submitAddSchedule':
-			// TODO remove any unneeded items
 			$dojoRequires = array('dojo.parser',
 			                      'dijit.form.TimeTextBox',
 			                      'dojox.grid.DataGrid',
 			                      'dojox.string.sprintf',
-			                      #'dijit.form.FilteringSelect',
-			                      #'dijit.Tooltip',
 			                      'dijit.form.Button',
 			                      'dojo.data.ItemFileWriteStore');
 		case 'viewImages':

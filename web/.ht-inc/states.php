@@ -141,6 +141,7 @@ $noHTMLwrappers = array('sendRDPfile',
                         'AJdeleteSiteMaintenance',
                         'AJgetScheduleTimesData',
                         'AJsaveScheduleTimes',
+                        'AJvalidateUserid',
 );
 
 # main
@@ -642,10 +643,12 @@ $actions['pages']['xmlrpcaffiliations'] = "RPC";
 $actions['mode']['continuationsError'] = "continuationsError";
 $actions['mode']['clearCache'] = "clearPrivCache";
 $actions['mode']['errorrpt'] = "errorrpt";
+$actions['mode']['AJvalidateUserid'] = "AJvalidateUserid";
 $actions['pages']['continuationsError'] = "misc";
 $actions['pages']['clearCache'] = "misc";
 $actions['pages']['errorrpt'] = "misc";
 $actions['pages']['logout'] = "misc";
 $actions['pages']['shiblogout'] = "misc";
+$actions['pages']['AJvalidateUserid'] = "misc";
 
 ?>

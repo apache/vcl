@@ -100,6 +100,7 @@ function validateITECSUser($loginid) {
 	global $ENABLE_ITECSAUTH;
 	if(! $ENABLE_ITECSAUTH)
 		return 0;
+	$loginid = mysql_real_escape_string($loginid);
 	$query = "SELECT email "
 	       . "FROM user "
 	       . "WHERE email = '$loginid' AND "
