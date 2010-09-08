@@ -407,12 +407,16 @@ function blockFormVerifyWeekly(mode) {
 	today.setMinutes(0);
 	today.setSeconds(0);
 	today.setMilliseconds(0);
-	if(dijit.byId('wkfirstdate').value < today) {
+	if(pagemode != 'edit' && dijit.byId('wkfirstdate').value < today) {
 		alert('The First Date of Usage must be today or later');
 		return;
 	}
-	if(dijit.byId('wklastdate').value < dijit.byId('wkfirstdate').value) {
+	if(pagemode != 'edit' && dijit.byId('wklastdate').value < dijit.byId('wkfirstdate').value) {
 		alert('The Last Date of Usage must be the same or later than the First Date of Usage');
+		return;
+	}
+	if(pagemode == 'edit' && dijit.byId('wklastdate').value < today) {
+		alert('The Last Date of Usage must be today or later');
 		return;
 	}
 	var days = new Array();
@@ -571,12 +575,16 @@ function blockFormVerifyMonthly(mode) {
 	today.setMinutes(0);
 	today.setSeconds(0);
 	today.setMilliseconds(0);
-	if(dijit.byId('mnfirstdate').value < today) {
+	if(pagemode != 'edit' && dijit.byId('mnfirstdate').value < today) {
 		alert('The First Date of Usage must be today or later');
 		return;
 	}
-	if(dijit.byId('mnlastdate').value < dijit.byId('mnfirstdate').value) {
+	if(pagemode != 'edit' && dijit.byId('mnlastdate').value < dijit.byId('mnfirstdate').value) {
 		alert('The Last Date of Usage must be the same or later than the First Date of Usage');
+		return;
+	}
+	if(pagemode != 'edit' && dijit.byId('mnlastdate').value < today) {
+		alert('The Last Date of Usage must be today or later');
 		return;
 	}
 	var len = requestBlockAddMonthlyStore._getItemsArray().length;

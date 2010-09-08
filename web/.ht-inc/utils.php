@@ -9028,6 +9028,10 @@ function getDojoHTML($refresh) {
 				$rt .= "   populateBlockStore('$cont');\n";
 			}
 			$rt .= "   });\n";
+			if($mode == 'editBlockAllocation')
+				$rt .= "   var pagemode = 'edit';\n";
+			else
+				$rt .= "   var pagemode = 'new';\n";
 			$rt .= "</script>\n";
 			return $rt;
 

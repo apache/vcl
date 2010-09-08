@@ -124,7 +124,10 @@ function blockAllocationForm() {
 		print "  <tr>\n";
 		print "    <th align=right>Owner:</th>\n";
 		print "    <td>\n";
-		print "      <input type=\"text\" value=\"{$data['owner']}\" dojoType=\"dijit.form.ValidationTextBox\" ";
+		$initval = $data['owner'];
+		if(empty($initval))
+			$initval = "{$user['unityid']}@{$user['affiliation']}";
+		print "      <input type=\"text\" value=\"$initval\" dojoType=\"dijit.form.ValidationTextBox\" ";
 		print "id=\"browner\" required=\"true\" invalidMessage=\"Unknown user\" style=\"width: 300px\" ";
 		print "validator=\"checkOwner\" onFocus=\"ownerFocus\">\n";
 		print "    </td>\n";
@@ -728,7 +731,10 @@ function AJblockAllocationSubmit() {
 		       .        "'{$data['enddate']}', "
 		       .        "{$data['daymask']})";
 		doQuery($query, 101);
-		if($method == 'new' || $method == 'edit')
+		$today = mktime(0, 0, 0);
+		if($method == 'edit' && $data['startts'] < $today)
+			createWeeklyBlockTimes($blockreqid, $today, $data['endts'], $data['daymask'], $data['times']);
+		elseif($method == 'new' || $method == 'edit')
 			createWeeklyBlockTimes($blockreqid, $data['startts'], $data['endts'], $data['daymask'], $data['times']);
 	}
 	elseif($data['type'] == 'monthly') {
@@ -745,7 +751,10 @@ function AJblockAllocationSubmit() {
 		       .        "{$data['day']}, "
 		       .        "{$data['weeknum']})";
 		doQuery($query, 101);
-		if($method == 'new' || $method == 'edit')
+		$today = mktime(0, 0, 0);
+		if($method == 'edit' && $data['startts'] < $today)
+			createMonthlyBlockTimes($blockreqid, $today, $data['endts'], $data['day'], $data['weeknum'], $data['times']);
+		elseif($method == 'new' || $method == 'edit')
 			createMonthlyBlockTimes($blockreqid, $data['startts'], $data['endts'], $data['day'], $data['weeknum'], $data['times']);
 	}
 	if($data['type'] == 'weekly' || $data['type'] == 'monthly') {
@@ -1169,7 +1178,8 @@ function getCurrentBlockHTML($listonly=0) {
 			       .        "endmeridian, "
 			       .        "`order` "
 			       . "FROM blockWebTime "
-			       . "WHERE blockRequestid = {$request['id']}";
+			       . "WHERE blockRequestid = {$request['id']} "
+			       . "ORDER BY startmeridian, starthour, startminute";
 			$qh = doQuery($query, 101);
 			while($row = mysql_fetch_assoc($qh)) {
 				$blocks[$id]['swhour'][$row['order']] = $row['starthour'];
@@ -1199,7 +1209,8 @@ function getCurrentBlockHTML($listonly=0) {
 			       .        "endmeridian, "
 			       .        "`order` "
 			       . "FROM blockWebTime "
-			       . "WHERE blockRequestid = {$request['id']}";
+			       . "WHERE blockRequestid = {$request['id']} "
+			       . "ORDER BY startmeridian, starthour, startminute";
 			$qh = doQuery($query, 101);
 			while($row = mysql_fetch_assoc($qh)) {
 				$blocks[$id]['smhour'][$row['order']] = $row['starthour'];
@@ -1212,10 +1223,10 @@ function getCurrentBlockHTML($listonly=0) {
 		}
 		elseif($request['available'] == 'list') {
 			$query = "SELECT DATE_FORMAT(start, '%m/%d/%y') AS date, "
-			       #.        "DATE_FORMAT(end, '%m/%d/%y')AS ewdate, " 
 			       .        "days AS `order` "
 			       . "FROM blockWebDate "
-			       . "WHERE blockRequestid = $id";
+			       . "WHERE blockRequestid = $id "
+			       . "ORDER BY start";
 			$qh = doQuery($query, 101);
 			while($row = mysql_fetch_assoc($qh)) {
 				if($row['date'] == '00/00/00')
@@ -1468,7 +1479,8 @@ function getUserCurrentBlockHTML($listonly=0) {
 			       .        "endmeridian, "
 			       .        "`order` "
 			       . "FROM blockWebTime "
-			       . "WHERE blockRequestid = {$request['id']}";
+			       . "WHERE blockRequestid = {$request['id']} "
+			       . "ORDER BY startmeridian, starthour, startminute";
 			$qh = doQuery($query, 101);
 			while($row = mysql_fetch_assoc($qh)) {
 				$blocks[$id]['swhour'][$row['order']] = $row['starthour'];
@@ -1498,7 +1510,8 @@ function getUserCurrentBlockHTML($listonly=0) {
 			       .        "endmeridian, "
 			       .        "`order` "
 			       . "FROM blockWebTime "
-			       . "WHERE blockRequestid = {$request['id']}";
+			       . "WHERE blockRequestid = {$request['id']} "
+			       . "ORDER BY startmeridian, starthour, startminute";
 			$qh = doQuery($query, 101);
 			while($row = mysql_fetch_assoc($qh)) {
 				$blocks[$id]['smhour'][$row['order']] = $row['starthour'];
@@ -1513,7 +1526,8 @@ function getUserCurrentBlockHTML($listonly=0) {
 			$query = "SELECT DATE_FORMAT(start, '%m/%d/%y') AS date, "
 			       .        "days AS `order` "
 			       . "FROM blockWebDate "
-			       . "WHERE blockRequestid = $id";
+			       . "WHERE blockRequestid = $id "
+			       . "ORDER BY start";
 			$qh = doQuery($query, 101);
 			while($row = mysql_fetch_assoc($qh)) {
 				if($row['date'] == '00/00/00')
@@ -1747,7 +1761,8 @@ function getPendingBlockHTML($listonly=0) {
 			        .        "endmeridian, "
 			        .        "`order` "
 			        . "FROM blockWebTime "
-			        . "WHERE blockRequestid = {$row['id']}";
+			        . "WHERE blockRequestid = {$row['id']} "
+			        . "ORDER BY startmeridian, starthour, startminute";
 			$qh2 = doQuery($query2, 101);
 			$row['times'] = array();
 			while($row2 = mysql_fetch_assoc($qh2)) {
@@ -1785,7 +1800,8 @@ function getPendingBlockHTML($listonly=0) {
 			        .        "endmeridian, "
 			        .        "`order` "
 			        . "FROM blockWebTime "
-			        . "WHERE blockRequestid = {$row['id']}";
+			        . "WHERE blockRequestid = {$row['id']} "
+			        . "ORDER BY startmeridian, starthour, startminute";
 			$qh2 = doQuery($query2, 101);
 			$row['times'] = array();
 			while($row2 = mysql_fetch_assoc($qh2)) {
@@ -1808,7 +1824,8 @@ function getPendingBlockHTML($listonly=0) {
 			        .        "start AS slotdate, "
 			        .        "days AS `order` "
 			        . "FROM blockWebDate "
-			        . "WHERE blockRequestid = {$row['id']}";
+			        . "WHERE blockRequestid = {$row['id']} "
+			        . "ORDER BY start";
 			$qh2 = doQuery($query2, 101);
 			while($row2 = mysql_fetch_assoc($qh2)) {
 				if($row2['date'] == '00/00/00')
@@ -2969,9 +2986,6 @@ function processBlockAllocationInput() {
 	   ! array_key_exists($return['groupid'], $extragroups) &&
 	   $return['groupid'] != 0) {
 		$errmsg = 'The submitted user group is invalid.';
-		print "/*";
-		print_r($groups);
-		print "*/";
 		$err = 1;
 	}
 	if(! $err && $method != 'request' && ! array_key_exists($return['admingroupid'], $groups) && $return['admingroupid'] != 0) {
@@ -2993,6 +3007,7 @@ function processBlockAllocationInput() {
 			$slots = processInputVar('slots', ARG_STRING);
 			$return['slots'] = explode(',', $slots);
 			$return['times'] = array();
+			$lastdate = array('day' => '', 'ts' => 0);
 			foreach($return['slots'] as $slot) {
 				$tmp = explode('|', $slot);
 				if(count($tmp) != 3) {
@@ -3003,16 +3018,20 @@ function processBlockAllocationInput() {
 				$date = $tmp[0];
 				if(! $err) {
 					$datets = strtotime($date);
-					if($datets < (time() - SECINDAY)) {
+					if($method != 'edit' && $datets < (time() - SECINDAY)) {
 						$errmsg = 'The date must be today or later.';
 						$err = 1;
 						break;
 					}
 				}
 				$return['times'][] = "{$tmp[1]}|{$tmp[2]}";
+				if($datets > $lastdate['ts']) {
+					$lastdate['ts'] = $datets;
+					$lastdate['day'] = $date;
+				}
 			}
 			if(! $err) {
-				$expirets = strtotime("{$tmp[0]} 23:59:59");
+				$expirets = strtotime("{$lastdate['day']} 23:59:59");
 				$return['expiretime'] = unixToDatetime($expirets);
 			}
 		}
@@ -3027,7 +3046,7 @@ function processBlockAllocationInput() {
 				$errmsg = 'The Last Date of Usage must be the same or later than the First Date of Usage.';
 				$err = 1;
 			}
-			elseif($return['startts'] < (time() - SECINDAY)) {
+			elseif($method != 'edit' && $return['startts'] < (time() - SECINDAY)) {
 				$errmsg = 'The start date must be today or later.';
 				$err = 1;
 			}
