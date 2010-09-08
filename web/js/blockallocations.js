@@ -1308,8 +1308,9 @@ function checkOwnerCB(data, ioArgs) {
 		ownervalid = false;
 	}
 	else {
-		dijit.byId('browner').attr('valid', true);
+		obj.attr('state', 'Normal');
 		obj._setStateClass();
+		obj.displayMessage(null);
 		ownervalid = true;
 	}
 }
