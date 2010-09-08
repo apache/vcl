@@ -2676,34 +2676,36 @@ sub _machine_os {
 
 sub nmap_port {
 	my ($hostname, $port) = @_;
-	my ($package, $filename, $line, $sub) = caller(0);
-	notify($ERRORS{'WARNING'}, 0, "hostname is not defined") if (!(defined($hostname)));
-	notify($ERRORS{'WARNING'}, 0, "port is not defined")     if (!(defined($port)));
-	my @file;
-	my $l;
-	if (open(NMAP, "/usr/bin/nmap $hostname -P0 -p $port -T Aggressive |")) {
-		@file = <NMAP>;
-		close NMAP;
-		foreach $l (@file) {
-			if ($l =~ /open/) {
-				return 1;
-			}
-			elsif ($l =~ /is: closed/) {
-				return 0;
-			}
-			elsif ($l =~ /Host seems down/) {
-				return 0;
-			}
-			elsif ($l =~ /filtered/) {
-				return 0;
-			}
-		} ## end foreach $l (@file)
-	} ## end if (open(NMAP, "/usr/bin/nmap $hostname -P0 -p $port -T Aggressive |"...
+	
+	if (!$hostname) {
+		notify($ERRORS{'WARNING'}, 0, "hostname argument was not specified");
+		return;
+	}
+	if (!defined($port)) {
+		notify($ERRORS{'WARNING'}, 0, "port argument was not specified");
+		return;
+	}
+	
+	my $command = "/usr/bin/nmap $hostname -P0 -p $port -T Aggressive";
+	my ($exit_status, $output) = run_command($command, 1);
+	
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run nmap command on management node: '$command'");
+		return;
+	}
+	
+	if (grep(/open/i, @$output)) {
+		notify($ERRORS{'DEBUG'}, 0, "port $port is open on $hostname");
+		return 1;
+	}
+	elsif (grep(/(nmap:|warning)/i, @$output)) {
+		notify($ERRORS{'WARNING'}, 0, "error occurred running nmap command: '$command', output:\n" . join("\n", @$output));
+		return;
+	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "problems executing /usr/bin/nmap $hostname -P0 -p $port $!");
+		notify($ERRORS{'DEBUG'}, 0, "port $port is closed on $hostname");
 		return 0;
 	}
-	return 0;
 } ## end sub nmap_port
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -5508,7 +5510,7 @@ sub run_ssh_command {
 		# Check the exit status
 		# ssh exits with the exit status of the remote command or with 255 if an error occurred.
 		# Check for vmware-cmd usage message, it returns 255 if the vmware-cmd usage output is returned
-		if (($exit_status == 255 && $ssh_output_formatted !~ /(vmware-cmd|vim-cmd|vmkfstools)/i) ||
+		if (($exit_status == 255 && $ssh_command !~ /(vmware-cmd|vim-cmd|vmkfstools)/i) ||
 			 $ssh_output_formatted =~ /(lost connection|reset by peer|no route to host|connection refused|connection timed out|resource temporarily unavailable)/i) {
 			notify($ERRORS{'WARNING'}, 0, "attempt $attempts/$max_attempts: failed to execute SSH command on $node: $command, exit status: $exit_status, SSH exits with the exit status of the remote command or with 255 if an error occurred, output:\n$ssh_output_formatted") if $output_level;
 			next;
@@ -6074,7 +6076,7 @@ AND managementnode.id != $management_node_id
 	
 	# Add the public IP address configuration variables
 	$management_node_info->{PUBLIC_IP_CONFIGURATION} = $management_node_info->{publicIPconfiguration};
-	$management_node_info->{PUBLIC_SUBNET_MASK} = $management_node_info->{publicSubnetMmask};
+	$management_node_info->{PUBLIC_SUBNET_MASK} = $management_node_info->{publicSubnetMask};
 	$management_node_info->{PUBLIC_DEFAULT_GATEWAY} = $management_node_info->{publicDefaultGateway};
 	$management_node_info->{PUBLIC_DNS_SERVER} = $management_node_info->{publicDNSserver};
 	

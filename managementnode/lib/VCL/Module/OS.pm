@@ -698,12 +698,17 @@ sub get_vcld_post_load_status {
 		return;
 	}
 	
+	# Make sure the OS module implements a post load subroutine
+	if (!$self->can('post_load')) {
+		notify($ERRORS{'DEBUG'}, 0, "OS module " . ref($self) . " does not implement a post_load subroutine, returning 1");
+		return 1;
+	}
+	
 	my $management_node_keys = $self->data->get_management_node_keys();
 	my $computer_node_name   = $self->data->get_computer_node_name();
 	
 	# Add a line to the end of currentimage.txt
 	my $command = "grep vcld_post_load= currentimage.txt";
-	
 	
 	my ($exit_status, $output) = run_ssh_command($computer_node_name, $management_node_keys, $command, '', '', 0);
 	if (defined($output)) {
@@ -749,7 +754,8 @@ sub set_vcld_post_load_status {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
-	
+
+	my $image_os_type = $self->data->get_image_os_type();
 	my $management_node_keys = $self->data->get_management_node_keys();
 	my $computer_node_name   = $self->data->get_computer_node_name();
 	
@@ -761,17 +767,28 @@ sub set_vcld_post_load_status {
 	my $command;
 	
 	# Remove existing lines beginning with vcld_post_load
-	$command .= "sed -i -e \"/^vcld_post_load.*/d\" currentimage.txt";
-	
+	$command .= "sed -i -e \'/vcld_post_load.*/d\' currentimage.txt";
+
 	# Add a line to the end of currentimage.txt
-	$command .= " && echo -E \"$post_load_line\" >> currentimage.txt";
+	$command .= " && echo >> currentimage.txt";
+	$command .= " && echo \"$post_load_line\" >> currentimage.txt";
+	
+	# Remove blank lines
+	$command .= ' && sed -i -e \'/^[\\s\\r\\n]*$/d\' currentimage.txt';
+
+	if ($image_os_type =~ /windows/i) {
+		$command .= " && unix2dos currentimage.txt";
+	}
+	else {
+		$command .= " && dos2unix currentimage.txt";
+	}
 	
 	my ($exit_status, $output) = run_ssh_command($computer_node_name, $management_node_keys, $command, '', '', 1);
 	if (defined($exit_status) && $exit_status == 0) {
-		notify($ERRORS{'DEBUG'}, 0, "added line to currentimage.txt on $computer_node_name: $post_load_line");
+		notify($ERRORS{'DEBUG'}, 0, "added line to currentimage.txt on $computer_node_name: '$post_load_line'");
 	}
 	elsif ($exit_status) {
-		notify($ERRORS{'WARNING'}, 0, "failed to add line to currentimage.txt on $computer_node_name: $post_load_line, exit status: $exit_status, output:\n" . join("\n", @$output));
+		notify($ERRORS{'WARNING'}, 0, "failed to add line to currentimage.txt on $computer_node_name: '$post_load_line', exit status: $exit_status, output:\n" . join("\n", @$output));
 		return;
 	}
 	else {

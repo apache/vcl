@@ -592,15 +592,35 @@ sub reload_image {
 		$node_status_string = 'reload';
 	}
 
-	# Check the status string returned by node_status = 'ready'
+	# Check if the status string returned by node_status = 'ready'
 	if ($node_status_string =~ /^ready/i) {
 		# node_status returned 'ready'
 		notify($ERRORS{'OK'}, 0, "node_status returned '$node_status_string', $computer_short_name will not be reloaded");
 		insertloadlog($reservation_id, $computer_id, "info", "node status is $node_status_string, $computer_short_name will not be reloaded");
 	}
 	
-	# node_status did not return 'ready'
-	else {
+	elsif ($node_status_string =~ /^post_load/i) {
+		notify($ERRORS{'OK'}, 0, "node_status returned '$node_status_string', OS post_load tasks will be performed on $computer_short_name");
+		
+		# Check if the OS module implements a post_load subroutine and that post_load has been run
+		if ($self->os->can('post_load')) {
+			if ($self->os->post_load()) {
+				# Add the vcld_post_load line to currentimage.txt
+				$self->os->set_vcld_post_load_status();
+				$node_status_string = 'READY';
+			}
+			else {
+				notify($ERRORS{'WARNING'}, 0, "failed to execute OS module's post_load() subroutine, $computer_short_name will be reloaded");
+				$node_status_string = 'POST_LOAD_FAILED';
+			}
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "provisioning module's node_status subroutine returned '$node_status' but OS module " . ref($self->os) . " does not implement a post_load() subroutine, $computer_short_name will not be reloaded");
+		}
+	}
+	
+	# Provisioning module's node_status subroutine did not return 'ready'
+	if ($node_status_string !~ /^ready/i) {
 		notify($ERRORS{'OK'}, 0, "node status is $node_status_string, $computer_short_name will be reloaded");
 		insertloadlog($reservation_id, $computer_id, "loadimageblade", "$computer_short_name must be reloaded with $image_name");
 		
@@ -693,9 +713,6 @@ sub reload_image {
 	else {
 		notify($ERRORS{'WARNING'}, 0, "failed to update computer table for $computer_short_name: currentimageid=$image_id");
 	}
-	
-	# Add the vcld_post_load line to currentimage.txt
-	$self->os->set_vcld_post_load_status();
 	
 	notify($ERRORS{'OK'}, 0, "returning 1");
 	return 1;
@@ -1008,20 +1025,6 @@ sub reserve_computer {
 	}
 
 	if ($computer_type =~ /blade|virtualmachine/) {
-		
-		# Check if the OS module implements a post_load subroutine and that post_load has been run
-		if ($self->os->can('post_load') && !$self->os->get_vcld_post_load_status()) {
-			# The OS module's post_load() tasks have not run
-			notify($ERRORS{'DEBUG'}, 0, "calling OS module's post_load() subroutine because currentimage.txt does not contain a vcld_post_load= line");
-			
-			# Call OS::post_load()
-			if ($self->os->post_load()) {
-				# Add the vcld_post_load line to currentimage.txt
-				$self->os->set_vcld_post_load_status();}
-			else {
-				notify($ERRORS{'WARNING'}, 0, "failed to execute OS module's post_load() subroutine");
-			}
-		}
 		
 		if (!$self->os->update_public_ip_address()) {
 			$self->reservation_failed("failed to update private IP address");
