@@ -389,6 +389,7 @@ function ldapLogin($authtype, $userid, $passwd) {
 		if($search) {
 			$tmpdata = ldap_get_entries($ds, $search);
 			if(! $tmpdata['count'] || ! array_key_exists('dn', $tmpdata[0])) {
+				addLoginLog($userid, $authtype, $authMechs[$authtype]['affiliationid'], 0);
 				printLoginPageWithSkin($authtype);
 				return;
 			}
