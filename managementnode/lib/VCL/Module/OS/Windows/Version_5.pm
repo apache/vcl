@@ -278,13 +278,16 @@ sub run_sysprep {
 		notify($ERRORS{'WARNING'}, 0, "unable to determine private and public interface names, failed to enable DHCP and shut down $computer_node_name");
 		return;
 	}
+	
+	# Release any DHCP addresses and delete the default route
+	$sysprep_command .= "$system32_path/ipconfig.exe /release & ";
+	$sysprep_command .= "$system32_path/route.exe DELETE 0.0.0.0 MASK 0.0.0.0 & ";
+	
+	# Disable DHCP
 	$sysprep_command .= "$system32_path/netsh.exe interface ip set address name=\\\"$private_interface_name\\\" source=dhcp & ";
 	$sysprep_command .= "$system32_path/netsh.exe interface ip set dns name=\\\"$private_interface_name\\\" source=dhcp & ";
 	$sysprep_command .= "$system32_path/netsh.exe interface ip set address name=\\\"$public_interface_name\\\" source=dhcp & ";
 	$sysprep_command .= "$system32_path/netsh.exe interface ip set dns name=\\\"$public_interface_name\\\" source=dhcp & ";
-	
-	# Delete the default route
-	$sysprep_command .= "$system32_path/route.exe DELETE 0.0.0.0 MASK 0.0.0.0 & ";
 	
 	# Run Sysprep.exe
 	$sysprep_command .= "C:/Sysprep/sysprep.exe /quiet /reseal /mini /forceshutdown & ";
@@ -359,6 +362,9 @@ sub get_sysprep_inf_contents {
 	# Get the image affiliation name or use ASF as the default
 	my $image_affiliation_name = $self->data->get_image_affiliation_name() || "Apache Software Foundation";
 	
+	# Get the Windows time zone code based on the time zone configured for the management node
+	my $time_zone_code = $self->get_time_zone_code();
+	
 	my %sysprep_inf_hash;
 	
 	# [Unattended] - Setup/Sysprep execution configuration
@@ -385,7 +391,7 @@ sub get_sysprep_inf_contents {
 	$sysprep_inf_hash{GuiUnattended}{OEMDuplicatorString} = 'VCL';         # Specifies a description of the duplication utility used, as well as any other information that an OEM or administrator wants to store in the registry
 	$sysprep_inf_hash{GuiUnattended}{OemSkipRegional} = '1';               # Specifies whether unattended Setup skips the Regional and Language Options page in GUI-mode Setup and Mini-Setup
 	$sysprep_inf_hash{GuiUnattended}{OemSkipWelcome} = '1';                # Specifies whether unattended Setup skips the Welcome page in GUI-mode Setup and Mini-Setup
-	$sysprep_inf_hash{GuiUnattended}{TimeZone} = '35';                     # Specifies the time zone of the computer's location
+	$sysprep_inf_hash{GuiUnattended}{TimeZone} = $time_zone_code;          # Specifies the time zone of the computer's location
 	
 	# [Display] - display/graphics settings
 	$sysprep_inf_hash{Display}{BitsPerPel} = '32';                         # Specifies the valid bits per pixel for the graphics device
@@ -607,6 +613,31 @@ sub firewall_enable_sessmgr {
 	}
 	
 	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 sanitize_files
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Removes the Windows root password from files on the computer.
+
+=cut
+
+sub sanitize_files {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my @file_paths = (
+		'$SYSTEMDRIVE/Sysprep',
+	);
+	
+	# Call the subroutine in Windows.pm
+	return $self->SUPER::sanitize_files(@file_paths);
 }
 
 #/////////////////////////////////////////////////////////////////////////////

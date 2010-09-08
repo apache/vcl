@@ -93,6 +93,98 @@ our $SOURCE_CONFIGURATION_DIRECTORY = "$TOOLS/Windows";
 
 our $NODE_CONFIGURATION_DIRECTORY = 'C:/Cygwin/home/root/VCL';
 
+
+=head2 %TIME_ZONE_INFO
+
+ Data type   : Hash
+ Description : Windows time zone code information. The hash keys are the
+               numerical Windows time zone codes used for things such as
+               Sysprep.
+
+=cut
+
+our %TIME_ZONE_INFO = (
+	'Afghanistan Standard Time' => {'abbreviation' => 'KAB', 'offset' => '+04:30', 'code' => '175'},
+	'Alaskan Standard Time' => {'abbreviation' => 'ALA', 'offset' => '-09:00', 'code' => '3'},
+	'Arab Standard Time' => {'abbreviation' => 'BKR', 'offset' => '+03:00', 'code' => '150'},
+	'Arabian Standard Time' => {'abbreviation' => 'ABT', 'offset' => '+04:00', 'code' => '165'},
+	'Arabic Standard Time' => {'abbreviation' => 'BKR', 'offset' => '+03:00', 'code' => '158'},
+	'Atlantic Standard Time' => {'abbreviation' => 'AST', 'offset' => '-04:00', 'code' => '50'},
+	'AUS Central Standard Time' => {'abbreviation' => 'ADA', 'offset' => '+09:30', 'code' => '245'},
+	'AUS Eastern Standard Time' => {'abbreviation' => 'CMS', 'offset' => '+10:00', 'code' => '255'},
+	'Azerbaijan Standard Time' => {'abbreviation' => undef, 'offset' => '+04:00', 'code' => undef},
+	'Azores Standard Time' => {'abbreviation' => 'AZO', 'offset' => '-01:00', 'code' => '80'},
+	'Canada Central Standard Time' => {'abbreviation' => 'CST', 'offset' => '-06:00', 'code' => '25'},
+	'Cape Verde Standard Time' => {'abbreviation' => 'AZO', 'offset' => '-01:00', 'code' => '83'},
+	'Caucasus Standard Time' => {'abbreviation' => 'ABT', 'offset' => '+04:00', 'code' => '170'},
+	'Cen. Australia Standard Time' => {'abbreviation' => 'ADA', 'offset' => '+09:30', 'code' => '250'},
+	'Central America Standard Time' => {'abbreviation' => 'CST', 'offset' => '-06:00', 'code' => '33'},
+	'Central Asia Standard Time' => {'abbreviation' => 'ADC', 'offset' => '+06:00', 'code' => '195'},
+	'Central Brazilian Standard Time' => {'abbreviation' => undef, 'offset' => '-04:00', 'code' => undef},
+	'Central Europe Standard Time' => {'abbreviation' => 'AMS', 'offset' => '+01:00', 'code' => '95'},
+	'Central European Standard Time' => {'abbreviation' => 'AMS', 'offset' => '+01:00', 'code' => '100'},
+	'Central Pacific Standard Time' => {'abbreviation' => 'MSN', 'offset' => '+11:00', 'code' => '280'},
+	'Central Standard Time' => {'abbreviation' => 'CST', 'offset' => '-06:00', 'code' => '20'},
+	'Central Standard Time (Mexico)' => {'abbreviation' => 'CST', 'offset' => '-06:00', 'code' => '30'},
+	'China Standard Time' => {'abbreviation' => 'SST', 'offset' => '+08:00', 'code' => '210'},
+	'Dateline Standard Time' => {'abbreviation' => 'IDLE', 'offset' => '-12:00', 'code' => '0'},
+	'E. Africa Standard Time' => {'abbreviation' => 'BKR', 'offset' => '+03:00', 'code' => '155'},
+	'E. Australia Standard Time' => {'abbreviation' => 'BGP', 'offset' => '+10:00', 'code' => '260'},
+	'E. Europe Standard Time' => {'abbreviation' => 'BCP', 'offset' => '+02:00', 'code' => '115'},
+	'E. South America Standard Time' => {'abbreviation' => 'BBA', 'offset' => '-03:00', 'code' => '65'},
+	'Eastern Standard Time' => {'abbreviation' => 'EST', 'offset' => '-05:00', 'code' => '35'},
+	'Egypt Standard Time' => {'abbreviation' => 'BCP', 'offset' => '+02:00', 'code' => '120'},
+	'Ekaterinburg Standard Time' => {'abbreviation' => 'EIK', 'offset' => '+05:00', 'code' => '180'},
+	'Fiji Standard Time' => {'abbreviation' => 'FKM', 'offset' => '+12:00', 'code' => '285'},
+	'FLE Standard Time' => {'abbreviation' => 'HRI', 'offset' => '+02:00', 'code' => '125'},
+	'Georgian Standard Time' => {'abbreviation' => undef, 'offset' => '+04:00', 'code' => undef},
+	'GMT Standard Time' => {'abbreviation' => 'GMT', 'offset' => '+00:00', 'code' => '85'},
+	'Greenland Standard Time' => {'abbreviation' => 'BBA', 'offset' => '-03:00', 'code' => '73'},
+	'Greenwich Standard Time' => {'abbreviation' => 'GMT', 'offset' => '+00:00', 'code' => '90'},
+	'GTB Standard Time' => {'abbreviation' => 'AIM', 'offset' => '+02:00', 'code' => '130'},
+	'Hawaiian Standard Time' => {'abbreviation' => 'HAW', 'offset' => '-10:00', 'code' => '2'},
+	'India Standard Time' => {'abbreviation' => 'BCD', 'offset' => '+05:30', 'code' => '190'},
+	'Iran Standard Time' => {'abbreviation' => 'THE', 'offset' => '+03:30', 'code' => '160'},
+	'Israel Standard Time' => {'abbreviation' => 'BCP', 'offset' => '+02:00', 'code' => '135'},
+	'Korea Standard Time' => {'abbreviation' => 'SYA', 'offset' => '+09:00', 'code' => '230'},
+	'Mid-Atlantic Standard Time' => {'abbreviation' => 'MAT', 'offset' => '-02:00', 'code' => '75'},
+	'Mountain Standard Time' => {'abbreviation' => 'MST', 'offset' => '-07:00', 'code' => '10'},
+	'Mountain Standard Time (Mexico)' => {'abbreviation' => 'MST', 'offset' => '-07:00', 'code' => '13'},
+	'Myanmar Standard Time' => {'abbreviation' => 'MMT', 'offset' => '+06:30', 'code' => '203'},
+	'N. Central Asia Standard Time' => {'abbreviation' => 'ADC', 'offset' => '+06:00', 'code' => '201'},
+	'Namibia Standard Time' => {'abbreviation' => undef, 'offset' => '+02:00', 'code' => undef},
+	'Nepal Standard Time' => {'abbreviation' => 'NPT', 'offset' => '+05:45', 'code' => '193'},
+	'New Zealand Standard Time' => {'abbreviation' => 'AWE', 'offset' => '+12:00', 'code' => '290'},
+	'Newfoundland Standard Time' => {'abbreviation' => 'NWF', 'offset' => '-03:30', 'code' => '60'},
+	'North Asia East Standard Time' => {'abbreviation' => 'SST', 'offset' => '+08:00', 'code' => '227'},
+	'North Asia Standard Time' => {'abbreviation' => 'BHJ', 'offset' => '+07:00', 'code' => '207'},
+	'Pacific SA Standard Time' => {'abbreviation' => 'AST', 'offset' => '-04:00', 'code' => '56'},
+	'Pacific Standard Time' => {'abbreviation' => 'PST', 'offset' => '-08:00', 'code' => '4'},
+	'Romance Standard Time' => {'abbreviation' => 'AMS', 'offset' => '+01:00', 'code' => '105'},
+	'Russian Standard Time' => {'abbreviation' => 'MSV', 'offset' => '+03:00', 'code' => '145'},
+	'SA Eastern Standard Time' => {'abbreviation' => 'BBA', 'offset' => '-03:00', 'code' => '70'},
+	'SA Pacific Standard Time' => {'abbreviation' => 'EST', 'offset' => '-05:00', 'code' => '45'},
+	'SA Western Standard Time' => {'abbreviation' => 'AST', 'offset' => '-04:00', 'code' => '55'},
+	'Samoa Standard Time' => {'abbreviation' => 'MIS', 'offset' => '-11:00', 'code' => '1'},
+	'SE Asia Standard Time' => {'abbreviation' => 'BHJ', 'offset' => '+07:00', 'code' => '205'},
+	'Singapore Standard Time' => {'abbreviation' => 'SST', 'offset' => '+08:00', 'code' => '215'},
+	'South Africa Standard Time' => {'abbreviation' => 'BCP', 'offset' => '+02:00', 'code' => '140'},
+	'Sri Lanka Standard Time' => {'abbreviation' => 'ADC', 'offset' => '+06:00', 'code' => '200'},
+	'Taipei Standard Time' => {'abbreviation' => 'SST', 'offset' => '+08:00', 'code' => '220'},
+	'Tasmania Standard Time' => {'abbreviation' => 'HVL', 'offset' => '+10:00', 'code' => '265'},
+	'Tokyo Standard Time' => {'abbreviation' => 'OST', 'offset' => '+09:00', 'code' => '235'},
+	'Tonga Standard Time' => {'abbreviation' => 'TOT', 'offset' => '+13:00', 'code' => '300'},
+	'US Eastern Standard Time' => {'abbreviation' => 'EST', 'offset' => '-05:00', 'code' => '40'},
+	'US Mountain Standard Time' => {'abbreviation' => 'MST', 'offset' => '-07:00', 'code' => '15'},
+	'Vladivostok Standard Time' => {'abbreviation' => 'HVL', 'offset' => '+10:00', 'code' => '270'},
+	'W. Australia Standard Time' => {'abbreviation' => 'SST', 'offset' => '+08:00', 'code' => '225'},
+	'W. Central Africa Standard Time' => {'abbreviation' => 'AMS', 'offset' => '+01:00', 'code' => '113'},
+	'W. Europe Standard Time' => {'abbreviation' => 'AMS', 'offset' => '+01:00', 'code' => '110'},
+	'West Asia Standard Time' => {'abbreviation' => 'EIK', 'offset' => '+05:00', 'code' => '185'},
+	'West Pacific Standard Time' => {'abbreviation' => 'BGP', 'offset' => '+10:00', 'code' => '275'},
+	'Yakutsk Standard Time' => {'abbreviation' => 'SYA', 'offset' => '+09:00', 'code' => '240'},
+);
+
 ##############################################################################
 
 =head1 INTERFACE OBJECT METHODS
@@ -608,6 +700,17 @@ sub post_load {
 #	if (!$self->disable_dynamic_dns()) {
 #		notify($ERRORS{'WARNING'}, 0, "failed to disable dynamic DNS");
 #	}
+
+=item *
+
+ Remove the Windows root password and other private information from the VCL configuration files
+
+=cut
+
+	if (!$self->sanitize_files()) {
+		notify($ERRORS{'WARNING'}, 0, "failed to sanitize the files on the computer");
+		return;
+	}
 
 =item *
 
@@ -3257,9 +3360,9 @@ sub defragment_hard_drive {
  Returns     : If successful: true
                If failed: false
  Description : This subroutine should be called as the last step before an image
-               is captured if neither Sysprep nor NewSID is used. It enables
-               autoadminlogon so that root automatically logs on the next time
-               the computer is booted and creates a registry key under
+               is captured if Sysprep is not is used. It enables autoadminlogon
+               so that root automatically logs on the next time the computer is
+               booted and creates a registry key under
                HKLM\Software\Microsoft\Windows\CurrentVersion\Run.
                
                This key causes the post_load.cmd script after the image is
@@ -3308,80 +3411,6 @@ sub prepare_post_load {
 	# Shut down computer unless end_state argument was passed with a value other than 'off'
 	if ($end_state eq 'off') {
 		if (!$self->shutdown(1)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to shut down computer");
-			return;
-		}
-	}
-	
-	return 1;
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 prepare_newsid
-
- Parameters  : None.
- Returns     : If successful: true
-               If failed: false
- Description : This subroutine prepares a computer to automatically run
-               newsid.exe the next time it is booted. Newsid.exe is a utility
-               which generates a new SID (security identifier) for the computer.
-               
-               This subroutine enables autoadminlogon so that root automatically
-               logs on the next time the computer is booted.
-               
-               A registry key is created under
-               HKLM\Software\Microsoft\Windows\CurrentVersion\Run.
-               This key calls the run_newsid.cmd script. This script will run
-               as root when it automatically logs on.
-               
-               The run_newsid.cmd script runs newsid.exe, removes the HKLM...Run
-               key which caused itself to be called, and configures another
-               HKLM...Run key to call post_load.cmd at next logon. The script
-               then reboots the computer.
-
-=cut
-
-sub prepare_newsid {
-	my $self = shift;
-	if (ref($self) !~ /windows/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-	
-	# Set the DevicePath registry key
-	# This is used to locate device drivers
-	if (!$self->set_device_path_key()) {
-		notify($ERRORS{'WARNING'}, 0, "failed to set the DevicePath registry key");
-		return;
-	}
-
-	my $management_node_keys = $self->data->get_management_node_keys();
-	my $computer_node_name   = $self->data->get_computer_node_name();
-	my $end_state = $self->{end_state} || 'off';
-	
-	# Get the node configuration directory
-	my $node_configuration_directory = $self->get_node_configuration_directory();
-	unless ($node_configuration_directory) {
-		notify($ERRORS{'WARNING'}, 0, "node configuration directory could not be determined");
-		return;
-	}
-	
-	# Add HKLM run key to call run_newsid.cmd after the image comes up
-	if (!$self->add_hklm_run_registry_key('run_newsid.cmd', $node_configuration_directory . '/Scripts/run_newsid.cmd  >> ' . $node_configuration_directory . '/Logs/run_newsid.log')) {
-		notify($ERRORS{'WARNING'}, 0, "unable to create run key to call run_newsid.cmd");
-		return;
-	}
-	
-	# Enable autoadminlogon
-	if (!$self->enable_autoadminlogon()) {
-		notify($ERRORS{'WARNING'}, 0, "unable to enable autoadminlogon");
-		return 0;
-	}
-	
-	# Shut down computer unless end_state argument was passed with a value other than 'off'
-	if ($end_state eq 'off') {
-		if (!$self->shutdown()) {
 			notify($ERRORS{'WARNING'}, 0, "failed to shut down computer");
 			return;
 		}
@@ -3595,36 +3624,36 @@ sub disable_scheduled_task {
  Returns     : array reference if successful, false if failed
  Description : Queries the scheduled tasks on a computer and returns the
                configuration for each task. An array reference is returned.
-					Each array element represents a scheduled task and contains
-					a hash reference. The hash contains the schedule task
-					configuration.  The hash keys are:
-						$scheduled_task_hash{"HostName"},
-						$scheduled_task_hash{"TaskName"},
-						$scheduled_task_hash{"Next Run Time"},
-						$scheduled_task_hash{"Status"},
-						$scheduled_task_hash{"Last Run Time"},
-						$scheduled_task_hash{"Last Result"},
-						$scheduled_task_hash{"Creator"},
-						$scheduled_task_hash{"Schedule"},
-						$scheduled_task_hash{"Task To Run"},
-						$scheduled_task_hash{"Start In"},
-						$scheduled_task_hash{"Comment"},
-						$scheduled_task_hash{"Scheduled Task State"},
-						$scheduled_task_hash{"Scheduled Type"},
-						$scheduled_task_hash{"Start Time"},
-						$scheduled_task_hash{"Start Date"},
-						$scheduled_task_hash{"End Date"},
-						$scheduled_task_hash{"Days"},
-						$scheduled_task_hash{"Months"},
-						$scheduled_task_hash{"Run As User"},
-						$scheduled_task_hash{"Delete Task If Not Rescheduled"},
-						$scheduled_task_hash{"Stop Task If Runs X Hours and X Mins"},
-						$scheduled_task_hash{"Repeat: Every"},
-						$scheduled_task_hash{"Repeat: Until: Time"},
-						$scheduled_task_hash{"Repeat: Until: Duration"},
-						$scheduled_task_hash{"Repeat: Stop If Still Running"},
-						$scheduled_task_hash{"Idle Time"},
-						$scheduled_task_hash{"Power Management"}
+               Each array element represents a scheduled task and contains
+               a hash reference. The hash contains the schedule task
+               configuration.  The hash keys are:
+                  $scheduled_task_hash{"HostName"},
+                  $scheduled_task_hash{"TaskName"},
+                  $scheduled_task_hash{"Next Run Time"},
+                  $scheduled_task_hash{"Status"},
+                  $scheduled_task_hash{"Last Run Time"},
+                  $scheduled_task_hash{"Last Result"},
+                  $scheduled_task_hash{"Creator"},
+                  $scheduled_task_hash{"Schedule"},
+                  $scheduled_task_hash{"Task To Run"},
+                  $scheduled_task_hash{"Start In"},
+                  $scheduled_task_hash{"Comment"},
+                  $scheduled_task_hash{"Scheduled Task State"},
+                  $scheduled_task_hash{"Scheduled Type"},
+                  $scheduled_task_hash{"Start Time"},
+                  $scheduled_task_hash{"Start Date"},
+                  $scheduled_task_hash{"End Date"},
+                  $scheduled_task_hash{"Days"},
+                  $scheduled_task_hash{"Months"},
+                  $scheduled_task_hash{"Run As User"},
+                  $scheduled_task_hash{"Delete Task If Not Rescheduled"},
+                  $scheduled_task_hash{"Stop Task If Runs X Hours and X Mins"},
+                  $scheduled_task_hash{"Repeat: Every"},
+                  $scheduled_task_hash{"Repeat: Until: Time"},
+                  $scheduled_task_hash{"Repeat: Until: Duration"},
+                  $scheduled_task_hash{"Repeat: Stop If Still Running"},
+                  $scheduled_task_hash{"Idle Time"},
+                  $scheduled_task_hash{"Power Management"}
 
 =cut
 
@@ -5851,19 +5880,26 @@ sub search_and_replace_in_files {
 		return;
 	}
 	
+	# Replace backslashes with a forward slash in the base directory path
+	$base_directory =~ s/\\+/\//g;
+	
+	# Escape forward slashes in the search pattern and replace string
+	$search_pattern =~ s/\//\\\//g;
+	$replace_string =~ s/\//\\\//g;
+	
 	# Run grep to find files matching pattern
 	my $grep_command = "/bin/grep -ilr \"$search_pattern\" \"$base_directory\" 2>&1 | grep -Ev \"\.(exe|dll)\"";
-	my ($grep_status, $grep_output) = run_ssh_command($computer_node_name, $management_node_keys, $grep_command);
+	my ($grep_status, $grep_output) = run_ssh_command($computer_node_name, $management_node_keys, $grep_command, '', '', 0);
 	if (!defined($grep_status)) {
 		notify($ERRORS{'WARNING'}, 0, "unable to run ssh command to run grep on directory: $base_directory, pattern: $search_pattern");
 		return;
 	}
-	elsif ("@$grep_output" =~ /$base_directory: No such file/i) {
-		notify($ERRORS{'WARNING'}, 0, "base directory does not exist: $base_directory");
-		return;
+	elsif ("@$grep_output" =~ /No such file/i) {
+		notify($ERRORS{'DEBUG'}, 0, "no files to process, base directory does not exist: $base_directory");
+		return 1;
 	}
 	elsif ("@$grep_output" =~ /grep:/i) {
-		notify($ERRORS{'WARNING'}, 0, "grep output contains 'grep:', unexpected:\n" . join("\n", @$grep_output));
+		notify($ERRORS{'WARNING'}, 0, "grep error occurred:\n" . join("\n", @$grep_output));
 		return;
 	}
 	elsif ($grep_status == 1) {
@@ -5877,9 +5913,10 @@ sub search_and_replace_in_files {
 	# Run sed on each matching file to replace string
 	my $sed_error_count = 0;
 	for my $matching_file (@$grep_output) {
+		$matching_file =~ s/\\+/\//g;
 		# Run grep to find files matching pattern
 		my $sed_command = "/bin/sed -i -e \"s/$search_pattern/$replace_string/\" \"$matching_file\"";
-		my ($sed_status, $sed_output) = run_ssh_command($computer_node_name, $management_node_keys, $sed_command);
+		my ($sed_status, $sed_output) = run_ssh_command($computer_node_name, $management_node_keys, $sed_command, '', '', 0);
 		if (!defined($sed_status)) {
 			notify($ERRORS{'WARNING'}, 0, "unable to run ssh command to run sed on file: $matching_file");
 			$sed_error_count++;
@@ -5900,6 +5937,7 @@ sub search_and_replace_in_files {
 			notify($ERRORS{'OK'}, 0, "replaced '$search_pattern' with '$replace_string' in $matching_file");
 			
 			# sed replaces Windows newlines with \n
+			# There is a sed -b option which prevents this but it is not available on all versions of sed
 			$self->run_unix2dos($matching_file);
 		}
 	}
@@ -9364,6 +9402,133 @@ sub setup_display_kms_server_info {
 	
 	$kms_server_info_string = "<not configured>\n" if !$kms_server_info_string;
 	print "$kms_server_info_string";
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_time_zone_name
+
+ Parameters  : none
+ Returns     : string
+ Description : Returns the name of the time zone configured for the management
+               node. The date command is run locally on the management node and
+               the time zone abbreviation is parsed from the output. This
+               %TIME_ZONE_INFO hash is searched for matching time zone
+               information and the time zone name is returned. If a matching
+               time zone is not found, 'Eastern Standard Time' is returned.
+               Example: 'HVL' returns 'Tasmania Standard Time'
+
+=cut
+
+sub get_time_zone_name {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $default_time_zone_name = 'Eastern Standard Time';
+	
+	# Call date to determine the time zone abbreviation in use on the management node
+	my ($exit_status, $output) = run_command('date +%Z');
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run command to determine time zone configured for management node, returning '$default_time_zone_name'");
+		return $default_time_zone_name;
+	}
+	
+	# Extract the time zone abbreviation from the output
+	my ($set_abbreviation) = grep(/^\w{3}$/, @$output);
+	if (!$set_abbreviation) {
+		notify($ERRORS{'WARNING'}, 0, "failed to determine time zone abbreviation from output, returning '$default_time_zone_name':\n" . join("\n", @$output));
+		return $default_time_zone_name;
+	}
+	
+	# Windows time zone codes don't include corresponding daylight time abbreviations, e.g. EDT
+	# Convert *DT --> *ST
+	if ($set_abbreviation =~ /(.)DT/i) {
+		$set_abbreviation = "$1ST";
+		notify($ERRORS{'DEBUG'}, 0, "time zone abbreviation converted to standard time: $1DT --> $set_abbreviation");
+	}
+	
+	# Loop through the time zone codes until a matching abbreviation is found
+	for my $time_zone_name (sort keys %TIME_ZONE_INFO) {
+		my $time_zone_abbreviation = $TIME_ZONE_INFO{$time_zone_name}{abbreviation};
+		
+		next if (!$time_zone_abbreviation || $set_abbreviation !~ /^$time_zone_abbreviation$/i);
+		
+		notify($ERRORS{'DEBUG'}, 0, "determined name of time zone configured for management node: '$time_zone_name'");
+		return $time_zone_name;
+	}
+	
+	# Return the code for EST if a match was not found
+	notify($ERRORS{'WARNING'}, 0, "unable to determine name of time zone configured for management node, abbreviation: $set_abbreviation, returning '$default_time_zone_name'");
+	return $default_time_zone_name;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_time_zone_code
+
+ Parameters  : none
+ Returns     : string
+ Description : Returns the Windows numerical code of the time zone configured
+               for the management node. If a matching time zone is not found, 35
+               is returned.
+               Example: 'HVL' returns 265
+
+=cut
+
+sub get_time_zone_code {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $time_zone_name = $self->get_time_zone_name() || return;
+	
+	my $time_zone_code = $TIME_ZONE_INFO{$time_zone_name}{code};
+	if ($time_zone_code) {
+		notify($ERRORS{'DEBUG'}, 0, "determined Windows code of time zone configured for management node: $time_zone_code");
+		return $time_zone_code;
+	}
+	else {
+		my $default = 35;
+		notify($ERRORS{'WARNING'}, 0, "time zone code could not be determined for time zone: '$time_zone_name', returning $default");
+		return $default;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 sanitize_files
+
+ Parameters  : @file_paths (optional)
+ Returns     : boolean
+ Description : Removes the Windows root password from files on the computer.
+
+=cut
+
+sub sanitize_files {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get the file path arguments, add the node configuration directory
+	my @file_paths = @_;
+	push @file_paths, $self->get_node_configuration_directory();
+	
+	# Loop through each file path, remove the Windows root password from each
+	for my $file_path (@file_paths) {
+		if (!$self->search_and_replace_in_files($file_path, $WINDOWS_ROOT_PASSWORD, 'WINDOWS_ROOT_PASSWORD')) {
+			notify($ERRORS{'WARNING'}, 0, "failed to remove the Windows root password from: $file_path");
+			return;
+		}
+	}
+	
+	return 1;
 }
 
 #/////////////////////////////////////////////////////////////////////////////

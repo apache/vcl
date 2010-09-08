@@ -259,11 +259,11 @@ sub activate {
 		return 1;
 	}
 	
-	# Attempt to activate using MAK product key
-	return 1 if $self->activate_mak();
-	
 	# Attempt to activate using KMS server
 	return 1 if $self->activate_kms();
+	
+	# Attempt to activate using MAK product key
+	return 1 if $self->activate_mak();
 	
 	notify($ERRORS{'WARNING'}, 0, "failed to activate Windows using MAK or KMS methods");
 	return;
@@ -1445,6 +1445,7 @@ sub run_sysprep {
 	my $system32_path = $self->get_system32_path();
 	my $system32_path_dos = $system32_path;
 	$system32_path_dos =~ s/\//\\/g;
+	my $node_configuration_directory = $self->get_node_configuration_directory();
 	
 	# Delete existing Panther directory, contains Sysprep log files
 	if (!$self->delete_file('C:/Windows/Panther')) {
@@ -1500,8 +1501,20 @@ sub run_sysprep {
 		return;
 	}
 	
+	# Update the Unattend.xml file with the time zone name configured for the management node
+	my $time_zone_name = $self->get_time_zone_name();
+	my $base_directory = "$node_configuration_directory/Utilities/Sysprep/Unattend.xml";
+	my $search_pattern = '<TimeZone>.*</TimeZone>';
+	my $replace_string = '<TimeZone>' . $time_zone_name . '</TimeZone>';
+	if ($self->search_and_replace_in_files($base_directory, $search_pattern, $replace_string)) {
+		notify($ERRORS{'DEBUG'}, 0, "updated Unattend.xml with the time zone configured for the management node: '$time_zone_name'");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to update Unattend.xml with the time zone configured for the management node: '$time_zone_name'");
+		return;
+	}
+
 	# Copy Unattend.xml file to sysprep directory
-	my $node_configuration_directory = $self->get_node_configuration_directory();
 	my $cp_command = "cp -f $node_configuration_directory/Utilities/Sysprep/Unattend.xml $system32_path/sysprep/Unattend.xml";
 	my ($cp_status, $cp_output) = run_ssh_command($computer_node_name, $management_node_keys, $cp_command);
 	if (defined($cp_status) && $cp_status == 0) {
@@ -1723,12 +1736,38 @@ sub wait_for_response {
 		$ssh_response_timeout_seconds = 1800; 
 	}
 	else {
-		$initial_delay_seconds = 180;
-		$ssh_response_timeout_seconds = 600; 
+		$initial_delay_seconds = 15;
+		$ssh_response_timeout_seconds = 300; 
 	}
 	
 	# Call parent class's wait_for_response subroutine
 	return $self->SUPER::wait_for_response($initial_delay_seconds, $ssh_response_timeout_seconds);
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 sanitize_files
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Removes the Windows root password from files on the computer.
+
+=cut
+
+sub sanitize_files {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my @file_paths = (
+		'$SYSTEMROOT/System32/sysprep',
+		'$SYSTEMROOT/Panther',
+	);
+	
+	# Call the subroutine in Windows.pm
+	return $self->SUPER::sanitize_files(@file_paths);
 }
 
 #/////////////////////////////////////////////////////////////////////////////
