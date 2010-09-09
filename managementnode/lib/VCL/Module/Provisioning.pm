@@ -316,6 +316,61 @@ sub retrieve_image {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 wait_for_power_off
+
+ Parameters  : Maximum number of seconds to wait (optional), seconds to delay between attempts (optional)
+ Returns     : 1 - If computer is powered off
+               0 - If computer is still powered on after waiting
+               undefined - Unable to determine power status
+ Description : Attempts to check the power status of the computer specified in
+               the DataStructure for the current reservation. It will wait up to
+               a maximum number of seconds for the computer to be powered off
+               (default: 300 seconds). The delay between attempts can be
+               specified as the 2nd argument in seconds (default: 15 seconds).
+
+=cut
+
+sub wait_for_power_off {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Attempt to get the total number of seconds to wait from the arguments
+	my $total_wait_seconds = shift;
+	if (!defined($total_wait_seconds) || $total_wait_seconds !~ /^\d+$/) {
+		$total_wait_seconds = 300;
+	}
+	
+	# Seconds to wait in between loop attempts
+	my $attempt_delay_seconds = shift;
+	if (!defined($attempt_delay_seconds) || $attempt_delay_seconds !~ /^\d+$/) {
+		$attempt_delay_seconds = 15;
+	}
+	
+	# Check if the provisioning module implements a power status subroutine
+	if (!$self->can('power_status')) {
+		notify($ERRORS{'WARNING'}, 0, "power_status subroutine has not been implemented by the provisioning module: " . ref($self));
+		return;
+	}
+	
+	my $computer_name = $self->data->get_computer_short_name();
+	
+	my $message = "waiting a maximum of $total_wait_seconds for $computer_name to be powered off";
+	
+	# Call code_loop_timeout and invert the result
+	if ($self->code_loop_timeout(sub{return ($self->power_status() =~ /off/i)}, [$computer_name], "waiting for $computer_name to power off", $total_wait_seconds, $attempt_delay_seconds)) {
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "$computer_name has not powered off after waiting $total_wait_seconds seconds, returning 0");
+		return 0;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 1;
 __END__
 

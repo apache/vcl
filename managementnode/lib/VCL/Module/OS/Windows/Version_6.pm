@@ -1583,7 +1583,32 @@ EOF
 	$self->run_slmgr_dlv();
 	
 	# Run Sysprep.exe, use cygstart to lauch the .exe and return immediately
-	my $sysprep_command = "/bin/cygstart.exe cmd.exe /c \"$system32_path_dos\\sysprep\\sysprep.exe /generalize /oobe /shutdown /quiet /unattend:$system32_path_dos\\sysprep\\Unattend.xml\"";
+	my $sysprep_command = "/bin/cygstart.exe cmd.exe /c \"";
+	
+	# First enable DHCP on the private and public interfaces and delete the default route
+	my $private_interface_name = $self->get_private_interface_name();
+	my $public_interface_name = $self->get_public_interface_name();
+	if (!$private_interface_name || !$public_interface_name) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine private and public interface names, failed to enable DHCP and shut down $computer_node_name");
+		return;
+	}
+	
+	# Release any DHCP addresses and delete the default route
+	$sysprep_command .= "$system32_path/ipconfig.exe /release & ";
+	$sysprep_command .= "$system32_path/route.exe DELETE 0.0.0.0 MASK 0.0.0.0 & ";
+	
+	# Disable DHCP
+	$sysprep_command .= "$system32_path/netsh.exe interface ip set address name=\\\"$private_interface_name\\\" source=dhcp & ";
+	$sysprep_command .= "$system32_path/netsh.exe interface ip set dns name=\\\"$private_interface_name\\\" source=dhcp & ";
+	$sysprep_command .= "$system32_path/netsh.exe interface ip set address name=\\\"$public_interface_name\\\" source=dhcp & ";
+	$sysprep_command .= "$system32_path/netsh.exe interface ip set dns name=\\\"$public_interface_name\\\" source=dhcp & ";
+	
+	# Run Sysprep.exe
+	$sysprep_command .= "$system32_path_dos\\sysprep\\sysprep.exe /generalize /oobe /shutdown /quiet /unattend:$system32_path_dos\\sysprep\\Unattend.xml";
+	
+	$sysprep_command .= "\"";
+	
+	# Run Sysprep.exe, use cygstart to lauch the .exe and return immediately
 	my ($sysprep_status, $sysprep_output) = run_ssh_command($computer_node_name, $management_node_keys, $sysprep_command);
 	if (defined($sysprep_status) && $sysprep_status == 0) {
 		notify($ERRORS{'OK'}, 0, "initiated Sysprep.exe, waiting for $computer_node_name to become unresponsive");
@@ -1601,14 +1626,19 @@ EOF
 	if (!$self->wait_for_no_ping(720)) {
 		# Computer never stopped responding to ping
 		notify($ERRORS{'WARNING'}, 0, "$computer_node_name never became unresponsive to ping");
-		return 0;
+		return;
 	}
 	
-	# Call power_off() to make sure computer is shut down
-	if (!$self->provisioner->power_off()) {
-		# Computer could not be shut off
-		notify($ERRORS{'WARNING'}, 0, "unable to power off $computer_node_name");
-		return 0;
+	# Wait maximum of 10 minutes for computer to power off
+	my $power_off = $self->provisioner->wait_for_power_off(600);
+	if (!defined($power_off)) {
+		# wait_for_power_off result will be undefined if the provisioning module doesn't implement a power_status subroutine
+		notify($ERRORS{'OK'}, 0, "unable to determine power status of $computer_node_name from provisioning module, sleeping 5 minutes to allow computer time to shutdown");
+		sleep 300;
+	}
+	elsif (!$power_off) {
+		notify($ERRORS{'WARNING'}, 0, "$computer_node_name never powered off");
+		return;
 	}
 	
 	return 1;

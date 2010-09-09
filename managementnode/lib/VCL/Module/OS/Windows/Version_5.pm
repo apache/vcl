@@ -292,7 +292,7 @@ sub run_sysprep {
 	# Run Sysprep.exe
 	$sysprep_command .= "C:/Sysprep/sysprep.exe /quiet /reseal /mini /forceshutdown & ";
 	
-	# Shutdown the computer - Sysprep does not always shut the computer down
+	# Shutdown the computer - Sysprep does not always shut the computer down automatically
 	$sysprep_command .= "$system32_path/shutdown.exe -s -t 0 -f";
 	$sysprep_command .= "\"";
 	
@@ -315,19 +315,19 @@ sub run_sysprep {
 		notify($ERRORS{'WARNING'}, 0, "$computer_node_name never became unresponsive to ping");
 		return 0;
 	}
-
-	# Wait for 3 minutes then call provisioning module's power_off() subroutine
-	# Sysprep does not always shut down the computer when it is done
-	notify($ERRORS{'OK'}, 0, "sleeping for 3 minutes to allow Sysprep.exe to finish");
-	sleep 180;
-
-	# Call power_off() to make sure computer is shut down
-	if (!$self->provisioner->power_off()) {
-		# Computer could not be shut off
-		notify($ERRORS{'WARNING'}, 0, "unable to power off $computer_node_name");
-		return 0;
+	
+	# Wait maximum of 10 minutes for computer to power off
+	my $power_off = $self->provisioner->wait_for_power_off(600);
+	if (!defined($power_off)) {
+		# wait_for_power_off result will be undefined if the provisioning module doesn't implement a power_status subroutine
+		notify($ERRORS{'OK'}, 0, "unable to determine power status of $computer_node_name from provisioning module, sleeping 5 minutes to allow computer time to power off");
+		sleep 300;
 	}
-
+	elsif (!$power_off) {
+		notify($ERRORS{'WARNING'}, 0, "$computer_node_name never powered off after running sysprep.exe");
+		return;
+	}
+	
 	return 1;
 }
 
