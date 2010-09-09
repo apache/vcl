@@ -554,6 +554,8 @@ function maintenanceCheck() {
 	$search = preg_replace($reg, '', $_SERVER['SCRIPT_FILENAME']);
 	$search .= "/.ht-inc/maintenance/";
 	$files = glob("$search*");
+	if(! is_array($files))
+		return;
 	$inmaintenance = 0;
 	foreach($files as $file) {
 		if(! preg_match("|^$search([0-9]{4})([0-9]{2})([0-9]{2})([0-9]{2})([0-9]{2})$|", $file, $matches))
@@ -3475,11 +3477,11 @@ function isAvailable($images, $imageid, $imagerevisionid, $start, $end,
 		$computerids = array();
 		$currentids = array();
 		$blockids = array();
-		$skipRemoveUsedBlock = 0;
+		$altRemoveBlockCheck = 0;
 		// if we are modifying a request and it is after the start time, only allow
 		// the scheduled computer(s) to be modified
 		if($requestid && datetimeToUnix($requestData["start"]) <= time()) {
-			$skipRemoveUsedBlock = 1;
+			$altRemoveBlockCheck = 1;
 			foreach($requestData["reservations"] as $key2 => $res) {
 				if($res["imageid"] == $imageid) {
 					$compid = $res["computerid"];
@@ -3576,7 +3578,13 @@ function isAvailable($images, $imageid, $imagerevisionid, $start, $end,
 		$blockids = array_diff($blockids, $usedComputerids);
 
 		# remove computers from list that are allocated to block allocations
-		if(! count($blockids) && ! $skipRemoveUsedBlock) {
+		if($altRemoveBlockCheck) {
+			if(editRequestBlockCheck($computerids[0], $imageid, $start, $end)) {
+				semUnlock();
+				return 0;
+			}
+		}
+		elseif(! count($blockids)) {  # && ! $altRemoveBlockCheck
 			$usedBlockCompids = getUsedBlockComputerids($start, $end);
 			$computerids = array_diff($computerids, $usedBlockCompids);
 			$currentids = array_diff($currentids, $usedBlockCompids);
@@ -3808,6 +3816,46 @@ function checkOverlap($start, $end, $max, $requestid=0) {
 		}
 	}
 	return 0;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn editRequestBlockCheck($compid, $imageid, $start, $end)
+///
+/// \param $compid - id of computer to check
+/// \param $imageid - id of image being checked
+/// \param $start - start of time period in unix timestamp format
+/// \param $end - end of time period in unix timestamp format
+///
+/// \return 1 if time period overlaps with a block allocation unavailable to the
+/// logged in user; 0 if not
+///
+/// \brief checks to see if $compid is part of a block allocation that the
+/// current user is not part of or is set for a different image than what the
+/// user is currently using on the computer
+///
+////////////////////////////////////////////////////////////////////////////////
+function editRequestBlockCheck($compid, $imageid, $start, $end) {
+	global $user;
+	$groupids = implode(',', array_keys($user['groups']));
+	if(! count($user['groups']))
+		$groupids = "''";
+	$startdt = unixToDatetime($start);
+	$enddt = unixToDatetime($end);
+	$query = "SELECT bc.computerid "
+	       . "FROM blockComputers bc, "
+	       .      "blockTimes bt, "
+	       .      "blockRequest r "
+	       . "WHERE bc.blockTimeid = bt.id AND "
+	       .       "bt.blockRequestid = r.id AND "
+	       .       "bc.computerid = $compid AND "
+	       .       "(bt.start - INTERVAL 15 MINUTE) < '$enddt' AND "
+	       .       "bt.end > '$startdt' AND "
+	       .       "(r.groupid NOT IN ($groupids) OR "
+	       .       "r.imageid != $imageid) AND "
+	       .       "r.status = 'accepted'";
+	$qh = doQuery($query, 101);
+	return(mysql_num_rows($qh));
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -6192,7 +6240,7 @@ function sortComputers($a, $b) {
 /// \param $start - starting time in unix timestamp form
 /// \param $end - ending time in unix timestamp form
 /// \param $allocatedcompids - array of computer ids that have already been
-/// allocated while processing this block allocation
+/// allocated while processing this reservation
 ///
 /// \return an array of computer ids
 ///
