@@ -1,3 +1,5 @@
+var resSubmitted = 0;
+
 function RPCwrapper(data, CB, dojson) {
 	if(dojson) {
 		dojo.xhrPost({
@@ -66,12 +68,13 @@ function updateWaitTime(cleardesc) {
 }
 
 function checkValidImage() {
-	if(! dijit.byId('imagesel'))
-		return;
-	if(! dijit.byId('imagesel').isValid()) {
+	if(resSubmitted)
+		return false;
+	if(dijit.byId('imagesel') && ! dijit.byId('imagesel').isValid()) {
 		alert('Please select a valid environment.');
 		return false;
 	}
+	resSubmitted = 1;
 	return true;
 }
 

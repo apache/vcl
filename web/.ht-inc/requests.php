@@ -184,7 +184,7 @@ function newReservation() {
 	print "</fieldset>\n";
 
 	print "<div id=waittime class=hidden></div><br>\n";
-	$cont = addContinuationsEntry('submitRequest', array('imaging' => $imaging));
+	$cont = addContinuationsEntry('submitRequest', array('imaging' => $imaging), SECINDAY, 1, 0);
 	print "<INPUT type=hidden name=continuation value=\"$cont\">\n";
 	if($imaging)
 		print "<INPUT id=newsubmit type=submit value=\"Create Imaging Reservation\" ";
