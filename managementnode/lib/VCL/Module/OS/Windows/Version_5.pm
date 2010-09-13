@@ -164,6 +164,7 @@ sub run_sysprep {
 
 	my $management_node_keys = $self->data->get_management_node_keys();
 	my $computer_node_name   = $self->data->get_computer_node_name();
+	my $system32_path        = $self->get_system32_path();
 	
 	# Specify where on the node the sysprep.inf file will reside
 	my $node_configuration_directory = $self->get_node_configuration_directory();
@@ -171,8 +172,6 @@ sub run_sysprep {
 	my $node_configuration_sysprep_inf_path = "$node_configuration_sysprep_directory/sysprep.inf";
 	my $node_working_sysprep_directory = 'C:/Sysprep';
 	my $node_working_sysprep_exe_path = 'C:\\Sysprep\\sysprep.exe';
-	
-	my $system32_path = $self->get_system32_path();
 	
 	# Get the sysprep.inf file contents
 	my $sysprep_contents = $self->get_sysprep_inf_contents();
@@ -269,7 +268,7 @@ sub run_sysprep {
 	
 	# Assemble the Sysprep command
 	# Run Sysprep.exe, use cygstart to lauch the .exe and return immediately
-	my $sysprep_command = "/bin/cygstart.exe cmd.exe /c \"";
+	my $sysprep_command = "/bin/cygstart.exe $system32_path/cmd.exe /c \"";
 	
 	# First enable DHCP on the private and public interfaces and delete the default route
 	my $private_interface_name = $self->get_private_interface_name();
@@ -595,12 +594,10 @@ sub firewall_enable_sessmgr {
 	
 	my $management_node_keys = $self->data->get_management_node_keys();
 	my $computer_node_name   = $self->data->get_computer_node_name();
+	my $system32_path        = $self->get_system32_path();
 	
-	my $sessmgr_path = $self->get_system32_path() . "/sessmgr.exe";
-	$sessmgr_path =~ s/\//\\\\/g;
-
 	# Configure the firewall to allow the sessmgr.exe program
-	my $netsh_command = 'netsh firewall set allowedprogram name = "Microsoft Remote Desktop Help Session Manager" mode = ENABLE scope = ALL profile = ALL program = "' . $sessmgr_path . '"';
+	my $netsh_command = "$system32_path/netsh.exe firewall set allowedprogram name = \"Microsoft Remote Desktop Help Session Manager\" mode = ENABLE scope = ALL profile = ALL program = \"$system32_path/sessmgr.exe\"";
 	my ($netsh_status, $netsh_output) = run_ssh_command($computer_node_name, $management_node_keys, $netsh_command);
 	if (defined($netsh_status) && $netsh_status == 0) {
 		notify($ERRORS{'DEBUG'}, 0, "configured firewall to allow sessmgr.exe");
