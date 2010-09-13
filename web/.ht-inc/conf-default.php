@@ -72,14 +72,14 @@ define("SCHEDULER_ALLOCATE_RANDOM_COMPUTER", 0); // set this to 1 to have the sc
                                                  // the best combination of specs
 define("PRIV_CACHE_TIMEOUT", 15); // time (in minutes) that we cache privileges in a session before reloading them
 /// defines the min number of block request machines
-define("MIN_BLOCK_MACHINES", 5);
+define("MIN_BLOCK_MACHINES", 1);
 /// defines the max number of block request machines
 define("MAX_BLOCK_MACHINES", 70);
 /// defines the URL used for the Documentation link in the navigation list
 define("DOCUMENTATIONURL", "https://cwiki.apache.org/VCLDOCS/");
-define("USEFILTERINGSELECT", 1); // set to 1 to use a dojo filteringselect on the new reservation page
+define("USEFILTERINGSELECT", 1); // set to 1 to use a dojo filteringselects for some of the select boxes
                                  // the filteringselect can be a little slow for a large number of items
-define("FILTERINGSELECTTHRESHOLD", 300); // if USEFILTERINGSELECT = 1, only use them for selects up to this size
+define("FILTERINGSELECTTHRESHOLD", 1000); // if USEFILTERINGSELECT = 1, only use them for selects up to this size
 
 define("DEFAULTTHEME", 'default'); // this is the theme that will be used when the site is placed in maintenance if $_COOKIE['VCLSKIN'] is not set
 
@@ -88,14 +88,14 @@ $ENABLE_ITECSAUTH = 0;     // use ITECS accounts (also called "Non-NCSU" account
 $userlookupUsers = array(1, # admin
 );
 
-$xmlrpcBlockAPIUsers = array(3, # vclsystem
+$xmlrpcBlockAPIUsers = array(3, # 3 = vclsystem
 );
 
 @require_once(".ht-inc/secrets.php");
 
 $authMechs = array(
 	"Local Account"    => array("type" => "local",
-	                            "affiliationid" => 4,
+	                            "affiliationid" => 1,
 	                            "help" => "Only use Local Account if there are no other options"),
 	/*"Shibboleth (UNC Federation)" => array("type" => "redirect",
 	                     "URL" => "https://federation.northcarolina.edu/wayf/wayf_framed.php?fed=FED_SHIB_UNC_DEV&version=dropdown&entityID=https%3A%2F%2Fvcl.ncsu.edu%2Fsp%2Fshibboleth&return=http%3A%2F%2Fvcl.ncsu.edu%2FShibboleth.sso%2FDS%3FSAMLDS%3D1%26target%3Dhttp%3A%2F%2Fvcl.ncsu.edu%2Fscheduling%2Fshibauth%2F",
