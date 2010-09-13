@@ -482,14 +482,14 @@ sub capture {
 	# Wait for the VM to power off
 	# This OS module may initiate a shutdown and immediately return
 	if (!$self->wait_for_power_off(600)) {
-		notify($ERRORS{'WARNING'}, 0, "VM $computer_name has not powered off after the OS module's pre_capture tasks were completed, waited $shutdown_wait_seconds seconds, powering off VM forcefully");
+		notify($ERRORS{'WARNING'}, 0, "VM $computer_name has not powered off after the OS module's pre_capture tasks were completed, powering off VM forcefully");
 		
 		if ($self->api->vm_power_off($vmx_file_path_capture)) {
 			# Sleep for 10 seconds to make sure the power off is complete
 			sleep 10;
 		}
 		else {
-			notify($ERRORS{'WARNING'}, 0, "failed to power off the VM being captured after the OS module's pre_capture tasks were completed, VM power state: $vm_power_state");
+			notify($ERRORS{'WARNING'}, 0, "failed to power off the VM being captured after the OS module's pre_capture tasks were completed");
 			return;
 		}
 	}
@@ -2784,7 +2784,7 @@ sub is_vm_registered {
 
  Parameters  : $image_name (optional)
  Returns     : integer
- Description : Returns the size of the image in bytes. If the vmdk file path
+ Description : Returns the size of the image in megabytes. If the vmdk file path
                argument is not supplied and the VM disk type in the VM profile
                is set to localdisk, the size of the image in the image
                repository on the management node is checked. Otherwise, the size
@@ -2793,6 +2793,34 @@ sub is_vm_registered {
 =cut
 
 sub get_image_size {
+	my $self = shift;
+	if (ref($self) !~ /vmware/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Attempt to get the image name argument
+	my $image_name = shift;
+	
+	my $image_size_bytes = $self->get_image_size_bytes($image_name) || return;
+	return round($image_size_bytes / 1024 / 1024);
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_image_size_bytes
+
+ Parameters  : $image_name (optional)
+ Returns     : integer
+ Description : Returns the size of the image in bytes. If the vmdk file path
+               argument is not supplied and the VM disk type in the VM profile
+               is set to localdisk, the size of the image in the image
+               repository on the management node is checked. Otherwise, the size
+               of the image in the vmdk directory on the VM host is checked.
+
+=cut
+
+sub get_image_size_bytes {
 	my $self = shift;
 	if (ref($self) !~ /vmware/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
@@ -3517,14 +3545,14 @@ sub get_vm_additional_vmdk_bytes_required {
 	
 	# Check if the .vmdk files already exist on the host
 	my $host_vmdk_file_exists = $self->vmhost_os->file_exists($self->get_vmdk_file_path());
-	my $image_size = $self->get_image_size() || return;
+	my $image_size_bytes = $self->get_image_size_bytes() || return;
 	if (!defined $host_vmdk_file_exists) {
 		notify($ERRORS{'WARNING'}, 0, "failed to determine if vmdk files already exist on VM host");
 		return;
 	}
 	if ($host_vmdk_file_exists == 0) {
-		$additional_bytes_required += $image_size;
-		notify($ERRORS{'DEBUG'}, 0, "$image_size additional bytes required because vmdk files do NOT already exist on VM host");
+		$additional_bytes_required += $image_size_bytes;
+		notify($ERRORS{'DEBUG'}, 0, "$image_size_bytes additional bytes required because vmdk files do NOT already exist on VM host");
 	}
 	else {
 		notify($ERRORS{'DEBUG'}, 0, "no additional space required for vmdk files because they already exist on VM host");
@@ -3573,8 +3601,8 @@ sub get_vm_additional_vmx_bytes_required {
 	}
 	else {
 		# Estimate that REDO files will grow to 1/4 the image size
-		my $image_size = $self->get_image_size() || return;
-		my $redo_size = int($image_size / 4);
+		my $image_size_bytes = $self->get_image_size_bytes() || return;
+		my $redo_size = int($image_size_bytes / 4);
 		$additional_bytes_required += $redo_size;
 		notify($ERRORS{'DEBUG'}, 0, "$redo_size additional bytes required for REDO files because VM disk mode is NOT persistent");
 	}
