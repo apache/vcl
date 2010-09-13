@@ -263,7 +263,8 @@ function viewComputers($showall=0) {
 		getComputerCounts($computers);
 	$userCompIDs = array_keys($resources["computer"]);
 	$states = array("2" => "available",
-	                "10" => "maintenance");
+	                "10" => "maintenance",
+	                "20" => "vmhostinuse");
 	$platforms = getPlatforms();
 	$tmp = getUserResources(array("scheduleAdmin"), array("manageGroup"));
 	$schedules = $tmp["schedule"];
@@ -619,6 +620,8 @@ function editOrAddComputer($state) {
 		$states = array(2 => "available",
 		                10 => "maintenance");
 	}
+	if($state)
+		$states[20] = 'vmhostinuse';
 	$platforms = getPlatforms();
 	$tmp = getUserResources(array("scheduleAdmin"), array("manageGroup"));
 	$schedules = $tmp["schedule"];
@@ -882,6 +885,8 @@ function confirmEditOrAddComputer($state) {
 	print "      <FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
 	if(! $state && $data['stateid'] == 10)
 		$cont = addContinuationsEntry('computerAddMaintenanceNote', $data, SECINDAY, 0);
+	elseif($state && $data['stateid'] == 20)
+		$cont = addContinuationsEntry('addComputerSetVMHostProfile', $data, SECINDAY, 0);
 	else
 		$cont = addContinuationsEntry($nextmode, $data, SECINDAY, 0, 0);
 	print "      <INPUT type=hidden name=continuation value=\"$cont\">\n";
@@ -981,6 +986,42 @@ function computerAddMaintenanceNote() {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
+/// \fn addComputerSetVMHostProfile()
+///
+/// \brief prints a page for user to select a vm host profile for the
+/// computer(s)
+///
+////////////////////////////////////////////////////////////////////////////////
+function addComputerSetVMHostProfile() {
+	$dobulk = getContinuationVar('dobulk', 0);
+	print "<div align=center>\n";
+	print "<H2>Add Computer</H2>\n";
+	print "Select a VM Host Profile to be used on this computer:<br><br>\n";
+	$profiles = getVMProfiles();
+	print "<FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
+	print "<select name=\"profileid\">\n";
+	foreach($profiles as $id => $profile)
+		print "<option value=\"$id\">{$profile['profilename']}</option>\n";
+	print "</select><br><br>\n";
+	print "VM Host Profiles can be created/modified under <a href=\"";
+	print	BASEURL . SCRIPT . "?mode=editVMInfo\">Virtual Hosts</a><br><br>\n";
+	if($dobulk) {
+		$data = processBulkComputerInput();
+		$data['profiles'] = $profiles;
+		$cont = addContinuationsEntry('submitAddBulkComputers', $data, SECINDAY, 0, 0);
+	}
+	else {
+		$data = processComputerInput();
+		$data['profiles'] = $profiles;
+		$cont = addContinuationsEntry('submitAddComputer', $data, SECINDAY, 0, 0);
+	}
+	print "<INPUT type=hidden name=continuation value=\"$cont\">\n";
+	print "<INPUT type=submit value=\"Add Computer\">\n";
+	print "</FORM>\n";
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
 /// \fn submitAddComputer()
 ///
 /// \brief adds a new computer with the submitted information
@@ -989,8 +1030,6 @@ function computerAddMaintenanceNote() {
 function submitAddComputer() {
 	$data = processComputerInput();
 	addComputer($data);
-	#print "<H2>Add Computer</H2>\n";
-	#print "The computer has been added.";
 	clearPrivCache();
 	viewComputers();
 }
@@ -1102,7 +1141,8 @@ function bulkAddComputer() {
 	                                  // makes things easier later
 
 	$states = array("2" => "available",
-	                "10" => "maintenance");
+	                "10" => "maintenance",
+	                "20" => "vmhostinuse");
 	$platforms = getPlatforms();
 	$tmp = getUserResources(array("scheduleAdmin"), array("manageGroup"));
 	$schedules = $tmp["schedule"];
@@ -1418,7 +1458,12 @@ function confirmAddBulkComputers() {
 	print "  <TR>\n";
 	print "    <TD>\n";
 	print "      <FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
-	$cont = addContinuationsEntry('submitAddBulkComputers', $data, SECINDAY, 0, 0);
+	if($data['stateid'] == 20) {
+		$data['dobulk'] = 1;
+		$cont = addContinuationsEntry('addComputerSetVMHostProfile', $data, SECINDAY, 0);
+	}
+	else
+		$cont = addContinuationsEntry('submitAddBulkComputers', $data, SECINDAY, 0, 0);
 	print "      <INPUT type=hidden name=continuation value=\"$cont\">\n";
 	print "      <INPUT type=submit value=Submit>\n";
 	print "      </FORM>\n";
@@ -1468,6 +1513,15 @@ function submitAddBulkComputers() {
 	if(! empty($data['macs'])) {
 		$domacs = 1;
 		$maccnt = 0;
+	}
+
+	if($data['stateid'] == 20) {
+		$profileid = processInputVar('profileid', ARG_NUMERIC);
+		$profiles = getContinuationVar('profiles');
+		if(! array_key_exists($profileid, $profiles)) {
+			$tmp = array_keys($profiles);
+			$profileid = $tmp[0];
+		}
 	}
 
 	$dhcpdata = array();
@@ -1525,40 +1579,45 @@ function submitAddBulkComputers() {
 		$query .=        "'{$data["type"]}')";
 		$qh = doQuery($query, 235);
 		$addedrows += mysql_affected_rows($mysql_link_vcl);
-		$qh = doQuery("SELECT LAST_INSERT_ID() FROM computer", 236);
-		if(! $row = mysql_fetch_row($qh)) {
-			abort(237);
-		}
+		$compid = dbLastInsertID();
+
 		$query = "INSERT INTO resource "
 		       .        "(resourcetypeid, "
 		       .        "subid) "
 		       . "VALUES (12, "
-		       .         $row[0] . ")";
+		       .         "$compid)";
 		doQuery($query, 238);
+		$resid = dbLastInsertID();
 
 		// add computer into selected groups
-		$qh = doQuery("SELECT LAST_INSERT_ID() FROM resource", 101);
-		if(! $row = mysql_fetch_row($qh)) {
-			abort(237);
-		}
+		$vals = array();
+		foreach(array_keys($data["computergroup"]) as $groupid)
+			$vals[] = "($resid, $groupid)";
+		$allvals = implode(',', $vals);
+		$query = "INSERT INTO resourcegroupmembers "
+	          .        "(resourceid, "
+	          .        "resourcegroupid) "
+	          . "VALUES $allvals";
+		doQuery($query, 101);
 
-		foreach(array_keys($data["computergroup"]) as $groupid) {
-			$query = "INSERT INTO resourcegroupmembers "
-		          .        "(resourceid, "
-		          .        "resourcegroupid) "
-		          . "VALUES ({$row[0]}, "
-		          .        "$groupid)";
+		if($data['stateid'] == 20) {
+			# create vmhost entry
+			$query = "INSERT INTO vmhost "
+			       .        "(computerid, "
+			       .        "vmlimit, "
+			       .        "vmprofileid) "
+			       . "VALUES ($compid, "
+			       .        "2, "
+			       .        "$profileid)";
 			doQuery($query, 101);
 		}
 	}
 	print "<DIV align=center>\n";
 	print "<H2>Add Multiple Computers</H2>\n";
-	if($count == $addedrows) {
+	if($count == $addedrows)
 		print "The computers were added successfully.<br><br>\n";
-	}
-	else {
+	else
 		print $count - $addedrows . " computers failed to get added<br><br>\n";
-	}
 	print "</div>\n";
 	if($domacs)
 		generateDhcpForm($dhcpdata);
@@ -2166,7 +2225,7 @@ function computerUtilities() {
 	$states = array("2" => "available",
 	                "23" => "hpc",
 	                "10" => "maintenance",
-	                "20" => "vmhostinuse");
+	                "20" => "convert to vmhostinuse");
 	print "    <TD colspan=2>\n";
 	printSelectInput("stateid", $states);
 	print "    <INPUT type=button onclick=compStateChangeSubmit(); value=\"Confirm State Change\">";
@@ -2397,7 +2456,10 @@ function compStateChange() {
 		print "Select a VM Host Profile and then click <strong>Submit</strong>\n";
 		print "to place the computers into the vmhostinuse state:<br><br>\n";
 		print "<FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
-		printSelectInput('profileid', $profiles);
+		print "<select name=\"profileid\">\n";
+		foreach($profiles as $id => $profile)
+			print "<option value=\"$id\">{$profile['profilename']}</option>\n";
+		print "</select><br><br>\n";
 		print "<br><br>\n";
 	}
 	elseif($data['stateid'] == 23) {
@@ -3472,45 +3534,57 @@ function addComputer($data) {
 	       .        "type, "
 	       .        "notes, "
 	       .        "provisioningid) "
-	       . "VALUES (" . $data["stateid"] . ", "
+	       . "VALUES ({$data["stateid"]}, "
 	       .         "$ownerid, "
-	       .         $data["platformid"] . ", "
-	       .         $data["scheduleid"] . ", "
+	       .         "{$data["platformid"]}, "
+	       .         "{$data["scheduleid"]}, "
 	       .         "4, "
-	       .         $data["ram"] . ", "
-	       .         $data["numprocs"] . ", "
-	       .         $data["procspeed"] . ", "
-	       .         $data["network"] . ", "
-	       .         "'" . $data["hostname"] . "', "
-	       .         "'" . $data["ipaddress"] . "', "
-	       .         "'" . $data["type"] . "', "
+	       .         "{$data["ram"]}, "
+	       .         "{$data["numprocs"]}, "
+	       .         "{$data["procspeed"]}, "
+	       .         "{$data["network"]}, "
+	       .         "'{$data["hostname"]}', "
+	       .         "'{$data["ipaddress"]}', "
+	       .         "'{$data["type"]}', "
 	       .         "$notes, "
-	       .         "'" . $data["provisioningid"] . "')";
+	       .         "'{$data["provisioningid"]}')";
 	doQuery($query, 195);
+	$compid = dbLastInsertID();
 
-	$qh = doQuery("SELECT LAST_INSERT_ID() FROM computer", 196);
-	if(! $row = mysql_fetch_row($qh)) {
-		abort(197);
-	}
 	$query = "INSERT INTO resource "
 			 .        "(resourcetypeid, "
 			 .        "subid) "
 			 . "VALUES (12, "
-			 .         $row[0] . ")";
+			 .         "$compid)";
 	doQuery($query, 198);
+	$resid = dbLastInsertID();
 
 	// add computer into selected groups
-	$qh = doQuery("SELECT LAST_INSERT_ID() FROM resource", 101);
-	if(! $row = mysql_fetch_row($qh)) {
-		abort(197);
-	}
+	$vals = array();
+	foreach(array_keys($data["computergroup"]) as $groupid)
+		$vals[] = "($resid, $groupid)";
+	$allvals = implode(',', $vals);
+	$query = "INSERT INTO resourcegroupmembers "
+	       .        "(resourceid, "
+	       .        "resourcegroupid) "
+	       . "VALUES $allvals";
+	doQuery($query, 101);
 
-	foreach(array_keys($data["computergroup"]) as $groupid) {
-		$query = "INSERT INTO resourcegroupmembers "
-		       .        "(resourceid, "
-		       .        "resourcegroupid) "
-		       . "VALUES ({$row[0]}, "
-		       .        "$groupid)";
+	if($data['stateid'] == 20) {
+		$profileid = processInputVar('profileid', ARG_NUMERIC);
+		$profiles = getContinuationVar('profiles');
+		if(! array_key_exists($profileid, $profiles)) {
+			$tmp = array_keys($profiles);
+			$profileid = $tmp[0];
+		}
+		# create vmhost entry
+		$query = "INSERT INTO vmhost "
+		       .        "(computerid, "
+		       .        "vmlimit, "
+		       .        "vmprofileid) "
+		       . "VALUES ($compid, "
+		       .        "2, "
+		       .        "$profileid)";
 		doQuery($query, 101);
 	}
 }
