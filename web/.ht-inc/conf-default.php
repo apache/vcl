@@ -23,10 +23,11 @@ define("ONLINEDEBUG", 1);     // 1 to display errors to screen, 0 to email error
 
 define("BASEURL", "https://vcl.example.org");   // no trailing slash - all of the URL except /index.php
 define("SCRIPT", "/index.php");                 // this should only be "/index.php" unless you rename index.php to something else
-define("HELPURL", "https://vcl.example.org/help/");
-define("HELPFAQURL", "http://vcl.example.org/help-faq/");
-define("HELPEMAIL", "vcl_help@example.org");
-define("ERROREMAIL", "webmaster@example.org");
+define("HELPURL", "https://vcl.example.org/help/"); // URL pointed to by the "Help" link in the navigation area
+define("HELPEMAIL", "vcl_help@example.org");        // if an unexpected error occurs, users will be prompted that they can email
+                                                    //   this address for further assistance
+define("ERROREMAIL", "webmaster@example.org");      // if an unexpected error occurs, the code will send an email about it to
+                                                    //   to this address
 define("ENVELOPESENDER", "webserver@example.org");   // email address for envelope sender of mail messages
                                                      //   if a message gets bounced, it goes to this address
 define("COOKIEDOMAIN", ".example.org");       // domain in which cookies are set
@@ -38,6 +39,11 @@ date_default_timezone_set('America/New_York'); // set this to your timezone; a l
 $blockNotifyUsers = "adminuser@example.org"; // comma delimited list of email addresses to which
                                              // a notification will be sent when new block allocation
                                              // requests are submitted and awaiting approval
+
+// Any time someone creates a new image, they will be required to agree to a click through
+//   agreement.  This is the text that will be displayed that the user must agree to.
+//   Place a '%s' where you want the 'I agree' and 'I do not agree' buttons to be placed.
+//   PLEASE NOTE: you at least need to change the email address
 $clickThroughText =
 "<center><h2>Installer Agreement</h2></center>
 <p>As the creator of the VCL image, you are responsible for understanding and 
@@ -82,6 +88,7 @@ define("USEFILTERINGSELECT", 1); // set to 1 to use a dojo filteringselects for 
 define("FILTERINGSELECTTHRESHOLD", 1000); // if USEFILTERINGSELECT = 1, only use them for selects up to this size
 
 define("DEFAULTTHEME", 'default'); // this is the theme that will be used when the site is placed in maintenance if $_COOKIE['VCLSKIN'] is not set
+define("HELPFAQURL", "http://vcl.example.org/help-faq/");
 
 $ENABLE_ITECSAUTH = 0;     // use ITECS accounts (also called "Non-NCSU" accounts)
 
