@@ -2090,7 +2090,7 @@ function printReserveItems($modifystart=1, $imaging=0, $length=60, $maxlength=0,
 							  "45" => "45");
 		printSelectInput("minute", $minutes, $minute);
 		printSelectInput("meridian", array("am" => "a.m.", "pm" => "p.m."), $meridian);
-		print "<small>(Eastern Time Zone)</small>";
+		print "<small>(" . date('T') . ")</small>";
 		//if(! $oneline)
 			print "<br><br>";
 		/*else
