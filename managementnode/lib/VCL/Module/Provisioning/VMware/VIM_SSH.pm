@@ -114,6 +114,32 @@ sub initialize {
 		}
 	}
 	
+	# Determine which VIM executable is installed on the VM host
+	my $command = 'vim-cmd ; vmware-vim-cmd';
+	my ($exit_status, $output) = $self->vmhost_os->execute($command);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to determine which VIM executable is available on the VM host");
+		return;
+	}
+	elsif (!grep(/vmsvc/, @$output)) {
+		# String 'vmsvc' does not exist in the output, neither of the commands worked
+		notify($ERRORS{'DEBUG'}, 0, "failed to determine which VIM executable is available on the VM host, output:\n" . join("\n", @$output));
+		return;
+	}
+	elsif (grep(/: vim-cmd:.*not found/i, @$output)) {
+		# Output contains the line: 'vim-cmd: command not found'
+		$self->{vim_cmd} = 'vmware-vim-cmd';
+	}
+	elsif (grep(/: vmware-vim-cmd:.*not found/i, @$output)) {
+		# Output contains the line: 'vmware-vim-cmd: command not found'
+		$self->{vim_cmd} = 'vim-cmd';
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unexpected output returned while attempting to determine which VIM executable is available on the VM host, output:\n" . join("\n", @$output));
+		return;
+	}
+	notify($ERRORS{'DEBUG'}, 0, "VIM executable available on VM host: $self->{vim_cmd}");
+	
 	notify($ERRORS{'DEBUG'}, 0, ref($self) . " object initialized");
 	return 1;
 }
@@ -124,7 +150,7 @@ sub initialize {
 
  Parameters  : $vim_arguments
  Returns     : array ($exit_status, $output)
- Description : Runs vim-cmd on the VMware host.
+ Description : Runs VIM command on the VMware host.
 
 =cut
 
@@ -143,12 +169,19 @@ sub _run_vim_cmd {
 	
 	my $vmhost_computer_name = $self->vmhost_os->data->get_computer_short_name();
 	
-	my $command = "vim-cmd $vim_arguments";
+	my $command = "$self->{vim_cmd} $vim_arguments";
 	
 	my $attempt = 0;
-	my $attempt_limit = 5;
+	my $attempt_limit = 3;
+	my $wait_seconds = 2;
 	
 	while ($attempt++ < $attempt_limit) {
+		if ($attempt > 1) {
+			# Wait before making next attempt
+			notify($ERRORS{'OK'}, 0, "sleeping $wait_seconds seconds before making attempt $attempt/$attempt_limit");
+			sleep $wait_seconds;
+		}
+		
 		my ($exit_status, $output) = $self->vmhost_os->execute($command);
 		if (!defined($output)) {
 			notify($ERRORS{'WARNING'}, 0, "attempt $attempt/$attempt_limit: failed to run VIM command on VM host $vmhost_computer_name: $command");
@@ -157,19 +190,13 @@ sub _run_vim_cmd {
 			notify($ERRORS{'OK'}, 0, "attempt $attempt/$attempt_limit: failed to connect to VM host $vmhost_computer_name to run command: $command, output:\n" . join("\n", @$output));
 		}
 		else {
-			# vim-cmd command was executed
+			# VIM command command was executed
 			notify($ERRORS{'DEBUG'}, 0, "attempt $attempt/$attempt_limit: executed command on VM host $vmhost_computer_name: $command") if ($attempt > 1);
 			return ($exit_status, $output);
 		}
-		
-		# Wait before making next attempt
-		# Progressively wait longer in case VM host is under heavy load
-		my $wait_seconds = ($attempt * 2);
-		notify($ERRORS{'OK'}, 0, "sleeping $wait_seconds seconds before making next vim-cmd attempt");
-		sleep $wait_seconds;
 	}
 	
-	notify($ERRORS{'WARNING'}, 0, "failed to run vim-cmd on VM host $vmhost_computer_name, made $attempt_limit attempts: $command");
+	notify($ERRORS{'WARNING'}, 0, "failed to run VIM command on VM host $vmhost_computer_name: '$command', made $attempt_limit attempts");
 	return;
 }
 
@@ -201,7 +228,7 @@ sub _get_vm_list {
 	# 496  vm-ark-mcnc-9 (nonpersistent: vmwarewinxp-base234-v12)        [nfs-datastore] vm-ark-mcnc-9_234-v12/vm-ark-mcnc-9_234-v12.vmx   winXPProGuest   vmx-04      
 	# 512  vm-ark-mcnc-10 (nonpersistent: vmwarelinux-centosbase1617-v1) [nfs-datastore] vm-ark-mcnc-10_1617-v1/vm-ark-mcnc-10_1617-v1.vmx otherLinuxGuest vmx-04
 	if (!grep(/Vmid\s+Name/i, @$output)) {
-		notify($ERRORS{'WARNING'}, 0, "unable to determine VM IDs, unexpected output returned from vim-cmd $vim_cmd_arguments:\n" . join("\n", @$output));
+		notify($ERRORS{'WARNING'}, 0, "unable to determine VM IDs, unexpected output returned, VIM command arguments: '$vim_cmd_arguments', output:\n" . join("\n", @$output));
 		return;
 	}
 	
@@ -214,7 +241,7 @@ sub _get_vm_list {
 		
 		# Make sure the vmx file path was parsed
 		if (!$vmx_file_path) {
-			notify($ERRORS{'WARNING'}, 0, "unable to determine vmx file path from vim-cmd $vim_cmd_arguments output line: $line");
+			notify($ERRORS{'WARNING'}, 0, "unable to determine vmx file path, VIM command arguments: '$vim_cmd_arguments', output line: $line");
 			return;
 		}
 		
@@ -378,7 +405,7 @@ sub _get_vm_summary {
 	#   overallStatus = "green",
 	# }
 	if (!grep(/vim\.vm\.Summary/i, @$output)) {
-		notify($ERRORS{'WARNING'}, 0, "unable to retrieve VM summary, unexpected output returned from vim-cmd $vim_cmd_arguments:\n" . join("\n", @$output));
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve VM summary, unexpected output returned, VIM command arguments: '$vim_cmd_arguments', output:\n" . join("\n", @$output));
 		return;
 	}
 	
@@ -437,7 +464,7 @@ sub _get_datastore_names {
 	#	},
 	# ]
 	if (!grep(/vim\.Datastore\.Summary/i, @$output)) {
-		notify($ERRORS{'WARNING'}, 0, "unable to determine datastore names, unexpected output returned from vim-cmd $vim_cmd_arguments:\n" . join("\n", @$output));
+		notify($ERRORS{'WARNING'}, 0, "unable to determine datastore names, unexpected output returned, VIM command arguments: '$vim_cmd_arguments', output:\n" . join("\n", @$output));
 		return;
 	}
 	
@@ -500,7 +527,7 @@ sub _get_datastore_normal_path {
 	#	type = "NFS",
 	# }
 	if (!grep(/vim\.Datastore\.Summary/i, @$output)) {
-		notify($ERRORS{'WARNING'}, 0, "unable to determine datastore normal path, unexpected output returned from vim-cmd $vim_cmd_arguments:\n" . join("\n", @$output));
+		notify($ERRORS{'WARNING'}, 0, "unable to determine datastore normal path, unexpected output returned, VIM command arguments: '$vim_cmd_arguments', output:\n" . join("\n", @$output));
 		return;
 	}
 	
@@ -661,7 +688,7 @@ sub _get_task_id {
 	# ]
 	
 	if (!grep(/ManagedObjectReference/i, @$output)) {
-		notify($ERRORS{'WARNING'}, 0, "unexpected output returned while attempting to retrieve task list, 'vim-cmd $vim_cmd_arguments' output:\n" . join("\n", @$output));
+		notify($ERRORS{'WARNING'}, 0, "unexpected output returned while attempting to retrieve task list, VIM command arguments: '$vim_cmd_arguments', output:\n" . join("\n", @$output));
 		return;
 	}
 	
@@ -676,7 +703,7 @@ sub _get_task_id {
 	
 	# Check if a matching task was found
 	if (!$task_id) {
-		notify($ERRORS{'WARNING'}, 0, "no recent $task_type tasks for VM $vm_id, vim-cmd $vim_cmd_arguments output:\n" . join("\n", @$output));
+		notify($ERRORS{'WARNING'}, 0, "no recent $task_type tasks for VM $vm_id, VIM command arguments: '$vim_cmd_arguments', output:\n" . join("\n", @$output));
 		return;
 	}
 	
@@ -763,7 +790,7 @@ sub _get_task_info {
 		return;
 	}
 	elsif (!grep(/vim.TaskInfo/i, @$output)) {
-		notify($ERRORS{'WARNING'}, 0, "unexpected output returned while attempting to retrieve task list, 'vim-cmd $vim_cmd_arguments' output:\n" . join("\n", @$output));
+		notify($ERRORS{'WARNING'}, 0, "unexpected output returned while attempting to retrieve task list, VIM command arguments: '$vim_cmd_arguments' output:\n" . join("\n", @$output));
 		return;
 	}
 	
@@ -936,7 +963,7 @@ sub get_vm_power_state {
 		return 'suspended';
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "unexpected output returned while attempting to determine power state of $vmx_file_path, 'vim-cmd $vim_cmd_arguments' output:\n" . join("\n", @$output));
+		notify($ERRORS{'WARNING'}, 0, "unexpected output returned while attempting to determine power state of $vmx_file_path, VIM command arguments: '$vim_cmd_arguments' output:\n" . join("\n", @$output));
 		return;
 	}
 }
@@ -994,7 +1021,7 @@ sub vm_power_on {
 		return 1;
 	}
 	elsif (!grep(/Powering on VM/i, @$output)) {
-		notify($ERRORS{'WARNING'}, 0, "unexpected output returned while attempting to power on VM $vmx_file_path, 'vim-cmd $vim_cmd_arguments' output:\n" . join("\n", @$output));
+		notify($ERRORS{'WARNING'}, 0, "unexpected output returned while attempting to power on VM $vmx_file_path, VIM command arguments: '$vim_cmd_arguments', output:\n" . join("\n", @$output));
 		return;
 	}
 	
@@ -1069,7 +1096,7 @@ sub vm_power_off {
 		return 1;
 	}
 	elsif (!grep(/Powering off VM/i, @$output)) {
-		notify($ERRORS{'WARNING'}, 0, "unexpected output returned while attempting to power off VM $vmx_file_path, 'vim-cmd $vim_cmd_arguments' output:\n" . join("\n", @$output));
+		notify($ERRORS{'WARNING'}, 0, "unexpected output returned while attempting to power off VM $vmx_file_path, VIM command arguments: '$vim_cmd_arguments', output:\n" . join("\n", @$output));
 		return;
 	}
 
@@ -1121,6 +1148,7 @@ sub vm_register {
 		return 1;
 	}
 	
+	$vmx_file_path =~ s/\\* /\\ /g;
 	my $vim_cmd_arguments = "solo/registervm \"$vmx_file_path\"";
 	my ($exit_status, $output) = $self->_run_vim_cmd($vim_cmd_arguments);
 	return if !$output;
@@ -1141,11 +1169,11 @@ sub vm_register {
 	
 	# Check to make sure the VM is registered
 	if ($self->is_vm_registered($vmx_file_path)) {
-		notify($ERRORS{'OK'}, 0, "registered VM: $vmx_file_path");
+		notify($ERRORS{'OK'}, 0, "registered VM: '$vmx_file_path'");
 		return 1;
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to register VM: $vmx_file_path, it does not appear in the list of registered VMs");
+		notify($ERRORS{'WARNING'}, 0, "failed to register VM: '$vmx_file_path'");
 		return;
 	}
 }
@@ -1189,7 +1217,13 @@ sub vm_unregister {
 		}
 	}
 	
-	my $vim_cmd_arguments = "vmsvc/unregister \"$vmx_file_path\"";
+	my $vm_id = $self->_get_vm_id($vmx_file_path);
+	if (!defined($vm_id)) {
+		notify($ERRORS{'OK'}, 0, "unable to unregister VM because VM ID could not be determined for vmx path: $vmx_file_path");
+		return;
+	}
+	
+	my $vim_cmd_arguments = "vmsvc/unregister $vm_id";
 	my ($exit_status, $output) = $self->_run_vim_cmd($vim_cmd_arguments);
 	return if !$output;
 	
@@ -1201,17 +1235,17 @@ sub vm_unregister {
 	# }
 	
 	if (grep(/fault/i, @$output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to unregister VM: $vmx_file_path\ncommand: vim-cmd $vim_cmd_arguments\noutput:\n" . join("\n", @$output));
+		notify($ERRORS{'WARNING'}, 0, "failed to unregister VM $vm_id: $vmx_file_path\nVIM command arguments: '$vim_cmd_arguments'\noutput:\n" . join("\n", @$output));
 		return;
 	}
 	
 	# Check to make sure the VM is not registered
 	if (!$self->is_vm_registered($vmx_file_path)) {
-		notify($ERRORS{'OK'}, 0, "unregistered VM: $vmx_file_path");
+		notify($ERRORS{'OK'}, 0, "unregistered VM: $vmx_file_path (ID: $vm_id)");
 		return 1;
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to unregister VM: $vmx_file_path, it still appears to be registered");
+		notify($ERRORS{'WARNING'}, 0, "failed to unregister VM: $vmx_file_path  (ID: $vm_id), it still appears to be registered");
 		return;
 	}
 }
@@ -1254,6 +1288,10 @@ sub get_virtual_disk_type {
 	}
 	
 	my $vmdk_directory_datastore_path = $self->_get_datastore_path($vmdk_directory_path);
+	if (!$vmdk_directory_datastore_path) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine vmdk directory datastore path from vmdk directory path: $vmdk_directory_path");
+		return;
+	}
 	
 	my $vim_cmd_arguments = "hostsvc/datastorebrowser/disksearch \"$vmdk_directory_datastore_path\"";
 	my ($exit_status, $output) = $self->_run_vim_cmd($vim_cmd_arguments);
@@ -1374,8 +1412,12 @@ sub get_virtual_disk_controller_type {
 	}
 	
 	my $vmdk_directory_datastore_path = $self->_get_datastore_path($vmdk_directory_path);
+	if (!$vmdk_directory_datastore_path) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine vmdk directory datastore path from vmdk directory path: $vmdk_directory_path");
+		return;
+	}
 	
-	my $vim_cmd_arguments = "hostsvc/datastorebrowser/search 0 \"$vmdk_directory_datastore_path\"";
+	my $vim_cmd_arguments = "hostsvc/datastorebrowser/searchsubfolders 0 \"$vmdk_directory_datastore_path\"";
 	my ($exit_status, $output) = $self->_run_vim_cmd($vim_cmd_arguments);
 	return if !$output;
 	
@@ -1518,8 +1560,12 @@ sub get_virtual_disk_hardware_version {
 	}
 	
 	my $vmdk_directory_datastore_path = $self->_get_datastore_path($vmdk_directory_path);
+	if (!$vmdk_directory_datastore_path) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine vmdk directory datastore path from vmdk directory path: $vmdk_directory_path");
+		return;
+	}
 	
-	my $vim_cmd_arguments = "hostsvc/datastorebrowser/search 0 \"$vmdk_directory_datastore_path\"";
+	my $vim_cmd_arguments = "hostsvc/datastorebrowser/searchsubfolders 0 \"$vmdk_directory_datastore_path\"";
 	my ($exit_status, $output) = $self->_run_vim_cmd($vim_cmd_arguments);
 	return if !$output;
 	
@@ -1670,28 +1716,137 @@ sub copy_virtual_disk {
 		return;
 	}
 	
-	# Run vmkfstools to copy the virtual disk
-	my $command = "vmkfstools -i \"$source_path\" \"$destination_path\" -d $destination_disk_type";
-	notify($ERRORS{'DEBUG'}, 0, "attempting to execute command on VM host: $command");
-	my ($exit_status, $output) = $self->vmhost_os->execute($command);
-	
-	# Expected output:
-	# Destination disk format: VMFS thin-provisioned
-	# Cloning disk '/vmfs/volumes/nfs-datastore/vmwarewinxp-base234-v12/vmwarewinxp-base234-v12.vmdk'...
-	# Clone: 0% done.Clone: 1% done. ... Clone: 98% done.Clone: 99% done.Clone: 100% done.
-
-	if (!defined($output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to run command on VM host: $command");
-		return;
+	# vmware-vdiskmanager disk types:
+	# 0 - single growable virtual disk, no separate descriptor file (copy time: 1:04)
+	#     createType="monolithicSparse"
+	#     4.2G disk_0.vmdk
+	#     4.2G total
+	# 1 - growable virtual disk split in 2GB files (copy time: 1:08)
+	#     createType="twoGbMaxExtentSparse"
+	#     691  disk_1.vmdk
+	#     2.0G disk_1-s001.vmdk
+	#     904M disk_1-s002.vmdk
+	#     16M  disk_1-s003.vmdk
+	#     203M disk_1-s004.vmdk
+	#     398M disk_1-s005.vmdk
+	#     623M disk_1-s006.vmdk
+	#     21M  disk_1-s007.vmdk
+	#     128K disk_1-s008.vmdk
+	#     4.2G total
+	# 2 - preallocated virtual disk (copy time: 12:33)
+	#     createType="monolithicFlat"
+	#     429 disk_2.vmdk
+	#     14G disk_2-flat.vmdk
+	#     15G total
+	# 3 - preallocated virtual disk split in 2GB files (copy time: 4:06)
+	#     createType="twoGbMaxExtentFlat"
+	#     688 disk_3.vmdk
+	#     2.0G disk_3-f001.vmdk
+	#     2.0G disk_3-f002.vmdk
+	#     2.0G disk_3-f003.vmdk
+	#     2.0G disk_3-f004.vmdk
+	#     2.0G disk_3-f005.vmdk
+	#     2.0G disk_3-f006.vmdk
+	#     2.0G disk_3-f007.vmdk
+	#     1.8M disk_3-f008.vmdk
+	#     15G total
+	# 4 : preallocated ESX-type virtual disk (copy time: 10:00)
+	#     createType="vmfs"
+	#     419 disk_4.vmdk
+	#     14G disk_4-flat.vmdk
+	#     15G total
+	# 5 : compressed disk optimized for streaming (copy time: 3:21)
+	#     createType="streamOptimized"
+	#     2.5G disk_5.vmdk
+	#     2.5G total
+	my $vdisk_type;
+	if ($destination_disk_type =~ /thin/i) {
+		$vdisk_type = 0;
 	}
-	elsif (!grep(/100\% done/, @$output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to copy virtual disk, output does not contain '100% done', command: $command, output:\n" . join("\n", @$output));
-		return;
+	elsif ($destination_disk_type =~ /2gbsparse/i) {
+		$vdisk_type = 1;
 	}
 	else {
-		notify($ERRORS{'OK'}, 0, "copied virtual disk: '$source_path' --> '$destination_path', destination disk type: $destination_disk_type");
-		return 1;
+		$vdisk_type = 4;
 	}
+	
+	my $success = 0;
+	my $start_time;
+	my $end_time;
+	
+	# Try vmware-vdiskmanager
+	notify($ERRORS{'DEBUG'}, 0, "attempting to copy virtual disk using 'vmware-vdiskmanager', disk type: $destination_disk_type ($vdisk_type)");
+	my $vdisk_command = "vmware-vdiskmanager -r \"$source_path\" -t $vdisk_type \"$destination_path\"";
+	$start_time = time;
+	my ($vdisk_exit_status, $vdisk_output) = $self->vmhost_os->execute($vdisk_command);
+	if (!defined($vdisk_output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute 'vmware-vdiskmanager' command on VM host to copy vmdk file:\n$vdisk_command");
+	}
+	elsif (grep(/success/i, @$vdisk_output)) {
+		$end_time = time;
+		$success = 1;
+		notify($ERRORS{'OK'}, 0, "copied vmdk file by executing 'vmware-vdiskmanager' on VM host: '$source_path' --> '$destination_path'");
+	}
+	elsif (grep(/not found/i, @$vdisk_output)) {
+		notify($ERRORS{'DEBUG'}, 0, "unable to copy vmdk using 'vmware-vdiskmanager' because the command is not available on VM host");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute 'vmware-vdiskmanager' on VM host to copy vmdk file:\n$vdisk_command\noutput:\n" . join("\n", @$vdisk_output));
+	}
+	
+	if (!$success){
+		# Run vmkfstools to copy the virtual disk
+		my $vmkfstools_command = "vmkfstools -i \"$source_path\" \"$destination_path\" -d $destination_disk_type";
+		notify($ERRORS{'DEBUG'}, 0, "attempting to copy virtual disk using 'vmkfstools', disk type: $destination_disk_type");
+		$start_time = time;
+		my ($vmkfstools_exit_status, $vmkfstools_output) = $self->vmhost_os->execute($vmkfstools_command);
+		
+		# Expected output:
+		# Destination disk format: VMFS thin-provisioned
+		# Cloning disk '/vmfs/volumes/nfs-datastore/vmwarewinxp-base234-v12/vmwarewinxp-base234-v12.vmdk'...
+		# Clone: 0% done.Clone: 1% done. ... Clone: 98% done.Clone: 99% done.Clone: 100% done.
+	
+		if (!defined($vmkfstools_output)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to run command on VM host: $vmkfstools_command");
+			return;
+		}
+		elsif (!grep(/100\% done/, @$vmkfstools_output)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to copy virtual disk, output does not contain '100% done', command: $vmkfstools_command, output:\n" . join("\n", @$vmkfstools_output));
+			return;
+		}
+		else {
+			$end_time = time;
+			$success = 1;
+			notify($ERRORS{'OK'}, 0, "copied virtual disk by executing 'vmkfstools' on VM host: '$source_path' --> '$destination_path'");
+		}
+	}
+	
+	my $duration_seconds = ($end_time - $start_time);
+	my $minutes = ($duration_seconds / 60);
+	$minutes =~ s/\..*//g;
+	my $seconds = ($duration_seconds - ($minutes * 60));
+	$seconds = "0$seconds" if length($seconds) == 1;
+	
+	my $search_path = $destination_path;
+	$search_path =~ s/\.vmdk$//g;
+	$search_path .= '*.vmdk';
+	my $image_size_bytes = $self->vmhost_os->get_file_size($search_path);
+	
+	my $bytes_per_second = ($image_size_bytes / $duration_seconds);
+	my $bits_per_second = ($image_size_bytes * 8 / $duration_seconds);
+	my $mb_per_second = ($image_size_bytes / $duration_seconds / 1024 / 1024);
+	my $mbit_per_second = ($image_size_bytes * 8 / $duration_seconds / 1024 / 1024);
+	my $gbyte_per_minute = ($image_size_bytes / $duration_seconds / 1024 / 1024 / 1024 * 60);
+	
+	notify($ERRORS{'OK'}, 0, "copied vmdk: '$source_path' --> '$destination_path'\n" .
+			 "total bytes: " . format_number($image_size_bytes) . "\n" .
+			 "time to copy: $minutes:$seconds (" . format_number($duration_seconds) . " seconds)\n" .
+			 "B/s: " . format_number($bytes_per_second) . "\n" .
+			 "b/s: " . format_number($bits_per_second) . "\n" .
+			 "MB/s: " . format_number($mb_per_second, 2) . "\n" .
+			 "Mb/s: " . format_number($mbit_per_second, 2) . "\n" .
+			 "GB/m: " . format_number($gbyte_per_minute, 2));
+	return 1;
 }
 
 #/////////////////////////////////////////////////////////////////////////////

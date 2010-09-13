@@ -57,6 +57,7 @@ use warnings;
 use diagnostics;
 use English qw( -no_match_vars );
 use File::Temp qw( tempdir );
+use List::Util qw( max );
 
 use VCL::utils;
 
@@ -96,7 +97,7 @@ sub get_registered_vms {
 	
 	my @vmx_paths;
 	for my $vm (@vms) {
-		push @vmx_paths, $self->get_normal_path($vm->summary->config->vmPathName) || return;
+		push @vmx_paths, $self->_get_normal_path($vm->summary->config->vmPathName) || return;
 	}
 	
 	notify($ERRORS{'DEBUG'}, 0, "found " . scalar(@vmx_paths) . " registered VMs:\n" . join("\n", @vmx_paths));
@@ -123,7 +124,7 @@ sub vm_register {
 	}
 	
 	# Get the vmx path argument and convert it to a datastore path
-	my $vmx_path = $self->get_datastore_path(shift) || return;
+	my $vmx_path = $self->_get_datastore_path(shift) || return;
 	
 	my $host_view = VIExt::get_host_view(1) || return;
 	my $datacenter = Vim::find_entity_view (view_type => 'Datacenter') || return;
@@ -179,7 +180,7 @@ sub vm_unregister {
 	}
 	
 	# Get the vmx path argument and convert it to a datastore path
-	my $vmx_path = $self->get_datastore_path(shift) || return;
+	my $vmx_path = $self->_get_datastore_path(shift) || return;
 	
 	# Override the die handler
 	local $SIG{__DIE__} = sub{};
@@ -224,7 +225,7 @@ sub vm_power_on {
 	}
 	
 	# Get the vmx path argument and convert it to a datastore path
-	my $vmx_path = $self->get_datastore_path(shift) || return;
+	my $vmx_path = $self->_get_datastore_path(shift) || return;
 	
 	# Override the die handler
 	local $SIG{__DIE__} = sub{};
@@ -274,7 +275,7 @@ sub vm_power_off {
 	}
 	
 	# Get the vmx path argument and convert it to a datastore path
-	my $vmx_path = $self->get_datastore_path(shift) || return;
+	my $vmx_path = $self->_get_datastore_path(shift) || return;
 	
 	# Override the die handler because fileManager may call it
 	local $SIG{__DIE__} = sub{};
@@ -327,7 +328,7 @@ sub get_vm_power_state {
 	}
 	
 	# Get the vmx path argument and convert it to a datastore path
-	my $vmx_path = $self->get_datastore_path(shift) || return;
+	my $vmx_path = $self->_get_datastore_path(shift) || return;
 	
 	# Override the die handler because fileManager may call it
 	local $SIG{__DIE__} = sub{};
@@ -440,8 +441,8 @@ sub copy_virtual_disk {
 	}
 	
 	# Get the source and destination path arguments in the datastore path format
-	my $source_path = $self->get_datastore_path(shift) || return;
-	my $destination_path = $self->get_datastore_path(shift) || return;
+	my $source_path = $self->_get_datastore_path(shift) || return;
+	my $destination_path = $self->_get_datastore_path(shift) || return;
 	
 	# Get the adapter type and disk type arguments if they were specified
 	# If not specified, set the default values
@@ -450,10 +451,19 @@ sub copy_virtual_disk {
 	
 	# If the adapter type was not specified, retrieve it from the source vmdk file
 	if (!$destination_adapter_type) {
+		my $vmware_product_name = $self->get_vmware_product_name();
 		$destination_adapter_type = $self->get_virtual_disk_controller_type($source_path);
 		
-		if (!$destination_adapter_type) {
+		if (!$vmware_product_name) {
+			notify($ERRORS{'WARNING'}, 0, "destination adapter type argument was not specifed and unable to determine VMware product name contains ESX, using lsiLogic");
+			$destination_adapter_type = 'lsiLogic';
+		}
+		elsif (!$destination_adapter_type) {
 			notify($ERRORS{'WARNING'}, 0, "destination adapter type argument was not specifed and unable to retrieve adapter type from source vmdk file: $source_path, using lsiLogic");
+			$destination_adapter_type = 'lsiLogic';
+		}
+		elsif ($vmware_product_name =~ /esx/i && $destination_adapter_type =~ /ide/i) {
+			notify($ERRORS{'OK'}, 0, "VMware product is '$vmware_product_name' and adapter type from source vmdk file is '$destination_adapter_type', using lsiLogic");
 			$destination_adapter_type = 'lsiLogic';
 		}
 	}
@@ -481,7 +491,7 @@ sub copy_virtual_disk {
 	my $virtual_disk_manager = Vim::get_view(mo_ref => $service_content->{virtualDiskManager}) || return;
 	
 	# Get the destination partent directory path and create the directory
-	my $destination_directory_path = $self->get_parent_directory_datastore_path($destination_path) || return;
+	my $destination_directory_path = $self->_get_parent_directory_datastore_path($destination_path) || return;
 	$self->create_directory($destination_directory_path) || return;
 	
 	# Create a virtual disk spec object
@@ -565,8 +575,8 @@ sub move_virtual_disk {
 	}
 	
 	# Get the source path argument in datastore path format
-	my $source_path = $self->get_datastore_path(shift) || return;
-	my $destination_path = $self->get_datastore_path(shift) || return;
+	my $source_path = $self->_get_datastore_path(shift) || return;
+	my $destination_path = $self->_get_datastore_path(shift) || return;
 	
 	# Make sure the source path ends with .vmdk
 	if ($source_path !~ /\.vmdk$/i || $destination_path !~ /\.vmdk$/i) {
@@ -587,7 +597,7 @@ sub move_virtual_disk {
 	}
 	
 	# Get the destination parent directory path, make sure it exists
-	my $destination_parent_directory_path = $self->get_parent_directory_datastore_path($destination_path) || return;
+	my $destination_parent_directory_path = $self->_get_parent_directory_datastore_path($destination_path) || return;
 	$self->create_directory($destination_parent_directory_path) || return;
 	
 	# Check if a virtual disk manager object is available
@@ -680,7 +690,7 @@ sub create_nfs_datastore {
 	my $datastore_device = "$remote_host:$remote_path";
 	
 	# Get the existing datastore summaries
-	my $datastore_summaries = $self->get_datastore_summaries();
+	my $datastore_summaries = $self->_get_datastore_summaries();
 	for my $check_datastore_name (keys(%$datastore_summaries)) {
 		my $check_datastore_type = $datastore_summaries->{$check_datastore_name}{type};
 		
@@ -788,7 +798,7 @@ sub get_virtual_disk_controller_type {
 	}
 	
 	# Get the vmdk file path argument
-	my $vmdk_file_path = $self->get_datastore_path(shift) || return;
+	my $vmdk_file_path = $self->_get_datastore_path(shift) || return;
 	if ($vmdk_file_path !~ /\.vmdk$/) {
 		notify($ERRORS{'WARNING'}, 0, "file path argument must end with .vmdk: $vmdk_file_path");
 		return;
@@ -823,7 +833,7 @@ sub get_virtual_disk_controller_type {
 		$return_controller_type = $controller_type;
 	}
 	
-	notify($ERRORS{'DEBUG'}, 0, "retrieved controllerType value from vmdk file info: $return_controller_type($controller_type)");
+	notify($ERRORS{'DEBUG'}, 0, "retrieved controllerType value from vmdk file info: $return_controller_type ($controller_type)");
 	return $return_controller_type;
 }
 
@@ -852,7 +862,7 @@ sub get_virtual_disk_type {
 	}
 	
 	# Get the vmdk file path argument
-	my $vmdk_file_path = $self->get_datastore_path(shift) || return;
+	my $vmdk_file_path = $self->_get_datastore_path(shift) || return;
 	if ($vmdk_file_path !~ /\.vmdk$/) {
 		notify($ERRORS{'WARNING'}, 0, "file path argument must end with .vmdk: $vmdk_file_path");
 		return;
@@ -899,7 +909,7 @@ sub get_virtual_disk_hardware_version {
 	}
 	
 	# Get the vmdk file path argument
-	my $vmdk_file_path = $self->get_datastore_path(shift) || return;
+	my $vmdk_file_path = $self->_get_datastore_path(shift) || return;
 	if ($vmdk_file_path !~ /\.vmdk$/) {
 		notify($ERRORS{'WARNING'}, 0, "file path argument must end with .vmdk: $vmdk_file_path");
 		return;
@@ -1105,7 +1115,7 @@ sub create_directory {
 	}
 	
 	# Get and check the directory path argument
-	my $directory_path = $self->get_datastore_path(shift) || return;
+	my $directory_path = $self->_get_datastore_path(shift) || return;
 	
 	# Check if the directory already exists
 	return 1 if $self->file_exists($directory_path);
@@ -1160,7 +1170,24 @@ sub delete_file {
 	}
 	
 	# Get and check the file path argument
-	my $path = $self->get_datastore_path(shift) || return;
+	my $path_argument = shift;
+	if (!$path_argument) {
+		notify($ERRORS{'WARNING'}, 0, "path argument was not specified");
+		return;
+	}
+	
+	my $datastore_path = $self->_get_datastore_path($path_argument);
+	if (!$datastore_path) {
+		notify($ERRORS{'WARNING'}, 0, "failed to convert path argument to datastore path: $path_argument");
+		return;
+	}
+	
+	# Sanity check, make sure the file path argument is not the root of a datastore
+	# Otherwise everything in the datastore would be deleted
+	if ($datastore_path =~ /^\[.+\]$/) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called with the file path argument pointing to the root of a datastore, this would cause all datastore contents to be deleted\nfile path argument: '$path_argument'\ndatastore path: '$datastore_path'");
+		return;
+	}
 	
 	# Get a fileManager object
 	my $service_content = Vim::get_service_content() || return;
@@ -1170,19 +1197,20 @@ sub delete_file {
 	local $SIG{__DIE__} = sub{};
 
 	# Attempt to delete the file
-	eval { $file_manager->DeleteDatastoreFile(name => $path); };
+	notify($ERRORS{'OK'}, 0, "attempting to delete file: $datastore_path");
+	eval { $file_manager->DeleteDatastoreFile(name => $datastore_path); };
 	if ($@) {
 		if ($@->isa('SoapFault') && ref($@->detail) eq 'FileNotFound') {
-			notify($ERRORS{'DEBUG'}, 0, "file does not exist: $path");
+			notify($ERRORS{'DEBUG'}, 0, "file does not exist: $datastore_path");
 			return 1;
 		}
 		else {
-			notify($ERRORS{'WARNING'}, 0, "failed to delete file: $path, error:\n$@");
+			notify($ERRORS{'WARNING'}, 0, "failed to delete file: $datastore_path, error:\n$@");
 			return;
 		}
 	}
 	else {
-		notify($ERRORS{'OK'}, 0, "file was deleted: $path");
+		notify($ERRORS{'OK'}, 0, "deleted file: $datastore_path");
 		return 1;
 	}
 }
@@ -1207,14 +1235,14 @@ sub copy_file {
 	}
 	
 	# Get and check the file path arguments
-	my $source_file_path = $self->get_datastore_path(shift) || return;
-	my $destination_file_path = $self->get_datastore_path(shift) || return;
+	my $source_file_path = $self->_get_datastore_path(shift) || return;
+	my $destination_file_path = $self->_get_datastore_path(shift) || return;
 	
 	# Get the VM host name
 	my $computer_node_name = $self->data->get_computer_node_name() || return;
 	
 	# Get the destination directory path and create the directory if it doesn't exit
-	my $destination_directory_path = $self->get_parent_directory_datastore_path($destination_file_path) || return;
+	my $destination_directory_path = $self->_get_parent_directory_datastore_path($destination_file_path) || return;
 	$self->create_directory($destination_directory_path) || return;
 	
 	# Get a fileManager object
@@ -1274,8 +1302,8 @@ sub copy_file_to {
 	}
 	
 	# Get the source and destination arguments
-	my $source_file_path = $self->get_normal_path(shift) || return;
-	my $destination_file_path = $self->get_datastore_path(shift) || return;
+	my $source_file_path = normalize_file_path(shift) || return;
+	my $destination_file_path = $self->_get_datastore_path(shift) || return;
 	
 	# Make sure the source file exists on the management node
 	if (!-f $source_file_path) {
@@ -1284,7 +1312,7 @@ sub copy_file_to {
 	}
 	
 	# Make sure the destination directory path exists
-	my $destination_directory_path = $self->get_parent_directory_datastore_path($destination_file_path) || return;
+	my $destination_directory_path = $self->_get_parent_directory_datastore_path($destination_file_path) || return;
 	$self->create_directory($destination_directory_path) || return;
 	sleep 2;
 	
@@ -1292,8 +1320,8 @@ sub copy_file_to {
 	my $computer_node_name = $self->data->get_computer_node_name() || return;
 	
 	# Get the destination datastore name and relative datastore path
-	my $destination_datastore_name = $self->get_datastore_name($destination_file_path);
-	my $destination_relative_datastore_path = $self->get_relative_datastore_path($destination_file_path);
+	my $destination_datastore_name = $self->_get_datastore_name($destination_file_path);
+	my $destination_relative_datastore_path = $self->_get_relative_datastore_path($destination_file_path);
 	
 	# Override the die handler
 	local $SIG{__DIE__} = sub{};
@@ -1332,11 +1360,11 @@ sub copy_file_from {
 	}
 	
 	# Get the source and destination arguments
-	my $source_file_path = $self->get_datastore_path(shift) || return;
-	my $destination_file_path = $self->get_normal_path(shift) || return;
+	my $source_file_path = $self->_get_datastore_path(shift) || return;
+	my $destination_file_path = normalize_file_path(shift) || return;
 	
 	# Get the destination directory path and make sure the directory exists
-	my $destination_directory_path = $self->get_parent_directory_normal_path($destination_file_path) || return;
+	my $destination_directory_path = $self->_get_parent_directory_normal_path($destination_file_path) || return;
 	if (!-d $destination_directory_path) {
 		# Attempt to create the directory
 		my $command = "mkdir -p -v \"$destination_directory_path\" 2>&1 && ls -1d \"$destination_directory_path\"";
@@ -1365,10 +1393,10 @@ sub copy_file_from {
 	my $computer_node_name = $self->data->get_computer_node_name() || return;
 	
 	# Get the source datastore name
-	my $source_datastore_name = $self->get_datastore_name($source_file_path) || return;
+	my $source_datastore_name = $self->_get_datastore_name($source_file_path) || return;
 	
 	# Get the source file relative datastore path
-	my $source_file_relative_datastore_path = $self->get_relative_datastore_path($source_file_path) || return;
+	my $source_file_relative_datastore_path = $self->_get_relative_datastore_path($source_file_path) || return;
 	
 	# Override the die handler
 	local $SIG{__DIE__} = sub{};
@@ -1420,7 +1448,7 @@ sub get_file_contents {
 	# Create a temp directory to store the file and construct the temp file path
 	# The temp directory is automatically deleted then this variable goes out of scope
 	my $temp_directory_path = tempdir( CLEANUP => 1 );
-	my $source_file_name = $self->get_file_name($path);
+	my $source_file_name = $self->_get_file_name($path);
 	my $temp_file_path = "$temp_directory_path/$source_file_name";
 	
 	$self->copy_file_from($path, $temp_file_path) || return;
@@ -1465,14 +1493,14 @@ sub move_file {
 	}
 	
 	# Get and check the file path arguments
-	my $source_file_path = $self->get_datastore_path(shift) || return;
-	my $destination_file_path = $self->get_datastore_path(shift) || return;
+	my $source_file_path = $self->_get_datastore_path(shift) || return;
+	my $destination_file_path = $self->_get_datastore_path(shift) || return;
 	
 	# Get the VM host name
 	my $computer_node_name = $self->data->get_computer_node_name() || return;
 	
 	# Get the destination directory path and create the directory if it doesn't exit
-	my $destination_directory_path = $self->get_parent_directory_datastore_path($destination_file_path) || return;
+	my $destination_directory_path = $self->_get_parent_directory_datastore_path($destination_file_path) || return;
 	$self->create_directory($destination_directory_path) || return;
 	
 	# Get a fileManager and Datacenter object
@@ -1529,12 +1557,12 @@ sub file_exists {
 	}
 	
 	# Get and check the file path argument
-	my $file_path = $self->get_datastore_path(shift) || return;
+	my $file_path = $self->_get_datastore_path(shift) || return;
 	
 	# Check if the path argument is the root of a datastore
 	if ($file_path =~ /^\[(.+)\]$/) {
 		my $datastore_name = $1;
-		(my @datastore_names = $self->get_datastore_names()) || return;
+		(my @datastore_names = $self->_get_datastore_names()) || return;
 		
 		if (grep(/^$datastore_name$/, @datastore_names)) {
 			notify($ERRORS{'DEBUG'}, 0, "file (datastore root) exists: $file_path");
@@ -1547,8 +1575,8 @@ sub file_exists {
 	}
 	
 	# Take the path apart, get the filename and parent directory path
-	my $base_directory_path = $self->get_parent_directory_datastore_path($file_path) || return;
-	my $file_name = $self->get_file_name($file_path) || return;
+	my $base_directory_path = $self->_get_parent_directory_datastore_path($file_path) || return;
+	my $file_name = $self->_get_file_name($file_path) || return;
 	
 	my $result = $self->find_files($base_directory_path, $file_name);
 	if ($result) {
@@ -1657,7 +1685,7 @@ sub find_files {
 	
 	$search_subdirectories = 1 if !defined($search_subdirectories);
 	
-	$base_directory_path = $self->get_normal_path($base_directory_path) || return;
+	$base_directory_path = $self->_get_normal_path($base_directory_path) || return;
 	
 	# Get the file info
 	my $file_info = $self->get_file_info("$base_directory_path/$search_pattern", $search_subdirectories);
@@ -1670,15 +1698,15 @@ sub find_files {
 	my @file_paths;
 	for my $file_path (keys(%{$file_info})) {
 		# Add the file path to the return array
-		push @file_paths, $self->get_normal_path($file_path);
+		push @file_paths, $self->_get_normal_path($file_path);
 		
 		# vmdk files will have a diskExtents key
 		# The extents must be added to the return array
 		if (defined($file_info->{$file_path}->{diskExtents})) {
 			for my $disk_extent (@{$file_info->{$file_path}->{diskExtents}}) {
 				# Convert the datastore file paths to normal file paths
-				$disk_extent = $self->get_normal_path($disk_extent);
-				push @file_paths, $self->get_normal_path($disk_extent);
+				$disk_extent = $self->_get_normal_path($disk_extent);
+				push @file_paths, $self->_get_normal_path($disk_extent);
 			}
 		}
 	}
@@ -1714,12 +1742,12 @@ sub get_available_space {
 	}
 	
 	# Get the datastore name
-	my $datastore_name = $self->get_datastore_name($path) || return;
+	my $datastore_name = $self->_get_datastore_name($path) || return;
 	
 	my $computer_node_name = $self->data->get_computer_node_name() || return;
 	
 	# Get the datastore summary hash
-	my $datastore_summaries = $self->get_datastore_summaries() || return;
+	my $datastore_summaries = $self->_get_datastore_summaries() || return;
 	
 	my $available_bytes = $datastore_summaries->{$datastore_name}{freeSpace};
 	if (!defined($available_bytes)) {
@@ -1853,20 +1881,20 @@ sub get_file_info {
 	}
 	
 	# Take the path argument apart
-	my $base_directory_path = $self->get_parent_directory_datastore_path($path_argument) || return;
-	my $search_pattern = $self->get_file_name($path_argument) || return;
+	my $base_directory_path = $self->_get_parent_directory_datastore_path($path_argument) || return;
+	my $search_pattern = $self->_get_file_name($path_argument) || return;
 	
 	# Set the default value for $search_subfolders if the argument wasn't passed
 	$search_subfolders = 0 if !$search_subfolders;
 	
 	# Make sure the base directory path is formatted as a datastore path
-	my $base_datastore_path = $self->get_datastore_path($base_directory_path) || return;
+	my $base_datastore_path = $self->_get_datastore_path($base_directory_path) || return;
 	
 	# Extract the datastore name from the base directory path
-	my $datastore_name = $self->get_datastore_name($base_directory_path) || return;
+	my $datastore_name = $self->_get_datastore_name($base_directory_path) || return;
 	
 	# Get a datastore object and host datastore browser object
-	my $datastore = $self->get_datastore_object($datastore_name) || return;
+	my $datastore = $self->_get_datastore_object($datastore_name) || return;
 	my $host_datastore_browser = Vim::get_view(mo_ref => $datastore->browser);
 	
 	# Create HostDatastoreBrowserSearchSpec spec
@@ -1953,11 +1981,11 @@ sub get_file_info {
 		if ($folder->file) {
 			# Retrieve the folder path, format: '[nfs-datastore] vmwarewinxp-base234-v12'
 			my $directory_datastore_path =  $folder->folderPath;
-			my $directory_normal_path = $self->get_normal_path($directory_datastore_path);
+			my $directory_normal_path = $self->_get_normal_path($directory_datastore_path);
 			
 			# Loop through all of the files under the folder
 			foreach my $file (@{$folder->file}) {
-				my $file_path = $self->get_datastore_path("$directory_normal_path/" . $file->path);
+				my $file_path = $self->_get_datastore_path("$directory_normal_path/" . $file->path);
 				
 				# Check the file type
 				if (ref($file) eq 'FolderFileInfo') {
@@ -1977,7 +2005,7 @@ sub get_file_info {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 get_datastore_names
+=head2 _get_datastore_names
 
  Parameters  : none
  Returns     : array
@@ -1986,33 +2014,27 @@ sub get_file_info {
 
 =cut
 
-sub get_datastore_names {
+sub _get_datastore_names {
 	my $self = shift;
 	if (ref($self) !~ /VCL::Module/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
 	
-	# Get the host view
-	my $host_view = VIExt::get_host_view(1);
-	
-	# Get an array containing datastore managed object references
-	my @datastore_mo_refs = @{$host_view->datastore};
-	
-	# Loop through the datastore managed object references
-	# Get a datastore view, add the view's summary to the return hash
-	my @datastore_names;
-	for my $datastore_mo_ref (@datastore_mo_refs) {
-		my $datastore_view = Vim::get_view(mo_ref => $datastore_mo_ref);
-		push @datastore_names, $datastore_view->summary->name;
+	# Get the datastore summary information
+	my $datastore_summaries = $self->_get_datastore_summaries();
+	if (!$datastore_summaries) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve datastore names, unable to retrieve datastore summary information from the VM host");
+		return;
 	}
 	
-	return @datastore_names;
+	# The datastore names are the hash keys
+	return sort keys %$datastore_summaries;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 get_datastore_object
+=head2 _get_datastore_object
 
  Parameters  : $datastore_name
  Returns     : vSphere SDK datastore object
@@ -2021,7 +2043,7 @@ sub get_datastore_names {
 
 =cut
 
-sub get_datastore_object {
+sub _get_datastore_object {
 	my $self = shift;
 	if (ref($self) !~ /VCL::Module/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
@@ -2056,7 +2078,7 @@ sub get_datastore_object {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 get_datastore_summaries
+=head2 _get_datastore_summaries
 
  Parameters  : none
  Returns     : hash reference
@@ -2064,7 +2086,7 @@ sub get_datastore_object {
                containing the datastore summary information. The keys of the
                hash are the datastore names. Example:
                
-               my $datastore_summaries = $self->get_datastore_summaries();
+               my $datastore_summaries = $self->_get_datastore_summaries();
                $datastore_summaries->{datastore1}{accessible} = '1'
                $datastore_summaries->{datastore1}{capacity} = '31138512896'
                $datastore_summaries->{datastore1}{datastore}{type} = 'Datastore'
@@ -2077,7 +2099,7 @@ sub get_datastore_object {
 
 =cut
 
-sub get_datastore_summaries {
+sub _get_datastore_summaries {
 	my $self = shift;
 	if (ref($self) !~ /VCL::Module/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
@@ -2113,8 +2135,6 @@ sub get_datastore_summaries {
 		$datastore_summaries{$datastore_name} = $datastore_view->summary;
 	}
 	
-	my @datastore_names = sort keys(%datastore_summaries);
-	
 	# Store the data in this object so it doesn't need to be retrieved again
 	$self->{datastore_summaries} = \%datastore_summaries;
    return $self->{datastore_summaries};
@@ -2122,7 +2142,7 @@ sub get_datastore_summaries {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 get_datastore_path
+=head2 _get_datastore_path
 
  Parameters  : $path
  Returns     : string
@@ -2132,7 +2152,7 @@ sub get_datastore_summaries {
 
 =cut
 
-sub get_datastore_path {
+sub _get_datastore_path {
 	my $self = shift;
 	if (ref($self) !~ /module/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
@@ -2140,11 +2160,23 @@ sub get_datastore_path {
 	}
 	
 	# Get the path argument
-	my $path = $self->get_normal_path(shift) || return;
+	my $path_argument = shift;
+	if (!$path_argument) {
+		notify($ERRORS{'WARNING'}, 0, "path argument was not specified");
+		return;
+	}
 	
-	my $datastore_name = $self->get_datastore_name($path) || return;
-	my $datastore_root_normal_path = $self->get_datastore_root_normal_path($path) || return;
-	my $relative_datastore_path = $self->get_relative_datastore_path($path);
+	my $datastore_name = $self->_get_datastore_name($path_argument);
+	if (!$datastore_name) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine datastore path, failed to determine datastore name: $path_argument");
+		return;
+	}
+	
+	my $relative_datastore_path = $self->_get_relative_datastore_path($path_argument);
+	if (!defined($relative_datastore_path)) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine datastore path, failed to determine relative datastore path: $path_argument");
+		return;
+	}
 	
 	if ($relative_datastore_path) {
 		return "[$datastore_name] $relative_datastore_path";
@@ -2156,7 +2188,7 @@ sub get_datastore_path {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 get_datastore_root_normal_path
+=head2 _get_datastore_root_normal_path
 
  Parameters  : $path
  Returns     : string
@@ -2167,41 +2199,82 @@ sub get_datastore_path {
 
 =cut
 
-sub get_datastore_root_normal_path {
+sub _get_datastore_root_normal_path {
 	my $self = shift;
 	if (ref($self) !~ /module/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
 	
-	# Get the path argument, convert it to a normal path
-	my $path = $self->get_normal_path(shift) || return;
-	
-	# Get the datastore summary information
-	my $datastore_summaries = $self->get_datastore_summaries();
-	my @datastore_normal_paths;
-	
-	# Loop through the datastores
-	for my $datastore_name (keys(%{$datastore_summaries})) {
-		my $datastore_normal_path = $datastore_summaries->{$datastore_name}{normal_path};
-		
-		# Check if the path begins with the datastore root path
-		if ($path =~ /^$datastore_normal_path/) {
-			return $datastore_normal_path;
-		}
-		else {
-			# Path does not begin with datastore path, add datastore path to array for warning message
-			push @datastore_normal_paths, $datastore_normal_path;
-		}
+	# Get the path argument
+	my $path = shift;
+	if (!$path) {
+		notify($ERRORS{'WARNING'}, 0, "path argument was not specified");
+		return;
 	}
 	
-	notify($ERRORS{'WARNING'}, 0, "unable to determine datastore root path from path: $path, path does not begin with any of the datastore paths:\n" . join("\n", @datastore_normal_paths));
-	return;
+	my $datastore_name = $self->_get_datastore_name($path);
+	if (!$datastore_name) {
+		notify($ERRORS{'WARNING'}, 0, "failed to determine datastore root normal path, unable to determine datastore name: $path");
+		return;
+	}
+	
+	# Get the datastore summary information
+	my $datastore_summaries = $self->_get_datastore_summaries();
+	if (!$datastore_summaries) {
+		notify($ERRORS{'WARNING'}, 0, "failed to determine datastore root normal path, unable to retrieve datastore summaries");
+		return;
+	}
+	
+	return $datastore_summaries->{$datastore_name}{normal_path};
 }
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 get_normal_path
+=head2 _get_datastore_root_url_path
+
+ Parameters  : $path
+ Returns     : string
+ Description : Parses the path argument and determines its datastore root path
+               in normal form.
+               '/vmfs/volumes/datastore1/folder/file.txt' --> '/vmfs/volumes/895cdc05-11c0ee8f'
+					'[datastore1] folder/file.txt' --> '/vmfs/volumes/895cdc05-11c0ee8f'
+
+=cut
+
+sub _get_datastore_root_url_path {
+	my $self = shift;
+	if (ref($self) !~ /module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get the path argument
+	my $path = shift;
+	if (!$path) {
+		notify($ERRORS{'WARNING'}, 0, "path argument was not specified");
+		return;
+	}
+	
+	my $datastore_name = $self->_get_datastore_name($path);
+	if (!$datastore_name) {
+		notify($ERRORS{'WARNING'}, 0, "failed to determine datastore root URL path, unable to determine datastore name: $path");
+		return;
+	}
+	
+	# Get the datastore summary information
+	my $datastore_summaries = $self->_get_datastore_summaries();
+	if (!$datastore_summaries) {
+		notify($ERRORS{'WARNING'}, 0, "failed to determine datastore root URL path, unable to retrieve datastore summaries");
+		return;
+	}
+	
+	return $datastore_summaries->{$datastore_name}{url};
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 _get_normal_path
 
  Parameters  : $path
  Returns     : string
@@ -2212,7 +2285,7 @@ sub get_datastore_root_normal_path {
 
 =cut
 
-sub get_normal_path {
+sub _get_normal_path {
 	my $self = shift;
 	if (ref($self) !~ /module/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
@@ -2220,50 +2293,40 @@ sub get_normal_path {
 	}
 	
 	# Get the path argument
-	my $path = shift;
-	if (!$path) {
+	my $path_argument = shift;
+	if (!$path_argument) {
 		notify($ERRORS{'WARNING'}, 0, "path argument was not specified");
 		return;
 	}
 	
-	# Remove any trailing slashes or spaces
-	$path =~ s/[\/\s]*$//g;
-	
-	# Check if path argument is a normal path - does not contain brackets
-	if ($path !~ /\[/) {
-		return normalize_file_path($path);
+	if ($path_argument !~ /\[.+\]/ && $path_argument !~ /^\/vmfs\/volumes\//i) {
+		return normalize_file_path($path_argument);
 	}
 	
-	# Extract the datastore name from the path
-	my ($datastore_name) = $path =~ /^\[(.+)\]/;
-	if (!$datastore_name) {
-		notify($ERRORS{'WARNING'}, 0, "unable to determine datastore name from path: '$path'");
+	my $datastore_root_normal_path = $self->_get_datastore_root_normal_path($path_argument);
+	if (!$datastore_root_normal_path) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine normal path, failed to determine datastore root normal path: $path_argument");
 		return;
 	}
 	
-	# Get the datastore summary information
-	my $datastore_summaries = $self->get_datastore_summaries();
-	
-	my $datastore_summary = $datastore_summaries->{$datastore_name};
-	if (!$datastore_summary) {
-		notify($ERRORS{'WARNING'}, 0, "datastore summary could not be retrieved for datastore: $datastore_name\n" . format_data($datastore_summaries));
+	my $relative_datastore_path = $self->_get_relative_datastore_path($path_argument);
+	if (!defined($relative_datastore_path)) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine normal path, failed to determine relative datastore path: $path_argument");
 		return;
 	}
 	
-	my $datastore_root_normal_path = $datastore_summary->{normal_path};
+	if ($relative_datastore_path) {
+		return "$datastore_root_normal_path/$relative_datastore_path";
+	}
+	else {
+		return $datastore_root_normal_path;
+	}
 	
-	# Replace '[datastore] ' with the datastore root normal path
-	$path =~ s/^\[.+\]\s*/$datastore_root_normal_path\//g;
-	
-	# Remove any trailing slashes or spaces
-	$path =~ s/[\/\s]*$//g;
-	
-	return $path;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 get_datastore_name
+=head2 _get_datastore_name
 
  Parameters  : $path
  Returns     : string
@@ -2273,7 +2336,7 @@ sub get_normal_path {
 
 =cut
 
-sub get_datastore_name {
+sub _get_datastore_name {
 	my $self = shift;
 	if (ref($self) !~ /module/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
@@ -2287,36 +2350,32 @@ sub get_datastore_name {
 		return;
 	}
 	
-	# Check if path is a datastore path, datastore name will be in brackets
-	if ($path =~ /^\[(.+)\]/) {
-		return $1;
-	}
-	
-	$path = $self->get_normal_path($path);
+	$path = normalize_file_path($path);
 	
 	# Get the datastore summary information
-	my $datastore_summaries = $self->get_datastore_summaries();
+	my $datastore_summaries = $self->_get_datastore_summaries();
 	my @datastore_normal_paths;
 	
 	# Loop through the datastores, check if the path begins with the datastore path
 	for my $datastore_name (keys(%{$datastore_summaries})) {
 		my $datastore_normal_path = $datastore_summaries->{$datastore_name}{normal_path};
+		my $datastore_url = $datastore_summaries->{$datastore_name}{url};
 		
-		if ($path =~ /^$datastore_normal_path/) {
+		if ($path =~ /^(\[$datastore_name\]|$datastore_normal_path|$datastore_url)(\s|\/|$)/) {
 			return $datastore_name;
 		}
 		
 		# Path does not begin with datastore path, add datastore path to array for warning message
-		push @datastore_normal_paths, $datastore_normal_path;
+		push @datastore_normal_paths, ("'[$datastore_name]'", "'$datastore_normal_path'", "'$datastore_url'");
 	}
 	
-	notify($ERRORS{'WARNING'}, 0, "unable to determine datastore name from path: $path, path does not begin with any of the datastore paths:\n" . join("\n", @datastore_normal_paths));
+	notify($ERRORS{'WARNING'}, 0, "unable to determine datastore name from path: '$path', path does not begin with any of the datastore paths:\n" . join("\n", @datastore_normal_paths));
 	return;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 get_parent_directory_normal_path
+=head2 _get_parent_directory_normal_path
 
  Parameters  : $path
  Returns     : string
@@ -2326,7 +2385,7 @@ sub get_datastore_name {
 
 =cut
 
-sub get_parent_directory_normal_path {
+sub _get_parent_directory_normal_path {
 	my $self = shift;
 	if (ref($self) !~ /module/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
@@ -2334,20 +2393,37 @@ sub get_parent_directory_normal_path {
 	}
 	
 	# Get the path argument
-	my $path = $self->get_normal_path(shift) || return;
+	my $path_argument = shift;
+	if (!$path_argument) {
+		notify($ERRORS{'WARNING'}, 0, "path argument was not specified");
+		return;
+	}
 	
-	# Remove the last component of the path - after the last '/'
-	$path =~ s/[^\/\]]*$//g;
+	if ($path_argument !~ /\[.+\]/ && $path_argument !~ /^\/vmfs\/volumes\//i) {
+		# Remove the last component of the path - after the last '/'
+		$path_argument =~ s/[^\/\]]*$//g;
 	
-	# Remove any trailing spaces or slashes
-	$path =~ s/[\/\s]*$//g;
+		return normalize_file_path($path_argument);
+	}
 	
-	return $path;
+	my $parent_directory_datastore_path = $self->_get_parent_directory_datastore_path($path_argument);
+	if (!$parent_directory_datastore_path) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine parent directory normal path, parent directory datastore path could not be determined on which the normal path is based: '$path_argument'");
+		return;
+	}
+	
+	my $parent_directory_normal_path = $self->_get_normal_path($parent_directory_datastore_path);
+	if (!$parent_directory_normal_path) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine parent directory normal path, parent directory datastore path could not be converted to a normal path: '$parent_directory_datastore_path'");
+		return;
+	}
+	
+	return $parent_directory_normal_path;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 get_parent_directory_datastore_path
+=head2 _get_parent_directory_datastore_path
 
  Parameters  : $path
  Returns     : string
@@ -2357,7 +2433,7 @@ sub get_parent_directory_normal_path {
 
 =cut
 
-sub get_parent_directory_datastore_path {
+sub _get_parent_directory_datastore_path {
 	my $self = shift;
 	if (ref($self) !~ /module/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
@@ -2365,20 +2441,32 @@ sub get_parent_directory_datastore_path {
 	}
 	
 	# Get the path argument
-	my $path = $self->get_datastore_path(shift) || return;
+	my $path_argument = shift;
+	if (!$path_argument) {
+		notify($ERRORS{'WARNING'}, 0, "path argument was not specified");
+		return;
+	}
+	
+	my $datastore_path = $self->_get_datastore_path($path_argument);
+	if (!$datastore_path) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine parent directory datastore path, path argument could not be converted to a datastore path: '$path_argument'");
+		return;
+	}
+	
+	if ($datastore_path =~ /^\[.+\]$/) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine parent directory datastore path, path argument is the root path of a datastore: '$path_argument'");
+		return;
+	}
 	
 	# Remove the last component of the path - after the last '/'
-	$path =~ s/[^\/\]]*$//g;
+	$datastore_path =~ s/[^\/\]]*$//g;
 	
-	# Remove any trailing spaces or slashes
-	$path =~ s/[\/\s]*$//g;
-	
-	return $path;
+	return normalize_file_path($datastore_path);
 }
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 get_file_name
+=head2 _get_file_name
 
  Parameters  : $path
  Returns     : string
@@ -2387,7 +2475,7 @@ sub get_parent_directory_datastore_path {
 
 =cut
 
-sub get_file_name {
+sub _get_file_name {
 	my $self = shift;
 	if (ref($self) !~ /module/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
@@ -2395,25 +2483,32 @@ sub get_file_name {
 	}
 	
 	# Get the path argument
-	my $path = $self->get_normal_path(shift) || return;
-	
-	# Remove the last component of the path - after the last '/'
-	my ($file_name) = $path =~ /([^\/]*)$/;
-	
-	# Remove slashes or spaces from the beginning and end of file name
-	$file_name =~ s/(^[\/\s]*|[\/\s]*$)//g;
-	
-	if (!$file_name) {
-		notify($ERRORS{'WARNING'}, 0, "unable to determine file name from path: '$path'");
+	my $path_argument = shift;
+	if (!$path_argument) {
+		notify($ERRORS{'WARNING'}, 0, "path argument was not specified");
 		return;
 	}
 	
-	return $file_name;
+	my $datastore_path = $self->_get_datastore_path($path_argument);
+	if (!$datastore_path) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine file name, path argument could not be converted to a datastore path: '$path_argument'");
+		return;
+	}
+	
+	if ($datastore_path =~ /^\[.+\]$/) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine file name, path argument is the root path of a datastore: '$path_argument'");
+		return;
+	}
+	
+	# Extract the last component of the path - after the last '/'
+	my ($file_name) = $datastore_path =~ /([^\/\]]+)$/;
+	
+	return normalize_file_path($file_name);
 }
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 get_file_base_name
+=head2 _get_file_base_name
 
  Parameters  : $path
  Returns     : string
@@ -2423,25 +2518,35 @@ sub get_file_name {
 
 =cut
 
-sub get_file_base_name {
+sub _get_file_base_name {
 	my $self = shift;
 	if (ref($self) !~ /module/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
 	
-	# Get the file name from the path argument
-	my $file_name = $self->get_file_name(shift) || return;
+	# Get the path argument
+	my $path_argument = shift;
+	if (!$path_argument) {
+		notify($ERRORS{'WARNING'}, 0, "path argument was not specified");
+		return;
+	}
 	
-	# Remove the file extension - everything after the last '.' in the file name
-	$file_name =~ s/\.[^\.]*$//;
+	my $file_name = $self->_get_file_name($path_argument);
+	if (!$file_name) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine file base name, file name could not be determined from path argument: '$path_argument'");
+		return;
+	}
 	
-	return $file_name;
+	# Remove the file extension - everything before the first '.' in the file name
+	my ($file_base_name) = $file_name =~ /^([^\.]*)/;
+	
+	return $file_base_name;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 get_relative_datastore_path
+=head2 _get_relative_datastore_path
 
  Parameters  : $path
  Returns     : string
@@ -2451,7 +2556,7 @@ sub get_file_base_name {
 
 =cut
 
-sub get_relative_datastore_path {
+sub _get_relative_datastore_path {
 	my $self = shift;
 	if (ref($self) !~ /module/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
@@ -2459,18 +2564,161 @@ sub get_relative_datastore_path {
 	}
 	
 	# Get the path argument
-	my $path = $self->get_normal_path(shift) || return;
+	my $path_argument = shift;
+	if (!$path_argument) {
+		notify($ERRORS{'WARNING'}, 0, "path argument was not specified");
+		return;
+	}
 	
-	my $datastore_root_normal_path = $self->get_datastore_root_normal_path($path) || return;
+	my $datastore_name = $self->_get_datastore_name($path_argument);
+	if (!$datastore_name) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine relative datastore path, failed to determine datastore name: $path_argument");
+		return;
+	}
 	
-	# Extract the section of the path after the datastore path
-	my ($relative_datastore_path) = $path =~ /$datastore_root_normal_path(.*)/g;
+	my $datastore_root_normal_path = $self->_get_datastore_root_normal_path($path_argument);
+	if (!$datastore_root_normal_path) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine relative datastore path, failed to determine the normal root path for the datastore: $path_argument");
+		return;
+	}
+	
+	my $datastore_root_url_path = $self->_get_datastore_root_url_path($path_argument);
+	if (!$datastore_root_normal_path) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine relative datastore path, failed to determine the normal root path for the datastore: $path_argument");
+		return;
+	}
+	
+	my ($datastore_path, $relative_datastore_path) = $path_argument =~ /^(\[$datastore_name\]|$datastore_root_normal_path|$datastore_root_url_path)(.*)/;
+	
+	if (!$datastore_path) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine relative datastore path: '$path_argument', path argument does not begin with any of the following:\n'[$datastore_name]'\n'$datastore_root_url_path'\n'$datastore_root_normal_path'");
+		return;
+	}
+	
 	$relative_datastore_path = '' if !$relative_datastore_path;
 	
 	# Remove slashes or spaces from the beginning and end of the relative datastore path
 	$relative_datastore_path =~ s/(^[\/\s]*|[\/\s]*$)//g;
 	
 	return $relative_datastore_path;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 _check_datastore_paths
+
+ Parameters  : @check_paths (optional)
+ Returns     : boolean
+ Description : Checks each of the vSphere.pm subroutines which parse a file path
+					argument. This subroutine returns false if any subroutine returns
+					undefined. The file paths passed to each subroutine that is
+					checked may be specified as arguments to _check_datastore_paths.
+					If no arguments are specified, several default paths will be
+					checked.
+
+=cut
+
+sub _check_datastore_paths {
+	my $self = shift;
+	if (ref($self) !~ /module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my @check_paths = @_;
+	
+	# Check to make sure all of the vmdk file path components can be retrieved
+	my $undefined_string = "<undefined>";
+	
+	# Assemble a string of all of the components
+	my $check_paths_string = "====================\n";
+	
+	my @datastore_names = $self->_get_datastore_names();
+	if (!@datastore_names) {
+		notify($ERRORS{'WARNING'}, 0, "datastore names could not be retrieved");
+	}
+	$check_paths_string .= "datastore names:\n" . join("\n", @datastore_names) . "\n";
+	
+	my $datastore_summaries = $self->_get_datastore_summaries();
+	if (!$datastore_summaries) {
+		notify($ERRORS{'WARNING'}, 0, "datastore summary information could not be retrieved");
+		return;
+	}
+	notify($ERRORS{'DEBUG'}, 0, "datastore summary information:\n" . format_data($datastore_summaries));
+	
+	my @check_subroutines = (
+		'_get_datastore_name',
+		'_get_datastore_path',
+		'_get_normal_path',
+		'_get_datastore_root_normal_path',
+		'_get_datastore_root_url_path',
+		'_get_parent_directory_datastore_path',
+		'_get_parent_directory_normal_path',
+		'_get_relative_datastore_path',
+		'_get_file_name',
+		'_get_file_base_name',
+	);
+	
+	my $max_sub_name_length = max (map { length } @check_subroutines);
+	
+	if (!@check_paths) {
+		#for my $datastore_name (sort keys %$datastore_summaries) {
+		#	my $datastore_normal_path = $datastore_summaries->{$datastore_name}{normal_path};
+		#	my $datastore_url_path = $datastore_summaries->{$datastore_name}{url};
+		#	push @check_paths, (
+		#		"[$datastore_name] ",
+		#		"[$datastore_name] /",
+		#		"[$datastore_name] test/test file.txt ",
+		#		"$datastore_normal_path/test dir/test file.txt ",
+		#		"$datastore_normal_path/test dir/ ",
+		#		"$datastore_url_path/test dir/test file.txt ",
+		#		"$datastore_url_path/test dir/ ",
+		#		"$datastore_url_path/test.txt ",
+		#		"[invalid datastore] file.txt",
+		#	);
+		#}
+		
+		push @check_paths, (
+			$self->get_vmx_file_path(),
+			$self->get_vmx_directory_path(),
+			$self->get_vmx_base_directory_path(),
+			$self->get_vmdk_file_path(),
+			$self->get_vmdk_directory_path(),
+			$self->get_vmdk_base_directory_path(),
+			$self->get_vmdk_directory_path_persistent(),
+			$self->get_vmdk_directory_path_nonpersistent(),
+			$self->get_vmdk_file_path_persistent(),
+			$self->get_vmdk_file_path_nonpersistent(),
+		);
+	}
+	
+	for my $check_path (@check_paths) {
+		$check_paths_string .= "----------\n";
+		$check_paths_string .= "'$check_path'\n";
+		
+		for my $check_subroutine (@check_subroutines) {
+			my $result = eval "\$self->$check_subroutine(\$check_path)";
+			
+			$check_paths_string .= "$check_subroutine: ";
+			$check_paths_string .= " " x ($max_sub_name_length - length($check_subroutine));
+			
+			if (defined($result)) {
+				$check_paths_string .= "'$result'\n";
+			}
+			else {
+				$check_paths_string .= "$undefined_string\n";
+			}
+		}
+	}
+	
+	notify($ERRORS{'OK'}, 0, "retrieved datastore path components:\n$check_paths_string");
+	
+	if ($check_paths_string =~ /$undefined_string/) {
+		return;
+	}
+	else {
+		return 1;
+	}
 }
 
 #/////////////////////////////////////////////////////////////////////////////

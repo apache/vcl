@@ -478,17 +478,15 @@ sub capture {
 		notify($ERRORS{'WARNING'}, 0, "failed to complete OS module's pre_capture tasks");
 		return;
 	}
-	
-	# Power off the VM if it's not already off
-	my $vm_power_state = $self->api->get_vm_power_state($vmx_file_path_capture);
-	if (!defined($vm_power_state)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to retrieve the power state of the VM being captured after the OS module's pre_capture tasks were completed");
-		return;
-	}
-	elsif ($vm_power_state !~ /off/i) {
+
+	# Wait for the VM to power off
+	# This OS module may initiate a shutdown and immediately return
+	if (!$self->wait_for_power_off(600)) {
+		notify($ERRORS{'WARNING'}, 0, "VM $computer_name has not powered off after the OS module's pre_capture tasks were completed, waited $shutdown_wait_seconds seconds, powering off VM forcefully");
+		
 		if ($self->api->vm_power_off($vmx_file_path_capture)) {
-			# Sleep for 5 seconds to make sure the power off is complete
-			sleep 5;
+			# Sleep for 10 seconds to make sure the power off is complete
+			sleep 10;
 		}
 		else {
 			notify($ERRORS{'WARNING'}, 0, "failed to power off the VM being captured after the OS module's pre_capture tasks were completed, VM power state: $vm_power_state");
@@ -703,10 +701,13 @@ sub get_active_vmx_file_path {
 =head2 node_status
 
  Parameters  : none
- Returns     : string -- 'READY' or 'RELOAD'
+ Returns     : string -- 'READY', 'POST_LOAD', or 'RELOAD'
  Description : Checks the status of a VM. 'READY' is returned if the VM is
-               registered, powered on, accessible via SSH, and the image loaded
-               matches the requested image.  'RELOAD' is returned otherwise.
+               accessible via SSH, the virtual disk mode is persistent if
+               necessary, the image loaded matches the requested image, and the
+               OS module's post-load tasks have run. 'POST_LOAD' is returned if
+               the VM only needs to have the OS module's post-load tasks run
+               before it is ready. 'RELOAD' is returned otherwise.
 
 =cut
 
@@ -718,25 +719,8 @@ sub node_status {
 	}
 	
 	my $computer_name = $self->data->get_computer_short_name();
-	
-	# Check if the VM is registered
-	if ($self->is_vm_registered()) {
-		notify($ERRORS{'DEBUG'}, 0, "VM $computer_name is registered");
-	}
-	else {
-		notify($ERRORS{'DEBUG'}, 0, "VM $computer_name is not registered, returning 'RELOAD'");
-		return {'status' => 'RELOAD'};
-	}
-	
-	# Check if the VM is powered on
-	my $power_status = $self->power_status();
-	if ($power_status && $power_status =~/on/i) {
-		notify($ERRORS{'DEBUG'}, 0, "VM $computer_name is powered on");
-	}
-	else {
-		notify($ERRORS{'DEBUG'}, 0, "VM $computer_name is not powered on, returning 'RELOAD'");
-		return {'status' => 'RELOAD'};
-	}
+	my $image_name = $self->data->get_image_name();
+	my $vm_persistent = $self->is_vm_persistent();
 	
 	# Check if SSH is available
 	if ($self->os->is_ssh_responding()) {
@@ -747,23 +731,82 @@ sub node_status {
 		return {'status' => 'RELOAD'};
 	}
 	
-	# Get the contents of currentimage.txt
+	# Get the contents of currentimage.txt and check if currentimage.txt matches the requested image name
 	my $current_image_name = $self->os->get_current_image_name();
 	if (!$current_image_name) {
 		notify($ERRORS{'DEBUG'}, 0, "unable to retrieve image name from currentimage.txt on VM $computer_name, returning 'RELOAD'");
 		return {'status' => 'RELOAD'};
 	}
-	
-	# Check if currentimage.txt matches the requested image name
-	my $image_name = $self->data->get_image_name();
-	if ($current_image_name eq $image_name) {
-		notify($ERRORS{'DEBUG'}, 0, "currentimage.txt image ($current_image_name) matches requested image name ($image_name) on VM $computer_name, returning 'READY'");
-		return {'status' => 'READY'};
+	elsif ($current_image_name eq $image_name) {
+		notify($ERRORS{'DEBUG'}, 0, "currentimage.txt image ($current_image_name) matches requested image name ($image_name) on VM $computer_name");
 	}
 	else {
 		notify($ERRORS{'DEBUG'}, 0, "currentimage.txt image ($current_image_name) does not match requested image name ($image_name) on VM $computer_name, returning 'RELOAD'");
 		return {'status' => 'RELOAD'};
 	}
+	
+	# If the VM should be persistent, make sure the VM already loaded is persistent
+	if ($vm_persistent) {
+		# Determine the vmx file path actively being used by the VM
+		my $vmx_file_path = $self->get_active_vmx_file_path();
+		if (!$vmx_file_path) {
+			notify($ERRORS{'WARNING'}, 0, "failed to determine the vmx file path actively being used by $computer_name, returning 'RELOAD'");
+			return {'status' => 'RELOAD'};
+		}
+	
+		# Set the vmx file path in this object so that it overrides the default value that would normally be constructed
+		if (!$self->set_vmx_file_path($vmx_file_path)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to set the vmx file to the path that was determined to be in use by the VM: $vmx_file_path, returning 'RELOAD'");
+			return {'status' => 'RELOAD'};
+		}
+		
+		# Get the information contained within the vmx file
+		my $vmx_info = $self->get_vmx_info($vmx_file_path);
+		
+		# Get the vmdk info from the vmx info
+		my @vmdk_identifiers = keys %{$vmx_info->{vmdk}};
+		if (!@vmdk_identifiers) {
+			notify($ERRORS{'WARNING'}, 0, "did not find vmdk file in vmx info ({vmdk} key), returning 'RELOAD':\n" . format_data($vmx_info));
+			return {'status' => 'RELOAD'};
+		}
+		elsif (scalar(@vmdk_identifiers) > 1) {
+			notify($ERRORS{'WARNING'}, 0, "found multiple vmdk files in vmx info ({vmdk} keys), returning 'RELOAD':\n" . format_data($vmx_info));
+			return {'status' => 'RELOAD'};
+		}
+		
+		# Get the vmdk file path from the vmx information
+		my $vmdk_file_path = $vmx_info->{vmdk}{$vmdk_identifiers[0]}{vmdk_file_path};
+		if (!$vmdk_file_path) {
+			notify($ERRORS{'WARNING'}, 0, "vmdk file path was not found in the vmx file info, returning 'RELOAD':\n" . format_data($vmx_info));
+			return {'status' => 'RELOAD'};
+		}
+		notify($ERRORS{'DEBUG'}, 0, "vmdk file path used by the VM already loaded: $vmdk_file_path");
+		
+		# Get the vmdk mode from the vmx information and make sure it's persistent
+		my $vmdk_mode = $vmx_info->{vmdk}{$vmdk_identifiers[0]}{mode};
+		if (!$vmdk_mode) {
+			notify($ERRORS{'WARNING'}, 0, "vmdk mode was not found in the vmx info, returning 'RELOAD':\n" . format_data($vmx_info));
+			return {'status' => 'RELOAD'};
+		}
+		
+		if ($vmdk_mode !~ /^(independent-)?persistent/i) {
+			notify($ERRORS{'OK'}, 0, "mode of vmdk already loaded is not persistent: $vmdk_mode, returning 'RELOAD'");
+			return {'status' => 'RELOAD'};
+		}
+		notify($ERRORS{'DEBUG'}, 0, "mode of vmdk already loaded is valid: $vmdk_mode");
+	}
+	
+	# Check if the OS post_load tasks have run
+	if ($self->os->get_vcld_post_load_status()) {
+		notify($ERRORS{'DEBUG'}, 0, "OS module post_load tasks have been completed on VM $computer_name");
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "OS module post_load tasks have not been completed on VM $computer_name, returning 'POST_LOAD'");
+		return {'status' => 'POST_LOAD'};
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "returning 'READY'");
+	return {'status' => 'READY'};
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -1437,13 +1480,14 @@ sub prepare_vmdk {
 	#}
 	
 	# Check if the VM is persistent, if so, attempt to copy files locally from the nonpersistent directory if they exist
-	if ($is_vm_persistent) {
-		
+	if ($is_vm_persistent && $self->vmhost_os->file_exists($host_vmdk_file_path_nonpersistent)) {
+		# Attempt to use the API's copy_virtual_disk subroutine
 		if ($self->api->can('copy_virtual_disk') && $self->api->copy_virtual_disk($host_vmdk_file_path_nonpersistent, $host_vmdk_file_path)) {
 			notify($ERRORS{'OK'}, 0, "copied vmdk files from nonpersistent to persistent directory on VM host");
 			return $self->check_vmdk_disk_type();
 		}
 		else {
+			# Unable to use the API's copy_virtual_disk subroutine, use VM host OS's copy_file subroutine
 			my $host_vmdk_directory_path_nonpersistent = $self->get_vmdk_directory_path_nonpersistent() || return;
 			
 			my $vmdk_file_prefix = $self->get_vmdk_file_prefix() || return;
@@ -1559,7 +1603,7 @@ sub check_vmdk_disk_type {
 	
 	# Retrieve the virtual disk type from the API object
 	my $virtual_disk_type = $self->api->get_virtual_disk_type($vmdk_file_path);
-	if (!$vmware_product_name) {
+	if (!$virtual_disk_type) {
 		notify($ERRORS{'DEBUG'}, 0, "skipping vmdk disk type check because virtual disk type could not be retrieved from the API object");
 		return 1;
 	}
@@ -1770,7 +1814,8 @@ sub get_vmx_directory_name_persistent {
 		return;
 	}
 	
-	return "$vmx_directory_name_nonpersistent\_$request_id";
+	return $vmx_directory_name_nonpersistent;
+	#return "$vmx_directory_name_nonpersistent\_$request_id";
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -2713,18 +2758,24 @@ sub is_vm_registered {
 	
 	# Get the vmx file path
 	# Use the argument if one was supplied
-	my $vmx_file_path = shift || $self->get_vmx_file_path() || return;
+	my $vmx_file_path = shift || $self->get_vmx_file_path();
+	if (!$vmx_file_path) {
+		notify($ERRORS{'WARNING'}, 0, "vmx file path argument was not specified and default vmx file path could not be determined");		
+		return;
+	}
+	$vmx_file_path = normalize_file_path($vmx_file_path);
 	
 	my @registered_vmx_file_paths = $self->api->get_registered_vms();
+	for my $registered_vmx_file_path (@registered_vmx_file_paths) {
+		$registered_vmx_file_path = normalize_file_path($registered_vmx_file_path);
+		if ($vmx_file_path eq $registered_vmx_file_path) {
+			notify($ERRORS{'DEBUG'}, 0, "VM is registered: $vmx_file_path");
+			return 1;
+		}
+	}
 	
-	if (grep { $_ eq $vmx_file_path } @registered_vmx_file_paths) {
-		notify($ERRORS{'DEBUG'}, 0, "VM is registered: $vmx_file_path");
-		return 1;
-	}
-	else {
-		notify($ERRORS{'DEBUG'}, 0, "VM is not registered: $vmx_file_path");
-		return 0;
-	}
+	notify($ERRORS{'DEBUG'}, 0, "VM is not registered: '$vmx_file_path', registered paths:\n" . join("\n", @registered_vmx_file_paths));
+	return 0;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -3411,7 +3462,7 @@ sub delete_vm {
 				 disk mode: $vmdk_mode");
 		
 		if ($vmdk_mode =~ /^(independent-)?persistent/) {
-			notify($ERRORS{'DEBUG'}, 0, "mode of vmdk file: $vmdk_mode, existing vmdk directory will be deleted");
+			notify($ERRORS{'DEBUG'}, 0, "mode of vmdk file: $vmdk_mode, attempting to delete vmdk directory: $vmdk_directory_path");
 			$self->vmhost_os->delete_file($vmdk_directory_path) || return;
 		}
 		else {
@@ -3975,6 +4026,55 @@ sub get_vmhost_product_name {
 	}
 	
 	return;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 post_maintenance_action
+
+ Parameters  : none
+ Returns     : boolean
+ Description : 
+
+=cut
+
+sub post_maintenance_action {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $computer_id = $self->data->get_computer_id();
+	my $computer_short_name = $self->data->get_computer_short_name();
+	my $vmhost_hostname = $self->data->get_vmhost_hostname();
+	
+	my $vmx_file_path = $self->get_vmx_file_path();
+	if (!$vmx_file_path) {
+		notify($ERRORS{'WARNING'}, 0, "vmx file path could not be determined");
+		return;
+	}
+	
+	# Delete the existing VM from the VM host
+	if ($self->vmhost_os->file_exists($vmx_file_path)) {
+		if (!$self->delete_vm($vmx_file_path)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to delete VM on VM host $vmhost_hostname: $vmx_file_path");
+			return;
+		}
+	}
+	else {
+		notify($ERRORS{'OK'}, 0, "vmx file does not exist on the VM host $vmhost_hostname: $vmx_file_path");
+	}
+	
+	if (switch_vmhost_id($computer_id, 'NULL')) {
+		notify($ERRORS{'OK'}, 0, "set vmhostid to NULL for for VM $computer_short_name");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to set the vmhostid to NULL for VM $computer_short_name");
+		return;
+	}
+	
+	return 1;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
