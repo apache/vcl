@@ -507,7 +507,8 @@ will wait before checking the database for tasks.
 </div>
 <div dojoType="dijit.Tooltip" connectId="installpathhelp">
 path to parent directory of image repository<br>
-directories (typically /install)
+directories (typically /install) - only needed<br>
+with bare metal installs or VMWare with local disk
 </div>
 <div dojoType="dijit.Tooltip" connectId="identityhelp">
 comma delimited list of full paths to ssh identity<br>
@@ -1289,7 +1290,7 @@ function addMgmtnode($data) {
 	       .         "publicDefaultGateway, "
 	       .         "publiDNSserver, "
 	       .         "sysadminEmailAddress, "
-	       .         "sharedMailBox "
+	       .         "sharedMailBox) "
 	       . "VALUES ('{$data["hostname"]}', "
 	       .         "'{$data["IPaddress"]}', "
 	       .         "$ownerid, "
