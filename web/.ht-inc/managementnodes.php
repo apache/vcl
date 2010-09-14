@@ -1288,7 +1288,7 @@ function addMgmtnode($data) {
 	       .         "publicIPconfiguration, "
 	       .         "publicSubnetMask, "
 	       .         "publicDefaultGateway, "
-	       .         "publiDNSserver, "
+	       .         "publicDNSserver, "
 	       .         "sysadminEmailAddress, "
 	       .         "sharedMailBox) "
 	       . "VALUES ('{$data["hostname"]}', "
