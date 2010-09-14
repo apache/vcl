@@ -83,8 +83,9 @@ use strict;
 use warnings;
 use diagnostics;
 use English '-no_match_vars';
+use Digest::SHA1 qw(sha1_hex);
 
-use VCL::utils qw($SETUP_MODE $VERBOSE %ERRORS &notify &getnewdbh format_data);
+use VCL::utils;
 use VCL::DataStructure;
 use VCL::Module::Semaphore;
 
@@ -495,6 +496,176 @@ sub get_semaphore {
 		notify($ERRORS{'DEBUG'}, 0, "failed to open and optain exclusive lock on file: $file_path");
 		return;
 	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 setup
+
+ Parameters  : none
+ Returns     : 
+ Description : This subroutine is used when vcld is run in setup mode. It
+               presents a menu for overall VCL configuration settings.
+
+=cut
+
+sub setup {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	push @{$ENV{setup_path}}, 'User Accounts';
+	
+	my @operation_choices = (
+		'Add Local VCL User Account',
+	);
+	
+	my @setup_path = @{$ENV{setup_path}};
+	OPERATION: while (1) {
+		@{$ENV{setup_path}} = @setup_path;
+		
+		print '-' x 76 . "\n";
+		
+		print "Choose an operation:\n";
+		my $operation_choice_index = setup_get_array_choice(@operation_choices);
+		last if (!defined($operation_choice_index));
+		my $operation_name = $operation_choices[$operation_choice_index];
+		print "\n";
+		
+		push @{$ENV{setup_path}}, $operation_name;
+		
+		if ($operation_name =~ /add local/i) {
+			$self->setup_add_local_account();
+		}
+	}
+	
+	pop @{$ENV{setup_path}};
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 setup_add_local_account
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Presents an interface to create a local VCL user account. This
+               subroutine is executed when vcld is run with the -setup argument.
+
+=cut
+
+sub setup_add_local_account {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	#myusername', 'myfirstname', 'mylastname', 'myemailaddr',
+	
+	# Get the username (user.unityid)
+	my $username;
+	while (!$username) {
+		$username = setup_get_input_string("Enter the user login name");
+		return if (!defined($username));
+		
+		# Check format of username
+		if ($username !~ /^[\w\-_]+$/i) {
+			print "User name is not valid: '$username'\n\n";
+			$username = undef;
+		}
+		
+		# Make sure username does not already exist
+		my $user_info = get_user_info($username, 'Local');
+		if ($user_info && $user_info->{unityid} eq $username) {
+			print "Local VCL user account already exists: $username\n\n";
+			$username = undef;
+		}
+	}
+	print "\n";
+	
+	# Get the other required information
+	my $first_name;
+	while (!$first_name) {
+		$first_name = setup_get_input_string("Enter the first name");
+		return if (!defined($first_name));
+	}
+	print "\n";
+	
+	my $last_name;
+	while (!$last_name) {
+		$last_name = setup_get_input_string("Enter the last name");
+		return if (!defined($last_name));
+	}
+	print "\n";
+	
+	my $email_address;
+	while (!defined($email_address)) {
+		$email_address = setup_get_input_string("Enter the email address", 'not set');
+		return if (!defined($email_address));
+		
+		# Check format of the email address
+		if ($email_address eq 'not set') {
+			$email_address = '';
+		}
+		elsif ($email_address !~ /^([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,4}(,?))+$/i) {
+			print "Email address is not valid: '$email_address'\n\n";
+			$email_address = undef;
+		}
+	}
+	print "\n";
+	
+	my $password;
+	while (!$password) {
+		$password = setup_get_input_string("Enter the password");
+		return if (!defined($password));
+	}
+	print "\n";
+	
+	# Generate an 8-character random string
+	my @characters = ("a" .. "z", "A" .. "Z", "0" .. "9");
+	my $random_string;
+	srand;
+	for (1 .. 8) {
+		$random_string .= $characters[rand((scalar(@characters) - 1))];
+	}
+	
+	# Get an SHA1 hex digest from the password and random string
+	my $digest = sha1_hex("$password$random_string");
+	
+	# Insert a row into the user table
+	my $insert_user_statement = <<EOF;
+INSERT INTO user
+(unityid, affiliationid, firstname, lastname, email, lastupdated)
+VALUES
+('$username', (SELECT id FROM affiliation WHERE name LIKE 'Local'), '$first_name', '$last_name', '$email_address', NOW())
+EOF
+	
+	my $user_id = database_execute($insert_user_statement);
+	if (!defined($user_id)) {
+		print "ERROR: failed to insert into user table\n";
+		return;
+	}
+	
+	# Insert a row into the localauth table
+	my $insert_localauth_statement = <<EOF;
+INSERT INTO localauth
+(userid, passhash, salt, lastupdated)
+VALUES
+($user_id, '$digest', '$random_string', NOW())
+EOF
+	
+	my $localauth_id = database_execute($insert_localauth_statement);
+	if (!defined($localauth_id)) {
+		print "ERROR: failed to insert into localauth table\n";
+		return;
+	}
+	
+	print "Local VCL user account successfully created: $username\n";
+	
+	return 1;
 }
 
 #/////////////////////////////////////////////////////////////////////////////

@@ -70,6 +70,7 @@ use List::Util qw(min max);
 use HTTP::Headers;
 use RPC::XML::Client;
 use Scalar::Util 'blessed';
+use Data::Dumper;
 
 #use Date::Calc qw(Delta_DHMS Time_to_Date Date_to_Time);
 
@@ -5422,16 +5423,9 @@ sub run_ssh_command {
 		
 		# Delay performing next attempt if this isn't the first attempt
 		if ($attempts > 1) {
-			my $delay;
-			if ($attempts == 2) {
-				$delay = 2;
-			}
-			else {
-				# Progressively increase the delay
-				$delay = (5 * $attempts);
-			}
-			notify($ERRORS{'DEBUG'}, 0, "sleeping for $delay seconds before making next SSH attempt") if $output_level;
-			sleep $delay;
+			my $delay_seconds = 2;
+			notify($ERRORS{'DEBUG'}, 0, "sleeping for $delay_seconds seconds before making next SSH attempt") if $output_level;
+			sleep $delay_seconds;
 		}
 
 		## Add -v (verbose) argument to command if this is the 2nd attempt
@@ -7918,7 +7912,7 @@ sub get_computer_grp_members {
 
 =head2 get_user_info
 
- Parameters  : $user_identifier
+ Parameters  : $user_identifier, $affiliation_identifier (optional)
  Returns     : hash reference
  Description : Retrieves user information from the database. The user identifier
                argument can either be a user ID or unityid. A hash reference is
@@ -7961,13 +7955,13 @@ sub get_computer_grp_members {
 =cut
 
 sub get_user_info {
-   my ($user_identifier) = @_;
+	my ($user_identifier, $affiliation_identifier) = @_;
 	if (!defined($user_identifier)) {
 		notify($ERRORS{'WARNING'}, 0, "user identifier argument was not specified");
 		return;
 	}
-
-   my $select_statement = <<EOF;
+	
+	my $select_statement = <<EOF;
 SELECT DISTINCT
 user.*,
 adminlevel.name AS adminlevel_name,
@@ -7985,12 +7979,24 @@ LEFT JOIN (affiliation) ON (affiliation.id = user.affiliationid)
 LEFT JOIN (IMtype) ON (IMtype.id = user.IMtypeid)
 WHERE
 EOF
-
+	
+	# If the user identifier is all digits match it to user.id
+	# Otherwise, match user.unityid
 	if ($user_identifier =~ /^\d+$/) {
 		$select_statement .= "user.id = $user_identifier";
 	}
 	else {
 		$select_statement .= "user.unityid = '$user_identifier'";
+	}
+	
+	# If the affiliation identifier argument was specified add affiliation table clause
+	if (defined($affiliation_identifier)) {
+		if ($affiliation_identifier =~ /^\d+$/) {
+			$select_statement .= "\nAND affiliation.id = $affiliation_identifier";
+		}
+		else {
+			$select_statement .= "\nAND affiliation.name LIKE '$affiliation_identifier'";
+		}
 	}
 
 	# Call the database select subroutine
@@ -8631,98 +8637,29 @@ sub update_cluster_info {
 
 =head2 format_data
 
- Parameters  :
- Returns     : 0 or 1
- Description :
+ Parameters  : $data
+ Returns     : string
+ Description : Formats the data argument using Data::Dumper.
 
 =cut
 
 sub format_data {
+	my @data = @_;
 	
-	my $return_string;
-
-	my $level = 0;
-	$level = $_[scalar(@_) - 2] if (scalar(@_) > 2 && !ref($_[scalar(@_) - 2]));
-
-	my $name = '';
-	$name = $_[scalar(@_) - 1] if (scalar(@_) > 1 && !ref($_[scalar(@_) - 1]));
-
-	my $type;
-	my $data;
-
-	if (ref($_[0]) eq "HASH" || (blessed($_[0]) && $_[0]->isa("HASH"))) {
-		$data = $_[0];
-		$type = '%';
-		return "%<empty>" if (keys(%{$_[0]}) == 0);
+	if (!(@data)) {
+		return '<undefined>';
 	}
-	elsif (ref($_[0]) eq "ARRAY" || (blessed($_[0]) && $_[0]->isa("ARRAY"))) {
-		my $index = 0;
-		for (@{$_[0]}) {
-			$data->{$index} = $_;
-			$index++;
-		}
-		$type = '@';
-		return "@<empty>" if (@{$_[0]} == 0);
-	}
-	elsif (ref($_[0]) eq "SCALAR") {
-		$data = $_[0];
-		$type = '$';
-	}
-	else {
-		$data = \$_[0];
-		$type = '$';
-
-		$return_string .= "ref: " . ref($_[0]) . "\n";
-		$return_string .= "data: " . $_[0] . "\n";
-
-		return $return_string;
-	}
-
-	$data = 'NULL' if (!defined $data);
-
-	$return_string .= "$type$name\n";
-
-	# Loop through values
-	foreach my $key (sort {lc($a) cmp lc($b)} keys(%{$data})) {
-		my $value = $data->{$key};
-
-		$value = 'NULL' if (!defined $value);
-
-		for (my $count = 0; $count < $level; $count++) {
-			$return_string .= "..." if ($count < $level);
-		}
-		$return_string .= "|--";
-
-		if (ref($value) eq 'SCALAR') {
-			$value = "\\'$$value'";
-		}
-		elsif (!ref($value) && $value ne 'NULL') {
-			$value = "'$value'";
-		}
-
-		if (!ref($value)) {
-			if ($type eq '@') {
-				$return_string .= "[$key] = $value\n";
-			}
-			elsif ($type eq '%') {
-				$return_string .= "[$name]{$key} = $value\n";
-			}
-		}
-		else {
-			if ($type eq '@') {
-				#$return_string .= "\[$key\]\n";
-				$return_string .= format_data($value, $level + 1, "$name\[$key\]");
-			}
-			elsif ($type eq '%') {
-				#$return_string .= "\{$key\} $name\n";
-				$return_string .= format_data($value, $level + 1, "$name\{$key\}");
-			}
-		} ## end else [ if (!ref($value))
-
-	} ## end foreach my $key (sort {lc($a) cmp lc($b)} keys(...
-
-	return $return_string;
-} ## end sub format_data
+	
+	$Data::Dumper::Indent    = 1;
+	$Data::Dumper::Purity    = 1;
+	$Data::Dumper::Useqq     = 1;      # Use double quotes for representing string values
+	$Data::Dumper::Terse     = 1;
+	$Data::Dumper::Quotekeys = 1;      # Quote hash keys
+	$Data::Dumper::Pair      = ' => '; # Specifies the separator between hash keys and values
+	$Data::Dumper::Sortkeys  = 1;      # Hash keys are dumped in sorted order
+	
+	return Dumper(@data);
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 
