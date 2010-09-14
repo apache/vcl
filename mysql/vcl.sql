@@ -1263,7 +1263,6 @@ INSERT INTO `module` (`id`, `name`, `prettyname`, `description`, `perlpackage`) 
 (7, 'os_winvista', 'Windows Vista OS Module', '', 'VCL::Module::OS::Windows::Version_6::Vista'),
 (8, 'predictive_level_0', 'Predictive Loading Module Level 0', 'Selects an image to load based on upcoming reservations.', 'VCL::Module::Predictive::Level_0'),
 (9, 'predictive_level_1', 'Predictive Loading Module Level 1', 'Selects an image to load based on historical data. Loads the most popular image that can be run on the machine that is not currently loaded and available on another node.', 'VCL::Module::Predictive::Level_1'),
-(10, 'provisioning_vmware_esx', 'VMware ESX Provisioning Module', '', 'VCL::Module::Provisioning::esx'),
 (11, 'provisioning_xcat_21', 'xCAT 2.1 Provisioning Module', '', 'VCL::Module::Provisioning::xCAT21'),
 (12, 'os_winxp', 'Windows XP OS Module', '', 'VCL::Module::OS::Windows::Version_5::XP'),
 (13, 'os_win2003', 'Windows Server 2003 OS Module', '', 'VCL::Module::OS::Windows::Version_5::2003'),
@@ -1272,7 +1271,7 @@ INSERT INTO `module` (`id`, `name`, `prettyname`, `description`, `perlpackage`) 
 (16, 'os_win2008', 'Windows Server 2008 OS Module', '', 'VCL::Module::OS::Windows::Version_6::2008'),
 (17, 'os_win7', 'Windows 7 OS Module', '', 'VCL::Module::OS::Windows::Version_6::7'),
 (20, 'provisioning_xCAT_2x', 'xCAT 2.x Provisioning Module', '', 'VCL::Module::Provisioning::xCAT2'),
-(21, 'provisioning_vmware_vsphere', 'VMware vSphere Provisioning Module', '', 'VCL::Module::Provisioning::VMware::VMware'),
+(21, 'provisioning_vmware', 'VMware Provisioning Module', '', 'VCL::Module::Provisioning::VMware::VMware'),
 (22, 'state_image', 'VCL Image State Module', '', 'VCL::image');
 
 -- 
@@ -1360,12 +1359,10 @@ INSERT INTO `privnode` (`id`, `parent`, `name`) VALUES
 
 INSERT INTO `provisioning` (`id`, `name`, `prettyname`, `moduleid`) VALUES
 (1, 'xcat_13', 'xCAT 1.3', 1),
-(2, 'vmware_server_gsx', 'VMware Server 1.x', 2),
 (3, 'lab', 'Computing Lab', 3),
-(4, 'vmware_esx', 'VMware ESX', 10),
 (5, 'xcat_21', 'xCAT 2.1', 11),
 (6, 'xcat_2x', 'xCAT 2.x', 20),
-(7, 'vmware_vsphere', 'VMware vSphere', 21);
+(7, 'vmware', 'VMware', 21);
 
 -- 
 -- Dumping data for table `resource`
