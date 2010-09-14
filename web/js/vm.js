@@ -77,7 +77,7 @@ function VMHostDataCB(data, ioArgs) {
 	var ct = '<table>';
 	ct += '<tr><th align=right>VM type:</th><td>' + profile.type + '</td></tr>';
 	ct += '<tr><th align=right>Image:</th><td>' + profile.image + '</td></tr>';
-	ct += '<tr><th align=right>NAS Share:</th><td>' + profile.nasshare + '</td></tr>';
+	ct += '<tr><th align=right>Repository Path:</th><td>' + profile.repositorypath + '</td></tr>';
 	ct += '<tr><th align=right>Datastore Path:</th><td>' + profile.datastorepath + '</td></tr>';
 	ct += '<tr><th align=right>VM Path:</th><td>' + profile.vmpath + '</td>';
 	ct += '<tr><th align=right>Virtual Switch 0:</th><td>' + profile.virtualswitch0 + '</td></tr>';
@@ -576,7 +576,7 @@ function getVMprofileDataCB(data, ioArgs) {
 		obj.setValue(curprofile.vmdisk);
 
 	dijit.byId('pname').noValueIndicator = '(empty)';
-	dijit.byId('pnasshare').noValueIndicator = '(empty)';
+	dijit.byId('prepositorypath').noValueIndicator = '(empty)';
 	dijit.byId('pdspath').noValueIndicator = '(empty)';
 	dijit.byId('pvmpath').noValueIndicator = '(empty)';
 	dijit.byId('pvs0').noValueIndicator = '(empty)';
@@ -584,7 +584,7 @@ function getVMprofileDataCB(data, ioArgs) {
 	dijit.byId('pusername').noValueIndicator = '(empty)';
 
 	dijit.byId('pname').setValue(curprofile.profilename);
-	dijit.byId('pnasshare').setValue(curprofile.nasshare);
+	dijit.byId('prepositorypath').setValue(curprofile.repositorypath);
 	dijit.byId('pdspath').setValue(curprofile.datastorepath);
 	dijit.byId('pvmpath').setValue(curprofile.vmpath);
 	dijit.byId('pvs0').setValue(curprofile.virtualswitch0);
@@ -659,8 +659,8 @@ function delProfile(cont) {
 	content += "<td>" + curprofile.image + "</td>";
 	content += "</tr>";
 	content += "<tr>";
-	content += "<th align=right>NAS Share:</th>";
-	content += "<td>" + curprofile.nasshare + "</td>";
+	content += "<th align=right>Repository Path:</th>";
+	content += "<td>" + curprofile.repositorypath + "</td>";
 	content += "</tr>";
 	content += "<tr>";
 	content += "<th align=right>Data Store Path:</th>";

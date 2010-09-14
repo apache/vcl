@@ -7773,7 +7773,7 @@ function generateString($length=8) {
 /// \b typeid - id of vm type\n
 /// \b image - name of image used for this profile\n
 /// \b imageid - id of image used for this profile\n
-/// \b nasshare - share exported by nas to the vmhost\n
+/// \b repositorypath - share exported by nas to the vmhost\n
 /// \b datastorepath - path to where vm data files are stored\n
 /// \b vmpath - path to where vm configuration files are stored\n
 /// \b virtualswitch0 - name of first virtual switch\n
@@ -7793,7 +7793,7 @@ function getVMProfiles($id="") {
 	       .        "vp.vmtypeid, "
 	       .        "i.prettyname AS image, "
 	       .        "vp.imageid, "
-	       .        "vp.nasshare, "
+	       .        "vp.repositorypath, "
 	       .        "vp.datastorepath, "
 	       .        "vp.vmpath, "
 	       .        "vp.virtualswitch0, "

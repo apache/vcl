@@ -214,8 +214,8 @@ function editVMInfo() {
 	print "    <td><span id=pimage dojoType=\"dijit.form.FilteringSelect\" searchAttr=\"name\" onchange=\"updateProfile('pimage', 'imageid');\" style=\"width: 420px\"></span></td>\n";
 	print "  </tr>\n";
 	print "  <tr>\n";
-	print "    <th align=right>NAS Share:</th>\n";
-	print "    <td><span id=pnasshare dojoType=\"dijit.InlineEditBox\" onChange=\"updateProfile('pnasshare', 'nasshare');\"></span></td>\n";
+	print "    <th align=right>Repository Path:</th>\n";
+	print "    <td><span id=prepositorypath dojoType=\"dijit.InlineEditBox\" onChange=\"updateProfile('prepositorypath', 'repositorypath');\"></span></td>\n";
 	print "  </tr>\n";
 	print "  <tr>\n";
 	print "    <th align=right>Data Store Path:</th>\n";
@@ -795,7 +795,7 @@ function AJupdateVMprofileItem() {
 	}
 	$profileid = processInputVar('profileid', ARG_NUMERIC);
 	$item = processInputVar('item', ARG_STRING);
-	if(! preg_match('/^(profilename|vmtypeid|imageid|nasshare|datastorepath|vmpath|virtualswitch0|virtualswitch1|vmdisk|username|password|vmware_mac_eth0_generated|vmware_mac_eth1_generated)$/', $item)) {
+	if(! preg_match('/^(profilename|vmtypeid|imageid|repositorypath|datastorepath|vmpath|virtualswitch0|virtualswitch1|vmdisk|username|password|vmware_mac_eth0_generated|vmware_mac_eth1_generated)$/', $item)) {
 		print "alert('Invalid data submitted.');";
 		return;
 	}
