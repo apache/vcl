@@ -1009,14 +1009,15 @@ function addComputerSetVMHostProfile() {
 		$data = processBulkComputerInput();
 		$data['profiles'] = $profiles;
 		$cont = addContinuationsEntry('submitAddBulkComputers', $data, SECINDAY, 0, 0);
+		print "<INPUT type=submit value=\"Add Computers\">\n";
 	}
 	else {
 		$data = processComputerInput();
 		$data['profiles'] = $profiles;
 		$cont = addContinuationsEntry('submitAddComputer', $data, SECINDAY, 0, 0);
+		print "<INPUT type=submit value=\"Add Computer\">\n";
 	}
 	print "<INPUT type=hidden name=continuation value=\"$cont\">\n";
-	print "<INPUT type=submit value=\"Add Computer\">\n";
 	print "</FORM>\n";
 }
 
