@@ -1384,6 +1384,7 @@ INSERT INTO `resourcegroup` (`id`, `name`, `ownerusergroupid`, `resourcetypeid`)
 (2, 'allImages', 3, 13),
 (3, 'allManagementNodes', 3, 16),
 (4, 'allSchedules', 3, 15),
+(5, 'All VM Computers', 3, 12),
 (8, 'newimages', 4, 12),
 (9, 'newvmimages', 4, 12),
 (10, 'allVMimages', 4, 13);
