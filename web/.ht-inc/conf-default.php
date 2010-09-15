@@ -124,30 +124,30 @@ $authMechs = array(
 	                                                             #    can be added to the user's login id to send mail
 	                           "masterlogin" => "vcluser",       # privileged login id for ldap server
 	                           "masterpwd" => "*********",       # privileged login password for ldap server
-	                           "affiliationid" => 2,             # id from affiliation id this login method is associated with
+	                           "affiliationid" => 3,             # id from affiliation id this login method is associated with
 	                           "help" => "Use EXAMPLE1 LDAP if you are using an EXAMPLE1 account"), # message to be displayed on login page about when
 	                                                                                                #   to use this login mechanism*/
 );
 
 $affilValFunc = array(1 => create_function('', 'return 0;'),
-                      /*2 => "validateLDAPUser",*/
+                      /*3 => "validateLDAPUser",*/
 );
 
-$affilValFuncArgs = array(/*2 => 'EXAMPLE1 LDAP',*/
+$affilValFuncArgs = array(/*3 => 'EXAMPLE1 LDAP',*/
 );
 
 $addUserFunc = array(1 => create_function('', 'return 0;'),
-                     /*2 => 'addLDAPUser',*/
+                     /*3 => 'addLDAPUser',*/
 );
 
-$addUserFuncArgs = array(/*2 => 'EXAMPLE1 LDAP',*/
+$addUserFuncArgs = array(/*3 => 'EXAMPLE1 LDAP',*/
 );
 
 $updateUserFunc = array(1 => create_function('', 'return 0;'),
-                        /*2 => 'updateLDAPUser',*/
+                        /*3 => 'updateLDAPUser',*/
 );
 
-$updateUserFuncArgs = array(/*2 => 'EXAMPLE1 LDAP',*/
+$updateUserFuncArgs = array(/*3 => 'EXAMPLE1 LDAP',*/
 );
 
 $findAffilFuncs = array("testGeneralAffiliation");
