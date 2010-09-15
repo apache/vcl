@@ -89,8 +89,8 @@ my @module_urls = (
 	# The other modules listed are dependencies for Object-InsideOut
 	'http://search.cpan.org/CPAN/authors/id/T/TM/TMTM/Class-Data-Inheritable-0.08.tar.gz',
 	'http://search.cpan.org/CPAN/authors/id/M/MS/MSCHWERN/Test-Simple-0.96.tar.gz',
-	'http://search.cpan.org/CPAN/authors/id/D/DR/DROLSKY/Devel-StackTrace-1.25.tar.gz',
 	'http://search.cpan.org/CPAN/authors/id/M/MS/MSCHWERN/ExtUtils-MakeMaker-6.56.tar.gz',
+	'http://search.cpan.org/CPAN/authors/id/D/DR/DROLSKY/Devel-StackTrace-1.25.tar.gz',
 	'http://search.cpan.org/CPAN/authors/id/D/DR/DROLSKY/Exception-Class-1.32.tar.gz',
 	'http://search.cpan.org/CPAN/authors/id/R/RO/ROBIN/Want-0.18.tar.gz',
 	'http://search.cpan.org/CPAN/authors/id/J/JD/JDHEDDEN/Math-Random-MT-Auto-6.15.tar.gz',
