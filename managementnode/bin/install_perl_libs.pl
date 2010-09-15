@@ -114,6 +114,9 @@ my @module_urls = (
 	
 	# DBI is used to communicate with the database
 	'http://search.cpan.org/CPAN/authors/id/T/TI/TIMB/DBI-1.613.tar.gz',
+	
+	# SHA1 is used when creating new local VCL accounts
+	'http://search.cpan.org/CPAN/authors/id/G/GA/GAAS/Digest-SHA1-2.13.tar.gz',
 );
 
 # Loop through each URL
