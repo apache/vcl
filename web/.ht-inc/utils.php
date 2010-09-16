@@ -447,13 +447,6 @@ function checkAccess() {
 							return;
 						}
 						break;
-					case 'blockAllocations':
-						if($viewmode != ADMIN_DEVELOPER && $user['memberCurrentBlock'] == 0) {
-							$mode = "";
-							$actionFunction = "main";
-							return;
-						}
-						break;
 					case 'viewGroups':
 						if(! in_array("groupAdmin", $user["privileges"])) {
 							$mode = "";
@@ -8720,11 +8713,9 @@ function getNavMenu($inclogout, $inchome, $homeurl=HOMEURL) {
 		$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=viewRequests\">";
 		$rt .= "Current Reservations</a></li>\n";
 	}
-	if($viewmode == ADMIN_DEVELOPER || $user['memberCurrentBlock']) {
-		$rt .= menulistLI('blockAllocations');
-		$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=blockAllocations\">";
-		$rt .= "Block Allocations</a></li>\n";
-	}
+	$rt .= menulistLI('blockAllocations');
+	$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=blockAllocations\">";
+	$rt .= "Block Allocations</a></li>\n";
 	$rt .= menulistLI('userPreferences');
 	$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=userpreferences\">";
 	$rt .= "User Preferences</a></li>\n";
