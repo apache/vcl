@@ -9,36 +9,7 @@ database:
 - none
 
 backend vcld:
-Required packages installed via yum
- - expat
- - expat-devel
- - gcc
- - krb5-libs
- - krb5-devel
- - libxml2
- - libxml2-devel
- - nmap
- - openssl
- - openssl-devel
- - perl-DBD-MySQL
- - xmlsec1-openssl
-
-Perl modules
- -  Class-Data-Inheritable
- - Compress-Raw-Zlib
- - Crypt-SSLeay
- - DBI
- - Devel-StackTrace
- - Exception-Class
- - HTML-Parser
- - IO-Compress
- - libwww-perl
- - MailTools
- - Object-InsideOut
- - RPC-XML
- - XML-Parser
- - YAML
-
+No dependency changes
 
 Release Notes - VCL - Version 2.2
 
