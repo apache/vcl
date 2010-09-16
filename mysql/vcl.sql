@@ -1224,7 +1224,7 @@ INSERT INTO `documentation` (`name`, `title`, `data`) VALUES
 -- 
 
 INSERT INTO `image` (`id`, `name`, `prettyname`, `ownerid`, `platformid`, `OSid`, `imagemetaid`, `minram`, `minprocnumber`, `minprocspeed`, `minnetwork`, `maxconcurrent`, `reloadtime`, `deleted`, `test`, `lastupdate`, `forcheckout`, `maxinitialtime`, `project`, `size`) VALUES 
-(4, 'noimage', 'No Image', 1, 1, 2, NULL, 0, 1, 0, 10, NULL, 0, 0, 0, NULL, 1, 0, 'vcl', 1450);
+(4, 'noimage', 'No Image', 1, 1, 2, NULL, 0, 1, 0, 10, NULL, 0, 0, 0, NULL, 0, 0, 'vcl', 1450);
 
 -- 
 -- Dumping data for table `imagerevision`
