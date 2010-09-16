@@ -1,4 +1,4 @@
-Installing VCL 2.1
+Installing VCL 2.2
 
 Contents:
 
@@ -15,19 +15,27 @@ MySQL 5 installed and running
 
 Installation:
 
-1.  create a database in mysql named for use with VCL
+1. run the mysql command line client
+
+   mysql
+
+2. create a database in mysql named for use with VCL
 
    CREATE DATABASE vcl;
 
-2. create a user with SELECT, INSERT, UPDATE, and DELETE privileges on the database you just created
+3. create a user with SELECT, INSERT, UPDATE, and DELETE privileges on the database you just created
 
    ** NOTE: Replace vcluserpassword with your own password!
 
    GRANT SELECT,INSERT,UPDATE,DELETE ON vcl.* TO 'vcluser'@'localhost' IDENTIFIED BY 'vcluserpassword';
 
-3. import vcl.sql file into database
+4. exit from the mysql command line client
 
-   mysql vcl < vcl.sql
+   exit
+
+5. import vcl.sql file into database
+
+   mysql vcl < mysql/vcl.sql
 
 
 
@@ -47,6 +55,12 @@ Your web server should meet the following criteria before installing the VCL Fro
       - php-sysvsem
       - php-xml
       - php-xmlrpc
+      - php-ldap (if you will be using ldap authentication)
+
+   * If you are running RedHat or CentOS, these can be installed with
+
+     yum install -y httpd mod_ssl php-gd php-mcrypt php-mysql php-xml php-xmlrpc php-ldap
+
    * useful to have the server set up to be able to send debugging emails
    * php-mcrypt requires libmcrypt and mcrypt libraries as dependencies. These may need to be installed first.
 
@@ -56,76 +70,199 @@ Installation:
 
    ex: mv web /var/www/html/vcl
 
-2. modify vcl/.ht-inc/secrets.php
+2. copy/rename secrets-default.php to secrets.php
+
+3. modify vcl/.ht-inc/secrets.php
    * set $vclhost, $vcldb, $vclusername, and $vclpassword to match your database setup
    * create random passwords for $mcryptkey, $mcryptiv, and $pemkey - $mcryptiv must be 8 hex characters
 
-3. run the genkeys.sh script from within vcl/.ht-inc and give it $pemkey from secrets.php as the passphrase (3 times, copy/paste is a good idea here)
+4. run the genkeys.sh script from within vcl/.ht-inc and give it $pemkey from secrets.php as the passphrase (3 times, copy/paste is a good idea here)
 
-4. modify vcl/.ht-inc/conf.php to match your site - COOKIEDOMAIN needs to be the domain name your web server is using, or left blank if you are accessing it by IP only
+5. copy/rename conf-default.php to conf.php
 
-5. *NOTICE* JpGraph 2.x is no longer available. JpGraph 3.x is released under a dual license. QPL 1.0 (Qt Free Licensee). Free for non-commercial, open-source or educational use (JpGraph Professional License for commercial use). If you are planning to use this for commercial use and don't want to pay for JpGraph, you can safely skip this step with the only side effect of not being able to display a few graphs on the statistics page.
+6. modify vcl/.ht-inc/conf.php to match your site - COOKIEDOMAIN needs to be the domain name your web server is using, or left blank if you are accessing it by IP only
+   ** You really need to modify every entry in the "Things in this section must be modified" part of the file.**
+
+7. *NOTICE* JpGraph 2.x is no longer available. JpGraph 3.x is released under a dual license. QPL 1.0 (Qt Free Licensee). Free for non-commercial, open-source or educational use (JpGraph Professional License for commercial use). If you are planning to use this for commercial use and don't want to pay for JpGraph, you can safely skip this step with the only side effect of not being able to display a few graphs on the statistics page.
    Download JpGraph from http://www.aditus.nu/jpgraph/jpdownload.php
-   * For PHP5, download the 3.x series, extract it, and copy the src directory from it to vcl/.ht-inc/jpgraph
+   * download the 3.x series, extract it, and copy the src directory from it to vcl/.ht-inc/jpgraph
 
-6. download version 0.4.0 of Dojo Toolkit: http://download.dojotoolkit.org/release-0.4.0/dojo-0.4.0-ajax.tar.gz
-   * extract it under the vcl directory and rename "dojo-0.4.0-ajax" to "dojoAjax"
+8. make the .ht-inc/maintenance directory writable by the web server user - i.e. if the httpd process is running as user 'apache' run 'chown apache .ht-inc/maintenance'
 
-7. download version 1.1.0 of Dojo Toolkit: http://download.dojotoolkit.org/release-1.1.0/dojo-release-1.1.0.tar.gz
-   * extract it under the vcl directory and rename "dojo-release-1.1.0" to "dojo"
-
-8. go into the themes directory (vcl/themes) and run "./copydojocss.sh default" to copy parts of dojo's css into the "default" theme
-
-9. if you want to be able to edit any of the documentation that comes bundled with the vcl web code, download fckeditor from http://www.fckeditor.net/download (most people can skip this step)
-       * extract it under the vcl directory
-
-10. open a browser and open the testsetup.php page
+9. open a browser and open the testsetup.php page
        * i.e. if you set up your site to be https://my.server.org/vcl/ open https://my.server.org/vcl/testsetup.php
 
-11. debug any issues reported by testsetup.php
+10. debug any issues reported by testsetup.php
 
-12. now, open the index.php page in your browser
+11. now, open the index.php page in your browser
 
-13. select Local Account and use 'admin' as the user and 'adminVc1passw0rd' as the password
+12. select Local Account and use 'admin' as the user and 'adminVc1passw0rd' as the password
+    **Now would be a good time to change the password from the default by going to User Preferences**
 
-14. click the "Management Nodes" link
+13. click the "Management Nodes" link
 
-15. enter the hostname and IP of your management node
+14. enter the hostname and IP of your management node
 
-16. click Add
+15. click Add
 
-17. fill in "Install Path" - this is parent directory under which image files will be stored
+16. fill in these additional required fields:
 
-18. enter "/etc/vcl/vcl.key" for "End Node SSH Identity Key Files"
+    * SysAdmin Email Address - error emails will be sent to this address
+    * Install Path - this is parent directory under which image files will be stored - only required if doing bare metal installs or using VMWare with local disks
+	 * End Node SSH Identity Key Files - probably just enter "/etc/vcl/vcl.key"
 
-19. click "Confirm Management Node"
+17. optionally, fill in these unrequired fields:
 
-20. click Submit
+    *  Address for Shadow Emails - End users are sent various emails about the status of their reservations. If this field is configured, copies of all of those emails will be sent to this address.
+    * Public NIC configuration method - this defaults to Dynamic DHCP - if DHCP is not available for the public interface of your nodes, you can set this to Static. Then, the IP configuration on the nodes will be manually set using Public Netmask, Public Gateway, Public DNS Server, and the IP address set for the computer under Manage Computers
 
-21. click the "Management Nodes" link
+18. click "Confirm Management Node"
 
-22. select "Edit Management Node Grouping"
+19. click Submit
 
-23. click Submit
+20. click the "Management Nodes" link
 
-24. select the checkbox for your management node
+21. select "Edit Management Node Grouping"
 
-25. click Submit
+22. click Submit
 
-26. click "Manage Computers"
+23. select the checkbox for your management node
 
-27. select the "Add Single Computer" radio button
+24. click Submit
 
-28. click the Submit
+If you will only be using VMWare (and not xCAT), skip to ADDING VMHOSTS AND VIRTUAL MACHINES
 
-29. fill in Hostname, IP Address, owner (admin@Local), RAM, Proc Speed, Network Speed, select "blade" for Type, select "xCAT 1.x Provisioning" for "Provisioning Engine", and click the checkbox under "allcomputers", and "newimages"
-       Note: if using using VMware, select "virtualmachine" for Type and "VMWare Server Provisioning" for "Provisioning Engine"
+ADDING BARE METAL HOSTS FOR XCAT
 
-30. click Confirm Computer
+You can initially add individual computers or multiple computers all together. After you have added at least one computer, you will need to go to Manage Computers -> Edit Computer Information to additional ones.
+Adding Individual Computers
 
-31. click Submit (don't worry about the fact that the computer you just added isn't listed after clicking Submit)
+1. click "Manage Computers"
+2. select the "Add Single Computer" radio button
+3. click Submit
+4. fill in Hostname, IP Address, owner (admin@Local), RAM, Proc Speed, Network Speed, select "blade" for Type, select "xCAT 2.x Provisioning" for "Provisioning Engine", and click the checkbox under "allcomputers", and "newimages"
+5. click Confirm Computer
+6. click Submit (don't worry about the fact that the computer you just added isn't listed after clicking Submit)
+7. after you've configured your image library and your management node has started checking in, you should be able to make a reservation
 
-32. after you've configured your image library and your management node has started checking in, you should be able to make a reservation
+Adding Multiple Computers
+
+1. click "Manage Computers"
+2. select the "Add Multiple Computers" radio button
+3. click Submit
+4. fill in
+    * Hostname - the hostnames of all the computers must have a numerical part that is sequential, use a % as a placeholder where that part would be
+    * Start value - the first number of the numerical part of the hostname
+    * End value - the last number of the numerical part of the hostname
+    * Start IP Address - if using static public addresses, the IP addresses must be sequential; enter the first address here; if using DHCP, just enter something like 1.1.1.1
+    * End IP address - the last IP address of the sequence; if using DHCP, you'll need to enter something that would work out to the last address relative to Start IP Address (i.e. if adding 3 computers, use 1.1.1.1 for start and 1.1.1.3 for end)
+    * Owner - owner of the computer
+    * RAM
+    * Processor Speed
+    * Network Speed
+    * Type - blade
+    * Provisioning Engine - xCAT 2.x
+    * check allComputers and newimages
+5. click Confirm Computer
+6. click Submit (don't worry about the fact that the computers you just added aren't listed after clicking Submit)
+7. after you've configured your image library and your management node has started checking in, you should be able to make a reservation
+
+
+ADDING VMHOSTS AND VIRTUAL MACHINES
+
+If you are using standalone VMWare servers (i.e. ones that VCL did not deploy using xCAT), you first need to add the VMWare servers; then, you need to add the virtual machines. You can either add them individually (Adding Individual VMWare Servers/Virtual Machines), or if they have sequential hostnames and IP addresses, you can add them all at once (Adding Multiple VMWare Servers/Virtual Machines).
+
+Once you have added at least one computer, you can get to the "Add Single Computer" page by going to Manage Computers->Edit Computer Information and clicking Add. You can get to the "Add Multiple Computers" page by doing the same thing but checking the "Add Multiple" checkbox.
+Adding Individual VMWare Servers
+
+1. click "Manage Computers"
+2. select the "Add Single Computer" radio button
+3. click Submit
+4. fill in
+    * Hostname
+    * IP Address
+    * State - vmhostinuse - double check this because you will not be able to change it later
+    * owner (admin@Local)
+    * RAM
+    * Proc Speed
+    * Network Speed
+    * Type - blade
+    * Provisioning Engine - xCAT 2.x Provisioning
+    * click the checkbox under "allcomputers"
+5. click Confirm Computer
+6. click Submit
+7. select a VM Host Profile to use with this host - you can edit the VM Host Profile later if needed
+8. click Add Computer (don't worry about the fact that the computer you just added isn't listed after clicking Submit)
+
+Adding Individual Virtual Machines
+
+1. click "Manage Computers"
+2. select the "Add Single Computer" radio button
+3. click Submit
+4. fill in
+    * Hostname
+    * IP Address
+    * State - maintenance
+    * owner (admin@Local)
+    * RAM
+    * Proc Speed
+    * Network Speed
+    * Type - virtualmachine
+    * Provisioning Engine - VMware
+    * click the checkbox under "All VM Computers" and "newvmimages"
+5. click Confirm Computer
+6. click Submit (don't worry about the fact that the computer you just added isn't listed after clicking Submit)
+
+Adding Multiple VMWare Servers
+
+1. click "Manage Computers"
+2. select the "Add Multiple Computers" radio button
+3. click Submit
+4. fill in
+    * Hostname - the hostnames of all the computers must have a numerical part that is sequential, use a % as a placeholder where that part would be
+    * Start value - the first number of the numerical part of the hostname
+    * End value - the last number of the numerical part of the hostname
+    * Start IP Address - if using static public addresses, the IP addresses must be sequential; enter the first address here; if using DHCP, just enter something like 1.1.1.1
+    * End IP address - the last IP address of the sequence; if using DHCP, you'll need to enter something that would work out to the last address relative to Start IP Address (i.e. if adding 3 computers, use 1.1.1.1 for start and 1.1.1.3 for end)
+    * State - vmhostinuse - double check this because you will not be able to change it later
+    * Owner - owner of the computer
+    * RAM
+    * Processor Speed
+    * Network Speed
+    * Type - blade
+    * Provisioning Engine - xCAT 2.x
+    * check allComputers
+5. click Confirm Computers
+6. click Submit
+7. select a VM Host Profile to use with these hosts - you can edit the VM Host Profile later if needed
+8. click Add Computers
+
+Adding Multiple Virtual Machines
+
+1. click "Manage Computers"
+2. select the "Add Multiple Computers" radio button
+3. click Submit
+4. fill in
+    * Hostname - the hostnames of all the computers must have a numerical part that is sequential, use a % as a placeholder where that part would be
+    * Start value - the first number of the numerical part of the hostname
+    * End value - the last number of the numerical part of the hostname
+    * Start IP Address - if using static public addresses, the IP addresses must be sequential; enter the first address here; if using DHCP, just enter something like 1.1.1.1
+    * End IP address - the last IP address of the sequence; if using DHCP, you'll need to enter something that would work out to the last address relative to Start IP Address (i.e. if adding 3 computers, use 1.1.1.1 for start and 1.1.1.3 for end)
+    * Start private IP Address - (optional) similar to Start IP Address, but for the private side
+    * End private IP Address - (optional) similar to the End IP Address but for the private side
+    * Start MAC Address - (optional) if mac addresses are sequential, with the first one being the private MAC address for the first computer, the second one being the public MAC address for the first computer, the third one being the private MAC address of the second computer, etc, you can enter the first one here and then have the option of generating data to add to your dhcpd.conf file later in the process.
+    * State - maintenance
+    * Owner - owner of the computer
+    * RAM
+    * Processor Speed
+    * Network Speed
+    * Type - virtualmachine
+    * Provisioning Engine - VMware
+    * check "All VM Computers" and newvmimages
+5. click Confirm Computers
+6. click Submit
+7. If you filled in the private address fields and the Start MAC Address, you can now enter the private IP address of the management node that will be handling these virtual machines to generate information to add to your dhcpd.conf file.
+
 
 
 
@@ -416,20 +553,11 @@ VMware toolkit - http://www.vmware.com/support/developer/viperltoolkit/
 
 IV. Adding extra local accounts
 
-There's not currently a tool for this.  You will need to add entries directly to the database.
-1) add entry to user table
-INSERT INTO user (unityid, firstname, lastname, email, lastupdated) VALUES ('myusername', 'myfirstname', 'mylastname', 'myemailaddr', NOW());
-2) find out the id generated for that user
-SELECT id, unityid FROM user WHERE unityid = 'myusername';
-3) add entry to the localauth table
-INSERT INTO localauth (userid, salt, passhash, lastupdated) VALUES ('place1', 'place2', 'place3', NOW())
-with place1 = id from step 2
-     place2 = an 8 char random string
-     place3 = sha1sum( desired password with place2 stuck on the end )
-              this can be generated under linux like this (using 'thedog' as the password and 11111111 as place2):
-                 echo -n 'thedog11111111' | sha1sum
-Once a user has been added, the user can go to User Preferences to change his/her password
+Additional local accounts can now be added using the backend code. After you have finished the backend install, run
 
+  vcld -setup
+
+select option 1, and follow the prompts.
 
 
 V. Adding LDAP authentication
