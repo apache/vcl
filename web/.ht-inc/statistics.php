@@ -17,14 +17,18 @@
 */
 
 if($phpVer == 5) {
-require_once(".ht-inc/jpgraph/jpgraph.php");
-require_once(".ht-inc/jpgraph/jpgraph_bar.php");
-require_once(".ht-inc/jpgraph/jpgraph_line.php");
+	if(is_dir(".ht-inc/jpgraph")) {
+		require_once(".ht-inc/jpgraph/jpgraph.php");
+		require_once(".ht-inc/jpgraph/jpgraph_bar.php");
+		require_once(".ht-inc/jpgraph/jpgraph_line.php");
+	}
 }
 else {
-require_once(".ht-inc/jpgraph.old/jpgraph.php");
-require_once(".ht-inc/jpgraph.old/jpgraph_bar.php");
-require_once(".ht-inc/jpgraph.old/jpgraph_line.php");
+	if(is_dir(".ht-inc/jpgraph.old")) {
+		require_once(".ht-inc/jpgraph.old/jpgraph.php");
+		require_once(".ht-inc/jpgraph.old/jpgraph_bar.php");
+		require_once(".ht-inc/jpgraph.old/jpgraph_line.php");
+	}
 }
 
 /**
