@@ -1,3 +1,193 @@
+ASF VCL 2.2
+
+Dependency changes:
+
+Web frontend:
+- tested under Apache HTTP Server v2.x with SSL enabled
+- PHP 5
+PHP modules
+ - php-gd
+ - php-json (if your PHP version is < 5.2, this is not required)
+ - php-mcrypt
+ - php-mysql
+ - php-openssl
+ - php-sysvsem
+ - php-xml
+ - php-xmlrpc
+ - php-ldap (if you will be using ldap authentication)
+
+database:
+- none
+
+backend vcld:
+Required packages installed via yum
+ - expat
+ - expat-devel
+ - gcc
+ - krb5-libs
+ - krb5-devel
+ - libxml2
+ - libxml2-devel
+ - nmap
+ - openssl
+ - openssl-devel
+ - perl-DBD-MySQL
+ - xmlsec1-openssl
+
+Perl modules
+ -  Class-Data-Inheritable
+ - Compress-Raw-Zlib
+ - Crypt-SSLeay
+ - DBI
+ - Devel-StackTrace
+ - Exception-Class
+ - HTML-Parser
+ - IO-Compress
+ - libwww-perl
+ - MailTools
+ - Object-InsideOut
+ - RPC-XML
+ - XML-Parser
+ - YAML
+
+
+Release Notes - VCL - Version 2.2
+
+** Bug
+    * [VCL-150] - Pages do not display correctly with IE8
+    * [VCL-154] - run_scp_command() is not catching permission denied errors
+    * [VCL-158] - utils.pm setstaticaddress() does not work correctly for Windows
+    * [VCL-159] - xCAT.pm is not always waiting long enough for ssh to respond on load
+    * [VCL-160] - Sysprep is overwriting DevicePath key after spdrvscn.exe runs
+    * [VCL-165] - Fix syntax bugs cause reservation processes to die
+    * [VCL-181] - VCL desktop request tool - use API to make reservations
+    * [VCL-189] - cannot add a computer in maintenance state
+    * [VCL-197] - _is_user_added routine 
+    * [VCL-210] - getdynamicaddress returns 127.0.01 for missing public adapter
+    * [VCL-214] - Windows modules don't always disable autoadminlogon
+    * [VCL-215] - reservation_failed sub in State.pm may change state of computer currently in maintenance
+    * [VCL-220] - VMs in the available state which aren't assigned to a VM host may be reserved
+    * [VCL-221] - Add check to make sure post_load tasks have run before reserving a computer
+    * [VCL-227] - deleting user group that owns a resource group
+    * [VCL-233] - all calls to simpleAddRequest need to check for all return codes
+    * [VCL-241] - detailed loading summary does not compute times correctly for future reservations that are preloaded
+    * [VCL-242] - currentimage.txt permissions incorrect set
+    * [VCL-245] - esx.pm - always reloads 
+    * [VCL-250] - authentication for XML RPC X-User doesn't properly check to see if no authtype was found
+    * [VCL-258] - cluster loads - cluster_info file
+    * [VCL-260] - Problems occur if root is not the owner of /home/root for Windows images
+    * [VCL-261] - Windows.pm filesystem_entry_exists() subroutine may return true even if output contains "file not found"
+    * [VCL-262] - Windows capture may remove "Log on as a service" right for existing accounts
+    * [VCL-265] - Linux adduser cmd - remove uid parameter if uid not defined in user table 
+    * [VCL-266] - New process detects another reload process being complete before it should
+    * [VCL-267] - cluster loads  listing wrong parent and child addresses cluster_info file
+    * [VCL-269] - Windows.pm logoff_users() does not detect disconnected users
+    * [VCL-273] - Single quotes in image pretty name can cause image capture to fail
+    * [VCL-299] - shib users may have incorrect full name and email address.
+    * [VCL-300] - shib users always have email notices turned off
+    * [VCL-303] - tomaintenance reservations inserting wrong image revision
+    * [VCL-306] - Web GUI code has hard coded Eastern Time Zone information - breaks in other time zones
+    * [VCL-307] - add empty post_reserve routine UnixLab.pm OS module
+    * [VCL-317] - scheduler doesn't take imagerevision into account
+    * [VCL-325] - removing a subimage from a cluster can result in all subimages getting removed
+    * [VCL-327] - set_computer_name.vbs causes Sysprep to hang if certain applications are installed
+    * [VCL-329] - DataStructure.pm get_computer_private_ip_address() not handling all valid formats in /etc/hosts
+    * [VCL-331] - Windows code does not handle special characters in Scheduled Task names when changing passwords
+    * [VCL-332] - cannot delete block requests once the start date has passed
+    * [VCL-333] - DataStructure %ENV hash not get detected in _initialize routine 
+    * [VCL-334] - numeric userids are not handled correctly
+    * [VCL-337] - Windows.pm delete_files_by_pattern may delete unintended files if an environment variable isn't defined
+    * [VCL-338] - vmprofiles that are in use can be deleted
+    * [VCL-346] - getdynamicaddress routine regex issue
+    * [VCL-347] - cluster connect page rdp file
+    * [VCL-349] - sql insert queries for image and imagerevision tables
+    * [VCL-353] - vmware.pm inserting new images - if original name is not in proper format $oldname does not get set correctly.
+    * [VCL-356] - vmware esx pm - vmware image directories
+    * [VCL-362] - vmware.pm power command output not detected under ESX 3.5
+    * [VCL-363] - Passwords for existing Linux accounts are reset when the root password is set
+    * [VCL-364] - vmhostid removed when vm put in maintenance state
+    * [VCL-368] - pre-capture and post load linux steps correct sed cmd line options
+    * [VCL-370] - Reservation ID not defined errors occur for cluster reservations
+    * [VCL-371] - Private IP address is not being found in /etc/hosts under some circumstances
+    * [VCL-377] - multiple clicks on Create Reservation button gives multiple reservations
+    * [VCL-378] - reservation can be extended into a block allocation for user not in block group
+
+** Improvement
+    * [VCL-2] - migrate preferredimage to nextimage
+    * [VCL-9] - Update reclaim.pm to use DataStructure methods
+    * [VCL-11] - Update blockrequest.pm to use database subroutines
+    * [VCL-31] - rename conf.php and secrets.php to include -default in the name
+    * [VCL-32] - modify XMLRPCaddRequest to allow an end time to be specified
+    * [VCL-93] - LDAP part of a login to fail silently on errors when Shibboleth authentication is used
+    * [VCL-94] - Rework image capture flow
+    * [VCL-98] - upgrade all of dojo-0.4.0 code to recent version of dojo
+    * [VCL-125] - Add ability to control whether or not users have root/administrator access
+    * [VCL-137] - Update vmware.pm to use provisioning module interface subroutine names
+    * [VCL-145] - Store product keys in the database
+    * [VCL-148] - Add management node to current reservations view for ADMIN_DEVELOPER
+    * [VCL-149] - Prevent multiple vcld processes
+    * [VCL-153] - Update interface subroutines in xCAT21.pm to match xCAT.pm
+    * [VCL-155] - Decrease initial Current Reservation page refresh interval
+    * [VCL-161] - remove  xmlrpcKey table from vcl.sql 
+    * [VCL-162] - create structure to add throttling to provisioning modules
+    * [VCL-163] - move throttle variable from vcld.conf to managment node table
+    * [VCL-164] - Make installation and configuration easier
+    * [VCL-200] - add edit node name option in Privilege tree
+    * [VCL-204] - remove private ssh identity keys from known locations- post load / pre-capture routines
+    * [VCL-206] - Alphabetize list of virtual hosts
+    * [VCL-211] - image creation mode - administrator timeout
+    * [VCL-223] - Remove information user should not be able to access on post_load
+    * [VCL-224] - Move settings from vcld.conf to database except for database connection settings
+    * [VCL-244] - Staticics page - show number of failed loads per image
+    * [VCL-248] - Update provisioning modules' node_status to return READY if SSH works but ping doesn't
+    * [VCL-251] - Make "Later" reservation time default to a time in the future.
+    * [VCL-252] - XMLHttpTransport Error
+    * [VCL-254] - block request improvements
+    * [VCL-255] - xmlrpc_call routine add better error control
+    * [VCL-271] - clean out unused routines
+    * [VCL-272] - block request form
+    * [VCL-275] - Predictive reloading level_1 module
+    * [VCL-284] - vmware.pm power_reset sub does not catch error if VMware tools are not running
+    * [VCL-286] - post_linux load operation - set hostname that matches public IP address
+    * [VCL-288] - Add Global affiliation to schema
+    * [VCL-293] - check for remote ldap server being up before connecting to it
+    * [VCL-295] - Combine normal new reservation and imaging new reservation code
+    * [VCL-302] - provide feedback to users about block reservation status
+    * [VCL-305] - update code to work with php 5.3
+    * [VCL-314] - change Documentation link to have links to ASF docs
+    * [VCL-320] - random selection of computer for reservations
+    * [VCL-326] - Shutdown Event Tracker causes autologin to fail
+    * [VCL-335] - max allowed ram for computers needs to be increased
+    * [VCL-357] - create update sql script to upgrade to the latest schema
+    * [VCL-359] - Remove DHCP and static IP configuration sections from provisioning modules
+
+** New Feature
+    * [VCL-134] - Add ability to control whether or not users have root/administrator access
+    * [VCL-142] - Add KMS activation server configuration per affiliation
+    * [VCL-146] - add linux support for all VMWare modules
+    * [VCL-180] - add power_X(off,on,reset,status)  routines to provisioning modules 
+    * [VCL-182] - Linux virtual machine support
+    * [VCL-195] - Add support for Windows Server 2008
+    * [VCL-196] - Add support for 64-bit Windows
+    * [VCL-201] - Add support for Windows Vista VMware images
+    * [VCL-208] - Ability to easily put the VCL site into a maintenance state to prevent user access
+    * [VCL-239] - xcat 2.X module
+    * [VCL-268] - OS table - create additional OS ids
+    * [VCL-278] - Add setup mechanism to vcld
+    * [VCL-279] - Add post_load_custom script functionality for Linux images
+    * [VCL-292] - option to save selected authentication method in cookie
+    * [VCL-294] - create a login log
+    * [VCL-301] - Add support for Windows 7
+    * [VCL-351] - extend vm profile to have more virtualswitches
+    * [VCL-352] - Add additional pre-capture steps for Linux OS
+    * [VCL-365] - change select box for environment on new reservation page to dojo filteringselect
+
+** Task
+    * [VCL-138] - remove antiquated vcldquery support
+    * [VCL-139] - make users' names optional
+    * [VCL-274] - check for SQL injection / XSS
+
+====================================================================================================
 ASF VCL 2.1
 
 Dependency changes:
