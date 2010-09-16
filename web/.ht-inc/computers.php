@@ -351,7 +351,7 @@ function viewComputers($showall=0) {
 	if($data["showhostname"] || $showall)
 		print "    <TD><INPUT type=text name=hostname maxlength=36></TD>\n";
 	if($data["showipaddress"] || $showall) {
-		print "    <TD><INPUT type=text name=ipaddress size=14 maxlength=14>";
+		print "    <TD><INPUT type=text name=ipaddress size=14 maxlength=15>";
 		print "</TD>\n";
 	}
 	if($data["showstate"] || $showall) {
@@ -647,7 +647,7 @@ function editOrAddComputer($state) {
 	print "  </TR>\n";
 	print "  <TR>\n";
 	print "    <TH align=right>IP Address:</TH>\n";
-	print "    <TD><INPUT type=text name=ipaddress maxlength=14 value=\"";
+	print "    <TD><INPUT type=text name=ipaddress maxlength=15 value=\"";
 	print $data["ipaddress"] . "\"></TD>\n";
 	print "    <TD>";
 	printSubmitErr(IPADDRERR);
@@ -1188,7 +1188,7 @@ function bulkAddComputer() {
 	print "  </TR>\n";
 	print "  <TR>\n";
 	print "    <TH align=right nowrap>Start IP Address*:</TH>\n";
-	print "    <TD><INPUT type=text name=startipaddress maxlength=14 value=\"";
+	print "    <TD><INPUT type=text name=startipaddress maxlength=15 value=\"";
 	print $data["startipaddress"] . "\"></TD>\n";
 	print "    <TD>";
 	printSubmitErr(IPADDRERR);
@@ -1196,7 +1196,7 @@ function bulkAddComputer() {
 	print "  </TR>\n";
 	print "  <TR>\n";
 	print "    <TH align=right nowrap>End IP Address*:</TH>\n";
-	print "    <TD><INPUT type=text name=endipaddress maxlength=14 value=\"";
+	print "    <TD><INPUT type=text name=endipaddress maxlength=15 value=\"";
 	print $data["endipaddress"] . "\"></TD>\n";
 	print "    <TD>";
 	printSubmitErr(IPADDRERR2);
@@ -1205,7 +1205,7 @@ function bulkAddComputer() {
 
 	print "  <TR>\n";
 	print "    <TH align=right nowrap>Start private IP Address:</TH>\n";
-	print "    <TD><INPUT type=text name=startpripaddress maxlength=14 value=\"";
+	print "    <TD><INPUT type=text name=startpripaddress maxlength=15 value=\"";
 	print $data["startpripaddress"] . "\"></TD>\n";
 	print "    <TD>";
 	printSubmitErr(IPADDRERR3);
@@ -1213,7 +1213,7 @@ function bulkAddComputer() {
 	print "  </TR>\n";
 	print "  <TR>\n";
 	print "    <TH align=right nowrap>End private IP Address:</TH>\n";
-	print "    <TD><INPUT type=text name=endpripaddress maxlength=14 value=\"";
+	print "    <TD><INPUT type=text name=endpripaddress maxlength=15 value=\"";
 	print $data["endpripaddress"] . "\"></TD>\n";
 	print "    <TD>";
 	printSubmitErr(IPADDRERR4);
