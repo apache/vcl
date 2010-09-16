@@ -601,7 +601,7 @@ function processUserPrefsInput($checks=1) {
 	   $submitErr |= VIEWASUSERERR;
 	   $submitErrMsg[VIEWASUSERERR] = "Invalid user id";
 	}
-	if($user['affiliation'] == 'Local') {
+	if($user['affiliation'] == 'Local' && array_key_exists('newpassword', $_POST)) {
 		$return['newpassword'] = $_POST['newpassword'];
 		$confirmpwd = $_POST['confirmpassword'];
 		$curr = $_POST['currentpassword'];
