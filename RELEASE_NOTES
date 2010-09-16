@@ -1,4 +1,4 @@
-VCL 2.1
+VCL 2.2
 
 I. Intro and Description
 
@@ -21,22 +21,15 @@ servers in a server farm or HPC cluster.
 
 II. VCL Roadmap
 
-VCL 2.1 (this release)
-  * completed modularization of vcld
-  * xCAT 2.1 support
-  * Shibboleth authentication
-  * VMWare management via VMWare toolkit
-  * ESXi with thin provisioning on a NetApp
-
-VCL 2.2
+VCL 2.2 (this release)
   * support for xCAT 2.3
-  * improve cluster reservations
-  * improve block reservations(rename to block allocations)
+  * VMWare Free Server 2.x
+  * improve block reservations (renamed to block allocations)
 
 VCL 2.3
   * Service deployments 
   * power management
-  * VMWare Free Server 2.x
+  * improve cluster reservations
 
 VCL 2.4
   * improve hypervisor support
@@ -82,6 +75,11 @@ There are five ways to become involved in the ASF VCL community.
   development work by submitting a contributor license agreement (CLA) to ASF
   and having a committer account created to directly contribute code to the
   project.
+
+* If you are interested in contributing something to the project, please discuss
+  it on the vcl-dev list BEFORE starting work on it. This allows the community
+  to be involved in decisions and allows current developers to provide some
+  guidance.
 
 IV. How to Submit Bugs and Feature Requests
 
