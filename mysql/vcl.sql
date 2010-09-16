@@ -87,6 +87,7 @@ CREATE TABLE IF NOT EXISTS `blockRequest` (
   `expireTime` datetime NOT NULL,
   `processing` tinyint(1) unsigned NOT NULL,
   `status` enum('requested','accepted','completed','rejected','deleted') NOT NULL DEFAULT 'accepted',
+  `comments` text,
   PRIMARY KEY  (`id`),
   KEY `imageid` (`imageid`),
   KEY `groupid` (`groupid`),

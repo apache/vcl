@@ -215,6 +215,7 @@ CALL AddColumnIfNotExists('blockComputers', 'reloadrequestid', "mediumint(8) uns
 --
 
 CALL AddColumnIfNotExists('blockRequest', 'status', "enum('requested','accepted','completed','rejected','deleted') NOT NULL DEFAULT 'accepted'");
+CALL AddColumnIfNotExists('blockRequest', 'comments', "text");
 
 -- --------------------------------------------------------
 
