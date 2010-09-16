@@ -289,11 +289,14 @@ User Group               = $block_group_name
 Environment name         = $image_prettyname
 
 The machines for this block allocation will be loaded up to an hour before the actual start time. 
-Once loaded the users listed in the user group $block_group_name will be able to login up to 15 minutes 
-before the start time.
+Once loaded the users listed in the user group $block_group_name will be able to login 5 minutes before the start time.
 
-If you wish to cancel this session or need to make changes to future sessions. Please visit 
-the VCL site: $blockAlloc_URL
+PLEASE NOTE: 
+The VCL resources are valuable and if you choose not to utilize them during this session, you should make them available for others to use. To skip this session please visit the VCL block allocations page: $blockAlloc_URL 
+Select View times and skip the desired session.
+
+Thank You,
+VCL Team
 
 EOF
 			if(defined($owner_email)){
