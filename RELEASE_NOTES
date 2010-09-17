@@ -32,9 +32,9 @@ VCL 2.3
   * improve cluster reservations
 
 VCL 2.4
-  * improve hypervisor support
-  * dynamic provisioning of host servers
-  * possibly XEN or KVM
+  *  additional and improved hypervisor support
+  * KVM and possibly others (virtual box and XEN)
+  * Allow for additional access methods for environments (port, other protocols, etc)
 
 VCL 2.5
   * develop tools for managing both system and user storage
