@@ -275,29 +275,22 @@ MySQL 5 client
 Nmap - security scanner
 OpenSSH client - All distros usually have this installed by default
 Perl 5.8.0 or later
-Perl modules SEE STEP 2 below in Installation (some of these may be built in for your distro or not even required if your not using jabber)
-- MailTools 2.04
-- Class-Data-Inheritable 0.08
-- Devel-StackTrace 1.20
-- Exception-Class 1.26
-- Object-InsideOut 3.52
-- Module-Build 0.30
-- Net-XMPP 1.02
-- GSSAPI 0.26
-- Digest-SHA1 2.12
-- Digest-HMAC 1.01
-- GBARR/Authen-SASL 2.12
-- XML-Stream 1.22
-- Net-Jabber 2.0
-- YAML 0.68
-- RPC-XML 0.64
-- XML-Parser 2.36
-- Crypt-SSLeay 0.57
-- Compress-Raw-Zlib 2.020
-- IO-Compress 2.020
-- DBI 1.609
-- libwww-perl 5.827
-- HTTP-Headers
+Perl modules SEE STEP 2 below in Installation:
+  * Class-Data-Inheritable
+  * Compress-Raw-Zlib
+  * Crypt-SSLeay
+  * DBI
+  * Devel-StackTrace
+  * Digest-SHA1
+  * Exception-Class
+  * HTML-Parser
+  * IO-Compress
+  * libwww-perl
+  * MailTools
+  * Object-InsideOut
+  * RPC-XML
+  * XML-Parser
+  * YAML
 
 Installation:
 
@@ -311,20 +304,7 @@ Installation:
 
 	perl /usr/local/vcl/bin/install_perl_libs.pl
 
-	A large amount of output will be displayed on the console the first time the script is run.  It will pause if any of the module installations ask for configuration information. Accept all of the defaults by pressing enter when this happens.
-
-	Run the script a 2nd time to check if all of the modules the script is configured to install were successfully installed. Output similar to the following should be displayed for each module:
-
-	==============================================================================
-	URL: http://search.cpan.org/CPAN/authors/id/T/TI/TIMB/DBI-1.609.tar.gz
-	Module filename: DBI-1.609.tar.gz
-	Module name: DBI-1.609
-	Module package: DBI
-	Checking if DBI is installed
-	Module is already installed: DBI
-	==============================================================================
-	
-	Additional output will be displayed if a module has not been successfully installed.  You will need to troubleshoot if any modules were not installed successfully.
+	The script will hang or terminate if it encounters a problem.  If this occurs, manually run the last command the script attempted.  The command should be listed in the output.  You will need to troubleshoot the problem.  The most likely cause of the problem is a missing Linux package.  Make sure the required packages are installed.
 
 3. Configure vcld.conf
 
@@ -379,11 +359,11 @@ Installation:
 
 6. Download and Configure Windows Dependencies
 
-   If you plan to capture Windows images, the following dependencies need to be downloaded to the locations specified below and the sysprep.inf files need to be configured.
+   If you plan to capture Windows images, the following dependencies need to be downloaded to the locations specified below.
 
    1. Windows XP and Server 2003 Deployment Tools (Sysprep)
       
-      The Windows XP and Server 2003 Deployment Tools are available from Microsoft and are required in order for the capture of Windows XP and Server 2003 VCL images to work.  The Sysprep.exe utility is included in the Deployment Tools.  You do not need to download Sysprep for Windows Vista or Server 2008 because it is included in the operating system.
+      The Windows XP and Server 2003 Deployment Tools are available from Microsoft and are required in order for the capture of Windows XP and Server 2003 VCL images to work.  The Sysprep.exe utility is included in the Deployment Tools.  You do not need to download Sysprep for Windows 7 or Windows Server 2008 because it is included in the operating system.
 
       (note: if the following links do not work, search microsoft.com for Sysprep download)
 
@@ -394,8 +374,6 @@ Installation:
       http://www.microsoft.com/downloads/details.aspx?familyid=93F20BB1-97AA-4356-8B43-9584B7E72556&displaylang=en
       
       The packages you download are in Microsoft's .cab format and need to be extracted.  It is easiest to extract the files on a Windows computer.  Windows Explorer is able to open the .cab file and then the files contained within can be copied elsewhere.
-
-      (Note: The Sysprep directories mentioned below should already exist on the management node and should contain a sysprep.inf file.  Copy the downloaded files into the Sysprep directories leaving the sysprep.inf file in place.)
        
       Copy the extracted Windows XP Sysprep files to the following directory on the management node after they have been extracted:
       /usr/local/vcl/tools/Windows_XP/Utilities/Sysprep
@@ -403,31 +381,13 @@ Installation:
       Copy the extracted Windows Server 2003 Sysprep files to the following directory on the management node after they have been extracted: 
       /usr/local/vcl/tools/Windows_Server_2003/Utilities/Sysprep
 
-      Your Windows product keys need to be entered into the sysprep.inf files:
+      Your Windows product keys and/or KMS server addresses need to be entered into the VCL database in order to capture a Windows image using Sysprep.  Enter the information into the database by running the the following command:
 
-      Find the ProductKey line in the following file and replace WIN_XP_PRO_KEY with your product key: 
-      /usr/local/vcl/tools/Windows_XP/Utilities/Sysprep/sysprep.inf
+      /usr/local/vcl/bin/vcld -setup
 
-      Find the ProductKey line in the following file and replace WIN_2003_ENT_KEY with your product key: 
-      /usr/local/vcl/tools/Windows_Server_2003/Utilities/Sysprep/sysprep.inf
+Select "Windows OS Module" and follow the prompts.
 
-   2. NewSID - Windows SID Changing Utility
-
-      NewSID.exe is used to change the SID of a Windows computer if Sysprep is not used.  VCL currently uses NewSID.exe during the load process for Windows Vista images.  Download the NewSID.exe utility:
-      http://technet.microsoft.com/en-us/sysinternals/bb897418.aspx
-
-      Save the NewSID.exe utility in the following location on the management node:
-      /usr/local/vcl/tools/Windows/Utilities/NewSID/newsid.exe
-
-   3. SPDrvScn.exe - Windows Driver Scanning Utility
-
-      SPDrvScn.exe is used before an image is captured to enter the paths of drivers to the Windows registry so that they are loaded when Sysprep attempts to install devices.  Download the SPDrvScn.exe utility from the link on the following webpage:
-      http://vernalex.com/tools/spdrvscn/
-
-      Save SPDrvScn.exe in the following location on the management node:
-      /usr/local/vcl/tools/Windows/Utilities/SPDrvScn/spdrvscn.exe
-
-   4. Download Drivers
+   2. Download Drivers
 
       Drivers which aren't included with Windows must be downloaded and saved to the management node.  The drivers required will vary greatly depending on the hardware.  The only way to know what additional drivers you need is to install Windows on a computer and check for missing drivers.  The drivers must be copied to the appropriate directory on the management node.  The VCL image capture process copies the driver directories to the computer before an image is captured.  Drivers from multiple directories will be copied based on the version of Windows being captured.  There are driver directories under tools for each version of Windows (Windows XP, Windows Vista, ...) and for each version group of Windows (5, 6, ...).  This allows drivers which are common to multiple versions of Windows to be shared in the management node tools directory structure.
 
@@ -466,76 +426,6 @@ Installation:
          /Network
          /Storage
          /Video
-
-      3rd party mass storage hardware IDs and driver .inf file paths must be added to the SysprepMassStorage section in sysprep.inf for Windows XP and Windows Server 2003 in order for the saved image to boot properly on different hardware.
-
-      - Identify the mass storage drivers required for your hardware which aren't native to Windows 
-      - Download drivers for your hardware 
-      - Each driver will have 1 or more .inf files. Examine the .inf files. Find all lines in this format containing a PnP device ID:
-        %DevDescD1% = SYMMPI_Inst, PCI\VEN_1000&DEV_0054&SUBSYS_1F041028
-        The PnP device ID in the example above is:
-        PCI\VEN_1000&DEV_0054&SUBSYS_1F041028 
-      - Each PnP device ID must be added to the sysprep.inf file under the [SysprepMassStorage] section using the following format:
-        ID = "C:\Sysprep\Drivers\<driver directory>\<.inf file path>" 
-
-      Example: LSI SAS drivers commonly need to be downloaded and the hardware IDs need to be added to the sysprep.inf files in order for computers with LSI SAS controllers to boot.
-      - Download the LSI SAS driver from ibm.com: ibm_dd_mptsas_1.30.02.00_windows_32-64.exe 
-      - Extract the ZIP file (it's a self-extracting zip; you can unzip it with whatever unzip tool you prefer) 
-      - Copy the files from the 32 bit XP directory (image/xp-32) to the appropriate directory on the management node:
-        tools/Windows/Drivers/Storage/LSI-SAS 
-      - Locate the .inf file included with the driver is:
-        tools/Windows/Drivers/Storage/LSI-SAS/symmpi.inf 
-      - Locate the PnP ID lines in the .inf file:
-        [LSI]
-        %DevDesc2% = SYMMPI_Inst, PCI\VEN_1000&DEV_0622
-        %DevDesc3% = SYMMPI_Inst, PCI\VEN_1000&DEV_0624
-        %DevDesc4% = SYMMPI_Inst, PCI\VEN_1000&DEV_0626
-        %DevDesc5% = SYMMPI_Inst, PCI\VEN_1000&DEV_0628
-        %DevDesc6% = SYMMPI_Inst, PCI\VEN_1000&DEV_0030
-        %DevDesc7% = SYMMPI_Inst, PCI\VEN_1000&DEV_0032
-        %DevDesc8% = SYMMPI_Inst, PCI\VEN_1000&DEV_0050
-        %DevDesc9% = SYMMPI_Inst, PCI\VEN_1000&DEV_0054
-        %DevDesc10% = SYMMPI_Inst, PCI\VEN_1000&DEV_0058
-        %DevDesc11% = SYMMPI_Inst, PCI\VEN_1000&DEV_0056
-        %DevDesc12% = SYMMPI_Inst, PCI\VEN_1000&DEV_0640
-        %DevDesc13% = SYMMPI_Inst, PCI\VEN_1000&DEV_0646
-        %DevDesc14% = SYMMPI_Inst, PCI\VEN_1000&DEV_0062
-        [DELL]
-        %DevDescD1% = SYMMPI_Inst, PCI\VEN_1000&DEV_0054&SUBSYS_1F041028
-        %DevDescD2% = SYMMPI_Inst, PCI\VEN_1000&DEV_0054&SUBSYS_1F051028
-        %DevDescD3% = SYMMPI_Inst, PCI\VEN_1000&DEV_0054&SUBSYS_1F061028
-        %DevDescD4% = SYMMPI_Inst, PCI\VEN_1000&DEV_0054&SUBSYS_1F071028
-        %DevDescD5% = SYMMPI_Inst, PCI\VEN_1000&DEV_0054&SUBSYS_1F081028
-        %DevDescD6% = SYMMPI_Inst, PCI\VEN_1000&DEV_0054&SUBSYS_1F091028
-        %DevDescD7% = SYMMPI_Inst, PCI\VEN_1000&DEV_0058&SUBSYS_1F0E1028
-        %DevDescD8% = SYMMPI_Inst, PCI\VEN_1000&DEV_0058&SUBSYS_1F0F1028
-        %DevDescD9% = SYMMPI_Inst, PCI\VEN_1000&DEV_0058&SUBSYS_1F101028
-      - Based on the contents of the .inf file, added the following to the Windows XP and Windows Server 2003 sysprep.inf files under [SysprepMassStorage]: PCI\VEN_1000&DEV_0622 = "C:\Sysprep\Drivers\Storage\LSI-SAS\symmpi.inf"
-        PCI\VEN_1000&DEV_0624 = "C:\Sysprep\Drivers\Storage\LSI-SAS\symmpi.inf"
-        PCI\VEN_1000&DEV_0626 = "C:\Sysprep\Drivers\Storage\LSI-SAS\symmpi.inf"
-        PCI\VEN_1000&DEV_0628 = "C:\Sysprep\Drivers\Storage\LSI-SAS\symmpi.inf"
-        PCI\VEN_1000&DEV_0030 = "C:\Sysprep\Drivers\Storage\LSI-SAS\symmpi.inf"
-        PCI\VEN_1000&DEV_0032 = "C:\Sysprep\Drivers\Storage\LSI-SAS\symmpi.inf"
-        PCI\VEN_1000&DEV_0050 = "C:\Sysprep\Drivers\Storage\LSI-SAS\symmpi.inf"
-        PCI\VEN_1000&DEV_0054 = "C:\Sysprep\Drivers\Storage\LSI-SAS\symmpi.inf"
-        PCI\VEN_1000&DEV_0058 = "C:\Sysprep\Drivers\Storage\LSI-SAS\symmpi.inf"
-        PCI\VEN_1000&DEV_0056 = "C:\Sysprep\Drivers\Storage\LSI-SAS\symmpi.inf"
-        PCI\VEN_1000&DEV_0640 = "C:\Sysprep\Drivers\Storage\LSI-SAS\symmpi.inf"
-        PCI\VEN_1000&DEV_0646 = "C:\Sysprep\Drivers\Storage\LSI-SAS\symmpi.inf"
-        PCI\VEN_1000&DEV_0062 = "C:\Sysprep\Drivers\Storage\LSI-SAS\symmpi.inf"
-        PCI\VEN_1000&DEV_0054&SUBSYS_1F041028 = "C:\Sysprep\Drivers\Storage\LSI-SAS\symmpi.inf"
-        PCI\VEN_1000&DEV_0054&SUBSYS_1F051028 = "C:\Sysprep\Drivers\Storage\LSI-SAS\symmpi.inf"
-        PCI\VEN_1000&DEV_0054&SUBSYS_1F061028 = "C:\Sysprep\Drivers\Storage\LSI-SAS\symmpi.inf"
-        PCI\VEN_1000&DEV_0054&SUBSYS_1F071028 = "C:\Sysprep\Drivers\Storage\LSI-SAS\symmpi.inf"
-        PCI\VEN_1000&DEV_0054&SUBSYS_1F081028 = "C:\Sysprep\Drivers\Storage\LSI-SAS\symmpi.inf"
-        PCI\VEN_1000&DEV_0054&SUBSYS_1F091028 = "C:\Sysprep\Drivers\Storage\LSI-SAS\symmpi.inf"
-        PCI\VEN_1000&DEV_0058&SUBSYS_1F0E1028 = "C:\Sysprep\Drivers\Storage\LSI-SAS\symmpi.inf"
-        PCI\VEN_1000&DEV_0058&SUBSYS_1F0F1028 = "C:\Sysprep\Drivers\Storage\LSI-SAS\symmpi.inf"
-        PCI\VEN_1000&DEV_0058&SUBSYS_1F101028 = "C:\Sysprep\Drivers\Storage\LSI-SAS\symmpi.inf"
-
-      If you have hardware using an LSI SAS controller (IBM HS21 blades), the section above can be copied and pasted into your sysprep.inf files:
-      /usr/local/vcl/tools/Windows_XP/Utilities/Sysprep/sysprep.inf
-      /usr/local/vcl/tools/Windows_Server_2003/Utilities/Sysprep/sysprep.inf
 
 7. Provisioning Engines and Hypervisors
 

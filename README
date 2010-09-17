@@ -122,9 +122,6 @@ Management Node Backend Conditional System Requirements:
   If provisioning Windows OS, you will need the following:
   - Sysprep - used for preparing Windows environments before an image is
 	 captured
-  - NewSID - used for preparing Windows environments before an image is captured
-  - SPDrvScn - used for scanning device drivers for Windows environments before
-	 an image is captured
 - Jabber Instant Message Notification(optional)s
   VCL has the ability to send instant message notifications using Jabber. This
   feature is optional and can be enabled or disabled by configuring the
