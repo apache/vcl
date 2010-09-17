@@ -8,7 +8,8 @@ stability of the code, it does indicate that the project has yet to be fully
 endorsed by the ASF.
 
 
-Please see the INSTALLATION file or the Install guide at the apache vcl site.
+Please see the INSTALLATION file or the Install guide at the apache vcl
+site. (https://cwiki.apache.org/VCL/new-install.html)
 This file is only a list of requirements, which are also stated in the Install guide.
 
 System Requirements:
@@ -25,9 +26,8 @@ php modules (some of these may be built in for your distro):
 - php-sysvsem
 - php-xml
 - php-xmlrpc
+- php-ldap (if you will be using ldap authentication)
 libmcrypt and mcrypt libraries installed for php-mcrypt
-Dojo Toolkit 0.4.0
-Dojo Toolkit 1.1.0
 
 Database:
 MySQL 5.0 or later
