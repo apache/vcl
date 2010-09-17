@@ -557,7 +557,7 @@ Additional local accounts can now be added using the backend code. After you hav
 
   vcld -setup
 
-select option 1, and follow the prompts.
+select vcl base module option, and follow the prompts.
 
 
 V. Adding LDAP authentication
