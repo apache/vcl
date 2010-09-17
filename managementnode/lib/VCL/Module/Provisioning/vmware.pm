@@ -506,10 +506,10 @@ sub load {
 						elsif($vmtype =~ /freeserver|gsx|vmwareGSX/) {
 							#copy srcdir to dstDir
                                                 	my $cpcmd = "/bin/cp -r $srcdir $dstDir";
-                                                	if(defined(run_ssh_command($hostnode, $identity, $cpcmd, "root"))) {
+                                                	if(defined(run_ssh_command($hostnode, $management_node_keys, $cpcmd, "root"))) {
                                                         	notify($ERRORS{'OK'}, 0, "copied $srcdir to $dstDir");
                                                         	my $renamecmd = "vmware-vdiskmanager -n $dstDir/$requestedimagename" . ".vmdk " .  $dstDisk;
-                                                        	if(defined(run_ssh_command($hostnode, $identity, $renamecmd, "root"))) {
+                                                        	if(defined(run_ssh_command($hostnode, $management_node_keys, $renamecmd, "root"))) {
                                                                 	notify($ERRORS{'OK'}, 0, "renamed $dstDir/$requestedimagename to $dstDisk");
                                                                 	$baseexists = 1;
                                                         	}
