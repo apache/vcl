@@ -1,0 +1,112 @@
+This file explains how to upgrade an existing install of Apache VCL 2.1
+to Apache VCL 2.2. It assumed that you extracted the release archive
+to /root/apache-VCL-2.2-incubating
+
+The basic steps that will be performed:
+
+1. Shutdown httpd and vcld services
+2. Create backup of vcl database
+3. Update mysql schema
+4. Update Web code, create a backup, copy in new, make changes
+5. Restart httpd service
+6. Update Management node vcl code, create a backup, copy in new, make changes
+7. Restart vcld service
+
+
+1. Shutdown httpd and vcld services
+
+   service httpd stop
+	service vcld stop
+
+2. Create a backup of vcl database
+
+We will create a backup of the vcl database. This will provide a restore point
+if necessary.
+
+   mysqldump vcl > ~/vcl-pre2.2-upgrade.sql
+
+3. Update mysql schema
+
+This step updates the mysql schema.
+
+   cd /root/apache-VCL-2.2-incubating
+   mysql vcl < mysql/update-2.2.sql
+
+4. Update web code
+
+This step we will move the 2.1 web directory out of the way, so we can copy in
+the new web code base. After copying in the new code, we will migrate your
+configuration changes. These instructions assume that you installed the vcl
+web code at /var/www/html/vcl. If you installed it elsewhere, replace
+/var/www/html/vcl with your vcl web root.
+
+   a. copy your old code out of the way
+
+      cd /var/www/html
+		mv vcl ~/vcl_2.1_web
+
+	b. copy the new code in place
+
+	   cd /root/apache-VCL-2.2-incubating
+		cp -r web /var/www/html/vcl
+
+	c. copy your 2.1 config files
+
+	   cd ~/vcl_2.1_web/.ht-inc
+		cp conf.php secrets.php pubkey.pem keys.pem /var/www/html/vcl/.ht-inc
+
+	d. make /var/www/html/vcl/.ht-inc/maintenance writable by the web server - if
+	   httpd on your server is running as the user apache:
+
+	   chown apache /var/www/html/vcl/.ht-inc/maintenance
+
+	e. add the following new entries to conf.php - You can copy them in from
+	   .ht-inc/conf-default.php. Descriptions of each item can also be found
+		in conf-default.php
+
+	   * date_default_timezone_set('America/New_York');
+		* $blockNotifyUsers = "adminuser@example.org";
+		* define("SCHEDULER_ALLOCATE_RANDOM_COMPUTER", 0);
+		* define("DOCUMENTATIONURL", "https://cwiki.apache.org/VCLDOCS/");
+		* define("USEFILTERINGSELECT", 1);
+		* define("FILTERINGSELECTTHRESHOLD", 1000);
+		* define("DEFAULTTHEME", 'default');
+
+5. Restart httpd service
+
+	service httpd start
+
+6. Update management node code
+
+This step will move the 2.1 vcl code base out of the way, so we can cleanly copy
+in the new management node(MN) code.
+
+	a. Copy 2.1 code base to a backup location
+
+		cd <your vcl MN code root path>
+		ie. cd /usr/local/
+		cp -r vcl ~/vcl_2.1_managementnode
+
+	b. Copy in the 2.2 code base to /usr/local, copying in should preserve any
+	drivers or other files you've added.
+
+		/bin/cp -r /root/apache-VCL-2.2-incubating/managementnode/* /usr/local/vcl
+
+	c. Make changes related to vcld.conf settings
+
+	   * Open VCL web interface
+		* Go to Management Nodes
+		* Select Edit Management Node Information
+		* Select Edit.
+		* Set any relevant fields:
+		* SysAdmin Email Address(es) - comma delimited list of vcl admin email
+		  addresses
+		* Address for Shadow Emails - a shared mail box, optional it receives
+		  email of all notifications
+		* Public NIC configuration method - Defines what type of NIC configuration is
+		  used, options are dynamic DHCP, Manual DHCP, or static
+		* End Node SSH Identity Key Files
+
+7. Restart vcld service
+
+	service vcld start
