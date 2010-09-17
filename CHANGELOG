@@ -71,6 +71,7 @@ Release Notes - VCL - Version 2.2
     * [VCL-371] - Private IP address is not being found in /etc/hosts under some circumstances
     * [VCL-377] - multiple clicks on Create Reservation button gives multiple reservations
     * [VCL-378] - reservation can be extended into a block allocation for user not in block group
+    * [VCL-382] - vmware.pm incorrectly handles free server with network datastores
 
 ** Improvement
     * [VCL-2] - migrate preferredimage to nextimage
