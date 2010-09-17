@@ -279,20 +279,20 @@ sub run_sysprep {
 	}
 	
 	# Release any DHCP addresses and delete the default route
-	$sysprep_command .= "$system32_path/ipconfig.exe /release & ";
-	$sysprep_command .= "$system32_path/route.exe DELETE 0.0.0.0 MASK 0.0.0.0 & ";
+	$sysprep_command .= "\%SYSTEMROOT\%/System32/ipconfig.exe /release & ";
+	$sysprep_command .= "\%SYSTEMROOT\%/System32/route.exe DELETE 0.0.0.0 MASK 0.0.0.0 & ";
 	
 	# Disable DHCP
-	$sysprep_command .= "$system32_path/netsh.exe interface ip set address name=\\\"$private_interface_name\\\" source=dhcp & ";
-	$sysprep_command .= "$system32_path/netsh.exe interface ip set dns name=\\\"$private_interface_name\\\" source=dhcp & ";
-	$sysprep_command .= "$system32_path/netsh.exe interface ip set address name=\\\"$public_interface_name\\\" source=dhcp & ";
-	$sysprep_command .= "$system32_path/netsh.exe interface ip set dns name=\\\"$public_interface_name\\\" source=dhcp & ";
+	$sysprep_command .= "\%SYSTEMROOT\%/System32/netsh.exe interface ip set address name=\\\"$private_interface_name\\\" source=dhcp & ";
+	$sysprep_command .= "\%SYSTEMROOT\%/System32/netsh.exe interface ip set dns name=\\\"$private_interface_name\\\" source=dhcp & ";
+	$sysprep_command .= "\%SYSTEMROOT\%/System32/netsh.exe interface ip set address name=\\\"$public_interface_name\\\" source=dhcp & ";
+	$sysprep_command .= "\%SYSTEMROOT\%/System32/netsh.exe interface ip set dns name=\\\"$public_interface_name\\\" source=dhcp & ";
 	
 	# Run Sysprep.exe
 	$sysprep_command .= "C:/Sysprep/sysprep.exe /quiet /reseal /mini /forceshutdown & ";
 	
 	# Shutdown the computer - Sysprep does not always shut the computer down automatically
-	$sysprep_command .= "$system32_path/shutdown.exe -s -t 0 -f";
+	$sysprep_command .= "\%SYSTEMROOT\%/System32/shutdown.exe -s -t 0 -f";
 	$sysprep_command .= "\"";
 	
 	my ($sysprep_status, $sysprep_output) = run_ssh_command($computer_node_name, $management_node_keys, $sysprep_command);

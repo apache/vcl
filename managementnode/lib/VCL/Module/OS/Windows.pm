@@ -3288,22 +3288,21 @@ sub shutdown {
 			return;
 		}
 		
-		$shutdown_command .= "$system32_path/netsh.exe interface ip set address name=\\\"$private_interface_name\\\" source=dhcp & ";
-		$shutdown_command .= "$system32_path/netsh.exe interface ip set dnsservers name=\\\"$private_interface_name\\\" source=dhcp & ";
-		
-		$shutdown_command .= "$system32_path/netsh.exe interface ip set address name=\\\"$public_interface_name\\\" source=dhcp & ";
-		$shutdown_command .= "$system32_path/netsh.exe interface ip set dnsservers name=\\\"$public_interface_name\\\" source=dhcp & ";
-		
-		$shutdown_command .= "$system32_path/ipconfig.exe /release & ";
-		
-		$shutdown_command .= "$system32_path/route.exe DELETE 0.0.0.0 MASK 0.0.0.0 & ";
+		$shutdown_command .= "\%SYSTEMROOT\%/System32/netsh.exe interface ip set address name=\\\"$private_interface_name\\\" source=dhcp & ";
+		$shutdown_command .= "\%SYSTEMROOT\%/System32/netsh.exe interface ip set dnsservers name=\\\"$private_interface_name\\\" source=dhcp & ";
+		$shutdown_command .= "\%SYSTEMROOT\%/System32/netsh.exe interface ip set address name=\\\"$public_interface_name\\\" source=dhcp & ";
+		$shutdown_command .= "\%SYSTEMROOT\%/System32/netsh.exe interface ip set dnsservers name=\\\"$public_interface_name\\\" source=dhcp & ";
+		$shutdown_command .= "\%SYSTEMROOT\%/System32/ipconfig.exe /release & ";
+		$shutdown_command .= "\%SYSTEMROOT\%/System32/route.exe DELETE 0.0.0.0 MASK 0.0.0.0 & ";
 	}
 	else {
 		notify($ERRORS{'DEBUG'}, 0, "shutting down $computer_node_name");
 	}
 	
 	# Initiate the shutdown.exe command to reboot the computer
-	$shutdown_command .= "$system32_path/shutdown.exe -s -t 0 -f\"";
+	$shutdown_command .= "start \%SYSTEMROOT\%/System32/shutdown.exe -s -t 0 -f";
+	
+	$shutdown_command .= "\"";
 	
 	my $attempt_count = 0;
 	my $attempt_limit = 12;
@@ -5864,7 +5863,7 @@ sub run_gpupdate {
 	my $computer_node_name   = $self->data->get_computer_node_name();
 	my $system32_path        = $self->get_system32_path() || return;
 	
-	my $gpupdate_command = "$system32_path/cmd.exe /c $system32_path/gpupdate.exe /Force";
+	my $gpupdate_command = "$system32_path/cmd.exe /c \%SYSTEMROOT\%/System32/gpupdate.exe /Force";
 	my ($gpupdate_status, $gpupdate_output) = run_ssh_command($computer_node_name, $management_node_keys, $gpupdate_command);
 	if (defined($gpupdate_output) && !grep(/error/i, @{$gpupdate_output})) {
 		notify($ERRORS{'OK'}, 0, "ran gpupdate /force");

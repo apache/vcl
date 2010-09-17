@@ -5402,6 +5402,13 @@ sub run_ssh_command {
 	#notify($ERRORS{'DEBUG'}, 0, "ssh path: $ssh_path");
 	#notify($ERRORS{'DEBUG'}, 0, "node: $node, identity file paths: $identity_paths, user: $user, port: $port");
 	#notify($ERRORS{'DEBUG'}, 0, "command: $command");
+	
+	#if ($command =~ /['\\]/) {
+	#	my @octals = map { "0" . sprintf("%o", $_) } unpack("C*", $command);
+	#	my $octal_string = '\\' . join("\\", @octals);
+	#	$command = "echo -e \"$octal_string\" | \$SHELL";
+	#	notify($ERRORS{'DEBUG'}, 0, "octal command:\n$command");
+	#}
 
 	# Assemble the SSH command
 	# -i <identity_file>, Selects the file from which the identity (private key) for RSA authentication is read.
@@ -8658,7 +8665,13 @@ sub format_data {
 	$Data::Dumper::Pair      = ' => '; # Specifies the separator between hash keys and values
 	$Data::Dumper::Sortkeys  = 1;      # Hash keys are dumped in sorted order
 	
-	return Dumper(@data);
+	my $formatted_string = Dumper(@data);
+	
+	my @formatted_lines = split("\n", $formatted_string);
+	
+	map { $_ = ": $_" } @formatted_lines;
+	
+	return join("\n", @formatted_lines);
 }
 
 #/////////////////////////////////////////////////////////////////////////////
