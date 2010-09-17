@@ -3057,8 +3057,6 @@ sub get_vm_disk_adapter_type {
 		return;
 	}
 	
-	my $vm_host_product_name = $self->get_vmhost_product_name() || return;
-	
 	my $vmdk_controller_type;
 	
 	if ($self->api->can("get_virtual_disk_controller_type") && ($vmdk_controller_type = $self->api->get_virtual_disk_controller_type($self->get_vmdk_file_path()))) {
@@ -3068,7 +3066,7 @@ sub get_vm_disk_adapter_type {
 		notify($ERRORS{'DEBUG'}, 0, "retrieved VM disk adapter type from vmdk file: $vmdk_controller_type");
 	}
 	
-	if (!$vmdk_controller_type || ($vm_host_product_name =~ /esx/i && $vmdk_controller_type =~ /ide/i)) {
+	if (!$vmdk_controller_type) {
 		my $vm_os_configuration = $self->get_vm_os_configuration();
 		if (!$vm_os_configuration) {
 			notify($ERRORS{'WARNING'}, 0, "unable to determine VM disk adapter type because unable to retrieve default VM OS configuration");
@@ -3105,12 +3103,49 @@ sub get_vm_virtual_hardware_version {
 		return;
 	}
 	
+	my $hardware_version;
 	if ($self->api->can("get_virtual_disk_hardware_version")) {
-		return $self->api->get_virtual_disk_hardware_version($self->get_vmdk_file_path());
+		$hardware_version = $self->api->get_virtual_disk_hardware_version($self->get_vmdk_file_path());
+		notify($ERRORS{'DEBUG'}, 0, "retrieved hardware version from api object: $hardware_version");
 	}
 	else {
-		return $self->get_vmdk_parameter_value('virtualHWVersion');
+		$hardware_version = $self->get_vmdk_parameter_value('virtualHWVersion');
+		notify($ERRORS{'DEBUG'}, 0, "retrieved hardware version stored in the vmdk file: $hardware_version");
 	}
+	
+	if (!$hardware_version) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine hardware version of vmdk file, returning 7");
+		return 7;
+	}
+	
+	# Under ESXi, IDE adapters are not allowed if the hardware version is 4
+	# Override the hardware version retrieved from the vmdk file if:
+	# -VMware product = ESX
+	# -Adapter type = IDE
+	# -Hardware version = 4
+	if ($hardware_version < 7) {
+		my $vmware_product_name = $self->get_vmhost_product_name();
+		if (!$vmware_product_name) {
+			notify($ERRORS{'WARNING'}, 0, "unable to determine VMware product name in order to tell if hardware version should be overridden, returning $hardware_version");
+			return $hardware_version;
+		}
+		
+		if ($vmware_product_name =~ /esx/i) {
+			my $adapter_type = $self->get_vm_disk_adapter_type();
+			if (!$adapter_type) {
+				notify($ERRORS{'WARNING'}, 0, "unable to determine disk adapter type in order to tell if hardware version should be overridden, returning $hardware_version");
+				return $hardware_version;
+			}
+			
+			if ($adapter_type =~ /ide/i) {
+				notify($ERRORS{'OK'}, 0, "overriding hardware version $hardware_version --> 7, IDE adapters cannot be used on ESX unless the hardware version is 7 or higher, VMware product: '$vmware_product_name', vmdk adapter type: $adapter_type, vmdk hardware version: $hardware_version");
+				return 7;
+			}
+		}
+	}
+	
+	notify($ERRORS{'OK'}, 0, "returning hardware version: $hardware_version");
+	return $hardware_version;
 }
 
 #/////////////////////////////////////////////////////////////////////////////

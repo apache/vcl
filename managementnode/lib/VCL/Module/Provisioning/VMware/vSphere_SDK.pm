@@ -451,19 +451,9 @@ sub copy_virtual_disk {
 	
 	# If the adapter type was not specified, retrieve it from the source vmdk file
 	if (!$destination_adapter_type) {
-		my $vmware_product_name = $self->get_vmware_product_name();
 		$destination_adapter_type = $self->get_virtual_disk_controller_type($source_path);
-		
-		if (!$vmware_product_name) {
-			notify($ERRORS{'WARNING'}, 0, "destination adapter type argument was not specifed and unable to determine VMware product name contains ESX, using lsiLogic");
-			$destination_adapter_type = 'lsiLogic';
-		}
-		elsif (!$destination_adapter_type) {
+		if (!$destination_adapter_type) {
 			notify($ERRORS{'WARNING'}, 0, "destination adapter type argument was not specifed and unable to retrieve adapter type from source vmdk file: $source_path, using lsiLogic");
-			$destination_adapter_type = 'lsiLogic';
-		}
-		elsif ($vmware_product_name =~ /esx/i && $destination_adapter_type =~ /ide/i) {
-			notify($ERRORS{'OK'}, 0, "VMware product is '$vmware_product_name' and adapter type from source vmdk file is '$destination_adapter_type', using lsiLogic");
 			$destination_adapter_type = 'lsiLogic';
 		}
 	}
@@ -923,12 +913,12 @@ sub get_virtual_disk_hardware_version {
 	}
 	
 	# Check if the hardwareVersion key exists in the vmdk file info
-	if (!defined($vmdk_file_info->{hardwareVersion}) || !$vmdk_file_info->{hardwareVersion}) {
+	my $hardware_version = $vmdk_file_info->{hardwareVersion};
+	if (!$hardware_version) {
 		notify($ERRORS{'WARNING'}, 0, "unable to retrieve hardwareVersion value from file info: $vmdk_file_path\n" . format_data($vmdk_file_info));
 		return;
 	}
 	
-	my $hardware_version = $vmdk_file_info->{hardwareVersion};
 	notify($ERRORS{'DEBUG'}, 0, "retrieved hardwareVersion value from vmdk file info: $hardware_version");
 	return $hardware_version;
 }
