@@ -146,3 +146,8 @@ Management Node Backend Conditional System Requirements:
     http://search.cpan.org/dist/Digest-SHA1/
     License: Perl Artistic and GPL
 
+
+
+Bundled 3rd Party Software
+A copy of Dojo Toolkit version 1.5.0 is included in the web code under
+web/dojo.
