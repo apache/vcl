@@ -1403,7 +1403,9 @@ INSERT INTO `resourcemap` (`resourcegroupid1`, `resourcetypeid1`, `resourcegroup
 (2, 13, 1, 12),
 (3, 16, 1, 12),
 (10, 13, 5, 12),
-(3, 16, 8, 12);
+(3, 16, 8, 12),
+(3, 16, 5, 12),
+(3, 16, 9, 12);
 
 -- 
 -- Dumping data for table `resourcepriv`
