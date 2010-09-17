@@ -1401,6 +1401,7 @@ INSERT INTO `resourcegroupmembers` (`resourceid`, `resourcegroupid`) VALUES
 INSERT INTO `resourcemap` (`resourcegroupid1`, `resourcetypeid1`, `resourcegroupid2`, `resourcetypeid2`) VALUES 
 (2, 13, 1, 12),
 (3, 16, 1, 12),
+(10, 13, 5, 12),
 (3, 16, 8, 12);
 
 -- 
