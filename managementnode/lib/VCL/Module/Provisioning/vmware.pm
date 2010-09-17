@@ -508,22 +508,19 @@ sub load {
                                                 	my $cpcmd = "/bin/cp -r $srcdir $dstDir";
                                                 	if(defined(run_ssh_command($hostnode, $identity, $cpcmd, "root"))) {
                                                         	notify($ERRORS{'OK'}, 0, "copied $srcdir to $dstDir");
-                                                        	my $renamecmd = "vmware-vdiskmanager -n $dstDir/$requestedimagename" . ".vmdk " . 
-$dstDisk;
+                                                        	my $renamecmd = "vmware-vdiskmanager -n $dstDir/$requestedimagename" . ".vmdk " .  $dstDisk;
                                                         	if(defined(run_ssh_command($hostnode, $identity, $renamecmd, "root"))) {
-                                                                	notify($ERRORS{'OK'}, 0, "renamed $dstDir/$requestedimagename to $dstDisk"
+                                                                	notify($ERRORS{'OK'}, 0, "renamed $dstDir/$requestedimagename to $dstDisk");
                                                                 	$baseexists = 1;
-                                                        }
-                                                        else{
-                                                                insertloadlog($reservation_id, $vmclient_computerid, "failed", "cloning ba
-se image failed");
-                                                                notify($ERRORS{'CRITICAL'}, 0, "problem running renamecmd $renamecmd");
-                                                                close(TMPLOCK);
-                                                                unlink($tmplockfile);
-                                                                return 0;
-
-                                                        }
-                                                }
+                                                        	}
+                                                        	else{
+                                                                	insertloadlog($reservation_id, $vmclient_computerid, "failed", "cloning base image failed");
+                                                                	notify($ERRORS{'CRITICAL'}, 0, "problem running renamecmd $renamecmd");
+                                                               		close(TMPLOCK);
+                                                                	unlink($tmplockfile);
+                                                                	return 0;
+                                                        	}
+                                                	}
 
 			
 						}
