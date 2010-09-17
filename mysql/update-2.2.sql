@@ -91,10 +91,10 @@ CREATE PROCEDURE `AddIndexIfNotExists`(
 )
 BEGIN
   IF NOT EXISTS (
-    SELECT * FROM information_schema.KEY_COLUMN_USAGE WHERE
+    SELECT * FROM information_schema.STATISTICS WHERE
     TABLE_SCHEMA=Database()
-    AND COLUMN_NAME=columnName
     AND TABLE_NAME=tableName
+    AND COLUMN_NAME=columnName
   )
   THEN
     SET @statement_array = CONCAT('ALTER TABLE ', Database(), '.', tableName, ' ADD INDEX (', columnName, ')');
@@ -394,6 +394,7 @@ INSERT IGNORE INTO `module` (`name`, `prettyname`, `description`, `perlpackage`)
 INSERT IGNORE INTO `module` (`name`, `prettyname`, `description`, `perlpackage`) VALUES ('provisioning_xcat_2x', 'xCAT 2.x Provisioning Module', '', 'VCL::Module::Provisioning::xCAT2');
 INSERT IGNORE INTO `module` (`name`, `prettyname`, `description`, `perlpackage`) VALUES ('provisioning_vmware', 'VMware Provisioning Module', '', 'VCL::Module::Provisioning::VMware::VMware');
 INSERT IGNORE INTO `module` (`name`, `prettyname`, `description`, `perlpackage`) VALUES ('state_image', 'VCL Image State Module', '', 'VCL::image');
+INSERT IGNORE INTO `module` (`name`, `prettyname`, `description`, `perlpackage`) VALUES ('base_module', 'VCL Base Module', '', 'VCL::Module');
 
 -- --------------------------------------------------------
 

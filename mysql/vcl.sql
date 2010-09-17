@@ -1273,7 +1273,8 @@ INSERT INTO `module` (`id`, `name`, `prettyname`, `description`, `perlpackage`) 
 (17, 'os_win7', 'Windows 7 OS Module', '', 'VCL::Module::OS::Windows::Version_6::7'),
 (20, 'provisioning_xCAT_2x', 'xCAT 2.x Provisioning Module', '', 'VCL::Module::Provisioning::xCAT2'),
 (21, 'provisioning_vmware', 'VMware Provisioning Module', '', 'VCL::Module::Provisioning::VMware::VMware'),
-(22, 'state_image', 'VCL Image State Module', '', 'VCL::image');
+(22, 'state_image', 'VCL Image State Module', '', 'VCL::image'),
+(23, 'base_module', 'VCL Base Module', '', 'VCL::Module');
 
 -- 
 -- Dumping data for table `OS`
