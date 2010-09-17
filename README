@@ -97,6 +97,9 @@ Required Perl modules" section of the INSTALLATION file.
 - YAML  
   http://search.cpan.org/dist/YAML/
   License: Perl Artistic & GPL
+- Digest-SHA1 
+  http://search.cpan.org/dist/Digest-SHA1/
+  License: Perl Artistic & GPL
 
 Management Node Backend Conditional System Requirements:
 - Bare-metal and virtual machine provisioning
