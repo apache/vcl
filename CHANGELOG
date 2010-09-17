@@ -14,6 +14,7 @@ No dependency changes
 Release Notes - VCL - Version 2.2
 
 ** Bug
+    * [VCL-121] - special characters in API passwords not handled correctly
     * [VCL-150] - Pages do not display correctly with IE8
     * [VCL-154] - run_scp_command() is not catching permission denied errors
     * [VCL-158] - utils.pm setstaticaddress() does not work correctly for Windows
@@ -22,6 +23,8 @@ Release Notes - VCL - Version 2.2
     * [VCL-165] - Fix syntax bugs cause reservation processes to die
     * [VCL-181] - VCL desktop request tool - use API to make reservations
     * [VCL-189] - cannot add a computer in maintenance state
+    * [VCL-193] - IP address field not large enough for 15-characters
+    * [VCL-194] - Marking new computer to be "maintenance" status causes indexing error
     * [VCL-197] - _is_user_added routine 
     * [VCL-210] - getdynamicaddress returns 127.0.01 for missing public adapter
     * [VCL-214] - Windows modules don't always disable autoadminlogon
@@ -49,6 +52,7 @@ Release Notes - VCL - Version 2.2
     * [VCL-306] - Web GUI code has hard coded Eastern Time Zone information - breaks in other time zones
     * [VCL-307] - add empty post_reserve routine UnixLab.pm OS module
     * [VCL-317] - scheduler doesn't take imagerevision into account
+    * [VCL-318] - API error if invalid affiliation is used
     * [VCL-325] - removing a subimage from a cluster can result in all subimages getting removed
     * [VCL-327] - set_computer_name.vbs causes Sysprep to hang if certain applications are installed
     * [VCL-329] - DataStructure.pm get_computer_private_ip_address() not handling all valid formats in /etc/hosts
@@ -58,6 +62,7 @@ Release Notes - VCL - Version 2.2
     * [VCL-334] - numeric userids are not handled correctly
     * [VCL-337] - Windows.pm delete_files_by_pattern may delete unintended files if an environment variable isn't defined
     * [VCL-338] - vmprofiles that are in use can be deleted
+    * [VCL-340] - cannot change name of vmprofile
     * [VCL-346] - getdynamicaddress routine regex issue
     * [VCL-347] - cluster connect page rdp file
     * [VCL-349] - sql insert queries for image and imagerevision tables
@@ -138,6 +143,7 @@ Release Notes - VCL - Version 2.2
     * [VCL-279] - Add post_load_custom script functionality for Linux images
     * [VCL-292] - option to save selected authentication method in cookie
     * [VCL-294] - create a login log
+    * [VCL-298] - Add support for VMware Server 2.x and ESXi 4.x
     * [VCL-301] - Add support for Windows 7
     * [VCL-351] - extend vm profile to have more virtualswitches
     * [VCL-352] - Add additional pre-capture steps for Linux OS
