@@ -351,7 +351,7 @@ function viewComputers($showall=0) {
 	if($data["showhostname"] || $showall)
 		print "    <TD><INPUT type=text name=hostname maxlength=36></TD>\n";
 	if($data["showipaddress"] || $showall) {
-		print "    <TD><INPUT type=text name=ipaddress size=14 maxlength=15>";
+		print "    <TD><INPUT type=text name=ipaddress size=15 maxlength=15>";
 		print "</TD>\n";
 	}
 	if($data["showstate"] || $showall) {
