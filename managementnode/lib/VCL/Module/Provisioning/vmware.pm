@@ -487,18 +487,45 @@ sub load {
 						my $srcDisk = "$datastorepath/$requestedimagename/$requestedimagename" . ".vmdk";
 						my $dstDisk = "$datastorepath/$mybasedirname/$myimagename" . ".vmdk";
 						my $dstDir  = "$datastorepath/$mybasedirname";
-
-						#create a clone -
-						if (_vmwareclone($hostnode, $management_node_keys, $srcDisk, $dstDisk, $dstDir)) {
-							$baseexists = 1;
-							insertloadlog($reservation_id, $vmclient_computerid, "transfervm", "cloning base image files");
+						my $srcdir  = "$datastorepath/$requestedimagename";
+						
+						if($vmtype eq "vmwareESX"){
+							#create a clone -
+							if (_vmwareclone($hostnode, $management_node_keys, $srcDisk, $dstDisk, $dstDir)) {
+								$baseexists = 1;
+								insertloadlog($reservation_id, $vmclient_computerid, "transfervm", "cloning base image files");
+							}
+							else {
+								insertloadlog($reservation_id, $vmclient_computerid, "failed", "cloning base image failed");
+								notify($ERRORS{'CRITICAL'}, 0, "problem cloning failed $srcDisk to $dstDisk");
+								close(TMPLOCK);
+								unlink($tmplockfile);
+								return 0;
+							}
 						}
-						else {
-							insertloadlog($reservation_id, $vmclient_computerid, "failed", "cloning base image failed");
-							notify($ERRORS{'CRITICAL'}, 0, "problem cloning failed $srcDisk to $dstDisk");
-							close(TMPLOCK);
-							unlink($tmplockfile);
-							return 0;
+						elsif($vmtype =~ /freeserver|gsx|vmwareGSX/) {
+							#copy srcdir to dstDir
+                                                	my $cpcmd = "/bin/cp -r $srcdir $dstDir";
+                                                	if(defined(run_ssh_command($hostnode, $identity, $cpcmd, "root"))) {
+                                                        	notify($ERRORS{'OK'}, 0, "copied $srcdir to $dstDir");
+                                                        	my $renamecmd = "vmware-vdiskmanager -n $dstDir/$requestedimagename" . ".vmdk " . 
+$dstDisk;
+                                                        	if(defined(run_ssh_command($hostnode, $identity, $renamecmd, "root"))) {
+                                                                	notify($ERRORS{'OK'}, 0, "renamed $dstDir/$requestedimagename to $dstDisk"
+                                                                	$baseexists = 1;
+                                                        }
+                                                        else{
+                                                                insertloadlog($reservation_id, $vmclient_computerid, "failed", "cloning ba
+se image failed");
+                                                                notify($ERRORS{'CRITICAL'}, 0, "problem running renamecmd $renamecmd");
+                                                                close(TMPLOCK);
+                                                                unlink($tmplockfile);
+                                                                return 0;
+
+                                                        }
+                                                }
+
+			
 						}
 					} ## end if ($persistent)
 					else {
