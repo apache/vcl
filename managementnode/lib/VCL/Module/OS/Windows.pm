@@ -2431,7 +2431,7 @@ sub reg_query {
 	# If value argument was specified, parse and return the data
 	if (defined($value_argument)) {
 		# Find the line containing the value information and parse it
-		my ($value, $type, $data) = map { $_ =~ /^\s+([^\t]+)\t(REG_\w+)\t?(.*)/ } @$output;
+		my ($value, $type, $data) = map { $_ =~ /^\s*([^\t]+)\s*(REG_\w+)\s*(.*)/ } @$output;
 		$value = '(Default)' if $value eq '<NO NAME>';
 		if ($type && defined($data)) {
 			$data = $self->reg_query_convert_data($type, $data);
@@ -2439,7 +2439,7 @@ sub reg_query {
 			return $data;
 		}
 		else {
-			notify($ERRORS{'WARNING'}, 0, "failed to retrieve registry data:\nkey: '$key_argument'\nvalue: '$value'\ncommand: '$command'\noutput:\n" . join("\n", @$output));
+			notify($ERRORS{'WARNING'}, 0, "failed to retrieve registry data:\nkey: '$key_argument'\nvalue: '$value'\ncommand: '$command'\noutput:\n" . string_to_ascii(join("\n", @$output)));
 			return;
 		}
 	}
@@ -2457,7 +2457,7 @@ sub reg_query {
 				$registry_hash{$key} = {};
 				next;
 			}
-			elsif ($line =~ /^\s+([^\t]+)\t(REG_\w+)\t(.*)/) {
+			elsif ($line =~ /^\s*([^\t]+)\s*(REG_\w+)\s*(.*)/) {
 				my ($value, $type, $data) = ($1, $2, $3);
 				$value = '(Default)' if $value eq '<NO NAME>';
 				$data = $self->reg_query_convert_data($type, $data);
