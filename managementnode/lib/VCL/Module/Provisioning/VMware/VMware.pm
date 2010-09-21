@@ -358,11 +358,19 @@ sub load {
 	insertloadlog($reservation_id, $computer_id, "startvm", "registered and powered on $computer_name");
 	
 	# Call the OS module's post_load() subroutine if implemented
-	if ($self->os->can("post_load") && !$self->os->post_load()) {
-		notify($ERRORS{'WARNING'}, 0, "failed to perform OS post-load tasks on VM $computer_name on VM host: $vmhost_hostname");
-		return;
+	if ($self->os->can("post_load")) {
+		if ($self->os->post_load()) {
+			$self->os->set_vcld_post_load_status();
+			insertloadlog($reservation_id, $computer_id, "loadimagecomplete", "performed OS post-load tasks on $computer_name");
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to perform OS post-load tasks on VM $computer_name on VM host: $vmhost_hostname");
+			return;
+		}
 	}
-	insertloadlog($reservation_id, $computer_id, "loadimagecomplete", "performed OS post-load tasks on $computer_name");
+	else {
+		insertloadlog($reservation_id, $computer_id, "loadimagecomplete", "OS post-load tasks not necessary on $computer_name");
+	}
 	
 	return 1;
 }
