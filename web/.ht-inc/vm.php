@@ -564,6 +564,8 @@ function AJvmFromHost() {
 	$rems = array();
 	$checks = array();
 	$vclreloadid = getUserlistID('vclreload@Local');
+	$imageid = getImageId('noimage');
+	$imagerevisionid = getProductionRevisionid($imageid);
 	$start = getReloadStartTime();
 	$end = $start + SECINMONTH;
 	$start = unixToDatetime($start);
@@ -583,7 +585,7 @@ function AJvmFromHost() {
 			moveReservationsOffComputer($compid)) {
 			// if no reservations on computer, submit reload 
 			#    reservation so vm gets stopped on host
-			$reqid = simpleAddRequest($compid, 4, 3, $start, $end, 18, $vclreloadid);
+			$reqid = simpleAddRequest($compid, $imageid, $imagerevisionid, $start, $end, 18, $vclreloadid);
 			if($reqid == 0) {
 				$fails[] = array('id' => $compid,
 				                 'name' => $compdata[$compid]['hostname'],
@@ -642,11 +644,13 @@ function AJvmFromHost() {
 function AJvmFromHostDelayed() {
 	$data = getContinuationVar();
 	$vclreloadid = getUserlistID('vclreload@Local');
+	$imageid = getImageId('noimage');
+	$imagerevisionid = getProductionRevisionid($imageid);
 	$fails = array();
 	foreach($data as $comp) {
 		$end = datetimeToUnix($comp['end2']) + SECINMONTH;
 		$end = unixToDatetime($end);
-		if(! simpleAddRequest($comp['id'], 4, 3, $comp['end2'], $end, 18, $vclreloadid))
+		if(! simpleAddRequest($comp['id'], $imageid, $imagerevisionid, $comp['end2'], $end, 18, $vclreloadid))
 			$fails[] = array('name' => $comp['hostname'],
 			                 'reason' => 'nomgtnode');
 	}
