@@ -77,6 +77,7 @@ Release Notes - VCL - Version 2.2
     * [VCL-377] - multiple clicks on Create Reservation button gives multiple reservations
     * [VCL-378] - reservation can be extended into a block allocation for user not in block group
     * [VCL-382] - vmware.pm incorrectly handles free server with network datastores
+    * [VCL-386] - older vmware.pm module not removing vmhostid from vm
 
 ** Improvement
     * [VCL-2] - migrate preferredimage to nextimage
