@@ -2074,7 +2074,7 @@ sub post_maintenance_action {
 	# remove vm machine directory from vmx path
 	# set vmhostid to null in computer table - handled in new.pm
 
-	my $computer_name   = $self->data->get_computer_short_name;
+	my $computer_short_name   = $self->data->get_computer_short_name;
 	my $computer_id = $self->data->get_computer_id();
 	my $vmhost_hostname = $self->data->get_vmhost_hostname;
 
