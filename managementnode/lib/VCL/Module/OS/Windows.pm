@@ -3132,7 +3132,10 @@ sub reboot {
 			notify($ERRORS{'WARNING'}, 0, "reboot not attempted, failed to enable ping from private IP addresses");
 			return 0;
 		}
-
+		
+		# Kill the screen saver process, it occasionally prevents reboots and shutdowns from working
+		$self->kill_process('logon.scr');
+		
 		# Initiate the shutdown.exe command to reboot the computer
 		my $shutdown_command = $system32_path . "/shutdown.exe -r -t 0 -f";
 		my ($shutdown_exit_status, $shutdown_output) = run_ssh_command($computer_node_name, $management_node_keys, $shutdown_command);
@@ -3275,6 +3278,9 @@ sub shutdown {
 	my $management_node_keys = $self->data->get_management_node_keys();
 	my $computer_node_name   = $self->data->get_computer_node_name();
 	my $system32_path        = $self->get_system32_path() || return;
+	
+	# Kill the screen saver process, it occasionally prevents reboots and shutdowns from working
+	$self->kill_process('logon.scr');
 	
 	my $shutdown_command = "/bin/cygstart.exe $system32_path/cmd.exe /c \"";
 	
@@ -8742,12 +8748,7 @@ sub get_driver_inf_paths {
 	elsif (defined($grep_output)) {
 		my @inf_paths = grep(/:[\\\/]/, @$grep_output);
 		notify($ERRORS{'DEBUG'}, 0, "found " . scalar(@inf_paths) . " driver .inf paths, grep output:\n". join("\n", @$grep_output));
-		if (@inf_paths) {
-			return @inf_paths;
-		}
-		else {
-			return 0;
-		}
+		return @inf_paths;
 	}
 	elsif (defined($grep_exit_status)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to find driver paths, exit status: $grep_exit_status, output:\n@{$grep_output}");

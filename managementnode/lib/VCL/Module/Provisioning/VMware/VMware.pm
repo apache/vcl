@@ -1053,7 +1053,9 @@ sub get_vmhost_api_object {
 
  Parameters  : none
  Returns     : boolean
- Description : 
+ Description : Removes VMs from a VMware host which were previously created for
+               the VM. It only removes VMs created for the VM assigned to the
+               reservation. It does not delete all VM's from the host.
 
 =cut
 
@@ -4120,23 +4122,12 @@ sub post_maintenance_action {
 	my $computer_short_name = $self->data->get_computer_short_name();
 	my $vmhost_hostname = $self->data->get_vmhost_hostname();
 	
-	my $vmx_file_path = $self->get_vmx_file_path();
-	if (!$vmx_file_path) {
-		notify($ERRORS{'WARNING'}, 0, "vmx file path could not be determined");
+	# Delete the existing VM from the VM host which were created for the VM assigned to the reservation
+	if (!$self->remove_existing_vms()) {
+		notify($ERRORS{'WARNING'}, 0, "failed to delete existing VMs on VM host $vmhost_hostname which were created for VM $computer_short_name");
 		return;
 	}
-	
-	# Delete the existing VM from the VM host
-	if ($self->vmhost_os->file_exists($vmx_file_path)) {
-		if (!$self->delete_vm($vmx_file_path)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to delete VM on VM host $vmhost_hostname: $vmx_file_path");
-			return;
-		}
-	}
-	else {
-		notify($ERRORS{'OK'}, 0, "vmx file does not exist on the VM host $vmhost_hostname: $vmx_file_path");
-	}
-	
+
 	if (switch_vmhost_id($computer_id, 'NULL')) {
 		notify($ERRORS{'OK'}, 0, "set vmhostid to NULL for for VM $computer_short_name");
 	}

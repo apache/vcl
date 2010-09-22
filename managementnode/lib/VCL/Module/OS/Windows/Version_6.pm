@@ -1588,6 +1588,9 @@ EOF
 	# Display licensing information
 	$self->run_slmgr_dlv();
 	
+	# Kill the screen saver process, it occasionally prevents reboots and shutdowns from working
+	$self->kill_process('logon.scr');
+	
 	# Run Sysprep.exe, use cygstart to lauch the .exe and return immediately
 	my $sysprep_command = "/bin/cygstart.exe $system32_path/cmd.exe /c \"";
 	

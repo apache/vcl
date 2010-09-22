@@ -266,6 +266,9 @@ sub run_sysprep {
 		notify($ERRORS{'WARNING'}, 0, "unable to configure firewall to allow sessmgr.exe program, Sysprep may hang");
 	}
 	
+	# Kill the screen saver process, it occasionally prevents reboots and shutdowns from working
+	$self->kill_process('logon.scr');
+	
 	# Assemble the Sysprep command
 	# Run Sysprep.exe, use cygstart to lauch the .exe and return immediately
 	my $sysprep_command = "/bin/cygstart.exe $system32_path/cmd.exe /c \"";
@@ -477,18 +480,19 @@ sub get_sysprep_inf_contents {
 	
 	# Add the SysprepMassStorage section
 	my $mass_storage_section = $self->get_sysprep_inf_mass_storage_section();
-	if (!$mass_storage_section) {
+	if ($mass_storage_section) {
+		$sysprep_contents .= "[SysprepMassStorage]\n$mass_storage_section";
+	}
+	elsif (!defined($mass_storage_section)) {
 		notify($ERRORS{'WARNING'}, 0, "unable to build sysprep.inf SysprepMassStorage section");
 		return;
 	}
-	else {
-		$sysprep_contents .= "[SysprepMassStorage]\n$mass_storage_section";
-	}
+	
 	
 	# Replace Unix\Linux newlines with Windows newlines
 	$sysprep_contents =~ s/\n/\r\n/g;
 	
-	notify($ERRORS{'DEBUG'}, 0, "sysprep.inf contents:\n" . string_to_ascii($sysprep_contents));
+	notify($ERRORS{'DEBUG'}, 0, "sysprep.inf contents:\n$sysprep_contents");
 	return $sysprep_contents;
 }
 
@@ -524,8 +528,8 @@ sub get_sysprep_inf_mass_storage_section {
 	my @storage_inf_paths = $self->get_driver_inf_paths('scsiadapter');
 	#my @storage_inf_paths = $self->get_driver_inf_paths('(scsiadapter|hdc)');
 	if (!@storage_inf_paths) {
-		notify($ERRORS{'WARNING'}, 0, "failed to locate storage driver .inf paths");
-		return;
+		notify($ERRORS{'OK'}, 0, "no storage driver .inf paths were found");
+		return '';
 	}
 	
 	# Extract hardware IDs from each storage driver .inf file 
