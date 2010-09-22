@@ -2075,11 +2075,20 @@ sub post_maintenance_action {
 	# set vmhostid to null in computer table - handled in new.pm
 
 	my $computer_name   = $self->data->get_computer_short_name;
+	my $computer_id = $self->data->get_computer_id();
 	my $vmhost_hostname = $self->data->get_vmhost_hostname;
 
 	if ($self->control_VM("remove")) {
 		notify($ERRORS{'OK'}, 0, "removed node $computer_name from vmhost $vmhost_hostname");
 	}
+
+	if (switch_vmhost_id($computer_id, 'NULL')) {
+                notify($ERRORS{'OK'}, 0, "set vmhostid to NULL for for VM $computer_short_name");
+        }
+        else {
+                notify($ERRORS{'WARNING'}, 0, "failed to set the vmhostid to NULL for VM $computer_short_name");
+                return;
+        }
 
 	return 1;
 
