@@ -2079,7 +2079,7 @@ sub post_maintenance_action {
 	my $vmhost_hostname = $self->data->get_vmhost_hostname;
 
 	if ($self->control_VM("remove")) {
-		notify($ERRORS{'OK'}, 0, "removed node $computer_name from vmhost $vmhost_hostname");
+		notify($ERRORS{'OK'}, 0, "removed node $computer_short_name from vmhost $vmhost_hostname");
 	}
 
 	if (switch_vmhost_id($computer_id, 'NULL')) {
