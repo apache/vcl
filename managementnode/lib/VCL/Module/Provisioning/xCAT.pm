@@ -408,7 +408,7 @@ sub load {
 		my @mactab = <MACTAB>;
 		close(MACTAB);
 		foreach my $line (@mactab) {
-			if ($line =~ /(^$computer_node_name(-eth[0-9])?)(\s+)([:0-9a-f]*)/) {
+			if ($line =~ /(^$computer_node_name(-eth[0-9])?)(\s+)([0-9:a-f]*)/i) {
 				$eth0MACaddress = $4;
 				notify($ERRORS{'OK'}, 0, "MAC address for $computer_node_name collected $eth0MACaddress");
 			}
