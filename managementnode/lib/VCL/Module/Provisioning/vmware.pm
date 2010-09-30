@@ -257,6 +257,10 @@ sub load {
 			notify($ERRORS{'OK'}, 0, "listing datestore $datastorepath ");
 			undef @sshcmd;
 			@sshcmd = run_ssh_command($hostnode, $management_node_keys, "ls -1 $datastorepath", "root");
+			if (!@sshcmd) {
+				notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to list datastore contents on vm host: $hostnode");
+				return;
+			}
 			notify($ERRORS{'OK'}, 0, "data store contents $datastorepath on vm host:\n@{ $sshcmd[1] }");
 			foreach my $l (@{$sshcmd[1]}) {
 				if ($l =~ /denied|No such/) {
