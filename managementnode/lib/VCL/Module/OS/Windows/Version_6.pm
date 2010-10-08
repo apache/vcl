@@ -496,7 +496,7 @@ sub run_slmgr_ipk {
 	}
 	
 	# Run cscript.exe slmgr.vbs -ipk to install the product key
-	my $ipk_command = "$system32_path/cmd.exe /c \%SYSTEMROOT\%/System32/cscript.exe //NoLogo \%SYSTEMROOT\%/System32/slmgr.vbs -ipk $product_key";
+	my $ipk_command = "$system32_path/cscript.exe //NoLogo \$SYSTEMROOT/System32/slmgr.vbs -ipk $product_key";
 	my ($ipk_exit_status, $ipk_output) = run_ssh_command($computer_node_name, $management_node_keys, $ipk_command);
 	if (defined($ipk_exit_status) && $ipk_exit_status == 0 && grep(/successfully/i, @$ipk_output)) {
 		notify($ERRORS{'OK'}, 0, "installed product key: $product_key");
@@ -537,7 +537,7 @@ sub run_slmgr_ckms {
 	
 	# Run slmgr.vbs -ckms to clear an existing KMS server from a computer
 	# slmgr.vbs must be run in a command shell using the correct System32 path or the task it's supposed to do won't really take effect
-	my $skms_command = "$system32_path/cmd.exe /c \%SYSTEMROOT\%/System32/cscript.exe //NoLogo \%SYSTEMROOT\%/System32/slmgr.vbs -ckms";
+	my $skms_command = "$system32_path/cscript.exe //NoLogo \$SYSTEMROOT/System32/slmgr.vbs -ckms";
 	my ($skms_exit_status, $skms_output) = run_ssh_command($computer_node_name, $management_node_keys, $skms_command);
 	if (defined($skms_exit_status) && $skms_exit_status == 0 && grep(/successfully/i, @$skms_output)) {
 		notify($ERRORS{'OK'}, 0, "cleared kms server");
@@ -578,7 +578,7 @@ sub run_slmgr_cpky {
 	
 	# Run slmgr.vbs -cpky to clear an existing product key from a computer
 	# slmgr.vbs must be run in a command shell using the correct System32 path or the task it's supposed to do won't really take effect
-	my $skms_command = "$system32_path/cmd.exe /c \%SYSTEMROOT\%/System32/cscript.exe //NoLogo \%SYSTEMROOT\%/System32/slmgr.vbs -cpky";
+	my $skms_command = "$system32_path/cscript.exe //NoLogo \$SYSTEMROOT/System32/slmgr.vbs -cpky";
 	my ($skms_exit_status, $skms_output) = run_ssh_command($computer_node_name, $management_node_keys, $skms_command);
 	if (defined($skms_exit_status) && $skms_exit_status == 0 && grep(/successfully/i, @$skms_output)) {
 		notify($ERRORS{'OK'}, 0, "cleared product key");
@@ -629,7 +629,9 @@ sub run_slmgr_skms {
 	
 	# Run slmgr.vbs -skms to configure the computer to use the KMS server
 	# slmgr.vbs must be run in a command shell using the correct System32 path or the task it's supposed to do won't really take effect
-	my $skms_command = "$system32_path/cmd.exe /c \%SYSTEMROOT\%/System32/cscript.exe //NoLogo \%SYSTEMROOT\%/System32/slmgr.vbs -skms $kms_address:$kms_port";
+	my $skms_command = "$system32_path/cscript.exe //NoLogo \$SYSTEMROOT/System32/slmgr.vbs -skms $kms_address:$kms_port";
+	$skms_command .= " && $system32_path/cscript.exe //NoLogo \$SYSTEMROOT/System32/slmgr.vbs -ato";
+	
 	my ($skms_exit_status, $skms_output) = run_ssh_command($computer_node_name, $management_node_keys, $skms_command);
 	if (defined($skms_exit_status) && $skms_exit_status == 0 && grep(/successfully/i, @$skms_output)) {
 		notify($ERRORS{'OK'}, 0, "set kms server to $kms_address:$kms_port");
@@ -669,7 +671,7 @@ sub run_slmgr_ato {
 	my $system32_path        = $self->get_system32_path() || return;
 	
 	# Run cscript.exe slmgr.vbs -ato to install the product key
-	my $ato_command = "$system32_path/cmd.exe /c \%SYSTEMROOT\%/System32/cscript.exe //NoLogo \%SYSTEMROOT\%/System32/slmgr.vbs -ato";
+	my $ato_command = "$system32_path/cscript.exe //NoLogo \$SYSTEMROOT/System32/slmgr.vbs -ato";
 	my ($ato_exit_status, $ato_output) = run_ssh_command($computer_node_name, $management_node_keys, $ato_command);
 	if (defined($ato_exit_status) && $ato_exit_status == 0 && grep(/successfully/i, @$ato_output)) {
 		notify($ERRORS{'OK'}, 0, "activated license");
@@ -709,7 +711,7 @@ sub run_slmgr_dlv {
 	my $system32_path        = $self->get_system32_path() || return;
 	
 	# Run cscript.exe slmgr.vbs -dlv to install the product key
-	my $dlv_command = "$system32_path/cmd.exe /c \%SYSTEMROOT\%/System32/cscript.exe //NoLogo \%SYSTEMROOT\%/System32/slmgr.vbs -dlv";
+	my $dlv_command = "$system32_path/cscript.exe //NoLogo \$SYSTEMROOT/System32/slmgr.vbs -dlv";
 	my ($dlv_exit_status, $dlv_output) = run_ssh_command($computer_node_name, $management_node_keys, $dlv_command, '', '', 0);
 	if (defined($dlv_exit_status) && $dlv_exit_status == 0) {
 		notify($ERRORS{'OK'}, 0, "licensing information:\n" . join("\n", @$dlv_output));
@@ -750,7 +752,7 @@ sub get_license_status {
 	my $system32_path        = $self->get_system32_path() || return;
 	
 	# Run cscript.exe slmgr.vbs -dlv to get the activation status
-	my $dlv_command = "$system32_path/cmd.exe /c \%SYSTEMROOT\%/System32/cscript.exe //NoLogo \%SYSTEMROOT\%/System32/slmgr.vbs -dlv";
+	my $dlv_command = "$system32_path/cscript.exe //NoLogo \$SYSTEMROOT/System32/slmgr.vbs -dlv";
 	my ($dlv_exit_status, $dlv_output) = run_ssh_command($computer_node_name, $management_node_keys, $dlv_command, '', '', 0);
 	if ($dlv_output && grep(/License Status/i, @$dlv_output)) {
 		#notify($ERRORS{'DEBUG'}, 0, "retrieved license information");
@@ -1592,28 +1594,10 @@ EOF
 	$self->kill_process('logon.scr');
 	
 	# Run Sysprep.exe, use cygstart to lauch the .exe and return immediately
-	my $sysprep_command = "/bin/cygstart.exe $system32_path/cmd.exe /c \"";
-	
-	# First enable DHCP on the private and public interfaces and delete the default route
-	my $private_interface_name = $self->get_private_interface_name();
-	my $public_interface_name = $self->get_public_interface_name();
-	if (!$private_interface_name || !$public_interface_name) {
-		notify($ERRORS{'WARNING'}, 0, "unable to determine private and public interface names, failed to enable DHCP and shut down $computer_node_name");
-		return;
-	}
-	
-	# Release any DHCP addresses and delete the default route
-	$sysprep_command .= "\%SYSTEMROOT\%/System32/ipconfig.exe /release & ";
-	$sysprep_command .= "\%SYSTEMROOT\%/System32/route.exe DELETE 0.0.0.0 MASK 0.0.0.0 & ";
-	
-	# Disable DHCP
-	$sysprep_command .= "\%SYSTEMROOT\%/System32/netsh.exe interface ip set address name=\\\"$private_interface_name\\\" source=dhcp & ";
-	$sysprep_command .= "\%SYSTEMROOT\%/System32/netsh.exe interface ip set dns name=\\\"$private_interface_name\\\" source=dhcp & ";
-	$sysprep_command .= "\%SYSTEMROOT\%/System32/netsh.exe interface ip set address name=\\\"$public_interface_name\\\" source=dhcp & ";
-	$sysprep_command .= "\%SYSTEMROOT\%/System32/netsh.exe interface ip set dns name=\\\"$public_interface_name\\\" source=dhcp & ";
+	my $sysprep_command = "/bin/cygstart.exe cmd.exe /c \"";
 	
 	# Run Sysprep.exe
-	$sysprep_command .= "\%SYSTEMROOT\%/System32/sysprep/sysprep.exe /generalize /oobe /shutdown /quiet /unattend:$system32_path/sysprep/Unattend.xml";
+	$sysprep_command .= "$system32_path/sysprep/sysprep.exe /generalize /oobe /shutdown /quiet /unattend:\$SYSTEMROOT/System32/sysprep/Unattend.xml";
 	
 	$sysprep_command .= "\"";
 	

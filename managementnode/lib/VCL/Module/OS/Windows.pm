@@ -966,65 +966,41 @@ sub create_directory {
 
 	my $management_node_keys = $self->data->get_management_node_keys();
 	my $computer_node_name   = $self->data->get_computer_node_name();
-	my $system32_path        = $self->get_system32_path() || return;
 	
-	my @paths;
-
-	# Get 1 or more paths from the subroutine arguments
-	while (my $path = shift) {
-		push @paths, $path;
-	}
-
-	# Make sure at least 1 path was specified
-	if (!@paths) {
-		notify($ERRORS{'WARNING'}, 0, "directory path was not specified as an argument");
+	my $path = shift;
+	if (!$path) {
+		notify($ERRORS{'WARNING'}, 0, "directory path argument was not specified");
 		return;
 	}
 
-	notify($ERRORS{'DEBUG'}, 0, "attempting to create " . scalar @paths . " directories:\n" . join("\n", @paths));
+	notify($ERRORS{'DEBUG'}, 0, "attempting to create directory: '$path'");
 
-	# Keep a count of paths which couldn't be deleted
-	my $directories_not_created = 0;
+	# Assemble the Windows shell mkdir command and execute it
+	my $mkdir_command = "cmd.exe /c \"mkdir \\\"$path\\\"\"";
+	my ($mkdir_exit_status, $mkdir_output) = run_ssh_command($computer_node_name, $management_node_keys, $mkdir_command, '', '', 1);
+	
+	if (!defined($mkdir_output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to create directory on $computer_node_name: $path");
+		return;
+	}
+	elsif ($mkdir_exit_status == 0) {
+		notify($ERRORS{'OK'}, 0, "created directory on $computer_node_name: '$path'");
+	}
+	elsif (grep(/already exists/i, @$mkdir_output)) {
+		notify($ERRORS{'OK'}, 0, "directory already exists on $computer_node_name: '$path'");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to create directory on $computer_node_name: '$path', exit status: $mkdir_exit_status, output:\n" . join("\n", @$mkdir_output));
+	}
 
-	# Loop through the paths
-	for my $path (@paths) {
-		notify($ERRORS{'DEBUG'}, 0, "attempting to create directory: $path");
-
-		# Assemble the Windows shell mkdir command and execute it
-		my $mkdir_command = $system32_path . '/cmd.exe /c "mkdir \\"' . $path . '\\""';
-		my ($mkdir_exit_status, $mkdir_output) = run_ssh_command($computer_node_name, $management_node_keys, $mkdir_command, '', '', 1);
-		if (defined($mkdir_exit_status) && $mkdir_exit_status == 0) {
-			notify($ERRORS{'OK'}, 0, "directory created on $computer_node_name: $path, output:\n@{$mkdir_output}");
-		}
-		elsif (defined($mkdir_exit_status) && $mkdir_exit_status == 1 && grep(/already exists/i, @{$mkdir_output})) {
-			notify($ERRORS{'OK'}, 0, "directory already exists on $computer_node_name: $path, exit status: $mkdir_exit_status, output:\n@{$mkdir_output}");
-		}
-		elsif (defined($mkdir_exit_status)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to create directory on $computer_node_name: $path, exit status: $mkdir_exit_status, output:\n@{$mkdir_output}");
-		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to delete file on $computer_node_name: $path");
-			$directories_not_created++;
-			next;
-		}
-
-		# Make sure directory was created
-		if (!$self->file_exists($path)) {
-			notify($ERRORS{'WARNING'}, 0, "filesystem entry does not exist on $computer_node_name: $path");
-			$directories_not_created++;
-			next;
-		}
-		else {
-			notify($ERRORS{'DEBUG'}, 0, "verified that filesystem entry exists on $computer_node_name: $path");
-		}
-	} ## end for my $path (@paths)
-
-	# Check if any paths couldn't be created
-	if ($directories_not_created) {
-		notify($ERRORS{'WARNING'}, 0, "some paths could not be created");
+	# Make sure directory was created
+	if (!$self->file_exists($path)) {
+		notify($ERRORS{'WARNING'}, 0, "directory does not exist on $computer_node_name: '$path'");
 		return 0;
 	}
 	else {
+		notify($ERRORS{'DEBUG'}, 0, "verified directory exists on $computer_node_name: '$path'");
 		return 1;
 	}
 } ## end sub create_directory
@@ -1057,6 +1033,12 @@ sub delete_file {
 		return;
 	}
 	
+	# Check if file exists before attempting to delete it
+	if (!$self->file_exists($path_argument)) {
+		notify($ERRORS{'OK'}, 0, "failed not deleted because it does not exist: '$path_argument'");
+		return 1;
+	}
+	
 	my $path_unix = $self->format_path_unix($path_argument);
 	my $path_dos = $self->format_path_dos($path_argument);
 	
@@ -1076,24 +1058,28 @@ sub delete_file {
 	$command .= " ; /usr/bin/chmod.exe -Rv 777 $path_unix 2>&1";
 	
 	$command .= " ; echo ---";
-	$command .= " ; echo Calling rm.exe to to delete file...";
+	$command .= " ; echo Calling \\\"rm.exe -rfv $path_unix\\\" to to delete file...";
 	$command .= " ; /usr/bin/rm.exe -rfv $path_unix 2>&1";
 	
 	# Add call to rmdir if the path does not contain a wildcard
 	# rmdir does not accept wildcards
 	if ($path_dos !~ /\*/) {
 		$command .= " ; echo ---";
-		$command .= " ; echo Calling 'cmd.exe /c rmdir' to to delete directory...";
-		$command .= " ; $system32_path/cmd.exe /c \"rmdir /s /q \\\"$path_dos\\\"\" 2>&1";
+		$command .= " ; echo Calling \\\"cmd.exe /c rmdir $path_dos\\\" to to delete directory...";
+		$command .= " ; cmd.exe /c \"rmdir /s /q \\\"$path_dos\\\"\" 2>&1";
 	}
 	
 	$command .= " ; echo ---";
-	$command .= " ; echo Calling 'cmd.exe /c del' to to delete file...";
-	$command .= " ; $system32_path/cmd.exe /c \"del /s /q /f /a \\\"$path_dos\\\" 2>&1\" 2>&1";
+	$command .= " ; echo Calling \\\"cmd.exe /c del $path_dos\\\" to to delete file...";
+	$command .= " ; cmd.exe /c \"del /s /q /f /a \\\"$path_dos\\\" 2>&1\" 2>&1";
 	
 	$command .= " ; echo ---";
-	$command .= " ; echo Calling 'cmd.exe /c dir' to to list remaining files...";
-	$command .= " ; $system32_path/cmd.exe /c \"dir /a /w \\\"$path_dos\\\"\"";
+	$command .= " ; echo Calling \\\"cmd.exe /c dir $path_dos\\\" to to list remaining files...";
+	$command .= " ; cmd.exe /c \"dir /a /w \\\"$path_dos\\\"\" 2>&1";
+	
+	$command .= " ; echo ---";
+	$command .= " ; date +%r";
+	
 	
 	# Run the command
 	my ($exit_status, $output) = run_ssh_command($computer_node_name, $management_node_keys, $command, '', '', 0);
@@ -1102,12 +1088,12 @@ sub delete_file {
 		return;
 	}
 	
-	# Sleep 1 second before checking if file was deleted
-	sleep 1;
+	## Sleep 1 second before checking if file was deleted
+	#sleep 1;
 	
 	# Check if file was deleted
 	if ($self->file_exists($path_argument)) {
-		notify($ERRORS{'WARNING'}, 0, "file still exists: '$path_argument, command:\n$command\noutput:\n" . join("\n", @$output));
+		notify($ERRORS{'WARNING'}, 0, "failed to delete file, it still exists: '$path_argument', command:\n$command\noutput:\n" . join("\n", @$output));
 		return;
 	}
 	else {
@@ -1235,7 +1221,7 @@ sub delete_files_by_pattern {
 	}
 	elsif (grep(/find:.*no such file/i, @$output)) {
 		notify($ERRORS{'OK'}, 0, "files not deleted because base directory does not exist: $base_directory");
-		return;
+		return 1;
 	}
 	elsif (grep(/(^Usage:)/i, @$output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to delete files under $base_directory matching pattern $pattern\ncommand: $command\noutput:\n" . join("\n", @$output));
@@ -1271,8 +1257,7 @@ sub file_exists {
 
 	my $management_node_keys = $self->data->get_management_node_keys();
 	my $computer_node_name   = $self->data->get_computer_node_name();
-	my $system32_path        = $self->get_system32_path() || return;
-
+	
 	# Get the path from the subroutine arguments and make sure it was passed
 	my $path = shift;
 	if (!$path) {
@@ -1280,22 +1265,22 @@ sub file_exists {
 		return;
 	}
 	
-	$path = $self->format_path_dos($path);
+	my $path_dos = $self->format_path_dos($path);
 	
 	# Assemble the dir command and execute it
-	my $dir_command = "$system32_path/cmd.exe /c \"dir /a /b \\\"$path\\\"\"";
+	my $dir_command = "cmd.exe /c \"dir /a /b \\\"$path_dos\\\"\"";
 	my ($dir_exit_status, $dir_output) = run_ssh_command($computer_node_name, $management_node_keys, $dir_command, '', '', 0);
 	if (!defined($dir_output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to determine if file exists on $computer_node_name: $path");
 		return;
 	}
 	
-	if (grep(/file not found/i, @$dir_output)) {
-		notify($ERRORS{'DEBUG'}, 0, "file does NOT exist on $computer_node_name: $path");
+	if ($dir_exit_status == 1 || grep(/(file not found|cannot find)/i, @$dir_output)) {
+		notify($ERRORS{'DEBUG'}, 0, "file does NOT exist on $computer_node_name: '$path'");
 		return 0;
 	}
 	else {
-		notify($ERRORS{'DEBUG'}, 0, "file exists on $computer_node_name: $path, dir output:\n" . join("\n", @$dir_output));
+		notify($ERRORS{'DEBUG'}, 0, "file exists on $computer_node_name: '$path'");
 		return 1;
 	}
 }
@@ -2916,7 +2901,7 @@ sub create_startup_scheduled_task {
 	}
 
 	# You cannot create a task if one with the same name already exists
-	# Vista's version of schtasks.exe has a /F which forces a new task to be created if one with the same name already exists
+	# Windows 6.x schtasks.exe has a /F which forces a new task to be created if one with the same name already exists
 	# This option isn't supported with XP and other older versions of Windows
 	if (!$self->delete_scheduled_task($task_name)) {
 		notify($ERRORS{'WARNING'}, 0, "unable to delete existing scheduled task '$task_name' on $computer_node_name");
@@ -3136,16 +3121,29 @@ sub reboot {
 		# Kill the screen saver process, it occasionally prevents reboots and shutdowns from working
 		$self->kill_process('logon.scr');
 		
-		# Initiate the shutdown.exe command to reboot the computer
-		my $shutdown_command = $system32_path . "/shutdown.exe -r -t 0 -f";
-		my ($shutdown_exit_status, $shutdown_output) = run_ssh_command($computer_node_name, $management_node_keys, $shutdown_command);
-		if (defined($shutdown_exit_status) && $shutdown_exit_status == 0) {
+		# Check if tsshutdn.exe exists on the computer
+		# tsshutdn.exe is the preferred utility, shutdown.exe often fails on Windows Server 2003
+		my $reboot_command;
+		if ($self->file_exists("$system32_path/tsshutdn.exe")) {
+			$reboot_command = "$system32_path/tsshutdn.exe 0 /REBOOT /DELAY:0 /V";
+		}
+		else {
+			$reboot_command = "$system32_path/shutdown.exe /r /t 0 /f";
+		}
+		
+		my ($reboot_exit_status, $reboot_output) = run_ssh_command($computer_node_name, $management_node_keys, $reboot_command);
+		if (!defined($reboot_output)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to execute ssh command to reboot $computer_node_name");
+			return;
+		}
+		
+		if ($reboot_exit_status == 0) {
 			notify($ERRORS{'OK'}, 0, "executed reboot command on $computer_node_name");
 		}
-		elsif (defined($shutdown_output) && grep(/processing another action/, @$shutdown_output)) {
+		else {
 			# The following message may be displayed causing the reboot to fail:
 			# The computer is processing another action and thus cannot be shut down. Wait until the computer has finished its action, and then try again.(21) 
-			notify($ERRORS{'WARNING'}, 0, "unable to reboot because of processing another action error on $computer_node_name, computer will be forcefully restarted, exit status: $shutdown_exit_status, output:\n@{$shutdown_output}");
+			notify($ERRORS{'WARNING'}, 0, "failed to reboot $computer_node_name, attempting power reset, output:\n" . join("\n", @$reboot_output));
 			
 			# Call provisioning module's power_reset() subroutine
 			if ($self->provisioner->power_reset()) {
@@ -3153,18 +3151,10 @@ sub reboot {
 			}
 			else {
 				notify($ERRORS{'WARNING'}, 0, "reboot failed, failed to initiate power reset on $computer_node_name");
-				return 0;
+				return;
 			}
 		}
-		elsif (defined($shutdown_exit_status)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to execute reboot command on $computer_node_name, exit status: $shutdown_exit_status, output:\n@{$shutdown_output}");
-			return 0;
-		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "failed to execute ssh command to reboot $computer_node_name");
-			return;
-		}
-	} ## end if ($self->wait_for_ssh(0))
+	}
 	else {
 		# Computer did not respond to ssh
 		notify($ERRORS{'WARNING'}, 0, "$computer_node_name did not respond to ssh, graceful reboot cannot be performed, attempting hard reset");
@@ -3259,7 +3249,7 @@ sub reboot {
 
 =head2 shutdown
 
- Parameters  : 
+ Parameters  : $enable_dhcp
  Returns     : 
  Description : 
 
@@ -3282,7 +3272,7 @@ sub shutdown {
 	# Kill the screen saver process, it occasionally prevents reboots and shutdowns from working
 	$self->kill_process('logon.scr');
 	
-	my $shutdown_command = "/bin/cygstart.exe $system32_path/cmd.exe /c \"";
+	my $shutdown_command = "/bin/cygstart.exe cmd.exe /c \"";
 	
 	if ($disable_dhcp) {
 		notify($ERRORS{'DEBUG'}, 0, "enabling DHCP and shutting down $computer_node_name");
@@ -3294,19 +3284,25 @@ sub shutdown {
 			return;
 		}
 		
-		$shutdown_command .= "\%SYSTEMROOT\%/System32/netsh.exe interface ip set address name=\\\"$private_interface_name\\\" source=dhcp & ";
-		$shutdown_command .= "\%SYSTEMROOT\%/System32/netsh.exe interface ip set dnsservers name=\\\"$private_interface_name\\\" source=dhcp & ";
-		$shutdown_command .= "\%SYSTEMROOT\%/System32/netsh.exe interface ip set address name=\\\"$public_interface_name\\\" source=dhcp & ";
-		$shutdown_command .= "\%SYSTEMROOT\%/System32/netsh.exe interface ip set dnsservers name=\\\"$public_interface_name\\\" source=dhcp & ";
-		$shutdown_command .= "\%SYSTEMROOT\%/System32/ipconfig.exe /release & ";
-		$shutdown_command .= "\%SYSTEMROOT\%/System32/route.exe DELETE 0.0.0.0 MASK 0.0.0.0 & ";
+		$shutdown_command .= "$system32_path/netsh.exe interface ip set address name=\\\"$private_interface_name\\\" source=dhcp & ";
+		$shutdown_command .= "$system32_path/netsh.exe interface ip set dnsservers name=\\\"$private_interface_name\\\" source=dhcp & ";
+		$shutdown_command .= "$system32_path/netsh.exe interface ip set address name=\\\"$public_interface_name\\\" source=dhcp & ";
+		$shutdown_command .= "$system32_path/netsh.exe interface ip set dnsservers name=\\\"$public_interface_name\\\" source=dhcp & ";
+		$shutdown_command .= "$system32_path/ipconfig.exe /release & ";
+		$shutdown_command .= "$system32_path/route.exe DELETE 0.0.0.0 MASK 0.0.0.0 & ";
 	}
 	else {
 		notify($ERRORS{'DEBUG'}, 0, "shutting down $computer_node_name");
 	}
 	
-	# Initiate the shutdown.exe command to reboot the computer
-	$shutdown_command .= "start \%SYSTEMROOT\%/System32/shutdown.exe -s -t 0 -f";
+	# Check if tsshutdn.exe exists on the computer
+	# tsshutdn.exe is the preferred utility, shutdown.exe often fails on Windows Server 2003
+	if ($self->file_exists("$system32_path/tsshutdn.exe")) {
+		$shutdown_command .= "$system32_path/tsshutdn.exe 0 /POWERDOWN /DELAY:0 /V";
+	}
+	else {
+		$shutdown_command .= "$system32_path/shutdown.exe /s /t 0 /f";
+	}
 	
 	$shutdown_command .= "\"";
 	
@@ -3353,6 +3349,71 @@ sub shutdown {
 		return;
 	}
 	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 create_text_file
+
+ Parameters  : $file_path, $file_contents
+ Returns     : boolean
+ Description : Creates a text file on the Windows computer. The $file_contents
+               string argument is converted to ASCII hex values. These values
+               are echo'd on the Windows host which avoids problems with special
+               characters and escaping. If the file already exists it is
+               overwritten.
+
+=cut
+
+sub create_text_file {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my ($file_path, $file_contents_string) = @_;
+	if (!$file_contents_string) {
+		notify($ERRORS{'WARNING'}, 0, "file contents argument was not supplied");
+		return;
+	}
+	
+	my $management_node_keys = $self->data->get_management_node_keys();
+	my $computer_node_name   = $self->data->get_computer_node_name();
+	
+	# Replace Unix newlines with DOS/Windows newlines: \n --> \r\n
+	$file_contents_string =~ s/\r?\n/\r\n/g;
+	
+	# Convert the string to a string containing the hex value of each character
+	# This is done to avoid problems with special characters in the file contents
+	
+	# Split the string up into an array if integers representing each character's ASCII decimal value
+	my @decimal_values = unpack("C*", $file_contents_string);
+	
+	# Convert the ASCII decimal values into hex values and add '\x' before each hex value
+	my @hex_values = map { '\x' . sprintf("%x", $_) } @decimal_values;
+	
+	# Join the hex values together into a string
+	my $hex_string = join('', @hex_values);
+	
+	# Create a command to echo the hex string to the file
+	# Use -e to enable interpretation of backslash escapes
+	my $command .= "echo -e \"$hex_string\" > $file_path 2>&1 && du -b $file_path";
+	my ($exit_status, $output) = run_ssh_command($computer_node_name, $management_node_keys, $command, '', '', 0);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute ssh command to create file on $computer_node_name: $file_path");
+		return;
+	}
+	
+	my ($file_size) = map(/^(\d+)\s/, @$output);
+	
+	if (!defined($file_size) || $file_size !~ /^\d+$/ || grep(/^\w+:/i, @$output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to create a file on $computer_node_name: $file_path, exit status: $exit_status, output:\n" . join("\n", @$output));
+		return;
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "created file on $computer_node_name: $file_path, size: $file_size bytes");
 	return 1;
 }
 
@@ -4798,10 +4859,6 @@ sub get_network_configuration {
 				$network_configuration{$interface_name}{$setting} = $value;
 			}
 		}
-		
-		
-		
-		
 		notify($ERRORS{'DEBUG'}, 0, 'saving network configuration in $self->{network_configuration}');
 		$self->{network_configuration} = \%network_configuration;
 	}
@@ -5073,9 +5130,13 @@ sub get_private_ip_address {
 
 =head2 get_public_ip_address
 
- Parameters  : 
- Returns     : 
- Description : 
+ Parameters  : none
+ Returns     : string
+ Description : Retrieves the public IP address assigned to the computer. If an
+					auto-generated public IP address is detected (169.254.x.x or
+					0.0.0.0), the public interface is using DHCP, and the management
+					node is configured to use DHCP, an attempt will be made to call
+					'ipconfig /renew' to obtain a valid public IP address.
 
 =cut
 
@@ -5085,7 +5146,9 @@ sub get_public_ip_address {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
-
+	
+	my $argument = shift;
+	
 	# Make sure network configuration was retrieved
 	my $network_configuration = $self->get_network_configuration('public');
 	if (!$network_configuration) {
@@ -5093,9 +5156,36 @@ sub get_public_ip_address {
 		return;
 	}
 	
+	my $public_ip_configuration = $self->data->get_management_node_public_ip_configuration();
+	
 	my $interface_name = (keys(%{$network_configuration}))[0];
+	
 	my $ip_address_config = $network_configuration->{$interface_name}{ip_address};
 	my $ip_address = (keys(%$ip_address_config))[0];
+	
+	my $dhcp_enabled = $network_configuration->{$interface_name}{dhcp_enabled};
+	
+	# Check if DHCP is to be used and an auto-generated IP address is detected
+	if ($public_ip_configuration =~ /dhcp/i && $dhcp_enabled =~ /yes/i && $ip_address =~ /^(169\.254\.|0\.0\.0\.0)/) {
+		# Check if this is the 2nd attempt to retrieve the public IP address
+		# This subroutine calls itself with a 'renewed' argument if an auto-generated IP address was detected and 'ipconfig /renew' was called
+		if ($argument && $argument eq 'renewed') {
+			notify($ERRORS{'WARNING'}, 0, "unable to retrieve public IP address, public interface '$interface_name' is still assigned an auto-generated IP address after attempting 'ipconfig /renew \"$interface_name\"'");
+			return;
+		}
+		
+		notify($ERRORS{'WARNING'}, 0, "public interface '$interface_name' has DHCP enabled and is assigned an auto-generated IP address: $ip_address, management node DHCP configuration: '$public_ip_configuration'");
+		
+		# Attempt to renew the IP address
+		if (!$self->ipconfig_renew($interface_name)) {
+			notify($ERRORS{'WARNING'}, 0, "unable to retrieve public IP address, failed to renew the IP address for the public interface '$interface_name'");
+			return;
+		}
+		
+		# Call this subroutine again, pass the 'renewed' argument so that 'ipconfig /renew' isn't called again (prevent infinite loop)
+		return $self->get_public_ip_address('renewed');
+	}
+	
 	notify($ERRORS{'DEBUG'}, 0, "returning public IP address: $ip_address");
 	return $ip_address;
 }
@@ -5294,6 +5384,9 @@ sub ipconfig_renew {
 	my ($ipconfig_status, $ipconfig_output) = run_ssh_command($computer_node_name, $management_node_keys, $ipconfig_command);
 	if (defined($ipconfig_status) && $ipconfig_status == 0) {
 		notify($ERRORS{'OK'}, 0, "ran ipconfig /renew");
+		
+		# Undefined previously retrieved network configuration so that it is retrieved again
+		$self->{network_configuration} = undef;
 	}
 	elsif (defined($ipconfig_status)) {
 		notify($ERRORS{'WARNING'}, 0, "unable to run ipconfig /renew, exit status: $ipconfig_status, output:\n@{$ipconfig_output}");
@@ -5869,7 +5962,7 @@ sub run_gpupdate {
 	my $computer_node_name   = $self->data->get_computer_node_name();
 	my $system32_path        = $self->get_system32_path() || return;
 	
-	my $gpupdate_command = "$system32_path/cmd.exe /c \%SYSTEMROOT\%/System32/gpupdate.exe /Force";
+	my $gpupdate_command = "cmd.exe /c $system32_path/gpupdate.exe /Force";
 	my ($gpupdate_status, $gpupdate_output) = run_ssh_command($computer_node_name, $management_node_keys, $gpupdate_command);
 	if (defined($gpupdate_output) && !grep(/error/i, @{$gpupdate_output})) {
 		notify($ERRORS{'OK'}, 0, "ran gpupdate /force");
@@ -6890,14 +6983,14 @@ sub kill_process {
 		notify($ERRORS{'OK'}, 0, scalar @killed . "processe(s) killed matching pattern: $task_pattern\n" . join("\n", @killed));
 	}
 	elsif (defined($taskkill_exit_status) && $taskkill_exit_status == 0 && grep(/No tasks running/i, @{$taskkill_output})) {
-		notify($ERRORS{'DEBUG'}, 0, "process does not exist matching patterh: $task_pattern");
+		notify($ERRORS{'DEBUG'}, 0, "process does not exist matching pattern: $task_pattern");
 	}
 	elsif (defined($taskkill_exit_status)) {
-		notify($ERRORS{'WARNING'}, 0, "unable to kill process matching $task_pattern\n" . join("\n", @{$taskkill_output}));
+		notify($ERRORS{'WARNING'}, 0, "unable to kill process matching pattern: $task_pattern\n" . join("\n", @{$taskkill_output}));
 		return;
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to kill process matching $task_pattern");
+		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to kill process matching pattern: $task_pattern");
 		return;
 	}
 	
@@ -6993,42 +7086,42 @@ sub set_computer_name {
 	}
 	
 	# Get the computer name
-	my $computer_name = shift;
-	if (!$computer_name) {
-		$computer_name = $self->data->get_computer_short_name();
-		if (!$computer_name) {
+	my $new_computer_name = shift;
+	if (!$new_computer_name) {
+		$new_computer_name = $self->data->get_computer_short_name();
+		if (!$new_computer_name) {
 			notify($ERRORS{'WARNING'}, 0, "computer name argument was not supplied and could not be retrieved from the reservation data");
 			return;
 		}
 		
 		# Append the image ID to the computer name
 		my $image_id = $self->data->get_image_id();
-		$computer_name .= "-$image_id" if $image_id;
+		$new_computer_name .= "-$image_id" if $image_id;
 	}
-
+	
 	my $management_node_keys = $self->data->get_management_node_keys();
 	my $computer_node_name   = $self->data->get_computer_node_name();
-
+	
 	my $registry_string .= <<"EOF";
 Windows Registry Editor Version 5.00
 
 [HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\ComputerName\\ComputerName]
-"ComputerName"="$computer_name"
+"ComputerName"="$new_computer_name"
 
 [HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters]
-"NV Hostname"="$computer_name"
+"Hostname"="$new_computer_name"
+"NV Hostname"="$new_computer_name"
 EOF
-
+	
 	# Import the string into the registry
 	if ($self->import_registry_string($registry_string)) {
-		notify($ERRORS{'OK'}, 0, "set registry keys to change the computer name to $computer_name");
+		notify($ERRORS{'DEBUG'}, 0, "set registry keys to change the computer name of $computer_node_name to $new_computer_name");
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to set registry keys to change the computer name to $computer_name");
+		notify($ERRORS{'WARNING'}, 0, "failed to set registry keys to change the computer name of $computer_node_name to $new_computer_name");
 		return;
 	}
 
-	return 1;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -7871,7 +7964,10 @@ sub format_path_dos {
 	}
 	
 	# Replace all forward slashes with 2 backslashes
-	$path =~ s/[\/\\]/\\/g;
+	$path =~ s/[\/\\]/\\\\/g;
+	
+	# Change $VARIABLE to %VARIABLE%
+	$path =~ s/\$([^\\]+)/\%$1\%/g;
 	
 	#notify($ERRORS{'DEBUG'}, 0, "formatted path for DOS: $path");
 	return $path;
@@ -8790,11 +8886,7 @@ sub set_device_path_key {
 	
 	# Find the paths of .inf files in the drivers directory
 	my @inf_paths = $self->get_driver_inf_paths();
-	if (!@inf_paths) {
-		notify($ERRORS{'WARNING'}, 0, "failed to locate driver .inf paths");
-		return;
-	}
-	elsif ($inf_paths[0] eq '0') {
+	if (!@inf_paths || $inf_paths[0] eq '0') {
 		# No driver paths were found, just use the inf path
 		$device_path_value = '%SystemRoot%\\inf';
 		notify($ERRORS{'DEBUG'}, 0, "no driver .inf paths were found");
