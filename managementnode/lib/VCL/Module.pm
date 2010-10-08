@@ -131,7 +131,7 @@ sub new {
 	my $class = shift;
 	my $args  = shift;
 
-	notify($ERRORS{'DEBUG'}, 0, "constructor called, class=$class");
+	notify($ERRORS{'DEBUG'}, 0, "$class constructor called");
 	
 	# Create a variable to store the newly created class object
 	my $class_object;
@@ -426,7 +426,7 @@ sub code_loop_timeout {
 
 =head2 get_semaphore
 
- Parameters  : $file_path, $total_wait_seconds (optional), $attempt_delay_seconds (optional)
+ Parameters  : $semaphore_id, $total_wait_seconds (optional), $attempt_delay_seconds (optional)
  Returns     : VCL::Module::Semaphore object
  Description : This subroutine is used to ensure that only 1 process performs a
                particular task at a time. An example would be the retrieval of
@@ -474,11 +474,15 @@ sub get_semaphore {
 	}
 	
 	# Get the file path argument
-	my ($file_path, $total_wait_seconds, $attempt_delay_seconds) = @_;
-	if (!$file_path) {
-		notify($ERRORS{'WARNING'}, 0, "file path argument was not supplied");
+	my ($semaphore_id, $total_wait_seconds, $attempt_delay_seconds) = @_;
+	if (!$semaphore_id) {
+		notify($ERRORS{'WARNING'}, 0, "semaphore ID argument was not supplied");
 		return;
 	}
+	
+	$semaphore_id =~ s/\W+/-/g;
+	$semaphore_id =~ s/(^-|-$)//g;
+	my $file_path = "/tmp/$semaphore_id.lock";
 	
 	# Attempt to create a new semaphore object
 	my $semaphore = VCL::Module::Semaphore->new({'data_structure' => $self->data});
@@ -490,6 +494,8 @@ sub get_semaphore {
 	# Attempt to open and exclusively lock the file
 	if ($semaphore->get_lockfile($file_path, $total_wait_seconds, $attempt_delay_seconds)) {
 		# Return the semaphore object
+		my $address = sprintf('%x', $semaphore);
+		notify($ERRORS{'DEBUG'}, 0, "created Semaphore object, memory address: $address");
 		return $semaphore;
 	}
 	else {

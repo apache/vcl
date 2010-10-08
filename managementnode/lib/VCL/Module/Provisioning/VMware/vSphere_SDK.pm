@@ -525,25 +525,7 @@ sub copy_virtual_disk {
 		return;
 	}
 	
-	my $end_time = time;
-	my $duration_seconds = ($end_time - $start_time);
-	my $minutes = ($duration_seconds / 60);
-	$minutes =~ s/\..*//g;
-	my $seconds = ($duration_seconds - ($minutes * 60));
-	my $bytes_per_second = ($source_file_size_bytes / $duration_seconds);
-	my $bits_per_second = ($source_file_size_bytes * 8 / $duration_seconds);
-	my $mb_per_second = ($source_file_size_bytes / $duration_seconds / 1024 / 1024);
-	my $mbit_per_second = ($source_file_size_bytes * 8 / $duration_seconds / 1024 / 1024);
-	my $gbyte_per_minute = ($source_file_size_bytes / $duration_seconds / 1024 / 1024 / 1024 * 60);
-	
-	notify($ERRORS{'OK'}, 0, "copied vmdk: '$source_path' --> '$destination_path'" .
-			 "source file bytes: " . format_number($source_file_size_bytes) . "\n" .
-			 "time to copy: $minutes:$seconds (" . format_number($duration_seconds) . " seconds)\n" .
-			 "B/s: " . format_number($bytes_per_second) . "\n" .
-			 "b/s: " . format_number($bits_per_second) . "\n" .
-			 "MB/s: " . format_number($mb_per_second, 2) . "\n" .
-			 "Mb/s: " . format_number($mbit_per_second, 2) . "\n" .
-			 "GB/m: " . format_number($gbyte_per_minute, 2));
+	notify($ERRORS{'OK'}, 0, "copied vmdk: '$source_path' --> '$destination_path'");
 	return 1;
 }
 
@@ -1626,7 +1608,7 @@ sub get_file_size {
 	
 	# Check if there are any keys in the file info hash - no keys indicates no files were found
 	if (!keys(%{$file_info})) {
-		notify($ERRORS{'WARNING'}, 0, "file does not exist on $computer_name: $file_path");
+		notify($ERRORS{'DEBUG'}, 0, "unable to determine size of file on $computer_name because it does not exist: $file_path");
 		return;
 	}
 	
@@ -1781,12 +1763,12 @@ sub initialize {
 		notify($ERRORS{'WARNING'}, 0, "VM host name could not be retrieved");
 		return;
 	}
-	elsif (!$vmhost_hostname) {
-		notify($ERRORS{'WARNING'}, 0, "VM host username is not configured in the database for the VM profile");
+	elsif (!$vmhost_username) {
+		notify($ERRORS{'DEBUG'}, 0, "unable to use vSphere SDK, VM host username is not configured in the database for the VM profile");
 		return;
 	}
 	elsif (!$vmhost_password) {
-		notify($ERRORS{'WARNING'}, 0, "VM host password is not configured in the database for the VM profile");
+		notify($ERRORS{'DEBUG'}, 0, "unable to use vSphere SDK, VM host password is not configured in the database for the VM profile");
 		return;
 	}
 	

@@ -100,7 +100,7 @@ sub get_lockfile {
 	}
 	
 	# Set the wait defaults if not supplied as arguments
-	$total_wait_seconds = 30 if !$total_wait_seconds;
+	$total_wait_seconds = 30 if !defined($total_wait_seconds);
 	$attempt_delay_seconds = 5 if !$attempt_delay_seconds;
 	
 	# Attempt to lock the file
@@ -182,7 +182,14 @@ sub open_lockfile {
 		return;
 	}
 	elsif (@locking_pids) {
-		notify($ERRORS{'DEBUG'}, 0, "file is locked by another process: @locking_pids");
+		# Attempt to retrieve the names of the locking process(es)
+		my ($ps_exit_status, $ps_output) = run_command("ps -o pid=,cmd= @locking_pids", 1);
+		if (defined($ps_output) && !grep(/(ps:)/, @$ps_output)) {
+			notify($ERRORS{'DEBUG'}, 0, "file is locked by another process: @locking_pids\n" . join("\n", @$ps_output));
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "file is locked by another process: @locking_pids");
+		}
 		return;
 	}
 	else {
@@ -259,7 +266,7 @@ sub release_lockfile {
 
 sub DESTROY {
 	my $self = shift;
-	notify($ERRORS{'DEBUG'}, 0, "destructor called: $self");
+	my $address = sprintf('%x', $self);
 	
 	for my $file_path (keys %{$self->{file_handles}}) {
 		$self->release_lockfile($file_path);
@@ -267,6 +274,8 @@ sub DESTROY {
 	
 	# Check for an overridden destructor
 	$self->SUPER::DESTROY if $self->can("SUPER::DESTROY");
+	
+	notify($ERRORS{'DEBUG'}, 0, "destroyed Semaphore object, memory address: $address");
 } ## end sub DESTROY
 
 #/////////////////////////////////////////////////////////////////////////////

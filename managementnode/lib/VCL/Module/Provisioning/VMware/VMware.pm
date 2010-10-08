@@ -187,6 +187,15 @@ our $VIX_API_PACKAGE = 'VCL::Module::Provisioning::VMware::VIX_API';
 
 our $VIM_SSH_PACKAGE = 'VCL::Module::Provisioning::VMware::VIM_SSH';
 
+=head2 $VMWARE_CMD_PACKAGE
+
+ Data type   : string
+ Description : Perl package name for the vmware-cmd module.
+
+=cut
+
+our $VMWARE_CMD_PACKAGE = 'VCL::Module::Provisioning::VMware::vmware_cmd';
+
 ##############################################################################
 
 =head1 OBJECT METHODS
@@ -216,6 +225,18 @@ sub initialize {
 	my $vmhost_data = $self->get_vmhost_datastructure() || return;
 	my $vmhost_computer_name = $vmhost_data->get_computer_node_name() || return;
 	my $vm_computer_name = $self->data->get_computer_node_name() || return;
+	
+	# Make sure the VM and datastore paths are normalized - spaces not escaped
+	# The subroutines that use these paths expect this
+	my $vmprofile_vmpath = $self->data->get_vmhost_profile_vmpath();
+	if ($vmprofile_vmpath) {
+		$self->data->set_vmhost_profile_vmpath(normalize_file_path($vmprofile_vmpath));
+	}
+	
+	my $vmprofile_datastore_path = $self->data->get_vmhost_profile_datastore_path() || return;
+	if ($vmprofile_datastore_path) {
+		$self->data->set_vmhost_profile_datastore_path(normalize_file_path($vmprofile_datastore_path));
+	}
 	
 	my $vmware_api;
 	my $vmhost_os;
@@ -264,9 +285,9 @@ sub initialize {
 		if ($vmware_api = $self->get_vmhost_api_object($VIM_SSH_PACKAGE)) {
 			notify($ERRORS{'DEBUG'}, 0, "VIM SSH command object will be used to control the VM: $vm_computer_name");
 		}
-		#elsif (($vmware_api = $self->get_vmhost_api_object($VIX_API_PACKAGE)) && !$vmware_api->is_restricted()) {
-		#	notify($ERRORS{'DEBUG'}, 0, "VIX API object will be used to control the VM: $vm_computer_name");
-		#}
+		elsif (($vmware_api = $self->get_vmhost_api_object($VMWARE_CMD_PACKAGE))) {
+			notify($ERRORS{'DEBUG'}, 0, "vmware_cmd object will be used to control the VM: $vm_computer_name");
+		}
 		else {
 			notify($ERRORS{'WARNING'}, 0, "failed to create an API object to control the VM: $vm_computer_name");
 			return;
@@ -547,20 +568,19 @@ sub capture {
 			}
 		}
 		
-		# Delete the vmdk directory on the VM host
-		if ($vmdk_directory_path_renamed eq $vmx_directory_path_capture) {
-			notify($ERRORS{'DEBUG'}, 0, "renamed vmdk directory will not be deleted yet because it matches the vmx directory path and the VM has not been unregistered yet: $vmdk_directory_path_renamed");
-		}
-		else {
-			if ($self->vmhost_os->delete_file($vmdk_directory_path_renamed)) {
-				notify($ERRORS{'OK'}, 0, "deleted the vmdk directory after files were copied to the image repository: $vmdk_directory_path_renamed");
-			}
-			else {
-				notify($ERRORS{'WARNING'}, 0, "failed to delete the vmdk directory after files were copied to the image repository: $vmdk_directory_path_renamed");
-			}
-		}
+		## Delete the vmdk directory on the VM host
+		#if ($vmdk_directory_path_renamed eq $vmx_directory_path_capture) {
+		#	notify($ERRORS{'DEBUG'}, 0, "renamed vmdk directory will not be deleted yet because it matches the vmx directory path and the VM has not been unregistered yet: $vmdk_directory_path_renamed");
+		#}
+		#else {
+		#	if ($self->vmhost_os->delete_file($vmdk_directory_path_renamed)) {
+		#		notify($ERRORS{'OK'}, 0, "deleted the vmdk directory after files were copied to the image repository: $vmdk_directory_path_renamed");
+		#	}
+		#	else {
+		#		notify($ERRORS{'WARNING'}, 0, "failed to delete the vmdk directory after files were copied to the image repository: $vmdk_directory_path_renamed");
+		#	}
+		#}
 	}
-	
 	
 	# Unregister the VM
 	if ($self->api->vm_unregister($vmx_file_path_capture)) {
@@ -1036,9 +1056,14 @@ sub get_vmhost_api_object {
 	my $api;
 	eval { $api = ($api_perl_package)->new({data_structure => $vmhost_datastructure, vmhost_os => $self->{vmhost_os}}) };
 	if (!$api) {
-		my $error = $EVAL_ERROR || 'no eval error';
-		notify($ERRORS{'WARNING'}, 0, "API object could not be created: $api_perl_package, $error");
-		return;
+		if ($EVAL_ERROR) {
+			notify($ERRORS{'WARNING'}, 0, "API object could not be created: $api_perl_package, error:\n$EVAL_ERROR");
+			return;
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "API object could not be created: $api_perl_package");
+			return;
+		}
 	}
 	
 	$api->{api} = $api;
@@ -1067,6 +1092,8 @@ sub remove_existing_vms {
 	}
 	
 	my $computer_name = $self->data->get_computer_short_name() || return;
+	my $vmx_base_directory_path = $self->get_vmx_base_directory_path();
+	my $vmdk_base_directory_path = $self->get_vmdk_base_directory_path();
 	
 	# Check the VMs on the host to see if any match the computer assigned to this reservation
 	# Get an array containing the existing vmx file paths on the VM host
@@ -1090,7 +1117,6 @@ sub remove_existing_vms {
 	}
 	
 	# Loop through the existing vmx file paths found, check if it matches the VM for this reservation
-	my $vmx_base_directory_path = $self->get_vmx_base_directory_path();
 	for my $vmx_file_path (@vmx_file_paths) {
 		# Parse the vmx file name from the path
 		my ($vmx_directory_name, $vmx_file_name) = $vmx_file_path =~ /([^\/]+)\/([^\/]+\.vmx)$/i;
@@ -1130,6 +1156,29 @@ sub remove_existing_vms {
 			next;
 		}
 	}
+	
+	# Delete orphaned vmx or vmdk directories previously created by VCL for the computer
+	# Find any files under the vmx or vmdk base directories matching the computer name
+	my @orphaned_paths = $self->vmhost_os->find_files($vmx_base_directory_path, "$computer_name*");
+	if ($vmx_base_directory_path ne $vmdk_base_directory_path) {
+		push @orphaned_paths, $self->vmhost_os->find_files($vmdk_base_directory_path, "$computer_name*");
+	}
+	my %unique_paths = map { $_ => 1 } (@orphaned_paths);
+	@orphaned_paths = sort keys(%unique_paths);
+	
+	# Check if any of the paths match the format of a directory VCL would have created for the computer
+	for my $orphaned_path (@orphaned_paths) {
+		if ($orphaned_path !~ /($vmx_base_directory_path|$vmdk_base_directory_path)\/$computer_name\_\d+-v\d+(_\d+)?$/i) {
+			notify($ERRORS{'DEBUG'}, 0, "ignoring path, it contains the computer name '$computer_name' but the directory name is not in the format VCL uses: '$orphaned_path'");
+			next;
+		}
+		
+		notify($ERRORS{'DEBUG'}, 0, "attempting to delete orphaned directory: '$orphaned_path'");
+		if (!$self->vmhost_os->delete_file($orphaned_path)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to delete orphaned directory: '$orphaned_path'");
+		}
+	}
+	
 	return 1;
 }
 
@@ -1176,6 +1225,7 @@ sub prepare_vmx {
 	my $vm_hardware_version      = $self->get_vm_virtual_hardware_version() || return;
 	my $vm_persistent            = $self->is_vm_persistent();
 	my $guest_os                 = $self->get_vm_guest_os() || return;
+	my $vmware_product_name      = $self->get_vmhost_product_name();
 	
 	## Figure out how much additional space is required for the vmx directory for the VM for this reservation
 	## This is the number of additional bytes which have not already been allocated the VM will likely use
@@ -1207,16 +1257,28 @@ sub prepare_vmx {
 	my $display_name;
 	my $vm_disk_mode;
 	my $vm_disk_write_through;
+	my $vm_disk_shared_bus;
 	if ($vm_persistent) {
 		$display_name = "$computer_name:$image_name (persistent)";
 		$vm_disk_mode = 'independent-persistent';
 		$vm_disk_write_through = "TRUE";
+		$vm_disk_shared_bus = "none";
 	}
 	else {
 		$display_name = "$computer_name:$image_name (nonpersistent)";
 		$vm_disk_mode = "independent-nonpersistent";
-		#$vm_disk_mode = "undoable";
 		$vm_disk_write_through = "FALSE";
+		$vm_disk_shared_bus = "none";
+	}
+	
+	# Determine which parameter to use in the vmx file for the network name
+	# VMware Server 1.x uses 'vnet', newer VMware products use 'networkName'
+	my $network_parameter;
+	if ($vmware_product_name =~ /VMware Server 1/i) {
+		$network_parameter = 'vnet';
+	}
+	else {
+		$network_parameter = 'networkName';
 	}
 	
 	notify($ERRORS{'DEBUG'}, 0, "vm info:
@@ -1265,17 +1327,19 @@ sub prepare_vmx {
 		
 		"displayName" => "$display_name",
 		
+		"ethernet0.connectionType" => "custom",
 		"ethernet0.address" => "$vm_eth0_mac",
 		"ethernet0.addressType" => "static",
 		"ethernet0.present" => "TRUE",
 		"ethernet0.virtualDev" => "$vm_ethernet_adapter_type",
-		"ethernet0.networkName" => "$virtual_switch_0",
+		"ethernet0.$network_parameter" => "$virtual_switch_0",
 		
+		"ethernet1.connectionType" => "custom",
 		"ethernet1.address" => "$vm_eth1_mac",
 		"ethernet1.addressType" => "static",
 		"ethernet1.present" => "TRUE",
 		"ethernet1.virtualDev" => "$vm_ethernet_adapter_type",
-		"ethernet1.networkName" => "$virtual_switch_1",
+		"ethernet1.$network_parameter" => "$virtual_switch_1",
 		
 		"floppy0.present" => "FALSE",
 		
@@ -1295,6 +1359,8 @@ sub prepare_vmx {
 		"powerType.suspend" => "hard",
 		
 		"snapshot.disabled" => "TRUE",
+		
+		"svga.autodetect" => "TRUE",
 		
 		"tools.remindInstall" => "TRUE",
 		"tools.syncTime" => "FALSE",
@@ -1316,6 +1382,7 @@ sub prepare_vmx {
 			"ide0:0.mode" => "$vm_disk_mode",
 			"ide0:0.present" => "TRUE",
 			"ide0:0.writeThrough" => "$vm_disk_write_through",
+			"ide0:0.sharedBus" => "$vm_disk_shared_bus",
 		));
 	}
 	else {
@@ -1326,6 +1393,7 @@ sub prepare_vmx {
 			"scsi0:0.mode" => "$vm_disk_mode",
 			"scsi0:0.present" => "TRUE",
 			"scsi0:0.writeThrough" => "$vm_disk_write_through",
+			"scsi0:0.sharedBus" => "$vm_disk_shared_bus",
 		));
 	}
 	
@@ -1349,7 +1417,7 @@ sub prepare_vmx {
 	}
 	
 	# Add additional Ethernet interfaces if the image project name is not vcl
-	if ($image_project !~ /^vcl$/i) {
+	if ($image_project !~ /^vcl$/i && self->api->can('get_network_names')) {
 		notify($ERRORS{'DEBUG'}, 0, "image project is: $image_project, checking if additional network adapters should be configured");
 		
 		# Get a list of all the network names configured on the VMware host
@@ -1371,7 +1439,7 @@ sub prepare_vmx {
 				$vmx_parameters{"ethernet$interface_index.addressType"} = "generated";
 				$vmx_parameters{"ethernet$interface_index.present"} = "TRUE";
 				$vmx_parameters{"ethernet$interface_index.virtualDev"} = "$vm_ethernet_adapter_type";
-				$vmx_parameters{"ethernet$interface_index.networkName"} = "$network_name";
+				$vmx_parameters{"ethernet$interface_index.$network_parameter"} = "$network_name";
 				
 				$interface_index++;
 			}
@@ -1402,6 +1470,9 @@ sub prepare_vmx {
 		notify($ERRORS{'WARNING'}, 0, "failed to create temporary vmx file: $temp_vmx_file_path, error: @!");
 		return;
 	}
+	
+	# The vmx file should be set to executable
+	chmod("0755", "/tmp/$vmx_file_name");
 	
 	# Copy the temporary vmx file the the VM host
 	$self->vmhost_os->copy_file_to($temp_vmx_file_path, $vmx_file_path) || return;
@@ -1437,104 +1508,112 @@ sub prepare_vmdk {
 		return;
 	}
 	
+	my $host_vmdk_base_directory_path = $self->get_vmdk_base_directory_path() || return;
 	my $host_vmdk_directory_path = $self->get_vmdk_directory_path() || return;
 	my $host_vmdk_file_path = $self->get_vmdk_file_path() || return;
 	my $host_vmdk_file_path_nonpersistent = $self->get_vmdk_file_path_nonpersistent() || return;
+	my $host_vmdk_directory_path_nonpersistent = $self->get_vmdk_directory_path_nonpersistent() || return;
 	
-	my $repository_vmdk_directory_path = $self->get_repository_vmdk_directory_path() || return;
 	my $image_name = $self->data->get_image_name() || return;
+	my $vm_computer_name = $self->data->get_computer_short_name() || return;
 	my $vmhost_hostname = $self->data->get_vmhost_hostname() || return;
 	
 	my $is_vm_persistent = $self->is_vm_persistent();
 	
-	# Check if the first .vmdk file exists on the host
-	if ($self->vmhost_os->file_exists($host_vmdk_file_path)) {
-		
-		if ($is_vm_persistent) {
-			notify($ERRORS{'DEBUG'}, 0, "VM is persistent and vmdk file already exists on VM host: $host_vmdk_file_path, vmdk file will be deleted and a new copy will be used");
-			exit;
-			if (!$self->vmhost_os->delete_file($host_vmdk_file_path)) {
-				notify($ERRORS{'WARNING'}, 0, "failed to deleted existing vmdk file: ");
-				return;
-			}
-		}
-		else {
-			# vmdk file exists and not persistent
-			# No copying necessary, proceed to check the disk type
-			return $self->check_vmdk_disk_type();
-		}
+	# Semaphores are created when exclusive access to a file/directory is needed to avoid conflicts
+	# A semaphore ID is a string identifying a semaphore object when created
+	# Only 1 process at a time may create a semaphore with a given ID - other processes must wait if they attempt to do so
+	# If the VM profile disk type is NOT network, include the VM host name in the semaphore ID
+	# This means exclusive access to a directory is only restricted to the same VM host
+	# If the disk type is network, multiple VM hosts may use the same directory so access should be restricted across hosts
+	my $vmdk_semaphore_id;
+	my $nonpersistent_vmdk_semaphore_id;
+	my $vmprofile_disk_type = $self->data->get_vmhost_profile_vmdisk();
+	if ($vmprofile_disk_type =~ /network/i) {
+		$vmdk_semaphore_id = $host_vmdk_directory_path;
+		$nonpersistent_vmdk_semaphore_id = $host_vmdk_directory_path_nonpersistent;
 	}
 	else {
-		notify($ERRORS{'DEBUG'}, 0, "vmdk file does NOT exist on VM host: $host_vmdk_file_path");
+		$vmdk_semaphore_id = "$vmhost_hostname-$host_vmdk_directory_path";
+		$nonpersistent_vmdk_semaphore_id = "$vmhost_hostname-$host_vmdk_directory_path_nonpersistent";
 	}
 	
-	## Figure out how much additional space is required for the vmdk directory for the VM for this reservation
-	## This is the number of additional bytes which have not already been allocated the VM will likely use
-	## The subroutine checks if the vmdk files already exist on the VM host
-	#my $vm_additional_vmdk_bytes_required = $self->get_vm_additional_vmdk_bytes_required();
-	#return if !defined($vm_additional_vmdk_bytes_required);
-	#
-	## Get the number of bytes available on the device where the base vmdk directory resides
-	#my $host_vmdk_bytes_available = $self->vmhost_os->get_available_space($self->get_vmdk_base_directory_path());
-	#return if !defined($host_vmdk_bytes_available);
-	#
-	## Check if there is enough space available for the VM's vmdk files
-	#if ($vm_additional_vmdk_bytes_required > $host_vmdk_bytes_available) {
-	#	my $vmdk_deficit_bytes = ($vm_additional_vmdk_bytes_required - $host_vmdk_bytes_available);
-	#	my $vmdk_deficit_mb = format_number($vmdk_deficit_bytes / 1024 / 1024);
-	#	notify($ERRORS{'WARNING'}, 0, "not enough space is available for the vmdk files on the VM host, deficit: $vmdk_deficit_bytes bytes ($vmdk_deficit_mb MB)");
-	#	return;
-	#}
-	#else {
-	#	notify($ERRORS{'DEBUG'}, 0, "enough space is available for the vmdk files on the VM host");
-	#}
+	# Establish a semaphore for the nonpersistent vmdk directory before checking if it exists
+	# This causes this process to wait if another process is copying to the nonpersistent directory
+	# Wait a long time to create the semaphore in case another process is copying a large vmdk to the directory
+	my $vmdk_semaphore = $self->get_semaphore($nonpersistent_vmdk_semaphore_id, (60 * 20), 15) || return;
+	my $nonpersistent_vmdk_exists = $self->vmhost_os->file_exists($host_vmdk_file_path_nonpersistent);
+	
+	# Return 1 if the VM is not persistent and the nonpersistent vmdk already exists on the host
+	if ($nonpersistent_vmdk_exists && !$is_vm_persistent) {
+		notify($ERRORS{'DEBUG'}, 0, "VM is not persistent and nonpersistent vmdk file already exists on VM host $vmhost_hostname: $host_vmdk_file_path");
+		return 1;
+	}
+	
+	# VM is either:
+	#    -persistent
+	#        -persistent directory should be deleted if it already exists
+	#        -persistent directory should be created and vmdk files copied to it
+	#    -nonpersistent and the directory doesn't exist
+	#        -nonpersistent vmdk directory should be retrieved from the image repository
+	# Update the semaphore for exclusive access to the vmdk directory if this is not the same directory as the nonpersistent directory
+	# The original semaphore is automatically released when the variable is reassigned
+	if ($vmdk_semaphore_id ne $nonpersistent_vmdk_semaphore_id) {
+		$vmdk_semaphore = $self->get_semaphore($vmdk_semaphore_id, (60 * 1)) || return;
+	}
+	
+	# If the VM is persistent, check if the persistent vmdk already file exists on the host, delete it if necessary
+	if ($is_vm_persistent && $self->vmhost_os->file_exists($host_vmdk_directory_path)) {
+		notify($ERRORS{'WARNING'}, 0, "VM is persistent and persistent vmdk directory already exists on VM host $vmhost_hostname: $host_vmdk_directory_path, existing directory will be deleted");
+		if (!$self->vmhost_os->delete_file($host_vmdk_directory_path)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to delete existing persistent vmdk directory on VM host $vmhost_hostname: $host_vmdk_directory_path");
+			return;
+		}
+	}
 	
 	# Check if the VM is persistent, if so, attempt to copy files locally from the nonpersistent directory if they exist
-	if ($is_vm_persistent && $self->vmhost_os->file_exists($host_vmdk_file_path_nonpersistent)) {
-		# Attempt to use the API's copy_virtual_disk subroutine
-		if ($self->api->can('copy_virtual_disk') && $self->api->copy_virtual_disk($host_vmdk_file_path_nonpersistent, $host_vmdk_file_path)) {
-			notify($ERRORS{'OK'}, 0, "copied vmdk files from nonpersistent to persistent directory on VM host");
-			return $self->check_vmdk_disk_type();
+	if ($is_vm_persistent && $nonpersistent_vmdk_exists) {
+		notify($ERRORS{'DEBUG'}, 0, "VM is persistent and nonpersistent vmdk exists on the VM host $vmhost_hostname, attempting to make a copy");
+		if ($self->copy_vmdk($host_vmdk_file_path_nonpersistent, $host_vmdk_file_path)) {
+			notify($ERRORS{'OK'}, 0, "copied vmdk from nonpersistent to persistent directory on VM host $vmhost_hostname");
+			return 1;
 		}
 		else {
-			# Unable to use the API's copy_virtual_disk subroutine, use VM host OS's copy_file subroutine
-			my $host_vmdk_directory_path_nonpersistent = $self->get_vmdk_directory_path_nonpersistent() || return;
-			
-			my $vmdk_file_prefix = $self->get_vmdk_file_prefix() || return;
-			
-			if (my @vmdk_nonpersistent_file_paths = $self->vmhost_os->find_files($host_vmdk_directory_path_nonpersistent, "$vmdk_file_prefix*.vmdk")) {
-				my $start_time = time;
-				
-				# Loop through the files, copy each file from the non-persistent directory to the persistent directory
-				for my $vmdk_nonpersistent_file_path (sort @vmdk_nonpersistent_file_paths) {
-					# Extract the file name from the path
-					my ($vmdk_copy_file_name) = $vmdk_nonpersistent_file_path =~ /([^\/]+)$/g;
-					
-					# Attempt to copy the file on the VM host
-					if (!$self->vmhost_os->copy_file($vmdk_nonpersistent_file_path, "$host_vmdk_directory_path/$vmdk_copy_file_name")) {
-						notify($ERRORS{'WARNING'}, 0, "failed to copy vmdk file from the non-persistent to the persistent directory on the VM host:\n'$vmdk_nonpersistent_file_path' --> '$host_vmdk_directory_path/$vmdk_copy_file_name'");
-						return;
-					}
-				}
-				
-				# All vmdk files were copied
-				my $duration = (time - $start_time);
-				notify($ERRORS{'OK'}, 0, "copied vmdk files from nonpersistent to persistent directory on VM host, took " . format_number($duration) . " seconds");
-				return $self->check_vmdk_disk_type();
-			}
-			else {
-				notify($ERRORS{'DEBUG'}, 0, "non-persistent set of vmdk files does not exist: '$host_vmdk_directory_path_nonpersistent'");
-			}
+			notify($ERRORS{'WARNING'}, 0, "failed to copy vmdk from nonpersistent to persistent directory on VM host $vmhost_hostname");
+			return;
 		}
 	}
 	
-	# VM is either non-persistent or persistent and could not copy files from existing non-persistent directory
-	# Copy the vmdk files from the image repository to the vmdk directory
+	# Check if the image repository is mounted on the VM host
+	# Copy vmdk files from mounted repository datastore if it's mounted
+	if ($self->is_repository_mounted_on_vmhost()) {
+		notify($ERRORS{'DEBUG'}, 0, "files will be copied from this image repository directory mounted on the VM host");
+		
+		# Check if the vmdk file exists in the mounted repository
+		my $repository_vmdk_file_path = $self->get_repository_vmdk_file_path();
+		if (!$self->vmhost_os->file_exists($repository_vmdk_file_path)) {
+			notify($ERRORS{'WARNING'}, 0, "vmdk file does not exist in image repository directory mounted on VM host $vmhost_hostname: $repository_vmdk_file_path");
+			return;
+		}
+		
+		# Attempt to copy the vmdk file from the mounted repository to the VM host datastore
+		if ($self->copy_vmdk($repository_vmdk_file_path, $host_vmdk_file_path)) {
+			notify($ERRORS{'OK'}, 0, "copied vmdk from image repository to VM host $vmhost_hostname");
+			return 1;
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to copy vmdk from image repository to VM host $vmhost_hostname");
+			return;
+		}
+	}
+	
+	# Copy the vmdk files from the image repository on the management node to the vmdk directory
+	my $repository_vmdk_directory_path = $self->get_repository_vmdk_directory_path() || return;
 	my $start_time = time;
 	
 	# Find the vmdk file paths in the image repository directory
 	my @vmdk_repository_file_paths;
-	my $command = "find \"$repository_vmdk_directory_path\" -type f -iname \"*.vmdk\"";
+	my $command = "find \"$repository_vmdk_directory_path\" -type f -iname \"$image_name*.vmdk\"";
 	my ($exit_status, $output) = run_command($command, 1);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to run command to find files in image repository directory: '$repository_vmdk_directory_path', pattern: '*.vmdk', command:\n$command");
@@ -1565,31 +1644,73 @@ sub prepare_vmdk {
 	my $duration = (time - $start_time);
 	notify($ERRORS{'OK'}, 0, "copied vmdk files from management node image repository to the VM host, took " . format_number($duration) . " seconds");
 	
-	return $self->check_vmdk_disk_type();
+	# Check if the vmdk disk type is compatible with the VMware product installed on the host
+	return 1 if $self->is_vmdk_compatible();
+
+	# Disk type is not compatible with the VMware product installed on the host
+	# Attempt to make a copy - copy_vmdk should create a copy in a compatible format
+	# The destination copy is stored in a directory with the same name as the normal vmdk directory followed by a ~
+	# Once the copy is done, delete the original vmdk directory and rename the copied directory
+	my $vmdk_file_name = $self->get_vmdk_file_name();
+	my $temp_vmdk_file_path = "$host_vmdk_directory_path~/$vmdk_file_name";
+	notify($ERRORS{'DEBUG'}, 0, "attempting to copy the vmdk using a compatible disk type on VM host $vmhost_hostname: '$host_vmdk_file_path' --> '$temp_vmdk_file_path'");
+	
+	if (!$self->copy_vmdk($host_vmdk_file_path, $temp_vmdk_file_path)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to copy the vmdk using a compatible disk type on VM host $vmhost_hostname: '$host_vmdk_file_path' --> '$temp_vmdk_file_path'");
+		return;
+	}
+	
+	if (!$self->vmhost_os->delete_file($host_vmdk_directory_path)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to delete the directory containing the incompatible vmdk on VM host $vmhost_hostname: '$host_vmdk_directory_path'");
+		return;
+	}
+	
+	if (!$self->vmhost_os->move_file("$host_vmdk_directory_path~", $host_vmdk_directory_path)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to rename the directory containing the compatible vmdk on VM host $vmhost_hostname: '$host_vmdk_directory_path~' --> '$host_vmdk_directory_path'");
+		return;
+	}
+
+	## Figure out how much additional space is required for the vmdk directory for the VM for this reservation
+	## This is the number of additional bytes which have not already been allocated the VM will likely use
+	## The subroutine checks if the vmdk files already exist on the VM host
+	#my $vm_additional_vmdk_bytes_required = $self->get_vm_additional_vmdk_bytes_required();
+	#return if !defined($vm_additional_vmdk_bytes_required);
+	#
+	## Get the number of bytes available on the device where the base vmdk directory resides
+	#my $host_vmdk_bytes_available = $self->vmhost_os->get_available_space($self->get_vmdk_base_directory_path());
+	#return if !defined($host_vmdk_bytes_available);
+	#
+	## Check if there is enough space available for the VM's vmdk files
+	#if ($vm_additional_vmdk_bytes_required > $host_vmdk_bytes_available) {
+	#	my $vmdk_deficit_bytes = ($vm_additional_vmdk_bytes_required - $host_vmdk_bytes_available);
+	#	my $vmdk_deficit_mb = format_number($vmdk_deficit_bytes / 1024 / 1024);
+	#	notify($ERRORS{'WARNING'}, 0, "not enough space is available for the vmdk files on the VM host, deficit: $vmdk_deficit_bytes bytes ($vmdk_deficit_mb MB)");
+	#	return;
+	#}
+	#else {
+	#	notify($ERRORS{'DEBUG'}, 0, "enough space is available for the vmdk files on the VM host");
+	#}
+	
+	return 1;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 check_vmdk_disk_type
+=head2 is_vmdk_compatible
 
  Parameters  : none
  Returns     : boolean
  Description : Determines if the vmdk disk type is compatible with the VMware
                product being used on the VM host. This subroutine currently only
-               checks if ESX is being used and the vmdk disk type is flat. If
-               using ESX and the disk type is not flat, a copy of the vmdk is
-               created using the thin virtual disk type in the same directory as
-               the incompatible vmdk directory. The name of the copied vmdk file
-               is the same as the incompatible vmdk file with 'thin_' inserted
-               at the beginning. Example:
-               'vmwarewinxp-base1-v0.vmdk' --> 'thin_vmwarewinxp-base1-v0.vmdk'
-               
-               This subroutine returns true unless ESX is being used, the
-               virtual disk type is not flat, and a thin copy cannot be created.
+               checks if ESX is being used and the vmdk disk type is flat.
+					
+					Returns false if:
+               -VM host is using ESX
+					-vmdk disk type is not flat
 
 =cut
 
-sub check_vmdk_disk_type {
+sub is_vmdk_compatible {
 	my $self = shift;
 	if (ref($self) !~ /vmware/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
@@ -1598,71 +1719,29 @@ sub check_vmdk_disk_type {
 	
 	my $vmdk_file_path = $self->get_vmdk_file_path() || return;
 	
-	# Check if the API object implements the required subroutines
-	unless ($self->api->can("get_virtual_disk_type") && $self->api->can("copy_virtual_disk")) {
-		notify($ERRORS{'DEBUG'}, 0, "skipping vmdk disk type check because required subroutines are not implemented by the API object");
-		return 1;
-	}
 	
 	# Retrieve the VMware product name
 	my $vmware_product_name = $self->get_vmhost_product_name();
 	if (!$vmware_product_name) {
-		notify($ERRORS{'DEBUG'}, 0, "skipping vmdk disk type check because VMware product name could not be retrieved from the API object");
-		return 1;
+		notify($ERRORS{'WARNING'}, 0, "unable to determine if vmdk is compatible with VM host, VMware product name could not be retrieved");
+		return;
 	}
 	
 	# Retrieve the virtual disk type from the API object
 	my $virtual_disk_type = $self->api->get_virtual_disk_type($vmdk_file_path);
 	if (!$virtual_disk_type) {
-		notify($ERRORS{'DEBUG'}, 0, "skipping vmdk disk type check because virtual disk type could not be retrieved from the API object");
-		return 1;
+		notify($ERRORS{'WARNING'}, 0, "unable to determine if vmdk is compatible with VM host, vmdk disk type could not be retrieved");
+		return;
 	}
 	
-	if ($vmware_product_name =~ /esx/i) {
-		if ($virtual_disk_type !~ /flat/i) {
-			notify($ERRORS{'DEBUG'}, 0, "virtual disk type is not compatible with $vmware_product_name: $virtual_disk_type");
-			
-			my $vmdk_file_path = $self->get_vmdk_file_path() || return;
-			my $vmdk_directory_path = $self->get_vmdk_directory_path() || return;
-			my $vmdk_file_prefix = $self->get_vmdk_file_prefix() || return;
-			my $thin_vmdk_file_path = "$vmdk_directory_path/thin_$vmdk_file_prefix.vmdk";
-			
-			if ($self->vmhost_os->file_exists($thin_vmdk_file_path)) {
-				notify($ERRORS{'DEBUG'}, 0, "thin virtual disk already exists: $thin_vmdk_file_path");
-			}
-			else {
-				notify($ERRORS{'DEBUG'}, 0, "attempting to create a copy of the virtual disk using the thin virtual disk type: $thin_vmdk_file_path");
-				
-				# Attempt to create a thin copy of the virtual disk
-				if ($self->api->copy_virtual_disk($vmdk_file_path, $thin_vmdk_file_path, 'thin')) {
-					notify($ERRORS{'DEBUG'}, 0, "created a copy of the virtual disk using the thin virtual disk type: $thin_vmdk_file_path");
-				}
-				else {
-					notify($ERRORS{'WARNING'}, 0, "failed to create a copy of the virtual disk using the thin virtual disk type: $thin_vmdk_file_path");
-					return;
-				}
-			}
-			
-			# Update this object to use the thin vmdk file path
-			if ($self->set_vmdk_file_path($thin_vmdk_file_path)) {
-				return 1;
-			}
-			else {
-				notify($ERRORS{'WARNING'}, 0, "failed to update the VMware module object to use the thin virtual disk path");
-				return;
-			}
-		}
-		else {
-			notify($ERRORS{'DEBUG'}, 0, "flat virtual disk ($virtual_disk_type) does not need to be converted for $vmware_product_name");
-			return 1;
-		}
+	if ($vmware_product_name =~ /esx/i && $virtual_disk_type !~ /flat/i) {
+		notify($ERRORS{'DEBUG'}, 0, "virtual disk type is not compatible with $vmware_product_name: $virtual_disk_type");
+		return 0;
 	}
 	else {
-		notify($ERRORS{'DEBUG'}, 0, "skipping vmdk disk type check because VMware product is not ESX: $vmware_product_name");
+		notify($ERRORS{'DEBUG'}, 0, "virtual disk type is compatible with $vmware_product_name: $virtual_disk_type");
 		return 1;
 	}
-	
-	return 1;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -2519,6 +2598,9 @@ sub check_file_paths {
 	# Assemble a string of all of the components
 	my $check_paths_string;
 	
+	$check_paths_string .= "VM profile VM path:                '" . ($self->data->get_vmhost_profile_vmpath() || $undefined_string) . "'\n";
+	$check_paths_string .= "VM profile datastore path:         '" . ($self->data->get_vmhost_profile_datastore_path() || $undefined_string) . "'\n";
+	
 	if ($file_type !~ /vmdk/i) {
 		$check_paths_string .= "vmx file path:                     '" . ($self->get_vmx_file_path() || $undefined_string) . "'\n";
 		$check_paths_string .= "vmx directory path:                '" . ($self->get_vmx_directory_path() || $undefined_string) . "'\n";
@@ -2784,7 +2866,7 @@ sub is_vm_registered {
 		}
 	}
 	
-	notify($ERRORS{'DEBUG'}, 0, "VM is not registered: '$vmx_file_path', registered paths:\n" . join("\n", @registered_vmx_file_paths));
+	notify($ERRORS{'DEBUG'}, 0, "VM is not registered: '$vmx_file_path', registered paths:\n" . (join("\n", @registered_vmx_file_paths) || '<none>'));
 	return 0;
 }
 
@@ -2838,6 +2920,9 @@ sub get_image_size_bytes {
 	}
 	
 	my $vmhost_hostname = $self->data->get_vmhost_hostname() || return;
+	my $vmprofile_vmdisk = $self->data->get_vmhost_profile_vmdisk() || return;
+	my $management_node_hostname = $self->data->get_management_node_short_name() || 'management node';
+	my $vmdk_base_directory_path = $self->get_vmdk_base_directory_path() || return;
 	
 	# Attempt to get the image name argument
 	my $image_name = shift;
@@ -2845,59 +2930,88 @@ sub get_image_size_bytes {
 		$image_name = $self->data->get_image_name() || return;
 	}
 	
-	my $image_size_bytes;
+	my $image_size_bytes_repository;
+	my $image_size_bytes_datastore;
 	
 	# Try to retrieve the image size from the repository if localdisk is being used
-	if (my $repository_vmdk_base_directory_path = $self->get_repository_vmdk_base_directory_path()) {
+	if ($vmprofile_vmdisk eq 'localdisk') {
+		my $repository_vmdk_base_directory_path = $self->get_repository_vmdk_base_directory_path();
+		my $repository_search_path = "$repository_vmdk_base_directory_path/$image_name/$image_name*.vmdk";
 		
-		my $search_path = "$repository_vmdk_base_directory_path/$image_name/$image_name*.vmdk";
-		
-		notify($ERRORS{'DEBUG'}, 0, "checking size of image in image repository: $search_path");
-		
-		# Run du specifying image repository directory as an argument
-		my ($exit_status, $output) = run_command("du -bc $search_path", 1);
-		if (!defined($output)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to run command to determine size of image in image repository: $search_path");
-		}
-		elsif (grep(/no such file/i, @$output)) {
-			notify($ERRORS{'DEBUG'}, 0, "image does not exist in image repository");
-		}
-		elsif (grep(/du: /i, @$output)) {
-			notify($ERRORS{'WARNING'}, 0, "error occurred attempting to determine size of image in image repository: $search_path, output:\n" . join("\n", @$output));
-		}
-		elsif (my ($total_line) = grep(/total/, @$output)) {
-			($image_size_bytes) = $total_line =~ /(\d+)/;
-			if (defined($image_size_bytes)) {
-				notify($ERRORS{'DEBUG'}, 0, "retrieved size of image in image repository: $image_size_bytes");
-			}
-			else {
-				notify($ERRORS{'WARNING'}, 0, "failed to parse du output to determine size of vmdk directory in image repository: $search_path, output:\n" . join("\n", @$output));
-			}
+		notify($ERRORS{'DEBUG'}, 0, "VM profile vmdisk is set to '$vmprofile_vmdisk', attempting to retrieve image size from image repository");
+		if ($self->is_repository_mounted_on_vmhost()) {
+			notify($ERRORS{'DEBUG'}, 0, "checking size of image in image repository mounted on VM host: $vmhost_hostname:$repository_vmdk_base_directory_path");
+			
+			# Get the size of the files on the VM host
+			$image_size_bytes_repository = $self->vmhost_os->get_file_size($repository_search_path);
 		}
 		else {
-			notify($ERRORS{'WARNING'}, 0, "unable to locate 'total' line in du output while attempting to determine size of vmdk directory in image repository: $search_path, output:\n" . join("\n", @$output));
+			notify($ERRORS{'DEBUG'}, 0, "checking size of image in image repository in management node: $management_node_hostname:$repository_vmdk_base_directory_path");
+			
+			# Run du on the mangement node
+			my $command = "du -bc $repository_search_path";
+			my ($exit_status, $output) = run_command($command, 1);
+			if (!defined($output)) {
+				notify($ERRORS{'WARNING'}, 0, "failed to run command on management node to determine size of image in image repository: $repository_search_path");
+			}
+			elsif (grep(/no such file/i, @$output)) {
+				notify($ERRORS{'DEBUG'}, 0, "image '$image_name' does not exist in image repository, command:\n'$command'");
+			}
+			elsif (grep(/du: /i, @$output)) {
+				notify($ERRORS{'WARNING'}, 0, "error occurred attempting to determine size of image in image repository: $repository_search_path, output:\n" . join("\n", @$output));
+			}
+			elsif (my ($total_line) = grep(/total/, @$output)) {
+				($image_size_bytes_repository) = $total_line =~ /(\d+)/;
+				if (defined($image_size_bytes_repository)) {
+					notify($ERRORS{'DEBUG'}, 0, "retrieved size of image in image repository: " . format_number($image_size_bytes_repository));
+				}
+				else {
+					notify($ERRORS{'WARNING'}, 0, "failed to parse du output to determine size of vmdk directory in image repository: $repository_search_path, output:\n" . join("\n", @$output));
+				}
+			}
 		}
 	}
-	
-	# Unable to determine the image size from the image repository, attempt to retrieve size from VM host
-	if (!defined($image_size_bytes)) {
-		# Assemble a search path
-		my $vmdk_base_directory_path = $self->get_vmdk_base_directory_path() || return;
-		my $search_path = "$vmdk_base_directory_path/$image_name/$image_name*.vmdk";
-		
-		# Get the size of the files on the VM host
-		$image_size_bytes = $self->vmhost_os->get_file_size($search_path);
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "VM profile vmdisk is set to '$vmprofile_vmdisk', image size will not be retrieved from image repository");
 	}
 	
+	# Attempt to retrieve size from the datastore on the VM host whether or not the size was retrieved from the image repository
+	my $search_path_datastore = "$vmdk_base_directory_path/$image_name/$image_name*.vmdk";
+	$image_size_bytes_datastore = $self->vmhost_os->get_file_size($search_path_datastore);
+	if (defined($image_size_bytes_datastore)) {
+		notify($ERRORS{'DEBUG'}, 0, "retrieved the size of the image from the datastore on the VM host: " . format_number($image_size_bytes_datastore));
+	}
 	
-	if (!defined($image_size_bytes)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to determine the size of image in image repository or on VM host");
+	my $image_size_bytes;
+	if (!defined($image_size_bytes_repository) && !defined($image_size_bytes_datastore)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to determine the size of image in image repository or on the VM host");
 		return;
 	}
+	elsif (defined($image_size_bytes_repository) && defined($image_size_bytes_datastore)) {
+		notify($ERRORS{'DEBUG'}, 0, "image size retrieved from both the image repository and VM host datastore:\n" .
+				 "image repository: " . format_number($image_size_bytes_repository) . "\n" .
+				 "VM host datastore: " . format_number($image_size_bytes_datastore));
+		
+		if ($image_size_bytes_repository > $image_size_bytes_datastore) {
+			$image_size_bytes = $image_size_bytes_repository;
+		}
+		else {
+			$image_size_bytes = $image_size_bytes_datastore;
+		}
+	}
+	elsif (defined($image_size_bytes_repository)) {
+		$image_size_bytes = $image_size_bytes_repository;
+	}
+	else {
+		$image_size_bytes = $image_size_bytes_datastore;
+	}
 	
-	my $mb_used = format_number(($image_size_bytes / 1024 / 1024));
-	my $gb_used = format_number(($image_size_bytes / 1024 / 1024 / 1024), 2);
-	notify($ERRORS{'DEBUG'}, 0, "size of $image_name image: " . format_number($image_size_bytes) . " bytes ($mb_used MB, $gb_used GB)");
+	my $image_size_mb = format_number(($image_size_bytes / 1024 / 1024));
+	my $image_size_gb = format_number(($image_size_bytes / 1024 / 1024 / 1024), 2);
+	notify($ERRORS{'DEBUG'}, 0, "size of $image_name image:\n" .
+			 format_number($image_size_bytes) . " bytes\n" .
+			 "$image_size_mb MB\n" .
+			 "$image_size_gb GB");
 	return $image_size_bytes;
 }
 
@@ -2922,7 +3036,9 @@ sub does_image_exist {
 		return;
 	}
 	
+	my $vmhost_hostname = $self->data->get_vmhost_hostname() || return;
 	my $vmprofile_vmdisk = $self->data->get_vmhost_profile_vmdisk() || return;
+	my $management_node_hostname = $self->data->get_management_node_short_name() || 'management node';
 	
 	# Get the non-persistent vmdk file path used on the VM host
 	my $vmhost_vmdk_file_path_nonpersistent = $self->get_vmdk_file_path_nonpersistent();
@@ -2936,10 +3052,13 @@ sub does_image_exist {
 		notify($ERRORS{'OK'}, 0, "image exists in the non-persistent directory on the VM host: $vmhost_vmdk_file_path_nonpersistent");
 		return 1;
 	}
-	else {
-		notify($ERRORS{'DEBUG'}, 0, "image does not exist in the non-persistent directory on the VM host, checking the image repository");
+	elsif ($vmprofile_vmdisk eq 'networkdisk') {
+		notify($ERRORS{'DEBUG'}, 0, "image does not exist in the non-persistent directory on the VM host, image repository will not be checked because VM profile vmdisk is '$vmprofile_vmdisk', returning false");
+		return 0;
 	}
-	
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "image does not exist in the non-persistent directory on the VM host, image repository will be checked because VM profile vmdisk is '$vmprofile_vmdisk'");
+	}
 	
 	# Get the image repository file path
 	my $repository_vmdk_file_path = $self->get_repository_vmdk_file_path();
@@ -2948,24 +3067,43 @@ sub does_image_exist {
 		return;
 	}
 	
-	
-	# Remove any trailing slashes and separate the directory path and name pattern
-	$repository_vmdk_file_path =~ s/\/*$//g;
-	my ($directory_path, $name_pattern) = $repository_vmdk_file_path =~ /^(.*)\/([^\/]*)/g;
-	
-	# Check if the file exists
-	(my ($exit_status, $output) = run_command("find \"$directory_path\" -iname \"$name_pattern\"")) || return;
-	if (!grep(/find: /i, @$output) && grep(/$directory_path/i, @$output)) {
-		notify($ERRORS{'OK'}, 0, "image exists in the image repository: $repository_vmdk_file_path");
-		return 1;
-	}
-	elsif (grep(/find: /i, @$output) && !grep(/no such file/i, @$output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to determine if file exists in repository: $repository_vmdk_file_path, output:\n" . join("\n", @$output));
-		return;
+	if ($self->is_repository_mounted_on_vmhost()) {
+		notify($ERRORS{'DEBUG'}, 0, "checking if vmdk file exists in image repository mounted on VM host: $vmhost_hostname:$repository_vmdk_file_path");
+		if ($self->vmhost_os->file_exists($repository_vmdk_file_path)) {
+			notify($ERRORS{'DEBUG'}, 0, "vmdk file exists in image repository mounted on VM host: $vmhost_hostname:$repository_vmdk_file_path");
+			return 1;
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "vmdk file does not exist in image repository mounted on VM host: $vmhost_hostname:$repository_vmdk_file_path");
+			return 0;
+		}
 	}
 	else {
-		notify($ERRORS{'DEBUG'}, 0, "image does not exist in image repository: $repository_vmdk_file_path");
-		return 0;
+		notify($ERRORS{'DEBUG'}, 0, "checking if vmdk file exists in image repository on managment node $management_node_hostname: $repository_vmdk_file_path");
+		
+		# Escape all spaces in the path
+		my $escaped_repository_vmdk_file_path = escape_file_path($repository_vmdk_file_path);
+		
+		# Check if the file or directory exists
+		# Do not enclose the path in quotes or else wildcards won't work
+		my $command = "stat $escaped_repository_vmdk_file_path";
+		my ($exit_status, $output) = run_command($command, 1);
+		if (!defined($output)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to run command to determine if vmdk file exists on management node:\npath: '$repository_vmdk_file_path'\ncommand: '$command'");
+			return;
+		}
+		elsif (grep(/no such file/i, @$output)) {
+			notify($ERRORS{'DEBUG'}, 0, "vmdk file does not exist on management node: '$repository_vmdk_file_path'");
+			return 0;
+		}
+		elsif (grep(/^\s*Size:.*file$/i, @$output)) {
+			notify($ERRORS{'DEBUG'}, 0, "vmdk file exists on management node: '$repository_vmdk_file_path'");
+			return 1;
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to determine if vmdk file exists on management node:\npath: '$repository_vmdk_file_path'\ncommand: '$command'\nexit status: $exit_status, output:\n" . join("\n", @$output));
+			return;
+		}
 	}
 }
 
@@ -3660,6 +3798,121 @@ sub get_vm_additional_vmx_bytes_required {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 copy_vmdk
+
+ Parameters  : $source_vmdk_file_path, $destination_vmdk_file_path
+ Returns     : boolean
+ Description : Copies a vmdk. The full paths to the source and destination vmdk
+               paths are required.
+
+=cut
+
+sub copy_vmdk {
+	my $self = shift;
+	if (ref($self) !~ /vmware/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get the arguments
+	my ($source_vmdk_file_path, $destination_vmdk_file_path) = @_;
+	if (!$source_vmdk_file_path || !$destination_vmdk_file_path) {
+		notify($ERRORS{'WARNING'}, 0, "source and destination vmdk file path arguments were not specified");
+		return;
+	}
+	
+	# Make sure the arguments end with .vmdk
+	if ($source_vmdk_file_path !~ /\.vmdk$/i || $destination_vmdk_file_path !~ /\.vmdk$/i) {
+		notify($ERRORS{'WARNING'}, 0, "source vmdk file path ($source_vmdk_file_path) and destination vmdk file path ($destination_vmdk_file_path) arguments do not end with .vmdk");
+		return;
+	}
+	
+	# Make sure the source vmdk file exists
+	if (!$self->vmhost_os->file_exists($source_vmdk_file_path)) {
+		notify($ERRORS{'WARNING'}, 0, "source vmdk file path does not exist: $source_vmdk_file_path");
+		return;
+	}
+	
+	# Make sure the destination vmdk file doesn't already exist
+	if ($self->vmhost_os->file_exists($destination_vmdk_file_path)) {
+		notify($ERRORS{'WARNING'}, 0, "destination vmdk file path already exists: $destination_vmdk_file_path");
+		return;
+	}
+	
+	# Get the destination parent directory path and create the directory
+	my ($destination_directory_path) = $destination_vmdk_file_path =~ /(.+)\/[^\/]+/;
+	if (!$self->vmhost_os->create_directory($destination_directory_path)) {
+		notify($ERRORS{'WARNING'}, 0, "unable to copy vmdk, destination directory could not be created on the VM host: $destination_directory_path");
+		return;
+	}
+	
+	my $start_time = time;
+	
+	# Attempt to use the API's copy_virtual_disk subroutine
+	if ($self->api->can('copy_virtual_disk') && $self->api->copy_virtual_disk($source_vmdk_file_path, $destination_vmdk_file_path)) {
+		notify($ERRORS{'OK'}, 0, "copied vmdk using API's copy_virtual_disk subroutine");
+	}
+	else {
+		# Unable to use API's copy_virtual_disk subroutine, try running vmkfstools or vmware-vdiskmanager
+		my $command;
+		if ($self->get_vmhost_product_name() =~ /VMware Server 1/i) {
+			# Use vmware-vdiskmanager if the VM host is running VMware Server 1.x
+			# Disk type 1 is 2GB sparse
+			$command = "vmware-vdiskmanager -r \"$source_vmdk_file_path\" -t 1 \"$destination_vmdk_file_path\"";
+			notify($ERRORS{'DEBUG'}, 0, "attempting to copy virtual disk using vmware-vdiskmanager, disk type: 2gbsparse: '$source_vmdk_file_path' --> '$destination_vmdk_file_path'");
+		}
+		else {
+			# Use vmkfstools if the VM host is running anything else
+			$command = "vmkfstools -i \"$source_vmdk_file_path\" \"$destination_vmdk_file_path\" -d thin";
+			notify($ERRORS{'DEBUG'}, 0, "attempting to copy virtual disk using vmkfstools, disk type: thin: '$source_vmdk_file_path' --> '$destination_vmdk_file_path'");
+		}
+		
+		my ($exit_status, $output) = $self->vmhost_os->execute($command);
+		if (!defined($output)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to run command on VM host: $command");
+			return;
+		}
+		elsif (!grep(/(100\% done|success)/, @$output)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to copy virtual disk, output does not contain '100% done' or 'success', command: '$command', output:\n" . join("\n", @$output));
+			return;
+		}
+		else {
+			notify($ERRORS{'OK'}, 0, "copied virtual disk on VM host: '$source_vmdk_file_path' --> '$destination_vmdk_file_path'");
+		}
+	}
+	
+	# Calculate how long it took to copy
+	my $duration_seconds = (time - $start_time);
+	my $minutes = ($duration_seconds / 60);
+	$minutes =~ s/\..*//g;
+	my $seconds = ($duration_seconds - ($minutes * 60));
+	$seconds = "0$seconds" if length($seconds) == 1;
+	
+	# Get the size of the copied vmdk files
+	my $search_path = $destination_vmdk_file_path;
+	$search_path =~ s/\.vmdk$//g;
+	$search_path .= '*.vmdk';
+	my $image_size_bytes = $self->vmhost_os->get_file_size($search_path);
+	
+	my $bytes_per_second = ($image_size_bytes / $duration_seconds);
+	my $bits_per_second = ($image_size_bytes * 8 / $duration_seconds);
+	my $mb_per_second = ($image_size_bytes / $duration_seconds / 1024 / 1024);
+	my $mbit_per_second = ($image_size_bytes * 8 / $duration_seconds / 1024 / 1024);
+	my $gbyte_per_minute = ($image_size_bytes / $duration_seconds / 1024 / 1024 / 1024 * 60);
+	
+	notify($ERRORS{'OK'}, 0, "copied vmdk: '$source_vmdk_file_path' --> '$destination_vmdk_file_path'\n" .
+		"bytes copied: " . format_number($image_size_bytes) . ", time to copy: $minutes:$seconds (" . format_number($duration_seconds) . " seconds)\n" .
+		"b/s:  " . format_number($bits_per_second) . "\n" .
+		"B/s:  " . format_number($bytes_per_second) . "\n" .
+		"Mb/s: " . format_number($mbit_per_second, 2) . "\n" .
+		"MB/s: " . format_number($mb_per_second, 2) . "\n" .
+		"GB/m: " . format_number($gbyte_per_minute, 2));
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 rename_vmdk
 
  Parameters  : $source_vmdk_file_path, $destination_vmdk_file_path
@@ -4137,6 +4390,42 @@ sub post_maintenance_action {
 	}
 	
 	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 is_repository_mounted_on_vmhost
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Checks if the image repository specified for the VM host profile
+               is mounted on the VM host.
+
+=cut
+
+sub is_repository_mounted_on_vmhost {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $vmhost_hostname = $self->data->get_vmhost_hostname();
+	
+	my $repository_vmdk_base_directory_path = $self->get_repository_vmdk_base_directory_path();
+	if (!$repository_vmdk_base_directory_path) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine if image repository is mounted on the VM host, repository vmdk base directory path could not be determined");
+		return;
+	}
+	
+	if ($self->vmhost_os->file_exists($repository_vmdk_base_directory_path)) {
+		notify($ERRORS{'DEBUG'}, 0, "image repository is mounted on VM host $vmhost_hostname: $repository_vmdk_base_directory_path");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "image repository is NOT mounted on VM host $vmhost_hostname: $repository_vmdk_base_directory_path");
+		return 0;
+	}
 }
 
 #/////////////////////////////////////////////////////////////////////////////

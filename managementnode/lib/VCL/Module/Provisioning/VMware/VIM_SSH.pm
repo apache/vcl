@@ -118,12 +118,12 @@ sub initialize {
 	my $command = 'vim-cmd ; vmware-vim-cmd';
 	my ($exit_status, $output) = $self->vmhost_os->execute($command);
 	if (!defined($output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to determine which VIM executable is available on the VM host");
+		notify($ERRORS{'OK'}, 0, "VIM executable is not available on the VM host");
 		return;
 	}
 	elsif (!grep(/vmsvc/, @$output)) {
 		# String 'vmsvc' does not exist in the output, neither of the commands worked
-		notify($ERRORS{'DEBUG'}, 0, "failed to determine which VIM executable is available on the VM host, output:\n" . join("\n", @$output));
+		notify($ERRORS{'DEBUG'}, 0, "VIM executable is not available on the VM host, output:\n" . join("\n", @$output));
 		return;
 	}
 	elsif (grep(/: vim-cmd:.*not found/i, @$output)) {
@@ -950,6 +950,8 @@ sub get_vm_power_state {
 	# Retrieved runtime info
 	# Suspended
 	
+	notify($ERRORS{'DEBUG'}, 0, "$vim_cmd_arguments:\n" . join("\n", @$output));
+	
 	if (grep(/powered on/i, @$output)) {
 		notify($ERRORS{'DEBUG'}, 0, "VM is powered on: $vmx_file_path");
 		return 'on';
@@ -1673,180 +1675,6 @@ sub get_virtual_disk_hardware_version {
 	
 	notify($ERRORS{'WARNING'}, 0, "unable to determine hardware version for disk: $vmdk_file_path, vim-cmd $vim_cmd_arguments output:\n" . join("\n", @$output));
 	return;
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 copy_virtual_disk
-
- Parameters  : $source_vmdk_file_path, $destination_vmdk_file_path, $destination_disk_type (optional)
- Returns     : boolean
- Description : Copies a virtual disk on the VMware host using vmkfstools. The
-               disk type argument may be one of the following values:
-					zeroedthick
-					thin (default)
-					eagerzeroedthick
-					2gbsparse
-
-=cut
-
-sub copy_virtual_disk {
-	my $self = shift;
-	if (ref($self) !~ /VCL::Module/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-	
-	# Get the source and destination path arguments
-	my $source_path = shift;
-	my $destination_path = shift;
-	if (!$source_path || !$destination_path) {
-		notify($ERRORS{'WARNING'}, 0, "source and destination vmdk file path arguments were not specified");
-		return;
-	}
-	
-	# Get the disk type argument if specified
-	# If not specified, set default value
-	my $destination_disk_type = shift || 'thin';
-	
-	# Get the destination parent directory path and create the directory
-	my ($destination_directory_path) = $destination_path =~ /(.+)\/[^\/]+/;
-	if (!$self->vmhost_os->create_directory($destination_directory_path)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to copy virtual disk, destination directory could not be created on the VM host: $destination_directory_path");
-		return;
-	}
-	
-	# vmware-vdiskmanager disk types:
-	# 0 - single growable virtual disk, no separate descriptor file (copy time: 1:04)
-	#     createType="monolithicSparse"
-	#     4.2G disk_0.vmdk
-	#     4.2G total
-	# 1 - growable virtual disk split in 2GB files (copy time: 1:08)
-	#     createType="twoGbMaxExtentSparse"
-	#     691  disk_1.vmdk
-	#     2.0G disk_1-s001.vmdk
-	#     904M disk_1-s002.vmdk
-	#     16M  disk_1-s003.vmdk
-	#     203M disk_1-s004.vmdk
-	#     398M disk_1-s005.vmdk
-	#     623M disk_1-s006.vmdk
-	#     21M  disk_1-s007.vmdk
-	#     128K disk_1-s008.vmdk
-	#     4.2G total
-	# 2 - preallocated virtual disk (copy time: 12:33)
-	#     createType="monolithicFlat"
-	#     429 disk_2.vmdk
-	#     14G disk_2-flat.vmdk
-	#     15G total
-	# 3 - preallocated virtual disk split in 2GB files (copy time: 4:06)
-	#     createType="twoGbMaxExtentFlat"
-	#     688 disk_3.vmdk
-	#     2.0G disk_3-f001.vmdk
-	#     2.0G disk_3-f002.vmdk
-	#     2.0G disk_3-f003.vmdk
-	#     2.0G disk_3-f004.vmdk
-	#     2.0G disk_3-f005.vmdk
-	#     2.0G disk_3-f006.vmdk
-	#     2.0G disk_3-f007.vmdk
-	#     1.8M disk_3-f008.vmdk
-	#     15G total
-	# 4 : preallocated ESX-type virtual disk (copy time: 10:00)
-	#     createType="vmfs"
-	#     419 disk_4.vmdk
-	#     14G disk_4-flat.vmdk
-	#     15G total
-	# 5 : compressed disk optimized for streaming (copy time: 3:21)
-	#     createType="streamOptimized"
-	#     2.5G disk_5.vmdk
-	#     2.5G total
-	my $vdisk_type;
-	if ($destination_disk_type =~ /thin/i) {
-		$vdisk_type = 0;
-	}
-	elsif ($destination_disk_type =~ /2gbsparse/i) {
-		$vdisk_type = 1;
-	}
-	else {
-		$vdisk_type = 4;
-	}
-	
-	my $success = 0;
-	my $start_time;
-	my $end_time;
-	
-	# Try vmware-vdiskmanager
-	notify($ERRORS{'DEBUG'}, 0, "attempting to copy virtual disk using 'vmware-vdiskmanager', disk type: $destination_disk_type ($vdisk_type)");
-	my $vdisk_command = "vmware-vdiskmanager -r \"$source_path\" -t $vdisk_type \"$destination_path\"";
-	$start_time = time;
-	my ($vdisk_exit_status, $vdisk_output) = $self->vmhost_os->execute($vdisk_command);
-	if (!defined($vdisk_output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to execute 'vmware-vdiskmanager' command on VM host to copy vmdk file:\n$vdisk_command");
-	}
-	elsif (grep(/success/i, @$vdisk_output)) {
-		$end_time = time;
-		$success = 1;
-		notify($ERRORS{'OK'}, 0, "copied vmdk file by executing 'vmware-vdiskmanager' on VM host: '$source_path' --> '$destination_path'");
-	}
-	elsif (grep(/not found/i, @$vdisk_output)) {
-		notify($ERRORS{'DEBUG'}, 0, "unable to copy vmdk using 'vmware-vdiskmanager' because the command is not available on VM host");
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to execute 'vmware-vdiskmanager' on VM host to copy vmdk file:\n$vdisk_command\noutput:\n" . join("\n", @$vdisk_output));
-	}
-	
-	if (!$success){
-		# Run vmkfstools to copy the virtual disk
-		my $vmkfstools_command = "vmkfstools -i \"$source_path\" \"$destination_path\" -d $destination_disk_type";
-		notify($ERRORS{'DEBUG'}, 0, "attempting to copy virtual disk using 'vmkfstools', disk type: $destination_disk_type");
-		$start_time = time;
-		my ($vmkfstools_exit_status, $vmkfstools_output) = $self->vmhost_os->execute($vmkfstools_command);
-		
-		# Expected output:
-		# Destination disk format: VMFS thin-provisioned
-		# Cloning disk '/vmfs/volumes/nfs-datastore/vmwarewinxp-base234-v12/vmwarewinxp-base234-v12.vmdk'...
-		# Clone: 0% done.Clone: 1% done. ... Clone: 98% done.Clone: 99% done.Clone: 100% done.
-	
-		if (!defined($vmkfstools_output)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to run command on VM host: $vmkfstools_command");
-			return;
-		}
-		elsif (!grep(/100\% done/, @$vmkfstools_output)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to copy virtual disk, output does not contain '100% done', command: $vmkfstools_command, output:\n" . join("\n", @$vmkfstools_output));
-			return;
-		}
-		else {
-			$end_time = time;
-			$success = 1;
-			notify($ERRORS{'OK'}, 0, "copied virtual disk by executing 'vmkfstools' on VM host: '$source_path' --> '$destination_path'");
-		}
-	}
-	
-	my $duration_seconds = ($end_time - $start_time);
-	my $minutes = ($duration_seconds / 60);
-	$minutes =~ s/\..*//g;
-	my $seconds = ($duration_seconds - ($minutes * 60));
-	$seconds = "0$seconds" if length($seconds) == 1;
-	
-	my $search_path = $destination_path;
-	$search_path =~ s/\.vmdk$//g;
-	$search_path .= '*.vmdk';
-	my $image_size_bytes = $self->vmhost_os->get_file_size($search_path);
-	
-	my $bytes_per_second = ($image_size_bytes / $duration_seconds);
-	my $bits_per_second = ($image_size_bytes * 8 / $duration_seconds);
-	my $mb_per_second = ($image_size_bytes / $duration_seconds / 1024 / 1024);
-	my $mbit_per_second = ($image_size_bytes * 8 / $duration_seconds / 1024 / 1024);
-	my $gbyte_per_minute = ($image_size_bytes / $duration_seconds / 1024 / 1024 / 1024 * 60);
-	
-	notify($ERRORS{'OK'}, 0, "copied vmdk: '$source_path' --> '$destination_path'\n" .
-			 "total bytes: " . format_number($image_size_bytes) . "\n" .
-			 "time to copy: $minutes:$seconds (" . format_number($duration_seconds) . " seconds)\n" .
-			 "B/s: " . format_number($bytes_per_second) . "\n" .
-			 "b/s: " . format_number($bits_per_second) . "\n" .
-			 "MB/s: " . format_number($mb_per_second, 2) . "\n" .
-			 "Mb/s: " . format_number($mbit_per_second, 2) . "\n" .
-			 "GB/m: " . format_number($gbyte_per_minute, 2));
-	return 1;
 }
 
 #/////////////////////////////////////////////////////////////////////////////

@@ -899,7 +899,7 @@ sub check_image_os {
 sub DESTROY {
 	my $self = shift;
 	
-	notify($ERRORS{'DEBUG'}, 0, "destructor called, ref(\$self)=" . ref($self));
+	notify($ERRORS{'DEBUG'}, 0, "ref($self) destructor called");
 	
 	# If not a blockrequest, delete computerloadlog entry
 	if ($self && $self->data && !$self->data->is_blockrequest()) {

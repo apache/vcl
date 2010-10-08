@@ -2696,7 +2696,7 @@ sub nmap_port {
 	}
 	
 	if (grep(/open/i, @$output)) {
-		notify($ERRORS{'DEBUG'}, 0, "port $port is open on $hostname");
+		#notify($ERRORS{'DEBUG'}, 0, "port $port is open on $hostname");
 		return 1;
 	}
 	elsif (grep(/(nmap:|warning)/i, @$output)) {
@@ -2704,7 +2704,7 @@ sub nmap_port {
 		return;
 	}
 	else {
-		notify($ERRORS{'DEBUG'}, 0, "port $port is closed on $hostname");
+		#notify($ERRORS{'DEBUG'}, 0, "port $port is closed on $hostname");
 		return 0;
 	}
 } ## end sub nmap_port
