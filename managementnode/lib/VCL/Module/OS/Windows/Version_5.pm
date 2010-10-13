@@ -273,31 +273,14 @@ sub run_sysprep {
 	# Run Sysprep.exe, use cygstart to lauch the .exe and return immediately
 	my $sysprep_command = "/bin/cygstart.exe cmd.exe /c \"";
 	
-	# First enable DHCP on the private and public interfaces and delete the default route
-	my $private_interface_name = $self->get_private_interface_name();
-	my $public_interface_name = $self->get_public_interface_name();
-	if (!$private_interface_name || !$public_interface_name) {
-		notify($ERRORS{'WARNING'}, 0, "unable to determine private and public interface names, failed to enable DHCP and shut down $computer_node_name");
-		return;
-	}
-	
-	# Release any DHCP addresses and delete the default route
-	$sysprep_command .= "$system32_path/ipconfig.exe /release & ";
-	$sysprep_command .= "$system32_path/route.exe DELETE 0.0.0.0 MASK 0.0.0.0 & ";
-	
-	# Disable DHCP
-	$sysprep_command .= "$system32_path/netsh.exe interface ip set address name=\\\"$private_interface_name\\\" source=dhcp & ";
-	$sysprep_command .= "$system32_path/netsh.exe interface ip set dns name=\\\"$private_interface_name\\\" source=dhcp & ";
-	$sysprep_command .= "$system32_path/netsh.exe interface ip set address name=\\\"$public_interface_name\\\" source=dhcp & ";
-	$sysprep_command .= "$system32_path/netsh.exe interface ip set dns name=\\\"$public_interface_name\\\" source=dhcp & ";
-	
 	# Run Sysprep.exe
 	$sysprep_command .= "C:/Sysprep/sysprep.exe /quiet /reseal /mini /forceshutdown & ";
 	
 	# Shutdown the computer - Sysprep does not always shut the computer down automatically
 	# Check if tsshutdn.exe exists on the computer
 	# tsshutdn.exe is the preferred utility, shutdown.exe often fails on Windows Server 2003
-	if ($self->file_exists("$system32_path/tsshutdn.exe")) {
+	my $windows_product_name = $self->get_product_name() || '';
+	if ($windows_product_name =~ /2003/ && $self->file_exists("$system32_path/tsshutdn.exe")) {
 		$sysprep_command .= "$system32_path/tsshutdn.exe 0 /POWERDOWN /DELAY:0 /V";
 	}
 	else {
@@ -333,12 +316,27 @@ sub run_sysprep {
 		notify($ERRORS{'OK'}, 0, "unable to determine power status of $computer_node_name from provisioning module, sleeping 5 minutes to allow computer time to power off");
 		sleep 300;
 	}
-	elsif (!$power_off) {
+	elsif ($power_off) {
+		notify($ERRORS{'OK'}, 0, "$computer_node_name powered off after running Sysprep.exe");
+		return 1;
+	}
+	else {
 		notify($ERRORS{'WARNING'}, 0, "$computer_node_name never powered off after running sysprep.exe");
-		return;
 	}
 	
-	return 1;
+	# Computer never powered off, check if provisioning module can forcefully power off the computer
+	if (!$self->provisioner->can('power_off')) {
+		notify($ERRORS{'OK'}, 0, "provisioning module does not implement a power_off subroutine");
+		return 1;
+	}
+	elsif ($self->provisioner->power_off()) {
+		notify($ERRORS{'OK'}, 0, "forcefully powered off $computer_node_name");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to forcefully power off $computer_node_name");
+		return 0;
+	}
 }
 
 #/////////////////////////////////////////////////////////////////////////////

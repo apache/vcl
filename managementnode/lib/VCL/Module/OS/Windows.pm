@@ -3124,7 +3124,8 @@ sub reboot {
 		# Check if tsshutdn.exe exists on the computer
 		# tsshutdn.exe is the preferred utility, shutdown.exe often fails on Windows Server 2003
 		my $reboot_command;
-		if ($self->file_exists("$system32_path/tsshutdn.exe")) {
+		my $windows_product_name = $self->get_product_name() || '';
+		if ($windows_product_name =~ /2003/ && $self->file_exists("$system32_path/tsshutdn.exe")) {
 			$reboot_command = "$system32_path/tsshutdn.exe 0 /REBOOT /DELAY:0 /V";
 		}
 		else {
@@ -3272,6 +3273,9 @@ sub shutdown {
 	# Kill the screen saver process, it occasionally prevents reboots and shutdowns from working
 	$self->kill_process('logon.scr');
 	
+	# Clear the event log before shutting down
+	$self->clear_event_log();
+	
 	my $shutdown_command = "/bin/cygstart.exe cmd.exe /c \"";
 	
 	if ($disable_dhcp) {
@@ -3296,8 +3300,9 @@ sub shutdown {
 	}
 	
 	# Check if tsshutdn.exe exists on the computer
-	# tsshutdn.exe is the preferred utility, shutdown.exe often fails on Windows Server 2003
-	if ($self->file_exists("$system32_path/tsshutdn.exe")) {
+	# tsshutdn.exe is the preferred utility for Windows 2003, shutdown.exe often fails
+	my $windows_product_name = $self->get_product_name() || '';
+	if ($windows_product_name =~ /2003/ && $self->file_exists("$system32_path/tsshutdn.exe")) {
 		$shutdown_command .= "$system32_path/tsshutdn.exe 0 /POWERDOWN /DELAY:0 /V";
 	}
 	else {
@@ -4897,7 +4902,7 @@ sub get_network_configuration {
 		}
 		
 		# Check if interface has private IP address assigned to it
-		if (grep(/$computer_private_ip_address/, @ip_addresses)) {
+		if (grep { $_ eq $computer_private_ip_address } @ip_addresses) {
 			# If private interface information was requested, return a hash containing only this interface
 			notify($ERRORS{'DEBUG'}, 0, "private interface found: $interface_name, description: $description, address(es): " . join (", ", @ip_addresses));
 			if ($network_type =~ /private/i) {
@@ -4911,42 +4916,19 @@ sub get_network_configuration {
 		}
 		
 		# Check if the interface should be ignored based on the name or description
-		if ($interface_name =~ /loopback|vmnet|afs|tunnel|6to4|isatap|teredo/i) {
-			notify($ERRORS{'DEBUG'}, 0, "interface ignored because of name: $interface_name, description: $description, address(es): " . join (", ", @ip_addresses));
+		if ($interface_name =~ /(loopback|vmnet|afs|tunnel|6to4|isatap|teredo)/i) {
+			notify($ERRORS{'DEBUG'}, 0, "interface '$interface_name' ignored because name contains '$1', address(es): " . join (", ", @ip_addresses));
 			next;
 		}
-		elsif ($description =~ /loopback|virtual|afs|tunnel|pseudo|6to4|isatap/i) {
-			notify($ERRORS{'DEBUG'}, 0, "interface ignored because of description: $interface_name, description: $description, address(es): " . join (", ", @ip_addresses));
+		elsif ($description =~ /(loopback|virtual|afs|tunnel|pseudo|6to4|isatap)/i) {
+			notify($ERRORS{'DEBUG'}, 0, "interface '$interface_name' ignored because description contains '$1': '$description', address(es): " . join (", ", @ip_addresses));
 			next;
 		}
 		
 		# Loop through the IP addresses for the interface
 		# Once a public address is found, return the data for that interface
 		for my $ip_address (@ip_addresses) {
-			# Split up the IP address being checked into its octets
-			my @octets = split(/\./, $ip_address);
-			
-			# Determine if this is a private or public address
-			# Private:
-			#   10.0.0.0    - 10.255.255.255
-			#   172.16.0.0  - 172.16.31.255.255
-			#   192.168.0.0 - 192.168.255.255
-			if (($octets[0] == 10) ||
-				 ($octets[0] != 172 && ($octets[1] >= 16 && $octets[1] <= 31)) ||
-				 ($octets[0] == 192 && $octets[1] == 168)
-				) {
-				notify($ERRORS{'DEBUG'}, 0, "interface found with private address not matching private address for reservation: $interface_name, description: $description, address(es): " . join (", ", @ip_addresses));
-				
-				if (keys(%public_interface)) {
-					notify($ERRORS{'DEBUG'}, 0, "already found another interface with a private address not matching private address for reservation, this one will be used if a public address isn't found");
-					next;
-				}
-				else {
-					notify($ERRORS{'DEBUG'}, 0, "interface will be returned if another with a public address isn't found");
-					$public_interface{$interface_name} = $network_configuration{$interface_name};
-				}
-			}
-			else {
+			if (is_public_ip_address($ip_address)) {
 				notify($ERRORS{'DEBUG'}, 0, "public interface found: $interface_name, description: $description, address(es): " . join (", ", @ip_addresses));
 				if ($network_type =~ /public/i) {
 					my %return_hash = ($interface_name => $network_configuration{$interface_name});
@@ -4957,6 +4939,19 @@ sub get_network_configuration {
 					next;
 				}
 			}
+			else {
+				notify($ERRORS{'DEBUG'}, 0, "interface found with non-public address not matching private address for reservation: $interface_name, description: $description, address(es): " . join (", ", @ip_addresses));
+				
+				if (keys(%public_interface)) {
+					notify($ERRORS{'DEBUG'}, 0, "already found another interface with a non-public address not matching private address for reservation, this one will be used if a public address isn't found");
+					next;
+				}
+				else {
+					notify($ERRORS{'DEBUG'}, 0, "interface will be returned if another with a public address isn't found");
+					$public_interface{$interface_name} = $network_configuration{$interface_name};
+				}
+			}
+			
 		}
 	}
 
@@ -9722,6 +9717,64 @@ sub sanitize_files {
 	}
 	
 	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 clear_event_log
+
+ Parameters  : @logfile_names (optional)
+ Returns     : boolean
+ Description : Clears the Windows 'Application', 'Security', 'System' event
+               logs. One or more event logfile names may be specified to only
+               clear certain event logs.
+
+=cut
+
+sub clear_event_log {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my @logfile_names = @_;
+	@logfile_names = ('Application', 'Security', 'System') if !@logfile_names;
+	
+	my $management_node_keys = $self->data->get_management_node_keys();
+	my $computer_node_name   = $self->data->get_computer_node_name();
+	my $system32_path        = $self->get_system32_path() || return;
+	
+	# Assemble the command
+	# Call wmic.exe - the WMI shell
+	# wmic.exe will hang if it is called by itself.  It has something to do with TTY/PTY
+	# Piping the echo command seems to prevent it from hanging
+	my $command;
+	for my $logfile_name (@logfile_names) {
+		$command .= "echo | $system32_path/Wbem/wmic.exe NTEVENTLOG WHERE LogFileName=\\\"$logfile_name\\\" CALL ClearEventLog ; ";
+	}
+	
+	# Remove the last ' ; ' added to the command
+	$command =~ s/[\s;]*$//g;
+	
+	my ($status, $output) = run_ssh_command($computer_node_name, $management_node_keys, $command);
+	if (!defined($output)) {
+		notify($ERRORS{'DEBUG'}, 0, "failed to run SSH command to clear the event log: @logfile_names");
+		return;
+	}
+	elsif (grep(/ERROR/i, @$output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to clear event log: @logfile_names, output:\n" . join("\n", @$output));
+		return;
+	}
+	elsif (grep(/Method execution successful/i, @$output)) {
+		notify($ERRORS{'DEBUG'}, 0, "cleared event log: @logfile_names");
+		$self->create_eventlog_entry("Event log cleared by VCL");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unexpected output while clearing event log: @logfile_names, output:\n" . join("\n", @$output));
+		return;
+	}
 }
 
 #/////////////////////////////////////////////////////////////////////////////
