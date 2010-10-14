@@ -146,36 +146,36 @@ sub pre_capture {
 		notify($ERRORS{'DEBUG'}, 0, "cleartmp precapture $computer_node_name ");
 	}
 
-	#Clear ssh idenity keys from /root/.ssh 
+	# Clear ssh idenity keys from /root/.ssh 
 	if (!$self->clear_private_keys()) {
 		notify($ERRORS{'WARNING'}, 0, "unable to clear known identity keys");
 	}
 
 	if ($ip_configuration eq "static") {
 		if ($self->can("set_static_public_address") && $self->set_static_public_address()) {
-                        notify($ERRORS{'DEBUG'}, 0, "set static public IP address on $computer_node_name using set_static_public_address() method");
-                }
+			notify($ERRORS{'DEBUG'}, 0, "set static public IP address on $computer_node_name using set_static_public_address() method");
+		}
 	} ## end if ($ip_configuration eq "static")
 
-	#Write /etc/rc.local script
+	# Write /etc/rc.local script
 	if(!$self->generate_rc_local()){
 		notify($ERRORS{'WARNING'}, 0, "unable to generate /etc/rc.local script on $computer_node_name");
 		return 0;
 	}
 
-	#Generate external_sshd_config
+	# Generate external_sshd_config
 	if(!$self->generate_ext_sshd_config()){
 		notify($ERRORS{'WARNING'}, 0, "unable to generate /etc/ssh/external_sshd_config on $computer_node_name");
 		return 0;
 	}
 
-	#Generate ext_sshd init script
+	# Generate ext_sshd init script
 	if(!$self->generate_ext_sshd_init()){
 		notify($ERRORS{'WARNING'}, 0, "unable to generate /etc/init.d/ext_sshd on $computer_node_name");
 		return 0;
 	}
 
-	#shutdown node
+	# Shutdown node
 	notify($ERRORS{'OK'}, 0, "shutting down node for Linux imaging sequence");
 	run_ssh_command($computer_node_name, $management_node_keys, "/sbin/shutdown -h now", "root");
 	notify($ERRORS{'OK'}, 0, "sleeping for 60 seconds while machine shuts down");
@@ -320,10 +320,15 @@ sub post_reserve {
 
 =head2 update_public_hostname
 
- Parameters  :
- Returns     : 1,0 success or failure
- Description : To be used for nodes that have both private and public addresses.
-               Set hostname to that of the public address.
+ Parameters  : none
+ Returns     : boolean
+ Description : Retrieves the public IP address being used on the Linux computer.
+               Runs ipcalc locally on the management node to determine the
+               registered hostname for that IP address. If unable to determine
+               the hostname by running ipcalc on the management node, an attempt
+               is made to run ipcalc on the Linux computer. Once the hostname is
+               determined, the hostname command is run to set the hostname on
+               the Linux computer.
 
 =cut
 
@@ -336,38 +341,62 @@ sub update_public_hostname {
 	
 	my $management_node_keys = $self->data->get_management_node_keys();
 	my $computer_node_name   = $self->data->get_computer_node_name();
-	my $image_os_type        = $self->data->get_image_os_type();
-	my $image_os_name        = $self->data->get_image_os_name();
-	my $computer_short_name  = $self->data->get_computer_short_name();
-	my $public_hostname;
 	
 	# Get the IP address of the public adapter
-	my $public_IP_address = getdynamicaddress($computer_short_name, $image_os_name, $image_os_type);
-	if (!($public_IP_address)) {
-		notify($ERRORS{'WARNING'}, 0, "Unable to get public IP address");
-		return 0;
+	my $public_ip_address = $self->get_public_ip_address();
+	if (!$public_ip_address) {
+		notify($ERRORS{'WARNING'}, 0, "hostname cannot be set, unable to determine public IP address");
+		return;
 	}
+	notify($ERRORS{'DEBUG'}, 0, "retrieved public IP address of $computer_node_name: $public_ip_address");
 	
 	# Get the hostname for the public IP address
-	my $get_public_hostname = "/bin/ipcalc --hostname $public_IP_address";
-	my ($ipcalc_status, $ipcalc_output) = run_ssh_command($computer_short_name, $management_node_keys,$get_public_hostname);
-	if (!defined($ipcalc_status)) {
-		notify($ERRORS{'WARNING'}, 0, "unable to run ssh cmd $get_public_hostname on $computer_short_name");
+	my $ipcalc_command = "/bin/ipcalc --hostname $public_ip_address";
+	my ($ipcalc_exit_status, $ipcalc_output) = run_command($ipcalc_command);
+	if (!defined($ipcalc_output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run ipcalc command on management node to determine public hostname of $computer_node_name, command: '$ipcalc_command'");
+		return;
+	}
+	
+	my ($public_hostname) = ("@$ipcalc_output" =~ /HOSTNAME=(.*)/i);
+	if ($public_hostname) {
+		notify($ERRORS{'DEBUG'}, 0, "determined registered public hostname of $computer_node_name ($public_ip_address) by running ipcalc on the management node: '$public_hostname'");
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "failed to determine registered public hostname of $computer_node_name ($public_ip_address), command: '$ipcalc_command', output:\n" . join("\n", @$ipcalc_output));
+		
+		# Attempt to run the ipcalc command on the host
+		my ($ipcalc_exit_status, $ipcalc_output) = run_ssh_command($computer_node_name, $management_node_keys, $ipcalc_command);
+		if (!defined($ipcalc_output)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to run ipcalc command on $computer_node_name to determine its public hostname, command: '$ipcalc_command'");
+			return;
+		}
+		
+		($public_hostname) = ("@$ipcalc_output" =~ /HOSTNAME=(.*)/i);
+		if ($public_hostname) {
+			notify($ERRORS{'DEBUG'}, 0, "determined registered public hostname of $computer_node_name ($public_ip_address) by running ipcalc on $computer_node_name: '$public_hostname'");
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to determine registered public hostname of $computer_node_name ($public_ip_address) by running ipcalc on either the management node or $computer_node_name, command: '$ipcalc_command', output:\n" . join("\n", @$ipcalc_output));
+			return;
+		}
+	}
+	
+	# Set the node's hostname to public hostname
+	my $hostname_command = "hostname -v $public_hostname";
+	my ($hostname_exit_status, $hostname_output) = run_ssh_command($computer_node_name, $management_node_keys, $hostname_command); 
+	if (!defined($hostname_output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to SSH command to set hostname on $computer_node_name to $public_hostname, command: '$hostname_command'");
+		return;
+	}
+	elsif ($hostname_exit_status == 0) {
+		notify($ERRORS{'OK'}, 0, "set public hostname on $computer_node_name to $public_hostname");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to set public hostname on $computer_node_name to $public_hostname, exit status: $hostname_exit_status, output:\n" . join("\n", @$hostname_output));
 		return 0;
 	}
-	elsif ("@$ipcalc_output" =~ /HOSTNAME=(.*)/i) {
-		$public_hostname = $1;
-		notify($ERRORS{'DEBUG'}, 0, "collected public hostname= $public_hostname");
-	}
-	
-	#Set the node's hostname to public hostname
-	my ($set_hostname_status, $set_hostname_output) = run_ssh_command($computer_short_name, $management_node_keys,"hostname -v $public_hostname"); 
-	unless (defined($set_hostname_status) && $set_hostname_status == 0) {
-		notify($ERRORS{'OK'}, 0, "failed to set public_hostname on $computer_short_name output: @${set_hostname_output}");
-	}
-	
-	notify($ERRORS{'OK'}, 0, "successfully set public_hostname on $computer_short_name output: @${set_hostname_output}");
-	return 1;
 }
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -1352,7 +1381,7 @@ sub file_exists {
 	my $links_found = grep(/^\s*Size:.*link$/i, @$output);
 	
 	if ($files_found || $directories_found || $links_found) {
-		#notify($ERRORS{'DEBUG'}, 0, "'$path' exists on $computer_short_name, files: $files_found, directories: $directories_found, links: $links_found");
+		notify($ERRORS{'DEBUG'}, 0, "'$path' exists on $computer_short_name, files: $files_found, directories: $directories_found, links: $links_found");
 		return 1;
 	}
 	else {
@@ -1457,22 +1486,23 @@ sub create_directory {
 	my $computer_short_name = $self->data->get_computer_short_name();
 	
 	# Attempt to create the directory
-	my $command = "mkdir -p \"$directory_path\" 2>&1 && ls -1d \"$directory_path\"";
+	my $command = "ls -1d \"$directory_path\" 2>&1 || mkdir -p \"$directory_path\" 2>&1 && ls -ld \"$directory_path\"";
 	my ($exit_status, $output) = $self->execute($command);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to run command to create directory on $computer_short_name:\npath: '$directory_path'\ncommand: '$command'");
 		return;
 	}
-	elsif (grep(/created directory/i, @$output)) {
-		notify($ERRORS{'OK'}, 0, "created directory on $computer_short_name: '$directory_path'");
-		return 1;
-	}
-	elsif (grep(/(mkdir|ls):/i, @$output)) {
+	elsif (grep(/mkdir:/i, @$output)) {
 		notify($ERRORS{'WARNING'}, 0, "error occurred attempting to create directory on $computer_short_name: '$directory_path':\ncommand: '$command'\nexit status: $exit_status\noutput:\n" . join("\n", @$output));
 		return;
 	}
-	elsif (grep(/^$directory_path/, @$output)) {
-		notify($ERRORS{'OK'}, 0, "directory either created or already exists on $computer_short_name: '$directory_path'");
+	elsif (grep(/^d.*\s+$directory_path\s*$/, @$output)) {
+		if (grep(/ls:/, @$output)) {
+			notify($ERRORS{'OK'}, 0, "directory created on $computer_short_name: '$directory_path'");
+		}
+		else {
+			notify($ERRORS{'OK'}, 0, "directory already exists on $computer_short_name: '$directory_path'");
+		}
 		return 1;
 	}
 	else {
@@ -1865,6 +1895,10 @@ sub get_file_size {
 		notify($ERRORS{'WARNING'}, 0, "failed to run command to determine file size on $computer_node_name: $file_path\ncommand: $command");
 		return;
 	}
+	elsif (grep(/no such file/i, @$output)) {
+		notify($ERRORS{'DEBUG'}, 0, "unable to determine size of file on $computer_node_name because it does not exist: $file_path");
+		return;
+	}
 	elsif (grep(/^stat:/i, @$output)) {
 		notify($ERRORS{'WARNING'}, 0, "error occurred attempting to determine file size on $computer_node_name: $file_path\ncommand: $command\noutput:\n" . join("\n", @$output));
 		return;
@@ -1929,7 +1963,7 @@ sub find_files {
 	my $computer_node_name = $self->data->get_computer_node_name() || return;
 	
 	# Run the find command
-	my $command = "find \"$base_directory_path\" -type f -iname \"$file_pattern\"";
+	my $command = "find \"$base_directory_path\" -iname \"$file_pattern\"";
 	notify($ERRORS{'DEBUG'}, 0, "attempting to find files on $computer_node_name, base directory path: '$base_directory_path', pattern: $file_pattern, command: $command");
 	
 	my ($exit_status, $output) = $self->execute($command);
@@ -2004,40 +2038,40 @@ sub generate_rc_local {
 
 	#write to tmpfile
 	my $tmpfile = "/tmp/$request_id.rc.local";
-        if (open(TMP, ">$tmpfile")) {
-            print TMP @array2print;
-            close(TMP);
-         }
-         else {
-             #print "could not write $tmpfile $!\n";
-             notify($ERRORS{'OK'}, 0, "could not write $tmpfile $!");
+	if (open(TMP, ">$tmpfile")) {
+		print TMP @array2print;
+		close(TMP);
+	}
+	else {
+		#print "could not write $tmpfile $!\n";
+		notify($ERRORS{'OK'}, 0, "could not write $tmpfile $!");
 		return 0;
-         }
-         #copy to node
-         if (run_scp_command($tmpfile, "$computer_node_name:/etc/rc.local", $management_node_keys)) {
-         }
+	}
+	#copy to node
+	if (run_scp_command($tmpfile, "$computer_node_name:/etc/rc.local", $management_node_keys)) {
+	}
 	else{
 		return 0;
 	}
 	
 	# Assemble the command
-        my $command = "chmod +rx /etc/rc.local";
-        
-        # Execute the command
-        my ($exit_status, $output) = run_ssh_command($computer_node_name, $management_node_keys, $command, '', '', 1);
-        if (defined($exit_status) && $exit_status == 0) {
-                notify($ERRORS{'OK'}, 0, "executed $command, exit status: $exit_status");
-        }
-        elsif (defined($exit_status)) {
-                notify($ERRORS{'WARNING'}, 0, "setting rx on /etc/rc.local returned a non-zero exit status: $exit_status");
-                return;
-        }
-        else {
-                notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to execute script_path");
-                return 0;
-        }
-
-        unlink($tmpfile);
+	my $command = "chmod +rx /etc/rc.local";
+	
+	# Execute the command
+	my ($exit_status, $output) = run_ssh_command($computer_node_name, $management_node_keys, $command, '', '', 1);
+	if (defined($exit_status) && $exit_status == 0) {
+		notify($ERRORS{'OK'}, 0, "executed $command, exit status: $exit_status");
+	}
+	elsif (defined($exit_status)) {
+		notify($ERRORS{'WARNING'}, 0, "setting rx on /etc/rc.local returned a non-zero exit status: $exit_status");
+		return;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to execute script_path");
+		return 0;
+	}
+	
+	unlink($tmpfile);
 
 	return 1;
 	
@@ -2054,28 +2088,28 @@ sub generate_rc_local {
 =cut
 
 sub generate_ext_sshd_config {
-        my $self = shift;
-        if (ref($self) !~ /linux/i) {
-                notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-                return 0;
-        }
-
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return 0;
+	}
+	
 	my $request_id               = $self->data->get_request_id();
-        my $management_node_keys     = $self->data->get_management_node_keys();
-        my $computer_short_name      = $self->data->get_computer_short_name();
-        my $computer_node_name       = $self->data->get_computer_node_name();
+	my $management_node_keys     = $self->data->get_management_node_keys();
+	my $computer_short_name      = $self->data->get_computer_short_name();
+	my $computer_node_name       = $self->data->get_computer_node_name();
 	
 	#check for and copy /etc/ssh/sshd_config file
-
+	
 	#Copy node's /etc/ssh/sshd_config to local /tmp for processing
 	my $tmpfile = "/tmp/$request_id.external_sshd_config";
 	if (run_scp_command("$computer_node_name:/etc/ssh/sshd_config", $tmpfile, $management_node_keys)) {
 		notify($ERRORS{'DEBUG'}, 0, "copied sshd_config from $computer_node_name for local processing");
-        }
-        else{
+	}
+	else{
 		notify($ERRORS{'WARNING'}, 0, "failed to copied sshd_config from $computer_node_name for local processing");
-                return 0;
-        }
+		return 0;
+	}
 	
 	my @ext_sshd_config = read_file_to_array($tmpfile);	
 	
@@ -2097,7 +2131,7 @@ sub generate_ext_sshd_config {
 			$l = "";
 		}
 	}
-
+	
 	push(@ext_sshd_config, "PidFile /var/run/ext_sshd.pid\n");
 	push(@ext_sshd_config, "PermitRootLogin no\n");
 	push(@ext_sshd_config, "UseDNS no\n");
@@ -2105,7 +2139,7 @@ sub generate_ext_sshd_config {
 	
 	#clear temp file
 	unlink($tmpfile);
-
+	
 	#write_array to file
 	if(open(FILE, ">$tmpfile")){
 		print FILE @ext_sshd_config;
@@ -2115,11 +2149,11 @@ sub generate_ext_sshd_config {
 	#copy temp file to node
 	if (run_scp_command($tmpfile, "$computer_node_name:/etc/ssh/external_sshd_config", $management_node_keys)) {
 		notify($ERRORS{'DEBUG'}, 0, "copied $tmpfile to $computer_node_name:/etc/ssh/external_sshd_config");
-        }
-        else{
+	}
+	else{
 		notify($ERRORS{'WARNING'}, 0, "failed to copied $tmpfile to $computer_node_name:/etc/ssh/external_sshd_config");
-                return 0;
-        }	
+		return 0;
+	}	
 	unlink($tmpfile);
 	
 	return 1;
@@ -2136,34 +2170,34 @@ sub generate_ext_sshd_config {
 =cut
 
 sub generate_ext_sshd_init {
-        my $self = shift;
-        if (ref($self) !~ /linux/i) {
-                notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-                return 0;
-        }
-
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return 0;
+	}
+	
 	my $request_id               = $self->data->get_request_id();
-        my $management_node_keys     = $self->data->get_management_node_keys();
-        my $computer_short_name      = $self->data->get_computer_short_name();
-        my $computer_node_name       = $self->data->get_computer_node_name();
-
+	my $management_node_keys     = $self->data->get_management_node_keys();
+	my $computer_short_name      = $self->data->get_computer_short_name();
+	my $computer_node_name       = $self->data->get_computer_node_name();
+	
 	#copy /etc/init.d/sshd to local /tmp for processing
 	my $tmpfile = "/tmp/$request_id.ext_sshd";
-        if (run_scp_command("$computer_node_name:/etc/init.d/sshd", $tmpfile, $management_node_keys)) {
-                notify($ERRORS{'DEBUG'}, 0, "copied sshd init script from $computer_node_name for local processing");
-        }
-        else{
-                notify($ERRORS{'WARNING'}, 0, "failed to copied sshd init script from $computer_node_name for local processing");
-                return 0;
-        }
+	if (run_scp_command("$computer_node_name:/etc/init.d/sshd", $tmpfile, $management_node_keys)) {
+		notify($ERRORS{'DEBUG'}, 0, "copied sshd init script from $computer_node_name for local processing");
+	}
+	else{
+		notify($ERRORS{'WARNING'}, 0, "failed to copied sshd init script from $computer_node_name for local processing");
+		return 0;
+	}
 	
 	my @ext_sshd_init = read_file_to_array($tmpfile);
-       
-	 notify($ERRORS{'DEBUG'}, 0, "read file $tmpfile into array ");
+	
+	notify($ERRORS{'DEBUG'}, 0, "read file $tmpfile into array ");
 	
 	foreach my $l (@ext_sshd_init) {
 		if($l =~ /PID_FILE=/){
-			$l = "PID_FILE=/var/run/ext_sshd.pid" . "\n" . "OPTIONS=\'-f /etc/ssh/external_sshd_config\'\n";
+			= "PID_FILE=/var/run/ext_sshd.pid" . "\n" . "OPTIONS=\'-f /etc/ssh/external_sshd_config\'\n";
 		}	
 		if($l =~ /prog=/){
 			$l="prog=\"ext_sshd\"" . "\n";
@@ -2176,20 +2210,20 @@ sub generate_ext_sshd_init {
 		if($l =~ /if \[ -f \/var\/lock\/subsys\/sshd \] ; then/){
 			$l = "if [ -f /var/lock/subsys/ext_sshd ] ; then" . "\n";
 		}
-        }
-
-        #clear temp file
-        unlink($tmpfile);
-
-        #write_array to file
-        if(open(FILE, ">$tmpfile")){
-                print FILE @ext_sshd_init;
-                close(FILE);
-        }
-
+	}
+	
+	#clear temp file
+	unlink($tmpfile);
+	
+	#write_array to file
+	if(open(FILE, ">$tmpfile")){
+		print FILE @ext_sshd_init;
+		close(FILE);
+	}
+	
 	#slurp/read the file to scalar
 	my $sshd_data = do { local( @ARGV, $/ ) = $tmpfile ; <> } ;
-		
+	
 	#notify($ERRORS{'DEBUG'}, 0, "sshd_data after read= $sshd_data");
 	
 	#write new stop block
@@ -2201,34 +2235,34 @@ sub generate_ext_sshd_init {
 	$new_stop_block .= "        [ \"\$RETVAL\" = 0 ] && rm -f /var/lock/subsys/ext_sshd\n";
 	$new_stop_block .= "        echo\n";	
 	$new_stop_block .= "}\n";	
-
-
+	
+	
 	#edit the stop block
 	$sshd_data =~ s/stop\(\).*?\}/$new_stop_block/s;
-
-		
+	
+	
 	#save to file
 	if(open(WRITEFILE,">$tmpfile")){
 		print WRITEFILE $sshd_data;
 		close(WRITEFILE);
 	}
-
-        #copy temp file to node
-        if (run_scp_command($tmpfile, "$computer_node_name:/etc/init.d/ext_sshd", $management_node_keys)) {
-                notify($ERRORS{'DEBUG'}, 0, "copied $tmpfile to $computer_node_name:/etc/init.d/ext_sshd");
+	
+	#copy temp file to node
+	if (run_scp_command($tmpfile, "$computer_node_name:/etc/init.d/ext_sshd", $management_node_keys)) {
+		notify($ERRORS{'DEBUG'}, 0, "copied $tmpfile to $computer_node_name:/etc/init.d/ext_sshd");
 		if(run_ssh_command($computer_node_name, $management_node_keys, "chmod +rx /etc/init.d/ext_sshd", '', '', 1)){
-                	notify($ERRORS{'DEBUG'}, 0, "setting  $computer_node_name:/etc/init.d/ext_sshd executable");
+			notify($ERRORS{'DEBUG'}, 0, "setting  $computer_node_name:/etc/init.d/ext_sshd executable");
 		}
-        }
-        else{
-                notify($ERRORS{'WARNING'}, 0, "failed to copied $tmpfile to $computer_node_name:/etc/init.d/ext_sshd");
-                return 0;
-        }
-
+	}
+	else{
+		notify($ERRORS{'WARNING'}, 0, "failed to copied $tmpfile to $computer_node_name:/etc/init.d/ext_sshd");
+		return 0;
+	}
+	
 	#delete local tmpfile
 	unlink($tmpfile);
-
-        return 1;
+	
+	return 1;
 
 }
 
