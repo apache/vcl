@@ -2197,7 +2197,7 @@ sub generate_ext_sshd_init {
 	
 	foreach my $l (@ext_sshd_init) {
 		if($l =~ /PID_FILE=/){
-			= "PID_FILE=/var/run/ext_sshd.pid" . "\n" . "OPTIONS=\'-f /etc/ssh/external_sshd_config\'\n";
+			$l = "PID_FILE=/var/run/ext_sshd.pid" . "\n" . "OPTIONS=\'-f /etc/ssh/external_sshd_config\'\n";
 		}	
 		if($l =~ /prog=/){
 			$l="prog=\"ext_sshd\"" . "\n";
