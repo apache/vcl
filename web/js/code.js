@@ -123,10 +123,10 @@ var genericCB = function(type, data, evt) {
 	eval(data);
 }
 
-var errorHandler = function(type, error, data) {
-	if(args.dojoType == 'cancel')
+var errorHandler = function(error, ioArgs) {
+	if(error.name == 'cancel')
 		return;
-	alert('error occurred' + error.message + data.responseText);
+	alert('AJAX Error: ' + error.message + '\nLine ' + error.lineNumber + ' in ' + error.fileName);
 }
 
 function errorHandler(data, ioArgs) {

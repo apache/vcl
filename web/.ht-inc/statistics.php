@@ -16,21 +16,6 @@
   limitations under the License.
 */
 
-if($phpVer == 5) {
-	if(is_dir(".ht-inc/jpgraph")) {
-		require_once(".ht-inc/jpgraph/jpgraph.php");
-		require_once(".ht-inc/jpgraph/jpgraph_bar.php");
-		require_once(".ht-inc/jpgraph/jpgraph_line.php");
-	}
-}
-else {
-	if(is_dir(".ht-inc/jpgraph.old")) {
-		require_once(".ht-inc/jpgraph.old/jpgraph.php");
-		require_once(".ht-inc/jpgraph.old/jpgraph_bar.php");
-		require_once(".ht-inc/jpgraph.old/jpgraph_line.php");
-	}
-}
-
 /**
  * \file
  */
@@ -289,6 +274,8 @@ function viewStatistics() {
 
 		# lengths
 		$length = $row["finalend"] - $row["start"];
+		if($length < 0)
+			$length = 0;
 		if($length <= 1800)
 			$lengths["30min"]++;
 		elseif($length <= 3600)
@@ -467,6 +454,7 @@ function viewStatistics() {
 	print "  </TR>\n";
 	print "</TABLE>\n";
 	print "<br>\n";
+	print "</div>\n";
 
 	$unixstart = datetimeToUnix($start);
 	$unixend = datetimeToUnix($end);
@@ -476,30 +464,38 @@ function viewStatistics() {
 	               'end' => $end,
 	               'affilid' => $affilid);
 	print "<H2>Reservations by Day</H2>\n";
-	$cont = addContinuationsEntry('statgraphday', $cdata);
-	print "<img src=" . BASEURL . SCRIPT . "?continuation=$cont>";
+	print "<small>(Reservations with start time on given day)</small><br>\n";
+	$cdata['divid'] = 'resbyday';
+	$cont = addContinuationsEntry('AJgetStatData', $cdata);
+	print "<input type=hidden id=statdaycont value=\"$cont\">\n";
+	print "<div id=\"resbyday\" style=\"width: 400px; height: 310px;\">(Loading...)</div>\n";
 
 	print "<H2>Max Concurrent Reservations By Day</H2>\n";
 	if($unixend - $unixstart > SECINMONTH)
 		print "(this graph only available for up to a month of data)<br>\n";
 	else {
-		$cont = addContinuationsEntry('statgraphdayconcuruser', $cdata);
-		print "<img src=" . BASEURL . SCRIPT . "?continuation=$cont>";
+		$cdata['divid'] = 'maxconcurresday';
+		$cont = addContinuationsEntry('AJgetStatData', $cdata);
+		print "<input type=hidden id=statconcurrescont value=\"$cont\">\n";
+		print "<div id=\"maxconcurresday\" style=\"width: 400px; height: 310px;\">Loading graph data...</div>\n";
 	}
 
 	print "<H2>Max Concurrent Blade Reservations By Day</H2>\n";
 	if($unixend - $unixstart > SECINMONTH)
 		print "(this graph only available for up to a month of data)<br>\n";
 	else {
-		$cont = addContinuationsEntry('statgraphdayconcurblade', $cdata);
-		print "<img src=" . BASEURL . SCRIPT . "?continuation=$cont>";
+		$cdata['divid'] = 'maxconcurbladeday';
+		$cont = addContinuationsEntry('AJgetStatData', $cdata);
+		print "<input type=hidden id=statconcurbladecont value=\"$cont\">\n";
+		print "<div id=\"maxconcurbladeday\" style=\"width: 400px; height: 310px;\">Loading graph data...</div>\n";
 	}
 
 	print "<H2>Reservations by Hour</H2>\n";
-	print "(Averaged over the time period)<br><br>\n";
-	$cont = addContinuationsEntry('statgraphhour', $cdata);
-	print "<img src=" . BASEURL . SCRIPT . "?continuation=$cont>";
-	print "</div>\n";
+	print "<small>(Active reservations during given hour averaged over selected dates)</small><br><br>\n";
+	$cdata['divid'] = 'resbyhour';
+	$cont = addContinuationsEntry('AJgetStatData', $cdata);
+	print "<input type=hidden id=statreshourcont value=\"$cont\">\n";
+	print "<div id=\"resbyhour\" style=\"width: 400px; height: 310px;\">Loading graph data...</div>\n";
 
 	$endtime = microtime(1);
 	$end = $endtime - $timestart;
@@ -508,36 +504,26 @@ function viewStatistics() {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn sendStatGraphDay()
+/// \fn AJgetStatData()
 ///
-/// \brief sends a graph image
+/// \brief gets statistical data for a dojox chart and returns it in json format
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function sendStatGraphDay() {
-	global $xaxislabels, $inContinuation;
-	if(! $inContinuation)
-		return;
+function AJgetStatData() {
 	$start = getContinuationVar("start");
 	$end = getContinuationVar("end");
 	$affilid = getContinuationVar("affilid");
-	$graphdata = getStatGraphDayData($start, $end, $affilid);
-	$count = count($graphdata["labels"]);
-	if($count < 8)
-		$labelinterval = 1;
-	else
-		$labelinterval = $count / 7;
-	$xaxislabels = $graphdata["labels"];
-	$graph = new Graph(300, 300, "auto");
-	$graph->SetScale("textlin");
-	$plot = new BarPlot($graphdata["points"]);
-	$graph->Add($plot);
-	$graph->xaxis->SetLabelFormatCallback('statXaxisDayCallback');
-	$graph->xaxis->SetLabelAngle(90);
-	$graph->xaxis->SetTextLabelInterval($labelinterval);
-	$graph->yaxis->SetTitle('Reservations with start time on given day', 
-	                        'high');
-	$graph->SetMargin(40,40,20,80);
-	$graph->Stroke();
+	$divid = getContinuationVar('divid');
+	if($divid == 'resbyday')
+		$data = getStatGraphDayData($start, $end, $affilid);
+	elseif($divid == 'maxconcurresday')
+		$data = getStatGraphDayConUsersData($start, $end, $affilid);
+	elseif($divid == 'maxconcurbladeday')
+		$data = getStatGraphConBladeUserData($start, $end, $affilid);
+	elseif($divid == 'resbyhour')
+		$data = getStatGraphHourData($start, $end, $affilid);
+	$data['id'] = $divid;
+	sendJSON($data);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -548,9 +534,13 @@ function sendStatGraphDay() {
 /// \param $end - ending day in YYYY-MM-DD format
 /// \param $affilid - affiliationid of data to gather
 ///
-/// \return an array whose keys are the days (in YYYY-MM-DD format) between
-/// $start and $end, inclusive, and whose values are the number of reservations
-/// on each day
+/// \return an array with three keys:\n
+/// \b points - an array with y and tooltip keys that have the same value which
+///             is the y value at that point\n
+/// \b xlabels - an array with value and text keys, value's value is just an
+///              increasing integer starting from 1, text's value is the label
+///              to display on the x axis for the poing\n
+/// \b maxy - the max y value of the data
 ///
 /// \brief queries the log table to get reservations between $start and $end
 /// and creates an array with the number of reservations on each day
@@ -562,10 +552,12 @@ function getStatGraphDayData($start, $end, $affilid) {
 
 	$data = array();
 	$data["points"] = array();
-	$data["labels"] = array();
+	$data['xlabels'] = array();
+	$data['maxy'] = 0;
 	$reloadid = getUserlistID('vclreload@Local');
+	$cnt = 0;
 	for($i = $startunix; $i < $endunix; $i += SECINDAY) {
-		array_push($data["labels"], date('Y-m-d', $i));
+		$cnt++;
 		$startdt = unixToDatetime($i);
 		$enddt = unixToDatetime($i + SECINDAY);
 		if($affilid != 0) {
@@ -589,59 +581,16 @@ function getStatGraphDayData($start, $end, $affilid) {
 		}
 		$qh = doQuery($query, 295);
 		if($row = mysql_fetch_row($qh))
-			array_push($data["points"], $row[0]);
+			$value = $row[0];
 		else
-			array_push($data["points"], 0);
+			$value = 0;
+		$label = date('m/d/Y', $i);
+		$data['points'][] = array('y' => (int)$value, 'tooltip' => "$label: " . (int)$value);
+		if($value > $data['maxy'])
+			$data['maxy'] = (int)$value;
+		$data['xlabels'][] = array('value' => $cnt, 'text' => $label);
 	}
 	return($data);
-}
-
-////////////////////////////////////////////////////////////////////////////////
-///
-/// \fn statXaxisDayCallback($val)
-///
-/// \param $val - value passed in by SetLabelFormatCallback
-///
-/// \return day of week
-///
-/// \brief formats $val into day of week
-///
-////////////////////////////////////////////////////////////////////////////////
-function statXaxisDayCallback($val) {
-	global $xaxislabels;
-	if(array_key_exists((int)$val, $xaxislabels)) {
-		return date('n/d/Y', datetimeToUnix($xaxislabels[$val] . " 00:00:00")) . " ";
-	}
-	else {
-		return $val;
-	}
-}
-
-////////////////////////////////////////////////////////////////////////////////
-///
-/// \fn sendStatGraphHour()
-///
-/// \brief sends a graph image
-///
-////////////////////////////////////////////////////////////////////////////////
-function sendStatGraphHour() {
-	global $xaxislabels, $inContinuation;
-	if(! $inContinuation)
-		return;
-	$start = getContinuationVar("start");
-	$end = getContinuationVar("end");
-	$affilid = getContinuationVar("affilid");
-	$graphdata = getStatGraphHourData($start, $end, $affilid);
-	$graph = new Graph(300, 300, "auto");
-	$graph->SetScale("textlin");
-	$plot = new LinePlot($graphdata["points"]);
-	$graph->Add($plot);
-	$graph->xaxis->SetLabelFormatCallback('statXaxisHourCallback');
-	$graph->xaxis->SetLabelAngle(90);
-	$graph->xaxis->SetTextLabelInterval(2);
-	$graph->yaxis->SetTitle('Active reservations during given hour', 'high');
-	$graph->SetMargin(40,40,20,80);
-	$graph->Stroke();
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -651,6 +600,15 @@ function sendStatGraphHour() {
 /// \param $start - starting day in YYYY-MM-DD format
 /// \param $end - ending day in YYYY-MM-DD format
 /// \param $affilid - affiliationid of data to gather
+///
+/// \return an array with two keys:\n
+/// \b points - an array with 5 keys:\n
+///             \t x - increasing integer starting from 1\n
+///             \t y - y value for the point\n
+///             \t value - same as x\n
+///             \t text - label for x axis for the point\n
+///             \t tooltip - tooltip to be displayed when point is hovered\n
+/// \b maxy - the max y value of the data
 ///
 /// \return an array whose keys are the days (in YYYY-MM-DD format) between
 /// $start and $end, inclusive, and whose values are the number of reservations
@@ -671,8 +629,9 @@ function getStatGraphHourData($start, $end, $affilid) {
 	$data = array();
 	$data["points"] = array();
 	for($i = 0; $i < 24; $i++) {
-		$data["points"][$i] = 0;
+		$data["points"][$i] = array('x' => $i, 'y' => 0, 'value' => $i, 'text' => statHourFormatX($i), 'tooltip' => 0);
 	}
+	$data["maxy"] = 0;
 
 	$reloadid = getUserlistID('vclreload@Local');
 	if($affilid != 0) {
@@ -701,7 +660,6 @@ function getStatGraphHourData($start, $end, $affilid) {
 		       .       "l.wasavailable = 1";
 	}
 	$qh = doQuery($query, 296);
-	$count = 0;
 	while($row = mysql_fetch_assoc($qh)) {
 		$startmin = ($row['shour'] * 60) + $row['smin'];
 		$endmin = ($row['ehour'] * 60) + $row['emin'];
@@ -713,7 +671,7 @@ function getStatGraphHourData($start, $end, $affilid) {
 				continue;
 			elseif($startmin < $binend &&
 				$endmin > $binstart) {
-				$data["points"][$binindex]++;
+				$data["points"][$binindex]['y']++;
 			}
 			elseif($binstart >= $endmin)
 				break;
@@ -721,70 +679,39 @@ function getStatGraphHourData($start, $end, $affilid) {
 	}
 
 	# comment this to change graph to be aggregate instead of average
-	foreach($data["points"] as $key => $val)
-		$data["points"][$key] = $val / $days;
+	foreach($data["points"] as $key => $val) {
+		$newval = $val['y'] / $days;
+		if($newval - (int)$newval != 0)
+			$newval = sprintf('%.2f', $newval);
+		$data['points'][$key]['y'] = $newval;
+		$data['points'][$key]['tooltip'] = $newval;
+		if($newval > $data['maxy'])
+			$data['maxy'] = $newval;
+	}
 
 	return($data);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn statXaxisHourCallback($val)
+/// \fn statHourFormatX($val)
 ///
-/// \param $val - value passed in by SetLabelFormatCallback
+/// \param $val - hour of day (0-23)
 ///
 /// \return day of week
 ///
-/// \brief formats $val into day of week
+/// \brief formats $val into "hour am/pm"
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function statXaxisHourCallback($val) {
-	if($val == 0) {
+function statHourFormatX($val) {
+	if($val == 0)
 		return "12 am ";
-	}
-	elseif($val < 12) {
+	elseif($val < 12)
 		return "$val am ";
-	}
-	elseif($val == 12) {
+	elseif($val == 12)
 		return "$val pm ";
-	}
-	else {
-		return $val - 12 . " pm ";
-	}
-}
-
-////////////////////////////////////////////////////////////////////////////////
-///
-/// \fn sendStatGraphDayConUsers()
-///
-/// \brief sends a graph image
-///
-////////////////////////////////////////////////////////////////////////////////
-function sendStatGraphDayConUsers() {
-	global $xaxislabels, $inContinuation;
-	if(! $inContinuation)
-		return;
-	$start = getContinuationVar("start");
-	$end = getContinuationVar("end");
-	$affilid = getContinuationVar("affilid");
-	$graphdata = getStatGraphDayConUsersData($start, $end, $affilid);
-	$count = count($graphdata["labels"]);
-	if($count < 8)
-		$labelinterval = 1;
 	else
-		$labelinterval = $count / 7;
-	$xaxislabels = $graphdata["labels"];
-	$graph = new Graph(300, 300, "auto");
-	$graph->SetScale("textlin");
-	$plot = new BarPlot($graphdata["points"]);
-	$graph->Add($plot);
-	$graph->xaxis->SetLabelFormatCallback('statXaxisDayConUsersCallback');
-	$graph->xaxis->SetLabelAngle(90);
-	$graph->xaxis->SetTextLabelInterval($labelinterval);
-	$graph->yaxis->SetTitle('Maximum concurrent reservations per day', 
-	                        'high');
-	$graph->SetMargin(40,40,20,80);
-	$graph->Stroke();
+		return $val - 12 . " pm ";
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -795,9 +722,13 @@ function sendStatGraphDayConUsers() {
 /// \param $end - ending day in YYYY-MM-DD format
 /// \param $affilid - affiliationid of data to gather
 ///
-/// \return an array whose keys are the days (in YYYY-MM-DD format) between
-/// $start and $end, inclusive, and whose values are the max concurrent users
-/// on each day
+/// \return an array with three keys:\n
+/// \b points - an array with y and tooltip keys that have the same value which
+///             is the y value at that point\n
+/// \b xlabels - an array with value and text keys, value's value is just an
+///              increasing integer starting from 1, text's value is the label
+///              to display on the x axis for the poing\n
+/// \b maxy - the max y value of the data
 ///
 /// \brief queries the log table to get reservations between $start and $end
 /// and creates an array with the max concurrent users per day
@@ -812,16 +743,17 @@ function getStatGraphDayConUsersData($start, $end, $affilid) {
 
 	$data = array();
 	$data["points"] = array();
-	$data["labels"] = array();
+	$data["xlabels"] = array();
+	$data["maxy"] = 0;
 
 	$reloadid = getUserlistID('vclreload@Local');
+	$cnt = 0;
 	for($daystart = $startunix; $daystart < $endunix; $daystart += SECINDAY) {
-		array_push($data["labels"], date('Y-m-d', $daystart));
+		$cnt++;
 		$count = array();
 		for($j = 0; $j < 24; $j++) {
 			$count[$j] = 0;
 		}
-
 		$startdt = unixToDatetime($daystart);
 		$enddt = unixToDatetime($daystart + SECINDAY);
 		if($affilid != 0) {
@@ -863,64 +795,13 @@ function getStatGraphDayConUsersData($start, $end, $affilid) {
 			}
 		}
 		rsort($count);
-		array_push($data["points"], $count[0]);
+		$label = date('m/d/Y', $daystart);
+		$data["points"][] = array('y' => $count[0], 'tooltip' => "$label: {$count[0]}");
+		if($count[0] > $data['maxy'])
+			$data['maxy'] = $count[0];
+		$data['xlabels'][] = array('value' => $cnt, 'text' => $label);
 	}
 	return($data);
-}
-
-////////////////////////////////////////////////////////////////////////////////
-///
-/// \fn statXaxisDayConUsersCallback($val)
-///
-/// \param $val - value passed in by SetLabelFormatCallback
-///
-/// \return day of week
-///
-/// \brief formats $val into day of week
-///
-////////////////////////////////////////////////////////////////////////////////
-function statXaxisDayConUsersCallback($val) {
-	global $xaxislabels;
-	if(array_key_exists((int)$val, $xaxislabels)) {
-		return date('n/d/Y', datetimeToUnix($xaxislabels[$val] . " 00:00:00")) . " ";
-	}
-	else {
-		return $val;
-	}
-}
-
-////////////////////////////////////////////////////////////////////////////////
-///
-/// \fn sendStatGraphConBladeUser()
-///
-/// \brief sends a graph image of max concurrent users of blades per day
-///
-////////////////////////////////////////////////////////////////////////////////
-function sendStatGraphConBladeUser() {
-	global $xaxislabels, $inContinuation;
-	if(! $inContinuation)
-		return;
-	$start = getContinuationVar("start");
-	$end = getContinuationVar("end");
-	$affilid = getContinuationVar("affilid");
-	$graphdata = getStatGraphConBladeUserData($start, $end, $affilid);
-	$count = count($graphdata["labels"]);
-	if($count < 8)
-		$labelinterval = 1;
-	else
-		$labelinterval = $count / 7;
-	$xaxislabels = $graphdata["labels"];
-	$graph = new Graph(300, 300, "auto");
-	$graph->SetScale("textlin");
-	$plot = new BarPlot($graphdata["points"]);
-	$graph->Add($plot);
-	$graph->xaxis->SetLabelFormatCallback('statXaxisDayConUsersCallback');
-	$graph->xaxis->SetLabelAngle(90);
-	$graph->xaxis->SetTextLabelInterval($labelinterval);
-	$graph->yaxis->SetTitle('Maximum concurrent reservations per day', 
-	                        'high');
-	$graph->SetMargin(40,40,20,80);
-	$graph->Stroke();
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -931,9 +812,13 @@ function sendStatGraphConBladeUser() {
 /// \param $end - ending day in YYYY-MM-DD format
 /// \param $affilid - affiliationid of data to gather
 ///
-/// \return an array whose keys are the days (in YYYY-MM-DD format) between
-/// $start and $end, inclusive, and whose values are the max concurrent users
-/// of blades on each day
+/// \return an array with three keys:\n
+/// \b points - an array with y and tooltip keys that have the same value which
+///             is the y value at that point\n
+/// \b xlabels - an array with value and text keys, value's value is just an
+///              increasing integer starting from 1, text's value is the label
+///              to display on the x axis for the poing\n
+/// \b maxy - the max y value of the data
 ///
 /// \brief queries the log table to get reservations between $start and $end
 /// and creates an array with the max concurrent users of blades per day
@@ -948,11 +833,13 @@ function getStatGraphConBladeUserData($start, $end, $affilid) {
 
 	$data = array();
 	$data["points"] = array();
-	$data["labels"] = array();
+	$data["xlabels"] = array();
+	$data["maxy"] = 0;
 
 	$reloadid = getUserlistID('vclreload@Local');
+	$cnt = 0;
 	for($daystart = $startunix; $daystart < $endunix; $daystart += SECINDAY) {
-		array_push($data["labels"], date('Y-m-d', $daystart));
+		$cnt++;
 		$count = array();
 		for($j = 0; $j < 24; $j++) {
 			$count[$j] = 0;
@@ -1010,29 +897,12 @@ function getStatGraphConBladeUserData($start, $end, $affilid) {
 			}
 		}
 		rsort($count);
-		array_push($data["points"], $count[0]);
+		$label = date('m/d/Y', $daystart);
+		$data["points"][] = array('y' => $count[0], 'tooltip' => "$label: {$count[0]}");
+		if($count[0] > $data['maxy'])
+			$data['maxy'] = $count[0];
+		$data['xlabels'][] = array('value' => $cnt, 'text' => $label);
 	}
 	return($data);
-}
-
-////////////////////////////////////////////////////////////////////////////////
-///
-/// \fn statXaxisConBladeUserCallback($val)
-///
-/// \param $val - value passed in by SetLabelFormatCallback
-///
-/// \return day of week
-///
-/// \brief formats $val into day of week
-///
-////////////////////////////////////////////////////////////////////////////////
-function statXaxisConBladeUserCallback($val) {
-	global $xaxislabels;
-	if(array_key_exists((int)$val, $xaxislabels)) {
-		return date('n/d/Y', datetimeToUnix($xaxislabels[$val] . " 00:00:00")) . " ";
-	}
-	else {
-		return $val;
-	}
 }
 ?>

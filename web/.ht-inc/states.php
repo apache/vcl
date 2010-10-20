@@ -55,6 +55,7 @@ $actions["entry"] = array('main',
                           'continuationsError',
                           'requestBlockAllocation',
                           'siteMaintenance',
+                          'dashboard',
 );
 
 $noHTMLwrappers = array('sendRDPfile',
@@ -142,6 +143,8 @@ $noHTMLwrappers = array('sendRDPfile',
                         'AJgetScheduleTimesData',
                         'AJsaveScheduleTimes',
                         'AJvalidateUserid',
+                        'AJupdateDashboard',
+                        'AJgetStatData',
 );
 
 # main
@@ -555,19 +558,12 @@ $actions['pages']['userLookup'] = "userLookup";
 $actions['pages']['submitUserLookup'] = "userLookup";
 
 # statistics
-# TODO might need the statgraph modes to be entry modes
 $actions['mode']['selectstats'] = "selectStatistics"; # entry
 $actions['mode']['viewstats'] = "viewStatistics";
-$actions['mode']['statgraphday'] = "sendStatGraphDay";
-$actions['mode']['statgraphhour'] = "sendStatGraphHour";
-$actions['mode']['statgraphdayconcuruser'] = "sendStatGraphDayConUsers";
-$actions['mode']['statgraphdayconcurblade'] = "sendStatGraphConBladeUser";
+$actions['mode']['AJgetStatData'] = "AJgetStatData";
 $actions['pages']['selectstats'] = "statistics";
 $actions['pages']['viewstats'] = "statistics";
-$actions['pages']['statgraphday'] = "statistics";
-$actions['pages']['statgraphhour'] = "statistics";
-$actions['pages']['statgraphdayconcuruser'] = "statistics";
-$actions['pages']['statgraphdayconcurblade'] = "statistics";
+$actions['pages']['AJgetStatData'] = "statistics";
 
 # help
 $actions['mode']['helpform'] = "printHelpForm"; # entry
@@ -634,6 +630,12 @@ $actions['pages']['AJgetSiteMaintenanceData'] = "sitemaintenance";
 $actions['pages']['AJgetDelSiteMaintenanceData'] = "sitemaintenance";
 $actions['pages']['AJeditSiteMaintenance'] = "sitemaintenance";
 $actions['pages']['AJdeleteSiteMaintenance'] = "sitemaintenance";
+
+# dashboard
+$actions['mode']['dashboard'] = "dashboard";
+$actions['mode']['AJupdateDashboard'] = "AJupdateDashboard";
+$actions['pages']['dashboard'] = "dashboard";
+$actions['pages']['AJupdateDashboard'] = "dashboard";
 
 # RPC
 $actions['mode']['xmlrpccall'] = "xmlrpccall";

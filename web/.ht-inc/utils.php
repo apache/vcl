@@ -307,6 +307,9 @@ function initGlobals() {
 		case 'vm':
 			require_once(".ht-inc/vm.php");
 			break;
+		case 'dashboard':
+			require_once(".ht-inc/dashboard.php");
+			break;
 		default:
 			require_once(".ht-inc/requests.php");
 	}
@@ -8776,14 +8779,10 @@ function getNavMenu($inclogout, $inchome, $homeurl=HOMEURL) {
 	$rt .= menulistLI('statistics');
 	$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=selectstats\">";
 	$rt .= "Statistics</a></li>\n";
-	if($skin != 'ecu') {
-		$rt .= menulistLI('help');
-		$rt .= "<a href=\"" . HELPURL . "\">Help</a></li>\n";
-	}
-	if($skin == 'ecu') {
-		$rt .= "<li><a href=\"http://www.ecu.edu/cs-itcs/vcl/connect.cfm\">Requirements</a></li>\n";
-		$rt .= "<li><a href=\"http://www.ecu.edu/cs-itcs/vcl/save.cfm\">File Saving</a></li>\n";
-		$rt .= "<li><a href=\"http://www.ecu.edu/cs-itcs/vcl/faqs.cfm\">Help</a></li>\n";
+	if($viewmode == ADMIN_DEVELOPER) {
+		$rt .= menulistLI('dashboard');
+		$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=dashboard\">";
+		$rt .= "Dashboard</a></li>\n";
 	}
 	if(in_array("userGrant", $user["privileges"]) ||
 		in_array("resourceGrant", $user["privileges"]) ||
@@ -8988,6 +8987,21 @@ function getDojoHTML($refresh) {
 			                      'dojox.string.sprintf',
 			                      'dijit.Tooltip',
 			                      'dijit.Dialog');
+			break;
+		case 'viewstats':
+			$dojoRequires = array('dojo.parser',
+			                      'dojox.charting.Chart2D',
+			                      'dojox.charting.action2d.Tooltip',
+			                      'dojox.charting.action2d.Magnify',
+			                      'dojox.charting.themes.ThreeD');
+			break;
+		case 'dashboard':
+			$dojoRequires = array('dojo.parser',
+			                      'dijit.Tooltip',
+			                      'dojox.charting.widget.Chart2D',
+			                      'dojox.charting.action2d.Tooltip',
+			                      'dojox.charting.action2d.Magnify',
+			                      'dojox.charting.themes.ThreeD');
 			break;
 	}
 	if(empty($dojoRequires))
@@ -9310,6 +9324,39 @@ function getDojoHTML($refresh) {
 			foreach($dojoRequires as $req) {
 				$rt .= "   dojo.require(\"$req\");\n";
 			}
+			$rt .= "   });\n";
+			$rt .= "</script>\n";
+			return $rt;
+		case "viewstats":
+			$rt .= "<style type=\"text/css\">\n";
+			$rt .= "   @import \"themes/$skin/css/dojo/$skin.css\";\n";
+			$rt .= "</style>\n";
+			$rt .= "<script type=\"text/javascript\" src=\"js/statistics.js\"></script>\n";
+			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
+			$rt .= "   djConfig=\"parseOnLoad: true\">\n";
+			$rt .= "</script>\n";
+			$rt .= "<script type=\"text/javascript\">\n";
+			$rt .= "   dojo.addOnLoad(function() {\n";
+			foreach($dojoRequires as $req)
+				$rt .= "   dojo.require(\"$req\");\n";
+			$rt .= "   generateGraphs();\n";
+			$rt .= "   });\n";
+			$rt .= "</script>\n";
+			return $rt;
+		case "dashboard":
+			$rt .= "<style type=\"text/css\">\n";
+			$rt .= "   @import \"themes/$skin/css/dojo/$skin.css\";\n";
+			$rt .= "   @import \"css/dashboard.css\";\n";
+			$rt .= "</style>\n";
+			$rt .= "<script type=\"text/javascript\" src=\"js/dashboard.js\"></script>\n";
+			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
+			$rt .= "   djConfig=\"parseOnLoad: true, debug: true\">\n";
+			$rt .= "</script>\n";
+			$rt .= "<script type=\"text/javascript\">\n";
+			$rt .= "   dojo.addOnLoad(function() {\n";
+			foreach($dojoRequires as $req)
+				$rt .= "   dojo.require(\"$req\");\n";
+			$rt .= "   updateDashboard();\n";
 			$rt .= "   });\n";
 			$rt .= "</script>\n";
 			return $rt;
