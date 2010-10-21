@@ -24,7 +24,7 @@
 ///
 /// \fn dashboard()
 ///
-/// \brief 
+/// \brief prints a page with various information about running system
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function dashboard() {
@@ -57,9 +57,9 @@ function dashboard() {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn 
+/// \fn AJupdateDashboard
 ///
-/// \brief 
+/// \brief gets updated data and returns it in json format
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function AJupdateDashboard() {
@@ -77,13 +77,16 @@ function AJupdateDashboard() {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn addWidget($id, $title)
+/// \fn addWidget($id, $title, extra)
 ///
-/// \param 
+/// \param $id - dom id for div
+/// \param $title - title to print at top of box
+/// \param $extra (optional, default='') - extra text to be placed below title,
+///        but above data
 ///
-/// \return
+/// \return div element for a section of data
 ///
-/// \brief 
+/// \brief creates HTML for a box of data to be displayed
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function addWidget($id, $title, $extra='') {
@@ -98,13 +101,15 @@ function addWidget($id, $title, $extra='') {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn addLineChart($id)
+/// \fn addLineChart($id, $title)
 ///
-/// \param 
+/// \param $id - dom id for chart
+/// \param $title - title to print at top of box
 ///
-/// \return
+/// \return div element for a section of data
 ///
-/// \brief 
+/// \brief creates HTML for a box of data to be displayed containing a dojox
+///        chart
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function addLineChart($id, $title) {
@@ -136,9 +141,12 @@ function addLineChart($id, $title) {
 ///
 /// \fn getStatusData()
 ///
-/// \return
+/// \return array of data where element is an array with these keys:\n
+/// \b key - name of data to be displayed\n
+/// \b val - value of data\n
+/// \b tooltip (optional) - text to be displayed when hovering over the key
 ///
-/// \brief 
+/// \brief gets general status data about VCL system
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function getStatusData() {
@@ -171,23 +179,16 @@ function getStatusData() {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn 
+/// \fn getTopImageData()
 ///
-/// \return
+/// \return array of data with these keys:\n
+/// \b prettyname - name of image\n
+/// \b count - number of reservations for this image
 ///
-/// \brief 
+/// \brief gets data about top used images with reservation duration <= 24 hours
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function getTopImageData() {
-	$query = "SELECT COUNT(c.currentimageid) AS count, "
-	       .        "i.prettyname "
-	       . "FROM computer c, "
-	       .      "image i "
-	       . "WHERE c.currentimageid = i.id AND "
-			 .       "c.stateid = 8 "
-	       . "GROUP BY c.currentimageid "
-	       . "ORDER BY count DESC "
-	       . "LIMIT 5";
 	$query = "SELECT COUNT(rs.imageid) AS count, "
 	       .        "i.prettyname "
 	       . "FROM reservation rs, "
@@ -209,11 +210,13 @@ function getTopImageData() {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn 
+/// \fn getTopLongImageData()
 ///
-/// \return
+/// \return array of data with these keys:\n
+/// \b prettyname - name of image\n
+/// \b count - number of reservations for this image
 ///
-/// \brief 
+/// \brief gets data about top used images with reservation duration > 24 hours
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function getTopLongImageData() {
@@ -253,9 +256,11 @@ function getTopLongImageData() {
 ///
 /// \fn getTopFailedData()
 ///
-/// \return
+/// \return array of data with these keys:\n
+/// \b prettyname - name of image\n
+/// \b count - number of failed reservations for this image
 ///
-/// \brief 
+/// \brief gets data about images that have failed within the last 5 days
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function getTopFailedData() {
@@ -280,9 +285,11 @@ function getTopFailedData() {
 ///
 /// \fn getTopFailedComputersData()
 ///
-/// \return
+/// \return array of data with these keys:\n
+/// \b hostname - name of image\n
+/// \b count - number of failures computer has had
 ///
-/// \brief 
+/// \brief gets data about computers that have failed within the last 5 days
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function getTopFailedComputersData() {
@@ -309,9 +316,16 @@ function getTopFailedComputersData() {
 ///
 /// \fn getActiveResChartData()
 ///
-/// \return
+/// \return array with these keys:\n
+/// \b points - array with these keys\n
+/// \t\b x - x value for point (1-n)\n
+/// \t\b y - number of reservations in this bin\n
+/// \t\b value - same as x\n
+/// \t\b text - value to be displayed as x label
+/// \b maxy - max y value of returned data
 ///
-/// \brief 
+/// \brief gets data about reservations during last 12 hours divided into bins
+///        of 15 minutes
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function getActiveResChartData() {
@@ -360,11 +374,11 @@ function getActiveResChartData() {
 ///
 /// \fn getBlockAllocationData()
 ///
-/// \param 
+/// \return array of data where element is an array with these keys:\n
+/// \b title - name of data to be displayed\n
+/// \b val - value of data\n
 ///
-/// \return
-///
-/// \brief 
+/// \brief gets information about active block allocations
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function getBlockAllocationData() {
