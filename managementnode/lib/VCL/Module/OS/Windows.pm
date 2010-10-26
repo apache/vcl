@@ -226,6 +226,7 @@ sub pre_capture {
 	}
 
 	my $computer_node_name = $self->data->get_computer_node_name();
+	my $image_os_install_type = $self->data->get_image_os_install_type();
 
 	notify($ERRORS{'OK'}, 0, "beginning Windows image capture preparation tasks on $computer_node_name");
 
@@ -410,6 +411,18 @@ sub pre_capture {
 
 =item *
 
+ Disable login screensaver if computer is a VM
+
+=cut
+
+	if ($image_os_install_type =~ /vm/i) {
+		if (!$self->disable_security_center_notifications()) {
+			notify($ERRORS{'WARNING'}, 0, "unable to disable Security Center notifications");
+		}
+	}
+
+=item *
+
  Clean up the hard drive
 
 =cut
@@ -555,7 +568,7 @@ sub post_load {
 
 =cut
 
-	if (!$self->wait_for_response(15, 900)) {
+	if (!$self->wait_for_response(15, 900, 8)) {
 		notify($ERRORS{'WARNING'}, 0, "$computer_node_name never responded to SSH");
 		return 0;
 	}
@@ -6063,6 +6076,9 @@ sub search_and_replace_in_files {
 	$search_pattern =~ s/\//\\\//g;
 	$replace_string =~ s/\//\\\//g;
 	
+	# Escape special characters in the search pattern
+	$search_pattern =~ s/([!-])/\\$1/g;
+	
 	# Run grep to find files matching pattern
 	my $grep_command = "/bin/grep -ilr \"$search_pattern\" \"$base_directory\" 2>&1 | grep -Ev \"\.(exe|dll)\"";
 	my ($grep_status, $grep_output) = run_ssh_command($computer_node_name, $management_node_keys, $grep_command, '', '', 0);
@@ -6074,8 +6090,8 @@ sub search_and_replace_in_files {
 		notify($ERRORS{'DEBUG'}, 0, "no files to process, base directory does not exist: $base_directory");
 		return 1;
 	}
-	elsif ("@$grep_output" =~ /grep:/i) {
-		notify($ERRORS{'WARNING'}, 0, "grep error occurred:\n" . join("\n", @$grep_output));
+	elsif ("@$grep_output" =~ /(grep|bash):/i) {
+		notify($ERRORS{'WARNING'}, 0, "error occurred running command '$grep_command':\n" . join("\n", @$grep_output));
 		return;
 	}
 	elsif ($grep_status == 1) {
@@ -6101,8 +6117,8 @@ sub search_and_replace_in_files {
 			notify($ERRORS{'WARNING'}, 0, "file was not found: $matching_file, sed output:\n" . join("\n", @$sed_output));
 			$sed_error_count++;
 		}
-		elsif ("@$sed_output" =~ /sed:/i) {
-			notify($ERRORS{'WARNING'}, 0, "sed output contains 'sed:', unexpected output:\n" . join("\n", @$sed_output));
+		elsif ("@$grep_output" =~ /(grep|sed):/i) {
+			notify($ERRORS{'WARNING'}, 0, "error occurred running command '$sed_command':\n" . join("\n", @$sed_output));
 			$sed_error_count++;
 		}
 		elsif ($sed_status != 0) {
@@ -9709,14 +9725,20 @@ sub sanitize_files {
 	push @file_paths, $self->get_node_configuration_directory();
 	
 	# Loop through each file path, remove the Windows root password from each
+	my $error_occurred = 0;
 	for my $file_path (@file_paths) {
 		if (!$self->search_and_replace_in_files($file_path, $WINDOWS_ROOT_PASSWORD, 'WINDOWS_ROOT_PASSWORD')) {
 			notify($ERRORS{'WARNING'}, 0, "failed to remove the Windows root password from: $file_path");
-			return;
+			$error_occurred = 1;
 		}
 	}
 	
-	return 1;
+	if ($error_occurred) {
+		return;
+	}
+	else {
+		return 1;
+	}
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -9775,6 +9797,36 @@ sub clear_event_log {
 		notify($ERRORS{'WARNING'}, 0, "unexpected output while clearing event log: @logfile_names, output:\n" . join("\n", @$output));
 		return;
 	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 disable_login_screensaver
+
+ Parameters  : None
+ Returns     : 
+ Description : Sets the registry keys to disable to login screensaver.
+
+=cut
+
+sub disable_login_screensaver {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $registry_key = 'HKEY_USERS\\.DEFAULT\\Control Panel\\Desktop';
+	if ($self->reg_add($registry_key, 'ScreenSaveActive', 'REG_SZ', 0) &&
+		 $self->reg_add($registry_key, 'ScreenSaveTimeOut', 'REG_SZ', 0)) {
+		notify($ERRORS{'DEBUG'}, 0, "set registry keys to disable the login screensaver");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to set registry keys to disable the login screensaver");
+		return;
+	}
+	
+	return 1;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
