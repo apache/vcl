@@ -190,15 +190,4 @@ function timestampToTime(val) {
 	else
 		var data = dijit.byId('reschart').chart.labeldata;
 	return data[val]['text'];
-	var d = new Date();
-	d.setTime(val*1000);
-	var h = d.getHours();
-	if(h == 0)
-		return "12:" + d.getMinutes() + " am";
-	else if(h < 12)
-		return h + ":" + d.getMinutes() + " am";
-	else if(h == 12)
-		return "12:" + d.getMinutes() + " pm";
-	else
-		return (h - 12) + ":" + d.getMinutes() + "pm";
 }
