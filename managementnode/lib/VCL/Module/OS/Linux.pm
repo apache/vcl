@@ -1486,7 +1486,7 @@ sub create_directory {
 	my $computer_short_name = $self->data->get_computer_short_name();
 	
 	# Attempt to create the directory
-	my $command = "ls -1d \"$directory_path\" 2>&1 || mkdir -p \"$directory_path\" 2>&1 && ls -ld \"$directory_path\"";
+	my $command = "ls -d --color=never \"$directory_path\" 2>&1 || mkdir -p \"$directory_path\" 2>&1 && ls -d --color=never \"$directory_path\"";
 	my ($exit_status, $output) = $self->execute($command);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to run command to create directory on $computer_short_name:\npath: '$directory_path'\ncommand: '$command'");
@@ -1496,7 +1496,7 @@ sub create_directory {
 		notify($ERRORS{'WARNING'}, 0, "error occurred attempting to create directory on $computer_short_name: '$directory_path':\ncommand: '$command'\nexit status: $exit_status\noutput:\n" . join("\n", @$output));
 		return;
 	}
-	elsif (grep(/^d.*\s+$directory_path\s*$/, @$output)) {
+	elsif (grep(/^\s*$directory_path\s*$/, @$output)) {
 		if (grep(/ls:/, @$output)) {
 			notify($ERRORS{'OK'}, 0, "directory created on $computer_short_name: '$directory_path'");
 		}
@@ -1506,7 +1506,7 @@ sub create_directory {
 		return 1;
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "unexpected output returned from command to create directory on $computer_short_name: '$directory_path':\ncommand: '$command'\nexit status: $exit_status\noutput:\n" . join("\n", @$output) . "\nlast line:\n" . @$output[-1]);
+		notify($ERRORS{'WARNING'}, 0, "unexpected output returned from command to create directory on $computer_short_name: '$directory_path':\ncommand: '$command'\nexit status: $exit_status\noutput:\n" . join("\n", @$output) . "\nlast line:\n" . string_to_ascii(@$output[-1]));
 		return;
 	}
 }
