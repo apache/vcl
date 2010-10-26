@@ -8894,6 +8894,17 @@ function getDojoHTML($refresh) {
 		case 'viewBlockStatus':
 			$dojoRequires = array('dojo.parser');
 			break;
+		case 'viewBlockAllocatedMachines':
+			$dojoRequires = array('dojo.parser',
+			                      'dojox.string.sprintf',
+			                      'dijit.form.Button',
+			                      'dijit.form.DateTextBox',
+			                      'dijit.form.TimeTextBox',
+			                      'dojox.charting.widget.Chart2D',
+			                      'dojox.charting.action2d.Tooltip',
+			                      'dojox.charting.action2d.Magnify',
+			                      'dojox.charting.themes.ThreeD');
+			break;
 		case 'editSchedule':
 		case 'submitAddSchedule':
 			$dojoRequires = array('dojo.parser',
@@ -9104,6 +9115,24 @@ function getDojoHTML($refresh) {
 			}
 			$rt .= "   });\n";
 			$rt .= "   setTimeout(updateBlockStatus, 30000);\n";
+			$rt .= "</script>\n";
+			return $rt;
+
+		case 'viewBlockAllocatedMachines':
+			$rt .= "<style type=\"text/css\">\n";
+			$rt .= "   @import \"themes/$skin/css/dojo/$skin.css\";\n";
+			$rt .= "</style>\n";
+			$rt .= "<script type=\"text/javascript\" src=\"js/blockallocations.js\"></script>\n";
+			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
+			$rt .= "   djConfig=\"parseOnLoad: true\">\n";
+			$rt .= "</script>\n";
+			$rt .= "<script type=\"text/javascript\">\n";
+			foreach($dojoRequires as $req) {
+				$rt .= "   dojo.require(\"$req\");\n";
+			}
+			$rt .= "   dojo.addOnLoad(function() {\n";
+			$rt .= "      updateAllocatedMachines();\n";
+			$rt .= "   });\n";
 			$rt .= "</script>\n";
 			return $rt;
 

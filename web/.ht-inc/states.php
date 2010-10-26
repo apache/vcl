@@ -145,6 +145,7 @@ $noHTMLwrappers = array('sendRDPfile',
                         'AJvalidateUserid',
                         'AJupdateDashboard',
                         'AJgetStatData',
+                        'AJgetBlockAllocatedMachineData',
 );
 
 # main
@@ -207,6 +208,8 @@ $actions['mode']['AJupdateBlockStatus'] = "AJupdateBlockStatus";
 $actions['mode']['AJpopulateBlockStore'] = "AJpopulateBlockStore";
 $actions['mode']['AJviewBlockAllocationTimes'] = "AJviewBlockAllocationTimes";
 $actions['mode']['AJtoggleBlockTime'] = "AJtoggleBlockTime";
+$actions['mode']['viewBlockAllocatedMachines'] = "viewBlockAllocatedMachines";
+$actions['mode']['AJgetBlockAllocatedMachineData'] = "AJgetBlockAllocatedMachineData";
 $actions['pages']['blockAllocations'] = "blockAllocations";
 $actions['pages']['newBlockAllocation'] = "blockAllocations";
 $actions['pages']['editBlockAllocation'] = "blockAllocations";
@@ -224,6 +227,8 @@ $actions['pages']['AJpopulateBlockStore'] = "blockAllocations";
 $actions['pages']['AJviewBlockAllocationTimes'] = "blockAllocations";
 $actions['pages']['AJtoggleBlockTime'] = "blockAllocations";
 $actions['pages']['AJviewBlockAllocation'] = "blockAllocations";
+$actions['pages']['viewBlockAllocatedMachines'] = "blockAllocations";
+$actions['pages']['AJgetBlockAllocatedMachineData'] = "blockAllocations";
 
 # user preferences
 $actions['mode']['userpreferences'] = "userpreferences"; # entry

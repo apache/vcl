@@ -44,6 +44,8 @@ function blockAllocations() {
 	}
 	else {
 		print "<h2>Manage Block Allocations</h2>\n";
+		$cont = addContinuationsEntry('viewBlockAllocatedMachines');
+		print "<a href=\"" . BASEURL . SCRIPT . "?continuation=$cont\">View Block Allocated Machines</a>\n";
 		print "<div id=\"blocklist\">\n";
 		print getCurrentBlockHTML();
 		print "</div>\n";
@@ -3439,5 +3441,202 @@ function AJpopulateBlockStore() {
 		               'endms' => $endms));
 	}
 
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn viewBlockAllocatedMachines()
+///
+/// \brief prints a page that displays charts of machines allocated to block
+/// allocations
+///
+////////////////////////////////////////////////////////////////////////////////
+function viewBlockAllocatedMachines() {
+	print "<h2>Block Allocated Bare Machines</h2>\n";
+	print "Start time: \n";
+	$start = unixToDatetime(unixFloor15(time() - 3600));
+	list($sdate, $stime) = explode(' ', $start);
+	print "<div type=\"text\" id=\"chartstartdate\" dojoType=\"dijit.form.DateTextBox\" ";
+	print "required=\"true\" value=\"$sdate\"></div>\n";
+	print "<div type=\"text\" id=\"chartstarttime\" dojoType=\"dijit.form.TimeTextBox\" ";
+	print "required=\"true\" value=\"T$stime\" style=\"width: 78px\"></div>\n";
+	print "<button dojoType=\"dijit.form.Button\" type=\"button\" ";
+	print "id=\"updatechart\">\n";
+	print "  Update Charts\n";
+	print "  <script type=\"dojo/method\" event=\"onClick\">\n";
+	print "    updateAllocatedMachines();\n";
+	print "  </script>\n";
+	print "</button>\n";
+	print "<h3>Bare Machines</h3>\n";
+	print "<div id=\"totalbare\"></div>\n";
+	print getChartHTML('allocatedBareMachines');
+	print "<h3>Virtual Machines</h3>\n";
+	print "<div id=\"totalvirtual\"></div>\n";
+	print getChartHTML('allocatedVirtualMachines');
+	$cont = addContinuationsEntry('AJgetBlockAllocatedMachineData', array('val' => 0), SECINDAY, 1, 0);
+	print "<input type=\"hidden\" id=\"updatecont\" value=\"$cont\">\n";
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn getChartHTML($id)
+///
+/// \param $id = js id for the dojo chart
+///
+/// \return html to build a dojo chart
+///
+/// \brief creates the html needed to generate a dojo chart
+///
+////////////////////////////////////////////////////////////////////////////////
+function getChartHTML($id) {
+	$txt  = "<div class=\"dashwidget\">\n";
+	$txt .= "<div dojoType=\"dojox.charting.widget.Chart2D\" id=\"$id\"\n";
+	$txt .= "     theme=\"dojox.charting.themes.ThreeD\"\n";
+	$txt .= "     style=\"width: 500px; height: 300px;\">\n";
+	$txt .= "<div class=\"axis\"\n";
+	$txt .= "     name=\"x\"\n";
+	if($id == 'allocatedBareMachines')
+		$txt .= "     labelFunc=\"timestampToTimeBare\"\n";
+	elseif($id == 'allocatedVirtualMachines')
+		$txt .= "     labelFunc=\"timestampToTimeVirtual\"\n";
+	$txt .= "     maxLabelSize=\"35\"\n";
+	$txt .= "     rotation=\"-90\"\n";
+	$txt .= "     majorTickStep=\"4\"\n";
+	$txt .= "     minorTickStep=\"1\">\n";
+	$txt .= "     </div>\n";
+	$txt .= "<div class=\"axis\" name=\"y\" vertical=\"true\" includeZero=\"true\"></div>\n";
+	$txt .= "<div class=\"plot\" name=\"default\" type=\"Columns\"></div>\n";
+	$txt .= "<div class=\"plot\" name=\"grid\" type=\"Grid\" vMajorLines=\"false\"></div>\n";
+	$txt .= "<div class=\"series\" name=\"Main\" data=\"0\"></div>\n";
+	$txt .= "<div class=\"action\" type=\"Tooltip\"></div>\n";
+	$txt .= "<div class=\"action\" type=\"Magnify\"></div>\n";
+	$txt .= "</div>\n";
+	$txt .= "</div>\n";
+	return $txt;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn AJgetBlockAllocatedMachineData()
+///
+/// \brief gets data about machines allocated to block allocations for the time
+/// period starting with submitted start and ending 12 hours later; sends data
+/// in JSON format
+///
+////////////////////////////////////////////////////////////////////////////////
+function AJgetBlockAllocatedMachineData() {
+	$start = processInputVar('start', ARG_STRING);
+	if(! preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/', $start)) {
+		$start = unixFloor15(time() - 3600);
+		$startdt = unixToDatetime($start);
+	}
+	else {
+		$startdt = "$start:00";
+		$start = datetimeToUnix($startdt);
+	}
+	$end = $start + (12 * 3600);
+	$enddt = unixToDatetime($end);
+	$alldata = array();
+
+	# bare
+	$data = array();
+	$query = "SELECT COUNT(id) "
+	       . "FROM computer "
+	       . "WHERE stateid IN (2, 3, 6, 8, 11) AND "
+	       .       "type = 'blade'";
+	$qh = doQuery($query, 101);
+	if($row = mysql_fetch_row($qh))
+		$data['total'] = $row[0];
+	for($time = $start, $i = 0; $time < $end; $time += 900, $i++) {
+		$fmttime = date('g:i a', $time);
+		$data["points"][$i] = array('x' => $i, 'y' => 0, 'value' => $i, 'text' => $fmttime);
+	}
+	$data['maxy'] = 0;
+	$query = "SELECT UNIX_TIMESTAMP(bt.start) as start, "
+	       .        "UNIX_TIMESTAMP(bt.end) as end, "
+	       .        "br.numMachines "
+	       . "FROM blockTimes bt, "
+	       .      "blockRequest br, "
+	       .      "image i, "
+	       .      "OS o "
+	       . "WHERE bt.blockRequestid = br.id AND "
+	       .       "bt.skip = 0 AND "
+	       .       "bt.start < '$enddt' AND "
+	       .       "bt.end > '$startdt' AND "
+	       .       "br.imageid = i.id AND "
+	       .       "i.OSid = o.id AND "
+	       .       "o.installtype != 'vmware'";
+	$qh = doQuery($query, 101);
+	while($row = mysql_fetch_assoc($qh)) {
+		for($binstart = $start, $binend = $start + 900, $binindex = 0; 
+		   $binend <= $end;
+		   $binstart += 900, $binend += 900, $binindex++) {
+			if($binend <= $row['start'])
+				continue;
+			elseif($row['start'] < $binend && $row['end'] > $binstart)
+				$data["points"][$binindex]['y'] += $row['numMachines'];
+			elseif($binstart >= $row['end'])
+				break;
+		}
+	}
+	for($time = $start, $i = 0; $time < $end; $time += 900, $i++) {
+		if($data["points"][$i]['y'] > $data['maxy'])
+			$data['maxy'] = $data['points'][$i]['y'];
+		$data["points"][$i]['tooltip'] = "{$data['points'][$i]['text']}: {$data['points'][$i]['y']}";
+	}
+	$alldata['bare'] = $data;
+
+	# virtual
+	$data = array();
+	$query = "SELECT COUNT(id) "
+	       . "FROM computer "
+	       . "WHERE stateid IN (2, 3, 6, 8, 11) AND "
+	       .       "type = 'virtualmachine'";
+	$qh = doQuery($query, 101);
+	if($row = mysql_fetch_row($qh))
+		$data['total'] = $row[0];
+	for($time = $start, $i = 0; $time < $end; $time += 900, $i++) {
+		$fmttime = date('g:i a', $time);
+		$data["points"][$i] = array('x' => $i, 'y' => 0, 'value' => $i, 'text' => $fmttime);
+	}
+	$data['maxy'] = 0;
+	$query = "SELECT UNIX_TIMESTAMP(bt.start) as start, "
+	       .        "UNIX_TIMESTAMP(bt.end) as end, "
+	       .        "br.numMachines "
+	       . "FROM blockTimes bt, "
+	       .      "blockRequest br, "
+	       .      "image i, "
+	       .      "OS o "
+	       . "WHERE bt.blockRequestid = br.id AND "
+	       .       "bt.skip = 0 AND "
+	       .       "bt.start < '$enddt' AND "
+	       .       "bt.end > '$startdt' AND "
+	       .       "br.imageid = i.id AND "
+	       .       "i.OSid = o.id AND "
+	       .       "o.installtype = 'vmware'";
+	$qh = doQuery($query, 101);
+	while($row = mysql_fetch_assoc($qh)) {
+		for($binstart = $start, $binend = $start + 900, $binindex = 0; 
+		   $binend <= $end;
+		   $binstart += 900, $binend += 900, $binindex++) {
+			if($binend <= $row['start'])
+				continue;
+			elseif($row['start'] < $binend && $row['end'] > $binstart)
+				$data["points"][$binindex]['y'] += $row['numMachines'];
+			elseif($binstart >= $row['end'])
+				break;
+		}
+	}
+	for($time = $start, $i = 0; $time < $end; $time += 900, $i++) {
+		if($data["points"][$i]['y'] > $data['maxy'])
+			$data['maxy'] = $data['points'][$i]['y'];
+		$data["points"][$i]['tooltip'] = "{$data['points'][$i]['text']}: {$data['points'][$i]['y']}";
+	}
+	$alldata['virtual'] = $data;
+
+	$val = getContinuationVar('val') + 1;
+	$cont = addContinuationsEntry('AJgetBlockAllocatedMachineData', array('val' => $val), SECINDAY, 1, 0);
+	$alldata['cont'] = $cont;
+	sendJSON($alldata);
 }
 ?>

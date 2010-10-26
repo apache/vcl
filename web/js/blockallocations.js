@@ -1338,3 +1338,46 @@ function checkOwnerCB(data, ioArgs) {
 		ownervalid = true;
 	}
 }
+
+function updateAllocatedMachines() {
+	var d = dijit.byId('chartstartdate').value;
+	var t = dijit.byId('chartstarttime').value;
+	var date1 = dojox.string.sprintf('%d-%02d-%02d %02d:%02d',
+	            d.getFullYear(),
+	            (d.getMonth() + 1),
+	            d.getDate(),
+	            t.getHours(),
+	            t.getMinutes());
+	var cont = dojo.byId('updatecont').value;
+	RPCwrapper({continuation: cont, start: date1}, updateAllocatedMachinesCB, 1);
+}
+
+function updateAllocatedMachinesCB(data, ioArgs) {
+	dojo.byId('updatecont').value = data.items.cont;
+	var graph = dijit.byId('allocatedBareMachines').chart;
+	graph.updateSeries('Main', data.items.bare.points);
+	graph.labeldata = data.items.bare.points;
+	graph.render();
+	var graph = dijit.byId('allocatedVirtualMachines').chart;
+	graph.updateSeries('Main', data.items.virtual.points);
+	graph.labeldata = data.items.virtual.points;
+	graph.render();
+	dojo.byId('totalbare').innerHTML = 'Total online: ' + data.items.bare.total;
+	dojo.byId('totalvirtual').innerHTML = 'Total online: ' + data.items.virtual.total;
+}
+
+function timestampToTimeBare(val) {
+	if(! dijit.byId('allocatedBareMachines').chart.labeldata)
+		return '';
+	else
+		var data = dijit.byId('allocatedBareMachines').chart.labeldata;
+	return data[val]['text'];
+}
+
+function timestampToTimeVirtual(val) {
+	if(! dijit.byId('allocatedVirtualMachines').chart.labeldata)
+		return '';
+	else
+		var data = dijit.byId('allocatedVirtualMachines').chart.labeldata;
+	return data[val]['text'];
+}
