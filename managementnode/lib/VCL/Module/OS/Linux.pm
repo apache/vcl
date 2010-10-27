@@ -1423,7 +1423,7 @@ sub delete_file {
 	my $computer_short_name = $self->data->get_computer_short_name();
 	
 	# Delete the file
-	my $command = "rm -rv $escaped_path";
+	my $command = "rm -rfv $escaped_path";
 	my ($exit_status, $output) = $self->execute($command);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to run command to delete file or directory on $computer_short_name:\npath: '$path'\ncommand: '$command'");
@@ -1984,6 +1984,69 @@ sub find_files {
 	my @file_paths = @$output;
 	notify($ERRORS{'DEBUG'}, 0, "matching file count: " . scalar(@file_paths));
 	return sort @file_paths;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 set_file_permissions
+
+ Parameters  : $file_path, $chmod_mode, $recursive (optional)
+ Returns     : boolean
+ Description : Calls chmod to set the file permissions on the Linux computer.
+               The $chmod_mode argument may be any valid chmod mode (+rw, 0755,
+               etc). The $recursive argument is optional. The default is false.
+
+=cut
+
+sub set_file_permissions {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get the arguments
+	my $path = shift;
+	if (!defined($path)) {
+		notify($ERRORS{'WARNING'}, 0, "path argument was not specified");
+		return;
+	}
+	
+	my $chmod_mode = shift;
+	if (!defined($chmod_mode)) {
+		notify($ERRORS{'WARNING'}, 0, "chmod mode argument was not specified");
+		return;
+	}
+	
+	my $recursive = shift;
+	my $recursive_string;
+	$recursive_string = "recursively " if $recursive;
+	
+	# Get the computer short and hostname
+	my $computer_node_name = $self->data->get_computer_node_name();
+	
+	# Run the chmod command
+	my $command = "chmod ";
+	$command .= "-R " if $recursive;
+	$command .= "$chmod_mode \"$path\"";
+	
+	my ($exit_status, $output) = $self->execute($command);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run command to " . $recursive_string . "set file permissions on $computer_node_name: '$command'");
+		return;
+	}
+	elsif (grep(/No such file or directory/i, @$output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to " . $recursive_string . "set permissions of '$path' to '$chmod_mode' on $computer_node_name because the file does not exist, command: '$command', output:\n" . join("\n", @$output));
+		return;
+	}
+	elsif (grep(/^chmod:/i, @$output)) {
+		notify($ERRORS{'WARNING'}, 0, "error occurred attempting to " . $recursive_string . "set permissions of '$path' to '$chmod_mode' on $computer_node_name, command: '$command'\noutput:\n" . join("\n", @$output));
+		return;
+	}
+	else {
+		notify($ERRORS{'OK'}, 0, $recursive_string . "set permissions of '$path' to '$chmod_mode' on $computer_node_name");
+		return 1;
+	}
 }
 	
 #/////////////////////////////////////////////////////////////////////////////
