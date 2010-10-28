@@ -751,6 +751,17 @@ sub post_load {
 
 =item *
 
+ Delete legacy VCL logon/logoff scripts
+
+=cut
+	
+	my $system32_path = $self->get_system32_path();
+	if (!$self->delete_files_by_pattern("$system32_path/GroupPolicy/User/Scripts", ".*VCL.*cmd", 2)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to delete legacy VCL logon and logoff scripts");
+	}
+
+=item *
+
  Check if the imagemeta postoption is set to reboot, reboot if necessary
 
 =cut
@@ -5441,7 +5452,7 @@ sub delete_capture_configuration_files {
 	# Delete VCL scheduled task if it exists
 	$self->delete_scheduled_task('VCL Startup Configuration');
 
-	## Remove VCLprepare.cmd and VCLcleanup.cmd lines from scripts.ini file
+	# Remove VCLprepare.cmd and VCLcleanup.cmd lines from scripts.ini file
 	$self->remove_group_policy_script('logon', 'VCLprepare.cmd');
 	$self->remove_group_policy_script('logoff', 'VCLcleanup.cmd');
 
@@ -5753,6 +5764,9 @@ sub remove_group_policy_script {
 	else {
 		$opposite_stage_argument = 'Logon';
 	}
+	
+	# Attempt to delete batch or script files specified by the argument
+	$self->delete_files_by_pattern("$system32_path/GroupPolicy/User/Scripts", ".*$cmdline_argument.*", 2);
 
 	# Path to scripts.ini file
 	my $scripts_ini = $system32_path . '/GroupPolicy/User/Scripts/scripts.ini';
@@ -6283,8 +6297,9 @@ sub clean_hard_drive {
 		'$SYSTEMDRIVE/Documents and Settings,.*Temporary Internet Files\\/Content.*\\/.*,10',
 		'$SYSTEMDRIVE,.*pagefile\\.sys,1',
 		'$SYSTEMDRIVE/cygwin/home/root,.*%USERPROFILE%,1',
+		"$system32_path/GroupPolicy/User/Scripts,.*VCL.*cmd"
 	);
-
+	
 	# Attempt to stop the AFS service, needed to delete AFS files
 	if ($self->service_exists('TransarcAFSDaemon')) {
 		$self->stop_service('TransarcAFSDaemon');
