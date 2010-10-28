@@ -139,7 +139,6 @@ our @EXPORT = qw(
   get_managable_resource_groups
   get_user_info
   get_vmhost_info
-  getdynamicaddress
   getimagesize
   getnewdbh
   getpw
@@ -1478,85 +1477,6 @@ sub setstaticaddress {
 	} ## end if 
 
 } ## end sub setstaticaddress
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 getdynamicaddress
-
- Parameters  : $node, $osname
- Returns     : assigned ipaddress
- Description : collects the dynamically assigned ipaddress
-=cut
-
-sub getdynamicaddress {
-	my ($node, $osname, $image_os_type) = @_;
-	my ($package, $filename, $line, $sub) = caller(0);
-	notify($ERRORS{'OK'}, 0, "nodename not set") if (!defined($node));
-	notify($ERRORS{'OK'}, 0, "osname not set")   if (!defined($osname));
-	notify($ERRORS{'OK'}, 0, "image_os_type not set")   if (!defined($image_os_type));
-
-	#collect private address -- read hosts file only useful if running
-	# xcat setup and private addresses are listsed in the local
-	# /etc/hosts file
-	#should also store/pull private address from the database
-	my $privateIP;
-	my @sshcmd;
-	if (open(HOSTS, "/etc/hosts")) {
-		my @hosts = <HOSTS>;
-		close(HOSTS);
-		foreach my $line (@hosts) {
-			if ($line =~ /(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\s+($node)/) {
-				$privateIP = $1;
-				notify($ERRORS{'OK'}, 0, "PrivateIP address for $node collected $privateIP");
-				last;
-			}
-		}
-	} ## end if (open(HOSTS, "/etc/hosts"))
-	if (!defined($privateIP)) {
-		notify($ERRORS{'WARNING'}, 0, "private IP address not found for $node, possible issue with regex");
-	}
-
-	my $identity_keys = $ENV{management_node_info}{keys};
-	my $dynaIPaddress = 0;
-	my $ip_address;
-	if ($image_os_type =~ /windows/i) {
-
-		@sshcmd = run_ssh_command($node, $identity_keys, "ipconfig", "root");
-		for my $l (@{$sshcmd[1]}) {
-			# skip class a,b,c private addresses
-                        next if ($l !~ /IP(.*)?Address[\s\.:]*([\d\.]*)/);
-                        my $ip_address_found = $2;
-                        next if ($ip_address_found =~ /^(10|127|192\.168|172\.(1[6-9]|2[0-9]|3[0-1]))\./);
-                        next if ($ip_address_found =~ /$privateIP/);
-                        $ip_address = $ip_address_found;
-                }
-                $dynaIPaddress = $ip_address;
-
-	} ## end if ($osname =~ /windows/)
-	elsif ($image_os_type =~ /linux/) {
-		#$identity = $ENV{management_node_info}{keys};
-		undef @sshcmd;
-		@sshcmd = run_ssh_command($node, $identity_keys, "/sbin/ifconfig \|grep inet", "root");
-		for my $l (@{$sshcmd[1]}) {
-			# skip class a,b,c private addresses
-			next if ($l !~ /inet addr:([\d\.]*)/);
-                        my $ip_address_found = $1;
-                        next if ($ip_address_found =~ /^(10|127|192\.168|172\.(1[6-9]|2[0-9]|3[0-1]))\./);
-                        next if ($ip_address_found =~ /$privateIP/);
-                        $ip_address = $ip_address_found;
-		}
-		$dynaIPaddress = $ip_address;
-
-	} ## end elsif ($image_os_type =~ /linux/)  [ if ($image_os_type =~ /windows/)
-	else {
-		notify($ERRORS{'WARNING'}, 0, "OStype $image_os_type not supported ");
-		return 0;
-	}
-	
-	notify($ERRORS{'OK'}, 0, "dynamic IP address for $node collected: $dynaIPaddress");
-	return $dynaIPaddress;
-
-} ## end sub getdynamicaddress
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -8233,15 +8153,16 @@ EOF
 	
 	# Check if the computer associated with this reservation has a vmhostid set
 	if ($computer_row{computer_vmhostid}) {
-		 my %vmhost_info = get_vmhost_info($computer_row{computer_vmhostid});
-		 # Make sure vmhost was located if vmhostid was specified for the image
-		 if (!%vmhost_info) {
-			 notify($ERRORS{'WARNING'}, 0, "vmhostid=" . $computer_row{computer_vmhostid} . " was specified for computer id=" . $computer_row{computer_id} . " but vmhost could not be found");
-		 }
-		 else {
-			 # Image meta data found, add it to the hash
-			 $comp_info{vmhost} = \%vmhost_info;
-		 }
+		my %vmhost_info = get_vmhost_info($computer_row{computer_vmhostid});
+		# Make sure vmhost was located if vmhostid was specified for the image
+		if (!%vmhost_info) {
+			notify($ERRORS{'WARNING'}, 0, "vmhostid=" . $computer_row{computer_vmhostid} . " was specified for computer id=" . $computer_row{computer_id} . " but vmhost could not be found");
+		}
+		else {
+			# Image meta data found, add it to the hash
+			$comp_info{vmhost} = \%vmhost_info;
+			$comp_info{computer}{vmhost} = \%vmhost_info;
+		}
 	} ## end if ($reservation_row{computer_vmhostid})
 
 

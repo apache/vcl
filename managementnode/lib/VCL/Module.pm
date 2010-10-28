@@ -130,11 +130,9 @@ use VCL::Module::Semaphore;
 sub new {
 	my $class = shift;
 	my $args  = shift;
-
-	notify($ERRORS{'DEBUG'}, 0, "$class constructor called");
 	
 	# Create a variable to store the newly created class object
-	my $class_object;
+	my $self;
 	
 	# Make sure the data structure was passed as an argument called 'data_structure'
 	if (!defined $args->{data_structure}) {
@@ -149,20 +147,39 @@ sub new {
 	}
 	
 	# Add the DataStructure reference to the class object
-	$class_object->{data} = $args->{data_structure};
+	$self->{data} = $args->{data_structure};
 
 	# Bless the object as the class which new was called with
-	bless $class_object, $class;
-	notify($ERRORS{'DEBUG'}, 0, "$class object created");
-
-	# Check if not running in setup mode and if initialize() subroutine is defined for this module
-	if (!$SETUP_MODE && $class_object->can("initialize")) {
-		# Call the initialize() subroutine, if it returns 0, return 0
-		# If it doesn't return 0, return the object reference
-		return if (!$class_object->initialize($args));
+	bless $self, $class;
+	
+	# Get the memory address of this newly created object - useful for debugging object creation problems
+	my $address = sprintf('%x', $self);
+	
+	# Display a message based on the type of object created
+	if ($self->isa('VCL::Module::State')) {
+		my $request_state_name = $self->data->get_request_state_name(0) || '<not set>';
+		notify($ERRORS{'DEBUG'}, 0, ref($self) . " object created for state $request_state_name, address: $address");
+	}
+	elsif ($self->isa('VCL::Module::OS')) {
+		my $image_name = $self->data->get_image_name(0) || '<not set>';
+		notify($ERRORS{'DEBUG'}, 0, ref($self) . " object created for image $image_name, address: $address");
+	}
+	elsif ($self->isa('VCL::Module::Provisioning')) {
+		my $computer_name = $self->data->get_computer_short_name(0) || '<not set>';
+		notify($ERRORS{'DEBUG'}, 0, ref($self) . " object created for computer $computer_name, address: $address");
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, ref($self) . " object created, address: $address");
 	}
 
-	return $class_object;
+	# Check if not running in setup mode and if initialize() subroutine is defined for this module
+	if (!$SETUP_MODE && $self->can("initialize")) {
+		# Call the initialize() subroutine, if it returns 0, return 0
+		# If it doesn't return 0, return the object reference
+		return if (!$self->initialize($args));
+	}
+
+	return $self;
 } ## end sub new
 
 ##############################################################################
@@ -201,6 +218,205 @@ sub data {
 	notify($ERRORS{'CRITICAL'}, 0, "unable to create DataStructure object");
 	return 0;
 } ## end sub data
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 create_os_object
+
+ Parameters  : None
+ Returns     : boolean
+ Description : Creates an OS object if one has not already been created for the
+               calling object.
+
+=cut
+
+sub create_os_object {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Make sure calling object isn't an OS module to avoid an infinite loop
+	if ($self->isa('VCL::Module::OS')) {
+		notify($ERRORS{'WARNING'}, 0, "this subroutine cannot be called from an existing OS module");
+		return;
+	}
+	
+	# Check if an OS object has already been stored in the calling object
+	if ($self->{os}) {
+		my $os_address = sprintf('%x', $self->{os});
+		my $os_image_name = $self->{os}->data->get_image_name();
+		notify($ERRORS{'DEBUG'}, 0, "OS object has already been created for $os_image_name, address: $os_address, returning 1");
+		return 1;
+	}
+	
+	# Get the Perl package for the OS
+	my $os_perl_package = $self->data->get_image_os_module_perl_package();
+	if (!$os_perl_package) {
+		notify($ERRORS{'WARNING'}, 0, "OS object could not be created, OS module Perl package could not be retrieved");
+		return;
+	}
+	
+	# Attempt to load the OS module
+	eval "use $os_perl_package";
+	if ($EVAL_ERROR) {
+		notify($ERRORS{'WARNING'}, 0, "$os_perl_package module could not be loaded, returning 0");
+		return 0;
+	}
+	notify($ERRORS{'DEBUG'}, 0, "$os_perl_package module loaded");
+	
+	# Attempt to create the object
+	if (my $os = ($os_perl_package)->new({data_structure => $self->data})) {
+		my $os_address = sprintf('%x', $os);
+		my $os_image_name = $os->data->get_image_name();
+		notify($ERRORS{'OK'}, 0, "$os_perl_package OS object created for $os_image_name, address: $os_address");
+		$self->set_os($os);
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to create OS object");
+		return;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 create_provisioning_object
+
+ Parameters  : None
+ Returns     : 
+ Description : 
+
+=cut
+
+sub create_provisioning_object {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Make sure calling object isn't a provisioning module to avoid an infinite loop
+	if ($self->isa('VCL::Module::Provisioning')) {
+		notify($ERRORS{'WARNING'}, 0, "this subroutine cannot be called from an existing provisioning module");
+		return;
+	}
+	
+	# Check if an OS object has already been stored in the calling object
+	if ($self->{provisioner}) {
+		my $address = sprintf('%x', $self->{provisioner});
+		my $provisioner_computer_name = $self->{provisioner}->data->get_computer_short_name();
+		notify($ERRORS{'DEBUG'}, 0, "provisioning object has already been created, address: $address, returning 1");
+		return 1;
+	}
+	
+	# Get the Perl package for the provisioning module
+	my $provisioning_perl_package = $self->data->get_computer_provisioning_module_perl_package();
+	if (!$provisioning_perl_package) {
+		notify($ERRORS{'WARNING'}, 0, "provisioning object could not be created, provisioning module Perl package could not be retrieved");
+		return;
+	}
+	
+	# Attempt to load the computer provisioning module
+	eval "use $provisioning_perl_package";
+	if ($EVAL_ERROR) {
+		notify($ERRORS{'WARNING'}, 0, "$provisioning_perl_package module could not be loaded, returning 0");
+		return 0;
+	}
+	notify($ERRORS{'DEBUG'}, 0, "$provisioning_perl_package module loaded");
+
+	# Create provisioner object
+	if (my $provisioner = ($provisioning_perl_package)->new({data_structure => $self->data})) {
+		my $provisioner_address = sprintf('%x', $provisioner);
+		my $provisioner_computer_name = $provisioner->data->get_computer_short_name();
+		notify($ERRORS{'OK'}, 0, "$provisioning_perl_package provisioner object created for $provisioner_computer_name, address: $provisioner_address");
+		$self->set_provisioner($provisioner);
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "provisioning object could not be created, returning 0");
+		return 0;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 os
+
+ Parameters  : None
+ Returns     : Process's OS object
+ Description : Allows provisioning modules to access the reservation's OS
+               object.
+
+=cut
+
+sub os {
+	my $self = shift;
+	
+	if (!$self->{os}) {
+		notify($ERRORS{'WARNING'}, 0, "unable to return OS object, \$self->{os} is not set");
+		return;
+	}
+	else {
+		return $self->{os};
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 provisioner
+
+ Parameters  : None
+ Returns     : Process's provisioner object
+ Description : Allows OS modules to access the reservation's provisioner
+               object.
+
+=cut
+
+sub provisioner {
+	my $self = shift;
+	
+	if (!$self->{provisioner}) {
+		notify($ERRORS{'WARNING'}, 0, "unable to return provisioner object, \$self->{provisioner} is not set");
+		return;
+	}
+	else {
+		return $self->{provisioner};
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 set_os
+
+ Parameters  : None
+ Returns     : Process's OS object
+ Description : Sets the OS object for the module to access.
+
+=cut
+
+sub set_os {
+	my $self = shift;
+	my $os = shift;
+	$self->{os} = $os;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 set_provisioner
+
+ Parameters  : None
+ Returns     : Process's provisioner object
+ Description : Sets the provisioner object for the module to access.
+
+=cut
+
+sub set_provisioner {
+	my $self = shift;
+	my $provisioner = shift;
+	$self->{provisioner} = $provisioner;
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 

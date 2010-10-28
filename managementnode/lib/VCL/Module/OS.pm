@@ -62,45 +62,6 @@ use VCL::utils;
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 set_provisioner
-
- Parameters  : None
- Returns     : Process's provisioner object
- Description : Sets the provisioner object for the OS module to access.
-
-=cut
-
-sub set_provisioner {
-	my $self = shift;
-	my $provisioner = shift;
-	$self->{provisioner} = $provisioner;
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 provisioner
-
- Parameters  : None
- Returns     : Process's provisioner object
- Description : Allows OS modules to access the reservation's provisioner
-               object.
-
-=cut
-
-sub provisioner {
-	my $self = shift;
-	
-	if (!$self->{provisioner}) {
-		notify($ERRORS{'WARNING'}, 0, "unable to return provisioner object, \$self->{provisioner} is not set");
-		return;
-	}
-	else {
-		return $self->{provisioner};
-	}
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
 =head2 get_source_configuration_directories
 
  Parameters  : None
@@ -440,7 +401,7 @@ sub is_ssh_responding {
 
 =head2 wait_for_response
 
- Parameters  : Initial delay seconds (optional), SSH response timeout seconds (optional)
+ Parameters  : Initial delay seconds (optional), SSH response timeout seconds (optional), SSH attempt delay seconds (optional)
  Returns     : If successful: true
                If failed: false
  Description : Waits for the reservation computer to respond to SSH after it
@@ -471,6 +432,11 @@ sub wait_for_response {
 		$ssh_response_timeout_seconds = 600;
 	}
 	
+	my $ssh_attempt_delay_seconds = shift;
+	if (!defined $ssh_attempt_delay_seconds) {
+		$ssh_response_timeout_seconds = 15;
+	}
+	
 	# Sleep for the initial delay value if it has been set
 	# Check SSH once to bypass the initial delay if SSH is already responding
 	if ($initial_delay_seconds && !$self->is_ssh_responding()) {
@@ -481,7 +447,7 @@ sub wait_for_response {
 	
 	# Wait for SSH to respond, loop until timeout is reached
 	notify($ERRORS{'OK'}, 0, "waiting for $computer_node_name to respond to SSH, maximum of $ssh_response_timeout_seconds seconds");
-	if (!$self->wait_for_ssh($ssh_response_timeout_seconds)) {
+	if (!$self->wait_for_ssh($ssh_response_timeout_seconds, $ssh_attempt_delay_seconds)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to connect to $computer_node_name via SSH after $ssh_response_timeout_seconds seconds");
 		return;
 	}
@@ -617,11 +583,12 @@ sub update_public_ip_address {
 		my $public_ip_address;
 		
 		# Try to retrieve the public IP address from the OS module
-		if ($self->can("get_public_ip_address") && ($public_ip_address = $self->get_public_ip_address())) {
-			notify($ERRORS{'DEBUG'}, 0, "retrieved public IP address from $computer_node_name using the OS module: $public_ip_address");
+		if (!$self->can("get_public_ip_address")) {
+			notify($ERRORS{'WARNING'}, 0, "unable to retrieve public IP address from $computer_node_name, OS module " . ref($self) . " does not implement a 'get_public_ip_address' subroutine");
+			return;
 		}
-		elsif ($public_ip_address = getdynamicaddress($computer_node_name, $image_os_name, $image_os_type)) {
-			notify($ERRORS{'DEBUG'}, 0, "retrieved public IP address from $computer_node_name using utils.pm::getdynamicaddress: $public_ip_address");
+		elsif ($public_ip_address = $self->get_public_ip_address()) {
+			notify($ERRORS{'DEBUG'}, 0, "retrieved public IP address from $computer_node_name using the OS module: $public_ip_address");
 		}
 		else {
 			notify($ERRORS{'WARNING'}, 0, "failed to retrieve dynamic public IP address from $computer_node_name");

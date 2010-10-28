@@ -489,7 +489,7 @@ $SUBROUTINE_MAPPINGS{management_node_predictive_module_perl_package} = '$ENV{man
 
 =cut
 
-my @request_id : Field : Arg('Name' => 'request_id') : Type(scalar) : Get('Name' => 'request_id', 'Private' => 1);
+my @request_id : Field : Arg('Name' => 'request_id', 'Default' => 0) : Type(scalar) : Get('Name' => 'request_id', 'Private' => 1);
 
 =head3 @reservation_id
 
@@ -498,7 +498,7 @@ my @request_id : Field : Arg('Name' => 'request_id') : Type(scalar) : Get('Name'
 
 =cut
 
-my @reservation_id : Field : Arg('Name' => 'reservation_id') : Type(scalar) : Get('Name' => 'reservation_id', 'Private' => 1);
+my @reservation_id : Field : Arg('Name' => 'reservation_id', 'Default' => 0) : Type(scalar) : Get('Name' => 'reservation_id', 'Private' => 1);
 
 =head3 @blockrequest_id
 
@@ -555,6 +555,15 @@ my @computer_id : Field : Arg('Name' => 'computer_id') : Type(scalar) : Get('Nam
 
 my @image_id : Field : Arg('Name' => 'image_id') : Type(scalar) : Get('Name' => 'image_id', 'Private' => 1);
 
+=head3 @imagerevision_id
+
+ Data type   : array of scalars
+ Description :
+
+=cut
+
+my @imagerevision_id : Field : Arg('Name' => 'imagerevision_id') : Type(scalar) : Get('Name' => 'imagerevision_id', 'Private' => 1);
+
 ##############################################################################
 
 =head1 PRIVATE OBJECT METHODS
@@ -587,15 +596,27 @@ sub _initialize : Init {
 	# If not deep copied, the separate objects will alter each other's data
 	$self->refresh_request_data(dclone($self->request_data)) if $self->request_data;
 	
+	# Set the request and reservation IDs in the request data hash if they are undefined
+	$self->request_data->{id} = ($self->request_id || 0) if (!defined($self->request_data->{id}));
+	$self->request_data->{RESERVATIONID} = ($self->reservation_id || 0) if (!defined($self->request_data->{RESERVATIONID}));
+	
+	my $computer_id = $self->computer_id;
+	my $image_id = $self->image_id;
+	my $imagerevision_id = $self->imagerevision_id;
+	
 	# Get the computer info if the computer_id argument was specified and add it to this object
-	if ($self->computer_id) {
-		my $vmhost_info_save = $self->request_data->{reservation}{$self->reservation_id}{computer}{vmhost};
+	if ($computer_id) {
+		my $vmhost_info_save;
+		if (defined($self->request_data->{reservation}{$self->reservation_id}{computer}{vmhost})) {
+			$vmhost_info_save = $self->request_data->{reservation}{$self->reservation_id}{computer}{vmhost};
+		}
 		
 		notify($ERRORS{'DEBUG'}, 0, "computer ID argument was specified, retrieving data for computer ID: " . $self->computer_id);
 		my $computer_info = get_computer_info($self->computer_id);
 		if (!$computer_info) {
 			notify($ERRORS{'WARNING'}, 0, "DataStructure object could not be initialized, failed to retrieve data for computer ID: " . $self->computer_id);
 			
+			# Throw an exception because simply returning undefined (return;) does not result in this DataStructure object being undefined
 			Exception::Class::Base->throw( error => "DataStructure object could not be initialized, failed to retrieve data for computer ID: " . $self->computer_id);
 			return;
 		}
@@ -609,27 +630,55 @@ sub _initialize : Init {
 		$self->request_data->{reservation}{$self->reservation_id}{computer} = $computer_info->{computer};
 	}
 	
-	# Get the image and imagerevision info if the image_id argument was specified
-	if ($self->image_id) {
-		my %image_info = get_image_info($self->image_id);
-		if (%image_info) {
-			$self->request_data->{reservation}{$self->reservation_id}{image} = \%image_info;
-		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "DataStructure object could not be initialized, failed to retrieve data for image ID: " . $self->image_id);
-			
-			Exception::Class::Base->throw( error => "DataStructure object could not be initialized, failed to retrieve data for image ID: " . $self->image_id);
-			return;
+	
+	# If either the computer ID, image ID, or imagerevision ID arguments are specified, retrieve appropriate image and imagerevision data
+	if ($imagerevision_id || $image_id || $computer_id) {
+		my %imagerevision_info;
+		
+		if ($imagerevision_id) {
+			notify($ERRORS{'DEBUG'}, 0, "imagerevision ID argument was specified: $imagerevision_id, DataStructure object will contain image information for this imagerevision ID: $imagerevision_id");
+			%imagerevision_info = get_imagerevision_info($imagerevision_id);
 		}
 		
-		my %imagerevision_info = get_production_imagerevision_info($self->image_id);
+		elsif ($image_id) {
+			notify($ERRORS{'DEBUG'}, 0, "image ID argument was specified: $image_id, DataStructure object will contain image information for the production imagerevision of this image");
+			%imagerevision_info = get_production_imagerevision_info($image_id);
+		}
+		
+		elsif ($computer_id) {
+			if ($imagerevision_id = $self->get_computer_imagerevision_id()) {
+				notify($ERRORS{'DEBUG'}, 0, "computer ID argument was specified ($computer_id) but image and imagerevision ID arguments were not, DataStructure object will contain image information for the computer's current imagerevision ID: $imagerevision_id");
+			}
+			else {
+				Exception::Class::Base->throw( error => "DataStructure object could not be initialized, computer's current imagerevision ID could not be retrieved from the current DataStructure data:\n" . format_data($self->get_request_data));
+				return;
+			}
+			%imagerevision_info = get_imagerevision_info($imagerevision_id);
+		}
+		
 		if (%imagerevision_info) {
+			$imagerevision_id = $imagerevision_info{id};
+			notify($ERRORS{'DEBUG'}, 0, "retrieved data for imagerevision ID: $imagerevision_id");
 			$self->request_data->{reservation}{$self->reservation_id}{imagerevision} = \%imagerevision_info;
 		}
 		else {
-			notify($ERRORS{'WARNING'}, 0, "DataStructure object could not be initialized, failed to retrieve production imagerevision data for image ID: " . $self->image_id);
-			
-			Exception::Class::Base->throw( error => "DataStructure object could not be initialized, failed to retrieve production imagerevision data for image ID: " . $self->image_id);
+			Exception::Class::Base->throw( error => "DataStructure object could not be initialized, failed to retrieve imagerevision data: ");
+			return;
+		}
+		
+		$image_id = $imagerevision_info{imageid};
+		if (!defined($image_id)) {
+			Exception::Class::Base->throw( error => "DataStructure object could not be initialized, failed to retrieve image ID from the imagerevision data retrieved for imagerevision ID $imagerevision_id:\n" . format_data(\%imagerevision_info));
+			return;
+		}
+		
+		my %image_info = get_image_info($image_id);
+		if (%image_info) {
+			notify($ERRORS{'DEBUG'}, 0, "retrieved data for image ID: $image_id");
+			$self->request_data->{reservation}{$self->reservation_id}{image} = \%image_info;
+		}
+		else {
+			Exception::Class::Base->throw( error => "DataStructure object could not be initialized, failed to retrieve data for image ID: " . $self->image_id);
 			return;
 		}
 	}
@@ -698,17 +747,17 @@ sub _automethod : Automethod {
 
 	# Replace RESERVATION_ID with the actual reservation ID if it exists in the hash path
 	my $reservation_id = $self->reservation_id;
-	$reservation_id = 'undefined' if !$reservation_id;
+	$reservation_id = 'undefined' if !defined($reservation_id);
 	$hash_path =~ s/RESERVATION_ID/$reservation_id/;
 
 	# Replace BLOCKREQUEST_ID with the actual blockrequest ID if it exists in the hash path
 	my $blockrequest_id = $self->blockrequest_id;
-	$blockrequest_id = 'undefined' if !$blockrequest_id;
+	$blockrequest_id = 'undefined' if !defined($blockrequest_id);
 	$hash_path =~ s/BLOCKREQUEST_ID/$blockrequest_id/;
 
 	# Replace BLOCKTIME_ID with the actual blocktime ID if it exists in the hash path
 	my $blocktime_id = $self->blocktime_id;
-	$$blocktime_id = 'undefined' if !$blocktime_id;
+	$blocktime_id = 'undefined' if !defined($blocktime_id);
 	$hash_path =~ s/BLOCKTIME_ID/$blocktime_id/;
 
 	if ($mode =~ /get/) {
@@ -2286,38 +2335,79 @@ sub get_reservation_info_string {
 	}
 
 	my $string;
-	$string .= "request: " . $self->get_request_id() . "\n";
-	$string .= "reservation: " . $self->get_reservation_id() . "\n";
-	$string .= "state/laststate: " . $self->get_request_state_name() . "/" . $self->get_request_laststate_name() . "\n";
+	
+	$string .= "management node: " . (defined($_ = $self->get_management_node_hostname(0)) ? $_ : '<undefined>') . "\n";
+	$string .= "reservation process PID: $PID\n";
+	$string .= "parent vcld process PID: " . (defined($_ = getppid()) ? $_ : '<undefined>') . "\n";
+	
 	$string .= "\n";
 	
-	$string .= "management node: " . $self->get_management_node_hostname() . "\n";
-	$string .= "PID: $PID\n";
+	$string .= "request ID: " . (defined($_ = $self->get_request_id(0)) ? $_ : '<undefined>') . "\n";
+	$string .= "reservation ID: " . (defined($_ = $self->get_reservation_id(0)) ? $_ : '<undefined>') . "\n";
+	$string .= "request state/laststate: " . (defined($_ = $self->get_request_state_name(0)) ? $_ : '<undefined>') . "/" . (defined($_ = $self->get_request_laststate_name(0)) ? $_ : '<undefined>') . "\n";
+	$string .= "request start time: " . (defined($_ = $self->get_request_start_time(0)) ? $_ : '<undefined>') . "\n";
+	$string .= "request end time: " . (defined($_ = $self->get_request_end_time(0)) ? $_ : '<undefined>') . "\n";
+	$string .= "reservation count: " . (defined($_ = $self->get_request_reservation_count(0)) ? $_ : '<undefined>') . "\n";
+	$string .= "parent reservation: " . (defined($_ = $self->get_request_is_cluster_parent(0)) ? $_ : '<undefined>') . "\n";
+	$string .= "for imaging: " . (defined($_ = $self->get_request_forimaging(0)) ? ($_ ? 'yes' : 'no') : '<undefined>') . "\n";
+	$string .= "log ID: " . (defined($_ = $self->get_request_log_id(0)) ? $_ : '<undefined>') . "\n";
+	
 	$string .= "\n";
 	
-	$string .= "computer name: " . $self->get_computer_host_name() . " (id: " . $self->get_computer_id() . ")\n";
-	my $computer_type = $self->get_computer_type();
-	$string .= "computer type: $computer_type\n";
+	$string .= "user ID: " . (defined($_ = $self->get_user_id(0)) ? $_ : '<undefined>') . "\n";
+	$string .= "user name: " . (defined($_ = $self->get_user_firstname(0)) ? $_ : '<undefined>') . " " . (defined($_ = $self->get_user_lastname(0)) ? $_ : '<undefined>') . "\n";
+	$string .= "user login ID: " . (defined($_ = $self->get_user_login_id(0)) ? $_ : '<undefined>') . "\n";
+	$string .= "user affiliation: " . (defined($_ = $self->get_user_affiliation_name(0)) ? $_ : '<undefined>') . "\n";
+	
 	$string .= "\n";
 	
-	if ($computer_type eq 'virtualmachine') {
-		$string .= "vm host: " . $self->get_vmhost_hostname() . " (vmhost id: " . $self->get_vmhost_id() . ")\n";
-		$string .= "vm host profile: " . $self->get_vmhost_profile_name() . "\n";
+	$string .= "computer id: " . (defined($_ = $self->get_computer_id(0)) ? $_ : '<undefined>') . "\n";
+	$string .= "computer name: " . (defined($_ = $self->get_computer_hostname(0)) ? $_ : '<undefined>') . "\n";
+	$string .= "computer type: " . (defined($_ = $self->get_computer_type(0)) ? $_ : '<undefined>') . "\n";
+	$string .= "computer eth0 MAC address: " . (defined($_ = $self->get_computer_eth0_mac_address(0)) ? $_ : '<undefined>') . "\n";
+	$string .= "computer eth1 MAC address: " . (defined($_ = $self->get_computer_eth1_mac_address(0)) ? $_ : '<undefined>') . "\n";
+	$string .= "computer private IP address: " . (defined($_ = $self->get_computer_private_ip_address(0)) ? $_ : '<undefined>') . "\n";
+	$string .= "computer public IP address: " . (defined($_ = $self->get_computer_ip_address(0)) ? $_ : '<undefined>') . "\n";
+	$string .= "computer in block allocation: " . (defined($_ = is_inblockrequest($self->get_computer_id(0))) ? ($_ ? 'yes' : 'no') : '<undefined>') . "\n";
+	
+	$string .= "\n";
+	
+	$string .= "provisioning module name: " . (defined($_ = $self->get_computer_provisioning_module_pretty_name(0)) ? $_ : '<undefined>') . " (" . (defined($_ = $self->get_computer_provisioning_module_name(0)) ? $_ : '<undefined>') . ")\n";
+	$string .= "provisioning module Perl package: " . (defined($_ = $self->get_computer_provisioning_module_perl_package(0)) ? $_ : '<undefined>') . "\n";
+	
+	if ((defined($_ = $self->get_computer_type(0)) ? $_ : '<undefined>') eq 'virtualmachine') {
 		$string .= "\n";
+		$string .= "vm host ID: " . (defined($_ = $self->get_vmhost_id(0)) ? $_ : '<undefined>') . "\n";
+		$string .= "vm host computer ID: " . (defined($_ = $self->get_vmhost_computer_id(0)) ? $_ : '<undefined>') . "\n";
+		$string .= "vm host name: " . (defined($_ = $self->get_vmhost_hostname(0)) ? $_ : '<undefined>') . "\n";
+		$string .= "vm profile: " . (defined($_ = $self->get_vmhost_profile_name(0)) ? $_ : '<undefined>') . "\n";
+		$string .= "vm profile VM path: " . (defined($_ = $self->get_vmhost_profile_vmpath(0)) ? $_ : '<undefined>') . "\n";
+		$string .= "vm profile repository path: " . (defined($_ = $self->get_vmhost_profile_repository_path(0)) ? $_ : '<undefined>') . "\n";
+		$string .= "vm profile datastore path: " . (defined($_ = $self->get_vmhost_profile_datastore_path(0)) ? $_ : '<undefined>') . "\n";
+		$string .= "vm profile disk type: " . (defined($_ = $self->get_vmhost_profile_vmdisk(0)) ? $_ : '<undefined>') . "\n";
 	}
 	
-	$string .= "user name: " . $self->get_user_login_id() . " (id: " . $self->get_user_id() . ")\n";
-	$string .= "user affiliation: " . $self->get_user_affiliation_name() . "\n";
 	$string .= "\n";
 	
-	$string .= "image: " . $self->get_image_name() . " (id: " . $self->get_image_id() . ")\n";
-	$string .= "image prettyname: " . $self->get_image_prettyname() . "\n";
-	$string .= "image size: " . $self->get_image_size() . "\n";
-	$string .= "image affiliation: " . $self->get_image_affiliation_name() . "\n";
-	$string .= "image revision ID: " . $self->get_imagerevision_id() . "\n";
-	$string .= "image revision comments: " . ($self->get_imagerevision_comments(0) || 'none') . "\n";
-	$string .= "image revision created: " . $self->get_imagerevision_date_created() . "\n";
-	$string .= "image revision production: " . $self->get_imagerevision_production();
+	$string .= "image ID: " . (defined($_ = $self->get_image_id(0)) ? $_ : '<undefined>') . "\n";
+	$string .= "image revision ID: " . (defined($_ = $self->get_imagerevision_id(0)) ? $_ : '<undefined>') . "\n";
+	
+	$string .= "image name: " . (defined($_ = $self->get_image_name(0)) ? $_ : '<undefined>') . "\n";
+	$string .= "image display name: " . (defined($_ = $self->get_image_prettyname(0)) ? $_ : '<undefined>') . "\n";
+	$string .= "image size: " . (defined($_ = $self->get_image_size(0)) ? $_ : '<undefined>') . " MB\n";
+	$string .= "use Sysprep: " . (defined($_ = $self->get_imagemeta_sysprep(0)) ? ($_ ? 'yes' : 'no') : '<undefined>') . "\n";
+	$string .= "root access: " . (defined($_ = $self->get_imagemeta_rootaccess(0)) ? ($_ ? 'yes' : 'no') : '<undefined>') . "\n";
+	$string .= "image owner affiliation: " . (defined($_ = $self->get_image_affiliation_name(0)) ? $_ : '<undefined>') . "\n";
+	$string .= "image revision date created: " . (defined($_ = $self->get_imagerevision_date_created(0)) ? $_ : '<undefined>') . "\n";
+	$string .= "image revision production: " . (defined($_ = $self->get_imagerevision_production(0)) ? ($_ ? 'yes' : 'no') : '<undefined>') . "\n";
+	$string .= "image revision comments: " . (defined($_ = $self->get_imagerevision_comments(0)) ? $_ : '<undefined>') . "\n";
+	
+	$string .= "\n";
+	
+	$string .= "OS module name: " . (defined($_ = $self->get_image_os_module_pretty_name(0)) ? $_ : '<undefined>') . " (" . (defined($_ = $self->get_image_os_module_name(0)) ? $_ : '<undefined>') . ")\n";
+	$string .= "OS module Perl package: " . (defined($_ = $self->get_image_os_module_perl_package(0)) ? $_ : '<undefined>') . "\n";
+	
+	$string .= "\n";
 	
 	return $string;
 }

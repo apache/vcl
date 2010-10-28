@@ -76,8 +76,7 @@ use VCL::DataStructure;
 
 sub initialize {
 	my $self = shift;
-	my ($package, $filename, $line, $sub) = caller(0);
-
+	
 	# Initialize the database handle count
 	$ENV{dbh_count} = 0;
 
@@ -88,20 +87,13 @@ sub initialize {
 	else {
 		notify($ERRORS{'WARNING'}, 0, "unable to obtain a database handle for this state process");
 	}
-
+	
 	# Check the image OS before creating OS object
 	if (!$self->check_image_os()) {
 		notify($ERRORS{'WARNING'}, 0, "failed to check if image OS is correct");
 		$self->reservation_failed();
 	}
-
-	# Store some hash variables into local variables
-	my $request_id                = $self->data->get_request_id();
-	my $reservation_id            = $self->data->get_reservation_id();
-	my $provisioning_perl_package = $self->data->get_computer_provisioning_module_perl_package();
-	my $os_perl_package           = $self->data->get_image_os_module_perl_package();
-	#my $predictive_perl_package   = $self->data->get_management_node_predictive_module_perl_package();
-
+	
 	# Rename this process to include some request info
 	rename_vcld_process($self->data);
 
@@ -112,95 +104,27 @@ sub initialize {
 
 	# Set the parent PID and this process's PID in the hash
 	set_hash_process_id($self->data->get_request_data);
-
-	# Attempt to load the computer provisioning module
-	if ($provisioning_perl_package) {
-		notify($ERRORS{'DEBUG'}, 0, "attempting to load provisioning module: $provisioning_perl_package");
-		eval "use $provisioning_perl_package";
-		if ($EVAL_ERROR) {
-			notify($ERRORS{'WARNING'}, 0, "$provisioning_perl_package module could not be loaded, returning 0");
-			return 0;
-		}
-		notify($ERRORS{'DEBUG'}, 0, "$provisioning_perl_package module loaded");
-
-		# Create provisioner object
-		if (my $provisioner = ($provisioning_perl_package)->new({data_structure => $self->data})) {
-			notify($ERRORS{'OK'}, 0, ref($provisioner) . " provisioner object created");
-			$self->{provisioner} = $provisioner;
-		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "provisioning object could not be created, returning 0");
-			return 0;
-		}
-	} ## end if ($provisioning_perl_package)
-	else {
-		notify($ERRORS{'OK'}, 0, "provisioning module not loaded, Perl package is not defined");
-	}
-
-	# Attempt to load the OS module
-	if ($os_perl_package) {
-		notify($ERRORS{'DEBUG'}, 0, "attempting to load OS module: $os_perl_package");
-		eval "use $os_perl_package";
-		if ($EVAL_ERROR) {
-			notify($ERRORS{'WARNING'}, 0, "$os_perl_package module could not be loaded, returning 0");
-			return 0;
-		}
-		notify($ERRORS{'DEBUG'}, 0, "$os_perl_package module loaded");
-
-		if (my $os = ($os_perl_package)->new({data_structure => $self->data})) {
-			notify($ERRORS{'OK'}, 0, ref($os) . " OS object created");
-			$self->{os} = $os;
-		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "OS object could not be created, returning 0");
-			return 0;
-		}
-	} ## end if ($os_perl_package)
-	else {
-		notify($ERRORS{'OK'}, 0, "OS module not loaded, Perl package is not defined");
+	
+	# Create an OS object
+	if (!$self->create_os_object()) {
+		notify($ERRORS{'WARNING'}, 0, "failed to create OS object");
+		return;
 	}
 	
+	# Create a provisioning object
+	if (!$self->create_provisioning_object()) {
+		notify($ERRORS{'WARNING'}, 0, "failed to create provisioning object");
+		return;
+	}
+	
+	# Allow the provisioning object to access the OS object and vice-versa
 	$self->{provisioner}->set_os($self->{os});
 	$self->{os}->set_provisioner($self->{provisioner});
-
+	
 	notify($ERRORS{'DEBUG'}, 0, "returning 1");
 	return 1;
 
 } ## end sub initialize
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 provisioner
-
- Parameters  : None
- Returns     : Object's provisioner object
- Description : Returns this objects provisioner object, which is stored in
-               $self->{provisioner}.  This method allows it to accessed using
-					$self->provisioner.
-
-=cut
-
-sub provisioner {
-	my $self = shift;
-	return $self->{provisioner};
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 os
-
- Parameters  : None
- Returns     : Object's OS object
- Description : Returns this objects OS object, which is stored in
-               $self->{os}.  This method allows it to accessed using
-					$self->os.
-
-=cut
-
-sub os {
-	my $self = shift;
-	return $self->{os};
-}
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -899,20 +823,21 @@ sub check_image_os {
 sub DESTROY {
 	my $self = shift;
 	
-	notify($ERRORS{'DEBUG'}, 0, "ref($self) destructor called");
+	my $address = sprintf('%x', $self);
+	notify($ERRORS{'DEBUG'}, 0, ref($self) . " destructor called, address: $address");
 	
 	# If not a blockrequest, delete computerloadlog entry
 	if ($self && $self->data && !$self->data->is_blockrequest()) {
 		my $reservation_id = $self->data->get_reservation_id();
 		
-		# Delete all computerloadlog rows with loadstatename = 'begin' for thie reservation
+		# Delete all computerloadlog rows with loadstatename = 'begin' for this reservation
 		if ($reservation_id && delete_computerloadlog_reservation($reservation_id, 'begin')) {
-			notify($ERRORS{'DEBUG'}, 0, "removed computerloadlog rows with loadstate=begin for reservation");
+			#notify($ERRORS{'DEBUG'}, 0, "removed computerloadlog rows with loadstate=begin for reservation");
 		}
-		elsif (!$reservation_id) {
+		elsif (!defined($reservation_id)) {
 			notify($ERRORS{'WARNING'}, 0, "failed to retrieve the reservation id, computerloadlog rows not removed");
 		}
-		else {
+		elsif ($reservation_id) {
 			notify($ERRORS{'WARNING'}, 0, "failed to remove computerloadlog rows with loadstate=begin for reservation");
 		}
 	}
@@ -927,17 +852,17 @@ sub DESTROY {
 
 	# Close the database handle
 	if (defined $ENV{dbh}) {
-		notify($ERRORS{'DEBUG'}, 0, "process has a database handle stored in \$ENV{dbh}, attempting disconnect");
+		#notify($ERRORS{'DEBUG'}, 0, "process has a database handle stored in \$ENV{dbh}, attempting disconnect");
 
 		if ($ENV{dbh}->disconnect) {
-			notify($ERRORS{'DEBUG'}, 0, "\$ENV{dbh}: database disconnect successful");
+			#notify($ERRORS{'DEBUG'}, 0, "\$ENV{dbh}: database disconnect successful");
 		}
 		else {
 			notify($ERRORS{'WARNING'}, 0, "\$ENV{dbh}: database disconnect failed, " . DBI::errstr());
 		}
 	} ## end if (defined $ENV{dbh})
 	else {
-		notify($ERRORS{'DEBUG'}, 0, "process does not have a database handle stored in \$ENV{dbh}");
+		#notify($ERRORS{'DEBUG'}, 0, "process does not have a database handle stored in \$ENV{dbh}");
 	}
 
 	# Check for an overridden destructor

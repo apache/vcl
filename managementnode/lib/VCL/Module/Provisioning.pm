@@ -62,22 +62,6 @@ use VCL::utils;
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 set_os
-
- Parameters  : None
- Returns     : Process's OS object
- Description : Sets the OS object for the provisioner module to access.
-
-=cut
-
-sub set_os {
-	my $self = shift;
-	my $os = shift;
-	$self->{os} = $os;
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
 =head2 set_vmhost_os
 
  Parameters  : None
@@ -90,29 +74,6 @@ sub set_vmhost_os {
 	my $self = shift;
 	my $vmhost_os = shift;
 	$self->{vmhost_os} = $vmhost_os;
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 os
-
- Parameters  : None
- Returns     : Process's OS object
- Description : Allows provisioning modules to access the reservation's OS
-               object.
-
-=cut
-
-sub os {
-	my $self = shift;
-	
-	if (!$self->{os}) {
-		notify($ERRORS{'WARNING'}, 0, "unable to return OS object, \$self->{os} is not set");
-		return;
-	}
-	else {
-		return $self->{os};
-	}
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -236,9 +197,9 @@ sub retrieve_image {
 		
 		# Run du to get the size of the image files on the partner if the image exists in any of the search paths
 		my $du_command = "du -b " . join(" ", @{$partner_info{$partner}{search_paths}});
-		my ($du_exit_status, $du_output) = run_ssh_command($partner, $partner_info{$partner}{identity_key}, $du_command, $partner_info{$partner}{user}, $partner_info{$partner}{port}, 0);
+		my ($du_exit_status, $du_output) = run_ssh_command($partner, $partner_info{$partner}{identity_key}, $du_command, $partner_info{$partner}{user}, $partner_info{$partner}{port}, 1);
 		if (!defined($du_output)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to determine if image $image_name exists on $partner_info{$partner}{hostname}");
+			notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to determine if image $image_name exists on $partner_info{$partner}{hostname}: $du_command");
 			next;
 		}
 		
