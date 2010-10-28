@@ -37,7 +37,7 @@ function addRemItem(cont, objid1, objid2, cb) {
 	dojo.xhrPost({
 		url: 'index.php',
 		load: cb,
-		handleAs: "json-comment-filtered",
+		handleAs: "json",
 		error: errorHandler,
 		content: {continuation: cont,
 					 listids: listids,
@@ -289,7 +289,7 @@ function getImagesButton() {
 
 	dojo.xhrPost({
 		url: 'index.php',
-		handleAs: "json-comment-filtered",
+		handleAs: "json",
 		load: imagesCallback,
 		error: errorHandler,
 		content: {continuation: obj.value,
@@ -332,7 +332,7 @@ function getGroupsButton() {
 
 	dojo.xhrPost({
 		url: 'index.php',
-		handleAs: "json-comment-filtered",
+		handleAs: "json",
 		load: groupsCallback,
 		error: errorHandler,
 		content: {continuation: obj.value,
@@ -375,7 +375,7 @@ function getMapCompGroupsButton() {
 
 	dojo.xhrPost({
 		url: 'index.php',
-		handleAs: "json-comment-filtered",
+		handleAs: "json",
 		load: mapCompGroupsCB,
 		error: errorHandler,
 		content: {continuation: obj.value,
@@ -418,7 +418,7 @@ function getMapImgGroupsButton() {
 
 	dojo.xhrPost({
 		url: 'index.php',
-		handleAs: "json-comment-filtered",
+		handleAs: "json",
 		load: mapImgGroupsCB,
 		error: errorHandler,
 		content: {continuation: obj.value,
@@ -460,7 +460,7 @@ function updateRevisionComments(id, cont) {
 	var comments = dijit.byId(id).value;
 	dojo.xhrPost({
 		url: 'index.php',
-		handleAs: "json-comment-filtered",
+		handleAs: "json",
 		load: updateRevisionCommentsCB,
 		error: errorHandler,
 		content: {continuation: cont,
@@ -495,7 +495,7 @@ function deleteRevisions(cont, idlist) {
 	checkedids = checkedids.join(',');
 	dojo.xhrPost({
 		url: 'index.php',
-		handleAs: "json-comment-filtered",
+		handleAs: "json",
 		load: deleteRevisionsCB,
 		error: errorHandler,
 		content: {continuation: cont,

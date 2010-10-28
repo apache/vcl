@@ -60,9 +60,11 @@ function selectImageOption() {
 	$tmp = getUserResources(array("imageAdmin"), array("manageGroup"), 1);
 	$imgGroupCnt = count($tmp['image']);
 
-	# get a count of computer groups user can manage
-	$tmp = getUserResources(array("computerAdmin"), array("manageGroup"), 1);
-	$compGroupCnt = count($tmp['computer']);
+	# get a count of image groups and computer groups user can map
+	$tmp = getUserResources(array("imageAdmin"), array("manageMapping"), 1);
+	$imgMapCnt = count($tmp['image']);
+	$tmp = getUserResources(array("computerAdmin"), array("manageMapping"), 1);
+	$compMapCnt = count($tmp['computer']);
 
 	print "<H2>Manage Images</H2>\n";
 	print "<FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
@@ -78,12 +80,12 @@ function selectImageOption() {
 		$cont = addContinuationsEntry('viewImageGrouping');
 		print "<INPUT type=radio name=continuation value=\"$cont\">Edit ";
 		print "Image Grouping<br>\n";
+	}
 
-		if($compGroupCnt) {
-			$cont = addContinuationsEntry('viewImageMapping');
-			print "<INPUT type=radio name=continuation value=\"$cont\">Edit ";
-			print "Image Mapping<br>\n";
-		}
+	if($imgMapCnt && $compMapCnt) {
+		$cont = addContinuationsEntry('viewImageMapping');
+		print "<INPUT type=radio name=continuation value=\"$cont\">Edit ";
+		print "Image Mapping<br>\n";
 	}
 
 	if($imgCnt) {
@@ -448,12 +450,12 @@ function imageGroupingGrid() {
 function viewImageMapping() {
 	global $mode;
 	$tmp = getUserResources(array("imageAdmin"),
-                           array("manageGroup"), 1);
+                           array("manageMapping"), 1);
 	$imagegroups = $tmp["image"];
 	uasort($imagegroups, "sortKeepIndex");
 	$imagecompmapping = getResourceMapping("image", "computer");
 	$resources = getUserResources(array("computerAdmin"),
-	                              array("manageGroup"), 1);
+	                              array("manageMapping"), 1);
 	$compgroups = $resources["computer"];
 	uasort($compgroups, "sortKeepIndex");
 	if(! count($imagegroups) || ! count($compgroups)) {
@@ -535,10 +537,7 @@ function viewImageMapping() {
 	print "button to map it to that group.<br><br>\n";
 	print "Computer Group:<select name=compgroups id=compgroups>\n";
 	# build list of groups
-	$tmp = getUserResources(array('computerAdmin'), array('manageGroup'), 1);
-	$groups = $tmp['computer'];
-	uasort($groups, 'sortKeepIndex');
-	foreach($groups as $id => $group) {
+	foreach($compgroups as $id => $group) {
 		print "<option value=$id>$group</option>\n";
 	}
 	print "</select>\n";
@@ -612,12 +611,12 @@ function viewImageMapping() {
 function imageMappingGrid() {
 	global $mode;
 	$tmp = getUserResources(array("imageAdmin"),
-                           array("manageGroup"), 1);
+                           array("manageMapping"), 1);
 	$imagegroups = $tmp["image"];
 	uasort($imagegroups, "sortKeepIndex");
 	$imagecompmapping = getResourceMapping("image", "computer");
 	$resources2 = getUserResources(array("computerAdmin"),
-	                               array("manageGroup"), 1);
+	                               array("manageMapping"), 1);
 	$compgroups = $resources2["computer"];
 	uasort($compgroups, "sortKeepIndex");
 
@@ -2312,10 +2311,10 @@ function submitImageMapping() {
 
 	# build an array of memberships currently in the db
 	$tmp = getUserResources(array("imageAdmin"),
-									array("manageGroup"), 1);
+									array("manageMapping"), 1);
 	$imagegroups = $tmp["image"];
 	$tmp = getUserResources(array("computerAdmin"),
-	                        array("manageGroup"), 1);
+	                        array("manageMapping"), 1);
 	$compgroups = $tmp["computer"];
 	$imageinlist = implode(',', array_keys($imagegroups));
 	$compinlist = implode(',', array_keys($compgroups));
@@ -2904,8 +2903,7 @@ function jsonImageGroupingImages() {
 	$groups = getUserResources(array("imageAdmin"), array("manageGroup"), 1);
 	if(! array_key_exists($groupid, $groups['image'])) {
 		$arr = array('inimages' => array(), 'outimages' => array(), 'all' => array());
-		header('Content-Type: text/json-comment-filtered; charset=utf-8');
-		print '/*{"items":' . json_encode($arr) . '}*/';
+		sendJSON($arr);
 		return;
 	}
 
@@ -2929,7 +2927,7 @@ function jsonImageGroupingImages() {
 		}
 	}
 	$arr = array('inimages' => $in, 'outimages' => $out, 'all' => $all);
-	print '/*{"items":' . json_encode($arr) . '}*/';
+	sendJSON($arr);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -2946,8 +2944,7 @@ function jsonImageGroupingGroups() {
 	$resources = getUserResources(array("imageAdmin"), array("manageGroup"));
 	if(! array_key_exists($imageid, $resources['image'])) {
 		$arr = array('ingroups' => array(), 'outgroups' => array(), 'all' => array());
-		header('Content-Type: text/json-comment-filtered; charset=utf-8');
-		print '/*{"items":' . json_encode($arr) . '}*/';
+		sendJSON($arr);
 		return;
 	}
 	$groups = getUserResources(array('imageAdmin'), array('manageGroup'), 1);
@@ -2967,7 +2964,7 @@ function jsonImageGroupingGroups() {
 		}
 	}
 	$arr = array('ingroups' => $in, 'outgroups' => $out, 'all' => $all);
-	print '/*{"items":' . json_encode($arr) . '}*/';
+	sendJSON($arr);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -2982,14 +2979,13 @@ function jsonImageGroupingGroups() {
 ////////////////////////////////////////////////////////////////////////////////
 function jsonImageMapCompGroups() {
 	$imagegrpid = processInputVar('imagegrpid', ARG_NUMERIC);
-	$resources = getUserResources(array("imageAdmin"), array("manageGroup"), 1);
+	$resources = getUserResources(array("imageAdmin"), array("manageMapping"), 1);
 	if(! array_key_exists($imagegrpid, $resources['image'])) {
 		$arr = array('ingroups' => array(), 'outgroups' => array(), 'all' => array());
-		header('Content-Type: text/json-comment-filtered; charset=utf-8');
-		print '/*{"items":' . json_encode($arr) . '}*/';
+		sendJSON($arr);
 		return;
 	}
-	$compgroups = getUserResources(array('computerAdmin'), array('manageGroup'), 1);
+	$compgroups = getUserResources(array('computerAdmin'), array('manageMapping'), 1);
 	$mapping = getResourceMapping('image', 'computer');
 	$in = array();
 	$out = array();
@@ -3006,7 +3002,7 @@ function jsonImageMapCompGroups() {
 		}
 	}
 	$arr = array('ingroups' => $in, 'outgroups' => $out, 'all' => $all);
-	print '/*{"items":' . json_encode($arr) . '}*/';
+	sendJSON($arr);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -3021,14 +3017,13 @@ function jsonImageMapCompGroups() {
 ////////////////////////////////////////////////////////////////////////////////
 function jsonImageMapImgGroups() {
 	$compgrpid = processInputVar('compgrpid', ARG_NUMERIC);
-	$resources = getUserResources(array("computerAdmin"), array("manageGroup"), 1);
+	$resources = getUserResources(array("computerAdmin"), array("manageMapping"), 1);
 	if(! array_key_exists($compgrpid, $resources['computer'])) {
 		$arr = array('ingroups' => array(), 'outgroups' => array(), 'all' => array());
-		header('Content-Type: text/json-comment-filtered; charset=utf-8');
-		print '/*{"items":' . json_encode($arr) . '}*/';
+		sendJSON($arr);
 		return;
 	}
-	$imagegroups = getUserResources(array('imageAdmin'), array('manageGroup'), 1);
+	$imagegroups = getUserResources(array('imageAdmin'), array('manageMapping'), 1);
 	$mapping = getResourceMapping('computer', 'image');
 	$in = array();
 	$out = array();
@@ -3045,7 +3040,7 @@ function jsonImageMapImgGroups() {
 		}
 	}
 	$arr = array('ingroups' => $in, 'outgroups' => $out, 'all' => $all);
-	print '/*{"items":' . json_encode($arr) . '}*/';
+	sendJSON($arr);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -3062,8 +3057,7 @@ function AJaddImageToGroup() {
 	$groups = getUserResources(array("imageAdmin"), array("manageGroup"), 1);
 	if(! array_key_exists($groupid, $groups['image'])) {
 		$arr = array('images' => array(), 'addrem' => 1);
-		header('Content-Type: text/json-comment-filtered; charset=utf-8');
-		print '/*{"items":' . json_encode($arr) . '}*/';
+		sendJSON($arr);
 		return;
 	}
 
@@ -3076,8 +3070,7 @@ function AJaddImageToGroup() {
 			continue;
 		if(! array_key_exists($id, $resources['image'])) {
 			$arr = array('images' => array(), 'addrem' => 1);
-			header('Content-Type: text/json-comment-filtered; charset=utf-8');
-			print '/*{"items":' . json_encode($arr) . '}*/';
+			sendJSON($arr);
 			return;
 		}
 		$imageids[] = $id;
@@ -3094,8 +3087,7 @@ function AJaddImageToGroup() {
 	doQuery($query, 287);
 	$_SESSION['userresources'] = array();
 	$arr = array('images' => $imageids, 'addrem' => 1);
-	header('Content-Type: text/json-comment-filtered; charset=utf-8');
-	print '/*{"items":' . json_encode($arr) . '}*/';
+	sendJSON($arr);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -3112,8 +3104,7 @@ function AJremImageFromGroup() {
 	$groups = getUserResources(array("imageAdmin"), array("manageGroup"), 1);
 	if(! array_key_exists($groupid, $groups['image'])) {
 		$arr = array('images' => array(), 'addrem' => 0);
-		header('Content-Type: text/json-comment-filtered; charset=utf-8');
-		print '/*{"items":' . json_encode($arr) . '}*/';
+		sendJSON($arr);
 		return;
 	}
 
@@ -3126,8 +3117,7 @@ function AJremImageFromGroup() {
 			continue;
 		if(! array_key_exists($id, $resources['image'])) {
 			$arr = array('images' => array(), 'addrem' => 0, 'id' => $id, 'extra' => $resources['image']);
-			header('Content-Type: text/json-comment-filtered; charset=utf-8');
-			print '/*{"items":' . json_encode($arr) . '}*/';
+			sendJSON($arr);
 			return;
 		}
 		$imageids[] = $id;
@@ -3142,8 +3132,7 @@ function AJremImageFromGroup() {
 	}
 	$_SESSION['userresources'] = array();
 	$arr = array('images' => $imageids, 'addrem' => 0);
-	header('Content-Type: text/json-comment-filtered; charset=utf-8');
-	print '/*{"items":' . json_encode($arr) . '}*/';
+	sendJSON($arr);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -3160,8 +3149,7 @@ function AJaddGroupToImage() {
 	$resources = getUserResources(array("imageAdmin"), array("manageGroup"));
 	if(! array_key_exists($imageid, $resources['image'])) {
 		$arr = array('groups' => array(), 'addrem' => 1);
-		header('Content-Type: text/json-comment-filtered; charset=utf-8');
-		print '/*{"items":' . json_encode($arr) . '}*/';
+		sendJSON($arr);
 		return;
 	}
 
@@ -3174,8 +3162,7 @@ function AJaddGroupToImage() {
 			continue;
 		if(! array_key_exists($id, $groups['image'])) {
 			$arr = array('groups' => array(), 'addrem' => 1);
-			header('Content-Type: text/json-comment-filtered; charset=utf-8');
-			print '/*{"items":' . json_encode($arr) . '}*/';
+			sendJSON($arr);
 			return;
 		}
 		$groupids[] = $id;
@@ -3192,8 +3179,7 @@ function AJaddGroupToImage() {
 	doQuery($query, 101);
 	$_SESSION['userresources'] = array();
 	$arr = array('groups' => $groupids, 'addrem' => 1);
-	header('Content-Type: text/json-comment-filtered; charset=utf-8');
-	print '/*{"items":' . json_encode($arr) . '}*/';
+	sendJSON($arr);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -3210,8 +3196,7 @@ function AJremGroupFromImage() {
 	$resources = getUserResources(array("imageAdmin"), array("manageGroup"));
 	if(! array_key_exists($imageid, $resources['image'])) {
 		$arr = array('groups' => array(), 'addrem' => 0);
-		header('Content-Type: text/json-comment-filtered; charset=utf-8');
-		print '/*{"items":' . json_encode($arr) . '}*/';
+		sendJSON($arr);
 		return;
 	}
 
@@ -3224,8 +3209,7 @@ function AJremGroupFromImage() {
 			continue;
 		if(! array_key_exists($id, $groups['image'])) {
 			$arr = array('groups' => array(), 'addrem' => 0);
-			header('Content-Type: text/json-comment-filtered; charset=utf-8');
-			print '/*{"items":' . json_encode($arr) . '}*/';
+			sendJSON($arr);
 			return;
 		}
 		$groupids[] = $id;
@@ -3240,8 +3224,7 @@ function AJremGroupFromImage() {
 	}
 	$_SESSION['userresources'] = array();
 	$arr = array('groups' => $groupids, 'addrem' => 0);
-	header('Content-Type: text/json-comment-filtered; charset=utf-8');
-	print '/*{"items":' . json_encode($arr) . '}*/';
+	sendJSON($arr);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -3255,15 +3238,14 @@ function AJremGroupFromImage() {
 ////////////////////////////////////////////////////////////////////////////////
 function AJaddCompGrpToImgGrp() {
 	$imagegrpid = processInputVar('id', ARG_NUMERIC);
-	$resources = getUserResources(array("imageAdmin"), array("manageGroup"), 1);
+	$resources = getUserResources(array("imageAdmin"), array("manageMapping"), 1);
 	if(! array_key_exists($imagegrpid, $resources['image'])) {
 		$arr = array('groups' => array(), 'addrem' => 1);
-		header('Content-Type: text/json-comment-filtered; charset=utf-8');
-		print '/*{"items":' . json_encode($arr) . '}*/';
+		sendJSON($arr);
 		return;
 	}
 
-	$compgroups = getUserResources(array("computerAdmin"), array("manageGroup"), 1);
+	$compgroups = getUserResources(array("computerAdmin"), array("manageMapping"), 1);
 	$tmp = processInputVar('listids', ARG_STRING);
 	$tmp = explode(',', $tmp);
 	$compgroupids = array();
@@ -3272,8 +3254,7 @@ function AJaddCompGrpToImgGrp() {
 			continue;
 		if(! array_key_exists($id, $compgroups['computer'])) {
 			$arr = array('groups' => array(), 'addrem' => 1);
-			header('Content-Type: text/json-comment-filtered; charset=utf-8');
-			print '/*{"items":' . json_encode($arr) . '}*/';
+			sendJSON($arr);
 			return;
 		}
 		$compgroupids[] = $id;
@@ -3289,8 +3270,7 @@ function AJaddCompGrpToImgGrp() {
 	doQuery($query, 101);
 	$_SESSION['userresources'] = array();
 	$arr = array('groups' => $compgroupids, 'addrem' => 1);
-	header('Content-Type: text/json-comment-filtered; charset=utf-8');
-	print '/*{"items":' . json_encode($arr) . '}*/';
+	sendJSON($arr);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -3304,15 +3284,14 @@ function AJaddCompGrpToImgGrp() {
 ////////////////////////////////////////////////////////////////////////////////
 function AJremCompGrpFromImgGrp() {
 	$imagegrpid = processInputVar('id', ARG_NUMERIC);
-	$resources = getUserResources(array("imageAdmin"), array("manageGroup"), 1);
+	$resources = getUserResources(array("imageAdmin"), array("manageMapping"), 1);
 	if(! array_key_exists($imagegrpid, $resources['image'])) {
 		$arr = array('groups' => array(), 'addrem' => 0);
-		header('Content-Type: text/json-comment-filtered; charset=utf-8');
-		print '/*{"items":' . json_encode($arr) . '}*/';
+		sendJSON($arr);
 		return;
 	}
 
-	$compgroups = getUserResources(array("computerAdmin"), array("manageGroup"), 1);
+	$compgroups = getUserResources(array("computerAdmin"), array("manageMapping"), 1);
 	$tmp = processInputVar('listids', ARG_STRING);
 	$tmp = explode(',', $tmp);
 	$compgroupids = array();
@@ -3321,8 +3300,7 @@ function AJremCompGrpFromImgGrp() {
 			continue;
 		if(! array_key_exists($id, $compgroups['computer'])) {
 			$arr = array('groups' => array(), 'addrem' => 0);
-			header('Content-Type: text/json-comment-filtered; charset=utf-8');
-			print '/*{"items":' . json_encode($arr) . '}*/';
+			sendJSON($arr);
 			return;
 		}
 		$compgroupids[] = $id;
@@ -3338,8 +3316,7 @@ function AJremCompGrpFromImgGrp() {
 	}
 	$_SESSION['userresources'] = array();
 	$arr = array('groups' => $compgroupids, 'addrem' => 0);
-	header('Content-Type: text/json-comment-filtered; charset=utf-8');
-	print '/*{"items":' . json_encode($arr) . '}*/';
+	sendJSON($arr);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -3353,15 +3330,14 @@ function AJremCompGrpFromImgGrp() {
 ////////////////////////////////////////////////////////////////////////////////
 function AJaddImgGrpToCompGrp() {
 	$compgrpid = processInputVar('id', ARG_NUMERIC);
-	$resources = getUserResources(array("computerAdmin"), array("manageGroup"), 1);
+	$resources = getUserResources(array("computerAdmin"), array("manageMapping"), 1);
 	if(! array_key_exists($compgrpid, $resources['computer'])) {
 		$arr = array('groups' => array(), 'addrem' => 1);
-		header('Content-Type: text/json-comment-filtered; charset=utf-8');
-		print '/*{"items":' . json_encode($arr) . '}*/';
+		sendJSON($arr);
 		return;
 	}
 
-	$imagegroups = getUserResources(array("imageAdmin"), array("manageGroup"), 1);
+	$imagegroups = getUserResources(array("imageAdmin"), array("manageMapping"), 1);
 	$tmp = processInputVar('listids', ARG_STRING);
 	$tmp = explode(',', $tmp);
 	$imagegroupids = array();
@@ -3370,8 +3346,7 @@ function AJaddImgGrpToCompGrp() {
 			continue;
 		if(! array_key_exists($id, $imagegroups['image'])) {
 			$arr = array('groups' => array(), 'addrem' => 1);
-			header('Content-Type: text/json-comment-filtered; charset=utf-8');
-			print '/*{"items":' . json_encode($arr) . '}*/';
+			sendJSON($arr);
 			return;
 		}
 		$imagegroupids[] = $id;
@@ -3387,8 +3362,7 @@ function AJaddImgGrpToCompGrp() {
 	doQuery($query, 101);
 	$_SESSION['userresources'] = array();
 	$arr = array('groups' => $imagegroupids, 'addrem' => 1);
-	header('Content-Type: text/json-comment-filtered; charset=utf-8');
-	print '/*{"items":' . json_encode($arr) . '}*/';
+	sendJSON($arr);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -3402,15 +3376,14 @@ function AJaddImgGrpToCompGrp() {
 ////////////////////////////////////////////////////////////////////////////////
 function AJremImgGrpFromCompGrp() {
 	$compgrpid = processInputVar('id', ARG_NUMERIC);
-	$resources = getUserResources(array("computerAdmin"), array("manageGroup"), 1);
+	$resources = getUserResources(array("computerAdmin"), array("manageMapping"), 1);
 	if(! array_key_exists($compgrpid, $resources['computer'])) {
 		$arr = array('groups' => array(), 'addrem' => 0);
-		header('Content-Type: text/json-comment-filtered; charset=utf-8');
-		print '/*{"items":' . json_encode($arr) . '}*/';
+		sendJSON($arr);
 		return;
 	}
 
-	$imagegroups = getUserResources(array("imageAdmin"), array("manageGroup"), 1);
+	$imagegroups = getUserResources(array("imageAdmin"), array("manageMapping"), 1);
 	$tmp = processInputVar('listids', ARG_STRING);
 	$tmp = explode(',', $tmp);
 	$imagegroupids = array();
@@ -3419,8 +3392,7 @@ function AJremImgGrpFromCompGrp() {
 			continue;
 		if(! array_key_exists($id, $imagegroups['image'])) {
 			$arr = array('groups' => array(), 'addrem' => 0);
-			header('Content-Type: text/json-comment-filtered; charset=utf-8');
-			print '/*{"items":' . json_encode($arr) . '}*/';
+			sendJSON($arr);
 			return;
 		}
 		$imagegroupids[] = $id;
@@ -3436,8 +3408,7 @@ function AJremImgGrpFromCompGrp() {
 	}
 	$_SESSION['userresources'] = array();
 	$arr = array('groups' => $imagegroupids, 'addrem' => 0);
-	header('Content-Type: text/json-comment-filtered; charset=utf-8');
-	print '/*{"items":' . json_encode($arr) . '}*/';
+	sendJSON($arr);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -3480,8 +3451,7 @@ function AJupdateRevisionComments() {
 	       . "WHERE id = $revisionid";
 	doQuery($query, 101);
 	$arr = array('comments' => $comments, 'id' => $revisionid);
-	header('Content-Type: text/json-comment-filtered; charset=utf-8');
-	print '/*{"items":' . json_encode($arr) . '}*/';
+	sendJSON($arr);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -3498,8 +3468,7 @@ function AJdeleteRevisions() {
 	$ids = explode(',', $checkedids);
 	foreach($ids as $id) {
 		if(! is_numeric($id) || ! in_array($id, $revids)) {
-			header('Content-Type: text/json-comment-filtered; charset=utf-8');
-			print '/*{"items":' . json_encode(array()) . '}*/';
+			sendJSON(array());
 			return;
 		}
 	}
@@ -3510,8 +3479,7 @@ function AJdeleteRevisions() {
 	doQuery($query, 101);
 	$html = getRevisionHTML($imageid);
 	$arr = array('html' => $html);
-	header('Content-Type: text/json-comment-filtered; charset=utf-8');
-	print '/*{"items":' . json_encode($arr) . '}*/';
+	sendJSON($arr);
 }
 
 ?>

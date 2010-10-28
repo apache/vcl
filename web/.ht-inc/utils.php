@@ -7417,6 +7417,25 @@ function getResourceTypeID($name) {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
+/// \fn getResourcePrivs()
+///
+/// \return an array of resource privileges
+///
+/// \brief gets the availabe resource privileges as defined in the resourcepriv
+/// table
+///
+////////////////////////////////////////////////////////////////////////////////
+function getResourcePrivs() {
+	$query = "show columns from resourcepriv where field = 'type'";
+	$qh = doQuery($query, 101);
+	$row = mysql_fetch_assoc($qh);
+	preg_match("/^enum\(([a-zA-Z0-9,']+)\)$/", $row['Type'], $matches);
+	$tmp = str_replace("'", '', $matches[1]);
+	return explode(',', $tmp);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
 /// \fn getNodeInfo($nodeid)
 ///
 /// \param $nodeid - an id from the privnode table

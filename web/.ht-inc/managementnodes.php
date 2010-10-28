@@ -75,9 +75,11 @@ function selectMgmtnodeOption() {
 	$tmp = getUserResources(array("mgmtNodeAdmin"), array("manageGroup"), 1);
 	$mnGroupCnt = count($tmp['managementnode']);
 
-	# get a count of computer groups user can manage
-	$tmp = getUserResources(array("computerAdmin"), array("manageGroup"), 1);
-	$compGroupCnt = count($tmp['computer']);
+	# get a count of mgmt node and computer groups user can manage
+	$tmp = getUserResources(array("mgmtNodeAdmin"), array("manageMapping"), 1);
+	$mnMapCnt = count($tmp['managementnode']);
+	$tmp = getUserResources(array("computerAdmin"), array("manageMapping"), 1);
+	$compMapCnt = count($tmp['computer']);
 
 	print "<H2>Manage Management Nodes</H2>\n";
 	print "<FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
@@ -90,13 +92,13 @@ function selectMgmtnodeOption() {
 		$cont = addContinuationsEntry('viewMgmtnodeGrouping');
 		print "<INPUT type=radio name=continuation value=\"$cont\">Edit ";
 		print "Management Node Grouping<br>\n";
-		if($compGroupCnt) {
-			$cont = addContinuationsEntry('viewMgmtnodeMapping');
-			print "<INPUT type=radio name=continuation value=\"$cont\">Edit ";
-			print "Management Node Mapping<br>\n";
-		}
 	}
-	if($mnAdminCnt || $mnGroupCnt)
+	if($mnMapCnt && $compMapCnt) {
+		$cont = addContinuationsEntry('viewMgmtnodeMapping');
+		print "<INPUT type=radio name=continuation value=\"$cont\">Edit ";
+		print "Management Node Mapping<br>\n";
+	}
+	if($mnAdminCnt || $mnGroupCnt || ($mnMapCnt && $compMapCnt))
 		print "<INPUT type=submit value=Submit>\n";
 	else {
 		print "You do not have access to manage any management nodes.<br>\n";
@@ -992,12 +994,12 @@ function viewMgmtnodeMapping($mngroups=0) {
 	global $mode;
 	if(! is_array($mngroups)) {
 		$tmp = getUserResources(array("mgmtNodeAdmin"), 
-	                           array("manageGroup"), 1);
+	                           array("manageMapping"), 1);
 		$mngroups = $tmp["managementnode"];
 	}
 	$mapping = getResourceMapping("managementnode", "computer");
 	$resources2 = getUserResources(array("computerAdmin"),
-	                               array("manageGroup"), 1);
+	                               array("manageMapping"), 1);
 	$compgroups = $resources2["computer"];
 	uasort($compgroups, "sortKeepIndex");
 
@@ -1073,10 +1075,10 @@ function submitMgmtnodeMapping() {
 
 	# build an array of memberships currently in the db
 	$tmp = getUserResources(array("mgmtNodeAdmin"),
-	                        array("manageGroup"), 1);
+	                        array("manageMapping"), 1);
 	$mngroups = $tmp["managementnode"];
 	$tmp = getUserResources(array("computerAdmin"),
-	                        array("manageGroup"), 1);
+	                        array("manageMapping"), 1);
 	$compgroups = $tmp["computer"];
 	$mninlist = implode(',', array_keys($mngroups));
 	$compinlist = implode(',', array_keys($compgroups));

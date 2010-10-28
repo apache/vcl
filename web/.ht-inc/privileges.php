@@ -240,7 +240,7 @@ function viewNodes() {
 	print "</div>\n";
 
 	# resources
-	$resourcetypes = array("available", "administer", "manageGroup");
+	$resourcetypes = getResourcePrivs();
 	print "<A name=\"resources\"></a>\n";
 	print "<div id=resourcesDiv>\n";
 	print "<H3>Resources</H3>\n";
@@ -253,6 +253,8 @@ function viewNodes() {
 		print "    <TH bgcolor=gray style=\"color: black;\">Block<br>Cascaded<br>Rights</TH>\n";
 		print "    <TH bgcolor=\"#008000\" style=\"color: black;\">Cascade<br>to Child<br>Nodes</TH>\n";
 		foreach($resourcetypes as $type) {
+			if($type == 'block' || $type == 'cascade')
+				continue;
 			$img = getImageText("$type");
 			print "    <TH>$img</TH>\n";
 		}
@@ -263,9 +265,14 @@ function viewNodes() {
 		$resourcegroups = getResourceGroups();
 		$resgroupmembers = getResourceGroupMembers();
 		foreach($resources as $resource) {
-			printResourcePrivRow($resource, $i, $privs["resources"], $resourcetypes,
-			                     $resourcegroups, $resgroupmembers,
-			                     $cascadePrivs["resources"], ! $hasResourceGrant);
+			$data = getResourcePrivRowHTML($resource, $i, $privs["resources"],
+			                               $resourcetypes, $resourcegroups,
+			                               $resgroupmembers, $cascadePrivs["resources"],
+			                               ! $hasResourceGrant);
+			print $data['html'];
+			print "<script language=\"Javascript\">\n";
+			print "dojo.addOnLoad(function () {setTimeout(\"{$data['javascript']}\", 500)});\n";
+			print "</script>\n";
 			$i++;
 		}
 		print "</TABLE>\n";
@@ -445,8 +452,9 @@ function viewNodes() {
 	print "    <TD></TD>\n";
 	print "    <TH bgcolor=gray style=\"color: black;\">Block<br>Cascaded<br>Rights</TH>\n";
 	print "    <TH bgcolor=\"#008000\" style=\"color: black;\">Cascade<br>to Child<br>Nodes</TH>\n";
-	$resourcetypes = array("available", "administer", "manageGroup");
 	foreach($resourcetypes as $type) {
+		if($type == 'block' || $type == 'cascade')
+			continue;
 		$img = getImageText("$type");
 		print "    <TH>$img</TH>\n";
 	}
@@ -474,12 +482,14 @@ function viewNodes() {
 	print "name=cascaderesgrp></TD>\n";
 
 	# normal rights
-	print "    <TD align=center id=resgrpcell0:1><INPUT type=checkbox ";
-	print "dojoType=dijit.form.CheckBox name=available id=resgrpck0:1></TD>\n";
-	print "    <TD align=center id=resgrpcell0:2><INPUT type=checkbox ";
-	print "dojoType=dijit.form.CheckBox name=administer id=resgrpck0:2></TD>\n";
-	print "    <TD align=center id=resgrpcell0:3><INPUT type=checkbox ";
-	print "dojoType=dijit.form.CheckBox name=manageGroup id=resgrpck0:3></TD>\n";
+	$i = 1;
+	foreach($resourcetypes as $type) {
+		if($type == 'block' || $type == 'cascade')
+			continue;
+		print "    <TD align=center id=resgrpcell0:$i><INPUT type=checkbox ";
+		print "dojoType=dijit.form.CheckBox name=$type id=resgrpck0:$i></TD>\n";
+		$i++;
+	}
 	print "  </TR>\n";
 	print "</TABLE>\n";
 	print "<div id=addResourceGroupPrivStatus></div>\n";
@@ -796,7 +806,7 @@ function selectNode() {
 
 	# resources
 	$text = "";
-	$resourcetypes = array("available", "administer", "manageGroup");
+	$resourcetypes = getResourcePrivs();
 	$text .= "<H3>Resources</H3>";
 	$text .= "<FORM id=resourceForm action=\"" . BASEURL . SCRIPT . "#resources\" method=post>";
 	if(count($privs["resources"]) || count($cascadePrivs["resources"])) {
@@ -807,6 +817,8 @@ function selectNode() {
 		$text .= "    <TH bgcolor=gray style=\"color: black;\">Block<br>Cascaded<br>Rights</TH>";
 		$text .= "    <TH bgcolor=\"#008000\" style=\"color: black;\">Cascade<br>to Child<br>Nodes</TH>";
 		foreach($resourcetypes as $type) {
+			if($type == 'block' || $type == 'cascade')
+				continue;
 			$img = getImageText("$type");
 			$text .= "    <TH>$img</TH>";
 		}
@@ -820,7 +832,10 @@ function selectNode() {
 			$tmpArr = getResourcePrivRowHTML($resource, $i, $privs["resources"],
 			          $resourcetypes, $resourcegroups, $resgroupmembers,
 			          $cascadePrivs["resources"], ! $hasResourceGrant);
-			$text .= $tmpArr['html'];
+			$html = str_replace("\n", '', $tmpArr['html']);
+			$html = str_replace("'", "\'", $html);
+			$html = preg_replace("/>\s*</", "><", $html);
+			$text .= $html;
 			$js .= $tmpArr['javascript'];
 			$i++;
 		}
@@ -1657,122 +1672,6 @@ function jsonGetUserGroupMembers() {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn printResourcePrivRow($privname, $rownum, $privs, $types,
-///                          $resourcegroups, $resgroupmembers, $cascadeprivs,
-///                          $disabled)
-///
-/// \param $privname - privilege name
-/// \param $rownum - number of the privilege row on this page
-/// \param $privs - an array of user's privileges
-/// \param $types - an array of privilege types
-/// \param $resourcegroups - array from getResourceGroups()
-/// \param $resgroupmembers - array from getResourceGroupMembers()
-/// \param $cascadeprivs - an array of user's cascaded privileges
-/// \param $disabled - 0 or 1; whether or not the checkboxes should be disabled
-///
-/// \brief prints a table row for this $privname
-///
-////////////////////////////////////////////////////////////////////////////////
-function printResourcePrivRow($privname, $rownum, $privs, $types, 
-                              $resourcegroups, $resgroupmembers, $cascadeprivs,
-                              $disabled) {
-	global $user;
-	print "  <TR>\n";
-	list($type, $name, $id) = explode('/', $privname);
-	print "    <TH>\n";
-	print "      <span id=\"resgrp$id\" onmouseover=getGroupMembers(\"$id\",";
-	print "\"resgrp$id\",\"rgmcont\"); onmouseout=getGroupMembersCancel";
-	print "(\"resgrp$id\");>$name</span>\n";
-	print "    </TH>\n";
-	print "    <TH>$type</TH>\n";
-
-	if($disabled)
-		$disabled = 'disabled=disabled';
-	else
-		$disabled = '';
-
-	# block rights
-	if(array_key_exists($privname, $privs) && 
-	   in_array("block", $privs[$privname])) {
-		$checked = "checked";
-		$blocked = 1;
-	}
-	else {
-		$checked = "";
-		$blocked = 0;
-	}
-	$count = count($types) + 1;
-	$name = "privrow[" . $privname . ":block]";
-	print "    <TD align=center bgcolor=gray><INPUT type=checkbox ";
-	print "dojoType=dijit.form.CheckBox id=ck$rownum:block name=\"$name\" ";
-	print "$checked $disabled onClick=\"";
-	print "changeCascadedRights(this.checked, $rownum, $count, 1, 3)\"></TD>\n";
-
-	#cascade rights
-	if(array_key_exists($privname, $privs) && 
-	   in_array("cascade", $privs[$privname]))
-		$checked = "checked";
-	else
-		$checked = "";
-	$name = "privrow[" . $privname . ":cascade]";
-	print "    <TD align=center bgcolor=\"#008000\" id=cell$rownum:0>";
-	print "<INPUT type=checkbox dojoType=dijit.form.CheckBox id=ck$rownum:0 ";
-	print "onClick=\"privChange(this.checked, $rownum, 0, 3);\" ";
-	print "name=\"$name\" $checked $disabled></TD>\n";
-
-	# normal rights
-	$j = 1;
-	foreach($types as $type) {
-		$bgcolor = "";
-		$checked = "";
-		$value = "";
-		$cascaded = 0;
-		if(array_key_exists($privname, $cascadeprivs) && 
-		   in_array($type, $cascadeprivs[$privname])) {
-			$bgcolor = "bgcolor=\"#008000\"";
-			$checked = "checked";
-			$value = "value=cascade";
-			$cascaded = 1;
-		}
-		if(array_key_exists($privname, $privs) && 
-		       in_array($type, $privs[$privname])) {
-			if($cascaded) {
-				$value = "value=cascadesingle";
-			}
-			else {
-				$checked = "checked";
-				$value = "value=single";
-			}
-		}
-		// if $type is administer or manageGroup, and it is not checked, and the
-		# user is not in the resource owner group, don't print the checkbox
-		if(($type == "administer" || $type == "manageGroup") &&
-		   $checked != "checked" && 
-		   ! array_key_exists($resourcegroups[$id]["ownerid"], $user["groups"])) {
-			print "<TD><img src=images/blank.gif></TD>\n";
-		}
-		else {
-			$name = "privrow[" . $privname . ":" . $type . "]";
-			print "    <TD align=center id=cell$rownum:$j $bgcolor><INPUT ";
-			print "type=checkbox dojoType=dijit.form.CheckBox name=\"$name\" ";
-			print "id=ck$rownum:$j $checked $value $disabled ";
-			print "onClick=\"nodeCheck(this.checked, $rownum, $j, 3);\">";
-			#print "onBlur=\"nodeCheck(this.checked, $rownum, $j, 3);\">";
-			print "</TD>\n";
-		}
-		$j++;
-	}
-	print "  </TR>\n";
-	$count = count($types) + 1;
-	if($blocked) {
-		print "<script language=\"Javascript\">\n";
-		print "dojo.addOnLoad(function () {setTimeout(\"changeCascadedRights(true, $rownum, $count, 0, 0)\", 500)});\n";
-		print "</script>\n";
-	}
-}
-
-////////////////////////////////////////////////////////////////////////////////
-///
 /// \fn getResourcePrivRowHTML($privname, $rownum, $privs, $types,
 ///                                     $resourcegroups, $resgroupmembers,
 ///                                     $cascadeprivs, $disabled)
@@ -1797,15 +1696,14 @@ function getResourcePrivRowHTML($privname, $rownum, $privs, $types,
 	global $user;
 	$text = "";
 	$js = "";
-	$text .= "  <TR>";
-	list($type, $name, $id) = explode('/', $privname);
-	$text .= "    <TH>";
+	$text .= "  <TR>\n";
+	list($grptype, $name, $id) = explode('/', $privname);
+	$text .= "    <TH>\n";
 	$text .= "      <span id=\"resgrp$id\" onmouseover=getGroupMembers(\"$id\",";
 	$text .= "\"resgrp$id\",\"rgmcont\"); onmouseout=getGroupMembersCancel";
-	$text .= "(\"resgrp$id\");>$name</span>";
-	$text .= "    </TH>";
-	//$text .= "    <TH>$name</TH>";
-	$text .= "    <TH>$type</TH>";
+	$text .= "(\"resgrp$id\");>$name</span>\n";
+	$text .= "    </TH>\n";
+	$text .= "    <TH>$grptype</TH>\n";
 
 	if($disabled)
 		$disabled = 'disabled=disabled';
@@ -1827,7 +1725,7 @@ function getResourcePrivRowHTML($privname, $rownum, $privs, $types,
 	$text .= "    <TD align=center bgcolor=gray><INPUT type=checkbox ";
 	$text .= "dojoType=dijit.form.CheckBox id=ck$rownum:block name=\"$name\" ";
 	$text .= "$checked $disabled onClick=\"changeCascadedRights";
-	$text .= "(this.checked, $rownum, $count, 1, 3)\"></TD>";
+	$text .= "(this.checked, $rownum, $count, 1, 3)\"></TD>\n";
 
 	#cascade rights
 	if(array_key_exists($privname, $privs) && 
@@ -1839,11 +1737,13 @@ function getResourcePrivRowHTML($privname, $rownum, $privs, $types,
 	$text .= "    <TD align=center bgcolor=\"#008000\" id=cell$rownum:0>";
 	$text .= "<INPUT type=checkbox dojoType=dijit.form.CheckBox id=ck$rownum:0 ";
 	$text .= "onClick=\"privChange(this.checked, $rownum, 0, 3);\" ";
-	$text .= "name=\"$name\" $checked $disabled></TD>";
+	$text .= "name=\"$name\" $checked $disabled></TD>\n";
 
 	# normal rights
 	$j = 1;
 	foreach($types as $type) {
+		if($type == 'block' || $type == 'cascade')
+			continue;
 		$bgcolor = "";
 		$checked = "";
 		$value = "";
@@ -1865,12 +1765,17 @@ function getResourcePrivRowHTML($privname, $rownum, $privs, $types,
 				$value = "value=single";
 			}
 		}
-		// if $type is administer or manageGroup, and it is not checked, and the
-		# user is not in the resource owner group, don't print the checkbox
-		if(($type == "administer" || $type == "manageGroup") &&
+		// if $type is administer, manageGroup, or manageMapping, and it is not
+		# checked, and the user is not in the resource owner group, don't print
+		# the checkbox
+		if(($type == "administer" || $type == "manageGroup" || $type == "manageMapping") &&
 		   $checked != "checked" && 
 		   ! array_key_exists($resourcegroups[$id]["ownerid"], $user["groups"])) {
-			$text .= "<TD><img src=images/blank.gif></TD>";
+			$text .= "<TD><img src=images/blank.gif></TD>\n";
+		}
+		elseif(($grptype == 'schedule' && ($type == 'available' || $type == 'manageMapping')) ||
+		      ($grptype == 'managementnode' && $type == 'available')) {
+			$text .= "<TD><img src=images/blank.gif></TD>\n";
 		}
 		else {
 			$name = "privrow[" . $privname . ":" . $type . "]";
@@ -1878,17 +1783,15 @@ function getResourcePrivRowHTML($privname, $rownum, $privs, $types,
 			$text .= "type=checkbox dojoType=dijit.form.CheckBox name=\"$name\" ";
 			$text .= "id=ck$rownum:$j $checked $value $disabled ";
 			$text .= "onClick=\"nodeCheck(this.checked, $rownum, $j, 3)\">";
-			#$text .= "onBlur=\"nodeCheck(this.checked, $rownum, $j, 3)\">";
-			$text .= "</TD>";
+			$text .= "</TD>\n";
 		}
 		$j++;
 	}
-	$text .= "  </TR>";
+	$text .= "  </TR>\n";
 	$count = count($types) + 1;
 	if($blocked) {
 		$js .= "changeCascadedRights(true, $rownum, $count, 0, 0);";
 	}
-	$text = preg_replace("/'/", '&#39;', $text);
 	return array('html' => $text,
 	             'javascript' => $js);
 }
@@ -2542,7 +2445,7 @@ function AJsubmitAddResourcePriv() {
 	}
 
 	$perms = explode(':', processInputVar('perms', ARG_STRING));
-	$privtypes = array("block", "cascade", "available", "administer", "manageGroup");
+	$privtypes = getResourcePrivs();
 	$newgroupprivs = array();
 	foreach($privtypes as $type) {
 		if(in_array($type, $perms))
