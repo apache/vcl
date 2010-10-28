@@ -751,17 +751,6 @@ sub post_load {
 
 =item *
 
- Delete legacy VCL logon/logoff scripts
-
-=cut
-	
-	my $system32_path = $self->get_system32_path();
-	if (!$self->delete_files_by_pattern("$system32_path/GroupPolicy/User/Scripts", ".*VCL.*cmd", 2)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to delete legacy VCL logon and logoff scripts");
-	}
-
-=item *
-
  Check if the imagemeta postoption is set to reboot, reboot if necessary
 
 =cut
@@ -883,6 +872,7 @@ sub grant_access {
 
 	my $management_node_keys = $self->data->get_management_node_keys();
 	my $computer_node_name   = $self->data->get_computer_node_name();
+	my $system32_path        = $self->get_system32_path();
 	my $remote_ip            = $self->data->get_reservation_remote_ip();
 	my $multiple_users       = $self->data->get_imagemeta_usergroupmembercount();
 	my $request_forimaging   = $self->data->get_request_forimaging();
@@ -927,6 +917,11 @@ sub grant_access {
 			return 0;
 		}
 	} ## end if ($request_forimaging)
+	
+	# Delete legacy VCL logon/logoff scripts
+	if (!$self->delete_files_by_pattern("$system32_path/GroupPolicy/User/Scripts", ".*VCL.*cmd", 2)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to delete legacy VCL logon and logoff scripts");
+	}
 
 	notify($ERRORS{'OK'}, 0, "access has been granted for reservation on $computer_node_name");
 	return 1;
