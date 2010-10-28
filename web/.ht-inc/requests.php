@@ -1235,7 +1235,7 @@ function detailStatusHTML($reqid) {
 function viewRequestInfo() {
 	$requestid = getContinuationVar("requestid");
 	$request = getRequestInfo($requestid);
-	if($request['forimaging'])
+	if($request['forimaging'] || $request['stateid'] == 18 || $request['laststateid'] == 18)
 		$reservation = $request['reservations'][0];
 	else {
 		foreach($request["reservations"] as $res) {
