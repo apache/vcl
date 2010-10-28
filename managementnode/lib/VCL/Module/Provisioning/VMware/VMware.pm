@@ -56,6 +56,7 @@ use English qw( -no_match_vars );
 use IO::File;
 use Fcntl qw(:DEFAULT :flock);
 use File::Temp qw( tempfile );
+use List::Util qw( max );
 
 use VCL::utils;
 
@@ -222,74 +223,67 @@ sub initialize {
 		return;
 	}
 	
-	my $vmhost_data = $self->get_vmhost_datastructure() || return;
-	my $vmhost_computer_name = $vmhost_data->get_computer_node_name() || return;
-	my $vm_computer_name = $self->data->get_computer_node_name() || return;
+	notify($ERRORS{'DEBUG'}, 0, "initializing " . ref($self) . " object");
+	
+	# Get a DataStructure object containing data for the VM host computer
+	my $vmhost_data = $self->get_vmhost_datastructure();
+	if (!$vmhost_data) {
+		notify($ERRORS{'WARNING'}, 0, "failed to create VM host DataStructure object");
+		return;
+	}
+	
+	my $vm_computer_name = $self->data->get_computer_node_name();
+	my $vmprofile_vmpath = $self->data->get_vmhost_profile_vmpath();
+	my $vmprofile_datastore_path = $self->data->get_vmhost_profile_datastore_path();
+	
+	my $vmhost_computer_name = $vmhost_data->get_computer_node_name();
+	my $vmhost_image_name = $vmhost_data->get_image_name();
+	my $vmhost_os_module_package = $vmhost_data->get_image_os_module_perl_package();
 	
 	# Make sure the VM and datastore paths are normalized - spaces not escaped
 	# The subroutines that use these paths expect this
-	my $vmprofile_vmpath = $self->data->get_vmhost_profile_vmpath();
-	if ($vmprofile_vmpath) {
-		$self->data->set_vmhost_profile_vmpath(normalize_file_path($vmprofile_vmpath));
-	}
-	
-	my $vmprofile_datastore_path = $self->data->get_vmhost_profile_datastore_path() || return;
-	if ($vmprofile_datastore_path) {
-		$self->data->set_vmhost_profile_datastore_path(normalize_file_path($vmprofile_datastore_path));
-	}
+	$self->data->set_vmhost_profile_vmpath(normalize_file_path($vmprofile_vmpath)) if ($vmprofile_vmpath);
+	$self->data->set_vmhost_profile_datastore_path(normalize_file_path($vmprofile_datastore_path)) if ($vmprofile_datastore_path);
 	
 	my $vmware_api;
-	my $vmhost_os;
 	
-	# Create an API object which will be used to control the VM (register, power on, etc.)
-	if ($vmware_api = $self->get_vmhost_api_object($VSPHERE_SDK_PACKAGE)) {
-		if ($vmware_api->is_restricted()) {
-			undef $vmware_api;
-		}
-		else {
-			notify($ERRORS{'DEBUG'}, 0, "vSphere SDK object will be used to control the VM: $vm_computer_name, and to control the OS of the VM host: $vmhost_computer_name");
-			$vmhost_os = $vmware_api;
-		}
-	}
-	
-	if (!$vmhost_os) {
-		# vSphere SDK is not available, SSH access to the VM host is required
-		# Get a DataStructure object containing the VM host's data and get the VM host OS module Perl package name
-		my $vmhost_image_name = $vmhost_data->get_image_name();
-		my $vmhost_os_module_package = $vmhost_data->get_image_os_module_perl_package();
-		
-		notify($ERRORS{'DEBUG'}, 0, "attempting to create OS object for the image currently loaded on the VM host: $vmhost_computer_name\nimage name: $vmhost_image_name\nOS module: $vmhost_os_module_package");
-		if ($vmhost_os = $self->get_vmhost_os_object($vmhost_os_module_package)) {
-			notify($ERRORS{'DEBUG'}, 0, "created OS object to control the OS of VM host: $vmhost_computer_name");
-		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "failed to create OS object to control the OS of VM host: $vmhost_computer_name");
-			return;
-		}
-		
+	notify($ERRORS{'DEBUG'}, 0, "attempting to create OS object for the image currently loaded on the VM host: $vmhost_computer_name\nimage name: $vmhost_image_name\nOS module: $vmhost_os_module_package");
+	if (my $vmhost_os = $self->get_vmhost_os_object($vmhost_os_module_package)) {
 		# Check if SSH is responding
 		if ($vmhost_os->is_ssh_responding()) {
-			notify($ERRORS{'DEBUG'}, 0, "OS of VM host $vmhost_computer_name will be controlled via SSH using OS object: " . ref($vmhost_os));
+			$self->{vmhost_os} = $vmhost_os;
+			notify($ERRORS{'OK'}, 0, "OS on VM host $vmhost_computer_name will be controlled using a " . ref($self->{vmhost_os}) . " OS object");
 		}
 		else {
-			notify($ERRORS{'WARNING'}, 0, "unable to control OS of VM host $vmhost_computer_name using OS object: " . ref($vmhost_os) . ", VM host is not responding to SSH");
-			return;
+			notify($ERRORS{'DEBUG'}, 0, "unable to control OS of VM host $vmhost_computer_name using $vmhost_os_module_package OS object because VM host is not responding to SSH");
 		}
 	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unable to create $vmhost_os_module_package OS object to control the OS of VM host: $vmhost_computer_name");
+	}
 	
-	# Store the VM host OS object in this object
-	$self->{vmhost_os} = $vmhost_os;
-	
-	
-	if (!$vmware_api) {
-		if ($vmware_api = $self->get_vmhost_api_object($VIM_SSH_PACKAGE)) {
-			notify($ERRORS{'DEBUG'}, 0, "VIM SSH command object will be used to control the VM: $vm_computer_name");
+	# Create an API object which will be used to control the VM (register, power on, etc.)
+	if (($vmware_api = $self->get_vmhost_api_object($VSPHERE_SDK_PACKAGE)) && !$vmware_api->is_restricted()) {
+		notify($ERRORS{'DEBUG'}, 0, "vSphere SDK object will be used to control the VM host $vmhost_computer_name and the VM: $vm_computer_name");
+		
+		$self->{vmhost_os} = $vmware_api if (!$self->{vmhost_os});
+	}
+	else {
+		# SSH access to the VM host OS is required if the vSphere SDK can't be used
+		if (!$self->{vmhost_os}) {
+			notify($ERRORS{'WARNING'}, 0, "no methods are available to control VM host $vmhost_computer_name, the vSphere SDK cannot be used to control the VM host and the host OS cannot be controlled via SSH");
+			return;
 		}
-		elsif (($vmware_api = $self->get_vmhost_api_object($VMWARE_CMD_PACKAGE))) {
-			notify($ERRORS{'DEBUG'}, 0, "vmware_cmd object will be used to control the VM: $vm_computer_name");
+		
+		# Try to create one of the other types of objects to control the VM host
+		if ($vmware_api = $self->get_vmhost_api_object($VIM_SSH_PACKAGE)) {
+			notify($ERRORS{'DEBUG'}, 0, "VMware on VM host $vmhost_computer_name will be controlled using vim-cmd via SSH");
+		}
+		elsif ($vmware_api = $self->get_vmhost_api_object($VMWARE_CMD_PACKAGE)) {
+			notify($ERRORS{'DEBUG'}, 0, "VMware on VM host $vmhost_computer_name will be controlled using vmware-cmd via SSH");
 		}
 		else {
-			notify($ERRORS{'WARNING'}, 0, "failed to create an API object to control the VM: $vm_computer_name");
+			notify($ERRORS{'WARNING'}, 0, "failed to create an object to control VMware on VM host: $vmhost_computer_name");
 			return;
 		}
 	}
@@ -297,22 +291,41 @@ sub initialize {
 	# Store the VM host API object in this object
 	$self->{api} = $vmware_api;
 	
+	notify($ERRORS{'DEBUG'}, 0, "VMware OS and API objects created for VM host $vmhost_computer_name:\n" .
+			 "VM host OS object type: " . ref($self->{vmhost_os}) . "\n" .
+			 "VMware API object type: " . ref($self->{api}) . "\n"
+	);
+
 	# Make sure the VMware product name can be retrieved
-	$self->get_vmhost_product_name() || return;
-	
-	# Make sure the vmx and vmdk base directories can be accessed
-	my $vmx_base_directory_path = $self->get_vmx_base_directory_path() || return;
-	if (!$vmhost_os->file_exists($vmx_base_directory_path)) {
-		notify($ERRORS{'WARNING'}, 0, "unable to access vmx base directory path: $vmx_base_directory_path");
+	my $vmhost_product_name = $self->get_vmhost_product_name();
+	if (!$vmhost_product_name) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine VMware product installed on VM host $vmhost_computer_name");
 		return;
 	}
-	my $vmdk_base_directory_path = $self->get_vmdk_base_directory_path() || return;
-	if (($vmx_base_directory_path ne $vmdk_base_directory_path) && !$vmhost_os->file_exists($vmdk_base_directory_path)) {
+	
+	# Make sure the vmx and vmdk base directories can be accessed
+	my $vmx_base_directory_path = $self->get_vmx_base_directory_path();
+	if (!$vmx_base_directory_path) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine vmx base directory path on VM host $vmhost_computer_name");
+		return;
+	}
+	elsif (!$self->vmhost_os->file_exists($vmx_base_directory_path)) {
+		notify($ERRORS{'WARNING'}, 0, "unable to access vmx base directory path on VM host $vmhost_computer_name: $vmx_base_directory_path");
+		return;
+	}
+	
+	my $vmdk_base_directory_path = $self->get_vmdk_base_directory_path();
+	if (!$vmdk_base_directory_path) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine vmdk base directory path on VM host $vmhost_computer_name");
+		return;
+	}
+	elsif ($vmx_base_directory_path eq $vmdk_base_directory_path) {
+		notify($ERRORS{'DEBUG'}, 0, "not checking if vmdk base directory exists because it is the same as the vmx base directory: $vmdk_base_directory_path");
+	}
+	elsif (!$self->vmhost_os->file_exists($vmdk_base_directory_path)) {
 		notify($ERRORS{'WARNING'}, 0, "unable to access vmdk base directory path: $vmdk_base_directory_path");
 		return;
 	}
-	
-	notify($ERRORS{'DEBUG'}, 0, "VMware provisioning object initialized:\nVM host OS object type: " . ref($self->{vmhost_os}) . "\nAPI object type: " . ref($self->{api}));
 	
 	return 1;
 }
@@ -507,7 +520,7 @@ sub capture {
 		notify($ERRORS{'WARNING'}, 0, "failed to complete OS module's pre_capture tasks");
 		return;
 	}
-
+	
 	# Wait for the VM to power off
 	# This OS module may initiate a shutdown and immediately return
 	if (!$self->wait_for_power_off(600)) {
@@ -523,84 +536,169 @@ sub capture {
 		}
 	}
 	
-	# Rename the vmdk files on the VM host and change the vmdk directory name to the image name
-	if ($vmx_file_path_capture ne $vmdk_file_path_renamed) {
-		if (!$self->rename_vmdk($vmdk_file_path_capture, $vmdk_file_path_renamed)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to rename the vmdk files after the VM was powered off: '$vmdk_file_path_capture' --> '$vmdk_file_path_renamed'");
-			return;
+	# Get the virtual disk type
+	my $virtual_disk_type = $self->api->get_virtual_disk_type($vmdk_file_path_capture) || 'unknown';
+	
+	# TODO: check if vmdk file path already matches the destination file path
+	
+	
+	if ($vmprofile_vmdisk eq "networkdisk") {
+		if ($virtual_disk_type =~ /thin|sparse/) {
+			# Files don't need to be converted, rename them
+			notify($ERRORS{'DEBUG'}, 0, "vmdk does not need to be copied or converted, it will be renamed, vmdk type: $virtual_disk_type, VM profile disk mode: $vmprofile_vmdisk");
+			if (!$self->rename_vmdk($vmdk_file_path_capture, $vmdk_file_path_renamed)) {
+				notify($ERRORS{'WARNING'}, 0, "failed to rename the vmdk files after the VM was powered off: '$vmdk_file_path_capture' --> '$vmdk_file_path_renamed'");
+				return;
+			}
+			
+			if (!$self->set_vmdk_file_path($vmdk_file_path_renamed)) {
+				notify($ERRORS{'WARNING'}, 0, "failed to set the vmdk file to the path after renaming the vmdk files: $vmdk_file_path_renamed");
+				return;
+			}
 		}
-		
-		if (!$self->set_vmdk_file_path($vmdk_file_path_renamed)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to set the vmdk file to the path after renaming the vmdk files: $vmdk_file_path_renamed");
-			return;
+		else {
+			# Files need to be converted
+			notify($ERRORS{'DEBUG'}, 0, "vmdk needs to be copied to convert it to a smaller format, vmdk type: $virtual_disk_type, VM profile disk mode: $vmprofile_vmdisk");
+			if (!$self->copy_vmdk($vmdk_file_path_capture, $vmdk_file_path_renamed)) {
+				notify($ERRORS{'WARNING'}, 0, "failed to copy the vmdk files after the VM was powered off: '$vmdk_file_path_capture' --> '$vmdk_file_path_renamed'");
+				return;
+			}
+			
+			if (!$self->set_vmdk_file_path($vmdk_file_path_renamed)) {
+				notify($ERRORS{'WARNING'}, 0, "failed to set the vmdk file to the path after copying the vmdk files: $vmdk_file_path_renamed");
+				return;
+			}
 		}
 	}
+	
 	else {
-		notify($ERRORS{'DEBUG'}, 0, "vmdk file does not need to be renamed: $vmx_file_path_capture");
-	}
-	
-	# Get the renamed vmdk directory path
-	my $vmdk_directory_path_renamed = $self->get_vmdk_directory_path();
-	
-	# Check if the VM host is using local or network-based disk to store vmdk files
-	# Don't have to do anything else for network disk because the vmdk directory has already been renamed
-	if ($vmprofile_vmdisk eq "localdisk") {
-		# Copy the vmdk directory from the VM host to the image repository
-		my @vmdk_copy_paths = $self->vmhost_os->find_files($vmdk_directory_path_renamed, '*.vmdk');
-		if (!@vmdk_copy_paths) {
-			notify($ERRORS{'WARNING'}, 0, "failed to find the renamed vmdk files on VM host to copy back to the managment node's image repository");
-			return;
-		}
-		
-		# Get the image repository directory path on this management node
+		# localdisk
+		# Get the image repository directory path on this management node or mounted on the VM host
 		my $repository_directory_path = $self->get_repository_vmdk_directory_path();
 		if (!$repository_directory_path) {
-			notify($ERRORS{'WARNING'}, 0, "failed to retrieve management node's image repository path");
+			notify($ERRORS{'WARNING'}, 0, "failed to retrieve image repository path");
 			return;
 		}
 		
-		# Loop through the files, copy each to the management node's repository directory
-		for my $vmdk_copy_path (@vmdk_copy_paths) {
-			my ($vmdk_copy_name) = $vmdk_copy_path =~ /([^\/]+)$/;
-			if (!$self->vmhost_os->copy_file_from($vmdk_copy_path, "$repository_directory_path/$vmdk_copy_name")) {
-				notify($ERRORS{'WARNING'}, 0, "failed to copy vmdk file from the VM host to the management node:\n '$vmdk_copy_path' --> '$repository_directory_path/$vmdk_copy_name'");
+		if ($self->is_repository_mounted_on_vmhost()) {
+			notify($ERRORS{'DEBUG'}, 0, "vmdk will be copied on the VM host directly to the image repository using the 2gbsparse disk format, vmdk type: $virtual_disk_type, VM profile disk mode: $vmprofile_vmdisk");
+			
+			# Files can be copied directly to the image repository and converted while they are copied
+			my $repository_vmdk_file_path = $self->get_repository_vmdk_file_path();
+			if (!$self->copy_vmdk($vmdk_file_path_capture, $repository_vmdk_file_path, '2gbsparse')) {
+				notify($ERRORS{'WARNING'}, 0, "failed to copy the vmdk files after the VM was powered off: '$vmdk_file_path_capture' --> '$repository_vmdk_file_path'");
+				return;
+			}
+			
+			# Rename the vmdk and leave the files in the datastore
+			notify($ERRORS{'DEBUG'}, 0, "renaming the vmdk files in the image repository datastore mounted on the VM host: '$vmdk_file_path_capture' --> '$vmdk_file_path_renamed'");
+			if (!$self->rename_vmdk($vmdk_file_path_capture, $vmdk_file_path_renamed)) {
+				notify($ERRORS{'WARNING'}, 0, "failed to rename the vmdk files before copying them directly to the image repository: '$vmdk_file_path_capture' --> '$vmdk_file_path_renamed'");
+				return;
+			}
+			
+			if (!$self->set_vmdk_file_path($vmdk_file_path_renamed)) {
+				notify($ERRORS{'WARNING'}, 0, "failed to set the vmdk file to the path after renaming the vmdk files: '$vmdk_file_path_renamed'");
+				return;
+			}
+		}
+		else {
+			if ($virtual_disk_type !~ /sparse/) {
+				notify($ERRORS{'DEBUG'}, 0, "vmdk will be copied locally on the VM host to the 2gbsparse disk format before copying it to the image repository, vmdk type: $virtual_disk_type, VM profile disk mode: $vmprofile_vmdisk");
+				
+				# Files need to be converted to smaller format before copying them to the image repository
+				if (!$self->copy_vmdk($vmdk_file_path_capture, $vmdk_file_path_renamed, '2gbsparse')) {
+					notify($ERRORS{'WARNING'}, 0, "failed to copy the vmdk files after the VM was powered off: '$vmdk_file_path_capture' --> '$vmdk_file_path_renamed'");
+					return;
+				}
+				
+				if (!$self->set_vmdk_file_path($vmdk_file_path_renamed)) {
+					notify($ERRORS{'WARNING'}, 0, "failed to set the vmdk file to the path after copying the vmdk files: $vmdk_file_path_renamed");
+					return;
+				}
+			}
+			
+			# Get the renamed vmdk directory path
+			my $vmdk_directory_path_renamed = $self->get_vmdk_directory_path();
+			
+			# Copy the vmdk directory from the VM host to the image repository
+			my @vmdk_copy_paths = $self->vmhost_os->find_files($vmdk_directory_path_renamed, '*.vmdk');
+			if (!@vmdk_copy_paths) {
+				notify($ERRORS{'WARNING'}, 0, "failed to find the renamed vmdk files on VM host to copy back to the managment node's image repository");
+				return;
+			}
+			
+			# Loop through the files, copy each to the management node's repository directory
+			for my $vmdk_copy_path (@vmdk_copy_paths) {
+				my ($vmdk_copy_name) = $vmdk_copy_path =~ /([^\/]+)$/;
+				if (!$self->vmhost_os->copy_file_from($vmdk_copy_path, "$repository_directory_path/$vmdk_copy_name")) {
+					notify($ERRORS{'WARNING'}, 0, "failed to copy vmdk file from the VM host to the management node:\n '$vmdk_copy_path' --> '$repository_directory_path/$vmdk_copy_name'");
+					return;
+				}
+			}
+		}
+		
+		# Get the current vmdk file and directory path
+		my $vmdk_file_path = $self->get_vmdk_file_path();
+		my $vmdk_directory_path = $self->get_vmdk_directory_path();
+		
+		# Delete the vmdk directory on the VM host if the vmdk is not compatible with the host
+		# The vmdk may have been converted to 2gbsparse on ESX/ESXi before being copied to the image repository
+		if ($self->is_vmdk_compatible($vmdk_file_path)) {
+			notify($ERRORS{'OK'}, 0, "leaving vmdk files in the datastore because virtual disk is compatible with the VM host: '$vmdk_file_path'");
+		}
+		elsif ($vmdk_directory_path eq $vmx_directory_path_capture) {
+			notify($ERRORS{'DEBUG'}, 0, "vmdk directory will not be deleted yet because it matches the vmx directory path and the VM has not been unregistered yet: $vmdk_directory_path");
+		}
+		else {
+			if ($self->vmhost_os->delete_file($vmdk_directory_path)) {
+				notify($ERRORS{'OK'}, 0, "deleted the vmdk directory after files were copied to the image repository: $vmdk_directory_path");
+			}
+			else {
+				notify($ERRORS{'WARNING'}, 0, "failed to delete the vmdk directory after files were copied to the image repository: $vmdk_directory_path");
 				return;
 			}
 		}
 		
-		## Delete the vmdk directory on the VM host
-		#if ($vmdk_directory_path_renamed eq $vmx_directory_path_capture) {
-		#	notify($ERRORS{'DEBUG'}, 0, "renamed vmdk directory will not be deleted yet because it matches the vmx directory path and the VM has not been unregistered yet: $vmdk_directory_path_renamed");
-		#}
-		#else {
-		#	if ($self->vmhost_os->delete_file($vmdk_directory_path_renamed)) {
-		#		notify($ERRORS{'OK'}, 0, "deleted the vmdk directory after files were copied to the image repository: $vmdk_directory_path_renamed");
-		#	}
-		#	else {
-		#		notify($ERRORS{'WARNING'}, 0, "failed to delete the vmdk directory after files were copied to the image repository: $vmdk_directory_path_renamed");
-		#	}
-		#}
+		# Attempt to set permissions to 0755 on the image repository directory
+		# VMware's methods to copy the files will set the permissions to 0700
+		# This prevents image retrieval from working when other management nodes attempt to retrieve the image
+		# Attempt to call the VM host OS's set_file_permissions subroutine if the repository is mounted on the VM host
+		if ($self->is_repository_mounted_on_vmhost() && $self->vmhost_os->can('set_file_permissions') && $self->vmhost_os->set_file_permissions($repository_directory_path, '0644', 1)) {
+			notify($ERRORS{'OK'}, 0, "set file permissions on the image repository directory mounted on the VM host: $repository_directory_path");
+		}
+		elsif (-d $repository_directory_path) {
+			# Set the permissions locally on the management node if the directory exists
+			notify($ERRORS{'DEBUG'}, 0, "image repository directory exists on the management node: $repository_directory_path, attempting to set permissions to 0644");
+			
+			my $chmod_command = "chmod -v -R 0644 \"$repository_directory_path\"";
+			my ($chmod_exit_status, $chmod_output) = run_command($chmod_command);
+			if (!defined($chmod_output)) {
+				notify($ERRORS{'WARNING'}, 0, "failed to run command to set permissions on image repository directory: $repository_directory_path");
+			}
+			elsif (grep(/^chmod:/, @$chmod_output)) {
+				notify($ERRORS{'WARNING'}, 0, "error occurred attempting to set permissions on image repository directory: $repository_directory_path, output:\n" . join("\n", @$chmod_output));
+			}
+			else {
+				notify($ERRORS{'OK'}, 0, "set permissions on image repository directory: $repository_directory_path");
+			}
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "unable to set permissions on image repository directory: $repository_directory_path");
+		}
 	}
 	
-	# Unregister the VM
-	if ($self->api->vm_unregister($vmx_file_path_capture)) {
-		notify($ERRORS{'OK'}, 0, "unregistered the VM being captured: $vmx_file_path_capture");
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to unregister the VM being captured: $vmx_file_path_capture");
-	}
-	
+	# Get the renamed vmdk directory path
+	my $vmdk_directory_path_renamed = $self->get_vmdk_directory_path();
 	
 	# Delete the vmx directory
 	if ($vmprofile_vmdisk eq "networkdisk" && $vmx_directory_path_capture eq $vmdk_directory_path_renamed) {
 		notify($ERRORS{'DEBUG'}, 0, "vmx directory will not be deleted because the VM disk mode is '$vmprofile_vmdisk' and the vmx directory path is the same as the vmdk directory path for the captured image: '$vmdk_directory_path_renamed'");
 	}
 	else {
-		if ($self->vmhost_os->delete_file($vmx_directory_path_capture)) {
-			notify($ERRORS{'OK'}, 0, "deleted the vmx directory after the image was captured: $vmx_directory_path_capture");
-		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "failed to delete the vmx directory that was captured: $vmx_directory_path_capture");
+		# Delete the VM
+		if (!$self->delete_vm($vmx_file_path_capture)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to delete the VM after the image was captured: $vmx_file_path_capture");
 		}
 	}
 	
@@ -728,7 +826,7 @@ sub get_active_vmx_file_path {
 
 =head2 node_status
 
- Parameters  : none
+ Parameters  : $computer_id or $hash->{computer}{id} (optional)
  Returns     : string -- 'READY', 'POST_LOAD', or 'RELOAD'
  Description : Checks the status of a VM. 'READY' is returned if the VM is
                accessible via SSH, the virtual disk mode is persistent if
@@ -740,52 +838,148 @@ sub get_active_vmx_file_path {
 =cut
 
 sub node_status {
-	my $self = shift;
-	if (ref($self) !~ /VCL::Module/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
+	my $self;
+	
+	# Get the argument
+	my $argument = shift;
+	
+	# Check if this subroutine was called an an object method or an argument was passed
+	if (ref($argument) =~ /VCL::Module/i) {
+		$self = $argument;
+	}
+	elsif (!ref($argument) || ref($argument) eq 'HASH') {
+		# An argument was passed, check its type and determine the computer ID
+		my $computer_id;
+		if (ref($argument)) {
+			# Hash reference was passed
+			$computer_id = $argument->{computer}{id};
+		}
+		elsif ($argument =~ /^\d+$/) {
+			# Computer ID was passed
+			$computer_id = $argument;
+		}
+		else {
+			# Computer name was passed
+			($computer_id) = get_computer_ids($argument);
+		}
+		
+		if ($computer_id) {
+			notify($ERRORS{'DEBUG'}, 0, "computer ID: $computer_id");
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "unable to determine computer ID from argument:\n" . format_data($argument));
+			return;
+		}
+		
+		# Create a DataStructure object containing data for the computer specified as the argument
+		my $data;
+		eval {
+			$data= new VCL::DataStructure({computer_id => $computer_id});
+		};
+		if ($EVAL_ERROR) {
+			notify($ERRORS{'WARNING'}, 0, "failed to create DataStructure object for computer ID: $computer_id, error: $EVAL_ERROR");
+			return;
+		}
+		elsif (!$data) {
+			notify($ERRORS{'WARNING'}, 0, "failed to create DataStructure object for computer ID: $computer_id, DataStructure object is not defined");
+			return;
+		}
+		else {
+			notify($ERRORS{'OK'}, 0, "created DataStructure object  for computer ID: $computer_id");
+		}
+		
+		# Create a VMware object
+		my $object_type = 'VCL::Module::Provisioning::VMware::VMware';
+		if ($self = ($object_type)->new({data_structure => $data})) {
+			notify($ERRORS{'OK'}, 0, "created $object_type object to check the status of computer ID: $computer_id");
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to create $object_type object to check the status of computer ID: $computer_id");
+			return;
+		}
+		
+		# Create an OS object for the VMware object to access
+		if (!$self->create_os_object()) {
+			notify($ERRORS{'WARNING'}, 0, "failed to create OS object");
+			return;
+		}
 	}
 	
-	my $computer_name = $self->data->get_computer_short_name();
+	my $reservation_id = $self->data->get_reservation_id();
+	my $computer_name = $self->data->get_computer_node_name();
 	my $image_name = $self->data->get_image_name();
-	my $vm_persistent = $self->is_vm_persistent();
+	
+	notify($ERRORS{'DEBUG'}, 0, "attempting to check the status of computer $computer_name, image: $image_name");
+	
+	# Create a hash reference and populate it with the default values
+	my $status;
+	$status->{currentimage} = '';
+	$status->{ssh} = 0;
+	$status->{image_match} = 0;
+	$status->{status} = 'RELOAD';
+	
+	# Check if node is pingable and retrieve the power status if the reservation ID is 0
+	# The reservation ID will be 0 is this subroutine was not called as an object method, but with a computer ID argument
+	# The reservation ID will be 0 when called from healthcheck.pm
+	# The reservation ID will be > 0 if called from a normal VCL reservation
+	# Skip the ping and power status checks for a normal reservation to speed things up
+	if (!$reservation_id) {
+		if (_pingnode($computer_name)) {
+			notify($ERRORS{'DEBUG'}, 0, "VM $computer_name is pingable");
+			$status->{ping} = 1;
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "VM $computer_name is not pingable");
+			$status->{ping} = 0;
+		}
+		
+		$status->{vmstate} = $self->power_status();
+	}
 	
 	# Check if SSH is available
 	if ($self->os->is_ssh_responding()) {
 		notify($ERRORS{'DEBUG'}, 0, "VM $computer_name is responding to SSH");
+		$status->{ssh} = 1;
 	}
 	else {
 		notify($ERRORS{'DEBUG'}, 0, "VM $computer_name is not responding to SSH, returning 'RELOAD'");
-		return {'status' => 'RELOAD'};
+		$status->{status} = 'RELOAD';
+		$status->{ssh} = 0;
+		
+		# Skip remaining checks if SSH isn't available
+		return $status;
 	}
 	
 	# Get the contents of currentimage.txt and check if currentimage.txt matches the requested image name
 	my $current_image_name = $self->os->get_current_image_name();
+	$status->{currentimage} = $current_image_name;
+	
 	if (!$current_image_name) {
 		notify($ERRORS{'DEBUG'}, 0, "unable to retrieve image name from currentimage.txt on VM $computer_name, returning 'RELOAD'");
-		return {'status' => 'RELOAD'};
+		return $status;
 	}
 	elsif ($current_image_name eq $image_name) {
 		notify($ERRORS{'DEBUG'}, 0, "currentimage.txt image ($current_image_name) matches requested image name ($image_name) on VM $computer_name");
+		$status->{image_match} = 1;
 	}
 	else {
 		notify($ERRORS{'DEBUG'}, 0, "currentimage.txt image ($current_image_name) does not match requested image name ($image_name) on VM $computer_name, returning 'RELOAD'");
-		return {'status' => 'RELOAD'};
+		return $status;
 	}
 	
 	# If the VM should be persistent, make sure the VM already loaded is persistent
-	if ($vm_persistent) {
+	if ($self->is_vm_persistent()) {
 		# Determine the vmx file path actively being used by the VM
 		my $vmx_file_path = $self->get_active_vmx_file_path();
 		if (!$vmx_file_path) {
 			notify($ERRORS{'WARNING'}, 0, "failed to determine the vmx file path actively being used by $computer_name, returning 'RELOAD'");
-			return {'status' => 'RELOAD'};
+			return $status;
 		}
 	
 		# Set the vmx file path in this object so that it overrides the default value that would normally be constructed
 		if (!$self->set_vmx_file_path($vmx_file_path)) {
 			notify($ERRORS{'WARNING'}, 0, "failed to set the vmx file to the path that was determined to be in use by the VM: $vmx_file_path, returning 'RELOAD'");
-			return {'status' => 'RELOAD'};
+			return $status;
 		}
 		
 		# Get the information contained within the vmx file
@@ -795,18 +989,18 @@ sub node_status {
 		my @vmdk_identifiers = keys %{$vmx_info->{vmdk}};
 		if (!@vmdk_identifiers) {
 			notify($ERRORS{'WARNING'}, 0, "did not find vmdk file in vmx info ({vmdk} key), returning 'RELOAD':\n" . format_data($vmx_info));
-			return {'status' => 'RELOAD'};
+			return $status;
 		}
 		elsif (scalar(@vmdk_identifiers) > 1) {
 			notify($ERRORS{'WARNING'}, 0, "found multiple vmdk files in vmx info ({vmdk} keys), returning 'RELOAD':\n" . format_data($vmx_info));
-			return {'status' => 'RELOAD'};
+			return $status;
 		}
 		
 		# Get the vmdk file path from the vmx information
 		my $vmdk_file_path = $vmx_info->{vmdk}{$vmdk_identifiers[0]}{vmdk_file_path};
 		if (!$vmdk_file_path) {
 			notify($ERRORS{'WARNING'}, 0, "vmdk file path was not found in the vmx file info, returning 'RELOAD':\n" . format_data($vmx_info));
-			return {'status' => 'RELOAD'};
+			return $status;
 		}
 		notify($ERRORS{'DEBUG'}, 0, "vmdk file path used by the VM already loaded: $vmdk_file_path");
 		
@@ -814,12 +1008,12 @@ sub node_status {
 		my $vmdk_mode = $vmx_info->{vmdk}{$vmdk_identifiers[0]}{mode};
 		if (!$vmdk_mode) {
 			notify($ERRORS{'WARNING'}, 0, "vmdk mode was not found in the vmx info, returning 'RELOAD':\n" . format_data($vmx_info));
-			return {'status' => 'RELOAD'};
+			return $status;
 		}
 		
 		if ($vmdk_mode !~ /^(independent-)?persistent/i) {
 			notify($ERRORS{'OK'}, 0, "mode of vmdk already loaded is not persistent: $vmdk_mode, returning 'RELOAD'");
-			return {'status' => 'RELOAD'};
+			return $status;
 		}
 		notify($ERRORS{'DEBUG'}, 0, "mode of vmdk already loaded is valid: $vmdk_mode");
 	}
@@ -827,14 +1021,39 @@ sub node_status {
 	# Check if the OS post_load tasks have run
 	if ($self->os->get_vcld_post_load_status()) {
 		notify($ERRORS{'DEBUG'}, 0, "OS module post_load tasks have been completed on VM $computer_name");
+		$status->{status} = 'READY';
 	}
 	else {
 		notify($ERRORS{'DEBUG'}, 0, "OS module post_load tasks have not been completed on VM $computer_name, returning 'POST_LOAD'");
-		return {'status' => 'POST_LOAD'};
+		$status->{status} = 'POST_LOAD';
 	}
 	
-	notify($ERRORS{'DEBUG'}, 0, "returning 'READY'");
-	return {'status' => 'READY'};
+	return $status;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 vmhost_data
+
+ Parameters  : none
+ Returns     : DataStructure object reference
+ Description : Returns the DataStructure object containing the VM host data.
+
+=cut
+
+sub vmhost_data {
+	my $self = shift;
+	if (ref($self) !~ /vmware/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	if (!$self->{vmhost_data}) {
+		notify($ERRORS{'WARNING'}, 0, "VM host DataStructure object is not defined as \$self->{vmhost_data}");
+		return;
+	}
+	
+	return $self->{vmhost_data};
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -855,7 +1074,7 @@ sub vmhost_os {
 	}
 	
 	if (!$self->{vmhost_os}) {
-		notify($ERRORS{'WARNING'}, 0, "VM host OS object is not defined");
+		notify($ERRORS{'WARNING'}, 0, "VM host OS object is not defined as \$self->{vmhost_os}");
 		return;
 	}
 	
@@ -909,10 +1128,10 @@ sub get_vmhost_datastructure {
 		return;
 	}
 	
-	my $request_data = $self->data->get_request_data() || return;
-	my $reservation_id = $self->data->get_reservation_id() || return;
-	my $vmhost_computer_id = $self->data->get_vmhost_computer_id() || return;
-	my $vmhost_profile_image_id = $self->data->get_vmhost_profile_image_id() || return;
+	my $request_data = $self->data->get_request_data();
+	my $reservation_id = $self->data->get_reservation_id();
+	my $vmhost_computer_id = $self->data->get_vmhost_computer_id();
+	my $vmhost_profile_image_id = $self->data->get_vmhost_profile_image_id();
 	
 	# Create a DataStructure object containing computer data for the VM host
 	my $vmhost_data;
@@ -995,8 +1214,7 @@ sub get_vmhost_os_object {
 	eval { $vmhost_os = ($vmhost_os_perl_package)->new({data_structure => $vmhost_data}) };
 	if ($vmhost_os) {
 		notify($ERRORS{'OK'}, 0, "VM host OS object created: " . ref($vmhost_os));
-		$self->{vmhost_os} = $vmhost_os;
-		return $self->{vmhost_os};
+		return $vmhost_os;
 	}
 	elsif ($EVAL_ERROR) {
 		notify($ERRORS{'WARNING'}, 0, "VM host OS object could not be created: type: $vmhost_os_perl_package, error:\n$EVAL_ERROR");
@@ -1282,35 +1500,35 @@ sub prepare_vmx {
 	}
 	
 	notify($ERRORS{'DEBUG'}, 0, "vm info:
-			 display name: $display_name
-			 
-			 image ID: $image_id
-			 imagerevision ID: $imagerevision_id
-			 
-			 vmx path: $vmx_file_path
-			 vmx directory name: $vmx_directory_name
-			 vmx directory path: $vmx_directory_path
-			 vmdk file path: $vmdk_file_path
-			 persistent: $vm_persistent
-			 computer ID: $computer_id
-			 computer name: $computer_name
-			 image name: $image_name
-			 guest OS: $guest_os
-			 virtual hardware version: $vm_hardware_version
-			 RAM: $vm_ram
-			 CPU count: $vm_cpu_count
-			 
-			 ethernet adapter type: $vm_ethernet_adapter_type
-			 
-			 virtual switch 0: $virtual_switch_0
-			 eth0 MAC address: $vm_eth0_mac
-			 
-			 virtual switch 1: $virtual_switch_1
-			 eth1 MAC address: $vm_eth1_mac
-			 
-			 disk adapter type: $vm_disk_adapter_type
-			 disk mode: $vm_disk_mode
-			 disk write through: $vm_disk_write_through"
+		display name: $display_name
+		
+		image ID: $image_id
+		imagerevision ID: $imagerevision_id
+		
+		vmx path: $vmx_file_path
+		vmx directory name: $vmx_directory_name
+		vmx directory path: $vmx_directory_path
+		vmdk file path: $vmdk_file_path
+		persistent: $vm_persistent
+		computer ID: $computer_id
+		computer name: $computer_name
+		image name: $image_name
+		guest OS: $guest_os
+		virtual hardware version: $vm_hardware_version
+		RAM: $vm_ram
+		CPU count: $vm_cpu_count
+		
+		ethernet adapter type: $vm_ethernet_adapter_type
+		
+		virtual switch 0: $virtual_switch_0
+		eth0 MAC address: $vm_eth0_mac
+		
+		virtual switch 1: $virtual_switch_1
+		eth1 MAC address: $vm_eth1_mac
+		
+		disk adapter type: $vm_disk_adapter_type
+		disk mode: $vm_disk_mode
+		disk write through: $vm_disk_write_through"
 	);
 	
 	# Create a hash containing the vmx parameter names and values
@@ -1362,17 +1580,21 @@ sub prepare_vmx {
 		
 		"svga.autodetect" => "TRUE",
 		
-		"tools.remindInstall" => "TRUE",
+		"tools.remindInstall" => "FALSE",
 		"tools.syncTime" => "FALSE",
 		
-		"toolScripts.afterPowerOn" => "TRUE",
-		"toolScripts.afterResume" => "TRUE",
-		"toolScripts.beforeSuspend" => "TRUE",
-		"toolScripts.beforePowerOff" => "TRUE",
+		"toolScripts.afterPowerOn" => "FALSE",
+		"toolScripts.afterResume" => "FALSE",
+		"toolScripts.beforeSuspend" => "FALSE",
+		"toolScripts.beforePowerOff" => "FALSE",
 		
 		"uuid.action" => "keep",	# Keep the VM's uuid, keeps existing MAC								
 		
 		"virtualHW.version" => "$vm_hardware_version",
+		
+		"MemTrimRate" => "0",
+		"sched.mem.pshare.enable" => "FALSE",
+		"mainMem.useNamedFile" => "FALSE",
 	);
 	
 	# Add the disk adapter parameters to the hash
@@ -1417,7 +1639,7 @@ sub prepare_vmx {
 	}
 	
 	# Add additional Ethernet interfaces if the image project name is not vcl
-	if ($image_project !~ /^vcl$/i && self->api->can('get_network_names')) {
+	if ($image_project !~ /^vcl$/i && $self->api->can('get_network_names')) {
 		notify($ERRORS{'DEBUG'}, 0, "image project is: $image_project, checking if additional network adapters should be configured");
 		
 		# Get a list of all the network names configured on the VMware host
@@ -1718,7 +1940,6 @@ sub is_vmdk_compatible {
 	}
 	
 	my $vmdk_file_path = $self->get_vmdk_file_path() || return;
-	
 	
 	# Retrieve the VMware product name
 	my $vmware_product_name = $self->get_vmhost_product_name();
@@ -2788,8 +3009,8 @@ sub get_repository_vmdk_file_path {
 	}
 	
 	my $repository_vmdk_directory_path = $self->get_repository_vmdk_directory_path() || return;
-	my $vmdk_file_name = $self->get_vmdk_file_name() || return;
-	return "$repository_vmdk_directory_path/$vmdk_file_name";
+	my $image_name = $self->data->get_image_name() || return;
+	return "$repository_vmdk_directory_path/$image_name.vmdk";
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -2811,18 +3032,21 @@ sub is_vm_persistent {
 		return;
 	}
 	
-	my $request_forimaging = $self->data->get_request_forimaging();
+	my $request_forimaging = $self->data->get_request_forimaging(0) || 0;
 	if ($request_forimaging) {
 		return 1;
 	}
 	
 	# Return true if the request end time is more than 24 hours in the future
-	my $end_epoch = convert_to_epoch_seconds($self->data->get_request_end_time());
-	my $now_epoch = time();
-	my $end_hours = (($end_epoch - $now_epoch) / 60 / 60);
-	if ($end_hours >= 24) {
-		notify($ERRORS{'DEBUG'}, 0, "request end time is " . format_number($end_hours, 1) . " hours in the future, returning true");
-		return 1;
+	my $request_end_time = $self->data->get_request_end_time(0);
+	if ($request_end_time) {
+		my $end_epoch = convert_to_epoch_seconds($self->data->get_request_end_time(0));
+		my $now_epoch = time();
+		my $end_hours = (($end_epoch - $now_epoch) / 60 / 60);
+		if ($end_hours >= 24) {
+			notify($ERRORS{'DEBUG'}, 0, "request end time is " . format_number($end_hours, 1) . " hours in the future, returning true");
+			return 1;
+		}
 	}
 	
 	return 0;
@@ -3814,11 +4038,24 @@ sub copy_vmdk {
 		return;
 	}
 	
+	my $vmhost_name = $self->vmhost_data->get_computer_short_name();
+	my $vmhost_product_name = $self->get_vmhost_product_name();
+	
 	# Get the arguments
-	my ($source_vmdk_file_path, $destination_vmdk_file_path) = @_;
+	my ($source_vmdk_file_path, $destination_vmdk_file_path, $virtual_disk_type) = @_;
 	if (!$source_vmdk_file_path || !$destination_vmdk_file_path) {
 		notify($ERRORS{'WARNING'}, 0, "source and destination vmdk file path arguments were not specified");
 		return;
+	}
+	
+	# Set the default virtual disk type if the argument was not specified
+	if (!$virtual_disk_type) {
+		if ($vmhost_product_name =~ /esx/i) {
+			$virtual_disk_type = 'thin';
+		}
+		else {
+			$virtual_disk_type = '2gbsparse';
+		}
 	}
 	
 	# Make sure the arguments end with .vmdk
@@ -3847,38 +4084,62 @@ sub copy_vmdk {
 	}
 	
 	my $start_time = time;
+	my $copy_result = 0;
 	
 	# Attempt to use the API's copy_virtual_disk subroutine
-	if ($self->api->can('copy_virtual_disk') && $self->api->copy_virtual_disk($source_vmdk_file_path, $destination_vmdk_file_path)) {
+	if ($self->api->can('copy_virtual_disk') && ($copy_result = $self->api->copy_virtual_disk($source_vmdk_file_path, $destination_vmdk_file_path, $virtual_disk_type))) {
 		notify($ERRORS{'OK'}, 0, "copied vmdk using API's copy_virtual_disk subroutine");
 	}
-	else {
-		# Unable to use API's copy_virtual_disk subroutine, try running vmkfstools or vmware-vdiskmanager
-		my $command;
-		if ($self->get_vmhost_product_name() =~ /VMware Server 1/i) {
-			# Use vmware-vdiskmanager if the VM host is running VMware Server 1.x
-			# Disk type 1 is 2GB sparse
-			$command = "vmware-vdiskmanager -r \"$source_vmdk_file_path\" -t 1 \"$destination_vmdk_file_path\"";
-			notify($ERRORS{'DEBUG'}, 0, "attempting to copy virtual disk using vmware-vdiskmanager, disk type: 2gbsparse: '$source_vmdk_file_path' --> '$destination_vmdk_file_path'");
-		}
-		else {
-			# Use vmkfstools if the VM host is running anything else
-			$command = "vmkfstools -i \"$source_vmdk_file_path\" \"$destination_vmdk_file_path\" -d thin";
-			notify($ERRORS{'DEBUG'}, 0, "attempting to copy virtual disk using vmkfstools, disk type: thin: '$source_vmdk_file_path' --> '$destination_vmdk_file_path'");
-		}
+	
+	if (!$copy_result) {
+		# Try to use vmkfstools
+		my $command = "vmkfstools -i \"$source_vmdk_file_path\" \"$destination_vmdk_file_path\" -d $virtual_disk_type";
+		notify($ERRORS{'DEBUG'}, 0, "attempting to copy virtual disk using vmkfstools, disk type: $virtual_disk_type:\n'$source_vmdk_file_path' --> '$destination_vmdk_file_path'");
 		
+		$start_time = time;
 		my ($exit_status, $output) = $self->vmhost_os->execute($command);
 		if (!defined($output)) {
 			notify($ERRORS{'WARNING'}, 0, "failed to run command on VM host: $command");
-			return;
+		}
+		elsif (grep(/command not found/i, @$output)) {
+			notify($ERRORS{'DEBUG'}, 0, "unable to copy virtual disk using vmkfstools because the command is not available on VM host $vmhost_name");
 		}
 		elsif (!grep(/(100\% done|success)/, @$output)) {
 			notify($ERRORS{'WARNING'}, 0, "failed to copy virtual disk, output does not contain '100% done' or 'success', command: '$command', output:\n" . join("\n", @$output));
-			return;
 		}
 		else {
-			notify($ERRORS{'OK'}, 0, "copied virtual disk on VM host: '$source_vmdk_file_path' --> '$destination_vmdk_file_path'");
+			notify($ERRORS{'OK'}, 0, "copied virtual disk on VM host using vmkfstools, destination disk type: $virtual_disk_type:\n'$source_vmdk_file_path' --> '$destination_vmdk_file_path'");
+			$copy_result = 1;
 		}
+	}
+	
+	if (!$copy_result) {
+		# Try to use vmware-vdiskmanager
+		# Use disk type  = 1 (2GB sparse)
+		my $command = "vmware-vdiskmanager -r \"$source_vmdk_file_path\" -t 1 \"$destination_vmdk_file_path\"";
+		notify($ERRORS{'DEBUG'}, 0, "attempting to copy virtual disk using vmware-vdiskmanager, disk type: 2gbsparse:\n'$source_vmdk_file_path' --> '$destination_vmdk_file_path'");
+		
+		$start_time = time;
+		my ($exit_status, $output) = $self->vmhost_os->execute($command);
+		if (!defined($output)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to run command on VM host: $command");
+		}
+		elsif (grep(/command not found/i, @$output)) {
+			notify($ERRORS{'DEBUG'}, 0, "unable to copy virtual disk using vmware-vdiskmanager because the command is not available on VM host $vmhost_name");
+		}
+		elsif (!grep(/(100\% done|success)/, @$output)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to copy virtual disk, output does not contain '100% done' or 'success', command: '$command', output:\n" . join("\n", @$output));
+		}
+		else {
+			notify($ERRORS{'OK'}, 0, "copied virtual disk on VM host using vmware-vdiskmanager:\n'$source_vmdk_file_path' --> '$destination_vmdk_file_path'");
+			$copy_result = 1;
+		}
+	}
+	
+	# Check if any of the methods was successful
+	if (!$copy_result) {
+		notify($ERRORS{'WARNING'}, 0, "failed to copy virtual disk using any available methods:\n'$source_vmdk_file_path' --> '$destination_vmdk_file_path'");
+		return;
 	}
 	
 	# Calculate how long it took to copy
@@ -3886,27 +4147,69 @@ sub copy_vmdk {
 	my $minutes = ($duration_seconds / 60);
 	$minutes =~ s/\..*//g;
 	my $seconds = ($duration_seconds - ($minutes * 60));
-	$seconds = "0$seconds" if length($seconds) == 1;
+	if (length($seconds) == 0) {
+		$seconds = "00";
+	}
+	elsif (length($seconds) == 1) {
+		$seconds = "0$seconds";
+	}
 	
 	# Get the size of the copied vmdk files
 	my $search_path = $destination_vmdk_file_path;
 	$search_path =~ s/\.vmdk$//g;
 	$search_path .= '*.vmdk';
+	
 	my $image_size_bytes = $self->vmhost_os->get_file_size($search_path);
+	if (!defined($image_size_bytes) || $image_size_bytes !~ /^\d+$/) {
+		notify($ERRORS{'WARNING'}, 0, "copied vmdk but failed to retrieve destination file size:\n'$source_vmdk_file_path' --> '$destination_vmdk_file_path'");
+		return 1;
+	}
+	
+	my $image_size_bits = ($image_size_bytes * 8);
+
+	my $image_size_kb = ($image_size_bytes / 1024);
+	my $image_size_mb = ($image_size_bytes / 1024 / 1024);
+	my $image_size_gb = ($image_size_bytes / 1024 / 1024 / 1024);
+	
+	my $image_size_kbit = ($image_size_bits / 1024);
+	my $image_size_mbit = ($image_size_bits / 1024 / 1024);
+	my $image_size_gbit = ($image_size_bits / 1024 / 1024 / 1024);
 	
 	my $bytes_per_second = ($image_size_bytes / $duration_seconds);
-	my $bits_per_second = ($image_size_bytes * 8 / $duration_seconds);
-	my $mb_per_second = ($image_size_bytes / $duration_seconds / 1024 / 1024);
-	my $mbit_per_second = ($image_size_bytes * 8 / $duration_seconds / 1024 / 1024);
-	my $gbyte_per_minute = ($image_size_bytes / $duration_seconds / 1024 / 1024 / 1024 * 60);
+	my $kb_per_second = ($image_size_kb / $duration_seconds);
+	my $mb_per_second = ($image_size_mb / $duration_seconds);
+	my $gb_per_second = ($image_size_gb / $duration_seconds);
+	
+	my $bits_per_second = ($image_size_bits / $duration_seconds);
+	my $kbit_per_second = ($image_size_kbit / $duration_seconds);
+	my $mbit_per_second = ($image_size_mbit / $duration_seconds);
+	my $gbit_per_second = ($image_size_gbit / $duration_seconds);
+	
+	my $bytes_per_minute = ($image_size_bytes / $duration_seconds * 60);
+	my $kb_per_minute = ($image_size_kb / $duration_seconds * 60);
+	my $mb_per_minute = ($image_size_mb / $duration_seconds * 60);
+	my $gb_per_minute = ($image_size_gb / $duration_seconds * 60);
+	
 	
 	notify($ERRORS{'OK'}, 0, "copied vmdk: '$source_vmdk_file_path' --> '$destination_vmdk_file_path'\n" .
-		"bytes copied: " . format_number($image_size_bytes) . ", time to copy: $minutes:$seconds (" . format_number($duration_seconds) . " seconds)\n" .
-		"b/s:  " . format_number($bits_per_second) . "\n" .
-		"B/s:  " . format_number($bytes_per_second) . "\n" .
-		"Mb/s: " . format_number($mbit_per_second, 2) . "\n" .
-		"MB/s: " . format_number($mb_per_second, 2) . "\n" .
-		"GB/m: " . format_number($gbyte_per_minute, 2));
+		"time to copy: $minutes:$seconds (" . format_number($duration_seconds) . " seconds)\n" .
+		"---\n" .
+		"bits copied:  " . format_number($image_size_bits) . " ($image_size_bits)\n" .
+		"bytes copied: " . format_number($image_size_bytes) . " ($image_size_bytes)\n" .
+		"MB copied:    " . format_number($image_size_mb, 1) . "\n" .
+		"GB copied:    " . format_number($image_size_gb, 2) . "\n" .
+		"---\n" .
+		"B/m:    " . format_number($bytes_per_minute) . "\n" .
+		"MB/m:   " . format_number($mb_per_minute, 1) . "\n" .
+		"GB/m:   " . format_number($gb_per_minute, 2) . "\n" .
+		"---\n" .
+		"B/s:    " . format_number($bytes_per_second) . "\n" .
+		"MB/s:   " . format_number($mb_per_second, 1) . "\n" .
+		"GB/s:   " . format_number($gb_per_second, 2) . "\n" .
+		"---\n" .
+		"Mbit/s: " . format_number($mbit_per_second, 1) . "\n" .
+		"Gbit/s: " . format_number($gbit_per_second, 2)
+	);
 	
 	return 1;
 }
@@ -4429,6 +4732,696 @@ sub is_repository_mounted_on_vmhost {
 }
 
 #/////////////////////////////////////////////////////////////////////////////
+
+
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_datastore_info
+
+ Parameters  : $refresh_info
+ Returns     : hash reference
+ Description : 
+
+=cut
+
+sub get_datastore_info {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get the optional argument
+	my $refresh_info = shift;
+	
+	# Return previously retrieved data if it is defined
+	# Datastore information shouldn't change much during a reservation
+	if (!$refresh_info && $self->{datastore_info}) {
+		return $self->{datastore_info};
+	}
+	
+	my $datastore_info = $self->api->_get_datastore_info();
+	
+	if (!$datastore_info) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve datastore info from " . ref($self->api) . " API object");
+		return;
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "retrieved datastore info from VM host:\n" . format_data($datastore_info));
+		$self->{datastore_info} = $datastore_info;
+		return $datastore_info;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 _get_datastore_names
+
+ Parameters  : none
+ Returns     : array
+ Description : Returns an array containing the names of the datastores on the VM
+               host.
+
+=cut
+
+sub _get_datastore_names {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get the datastore information
+	my $datastore_info = $self->get_datastore_info();
+	if (!$datastore_info) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve datastore names, unable to retrieve datastore information from the VM host");
+		return;
+	}
+	
+	my @datastore_names = sort keys %{$datastore_info};
+	notify($ERRORS{'DEBUG'}, 0, "datastore names:\n" . join("\n", @datastore_names));
+	
+	return @datastore_names;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 _get_datastore_object
+
+ Parameters  : $datastore_name
+ Returns     : vSphere SDK datastore object
+ Description : Retrieves a datastore object for the datastore specified by the
+               datastore name argument.
+
+=cut
+
+sub _get_datastore_object {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get the datastore name argument
+	my $datastore_name = shift;
+	if (!$datastore_name) {
+		notify($ERRORS{'WARNING'}, 0, "datastore name argument was not specified");
+		return;
+	}
+	
+	# Get the host view
+	my $host_view = VIExt::get_host_view(1);
+	
+	# Get an array containing datastore managed object references
+	my @datastore_mo_refs = @{$host_view->datastore};
+	
+	# Loop through the datastore managed object references
+	# Get a datastore view, add the view's summary to the return hash
+	my @datastore_names_found;
+	for my $datastore_mo_ref (@datastore_mo_refs) {
+		my $datastore = Vim::get_view(mo_ref => $datastore_mo_ref);
+		return $datastore if ($datastore_name eq $datastore->summary->name);
+		push @datastore_names_found, $datastore->summary->name;
+	}
+	
+	notify($ERRORS{'WARNING'}, 0, "failed to find datastore named $datastore_name, datastore names found:\n" . join("\n", @datastore_names_found));
+	return;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 _get_datastore_path
+
+ Parameters  : $path
+ Returns     : string
+ Description : Converts a normal path to a datastore path. The path returned
+               will never have any trailing slashes or spaces.
+               '/vmfs/volumes/datastore1/folder/file.txt' --> '[datastore1] folder/file.txt'
+
+=cut
+
+sub _get_datastore_path {
+	my $self = shift;
+	if (ref($self) !~ /module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get the path argument
+	my $path_argument = shift;
+	if (!$path_argument) {
+		notify($ERRORS{'WARNING'}, 0, "path argument was not specified");
+		return;
+	}
+	
+	my $datastore_name = $self->_get_datastore_name($path_argument);
+	if (!$datastore_name) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine datastore path, failed to determine datastore name: $path_argument");
+		return;
+	}
+	
+	my $relative_datastore_path = $self->_get_relative_datastore_path($path_argument);
+	if (!defined($relative_datastore_path)) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine datastore path, failed to determine relative datastore path: $path_argument");
+		return;
+	}
+	
+	if ($relative_datastore_path) {
+		return "[$datastore_name] $relative_datastore_path";
+	}
+	else {
+		return "[$datastore_name]";
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 _get_datastore_root_normal_path
+
+ Parameters  : $path
+ Returns     : string
+ Description : Parses the path argument and determines its datastore root path
+               in normal form.
+               '/vmfs/volumes/datastore1/folder/file.txt' --> '/vmfs/volumes/datastore1'
+					'[datastore1] folder/file.txt' --> '/vmfs/volumes/datastore1'
+
+=cut
+
+sub _get_datastore_root_normal_path {
+	my $self = shift;
+	if (ref($self) !~ /module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get the path argument
+	my $path = shift;
+	if (!$path) {
+		notify($ERRORS{'WARNING'}, 0, "path argument was not specified");
+		return;
+	}
+	
+	my $datastore_name = $self->_get_datastore_name($path);
+	if (!$datastore_name) {
+		notify($ERRORS{'WARNING'}, 0, "failed to determine datastore root normal path, unable to determine datastore name: $path");
+		return;
+	}
+	
+	# Get the datastore information
+	my $datastore_info = $self->get_datastore_info();
+	if (!$datastore_info) {
+		notify($ERRORS{'WARNING'}, 0, "failed to determine datastore root normal path, unable to retrieve datastore information");
+		return;
+	}
+	
+	return $datastore_info->{$datastore_name}{normal_path};
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 _get_datastore_root_url_path
+
+ Parameters  : $path
+ Returns     : string
+ Description : Parses the path argument and determines its datastore root path
+               in normal form.
+               '/vmfs/volumes/datastore1/folder/file.txt' --> '/vmfs/volumes/895cdc05-11c0ee8f'
+					'[datastore1] folder/file.txt' --> '/vmfs/volumes/895cdc05-11c0ee8f'
+
+=cut
+
+sub _get_datastore_root_url_path {
+	my $self = shift;
+	if (ref($self) !~ /module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get the path argument
+	my $path = shift;
+	if (!$path) {
+		notify($ERRORS{'WARNING'}, 0, "path argument was not specified");
+		return;
+	}
+	
+	my $datastore_name = $self->_get_datastore_name($path);
+	if (!$datastore_name) {
+		notify($ERRORS{'WARNING'}, 0, "failed to determine datastore root URL path, unable to determine datastore name: $path");
+		return;
+	}
+	
+	# Get the datastore information
+	my $datastore_info = $self->get_datastore_info();
+	if (!$datastore_info) {
+		notify($ERRORS{'WARNING'}, 0, "failed to determine datastore root URL path, unable to retrieve datastore information");
+		return;
+	}
+	
+	return $datastore_info->{$datastore_name}{url};
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 _get_normal_path
+
+ Parameters  : $path
+ Returns     : string
+ Description : Converts a datastore path to a normal path. The path returned
+               will never have any trailing slashes or spaces.
+               '[datastore1] folder/file.txt' --> '/vmfs/volumes/datastore1/folder/file.txt'
+               '[datastore1]' --> '/vmfs/volumes/datastore1'
+
+=cut
+
+sub _get_normal_path {
+	my $self = shift;
+	if (ref($self) !~ /module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get the path argument
+	my $path_argument = shift;
+	if (!$path_argument) {
+		notify($ERRORS{'WARNING'}, 0, "path argument was not specified");
+		return;
+	}
+	
+	if ($path_argument !~ /\[.+\]/ && $path_argument !~ /^\/vmfs\/volumes\//i) {
+		return normalize_file_path($path_argument);
+	}
+	
+	my $datastore_root_normal_path = $self->_get_datastore_root_normal_path($path_argument);
+	if (!$datastore_root_normal_path) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine normal path, failed to determine datastore root normal path: $path_argument");
+		return;
+	}
+	
+	my $relative_datastore_path = $self->_get_relative_datastore_path($path_argument);
+	if (!defined($relative_datastore_path)) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine normal path, failed to determine relative datastore path: $path_argument");
+		return;
+	}
+	
+	if ($relative_datastore_path) {
+		return "$datastore_root_normal_path/$relative_datastore_path";
+	}
+	else {
+		return $datastore_root_normal_path;
+	}
+	
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 _get_datastore_name
+
+ Parameters  : $path
+ Returns     : string
+ Description : Returns the datastore name from the path argument.
+               '/vmfs/volumes/datastore1/folder/file.txt' --> 'datastore1'
+					'[datastore1] folder/file.txt' --> 'datastore1'
+
+=cut
+
+sub _get_datastore_name {
+	my $self = shift;
+	if (ref($self) !~ /module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get the path argument
+	my $path = shift;
+	if (!$path) {
+		notify($ERRORS{'WARNING'}, 0, "path argument was not specified");
+		return;
+	}
+	
+	$path = normalize_file_path($path);
+	
+	# Get the datastore information
+	my $datastore_info = $self->get_datastore_info();
+	my @datastore_normal_paths;
+	
+	# Loop through the datastores, check if the path begins with the datastore path
+	for my $datastore_name (keys(%{$datastore_info})) {
+		my $datastore_normal_path = $datastore_info->{$datastore_name}{normal_path};
+		my $datastore_url = $datastore_info->{$datastore_name}{url};
+		
+		if ($path =~ /^(\[$datastore_name\]|$datastore_normal_path|$datastore_url)(\s|\/|$)/) {
+			return $datastore_name;
+		}
+		
+		# Path does not begin with datastore path, add datastore path to array for warning message
+		push @datastore_normal_paths, ("'[$datastore_name]'", "'$datastore_normal_path'", "'$datastore_url'");
+	}
+	
+	notify($ERRORS{'WARNING'}, 0, "unable to determine datastore name from path: '$path', path does not begin with any of the datastore paths:\n" . join("\n", @datastore_normal_paths));
+	return;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 _get_parent_directory_normal_path
+
+ Parameters  : $path
+ Returns     : string
+ Description : Returns the parent directory of the path argument in normal form.
+               '/vmfs/volumes/nfs datastore/vmwarewinxp-base234-v12/*.vmdk' --> '/vmfs/volumes/nfs datastore/vmwarewinxp-base234-v12'
+               '/vmfs/volumes/nfs datastore/vmwarewinxp-base234-v12/' --> '/vmfs/volumes/nfs datastore'
+
+=cut
+
+sub _get_parent_directory_normal_path {
+	my $self = shift;
+	if (ref($self) !~ /module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get the path argument
+	my $path_argument = shift;
+	if (!$path_argument) {
+		notify($ERRORS{'WARNING'}, 0, "path argument was not specified");
+		return;
+	}
+	
+	my $parent_directory_datastore_path = $self->_get_parent_directory_datastore_path($path_argument);
+	if (!$parent_directory_datastore_path) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine parent directory normal path, parent directory datastore path could not be determined on which the normal path is based: '$path_argument'");
+		return;
+	}
+	
+	my $parent_directory_normal_path = $self->_get_normal_path($parent_directory_datastore_path);
+	if (!$parent_directory_normal_path) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine parent directory normal path, parent directory datastore path could not be converted to a normal path: '$parent_directory_datastore_path'");
+		return;
+	}
+	
+	return $parent_directory_normal_path;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 _get_parent_directory_datastore_path
+
+ Parameters  : $path
+ Returns     : string
+ Description : Returns the parent directory path for the path argument in
+               datastore format.
+               '/vmfs/volumes/nfs datastore/vmwarewinxp-base234-v12/*.vmdk ' --> '[nfs datastore] vmwarewinxp-base234-v12'
+
+=cut
+
+sub _get_parent_directory_datastore_path {
+	my $self = shift;
+	if (ref($self) !~ /module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get the path argument
+	my $path_argument = shift;
+	if (!$path_argument) {
+		notify($ERRORS{'WARNING'}, 0, "path argument was not specified");
+		return;
+	}
+	
+	my $datastore_path = $self->_get_datastore_path($path_argument);
+	if (!$datastore_path) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine parent directory datastore path, path argument could not be converted to a datastore path: '$path_argument'");
+		return;
+	}
+	
+	if ($datastore_path =~ /^\[.+\]$/) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine parent directory datastore path, path argument is the root path of a datastore: '$path_argument'");
+		return;
+	}
+	
+	# Remove the last component of the path - after the last '/'
+	$datastore_path =~ s/[^\/\]]*$//g;
+	
+	return normalize_file_path($datastore_path);
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 _get_file_name
+
+ Parameters  : $path
+ Returns     : string
+ Description : Returns the file name or leftmost section of the path argument.
+               '/vmfs/volumes/nfs datastore/vmwarewinxp-base234-v12/*.vmdk ' --> '*.vmdk'
+
+=cut
+
+sub _get_file_name {
+	my $self = shift;
+	if (ref($self) !~ /module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get the path argument
+	my $path_argument = shift;
+	if (!$path_argument) {
+		notify($ERRORS{'WARNING'}, 0, "path argument was not specified");
+		return;
+	}
+	
+	my $datastore_path = $self->_get_datastore_path($path_argument);
+	if (!$datastore_path) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine file name, path argument could not be converted to a datastore path: '$path_argument'");
+		return;
+	}
+	
+	if ($datastore_path =~ /^\[.+\]$/) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine file name, path argument is the root path of a datastore: '$path_argument'");
+		return;
+	}
+	
+	# Extract the last component of the path - after the last '/'
+	my ($file_name) = $datastore_path =~ /([^\/\]]+)$/;
+	
+	return normalize_file_path($file_name);
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 _get_file_base_name
+
+ Parameters  : $path
+ Returns     : string
+ Description : Returns the file name of the path argument without the file
+               extension.
+               '/vmfs/volumes/nfs datastore/vmwarewinxp-base234-v12/image_55-v0.vmdk ' --> 'image_55-v0'
+
+=cut
+
+sub _get_file_base_name {
+	my $self = shift;
+	if (ref($self) !~ /module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get the path argument
+	my $path_argument = shift;
+	if (!$path_argument) {
+		notify($ERRORS{'WARNING'}, 0, "path argument was not specified");
+		return;
+	}
+	
+	my $file_name = $self->_get_file_name($path_argument);
+	if (!$file_name) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine file base name, file name could not be determined from path argument: '$path_argument'");
+		return;
+	}
+	
+	# Remove the file extension - everything before the first '.' in the file name
+	my ($file_base_name) = $file_name =~ /^([^\.]*)/;
+	
+	return $file_base_name;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 _get_relative_datastore_path
+
+ Parameters  : $path
+ Returns     : string
+ Description : Returns the relative datastore path for the path argument.
+               '/vmfs/volumes/datastore1/folder/file.txt' --> 'folder/file.txt'
+               '[datastore1] folder/file.txt' --> 'folder/file.txt'
+
+=cut
+
+sub _get_relative_datastore_path {
+	my $self = shift;
+	if (ref($self) !~ /module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get the path argument
+	my $path_argument = shift;
+	if (!$path_argument) {
+		notify($ERRORS{'WARNING'}, 0, "path argument was not specified");
+		return;
+	}
+	
+	my $datastore_name = $self->_get_datastore_name($path_argument);
+	if (!$datastore_name) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine relative datastore path, failed to determine datastore name: $path_argument");
+		return;
+	}
+	
+	my $datastore_root_normal_path = $self->_get_datastore_root_normal_path($path_argument);
+	if (!$datastore_root_normal_path) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine relative datastore path, failed to determine the normal root path for the datastore: $path_argument");
+		return;
+	}
+	
+	my $datastore_root_url_path = $self->_get_datastore_root_url_path($path_argument);
+	if (!$datastore_root_normal_path) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine relative datastore path, failed to determine the normal root path for the datastore: $path_argument");
+		return;
+	}
+	
+	my ($datastore_path, $relative_datastore_path) = $path_argument =~ /^(\[$datastore_name\]|$datastore_root_normal_path|$datastore_root_url_path)(.*)/;
+	
+	if (!$datastore_path) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine relative datastore path: '$path_argument', path argument does not begin with any of the following:\n'[$datastore_name]'\n'$datastore_root_url_path'\n'$datastore_root_normal_path'");
+		return;
+	}
+	
+	$relative_datastore_path = '' if !$relative_datastore_path;
+	
+	# Remove slashes or spaces from the beginning and end of the relative datastore path
+	$relative_datastore_path =~ s/(^[\/\s]*|[\/\s]*$)//g;
+	
+	return $relative_datastore_path;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 _check_datastore_paths
+
+ Parameters  : @check_paths (optional)
+ Returns     : boolean
+ Description : Checks each of the vSphere.pm subroutines which parse a file path
+					argument. This subroutine returns false if any subroutine returns
+					undefined. The file paths passed to each subroutine that is
+					checked may be specified as arguments to _check_datastore_paths.
+					If no arguments are specified, several default paths will be
+					checked.
+
+=cut
+
+sub _check_datastore_paths {
+	my $self = shift;
+	if (ref($self) !~ /module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my @check_paths = @_;
+	
+	# Check to make sure all of the vmdk file path components can be retrieved
+	my $undefined_string = "<undefined>";
+	
+	# Assemble a string of all of the components
+	my $check_paths_string = "====================\n";
+	
+	my @datastore_names = $self->_get_datastore_names();
+	if (!@datastore_names) {
+		notify($ERRORS{'WARNING'}, 0, "datastore names could not be retrieved");
+	}
+	$check_paths_string .= "datastore names:\n" . join("\n", @datastore_names) . "\n";
+	
+	my $datastore_info = $self->get_datastore_info();
+	if (!$datastore_info) {
+		notify($ERRORS{'WARNING'}, 0, "datastore information could not be retrieved");
+		return;
+	}
+	notify($ERRORS{'DEBUG'}, 0, "datastore information:\n" . format_data($datastore_info));
+	
+	my @check_subroutines = (
+		'_get_datastore_name',
+		'_get_datastore_path',
+		'_get_normal_path',
+		'_get_datastore_root_normal_path',
+		'_get_datastore_root_url_path',
+		'_get_parent_directory_datastore_path',
+		'_get_parent_directory_normal_path',
+		'_get_relative_datastore_path',
+		'_get_file_name',
+		'_get_file_base_name',
+	);
+	
+	my $max_sub_name_length = max (map { length } @check_subroutines);
+	
+	if (!@check_paths) {
+		#for my $datastore_name (sort keys %$datastore_info) {
+		#	my $datastore_normal_path = $datastore_info->{$datastore_name}{normal_path};
+		#	my $datastore_url_path = $datastore_info->{$datastore_name}{url};
+		#	push @check_paths, (
+		#		"[$datastore_name] ",
+		#		"[$datastore_name] /",
+		#		"[$datastore_name] test/test file.txt ",
+		#		"$datastore_normal_path/test dir/test file.txt ",
+		#		"$datastore_normal_path/test dir/ ",
+		#		"$datastore_url_path/test dir/test file.txt ",
+		#		"$datastore_url_path/test dir/ ",
+		#		"$datastore_url_path/test.txt ",
+		#		"[invalid datastore] file.txt",
+		#	);
+		#}
+		
+		push @check_paths, (
+			$self->get_vmx_file_path(),
+			$self->get_vmx_directory_path(),
+			$self->get_vmx_base_directory_path(),
+			$self->get_vmdk_file_path(),
+			$self->get_vmdk_directory_path(),
+			$self->get_vmdk_base_directory_path(),
+			$self->get_vmdk_directory_path_persistent(),
+			$self->get_vmdk_directory_path_nonpersistent(),
+			$self->get_vmdk_file_path_persistent(),
+			$self->get_vmdk_file_path_nonpersistent(),
+		);
+	}
+	
+	for my $check_path (@check_paths) {
+		$check_paths_string .= "----------\n";
+		$check_paths_string .= "'$check_path'\n";
+		
+		for my $check_subroutine (@check_subroutines) {
+			my $result = eval "\$self->$check_subroutine(\$check_path)";
+			
+			$check_paths_string .= "$check_subroutine: ";
+			$check_paths_string .= " " x ($max_sub_name_length - length($check_subroutine));
+			
+			if (defined($result)) {
+				$check_paths_string .= "'$result'\n";
+			}
+			else {
+				$check_paths_string .= "$undefined_string\n";
+			}
+		}
+	}
+	
+	notify($ERRORS{'OK'}, 0, "retrieved datastore path components:\n$check_paths_string");
+	
+	if ($check_paths_string =~ /$undefined_string/) {
+		return;
+	}
+	else {
+		return 1;
+	}
+}
 
 1;
 __END__

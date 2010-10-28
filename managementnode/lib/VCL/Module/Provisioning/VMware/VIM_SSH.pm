@@ -414,15 +414,15 @@ sub _get_vm_summary {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 _get_datastore_names
+=head2 _get_datastore_info
 
- Parameters  : $vm_id
- Returns     : string
+ Parameters  : none
+ Returns     : hash reference
  Description : 
 
 =cut
 
-sub _get_datastore_names {
+sub _get_datastore_info {
 	my $self = shift;
 	if (ref($self) !~ /VCL::Module/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
@@ -430,7 +430,9 @@ sub _get_datastore_names {
 	}
 	
 	# Return previously retrieved datastore name array if it is defined in this object
-	return @{$self->{datastore_names}} if $self->{datastore_names};
+	if ($self->{datastore}) {
+		return $self->{datastore};
+	}
 	
 	my $vim_cmd_arguments = "hostsvc/datastore/listsummary";
 	my ($exit_status, $output) = $self->_run_vim_cmd($vim_cmd_arguments);
@@ -468,173 +470,47 @@ sub _get_datastore_names {
 		return;
 	}
 	
-	# Parse the output to get the datastore names
-	my @datastore_names = map(/^\s*name\s*=\s*"(.+)"/, @$output);
+	my $datastore_info;
 	
-	# Store the array in this object so the datastore names don't have to be retrieved again
-	$self->{datastore_names} = \@datastore_names;
-
-	notify($ERRORS{'DEBUG'}, 0, "retrieved datastore names: " . join(", ", @datastore_names));
-	return @datastore_names;
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 _get_datastore_normal_path
-
- Parameters  : $vm_id
- Returns     : string
- Description : 
-
-=cut
-
-sub _get_datastore_normal_path {
-	my $self = shift;
-	if (ref($self) !~ /VCL::Module/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
+	# Split the output into sections for each datastore
+	my @output_sections = split(/vim\.Datastore\.Summary/i, join("\n", @$output));
+	
+	for my $output_section (@output_sections) {
+		my ($datastore_name) = $output_section =~ /name\s*=\s*"(.+)"/;
+		next if (!defined($datastore_name));
+		
+		for my $line (split(/[\r\n]+/, $output_section)) {
+			# Skip lines which don't contain a '='
+			next if $line !~ /=/;
+			
+			# Parse the line
+			my ($parameter, $value) = $line =~ /^\s*(\w+)\s*=[\s"']*([^"',]+)/g;
+			if (defined($parameter) && defined($value)) {
+				$datastore_info->{$datastore_name}{$parameter} = $value if ($parameter ne 'name');
+			}
+			else {
+				notify($ERRORS{'WARNING'}, 0, "unable to parse parameter and value from line: '$line'");
+			}
+		}
+		
+		# Add a 'normal_path' key to the hash based on the datastore url
+		my $datastore_url = $datastore_info->{$datastore_name}{url};
+		if (!defined($datastore_url)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to determine datastore url from 'vim-cmd $vim_cmd_arguments' output section, datastore name: $datastore_name:\n$output_section");
+			next;
+		}
+		
+		my $datastore_normal_path;
+		if ($datastore_url =~ /^\/vmfs\/volumes/i) {
+			$datastore_normal_path = "/vmfs/volumes/$datastore_name";
+		}
+		else {
+			$datastore_normal_path = $datastore_url;
+		}
+		$datastore_info->{$datastore_name}{normal_path} = $datastore_normal_path;
 	}
-	
-	my $datastore_name = shift;
-	if (!$datastore_name) {
-		notify($ERRORS{'WARNING'}, 0, "datastore name argument was not specified");
-		return;
-	}
-	
-	# Check if the datastore normal path has already been retrieved for this datastore
-	# This is done to reduce the number of vim-cmd calls to improve performance
-	my $datastore_normal_path;
-	if ($datastore_normal_path = $self->{datastore}{$datastore_name}{normal_path}) {
-		#notify($ERRORS{'DEBUG'}, 0, "returning previously retrieved normal path for $datastore_name datastore: $datastore_normal_path");
-		return $datastore_normal_path;
-	}
-	
-	my $vim_cmd_arguments = "hostsvc/datastore/summary \"$datastore_name\"";
-	my ($exit_status, $output) = $self->_run_vim_cmd($vim_cmd_arguments);
-	return if !$output;
-	
-	# The output should look like this:
-	# (vim.Datastore.Summary) {
-	#	dynamicType = <unset>,
-	#	datastore = 'vim.Datastore:10.25.0.245:/vmfs/volumes/nfs-datastore',
-	#	name = "nfs-datastore",
-	#	url = "/vmfs/volumes/95e378c2-863dd2b4",
-	#	capacity = 975027175424,
-	#	freeSpace = 108854874112,
-	#	uncommitted = 0,
-	#	accessible = true,
-	#	multipleHostAccess = <unset>,
-	#	type = "NFS",
-	# }
-	if (!grep(/vim\.Datastore\.Summary/i, @$output)) {
-		notify($ERRORS{'WARNING'}, 0, "unable to determine datastore normal path, unexpected output returned, VIM command arguments: '$vim_cmd_arguments', output:\n" . join("\n", @$output));
-		return;
-	}
-	
-	# Get the datastore URL from the output
-	my ($datastore_url) = join("\n", @$output) =~ /url = "(.+)"/;
-	
-	# Check if the URL begins with /vmfs/volumes, modify the path to include the datastore name if necessary:
-	# /vmfs/volumes/95e378c2-863dd2b4 --> /vmfs/volumes/nfs-datastore
-	if ($datastore_url =~ /^\/vmfs\/volumes/i) {
-		$datastore_normal_path = "/vmfs/volumes/$datastore_name";
-	}
-	else {
-		$datastore_normal_path = $datastore_url;
-	}
-	
-	# Store the normal path in this object so vim-cmd doesn't need to be called again to retrieve it
-	$self->{datastore}{$datastore_name}{normal_path} = $datastore_normal_path;
 
-	#notify($ERRORS{'DEBUG'}, 0, "datastore name: $datastore_name\npath: $datastore_normal_path\nurl: $datastore_url");
-	return $datastore_normal_path;
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 _get_datastore_path
-
- Parameters  : $path
- Returns     : string
- Description : 
-
-=cut
-
-sub _get_datastore_path {
-	my $self = shift;
-	if (ref($self) !~ /VCL::Module/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-	
-	my $path = shift;
-	if (!$path) {
-		notify($ERRORS{'WARNING'}, 0, "path argument was not specified");
-		return;
-	}
-	
-	return $path if $path =~ /\[.+\]/;
-	
-	my @datastore_names = $self->_get_datastore_names();
-	if (!@datastore_names) {
-		notify($ERRORS{'WARNING'}, 0, "unable to convert to datastore path because datastore names could not be retrieved");
-		return;
-	}
-	
-	my ($datastore_name) = grep($path =~ /\/($_)\//, @datastore_names);
-	if (!$datastore_name) {
-		notify($ERRORS{'WARNING'}, 0, "unable to determine datastore name in path: $path, datastore names:\n" . join("\n", @datastore_names));
-		return;
-	}
-	
-	my ($relative_datastore_path) = $path =~ /$datastore_name\/?(.*)/;
-	
-	my $datastore_path = "[$datastore_name]";
-	$datastore_path .= " $relative_datastore_path" if $relative_datastore_path;
-	
-	#notify($ERRORS{'DEBUG'}, 0, "converted to datastore path: '$path' --> '$datastore_path'");
-	return $datastore_path;
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 _get_normal_path
-
- Parameters  : $path
- Returns     : string
- Description : 
-
-=cut
-
-sub _get_normal_path {
-	my $self = shift;
-	if (ref($self) !~ /VCL::Module/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-	
-	# Get the path argument
-	my $path = shift;
-	if (!$path) {
-		notify($ERRORS{'WARNING'}, 0, "path argument was not specified");
-		return;
-	}
-	
-	# Retrieve the datastore name from the path - string in square brackets
-	my ($datastore_name, $relative_path) = $path =~ /\[(.+)\]\s*(.*)/;
-	
-	# If the datastore name wasn't found, assume path argument is not a datastore path, just return the path
-	if (!$datastore_name) {
-		return normalize_file_path($path);
-	}
-	
-	my $datastore_normal_path = $self->_get_datastore_normal_path($datastore_name);
-	if (!$datastore_normal_path) {
-		notify($ERRORS{'WARNING'}, 0, "unable to determine normal path for $path, unable to determine normal path for datastore: $datastore_name");
-		return;
-	}
-	
-	return normalize_file_path("$datastore_normal_path/$relative_path");
+	return $datastore_info;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
