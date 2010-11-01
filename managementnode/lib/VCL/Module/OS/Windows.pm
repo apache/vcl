@@ -7054,6 +7054,9 @@ Windows Registry Editor Version 5.00
 "Enabled"=dword:00000002
 "ShownVerifyBalloon"=dword:00000001
 
+[HKEY_LOCAL_MACHINE\\Software\\Policies\\Microsoft\\Internet Explorer\\Main]
+"DisableFirstRunCustomize"=dword:00000001
+
 EOF
 
 	# Import the string into the registry
