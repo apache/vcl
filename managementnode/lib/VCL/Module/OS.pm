@@ -434,7 +434,7 @@ sub wait_for_response {
 	
 	my $ssh_attempt_delay_seconds = shift;
 	if (!defined $ssh_attempt_delay_seconds) {
-		$ssh_response_timeout_seconds = 15;
+		$ssh_attempt_delay_seconds = 15;
 	}
 	
 	# Sleep for the initial delay value if it has been set
