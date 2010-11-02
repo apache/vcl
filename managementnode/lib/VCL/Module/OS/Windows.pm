@@ -423,6 +423,16 @@ sub pre_capture {
 
 =item *
 
+ Enable audio redirection for RDP sessions
+
+=cut
+
+	if (!$self->enable_rdp_audio()) {
+		notify($ERRORS{'WARNING'}, 0, "unable to enable RDP audio redirection");
+	}
+
+=item *
+
  Clean up the hard drive
 
 =cut
@@ -7065,6 +7075,59 @@ EOF
 	}
 	else {
 		notify($ERRORS{'WARNING'}, 0, "failed to set the registry key to disable IE runonce");
+		return 0;
+	}
+
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 enable_rdp_audio
+
+ Parameters  : None.
+ Returns     : If successful: true
+               If failed: false
+ Description : Sets the registry keys to allow audio redirection via RDP
+               sessions. This is disabled by default under Windows Server 2008
+               and possibly other versions of Windows. Also sets the Windows
+               Audio service to start automatically.
+
+=cut
+
+sub enable_rdp_audio {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a VCL::Module module object method");
+		return;	
+	}
+	
+	my $registry_string .= <<"EOF";
+Windows Registry Editor Version 5.00
+
+[HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\Terminal Server\\WinStations\\RDP-Tcp]
+"fDisableCam"=dword:00000000
+
+[HKEY_LOCAL_MACHINE\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\Terminal Services]
+"fDisableCam"=dword:00000000
+
+EOF
+
+	# Import the string into the registry
+	if ($self->import_registry_string($registry_string)) {
+		notify($ERRORS{'OK'}, 0, "set the registry keys to enable RDP audio");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to set the registry key to enable RDP audio");
+		return 0;
+	}
+	
+	# Configure the Windows Audio service to start automatically
+	if ($self->set_service_startup_mode('AudioSrv', 'auto')) {
+		notify($ERRORS{'DEBUG'}, 0, "set the Windows Audio service startup mode to auto");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to set the Windows Audio service startup mode to auto");
 		return 0;
 	}
 
