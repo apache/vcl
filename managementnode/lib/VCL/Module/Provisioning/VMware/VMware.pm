@@ -664,7 +664,7 @@ sub capture {
 		# VMware's methods to copy the files will set the permissions to 0700
 		# This prevents image retrieval from working when other management nodes attempt to retrieve the image
 		# Attempt to call the VM host OS's set_file_permissions subroutine if the repository is mounted on the VM host
-		if ($self->is_repository_mounted_on_vmhost() && $self->vmhost_os->can('set_file_permissions') && $self->vmhost_os->set_file_permissions($repository_directory_path, '0644', 1)) {
+		if ($self->is_repository_mounted_on_vmhost() && $self->vmhost_os->can('set_file_permissions') && $self->vmhost_os->set_file_permissions($repository_directory_path, '0755', 1)) {
 			notify($ERRORS{'OK'}, 0, "set file permissions on the image repository directory mounted on the VM host: $repository_directory_path");
 		}
 		elsif (-d $repository_directory_path) {
