@@ -4116,23 +4116,54 @@ sub copy_vmdk {
 	if (!$copy_result) {
 		# Try to use vmware-vdiskmanager
 		# Use disk type  = 1 (2GB sparse)
-		my $command = "vmware-vdiskmanager -r \"$source_vmdk_file_path\" -t 1 \"$destination_vmdk_file_path\"";
+		my $vdisk_command = "vmware-vdiskmanager -r \"$source_vmdk_file_path\" -t 1 \"$destination_vmdk_file_path\"";
 		notify($ERRORS{'DEBUG'}, 0, "attempting to copy virtual disk using vmware-vdiskmanager, disk type: 2gbsparse:\n'$source_vmdk_file_path' --> '$destination_vmdk_file_path'");
 		
 		$start_time = time;
-		my ($exit_status, $output) = $self->vmhost_os->execute($command);
+		my ($exit_status, $output) = $self->vmhost_os->execute($vdisk_command);
 		if (!defined($output)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to run command on VM host: $command");
+			notify($ERRORS{'WARNING'}, 0, "failed to run command on VM host: $vdisk_command");
 		}
 		elsif (grep(/command not found/i, @$output)) {
 			notify($ERRORS{'DEBUG'}, 0, "unable to copy virtual disk using vmware-vdiskmanager because the command is not available on VM host $vmhost_name");
 		}
-		elsif (!grep(/(100\% done|success)/, @$output)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to copy virtual disk, output does not contain '100% done' or 'success', command: '$command', output:\n" . join("\n", @$output));
-		}
 		else {
-			notify($ERRORS{'OK'}, 0, "copied virtual disk on VM host using vmware-vdiskmanager:\n'$source_vmdk_file_path' --> '$destination_vmdk_file_path'");
-			$copy_result = 1;
+			# Check if virtual disk needs to be repaired, vmware-vdisk manager may display the following:
+			# Failed to convert diskCreating disk '<path>'
+			# The specified virtual disk needs repair (0xe00003e86).
+			if (grep(/needs repair/i, @$output)) {
+				notify($ERRORS{'WARNING'}, 0, "virtual disk needs to be repaired, output:\n" . join("\n", @$output));
+				
+				my $vdisk_repair_command = "vmware-vdiskmanager -R \"$source_vmdk_file_path\"";
+				notify($ERRORS{'DEBUG'}, 0, "attempting to repair virtual disk using vmware-vdiskmanager: '$source_vmdk_file_path'");
+				
+				my ($vdisk_repair_exit_status, $vdisk_repair_output) = $self->vmhost_os->execute($vdisk_repair_command);
+				if (!defined($output)) {
+					notify($ERRORS{'WARNING'}, 0, "failed to run command to repair the virtual disk: '$vdisk_repair_command'");
+				}
+				elsif (grep(/(has been successfully repaired|no errors)/i, @$vdisk_repair_output)) {
+					notify($ERRORS{'DEBUG'}, 0, "repaired virtual disk using vmware-vdiskmanage, output:\n" . join("\n", @$vdisk_repair_output));
+					
+					# Attempt to run the vmware-vdiskmanager copy command again
+					notify($ERRORS{'DEBUG'}, 0, "making a 2nd attempt to copy virtual disk using vmware-vdiskmanager after the source was repaired, disk type: 2gbsparse:\n'$source_vmdk_file_path' --> '$destination_vmdk_file_path'");
+					$start_time = time;
+					($exit_status, $output) = $self->vmhost_os->execute($vdisk_command);
+				}
+				else {
+					notify($ERRORS{'WARNING'}, 0, "failed to repair the virtual disk on VM host, output:\n" . join("\n", @$vdisk_repair_output));
+				}
+			}
+			
+			if (!defined($output)) {
+				notify($ERRORS{'WARNING'}, 0, "failed to run command on VM host: $vdisk_command");
+			}
+			elsif (!grep(/(100\% done|success)/, @$output)) {
+				notify($ERRORS{'WARNING'}, 0, "failed to copy virtual disk, output does not contain '100% done' or 'success', command: '$vdisk_command', output:\n" . join("\n", @$output));
+			}
+			else {
+				notify($ERRORS{'OK'}, 0, "copied virtual disk on VM host using vmware-vdiskmanager:\n'$source_vmdk_file_path' --> '$destination_vmdk_file_path'");
+				$copy_result = 1;
+			}
 		}
 	}
 	

@@ -1379,7 +1379,7 @@ sub get_virtual_disk_controller_type {
 			next;
 		}
 		elsif ($disk_path ne $vmdk_file_name) {
-			notify($ERRORS{'DEBUG'}, 0, "ignoring disk because the file name does not match $vmdk_file_name: $disk_path");
+			#notify($ERRORS{'DEBUG'}, 0, "ignoring disk because the file name does not match $vmdk_file_name: $disk_path");
 			next;
 		}
 		
