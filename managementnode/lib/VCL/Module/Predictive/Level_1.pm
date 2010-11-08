@@ -214,21 +214,30 @@ sub get_next_image {
 	# check if > X% usage, look at past X days, otherwise, look at past 2 months
 	my $timeframe;
 	my $notavail = ($online - $avail);
-	if (($notavail / $online) > 0.35) {
-		$timeframe = '1 DAY';
-	}
-	elsif(($notavail / $online) > 0.25) {
-		$timeframe = '2 DAY';
-	}
-	elsif(($notavail / $online) > 0.15) {
-		$timeframe = '5 DAY';
-	}
-	elsif(($notavail / $online) > 0.10) {
-		$timeframe = '10 DAY';
-	}
-	elsif(($notavail / $online) > 0.05) {
-		$timeframe = '20 DAY';
-	}
+	if ( $usage > 0.40) {
+                $timeframe = '1 DAY';
+        }
+        elsif( $usage > 0.35) {
+                $timeframe = '2 DAY';
+        }
+        elsif( $usage > 0.30) {
+                $timeframe = '3 DAY';
+        }
+        elsif( $usage > 0.25) {
+                $timeframe = '4 DAY';
+        }
+        elsif( $usage > 0.20) {
+                $timeframe = '5 DAY';
+        }
+        elsif( $usage > 0.15) {
+                $timeframe = '10 DAY';
+        }
+        elsif( $usage > 0.10) {
+                $timeframe = '20 DAY';
+        }
+        elsif( $usage > 0.05) {
+                $timeframe = '30 DAY';
+        }
 	else {
 		$timeframe = '2 MONTH';
 	}
