@@ -214,6 +214,7 @@ sub get_next_image {
 	# check if > X% usage, look at past X days, otherwise, look at past 2 months
 	my $timeframe;
 	my $notavail = ($online - $avail);
+	my $usage = ($notavail / $online);
 	if ( $usage > 0.40) {
                 $timeframe = '1 DAY';
         }
