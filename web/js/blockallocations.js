@@ -599,7 +599,7 @@ function blockFormVerifyMonthly(mode) {
 		alert('The Last Date of Usage must be the same or later than the First Date of Usage');
 		return;
 	}
-	if(pagemode != 'edit' && dijit.byId('mnlastdate').value < today) {
+	if(pagemode == 'edit' && dijit.byId('mnlastdate').value < today) {
 		alert('The Last Date of Usage must be today or later');
 		return;
 	}
