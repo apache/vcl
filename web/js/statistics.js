@@ -55,12 +55,20 @@ function generateGraphs() {
 		var cont = dojo.byId('statconcurbladecont').value;
 		RPCwrapper({continuation: cont}, generateColGraphsCB, 1);
 	}
+	if(dojo.byId('statconcurvmcont')) {
+		var cont = dojo.byId('statconcurvmcont').value;
+		RPCwrapper({continuation: cont}, generateColGraphsCB, 1);
+	}
 }
 
 function generateColGraphsCB(data, ioArgs) {
 	dojo.byId(data.items.id).innerHTML = '';
 	var graph = new dojox.charting.Chart2D(data.items.id);
-	if(data.items.maxy <= 400)
+	if(data.items.maxy <= 50)
+		var majortick = 10;
+	else if(data.items.maxy <= 200)
+		var majortick = 25;
+	else if(data.items.maxy <= 400)
 		var majortick = 50;
 	else if(data.items.maxy <= 600)
 		var majortick = 100;
