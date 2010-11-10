@@ -7257,20 +7257,33 @@ function addSublogEntry($logid, $imageid, $imagerevisionid, $computerid,
 	$qh = doQuery($query, 101);
 	$row = mysql_fetch_assoc($qh);
 	$predictiveid = $row['predictivemoduleid'];
+	$query = "SELECT c.type, "
+	       .        "v.computerid AS hostid "
+	       . "FROM computer c "
+	       . "LEFT JOIN vmhost v ON (c.vmhostid = v.id) "
+	       . "WHERE c.id = $computerid";
+	$qh = doQuery($query, 101);
+	$row = mysql_fetch_assoc($qh);
+	if($row['type'] == 'virtualmachine')
+		$hostcomputerid = $row['hostid'];
+	else
+		$hostcomputerid = 'NULL';
 	$query = "INSERT INTO sublog "
 	       .        "(logid, "
 	       .        "imageid, "
 	       .        "imagerevisionid, "
 	       .        "computerid, "
 	       .        "managementnodeid, "
-	       .        "predictivemoduleid) "
+	       .        "predictivemoduleid, "
+	       .        "hostcomputerid) "
 	       . "VALUES "
 	       .        "($logid, "
 	       .        "$imageid, "
 	       .        "$imagerevisionid, "
 	       .        "$computerid, "
 	       .        "$mgmtnodeid, "
-	       .        "$predictiveid)";
+	       .        "$predictiveid, "
+	       .        "$hostcomputerid)";
 	doQuery($query, 101);
 }
 
