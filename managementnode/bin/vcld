@@ -156,9 +156,10 @@ sub main () {
 		delete $ENV{request_id};
 		delete $ENV{reservation_id};
 		delete $ENV{state};
+		delete $ENV{data};
 		
 		sleep $management_node_checkin_interval;
-			
+		
 		#===========================================================================
 		# Update lastcheckin for this management node
 		my $lastcheckin_timestamp = update_lastcheckin($management_node_id);
@@ -313,6 +314,9 @@ sub main () {
 					next RESERVATION;
 				}
 				
+				# Add the DataStructure reference to %ENV so it can be accessed from non-object methods
+				$ENV{data} = $data_structure;
+				
 				# Update the request state to pending, laststate to next state
 				# Pending is set now so vcld doesn't try to process it again
 				# The previous state is already in the hash as the laststate value
@@ -347,6 +351,7 @@ sub main () {
 		delete $ENV{request_id};
 		delete $ENV{reservation_id};
 		delete $ENV{state};
+		delete $ENV{data};
 
 		#===========================================================================
 		# Get all the block requests assigned to this management node
@@ -513,39 +518,6 @@ sub make_new_child {
 		notify($ERRORS{'WARNING'}, $LOGFILE, "$state_module module could not be loaded");
 	}
 
-	# For testing purposes on Windows
-	if ($^O =~ /win/i) {
-		# Set the request_id and reservation_id environment variables
-		$ENV{request_id}     = $request_id;
-		$ENV{reservation_id} = $reservation_id;
-
-		# Set the vcld environment variable to 0 so other subroutines know if this is the vcld or child process
-		$ENV{vcld} = 0;
-		notify($ERRORS{'DEBUG'}, $LOGFILE, "vcld environment variable set to $ENV{vcld} for this process");
-
-		my $kid;
-		if ($kid = ($state_module)->new({%{$request_data}, data_structure => $data_structure})) {
-			notify($ERRORS{'OK'}, $LOGFILE, "$state object created and initialized");
-			# Set the request_id and reservation_id environment variables
-			$kid->process();
-		}
-		else {
-			notify($ERRORS{'CRITICAL'}, $LOGFILE, "$state object could not be created and initialized");
-			switch_state($request_data, 'failed', '', 'failed', 1);
-		}
-
-		# Set the request_id and reservation_id environment variables
-		delete $ENV{request_id};
-		delete $ENV{reservation_id};
-		delete $ENV{state};
-
-		# Restore the vcld environment variable to 1
-		$ENV{vcld} = 1;
-		
-		# Only return from make_new_child if running on Windows for testing without actually forking
-		return;
-	} ## end if ($^O =~ /win/i)
-
 	# Build a signal set using POSIX::SigSet->new, contains only the SIGINT signal
 	my $sigset = POSIX::SigSet->new(SIGINT);
 	
@@ -586,6 +558,7 @@ sub make_new_child {
 			$ENV{request_id}     = $request_id;
 			$ENV{reservation_id} = $reservation_id if $reservation_id;
 			$ENV{state}          = $state;
+			$ENV{data}           = $data_structure;
 
 			# Create a new VCL state object, passing it the reservation data
 			if (my $state_object = ($state_module)->new({%{$request_data}, data_structure => $data_structure})) {
