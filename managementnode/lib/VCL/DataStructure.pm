@@ -2337,77 +2337,105 @@ sub get_reservation_info_string {
 	my $string;
 	
 	$string .= "management node: " . (defined($_ = $self->get_management_node_hostname(0)) ? $_ : '<undefined>') . "\n";
-	$string .= "reservation process PID: $PID\n";
-	$string .= "parent vcld process PID: " . (defined($_ = getppid()) ? $_ : '<undefined>') . "\n";
+	$string .= "reservation PID: $PID\n";
+	$string .= "parent vcld PID: " . (defined($_ = getppid()) ? $_ : '<undefined>') . "\n";
 	
-	$string .= "\n";
-	
-	$string .= "request ID: " . (defined($_ = $self->get_request_id(0)) ? $_ : '<undefined>') . "\n";
-	$string .= "reservation ID: " . (defined($_ = $self->get_reservation_id(0)) ? $_ : '<undefined>') . "\n";
-	$string .= "request state/laststate: " . (defined($_ = $self->get_request_state_name(0)) ? $_ : '<undefined>') . "/" . (defined($_ = $self->get_request_laststate_name(0)) ? $_ : '<undefined>') . "\n";
-	$string .= "request start time: " . (defined($_ = $self->get_request_start_time(0)) ? $_ : '<undefined>') . "\n";
-	$string .= "request end time: " . (defined($_ = $self->get_request_end_time(0)) ? $_ : '<undefined>') . "\n";
-	$string .= "reservation count: " . (defined($_ = $self->get_request_reservation_count(0)) ? $_ : '<undefined>') . "\n";
-	$string .= "parent reservation: " . (defined($_ = $self->get_request_is_cluster_parent(0)) ? $_ : '<undefined>') . "\n";
-	$string .= "for imaging: " . (defined($_ = $self->get_request_forimaging(0)) ? ($_ ? 'yes' : 'no') : '<undefined>') . "\n";
-	$string .= "log ID: " . (defined($_ = $self->get_request_log_id(0)) ? $_ : '<undefined>') . "\n";
-	
-	$string .= "\n";
-	
-	$string .= "user ID: " . (defined($_ = $self->get_user_id(0)) ? $_ : '<undefined>') . "\n";
-	$string .= "user name: " . (defined($_ = $self->get_user_firstname(0)) ? $_ : '<undefined>') . " " . (defined($_ = $self->get_user_lastname(0)) ? $_ : '<undefined>') . "\n";
-	$string .= "user login ID: " . (defined($_ = $self->get_user_login_id(0)) ? $_ : '<undefined>') . "\n";
-	$string .= "user affiliation: " . (defined($_ = $self->get_user_affiliation_name(0)) ? $_ : '<undefined>') . "\n";
-	
-	$string .= "\n";
-	
-	$string .= "computer id: " . (defined($_ = $self->get_computer_id(0)) ? $_ : '<undefined>') . "\n";
-	$string .= "computer name: " . (defined($_ = $self->get_computer_hostname(0)) ? $_ : '<undefined>') . "\n";
-	$string .= "computer type: " . (defined($_ = $self->get_computer_type(0)) ? $_ : '<undefined>') . "\n";
-	$string .= "computer eth0 MAC address: " . (defined($_ = $self->get_computer_eth0_mac_address(0)) ? $_ : '<undefined>') . "\n";
-	$string .= "computer eth1 MAC address: " . (defined($_ = $self->get_computer_eth1_mac_address(0)) ? $_ : '<undefined>') . "\n";
-	$string .= "computer private IP address: " . (defined($_ = $self->get_computer_private_ip_address(0)) ? $_ : '<undefined>') . "\n";
-	$string .= "computer public IP address: " . (defined($_ = $self->get_computer_ip_address(0)) ? $_ : '<undefined>') . "\n";
-	$string .= "computer in block allocation: " . (defined($_ = is_inblockrequest($self->get_computer_id(0))) ? ($_ ? 'yes' : 'no') : '<undefined>') . "\n";
-	
-	$string .= "\n";
-	
-	$string .= "provisioning module name: " . (defined($_ = $self->get_computer_provisioning_module_pretty_name(0)) ? $_ : '<undefined>') . " (" . (defined($_ = $self->get_computer_provisioning_module_name(0)) ? $_ : '<undefined>') . ")\n";
-	$string .= "provisioning module Perl package: " . (defined($_ = $self->get_computer_provisioning_module_perl_package(0)) ? $_ : '<undefined>') . "\n";
-	
-	if ((defined($_ = $self->get_computer_type(0)) ? $_ : '<undefined>') eq 'virtualmachine') {
+	my $request_id = $self->get_request_id(0);
+	if ($request_id) {
 		$string .= "\n";
-		$string .= "vm host ID: " . (defined($_ = $self->get_vmhost_id(0)) ? $_ : '<undefined>') . "\n";
-		$string .= "vm host computer ID: " . (defined($_ = $self->get_vmhost_computer_id(0)) ? $_ : '<undefined>') . "\n";
-		$string .= "vm host name: " . (defined($_ = $self->get_vmhost_hostname(0)) ? $_ : '<undefined>') . "\n";
-		$string .= "vm profile: " . (defined($_ = $self->get_vmhost_profile_name(0)) ? $_ : '<undefined>') . "\n";
-		$string .= "vm profile VM path: " . (defined($_ = $self->get_vmhost_profile_vmpath(0)) ? $_ : '<undefined>') . "\n";
-		$string .= "vm profile repository path: " . (defined($_ = $self->get_vmhost_profile_repository_path(0)) ? $_ : '<undefined>') . "\n";
-		$string .= "vm profile datastore path: " . (defined($_ = $self->get_vmhost_profile_datastore_path(0)) ? $_ : '<undefined>') . "\n";
-		$string .= "vm profile disk type: " . (defined($_ = $self->get_vmhost_profile_vmdisk(0)) ? $_ : '<undefined>') . "\n";
+		
+		$string .= "request ID: $request_id\n";
+		$string .= "reservation ID: " . (defined($_ = $self->get_reservation_id(0)) ? $_ : '<undefined>') . "\n";
+		$string .= "request state/laststate: " . (defined($_ = $self->get_request_state_name(0)) ? $_ : '<undefined>') . "/" . (defined($_ = $self->get_request_laststate_name(0)) ? $_ : '<undefined>') . "\n";
+		$string .= "request start time: " . (defined($_ = $self->get_request_start_time(0)) ? $_ : '<undefined>') . "\n";
+		$string .= "request end time: " . (defined($_ = $self->get_request_end_time(0)) ? $_ : '<undefined>') . "\n";
+		$string .= "for imaging: " . (defined($_ = $self->get_request_forimaging(0)) ? ($_ ? 'yes' : 'no') : '<undefined>') . "\n";
+		$string .= "log ID: " . (defined($_ = $self->get_request_log_id(0)) ? ($_ eq '0' ? 'none' : $_) : '<undefined>') . "\n";
+		
+		my $reservation_count = $self->get_request_reservation_count(0);
+		if (defined($reservation_count) && $reservation_count > 1) {
+			$string .= "cluster reservation: yes\n";
+			$string .= "reservation count: $reservation_count\n";
+			$string .= "parent reservation: " . (defined($_ = $self->get_request_is_cluster_parent(0)) ? ($_ ? 'yes' : 'no') : '<undefined>') . "\n";
+		}
 	}
 	
-	$string .= "\n";
+	my $blockrequest_id = $self->get_blockrequest_id(0);
+	if ($blockrequest_id) {
+		$string .= "\n";
+		
+		$string .= "blockrequest: " . (defined($_ = $self->get_blockrequest_name(0)) ? $_ : '<undefined>') . "\n";
+		$string .= "block request ID: $blockrequest_id\n";
+		$string .= "blockrequest image ID: " . (defined($_ = $self->get_blockrequest_image_id(0)) ? $_ : '<undefined>') . "\n";
+		$string .= "number of machines: " . (defined($_ = $self->get_blockrequest_number_machines(0)) ? $_ : '<undefined>') . "\n";
+		$string .= "owner ID: " . (defined($_ = $self->get_blockrequest_owner_id(0)) ? $_ : '<undefined>') . "\n";
+		$string .= "management node ID: " . (defined($_ = $self->get_blockrequest_management_node_id(0)) ? $_ : '<undefined>') . "\n";
+		$string .= "processing flag: " . (defined($_ = $self->get_blockrequest_processing(0)) ? $_ : '<undefined>') . "\n";
+		$string .= "mode: " . (defined($_ = $self->get_blockrequest_mode(0)) ? $_ : '<undefined>') . "\n";
+		$string .= "blocktime ID: " . (defined($_ = $self->get_blocktime_id(0)) ? $_ : '<undefined>') . "\n";
+		$string .= "blocktime start: " . (defined($_ = $self->get_blocktime_start(0)) ? $_ : '<undefined>') . "\n";
+		$string .= "blocktime end: " . (defined($_ = $self->get_blocktime_end(0)) ? $_ : '<undefined>') . "\n";
+		$string .= "blocktime processed flag: " . (defined($_ = $self->get_blocktime_processed(0)) ? $_ : '<undefined>') . "\n";
+	}
 	
-	$string .= "image ID: " . (defined($_ = $self->get_image_id(0)) ? $_ : '<undefined>') . "\n";
-	$string .= "image revision ID: " . (defined($_ = $self->get_imagerevision_id(0)) ? $_ : '<undefined>') . "\n";
+	my $computer_id = $self->get_computer_id(0);
+	if (defined($computer_id)) {
+		$string .= "\n";
+		
+		$string .= "computer: " . (defined($_ = $self->get_computer_hostname(0)) ? $_ : '<undefined>') . "\n";
+		$string .= "computer id: $computer_id\n";
+		$string .= "computer type: " . (defined($_ = $self->get_computer_type(0)) ? $_ : '<undefined>') . "\n";
+		$string .= "computer eth0 MAC address: " . (defined($_ = $self->get_computer_eth0_mac_address(0)) ? $_ : '<undefined>') . "\n";
+		$string .= "computer eth1 MAC address: " . (defined($_ = $self->get_computer_eth1_mac_address(0)) ? $_ : '<undefined>') . "\n";
+		$string .= "computer private IP address: " . (defined($_ = $self->get_computer_private_ip_address(0)) ? $_ : '<undefined>') . "\n";
+		$string .= "computer public IP address: " . (defined($_ = $self->get_computer_ip_address(0)) ? $_ : '<undefined>') . "\n";
+		$string .= "computer in block allocation: " . (defined($_ = is_inblockrequest($self->get_computer_id(0))) ? ($_ ? 'yes' : 'no') : '<undefined>') . "\n";
+		$string .= "provisioning module: " . (defined($_ = $self->get_computer_provisioning_module_perl_package(0)) ? $_ : '<undefined>') . "\n";
 	
-	$string .= "image name: " . (defined($_ = $self->get_image_name(0)) ? $_ : '<undefined>') . "\n";
-	$string .= "image display name: " . (defined($_ = $self->get_image_prettyname(0)) ? $_ : '<undefined>') . "\n";
-	$string .= "image size: " . (defined($_ = $self->get_image_size(0)) ? $_ : '<undefined>') . " MB\n";
-	$string .= "use Sysprep: " . (defined($_ = $self->get_imagemeta_sysprep(0)) ? ($_ ? 'yes' : 'no') : '<undefined>') . "\n";
-	$string .= "root access: " . (defined($_ = $self->get_imagemeta_rootaccess(0)) ? ($_ ? 'yes' : 'no') : '<undefined>') . "\n";
-	$string .= "image owner affiliation: " . (defined($_ = $self->get_image_affiliation_name(0)) ? $_ : '<undefined>') . "\n";
-	$string .= "image revision date created: " . (defined($_ = $self->get_imagerevision_date_created(0)) ? $_ : '<undefined>') . "\n";
-	$string .= "image revision production: " . (defined($_ = $self->get_imagerevision_production(0)) ? ($_ ? 'yes' : 'no') : '<undefined>') . "\n";
-	$string .= "image revision comments: " . (defined($_ = $self->get_imagerevision_comments(0)) ? $_ : '<undefined>') . "\n";
+		if ($self->get_computer_type(0) eq 'virtualmachine') {
+			$string .= "\n";
+			
+			$string .= "vm host: " . (defined($_ = $self->get_vmhost_hostname(0)) ? $_ : '<undefined>') . "\n";
+			$string .= "vm host ID: " . (defined($_ = $self->get_vmhost_id(0)) ? $_ : '<undefined>') . "\n";
+			$string .= "vm host computer ID: " . (defined($_ = $self->get_vmhost_computer_id(0)) ? $_ : '<undefined>') . "\n";
+			$string .= "vm profile: " . (defined($_ = $self->get_vmhost_profile_name(0)) ? $_ : '<undefined>') . "\n";
+			$string .= "vm profile VM path: " . (defined($_ = $self->get_vmhost_profile_vmpath(0)) ? $_ : '<undefined>') . "\n";
+			$string .= "vm profile repository path: " . (defined($_ = $self->get_vmhost_profile_repository_path(0)) ? $_ : '<undefined>') . "\n";
+			$string .= "vm profile datastore path: " . (defined($_ = $self->get_vmhost_profile_datastore_path(0)) ? $_ : '<undefined>') . "\n";
+			$string .= "vm profile disk type: " . (defined($_ = $self->get_vmhost_profile_vmdisk(0)) ? $_ : '<undefined>') . "\n";
+		}
+	}
 	
-	$string .= "\n";
+	my $image_id = $self->get_image_id(0);
+	if (defined($image_id)) {
+		$string .= "\n";
+		
+		$string .= "image: " . (defined($_ = $self->get_image_name(0)) ? $_ : '<undefined>') . "\n";
+		$string .= "image display name: " . (defined($_ = $self->get_image_prettyname(0)) ? $_ : '<undefined>') . "\n";
+		$string .= "image ID: $image_id\n";
+		$string .= "image revision ID: " . (defined($_ = $self->get_imagerevision_id(0)) ? $_ : '<undefined>') . "\n";
+		$string .= "image size: " . (defined($_ = $self->get_image_size(0)) ? $_ : '<undefined>') . " MB\n";
+		$string .= "use Sysprep: " . (defined($_ = $self->get_imagemeta_sysprep(0)) ? ($_ ? 'yes' : 'no') : '<undefined>') . "\n";
+		$string .= "root access: " . (defined($_ = $self->get_imagemeta_rootaccess(0)) ? ($_ ? 'yes' : 'no') : '<undefined>') . "\n";
+		$string .= "image owner ID: " . (defined($_ = $self->get_image_ownerid(0)) ? $_ : '<undefined>') . "\n";
+		$string .= "image owner affiliation: " . (defined($_ = $self->get_image_affiliation_name(0)) ? $_ : '<undefined>') . "\n";
+		$string .= "image revision date created: " . (defined($_ = $self->get_imagerevision_date_created(0)) ? $_ : '<undefined>') . "\n";
+		$string .= "image revision production: " . (defined($_ = $self->get_imagerevision_production(0)) ? ($_ ? 'yes' : 'no') : '<undefined>') . "\n";
+		$string .= "OS module: " . (defined($_ = $self->get_image_os_module_perl_package(0)) ? $_ : '<undefined>') . "\n";
+		
+		my $imagerevision_comments = $self->get_imagerevision_comments(0);
+		$string .= "image revision comments: $imagerevision_comments\n" if $imagerevision_comments;
+	}
 	
-	$string .= "OS module name: " . (defined($_ = $self->get_image_os_module_pretty_name(0)) ? $_ : '<undefined>') . " (" . (defined($_ = $self->get_image_os_module_name(0)) ? $_ : '<undefined>') . ")\n";
-	$string .= "OS module Perl package: " . (defined($_ = $self->get_image_os_module_perl_package(0)) ? $_ : '<undefined>') . "\n";
-	
-	$string .= "\n";
+	my $user_id = $self->get_user_id(0);
+	if (defined($user_id)) {
+		$string .= "\n";
+		
+		$string .= "user: " . (defined($_ = $self->get_user_login_id(0)) ? $_ : '<undefined>') . "\n";
+		$string .= "user name: " . (defined($_ = $self->get_user_firstname(0)) ? $_ : '<undefined>') . " " . (defined($_ = $self->get_user_lastname(0)) ? $_ : '<undefined>') . "\n";
+		$string .= "user ID: " . (defined($_ = $self->get_user_id(0)) ? $_ : '<undefined>') . "\n";
+		$string .= "user affiliation: " . (defined($_ = $self->get_user_affiliation_name(0)) ? $_ : '<undefined>') . "\n";
+	}
 	
 	return $string;
 }

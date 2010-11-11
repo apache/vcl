@@ -607,27 +607,20 @@ sub notify {
 	# Get info about the subroutine which called this subroutine
 	my ($package, $filename, $line, $sub) = caller(0);
 
+	# Assemble the caller information
+	my $caller_info;
+	if (caller(1)) {
+		$sub = (caller(1))[3];
+	}
+
 	# Remove leading path from filename
 	$filename =~ s/.*\///;
 
 	# Remove the leading package path from the sub name (VC::...)
 	$sub =~ s/.*:://;
-
-	# Assemble the caller information
-	my $caller_info;
-	if (caller(1)) {
-		my ($caller_previous_package, $caller_previous_filename, $caller_previous_line, $caller_previous_sub) = caller(1);
-		$caller_previous_filename =~ s/.*\///;
-		$caller_previous_sub      =~ s/.*:://;
-		$caller_info = "$filename:$caller_previous_sub($line)";
-	}
-	else {
-		$caller_info = "$filename:$sub($line)";
-	}
-
-	# Get the caller trace information
-	my $caller_trace = get_caller_trace(6);
 	
+	$caller_info = "$filename:$sub($line)";
+
 	# Format the message string
 	# Remove Windows carriage returns from the message string for consistency
 	$string =~ s/\r//gs;
@@ -665,59 +658,85 @@ sub notify {
 
 	# Assemble an email message body if CRITICAL
 	my $body;
-	if ($error == 2) {
-		# Get the previous several log file entries for this process
-		my $log_history_count = 100;
-		my $log_history       = "RECENT LOG ENTRIES FOR THIS PROCESS:\n";
-		$log_history .= `grep "|$PID|" $log | tail -n $log_history_count` if $log;
-		chomp $log_history;
-
-		# Assemble the e-mail message body
-		$body = <<"END";
-$string
-
-Time: $currenttime
-PID: $PID
-Caller: $caller_info
-
-$caller_trace
-
-$log_history
-END
-
-		# Add the formatted data to the message body if data was passed
-		$body .= "\n\n$formatted_data\n" if $formatted_data;
-	} ## end if ($error == 2) 
-
-
-	# OK, VERBOSE
-	if (!$error || ($error == 6 && $VERBOSE)) {
-
-	}
-
+	my $body_separator = '-' x 72;
+	
 	# WARNING
 	if ($error == 1) {
+		my $caller_trace = get_caller_trace(6);
 		$log_message = "\n---- WARNING ---- \n$log_message\n$caller_trace\n\n";
 	}
 
 	# CRITICAL
 	elsif ($error == 2) {
-		$log_message = "\n---- CRITICAL ---- \n$log_message\n$caller_trace\n";
-		$log_message .= "$formatted_data\n" if $formatted_data;
-		$log_message .= "\n";
-
+		my $caller_trace = get_caller_trace(15);
+		$log_message = "\n---- CRITICAL ---- \n$log_message\n$caller_trace\n\n";
+		
+		# Assemble the e-mail message body
+		$body = <<"END";
+$string
+$body_separator
+time: $currenttime
+caller: $caller_info
+$caller_trace
+$body_separator
+END
+		
+		# Add the reservation info to the message if the DataStructure object is defined in %ENV
+		if ($ENV{data}) {
+			my $reservation_info_string = $ENV{data}->get_reservation_info_string();
+			if ($reservation_info_string) {
+				$reservation_info_string =~ s/\s+$//;
+				$body .= "$reservation_info_string\n";
+				$body .= "$body_separator\n";
+			}
+		}
+		
+		# Get the previous several log file entries for this process
+		my $log_history_count = 100;
+		my $log_history       = "RECENT LOG ENTRIES FOR THIS PROCESS:\n";
+		$log_history .= `grep "|$PID|" $log | tail -n $log_history_count` if $log;
+		chomp $log_history;
+		$body .= $log_history;
+		
+		# Add the formatted data to the message body if data was passed
+		$body .= "\n\nDATA:\n$formatted_data\n" if $formatted_data;
+		
+		my $subject = "PROBLEM -- ";
+		
+		# Assemble the process identifier string
+		if (defined $ENV{request_id} && defined $ENV{reservation_id} && defined $ENV{state}) {
+			$subject .= "$ENV{request_id}:$ENV{reservation_id}|$ENV{state}|$filename";
+		}
+		else {
+			$subject .= "$caller_info";
+		}
+		
+		if (defined($ENV{data})) {
+			my $blockrequest_name = $ENV{data}->get_blockrequest_name(0);
+			$subject .= "|$blockrequest_name" if (defined $blockrequest_name);
+			
+			my $computer_name = $ENV{data}->get_computer_short_name(0);
+			$subject .= "|$computer_name" if (defined $computer_name);
+			
+			my $image_name = $ENV{data}->get_image_name(0);
+			$subject .= "|$image_name" if (defined $image_name);
+			
+			my $user_name = $ENV{data}->get_user_login_id(0);
+			$subject .= "|$user_name" if (defined $user_name);
+		}
+		
 		my $from    = "root\@$FQDN";
 		my $to      = $sysadmin;
-		my $subject = "PROBLEM -- $filename";
+		
 		mail($to, $subject, $body, $from);
 	} ## end elsif ($error == 2)  [ if ($error == 1)
-
+	
 	# MAILMASTERS - only for email notifications
 	elsif ($error == 5 && $shared_mail_box) {
 		my $to      = $shared_mail_box;
 		my $from    = "root\@$FQDN";
 		my $subject = "Informational -- $filename";
-
+		
 		# Assemble the e-mail message body
 		$body = <<"END";
 $string
@@ -727,7 +746,7 @@ PID: $PID
 Caller: $caller_info
 
 END
-
+		
 		mail($to, $subject, $body, $from);
 	}
 
@@ -5573,22 +5592,17 @@ sub run_scp_command {
 		
 		# Delay performing next attempt if this isn't the first attempt
 		if ($attempts > 1) {
-			my $delay;
-			if ($attempts == 2) {
-				$delay = 2;
-			}
-			else {
-				# Progressively increase the delay
-				$delay = (5 * $attempts);
-			}
+			my $delay = 2;
 			notify($ERRORS{'DEBUG'}, 0, "sleeping for $delay seconds before making next SCP attempt");
 			sleep $delay;
+			notify($ERRORS{'DEBUG'}, 0, "attempt $attempts/$max_attempts: executing SCP command: $scp_command");
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "attempting to copy file via SCP: '$path1' --> '$path2'");
 		}
 		
 		## Add -v (verbose) argument to command if this is the 2nd attempt
 		#$scp_command =~ s/$scp_path/$scp_path -v/ if $attempts == 2;
-		
-		notify($ERRORS{'DEBUG'}, 0, "attempt $attempts/$max_attempts: executing SCP command: $scp_command");
 		
 		$scp_output = `$scp_command`;
 		
@@ -5610,42 +5624,22 @@ sub run_scp_command {
 			$scp_output = '';
 		}
 		
-		# Get a slice of the SCP output if there are many lines
-		my @scp_output_formatted_lines = split("\n", $scp_output);
-		my $scp_output_formatted_line_count = scalar @scp_output_formatted_lines;
-		if ($scp_output_formatted_line_count > 50) {
-			@scp_output_formatted_lines = @scp_output_formatted_lines[0 .. 49];
-			push(@scp_output_formatted_lines, "displayed first 50 of $scp_output_formatted_line_count SCP output lines");
-			$scp_output = join("\n", @scp_output_formatted_lines);
-		}
-		
 		# Check the output for known error messages
-		# Check the exit status
-		# scp exits with 0 on success or >0 if an error occurred
-		if ($scp_output =~ /permission denied|no such file|ambiguous target|is a directory/i) {
-			notify($ERRORS{'WARNING'}, 0, "failed to copy file, scp error occurred: command: $scp_command, exit status: $scp_exit_status, output: $scp_output");
+		if ($scp_output =~ /permission denied|no such file|ambiguous target|is a directory|not known|no space/i) {
+			notify($ERRORS{'WARNING'}, 0, "failed to copy via SCP: '$path1' --> '$path2'\ncommand: $scp_command\noutput:\n$scp_output");
 			return 0;
 		}
-		elsif ($scp_exit_status > 0 || $scp_output =~ /lost connection|failed|reset by peer|no route to host/i) {
-			notify($ERRORS{'WARNING'}, 0, "scp error occurred: attempt $attempts/$max_attempts, command: $scp_command, exit status: $scp_exit_status, output: $scp_output");
-			
-			# Temporary fix for problem of nodes using different ports
-			if ($attempts == 3) {
-				$max_attempts++;
-				notify($ERRORS{'OK'}, 0, "making 1 more attempt using port 24");
-				$scp_command = "$scp_path -B $identity_paths-P 24 -p -r $path1 $path2 2>&1";
-			}
-			
+		elsif ($scp_output =~ /^(scp|ssh):/i) {
+			notify($ERRORS{'WARNING'}, 0, "attempt $attempts/$max_attempts: error occurred while attempting to copy file via SCP: '$path1' --> '$path2'\ncommand: $scp_command\noutput:\n$scp_output");
 			next;
 		}
 		else {
-			notify($ERRORS{'OK'}, 0, "scp successful: attempt $attempts/$max_attempts, exit status: $scp_exit_status, output: $scp_output");
+			notify($ERRORS{'OK'}, 0, "copied file via SCP: '$path1' --> '$path2'");
 			return 1;
 		}
 	} ## end while ($attempts < $max_attempts)
 	
 	# Failure
-	notify($ERRORS{'WARNING'}, 0, "failed to copy files using scp after $attempts attempts, command: $scp_command, exit status: $scp_exit_status, output: $scp_output");
 	return 0;
 } ## end sub run_scp_command
 
@@ -8612,16 +8606,29 @@ sub get_caller_trace {
 	# Add one to make the argument usage more intuitive
 	# One of the levels is the subroutine which called this
 	$level_limit++;
-
+	
+	# Check if this subroutine was called from notify
+	my $called_from_notify = ((caller(1))[3] =~ /notify$/)? 1 : 0;
+	
 	my $caller_trace = "";
 	for (1 .. $level_limit) {
 		my $caller_index = $_;
 		if (caller($caller_index)) {
 			my ($package_last, $filename_last, $line_last, $sub_last) = caller($caller_index - 1);
 			my ($package,      $filename,      $line,      $sub)      = caller($caller_index);
-
+			
 			$filename_last =~ s/.*\///;
 			$sub           =~ s/.*:://;
+			
+			if ($called_from_notify) {
+				if ($sub =~ /notify$/) {
+					next;
+				}
+				else {
+					$caller_index--;
+				}
+			}
+			
 			if ($brief_output) {
 				$caller_trace .= (($caller_index - 1) * -1) . ":$filename_last:$sub:$line_last;";
 			}
