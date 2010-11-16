@@ -724,7 +724,14 @@ function updateGroup($data) {
 function addGroup($data) {
 	global $viewmode;
 	if($data["type"] == "user") {
-		$ownerid = getUserlistID($data["owner"]);
+		if(! array_key_exists('custom', $data))
+			$data['custom'] = 1;
+		elseif($data['custom'] == 0) {
+			$ownerid = 'NULL';
+			$data['editgroupid'] = 'NULL';
+		}
+		if($data['custom'])
+			$ownerid = getUserlistID($data["owner"]);
 		$query = "INSERT INTO usergroup "
 				 .         "(name, "
 				 .         "affiliationid, "
@@ -740,7 +747,7 @@ function addGroup($data) {
 				 .        "{$data["affiliationid"]}, "
 				 .        "$ownerid, "
 				 .        "{$data["editgroupid"]}, "
-		       .        "1, "
+		       .        "{$data['custom']}, "
 		       .        "{$data["initialmax"]}, "
 		       .        "{$data["totalmax"]}, ";
 		if($viewmode == ADMIN_DEVELOPER)

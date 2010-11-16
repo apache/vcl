@@ -1136,7 +1136,8 @@ function XMLRPCprocessBlockTime($blockTimesid, $ignoreprivileges=0) {
 ////////////////////////////////////////////////////////////////////////////////
 ///
 /// \fn XMLRPCaddUserGroup($name, $affiliation, $owner, $managingGroup,
-///                        $initialMaxTime, $totalMaxTime, $maxExtendTime)
+///                        $initialMaxTime, $totalMaxTime, $maxExtendTime,
+///                        $custom)
 ///
 /// \param $name - name of user group
 /// \param $affiliation - affiliation of user group
@@ -1149,6 +1150,9 @@ function XMLRPCprocessBlockTime($blockTimesid, $ignoreprivileges=0) {
 ///                        for a reservation (including all extensions)
 /// \param $maxExtendTime - (minutes) max length of time users can request as an
 ///                         extension to a reservation at a time
+/// \param $custom (optional, default=1) - set custom flag for user group; if
+///                set to 0, $owner and $managingGroup will be ignored and group
+///                membership will be managed via authentication protocol
 ///
 /// \return an array with at least one index named 'status' which will have
 /// one of these values:\n
@@ -1162,7 +1166,8 @@ function XMLRPCprocessBlockTime($blockTimesid, $ignoreprivileges=0) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function XMLRPCaddUserGroup($name, $affiliation, $owner, $managingGroup,
-                            $initialMaxTime, $totalMaxTime, $maxExtendTime) {
+                            $initialMaxTime, $totalMaxTime, $maxExtendTime,
+                            $custom=1) {
 	global $user;
 	if(! in_array('groupAdmin', $user['privileges'])) {
 		return array('status' => 'error',
@@ -1179,6 +1184,8 @@ function XMLRPCaddUserGroup($name, $affiliation, $owner, $managingGroup,
 	$rc = validateAPIgroupInput($validate, 0);
 	if($rc['status'] == 'error')
 		return $rc;
+	if($custom != 0 && $custom != 1)
+		$custom = 1;
 	$data = array('type' => 'user',
 	              'owner' => $owner,
 	              'name' => $name,
@@ -1187,7 +1194,8 @@ function XMLRPCaddUserGroup($name, $affiliation, $owner, $managingGroup,
 	              'initialmax' => $initialMaxTime,
 	              'totalmax' => $totalMaxTime,
 	              'maxextend' => $maxExtendTime,
-	              'overlap' => 0);
+	              'overlap' => 0,
+	              'custom' => $custom);
 	if(! addGroup($data)) {
 		return array('status' => 'error',
 		             'errorcode' => 26,
