@@ -8323,7 +8323,8 @@ function printXMLRPCerror($errcode) {
 /// \fn validateAPIgroupInput($items, $exists)
 ///
 /// \param $items - array of data to validate; the following items can be
-/// validated:\n
+/// validated, if 'custom' is included and is 0, owner and managingGroup are
+/// not validated:\n
 /// \b name - if specified, affiliation must also be specified\n
 /// \b affiliation - if specified, name must also be specified\n
 /// \b owner \n
@@ -8347,6 +8348,9 @@ function printXMLRPCerror($errcode) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function validateAPIgroupInput($items, $exists) {
+	$custom = 1;
+	if(array_key_exists('custom', $items))
+		$custom = $items['custom'];
 	# initialMaxTime
 	if(array_key_exists('initialMaxTime', $items)) {
 		if(! is_numeric($items['initialMaxTime']) ||
@@ -8414,7 +8418,7 @@ function validateAPIgroupInput($items, $exists) {
 		}
 	}
 	# owner
-	if(array_key_exists('owner', $items)) {
+	if($custom && array_key_exists('owner', $items)) {
 		if(! validateUserid(mysql_real_escape_string($items['owner']))) {
 			return array('status' => 'error',
 			             'errorcode' => 20,
@@ -8422,7 +8426,7 @@ function validateAPIgroupInput($items, $exists) {
 		}
 	}
 	# managingGroup
-	if(array_key_exists('managingGroup', $items)) {
+	if($custom && array_key_exists('managingGroup', $items)) {
 		$parts = explode('@', $items['managingGroup']);
 		if(count($parts) != 2) {
 			return array('status' => 'error',

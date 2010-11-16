@@ -1180,7 +1180,8 @@ function XMLRPCaddUserGroup($name, $affiliation, $owner, $managingGroup,
 	                  'managingGroup' => $managingGroup,
 	                  'initialMaxTime' => $initialMaxTime,
 	                  'totalMaxTime' => $totalMaxTime,
-	                  'maxExtendTime' => $maxExtendTime);
+	                  'maxExtendTime' => $maxExtendTime,
+	                  'custom' => $custom);
 	$rc = validateAPIgroupInput($validate, 0);
 	if($rc['status'] == 'error')
 		return $rc;
