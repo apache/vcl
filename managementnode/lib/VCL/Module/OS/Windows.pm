@@ -773,6 +773,14 @@ sub post_load {
 		}
 	}
 
+=item *
+
+ Add a line to currentimage.txt indicating post_load has run
+
+=cut
+
+	$self->set_vcld_post_load_status();
+
 =back
 
 =cut
@@ -2312,7 +2320,7 @@ sub import_registry_string {
 
 	# Echo the registry string to a file on the node
 	my $echo_registry_command = "rm -f $temp_registry_file_path; /usr/bin/echo.exe -E \"$registry_string\" > " . $temp_registry_file_path;
-	my ($echo_registry_exit_status, $echo_registry_output) = run_ssh_command($computer_node_name, $management_node_keys, $echo_registry_command, '', '', 1);
+	my ($echo_registry_exit_status, $echo_registry_output) = run_ssh_command($computer_node_name, $management_node_keys, $echo_registry_command, '', '', 0);
 	if (defined($echo_registry_exit_status) && $echo_registry_exit_status == 0) {
 		notify($ERRORS{'DEBUG'}, 0, "registry string contents echoed to $temp_registry_file_path");
 	}
@@ -2427,7 +2435,7 @@ sub reg_query {
 	}
 	
 	# Run reg.exe QUERY
-	my ($exit_status, $output) = run_ssh_command($computer_node_name, $management_node_keys, $command, '', '', 1);
+	my ($exit_status, $output) = run_ssh_command($computer_node_name, $management_node_keys, $command, '', '', 0);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to query registry key: $key_argument");
 		return;
@@ -2440,7 +2448,7 @@ sub reg_query {
 		return;
 	}
 	
-	notify($ERRORS{'DEBUG'}, 0, "reg.exe QUERY output:\n" . join("\n", @$output));
+	#notify($ERRORS{'DEBUG'}, 0, "reg.exe QUERY output:\n" . join("\n", @$output));
 	
 	# If value argument was specified, parse and return the data
 	if (defined($value_argument)) {
@@ -2464,9 +2472,6 @@ sub reg_query {
 		my $key;
 		for my $line (@$output) {
 			if ($line =~ /^HKEY/) {
-				## Don't add the key being queried to the result, only add subkeys
-				#next if ($line eq $key_argument);
-				
 				$key = $line;
 				$registry_hash{$key} = {};
 				next;
@@ -2696,17 +2701,178 @@ sub reg_import {
 	}
 	
 	# Run reg.exe IMPORT
-	my $import_registry_command .= $system32_path . "/reg.exe IMPORT $registry_file_path";
-	my ($import_registry_exit_status, $import_registry_output) = run_ssh_command($computer_node_name, $management_node_keys, $import_registry_command, '', '', 1);
-	if (defined($import_registry_exit_status) && $import_registry_exit_status == 0) {
-		notify($ERRORS{'DEBUG'}, 0, "imported registry file: $registry_file_path");
-	}
-	elsif ($import_registry_exit_status) {
-		notify($ERRORS{'WARNING'}, 0, "failed to import registry file: $registry_file_path, exit status: $import_registry_exit_status, output:\n@{$import_registry_output}");
+	my $command .= $system32_path . "/reg.exe IMPORT $registry_file_path";
+	my ($exit_status, $output) = run_ssh_command($computer_node_name, $management_node_keys, $command, '', '', 0);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to import registry file: $registry_file_path");
 		return;
 	}
+	elsif (grep(/completed successfully/i, @$output)) {
+		notify($ERRORS{'DEBUG'}, 0, "imported registry file: $registry_file_path");
+	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to import registry file: $registry_file_path");
+		notify($ERRORS{'WARNING'}, 0, "failed to import registry file: $registry_file_path, exit status: $exit_status, output:\n" . join("\n", @$output));
+		return;
+	}
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 reg_export
+
+ Parameters  :
+ Returns     :
+ Description :
+
+=cut
+
+sub reg_export {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+
+	my $management_node_keys = $self->data->get_management_node_keys();
+	my $computer_node_name   = $self->data->get_computer_node_name();
+	my $system32_path        = $self->get_system32_path() || return;
+	
+	# Get the arguments
+	my $root_key = shift;
+	if (!$root_key) {
+		notify($ERRORS{'WARNING'}, 0, "registry root key was not passed correctly as an argument");
+		return;
+	}
+	
+	# Get the registry file path argument
+	my $registry_file_path = shift;
+	if (!defined($registry_file_path) || !$registry_file_path) {
+		notify($ERRORS{'WARNING'}, 0, "registry file path was not passed correctly as an argument");
+		return;
+	}
+	$registry_file_path = $self->format_path_unix($registry_file_path);
+	
+	# Escape backslashes in the root key
+	$root_key =~ s/\\+/\\\\/;
+	
+	# Run reg.exe EXPORT
+	my $command .= $system32_path . "/reg.exe EXPORT $root_key $registry_file_path /y";
+	my ($exit_status, $output) = run_ssh_command($computer_node_name, $management_node_keys, $command, '', '', 1);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to export registry key $root_key to file: $registry_file_path");
+		return;
+	}
+	elsif (grep(/completed successfully/i, @$output)) {
+		notify($ERRORS{'DEBUG'}, 0, "exported registry key $root_key to file: $registry_file_path");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to export registry key $root_key to file: $registry_file_path, exit status: $exit_status, output:\n" . join("\n", @$output));
+		return;
+	}
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 reg_load
+
+ Parameters  : $root_key, $hive_file_path
+ Returns     :
+ Description :
+
+=cut
+
+sub reg_load {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+
+	my $management_node_keys = $self->data->get_management_node_keys();
+	my $computer_node_name   = $self->data->get_computer_node_name();
+	my $system32_path        = $self->get_system32_path() || return;
+	
+	# Get the arguments
+	my $root_key = shift;
+	if (!$root_key) {
+		notify($ERRORS{'WARNING'}, 0, "registry root key was not passed correctly as an argument");
+		return;
+	}
+	my $hive_file_path = shift;
+	if (!$hive_file_path) {
+		notify($ERRORS{'WARNING'}, 0, "registry hive file path was not passed correctly as an argument");
+		return;
+	}
+	$hive_file_path = $self->format_path_unix($hive_file_path);
+	
+	# Escape backslashes in the root key
+	$root_key =~ s/\\+/\\\\/;
+	
+	# Run reg.exe LOAD
+	my $command .= "$system32_path/reg.exe LOAD $root_key $hive_file_path";
+	my ($exit_status, $output) = run_ssh_command($computer_node_name, $management_node_keys, $command, '', '', 0);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to load registry hive file '$hive_file_path' into key $root_key");
+		return;
+	}
+	elsif (grep(/completed successfully/i, @$output)) {
+		notify($ERRORS{'DEBUG'}, 0, "loaded registry hive file '$hive_file_path' into key $root_key");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to load registry hive file '$hive_file_path' into key $root_key, exit status: $exit_status, output:\n" . join("\n", @$output));
+		return;
+	}
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 reg_unload
+
+ Parameters  : $root_key
+ Returns     :
+ Description :
+
+=cut
+
+sub reg_unload {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+
+	my $management_node_keys = $self->data->get_management_node_keys();
+	my $computer_node_name   = $self->data->get_computer_node_name();
+	my $system32_path        = $self->get_system32_path() || return;
+	
+	# Get the arguments
+	my $root_key = shift;
+	if (!$root_key) {
+		notify($ERRORS{'WARNING'}, 0, "registry root key was not passed correctly as an argument");
+		return;
+	}
+	
+	# Escape backslashes in the root key
+	$root_key =~ s/\\+/\\\\/;
+	
+	# Run reg.exe UNLOAD
+	my $command .= "$system32_path/reg.exe UNLOAD $root_key";
+	my ($exit_status, $output) = run_ssh_command($computer_node_name, $management_node_keys, $command, '', '', 0);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to unload registry hive: $root_key");
+		return;
+	}
+	elsif (grep(/completed successfully/i, @$output)) {
+		notify($ERRORS{'DEBUG'}, 0, "unloaded registry hive key: $root_key");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to unload registry hive: $root_key, exit status: $exit_status, output:\n" . join("\n", @$output));
 		return;
 	}
 	
@@ -3321,7 +3487,10 @@ sub shutdown {
 		$shutdown_command .= "$system32_path/netsh.exe interface ip set dnsservers name=\\\"$private_interface_name\\\" source=dhcp & ";
 		$shutdown_command .= "$system32_path/netsh.exe interface ip set address name=\\\"$public_interface_name\\\" source=dhcp & ";
 		$shutdown_command .= "$system32_path/netsh.exe interface ip set dnsservers name=\\\"$public_interface_name\\\" source=dhcp & ";
+		$shutdown_command .= "$system32_path/netsh.exe interface ip reset & ";
 		$shutdown_command .= "$system32_path/ipconfig.exe /release & ";
+		$shutdown_command .= "$system32_path/ipconfig.exe /flushdns & ";
+		$shutdown_command .= "$system32_path/arp.exe -d * & ";
 		$shutdown_command .= "$system32_path/route.exe DELETE 0.0.0.0 MASK 0.0.0.0 & ";
 	}
 	else {
@@ -4048,11 +4217,11 @@ sub disable_netbios {
 	for my $interface_key (@interface_keys) {
 		my $netbios_options = $interface_registry_data->{$interface_key}{NetbiosOptions};
 		
-		next if !defined($netbios_options);
-		notify($ERRORS{'DEBUG'}, 0, "$interface_key: NetbiosOptions = $netbios_options");
-		
-		if (!$self->reg_add($interface_key, 'NetbiosOptions', 'REG_DWORD', 2)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to set NetbiosOptions = 2 under interface key: $interface_key");
+		if ($self->reg_add($interface_key, 'NetbiosOptions', 'REG_DWORD', 2)) {
+			notify($ERRORS{'OK'}, 0, "disabled Netbios for interface: $interface_key");
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to disabled Netbios for interface: $interface_key");
 			return;
 		}
 	}
@@ -8012,14 +8181,14 @@ sub format_path_unix {
 		return;	
 	}
 	
-	# Replace all backslashes with forward slashes
-	$path =~ s/[\\]+/\//g;
-	
-	# Replace multiple forward slashes with a single forward slash
-	$path =~ s/\/+/\//g;
+	# Replace all forward slashes and backslashes with a single forward slash
+	$path =~ s/[\/\\]+/\//g;
 	
 	# Escape all spaces
 	$path =~ s/ /\\ /g;
+	
+	# Change %VARIABLE% to $VARIABLE
+	$path =~ s/\%(.+)\%/\$$1/g;
 	
 	#notify($ERRORS{'DEBUG'}, 0, "formatted path for Unix: $path");
 	return $path;
@@ -9902,6 +10071,87 @@ sub disable_login_screensaver {
 		return;
 	}
 	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 fix_default_profile
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Attempts to correct common problems with the default user
+               profile by loading the default user registry hive from the
+               ntuser.dat file into the registry, making changes, then unloading
+               the hive.
+
+=cut
+
+sub fix_default_profile {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $computer_node_name   = $self->data->get_computer_node_name();
+	
+	my $root_key = 'HKEY_USERS\DEFAULT_USER_PROFILE';
+	my $profile_list_key = 'HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList';
+	
+	# Determine the default user profile path
+	my $profile_list_registry_info = $self->reg_query($profile_list_key);
+	if (!$profile_list_registry_info) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve profile information from the registry on $computer_node_name");
+		return;
+	}
+	elsif (!$profile_list_registry_info->{$profile_list_key}) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine default profile path, '$profile_list_key' key does not exist in the registry data:\n" . format_data($profile_list_registry_info));
+		return;
+	}
+	
+	# The default profile path should either be stored in the 'Default' value or can be assembled from combining the 'ProfilesDirectory' and 'DefaultUserProfile' values
+	my $default_profile_path;
+	if ($profile_list_registry_info->{$profile_list_key}{Default}) {
+		$default_profile_path = $profile_list_registry_info->{$profile_list_key}{Default};
+	}
+	elsif ($profile_list_registry_info->{$profile_list_key}{ProfilesDirectory} && $profile_list_registry_info->{$profile_list_key}{DefaultUserProfile}) {
+		$default_profile_path = "$profile_list_registry_info->{$profile_list_key}{ProfilesDirectory}\\$profile_list_registry_info->{$profile_list_key}{DefaultUserProfile}";
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to determine default profile path from the registry on $computer_node_name:\n" . format_data($profile_list_registry_info->{$profile_list_key}));
+		return;
+	}
+	notify($ERRORS{'DEBUG'}, 0, "determined default profile path from the registry on $computer_node_name: '$default_profile_path'");
+
+	# Load the default profile hive file into the registry
+	my $hive_file_path = "$default_profile_path\\ntuser.dat";
+	if (!$self->reg_load($root_key, $hive_file_path)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to load the default profile hive into the registry on $computer_node_name");
+		return;
+	}
+return;
+	# Fix registry values known to cause problems
+	# The "Shell Folders" key may contain paths pointing to a specific user's profile
+	# Any paths under "Shell Folders" can be deleted
+	my $registry_string .= <<EOF;
+Windows Registry Editor Version 5.00
+[-$root_key\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Shell Folders]
+[$root_key\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Shell Folders]
+EOF
+
+	# Import the string into the registry
+	if (!$self->import_registry_string($registry_string)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to fix problematic registry settings in the default profile");
+		return;
+	}
+	
+	# Unoad the default profile hive
+	if (!$self->reg_unload($root_key)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to unload the default profile hive from the registry on $computer_node_name");
+		return;
+	}
+
 	return 1;
 }
 

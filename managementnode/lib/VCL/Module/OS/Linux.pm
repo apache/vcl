@@ -267,7 +267,10 @@ sub post_load {
 	
 	# Attempt to generate ifcfg-eth* files and ifup any interfaces which the file does not exist
 	$self->activate_interfaces();
-
+	
+	# Add a line to currentimage.txt indicating post_load has run
+	$self->set_vcld_post_load_status();
+	
 	return 1;
 
 } ## end sub post_load
@@ -1612,7 +1615,7 @@ sub get_file_contents {
 
 =head2 get_available_space
 
- Parameters  : none
+ Parameters  : $path
  Returns     : If successful: integer
                If failed: undefined
  Description : Returns the bytes available in the path specified by the
@@ -1662,19 +1665,88 @@ sub get_available_space {
 	}
 	
 	# Extract the blocks free value
-	my ($blocks_free) = $output_string =~ /Blocks:[^\n]*Free: (\d+)/;
-	if (!$blocks_free) {
-		notify($ERRORS{'WARNING'}, 0, "unable to locate blocks free value in stat output:\ncommand: $command\noutput:\n" . join("\n", @$output));
+	my ($blocks_available) = $output_string =~ /Blocks:[^\n]*Available: (\d+)/;
+	if (!defined($blocks_available)) {
+		notify($ERRORS{'WARNING'}, 0, "unable to locate blocks available value in stat output:\ncommand: $command\noutput:\n" . join("\n", @$output));
+		return;
+	}
+	
+	# Calculate the bytes available
+	my $bytes_available = ($block_size * $blocks_available);
+	my $mb_available = format_number(($bytes_available / 1024 / 1024), 2);
+	my $gb_available = format_number(($bytes_available / 1024 / 1024 / 1024), 1);
+	
+	notify($ERRORS{'DEBUG'}, 0, "bytes available in '$path' on $computer_short_name: " . format_number($bytes_available) . " bytes ($mb_available MB, $gb_available GB)");
+	return $bytes_available;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_total_space
+
+ Parameters  : $path
+ Returns     : If successful: integer
+               If failed: undefined
+ Description : Returns the total size in bytes of the volume where the path
+					resides specified by the argument. Undefined is returned if an
+					error occurred.
+
+=cut
+
+sub get_total_space {
+	my $self = shift;
+	if (ref($self) !~ /module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get the path argument
+	my $path = shift;
+	if (!$path) {
+		notify($ERRORS{'WARNING'}, 0, "path argument was not specified");
+		return;
+	}
+	
+	my $computer_short_name = $self->data->get_computer_short_name();
+	
+	# Run stat -f specifying the path as an argument
+	# Don't use df because you can't specify a path under ESX and parsing would be difficult
+	my $command = "stat -f \"$path\"";
+	my ($exit_status, $output) = $self->execute($command);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run command to determine available space on $computer_short_name:\ncommand: $command\noutput:\n" . join("\n", @$output));
+		return;
+	}
+	elsif (grep(/^stat: /i, @$output)) {
+		notify($ERRORS{'WARNING'}, 0, "error occurred running command to determine available space on $computer_short_name\ncommand: $command\noutput:\n" . join("\n", @$output));
+		return;
+	}
+	
+	# Create an output string from the array of lines for easier regex parsing
+	my $output_string = join("\n", @$output);
+	
+	# Extract the block size value
+	# Search case sensitive for 'Block size:' because the line may also contain "Fundamental block size:"
+	my ($block_size) = $output_string =~ /Block size: (\d+)/;
+	if (!$block_size) {
+		notify($ERRORS{'WARNING'}, 0, "unable to locate 'Block size:' value in stat output:\ncommand: $command\noutput:\n" . join("\n", @$output));
+		return;
+	}
+	
+	# Extract the blocks total value
+	my ($blocks_total) = $output_string =~ /Blocks:[^\n]*Total: (\d+)/;
+	if (!defined($blocks_total)) {
+		notify($ERRORS{'WARNING'}, 0, "unable to locate blocks total value in stat output:\ncommand: $command\noutput:\n" . join("\n", @$output));
 		return;
 	}
 	
 	# Calculate the bytes free
-	my $bytes_free = ($block_size * $blocks_free);
-	my $mb_free = format_number(($bytes_free / 1024 / 1024), 2);
-	my $gb_free = format_number(($bytes_free / 1024 / 1024 / 1024), 1);
+	my $bytes_total = ($block_size * $blocks_total);
+	my $mb_total = format_number(($bytes_total / 1024 / 1024), 2);
+	my $gb_total = format_number(($bytes_total / 1024 / 1024 / 1024), 1);
 	
-	notify($ERRORS{'DEBUG'}, 0, "bytes free in '$path' on $computer_short_name: " . format_number($bytes_free) . " bytes ($mb_free MB, $gb_free GB)");
-	return $bytes_free;
+	notify($ERRORS{'DEBUG'}, 0, "total bytes of volume where '$path' resides on $computer_short_name: " . format_number($bytes_total) . " bytes ($mb_total MB, $gb_total GB)");
+	return $bytes_total;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -1920,10 +1992,30 @@ sub get_file_size {
 			$total_bytes_used += ($file_blocks * $block_size);
 			$total_bytes_allocated += $file_bytes;
 		}
+		elsif ($type =~ /directory/) {
+			$total_bytes_used += ($file_blocks * $block_size);
+			$total_bytes_allocated += $file_bytes;
+			
+			$path =~ s/[\\\/\*]+$//g;
+			notify($ERRORS{'DEBUG'}, 0, "recursively retrieving size of files under directory: '$path'");
+			my ($subdirectory_bytes_used, $subdirectory_bytes_allocated) = $self->get_file_size("$path/*");
+			$total_bytes_used += $subdirectory_bytes_used;
+			$total_bytes_allocated += $subdirectory_bytes_allocated;
+		}
 	}
 	
-	notify($ERRORS{'DEBUG'}, 0, "size of $file_path on $computer_node_name: " . format_number($total_bytes_used) . " bytes, (" . format_number($total_bytes_allocated) . " bytes allocated)");
-	return $total_bytes_used;
+	if ((caller(1))[3] !~ /get_file_size/) {
+		notify($ERRORS{'DEBUG'}, 0, "size of '$file_path' on $computer_node_name:\n" .
+				 "used: " . get_file_size_info_string($total_bytes_used) . "\n" .
+				 "allocated: " . get_file_size_info_string($total_bytes_allocated));
+	}
+	
+	if (wantarray) {
+		return ($total_bytes_used, $total_bytes_allocated);
+	}
+	else {
+		return $total_bytes_used;
+	}
 }
 
 #/////////////////////////////////////////////////////////////////////////////
