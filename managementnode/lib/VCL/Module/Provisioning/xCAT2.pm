@@ -1873,6 +1873,16 @@ sub node_status {
 	# Node is up and doesn't need to be reloaded
 	if ($status{status} =~ /ready/i) {
 		notify($ERRORS{'OK'}, $log, "node is up and does not need to be reloaded");
+		
+		# Check if the OS post_load tasks have run
+		if ($self->os->get_vcld_post_load_status()) {
+			notify($ERRORS{'DEBUG'}, 0, "OS module post_load tasks have been completed on $computer_short_name");
+			$status{status} = 'READY';
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "OS module post_load tasks have not been completed on $computer_short_name, returning 'POST_LOAD'");
+			$status{status} = 'POST_LOAD';
+		}
 	}
 	else {
 		notify($ERRORS{'OK'}, $log, "node is either down or needs to be reloaded");

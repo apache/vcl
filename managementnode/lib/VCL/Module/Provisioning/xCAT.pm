@@ -2289,11 +2289,11 @@ sub node_status {
 		
 		# Check if the OS post_load tasks have run
 		if ($self->os->get_vcld_post_load_status()) {
-			notify($ERRORS{'DEBUG'}, 0, "OS module post_load tasks have been completed on VM $computer_short_name");
+			notify($ERRORS{'DEBUG'}, 0, "OS module post_load tasks have been completed on $computer_short_name");
 			$status{status} = 'READY';
 		}
 		else {
-			notify($ERRORS{'DEBUG'}, 0, "OS module post_load tasks have not been completed on VM $computer_short_name, returning 'POST_LOAD'");
+			notify($ERRORS{'DEBUG'}, 0, "OS module post_load tasks have not been completed on $computer_short_name, returning 'POST_LOAD'");
 			$status{status} = 'POST_LOAD';
 		}
 	}
