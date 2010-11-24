@@ -111,6 +111,12 @@ sub initialize {
 		return;
 	}
 	
+	# Create a management node OS object
+	if (!$self->create_mn_os_object()) {
+		notify($ERRORS{'WARNING'}, 0, "failed to create management node OS object");
+		return;
+	}
+	
 	# Create a provisioning object
 	if (!$self->create_provisioning_object()) {
 		notify($ERRORS{'WARNING'}, 0, "failed to create provisioning object");
@@ -120,6 +126,10 @@ sub initialize {
 	# Allow the provisioning object to access the OS object and vice-versa
 	$self->{provisioner}->set_os($self->{os});
 	$self->{os}->set_provisioner($self->{provisioner});
+	
+	# Allow the provisioning and OS objects to access the management node OS object
+	$self->{provisioner}->set_mn_os($self->{mn_os});
+	$self->{os}->set_mn_os($self->{mn_os});
 	
 	notify($ERRORS{'DEBUG'}, 0, "returning 1");
 	return 1;

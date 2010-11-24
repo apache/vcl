@@ -2448,13 +2448,18 @@ sub reg_query {
 		return;
 	}
 	
-	#notify($ERRORS{'DEBUG'}, 0, "reg.exe QUERY output:\n" . join("\n", @$output));
+	notify($ERRORS{'DEBUG'}, 0, "reg.exe QUERY output:\n" . join("\n", @$output));
 	
 	# If value argument was specified, parse and return the data
 	if (defined($value_argument)) {
 		# Find the line containing the value information and parse it
-		my ($value, $type, $data) = map { $_ =~ /^\s*([^\t]+)\s*(REG_\w+)\s*(.*)/ } @$output;
-		$value = '(Default)' if $value eq '<NO NAME>';
+		my ($value, $type, $data) = map { $_ =~ /^\s*(.*)\s+(REG_\w+)\s+(.*)/ } @$output;
+		$value =~ s/(^\s+|\s+$)//g;
+		$type =~ s/(^\s+|\s+$)//g;
+		$data =~ s/(^\s+|\s+$)//g;
+		
+		$value = '(Default)' if $value =~ /NO NAME/;
+		
 		if ($type && defined($data)) {
 			$data = $self->reg_query_convert_data($type, $data);
 			notify($ERRORS{'DEBUG'}, 0, "retrieved registry data:\nkey: '$key_argument'\nvalue: '$value'\ntype: $type\ndata: '$data'");
@@ -2471,15 +2476,26 @@ sub reg_query {
 		
 		my $key;
 		for my $line (@$output) {
+			
 			if ($line =~ /^HKEY/) {
 				$key = $line;
 				$registry_hash{$key} = {};
 				next;
 			}
-			elsif ($line =~ /^\s*([^\t]+)\s*(REG_\w+)\s*(.*)/) {
+			elsif ($line =~ /^\s*(.*)\s+(REG_\w+)\s+(.*)/) {
 				my ($value, $type, $data) = ($1, $2, $3);
-				$value = '(Default)' if $value eq '<NO NAME>';
+				$value =~ s/(^\s+|\s+$)//g;
+				$type =~ s/(^\s+|\s+$)//g;
+				$data =~ s/(^\s+|\s+$)//g;
+				
+				$value = '(Default)' if $value =~ /NO NAME/;
+				
 				$data = $self->reg_query_convert_data($type, $data);
+				
+				#notify($ERRORS{'DEBUG'}, 0, "line: " . string_to_ascii($line) . "\n" .
+						 #"value: " . string_to_ascii($value) . "\n" .
+						 #"data: " . string_to_ascii($data)
+						 #);
 				
 				#$registry_hash{$key}{$value}{type} = $type;
 				$registry_hash{$key}{$value} = $data;
@@ -10123,14 +10139,14 @@ sub fix_default_profile {
 		return;
 	}
 	notify($ERRORS{'DEBUG'}, 0, "determined default profile path from the registry on $computer_node_name: '$default_profile_path'");
-
+	
 	# Load the default profile hive file into the registry
 	my $hive_file_path = "$default_profile_path\\ntuser.dat";
 	if (!$self->reg_load($root_key, $hive_file_path)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to load the default profile hive into the registry on $computer_node_name");
 		return;
 	}
-return;
+	
 	# Fix registry values known to cause problems
 	# The "Shell Folders" key may contain paths pointing to a specific user's profile
 	# Any paths under "Shell Folders" can be deleted

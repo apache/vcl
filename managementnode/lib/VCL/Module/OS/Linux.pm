@@ -1676,7 +1676,7 @@ sub get_available_space {
 	my $mb_available = format_number(($bytes_available / 1024 / 1024), 2);
 	my $gb_available = format_number(($bytes_available / 1024 / 1024 / 1024), 1);
 	
-	notify($ERRORS{'DEBUG'}, 0, "bytes available in '$path' on $computer_short_name: " . format_number($bytes_available) . " bytes ($mb_available MB, $gb_available GB)");
+	notify($ERRORS{'DEBUG'}, 0, "space available on volume on $computer_short_name containing '$path': " . get_file_size_info_string($bytes_available));
 	return $bytes_available;
 }
 
@@ -1745,7 +1745,7 @@ sub get_total_space {
 	my $mb_total = format_number(($bytes_total / 1024 / 1024), 2);
 	my $gb_total = format_number(($bytes_total / 1024 / 1024 / 1024), 1);
 	
-	notify($ERRORS{'DEBUG'}, 0, "total bytes of volume where '$path' resides on $computer_short_name: " . format_number($bytes_total) . " bytes ($mb_total MB, $gb_total GB)");
+	notify($ERRORS{'DEBUG'}, 0, "total size of volume on $computer_short_name containing '$path': " . get_file_size_info_string($bytes_total));
 	return $bytes_total;
 }
 

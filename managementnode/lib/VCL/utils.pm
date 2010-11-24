@@ -118,6 +118,7 @@ our @EXPORT = qw(
   get_current_file_name
   get_current_package_name
   get_current_subroutine_name
+  get_file_size_info_string
   get_group_name
   get_highest_imagerevision_info
   get_image_info
@@ -606,7 +607,7 @@ sub notify {
 	
 	# Get info about the subroutine which called this subroutine
 	my ($package, $filename, $line, $sub) = caller(0);
-
+	
 	# Assemble the caller information
 	my $caller_info;
 	if (caller(1)) {
@@ -6372,7 +6373,7 @@ sub get_request_by_computerid {
 
 	# Check to make sure 1 row was returned
 	if (scalar @selected_rows == 0) {
-		notify($ERRORS{'WARNING'}, 0, "zero rows were returned from database select $computer_id");
+		notify($ERRORS{'OK'}, 0, "zero rows were returned from database select $computer_id");
 		return ();
 	}
 
@@ -9082,7 +9083,12 @@ sub string_to_ascii {
 		}
 	}
 	
-	return $ascii_value_string || '';
+	if (defined($ascii_value_string)) {
+		return $ascii_value_string;
+	}
+	else {
+		return '';
+	}
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -9765,6 +9771,30 @@ sub format_number {
 	$number =~ s/(\d\d\d)(?=\d)(?!\d*\.)/$1,/g;
 	
 	return scalar reverse $number;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_file_size_info_string
+
+ Parameters  : $bytes
+ Returns     : string
+ Description : 
+
+=cut
+
+sub get_file_size_info_string {
+	my ($size_bytes, $separator) = @_;
+	$separator = ", " if !$separator;
+	
+	my $size_mb = format_number(($size_bytes / 1024 / 1024), 1);
+	my $size_gb = format_number(($size_bytes / 1024 / 1024 / 1024), 2);
+	
+	my $size_info;
+	$size_info .= format_number($size_bytes) . " bytes$separator";
+	$size_info .= "$size_mb MB$separator";
+	$size_info .=  "$size_gb GB";
+	return $size_info;
 }
 
 #/////////////////////////////////////////////////////////////////////////////

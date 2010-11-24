@@ -282,6 +282,68 @@ sub create_os_object {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 create_mn_os_object
+
+ Parameters  : None
+ Returns     : boolean
+ Description : Creates a management node OS object if one has not already been
+               created for the calling object.
+
+=cut
+
+sub create_mn_os_object {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Make sure calling object isn't an OS module to avoid an infinite loop
+	if ($self->isa('VCL::Module::OS')) {
+		notify($ERRORS{'WARNING'}, 0, "this subroutine cannot be called from an existing OS module");
+		return;
+	}
+	
+	# Check if an OS object has already been stored in the calling object
+	if ($self->{mn_os}) {
+		my $address = sprintf('%x', $self->{mn_os});
+		notify($ERRORS{'DEBUG'}, 0, "management node OS object has already been created, address: $address, returning 1");
+		return 1;
+	}
+	
+	my $request_data = $self->data->get_request_data();
+	my $reservation_id = $self->data->get_reservation_id();
+	
+	# Create a DataStructure object containing computer data for the management node
+	my $mn_data;
+	eval {
+		$mn_data = new VCL::DataStructure();
+	};
+	
+	# Attempt to load the OS module
+	my $mn_os_perl_package = 'VCL::Module::OS::Linux::ManagementNode';
+	eval "use $mn_os_perl_package";
+	if ($EVAL_ERROR) {
+		notify($ERRORS{'WARNING'}, 0, "$mn_os_perl_package module could not be loaded, returning 0");
+		return 0;
+	}
+	notify($ERRORS{'DEBUG'}, 0, "$mn_os_perl_package module loaded");
+	
+	# Attempt to create the object
+	if (my $mn_os = ($mn_os_perl_package)->new({data_structure => $mn_data})) {
+		my $address = sprintf('%x', $mn_os);
+		notify($ERRORS{'OK'}, 0, "$mn_os_perl_package OS object created, address: $address");
+		$self->set_mn_os($mn_os);
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to create management node OS object");
+		return;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 create_provisioning_object
 
  Parameters  : None
@@ -346,8 +408,7 @@ sub create_provisioning_object {
 
  Parameters  : None
  Returns     : Process's OS object
- Description : Allows provisioning modules to access the reservation's OS
-               object.
+ Description : Allows modules to access the reservation's OS object.
 
 =cut
 
@@ -360,6 +421,28 @@ sub os {
 	}
 	else {
 		return $self->{os};
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 mn_os
+
+ Parameters  : None
+ Returns     : Management node's OS object
+ Description : Allows modules to access the management node's OS object.
+
+=cut
+
+sub mn_os {
+	my $self = shift;
+	
+	if (!$self->{mn_os}) {
+		notify($ERRORS{'WARNING'}, 0, "unable to return management node OS object, \$self->{mn_os} is not set");
+		return;
+	}
+	else {
+		return $self->{mn_os};
 	}
 }
 
@@ -391,7 +474,7 @@ sub provisioner {
 =head2 set_os
 
  Parameters  : None
- Returns     : Process's OS object
+ Returns     : 
  Description : Sets the OS object for the module to access.
 
 =cut
@@ -400,6 +483,22 @@ sub set_os {
 	my $self = shift;
 	my $os = shift;
 	$self->{os} = $os;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 set_mn_os
+
+ Parameters  : None
+ Returns     : 
+ Description : Sets the management node OS object for the module to access.
+
+=cut
+
+sub set_mn_os {
+	my $self = shift;
+	my $mn_os = shift;
+	$self->{mn_os} = $mn_os;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
