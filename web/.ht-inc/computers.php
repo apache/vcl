@@ -2222,14 +2222,15 @@ function computerUtilities() {
 		print "  </TR>\n";
 	}
 	print "  <TR>\n";
-	print "    <TD>Change state of selected computers to:</TD>";
+	print "    <TD>Change state of or delete selected computers:</TD>";
 	$states = array("2" => "available",
 	                "23" => "hpc",
 	                "10" => "maintenance",
-	                "20" => "convert to vmhostinuse");
+	                "20" => "convert to vmhostinuse",
+	                "999" => "DELETE");
 	print "    <TD colspan=2>\n";
 	printSelectInput("stateid", $states);
-	print "    <INPUT type=button onclick=compStateChangeSubmit(); value=\"Confirm State Change\">";
+	print "    <INPUT type=button onclick=compStateChangeSubmit(); value=\"Confirm Change\">";
 	print "    </TD>\n";
 	$cont = addContinuationsEntry('compStateChange', array(), SECINDAY, 0);
 	print "    <INPUT type=hidden id=statecont value=\"$cont\">\n";
@@ -2468,6 +2469,11 @@ function compStateChange() {
 		print "hpc state:\n";
 		print "<FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
 	}
+	elseif($data['stateid'] == 999) {
+		print "You are about to <font color=\"FF0000\">DELETE</font> the following computers";
+		print "<FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
+	}
+
 	$cont = addContinuationsEntry('submitCompStateChange', $data, SECINDAY, 0, 0);
 	print "      <INPUT type=hidden name=continuation value=\"$cont\">\n";
 	print "<TABLE>\n";
@@ -2971,6 +2977,22 @@ function submitCompStateChange() {
 			print "</TABLE>\n";
 			print "<br>\n";
 		}
+	}
+	elseif($data['stateid'] == 999) {
+		$compids = implode(',', $data['computerids']);
+		$query = "UPDATE computer "
+		       . "SET deleted = 1, "
+		       .     "notes = '' "
+		       . "WHERE id IN ($compids)";
+		doQuery($query, 999);
+		print "The following computers were deleted:\n";
+		print "<TABLE>\n";
+		foreach($data['computerids'] as $compid) {
+			print "  <TR>\n";
+			print "    <TD>{$computers[$compid]['hostname']}</TD>\n";
+			print "  </TR>\n";
+		}
+		print "</TABLE>\n";
 	}
 	else
 		abort(50);
