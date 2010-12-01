@@ -858,7 +858,7 @@ function AJnewProfile() {
 		sendJSON(array('failed' => 'exists'));
 		return;
 	}
-	$query = "INSERT INTO vmprofile (profilename) VALUES ('$newprofile')";
+	$query = "INSERT INTO vmprofile (profilename, vmtypeid, imageid) VALUES ('$newprofile',1,4)";
 	doQuery($query, 101);
 	$qh = doQuery("SELECT LAST_INSERT_ID() FROM vmprofile", 101);
 	$row = mysql_fetch_row($qh);
