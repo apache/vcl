@@ -130,13 +130,10 @@ sub initialize {
 		# Output contains the line: 'vim-cmd: command not found'
 		$self->{vim_cmd} = 'vmware-vim-cmd';
 	}
-	elsif (grep(/: vmware-vim-cmd:.*not found/i, @$output)) {
-		# Output contains the line: 'vmware-vim-cmd: command not found'
-		$self->{vim_cmd} = 'vim-cmd';
-	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "unexpected output returned while attempting to determine which VIM executable is available on the VM host, output:\n" . join("\n", @$output));
-		return;
+		# Output contains the line: 'vmware-vim-cmd: command not found'
+		# Note: VMware ESX 4.1 has BOTH vim-cmd and vmware-vim-cmd
+		$self->{vim_cmd} = 'vim-cmd';
 	}
 	notify($ERRORS{'DEBUG'}, 0, "VIM executable available on VM host: $self->{vim_cmd}");
 	
