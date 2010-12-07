@@ -221,7 +221,6 @@ our @EXPORT = qw(
   $DAEMON_MODE
   $DATABASE
   $DEFAULTHELPEMAIL
-  $GATEWAY
   $FQDN
   $jabPass
   $jabPort
