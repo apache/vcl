@@ -439,9 +439,9 @@ sub clear_private_keys {
 
 =head2 set_static_public_address
 
- Parameters  :
- Returns     :
- Description :
+ Parameters  : none
+ Returns     : boolean
+ Description : Configures the public interface with a static IP address.
 
 =cut
 
@@ -451,198 +451,193 @@ sub set_static_public_address {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return 0;
 	}
+	
+	my $computer_name = $self->data->get_computer_short_name();
+	
 	# Make sure public IP configuration is static
-	my $ip_configuration = $self->data->get_management_node_public_ip_configuration() || 'undefined';
-	unless ($ip_configuration =~ /static/i) {
+	my $ip_configuration = $self->data->get_management_node_public_ip_configuration();
+	if ($ip_configuration !~ /static/i) {
 		notify($ERRORS{'WARNING'}, 0, "static public address can only be set if IP configuration is static, current value: $ip_configuration");
 		return;
 	}
 
 	# Get the IP configuration
-	my $public_interface_name = $self->get_public_interface_name()     || 'undefined';
-	my $public_ip_address     = $self->data->get_computer_ip_address() || 'undefined';
-
-	my $subnet_mask     = $self->data->get_management_node_public_subnet_mask() || 'undefined';
-	my $default_gateway = $self->get_public_default_gateway()                   || 'undefined';
-	my $dns_server      = $self->data->get_management_node_public_dns_server()  || 'undefined';
-
+	my $interface_name = $self->get_public_interface_name() || '<undefined>';
+	my $ip_address = $self->data->get_computer_ip_address() || '<undefined>';
+	my $subnet_mask = $self->data->get_management_node_public_subnet_mask() || '<undefined>';
+	my $default_gateway = $self->data->get_management_node_public_default_gateway() || '<undefined>';
+	my @dns_servers = $self->data->get_management_node_public_dns_servers();
+	
+	# Assemble a string containing the static IP configuration
+	my $configuration_info_string = <<EOF;
+public interface name: $interface_name
+public IP address: $ip_address
+public subnet mask: $subnet_mask
+public default gateway: $default_gateway
+public DNS server(s): @dns_servers
+EOF
+	
 	# Make sure required info was retrieved
-	if ("$public_interface_name $subnet_mask $default_gateway $dns_server" =~ /undefined/) {
-		notify($ERRORS{'WARNING'}, 0, "unable to retrieve required network configuration:\ninterface: $public_interface_name\npublic IP address: $public_ip_address\nsubnet mask=$subnet_mask\ndefault gateway=$default_gateway\ndns server=$dns_server");
+	if ("$interface_name $ip_address $subnet_mask $default_gateway" =~ /undefined/) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve required network configuration for $computer_name:\n$configuration_info_string");
 		return;
 	}
-
-	my $management_node_keys = $self->data->get_management_node_keys();
-	my $image_name           = $self->data->get_image_name();
-	my $computer_short_name  = $self->data->get_computer_short_name();
-	my $computer_node_name   = $self->data->get_computer_node_name();
-
-	notify($ERRORS{'OK'}, 0, "initiating Linux set_static_public_address on $computer_short_name");
-	my @eth1file;
-	my $tmpfile = "/tmp/ifcfg-eth_device-$computer_short_name";
-	push(@eth1file, "DEVICE=$public_interface_name\n");
-	push(@eth1file, "BOOTPROTO=static\n");
-	push(@eth1file, "IPADDR=$public_ip_address\n");
-	push(@eth1file, "NETMASK=$subnet_mask\n");
-	push(@eth1file, "STARTMODE=onboot\n");
-	push(@eth1file, "ONBOOT=yes\n");
-
-	#write to tmpfile
-	if (open(TMP, ">$tmpfile")) {
-		print TMP @eth1file;
-		close(TMP);
+	else {
+		notify($ERRORS{'OK'}, 0, "attempting to set static public IP address on $computer_name:\n$configuration_info_string");
+	}
+	
+	# Assemble the ifcfg file path
+	my $network_scripts_path = "/etc/sysconfig/network-scripts";
+	my $ifcfg_file_path = "$network_scripts_path/ifcfg-$interface_name";
+	notify($ERRORS{'DEBUG'}, 0, "public interface ifcfg file path: $ifcfg_file_path");
+	
+	# Assemble the ifcfg file contents
+	my $ifcfg_contents = <<EOF;
+DEVICE=$interface_name
+BOOTPROTO=static
+IPADDR=$ip_address
+NETMASK=$subnet_mask
+STARTMODE=onboot
+ONBOOT=yes
+EOF
+	
+	# Echo the contents to the ifcfg file
+	my $echo_ifcfg_command = "echo \"$ifcfg_contents\" > $ifcfg_file_path";
+	my ($echo_ifcfg_exit_status, $echo_ifcfg_output) = $self->execute($echo_ifcfg_command);
+	if (!defined($echo_ifcfg_output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run command to recreate $ifcfg_file_path on $computer_name: '$echo_ifcfg_command'");
+		return;
+	}
+	elsif ($echo_ifcfg_exit_status || grep(/echo:/i, @$echo_ifcfg_output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to recreate $ifcfg_file_path on $computer_name, exit status: $echo_ifcfg_exit_status, command: '$echo_ifcfg_command', output:\n" . join("\n", @$echo_ifcfg_output));
+		return;
 	}
 	else {
-		#print "could not write $tmpfile $!\n";
-
+		notify($ERRORS{'DEBUG'}, 0, "recreated $ifcfg_file_path on $computer_name:\n$ifcfg_contents");
 	}
-	my @sshcmd = run_ssh_command($computer_short_name, $management_node_keys, "/etc/sysconfig/network-scripts/ifdown $public_interface_name", "root");
-	foreach my $l (@{$sshcmd[1]}) {
-		if ($l) {
-			#potential problem
-			notify($ERRORS{'OK'}, 0, "sshcmd output ifdown $computer_short_name $l");
-		}
+	
+	# Restart the interface
+	notify($ERRORS{'DEBUG'}, 0, "attempting to restart public interface $interface_name on $computer_name");
+	my $interface_restart_command = "$network_scripts_path/ifdown $interface_name ; $network_scripts_path/ifup $interface_name";
+	my ($interface_restart_exit_status, $interface_restart_output) = $self->execute($interface_restart_command);
+	if (!defined($interface_restart_output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run command to restart public interface $interface_name on $computer_name: '$interface_restart_command'");
+		return;
 	}
-	#copy new ifcfg-Device
-	if (run_scp_command($tmpfile, "$computer_short_name:/etc/sysconfig/network-scripts/ifcfg-$public_interface_name", $management_node_keys)) {
-
-		#confirm it got there
-		undef @sshcmd;
-		@sshcmd = run_ssh_command($computer_short_name, $management_node_keys, "cat /etc/sysconfig/network-scripts/ifcfg-$public_interface_name", "root");
-		my $success = 0;
-		foreach my $i (@{$sshcmd[1]}) {
-			if ($i =~ /$public_ip_address/) {
-				notify($ERRORS{'OK'}, 0, "SUCCESS - copied ifcfg_$public_interface_name\n");
-				$success = 1;
-			}
-		}
-		if (unlink($tmpfile)) {
-			notify($ERRORS{'OK'}, 0, "unlinking $tmpfile");
-		}
-
-		if (!$success) {
-			notify($ERRORS{'WARNING'}, 0, "unable to copy $tmpfile to $computer_short_name file ifcfg-$public_interface_name did get updated with $public_ip_address ");
-			return 0;
-		}
-	} ## end if (run_scp_command($tmpfile, "$computer_short_name:/etc/sysconfig/network-scripts/ifcfg-$public_interface_name"...
-
-	#bring device up
-	@sshcmd = run_ssh_command($computer_short_name, $management_node_keys, "/etc/sysconfig/network-scripts/ifup $public_interface_name", "root");
-	#should be empty
-	foreach my $l (@{$sshcmd[1]}) {
-		if ($l) {
-			#potential problem
-			notify($ERRORS{'OK'}, 0, "possible problem with ifup $public_interface_name $l");
-		}
+	elsif ($interface_restart_exit_status) {
+		notify($ERRORS{'WARNING'}, 0, "failed to restart public interface $interface_name on $computer_name, exit status: $interface_restart_exit_status, command: '$interface_restart_command', output:\n" . join("\n", @$interface_restart_output));
+		return;
 	}
-	#correct route table - delete old default and add new in same line
-	undef @sshcmd;
-	@sshcmd = run_ssh_command($computer_short_name, $management_node_keys, "/sbin/route del default", "root");
-	#should be empty
-	foreach my $l (@{$sshcmd[1]}) {
-		if ($l =~ /Usage:/) {
-			#potential problem
-			notify($ERRORS{'OK'}, 0, "possible problem with route del default $l");
-		}
-		if ($l =~ /No such process/) {
-			notify($ERRORS{'OK'}, 0, "$l - ok  just no default route since we downed eth device");
-		}
-	}
-
-	notify($ERRORS{'OK'}, 0, "Setting default route");
-	undef @sshcmd;
-	@sshcmd = run_ssh_command($computer_short_name, $management_node_keys, "/sbin/route add default gw $default_gateway metric 0 $public_interface_name", "root");
-	#should be empty
-	foreach my $l (@{$sshcmd[1]}) {
-		if ($l =~ /Usage:/) {
-			#potential problem
-			notify($ERRORS{'OK'}, 0, "possible problem with route add default gw $default_gateway metric 0 $public_interface_name");
-		}
-		if ($l =~ /No such process/) {
-			notify($ERRORS{'CRITICAL'}, 0, "problem with $computer_short_name $l add default gw $default_gateway metric 0 $public_interface_name");
-			return 0;
-		}
-	} ## end foreach my $l (@{$sshcmd[1]})
-
-	#correct external sshd file
-
-	if (run_ssh_command($computer_short_name, $management_node_keys, "sed -i -e \"/ListenAddress .*/d \" /etc/ssh/external_sshd_config", "root")) {
-		notify($ERRORS{'OK'}, 0, "Cleared ListenAddress from external_sshd_config");
-	}
-
-	# Add correct ListenAddress
-	if (run_ssh_command($computer_short_name, $management_node_keys, "echo \"ListenAddress $public_ip_address\" >> /etc/ssh/external_sshd_config", "root")) {
-		notify($ERRORS{'OK'}, 0, "appended ListenAddress $public_ip_address to external_sshd_config");
-	}
-
-	#modify /etc/resolve.conf
-	my $search;
-	undef @sshcmd;
-	@sshcmd = run_ssh_command($computer_short_name, $management_node_keys, "cat /etc/resolv.conf", "root");
-	foreach my $l (@{$sshcmd[1]}) {
-		chomp($l);
-		if ($l =~ /search/) {
-			$search = $l;
-		}
-	}
-
-	if (defined($search)) {
-		my @resolvconf;
-		push(@resolvconf, "$search\n");
-		my ($s1, $s2, $s3);
-		if ($dns_server =~ /,/) {
-			($s1, $s2, $s3) = split(/,/, $dns_server);
-		}
-		else {
-			$s1 = $dns_server;
-		}
-		push(@resolvconf, "nameserver $s1\n");
-		push(@resolvconf, "nameserver $s2\n") if (defined($s2));
-		push(@resolvconf, "nameserver $s3\n") if (defined($s3));
-		my $rtmpfile = "/tmp/resolvconf$computer_short_name";
-		if (open(RES, ">$rtmpfile")) {
-			print RES @resolvconf;
-			close(RES);
-		}
-		else {
-			notify($ERRORS{'OK'}, 0, "could not write to $rtmpfile $!");
-		}
-		#put resolve.conf  file back on node
-		notify($ERRORS{'OK'}, 0, "copying in new resolv.conf");
-		if (run_scp_command($rtmpfile, "$computer_short_name:/etc/resolv.conf", $management_node_keys)) {
-			notify($ERRORS{'OK'}, 0, "SUCCESS copied new resolv.conf to $computer_short_name");
-		}
-		else {
-			notify($ERRORS{'OK'}, 0, "FALIED to copied new resolv.conf to $computer_short_name");
-			return 0;
-		}
-
-		if (unlink($rtmpfile)) {
-			notify($ERRORS{'OK'}, 0, "unlinking $rtmpfile");
-		}
-	} ## end if (defined($search))
 	else {
-		notify($ERRORS{'WARNING'}, 0, "pulling resolve.conf from $computer_short_name failed output= @{ $sshcmd[1] }");
+		notify($ERRORS{'DEBUG'}, 0, "restarted public interface $interface_name on $computer_name");
 	}
-
-
+	
+	# Delete existing default route
+	my $route_del_command = "/sbin/route del default";
+	my ($route_del_exit_status, $route_del_output) = $self->execute($route_del_command);
+	if (!defined($route_del_output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run command to delete the existing default route on $computer_name: '$route_del_command'");
+		return;
+	}
+	elsif (grep(/No such process/i, @$route_del_output)) {
+		notify($ERRORS{'DEBUG'}, 0, "existing default route is not set");
+	}
+	elsif ($route_del_exit_status) {
+		notify($ERRORS{'WARNING'}, 0, "failed to delete existing default route on $computer_name, exit status: $route_del_exit_status, command: '$route_del_command', output:\n" . join("\n", @$route_del_output));
+		return;
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "deleted existing default route on $computer_name, output:\n" . join("\n", @$route_del_output));
+	}
+	
+	# Set default route
+	my $route_add_command = "/sbin/route add default gw $default_gateway metric 0 $interface_name 2>&1 && /sbin/route -n";
+	my ($route_add_exit_status, $route_add_output) = $self->execute($route_add_command);
+	if (!defined($route_add_output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run command to add default route to $default_gateway on public interface $interface_name on $computer_name: '$route_add_command'");
+		return;
+	}
+	elsif ($route_add_exit_status) {
+		notify($ERRORS{'WARNING'}, 0, "failed to add default route to $default_gateway on public interface $interface_name on $computer_name, exit status: $route_add_exit_status, command: '$route_add_command', output:\n" . join("\n", @$route_add_output));
+		return;
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "added default route to $default_gateway on public interface $interface_name on $computer_name, output:\n" . format_data($route_add_output));
+	}
+	
+	# Update the external sshd file
+	# Remove existing ListenAddress lines using sed
+	# Add ListenAddress line to the end of the file
+	my $ext_sshd_command;
+	$ext_sshd_command .= "sed -i -e \"/ListenAddress .*/d \" /etc/ssh/external_sshd_config 2>&1";
+	$ext_sshd_command .= " && echo \"ListenAddress $ip_address\" >> /etc/ssh/external_sshd_config";
+	$ext_sshd_command .= " && tail -n1 /etc/ssh/external_sshd_config";
+	my ($ext_sshd_exit_status, $ext_sshd_output) = $self->execute($ext_sshd_command);
+	if (!defined($ext_sshd_output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run command to update ListenAddress line in /etc/ssh/external_sshd_config on $computer_name: '$ext_sshd_command'");
+		return;
+	}
+	elsif ($ext_sshd_exit_status) {
+		notify($ERRORS{'WARNING'}, 0, "failed to update ListenAddress line in /etc/ssh/external_sshd_config on $computer_name, exit status: $ext_sshd_exit_status\ncommand:\n'$ext_sshd_command'\noutput:\n" . join("\n", @$ext_sshd_output));
+		return;
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "updated ListenAddress line in /etc/ssh/external_sshd_config on $computer_name, output:\n" . join("\n", @$ext_sshd_output));
+	}
+	
+	# Update resolv.conf if DNS server address is configured for the management node
+	my $resolv_conf_path = "/etc/resolv.conf";
+	if (@dns_servers) {
+		# Get the resolve.conf contents
+		my $cat_resolve_command = "cat $resolv_conf_path";
+		my ($cat_resolve_exit_status, $cat_resolve_output) = $self->execute($cat_resolve_command);
+		if (!defined($cat_resolve_output)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to run command to retrieve existing $resolv_conf_path contents from $computer_name");
+			return;
+		}
+		elsif ($cat_resolve_exit_status || grep(/^(bash:|cat:)/, @$cat_resolve_output)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to retrieve existing $resolv_conf_path contents from $computer_name, exit status: $cat_resolve_exit_status, command: '$cat_resolve_command', output:\n" . join("\n", @$cat_resolve_output));
+			return;
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "retrieved existing $resolv_conf_path contents from $computer_name:\n" . join("\n", @$cat_resolve_output));
+		}
+		
+		# Remove lines containing nameserver
+		my @resolv_conf_lines = grep(!/nameserver/i, @$cat_resolve_output);
+		
+		# Add a nameserver line for each configured DNS server
+		for my $dns_server_address (@dns_servers) {
+			push @resolv_conf_lines, "nameserver $dns_server_address";
+		}
+		
+		# Remove newlines for consistency
+		map { chomp $_ } @resolv_conf_lines;
+		
+		# Assemble the lines into an array
+		my $resolv_conf_contents = join("\n", @resolv_conf_lines);
+		
+		# Echo the updated contents to resolv.conf
+		my $echo_resolve_command = "echo \"$resolv_conf_contents\" > $resolv_conf_path 2>&1 && cat $resolv_conf_path";
+		my ($echo_resolve_exit_status, $echo_resolve_output) = $self->execute($echo_resolve_command);
+		if (!defined($echo_resolve_output)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to run command to update $resolv_conf_path on $computer_name:\n$echo_resolve_command");
+			return;
+		}
+		elsif ($echo_resolve_exit_status) {
+			notify($ERRORS{'WARNING'}, 0, "failed to update $resolv_conf_path on $computer_name, exit status: $echo_resolve_exit_status\ncommand:\n$echo_resolve_command\noutput:\n" . join("\n", @$echo_resolve_output));
+			return;
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "updated $resolv_conf_path on $computer_name:\n" . join("\n", @$echo_resolve_output));
+		}
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "$resolv_conf_path not updated  on $computer_name because DNS server address is not configured for the management node");
+	}
+	
+	notify($ERRORS{'OK'}, 0, "successfully set static public IP address on $computer_name");
 	return 1;
-} ## end sub set_static_public_address
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 get_public_default_gateway
-
- Parameters  :
- Returns     :
- Description :
-
-=cut
-
-sub get_public_default_gateway {
-
-	#global varible pulled from vcld.conf
-	return $GATEWAY;
 }
 
 #/////////////////////////////////////////////////////////////////////////////

@@ -354,10 +354,16 @@ sub wait_for_ssh {
 
 =head2 is_ssh_responding
 
- Parameters  : None
+ Parameters  : $max_attempts
  Returns     : If computer responds to SSH: 1
                If computer never responds to SSH: 0
- Description : Checks if the reservation computer is responding to SSH.
+ Description : Checks if the computer is responding to SSH. Ports 22 and 24 are
+               first checked to see if either is open. If neither is open, 0 is
+               returned. If either of the ports is open a test SSH command which
+               simply echo's a string is attempted. The default is to only
+               attempt to run this command once. This can be changed by
+               supplying the $max_attempts argument. If the $max_attempts is
+               supplied but set to 0, only the port checks are done.
 
 =cut
 
@@ -367,6 +373,9 @@ sub is_ssh_responding {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
+	
+	# Get the max attempts argument if supplied, default to 1
+	my $max_attempts = shift || 1;
 	
 	my $computer_node_name = $self->data->get_computer_node_name();
 	
@@ -378,22 +387,27 @@ sub is_ssh_responding {
 		return 0;
 	}
 	
-	# Run a test SSH command
-	my ($exit_status, $output) = run_ssh_command({
-		node => $computer_node_name,
-		command => "echo testing ssh on $computer_node_name",
-		max_attempts => 1,
-		output_level => 0,
-	});
-	
-	# The exit status will be 0 if the command succeeded
-	if (defined($output) && grep(/testing/, @$output)) {
-		notify($ERRORS{'DEBUG'}, 0, "$computer_node_name is responding to SSH, port 22: $port_22_status, port 24: $port_24_status");
-		return 1;
+	if ($max_attempts) {
+		# Run a test SSH command
+		my ($exit_status, $output) = run_ssh_command({
+			node => $computer_node_name,
+			command => "echo testing ssh on $computer_node_name",
+			max_attempts => $max_attempts,
+			output_level => 0,
+		});
+		
+		# The exit status will be 0 if the command succeeded
+		if (defined($output) && grep(/testing/, @$output)) {
+			notify($ERRORS{'DEBUG'}, 0, "$computer_node_name is responding to SSH, port 22: $port_22_status, port 24: $port_24_status");
+			return 1;
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "$computer_node_name is NOT responding to SSH, SSH command failed, port 22: $port_22_status, port 24: $port_24_status");
+			return 0;
+		}
 	}
 	else {
-		notify($ERRORS{'DEBUG'}, 0, "$computer_node_name is NOT responding to SSH, SSH command failed, port 22: $port_22_status, port 24: $port_24_status");
-		return 0;
+		return 1;
 	}
 }
 
@@ -855,13 +869,28 @@ sub get_public_interface_name {
 	
 	my $public_interface_name;
 	
+	# Store the name of an interface found without any bound IP addresses
+	# This interface will be returned if no others are found with an IP address
+	my $addressless_interface_name;
+	
 	# Loop through all of the network interfaces found
-	foreach my $interface_name (sort keys %$network_configuration) {
+	INTERFACE_NAME: foreach my $interface_name (sort keys %$network_configuration) {
 		# Get the interface IP addresses and make sure an IP address was found
 		my @ip_addresses  = keys %{$network_configuration->{$interface_name}{ip_address}};
-		if (!@ip_addresses) {
-			notify($ERRORS{'DEBUG'}, 0, "interface is not assigned an IP address: $interface_name");
-			next;
+		
+		# Check if the interface does not have any bound IP addresses
+		# Store the interface name if another has not already been found
+		# This will be returned if no others are found with a bound IP address
+		# This may occur if the public interface is present but down
+		if (!@ip_addresses && !defined($addressless_interface_name)) {
+			if (!defined($addressless_interface_name)) {
+				notify($ERRORS{'DEBUG'}, 0, "found interface without a bound IP address: $interface_name, this name will be returned if no other valid interface is found with a bound IP address");
+				$addressless_interface_name = $interface_name;
+			}
+			else {
+				notify($ERRORS{'DEBUG'}, 0, "found another interface without a bound IP address: $interface_name, the first interface found without a bound IP address will be returned if no other valid interface is found with a bound IP address: $addressless_interface_name");
+			}
+			next INTERFACE_NAME;
 		}
 		
 		# Check if interface has private IP address assigned to it
@@ -907,6 +936,10 @@ sub get_public_interface_name {
 	if ($public_interface_name) {
 		notify($ERRORS{'DEBUG'}, 0, "did not find any interfaces assigned a public IP address, returning interface assigned a private IP address not matching the private IP address assigned to the reservation computer: $public_interface_name");
 		return $public_interface_name;
+	}
+	elsif ($addressless_interface_name) {
+		notify($ERRORS{'DEBUG'}, 0, "did not find any interfaces assigned a public IP address, returning interface found with no bound IP addresses: $addressless_interface_name");
+		return $addressless_interface_name;
 	}
 	else {
 		notify($ERRORS{'WARNING'}, 0, "failed to determine the public interface from the network configuration:\n" . format_data($network_configuration));

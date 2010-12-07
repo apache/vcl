@@ -2158,7 +2158,7 @@ sub get_management_node_public_default_gateway {
 	}
 	
 	# Attempt to retrieve the gateway from the route command
-	my ($route_exit_statux, $route_output) = run_command('route -n', 1);
+	my ($route_exit_status, $route_output) = run_command('route -n', 1);
 	if ($route_output && (my @route_gateway_lines = grep(/^0.0.0.0/, @$route_output))) {
 		if (scalar @route_gateway_lines == 1) {
 			($default_gateway) = $route_gateway_lines[0] =~ /^[\d\.]+\s+([\d\.]+)/;
@@ -2221,6 +2221,29 @@ sub get_management_node_public_default_gateway {
 	}
 	
 	return;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_management_node_public_dns_servers
+
+ Parameters  : None
+ Returns     : If successful: array containing IP addresses
+               If failed: false
+ Description : Returns an array containing the addresses of the public DNS
+               servers configured for the management node.
+
+=cut
+
+sub get_management_node_public_dns_servers {
+	# Attempt to retrieve the DNS server addresses configured for this management node
+	my $dns_address_string = $ENV{management_node_info}{PUBLIC_DNS_SERVER};
+	if (!$dns_address_string) {
+		notify($ERRORS{'DEBUG'}, 0, "no public dns server addresses are configured for the management node");
+		return ();
+	}
+	
+	return split(/\s*[,;]\s*/g, $dns_address_string);
 }
 
 #/////////////////////////////////////////////////////////////////////////////
