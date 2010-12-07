@@ -1594,7 +1594,7 @@ EOF
 	$self->kill_process('logon.scr');
 	
 	# Run Sysprep.exe, use cygstart to lauch the .exe and return immediately
-	my $sysprep_command = "/bin/cygstart.exe cmd.exe /c \"";
+	my $sysprep_command = "/bin/cygstart.exe \$SYSTEMROOT/system32/cmd.exe /c \"";
 	
 	# Run Sysprep.exe
 	$sysprep_command .= "$system32_path/sysprep/sysprep.exe /generalize /oobe /shutdown /quiet /unattend:\$SYSTEMROOT/System32/sysprep/Unattend.xml";

@@ -3487,7 +3487,7 @@ sub shutdown {
 	# Clear the event log before shutting down
 	$self->clear_event_log();
 	
-	my $shutdown_command = "/bin/cygstart.exe cmd.exe /c \"";
+	my $shutdown_command = "/bin/cygstart.exe \$SYSTEMROOT/system32/cmd.exe /c \"";
 	
 	if ($disable_dhcp) {
 		notify($ERRORS{'DEBUG'}, 0, "enabling DHCP and shutting down $computer_node_name");

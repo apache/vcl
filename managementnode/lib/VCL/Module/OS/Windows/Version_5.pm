@@ -271,7 +271,7 @@ sub run_sysprep {
 	
 	# Assemble the Sysprep command
 	# Run Sysprep.exe, use cygstart to lauch the .exe and return immediately
-	my $sysprep_command = "/bin/cygstart.exe cmd.exe /c \"";
+	my $sysprep_command = "/bin/cygstart.exe \$SYSTEMROOT/system32/cmd.exe /c \"";
 	
 	# Run Sysprep.exe
 	$sysprep_command .= "C:/Sysprep/sysprep.exe /quiet /reseal /mini /forceshutdown & ";
