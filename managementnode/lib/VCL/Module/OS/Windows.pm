@@ -6589,22 +6589,81 @@ EOF
 	}
 	
 	# Run cleanmgr.exe
-	my $command = $system32_path . '/cleanmgr.exe /SAGERUN:01';
-	my ($status_cleanmgr, $output_cleanmgr) = run_ssh_command($computer_node_name, $management_node_keys, $command);
-	if (defined($status_cleanmgr) && $status_cleanmgr == 0) {
-		notify($ERRORS{'OK'}, 0, "ran cleanmgr.exe");
+	# The cleanmgr.exe file may not be present - it is not installed by default on Windows Server 2008 and possibly others
+	my $cleanmgr_command = "/bin/cygstart.exe $system32_path/cleanmgr.exe /SAGERUN:01";
+	my ($cleanmgr_exit_status, $cleanmgr_output) = run_ssh_command($computer_node_name, $management_node_keys, $cleanmgr_command);
+	if (!defined($cleanmgr_output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to run cleanmgr.exe");
+		return;
 	}
-	elsif (defined($status_cleanmgr)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to run cleanmgr.exe, exit status: $status_cleanmgr, output:\n@{$output_cleanmgr}");
-		return 0;
+	elsif (grep(/not found/i, @$cleanmgr_output)) {
+		notify($ERRORS{'OK'}, 0, "cleanmgr.exe is not present on $computer_node_name, this is usually because the Desktop Experience feature is not installed");
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "unable to run ssh command to run cleanmgr.exe");
-		return 0;
+		# Wait for cleanmgr.exe to finish
+		my $message = 'waiting for cleanmgr.exe to finish';
+		my $total_wait_seconds = 120;
+		notify($ERRORS{'OK'}, 0, "started cleanmgr.exe, waiting up to $total_wait_seconds seconds for it to finish");
+		
+		if ($self->code_loop_timeout(sub{!$self->is_process_running(@_)}, ['cleanmgr.exe'], $message, $total_wait_seconds, 5)) {
+			notify($ERRORS{'DEBUG'}, 0, "cleanmgr.exe has finished");
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "cleanmgr.exe has not finished after waiting $total_wait_seconds seconds, the Recycle Bin may be corrupt");
+		}
 	}
-
+	
 	return 1;
 } ## end sub clean_hard_drive
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 is_process_running
+
+ Parameters  : $process_identifier
+ Returns     : boolean
+ Description : Determines if a process is running identified by the argument.
+               The argument should be the name of an executable. Wildcards (*)
+               are allowed.
+
+=cut
+
+sub is_process_running {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method, arguments:\n" . format_data(\@_));
+		return;
+	}
+	
+	my $management_node_keys = $self->data->get_management_node_keys();
+	my $computer_node_name   = $self->data->get_computer_node_name();
+	my $system32_path        = $self->get_system32_path() || return;
+	
+	my $process_identifier = shift;
+	if (!defined($process_identifier)) {
+		notify($ERRORS{'WARNING'}, 0, "process identifier argument was not supplied");
+		return;
+	}
+	
+	my $command = "$system32_path/tasklist.exe /FI \"IMAGENAME eq $process_identifier\"";
+	my ($status, $output) = run_ssh_command($computer_node_name, $management_node_keys, $command, '', '', 0);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to determine if process is running: $process_identifier");
+		return;
+	}
+	elsif (grep(/No tasks/i, @$output)) {
+		notify($ERRORS{'DEBUG'}, 0, "process is NOT running: $process_identifier");
+		return 0;
+	}
+	elsif (grep(/PID/, @$output)) {
+		notify($ERRORS{'DEBUG'}, 0, "process is running: $process_identifier");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unexpected output returned from command to determine if process is running: '$command', output:\n" . join("\n", @$output));
+		return;
+	}
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 
