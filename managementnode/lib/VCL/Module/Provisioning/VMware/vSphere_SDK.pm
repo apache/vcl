@@ -963,19 +963,19 @@ sub get_vmware_product_name {
 	
 	return $self->{product_name} if $self->{product_name};
 	
-	my $computer_name = $self->data->get_computer_node_name() || return;
+	my $vmhost_hostname = $self->data->get_vmhost_hostname();
 	
 	# Get the host view
 	my $host_view = VIExt::get_host_view(1);
 	my $product_name = $host_view->config->product->fullName;
 	
 	if ($product_name) {
-		notify($ERRORS{'DEBUG'}, 0, "VMware product being used on VM host $computer_name: '$product_name'");
+		notify($ERRORS{'DEBUG'}, 0, "VMware product being used on VM host $vmhost_hostname: '$product_name'");
 		$self->{product_name} = $product_name;
 		return $self->{product_name};
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "unable to retrieve VMware product name being used on VM host $computer_name");
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve VMware product name being used on VM host $vmhost_hostname");
 		return;
 	}
 }
@@ -1000,19 +1000,19 @@ sub get_vmware_product_version {
 	
 	return $self->{product_version} if $self->{product_version};
 	
-	my $computer_name = $self->data->get_computer_node_name() || return;
+	my $vmhost_hostname = $self->data->get_vmhost_hostname();
 	
 	# Get the host view
 	my $host_view = VIExt::get_host_view(1);
 	my $product_version = $host_view->config->product->version;
 	
 	if ($product_version) {
-		notify($ERRORS{'DEBUG'}, 0, "retrieved product version for VM host $computer_name: $product_version");
+		notify($ERRORS{'DEBUG'}, 0, "retrieved product version for VM host $vmhost_hostname: $product_version");
 		$self->{product_version} = $product_version;
 		return $self->{product_version};
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "unable to retrieve product version for VM host $computer_name");
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve product version for VM host $vmhost_hostname");
 		return;
 	}
 }
@@ -1143,7 +1143,7 @@ sub create_directory {
 	return 1 if $self->file_exists($directory_path);
 	
 	# Get the VM host name
-	my $computer_node_name = $self->data->get_computer_node_name() || return;
+	my $vmhost_hostname = $self->data->get_vmhost_hostname();
 	
 	# Get a fileManager object
 	my $service_content = Vim::get_service_content() || return;
@@ -1261,7 +1261,7 @@ sub copy_file {
 	my $destination_file_path = $self->_get_datastore_path(shift) || return;
 	
 	# Get the VM host name
-	my $computer_node_name = $self->data->get_computer_node_name() || return;
+	my $vmhost_hostname = $self->data->get_vmhost_hostname();
 	
 	# Get the destination directory path and create the directory if it doesn't exit
 	my $destination_directory_path = $self->_get_parent_directory_datastore_path($destination_file_path) || return;
@@ -1276,7 +1276,7 @@ sub copy_file {
 	local $SIG{__DIE__} = sub{};
 	
 	# Attempt to copy the file
-	notify($ERRORS{'DEBUG'}, 0, "attempting to copy file on VM host $computer_node_name: '$source_file_path' --> '$destination_file_path'");
+	notify($ERRORS{'DEBUG'}, 0, "attempting to copy file on VM host $vmhost_hostname: '$source_file_path' --> '$destination_file_path'");
 	eval { $file_manager->CopyDatastoreFile(sourceName => $source_file_path,
 														 sourceDatacenter => $datacenter,
 														 destinationName => $destination_file_path,
@@ -1287,20 +1287,20 @@ sub copy_file {
 	# Check if an error occurred
 	if ($@) {
 		if ($@->isa('SoapFault') && ref($@->detail) eq 'FileNotFound') {
-			notify($ERRORS{'WARNING'}, 0, "source file does not exist on VM host $computer_node_name: '$source_file_path'");
+			notify($ERRORS{'WARNING'}, 0, "source file does not exist on VM host $vmhost_hostname: '$source_file_path'");
 			return 0;
 		}
 		elsif ($@->isa('SoapFault') && ref($@->detail) eq 'FileAlreadyExists') {
-			notify($ERRORS{'WARNING'}, 0, "destination file already exists on VM host $computer_node_name: '$destination_file_path'");
+			notify($ERRORS{'WARNING'}, 0, "destination file already exists on VM host $vmhost_hostname: '$destination_file_path'");
 			return 0;
 		}
 		else {
-			notify($ERRORS{'WARNING'}, 0, "failed to copy file on VM host $computer_node_name: '$source_file_path' --> '$destination_file_path'\nerror:\n$@");
+			notify($ERRORS{'WARNING'}, 0, "failed to copy file on VM host $vmhost_hostname: '$source_file_path' --> '$destination_file_path'\nerror:\n$@");
 			return;
 		}
 	}
 	
-	notify($ERRORS{'OK'}, 0, "copied file on VM host $computer_node_name: '$source_file_path' --> '$destination_file_path'");
+	notify($ERRORS{'OK'}, 0, "copied file on VM host $vmhost_hostname: '$source_file_path' --> '$destination_file_path'");
 	return 1;
 }
 
@@ -1339,7 +1339,7 @@ sub copy_file_to {
 	sleep 2;
 	
 	# Get the VM host name
-	my $computer_node_name = $self->data->get_computer_node_name() || return;
+	my $vmhost_hostname = $self->data->get_vmhost_hostname();
 	
 	# Get the destination datastore name and relative datastore path
 	my $destination_datastore_name = $self->_get_datastore_name($destination_file_path);
@@ -1349,15 +1349,15 @@ sub copy_file_to {
 	local $SIG{__DIE__} = sub{};
 	
 	# Attempt to copy the file
-	notify($ERRORS{'DEBUG'}, 0, "attempting to copy file from management node to VM host: '$source_file_path' --> $computer_node_name:'[$destination_datastore_name] $destination_relative_datastore_path'");
+	notify($ERRORS{'DEBUG'}, 0, "attempting to copy file from management node to VM host: '$source_file_path' --> $vmhost_hostname:'[$destination_datastore_name] $destination_relative_datastore_path'");
 	my $response;
 	eval { $response = VIExt::http_put_file("folder" , $source_file_path, $destination_relative_datastore_path, $destination_datastore_name, "ha-datacenter"); };
 	if ($response->is_success) {
-		notify($ERRORS{'DEBUG'}, 0, "copied file from management node to VM host: '$source_file_path' --> $computer_node_name:'[$destination_datastore_name] $destination_relative_datastore_path'");
+		notify($ERRORS{'DEBUG'}, 0, "copied file from management node to VM host: '$source_file_path' --> $vmhost_hostname:'[$destination_datastore_name] $destination_relative_datastore_path'");
 		return 1;
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to copy file from management node to VM host: '$source_file_path' --> $computer_node_name:'$destination_file_path'\nerror: " . $response->message);
+		notify($ERRORS{'WARNING'}, 0, "failed to copy file from management node to VM host: '$source_file_path' --> $vmhost_hostname:'$destination_file_path'\nerror: " . $response->message);
 		return;
 	}
 }
@@ -1412,7 +1412,7 @@ sub copy_file_from {
 	}
 	
 	# Get the VM host name
-	my $computer_node_name = $self->data->get_computer_node_name() || return;
+	my $vmhost_hostname = $self->data->get_vmhost_hostname();
 	
 	# Get the source datastore name
 	my $source_datastore_name = $self->_get_datastore_name($source_file_path) || return;
@@ -1424,15 +1424,15 @@ sub copy_file_from {
 	local $SIG{__DIE__} = sub{};
 	
 	# Attempt to copy the file
-	notify($ERRORS{'DEBUG'}, 0, "attempting to copy file from VM host to management node: $computer_node_name:'[$source_datastore_name] $source_file_relative_datastore_path' --> '$destination_file_path'");
+	notify($ERRORS{'DEBUG'}, 0, "attempting to copy file from VM host to management node: $vmhost_hostname:'[$source_datastore_name] $source_file_relative_datastore_path' --> '$destination_file_path'");
 	my $response;
 	eval { $response = VIExt::http_get_file("folder", $source_file_relative_datastore_path, $source_datastore_name, "ha-datacenter", $destination_file_path); };
 	if ($response->is_success) {
-		notify($ERRORS{'DEBUG'}, 0, "copied file from VM host to management node: $computer_node_name:'[$source_datastore_name] $source_file_relative_datastore_path' --> '$destination_file_path'");
+		notify($ERRORS{'DEBUG'}, 0, "copied file from VM host to management node: $vmhost_hostname:'[$source_datastore_name] $source_file_relative_datastore_path' --> '$destination_file_path'");
 		return 1;
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to copy file from VM host to management node: $computer_node_name:'[$source_datastore_name] $source_file_relative_datastore_path' --> '$destination_file_path'\nerror: " . $response->message);
+		notify($ERRORS{'WARNING'}, 0, "failed to copy file from VM host to management node: $vmhost_hostname:'[$source_datastore_name] $source_file_relative_datastore_path' --> '$destination_file_path'\nerror: " . $response->message);
 		return;
 	}
 }
@@ -1465,7 +1465,7 @@ sub get_file_contents {
 		return;
 	}
 	
-	my $computer_node_name = $self->data->get_computer_node_name() || return;
+	my $vmhost_hostname = $self->data->get_vmhost_hostname();
 	
 	# Create a temp directory to store the file and construct the temp file path
 	# The temp directory is automatically deleted then this variable goes out of scope
@@ -1519,7 +1519,7 @@ sub move_file {
 	my $destination_file_path = $self->_get_datastore_path(shift) || return;
 	
 	# Get the VM host name
-	my $computer_node_name = $self->data->get_computer_node_name() || return;
+	my $vmhost_hostname = $self->data->get_vmhost_hostname();
 	
 	# Get the destination directory path and create the directory if it doesn't exit
 	my $destination_directory_path = $self->_get_parent_directory_datastore_path($destination_file_path) || return;
@@ -1534,7 +1534,7 @@ sub move_file {
 	local $SIG{__DIE__} = sub{};
 
 	# Attempt to copy the file
-	notify($ERRORS{'DEBUG'}, 0, "attempting to move file on VM host $computer_node_name: '$source_file_path' --> '$destination_file_path'");
+	notify($ERRORS{'DEBUG'}, 0, "attempting to move file on VM host $vmhost_hostname: '$source_file_path' --> '$destination_file_path'");
 	eval { $file_manager->MoveDatastoreFile(sourceName => $source_file_path,
 														 sourceDatacenter => $datacenter,
 														 destinationName => $destination_file_path,
@@ -1544,20 +1544,20 @@ sub move_file {
 	
 	if ($@) {
 		if ($@->isa('SoapFault') && ref($@->detail) eq 'FileNotFound') {
-			notify($ERRORS{'WARNING'}, 0, "source file does not exist on VM host $computer_node_name: '$source_file_path'");
+			notify($ERRORS{'WARNING'}, 0, "source file does not exist on VM host $vmhost_hostname: '$source_file_path'");
 			return 0;
 		}
 		elsif ($@->isa('SoapFault') && ref($@->detail) eq 'FileAlreadyExists') {
-			notify($ERRORS{'WARNING'}, 0, "destination file already exists on VM host $computer_node_name: '$destination_file_path'");
+			notify($ERRORS{'WARNING'}, 0, "destination file already exists on VM host $vmhost_hostname: '$destination_file_path'");
 			return 0;
 		}
 		else {
-			notify($ERRORS{'WARNING'}, 0, "failed to move file on VM host $computer_node_name: '$source_file_path' --> '$destination_file_path', error:\n$@");
+			notify($ERRORS{'WARNING'}, 0, "failed to move file on VM host $vmhost_hostname: '$source_file_path' --> '$destination_file_path', error:\n$@");
 			return;
 		}
 	}
 	
-	notify($ERRORS{'OK'}, 0, "moved file on VM host $computer_node_name: '$source_file_path' --> '$destination_file_path'");
+	notify($ERRORS{'OK'}, 0, "moved file on VM host $vmhost_hostname: '$source_file_path' --> '$destination_file_path'");
 	return 1;
 }
 
@@ -1641,7 +1641,7 @@ sub get_file_size {
 		return;
 	}
 	
-	my $computer_name = $self->data->get_computer_short_name() || return;
+	my $vmhost_hostname = $self->data->get_vmhost_hostname();
 	
 	# Get the file info
 	my $file_info = $self->_get_file_info($file_path);
@@ -1652,13 +1652,13 @@ sub get_file_size {
 	
 	# Make sure the file info is not null or else an error occurred
 	if (!$file_info) {
-		notify($ERRORS{'WARNING'}, 0, "unable to retrieve info for file on $computer_name: $file_path");
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve info for file on $vmhost_hostname: $file_path");
 		return;
 	}
 	
 	# Check if there are any keys in the file info hash - no keys indicates no files were found
 	if (!keys(%{$file_info})) {
-		notify($ERRORS{'DEBUG'}, 0, "unable to determine size of file on $computer_name because it does not exist: $file_path");
+		notify($ERRORS{'DEBUG'}, 0, "unable to determine size of file on $vmhost_hostname because it does not exist: $file_path");
 		return;
 	}
 	
@@ -1766,7 +1766,7 @@ sub get_available_space {
 	# Get the datastore name
 	my $datastore_name = $self->_get_datastore_name($path) || return;
 	
-	my $computer_node_name = $self->data->get_computer_node_name() || return;
+	my $vmhost_hostname = $self->data->get_vmhost_hostname();
 	
 	# Get the datastore info hash
 	my $datastore_info = $self->_get_datastore_info() || return;
@@ -1777,7 +1777,7 @@ sub get_available_space {
 		return;
 	}
 	
-	notify($ERRORS{'DEBUG'}, 0, "space available in $datastore_name datastore on $computer_node_name: " . format_number($available_bytes) . " bytes");
+	notify($ERRORS{'DEBUG'}, 0, "space available in $datastore_name datastore on $vmhost_hostname: " . format_number($available_bytes) . " bytes");
 	return $available_bytes;
 }
 
