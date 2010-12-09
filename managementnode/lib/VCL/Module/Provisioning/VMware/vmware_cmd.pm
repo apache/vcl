@@ -152,28 +152,6 @@ sub _run_vmware_cmd {
 	}
 }
 
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 _get_file_name
-
- Parameters  : $file_path
- Returns     : string
- Description : Extracts the file name from a file path.
-
-=cut
-
-sub _get_file_name {
-	my $self = shift;
-	if (ref($self) !~ /VCL::Module/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-	
-	my $file_path = shift;
-	my ($file_name) = $file_path =~ /([^\/]+)$/;
-	return $file_name || $file_path;
-}
-
 ##############################################################################
 
 =head1 API OBJECT METHODS
@@ -204,7 +182,7 @@ sub get_registered_vms {
 	return if !$output;
 	
 	my @vmx_file_paths = grep(/^\//, @$output);
-	notify($ERRORS{'DEBUG'}, 0, "registered VMs found: " . scalar(@vmx_file_paths));
+	notify($ERRORS{'DEBUG'}, 0, "registered VMs found: " . scalar(@vmx_file_paths) . "\n" . join("\n", sort @vmx_file_paths));
 	return @vmx_file_paths;
 }
 
@@ -663,6 +641,83 @@ sub get_virtual_disk_hardware_version {
 		notify($ERRORS{'WARNING'}, 0, "unable to determine hardware version configured in '$vmdk_file_name', command: '$command', output:\n" . join("\n", @$output));
 		return;
 	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 _get_datastore_info
+
+ Parameters  : none
+ Returns     : hash reference
+ Description : Retrieves information about the VM host's datastore from the
+               /etc/vmware/config file and returns a hash containing the
+               information.
+
+=cut
+
+sub _get_datastore_info {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Set the default values
+	my $default_datastore_info;
+	$default_datastore_info->{local}{accessible} = 'true';
+	$default_datastore_info->{local}{type} = 'local';
+	$default_datastore_info->{local}{normal_path} = '/var/lib/vmware/Virtual Machines';
+	$default_datastore_info->{local}{url} = '/var/lib/vmware/Virtual Machines';
+	
+	# Get the contents of the VMware config file
+	my $config_file_path = '/etc/vmware/config';
+	my @config_contents = $self->vmhost_os->get_file_contents($config_file_path);
+	if (@config_contents) {
+		notify($ERRORS{'DEBUG'}, 0, "retrieved contents of $config_file_path\n" . join("\n", @config_contents));
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve the contents of $config_file_path, returning default datastore information:\n" . format_data($default_datastore_info));
+		return $default_datastore_info;
+	}
+	
+	# Get the datastore name and path from the file contents
+	my ($datastore_name) = map { $_ =~ /datastore\.name\s*=\s*"([^"]+)"/ } @config_contents;
+	if (!$datastore_name) {
+		notify($ERRORS{'WARNING'}, 0, "failed to locate the 'datastore.name' line in $config_file_path, returning default datastore information:\n" . format_data($default_datastore_info));
+		return $default_datastore_info;
+	}
+	
+	my ($datastore_path) = map { $_ =~ /datastore\.localpath\s*=\s*"([^"]+)"/ } @config_contents;
+	$datastore_path = normalize_file_path($datastore_path);
+	if (!$datastore_path) {
+		notify($ERRORS{'WARNING'}, 0, "failed to locate the 'datastore.localpath' line in $config_file_path, returning default datastore information:\n" . format_data($default_datastore_info));
+		return $default_datastore_info;
+	}
+	
+	my $datastore_info;
+	$datastore_info->{$datastore_name}{accessible} = 'true';
+	$datastore_info->{$datastore_name}{type} = 'local';
+	$datastore_info->{$datastore_name}{normal_path} = $datastore_path;
+	$datastore_info->{$datastore_name}{url} = $datastore_path;
+	
+	my $available_space = $self->vmhost_os->get_available_space($datastore_path);
+	if (defined($available_space)) {
+		$datastore_info->{$datastore_name}{freeSpace} = $available_space;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to determine the amount of space available in '$datastore_path'");
+	}
+	
+	my $total_space = $self->vmhost_os->get_total_space($datastore_path);
+	if (defined($total_space)) {
+		$datastore_info->{$datastore_name}{capacity} = $total_space;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to determine the total amount of space of the volume where '$datastore_path' resides");
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "retrieved datastore info:\n" . format_data($datastore_info));
+	return $datastore_info;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
