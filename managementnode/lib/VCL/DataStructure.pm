@@ -2243,7 +2243,7 @@ sub get_management_node_public_dns_servers {
 		return ();
 	}
 	
-	return split(/\s*[,;]\s*/g, $dns_address_string);
+	return split(/\s*[,;]\s*/, $dns_address_string);
 }
 
 #/////////////////////////////////////////////////////////////////////////////
