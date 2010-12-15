@@ -130,8 +130,6 @@ function validateITECSUser($loginid) {
 /// \b email - user's preferred email address\n
 /// \b IMtype - user's preferred IM protocol\n
 /// \b IMid - user's IM id\n
-/// \b adminlevel - user's admin level (= 'none' if no admin access)\n
-/// \b adminlevelid - id of adminlevel\n
 /// \b width - rdp file width\n
 /// \b height - rdp file height\n
 /// \b bpp - rdp file bpp\n
@@ -168,8 +166,6 @@ function updateITECSUser($userid) {
 	       .        "u.IMid AS IMid, "
 	       .        "u.affiliationid, "
 	       .        "af.name AS affiliation, "
-	       .        "a.name AS adminlevel, "
-	       .        "a.id AS adminlevelid, "
 	       .        "u.preferredname AS preferredname, "
 	       .        "u.uid AS uid, "
 	       .        "u.id AS id, "
@@ -183,10 +179,8 @@ function updateITECSUser($userid) {
 	       .        "u.showallgroups "
 	       . "FROM user u, "
 	       .      "IMtype i, "
-	       .      "affiliation af, "
-	       .      "adminlevel a "
+	       .      "affiliation af "
 	       . "WHERE u.IMtypeid = i.id AND "
-	       .       "u.adminlevelid = a.id AND "
 	       .       "u.affiliationid = af.id AND "
 		    .       "u.uid = " . $userData["uid"];
 	$qh = doQuery($query, 255);
@@ -226,8 +220,6 @@ function updateITECSUser($userid) {
 		       .        "u.IMid AS IMid, "
 		       .        "u.uid AS uid, "
 		       .        "u.id AS id, "
-		       .        "a.name AS adminlevel, "
-		       .        "a.id AS adminlevelid, "
 		       .        "u.width AS width, "
 		       .        "u.height AS height, "
 		       .        "u.bpp AS bpp, "
@@ -239,10 +231,8 @@ function updateITECSUser($userid) {
 		       .        "u.lastupdated AS lastupdated "
 		       . "FROM user u, "
 		       .      "IMtype i, "
-		       .      "affiliation af, "
-		       .      "adminlevel a "
+		       .      "affiliation af "
 		       . "WHERE u.IMtypeid = i.id AND "
-		       .       "u.adminlevelid = a.id AND "
 		       .       "u.affiliationid = af.id AND "
 		       .       "u.id = $id";
 		$qh = doQuery($query, 101);
@@ -254,6 +244,7 @@ function updateITECSUser($userid) {
 	}
 
 	$user["groups"] = getUsersGroups($user["id"], 1);
+	$user["groupperms"] = getUsersGroupPerms(array_keys($user['groups']));
 
 	checkExpiredDemoUser($user['id'], $user['groups']);
 

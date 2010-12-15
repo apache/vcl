@@ -37,7 +37,7 @@ define("ORDERERR", 1 << 2);
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function selectStatistics() {
-	global $submitErr, $viewmode, $user;
+	global $submitErr, $user;
 	list($month1, $day1, $year1) = explode(',', date('F,j,Y', time() - 
 	                                    (SECINDAY * 6)));
 	list($month2, $day2, $year2) = explode(',', date('F,j,Y', time()));
@@ -100,7 +100,7 @@ function selectStatistics() {
 	printSelectInput("day2", $days, $daykey2);
 	printSelectInput("year2", $years, $yearkey2);
 	print "<br>\n";
-	if($viewmode >= ADMIN_FULL) {
+	if(checkUserHasPerm('View Statistics by Affiliation')) {
 		print "Select an affiliation:<br>\n";
 		$affils = getAffiliations();
 		if(! array_key_exists($affilid, $affils))
@@ -125,7 +125,7 @@ function selectStatistics() {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function viewStatistics() {
-	global $submitErr, $submitErrMsg, $user, $viewmode;
+	global $submitErr, $submitErrMsg, $user;
 	define("30MIN", 1800);
 	define("1HOUR", 3600);
 	define("2HOURS", 7200);
@@ -139,7 +139,7 @@ function viewStatistics() {
 	$affilid = processInputVar("affilid", ARG_NUMERIC, $user['affiliationid']);
 
 	$affils = getAffiliations();
-	if($viewmode < ADMIN_FULL ||
+	if(! checkUserHasPerm('View Statistics by Affiliation') ||
 	   ($affilid != 0 && ! array_key_exists($affilid, $affils)))
 		$affilid = $user['affiliationid'];
 
@@ -327,16 +327,14 @@ function viewStatistics() {
 	print "    <TH align=right>Unavailable:</TH>\n";
 	print "    <TD>$notavailable</TD>\n";
 	print "  </TR>\n";
-	if($viewmode >= ADMIN_FULL) {
-		print "  <TR>\n";
-		print "    <TH align=right>Load times &lt; 2 minutes:</TH>\n";
-		print "    <TD>{$loadtimes['2less']}</TD>\n";
-		print "  </TR>\n";
-		print "  <TR>\n";
-		print "    <TH align=right>Load times &gt;= 2 minutes:</TH>\n";
-		print "    <TD>{$loadtimes['2more']}</TD>\n";
-		print "  </TR>\n";
-	}
+	print "  <TR>\n";
+	print "    <TH align=right>Load times &lt; 2 minutes:</TH>\n";
+	print "    <TD>{$loadtimes['2less']}</TD>\n";
+	print "  </TR>\n";
+	print "  <TR>\n";
+	print "    <TH align=right>Load times &gt;= 2 minutes:</TH>\n";
+	print "    <TD>{$loadtimes['2more']}</TD>\n";
+	print "  </TR>\n";
 	print "  <TR>\n";
 	print "    <TH align=right>Total Unique Users:</TH>\n";
 	print "    <TD>" . count($users) . "</TD>\n";
@@ -355,11 +353,9 @@ function viewStatistics() {
 	print "    <TH>Reservations</TH>\n";
 	print "    <TH>Unique Users</TH>\n";
 	print "    <TH>Hours Used</TH>\n";
-	if($viewmode >= ADMIN_FULL) {
-		print "    <TH>&lt; 2 min load time</TH>\n";
-		print "    <TH>&gt;= 2 min load time</TH>\n";
-		print "    <TH>Failures</TH>\n";
-	}
+	print "    <TH>&lt; 2 min load time</TH>\n";
+	print "    <TH>&gt;= 2 min load time</TH>\n";
+	print "    <TH>Failures</TH>\n";
 	print "  </TR>\n";
 	foreach($imagecount as $key => $value) {
 		print "  <TR>\n";
@@ -370,21 +366,19 @@ function viewStatistics() {
 			print "    <TD align=center>1</TD>\n";
 		else
 			print "    <TD align=center>" . (int)$imagehours[$key] . "</TD>\n";
-		if($viewmode >= ADMIN_FULL) {
-			print "    <TD align=center>{$imageload2less[$key]}</TD>\n";
-			print "    <TD align=center>{$imageload2more[$key]}</TD>\n";
-			if($imagefails[$key]) {
-				$percent = $imagefails[$key] * 100 / $value;
-				if($percent < 1)
-					$percent = sprintf('%.1f%%', $percent);
-				else
-					$percent = sprintf('%d%%', $percent);
-				print "    <TD align=center><font color=red>{$imagefails[$key]} ";
-				print "($percent)</font></TD>\n";
-			}
+		print "    <TD align=center>{$imageload2less[$key]}</TD>\n";
+		print "    <TD align=center>{$imageload2more[$key]}</TD>\n";
+		if($imagefails[$key]) {
+			$percent = $imagefails[$key] * 100 / $value;
+			if($percent < 1)
+				$percent = sprintf('%.1f%%', $percent);
 			else
-				print "    <TD align=center>{$imagefails[$key]}</TD>\n";
+				$percent = sprintf('%d%%', $percent);
+			print "    <TD align=center><font color=red>{$imagefails[$key]} ";
+			print "($percent)</font></TD>\n";
 		}
+		else
+			print "    <TD align=center>{$imagefails[$key]}</TD>\n";
 		print "  </TR>\n";
 	}
 	print "</TABLE>\n";

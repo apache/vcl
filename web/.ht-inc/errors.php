@@ -120,8 +120,8 @@ $ERRORS = array (
 	"227" => "Failed to execute query 3 in acknowledgeRequest",
 	"228" => "Failed to execute query 4 in acknowledgeRequest",
 	"229" => "Failed to execute query 5 in acknowledgeRequest",
-	"235" => "Failed to execute query 1 in submitBulkAddComputers",
-	"238" => "Failed to execute query 3 in submitBulkAddComputers",
+	"235" => "Failed to execute query 1 in submitAddBulkComputers",
+	"238" => "Failed to execute query 3 in submitAddBulkComputers",
 	"240" => "Failed to execute query 1 in addUser",
 	"241" => "Failed to execute query 2 in addUser",
 	"242" => "Failed to fetch last insert id in addUser",
@@ -223,7 +223,7 @@ $XMLRPCERRORS = array(
 ////////////////////////////////////////////////////////////////////////////////
 function errorHandler($errno, $errstr, $errfile=NULL, $errline=NULL, $errcontext=NULL) {
 	global $user;
-	if($user["adminlevel"] != "developer") {
+	if(! ONLINEDEBUG || ! checkUserHasPerm('View Debug Information')) {
 		dbDisconnect();
 		printHTMLFooter();
 		semUnlock();

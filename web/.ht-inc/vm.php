@@ -28,15 +28,14 @@
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function editVMInfo() {
-	global $viewmode;
 	print "<h2>Manage Virtual Hosts</h2>\n";
 
 	$profiles = getVMProfiles();
-	if($viewmode == ADMIN_DEVELOPER) {
-	print "<div id=\"mainTabContainer\" dojoType=\"dijit.layout.TabContainer\"\n";
-	print "     style=\"width:650px;height:600px\">\n";
+	if(checkUserHasPerm('Manage VM Profiles')) {
+		print "<div id=\"mainTabContainer\" dojoType=\"dijit.layout.TabContainer\"\n";
+		print "     style=\"width:650px;height:600px\">\n";
 
-	print "<div id=\"vmhosts\" dojoType=\"dijit.layout.ContentPane\" title=\"VM Hosts\">\n";
+		print "<div id=\"vmhosts\" dojoType=\"dijit.layout.ContentPane\" title=\"VM Hosts\">\n";
 	}
 
 	print "<div dojoType=\"dijit.Dialog\"\n";
@@ -61,7 +60,7 @@ function editVMInfo() {
 	}
 	print $newmsg;
 	print "Select a Virtual Host:<br>\n";
-	printSelectInput("vmhostid", $vmhosts, -1, 0, 0, 'vmhostid');
+	printSelectInput("vmhostid", $vmhosts, -1, 0, 0, 'vmhostid', 'onChange="dojo.byId(\'vmhostdata\').className = \'hidden\';"');
 	$cont = addContinuationsEntry('vmhostdata');
 	print "<button dojoType=\"dijit.form.Button\" id=\"fetchCompGrpsButton\">\n";
 	print "	Configure Host\n";
@@ -165,11 +164,11 @@ function editVMInfo() {
 	print "</div>\n";*/
 	print "</div>\n";
 
-	if($viewmode != ADMIN_DEVELOPER)
+	if(! checkUserHasPerm('Manage VM Profiles'))
 		return;
 	print "<div id=\"vmprofiles\" dojoType=\"dijit.layout.ContentPane\" title=\"VM Host Profiles\">\n";
 	print "<br>Select a profile to configure:<br>\n";
-	print "<select name=\"profileid\" id=\"profileid\">\n";
+	print "<select name=\"profileid\" id=\"profileid\" onChange=\"dojo.byId('vmprofiledata').className = 'hidden';\">\n";
 	foreach($profiles as $id => $item)
 		print "  <option value=\"$id\">{$item['profilename']}</option>\n";
 	print "</select>\n";
@@ -747,8 +746,7 @@ function AJcancelVMmove() {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function AJprofileData($profileid="") {
-	global $viewmode;
-	if($viewmode != ADMIN_DEVELOPER) {
+	if(! checkUserHasPerm('Manage VM Profiles')) {
 		sendJSON(array('failed' => 'noaccess'));
 		return;
 	}
@@ -792,8 +790,7 @@ function AJprofileData($profileid="") {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function AJupdateVMprofileItem() {
-	global $viewmode;
-	if($viewmode != ADMIN_DEVELOPER) {
+	if(! checkUserHasPerm('Manage VM Profiles')) {
 		print "alert('You do not have access to manage this vm profile.');";
 		return;
 	}
@@ -874,8 +871,7 @@ function AJnewProfile() {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function AJdelProfile() {
-	global $viewmode;
-	if($viewmode != ADMIN_DEVELOPER) {
+	if(! checkUserHasPerm('Manage VM Profiles')) {
 		sendJSON(array('failed' => 'noaccess'));
 		return;
 	}

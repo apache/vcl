@@ -32,7 +32,6 @@ $submitErr = '';
 $submitErrMsg = '';
 $remoteIP = '';
 $authed = '';
-$viewmode = '';
 $semid = '';
 $semislocked = '';
 unset($GLOBALS['php_errormsg']);
@@ -74,7 +73,7 @@ sendHeaders();
 
 printHTMLHeader();
 
-if($viewmode == ADMIN_DEVELOPER) {
+if(checkUserHasPerm('View Debug Information')) {
 	set_error_handler("errorHandler");
 }
 

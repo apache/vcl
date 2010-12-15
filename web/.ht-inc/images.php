@@ -109,7 +109,7 @@ function selectImageOption() {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function viewImages() {
-	global $viewmode, $user, $mode;
+	global $user, $mode;
 	$showdeleted = getContinuationVar("showdeleted", 0);
 	$deleted = getContinuationVar("deleted");
 	$details = processInputVar("details", ARG_NUMERIC);
@@ -945,30 +945,6 @@ function editOrAddImage($state) {
 	printSelectInput("rootaccess", $yesno, $default);
 	print "    </TD>\n";
 	print "  </TR>\n";
-	# finally just limited access so only high level access people see this
-	# because it confused too many people
-	if($user["adminlevel"] == "developer") {
-		print "  <TR>\n";
-		print "    <TH align=right>User group allowed to log in:<br>\n";
-		print "    <small>(This does not grant permission to<br>\n";
-		print "make a reservation for the image)</small></TH>\n";
-		print "    <TD>\n";
-		if(! empty($data["usergroupid"])) {
-			$default = $data["usergroupid"];
-			if(! array_key_exists($default, $groups)) {
-				if($submitErr || $mode == 'submitEditImageButtons')
-					$groups[$data['usergroupid']] = array('name' => $images[$data['imageid']]['usergroup']);
-				else
-					$groups[$data['usergroupid']] = array('name' => $data['usergroup']);
-				uasort($groups, 'sortKeepIndex');
-			}
-		}
-		else
-			$default = 0;
-		printSelectInput("usergroupid", $groups, $default);
-		print "    </TD>\n";
-		print "  </TR>\n";
-	}
 	if($state) {
 		if(array_key_exists("sysprep", $data) && ! $data["sysprep"])
 			$default = 0;
@@ -1488,16 +1464,6 @@ function confirmEditOrAddImage($state) {
 	else
 		print "    <TD>No</TD>\n";
 	print "  </TR>\n";
-	if($user["adminlevel"] == "developer" || $user['adminlevel'] == 'full') {
-		print "  <TR>\n";
-		print "    <TH align=right>User group allowed to log in:</TH>\n";
-		$tmp = explode('@', $groups[$data["usergroupid"]]["name"]);
-		if(array_key_exists(1, $tmp) && $tmp[1] != $user['affiliation'])
-			print "    <TD>" . $groups[$data["usergroupid"]]["name"] . "</TD>\n";
-		else
-			print "    <TD>{$tmp[0]}</TD>\n";
-		print "  </TR>\n";
-	}
 	if(! $state) {
 		print "  <TR>\n";
 		print "    <TH style=\"vertical-align:top; text-align:right;\">Subimages:</TH>\n";
@@ -2164,12 +2130,6 @@ function viewImageDetails() {
 	else
 		print "    <TD>yes</TD>\n";
 	print "  </TR>\n";
-	if(! empty($images[$imageid]["usergroupid"])) {
-		print "  <TR>\n";
-		print "    <TH align=right>User group allowed to log in:</TH>\n";
-		print "    <TD>{$images[$imageid]["usergroup"]}</TD>\n";
-		print "  </TR>\n";
-	}
 	if($oslist[$images[$imageid]["osid"]]["type"] == 'windows') {
 		print "  <TR>\n";
 		print "    <TH align=right>Use sysprep:</TH>\n";
@@ -2424,7 +2384,6 @@ function processImageInput($checks=1) {
 	$return["forcheckout"] = processInputVar("forcheckout", ARG_NUMERIC, 1);
 	$return["checkuser"] = processInputVar("checkuser", ARG_NUMERIC, 1);
 	$return["rootaccess"] = processInputVar("rootaccess", ARG_NUMERIC, 1);
-	$return["usergroupid"] = processInputVar("usergroupid", ARG_NUMERIC);
 	$return["sysprep"] = processInputVar("sysprep", ARG_NUMERIC, 1);
 	$return["description"] = processInputVar("description", ARG_STRING);
 	$return["usage"] = processInputVar("usage", ARG_STRING);
@@ -2562,16 +2521,11 @@ function updateImage($data) {
 	$return = mysql_affected_rows($GLOBALS["mysql_link_vcl"]);
 	if(empty($imgdata[$data["imageid"]]["imagemetaid"]) &&
 	   ($data["checkuser"] == 0 ||
-	   $data["usergroupid"] != 0 ||
 	   $data['rootaccess'] == 0)) {
-		if($data["usergroupid"] == 0)
-			$data["usergroupid"] = "NULL";
 		$query = "INSERT INTO imagemeta "
 		       .        "(checkuser, "
-		       .        "usergroupid, "
 		       .        "rootaccess) "
 		       . "VALUES ({$data["checkuser"]}, "
-		       .        "{$data["usergroupid"]}, "
 		       .        "{$data["rootaccess"]})";
 		doQuery($query, 101);
 		$qh = doQuery("SELECT LAST_INSERT_ID() FROM imagemeta", 101);
@@ -2585,14 +2539,10 @@ function updateImage($data) {
 	}
 	elseif(! empty($imgdata[$data["imageid"]]["imagemetaid"])) {
 	  if($data["checkuser"] != $imgdata[$data["imageid"]]["checkuser"] ||
-	   $data["rootaccess"] != $imgdata[$data["imageid"]]["rootaccess"] ||
-	   $data["usergroupid"] != $imgdata[$data["imageid"]]["usergroupid"]) {
-			if($data["usergroupid"] == 0)
-				$data["usergroupid"] = "NULL";
+	   $data["rootaccess"] != $imgdata[$data["imageid"]]["rootaccess"]) {
 			$query = "UPDATE imagemeta "
 			       . "SET checkuser = {$data["checkuser"]}, "
-			       .     "rootaccess = {$data["rootaccess"]}, "
-			       .     "usergroupid = {$data["usergroupid"]} "
+			       .     "rootaccess = {$data["rootaccess"]} "
 			       . "WHERE id = {$imgdata[$data["imageid"]]["imagemetaid"]}";
 			doQuery($query, 101);
 		}
@@ -2669,23 +2619,18 @@ function addImage($data) {
 		$data['checkuser'] = 1;
 	if($data['rootaccess'] != 0 && $data['rootaccess'] != 1)
 		$data['rootaccess'] = 1;
-	if(! is_numeric($data['usergroupid']) || $data['usergroupid'] <= 0)
-		$data['usergroupid'] = "NULL";
 	if($data['sysprep'] != 0 && $data['sysprep'] != 1)
 		$data['sysprep'] = 1;
 	if($data['checkuser'] == 0 ||
 	   $data['rootaccess'] == 0 ||
-	   (is_numeric($data['usergroupid']) && $data['usergroupid'] > 0) ||
 	   $data['sysprep'] == 0) {
 		$query = "INSERT INTO imagemeta "
 		       .        "(checkuser, "
 		       .        "rootaccess, "
-		       .        "usergroupid, "
 		       .        "sysprep) "
 		       . "VALUES "
 		       .        "({$data['checkuser']}, "
 		       .        "{$data['rootaccess']}, "
-		       .        "{$data['usergroupid']}, "
 		       .        "{$data['sysprep']})";
 		doQuery($query, 101);
 

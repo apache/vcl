@@ -26,10 +26,8 @@ define("PREFNAMEERR", 1);
 define("WIDTHERR", 1 << 1);
 /// signifies an error with submitted height
 define("HEIGHTERR", 1 << 2);
-/// signifies an error with submitted viewasuser id
-define("VIEWASUSERERR", 1 << 3);
 /// signifies an error with submitted new password
-define("LOCALPASSWORDERR", 1 << 4);
+define("LOCALPASSWORDERR", 1 << 3);
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
@@ -39,7 +37,7 @@ define("LOCALPASSWORDERR", 1 << 4);
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function userpreferences() {
-	global $user, $submitErr, $viewmode, $mode;
+	global $user, $submitErr, $mode;
 	if($submitErr) {
 		$data = processUserPrefsInput(0);
 		$data['affiliation'] = $user['affiliation'];
@@ -51,11 +49,6 @@ function userpreferences() {
 		else
 			$data["resolution"] = $user["width"] . "x" . $user["height"];
 	}
-
-	$adminleveldeveloper = 0;
-	if($user['adminlevelid'] == ADMIN_DEVELOPER)
-		$adminleveldeveloper = 1;
-
 
 	print "<H2 align=center>User Preferences</H2>\n";
 	print "<div align=center id=status class=visible>\n";
@@ -81,10 +74,6 @@ function userpreferences() {
 	print "</li>\n";
 	print "      <li><a href=#uiprefs onclick=\"javascript:show('uiprefs'); ";
 	print "return false\">General&nbsp;Preferences</a></li>\n";
-	if($adminleveldeveloper) {
-		print "      <li><a href=#viewmode onclick=\"javascript:";
-		print "show('viewmode'); return false\">View&nbsp;Mode</a></li>\n";
-	}
 	print "      </ul>\n";
 	print "      </div>\n";
 	print "    </TD>\n";
@@ -305,54 +294,6 @@ function userpreferences() {
 	print "      </FORM>\n";
 	print "      </fieldset>\n";
 	print "      </div>\n";
-	print "      <div id=viewmode class=visible>\n";
-	if($adminleveldeveloper) {
-		print "      <fieldset>\n";
-		print "      <legend>View Mode</legend>\n";
-		print "      <FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
-		if($viewmode == ADMIN_FULL) {
-			$selected[ADMIN_NONE] = "";
-			$selected[ADMIN_FULL] = "checked";
-			$selected[ADMIN_DEVELOPER] = "";
-		}
-		elseif($viewmode == ADMIN_DEVELOPER) {
-			$selected[ADMIN_NONE] = "";
-			$selected[ADMIN_FULL] = "";
-			$selected[ADMIN_DEVELOPER] = "checked";
-		}
-		else {
-			$selected[ADMIN_NONE] = "checked";
-			$selected[ADMIN_FULL] = "";
-			$selected[ADMIN_DEVELOPER] = "";
-		}
-		if($user["adminlevelid"] != ADMIN_NONE) {
-			print "      <p>View site as:<br>\n";
-			print "      <INPUT type=radio name=viewmode value=" . ADMIN_NONE . " ";
-			print $selected[ADMIN_NONE] . ">Normal User<br>\n";
-			if($user["adminlevel"] == "full" || $user["adminlevel"] == "developer") {
-				print "      <INPUT type=radio name=viewmode value=" . ADMIN_FULL . " ";
-				print $selected[ADMIN_FULL] . ">Admin Level<br>\n";
-			}
-			if($user["adminlevel"] == "developer") {
-				print "      <INPUT type=radio name=viewmode value=" . ADMIN_DEVELOPER . " ";
-				print $selected[ADMIN_DEVELOPER] . ">Developer Level<br>\n";
-			}
-			print "      </p>\n";
-		}
-		print "      View As User: <INPUT type=text name=viewasuser  ";
-		if(! array_key_exists('unityid', $data))
-			print "size=20 value=\"{$user["unityid"]}@{$user['affiliation']}\">\n";
-		else
-			print "size=20 value=\"{$data["unityid"]}@{$data['affiliation']}\">\n";
-		printSubmitErr(VIEWASUSERERR);
-		print "<br>\n";
-		$cont = addContinuationsEntry('submitviewmode', array(), SECINDAY, 1, 0);
-		print "      <INPUT type=hidden name=continuation value=\"$cont\">\n";
-		print "      <INPUT type=submit value=\"Submit View Mode\">\n";
-		print "      </FORM>\n";
-		print "      </fieldset>\n";
-	}
-	print "      </div>\n";
 	print "    </TD>\n";
 	print "  </TR>\n";
 	print "</table>\n";
@@ -515,7 +456,7 @@ function submitUserPrefs() {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function submitGeneralPreferences() {
-	global $user, $HTMLheader, $printedHTMLheader, $mode, $viewmode;
+	global $user, $HTMLheader, $printedHTMLheader, $mode;
 	$groupview = getContinuationVar('groupview', processInputVar('groupview', ARG_STRING));
 	$emailnotify = processInputVar('emailnotify', ARG_NUMERIC);
 	if($groupview != 'affiliation' && $groupview != 'allgroups') {
@@ -582,7 +523,6 @@ function processUserPrefsInput($checks=1) {
 	$return["mapdrives"] = processInputVar("mapdrives" , ARG_NUMERIC, $user["mapdrives"]);
 	$return["mapprinters"] = processInputVar("mapprinters" , ARG_NUMERIC, $user["mapprinters"]);
 	$return["mapserial"] = processInputVar("mapserial" , ARG_NUMERIC, $user["mapserial"]);
-	$return['unityid'] = "{$user['unityid']}@{$user['affiliation']}";
 
 	if(! $checks) {
 		return $return;
@@ -595,11 +535,6 @@ function processUserPrefsInput($checks=1) {
 	if(! preg_match('/^[a-zA-Z ]*$/', $return["preferredname"])) {
 	   $submitErr |= PREFNAMEERR;
 	   $submitErrMsg[PREFNAMEERR] = "Preferred name can only contain letters and spaces";
-	}
-	if(array_key_exists('unityid', $return) &&
-	   ! validateUserid($return['unityid'])) {
-	   $submitErr |= VIEWASUSERERR;
-	   $submitErrMsg[VIEWASUSERERR] = "Invalid user id";
 	}
 	if($user['affiliation'] == 'Local' && array_key_exists('newpassword', $_POST)) {
 		$return['newpassword'] = $_POST['newpassword'];
@@ -641,7 +576,6 @@ function show(id) {
 		obj.className = "hidden";
 	document.getElementById("rdpfile").className = "hidden";
 	document.getElementById("uiprefs").className = "hidden";
-	document.getElementById("viewmode").className = "hidden";
 	document.getElementById("status").className = "hidden";
 	if(id == 'personal' && ! obj)
 		id = 'rdpfile';

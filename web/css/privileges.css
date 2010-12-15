@@ -31,3 +31,19 @@
 	background-color: #678DB2;
 	color: white;
 }
+#groupprivhelpcell {
+	height: 100%;
+	width: 200px;
+}
+.hlperm {
+	background-color: #eeeeee;
+}
+.statusfailed {
+	color: red;
+}
+.statussuccess {
+	color: #008000;
+}
+.groupprivshidden {
+	visibility: hidden;
+}

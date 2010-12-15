@@ -177,8 +177,6 @@ function updateLDAPUser($authtype, $userid) {
 	       .        "af.name AS affiliation, "
 	       .        "af.shibonly, "
 	       .        "u.emailnotices, "
-	       .        "a.name AS adminlevel, "
-	       .        "a.id AS adminlevelid, "
 	       .        "u.preferredname AS preferredname, "
 	       .        "u.uid AS uid, "
 	       .        "u.id AS id, "
@@ -192,10 +190,8 @@ function updateLDAPUser($authtype, $userid) {
 	       .        "u.showallgroups "
 	       . "FROM user u, "
 	       .      "IMtype i, "
-	       .      "adminlevel a, "
 	       .      "affiliation af "
 	       . "WHERE u.IMtypeid = i.id AND "
-	       .       "u.adminlevelid = a.id AND "
 	       .       "af.id = $affilid AND ";
 	if(array_key_exists('numericid', $userData) &&
 	   is_numeric($userData['numericid']))
@@ -242,8 +238,6 @@ function updateLDAPUser($authtype, $userid) {
 		       .        "u.IMid AS IMid, "
 		       .        "u.uid AS uid, "
 		       .        "u.id AS id, "
-		       .        "a.name AS adminlevel, "
-		       .        "a.id AS adminlevelid, "
 		       .        "u.width AS width, "
 		       .        "u.height AS height, "
 		       .        "u.bpp AS bpp, "
@@ -255,10 +249,8 @@ function updateLDAPUser($authtype, $userid) {
 		       .        "u.lastupdated AS lastupdated "
 		       . "FROM user u, "
 		       .      "IMtype i, "
-		       .      "affiliation af, "
-		       .      "adminlevel a "
+		       .      "affiliation af "
 		       . "WHERE u.IMtypeid = i.id AND "
-		       .       "u.adminlevelid = a.id AND "
 		       .       "u.affiliationid = af.id AND "
 		       .       "u.id = $id";
 		$qh = doQuery($query, 101);
@@ -275,6 +267,7 @@ function updateLDAPUser($authtype, $userid) {
 			//TODO possibly add to a default group
 	}
 	$user["groups"] = getUsersGroups($user["id"], 1);
+	$user["groupperms"] = getUsersGroupPerms(array_keys($user['groups']));
 	$user["privileges"] = getOverallUserPrivs($user["id"]);
 	$user['login'] = $user['unityid'];
 	return $user;

@@ -291,7 +291,7 @@ function AJupdateWaitTime() {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function submitRequest() {
-	global $submitErr, $user, $viewmode, $HTMLheader, $mode, $printedHTMLheader;
+	global $submitErr, $user, $HTMLheader, $mode, $printedHTMLheader;
 
 	if($mode == 'submitTestProd') {
 		$data = getContinuationVar();
@@ -596,7 +596,7 @@ function submitRequest() {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function viewRequests() {
-	global $user, $viewmode, $inContinuation, $mode;
+	global $user, $inContinuation, $mode;
 	if($inContinuation)
 		$lengthchanged = getContinuationVar('lengthchanged', 0);
 	else
@@ -617,7 +617,7 @@ function viewRequests() {
 	$normal = '';
 	$imaging = '';
 	$long = '';
-	if($viewmode == ADMIN_DEVELOPER)
+	if(checkUserHasPerm('View Debug Information'))
 		$nodes = getManagementNodes();
 	if($count = count($requests)) {
 		$now = time();
@@ -810,7 +810,7 @@ function viewRequests() {
 			# print date requested
 			$text .= "    <TD>" . prettyDatetime($requests[$i]["daterequested"]) . "</TD>\n";
 
-			if($viewmode == ADMIN_DEVELOPER) {
+			if(checkUserHasPerm('View Debug Information')) {
 				$text .= "    <TD align=center>" . $requests[$i]["id"] . "</TD>\n";
 				$text .= "    <TD align=center>" . $requests[$i]["computerid"] . "</TD>\n";
 				$text .= "    <TD align=center>" . $nodes[$requests[$i]["managementnodeid"]]['hostname'] . "</TD>\n";
@@ -851,7 +851,7 @@ function viewRequests() {
 		$text .= "    <TH>Starting</TH>\n";
 		$text .= "    <TH>Ending</TH>\n";
 		$text .= "    <TH>Initially requested</TH>\n";
-		if($viewmode == ADMIN_DEVELOPER) {
+		if(checkUserHasPerm('View Debug Information')) {
 			$text .= "    <TH>Req ID</TH>\n";
 			$text .= "    <TH>Comp ID</TH>\n";
 			$text .= "    <TH>Management Node</TH>\n";
@@ -876,7 +876,7 @@ function viewRequests() {
 		$text .= "    <TH>Ending</TH>\n";
 		$text .= "    <TH>Initially requested</TH>\n";
 		$computers = getComputers();
-		if($viewmode == ADMIN_DEVELOPER) {
+		if(checkUserHasPerm('View Debug Information')) {
 			$text .= "    <TH>Req ID</TH>\n";
 			$text .= "    <TH>Comp ID</TH>\n";
 			$text .= "    <TH>Management Node</TH>\n";
@@ -901,7 +901,7 @@ function viewRequests() {
 		$text .= "    <TH>Ending</TH>\n";
 		$text .= "    <TH>Initially requested</TH>\n";
 		$computers = getComputers();
-		if($viewmode == ADMIN_DEVELOPER) {
+		if(checkUserHasPerm('View Debug Information')) {
 			$text .= "    <TH>Req ID</TH>\n";
 			$text .= "    <TH>Comp ID</TH>\n";
 			$text .= "    <TH>Management Node</TH>\n";
@@ -1757,7 +1757,7 @@ function confirmEditRequest() {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function submitEditRequest() {
-	global $user, $submitErr, $viewmode, $mode;
+	global $user, $submitErr, $mode;
 	$data = getContinuationVar();
 	$request = getRequestInfo($data["requestid"]);
 

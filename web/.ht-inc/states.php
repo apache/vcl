@@ -146,6 +146,9 @@ $noHTMLwrappers = array('sendRDPfile',
                         'AJupdateDashboard',
                         'AJgetStatData',
                         'AJgetBlockAllocatedMachineData',
+                        'AJpermSelectUserGroup',
+                        'AJcopyUserGroupPrivs',
+                        'AJsaveUserGroupPrivs',
 );
 
 # main
@@ -529,6 +532,9 @@ $actions['mode']['AJchangeResourcePrivs'] = "AJchangeResourcePrivs";
 $actions['mode']['JSONprivnodelist'] = "JSONprivnodelist";
 $actions['mode']['jsonGetUserGroupMembers'] = "jsonGetUserGroupMembers";
 $actions['mode']['jsonGetResourceGroupMembers'] = "jsonGetResourceGroupMembers";
+$actions['mode']['AJpermSelectUserGroup'] = "AJpermSelectUserGroup";
+$actions['mode']['AJcopyUserGroupPrivs'] = "AJcopyUserGroupPrivs";
+$actions['mode']['AJsaveUserGroupPrivs'] = "AJsaveUserGroupPrivs";
 $actions['pages']['viewNodes'] = "privileges";
 $actions['pages']['submitAddChildNode'] = "privileges";
 $actions['pages']['AJsubmitAddChildNode'] = "privileges";
@@ -555,6 +561,9 @@ $actions['pages']['AJchangeResourcePrivs'] = "privileges";
 $actions['pages']['JSONprivnodelist'] = "privileges";
 $actions['pages']['jsonGetUserGroupMembers'] = "privileges";
 $actions['pages']['jsonGetResourceGroupMembers'] = "privileges";
+$actions['pages']['AJpermSelectUserGroup'] = "privileges";
+$actions['pages']['AJcopyUserGroupPrivs'] = "privileges";
+$actions['pages']['AJsaveUserGroupPrivs'] = "privileges";
 
 # user lookup
 $actions['mode']['userLookup'] = "userLookup"; # entry

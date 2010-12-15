@@ -29,7 +29,15 @@
 ////////////////////////////////////////////////////////////////////////////////
 function dashboard() {
 	print "<h2>VCL Dashboard</h2>\n";
-	print "<table summary=\"\">\n";
+	if(checkUserHasPerm('View Dashboard (global)')) {
+		print "View data for:";
+		$affils = getAffiliations();
+		$affils = array_reverse($affils, TRUE);
+		$affils[0] = "All Affiliations";
+		$affils = array_reverse($affils, TRUE);
+		printSelectInput('affilid', $affils, -1, 0, 0, 'affilid', 'onChange="updateDashboard();"');
+	}
+	print "<table summary=\"\" id=dashboard>\n";
 	print "<tr>\n";
 
 	# -------- left column ---------
@@ -37,6 +45,7 @@ function dashboard() {
 	print addWidget('status', 'Current Status');
 	print addWidget('topimages', 'Top 5 Images in Use', '(Reservations &lt; 24 hours long)');
 	print addWidget('toplongimages', 'Top 5 Long Term Images in Use', '(Reservations &gt; 24 hours long)');
+	print addWidget('toppastimages', 'Top 5 Images From Past Day', '(Reservations with a start<br>time within past 24 hours)');
 	print addWidget('topfailedcomputers', 'Top Recent Computer Failures', '(Failed in the last 5 days)');
 	print "</td>\n";
 	# -------- end left column ---------
@@ -51,7 +60,7 @@ function dashboard() {
 
 	print "</tr>\n";
 	print "</table>\n";
-	$cont = addContinuationsEntry('AJupdateDashboard', array('val' => 0), 60, 1, 0);
+	$cont = addContinuationsEntry('AJupdateDashboard', array('val' => 0), 90, 1, 0);
 	print "<input type=\"hidden\" id=\"updatecont\" value=\"$cont\">\n";
 }
 
@@ -64,10 +73,11 @@ function dashboard() {
 ////////////////////////////////////////////////////////////////////////////////
 function AJupdateDashboard() {
 	$data = array();
-	$data['cont'] = addContinuationsEntry('AJupdateDashboard', array(), 60, 1, 0);
+	$data['cont'] = addContinuationsEntry('AJupdateDashboard', array(), 90, 1, 0);
 	$data['status'] = getStatusData();
 	$data['topimages'] = getTopImageData();
 	$data['toplongimages'] = getTopLongImageData();
+	$data['toppastimages'] = getTopPastImageData();
 	$data['topfailed'] = getTopFailedData();
 	$data['topfailedcomputers'] = getTopFailedComputersData();
 	$data['reschart'] = getActiveResChartData();
@@ -150,17 +160,31 @@ function addLineChart($id, $title) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function getStatusData() {
+	$affilid = getDashboardAffilID();
 	$data = array();
 	$data[] = array('key' => 'Active Reservations', 'val' => 0);
 	$data[] = array('key' => 'Online Computers', 'val' => 0, 'tooltip' => 'Computers in states available, reserved,<br>reloading, inuse, or timeout');
 	$data[] = array('key' => 'Failed Computers', 'val' => 0);
 	$reloadid = getUserlistID('vclreload@Local');
-	$query = "SELECT COUNT(id) "
-	       . "FROM request "
-	       . "WHERE userid != $reloadid AND "
-	       .       "stateid NOT IN (1, 5, 12) AND "
-	       .       "start < NOW() AND "
-			 .       "end > NOW()";
+	if($affilid == 0) {
+		$query = "SELECT COUNT(id) "
+		       . "FROM request "
+		       . "WHERE userid != $reloadid AND "
+		       .       "stateid NOT IN (1, 5, 12) AND "
+		       .       "start < NOW() AND "
+				 .       "end > NOW()";
+	}
+	else {
+		$query = "SELECT COUNT(rq.id) "
+		       . "FROM request rq, "
+		       .      "user u "
+		       . "WHERE rq.userid != $reloadid AND "
+		       .       "rq.userid = u.id AND "
+		       .       "u.affiliationid = $affilid AND "
+		       .       "rq.stateid NOT IN (1, 5, 12) AND "
+		       .       "rq.start < NOW() AND "
+				 .       "rq.end > NOW()";
+	}
 	$qh = doQuery($query, 101);
 	if($row = mysql_fetch_row($qh))
 		$data[0]['val'] = $row[0];
@@ -189,18 +213,38 @@ function getStatusData() {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function getTopImageData() {
-	$query = "SELECT COUNT(rs.imageid) AS count, "
-	       .        "i.prettyname "
-	       . "FROM reservation rs, "
-	       .      "request rq, "
-	       .      "image i "
-	       . "WHERE rs.imageid = i.id AND "
-			 .       "rq.stateid = 8 AND "
-			 .       "rs.requestid = rq.id AND "
-			 .       "TIMESTAMPDIFF(HOUR, rq.start, rq.end) <= 24 "
-	       . "GROUP BY rs.imageid "
-	       . "ORDER BY count DESC "
-	       . "LIMIT 5";
+	$affilid = getDashboardAffilID();
+	if($affilid == 0) {
+		$query = "SELECT COUNT(rs.imageid) AS count, "
+		       .        "i.prettyname "
+		       . "FROM reservation rs, "
+		       .      "request rq, "
+		       .      "image i "
+		       . "WHERE rs.imageid = i.id AND "
+				 .       "rq.stateid = 8 AND "
+				 .       "rs.requestid = rq.id AND "
+				 .       "TIMESTAMPDIFF(HOUR, rq.start, rq.end) <= 24 "
+		       . "GROUP BY rs.imageid "
+		       . "ORDER BY count DESC "
+		       . "LIMIT 5";
+	}
+	else {
+		$query = "SELECT COUNT(rs.imageid) AS count, "
+		       .        "i.prettyname "
+		       . "FROM reservation rs, "
+		       .      "request rq, "
+		       .      "image i, "
+		       .      "user u "
+		       . "WHERE rq.userid = u.id AND "
+		       .       "u.affiliationid = $affilid AND "
+		       .       "rs.imageid = i.id AND "
+				 .       "rq.stateid = 8 AND "
+				 .       "rs.requestid = rq.id AND "
+				 .       "TIMESTAMPDIFF(HOUR, rq.start, rq.end) <= 24 "
+		       . "GROUP BY rs.imageid "
+		       . "ORDER BY count DESC "
+		       . "LIMIT 5";
+	}
 	$data = array();
 	$qh = doQuery($query, 101);
 	while($row = mysql_fetch_assoc($qh))
@@ -220,31 +264,88 @@ function getTopImageData() {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function getTopLongImageData() {
-	$query = "SELECT COUNT(rs.imageid) AS count, "
-	       .        "i.prettyname, "
-	       .        "TIMESTAMPDIFF(HOUR, rq.start, rq.end) AS reslen "
-	       . "FROM reservation rs, "
-	       .      "request rq, "
-	       .      "image i "
-	       . "WHERE rs.imageid = i.id AND "
-			 .       "rq.stateid = 8 AND "
-			 .       "rs.requestid = rq.id "
-	       . "GROUP BY rs.imageid "
-	       . "HAVING reslen > 24 "
-	       . "ORDER BY count DESC "
-	       . "LIMIT 5";
-	$query = "SELECT COUNT(rs.imageid) AS count, "
-	       .        "i.prettyname "
-	       . "FROM reservation rs, "
-	       .      "request rq, "
-	       .      "image i "
-	       . "WHERE rs.imageid = i.id AND "
-			 .       "rq.stateid = 8 AND "
-			 .       "rs.requestid = rq.id AND "
-			 .       "TIMESTAMPDIFF(HOUR, rq.start, rq.end) > 24 "
-	       . "GROUP BY rs.imageid "
-	       . "ORDER BY count DESC "
-	       . "LIMIT 5";
+	$affilid = getDashboardAffilID();
+	if($affilid == 0) {
+		$query = "SELECT COUNT(rs.imageid) AS count, "
+		       .        "i.prettyname "
+		       . "FROM reservation rs, "
+		       .      "request rq, "
+		       .      "image i "
+		       . "WHERE rs.imageid = i.id AND "
+				 .       "rq.stateid = 8 AND "
+				 .       "rs.requestid = rq.id AND "
+				 .       "TIMESTAMPDIFF(HOUR, rq.start, rq.end) > 24 "
+		       . "GROUP BY rs.imageid "
+		       . "ORDER BY count DESC "
+		       . "LIMIT 5";
+	}
+	else {
+		$query = "SELECT COUNT(rs.imageid) AS count, "
+		       .        "i.prettyname "
+		       . "FROM reservation rs, "
+		       .      "request rq, "
+		       .      "image i, "
+		       .      "user u "
+		       . "WHERE rq.userid = u.id AND "
+		       .       "u.affiliationid = $affilid AND "
+		       .       "rs.imageid = i.id AND "
+				 .       "rq.stateid = 8 AND "
+				 .       "rs.requestid = rq.id AND "
+				 .       "TIMESTAMPDIFF(HOUR, rq.start, rq.end) > 24 "
+		       . "GROUP BY rs.imageid "
+		       . "ORDER BY count DESC "
+		       . "LIMIT 5";
+	}
+	$data = array();
+	$qh = doQuery($query, 101);
+	while($row = mysql_fetch_assoc($qh))
+		$data[] = $row;
+	return $data;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn getTopPastImageData()
+///
+/// \return array of data with these keys:\n
+/// \b prettyname - name of image\n
+/// \b count - number of reservations for this image
+///
+/// \brief gets data about top reserved images over past day
+///
+////////////////////////////////////////////////////////////////////////////////
+function getTopPastImageData() {
+	$affilid = getDashboardAffilID();
+	$reloadid = getUserlistID('vclreload@Local');
+	if($affilid == 0) {
+		$query = "SELECT COUNT(l.imageid) AS count, "
+		       .        "i.prettyname "
+		       . "FROM log l, "
+		       .      "image i "
+		       . "WHERE l.imageid = i.id AND "
+				 .       "l.wasavailable = 1 AND "
+				 .       "l.userid != $reloadid AND "
+				 .       "l.start > DATE_SUB(NOW(), INTERVAL 1 DAY) "
+		       . "GROUP BY l.imageid "
+		       . "ORDER BY count DESC "
+		       . "LIMIT 5";
+	}
+	else {
+		$query = "SELECT COUNT(l.imageid) AS count, "
+		       .        "i.prettyname "
+		       . "FROM log l, "
+		       .      "image i, "
+		       .      "user u "
+		       . "WHERE l.userid = u.id AND "
+		       .       "u.affiliationid = $affilid AND "
+		       .       "l.imageid = i.id AND "
+				 .       "l.wasavailable = 1 AND "
+				 .       "l.userid != $reloadid AND "
+				 .       "l.start > DATE_SUB(NOW(), INTERVAL 1 DAY) "
+		       . "GROUP BY l.imageid "
+		       . "ORDER BY count DESC "
+		       . "LIMIT 5";
+	}
 	$data = array();
 	$qh = doQuery($query, 101);
 	while($row = mysql_fetch_assoc($qh))
@@ -264,16 +365,34 @@ function getTopLongImageData() {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function getTopFailedData() {
-	$query = "SELECT COUNT(l.imageid) AS count, "
-	       .        "i.prettyname "
-	       . "FROM log l, "
-	       .      "image i "
-	       . "WHERE l.imageid = i.id AND "
-	       .       "l.ending = 'failed' AND "
-	       .       "l.start > DATE_SUB(NOW(), INTERVAL 5 DAY) "
-	       . "GROUP BY l.imageid "
-	       . "ORDER BY count DESC "
-	       . "LIMIT 5";
+	$affilid = getDashboardAffilID();
+	if($affilid == 0) {
+		$query = "SELECT COUNT(l.imageid) AS count, "
+		       .        "i.prettyname "
+		       . "FROM log l, "
+		       .      "image i "
+		       . "WHERE l.imageid = i.id AND "
+		       .       "l.ending = 'failed' AND "
+		       .       "l.start > DATE_SUB(NOW(), INTERVAL 5 DAY) "
+		       . "GROUP BY l.imageid "
+		       . "ORDER BY count DESC "
+		       . "LIMIT 5";
+	}
+	else {
+		$query = "SELECT COUNT(l.imageid) AS count, "
+		       .        "i.prettyname "
+		       . "FROM log l, "
+		       .      "image i, "
+		       .      "user u "
+		       . "WHERE l.userid = u.id AND "
+		       .       "u.affiliationid = $affilid AND "
+		       .       "l.imageid = i.id AND "
+		       .       "l.ending = 'failed' AND "
+		       .       "l.start > DATE_SUB(NOW(), INTERVAL 5 DAY) "
+		       . "GROUP BY l.imageid "
+		       . "ORDER BY count DESC "
+		       . "LIMIT 5";
+	}
 	$data = array();
 	$qh = doQuery($query, 101);
 	while($row = mysql_fetch_assoc($qh))
@@ -293,18 +412,38 @@ function getTopFailedData() {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function getTopFailedComputersData() {
-	$query = "SELECT COUNT(s.computerid) AS count, "
-	       .        "c.hostname "
-	       . "FROM log l, "
-	       .      "sublog s, "
-	       .      "computer c "
-	       . "WHERE s.logid = l.id AND "
-	       .       "s.computerid = c.id AND "
-	       .       "l.ending = 'failed' AND "
-	       .       "l.start > DATE_SUB(NOW(), INTERVAL 5 DAY) "
-	       . "GROUP BY s.computerid "
-	       . "ORDER BY count DESC "
-	       . "LIMIT 5";
+	$affilid = getDashboardAffilID();
+	if($affilid == 0) {
+		$query = "SELECT COUNT(s.computerid) AS count, "
+		       .        "c.hostname "
+		       . "FROM log l, "
+		       .      "sublog s, "
+		       .      "computer c "
+		       . "WHERE s.logid = l.id AND "
+		       .       "s.computerid = c.id AND "
+		       .       "l.ending = 'failed' AND "
+		       .       "l.start > DATE_SUB(NOW(), INTERVAL 5 DAY) "
+		       . "GROUP BY s.computerid "
+		       . "ORDER BY count DESC "
+		       . "LIMIT 5";
+	}
+	else {
+		$query = "SELECT COUNT(s.computerid) AS count, "
+		       .        "c.hostname "
+		       . "FROM log l, "
+		       .      "sublog s, "
+		       .      "computer c, "
+		       .      "user u "
+		       . "WHERE l.userid = u.id AND "
+		       .       "u.affiliationid = $affilid AND "
+		       .       "s.logid = l.id AND "
+		       .       "s.computerid = c.id AND "
+		       .       "l.ending = 'failed' AND "
+		       .       "l.start > DATE_SUB(NOW(), INTERVAL 5 DAY) "
+		       . "GROUP BY s.computerid "
+		       . "ORDER BY count DESC "
+		       . "LIMIT 5";
+	}
 	$data = array();
 	$qh = doQuery($query, 101);
 	while($row = mysql_fetch_assoc($qh))
@@ -338,15 +477,32 @@ function getActiveResChartData() {
 	}
 	$data['maxy'] = 0;
 	$reloadid = getUserlistID('vclreload@Local');
-	$query = "SELECT id, "
-	       .        "UNIX_TIMESTAMP(start) AS start, "
-	       .        "UNIX_TIMESTAMP(finalend) AS end "
-	       . "FROM log "
-	       . "WHERE start < NOW() AND "
-	       .       "finalend > DATE_SUB(NOW(), INTERVAL 12 HOUR) AND "
-	       .       "ending NOT IN ('failed', 'failedtest') AND "
-	       .       "wasavailable = 1 AND "
-	       .       "userid != $reloadid";
+	$affilid = getDashboardAffilID();
+	if($affilid == 0) {
+		$query = "SELECT id, "
+		       .        "UNIX_TIMESTAMP(start) AS start, "
+		       .        "UNIX_TIMESTAMP(finalend) AS end "
+		       . "FROM log "
+		       . "WHERE start < NOW() AND "
+		       .       "finalend > DATE_SUB(NOW(), INTERVAL 12 HOUR) AND "
+		       .       "ending NOT IN ('failed', 'failedtest') AND "
+		       .       "wasavailable = 1 AND "
+		       .       "userid != $reloadid";
+	}
+	else {
+		$query = "SELECT l.id, "
+		       .        "UNIX_TIMESTAMP(l.start) AS start, "
+		       .        "UNIX_TIMESTAMP(l.finalend) AS end "
+		       . "FROM log l, "
+		       .      "user u "
+		       . "WHERE l.userid = u.id AND "
+		       .       "u.affiliationid = $affilid AND "
+		       .       "l.start < NOW() AND "
+		       .       "l.finalend > DATE_SUB(NOW(), INTERVAL 12 HOUR) AND "
+		       .       "l.ending NOT IN ('failed', 'failedtest') AND "
+		       .       "l.wasavailable = 1 AND "
+		       .       "l.userid != $reloadid";
+	}
 	$qh = doQuery($query, 101);
 	while($row = mysql_fetch_assoc($qh)) {
 		for($binstart = $chartstart, $binend = $chartstart + 900, $binindex = 0; 
@@ -382,24 +538,54 @@ function getActiveResChartData() {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function getBlockAllocationData() {
+	$affilid = getDashboardAffilID();
 	# active block allocation
-	$query = "SELECT COUNT(id) "
-	       . "FROM blockTimes "
-	       . "WHERE skip = 0 AND "
-	       .       "start < NOW() AND "
-			 .       "end > NOW()";
+	if($affilid == 0) {
+		$query = "SELECT COUNT(id) "
+		       . "FROM blockTimes "
+		       . "WHERE skip = 0 AND "
+		       .       "start < NOW() AND "
+				 .       "end > NOW()";
+	}
+	else {
+		$query = "SELECT COUNT(bt.id) "
+		       . "FROM blockTimes bt, "
+		       .      "blockRequest br, "
+		       .      "user u "
+		       . "WHERE bt.blockRequestid = br.id AND "
+		       .       "br.ownerid = u.id AND "
+		       .       "u.affiliationid = $affilid AND "
+		       .       "bt.skip = 0 AND "
+		       .       "bt.start < NOW() AND "
+				 .       "bt.end > NOW()";
+	}
 	$qh = doQuery($query, 101);
 	$row = mysql_fetch_row($qh);
 	$blockcount = $row[0];
 	# computers in blockComputers for active allocations
-	$query = "SELECT bc.computerid, "
-	       .        "c.stateid "
-	       . "FROM blockComputers bc "
-	       . "LEFT JOIN computer c ON (c.id = bc.computerid) "
-	       . "LEFT JOIN blockTimes bt ON (bt.id = bc.blockTimeid) "
-	       . "WHERE c.stateid IN (2, 3, 6, 8, 19) AND "
-	       .       "bt.start < NOW() AND "
-	       .       "bt.end > NOW()";
+	if($affilid == 0) {
+		$query = "SELECT bc.computerid, "
+		       .        "c.stateid "
+		       . "FROM blockComputers bc "
+		       . "LEFT JOIN computer c ON (c.id = bc.computerid) "
+		       . "LEFT JOIN blockTimes bt ON (bt.id = bc.blockTimeid) "
+		       . "WHERE c.stateid IN (2, 3, 6, 8, 19) AND "
+		       .       "bt.start < NOW() AND "
+		       .       "bt.end > NOW()";
+	}
+	else {
+		$query = "SELECT bc.computerid, "
+		       .        "c.stateid "
+		       . "FROM blockComputers bc "
+		       . "LEFT JOIN computer c ON (c.id = bc.computerid) "
+		       . "LEFT JOIN blockTimes bt ON (bt.id = bc.blockTimeid) "
+		       . "LEFT JOIN blockRequest br ON (bt.blockRequestid = br.id) "
+		       . "LEFT JOIN user u ON (br.ownerid = u.id) "
+		       . "WHERE u.affiliationid = $affilid AND "
+		       .       "c.stateid IN (2, 3, 6, 8, 19) AND "
+		       .       "bt.start < NOW() AND "
+		       .       "bt.end > NOW()";
+	}
 	$qh = doQuery($query, 101);
 	$total = 0;
 	$used = 0;
@@ -413,12 +599,24 @@ function getBlockAllocationData() {
 	else
 		$compused = 0;
 	# number of computers that should be allocated
-	$query = "SELECT br.numMachines "
-	       . "FROM blockRequest br "
-	       . "LEFT JOIN blockTimes bt ON (bt.blockRequestid = br.id) "
-	       . "WHERE bt.start < NOW() AND "
-	       .       "bt.end > NOW() AND "
-	       .       "bt.skip = 0";
+	if($affilid == 0) {
+		$query = "SELECT br.numMachines "
+		       . "FROM blockRequest br "
+		       . "LEFT JOIN blockTimes bt ON (bt.blockRequestid = br.id) "
+		       . "WHERE bt.start < NOW() AND "
+		       .       "bt.end > NOW() AND "
+		       .       "bt.skip = 0";
+	}
+	else {
+		$query = "SELECT br.numMachines "
+		       . "FROM blockRequest br "
+		       . "LEFT JOIN blockTimes bt ON (bt.blockRequestid = br.id) "
+		       . "LEFT JOIN user u ON (br.ownerid = u.id) "
+		       . "WHERE u.affiliationid = $affilid AND "
+		       .       "bt.start < NOW() AND "
+		       .       "bt.end > NOW() AND "
+		       .       "bt.skip = 0";
+	}
 	$alloc = 0;
 	$qh = doQuery($query, 101);
 	while($row = mysql_fetch_assoc($qh))
@@ -432,5 +630,26 @@ function getBlockAllocationData() {
 	$data[] = array('title' => 'Block Computer Usage', 'val' => $compused);
 	$data[] = array('title' => 'Failed Block Computers', 'val' => $failed);
 	return $data;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn getDashboardAffilID()
+///
+/// \return an affiliation id
+///
+/// \brief if user has access to view the dashboard for any affiliation, returns
+/// selected affiliationid; otherwise, returns user's affiliationid
+///
+////////////////////////////////////////////////////////////////////////////////
+function getDashboardAffilID() {
+	global $user;
+	if(! checkUserHasPerm('View Dashboard (global)'))
+		return $user['affiliationid'];
+	$affilid = processInputVar('affilid', ARG_NUMERIC);
+	$affils = getAffiliations();
+	if($affilid != 0 && ! array_key_exists($affilid, $affils))
+		return 0;
+	return $affilid;
 }
 ?>

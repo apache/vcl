@@ -114,7 +114,7 @@ function selectMgmtnodeOption() {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function viewMgmtnodes() {
-	global $viewmode, $user, $mode;
+	global $user, $mode;
 
 	$mgmtnodes = getManagementNodes();
 	$resources = getUserResources(array("mgmtNodeAdmin"), array("administer"));

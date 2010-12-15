@@ -34,15 +34,8 @@ define("ARG_STRING", 1 << 1);
 define("ARG_MULTINUMERIC", 1 << 2);
 /// used for processInputVar, means the input variable should be an array of strings
 define("ARG_MULTISTRING", 1 << 3);
-/// define adminlevel developer
-define("ADMIN_DEVELOPER", 3);
-/// define adminlevel full
-define("ADMIN_FULL", 2);
-/// define adminlevel none
-define("ADMIN_NONE", 1);
 /// define semaphore key
 define("SEMKEY", 192365819256598);
-
 
 /// global array used to hold request information between calling isAvailable
 /// and addRequest
@@ -67,7 +60,7 @@ $printedHTMLheader = 0;
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function initGlobals() {
-	global $mode, $user, $remoteIP, $authed, $oldmode, $viewmode, $semid;
+	global $mode, $user, $remoteIP, $authed, $oldmode, $semid;
 	global $semislocked, $days, $phpVer, $keys, $pemkey, $AUTHERROR;
 	global $passwdArray, $skin, $contdata, $lastmode, $inContinuation;
 	global $totalQueries, $ERRORS, $queryTimes, $actions;
@@ -138,7 +131,7 @@ function initGlobals() {
 	# the user table corresponding to the user you want
 	# logged in
 
-  	# start auth check
+	# start auth check
 	$authed = 0;
 	if(array_key_exists("VCLAUTH", $_COOKIE)) {
 		$userid = readAuthCookie();
@@ -216,20 +209,11 @@ function initGlobals() {
 				abort(1);
 			}
 		}
-		if($user['adminlevel'] == 'developer' &&
-			array_key_exists('VCLTESTUSER', $_COOKIE)) {
-			$userid = $_COOKIE['VCLTESTUSER'];
-			if($userid != "{$user['unityid']}@{$user['affiliation']}") {
-				if($testuser = getUserInfo($userid, 1))
-					$user = $testuser;
-			}
-		}
 		if(! empty($contuserid) &&
 		   $user['id'] != $contuserid)
 			abort(51);
 		$_SESSION['user'] = $user;
 	}
-	$viewmode = getViewMode($user);
 
 	$affil = $user['affiliation'];
 
@@ -324,7 +308,7 @@ function initGlobals() {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function checkAccess() {
-	global $mode, $user, $viewmode, $actionFunction, $authMechs;
+	global $mode, $user, $actionFunction, $authMechs;
 	global $itecsauthkey, $ENABLE_ITECSAUTH, $actions, $noHTMLwrappers;
 	global $inContinuation, $docreaders, $userlookupUsers;
 	if($mode == 'xmlrpccall') {
@@ -504,8 +488,8 @@ function checkAccess() {
 						}
 						break;
 					case 'userLookup':
-						if($viewmode != ADMIN_DEVELOPER &&
-						   ! in_array($user['id'], $userlookupUsers)) {
+						if(! checkUserHasPerm('User Lookup (global)') &&
+						   ! checkUserHasPerm('User Lookup (affiliation only)')) {
 							$mode = "";
 							$actionFunction = "main";
 							return;
@@ -738,40 +722,6 @@ function stopSession() {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn getViewMode($user)
-///
-/// \param $user - an array as returned from getUserInfo
-///
-/// \return user's viewmode level
-///
-/// \brief determines viewmode based on $_COOKIE["VCLVIEWMODE"] and user's
-/// adminlevel
-///
-////////////////////////////////////////////////////////////////////////////////
-function getViewMode($user) {
-	if($user["adminlevelid"] == 1) {
-		return 1;
-	}
-	if(empty($_COOKIE["VCLVIEWMODE"])) {
-		return $user["adminlevelid"];
-	}
-	$tmpviewmode = $_COOKIE["VCLVIEWMODE"];
-	if($user["adminlevel"] == "developer") {
-		return $tmpviewmode;
-	}
-	elseif($user["adminlevel"] == "full") {
-		if($tmpviewmode <= ADMIN_FULL) {
-			return $tmpviewmode;
-		}
-		else {
-			return ADMIN_FULL;
-		}
-	}
-	return 1;
-}
-
-////////////////////////////////////////////////////////////////////////////////
-///
 /// \fn main()
 ///
 /// \brief prints a welcome screen
@@ -829,7 +779,7 @@ function abort($errcode, $query="") {
 	global $ENABLE_ITECSAUTH, $requestInfo;
 	if($mode == 'xmlrpccall')
 		xmlRPCabort($errcode, $query);
-	if(ONLINEDEBUG && $user["adminlevel"] == "developer") {
+	if(ONLINEDEBUG && checkUserHasPerm('View Debug Information')) {
 		if($errcode >= 100 && $errcode < 400) {
 			print "<font color=red>" . mysql_error($mysql_link_vcl) . "</font><br>\n";
 			if($ENABLE_ITECSAUTH)
@@ -1484,7 +1434,7 @@ function removeNoCheckout($images) {
 ////////////////////////////////////////////////////////////////////////////////
 function getUserResources($userprivs, $resourceprivs=array("available"),
                           $onlygroups=0, $includedeleted=0, $userid=0) {
-	global $user, $viewmode;
+	global $user;
 	$key = getKey(array($userprivs, $resourceprivs, $onlygroups, $includedeleted, $userid));
 	if(array_key_exists($key, $_SESSION['userresources']))
 		return $_SESSION['userresources'][$key];
@@ -2212,6 +2162,9 @@ function getChildNodes($parent=DEFAULT_PRIVNODE) {
 ////////////////////////////////////////////////////////////////////////////////
 function getUserGroups($groupType=0, $affiliationid=0) {
 	global $user;
+	$key = getKey(array($groupType, $affiliationid, $user['showallgroups']));
+	if(array_key_exists($key, $_SESSION['usersessiondata']))
+		return $_SESSION['usersessiondata'][$key];
 	$return = array();
 	$query = "SELECT ug.id, "
 	       .        "ug.name, "
@@ -2252,6 +2205,7 @@ function getUserGroups($groupType=0, $affiliationid=0) {
 			$row['name'] = "{$row['name']}@{$row['groupaffiliation']}";
 		$return[$row["id"]] = $row;
 	}
+	$_SESSION['usersessiondata'][$key] = $return;
 	return $return;
 }
 
@@ -2295,6 +2249,67 @@ function getUserEditGroups($id) {
 		$groups[$row['id']] = $row['name'];
 	}
 	return $groups;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn getUserGroupPrivs($groupid='')
+///
+/// \param $groupid (optional, default='') - if specified, only get permissions
+///        granted to this user group; if not specified, get information about
+///        all groups
+///
+/// \return array of data about user group permissions where each element is an
+/// array with these keys:\n
+/// \b usergroup - name of user group\n
+/// \b usergroupid - id of user group\n
+/// \b permission - permission granted to user group\n
+/// \b permid - id of permission granted to user group
+///
+/// \brief builds an array of data about permissions granted to user groups
+///
+////////////////////////////////////////////////////////////////////////////////
+function getUserGroupPrivs($groupid='') {
+	$data = array();
+	$query = "SELECT ug.name AS usergroup, "
+	       .        "ugp.usergroupid, "
+	       .        "ugpt.name AS permission, "
+	       .        "ugp.userprivtypeid AS permid "
+	       . "FROM usergroup ug, "
+	       .      "usergrouppriv ugp, "
+	       .      "usergroupprivtype ugpt "
+	       . "WHERE ugp.usergroupid = ug.id AND "
+	       .       "ugp.userprivtypeid = ugpt.id ";
+	if(! empty($groupid))
+		$query .= "AND ugp.usergroupid = $groupid ";
+	$query .= "ORDER BY ug.name, "
+	       .           "ugpt.name";
+	$qh = doQuery($query, 101);
+	while($row = mysql_fetch_assoc($qh))
+		$data[] = $row;
+	return $data;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn getUserGroupPrivTypes()
+///
+/// \return array of information about user group permissions where each index
+/// is the id of the permission and each element has these keys:\n
+/// \b id - id of permission\n
+/// \b name - name of permission\n
+/// \b help - additional information about permission
+///
+/// \brief builds an array of information about the user group permissions
+///
+////////////////////////////////////////////////////////////////////////////////
+function getUserGroupPrivTypes() {
+	$data = array();
+	$query = "SELECT id, name, help FROM usergroupprivtype ORDER BY name";
+	$qh = doQuery($query, 101);
+	while($row = mysql_fetch_assoc($qh))
+		$data[$row['id']] = $row;
+	return $data;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -2987,8 +3002,6 @@ function processInputData($data, $type, $addslashes=0, $defaultvalue=NULL) {
 /// \b IMtype - user's preferred IM protocol\n
 /// \b IMid - user's IM id\n
 /// \b id - user's id from database\n
-/// \b adminlevel - user's admin level (= 'none' if no admin access)\n
-/// \b adminlevelid - id for user's adminlevel\n
 /// \b width - pixel width for rdp files\n
 /// \b height - pixel height for rdp files\n
 /// \b bpp - color depth for rdp files\n
@@ -3029,8 +3042,6 @@ function getUserInfo($id, $noupdate=0, $numeric=0) {
 	       .        "i.name AS IMtype, "
 	       .        "u.IMid AS IMid, "
 	       .        "u.id AS id, "
-	       .        "a.name AS adminlevel, "
-	       .        "a.id AS adminlevelid, "
 	       .        "u.width AS width, "
 	       .        "u.height AS height, "
 	       .        "u.bpp AS bpp, "
@@ -3043,10 +3054,8 @@ function getUserInfo($id, $noupdate=0, $numeric=0) {
 	       .        "af.shibonly "
 	       . "FROM user u, "
 	       .      "IMtype i, "
-	       .      "affiliation af, "
-	       .      "adminlevel a "
+	       .      "affiliation af "
 	       . "WHERE u.IMtypeid = i.id AND "
-	       .       "u.adminlevelid = a.id AND "
 	       .       "u.affiliationid = af.id AND ";
 	if($numeric)
 		$query .= "u.id = $id";
@@ -3062,6 +3071,7 @@ function getUserInfo($id, $noupdate=0, $numeric=0) {
 		   $noupdate) {
 			# get user's groups
 			$user["groups"] = getUsersGroups($user["id"], 1);
+			$user["groupperms"] = getUsersGroupPerms(array_keys($user['groups']));
 
 			checkExpiredDemoUser($user['id'], $user['groups']);
 
@@ -3147,6 +3157,62 @@ function getUsersGroups($userid, $includeowned=0, $includeaffil=0) {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
+/// \fn getUsersGroupPerms($usergroupids)
+///
+/// \param $usergroupids - array of user group ids
+///
+/// \return array of permissions where each index is the permission id and each
+/// element is the name of the permission
+///
+/// \brief builds an array of all permissions granted to a user via that user's
+/// user groups
+///
+////////////////////////////////////////////////////////////////////////////////
+function getUsersGroupPerms($usergroupids) {
+	$inlist = implode(',', $usergroupids);
+	$query = "SELECT DISTINCT t.id, "
+	       .        "t.name "
+	       . "FROM usergroupprivtype t, "
+	       .      "usergrouppriv u "
+	       . "WHERE u.usergroupid IN ($inlist) AND "
+	       .       "u.userprivtypeid = t.id "
+	       . "ORDER BY t.name";
+	$perms = array();
+	$qh = doQuery($query, 101);
+	while($row = mysql_fetch_assoc($qh))
+		$perms[$row['id']] = $row['name'];
+	return $perms;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn checkUserHasPerm($perm, $userid=0)
+///
+/// \param $perm - name of a user group permission
+/// \param $userid (optional, default=0) - if specified, check for $userid
+/// having $perm; otherwise, check logged in user
+///
+/// \return 1 if user has $perm, 0 otherwise
+///
+/// \brief checks to see if a user has been granted a permission through that
+/// user's group memberships
+///
+////////////////////////////////////////////////////////////////////////////////
+function checkUserHasPerm($perm, $userid=0) {
+	global $user;
+	if($userid == 0)
+		$perms = $user['groupperms'];
+	else {
+		$usersgroups = getUsersGroups($userid, 1);
+		$perms = getUsersGroupPerms(array_keys($usersgroups));
+	}
+	if(in_array($perm, $perms))
+		return 1;
+	return 0;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
 /// \fn updateUserData($id, $type, $affilid)
 ///
 /// \param $id - user's unity id or id from user table
@@ -3165,7 +3231,6 @@ function getUsersGroups($userid, $includeowned=0, $includeaffil=0) {
 /// \b email - user's preferred email address\n
 /// \b IMtype - user's preferred IM protocol\n
 /// \b IMid - user's IM id\n
-/// \b adminlevel - user's admin level (= 'none' if no admin access)\n
 /// \b lastupdated - datetime the information was last updated
 ///
 /// \brief looks up the logged in user's info in ldap and updates it in the db
@@ -5214,7 +5279,6 @@ function getPredictiveModules() {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function getTimeSlots($compids, $end=0, $start=0) {
-	global $viewmode;
 	if(empty($compids))
 		return array();
 	$requestid = processInputVar("requestid", ARG_NUMERIC, 0);
@@ -5416,7 +5480,7 @@ function getTimeSlots($compids, $end=0, $start=0) {
 				continue;
 			}
 			# shouldn't get here; print debug info if we do
-			if($viewmode == ADMIN_DEVELOPER) {
+			if(checkUserHasPerm('View Debug Information')) {
 				print "******************************************************<br>\n";
 				print "current - " . unixToDatetime($current) . "<br>\n";
 				print "endtime - " . unixToDatetime($endtime) . "<br>\n";
@@ -5510,7 +5574,7 @@ function pickTimeTable() {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function showTimeTable($links) {
-	global $mode, $viewmode, $user;
+	global $mode, $user;
 	$imaging = getContinuationVar('imaging', 0);
 	if($links == 1) {
 		$imageid = getContinuationVar('imageid');
@@ -5667,7 +5731,7 @@ function showTimeTable($links) {
 	$tmpArr = array_keys($computers);
 	$first = $computers[$tmpArr[0]];
 	print "      <table id=ttlayout summary=\"\">\n";
-	if(! $links || $viewmode >= ADMIN_DEVELOPER) {
+	if(! $links || checkUserHasPerm('View Debug Information')) {
 		print "        <TR>\n";
 		print "          <TH align=right>Computer&nbsp;ID:</TH>\n";
 		print $computeridrow;
@@ -7979,7 +8043,7 @@ function addContinuationsEntry($nextmode, $data=array(), $duration=SECINWEEK,
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function getContinuationsData($data) {
-	global $user, $continuationid;
+	global $user, $continuationid, $noHTMLwrappers;
 	if(array_key_exists('continuation', $_POST))
 		$edata = urldecode($data);
 	else
@@ -8022,7 +8086,12 @@ function getContinuationsData($data) {
 		       . "WHERE id = '{$row['deletefromid']}' AND "
 		       .       "userid = {$items[2]}";
 		doQuery($query, 101, 'vcl', 1);
-		return array('error' => 'expired');
+		$rt = array('error' => 'expired');
+		if(in_array($row['tomode'], $noHTMLwrappers))
+			$rt['noHTMLwrappers'] = 1;
+		else
+			$rt['noHTMLwrappers'] = 0;
+		return $rt;
 	}
 
 	# remove if multicall is 0
@@ -8047,11 +8116,14 @@ function getContinuationsData($data) {
 ////////////////////////////////////////////////////////////////////////////////
 function continuationsError() {
 	global $contdata, $printedHTMLheader, $HTMLheader;
-	if(empty($HTMLheader))
-		printHTMLHeader();
-	if(! $printedHTMLheader) {
-		$printedHTMLheader = 1;
-		print $HTMLheader;
+	if(! array_key_exists('noHTMLwrappers', $contdata) ||
+		$contdata['noHTMLwrappers'] == 0) {
+		if(empty($HTMLheader))
+			printHTMLHeader();
+		if(! $printedHTMLheader) {
+			$printedHTMLheader = 1;
+			print $HTMLheader;
+		}
 	}
 	if(array_key_exists('error', $contdata)) {
 		switch($contdata['error']) {
@@ -8078,7 +8150,9 @@ function continuationsError() {
 			print "steps you took that led up to this problem in your email message.";
 		}
 	}
-	printHTMLFooter();
+	if(! array_key_exists('noHTMLwrappers', $contdata) ||
+		$contdata['noHTMLwrappers'] == 0)
+		printHTMLFooter();
 	dbDisconnect();
 	exit;
 }
@@ -8249,7 +8323,7 @@ function xmlRPChandler($function, $args, $blah) {
 function xmlRPCabort($errcode, $query='') {
 	global $mysql_link_vcl, $mysql_link_acct, $ERRORS, $user, $mode;
 	global $XMLRPCERRORS;
-	if(ONLINEDEBUG && $user["adminlevel"] == "developer") {
+	if(ONLINEDEBUG && checkUserHasPerm('View Debug Information')) {
 		$msg = '';
 		if($errcode >= 100 && $errcode < 400) {
 			$msg .= mysql_error($mysql_link_vcl) . " $query ";
@@ -8545,9 +8619,8 @@ function menulistLI($page) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function sendHeaders() {
-	global $mode, $user, $authed, $oldmode, $viewmode, $actionFunction, $skin;
+	global $mode, $user, $authed, $oldmode, $actionFunction, $skin;
 	global $shibauthed;
-	$setwrapreferer = processInputVar('am', ARG_NUMERIC, 0);
 	if(! $authed && $mode == "auth") {
 		header("Location: " . BASEURL . SCRIPT . "?mode=selectauth");
 		dbDisconnect();
@@ -8629,16 +8702,6 @@ function sendHeaders() {
 			dbDisconnect();
 			exit;
 	}
-	if($mode == "submitviewmode") {
-		$expire = time() + 31536000; //expire in 1 year
-		$newviewmode = processInputVar("viewmode", ARG_NUMERIC);
-		if(! empty($newviewmode) && $newviewmode <= $user['adminlevelid'])
-			setcookie("VCLVIEWMODE", $newviewmode, $expire, "/", COOKIEDOMAIN);
-		stopSession();
-		header("Location: " . BASEURL . SCRIPT);
-		dbDisconnect();
-		exit;
-	}
 	if($mode == "statgraphday" ||
 	   $mode == "statgraphdayconcuruser" ||
 	   $mode == "statgraphdayconcurblade" ||
@@ -8684,7 +8747,7 @@ function sendHeaders() {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function printHTMLHeader() {
-	global $mode, $user, $authed, $oldmode, $viewmode, $HTMLheader;
+	global $mode, $user, $authed, $oldmode, $HTMLheader, $contdata;
 	global $printedHTMLheader, $docreaders, $skin, $noHTMLwrappers, $actions;
 	if($printedHTMLheader)
 		return;
@@ -8708,7 +8771,9 @@ function printHTMLHeader() {
 	if($mode != 'selectauth' && $mode != 'submitLogin')
 		$HTMLheader .= getHeader($refresh);
 
-	if(! in_array($mode, $noHTMLwrappers)) {
+	if(! in_array($mode, $noHTMLwrappers) &&
+	   (! array_key_exists('noHTMLwrappers', $contdata) ||
+	    $contdata['noHTMLwrappers'] == 0)) {
 		print $HTMLheader;
 		if($mode != 'inmaintenance')
 			print maintenanceNotice();
@@ -8731,7 +8796,7 @@ function printHTMLHeader() {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function getNavMenu($inclogout, $inchome, $homeurl=HOMEURL) {
-	global $user, $viewmode, $docreaders, $authed, $userlookupUsers, $skin;
+	global $user, $docreaders, $authed, $userlookupUsers, $skin;
 	global $mode;
 	if($authed && $mode != 'expiredemouser')
 		$computermetadata = getUserComputerMetaData();
@@ -8796,8 +8861,8 @@ function getNavMenu($inclogout, $inchome, $homeurl=HOMEURL) {
 		$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=viewNodes\">";
 		$rt .= "Privileges</a></li>\n";
 	}
-	if($viewmode == ADMIN_DEVELOPER ||
-	   in_array($user['id'], $userlookupUsers)) {
+	if(checkUserHasPerm('User Lookup (global)') ||
+	   checkUserHasPerm('User Lookup (affiliation only)')) {
 		$rt .= menulistLI('userLookup');
 		$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=userLookup\">";
 		$rt .= "User Lookup</a></li>\n";
@@ -8807,7 +8872,7 @@ function getNavMenu($inclogout, $inchome, $homeurl=HOMEURL) {
 		$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=editVMInfo\">";
 		$rt .= "Virtual Hosts</a></li>\n";
 	}
-	if($viewmode == ADMIN_DEVELOPER) {
+	if(checkUserHasPerm('Schedule Site Maintenance')) {
 		$rt .= menulistLI('sitemaintenance');
 		$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=siteMaintenance\">";
 		$rt .= "Site Maintenance</a></li>\n";
@@ -8815,7 +8880,8 @@ function getNavMenu($inclogout, $inchome, $homeurl=HOMEURL) {
 	$rt .= menulistLI('statistics');
 	$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=selectstats\">";
 	$rt .= "Statistics</a></li>\n";
-	if($viewmode == ADMIN_DEVELOPER) {
+	if(checkUserHasPerm('View Dashboard (global)') ||
+	   checkUserHasPerm('View Dashboard (affiliation only)')) {
 		$rt .= menulistLI('dashboard');
 		$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=dashboard\">";
 		$rt .= "Dashboard</a></li>\n";
@@ -8885,6 +8951,8 @@ function getDojoHTML($refresh) {
 			                      'dijit.form.TextBox',
 			                      'dijit.Tooltip',
 			                      'dijit.Dialog',
+			                      'dijit.layout.ContentPane',
+			                      'dijit.layout.TabContainer',
 			                      'dojo.parser');
 			break;
 		case 'newRequest':

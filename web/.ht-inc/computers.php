@@ -53,7 +53,7 @@ define("VMAVAILERR", 1 << 11);
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function selectComputers() {
-	global $viewmode, $user;
+	global $user;
 	$test = getComputers();
 	if(empty($test)) {
 		addComputerPrompt();
@@ -1135,7 +1135,7 @@ function submitDeleteComputer() {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function bulkAddComputer() {
-	global $submitErr, $viewmode;
+	global $submitErr;
 
 	$data = processBulkComputerInput(0);
 	$data2 = processComputerInput2(); //yes, this is somewhat redundant, but it
@@ -1378,7 +1378,7 @@ function confirmAddBulkComputers() {
 	print "    <TD>" . $data["startipaddress"] . " - ";
 	print $data["endipaddress"] . "</TD>\n";
 	print "  </TR>\n";
-	if(! empty($data['startpraddress'])) {
+	if(! empty($data['startpripaddress'])) {
 		print "  <TR>\n";
 		print "    <TH align=right nowrap>Private IP Addresses:</TH>\n";
 		print "    <TD>" . $data["startpripaddress"] . " - ";
@@ -3227,7 +3227,7 @@ function processComputerInput3() {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function processBulkComputerInput($checks=1) {
-	global $submitErr, $submitErrMsg, $viewmode;
+	global $submitErr, $submitErrMsg;
 	$return = processComputerInput2();
 	$ipaddress = getContinuationVar("ipaddress", processInputVar("ipaddress", ARG_STRING));
 	if(! empty($ipaddress)) {
@@ -3377,8 +3377,7 @@ function processBulkComputerInput($checks=1) {
 	   $submitErrMsg[ENDHOSTVALERR] = "The number of IP addresses ($numipaddrs) "
 		      . "does not match the number of hostnames ($numhostnames).";
 	}
-	if($viewmode == ADMIN_DEVELOPER &&
-	   ! empty($return['startpripaddress']) && ! empty($return['endpripaddress']) &&
+	if(! empty($return['startpripaddress']) && ! empty($return['endpripaddress']) &&
 	   (! ($submitErr & IPADDRERR2 || $submitErr & IPADDRERR4) && 
 	   ! empty($endpraddrArr) &&
 		($endaddrArr[3] - $startaddrArr[3] != $endpraddrArr[3] - $startpraddrArr[3]))) {

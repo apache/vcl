@@ -43,7 +43,7 @@ define("MAXOVERLAPERR", 1 << 6);
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function viewGroups() {
-	global $viewmode, $user, $mode;
+	global $user, $mode;
 	$modetype = getContinuationVar("type");
 
 	$usergroups = getUserGroups(1);
@@ -92,7 +92,7 @@ function viewGroups() {
 	print "    <TH>Initial Max Time (minutes)</TH>\n";
 	print "    <TH>Total Max Time (minutes)</TH>\n";
 	print "    <TH>Max Extend Time (minutes)</TH>\n";
-	if($viewmode == ADMIN_DEVELOPER)
+	if(checkUserHasPerm('Set Overlapping Reservation Count'))
 		print "    <TH>Max Overlapping Reservations</TH>\n";
 	print "  </TR>\n";
 	print "  <TR>\n";
@@ -118,7 +118,7 @@ function viewGroups() {
 	print "</TD>\n";
 	print "    <TD><INPUT type=text name=maxextend maxlength=4 size=4 value=30>";
 	print "</TD>\n";
-	if($viewmode == ADMIN_DEVELOPER) {
+	if(checkUserHasPerm('Set Overlapping Reservation Count')) {
 		print "    <TD><INPUT type=text name=overlap maxlength=4 size=4 value=0>";
 		print "</TD>\n";
 	}
@@ -174,7 +174,7 @@ function viewGroups() {
 		print "    <TD align=center>{$usergroups[$id]["initialmaxtime"]}</TD>\n";
 		print "    <TD align=center>{$usergroups[$id]["totalmaxtime"]}</TD>\n";
 		print "    <TD align=center>{$usergroups[$id]["maxextendtime"]}</TD>\n";
-		if($viewmode == ADMIN_DEVELOPER)
+		if(checkUserHasPerm('Set Overlapping Reservation Count'))
 			print "    <TD align=center>{$usergroups[$id]["overlapResCount"]}</TD>\n";
 		print "  </TR>\n";
 	}
@@ -280,7 +280,7 @@ function viewGroups() {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function editOrAddGroup($state) {
-	global $submitErr, $user, $mode, $viewmode;
+	global $submitErr, $user, $mode;
 
 	$usergroups = getUserGroups(1);
 	if($user['showallgroups'])
@@ -446,7 +446,7 @@ function editOrAddGroup($state) {
 			printSubmitErr(MAXEXTENDERR);
 			print "</TD>\n";
 			print "  </TR>\n";
-			if($viewmode == ADMIN_DEVELOPER) {
+			if(checkUserHasPerm('Set Overlapping Reservation Count')) {
 				print "  <TR>\n";
 				print "    <TH align=right>Max Overlapping Reservations:</TH>\n";
 				print "    <TD><INPUT type=text name=overlap value=\"";
@@ -568,7 +568,7 @@ function editOrAddGroup($state) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function processGroupInput($checks=1) {
-	global $submitErr, $submitErrMsg, $user, $viewmode;
+	global $submitErr, $submitErrMsg, $user;
 	$return = array();
 	$return["groupid"] = getContinuationVar("groupid");
 	$return["type"] = getContinuationVar("type");
@@ -628,7 +628,7 @@ function processGroupInput($checks=1) {
 		$submitErrMsg[MAXEXTENDERR] = "Max extend time must be at least 15 "
 		                            . "minutes";
 	}
-	if($viewmode == ADMIN_DEVELOPER &&
+	if(checkUserHasPerm('Set Overlapping Reservation Count') &&
 	   $return["type"] == "user" &&
 	   ($return["overlap"] < 0 ||
 	   $return["overlap"] == 1)) {
@@ -685,7 +685,6 @@ function checkForGroupName($name, $type, $id, $extraid) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function updateGroup($data) {
-	global $viewmode;
 	if($data["type"] == "user") {
 		$ownerid = getUserlistID($data["owner"]);
 		$query = "UPDATE usergroup "
@@ -695,7 +694,7 @@ function updateGroup($data) {
 		       .     "editusergroupid = {$data["editgroupid"]}, "
 		       .     "initialmaxtime = {$data["initialmax"]}, "
 		       .     "totalmaxtime = {$data["totalmax"]}, ";
-		if($viewmode == ADMIN_DEVELOPER)
+		if(checkUserHasPerm('Set Overlapping Reservation Count'))
 			$query .= "overlapResCount = {$data["overlap"]}, ";
 		$query .=    "maxextendtime = {$data["maxextend"]} "
 		       . "WHERE id = {$data["groupid"]}";
@@ -722,7 +721,6 @@ function updateGroup($data) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function addGroup($data) {
-	global $viewmode;
 	if($data["type"] == "user") {
 		if(! array_key_exists('custom', $data))
 			$data['custom'] = 1;
@@ -740,7 +738,7 @@ function addGroup($data) {
 		       .         "custom, "
 		       .         "initialmaxtime, "
 		       .         "totalmaxtime, ";
-		if($viewmode == ADMIN_DEVELOPER)
+		if(checkUserHasPerm('Set Overlapping Reservation Count'))
 			$query .=     "overlapResCount, ";
 		$query .=        "maxextendtime) "
 				 . "VALUES ('{$data["name"]}', "
@@ -750,7 +748,7 @@ function addGroup($data) {
 		       .        "{$data['custom']}, "
 		       .        "{$data["initialmax"]}, "
 		       .        "{$data["totalmax"]}, ";
-		if($viewmode == ADMIN_DEVELOPER)
+		if(checkUserHasPerm('Set Overlapping Reservation Count'))
 			$query .=    "{$data["overlap"]}, ";
 		$query .=       "{$data["maxextend"]})";
 	}
@@ -824,7 +822,7 @@ function checkForGroupUsage($groupid, $type) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function confirmEditOrAddGroup($state) {
-	global $submitErr, $user, $viewmode;
+	global $submitErr, $user;
 
 	$data = processGroupInput(1);
 
@@ -908,7 +906,7 @@ function confirmEditOrAddGroup($state) {
 		print "    <TH align=right>Max Extend Time (minutes):</TH>\n";
 		print "    <TD>{$data["maxextend"]}</TD>\n";
 		print "  </TR>\n";
-		if($viewmode == ADMIN_DEVELOPER) {
+		if(checkUserHasPerm('Set Overlapping Reservation Count')) {
 			print "  <TR>\n";
 			print "    <TH align=right>Max Overlapping Reservations:</TH>\n";
 			print "    <TD>{$data["overlap"]}</TD>\n";
@@ -1125,7 +1123,7 @@ function deleteGroupUser() {
 ///
 /// \fn jsonGetGroupInfo()
 ///
-/// \brief 
+/// \brief gets members of submitted resource group and returns in JSON format
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function jsonGetGroupInfo() {

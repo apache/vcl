@@ -31,7 +31,7 @@ $actions['mode']['viewdocs'] = "viewDocs";
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function viewDocs() {
-	global $user, $docreaders, $viewmode;
+	global $user, $docreaders;
 	if(! (in_array("userGrant", $user["privileges"]) ||
 		in_array("resourceGrant", $user["privileges"]) ||
 		in_array("nodeAdmin", $user["privileges"]) ||
@@ -59,7 +59,7 @@ function viewDocs() {
 	while($row = mysql_fetch_assoc($qh))
 		$docs[$row['name']] = $row['title'];
 
-	if($viewmode == ADMIN_DEVELOPER || in_array($user['id'], $doceditors)) {
+	if(in_array($user['id'], $doceditors)) {
 		$cdata = array('submode' => 'newpage');
 		$cont = addContinuationsEntry('editdoc', $cdata);
 		print "[ <a href=\"" . BASEURL . SCRIPT . "?continuation=$cont\">";
@@ -127,7 +127,7 @@ function showXmlrpcExample() {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function showDatabaseDoc($item) {
-	global $viewmode, $user;
+	global $user;
 	$query = "SELECT title, data FROM documentation WHERE name = '$item'";
 	$qh = doQuery($query, 101);
 	if(! ($row = mysql_fetch_assoc($qh))) {
@@ -135,7 +135,7 @@ function showDatabaseDoc($item) {
 		print "Failed to retrieve documentation for \"$item\".<br>\n";
 		return;
 	}
-	if($viewmode == ADMIN_DEVELOPER || in_array($user['id'], $doceditors)) {
+	if(in_array($user['id'], $doceditors)) {
 		$cdata = array('item' => $item,
 		               'submode' => 'newpage');
 		$cont = addContinuationsEntry('editdoc', $cdata);
@@ -166,9 +166,9 @@ function showDatabaseDoc($item) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function editDoc() {
-	global $viewmode, $user;
+	global $user;
 	$item = getContinuationVar('item');
-	if($viewmode != ADMIN_DEVELOPER && ! in_array($user['id'], $doceditors)) {
+	if(! in_array($user['id'], $doceditors)) {
 		showDatabaseDoc($item);
 		return;
 	}
@@ -223,10 +223,10 @@ function editDoc() {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function confirmEditDoc() {
-	global $viewmode, $mysql_link_vcl, $contdata;
+	global $mysql_link_vcl, $contdata;
 	$item = getContinuationVar('item');
 	$newedit = getContinuationVar('newedit');
-	if($viewmode != ADMIN_DEVELOPER && ! in_array($user['id'], $doceditors)) {
+	if(! in_array($user['id'], $doceditors)) {
 		showDatabaseDoc($item);
 		return;
 	}
@@ -271,10 +271,10 @@ function confirmEditDoc() {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function submitEditDoc() {
-	global $viewmode, $mysql_link_vcl;
+	global $mysql_link_vcl;
 	$item = getContinuationVar('item');
 	$newedit = getContinuationVar('newedit');
-	if($viewmode != ADMIN_DEVELOPER && ! in_array($user['id'], $doceditors)) {
+	if(! in_array($user['id'], $doceditors)) {
 		showDatabaseDoc($item);
 		return;
 	}
@@ -331,9 +331,8 @@ function submitEditDoc() {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function confirmDeleteDoc() {
-	global $viewmode;
 	$item = getContinuationVar('item');
-	if($viewmode != ADMIN_DEVELOPER && ! in_array($user['id'], $doceditors)) {
+	if(! in_array($user['id'], $doceditors)) {
 		showDatabaseDoc($item);
 		return;
 	}
@@ -376,9 +375,8 @@ function confirmDeleteDoc() {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function submitDeleteDoc() {
-	global $viewmode;
 	$item = getContinuationVar('item');
-	if($viewmode != ADMIN_DEVELOPER && ! in_array($user['id'], $doceditors)) {
+	if(! in_array($user['id'], $doceditors)) {
 		showDatabaseDoc($item);
 		return;
 	}

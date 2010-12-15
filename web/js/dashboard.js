@@ -43,8 +43,10 @@ function generalReqCB(data, ioArgs) {
 }
 
 function updateDashboard() {
-	var cont = dojo.byId('updatecont').value;
-	RPCwrapper({continuation: cont}, updateDashboardCB, 1);
+	var data = {continuation: dojo.byId('updatecont').value};
+	if(dojo.byId('affilid'))
+		data['affilid'] = dojo.byId('affilid').value;
+	RPCwrapper(data, updateDashboardCB, 1);
 }
 
 function updateDashboardCB(data, ioArgs) {
@@ -52,6 +54,7 @@ function updateDashboardCB(data, ioArgs) {
 	updateStatus(data.items.status);
 	updateTopImages(data.items.topimages);
 	updateTopLongImages(data.items.toplongimages);
+	updateTopPastImages(data.items.toppastimages);
 	updateTopFailed(data.items.topfailed);
 	updateTopFailedComputers(data.items.topfailedcomputers);
 	updateResChart(data.items.reschart);
@@ -111,6 +114,24 @@ function updateTopImages(data) {
 
 function updateTopLongImages(data) {
 	var obj = dojo.byId('toplongimages');
+	if(data.length == 0) {
+		obj.innerHTML = 'No recent reservations';
+		return;
+	}
+	var txt = '<table>';
+	for(var i = 0; i < data.length; i++) {
+		txt += '<tr><th align="right">'
+		    + data[i].prettyname
+		    + '</th><td>'
+		    + data[i].count
+		    + '</td></tr>';
+	}
+	txt += '</table>';
+	obj.innerHTML = txt;
+}
+
+function updateTopPastImages(data) {
+	var obj = dojo.byId('toppastimages');
 	if(data.length == 0) {
 		obj.innerHTML = 'No recent reservations';
 		return;

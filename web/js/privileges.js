@@ -514,3 +514,95 @@ function groupMembersCB(data, ioArgs) {
 	if(currentOver == domid)
 		tt.open(dojo.byId(domid));
 }
+
+function selectUserGroup(cont) {
+	var data = {continuation: cont,
+	            groupid: dojo.byId('editusergroupid').value};
+	RPCwrapper(data, selectUserGroupCB, 1);
+}
+
+function selectUserGroupCB(data, ioArgs) {
+	if(data.items.failed) {
+		alert('You are not authorized to manage this group');
+		return;
+	}
+	dojo.removeClass('usergroupprivs', 'groupprivshidden');
+	dijit.byId('usergroupcopyprivsbtn').setAttribute('disabled', false);
+	dijit.byId('usergroupsaveprivsbtn').setAttribute('disabled', false);
+	var items = dojo.query('#usergroupprivs input[type=checkbox]');
+	for(var i = 0; i < items.length; i++) {
+		dijit.byId(items[i].id).setAttribute('checked', false);
+	}
+	for(var i = 0; i < data.items.perms.length; i++) {
+		obj = dijit.byId('grouptype' + data.items.perms[i]);
+		obj.setAttribute('checked', true);
+	}
+}
+
+function showUserGroupPrivHelp(help, id) {
+	dojo.byId('groupprivhelp').innerHTML = help;
+	dojo.addClass('grouptypespan' + id, 'hlperm');
+}
+
+function clearUserGroupPrivHelp(id) {
+	dojo.byId('groupprivhelp').innerHTML = '';
+	dojo.removeClass('grouptypespan' + id, 'hlperm');
+}
+
+function copyUserGroupPrivs(cont) {
+	var data = {continuation: cont,
+	            groupid: dojo.byId('copyusergroupid').value};
+	RPCwrapper(data, copyUserGroupPrivsCB, 1);
+}
+
+function copyUserGroupPrivsCB(data, ioArgs) {
+	if(data.items.failed) {
+		alert('You are not authorized to manage this group');
+		return;
+	}
+	var items = dojo.query('#usergroupprivs input[type=checkbox]');
+	for(var i = 0; i < items.length; i++) {
+		dijit.byId(items[i].id).setAttribute('checked', false);
+	}
+	for(var i = 0; i < data.items.perms.length; i++) {
+		obj = dijit.byId('grouptype' + data.items.perms[i]);
+		obj.setAttribute('checked', true);
+	}
+}
+
+function saveUserGroupPrivs(cont) {
+	var permids = new Array();
+	var items = dojo.query('#usergroupprivs input[type=checkbox]:checked');
+	for(var i = 0; i < items.length; i++) {
+		permids.push(items[i].name);
+	}
+	var permids2 = permids.join(',');
+	var data = {continuation: cont,
+	            permids: permids2,
+	            groupid: dojo.byId('editusergroupid').value};
+	RPCwrapper(data, saveUserGroupPrivsCB, 1);
+}
+
+function saveUserGroupPrivsCB(data, ioArgs) {
+	if(data.items.failed) {
+		dojo.byId('userpermsubmitstatus').innerHTML = "Failed to save permissions: " + data.items.failed;
+		dojo.addClass('userpermsubmitstatus', 'statusfailed');
+	}
+	else if(data.items.success) {
+		dojo.byId('userpermsubmitstatus').innerHTML = "Permissions successfully saved";
+		dojo.addClass('userpermsubmitstatus', 'statussuccess');
+	}
+	setTimeout(clearUserPrivStatus, 10000);
+}
+
+function clearUserPrivStatus() {
+	dojo.byId('userpermsubmitstatus').innerHTML = "";
+	dojo.removeClass('userpermsubmitstatus', 'statussuccess');
+	dojo.removeClass('userpermsubmitstatus', 'statusfailed');
+}
+
+function hideUserGroupPrivs() {
+	dojo.addClass('usergroupprivs', 'groupprivshidden');
+	dijit.byId('usergroupcopyprivsbtn').setAttribute('disabled', true);
+	dijit.byId('usergroupsaveprivsbtn').setAttribute('disabled', true);
+}

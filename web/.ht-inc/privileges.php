@@ -49,8 +49,14 @@ function viewNodes() {
 	}
 
 	$hasNodeAdmin = checkUserHasPriv("nodeAdmin", $user["id"], $activeNode);
+	$hasManagePerms = checkUserHasPerm('Manage Additional User Group Permissions');
 
 	# tree
+	if($hasManagePerms) {
+		print "<div id=\"mainTabContainer\" dojoType=\"dijit.layout.TabContainer\"\n";
+		print "     style=\"width:800px;height:600px\">\n";
+		print "<div id=\"privtreetab\" dojoType=\"dijit.layout.ContentPane\" title=\"Privilege Tree\">\n";
+	}
 	print "<H2>Privilege Tree</H2>\n";
 	$cont = addContinuationsEntry('JSONprivnodelist');
 	print "<div dojoType=\"dojo.data.ItemFileWriteStore\" url=\"" . BASEURL . SCRIPT . "?continuation=$cont\" jsid=\"nodestore\" id=\"nodestore\"></div>\n";
@@ -632,6 +638,67 @@ function viewNodes() {
 	print "    dojo.addClass(dijit.byId('workingDialog').titleBar, 'hidden');\n";
 	print "  </script>\n";
 	print "</div>\n";
+	if(! $hasManagePerms)
+		return;
+	print "</div>\n"; # end privtree tab
+
+	print "<div id=\"userpermtab\" dojoType=\"dijit.layout.ContentPane\" title=\"Additional User Permissions\">\n";
+	print "<h2>Additional User Group Permissions</h2>\n";
+	print "There are additional permisssions that can be assigned to user<br>\n";
+	print "groups that are not specific to any nodes in the privilege tree.<br>\n";
+	print "Use this portion of the site to manage those permissions.<br><br>\n";
+	printSelectInput("editusergroupid", $groups, -1, 0, 0, 'editusergroupid', 'onChange="hideUserGroupPrivs();"');
+	$cont = addContinuationsEntry('AJpermSelectUserGroup');
+	print "<button dojoType=\"dijit.form.Button\">\n";
+	print "	Manage User Group Permissions\n";
+	print "	<script type=\"dojo/method\" event=onClick>\n";
+	print "		selectUserGroup('$cont');\n";
+	print "	</script>\n";
+	print "</button>\n";
+	print "<div id=\"extrapermsdiv\">\n";
+	print "<table summary=\"\">\n";
+	print "<tr>\n";
+	print "<td nowrap>\n";
+	print "<div id=\"usergroupprivs\" class=\"groupprivshidden\">\n";
+	$privtypes = getUserGroupPrivTypes();
+	foreach($privtypes as $id => $type) {
+		print "<span onMouseOver=\"showUserGroupPrivHelp('{$type['help']}', $id);\" \n";
+		print "onMouseOut=\"clearUserGroupPrivHelp($id);\" id=\"grouptypespan$id\">\n";
+		print "<input id=\"grouptype$id\" dojoType=\"dijit.form.CheckBox\" ";
+		print "value=\"1\" name=\"$id\"><label for=\"grouptype$id\">{$type['name']}";
+		print "</label></span><br>\n";
+	}
+	print "</div>\n";
+	print "</td>\n";
+	print "<td id=\"groupprivhelpcell\">\n";
+	print "<fieldset style=\"height: 100%\";>\n";
+	print "<legend>Permission Description</legend>\n";
+	print "<div id=\"groupprivhelp\"></div>\n";
+	print "</fieldset>\n";
+	print "</td>\n";
+	print "</tr>\n";
+	print "</table><br><br>\n";
+	print "Copy permissions from user group: ";
+	printSelectInput("copyusergroupid", $groups, -1, 0, 0, 'copyusergroupid');
+	$cont = addContinuationsEntry('AJpermSelectUserGroup');
+	print "<button dojoType=\"dijit.form.Button\" id=\"usergroupcopyprivsbtn\" disabled>\n";
+	print "	Copy Permissions\n";
+	print "	<script type=\"dojo/method\" event=onClick>\n";
+	print "		copyUserGroupPrivs('$cont');\n";
+	print "	</script>\n";
+	print "</button><br><br>\n";
+	$cont = addContinuationsEntry('AJsaveUserGroupPrivs');
+	print "<button dojoType=\"dijit.form.Button\" id=\"usergroupsaveprivsbtn\" disabled>\n";
+	print "	Save Selected Permissions\n";
+	print "	<script type=\"dojo/method\" event=onClick>\n";
+	print "		saveUserGroupPrivs('$cont');\n";
+	print "	</script>\n";
+	print "</button><br>\n";
+	print "<span id=\"userpermsubmitstatus\"></span>\n";
+	print "</div>\n";
+	print "</div>\n"; # end userperm tab
+
+	print "</div>\n"; # end tab container
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1075,7 +1142,7 @@ function AJsubmitRenameNode() {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function userLookup() {
-	global $user, $viewmode;
+	global $user;
 	$userid = processInputVar("userid", ARG_STRING);
 	$force = processInputVar('force', ARG_NUMERIC, 0);
 	print "<div align=center>\n";
@@ -1107,7 +1174,7 @@ function userLookup() {
 			print "specified affiliation is unknown<br>\n";
 			return;
 		}
-		if($viewmode != ADMIN_DEVELOPER &&
+		if(! checkUserHasPerm('User Lookup (global)') &&
 		   $user['affiliationid'] != $affilid) {
 			print "You are only allowed to look up users from your own affiliation.<br>\n";
 			return;
@@ -1160,16 +1227,23 @@ function userLookup() {
 			print "  </TR>\n";
 		}
 		print "  <TR>\n";
-		print "    <TH align=right>Admin Level:</TH>\n";
-		print "    <TD>{$userdata["adminlevel"]}</TD>\n";
-		print "  </TR>\n";
-		print "  <TR>\n";
 		print "    <TH align=right style=\"vertical-align: top\">Groups:</TH>\n";
 		print "    <TD>\n";
 		uasort($userdata["groups"], "sortKeepIndex");
 		foreach($userdata["groups"] as $group) {
 			print "      $group<br>\n";
 		}
+		print "    </TD>\n";
+		print "  </TR>\n";
+		print "  <TR>\n";
+		print "    <TH align=right style=\"vertical-align: top\">User Group Permissions:</TH>\n";
+		print "    <TD>\n";
+		if(count($userdata['groupperms'])) {
+			foreach($userdata['groupperms'] as $perm)
+				print "      $perm<br>\n";
+		}
+		else
+			print "      No additional user group permissions\n";
 		print "    </TD>\n";
 		print "  </TR>\n";
 		print "  <TR>\n";
@@ -1773,6 +1847,8 @@ function getResourcePrivRowHTML($privname, $rownum, $privs, $types,
 		   ! array_key_exists($resourcegroups[$id]["ownerid"], $user["groups"])) {
 			$text .= "<TD><img src=images/blank.gif></TD>\n";
 		}
+		// if group type is schedule, don't print available or manageMapping checkboxes
+		// if group type is managementnode, don't print available checkbox
 		elseif(($grptype == 'schedule' && ($type == 'available' || $type == 'manageMapping')) ||
 		      ($grptype == 'managementnode' && $type == 'available')) {
 			$text .= "<TD><img src=images/blank.gif></TD>\n";
@@ -2530,6 +2606,68 @@ function checkUserHasPriv($priv, $uid, $node, $privs=0, $cascadePrivs=0) {
 	}
 	$_SESSION['userhaspriv'][$key] = 0;
 	return 0;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn AJpermSelectUserGroup()
+///
+/// \brief gets permissions granted to a user group and sends it in JSON format
+///
+////////////////////////////////////////////////////////////////////////////////
+function AJpermSelectUserGroup() {
+	global $user;
+	$groups = getUserGroups(0, $user['affiliationid']);
+	$groupid = processInputVar('groupid', ARG_NUMERIC);
+	if(! array_key_exists($groupid, $groups)) {
+		sendJSON(array('failed' => 'noaccess'));
+		return;
+	}
+	$permdata = getUserGroupPrivs($groupid);
+	$perms = array();
+	foreach($permdata as $perm)
+		$perms[] = $perm['permid'];
+	sendJSON(array('perms' => $perms));
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn AJsaveUserGroupPrivs()
+///
+/// \brief saves submitted permissions for user group
+///
+////////////////////////////////////////////////////////////////////////////////
+function AJsaveUserGroupPrivs() {
+	global $user;
+	$groups = getUserGroups(0, $user['affiliationid']);
+	$groupid = processInputVar('groupid', ARG_NUMERIC);
+	if(! array_key_exists($groupid, $groups)) {
+		sendJSON(array('failed' => 'noaccess'));
+		return;
+	}
+	$permids = processInputVar('permids', ARG_STRING);
+	if(! preg_match('/^[0-9,]*$/', $permids)) {
+		sendJSON(array('failed' => 'invalid input'));
+		return;
+	}
+	$perms = explode(',', $permids);
+	$query = "DELETE FROM usergrouppriv WHERE usergroupid = $groupid";
+	doQuery($query, 101);
+	if(empty($perms[0])) {
+		sendJSON(array('success' => 1));
+		return;
+	}
+	$values = array();
+	foreach($perms as $permid)
+		$values[] = "($groupid, $permid)";
+	$allvals = implode(',', $values);
+	$query = "INSERT INTO usergrouppriv "
+	       .        "(usergroupid, "
+	       .        "userprivtypeid) "
+	       . "VALUES $allvals";
+	doQuery($query, 101);
+	sendJSON(array('success' => 1));
+	$_SESSION['user']["groupperms"] = getUsersGroupPerms(array_keys($user['groups']));
 }
 
 ?>

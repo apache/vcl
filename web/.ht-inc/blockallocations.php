@@ -30,8 +30,8 @@
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function blockAllocations() {
-	global $viewmode, $user;
-	if($viewmode != ADMIN_DEVELOPER) {
+	global $user;
+	if(! checkUserHasPerm('Manage Block Allocations')) {
 		print "<H2>Block Allocations</H2>\n";
 		print "Block Allocations are a way to have a set of machines preloaded with a particular environment at specified times and made available to a specific group of users. This is very useful for classroom use and for workshops. They can be made available on a repeating schedule such as when a course meets each week. Block Allocations only allocate machines for the group of users - they do not create the actual, end user reservations for the machines. All users still must log in to the VCL web site and make their own reservations DURING the period a block allocation is active.<br><br>\n";
 		print "<button dojoType=\"dijit.form.Button\" type=\"button\">\n";
