@@ -3564,6 +3564,21 @@ function isAvailable($images, $imageid, $imagerevisionid, $start, $end,
 		}
 		// otherwise, build a list of computers
 		else {
+			# determine if image is bare metal or virtual
+			$query = "SELECT OS.installtype "
+			       . "FROM image i "
+			       . "LEFT JOIN OS ON (i.OSid = OS.id) "
+			       . "WHERE i.id = $imageid";
+			$qh = doQuery($query, 101);
+			if(! ($row = mysql_fetch_assoc($qh))) {
+				semUnlock();
+				return 0;
+			}
+			if(preg_match('/(vmware)/', $row['installtype']))
+				$virtual = 1;
+			else
+				$virtual = 0;
+
 			# get list of available computers
 			if(! $ignoreprivileges) {
 				$resources = getUserResources(array("imageAdmin", "imageCheckOut"),
@@ -3573,15 +3588,22 @@ function isAvailable($images, $imageid, $imagerevisionid, $start, $end,
 			}
 			$alloccompids = implode(",", $allocatedcompids);
 
+			# get list of computers we can provision image to
+
 			$schedules = implode(',', $scheduleids);
 
+			#image.OSid->OS.installtype->OSinstalltype.id->provisioningOSinstalltype.provisioningid->computer.provisioningid
 			$query = "SELECT DISTINCT c.id, "
 			       .                 "c.currentimageid, "
 			       .                 "c.imagerevisionid "
-			       . "FROM computer c, "
-			       .      "image i, "
-			       .      "state s "
-			       . "WHERE c.scheduleid IN ($schedules) AND "
+			       . "FROM state s, "
+			       .      "image i "
+			       . "LEFT JOIN OS o ON (o.id = i.OSid) "
+			       . "LEFT JOIN OSinstalltype oi ON (oi.name = o.installtype) "
+			       . "LEFT JOIN provisioningOSinstalltype poi ON (poi.OSinstalltypeid = oi.id) "
+			       . "LEFT JOIN computer c ON (poi.provisioningid = c.provisioningid) "
+			       . "WHERE i.id = $imageid AND "
+			       .       "c.scheduleid IN ($schedules) AND "
 			       .       "c.platformid = $platformid AND "
 			       .       "c.stateid = s.id AND "
 			       .       "s.name != 'maintenance' AND "
@@ -3593,8 +3615,7 @@ function isAvailable($images, $imageid, $imagerevisionid, $start, $end,
 				       .    "s.name != 'reload' AND "
 				       .    "s.name != 'timeout' AND "
 				       .    "s.name != 'inuse' AND ";
-			$query .=      "i.id = $imageid AND "
-			       .       "c.RAM >= i.minram AND "
+			$query .=      "c.RAM >= i.minram AND "
 			       .       "c.procnumber >= i.minprocnumber AND "
 			       .       "c.procspeed >= i.minprocspeed AND "
 			       .       "c.network >= i.minnetwork AND "
@@ -3605,7 +3626,8 @@ function isAvailable($images, $imageid, $imagerevisionid, $start, $end,
 			       .       "c.id NOT IN ($alloccompids) "
 			       . "ORDER BY (c.procspeed * c.procnumber) DESC, "
 			       .          "RAM DESC, "
-			       .          "network DESC";
+					 .          "network DESC";
+
 			$qh = doQuery($query, 129);
 			while($row = mysql_fetch_assoc($qh)) {
 				array_push($computerids, $row['id']);
@@ -3649,6 +3671,46 @@ function isAvailable($images, $imageid, $imagerevisionid, $start, $end,
 			$usedBlockCompids = getUsedBlockComputerids($start, $end);
 			$computerids = array_diff($computerids, $usedBlockCompids);
 			$currentids = array_diff($currentids, $usedBlockCompids);
+		}
+
+		if($virtual && empty($currentids) && ! empty($computerids)) {
+			# find computers whose hosts can handle the required RAM - we don't
+			#   need to do this if there are VMs with the requested image already
+			#   available because they would already fit within the host's available
+			#   RAM
+
+			$query = "CREATE TEMPORARY TABLE VMhostCheck ( "
+			       .    "RAM mediumint unsigned NOT NULL, "
+			       .    "allocRAM mediumint unsigned NOT NULL, "
+			       .    "vmhostid smallint unsigned NOT NULL "
+			       . ") ENGINE=MEMORY";
+			doQuery($query, 101);
+
+			$query = "INSERT INTO VMhostCheck "
+			       . "SELECT c.RAM, "
+			       .        "SUM(i.minram), "
+			       .        "v.id "
+			       . "FROM vmhost v "
+			       . "LEFT JOIN computer c ON (v.computerid = c.id) "
+			       . "LEFT JOIN computer c2 ON (v.id = c2.vmhostid) "
+			       . "LEFT JOIN image i ON (c2.currentimageid = i.id) "
+			       . "WHERE c.stateid = 20 "
+			       . "GROUP BY c.id";
+			doQuery($query, 101);
+
+			$inids = implode(',', $computerids);
+			// if want overbooking, modify the last part of the WHERE clause
+			$query = "SELECT c.id "
+			       . "FROM VMhostCheck v "
+			       . "LEFT JOIN computer c ON (v.vmhostid = c.vmhostid) "
+			       . "LEFT JOIN image i ON (c.currentimageid = i.id) "
+			       . "WHERE c.id IN ($inids) AND "
+			       .       "(v.allocRAM - i.minram + {$images[$imageid]['minram']}) < v.RAM";
+			$qh = doQuery($query, 101);
+			$newcompids = array();
+			while($row = mysql_fetch_assoc($qh))
+				$newcompids[] = $row['id'];
+			$computerids = $newcompids;
 		}
 
 		$comparr = allocComputer($blockids, $currentids, $computerids,
