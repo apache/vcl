@@ -626,6 +626,18 @@ CREATE TABLE IF NOT EXISTS `provisioning` (
 
 -- --------------------------------------------------------
 
+--
+-- Table structure for table `provisioningOSinstalltype`
+--
+
+CREATE TABLE IF NOT EXISTS `provisioningOSinstalltype` (
+  `provisioningid` smallint(5) unsigned NOT NULL,
+  `OSinstalltypeid` tinyint(3) unsigned NOT NULL,
+  PRIMARY KEY  (`provisioningid`,`OSinstalltypeid`)
+) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
+
+-- --------------------------------------------------------
+
 -- 
 -- Table structure for table `querylog`
 -- 
@@ -1365,6 +1377,20 @@ INSERT INTO `provisioning` (`id`, `name`, `prettyname`, `moduleid`) VALUES
 (5, 'xcat_21', 'xCAT 2.1', 11),
 (6, 'xcat_2x', 'xCAT 2.x', 20),
 (7, 'vmware', 'VMware', 21);
+
+--
+-- Dumping data for table `provisioningOSinstalltype`
+--
+
+INSERT INTO `provisioningOSinstalltype` (`provisioningid`, `OSinstalltypeid`) VALUES
+(1, 1),
+(5, 1),
+(6, 1),
+(1, 2),
+(5, 2),
+(6, 2),
+(3, 3),
+(7, 4);
 
 -- 
 -- Dumping data for table `resource`
