@@ -159,10 +159,10 @@ function newReservation() {
 	print "onclick='updateWaitTime(0);' value=now checked>Now<br>\n";
 	print "&nbsp;&nbsp;&nbsp;<INPUT type=radio name=time value=future ";
 	print "onclick='updateWaitTime(0);'>Later:\n";
-	if(empty($imageid))
-		$maxlen = 0;
-	else
+	if(array_key_exists($imageid, $images))
 		$maxlen = $images[$imageid]['maxinitialtime'];
+	else
+		$maxlen = 0;
 	if($submitErr) {
 		$hour24 = $hour;
 		if($hour24 == 12) {
