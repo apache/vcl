@@ -3713,6 +3713,25 @@ function isAvailable($images, $imageid, $imagerevisionid, $start, $end,
 			$computerids = $newcompids;
 		}
 
+		# remove any recently reserved computers that could have been an
+		#   undetected failure
+		$failedids = getPossibleRecentFailures($userid, $imageid);
+		if(! empty($failedids)) {
+			if(! empty($computerids)) {
+				$testids = array_diff($computerids, $failedids);
+				if(! empty($testids)) {
+					$computerids = $testids;
+					$currentids = array_diff($currentids, $failedids);
+				}
+			}
+			if(! empty($blockids)) {
+				$testids = array_diff($blockids, $failedids);
+				if(! empty($testids))
+					$blockids = $testids;
+			}
+		}
+
+		# allocate a computer
 		$comparr = allocComputer($blockids, $currentids, $computerids,
 		                         $startstamp, $nowfuture);
 		if(empty($comparr)) {
@@ -3813,6 +3832,42 @@ function allocComputer($blockids, $currentids, $computerids, $start,
 		return $ret;
 	}
 	return $ret;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn getPossibleRecentFailures($userid, $imageid)
+///
+/// \param $userid - check log data for this user; if $userid = 0, check for
+///                  currently logged in user
+/// \param $imageid - check log data for this image
+///
+/// \return array of computerids that may have recently given the user a problem
+///
+/// \brief checks for recent reservations by the user that were very short and
+/// within a recent time frame in case there was a computer that gave a problem
+/// that the backend did not pick up
+///
+////////////////////////////////////////////////////////////////////////////////
+function getPossibleRecentFailures($userid, $imageid) {
+	if($userid == 0) {
+		global $user;
+		$userid = $user['id'];
+	}
+	$comps = array();
+	$query = "SELECT s.computerid "
+	       . "FROM log l "
+	       . "LEFT JOIN sublog s ON (s.logid = l.id) "
+	       . "WHERE l.start > (NOW() - INTERVAL 90 MINUTE) AND "
+	       .       "l.finalend < NOW() AND "
+	       .       "l.userid = $userid AND "
+	       .       "l.imageid = $imageid AND "
+	       .       "l.wasavailable = 1 AND "
+	       .       "l.ending != 'failed'";
+	$qh = doQuery($query, 101);
+	while($row = mysql_fetch_assoc($qh))
+		$comps[] = $row['computerid'];
+	return $comps;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
