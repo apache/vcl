@@ -578,10 +578,26 @@ function AJvmFromHost() {
 			continue;
 		}
 		# try to remove reservations off of computer
-		if(($compdata[$compid]['state'] == 'available' ||
-			$compdata[$compid]['state'] == 'maintenance' ||
-			$compdata[$compid]['state'] == 'failed') &&
-			moveReservationsOffComputer($compid)) {
+		moveReservationsOffComputer($compid);
+
+		# check for unmovable or active reservations
+		$query = "SELECT DATE_FORMAT(rq.end, '%l:%i%p %c/%e/%y') AS end, "
+		       .        "rq.end AS end2 "
+		       . "FROM request rq, "
+		       .      "reservation rs "
+		       . "WHERE rs.requestid = rq.id AND "
+		       .       "rs.computerid = $compid AND "
+		       .       "rq.stateid NOT IN (1,5,12) "
+		       . "ORDER BY end DESC "
+		       . "LIMIT 1";
+		$qh = doQuery($query, 101);
+		if($row = mysql_fetch_assoc($qh)) {
+			$checks[] = array('id' => $compid,
+			                  'hostname' => $compdata[$compid]['hostname'],
+			                  'end' => strtolower($row['end']),
+			                  'end2' => $row['end2']);
+		}
+		else {
 			// if no reservations on computer, submit reload 
 			#    reservation so vm gets stopped on host
 			$reqid = simpleAddRequest($compid, $imageid, $imagerevisionid, $start, $end, 18, $vclreloadid);
@@ -596,28 +612,6 @@ function AJvmFromHost() {
 				                'reqid' => $reqid,
 				                'time' => 'immediately');
 			}
-		}
-		else {
-			# existing reservation on computer, find end time and prompt user
-			#   if ok to wait until then to move it
-			$query = "SELECT DATE_FORMAT(rq.end, '%l:%i%p %c/%e/%y') AS end, "
-			       .        "rq.end AS end2 "
-			       . "FROM request rq, "
-			       .      "reservation rs "
-			       . "WHERE rs.requestid = rq.id AND "
-			       .       "rs.computerid = $compid AND "
-			       .       "rq.stateid NOT IN (1,5,12) "
-			       . "ORDER BY end DESC "
-			       . "LIMIT 1";
-			$qh = doQuery($query, 101);
-			if($row = mysql_fetch_assoc($qh)) {
-				$checks[] = array('id' => $compid,
-				                  'hostname' => $compdata[$compid]['hostname'],
-				                  'end' => strtolower($row['end']),
-				                  'end2' => $row['end2']);
-			}
-			else
-				$rems[] = array('id' => $compid);
 		}
 	}
 	if(count($checks))
