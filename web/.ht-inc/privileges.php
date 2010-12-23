@@ -397,8 +397,6 @@ function viewNodes() {
 	print "    <TD>\n";
 	# FIXME should $groups be only the user's groups?
 	$groups = getUserGroups(0, $user['affiliationid']);
-	if(array_key_exists(82, $groups))
-		unset($groups[82]); # remove None group
 	printSelectInput("newgroupid", $groups, -1, 0, 0, 'newgroupid');
 	print "    </TD>\n";
 

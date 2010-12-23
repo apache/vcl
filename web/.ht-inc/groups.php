@@ -49,7 +49,6 @@ function viewGroups() {
 	$modetype = getContinuationVar("type");
 
 	$usergroups = getUserGroups(1);
-	unset($usergroups[82]);  // remove None group
 	if($user['showallgroups'])
 		$affilusergroups = $usergroups;
 	else
@@ -112,7 +111,7 @@ function viewGroups() {
 	print "</TD>\n";
 	print "    <TD><INPUT type=text name=owner size=15></TD>\n";
 	print "    <TD>\n";
-	printSelectInput("editgroupid", $affilusergroups, 82);
+	printSelectInput("editgroupid", $affilusergroups);
 	print "    </TD>\n";
 	print "    <TD><INPUT type=text name=initialmax maxlength=4 size=4 ";
 	print "value=240></TD>\n";
@@ -130,8 +129,6 @@ function viewGroups() {
 	print "  </TR>\n";
 	$dispUserGrpIDs = array();
 	foreach(array_keys($usergroups) as $id) {
-		if($usergroups[$id]["name"] == " None")
-			continue;
 		# figure out if user is owner or in editor group
 		$owner = 0;
 		$editor = 0;
@@ -223,8 +220,6 @@ function viewGroups() {
 		print "    </TD>\n";
 		print "    <TD><INPUT type=text name=name maxlength=30 size=10></TD>\n";
 		print "    <TD colspan=2>\n";
-		# remove the "None" group
-		unset($usergroups[82]);
 		# find a custom group the user is in and make it the default
 		$defaultgroupkey = "";
 		foreach(array_keys($user["groups"]) as $grpid) {
