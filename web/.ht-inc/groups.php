@@ -34,6 +34,8 @@ define("TOTALMAXERR", 1 << 4);
 define("MAXEXTENDERR", 1 << 5);
 /// signifies an error with the submitted max overlapping reservations
 define("MAXOVERLAPERR", 1 << 6);
+/// signifies an error with the submitted editing user group
+define("EDITGROUPERR", 1 << 7);
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
@@ -169,8 +171,12 @@ function viewGroups() {
 		print "    </TD>\n";
 		print "    <TD valign=bottom>{$usergroups[$id]["name"]}</TD>\n";
 		print "    <TD>{$usergroups[$id]["owner"]}</TD>\n";
-		print "    <TD>{$usergroups[$id]["editgroup"]}@";
-		print "{$usergroups[$id]['editgroupaffiliation']}</TD>\n";
+		if(! empty($usergroups[$id]["editgroup"])) {
+			print "    <TD>{$usergroups[$id]["editgroup"]}@";
+			print "{$usergroups[$id]['editgroupaffiliation']}</TD>\n";
+		}
+		else
+			print "    <TD>None</TD>\n";
 		print "    <TD align=center>{$usergroups[$id]["initialmaxtime"]}</TD>\n";
 		print "    <TD align=center>{$usergroups[$id]["totalmaxtime"]}</TD>\n";
 		print "    <TD align=center>{$usergroups[$id]["maxextendtime"]}</TD>\n";
@@ -411,16 +417,38 @@ function editOrAddGroup($state) {
 			print "  </TR>\n";
 			print "  <TR>\n";
 			print "    <TH align=right>Editable by:</TH>\n";
-			print "    <TD>\n";
-			if(! empty($data['editgroupid']) &&
-			   ! array_key_exists($data['editgroupid'], $affilusergroups)) {
+			print "    <TD valign=\"top\">\n";
+			$groupwasnone = 0;
+			if($submitErr & EDITGROUPERR)
+				if($state == 0)
+					$data['editgroupid'] = $usergroups[$data['groupid']]['editgroupid'];
+				else {
+					$tmp = array_keys($affilusergroups);
+					$data['editgroupid'] = $tmp[0];
+				}
+			$notice = '';
+			if($state == 0 && empty($usergroups[$data['groupid']]["editgroup"])) {
+				$affilusergroups = array_reverse($affilusergroups, TRUE);
+				$affilusergroups[0] = array('name' => 'None');
+				$affilusergroups = array_reverse($affilusergroups, TRUE);
+				$groupwasnone = 1;
+				$notice = "<strong>Note:</strong> You are the only person that can<br>"
+				        . "edit membership of this group. Select a<br>user group here "
+				        . "to allow members of that<br>group to edit membership of this one.";
+			}
+			elseif(! array_key_exists($data['editgroupid'], $affilusergroups)) {
 				$affilusergroups[$data['editgroupid']] =
 				      array('name' => getUserGroupName($data['editgroupid'], 1));
 				uasort($affilusergroups, "sortKeepIndex");
 			}
 			printSelectInput("editgroupid", $affilusergroups, $data["editgroupid"]);
 			print "    </TD>\n";
-			print "    <TD></TD>";
+			print "    <TD>";
+			if($submitErr & EDITGROUPERR)
+				printSubmitErr(EDITGROUPERR);
+			else
+				print $notice;
+			print "</TD>";
 			print "  </TR>\n";
 			print "  <TR>\n";
 			print "    <TH align=right>Initial Max Time (minutes):</TH>\n";
@@ -484,7 +512,8 @@ function editOrAddGroup($state) {
 		else {
 			$cdata = array('type' => $data['type'],
 			               'groupid' => $data['groupid'],
-			               'isowner' => $data['isowner']);
+			               'isowner' => $data['isowner'],
+			               'groupwasnone' => $groupwasnone);
 			if($data['type'] == 'resource')
 				$cdata['resourcetypeid'] = $resourcetypeid;
 			else
@@ -583,6 +612,7 @@ function processGroupInput($checks=1) {
 	$return["totalmax"] = getContinuationVar('totalmax', processInputVar("totalmax", ARG_NUMERIC));
 	$return["maxextend"] = getContinuationVar('maxextend', processInputVar("maxextend", ARG_NUMERIC));
 	$return["overlap"] = getContinuationVar('overlap', processInputVar("overlap", ARG_NUMERIC, 0));
+	$groupwasnone = getContinuationVar('groupwasnone');
 
 	$affils = getAffiliations();
 	if(! array_key_exists($return['affiliationid'], $affils))
@@ -612,6 +642,10 @@ function processGroupInput($checks=1) {
 	if($return["type"] == "user" && ! validateUserid($return["owner"])) {
 		$submitErr |= GRPOWNER;
 	   $submitErrMsg[GRPOWNER] = "Submitted ID is not valid";
+	}
+	if($return["type"] == "user" && $return['editgroupid'] == 0 && ! $groupwasnone) {
+		$submitErr |= EDITGROUPERR;
+		$submitErrMsg[EDITGROUPERR] = "Invalid group was selected";
 	}
 	if($return["type"] == "user" && $return["initialmax"] < 30) {
 		$submitErr |= INITIALMAXERR;
@@ -686,6 +720,8 @@ function checkForGroupName($name, $type, $id, $extraid) {
 ////////////////////////////////////////////////////////////////////////////////
 function updateGroup($data) {
 	if($data["type"] == "user") {
+		if($data['editgroupid'] == 0)
+			$data['editgroupid'] = 'NULL';
 		$ownerid = getUserlistID($data["owner"]);
 		$query = "UPDATE usergroup "
 		       . "SET name = '{$data["name"]}', "
@@ -888,7 +924,9 @@ function confirmEditOrAddGroup($state) {
 		print "  </TR>\n";
 		print "  <TR>\n";
 		print "    <TH align=right>Editable by:</TH>\n";
-		if(! $user['showallgroups']) {
+		if($state == 0 && $data['editgroupid'] == 0)
+			$usergroups[0]['name'] = 'None';
+		elseif(! $user['showallgroups']) {
 			$tmp = explode('@', $usergroups[$data["editgroupid"]]["name"]);
 			if($tmp[1] == $user['affiliation'])
 				$usergroups[$data["editgroupid"]]["name"] = $tmp[0];
@@ -957,6 +995,7 @@ function submitEditGroup() {
 	updateGroup($data);
 	$_SESSION['userresources'] = array();
 	$_SESSION['nodeprivileges'] = array();
+	$_SESSION['usersessiondata'] = array();
 	#$_SESSION['cascadenodeprivileges'] = array(); // might need this uncommented
 	viewGroups();
 }
