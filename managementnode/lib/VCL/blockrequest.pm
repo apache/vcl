@@ -133,7 +133,6 @@ sub process {
 	my $blocktime_end                = $self->data->get_blocktime_end();
 	my $blockrequest_name            = $self->data->get_blockrequest_name();
 	my $blockrequest_owner_id	 = $self->data->get_blockrequest_owner_id();
-	my $block_group_id		 = $self->data->get_blockrequest_group_id();
 	my $block_group_name		 = $self->data->get_blockrequest_group_name();
 
 	# Get user info	
@@ -538,9 +537,7 @@ sub udpate_block_request_status {
 
 sub clear_blockTimes {
 	my ($blockTimes_id) = @_;
-
-	my ($package, $filename, $line, $sub) = caller(0);
-
+	
 	# Check the arguments
 	if (!defined($blockTimes_id)) {
 		notify($ERRORS{'WARNING'}, 0, "blockTimes ID was not specified");
@@ -578,9 +575,7 @@ sub clear_blockTimes {
 
 sub clear_blockComputers {
 	my ($blockTimes_id) = @_;
-
-	my ($package, $filename, $line, $sub) = caller(0);
-
+	
 	# Check the arguments
 	if (!defined($blockTimes_id)) {
 		notify($ERRORS{'WARNING'}, 0, "blockTimes ID was not specified");
