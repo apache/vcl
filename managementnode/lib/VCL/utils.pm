@@ -718,6 +718,9 @@ END
 			my $computer_name = $ENV{data}->get_computer_short_name(0);
 			$subject .= "|$computer_name" if (defined $computer_name);
 			
+			my $vmhost_hostname = $ENV{data}->get_vmhost_hostname(0);
+			$subject .= ">$vmhost_hostname" if (defined $vmhost_hostname);
+			
 			my $image_name = $ENV{data}->get_image_name(0);
 			$subject .= "|$image_name" if (defined $image_name);
 			
@@ -4349,67 +4352,46 @@ sub get_request_info {
 			}
 		} ## end if ($reservation_row{computer_vmhostid})
 
-		# Get the computer's current image information
-		if ($reservation_row{computer_currentimageid}) {
-			my %computer_currentimage_info;
-			if (%computer_currentimage_info = get_image_info($reservation_row{computer_currentimageid})) {
-				$request_info{reservation}{$reservation_id}{computer}{currentimage} = \%computer_currentimage_info;
-			}
-			else {
-				notify($ERRORS{'WARNING'}, 0, "unable to get current image info for computer");
-			}
-		}
-		else {
-			# currentimageid wasn't set for the computer
-			notify($ERRORS{'WARNING'}, 0, "currentimageid is not set for computer id=" . $reservation_row{computer_id});
-		}
-
 		# Get the computer's next image information
 		if ($reservation_row{computer_nextimageid}) {
-			my %computer_nextimage_info;
-			if (%computer_nextimage_info = get_image_info($reservation_row{computer_nextimageid})) {
+			if (my %computer_nextimage_info = get_image_info($reservation_row{computer_nextimageid})) {
 				$request_info{reservation}{$reservation_id}{computer}{nextimage} = \%computer_nextimage_info;
 
 				# For next imageid get the production imagerevision info
-				my %next_imagerevision_info;
-				if (%next_imagerevision_info = get_production_imagerevision_info($reservation_row{computer_nextimageid})) {
+				if (my %next_imagerevision_info = get_production_imagerevision_info($reservation_row{computer_nextimageid})) {
 					$request_info{reservation}{$reservation_id}{computer}{nextimagerevision} = \%next_imagerevision_info;
 				}
 				else {
 					notify($ERRORS{'WARNING'}, 0, "unable to get next image revision info for computer, image revision ID is not set, tried to get production image for image ID " . $reservation_row{computer_nextimageid});
 				}
-			} ## end if (%computer_nextimage_info = get_image_info...
+			}
 			else {
 				notify($ERRORS{'WARNING'}, 0, "unable to get nextimage image info for computer");
 			}
-		} ## end if ($reservation_row{computer_nextimageid...
-		else {
-			# currentimageid wasn't set for the computer
-			notify($ERRORS{'WARNING'}, 0, "nextimageid is not set for computer id=" . $reservation_row{computer_id});
-		}
-
-		# Get the computer's current imagemeta information
-		my %computer_currentimagerevision_info;
-		if ($reservation_row{computer_imagerevisionid} > 0) {
-			# imagerevisionid is set for computer, get the info for that specific revision
-			if (%computer_currentimagerevision_info = get_imagerevision_info($reservation_row{computer_imagerevisionid})) {
-				$request_info{reservation}{$reservation_id}{computer}{currentimagerevision} = \%computer_currentimagerevision_info;
-			}
-			else {
-				notify($ERRORS{'WARNING'}, 0, "unable to get current image revision info for computer, image revision ID is set to " . $reservation_row{computer_imagerevisionid});
-			}
 		}
 		else {
-			# imagerevisionid is not set for computer, get the info for the production revision of currentimageid
-			if (%computer_currentimagerevision_info = get_production_imagerevision_info($reservation_row{computer_currentimageid})) {
-				$request_info{reservation}{$reservation_id}{computer}{currentimagerevision} = \%computer_currentimagerevision_info;
-			}
-			else {
-				notify($ERRORS{'WARNING'}, 0, "unable to get current image revision info for computer, image revision ID is not set, tried to get production image for image ID " . $reservation_row{computer_currentimageid});
-			}
+			notify($ERRORS{'DEBUG'}, 0, "nextimageid is not set for computer");
 		}
 
-
+		# Get the computer's current imagerevision information
+		if ($reservation_row{computer_imagerevisionid}) {
+			if (my %computer_currentimagerevision_info = get_imagerevision_info($reservation_row{computer_imagerevisionid})) {
+				if (my %computer_currentimage_info = get_image_info($computer_currentimagerevision_info{imageid})) {
+					$request_info{reservation}{$reservation_id}{computer}{currentimagerevision} = \%computer_currentimagerevision_info;
+					$request_info{reservation}{$reservation_id}{computer}{currentimage} = \%computer_currentimage_info;
+				}
+				else {
+					notify($ERRORS{'WARNING'}, 0, "unable to get current image info for computer, image ID: $computer_currentimagerevision_info{imageid}");
+				}
+			}
+			else {
+				notify($ERRORS{'WARNING'}, 0, "unable to get current image revision info for computer, image revision ID: $reservation_row{computer_imagerevisionid}");
+			}
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "imagerevisionid is not set for computer");
+		}
+		
 		# Loop through all the columns returned for the reservation
 		foreach my $key (keys %reservation_row) {
 			my $value = $reservation_row{$key};
@@ -5261,7 +5243,7 @@ sub get_vmhost_info {
 
 sub run_ssh_command {
 	my ($node, $identity_paths, $command, $user, $port, $output_level) = @_;
-	
+
 	my $max_attempts = 3;
 	
 	if (ref($_[0]) eq 'HASH') {
@@ -5274,6 +5256,7 @@ sub run_ssh_command {
 		$port = $arguments->{port} || '22';
 		$output_level = $arguments->{output_level};
 		$max_attempts = $arguments->{max_attempts} || 3;
+		
 	}
 	
 	# Determine the output level if it was specified
@@ -7079,6 +7062,7 @@ sub rename_vcld_process {
 			my $reservation_id        = $data_structure->get_reservation_id();
 			my $request_state_name    = $data_structure->get_request_state_name();
 			my $computer_short_name   = $data_structure->get_computer_short_name();
+			my $vmhost_hostname       = $data_structure->get_vmhost_hostname(0);
 			my $image_name            = $data_structure->get_image_name();
 			my $user_login_id         = $data_structure->get_user_login_id();
 			my $request_forimaging    = $data_structure->get_request_forimaging();
@@ -7089,6 +7073,7 @@ sub rename_vcld_process {
 			$new_process_name .= " $request_id:$reservation_id";
 			$new_process_name .= " $request_state_name" if ($request_state_name);
 			$new_process_name .= " $computer_short_name" if ($computer_short_name);
+			$new_process_name .= ">$vmhost_hostname" if ($vmhost_hostname);
 			$new_process_name .= " $image_name" if ($image_name);
 			$new_process_name .= " $user_login_id" if ($user_login_id);
 			$new_process_name .= " (imaging)" if $request_forimaging;
@@ -9788,11 +9773,13 @@ sub get_file_size_info_string {
 	
 	my $size_mb = format_number(($size_bytes / 1024 / 1024), 1);
 	my $size_gb = format_number(($size_bytes / 1024 / 1024 / 1024), 2);
+	my $size_tb = format_number(($size_bytes / 1024 / 1024 / 1024 / 1024), 2);
 	
 	my $size_info;
 	$size_info .= format_number($size_bytes) . " bytes$separator";
 	$size_info .= "$size_mb MB$separator";
 	$size_info .=  "$size_gb GB";
+	$size_info .=  "$separator$size_tb TB" if ($size_tb >= 1);
 	return $size_info;
 }
 
@@ -9894,9 +9881,11 @@ sub escape_file_path {
 	
 	$path = normalize_file_path($path);
 	
-	# Add a backslash before each space
-	# Also check for spaces that already have a leading backslash
-	$path =~ s/\\*(\s)/\\$1/g;
+	# Call quotemeta to escape all special character
+	$path = quotemeta $path;
+	
+	# Unescape wildcard * characters or else subroutines will fail which accept a wildcard file path
+	$path =~ s/\\+\*/\*/g;
 	
 	return $path;
 }
