@@ -179,16 +179,34 @@ sub _run_vim_cmd {
 			sleep $wait_seconds;
 		}
 		
+		# The following error is somewhat common if several processes are adding/removing VMs at the same time:
+		# (vmodl.fault.ManagedObjectNotFound) {
+		#	 dynamicType = <unset>,
+		#	 faultCause = (vmodl.MethodFault) null,
+		# 	 obj = 'vim.VirtualMachine:672',
+		# 	 msg = "The object has already been deleted or has not been completely created",
+		# }
+		
+		# Keep a count of the number of times vim-cmd is executed for the entire vcld state process
+		# This will be used to improve performance by reducing the number of calls necessary
+		$self->{vim_cmd_calls}++;
+		notify($ERRORS{'DEBUG'}, 0, "vim-cmd call count: $self->{vim_cmd_calls} ($vim_arguments)");
+		
 		my ($exit_status, $output) = $self->vmhost_os->execute($command);
 		if (!defined($output)) {
 			notify($ERRORS{'WARNING'}, 0, "attempt $attempt/$attempt_limit: failed to run VIM command on VM host $vmhost_computer_name: $command");
 		}
-		elsif (grep(/(failed to connect|error connecting)/i, @$output)) {
-			notify($ERRORS{'OK'}, 0, "attempt $attempt/$attempt_limit: failed to connect to VM host $vmhost_computer_name to run command: $command, output:\n" . join("\n", @$output));
+		elsif (grep(/already been deleted/i, @$output)) {
+			notify($ERRORS{'OK'}, 0, "attempt $attempt/$attempt_limit: fault occurred attempting to run command on VM host $vmhost_computer_name: $command, output:\n" . join("\n", @$output));
 		}
 		else {
 			# VIM command command was executed
-			notify($ERRORS{'DEBUG'}, 0, "attempt $attempt/$attempt_limit: executed command on VM host $vmhost_computer_name: $command") if ($attempt > 1);
+			if ($attempt > 1) {
+				notify($ERRORS{'DEBUG'}, 0, "attempt $attempt/$attempt_limit: executed command on VM host $vmhost_computer_name: $command");
+			}
+			else {
+				notify($ERRORS{'DEBUG'}, 0, "executed command on VM host $vmhost_computer_name: $command");
+			}
 			return ($exit_status, $output);
 		}
 	}
@@ -281,6 +299,10 @@ sub _get_vm_id {
 	
 	# Get the VM IDs and vmx paths
 	my $vm_list = $self->_get_vm_list();
+	if (!defined($vm_list)) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine VM ID, failed to retrieve list of registered VMs and their IDs");
+		return;
+	}
 	
 	for my $vm_id (keys %$vm_list) {
 		return $vm_id if ($vmx_file_path eq $vm_list->{$vm_id});
@@ -512,21 +534,21 @@ sub _get_datastore_info {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 _get_task_id
+=head2 _get_task_ids
 
  Parameters  : $vmx_file_path, $task_type
- Returns     : string
- Description : Returns the vim.Task string of the most recent task executed on
-					the VM indicated by the $vm_id argument. The task type argument
-					must be specified. Example task type values:
-					powerOn
-					powerOff
-					registerVm
-					unregisterVm
+ Returns     : array
+ Description : Returns an array containing the task IDs recently executed on
+               the VM indicated by the $vm_id argument. The task type argument
+               must be specified. Example task type values:
+               powerOn
+               powerOff
+               registerVm
+               unregisterVm
 
 =cut
 
-sub _get_task_id {
+sub _get_task_ids {
 	my $self = shift;
 	if (ref($self) !~ /VCL::Module/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
@@ -534,18 +556,14 @@ sub _get_task_id {
 	}
 	
 	# Get the vmx file path argument
-	my $vmx_file_path = shift;
+	my $vmx_file_path = shift || $self->get_vmx_file_path();
 	if (!$vmx_file_path) {
-		notify($ERRORS{'WARNING'}, 0, "vmx file path argument was not supplied");
+		notify($ERRORS{'WARNING'}, 0, "vmx file path argument could not be determined");
 		return;
 	}
 	
 	# Get the task type argument
 	my $task_type = shift;
-	if (!$task_type) {
-		notify($ERRORS{'WARNING'}, 0, "task type argument was not supplied");
-		return;
-	}
 	
 	my $vm_id = $self->_get_vm_id($vmx_file_path) || return;
 	
@@ -560,9 +578,16 @@ sub _get_task_id {
 	#   'vim.Task:haTask-512-vim.VirtualMachine.powerOn-2856'
 	# ]
 	
+	# Expected output if there are no recent tasks:
+	# (ManagedObjectReference) []
+	
 	if (!grep(/ManagedObjectReference/i, @$output)) {
 		notify($ERRORS{'WARNING'}, 0, "unexpected output returned while attempting to retrieve task list, VIM command arguments: '$vim_cmd_arguments', output:\n" . join("\n", @$output));
 		return;
+	}
+	elsif (grep(/\(ManagedObjectReference\)\s*\[\]/i, @$output)) {
+		notify($ERRORS{'DEBUG'}, 0, "there are no recent tasks for VM $vm_id");
+		return ();
 	}
 	
 	#notify($ERRORS{'DEBUG'}, 0, "task list output:\n" . join("\n", @$output));
@@ -572,20 +597,24 @@ sub _get_task_id {
 	
 	#notify($ERRORS{'DEBUG'}, 0, "reversed task list output:\n" . join("\n", @reversed_output));
 	
-	my ($task_id) = grep(/haTask-$vm_id-.+$task_type-/, @reversed_output);
+	#my (@task_ids) = grep(/haTask-$vm_id-.+$task_type-/, @reversed_output);
+	my @task_ids;
+	if ($task_type) {
+		@task_ids = map { /(haTask-$vm_id-.+$task_type-\d+)/ } @reversed_output;
+	}
+	else {
+		@task_ids = map { /(haTask-$vm_id-.+-\d+)/ } @reversed_output;
+		$task_type = 'all';
+	}
 	
 	# Check if a matching task was found
-	if (!$task_id) {
-		notify($ERRORS{'WARNING'}, 0, "no recent $task_type tasks for VM $vm_id, VIM command arguments: '$vim_cmd_arguments', output:\n" . join("\n", @$output));
+	if (!@task_ids) {
+		notify($ERRORS{'WARNING'}, 0, "failed to determine task IDs from output for VM $vm_id, task type: $task_type, output:\n" . join("\n", @$output));
 		return;
 	}
 	
-	# Remove "vim.Task:" from the beginning of the task ID and the trailing single quote
-	# This should not be included when passing the task ID to other vim-cmd functions
-	$task_id =~ s/(^.*vim\.Task:|[^\d]*$)//ig;
-
-	#notify($ERRORS{'DEBUG'}, 0, "task id: '$task_id'");
-	return $task_id;
+	#notify($ERRORS{'DEBUG'}, 0, "retrieved task IDs for VM $vm_id, task type: $task_type:\n" . join("\n", @task_ids));
+	return @task_ids;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -606,68 +635,73 @@ sub _get_task_info {
 	}
 	
 	# Get the task ID path argument
-	my $task_id = shift;
-	if (!$task_id) {
-		notify($ERRORS{'WARNING'}, 0, "task ID argument was not supplied");
-		return;
+	my (@task_ids) = @_;
+	@task_ids = $self->_get_task_ids() if (!@task_ids);
+	
+	my %task_info;
+	
+	for my $task_id (@task_ids) {
+		my $vim_cmd_arguments = "vimsvc/task_info $task_id";
+		my ($exit_status, $output) = $self->_run_vim_cmd($vim_cmd_arguments);
+		return if !$output;
+		
+		# Expected output:
+		# (vim.TaskInfo) {
+		#   dynamicType = <unset>,
+		#   key = "haTask-496-vim.VirtualMachine.powerOn-3072",
+		#   task = 'vim.Task:haTask-496-vim.VirtualMachine.powerOn-3072',
+		#   description = (vmodl.LocalizableMessage) null,
+		#   name = "vim.VirtualMachine.powerOn",
+		#   descriptionId = "VirtualMachine.powerOn",
+		#   entity = 'vim.VirtualMachine:496',
+		#   entityName = "vm-ark-mcnc-9 (nonpersistent: vmwarewinxp-base234-v12)",
+		#   state = "error",
+		#   cancelled = false,
+		#   cancelable = false,
+		#   error = (vmodl.fault.RequestCanceled) {
+		#      dynamicType = <unset>,
+		#      faultCause = (vmodl.MethodFault) null,
+		#      msg = "The task was canceled by a user.",
+		#   },
+		#   result = <unset>,
+		#   progress = 100,
+		#   reason = (vim.TaskReasonUser) {
+		#      dynamicType = <unset>,
+		#      userName = "root",
+		#   },
+		#   queueTime = "2010-06-30T08:48:44.187347Z",
+		#   startTime = "2010-06-30T08:48:44.187347Z",
+		#   completeTime = "2010-06-30T08:49:26.381383Z",
+		#   eventChainId = 3072,
+		#   changeTag = <unset>,
+		#   parentTaskKey = <unset>,
+		#   rootTaskKey = <unset>,
+		# }
+		
+		# Expected output if the task is not found:
+		# (vmodl.fault.ManagedObjectNotFound) {
+		#   dynamicType = <unset>,
+		#   faultCause = (vmodl.MethodFault) null,
+		#   obj = 'vim.Task:haTask-496-vim.VirtualMachine.powerOn-3072x',
+		#   msg = "The object has already been deleted or has not been completely created",
+		# }
+	
+		
+		if (grep(/ManagedObjectNotFound/i, @$output)) {
+			notify($ERRORS{'WARNING'}, 0, "task was not found, task ID: $task_id, output:\n" . join("\n", @$output));
+			next;
+		}
+		elsif (!grep(/vim.TaskInfo/i, @$output)) {
+			notify($ERRORS{'WARNING'}, 0, "unexpected output returned while attempting to retrieve task list, VIM command arguments: '$vim_cmd_arguments' output:\n" . join("\n", @$output));
+			next;
+		}
+		else {
+			#notify($ERRORS{'DEBUG'}, 0, "retrieved info for task $task_id");	
+			$task_info{$task_id} = join("\n", @$output);
+		}
 	}
 	
-	my $vim_cmd_arguments = "vimsvc/task_info $task_id";
-	my ($exit_status, $output) = $self->_run_vim_cmd($vim_cmd_arguments);
-	return if !$output;
-	
-	# Expected output:
-	# (vim.TaskInfo) {
-	#   dynamicType = <unset>,
-	#   key = "haTask-496-vim.VirtualMachine.powerOn-3072",
-	#   task = 'vim.Task:haTask-496-vim.VirtualMachine.powerOn-3072',
-	#   description = (vmodl.LocalizableMessage) null,
-	#   name = "vim.VirtualMachine.powerOn",
-	#   descriptionId = "VirtualMachine.powerOn",
-	#   entity = 'vim.VirtualMachine:496',
-	#   entityName = "vm-ark-mcnc-9 (nonpersistent: vmwarewinxp-base234-v12)",
-	#   state = "error",
-	#   cancelled = false,
-	#   cancelable = false,
-	#   error = (vmodl.fault.RequestCanceled) {
-	#      dynamicType = <unset>,
-	#      faultCause = (vmodl.MethodFault) null,
-	#      msg = "The task was canceled by a user.",
-	#   },
-	#   result = <unset>,
-	#   progress = 100,
-	#   reason = (vim.TaskReasonUser) {
-	#      dynamicType = <unset>,
-	#      userName = "root",
-	#   },
-	#   queueTime = "2010-06-30T08:48:44.187347Z",
-	#   startTime = "2010-06-30T08:48:44.187347Z",
-	#   completeTime = "2010-06-30T08:49:26.381383Z",
-	#   eventChainId = 3072,
-	#   changeTag = <unset>,
-	#   parentTaskKey = <unset>,
-	#   rootTaskKey = <unset>,
-	# }
-	
-	# Expected output if the task is not found:
-	# (vmodl.fault.ManagedObjectNotFound) {
-	#   dynamicType = <unset>,
-	#   faultCause = (vmodl.MethodFault) null,
-	#   obj = 'vim.Task:haTask-496-vim.VirtualMachine.powerOn-3072x',
-	#   msg = "The object has already been deleted or has not been completely created",
-	# }
-
-	
-	if (grep(/ManagedObjectNotFound/i, @$output)) {
-		notify($ERRORS{'WARNING'}, 0, "task was not found: $task_id, output:\n" . join("\n", @$output));
-		return;
-	}
-	elsif (!grep(/vim.TaskInfo/i, @$output)) {
-		notify($ERRORS{'WARNING'}, 0, "unexpected output returned while attempting to retrieve task list, VIM command arguments: '$vim_cmd_arguments' output:\n" . join("\n", @$output));
-		return;
-	}
-	
-	return @$output;
+	return \%task_info;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -702,40 +736,49 @@ sub _wait_for_task {
 	while (time() - $start_time < $timeout_seconds) {
 		notify($ERRORS{'DEBUG'}, 0, "checking status of task: $task_id");
 		
-		(my @task_info_output = $self->_get_task_info($task_id)) || return;
-		
-		# Parse the output to get the task state and progress
-		my ($task_state) = map(/^\s*state\s*=\s*"(.+)"/, @task_info_output);
-		
-		if (!$task_state) {
-			notify($ERRORS{'WARNING'}, 0, "unable to determine task state from task info output:\n" . join("\n", @task_info_output));
+		# Get the task info
+		my $task_info_output = $self->_get_task_info($task_id)->{$task_id};
+		if (!$task_info_output) {
+			notify($ERRORS{'WARNING'}, 0, "unable to determine if task $task_id has completed, task info could not be retrieved");
 			return;
 		}
+		
+		# Parse the output to get the task state and progress
+		my ($task_state) = $task_info_output =~ /state\s*=\s*"([^"]+)/is;
+		if (!$task_state) {
+			notify($ERRORS{'WARNING'}, 0, "unable to determine task state from task info output:\n$task_info_output");
+			return;
+		}
+		
+		my ($error_message) = $task_info_output =~ /msg\s*=\s*"([^"]+)/;
+		$error_message = $task_info_output if !$error_message;
+		
+		my ($progress)= $task_info_output =~ /progress\s*=\s*(\d+)/;
+		$progress = 'unknown' if !defined($progress);
 		
 		if ($task_state =~ /success/) {
 			notify($ERRORS{'DEBUG'}, 0, "task completed successfully: $task_id");
 			return 1;
 		}
 		elsif ($task_state =~ /error|cancelled/) {
-			# Get the error message from the task info output
-			my ($error_message) = map(/^\s*msg\s*=\s*"(.+)"/, @task_info_output);
 			
-			# If the error message can't be determined, display all of the task info output
-			$error_message = "\n" . join("\n", @task_info_output) if !$error_message;
-			
-			notify($ERRORS{'WARNING'}, 0, "task $task_id did not complete successfully, state: $task_state, error message: $error_message");
+			# Check if the task failed with the message: 'Operation failed since another task is in progress.'
+			if ($error_message =~ /another task is in progress/i) {
+				# Retrieve info for all of the VMs recent tasks
+				my $task_info_all = $self->_get_task_info();
+				notify($ERRORS{'WARNING'}, 0, "task $task_id did not complete successfully, state: $task_state, error message: $error_message, task info:\n" . format_data($task_info_all));
+			}
+			else {
+				notify($ERRORS{'WARNING'}, 0, "task $task_id did not complete successfully, state: $task_state, error message: $error_message");
+			}
 			return;
 		}
 		elsif ($task_state =~ /running/) {
-			my ($progress) = map(/^\s*progress\s*=\s*(\d+)/, @task_info_output);
-			$progress = 'unknown' if !defined($progress);
 			notify($ERRORS{'DEBUG'}, 0, "task state: $task_state, progress: $progress, sleeping for 3 seconds before checking task state again");
 			sleep 3;
 		}
 		else {
-			my ($progress) = map(/^\s*progress\s*=\s*(\d+)/, @task_info_output);
-			$progress = 'unknown' if !defined($progress);
-			notify($ERRORS{'DEBUG'}, 0, "task state: $task_state, progress: $progress, sleeping for 3 seconds before checking task state again\n" . join("\n", @task_info_output));
+			notify($ERRORS{'DEBUG'}, 0, "task state: $task_state, progress: $progress, sleeping for 3 seconds before checking task state again, output:\n$task_info_output");
 			sleep 3;
 		}
 	}
@@ -770,11 +813,15 @@ sub get_registered_vms {
 	
 	# Get the VM IDs
 	my $vm_list = $self->_get_vm_list();
+	if (!defined($vm_list)) {
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve registered VMs, failed to retrieve list of registered VMs and their IDs");
+		return;
+	}
 	
 	# Get the vmx path values for each VM
 	my @vmx_paths = values(%$vm_list);
 	
-	#notify($ERRORS{'DEBUG'}, 0, "found " . scalar(@vmx_paths) . " registered VMs");
+	notify($ERRORS{'DEBUG'}, 0, "found " . scalar(@vmx_paths) . " registered VMs");
 	return @vmx_paths;
 }
 
@@ -901,14 +948,14 @@ sub vm_power_on {
 	}
 	
 	# Get the task ID
-	my $task_id = $self->_get_task_id($vmx_file_path, 'powerOn');
-	if (!$task_id) {
+	my @task_ids = $self->_get_task_ids($vmx_file_path, 'powerOn');
+	if (!@task_ids) {
 		notify($ERRORS{'WARNING'}, 0, "unable to retrieve the ID of the task created to power on the VM");
 		return;
 	}
 	
 	# Wait for the task to complete
-	if ($self->_wait_for_task($task_id)) {
+	if ($self->_wait_for_task($task_ids[0])) {
 		notify($ERRORS{'OK'}, 0, "powered on VM: $vmx_file_path");
 		return 1;
 	}
@@ -976,14 +1023,14 @@ sub vm_power_off {
 	}
 
 	# Get the task ID
-	my $task_id = $self->_get_task_id($vmx_file_path, 'powerOff');
-	if (!$task_id) {
+	my @task_ids = $self->_get_task_ids($vmx_file_path, 'powerOff');
+	if (!@task_ids) {
 		notify($ERRORS{'WARNING'}, 0, "unable to retrieve the ID of the task created to power on the VM");
 		return;
 	}
 	
 	# Wait for the task to complete
-	if ($self->_wait_for_task($task_id)) {
+	if ($self->_wait_for_task($task_ids[0])) {
 		notify($ERRORS{'OK'}, 0, "powered off VM: $vmx_file_path");
 		return 1;
 	}
@@ -1168,59 +1215,44 @@ sub get_virtual_disk_type {
 		return;
 	}
 	
-	my $vim_cmd_arguments = "hostsvc/datastorebrowser/disksearch \"$vmdk_directory_datastore_path\"";
+	# The output of 'vim-cmd hostsvc/datastorebrowser/disksearch' differs for VMware Server 2.x and ESXi
+	# The value of 'thin' is not returned if disksearch is run under ESXi
+	my $vmware_product_name = $self->get_vmhost_product_name();
+	my $vim_cmd_arguments;
+	if ($vmware_product_name =~ /esx/i) {
+		$vim_cmd_arguments = "hostsvc/datastorebrowser/search 0 \"$vmdk_directory_datastore_path\"";
+	}
+	else {
+		$vim_cmd_arguments = "hostsvc/datastorebrowser/disksearch \"$vmdk_directory_datastore_path\"";
+	}
+	
 	my ($exit_status, $output) = $self->_run_vim_cmd($vim_cmd_arguments);
 	return if !$output;
 	
 	# Expected output:
-	# (vim.host.DatastoreBrowser.SearchResults) [
-	#   (vim.host.DatastoreBrowser.SearchResults) {
-	#      dynamicType = <unset>,
-	#      datastore = 'vim.Datastore:10.25.0.245:/vmfs/volumes/nfs-datastore',
-	#      folderPath = "[nfs-datastore] vmwarewinxp-base234-v12",
-	#      file = (vim.host.DatastoreBrowser.FileInfo) [
-	#         (vim.host.DatastoreBrowser.VmDiskInfo) {
-	#            dynamicType = <unset>,
-	#            path = "vmwarewinxp-base234-v12.vmdk",
-	#            fileSize = 4774187008,
-	#            modification = <unset>,
-	#            owner = <unset>,
-	#            diskType = "vim.vm.device.VirtualDisk.SparseVer2BackingInfo",
-	#            capacityKb = 14680064,
-	#            hardwareVersion = 4,
-	#            controllerType = <unset>,
-	#            diskExtents = (string) [
-	#               "[nfs-datastore] vmwarewinxp-base234-v12/vmwarewinxp-base234-v12-s001.vmdk",
-	#               "[nfs-datastore] vmwarewinxp-base234-v12/vmwarewinxp-base234-v12-s002.vmdk",
-	#               "[nfs-datastore] vmwarewinxp-base234-v12/vmwarewinxp-base234-v12-s003.vmdk",
-	#               "[nfs-datastore] vmwarewinxp-base234-v12/vmwarewinxp-base234-v12-s004.vmdk",
-	#               "[nfs-datastore] vmwarewinxp-base234-v12/vmwarewinxp-base234-v12-s005.vmdk",
-	#               "[nfs-datastore] vmwarewinxp-base234-v12/vmwarewinxp-base234-v12-s006.vmdk",
-	#               "[nfs-datastore] vmwarewinxp-base234-v12/vmwarewinxp-base234-v12-s007.vmdk",
-	#               "[nfs-datastore] vmwarewinxp-base234-v12/vmwarewinxp-base234-v12-s008.vmdk",
-	#               "[nfs-datastore] vmwarewinxp-base234-v12/vmwarewinxp-base234-v12-s009.vmdk",
-	#               "[nfs-datastore] vmwarewinxp-base234-v12/vmwarewinxp-base234-v12-s010.vmdk"
-	#            ],
-	#            thin = <unset>,
-	#         },
-	#         (vim.host.DatastoreBrowser.VmDiskInfo) {
-	#            dynamicType = <unset>,
-	#            path = "thin_vmwarewinxp-base234-v12.vmdk",
-	#            fileSize = 4408459264,
-	#            modification = <unset>,
-	#            owner = <unset>,
-	#            diskType = "vim.vm.device.VirtualDisk.FlatVer2BackingInfo",
-	#            capacityKb = 14680064,
-	#            hardwareVersion = 4,
-	#            controllerType = <unset>,
-	#            diskExtents = (string) [
-	#               "[nfs-datastore] vmwarewinxp-base234-v12/thin_vmwarewinxp-base234-v12-flat.vmdk"
-	#            ],
-	#            thin = <unset>,
-	#         }
-	#      ],
-	#   }
-	# ]
+	#(vim.host.DatastoreBrowser.SearchResults) {
+	#   dynamicType = <unset>,
+	#   datastore = 'vim.Datastore:10.10.14.20:/nfs-datastore1',
+	#   folderPath = "[nfs-datastore1] vclv17-149_234-v14",
+	#   file = (vim.host.DatastoreBrowser.FileInfo) [
+	#      (vim.host.DatastoreBrowser.VmDiskInfo) {
+	#         dynamicType = <unset>,
+	#         path = "vmwarewinxp-base234-v14.vmdk",
+	#         fileSize = 5926510592,
+	#         modification = "2010-11-24T17:06:44Z",
+	#         owner = <unset>,
+	#         diskType = "vim.vm.device.VirtualDisk.FlatVer2BackingInfo",
+	#         capacityKb = 14680064,
+	#         hardwareVersion = 4,
+	#         controllerType = "vim.vm.device.VirtualIDEController",
+	#         diskExtents = (string) [
+	#            "[nfs-datastore1] vclv17-149_234-v14/vmwarewinxp-base234-v14-flat.vmdk"
+	#         ],
+	#         thin = true,
+	#      }
+	#   ],
+	#}
+
 
 	my $output_string = join("\n", @$output);
 	my (@disk_info_sections) = split(/vim.host.DatastoreBrowser.VmDiskInfo/, $output_string);
@@ -1241,6 +1273,12 @@ sub get_virtual_disk_type {
 		# Disk type format: vim.vm.device.VirtualDisk.FlatVer2BackingInfo
 		# Remove everything but "FlatVer2"
 		$disk_type =~ s/(^.*\.|BackingInfo$)//g;
+		
+		# Return 'thin' if thin is set to true
+		my ($thin) = $disk_info =~ /\sthin\s*=\s*(.+)/i;
+		if (defined($thin) && $thin =~ /true/) {
+			$disk_type = 'thin';
+		}
 		
 		notify($ERRORS{'DEBUG'}, 0, "$disk_path disk type: $disk_type");
 		return $disk_type;
@@ -1614,6 +1652,27 @@ sub get_network_names {
 	notify($ERRORS{'DEBUG'}, 0, "retrieved network names:\n" . join("\n", @network_names));
 	return @network_names;
 }
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 DESTROY
+
+ Parameters  : none
+ Returns     : nothing
+ Description : Destroys the VIM_SSH object. Displays the number of times vim-cmd
+               was called for performance tuning/debugging purposes.
+
+=cut
+
+sub DESTROY {
+	my $self = shift;
+	my $address = sprintf('%x', $self);
+	
+	# Check for an overridden destructor
+	$self->SUPER::DESTROY if $self->can("SUPER::DESTROY");
+	
+	notify($ERRORS{'DEBUG'}, 0, "vim-cmd call count: $self->{vim_cmd_calls}") if ($self->{vim_cmd_calls});
+} ## end sub DESTROY
 
 #/////////////////////////////////////////////////////////////////////////////
 
