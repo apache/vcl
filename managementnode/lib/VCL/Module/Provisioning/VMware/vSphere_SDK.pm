@@ -1074,6 +1074,13 @@ sub is_restricted {
 		return 1;
 	}
 	
+	# Attempt to get a virtual disk manager object
+	# This is required to copy virtual disks and perform other operations
+	if (!$service_content->{virtualDiskManager}) {
+		notify($ERRORS{'OK'}, 0, "access to the VM host is restricted, virtual disk manager is not available through the vSphere SDK");
+		return 1;
+	}
+	
 	# Get a fileManager object
 	my $file_manager = Vim::get_view(mo_ref => $service_content->{fileManager}) || return;
 	if (!$file_manager) {
@@ -1101,13 +1108,6 @@ sub is_restricted {
 	}
 	
 	notify($ERRORS{'OK'}, 0, "access to the VM host via the vSphere SDK is NOT restricted due to the license");
-	
-	# Attempt to get a virtual disk manager object
-	# This is required to copy virtual disks and perform other operations
-	if (!$service_content->{virtualDiskManager}) {
-		notify($ERRORS{'OK'}, 0, "access to the VM host is restricted, virtual disk manager is not available through the vSphere SDK");
-		return 1;
-	}
 	
 	return 0;
 }
@@ -1849,18 +1849,28 @@ sub initialize {
 		my $result;
 		eval { $result = Util::connect(); };
 		$result = 'undefined' if !defined($result);
+		my $error_message = $@;
+		undef $@;
 		
-		if (!$result || $@) {
-			notify($ERRORS{'DEBUG'}, 0, "unable to connect to VM host: $host_url, username: '$vmhost_username', password: '$vmhost_password', error:\n$@");
-			undef $@;
+		# It's normal if some connection attempts fail - SSH will be used if the vSphere SDK isn't available
+		# Don't display a warning unless the error indicates a configuration problem (wrong username or password)
+		# Possible error messages:
+		#    Cannot complete login due to an incorrect user name or password.
+		#    Error connecting to server at 'https://<VM host>/sdk': Connection refused
+		if ($error_message && $error_message =~ /incorrect/) {
+			notify($ERRORS{'WARNING'}, 0, "unable to connect to VM host because username or password is incorrectly configured in the VM profile ($vmhost_username/$vmhost_password), error: $error_message");
+			return;
+		}
+		elsif (!$result || $error_message) {
+			notify($ERRORS{'DEBUG'}, 0, "unable to connect to VM host using URL: $host_url, error:\n$error_message");
 		}
 		else {
-			notify($ERRORS{'DEBUG'}, 0, "connected to VM host: $host_url, username: '$vmhost_username'");
+			notify($ERRORS{'OK'}, 0, "connected to VM host: $host_url, username: '$vmhost_username'");
 			return 1;
 		}
 	}
 	
-	notify($ERRORS{'WARNING'}, 0, "failed to connect to VM host: $vmhost_hostname");
+	notify($ERRORS{'OK'}, 0, "unable connect to VM host: $vmhost_hostname");
 	return;
 }
 
