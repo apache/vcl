@@ -3573,71 +3573,6 @@ sub shutdown {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 create_text_file
-
- Parameters  : $file_path, $file_contents
- Returns     : boolean
- Description : Creates a text file on the Windows computer. The $file_contents
-               string argument is converted to ASCII hex values. These values
-               are echo'd on the Windows host which avoids problems with special
-               characters and escaping. If the file already exists it is
-               overwritten.
-
-=cut
-
-sub create_text_file {
-	my $self = shift;
-	if (ref($self) !~ /windows/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-	
-	my ($file_path, $file_contents_string) = @_;
-	if (!$file_contents_string) {
-		notify($ERRORS{'WARNING'}, 0, "file contents argument was not supplied");
-		return;
-	}
-	
-	my $management_node_keys = $self->data->get_management_node_keys();
-	my $computer_node_name   = $self->data->get_computer_node_name();
-	
-	# Replace Unix newlines with DOS/Windows newlines: \n --> \r\n
-	$file_contents_string =~ s/\r?\n/\r\n/g;
-	
-	# Convert the string to a string containing the hex value of each character
-	# This is done to avoid problems with special characters in the file contents
-	
-	# Split the string up into an array if integers representing each character's ASCII decimal value
-	my @decimal_values = unpack("C*", $file_contents_string);
-	
-	# Convert the ASCII decimal values into hex values and add '\x' before each hex value
-	my @hex_values = map { '\x' . sprintf("%x", $_) } @decimal_values;
-	
-	# Join the hex values together into a string
-	my $hex_string = join('', @hex_values);
-	
-	# Create a command to echo the hex string to the file
-	# Use -e to enable interpretation of backslash escapes
-	my $command .= "echo -e \"$hex_string\" > $file_path 2>&1 && du -b $file_path";
-	my ($exit_status, $output) = run_ssh_command($computer_node_name, $management_node_keys, $command, '', '', 0);
-	if (!defined($output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to execute ssh command to create file on $computer_node_name: $file_path");
-		return;
-	}
-	
-	my ($file_size) = map(/^(\d+)\s/, @$output);
-	
-	if (!defined($file_size) || $file_size !~ /^\d+$/ || grep(/^\w+:/i, @$output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to execute command to create a file on $computer_node_name: $file_path, exit status: $exit_status, output:\n" . join("\n", @$output));
-		return;
-	}
-	
-	notify($ERRORS{'DEBUG'}, 0, "created file on $computer_node_name: $file_path, size: $file_size bytes");
-	return 1;
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
 =head2 set_service_startup_mode
 
  Parameters  : 
@@ -7751,36 +7686,42 @@ sub set_static_public_address {
 	my $computer_node_name   = $self->data->get_computer_node_name();
 	my $system32_path        = $self->get_system32_path() || return;
 	
+	my $computer_name = $self->data->get_computer_short_name();
+	
 	# Make sure public IP configuration is static
-	my $ip_configuration = $self->data->get_management_node_public_ip_configuration() || 'undefined';
-	unless ($ip_configuration =~ /static/i) {
+	my $ip_configuration = $self->data->get_management_node_public_ip_configuration();
+	if ($ip_configuration !~ /static/i) {
 		notify($ERRORS{'WARNING'}, 0, "static public address can only be set if IP configuration is static, current value: $ip_configuration");
-		return;	
+		return;
 	}
-	
-	# Get the IP configuration
-	my $public_interface_name = $self->get_public_interface_name() || 'undefined';
-	my $public_ip_address = $self->data->get_computer_ip_address() || 'undefined';
-	
-	my $subnet_mask = $self->data->get_management_node_public_subnet_mask() || 'undefined';
-	my $default_gateway = $self->get_public_default_gateway() || 'undefined';
-	my $dns_server = $self->data->get_management_node_public_dns_server() || 'undefined';
-	
-	# Windows does not handle comma delimited dns servers. 
-	# We will split and if we have > 1 dns servers we will add them as alternates.
 
-	my ($dns_server_primary, $dns_server_alt1, $dns_server_alt2) = split(",",$dns_server);
+	# Get the IP configuration
+	my $interface_name = $self->get_public_interface_name() || '<undefined>';
+	my $ip_address = $self->data->get_computer_ip_address() || '<undefined>';
+	my $subnet_mask = $self->data->get_management_node_public_subnet_mask() || '<undefined>';
+	my $default_gateway = $self->data->get_management_node_public_default_gateway() || '<undefined>';
+	my @dns_servers = $self->data->get_management_node_public_dns_servers();
+	
+	# Assemble a string containing the static IP configuration
+	my $configuration_info_string = <<EOF;
+public interface name: $interface_name
+public IP address: $ip_address
+public subnet mask: $subnet_mask
+public default gateway: $default_gateway
+public DNS server(s): @dns_servers
+EOF
 	
 	# Make sure required info was retrieved
-	if ("$public_interface_name $subnet_mask $default_gateway $dns_server" =~ /undefined/) {
-		notify($ERRORS{'WARNING'}, 0, "unable to retrieve required network configuration:\ninterface: $public_interface_name\npublic IP address: $public_ip_address\nsubnet mask=$subnet_mask\ndefault gateway=$default_gateway\ndns server=$dns_server");
-		return;	
+	if ("$interface_name $ip_address $subnet_mask $default_gateway" =~ /undefined/) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve required network configuration for $computer_name:\n$configuration_info_string");
+		return;
+	}
+	else {
+		notify($ERRORS{'OK'}, 0, "attempting to set static public IP address on $computer_name:\n$configuration_info_string");
 	}
 	
-	notify($ERRORS{'DEBUG'}, 0, "network configuration:\ninterface: $public_interface_name\npublic IP address: $public_ip_address\nsubnet mask=$subnet_mask\ndefault gateway=$default_gateway\ndns server=$dns_server");
-	
 	# Set the static public IP address
-	my $address_command = "$system32_path/netsh.exe interface ip set address name=\"$public_interface_name\" source=static addr=$public_ip_address mask=$subnet_mask gateway=$default_gateway gwmetric=0";
+	my $address_command = "$system32_path/netsh.exe interface ip set address name=\"$interface_name\" source=static addr=$ip_address mask=$subnet_mask gateway=$default_gateway gwmetric=0";
 	
 	# Set number of attempts to try netsh.exe commands
 	my $max_attempts = 3;
@@ -7789,14 +7730,14 @@ sub set_static_public_address {
 		$address_attempts++;
 		my ($address_exit_status, $address_output) = run_ssh_command($computer_node_name, $management_node_keys, $address_command);
 		if (defined($address_exit_status) && $address_exit_status == 0) {
-			notify($ERRORS{'DEBUG'}, 0, "set static public IP address to $public_ip_address");
+			notify($ERRORS{'DEBUG'}, 0, "set static public IP address to $ip_address");
 			last;
 		}
 		elsif (defined($address_exit_status)) {
-			notify($ERRORS{'WARNING'}, 0, "attempt $address_attempts/$max_attempts: failed to set static public IP address to $public_ip_address, exit status: $address_exit_status, output:\n@{$address_output}");
+			notify($ERRORS{'WARNING'}, 0, "attempt $address_attempts/$max_attempts: failed to set static public IP address to $ip_address, exit status: $address_exit_status, output:\n@{$address_output}");
 		}
 		else {
-			notify($ERRORS{'WARNING'}, 0, "attempt $address_attempts/$max_attempts: failed to run ssh command to set static public IP address to $public_ip_address");
+			notify($ERRORS{'WARNING'}, 0, "attempt $address_attempts/$max_attempts: failed to run ssh command to set static public IP address to $ip_address");
 		}
 		
 		# Check if max attempts has been reached.
@@ -7808,34 +7749,38 @@ sub set_static_public_address {
 		sleep 2;
 	}
 	
+	my $primary_dns_server_address = shift @dns_servers;
+	notify($ERRORS{'DEBUG'}, 0, "primary DNS server address: $primary_dns_server_address\nalternate DNS server address(s):\n" . (join("\n", @dns_servers) || '<none>'));
+	
 	# Set the static DNS server address
-	my $dns_command = "$system32_path/netsh.exe interface ip set dns name=\"$public_interface_name\" source=static addr=$dns_server_primary register=none";
+	my $dns_command = "$system32_path/netsh.exe interface ip set dns name=\"$interface_name\" source=static addr=$primary_dns_server_address register=none";
 	my ($dns_exit_status, $dns_output) = run_ssh_command($computer_node_name, $management_node_keys, $dns_command);
-	if (defined($dns_exit_status) && $dns_exit_status == 0) {
-		notify($ERRORS{'DEBUG'}, 0, "set static DNS server address to $dns_server_primary");
+	if (!defined($dns_output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to set static primary DNS server address to $primary_dns_server_address");
+		return;
 	}
-	elsif (defined($dns_exit_status)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to set static DNS server address to $dns_server_primary, exit status: $dns_exit_status, output:\n@{$dns_output}");
+	elsif ($dns_exit_status) {
+		notify($ERRORS{'WARNING'}, 0, "failed to set static primary DNS server address to $primary_dns_server_address, exit status: $dns_exit_status, output:\n@{$dns_output}");
 		return 0;
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to set static DNS server address to $dns_server_primary");
-		return;
+		notify($ERRORS{'DEBUG'}, 0, "set static primary DNS server address to $primary_dns_server_address");
 	}
 	
+	
 	# We are only going to set up alternate dns server		
-	if(defined($dns_server_alt1) && $dns_server_alt1){
-		my $dns_alt1_command = "$system32_path/netsh.exe interface ip add dns name=\"$public_interface_name\" addr=$dns_server_alt1";
-        	my ($dns_a_exit_status, $dns_a_output) = run_ssh_command($computer_node_name, $management_node_keys, $dns_alt1_command);
-        	if (defined($dns_a_exit_status) && $dns_a_exit_status == 0) {
-                	notify($ERRORS{'DEBUG'}, 0, "set static DNS server address to $dns_server_alt1");
-        	}	
-        	elsif (defined($dns_a_exit_status)) {
-                	notify($ERRORS{'WARNING'}, 0, "failed to set static DNS server address to $dns_server_alt1, exit status: $dns_a_exit_status, output:\n@{$dns_a_output}");
-        	}
-        	else {
-                	notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to set static DNS server address to $dns_server_alt1");
-        	}
+	for my $alternate_dns_server_address (@dns_servers) {
+		my $alternate_dns_command = "$system32_path/netsh.exe interface ip add dns name=\"$interface_name\" addr=$alternate_dns_server_address";
+		my ($alternate_dns_exit_status, $alternate_dns_output) = run_ssh_command($computer_node_name, $management_node_keys, $dns_command);
+		if (!defined($alternate_dns_output)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to set static alternate DNS server address to $alternate_dns_server_address");
+		}
+		elsif ($alternate_dns_exit_status) {
+			notify($ERRORS{'WARNING'}, 0, "failed to set static alternate DNS server address to $alternate_dns_server_address, exit status: $alternate_dns_exit_status, output:\n" . join("\n", @$alternate_dns_output));
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "set static alternate DNS server address to $alternate_dns_server_address");
+		}
 	}
 	
 	# Add persistent static public default route
@@ -7844,7 +7789,7 @@ sub set_static_public_address {
 		return;
 	}
 	
-	notify($ERRORS{'OK'}, 0, "configured static address for public interface '$public_interface_name'");
+	notify($ERRORS{'OK'}, 0, "configured static address for public interface '$interface_name'");
 	return 1;
 }
 

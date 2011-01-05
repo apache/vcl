@@ -192,8 +192,11 @@ sub open_lockfile {
 		}
 		return;
 	}
+	elsif (grep(/\w/, @$output)) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine PIDs from lsof output\n:" . join("\n", @$output));
+	}
 	else {
-		notify($ERRORS{'DEBUG'}, 0, "unable to determine PIDs from lsof output\n:" . join("\n", @$output));
+		notify($ERRORS{'DEBUG'}, 0, "lsof did not return any PIDs of processes which prevented an exclusive lock to be obtained, lock may have been released before lsof command was executed");
 	}
 	
 	return 0;

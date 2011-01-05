@@ -1760,7 +1760,7 @@ sub wait_for_response {
 	}
 	else {
 		$initial_delay_seconds = 15;
-		$ssh_response_timeout_seconds = 300; 
+		$ssh_response_timeout_seconds = 600; 
 	}
 	
 	# Call parent class's wait_for_response subroutine

@@ -949,6 +949,70 @@ sub get_public_interface_name {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 create_text_file
+
+ Parameters  : $file_path, $file_contents
+ Returns     : boolean
+ Description : Creates a text file on the computer. The $file_contents
+               string argument is converted to ASCII hex values. These values
+               are echo'd on the Windows host which avoids problems with special
+               characters and escaping. If the file already exists it is
+               overwritten.
+
+=cut
+
+sub create_text_file {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my ($file_path, $file_contents_string) = @_;
+	if (!$file_contents_string) {
+		notify($ERRORS{'WARNING'}, 0, "file contents argument was not supplied");
+		return;
+	}
+	
+	my $management_node_keys = $self->data->get_management_node_keys();
+	my $computer_node_name   = $self->data->get_computer_node_name();
+	
+	# Replace Unix newlines with DOS/Windows newlines: \n --> \r\n
+	$file_contents_string =~ s/\r?\n/\r\n/g;
+	
+	# Convert the string to a string containing the hex value of each character
+	# This is done to avoid problems with special characters in the file contents
+	
+	# Split the string up into an array if integers representing each character's ASCII decimal value
+	my @decimal_values = unpack("C*", $file_contents_string);
+	
+	# Convert the ASCII decimal values into hex values and add '\x' before each hex value
+	my @hex_values = map { '\x' . sprintf("%x", $_) } @decimal_values;
+	
+	# Join the hex values together into a string
+	my $hex_string = join('', @hex_values);
+	
+	# Create a command to echo the hex string to the file
+	# Use -e to enable interpretation of backslash escapes
+	my $command .= "echo -e \"$hex_string\" > $file_path";
+	my ($exit_status, $output) = run_ssh_command($computer_node_name, $management_node_keys, $command, '', '', 0);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute ssh command to create file on $computer_node_name: $file_path");
+		return;
+	}
+	elsif ($exit_status != 0 || grep(/^\w+:/i, @$output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to create a file on $computer_node_name: $file_path, exit status: $exit_status, output:\n" . join("\n", @$output));
+		return;
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "created file on $computer_node_name: $file_path");
+	}
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 1;
 __END__
 

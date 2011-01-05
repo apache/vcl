@@ -1959,11 +1959,11 @@ sub get_file_size {
 	my $command = 'stat -c "%F:%s:%b:%B:%n" ' . $escaped_file_path;
 	my ($exit_status, $output) = $self->execute($command);
 	if (!defined($output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to run command to determine file size on $computer_node_name: $file_path\ncommand: $command");
+		notify($ERRORS{'WARNING'}, 0, "failed to run command to determine file size on $computer_node_name: $file_path\ncommand: '$command'");
 		return;
 	}
 	elsif (grep(/no such file/i, @$output)) {
-		notify($ERRORS{'DEBUG'}, 0, "unable to determine size of file on $computer_node_name because it does not exist: $file_path");
+		notify($ERRORS{'DEBUG'}, 0, "unable to determine size of file on $computer_node_name because it does not exist: $file_path, command: '$command'");
 		return;
 	}
 	elsif (grep(/^stat:/i, @$output)) {

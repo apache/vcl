@@ -77,6 +77,8 @@ use VCL::DataStructure;
 sub initialize {
 	my $self = shift;
 	
+	$self->{start_time} = time;
+	
 	# Initialize the database handle count
 	$ENV{dbh_count} = 0;
 
@@ -878,7 +880,10 @@ sub DESTROY {
 	# Check for an overridden destructor
 	$self->SUPER::DESTROY if $self->can("SUPER::DESTROY");
 	
-	notify($ERRORS{'OK'}, 0, ref($self) . " process $PID exiting");
+	# Determine how long process took to run
+	my $duration = (time - $self->{start_time});
+	
+	notify($ERRORS{'OK'}, 0, ref($self) . " process duration: $duration seconds");
 } ## end sub DESTROY
 
 #/////////////////////////////////////////////////////////////////////////////
