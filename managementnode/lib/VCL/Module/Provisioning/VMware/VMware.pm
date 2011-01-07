@@ -249,7 +249,7 @@ sub initialize {
 	notify($ERRORS{'DEBUG'}, 0, "attempting to create OS object for the image currently loaded on the VM host: $vmhost_computer_name\nimage name: $vmhost_image_name\nOS module: $vmhost_os_module_package");
 	if (my $vmhost_os = $self->get_vmhost_os_object($vmhost_os_module_package)) {
 		# Check if SSH is responding
-		if ($vmhost_os->is_ssh_responding()) {
+		if ($vmhost_os->is_ssh_responding(3)) {
 			$self->{vmhost_os} = $vmhost_os;
 			notify($ERRORS{'OK'}, 0, "OS on VM host $vmhost_computer_name will be controlled using a " . ref($self->{vmhost_os}) . " OS object");
 		}
@@ -666,26 +666,8 @@ sub capture {
 		}
 		
 		# Attempt to set permissions on the image repository directory
-		# VMware's methods to copy the files will set the permissions to 0700
-		# This prevents image retrieval from working when other management nodes attempt to retrieve the image
-		# Attempt to call the VM host OS's set_file_permissions subroutine if the repository is mounted on the VM host
-		if ($repository_mounted_on_vmhost && $self->vmhost_os->can('set_file_permissions') && $self->vmhost_os->set_file_permissions($repository_directory_path, '0755', 1)) {
-			notify($ERRORS{'OK'}, 0, "set file permissions on the image repository directory mounted on the VM host: $repository_directory_path");
-		}
-		elsif (-d $repository_directory_path) {
-			# Set the permissions locally on the management node if the directory exists
-			notify($ERRORS{'DEBUG'}, 0, "image repository directory exists on the management node: $repository_directory_path, attempting to set permissions to 0644");
-			
-			if ($self->mn_os->set_file_permissions($repository_directory_path, '0644', 1)) {
-				notify($ERRORS{'OK'}, 0, "set permissions for image repository directory on the management node: $repository_directory_path");
-			}
-			else {
-				notify($ERRORS{'WARNING'}, 0, "failed to set permissions for image repository directory on the management node: $repository_directory_path");
-			}
-		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "unable to set permissions on image repository directory: $repository_directory_path");
-		}
+		# Don't fail the capture if this fails, it only affects image retrieval from another managment node
+		$self->set_image_repository_permissions();
 	}
 	else {
 		# The repository path isn't set in the VM profile
@@ -3509,8 +3491,8 @@ sub get_image_repository_search_paths {
 	
 	my @repository_search_paths;
 	
-	if (my $repository_vmdk_file_path = $self->get_repository_vmdk_file_path()) {
-		push @repository_search_paths, $repository_vmdk_file_path;
+	if (my $repository_vmdk_directory_path = $self->get_repository_vmdk_directory_path()) {
+		push @repository_search_paths, "$repository_vmdk_directory_path/$image_name*.vmdk";
 	}
 	
 	if (my $management_node_install_path = $self->data->get_management_node_install_path($management_node_identifier)) {
@@ -6194,6 +6176,101 @@ sub configure_vmhost_persistent_ssh_key {
 	}
 	
 	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 set_image_repository_permissions
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Sets file permissions to 0755 on the image repository directory
+               and files for the reservation image. The directory may either be
+               mounted on the VM host or management node.
+
+=cut
+
+sub set_image_repository_permissions {
+	my $self = shift;
+	if (ref($self) !~ /module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $image_name = $self->data->get_image_name();
+	my $repository_directory_path = $self->get_repository_vmdk_directory_path();
+	my $repository_mounted_on_vmhost = $self->is_repository_mounted_on_vmhost();
+	
+	my $mode = '0755';
+	
+	# Attempt to set permissions on the image repository directory
+	# VMware's methods to copy the files will set the permissions to 0700
+	# This prevents image retrieval from working when other management nodes attempt to retrieve the image
+	# The directory and all vmdk files must have r & x permissions or else image retrieval from another managment node will fail
+	
+	# Attempt to call the VM host OS's set_file_permissions subroutine if the repository is mounted on the VM host
+	if ($repository_mounted_on_vmhost && $self->vmhost_os->can('set_file_permissions')) {
+		if ($self->vmhost_os->set_file_permissions($repository_directory_path, '0755', 1)) {
+			notify($ERRORS{'OK'}, 0, "set file permissions on image repository directory mounted on the VM host: $repository_directory_path");
+			return 1;
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "failed to set file permissions on the image repository directory mounted on the VM host: $repository_directory_path");
+		}
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "repository is either not mounted on the VM host or the VM host OS is unable to set file permissions: $repository_directory_path");
+	}
+	
+	# Attempt to find image files on the management node by searching all paths returned by get_image_repository_search_paths()
+	my %repository_image_file_path_hash;
+	my @image_repository_search_paths = $self->get_image_repository_search_paths();
+	for my $search_path (@image_repository_search_paths) {
+		my ($exit_status, $output) = $self->mn_os->execute("ls -1 $search_path", 0);
+		
+		my @file_paths_found = grep(/^\//, @$output);
+		notify($ERRORS{'DEBUG'}, 0, "search path: $search_path, file paths found: " . scalar(@file_paths_found));
+		
+		for my $file_path (@file_paths_found) {
+			$repository_image_file_path_hash{$file_path} = 1;
+		}
+	}
+	if (!%repository_image_file_path_hash) {
+		notify($ERRORS{'WARNING'}, 0, "failed to find image files in repository on the management node");
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "found image files in repository on the management node:\n" . join("\n", sort keys(%repository_image_file_path_hash)));
+		my $error_occurred = 0;
+		for my $file_path (sort keys(%repository_image_file_path_hash)) {
+			if (!$self->mn_os->set_file_permissions($file_path, $mode)) {
+				notify($ERRORS{'WARNING'}, 0, "failed to set permissions to $mode on $file_path on management node");
+				$error_occurred = 1;
+			}
+		}
+		if (!$error_occurred) {
+			notify($ERRORS{'OK'}, 0, "set permissions on files in image repository for image $image_name to $mode");
+			return 1;
+		}
+	}
+	
+	# Check if the repository directory path exists on the management node
+	if (-d $repository_directory_path) {
+		notify($ERRORS{'DEBUG'}, 0, "repository directory exists on the management node: $repository_directory_path");
+		
+		if ($self->mn_os->set_file_permissions($repository_directory_path, $mode, 1)) {
+			notify($ERRORS{'OK'}, 0, "set permissions for image repository directory on the management node: $repository_directory_path");
+			return 1;
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to set permissions for image repository directory on the management node: $repository_directory_path");
+		}
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "repository directory does NOT exist on the management node: $repository_directory_path");
+	}
+	
+	notify($ERRORS{'WARNING'}, 0, "failed to set permissions on files in image repository for image $image_name to $mode");
+	return 0;
 }
 
 #/////////////////////////////////////////////////////////////////////////////

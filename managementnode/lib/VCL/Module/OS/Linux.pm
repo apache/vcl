@@ -2106,7 +2106,7 @@ sub set_file_permissions {
 	}
 	
 	my $recursive = shift;
-	my $recursive_string;
+	my $recursive_string = '';
 	$recursive_string = "recursively " if $recursive;
 	
 	# Get the computer short and hostname
@@ -2117,7 +2117,7 @@ sub set_file_permissions {
 	$command .= "-R " if $recursive;
 	$command .= "$chmod_mode \"$path\"";
 	
-	my ($exit_status, $output) = $self->execute($command);
+	my ($exit_status, $output) = $self->execute($command, 0);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to run command to " . $recursive_string . "set file permissions on $computer_node_name: '$command'");
 		return;

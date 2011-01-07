@@ -118,12 +118,11 @@ sub execute {
 	# Get 2nd display output argument if supplied, or set default value
 	my $display_output = shift || '0';
 	
-	
 	# Run the command
-	my ($exit_status, $output) = run_command($command, $display_output);
+	my ($exit_status, $output) = run_command($command, !$display_output);
 	if (defined($exit_status) && defined($output)) {
 		if ($display_output) {
-			notify($ERRORS{'OK'}, 0, "executed command: '$command', exit status: $exit_status, output:\n" . join("\n", @$output));
+			notify($ERRORS{'OK'}, 0, "executed command: '$command', exit status: $exit_status, output:\n" . join("\n", @$output)) if $display_output;
 		}
 		return ($exit_status, $output);
 	}

@@ -141,7 +141,7 @@ sub retrieve_image {
 	
 	# Get a semaphore so only 1 process is able to retrieve the image at a time
 	# Do this before checking if the image exists in case another process is retrieving the image
-	my $semaphore = $self->get_semaphore("/tmp/retrieve_$image_name.lock", (60 * 15)) || return;
+	my $semaphore = $self->get_semaphore("retrieve_$image_name", (60 * 15)) || return;
 	
 	# Make sure image does not already exist on this management node
 	if ($self->does_image_exist($image_name)) {
