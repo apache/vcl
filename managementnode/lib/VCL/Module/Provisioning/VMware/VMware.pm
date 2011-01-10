@@ -5718,6 +5718,10 @@ sub _get_datastore_name {
 	# Loop through the datastores, check if the path begins with the datastore path
 	for my $datastore_name (keys(%{$datastore_info})) {
 		my $datastore_normal_path = $datastore_info->{$datastore_name}{normal_path};
+		if (!$datastore_normal_path) {
+			notify($ERRORS{'WARNING'}, 0, "normal path is not defined in the datastore info hash for datastore $datastore_name:" . format_data($datastore_info->{$datastore_name}));
+			next;
+		}
 		$datastore_normal_path = normalize_file_path($datastore_normal_path);
 		
 		my $datastore_url = $datastore_info->{$datastore_name}{url};

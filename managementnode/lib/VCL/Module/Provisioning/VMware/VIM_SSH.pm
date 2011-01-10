@@ -453,6 +453,8 @@ sub _get_datastore_info {
 		return $self->{datastore};
 	}
 	
+	my $vmhost_hostname = $self->data->get_vmhost_hostname();
+	
 	my $vim_cmd_arguments = "hostsvc/datastore/listsummary";
 	my ($exit_status, $output) = $self->_run_vim_cmd($vim_cmd_arguments);
 	return if !$output;
@@ -512,10 +514,19 @@ sub _get_datastore_info {
 			}
 		}
 		
+		# Check if the accessible value was retrieved and is not false
+		my $datastore_accessible = $datastore_info->{$datastore_name}{accessible};
+		if (!$datastore_accessible || $datastore_accessible =~ /false/i) {
+			notify($ERRORS{'WARNING'}, 0, "datastore '$datastore_name' is mounted on $vmhost_hostname but not accessible");
+			delete $datastore_info->{$datastore_name};
+			next;
+		}
+		
 		# Add a 'normal_path' key to the hash based on the datastore url
 		my $datastore_url = $datastore_info->{$datastore_name}{url};
 		if (!defined($datastore_url)) {
 			notify($ERRORS{'WARNING'}, 0, "failed to determine datastore url from 'vim-cmd $vim_cmd_arguments' output section, datastore name: $datastore_name:\n$output_section");
+			delete $datastore_info->{$datastore_name};
 			next;
 		}
 		

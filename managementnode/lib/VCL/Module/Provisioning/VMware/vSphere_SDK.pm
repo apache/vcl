@@ -2109,6 +2109,8 @@ sub _get_datastore_info {
 		return;
 	}
 	
+	my $vmhost_hostname = $self->data->get_vmhost_hostname();
+	
 	# Get the host view
 	my $host_view = VIExt::get_host_view(1);
 	
@@ -2121,7 +2123,20 @@ sub _get_datastore_info {
 	for my $datastore_mo_ref (@datastore_mo_refs) {
 		my $datastore_view = Vim::get_view(mo_ref => $datastore_mo_ref);
 		my $datastore_name = $datastore_view->summary->name;
+		
+		# Make sure the datastore is accessible
+		# Don't return info for inaccessible datastores
+		my $datastore_accessible = $datastore_view->summary->accessible;
+		if (!$datastore_accessible) {
+			notify($ERRORS{'WARNING'}, 0, "datastore '$datastore_name' is mounted on $vmhost_hostname but not accessible");
+			next;
+		}
+		
 		my $datastore_url = $datastore_view->summary->url;
+		if (!$datastore_url) {
+			notify($ERRORS{'WARNING'}, 0, "unable to retrieve URL for datastore '$datastore_name'");
+			next;
+		}
 		
 		if ($datastore_url =~ /^\/vmfs\/volumes/i) {
 			$datastore_view->summary->{normal_path} = "/vmfs/volumes/$datastore_name";
