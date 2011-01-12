@@ -61,10 +61,6 @@ use List::Util qw( max );
 
 use VCL::utils;
 
-use VMware::VIRuntime;
-use VMware::VILib;
-use VMware::VIExt;
-
 ##############################################################################
 
 =head1 API OBJECT METHODS
@@ -1804,6 +1800,16 @@ sub initialize {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
+	
+	# Override the die handler because process will die if VMware Perl libraries aren't installed
+	local $SIG{__DIE__} = sub{};
+	
+	eval "use VMware::VIRuntime; use VMware::VILib; use VMware::VIExt";
+	if ($EVAL_ERROR) {
+		notify($ERRORS{'OK'}, 0, "vSphere SDK for Perl does not appear to be installed on this managment node, unable to load VMware vSphere SDK Perl modules");
+		return 0;
+	}
+	notify($ERRORS{'DEBUG'}, 0, "loaded VMware vSphere SDK modules");
 	
 	my $vmhost_hostname = $self->data->get_vmhost_hostname();
 	my $vmhost_username = $self->data->get_vmhost_profile_username();
