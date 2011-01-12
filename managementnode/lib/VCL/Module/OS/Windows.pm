@@ -5034,12 +5034,11 @@ sub get_network_configuration {
 		return;
 	}
 	
-	my $computer_public_ip_address;
-	
-	my %public_interface;
+	my $public_interface_name;
+	my $private_interface_name;
 	
 	# Loop through all of the network interfaces found
-	foreach my $interface_name (sort keys %network_configuration) {
+	INTERFACE: foreach my $interface_name (sort keys %network_configuration) {
 		my @ip_addresses  = keys %{$network_configuration{$interface_name}{ip_address}};
 		my $description = $network_configuration{$interface_name}{description};
 		$description = '' if !$description;
@@ -5054,50 +5053,56 @@ sub get_network_configuration {
 		if (grep { $_ eq $computer_private_ip_address } @ip_addresses) {
 			# If private interface information was requested, return a hash containing only this interface
 			notify($ERRORS{'DEBUG'}, 0, "private interface found: $interface_name, description: $description, address(es): " . join (", ", @ip_addresses));
+			$private_interface_name = $interface_name;
 			if ($network_type =~ /private/i) {
-				my %return_hash = ($interface_name => $network_configuration{$interface_name});
-				notify($ERRORS{'DEBUG'}, 0, "returning data for private interface: $interface_name (" . join (", ", @ip_addresses) . ")");
-				return \%return_hash;
+				last INTERFACE;
 			}
 			else {
-				next;
+				next INTERFACE;
 			}
+		}
+		elsif ($network_type =~ /private/i) {
+			notify($ERRORS{'DEBUG'}, 0, "interface is not assigned the private IP address: $interface_name (" . join (", ", @ip_addresses) . ")");
+			next INTERFACE;
 		}
 		
 		# Check if the interface should be ignored based on the name or description
 		if ($interface_name =~ /(loopback|vmnet|afs|tunnel|6to4|isatap|teredo)/i) {
 			notify($ERRORS{'DEBUG'}, 0, "interface '$interface_name' ignored because name contains '$1', address(es): " . join (", ", @ip_addresses));
-			next;
+			next INTERFACE;
 		}
 		elsif ($description =~ /(loopback|virtual|afs|tunnel|pseudo|6to4|isatap)/i) {
 			notify($ERRORS{'DEBUG'}, 0, "interface '$interface_name' ignored because description contains '$1': '$description', address(es): " . join (", ", @ip_addresses));
-			next;
+			next INTERFACE;
 		}
 		
 		# Loop through the IP addresses for the interface
 		# Once a public address is found, return the data for that interface
-		for my $ip_address (@ip_addresses) {
-			if (is_public_ip_address($ip_address)) {
-				notify($ERRORS{'DEBUG'}, 0, "public interface found: $interface_name, description: $description, address(es): " . join (", ", @ip_addresses));
-				if ($network_type =~ /public/i) {
-					my %return_hash = ($interface_name => $network_configuration{$interface_name});
-					notify($ERRORS{'DEBUG'}, 0, "returning data for public interface: $interface_name (" . join (", ", @ip_addresses) . ")");
-					return \%return_hash;
+		IP_ADDRESS: for my $ip_address (@ip_addresses) {
+			my $is_public = is_public_ip_address($ip_address);
+			my $default_gateway = $network_configuration{$interface_name}{default_gateway};
+			
+			if ($is_public) {
+				if ($default_gateway) {
+					notify($ERRORS{'DEBUG'}, 0, "public interface found with default gateway: $interface_name, address(es): " . join (", ", @ip_addresses) . ", default gateway: $default_gateway");
+					$public_interface_name = $interface_name;
+					last INTERFACE;
 				}
 				else {
-					next;
+					notify($ERRORS{'DEBUG'}, 0, "interface found with public address but default gateway is not set: $interface_name, address(es): " . join (", ", @ip_addresses));
+					$public_interface_name = $interface_name;
 				}
 			}
 			else {
-				notify($ERRORS{'DEBUG'}, 0, "interface found with non-public address not matching private address for reservation: $interface_name, description: $description, address(es): " . join (", ", @ip_addresses));
+				notify($ERRORS{'DEBUG'}, 0, "interface found with non-public address not matching private address for reservation: $interface_name, address(es): " . join (", ", @ip_addresses));
 				
-				if (keys(%public_interface)) {
-					notify($ERRORS{'DEBUG'}, 0, "already found another interface with a non-public address not matching private address for reservation, this one will be used if a public address isn't found");
+				if ($public_interface_name) {
+					notify($ERRORS{'DEBUG'}, 0, "already found another interface with a non-public address not matching private address for reservation, the one previously found will be used if a public address isn't found");
 					next;
 				}
 				else {
 					notify($ERRORS{'DEBUG'}, 0, "interface will be returned if another with a public address isn't found");
-					$public_interface{$interface_name} = $network_configuration{$interface_name};
+					$public_interface_name = $interface_name;
 				}
 			}
 			
@@ -5105,18 +5110,23 @@ sub get_network_configuration {
 	}
 
 	if ($network_type =~ /private/i) {
-		notify($ERRORS{'WARNING'}, 0, "did not find an interface using the private IP address for the reservation: $computer_private_ip_address\n" . format_data(\%network_configuration));
-		return;
-	}
-	elsif (keys(%public_interface)) {
-		notify($ERRORS{'OK'}, 0, "did not find a public interface using a public IP address, but found interface using private IP address not matching reservation private IP address, returning data for public interface:\n" . format_data(\%public_interface));
-		return \%public_interface;
+		if ($private_interface_name) {
+			return {$private_interface_name => $network_configuration{$private_interface_name}};
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "did not find an interface using the private IP address for the reservation: $computer_private_ip_address\n" . format_data(\%network_configuration));
+			return;
+		}
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "unable to determine the public interface:\n" . format_data(\%network_configuration));
-		return;
+		if ($public_interface_name) {
+			return {$public_interface_name => $network_configuration{$public_interface_name}};
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to find a public interface:\n" . format_data(\%network_configuration));
+			return;
+		}
 	}
-	
 } ## end sub get_network_configuration
 
 #/////////////////////////////////////////////////////////////////////////////
