@@ -1795,6 +1795,55 @@ sub sanitize_files {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 disable_sleep
+
+ Parameters  : None
+ Returns     : If successful: true
+               If failed: false
+ Description : Disables the sleep power mode.
+
+=cut
+
+sub disable_sleep {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a VCL::Module module object method");
+		return;	
+	}
+	
+	my $management_node_keys = $self->data->get_management_node_keys();
+	my $computer_node_name   = $self->data->get_computer_node_name();
+	my $system32_path        = $self->get_system32_path() || return;
+
+	# Run powercfg.exe to disable sleep
+	my $powercfg_command;
+	$powercfg_command .= "$system32_path/powercfg.exe -CHANGE -monitor-timeout-ac 0 ; ";
+	$powercfg_command .= "$system32_path/powercfg.exe -CHANGE -monitor-timeout-dc 0 ; ";
+	$powercfg_command .= "$system32_path/powercfg.exe -CHANGE -disk-timeout-ac 0 ; ";
+	$powercfg_command .= "$system32_path/powercfg.exe -CHANGE -disk-timeout-dc 0 ; ";
+	$powercfg_command .= "$system32_path/powercfg.exe -CHANGE -standby-timeout-ac 0 ; ";
+	$powercfg_command .= "$system32_path/powercfg.exe -CHANGE -standby-timeout-dc 0 ; ";
+	$powercfg_command .= "$system32_path/powercfg.exe -CHANGE -hibernate-timeout-ac 0 ; ";
+	$powercfg_command .= "$system32_path/powercfg.exe -CHANGE -hibernate-timeout-dc 0";
+	
+	my ($powercfg_exit_status, $powercfg_output) = run_ssh_command($computer_node_name, $management_node_keys, $powercfg_command, '', '', 1);
+	if (!defined($powercfg_output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to disable sleep");
+		return;
+	}
+	elsif (grep(/(error|invalid|not found)/i, @$powercfg_output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to disable sleep, powercfg.exe output:\n" . join("\n", @$powercfg_output));
+		return;
+	}
+	else {
+		notify($ERRORS{'OK'}, 0, "disabled sleep");
+	}
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 1;
 __END__
 

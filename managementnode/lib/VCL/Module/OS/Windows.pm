@@ -361,6 +361,16 @@ sub pre_capture {
 
 =item *
 
+ Disable sleep
+
+=cut
+
+	if (!$self->disable_sleep()) {
+		notify($ERRORS{'WARNING'}, 0, "unable to disable sleep");
+	}
+
+=item *
+
  Disable Windows Customer Experience Improvement program
 
 =cut
@@ -757,6 +767,16 @@ sub post_load {
 	if (!$self->set_password('Administrator', $administrator_random_password)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to set random Administrator password");
 		return 0;
+	}
+
+=item *
+
+ Disable sleep
+
+=cut
+
+	if (!$self->disable_sleep()) {
+		notify($ERRORS{'WARNING'}, 0, "unable to disable sleep");
 	}
 
 =item *

@@ -649,6 +649,71 @@ sub sanitize_files {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 disable_sleep
+
+ Parameters  : None
+ Returns     : If successful: true
+               If failed: false
+ Description : Disables the sleep power mode.
+
+=cut
+
+sub disable_sleep {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a VCL::Module module object method");
+		return;	
+	}
+	
+	my $management_node_keys = $self->data->get_management_node_keys();
+	my $computer_node_name   = $self->data->get_computer_node_name();
+	my $system32_path        = $self->get_system32_path() || return;
+	
+	my $query_command = "$system32_path/powercfg.exe /QUERY";
+	my ($query_exit_status, $query_output) = run_ssh_command($computer_node_name, $management_node_keys, $query_command, '', '', 1);
+	if (!defined($query_output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to retrieve power scheme name");
+		return;
+	}
+	
+	# Join the powercfg.exe output lines into a string then parse the line beginning with 'Name '
+	join("\n", @$query_output) =~ /Name\s+(.*)/;
+	my $scheme_name = $1;
+	if (!$scheme_name) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve power scheme name from powercfg.exe query output:\n" . join("\n", @$query_output));
+		return;
+	}
+	notify($ERRORS{'DEBUG'}, 0, "retrieved power scheme name: '$scheme_name'");
+	
+	# Run powercfg.exe to disable sleep
+	my $powercfg_command;
+	$powercfg_command .= "$system32_path/powercfg.exe /CHANGE \"$scheme_name\" /monitor-timeout-ac 0 ; ";
+	$powercfg_command .= "$system32_path/powercfg.exe /CHANGE \"$scheme_name\" /monitor-timeout-dc 0 ; ";
+	$powercfg_command .= "$system32_path/powercfg.exe /CHANGE \"$scheme_name\" /disk-timeout-ac 0 ; ";
+	$powercfg_command .= "$system32_path/powercfg.exe /CHANGE \"$scheme_name\" /disk-timeout-dc 0 ; ";
+	$powercfg_command .= "$system32_path/powercfg.exe /CHANGE \"$scheme_name\" /standby-timeout-ac 0 ; ";
+	$powercfg_command .= "$system32_path/powercfg.exe /CHANGE \"$scheme_name\" /standby-timeout-dc 0 ; ";
+	$powercfg_command .= "$system32_path/powercfg.exe /CHANGE \"$scheme_name\" /hibernate-timeout-ac 0 ; ";
+	$powercfg_command .= "$system32_path/powercfg.exe /CHANGE \"$scheme_name\" /hibernate-timeout-dc 0";
+	
+	my ($powercfg_exit_status, $powercfg_output) = run_ssh_command($computer_node_name, $management_node_keys, $powercfg_command, '', '', 1);
+	if (!defined($powercfg_output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to disable sleep");
+		return;
+	}
+	elsif (grep(/(error|invalid|not found)/i, @$powercfg_output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to disable sleep, powercfg.exe output:\n" . join("\n", @$powercfg_output));
+		return;
+	}
+	else {
+		notify($ERRORS{'OK'}, 0, "disabled sleep");
+	}
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 1;
 __END__
 
