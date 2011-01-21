@@ -474,10 +474,12 @@ sub copy_virtual_disk {
 		return;
 	}
 	
+	my $vmhost_name = $self->data->get_vmhost_hostname();
+	
 	# Get a virtual disk manager object
 	my $service_content = Vim::get_service_content() || return;
 	if (!$service_content->{virtualDiskManager}) {
-		notify($ERRORS{'WARNING'}, 0, "unable to copy virtual disk, virtual disk manager is not available through the vSphere SDK");
+		notify($ERRORS{'WARNING'}, 0, "unable to copy virtual disk on VM host $vmhost_name, virtual disk manager is not available through the vSphere SDK");
 		return;
 	}
 	my $virtual_disk_manager = Vim::get_view(mo_ref => $service_content->{virtualDiskManager}) || return;
@@ -501,7 +503,7 @@ sub copy_virtual_disk {
 	my $source_disk_type = $source_info->{$info_file_name}{diskType};
 	my $source_file_size_bytes = $source_info->{$info_file_name}{fileSize};
 	if ($source_adapter_type !~ /\w/ || $source_disk_type !~ /\w/ || $source_file_size_bytes !~ /\d/) {
-		notify($ERRORS{'WARNING'}, 0, "unable to retrieve adapter type, disk type, and file size of source file: '$source_path', file info:\n" . format_data($source_info));
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve adapter type, disk type, and file size of source file on VM host $vmhost_name: '$source_path', file info:\n" . format_data($source_info));
 		return;
 	}
 	
@@ -509,7 +511,7 @@ sub copy_virtual_disk {
 	local $SIG{__DIE__} = sub{};
 	
 	# Attempt to copy the file
-	notify($ERRORS{'DEBUG'}, 0, "attempting to copy file: '$source_path' --> '$destination_path'
+	notify($ERRORS{'DEBUG'}, 0, "attempting to copy file on VM host $vmhost_name: '$source_path' --> '$destination_path'
 			 adapter type: $source_adapter_type --> $destination_adapter_type
 			 disk type: $source_disk_type --> $destination_disk_type
 			 source file size: " . format_number($source_file_size_bytes));
@@ -523,11 +525,21 @@ sub copy_virtual_disk {
 	
 	# Check if an error occurred
 	if (my $fault = $@) {
-		notify($ERRORS{'WARNING'}, 0, "failed to copy vmdk: '$source_path' --> '$destination_path'\nerror:\n$fault");
+		if ($fault =~ /No space left/i) {
+			# Check if the output indicates there is not enough space to copy the vmdk
+			# Output will contain:
+			#    Fault string: A general system error occurred: No space left on device
+			#    Fault detail: SystemError
+			notify($ERRORS{'CRITICAL'}, 0, "failed to copy vmdk on VM host $vmhost_name, no space is left on the destination device: '$destination_path'\nerror:\n$fault");
+			return;
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to copy vmdk on VM host $vmhost_name: '$source_path' --> '$destination_path'\nerror:\n$fault");
+		}
 		return;
 	}
 	
-	notify($ERRORS{'OK'}, 0, "copied vmdk: '$source_path' --> '$destination_path'");
+	notify($ERRORS{'OK'}, 0, "copied vmdk on VM host $vmhost_name: '$source_path' --> '$destination_path'");
 	return 1;
 }
 
@@ -552,6 +564,8 @@ sub move_virtual_disk {
 	my $source_path = $self->_get_datastore_path(shift) || return;
 	my $destination_path = $self->_get_datastore_path(shift) || return;
 	
+	my $vmhost_name = $self->data->get_vmhost_hostname();
+	
 	# Make sure the source path ends with .vmdk
 	if ($source_path !~ /\.vmdk$/i || $destination_path !~ /\.vmdk$/i) {
 		notify($ERRORS{'WARNING'}, 0, "source and destination path arguments must end with .vmdk:\nsource path argument: $source_path\ndestination path argument: $destination_path");
@@ -560,13 +574,13 @@ sub move_virtual_disk {
 	
 	# Make sure the source file exists
 	if (!$self->file_exists($source_path)) {
-		notify($ERRORS{'WARNING'}, 0, "source file does not exist: '$source_path'");
+		notify($ERRORS{'WARNING'}, 0, "source file does not exist on VM host $vmhost_name: '$source_path'");
 		return;
 	}
 	
 	# Make sure the destination file does not exist
 	if ($self->file_exists($destination_path)) {
-		notify($ERRORS{'WARNING'}, 0, "destination file already exists: '$destination_path'");
+		notify($ERRORS{'WARNING'}, 0, "destination file already exists on VM host $vmhost_name: '$destination_path'");
 		return;
 	}
 	
@@ -579,21 +593,21 @@ sub move_virtual_disk {
 	
 	# Check if the virtual disk manager is available
 	if (!$service_content->{virtualDiskManager}) {
-		notify($ERRORS{'OK'}, 0, "unable to move virtual disk using vSphere SDK because virtual disk manager object is not available on the VM host");
+		notify($ERRORS{'OK'}, 0, "unable to move virtual disk using vSphere SDK because virtual disk manager object is not available on VM host $vmhost_name");
 		return 0;
 	}
 	
 	# Create a virtual disk manager object
 	my $virtual_disk_manager = Vim::get_view(mo_ref => $service_content->{virtualDiskManager});
 	if (!$virtual_disk_manager) {
-		notify($ERRORS{'WARNING'}, 0, "failed to create vSphere SDK virtual disk manager object");
+		notify($ERRORS{'WARNING'}, 0, "failed to create vSphere SDK virtual disk manager object on VM host $vmhost_name");
 		return;
 	}
 	
 	# Create a datacenter object
 	my $datacenter = Vim::find_entity_view(view_type => 'Datacenter');
 	if (!$datacenter) {
-		notify($ERRORS{'WARNING'}, 0, "failed to create vSphere SDK datacenter object");
+		notify($ERRORS{'WARNING'}, 0, "failed to create vSphere SDK datacenter object on VM host $vmhost_name");
 		return;
 	}
 	
@@ -601,7 +615,7 @@ sub move_virtual_disk {
 	local $SIG{__DIE__} = sub{};
 	
 	# Attempt to move the virtual disk using MoveVirtualDisk
-	notify($ERRORS{'DEBUG'}, 0, "attempting to move virtual disk: '$source_path' --> '$destination_path'");
+	notify($ERRORS{'DEBUG'}, 0, "attempting to move virtual disk on VM host $vmhost_name: '$source_path' --> '$destination_path'");
 	eval { $virtual_disk_manager->MoveVirtualDisk(sourceName => $source_path,
 																 sourceDatacenter => $datacenter,
 																 destName => $destination_path,
@@ -616,19 +630,22 @@ sub move_virtual_disk {
 		
 		# A FileNotFound fault will be generated if the source vmdk file exists but there is a problem with it
 		if ($fault->isa('SoapFault') && ref($fault->detail) eq 'FileNotFound' && defined($source_file_info->{type}) && $source_file_info->{type} !~ /vmdisk/i) {
-			notify($ERRORS{'WARNING'}, 0, "failed to move virtual disk, source file is either not a virtual disk file or there is a problem with its configuration, check the 'Extent description' section of the vmdk file: '$source_path'\nsource file info:\n" . format_data($source_file_info));
+			notify($ERRORS{'WARNING'}, 0, "failed to move virtual disk on VM host $vmhost_name, source file is either not a virtual disk file or there is a problem with its configuration, check the 'Extent description' section of the vmdk file: '$source_path'\nsource file info:\n" . format_data($source_file_info));
+		}
+		elsif ($fault =~ /No space left/i) {
+			notify($ERRORS{'CRITICAL'}, 0, "failed to move virtual disk on VM host $vmhost_name, no space is left on the destination device: '$destination_path'\nerror:\n$fault");
 		}
 		elsif ($source_file_info) {
-			notify($ERRORS{'WARNING'}, 0, "failed to move virtual disk:\n'$source_path' --> '$destination_path'\nsource file info:\n" . format_data($source_file_info) . "\n$fault");
+			notify($ERRORS{'WARNING'}, 0, "failed to move virtual disk on VM host $vmhost_name:\n'$source_path' --> '$destination_path'\nsource file info:\n" . format_data($source_file_info) . "\n$fault");
 		}
 		else {
-			notify($ERRORS{'WARNING'}, 0, "failed to move virtual disk:\n'$source_path' --> '$destination_path'\nsource file info: unavailable\n$fault");
+			notify($ERRORS{'WARNING'}, 0, "failed to move virtual disk on VM host $vmhost_name:\n'$source_path' --> '$destination_path'\nsource file info: unavailable\n$fault");
 		}
 		
 		return;
 	}
 	
-	notify($ERRORS{'OK'}, 0, "moved virtual disk:\n'$source_path' --> '$destination_path'");
+	notify($ERRORS{'OK'}, 0, "moved virtual disk on VM host $vmhost_name:\n'$source_path' --> '$destination_path'");
 	return 1;
 }
 

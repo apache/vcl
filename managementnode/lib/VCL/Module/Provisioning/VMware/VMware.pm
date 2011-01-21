@@ -573,8 +573,7 @@ sub capture {
 	# Rename the vmdk to the new image directory and file name
 	# First check if vmdk file path already matches the destination file path
 	if ($vmdk_file_path_original eq $vmdk_file_path_renamed) {
-		notify($ERRORS{'OK'}, 0, "vmdk files will not be renamed, vmdk file path being captured is already named as the image being captured: '$vmdk_file_path_original'");
-		
+		notify($ERRORS{'DEBUG'}, 0, "vmdk files will not be renamed, vmdk file path being captured is already named as the image being captured: '$vmdk_file_path_original'");
 	}
 	else {
 		if (!$self->rename_vmdk($vmdk_file_path_original, $vmdk_file_path_renamed)) {
@@ -586,6 +585,8 @@ sub capture {
 	# Copy the vmdk to the image repository if the repository path is defined in the VM profile
 	my $repository_directory_path = $self->get_repository_vmdk_directory_path();
 	if ($repository_directory_path) {
+		my $repository_copy_successful = 0;
+		
 		# Check if the image repository path configured in the VM profile is mounted on the host or on the management node
 		my $repository_mounted_on_vmhost = $self->is_repository_mounted_on_vmhost();
 		if ($repository_mounted_on_vmhost) {
@@ -593,9 +594,11 @@ sub capture {
 			
 			# Files can be copied directly to the image repository and converted while they are copied
 			my $repository_vmdk_file_path = $self->get_repository_vmdk_file_path();
-			if (!$self->copy_vmdk($vmdk_file_path_renamed, $repository_vmdk_file_path, '2gbsparse')) {
+			if ($self->copy_vmdk($vmdk_file_path_renamed, $repository_vmdk_file_path, '2gbsparse')) {
+				$repository_copy_successful = 1;
+			}
+			else {
 				notify($ERRORS{'WARNING'}, 0, "failed to copy the vmdk files after the VM was powered off: '$vmdk_file_path_renamed' --> '$repository_vmdk_file_path'");
-				return;
 			}
 		}
 		else {
@@ -609,12 +612,11 @@ sub capture {
 			my $virtual_disk_type = $self->api->get_virtual_disk_type($vmdk_file_path_renamed);
 			if (!$virtual_disk_type) {
 				notify($ERRORS{'WARNING'}, 0, "failed to determine the virtual disk type of the vmdk being captured: $vmdk_file_path_renamed");
-				return;
 			}
 			elsif ($virtual_disk_type =~ /sparse/) {
 				# Virtual disk is sparse, get a list of the vmdk file paths
 				notify($ERRORS{'DEBUG'}, 0, "vmdk can be copied directly from VM host $vmhost_hostname to the image repository because the virtual disk type is sparse: $virtual_disk_type");
-				@vmdk_copy_paths = $self->vmhost_os->find_files($vmdk_file_path_renamed, '*.vmdk');
+				@vmdk_copy_paths = $self->vmhost_os->find_files($vmdk_directory_path_original, '*.vmdk');
 			}
 			else {
 				# Virtual disk is NOT sparse - a sparse copy must first be created before being copied to the repository
@@ -623,33 +625,38 @@ sub capture {
 				# Construct the vmdk file path where the 2gbsparse copy will be created
 				# The vmdk files are copied to a directory with the same name but with '_2gbsparse' appended to the directory name
 				# The vmdk files in the '_2gbsparse' are named the same as the original non-sparse directory
-				$vmdk_directory_path_sparse = "$vmdk_base_directory_path/$image_name\_2gbsparse";
+				$vmdk_directory_path_sparse = "$vmdk_directory_path_original\_2gbsparse";
 				$vmdk_file_path_sparse = "$vmdk_directory_path_sparse/$image_name.vmdk";
 				
 				# Create a sparse copy of the virtual disk
-				if (!$self->copy_vmdk($vmdk_file_path_renamed, $vmdk_file_path_sparse, '2gbsparse')) {
-					notify($ERRORS{'WARNING'}, 0, "failed to create a temporary 2gbsparse copy of the vmdk file: '$vmdk_file_path_renamed' --> '$vmdk_file_path_sparse'");
-					return;
+				if ($self->copy_vmdk($vmdk_file_path_renamed, $vmdk_file_path_sparse, '2gbsparse')) {
+					# Get a list of the 2gbsparse vmdk file paths
+					@vmdk_copy_paths = $self->vmhost_os->find_files($vmdk_directory_path_sparse, '*.vmdk');
 				}
-				
-				# Get a list of the 2gbsparse vmdk file paths
-				@vmdk_copy_paths = $self->vmhost_os->find_files($vmdk_directory_path_sparse, '*.vmdk');
+				else {
+					notify($ERRORS{'WARNING'}, 0, "failed to create a temporary 2gbsparse copy of the vmdk file: '$vmdk_file_path_renamed' --> '$vmdk_file_path_sparse'");
+				}
 			}
 			
 			# Copy the vmdk directory from the VM host to the image repository
-			if (!@vmdk_copy_paths) {
-				notify($ERRORS{'WARNING'}, 0, "failed to find the vmdk files on VM host $vmhost_hostname to copy back to the managment node's image repository");
-				return;
-			}
-			
-			# Loop through the files, copy each to the management node's repository directory
-			notify($ERRORS{'DEBUG'}, 0, "vmdk files will be copied from VM host $vmhost_hostname to the image repository on the management node:\n" . join("\n", sort @vmdk_copy_paths));
-			for my $vmdk_copy_path (@vmdk_copy_paths) {
-				my ($vmdk_copy_name) = $vmdk_copy_path =~ /([^\/]+)$/;
-				if (!$self->vmhost_os->copy_file_from($vmdk_copy_path, "$repository_directory_path/$vmdk_copy_name")) {
-					notify($ERRORS{'WARNING'}, 0, "failed to copy vmdk file from VM host $vmhost_hostname to the management node:\n '$vmdk_copy_path' --> '$repository_directory_path/$vmdk_copy_name'");
-					return;
+			if (@vmdk_copy_paths) {
+				# Loop through the files, copy each to the management node's repository directory
+				notify($ERRORS{'DEBUG'}, 0, "vmdk files will be copied from VM host $vmhost_hostname to the image repository on the management node:\n" . join("\n", sort @vmdk_copy_paths));
+				VMDK_COPY_PATH: for my $vmdk_copy_path (@vmdk_copy_paths) {
+					my ($vmdk_copy_name) = $vmdk_copy_path =~ /([^\/]+)$/;
+					
+					# Set the flag to 1 before copying, set it back to 0 if any files fail to be copied
+					$repository_copy_successful = 1;
+					
+					if (!$self->vmhost_os->copy_file_from($vmdk_copy_path, "$repository_directory_path/$vmdk_copy_name")) {
+						notify($ERRORS{'WARNING'}, 0, "failed to copy vmdk file from VM host $vmhost_hostname to the management node:\n '$vmdk_copy_path' --> '$repository_directory_path/$vmdk_copy_name'");
+						$repository_copy_successful = 0;
+						last VMDK_COPY_PATH;
+					}
 				}
+			}
+			else {
+				notify($ERRORS{'WARNING'}, 0, "failed to find the vmdk files on VM host $vmhost_hostname to copy back to the managment node's image repository");
 			}
 			
 			# Check if the $vmdk_directory_path_sparse variable has been set
@@ -660,9 +667,40 @@ sub capture {
 				
 				if (!$self->vmhost_os->delete_file($vmdk_directory_path_sparse)) {
 					notify($ERRORS{'WARNING'}, 0, "failed to delete the directory containing the 2gbsparse copy of the vmdk files: $vmdk_directory_path_sparse");
-					return;
 				}
 			}
+		}
+		
+		# The $repository_copy_successful flag should be set to 1 by this point if the copy was successful
+		if (!$repository_copy_successful) {
+			# Rename the vmdk back to the original file name
+			# This is necessary to power the VM back on in order to fix the problem because the VM's vmx file still contains the path to the original vmdk
+			# First check if vmdk file path already matches the destination file path
+			if ($vmdk_file_path_original eq $vmdk_file_path_renamed) {
+				notify($ERRORS{'DEBUG'}, 0, "vmdk file does not need to be renamed back to the original name, vmdk file path being captured is already named as the image being captured: '$vmdk_file_path_original'");
+				
+				# Attempt to power the VM back on
+				# This saves a step when troubleshooting the problem
+				notify($ERRORS{'DEBUG'}, 0, "attempting to power the VM back on so that it can be captured again");
+				$self->api->vm_power_on($vmx_file_path_original);
+			}
+			else {
+				if ($self->rename_vmdk($vmdk_file_path_renamed, $vmdk_file_path_original)) {
+					if ($vmdk_directory_path_original ne $vmdk_directory_path_renamed) {
+						notify($ERRORS{'DEBUG'}, 0, "attempting to delete directory where renamed vmdk resided before reverting the name back to the original: $vmdk_directory_path_renamed");
+						$self->vmhost_os->delete_file($vmdk_directory_path_renamed);
+					}
+					
+					# Attempt to power the VM back on
+					# This saves a step when troubleshooting the problem
+					notify($ERRORS{'DEBUG'}, 0, "attempting to power the VM back on so that it can be captured again");
+					$self->api->vm_power_on($vmx_file_path_original);
+				}
+				else {
+					notify($ERRORS{'WARNING'}, 0, "failed to rename the vmdk files back to the original name after copying to the repository failed: '$vmdk_file_path_renamed' --> '$vmdk_file_path_original'");
+				}
+			}
+			return;
 		}
 		
 		# Attempt to set permissions on the image repository directory
@@ -1259,7 +1297,10 @@ sub get_vmhost_api_object {
 	
 	# Create an API object to control the VM host and VMs
 	my $api;
-	eval { $api = ($api_perl_package)->new({data_structure => $vmhost_datastructure, vmhost_os => $self->{vmhost_os}}) };
+	eval { $api = ($api_perl_package)->new({data_structure => $self->data,
+														 vmhost_data => $vmhost_datastructure,
+														 vmhost_os => $self->{vmhost_os}
+														 })};
 	if (!$api) {
 		if ($EVAL_ERROR) {
 			notify($ERRORS{'WARNING'}, 0, "API object could not be created: $api_perl_package, error:\n$EVAL_ERROR");
@@ -2944,13 +2985,13 @@ sub get_vmdk_file_path_persistent {
 		return;
 	}
 	
-	my $image_name = $self->data->get_image_name();
-	if (!$image_name) {
-		notify($ERRORS{'WARNING'}, 0, "unable to construct vmdk file path, image name could not be determined");
+	my $vmdk_directory_name_persistent = $self->get_vmdk_directory_name_persistent();
+	if (!$vmdk_directory_name_persistent) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine the persistent vmdk file path");
 		return;
 	}
 	
-	return "$vmdk_directory_path_persistent/$image_name.vmdk";
+	return "$vmdk_directory_path_persistent/$vmdk_directory_name_persistent.vmdk";
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -3215,15 +3256,21 @@ sub get_vmdk_directory_path_persistent {
 		return;
 	}
 	
-	# Use the same path that's used for the persistent vmx directory path
-	my $vmdk_directory_path_persistent = $self->get_vmx_directory_path();
-	if ($vmdk_directory_path_persistent) {
-		return $vmdk_directory_path_persistent;
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "unable to determine persistent vmdk directory path because vmx directory path could not be retrieved");
+	# Get the vmdk base directory path
+	# Pass '1' to the subroutine to specify that the path should be retrieved directly from the vmprofile table
+	my $vmdk_base_directory_path = $self->get_vmdk_base_directory_path(1);
+	if (!$vmdk_base_directory_path) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine the nonpersistent vmdk base directory path, failed to retrieve datastore path for the VM profile");
 		return;
 	}
+	
+	my $vmdk_directory_name_persistent = $self->get_vmdk_directory_name_persistent();
+	if (!$vmdk_directory_name_persistent) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine persistent vmdk directory path because persistent vmdk directory name could not be determined");
+		return;
+	}
+	
+	return "$vmdk_base_directory_path/$vmdk_directory_name_persistent";
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -4673,6 +4720,9 @@ sub copy_vmdk {
 		return;
 	}
 	
+	$source_vmdk_file_path = $self->_get_normal_path($source_vmdk_file_path) || return;
+	$destination_vmdk_file_path = $self->_get_normal_path($destination_vmdk_file_path) || return;
+	
 	# Set the default virtual disk type if the argument was not specified
 	if (!$virtual_disk_type) {
 		if ($vmhost_product_name =~ /esx/i) {
@@ -4691,20 +4741,20 @@ sub copy_vmdk {
 	
 	# Make sure the source vmdk file exists
 	if (!$self->vmhost_os->file_exists($source_vmdk_file_path)) {
-		notify($ERRORS{'WARNING'}, 0, "source vmdk file path does not exist: $source_vmdk_file_path");
+		notify($ERRORS{'WARNING'}, 0, "source vmdk file path does not exist on VM host $vmhost_name: $source_vmdk_file_path");
 		return;
 	}
 	
 	# Make sure the destination vmdk file doesn't already exist
 	if ($self->vmhost_os->file_exists($destination_vmdk_file_path)) {
-		notify($ERRORS{'WARNING'}, 0, "destination vmdk file path already exists: $destination_vmdk_file_path");
+		notify($ERRORS{'WARNING'}, 0, "destination vmdk file path already exists on VM host $vmhost_name: $destination_vmdk_file_path");
 		return;
 	}
 	
 	# Get the destination parent directory path and create the directory
 	my ($destination_directory_path) = $destination_vmdk_file_path =~ /(.+)\/[^\/]+/;
 	if (!$self->vmhost_os->create_directory($destination_directory_path)) {
-		notify($ERRORS{'WARNING'}, 0, "unable to copy vmdk, destination directory could not be created on the VM host: $destination_directory_path");
+		notify($ERRORS{'WARNING'}, 0, "unable to copy vmdk, destination directory could not be created on VM host $vmhost_name: $destination_directory_path");
 		return;
 	}
 	
@@ -4712,8 +4762,21 @@ sub copy_vmdk {
 	my $copy_result = 0;
 	
 	# Attempt to use the API's copy_virtual_disk subroutine
-	if ($self->api->can('copy_virtual_disk') && ($copy_result = $self->api->copy_virtual_disk($source_vmdk_file_path, $destination_vmdk_file_path, $virtual_disk_type))) {
-		notify($ERRORS{'OK'}, 0, "copied vmdk using API's copy_virtual_disk subroutine");
+	if ($self->api->can('copy_virtual_disk')) {
+		if ($self->api->copy_virtual_disk($source_vmdk_file_path, $destination_vmdk_file_path, $virtual_disk_type)) {
+			notify($ERRORS{'OK'}, 0, "copied vmdk using API's copy_virtual_disk subroutine");
+			$copy_result = 1;
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to copy vmdk using API's copy_virtual_disk subroutine");
+			return;
+		}
+	}
+	
+	# Make sure VM host OS object implements 'execute' before attempting to call utilities
+	if (!$copy_result && !$self->vmhost_os->can('execute')) {
+		notify($ERRORS{'WARNING'}, 0, "failed to copy vmdk on VM host $vmhost_name, unable to copy using API's copy_virtual_disk subroutine and an 'execute' subroutine is not implemented by the VM host OS object");
+		return;
 	}
 	
 	if (!$copy_result) {
@@ -4729,8 +4792,18 @@ sub copy_vmdk {
 		elsif (grep(/command not found/i, @$output)) {
 			notify($ERRORS{'DEBUG'}, 0, "unable to copy virtual disk using vmkfstools because the command is not available on VM host $vmhost_name");
 		}
-		elsif (!grep(/(100\% done|success)/, @$output)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to copy virtual disk, output does not contain '100% done' or 'success', command: '$command', output:\n" . join("\n", @$output));
+		elsif (grep(/Enter username/i, @$output)) {
+			notify($ERRORS{'DEBUG'}, 0, "unable to copy virtual disk using vmkfstools, the command is not compatible on VM host $vmhost_name");
+		}
+		elsif (grep(/No space left/, @$output)) {
+			# Check if the output indicates there is not enough space to copy the vmdk
+			# Output will contain:
+			#    Failed to clone disk : No space left on device (1835017).
+			notify($ERRORS{'CRITICAL'}, 0, "failed to copy virtual disk, no space is left on the destination device on VM host $vmhost_name: '$destination_directory_path'\ncommand: '$command'\noutput:\n" . join("\n", @$output));
+			return;
+		}
+		elsif (grep(/Failed to clone disk/, @$output) || !grep(/(100\% done|success)/, @$output)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to copy virtual disk\ncommand: '$command'\noutput:\n" . join("\n", @$output));
 		}
 		else {
 			notify($ERRORS{'OK'}, 0, "copied virtual disk on VM host using vmkfstools, destination disk type: $virtual_disk_type:\n'$source_vmdk_file_path' --> '$destination_vmdk_file_path'");
@@ -4775,18 +4848,24 @@ sub copy_vmdk {
 					($exit_status, $output) = $self->vmhost_os->execute($vdisk_command);
 				}
 				else {
-					notify($ERRORS{'WARNING'}, 0, "failed to repair the virtual disk on VM host, output:\n" . join("\n", @$vdisk_repair_output));
+					notify($ERRORS{'WARNING'}, 0, "failed to repair the virtual disk on VM host $vmhost_name, output:\n" . join("\n", @$vdisk_repair_output));
 				}
 			}
 			
 			if (!defined($output)) {
-				notify($ERRORS{'WARNING'}, 0, "failed to run command on VM host: $vdisk_command");
+				notify($ERRORS{'WARNING'}, 0, "failed to run command on VM host $vmhost_name: $vdisk_command");
+			}
+			elsif (grep(/disk is full/i, @$output)) {
+				# vmware-vdiskmgr output if not enough space is available:
+				#    Failed to convert disk: An error occurred while writing a file; the disk is full. Data has not been saved. Free some space and try again (0xa00800000008).
+				notify($ERRORS{'CRITICAL'}, 0, "failed to copy virtual disk on VM host $vmhost_name, no space is left on the destination device: '$destination_directory_path'\ncommand: '$vdisk_command'\noutput:\n" . join("\n", @$output));
+				return;
 			}
 			elsif (!grep(/(100\% done|success)/, @$output)) {
-				notify($ERRORS{'WARNING'}, 0, "failed to copy virtual disk, output does not contain '100% done' or 'success', command: '$vdisk_command', output:\n" . join("\n", @$output));
+				notify($ERRORS{'WARNING'}, 0, "failed to copy virtual disk on VM host $vmhost_name, output does not contain '100% done' or 'success', command: '$vdisk_command', output:\n" . join("\n", @$output));
 			}
 			else {
-				notify($ERRORS{'OK'}, 0, "copied virtual disk on VM host using vmware-vdiskmanager:\n'$source_vmdk_file_path' --> '$destination_vmdk_file_path'");
+				notify($ERRORS{'OK'}, 0, "copied virtual disk on VM host $vmhost_name using vmware-vdiskmanager:\n'$source_vmdk_file_path' --> '$destination_vmdk_file_path'");
 				$copy_result = 1;
 			}
 		}
@@ -4794,7 +4873,7 @@ sub copy_vmdk {
 	
 	# Check if any of the methods was successful
 	if (!$copy_result) {
-		notify($ERRORS{'WARNING'}, 0, "failed to copy virtual disk using any available methods:\n'$source_vmdk_file_path' --> '$destination_vmdk_file_path'");
+		notify($ERRORS{'WARNING'}, 0, "failed to copy virtual disk on VM host $vmhost_name using any available methods:\n'$source_vmdk_file_path' --> '$destination_vmdk_file_path'");
 		return;
 	}
 	
@@ -4817,7 +4896,7 @@ sub copy_vmdk {
 	
 	my $image_size_bytes = $self->vmhost_os->get_file_size($search_path);
 	if (!defined($image_size_bytes) || $image_size_bytes !~ /^\d+$/) {
-		notify($ERRORS{'WARNING'}, 0, "copied vmdk but failed to retrieve destination file size:\n'$source_vmdk_file_path' --> '$destination_vmdk_file_path'");
+		notify($ERRORS{'WARNING'}, 0, "copied vmdk on VM host $vmhost_name but failed to retrieve destination file size:\n'$source_vmdk_file_path' --> '$destination_vmdk_file_path'");
 		return 1;
 	}
 	
@@ -4847,7 +4926,7 @@ sub copy_vmdk {
 	my $gb_per_minute = ($image_size_gb / $duration_seconds * 60);
 	
 	
-	notify($ERRORS{'OK'}, 0, "copied vmdk: '$source_vmdk_file_path' --> '$destination_vmdk_file_path'\n" .
+	notify($ERRORS{'OK'}, 0, "copied vmdk on VM host $vmhost_name: '$source_vmdk_file_path' --> '$destination_vmdk_file_path'\n" .
 		"time to copy: $minutes:$seconds (" . format_number($duration_seconds) . " seconds)\n" .
 		"---\n" .
 		"bits copied:  " . format_number($image_size_bits) . " ($image_size_bits)\n" .
@@ -6042,10 +6121,10 @@ sub _check_datastore_paths {
 			'get_vmx_directory_path',
 			'get_vmx_file_path',
 			
+			'get_vmdk_base_directory_path',
 			'get_vmdk_directory_path',
 			'get_vmdk_file_path',
 			
-			'get_vmdk_base_directory_path',
 			'get_vmdk_directory_path_nonpersistent',
 			'get_vmdk_file_path_nonpersistent',
 			
