@@ -1286,7 +1286,8 @@ INSERT INTO `module` (`id`, `name`, `prettyname`, `description`, `perlpackage`) 
 (20, 'provisioning_xCAT_2x', 'xCAT 2.x Provisioning Module', '', 'VCL::Module::Provisioning::xCAT2'),
 (21, 'provisioning_vmware', 'VMware Provisioning Module', '', 'VCL::Module::Provisioning::VMware::VMware'),
 (22, 'state_image', 'VCL Image State Module', '', 'VCL::image'),
-(23, 'base_module', 'VCL Base Module', '', 'VCL::Module');
+(23, 'base_module', 'VCL Base Module', '', 'VCL::Module'),
+(24, 'vbox_module', 'Virtual Box Module', '', 'VCL::Module::Provisioning::vbox');
 
 -- 
 -- Dumping data for table `OS`
@@ -1376,7 +1377,8 @@ INSERT INTO `provisioning` (`id`, `name`, `prettyname`, `moduleid`) VALUES
 (3, 'lab', 'Computing Lab', 3),
 (5, 'xcat_21', 'xCAT 2.1', 11),
 (6, 'xcat_2x', 'xCAT 2.x', 20),
-(7, 'vmware', 'VMware', 21);
+(7, 'vmware', 'VMware', 21),
+(8, 'vbox', 'Virtual Box', 24);
 
 --
 -- Dumping data for table `provisioningOSinstalltype`
