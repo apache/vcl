@@ -4337,7 +4337,9 @@ sub get_request_info {
 				notify($ERRORS{'DEBUG'}, 0, "request checkuser flag is set to $reservation_row{request_checkuser}");
 				$request_info{reservation}{$reservation_id}{image}{imagemeta}{checkuser} = $reservation_row{request_checkuser};
 			}
+
 		}
+		
 
 		# Check if the computer associated with this reservation has a vmhostid set
 		if ($reservation_row{computer_vmhostid}) {
@@ -4477,6 +4479,14 @@ sub get_request_info {
 	$request_info{NOTICEINTERVAL}   = '';
 	$request_info{RESERVATIONCOUNT} = scalar keys %{$request_info{reservation}};
 	$request_info{UPDATED}          = '0';
+	$request_info{DURATION}		= '';
+
+	
+	# Store duration in epoch seconds format
+	my $startepoch 			= convert_to_epoch_seconds($request_info{start});
+	my $endepoch			= convert_to_epoch_seconds($request_info{end});
+	$request_info{DURATION}         = ($endepoch - $startepoch);
+ 
 
 	# Each selected row represents a reservation associated with this request
 
@@ -4552,6 +4562,12 @@ sub get_request_info {
 		# Set the reservation remote IP to 0 if it's NULL
 		if (!defined($request_info{reservation}{$reservation_id}{remoteIP})) {
 			$request_info{reservation}{$reservation_id}{remoteIP} = 0;
+		}
+		
+		# If duration is greater >= 24 hrs disable user checks
+		if($request_info{DURATION} >= (1 * 60 * 60 * 24) ){
+			notify($ERRORS{'DEBUG'}, 0, "DURATION greater than 24 hrs disabling checkuser flag by setting to 0");
+			$request_info{reservation}{$reservation_id}{image}{imagemeta}{checkuser} = 0;
 		}
 
 		# Set the short name of the computer based on the hostname
