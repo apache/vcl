@@ -1337,7 +1337,8 @@ INSERT INTO `OSinstalltype` (`id`, `name`) VALUES
 (2, 'kickstart'),
 (3, 'none'),
 (1, 'partimage'),
-(4, 'vmware');
+(4, 'vmware'),
+(5, 'vbox');
 
 -- 
 -- Dumping data for table `OStype`
@@ -1393,6 +1394,8 @@ INSERT INTO `provisioningOSinstalltype` (`provisioningid`, `OSinstalltypeid`) VA
 (6, 2),
 (3, 3),
 (7, 4);
+INSERT IGNORE INTO `provisioningOSinstalltype` (`provisioningid`, `OSinstalltypeid`) VALUES
+((SELECT `id` FROM `provisioning` WHERE `name` LIKE 'vbox' ), (SELECT `id` FROM `OSinstalltype` WHERE `name` LIKE 'vbox'`));
 
 -- 
 -- Dumping data for table `resource`
