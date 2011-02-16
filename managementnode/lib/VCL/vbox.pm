@@ -162,11 +162,8 @@ sub load {
                 notify($ERRORS{'OK'}, 0, "removed node $shortname from vmhost $vmhost_hostname");
         }
 
-        ### FIX-ME: I have no freakin clue how to approach this (imaging mode) at the moment
-        ###         For VBox, this would require changing the disk mode from immuatable to normal
-        ###         which itself would be easy, the challenge for me is handeling the hypervisors that have this image registered
-        ###         where any VMs that are using it will have associated snapshots that will have to be delt with before the image
-        ###         could be un-registered and re-registered. so for now, @#$% it... (david.hutchins)
+	## Some progress was made in respect to imaging, some new bugs were added too
+
 	if ($persistent) {
          $vm_name = "$requestedimagename\_IMAGING\_$shortname"; 
 	} ## end if ($persistent)
