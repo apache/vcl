@@ -211,7 +211,10 @@ CREATE TABLE IF NOT EXISTS `provisioningOSinstalltype` (
 -- Inserts for table `module`
 -- 
 
-INSERT IGNORE INTO `module` (`name`, `prettyname`, `description`, `perlpackage`) VALUES ('provisioning_vbox', 'Virtual Box Provisioning Module', '', 'VCL::Module::Provisioning::vbox');
+INSERT IGNORE INTO `module` (`id`, `name`, `prettyname`, `description`, `perlpackage`) VALUES 
+('22, 'state_image', 'VCL Image State Module', '', 'VCL::image'),
+('23', 'base', 'VCL Base Module', '', 'VCL::Module'),
+('24', 'provisioning_vbox', 'Virtual Box Provisioning Module', '', 'VCL::Module::Provisioning::vbox');
 
 -- --------------------------------------------------------
 
@@ -219,7 +222,8 @@ INSERT IGNORE INTO `module` (`name`, `prettyname`, `description`, `perlpackage`)
 -- Inserts for table `provisioning`
 --
 
-INSERT IGNORE INTO `provisioning` (`name`, `prettyname`, `moduleid`) VALUES ('vbox', 'Virtual Box', (SELECT `id` FROM `module` WHERE `name` LIKE 'provisioning_vbox'));
+INSERT IGNORE INTO `provisioning` (`id`, `name`, `prettyname`, `moduleid`) VALUES 
+('8', 'vbox', 'Virtual Box', (SELECT `id` FROM `module` WHERE `name` LIKE 'provisioning_vbox'));
 
 -- --------------------------------------------------------
 
@@ -227,7 +231,7 @@ INSERT IGNORE INTO `provisioning` (`name`, `prettyname`, `moduleid`) VALUES ('vb
 -- Inserts for table `OSinstalltype`
 --
 
-INSERT IGNORE INTO `OSinstalltype` (`name`) VALUES ('vbox');
+INSERT IGNORE INTO `OSinstalltype` (`id`, `name`) VALUES ('5', 'vbox');
 
 -- --------------------------------------------------------
 -- --------------------------------------------------------
@@ -235,9 +239,16 @@ INSERT IGNORE INTO `OSinstalltype` (`name`) VALUES ('vbox');
 -- 
 -- Inserts for table `provisioningOSinstalltype`
 -- 
-
-INSERT IGNORE INTO `provisioningOSinstalltype` (`provisioningid`, `OSinstalltypeid`) VALUES 
-((SELECT `id` FROM `provisioning` WHERE `name` LIKE 'vbox' ), (SELECT `id` FROM `OSinstalltype` WHERE `name` LIKE 'vbox'`));
+INSERT IGNORE INTO `provisioningOSinstalltype` (`provisioningid`, `OSinstalltypeid`) VALUES
+(1, 1),
+(5, 1),
+(6, 1),
+(1, 2),
+(5, 2),
+(6, 2),
+(3, 3),
+(7, 4),
+(8, 5);
 
 -- --------------------------------------------------------
 --
