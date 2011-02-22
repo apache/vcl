@@ -212,9 +212,9 @@ CREATE TABLE IF NOT EXISTS `provisioningOSinstalltype` (
 -- 
 
 INSERT IGNORE INTO `module` (`id`, `name`, `prettyname`, `description`, `perlpackage`) VALUES 
-('22, 'state_image', 'VCL Image State Module', '', 'VCL::image'),
-('23', 'base', 'VCL Base Module', '', 'VCL::Module'),
-('24', 'provisioning_vbox', 'Virtual Box Provisioning Module', '', 'VCL::Module::Provisioning::vbox');
+(22, 'state_image', 'VCL Image State Module', '', 'VCL::image'),
+(23, 'base', 'VCL Base Module', '', 'VCL::Module'),
+(24, 'provisioning_vbox', 'Virtual Box Provisioning Module', '', 'VCL::Module::Provisioning::vbox');
 
 -- --------------------------------------------------------
 
