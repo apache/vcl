@@ -246,7 +246,6 @@ $SUBROUTINE_MAPPINGS{vmhost_profile_datastore_path}     = '$self->request_data->
 $SUBROUTINE_MAPPINGS{vmhost_profile_datastorepath_4vmx} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{vmprofile}{datastorepath4vmx}';
 #$SUBROUTINE_MAPPINGS{vmhost_profile_id} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{vmprofile}{id}';
 $SUBROUTINE_MAPPINGS{vmhost_profile_image_id} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{vmprofile}{imageid}';
-$SUBROUTINE_MAPPINGS{vmhost_profile_nas_share}      = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{vmprofile}{nasshare}';
 $SUBROUTINE_MAPPINGS{vmhost_profile_name}           = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{vmprofile}{profilename}';
 $SUBROUTINE_MAPPINGS{vmhost_profile_virtualswitch0} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{vmprofile}{virtualswitch0}';
 $SUBROUTINE_MAPPINGS{vmhost_profile_virtualswitch1} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{vmprofile}{virtualswitch1}';
@@ -1550,12 +1549,12 @@ sub get_computer_private_ip_address {
 			$computer_name = $argument;
 		}
 		else {
-			# Argument was not specified, check if private IP address for this reservation's computer was already retrieved from /etc/hosts
-			if (defined $self->request_data->{reservation}{$self->reservation_id}{computer}{PRIVATE_IP_ADDRESS_ETC_HOSTS}) {
-				my $existing_private_ip_address = $self->request_data->{reservation}{$self->reservation_id}{computer}{PRIVATE_IP_ADDRESS_ETC_HOSTS};
+			# Argument was not specified, check if private IP address for this reservation's computer was already retrieved
+			if (defined $self->request_data->{reservation}{$self->reservation_id}{computer}{PRIVATE_IP_ADDRESS}) {
+				my $existing_private_ip_address = $self->request_data->{reservation}{$self->reservation_id}{computer}{PRIVATE_IP_ADDRESS};
 				
 				# This subroutine has already been run for the reservation computer, return IP address retrieved earlier
-				notify($ERRORS{'DEBUG'}, 0, "returning private IP address previously retrieved from /etc/hosts: $existing_private_ip_address");
+				notify($ERRORS{'DEBUG'}, 0, "returning private IP address previously retrieved: $existing_private_ip_address");
 				return $existing_private_ip_address;
 			}
 			
@@ -1621,8 +1620,15 @@ sub get_computer_private_ip_address {
 	# Make sure 1 uncommented line was found
 	my $found_count = scalar keys %matching_computer_ip_addresses;
 	if ($found_count == 0) {
-		notify($ERRORS{'WARNING'}, 0, "did not find any lines in /etc/hosts containing '$computer_name'");
-		return;
+		if (my $database_ip_address = $self->request_data->{reservation}{$self->reservation_id}{computer}{privateIPaddress}) {
+			notify($ERRORS{'OK'}, 0, "did not find any lines in /etc/hosts containing '$computer_name', returning private IP address defined in the database: $database_ip_address");
+			$self->request_data->{reservation}{$self->reservation_id}{computer}{PRIVATE_IP_ADDRESS} = $database_ip_address;
+			return $database_ip_address;
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "did not find any lines in /etc/hosts containing '$computer_name' and the private IP address is not defined in the database");
+			return;
+		}
 	}
 	elsif ($found_count > 1) {
 		notify($ERRORS{'WARNING'}, 0, "found multiple lines in /etc/hosts containing '$computer_name' with different IP addresses:\n" . join("\n", values(%matching_computer_ip_addresses)));
@@ -1633,7 +1639,7 @@ sub get_computer_private_ip_address {
 	
 	# Update the request data if subroutine was called as an object method without an argument
 	if ($self && !$argument) {
-		$self->request_data->{reservation}{$self->reservation_id}{computer}{PRIVATE_IP_ADDRESS_ETC_HOSTS} = $ip_address;
+		$self->request_data->{reservation}{$self->reservation_id}{computer}{PRIVATE_IP_ADDRESS} = $ip_address;
 	}
 	
 	notify($ERRORS{'DEBUG'}, 0, "returning IP address from /etc/hosts file: $ip_address");

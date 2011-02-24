@@ -110,7 +110,7 @@ our %VM_OS_CONFIGURATION = (
 		"memsize" => 1024,
 	}, 
 	"7-x86" => {
-		"guestOS" => "winvista",
+		"guestOS" => "windows7",
 		"ethernet-virtualDev" => "e1000",
 		"scsi-virtualDev" => "lsiLogic",
 		"memsize" => 1024,
@@ -370,19 +370,19 @@ sub load {
 		return;
 	}
 
-	## Check if enough disk space is available
-	#my $enough_disk_space = $self->check_vmhost_disk_space();
-	#if (!defined($enough_disk_space)) {
-	#	notify($ERRORS{'WARNING'}, 0, "failed to determine if enough disk space is available on VM host $vmhost_hostname");
-	#	return;
-	#}
-	#elsif (!$enough_disk_space) {
-	#	if (!$self->reclaim_vmhost_disk_space()) {
-	#		notify($ERRORS{'CRITICAL'}, 0, "not enough space is available on VM host $vmhost_hostname to accomodate the reservation");
-	#		return;
-	#	}
-	#}
-
+	# Check if enough disk space is available
+	my $enough_disk_space = $self->check_vmhost_disk_space();
+	if (!defined($enough_disk_space)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to determine if enough disk space is available on VM host $vmhost_hostname");
+		return;
+	}
+	elsif (!$enough_disk_space) {
+		if (!$self->reclaim_vmhost_disk_space()) {
+			notify($ERRORS{'CRITICAL'}, 0, "not enough space is available on VM host $vmhost_hostname to accomodate the reservation");
+			return;
+		}
+	}
+	
 	# Check if the .vmdk files exist, copy them if necessary
 	if (!$self->prepare_vmdk()) {
 		notify($ERRORS{'WARNING'}, 0, "failed to prepare vmdk file for $computer_name on VM host: $vmhost_hostname");
@@ -548,6 +548,9 @@ sub capture {
 		notify($ERRORS{'WARNING'}, 0, "failed to create the currentimage.txt file on the VM being captured");
 		return;
 	}
+	
+	# Set the imagemeta Sysprep value to 0 to prevent Sysprep from being used
+	$self->data->set_imagemeta_sysprep(0);
 	
 	# Call the OS module's pre_capture() subroutine if implemented
 	if ($self->os->can("pre_capture") && !$self->os->pre_capture({end_state => 'off'})) {
@@ -1342,35 +1345,14 @@ sub remove_existing_vms {
 	my $vmx_base_directory_path = $self->get_vmx_base_directory_path();
 	my $vmdk_base_directory_path = $self->get_vmdk_base_directory_path();
 	
-	# Check the VMs on the host to see if any match the computer assigned to this reservation
 	# Get an array containing the existing vmx file paths on the VM host
 	my @vmx_file_paths = $self->get_vmx_file_paths();
-	
-	# Get a list of the registered VMs
-	my @registered_vmx_paths = $self->api->get_registered_vms();
-	
-	# Loop through all registered vmx file paths
-	# Make sure the vmx file actually exists for the registered VM
-	# A VM will remain in the registered list if the vmx file is deleted while it is registered
-	for my $registered_vmx_path (@registered_vmx_paths) {
-		if (!grep { $_ eq $registered_vmx_path } @vmx_file_paths) {
-			notify($ERRORS{'WARNING'}, 0, "VM is registered but the vmx file does not exist: $registered_vmx_path");
-			
-			# Unregister the zombie VM
-			if (!$self->api->vm_unregister($registered_vmx_path)) {
-				notify($ERRORS{'WARNING'}, 0, "failed to unregister zombie VM: $registered_vmx_path");
-			}
-		}
-	}
+	my %vmx_file_path_hash = map { $_ => 1 } (@vmx_file_paths);
 	
 	# Loop through the existing vmx file paths found, check if it matches the VM for this reservation
 	for my $vmx_file_path (@vmx_file_paths) {
-		# Parse the vmx file name from the path
-		my ($vmx_directory_name, $vmx_file_name) = $vmx_file_path =~ /([^\/]+)\/([^\/]+\.vmx)$/i;
-		if (!$vmx_directory_name || !$vmx_file_name) {
-			notify($ERRORS{'WARNING'}, 0, "unable to determine vmx directory and file name from vmx file path: $vmx_file_path");
-			next;
-		}
+		my $vmx_file_name = $self->_get_file_name($vmx_file_path);
+		notify($ERRORS{'DEBUG'}, 0, "checking existing vmx file: '$vmx_file_path'");
 		
 		# Ignore file if it does not begin with the base directory path
 		# get_vmx_file_paths() will return all vmx files it finds under the base directory path and all registered vmx files
@@ -1380,51 +1362,58 @@ sub remove_existing_vms {
 			next;
 		}
 		
-		# Check if the vmx directory name matches the pattern:
-		# <computer_short_name>_<image id>-v<imagerevision revision>
-		# <computer_short_name>_<image id>-v<imagerevision revision>_<request id>
-		if ($vmx_directory_name =~ /^$computer_name\_\d+-v\d+(_\d+)?$/i) {
-			notify($ERRORS{'DEBUG'}, 0, "found existing vmx directory with that appears to match $computer_name: $vmx_file_path");
+		# Check if the vmx directory name matches the naming convention VCL would use for the computer
+		my $vmx_file_path_computer_name = $self->_get_vmx_file_path_computer_name($vmx_file_path);
+		if (!$vmx_file_path_computer_name) {
+			notify($ERRORS{'DEBUG'}, 0, "ignoring existing vmx file $vmx_file_name, the computer name could not be determined from the directory name");
+			next;
+		}
+		elsif ($vmx_file_path_computer_name ne $computer_name) {
+			notify($ERRORS{'DEBUG'}, 0, "ignoring existing vmx file: $vmx_file_name, the directory computer name '$vmx_file_path_computer_name' does not match the reservation computer name '$computer_name'");
+			next;
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "found existing vmx file $vmx_file_name with matching computer name $computer_name: $vmx_file_path");
 			
 			# Delete the existing VM from the VM host
 			if (!$self->delete_vm($vmx_file_path)) {
 				notify($ERRORS{'WARNING'}, 0, "failed to delete existing VM: $vmx_file_path");
 			}
 		}
-		else {
-			#notify($ERRORS{'DEBUG'}, 0, "ignoring existing vmx directory: $vmx_directory_name");
-			next;
-		}
 	}
 	
 	# Delete orphaned vmx or vmdk directories previously created by VCL for the computer
 	# Find any files under the vmx or vmdk base directories matching the computer name
-	my @orphaned_paths = $self->vmhost_os->find_files($vmx_base_directory_path, $computer_name . "_*\.vmx");
-	if ($vmx_base_directory_path ne $vmdk_base_directory_path) {
-		push @orphaned_paths, $self->vmhost_os->find_files($vmdk_base_directory_path, $computer_name . "_*\.vmdk");
-	}
-	my %unique_paths = map { $_ => 1 } (@orphaned_paths);
-	@orphaned_paths = sort keys(%unique_paths);
+	my @orphaned_vmx_file_paths = $self->vmhost_os->find_files($vmx_base_directory_path, "*$computer_name*\.vmx");
 	
 	# Check if any of the paths match the format of a directory VCL would have created for the computer
-	for my $orphaned_path (@orphaned_paths) {
-		if ($orphaned_path !~ /($vmx_base_directory_path|$vmdk_base_directory_path)\/$computer_name\_\d+-v\d+(_\d+)?$/i) {
-			notify($ERRORS{'DEBUG'}, 0, "ignoring path, it contains the computer name '$computer_name' but the directory name is not in the format VCL uses:\n$orphaned_path");
+	for my $orphaned_vmx_file_path (@orphaned_vmx_file_paths) {
+		# Check if the directory name matches the naming convention VCL would use for the computer
+		my $orphaned_computer_name = $self->_get_vmx_file_path_computer_name($orphaned_vmx_file_path);
+		if (!$orphaned_computer_name) {
+			notify($ERRORS{'DEBUG'}, 0, "ignoring existing file path '$orphaned_vmx_file_path', the computer name could not be determined from the directory name");
 			next;
 		}
-		
-		notify($ERRORS{'DEBUG'}, 0, "attempting to delete orphaned directory: '$orphaned_path'");
-		if (!$self->vmhost_os->delete_file($orphaned_path)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to delete orphaned directory: '$orphaned_path'");
+		elsif ($orphaned_computer_name ne $computer_name) {
+			notify($ERRORS{'DEBUG'}, 0, "ignoring existing file: '$orphaned_vmx_file_path', the directory computer name '$orphaned_computer_name' does not match the reservation computer name '$computer_name'");
+			next;
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "found orphaned file '$orphaned_vmx_file_path' with matching computer name $computer_name");
+			
+			# Delete the orphaned VM from the VM host
+			if (!$self->delete_vm($orphaned_vmx_file_path)) {
+				notify($ERRORS{'WARNING'}, 0, "failed to delete orphaned VM: $orphaned_vmx_file_path");
+			}
 		}
 	}
 	
 	# Set the computer current image in the database to 'noimage'
 	if (update_computer_imagename($computer_id, 'noimage')) {
-		notify($ERRORS{'DEBUG'}, 0, "set computer current image to 'noimage'");
+		notify($ERRORS{'DEBUG'}, 0, "set computer $computer_name current image to 'noimage'");
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to set computer current image to 'noimage'");
+		notify($ERRORS{'WARNING'}, 0, "failed to set computer $computer_name current image to 'noimage'");
 	}
 	
 	return 1;
@@ -1474,6 +1463,7 @@ sub prepare_vmx {
 	my $vm_persistent            = $self->is_vm_persistent();
 	my $guest_os                 = $self->get_vm_guest_os() || return;
 	my $vmware_product_name      = $self->get_vmhost_product_name();
+	my $reservation_password     = $self->data->get_reservation_password();
 	
 	# Create the .vmx directory on the host
 	if (!$self->vmhost_os->create_directory($vmx_directory_path)) {
@@ -1606,6 +1596,20 @@ sub prepare_vmx {
 		"sched.mem.pshare.enable" => "FALSE",
 		"mainMem.useNamedFile" => "FALSE",
 	);
+	
+	#if (defined($reservation_password)) {
+	#	my $vnc_port = ($computer_id + 10000);
+	#	notify($ERRORS{'DEBUG'}, 0, "vnc access will be enabled, port: $vnc_port, password: $reservation_password");
+	#	
+	#	%vmx_parameters = (%vmx_parameters, (
+	#		"RemoteDisplay.vnc.enabled" => "TRUE",
+	#		"RemoteDisplay.vnc.password" => $reservation_password,
+	#		"RemoteDisplay.vnc.port" => $vnc_port,
+	#	));
+	#}
+	#else {
+	#	notify($ERRORS{'DEBUG'}, 0, "vnc access will be not be enabled because the reservation password is not set");
+	#}
 	
 	# Add the disk adapter parameters to the hash
 	if ($vm_disk_adapter_type =~ /ide/i) {
@@ -1876,6 +1880,12 @@ sub prepare_vmdk {
 	my $duration = (time - $start_time);
 	notify($ERRORS{'OK'}, 0, "copied vmdk files from management node image repository to the VM host, took " . format_number($duration) . " seconds");
 	
+	# If SCP is used, the names of the vmdk files will be the image name
+	if ("$host_vmdk_directory_path/$image_name.vmdk" ne $host_vmdk_file_path && !$self->rename_vmdk("$host_vmdk_directory_path/$image_name.vmdk", $host_vmdk_file_path)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to rename the vmdk that was copied via SCP to the VM host $vmhost_hostname: '$host_vmdk_directory_path/$image_name.vmdk' --> '$host_vmdk_file_path'");
+		return;
+	}
+	
 	# Check if the vmdk disk type is compatible with the VMware product installed on the host
 	return 1 if $self->is_vmdk_compatible();
 
@@ -2051,29 +2061,29 @@ sub check_vmhost_disk_space {
 		my $additional_bytes_required = ($vmx_additional_bytes_required + $vmdk_additional_bytes_required);
 		
 		my $space_message;
-		$space_message .= "vmx additional space required: " . get_file_size_info_string($vmx_additional_bytes_required) . "\n";
-		$space_message .= "vmdk additional space required: " . get_file_size_info_string($vmdk_additional_bytes_required) . "\n";
-		$space_message .= "total additional space required: " . get_file_size_info_string($additional_bytes_required) . "\n";
+		$space_message .= "vmx additional space required:          " . get_file_size_info_string($vmx_additional_bytes_required) . "\n";
+		$space_message .= "vmdk additional space required:         " . get_file_size_info_string($vmdk_additional_bytes_required) . "\n";
+		$space_message .= "total additional space required:        " . get_file_size_info_string($additional_bytes_required) . "\n";
 		$space_message .= "shared vmx/vmdk volume available space: " . get_file_size_info_string($vmx_volume_available_space);
 		
 		if ($additional_bytes_required <= $vmx_volume_available_space) {
-			notify($ERRORS{'DEBUG'}, 0, "enough space is available on shared vmx/vmdk volume on VM host $vmhost_hostname:\n$space_message");
+			notify($ERRORS{'DEBUG'}, 0, "enough space is available on shared vmx/vmdk volume on VM host $vmhost_hostname: '$vmx_base_directory_path'\n$space_message");
 			return 1;
 		}
 		else {
 			my $deficit_space = ($additional_bytes_required - $vmx_volume_available_space);
-			$space_message .= "\nshared vmx/vmdk volume space deficit: " . get_file_size_info_string($deficit_space);
-			notify($ERRORS{'DEBUG'}, 0, "not enough space is available on shared vmx/vmdk volume on VM host $vmhost_hostname:\n$space_message");
+			$space_message .= "\nshared vmx/vmdk volume space deficit:   " . get_file_size_info_string($deficit_space);
+			notify($ERRORS{'DEBUG'}, 0, "not enough space is available on shared vmx/vmdk volume on VM host $vmhost_hostname: '$vmx_base_directory_path'\n$space_message");
 			return 0;
 		}
 	}
 	else {
 		my $vmdk_volume_available_space = $self->vmhost_os->get_available_space($vmdk_base_directory_path);
 		
-		$space_message .= "vmx additional space required: " . get_file_size_info_string($vmx_additional_bytes_required) . "\n";
-		$space_message .= "vmx volume available space: " . get_file_size_info_string($vmx_volume_available_space) . "\n";
-		$space_message .= "vmdk additional space required: " . get_file_size_info_string($vmdk_additional_bytes_required) . "\n";
-		$space_message .= "vmdk volume available space: " . get_file_size_info_string($vmdk_volume_available_space);
+		$space_message .= "vmx additional space required:          " . get_file_size_info_string($vmx_additional_bytes_required) . "\n";
+		$space_message .= "vmx volume available space:             " . get_file_size_info_string($vmx_volume_available_space) . "\n";
+		$space_message .= "vmdk additional space required:         " . get_file_size_info_string($vmdk_additional_bytes_required) . "\n";
+		$space_message .= "vmdk volume available space:            " . get_file_size_info_string($vmdk_volume_available_space);
 		
 		if ($vmx_additional_bytes_required <= $vmx_volume_available_space && $vmdk_additional_bytes_required <= $vmdk_volume_available_space) {
 			notify($ERRORS{'DEBUG'}, 0, "enough space is available on vmx and vmdk volumes on VM host $vmhost_hostname:\n$space_message");
@@ -2085,7 +2095,7 @@ sub check_vmhost_disk_space {
 		}
 		else {
 			my $vmdk_deficit_space = ($vmdk_additional_bytes_required - $vmdk_volume_available_space);
-			$space_message .= "\nvmdk volume space deficit: " . get_file_size_info_string($vmdk_deficit_space);
+			$space_message .= "\nvmdk volume space deficit:              " . get_file_size_info_string($vmdk_deficit_space);
 			$space_message = "not enough space is available on vmdk volume on VM host $vmhost_hostname:\n$space_message";
 		}
 		
@@ -2094,7 +2104,7 @@ sub check_vmhost_disk_space {
 		}
 		else {
 			my $vmx_deficit_space = ($vmx_additional_bytes_required - $vmx_volume_available_space);
-			$space_message .= "\nvmx volume space deficit: " . get_file_size_info_string($vmx_deficit_space);
+			$space_message .= "\nvmx volume space deficit:               " . get_file_size_info_string($vmx_deficit_space);
 			$space_message = "not enough space is available on vmx volume on VM host $vmhost_hostname:\n$space_message";
 		}
 		
@@ -2152,25 +2162,21 @@ sub reclaim_vmhost_disk_space {
 	# Get a list of the files and directories under the vmdk base directory
 	my @vmdk_base_directory_contents = $self->vmhost_os->find_files($vmdk_base_directory_path, '*');
 	for my $vmdk_base_directory_entry (@vmdk_base_directory_contents) {
-		if ($vmdk_base_directory_entry =~ /^$vmdk_base_directory_path\/vmware\w+-[a-z]+[0-9]+-v[0-9]+$/) {
+		if ($vmdk_base_directory_entry =~ /^$vmdk_base_directory_path\/(vmware\w+-[^\/]+\d+-v\d+)$/) {
+			my $vmdk_directory_name = $1;
+			notify($ERRORS{'DEBUG'}, 0, "found existing vmdk directory: '$vmdk_directory_name'");
 			$vmdk_directories->{$vmdk_base_directory_entry} = {}
 		}
 	}
-	notify($ERRORS{'DEBUG'}, 0, "retrieved list of existing vmdk directories:\n" . join("\n", sort keys %$vmdk_directories));
+	notify($ERRORS{'DEBUG'}, 0, "retrieved list of existing vmdk directories under '$vmdk_base_directory_path':\n" . join("\n", sort keys %$vmdk_directories));
 	
 	# Find VMs that can can be deleted
 	my @vmx_file_paths = $self->get_vmx_file_paths();
 	for my $vmx_file_path (@vmx_file_paths) {
-print "\n\n" . '=' x 150 . "\n\n";
-		
 		$vmx_files->{$vmx_file_path} = {};
 		
 		my $vmx_info = $self->get_vmx_info($vmx_file_path);
-		
-		if ($vmx_info) {
-			#notify($ERRORS{'DEBUG'}, 0, "retrieved vmx info:\n" . format_data($vmx_info));
-		}
-		else {
+		if (!$vmx_info) {
 			notify($ERRORS{'WARNING'}, 0, "failed to retrieve info from vmx file: $vmx_file_path");
 			next;
 		}
@@ -2195,7 +2201,7 @@ print "\n\n" . '=' x 150 . "\n\n";
 		# Retrieve the computer_id value from the vmx info - this should exist if VCL created the vmx file
 		my $check_computer_id = $vmx_info->{computer_id};
 		if (!defined($check_computer_id)) {
-			notify($ERRORS{'DEBUG'}, 0, "$vmx_file_name can't be deleted because the vmx file does not contain a computer_id value: $vmx_file_path");
+			notify($ERRORS{'DEBUG'}, 0, "$vmx_file_name can't be deleted, vmx file does not contain a computer_id value and ID could not be determined from the directory name");
 			$vmx_files->{$vmx_file_path}{deletable} = 0;
 			next;
 		}
@@ -2340,8 +2346,6 @@ print "\n\n" . '=' x 150 . "\n\n";
 		$total_deletable_vmx_size += $vmx_directory_size;
 		notify($ERRORS{'DEBUG'}, 0, "VM $vmx_file_name can be deleted");
 	}
-
-print "\n\n" . '=' x 150 . "\n\n";
 	
 	if ($vmhost_profile_vmdisk =~ /local/) {
 		for my $vmdk_directory_path (sort keys %$vmdk_directories) {
@@ -2372,6 +2376,8 @@ print "\n\n" . '=' x 150 . "\n\n";
 				my %imagerevision_info = get_imagerevision_info($vmdk_directory_name);
 				if (!%imagerevision_info) {
 					notify($ERRORS{'WARNING'}, 0, "failed to retrieve info for the image revision matching the vmdk directory name: '$vmdk_directory_name'");
+					$vmdk_directories->{$vmdk_directory_path}{deletable} = 0;
+					next;
 				}
 				else {
 					#notify($ERRORS{'DEBUG'}, 0, "retrieved info for the image revision matching the vmdk directory name: '$vmdk_directory_name'\n" . format_data(\%imagerevision_info));
@@ -2409,17 +2415,11 @@ print "\n\n" . '=' x 150 . "\n\n";
 		}
 	}
 	
-	notify($ERRORS{'DEBUG'}, 0, "VMs:\n" . format_data($vmx_files));
-	notify($ERRORS{'DEBUG'}, 0, "vmdk directories:\n" . format_data($vmdk_directories));
-
-print "\n\n" . '=' x 150 . "\n\n";
+	notify($ERRORS{'DEBUG'}, 0, "all VMs:\n" . format_data($vmx_files));
+	notify($ERRORS{'DEBUG'}, 0, "all vmdk directories:\n" . format_data($vmdk_directories));
 
 	notify($ERRORS{'DEBUG'}, 0, "deletable VMs:\n" . format_data($deletable_vmx_files));
 	notify($ERRORS{'DEBUG'}, 0, "deletable vmdk directories:\n" . format_data($deletable_vmdk_directories));
-	
-
-print "\n\n" . '=' x 150 . "\n\n";
-
 	
 	if ($shared_vmx_vmdk_volume) {
 		my $additional_space_required = ($vmx_additional_bytes_required + $vmdk_additional_bytes_required);
@@ -2428,7 +2428,13 @@ print "\n\n" . '=' x 150 . "\n\n";
 		my $deletable_space = ($total_deletable_vmx_size + $total_deletable_vmdk_size);
 		my $potential_available_space = ($available_space + $deletable_space);
 		
-		if ($potential_available_space < $additional_space_required) {
+		if ($available_space >= $additional_space_required) {
+			notify($ERRORS{'DEBUG'}, 0, "enough space is already available to accomodate the VM:\n" .
+						 "currently available space: " . get_file_size_info_string($available_space) . "\n" .
+						 "space required for the VM: " . get_file_size_info_string($additional_space_required));
+			return 1;
+		}
+		elsif ($potential_available_space < $additional_space_required) {
 			notify($ERRORS{'WARNING'}, 0, "not enough space can be reclaimed to accomodate the VM:\n" .
 					 "deletable space: " . get_file_size_info_string($deletable_space) . "\n" .
 					 "currently available space: " . get_file_size_info_string($available_space) . "\n" .
@@ -2436,12 +2442,13 @@ print "\n\n" . '=' x 150 . "\n\n";
 					 "space required for the VM: " . get_file_size_info_string($additional_space_required));
 			return 0;
 		}
-		
-		notify($ERRORS{'DEBUG'}, 0, "enough space can be reclaimed to accomodate the VM:\n" .
-					 "deletable space: " . get_file_size_info_string($deletable_space) . "\n" .
-					 "currently available space: " . get_file_size_info_string($available_space) . "\n" .
-					 "potential available space: " . get_file_size_info_string($potential_available_space) . "\n" .
-					 "space required for the VM: " . get_file_size_info_string($additional_space_required));
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "enough space can be reclaimed to accomodate the VM:\n" .
+						 "deletable space: " . get_file_size_info_string($deletable_space) . "\n" .
+						 "currently available space: " . get_file_size_info_string($available_space) . "\n" .
+						 "potential available space: " . get_file_size_info_string($potential_available_space) . "\n" .
+						 "space required for the VM: " . get_file_size_info_string($additional_space_required));
+		}
 	}
 	else {
 		my $vmx_available_space = $self->vmhost_os->get_available_space($vmx_base_directory_path);
@@ -2449,6 +2456,15 @@ print "\n\n" . '=' x 150 . "\n\n";
 		
 		my $vmx_potential_available_space = ($vmx_available_space + $total_deletable_vmx_size);
 		my $vmdk_potential_available_space = ($vmdk_available_space + $total_deletable_vmdk_size);
+		
+		if ($vmx_available_space >= $vmx_additional_bytes_required && $vmdk_available_space >= $vmdk_additional_bytes_required) {
+			notify($ERRORS{'DEBUG'}, 0, "enough space is already available to accomodate the VM:\n" .
+					 "space required for the vmx directory: " . get_file_size_info_string($vmx_additional_bytes_required) . "\n" .
+					 "vmx volume available space: " . get_file_size_info_string($vmx_available_space) . "\n" .
+					 "space required for the vmdk directory: " . get_file_size_info_string($vmdk_additional_bytes_required) . "\n" .
+					 "vmdk volume available space: " . get_file_size_info_string($vmdk_available_space));
+			return 1;
+		}
 		
 		my $deficit = 0;
 		if ($vmx_potential_available_space < $vmx_additional_bytes_required) {
@@ -2496,7 +2512,6 @@ print "\n\n" . '=' x 150 . "\n\n";
 	my $enough_space_reclaimed = 0;
 	
 	DELETE_STAGE: for my $delete_stage (@delete_stage_order) {
-print "\n\n" . '*' x 150 . "\n\n";	
 		my ($vmx_vmdk, $key, $value) = @$delete_stage;
 		notify($ERRORS{'DEBUG'}, 0, "processing delete stage - $vmx_vmdk: $key = $value");
 		
@@ -2516,8 +2531,7 @@ print "\n\n" . '*' x 150 . "\n\n";
 				
 				notify($ERRORS{'DEBUG'}, 0, "match: vmx file $deletable_vmx_file_name matches delete stage criteria: $key = $value, vmx value: $deletable_vmx_file_value");
 				
-				if (1) {
-				#if ($self->delete_vm($deletable_vmx_file_path)) {
+				if ($self->delete_vm($deletable_vmx_file_path)) {
 					notify($ERRORS{'DEBUG'}, 0, "reclaimed space used by VM: $deletable_vmx_file_path");
 					
 					for my $vmdk_directory_path (sort keys %{$deletable_vmx_files->{$deletable_vmx_file_path}{vmdk_directory_paths}}) {
@@ -2527,10 +2541,6 @@ print "\n\n" . '*' x 150 . "\n\n";
 					}
 					delete $deletable_vmx_files->{$deletable_vmx_file_path};
 					
-print "\n\n" . '/' x 150 . "\n\n";	
-print "vmx:\n" . format_data($deletable_vmx_files) . "\n--------\nvmdk:\n" . format_data($deletable_vmdk_directories) . "\n";
-print "\n\n" . '/' x 150 . "\n\n";
-
 					$enough_space_reclaimed = $self->check_vmhost_disk_space();
 					last DELETE_STAGE if $enough_space_reclaimed;
 				}
@@ -2554,30 +2564,20 @@ print "\n\n" . '/' x 150 . "\n\n";
 				notify($ERRORS{'DEBUG'}, 0, "match: vmdk file $deletable_vmdk_directory_name matches delete stage criteria: $key = $value, vmdk value: $deletable_vmdk_directory_value");
 				
 				for my $vmx_file_path (sort keys %{$deletable_vmdk_directories->{$deletable_vmdk_directory_path}{vmx_file_paths}}) {
-					if (1) {
-					#if ($self->delete_vm($vmx_file_path)) {
+					if ($self->delete_vm($vmx_file_path)) {
 						notify($ERRORS{'DEBUG'}, 0, "reclaimed space used by VM: $vmx_file_path");
 						delete $deletable_vmx_files->{$vmx_file_path};
 						delete $deletable_vmdk_directories->{$deletable_vmdk_directory_path}{vmx_file_paths}{$vmx_file_path};
-print "\n\n" . '+' x 150 . "\n\n";	
-print "vmx:\n" . format_data($deletable_vmx_files) . "\n--------\nvmdk:\n" . format_data($deletable_vmdk_directories) . "\n";
-print "\n\n" . '+' x 150 . "\n\n";
-
 					}
 					else {
 						next DELETABLE_VMDK;
 					}
 				}
 				
-				if (1) {
-				#if ($self->vmhost_os->delete_file($deletable_vmdk_directory_path)) {
+				if ($self->vmhost_os->delete_file($deletable_vmdk_directory_path)) {
 					notify($ERRORS{'DEBUG'}, 0, "reclaimed space used by vmdk directory: $deletable_vmdk_directory_path");
 					delete $deletable_vmdk_directories->{$deletable_vmdk_directory_path};
-print "\n\n" . ':' x 150 . "\n\n";	
-print "vmx:\n" . format_data($deletable_vmx_files) . "\n--------\nvmdk:\n" . format_data($deletable_vmdk_directories) . "\n";
-print "\n\n" . ':' x 150 . "\n\n";
 				}
-				
 				$enough_space_reclaimed = $self->check_vmhost_disk_space();
 				last DELETE_STAGE if $enough_space_reclaimed;
 			}
@@ -4423,6 +4423,28 @@ sub get_vmx_info {
 	($vmx_info{vmx_file_name}) = $vmx_file_path =~ /([^\/]+)$/;
 	($vmx_info{vmx_directory_path}) = $vmx_file_path =~ /(.*)\/[^\/]+$/;
 	
+	
+	# Check if the computer_id value exists in the vmx file
+	# If not, try to determine it
+	if (!defined($vmx_info{computer_id})) {
+		notify($ERRORS{'DEBUG'}, 0, "vmx file does not contain a computer_id value, attempting to determine matching computer");
+		
+		my $computer_name = $self->_get_vmx_file_path_computer_name($vmx_file_path);
+		if ($computer_name) {
+			my @computer_ids = get_computer_ids($computer_name);
+			if ((scalar(@computer_ids) == 1)) {
+				$vmx_info{computer_id} = $computer_ids[0];
+				notify($ERRORS{'DEBUG'}, 0, "determined ID of computer '$computer_name' belonging to vmx file '$vmx_file_path': $vmx_info{computer_id}");
+			}
+			else {
+				notify($ERRORS{'DEBUG'}, 0, "unable to determine ID of computer '$computer_name' belonging to vmx file '$vmx_file_path'");
+			}
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "unable to determine computer name from vmx file path: '$vmx_file_path'");
+		}
+	}
+	
 	# Loop through the storage identifiers (idex:x or scsix:x lines found)
 	# Find the ones with a fileName property set to a .vmdk path
 	for my $storage_identifier (keys %{$vmx_info{vmdk}}) {
@@ -5904,6 +5926,51 @@ sub _get_parent_directory_datastore_path {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 _get_parent_directory_name
+
+ Parameters  : $path
+ Returns     : string
+ Description : Returns the parent directory name for the path argument.
+               '/vmfs/volumes/nfs datastore/vmwarewinxp-base234-v12/*.vmdk ' --> 'vmwarewinxp-base234-v12'
+
+=cut
+
+sub _get_parent_directory_name {
+	my $self = shift;
+	if (ref($self) !~ /module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get the path argument
+	my $path_argument = shift;
+	if (!$path_argument) {
+		notify($ERRORS{'WARNING'}, 0, "path argument was not specified");
+		return;
+	}
+	
+	my $datastore_path = $self->_get_datastore_path($path_argument);
+	if (!$datastore_path) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine parent directory name, path argument could not be converted to a datastore path: '$path_argument'");
+		return;
+	}
+	
+	if ($datastore_path =~ /^\[.+\]$/) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine parent directory name, path argument is the root path of a datastore: '$path_argument'");
+		return;
+	}
+	
+	my ($parent_directory_name) = $datastore_path =~ /[\s\/]([^\/]+)\/[^\/]+$/g;
+	if (!$parent_directory_name) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine parent directory name from path: '$path_argument'");
+		return;
+	}
+	
+	return $parent_directory_name;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 _get_file_name
 
  Parameters  : $path
@@ -6039,6 +6106,61 @@ sub _get_relative_datastore_path {
 	$relative_datastore_path =~ s/(^[\/\s]*|[\/\s]*$)//g;
 	
 	return $relative_datastore_path;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 _get_vmx_file_path_computer_name
+
+ Parameters  : $vmx_file_path
+ Returns     : string
+ Description : Attempts to determine the computer name from the vmx file path
+					argument. Undefined is returned if the computer name cannot be
+					determined.
+					'/vmfs/volumes/vmpath/vmwarewinxp-ArcGIS93Desktop1301-v15ve1-71/vmwarewinxp-ArcGIS93Desktop1301-v15ve1-72.vmx' --> 've1-72'
+					'/vmfs/volumes/vmpath/ve1-72_1036-v2/ve1-72_1036-v2.vmx' --> 've1-72'
+
+=cut
+
+sub _get_vmx_file_path_computer_name {
+	my $self = shift;
+	if (ref($self) !~ /module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get the path argument
+	my $path_argument = shift;
+	if (!$path_argument) {
+		notify($ERRORS{'WARNING'}, 0, "path argument was not specified");
+		return;
+	}
+	
+	my $directory_name = $self->_get_parent_directory_name($path_argument);
+	if (!$directory_name) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine computer name from path '$path_argument', directory name could not be determined from path");
+		return;
+	}
+	
+	my $file_name = $self->_get_file_name($path_argument);
+	if (!$directory_name) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine computer name from path '$path_argument', file name could not be determined from path");
+		return;
+	}
+	
+	my ($computer_name) = $directory_name =~ /^([\w\-]+)\_\d+-v\d+$/;
+	if (!$computer_name) {
+		($computer_name) = $directory_name =~ /^vmware.*\d+-v\d+([\w\-]+)$/i;
+	}
+	
+	if ($computer_name) {
+		notify($ERRORS{'DEBUG'}, 0, "determined computer name '$computer_name' from directory name: '$directory_name'");
+		return $computer_name;
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "computer name could not be determined from directory name: '$directory_name'");
+		return;
+	}
 }
 
 #/////////////////////////////////////////////////////////////////////////////

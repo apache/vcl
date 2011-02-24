@@ -300,7 +300,7 @@ INIT {
 	
 	# Make sure the config file exists
 	if (!-f $CONF_FILE_PATH) {
-		print STDOUT "ERROR: config file being does not exist: $CONF_FILE_PATH\n";
+		print STDOUT "ERROR: config file does not exist: $CONF_FILE_PATH\n";
 		help();
 	}
 
@@ -524,7 +524,7 @@ Command line options:
 END
 
 	print $message;
-	exit;
+	exit 1;
 } ## end sub help
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -5354,7 +5354,7 @@ sub run_ssh_command {
 	# -p <port>, Port to connect to on the remote host.
 	# -x, Disables X11 forwarding.
 	# Dont use: -q, Quiet mode.  Causes all warning and diagnostic messages to be suppressed.
-	my $ssh_command = "$ssh_path $identity_paths -l $user -p $port -x $node '$command' 2>&1";
+	my $ssh_command = "$ssh_path $identity_paths -o StrictHostKeyChecking=no -l $user -p $port -x $node '$command' 2>&1";
 	
 	# Execute the command
 	my $ssh_output;
@@ -5449,9 +5449,9 @@ sub run_ssh_command {
 		# Check the exit status
 		# ssh exits with the exit status of the remote command or with 255 if an error occurred.
 		# Check for vmware-cmd usage message, it returns 255 if the vmware-cmd usage output is returned
-		if (($exit_status == 255 && $ssh_command !~ /(vmware-cmd|vim-cmd|vmkfstools)/i) ||
-			 $ssh_output_formatted =~ /(lost connection|reset by peer|no route to host|connection refused|connection timed out|resource temporarily unavailable)/i) {
-			notify($ERRORS{'WARNING'}, 0, "attempt $attempts/$max_attempts: failed to execute SSH command on $node: $command, exit status: $exit_status, SSH exits with the exit status of the remote command or with 255 if an error occurred, output:\n$ssh_output_formatted") if $output_level;
+		if ($ssh_output_formatted =~ /^ssh:/ && (($exit_status == 255 && $ssh_command !~ /(vmware-cmd|vim-cmd|vmkfstools)/i) ||
+			 $ssh_output_formatted =~ /(lost connection|reset by peer|no route to host|connection refused|connection timed out|resource temporarily unavailable)/i)) {
+			notify($ERRORS{'WARNING'}, 0, "attempt $attempts/$max_attempts: failed to execute SSH command on $node: '$command', exit status: $exit_status, SSH exits with the exit status of the remote command or with 255 if an error occurred, output:\n$ssh_output_formatted") if $output_level;
 			next;
 		}
 		else {
@@ -8262,8 +8262,7 @@ SELECT
 FROM
 computer
 WHERE
-hostname LIKE '$computer_identifier'
-OR hostname LIKE '$computer_identifier.%'
+hostname REGEXP '^$computer_identifier(\\\\.|\$)'
 OR IPaddress = '$computer_identifier'
 OR privateIPaddress = '$computer_identifier'
 EOF
