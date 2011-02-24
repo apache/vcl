@@ -441,7 +441,7 @@ sub load {
 		my @file = <NODELS>;
 		close(NODELS);
 		foreach my $l (@file) {
-			if ($l =~ /(^$computer_node_name:)(\s+)([:0-9a-f]*)/) {
+			if ($l =~ /(^$computer_node_name:)(\s+)([:0-9a-f]*)/i) {
 				$eth0MACaddress = $3;
 				notify($ERRORS{'OK'}, 0, "MAC address for $computer_node_name collected $eth0MACaddress");
 			}
