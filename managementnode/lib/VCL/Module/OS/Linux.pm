@@ -178,12 +178,22 @@ sub pre_capture {
 	# Shutdown node
 	notify($ERRORS{'OK'}, 0, "shutting down node for Linux imaging sequence");
 	run_ssh_command($computer_node_name, $management_node_keys, "/sbin/shutdown -h now", "root");
-	notify($ERRORS{'OK'}, 0, "sleeping for 60 seconds while machine shuts down");
-	sleep 60;
+	
+	# Wait maximum of 5 minutes for computer to power off
+	my $power_off = $self->provisioner->wait_for_power_off(120, 3, 3);
+	if (!defined($power_off)) {
+		# wait_for_power_off result will be undefined if the provisioning module doesn't implement a power_status subroutine
+		notify($ERRORS{'OK'}, 0, "unable to determine power status of $computer_node_name from provisioning module, sleeping 1 minute to allow computer time to shutdown");
+		sleep 60;
+	}
+	elsif (!$power_off) {
+		notify($ERRORS{'WARNING'}, 0, "$computer_node_name never powered off");
+		return;
+	}
 
 	notify($ERRORS{'OK'}, 0, "returning 1");
 	return 1;
-} ## end sub capture_prepare
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -202,11 +212,12 @@ sub post_load {
 		return 0;
 	}
 
-	my $management_node_keys = $self->data->get_management_node_keys();
-	my $image_name           = $self->data->get_image_name();
-	my $computer_short_name  = $self->data->get_computer_short_name();
-	my $computer_node_name   = $self->data->get_computer_node_name();
-
+	my $management_node_keys  = $self->data->get_management_node_keys();
+	my $image_name            = $self->data->get_image_name();
+	my $computer_short_name   = $self->data->get_computer_short_name();
+	my $computer_node_name    = $self->data->get_computer_node_name();
+	my $image_os_install_type = $self->data->get_image_os_install_type();
+	
 	notify($ERRORS{'OK'}, 0, "initiating Linux post_load: $image_name on $computer_short_name");
 
 	# Wait for computer to respond to SSH
@@ -214,7 +225,17 @@ sub post_load {
 		notify($ERRORS{'WARNING'}, 0, "$computer_node_name never responded to SSH");
 		return 0;
 	}
-
+	
+	if ($image_os_install_type eq "kickstart"){
+		notify($ERRORS{'OK'}, 0, "detected kickstart install on $computer_short_name, writing current_image.txt");
+		if (write_currentimage_txt($self->data)){
+			notify($ERRORS{'OK'}, 0, "wrote current_image.txt on $computer_short_name");
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to write current_image.txt on $computer_short_name");
+		}
+	}
+	
 	# Change password
 	if ($self->changepasswd($computer_node_name, "root")) {
 		notify($ERRORS{'OK'}, 0, "successfully changed root password on $computer_node_name");
@@ -223,6 +244,7 @@ sub post_load {
 	else {
 		notify($ERRORS{'OK'}, 0, "failed to edit root password on $computer_node_name");
 	}
+	
 	#disable ext_sshd
 	my @stopsshd = run_ssh_command($computer_short_name, $management_node_keys, "/etc/init.d/ext_sshd stop", "root");
 	foreach my $l (@{$stopsshd[1]}) {
@@ -1984,13 +2006,10 @@ sub get_file_size {
 		
 		# Add the size to the total if the type is file
 		if ($type =~ /file/) {
-			$total_bytes_used += ($file_blocks * $block_size);
-			$total_bytes_allocated += $file_bytes;
+			$total_bytes_allocated += ($file_blocks * $block_size);
+			$total_bytes_used += $file_bytes;
 		}
 		elsif ($type =~ /directory/) {
-			$total_bytes_used += ($file_blocks * $block_size);
-			$total_bytes_allocated += $file_bytes;
-			
 			$path =~ s/[\\\/\*]+$//g;
 			notify($ERRORS{'DEBUG'}, 0, "recursively retrieving size of files under directory: '$path'");
 			my ($subdirectory_bytes_used, $subdirectory_bytes_allocated) = $self->get_file_size("$path/*");
@@ -1999,7 +2018,8 @@ sub get_file_size {
 		}
 	}
 	
-	if ((caller(1))[3] !~ /get_file_size/) {
+	my $calling_sub = (caller(1))[3] || '';
+	if ($calling_sub !~ /get_file_size/) {
 		notify($ERRORS{'DEBUG'}, 0, "size of '$file_path' on $computer_node_name:\n" .
 				 "used: " . get_file_size_info_string($total_bytes_used) . "\n" .
 				 "allocated: " . get_file_size_info_string($total_bytes_allocated));
@@ -2099,6 +2119,9 @@ sub set_file_permissions {
 		return;
 	}
 	
+	# Escape the file path in case it contains spaces
+	$path = escape_file_path($path);
+	
 	my $chmod_mode = shift;
 	if (!defined($chmod_mode)) {
 		notify($ERRORS{'WARNING'}, 0, "chmod mode argument was not specified");
@@ -2115,7 +2138,7 @@ sub set_file_permissions {
 	# Run the chmod command
 	my $command = "chmod ";
 	$command .= "-R " if $recursive;
-	$command .= "$chmod_mode \"$path\"";
+	$command .= "$chmod_mode $path";
 	
 	my ($exit_status, $output) = $self->execute($command, 0);
 	if (!defined($output)) {

@@ -464,7 +464,8 @@ sub load {
 	sleep 65;
 	my @TAILLOG;
 	my $t;
-	my $maxloops = 45;
+	my $maxloops = ($image_reload_time * 6);
+	$maxloops = 60 if $maxloops < 60;
 
 	if ($eth0MACaddress && $computer_private_ip_address) {
 		@TAILLOG = 0;
@@ -497,7 +498,7 @@ sub load {
 						}
 					}
 					if (!$s4) {
-						if ($_ =~ /Serving xcat\/\w+\/x86(_64)?\/initrd.img to $computer_private_ip_address:/) {
+						if ($_ =~ /Serving xcat\/.+ to $computer_private_ip_address:/) {
 							$s4 = 1;
 							chomp($_);
 							notify($ERRORS{'OK'}, 0, "$computer_node_name STAGE 4 set $_");
@@ -543,7 +544,7 @@ sub load {
 				else {
 					#keep checking the messages log
 					$sloop++;
-					sleep 7;
+					sleep 10;
 					seek TAIL, 0, 1;
 				}
 			}    #for loop
@@ -1869,6 +1870,10 @@ sub node_status {
 		$status{status} = 'RELOAD';
 		notify($ERRORS{'OK'}, $log, "nodetype.tab does not match requested image, node needs to be reloaded");
 	}
+	if (!$nodetype_currentimage_match) {
+		$status{status} = 'RELOAD';
+		notify($ERRORS{'OK'}, $log, "currentimage.txt does not match requested image, node needs to be reloaded");
+	}
 
 	# Node is up and doesn't need to be reloaded
 	if ($status{status} =~ /ready/i) {
@@ -2098,10 +2103,14 @@ sub _get_image_template_path {
 	
 	# Fix the image OS source path for xCAT 2.x
 	my $xcat2_image_os_source_path = $image_os_source_path;
+	# Remove periods
+	$xcat2_image_os_source_path =~ s/\.//g;
 	# centos5 --> centos
-	$xcat2_image_os_source_path =~ s/\d+$//;
+	$xcat2_image_os_source_path =~ s/\d+$//g;
 	# rhas5 --> rh
 	$xcat2_image_os_source_path =~ s/^rh.*/rh/;
+	# esxi --> esx
+	$xcat2_image_os_source_path =~ s/^esx.*/esx/i;
 	
 	notify($ERRORS{'DEBUG'}, 0, "attempting to determine template path for image:
       image name:               $image_name
