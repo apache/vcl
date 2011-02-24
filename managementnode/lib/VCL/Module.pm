@@ -134,6 +134,22 @@ sub new {
 	# Create a variable to store the newly created class object
 	my $self;
 	
+	# Make sure a hash reference argument was passed
+	if (!$args) {
+		my $data_structure = new VCL::DataStructure();
+		if ($data_structure) {
+			$args->{data_structure} = $data_structure;
+		}
+		else {
+			notify($ERRORS{'CRITICAL'}, 0, "no argument was passed and default DataStructure object could not be created");
+			return;
+		}
+	}
+	elsif (!ref($args) || ref($args) ne 'HASH') {
+		notify($ERRORS{'CRITICAL'}, 0, "argument passed is not a hash reference");
+		return;
+	}
+	
 	# Make sure the data structure was passed as an argument called 'data_structure'
 	if (!defined $args->{data_structure}) {
 		notify($ERRORS{'CRITICAL'}, 0, "required 'data_structure' argument was not passed");
@@ -148,12 +164,27 @@ sub new {
 	
 	# Add the DataStructure reference to the class object
 	$self->{data} = $args->{data_structure};
+	
+	for my $arg_key (keys %$args) {
+		next if ($arg_key eq 'data_structure');
+		
+		$self->{$arg_key} = $args->{$arg_key};
+		notify($ERRORS{'DEBUG'}, 0, "set '$arg_key' key for $class object from arguments");
+	}
 
 	# Bless the object as the class which new was called with
 	bless $self, $class;
 	
 	# Get the memory address of this newly created object - useful for debugging object creation problems
 	my $address = sprintf('%x', $self);
+	
+	# Create a management node OS object
+	if (!$self->isa('VCL::Module::OS::Linux::ManagementNode')) {
+		if (!$self->create_mn_os_object()) {
+			notify($ERRORS{'WARNING'}, 0, "failed to create management node OS object");
+			return;
+		}
+	}
 	
 	# Display a message based on the type of object created
 	if ($self->isa('VCL::Module::State')) {
@@ -298,17 +329,17 @@ sub create_mn_os_object {
 		return;
 	}
 	
-	# Make sure calling object isn't an OS module to avoid an infinite loop
-	if ($self->isa('VCL::Module::OS')) {
-		notify($ERRORS{'WARNING'}, 0, "this subroutine cannot be called from an existing OS module");
-		return;
-	}
-	
 	# Check if an OS object has already been stored in the calling object
-	if ($self->{mn_os}) {
-		my $address = sprintf('%x', $self->{mn_os});
+	if ($ENV{mn_os}) {
+		my $address = sprintf('%x', $ENV{mn_os});
 		notify($ERRORS{'DEBUG'}, 0, "management node OS object has already been created, address: $address, returning 1");
 		return 1;
+	}
+	
+	# Make sure calling object isn't an OS module to avoid an infinite loop
+	if ($self->isa('VCL::Module::OS::Linux::ManagementNode')) {
+		notify($ERRORS{'WARNING'}, 0, "this subroutine cannot be called from an existing management node OS module: " . ref($self));
+		return;
 	}
 	
 	my $request_data = $self->data->get_request_data();
@@ -437,12 +468,12 @@ sub os {
 sub mn_os {
 	my $self = shift;
 	
-	if (!$self->{mn_os}) {
-		notify($ERRORS{'WARNING'}, 0, "unable to return management node OS object, \$self->{mn_os} is not set");
+	if (!$ENV{mn_os}) {
+		notify($ERRORS{'WARNING'}, 0, "unable to return management node OS object, \$ENV{mn_os} is not set");
 		return;
 	}
 	else {
-		return $self->{mn_os};
+		return $ENV{mn_os};
 	}
 }
 
@@ -498,7 +529,7 @@ sub set_os {
 sub set_mn_os {
 	my $self = shift;
 	my $mn_os = shift;
-	$self->{mn_os} = $mn_os;
+	$ENV{mn_os} = $mn_os;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
