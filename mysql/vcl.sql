@@ -633,7 +633,8 @@ CREATE TABLE IF NOT EXISTS `provisioning` (
 CREATE TABLE IF NOT EXISTS `provisioningOSinstalltype` (
   `provisioningid` smallint(5) unsigned NOT NULL,
   `OSinstalltypeid` tinyint(3) unsigned NOT NULL,
-  PRIMARY KEY  (`provisioningid`,`OSinstalltypeid`)
+  PRIMARY KEY  (`provisioningid`,`OSinstalltypeid`),
+  KEY `OSinstalltypeid` (`OSinstalltypeid`)
 ) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
@@ -1268,7 +1269,7 @@ INSERT INTO `localauth` (`userid`, `passhash`, `salt`, `lastupdated`, `lockedout
 
 INSERT INTO `module` (`id`, `name`, `prettyname`, `description`, `perlpackage`) VALUES 
 (1, 'provisioning_xcat_13', 'xCAT 1.3 Provisioning Module', '', 'VCL::Module::Provisioning::xCAT'),
-(2, 'provisioning_vmware_gsx', 'VMware Server 1.x Provisioning Module', '', 'VCL::Module::Provisioning::vmware'),
+(2, 'provisioning_vmware_1x', 'VMware Server 1.x Provisioning Module', '', 'VCL::Module::Provisioning::vmware'),
 (3, 'provisioning_lab', 'Computing Lab Provisioning Module', '', 'VCL::Module::Provisioning::Lab'),
 (4, 'os_windows', 'Windows OS Module', '', 'VCL::Module::OS::Windows'),
 (5, 'os_linux', 'Linux OS Module', '', 'VCL::Module::OS::Linux'),
@@ -1287,7 +1288,8 @@ INSERT INTO `module` (`id`, `name`, `prettyname`, `description`, `perlpackage`) 
 (21, 'provisioning_vmware', 'VMware Provisioning Module', '', 'VCL::Module::Provisioning::VMware::VMware'),
 (22, 'state_image', 'VCL Image State Module', '', 'VCL::image'),
 (23, 'base_module', 'VCL Base Module', '', 'VCL::Module'),
-(24, 'vbox_module', 'Virtual Box Module', '', 'VCL::Module::Provisioning::vbox');
+(24, 'provisioning_vbox', 'Virtual Box Provisioning Module', '', 'VCL::Module::Provisioning::vbox'),
+(25, 'os_esxi', 'VMware ESXi OS Module', '', 'VCL::Module::OS::Linux::ESXi');
 
 -- 
 -- Dumping data for table `OS`
@@ -1327,7 +1329,8 @@ INSERT INTO `OS` (`id`, `name`, `prettyname`, `type`, `installtype`, `sourcepath
 (34, 'win7', 'Windows 7 (Bare Metal)', 'windows', 'partimage', 'image', 17),
 (35, 'vmwarewin7', 'Windows 7 (VMware)', 'windows', 'vmware', 'vmware_images', 17),
 (36, 'vmwarelinux', 'Generic Linux (VMware)', 'linux', 'vmware', 'vmware_images', 5),
-(37, 'vmwarewin2003', 'Windows 2003 Server (VMware)', 'windows', 'vmware', 'vmware_images', 13);
+(37, 'vmwarewin2003', 'Windows 2003 Server (VMware)', 'windows', 'vmware', 'vmware_images', 13),
+(38, 'esxi4.1', 'VMware ESXi 4.1', 'linux', 'kickstart', 'esxi4.1', 25);
 
 -- 
 -- Dumping data for table `OSinstalltype`
@@ -1385,17 +1388,12 @@ INSERT INTO `provisioning` (`id`, `name`, `prettyname`, `moduleid`) VALUES
 -- Dumping data for table `provisioningOSinstalltype`
 --
 
-INSERT INTO `provisioningOSinstalltype` (`provisioningid`, `OSinstalltypeid`) VALUES
-(1, 1),
-(5, 1),
-(6, 1),
-(1, 2),
-(5, 2),
-(6, 2),
-(3, 3),
-(7, 4);
-INSERT IGNORE INTO `provisioningOSinstalltype` (`provisioningid`, `OSinstalltypeid`) VALUES
-((SELECT `id` FROM `provisioning` WHERE `name` LIKE 'vbox' ), (SELECT `id` FROM `OSinstalltype` WHERE `name` LIKE 'vbox'`));
+INSERT IGNORE provisioningOSinstalltype (provisioningid, OSinstalltypeid) SELECT provisioning.id, OSinstalltype.id FROM provisioning, OSinstalltype WHERE provisioning.name LIKE '%xcat%' AND OSinstalltype.name = 'partimage';
+INSERT IGNORE provisioningOSinstalltype (provisioningid, OSinstalltypeid) SELECT provisioning.id, OSinstalltype.id FROM provisioning, OSinstalltype WHERE provisioning.name LIKE '%xcat%' AND OSinstalltype.name = 'kickstart';
+INSERT IGNORE provisioningOSinstalltype (provisioningid, OSinstalltypeid) SELECT provisioning.id, OSinstalltype.id FROM provisioning, OSinstalltype WHERE provisioning.name LIKE '%vmware%' AND OSinstalltype.name = 'vmware';
+INSERT IGNORE provisioningOSinstalltype (provisioningid, OSinstalltypeid) SELECT provisioning.id, OSinstalltype.id FROM provisioning, OSinstalltype WHERE provisioning.name LIKE '%esx%' AND OSinstalltype.name = 'vmware';
+INSERT IGNORE provisioningOSinstalltype (provisioningid, OSinstalltypeid) SELECT provisioning.id, OSinstalltype.id FROM provisioning, OSinstalltype WHERE provisioning.name LIKE '%vbox%' AND OSinstalltype.name = 'vbox';
+INSERT IGNORE provisioningOSinstalltype (provisioningid, OSinstalltypeid) SELECT provisioning.id, OSinstalltype.id FROM provisioning, OSinstalltype WHERE provisioning.name LIKE '%lab%' AND OSinstalltype.name = 'none';
 
 -- 
 -- Dumping data for table `resource`
@@ -1653,12 +1651,12 @@ ALTER TABLE `blockWebTime`
 -- Constraints for table `computer`
 -- 
 ALTER TABLE `computer`
-  ADD CONSTRAINT `computer_ibfk_37` FOREIGN KEY (`provisioningid`) REFERENCES `provisioning` (`id`) ON UPDATE CASCADE,
   ADD CONSTRAINT `computer_ibfk_12` FOREIGN KEY (`ownerid`) REFERENCES `user` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
   ADD CONSTRAINT `computer_ibfk_30` FOREIGN KEY (`scheduleid`) REFERENCES `schedule` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
   ADD CONSTRAINT `computer_ibfk_33` FOREIGN KEY (`stateid`) REFERENCES `state` (`id`) ON UPDATE CASCADE,
   ADD CONSTRAINT `computer_ibfk_35` FOREIGN KEY (`platformid`) REFERENCES `platform` (`id`) ON UPDATE CASCADE,
-  ADD CONSTRAINT `computer_ibfk_36` FOREIGN KEY (`currentimageid`) REFERENCES `image` (`id`) ON UPDATE CASCADE;
+  ADD CONSTRAINT `computer_ibfk_36` FOREIGN KEY (`currentimageid`) REFERENCES `image` (`id`) ON UPDATE CASCADE,
+  ADD CONSTRAINT `computer_ibfk_37` FOREIGN KEY (`provisioningid`) REFERENCES `provisioning` (`id`) ON UPDATE CASCADE;
 
 -- 
 -- Constraints for table `computerloadlog`
@@ -1713,9 +1711,9 @@ ALTER TABLE `managementnode`
 -- Constraints for table `OS`
 --
 ALTER TABLE `OS`
-  ADD CONSTRAINT `OS_ibfk_4` FOREIGN KEY (`moduleid`) REFERENCES `module` (`id`) ON UPDATE CASCADE,
   ADD CONSTRAINT `OS_ibfk_2` FOREIGN KEY (`type`) REFERENCES `OStype` (`name`) ON UPDATE CASCADE,
-  ADD CONSTRAINT `OS_ibfk_3` FOREIGN KEY (`installtype`) REFERENCES `OSinstalltype` (`name`) ON UPDATE CASCADE;
+  ADD CONSTRAINT `OS_ibfk_3` FOREIGN KEY (`installtype`) REFERENCES `OSinstalltype` (`name`) ON UPDATE CASCADE,
+  ADD CONSTRAINT `OS_ibfk_4` FOREIGN KEY (`moduleid`) REFERENCES `module` (`id`) ON UPDATE CASCADE;
 
 --
 -- Constraints for table `privnode`
@@ -1728,6 +1726,13 @@ ALTER TABLE `privnode`
 --
 ALTER TABLE `provisioning`
   ADD CONSTRAINT `provisioning_ibfk_1` FOREIGN KEY (`moduleid`) REFERENCES `module` (`id`) ON UPDATE CASCADE;
+
+--
+-- Constraints for table `provisioningOSinstalltype`
+--
+ALTER TABLE `provisioningOSinstalltype`
+  ADD CONSTRAINT `provisioningOSinstalltype_ibfk_2` FOREIGN KEY (`OSinstalltypeid`) REFERENCES `OSinstalltype` (`id`) ON UPDATE CASCADE,
+  ADD CONSTRAINT `provisioningOSinstalltype_ibfk_1` FOREIGN KEY (`provisioningid`) REFERENCES `provisioning` (`id`) ON UPDATE CASCADE;
 
 -- 
 -- Constraints for table `querylog`
