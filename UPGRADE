@@ -1,6 +1,6 @@
-This file explains how to upgrade an existing install of Apache VCL 2.1
-to Apache VCL 2.2. It assumed that you extracted the release archive
-to /root/apache-VCL-2.2-incubating
+This file explains how to upgrade an existing install of Apache VCL 2.1 or 2.2
+to Apache VCL 2.2.1. It assumed that you extracted the release archive
+to /root/apache-VCL-2.2.1-incubating
 
 The basic steps that will be performed:
 
@@ -23,36 +23,36 @@ The basic steps that will be performed:
 We will create a backup of the vcl database. This will provide a restore point
 if necessary.
 
-   mysqldump vcl > ~/vcl-pre2.2-upgrade.sql
+   mysqldump vcl > ~/vcl-pre2.2.1-upgrade.sql
 
 3. Update mysql schema
 
 This step updates the mysql schema.
 
-   cd /root/apache-VCL-2.2-incubating
-   mysql vcl < mysql/update-2.2.sql
+   cd /root/apache-VCL-2.2.1-incubating
+   mysql vcl < mysql/update-vcl.sql
 
 4. Update web code
 
-This step we will move the 2.1 web directory out of the way, so we can copy in
-the new web code base. After copying in the new code, we will migrate your
-configuration changes. These instructions assume that you installed the vcl
-web code at /var/www/html/vcl. If you installed it elsewhere, replace
+This step we will move the existing web directory out of the way, so we can copy
+in the new web code base. After copying in the new code, we will migrate your
+configuration changes. These instructions assume that you installed the vcl web
+code at /var/www/html/vcl. If you installed it elsewhere, replace
 /var/www/html/vcl with your vcl web root.
 
    a. copy your old code out of the way
 
       cd /var/www/html
-		mv vcl ~/vcl_2.1_web
+		mv vcl ~/vcl-pre2.2.1_web
 
 	b. copy the new code in place
 
-	   cd /root/apache-VCL-2.2-incubating
+	   cd /root/apache-VCL-2.2.1-incubating
 		cp -r web /var/www/html/vcl
 
 	c. copy your 2.1 config files
 
-	   cd ~/vcl_2.1_web/.ht-inc
+	   cd ~/vcl-pre2.2.1_web/.ht-inc
 		cp conf.php secrets.php pubkey.pem keys.pem /var/www/html/vcl/.ht-inc
 
 	d. make /var/www/html/vcl/.ht-inc/maintenance writable by the web server - if
@@ -78,19 +78,19 @@ web code at /var/www/html/vcl. If you installed it elsewhere, replace
 
 6. Update management node code
 
-This step will move the 2.1 vcl code base out of the way, so we can cleanly copy
-in the new management node(MN) code.
+This step will move the existing vcl code base out of the way, so we can cleanly
+copy in the new management node code.
 
-	a. Copy 2.1 code base to a backup location
+	a. Copy the existing management node code base to a backup location
 
 		cd <your vcl MN code root path>
 		ie. cd /usr/local/
-		cp -r vcl ~/vcl_2.1_managementnode
+		cp -r vcl ~/vcl-pre2.2.1_managementnode
 
-	b. Copy in the 2.2 code base to /usr/local, copying in should preserve any
+	b. Copy in the 2.2.1 code base to /usr/local, copying in should preserve any
 	drivers or other files you've added.
 
-		/bin/cp -r /root/apache-VCL-2.2-incubating/managementnode/* /usr/local/vcl
+		/bin/cp -r /root/apache-VCL-2.2.1-incubating/managementnode/* /usr/local/vcl
 
 	c. Make changes related to vcld.conf settings
 
@@ -103,8 +103,8 @@ in the new management node(MN) code.
 		  addresses
 		* Address for Shadow Emails - a shared mail box, optional it receives
 		  email of all notifications
-		* Public NIC configuration method - Defines what type of NIC configuration is
-		  used, options are dynamic DHCP, Manual DHCP, or static
+		* Public NIC configuration method - Defines what type of NIC configuration
+		  is used, options are dynamic DHCP, Manual DHCP, or static
 		* End Node SSH Identity Key Files
 
 7. Restart vcld service
