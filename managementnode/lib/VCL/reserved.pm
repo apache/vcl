@@ -92,30 +92,26 @@ use VCL::utils;
 
 sub process {
 	my $self = shift;
-	my ($package, $filename, $line, $sub) = caller(0);
-
-	# Store hash variables into local variables
-	my $request_data = $self->data->get_request_data;
-
-	my $request_id           = $self->data->get_request_id();
-	my $request_logid        = $self->data->get_request_log_id();
-	my $reservation_id       = $self->data->get_reservation_id();
-	my $reservation_password = $request_data->{reservation}{$reservation_id}{pw};
-	my $computer_id          = $self->data->get_computer_id();
-	my $computer_hostname    = $self->data->get_computer_host_name();
-	my $computer_short_name  = $self->data->get_computer_short_name();
-	my $computer_type        = $self->data->get_computer_type();
-	my $computer_ip_address  = $self->data->get_computer_ip_address();
-	my $image_os_name        = $self->data->get_image_os_name();
-	my $image_os_type        = $self->data->get_image_os_type();
-	my $request_forimaging   = $self->data->get_request_forimaging;
-	my $image_name           = $self->data->get_image_name();
-	my $user_unityid         = $self->data->get_user_login_id();
-	my $user_standalone      = $self->data->get_user_standalone();
-	my $imagemeta_checkuser  = $self->data->get_imagemeta_checkuser();
-	my $reservation_count     = $self->data->get_reservation_count();
 	
-
+	my $request_data          = $self->data->get_request_data();
+	my $request_id            = $self->data->get_request_id();
+	my $request_logid         = $self->data->get_request_log_id();
+	my $reservation_id        = $self->data->get_reservation_id();
+	my $computer_id           = $self->data->get_computer_id();
+	my $computer_hostname     = $self->data->get_computer_host_name();
+	my $computer_short_name   = $self->data->get_computer_short_name();
+	my $computer_type         = $self->data->get_computer_type();
+	my $computer_ip_address   = $self->data->get_computer_ip_address();
+	my $image_os_name         = $self->data->get_image_os_name();
+	my $image_os_type         = $self->data->get_image_os_type();
+	my $request_forimaging    = $self->data->get_request_forimaging;
+	my $image_name            = $self->data->get_image_name();
+	my $user_unityid          = $self->data->get_user_login_id();
+	my $user_standalone       = $self->data->get_user_standalone();
+	my $imagemeta_checkuser   = $self->data->get_imagemeta_checkuser();
+	my $reservation_count     = $self->data->get_reservation_count();
+	my $imagemeta_usergroupid = $self->data->get_imagemeta_usergroupid();
+	
 	# Update the log table, set the loaded time to now for this request
 	if (update_log_loaded_time($request_logid)) {
 		notify($ERRORS{'OK'}, 0, "updated log table, set loaded time to now for id:$request_logid");
@@ -125,14 +121,12 @@ sub process {
 	}
 
 	# Figure out if image has usergroupid set in meta data and how many members it has
-	my $imagemeta_usergroupid = '';
 	my @user_group_members;
 	my $user_group_member_count = 0;
-	if (defined $request_data->{reservation}{$reservation_id}{image}{imagemeta}{usergroupid}) {
-		notify($ERRORS{'OK'}, 0, "imagemeta user group defined $request_data->{reservation}{$reservation_id}{image}{imagemeta}{usergroupid}");
-		$imagemeta_usergroupid   = $request_data->{reservation}{$reservation_id}{image}{imagemeta}{usergroupid};
-		@user_group_members      = getusergroupmembers($imagemeta_usergroupid);
-		$user_group_member_count = scalar @user_group_members;
+	if ($imagemeta_usergroupid) {
+		notify($ERRORS{'OK'}, 0, "imagemeta user group defined: $imagemeta_usergroupid");
+		@user_group_members      = $self->data->get_imagemeta_usergroupmembers();
+		$user_group_member_count = $self->data->get_imagemeta_usergroupmembercount();
 	}
 	notify($ERRORS{'OK'}, 0, "imagemeta user group membership count = $user_group_member_count");
 

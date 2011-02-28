@@ -100,31 +100,27 @@ use VCL::utils;
 
 sub process {
 	my $self = shift;
-	my ($package, $filename, $line, $sub) = caller(0);
-
-	# Store hash variables into local variables
-	my $request_data = $self->data->get_request_data;
-
-	my $request_id            = $request_data->{id};
-	my $reservation_id        = $request_data->{RESERVATIONID};
-	my $request_end           = $request_data->{end};
-	my $request_logid         = $request_data->{logid};
-	my $request_checktime     = $request_data->{CHECKTIME};
-	my $reservation_remoteip  = $request_data->{reservation}{$reservation_id}{remoteIP};
-	my $computer_id           = $request_data->{reservation}{$reservation_id}{computer}{id};
-	my $computer_shortname    = $request_data->{reservation}{$reservation_id}{computer}{SHORTNAME};
-	my $computer_type         = $request_data->{reservation}{$reservation_id}{computer}{type};
-	my $computer_hostname     = $request_data->{reservation}{$reservation_id}{computer}{hostname};
-	my $computer_nodename     = $request_data->{reservation}{$reservation_id}{computer}{NODENAME};
-	my $computer_ipaddress    = $request_data->{reservation}{$reservation_id}{computer}{IPaddress};
-	my $image_os_name         = $request_data->{reservation}{$reservation_id}{image}{OS}{name};
-	my $imagemeta_checkuser   = $request_data->{reservation}{$reservation_id}{image}{imagemeta}{checkuser};
-	my $user_unityid          = $request_data->{user}{unityid};
-	my $request_forimaging    = $request_data->{forimaging};
-	my $identity_key          = $request_data->{reservation}{$reservation_id}{image}{IDENTITY};
+	
+	my $request_id            = $self->data->get_request_id();
+	my $reservation_id        = $self->data->get_reservation_id();
+	my $request_end           = $self->data->get_request_end_time();
+	my $request_logid         = $self->data->get_request_log_id();
+	my $request_checktime     = $self->data->get_request_check_time();
+	my $reservation_remoteip  = $self->data->get_reservation_remote_ip();
+	my $computer_id           = $self->data->get_computer_id();
+	my $computer_short_name   = $self->data->get_computer_short_name();
+	my $computer_type         = $self->data->get_computer_type();
+	my $computer_hostname     = $self->data->get_computer_hostname();
+	my $computer_nodename     = $self->data->get_computer_node_name();
+	my $computer_ip_address   = $self->data->get_computer_ip_address();
+	my $image_os_name         = $self->data->get_image_os_name();
+	my $imagemeta_checkuser   = $self->data->get_imagemeta_checkuser();
+	my $user_login_id         = $self->data->get_user_login_id();
+	my $request_forimaging    = $self->data->get_request_forimaging();
 	my $image_os_type         = $self->data->get_image_os_type();
 	my $reservation_count     = $self->data->get_reservation_count();
 	my $is_parent_reservation = $self->data->is_parent_reservation();
+	my $identity_key          = $self->data->get_image_identity();
 
 	# Set the user connection timeout limit in minutes
 	my $connect_timeout_limit = 15;
@@ -258,14 +254,14 @@ sub process {
 			my $sleep_time = $time_difference - (10 * 60);
 			notify($ERRORS{'OK'}, 0, "sleeping for $sleep_time seconds");
 			sleep $sleep_time;
-			$request_data->{CHECKTIME} = "end";
+			$request_checktime = "end";
 			goto ENDTIME;
 		}    # Close if poll, checkuser=1, and end time is 10-15 minutes away
 
 		notify($ERRORS{'OK'}, 0, "end time not yet reached, polling machine for user connection");
 
 		# Check the user connection, this will loop until user connects or time limit is reached
-		my $check_connection = check_connection($computer_nodename, $computer_ipaddress, $computer_type, $reservation_remoteip, $connect_timeout_limit, $image_os_name, 0, $request_id, $user_unityid,$image_os_type);
+		my $check_connection = check_connection($computer_nodename, $computer_ip_address, $computer_type, $reservation_remoteip, $connect_timeout_limit, $image_os_name, 0, $request_id, $user_login_id,$image_os_type);
 
 		#TESTING
 		#$check_connection = 'timeout';
@@ -327,7 +323,7 @@ sub process {
 
 			# Check if computer is in maintenance state
 			if ($computer_state =~ /maintenance/) {
-				notify($ERRORS{'OK'}, 0, "computer $computer_shortname in maintenance state, skipping update");
+				notify($ERRORS{'OK'}, 0, "computer $computer_short_name in maintenance state, skipping update");
 			}
 			else {
 				# Computer is not in maintenance state, set its state to timeout
@@ -418,13 +414,13 @@ sub process {
 			# Perform some actions at 5 minutes until end of request
 			if ($disconnect_time == 5) {
 				# Check for connection
-				if (isconnected($computer_hostname, $computer_type, $reservation_remoteip, $image_os_name, $computer_ipaddress,$image_os_type)) {
+				if (isconnected($computer_hostname, $computer_type, $reservation_remoteip, $image_os_name, $computer_ip_address,$image_os_type)) {
 					insertloadlog($reservation_id, $computer_id, "inuseend5", "notifying user of endtime");
 					$self->_notify_user_disconnect($disconnect_time);
 				}
 				else {
 					insertloadlog($reservation_id, $computer_id, "inuseend5", "user is not connected, notification skipped");
-					notify($ERRORS{'OK'}, 0, "user has disconnected from $computer_shortname, skipping additional notices");
+					notify($ERRORS{'OK'}, 0, "user has disconnected from $computer_short_name, skipping additional notices");
 				}
 			}    # Close if disconnect time = 5
 
@@ -495,7 +491,7 @@ sub process {
 
 		# Check if computer is in maintenance state
 		if ($computer_state =~ /maintenance/) {
-			notify($ERRORS{'OK'}, 0, "computer $computer_shortname in maintenance state, skipping computer state update");
+			notify($ERRORS{'OK'}, 0, "computer $computer_short_name in maintenance state, skipping computer state update");
 		}
 		else {
 			notify($ERRORS{'OK'}, 0, "computer not in maintenance, setting computer to timeout state");
@@ -554,33 +550,32 @@ sub process {
 sub _notify_user_endtime {
 	my $self            = shift;
 	my $notice_interval = shift;
-
-	my ($package, $filename, $line, $sub) = caller(0);
-
-	my $request_data          = $self->data->get_request_data;
-	my $is_parent_reservation = $self->data->is_parent_reservation();
-
+	
 	# Check to make sure notice interval is set
 	if (!defined($notice_interval)) {
 		notify($ERRORS{'WARNING'}, 0, "end time message not set, notice interval was not passed");
 		return 0;
 	}
-
-	# Store hash variables into local variables
-	my $request_id                 = $request_data->{id};
-	my $reservation_id             = $request_data->{RESERVATIONID};
-	my $user_email                 = $request_data->{user}{email};
-	my $user_emailnotices          = $request_data->{user}{emailnotices};
-	my $user_im_name               = $request_data->{user}{IMtype}{name};
-	my $user_im_id                 = $request_data->{user}{IMid};
-	my $user_unityid               = $request_data->{user}{unityid};
-	my $affiliation_sitewwwaddress = $request_data->{user}{affiliation}{sitewwwaddress};
-	my $affiliation_helpaddress    = $request_data->{user}{affiliation}{helpaddress};
-	my $image_prettyname           = $request_data->{reservation}{$reservation_id}{image}{prettyname};
-	my $image_os_name              = $request_data->{reservation}{$reservation_id}{image}{OS}{name};
-	my $computer_ipaddress         = $request_data->{reservation}{$reservation_id}{computer}{IPaddress};
-	my $computer_type              = $request_data->{reservation}{$reservation_id}{computer}{type};
-	my $computer_shortname         = $request_data->{reservation}{$reservation_id}{computer}{SHORTNAME};
+	
+	my $is_parent_reservation = $self->data->is_parent_reservation();
+	if (!$is_parent_reservation) {
+		notify($ERRORS{'DEBUG'}, 0, "child reservation - not notifying user of endtime");
+		return 1;
+	}
+	
+	my $computer_short_name             = $self->data->get_computer_short_name();
+	my $computer_type                   = $self->data->get_computer_type();
+	my $computer_ip_address             = $self->data->get_computer_ip_address();
+	my $image_os_name                   = $self->data->get_image_os_name();
+	my $image_prettyname                = $self->data->get_image_prettyname();
+	my $image_os_type                   = $self->data->get_image_os_type();
+	my $user_affiliation_sitewwwaddress = $self->data->get_user_affiliation_sitewwwaddress();
+	my $user_affiliation_helpaddress    = $self->data->get_user_affiliation_helpaddress();
+	my $user_login_id                   = $self->data->get_user_login_id();
+	my $user_email                      = $self->data->get_user_email();
+	my $user_emailnotices               = $self->data->get_user_emailnotices();
+	my $user_imtype_name                = $self->data->get_user_imtype_name();
+	my $user_im_id                      = $self->data->get_user_im_id();
 
 	my $message = <<"EOF";
 
@@ -589,7 +584,7 @@ You have $notice_interval until the end of your reservation for image $image_pre
 Reservation extensions are available if the machine you are on does not have a reservation immediately following.
 
 To edit this reservation:
--Visit $affiliation_sitewwwaddress
+-Visit $user_affiliation_sitewwwaddress
 -Select Current Reservations
 
 Thank You,
@@ -602,7 +597,7 @@ with detailed information on the issue and a help ticket will be
 generated.
 
 To disable email notices
--Visit $affiliation_sitewwwaddress
+-Visit $user_affiliation_sitewwwaddress
 -Select User Preferences
 -Select General Preferences
 
@@ -612,13 +607,21 @@ EOF
 	my $subject = "VCL -- $notice_interval until end of reservation";
 
 	# Send mail
-	if ($is_parent_reservation && $user_emailnotices) {
-		mail($user_email, $subject, $message, $affiliation_helpaddress);
+	if ($user_emailnotices) {
+		notify($ERRORS{'DEBUG'}, 0, "user $user_login_id email notices enabled - notifying user of endtime");
+		mail($user_email, $subject, $message, $user_affiliation_helpaddress);
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "user $user_login_id email notices disabled - not notifying user of endtime");
 	}
 
 	# Send IM
-	if ($is_parent_reservation && $user_im_name ne "none") {
-		notify_via_IM($user_im_name, $user_im_id, $message);
+	if ($user_imtype_name ne "none") {
+		notify($ERRORS{'DEBUG'}, 0, "user $user_login_id IM type: $user_imtype_name - notifying user of endtime");
+		notify_via_IM($user_imtype_name, $user_im_id, $message);
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "user $user_login_id IM type: $user_imtype_name - not notifying user of endtime");
 	}
 
 	return 1;
@@ -640,34 +643,28 @@ EOF
 sub _notify_user_disconnect {
 	my $self            = shift;
 	my $disconnect_time = shift;
-	my ($package, $filename, $line, $sub) = caller(0);
-
-	my $request_data          = $self->data->get_request_data;
-	my $is_parent_reservation = $self->data->is_parent_reservation();
-
+	
 	# Check to make sure disconnect time was passed
 	if (!defined($disconnect_time)) {
 		notify($ERRORS{'WARNING'}, 0, "disconnect time message not set, disconnect time was not passed");
 		return 0;
 	}
-
-	# Store hash variables into local variables
-	my $request_id                 = $request_data->{id};
-	my $reservation_id             = $request_data->{RESERVATIONID};
-	my $user_email                 = $request_data->{user}{email};
-	my $user_emailnotices          = $request_data->{user}{emailnotices};
-	my $user_im_name               = $request_data->{user}{IMtype}{name};
-	my $user_im_id                 = $request_data->{user}{IMid};
-	my $user_unityid               = $request_data->{user}{unityid};
-	my $affiliation_sitewwwaddress = $request_data->{user}{affiliation}{sitewwwaddress};
-	my $affiliation_helpaddress    = $request_data->{user}{affiliation}{helpaddress};
-	my $image_prettyname           = $self->data->get_image_prettyname();
-	my $image_os_name              = $self->data->get_image_os_name();
-	my $computer_ipaddress         = $request_data->{reservation}{$reservation_id}{computer}{IPaddress};
-	my $computer_type              = $self->data->get_computer_type();
-	my $image_os_type					 = $self->data->get_image_os_type();
-	my $computer_shortname         = $self->data->get_computer_short_name();
-
+	
+	my $computer_short_name             = $self->data->get_computer_short_name();
+	my $computer_type                   = $self->data->get_computer_type();
+	my $computer_ip_address             = $self->data->get_computer_ip_address();
+	my $image_os_name                   = $self->data->get_image_os_name();
+	my $image_prettyname                = $self->data->get_image_prettyname();
+	my $image_os_type                   = $self->data->get_image_os_type();
+	my $user_affiliation_sitewwwaddress = $self->data->get_user_affiliation_sitewwwaddress();
+	my $user_affiliation_helpaddress    = $self->data->get_user_affiliation_helpaddress();
+	my $user_login_id                   = $self->data->get_user_login_id();
+	my $user_email                      = $self->data->get_user_email();
+	my $user_emailnotices               = $self->data->get_user_emailnotices();
+	my $user_imtype_name                = $self->data->get_user_imtype_name();
+	my $user_im_id                      = $self->data->get_user_im_id();
+	my $is_parent_reservation           = $self->data->is_parent_reservation();
+	
 	my $disconnect_string;
 	if ($disconnect_time == 0) {
 		$disconnect_string = "0 minutes";
@@ -685,7 +682,7 @@ You have $disconnect_string until the end of your reservation for image $image_p
 
 Reservation extensions are available if the machine you are on does not have a reservation immediately following.
 
-Visit $affiliation_sitewwwaddress and select Current Reservations to edit this reservation.
+Visit $user_affiliation_sitewwwaddress and select Current Reservations to edit this reservation.
 
 Thank You,
 VCL Team
@@ -697,7 +694,7 @@ with detailed information on the issue and a help ticket will be
 generated.
 
 To disable email notices
--Visit $affiliation_sitewwwaddress
+-Visit $user_affiliation_sitewwwaddress
 -Select User Preferences
 -Select General Preferences
 
@@ -710,28 +707,28 @@ EOF
 
 	# Send mail
 	if ($is_parent_reservation && $user_emailnotices) {
-		mail($user_email, $subject, $message, $affiliation_helpaddress);
+		mail($user_email, $subject, $message, $user_affiliation_helpaddress);
 	}
 
 	# Send IM
-	if ($is_parent_reservation && $user_im_name ne "none") {
-		notify_via_IM($user_im_name, $user_im_id, $message);
+	if ($is_parent_reservation && $user_imtype_name ne "none") {
+		notify_via_IM($user_imtype_name, $user_im_id, $message);
 	}
 
 	# Send message to machine
 	if ($computer_type =~ /blade|virtualmachine/) {
 		if ($image_os_type =~ /windows/) {
 			# Notify via windows msg cmd
-			notify_via_msg($computer_shortname, $user_unityid, $short_message);
+			notify_via_msg($computer_short_name, $user_login_id, $short_message);
 		}
 		elsif ($image_os_type =~ /linux/){
 			# Notify via wall
-			notify_via_wall($computer_shortname, $user_unityid, $short_message, $image_os_name, $computer_type);
+			notify_via_wall($computer_short_name, $user_login_id, $short_message, $image_os_name, $computer_type);
 		}
 	} ## end if ($computer_type =~ /blade|virtualmachine/)
 	elsif ($computer_type eq "lab") {
 		# Notify via wall
-		notify_via_wall($computer_ipaddress, $user_unityid, $short_message, $image_os_name, $computer_type);
+		notify_via_wall($computer_ip_address, $user_login_id, $short_message, $image_os_name, $computer_type);
 	}
 
 	return 1;
@@ -750,28 +747,28 @@ EOF
 
 sub _notify_user_timeout {
 	my $self = shift;
-	my ($package, $filename, $line, $sub) = caller(0);
-
-	my $request_data          = $self->data->get_request_data;
-	my $is_parent_reservation = $self->data->is_parent_reservation();
-
-	# Store some hash variables into local variables
-	my $reservation_id             = $request_data->{RESERVATIONID};
-	my $user_email                 = $request_data->{user}{email};
-	my $user_emailnotices          = $request_data->{user}{emailnotices};
-	my $user_im_name               = $request_data->{user}{IMtype}{name};
-	my $user_im_id                 = $request_data->{user}{IMid};
-	my $affiliation_sitewwwaddress = $request_data->{user}{affiliation}{sitewwwaddress};
-	my $affiliation_helpaddress    = $request_data->{user}{affiliation}{helpaddress};
-	my $image_prettyname           = $request_data->{reservation}{$reservation_id}{image}{prettyname};
-	my $computer_ipaddress         = $request_data->{reservation}{$reservation_id}{computer}{IPaddress};
+	
+	my $computer_short_name             = $self->data->get_computer_short_name();
+	my $computer_type                   = $self->data->get_computer_type();
+	my $computer_ip_address             = $self->data->get_computer_ip_address();
+	my $image_os_name                   = $self->data->get_image_os_name();
+	my $image_prettyname                = $self->data->get_image_prettyname();
+	my $image_os_type                   = $self->data->get_image_os_type();
+	my $user_affiliation_sitewwwaddress = $self->data->get_user_affiliation_sitewwwaddress();
+	my $user_affiliation_helpaddress    = $self->data->get_user_affiliation_helpaddress();
+	my $user_login_id                   = $self->data->get_user_login_id();
+	my $user_email                      = $self->data->get_user_email();
+	my $user_emailnotices               = $self->data->get_user_emailnotices();
+	my $user_imtype_name                = $self->data->get_user_imtype_name();
+	my $user_im_id                      = $self->data->get_user_im_id();
+	my $is_parent_reservation           = $self->data->is_parent_reservation();
 
 	my $message = <<"EOF";
 
-Your reservation has timed out due to inactivity for image $image_prettyname at address $computer_ipaddress.
+Your reservation has timed out due to inactivity for image $image_prettyname at address $computer_ip_address.
 
 To make another reservation, please revisit:
-$affiliation_sitewwwaddress
+$user_affiliation_sitewwwaddress
 
 Thank You,
 VCL Team
@@ -783,7 +780,7 @@ with detailed information on the issue and a help ticket will be
 generated.
 
 To disable email notices
--Visit $affiliation_sitewwwaddress
+-Visit $user_affiliation_sitewwwaddress
 -Select User Preferences
 -Select General Preferences
 
@@ -794,12 +791,12 @@ EOF
 
 	# Send mail
 	if ($is_parent_reservation && $user_emailnotices) {
-		mail($user_email, $subject, $message, $affiliation_helpaddress);
+		mail($user_email, $subject, $message, $user_affiliation_helpaddress);
 	}
 
 	# Send IM
-	if ($is_parent_reservation && $user_im_name ne "none") {
-		notify_via_IM($user_im_name, $user_im_id, $message);
+	if ($is_parent_reservation && $user_imtype_name ne "none") {
+		notify_via_IM($user_imtype_name, $user_im_id, $message);
 	}
 
 	return 1;
@@ -818,26 +815,34 @@ EOF
 
 sub _notify_user_request_ended {
 	my $self = shift;
-	my ($package, $filename, $line, $sub) = caller(0);
 
-	my $request_data          = $self->data->get_request_data;
-	my $is_parent_reservation = $self->data->is_parent_reservation();
-
-	# Store some hash variables into local variables
-	my $reservation_id             = $request_data->{RESERVATIONID};
-	my $user_email                 = $request_data->{user}{email};
-	my $user_emailnotices          = $request_data->{user}{emailnotices};
-	my $user_im_name               = $request_data->{user}{IMtype}{name};
-	my $user_im_id                 = $request_data->{user}{IMid};
-	my $affiliation_helpaddress    = $request_data->{user}{affiliation}{helpaddress};
-	my $affiliation_sitewwwaddress = $request_data->{user}{affiliation}{sitewwwaddress};
-	my $image_prettyname           = $request_data->{reservation}{$reservation_id}{image}{prettyname};
+	my $request_id                      = $self->data->get_request_id();
+	my $request_logid                   = $self->data->get_request_log_id();
+	my $request_forimaging              = $self->data->get_request_forimaging();
+	my $reservation_count               = $self->data->get_reservation_count();
+	my $reservation_id                  = $self->data->get_reservation_id();
+	my $reservation_is_parent           = $self->data->is_parent_reservation;
+	my $computer_id                     = $self->data->get_computer_id();
+	my $computer_short_name             = $self->data->get_computer_short_name();
+	my $computer_type                   = $self->data->get_computer_type();
+	my $computer_ip_address             = $self->data->get_computer_ip_address();
+	my $image_os_name                   = $self->data->get_image_os_name();
+	my $image_prettyname                = $self->data->get_image_prettyname();
+	my $image_os_type                   = $self->data->get_image_os_type();
+	my $user_affiliation_sitewwwaddress = $self->data->get_user_affiliation_sitewwwaddress();
+	my $user_affiliation_helpaddress    = $self->data->get_user_affiliation_helpaddress();
+	my $user_standalone                 = $self->data->get_user_standalone();
+	my $user_email                      = $self->data->get_user_email();
+	my $user_emailnotices               = $self->data->get_user_emailnotices();
+	my $user_imtype_name                = $self->data->get_user_imtype_name();
+	my $user_im_id                      = $self->data->get_user_im_id();
+	my $is_parent_reservation           = $self->data->is_parent_reservation();
 
 	my $subject = "VCL -- End of reservation";
 
 	my $message = <<"EOF";
 
-Your reservation of $image_prettyname has ended. Thank you for using $affiliation_sitewwwaddress.
+Your reservation of $image_prettyname has ended. Thank you for using $user_affiliation_sitewwwaddress.
 
 Regards,
 VCL Team
@@ -849,7 +854,7 @@ with detailed information on the issue and a help ticket will be
 generated.
 
 To disable email notices
--Visit $affiliation_sitewwwaddress
+-Visit $user_affiliation_sitewwwaddress
 -Select User Preferences
 -Select General Preferences
 
@@ -858,12 +863,12 @@ EOF
 
 	# Send mail
 	if ($is_parent_reservation && $user_emailnotices) {
-		mail($user_email, $subject, $message, $affiliation_helpaddress);
+		mail($user_email, $subject, $message, $user_affiliation_helpaddress);
 	}
 
 	# Send IM
-	if ($is_parent_reservation && $user_im_name ne "none") {
-		notify_via_IM($user_im_name, $user_im_id, $message);
+	if ($is_parent_reservation && $user_imtype_name ne "none") {
+		notify_via_IM($user_imtype_name, $user_im_id, $message);
 	}
 
 	return 1;

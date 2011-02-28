@@ -89,53 +89,19 @@ sub process {
 	
 	my $request_data                    = $self->data->get_request_data();
 	my $request_id                      = $self->data->get_request_id();
-	my $request_logid                   = $self->data->get_request_log_id();
 	my $request_state_name              = $self->data->get_request_state_name();
-	my $request_laststate_name          = $self->data->get_request_laststate_name();
-	my $request_forimaging              = $self->data->get_request_forimaging();
 	my $request_preload_only            = $self->data->get_request_preload_only();
 	my $reservation_count               = $self->data->get_reservation_count();
 	my $reservation_id                  = $self->data->get_reservation_id();
 	my $reservation_is_parent           = $self->data->is_parent_reservation;
 	my $computer_id                     = $self->data->get_computer_id();
-	my $computer_host_name              = $self->data->get_computer_host_name();
 	my $computer_short_name             = $self->data->get_computer_short_name();
-	my $computer_type                   = $self->data->get_computer_type();
-	my $computer_ip_address             = $self->data->get_computer_ip_address();
 	my $computer_state_name             = $self->data->get_computer_state_name();
-	my $computer_next_image_id	         = $self->data->get_computer_nextimage_id();
-	my $computer_next_image_name        = $self->data->get_computer_nextimage_name();
+	my $computer_next_image_name        = $self->data->get_computer_nextimage_name(0);
 	my $image_id                        = $self->data->get_image_id();
-	my $image_os_name                   = $self->data->get_image_os_name();
 	my $image_name                      = $self->data->get_image_name();
-	my $image_prettyname                = $self->data->get_image_prettyname();
-	my $image_project                   = $self->data->get_image_project();
-	my $image_reloadtime                = $self->data->get_image_reload_time();
-	my $image_architecture              = $self->data->get_image_architecture();
-	my $image_os_type                   = $self->data->get_image_os_type();
-	my $imagemeta_checkuser             = $self->data->get_imagemeta_checkuser();
-	my $imagemeta_usergroupid           = $self->data->get_imagemeta_usergroupid();
-	my $imagemeta_usergroupmembercount  = $self->data->get_imagemeta_usergroupmembercount();
-	my $imagemeta_usergroupmembers      = $self->data->get_imagemeta_usergroupmembers();
 	my $imagerevision_id                = $self->data->get_imagerevision_id();
-	my $managementnode_id               = $self->data->get_management_node_id();
-	my $managementnode_hostname         = $self->data->get_management_node_hostname();
-	my $user_unityid                    = $self->data->get_user_login_id();
-	my $user_uid                        = $self->data->get_user_uid();
-	my $user_affiliation_sitewwwaddress = $self->data->get_user_affiliation_sitewwwaddress();
-	my $user_affiliation_helpaddress    = $self->data->get_user_affiliation_helpaddress();
 	my $user_standalone                 = $self->data->get_user_standalone();
-	my $user_email                      = $self->data->get_user_email();
-	my $user_emailnotices               = $self->data->get_user_emailnotices();
-	my $user_imtype_name                = $self->data->get_user_imtype_name();
-	my $user_im_id                      = $self->data->get_user_im_id();
-
-	notify($ERRORS{'OK'}, 0, "reservation is parent = $reservation_is_parent");
-	notify($ERRORS{'OK'}, 0, "preload only = $request_preload_only");
-	notify($ERRORS{'OK'}, 0, "originating request state = $request_state_name");
-	notify($ERRORS{'OK'}, 0, "originating request laststate = $request_laststate_name");
-	notify($ERRORS{'OK'}, 0, "originating computer state = $computer_state_name");
-	notify($ERRORS{'OK'}, 0, "originating computer type = $computer_type");
 	
 	# If state is tomaintenance, place machine into maintenance state and set request to complete
 	if ($request_state_name =~ /tomaintenance/) {
@@ -156,10 +122,10 @@ sub process {
 		else {
 			notify($ERRORS{'OK'}, 0, "post action skipped, post_maintenance_action not implemented by " . ref($self->provisioner) . ", assuming no steps required");
 		}
-
+		
 		notify($ERRORS{'OK'}, 0, "exiting");
 		exit;
-	} ## end if ($request_state_name =~ /tomaintenance/)
+	}
 
 	#If reload state is not new (reload) and computer is part of block allocation
 	#confirm imagerevisionid is the production image.
@@ -477,50 +443,15 @@ sub process {
 sub reload_image {
 	my $self = shift;
 
-	my $request_data                    = $self->data->get_request_data();
-	my $request_id                      = $self->data->get_request_id();
-	my $request_logid                   = $self->data->get_request_log_id();
 	my $request_state_name              = $self->data->get_request_state_name();
-	my $request_laststate_name          = $self->data->get_request_laststate_name();
-	my $request_forimaging              = $self->data->get_request_forimaging();
-	my $request_preload_only            = $self->data->get_request_preload_only();
-	my $reservation_count               = $self->data->get_reservation_count();
 	my $reservation_id                  = $self->data->get_reservation_id();
-	my $reservation_is_parent           = $self->data->is_parent_reservation;
 	my $computer_id                     = $self->data->get_computer_id();
-	my $computer_host_name              = $self->data->get_computer_host_name();
 	my $computer_short_name             = $self->data->get_computer_short_name();
-	my $computer_type                   = $self->data->get_computer_type();
-	my $computer_ip_address             = $self->data->get_computer_ip_address();
 	my $computer_state_name             = $self->data->get_computer_state_name();
-	my $computer_next_image_id	    = $self->data->get_computer_nextimage_id();
-	my $computer_next_image_name   	    = $self->data->get_computer_nextimage_name();
-	my $computer_currentimage_name 		= $self->data->get_computer_currentimage_name();
 	my $image_id                        = $self->data->get_image_id();
-	my $image_os_name                   = $self->data->get_image_os_name();
 	my $image_name                      = $self->data->get_image_name();
-	my $image_prettyname                = $self->data->get_image_prettyname();
-	my $image_project                   = $self->data->get_image_project();
-	my $image_reloadtime                = $self->data->get_image_reload_time();
-	my $image_architecture              = $self->data->get_image_architecture();
 	my $image_os_install_type				= $self->data->get_image_os_install_type();
-	my $image_os_type                   = $self->data->get_image_os_type();
-	my $imagemeta_checkuser             = $self->data->get_imagemeta_checkuser();
-	my $imagemeta_usergroupid           = $self->data->get_imagemeta_usergroupid();
-	my $imagemeta_usergroupmembercount  = $self->data->get_imagemeta_usergroupmembercount();
-	my $imagemeta_usergroupmembers      = $self->data->get_imagemeta_usergroupmembers();
 	my $imagerevision_id                = $self->data->get_imagerevision_id();
-	my $managementnode_id               = $self->data->get_management_node_id();
-	my $managementnode_hostname         = $self->data->get_management_node_hostname();
-	my $user_unityid                    = $self->data->get_user_login_id();
-	my $user_uid                        = $self->data->get_user_uid();
-	my $user_affiliation_sitewwwaddress = $self->data->get_user_affiliation_sitewwwaddress();
-	my $user_affiliation_helpaddress    = $self->data->get_user_affiliation_helpaddress();
-	my $user_standalone                 = $self->data->get_user_standalone();
-	my $user_email                      = $self->data->get_user_email();
-	my $user_emailnotices               = $self->data->get_user_emailnotices();
-	my $user_imtype_name                = $self->data->get_user_imtype_name();
-	my $user_im_id                      = $self->data->get_user_im_id();
 	
 	# Try to get the node status if the provisioning engine has implemented a node_status() subroutine
 	my $node_status;
@@ -694,14 +625,6 @@ sub reload_image {
 			return;
 		}
 		
-		#Post operations not to be handled by provisioning modules
-		if($image_os_install_type eq "kickstart"){
-			notify($ERRORS{'OK'}, 0, "detected kickstart install on $computer_short_name, writing current_image.txt");
-			  if(write_currentimage_txt($self->data)){
-				  notify($ERRORS{'OK'}, 0, "Successfully wrote current_image.txt on $computer_short_name");
-			  }
-		}
-		
 		notify($ERRORS{'OK'}, 0, "node ready: successfully reloaded $computer_short_name with $image_name");
 		insertloadlog($reservation_id, $computer_id, "nodeready", "$computer_short_name was reloaded with $image_name");
 	}
@@ -731,48 +654,12 @@ sub reload_image {
 sub computer_not_being_used {
 	my $self = shift;
 
-	my $request_data                    = $self->data->get_request_data();
-	my $request_id                      = $self->data->get_request_id();
-	my $request_logid                   = $self->data->get_request_log_id();
-	my $request_state_name              = $self->data->get_request_state_name();
-	my $request_laststate_name          = $self->data->get_request_laststate_name();
-	my $request_forimaging              = $self->data->get_request_forimaging();
-	my $request_preload_only            = $self->data->get_request_preload_only();
-	my $reservation_count               = $self->data->get_reservation_count();
 	my $reservation_id                  = $self->data->get_reservation_id();
-	my $reservation_is_parent           = $self->data->is_parent_reservation;
 	my $computer_id                     = $self->data->get_computer_id();
-	my $computer_host_name              = $self->data->get_computer_host_name();
 	my $computer_short_name             = $self->data->get_computer_short_name();
-	my $computer_type                   = $self->data->get_computer_type();
-	my $computer_ip_address             = $self->data->get_computer_ip_address();
 	my $computer_state_name             = $self->data->get_computer_state_name();
-	my $computer_next_image_id          = $self->data->get_computer_nextimage_id();
-	my $computer_next_image_name        = $self->data->get_computer_nextimage_name();
-	my $image_id                        = $self->data->get_image_id();
-	my $image_os_name                   = $self->data->get_image_os_name();
 	my $image_name                      = $self->data->get_image_name();
-	my $image_prettyname                = $self->data->get_image_prettyname();
-	my $image_project                   = $self->data->get_image_project();
 	my $image_reloadtime                = $self->data->get_image_reload_time();
-	my $image_architecture              = $self->data->get_image_architecture();
-	my $image_os_type                   = $self->data->get_image_os_type();
-	my $imagemeta_checkuser             = $self->data->get_imagemeta_checkuser();
-	my $imagemeta_usergroupid           = $self->data->get_imagemeta_usergroupid();
-	my $imagemeta_usergroupmembercount  = $self->data->get_imagemeta_usergroupmembercount();
-	my $imagemeta_usergroupmembers      = $self->data->get_imagemeta_usergroupmembers();
-	my $imagerevision_id                = $self->data->get_computer_imagerevision_id();
-	my $managementnode_id               = $self->data->get_management_node_id();
-	my $managementnode_hostname         = $self->data->get_management_node_hostname();
-	my $user_unityid                    = $self->data->get_user_login_id();
-	my $user_uid                        = $self->data->get_user_uid();
-	my $user_affiliation_sitewwwaddress = $self->data->get_user_affiliation_sitewwwaddress();
-	my $user_affiliation_helpaddress    = $self->data->get_user_affiliation_helpaddress();
-	my $user_standalone                 = $self->data->get_user_standalone();
-	my $user_email                      = $self->data->get_user_email();
-	my $user_emailnotices               = $self->data->get_user_emailnotices();
-	my $user_imtype_name                = $self->data->get_user_imtype_name();
-	my $user_im_id                      = $self->data->get_user_im_id();
 
 	# Possible computer states:
 	# available
@@ -972,38 +859,17 @@ sub reserve_computer {
 	my $request_data                    = $self->data->get_request_data();
 	my $request_id                      = $self->data->get_request_id();
 	my $request_logid                   = $self->data->get_request_log_id();
-	my $request_state_name              = $self->data->get_request_state_name();
-	my $request_laststate_name          = $self->data->get_request_laststate_name();
 	my $request_forimaging              = $self->data->get_request_forimaging();
-	my $request_preload_only            = $self->data->get_request_preload_only();
 	my $reservation_count               = $self->data->get_reservation_count();
 	my $reservation_id                  = $self->data->get_reservation_id();
 	my $reservation_is_parent           = $self->data->is_parent_reservation;
 	my $computer_id                     = $self->data->get_computer_id();
-	my $computer_host_name              = $self->data->get_computer_host_name();
 	my $computer_short_name             = $self->data->get_computer_short_name();
 	my $computer_type                   = $self->data->get_computer_type();
 	my $computer_ip_address             = $self->data->get_computer_ip_address();
-	my $computer_state_name             = $self->data->get_computer_state_name();
-	my $computer_next_image_id     	    = $self->data->get_computer_nextimage_id();
-	my $computer_next_image_name        = $self->data->get_computer_nextimage_name();
-	my $image_id                        = $self->data->get_image_id();
 	my $image_os_name                   = $self->data->get_image_os_name();
-	my $image_name                      = $self->data->get_image_name();
 	my $image_prettyname                = $self->data->get_image_prettyname();
-	my $image_project                   = $self->data->get_image_project();
-	my $image_reloadtime                = $self->data->get_image_reload_time();
-	my $image_architecture              = $self->data->get_image_architecture();
 	my $image_os_type                   = $self->data->get_image_os_type();
-	my $imagemeta_checkuser             = $self->data->get_imagemeta_checkuser();
-	my $imagemeta_usergroupid           = $self->data->get_imagemeta_usergroupid();
-	my $imagemeta_usergroupmembercount  = $self->data->get_imagemeta_usergroupmembercount();
-	my $imagemeta_usergroupmembers      = $self->data->get_imagemeta_usergroupmembers();
-	my $imagerevision_id                = $self->data->get_computer_imagerevision_id();
-	my $managementnode_id               = $self->data->get_management_node_id();
-	my $managementnode_hostname         = $self->data->get_management_node_hostname();
-	my $user_unityid                    = $self->data->get_user_login_id();
-	my $user_uid                        = $self->data->get_user_uid();
 	my $user_affiliation_sitewwwaddress = $self->data->get_user_affiliation_sitewwwaddress();
 	my $user_affiliation_helpaddress    = $self->data->get_user_affiliation_helpaddress();
 	my $user_standalone                 = $self->data->get_user_standalone();
@@ -1011,8 +877,7 @@ sub reserve_computer {
 	my $user_emailnotices               = $self->data->get_user_emailnotices();
 	my $user_imtype_name                = $self->data->get_user_imtype_name();
 	my $user_im_id                      = $self->data->get_user_im_id();
-	my $ip_configuration         = $self->data->get_management_node_public_ip_configuration();
-
+	
 	notify($ERRORS{'OK'}, 0, "user_standalone=$user_standalone, image OS type=$image_os_type");
 
 	my ($mailstring, $subject, $r);
@@ -1241,9 +1106,9 @@ EOF
 
 sub wait_for_child_reservations {
 	my $self              = shift;
+	
 	my $request_data      = $self->data->get_request_data();
 	my $request_id        = $self->data->get_request_id();
-	my $reservation_count = $self->data->get_reservation_count();
 	my $reservation_id    = $self->data->get_reservation_id();
 	my @reservation_ids   = $self->data->get_reservation_ids();
 

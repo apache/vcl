@@ -92,12 +92,9 @@ sub process {
 	my $reservation_id             = $self->data->get_reservation_id();
 	my $user_id                    = $self->data->get_user_id();
 	my $user_unityid               = $self->data->get_user_login_id();
-	my $user_email                 = $self->data->get_user_email();
-	my $affiliation_sitewwwaddress = $self->data->get_user_affiliation_sitewwwaddress();
 	my $affiliation_helpaddress    = $self->data->get_user_affiliation_helpaddress();
 	my $image_id                   = $self->data->get_image_id();
 	my $image_name                 = $self->data->get_image_name();
-	my $image_prettyname           = $self->data->get_image_prettyname();
 	my $image_size                 = $self->data->get_image_size();
 	my $imagerevision_id           = $self->data->get_imagerevision_id();
 	my $imagemeta_sysprep          = $self->data->get_imagemeta_sysprep();
@@ -301,7 +298,6 @@ sub reservation_successful {
 	my $imagerevision_id           = $self->data->get_imagerevision_id();
 	my $imagemeta_sysprep          = $self->data->get_imagemeta_sysprep();
 	my $computer_id                = $self->data->get_computer_id();
-	my $computer_type              = $self->data->get_computer_type();
 	my $computer_shortname         = $self->data->get_computer_short_name();
 	my $managementnode_shortname   = $self->data->get_management_node_short_name();
 	my $sysadmin_mail_address      = $self->data->get_management_node_sysadmin_email();
@@ -369,22 +365,18 @@ END
 sub reservation_failed {
 	my $self = shift;
 
-	my $request_data               = $self->data->get_request_data();
 	my $request_id                 = $self->data->get_request_id();
 	my $reservation_id             = $self->data->get_reservation_id();
 	my $user_id                    = $self->data->get_user_id();
 	my $user_unityid               = $self->data->get_user_login_id();
 	my $user_email                 = $self->data->get_user_email();
-	my $affiliation_sitewwwaddress = $self->data->get_user_affiliation_sitewwwaddress();
 	my $affiliation_helpaddress    = $self->data->get_user_affiliation_helpaddress();
 	my $image_id                   = $self->data->get_image_id();
 	my $image_name                 = $self->data->get_image_name();
 	my $image_prettyname           = $self->data->get_image_prettyname();
-	my $image_size                 = $self->data->get_image_size();
 	my $imagerevision_id           = $self->data->get_imagerevision_id();
 	my $imagemeta_sysprep          = $self->data->get_imagemeta_sysprep();
 	my $computer_id                = $self->data->get_computer_id();
-	my $computer_type              = $self->data->get_computer_type();
 	my $computer_shortname         = $self->data->get_computer_short_name();
 	my $managementnode_shortname   = $self->data->get_management_node_short_name();
 	my $sysadmin_mail_address      = $self->data->get_management_node_sysadmin_email();
@@ -583,6 +575,8 @@ sub setup_capture_base_image {
 		else {
 			$computer_id = (keys %computer_info)[0];
 		}
+		
+		
 	}
 	
 	my $computer_hostname = $computer_info{$computer_id}{hostname};

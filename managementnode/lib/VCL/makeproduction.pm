@@ -87,10 +87,6 @@ use VCL::utils;
 sub process {
 	my $self = shift;
 	my $request_data                    = $self->data->get_request_data();
-	my $request_id                      = $self->data->get_request_id();
-	my $reservation_id                  = $self->data->get_reservation_id();
-	my $request_state_name              = $self->data->get_request_state_name();
-	my $image_id                        = $self->data->get_image_id();
 	my $image_name                      = $self->data->get_image_name();
 
 	# Update the image and imagerevision tables:
@@ -201,11 +197,8 @@ sub set_imagerevision_to_production {
 =cut
 
 sub notify_imagerevision_to_production {
-	my $self         = shift;
-	my $image_id                        = $self->data->get_image_id();
-	my $image_name                      = $self->data->get_image_name();
+	my $self = shift;
 	my $image_prettyname                = $self->data->get_image_prettyname();
-	my $imagerevision_id                = $self->data->get_imagerevision_id();
 	my $imagerevision_revision          = $self->data->get_imagerevision_revision();
 	my $user_affiliation_helpaddress    = $self->data->get_user_affiliation_helpaddress();
 	my $user_email                      = $self->data->get_user_email();

@@ -96,7 +96,7 @@ sub process {
 	my $computer_type                       = $self->data->get_computer_type();
 	my $computer_shortname                  = $self->data->get_computer_short_name();
 	my $computer_state_name                 = $self->data->get_computer_state_name();
-	my $computer_currentimage_name          = $self->data->get_computer_currentimage_name();
+	my $computer_currentimage_name          = $self->data->get_computer_currentimage_name(0);
 	
 	# Insert into computerloadlog if request state = timeout
 	if ($request_state_name =~ /timeout|deleted/) {
@@ -186,7 +186,6 @@ sub insert_reload_and_exit {
 	my $self = shift;
 	my $request_data               = $self->data->get_request_data;
 	my $computer_id                = $self->data->get_computer_id();
-	my $computer_host_name         = $self->data->get_computer_hostname();
 	
 	# Retrieve next image
 	my ($next_image_name, $next_image_id, $next_imagerevision_id) = $self->data->get_next_image_dataStructure();
