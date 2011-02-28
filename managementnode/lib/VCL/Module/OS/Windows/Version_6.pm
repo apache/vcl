@@ -45,7 +45,7 @@ use lib "$FindBin::Bin/../../../..";
 use base qw(VCL::Module::OS::Windows);
 
 # Specify the version of this module
-our $VERSION = '2.00';
+our $VERSION = '2.2.1';
 
 # Specify the version of Perl to use
 use 5.008000;
