@@ -2511,6 +2511,9 @@ sub reclaim_vmhost_disk_space {
 	
 	my $enough_space_reclaimed = 0;
 	
+	notify($ERRORS{'DEBUG'}, 0, "deletable vmx files:\n" . format_data($deletable_vmx_files));
+	notify($ERRORS{'DEBUG'}, 0, "deletable vmdk directories:\n" . format_data($deletable_vmdk_directories));
+	
 	DELETE_STAGE: for my $delete_stage (@delete_stage_order) {
 		my ($vmx_vmdk, $key, $value) = @$delete_stage;
 		notify($ERRORS{'DEBUG'}, 0, "processing delete stage - $vmx_vmdk: $key = $value");
@@ -2535,9 +2538,13 @@ sub reclaim_vmhost_disk_space {
 					notify($ERRORS{'DEBUG'}, 0, "reclaimed space used by VM: $deletable_vmx_file_path");
 					
 					for my $vmdk_directory_path (sort keys %{$deletable_vmx_files->{$deletable_vmx_file_path}{vmdk_directory_paths}}) {
-						notify($ERRORS{'DEBUG'}, 0, "deleting $deletable_vmx_file_name from vmdk info: $vmdk_directory_path\n" . format_data($deletable_vmdk_directories->{$vmdk_directory_path}{vmx_file_paths}));
+						notify($ERRORS{'DEBUG'}, 0, "deleting $deletable_vmx_file_name from vmdk info: $vmdk_directory_path\n" . format_data($deletable_vmdk_directories->{$vmdk_directory_path}));
 						delete $deletable_vmdk_directories->{$vmdk_directory_path}{vmx_file_paths}{$deletable_vmx_file_path};
-						notify($ERRORS{'DEBUG'}, 0, "after:\n" . format_data($deletable_vmdk_directories->{$vmdk_directory_path}{vmx_file_paths}));
+						
+						my $vmx_file_path_count = scalar(keys %{$deletable_vmdk_directories->{$vmdk_directory_path}{vmx_file_paths}});
+						$deletable_vmdk_directories->{$vmdk_directory_path}{vmx_file_path_count} = $vmx_file_path_count;
+						
+						notify($ERRORS{'DEBUG'}, 0, "after:\n" . format_data($deletable_vmdk_directories->{$vmdk_directory_path}));
 					}
 					delete $deletable_vmx_files->{$deletable_vmx_file_path};
 					
@@ -2552,17 +2559,19 @@ sub reclaim_vmhost_disk_space {
 				my $deletable_vmdk_directory_name = $deletable_vmdk_directories->{$deletable_vmdk_directory_path}{directory_name};
 				my $deletable_vmdk_directory_value = $deletable_vmdk_directories->{$deletable_vmdk_directory_path}{$key};
 				
-				if (!defined($deletable_vmdk_directory_value)) {
+				if (!defined($deletable_vmdk_directory_name)) {
+					notify($ERRORS{'WARNING'}, 0, "vmdk directory name is not set the hash for deletable vmdk directory path: '$deletable_vmdk_directory_path'\n" . format_data($deletable_vmdk_directories->{$deletable_vmdk_directory_path}));
+					next;
+				}
+				elsif (!defined($deletable_vmdk_directory_value)) {
 					notify($ERRORS{'DEBUG'}, 0, "no value: $key is not set for vmdk file $deletable_vmdk_directory_name");
 					next;
 				}
 				elsif ($deletable_vmdk_directory_value ne $value) {
-					notify($ERRORS{'DEBUG'}, 0, "no match: vmdk file $deletable_vmdk_directory_name does not match delete stage criteria: $key = $value, vmdk value: $deletable_vmdk_directory_value");
+					notify($ERRORS{'DEBUG'}, 0, "no match: vmdk directory: $deletable_vmdk_directory_name\ndelete stage criteria: $key = $value\nvmdk value: $key = $deletable_vmdk_directory_value");
 					next;
 				}
-				
-				notify($ERRORS{'DEBUG'}, 0, "match: vmdk file $deletable_vmdk_directory_name matches delete stage criteria: $key = $value, vmdk value: $deletable_vmdk_directory_value");
-				
+				notify($ERRORS{'DEBUG'}, 0, "match: vmdk directory: $deletable_vmdk_directory_name\ndelete stage criteria: $key = $value\nvmdk value: $key = $deletable_vmdk_directory_value");
 				for my $vmx_file_path (sort keys %{$deletable_vmdk_directories->{$deletable_vmdk_directory_path}{vmx_file_paths}}) {
 					if ($self->delete_vm($vmx_file_path)) {
 						notify($ERRORS{'DEBUG'}, 0, "reclaimed space used by VM: $vmx_file_path");
