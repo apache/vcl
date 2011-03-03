@@ -30,14 +30,12 @@ Run this script from the command line:
 
 =head1 DESCRIPTION
 
- This script downloads and installs the Perl modules which are required for the
- backend VCL management node code. The modules which are automatically
- downloaded and installed by this script are licensed under the Artistic
- license, GPL, and LGPL. A disclaimer is displayed before this script downloads
- any modules notifying you of the modules' licenses. You must type YES in order
- for the script to proceed.
- 
- Module source packages (.tar.gz files) are downloaded to /tmp/perl-modules.
+ This script downloads and installs the Linux packages and Perl modules which
+ are required for the backend VCL management node code. The yum utility is used
+ to download and install the Linux packages. The CPAN.pm Perl module is used to
+ download and install the required Perl modules. A disclaimer is displayed
+ before this script downloads any files notifying you of the licenses used by
+ the dependencies. You must type YES in order for the script to proceed.
 
 =cut
 
