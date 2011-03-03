@@ -662,62 +662,88 @@ sub _get_datastore_info {
 		return;
 	}
 	
-	# Set the default values
-	my $default_datastore_info;
-	$default_datastore_info->{local}{accessible} = 'true';
-	$default_datastore_info->{local}{type} = 'local';
-	$default_datastore_info->{local}{normal_path} = '/var/lib/vmware/Virtual Machines';
-	$default_datastore_info->{local}{url} = '/var/lib/vmware/Virtual Machines';
+	my $vmhost_profile_datastore_path = $self->data->get_vmhost_profile_datastore_path();
+	my $vmhost_profile_vmpath = $self->data->get_vmhost_profile_vmpath();
+	
+	$vmhost_profile_datastore_path = normalize_file_path($vmhost_profile_datastore_path);
+	$vmhost_profile_vmpath = normalize_file_path($vmhost_profile_vmpath);
 	
 	# Get the contents of the VMware config file
 	my $config_file_path = '/etc/vmware/config';
+	
+	my $config_datastore_name;
+	my $config_datastore_path;
 	my @config_contents = $self->vmhost_os->get_file_contents($config_file_path);
 	if (@config_contents) {
 		notify($ERRORS{'DEBUG'}, 0, "retrieved contents of $config_file_path\n" . join("\n", @config_contents));
+		
+		# Get the datastore name and path from the file contents
+		($config_datastore_name) = map { $_ =~ /datastore\.name\s*=\s*"([^"]+)"/ } @config_contents;
+		if (!$config_datastore_name) {
+			notify($ERRORS{'WARNING'}, 0, "failed to locate the 'datastore.name' line in $config_file_path");
+		}
+		
+		($config_datastore_path) = map { $_ =~ /datastore\.localpath\s*=\s*"([^"]+)"/ } @config_contents;
+		if ($config_datastore_path) {
+			$config_datastore_path = normalize_file_path($config_datastore_path);
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to locate the 'datastore.localpath' line in $config_file_path");
+		}
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to retrieve the contents of $config_file_path, returning default datastore information:\n" . format_data($default_datastore_info));
-		return $default_datastore_info;
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve the contents of $config_file_path");
 	}
 	
-	# Get the datastore name and path from the file contents
-	my ($datastore_name) = map { $_ =~ /datastore\.name\s*=\s*"([^"]+)"/ } @config_contents;
-	if (!$datastore_name) {
-		notify($ERRORS{'WARNING'}, 0, "failed to locate the 'datastore.name' line in $config_file_path, returning default datastore information:\n" . format_data($default_datastore_info));
-		return $default_datastore_info;
+	# Create a hash containing datastore names and their paths
+	my %datastore_info;
+	
+	# Keep track of paths added to returning %datastore_info hash so the same path isn't added more than once
+	my %datastore_paths;
+	
+	# Add the datastore found in the config file
+	if (defined($config_datastore_name) && defined($config_datastore_path)) {
+		$datastore_info{$config_datastore_name}{normal_path} = $config_datastore_path;
+		$datastore_paths{$config_datastore_path} = 1;
+	};
+	
+	# Add datastores for the VM host profile vmpath and datastore if they are different than what's in the config file
+	if (!defined($datastore_paths{$vmhost_profile_vmpath})) {
+		$datastore_info{'vmprofile-vmpath'}{normal_path} = $vmhost_profile_vmpath;
+		$datastore_paths{$vmhost_profile_vmpath} = 1;
+	}
+	if (!defined($datastore_paths{$vmhost_profile_datastore_path})) {
+		$datastore_info{'vmprofile-datastore'}{normal_path} = $vmhost_profile_datastore_path;
+		$datastore_paths{$vmhost_profile_vmpath} = 1;
 	}
 	
-	my ($datastore_path) = map { $_ =~ /datastore\.localpath\s*=\s*"([^"]+)"/ } @config_contents;
-	$datastore_path = normalize_file_path($datastore_path);
-	if (!$datastore_path) {
-		notify($ERRORS{'WARNING'}, 0, "failed to locate the 'datastore.localpath' line in $config_file_path, returning default datastore information:\n" . format_data($default_datastore_info));
-		return $default_datastore_info;
+	# Construct a hash containing
+	for my $datastore_name (keys %datastore_info) {
+		my $datastore_path = $datastore_info{$datastore_name}{normal_path};
+		
+		$datastore_info{$datastore_name}{accessible} = 'true';
+		$datastore_info{$datastore_name}{type} = 'local';
+		$datastore_info{$datastore_name}{url} = $datastore_path;
+		
+		my $available_space = $self->vmhost_os->get_available_space($datastore_path);
+		if (defined($available_space)) {
+			$datastore_info{$datastore_name}{freeSpace} = $available_space;
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to determine the amount of space available in datastore '$datastore_name' ($datastore_path)");
+		}
+		
+		my $total_space = $self->vmhost_os->get_total_space($datastore_path);
+		if (defined($total_space)) {
+			$datastore_info{$datastore_name}{capacity} = $total_space;
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to determine the total amount of space of the volume where datastore '$datastore_name' ($datastore_path) resides");
+		}
 	}
 	
-	my $datastore_info;
-	$datastore_info->{$datastore_name}{accessible} = 'true';
-	$datastore_info->{$datastore_name}{type} = 'local';
-	$datastore_info->{$datastore_name}{normal_path} = $datastore_path;
-	$datastore_info->{$datastore_name}{url} = $datastore_path;
-	
-	my $available_space = $self->vmhost_os->get_available_space($datastore_path);
-	if (defined($available_space)) {
-		$datastore_info->{$datastore_name}{freeSpace} = $available_space;
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to determine the amount of space available in '$datastore_path'");
-	}
-	
-	my $total_space = $self->vmhost_os->get_total_space($datastore_path);
-	if (defined($total_space)) {
-		$datastore_info->{$datastore_name}{capacity} = $total_space;
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to determine the total amount of space of the volume where '$datastore_path' resides");
-	}
-	
-	notify($ERRORS{'DEBUG'}, 0, "retrieved datastore info:\n" . format_data($datastore_info));
-	return $datastore_info;
+	notify($ERRORS{'DEBUG'}, 0, "retrieved datastore info:\n" . format_data(\%datastore_info));
+	return \%datastore_info;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
