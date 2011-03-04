@@ -129,26 +129,32 @@ $authMechs = array(
 	                                                                                                #   to use this login mechanism*/
 );
 
-$affilValFunc = array(1 => create_function('', 'return 0;'),
-                      /*3 => "validateLDAPUser",*/
-);
+$affilValFunc = array();
+$affilValFuncArgs = array();
+$addUserFunc = array();
+$addUserFuncArgs = array();
+$updateUserFunc = array();
+$updateUserFuncArgs = array();
+foreach($authMechs as $key => $item) {
+	if($item['type'] == 'ldap') {
+		$affilValFunc[$item['affiliationid']] = 'validateLDAPUser';
+		$affilValFuncArgs[$item['affiliationid']] = $key;
+		$addUserFunc[$item['affiliationid']] = 'addLDAPUser';
+		$addUserFuncArgs[$item['affiliationid']] = $key;
+		$updateUserFunc[$item['affiliationid']] = 'updateLDAPUser';
+		$updateUserFuncArgs[$item['affiliationid']] = $key;
+	}
+	elseif($item['type'] == 'local') {
+		$affilValFunc[$item['affiliationid']] = create_function('', 'return 0;');
+		$addUserFunc[$item['affiliationid']] = create_function('', 'return 0;');
+		$updateUserFunc[$item['affiliationid']] = create_function('', 'return 0;');
+	}
+}
 
-$affilValFuncArgs = array(/*3 => 'EXAMPLE1 LDAP',*/
-);
+# any affiliation that is shibboleth authenticated without a corresponding
+# LDAP server needs an entry in addUserFunc
+# $addUserFunc[affiliationid goes here] = create_function('', 'return 0;');
 
-$addUserFunc = array(1 => create_function('', 'return 0;'),
-                     /*3 => 'addLDAPUser',*/
-);
-
-$addUserFuncArgs = array(/*3 => 'EXAMPLE1 LDAP',*/
-);
-
-$updateUserFunc = array(1 => create_function('', 'return 0;'),
-                        /*3 => 'updateLDAPUser',*/
-);
-
-$updateUserFuncArgs = array(/*3 => 'EXAMPLE1 LDAP',*/
-);
 
 $findAffilFuncs = array("testGeneralAffiliation");
 
