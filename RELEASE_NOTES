@@ -21,10 +21,11 @@ servers in a server farm or HPC cluster.
 
 II. VCL Roadmap
 
-VCL 2.2 (this release)
-  * support for xCAT 2.3
-  * VMWare Free Server 2.x
-  * improve block reservations (renamed to block allocations)
+VCL 2.2.1 (this release)
+  * removed frontend dependency on jpgraph
+  * remove any access control that is hard coded in frontend
+  * added support for VirtualBox hypervisor
+  * many bug fixes and improvements to VMWare support
 
 VCL 2.3
   * Service deployments 
