@@ -50,19 +50,19 @@ code at /var/www/html/vcl. If you installed it elsewhere, replace
 	   cd /root/apache-VCL-2.2.1-incubating
 		cp -r web /var/www/html/vcl
 
-	c. copy your 2.1 config files
+	c. copy your config files from the previous version:
 
 	   cd ~/vcl-pre2.2.1_web/.ht-inc
 		cp conf.php secrets.php pubkey.pem keys.pem /var/www/html/vcl/.ht-inc
 
-	d. make /var/www/html/vcl/.ht-inc/maintenance writable by the web server - if
-	   httpd on your server is running as the user apache:
+	d. (2.1 -> 2.2.1 only) make /var/www/html/vcl/.ht-inc/maintenance writable by
+		the web server - if httpd on your server is running as the user apache:
 
 	   chown apache /var/www/html/vcl/.ht-inc/maintenance
 
-	e. add the following new entries to conf.php - You can copy them in from
-	   .ht-inc/conf-default.php. Descriptions of each item can also be found
-		in conf-default.php
+	e. (2.1 -> 2.2.1 only) add the following new entries to conf.php - You can copy
+		them in from .ht-inc/conf-default.php. Descriptions of each item can also be
+		found in conf-default.php
 
 	   * date_default_timezone_set('America/New_York');
 		* $blockNotifyUsers = "adminuser@example.org";
@@ -92,7 +92,7 @@ copy in the new management node code.
 
 		/bin/cp -r /root/apache-VCL-2.2.1-incubating/managementnode/* /usr/local/vcl
 
-	c. Make changes related to vcld.conf settings
+	c. (2.1 -> 2.2.1 only) Make changes related to vcld.conf settings
 
 	   * Open VCL web interface
 		* Go to Management Nodes
