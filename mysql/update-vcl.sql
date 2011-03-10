@@ -340,6 +340,31 @@ CALL AddColumnIfNotExists('request', 'checkuser', "tinyint(1) unsigned NOT NULL 
 
 -- --------------------------------------------------------
 
+--
+-- Table structure for table `usergrouppriv`
+--
+
+CREATE TABLE IF NOT EXISTS `usergrouppriv` (
+  `usergroupid` smallint(5) unsigned NOT NULL,
+  `userprivtypeid` tinyint(3) unsigned NOT NULL,
+  UNIQUE KEY `usergroupid` (`usergroupid`,`userprivtypeid`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+
+-- --------------------------------------------------------
+
+-- 
+-- Table structure for table `usergroupprivtype`
+-- 
+
+CREATE TABLE IF NOT EXISTS `usergroupprivtype` (
+  `id` tinyint(3) unsigned NOT NULL auto_increment,
+  `name` varchar(50) NOT NULL,
+  `help` text,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+
+-- --------------------------------------------------------
+
 -- 
 -- Table structure change for table `vmhost`
 -- 
@@ -459,6 +484,34 @@ INSERT IGNORE provisioningOSinstalltype (provisioningid, OSinstalltypeid) SELECT
 INSERT IGNORE provisioningOSinstalltype (provisioningid, OSinstalltypeid) SELECT provisioning.id, OSinstalltype.id FROM provisioning, OSinstalltype WHERE provisioning.name LIKE '%esx%' AND OSinstalltype.name = 'vmware';
 INSERT IGNORE provisioningOSinstalltype (provisioningid, OSinstalltypeid) SELECT provisioning.id, OSinstalltype.id FROM provisioning, OSinstalltype WHERE provisioning.name LIKE '%vbox%' AND OSinstalltype.name = 'vbox';
 INSERT IGNORE provisioningOSinstalltype (provisioningid, OSinstalltypeid) SELECT provisioning.id, OSinstalltype.id FROM provisioning, OSinstalltype WHERE provisioning.name LIKE '%lab%' AND OSinstalltype.name = 'none';
+
+-- --------------------------------------------------------
+
+-- 
+-- Inserts for table `usergroupprivtype`
+--
+
+INSERT IGNORE INTO `usergroupprivtype` (`id`, `name`, `help`) VALUES
+(1, 'Manage Additional User Group Permissions', 'This gives users in the group access to this portion of the site.'),
+(2, 'Manage Block Allocations', 'Grants the ability to create, accept, and reject block allocations.'),
+(3, 'Set Overlapping Reservation Count', 'Grants the ability to control how many overlapping reservations users in a given user group can make.'),
+(4, 'View Debug Information', 'Allows user to see various verbose/debugging information while using the web site.'),
+(5, 'Manage VM Profiles', 'Grants the ability to manage VM profiles under the Virtual Hosts section of the site.'),
+(6, 'Search Tools', 'Grants the ability to see the Search Tools section of the site.'),
+(7, 'Schedule Site Maintenance', 'Grants the ability to schedule and manage site maintenance for the web site.'),
+(8, 'View Dashboard (global)', 'The dashboard displays real time information about the VCL system. This option grants access to view the dashboard with information displayed for users from all affiliations.'),
+(9, 'View Dashboard (affiliation only)', 'The dashboard displays real time information about the VCL system. This option grants access to view the dashboard with information displayed only about users matching the affiliation of the currently logged in user.'),
+(10, 'User Lookup (global)', 'The User Lookup tool allows a user to see various information about VCL users. This grants the use of the tool for all affiliations.'),
+(11, 'User Lookup (affiliation only)', 'The User Lookup tool allows a user to see various information about VCL users. This grants the use of the tool for looking up users of the same affiliation as the logged in user.'),
+(12, 'View Statistics by Affiliation', 'Grants the ability to see statistics for affiliations that do not match the affiliation of the logged in user.');
+
+-- --------------------------------------------------------
+
+-- 
+-- Inserts for table `usergrouppriv`
+--
+
+INSERT IGNORE usergrouppriv (usergroupid, userprivtypeid) SELECT usergroup.id, usergroupprivtype.id FROM usergroup, usergroupprivtype WHERE usergroup.name = 'adminUsers' AND usergroup.affiliationid = (SELECT id FROM affiliation WHERE name = 'Local');
 
 -- --------------------------------------------------------
 
