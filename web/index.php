@@ -16,6 +16,8 @@
   limitations under the License.
 */
 
+# ASF VCL v2.2.1
+
 @include_once("fckeditor/fckeditor.php");
 require_once(".ht-inc/conf.php");
 if(! isset($_SERVER['HTTPS']) || $_SERVER['HTTPS'] != "on") {
