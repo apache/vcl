@@ -460,20 +460,6 @@ else
 	fail("dojo directory does not exist. Download and install Dojo Toolkit 1.5.0");
 print "</ul>\n";
 
-# check for jpgraph directory
-title("Testing for existance of jpgraph directory");
-print "<ul>\n";
-if(is_dir('.ht-inc/jpgraph')) {
-	pass(".ht-inc/jpgraph directory exists");
-	if(is_readable('.ht-inc/jpgraph'))
-		pass(".ht-inc/jpgraphdirectory is readable");
-	else
-		fail(".ht-inc/jpgraphdirectory is not readable. Check permissions on this directory");
-}
-else
-	fail(".ht-inc/jpgraph directory does not exist. This will only prevent statistic graphs from being generated. To correct, download and install the 3.x series of jpgraph.");
-print "</ul>\n";
-
 # php display errors
 title("Checking value of PHP display_errors");
 $a = ini_get('display_errors');
