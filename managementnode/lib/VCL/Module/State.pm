@@ -871,9 +871,10 @@ sub DESTROY {
 	$self->SUPER::DESTROY if $self->can("SUPER::DESTROY");
 	
 	# Determine how long process took to run
-	my $duration = (time - $self->{start_time});
-	
-	notify($ERRORS{'OK'}, 0, ref($self) . " process duration: $duration seconds");
+	if ($self->{start_time}) {
+		my $duration = (time - $self->{start_time});
+		notify($ERRORS{'OK'}, 0, ref($self) . " process duration: $duration seconds");
+	}
 } ## end sub DESTROY
 
 #/////////////////////////////////////////////////////////////////////////////
