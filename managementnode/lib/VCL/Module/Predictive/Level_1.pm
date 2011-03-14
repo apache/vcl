@@ -164,7 +164,7 @@ sub get_next_image {
 	# get machine type
 	my $select_type = "
     SELECT
-    type
+    type,provisioningid
 	 FROM
 	  computer
 	  WHERE
@@ -176,6 +176,7 @@ sub get_next_image {
 		return 0;
 	}
 	my $type = $data[0]{type};
+	my $provisioningid = $data[0]{provisioningid};
 
 	# online machines
 	my $select_online = "
@@ -319,20 +320,28 @@ sub get_next_image {
 		return 0;
 	}
 
+
 	$inlist = join(',', @imggroups);
 	my $select_imageids = "
         SELECT
         DISTINCT(r.subid)
         FROM
         image i,
+	OS o,
         resource r,
-        resourcegroupmembers rgm
+        resourcegroupmembers rgm,
+	OSinstalltype osit,
+	provisioningOSinstalltype posit
         WHERE
         rgm.resourceid = r.id
         AND r.resourcetypeid = 13
         AND rgm.resourcegroupid IN ($inlist)
         AND r.subid = i.id
         AND i.deleted = 0
+	AND i.OSid = o.id
+	AND o.installtype = osit.name
+	AND osit.id = posit.OSinstalltypeid
+	AND posit.provisioningid = $provisioningid
         ";
 	my @imgids;
 	@data = database_select($select_imageids);
