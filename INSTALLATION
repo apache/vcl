@@ -9,394 +9,864 @@ IV. Adding LDAP authentication
 --------------------------------------------------------------------------------
 
 I. Install & Configure the Database
-	1. Download & Extract the Apache VCL Source
-		a. If you have not already done so, download and the Apache VCL source to the database server: 
-			wget http://www.apache.org/dist/incubator/vcl/apache-VCL-2.2.1-incubating.tar.bz2 
-		b. Extract the files: 
-			tar -jxvf apache-VCL-2.2.1-incubating.tar.bz2 
-	2. Install MySQL Server
-		a. Install MySQL Server 5.x: 
-			yum install mysql-server -y 
-		b. Configure the MySQL daemon (mysqld) to start automatically: 
-			/sbin/chkconfig --level 345 mysqld on 
-		c. Start the MySQL daemon: 
-			/sbin/service mysqld start 
-		d. Make sure the firewall on the database server is configured to allow traffic from the web server and management node servers to connect to the MySQL daemon TCP port: 3306.  See the firewall documentation for more information. 
-			man iptables 
-	3. Create the VCL Database
-		a. Run the MySQL command-line client: 
-			mysql 
-		b. Create a database: 
-			CREATE DATABASE vcl; 
-		c. Create a user with SELECT, INSERT, UPDATE, and DELETE privileges on the database you just created: 
-			GRANT SELECT,INSERT,UPDATE,DELETE ON vcl.* TO 'vcluser'@'localhost' IDENTIFIED BY 'vcluserpassword'; 
-			Replace vcluser and vcluserpassword with that of the user you want to use to connect to the database 
-			The GRANT command will automatically create the user if it doesn't already exist 
-		d. Exit the MySQL command-line client: 
-			exit 
-		e. Import the vcl.sql file into the database: 
-			mysql vcl < apache-VCL-2.2.1-incubating/mysql/vcl.sql 
-			The vcl.sql file is included in the mysql directory within the Apache VCL source code 
-	4. Install & Configure phpMyAdmin (Optional):
-			phpMyAdmin is a free and optional tool which allows MySQL to be administered using a web browser. It makes administering the VCL database easier. This tool can be installed on the VCL web server.
-			To install phpMyAdmin, follow the instructions on: VCL 2.2.1 phpMyAdmin Installation & Configuration
+   1. Download & Extract the Apache VCL Source
+      a. If you have not already done so, download and the Apache VCL source to
+         the database server: 
+
+         wget http://www.apache.org/dist/incubator/vcl/apache-VCL-2.2.1-incubating.tar.bz2 
+
+      b. Extract the files: 
+
+         tar -jxvf apache-VCL-2.2.1-incubating.tar.bz2 
+
+   2. Install MySQL Server
+      a. Install MySQL Server 5.x: 
+
+         yum install mysql-server -y 
+
+      b. Configure the MySQL daemon (mysqld) to start automatically: 
+
+         /sbin/chkconfig --level 345 mysqld on 
+
+      c. Start the MySQL daemon: 
+
+         /sbin/service mysqld start 
+
+      d. Make sure the firewall on the database server is configured to allow
+         traffic from the web server and management node servers to connect to
+         the MySQL daemon TCP port: 3306.  See the firewall documentation for
+         more information. 
+
+         man iptables 
+
+   3. Create the VCL Database
+      a. Run the MySQL command-line client: 
+
+         mysql 
+
+      b. Create a database: 
+
+         CREATE DATABASE vcl; 
+
+      c. Create a user with SELECT, INSERT, UPDATE, and DELETE privileges on
+         the database you just created: 
+
+         GRANT SELECT,INSERT,UPDATE,DELETE ON vcl.* TO 'vcluser'@'localhost' \
+         IDENTIFIED BY 'vcluserpassword'; 
+
+         NOTE: Replace vcluser and vcluserpassword with that of the user you 
+         want to use to connect to the database. The GRANT command will 
+         automatically create the user if it doesn't already exist.
+
+      d. Exit the MySQL command-line client: 
+
+         exit 
+
+      e. Import the vcl.sql file into the database: 
+
+         mysql vcl < apache-VCL-2.2.1-incubating/mysql/vcl.sql 
+
+         The vcl.sql file is included in the mysql directory within the Apache
+         VCL source code 
+
+   4. Install & Configure phpMyAdmin (Optional):
+      phpMyAdmin is a free and optional tool which allows MySQL to be 
+      administered using a web browser. It makes administering the VCL database 
+      easier. This tool can be installed on the VCL web server.  To install 
+      phpMyAdmin, follow the instructions on:
+
+            VCL 2.2.1 phpMyAdmin Installation & Configuration
+            http://cwiki.apache.org/VCL/vcl-221-phpmyadmin-installation-configuration.html
 
 --------------------------------------------------------------------------------
 
 II. Install & Configure the Web Components
-	Prerequisites
-	The following instructions assume these tasks have previously been completed:
-		* Apache VCL 2.2.1 has been downloaded
-		* VCL database has been installed and configured
 
-	Web Server:
-		* Apache HTTP Server v1.3 or v2.x with SSL enabled
-		* PHP 5.0 or later
-		The VCL web frontend may run under other web server platforms capable of running PHP code, but has only been tested to work with Apache HTTP Server. 
-	
-	Required Linux Packages:
-		* libmcrypt - Encryption algorithms library
-	
-	Required PHP Modules:
-	(Some of these may already be included with your PHP distribution)
-		* php-gd
-		* php-json (required if your PHP version is 5.2 or later)
-		* php-mcrypt
-		* php-mysql
-		* php-openssl
-		* php-sysvsem
-		* php-xml
-		* php-xmlrpc
-		* php-ldap (if you will be using LDAP authentication)
-		
-	1. Install the Required Linux Packages & PHP Modules
-		a. If your web server is running a Red Hat-based OS, the required components can be installed with: 
-			yum install httpd mod_ssl php-gd php-mcrypt php-mysql php-xml php-xmlrpc php-ldap -y 
-			* If you will be using a self-signed certificate for SSL, this is a great HOWTO explaining how to set it up on CentOS
-			* It is useful to configure the server set up to be able to send debugging emails
-		b. Configure the web server daemon (httpd) to start automatically: 
-			/sbin/chkconfig --level 345 httpd on 
-		c. Start the web server daemon: 
-			/sbin/service httpd start 
-		d. If SELinux is enabled, run the following command to allow the web server to connect to the database: 
-			/usr/sbin/setsebool -P httpd_can_network_connect=1 
-	2. Install the VCL Frontend Web Code
-		a. If you have not already done so, download and extract the source files on the web server: 
-			wget http://www.apache.org/dist/incubator/vcl/apache-VCL-2.2.1-incubating.tar.bz2
-			tar -jxvf apache-VCL-2.2.1-incubating.tar.bz2 
-		b. Copy the web directory to a location under the web root of your web server and navigate to the destination .ht-inc subdirectory: 
-			cp -r apache-VCL-2.2.1-incubating/web/ /var/www/html/vcl
-			cd /var/www/html/vcl/.ht-inc 
-		c. Copy secrets-default.php to secrets.php: 
-			cp secrets-default.php secrets.php 
-		d. Edit the secrets.php file: 
-			vi secrets.php 
-			* Set the following variables to match your database configuration: 
-			* $vclhost
-			* $vcldb
-			* $vclusername
-			* $vclpassword
-			* Create random passwords for the following variables: 
-			* $mcryptkey
-			* $mcryptiv (must be 8 hex characters)
-			* $pemkey
-			* Save the secrets.php file
-		e. Run the genkeys.sh script.  Enter the value you set for $pemkey in secrets.php as the passphrase (3 times, copy/paste is a good idea) 
-			./genkeys.sh 
-		f. Copy conf-default.php to conf.php: 
-			cp conf-default.php conf.php 
-		g. Modify conf.php to match your site 
-			vi conf.php 
-			Modify every entry under "Things in this section must be modified". Descriptions and pointers for each value are included within conf.php. 
-			* COOKIEDOMAIN - set this to the domain name your web server is using or leave it blank if you are only accessing the web server by its IP address
-		h. Set the owner of the .ht-inc/maintenance directory to the web server user (normally 'apache'): 
-			chown apache maintenance 
-			i. Open the testsetup.php page in a web browser: 
-			* If you set up your site to be https://my.server.org/vcl/ open https://my.server.org/vcl/testsetup.php
-			* Debug any issues reported by testsetup.php
-	3. Log In to the VCL Website
-		a. Open the index.php page in your browser (https://my.server.org/vcl/index.php) 
-			* Select Local Account
-			* Username: admin
-			* Password: adminVc1passw0rd
-		b. Set the admin user password (optional): 
-			i. Click User Preferences
-			ii. Enter the current password: adminVc1passw0rd
-			iii. Enter a new password
-			iv. Click Submit Changes
-	4. Add a Management Node to the Database
-		a. Click the Management Nodes link 
-			i. Enter the hostname and IP address of your management node
-			ii. Click Add
-			iii. Fill in these additional required fields: 
-			* SysAdmin Email Address - error emails will be sent to this address
-			* Install Path - this is parent directory under which image files will be stored - only required if doing bare metal installs or using VMWare with local disks
-			* End Node SSH Identity Key Files - probably just enter "/etc/vcl/vcl.key"
-			iv. Optionally, fill in these fields: 
-			* Address for Shadow Emails - End users are sent various emails about the status of their reservations. If this field is configured, copies of all of those emails will be sent to this address.
-			* Public NIC configuration method - this defaults to Dynamic DHCP - if DHCP is not available for the public interface of your nodes, you can set this to Static. Then, the IP configuration on the nodes will be manually set using Public Netmask, Public Gateway, Public DNS Server, and the IP address set for the computer under Manage Computers
-		b. Click Confirm Management Node
-		c. Click Submit
-		d. Click the Management Nodes link 
-			i. Select Edit Management Node Grouping
-			ii. Click Submit
-			iii. Select the checkbox for your management node
-			iv. Click Submit
-		Further steps if using only VMWare
-	
-		Further steps if using xCAT
-	
-		Adding Local VCL Accounts
-		Local VCL accounts are contained within the VCL database.  The admin account is a local VCL account.  Additional local accounts can be added via the backend management node code. After you have finished the backend management node installation, run:
-			vcld -setup 
-			1. 	Select VCL Base Module
-			2. 	Select Add Local VCL User Account
-			3. 	Enter the requested information
-		
-		Adding LDAP Authentication
-		Follow the instruction on the Adding LDAP Authentication page.
+   Prerequisites:
+
+   The following instructions assume these tasks have previously been completed:
+      * Apache VCL 2.2.1 has been downloaded
+      * VCL database has been installed and configured
+
+   Web Server:
+      * Apache HTTP Server v1.3 or v2.x with SSL enabled
+      * PHP 5.0 or later
+      The VCL web frontend may run under other web server platforms capable of
+      running PHP code, but has only been tested to work with Apache HTTP Server
+   
+   Required Linux Packages:
+      * libmcrypt - Encryption algorithms library
+   
+   Required PHP Modules:
+   (Some of these may already be included with your PHP distribution)
+      * php-gd
+      * php-json (required if your PHP version is 5.2 or later)
+      * php-mcrypt
+      * php-mysql
+      * php-openssl
+      * php-sysvsem
+      * php-xml
+      * php-xmlrpc
+      * php-ldap (if you will be using LDAP authentication)
+      
+   1. Install the Required Linux Packages & PHP Modules
+      a. If your web server is running a Red Hat-based OS, the required
+         components can be installed with: 
+
+         yum install httpd mod_ssl php-gd php-mcrypt php-mysql php-xml \
+         php-xmlrpc php-ldap -y 
+
+         * If you will be using a self-signed certificate for SSL, this is a
+           great HOWTO explaining how to set it up on CentOS:
+
+           http://wiki.centos.org/HowTos/Https
+
+         * It is useful to configure the server to be able to send debugging
+           emails
+
+      b. Configure the web server daemon (httpd) to start automatically: 
+
+         /sbin/chkconfig --level 345 httpd on 
+
+      c. Start the web server daemon: 
+
+         /sbin/service httpd start 
+
+      d. If SELinux is enabled, run the following command to allow the web
+         server to connect to the database: 
+
+         /usr/sbin/setsebool -P httpd_can_network_connect=1 
+
+   2. Install the VCL Frontend Web Code
+      a. Copy the web directory to a location under the web root of your web
+         server and navigate to the destination .ht-inc subdirectory: 
+
+         cp -r apache-VCL-2.2.1-incubating/web/ /var/www/html/vcl
+         cd /var/www/html/vcl/.ht-inc 
+
+      b. Copy secrets-default.php to secrets.php: 
+
+         cp secrets-default.php secrets.php 
+
+      c. Edit the secrets.php file: 
+
+         vi secrets.php 
+
+         * Set the following variables to match your database configuration: 
+            * $vclhost
+            * $vcldb
+            * $vclusername
+            * $vclpassword
+         * Create random passwords for the following variables: 
+            * $mcryptkey
+            * $mcryptiv (must be 8 hex characters)
+            * $pemkey
+            * Save the secrets.php file
+      d. Run the genkeys.sh script.  Enter the value you set for $pemkey in
+         secrets.php as the passphrase (3 times, copy/paste is a good idea) 
+
+         ./genkeys.sh 
+
+      e. Copy conf-default.php to conf.php: 
+
+         cp conf-default.php conf.php 
+
+      f. Modify conf.php to match your site 
+
+         vi conf.php 
+
+         Modify every entry under "Things in this section must be modified".
+         Descriptions and pointers for each value are included within conf.php. 
+         * COOKIEDOMAIN - set this to the domain name your web server is using
+           or leave it blank if you are only accessing the web server by its IP
+           address
+      g. Set the owner of the .ht-inc/maintenance directory to the web server
+         user (normally 'apache'): 
+
+         chown apache maintenance 
+
+      h. Open the testsetup.php page in a web browser: 
+         * If you set up your site to be https://my.server.org/vcl/ open
+           https://my.server.org/vcl/testsetup.php
+         * Debug any issues reported by testsetup.php
+
+   3. Log In to the VCL Website
+      a. Open the index.php page (https://my.server.org/vcl/index.php) 
+         * Select Local Account
+         * Username: admin
+         * Password: adminVc1passw0rd
+      b. Set the admin user password (optional): 
+         * Click User Preferences
+         * Enter the current password: adminVc1passw0rd
+         * Enter a new password
+         * Click Submit Changes
+   4. Add a Management Node to the Database
+      a. Click the Management Nodes link 
+         * Enter the hostname and IP address of your management node
+         * Click Add
+         * Fill in these additional required fields: 
+           * SysAdmin Email Address - error emails will be sent to this address
+           * Install Path - this is parent directory under which image files
+             will be stored - only required if doing bare metal installs or
+             using VMWare with local disks
+           * End Node SSH Identity Key Files - probably just enter
+             "/etc/vcl/vcl.key"
+         * Optionally, fill in these fields: 
+           * Address for Shadow Emails - End users are sent various emails
+             about the status of their reservations. If this field is
+             configured, copies of all of those emails will be sent to this
+             address.
+           * Public NIC configuration method - this defaults to Dynamic DHCP -
+             if DHCP is not available for the public interface of your nodes,
+             you can set this to Static. Then, the IP configuration on the
+             nodes will be manually set using Public Netmask, Public Gateway,
+             Public DNS Server, and the IP address set for the computer under
+             Manage Computers
+      b. Click Confirm Management Node
+      c. Click Submit
+      d. Click the Management Nodes link 
+         * Select Edit Management Node Grouping
+         * Click Submit
+         * Select the checkbox for your management node
+         * Click Submit
+
+      Further steps if using only VMWare
+
+         If you are using standalone VMware servers (i.e. ones that VCL did not
+         deploy using xCAT), you first need to add the VMWare servers; then, you
+         need to add the virtual machines. You can either add them individually
+         (Adding Individual VMWare Servers/Virtual Machines), or if they have
+         sequential hostnames and IP addresses, you can add them all at once
+         (Adding Multiple VMWare Servers/Virtual Machines).
+
+         Once you have added at least one computer, you can get to the "Add
+         Single Computer" page by going to "Manage Computers->Edit Computer
+         Information" and clicking Add. You can get to the "Add Multiple
+         Computers" page by doing the same thing but checking the "Add
+         Multiple" checkbox.
+
+         Adding Individual VMware Servers
+
+            1. Click Manage Computers
+            2. Select the Add Single Computer radio button
+            3. Click Submit
+            4. Fill in the following:
+               * Hostname
+               * IP Address
+               * State - vmhostinuse *** Double-check this because you will
+                 not be able to change it later
+               * Owner - admin@Local
+               * RAM
+               * Processor Speed
+               * Network Speed
+               * Type - blade
+               * Provisioning Engine - xCAT 2.x Provisioning
+               * Click the checkbox under allcomputers
+            5. Click Confirm Computer
+            6. Click Submit
+            7. Select a VM Host Profile these VMware hosts will use. You can
+               modify the VM Host Profile later if needed. See following page
+               for more information about VM Host Profiles:
+
+               http://cwiki.apache.org/VCL/vmware-configuration.html
+
+            8. Click Add Computer
+               * The computer you just added isn't listed after clicking Submit.
+                 This is not a problem.                                                     
+         Adding Multiple VMWare Servers
+
+            1. Click Manage Computers
+            2. Select the Add Multiple Computers radio button
+            3. Click Submit
+            4. Fill in the following:
+               * Hostname - the hostnames of all the computers must have a
+                 numerical part that is sequential, use a % as a placeholder
+                 where that part would be
+               * Start value - the first number of the numerical part of the
+                 hostname
+               * End value - the last number of the numerical part of the
+                 hostname
+               * Start IP Address - if using static public addresses, the IP
+                 addresses must be sequential; enter the first address here; if
+                 using DHCP, just enter something like 1.1.1.1
+               * End IP address - the last IP address of the sequence; if using
+                 DHCP, you'll need to enter something that would work out to the
+                 last address relative to Start IP Address (i.e. if adding 3
+                 computers, use 1.1.1.1 for start and 1.1.1.3 for end)
+               * State - vmhostinuse *** Double-check this because you will
+                 not be able to change it later
+               * Owner - owner of the computer
+               * RAM
+               * Processor Speed
+               * Network Speed
+               * Type - blade
+               * Provisioning Engine - xCAT 2.x
+               * Check allComputers
+            5. Click Confirm Computers
+            6. Click Submit
+            7. Select a VM Host Profile these VMware hosts will use. You can
+               modify the VM Host Profile later if needed. See following page
+               for more information about VM Host Profiles:
+
+               http://cwiki.apache.org/VCL/vmware-configuration.html
+
+            8. Click Add Computers
+
+         Adding Virtual Machines
+
+            1. Click Manage Computers
+            2. Select the Add Multiple Computers radio button
+            3. Click Submit
+            4. Fill in the following:
+               * Hostname - the hostnames of all the computers must have a
+                 numerical part that is sequential, use a % as a placeholder
+                 where that part would be
+               * Start value - the first number of the numerical part of the
+                 hostname
+               * End value - the last number of the numerical part of the
+                 hostname
+               * Start IP Address - if using static public addresses, the IP
+                 addresses must be sequential; enter the first address here; if
+                 using DHCP, just enter something like 1.1.1.1
+               * End IP address - the last IP address of the sequence; if using
+                 DHCP, you'll need to enter something that would work out to the
+                 last address relative to Start IP Address (i.e. if adding 3
+                 computers, use 1.1.1.1 for start and 1.1.1.3 for end)
+               * Start private IP Address - similar to Start IP Address, but for
+                 the private side
+               * End private IP Address - similar to the End IP Address but for
+                 the private side
+               * Start MAC Address - if mac addresses are sequential, with the
+                 first one being the private MAC address for the first computer,
+                 the second one being the public MAC address for the first
+                 computer, the third one being the private MAC address of the
+                 second computer, etc, you can enter the first one here and then
+                 have the option of generating data to add to your dhcpd.conf
+                 file later in the process.
+
+                 NOTE: For VMware virtual machines, the MAC addresses you choose
+                 must be in the range 00:50:56:00:00:00 - 00:50:56:3F:FF:FF. Pay
+                 special attention to the upper bound of this range. 
+                 00:50:56:40:00:00 - 00:50:56:FF:FF:FF are NOT valid VMware
+                 virtual machines.                                                
+               * State - maintenance
+               * Owner - owner of the computer
+               * RAM
+               * Processor Speed
+               * Network Speed
+               * Type - virtualmachine
+               * Provisioning Engine - VMware
+               * Check All VM Computers and newvmimages
+            5. Click Confirm Computers
+            6. Click Submit
+            7. If you filled in the private address fields and the Start MAC
+               Address, you can now enter the private IP address of the
+               management node that will be handling these virtual machines to
+               generate information to add to your dhcpd.conf file.
+   
+      Further steps if using xCAT
+
+         If you will not be doing bare metal provisioning, you can skip down to
+         "Adding Local VCL Accounts".
+
+         You can initially add individual computers or multiple computers all
+         together. After you have added at least one computer, you will need to
+         go to Manage Computers -> Edit Computer Information to additional ones.
+
+         Adding Individual Computers
+
+            1. click "Manage Computers"
+            2. select the "Add Single Computer" radio button
+            3. click Submit
+            4. fill in Hostname, IP Address, owner (admin@Local), RAM, Proc
+               Speed, Network Speed, select "blade" for Type, select "xCAT 2.x
+               Provisioning" for "Provisioning Engine", and click the checkbox
+               under "allcomputers", and "newimages"
+            5. click Confirm Computer
+            6. click Submit (don't worry about the fact that the computer you
+               just added isn't listed after clicking Submit)
+            7. after you've configured your image library and your management
+               node has started checking in, you should be able to make a
+               reservation
+
+         Adding Multiple Computers
+
+            1. click "Manage Computers"
+            2. select the "Add Multiple Computers" radio button
+            3. click Submit
+            4. fill in
+               * Hostname - the hostnames of all the computers must have a
+                 numerical part that is sequential, use a % as a placeholder
+                 where that part would be
+               * Start value - the first number of the numerical part of the
+                 hostname
+               * End value - the last number of the numerical part of the
+                 hostname
+               * Start IP Address - if using static public addresses, the IP
+                 addresses must be sequential; enter the first address here; if
+                 using DHCP, just enter something like 1.1.1.1
+               * End IP address - the last IP address of the sequence; if using
+                 DHCP, you'll need to enter something that would work out to the
+                 last address relative to Start IP Address (i.e. if adding 3
+                 computers, use 1.1.1.1 for start and 1.1.1.3 for end)
+               * Owner - owner of the computer
+               * RAM
+               * Processor Speed
+               * Network Speed
+               * Type - blade
+               * Provisioning Engine - xCAT 2.x
+               * check allComputers and newimages
+            5. click Confirm Computer
+            6. click Submit (don't worry about the fact that the computers you
+               just added aren't listed after clicking Submit)
+            7. after you've configured your image library and your management
+               node has started checking in, you should be able to make a
+               reservation
+
+      Adding Local VCL Accounts
+
+         Local VCL accounts are contained within the VCL database.  The admin
+         account is a local VCL account.  Additional local accounts can be added
+         via the backend management node code. After you have finished the
+         backend management node installation, run:
+
+         vcld -setup 
+
+         1. Select VCL Base Module
+         2. Select Add Local VCL User Account
+         3. Enter the requested information
+      
+      Adding LDAP Authentication
+
+         The last section of this installation guide (IV. Adding LDAP
+         authentication) explains how to set up LDAP authentication.
 
 --------------------------------------------------------------------------------
 
 III. Install & Configure the Management Node Components
-		Prerequisites
-		The following management node installation instructions assume the instructions on the following pages have previously been completed:
-			* VCL 2.2.1 Database Installation
-			* VCL 2.2.1 Web Code Installation
-		
-      Supported Operating Systems:
-		The VCL management node daemon (vcld) has been developed to run on an operating system based on Red Hat Enterprise Linux (RHEL). It has been tested on the following:
-			* Red Hat Enterprise Linux 4.x
-			* Red Hat Enterprise Linux 5.x
-			* CentOS 5.x
-		
-      Required Linux Packages:
-		The VCL management node daemon (vcld) requires the following Linux packages and Perl modules in order to run (see step 2 below for installation instructions):
-			* expat - A library for parsing XML
-			* expat-devel - Libraries and include files to develop XML applications with expat
-			* gcc - Various compilers (C, C++, Objective-C, Java, ...)
-			* krb5-libs - The shared libraries used by Kerberos 5
-			* krb5-devel - Development files needed to compile Kerberos 5 programs
-			* libxml2 - Library providing XML and HTML support
-			* libxml2-devel - Libraries, includes, etc. to develop XML and HTML applications
-			* mysql - MySQL client programs and shared libraries
-			* nmap - Network exploration tool and security scanner
-			* openssh - The OpenSSH implementation of SSH protocol versions 1 and 2
-			* openssl - The OpenSSL toolkit
-			* openssl-devel - Files for development of applications which will use OpenSSL
-			* perl - The Perl programming language
-			* perl-DBD-MySQL - A MySQL interface for perl
-			* xmlsec1-openssl - OpenSSL crypto plugin for XML Security Library
-		
-      Required Perl Modules:
-		The VCL management node daemon (vcld) is written in Perl and has been tested on Perl 5.8.x. The following Perl modules available from CPAN are also required (see step 2 below for installation instructions):
-			* DBI - Generic Database Interface
-			* Digest::SHA1 - NIST SHA message digest algorithm
-			* Mail::Mailer - Simple mail agent interface
-			* Object::InsideOut - Comprehensive inside-out object support
-			* RPC::XML - A set of classes for core data, message and XML handling
-			* YAML - YAML Ain't Markup Language
 
-	1. Install the VCL Management Node Code - Perl Daemon
-		a. If you have not already done so, download and extract the VCL source files to the management node: 
-			wget http://www.devlib.org/apache/incubator/vcl/apache-VCL-2.2-incubating.tar.bz2
-			tar -jxvf apache-VCL-2.2-incubating.tar.bz2 
-		b. Copy the managementnode directory to the location where you want it to reside (typically /usr/local): 
-			cp -r apache-VCL-2.2-incubating/managementnode /usr/local/vcl 
-	2. Install the Required Linux Packages & Perl Modules
-		Run the install_perl_libs.pl script:
-		perl /usr/local/vcl/bin/install_perl_libs.pl 
-		
-      The last line of the install_perl_libs.pl script output should be:
-		successfully installed required Perl modulesNote: The script will hang or terminate if it encounters a problem. If this occurs, you will need to troubleshoot the problem by looking at the output. 
-	
-		The install_perl_libs.pl script included in the VCL distribution will attempt to download and install the required Linux packages and Perl modules. It uses the yum utility to install the required Linux packages. The required Perl modules are available from CPAN - The Comprehensive Perl Archive Network. The install_perl_libs.pl script attempts to download and install the required Perl modules by using the CPAN.pm module which is included with most Perl distributions. 
-		The yum utility should exist on any modern Red Hat-based Linux distribution (Red Hat, CentOS, Fedora, etc). If yum isn't available on your management node OS, you will need to download and install the required Linux packages manually or by using another package management utility. After installing the required Linux packages, attempt to run the install_perl_libs.pl script again.
-	
-	3. Configure vcld.conf
-		a. Create the */etc/vcl* directory: 
-			mkdir /etc/vcl 
-		b. Copy the stock *vcld.conf* file to */etc/vcl*: 
-			cp /usr/local/vcl/etc/vcl/vcld.conf /etc/vcl 
-		c. Edit */etc/vcl/vcld.conf*: 
-			vi /etc/vcl/vcld.conf 
-		The following lines must be configured in order to start the VCL daemon (vcld) and allow it to check in to the database:
-			* FQDN - the fully qualified name of the management node, this should match the name that was configured for the management node in the database
-			* server - the IP address or FQDN of the database server
-			* LockerWrtUser - database user account with write privileges
-			* wrtPass - database user password
-		d. Save the vcld.conf file
-	4. Configure the SSH Client
-		The SSH client on the management node should be configured to prevent SSH processes spawned by the root user to the computers it controls from hanging because of missing or different entries in the known_hosts file. 
-	
-		Edit the ssh_config file: 
-		vi /etc/ssh/ssh_config 
-		
-      Locate the UserKnownHostsFile and StrictHostKeyChecking lines and change them to the following:
-		UserKnownHostsFile /dev/null
-		StrictHostKeyChecking no
+   Prerequisites
+
+      The following management node installation instructions assume the
+      instructions on the following pages have previously been completed:
+         * VCL 2.2.1 Database Installation
+         * VCL 2.2.1 Web Code Installation
       
-      Note: If you do not want these settings applied universally on the management node the SSH configuration can also be configured to only apply these settings to certain hosts or only for the root user. Consult the SSH documentation for more information.
-	
-	5. Install and Start the VCL Daemon (vcld) Service
-		a. Copy the vcld service script to /etc/init.d and name it vcld: 
-			cp /usr/local/vcl/bin/S99vcld.linux /etc/init.d/vcld 
-		b. Add the vcld service using chkconfig: 
-			/sbin/chkconfig --add vcld 
-		c. Configure the vcld service to automatically run at runtime levels 3-5: 
-			/sbin/chkconfig --level 345 vcld on 
-		d. Start the vcld service: 
-			/sbin/service vcld start 
-		You should see output similar to the following:
-         Starting vcld daemon: BIN PATH: /usr/local/vcl/bin
-         pre-execution: config file being used: /etc/vcl/vcld.conf
-         FQDN is not listed
-         pre-execution: process name is set to: vcld
-         pre-execution: verbose mode is set to: 1
-         pre-execution: testing mode is set to: 0
-         pre-execution: log file being used: /var/log/vcld.log
-         pre-execution: PID file being used: /var/run/vcld.pid
-         Created process 23696 renamed to vcld ...
-         [  OK  ] The vcld service can also be started by running the service script directly: /etc/init.d/vcld start 
-		e. Check the vcld service by monitoring the vcld.log file: 
-			tail -f /var/log/vcld.log 
-			
-			You should see the following being added to the log file every few seconds if the management node is checking in with the database:
-	
-			2009-06-16 16:57:15|15792|vcld:main(165)|lastcheckin time updated for management node 18: 2009-06-16 16:57:156.Configure Windows Product Keys and/or KMS Server Addresses (Optional)
-			If you will be deploying Windows environments your institution's Windows product key and/or KMS server addresses must be entered into the VCL database. This can be done by running the following command:
-	
-			/usr/local/vcl/bin/vcld -setup 
-			Select "Windows OS Module" and follow the prompts.
-	
-	7. Download Windows Sysprep Utility (Optional)
-		If you will be using VCL to deploy bare-metal Windows XP or Windows Server 2003 environments via xCAT, the appropriate versions of the Microsoft Sysprep utility must be downloaded to the management node. The following steps do not need to be completed if you only intend to deploy VMware virtual machines. 
-		The Sysprep utility is included in the Deployment Tools available for free from Microsoft. You do not need to download Sysprep for Windows 7 or Windows Server 2008 because it is included in the operating system. 
-		The Sysprep files need to be downloaded, extracted, and then copied to the management node. The format of the file available for download is Microsoft's .cab format. It is easiest to extract the files on a Windows computer. Windows Explorer is able to open the .cab file and then the files contained within can be copied elsewhere. 
-	
-		a. Windows XP 
-			i. Download Sysprep for Windows XP: Windows XP Service Pack 3 Deployment Tools
-			ii. Extract the Windows XP Sysprep Files
-			iii. Copy the extracted Windows XP Sysprep files to the following directory the management node: 
-				/usr/local/vcl/tools/Windows_XP/Utilities/Sysprepb.Windows Server 2003 
-			i. Download Sysprep for Windows Server 2003: System Preparation tool for Windows Server 2003 Service Pack 2 Deployment
-			ii. Extract the Windows Server 2003 Sysprep Files
-			iii. Copy the extracted Windows Server 2003 Sysprep files to the following directory the management node: 
-				/usr/local/vcl/tools/Windows_Server_2003/Utilities/Sysprep8.Download Windows Drivers (Optional)
-		
-		Drivers which aren't included with Windows must be downloaded and saved to the management node. The drivers required will vary greatly depending on the hardware. The only way to know what additional drivers you need is to install Windows on a computer and check for missing drivers. 
-	
-		The drivers must be copied to the appropriate directory on the management node. The VCL image capture process copies the driver directories to the computer before an image is captured. Drivers from multiple directories will be copied based on the version of Windows being captured. There are driver directories under tools for each version of Windows (Windows XP, Windows 7) and for each version group of Windows (version 5, 6). This allows drivers which are common to multiple versions of Windows to be shared in the management node tools directory structure.
-	
-		Examples: 
-	
-		If a chipset driver works for all versions of Windows it should be saved in:
-		/var/lib/vcl/tools/Windows/Drivers/Chipset 
-	
-		If Windows XP and Windows Server 2003 both use the same network driver it can be saved in:
-		/var/lib/vcl/tools/Windows_Version_5/Drivers/Network 
-	
-		If a storage driver only works for Windows XP it should be saved in:
-		/var/lib/vcl/tools/Windows_XP/Drivers/Storage 
-	
-		During the image capture process, each Windows version directory is copied to the computer under C:\Cygwin\home\root\VCL. The order in which the Windows version directories are copied goes from most general to most specific. In the example above, the order would be:
-		/var/lib/vcl/tools/Windows/*
-		/var/lib/vcl/tools/Windows_Version_5/*
-		/var/lib/vcl/tools/Windows_XP/* 
-	
-		The following list shows which driver files should be saved in the driver directories:
-		/var/lib/vcl/tools/Windows/Drivers - drivers common to all versions of Windows
-		/var/lib/vcl/tools/Windows_Version_5/Drivers - drivers used by Windows XP and Server 2003
-		/var/lib/vcl/tools/Windows_XP/Drivers - drivers only used by Windows XP
-		/var/lib/vcl/tools/Windows_Server_2003/Drivers - drivers only used by Windows Server 2003 
-		/var/lib/vcl/tools/Windows_Version_6/Drivers - drivers used by Windows Vista and Server 2008
-		/var/lib/vcl/tools/Windows_7/Drivers - drivers only used by Windows 7
-		/var/lib/vcl/tools/Windows_Server_2008/Drivers - drivers only used by Windows Server 2008
-	
-		The directory structure under each Drivers directory does not matter. It is helpful to organize each directory by driver class, and each directory should be organized using the same theme. For example:
-		/var/lib/vcl/tools/Windows_Version_XP/Drivers/Chipset
-		/var/lib/vcl/tools/Windows_Version_XP/Drivers/Network
-		/var/lib/vcl/tools/Windows_Version_XP/Drivers/Storage
-		/var/lib/vcl/tools/Windows_Version_XP/Drivers/Video
-	
-	8. Install & Configure Provisioning Engines and Hypervisors
-		VCL supports the following, please see the related websites for installation and configuration instructions:
-	
-		a. xCAT - Extreme Cluster Administration Toolkit 
-			* Versions Supported: 
-			* 1.3
-			* 2.x
-			* See the xCAT website for installation & configuration information: http://xcat.sourceforge.net
-		b. VMware 
-			i. See the VMware website for installation & configuration information: http://www.vmware.com
-			ii. See the following pages for additional VCL VMware configuration information: 
-				1. VCL 2.2.1 - Further steps if using only VMware
-				2. VMware Configuration
+   Supported Operating Systems:
+
+      The VCL management node daemon (vcld) has been developed to run on an
+      operating system based on Red Hat Enterprise Linux (RHEL). It has been
+      tested on the following:
+         * Red Hat Enterprise Linux 4.x
+         * Red Hat Enterprise Linux 5.x
+         * CentOS 5.x
+      
+   Required Linux Packages:
+
+      The VCL management node daemon (vcld) requires the following Linux
+      packages and Perl modules in order to run (see step 2 below for
+      installation instructions):
+         * expat - A library for parsing XML
+         * expat-devel - Libraries and include files to develop XML applications
+           with expat
+         * gcc - Various compilers (C, C++, Objective-C, Java, ...)
+         * krb5-libs - The shared libraries used by Kerberos 5
+         * krb5-devel - Development files needed to compile Kerberos 5 programs
+         * libxml2 - Library providing XML and HTML support
+         * libxml2-devel - Libraries, includes, etc. to develop XML and HTML
+           applications
+         * mysql - MySQL client programs and shared libraries
+         * nmap - Network exploration tool and security scanner
+         * openssh - The OpenSSH implementation of SSH protocol versions 1 and 2
+         * openssl - The OpenSSL toolkit
+         * openssl-devel - Files for development of applications which will use
+           OpenSSL
+         * perl - The Perl programming language
+         * perl-DBD-MySQL - A MySQL interface for perl
+         * xmlsec1-openssl - OpenSSL crypto plugin for XML Security Library
+      
+   Required Perl Modules:
+
+      The VCL management node daemon (vcld) is written in Perl and has been
+      tested on Perl 5.8.x. The following Perl modules available from CPAN are
+      also required (see step 2 below for installation instructions):
+         * DBI - Generic Database Interface
+         * Digest::SHA1 - NIST SHA message digest algorithm
+         * Mail::Mailer - Simple mail agent interface
+         * Object::InsideOut - Comprehensive inside-out object support
+         * RPC::XML - A set of classes for core data, message and XML handling
+         * YAML - YAML Ain't Markup Language
+
+   1. Install the VCL Management Node Code - Perl Daemon
+      Copy the managementnode directory to the location where you want it to
+      reside (typically /usr/local): 
+
+         cp -r apache-VCL-2.2.1-incubating/managementnode /usr/local/vcl 
+
+   2. Install the Required Linux Packages & Perl Modules
+      Run the install_perl_libs.pl script:
+
+         perl /usr/local/vcl/bin/install_perl_libs.pl 
+      
+      The last line of the install_perl_libs.pl script output should be:
+
+         successfully installed required Perl modules
+      
+      Note: The script will hang or terminate if it encounters a problem. If
+      this occurs, you will need to troubleshoot the problem by looking at the
+      output. 
+   
+      The install_perl_libs.pl script included in the VCL distribution will 
+      attempt to download and install the required Linux packages and Perl 
+      modules. It uses the yum utility to install the required Linux packages. 
+      The required Perl modules are available from CPAN - The Comprehensive Perl
+      Archive Network. The install_perl_libs.pl script attempts to download and 
+      install the required Perl modules by using the CPAN.pm module which is 
+      included with most Perl distributions. 
+
+      The yum utility should exist on any modern Red Hat-based Linux 
+      distribution (Red Hat, CentOS, Fedora, etc). If yum isn't available on 
+      your management node OS, you will need to download and install the 
+      required Linux packages manually or by using another package management 
+      utility. After installing the required Linux packages, attempt to run the 
+      install_perl_libs.pl script again.
+   
+   3. Configure vcld.conf
+      a. Create the /etc/vcl directory: 
+
+         mkdir /etc/vcl 
+
+      b. Copy the stock vcld.conf file to /etc/vcl: 
+
+         cp /usr/local/vcl/etc/vcl/vcld.conf /etc/vcl 
+
+      c. Edit /etc/vcl/vcld.conf: 
+
+         vi /etc/vcl/vcld.conf 
+
+         The following lines must be configured in order to start the VCL daemon
+         (vcld) and allow it to check in to the database:
+            * FQDN - the fully qualified name of the management node, this
+              should match the name that was configured for the management node
+              in the database
+            * server - the IP address or FQDN of the database server
+            * LockerWrtUser - database user account with write privileges
+            * wrtPass - database user password
+      d. Save the vcld.conf file
+
+   4. Configure the SSH Client
+      The SSH client on the management node should be configured to prevent SSH
+      processes spawned by the root user to the computers it controls from
+      hanging because of missing or different entries in the known_hosts file. 
+   
+      Edit the ssh_config file: 
+
+         vi /etc/ssh/ssh_config 
+      
+      Locate the UserKnownHostsFile and StrictHostKeyChecking lines and change
+      them to the following:
+
+         UserKnownHostsFile /dev/null
+         StrictHostKeyChecking no
+      
+      Note: If you do not want these settings applied universally on the 
+      management node the SSH configuration can also be configured to only apply
+      these settings to certain hosts or only for the root user. Consult the SSH
+      documentation for more information.
+   
+   5. Install and Start the VCL Daemon (vcld) Service
+      a. Copy the vcld service script to /etc/init.d and name it vcld: 
+
+         cp /usr/local/vcl/bin/S99vcld.linux /etc/init.d/vcld 
+
+      b. Add the vcld service using chkconfig: 
+
+         /sbin/chkconfig --add vcld 
+
+      c. Configure the vcld service to automatically run at runtime levels 3-5: 
+
+         /sbin/chkconfig --level 345 vcld on 
+
+      d. Start the vcld service: 
+
+         /sbin/service vcld start 
+
+      You should see output similar to the following:
+
+         Starting vcld daemon:
+         =====================================================================
+         VCL Management Node Daemon (vcld) | 2011-03-15 10:23:04
+         =====================================================================
+         bin path:      /usr/local/vcl/bin
+         config file:   /etc/vcl/vcld.conf
+         log file:      /var/log/vcld.log
+         pid file:      /var/run/vcld.pid
+         daemon mode:   1
+         setup mode:    0
+         verbose mode:  1
+         =====================================================================
+         Created VCL daemon process: 8465
+                                                           [  OK  ]
+
+         The vcld service can also be started by running the service script
+         directly: /etc/init.d/vcld start 
+
+      e. Check the vcld service by monitoring the vcld.log file: 
+
+         tail -f /var/log/vcld.log 
+         
+         You should see the following being added to the log file every few
+         seconds if the management node is checking in with the database:
+   
+            2009-06-16 16:57:15|15792|vcld:main(165)|lastcheckin time updated
+            for management node 18: 2009-06-16 16:57:15
+               
+   6. Configure Windows Product Keys and/or KMS Server Addresses (Optional)
+      If you will be deploying Windows environments your institution's Windows 
+      product key and/or KMS server addresses must be entered into the VCL 
+      database. This can be done by running the following command:
+   
+         /usr/local/vcl/bin/vcld -setup 
+         Select "Windows OS Module" and follow the prompts.
+   
+   7. Download Windows Sysprep Utility (Optional)
+      If you will be using VCL to deploy bare-metal Windows XP or Windows Server
+      2003 environments via xCAT, the appropriate versions of the Microsoft 
+      Sysprep utility must be downloaded to the management node. The following 
+      steps do not need to be completed if you only intend to deploy VMware 
+      virtual machines. 
+
+      The Sysprep utility is included in the Deployment Tools available for free
+      from Microsoft. You do not need to download Sysprep for Windows 7 or 
+      Windows Server 2008 because it is included in the operating system. 
+
+      The Sysprep files need to be downloaded, extracted, and then copied to the
+      management node. The format of the file available for download is 
+      Microsoft's .cab format. It is easiest to extract the files on a Windows 
+      computer. Windows Explorer is able to open the .cab file and then the 
+      files contained within can be copied elsewhere. 
+   
+      a. Windows XP 
+         * Download Sysprep for Windows XP: Windows XP Service Pack 3
+           Deployment Tools
+         * Extract the Windows XP Sysprep Files
+         * Copy the extracted Windows XP Sysprep files to the following
+           directory the management node: 
+
+           /usr/local/vcl/tools/Windows_XP/Utilities/Sysprep
+
+      b.Windows Server 2003 
+         * Download Sysprep for Windows Server 2003: System Preparation tool
+           for Windows Server 2003 Service Pack 2 Deployment
+         * Extract the Windows Server 2003 Sysprep Files
+         * Copy the extracted Windows Server 2003 Sysprep files to the
+           following directory the management node: 
+
+           /usr/local/vcl/tools/Windows_Server_2003/Utilities/Sysprep
+            
+   8.Download Windows Drivers (Optional)
+      
+      Drivers which aren't included with Windows must be downloaded and saved to
+      the management node. The drivers required will vary greatly depending on 
+      the hardware. The only way to know what additional drivers you need is to 
+      install Windows on a computer and check for missing drivers. 
+
+      The drivers must be copied to the appropriate directory on the management 
+      node. The VCL image capture process copies the driver directories to the 
+      computer before an image is captured. Drivers from multiple directories 
+      will be copied based on the version of Windows being captured. There are 
+      driver directories under tools for each version of Windows (Windows XP, 
+      Windows 7) and for each version group of Windows (version 5, 6). This 
+      allows drivers which are common to multiple versions of Windows to be 
+      shared in the management node tools directory structure.
+   
+      Examples: 
+   
+      If a chipset driver works for all versions of Windows it should be saved
+      in:
+
+      /var/lib/vcl/tools/Windows/Drivers/Chipset 
+   
+      If Windows XP and Windows Server 2003 both use the same network driver it
+      can be saved in:
+
+      /var/lib/vcl/tools/Windows_Version_5/Drivers/Network 
+   
+      If a storage driver only works for Windows XP it should be saved in:
+
+      /var/lib/vcl/tools/Windows_XP/Drivers/Storage 
+   
+      During the image capture process, each Windows version directory is copied
+      to the computer under C:\Cygwin\home\root\VCL. The order in which the 
+      Windows version directories are copied goes from most general to most 
+      specific. In the example above, the order would be:
+
+      /var/lib/vcl/tools/Windows/*
+      /var/lib/vcl/tools/Windows_Version_5/*
+      /var/lib/vcl/tools/Windows_XP/* 
+   
+      The following list shows which driver files should be saved in the driver
+      directories:
+
+      /var/lib/vcl/tools/Windows/Drivers - drivers common to all versions of
+                                           Windows
+      /var/lib/vcl/tools/Windows_Version_5/Drivers - drivers used by Windows XP
+                                                     and Server 2003
+      /var/lib/vcl/tools/Windows_XP/Drivers - drivers only used by Windows XP
+      /var/lib/vcl/tools/Windows_Server_2003/Drivers - drivers only used by
+                                                       Windows Server 2003 
+      /var/lib/vcl/tools/Windows_Version_6/Drivers - drivers used by Windows
+                                                     Vista and Server 2008
+      /var/lib/vcl/tools/Windows_7/Drivers - drivers only used by Windows 7
+      /var/lib/vcl/tools/Windows_Server_2008/Drivers - drivers only used by
+                                                       Windows Server 2008
+   
+      The directory structure under each Drivers directory does not matter. It 
+      is helpful to organize each directory by driver class, and each directory 
+      should be organized using the same theme. For example:
+
+      /var/lib/vcl/tools/Windows_Version_XP/Drivers/Chipset
+      /var/lib/vcl/tools/Windows_Version_XP/Drivers/Network
+      /var/lib/vcl/tools/Windows_Version_XP/Drivers/Storage
+      /var/lib/vcl/tools/Windows_Version_XP/Drivers/Video
+   
+   8. Install & Configure Provisioning Engines and Hypervisors
+      VCL supports the following, please see the related websites for
+      installation and configuration instructions:
+   
+      a. xCAT - Extreme Cluster Administration Toolkit 
+         * Versions Supported: 
+            * 1.3
+            * 2.x
+         * See the xCAT website for installation & configuration information:
+
+           http://xcat.sourceforge.net
+
+      b. VMware 
+         * See the VMware website for installation & configuration information:
+
+           http://www.vmware.com
+
+         * See the following page for additional VCL VMware configuration
+           information: 
+
+           http://cwiki.apache.org/VCL/vmware-configuration.html
 
 --------------------------------------------------------------------------------
 
 IV. Adding LDAP authentication
-	
-	1. Prerequisites for your LDAP server:
-	
-		* enable SSL on your LDAP server
-		* Create an account that can look up a user's first and last names, user id, and email address (email address is optional) - this will be referred to as 'vcllookup' in this document. You can skip this step if anonymous binds are enabled on your LDAP server and an anonymous bind will be able to look up userids, names, and email addresses.
-		* if your LDAP server is firewalled, you will need to allow your VCL web server to access tcp port 636 on your LDAP server
-	
-	2. Prerequisites for your VCL web server:
-	
-		* php-ldap needs to be installed
-		* If your LDAP server SSL certificate is self-signed, your VCL web server needs to have the root CA certificate that was used to sign the LDAP server certificate installed. On CentOS, information about the certificate needs to be added to /etc/pki/tls/certs/ca-bundle.crt - this script will take as input a file containing the base64 encoded certificate and generate the lines that need to be added to the ca-bundle.crt file.
-		* After adding the certificate, restart httpd:
-	
-			service httpd restart
-	
-		* You can verify that the certificate is properly installed using this command:
-	
-			openssl s_client -showcerts -CAfile /etc/pki/tls/certs/ca-bundle.crt -connect your.ldap.server.here:636
-	
-			If you see "Verify return code: 0 (ok)" at the end of the output, then it is installed correctly. If you see a different return code, then you'll need to work through the problem.
-		* You may need to add a line to /etc/openldap/ldap.conf to point to the ca-bundle.crt file. It is difficult to explain if you need it or not, but if you do, add the following:
-	
-			TLS_CACERT /etc/pki/tls/certs/ca-bundle.crt
-	
-	3. Adding LDAP Authentication to the Web Code
-	
-		* You will need to manually add an entry to the affiliation table in the vcl database. You need to come up with a name for the affiliation. This will be appended to all userids for the affiliation to distinguish them from other affiliations you may configure later. Initials or a short name of your organization are a good idea. This cannot contain spaces. Use the following to add the affiliation, replacing 'EXAMPLE' with the name you chose. Take note of the id from the 2nd SQL statement as you will need it later. It is the affiliationid for this affiliation.
-	
-			mysql vcl
-			INSERT INTO affiliation (name) VALUES ('EXAMPLE');
-			SELECT id FROM affiliation WHERE name = 'EXAMPLE';
-			exit
-	
-		* Edit conf.php and search for "EXAMPLE1 LDAP"
-		* Uncomment the "EXAMPLE1 LDAP" section by removing the '/' before it and the '/' at the end of 'to use this login mechanism'
-		* Change 'EXAMPLE1 LDAP' to something to match your location, for example at NCSU, it is 'NCSU LDAP'. This string is what users will see where they select the authentication mechanism to use when logging in.
-		* Modify the following fields:
-			* server - this is the hostname of your LDAP server
-			* binddn - typically, you'll want to use the base DN of your LDAP server; for Active Directory, this is usually dc= for each of your domain name components. For example, your your domain name was ad.example.org, it would be "dc=ad,dc=example,dc=org"
-			* userid - this is a string that is added to the userid a user enters on the login page. Place a '%s' where the entered userid should go. Some examples are:
-				* %s@example.org
-				* %s@ad.example.org
-				* uid=%s,ou=accounts,dc=example,dc=org'
-			* unityid - this is the ldap field that contains a user's login id (for Active Directory, this is usually sAMAccountName)
-			* firstname - this is the ldap field that contains a user's first name
-			* lastname - this is the ldap field that contains a user's last name
-			* email - this is the ldap field that contains a user's email address
-			* defaultemail - if an email address is not provided by the ldap server, this will be appended to the end of the userid to create an email address. In this case, email notifications will be disabled by default.
-			* masterlogin - this is the vcllookup account referred to in the "Prerequisites for your LDAP server" section - comment out this line if using anonymous binds
-			* masterpwd - password for the masterlogin account - comment out this line if using anonymous binds
-			* affiliationid - this is the id from the SELECT statement in the first step
-			* help - this is some text that will show up on the page where users select the authentication method explaining why they would select this option
-		* uncomment the require_once line for ldapauth.php toward the bottom of the file
-	
-	4. Tweak if your LDAP server has users in multiple containers
-	
-		If your LDAP server has users in multiple containers, then the full DN for each user must be looked up before doing a bind to the LDAP server to authenticate the user. In this case, you'll need to modify authentication.php.
-	
-		* edit authenciation.php
-		* search for ldapLogin
-		* search for EXAMPLE1 LDAP in the function
-		* uncomment the block of code it is contained in by removing the '/' at the beginning of the line containing 'EXAMPLE1 LDAP', and removing the '/' at the end of the else that is before '$ldapuser = sprintf($authMechs[]'userid', $userid);'
-		* Look for the line containing 'cn=$userid'. If you use 'cn' to look up userids in your LDAP server, the line is fine as is. If you use something else, such as 'uid', change 'cn' to 'uid' or whatever is used on your LDAP server.
-		* save the file
+   
+   1. Prerequisites for your LDAP server:
+   
+      * enable SSL on your LDAP server
+      * Create an account that can look up a user's first and last names, user
+        id, and email address (email address is optional) - this will be 
+        referred to as 'vcllookup' in this document. You can skip this step if 
+        anonymous binds are enabled on your LDAP server and an anonymous bind 
+        will be able to look up userids, names, and email addresses.
+      * if your LDAP server is firewalled, you will need to allow your VCL web
+        server to access tcp port 636 on your LDAP server
+   
+   2. Prerequisites for your VCL web server:
+   
+      * php-ldap needs to be installed
+      * If your LDAP server SSL certificate is self-signed, your VCL web 
+        server needs to have the root CA certificate that was used to sign the 
+        LDAP server certificate installed. The PEM formatted certificate needs
+        to be added to the ca-bundle.crt file. On CentOS, the file is located at
+
+        /etc/pki/tls/certs/ca-bundle.crt
+
+      * After adding the certificate, restart httpd:
+   
+        service httpd restart
+   
+      * You can verify that the certificate is properly installed using this
+        command:
+   
+        openssl s_client -showcerts -CAfile /etc/pki/tls/certs/ca-bundle.crt \
+            -connect your.ldap.server.here:636
+   
+        If you see "Verify return code: 0 (ok)" at the end of the output, then 
+        it is installed correctly. If you see a different return code, then 
+        you'll need to work through the problem.
+      * You may need to add a line to /etc/openldap/ldap.conf to point to the 
+        ca-bundle.crt file. It is difficult to explain if you need it or not, 
+        but if you do, add the following:
+   
+        TLS_CACERT /etc/pki/tls/certs/ca-bundle.crt
+   
+   3. Adding LDAP Authentication to the Web Code
+   
+      * You will need to manually add an entry to the affiliation table in the 
+        vcl database. You need to come up with a name for the affiliation. This 
+        will be appended to all userids for the affiliation to distinguish them 
+        from other affiliations you may configure later. Initials or a short 
+        name of your organization are a good idea. This cannot contain spaces. 
+        Use the following to add the affiliation, replacing 'EXAMPLE' with the 
+        name you chose. Take note of the id from the 2nd SQL statement as you 
+        will need it later. It is the affiliationid for this affiliation.
+   
+         mysql vcl
+         INSERT INTO affiliation (name) VALUES ('EXAMPLE');
+         SELECT id FROM affiliation WHERE name = 'EXAMPLE';
+         exit
+   
+      * Edit conf.php and search for "EXAMPLE1 LDAP"
+      * Uncomment the "EXAMPLE1 LDAP" section by removing the '/*' before it and
+        the '*/' at the end of 'to use this login mechanism'
+      * Change 'EXAMPLE1 LDAP' to something to match your location, for example
+        at NCSU, it is 'NCSU LDAP'. This string is what users will see where
+        they select the authentication mechanism to use when logging in.
+      * Modify the following fields:
+        * server - this is the hostname of your LDAP server
+        * binddn - typically, you'll want to use the base DN of your LDAP
+          server; for Active Directory, this is usually dc= for each of your
+          domain name components. For example, your your domain name was
+          ad.example.org, it would be "dc=ad,dc=example,dc=org"
+        * userid - this is a string that is added to the userid a user enters on
+          the login page. Place a '%s' where the entered userid should go. Some
+          examples are:
+            * %s@example.org
+            * %s@ad.example.org
+            * uid=%s,ou=accounts,dc=example,dc=org'
+        * unityid - this is the ldap field that contains a user's login id (for
+          Active Directory, this is usually sAMAccountName)
+        * firstname - this is the ldap field that contains a user's first name
+        * lastname - this is the ldap field that contains a user's last name
+        * email - this is the ldap field that contains a user's email address
+        * defaultemail - if an email address is not provided by the ldap server,
+          this will be appended to the end of the userid to create an email
+          address. In this case, email notifications will be disabled by default
+        * masterlogin - this is the vcllookup account referred to in the
+          "Prerequisites for your LDAP server" section - comment out this line
+          if using anonymous binds
+        * masterpwd - password for the masterlogin account - comment out this
+          line if using anonymous binds
+        * affiliationid - this is the id from the SELECT statement in the first
+          step
+        * help - this is some text that will show up on the page where users
+          select the authentication method explaining why they would select
+          this option
+      * uncomment the require_once line for ldapauth.php toward the bottom of
+        the file
+   
+   4. Tweak if your LDAP server has users in multiple containers
+   
+      If your LDAP server has users in multiple containers, then the full DN for
+      each user must be looked up before doing a bind to the LDAP server to 
+      authenticate the user. In this case, you'll need to modify
+      authentication.php.
+   
+      * edit authenciation.php
+      * search for ldapLogin
+      * search for EXAMPLE1 LDAP in the function
+      * uncomment the block of code it is contained in by removing the '/*' at 
+        the beginning of the line containing 'EXAMPLE1 LDAP', and removing the 
+        '*/' at the end of the else that is before
+        '$ldapuser = sprintf($authMechs[]'userid', $userid);'
+      * Look for the line containing 'cn=$userid'. If you use 'cn' to look up 
+        userids in your LDAP server, the line is fine as is. If you use 
+        something else, such as 'uid', change 'cn' to 'uid' or whatever is used 
+        on your LDAP server.
+      * save the file
