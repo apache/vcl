@@ -865,6 +865,7 @@ IV. Adding LDAP authentication
         the beginning of the line containing 'EXAMPLE1 LDAP', and removing the 
         '*/' at the end of the else that is before
         '$ldapuser = sprintf($authMechs[]'userid', $userid);'
+		* change 'EXAMPLE1 LDAP' to match what you changed it to in step 3
       * Look for the line containing 'cn=$userid'. If you use 'cn' to look up 
         userids in your LDAP server, the line is fine as is. If you use 
         something else, such as 'uid', change 'cn' to 'uid' or whatever is used 
