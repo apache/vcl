@@ -3169,6 +3169,8 @@ function getUsersGroups($userid, $includeowned=0, $includeaffil=0) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function getUsersGroupPerms($usergroupids) {
+	if(empty($usergroupids))
+		return array();
 	$inlist = implode(',', $usergroupids);
 	$query = "SELECT DISTINCT t.id, "
 	       .        "t.name "
@@ -3206,7 +3208,7 @@ function checkUserHasPerm($perm, $userid=0) {
 		$usersgroups = getUsersGroups($userid, 1);
 		$perms = getUsersGroupPerms(array_keys($usersgroups));
 	}
-	if(in_array($perm, $perms))
+	if(is_array($perms) && in_array($perm, $perms))
 		return 1;
 	return 0;
 }
