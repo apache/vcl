@@ -48,11 +48,11 @@ I. Install & Configure the Database
 
          CREATE DATABASE vcl; 
 
-      c. Create a user with SELECT, INSERT, UPDATE, and DELETE privileges on
-         the database you just created: 
+      c. Create a user with SELECT, INSERT, UPDATE, DELETE, and 
+         CREATE TEMPORARY TABLES privileges on the database you just created:
 
-         GRANT SELECT,INSERT,UPDATE,DELETE ON vcl.* TO 'vcluser'@'localhost' \
-         IDENTIFIED BY 'vcluserpassword'; 
+         GRANT SELECT,INSERT,UPDATE,DELETE,CREATE TEMPORARY TABLES ON vcl.* \
+         TO 'vcluser'@'localhost' IDENTIFIED BY 'vcluserpassword'; 
 
          NOTE: Replace vcluser and vcluserpassword with that of the user you 
          want to use to connect to the database. The GRANT command will 
