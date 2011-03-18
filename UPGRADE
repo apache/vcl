@@ -7,10 +7,11 @@ The basic steps that will be performed:
 1. Shutdown httpd and vcld services
 2. Create backup of vcl database
 3. Update mysql schema
-4. Update Web code, create a backup, copy in new, make changes
-5. Restart httpd service
-6. Update Management node vcl code, create a backup, copy in new, make changes
-7. Restart vcld service
+4. Grant CREATE TEMPORARY TABLES to mysql user
+5. Update Web code, create a backup, copy in new, make changes
+6. Restart httpd service
+7. Update Management node vcl code, create a backup, copy in new, make changes
+8. Restart vcld service
 
 
 1. Shutdown httpd and vcld services
@@ -32,7 +33,26 @@ This step updates the mysql schema.
    cd /root/apache-VCL-2.2.1-incubating
    mysql vcl < mysql/update-vcl.sql
 
-4. Update web code
+4. Grant CREATE TEMPORARY TABLES to mysql user
+
+The web code now requires access to create temporary tables in mysql. You need
+to grant the user your web code uses to access mysql the "CREATE TEMPORARY
+TABLES" permission. Look at the secrets.php file in your web code for the user
+and hostname. For example, if your web code is installed at /var/www/html/vcl,
+your secrets.php file would be /var/www/html/vcl/.ht-inc/secrets.php. Look for
+$vclhost and $vclusername. The secrets.php file might have something like:
+
+$vclhost = 'localhost';
+$vcluser = 'vcluser';
+
+Then, you need to issue the grant command to mysql. Using the values from above
+as examples, connect to mysql and then issue the grant command:
+
+mysql
+GRANT CREATE TEMPORARY TABLES ON `vcl`.* TO 'vcluser'@'localhost';
+exit
+
+5. Update web code
 
 This step we will move the existing web directory out of the way, so we can copy
 in the new web code base. After copying in the new code, we will migrate your
@@ -72,11 +92,11 @@ code at /var/www/html/vcl. If you installed it elsewhere, replace
 		* define("FILTERINGSELECTTHRESHOLD", 1000);
 		* define("DEFAULTTHEME", 'default');
 
-5. Restart httpd service
+6. Restart httpd service
 
 	service httpd start
 
-6. Update management node code
+7. Update management node code
 
 This step will move the existing vcl code base out of the way, so we can cleanly
 copy in the new management node code.
@@ -107,6 +127,6 @@ copy in the new management node code.
 		  is used, options are dynamic DHCP, Manual DHCP, or static
 		* End Node SSH Identity Key Files
 
-7. Restart vcld service
+8. Restart vcld service
 
 	service vcld start
