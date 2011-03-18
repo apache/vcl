@@ -898,6 +898,7 @@ CREATE TABLE IF NOT EXISTS `sublog` (
   `IPaddress` varchar(15) default NULL,
   `managementnodeid` smallint(5) unsigned NOT NULL default '0',
   `predictivemoduleid` smallint(5) unsigned NOT NULL default '8',
+  `hostcomputerid` smallint(5) unsigned default NULL,
   KEY `logid` (`logid`),
   KEY `imageid` (`imageid`),
   KEY `imagerevisionid` (`imagerevisionid`),
