@@ -332,6 +332,14 @@ CREATE TABLE IF NOT EXISTS `sitemaintenance` (
 
 -- --------------------------------------------------------
 
+--
+-- Table structure change for table `sublog`
+--
+
+CALL AddColumnIfNotExists('sublog', 'hostcomputerid', "smallint(5) unsigned default NULL");
+
+-- --------------------------------------------------------
+
 -- 
 -- Table structure change for table `request`
 -- 
