@@ -103,7 +103,7 @@ function generateColGraphsCB(data, ioArgs) {
 		minorTicks: true,
 		minorLabels: false,
 		majorTickStep: majortick,
-		minorTickStep: majortick / 2,
+		minorTickStep: majortick / 2
 	});
 	graph.addPlot('default', {type: "Columns", gap: gap});
 	graph.addPlot('Grid', {type: 'Grid', hMajorLines: true, vMajorLines: false});
@@ -141,7 +141,7 @@ function generateHourGraphsCB(data, ioArgs) {
 		minorTicks: true,
 		minorLabels: false,
 		majorTickStep: majortick,
-		minorTickStep: majortick / 5,
+		minorTickStep: majortick / 5
 	});
 	graph.addPlot('default', {markers: true});
 	graph.addPlot('Grid', {type: 'Grid', hMajorLines: true, vMajorLines: false});
