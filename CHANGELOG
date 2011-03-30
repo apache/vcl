@@ -15,6 +15,8 @@ Release Notes - VCL - Version 2.2.1
     * [VCL-397] - Hostname not set on Linux computers if DNS is not configured remotely
     * [VCL-411] - Legacy VCL logon and logoff scripts may not be deleted during capture causing immediate user logoff
     * [VCL-412] - clicking on tomaintenance reload reservation in timetable gives an error
+    * [VCL-437] - delete image/reservation bug
+    * [VCL-439] - trailing commas in statistics.js keeps graphs from showing in IE on stats page
 
 
 ** Improvement
