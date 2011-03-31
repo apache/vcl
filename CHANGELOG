@@ -18,7 +18,7 @@ Release Notes - VCL - Version 2.2.1
     * [VCL-436] - Predictive Level_1 reload module - can select wrong image for computer
     * [VCL-437] - delete image/reservation bug
     * [VCL-439] - trailing commas in statistics.js keeps graphs from showing in IE on stats page
-
+    * [VCL-440] - dashboard last 12 hours of reservations graph not positioned correctly in IE in compatibility mode
 
 ** Improvement
     * [VCL-140] - General variable table
