@@ -127,7 +127,7 @@ function addLineChart($id, $title) {
 	$txt .= "<h3>$title</h3>\n";
 	$txt .= "<div dojoType=\"dojox.charting.widget.Chart2D\" id=\"$id\"\n";
 	$txt .= "     theme=\"dojox.charting.themes.ThreeD\"\n";
-	$txt .= "     style=\"width: 300px; height: 300px;\">\n";
+	$txt .= "     style=\"width: 300px; height: 300px; text-align: left;\">\n";
 	$txt .= "<div class=\"axis\"\n";
 	$txt .= "     name=\"x\"\n";
 	$txt .= "     labelFunc=\"timestampToTime\"\n";
@@ -221,9 +221,9 @@ function getTopImageData() {
 		       .      "request rq, "
 		       .      "image i "
 		       . "WHERE rs.imageid = i.id AND "
-				 .       "rq.stateid = 8 AND "
-				 .       "rs.requestid = rq.id AND "
-				 .       "TIMESTAMPDIFF(HOUR, rq.start, rq.end) <= 24 "
+		       .       "rq.stateid = 8 AND "
+		       .       "rs.requestid = rq.id AND "
+		       .       "TIMESTAMPDIFF(HOUR, rq.start, rq.end) <= 24 "
 		       . "GROUP BY rs.imageid "
 		       . "ORDER BY count DESC "
 		       . "LIMIT 5";
@@ -272,9 +272,9 @@ function getTopLongImageData() {
 		       .      "request rq, "
 		       .      "image i "
 		       . "WHERE rs.imageid = i.id AND "
-				 .       "rq.stateid = 8 AND "
-				 .       "rs.requestid = rq.id AND "
-				 .       "TIMESTAMPDIFF(HOUR, rq.start, rq.end) > 24 "
+		       .       "rq.stateid = 8 AND "
+		       .       "rs.requestid = rq.id AND "
+		       .       "TIMESTAMPDIFF(HOUR, rq.start, rq.end) > 24 "
 		       . "GROUP BY rs.imageid "
 		       . "ORDER BY count DESC "
 		       . "LIMIT 5";
@@ -289,9 +289,9 @@ function getTopLongImageData() {
 		       . "WHERE rq.userid = u.id AND "
 		       .       "u.affiliationid = $affilid AND "
 		       .       "rs.imageid = i.id AND "
-				 .       "rq.stateid = 8 AND "
-				 .       "rs.requestid = rq.id AND "
-				 .       "TIMESTAMPDIFF(HOUR, rq.start, rq.end) > 24 "
+		       .       "rq.stateid = 8 AND "
+		       .       "rs.requestid = rq.id AND "
+		       .       "TIMESTAMPDIFF(HOUR, rq.start, rq.end) > 24 "
 		       . "GROUP BY rs.imageid "
 		       . "ORDER BY count DESC "
 		       . "LIMIT 5";
@@ -323,9 +323,9 @@ function getTopPastImageData() {
 		       . "FROM log l, "
 		       .      "image i "
 		       . "WHERE l.imageid = i.id AND "
-				 .       "l.wasavailable = 1 AND "
-				 .       "l.userid != $reloadid AND "
-				 .       "l.start > DATE_SUB(NOW(), INTERVAL 1 DAY) "
+		       .       "l.wasavailable = 1 AND "
+		       .       "l.userid != $reloadid AND "
+		       .       "l.start > DATE_SUB(NOW(), INTERVAL 1 DAY) "
 		       . "GROUP BY l.imageid "
 		       . "ORDER BY count DESC "
 		       . "LIMIT 5";
@@ -339,9 +339,9 @@ function getTopPastImageData() {
 		       . "WHERE l.userid = u.id AND "
 		       .       "u.affiliationid = $affilid AND "
 		       .       "l.imageid = i.id AND "
-				 .       "l.wasavailable = 1 AND "
-				 .       "l.userid != $reloadid AND "
-				 .       "l.start > DATE_SUB(NOW(), INTERVAL 1 DAY) "
+		       .       "l.wasavailable = 1 AND "
+		       .       "l.userid != $reloadid AND "
+		       .       "l.start > DATE_SUB(NOW(), INTERVAL 1 DAY) "
 		       . "GROUP BY l.imageid "
 		       . "ORDER BY count DESC "
 		       . "LIMIT 5";
