@@ -136,6 +136,7 @@ $SUBROUTINE_MAPPINGS{request_preload}           = '$self->request_data->{preload
 $SUBROUTINE_MAPPINGS{request_preload_only}      = '$self->request_data->{PRELOADONLY}';
 $SUBROUTINE_MAPPINGS{request_reservation_count} = '$self->request_data->{RESERVATIONCOUNT}';
 $SUBROUTINE_MAPPINGS{request_start_time}        = '$self->request_data->{start}';
+$SUBROUTINE_MAPPINGS{request_duration_epoch}    = '$self->request_data->{DURATION}';
 $SUBROUTINE_MAPPINGS{request_checkuser} 	= '$self->request_data->{checkuser}';
 #$SUBROUTINE_MAPPINGS{request_stateid} 		= '$self->request_data->{stateid}';
 $SUBROUTINE_MAPPINGS{request_is_cluster_child} 	= '$self->request_data->{SUBIMAGE}';

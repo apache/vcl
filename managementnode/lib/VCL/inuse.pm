@@ -104,6 +104,7 @@ sub process {
 	my $request_id            = $self->data->get_request_id();
 	my $reservation_id        = $self->data->get_reservation_id();
 	my $request_end           = $self->data->get_request_end_time();
+	my $request_duration      = $self->data->get_request_duration_epoch();
 	my $request_logid         = $self->data->get_request_log_id();
 	my $request_checktime     = $self->data->get_request_check_time();
 	my $reservation_remoteip  = $self->data->get_reservation_remote_ip();
@@ -172,28 +173,29 @@ sub process {
 
 			# Get a date string for the current time
 			my $date_string;
+			# If duration is greater than 24hrs 5minutes then perform end time notice checks
+			if($request_duration >= 86640 ){
+				# Check end time for a notice interval
+				# This returns 0 if no notice is to be given
+				my $notice_interval = check_endtimenotice_interval($request_end);
 
-			# Check end time for a notice interval
-			# This returns 0 if no notice is to be given
-			my $notice_interval = check_endtimenotice_interval($request_end);
+				if ($notice_interval && $is_parent_reservation) {
+					notify($ERRORS{'OK'}, 0, "notice interval is set to $notice_interval");
 
-			if ($notice_interval) {
-				notify($ERRORS{'OK'}, 0, "notice interval is set to $notice_interval");
+					# Notify the user of the end time
+					$self->_notify_user_endtime($notice_interval);
 
-				# Notify the user of the end time
-				$self->_notify_user_endtime($notice_interval);
-
-				# Set lastcheck time ahead by 16 minutes for all notices except the last (30 minute) notice
-				if ($notice_interval ne "30 minutes") {
-					my $epoch_now = convert_to_epoch_seconds();
-					$date_string = convert_to_datetime(($epoch_now + (16 * 60)));
-				}
-				else {
-					my $epoch_now = convert_to_epoch_seconds();
-					$date_string = convert_to_datetime($epoch_now);
-				}
-			} ## end if ($notice_interval)
-
+					# Set lastcheck time ahead by 16 minutes for all notices except the last (30 minute) notice
+					if ($notice_interval ne "30 minutes") {
+						my $epoch_now = convert_to_epoch_seconds();
+						$date_string = convert_to_datetime(($epoch_now + (16 * 60)));
+					}
+					else {
+						my $epoch_now = convert_to_epoch_seconds();
+						$date_string = convert_to_datetime($epoch_now);
+					}
+				} ## end if ($notice_interval)
+			}
 			# Check if the user deleted the request
 			if (is_request_deleted($request_id)) {
 				# User deleted request, exit queitly
@@ -227,7 +229,7 @@ sub process {
 
 			notify($ERRORS{'OK'}, 0, "exiting");
 			exit;
-		}    # Close if poll and checkuser = 0
+		}    # if (!$imagemeta_checkuser || $request_forimaging.......
 
 
 		# Poll:
@@ -464,6 +466,42 @@ sub process {
 
 		# Check if this is an imaging request, causes process to exit if state or laststate = image
 		$request_forimaging = $self->_check_imaging_request();
+		
+		# Automatically capture image
+		# If forimaging and not a cluster reservation - initiate capture process
+		if($request_forimaging && ($reservation_count < 2) ){
+			# Check if the user deleted the request
+			if (is_request_deleted($request_id)) {
+				# User deleted request, exit queitly
+				notify($ERRORS{'OK'}, 0, "user has deleted the request, quietly exiting");
+				exit;
+			}
+			if($self->_start_imaging_request){
+				notify($ERRORS{'OK'}, 0, "Started image capture process. This process is Exiting.");
+				#notify user - endtime and image capture has started
+				$self->_notify_user_request_ended();
+				exit;
+			}	
+			else {
+				notify($ERRORS{'CRITICAL'}, 0, "_start_imaging_request xmlrpc call failed putting request and node into maintenance");
+				# Update the request state to maintenance, laststate to image
+        			if (update_request_state($request_id, "maintenance", "image")) {
+                			notify($ERRORS{'OK'}, 0, "request state set to maintenance, laststate to image");
+        			}
+        			else {
+                			notify($ERRORS{'CRITICAL'}, 0, "unable to set request state to maintenance, laststate to image");
+        			}
+
+        			# Update the computer state to maintenance
+        			if (update_computer_state($computer_id, "maintenance")) {
+               	 			notify($ERRORS{'OK'}, 0, "$computer_short_name state set to maintenance");
+        			}
+        			else {
+                			notify($ERRORS{'CRITICAL'}, 0, "unable to set $computer_short_name state to maintenance");
+       	 			}
+				exit;
+			}
+		}
 
 		# Insert an entry into the load log
 		insertloadlog($reservation_id, $computer_id, "timeout", "endtime reached moving to timeout");
@@ -576,10 +614,16 @@ sub _notify_user_endtime {
 	my $user_emailnotices               = $self->data->get_user_emailnotices();
 	my $user_imtype_name                = $self->data->get_user_imtype_name();
 	my $user_im_id                      = $self->data->get_user_im_id();
+	my $request_forimaging 		    = $self->_check_imaging_request();	
+	my $request_id                      = $self->data->get_request_id();
 
-	my $message = <<"EOF";
+	my $message;
+	my $subject;
+	my $short_message = "You have $notice_interval until the scheduled end time of your reservation. VCL Team";
 
-You have $notice_interval until the end of your reservation for image $image_prettyname.
+	$message  = <<"EOF";
+
+You have $notice_interval until the scheduled end time of your reservation for image $image_prettyname.
 
 Reservation extensions are available if the machine you are on does not have a reservation immediately following.
 
@@ -604,7 +648,7 @@ To disable email notices
 ******************************************************************
 EOF
 
-	my $subject = "VCL -- $notice_interval until end of reservation";
+	$subject = "VCL -- $notice_interval until end of reservation for $image_prettyname";
 
 	# Send mail
 	if ($user_emailnotices) {
@@ -614,6 +658,23 @@ EOF
 	else {
 		notify($ERRORS{'DEBUG'}, 0, "user $user_login_id email notices disabled - not notifying user of endtime");
 	}
+        # Send message to machine
+        if ($computer_type =~ /blade|virtualmachine/) {
+                if ($image_os_type =~ /windows/) {
+                        # Notify via windows msg cmd
+                        $user_login_id= "administrator" if($request_forimaging);
+                        notify_via_msg($computer_short_name, $user_login_id, $short_message);
+                }
+                elsif ($image_os_type =~ /linux/){
+                        # Notify via wall
+                        notify_via_wall($computer_short_name, $user_login_id, $short_message, $image_os_name, $computer_type);
+                }
+        } ## end if ($computer_type =~ /blade|virtualmachine/)
+        elsif ($computer_type eq "lab") {
+                # Notify via wall
+                notify_via_wall($computer_ip_address, $user_login_id, $short_message, $image_os_name, $computer_type);
+        }
+
 
 	# Send IM
 	if ($user_imtype_name ne "none") {
@@ -649,22 +710,23 @@ sub _notify_user_disconnect {
 		notify($ERRORS{'WARNING'}, 0, "disconnect time message not set, disconnect time was not passed");
 		return 0;
 	}
-	
+
 	my $computer_short_name             = $self->data->get_computer_short_name();
-	my $computer_type                   = $self->data->get_computer_type();
-	my $computer_ip_address             = $self->data->get_computer_ip_address();
-	my $image_os_name                   = $self->data->get_image_os_name();
-	my $image_prettyname                = $self->data->get_image_prettyname();
-	my $image_os_type                   = $self->data->get_image_os_type();
-	my $user_affiliation_sitewwwaddress = $self->data->get_user_affiliation_sitewwwaddress();
-	my $user_affiliation_helpaddress    = $self->data->get_user_affiliation_helpaddress();
-	my $user_login_id                   = $self->data->get_user_login_id();
-	my $user_email                      = $self->data->get_user_email();
-	my $user_emailnotices               = $self->data->get_user_emailnotices();
-	my $user_imtype_name                = $self->data->get_user_imtype_name();
-	my $user_im_id                      = $self->data->get_user_im_id();
-	my $is_parent_reservation           = $self->data->is_parent_reservation();
-	
+        my $computer_type                   = $self->data->get_computer_type();
+        my $computer_ip_address             = $self->data->get_computer_ip_address();
+        my $image_os_name                   = $self->data->get_image_os_name();
+        my $image_prettyname                = $self->data->get_image_prettyname();
+        my $image_os_type                   = $self->data->get_image_os_type();
+        my $user_affiliation_sitewwwaddress = $self->data->get_user_affiliation_sitewwwaddress();
+        my $user_affiliation_helpaddress    = $self->data->get_user_affiliation_helpaddress();
+        my $user_login_id                   = $self->data->get_user_login_id();
+        my $user_email                      = $self->data->get_user_email();
+        my $user_emailnotices               = $self->data->get_user_emailnotices();
+        my $user_imtype_name                = $self->data->get_user_imtype_name();
+        my $user_im_id                      = $self->data->get_user_im_id();
+        my $is_parent_reservation           = $self->data->is_parent_reservation();
+	my $request_forimaging		    = $self->_check_imaging_request();
+
 	my $disconnect_string;
 	if ($disconnect_time == 0) {
 		$disconnect_string = "0 minutes";
@@ -676,7 +738,14 @@ sub _notify_user_disconnect {
 		$disconnect_string = "$disconnect_time minutes";
 	}
 
-	my $message = <<"EOF";
+	my $short_message;
+	my $subject;
+	my $message;
+
+	if(!$request_forimaging){
+		
+
+	$message = <<"EOF";
 
 You have $disconnect_string until the end of your reservation for image $image_prettyname, please save all work and prepare to exit.
 
@@ -701,10 +770,45 @@ To disable email notices
 ******************************************************************
 EOF
 
-	my $short_message = "You have $disconnect_string until the end of your reservation. Please save all work and prepare to log off.";
+		$short_message = "You have $disconnect_string until the end of your reservation. Please save all work and prepare to log off.";
 
-	my $subject = "VCL -- $disconnect_string until end of reservation";
+		$subject = "VCL -- $disconnect_string until end of reservation";
+	
+	}
+	else {
+		$short_message = "You have $disconnect_string until the auto capture process is started.";
 
+		$subject = "VCL Imaging Reservation -- $disconnect_string until starting auto capture";
+		
+		$message = <<"EOF";
+
+You have $disconnect_string until the end of your reservation for image $image_prettyname. 
+
+At the scheduled end time your imaging reservation will be automatically captured. 
+
+To prevent this auto capture, visit the VCL site $user_affiliation_sitewwwaddress manually start the image creation process.
+
+Please note this auto capture feature is intended to prevent destorying any work you have done to the image.
+
+Thank You,
+VCL Team
+
+
+******************************************************************
+This is an automated notice. If you need assistance please respond 
+with detailed information on the issue and a help ticket will be 
+generated.
+
+To disable email notices
+-Visit $user_affiliation_sitewwwaddress
+-Select User Preferences
+-Select General Preferences
+
+******************************************************************
+EOF
+		
+	
+	}
 	# Send mail
 	if ($is_parent_reservation && $user_emailnotices) {
 		mail($user_email, $subject, $message, $user_affiliation_helpaddress);
@@ -719,6 +823,7 @@ EOF
 	if ($computer_type =~ /blade|virtualmachine/) {
 		if ($image_os_type =~ /windows/) {
 			# Notify via windows msg cmd
+			$user_login_id= "administrator" if($request_forimaging);
 			notify_via_msg($computer_short_name, $user_login_id, $short_message);
 		}
 		elsif ($image_os_type =~ /linux/){
@@ -837,10 +942,13 @@ sub _notify_user_request_ended {
 	my $user_imtype_name                = $self->data->get_user_imtype_name();
 	my $user_im_id                      = $self->data->get_user_im_id();
 	my $is_parent_reservation           = $self->data->is_parent_reservation();
+	my $subject;
+	my $message;
 
-	my $subject = "VCL -- End of reservation";
+	if(!$request_forimaging) {
+	$subject = "VCL -- End of reservation";
 
-	my $message = <<"EOF";
+	$message = <<"EOF";
 
 Your reservation of $image_prettyname has ended. Thank you for using $user_affiliation_sitewwwaddress.
 
@@ -860,6 +968,35 @@ To disable email notices
 
 ******************************************************************
 EOF
+	}
+	else {
+		$subject = "VCL Image Reservation - Auto capture started";
+		
+		$message = <<"EOF";
+
+Your imaging reservation of $image_prettyname has reached it's scheduled end time.
+
+To avoid losing your work we have started an automatic capture of this image. Upon completion of the 
+image capture. You will be notified about the completion of the image capture.
+
+Thank You,
+VCL Team
+
+
+******************************************************************
+This is an automated notice. If you need assistance please respond 
+with detailed information on the issue and a help ticket will be 
+generated.
+
+To disable email notices
+-Visit $user_affiliation_sitewwwaddress
+-Select User Preferences
+-Select General Preferences
+
+******************************************************************
+EOF
+
+	}	
 
 	# Send mail
 	if ($is_parent_reservation && $user_emailnotices) {
@@ -926,6 +1063,37 @@ sub _check_imaging_request {
 		return;
 	}
 	
+}
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 _start_imaging_request
+
+ Parameters  :   
+ Returns     : 1 if successfully inserted image capture, undefined if an error occurred, exits otherwise
+ Description : If request is forimaging and timesout, this inserts a imaging reservation. 
+
+=cut
+
+sub _start_imaging_request {
+
+	my $self            = shift;
+	my $request_id = $self->data->get_request_id();
+
+	my $method = "XMLRPCautoCapture";
+	my @argument_string = ($method,$request_id);
+	my $xml_ret = xmlrpc_call(@argument_string);
+
+	if($xml_ret->value->{status} =~ /success/ ){
+		return 1;
+	}
+	
+	notify($ERRORS{'WARNING'}, 0, "$xml_ret->value->{status}");
+	if($xml_ret->value->{status} =~ /error/i){
+		notify($ERRORS{'WARNING'}, 0, "errorcode= $xml_ret->value->{errorcode} errormsg= $xml_ret->value->{errormsg}");
+	}
+
+	return 0;
+
 }
 
 #/////////////////////////////////////////////////////////////////////////////

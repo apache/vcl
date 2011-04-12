@@ -860,106 +860,63 @@ sub check_endtimenotice_interval {
 	my $end = $_[0];
 	my ($package, $filename, $line, $sub) = caller(0);
 	notify($ERRORS{'WARNING'}, 0, "endtime not set") if (!defined($end));
-	my $now      = time();
+	my $now      = convert_to_epoch_seconds();
 	my $epochend = convert_to_epoch_seconds($end);
-	#flag on: 2 & 1 week; 2,1 day, 1 hour, 30,15,10,5 minutes
-	#2 week: between 14 days and a 14 day -15 minutes window
-	if ($epochend <= (14 * 60 * 60 * 24) && $epochend >= (14 * 60 * 60 * 24 - 15 * 60)) {
-		return (1, "2week");
-	}
-	#1 week: between 7 days and a 14 day -15 minute window
-	elsif ($epochend <= (7 * 60 * 60 * 24) && $epochend >= (7 * 60 * 60 * 24 - 15 * 60)) {
-		return (1, "1week");
-	}
-	#2 day: between 2 days and a 2 day -15 minute window
-	if ($epochend <= (2 * 60 * 60 * 24) && $epochend >= (2 * 60 * 60 * 24 - 15 * 60)) {
-		return (1, "2day");
-	}
-	#1 day: between 1 days and a 1 day -15 minute window
-	if ($epochend <= (1 * 60 * 60 * 24) && $epochend >= (1 * 60 * 60 * 24 - 15 * 60)) {
-		return (1, "1day");
-	}
-	#30-25 minutes
-	if ($epochend <= (30 * 60) && $epochend >= (25 * 60)) {
-		return (1, "30min");
-	}
-} ## end sub check_endtimenotice_interval
-#sub new_check_endtimenotice_interval {
-#	 my ($request_end, $base_time) = @_;
-#	 my ($package, $filename, $line, $sub) = caller(0);
-#
-#	# Check the parameter
-#	if (!defined($request_end)) {
-#		notify($ERRORS{'WARNING'}, 0, "request end time was not specified"");
-#		return 0;
-#	 }
-#	elsif (!$request_end) {
-#		notify($ERRORS{'WARNING'}, 0, "request end time was specified but is blank"");
-#		return 0;
-#	 }
-#
-#	# Convert the request end time to epoch seconds
-#	 my $end_epoch_seconds = convert_to_epoch_seconds($request_end);
-#
-#	# This is only used for testing
-#	my @now;
-#	if ($base_time) {
-#		my $base_epoch_seconds = convert_to_epoch_seconds($base_time);
-#		@now = Time_to_Date($base_epoch_seconds);
-#	 }
-#	else {
-#		@now = Time_to_Date();
-#	 }
-#
-#	# Get arrays from the Date::Calc::Time_to_Date functions for now and the end time
-#	my @end = Time_to_Date($end_epoch_seconds);
-#
-#	# Calculate the difference
-#	my ($days, $hours, $minutes, $seconds) = Delta_DHMS(@now, @end);
-#
-#	 # Return a value on: 2 & 1 week; 2,1 day, 1 hour, 30,15,10,5 minutes
-#	my $return_value = 0;
-#
-#	# Ignore: over 14 days away
-#	 if ($days >= 14){
-#	    $return_value = 0;
-#	 }
-#	# 2 week notice: between 14 days and a 14 day - 15 minute window
-#	elsif ($days >= 13 && $hours >= 23 && $minutes >= 45){
-#	    $return_value = "2 weeks";
-#	 }
-#	# Ignore: between 7 days and 14 day - 15 minute window
-#	elsif ($days >= 7) {
-#		$return_value = 0;
-#	}
-#	 # 1 week notice: between 7 days and a 7 day -15 minute window
-#	 elsif ($days >= 6 && $hours >= 23 && $minutes >= 45) {
-#	    $return_value = "1 week";
-#	 }
-#	# Ignore: between 2 days and 7 day - 15 minute window
-#	elsif ($days >= 2) {
-#		$return_value = 0;
-#	}
-#	 # 2 day notice: between 2 days and a 2 day -15 minute window
-#	 elsif($days >= 1 && $hours >= 23 && $minutes >= 45) {
-#	    $return_value = "2 days";
-#	 }
-#	# Ignore: between 1 days and 2 day - 15 minute window
-#	elsif ($days >= 1) {
-#		$return_value = 0;
-#	}
-#	 # 1 day notice: between 1 days and a 1 day -15 minute window
-#	 elsif($days >= 0 && $hours >= 23 && $minutes >= 45) {
-#	    $return_value = "1 day";
-#	 }
-#	 #30-25 minutes
-#	 elsif ($minutes >= 25 && $minutes <= 30) {
-#	    $return_value = "30 minutes";
-#	 }
+	my $epoch_until_end = $epochend - $now;
 
-#	notify($ERRORS{'OK'}, 0, "days: time difference is days:$days hours:$hours minutes:$minutes, returning $return_value");
-#	return $return_value;
-#}
+	notify($ERRORS{'OK'}, 0, "endtime= $end epoch_until_end= $epoch_until_end");
+
+	my $diff_seconds = $epoch_until_end;
+	
+	my $diff_weeks = int($epoch_until_end/604800);
+	$diff_seconds -= $diff_weeks * 604800;
+	
+	my $diff_days = int($diff_seconds/86400);
+        my $Total_days = int($epoch_until_end/86400);
+	$diff_seconds -= $diff_days * 86400;
+        
+	my $diff_hours = int($diff_seconds/3600);
+        $diff_seconds -= $diff_hours * 3600;
+
+        my $diff_minutes = int($diff_seconds/60);
+        $diff_seconds -= $diff_minutes * 60;
+	
+	notify($ERRORS{'OK'}, 0, "End Time is in: $diff_weeks week\(s\) $diff_days day\(s\) $diff_hours hour\(s\) $diff_minutes min\(s\) and $diff_seconds sec\(s\)");
+
+	#flag on: 2 & 1 week; 2,1 day, 1 hour, 30,15,10,5 minutes
+	#ignore over 2weeks away
+	if($diff_weeks >= 2){ 
+		return 0;
+	}
+	#2 week: between 14 days and a 14 day -6 minutes window
+	elsif($Total_days >= 13 && $diff_hours >= 23 && $diff_minutes >= 55){
+		return "2 weeks";
+	}
+	#Ignore: between 7 days and 14 day - 6 minute window
+	elsif($Total_days >=7) {
+		return 0;
+	}
+	# 1 week notice: between 7 days and a 7 day -6 minute window
+        elsif ($Total_days >= 6 && $diff_hours >= 23 && $diff_minutes >= 55) {
+           return "1 week";
+        }
+       	# Ignore: between 2 days and 7 day - 15 minute window
+       	elsif ($Total_days >= 2) {
+               return 0;
+       	}
+       	# 2 day notice: between 2 days and a 2 day -6 minute window
+       	elsif($Total_days >= 1 && $diff_hours >= 23 && $diff_minutes >= 55) {
+           return "2 days";
+       	}
+	 # 1 day notice: between 1 days and a 1 day -6 minute window
+	elsif($Total_days >= 0 && $diff_hours >= 23 && $diff_minutes >= 55) {
+    		return "24 hours";
+	}
+
+	return 0; 
+	
+	
+} ## end sub check_endtimenotice_interval
 
 #/////////////////////////////////////////////////////////////////////////////
 
