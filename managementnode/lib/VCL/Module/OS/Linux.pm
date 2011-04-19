@@ -1947,10 +1947,21 @@ sub copy_file {
 =head2 get_file_size
 
  Parameters  : $file_path
- Returns     : integer
+ Returns     : integer or array
  Description : Determines the size of the file specified by the file path
-               argument in bytes. The file path argument may contain wildcards.
-					If the path argument is a directory, 0 will be returned.
+               argument in bytes. The file path argument may be a directory or
+               contain wildcards. Directories are processed recursively.
+               
+               When called in sclar context, the actual bytes used on the disk by the file
+               is returned. This correlates to the size reported by the `du`
+               command. This value is not the same as what is reported by the `ls`
+               command. This is important when determining the size of
+               compressed files or thinly-provisioned virtual disk images.
+               
+               When called in array context, 3 values are returned:
+               [0] bytes used (`du` size)
+               [1] bytes reserved (`ls` size)
+               [2] file count
 
 =cut
 
@@ -1960,6 +1971,8 @@ sub get_file_size {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
+	
+	my $calling_sub = (caller(1))[3] || '';
 	
 	# Get the path argument
 	my $file_path = shift;
@@ -1978,14 +1991,23 @@ sub get_file_size {
 	my $computer_node_name = $self->data->get_computer_node_name() || return;
 	
 	# Run stat rather than du because du is not available on VMware ESX
-	my $command = 'stat -c "%F:%s:%b:%B:%n" ' . $escaped_file_path;
+	# -L     Dereference links
+	# %F     File type
+	# %n     File name
+	# %b     Number of blocks allocated (see %B)
+	# %B     The size in bytes of each block reported by %b
+	# %s     Total size, in bytes
+	
+	my $command = 'stat -L -c "%F:%n:%s:%b:%B" ' . $escaped_file_path;
 	my ($exit_status, $output) = $self->execute($command);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to run command to determine file size on $computer_node_name: $file_path\ncommand: '$command'");
 		return;
 	}
 	elsif (grep(/no such file/i, @$output)) {
-		notify($ERRORS{'DEBUG'}, 0, "unable to determine size of file on $computer_node_name because it does not exist: $file_path, command: '$command'");
+		if ($calling_sub !~ /get_file_size/) {
+			notify($ERRORS{'DEBUG'}, 0, "unable to determine size of file on $computer_node_name because it does not exist: $file_path\ncommand: '$command'");
+		}
 		return;
 	}
 	elsif (grep(/^stat:/i, @$output)) {
@@ -1994,11 +2016,12 @@ sub get_file_size {
 	}
 	
 	# Loop through the stat output lines
+	my $file_count = 0;
+	my $total_bytes_reserved = 0;
 	my $total_bytes_used = 0;
-	my $total_bytes_allocated = 0;
 	for my $line (@$output) {
 		# Take the stat output line apart
-		my ($type, $file_bytes, $file_blocks, $block_size, $path) = split(/:/, $line);
+		my ($type, $path, $file_bytes, $file_blocks, $block_size) = split(/:/, $line);
 		if (!defined($type) || !defined($file_bytes) || !defined($file_blocks) || !defined($block_size) || !defined($path)) {
 			notify($ERRORS{'WARNING'}, 0, "unexpected output returned from stat, line: $line\ncommand: $command\noutput:\n" . join("\n", @$output));
 			return;
@@ -2006,27 +2029,41 @@ sub get_file_size {
 		
 		# Add the size to the total if the type is file
 		if ($type =~ /file/) {
-			$total_bytes_allocated += ($file_blocks * $block_size);
-			$total_bytes_used += $file_bytes;
+			$file_count++;
+			
+			my $file_bytes_allocated = ($file_blocks * $block_size);
+			
+			$total_bytes_used += $file_bytes_allocated;
+			$total_bytes_reserved += $file_bytes;
+			
+			#print "$file_count: '$path', used: $file_bytes, allocated: $file_bytes_allocated, ($file_blocks * $block_size)\n";
 		}
 		elsif ($type =~ /directory/) {
 			$path =~ s/[\\\/\*]+$//g;
-			notify($ERRORS{'DEBUG'}, 0, "recursively retrieving size of files under directory: '$path'");
-			my ($subdirectory_bytes_used, $subdirectory_bytes_allocated) = $self->get_file_size("$path/*");
-			$total_bytes_used += $subdirectory_bytes_used;
-			$total_bytes_allocated += $subdirectory_bytes_allocated;
+			#notify($ERRORS{'DEBUG'}, 0, "recursively retrieving size of files under directory: '$path'");
+			my ($subdirectory_bytes_allocated, $subdirectory_bytes_used, $subdirectory_file_count) = $self->get_file_size("$path/*");
+			
+			# Values will be null if there are no files under the subdirectory
+			if (!defined($subdirectory_bytes_allocated)) {
+				next;
+			}
+			
+			$file_count += $subdirectory_file_count;
+			$total_bytes_reserved += $subdirectory_bytes_used;
+			$total_bytes_used += $subdirectory_bytes_allocated;
 		}
 	}
 	
 	my $calling_sub = (caller(1))[3] || '';
 	if ($calling_sub !~ /get_file_size/) {
 		notify($ERRORS{'DEBUG'}, 0, "size of '$file_path' on $computer_node_name:\n" .
-				 "used: " . get_file_size_info_string($total_bytes_used) . "\n" .
-				 "allocated: " . get_file_size_info_string($total_bytes_allocated));
+				 "file count: $file_count\n" .
+				 "reserved: " . get_file_size_info_string($total_bytes_reserved) . "\n" .
+				 "used: " . get_file_size_info_string($total_bytes_used));
 	}
 	
 	if (wantarray) {
-		return ($total_bytes_used, $total_bytes_allocated);
+		return ($total_bytes_used, $total_bytes_reserved, $file_count);
 	}
 	else {
 		return $total_bytes_used;
