@@ -389,15 +389,15 @@ sub pre_capture {
 		notify($ERRORS{'WARNING'}, 0, "unable to disable IE configuration");
 	}
 
-=item *
-
- Disable Windows Defender
-
-=cut
-
-	if (!$self->disable_windows_defender()) {
-		notify($ERRORS{'WARNING'}, 0, "unable to disable Windows Defender");
-	}
+#=item *
+#
+# Disable Windows Defender
+#
+#=cut
+#
+#	if (!$self->disable_windows_defender()) {
+#		notify($ERRORS{'WARNING'}, 0, "unable to disable Windows Defender");
+#	}
 
 =item *
 
@@ -439,6 +439,16 @@ sub pre_capture {
 
 	if (!$self->enable_rdp_audio()) {
 		notify($ERRORS{'WARNING'}, 0, "unable to enable RDP audio redirection");
+	}
+	
+=item *
+
+ Enable client-compatible color depth for RDP sessions
+
+=cut
+
+	if (!$self->enable_client_compatible_rdp_color_depth()) {
+		notify($ERRORS{'WARNING'}, 0, "unable to enable client-compatible color depth for RDP sessions");
 	}
 
 =item *
@@ -1092,7 +1102,7 @@ sub delete_file {
 	
 	# Check if file exists before attempting to delete it
 	if (!$self->file_exists($path_argument)) {
-		notify($ERRORS{'OK'}, 0, "failed not deleted because it does not exist: '$path_argument'");
+		notify($ERRORS{'OK'}, 0, "file not deleted because it does not exist: '$path_argument'");
 		return 1;
 	}
 	
@@ -3523,7 +3533,7 @@ sub shutdown {
 		$shutdown_command .= "$system32_path/netsh.exe interface ip set dnsservers name=\\\"$private_interface_name\\\" source=dhcp & ";
 		$shutdown_command .= "$system32_path/netsh.exe interface ip set address name=\\\"$public_interface_name\\\" source=dhcp & ";
 		$shutdown_command .= "$system32_path/netsh.exe interface ip set dnsservers name=\\\"$public_interface_name\\\" source=dhcp & ";
-		$shutdown_command .= "$system32_path/netsh.exe interface ip reset & ";
+		$shutdown_command .= "$system32_path/netsh.exe interface ip reset $NODE_CONFIGURATION_DIRECTORY/Logs/ipreset.log & ";
 		$shutdown_command .= "$system32_path/ipconfig.exe /release & ";
 		$shutdown_command .= "$system32_path/ipconfig.exe /flushdns & ";
 		$shutdown_command .= "$system32_path/arp.exe -d * & ";
@@ -6424,6 +6434,30 @@ sub clean_hard_drive {
 	my $computer_node_name   = $self->data->get_computer_node_name();
 	my $system32_path        = $self->get_system32_path() || return;
 	
+	# Run dism.exe
+	# The dism.exe file may not be present
+	my $dism_command = "$system32_path/dism.exe /online /cleanup-image /spsuperseded";
+	my ($dism_exit_status, $dism_output) = run_ssh_command($computer_node_name, $management_node_keys, $dism_command, '', '', 1);
+	if (!defined($dism_output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to run dism.exe");
+		return;
+	}
+	elsif (grep(/not found|no such file/i, @$dism_output)) {
+		notify($ERRORS{'OK'}, 0, "dism.exe is not present on $computer_node_name");
+	}
+	elsif (grep(/No service pack backup files/i, @$dism_output)) {
+		notify($ERRORS{'DEBUG'}, 0, "dism.exe did not find any service pack files to remove");
+	}
+	elsif (grep(/spsuperseded option is not recognized/i, @$dism_output)) {
+		notify($ERRORS{'DEBUG'}, 0, "dism.exe is not able to remove service pack files for the OS version");
+	}
+	elsif (grep(/operation completed successfully/i, @$dism_output)) {
+		notify($ERRORS{'OK'}, 0, "ran dism.exe, output:\n" . join("\n", @$dism_output));
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unexpected output returned from dism.exe:\n" . join("\n", @$dism_output));
+	}
+	
 	# Note: attempt to delete everything under C:\RECYCLER before running cleanmgr.exe
 	# The Recycle Bin occasionally becomes corrupted
 	# cleanmgr.exe will hang with an "OK/Cancel" box on the screen if this happens
@@ -7340,6 +7374,45 @@ EOF
 		return 0;
 	}
 
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 enable_client_compatible_rdp_color_depth
+
+ Parameters  : None.
+ Returns     : If successful: true
+               If failed: false
+ Description : Sets the registry keys to allow clients use 24 or 32-bit color
+               depth in the RDP session.
+
+=cut
+
+sub enable_client_compatible_rdp_color_depth {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a VCL::Module module object method");
+		return;	
+	}
+	
+	my $registry_string .= <<"EOF";
+Windows Registry Editor Version 5.00
+
+[HKEY_LOCAL_MACHINE\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\Terminal Services]
+"ColorDepth"=dword:000003e7
+
+EOF
+
+	# Import the string into the registry
+	if ($self->import_registry_string($registry_string)) {
+		notify($ERRORS{'OK'}, 0, "set the registry keys to enable client compatible RDP color depth");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to set the registry key to enable client compatible RDP color depth");
+		return 0;
+	}
+	
 	return 1;
 }
 
