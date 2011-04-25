@@ -87,17 +87,17 @@ our %VM_OS_CONFIGURATION = (
 		"scsi-virtualDev" => "lsiLogic",
 	},
 	# Windows configurations:
-	"xp-x86" => {
+	"winxp-x86" => {
 		"guestOS" => "winXPPro",
 		"ethernet-virtualDev" => "vlance",
 		"scsi-virtualDev" => "busLogic",
 	},
-	"xp-x86_64" => {
+	"winxp-x86_64" => {
 		"guestOS" => "winXPPro-64",
 		"ethernet-virtualDev" => "e1000",
 		"scsi-virtualDev" => "lsiLogic",
 	},
-	"vista-x86" => {
+	"winvista-x86" => {
 		"guestOS" => "winvista",
 		"ethernet-virtualDev" => "e1000",
 		"scsi-virtualDev" => "lsiLogic",
@@ -109,34 +109,35 @@ our %VM_OS_CONFIGURATION = (
 		"scsi-virtualDev" => "lsiLogic",
 		"memsize" => 1024,
 	}, 
-	"7-x86" => {
+	"win7-x86" => {
 		"guestOS" => "windows7",
 		"ethernet-virtualDev" => "e1000",
 		"scsi-virtualDev" => "lsiLogic",
 		"memsize" => 1024,
 	},
-	"7-x86_64" => {
+	"win7-x86_64" => {
 		"guestOS" => "windows7-64",
 		"ethernet-virtualDev" => "e1000",
 		"scsi-virtualDev" => "lsiLogic",
 		"memsize" => 2048,
 	}, 
-	"2003-x86" => {
+	"win2003-x86" => {
 		"guestOS" => "winNetEnterprise",
 		"ethernet-virtualDev" => "vlance",
 		"scsi-virtualDev" => "lsiLogic",
 	},
-	"2003-x86_64" => {
+	"win2003-x86_64" => {
 		"guestOS" => "winNetEnterprise-64",
 		"ethernet-virtualDev" => "e1000",
 		"scsi-virtualDev" => "lsiLogic",
+		"memsize" => 1024,
 	},
-	"2008-x86" => {
+	"win2008-x86" => {
 		"guestOS" => "winServer2008Enterprise-32",
 		"ethernet-virtualDev" => "e1000",
 		"scsi-virtualDev" => "lsiLogic",
 	},
-	"2008-x86_64" => {
+	"win2008-x86_64" => {
 		"guestOS" => "winServer2008Enterprise-64",
 		"ethernet-virtualDev" => "e1000",
 		"scsi-virtualDev" => "lsiLogic",
@@ -469,7 +470,7 @@ sub capture {
 		notify($ERRORS{'WARNING'}, 0, "failed to determine the vmx file path actively being used by VM $computer_name");
 		return;
 	}
-
+	
 	# Set the vmx file path in this object so that it overrides the default value that would normally be constructed
 	if (!$self->set_vmx_file_path($vmx_file_path_original)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to set the vmx file to the path that was determined to be in use by VM $computer_name being captured: $vmx_file_path_original");
@@ -535,6 +536,11 @@ sub capture {
 	my $vmdk_directory_path_renamed = "$vmdk_base_directory_path/$image_name";
 	my $vmdk_file_path_renamed = "$vmdk_directory_path_renamed/$image_name.vmdk";
 	
+	# Construct the path of the reference vmx file to be saved with the vmdk
+	# The .vmx file is only saved so that it can be referenced later
+	my $reference_vmx_file_name = $self->get_reference_vmx_file_name();
+	my $vmx_file_path_renamed = "$vmdk_directory_path_renamed/$reference_vmx_file_name";
+	
 	# Make sure the vmdk file path for the captured image doesn't already exist
 	# Do this before calling pre_capture and shutting down the VM
 	if ($vmdk_file_path_original ne $vmdk_file_path_renamed && $self->vmhost_os->file_exists($vmdk_file_path_renamed)) {
@@ -585,6 +591,18 @@ sub capture {
 		}
 	}
 	
+	# Copy the vmx file to the new image directory for later reference
+	# First check if vmx file already exists (could happen if base image VM was manually created)
+	if ($vmx_file_path_original eq $vmx_file_path_renamed) {
+		notify($ERRORS{'DEBUG'}, 0, "vmx file will not be copied, vmx file path being captured is already named as the image being captured: '$vmx_file_path_original'");
+	}
+	else {
+		if (!$self->vmhost_os->copy_file($vmx_file_path_original, $vmx_file_path_renamed)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to copy the reference vmx file after the VM was powered off: '$vmx_file_path_original' --> '$vmx_file_path_renamed'");
+			return;
+		}
+	}
+	
 	# Copy the vmdk to the image repository if the repository path is defined in the VM profile
 	my $repository_directory_path = $self->get_repository_vmdk_directory_path();
 	if ($repository_directory_path) {
@@ -598,10 +616,18 @@ sub capture {
 			# Files can be copied directly to the image repository and converted while they are copied
 			my $repository_vmdk_file_path = $self->get_repository_vmdk_file_path();
 			if ($self->copy_vmdk($vmdk_file_path_renamed, $repository_vmdk_file_path, '2gbsparse')) {
-				$repository_copy_successful = 1;
+				
+				# Copy the reference vmx file of the VM being captured to the vmdk directory
+				my $repository_vmx_file_path = "$repository_directory_path/$image_name.vmx";
+				if ($self->vmhost_os->copy_file($vmx_file_path_renamed, $repository_vmx_file_path)) {
+					$repository_copy_successful = 1;
+				}
+				else {
+					notify($ERRORS{'WARNING'}, 0, "failed to copy the reference vmx file to the repository mounted on the VM host after the VM was powered off: '$vmx_file_path_renamed' --> '$repository_vmx_file_path'");
+				}
 			}
 			else {
-				notify($ERRORS{'WARNING'}, 0, "failed to copy the vmdk files after the VM was powered off: '$vmdk_file_path_renamed' --> '$repository_vmdk_file_path'");
+				notify($ERRORS{'WARNING'}, 0, "failed to copy the vmdk files to the repository mounted on the VM host after the VM was powered off: '$vmdk_file_path_renamed' --> '$repository_vmdk_file_path'");
 			}
 		}
 		else {
@@ -619,7 +645,7 @@ sub capture {
 			elsif ($virtual_disk_type =~ /sparse/) {
 				# Virtual disk is sparse, get a list of the vmdk file paths
 				notify($ERRORS{'DEBUG'}, 0, "vmdk can be copied directly from VM host $vmhost_hostname to the image repository because the virtual disk type is sparse: $virtual_disk_type");
-				@vmdk_copy_paths = $self->vmhost_os->find_files($vmdk_directory_path_original, '*.vmdk');
+				@vmdk_copy_paths = $self->vmhost_os->find_files($vmdk_directory_path_renamed, '*.vmdk');
 			}
 			else {
 				# Virtual disk is NOT sparse - a sparse copy must first be created before being copied to the repository
@@ -628,7 +654,7 @@ sub capture {
 				# Construct the vmdk file path where the 2gbsparse copy will be created
 				# The vmdk files are copied to a directory with the same name but with '_2gbsparse' appended to the directory name
 				# The vmdk files in the '_2gbsparse' are named the same as the original non-sparse directory
-				$vmdk_directory_path_sparse = "$vmdk_directory_path_original\_2gbsparse";
+				$vmdk_directory_path_sparse = "$vmdk_directory_path_renamed\_2gbsparse";
 				$vmdk_file_path_sparse = "$vmdk_directory_path_sparse/$image_name.vmdk";
 				
 				# Create a sparse copy of the virtual disk
@@ -643,6 +669,9 @@ sub capture {
 			
 			# Copy the vmdk directory from the VM host to the image repository
 			if (@vmdk_copy_paths) {
+				# Add the reference vmx file path to the array so that the vmx is copied to the repository
+				push @vmdk_copy_paths, $vmx_file_path_renamed;
+				
 				# Loop through the files, copy each to the management node's repository directory
 				notify($ERRORS{'DEBUG'}, 0, "vmdk files will be copied from VM host $vmhost_hostname to the image repository on the management node:\n" . join("\n", sort @vmdk_copy_paths));
 				VMDK_COPY_PATH: for my $vmdk_copy_path (@vmdk_copy_paths) {
@@ -1849,7 +1878,7 @@ sub prepare_vmdk {
 	
 	# Find the vmdk file paths in the image repository directory
 	my @vmdk_repository_file_paths;
-	my $command = "find \"$repository_vmdk_directory_path\" -type f -iname \"$image_name*.vmdk\"";
+	my $command = "find \"$repository_vmdk_directory_path\" -type f -iname \"$image_name*\"";
 	my ($exit_status, $output) = run_command($command, 1);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to run command to find files in image repository directory: '$repository_vmdk_directory_path', pattern: '*.vmdk', command:\n$command");
@@ -1888,7 +1917,7 @@ sub prepare_vmdk {
 	
 	# Check if the vmdk disk type is compatible with the VMware product installed on the host
 	return 1 if $self->is_vmdk_compatible();
-
+	
 	# Disk type is not compatible with the VMware product installed on the host
 	# Attempt to make a copy - copy_vmdk should create a copy in a compatible format
 	# The destination copy is stored in a directory with the same name as the normal vmdk directory followed by a ~
@@ -2941,6 +2970,69 @@ sub set_vmx_file_path {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 get_reference_vmx_file_name
+
+ Parameters  : none
+ Returns     : string
+ Description : Returns the name of the reference vmx file that was used when the
+               image was captured.
+
+=cut
+
+sub get_reference_vmx_file_name {
+	my $self = shift;
+	if (ref($self) !~ /vmware/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	return $ENV{reference_vmx_file_name} if defined($ENV{reference_vmx_file_name});
+	
+	my $image_name = $self->data->get_image_name() || return;
+	
+	$ENV{reference_vmx_file_name} = "$image_name.vmx.reference";
+	return $ENV{reference_vmx_file_name};
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_reference_vmx_file_path
+
+ Parameters  : none
+ Returns     : string
+ Description : Returns the path to the reference vmx file that was used when the
+               image was captured.
+
+=cut
+
+sub get_reference_vmx_file_path {
+	my $self = shift;
+	if (ref($self) !~ /vmware/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	return $ENV{reference_vmx_file_path} if defined($ENV{reference_vmx_file_path});
+	
+	my $vmdk_directory_path = $self->get_vmdk_directory_path();
+	if (!$vmdk_directory_path) {
+		notify($ERRORS{'WARNING'}, 0, "unable to construct reference vmx file path, vmdk directory path could not be determined");
+		return;
+	}
+	
+	my $reference_vmx_file_name = $self->get_reference_vmx_file_name();
+	if (!$reference_vmx_file_name) {
+		notify($ERRORS{'WARNING'}, 0, "unable to construct reference vmx file path, reference vmx file name could not be determined");
+		return;
+	}
+	
+	$ENV{reference_vmx_file_path} = "$vmdk_directory_path/$reference_vmx_file_name";
+	notify($ERRORS{'DEBUG'}, 0, "determined reference vmx file path: $ENV{reference_vmx_file_path}");
+	return $ENV{reference_vmx_file_path};
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 get_vmdk_file_path
 
  Parameters  : none
@@ -3989,54 +4081,41 @@ sub get_vmdk_parameter_value {
 		return;
 	}
 	
-	my $vmdk_file_path = $self->get_vmdk_file_path() || return;
-	my $image_repository_vmdk_file_path = $self->get_repository_vmdk_file_path() || return;
+	my $vmhost_hostname = $self->data->get_vmhost_hostname();
 	
-	# Open the vmdk file for reading
-	if (open FILE, "<", $vmdk_file_path) {
-		notify($ERRORS{'DEBUG'}, 0, "attempting to locate $vmdk_parameter value in vmdk file: $vmdk_file_path");
-	}
-	elsif (open FILE, "<", $image_repository_vmdk_file_path) {
-		notify($ERRORS{'DEBUG'}, 0, "attempting to locate $vmdk_parameter value in vmdk file: $image_repository_vmdk_file_path");
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "unable to open either vmdk file for reading: $vmdk_file_path, $image_repository_vmdk_file_path");
-		return;
-	}
+	# Try to get the file contents from the VM host
+	my $vmdk_file_path = $self->get_vmdk_file_path();
+	my @vmdk_file_lines = $self->vmhost_os->get_file_contents($vmdk_file_path);
 	
-	# Read the file line by line - do not read the file all at once
-	# The vmdk file may be very large depending on the type - it may not be split up into a descriptor file and extents
-	# If the vmdk file isn't split, the descriptor section will be at the beginning
-	my $line_count = 0;
-	my $value;
-	while ($line_count < 100) {
-		$line_count++;
-		my $line = <FILE>;
-		chomp $line;
+	if (!@vmdk_file_lines) {
+		my $head_command = "head -n 100 $vmdk_file_path";
 		
+		my $image_repository_vmdk_file_path = $self->get_repository_vmdk_file_path();
+		$head_command .= " $image_repository_vmdk_file_path" if $image_repository_vmdk_file_path;
+		
+		my ($head_exit_status, $head_output) = $self->mn_os->execute($head_command);
+		if (!defined($head_output)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to run command on management node while attempting to locate $vmdk_parameter value in vmdk file: '$head_command'");
+			return;
+		}
+		@vmdk_file_lines = @$head_output;
+	}
+	
+	for my $vmdk_file_line (@vmdk_file_lines) {
 		# Ignore comment lines
-		next if ($line =~ /^\s*#/);
+		next if ($vmdk_file_line =~ /^\s*#/);
 		
 		# Check if the line contains the parameter name
-		if ($line =~ /(^|\.)$vmdk_parameter[\s=]+/i) {
-			notify($ERRORS{'DEBUG'}, 0, "found line containing $vmdk_parameter: '$line'");
-			
-			# Extract the value from the line
-			($value) = $line =~ /\"(.+)\"/;
-			last;
+		if ($vmdk_file_line =~ /(?:^|\.)$vmdk_parameter[=\s\"]*([^\"]*)/ig) {
+			my $value = $1;
+			chomp $value;
+			notify($ERRORS{'DEBUG'}, 0, "found '$vmdk_parameter' value in vmdk file:\nline: '$vmdk_file_line'\nvalue: '$value'");
+			return $value;
 		}
 	}
 	
-	close FILE;
-	
-	if (defined($value)) {
-		notify($ERRORS{'DEBUG'}, 0, "found $vmdk_parameter value in vmdk file: '$value'");
-		return $value;
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "did not find $vmdk_parameter value in vmdk file");
-		return;
-	}
+	notify($ERRORS{'WARNING'}, 0, "did not find '$vmdk_parameter' value in vmdk file");
+	return;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -4062,31 +4141,44 @@ sub get_vm_disk_adapter_type {
 	
 	my $vmdk_controller_type;
 	
-	if ($self->api->can("get_virtual_disk_controller_type") && ($vmdk_controller_type = $self->api->get_virtual_disk_controller_type($self->get_vmdk_file_path()))) {
-		notify($ERRORS{'DEBUG'}, 0, "retrieved VM disk adapter type from api object: $vmdk_controller_type");
-	}
-	elsif ($vmdk_controller_type = $self->get_vmdk_parameter_value('adapterType')) {
-		notify($ERRORS{'DEBUG'}, 0, "retrieved VM disk adapter type from vmdk file: $vmdk_controller_type");
-	}
-	
-	if (!$vmdk_controller_type) {
-		my $vm_os_configuration = $self->get_vm_os_configuration();
-		if (!$vm_os_configuration) {
-			notify($ERRORS{'WARNING'}, 0, "unable to determine VM disk adapter type because unable to retrieve default VM OS configuration");
-			return;
+	# Attempt to retrieve the type from the reference vmx file for the image
+	my $reference_vmx_file_info = $self->get_reference_vmx_info();
+	if ($reference_vmx_file_info) {
+		for my $vmx_key (keys %$reference_vmx_file_info) {
+			if ($vmx_key =~ /scsi\d+\.virtualdev/i) {
+				$vmdk_controller_type = $reference_vmx_file_info->{$vmx_key};
+				notify($ERRORS{'DEBUG'}, 0, "retrieved VM disk adapter type from reference vmx file: $vmdk_controller_type");
+				return $vmdk_controller_type;
+			}
 		}
-		
-		$vmdk_controller_type = $vm_os_configuration->{"scsi-virtualDev"};
-		notify($ERRORS{'DEBUG'}, 0, "retrieved default VM disk adapter type for VM OS: $vmdk_controller_type");
+		notify($ERRORS{'DEBUG'}, 0, "unable to retrieve VM disk adapter type from reference vmx file, 'scsi*.virtualDev' key does not exist");
 	}
 	
-	if ($vmdk_controller_type) {
+	# Try to get the type from the API module's get_virtual_disk_controller_type subroutine
+	if ($self->api->can("get_virtual_disk_controller_type")) {
+		if ($vmdk_controller_type = $self->api->get_virtual_disk_controller_type($self->get_vmdk_file_path())) {
+			notify($ERRORS{'DEBUG'}, 0, "retrieved VM disk adapter type from api object: $vmdk_controller_type");
+			return $vmdk_controller_type;
+		}
+	}
+	
+	# Try to retrieve the adapter type by reading the vmdk descriptor
+	if ($vmdk_controller_type = $self->get_vmdk_parameter_value('adapterType')) {
+		notify($ERRORS{'DEBUG'}, 0, "retrieved VM disk adapter type from vmdk file: $vmdk_controller_type");
+		return $vmdk_controller_type;
+	}
+	
+	# Try to retrieve the default adapter type for the image OS
+	my $vm_os_configuration = $self->get_vm_os_configuration();
+	if ($vm_os_configuration && ($vmdk_controller_type = $vm_os_configuration->{"scsi-virtualDev"})) {
+		notify($ERRORS{'DEBUG'}, 0, "retrieved default VM disk adapter type for VM OS: $vmdk_controller_type");
 		return $vmdk_controller_type;
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "unable to determine VM disk adapter type");
+		notify($ERRORS{'WARNING'}, 0, "unable to determine VM disk adapter type from default VM OS configuration");
 		return;
 	}
+	
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -4107,6 +4199,21 @@ sub get_vm_virtual_hardware_version {
 	}
 	
 	my $hardware_version;
+	
+	# Attempt to retrieve the type from the reference vmx file for the image
+	my $reference_vmx_file_info = $self->get_reference_vmx_info();
+	if ($reference_vmx_file_info) {
+		for my $vmx_key (keys %$reference_vmx_file_info) {
+			if ($vmx_key =~ /virtualHW\.version/i) {
+				$hardware_version = $reference_vmx_file_info->{$vmx_key};
+				notify($ERRORS{'DEBUG'}, 0, "retrieved VM virtual hardware version from reference vmx file: $hardware_version");
+				return $hardware_version;
+			}
+		}
+		notify($ERRORS{'DEBUG'}, 0, "unable to retrieve VM virtual hardware version from reference vmx file, 'virtualHW.version' key does not exist");
+	}
+	
+	
 	if ($self->api->can("get_virtual_disk_hardware_version")) {
 		$hardware_version = $self->api->get_virtual_disk_hardware_version($self->get_vmdk_file_path());
 		notify($ERRORS{'DEBUG'}, 0, "retrieved hardware version from api object: $hardware_version");
@@ -4165,8 +4272,8 @@ sub get_vm_virtual_hardware_version {
  Returns     : hash
  Description : Returns the information stored in %VM_OS_CONFIGURATION for
                the guest OS. The guest OS type, OS name, and archictecture are
-               used to determine the appropriate guestOS and ethernet-virtualDev
-               values to be used in the vmx file.
+               used to determine some of the appropriate values to be used in
+               the vmx file.
 
 =cut
 
@@ -4180,40 +4287,52 @@ sub get_vm_os_configuration {
 	# Return previously retrieved data if it exists
 	return $self->{vm_os_configuration} if $self->{vm_os_configuration};
 	
-	my $image_os_type = $self->data->get_image_os_type() || return;
 	my $image_os_name = $self->data->get_image_os_name() || return;
+	my $image_os_type = $self->data->get_image_os_type();
 	my $image_architecture = $self->data->get_image_architecture() || return;
 	
 	# Figure out the key name in the %VM_OS_CONFIGURATION hash for the guest OS
-	my $vm_os_configuration_key;
-	if ($image_os_type =~ /linux/i) {
-		$vm_os_configuration_key = "linux-$image_architecture";
-	}
-	elsif ($image_os_type =~ /windows/i) {
-		my $regex = 'xp|2003|2008|vista|7';
-		$image_os_name =~ /($regex)/i;
-		my $windows_product = $1;
-		if (!$windows_product) {
-			notify($ERRORS{'WARNING'}, 0, "unsupported Windows product: $image_os_name, it does not contain ($regex), using default values for Windows");
-			$windows_product = 'windows';
+	for my $vm_os_configuration_key (keys(%VM_OS_CONFIGURATION)) {
+		my ($os_product_name, $os_architecture) = $vm_os_configuration_key =~ /(.+)-(.+)/;
+		if (!$os_product_name || !$os_architecture) {
+			notify($ERRORS{'WARNING'}, 0, "failed to parse VM OS configuration key: $vm_os_configuration_key, format should be <OS product name>-<architecture>");
+			next;
 		}
-		$vm_os_configuration_key = "$windows_product-$image_architecture";
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "unsupported OS type: $image_os_type, using default values");
-		$vm_os_configuration_key = "default-$image_architecture";
+		elsif ($image_architecture ne $os_architecture) {
+			next;
+		}
+		elsif ($image_os_name !~ /$os_product_name/) {
+			next;
+		}
+		else {
+			$self->{vm_os_configuration} = $VM_OS_CONFIGURATION{$vm_os_configuration_key};
+			notify($ERRORS{'DEBUG'}, 0, "returning matching '$vm_os_configuration_key' OS configuration: $image_os_name, image architecture: $image_architecture\n" . format_data($self->{vm_os_configuration}));
+		}
 	}
 	
-	# Retrieve the information from the hash, set an object variable
-	$self->{vm_os_configuration} = $VM_OS_CONFIGURATION{$vm_os_configuration_key};
-	if ($self->{vm_os_configuration}) {
-		notify($ERRORS{'DEBUG'}, 0, "retrieved default VM configuration for OS: $vm_os_configuration_key\n" . format_data($self->{vm_os_configuration}));
-		return $self->{vm_os_configuration};
+	if (!$self->{vm_os_configuration}) {
+		# Check if the default key exists for the OS type - 'windows', 'linux', etc.
+		if ($self->{vm_os_configuration} = $VM_OS_CONFIGURATION{"$image_os_type-$image_architecture"}) {
+			notify($ERRORS{'DEBUG'}, 0, "returning default '$image_os_type' OS configuration, architecture: $image_architecture\n" . format_data($self->{vm_os_configuration}));
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "default VM OS configuration key '$image_os_type-$image_architecture' does not exist for image OS type: $image_os_type, image architecture: $image_architecture");
+			
+			# Check if the default key exists for the image architecture
+			if ($self->{vm_os_configuration} = $VM_OS_CONFIGURATION{"default-$image_architecture"}) {
+				notify($ERRORS{'DEBUG'}, 0, "returning default OS configuration, architecture: $image_architecture\n" . format_data($self->{vm_os_configuration}));
+			}
+			else {
+				notify($ERRORS{'WARNING'}, 0, "default VM OS configuration key 'default-$image_architecture' does not exist for image architecture: $image_architecture");
+				
+				# Unable to locate closest matching key, return default x86 configuration
+				$self->{vm_os_configuration} = $VM_OS_CONFIGURATION{"default-x86"};
+				notify($ERRORS{'DEBUG'}, 0, "returning default x86 OS configuration\n" . format_data($self->{vm_os_configuration}));
+			}
+		}
 	}
-	else {
-		notify($ERRORS{'DEBUG'}, 0, "failed to find default VM configuration for OS: $vm_os_configuration_key");
-		return;
-	}
+	
+	return $self->{vm_os_configuration};
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -4285,8 +4404,6 @@ sub get_vm_ram {
 		return;
 	}
 	
-	my $minimum_vm_ram_mb = 512;
-	
 	# Get the image minram setting
 	my $image_minram_mb = $self->data->get_image_minram();
 	if (!defined($image_minram_mb)) {
@@ -4298,16 +4415,21 @@ sub get_vm_ram {
 	if ($image_minram_mb % 4) {
 		my $image_minram_mb_original = $image_minram_mb;
 		$image_minram_mb -= ($image_minram_mb % 4);
-		notify($ERRORS{'DEBUG'}, 0, "image minram value is not a multiple of 4: $image_minram_mb_original, adjusting to $image_minram_mb");
+		notify($ERRORS{'DEBUG'}, 0, "image minimum RAM value ($image_minram_mb_original MB) is not a multiple of 4, adjusting to $image_minram_mb MB");
 	}
 	
 	# Check if the image setting is too low
-	if ($image_minram_mb < $minimum_vm_ram_mb) {
-		notify($ERRORS{'DEBUG'}, 0, "image ram setting is too low: $image_minram_mb MB, $minimum_vm_ram_mb MB will be used");
-		return $minimum_vm_ram_mb;
+	# Get the minimum memory size for the OS
+	my $vm_os_configuration = $self->get_vm_os_configuration();
+	my $vm_guest_os = $vm_os_configuration->{guestOS} || 'unknown';
+	my $vm_os_memsize = $vm_os_configuration->{memsize} || 512;
+	if ($image_minram_mb < $vm_os_memsize) {
+		notify($ERRORS{'DEBUG'}, 0, "image minimum RAM value ($image_minram_mb MB) is too low for the $vm_guest_os guest OS, adjusting to $vm_os_memsize MB");
+		return $vm_os_memsize;
 	}
-	
-	return $image_minram_mb;
+	else {
+		return $image_minram_mb;
+	}
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -4503,6 +4625,58 @@ sub get_vmx_info {
 	# Store the vmx file info so it doesn't have to be retrieved again
 	$self->{vmx_info}{$vmx_file_path} = \%vmx_info;
 	return $self->{vmx_info}{$vmx_file_path};
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_reference_vmx_info
+
+ Parameters  : none
+ Returns     : hash reference
+ Description : Checks if the reference vmx file exists for the image and returns
+               a hash reference containing the data contained in the file. This
+               data is the configuration used when the image was captured.
+
+=cut
+
+sub get_reference_vmx_info {
+	my $self = shift;
+	if (ref($self) !~ /module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Check if the reference vmx info has already been retrieved
+	if ($self->{reference_vmx_info}) {
+		return $self->{reference_vmx_info};
+	}
+	
+	# Check if it was already determined that the reference vmx file doesn't exist
+	# $self->{reference_vmx_info} is set to 0 if the file doesn't exist
+	if (defined($self->{reference_vmx_info}) && !$self->{reference_vmx_info}) {
+		return 0;
+	}
+	
+	# Get the reference vmx file path and check if the file exists
+	my $reference_vmx_file_path = $self->get_reference_vmx_file_path();
+	if (!$self->vmhost_os->file_exists($reference_vmx_file_path)) {
+		notify($ERRORS{'DEBUG'}, 0, "reference vmx file does not exist: $reference_vmx_file_path");
+		# Set $self->{reference_vmx_info} to 0 so this subroutine doesn't have to check if it exists again on subsequent calls
+		$self->{reference_vmx_info} = 0;
+		return 0;
+	}
+	
+	# Retrieve the info from the file
+	my $reference_vmx_info = $self->get_vmx_info($reference_vmx_file_path);
+	if ($reference_vmx_info) {
+		notify($ERRORS{'DEBUG'}, 0, "retrieved reference vmx info from file: $reference_vmx_file_path");
+		$self->{reference_vmx_info} = $reference_vmx_info;
+		return $reference_vmx_info;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve reference vmx info from file: $reference_vmx_file_path");
+		return;
+	}
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -4751,8 +4925,18 @@ sub copy_vmdk {
 		return;
 	}
 	
+	# Normalize the file paths
 	$source_vmdk_file_path = $self->_get_normal_path($source_vmdk_file_path) || return;
 	$destination_vmdk_file_path = $self->_get_normal_path($destination_vmdk_file_path) || return;
+	
+	my $source_directory_path = $self->_get_parent_directory_normal_path($source_vmdk_file_path) || return;
+	my $destination_directory_path = $self->_get_parent_directory_normal_path($destination_vmdk_file_path) || return;
+	
+	# Construct the source and destination reference vmx file paths
+	# The reference vmx file is copied to the vmdk directory if it exists
+	my $reference_vmx_file_name = $self->get_reference_vmx_file_name();
+	my $source_reference_vmx_file_path = "$source_directory_path/$reference_vmx_file_name";
+	my $destination_reference_vmx_file_path = "$destination_directory_path/$reference_vmx_file_name";
 	
 	# Set the default virtual disk type if the argument was not specified
 	if (!$virtual_disk_type) {
@@ -4782,16 +4966,9 @@ sub copy_vmdk {
 		return;
 	}
 	
-	# Get the destination parent directory path and create the directory
-	my ($destination_directory_path) = $destination_vmdk_file_path =~ /(.+)\/[^\/]+/;
-	if (!$self->vmhost_os->create_directory($destination_directory_path)) {
-		notify($ERRORS{'WARNING'}, 0, "unable to copy vmdk, destination directory could not be created on VM host $vmhost_name: $destination_directory_path");
-		return;
-	}
-	
 	my $start_time = time;
 	my $copy_result = 0;
-	
+
 	# Attempt to use the API's copy_virtual_disk subroutine
 	if ($self->api->can('copy_virtual_disk')) {
 		if ($self->api->copy_virtual_disk($source_vmdk_file_path, $destination_vmdk_file_path, $virtual_disk_type)) {
@@ -4808,6 +4985,13 @@ sub copy_vmdk {
 	if (!$copy_result && !$self->vmhost_os->can('execute')) {
 		notify($ERRORS{'WARNING'}, 0, "failed to copy vmdk on VM host $vmhost_name, unable to copy using API's copy_virtual_disk subroutine and an 'execute' subroutine is not implemented by the VM host OS object");
 		return;
+	}
+	elsif (!$copy_result) {
+		# Create the destination directory
+		if (!$self->vmhost_os->create_directory($destination_directory_path)) {
+			notify($ERRORS{'WARNING'}, 0, "unable to copy vmdk, destination directory could not be created on VM host $vmhost_name: $destination_directory_path");
+			return;
+		}
 	}
 	
 	if (!$copy_result) {
@@ -4905,6 +5089,12 @@ sub copy_vmdk {
 	# Check if any of the methods was successful
 	if (!$copy_result) {
 		notify($ERRORS{'WARNING'}, 0, "failed to copy virtual disk on VM host $vmhost_name using any available methods:\n'$source_vmdk_file_path' --> '$destination_vmdk_file_path'");
+		
+		# Delete the destination directory
+		if (!$self->vmhost_os->delete_file($destination_directory_path)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to delete destination directory after failing to copy virtual disk on VM host $vmhost_name: $destination_directory_path");
+		}
+		
 		return;
 	}
 	
@@ -4920,11 +5110,21 @@ sub copy_vmdk {
 		$seconds = "0$seconds";
 	}
 	
+	# Check if the reference vmx file exists in the source directory
+	# Copy it to the destination directory if it does exist
+	if ($self->vmhost_os->file_exists($source_reference_vmx_file_path)) {
+		notify($ERRORS{'DEBUG'}, 0, "copying reference vmx file to vmdk directory: '$source_reference_vmx_file_path' --> '$destination_reference_vmx_file_path'");
+		if (!$self->vmhost_os->copy_file($source_reference_vmx_file_path, $destination_reference_vmx_file_path)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to copy reference vmx file to vmdk directory: '$source_reference_vmx_file_path' --> '$destination_reference_vmx_file_path'");
+		}
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "reference vmx file not copied to vmdk directory because it does not exist: '$source_reference_vmx_file_path'");
+	}
+	
 	# Get the size of the copied vmdk files
 	my $search_path = $destination_vmdk_file_path;
-	$search_path =~ s/\.vmdk$//g;
-	$search_path .= '*.vmdk';
-	
+	$search_path =~ s/(\.vmdk)$/\*$1/i;
 	my $image_size_bytes = $self->vmhost_os->get_file_size($search_path);
 	if (!defined($image_size_bytes) || $image_size_bytes !~ /^\d+$/) {
 		notify($ERRORS{'WARNING'}, 0, "copied vmdk on VM host $vmhost_name but failed to retrieve destination file size:\n'$source_vmdk_file_path' --> '$destination_vmdk_file_path'");
