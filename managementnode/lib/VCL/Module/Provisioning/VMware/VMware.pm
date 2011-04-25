@@ -616,15 +616,7 @@ sub capture {
 			# Files can be copied directly to the image repository and converted while they are copied
 			my $repository_vmdk_file_path = $self->get_repository_vmdk_file_path();
 			if ($self->copy_vmdk($vmdk_file_path_renamed, $repository_vmdk_file_path, '2gbsparse')) {
-				
-				# Copy the reference vmx file of the VM being captured to the vmdk directory
-				my $repository_vmx_file_path = "$repository_directory_path/$image_name.vmx";
-				if ($self->vmhost_os->copy_file($vmx_file_path_renamed, $repository_vmx_file_path)) {
-					$repository_copy_successful = 1;
-				}
-				else {
-					notify($ERRORS{'WARNING'}, 0, "failed to copy the reference vmx file to the repository mounted on the VM host after the VM was powered off: '$vmx_file_path_renamed' --> '$repository_vmx_file_path'");
-				}
+				$repository_copy_successful = 1;
 			}
 			else {
 				notify($ERRORS{'WARNING'}, 0, "failed to copy the vmdk files to the repository mounted on the VM host after the VM was powered off: '$vmdk_file_path_renamed' --> '$repository_vmdk_file_path'");
@@ -1492,7 +1484,6 @@ sub prepare_vmx {
 	my $vm_persistent            = $self->is_vm_persistent();
 	my $guest_os                 = $self->get_vm_guest_os() || return;
 	my $vmware_product_name      = $self->get_vmhost_product_name();
-	my $reservation_password     = $self->data->get_reservation_password();
 	
 	# Create the .vmx directory on the host
 	if (!$self->vmhost_os->create_directory($vmx_directory_path)) {
@@ -1626,6 +1617,7 @@ sub prepare_vmx {
 		"mainMem.useNamedFile" => "FALSE",
 	);
 	
+	#my $reservation_password     = $self->data->get_reservation_password();
 	#if (defined($reservation_password)) {
 	#	my $vnc_port = ($computer_id + 10000);
 	#	notify($ERRORS{'DEBUG'}, 0, "vnc access will be enabled, port: $vnc_port, password: $reservation_password");
