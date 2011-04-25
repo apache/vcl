@@ -259,14 +259,15 @@ sub activate {
 		return 1;
 	}
 	
-	# Attempt to activate using KMS server
-	return 1 if $self->activate_kms();
-	
-	# Attempt to activate using MAK product key
-	return 1 if $self->activate_mak();
-	
-	notify($ERRORS{'WARNING'}, 0, "failed to activate Windows using MAK or KMS methods");
-	return;
+	# Attempt to activate first using KMS server
+	# Attempt to activate using MAK if KMS fails or is not configured
+	if ($self->activate_kms() || $self->activate_mak()) {
+		return 1;
+	}
+	else {
+		notify($ERRORS{'CRITICAL'}, 0, "failed to activate Windows using MAK or KMS methods");
+		return;
+	}
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -304,7 +305,7 @@ sub activate_mak {
 		notify($ERRORS{'DEBUG'}, 0, "installed MAK product key: $product_key");
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to install MAK product key: $product_key");
+		notify($ERRORS{'CRITICAL'}, 0, "failed to install MAK product key: $product_key");
 		return;
 	}
 	
@@ -314,7 +315,7 @@ sub activate_mak {
 		return 1;
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to activate Windows using MAK product key: $product_key");
+		notify($ERRORS{'CRITICAL'}, 0, "failed to activate Windows using MAK product key: $product_key");
 		return;
 	}
 }
@@ -361,7 +362,7 @@ sub activate_kms {
 		notify($ERRORS{'DEBUG'}, 0, "installed KMS client product key: $product_key");
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to install KMS client product key: $product_key");
+		notify($ERRORS{'CRITICAL'}, 0, "failed to install KMS client product key: $product_key");
 		return;
 	}
 	
@@ -381,12 +382,12 @@ sub activate_kms {
 				return 1;
 			}
 			else {
-				notify($ERRORS{'WARNING'}, 0, "failed to activate Windows using KMS server: $kms_address:$kms_port");
+				notify($ERRORS{'CRITICAL'}, 0, "failed to activate Windows using KMS server: $kms_address:$kms_port");
 				next;
 			}
 		}
 		else {
-			notify($ERRORS{'WARNING'}, 0, "failed to set KMS server: $kms_address:$kms_port");
+			notify($ERRORS{'CRITICAL'}, 0, "failed to set KMS server: $kms_address:$kms_port");
 			next;
 		}
 	}
@@ -1455,6 +1456,9 @@ sub run_sysprep {
 	
 	my $node_configuration_directory = $self->get_node_configuration_directory();
 	
+	my $source_configuration_directory = eval '$' . ref($self) . '::SOURCE_CONFIGURATION_DIRECTORY';
+	run_scp_command("$source_configuration_directory/Utilities/Sysprep/Unattend.xml", "$computer_node_name:$node_configuration_directory/Utilities/sysprep/Unattend.xml");
+	
 	# Delete existing Panther directory, contains Sysprep log files
 	if (!$self->delete_file('C:/Windows/Panther')) {
 		notify($ERRORS{'WARNING'}, 0, "unable to delete Panther directory, Sysprep will proceed");
@@ -1485,24 +1489,6 @@ sub run_sysprep {
 		notify($ERRORS{'WARNING'}, 0, "unable to delete Sysprep_succeeded.tag log file, Sysprep will proceed");
 	}
 	
-	# Delete existing MSDTC.LOG file
-	if (!$self->delete_file("$system32_path/MsDtc/MSTTC.LOG")) {
-		notify($ERRORS{'WARNING'}, 0, "unable to delete MSTTC.LOG file, Sysprep will proceed");
-	}
-	
-	# Uninstall and reinstall MsDTC
-	my $msdtc_command = "$system32_path/msdtc.exe -uninstall ; $system32_path/msdtc.exe -install";
-	my ($msdtc_status, $msdtc_output) = run_ssh_command($computer_node_name, $management_node_keys, $msdtc_command);
-	if (defined($msdtc_status) && $msdtc_status == 0) {
-		notify($ERRORS{'DEBUG'}, 0, "reinstalled MsDtc");
-	}
-	elsif (defined($msdtc_status)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to reinstall MsDtc, exit status: $msdtc_status, output:\n@{$msdtc_output}");
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "unable to run ssh command to reinstall MsDtc");
-	}
-	
 	# Delete existing Unattend.xml file
 	if (!$self->delete_file("$system32_path/sysprep/Unattend.xml")) {
 		notify($ERRORS{'WARNING'}, 0, "unable to delete Sysprep Unattend.xml file, Sysprep will NOT proceed");
@@ -1521,7 +1507,23 @@ sub run_sysprep {
 		notify($ERRORS{'WARNING'}, 0, "failed to update Unattend.xml with the time zone configured for the management node: '$time_zone_name'");
 		return;
 	}
-
+	
+	# Update the Unattend.xml file with the KMS client product key for the installed OS
+	my $product_key = $self->get_kms_client_product_key();
+	if (!$product_key) {
+		notify($ERRORS{'WARNING'}, 0, "KMS client product key could not be retrieved");
+		return;
+	}
+	my $product_key_search_pattern = '<ProductKey>.*</ProductKey>';
+	my $product_key_replace_string = '<ProductKey>' . $product_key . '</ProductKey>';
+	if ($self->search_and_replace_in_files($base_directory, $product_key_search_pattern, $product_key_replace_string)) {
+		notify($ERRORS{'DEBUG'}, 0, "updated Unattend.xml with the KMS product key: $product_key");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to update Unattend.xml with the KMS product key: $product_key");
+		return;
+	}
+	
 	# Copy Unattend.xml file to sysprep directory
 	my $cp_command = "cp -f $node_configuration_directory/Utilities/Sysprep/Unattend.xml $system32_path/sysprep/Unattend.xml";
 	my ($cp_status, $cp_output) = run_ssh_command($computer_node_name, $management_node_keys, $cp_command);
@@ -1535,6 +1537,24 @@ sub run_sysprep {
 	else {
 		notify($ERRORS{'WARNING'}, 0, "unable to run ssh command to copy Unattend.xml to $system32_path/sysprep");
 		return;
+	}
+	
+	# Delete existing MSDTC.LOG file
+	if (!$self->delete_file("$system32_path/MsDtc/MSTTC.LOG")) {
+		notify($ERRORS{'WARNING'}, 0, "unable to delete MSTTC.LOG file, Sysprep will proceed");
+	}
+	
+	# Uninstall and reinstall MsDTC
+	my $msdtc_command = "$system32_path/msdtc.exe -uninstall ; $system32_path/msdtc.exe -install";
+	my ($msdtc_status, $msdtc_output) = run_ssh_command($computer_node_name, $management_node_keys, $msdtc_command);
+	if (defined($msdtc_status) && $msdtc_status == 0) {
+		notify($ERRORS{'DEBUG'}, 0, "reinstalled MsDtc");
+	}
+	elsif (defined($msdtc_status)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to reinstall MsDtc, exit status: $msdtc_status, output:\n@{$msdtc_output}");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unable to run ssh command to reinstall MsDtc");
 	}
 	
 	# Get the node drivers directory and convert it to DOS format
@@ -1586,9 +1606,6 @@ EOF
 		notify($ERRORS{'WARNING'}, 0, "failed to reset the Windows setup state in the registry");
 		return 0;
 	}
-	
-	# Display licensing information
-	$self->run_slmgr_dlv();
 	
 	# Kill the screen saver process, it occasionally prevents reboots and shutdowns from working
 	$self->kill_process('logon.scr');
