@@ -2714,12 +2714,12 @@ function AJtoggleBlockTime() {
 		sendJSON($data);
 		return;
 	}
-	$query = "UPDATE request "
-	       . "SET stateid = 1 "
+	$query = "DELETE FROM request "
 	       . "WHERE id IN "
 	       .    "(SELECT DISTINCT reloadrequestid "
-	       .    "FROM blockComputers " 
-	       .    "WHERE blockTimeid = $timeid)";
+	       .    "FROM blockComputers "
+	       .    "WHERE blockTimeid = $timeid) AND "
+	       .    "stateid = 19";
 	doQuery($query, 101);
 	$query = "DELETE FROM blockComputers "
 	       . "WHERE blockTimeid = $timeid";
@@ -2877,10 +2877,11 @@ function AJupdateBlockStatus() {
 		foreach($data['comps'] as $id => $comp) {
 			if($comp['state'] == 'available')
 				$available++;
-			elseif($comp['state'] == 'reloading')
+			elseif($comp['state'] == 'reload' ||
+			       $comp['state'] == 'reloading')
 				$reloading++;
 			elseif($comp['state'] == 'reserved' ||
-					 $comp['state'] == 'inuse')
+			       $comp['state'] == 'inuse')
 				$used++;
 		}
 		$failed = $data['numMachines'] - $available - $reloading - $used;
