@@ -995,7 +995,7 @@ function getStatGraphConVMUserData($start, $end, $affilid) {
 			       .       "s.computerid = c.id AND "
 			       .       "l.wasavailable = 1 AND "
 			       .       "c.type = 'virtualmachine' AND "
-					 .       "l.userid != $reloadid";
+			       .       "l.userid != $reloadid";
 		}
 		$qh = doQuery($query, 101);
 		while($row = mysql_fetch_assoc($qh)) {
