@@ -244,6 +244,39 @@ EXECUTE nextimageid_noimage;
 -- --------------------------------------------------------
 
 --
+-- Table structure for table `connectmethod`
+--
+
+CREATE TABLE IF NOT EXISTS `connectmethod` (
+  `id` tinyint(3) unsigned NOT NULL auto_increment,
+  `name` varchar(80) NOT NULL,
+  `description` varchar(255) NOT NULL,
+  `port` smallint(5) unsigned NOT NULL,
+  PRIMARY KEY  (`id`)
+) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `connectmethodmap`
+--
+
+CREATE TABLE IF NOT EXISTS `connectmethodmap` (
+  `connectmethodid` tinyint(3) unsigned NOT NULL,
+  `OStypeid` tinyint(3) unsigned default NULL,
+  `OSid` tinyint(3) unsigned default NULL,
+  `imageid` smallint(5) unsigned default NULL,
+  `disabled` tinyint(1) unsigned NOT NULL default '0',
+  `autoprovisioned` tinyint(1) unsigned default NULL,
+  KEY `connectmethodid` (`connectmethodid`),
+  KEY `OStypeid` (`OStypeid`),
+  KEY `OSid` (`OSid`),
+  KEY `imageid` (`imageid`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+
+-- --------------------------------------------------------
+
+--
 -- Table structure for table `loginlog`
 --
  
@@ -306,6 +339,50 @@ CREATE TABLE IF NOT EXISTS `provisioningOSinstalltype` (
   `provisioningid` smallint(5) unsigned NOT NULL,
   `OSinstalltypeid` tinyint(3) unsigned NOT NULL,
   PRIMARY KEY  (`provisioningid`,`OSinstalltypeid`)
+) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `serverprofile`
+--
+
+CREATE TABLE IF NOT EXISTS `serverprofile` (
+  `id` smallint(5) unsigned NOT NULL auto_increment,
+  `name` varchar(255) NOT NULL,
+  `description` text NOT NULL,
+  `imageid` smallint(5) unsigned NOT NULL,
+  `ownerid` mediumint(8) unsigned NOT NULL,
+  `ending` enum('specified','indefinite') NOT NULL default 'specified',
+  `fixedIP` varchar(15) default NULL,
+  `fixedMAC` varchar(17) default NULL,
+  `admingroupid` smallint(5) unsigned default NULL,
+  `logingroupid` smallint(5) unsigned default NULL,
+  `monitored` tinyint(1) unsigned NOT NULL default '0',
+  PRIMARY KEY  (`id`),
+  KEY `ownerid` (`ownerid`),
+  KEY `name` (`name`),
+  KEY `admingroupid` (`admingroupid`),
+  KEY `logingroupid` (`logingroupid`),
+  KEY `imageid` (`imageid`)
+) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `serverrequest`
+--
+
+CREATE TABLE IF NOT EXISTS `serverrequest` (
+  `id` mediumint(8) unsigned NOT NULL auto_increment,
+  `requestid` mediumint(8) unsigned NOT NULL,
+  `fixedIP` varchar(15) default NULL,
+  `fixedMAC` varchar(17) default NULL,
+  `admingroupid` smallint(5) unsigned default NULL,
+  `logingroupid` smallint(5) unsigned default NULL,
+  `monitored` tinyint(1) unsigned NOT NULL default '0',
+  PRIMARY KEY  (`id`),
+  UNIQUE KEY `requestid` (`requestid`)
 ) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
@@ -437,6 +514,28 @@ UPDATE `computer` SET `imagerevisionid` = (SELECT `id` FROM `imagerevision` WHER
 
 -- --------------------------------------------------------
 
+--
+-- Inserts for table `connectmethod`
+--
+
+INSERT IGNORE INTO `connectmethod` (`id`, `name`, `description`, `port`) VALUES (1, 'ssh', 'ssh on port 22', 22);
+INSERT IGNORE INTO `connectmethod` (`id`, `name`, `description`, `port`) VALUES (2, 'RDP', 'Remote Desktop', 3389);
+
+-- --------------------------------------------------------
+
+--
+-- Inserts for table `connectmethodmap`
+--
+
+INSERT IGNORE INTO `connectmethodmap` (`connectmethodid`, `OStypeid`, `OSid`, `imageid`, `disabled`, `autoprovisioned`) VALUES (1, 2, NULL, NULL, 0, 1);
+INSERT IGNORE INTO `connectmethodmap` (`connectmethodid`, `OStypeid`, `OSid`, `imageid`, `disabled`, `autoprovisioned`) VALUES (1, 3, NULL, NULL, 0, 1);
+INSERT IGNORE INTO `connectmethodmap` (`connectmethodid`, `OStypeid`, `OSid`, `imageid`, `disabled`, `autoprovisioned`) VALUES (2, 1, NULL, NULL, 0, 1);
+INSERT IGNORE INTO `connectmethodmap` (`connectmethodid`, `OStypeid`, `OSid`, `imageid`, `disabled`, `autoprovisioned`) VALUES (1, 2, NULL, NULL, 0, NULL);
+INSERT IGNORE INTO `connectmethodmap` (`connectmethodid`, `OStypeid`, `OSid`, `imageid`, `disabled`, `autoprovisioned`) VALUES (1, 3, NULL, NULL, 0, NULL);
+INSERT IGNORE INTO `connectmethodmap` (`connectmethodid`, `OStypeid`, `OSid`, `imageid`, `disabled`, `autoprovisioned`) VALUES (2, 1, NULL, NULL, 0, NULL);
+
+-- --------------------------------------------------------
+
 -- 
 -- Inserts for table `module`
 -- 
@@ -532,11 +631,41 @@ CALL AddConstraintIfNotExists('computer', 'currentimageid', 'image', 'id');
 -- --------------------------------------------------------
 
 --
+-- Constraints for table `connectmethodmap`
+--
+
+CALL AddConstraintIfNotExists('connectmethodmap', 'connectmethodid', 'connectmethod', 'id');
+CALL AddConstraintIfNotExists('connectmethodmap', 'OStypeid', 'OStype', 'id');
+CALL AddConstraintIfNotExists('connectmethodmap', 'OSid', 'OS', 'id');
+CALL AddConstraintIfNotExists('connectmethodmap', 'imageid', 'image', 'id');
+
+-- --------------------------------------------------------
+
+--
 -- Constraints for table `provisioningOSinstalltype`
 --
  
 CALL AddConstraintIfNotExists('provisioningOSinstalltype', 'provisioningid', 'provisioning', 'id');
 CALL AddConstraintIfNotExists('provisioningOSinstalltype', 'OSinstalltypeid', 'OSinstalltype', 'id');
+
+-- --------------------------------------------------------
+
+--
+-- Constraints for table `serverprofile`
+--
+
+CALL AddConstraintIfNotExists('serverprofile', 'ownerid', 'user', 'id');
+CALL AddConstraintIfNotExists('serverprofile', 'admingroupid', 'usergroup', 'id');
+CALL AddConstraintIfNotExists('serverprofile', 'logingroupid', 'usergroup', 'id');
+CALL AddConstraintIfNotExists('serverprofile', 'imageid', 'image', 'id');
+
+-- --------------------------------------------------------
+
+--
+-- Constraints for table `serverrequest`
+--
+
+CALL AddConstraintIfNotExists('serverrequest', 'requestid', 'request', 'id');
 
 -- --------------------------------------------------------
 
