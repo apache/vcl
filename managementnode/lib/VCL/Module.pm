@@ -274,19 +274,29 @@ sub create_os_object {
 		return;
 	}
 	
+	my $os_perl_package_argument = shift;
+	my $os_perl_package;
+	
+	if ($os_perl_package_argument) {
+		$os_perl_package = $os_perl_package_argument;
+	}
+	else {
+		# Get the Perl package for the OS
+		$os_perl_package = $self->data->get_image_os_module_perl_package();
+	}
+	
+	if (!$os_perl_package) {
+		notify($ERRORS{'WARNING'}, 0, "OS object could not be created, OS module Perl package could not be retrieved");
+		return;
+	}
+	
 	# Check if an OS object has already been stored in the calling object
-	if ($self->{os}) {
+	# Return this object if a Perl package argument wasn't passed
+	if (!$os_perl_package_argument && $self->{os}) {
 		my $os_address = sprintf('%x', $self->{os});
 		my $os_image_name = $self->{os}->data->get_image_name();
 		notify($ERRORS{'DEBUG'}, 0, "OS object has already been created for $os_image_name, address: $os_address, returning 1");
 		return 1;
-	}
-	
-	# Get the Perl package for the OS
-	my $os_perl_package = $self->data->get_image_os_module_perl_package();
-	if (!$os_perl_package) {
-		notify($ERRORS{'WARNING'}, 0, "OS object could not be created, OS module Perl package could not be retrieved");
-		return;
 	}
 	
 	# Attempt to load the OS module
@@ -301,9 +311,14 @@ sub create_os_object {
 	if (my $os = ($os_perl_package)->new({data_structure => $self->data})) {
 		my $os_address = sprintf('%x', $os);
 		my $os_image_name = $os->data->get_image_name();
-		notify($ERRORS{'OK'}, 0, "$os_perl_package OS object created for $os_image_name, address: $os_address");
-		$self->set_os($os);
-		return 1;
+		notify($ERRORS{'OK'}, 0, "$os_perl_package OS object created, address: $os_address");
+		
+		# Store the OS object if an OS Perl package argument wasn't passed
+		if (!$os_perl_package_argument) {
+			$self->set_os($os);
+		}
+		
+		return $os;
 	}
 	else {
 		notify($ERRORS{'WARNING'}, 0, "failed to create OS object");
@@ -872,6 +887,8 @@ sub setup {
 	
 	my @operation_choices = (
 		'Add Local VCL User Account',
+		'Set Local VCL User Account Password',
+		'Test RPC-XML Access',
 	);
 	
 	my @setup_path = @{$ENV{setup_path}};
@@ -890,6 +907,12 @@ sub setup {
 		
 		if ($operation_name =~ /add local/i) {
 			$self->setup_add_local_account();
+		}
+		elsif ($operation_name =~ /rpc/i) {
+			$self->setup_test_rpc_xml();
+		}
+		elsif ($operation_name =~ /password/i) {
+			$self->setup_set_local_account_password();
 		}
 	}
 	
@@ -1018,6 +1041,226 @@ EOF
 	print "Local VCL user account successfully created: $username\n";
 	
 	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 setup_add_local_account
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Presents an interface to create a local VCL user account. This
+               subroutine is executed when vcld is run with the -setup argument.
+
+=cut
+
+sub setup_test_rpc_xml {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $error_count = 0;
+	my $user_id;
+	
+	if (!$XMLRPC_URL) {
+		print "PROBLEM: xmlrpc_url is not configured in $CONF_FILE_PATH\n";
+		$error_count++;
+	}
+	
+	if (!$XMLRPC_USER) {
+		print "PROBLEM: xmlrpc_username is not configured in $CONF_FILE_PATH\n";
+		$error_count++;
+	}
+	elsif ($XMLRPC_USER !~ /.@./) {
+		print "PROBLEM: xmlrpc_username value is not valid: '$XMLRPC_USER', the format must be 'username" . '@' . "affiliation_name'\n";
+		$error_count++;
+	}
+	else {
+		my ($username, $user_affiliation_name) = $XMLRPC_USER =~ /(.+)@(.+)/;
+		
+		my $affiliation_ok = 0;
+		
+		my $affiliation_info = get_affiliation_info();
+		if (!$affiliation_info) {
+			print "WARNING: unable to retrieve affiliation info from the database, unable to determine if affilation '$user_affiliation_name' is valid\n";
+		}
+		else {
+			for my $affiliation_id (keys(%$affiliation_info)) {
+				my $affiliation_name = $affiliation_info->{$affiliation_id}{name};
+				if ($user_affiliation_name =~ /^$affiliation_name$/i) {
+					print "OK: verified user affiliation exists in the database: '$affiliation_name'\n";
+					$affiliation_ok = 1;
+					last;
+				}
+			}
+			if (!$affiliation_ok) {
+				print "PROBLEM: user affiliation '$user_affiliation_name' does not exist in the database\n";
+				$error_count++;
+			}
+		}
+		
+		if ($affiliation_ok) {
+			my $user_info = get_user_info($username, $user_affiliation_name);
+			if ($user_info) {
+				print "OK: verified user exists in the database: '$XMLRPC_USER'\n";
+				$user_id = $user_info->{id};
+			}
+			else {
+				print "PROBLEM: user does not exist in the database database: username: '$username', affiliation: '$user_affiliation_name'\n";
+				$error_count++;
+			}
+			
+			if (!$XMLRPC_PASS) {
+				print "not verifying user password because xmlrpc_pass is not set in $CONF_FILE_PATH\n";
+			}
+			elsif ($user_affiliation_name !~ /^local$/i) {
+				print "not verifying user password because $XMLRPC_USER is not a local account\n";
+			}
+			elsif (!$user_info->{localauth}) {
+				print "WARNING: not verifying user password because localauth information could not be retrieved from the database\n";
+			}
+			else {
+				my $passhash = $user_info->{localauth}{passhash};
+				my $salt = $user_info->{localauth}{salt};
+				
+				#print "verifying user password: '$XMLRPC_PASS':'$salt' =? '$passhash'\n";
+				
+				# Get an SHA1 hex digest from the password and random string
+				my $digest = sha1_hex("$XMLRPC_PASS$salt");
+				
+				if ($passhash eq $digest) {
+					print "OK: verfied xmlrpc_pass value configured in $CONF_FILE_PATH is correct\n";
+				}
+				else {
+					print "PROBLEM: xmlrpc_pass value configured in $CONF_FILE_PATH is not correct\n";
+					#print "localauth.passhash: $passhash\n";
+					#print "localauth.salt: $salt\n";
+					#print "xmlrpc_pass: $XMLRPC_PASS\n";
+					#print "calculated SHA1 digest ('$XMLRPC_PASS$salt'): $digest\n";
+					#print "'$digest' != '$passhash'";
+					$error_count++;
+				}
+			}
+		}
+	}
+
+	if (!$XMLRPC_PASS) {
+		print "PROBLEM: xmlrpc_pass is not configured in $CONF_FILE_PATH\n";
+		$error_count++;
+	}
+	
+	print "\n";
+	
+	if ($error_count) {
+		print "FAILURE: RPC-XML access is not configured correctly, errors encountered: $error_count\n";
+		return;
+	}
+	
+	my $xmlrpc_function = 'system.listMethods';
+	my @xmlrpc_arguments = (
+		$xmlrpc_function,
+	);
+	
+	my $result = xmlrpc_call(@xmlrpc_arguments);
+	if ($result) {
+		print "SUCCESS: RPC-XML access is configured correctly\n";
+		return;
+	}
+	
+	
+	if (!$ENV{rpc_xml_error}) {
+		print "FAILURE: RPC-XML access is not configured correctly, view the log file for more information: $LOGFILE\n";
+		return;
+	}
+	
+	print "FAILURE: RPC-XML access is not configured correctly: $ENV{rpc_xml_error}\n\n";
+	
+	if ($ENV{rpc_xml_error} =~ /access denied/i) {
+		# Affiliation not correct
+		# Affiliation not included, default affiliation isn't Local
+		# Incorrect password
+		print "SUGGESTION: make sure the xmlrpc_username and xmlrpc_pass values are correct in $CONF_FILE_PATH\n";
+	}
+	if ($ENV{rpc_xml_error} =~ /internal server error/i) {
+		# Affiliation not included in username
+		# User doesn't exist but affiliation does
+		# Affiliation does not exist
+		print "SUGGESTION:  make sure the xmlrpc_username is correct in $CONF_FILE_PATH, current value: '$XMLRPC_USER'\n";
+	}
+	if ($ENV{rpc_xml_error} =~ /internal error while processing/i) {
+		# Affiliation not included in username
+		# User doesn't exist but affiliation does
+		# Affiliation does not exist
+		print "SUGGESTION: make sure user ID $user_id has been added to the \$xmlrpcBlockAPIUsers line in the conf.php file on the web server\n";
+	}
+	
+	return;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 setup_set_local_account_password
+
+ Parameters  : none
+ Returns     : boolean
+ Description : 
+
+=cut
+
+sub setup_set_local_account_password {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $local_user_info = get_local_user_info();
+	
+	print "Select an local VCL user account:\n";
+	my $user_id = setup_get_hash_choice($local_user_info, 'unityid');
+	return if (!defined($user_id));
+	
+	my $user_login_name = $local_user_info->{$user_id}{unityid};
+	
+	print "Selected user: $user_login_name (id: $user_id)\n";
+	
+	my $password;
+	while (!$password) {
+		$password = setup_get_input_string("Enter the new password");
+		return if (!defined($password));
+	}
+	
+	
+	# Generate an 8-character random string
+	my @characters = ("a" .. "z", "A" .. "Z", "0" .. "9");
+	my $random_string;
+	srand;
+	for (1 .. 8) {
+		$random_string .= $characters[rand((scalar(@characters) - 1))];
+	}
+	
+	# Get an SHA1 hex digest from the password and random string
+	my $digest = sha1_hex("$password$random_string");
+	
+	# Insert a row into the localauth table
+	my $insert_localauth_statement = <<EOF;
+UPDATE localauth SET
+passhash = '$digest',
+salt = '$random_string'
+WHERE
+userid = $user_id
+EOF
+	
+	if (database_execute($insert_localauth_statement)) {
+		print "Reset password for local '$user_login_name' account to '$password'\n";
+	}
+	else {
+		print "ERROR: failed to update localauth table\n";
+		return;
+	}
+	
 }
 
 #/////////////////////////////////////////////////////////////////////////////
