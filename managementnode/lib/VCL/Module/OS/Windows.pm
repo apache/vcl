@@ -265,6 +265,16 @@ sub pre_capture {
 
 =item *
 
+ Make sure Cygwin is configured correctly
+
+=cut
+
+	if (!$self->check_cygwin()) {
+		notify($ERRORS{'WARNING'}, 0, "failed to verify that Cygwin is configured correctly");
+	}
+
+=item *
+
  Set root as the owner of /home/root
 
 =cut
@@ -4942,10 +4952,6 @@ sub get_network_configuration {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
-
-	my $management_node_keys = $self->data->get_management_node_keys();
-	my $computer_node_name   = $self->data->get_computer_node_name();
-	my $system32_path        = $self->get_system32_path() || return;
 	
 	# Check if a 'public' or 'private' network type argument was specified
 	my $network_type = lc(shift());
@@ -4953,6 +4959,19 @@ sub get_network_configuration {
 		notify($ERRORS{'WARNING'}, 0, "network type argument can only be 'public' or 'private'");
 		return;
 	}
+
+	my $management_node_keys = $self->data->get_management_node_keys();
+	my $computer_node_name   = $self->data->get_computer_node_name();
+	my $system32_path        = $self->get_system32_path() || return;
+	
+	# Get the computer private IP address
+	my $computer_private_ip_address = $self->data->get_computer_private_ip_address();
+	if (!$computer_private_ip_address) {
+		notify($ERRORS{'DEBUG'}, 0, "unable to retrieve computer private IP address from reservation data");
+		return;
+	}
+	
+	
 	
 	my %network_configuration;
 	if (!$self->{network_configuration}) {
@@ -5047,7 +5066,7 @@ sub get_network_configuration {
 		$self->{network_configuration} = \%network_configuration;
 	}
 	else {
-		notify($ERRORS{'DEBUG'}, 0, "network configuration has already been retrieved");
+		#notify($ERRORS{'DEBUG'}, 0, "network configuration has already been retrieved");
 		%network_configuration = %{$self->{network_configuration}};
 	}
 	
@@ -5057,12 +5076,7 @@ sub get_network_configuration {
 		return \%network_configuration;
 	}
 	
-	# Get the computer private IP address
-	my $computer_private_ip_address = $self->data->get_computer_private_ip_address();
-	if (!$computer_private_ip_address) {
-		notify($ERRORS{'DEBUG'}, 0, "unable to retrieve computer private IP address from reservation data");
-		return;
-	}
+	my $private_is_public = is_public_ip_address($computer_private_ip_address);
 	
 	my $public_interface_name;
 	my $private_interface_name;
@@ -5126,7 +5140,11 @@ sub get_network_configuration {
 			else {
 				notify($ERRORS{'DEBUG'}, 0, "interface found with non-public address not matching private address for reservation: $interface_name, address(es): " . join (", ", @ip_addresses));
 				
-				if ($public_interface_name) {
+				if ($private_is_public) {
+					notify($ERRORS{'DEBUG'}, 0, "private interface IP address is public, this will be returned unless another interface with a public IP address is found");
+					next;
+				}
+				elsif ($public_interface_name) {
 					notify($ERRORS{'DEBUG'}, 0, "already found another interface with a non-public address not matching private address for reservation, the one previously found will be used if a public address isn't found");
 					next;
 				}
@@ -5138,7 +5156,7 @@ sub get_network_configuration {
 			
 		}
 	}
-
+	
 	if ($network_type =~ /private/i) {
 		if ($private_interface_name) {
 			return {$private_interface_name => $network_configuration{$private_interface_name}};
@@ -5151,6 +5169,10 @@ sub get_network_configuration {
 	else {
 		if ($public_interface_name) {
 			return {$public_interface_name => $network_configuration{$public_interface_name}};
+		}
+		elsif ($private_interface_name) {
+			notify($ERRORS{'DEBUG'}, 0, "did not find a separate public interface, assuming a single interface is being used, returning private interface configuration: '$private_interface_name'");
+			return {$private_interface_name => $network_configuration{$private_interface_name}};
 		}
 		else {
 			notify($ERRORS{'WARNING'}, 0, "failed to find a public interface:\n" . format_data(\%network_configuration));
@@ -6216,7 +6238,7 @@ sub run_unix2dos {
 =head2 search_and_replace_in_files
 
  Parameters  : 
- Returns     :
+ Returns     : 
  Description : 
 
 =cut
@@ -6265,7 +6287,7 @@ sub search_and_replace_in_files {
 		notify($ERRORS{'WARNING'}, 0, "unable to run ssh command to run grep on directory: $base_directory, pattern: $search_pattern");
 		return;
 	}
-	elsif ("@$grep_output" =~ /No such file/i) {
+	elsif (grep(/No such file/i, @$grep_output)) {
 		notify($ERRORS{'DEBUG'}, 0, "no files to process, base directory does not exist: $base_directory");
 		return 1;
 	}
@@ -6276,6 +6298,10 @@ sub search_and_replace_in_files {
 	elsif ($grep_status == 1) {
 		notify($ERRORS{'OK'}, 0, "no files were found matching pattern '$search_pattern' in: $base_directory");
 		return 1;
+	}
+	elsif (grep(/(grep|bash|warning|error):/i, @$grep_output) || $grep_status != 0) {
+		notify($ERRORS{'WARNING'}, 0, "error occurred running command: '$grep_command'\noutput:\n" . join("\n", @$grep_output));
+		return;
 	}
 	else {
 		notify($ERRORS{'DEBUG'}, 0, "found files matching pattern '$search_pattern' in $base_directory:\n" . join("\n", @$grep_output));
@@ -6761,6 +6787,51 @@ sub stop_service {
 
 	return 1;
 } ## end sub stop_service
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 restart_service
+
+ Parameters  : $service_name
+ Returns     : boolean
+ Description : Restarts the Windows service specified by the argument. The
+               service is started if it is not running.
+
+=cut
+
+sub restart_service {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+
+	my $management_node_keys = $self->data->get_management_node_keys();
+	my $computer_node_name   = $self->data->get_computer_node_name();
+	my $system32_path        = $self->get_system32_path() || return;
+	
+	my $service_name = shift;
+	if (!$service_name) {
+		notify($ERRORS{'WARNING'}, 0, "service name was not passed as an argument");
+		return;
+	}
+
+	my $command = "$system32_path/net.exe stop \"$service_name\" ; $system32_path/net.exe start \"$service_name\"";
+	my ($status, $output) = run_ssh_command($computer_node_name, $management_node_keys, $command, '', '', 1);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run command to restart service: $service_name");
+		return;
+	}
+	elsif ($status == 0) {
+		notify($ERRORS{'OK'}, 0, "restarted service: $service_name, output:\n" . join("\n", @$output));
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to restart service: $service_name, exit status: $status, output:\n" . join("\n", @$output));
+		return 0;
+	}
+
+	return 1;
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -10276,6 +10347,131 @@ EOF
 	}
 
 	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 check_cygwin
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Checks the CYGWIN environment variable to make sure it is set
+               to 'ntsec nodosfilewarning'. If not, the registry is updated, the
+               sshd service is restarted, and the value is checked again.
+
+=cut
+
+sub check_cygwin {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $computer_node_name   = $self->data->get_computer_node_name();
+	
+	my $environment_variable_name = 'CYGWIN';
+	my $correct_value = 'ntsec nodosfilewarning';
+	
+	my $environment_variable_value = $self->get_environment_variable_value($environment_variable_name);
+	if ($environment_variable_value && $environment_variable_value eq $correct_value) {
+		notify($ERRORS{'DEBUG'}, 0, "$environment_variable_name environment variable is set correctly on $computer_node_name: '$environment_variable_value'");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "$environment_variable_name environment variable is not set correctly on $computer_node_name:\ncorrect value: $correct_value\ncurrent value: '$environment_variable_value'");
+	}
+	
+	# Set the correct value in the registry for the sshd service parameters
+	my $key = 'HKLM\\SYSTEM\\CurrentControlSet\\services\\sshd\\Parameters\\Environment'; 
+	if (!$self->reg_add($key, $environment_variable_name, 'REG_SZ', $correct_value)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to set sshd service $environment_variable_name environment variable in the registry to '$correct_value'");
+		return;
+	}
+	
+	if (!$self->restart_service('sshd')) {
+		notify($ERRORS{'WARNING'}, 0, "failed to restart the sshd service after the $environment_variable_name environment variable was set in the registry to '$correct_value'");
+		return;
+	}
+	
+	$environment_variable_value = $self->get_environment_variable_value($environment_variable_name);
+	if ($environment_variable_value && $environment_variable_value eq $correct_value) {
+		notify($ERRORS{'DEBUG'}, 0, "verified $environment_variable_name environment variable is set correctly after updating the registry: '$environment_variable_value'");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "$environment_variable_name environment variable is still not set correctly after updating the registry:\ncorrect value: $correct_value\ncurrent value: '$environment_variable_value'");
+		return;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_environment_variable_value
+
+ Parameters  : $environment_variable_name
+ Returns     : string
+ Description : Retrieves the value of the environment variable specified by the
+					argument. An empty string is returned if the variable is not set.
+
+=cut
+
+sub get_environment_variable_value {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $computer_node_name   = $self->data->get_computer_node_name();
+	
+	# Get the environment variable name argument
+	my $environment_variable_name = shift;
+	if (!defined($environment_variable_name)) {
+		notify($ERRORS{'WARNING'}, 0, "environment variable name argument was not supplied");
+		return;
+	}
+	
+	# Determine how the environment variable should be echo'd
+	my $command = 'bash --login -c "';
+	if ($environment_variable_name =~ /^\$/) {
+		# Unix-style environment variable name passed beginning with a '$', echo it from the Cygwin bash shell
+		$environment_variable_name = uc($environment_variable_name);
+		$command .= "echo \\$environment_variable_name";
+	}
+	elsif ($environment_variable_name =~ /^\%.*\%$/) {
+		# DOS-style environment variable name passed enclosed in '%...%', echo it from a command prompt
+		$command .= "cmd.exe /c echo $environment_variable_name";
+	}
+	else {
+		# Plain-word environment variable name passed, enclose it in '%...%' and echo it from a command prompt
+		$command .= "cmd.exe /c echo \%$environment_variable_name\%";
+	}
+	$command .= '"';
+	
+	my ($exit_status, $output) = $self->execute($command);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run command to retrieve value of '$environment_variable_name' environment variable on $computer_node_name");
+		return;
+	}
+	elsif ($exit_status ne '0' || grep(/bash:/, @$output)) {
+		notify($ERRORS{'WARNING'}, 0, "error occurred attempting to retrieve value of '$environment_variable_name' environment variable on $computer_node_name\ncommand: '$command'\noutput:\n" . join("\n", @$output));
+		return;
+	}
+	elsif (scalar @$output > 1) {
+		notify($ERRORS{'WARNING'}, 0, "unexpected output returned from command to retrieve value of '$environment_variable_name' environment variable on $computer_node_name\ncommand: '$command'\noutput:\n" . join("\n", @$output));
+		return;
+	}
+	
+	my $value = @$output[0];
+	if (scalar @$output == 0 || $value =~ /^\%.*\%$/) {
+		notify($ERRORS{'DEBUG'}, 0, "'$environment_variable_name' environment variable is not set on $computer_node_name");
+		return '';
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "retrieved value of '$environment_variable_name' environment variable on $computer_node_name: '$value'");
+		return $value;
+	}
 }
 
 #/////////////////////////////////////////////////////////////////////////////

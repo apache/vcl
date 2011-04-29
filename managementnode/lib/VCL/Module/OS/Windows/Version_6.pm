@@ -1691,42 +1691,38 @@ sub set_ignore_default_routes {
 		return;	
 	}
 	
-	# Run netsh.exe to configure any default routes configured for the private interface to be ignored
-	my $private_netsh_command = "$system32_path/netsh.exe interface ip set interface \"$private_interface_name\" ignoredefaultroutes=enabled";
-	my ($private_netsh_exit_status, $private_netsh_output) = run_ssh_command($computer_node_name, $management_node_keys, $private_netsh_command);
-	if (defined($private_netsh_exit_status) && $private_netsh_exit_status == 0) {
-		notify($ERRORS{'OK'}, 0, "configured interface \"$private_interface_name\": ignore default routes = enabled");
-	}
-	elsif (defined($private_netsh_exit_status)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to configure interface \"$private_interface_name\": ignore default routes = enabled, exit status: $private_netsh_exit_status, output:\n@{$private_netsh_output}");
-		return;
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to configure interface \"$private_interface_name\": ignore default routes = enabled");
-		return;
-	}
-	
 	# Get the public interface name
 	my $public_interface_name = $self->get_public_interface_name();
-	if (!$private_interface_name) {
+	if (!$public_interface_name) {
 		notify($ERRORS{'WARNING'}, 0, "unable to determine public interface name");
 		return;	
 	}
 	
 	# Run netsh.exe to configure any default routes configured for the public interface to be used
-	my $public_netsh_command = "$system32_path/netsh.exe interface ip set interface \"$public_interface_name\" ignoredefaultroutes=disabled";
-	my ($public_netsh_exit_status, $public_netsh_output) = run_ssh_command($computer_node_name, $management_node_keys, $public_netsh_command);
-	if (defined($public_netsh_exit_status) && $public_netsh_exit_status == 0) {
-		notify($ERRORS{'OK'}, 0, "configured interface \"$public_interface_name\": ignore default routes = disabled");
-	}
-	elsif (defined($public_netsh_exit_status)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to configure interface \"$public_interface_name\": ignore default routes = disabled, exit status: $public_netsh_exit_status, output:\n@{$public_netsh_output}");
-		return;
+	my $netsh_command = "$system32_path/netsh.exe interface ip set interface \"$public_interface_name\" ignoredefaultroutes=disabled";
+	
+	# If multiple interfaces are used, set the private interface to ignore default routes
+	if ($private_interface_name ne $public_interface_name) {
+		notify($ERRORS{'DEBUG'}, 0, "computer has multiple network interfaces, configuring ignore default routes:\nprivate interface '$private_interface_name': enabled\npublic interface '$public_interface_name': disabled");
+		$netsh_command .= " & $system32_path/netsh.exe interface ip set interface \"$private_interface_name\" ignoredefaultroutes=enabled";
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to configure interface \"$public_interface_name\": ignore default routes = disabled");
+		notify($ERRORS{'DEBUG'}, 0, "computer has a single network interface, configuring ignore default routes:\ninterface '$private_interface_name': enabled");
+	}
+	
+	my ($netsh_exit_status, $netsh_output) = run_ssh_command($computer_node_name, $management_node_keys, $netsh_command);
+	if (!defined($netsh_output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to configure ignore default routes");
 		return;
 	}
+	elsif ($netsh_exit_status == 0) {
+		notify($ERRORS{'OK'}, 0, "configured ignore default routes");
+	}
+	elsif (defined($netsh_exit_status)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to configure ignore default routes, exit status: $netsh_exit_status\ncommand: '$netsh_command'\noutput:\n" . join("\n", @$netsh_output));
+		return;
+	}
+	
 	
 	return 1;
 }
@@ -1801,8 +1797,10 @@ sub sanitize_files {
 		return;
 	}
 	
+	my $system32_path = $self->get_system32_path() || return;
+	
 	my @file_paths = (
-		'$SYSTEMROOT/System32/sysprep',
+		"$system32_path/sysprep",
 		'$SYSTEMROOT/Panther',
 	);
 	

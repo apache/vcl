@@ -1013,6 +1013,99 @@ sub create_text_file {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 execute
+
+ Parameters  : $command, $display_output (optional)
+ Returns     : array ($exit_status, $output)
+ Description : Executes a command on the computer via SSH.
+
+=cut
+
+sub execute {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as an object method");
+		return;
+	}
+	
+	# Get the command argument
+	my $command = shift;
+	if (!$command) {
+		notify($ERRORS{'WARNING'}, 0, "command argument was not specified");
+		return;
+	}
+	
+	# Get 2nd display output argument if supplied, or set default value
+	my $display_output = shift || '0';
+	
+	# Get the computer node name
+	my $computer_name = $self->data->get_computer_node_name() || return;
+	
+	# Get the identity keys used by the management node
+	my $management_node_keys = $self->data->get_management_node_keys() || '';
+	
+	# Run the command via SSH
+	my ($exit_status, $output) = run_ssh_command($computer_name, $management_node_keys, $command, '', '', $display_output);
+	if (defined($exit_status) && defined($output)) {
+		if ($display_output) {
+			notify($ERRORS{'OK'}, 0, "executed command: '$command', exit status: $exit_status, output:\n" . join("\n", @$output));
+		}
+		return ($exit_status, $output);
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to run command on $computer_name: $command");
+		return;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_os_type
+
+ Parameters  : None
+ Returns     : If successful: string
+               If failed: false
+ Description : Determines the OS type currently installed on the computer. It
+               returns 'windows' or 'linux'.
+
+=cut
+
+sub get_os_type {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get the computer node name
+	my $computer_node_name = $self->data->get_computer_node_name() || return;
+	
+	my $command = 'uname -a';
+	my ($exit_status, $output) = $self->execute($command);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run command to determine OS type currently installed on $computer_node_name");
+		return;
+	}
+	elsif ($exit_status ne '0') {
+		notify($ERRORS{'WARNING'}, 0, "error occurred attempting to determine OS type currently installed on $computer_node_name\ncommand: '$command'\noutput:\n" . join("\n", @$output));
+		return;
+	}
+	elsif (grep(/linux/i, @$output)) {
+		notify($ERRORS{'DEBUG'}, 0, "Linux OS is currently installed on $computer_node_name, output:\n" . join("\n", @$output));
+		return 'linux';
+	}
+	elsif (grep(/win/i, @$output)) {
+		notify($ERRORS{'DEBUG'}, 0, "Windows OS is currently installed on $computer_node_name, output:\n" . join("\n", @$output));
+		return 'windows';
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine OS type currently installed on $computer_node_name, the '$command' output does not contain 'win' or 'linux':\n" . join("\n", @$output));
+		return;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 1;
 __END__
 

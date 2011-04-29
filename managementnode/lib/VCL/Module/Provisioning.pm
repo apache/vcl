@@ -321,7 +321,30 @@ sub wait_for_power_off {
 	my $message = "waiting a maximum of $total_wait_seconds for $computer_name to be powered off";
 	
 	# Call code_loop_timeout and invert the result
-	if ($self->code_loop_timeout(sub{return ($self->power_status() =~ /off/i)}, [$computer_name], "waiting for $computer_name to power off", $total_wait_seconds, $attempt_delay_seconds)) {
+	my $code_loop_result = $self->code_loop_timeout(
+		sub{
+			my $power_status = $self->power_status();
+			if (!defined($power_status)) {
+				return;
+			}
+			elsif ($power_status =~ /off/i) {
+				return 1;
+			}
+			else {
+				return 0;
+			}
+		},
+		[$computer_name],
+		"waiting for $computer_name to power off",
+		$total_wait_seconds,
+		$attempt_delay_seconds
+	);
+	
+	if (!defined($code_loop_result)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to determine power status of $computer_name, returning undefined");
+		return;
+	}
+	elsif ($code_loop_result) {
 		return 1;
 	}
 	else {

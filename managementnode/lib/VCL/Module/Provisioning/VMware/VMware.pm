@@ -779,10 +779,47 @@ sub get_active_vmx_file_path {
 		return;
 	}
 	
+	my $os_type = $self->data->get_image_os_type();
 	my $computer_name = $self->data->get_computer_short_name();
 	
+	my $active_os;
+	my $active_os_type = $self->os->get_os_type();
+	if (!$active_os_type) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine active vmx file path, OS type currently installed on $computer_name could not be determined");
+		return;
+	}
+	elsif ($active_os_type ne $os_type) {
+		notify($ERRORS{'DEBUG'}, 0, "OS type currently installed on $computer_name does not match the OS type of the reservation image:\nOS type installed on $computer_name: $active_os_type\nreservation image OS type: $os_type");
+		
+		my $active_os_perl_package;
+		if ($active_os_type =~ /linux/i) {
+			$active_os_perl_package = 'VCL::Module::OS::Linux';
+		}
+		else {
+			$active_os_perl_package = 'VCL::Module::OS::Windows';
+		}
+		
+		if ($active_os = $self->create_os_object($active_os_perl_package)) {
+			notify($ERRORS{'DEBUG'}, 0, "created a '$active_os_perl_package' OS object for the '$active_os_type' OS type currently installed on $computer_name");
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "unable to determine active vmx file path, failed to create a '$active_os_perl_package' OS object for the '$active_os_type' OS type currently installed on $computer_name");
+			return;
+		}
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "'$active_os_type' OS type currently installed on $computer_name matches the OS type of the image assigned to this reservation");
+		$active_os = $self->os;
+	}
+	
+	# Make sure the active OS object implements the required subroutines called below
+	if (!$active_os->can('get_private_mac_address') || !$active_os->can('get_public_mac_address')) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine active vmx file path, " . ref($active_os) . " OS object does not implement 'get_private_mac_address' and 'get_public_mac_address' subroutines");
+		return;
+	}
+	
 	# Get the MAC addresses being used by the running VM for this reservation
-	my @vm_mac_addresses = ($self->os->get_private_mac_address(), $self->os->get_public_mac_address());
+	my @vm_mac_addresses = ($active_os->get_private_mac_address(), $active_os->get_public_mac_address());
 	if (!@vm_mac_addresses) {
 		notify($ERRORS{'WARNING'}, 0, "unable to retrieve the private and public MAC address being used by VM $computer_name");
 		return;
@@ -1427,6 +1464,22 @@ sub remove_existing_vms {
 				notify($ERRORS{'WARNING'}, 0, "failed to delete orphaned VM: $orphaned_vmx_file_path");
 			}
 		}
+	}
+	
+	# Make sure the computer assigned to this reservation isn't still responding
+	# This could occur if a VM was configured to use the IP address but the directory where the VM resides doesn't match the name VCL would have given it
+	if ($self->os->is_ssh_responding()) {
+		my $private_ip_address = $self->data->get_computer_private_ip_address() || '';
+		notify($ERRORS{'WARNING'}, 0, "$computer_name ($private_ip_address) is still responding to SSH after deleting deleting matching VMs, attempting to determine vmx file path");
+		
+		my $active_vmx_file_path = $self->get_active_vmx_file_path();
+		if ($active_vmx_file_path) {
+			notify($ERRORS{'CRITICAL'}, 0, "VM is still running after attempting to delete all existing matching VMs: $computer_name ($private_ip_address)\nvmx file path: '$active_vmx_file_path'");
+		}
+		else {
+			notify($ERRORS{'CRITICAL'}, 0, "VM is still running after attempting to delete all existing matching VMs: $computer_name ($private_ip_address), unable to determine vmx file path");
+		}
+		return;
 	}
 	
 	# Set the computer current image in the database to 'noimage'
