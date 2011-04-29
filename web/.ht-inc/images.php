@@ -730,6 +730,67 @@ function startImage() {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
+/// \fn startCheckpoint()
+///
+/// \brief prints page prompting user for image revision comments
+///
+////////////////////////////////////////////////////////////////////////////////
+function startCheckpoint() {
+	global $user;
+	$requestid = getContinuationVar("requestid");
+
+	$data = getRequestInfo($requestid);
+	$disableUpdate = 1;
+	$imageid = '';
+	foreach($data["reservations"] as $res) {
+		if($res["forcheckout"]) {
+			$imageid = $res["imageid"];
+			$revisionid = $res['imagerevisionid'];
+			break;
+		}
+	}
+	print "<H2>Create New Revision of an Online Image</H2>\n";
+	print "This process will create a new revision of the image while ";
+	print "still keeping the reservation online and active.<br><br>\n";
+
+	# input for imagerevision comments
+	$revisions = getImageRevisions($imageid);
+	print "<h3>New Revision Comments</h3>\n";
+	print "Enter any notes for yourself and other admins about the current ";
+	print "state of the image.<br>\nThese are optional and are not visible ";
+	print "to end users:<br>\n";
+	print "<form action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
+	print "<textarea dojoType=\"dijit.form.Textarea\" name=comments ";
+	print "style=\"width: 400px; text-align: left;\"\">\n\n</textarea>\n";
+	print "<h3>Previous Revision Comments</h3>\n";
+	if(array_key_exists($revisionid, $revisions))
+		$comments = $revisions[$revisionid]['comments'];
+	else {
+		$keys = array_keys($revisions);
+		if(count($keys)) {
+			$key = array_pop($keys);
+			$comments = $revisions[$key]['comments'];
+		}
+		else
+			$comments = '';
+	}
+	if(preg_match('/\w/', $comments)) {
+		print "These are the comments from the previous revision ";
+		print "({$revisions[$revisionid]['revision']}):<br>\n";
+		print "{$revisions[$revisionid]['comments']}<br><br>\n";
+	}
+	else
+		print "The previous revision did not have any comments.<br>\n";
+	$cdata = array('requestid' => $requestid,
+	               'nextmode' => 'submitCheckpoint');
+	$cont = addContinuationsEntry('imageClickThroughAgreement', $cdata, SECINDAY, 0);
+	print "<br><br><INPUT type=\"submit\" value=\"Submit\">\n";
+	print "<INPUT type=\"hidden\" name=\"continuation\" value=\"$cont\">\n";
+	print "</FORM>\n";
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
 /// \fn submitImageButton
 ///
 /// \brief wrapper for confirmDeleteImage, editOrAddImage(0), and
@@ -813,18 +874,6 @@ function editOrAddImage($state) {
 	printSubmitErr(IMGOWNERERR);
 	print "</TD>\n";
 	print "  </TR>\n";
-	/*print "  <TR>\n";
-	print "    <TH align=right>Platform:</TH>\n";
-	print "    <TD>\n";
-	printSelectInput("platformid", $platforms, $data["platformid"]);
-	print "    </TD>\n";
-	print "  </TR>\n";
-	print "  <TR>\n";
-	print "    <TH align=right>OS:</TH>\n";
-	print "    <TD>\n";
-	printSelectInput("osid", $oslist, $data["osid"]);
-	print "    </TD>\n";
-	print "  </TR>\n";*/
 	print "  <TR>\n";
 	print "    <TD colspan=3>\n";
 	print "<fieldset>\n";
@@ -848,8 +897,8 @@ function editOrAddImage($state) {
 		print "<fieldset>\n";
 		print "<legend>Revision Comments</legend>\n";
 		print "Notes for yourself and other admins about how the image ";
-		print "was setup/installed.<br>\nThese are optional and not visible to end ";
-		print "users.<br>\n";
+		print "was setup/installed.<br>\nThese are optional and are not visible ";
+		print "to end users.<br>\n";
 		print "<textarea dojoType=\"dijit.form.Textarea\" name=comments ";
 		print "style=\"width: 400px; text-align: left;\"\">{$data['comments']}\n\n";
 		print "</textarea>\n";
@@ -913,7 +962,7 @@ function editOrAddImage($state) {
 		print "  <TR>\n";
 		print "    <TH align=right>Estimated Reload Time (min):</TH>\n";
 		print "    <TD><INPUT type=text name=reloadtime value=\"";
-		print $data["reloadtime"] . "\" maxlength=3></TD>\n";
+		print $data["reloadtime"] . "\" maxlength=3 size=4></TD>\n";
 		print "    <TD>";
 		printSubmitErr(RELOADTIMEERR);
 		print "</TD>\n";
@@ -958,14 +1007,29 @@ function editOrAddImage($state) {
 		print "  </TR>\n";
 	}
 	print "  <TR>\n";
+	print "    <TH style=\"vertical-align:top; text-align:right;\">Connection methods:</TH>\n";
+	print "    <TD>\n";
+	print "    <div id=\"connectmethodlist\">\n";
+	foreach($data['connectmethods'] AS $method)
+		print "$method<br>\n";
+	print "    </div>\n";
+	$cont = addContinuationsEntry('connectmethodDialogContent', array('imageid' => $data['imageid']));
+	$url = BASEURL . SCRIPT . "?continuation=$cont";
+	print "    <div dojoType=\"dijit.form.DropDownButton\" id=\"connectmethoddlg\">\n";
+	print "      <span>Modify Connection Methods</span>";
+	print "      <div dojoType=\"dijit.TooltipDialog\" href=\"$url\"></div>\n";
+	print "    <div>\n";
+	print "    </TD>\n";
+	print "  </TR>\n";
+	print "  <TR>\n";
 	print "    <TD colspan=3 id=hide3><hr></TD>\n";
 	print "  </TR>\n";
 	print "</TABLE>\n";
 	if(! $state) {
 		$cont = addContinuationsEntry('subimageDialogContent', array('imageid' => $data['imageid']));
+		$url = BASEURL . SCRIPT . "?continuation=$cont";
 		print "<div dojoType=\"dijit.form.DropDownButton\" id=\"subimagebtn\">";
 		print "  <span>Manage Subimages</span>\n";
-		$url = BASEURL . SCRIPT . "?continuation=$cont";
 		print "  <div dojoType=\"dijit.TooltipDialog\" id=\"subimagedlg\" href=\"$url\"></div>\n";
 		print "</div>\n";
 
@@ -1006,6 +1070,35 @@ function editOrAddImage($state) {
 		return;
 	print "<div id=revisiondiv>\n";
 	print getRevisionHTML($data['imageid']);
+	print "</div>\n";
+
+	print "<div dojoType=dijit.Dialog\n";
+	print "      id=\"autoconfirmdlg\"\n";
+	print "      title=\"Confirm Manual Install\"\n";
+	print "      duration=250\n";
+	print "      draggable=true>\n";
+	print "<strong><span id=\"autoconfirmcontent\"></span></strong><br><br>\n";
+	print "This method cannot be automatically added to the image by VCL. The<br>\n";
+	print "image must be created with the software for this method already installed.<br>\n";
+	print "If this image already has software for this method installed in it, please<br>\n";
+	print "click <strong>Software is Manually Installed</strong>. Otherwise, click cancel.<br><br>\n";
+	print "   <div align=\"center\">\n";
+	print "   <button dojoType=\"dijit.form.Button\">\n";
+	print "     Software is Manually Installed\n";
+	print "	   <script type=\"dojo/method\" event=\"onClick\">\n";
+	print "       dijit.byId('autoconfirmdlg').hide();\n";
+	print "       addConnectMethod3();\n";
+	print "       dijit.byId('connectmethoddlg').openDropDown();\n";
+	print "     </script>\n";
+	print "   </button>\n";
+	print "   <button dojoType=\"dijit.form.Button\">\n";
+	print "     Cancel\n";
+	print "	   <script type=\"dojo/method\" event=\"onClick\">\n";
+	print "       dijit.byId('autoconfirmdlg').hide();\n";
+	print "       dijit.byId('connectmethoddlg').openDropDown();\n";
+	print "     </script>\n";
+	print "   </button>\n";
+	print "   </div>\n";
 	print "</div>\n";
 }
 
@@ -1089,6 +1182,220 @@ function getRevisionHTML($imageid) {
 	$rt .= "</div>\n";
 	$rt .= "</td></tr></table>\n";
 	return $rt;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn connectmethodDialogContent()
+///
+/// \brief prints content to fill in the dojo dialog for managing subimages
+///
+////////////////////////////////////////////////////////////////////////////////
+function connectmethodDialogContent() {
+	$imageid = getContinuationVar('imageid');
+	$methods = getConnectMethods($imageid);
+	$curmethods = getImageConnectMethods($imageid);
+
+	$h  = "<h3>Modify Connection Methods</h3>";
+	$cdata = array('imageid' => $imageid);
+	$cont = addContinuationsEntry('jsonImageConnectMethods', $cdata);
+	$h .= "<div dojoType=\"dojo.data.ItemFileWriteStore\" url=\"" . BASEURL;
+	$h .= SCRIPT . "?continuation=$cont\" jsid=\"cmstore\" id=\"cmstore\">";
+	$h .= "</div>\n";
+	if(count($methods) == count($curmethods))
+		$disabled = 'disabled="true"';
+	else
+		$disabled = '';
+	$h .= "<div dojoType=\"dijit.form.Select\" id=\"addcmsel\" ";
+	$h .= "store=\"cmstore\" query=\"{active: 0}\" $disabled></div>";
+	$h .= "<button dojoType=\"dijit.form.Button\" id=\"addcmbtn\" $disabled>";
+	$h .= "Add Method";
+	$h .= "<script type=\"dojo/method\" event=onClick>";
+	$h .= "addConnectMethod();";
+	$h .= "</script>";
+	$h .= "</button><br>";
+	$h .= "<h3>Current Methods</h3>";
+	$h .= "<select id=\"curmethodsel\" multiple size=5>";
+	foreach($curmethods as $id => $method)
+		$h .= "<option value=\"$id\">$method</option>";
+	$h .= "</select><br>";
+	$h .= "<button dojoType=\"dijit.form.Button\" id=\"remcmbtn\">";
+	$h .= "Remove Selected Methods(s)";
+	$h .= "<script type=\"dojo/method\" event=onClick>";
+	$h .= "remConnectMethod();";
+	$h .= "</script>";
+	$h .= "</button><br>";
+	$h .= "<div id=\"cmerror\" class=\"rederrormsg\"></div>\n";
+	$adminimages = getUserResources(array("imageAdmin"), array("administer"));
+	$adminids = array_keys($adminimages["image"]);
+	$data = array('imageid' => $imageid,
+	              'methods' => $methods);
+	$cont = addContinuationsEntry('AJaddImageConnectMethod', $data, 3600, 1, 0);
+	$h .= "<INPUT type=hidden id=addcmcont value=\"$cont\">";
+	$cont = addContinuationsEntry('AJremImageConnectMethod', $data, 3600, 1, 0);
+	$h .= "<INPUT type=hidden id=remcmcont value=\"$cont\">";
+	$h .= "NOTE: Connection Method changes take effect immediately; you do<br>";
+	$h .= "<strong>not</strong> need to click \"Confirm Changes\" to submit them.";
+	print $h;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn jsonImageConnectMethods()
+///
+/// \brief gets list of connect methods used for specified image and sends them
+/// in json format
+///
+////////////////////////////////////////////////////////////////////////////////
+function jsonImageConnectMethods() {
+	$imageid = getContinuationVar('imageid');
+	$methods = getConnectMethods($imageid);
+	$curmethods = getImageConnectMethods($imageid);
+	$items = array();
+	foreach($methods as $id => $method) {
+		if(array_key_exists($id, $curmethods))
+			$active = 1;
+		else
+			$active = 0;
+		$items[] = "{name:'$id', "
+		         .  "display:'{$method['description']}', "
+		         .  "autoprovisioned:'{$method['autoprovisioned']}', "
+		         .  "active:$active}";
+	}
+	$data = implode(',', $items);
+	header('Content-Type: text/json; charset=utf-8');
+	$data = "{} && {label:'display',identifier:'name',items:[$data]}";
+	print $data;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn AJaddImageConnectMethod()
+///
+/// \brief adds a subimage to an image
+///
+////////////////////////////////////////////////////////////////////////////////
+function AJaddImageConnectMethod() {
+	$imageid = getContinuationVar('imageid');
+	$methods = getContinuationVar('methods');
+	$curmethods = getImageConnectMethods($imageid);
+	$newid = processInputVar('newid', ARG_NUMERIC);
+	if(! array_key_exists($newid, $methods)) {
+		$arr = array('error' => 'invalidmethod',
+	                'msg' => 'Invalid method submitted.');
+		sendJSON($arr);
+		return;
+	}
+	# delete any current entries for method and image (including disabled)
+	$query = "DELETE FROM connectmethodmap "
+	       . "WHERE imageid = $imageid AND "
+	       .       "connectmethodid = $newid AND "
+	       .       "autoprovisioned IS NULL";
+	doQuery($query, 101);
+
+	# check to see if enabled for OStype or OS
+	$query = "SELECT cm.connectmethodid "
+			 . "FROM connectmethodmap cm, "
+			 .      "image i "
+			 . "LEFT JOIN OS o ON (o.id = i.OSid) "
+			 . "LEFT JOIN OStype ot ON (ot.name = o.type) "
+			 . "WHERE i.id = $imageid AND "
+			 .       "cm.autoprovisioned IS NULL AND "
+			 .       "cm.connectmethodid = $newid AND "
+			 .       "cm.disabled = 0 AND "
+			 .       "(cm.OStypeid = ot.id OR "
+			 .        "cm.OSid = o.id)";
+	$qh = doQuery($query, 101);
+	if(! (mysql_num_rows($qh))) {
+		# add entry for method and image
+		$query = "INSERT INTO connectmethodmap "
+		       .        "(connectmethodid, "
+		       .        "imageid, "
+		       .        "disabled) "
+		       . "VALUES "
+		       .        "($newid, "
+		       .        "$imageid, "
+		       .        "0)";
+		doQuery($query, 101);
+	}
+
+	#   return success
+	$subimages[] = $newid;
+	$data = array('imageid' => $imageid,
+	              'methods' => $methods);
+	$addcont = addContinuationsEntry('AJaddImageConnectMethod', $data, 3600, 1, 0);
+	$remcont = addContinuationsEntry('AJremImageConnectMethod', $data, 3600, 1, 0);
+	$name = $methods[$newid]['description'];
+	$arr = array('newid' => $newid,
+	             'name' => $name,
+	             'addcont' => $addcont,
+	             'remcont' => $remcont);
+	sendJSON($arr);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn AJremImageConnectMethod()
+///
+/// \brief removes subimages from an image
+///
+////////////////////////////////////////////////////////////////////////////////
+function AJremImageConnectMethod() {
+	$imageid = getContinuationVar('imageid');
+	$methods = getContinuationVar('methods');
+	$curmethods = getImageConnectMethods($imageid);
+	$remidlist = mysql_real_escape_string(processInputVar('ids', ARG_STRING));
+	$remids = explode(',', $remidlist);
+	foreach($remids as $id) {
+		if(! is_numeric($id)) {
+			$arr = array('error' => 'invalidinput',
+			             'msg' => 'Non-numeric data was submitted for a connection method id.');
+			sendJSON($arr);
+			return;
+		}
+	}
+	# delete any current entries for method and image
+	$query = "DELETE FROM connectmethodmap "
+	       . "WHERE imageid = $imageid AND "
+	       .       "connectmethodid IN ($remidlist) AND "
+	       .       "autoprovisioned IS NULL";
+	doQuery($query, 101);
+	# query to see if enabled for OStype or OS
+	$insvals = array();
+	foreach($remids as $id) {
+		$query = "SELECT cm.connectmethodid "
+				 . "FROM connectmethodmap cm, "
+				 .      "image i "
+				 . "LEFT JOIN OS o ON (o.id = i.OSid) "
+				 . "LEFT JOIN OStype ot ON (ot.name = o.type) "
+				 . "WHERE i.id = $imageid AND "
+				 .       "cm.autoprovisioned IS NULL AND "
+				 .       "cm.connectmethodid = $id AND "
+				 .       "cm.disabled = 0 AND "
+				 .       "(cm.OStypeid = ot.id OR "
+				 .        "cm.OSid = o.id)";
+		$qh = doQuery($query, 101);
+		if(mysql_num_rows($qh))
+			# if so, add disabled entry for image and method
+			$insvals[] = "($id, $imageid, 1)";
+	}
+	if(count($insvals)) {
+		$allinsvals = implode(',', $insvals);
+		$query = "INSERT INTO connectmethodmap "
+		       .        "(connectmethodid, " 
+		       .        "imageid, "
+		       .        "disabled) "
+		       . "VALUES $allinsvals";
+		doQuery($query, 101);
+	}
+
+	$data = array('imageid' => $imageid,
+	              'methods' => $methods);
+	$addcont = addContinuationsEntry('AJaddImageConnectMethod', $data, 3600, 1, 0);
+	$remcont = addContinuationsEntry('AJremImageConnectMethod', $data, 3600, 1, 0);
+	$arr = array('addcont' => $addcont,
+	             'remcont' => $remcont);
+	sendJSON($arr);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1372,12 +1679,6 @@ function confirmEditOrAddImage($state) {
 	print "<H2>$title</H2>\n";
 	print "$question<br><br>\n";
 	print "<TABLE>\n";
-	if(! $state) {
-		/*print "  <TR>\n";
-		print "    <TH align=right>Short Name:</TH>\n";
-		print "    <TD>" . $data["name"] . "</TD>\n";
-		print "  </TR>\n";*/
-	}
 	print "  <TR>\n";
 	print "    <TH align=right>Name:</TH>\n";
 	print "    <TD>" . $data["prettyname"] . "</TD>\n";
@@ -1386,14 +1687,6 @@ function confirmEditOrAddImage($state) {
 	print "    <TH align=right>Owner:</TH>\n";
 	print "    <TD>" . $data["owner"] . "</TD>\n";
 	print "  </TR>\n";
-	/*print "  <TR>\n";
-	print "    <TH align=right>Platform:</TH>\n";
-	print "    <TD>" . $platforms[$data["platformid"]] . "</TD>\n";
-	print "  </TR>\n";
-	print "  <TR>\n";
-	print "    <TH align=right>OS:</TH>\n";
-	print "    <TD>" . $oslist[$data["osid"]]["prettyname"] . "</TD>\n";
-	print "  </TR>\n";*/
 	print "  <TR>\n";
 	print "    <TD colspan=2>\n";
 	print "<br><strong>Image Description</strong>:<br>\n";
@@ -1562,6 +1855,11 @@ function imageClickThrough() {
 function imageClickThroughAgreement() {
 	global $clickThroughText;
 	$data = getContinuationVar();
+	$comments = processInputVar('comments', ARG_STRING, '');
+	$comments = htmlspecialchars($comments);
+	if(get_magic_quotes_gpc())
+		$comments = stripslashes($comments);
+	$data['comments'] = mysql_real_escape_string($comments);
 	$nextmode = $data['nextmode'];
 	$multicall = getContinuationVar('multicall', 0);
 	unset($data['nextmode']);
@@ -1604,9 +1902,10 @@ function imageClickThroughAgreement() {
 /// \brief adds the image and notifies user
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function submitAddImage() {
+function submitAddImage($data=array(), $autocaptured=0) {
 	global $user, $clickThroughText;
-	$data = getContinuationVar();
+	if(empty($data))
+		$data = getContinuationVar();
 
 	// get platformid and osid
 	$requestdata = getRequestInfo($data['requestid']);
@@ -1614,6 +1913,7 @@ function submitAddImage() {
 	$data["platformid"] = $imagedata[$requestdata["reservations"][0]["imageid"]]["platformid"];
 	$data["osid"] = $imagedata[$requestdata["reservations"][0]["imageid"]]["osid"];
 	$data["basedoffrevisionid"] = $requestdata["reservations"][0]["imagerevisionid"];
+	$data["autocaptured"] = $autocaptured;
 
 	// add estimated reload time
 	$data["reloadtime"] = 20;
@@ -1662,6 +1962,9 @@ function submitAddImage() {
 		doQuery($query, 101);
 	}
 
+	if($autocaptured)
+		return 1;
+
 	print "<H2>Add Image</H2>\n";
 	print "The image creation process has been started.  It normally takes ";
 	print "about 25 minutes to complete (though can sometimes be more than ";
@@ -1672,6 +1975,7 @@ function submitAddImage() {
 	print "group on the <a href=\"" . BASEURL . SCRIPT;
 	print "?mode=viewImageOptions\">Manage Images</a> page if you have ";
 	print "sufficient access or have your computing support add it for you.<br>\n";
+	return 1;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1696,8 +2000,8 @@ function updateExistingImageComments() {
 	print "<H2>Update Existing Image</H2>\n";
 	print "<h3>New Revision Comments</h3>\n";
 	print "Enter any notes for yourself and other admins about how the image ";
-	print "was setup/installed.<br>\nThese are optional and not visible to end ";
-	print "users:<br>\n";
+	print "was setup/installed.<br>\nThese are optional and are not visible ";
+	print "to end users:<br>\n";
 	print "<form action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
 	print "<textarea dojoType=\"dijit.form.Textarea\" name=comments ";
 	print "style=\"width: 400px; text-align: left;\"\">\n\n</textarea>\n";
@@ -1736,11 +2040,11 @@ function updateExistingImageComments() {
 /// notifies the user that the imaging process has started
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function updateExistingImage() {
+function updateExistingImage($requestid=0, $userid=0, $comments='', $autocaptured=0) {
 	global $user, $clickThroughText;
-	$requestid = getContinuationVar("requestid");
+	$requestid = getContinuationVar("requestid", $requestid);
 	$fromAgreement = getContinuationVar('fromAgreement', 0);
-	$comments = processInputVar("comments", ARG_STRING);
+	$comments = processInputVar("comments", ARG_STRING, $comments);
 	$comments = preg_replace("/\r/", '', $comments);
 	$comments = htmlspecialchars($comments);
 	#$comments = preg_replace("/\n/", '<br>', $comments);
@@ -1748,6 +2052,9 @@ function updateExistingImage() {
 	if(get_magic_quotes_gpc())
 		$comments = stripslashes($comments);
 	$comments = mysql_real_escape_string($comments);
+
+	if($userid == 0)
+		$userid = $user['id'];
 
 	$data = getRequestInfo($requestid);
 	foreach($data["reservations"] as $res) {
@@ -1757,9 +2064,10 @@ function updateExistingImage() {
 		}
 	}
 	$imageData = getImages(0, $imageid);
-	if($imageData[$imageid]['ownerid'] != $user['id']) {
-		editOrAddImage(1);
-		return;
+	if($imageData[$imageid]['ownerid'] != $userid) {
+		if(! $autocaptured)
+			editOrAddImage(1);
+		return 0;
 	}
 	// set the test flag on the image in the image table
 	$query = "UPDATE image SET test = 1 WHERE id = $imageid";
@@ -1785,15 +2093,17 @@ function updateExistingImage() {
 	       .        "deleted, "
 	       .        "production, "
 	       .        "comments, "
-	       .        "imagename) "
+	       .        "imagename, "
+	       .        "autocaptured) "
 	       . "VALUES ($imageid, "
 	       .        "$newrevision, "
-	       .        "{$user['id']}, "
+	       .        "$userid, "
 	       .        "NOW(), "
 	       .        "1, "
 	       .        "0, "
 	       .        "'$comments', "
-	       .        "'$newname')";
+	       .        "'$newname', "
+	       .        "$autocaptured)";
 	doQuery($query, 101);
 	$qh = doQuery("SELECT LAST_INSERT_ID() FROM imagerevision", 101);
 	$row = mysql_fetch_row($qh);
@@ -1818,12 +2128,15 @@ function updateExistingImage() {
 		       .        "accepted, "
 		       .        "agreement) "
 		       . "VALUES "
-		       .        "({$user['id']}, "
+		       .        "($userid, "
 		       .        "$imageid, "
 		       .        "NOW(), "
 		       .        "'$agreement')";
 		doQuery($query, 101);
 	}
+
+	if($autocaptured)
+		return 1;
 
 	print "<H2>Update Image</H2>\n";
 	print "The image creation process has been started.  It normally takes ";
@@ -1840,7 +2153,125 @@ function updateExistingImage() {
 	print "</li>\n";
 	print "<li>Test the environment to make sure it works correctly</li>\n";
 	print "<li>After you are satisfied that it works correctly, click the ";
-	print "<strong>End</strong> button on the Current Reservations page</li>\n";
+	print "<strong>Delete</strong> button on the Current Reservations page</li>\n";
+	print "<li>You will be prompted to make the revision production or just end ";
+	print "the reservation</li>\n";
+	print "<li>Select the <strong>Make this the production revision</strong> ";
+	print "radio button</li> and click <strong>Submit</strong></li>\n";
+	print "</ol>\n";
+	print "Once the revision is made production, everyone that selects it will ";
+	print "get the new revision<br>\n";
+	return 1;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn submitCheckpoint()
+///
+/// \brief sets test flag on image to 1, sets state of request to 'checkpoint'
+/// and notifies the user that the imaging process has started
+///
+////////////////////////////////////////////////////////////////////////////////
+function submitCheckpoint() {
+	global $user, $clickThroughText;
+	$requestid = getContinuationVar("requestid");
+	$fromAgreement = getContinuationVar('fromAgreement', 0);
+	$comments = getContinuationVar("comments");
+	$comments = preg_replace("/\r/", '', $comments);
+	#$comments = preg_replace("/\n/", '<br>', $comments);
+	$comments = preg_replace("/\n/", '', $comments);
+
+	$data = getRequestInfo($requestid);
+	foreach($data["reservations"] as $res) {
+		if($res["forcheckout"]) {
+			$imageid = $res["imageid"];
+			break;
+		}
+	}
+	// set the test flag on the image in the image table
+	$query = "UPDATE image SET test = 1 WHERE id = $imageid";
+	doQuery($query, 101);
+
+	# add entry to imagerevision table
+	$query = "SELECT revision, "
+	       .        "imagename "
+	       . "FROM imagerevision "
+	       . "WHERE imageid = $imageid "
+	       . "ORDER BY revision DESC "
+	       . "LIMIT 1";
+	$qh = doQuery($query, 101);
+	$row = mysql_fetch_assoc($qh);
+	$newrevision = $row['revision'] + 1;
+	$newname = preg_replace("/{$row['revision']}$/",
+	                        $newrevision, $row['imagename']);
+	$query = "INSERT INTO imagerevision "
+	       .        "(imageid, "
+	       .        "revision, "
+	       .        "userid, "
+	       .        "datecreated, "
+	       .        "deleted, "
+	       .        "production, "
+	       .        "comments, "
+	       .        "imagename, "
+	       .        "autocaptured) "
+	       . "VALUES ($imageid, "
+	       .        "$newrevision, "
+	       .        "{$user['id']}, "
+	       .        "NOW(), "
+	       .        "1, "
+	       .        "0, "
+	       .        "'$comments', "
+	       .        "'$newname', "
+	       .        "0)";
+	doQuery($query, 101);
+	$qh = doQuery("SELECT LAST_INSERT_ID() FROM imagerevision", 101);
+	$row = mysql_fetch_row($qh);
+	$imagerevisionid = $row[0];
+
+	# update request and reservation
+	$query = "UPDATE request rq, "
+	       .        "reservation rs "
+	       . "SET rs.imagerevisionid = $imagerevisionid, "
+	       .     "rq.stateid = 24,"
+	       .     "rq.forimaging = 1 "
+	       . "WHERE rq.id = $requestid AND "
+	       .       "rq.id = rs.requestid AND "
+	       .       "rs.imageid = $imageid";
+	doQuery($query, 101);
+
+	if($fromAgreement) {
+		$agreement = strip_tags(sprintf($clickThroughText, ""));
+		$query = "INSERT INTO clickThroughs "
+		       .        "(userid, "
+		       .        "imageid, "
+		       .        "accepted, "
+		       .        "agreement) "
+		       . "VALUES "
+		       .        "({$user['id']}, "
+		       .        "$imageid, "
+		       .        "NOW(), "
+		       .        "'$agreement')";
+		doQuery($query, 101);
+	}
+
+	print "<H2>Create New Revision of an Online Image</H2>\n";
+	print "The image creation process has been started. It normally takes ";
+	print "about 20-25 minutes to complete. You will be notified by email ";
+	print "when the image has been created. Afterward, you have the option to ";
+	print "set the new revision be the production one. There are a few steps ";
+	print "you would need to follow to make it the production revision of the ";
+	print "image:";
+	print "<ol class=numbers>\n";
+	print "<li>Make a new reservation for the environment (it will have the ";
+	print "same name in the drop-down list).</li>\n";
+	print "<li>After clicking <strong>Submit</strong> on the New Reservations ";
+	print "page, you will be prompted to select the revision of the environment ";
+	print "you want</li>\n";
+	print "<li>Select the most recent revision and click <strong>Submit</strong>";
+	print "</li>\n";
+	print "<li>Test the environment to make sure it works correctly</li>\n";
+	print "<li>After you are satisfied that it works correctly, click the ";
+	print "<strong>Delete</strong> button on the Current Reservations page</li>\n";
 	print "<li>You will be prompted to make the revision production or just end ";
 	print "the reservation</li>\n";
 	print "<li>Select the <strong>Make this the production revision</strong> ";
@@ -1896,6 +2327,38 @@ function setImageProduction() {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
+/// \fn AJsetImageProduction()
+///
+/// \brief prompts user if really ready to set image to production
+///
+////////////////////////////////////////////////////////////////////////////////
+function AJsetImageProduction() {
+	$requestid = getContinuationVar('requestid');
+	$data = getRequestInfo($requestid);
+	foreach($data["reservations"] as $res) {
+		if($res["forcheckout"]) {
+			$prettyimage = $res["prettyimage"];
+			break;
+		}
+	}
+	$title = "<big><strong>Change Test Image to Production</strong></big><br><br>\n";
+	$text  = "This will update the <b>$prettyimage</b> ";
+	$text .= "environment to be the newly created revision so that people will ";
+	$text .= "start getting it when they checkout the environment.  It will also ";
+	$text .= "cause all the blades that currently have this image preloaded to be ";
+	$text .= "reloaded with this new image.  Are you sure the image works ";
+	$text .= "correctly?<br>\n";
+	$cdata = array('requestid' => $requestid);
+	$cont = addContinuationsEntry('AJsubmitSetImageProduction', $cdata, SECINDAY, 0, 0);
+	$text = preg_replace("/(.{1,60}[ \n])/", '\1<br>', $text);
+	$data = array('content' => $title . $text,
+	              'cont' => $cont,
+	              'btntxt' => 'Submit');
+	sendJSON($data);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
 /// \fn submitSetImageProduction()
 ///
 /// \brief sets request state to 'makeproduction', notifies user that
@@ -1916,6 +2379,46 @@ function submitSetImageProduction() {
 	print "<H2>Change Test Image to Production</H2>\n";
 	print "<b>$prettyimage</b> is in the process of being ";
 	print "updated to use the newly created image.<br>\n";
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn AJsubmitSetImageProduction()
+///
+/// \brief sets request state to 'makeproduction', notifies user that
+/// "productioning" process has started
+///
+////////////////////////////////////////////////////////////////////////////////
+function AJsubmitSetImageProduction() {
+	$requestid = getContinuationVar('requestid');
+	$data = getRequestInfo($requestid);
+	foreach($data["reservations"] as $res) {
+		if($res["forcheckout"]) {
+			$prettyimage = $res["prettyimage"];
+			break;
+		}
+	}
+	$query = "UPDATE request SET stateid = 17 WHERE id = $requestid";
+	doQuery($query, 101);
+	$content = "<b>$prettyimage</b> is now in the process of being updated "
+	         . "to use the newly created image revision. <br>";
+	$content = preg_replace("/(.{1,60}[ \n])/", '\1<br>', $content);
+	$a = "var dlg = new dijit.Dialog({"
+	   .    "title: \"Change Test Image to Production\","
+	   .    "id: \"toproddlg\""
+	   . "});"
+		. "var content = '$content"
+	   . "<div align=\"center\">"
+	   . "<button dojoType=\"dijit.form.Button\">"
+	   .   "Close"
+	   .   "<script type=\"dojo/method\" event=\"onClick\">"
+	   .   "dijit.byId(\"toproddlg\").destroy();"
+	   .   "</script>"
+		.   "</button>"
+	   .   "</div>';"
+	   . "dlg.set(\"content\", content);"
+	   . "dlg.show();";
+	print $a;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1954,10 +2457,6 @@ function confirmDeleteImage() {
 	print "<H2>$title</H2>\n";
 	print "$question<br><br>\n";
 	print "<TABLE>\n";
-	/*print "  <TR>\n";
-	print "    <TH align=right>Short Name:</TH>\n";
-	print "    <TD>" . $images[$imageid]["name"] . "</TD>\n";
-	print "  </TR>\n";*/
 	print "  <TR>\n";
 	print "    <TH align=right>Long Name:</TH>\n";
 	print "    <TD>" . $images[$imageid]["prettyname"] . "</TD>\n";
@@ -2060,10 +2559,6 @@ function viewImageDetails() {
 	print "<DIV align=center>\n";
 	print "<H2>Image Details</H2>\n";
 	print "<TABLE>\n";
-	/*print "  <TR>\n";
-	print "    <TH align=right>Short Name:</TH>\n";
-	print "    <TD>" . $images[$imageid]["name"] . "</TD>\n";
-	print "  </TR>\n";*/
 	print "  <TR>\n";
 	print "    <TH align=right>Long Name:</TH>\n";
 	print "    <TD>" . $images[$imageid]["prettyname"] . "</TD>\n";
@@ -2370,11 +2865,8 @@ function processImageInput($checks=1) {
 	$mode = processInputVar("mode", ARG_STRING);
 	$return["imageid"] = processInputVar("imageid" , ARG_NUMERIC, getContinuationVar('imageid'));
 	$return['requestid'] = getContinuationVar('requestid');
-	#$return["name"] = processInputVar("name", ARG_STRING);
 	$return["prettyname"] = processInputVar("prettyname", ARG_STRING);
 	$return["owner"] = processInputVar("owner", ARG_STRING, "{$user["unityid"]}@{$user['affiliation']}");
-	#$return["platformid"] = processInputVar("platformid", ARG_NUMERIC);
-	#$return["osid"] = processInputVar("osid", ARG_NUMERIC);
 	$return["minram"] = processInputVar("minram", ARG_NUMERIC, 64);
 	$return["minprocnumber"] = processInputVar("minprocnumber", ARG_NUMERIC);
 	$return["minprocspeed"] = processInputVar("minprocspeed", ARG_NUMERIC, 500);
@@ -2406,16 +2898,6 @@ function processImageInput($checks=1) {
 		return $return;
 	}
 	
-	/*if($mode != "confirmAddImage" &&
-	   (strlen($return["name"]) > 30 || strlen($return["name"]) < 2)) {
-	   $submitErr |= NAMEERR;
-	   $submitErrMsg[NAMEERR] = "Short Name must be from 2 to 30 characters";
-	}
-	if(! ($submitErr & NAMEERR) &&
-	   checkForImageName($return["name"], "short", $return["imageid"])) {
-	   $submitErr |= NAMEERR;
-	   $submitErrMsg[NAMEERR] = "An image already exists with this name.";
-	}*/
 	if(preg_match('/-/', $return["prettyname"]) ||
 		strlen($return["prettyname"]) > 60 || strlen($return["prettyname"]) < 2) {
 	   $submitErr |= PRETTYNAMEERR;
@@ -2505,8 +2987,6 @@ function updateImage($data) {
 	$query = "UPDATE image "
 	       . "SET prettyname = '{$data["prettyname"]}', "
 	       .     "ownerid = $ownerid, "
-	       /*.     "platformid = {$data["platformid"]}, "
-	       .     "OSid = {$data["osid"]}, "*/
 	       .     "minram = {$data["minram"]}, "
 	       .     "minprocnumber = {$data["minprocnumber"]}, "
 	       .     "minprocspeed = {$data["minprocspeed"]}, "
@@ -2662,13 +3142,15 @@ function addImage($data) {
 	       .        "datecreated, "
 	       .        "production, "
 	       .        "imagename, "
-	       .        "comments) "
+	       .        "comments, "
+	       .        "autocaptured) "
 	       . "VALUES ($imageid, "
 	       .        "{$user['id']}, "
 	       .        "NOW(), "
 	       .        "1, "
 	       .        "'$name', "
-	       .        "'{$data['comments']}')";
+	       .        "'{$data['comments']}', "
+	       .        "{$data['autocaptured']})";
 	doQuery($query, 101);
 
 	// add entry in resource table

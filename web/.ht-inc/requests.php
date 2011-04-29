@@ -23,6 +23,8 @@
 define("STARTDAYERR", 1);
 /// signifies an error with the submitted start hour
 define("STARTHOURERR", 1 << 1);
+/// signifies an error with the submitted start minute
+define("STARTMINUTEERR", 1 << 2);
 /// signifies an error with the submitted end date
 //define("ENDDAYERR", 1 << 2);
 /// signifies an error with the submitted end hour
@@ -156,9 +158,11 @@ function newReservation() {
 	else
 		print "<legend>When would you like to use the application?</legend>\n";
 	print "&nbsp;&nbsp;&nbsp;<INPUT type=radio name=time id=timenow ";
-	print "onclick='updateWaitTime(0);' value=now checked>Now<br>\n";
+	print "onclick='updateWaitTime(0);' value=now checked>";
+	print "<label for=\"timenow\">Now</label><br>\n";
 	print "&nbsp;&nbsp;&nbsp;<INPUT type=radio name=time value=future ";
-	print "onclick='updateWaitTime(0);'>Later:\n";
+	print "onclick='updateWaitTime(0);' id=\"laterradio\">";
+	print "<label for=\"laterradio\">Later:</label>\n";
 	if(array_key_exists($imageid, $images))
 		$maxlen = $images[$imageid]['maxinitialtime'];
 	else
@@ -391,7 +395,7 @@ function submitRequest() {
 				print "<H2>New Reservation</H2>\n";
 			print "<font color=\"#ff0000\">The time you requested is in the past.";
 			print " Please select \"Now\" or use a time in the future.</font><br>\n";
-			$submitErr = 1;
+			$submitErr = 5000;
 			newReservation();
 			print getFooter();
 			return;
@@ -452,7 +456,7 @@ function submitRequest() {
 	// if user is owner of the image and there is a test version of the image
 	#   available, ask user if production or test image desired
 	if($mode != "submitTestProd" && $showrevisions &&
-	   $images[$data["imageid"]]["ownerid"] == $user["id"]) {
+	   ($images[$data["imageid"]]["ownerid"] == $user["id"] || checkUserHasPerm('View Debug Information'))) {
 		#unset($data["testprod"]);
 		$printedHTMLheader = 1;
 		print $HTMLheader;
@@ -606,79 +610,64 @@ function viewRequests() {
 	$requests = getUserRequests("all");
 	$images = getImages();
 	$computers = getComputers();
+	$resources = getUserResources(array("imageAdmin"));
 
 	if($mode != 'AJviewRequests')
 		print "<div id=subcontent>\n";
 
 	$refresh = 0;
-	$failed = 0;
 	$connect = 0;
 
 	$normal = '';
 	$imaging = '';
 	$long = '';
+	$server = '';
+	$reqids = array();
 	if(checkUserHasPerm('View Debug Information'))
 		$nodes = getManagementNodes();
 	if($count = count($requests)) {
 		$now = time();
-		for($i = 0, $noedit = 0, $text = '';
+		for($i = 0, $failed = 0, $timedout = 0, $text = '', $showcreateimage = 0;
 		   $i < $count;
-		   $i++, $noedit = 0, $text = '') {
+		   $i++, $failed = 0, $timedout = 0, $text = '') {
 			if($requests[$i]['forcheckout'] == 0 &&
 			   $requests[$i]['forimaging'] == 0)
 				continue;
+			$cdata = array('requestid' => $requests[$i]['id']);
+			$reqids[] = $requests[$i]['id'];
 			$imageid = $requests[$i]["imageid"];
 			$text .= "  <TR valign=top id=reqrow{$requests[$i]['id']}>\n";
+			# TODO probably should display current status somewhere if checkpointing, rebooting, or reinstalling
 			if(requestIsReady($requests[$i])) {
 				$connect = 1;
 				# request is ready, print Connect! and End buttons
-				$cdata = array('requestid' => $requests[$i]['id']);
 				$text .= "    <TD>\n";
 				$text .= "      <FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
 				$cont = addContinuationsEntry('connectRequest', $cdata, SECINDAY);
 				$text .= "      <INPUT type=hidden name=continuation value=\"$cont\">\n";
-				$text .= "      <INPUT type=submit value=\"Connect!\">\n";
+				$text .= "      <button type=submit dojoType=\"dijit.form.Button\">\n";
+				$text .= "      Connect!\n";
+				$text .= "      </button>\n";
 				$text .= "      </FORM>\n";
 				$text .= "    </TD>\n";
-				if($requests[$i]['forimaging']) {
-					# this is the imaging case, need to do sanity check here for if the request
-					#   state currstateid or laststateid are "inuse", otherwise disable out the
-					#   create image button					
-					$noedit = 1;
+				if($requests[$i]['serveradmin']) {
 					$text .= "    <TD>\n";
-					if($requests[$i]['currstateid'] == 8 || $requests[$i]['laststateid'] == 8) {
-						# the user has connected successfully so we will allow create image button
-						#   to be displayed
-						$text .= "      <FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
-						$cont = addContinuationsEntry('startImage', $cdata);
-						$text .= "      <INPUT type=hidden name=continuation value=\"$cont\">\n";
-						$text .= "      <INPUT type=submit value=\"Create\nImage\">\n";
-						$text .= "      </FORM>\n";
-					}
-					$text .= "    </TD>\n";
-					$text .= "    <TD>\n";
-					$text .= "      <FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
-					$cdata = array('requestid' => $requests[$i]['id']);
-					$cont = addContinuationsEntry('confirmDeleteRequest', $cdata, SECINDAY);
-					$text .= "      <INPUT type=hidden name=continuation value=\"$cont\">\n";
-					$text .= "      <INPUT type=submit value=Cancel>\n";
-					$text .= "      </FORM>\n";
+					$cont = addContinuationsEntry('AJconfirmDeleteRequest', $cdata, SECINDAY);
+					$text .= "      <button dojoType=\"dijit.form.Button\">\n";
+					$text .= "        Delete\n";
+					$text .= "	      <script type=\"dojo/method\" event=\"onClick\">\n";
+					$text .= "          endReservation('$cont');\n";
+					$text .= "        </script>\n";
+					$text .= "      </button>\n";
 					$text .= "    </TD>\n";
 				}
-				else {
-					$text .= "    <TD>\n";
-					$text .= "      <FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
-					$cont = addContinuationsEntry('confirmDeleteRequest', $cdata, SECINDAY);
-					$text .= "      <INPUT type=hidden name=continuation value=\"$cont\">\n";
-					$text .= "      <INPUT type=submit value=End>\n";
-					$text .= "      </FORM>\n";
-					$text .= "    </TD>\n";
-				}
+				else
+					$text .= "    <TD></TD>\n";
 				$startstamp = datetimeToUnix($requests[$i]["start"]);
 			}
 			elseif($requests[$i]["currstateid"] == 5) {
 				# request has failed
-				$cdata = array('requestid' => $requests[$i]['id']);
+				# TODO add a way for users to remove these entries
 				$text .= "    <TD colspan=2 nowrap>\n";
 				$text .= "      <span class=scriptonly>\n";
 				$text .= "      <span class=compstatelink>";
@@ -693,7 +682,6 @@ function viewRequests() {
 				$text .= "      </noscript>\n";
 				$text .= "    </TD>\n";
 				$failed = 1;
-				$noedit = 1;
 			}
 			elseif(datetimeToUnix($requests[$i]["start"]) < $now) {
 				# other cases where the reservation start time has been reached
@@ -703,20 +691,20 @@ function viewRequests() {
 					($requests[$i]["currstateid"] == 14 &&
 					$requests[$i]["laststateid"] == 11)) {
 					# request has timed out
+					# TODO add a way for users to remove these entries
 					if($requests[$i]['forimaging'])
 						$text .= "    <TD colspan=3>\n";
 					else
 						$text .= "    <TD colspan=2>\n";
 					$text .= "      <span class=compstatelink>Reservation has ";
 					$text .= "timed out</span>\n";
-					$noedit = 1;
+					$timedout = 1;
 					$text .= "    </TD>\n";
 				}
 				else {
 					# computer is loading, print Pending... and Delete button
+					# TODO figure out a different way to estimate for reboot and reinstall states
 					$remaining = 1;
-					if($requests[$i]['forimaging'])
-						$noedit = 1;
 					if(isComputerLoading($requests[$i], $computers)) {
 						if(datetimeToUnix($requests[$i]["daterequested"]) >=
 						   datetimeToUnix($requests[$i]["start"])) {
@@ -734,11 +722,7 @@ function viewRequests() {
 							$remaining = 1;
 						}
 					}
-					# computer is loading, print Pending... and Delete button
-					if($requests[$i]['forimaging'])
-						$text .= "    <TD colspan=2>\n";
-					else
-						$text .= "    <TD>\n";
+					$text .= "    <TD>\n";
 					$text .= "      <span class=scriptonly>\n";
 					$text .= "      <span class=compstatelink><i>";
 					$text .= "<a onClick=\"showResStatusPane({$requests[$i]['id']}); ";
@@ -753,38 +737,137 @@ function viewRequests() {
 					$text .= "<br>Est:&nbsp;$remaining&nbsp;min remaining\n";
 					$refresh = 1;
 					$text .= "    </TD>\n";
-					$text .= "    <TD>\n";
-					$text .= "      <FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
-					$cdata = array('requestid' => $requests[$i]['id']);
-					$cont = addContinuationsEntry('confirmDeleteRequest', $cdata, SECINDAY);
-					$text .= "      <INPUT type=hidden name=continuation value=\"$cont\">\n";
-					$text .= "      <INPUT type=submit value=Delete>\n";
-					$text .= "      </FORM>\n";
-					$text .= "    </TD>\n";
+					if($requests[$i]['serveradmin']) {
+						$text .= "    <TD>\n";
+						$cont = addContinuationsEntry('AJconfirmDeleteRequest', $cdata, SECINDAY);
+						$text .= "      <button dojoType=\"dijit.form.Button\">\n";
+						$text .= "        Delete\n";
+						$text .= "	      <script type=\"dojo/method\" event=\"onClick\">\n";
+						$text .= "          endReservation('$cont');\n";
+						$text .= "        </script>\n";
+						$text .= "      </button>\n";
+						$text .= "    </TD>\n";
+					}
+					else
+						$text .= "    <TD></TD>\n";
 				}
 			}
 			else {
 				# reservation is in the future
 				$text .= "    <TD></TD>\n";
-				$text .= "    <TD>\n";
-				$text .= "      <FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
-				$cdata = array('requestid' => $requests[$i]['id']);
-				$cont = addContinuationsEntry('confirmDeleteRequest', $cdata, SECINDAY);
-				$text .= "      <INPUT type=hidden name=continuation value=\"$cont\">\n";
-				$text .= "      <INPUT type=submit value=Delete>\n";
-				$text .= "      </FORM>\n";
-				$text .= "    </TD>\n";
+				if($requests[$i]['serveradmin']) {
+					$text .= "    <TD>\n";
+					$cont = addContinuationsEntry('AJconfirmDeleteRequest', $cdata, SECINDAY);
+					$text .= "      <button dojoType=\"dijit.form.Button\">\n";
+					$text .= "        Delete\n";
+					$text .= "	      <script type=\"dojo/method\" event=\"onClick\">\n";
+					$text .= "          endReservation('$cont');\n";
+					$text .= "        </script>\n";
+					$text .= "      </button>\n";
+					$text .= "    </TD>\n";
+				}
+				else
+					$text .= "    <TD></TD>\n";
 			}
-			if(! $noedit) {
+			if(! $failed && ! $timedout) {
 				# print edit button
-				$text .= "    <TD align=right>\n";
-				$text .= "      <FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
-				$cdata = array('requestid' => $requests[$i]['id']);
-				$cont = addContinuationsEntry('editRequest', $cdata);
-				$text .= "      <INPUT type=hidden name=continuation value=\"$cont\">\n";
-				$text .= "      <INPUT type=submit value=Edit>\n";
-				$text .= "      </FORM>\n";
-				$text .= "    </TD>\n";
+				$editcont = addContinuationsEntry('AJeditRequest', $cdata, SECINDAY);
+				$imgcont = addContinuationsEntry('startImage', $cdata, SECINDAY);
+				$imgurl = BASEURL . SCRIPT . "?continuation=$imgcont";
+				if($requests[$i]['serveradmin']) {
+					$text .= "    <TD align=right>\n";
+					$text .= "      <div dojoType=\"dijit.form.DropDownButton\">\n";
+					$text .= "        <span>More Options...</span>\n";
+					$text .= "        <div dojoType=\"dijit.Menu\">\n";
+					$text .= "          <div dojoType=\"dijit.MenuItem\"\n";
+					$text .= "               iconClass=\"noicon\"\n";
+					$text .= "               label=\"Edit\"\n";
+					$text .= "               onClick=\"editReservation('$editcont');\">\n";
+					$text .= "          </div>\n";
+					if(array_key_exists($imageid, $resources['image']) &&
+						($images[$imageid]['installtype'] == 'kickstart' ||
+						 $images[$imageid]['installtype'] == 'partimage' ||
+						 ($requests[$i]['initialduration'] + 30) > SECINDAY) &&
+						(count($requests[$i]['reservations'] == 1) || $requests[$i]['forimaging']) &&
+						($requests[$i]['currstateid'] == 8 || $requests[$i]['laststateid'] == 8)) {
+						$text .= "          <div dojoType=\"dijit.MenuItem\"\n";
+						$text .= "               iconClass=\"noicon\"\n";
+						$text .= "               label=\"End Reservation & Create Image\"\n";
+						if($mode != 'AJviewRequests')
+							$text .= "               onClick=\"window.location.href='$imgurl';\">\n";
+						else
+							$text .= "               onClick=\"window.location.href=\'$imgurl\';\">\n";
+						$text .= "          </div>\n";
+					}
+					/*else {
+						$text .= "          <div dojoType=\"dijit.MenuItem\"\n";
+						$text .= "               iconClass=\"noicon\"\n";
+						$text .= "               label=\"End Reservation & Create Image\" disabled>\n";
+						$text .= "          </div>\n";
+					}*/
+					# TODO control which users get to see this
+					if($requests[$i]['server'] && $requests[$i]['currstateid'] != 24 &&
+						($requests[$i]['currstateid'] == 8 || $requests[$i]['laststateid'] == 8)) {
+						$cont = addContinuationsEntry('startCheckpoint', $cdata, SECINDAY);
+						$url = BASEURL . SCRIPT . "?continuation=$cont";
+						$text .= "          <div dojoType=\"dijit.MenuItem\"\n";
+						$text .= "               iconClass=\"noicon\"\n";
+						$text .= "               label=\"Create Image\"\n";
+						if($mode != 'AJviewRequests')
+							$text .= "               onClick=\"window.location.href='$url';\">\n";
+						else
+							$text .= "               onClick=\"window.location.href=\'$url\';\">\n";
+						$text .= "          </div>\n";
+					}
+					elseif($requests[$i]['server'] && $requests[$i]['currstateid'] == 24) {
+						$text .= "          <div dojoType=\"dijit.MenuItem\"\n";
+						$text .= "               iconClass=\"noicon\"\n";
+						$text .= "               label=\"Create Image\" disabled>\n";
+						$text .= "          </div>\n";
+					}
+					if($requests[$i]['currstateid'] != 24 &&
+					   $requests[$i]['laststateid'] != 24 &&
+					   $requests[$i]['currstateid'] != 16 &&
+					   $requests[$i]['laststateid'] != 16 &&
+					   /*$requests[$i]['currstateid'] != 26 && # TODO do we allow reboots again if already in reboot state?
+					   $requests[$i]['laststateid'] != 26 &&
+					   $requests[$i]['currstateid'] != 28 &&
+						$requests[$i]['laststateid'] != 28 &&*/
+					   $requests[$i]['currstateid'] != 27 &&
+					   $requests[$i]['laststateid'] != 27) {
+						$cont = addContinuationsEntry('AJrebootRequest', $cdata, SECINDAY);
+						$text .= "          <div dojoType=\"dijit.MenuItem\"\n";
+						$text .= "               iconClass=\"noicon\"\n";
+						$text .= "               label=\"Reboot\">\n";
+						$text .= "	          <script type=\"dojo/method\" event=\"onClick\">\n";
+						$text .= "              rebootRequest('$cont');\n";
+						$text .= "            </script>\n";
+						$text .= "          </div>\n";
+						$cont = addContinuationsEntry('AJreinstallRequest', $cdata, SECINDAY);
+						$text .= "          <div dojoType=\"dijit.MenuItem\"\n";
+						$text .= "               iconClass=\"noicon\"\n";
+						$text .= "               label=\"Reinstall\">\n";
+						$text .= "	          <script type=\"dojo/method\" event=\"onClick\">\n";
+						$text .= "              reinstallRequest('$cont');\n";
+						$text .= "            </script>\n";
+						$text .= "          </div>\n";
+					}
+					else {
+						$text .= "          <div dojoType=\"dijit.MenuItem\"\n";
+						$text .= "               iconClass=\"noicon\"\n";
+						$text .= "               label=\"Reboot\" disabled>\n";
+						$text .= "          </div>\n";
+						$text .= "          <div dojoType=\"dijit.MenuItem\"\n";
+						$text .= "               iconClass=\"noicon\"\n";
+						$text .= "               label=\"Reinstall\" disabled>\n";
+						$text .= "          </div>\n";
+					}
+					$text .= "       </div>\n";
+					$text .= "     </div>\n";
+					$text .= "    </TD>\n";
+				}
+				else
+					$text .= "    <TD></TD>\n";
 			}
 			elseif($requests[$i]['forimaging'] == 0)
 				$text .= "    <TD></TD>\n";
@@ -798,32 +881,50 @@ function viewRequests() {
 			# print start time
 			if(datetimeToUnix($requests[$i]["start"]) < 
 			   datetimeToUnix($requests[$i]["daterequested"])) {
-				$text .= "    <TD>" . prettyDatetime($requests[$i]["daterequested"]) . "</TD>\n";
+				$text .= "    <TD>" . prettyDatetime($requests[$i]["daterequested"], 1) . "</TD>\n";
 			}
 			else {
-				$text .= "    <TD>" . prettyDatetime($requests[$i]["start"]) . "</TD>\n";
+				$text .= "    <TD>" . prettyDatetime($requests[$i]["start"], 1) . "</TD>\n";
 			}
 
 			# print end time
-			$text .= "    <TD>" . prettyDatetime($requests[$i]["end"]) . "</TD>\n";
+			if($requests[$i]['server'] && $requests[$i]['end'] == '2038-01-01 00:00:00')
+				$text .= "    <TD>(none)</TD>\n";
+			else
+				$text .= "    <TD>" . prettyDatetime($requests[$i]["end"], 1) . "</TD>\n";
 
 			# print date requested
-			$text .= "    <TD>" . prettyDatetime($requests[$i]["daterequested"]) . "</TD>\n";
+			$text .= "    <TD>" . prettyDatetime($requests[$i]["daterequested"], 1) . "</TD>\n";
 
 			if(checkUserHasPerm('View Debug Information')) {
-				$text .= "    <TD align=center>" . $requests[$i]["id"] . "</TD>\n";
-				$text .= "    <TD align=center>" . $requests[$i]["computerid"] . "</TD>\n";
-				$text .= "    <TD align=center>" . $nodes[$requests[$i]["managementnodeid"]]['hostname'] . "</TD>\n";
-				$text .= "    <TD>" . $requests[$i]["IPaddress"] . "</TD>\n";
-				$text .= "    <TD align=center>" . $requests[$i]["currstateid"];
-				$text .= "</TD>\n";
-				$text .= "    <TD align=center>" . $requests[$i]["laststateid"];
-				$text .= "</TD>\n";
-				$text .= "    <TD align=center>";
-				$text .= $computers[$requests[$i]["computerid"]]["stateid"] . "</TD>\n";
+				if(! is_null($requests[$i]['vmhostid'])) {
+					$query = "SELECT c.hostname "
+					       . "FROM computer c, " 
+					       .      "vmhost v "
+					       . "WHERE v.id = {$requests[$i]['vmhostid']} AND "
+					       .       "v.computerid = c.id";
+					$qh = doQuery($query, 101);
+					$row = mysql_fetch_assoc($qh);
+					$vmhost = $row['hostname'];
+				}
+				$text .= "    <TD align=center><span id=\"req{$requests[$i]['id']}\">";
+				$text .= "{$requests[$i]["id"]}</span></TD>\n";
+				$text .= "<div dojoType=\"vcldojo.HoverTooltip\" connectId=\"req{$requests[$i]['id']}\">";
+				$text .= "Mgmt node: {$nodes[$requests[$i]["managementnodeid"]]['hostname']}<br>\n";
+				$text .= "Computer ID: {$requests[$i]['computerid']}<br>\n";
+				$text .= "Comp IP: {$requests[$i]["IPaddress"]}<br>\n";
+				$text .= "Comp State ID: {$computers[$requests[$i]["computerid"]]["stateid"]}<br>\n";
+				$text .= "Comp Type: {$requests[$i]['comptype']}<br>\n";
+				if(! is_null($requests[$i]['vmhostid']))
+					$text .= "VM Host: $vmhost<br>\n";
+				$text .= "Current State ID: {$requests[$i]["currstateid"]}<br>\n";
+				$text .= "Last State ID: {$requests[$i]["laststateid"]}<br>\n";
+				$text .= "</div></TD>\n";
 			}
 			$text .= "  </TR>\n";
-			if($requests[$i]['forimaging'])
+			if($requests[$i]['server'])
+				$server .= $text;
+			elseif($requests[$i]['forimaging'])
 				$imaging .= $text;
 			elseif($requests[$i]['longterm'])
 				$long .= $text;
@@ -851,15 +952,8 @@ function viewRequests() {
 		$text .= "    <TH>Starting</TH>\n";
 		$text .= "    <TH>Ending</TH>\n";
 		$text .= "    <TH>Initially requested</TH>\n";
-		if(checkUserHasPerm('View Debug Information')) {
+		if(checkUserHasPerm('View Debug Information'))
 			$text .= "    <TH>Req ID</TH>\n";
-			$text .= "    <TH>Comp ID</TH>\n";
-			$text .= "    <TH>Management Node</TH>\n";
-			$text .= "    <TH>IP address</TH>\n";
-			$text .= "    <TH>Current State</TH>\n";
-			$text .= "    <TH>Last State</TH>\n";
-			$text .= "    <TH>Computer State</TH>\n";
-		}
 		$text .= "  </TR>\n";
 		$text .= $normal;
 		$text .= "</table>\n";
@@ -876,15 +970,8 @@ function viewRequests() {
 		$text .= "    <TH>Ending</TH>\n";
 		$text .= "    <TH>Initially requested</TH>\n";
 		$computers = getComputers();
-		if(checkUserHasPerm('View Debug Information')) {
+		if(checkUserHasPerm('View Debug Information'))
 			$text .= "    <TH>Req ID</TH>\n";
-			$text .= "    <TH>Comp ID</TH>\n";
-			$text .= "    <TH>Management Node</TH>\n";
-			$text .= "    <TH>IP address</TH>\n";
-			$text .= "    <TH>Current State</TH>\n";
-			$text .= "    <TH>Last State</TH>\n";
-			$text .= "    <TH>Computer State</TH>\n";
-		}
 		$text .= "  </TR>\n";
 		$text .= $imaging;
 		$text .= "</table>\n";
@@ -901,17 +988,28 @@ function viewRequests() {
 		$text .= "    <TH>Ending</TH>\n";
 		$text .= "    <TH>Initially requested</TH>\n";
 		$computers = getComputers();
-		if(checkUserHasPerm('View Debug Information')) {
+		if(checkUserHasPerm('View Debug Information'))
 			$text .= "    <TH>Req ID</TH>\n";
-			$text .= "    <TH>Comp ID</TH>\n";
-			$text .= "    <TH>Management Node</TH>\n";
-			$text .= "    <TH>IP address</TH>\n";
-			$text .= "    <TH>Current State</TH>\n";
-			$text .= "    <TH>Last State</TH>\n";
-			$text .= "    <TH>Computer State</TH>\n";
-		}
 		$text .= "  </TR>\n";
 		$text .= $long;
+		$text .= "</table>\n";
+	}
+	if(! empty($server)) {
+		if(! empty($normal) || ! empty($imaging) || ! empty($long))
+			$text .= "<hr>\n";
+		$text .= "You currently have the following <strong>server</strong> reservations:<br>\n";
+		$text .= "<table id=\"longreslisttable\" summary=\"lists server reservations you currently have\" cellpadding=5>\n";
+		$text .= "  <TR>\n";
+		$text .= "    <TD colspan=3></TD>\n";
+		$text .= "    <TH>Environment</TH>\n";
+		$text .= "    <TH>Starting</TH>\n";
+		$text .= "    <TH>Ending</TH>\n";
+		$text .= "    <TH>Initially requested</TH>\n";
+		$computers = getComputers();
+		if(checkUserHasPerm('View Debug Information'))
+			$text .= "    <TH>Req ID</TH>\n";
+		$text .= "  </TR>\n";
+		$text .= $server;
 		$text .= "</table>\n";
 	}
 
@@ -928,52 +1026,140 @@ function viewRequests() {
 	if($refresh) {
 		$text .= "<br><br>This page will automatically update ";
 		$text .= "every 20 seconds until the <font color=red><i>Pending...</i>";
-		#$text .= "</font> reservation is ready.<br></div>\n";
 		$text .= "</font> reservation is ready.\n";
-		$cont = addContinuationsEntry('AJviewRequests', $cdata, SECINDAY);
-		$text .= "<INPUT type=hidden id=resRefreshCont value=\"$cont\">\n";
 	}
 
 	if($failed) {
 		$text .= "<br><br>An error has occurred that has kept one of your reservations ";
 		$text .= "from being processed. We apologize for any inconvenience ";
 		$text .= "this may have caused.\n";
-		if(! $refresh) {
-			$cont = addContinuationsEntry('AJviewRequests', $cdata, SECINDAY);
-			$text .= "<INPUT type=hidden id=resRefreshCont value=\"$cont\">\n";
-		}
 	}
 
-	if(empty($normal) && empty($imaging) && empty($long))
+	if(empty($normal) && empty($imaging) && empty($long) && empty($server))
 		$text .= "You have no current reservations.<br>\n";
+	else {
+		$cont = addContinuationsEntry('AJviewRequests', $cdata, SECINDAY);
+		$text .= "<INPUT type=hidden id=resRefreshCont value=\"$cont\">\n";
+	}
 
 	$text .= "</div>\n";
 	if($mode != 'AJviewRequests') {
-		if($refresh || $failed) {
-			$text .= "<div dojoType=dojox.layout.FloatingPane\n";
-			$text .= "      id=resStatusPane\n";
-			$text .= "      resizable=true\n";
-			$text .= "      closable=false\n";
-			$text .= "      title=\"Detailed Reservation Status\"\n";
-			$text .= "      style=\"width: 350px; ";
-			$text .=               "height: 280px; ";
-			$text .=               "position: absolute; ";
-			$text .=               "left: 0px; ";
-			$text .=               "top: 0px; ";
-			$text .=               "visibility: hidden; ";
-			$text .=               "border: solid 1px #7EABCD;\"\n";
-			$text .= ">\n";
-			$text .= "<script type=\"dojo/method\" event=minimize>\n";
-			$text .= "  this.hide();\n";
-			$text .= "</script>\n";
-			$text .= "<div id=resStatusText></div>\n";
-			$text .= "<input type=hidden id=detailreqid value=0>\n";
-			$text .= "</div>\n";
-		}
+		$text .= "<div dojoType=dojox.layout.FloatingPane\n";
+		$text .= "      id=resStatusPane\n";
+		$text .= "      resizable=true\n";
+		$text .= "      closable=false\n";
+		$text .= "      title=\"Detailed Reservation Status\"\n";
+		$text .= "      style=\"width: 350px; ";
+		$text .=               "height: 280px; ";
+		$text .=               "position: absolute; ";
+		$text .=               "left: 0px; ";
+		$text .=               "top: 0px; ";
+		$text .=               "visibility: hidden; ";
+		$text .=               "border: solid 1px #7EABCD;\"\n";
+		$text .= ">\n";
+		$text .= "<script type=\"dojo/method\" event=minimize>\n";
+		$text .= "  this.hide();\n";
+		$text .= "</script>\n";
+		$text .= "<div id=resStatusText></div>\n";
+		$text .= "<input type=hidden id=detailreqid value=0>\n";
+		$text .= "</div>\n";
+
+		$text .= "<div dojoType=dijit.Dialog\n";
+		$text .= "      id=\"endResDlg\"\n";
+		$text .= "      title=\"Delete Reservation\"\n";
+		$text .= "      duration=250\n";
+		$text .= "      draggable=true>\n";
+		#$text .= "	  <script type=\"dojo/connect\" event=onCancel>\n";
+		#$text .= "      endResDlgHide();\n";
+		#$text .= "    </script>\n";
+		$text .= "   <div id=\"endResDlgContent\"></div>\n";
+		$text .= "   <input type=\"hidden\" id=\"endrescont\">\n";
+		$text .= "   <input type=\"hidden\" id=\"endresid\">\n";
+		$text .= "   <div align=\"center\">\n";
+		$text .= "   <button id=\"endResDlgBtn\" dojoType=\"dijit.form.Button\">\n";
+		$text .= "     Delete Reservation\n";
+		$text .= "	   <script type=\"dojo/method\" event=\"onClick\">\n";
+		$text .= "       submitDeleteReservation();\n";
+		$text .= "     </script>\n";
+		$text .= "   </button>\n";
+		$text .= "   <button dojoType=\"dijit.form.Button\">\n";
+		$text .= "     Cancel\n";
+		$text .= "	   <script type=\"dojo/method\" event=\"onClick\">\n";
+		$text .= "       dijit.byId('endResDlg').hide();\n";
+		$text .= "       dojo.byId('endResDlgContent').innerHTML = '';\n";
+		$text .= "     </script>\n";
+		$text .= "   </button>\n";
+		$text .= "   </div>\n";
+		$text .= "</div>\n";
+
+		$text .= "<div dojoType=dijit.Dialog\n";
+		$text .= "      id=\"editResDlg\"\n";
+		$text .= "      title=\"Modify Reservation\"\n";
+		$text .= "      duration=250\n";
+		$text .= "      draggable=true>\n";
+		$text .= "	  <script type=\"dojo/connect\" event=onHide>\n";
+		$text .= "      hideEditResDlg();\n";
+		$text .= "    </script>\n";
+		$text .= "   <div id=\"editResDlgContent\"></div>\n";
+		$text .= "   <input type=\"hidden\" id=\"editrescont\">\n";
+		$text .= "   <input type=\"hidden\" id=\"editresid\">\n";
+		$text .= "   <div id=\"editResDlgErrMsg\" class=\"rederrormsg\"></div>\n";
+		$text .= "   <div align=\"center\">\n";
+		$text .= "   <button id=\"editResDlgBtn\" dojoType=\"dijit.form.Button\">\n";
+		$text .= "     Modify Reservation\n";
+		$text .= "	   <script type=\"dojo/method\" event=\"onClick\">\n";
+		$text .= "       submitEditReservation();\n";
+		$text .= "     </script>\n";
+		$text .= "   </button>\n";
+		$text .= "   <button dojoType=\"dijit.form.Button\" id=\"editResCancelBtn\">\n";
+		$text .= "     Cancel\n";
+		$text .= "	   <script type=\"dojo/method\" event=\"onClick\">\n";
+		$text .= "       dijit.byId('editResDlg').hide();\n";
+		$text .= "     </script>\n";
+		$text .= "   </button>\n";
+		$text .= "   </div>\n";
+		$text .= "</div>\n";
+
+		$text .= "<div dojoType=dijit.Dialog\n";
+		$text .= "      id=\"rebootreinstalldlg\"\n";
+		$text .= "      title=\"Reboot Reservation\"\n";
+		$text .= "      duration=250\n";
+		$text .= "      draggable=true>\n";
+		$text .= "	  <script type=\"dojo/connect\" event=onHide>\n";
+		$text .= "      hideRebReinstResDlg();\n";
+		$text .= "    </script>\n";
+		$text .= "   <div id=\"rebreinstResDlgContent\"></div>\n";
+		$text .= "   <div id=\"rebootRadios\" style=\"margin-left: 90px;\">\n";
+		$text .= "   <input type=\"radio\" name=\"reboottype\" id=\"softreboot\" checked>\n";
+		$text .= "   <label for=\"softreboot\">Soft Reboot</label><br>\n";
+		$text .= "   <input type=\"radio\" name=\"reboottype\" id=\"hardreboot\">\n";
+		$text .= "   <label for=\"hardreboot\">Hard Reboot</label><br><br>\n";
+		$text .= "   </div>\n";
+		$text .= "   <input type=\"hidden\" id=\"rebreinstrescont\">\n";
+		#$text .= "   <input type=\"hidden\" id=\"rebreinstresid\">\n";
+		$text .= "   <div id=\"rebreinstResDlgErrMsg\" class=\"rederrormsg\"></div>\n";
+		$text .= "   <div align=\"center\">\n";
+		$text .= "   <button id=\"rebreinstResDlgBtn\" dojoType=\"dijit.form.Button\">\n";
+		$text .= "     Reboot Reservation\n";
+		$text .= "	   <script type=\"dojo/method\" event=\"onClick\">\n";
+		$text .= "       submitRebReinstReservation();\n";
+		$text .= "     </script>\n";
+		$text .= "   </button>\n";
+		$text .= "   <button dojoType=\"dijit.form.Button\" id=\"rebreinstResCancelBtn\">\n";
+		$text .= "     Cancel\n";
+		$text .= "	   <script type=\"dojo/method\" event=\"onClick\">\n";
+		$text .= "       dijit.byId('rebootreinstalldlg').hide();\n";
+		$text .= "     </script>\n";
+		$text .= "   </button>\n";
+		$text .= "   </div>\n";
+		$text .= "</div>\n";
 		print $text;
 	}
 	else {
 		$text = str_replace("\n", ' ', $text);
+		$text = str_replace("('", "(\'", $text);
+		$text = str_replace("')", "\')", $text);
+		print "document.body.style.cursor = 'default';";
 		if($refresh)
 			print "refresh_timer = setTimeout(resRefresh, 20000);\n";
 		print(setAttribute('subcontent', 'innerHTML', $text));
@@ -982,6 +1168,7 @@ function viewRequests() {
 			$text = detailStatusHTML($refreqid);
 			print(setAttribute('resStatusText', 'innerHTML', $text));
 		}
+		print "checkResGone(" . json_encode($reqids) . ");";
 		dbDisconnect();
 		exit;
 	}
@@ -1118,7 +1305,7 @@ function detailStatusHTML($reqid) {
 		$last = $data;
 	}
 	# $id will be set if there was log data, use the first state in the flow
-	#    if it isn't set
+	//    if it isn't set
 	if(! empty($id))
 		$id = $flow['nextstates'][$id];
 	else
@@ -1233,7 +1420,7 @@ function detailStatusHTML($reqid) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function viewRequestInfo() {
-	$requestid = getContinuationVar("requestid");
+	$requestid = getContinuationVar('requestid');
 	$request = getRequestInfo($requestid);
 	if($request['forimaging'] || $request['stateid'] == 18 || $request['laststateid'] == 18)
 		$reservation = $request['reservations'][0];
@@ -1339,547 +1526,568 @@ function viewRequestInfo() {
 	print "      </FORM>\n";
 	print "    </TD>\n";*/
 	print "    <TD>\n";
-	print "      <FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
-	$cdata = array('requestid' => $requestid, 'notbyowner' => 1);
-	$cont = addContinuationsEntry('confirmDeleteRequest', $cdata, SECINDAY);
-	print "      <INPUT type=hidden name=continuation value=\"$cont\">\n";
-	print "      <INPUT type=submit value=\"Delete Reservation\">\n";
-	print "      </FORM>\n";
+	$cdata = array('requestid' => $requestid,
+	               'notbyowner' => 1,
+	               'ttdata' => getContinuationVar('ttdata'),
+	               'fromtimetable' => 1);
+	$cont = addContinuationsEntry('AJconfirmDeleteRequest', $cdata, SECINDAY);
+	print "      <button dojoType=\"dijit.form.Button\">\n";
+	print "        Delete Reservation\n";
+	print "	      <script type=\"dojo/method\" event=\"onClick\">\n";
+	print "          endReservation('$cont');\n";
+	print "        </script>\n";
+	print "      </button>\n";
 	print "    </TD>\n";
 	print "  </TR>\n";
 	print "</table>\n";
 	print "</DIV>\n";
+
+	print "<div dojoType=dijit.Dialog\n";
+	print "      id=\"endResDlg\"\n";
+	print "      title=\"Delete Reservation\"\n";
+	print "      duration=250\n";
+	print "      draggable=true>\n";
+	print "   <div id=\"endResDlgContent\"></div>\n";
+	print "   <input type=\"hidden\" id=\"endrescont\">\n";
+	print "   <input type=\"hidden\" id=\"endresid\">\n";
+	print "   <div align=\"center\">\n";
+	print "   <button id=\"endResDlgBtn\" dojoType=\"dijit.form.Button\">\n";
+	print "     Delete Reservation\n";
+	print "	   <script type=\"dojo/method\" event=\"onClick\">\n";
+	print "       submitDeleteReservation();\n";
+	print "     </script>\n";
+	print "   </button>\n";
+	print "   <button dojoType=\"dijit.form.Button\">\n";
+	print "     Cancel\n";
+	print "	   <script type=\"dojo/method\" event=\"onClick\">\n";
+	print "       dijit.byId('endResDlg').hide();\n";
+	print "       dojo.byId('endResDlgContent').innerHTML = '';\n";
+	print "     </script>\n";
+	print "   </button>\n";
+	print "   </div>\n";
+	print "</div>\n";
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn editRequest()
+/// \fn AJeditRequest()
 ///
 /// \brief prints a page for a user to edit a previous request
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function editRequest() {
+function AJeditRequest() {
 	global $submitErr, $user;
 	$requestid = getContinuationVar('requestid', 0);
-	$request = getRequestInfo($requestid);
-	if(! array_key_exists("stateid", $request)) {
-		viewRequests();
+	$request = getRequestInfo($requestid, 1);
+	# check to see if reservation exists
+	if(is_null($request)) {
+		sendJSON(array('status' => 'resgone'));
 		return;
 	}
-	if($request['forimaging'])
-		$reservation = $request['reservations'][0];
-	else {
-		foreach($request["reservations"] as $res) {
-			if($res["forcheckout"]) {
-				$reservation = $res;
-				break;
-			}
-		}
-	}
-	if($submitErr) {
-		$data = processRequestInput(0);
-	}
+	$unixstart = datetimeToUnix($request["start"]);
+	$unixend = datetimeToUnix($request["end"]);
+	$duration = $unixend - $unixstart;
+	$now = time();
+	$maxtimes = getUserMaxTimes();
 	$groupid = getUserGroupID('Specify End Time', 1);
 	$members = getUserGroupMembers($groupid);
-	if(array_key_exists($user['id'], $members))
+	if(array_key_exists($user['id'], $members) || $request['serverrequest'])
 		$openend = 1;
 	else
 		$openend = 0;
-	$unixstart = datetimeToUnix($request["start"]);
-	$unixend = datetimeToUnix($request["end"]);
-	$maxtimes = getUserMaxTimes();
-	$timeToNext = timeToNextReservation($request);
+	$h = '';
 
-	print "<H2>Modify Reservation</H2>\n";
-	$now = time();
-	if($unixstart > $now)
-		$started = 0;
-	else {
-		# \todo if $timeToNext is anything < 30, try moving reservations off until it is >= 30
-		if($timeToNext == 0) {
-			$movedall = 1;
-			foreach($request["reservations"] as $res) {
-				if(! moveReservationsOffComputer($res["computerid"], 1)) {
-					$movedall = 0;
-					break;
-				}
-			}
-			if(! $movedall) {
-				// cannot extend the reservation unless we move the next one to another computer
-				print "The computer you are using has another reservation ";
-				print "immediately following yours. Therefore, you cannot extend ";
-				print "your reservation because it would overlap with the next ";
-				print "one.<br>\n";
-				printEditNewUpdate($request, $reservation);
-				return;
-			}
-			$timeToNext = timeToNextReservation($request);
+	# determine the current total length of the reservation
+	$reslen = ($unixend - unixFloor15($unixstart)) / 60;
+	$timeval = getdate($unixstart);
+	if(($timeval["minutes"] % 15) != 0)
+		$reslen -= 15;
+	$cdata = array('requestid' => $requestid,
+	               'openend' => $openend,
+	               'modifystart' => 0,
+	               'allowindefiniteend' => 0);
+	// if future, allow start to be modified
+	if($unixstart > $now) {
+		$cdata['modifystart'] = 1;
+		$txt  = "Modify reservation for <b>{$request['reservations'][0]['prettyimage']}</b> "; 
+		$txt .= "starting " . prettyDatetime($request["start"]) . ": <br>";
+		$h .= preg_replace("/(.{1,60}[ \n])/", '\1<br>', $txt);
+		$days = array();
+		$startday = date('l', $unixstart);
+		for($cur = time(), $end = $cur + DAYSAHEAD * SECINDAY; 
+		    $cur < $end; 
+		    $cur += SECINDAY) {
+			$index = date('Ymd', $cur);
+			$days[$index] = date('l', $cur);
 		}
-		if($timeToNext >= 15)
-			$timeToNext -= 15;
-		$started = 1;
-		if(! $openend) {
-			if($timeToNext == -1) {
-				print "Because this reservation has already started, you can only ";
-				print "extend the length of the reservation. ";
-				print "You can extend this reservation ";
-				print "by up to " . minToHourMin($maxtimes["extend"]) . ", but not ";
-				print "exceeding " . minToHourMin($maxtimes["total"]) . " for your ";
-				print "total reservation time.<br><br>\n";
+		$cdata['startdays'] = array_keys($days);
+		$h .= "Start: <select dojoType=\"dijit.form.Select\" id=\"day\">";
+		foreach($days as $id => $name) {
+			if($name == $startday)
+				$h .= "<option value=\"$id\" selected=\"selected\">$name</option>";
+			else
+				$h .= "<option value=\"$id\">$name</option>";
+		}
+		$h .= "</select>";
+		$h .= "&nbsp;At&nbsp;";
+		$tmp = explode(' ' , $request['start']);
+		$stime = $tmp[1];
+		$h .= "<div type=\"text\" dojoType=\"dijit.form.TimeTextBox\" ";
+		$h .= "id=\"editstarttime\" style=\"width: 78px\" value=\"T$stime\"></div>";
+		$h .= "<small>(" . date('T') . ")</small><br><br>";
+		$durationmatch = 0;
+		if($request['serverrequest']) {
+			$cdata['allowindefiniteend'] = 1;
+			if($request['end'] == '2038-01-01 00:00:00')
+				$h .= "<INPUT type=\"radio\" name=\"ending\" id=\"indefiniteradio\" checked>";
+			else
+				$h .= "<INPUT type=\"radio\" name=\"ending\" id=\"indefiniteradio\">";
+			$h .= "<label for=\"indefiniteradio\">Indefinite Ending</label>";
+		}
+		else {
+			$durationmin = $duration / 60;
+			if($request['forimaging'] && $maxtimes['initial'] < 720) # make sure at least 12 hours available for imaging reservations
+				$maxtimes['initial'] = 720;
+			$imgdata = getImages(1, $request['reservations'][0]['imageid']);
+			$maxlen = $imgdata[$request['reservations'][0]['imageid']]['maxinitialtime'];
+			if($maxlen > 0 && $maxlen < $maxtimes['initial'])
+				$maxtimes['initial'] = $maxlen;
+			$lengths = array();
+			if($maxtimes["initial"] >= 30)
+				$lengths["30"] = "30 minutes";
+			if($maxtimes["initial"] >= 60)
+				$lengths["60"] = "1 hour";
+			if($durationmin == 30 || $durationmin == 60)
+				$durationmatch = 1;
+			for($i = 120; $i <= $maxtimes["initial"] && $i < 2880; $i += 120) {
+				$lengths[$i] = $i / 60 . " hours";
+				if($durationmin == $i)
+					$durationmatch = 1;
 			}
-			elseif($timeToNext < 15) {
-				print "The computer you are using has another reservation ";
-				print "immediately following yours. Therefore, you cannot extend ";
-				print "your reservation because it would overlap with the next ";
-				print "one.<br>\n";
-				printEditNewUpdate($request, $reservation);
-				return;
+			for($i = 2880; $i <= $maxtimes["initial"]; $i += 1440) {
+				$lengths[$i] = $i / 1440 . " days";
+				if($durationmin == $i)
+					$durationmatch = 1;
+			}
+			if($openend) {
+				if($durationmatch)
+					$h .= "<INPUT type=\"radio\" name=\"ending\" id=\"lengthradio\" checked>";
+				else
+					$h .= "<INPUT type=\"radio\" name=\"ending\" id=\"lengthradio\">";
+				$h .= "<label for=\"lengthradio\">";
+			}
+			$h .= "Duration:";
+			if($openend)
+				$h .= "</label>";
+			$h .= "<select dojoType=\"dijit.form.Select\" id=\"length\" ";
+			$h .= "onChange=\"selectLength();\">";
+			$cdata['lengths'] = array_keys($lengths);
+			foreach($lengths as $id => $name) {
+				if($id == $duration / 60)
+					$h .= "<option value=\"$id\" selected=\"selected\">$name</option>";
+				else
+					$h .= "<option value=\"$id\">$name</option>";
+			}
+			$h .= "</select>";
+		}
+		if($openend) {
+			if($request['serverrequest'] && $request['end'] == '2038-01-01 00:00:00') {
+				$h .= "<br><INPUT type=\"radio\" name=\"ending\" id=\"dateradio\">";
+				$edate = '';
+				$etime = '';
 			}
 			else {
-				print "Because this reservation has already started, you can only ";
-				print "extend the length of the reservation. ";
-				print "The computer you are using has another reservation following ";
-				print "yours. Therefore, you can only extend this reservation for ";
-				print "another " . prettyLength($timeToNext) . ".<br><br>\n";
-			}
-		}
-	}
-	print "Modify reservation for <b>" . $reservation["prettyimage"];
-	print "</b> starting ";
-	if(datetimeToUnix($request["start"]) <
-	   datetimeToUnix($request["daterequested"])) {
-		print prettyDatetime($request["daterequested"]);
-	}
-	else {
-		print prettyDatetime($request["start"]);
-	}
-	print ":<br><br>\n";
-	$start = date('l,g,i,a', datetimeToUnix($request["start"]));
-	$startArr = explode(',', $start);
-	$len = ($unixend - $unixstart) / 60;
-	$cdata = array();
-	if($started) {
-		$inputday = date('n/j/Y', datetimeToUnix($request["start"]));
-		$cdata['day'] = $inputday;
-		$cdata['hour'] = $startArr[1];
-		$cdata['minute'] = $startArr[2];
-		$cdata['meridian'] = $startArr[3];
-		# determine the current total length of the reservation
-		$reslen = ($unixend - unixFloor15($unixstart)) / 60;
-		$timeval = getdate($unixstart);
-		if(($timeval["minutes"] % 15) != 0) {
-			$reslen -= 15;
-		}
-		if(! $openend && ($reslen >= $maxtimes["total"])) {
-			print "You are only allowed to extend your reservation such that it ";
-			print "has a total length of " . minToHourMin($maxtimes["total"]);
-			print ". This reservation already meets that length. Therefore, ";
-			print "you are not allowed to extend your reservation any further.<br><br>\n";
-			printEditNewUpdate($request, $reservation);
-			return;
-		}
-		//if have time left to extend it, create an array of lengths based on maxextend that has a cap
-		# so we don't run into another reservation and we can't extend past the totalmax
-		$lengths = array();
-		if($timeToNext == -1) {
-			// there is no following reservation
-			if((($reslen + 15) <= $maxtimes["total"]) && (15 <= $maxtimes["extend"]))
-				$lengths["15"] = "15 minutes";
-			if((($reslen + 30) <= $maxtimes["total"]) && (30 <= $maxtimes["extend"]))
-				$lengths["30"] = "30 minutes";
-			if((($reslen + 60) <= $maxtimes["total"]) && (60 <= $maxtimes["extend"]))
-				$lengths["60"] = "1 hour";
-			for($i = 120;(($reslen + $i) <= $maxtimes["total"]) && ($i <= $maxtimes["extend"]); $i += 60) {
-				$lengths[$i] = $i / 60 . " hours";
-			}
-		}
-		else {
-			if($timeToNext >= 15 && (($reslen + 15) <= $maxtimes["total"]) && (15 <= $maxtimes["extend"]))
-				$lengths["15"] = "15 minutes";
-			if($timeToNext >= 30 && (($reslen + 30) <= $maxtimes["total"]) && (30 <= $maxtimes["extend"]))
-				$lengths["30"] = "30 minutes";
-			if($timeToNext >= 45 && (($reslen + 45) <= $maxtimes["total"]) && (45 <= $maxtimes["extend"]))
-				$lengths["45"] = "45 minutes";
-			if($timeToNext >= 60 && (($reslen + 60) <= $maxtimes["total"]) && (60 <= $maxtimes["extend"]))
-				$lengths["60"] = "1 hour";
-			for($i = 120; ($i <= $timeToNext) && (($reslen + $i) <= $maxtimes["total"]) && ($i <= $maxtimes["extend"]); $i += 60) {
-				$lengths[$i] = $i / 60 . " hours";
-			}
-		}
-		# do we need this?
-		/*if($timeToNext > 60 && (($reslen + $timeToNext) <= $maxtimes["total"]) && ($timeToNext <= $maxtimes["extend"]))
-			if($timeToNext % 60 == 0)
-				$lengths[$timeToNext] = $timeToNext / 60 . " hours";
-			else
-				$lengths[$timeToNext] = sprintf("%.2f hours", $timeToNext / 60);*/
-		print "<FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
-		if($openend) {
-			if(! empty($lengths)) {
-				if($submitErr && $data['ending'] == 'date') {
-					$chk['length'] = '';
-					$chk['date'] = 'checked';
-				}
-				else {
-					$chk['length'] = 'checked';
-					$chk['date'] = '';
-				}
-				print "<INPUT type=radio name=ending value=length {$chk['length']}>";
-				print "Extend reservation by:\n";
-				if($submitErr)
-					printSelectInput("length", $lengths, $data['length']);
+				if(! $request['serverrequest'] && $durationmatch)
+					$h .= "<br><INPUT type=\"radio\" name=\"ending\" id=\"dateradio\">";
 				else
-					printSelectInput("length", $lengths, 30);
-				print "<br><INPUT type=radio name=ending value=date {$chk['date']}>";
+					$h .= "<br><INPUT type=\"radio\" name=\"ending\" id=\"dateradio\" checked>";
+				$tmp = explode(' ', $request['end']);
+				$edate = $tmp[0];
+				$etime = $tmp[1];
 			}
-			else
-					print "<INPUT type=hidden name=ending value=date>\n";
-			print "Change ending to:\n";
-			$enddate = $request['end'];
-			if($submitErr)
-				$enddate = $data['enddate'];
-			print "<INPUT type=text name=enddate size=20 value=\"$enddate\">(YYYY-MM-DD HH:MM:SS)\n";
-			printSubmitErr(ENDDATEERR);
-			if($timeToNext > -1) {
-				$extend = $unixend + (($timeToNext - 15) * 60);
-				$extend = unixToDatetime($extend);
-				print "<br><font color=red><strong>NOTE:</strong> Due to an upcoming ";
-				print "reservation on the same computer,<br>\n";
-				print "you can only extend this reservation until $extend.</font>\n";
-			}
+			$h .= "<label for=\"dateradio\">";
+			$h .= "End:";
+			$h .= "</label>";
+			$h .= "<div type=\"text\" dojoType=\"dijit.form.DateTextBox\" ";
+			$h .= "id=\"openenddate\" style=\"width: 78px\" value=\"$edate\" ";
+			$h .= "onChange=\"selectEnding();\"></div>";
+			$h .= "<div type=\"text\" dojoType=\"dijit.form.TimeTextBox\" ";
+			$h .= "id=\"openendtime\" style=\"width: 78px\" value=\"T$etime\" ";
+			$h .= "onChange=\"selectEnding();\"></div>";
+			$h .= "<small>(" . date('T') . ")</small>";
 		}
-		else {
-			print "Extend reservation by: \n";
-			printSelectInput("length", $lengths, 30);
-		}
-		print "<br>\n";
-		$cdata['started'] = 1;
-	}
-	else {
-		$imgdata = getImages(1, $reservation['imageid']);
-		$maxlen = $imgdata[$reservation['imageid']]['maxinitialtime'];
-		print "<FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
-		printReserveItems(1, 0, $len, $maxlen, $startArr[0], $startArr[1], $startArr[2], $startArr[3], 1);
-		$cdata['started'] = 0;
-	}
-	print "<br>\n";
-	print "<table summary=\"\">\n";
-	print "  <TR valign=top>\n";
-	print "    <TD>\n";
-	$cdata['requestid'] = $requestid;
-	$cdata['openend'] = $openend;
-	$cdata['imageid'] = $reservation['imageid'];
-	$cont = addContinuationsEntry('confirmEditRequest', $cdata, SECINDAY, 0, 1, 1);
-	print "      <INPUT type=hidden name=continuation value=\"$cont\">\n";
-	print "      <INPUT type=submit value=\"Confirm Changes\">\n";
-	print "      </FORM>\n";
-	print "    </TD>\n";
-	print "    <TD>\n";
-	print "      <FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
-	$cont = addContinuationsEntry('viewRequests');
-	print "      <INPUT type=hidden name=continuation value=\"$cont\">\n";
-	print "      <INPUT type=submit value=Cancel>\n";
-	print "      </FORM>\n";
-	print "    </TD>\n";
-	print "  </TR>\n";
-	print "</table>\n";
-
-	printEditNewUpdate($request, $reservation);
-}
-
-////////////////////////////////////////////////////////////////////////////////
-///
-/// \fn printEditNewUpdate($request, $res)
-///
-/// \param $request - array of request data from getRequestInfo
-/// \param $res - reservation part of $request array
-///
-/// \brief prints a form for allowing the user to save the current image as a
-/// new image or update the existing image
-///
-////////////////////////////////////////////////////////////////////////////////
-function printEditNewUpdate($request, $res) {
-	global $user;
-	# do not allow save/update for cluster images
-	if(count($request['reservations']) > 1)
-		return;
-
-	# if already an imaging reservation, don't display update info here
-	if($request['forimaging'])
-		return;
-	
-	# don't allow save/update unless reservation has made inuse state
-	if($request['stateid'] != 8 && $request['laststateid'] != 8)
-		return;
-
-	$resources = getUserResources(array("imageAdmin"));
-	if(! array_key_exists($res['imageid'], $resources['image']))
-		return;
-
-	$compid = $request['reservations'][0]['computerid'];
-	$comp = getComputers(0, 0, $compid);
-	if($comp[$compid]['type'] != 'blade')
-		return;
-
-	print "<h2>Save as New Image / Update Image</h2>\n";
-	print "<FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
-	$cdata = array('requestid' => $request['id']);
-	$cont = addContinuationsEntry('newImage', $cdata, SECINDAY, 0);
-	print "<INPUT type=radio name=continuation value=\"$cont\" id=newimage checked>";
-	print "<label for=newimage>Save as New Image</label><br>\n";
-	$imageData = getImages(0, $res['imageid']);
-	if($imageData[$res['imageid']]['ownerid'] != $user['id']) {
-		print "<INPUT type=radio name=continuation value=\"$cont\" ";
-		print "id=updateimage disabled><label for=updateimage><font color=gray>";
-		print "Update Existing Image</font></label>";
-	}
-	else {
-		$cdata['nextmode'] = 'updateExistingImage';
-		$cont = addContinuationsEntry('imageClickThroughAgreement', $cdata, SECINDAY, 0);
-		print "<INPUT type=radio name=continuation value=\"$cont\" ";
-		print "id=updateimage><label for=updateimage>Update Existing Image";
-		print "</label>";
-	}
-	print "<br><br>\n";
-	print "<INPUT type=submit value=\"Save/Update\">\n";
-	print "</FORM>\n";
-}
-
-////////////////////////////////////////////////////////////////////////////////
-///
-/// \fn confirmEditRequest()
-///
-/// \brief prints a page confirming the change the user requested for his
-/// request
-///
-////////////////////////////////////////////////////////////////////////////////
-function confirmEditRequest() {
-	global $submitErr;
-	$data = processRequestInput(1);
-	if($submitErr) {
-		editRequest();
+		$h .= "<br><br>";
+		$cont = addContinuationsEntry('AJsubmitEditRequest', $cdata, SECINDAY, 1, 0);
+		sendJSON(array('status' => 'modify', 'html' => $h, 'cont' => $cont));
 		return;
 	}
-	$cdata = getContinuationVar();
-	$request = getRequestInfo($cdata["requestid"]);
-	if($request['forimaging'])
-		$reservation = $request['reservations'][0];
-	else {
+	# check for max time being reached
+	if($request['forimaging'] && $maxtimes['total'] < 720)
+		$maxcheck = 720;
+	else
+		$maxcheck = $maxtimes['total'];
+	if(! $openend && ($reslen >= $maxcheck)) {
+		$h .= "You are only allowed to extend your reservation such that it ";
+		$h .= "has a total length of " . minToHourMin($maxcheck);
+		$h .= ". This reservation<br>already meets that length. Therefore, ";
+		$h .= "you are not allowed to extend your reservation any further.<br><br>";
+		sendJSON(array('status' => 'nomodify', 'html' => $h));
+		return;
+	}
+	// if started, only allow end to be modified
+	# check for following reservations
+	$timeToNext = timeToNextReservation($request);
+	# check for 30 minutes because need 15 minute buffer and min can 
+	# extend by is 15 min
+	if($timeToNext < 30) {
+		$movedall = 1;
 		foreach($request["reservations"] as $res) {
-			if($res["forcheckout"]) {
-				$reservation = $res;
+			if(! moveReservationsOffComputer($res["computerid"], 1)) {
+				$movedall = 0;
 				break;
 			}
 		}
+		if(! $movedall) {
+			$h .= "The computer you are using has another reservation<br>";
+			$h .= "immediately following yours. Therefore, you cannot<br>";
+			$h .= "extend your reservation because it would overlap<br>";
+			$h .= "with the next one.<br>";
+			sendJSON(array('status' => 'nomodify', 'html' => $h));
+			return;
+		}
+		$timeToNext = timeToNextReservation($request);
 	}
-	print "<H2>Modify Reservation</H2>\n";
-	print "<FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
-	if($cdata["started"]) {
-		if($cdata['openend'] && $data['ending'] == 'date') {
-			print "Change ending for <b>{$reservation["prettyimage"]}</b> ";
-			print "to {$data['enddate']}?<br><br>\n";
+	if($timeToNext >= 15)
+		$timeToNext -= 15;
+	//if have time left to extend it, create an array of lengths based on maxextend that has a cap
+	# so we don't run into another reservation and we can't extend past the totalmax
+	$lengths = array();
+	if($request['forimaging'] && $maxtimes['total'] < 720) # make sure at least 12 hours available for imaging reservations
+		$maxtimes['total'] = 720;
+	if($timeToNext == -1) {
+		// there is no following reservation
+		if((($reslen + 15) <= $maxtimes["total"]) && (15 <= $maxtimes["extend"]))
+			$lengths["15"] = "15 minutes";
+		if((($reslen + 30) <= $maxtimes["total"]) && (30 <= $maxtimes["extend"]))
+			$lengths["30"] = "30 minutes";
+		if((($reslen + 60) <= $maxtimes["total"]) && (60 <= $maxtimes["extend"]))
+			$lengths["60"] = "1 hour";
+		for($i = 120;(($reslen + $i) <= $maxtimes["total"]) && ($i <= $maxtimes["extend"]); $i += 60) {
+			$lengths[$i] = $i / 60 . " hours";
 		}
-		else {
-			print "Extend reservation for <b>{$reservation["prettyimage"]}</b> ";
-			print "by " . prettyLength($data["length"]) . "?<br><br>\n";
-		}
-
-		$unixstart = datetimeToUnix($request["start"]);
-		$curlen = (datetimeToUnix($request["end"]) - $unixstart) / 60;
-		if($unixstart < datetimeToUnix($request["daterequested"])) {
-			$curlen -= 15;
-		}
-		$cdata["extend"] = $data["length"];
-		$cdata["length"] = $curlen + $data["length"];
 	}
 	else {
-		print "Change reservation for <b>" . $reservation["prettyimage"];
-		print "</b> starting ";
-		if(datetimeToUnix($request["start"]) <
-		   datetimeToUnix($request["daterequested"])) {
-			print prettyDatetime($request["daterequested"]);
-		}
-		else {
-			print prettyDatetime($request["start"]);
-		}
-		print "<br>\nto ";
-		if($data['ending'] == 'date') {
-			print "start {$data["day"]} at {$data["hour"]}:";
-			if($data["minute"] == 0)
-				print "00";
-			else
-				print $data["minute"];
-			print " {$data["meridian"]} and end ";
-			$tmp = date('n/j/Y-g:i a', datetimeToUnix($data["enddate"]));
-			$tmp = explode('-', $tmp);
-			print "{$tmp[0]} at {$tmp[1]}?<br><br>\n";
-		}
-		else {
-			print "{$data["day"]}, at {$data["hour"]}:";
-			if($data["minute"] == 0)
-				print "00";
-			else
-				print $data["minute"];
-			print " {$data["meridian"]} ";
-			print "for " . prettyLength($data["length"]) . "?<br><br>\n";
+		if($timeToNext >= 15 && (($reslen + 15) <= $maxtimes["total"]) && (15 <= $maxtimes["extend"]))
+			$lengths["15"] = "15 minutes";
+		if($timeToNext >= 30 && (($reslen + 30) <= $maxtimes["total"]) && (30 <= $maxtimes["extend"]))
+			$lengths["30"] = "30 minutes";
+		if($timeToNext >= 45 && (($reslen + 45) <= $maxtimes["total"]) && (45 <= $maxtimes["extend"]))
+			$lengths["45"] = "45 minutes";
+		if($timeToNext >= 60 && (($reslen + 60) <= $maxtimes["total"]) && (60 <= $maxtimes["extend"]))
+			$lengths["60"] = "1 hour";
+		for($i = 120; ($i <= $timeToNext) && (($reslen + $i) <= $maxtimes["total"]) && ($i <= $maxtimes["extend"]); $i += 60) {
+			$lengths[$i] = $i / 60 . " hours";
 		}
 	}
-	print "<table summary=\"\">\n";
-	print "  <TR valign=top>\n";
-	print "    <TD>\n";
-	$cdata = array_merge($data, $cdata);
-	$cdata['imageid'] = $reservation['imageid'];
-	$cdata['imagerevisionid'] = $reservation['imagerevisionid'];
-	$cdata['prettyimage'] = $reservation['prettyimage'];
-	if($submitErr)
-		$cont = addContinuationsEntry('submitEditRequest', $cdata, SECINDAY, 1, 0);
-	else
-		$cont = addContinuationsEntry('submitEditRequest', $cdata, SECINDAY, 0, 0);
-	print "      <INPUT type=hidden name=continuation value=\"$cont\">\n";
-	print "      <INPUT type=submit value=Submit>\n";
-	print "      </FORM>\n";
-	print "    </TD>\n";
-	print "    <TD>\n";
-	print "      <FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
-	$cont = addContinuationsEntry('viewRequests');
-	print "      <INPUT type=hidden name=continuation value=\"$cont\">\n";
-	print "      <INPUT type=submit value=Cancel>\n";
-	print "      </FORM>\n";
-	print "    </TD>\n";
-	print "  </TR>\n";
-	print "</table>\n";
+	$cdata['lengths'] = array_keys($lengths);
+	if($timeToNext == -1 || $timeToNext >= $maxtimes['total']) {
+		if($openend) {
+			if(! empty($lenghts)) {
+				$h .= "You can extend this reservation by a selected amount or<br>";
+				$h .= "change the end time to a specified date and time.<br><br>";
+			}
+			else
+				$h .= "Modify the end time for this reservation:<br><br>";
+		}
+		else {
+			if($request['forimaging'] && $maxtimes['total'] < 720)
+				$maxcheck = 720;
+			else
+				$maxcheck = $maxtimes['total'];
+			$h .= "You can extend this reservation by up to ";
+			$h	.= minToHourMin($maxtimes["extend"]) . ", but not<br>exceeding ";
+			$h	.= minToHourMin($maxcheck) . " for your total reservation ";
+			$h .= "time.<br><br>";
+		}
+	}
+	else {
+		$t  = "The computer you are using has another reservation following ";
+		$t .= "yours. Therefore, you can only extend this reservation for ";
+		$t .= "another " . prettyLength($timeToNext) . ". <br>";
+		$h .= preg_replace("/(.{1,60}[ ])/", '\1<br>', $t);
+	}
+	# extend by drop down
+	# extend by specifying end time if $openend
+	if($openend) {
+		if($request['serverrequest']) {
+			$cdata['allowindefiniteend'] = 1;
+			$endchecked = 0;
+			if($request['end'] == '2038-01-01 00:00:00') {
+				$h .= "<INPUT type=\"radio\" name=\"ending\" id=\"indefiniteradio\" checked>";
+				$h .= "<label for=\"indefiniteradio\">Indefinite Ending</label>";
+				$h .= "<br><INPUT type=\"radio\" name=\"ending\" id=\"dateradio\">";
+			}
+			else {
+				$h .= "<INPUT type=\"radio\" name=\"ending\" id=\"indefiniteradio\">";
+				$h .= "<label for=\"indefiniteradio\">Indefinite Ending</label>";
+				$h .= "<br><INPUT type=\"radio\" name=\"ending\" id=\"dateradio\" checked>";
+				$endchecked = 1;
+			}
+			$h .= "<label for=\"dateradio\">";
+		}
+		elseif(! empty($lengths)) {
+			$h .= "<INPUT type=\"radio\" name=\"ending\" id=\"lengthradio\" checked>";
+			$h .= "<label for=\"lengthradio\">Extend reservation by:</label>";
+			$h .= "<select dojoType=\"dijit.form.Select\" id=\"length\" ";
+			$h .= "onChange=\"selectLength();\">";
+			foreach($lengths as $id => $name)
+				$h .= "<option value=\"$id\">$name</option>";
+			$h .= "</select>";
+			$h .= "<br><INPUT type=\"radio\" name=\"ending\" id=\"dateradio\">";
+			$h .= "<label for=\"dateradio\">";
+		}
+		if($request['serverrequest']) {
+			$h .= "End:";
+			if($endchecked) {
+				$tmp = explode(' ', $request['end']);
+				$edate = $tmp[0];
+				$etime = $tmp[1];
+			}
+			else {
+				$edate = '';
+				$etime = '';
+			}
+		}
+		else {
+			$h .= "Change ending to:";
+			$tmp = explode(' ', $request['end']);
+			$edate = $tmp[0];
+			$etime = $tmp[1];
+		}
+		if(! empty($lengths) || $request['serverrequest'])
+			$h .= "</label>";
+		$h .= "<div type=\"text\" dojoType=\"dijit.form.DateTextBox\" ";
+		$h .= "id=\"openenddate\" style=\"width: 78px\" value=\"$edate\" ";
+		$h .= "onChange=\"selectEnding();\"></div>";
+		$h .= "<div type=\"text\" dojoType=\"dijit.form.TimeTextBox\" ";
+		$h .= "id=\"openendtime\" style=\"width: 78px\" value=\"T$etime\" ";
+		$h .= "onChange=\"selectEnding();\"></div>";
+		$h .= "<small>(" . date('T') . ")</small>";
+		$h .= "<INPUT type=\"hidden\" name=\"enddate\" id=\"enddate\">";
+		if($timeToNext > -1) {
+			$extend = $unixend + (($timeToNext - 15) * 60); # TODO may not need the -15
+			$extend = date('m/d/Y g:i A', $extend);
+			$h .= "<br><font color=red><strong>NOTE:</strong> Due to an upcoming ";
+			$h .= "reservation on the same computer,<br>";
+			$h .= "you can only extend this reservation until $extend.</font>";
+			$cdata['maxextend'] = $extend;
+		}
+	}
+	else {
+		$h .= "Extend reservation by:";
+		$h .= "<select dojoType=\"dijit.form.Select\" id=\"length\">";
+		foreach($lengths as $id => $name)
+			$h .= "<option value=\"$id\">$name</option>";
+		$h .= "</select>";
+	}
+	$h .= "<br><br>";
+	$cont = addContinuationsEntry('AJsubmitEditRequest', $cdata, SECINDAY, 1, 0);
+	$data = array('status' => 'modify',
+	              'html' => $h,
+	              'requestid' => $requestid,
+	              'cont' => $cont);
+	sendJSON($data);
+	return;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn submitEditRequest()
+/// \fn AJsubmitEditRequest()
 ///
 /// \brief submits changes to a request and prints that it has been changed
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function submitEditRequest() {
-	global $user, $submitErr, $mode;
-	$data = getContinuationVar();
-	$request = getRequestInfo($data["requestid"]);
+function AJsubmitEditRequest() {
+	global $user;
+	$requestid = getContinuationVar('requestid');
+	$openend = getContinuationVar('openend');
+	$modifystart = getContinuationVar('modifystart');
+	$startdays = getContinuationVar('startdays');
+	$lengths = getContinuationVar('lengths');
+	$maxextend = getContinuationVar('maxextend');
+	$allowindefiniteend = getContinuationVar('allowindefiniteend');
 
-	print "<H2>Modify Reservation</H2>\n";
+	$request = getRequestInfo($requestid, 1);
+	if(is_null($request)) {
+		$cdata = getContinuationVar();
+		$cont = addContinuationsEntry('AJsubmitEditRequest', $cdata, SECINDAY, 1, 0);
+		sendJSON(array('status' => 'norequest',
+		               'html' => 'The selected reservation no longer exists.<br><br>',
+		               'cont' => $cont));
+		return;
+	}
 
-	$hour = $data["hour"];
-	if($data["hour"] == 12) {
-		if($data["meridian"] == "am") {
-			$hour = 0;
+	if($modifystart) {
+		$day = processInputVar('day', ARG_NUMERIC, 0);
+		if(! in_array($day, $startdays)) {
+			$cdata = getContinuationVar();
+			$cont = addContinuationsEntry('AJsubmitEditRequest', $cdata, SECINDAY, 1, 0);
+			sendJSON(array('status' => 'error',
+			               'errmsg' => 'Invalid start day submitted',
+			               'cont' => $cont));
+			return;
 		}
+		$starttime = processInputVar('starttime', ARG_STRING);
+		if(! preg_match('/^(([01][0-9])|(2[0-3]))([0-5][0-9])$/', $starttime, $matches)) {
+			$cdata = getContinuationVar();
+			$cont = addContinuationsEntry('AJsubmitEditRequest', $cdata, SECINDAY, 1, 0);
+			sendJSON(array('status' => 'error',
+			               'errmsg' => "Invalid start time submitted",
+			               'cont' => $cont));
+			return;
+		}
+		preg_match('/^([0-9]{4})([0-9]{2})([0-9]{2})$/', $day, $tmp);
+		$startdt = "{$tmp[1]}-{$tmp[2]}-{$tmp[3]} {$matches[1]}:{$matches[4]}:00";
+		$startts = datetimeToUnix($startdt);
 	}
-	elseif($data["meridian"] == "pm") {
-		$hour = $data["hour"] + 12;
-	}
-
-	$tmp = explode('/', $data["day"]);
-	$start = mktime($hour, $data["minute"], "0", $tmp[0], $tmp[1], $tmp[2]);
-	if($data['openend'] && $data['ending'] == 'date')
-		$end = datetimeToUnix($data['enddate']);
 	else {
-		if(datetimeToUnix($request["start"]) < datetimeToUnix($request["daterequested"]))
-			$end = $start + $data["length"] * 60 + 900;
-		else
-			$end = $start + $data["length"] * 60;
+		$startdt = $request['start'];
+		$startts = datetimeToUnix($startdt);
+	}
+	$endmode = processInputVar('endmode', ARG_STRING);
+	if($endmode == 'length') {
+		$length = processInputVar('length', ARG_NUMERIC);
+		if(! in_array($length, $lengths)) {
+			$cdata = getContinuationVar();
+			$cont = addContinuationsEntry('AJsubmitEditRequest', $cdata, SECINDAY, 1, 0);
+			sendJSON(array('status' => 'error',
+			               'errmsg' => "Invalid duration submitted",
+			               'cont' => $cont));
+			return;
+		}
+		if($modifystart)
+			$endts = $startts + ($length * 60);
+		else {
+			$tmp = datetimeToUnix($request['end']);
+			$endts = $tmp + ($length * 60);
+		}
+		$enddt = unixToDatetime($endts);
+	}
+	elseif($endmode == 'ending') {
+		$ending = processInputVar('ending', ARG_NUMERIC);
+		if(! preg_match('/^([0-9]{4})([0-9]{2})([0-9]{2})(([01][0-9])|(2[0-3]))([0-5][0-9])$/', $ending, $tmp) ||
+		   ! checkdate($tmp[2], $tmp[3], $tmp[1])) {
+			$cdata = getContinuationVar();
+			$cont = addContinuationsEntry('AJsubmitEditRequest', $cdata, SECINDAY, 1, 0);
+			sendJSON(array('status' => 'error',
+			               'errmsg' => "Invalid end date/time submitted",
+			               'cont' => $cont));
+			return;
+		}
+		$enddt = "{$tmp[1]}-{$tmp[2]}-{$tmp[3]} {$tmp[4]}:{$tmp[7]}:00";
+		$endts = datetimeToUnix($enddt);
+	}
+	elseif($allowindefiniteend && $endmode == 'indefinite') {
+		$endts = datetimeToUnix('2038-01-01 00:00:00');
+	}
+	else {
+		$cdata = getContinuationVar();
+		$cont = addContinuationsEntry('AJsubmitEditRequest', $cdata, SECINDAY, 1, 0);
+		sendJSON(array('status' => 'error',
+		               'errmsg' => "Invalid data submitted",
+		               'cont' => $cont));
+		return;
 	}
 
 	// get semaphore lock
 	if(! semLock())
 		abort(3);
 
+	$h = '';
 	$max = getMaxOverlap($user['id']);
-	if(checkOverlap($start, $end, $max, $data["requestid"])) {
+	if(checkOverlap($startts, $endts, $max, $requestid)) {
 		if($max == 0) {
-			print "<font color=\"#ff0000\">The time you requested overlaps with ";
-			print "another reservation you currently have.  You are only allowed ";
-			print "to have a single reservation at any given time. Please select ";
-			print "another time to use the application.</font><br><br>\n";
+			$h .= "The time you requested overlaps with another reservation<br>";
+			$h .= "you currently have. You are only allowed to have a single<br>";
+			$h .= "reservation at any given time. Please select another time<br>";
+			$h .= "for the reservation.<br><br>";
 		}
 		else {
-			print "<font color=\"#ff0000\">The time you requested overlaps with ";
-			print "another reservation you currently have.  You are allowed ";
-			print "to have $max overlapping reservations at any given time. ";
-			print "Please select another time to use the application.</font><br>";
-			print "<br>\n";
+			$h .= "The time you requested overlaps with another reservation<br>";
+			$h .= "you currently have. You are allowed to have $max overlapping<br>";
+			$h .= "reservations at any given time. Please select another time<br>";
+			$h .= "for the reservation.<br><br>";
 		}
-		$submitErr = 1;
-		editRequest();
+		$cdata = getContinuationVar();
+		$cont = addContinuationsEntry('AJsubmitEditRequest', $cdata, SECINDAY, 1, 0);
+		sendJSON(array('status' => 'error', 'errmsg' => $h, 'cont' => $cont));
+		semUnlock();
 		return;
 	}
-	$rc = isAvailable(getImages(), $data["imageid"], $data['imagerevisionid'],
-	                  $start, $end, $data["requestid"]);
+
+	$rc = isAvailable(getImages(), $request['reservations'][0]['imageid'],
+	                  $request['reservations'][0]['imagerevisionid'], $startts,
+	                  $endts, $requestid);
 	if($rc == -1) {
-		print "You have requested an environment that is limited in the number ";
-		print "of concurrent reservations that can be made. No further ";
-		print "reservations for the environment can be made for the time you ";
-		print "have selected. Please select another time to use the ";
-		print "environment.<br>";
-		addChangeLogEntry($request["logid"], NULL, unixToDatetime($end),
-		                  unixToDatetime($start), NULL, NULL, 0);
+		$h .= "The time you requested overlaps with another reservation<br>";
+
+		$h .= "You have requested an environment that is limited in the<br>";
+		$h .= "number of concurrent reservations that can be made. No further<br>";
+		$h .= "reservations for the environment can be made for the time you<br>";
+		$h .= "have selected. Please select another time for the reservation.<br><br>";
+		addChangeLogEntry($request["logid"], NULL, $enddt, $startdt, NULL, NULL, 0);
+		$cdata = getContinuationVar();
+		$cont = addContinuationsEntry('AJsubmitEditRequest', $cdata, SECINDAY, 1, 0);
+		sendJSON(array('status' => 'error', 'errmsg' => $h, 'cont' => $cont));
+		semUnlock();
+		return;
 	}
 	elseif($rc > 0) {
-		updateRequest($data["requestid"]);
-		if($data["started"]) {
-			if($data['openend'] && $data['ending'] == 'date') {
-				print "Your request to change the ending of your reservation for <b>";
-				print "{$data["prettyimage"]}</b> to {$data['enddate']} ";
-				print "has been accepted.<br><br>\n";
-			}
-			else {
-				$remaining = (int)(($end - time()) / 60);
-				print "Your request to extend your reservation for <b>";
-				print "{$data["prettyimage"]}</b> by " . prettyLength($data["extend"]);
-				print " has been accepted.<br><br>\n";
-				print "You now have " . prettyLength($remaining) . " remaining for ";
-				print "your reservation<br>\n";
-			}
-		}
-		else {
-			print "Your request to use <b>" . $data["prettyimage"] . "</b> on ";
-			if(datetimeToUnix($request["start"]) <
-			   datetimeToUnix($request["daterequested"])) {
-				print prettyDatetime($request["daterequested"]);
-			}
-			else
-				print prettyDatetime($start);
-			if($data['openend'] && $data['ending'] == 'date')
-				print " until " . prettyDatetime($end);
-			else
-				print " for " . prettyLength($data["length"]);
-			print " has been accepted.<br>\n";
-		}
+		updateRequest($requestid);
+		sendJSON(array('status' => 'success'));
+		semUnlock();
+		return;
 	}
 	else {
+		sendJSON(array('status' => 'unavailable'));
+		return;
+		# TODO what to do here (timetable)?
 		$cdata = array('imageid' => $data['imageid'],
 		               'length' => $data['length'],
 		               'requestid' => $data['requestid']);
 		$cont = addContinuationsEntry('selectTimeTable', $cdata);
 		if($rc == -2) {
-			print "The time you have requested is not available due to scheduled ";
-			print "system downtime for maintenance. ";
+			$h .= "The time you have requested is not available due to scheduled ";
+			$h .= "system downtime for maintenance. ";
 		}
 		else
-			print "The time you have requested is not available. ";
-		print "You may <a href=\"" . BASEURL . SCRIPT . "?continuation=$cont\">";
-		print "view a timetable</a> of free and reserved times to find ";
-		print "a time that will work for you.<br>\n";
-		addChangeLogEntry($request["logid"], NULL, unixToDatetime($end),
+			$h .= "The time you have requested is not available. ";
+		$h .= "You may <a href=\"" . BASEURL . SCRIPT . "?continuation=$cont\">";
+		$h .= "view a timetable</a> of free and reserved times to find ";
+		$h .= "a time that will work for you.<br>\n";
+		addChangeLogEntry($request["logid"], NULL, unixToDatetime($endts),
 		                  unixToDatetime($start), NULL, NULL, 0);
 	}
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn confirmDeleteRequest()
+/// \fn AJconfirmDeleteRequest()
 ///
 /// \brief prints a confirmation page about deleting a request
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function confirmDeleteRequest() {
+function AJconfirmDeleteRequest() {
 	$requestid = getContinuationVar('requestid', 0);
 	$notbyowner = getContinuationVar('notbyowner', 0);
-	$request = getRequestInfo($requestid);
+	$fromtimetable = getContinuationVar('fromtimetable', 0);
+	$request = getRequestInfo($requestid, 1);
+	if(is_null($request)) {
+		$data = array('error' => 1,
+		              'msg' => "The specified reservation no longer exists.");
+		sendJSON($data);
+		return;
+	}
 	if($request['forimaging'])
 		$reservation = $request['reservations'][0];
 	else {
@@ -1891,17 +2099,15 @@ function confirmDeleteRequest() {
 		}
 	}
 	if(datetimeToUnix($request["start"]) > time()) {
-		$title = "Delete Reservation";
 		$text = "Delete reservation for <b>" . $reservation["prettyimage"]
 		      . "</b> starting " . prettyDatetime($request["start"]) . "?<br>\n";
 	}
 	else {
-		if(! $reservation["production"]) {
-			confirmDeleteRequestProduction($request);
+		if($notbyowner == 0 && ! $reservation["production"]) {
+			AJconfirmDeleteRequestProduction($request);
 			return;
 		}
 		else {
-			$title = "End Reservation";
 			if($notbyowner == 0) {
 				$text = "Are you finished with your reservation for <strong>"
 						. $reservation["prettyimage"] . "</strong> that started ";
@@ -1913,41 +2119,30 @@ function confirmDeleteRequest() {
 				      . "{$reservation["prettyimage"]}</strong> that started ";
 			}
 			if(datetimeToUnix($request["start"]) <
-				datetimeToUnix($request["daterequested"])) {
+				datetimeToUnix($request["daterequested"]))
 				$text .= prettyDatetime($request["daterequested"]);
-			}
-			else {
+			else
 				$text .= prettyDatetime($request["start"]);
-			}
 			$text .= "?<br>\n";
 		}
 	}
-	print "<H2>$title</H2>\n";
-	print $text;
-	print "<table summary=\"\">\n";
-	print "  <TR valign=top>\n";
-	print "    <TD>\n";
-	print "      <FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
-	$cdata = array('requestid' => $requestid, 'notbyowner' => $notbyowner);
-	$cont = addContinuationsEntry('submitDeleteRequest', $cdata, SECINDAY, 0, 0);
-	print "      <INPUT type=hidden name=continuation value=\"$cont\">\n";
-	print "      <INPUT type=submit value=Yes>\n";
-	print "      </FORM>\n";
-	print "    </TD>\n";
-	print "    <TD>\n";
-	print "      <FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
-	$cont = addContinuationsEntry('viewRequests');
-	print "      <INPUT type=hidden name=continuation value=\"$cont\">\n";
-	print "      <INPUT type=submit value=No>\n";
-	print "      </FORM>\n";
-	print "    </TD>\n";
-	print "  </TR>\n";
-	print "</table>\n";
+	$cdata = array('requestid' => $requestid,
+	               'notbyowner' => $notbyowner,
+	               'fromtimetable' => $fromtimetable);
+	if($fromtimetable)
+		$cdata['ttdata'] = getContinuationVar('ttdata');
+	$cont = addContinuationsEntry('AJsubmitDeleteRequest', $cdata, SECINDAY, 0, 0);
+	$text = preg_replace("/(.{1,60}[ \n])/", '\1<br>', $text);
+	$data = array('content' => $text,
+	              'cont' => $cont,
+	              'requestid' => $requestid,
+	              'btntxt' => 'Delete Reservation');
+	sendJSON($data);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn confirmDeleteRequestProduction($request)
+/// \fn AJconfirmDeleteRequestProduction($request)
 ///
 /// \param $request - a request array as returend from getRequestInfo
 ///
@@ -1955,82 +2150,96 @@ function confirmDeleteRequest() {
 /// production or just end this reservation
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function confirmDeleteRequestProduction($request) {
+function AJconfirmDeleteRequestProduction($request) {
 	$cdata = array('requestid' => $request['id']);
-	print "<H2>End Reservation/Make Production</H2>\n";
-	print	"Are you satisfied that this environment is ready to be made production ";
-	print "and replace the current production version, or would you just like to ";
-	print "end this reservation and test it again later?\n";
+	$text = '';
+	$title = "<big><strong>End Reservation/Make Production</strong></big><br><br>";
+	$text .=	"Are you satisfied that this environment is ready to be made production ";
+	$text .= "and replace the current production version, or would you just like to ";
+	$text .= "end this reservation and test it again later? ";
 
 	if(isImageBlockTimeActive($request['reservations'][0]['imageid'])) {
-		print "<br><br><font color=\"red\">WARNING: This environment is part of ";
-		print "an active block allocation. Changing the production version of ";
-		print "the environment at this time will result in new reservations ";
-		print "under the block allocation to have full reload times instead of ";
-		print "a &lt; 1 minutes wait. You can change the production version ";
-		print "later by going to Manage Images-&gt;Edit Image Profiles and ";
-		print "clicking Edit for this environment.</font><br>\n";
+		$text .= "<br><font color=\"red\">\nWARNING: This environment is part of ";
+		$text .= "an active block allocation. Changing the production version of ";
+		$text .= "the environment at this time will result in new reservations ";
+		$text .= "under the block allocation to have full reload times instead of ";
+		$text .= "a &lt; 1 minutes wait. You can change the production version ";
+		$text .= "later by going to Manage Images-&gt;Edit Image Profiles and ";
+		$text .= "clicking Edit for this environment.</font><br>";
 	}
 
-	print "<FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
+	$cont = addContinuationsEntry('AJsetImageProduction', $cdata, SECINDAY, 0, 1);
+	$radios = '';
+	$radios .= "<br>&nbsp;&nbsp;&nbsp;<INPUT type=radio name=continuation ";
+	$radios .= "value=\"$cont\" id=\"radioprod\"><label for=\"radioprod\">Make ";
+	$radios .= "this the production version</label><br>";
 
-	$cont = addContinuationsEntry('setImageProduction', $cdata, SECINDAY, 0, 1);
-	print "<br>&nbsp;&nbsp;&nbsp;<INPUT type=radio name=continuation ";
-	print "value=\"$cont\">Make this the production version<br>\n";
-
-	$cont = addContinuationsEntry('submitDeleteRequest', $cdata, SECINDAY, 0, 0);
-	print "&nbsp;&nbsp;&nbsp;<INPUT type=radio name=continuation ";
-	print "value=\"$cont\">Just end the reservation<br>\n";
-
-	$cont = addContinuationsEntry('viewRequests');
-	print "&nbsp;&nbsp;&nbsp;<INPUT type=radio name=continuation ";
-	print "value=\"$cont\">Neither, go back to <strong>Current Reservations";
-	print "</strong><br><br>\n";
-
-	print "<INPUT type=submit value=Submit>\n";
-	print "</FORM>\n";
+	$cont = addContinuationsEntry('AJsubmitDeleteRequest', $cdata, SECINDAY, 0, 0);
+	$radios .= "&nbsp;&nbsp;&nbsp;<INPUT type=radio name=continuation ";
+	$radios .= "value=\"$cont\" id=\"radioend\"><label for=\"radioend\">Just ";
+	$radios .= "end the reservation</label><br><br>";
+	$text = preg_replace("/(.{1,60}[ \n])/", '\1<br>', $text);
+	$data = array('content' => $title . $text . $radios,
+	              'cont' => $cont,
+	              'btntxt' => 'Submit');
+	sendJSON($data);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn submitDeleteRequest()
+/// \fn AJsubmitDeleteRequest()
 ///
 /// \brief submits deleting a request and prints that it has been deleted
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function submitDeleteRequest() {
+function AJsubmitDeleteRequest() {
+	global $mode;
+	$mode = 'AJviewRequests';
 	$requestid = getContinuationVar('requestid', 0);
+	$fromtimetable = getContinuationVar('fromtimetable', 0);
 	$request = getRequestInfo($requestid);
-	if($request['forimaging'])
-		$reservation = $request['reservations'][0];
-	else {
-		foreach($request["reservations"] as $res) {
-			if($res["forcheckout"]) {
-				$reservation = $res;
-				break;
-			}
-		}
-	}
 	deleteRequest($request);
-	if(datetimeToUnix($request["start"]) > time()) {
-		print "<H2>Delete Reservation</H2>";
-		print "The reservation for <b>" . $reservation["prettyimage"];
-		print "</b> starting " . prettyDatetime($request["start"]);
-		print " has been deleted.<br>\n";
+	if($fromtimetable) {
+		$cdata = getContinuationVar('ttdata');
+		$cont = addContinuationsEntry('showTimeTable', $cdata);
+		print "window.location.href='" . BASEURL . SCRIPT . "?continuation=$cont';";
+		return;
 	}
-	else {
-		print "<H2>End Reservation</H2>";
-		print "The reservation for <b>" . $reservation["prettyimage"];
-		print "</b> starting ";
-		if(datetimeToUnix($request["start"]) <
-		   datetimeToUnix($request["daterequested"])) {
-			print prettyDatetime($request["daterequested"]);
-		}
-		else {
-			print prettyDatetime($request["start"]);
-		}
-		print " has been released.<br>\n";
-	}
+	viewRequests();
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn AJrebootRequest()
+///
+/// \brief sets a reservation to the reboot state and refreshes the Current
+/// Reservations page
+///
+////////////////////////////////////////////////////////////////////////////////
+function AJrebootRequest() {
+	$requestid = getContinuationVar('requestid');
+	$reboottype = processInputVar('reboottype', ARG_NUMERIC);
+	$newstateid = 26;
+	if($reboottype == 1)
+		$newstateid = 28;
+	$query = "UPDATE request SET stateid = $newstateid WHERE id = $requestid";
+	doQuery($query, 101);
+	print "resRefresh();";
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn AJreinstallRequest()
+///
+/// \brief sets a reservation to the reinstall state and refreshes the Current
+/// Reservations page
+///
+////////////////////////////////////////////////////////////////////////////////
+function AJreinstallRequest() {
+	$requestid = getContinuationVar('requestid');
+	$query = "UPDATE request SET stateid = 27 WHERE id = $requestid";
+	doQuery($query, 101);
+	print "resRefresh();";
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -2055,7 +2264,7 @@ function submitDeleteRequest() {
 function printReserveItems($modifystart=1, $imaging=0, $length=60, $maxlength=0,
                            $day=NULL, $hour=NULL, $minute=NULL, $meridian=NULL,
                            $oneline=0) {
-	global $user;
+	global $user, $submitErr;
 	if(! is_numeric($length))
 		$length = 60;
 	$enddate = processInputVar("enddate", ARG_STRING);
@@ -2079,30 +2288,37 @@ function printReserveItems($modifystart=1, $imaging=0, $length=60, $maxlength=0,
 	}
 
 	if($modifystart) {
-		printSelectInput("day", $days, $inputday);
+		printSelectInput("day", $days, $inputday, 0, 0, '', "onChange='selectLater();'");
 		print "&nbsp;At&nbsp;\n";
 		$tmpArr = array();
 		for($i = 1; $i < 13; $i++) {
 			$tmpArr[$i] = $i;
 		}
-		printSelectInput("hour", $tmpArr, $hour);
+		printSelectInput("hour", $tmpArr, $hour, 0, 0, '', "onChange='selectLater();'");
 
 		$minutes = array("zero" => "00",
 							  "15" => "15",
 							  "30" => "30", 
 							  "45" => "45");
-		printSelectInput("minute", $minutes, $minute);
-		printSelectInput("meridian", array("am" => "a.m.", "pm" => "p.m."), $meridian);
+		printSelectInput("minute", $minutes, $minute, 0, 0, '', "onChange='selectLater();'");
+		printSelectInput("meridian", array("am" => "a.m.", "pm" => "p.m."), $meridian,
+		                 "onChange='selectLater();'");
 		print "<small>(" . date('T') . ")</small>";
-		//if(! $oneline)
-			print "<br><br>";
-		/*else
-			print "&nbsp;&nbsp;";*/
+		if($submitErr & STARTDAYERR)
+			printSubmitErr(STARTDAYERR);
+		elseif($submitErr & STARTHOURERR)
+			printSubmitErr(STARTHOURERR);
+		elseif($submitErr & STARTMINUTEERR)
+			printSubmitErr(STARTMINUTEERR);
+		print "<br><br>";
 		if($openend) {
-			print "&nbsp;&nbsp;&nbsp;<INPUT type=radio name=ending ";
-			print "onclick='updateWaitTime(0);' value=length checked>";
+			print "&nbsp;&nbsp;&nbsp;<INPUT type=\"radio\" name=\"ending\" ";
+			print "onclick=\"updateWaitTime(0);\" value=\"length\" checked ";
+			print "id=\"durationradio\"><label for=\"durationradio\">";
 		}
 		print "Duration:&nbsp;\n";
+		if($openend)
+			print "</label>";
 	}
 	else {
 		print "<INPUT type=hidden name=day value=$inputday>\n";
@@ -2138,13 +2354,23 @@ function printReserveItems($modifystart=1, $imaging=0, $length=60, $maxlength=0,
 	for($i = 2880; $i <= $maxtimes["initial"]; $i += 1440)
 		$lengths[$i] = $i / 1440 . " days";
 
-	printSelectInput("length", $lengths, $length, 0, 0, 'reqlength', "onChange='updateWaitTime(0);'");
+	printSelectInput("length", $lengths, $length, 0, 0, 'reqlength',
+		"onChange='updateWaitTime(0); selectDuration();'");
 	print "<br>\n";
 	if($openend) {
-		print "&nbsp;&nbsp;&nbsp;<INPUT type=radio name=ending id=openend ";
-		print "onclick='updateWaitTime(0);' value=date>Until\n";
-		print "<INPUT type=text name=enddate size=20 value=\"$enddate\">(YYYY-MM-DD HH:MM:SS)\n";
+		print "&nbsp;&nbsp;&nbsp;<INPUT type=\"radio\" name=\"ending\" id=\"openend\" ";
+		print "onclick=\"updateWaitTime(0);\" value=\"date\">";
+		print "<label for=\"openend\">Until</label>\n";
+
+		print "<div type=\"text\" dojoType=\"dijit.form.DateTextBox\" ";
+		print "id=\"openenddate\" onChange=\"setOpenEnd();\" ";
+		print "style=\"width: 78px\"></div>\n";
+		print "<div type=\"text\" dojoType=\"dijit.form.TimeTextBox\" ";
+		print "id=\"openendtime\" onChange=\"setOpenEnd();\" ";
+		print "style=\"width: 78px\"></div>\n";
+		print "<small>(" . date('T') . ")</small>\n";
 		printSubmitErr(ENDDATEERR);
+		print "<INPUT type=\"hidden\" name=\"enddate\" id=\"enddate\" value=\"$enddate\">\n";
 		print "<br>\n";
 	}
 }
@@ -2510,11 +2736,31 @@ function processRequestInput($checks=1) {
 		   ! is_numeric($checkdateArr[2]) ||
 		   ! checkdate($checkdateArr[0], $checkdateArr[1], $checkdateArr[2])) {
 			$submitErr |= STARTDAYERR;
-			$submitErrMsg[STARTDAYERR] = "The submitted start date is invalid. ";
+			$submitErrMsg[STARTDAYERR] = "The submitted start date is invalid.";
 		}
 		if(! preg_match('/^((0?[1-9])|(1[0-2]))$/', $return["hour"], $regs)) {
 			$submitErr |= STARTHOURERR;
 			$submitErrMsg[STARTHOURERR] = "The submitted hour must be from 1 to 12.";
+		}
+		if(! preg_match('/^([0-5][0-9])$/', $return["minute"], $regs)) {
+			$submitErr |= STARTMINUTEERR;
+			$submitErrMsg[STARTMINUTEERR] = "The submitted minute must be from 00 to 59.";
+		}
+		if(! preg_match('/^(am|pm)$/', $return["meridian"], $regs))
+			$return['meridian'] = 'am';
+		$checkstart = sprintf('%04d-%02d-%02d ', $checkdateArr[2], $checkdateArr[0],
+		              $checkdateArr[1]);
+		if($return['meridian'] == 'am') {
+			if($return['hour'] == '12')
+				$checkstart .= "00:{$return['minute']}:00";
+			else
+				$checkstart .= "{$return['hour']}:{$return['minute']}:00";
+		}
+		else {
+			if($return['hour'] == '12')
+				$checkstart .= "12:{$return['minute']}:00";
+			else
+				$checkstart .= ($return['hour'] + 12) . ":{$return['minute']}:00";
 		}
 	}
 
@@ -2526,45 +2772,22 @@ function processRequestInput($checks=1) {
 		}
 	}
 
-	/*if($mode == "confirmAdminEditRequest") {
-		$checkdateArr = explode('/', $return["endday"]);
-		if(! is_numeric($checkdateArr[0]) ||
-		   ! is_numeric($checkdateArr[1]) ||
-		   ! is_numeric($checkdateArr[2]) ||
-		   ! checkdate($checkdateArr[0], $checkdateArr[1], $checkdateArr[2])) {
-			$submitErr |= ENDDAYERR;
-			$submitErrMsg[ENDDAYERR] = "The submitted end date is invalid. ";
-		}
-		if(! preg_match('/^((0?[1-9])|(1[0-2]))$/', $return["endhour"])) {
-			$submitErr |= ENDHOURERR;
-			$submitErrMsg[ENDHOURERR] = "The submitted hour must be from 1 to 12.";
-		}
-	}*/
-
 	// make sure user hasn't submitted something longer than their allowed max length
 	$maxtimes = getUserMaxTimes();
-	if($mode != 'confirmEditRequest') {
-		if($return['imaging']) {
-			if($maxtimes['initial'] < 720) # make sure at least 12 hours available for imaging reservations
-				$maxtimes['initial'] = 720;
-		}
-		if($maxtimes['initial'] < $return['length']) {
-			$return['lengthchanged'] = 1;
-			$return['length'] = $maxtimes['initial'];
-		}
-		if(! $noimage) {
-			$imageData = getImages(0, $return['imageid']);
-			if($imageData[$return['imageid']]['maxinitialtime'] > 0 &&
-			   $imageData[$return['imageid']]['maxinitialtime'] < $return['length']) {
-				$return['lengthchanged'] = 1;
-				$return['length'] = $imageData[$return['imageid']]['maxinitialtime'];
-			}
-		}
+	if($return['imaging']) {
+		if($maxtimes['initial'] < 720) # make sure at least 12 hours available for imaging reservations
+			$maxtimes['initial'] = 720;
 	}
-	else {
-		if($maxtimes['extend'] < $return['length']) {
+	if($maxtimes['initial'] < $return['length']) {
+		$return['lengthchanged'] = 1;
+		$return['length'] = $maxtimes['initial'];
+	}
+	if(! $noimage) {
+		$imageData = getImages(0, $return['imageid']);
+		if($imageData[$return['imageid']]['maxinitialtime'] > 0 &&
+			$imageData[$return['imageid']]['maxinitialtime'] < $return['length']) {
 			$return['lengthchanged'] = 1;
-			$return['length'] = $maxtimes['extend'];
+			$return['length'] = $imageData[$return['imageid']]['maxinitialtime'];
 		}
 	}
 
@@ -2576,6 +2799,10 @@ function processRequestInput($checks=1) {
 		elseif(! checkdate($regs[2], $regs[3], $regs[1])) {
 			$submitErr |= ENDDATEERR;
 			$submitErrMsg[ENDDATEERR] = "The submitted date/time is invalid.";
+		}
+		elseif(! $return["started"] && datetimeToUnix($checkstart) >= datetimeToUnix($return['enddate'])) {
+			$submitErr |= ENDDATEERR;
+			$submitErrMsg[ENDDATEERR] = "The end time must be later than the start time.";
 		}
 	}
 

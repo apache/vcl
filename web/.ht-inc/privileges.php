@@ -1847,8 +1847,10 @@ function getResourcePrivRowHTML($privname, $rownum, $privs, $types,
 		}
 		// if group type is schedule, don't print available or manageMapping checkboxes
 		// if group type is managementnode, don't print available checkbox
+		// if group type is serverprofile, don't print manageMapping checkbox
 		elseif(($grptype == 'schedule' && ($type == 'available' || $type == 'manageMapping')) ||
-		      ($grptype == 'managementnode' && $type == 'available')) {
+		      ($grptype == 'managementnode' && $type == 'available') ||
+		      ($grptype == 'serverprofile' && $type == 'manageMapping')) {
 			$text .= "<TD><img src=images/blank.gif></TD>\n";
 		}
 		else {
@@ -2505,14 +2507,16 @@ function AJsubmitAddResourcePriv() {
 		return;
 	}
 	$newgroupid = processInputVar("newgroupid", ARG_NUMERIC);
-	$privs = array("computerAdmin","mgmtNodeAdmin",  "imageAdmin", "scheduleAdmin");
+	$privs = array("computerAdmin", "mgmtNodeAdmin", "imageAdmin",
+	               "scheduleAdmin", "serverProfileAdmin");
 	$resourcesgroups = getUserResources($privs, array("manageGroup"), 1);
 
 	if(! array_key_exists($newgroupid, $resourcesgroups['image']) &&
 	   ! array_key_exists($newgroupid, $resourcesgroups['computer']) &&
 	   ! array_key_exists($newgroupid, $resourcesgroups['managementnode']) &&
-	   ! array_key_exists($newgroupid, $resourcesgroups['schedule'])) {
-		$text = "You do not have rights manage the specified resource group.";
+	   ! array_key_exists($newgroupid, $resourcesgroups['schedule']) &&
+	   ! array_key_exists($newgroupid, $resourcesgroups['serverprofile'])) {
+		$text = "You do not have rights to manage the specified resource group.";
 		print "addResourceGroupPaneHide(); ";
 		print "alert('$text');";
 		return;

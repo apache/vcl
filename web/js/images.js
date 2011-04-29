@@ -19,6 +19,28 @@ var allgroups = '';
 var allcompgroups = '';
 var allimggroups = '';
 
+function RPCwrapper(data, CB, dojson) {
+	if(dojson) {
+		dojo.xhrPost({
+			url: 'index.php',
+			load: CB,
+			handleAs: "json",
+			error: errorHandler,
+			content: data,
+			timeout: 15000
+		});
+	}
+	else {
+		dojo.xhrPost({
+			url: 'index.php',
+			load: CB,
+			error: errorHandler,
+			content: data,
+			timeout: 15000
+		});
+	}
+}
+
 function addRemItem(cont, objid1, objid2, cb) {
    document.body.style.cursor = 'wait';
 	var obj = document.getElementById(objid1);
@@ -34,16 +56,10 @@ function addRemItem(cont, objid1, objid2, cb) {
 	}
 	if(listids == "")
 		return;
-	dojo.xhrPost({
-		url: 'index.php',
-		load: cb,
-		handleAs: "json",
-		error: errorHandler,
-		content: {continuation: cont,
-					 listids: listids,
-					 id: id},
-		timeout: 15000
-	});
+	var data = {continuation: cont,
+	            listids: listids,
+	            id: id};
+	RPCwrapper(data, cb, 1);
 }
 
 function addRemGroup2(data, ioArgs) {
@@ -287,15 +303,9 @@ function getImagesButton() {
 
 	obj = document.getElementById('imgcont');
 
-	dojo.xhrPost({
-		url: 'index.php',
-		handleAs: "json",
-		load: imagesCallback,
-		error: errorHandler,
-		content: {continuation: obj.value,
-					 groupid: groupid},
-		timeout: 15000
-	});
+	var data = {continuation: obj.value,
+	            groupid: groupid};
+	RPCwrapper(data, imagesCallback, 1);
 }
 
 function imagesCallback(data, ioArgs) {
@@ -330,15 +340,9 @@ function getGroupsButton() {
 
 	obj = document.getElementById('grpcont');
 
-	dojo.xhrPost({
-		url: 'index.php',
-		handleAs: "json",
-		load: groupsCallback,
-		error: errorHandler,
-		content: {continuation: obj.value,
-					 imageid: imageid},
-		timeout: 15000
-	});
+	var data = {continuation: obj.value,
+	            imageid: imageid};
+	RPCwrapper(data, groupsCallback, 1);
 }
 
 function groupsCallback(data, ioArgs) {
@@ -373,15 +377,9 @@ function getMapCompGroupsButton() {
 
 	obj = document.getElementById('compcont');
 
-	dojo.xhrPost({
-		url: 'index.php',
-		handleAs: "json",
-		load: mapCompGroupsCB,
-		error: errorHandler,
-		content: {continuation: obj.value,
-					 imagegrpid: imagegrpid},
-		timeout: 15000
-	});
+	var data = {continuation: obj.value,
+	            imagegrpid: imagegrpid};
+	RPCwrapper(data, mapCompGroupsCB, 1);
 }
 
 function mapCompGroupsCB(data, ioArgs) {
@@ -416,15 +414,9 @@ function getMapImgGroupsButton() {
 
 	obj = document.getElementById('imgcont');
 
-	dojo.xhrPost({
-		url: 'index.php',
-		handleAs: "json",
-		load: mapImgGroupsCB,
-		error: errorHandler,
-		content: {continuation: obj.value,
-					 compgrpid: compgrpid},
-		timeout: 15000
-	});
+	var data = {continuation: obj.value,
+	            compgrpid: compgrpid};
+	RPCwrapper(data, mapImgGroupsCB, 1);
 }
 
 function mapImgGroupsCB(data, ioArgs) {
@@ -446,27 +438,16 @@ function generalCB(data, ioArgs) {
 
 function updateRevisionProduction(cont) {
    document.body.style.cursor = 'wait';
-	dojo.xhrPost({
-		url: 'index.php',
-		load: generalCB,
-		error: errorHandler,
-		content: {continuation: cont},
-		timeout: 15000
-	});
+	var data = {continuation: obj.value,
+	            imagegrpid: imagegrpid};
+	RPCwrapper({continuation: cont}, generalCB);
 }
 
 function updateRevisionComments(id, cont) {
    document.body.style.cursor = 'wait';
-	var comments = dijit.byId(id).value;
-	dojo.xhrPost({
-		url: 'index.php',
-		handleAs: "json",
-		load: updateRevisionCommentsCB,
-		error: errorHandler,
-		content: {continuation: cont,
-					 comments: comments},
-		timeout: 15000
-	});
+	var data = {continuation: obj.value,
+	            comments: dijit.byId(id).value};
+	RPCwrapper(data, updateRevisionCommentsCB, 1);
 }
 
 function updateRevisionCommentsCB(data, ioArgs) {
@@ -493,15 +474,9 @@ function deleteRevisions(cont, idlist) {
 	if(checkedids.length == 0)
 		return;
 	checkedids = checkedids.join(',');
-	dojo.xhrPost({
-		url: 'index.php',
-		handleAs: "json",
-		load: deleteRevisionsCB,
-		error: errorHandler,
-		content: {continuation: cont,
-					 checkedids: checkedids},
-		timeout: 15000
-	});
+	var data = {continuation: cont,
+	            checkedids: checkedids};
+	RPCwrapper(data, deleteRevisionsCB, 1);
 }
 
 function deleteRevisionsCB(data, ioArgs) {
@@ -511,15 +486,9 @@ function deleteRevisionsCB(data, ioArgs) {
 
 function addSubimage() {
 	dijit.byId('addbtn').attr('label', 'Working...');
-	dojo.xhrPost({
-		url: 'index.php',
-		handleAs: "json",
-		load: addSubimageCB,
-		error: errorHandler,
-		content: {continuation: dojo.byId('addsubimagecont').value,
-					 imageid: dijit.byId('addsubimagesel').value},
-		timeout: 15000
-	});
+	var data = {continuation: dojo.byId('addsubimagecont').value,
+	            imageid: dijit.byId('addsubimagesel').value};
+	RPCwrapper(data, addSubimageCB, 1);
 }
 
 function addSubimageCB(data, ioArgs) {
@@ -553,15 +522,9 @@ function remSubimages() {
 		return;
 	var ids = imgids.join(',');
 	dijit.byId('rembtn').attr('label', 'Working...');
-	dojo.xhrPost({
-		url: 'index.php',
-		handleAs: "json",
-		load: remSubimagesCB,
-		error: errorHandler,
-		content: {continuation: dojo.byId('remsubimagecont').value,
-					 imageids: ids},
-		timeout: 15000
-	});
+	var data = {continuation: dojo.byId('remsubimagecont').value,
+	            imageids: ids};
+	RPCwrapper(data, remSubimagesCB, 1);
 }
 
 function remSubimagesCB(data, ioArgs) {
@@ -585,4 +548,113 @@ function remSubimagesCB(data, ioArgs) {
 	dojo.byId('addsubimagecont').value = data.items.addcont;
 	dojo.byId('remsubimagecont').value = data.items.remcont;
 	dijit.byId('rembtn').attr('label', 'Remove Selected Subimage(s)');
+}
+
+function addConnectMethod() {
+	cmstore.fetch({
+		query: {name: dijit.byId('addcmsel').value},
+		onItem: addConnectMethod2
+	});
+}
+
+function addConnectMethod2(item) {
+	if(cmstore.getValue(item, 'autoprovisioned') == 0) {
+		dojo.byId('autoconfirmcontent').innerHTML = cmstore.getValue(item, 'display');
+		dijit.byId('autoconfirmdlg').show();
+		return;
+	}
+	addConnectMethod3();
+}
+
+function addConnectMethod3() {
+	dijit.byId('addcmbtn').attr('label', 'Working...');
+	var data = {continuation: dojo.byId('addcmcont').value,
+	            newid: dijit.byId('addcmsel').value};
+	RPCwrapper(data, addConnectMethodCB, 1);
+}
+
+function addConnectMethodCB(data, ioArgs) {
+	if(data.items.error) {
+		dijit.byId('addcmbtn').attr('label', 'Add Method');
+		alert(data.items.msg);
+		return;
+	}
+	cmstore.fetch({
+		query: {name: data.items.newid},
+		onItem: function(item) {
+			cmstore.setValue(item, 'active', 1);
+		}
+	});
+	dijit.byId('addcmsel').setStore(cmstore, '', {query: {active: 0}});
+	var obj = dojo.byId('curmethodsel');
+	dojo.byId('addcmcont').value = data.items.addcont;
+	dojo.byId('remcmcont').value = data.items.remcont;
+	var index = obj.options.length;
+	obj.options[index] = new Option(data.items.name, data.items.newid, false, false);
+	if(obj.options.length == cmstore._arrayOfAllItems.length) {
+		dijit.byId('addcmsel').set('disabled', true);
+		dijit.byId('addcmbtn').set('disabled', true);
+	}
+	sortSelect(obj);
+	updateConnectionMethodList();
+	dijit.byId('addcmbtn').attr('label', 'Add Method');
+}
+
+function remConnectMethod() {
+	var obj = dojo.byId('curmethodsel');
+	var cmids = new Array();
+	for(var i = obj.options.length - 1; i >= 0; i--) {
+		if(obj.options[i].selected)
+			cmids.push(obj.options[i].value);
+	}
+	if(! cmids.length)
+		return;
+	if(cmids.length == obj.options.length) {
+		dojo.byId('cmerror').innerHTML = 'There must be at least one item in Current Methods';
+		setTimeout(function() {dojo.byId('cmerror').innerHTML = '';}, 20000);
+		return;
+	}
+	var ids = cmids.join(',');
+	dijit.byId('remcmbtn').attr('label', 'Working...');
+	var data = {continuation: dojo.byId('remcmcont').value,
+	            ids: ids};
+	RPCwrapper(data, remConnectMethodCB, 1);
+}
+
+function remConnectMethodCB(data, ioArgs) {
+	if(dijit.byId('addcmsel').get('disabled')) {
+		dijit.byId('addcmsel').set('disabled', false);
+		dijit.byId('addcmbtn').set('disabled', false);
+	}
+	if(data.items.error) {
+		dijit.byId('rembtn').attr('label', 'Remove Selected Methods');
+		alert(data.items.msg);
+		return;
+	}
+	var obj = dojo.byId('curmethodsel');
+	for(var i = obj.options.length - 1; i >= 0; i--) {
+		if(obj.options[i].selected) {
+			cmstore.fetch({
+				query: {name: obj.options[i].value},
+				onItem: function(item) {
+					cmstore.setValue(item, 'active', 0);
+				}
+			});
+			obj.remove(i);
+		}
+	}
+	dijit.byId('addcmsel').setStore(cmstore, '', {query: {active: 0}});
+	dojo.byId('addcmcont').value = data.items.addcont;
+	dojo.byId('remcmcont').value = data.items.remcont;
+	updateConnectionMethodList();
+	dijit.byId('remcmbtn').attr('label', 'Remove Selected Methods');
+}
+
+function updateConnectionMethodList() {
+	var options = dojo.byId('curmethodsel').options;
+	var items = new Array();
+	for(var i = 0; i < options.length; i++) {
+		items.push(options[i].text);
+	}
+	dojo.byId('connectmethodlist').innerHTML = items.join('<br>');
 }

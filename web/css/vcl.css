@@ -215,6 +215,10 @@
 	color: red;
 }
 
+.rederrormsg {
+	color: red;
+}
+
 #revisiontable th {
 	border: solid 1px #000000;
 	padding: 2px;
@@ -259,4 +263,7 @@
 
 #savestatus {
 	color: #008000;
+}
+.noicon {
+	display: none;
 }

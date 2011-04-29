@@ -1015,7 +1015,10 @@ function XMLRPCprocessBlockTime($blockTimesid, $ignoreprivileges=0) {
 		             'errormsg' => 'failure to communicate with database');
 	}
 	$compCompleted = $row['allocated'];
-	$compsPerAlloc = 1 + count($images[$rqdata['imageid']]['subimages']);
+	if(array_key_exists('subimages', $images[$rqdata['imageid']]))
+		$compsPerAlloc = 1 + count($images[$rqdata['imageid']]['subimages']);
+	else
+		$compsPerAlloc = 1;
 	$toallocate = ($rqdata['numMachines'] * $compsPerAlloc) - $compCompleted;
 	if($toallocate == 0)
 		return array('status' => 'completed');
@@ -1709,6 +1712,100 @@ function XMLRPCremoveUsersFromGroup($name, $affiliation, $users) {
 		             'failedusers' => $fails,
 		             'warningcode' => $code,
 		             'warningmsg' => "failed to remove $cnt users from user group");
+	}
+	return array('status' => 'success');
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn XMLRPCautoCapture($requestid)
+///
+/// \param $requestid - id of request to be captured
+///
+/// \return an array with at least one index named 'status' which will have
+/// one of these values:\n
+/// \b error - error occurred; there will be 2 additional elements in the array:
+/// \li \b errorcode - error number
+/// \li \b errormsg - error string
+///
+/// \b success - image was successfully set to be captured
+///
+/// \brief creates entries in appropriate tables to capture an image and sets
+/// the request state to image
+///
+////////////////////////////////////////////////////////////////////////////////
+function XMLRPCautoCapture($requestid) {
+	global $user, $xmlrpcBlockAPIUsers;
+	if(! in_array($user['id'], $xmlrpcBlockAPIUsers)) {
+		return array('status' => 'error',
+		             'errorcode' => 47,
+		             'errormsg' => 'access denied to XMLRPCautoCapture');
+	}
+	$query = "SELECT id FROM request WHERE id = $requestid";
+	$qh = doQuery($query, 101);
+	if(! mysql_num_rows($qh)) {
+		return array('status' => 'error',
+		             'errorcode' => 52,
+		             'errormsg' => 'specified request does not exist');
+	}
+	$reqData = getRequestInfo($requestid);
+	# check state of reservation
+	if($reqData['stateid'] != 14 || $reqData['laststateid'] != 8) {
+		return array('status' => 'error',
+		             'errorcode' => 51,
+		             'errormsg' => 'reservation not in valid state');
+	}
+	# check that not a cluster reservation
+	if(count($reqData['reservations']) > 1) {
+		return array('status' => 'error',
+		             'errorcode' => 48,
+		             'errormsg' => 'cannot image a cluster reservation');
+	}
+	require_once(".ht-inc/images.php");
+	$imageid = $reqData['reservations'][0]['imageid'];
+	$imageData = getImages(0, $imageid);
+	$captime = unixToDatetime(time());
+	$comments = "start: {$reqData['start']}<br>"
+	          . "end: {$reqData['end']}<br>"
+	          . "computer: {$reqData['reservations'][0]['reservedIP']}<br>"
+	          . "capture time: $captime";
+	# create new revision if requestor is owner and not a kickstart image
+	if($imageData[$imageid]['installtype'] != 'kickstart' &&
+	   $reqData['userid'] == $imageData[$imageid]['ownerid']) {
+		$rc = updateExistingImage($requestid, $reqData['userid'], $comments, 1);
+		if($rc == 0) {
+			return array('status' => 'error',
+			             'errorcode' => 49,
+			             'errormsg' => 'error encountered while attempting to create new revision');
+		}
+	}
+	# create a new image if requestor is not owner or a kickstart image
+	else {
+		$ownerdata = getUserInfo($reqData['userid'], 1, 1);
+		$desc = "This is an autocaptured image.<br>"
+		      . "captured from image: {$reqData['reservations'][0]['prettyimage']}<br>"
+		      . "captured on: $captime<br>"
+		      . "owner: {$ownerdata['unityid']}@{$ownerdata['affiliation']}<br>";
+		$data = array('requestid' => $requestid,
+		              'description' => $desc,
+		              'usage' => '',
+		              'owner' => "{$ownerdata['unityid']}@{$ownerdata['affiliation']}",
+		              'prettyname' => "Autocaptured ({$ownerdata['unityid']} - $requestid)",
+		              'minram' => 64,
+		              'minprocnumber' => 1,
+		              'minprocspeed' => 500,
+		              'minnetwork' => 10,
+		              'maxconcurrent' => '',
+		              'checkuser' => 1,
+		              'rootaccess' => 1,
+		              'sysprep' => 1,
+		              'comments' => $comments);
+		$rc = submitAddImage($data, 1);
+		if($rc == 0) {
+			return array('status' => 'error',
+			             'errorcode' => 50,
+			             'errormsg' => 'error encountered while attempting to create image');
+		}
 	}
 	return array('status' => 'success');
 }
