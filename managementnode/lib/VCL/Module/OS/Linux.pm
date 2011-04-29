@@ -2035,8 +2035,6 @@ sub get_file_size {
 			
 			$total_bytes_used += $file_bytes_allocated;
 			$total_bytes_reserved += $file_bytes;
-			
-			#print "$file_count: '$path', used: $file_bytes, allocated: $file_bytes_allocated, ($file_blocks * $block_size)\n";
 		}
 		elsif ($type =~ /directory/) {
 			$path =~ s/[\\\/\*]+$//g;
@@ -2054,7 +2052,6 @@ sub get_file_size {
 		}
 	}
 	
-	my $calling_sub = (caller(1))[3] || '';
 	if ($calling_sub !~ /get_file_size/) {
 		notify($ERRORS{'DEBUG'}, 0, "size of '$file_path' on $computer_node_name:\n" .
 				 "file count: $file_count\n" .
@@ -2340,12 +2337,16 @@ sub generate_ext_sshd_config {
 		if($l =~ /^(.)?X11Forwarding/){
 			$l = "";
 		}
+		if($l =~ /^(.)?PasswordAuthentication/){
+			$l = "";
+		}
 	}
 	
 	push(@ext_sshd_config, "PidFile /var/run/ext_sshd.pid\n");
 	push(@ext_sshd_config, "PermitRootLogin no\n");
 	push(@ext_sshd_config, "UseDNS no\n");
 	push(@ext_sshd_config, "X11Forwarding yes\n");
+	push(@ext_sshd_config, "PasswordAuthentication yes\n");
 	
 	#clear temp file
 	unlink($tmpfile);
