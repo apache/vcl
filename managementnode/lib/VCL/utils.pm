@@ -4206,10 +4206,19 @@ sub get_request_info {
 	computerprovisioningmodule.name AS computerprovisioningmodule_name,
 	computerprovisioningmodule.prettyname AS computerprovisioningmodule_prettyname,
 	computerprovisioningmodule.description AS computerprovisioningmodule_description,
-	computerprovisioningmodule.perlpackage AS computerprovisioningmodule_perlpackage
+	computerprovisioningmodule.perlpackage AS computerprovisioningmodule_perlpackage,
+	
+	serverrequest.id AS serverrequest_id,
+	serverrequest.requestid AS serverrequest_requestid,
+	serverrequest.fixedIP AS serverrequest_fixedIP,
+	serverrequest.fixedMAC AS serverrequest_fixedMAC,
+	serverrequest.admingroupid AS serverrequest_admingroupid,
+	serverrequest.logingroupid AS serverrequest_logingroupid,
+	serverrequest.monitored AS serverrequest_monitored
 
    FROM
-   request,
+   request 
+   LEFT JOIN (serverrequest) ON (serverrequest.requestid = request.id),
    user,
    adminlevel,
    affiliation,
@@ -4350,7 +4359,8 @@ sub get_request_info {
 		else {
 			notify($ERRORS{'DEBUG'}, 0, "imagerevisionid is not set for computer");
 		}
-		
+
+	
 		# Loop through all the columns returned for the reservation
 		foreach my $key (keys %reservation_row) {
 			my $value = $reservation_row{$key};
@@ -4417,6 +4427,9 @@ sub get_request_info {
 			elsif ($key =~ /computerprovisioningmodule_/) {
 				$request_info{reservation}{$reservation_id}{computer}{provisioning}{module}{$original_key} = $value;
 			}
+			elsif ($key =~ /serverrequest_/) {
+				$request_info{reservation}{$reservation_id}{$original_key} = $value;
+			}
 			else {
 				notify($ERRORS{'WARNING'}, 0, "unknown key found in SQL data: $key");
 			}
@@ -4448,7 +4461,7 @@ sub get_request_info {
 	# Each selected row represents a reservation associated with this request
 
 	# Fix some of the data
-
+	
 	# Set the user's preferred name to the first name if it isn't defined
 	if (!defined($request_info{user}{preferredname}) || !$request_info{user}{preferredname}) {
 		$request_info{user}{preferredname} = $request_info{user}{firstname};
@@ -4510,6 +4523,38 @@ sub get_request_info {
 
 	# Loop through all the reservations
 	foreach my $reservation_id (keys %{$request_info{reservation}}) {
+	
+		# Set server request NULL values to 0
+		if (defined($request_info{reservation}{$reservation_id}{serverrequest}{id})) {
+			
+			notify($ERRORS{'DEBUG'}, 0, "Server Request load - disabling user checks");
+			$request_info{reservation}{$reservation_id}{image}{imagemeta}{checkuser} = 0;
+
+			if (!defined($request_info{reservation}{$reservation_id}{serverrequest}{fixedIP})){
+				$request_info{reservation}{$reservation_id}{serverrequest}{fixedIP} = 0;
+			}
+			if (!defined($request_info{reservation}{$reservation_id}{serverrequest}{fixedMAC})){
+				$request_info{reservation}{$reservation_id}{serverrequest}{fixedMAC} = 0;
+			}
+			if (!defined($request_info{reservation}{$reservation_id}{serverrequest}{admingroupid})){
+				$request_info{reservation}{$reservation_id}{serverrequest}{admingroupid} = 0;
+			}
+			if (!defined($request_info{reservation}{$reservation_id}{serverrequest}{logingroupid})){
+				$request_info{reservation}{$reservation_id}{serverrequest}{logingroupid} = 0;
+			}
+			if (!defined($request_info{reservation}{$reservation_id}{serverrequest}{monitored})){
+				$request_info{reservation}{$reservation_id}{serverrequest}{monitored} = 0;
+			}
+		}
+		else {
+			#No server request, set all values to 0, so datastructure doesn't complain
+			$request_info{reservation}{$reservation_id}{serverrequest}{id} = 0;
+			$request_info{reservation}{$reservation_id}{serverrequest}{fixedIP} = 0;
+			$request_info{reservation}{$reservation_id}{serverrequest}{fixedMAC} = 0;
+			$request_info{reservation}{$reservation_id}{serverrequest}{admingroupid} = 0;
+			$request_info{reservation}{$reservation_id}{serverrequest}{logingroupid} = 0;
+			$request_info{reservation}{$reservation_id}{serverrequest}{monitored} = 0;
+		}
 
 		# Confirm lastcheck time is not NULL
 		if (!defined($request_info{reservation}{$reservation_id}{lastcheck})) {
@@ -7605,7 +7650,7 @@ sub get_computers_controlled_by_MN {
 					notify($ERRORS{'DEBUG'}, $LOGFILE, "retrieved computers from computer groupname= $info{manageable_resoucegroups}{$grp_id}{$id}{groupname}");
 				}
 				else{ 
-					notify($ERRORS{'DEBUG'}, $LOGFILE, "no computers in computer groupname= $info{managementnode}{resoucegroups}{$grp_id}{$id}{groupname}");
+					notify($ERRORS{'DEBUG'}, $LOGFILE, "no computers in computer groupid= $computer_group_id}");
 					delete $info{manageable_resoucegroups}{$grp_id}{$id};
 				}
 			}
