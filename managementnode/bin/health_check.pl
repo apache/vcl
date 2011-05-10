@@ -59,7 +59,7 @@ use Getopt::Long;
 
 #------- Subroutine declarations -------
 sub main();
-sub help();
+sub _help();
 sub print_usage(); 
 
 #----------GLOBALS--------------
@@ -81,13 +81,13 @@ if($STAGE){
 
 	unless($STAGE =~ /available|all/){ 
 		print "\nInvalid powerdown option\n\n";
-		help();
+		_help();
 		exit;
 	}
 
 }
 if($HELP){
-	help();
+	_help();
 	exit;
 }
 ##############################################################################
@@ -137,11 +137,11 @@ sub print_usage() {
 
 	print "$text\n";
 
-} ## end sub help
+} ## end sub _help
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 help
+=head2 _help
 
  Parameters  : 
  Returns     : 
@@ -149,7 +149,7 @@ sub print_usage() {
 
 =cut
 
-sub help() {
+sub _help() {
 	my $message = <<"END";
 --------------------------------------------
 
@@ -160,7 +160,7 @@ END
 	print $message;
 	print_usage();
 	exit;
-} ## end sub help
+} ## end sub _help
 #/////////////////////////////////////////////////////////////////////////////
 
 1;
