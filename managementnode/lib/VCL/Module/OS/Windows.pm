@@ -5367,7 +5367,21 @@ sub get_public_ip_address {
 	my $interface_name = (keys(%{$network_configuration}))[0];
 	
 	my $ip_address_config = $network_configuration->{$interface_name}{ip_address};
-	my $ip_address = (keys(%$ip_address_config))[0];
+	
+	my $ip_address;
+	
+	# If multiple IP addresses were found, loop through them until a public IP address was found
+	# If none of the addresses are public, use the first one found
+	for my $ip_address_check (keys(%$ip_address_config)) {
+		if (is_public_ip_address($ip_address_check)) {
+			$ip_address = $ip_address_check;
+			last;
+		}
+		elsif (!$ip_address) {
+			# Only set $ip_address for the first non-public address found
+			$ip_address = $ip_address_check;
+		}
+	}
 	
 	my $dhcp_enabled = $network_configuration->{$interface_name}{dhcp_enabled};
 	
