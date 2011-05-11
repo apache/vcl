@@ -433,7 +433,7 @@ sub load {
 	if (!defined($privateIP)) {
 		notify($ERRORS{'WARNING'}, 0, "private IP address not found for $computer_node_name, possible issue with regex");
 	}
-	my ($s1, $s2, $s3, $s4, $s5) = 0;
+	my ($s1, $s2, $s3, $s4) = 0;
 	my $sloop = 0;
 
 	#insertloadlog($reservation_id,$computer_id,"info","SUCCESS initiated install process");
@@ -474,39 +474,18 @@ sub load {
 						}
 					}
 					if (!$s4) {
-						if ($_ =~ /Serving \/tftpboot\/xcat\/([.-_a-zA-Z0-9]*)\/x86\/install.gz to $privateIP:/) {
+						if ($_ =~ /Serving \/tftpboot\/xcat\/([.-_a-zA-Z0-9]*)\/x86\/install.gz to $privateIP:/ ||
+							 $_ =~ /authenticated mount request from ($computer_node_name|$privateIP):(\d+) for/ ||
+							 $_ =~ /xcat: xcatd: $computer_node_name installing/) {
 							$s4 = 1;
 							chomp($_);
 							notify($ERRORS{'OK'}, 0, "$computer_node_name STAGE 4 set $_");
 							insertloadlog($reservation_id, $computer_id, "xcatstage4", "SUCCESS stage4 node received pxe install instructions");
 						}
 					}
-
-					#stage5 is where images and rhas(KS) are different
-					if (!$s5) {
-
-						#here we look for rpc.mountd
-						if ($_ =~ /authenticated mount request from ($computer_node_name|$privateIP):(\d+) for/) {
-							$s5 = 1;
-							chomp($_);
-							notify($ERRORS{'OK'}, 0, "$computer_node_name STAGE 5 set $_");
-							insertloadlog($reservation_id, $computer_id, "xcatstage5", "SUCCESS stage5 node started installing via partimage");
-						}
-
-						#in case we miss the above statement
-						if ($image_os_type =~ /linux/i) {
-							if ($_ =~ /xcat: xcatd: $computer_node_name installing/) {
-								$s5 = 1;
-								chomp($_);
-								notify($ERRORS{'OK'}, 0, "$computer_node_name STAGE 5 set $_");
-								insertloadlog($reservation_id, $computer_id, "xcatstage5", "SUCCESS stage5 node started installing via kickstart");
-							}
-						}
-					} ## end if (!$s5)
 				}    #while
 				     #either stages are set or we loop or we rinstall again
-				     #check s5 and counter for loop control
-				if ($s5) {
+				if ($s4) {
 					notify($ERRORS{'OK'}, 0, "$computer_node_name ROUND1 stages are set proceeding to next round");
 					close(TAIL);
 					goto ROUND2;
@@ -540,7 +519,7 @@ sub load {
 						close(TAIL);
 						return 0;
 					} ## end else [ if ($rinstall_attempts < 3)
-				} ## end elsif ($sloop > 45)  [ if ($s5)
+				} ## end elsif ($sloop > 45)
 				else {
 
 					#keep checking the messages log
@@ -563,7 +542,7 @@ sub load {
 	ROUND2:
 
 	#begin second round of checks reset $sX
-	($s1, $s2, $s3, $s4, $s5) = 0;
+	($s1, $s2, $s3, $s4) = 0;
 	$sloop = 0;
 
 	# start time for loading
