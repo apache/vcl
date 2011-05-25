@@ -3428,73 +3428,24 @@ sub reboot {
 
 	# Make multiple attempts to wait for the reboot to complete
 	my $wait_attempt_limit = 2;
-	WAIT_ATTEMPT:
-	for (my $wait_attempt = 1; $wait_attempt <= $wait_attempt_limit; $wait_attempt++) {
-		if ($wait_attempt > 1) {
-			# Computer did not become fully responsive on previous wait attempt
-			notify($ERRORS{'OK'}, 0, "$computer_node_name reboot failed to complete on previous attempt, attempting hard power reset");
+	# Check if wait for reboot is set
+        if (!$wait_for_reboot) {
+                return 1;
+        }
+        else {
+                if($self->wait_for_reboot($wait_attempt_limit)){
+                        # Reboot was successful, calculate how long reboot took
+                        my $reboot_end_time = time();
+                        my $reboot_duration = ($reboot_end_time - $reboot_start_time);
+                        notify($ERRORS{'OK'}, 0, "reboot complete on $computer_node_name, took $reboot_duration seconds");
+                        return 1;
+                }
+                else {
+                        notify($ERRORS{'WARNING'}, 0, "reboot failed on $computer_node_name, made $wait_attempt_limit attempts");
+                        return 0;
+                }
+        }
 
-			# Call provisioning module's power_reset() subroutine
-			if ($self->provisioner->power_reset()) {
-				notify($ERRORS{'OK'}, 0, "reboot attempt $wait_attempt/$wait_attempt_limit: initiated power reset on $computer_node_name");
-			}
-			else {
-				notify($ERRORS{'WARNING'}, 0, "reboot failed, failed to initiate power reset on $computer_node_name");
-				return 0;
-			}
-		} ## end if ($wait_attempt > 1)
-
-		# Wait maximum of 3 minutes for the computer to become unresponsive
-		if (!$self->wait_for_no_ping(180, 3)) {
-			# Computer never stopped responding to ping
-			notify($ERRORS{'WARNING'}, 0, "$computer_node_name never became unresponsive to ping");
-			next WAIT_ATTEMPT;
-		}
-
-		# Computer is unresponsive, reboot has begun
-		# Wait for 5 seconds before beginning to check if computer is back online
-		notify($ERRORS{'DEBUG'}, 0, "$computer_node_name reboot has begun, sleeping for 5 seconds");
-		sleep 5;
-
-		# Wait maximum of 6 minutes for the computer to come back up
-		if (!$self->wait_for_ping(360, 5)) {
-			# Check if the computer was ever offline, it should have been or else reboot never happened
-			notify($ERRORS{'WARNING'}, 0, "$computer_node_name never responded to ping");
-			next WAIT_ATTEMPT;
-		}
-
-		notify($ERRORS{'DEBUG'}, 0, "$computer_node_name is pingable, waiting for ssh to respond");
-
-		# Wait maximum of 3 minutes for ssh to respond
-		if (!$self->wait_for_ssh(180, 5)) {
-			notify($ERRORS{'WARNING'}, 0, "ssh never responded on $computer_node_name");
-			next WAIT_ATTEMPT;
-		}
-
-		notify($ERRORS{'DEBUG'}, 0, "$computer_node_name responded to ssh");
-		
-		## Wait then check ssh again in case initialization scripts are running
-		## ssh may be available when the computer first boots, then network configuration scripts may automatically run
-		## Make sure ssh is available a short time after it's first available
-		#notify($ERRORS{'DEBUG'}, 0, "sleeping for 20 seconds then checking ssh again");
-		#sleep 20;
-		#
-		## Wait maximum of 2 minutes for ssh to respond
-		#if (!$self->wait_for_ssh(120)) {
-		#	notify($ERRORS{'WARNING'}, 0, "ssh responded then stopped responding on $computer_node_name");
-		#	next WAIT_ATTEMPT;
-		#}
-
-		# Reboot was successful, calculate how long reboot took
-		my $reboot_end_time = time();
-		my $reboot_duration = ($reboot_end_time - $reboot_start_time);
-		notify($ERRORS{'OK'}, 0, "reboot complete on $computer_node_name, took $reboot_duration seconds");
-		return 1;
-	} ## end for (my $wait_attempt = 1; $wait_attempt <=...
-
-	# If loop completed, maximum number of reboot attempts was reached
-	notify($ERRORS{'WARNING'}, 0, "reboot failed on $computer_node_name, made $wait_attempt_limit attempts");
-	return 0;
 } ## end sub reboot
 
 #/////////////////////////////////////////////////////////////////////////////
