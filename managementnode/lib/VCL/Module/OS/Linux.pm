@@ -2787,6 +2787,111 @@ sub get_public_ip_address {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+
+=head2 reboot
+
+ Parameters  : $wait_for_reboot
+ Returns     : 
+ Description : 
+
+=cut
+
+sub reboot {
+        my $self = shift;
+        if (ref($self) !~ /linux/i) {
+                notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+                return;
+        }
+
+        my $management_node_keys = $self->data->get_management_node_keys();
+        my $computer_node_name   = $self->data->get_computer_node_name();
+
+        # Check if an argument was supplied
+        my $wait_for_reboot = shift;
+        if (!defined($wait_for_reboot) || $wait_for_reboot !~ /0/) {
+                notify($ERRORS{'DEBUG'}, 0, "rebooting $computer_node_name and waiting for ssh to become active");
+                $wait_for_reboot = 1;
+        }
+        else {
+                notify($ERRORS{'DEBUG'}, 0, "rebooting $computer_node_name and NOT waiting");
+                $wait_for_reboot = 0;
+        }
+
+        my $reboot_start_time = time();
+        notify($ERRORS{'DEBUG'}, 0, "reboot will be attempted on $computer_node_name");
+
+        # Check if computer responds to ssh before preparing for reboot
+        if ($self->wait_for_ssh(0)) {
+
+                # Check if shutdown exists on the computer
+                my $reboot_command;
+                if ( $self->file_exists("/sbin/shutdown")) {
+                        $reboot_command = "/sbin/shutdown -r now";
+                }
+                else {
+                        notify($ERRORS{'WARNING'}, 0, "reboot not attempted, /sbin/shutdown did not exists on OS");
+                        return 0;
+                }
+
+                my ($reboot_exit_status, $reboot_output) = run_ssh_command($computer_node_name, $management_node_keys, $reboot_command);
+                if (!defined($reboot_output)) {
+                        notify($ERRORS{'WARNING'}, 0, "failed to execute ssh command to reboot $computer_node_name");
+                        return;
+                }
+
+                if ($reboot_exit_status == 0) {
+                        notify($ERRORS{'OK'}, 0, "executed reboot command on $computer_node_name");
+                }
+                else {
+                        notify($ERRORS{'WARNING'}, 0, "failed to reboot $computer_node_name, attempting power reset, output:\n" . join("\n", @$reboot_output));
+
+                        # Call provisioning module's power_reset() subroutine
+                        if ($self->provisioner->power_reset()) {
+                                notify($ERRORS{'OK'}, 0, "initiated power reset on $computer_node_name");
+                        }
+                        else {
+                                notify($ERRORS{'WARNING'}, 0, "reboot failed, failed to initiate power reset on $computer_node_name");
+                                return;
+                        }
+                }
+        }
+        else {
+                # Computer did not respond to ssh
+                notify($ERRORS{'WARNING'}, 0, "$computer_node_name did not respond to ssh, graceful reboot cannot be performed, attempting hard reset");
+
+                # Call provisioning module's power_reset() subroutine
+                if ($self->provisioner->power_reset()) {
+                        notify($ERRORS{'OK'}, 0, "initiated power reset on $computer_node_name");
+                }
+                else {
+                        notify($ERRORS{'WARNING'}, 0, "reboot failed, failed to initiate power reset on $computer_node_name");
+                        return 0;
+                }
+        } ## end else [ if ($self->wait_for_ssh(0))
+	
+	my $wait_attempt_limit = 2;
+        # Check if wait for reboot is set
+        if (!$wait_for_reboot) {
+                return 1;
+        }
+	else {
+		if($self->wait_for_reboot($wait_attempt_limit)){
+			# Reboot was successful, calculate how long reboot took
+                	my $reboot_end_time = time();
+                	my $reboot_duration = ($reboot_end_time - $reboot_start_time);
+                	notify($ERRORS{'OK'}, 0, "reboot complete on $computer_node_name, took $reboot_duration seconds");
+			return 1;
+		}
+		else {
+        		notify($ERRORS{'WARNING'}, 0, "reboot failed on $computer_node_name, made $wait_attempt_limit attempts");
+			return 0;
+		}
+	}
+
+} ## end sub reboot
+
+#/////////////////////////////////////////////////////////////////////////////
+
 1;
 __END__
 

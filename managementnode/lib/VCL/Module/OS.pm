@@ -220,6 +220,86 @@ sub get_current_image_name {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 wait_for_reboot
+
+ Parameters  : Maximum number of seconds to wait (optional), delay between attempts (optional)
+ Returns     : If computer is pingable before the maximum amount of time has elapsed: 1
+ Description : 
+
+=cut
+
+sub wait_for_reboot {
+        my $self = shift;
+        if (ref($self) !~ /VCL::Module/i) {
+                notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+                return;
+        }
+	
+        my $computer_node_name   = $self->data->get_computer_node_name();
+
+	# Make multiple attempts to wait for the reboot to complete
+        my $wait_attempt_limit = shift;
+	
+	if (!defined($wait_attempt_limit)) {
+                $wait_attempt_limit = 2;
+        }
+	
+        WAIT_ATTEMPT:
+        for (my $wait_attempt = 1; $wait_attempt <= $wait_attempt_limit; $wait_attempt++) {
+                if ($wait_attempt > 1) {
+                        # Computer did not become fully responsive on previous wait attempt
+                        notify($ERRORS{'OK'}, 0, "$computer_node_name reboot failed to complete on previous attempt, attempting hard power reset");
+                        # Call provisioning module's power_reset() subroutine
+                        if ($self->provisioner->power_reset()) {
+                                notify($ERRORS{'OK'}, 0, "reboot attempt $wait_attempt/$wait_attempt_limit: initiated power reset on $computer_node_name");
+                        }
+                        else {
+                                notify($ERRORS{'WARNING'}, 0, "reboot failed, failed to initiate power reset on $computer_node_name");
+                                return 0;
+                        }
+                } ## end if ($wait_attempt > 1)
+
+                # Wait maximum of 3 minutes for the computer to become unresponsive
+                if (!$self->wait_for_no_ping(180, 3)) {
+                        # Computer never stopped responding to ping
+                        notify($ERRORS{'WARNING'}, 0, "$computer_node_name never became unresponsive to ping");
+                        next WAIT_ATTEMPT;
+                }
+
+                # Computer is unresponsive, reboot has begun
+                # Wait for 5 seconds before beginning to check if computer is back online
+                notify($ERRORS{'DEBUG'}, 0, "$computer_node_name reboot has begun, sleeping for 5 seconds");
+                sleep 5;
+
+                # Wait maximum of 6 minutes for the computer to come back up
+                if (!$self->wait_for_ping(360, 5)) {
+                        # Check if the computer was ever offline, it should have been or else reboot never happened
+                        notify($ERRORS{'WARNING'}, 0, "$computer_node_name never responded to ping");
+                        next WAIT_ATTEMPT;
+                }
+
+                notify($ERRORS{'DEBUG'}, 0, "$computer_node_name is pingable, waiting for ssh to respond");
+
+                # Wait maximum of 3 minutes for ssh to respond
+                if (!$self->wait_for_ssh(180, 5)) {
+                        notify($ERRORS{'WARNING'}, 0, "ssh never responded on $computer_node_name");
+                        next WAIT_ATTEMPT;
+                }
+
+                notify($ERRORS{'DEBUG'}, 0, "$computer_node_name responded to ssh");
+
+                return 1;
+        } ## end for (my $wait_attempt = 1; $wait_attempt <=...
+
+        # If loop completed, maximum number of reboot attempts was reached
+        notify($ERRORS{'WARNING'}, 0, "reboot failed on $computer_node_name, made $wait_attempt_limit attempts");
+        return 0;
+
+
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 wait_for_ping
 
  Parameters  : Maximum number of seconds to wait (optional), delay between attempts (optional)

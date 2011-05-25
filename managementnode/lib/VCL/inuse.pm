@@ -122,7 +122,32 @@ sub process {
 	my $reservation_count     = $self->data->get_reservation_count();
 	my $is_parent_reservation = $self->data->is_parent_reservation();
 	my $identity_key          = $self->data->get_image_identity();
+	my $request_state_name    = $self->data->get_request_state_name();
 
+	if ($request_state_name =~ /reboot|rebootsoft|reboothard/) {
+		notify($ERRORS{'OK'}, 0, "this is a 'reboot' request");
+		if($self->os->can('reboot')){
+			if($self->os->reboot()){
+				notify($ERRORS{'OK'}, 0, "successfuly rebooted $computer_nodename");
+			
+			}
+			else {
+				notify($ERRORS{'WARNING'}, 0, "failed to reboot $computer_nodename");
+				#do not fail request or machine
+			}
+			# Put this request back into the inuse state
+                       	if (update_request_state($request_id, "inuse", "inuse")) {
+                               	notify($ERRORS{'OK'}, 0, "request state set back to inuse");
+                        }
+                        else {
+                               	notify($ERRORS{'WARNING'}, 0, "unable to set request state back to inuse");
+                        }
+			notify($ERRORS{'OK'}, 0, "exiting");
+        		exit;
+		}
+		
+	}
+	
 	# Set the user connection timeout limit in minutes
 	my $connect_timeout_limit = 15;
 	

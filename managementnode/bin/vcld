@@ -202,7 +202,7 @@ sub main () {
 			$ENV{state}     = $request_state_name;
 
 			# Make sure the request state is valid
-			if ($request_state_name !~ /inuse|reserved|deleted|timeout|reclaim|reload|new|tomaintenance|image|imageprep|makeproduction|imageinuse|complete|failed|pending|maintenance|tovmhostinuse/) {
+			if ($request_state_name !~ /inuse|reserved|deleted|timeout|reclaim|reload|new|tomaintenance|image|imageprep|makeproduction|imageinuse|complete|failed|pending|maintenance|tovmhostinuse|rebootsoft|reboothard|reinstall/) {
 				notify($ERRORS{'WARNING'}, $LOGFILE, "assigned request in unsupported state: $request_state_name");
 				next REQUEST;
 			}
@@ -497,7 +497,7 @@ sub make_new_child {
 	}
 
 	# The imageinuse state is now handled by inuse.pm
-	if ($state =~ /^(imageinuse)$/) {
+	if ($state =~ /^(imageinuse|rebootsoft|reboothard|reinstall)$/) {
 		notify($ERRORS{'DEBUG'}, $LOGFILE, "request will be processed by inuse.pm");
 		$state_module = "VCL::inuse";
 	}
