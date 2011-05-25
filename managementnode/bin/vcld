@@ -497,13 +497,13 @@ sub make_new_child {
 	}
 
 	# The imageinuse state is now handled by inuse.pm
-	if ($state =~ /^(imageinuse|rebootsoft|reboothard|reinstall)$/) {
+	if ($state =~ /^(imageinuse|rebootsoft|reboothard)$/) {
 		notify($ERRORS{'DEBUG'}, $LOGFILE, "request will be processed by inuse.pm");
 		$state_module = "VCL::inuse";
 	}
 
 	# The tomaintenance state is handled by new.pm
-	if ($state =~ /^(tomaintenance|imageprep|reload|tovmhostinuse)$/) {
+	if ($state =~ /^(tomaintenance|imageprep|reload|reinstall|tovmhostinuse)$/) {
 		notify($ERRORS{'DEBUG'}, $LOGFILE, "request will be processed by new.pm");
 		$state_module = "VCL::new";
 	}
