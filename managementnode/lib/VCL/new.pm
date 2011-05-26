@@ -129,7 +129,7 @@ sub process {
 
 	#If reload state is not new (reload) and computer is part of block allocation
 	#confirm imagerevisionid is the production image.
-	if($request_state_name ne 'new') {
+	if($request_state_name !~ /^(new|reinstall)$/) {
 		notify($ERRORS{'OK'}, 0, "request_state_name is not new");
 		if(is_inblockrequest($computer_id)){
 			notify($ERRORS{'OK'}, 0, "computer_id $computer_id is in blockrequest");
@@ -327,7 +327,8 @@ sub process {
 
 	# Attempt to reserve the computer if this is a 'new' reservation
 	# These steps are not done for simple reloads
-	if ($request_state_name eq 'new') {
+	notify($ERRORS{'OK'}, 0, "request_state_name= $request_state_name");
+	if ($request_state_name =~ /^(new|reinstall)/) {
 		# Set the computer next image to the one for this reservation
 		if (!defined($computer_next_image_name) || $image_name ne $computer_next_image_name) {
 			if (setnextimage($computer_id, $image_id)) {
@@ -515,6 +516,9 @@ sub reload_image {
 	else {
 		notify($ERRORS{'OK'}, 0, "node status not checked, node_status() not implemented by " . ref($self->provisioner) . ", assuming load=true");
 	}
+	
+	#If reinstall state - force reload state
+	$computer_state_name = 'reload' if ($request_state_name eq 'reinstall');
 
 	if ($computer_state_name eq 'reload') {
 		# Always call load() if state is reload regardless of node_status()
@@ -660,6 +664,7 @@ sub computer_not_being_used {
 	my $computer_state_name             = $self->data->get_computer_state_name();
 	my $image_name                      = $self->data->get_image_name();
 	my $image_reloadtime                = $self->data->get_image_reload_time();
+	my $request_state_name              = $self->data->get_request_state_name();
 
 	# Possible computer states:
 	# available
@@ -679,6 +684,12 @@ sub computer_not_being_used {
 		return 0;
 	}
 
+	# Check if request is reinstall
+	if ($request_state_name =~ /^(reinstall)$/) {
+		notify($ERRORS{'OK'}, 0, "$computer_short_name is to be reinstalled");
+		return 1;
+	}
+	
 	# Check if computer state is available
 	if ($computer_state_name =~ /^(available|reload)$/) {
 		notify($ERRORS{'OK'}, 0, "$computer_short_name is available, its state is $computer_state_name");
@@ -857,6 +868,7 @@ sub reserve_computer {
 	my $self = shift;
 
 	my $request_data                    = $self->data->get_request_data();
+	my $request_state_name              = $self->data->get_request_state_name();
 	my $request_id                      = $self->data->get_request_id();
 	my $request_logid                   = $self->data->get_request_log_id();
 	my $request_forimaging              = $self->data->get_request_forimaging();
@@ -897,21 +909,26 @@ sub reserve_computer {
 		
 		insertloadlog($reservation_id, $computer_id, "info", "node ready adding user account");
 		
-		# Create a random password and update the reservation table unless the reservation if for a Linux non-standalone image
-		unless ($image_os_type =~ /linux/ && !$user_standalone) {
-			# Create a random password for the reservation
-			my $reservation_password = getpw();
+		# Only generate new password if:
+		# ! reinstall
+		# linux and user standalone	
+		if ( $request_state_name !~ /^(reinstall)/ ) {
+			# Create a random password and update the reservation table unless the reservation if for a Linux non-standalone image
+			unless ($image_os_type =~ /linux/ && !$user_standalone) {
+				# Create a random password for the reservation
+				my $reservation_password = getpw();
 			
-			# Update the password in the reservation table
-			if (update_request_password($reservation_id, $reservation_password)) {
-				notify($ERRORS{'DEBUG'}, 0, "updated password in the reservation table");
-			}
-			else {
-				$self->reservation_failed("failed to update password in the reservation table");
-			}
+				# Update the password in the reservation table
+				if (update_request_password($reservation_id, $reservation_password)) {
+					notify($ERRORS{'DEBUG'}, 0, "updated password in the reservation table");
+				}
+				else {
+					$self->reservation_failed("failed to update password in the reservation table");
+				}
 			
-			# Set the password in the DataStructure object
-			$self->data->set_reservation_password($reservation_password);
+				# Set the password in the DataStructure object
+				$self->data->set_reservation_password($reservation_password);
+			}
 		}
 		
 		# Check if OS module implements a reserve() subroutine
@@ -934,6 +951,8 @@ sub reserve_computer {
 		# Assemble the message subject based on whether this is a cluster based or normal request
 		if ($request_forimaging) {
 			$subject = "VCL -- $image_prettyname imaging reservation";
+
+			
 		}
 		elsif ($reservation_count > 1) {
 			$subject = "VCL -- Cluster-based reservation";
@@ -941,12 +960,22 @@ sub reserve_computer {
 		else {
 			$subject = "VCL -- $image_prettyname reservation";
 		}
+		
+		
 
-		# Assemble the message body
+		# Assemble the message body reservations
 		if ($request_forimaging) {
 			$mailstring = <<"EOF";
 
 The resources for your VCL image creation request have been successfully reserved.
+
+EOF
+		}
+		elsif ($request_state_name =~ /^(reinstall)$/) {
+			$mailstring = <<"EOF";
+
+Your reservation was successfully reinstalled and you can proceed to reconnect. 
+Please revisit the Current reservations page for any additional information.
 
 EOF
 		}
@@ -962,13 +991,18 @@ EOF
 		$mailstring .= "Reservation Information:\n";
 		foreach $r (keys %{$request_data->{reservation}}) {
 			my $reservation_image_name = $request_data->{reservation}{$r}{image}{prettyname};
-			my $computer_ip_address    = $request_data->{reservation}{$r}{computer}{IPaddress};
 			$mailstring .= "Image Name: $reservation_image_name\n";
-			$mailstring .= "IP Address: $computer_ip_address\n\n";
+		}
+
+		if ($request_state_name !~ /^(reinstall)$/) {
+                        $mailstring = <<"EOF";
+
+Connection will not be allowed until you acknowledge using the VCL web interface.  You must acknowledge the reservation within the next 15 minutes or the resources will be reclaimed for other VCL users.
+
+EOF
 		}
 
 		$mailstring .= <<"EOF";
-Connection will not be allowed until you acknowledge using the VCL web interface.  You must acknowledge the reservation within the next 15 minutes or the resources will be reclaimed for other VCL users.
 
 -Visit $user_affiliation_sitewwwaddress
 -Select "Current Reservations"
