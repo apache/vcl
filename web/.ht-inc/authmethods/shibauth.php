@@ -77,9 +77,11 @@ function updateShibUser($userid) {
 	       . "WHERE unityid = '$userid' AND "
 	       .       "affiliationid = $affilid";
 	$qh = doQuery($query, 101);
-	if(! $row = mysql_fetch_assoc($qh))
+	if(! $row = mysql_fetch_assoc($qh)) {
 		# add user to our db
-		return addShibUser($user);
+		$user['id'] = addShibUser($user);
+		return $user;
+	}
 
 	# update user's data in db
 	$user['id'] = $row['id'];
@@ -109,8 +111,7 @@ function updateShibUser($userid) {
 /// \b lastname\n
 /// \b email
 ///
-/// \return an array with all of the values from $user along with an additional
-/// key named 'id' that is the new user's id from the user table
+/// \return id from user table for user
 ///
 /// \brief adds $user to the user table
 ///
@@ -143,7 +144,7 @@ function addShibUser($user) {
 	doQuery($query, 101, 'vcl', 1);
 	if(mysql_affected_rows($mysql_link_vcl)) {
 		$user['id'] = mysql_insert_id($mysql_link_vcl);
-		return $user;
+		return $user['id'];
 	}
 	else
 		return NULL;
