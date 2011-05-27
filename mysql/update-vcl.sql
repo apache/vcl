@@ -252,6 +252,7 @@ CREATE TABLE IF NOT EXISTS `connectmethod` (
   `name` varchar(80) NOT NULL,
   `description` varchar(255) NOT NULL,
   `port` smallint(5) unsigned NOT NULL,
+  `connecttext` text NOT NULL,
   PRIMARY KEY  (`id`)
 ) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
 
@@ -265,7 +266,7 @@ CREATE TABLE IF NOT EXISTS `connectmethodmap` (
   `connectmethodid` tinyint(3) unsigned NOT NULL,
   `OStypeid` tinyint(3) unsigned default NULL,
   `OSid` tinyint(3) unsigned default NULL,
-  `imageid` smallint(5) unsigned default NULL,
+  `imagerevisionid` mediumint(8) unsigned default NULL,
   `disabled` tinyint(1) unsigned NOT NULL default '0',
   `autoprovisioned` tinyint(1) unsigned default NULL,
   KEY `connectmethodid` (`connectmethodid`),
@@ -344,6 +345,27 @@ CREATE TABLE IF NOT EXISTS `provisioningOSinstalltype` (
 -- --------------------------------------------------------
 
 --
+-- Table structure change for table `reservation`
+--
+
+CALL AddColumnIfNotExists('reservation', 'connectIP', "varchar(15) default NULL");
+CALL AddColumnIfNotExists('reservation', 'connectport', "smallint(5) unsigned default NULL");
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `reservationaccounts`
+--
+
+CREATE TABLE IF NOT EXISTS `reservationaccounts` (
+  `reservationid` mediumint(8) unsigned NOT NULL,
+  `userid` mediumint(8) unsigned NOT NULL,
+  `password` varchar(50) default NULL
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+
+-- --------------------------------------------------------
+
+--
 -- Table structure for table `serverprofile`
 --
 
@@ -406,6 +428,22 @@ CREATE TABLE IF NOT EXISTS `sitemaintenance` (
   KEY `end` (`end`),
   KEY `ownerid` (`ownerid`)
 ) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `statgraphcache`
+--
+
+CREATE TABLE IF NOT EXISTS `statgraphcache` (
+	  `graphtype` enum('totalres','concurres','concurblade','concurvm') NOT NULL,
+	  `statdate` date NOT NULL,
+	  `affiliationid` mediumint(8) unsigned NOT NULL,
+	  `value` mediumint(8) unsigned NOT NULL,
+	  KEY `graphtype` (`graphtype`),
+	  KEY `statdate` (`statdate`),
+	  KEY `affiliationid` (`affiliationid`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -518,8 +556,10 @@ UPDATE `computer` SET `imagerevisionid` = (SELECT `id` FROM `imagerevision` WHER
 -- Inserts for table `connectmethod`
 --
 
-INSERT IGNORE INTO `connectmethod` (`id`, `name`, `description`, `port`) VALUES (1, 'ssh', 'ssh on port 22', 22);
-INSERT IGNORE INTO `connectmethod` (`id`, `name`, `description`, `port`) VALUES (2, 'RDP', 'Remote Desktop', 3389);
+INSERT IGNORE INTO `connectmethod` (`id`, `name`, `description`, `port`, `connecttext`) VALUES
+(1, 'ssh', 'ssh on port 22', 22, 'You will need to have an X server running on your local computer and use an ssh client to connect to the system. If you did not click on the <b>Connect!</b> button from the computer you will be using to access the VCL system, you will need to return to the <strong>Current Reservations</strong> page and click the <strong>Connect!</strong> button from a web browser running on the same computer from which you will be connecting to the VCL system. Otherwise, you may be denied access to the remote computer.<br><br>\r\nUse the following information when you are ready to connect:<br>\r\n<UL>\r\n<LI><b>Remote Computer</b>: #connectIP#</LI>\r\n<LI><b>User ID</b>: #userid#</LI>\r\n<LI><b>Password</b>: #password#<br></LI>\r\n</UL>\r\n<b>NOTE</b>: The given password is for <i>this reservation only</i>. You will be given a different password for any other reservations.<br>\r\n<strong><big>NOTE:</big> You cannot use the Windows Remote Desktop Connection to connect to this computer. You must use an ssh client.</strong>');
+INSERT IGNORE INTO `connectmethod` (`id`, `name`, `description`, `port`, `connecttext`) VALUES
+(2, 'RDP', 'Remote Desktop', 3389, 'You will need to use a Remote Desktop program to connect to the system. If you did not click on the <b>Connect!</b> button from the computer you will be using to access the VCL system, you will need to return to the <strong>Current Reservations</strong> page and click the <strong>Connect!</strong> button from a web browser running on the same computer from which you will be connecting to the VCL system. Otherwise, you may be denied access to the remote computer.<br><br>\r\n\r\nUse the following information when you are ready to connect:<br>\r\n<UL>\r\n<LI><b>Remote Computer</b>: #connectIP#</LI>\r\n<LI><b>User ID</b>: #userid#</LI>\r\n<LI><b>Password</b>: #password#<br></LI>\r\n</UL>\r\n<b>NOTE</b>: The given password is for <i>this reservation only</i>. You will be given a different password for any other reservations.<br>\r\n<br>\r\nFor automatic connection, you can download an RDP file that can be opened by the Remote Desktop Connection program.<br><br>\r\n');
 
 -- --------------------------------------------------------
 
@@ -595,6 +635,14 @@ INSERT IGNORE provisioningOSinstalltype (provisioningid, OSinstalltypeid) SELECT
 -- --------------------------------------------------------
 
 -- 
+-- Inserts for table `resourcetype`
+--
+
+INSERT IGNORE INTO resourcetype (id, name) VALUES (17, serverprofile);
+
+-- --------------------------------------------------------
+
+-- 
 -- Inserts for table `usergroupprivtype`
 --
 
@@ -619,6 +667,24 @@ INSERT IGNORE INTO `usergroupprivtype` (`id`, `name`, `help`) VALUES
 --
 
 INSERT IGNORE usergrouppriv (usergroupid, userprivtypeid) SELECT usergroup.id, usergroupprivtype.id FROM usergroup, usergroupprivtype WHERE usergroup.name = 'adminUsers' AND usergroup.affiliationid = (SELECT id FROM affiliation WHERE name = 'Local');
+
+-- --------------------------------------------------------
+
+-- 
+-- Inserts for table `userprivtype`
+--
+
+INSERT IGNORE INTO userprivtype (id, name) VALUES (8, 'serverCheckOut');
+INSERT IGNORE INTO userprivtype (id, name) VALUES (9, 'serverProfileAdmin');
+
+-- --------------------------------------------------------
+
+-- 
+-- Inserts for table `userpriv`
+--
+
+INSERT IGNORE userpriv (usergroupid, privnodeid, userprivtypeid) SELECT usergroup.id, privnode.id, userprivtype.id FROM usergroup, privnode, userprivtype WHERE usergroup.name = 'adminUsers' AND usergroup.affiliationid = (SELECT id FROM affiliation WHERE name = 'Local') AND privnode.name = 'admin' AND privnode.parent = 3 AND userprivtype.name = 'serverCheckOut';
+INSERT IGNORE userpriv (usergroupid, privnodeid, userprivtypeid) SELECT usergroup.id, privnode.id, userprivtype.id FROM usergroup, privnode, userprivtype WHERE usergroup.name = 'adminUsers' AND usergroup.affiliationid = (SELECT id FROM affiliation WHERE name = 'Local') AND privnode.name = 'admin' AND privnode.parent = 3 AND userprivtype.name = 'serverProfileAdmin';
 
 -- --------------------------------------------------------
 
@@ -647,6 +713,15 @@ CALL AddConstraintIfNotExists('connectmethodmap', 'imageid', 'image', 'id');
  
 CALL AddConstraintIfNotExists('provisioningOSinstalltype', 'provisioningid', 'provisioning', 'id');
 CALL AddConstraintIfNotExists('provisioningOSinstalltype', 'OSinstalltypeid', 'OSinstalltype', 'id');
+
+-- --------------------------------------------------------
+
+--
+-- Constraints for table `reservationaccounts`
+--
+
+CALL AddConstraintIfNotExists('reservationaccounts', 'reservationid', 'reservation', 'id');
+CALL AddConstraintIfNotExists('reservationaccounts', 'userid', 'user', 'id');
 
 -- --------------------------------------------------------
 

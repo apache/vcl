@@ -298,6 +298,7 @@ CREATE TABLE IF NOT EXISTS `connectmethod` (
   `name` varchar(80) NOT NULL,
   `description` varchar(255) NOT NULL,
   `port` smallint(5) unsigned NOT NULL,
+  `connecttext` text NOT NULL,
   PRIMARY KEY  (`id`)
 ) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
 
@@ -311,7 +312,7 @@ CREATE TABLE IF NOT EXISTS `connectmethodmap` (
   `connectmethodid` tinyint(3) unsigned NOT NULL,
   `OStypeid` tinyint(3) unsigned default NULL,
   `OSid` tinyint(3) unsigned default NULL,
-  `imageid` smallint(5) unsigned default NULL,
+  `imagerevisionid` mediumint(8) unsigned default NULL,
   `disabled` tinyint(1) unsigned NOT NULL default '0',
   `autoprovisioned` tinyint(1) unsigned default NULL,
   KEY `connectmethodid` (`connectmethodid`),
@@ -729,6 +730,8 @@ CREATE TABLE IF NOT EXISTS `reservation` (
   `remoteIP` varchar(15) default NULL,
   `lastcheck` datetime default '0000-00-00 00:00:00',
   `pw` varchar(10) default NULL,
+  `connectIP` varchar(15) default NULL,
+  `connectport` smallint(5) unsigned default NULL,
   PRIMARY KEY  (`id`),
   KEY `managementnodeid` (`managementnodeid`),
   KEY `imageid` (`imageid`),
@@ -736,6 +739,18 @@ CREATE TABLE IF NOT EXISTS `reservation` (
   KEY `computerid` (`computerid`),
   KEY `imagerevisionid` (`imagerevisionid`)
 ) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `reservationaccounts`
+--
+
+CREATE TABLE IF NOT EXISTS `reservationaccounts` (
+  `reservationid` mediumint(8) unsigned NOT NULL,
+  `userid` mediumint(8) unsigned NOT NULL,
+  `password` varchar(50) default NULL
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -947,6 +962,22 @@ CREATE TABLE IF NOT EXISTS `state` (
   PRIMARY KEY  (`id`),
   UNIQUE KEY `name` (`name`)
 ) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `statgraphcache`
+--
+
+CREATE TABLE `statgraphcache` (
+	  `graphtype` enum('totalres','concurres','concurblade','concurvm') NOT NULL,
+	  `statdate` date NOT NULL,
+	  `affiliationid` mediumint(8) unsigned NOT NULL,
+	  `value` mediumint(8) unsigned NOT NULL,
+	  KEY `graphtype` (`graphtype`),
+	  KEY `statdate` (`statdate`),
+	  KEY `affiliationid` (`affiliationid`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -1331,15 +1362,16 @@ INSERT INTO `computerloadstate` (`id`, `loadstatename`, `prettyname`, `est`) VAL
 -- Dumping data for table `connectmethod`
 --
 
-INSERT INTO `connectmethod` (`id`, `name`, `description`, `port`) VALUES
-(1, 'ssh', 'ssh on port 22', 22),
-(2, 'RDP', 'Remote Desktop', 3389);
+INSERT INTO `connectmethod` (`id`, `name`, `description`, `port`, `connecttext`) VALUES
+(1, 'ssh', 'ssh on port 22', 22, 'You will need to have an X server running on your local computer and use an ssh client to connect to the system. If you did not click on the <b>Connect!</b> button from the computer you will be using to access the VCL system, you will need to return to the <strong>Current Reservations</strong> page and click the <strong>Connect!</strong> button from a web browser running on the same computer from which you will be connecting to the VCL system. Otherwise, you may be denied access to the remote computer.<br><br>\r\nUse the following information when you are ready to connect:<br>\r\n<UL>\r\n<LI><b>Remote Computer</b>: #connectIP#</LI>\r\n<LI><b>User ID</b>: #userid#</LI>\r\n<LI><b>Password</b>: #password#<br></LI>\r\n</UL>\r\n<b>NOTE</b>: The given password is for <i>this reservation only</i>. You will be given a different password for any other reservations.<br>\r\n<strong><big>NOTE:</big> You cannot use the Windows Remote Desktop Connection to connect to this computer. You must use an ssh client.</strong>'),
+(2, 'RDP', 'Remote Desktop', 3389, 'You will need to use a Remote Desktop program to connect to the system. If you did not click on the <b>Connect!</b> button from the computer you will be using to access the VCL system, you will need to return to the <strong>Current Reservations</strong> page and click the <strong>Connect!</strong> button from a web browser running on the same computer from which you will be connecting to the VCL system. Otherwise, you may be denied access to the remote computer.<br><br>\r\n\r\nUse the following information when you are ready to connect:<br>\r\n<UL>\r\n<LI><b>Remote Computer</b>: #connectIP#</LI>\r\n<LI><b>User ID</b>: #userid#</LI>\r\n<LI><b>Password</b>: #password#<br></LI>\r\n</UL>\r\n<b>NOTE</b>: The given password is for <i>this reservation only</i>. You will be given a different password for any other reservations.<br>\r\n<br>\r\nFor automatic connection, you can download an RDP file that can be opened by the Remote Desktop Connection program.<br><br>\r\n');
+
 
 --
 -- Dumping data for table `connectmethodmap`
 --
 
-INSERT INTO `connectmethodmap` (`connectmethodid`, `OStypeid`, `OSid`, `imageid`, `disabled`, `autoprovisioned`) VALUES
+INSERT INTO `connectmethodmap` (`connectmethodid`, `OStypeid`, `OSid`, `imagerevisionid`, `disabled`, `autoprovisioned`) VALUES
 (1, 2, NULL, NULL, 0, 1),
 (1, 3, NULL, NULL, 0, 1),
 (2, 1, NULL, NULL, 0, 1),
@@ -1587,7 +1619,8 @@ INSERT INTO `resourcetype` (`id`, `name`) VALUES
 (12, 'computer'),
 (13, 'image'),
 (16, 'managementnode'),
-(15, 'schedule');
+(15, 'schedule'),
+(17, 'serverprofile');
 
 -- 
 -- Dumping data for table `schedule`
@@ -1704,6 +1737,8 @@ INSERT INTO `userpriv` (`id`, `userid`, `usergroupid`, `privnodeid`, `userprivty
 (13, NULL, 3, 4, 5),
 (14, NULL, 3, 4, 6),
 (19, NULL, 3, 4, 7),
+(20, NULL, 3, 4, 8),
+(21, NULL, 3, 4, 9),
 (17, NULL, 3, 4, 10),
 (12, NULL, 3, 4, 11),
 (18, NULL, 3, 4, 12),
@@ -1734,6 +1769,8 @@ INSERT INTO `userprivtype` (`id`, `name`) VALUES
 (3, 'nodeAdmin'),
 (10, 'resourceGrant'),
 (12, 'scheduleAdmin'),
+(8, 'serverCheckOut'),
+(9, 'serverProfileAdmin'),
 (7, 'userGrant');
 
 -- 
@@ -1923,6 +1960,13 @@ ALTER TABLE `reservation`
   ADD CONSTRAINT `reservation_ibfk_11` FOREIGN KEY (`requestid`) REFERENCES `request` (`id`) ON DELETE CASCADE,
   ADD CONSTRAINT `reservation_ibfk_10` FOREIGN KEY (`managementnodeid`) REFERENCES `managementnode` (`id`),
   ADD CONSTRAINT `reservation_ibfk_9` FOREIGN KEY (`computerid`) REFERENCES `computer` (`id`) ON UPDATE CASCADE;
+
+--
+-- Constraints for table `reservationaccounts`
+--
+ALTER TABLE `reservationaccounts`
+  ADD CONSTRAINT `reservationaccounts_ibfk_2` FOREIGN KEY (`userid`) REFERENCES `user` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  ADD CONSTRAINT `reservationaccounts_ibfk_1` FOREIGN KEY (`reservationid`) REFERENCES `reservation` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- 
 -- Constraints for table `resource`
