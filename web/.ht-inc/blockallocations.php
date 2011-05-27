@@ -1134,7 +1134,8 @@ function getCurrentBlockHTML($listonly=0) {
 		        .        "UNIX_TIMESTAMP(end) AS unixend "
 		        . "FROM blockTimes "
 		        . "WHERE blockRequestid = {$row['id']} AND "
-		        .       "end > NOW() "
+		        .       "end > NOW() AND "
+		        .       "skip = 0 "
 		        . "ORDER BY start "
 		        . "LIMIT 1";
 		$qh2 = doQuery($query2, 101);
