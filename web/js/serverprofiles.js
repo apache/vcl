@@ -70,7 +70,8 @@ function selectProfileChanged() {
 	dojo.addClass('serverprofiledata', 'hidden');
 	dijit.byId('fetchProfilesBtn').set('disabled', false);
 	dijit.byId('delProfilesBtn').set('disabled', false);
-	if(dijit.byId('profileid').getOptions(0).value == 70000)
+	if(dijit.byId('profileid').getOptions(0) &&
+	   dijit.byId('profileid').getOptions(0).value == 70000)
 		dijit.byId('profileid').setStore(profilesstore, '', {query: {id:new RegExp("^(?:(?!70000).)*$")}});
 }
 
@@ -116,6 +117,8 @@ function saveServerProfile(cont) {
 		alert('Please correct the fields with invalid input');
 		return;
 	}
+	dijit.byId('saveProfilesBtn').set('label', 'Working...');
+	dijit.byId('saveProfilesBtn').set('disabled', true);
 	if(dijit.byId('profileimage'))
 		var imageid = dijit.byId('profileimage').get('value');
 	else
@@ -142,14 +145,18 @@ function saveServerProfile(cont) {
 }
 
 function saveServerProfileCB(data, ioArgs) {
+	dijit.byId('saveProfilesBtn').set('label', 'Save Profile');
+	dijit.byId('saveProfilesBtn').set('disabled', false);
 	if(data.items.error) {
 		alert(data.items.msg);
 		return;
 	}
 	var selobj = dijit.byId('profileid');
-	dijit.byId('profileid').setStore(profilesstore, '', {query: {id:new RegExp("^(?:(?!70000).)*$")}});
+	selobj.setStore(profilesstore, '', {query: {id:new RegExp("^(?:(?!70000).)*$")}});
 	if(data.items.newprofile == 1) {
 		dojo.removeClass('serverprofiledata', 'hidden');
+		if(allprofiles.length == 0)
+			dojo.removeClass('profileslist', 'hidden');
 		profilesstore.newItem({id: data.items.id,
 		                       name: data.items.name,
 		                       desc: data.items.desc});
@@ -184,12 +191,18 @@ function saveServerProfileCB(data, ioArgs) {
 }
 
 function getServerProfileData(cont, id, cb) {
+	if(id == 'profileid') {
+		dijit.byId('fetchProfilesBtn').set('label', 'Working...');
+		dijit.byId('fetchProfilesBtn').set('disabled', true);
+	}
 	var data = {continuation: cont,
 	            id: dijit.byId(id).get('value')};
 	RPCwrapper(data, cb, 1);
+	document.body.style.cursor = 'wait';
 }
 
 function getServerProfileDataDeployCB(data, ioArgs) {
+	document.body.style.cursor = 'default';
 	if(data.items.error) {
 		alert('You do not have access to apply this server profile.');
 		return;
@@ -203,6 +216,9 @@ function getServerProfileDataDeployCB(data, ioArgs) {
 }
 
 function getServerProfileDataManageCB(data, ioArgs) {
+	document.body.style.cursor = 'default';
+	dijit.byId('fetchProfilesBtn').set('label', 'Configure Profile');
+	dijit.byId('fetchProfilesBtn').set('disabled', false);
 	if(data.items.error) {
 		alert('You do not have access to modify this server profile.');
 		return;
@@ -225,6 +241,8 @@ function confirmDelServerProfile(cont) {
 }
 
 function delServerProfile() {
+	if(allprofiles.length == 1)
+		dojo.addClass('profileslist', 'hidden');
 	dijit.byId('confirmDeleteProfile').hide();
 	var data = {continuation: dojo.byId('delcont').value,
 	            id: dijit.byId('profileid').get('value')};
@@ -242,6 +260,7 @@ function delServerProfileCB(data, ioArgs) {
 		query: {id: data.items.id},
 		onItem: function(item, request) {
 			profilesstore.deleteItem(item);
+			dijit.byId('deployprofileid').removeOption({value: item.id[0]});
 			dijit.byId('profileid').removeOption({value: item.id[0]});
 			dijit.byId('profiles').removeOption({value: item.id[0]});
 		}
@@ -254,7 +273,7 @@ function clearSaveStatus() {
 }
 
 function getGroups() {
-   document.body.style.cursor = 'wait';
+	document.body.style.cursor = 'wait';
 	var selobj = dojo.byId('ingroups');
 	for(var i = selobj.options.length - 1; i >= 0; i--) {
 		selobj.remove(i);
@@ -265,8 +284,10 @@ function getGroups() {
 	}
 
 	var profileid = dijit.byId('profiles').get('value');
-	if(profileid == '')
+	if(profileid == '') {
+		document.body.style.cursor = 'default';
 		return;
+	}
 	profilesstore.fetch({
 		query: {id: profileid},
 		onItem: function(item, request) {
@@ -274,13 +295,6 @@ function getGroups() {
 			dojo.byId('outprofilename').innerHTML = item.name;
 		}
 	});
-	/*var obj = dijit.byId('profiles').getOptions(dijit.byId('profiles').get('value'));
-	if(! obj)
-		return;
-	var profilename = obj.label;
-
-	dojo.byId('inprofilename').innerHTML = profilename;
-	dojo.byId('outprofilename').innerHTML = profilename;*/
 
 	var data = {continuation: dojo.byId('grpcont').value,
 	            profileid: profileid};
@@ -303,8 +317,10 @@ function getGroupsCB(data, ioArgs) {
 }
 
 function getProfiles() {
-   document.body.style.cursor = 'wait';
 	var selobj = dojo.byId('inprofiles');
+	if(! selobj)
+		return;
+	document.body.style.cursor = 'wait';
 	for(var i = selobj.options.length - 1; i >= 0; i--) {
 		selobj.remove(i);
 	}
@@ -313,8 +329,10 @@ function getProfiles() {
 		selobj.remove(i);
 	}
 
-	var obj = dijit.byId('profileGroups').getOptions(dijit.byId('profileGroups').get('value'));
-	var groupname = obj.label;
+	var obj = dijit.byId('profileGroups');
+	if(! obj)
+		return;
+	var groupname = obj.getOptions(dijit.byId('profileGroups').get('value')).label;
 
 	dojo.byId('ingroupname').innerHTML = groupname;
 	dojo.byId('outgroupname').innerHTML = groupname;
@@ -335,6 +353,18 @@ function getProfilesCB(data, ioArgs) {
 		obj.options[obj.options.length] = new Option(data.items.outprofiles[i].name, data.items.outprofiles[i].id);
 	}
 	allprofiles = data.items.all;
+	if(allprofiles.length == 0) {
+		dojo.addClass('profileslist', 'hidden');
+		dojo.addClass('deployprofileslist', 'hidden');
+		dojo.addClass('groupprofilesspan', 'hidden');
+		dojo.removeClass('noprofilegroupsspan', 'hidden');
+	}
+	else {
+		dojo.removeClass('profileslist', 'hidden');
+		dojo.removeClass('deployprofileslist', 'hidden');
+		dojo.removeClass('groupprofilesspan', 'hidden');
+		dojo.addClass('noprofilegroupsspan', 'hidden');
+	}
 	dojo.removeClass('profilesdiv', 'hidden');
 	document.body.style.cursor = 'default';
 }
@@ -352,7 +382,7 @@ function addRemItem(cont, objid1, objid2, cb) {
 	}
 	if(listids == "")
 		return;
-   document.body.style.cursor = 'wait';
+	document.body.style.cursor = 'wait';
 	var data = {continuation: cont,
 	            listids: listids,
 	            id: id};
@@ -649,7 +679,4 @@ function submitDeployCB(data, ioArgs) {
 	if(data.items.success) {
 		window.location.href = data.items.redirecturl;
 	}
-}
-
-function updateWaitTime(a) {
 }
