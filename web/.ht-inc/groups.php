@@ -414,13 +414,14 @@ function editOrAddGroup($state) {
 			print "    <TH align=right>Editable by:</TH>\n";
 			print "    <TD valign=\"top\">\n";
 			$groupwasnone = 0;
-			if($submitErr & EDITGROUPERR)
+			if($submitErr & EDITGROUPERR) {
 				if($state == 0)
 					$data['editgroupid'] = $usergroups[$data['groupid']]['editgroupid'];
 				else {
 					$tmp = array_keys($affilusergroups);
 					$data['editgroupid'] = $tmp[0];
 				}
+			}
 			$notice = '';
 			if($state == 0 && empty($usergroups[$data['groupid']]["editgroup"])) {
 				$affilusergroups = array_reverse($affilusergroups, TRUE);
@@ -507,12 +508,13 @@ function editOrAddGroup($state) {
 		else {
 			$cdata = array('type' => $data['type'],
 			               'groupid' => $data['groupid'],
-			               'isowner' => $data['isowner'],
-			               'groupwasnone' => $groupwasnone);
+			               'isowner' => $data['isowner']);
 			if($data['type'] == 'resource')
 				$cdata['resourcetypeid'] = $resourcetypeid;
-			else
+			else {
 				$cdata['selectAffil'] = $selectAffil;
+				$cdata['groupwasnone'] = $groupwasnone;
+			}
 			$cont = addContinuationsEntry('confirmEditGroup', $cdata);
 			print "      <INPUT type=hidden name=continuation value=\"$cont\">\n";
 			print "      <INPUT type=submit value=\"Confirm Changes\">\n";
