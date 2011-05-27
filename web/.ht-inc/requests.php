@@ -612,11 +612,23 @@ function viewRequests() {
 	$computers = getComputers();
 	$resources = getUserResources(array("imageAdmin"));
 
+	if(count($requests) == 0) {
+		if($mode == 'AJviewRequests')
+			print "document.body.style.cursor = 'default';";
+		$text  = "<H2>Current Reservations</H2>";
+		$text .= "You have no current reservations.<br>";
+		if($mode == 'AJviewRequests')
+			print(setAttribute('subcontent', 'innerHTML', $text));
+		else
+			print $text;
+		return;
+	}
 	if($mode != 'AJviewRequests')
 		print "<div id=subcontent>\n";
 
 	$refresh = 0;
 	$connect = 0;
+	$failed = 0;
 
 	$normal = '';
 	$imaging = '';
@@ -785,11 +797,12 @@ function viewRequests() {
 					$text .= "               onClick=\"editReservation('$editcont');\">\n";
 					$text .= "          </div>\n";
 					if(array_key_exists($imageid, $resources['image']) &&
-						($images[$imageid]['installtype'] == 'kickstart' ||
-						 $images[$imageid]['installtype'] == 'partimage' ||
-						 ($requests[$i]['initialduration'] + 30) > SECINDAY) &&
-						(count($requests[$i]['reservations'] == 1) || $requests[$i]['forimaging']) &&
-						($requests[$i]['currstateid'] == 8 || $requests[$i]['laststateid'] == 8)) {
+					   ($images[$imageid]['installtype'] == 'kickstart' ||
+					    $images[$imageid]['installtype'] == 'partimage' ||
+					    $requests[$i]['forimaging'] ||
+					    ($requests[$i]['initialduration'] + 30) > SECINDAY) &&
+					   (count($requests[$i]['reservations'] == 1) || $requests[$i]['forimaging']) &&
+					   ($requests[$i]['currstateid'] == 8 || $requests[$i]['laststateid'] == 8)) {
 						$text .= "          <div dojoType=\"dijit.MenuItem\"\n";
 						$text .= "               iconClass=\"noicon\"\n";
 						$text .= "               label=\"End Reservation & Create Image\"\n";
@@ -908,10 +921,11 @@ function viewRequests() {
 					$vmhost = $row['hostname'];
 				}
 				$text .= "    <TD align=center><span id=\"req{$requests[$i]['id']}\">";
-				$text .= "{$requests[$i]["id"]}</span></TD>\n";
+				$text .= "{$requests[$i]["id"]}</span>\n";
 				$text .= "<div dojoType=\"vcldojo.HoverTooltip\" connectId=\"req{$requests[$i]['id']}\">";
 				$text .= "Mgmt node: {$nodes[$requests[$i]["managementnodeid"]]['hostname']}<br>\n";
 				$text .= "Computer ID: {$requests[$i]['computerid']}<br>\n";
+				$text .= "Comp hostname: {$computers[$requests[$i]["computerid"]]["hostname"]}<br>\n";
 				$text .= "Comp IP: {$requests[$i]["IPaddress"]}<br>\n";
 				$text .= "Comp State ID: {$computers[$requests[$i]["computerid"]]["stateid"]}<br>\n";
 				$text .= "Comp Type: {$requests[$i]['comptype']}<br>\n";
@@ -1035,12 +1049,8 @@ function viewRequests() {
 		$text .= "this may have caused.\n";
 	}
 
-	if(empty($normal) && empty($imaging) && empty($long) && empty($server))
-		$text .= "You have no current reservations.<br>\n";
-	else {
-		$cont = addContinuationsEntry('AJviewRequests', $cdata, SECINDAY);
-		$text .= "<INPUT type=hidden id=resRefreshCont value=\"$cont\">\n";
-	}
+	$cont = addContinuationsEntry('AJviewRequests', array(), SECINDAY);
+	$text .= "<INPUT type=hidden id=resRefreshCont value=\"$cont\">\n";
 
 	$text .= "</div>\n";
 	if($mode != 'AJviewRequests') {
@@ -1169,8 +1179,7 @@ function viewRequests() {
 			print(setAttribute('resStatusText', 'innerHTML', $text));
 		}
 		print "checkResGone(" . json_encode($reqids) . ");";
-		dbDisconnect();
-		exit;
+		return;
 	}
 }
 
@@ -2267,6 +2276,7 @@ function printReserveItems($modifystart=1, $imaging=0, $length=60, $maxlength=0,
 	global $user, $submitErr;
 	if(! is_numeric($length))
 		$length = 60;
+	$ending = processInputVar("ending", ARG_STRING, "length");
 	$enddate = processInputVar("enddate", ARG_STRING);
 	$groupid = getUserGroupID('Specify End Time', 1);
 	$members = getUserGroupMembers($groupid);
@@ -2312,8 +2322,12 @@ function printReserveItems($modifystart=1, $imaging=0, $length=60, $maxlength=0,
 			printSubmitErr(STARTMINUTEERR);
 		print "<br><br>";
 		if($openend) {
+			if($ending != 'date')
+				$checked = 'checked';
+			else
+				$checked = '';
 			print "&nbsp;&nbsp;&nbsp;<INPUT type=\"radio\" name=\"ending\" ";
-			print "onclick=\"updateWaitTime(0);\" value=\"length\" checked ";
+			print "onclick=\"updateWaitTime(0);\" value=\"length\" $checked ";
 			print "id=\"durationradio\"><label for=\"durationradio\">";
 		}
 		print "Duration:&nbsp;\n";
@@ -2358,19 +2372,38 @@ function printReserveItems($modifystart=1, $imaging=0, $length=60, $maxlength=0,
 		"onChange='updateWaitTime(0); selectDuration();'");
 	print "<br>\n";
 	if($openend) {
+		if($ending == 'date')
+			$checked = 'checked';
+		else
+			$checked = '';
 		print "&nbsp;&nbsp;&nbsp;<INPUT type=\"radio\" name=\"ending\" id=\"openend\" ";
-		print "onclick=\"updateWaitTime(0);\" value=\"date\">";
+		print "onclick=\"updateWaitTime(0);\" value=\"date\" $checked>";
 		print "<label for=\"openend\">Until</label>\n";
 
+		if(preg_match('/^(20[0-9]{2}-[0-1][0-9]-[0-3][0-9]) ((([0-1][0-9])|(2[0-3])):([0-5][0-9]):([0-5][0-9]))$/', $enddate, $regs)) {
+			$edate = $regs[1];
+			$etime = $regs[2];
+			$validendformat = 1;
+		}
+		else {
+			$edate = '';
+			$etime = '';
+			$validendformat = 0;
+		}
 		print "<div type=\"text\" dojoType=\"dijit.form.DateTextBox\" ";
 		print "id=\"openenddate\" onChange=\"setOpenEnd();\" ";
-		print "style=\"width: 78px\"></div>\n";
+		print "style=\"width: 78px\" value=\"$edate\"></div>\n";
 		print "<div type=\"text\" dojoType=\"dijit.form.TimeTextBox\" ";
 		print "id=\"openendtime\" onChange=\"setOpenEnd();\" ";
-		print "style=\"width: 78px\"></div>\n";
+		print "style=\"width: 78px\" value=\"T$etime\"></div>\n";
 		print "<small>(" . date('T') . ")</small>\n";
+		print "<noscript>(You must have javascript enabled to use the 'Until' ";
+		print "option.)<br></noscript>\n";
 		printSubmitErr(ENDDATEERR);
-		print "<INPUT type=\"hidden\" name=\"enddate\" id=\"enddate\" value=\"$enddate\">\n";
+		if($validendformat)
+			print "<INPUT type=\"hidden\" name=\"enddate\" id=\"enddate\" value=\"$enddate\">\n";
+		else
+			print "<INPUT type=\"hidden\" name=\"enddate\" id=\"enddate\" value=\"\">\n";
 		print "<br>\n";
 	}
 }
@@ -2405,148 +2438,62 @@ function connectRequest() {
 		print "<font color=red><big><strong>NOTICE:</strong> Later in this process, you must accept a
 		<a href=\"" . BASEURL . SCRIPT . "?mode=imageClickThrough\">click-through agreement</a> about software licensing.</big></font><br><br>\n";
 	}
-	if(count($requestData["reservations"]) == 1) {
-		$serverIP = $requestData["reservations"][0]["reservedIP"];
-		$osname = $requestData["reservations"][0]["OS"];
-		$passwd = $requestData["reservations"][0]["password"];
-		if(preg_match("/windows/i", $osname)) {
-			print "You will need to use a ";
-			print "Remote Desktop program to connect to the ";
-			print "system. If you did not click on the <b>Connect!</b> button from ";
-			print "the computer you will be using to access the VCL system, you ";
-			print "will need to return to the <strong>Current Reservations</strong> ";
-			print "page and click the <strong>Connect!</strong> button from ";
-			print "a web browser running on the same computer from which you will ";
-			print "be connecting to the VCL system. Otherwise, you may be denied ";
-			print "access to the remote computer.<br><br>\n";
-			print "Use the following information when you are ready to connect:<br>\n";
-			print "<UL>\n";
-			print "<LI><b>Remote Computer</b>: $serverIP</LI>\n";
-			if($requestData["forimaging"])
-				print "<LI><b>User ID</b>: Administrator</LI>\n";
-			else
-				if(preg_match('/(.*)@(.*)/', $user['unityid'], $matches))
-					print "<LI><b>User ID</b>: " . $matches[1] . "</LI>\n";
-				else
-					print "<LI><b>User ID</b>: " . $user['unityid'] . "</LI>\n";
-			if(strlen($passwd)) {
-				print "<LI><b>Password</b>: $passwd<br></LI>\n";
-				print "</UL>\n";
-				print "<b>NOTE</b>: The given password is for <i>this reservation ";
-				print "only</i>. You will be given a different password for any other ";
-				print "reservations.<br>\n";
-			}
-			else {
-				print "<LI><b>Password</b>: (use your campus password)</LI>\n";
-				print "</UL>\n";
-			}
-			/*print "<br>\n";
-			print "<FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
-			print "<h3>NEW!</h3>\n";
-			print "Connect to the server using a java applet:<br>\n";
-			print "<INPUT type=submit value=\"Connect with Applet\">\n";
-			print "<INPUT type=hidden name=mode value=connectRDPapplet>\n";
-			print "<INPUT type=hidden name=requestid value=$requestid>\n";
-			print "</FORM><br>\n";*/
-			print "For automatic connection, you can download an RDP file that can ";
-			print "be opened by the Remote Desktop Connection program.<br><br>\n";
-			print "<table summary=\"\">\n";
-			print "  <TR>\n";
-			print "    <TD>\n";
-			print "      <FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
-			$cdata = array('requestid' => $requestid,
-				            'resid' => $requestData['reservations'][0]['reservationid']);
-			$expire = datetimeToUnix($requestData['end']) -
-			          datetimeToUnix($requestData['start']) + 1800; # reservation time plus 30 min
-			$cont = addContinuationsEntry('sendRDPfile', $cdata, $expire);
-			print "      <INPUT type=hidden name=continuation value=\"$cont\">\n";
-			print "      <INPUT type=submit value=\"Get RDP File\">\n";
-			print "      </FORM>\n";
-			print "    </TD>\n";
-			print "  </TR>\n";
-			print "</table>\n";
-		}
-		else {
-			print "You will need to have an ";
-			print "X server running on your local computer and use an ";
-			print "ssh client to connect to the system. If you did not ";
-			print "click on the <b>Connect!</b> button from ";
-			print "the computer you will be using to access the VCL system, you ";
-			print "will need to return to the <strong>Current Reservations</strong> ";
-			print "page and click the <strong>Connect!</strong> button from ";
-			print "a web browser running on the same computer from which you will ";
-			print "be connecting to the VCL system. Otherwise, you may be denied ";
-			print "access to the remote computer.<br><br>\n";
-			print "Use the following information when you are ready to connect:<br>\n";
-			print "<UL>\n";
-			print "<LI><b>Remote Computer</b>: $serverIP</LI>\n";
-			if(preg_match('/(.*)@(.*)/', $user['unityid'], $matches))
-				print "<LI><b>User ID</b>: " . $matches[1] . "</LI>\n";
-			else
-				print "<LI><b>User ID</b>: " . $user['unityid'] . "</LI>\n";
-			if(strlen($passwd)) {
-				print "<LI><b>Password</b>: $passwd<br></LI>\n";
-				print "</UL>\n";
-				print "<b>NOTE</b>: The given password is for <i>this reservation ";
-				print "only</i>. You will be given a different password for any other ";
-				print "reservations.<br>\n";
-			}
-			else {
-				print "<LI><b>Password</b>: (use your campus password)</LI>\n";
-				print "</UL>\n";
-			}
-			print "<strong><big>NOTE:</big> You cannot use the Windows Remote ";
-			print "Desktop Connection to connect to this computer. You must use an ";
-			print "ssh client.</strong>\n";
-			/*if(preg_match("/windows/i", $_SERVER["HTTP_USER_AGENT"])) {
-				print "<br><br><h3>NEW!</h3>\n";
-				print "Connect to the server using a java applet:<br>\n";
-				print "<FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
-				print "<INPUT type=submit value=\"Connect with Applet\">\n";
-				print "<INPUT type=hidden name=mode value=connectMindterm>\n";
-				print "<INPUT type=hidden name=serverip value=\"$serverIP\">\n";
-				print "</FORM>\n";
-			}*/
-		}
+	$imagenotes = getImageNotes($requestData['reservations'][0]['imageid']);
+	if(preg_match('/\w/', $imagenotes['usage'])) {
+		print "<h3>Notes on using this environment:</h3>\n";
+		print "{$imagenotes['usage']}<br><br><br>\n";
 	}
-	else {
-		print "You will need an ";
-		print "ssh client to connect to any unix systems.<br>\n";
-		print "You will need a ";
-		print "Remote Desktop program</a> to connect to any windows systems.<br><br>\n";
-		print "Use the following information when you are ready to connect:<br>\n";
-		$total = count($requestData["reservations"]);
-		$count = 0;
-		foreach($requestData["reservations"] as $key => $res) {
-			$count++;
-			print "<h3>{$res["prettyimage"]}</h3>\n";
-			print "<UL>\n";
-			print "<LI><b>Platform</b>: {$res["OS"]}</LI>\n";
-			print "<LI><b>Remote Computer</b>: {$res["reservedIP"]}</LI>\n";
-			print "<LI><b>User ID</b>: " . $user['login'] . "</LI>\n";
-			if(preg_match("/windows/i", $res["OS"])) {
-				if(strlen($res['password'])) {
-					print "<LI><b>Password</b>: {$res['password']}<br></LI>\n";
-					print "</UL>\n";
-					print "<b>NOTE</b>: The given password is for <i>this reservation ";
-					print "only</i>. You will be given a different password for any other ";
-					print "reservations.<br>\n";
-				}
-				else {
-					print "<LI><b>Password</b>: (use your campus password)</LI>\n";
-					print "</UL>\n";
-				}
-				/*print "Connect to the server using a java applet:<br>\n";
-				print "<INPUT type=submit value=\"Connect with Applet\">\n";
-				print "<INPUT type=hidden name=mode value=connectRDPapplet>\n";
-				print "<INPUT type=hidden name=requestid value=$requestid>\n";
-				print "<INPUT type=hidden name=reservedIP value=\"{$res["reservedIP"]}\">\n";
-				print "</FORM><br><br>\n";*/
-				print "Automatic connection using an RDP file:<br>\n";
+	if(count($requestData["reservations"]) > 1)
+		$cluster = 1;
+	else
+		$cluster = 0;
+	if($cluster) {
+		print "<h2>Cluster Reservation</h2>\n";
+		print "This is a cluster reservation. Depending on the makeup of the ";
+		print "cluster, you may need to use different methods to connect to the ";
+		print "different environments in your cluster.<br><br>\n";
+	}
+	foreach($requestData["reservations"] as $key => $res) {
+		$serverIP = $res["reservedIP"];
+		$osname = $res["OS"];
+		$passwd = $res["password"];
+		$connectData = getImageConnectMethodTexts($res['imageid'],
+		                                          $res['imagerevisionid']);
+		$first = 1;
+		if($cluster) {
+			print "<fieldset>\n";
+			print "<legend><big><strong>{$res['prettyimage']}</strong></big></legend>\n";
+		}
+		foreach($connectData as $method) {
+			if($first)
+				$first = 0;
+			else
+				print "<hr>\n";
+			if(preg_match('/(.*)@(.*)/', $user['unityid'], $matches))
+				$conuser = $matches[1];
+			else
+				$conuser = $user['unityid'];
+			if(! strlen($passwd))
+				$passwd = '(use your campus password)';
+			if($cluster)
+				print "<h4>Connect to reservation using {$method['description']}</h4>\n";
+			else
+				print "<h3>Connect to reservation using {$method['description']}</h3>\n";
+			$froms = array('/#userid#/',
+			               '/#password#/',
+			               '/#connectIP#/',
+			               '/#connectport#/');
+			if(empty($res['connectIP']))
+				$res['connectIP'] = $serverIP; #TODO delete this when vcld is populating connectIP
+			$tos = array($conuser,
+			             $passwd,
+			             $res['connectIP'], 
+			             $res['connectport']);
+			print preg_replace($froms, $tos, $method['connecttext']);
+			if($method['description'] == 'Remote Desktop') {
 				print "<FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
 				$cdata = array('requestid' => $requestid,
-				               'resid' => $res['reservationid'],
-				               'reservedIP' => $res['reservedIP']);
+				               'resid' => $res['reservationid']);
 				$expire = datetimeToUnix($requestData['end']) -
 				          datetimeToUnix($requestData['start']) + 1800; # reservation time plus 30 min
 				$cont = addContinuationsEntry('sendRDPfile', $cdata, $expire);
@@ -2554,42 +2501,9 @@ function connectRequest() {
 				print "<INPUT type=submit value=\"Get RDP File\">\n";
 				print "</FORM>\n";
 			}
-			else {
-				if(strlen($res['password'])) {
-					print "<LI><b>Password</b>: {$res['password']}<br></LI>\n";
-					print "</UL>\n";
-					print "<b>NOTE</b>: The given password is for <i>this reservation ";
-					print "only</i>. You will be given a different password for any other ";
-					print "reservations.<br>\n";
-				}
-				else {
-					print "<LI><b>Password</b>: (use your campus password)</LI>\n";
-					print "</UL>\n";
-				}
-				/*if(preg_match("/windows/i", $_SERVER["HTTP_USER_AGENT"])) {
-					print "Connect to the server using a java applet:<br>\n";
-					print "<FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
-					print "<INPUT type=submit value=\"Connect with Applet\">\n";
-					print "<INPUT type=hidden name=mode value=connectMindterm>\n";
-					print "<INPUT type=hidden name=requestid value=$requestid>\n";
-					print "<INPUT type=hidden name=serverip value=\"{$res["reservedIP"]}\">\n";
-					print "</FORM>\n";
-				}*/
-			}
-			if($count < $total)
-				print "<hr>\n";
 		}
-	}
-	foreach($requestData["reservations"] as $res) {
-		if($res["forcheckout"]) {
-			$imageid = $res["imageid"];
-			break;
-		}
-	}
-	$imagenotes = getImageNotes($imageid);
-	if(preg_match('/\w/', $imagenotes['usage'])) {
-		print "<h3>Notes on using this environment:</h3>\n";
-		print "{$imagenotes['usage']}<br><br><br>\n";
+		if($cluster)
+			print "</fieldset><br>\n";
 	}
 }
 
