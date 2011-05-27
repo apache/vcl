@@ -103,6 +103,7 @@ function selectEnding() {
 }
 
 function setOpenEnd() {
+	dojo.byId('openend').checked = true;
 	if(! dijit.byId('openenddate').isValid() ||
 	   ! dijit.byId('openendtime').isValid()) {
 		dojo.byId('enddate').value = '';
@@ -120,7 +121,6 @@ function setOpenEnd() {
 	                             d.getDate(),
 	                             t.getHours(),
 	                             t.getMinutes());
-	dojo.byId('openend').checked = true;
 }
 
 function checkValidImage() {
