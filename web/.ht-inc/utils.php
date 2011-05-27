@@ -325,6 +325,10 @@ function checkAccess() {
 		if(! $user = getUserInfo($xmluser)) {
 			// if first call to getUserInfo fails, try calling with $noupdate set
 			if(! $user = getUserInfo($xmluser, 1)) {
+				$testid = $xmluser;
+				$affilid = DEFAULT_AFFILID;
+				getAffilidAndLogin($testid, $affilid);
+				addLoginLog($testid, 'unknown', $affilid, 0);
 				printXMLRPCerror(3);   # access denied
 				dbDisconnect();
 				exit;
@@ -1316,9 +1320,10 @@ function getImageNotes($imageid) {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn getImageConnectMethods($imageid)
+/// \fn getImageConnectMethods($imageid, $revisionid)
 ///
 /// \param $imageid - id of an image
+/// \param $revisionid - (optional, default=0) revision id of image
 ///
 /// \return an array of connect methods enabled for specified image where the
 /// key is the id of the connect method and the value is the description
@@ -1326,7 +1331,9 @@ function getImageNotes($imageid) {
 /// \brief builds an array of connect methods enabled for the image
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function getImageConnectMethods($imageid) {
+function getImageConnectMethods($imageid, $revisionid=0) {
+	if($revisionid == 0)
+		$revisionid = getProductionRevisionid($imageid);
 	$query = "SELECT c.id, "
 	       .        "c.description, "
 	       .        "cm.disabled "
@@ -1340,7 +1347,7 @@ function getImageConnectMethods($imageid) {
 	       .       "cm.autoprovisioned IS NULL AND "
 	       .       "(cm.OStypeid = ot.id OR "
 	       .        "cm.OSid = o.id OR "
-	       .        "cm.imageid = $imageid) "
+	       .        "cm.imagerevisionid = $revisionid) "
 	       . "ORDER BY cm.disabled, "
 	       .          "c.description";
 	$methods = array();
@@ -1352,6 +1359,53 @@ function getImageConnectMethods($imageid) {
 		}
 		else
 			$methods[$row['id']] = $row['description'];
+	}
+	return $methods;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn getImageConnectMethodTexts($imageid, $revisionid)
+///
+/// \param $imageid - id of an image
+/// \param $revisionid - (optional, default=0) revision id of image
+///
+/// \return an array of connect method texts enabled for specified image where
+/// the key is the id of the connect method and the value is the connecttext
+///
+/// \brief builds an array of connect methods enabled for the image
+///
+////////////////////////////////////////////////////////////////////////////////
+function getImageConnectMethodTexts($imageid, $revisionid=0) {
+	if($revisionid == 0)
+		$revisionid = getProductionRevisionid($imageid);
+	$query = "SELECT c.id, "
+	       .        "c.description, "
+	       .        "c.connecttext, "
+	       .        "cm.disabled "
+	       . "FROM connectmethod c, "
+	       .      "connectmethodmap cm, "
+	       .      "image i "
+	       . "LEFT JOIN OS o ON (o.id = i.OSid) "
+	       . "LEFT JOIN OStype ot ON (ot.name = o.type) "
+	       . "WHERE i.id = $imageid AND "
+	       .       "cm.connectmethodid = c.id AND "
+	       .       "cm.autoprovisioned IS NULL AND "
+	       .       "(cm.OStypeid = ot.id OR "
+	       .        "cm.OSid = o.id OR "
+	       .        "cm.imagerevisionid = $revisionid) "
+	       . "ORDER BY cm.disabled, "
+	       .          "c.description";
+	$methods = array();
+	$qh = doQuery($query, 101);
+	while($row = mysql_fetch_assoc($qh)) {
+		if($row['disabled']) {
+		  if(array_key_exists($row['id'], $methods))
+			unset($methods[$row['id']]);
+		}
+		else
+			$methods[$row['id']] = array('description' => $row['description'],
+			                             'connecttext' => $row['connecttext']);
 	}
 	return $methods;
 }
@@ -3437,6 +3491,7 @@ function getBlockAllocationIDs($user) {
 	       .       "r.status = 'accepted' AND "
 	       .       "t.start <= DATE_ADD(NOW(), INTERVAL 15 MINUTE) AND "
 	       .       "t.end > NOW() AND "
+	       .       "t.skip = 0 AND "
 	       .       "r.groupid IN ($inids)";
 	$ids = array();
 	$qh = doQuery($query, 101);
@@ -4425,6 +4480,8 @@ function findManagementNode($compid, $start, $nowfuture) {
 /// \b hostname - hostname of reserved computer\n
 /// \b forcheckout - whether or not the image is intended for checkout\n
 /// \b password - password for this computer\n
+/// \b connectIP - IP to which user will connect\n
+/// \b connectport - port to which user will connect\n
 /// \b remoteIP - IP of remote user
 ///
 /// \brief creates an array with info about request $id
@@ -4477,6 +4534,8 @@ function getRequestInfo($id, $returnNULL=0) {
 	       .        "c.hostname, "
 	       .        "i.forcheckout, "
 	       .        "rs.pw AS password, "
+	       .        "rs.connectIP, "
+	       .        "rs.connectport, "
 	       .        "rs.remoteIP "
 	       . "FROM reservation rs, "
 	       .      "image i, "
@@ -7975,7 +8034,7 @@ function getResourceMapping($resourcetype1, $resourcetype2,
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn getConnectMethods()
+/// \fn getConnectMethods($imageid)
 ///
 /// \param $imageid - id of image for which to get available methods
 ///
@@ -7988,7 +8047,10 @@ function getResourceMapping($resourcetype1, $resourcetype2,
 /// \brief get the available connection methods for a specific image
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function getConnectMethods() {
+function getConnectMethods($imageid) {
+	$key = getKey(array('getConnectMethods', $imageid));
+	if(array_key_exists($key, $_SESSION['usersessiondata']))
+		return $_SESSION['usersessiondata'][$key];
 	$query = "SELECT DISTINCT c.id, "
 	       .        "c.description, "
 	       .        "cm.autoprovisioned "
@@ -8007,6 +8069,7 @@ function getConnectMethods() {
 	$qh = doQuery($query, 101);
 	while($row = mysql_fetch_assoc($qh))
 		$methods[$row['id']] = $row;
+	$_SESSION['usersessiondata'][$key] = $methods;
 	return $methods;
 }
 
@@ -9306,17 +9369,8 @@ function getDojoHTML($refresh) {
 			break;
 		case 'viewRequestInfo':
 			$dojoRequires = array('dojo.parser',
-			                      #'dijit.form.DateTextBox',
-			                      #'dijit.form.TimeTextBox',
-			                      #'dijit.form.Select',
-			                      #'dojox.string.sprintf',
 			                      'dijit.Dialog',
-			                      #'dijit.Menu',
-			                      'dijit.form.Button',
-			                      #'dijit.form.DropDownButton',
-			                      #'dijit.Tooltip',
-			                      #'vcldojo.HoverTooltip',
-										 /*'dojox.layout.FloatingPane'*/);
+			                      'dijit.form.Button');
 			break;
 		case 'blockAllocations':
 			$dojoRequires = array('dojo.parser',
@@ -9440,7 +9494,6 @@ function getDojoHTML($refresh) {
 			                      'dijit.form.FilteringSelect',
 			                      'dijit.form.Select',
 			                      'dijit.layout.LinkPane',
-			                      #'dijit.TitlePane',
 			                      'dijit.form.TextBox',
 			                      'dijit.form.ValidationTextBox',
 			                      'dijit.form.CheckBox',
@@ -9750,20 +9803,19 @@ function getDojoHTML($refresh) {
 		case "serverProfiles":
 			$rt .= "<style type=\"text/css\">\n";
 			$rt .= "   @import \"themes/$skin/css/dojo/$skin.css\";\n";
-			#$rt .= "   @import \"css/dashboard.css\";\n";
 			$rt .= "</style>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"js/serverprofiles.js\"></script>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
-			$rt .= "   djConfig=\"parseOnLoad: true, debug: true\">\n";
+			$rt .= "   djConfig=\"parseOnLoad: true\">\n";
 			$rt .= "</script>\n";
 			$rt .= "<script type=\"text/javascript\">\n";
+			$rt .= "   dojo.addOnLoad(function() {\n";
 			foreach($dojoRequires as $req)
 				$rt .= "   dojo.require(\"$req\");\n";
-			#$rt .= "   dojo.addOnLoad(function() {\n";
-			#$rt .= "   });\n";
-			$rt .= "   dojo.addOnLoad(getProfiles);\n";
 			$cont = addContinuationsEntry('AJserverProfileStoreData', array(), 120, 1, 0);
-			$rt .= "   dojo.addOnLoad(function() {populateProfileStore('$cont');});\n";
+			$rt .= "   populateProfileStore('$cont');\n";
+			$rt .= "   });\n";
+			$rt .= "   dojo.addOnLoad(getProfiles);\n";
 			$rt .= "</script>\n";
 			return $rt;
 
@@ -9882,7 +9934,7 @@ function getDojoHTML($refresh) {
 			$rt .= "</style>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"js/dashboard.js\"></script>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
-			$rt .= "   djConfig=\"parseOnLoad: true, debug: true\">\n";
+			$rt .= "   djConfig=\"parseOnLoad: true\">\n";
 			$rt .= "</script>\n";
 			$rt .= "<script type=\"text/javascript\">\n";
 			$rt .= "   dojo.addOnLoad(function() {\n";
