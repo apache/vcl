@@ -280,11 +280,21 @@ function sortSelect(selobj) {
 		values[selobj.options[i].text] = selobj.options[i].value;
 		texts[i] = selobj.options[i].text;
 	}
-	texts.sort();
+	texts.sort(ignoreCaseSort);
 	for(var i = 0; i < selobj.options.length; i++) {
 		selobj.options[i].text = texts[i];
 		selobj.options[i].value = values[texts[i]];
 	}
+}
+
+function ignoreCaseSort(a, b) {
+	a = a.toLowerCase();
+	b = b.toLowerCase();
+	if(a > b)
+		return 1;
+	if(a < b)
+		return -1;
+	return 0;
 }
 
 function getSelectText(objid) {
