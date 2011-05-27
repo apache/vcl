@@ -70,28 +70,33 @@ function selectImageOption() {
 	print "<FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
 	if($imgAdminCnt) {
 		$cont = addContinuationsEntry('viewImages');
-		print "<INPUT type=radio name=continuation value=\"$cont\" checked>Edit ";
-		print "Image Profiles<br>\n";
+		print "<INPUT type=radio name=continuation value=\"$cont\" checked ";
+		print "id=\"imageedit\"><label for=\"imageedit\">Edit ";
+		print "Image Profiles</label><br>\n";
 		print "<img src=images/blank.gif width=20><INPUT type=checkbox name=";
-		print "details value=1>Include details<br>\n";
+		print "\"details\" value=\"1\" id=\"imagedetails\"><label for=\"";
+		print "imagedetails\">Include details</label><br>\n";
 	}
 
 	if($imgGroupCnt) {
 		$cont = addContinuationsEntry('viewImageGrouping');
-		print "<INPUT type=radio name=continuation value=\"$cont\">Edit ";
-		print "Image Grouping<br>\n";
+		print "<INPUT type=radio name=continuation value=\"$cont\" id=\"";
+		print "imagegrouping\"><label for=\"imagegrouping\">Edit Image Grouping";
+		print "</label><br>\n";
 	}
 
 	if($imgMapCnt && $compMapCnt) {
 		$cont = addContinuationsEntry('viewImageMapping');
-		print "<INPUT type=radio name=continuation value=\"$cont\">Edit ";
-		print "Image Mapping<br>\n";
+		print "<INPUT type=radio name=continuation value=\"$cont\" id=\"";
+		print "imagemapping\"><label for=\"imagemapping\">Edit Image Mapping";
+		print "</label><br>\n";
 	}
 
 	if($imgCnt) {
 		$cont = addContinuationsEntry('newRequest', array('imaging' => 1));
-		print "<INPUT type=radio name=continuation value=\"$cont\">Create&nbsp;/";
-		print "&nbsp;Update an Image<br>\n";
+		print "<INPUT type=radio name=continuation value=\"$cont\" id=\"";
+		print "newimage\"><label for=\"newimage\">Create&nbsp;/&nbsp;Update an ";
+		print "Image</label><br>\n";
 	}
 
 	if($imgAdminCnt || $imgGroupCnt || $imgCnt)
@@ -817,15 +822,7 @@ function submitImageButton() {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function editOrAddImage($state) {
-	global $submitErr, $mode, $submode, $user;
-
-	$images = getImages();
-	$platforms = getPlatforms();
-	$oslist = getOSList();
-	$groups = getUserGroups(0, $user['affiliationid']);
-	$groups = array_reverse($groups, TRUE);
-	$groups[0] = array("name" => "Any");
-	$groups = array_reverse($groups, TRUE);
+	global $submitErr, $mode;
 
 	if($submitErr || $state == 1 || $mode == "submitEditImageButtons") {
 		$data = processImageInput(0);
@@ -837,13 +834,29 @@ function editOrAddImage($state) {
 		$data['imageid'] = getContinuationVar('imageid');
 		if($mode == "newImage") {
 			$requestdata = getRequestInfo($data['requestid']);
-			$imagedata = getImages(0, $requestdata["reservations"][0]["imageid"]);
-			$data["platformid"] = $imagedata[$requestdata["reservations"][0]["imageid"]]["platformid"];
-			$data["osid"] = $imagedata[$requestdata["reservations"][0]["imageid"]]["osid"];
+			$baserevisionid = $requestdata['reservations'][0]['imagerevisionid'];
+			$data['imageid'] = $requestdata['reservations'][0]['imageid'];
+			$imagedata = getImages(0, $data["imageid"]);
+			$data["platformid"] = $imagedata[$data["imageid"]]["platformid"];
+			$data["osid"] = $imagedata[$data["imageid"]]["osid"];
+			$data['connectmethods'] = getImageConnectMethods($data['imageid'],
+			      $baserevisionid);
+		}
+		if($submitErr) {
+			if($state == 1) {
+				$tmpconmeth = getConnectMethods($data['imageid']);
+				$data['connectmethods'] = array();
+				foreach(explode(',', $data['connectmethodids']) as $id)
+					$data['connectmethods'][$id] = $tmpconmeth[$id]['description'];
+				$baserevisionid = getContinuationVar('baserevisionid');
+			}
+			else
+				$data['connectmethods'] = getImageConnectMethods($data['imageid']);
 		}
 	}
 	else {
 		$id = getContinuationVar("imageid");
+		$images = getImages(0, $id);
 		$data = $images[$id];
 		$data["imageid"] = $id;
 		$tmp = getImageNotes($id);
@@ -931,7 +944,7 @@ function editOrAddImage($state) {
 	$tmpArr = array("1" => "1", "2" => "2", "4" => "4", "8" => "8");
 	printSelectInput("minprocnumber", $tmpArr, $data["minprocnumber"]);
 	print "    </TD>\n";
-	print "    <TD></TD>";
+	print "    <TD></TD>\n";
 	print "  </TR>\n";
 	print "  <TR>\n";
 	print "    <TH align=right>Minimum Processor Speed (MHz):</TH>\n";
@@ -947,7 +960,7 @@ function editOrAddImage($state) {
 	$tmpArr = array("10" => "10", "100" => "100", "1000" => "1000");
 	printSelectInput("minnetwork", $tmpArr, $data["minnetwork"]);
 	print "    </TD>\n";
-	print "    <TD></TD>";
+	print "    <TD></TD>\n";
 	print "  </TR>\n";
 	print "  <TR>\n";
 	print "    <TH align=right>Maximum Concurrent Usage:</TH>\n";
@@ -956,7 +969,7 @@ function editOrAddImage($state) {
 	print "    <TD>";
 	printSubmitErr(MAXCONCURRENTERR);
 	print "</TD>\n";
-	print "    <TD></TD>";
+	print "    <TD></TD>\n";
 	print "  </TR>\n";
 	if(! $state) {
 		print "  <TR>\n";
@@ -1010,15 +1023,21 @@ function editOrAddImage($state) {
 	print "    <TH style=\"vertical-align:top; text-align:right;\">Connection methods:</TH>\n";
 	print "    <TD>\n";
 	print "    <div id=\"connectmethodlist\">\n";
-	foreach($data['connectmethods'] AS $method)
-		print "$method<br>\n";
 	print "    </div>\n";
-	$cont = addContinuationsEntry('connectmethodDialogContent', array('imageid' => $data['imageid']));
+	$cdata = array('imageid' => $data['imageid'],
+	               'newimage' => $state,
+	               'curmethods' => $data['connectmethods']);
+	$cont = addContinuationsEntry('connectmethodDialogContent', $cdata);
 	$url = BASEURL . SCRIPT . "?continuation=$cont";
 	print "    <div dojoType=\"dijit.form.DropDownButton\" id=\"connectmethoddlg\">\n";
-	print "      <span>Modify Connection Methods</span>";
+	print "      <span>Modify Connection Methods</span>\n";
 	print "      <div dojoType=\"dijit.TooltipDialog\" href=\"$url\"></div>\n";
-	print "    <div>\n";
+	print "    </div>\n";
+	if($state) {
+		$cmids = implode(',', array_keys($data['connectmethods']));
+		print "      <input type=\"hidden\" name=\"connectmethodids\" ";
+		print "id=\"connectmethodids\" value=\"$cmids\">\n";
+	}
 	print "    </TD>\n";
 	print "  </TR>\n";
 	print "  <TR>\n";
@@ -1040,7 +1059,8 @@ function editOrAddImage($state) {
 	print "    <TD>\n";
 	if($state) {
 		$cdata = array('requestid' => $data['requestid'],
-		               'imageid' => $data['imageid']);
+		               'imageid' => $data['imageid'],
+		               'baserevisionid' => $baserevisionid);
 		$cont = addContinuationsEntry('submitEditImageButtons', $cdata, SECINDAY, 0);
 		print "      <INPUT type=hidden name=continuation value=\"$cont\">\n"; # confirmAddImage
 		print "      <INPUT type=submit name=submode value=\"Confirm Image\">\n";
@@ -1065,12 +1085,6 @@ function editOrAddImage($state) {
 	print "    </TD>\n";
 	print "  </TR>\n";
 	print "</TABLE>\n";
-
-	if($state)
-		return;
-	print "<div id=revisiondiv>\n";
-	print getRevisionHTML($data['imageid']);
-	print "</div>\n";
 
 	print "<div dojoType=dijit.Dialog\n";
 	print "      id=\"autoconfirmdlg\"\n";
@@ -1099,6 +1113,12 @@ function editOrAddImage($state) {
 	print "     </script>\n";
 	print "   </button>\n";
 	print "   </div>\n";
+	print "</div>\n";
+
+	if($state)
+		return;
+	print "<div id=revisiondiv>\n";
+	print getRevisionHTML($data['imageid']);
 	print "</div>\n";
 }
 
@@ -1193,31 +1213,48 @@ function getRevisionHTML($imageid) {
 ////////////////////////////////////////////////////////////////////////////////
 function connectmethodDialogContent() {
 	$imageid = getContinuationVar('imageid');
+	$newimage = getContinuationVar('newimage');
+	$curmethods = getContinuationVar('curmethods');
 	$methods = getConnectMethods($imageid);
-	$curmethods = getImageConnectMethods($imageid);
+	$revisions = getImageRevisions($imageid);
 
 	$h  = "<h3>Modify Connection Methods</h3>";
-	$cdata = array('imageid' => $imageid);
+	if(! $newimage && count($revisions) > 1) {
+		$h .= "Selected Revision ID: ";
+		$cdata = array('imageid' => $imageid,
+		               'revids' => array_keys($revisions),
+		               'curmethods' => $curmethods,
+		               'newimage' => $newimage);
+		$cont = addContinuationsEntry('jsonImageConnectMethods', $cdata);
+		$url = BASEURL . SCRIPT . "?continuation=$cont";
+		$h .= "<select dojoType=\"dijit.form.Select\" id=\"conmethodrevid\" ";
+		$h .= "onChange=\"selectConMethodRevision('$url');\">";
+		foreach($revisions as $revid => $revision) {
+			if($revision['production'])
+				$h .= "<option value=\"$revid\" selected=\"true\">{$revision['revision']}</option>";
+			else
+				$h .= "<option value=\"$revid\">{$revision['revision']}</option>";
+		}
+		$h .= "</select>";
+	}
+	$cdata = array('imageid' => $imageid,
+	               'curmethods' => $curmethods,
+	               'newimage' => $newimage);
 	$cont = addContinuationsEntry('jsonImageConnectMethods', $cdata);
 	$h .= "<div dojoType=\"dojo.data.ItemFileWriteStore\" url=\"" . BASEURL;
 	$h .= SCRIPT . "?continuation=$cont\" jsid=\"cmstore\" id=\"cmstore\">";
 	$h .= "</div>\n";
-	if(count($methods) == count($curmethods))
-		$disabled = 'disabled="true"';
-	else
-		$disabled = '';
 	$h .= "<div dojoType=\"dijit.form.Select\" id=\"addcmsel\" ";
-	$h .= "store=\"cmstore\" query=\"{active: 0}\" $disabled></div>";
-	$h .= "<button dojoType=\"dijit.form.Button\" id=\"addcmbtn\" $disabled>";
+	$h .= "store=\"cmstore\" query=\"{active: 0}\" ";
+	$h .= "onSetStore=\"updateCurrentConMethods();\"></div>";
+	$h .= "<button dojoType=\"dijit.form.Button\" id=\"addcmbtn\">";
 	$h .= "Add Method";
 	$h .= "<script type=\"dojo/method\" event=onClick>";
 	$h .= "addConnectMethod();";
 	$h .= "</script>";
 	$h .= "</button><br>";
 	$h .= "<h3>Current Methods</h3>";
-	$h .= "<select id=\"curmethodsel\" multiple size=5>";
-	foreach($curmethods as $id => $method)
-		$h .= "<option value=\"$id\">$method</option>";
+	$h .= "<select id=\"curmethodsel\" multiple size=\"5\">";
 	$h .= "</select><br>";
 	$h .= "<button dojoType=\"dijit.form.Button\" id=\"remcmbtn\">";
 	$h .= "Remove Selected Methods(s)";
@@ -1229,13 +1266,17 @@ function connectmethodDialogContent() {
 	$adminimages = getUserResources(array("imageAdmin"), array("administer"));
 	$adminids = array_keys($adminimages["image"]);
 	$data = array('imageid' => $imageid,
-	              'methods' => $methods);
+	              'methods' => $methods,
+	              'revids' => array_keys($revisions),
+	              'newimage' => $newimage);
 	$cont = addContinuationsEntry('AJaddImageConnectMethod', $data, 3600, 1, 0);
 	$h .= "<INPUT type=hidden id=addcmcont value=\"$cont\">";
 	$cont = addContinuationsEntry('AJremImageConnectMethod', $data, 3600, 1, 0);
 	$h .= "<INPUT type=hidden id=remcmcont value=\"$cont\">";
-	$h .= "NOTE: Connection Method changes take effect immediately; you do<br>";
-	$h .= "<strong>not</strong> need to click \"Confirm Changes\" to submit them.";
+	if(! $newimage) {
+		$h .= "NOTE: Connection Method changes take effect immediately; you do<br>";
+		$h .= "<strong>not</strong> need to click \"Confirm Changes\" to submit them.";
+	}
 	print $h;
 }
 
@@ -1249,8 +1290,18 @@ function connectmethodDialogContent() {
 ////////////////////////////////////////////////////////////////////////////////
 function jsonImageConnectMethods() {
 	$imageid = getContinuationVar('imageid');
+	$newimage = getContinuationVar('newimage');
+	$revid = processInputVar('revid', ARG_NUMERIC, 0);
+	if($revid != 0) {
+		$revids = getContinuationVar('revids');
+		if(! in_array($revid, $revids))
+			$revid = getProductionRevisionid($imageid);
+	}
+	if($newimage)
+		$curmethods = getContinuationVar('curmethods');
+	else
+		$curmethods = getImageConnectMethods($imageid, $revid);
 	$methods = getConnectMethods($imageid);
-	$curmethods = getImageConnectMethods($imageid);
 	$items = array();
 	foreach($methods as $id => $method) {
 		if(array_key_exists($id, $curmethods))
@@ -1278,51 +1329,66 @@ function jsonImageConnectMethods() {
 function AJaddImageConnectMethod() {
 	$imageid = getContinuationVar('imageid');
 	$methods = getContinuationVar('methods');
+	$revids = getContinuationVar('revids');
 	$curmethods = getImageConnectMethods($imageid);
 	$newid = processInputVar('newid', ARG_NUMERIC);
+	$revid = processInputVar('revid', ARG_NUMERIC);
+	$newimage = getContinuationVar('newimage');
 	if(! array_key_exists($newid, $methods)) {
 		$arr = array('error' => 'invalidmethod',
 	                'msg' => 'Invalid method submitted.');
 		sendJSON($arr);
 		return;
 	}
-	# delete any current entries for method and image (including disabled)
-	$query = "DELETE FROM connectmethodmap "
-	       . "WHERE imageid = $imageid AND "
-	       .       "connectmethodid = $newid AND "
-	       .       "autoprovisioned IS NULL";
-	doQuery($query, 101);
-
-	# check to see if enabled for OStype or OS
-	$query = "SELECT cm.connectmethodid "
-			 . "FROM connectmethodmap cm, "
-			 .      "image i "
-			 . "LEFT JOIN OS o ON (o.id = i.OSid) "
-			 . "LEFT JOIN OStype ot ON (ot.name = o.type) "
-			 . "WHERE i.id = $imageid AND "
-			 .       "cm.autoprovisioned IS NULL AND "
-			 .       "cm.connectmethodid = $newid AND "
-			 .       "cm.disabled = 0 AND "
-			 .       "(cm.OStypeid = ot.id OR "
-			 .        "cm.OSid = o.id)";
-	$qh = doQuery($query, 101);
-	if(! (mysql_num_rows($qh))) {
-		# add entry for method and image
-		$query = "INSERT INTO connectmethodmap "
-		       .        "(connectmethodid, "
-		       .        "imageid, "
-		       .        "disabled) "
-		       . "VALUES "
-		       .        "($newid, "
-		       .        "$imageid, "
-		       .        "0)";
+	if($revid != 0 && ! in_array($revid, $revids)) {
+		$arr = array('error' => 'invalidrevision',
+	                'msg' => 'Invalid revision id submitted.');
+		sendJSON($arr);
+		return;
+	}
+	if(! $newimage) {
+		if($revid == 0)
+			$revid = getProductionRevisionid($imageid);
+		# delete any current entries for method and image (including disabled)
+		$query = "DELETE FROM connectmethodmap "
+		       . "WHERE imagerevisionid = $revid AND "
+		       .       "connectmethodid = $newid AND "
+		       .       "autoprovisioned IS NULL";
 		doQuery($query, 101);
+	
+		# check to see if enabled for OStype or OS
+		$query = "SELECT cm.connectmethodid "
+		       . "FROM connectmethodmap cm, "
+		       .      "image i "
+		       . "LEFT JOIN OS o ON (o.id = i.OSid) "
+		       . "LEFT JOIN OStype ot ON (ot.name = o.type) "
+		       . "WHERE i.id = $imageid AND "
+		       .       "cm.autoprovisioned IS NULL AND "
+		       .       "cm.connectmethodid = $newid AND "
+		       .       "cm.disabled = 0 AND "
+		       .       "(cm.OStypeid = ot.id OR "
+		       .        "cm.OSid = o.id)";
+		$qh = doQuery($query, 101);
+		if(! (mysql_num_rows($qh))) {
+			# not enabled, add entry for method and image revision
+			$query = "INSERT INTO connectmethodmap "
+			       .        "(connectmethodid, "
+			       .        "imagerevisionid, "
+			       .        "disabled) "
+			       . "VALUES "
+			       .        "($newid, "
+			       .        "$revid, "
+			       .        "0)";
+			doQuery($query, 101);
+		}
 	}
 
 	#   return success
 	$subimages[] = $newid;
 	$data = array('imageid' => $imageid,
-	              'methods' => $methods);
+	              'methods' => $methods,
+	              'revids' => $revids,
+	              'newimage' => $newimage);
 	$addcont = addContinuationsEntry('AJaddImageConnectMethod', $data, 3600, 1, 0);
 	$remcont = addContinuationsEntry('AJremImageConnectMethod', $data, 3600, 1, 0);
 	$name = $methods[$newid]['description'];
@@ -1343,9 +1409,12 @@ function AJaddImageConnectMethod() {
 function AJremImageConnectMethod() {
 	$imageid = getContinuationVar('imageid');
 	$methods = getContinuationVar('methods');
+	$revids = getContinuationVar('revids');
 	$curmethods = getImageConnectMethods($imageid);
 	$remidlist = mysql_real_escape_string(processInputVar('ids', ARG_STRING));
 	$remids = explode(',', $remidlist);
+	$revid = processInputVar('revid', ARG_NUMERIC);
+	$newimage = getContinuationVar('newimage');
 	foreach($remids as $id) {
 		if(! is_numeric($id)) {
 			$arr = array('error' => 'invalidinput',
@@ -1354,43 +1423,55 @@ function AJremImageConnectMethod() {
 			return;
 		}
 	}
-	# delete any current entries for method and image
-	$query = "DELETE FROM connectmethodmap "
-	       . "WHERE imageid = $imageid AND "
-	       .       "connectmethodid IN ($remidlist) AND "
-	       .       "autoprovisioned IS NULL";
-	doQuery($query, 101);
-	# query to see if enabled for OStype or OS
-	$insvals = array();
-	foreach($remids as $id) {
-		$query = "SELECT cm.connectmethodid "
-				 . "FROM connectmethodmap cm, "
-				 .      "image i "
-				 . "LEFT JOIN OS o ON (o.id = i.OSid) "
-				 . "LEFT JOIN OStype ot ON (ot.name = o.type) "
-				 . "WHERE i.id = $imageid AND "
-				 .       "cm.autoprovisioned IS NULL AND "
-				 .       "cm.connectmethodid = $id AND "
-				 .       "cm.disabled = 0 AND "
-				 .       "(cm.OStypeid = ot.id OR "
-				 .        "cm.OSid = o.id)";
-		$qh = doQuery($query, 101);
-		if(mysql_num_rows($qh))
-			# if so, add disabled entry for image and method
-			$insvals[] = "($id, $imageid, 1)";
+	if($revid != 0 && ! in_array($revid, $revids)) {
+		$arr = array('error' => 'invalidrevision',
+	                'msg' => 'Invalid revision id submitted.');
+		sendJSON($arr);
+		return;
 	}
-	if(count($insvals)) {
-		$allinsvals = implode(',', $insvals);
-		$query = "INSERT INTO connectmethodmap "
-		       .        "(connectmethodid, " 
-		       .        "imageid, "
-		       .        "disabled) "
-		       . "VALUES $allinsvals";
+	if(! $newimage) {
+		if($revid == 0)
+			$revid = getProductionRevisionid($imageid);
+		# delete any current entries for method and image
+		$query = "DELETE FROM connectmethodmap "
+		       . "WHERE imagerevisionid = $revid AND "
+		       .       "connectmethodid IN ($remidlist) AND "
+		       .       "autoprovisioned IS NULL";
 		doQuery($query, 101);
+		# query to see if enabled for OStype or OS
+		$insvals = array();
+		foreach($remids as $id) {
+			$query = "SELECT cm.connectmethodid "
+			       . "FROM connectmethodmap cm, "
+			       .      "image i "
+			       . "LEFT JOIN OS o ON (o.id = i.OSid) "
+			       . "LEFT JOIN OStype ot ON (ot.name = o.type) "
+			       . "WHERE i.id = $imageid AND "
+			       .       "cm.autoprovisioned IS NULL AND "
+			       .       "cm.connectmethodid = $id AND "
+			       .       "cm.disabled = 0 AND "
+			       .       "(cm.OStypeid = ot.id OR "
+			       .        "cm.OSid = o.id)";
+			$qh = doQuery($query, 101);
+			if(mysql_num_rows($qh))
+				# if so, add disabled entry for image revision and method
+				$insvals[] = "($id, $revid, 1)";
+		}
+		if(count($insvals)) {
+			$allinsvals = implode(',', $insvals);
+			$query = "INSERT INTO connectmethodmap "
+			       .        "(connectmethodid, " 
+			       .        "imagerevisionid, "
+			       .        "disabled) "
+			       . "VALUES $allinsvals";
+			doQuery($query, 101);
+		}
 	}
 
 	$data = array('imageid' => $imageid,
-	              'methods' => $methods);
+	              'methods' => $methods,
+	              'revids' => $revids,
+	              'newimage' => $newimage);
 	$addcont = addContinuationsEntry('AJaddImageConnectMethod', $data, 3600, 1, 0);
 	$remcont = addContinuationsEntry('AJremImageConnectMethod', $data, 3600, 1, 0);
 	$arr = array('addcont' => $addcont,
@@ -1780,6 +1861,14 @@ function confirmEditOrAddImage($state) {
 		else
 			print "    <TD>No</TD>\n";
 		print "  </TR>\n";
+		$conmethods = getConnectMethods($data['imageid']);
+		print "  <TR>\n";
+		print "    <TH align=right>Connection Methods:</TH>\n";
+		print "    <TD>\n";
+		foreach(explode(',', $data['connectmethodids']) as $id)
+			print "{$conmethods[$id]['description']}<br>\n";
+		print "    </TD>\n";
+		print "  </TR>\n";
 	}
 	print "  <TR>\n";
 	print "    <TD colspan=2><hr></TD>\n";
@@ -2060,6 +2149,7 @@ function updateExistingImage($requestid=0, $userid=0, $comments='', $autocapture
 	foreach($data["reservations"] as $res) {
 		if($res["forcheckout"]) {
 			$imageid = $res["imageid"];
+			$oldrevisionid = $res['imagerevisionid'];
 			break;
 		}
 	}
@@ -2108,6 +2198,18 @@ function updateExistingImage($requestid=0, $userid=0, $comments='', $autocapture
 	$qh = doQuery("SELECT LAST_INSERT_ID() FROM imagerevision", 101);
 	$row = mysql_fetch_row($qh);
 	$imagerevisionid = $row[0];
+
+	# duplicate any entries in connectmethodmap for new revision
+	$query = "INSERT INTO connectmethodmap "
+	       . "SELECT connectmethodid, "
+	       .        "OStypeid, "
+	       .        "OSid, "
+	       .        "$imagerevisionid, "
+	       .        "disabled, "
+	       .        "autoprovisioned "
+	       . "FROM connectmethodmap "
+	       . "WHERE imagerevisionid = $oldrevisionid";
+	doQuery($query, 101);
 
 	# update request and reservation
 	$query = "UPDATE request rq, "
@@ -2880,6 +2982,7 @@ function processImageInput($checks=1) {
 	$return["description"] = processInputVar("description", ARG_STRING);
 	$return["usage"] = processInputVar("usage", ARG_STRING);
 	$return["comments"] = processInputVar("comments", ARG_STRING);
+	$return["connectmethodids"] = processInputVar("connectmethodids", ARG_STRING);
 
 	$return['description'] = preg_replace("/[\n\s]*$/", '', $return['description']);
 	$return['description'] = preg_replace("/\r/", '', $return['description']);
@@ -2933,6 +3036,23 @@ function processImageInput($checks=1) {
 	if(empty($return['description'])) {
 	   $submitErr |= IMAGEDESCRIPTIONERR;
 	   $submitErrMsg[IMAGEDESCRIPTIONERR] = "You must include a description of the image<br>";
+	}
+	if(! preg_match('/^[,0-9]+$/', $return['connectmethodids'])) {
+		$tmp = getImageConnectMethods($return['imageid'],
+		      getContinuationVar('baserevisionid', 0));
+		$return['connectmethodids'] = implode(',', array_keys($tmp));
+	}
+	else {
+		$conmethods = getConnectMethods($return['imageid']);
+		$ids = array();
+		foreach(explode(',', $return['connectmethodids']) as $id) {
+			if(array_key_exists($id, $conmethods))
+				$ids[$id] = 1;
+		}
+		if(empty($ids))
+			$ids = getImageConnectMethods($return['imageid'],
+			      getContinuationVar('baserevisionid', 0));
+		$return['connectmethodids'] = implode(',', array_keys($ids));
 	}
 	return $return;
 }
@@ -3152,6 +3272,32 @@ function addImage($data) {
 	       .        "'{$data['comments']}', "
 	       .        "{$data['autocaptured']})";
 	doQuery($query, 101);
+	$revid = dbLastInsertID();
+
+	// possibly add entries to connectmethodmap
+	$baseconmethods = getImageConnectMethods($imageid);
+	$baseids = array_keys($baseconmethods);
+	$conmethodids = explode(',', $data['connectmethodids']);
+	$adds = array_diff($conmethodids, $baseids);
+	$rems = array_diff($baseids, $conmethodids);
+	$vals = array();
+	if(count($adds)) {
+		foreach($adds as $id)
+			$vals[] = "($id, $revid, 0)";
+	}
+	if(count($rems)) {
+		foreach($rems as $id)
+			$vals[] = "($id, $revid, 1)";
+	}
+	if(count($vals)) {
+		$allvals = implode(',', $vals);
+		$query = "INSERT INTO connectmethodmap "
+		       .        "(connectmethodid, "
+		       .        "imagerevisionid, "
+		       .        "disabled) "
+		       . "VALUES $allvals";
+		doQuery($query, 101);
+	}
 
 	// add entry in resource table
 	$query = "INSERT INTO resource "
