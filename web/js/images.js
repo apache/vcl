@@ -550,6 +550,42 @@ function remSubimagesCB(data, ioArgs) {
 	dijit.byId('rembtn').attr('label', 'Remove Selected Subimage(s)');
 }
 
+function updateCurrentConMethods() {
+	var tmp = dijit.byId('addcmsel').get('value');
+	if(tmp == '') {
+		dijit.byId('addcmsel').set('disabled', true);
+		dijit.byId('addcmbtn').set('disabled', true);
+	}
+	else {
+		dijit.byId('addcmsel').set('disabled', false);
+		dijit.byId('addcmbtn').set('disabled', false);
+	}
+	// update list of current methods
+	var obj = dojo.byId('curmethodsel');
+	for(var i = obj.options.length - 1; i >= 0; i--)
+		obj.remove(i);
+	cmstore.fetch({
+		query: {active: 1},
+		onItem: function(item) {
+			var obj = dojo.byId('curmethodsel').options;
+			obj[obj.length] = new Option(item.display[0], item.name[0], false, false);
+		},
+		onComplete: function() {
+			sortSelect(dojo.byId('curmethodsel'));
+			updateConnectionMethodList();
+		}
+	});
+}
+
+function selectConMethodRevision(url) {
+	var revid = dijit.byId('conmethodrevid').get('value');
+	dijit.byId('addcmsel').set('disabled', true);
+	dijit.byId('addcmbtn').set('disabled', true);
+	var oldstore = cmstore;
+	cmstore = new dojo.data.ItemFileWriteStore({url: url + '&revid=' + revid});
+	dijit.byId('addcmsel').setStore(cmstore, '', {query: {active: 0}});
+}
+
 function addConnectMethod() {
 	cmstore.fetch({
 		query: {name: dijit.byId('addcmsel').value},
@@ -567,9 +603,14 @@ function addConnectMethod2(item) {
 }
 
 function addConnectMethod3() {
+	dojo.byId('cmerror').innerHTML = '';
 	dijit.byId('addcmbtn').attr('label', 'Working...');
 	var data = {continuation: dojo.byId('addcmcont').value,
 	            newid: dijit.byId('addcmsel').value};
+	if(dijit.byId('conmethodrevid'))
+		data.revid = dijit.byId('conmethodrevid').get('value');
+	else
+		data.revid = 0;
 	RPCwrapper(data, addConnectMethodCB, 1);
 }
 
@@ -586,17 +627,8 @@ function addConnectMethodCB(data, ioArgs) {
 		}
 	});
 	dijit.byId('addcmsel').setStore(cmstore, '', {query: {active: 0}});
-	var obj = dojo.byId('curmethodsel');
 	dojo.byId('addcmcont').value = data.items.addcont;
 	dojo.byId('remcmcont').value = data.items.remcont;
-	var index = obj.options.length;
-	obj.options[index] = new Option(data.items.name, data.items.newid, false, false);
-	if(obj.options.length == cmstore._arrayOfAllItems.length) {
-		dijit.byId('addcmsel').set('disabled', true);
-		dijit.byId('addcmbtn').set('disabled', true);
-	}
-	sortSelect(obj);
-	updateConnectionMethodList();
 	dijit.byId('addcmbtn').attr('label', 'Add Method');
 }
 
@@ -618,6 +650,10 @@ function remConnectMethod() {
 	dijit.byId('remcmbtn').attr('label', 'Working...');
 	var data = {continuation: dojo.byId('remcmcont').value,
 	            ids: ids};
+	if(dijit.byId('conmethodrevid'))
+		data.revid = dijit.byId('conmethodrevid').get('value');
+	else
+		data.revid = 0;
 	RPCwrapper(data, remConnectMethodCB, 1);
 }
 
@@ -653,8 +689,12 @@ function remConnectMethodCB(data, ioArgs) {
 function updateConnectionMethodList() {
 	var options = dojo.byId('curmethodsel').options;
 	var items = new Array();
+	var ids = new Array();
 	for(var i = 0; i < options.length; i++) {
 		items.push(options[i].text);
+		ids.push(options[i].value);
 	}
 	dojo.byId('connectmethodlist').innerHTML = items.join('<br>');
+	if(dojo.byId('connectmethodids'))
+		dojo.byId('connectmethodids').value = ids.join(',');
 }
