@@ -267,3 +267,8 @@
 .noicon {
 	display: none;
 }
+
+.statgraph {
+	width: 400px;
+	height: 310px;
+}

@@ -143,6 +143,11 @@ function viewStatistics() {
 	   ($affilid != 0 && ! array_key_exists($affilid, $affils)))
 		$affilid = $user['affiliationid'];
 
+	if($affilid == 0)
+		$statsfor = "All Affiliations";
+	else
+		$statsfor = $affils[$affilid];
+
 	$start = "$year1-$month1-$day1 00:00:00";
 	$end = "$year2-$month2-$day2 23:59:59";
 	if(! checkdate($month1, $day1, $year1)) {
@@ -167,7 +172,7 @@ function viewStatistics() {
 	}
 
 	$timestart = microtime(1);
-	print "<H2>Statistic Information</H2>\n";
+	print "<H2>Statistic Information for $statsfor</H2>\n";
 	print "<H3>Reservation information between $month1/$day1/$year1 and ";
 	print "$month2/$day2/$year2:\n";
 	print "</H3>\n";
@@ -461,44 +466,32 @@ function viewStatistics() {
 	$cdata['divid'] = 'resbyday';
 	$cont = addContinuationsEntry('AJgetStatData', $cdata);
 	print "<input type=hidden id=statdaycont value=\"$cont\">\n";
-	print "<div id=\"resbyday\" style=\"width: 400px; height: 310px;\">(Loading...)</div>\n";
+	print "<div id=\"resbyday\" class=\"statgraph\">(Loading...)</div>\n";
 
 	print "<H2>Max Concurrent Reservations By Day</H2>\n";
-	if($unixend - $unixstart > SECINMONTH)
-		print "(this graph only available for up to a month of data)<br>\n";
-	else {
-		$cdata['divid'] = 'maxconcurresday';
-		$cont = addContinuationsEntry('AJgetStatData', $cdata);
-		print "<input type=hidden id=statconcurrescont value=\"$cont\">\n";
-		print "<div id=\"maxconcurresday\" style=\"width: 400px; height: 310px;\">Loading graph data...</div>\n";
-	}
+	$cdata['divid'] = 'maxconcurresday';
+	$cont = addContinuationsEntry('AJgetStatData', $cdata);
+	print "<input type=hidden id=statconcurrescont value=\"$cont\">\n";
+	print "<div id=\"maxconcurresday\" class=\"statgraph\">Loading graph data...</div>\n";
 
 	print "<H2>Max Concurrent Blade Reservations By Day</H2>\n";
-	if($unixend - $unixstart > SECINMONTH)
-		print "(this graph only available for up to a month of data)<br>\n";
-	else {
-		$cdata['divid'] = 'maxconcurbladeday';
-		$cont = addContinuationsEntry('AJgetStatData', $cdata);
-		print "<input type=hidden id=statconcurbladecont value=\"$cont\">\n";
-		print "<div id=\"maxconcurbladeday\" style=\"width: 400px; height: 310px;\">Loading graph data...</div>\n";
-	}
+	$cdata['divid'] = 'maxconcurbladeday';
+	$cont = addContinuationsEntry('AJgetStatData', $cdata);
+	print "<input type=hidden id=statconcurbladecont value=\"$cont\">\n";
+	print "<div id=\"maxconcurbladeday\" class=\"statgraph\">Loading graph data...</div>\n";
 
 	print "<H2>Max Concurrent Virtual Machine Reservations By Day</H2>\n";
-	if($unixend - $unixstart > SECINMONTH)
-		print "(this graph only available for up to a month of data)<br>\n";
-	else {
-		$cdata['divid'] = 'maxconcurvmday';
-		$cont = addContinuationsEntry('AJgetStatData', $cdata);
-		print "<input type=hidden id=statconcurvmcont value=\"$cont\">\n";
-		print "<div id=\"maxconcurvmday\" style=\"width: 400px; height: 310px;\">Loading graph data...</div>\n";
-	}
+	$cdata['divid'] = 'maxconcurvmday';
+	$cont = addContinuationsEntry('AJgetStatData', $cdata);
+	print "<input type=hidden id=statconcurvmcont value=\"$cont\">\n";
+	print "<div id=\"maxconcurvmday\" class=\"statgraph\">Loading graph data...</div>\n";
 
 	print "<H2>Reservations by Hour</H2>\n";
 	print "<small>(Active reservations during given hour averaged over selected dates)</small><br><br>\n";
 	$cdata['divid'] = 'resbyhour';
 	$cont = addContinuationsEntry('AJgetStatData', $cdata);
 	print "<input type=hidden id=statreshourcont value=\"$cont\">\n";
-	print "<div id=\"resbyhour\" style=\"width: 400px; height: 310px;\">Loading graph data...</div>\n";
+	print "<div id=\"resbyhour\" class=\"statgraph\">Loading graph data...</div>\n";
 
 	$endtime = microtime(1);
 	$end = $endtime - $timestart;
@@ -559,42 +552,63 @@ function getStatGraphDayData($start, $end, $affilid) {
 	$data["points"] = array();
 	$data['xlabels'] = array();
 	$data['maxy'] = 0;
+	$cachepts = array();
+	$addcache = array();
 	$reloadid = getUserlistID('vclreload@Local');
 	$cnt = 0;
+	$query = "SELECT statdate, "
+	       .        "value "
+	       . "FROM statgraphcache "
+	       . "WHERE graphtype = 'totalres' AND "
+			 .       "affiliationid = $affilid AND "
+	       .       "statdate >= '$start' AND "
+	       .       "statdate <= '$end'";
+	$qh = doQuery($query, 101);
+	while($row = mysql_fetch_assoc($qh))
+		$cachepts[$row['statdate']] = $row['value'];
 	for($i = $startunix; $i < $endunix; $i += SECINDAY) {
 		$cnt++;
 		$startdt = unixToDatetime($i);
 		$enddt = unixToDatetime($i + SECINDAY);
-		if($affilid != 0) {
-			$query = "SELECT count(l.id) "
-			       . "FROM log l, "
-			       .      "user u "
-			       . "WHERE l.start >= '$startdt' AND "
-			       .       "l.start < '$enddt' AND "
-			       .       "l.userid != $reloadid AND "
-			       .       "l.wasavailable = 1 AND "
-			       .       "l.userid = u.id AND "
-			       .       "u.affiliationid = $affilid";
-		}
+		$tmp = explode(' ', $startdt);
+		$key = $tmp[0];
+		if(array_key_exists($key, $cachepts))
+			$value = $cachepts[$key];
 		else {
-			$query = "SELECT count(l.id) "
-			       . "FROM log l "
-			       . "WHERE l.start >= '$startdt' AND "
-			       .       "l.start < '$enddt' AND "
-			       .       "l.userid != $reloadid AND "
-			       .       "l.wasavailable = 1";
+			if($affilid != 0) {
+				$query = "SELECT count(l.id) "
+				       . "FROM log l, "
+				       .      "user u "
+				       . "WHERE l.start >= '$startdt' AND "
+				       .       "l.start < '$enddt' AND "
+				       .       "l.userid != $reloadid AND "
+				       .       "l.wasavailable = 1 AND "
+				       .       "l.userid = u.id AND "
+				       .       "u.affiliationid = $affilid";
+			}
+			else {
+				$query = "SELECT count(l.id) "
+				       . "FROM log l "
+				       . "WHERE l.start >= '$startdt' AND "
+				       .       "l.start < '$enddt' AND "
+				       .       "l.userid != $reloadid AND "
+				       .       "l.wasavailable = 1";
+			}
+			$qh = doQuery($query, 295);
+			if($row = mysql_fetch_row($qh))
+				$value = $row[0];
+			else
+				$value = 0;
+			$addcache[$startdt] = (int)$value;
 		}
-		$qh = doQuery($query, 295);
-		if($row = mysql_fetch_row($qh))
-			$value = $row[0];
-		else
-			$value = 0;
 		$label = date('m/d/Y', $i);
 		$data['points'][] = array('y' => (int)$value, 'tooltip' => "$label: " . (int)$value);
 		if($value > $data['maxy'])
 			$data['maxy'] = (int)$value;
 		$data['xlabels'][] = array('value' => $cnt, 'text' => $label);
 	}
+	if(count($addcache))
+		addToStatGraphCache('totalres', $addcache, $affilid);
 	return($data);
 }
 
@@ -744,68 +758,100 @@ function getStatGraphDayConUsersData($start, $end, $affilid) {
 	$enddt = $end . " 23:59:59";
 	$startunix = datetimeToUnix($startdt);
 	$endunix = datetimeToUnix($enddt) + 1;
-	$days = ($endunix - $startunix) / SECINDAY;
+
+	$daycnt = ($endunix - $startunix) / SECINDAY;
+	if($daycnt - (int)$daycnt > 0.5)
+		$daycnt = (int)$daycnt + 1;
+	else
+		$daycnt = (int)$daycnt;
+	if($endunix >= time())
+		$daycnt--;
 
 	$data = array();
 	$data["points"] = array();
 	$data["xlabels"] = array();
 	$data["maxy"] = 0;
+	$cachepts = array();
+	$addcache = array();
 
 	$reloadid = getUserlistID('vclreload@Local');
 	$cnt = 0;
+	$query = "SELECT statdate, "
+	       .        "value "
+	       . "FROM statgraphcache "
+	       . "WHERE graphtype = 'concurres' AND "
+			 .       "affiliationid = $affilid AND "
+	       .       "statdate >= '$start' AND "
+	       .       "statdate <= '$end'";
+	$qh = doQuery($query, 101);
+	while($row = mysql_fetch_assoc($qh))
+		$cachepts[$row['statdate']] = $row['value'];
+	if((count($cachepts) + 31) < $daycnt) {
+		$data = array('nodata' => '(too much computational time required to generate this graph)');
+		return $data;
+	}
 	for($daystart = $startunix; $daystart < $endunix; $daystart += SECINDAY) {
 		$cnt++;
-		$count = array();
-		for($j = 0; $j < 24; $j++) {
-			$count[$j] = 0;
-		}
 		$startdt = unixToDatetime($daystart);
 		$enddt = unixToDatetime($daystart + SECINDAY);
-		if($affilid != 0) {
-			$query = "SELECT UNIX_TIMESTAMP(l.start) AS start, "
-			       .        "UNIX_TIMESTAMP(l.finalend) AS end "
-			       . "FROM log l, "
-			       .      "user u "
-			       . "WHERE l.start < '$enddt' AND "
-			       .       "l.finalend > '$startdt' AND "
-			       .       "l.userid != $reloadid AND "
-			       .       "l.userid = u.id AND "
-				    .       "u.affiliationid = $affilid";
-		}
+		$tmp = explode(' ', $startdt);
+		$key = $tmp[0];
+		if(array_key_exists($key, $cachepts))
+			$value = $cachepts[$key];
 		else {
-			$query = "SELECT UNIX_TIMESTAMP(l.start) AS start, "
-			       .        "UNIX_TIMESTAMP(l.finalend) AS end "
-			       . "FROM log l "
-			       . "WHERE l.start < '$enddt' AND "
-			       .       "l.finalend > '$startdt' AND "
-			       .       "l.userid != $reloadid";
-		}
-		$qh = doQuery($query, 101);
-		while($row = mysql_fetch_assoc($qh)) {
-			$unixstart = $row["start"];
-			$unixend = $row["end"];
-			for($binstart = $daystart, $binend = $daystart + 3600, $binindex = 0;
-			   $binstart <= $unixend && $binend <= ($daystart + SECINDAY);
-			   $binstart += 3600, $binend += 3600, $binindex++) {
-				if($binend <= $unixstart) {
-					continue;
-				}
-				elseif($unixstart < $binend &&
-					$unixend > $binstart) {
-					$count[$binindex]++;
-				}
-				elseif($binstart >= $unixend) {
-					break;
+			$count = array();
+			for($j = 0; $j < 24; $j++)
+				$count[$j] = 0;
+			if($affilid != 0) {
+				$query = "SELECT UNIX_TIMESTAMP(l.start) AS start, "
+				       .        "UNIX_TIMESTAMP(l.finalend) AS end "
+				       . "FROM log l, "
+				       .      "user u "
+				       . "WHERE l.start < '$enddt' AND "
+				       .       "l.finalend > '$startdt' AND "
+				       .       "l.userid != $reloadid AND "
+				       .       "l.userid = u.id AND "
+					    .       "u.affiliationid = $affilid";
+			}
+			else {
+				$query = "SELECT UNIX_TIMESTAMP(l.start) AS start, "
+				       .        "UNIX_TIMESTAMP(l.finalend) AS end "
+				       . "FROM log l "
+				       . "WHERE l.start < '$enddt' AND "
+				       .       "l.finalend > '$startdt' AND "
+				       .       "l.userid != $reloadid";
+			}
+			$qh = doQuery($query, 101);
+			while($row = mysql_fetch_assoc($qh)) {
+				$unixstart = $row["start"];
+				$unixend = $row["end"];
+				for($binstart = $daystart, $binend = $daystart + 3600, $binindex = 0;
+				   $binstart <= $unixend && $binend <= ($daystart + SECINDAY);
+				   $binstart += 3600, $binend += 3600, $binindex++) {
+					if($binend <= $unixstart) {
+						continue;
+					}
+					elseif($unixstart < $binend &&
+						$unixend > $binstart) {
+						$count[$binindex]++;
+					}
+					elseif($binstart >= $unixend) {
+						break;
+					}
 				}
 			}
+			rsort($count);
+			$value = $count[0];
+			$addcache[$startdt] = (int)$value;
 		}
-		rsort($count);
 		$label = date('m/d/Y', $daystart);
-		$data["points"][] = array('y' => $count[0], 'tooltip' => "$label: {$count[0]}");
-		if($count[0] > $data['maxy'])
-			$data['maxy'] = $count[0];
+		$data["points"][] = array('y' => $value, 'tooltip' => "$label: {$value}");
+		if($value > $data['maxy'])
+			$data['maxy'] = $value;
 		$data['xlabels'][] = array('value' => $cnt, 'text' => $label);
 	}
+	if(count($addcache))
+		addToStatGraphCache('concurres', $addcache, $affilid);
 	return($data);
 }
 
@@ -834,93 +880,127 @@ function getStatGraphConBladeUserData($start, $end, $affilid) {
 	$enddt = $end . " 23:59:59";
 	$startunix = datetimeToUnix($startdt);
 	$endunix = datetimeToUnix($enddt) + 1;
-	$days = ($endunix - $startunix) / SECINDAY;
+
+	$daycnt = ($endunix - $startunix) / SECINDAY;
+	if($daycnt - (int)$daycnt > 0.5)
+		$daycnt = (int)$daycnt + 1;
+	else
+		$daycnt = (int)$daycnt;
+	if($endunix >= time())
+		$daycnt--;
 
 	$data = array();
 	$data["points"] = array();
 	$data["xlabels"] = array();
 	$data["maxy"] = 0;
+	$cachepts = array();
+	$addcache = array();
 
 	$reloadid = getUserlistID('vclreload@Local');
 	$cnt = 0;
+	$query = "SELECT statdate, "
+	       .        "value "
+	       . "FROM statgraphcache "
+	       . "WHERE graphtype = 'concurblade' AND "
+			 .       "affiliationid = $affilid AND "
+	       .       "statdate >= '$start' AND "
+	       .       "statdate <= '$end'";
+	$qh = doQuery($query, 101);
+	while($row = mysql_fetch_assoc($qh))
+		$cachepts[$row['statdate']] = $row['value'];
+	if((count($cachepts) + 31) < $daycnt) {
+		$data = array('nodata' => '(too much computational time required to generate this graph)');
+		return $data;
+	}
+	$data['here'] = ''; # todo is this leftover debugging?
 	for($daystart = $startunix; $daystart < $endunix; $daystart += SECINDAY) {
 		$cnt++;
-		$count = array();
-		for($j = 0; $j < 24; $j++) {
-			$count[$j] = 0;
-		}
 		$startdt = unixToDatetime($daystart);
 		$enddt = unixToDatetime($daystart + SECINDAY);
-		if($affilid != 0) {
-			$query = "SELECT s.hostcomputerid, "
-			       .        "l.start AS start, "
-			       .        "l.finalend AS end, "
-			       .        "c.type "
-					 . "FROM log l, "
-			       .      "user u, "
-			       .      "sublog s "
-			       . "LEFT JOIN computer c ON (s.computerid = c.id) "
-			       . "LEFT JOIN computer c2 ON (s.hostcomputerid = c2.id) "
-			       . "WHERE l.userid = u.id AND "
-			       .       "l.start < '$enddt' AND "
-			       .       "l.finalend > '$startdt' AND "
-			       .       "s.logid = l.id AND "
-			       .       "l.wasavailable = 1 AND "
-			       .       "l.userid != $reloadid AND "
-					 .       "(c.type = 'blade' OR "
-			       .       " (c.type = 'virtualmachine' AND c2.type = 'blade')) AND "
-					 .       "u.affiliationid = $affilid";
-		}
+		$tmp = explode(' ', $startdt);
+		$key = $tmp[0];
+		if(array_key_exists($key, $cachepts))
+			$value = $cachepts[$key];
 		else {
-			$query = "SELECT s.hostcomputerid, "
-			       .        "l.start AS start, "
-			       .        "l.finalend AS end, "
-			       .        "c.type "
-					 . "FROM log l, "
-			       .      "sublog s "
-			       . "LEFT JOIN computer c ON (s.computerid = c.id) "
-			       . "LEFT JOIN computer c2 ON (s.hostcomputerid = c2.id) "
-			       . "WHERE l.start < '$enddt' AND "
-			       .       "l.finalend > '$startdt' AND "
-			       .       "s.logid = l.id AND "
-			       .       "l.wasavailable = 1 AND "
-			       .       "l.userid != $reloadid AND "
-					 .       "(c.type = 'blade' OR "
-			       .       " (c.type = 'virtualmachine' AND c2.type = 'blade'))";
-		}
-		$qh = doQuery($query, 101);
-		$comps = array();
-		while($row = mysql_fetch_assoc($qh)) {
-			$unixstart = datetimeToUnix($row["start"]);
-			$unixend = datetimeToUnix($row["end"]);
-			for($binstart = $daystart, $binend = $daystart + 3600, $binindex = 0;
-			   $binstart <= $unixend && $binend <= ($daystart + SECINDAY);
-			   $binstart += 3600, $binend += 3600, $binindex++) {
-				if($row['type'] == 'virtualmachine') {
-					if(array_key_exists($binindex, $comps) &&
-					   array_key_exists($row['hostcomputerid'], $comps[$binindex]))
+			$data['here'] .= "$startdt, ";
+			$count = array();
+			for($j = 0; $j < 24; $j++)
+				$count[$j] = 0;
+			if($affilid != 0) {
+				$query = "SELECT s.hostcomputerid, "
+				       .        "l.start AS start, "
+				       .        "l.finalend AS end, "
+				       .        "c.type "
+						 . "FROM log l, "
+				       .      "user u, "
+				       .      "sublog s "
+				       . "LEFT JOIN computer c ON (s.computerid = c.id) "
+				       . "LEFT JOIN computer c2 ON (s.hostcomputerid = c2.id) "
+				       . "WHERE l.userid = u.id AND "
+				       .       "l.start < '$enddt' AND "
+				       .       "l.finalend > '$startdt' AND "
+				       .       "s.logid = l.id AND "
+				       .       "l.wasavailable = 1 AND "
+				       .       "l.userid != $reloadid AND "
+						 .       "(c.type = 'blade' OR "
+				       .       " (c.type = 'virtualmachine' AND c2.type = 'blade')) AND "
+						 .       "u.affiliationid = $affilid";
+			}
+			else {
+				$query = "SELECT s.hostcomputerid, "
+				       .        "l.start AS start, "
+				       .        "l.finalend AS end, "
+				       .        "c.type "
+						 . "FROM log l, "
+				       .      "sublog s "
+				       . "LEFT JOIN computer c ON (s.computerid = c.id) "
+				       . "LEFT JOIN computer c2 ON (s.hostcomputerid = c2.id) "
+				       . "WHERE l.start < '$enddt' AND "
+				       .       "l.finalend > '$startdt' AND "
+				       .       "s.logid = l.id AND "
+				       .       "l.wasavailable = 1 AND "
+				       .       "l.userid != $reloadid AND "
+						 .       "(c.type = 'blade' OR "
+				       .       " (c.type = 'virtualmachine' AND c2.type = 'blade'))";
+			}
+			$qh = doQuery($query, 101);
+			$comps = array();
+			while($row = mysql_fetch_assoc($qh)) {
+				$unixstart = datetimeToUnix($row["start"]);
+				$unixend = datetimeToUnix($row["end"]);
+				for($binstart = $daystart, $binend = $daystart + 3600, $binindex = 0;
+				   $binstart <= $unixend && $binend <= ($daystart + SECINDAY);
+				   $binstart += 3600, $binend += 3600, $binindex++) {
+					if($row['type'] == 'virtualmachine') {
+						if(array_key_exists($binindex, $comps) &&
+						   array_key_exists($row['hostcomputerid'], $comps[$binindex]))
+							continue;
+						$comps[$binindex][$row['hostcomputerid']] = 1;
+					}
+					if($binend <= $unixstart) {
 						continue;
-					$comps[$binindex][$row['hostcomputerid']] = 1;
-				}
-				if($binend <= $unixstart) {
-					continue;
-				}
-				elseif($unixstart < $binend &&
-					$unixend > $binstart) {
-					$count[$binindex]++;
-				}
-				elseif($binstart >= $unixend) {
-					break;
+					}
+					elseif($unixstart < $binend &&
+						$unixend > $binstart) {
+						$count[$binindex]++;
+					}
+					elseif($binstart >= $unixend) {
+						break;
+					}
 				}
 			}
+			rsort($count);
+			$value = $count[0];
+			$addcache[$startdt] = (int)$value;
 		}
-		rsort($count);
 		$label = date('m/d/Y', $daystart);
-		$data["points"][] = array('y' => $count[0], 'tooltip' => "$label: {$count[0]}");
-		if($count[0] > $data['maxy'])
-			$data['maxy'] = $count[0];
+		$data["points"][] = array('y' => $value, 'tooltip' => "$label: {$value}");
+		if($value > $data['maxy'])
+			$data['maxy'] = $value;
 		$data['xlabels'][] = array('value' => $cnt, 'text' => $label);
 	}
+	if(count($addcache))
+		addToStatGraphCache('concurblade', $addcache, $affilid);
 	return($data);
 }
 
@@ -949,80 +1029,147 @@ function getStatGraphConVMUserData($start, $end, $affilid) {
 	$enddt = $end . " 23:59:59";
 	$startunix = datetimeToUnix($startdt);
 	$endunix = datetimeToUnix($enddt) + 1;
-	$days = ($endunix - $startunix) / SECINDAY;
+
+	$daycnt = ($endunix - $startunix) / SECINDAY;
+	if($daycnt - (int)$daycnt > 0.5)
+		$daycnt = (int)$daycnt + 1;
+	else
+		$daycnt = (int)$daycnt;
+	if($endunix >= time())
+		$daycnt--;
 
 	$data = array();
 	$data["points"] = array();
 	$data["xlabels"] = array();
 	$data["maxy"] = 0;
+	$cachepts = array();
+	$addcache = array();
 
 	$reloadid = getUserlistID('vclreload@Local');
 	$cnt = 0;
+	$query = "SELECT statdate, "
+	       .        "value "
+	       . "FROM statgraphcache "
+	       . "WHERE graphtype = 'concurvm' AND "
+			 .       "affiliationid = $affilid AND "
+	       .       "statdate >= '$start' AND "
+	       .       "statdate <= '$end'";
+	$qh = doQuery($query, 101);
+	while($row = mysql_fetch_assoc($qh))
+		$cachepts[$row['statdate']] = $row['value'];
+	if((count($cachepts) + 31) < $daycnt) {
+		$data = array('nodata' => '(too much computational time required to generate this graph)');
+		return $data;
+	}
+	$data['here'] = '';
 	for($daystart = $startunix; $daystart < $endunix; $daystart += SECINDAY) {
 		$cnt++;
-		$count = array();
-		for($j = 0; $j < 24; $j++) {
-			$count[$j] = 0;
-		}
 		$startdt = unixToDatetime($daystart);
 		$enddt = unixToDatetime($daystart + SECINDAY);
-		if($affilid != 0) {
-			$query = "SELECT l.start AS start, "
-			       .        "l.finalend AS end "
-			       . "FROM log l, "
-			       .      "sublog s, "
-			       .      "computer c, "
-			       .      "user u "
-			       . "WHERE l.userid = u.id AND "
-			       .       "l.start < '$enddt' AND "
-			       .       "l.finalend > '$startdt' AND "
-			       .       "s.logid = l.id AND "
-			       .       "s.computerid = c.id AND "
-			       .       "l.wasavailable = 1 AND "
-			       .       "c.type = 'virtualmachine' AND "
-			       .       "l.userid != $reloadid AND "
-					 .       "u.affiliationid = $affilid";
-		}
+		$tmp = explode(' ', $startdt);
+		$key = $tmp[0];
+		if(array_key_exists($key, $cachepts))
+			$value = $cachepts[$key];
 		else {
-			$query = "SELECT l.start AS start, "
-			       .        "l.finalend AS end "
-			       . "FROM log l, "
-			       .      "sublog s, "
-			       .      "computer c "
-			       . "WHERE l.start < '$enddt' AND "
-			       .       "l.finalend > '$startdt' AND "
-			       .       "s.logid = l.id AND "
-			       .       "s.computerid = c.id AND "
-			       .       "l.wasavailable = 1 AND "
-			       .       "c.type = 'virtualmachine' AND "
-			       .       "l.userid != $reloadid";
-		}
-		$qh = doQuery($query, 101);
-		while($row = mysql_fetch_assoc($qh)) {
-			$unixstart = datetimeToUnix($row["start"]);
-			$unixend = datetimeToUnix($row["end"]);
-			for($binstart = $daystart, $binend = $daystart + 3600, $binindex = 0;
-			   $binstart <= $unixend && $binend <= ($daystart + SECINDAY);
-			   $binstart += 3600, $binend += 3600, $binindex++) {
-				if($binend <= $unixstart) {
-					continue;
-				}
-				elseif($unixstart < $binend &&
-					$unixend > $binstart) {
-					$count[$binindex]++;
-				}
-				elseif($binstart >= $unixend) {
-					break;
+			$data['here'] .= "$startdt, ";
+			$count = array();
+			for($j = 0; $j < 24; $j++)
+				$count[$j] = 0;
+			if($affilid != 0) {
+				$query = "SELECT l.start AS start, "
+				       .        "l.finalend AS end "
+				       . "FROM log l, "
+				       .      "sublog s, "
+				       .      "computer c, "
+				       .      "user u "
+				       . "WHERE l.userid = u.id AND "
+				       .       "l.start < '$enddt' AND "
+				       .       "l.finalend > '$startdt' AND "
+				       .       "s.logid = l.id AND "
+				       .       "s.computerid = c.id AND "
+				       .       "l.wasavailable = 1 AND "
+				       .       "c.type = 'virtualmachine' AND "
+				       .       "l.userid != $reloadid AND "
+						 .       "u.affiliationid = $affilid";
+			}
+			else {
+				$query = "SELECT l.start AS start, "
+				       .        "l.finalend AS end "
+				       . "FROM log l, "
+				       .      "sublog s, "
+				       .      "computer c "
+				       . "WHERE l.start < '$enddt' AND "
+				       .       "l.finalend > '$startdt' AND "
+				       .       "s.logid = l.id AND "
+				       .       "s.computerid = c.id AND "
+				       .       "l.wasavailable = 1 AND "
+				       .       "c.type = 'virtualmachine' AND "
+				       .       "l.userid != $reloadid";
+			}
+			$qh = doQuery($query, 101);
+			while($row = mysql_fetch_assoc($qh)) {
+				$unixstart = datetimeToUnix($row["start"]);
+				$unixend = datetimeToUnix($row["end"]);
+				for($binstart = $daystart, $binend = $daystart + 3600, $binindex = 0;
+				   $binstart <= $unixend && $binend <= ($daystart + SECINDAY);
+				   $binstart += 3600, $binend += 3600, $binindex++) {
+					if($binend <= $unixstart) {
+						continue;
+					}
+					elseif($unixstart < $binend &&
+						$unixend > $binstart) {
+						$count[$binindex]++;
+					}
+					elseif($binstart >= $unixend) {
+						break;
+					}
 				}
 			}
+			rsort($count);
+			$value = $count[0];
+			$addcache[$startdt] = (int)$value;
 		}
-		rsort($count);
 		$label = date('m/d/Y', $daystart);
-		$data["points"][] = array('y' => $count[0], 'tooltip' => "$label: {$count[0]}");
-		if($count[0] > $data['maxy'])
-			$data['maxy'] = $count[0];
+		$data["points"][] = array('y' => $value, 'tooltip' => "$label: {$value}");
+		if($value > $data['maxy'])
+			$data['maxy'] = $value;
 		$data['xlabels'][] = array('value' => $cnt, 'text' => $label);
 	}
+	if(count($addcache))
+		addToStatGraphCache('concurvm', $addcache, $affilid);
 	return($data);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn addToStatGraphCache($type, $addcache, $affilid)
+///
+/// \param $type - type of data to add, one of totalres, concurres, concurblade,
+/// or concurvm
+/// \param $addcache - array of data where the keys are a date and the values
+/// are the stat value for that date
+/// \param $affilid - affiliation id for which the data is associated
+///
+/// \brief adds passed in data to statgraphcache table
+///
+////////////////////////////////////////////////////////////////////////////////
+function addToStatGraphCache($type, $addcache, $affilid) {
+	$nosave = time() - SECINDAY;
+	$values = array();
+	foreach($addcache as $date => $value) {
+		$startts = datetimeToUnix($date);
+		if($startts < $nosave) {
+			$tmp = explode(' ', $date);
+			$statdate = $tmp[0];
+			$values[] = "('$type', '$statdate', $affilid, $value)";
+		}
+	}
+	if(count($values)) {
+		$insval = implode(',', $values);
+		$query = "INSERT INTO statgraphcache "
+		       . "(graphtype, statdate, affiliationid, value) "
+		       . "VALUES $insval";
+		doQuery($query, 101);
+	}
 }
 ?>
