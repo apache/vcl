@@ -628,6 +628,7 @@ function checkExpiredDemoUser($userid, $groups=0) {
 				                                          # delete from custom groups
 				doQuery($query, 101);
 				updateGroups(array($nodemoid), $userid);
+				checkUpdateServerRequestGroups($groupid);
 				if(empty($skin)) {
 					$skin = 'default';
 					require_once("themes/$skin/page.php");

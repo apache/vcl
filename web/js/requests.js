@@ -275,6 +275,30 @@ function submitDeleteReservation() {
 	RPCwrapper(data, generalReqCB);
 }
 
+function removeReservation(cont) {
+	RPCwrapper({continuation: cont}, removeReservationCB, 1);
+}
+
+function removeReservationCB(data, ioArgs) {
+	if(data.items.error) {
+		alert(data.items.msg);
+		if(data.items.error == 2)
+			window.location.href = data.items.url;
+		return;
+	}
+	dojo.byId('remrescont').value = data.items.cont;
+	dojo.byId('remResDlgContent').innerHTML = data.items.content;
+	dijit.byId('remResDlg').show();
+}
+
+function submitRemoveReservation() {
+	var data = {continuation: dojo.byId('remrescont').value};
+	dojo.byId('remResDlgContent').innerHTML = '';
+	dijit.byId('remResDlg').hide();
+   document.body.style.cursor = 'wait';
+	RPCwrapper(data, generalReqCB);
+}
+
 function editReservation(cont) {
    document.body.style.cursor = 'wait';
 	RPCwrapper({continuation: cont}, editReservationCB, 1);
@@ -316,6 +340,10 @@ function hideEditResDlg() {
 		dijit.byId('openenddate').destroy();
 	if(dijit.byId('openendtime'))
 		dijit.byId('openendtime').destroy();
+	if(dijit.byId('admingrpsel'))
+		dijit.byId('admingrpsel').destroy();
+	if(dijit.byId('logingrpsel'))
+		dijit.byId('logingrpsel').destroy();
 	dojo.byId('editResDlgErrMsg').innerHTML = '';
 	dojo.byId('editrescont').value = '';
 	dojo.byId('editresid').value = '';
@@ -353,6 +381,14 @@ function submitEditReservation() {
 		                                      t.getMinutes());
 		var tmp = dijit.byId('day').value.match(/([0-9]{4})([0-9]{2})([0-9]{2})/);
 		var teststart = new Date(tmp[1], tmp[2] - 1, tmp[3], t.getHours(), t.getMinutes(), 0, 0);
+	}
+	if(dijit.byId('admingrpsel')) {
+		data.admingroupid = dijit.byId('admingrpsel').get('value');
+		data.logingroupid = dijit.byId('logingrpsel').get('value');
+	}
+	else if(dojo.byId('admingrpsel')) {
+		data.admingroupid = dojo.byId('admingrpsel').value;
+		data.logingroupid = dojo.byId('logingrpsel').value;
 	}
 	if((! dojo.byId('dateradio') && ! dojo.byId('indefiniteradio') && dijit.byId('length')) ||
 	   (dojo.byId('lengthradio') && dojo.byId('lengthradio').checked)) {

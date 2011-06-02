@@ -638,6 +638,7 @@ function viewRequests() {
 	if(checkUserHasPerm('View Debug Information'))
 		$nodes = getManagementNodes();
 	if($count = count($requests)) {
+		# TODO display admin and login groups somewhere
 		$now = time();
 		for($i = 0, $failed = 0, $timedout = 0, $text = '', $showcreateimage = 0;
 		   $i < $count;
@@ -650,7 +651,7 @@ function viewRequests() {
 			$imageid = $requests[$i]["imageid"];
 			$text .= "  <TR valign=top id=reqrow{$requests[$i]['id']}>\n";
 			# TODO probably should display current status somewhere if checkpointing, rebooting, or reinstalling
-			if(requestIsReady($requests[$i])) {
+			if(requestIsReady($requests[$i]) && $requests[$i]['useraccountready']) {
 				$connect = 1;
 				# request is ready, print Connect! and End buttons
 				$text .= "    <TD>\n";
@@ -679,8 +680,7 @@ function viewRequests() {
 			}
 			elseif($requests[$i]["currstateid"] == 5) {
 				# request has failed
-				# TODO add a way for users to remove these entries
-				$text .= "    <TD colspan=2 nowrap>\n";
+				$text .= "    <TD nowrap>\n";
 				$text .= "      <span class=scriptonly>\n";
 				$text .= "      <span class=compstatelink>";
 				$text .= "<a onClick=\"showResStatusPane({$requests[$i]['id']}); ";
@@ -693,6 +693,19 @@ function viewRequests() {
 				$text .= "      </span>\n";
 				$text .= "      </noscript>\n";
 				$text .= "    </TD>\n";
+				if($requests[$i]['serveradmin']) {
+					$text .= "    <TD>\n";
+					$cont = addContinuationsEntry('AJconfirmRemoveRequest', $cdata, SECINDAY);
+					$text .= "      <button dojoType=\"dijit.form.Button\">\n";
+					$text .= "        Remove\n";
+					$text .= "	      <script type=\"dojo/method\" event=\"onClick\">\n";
+					$text .= "          removeReservation('$cont');\n";
+					$text .= "        </script>\n";
+					$text .= "      </button>\n";
+					$text .= "    </TD>\n";
+				}
+				else
+					$text .= "    <TD></TD>\n";
 				$failed = 1;
 			}
 			elseif(datetimeToUnix($requests[$i]["start"]) < $now) {
@@ -703,19 +716,32 @@ function viewRequests() {
 					($requests[$i]["currstateid"] == 14 &&
 					$requests[$i]["laststateid"] == 11)) {
 					# request has timed out
-					# TODO add a way for users to remove these entries
 					if($requests[$i]['forimaging'])
-						$text .= "    <TD colspan=3>\n";
-					else
 						$text .= "    <TD colspan=2>\n";
+					else
+						$text .= "    <TD>\n";
 					$text .= "      <span class=compstatelink>Reservation has ";
 					$text .= "timed out</span>\n";
 					$timedout = 1;
 					$text .= "    </TD>\n";
+					if($requests[$i]['serveradmin']) {
+						$text .= "    <TD>\n";
+						$cont = addContinuationsEntry('AJconfirmRemoveRequest', $cdata, SECINDAY);
+						$text .= "      <button dojoType=\"dijit.form.Button\">\n";
+						$text .= "        Remove\n";
+						$text .= "	      <script type=\"dojo/method\" event=\"onClick\">\n";
+						$text .= "          removeReservation('$cont');\n";
+						$text .= "        </script>\n";
+						$text .= "      </button>\n";
+						$text .= "    </TD>\n";
+					}
+					else
+						$text .= "    <TD></TD>\n";
 				}
 				else {
 					# computer is loading, print Pending... and Delete button
 					# TODO figure out a different way to estimate for reboot and reinstall states
+					# TODO if user account not ready, print accurate information in details
 					$remaining = 1;
 					if(isComputerLoading($requests[$i], $computers)) {
 						if(datetimeToUnix($requests[$i]["daterequested"]) >=
@@ -818,9 +844,8 @@ function viewRequests() {
 						$text .= "               label=\"End Reservation & Create Image\" disabled>\n";
 						$text .= "          </div>\n";
 					}*/
-					# TODO control which users get to see this
-					if($requests[$i]['server'] && $requests[$i]['currstateid'] != 24 &&
-						($requests[$i]['currstateid'] == 8 || $requests[$i]['laststateid'] == 8)) {
+					if($requests[$i]['server'] && ($requests[$i]['currstateid'] == 8 ||
+						($requests[$i]['currstateid'] == 14 && $requests[$i]['laststateid'] == 8))) {
 						$cont = addContinuationsEntry('startCheckpoint', $cdata, SECINDAY);
 						$url = BASEURL . SCRIPT . "?continuation=$cont";
 						$text .= "          <div dojoType=\"dijit.MenuItem\"\n";
@@ -1097,6 +1122,30 @@ function viewRequests() {
 		$text .= "	   <script type=\"dojo/method\" event=\"onClick\">\n";
 		$text .= "       dijit.byId('endResDlg').hide();\n";
 		$text .= "       dojo.byId('endResDlgContent').innerHTML = '';\n";
+		$text .= "     </script>\n";
+		$text .= "   </button>\n";
+		$text .= "   </div>\n";
+		$text .= "</div>\n";
+
+		$text .= "<div dojoType=dijit.Dialog\n";
+		$text .= "      id=\"remResDlg\"\n";
+		$text .= "      title=\"Remove Reservation\"\n";
+		$text .= "      duration=250\n";
+		$text .= "      draggable=true>\n";
+		$text .= "   <div id=\"remResDlgContent\"></div>\n";
+		$text .= "   <input type=\"hidden\" id=\"remrescont\">\n";
+		$text .= "   <div align=\"center\">\n";
+		$text .= "   <button id=\"remResDlgBtn\" dojoType=\"dijit.form.Button\">\n";
+		$text .= "     Remove Reservation\n";
+		$text .= "	   <script type=\"dojo/method\" event=\"onClick\">\n";
+		$text .= "       submitRemoveReservation();\n";
+		$text .= "     </script>\n";
+		$text .= "   </button>\n";
+		$text .= "   <button dojoType=\"dijit.form.Button\">\n";
+		$text .= "     Cancel\n";
+		$text .= "	   <script type=\"dojo/method\" event=\"onClick\">\n";
+		$text .= "       dijit.byId('remResDlg').hide();\n";
+		$text .= "       dojo.byId('remResDlgContent').innerHTML = '';\n";
 		$text .= "     </script>\n";
 		$text .= "   </button>\n";
 		$text .= "   </div>\n";
@@ -1615,6 +1664,42 @@ function AJeditRequest() {
 	               'openend' => $openend,
 	               'modifystart' => 0,
 	               'allowindefiniteend' => 0);
+	if($request['serverrequest']) {
+		if($user['showallgroups'])
+			$groups = getUserGroups(1);
+		else
+			$groups = getUserGroups(1, $user['affiliationid']);
+		$h .= "Admin User Group: ";
+		if(USEFILTERINGSELECT && count($groups) < FILTERINGSELECTTHRESHOLD) {
+			$h .= "<select dojoType=\"dijit.form.FilteringSelect\" id=\"admingrpsel\" ";
+			$h .= "highlightMatch=\"all\" autoComplete=\"false\">";
+		}
+		else
+			$h .= "<select id=\"admingrpsel\">";
+		$h .= "<option value=\"0\">None</option>\n";
+		foreach($groups as $id => $group) {
+			if($id == $request['admingroupid'])
+				$h .= "<option value=\"$id\" selected>{$group['name']}</option>";
+			else
+				$h .= "<option value=\"$id\">{$group['name']}</option>";
+		}
+		$h .= "</select><br>";
+		$h .= "Access User Group: ";
+		if(USEFILTERINGSELECT && count($groups) < FILTERINGSELECTTHRESHOLD) {
+			$h .= "<select dojoType=\"dijit.form.FilteringSelect\" id=\"logingrpsel\" ";
+			$h .= "highlightMatch=\"all\" autoComplete=\"false\">";
+		}
+		else
+			$h .= "<select id=\"logingrpsel\">";
+		$h .= "<option value=\"0\">None</option>\n";
+		foreach($groups as $id => $group) {
+			if($id == $request['logingroupid'])
+				$h .= "<option value=\"$id\" selected>{$group['name']}</option>";
+			else
+				$h .= "<option value=\"$id\">{$group['name']}</option>";
+		}
+		$h .= "</select><br><br>";
+	}
 	// if future, allow start to be modified
 	if($unixstart > $now) {
 		$cdata['modifystart'] = 1;
@@ -2007,6 +2092,27 @@ function AJsubmitEditRequest() {
 		               'cont' => $cont));
 		return;
 	}
+	$updategroups = 0;
+	if($request['serverrequest']) {
+		if($user['showallgroups'])
+			$groups = getUserGroups(1);
+		else
+			$groups = getUserGroups(1, $user['affiliationid']);
+		$admingroupid = processInputVar('admingroupid', ARG_NUMERIC);
+		$logingroupid = processInputVar('logingroupid', ARG_NUMERIC);
+		if(($admingroupid != 0 && ! array_key_exists($admingroupid, $groups)) ||
+			($logingroupid != 0 && ! array_key_exists($logingroupid, $groups))) {
+			$cdata = getContinuationVar();
+			$cont = addContinuationsEntry('AJsubmitEditRequest', $cdata, SECINDAY, 1, 0);
+			sendJSON(array('status' => 'error',
+			               'errmsg' => "Invalid user group submitted",
+			               'cont' => $cont));
+			return;
+		}
+		if($admingroupid != $request['admingroupid'] ||
+			$logingroupid != $request['logingroupid'])
+			$updategroups = 1;
+	}
 
 	// get semaphore lock
 	if(! semLock())
@@ -2053,6 +2159,17 @@ function AJsubmitEditRequest() {
 	}
 	elseif($rc > 0) {
 		updateRequest($requestid);
+		if($updategroups) {
+			$query = "UPDATE serverrequest "
+			       . "SET admingroupid = $admingroupid, "
+			       .     "logingroupid = $logingroupid "
+			       . "WHERE requestid = $requestid";
+			doQuery($query, 101);
+			$query = "UPDATE request "
+			       . "SET stateid = 29 "
+			       . "WHERE id = $requestid";
+			doQuery($query, 101);
+		}
 		sendJSON(array('status' => 'success'));
 		semUnlock();
 		return;
@@ -2214,6 +2331,80 @@ function AJsubmitDeleteRequest() {
 		print "window.location.href='" . BASEURL . SCRIPT . "?continuation=$cont';";
 		return;
 	}
+	viewRequests();
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn AJconfirmRemoveRequest()
+///
+/// \brief populates a confirmation dialog box
+///
+////////////////////////////////////////////////////////////////////////////////
+function AJconfirmRemoveRequest() {
+	$requestid = getContinuationVar('requestid', 0);
+	$request = getRequestInfo($requestid, 1);
+	if(is_null($request)) {
+		$data = array('error' => 1,
+		              'msg' => "The specified reservation no longer exists.");
+		sendJSON($data);
+		return;
+	}
+	if($request['stateid'] != 11 && $request['laststateid'] != 11 &&
+	   $request['stateid'] != 12 && $request['laststateid'] != 12 &&
+	   $request['stateid'] !=  5 && $request['laststateid'] !=  5) {
+		$data = array('error' => 2,
+		              'msg' => "The reservation is no longer failed or timed out.",
+		              'url' => BASEURL . SCRIPT . "?mode=viewRequests");
+		sendJSON($data);
+		return;
+	}
+	if($request['stateid'] == 11 || $request['stateid'] == 12 ||
+	   $request['stateid'] == 12 || $request['laststateid'] == 12) {
+		$text  = "Remove timed out reservation from list of current ";
+		$text .= "reservations?<br>\n";
+	}
+	else {
+		$text  = "Remove failed reservation from list of current reservations?";
+		$text .= "<br>\n";
+	}
+	$cdata = array('requestid' => $requestid);
+	$cont = addContinuationsEntry('AJsubmitRemoveRequest', $cdata, SECINDAY, 0, 0);
+	$text = preg_replace("/(.{1,60}[ \n])/", '\1<br>', $text);
+	$data = array('content' => $text,
+	              'cont' => $cont);
+	sendJSON($data);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn AJsubmitRemoveRequest()
+///
+/// \brief submits deleting a request and prints that it has been deleted
+///
+////////////////////////////////////////////////////////////////////////////////
+function AJsubmitRemoveRequest() {
+	global $mode;
+	$mode = 'AJviewRequests';
+	$requestid = getContinuationVar('requestid', 0);
+	$request = getRequestInfo($requestid, 1);
+	if(is_null($requestid)) {
+		viewRequests();
+		return;
+	}
+
+	if($request['serverrequest']) {
+		$query = "DELETE FROM serverrequest WHERE requestid = $requestid";
+		doQuery($query, 152);
+	}
+
+	# TODO do these need to set state to complete?
+	$query = "DELETE FROM request WHERE id = $requestid";
+	doQuery($query, 153);
+
+	$query = "DELETE FROM reservation WHERE requestid = $requestid";
+	doQuery($query, 154);
+
 	viewRequests();
 }
 
@@ -2422,6 +2613,14 @@ function connectRequest() {
 	else
 		$requestid = processInputVar("requestid", ARG_NUMERIC);
 	$requestData = getRequestInfo($requestid);
+	if($requestData['stateid'] == 11 || $requestData['stateid'] == 12 ||
+	   ($requestData['stateid'] == 14 && 
+	   ($requestData['laststateid'] == 11 || $requestData['laststateid'] == 12))) {
+		print "<H2 align=center>Connect!</H2>\n";
+		print "This reservation has timed out due to lack of user activity and ";
+		print "is no longer available.<br>\n";
+		return;
+	}
 	if($requestData['reservations'][0]['remoteIP'] != $remoteIP) {
 		$setback = unixToDatetime(time() - 600);
 		$query = "UPDATE reservation "

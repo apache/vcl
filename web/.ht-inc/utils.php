@@ -2669,6 +2669,7 @@ function addUserGroupMember($unityid, $groupid) {
 	       .        "($userid, "
 	       .        "$groupid)";
 	doQuery($query, 101);
+	checkUpdateServerRequestGroups($groupid);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -2686,6 +2687,7 @@ function deleteUserGroupMember($userid, $groupid) {
 	       . "WHERE userid = $userid AND "
 	       .       "usergroupid = $groupid";
 	doQuery($query, 101);
+	checkUpdateServerRequestGroups($groupid);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -4465,7 +4467,9 @@ function findManagementNode($compid, $start, $nowfuture) {
 /// \b logid - id from log table\n
 /// \b test - test flag\n
 /// \b forimaging - 0 if request is normal, 1 if it is for imaging\n
-/// \b serverrequest - 0 if request is normal, 1 if it is a server request\n\n
+/// \b serverrequest - 0 if request is normal, 1 if it is a server request\n
+/// \b admingroupid - id of admin user group if server request\n
+/// \b logingroupid - id of login user group if server request\n\n
 /// an array of reservations associated with the request whose key is
 /// 'reservations', each with the following items:\n
 /// \b imageid - id of the image\n
@@ -4552,10 +4556,17 @@ function getRequestInfo($id, $returnNULL=0) {
 	$data["reservations"] = array();
 	while($row = mysql_fetch_assoc($qh))
 		array_push($data["reservations"], $row);
-	$query = "SELECT id FROM serverrequest WHERE requestid = $id";
+	$query = "SELECT id, "
+	       .        "admingroupid, "
+	       .        "logingroupid "
+	       . "FROM serverrequest "
+	       . "WHERE requestid = $id";
 	$qh = doQuery($query, 101);
-	if(mysql_num_rows($qh))
+	if($row = mysql_fetch_assoc($qh)) {
 		$data['serverrequest'] = 1;
+		$data['admingroupid'] = $row['admingroupid'];
+		$data['logingroupid'] = $row['logingroupid'];
+	}
 	else
 		$data['serverrequest'] = 0;
 	return $data;
@@ -4919,9 +4930,10 @@ function getUserRequests($type, $id=0) {
 	       .        "sp.logingroupid AS serverlogingroupid, "
 	       .        "ugl.name AS serverlogingroup, "
 	       .        "sp.monitored, "
+	       .        "ra.password, "
+	       .        "rs.pw, "
 	       .        "(UNIX_TIMESTAMP(l.initialend) - UNIX_TIMESTAMP(l.start)) AS initialduration "
-	       . "FROM reservation rs, "
-	       .      "image i, "
+	       . "FROM image i, "
 	       .      "OS o, "
 	       .      "computer c, "
 	       .      "request rq "
@@ -4929,10 +4941,11 @@ function getUserRequests($type, $id=0) {
 	       . "LEFT JOIN usergroup uga ON (uga.id = sp.admingroupid) "
 	       . "LEFT JOIN usergroup ugl ON (ugl.id = sp.logingroupid) "
 	       . "LEFT JOIN log l ON (l.requestid = rq.id) "
+	       . "LEFT JOIN reservation rs ON (rs.requestid = rq.id) "
+	       . "LEFT JOIN reservationaccounts ra ON (ra.reservationid = rs.id AND ra.userid = $id) "
 	       . "WHERE (rq.userid = $id OR "
 	       .       "sp.admingroupid IN ($ingroupids) OR "
 	       .       "sp.logingroupid IN ($ingroupids)) AND "
-	       .       "rs.requestid = rq.id AND "
 	       .       "rs.imageid = i.id AND "
 	       .       "rq.end > NOW() AND "
 	       .       "i.OSid = o.id AND "
@@ -5008,6 +5021,10 @@ function getUserRequests($type, $id=0) {
 			$data[$count]['serverowner'] = 1;
 			$data[$count]['serveradmin'] = 1;
 		}
+		if(! empty($row['password']) || ($row['userid'] == $id && ! empty($row['pw'])))
+			$data[$count]['useraccountready'] = 1;
+		else
+			$data[$count]['useraccountready'] = 0;
 		$data[$count]["reservations"] = array();
 		$query2 = sprintf($qbase2, $row['resid'], $row['id']);
 		$qh2 = doQuery($query2, 160);
@@ -6937,7 +6954,9 @@ function requestIsReady($request) {
 	   $request["computerstateid"] == 3) ||   //   computer reserved
 	   ($request["currstateid"] == 8 &&       // request current state inuse
 	   $request["computerstateid"] == 8) ||   //   and computer state inuse
-	   ($request["currstateid"] == 24 &&       // request current state checkpoint
+	   ($request["currstateid"] == 24 &&      // request current state checkpoint
+	   $request["computerstateid"] == 8) ||   //   and computer state inuse
+	   ($request["currstateid"] == 29 &&      // request current state servermodified
 	   $request["computerstateid"] == 8) ||   //   and computer state inuse
 	   ($request["currstateid"] == 14 &&      // request current state pending
 	   $request["laststateid"] == 8 &&        //   and last state inuse and
@@ -7208,6 +7227,7 @@ function updateGroups($newusergroups, $userid) {
 			       . "userid = $userid, usergroupid = $id";
 			doQuery($query, 307);
 		}
+		checkUpdateServerRequestGroups($groupid);
 	}
 	return $newusergroups;
 }
@@ -7283,6 +7303,28 @@ function getUserGroupName($id, $incAffil=0) {
 	if($row = mysql_fetch_row($qh))
 		return $row[0];
 	return 0;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn checkUpdateServerRequestGroups($groupid)
+///
+/// \param $groupid = id of a user group
+///
+/// \brief checks for any server requests with an admin or login group of
+/// $groupid; if any exist, set request stateid to servermodified
+///
+////////////////////////////////////////////////////////////////////////////////
+function checkUpdateServerRequestGroups($groupid) {
+	$query = "UPDATE request "
+	       . "SET stateid = 29 "
+	       . "WHERE stateid IN (3, 7, 8, 14, 16, 24, 25, 26, 27, 28) AND "
+	       .       "id IN "
+	       .   "(SELECT requestid "
+	       .   "FROM serverrequest "
+	       .   "WHERE admingroupid = $groupid OR "
+	       .         "logingroupid = $groupid)";
+	doQuery($query, 101);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -7406,6 +7448,13 @@ function sendRDPfile() {
 	$requestid = getContinuationVar("requestid");
 	$resid = getContinuationVar("resid");
 	$request = getRequestInfo("$requestid");
+	if($request['stateid'] == 11 || $request['stateid'] == 12 ||
+	   ($request['stateid'] == 14 && 
+	   ($request['laststateid'] == 11 || $request['laststateid'] == 12))) {
+		$cont = addContinuationsEntry('viewRequests');
+		header("Location: " . BASEURL . SCRIPT . "?continuation=$cont");
+		return;
+	}
 	foreach($request["reservations"] as $res) {
 		if($res['reservationid'] == $resid) {
 			$ipaddress = $res["reservedIP"];
@@ -7470,7 +7519,6 @@ function sendRDPfile() {
 	print "disable cursor setting:i:0\r\n";
 	print "bitmapcachepersistenable:i:1\r\n";
 	//print "connect to console:i:1\r\n";
-	exit(0);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -9365,7 +9413,8 @@ function getDojoHTML($refresh) {
 			                      'dijit.form.DropDownButton',
 			                      'dijit.Tooltip',
 			                      'vcldojo.HoverTooltip',
-			                      'dojox.layout.FloatingPane');
+			                      'dojox.layout.FloatingPane',
+			                      'dijit.form.FilteringSelect');
 			break;
 		case 'viewRequestInfo':
 			$dojoRequires = array('dojo.parser',

@@ -22,13 +22,9 @@
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn 
+/// \fn serverProfiles()
 ///
-/// \param 
-///
-/// \return
-///
-/// \brief 
+/// \brief prints server profile page
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function serverProfiles() {
@@ -36,7 +32,7 @@ function serverProfiles() {
 	print "data=\"profilesstoredata\"></div>\n";
 	print "<div id=\"mainTabContainer\" dojoType=\"dijit.layout.TabContainer\"\n";
 	print "     style=\"width:630px;height:600px\">\n";
-	print "<div id=\"deploytab\" dojoType=\"dijit.layout.ContentPane\" title=\"Shake & Bake\" selected=\"true\">\n";
+	print "<div id=\"deploytab\" dojoType=\"dijit.layout.ContentPane\" title=\"Shake &amp; Bake\" selected=\"true\">\n";
 	$data = deployHTML();
 	print $data['html'];
 	print "</div>\n"; # deploy tab
@@ -58,20 +54,18 @@ function serverProfiles() {
 ///
 /// \fn deployHTML()
 ///
-/// \param 
+/// \return an array with one element with a key of 'html' whose value is the
+/// html content for the deploy tab
 ///
-/// \return
-///
-/// \brief 
+/// \brief builds the html for the deploy tab
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function deployHTML() {
 	global $user;
 	$profiles = getServerProfiles();
 
-	// TODO finish making this work correctly if there are no server profiles
 	$h = '';
-	$h .= "<h2>Shake & Bake</h2>\n";
+	$h .= "<h2>Shake &amp; Bake</h2>\n";
 	$h .= "<span id=\"deployprofileslist\"";
 	if(! count($profiles))
 		$h .= " class=\"hidden\"";
@@ -90,8 +84,8 @@ function deployHTML() {
 	$h .= "		getServerProfileData('$cont', 'deployprofileid', getServerProfileDataDeployCB);\n";
 	$h .= "	</script>\n";
 	$h .= "</button>";
-	$h .= "</span>\n"; # deployprofileslist
 	$h .= "<br><hr><br>\n";
+	$h .= "</span>\n"; # deployprofileslist
 
 	$h .= "<div id=\"deployprofilediv\">\n";
 	$h .= "<table summary=\"\">\n";
@@ -107,8 +101,10 @@ function deployHTML() {
 	}
 	else
 		$h .= "      <select dojoType=\"dijit.form.Select\" id=\"deployimage\">\n";
-	foreach($images as $id => $image)
+	foreach($images as $id => $image) {
+		$image = preg_replace('/&/', '&amp;', $image);
 		$h .= "        <option value=\"$id\">$image</option>\n";
+	}
 	$h .= "      </select>\n";
 	$h .= "    </td>\n";
 	$h .= "  </tr>\n";
@@ -116,13 +112,13 @@ function deployHTML() {
 	$h .= "    <th align=right>Fixed IP Address:</th>\n";
 	$h .= "    <td><input type=\"text\" id=\"deployfixedIP\" ";
 	$h .= "dojoType=\"dijit.form.ValidationTextBox\" ";
-	$h .= "regExp=\"([0-9]{1,3}\\.){3}([0-9]{1,3})\"></td>\n";
+	$h .= "regExp=\"([0-9]{1,3}\\.){3}([0-9]{1,3})\">(optional)</td>\n";
 	$h .= "  </tr>\n";
 	$h .= "  <tr>\n";
 	$h .= "    <th align=right>Fixed MAC Address:</th>\n";
 	$h .= "    <td><input type=\"text\" id=\"deployfixedMAC\" ";
 	$h .= "dojoType=\"dijit.form.ValidationTextBox\" ";
-	$h .= "regExp=\"([0-9a-fA-F]{2}:){5}([0-9a-fA-F]{2})\"></td>\n";
+	$h .= "regExp=\"([0-9a-fA-F]{2}:){5}([0-9a-fA-F]{2})\">(optional)</td>\n";
 	$h .= "  </tr>\n";
 	$h .= "  <tr>\n";
 	$h .= "    <th align=right>Admin User Group:</th>\n";
@@ -134,7 +130,7 @@ function deployHTML() {
 		$h .= "highlightMatch=\"all\" autoComplete=\"false\">\n";
 	}
 	else
-		$h .= "      <select dojoType=\"dijit.form.Select\" id=\"deployadmingroup>\n";
+		$h .= "      <select dojoType=\"dijit.form.Select\" id=\"deployadmingroup\">\n";
 	$h .= "        <option value=\"0\">None</option>\n";
 	foreach($usergroups as $id => $group)
 		$h .= "        <option value=\"$id\">$group</option>\n";
@@ -150,14 +146,14 @@ function deployHTML() {
 		$h .= "highlightMatch=\"all\" autoComplete=\"false\">\n";
 	}
 	else
-		$h .= "      <select dojoType=\"dijit.form.Select\" id=\"deploylogingroup>\n";
+		$h .= "      <select dojoType=\"dijit.form.Select\" id=\"deploylogingroup\">\n";
 	$h .= "        <option value=\"0\">None</option>\n";
 	foreach($usergroups as $id => $group)
 		$h .= "        <option value=\"$id\">$group</option>\n";
 	$h .= "      </select>\n";
 	$h .= "    </td>\n";
 	$h .= "  </tr>\n";
-	$h .= "  <tr>\n";
+	$h .= "  <tr class=\"hidden\">\n";
 	$h .= "    <th align=right>Monitored:</th>\n";
 	$h .= "    <td><input type=\"checkbox\" ";
 	$h .= "id=\"deploymonitored\" dojoType=\"dijit.form.CheckBox\"></td>\n";
@@ -172,16 +168,16 @@ function deployHTML() {
 	$h .= "<input type=\"radio\" id=\"startlater\" name=\"deploystart\" ";
 	$h .= "onclick=\"setStartLater();\">\n";
 	$h .= "<label for=\"startlater\">Later:</label>\n";
-	$h .= "<div type=\"text\" dojoType=\"dijit.form.DateTextBox\" ";
+	$h .= "<div dojoType=\"dijit.form.DateTextBox\" ";
 	$h .= "id=\"deploystartdate\" onChange=\"setStartLater();\" ";
 	$h .= "style=\"width: 78px\"></div>\n";
-	$h .= "<div type=\"text\" id=\"deploystarttime\" dojoType=\"dijit.form.TimeTextBox\" ";
+	$h .= "<div id=\"deploystarttime\" dojoType=\"dijit.form.TimeTextBox\" ";
 	$h .= "style=\"width: 78px\" onChange=\"setStartLater();\"></div>\n";
 	$h .= "<small>(" . date('T') . ")</small><br><br>\n";
 	$h .= "Ending for server:<br>\n";
 	$h .= "&nbsp;&nbsp;&nbsp;";
 	$h .= "<input type=\"radio\" id=\"endindef\" name=\"deployend\" ";
-	$h .= "onclick=\"setEndIndef();\" checked>\n";
+	$h .= "onclick=\"setEndIndef();\" checked>\n"; # todo should this 'checked' be hard coded?
 	$h .= "<label for=\"endindef\">Indefinite</label><br>\n";
 	$h .= "&nbsp;&nbsp;&nbsp;";
 	$h .= "<input type=\"radio\" id=\"endat\" name=\"deployend\" ";
@@ -195,13 +191,13 @@ function deployHTML() {
 	$h .= "<small>(" . date('T') . ")</small><br><br>\n";
 	$cont = addContinuationsEntry('AJdeployServer', array(), SECINDAY, 1, 0);
 	$h .= "<button dojoType=\"dijit.form.Button\">\n";
-	$h .= "	Shake & Bake Server\n";
+	$h .= "	Shake &amp; Bake Server\n";
 	$h .= "	<script type=\"dojo/method\" event=onClick>\n";
 	$h .= "		submitDeploy();\n";
 	$h .= "	</script>\n";
 	$h .= "</button><br><br>\n";
 	$h .= "<input type=\"hidden\" id=\"deploycont\" value=\"$cont\">\n";
-	$h .= "</div>\n"; # serverprofiledata
+	$h .= "</div>\n"; # serverprofilediv
 	return array('html' => $h);
 }
 
@@ -209,11 +205,10 @@ function deployHTML() {
 ///
 /// \fn manageProfilesHTML()
 ///
-/// \param 
+/// \return an array with one element with a key of 'html' whose value is the
+/// html content for the manage tab
 ///
-/// \return
-///
-/// \brief 
+/// \brief builds the html for the manage tab
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function manageProfilesHTML() {
@@ -276,7 +271,7 @@ function manageProfilesHTML() {
 		$h .= "highlightMatch=\"all\" autoComplete=\"false\">\n";
 	}
 	else
-		$h .= "      <select dojoType=\"dijit.form.Select\" name=\"profileimage\" id=\"profileimage>\n";
+		$h .= "      <select dojoType=\"dijit.form.Select\" name=\"profileimage\" id=\"profileimage\">\n";
 	foreach($images as $id => $image)
 		$h .= "        <option value=\"$id\">$image</option>\n";
 	$h .= "      </select>\n";
@@ -286,13 +281,13 @@ function manageProfilesHTML() {
 	$h .= "    <th align=right>Fixed IP Address:</th>\n";
 	$h .= "    <td><input type=\"text\" name=\"profilefixedIP\" id=\"profilefixedIP\" ";
 	$h .= "dojoType=\"dijit.form.ValidationTextBox\" ";
-	$h .= "regExp=\"([0-9]{1,3}\\.){3}([0-9]{1,3})\"></td>\n";
+	$h .= "regExp=\"([0-9]{1,3}\\.){3}([0-9]{1,3})\">(optional)</td>\n";
 	$h .= "  </tr>\n";
 	$h .= "  <tr>\n";
 	$h .= "    <th align=right>Fixed MAC Address:</th>\n";
 	$h .= "    <td><input type=\"text\" name=\"profilefixedMAC\" id=\"profilefixedMAC\" ";
 	$h .= "dojoType=\"dijit.form.ValidationTextBox\" ";
-	$h .= "regExp=\"([0-9a-fA-F]{2}:){5}([0-9a-fA-F]{2})\"></td>\n";
+	$h .= "regExp=\"([0-9a-fA-F]{2}:){5}([0-9a-fA-F]{2})\">(optional)</td>\n";
 	$h .= "  </tr>\n";
 	$h .= "  <tr>\n";
 	$h .= "    <th align=right>Admin User Group:</th>\n";
@@ -304,7 +299,7 @@ function manageProfilesHTML() {
 		$h .= "highlightMatch=\"all\" autoComplete=\"false\">\n";
 	}
 	else
-		$h .= "      <select dojoType=\"dijit.form.Select\" name=\"profileadmingroup\" id=\"profileadmingroup>\n";
+		$h .= "      <select dojoType=\"dijit.form.Select\" name=\"profileadmingroup\" id=\"profileadmingroup\">\n";
 	$h .= "        <option value=\"0\">None</option>\n";
 	foreach($usergroups as $id => $group)
 		$h .= "        <option value=\"$id\">$group</option>\n";
@@ -320,14 +315,14 @@ function manageProfilesHTML() {
 		$h .= "highlightMatch=\"all\" autoComplete=\"false\">\n";
 	}
 	else
-		$h .= "      <select dojoType=\"dijit.form.Select\" name=\"profilelogingroup\" id=\"profilelogingroup>\n";
+		$h .= "      <select dojoType=\"dijit.form.Select\" name=\"profilelogingroup\" id=\"profilelogingroup\">\n";
 	$h .= "        <option value=\"0\">None</option>\n";
 	foreach($usergroups as $id => $group)
 		$h .= "        <option value=\"$id\">$group</option>\n";
 	$h .= "      </select>\n";
 	$h .= "    </td>\n";
 	$h .= "  </tr>\n";
-	$h .= "  <tr>\n";
+	$h .= "  <tr class=\"hidden\">\n";
 	$h .= "    <th align=right>Monitored:</th>\n";
 	$h .= "    <td><input type=\"checkbox\" name=\"profilemonitored\" ";
 	$h .= "id=\"profilemonitored\" dojoType=\"dijit.form.CheckBox\"></td>\n";
@@ -370,11 +365,10 @@ function manageProfilesHTML() {
 ///
 /// \fn manageGroupingHTML()
 ///
-/// \param 
+/// \return an array with one element with a key of 'html' whose value is the
+/// html content for the grouping tab
 ///
-/// \return 
-///
-/// \brief 
+/// \brief builds the html for the grouping tab
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function manageGroupingHTML() {
@@ -382,17 +376,22 @@ function manageGroupingHTML() {
 	$resources = getUserResources(array("serverProfileAdmin"),
 	                              array("manageGroup"));
 	$h = '';
-	if(! count($resources["serverprofile"])) {
-		$h .= "<H2>Server Profile Grouping</H2>\n";
-		$h .= "You don't have access to modify any server profile groups.<br>\n";
-		return;
-	}
 	if($mode == 'submitServerProfileGroups')
 		$gridSelected = "selected=\"true\"";
 	else
 		$gridSelected = "";
 	
 	$h .= "<H2>Server Profile Grouping</H2>\n";
+	$h .= "<span id=\"noprofilegroupsspan\"";
+	if(count($resources["serverprofile"]))
+		$h .= " class=\"hidden\"";
+	$h .= ">\n";
+	$h .= "You don't have access to modify any server profile groups.<br>\n";
+	$h .= "</span>\n";
+	$h .= "<span id=\"groupprofilesspan\"";
+	if(! count($resources["serverprofile"]))
+		$h .= " class=\"hidden\"";
+	$h .= ">\n";
 	$h .= "<div id=\"groupTabContainer\" dojoType=\"dijit.layout.TabContainer\"\n";
 	$h .= "     style=\"width:600px;height:400px\">\n";
 
@@ -462,7 +461,7 @@ function manageGroupingHTML() {
 	$h .= "in it. Then,<br>select a server profile in it and click the Remove ";
 	$h .= "button to remove it from the group,<br>or select a server profile that is not ";
 	$h .= "in it and click the Add button to add it to the group.<br><br>\n";
-	$h .= "Group:<select dojoType=\"dijit.form.Select\" id=profileGroups ";
+	$h .= "Group:<select dojoType=\"dijit.form.Select\" id=\"profileGroups\" ";
 	$h .= "onChange=\"dojo.addClass('profilesdiv', 'hidden');\">\n";
 	# build list of groups
 	$tmp = getUserResources(array('serverProfileAdmin'), array('manageGroup'), 1);
@@ -517,6 +516,7 @@ function manageGroupingHTML() {
 	$h .= "</div>\n"; # group
 
 	$h .= "</div>\n"; # end of main tab container
+	$h .= "</span>\n";
 	$cont = addContinuationsEntry('jsonProfileGroupingProfiles');
 	$h .= "<input type=hidden id=profilecont value=\"$cont\">\n";
 	$cont = addContinuationsEntry('jsonProfileGroupingGroups');
@@ -528,11 +528,7 @@ function manageGroupingHTML() {
 ///
 /// \fn AJserverProfileData()
 ///
-/// \param 
-///
-/// \return 
-///
-/// \brief 
+/// \brief sends information about a specified server profile in json format
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function AJserverProfileData() {
@@ -565,11 +561,7 @@ function AJserverProfileData() {
 ///
 /// \fn AJserverProfileStoreData()
 ///
-/// \param 
-///
-/// \return 
-///
-/// \brief 
+/// \brief sends information about server profiles in json format
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function AJserverProfileStoreData() {
@@ -588,13 +580,10 @@ function AJserverProfileStoreData() {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn 
+/// \fn AJdeployServer()
 ///
-/// \param 
-///
-/// \return 
-///
-/// \brief 
+/// \brief processes request information and creates reservation if everything
+/// ok
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function AJdeployServer() {
@@ -799,11 +788,7 @@ function AJdeployServer() {
 ///
 /// \fn AJsaveServerProfile
 ///
-/// \param 
-///
-/// \return
-///
-/// \brief 
+/// \brief updates server profile information
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function AJsaveServerProfile() {
@@ -880,11 +865,7 @@ function AJsaveServerProfile() {
 ///
 /// \fn AJdelServerProfile()
 ///
-/// \param 
-///
-/// \return 
-///
-/// \brief 
+/// \brief deletes a server profile
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function AJdelServerProfile() {
@@ -912,13 +893,20 @@ function AJdelServerProfile() {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn 
+/// \fn processProfileInput()
 ///
-/// \param 
+/// \return array with these values:\n
+/// \b profileid - id of profile\n
+/// \b name - name of profile\n
+/// \b desc - description of profile\n
+/// \b imageid - id associated with profile\n
+/// \b fixedIP - IP address to be assigned to profile\n
+/// \b fixedMAC - MAC address to be assigned to profile\n
+/// \b admingroupid - admin user group associated with profile\n
+/// \b logingroupid - login user group associated with profile\n
+/// \b monitored - whether or not the profile should be monitored
 ///
-/// \return 
-///
-/// \brief 
+/// \brief process submitted profile information
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function processProfileInput() {
@@ -1030,11 +1018,26 @@ function processProfileInput() {
 ///
 /// \fn getServerProfiles($id)
 ///
-/// \param 
+/// \param $id - (optional) if specified, only return data for specified profile
 ///
-/// \return
+/// \return an array where each key is a profile id whose value is an array with
+/// these values:\n
+/// \b name - profile name\n
+/// \b description - profile description\n
+/// \b imageid - id of image associated with profile\n
+/// \b image - pretty name of image associated with profile\n
+/// \b ownerid - user id of owner of profile\n
+/// \b owner - unityid of owner of profile\n
+/// \b fixedIP - IP address to be used with deployed profile\n
+/// \b fixedMAC - MAC address to be used with deployed profile\n
+/// \b admingroupid - id of admin user group associated with profile\n
+/// \b admingroup - name of admin user group associated with profile\n
+/// \b logingroupid - id of login user group associated with profile\n
+/// \b logingroup - name of login user group associated with profile\n
+/// \b monitored - whether or not deployed profile should be monitored\n
+/// \b resourceid - resource id of profile
 ///
-/// \brief 
+/// \brief gets information about server profiles
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function getServerProfiles($id=0) {
@@ -1082,11 +1085,7 @@ function getServerProfiles($id=0) {
 ///
 /// \fn jsonProfileGroupingGroups()
 ///
-/// \param 
-///
-/// \return 
-///
-/// \brief 
+/// \brief sends data about which profile groups are assigned to a profile
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function jsonProfileGroupingGroups() {
@@ -1121,11 +1120,7 @@ function jsonProfileGroupingGroups() {
 ///
 /// \fn jsonProfileGroupingProfiles()
 ///
-/// \param 
-///
-/// \return 
-///
-/// \brief 
+/// \brief sends data about which profiles are assigned to a profile group
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function jsonProfileGroupingProfiles() {
@@ -1162,11 +1157,7 @@ function jsonProfileGroupingProfiles() {
 ///
 /// \fn AJaddGroupToProfile()
 ///
-/// \param 
-///
-/// \return 
-///
-/// \brief 
+/// \brief adds a profile group to a profile
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function AJaddGroupToProfile() {
@@ -1213,11 +1204,7 @@ function AJaddGroupToProfile() {
 ///
 /// \fn AJremGroupFromProfile()
 ///
-/// \param 
-///
-/// \return 
-///
-/// \brief 
+/// \brief removes a profile group from a profile
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function AJremGroupFromProfile() {
@@ -1265,11 +1252,7 @@ function AJremGroupFromProfile() {
 ///
 /// \fn AJaddProfileToGroup()
 ///
-/// \param 
-///
-/// \return 
-///
-/// \brief 
+/// \brief adds a profile to a profile group
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function AJaddProfileToGroup() {
@@ -1314,11 +1297,7 @@ function AJaddProfileToGroup() {
 ///
 /// \fn AJremProfileFromGroup()
 ///
-/// \param 
-///
-/// \return 
-///
-/// \brief 
+/// \brief removes a profile from a profile group
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function AJremProfileFromGroup() {
