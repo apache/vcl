@@ -1456,8 +1456,8 @@ sub run_sysprep {
 	
 	my $node_configuration_directory = $self->get_node_configuration_directory();
 	
-	my $source_configuration_directory = eval '$' . ref($self) . '::SOURCE_CONFIGURATION_DIRECTORY';
-	run_scp_command("$source_configuration_directory/Utilities/Sysprep/Unattend.xml", "$computer_node_name:$node_configuration_directory/Utilities/sysprep/Unattend.xml");
+	#my $source_configuration_directory = eval '$' . ref($self) . '::SOURCE_CONFIGURATION_DIRECTORY';
+	#run_scp_command("$source_configuration_directory/Utilities/Sysprep/Unattend.xml", "$computer_node_name:$node_configuration_directory/Utilities/sysprep/Unattend.xml");
 	
 	# Delete existing Panther directory, contains Sysprep log files
 	if (!$self->delete_file('C:/Windows/Panther')) {
