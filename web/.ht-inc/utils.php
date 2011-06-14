@@ -4478,6 +4478,7 @@ function findManagementNode($compid, $start, $nowfuture) {
 /// \b image - name of the image\n
 /// \b prettyimage - pretty name of the image\n
 /// \b OS - name of the os\n
+/// \b OStype - type of the os\n
 /// \b computerid - id of the computer\n
 /// \b reservationid - id of the corresponding reservation\n
 /// \b reservedIP - ip address of reserved computer\n
@@ -4532,6 +4533,7 @@ function getRequestInfo($id, $returnNULL=0) {
 	       .        "i.name AS image, "
 	       .        "i.prettyname AS prettyimage, "
 	       .        "o.prettyname AS OS, "
+	       .        "o.type AS OStype, "
 	       .        "rs.computerid, "
 	       .        "rs.id AS reservationid, "
 	       .        "c.IPaddress AS reservedIP, "
