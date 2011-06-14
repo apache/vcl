@@ -2668,7 +2668,9 @@ function connectRequest() {
 				$first = 0;
 			else
 				print "<hr>\n";
-			if(preg_match('/(.*)@(.*)/', $user['unityid'], $matches))
+			if($requestData['forimaging'] && $res['OStype'] == 'windows')
+				$conuser = 'Administrator';
+			elseif(preg_match('/(.*)@(.*)/', $user['unityid'], $matches))
 				$conuser = $matches[1];
 			else
 				$conuser = $user['unityid'];
