@@ -880,6 +880,8 @@ sub get_private_interface_name {
 		return;
 	}
 	
+	return $self->{private_interface_name} if defined $self->{private_interface_name};
+	
 	# Get the network configuration hash reference
 	my $network_configuration = $self->get_network_configuration();
 	if (!$network_configuration) {
@@ -905,12 +907,13 @@ sub get_private_interface_name {
 		
 		# Check if interface has the private IP address assigned to it
 		if (grep { $_ eq $computer_private_ip_address } @ip_addresses) {
-			notify($ERRORS{'DEBUG'}, 0, "determined private interface name: $interface_name (" . join (", ", @ip_addresses) . ")");
-			return $interface_name;
+			$self->{private_interface_name} = $interface_name;
+			notify($ERRORS{'DEBUG'}, 0, "determined private interface name: $self->{private_interface_name} (" . join (", ", @ip_addresses) . ")");
+			return $self->{private_interface_name};
 		}
 	}
 
-	notify($ERRORS{'WARNING'}, 0, "failed to determined private interface name, no interface is assigned the private IP address for the reservation: $computer_private_ip_address\n" . format_data($network_configuration));
+	notify($ERRORS{'WARNING'}, 0, "failed to determine private interface name, no interface is assigned the private IP address for the reservation: $computer_private_ip_address\n" . format_data($network_configuration));
 	return;
 }
 
@@ -933,6 +936,8 @@ sub get_public_interface_name {
 		return;
 	}
 	
+	return $self->{public_interface_name} if defined $self->{public_interface_name};
+	
 	# Get the network configuration hash reference
 	my $network_configuration = $self->get_network_configuration();
 	if (!$network_configuration) {
@@ -949,82 +954,552 @@ sub get_public_interface_name {
 	
 	my $public_interface_name;
 	
-	# Store the name of an interface found without any bound IP addresses
-	# This interface will be returned if no others are found with an IP address
-	my $addressless_interface_name;
-	
 	# Loop through all of the network interfaces found
-	INTERFACE_NAME: foreach my $interface_name (sort keys %$network_configuration) {
-		# Get the interface IP addresses and make sure an IP address was found
-		my @ip_addresses  = keys %{$network_configuration->{$interface_name}{ip_address}};
+	INTERFACE: for my $check_interface_name (sort keys %$network_configuration) {
 		
-		# Check if the interface does not have any bound IP addresses
-		# Store the interface name if another has not already been found
-		# This will be returned if no others are found with a bound IP address
-		# This may occur if the public interface is present but down
-		if (!@ip_addresses && !defined($addressless_interface_name)) {
-			if (!defined($addressless_interface_name)) {
-				notify($ERRORS{'DEBUG'}, 0, "found interface without a bound IP address: $interface_name, this name will be returned if no other valid interface is found with a bound IP address");
-				$addressless_interface_name = $interface_name;
-			}
-			else {
-				notify($ERRORS{'DEBUG'}, 0, "found another interface without a bound IP address: $interface_name, the first interface found without a bound IP address will be returned if no other valid interface is found with a bound IP address: $addressless_interface_name");
-			}
-			next INTERFACE_NAME;
-		}
-		
-		# Check if interface has private IP address assigned to it
-		if (grep { $_ eq $computer_private_ip_address } @ip_addresses) {
-			notify($ERRORS{'DEBUG'}, 0, "ignoring private interface: $interface_name (" . join (", ", @ip_addresses) . ")");
-			next;
-		}
-		
-		my $description = $network_configuration->{$interface_name}{description} || '';
+		my $description = $network_configuration->{$check_interface_name}{description} || '';
 		
 		# Check if the interface should be ignored based on the name or description
-		if ($interface_name =~ /(^lo|loopback|vmnet|afs|tunnel|6to4|isatap|teredo)/i) {
-			notify($ERRORS{'DEBUG'}, 0, "interface ignored because of name: $interface_name (" . join (", ", @ip_addresses) . ")");
-			next;
+		if ($check_interface_name =~ /(loopback|vmnet|afs|tunnel|6to4|isatap|teredo)/i) {
+			notify($ERRORS{'DEBUG'}, 0, "interface '$check_interface_name' ignored because its name contains '$1'");
+			next INTERFACE;
 		}
-		elsif ($description =~ /loopback|virtual|afs|tunnel|pseudo|6to4|isatap/i) {
-			notify($ERRORS{'DEBUG'}, 0, "interface ignored because of description: $interface_name, description: $description (" . join (", ", @ip_addresses) . ")");
+		elsif ($description =~ /(loopback|virtual|afs|tunnel|pseudo|6to4|isatap)/i) {
+			notify($ERRORS{'DEBUG'}, 0, "interface '$check_interface_name' ignored because its description contains '$1'");
+			next INTERFACE;
+		}
+		
+		# Get the IP addresses assigned to the interface
+		my @check_ip_addresses  = keys %{$network_configuration->{$check_interface_name}{ip_address}};
+		
+		# Ignore interface if it doesn't have an IP address
+		if (!@check_ip_addresses) {
+			notify($ERRORS{'DEBUG'}, 0, "interface '$check_interface_name' ignored because it is not assigned an IP address");
+			next INTERFACE;
+		}
+		
+		# If $public_interface_name hasn't been set yet, set it and continue checking the next interface
+		if (!$public_interface_name) {
+			$public_interface_name = $check_interface_name;
+			next INTERFACE;
+		}
+		
+		# Call the helper subroutine
+		# It uses recursion to avoid large/duplicated if-else blocks
+		$public_interface_name = $self->_get_public_interface_name_helper($check_interface_name, $public_interface_name);
+		if (!$public_interface_name) {
+			notify($ERRORS{'WARNING'}, 0, "failed to determine if '$check_interface_name' or '$public_interface_name' is more likely the public interface");
+			next INTERFACE;
+		}
+	}
+	
+	if ($public_interface_name) {
+		$self->{public_interface_name} = $public_interface_name;
+		notify($ERRORS{'OK'}, 0, "determined the public interface name: '$self->{public_interface_name}'\n" . format_data($network_configuration->{$self->{public_interface_name}}));
+		return $self->{public_interface_name};
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to determine the public interface name:\n" . format_data($network_configuration));
+		return;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 _get_public_interface_name_helper
+
+ Parameters  : $interface_name_1, $interface_name_2
+ Returns     : string
+ Description : Compares the network configuration of the interfaces passed as
+               the arguments. Returns the name of the interface more likely to
+               be the public interface. It checks the following:
+               1. Is either interface assigned a public IP address?
+                  - If only 1 interface is assigned a public IP address then that interface name is returned.
+                  - If neither or both are assigned a public IP address:
+               2. Is either interface assigned a default gateway?
+                  - If only 1 interface is assigned a default gateway then that interface name is returned.
+                  - If neither or both are assigned a default gateway:
+               3. Is either interface assigned the private IP address?
+                  - If only 1 interface is assigned the private IP address, then the other interface name is returned.
+                  - If neither or both are assigned the private IP address, the first interface argument is returned
+
+=cut
+
+sub _get_public_interface_name_helper {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+print "\n\n" . '.' x 100 . "\n\n";
+	
+	my ($interface_name_1, $interface_name_2, $condition) = @_;
+	
+	if (!$interface_name_1 || !$interface_name_2) {
+		notify($ERRORS{'WARNING'}, 0, "\$network_configuration, \$interface_name_1, and \$interface_name_2 arguments were not specified");
+		return;
+	}
+	
+	my $network_configuration = $self->get_network_configuration();
+	my @ip_addresses_1 = keys %{$network_configuration->{$interface_name_1}{ip_address}};
+	my @ip_addresses_2 = keys %{$network_configuration->{$interface_name_2}{ip_address}};
+	
+	if (!$condition || $condition eq 'assigned_public') {
+		my $assigned_public_1 = (grep { is_public_ip_address($_) } @ip_addresses_1) ? 1 : 0;
+		my $assigned_public_2 = (grep { is_public_ip_address($_) } @ip_addresses_2) ? 1 : 0;
+		
+		if ($assigned_public_1 eq $assigned_public_2) {
+			notify($ERRORS{'DEBUG'}, 0, "tie: both interfaces are/are not assigned public IP addresses, proceeding to check default gateways");
+			return $self->_get_public_interface_name_helper($interface_name_1, $interface_name_2, 'assigned_gateway');
+		}
+		elsif ($assigned_public_1) {
+			notify($ERRORS{'DEBUG'}, 0, "'$interface_name_1' is more likely the public interface, it is assigned a public IP address, '$interface_name_2' is not");
+			return $interface_name_1;
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "'$interface_name_2' is more likely the public interface, it is assigned a public IP address, '$interface_name_1' is not");
+			return $interface_name_2;
+		}
+	}
+	elsif ($condition eq 'assigned_gateway') {
+		my $assigned_default_gateway_1 = defined($network_configuration->{$interface_name_1}{default_gateway}) ? 1 : 0;
+		my $assigned_default_gateway_2 = defined($network_configuration->{$interface_name_2}{default_gateway}) ? 1 : 0;
+		
+		if ($assigned_default_gateway_1 eq $assigned_default_gateway_2) {
+			notify($ERRORS{'DEBUG'}, 0, "tie: both interfaces are/are not assigned a default gateway, proceeding to check if either is assigned the private IP address");
+			return $self->_get_public_interface_name_helper($interface_name_1, $interface_name_2, 'matches_private');
+		}
+		elsif ($assigned_default_gateway_1) {
+			notify($ERRORS{'DEBUG'}, 0, "'$interface_name_1' is more likely the public interface, it is assigned a default gateway, '$interface_name_2' is not");
+			return $interface_name_1;
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "'$interface_name_2' is more likely the public interface, it is assigned a default gateway, '$interface_name_1' is not");
+			return $interface_name_2;
+		}
+	}
+	elsif ($condition eq 'matches_private') {
+		# Get the computer private IP address
+		my $computer_private_ip_address = $self->data->get_computer_private_ip_address();
+		if (!$computer_private_ip_address) {
+			notify($ERRORS{'DEBUG'}, 0, "unable to retrieve computer private IP address from reservation data");
+			return;
+		}
+		
+		my $matches_private_1 = (grep { $_ eq $computer_private_ip_address } @ip_addresses_1) ? 1 : 0;
+		my $matches_private_2 = (grep { $_ eq $computer_private_ip_address } @ip_addresses_2) ? 1 : 0;
+		
+		if ($matches_private_1 eq $matches_private_2) {
+			notify($ERRORS{'DEBUG'}, 0, "tie: both interfaces are/are not assigned the private IP address: $computer_private_ip_address, returning '$interface_name_1'");
+			return $interface_name_1;
+		}
+		elsif ($matches_private_1) {
+			notify($ERRORS{'DEBUG'}, 0, "'$interface_name_2' is more likely the public interface, it is NOT assigned the private IP address: $computer_private_ip_address");
+			return $interface_name_2;
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "'$interface_name_1' is more likely the public interface, it is NOT assigned the private IP address: $computer_private_ip_address");
+			return $interface_name_1;
+		}
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine which interface is more likely the public interface, invalid \$condition argument: '$condition'");
+		return;
+	}
+	
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_private_network_configuration
+
+ Parameters  : none
+ Returns     : 
+ Description : 
+
+=cut
+
+sub get_private_network_configuration {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	return $self->get_network_configuration()->{$self->get_private_interface_name()};
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_public_network_configuration
+
+ Parameters  : none
+ Returns     : 
+ Description : 
+
+=cut
+
+sub get_public_network_configuration {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	return $self->get_network_configuration()->{$self->get_public_interface_name()};
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_mac_address
+
+ Parameters  : 
+ Returns     : 
+ Description : 
+
+=cut
+
+sub get_mac_address {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Check if a 'public' or 'private' network type argument was specified
+	# Assume 'public' if not specified
+	my $network_type = lc(shift()) || 'public';
+	if ($network_type && $network_type !~ /(public|private)/i) {
+		notify($ERRORS{'WARNING'}, 0, "network type argument can only be 'public' or 'private'");
+		return;
+	}
+
+	# Get the public or private network configuration
+	# Use 'eval' to construct the appropriate subroutine name
+	my $network_configuration = eval "\$self->get_$network_type\_network_configuration()";
+	if ($EVAL_ERROR || !$network_configuration) {
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve $network_type network configuration");
+		return;
+	}
+
+	my $mac_address = $network_configuration->{physical_address};
+	if ($mac_address) {
+		notify($ERRORS{'DEBUG'}, 0, "returning $network_type MAC address: $mac_address");
+		return $mac_address;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine $network_type MAC address, 'physical_address' key does not exist in the network configuration info: \n" . format_data($network_configuration));
+		return;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_private_mac_address
+
+ Parameters  : 
+ Returns     : 
+ Description : 
+
+=cut
+
+sub get_private_mac_address {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	return $self->get_mac_address('private');
+}
+
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_public_mac_address
+
+ Parameters  : 
+ Returns     : 
+ Description : 
+
+=cut
+
+sub get_public_mac_address {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	return $self->get_mac_address('public');
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_ip_address
+
+ Parameters  : 
+ Returns     : 
+ Description : 
+
+=cut
+
+sub get_ip_address {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Check if a 'public' or 'private' network type argument was specified
+	# Assume 'public' if not specified
+	my $network_type = lc(shift()) || 'public';
+	if ($network_type && $network_type !~ /(public|private)/i) {
+		notify($ERRORS{'WARNING'}, 0, "network type argument can only be 'public' or 'private'");
+		return;
+	}
+
+	# Get the public or private network configuration
+	# Use 'eval' to construct the appropriate subroutine name
+	my $network_configuration = eval "\$self->get_$network_type\_network_configuration()";
+	if ($EVAL_ERROR || !$network_configuration) {
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve $network_type network configuration");
+		return;
+	}
+	
+	my $ip_address_info = $network_configuration->{ip_address};
+	if (!defined($ip_address_info)) {
+		notify($ERRORS{'WARNING'}, 0, "$network_type network configuration info does not contain an 'ip_address' key");
+		return;
+	}
+	
+	# Return the first IP address listed
+	my $ip_address = (sort keys(%$ip_address_info))[0];
+	if ($ip_address) {
+		notify($ERRORS{'DEBUG'}, 0, "returning $network_type IP address: $ip_address");
+		return $ip_address;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine $network_type IP address, 'ip_address' value is not set in the network configuration info: \n" . format_data($network_configuration));
+		return;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_private_ip_address
+
+ Parameters  : 
+ Returns     : 
+ Description : 
+
+=cut
+
+sub get_private_ip_address {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	return $self->get_ip_address('private');
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_public_ip_address
+
+ Parameters  : 
+ Returns     : 
+ Description : 
+
+=cut
+
+sub get_public_ip_address {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	return $self->get_ip_address('public');
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_subnet_mask
+
+ Parameters  : 
+ Returns     : $ip_address
+ Description : 
+
+=cut
+
+sub get_subnet_mask {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get the IP address argument
+	my $ip_address = shift;
+	if (!$ip_address) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine subnet mask, IP address argument was not specified");
+		return;
+	}
+
+	# Make sure network configuration was retrieved
+	my $network_configuration = $self->get_network_configuration();
+	if (!$network_configuration) {
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve network configuration");
+		return;
+	}
+	
+	for my $interface_name (keys(%$network_configuration)) {
+		my $ip_address_info = $network_configuration->{$interface_name}{ip_address};
+		
+		if (!defined($ip_address_info->{$ip_address})) {
 			next;
 		}
 		
-		# Loop through the IP addresses for the interface
-		# Try to find a public address
-		for my $ip_address (@ip_addresses) {
-			
-			if (is_public_ip_address($ip_address)) {
-				notify($ERRORS{'DEBUG'}, 0, "determined public interface name: $interface_name (" . join (", ", @ip_addresses) . ")");
-				return $interface_name;
-			}
-			else {
-				notify($ERRORS{'DEBUG'}, 0, "found interface assigned a private address not matching private address for reservation: $interface_name (" . join(", ", @ip_addresses) . ")");
-				
-				if ($public_interface_name) {
-					notify($ERRORS{'DEBUG'}, 0, "already found another interface with a private address not matching private address for reservation: $public_interface_name, the first one found will be used if an interface with a public address isn't found");
-				}
-				else {
-					$public_interface_name = $interface_name;
-					notify($ERRORS{'DEBUG'}, 0, "assuming interface is public if another interface with a public address isn't found: $public_interface_name");
-				}
-			}
+		my $subnet_mask = $ip_address_info->{$ip_address};
+		if ($subnet_mask) {
+			return $subnet_mask;
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "subnet mask is not set for interface '$interface_name' IP address $ip_address in network configuration:\n" . format_data($network_configuration));
+			return;
 		}
 	}
+	
+	notify($ERRORS{'WARNING'}, 0, "interface with IP address $ip_address does not exist in the network configuration:\n" . format_data($network_configuration));
+	return;
+}
 
-	if ($public_interface_name) {
-		notify($ERRORS{'DEBUG'}, 0, "did not find any interfaces assigned a public IP address, returning interface assigned a private IP address not matching the private IP address assigned to the reservation computer: $public_interface_name");
-		return $public_interface_name;
-	}
-	elsif ($addressless_interface_name) {
-		notify($ERRORS{'DEBUG'}, 0, "did not find any interfaces assigned a public IP address, returning interface found with no bound IP addresses: $addressless_interface_name");
-		return $addressless_interface_name;
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to determine the public interface from the network configuration:\n" . format_data($network_configuration));
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_private_subnet_mask
+
+ Parameters  : 
+ Returns     : 
+ Description : 
+
+=cut
+
+sub get_private_subnet_mask {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
+	
+	return $self->get_subnet_mask($self->get_private_ip_address());
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_public_subnet_mask
+
+ Parameters  : 
+ Returns     : 
+ Description : 
+
+=cut
+
+sub get_public_subnet_mask {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	return $self->get_subnet_mask($self->get_public_ip_address());
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_default_gateway
+
+ Parameters  : 
+ Returns     : 
+ Description : 
+
+=cut
+
+sub get_default_gateway {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Check if a 'public' or 'private' network type argument was specified
+	# Assume 'public' if not specified
+	my $network_type = lc(shift()) || 'public';
+	if ($network_type && $network_type !~ /(public|private)/i) {
+		notify($ERRORS{'WARNING'}, 0, "network type argument can only be 'public' or 'private'");
+		return;
+	}
+
+	# Get the public or private network configuration
+	# Use 'eval' to construct the appropriate subroutine name
+	my $network_configuration = eval "\$self->get_$network_type\_network_configuration()";
+	if ($EVAL_ERROR || !$network_configuration) {
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve $network_type network configuration");
+		return;
+	}
+	
+	my $default_gateway = $network_configuration->{default_gateway};
+	if ($default_gateway) {
+		notify($ERRORS{'DEBUG'}, 0, "returning $network_type default gateway: $default_gateway");
+		return $default_gateway;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine $network_type default gateway, 'default_gateway' key does not exist in the network configuration info: \n" . format_data($network_configuration));
+		return;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_private_default_gateway
+
+ Parameters  : 
+ Returns     : 
+ Description : 
+
+=cut
+
+sub get_private_default_gateway {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	return $self->get_default_gateway('private');
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_public_default_gateway
+
+ Parameters  : 
+ Returns     : 
+ Description : 
+
+=cut
+
+sub get_public_default_gateway {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	return $self->get_default_gateway('public');
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -1035,7 +1510,7 @@ sub get_public_interface_name {
  Returns     : boolean
  Description : Creates a text file on the computer. The $file_contents
                string argument is converted to ASCII hex values. These values
-               are echo'd on the Windows host which avoids problems with special
+               are echo'd on the computer which avoids problems with special
                characters and escaping. If the file already exists it is
                overwritten.
 

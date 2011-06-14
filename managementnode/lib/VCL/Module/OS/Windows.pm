@@ -4904,16 +4904,12 @@ sub get_network_configuration {
 		return;
 	}
 	
-	# Check if a 'public' or 'private' network type argument was specified
-	my $network_type = lc(shift());
-	if ($network_type && $network_type !~ /(public|private)/i) {
-		notify($ERRORS{'WARNING'}, 0, "network type argument can only be 'public' or 'private'");
-		return;
-	}
-
+	# Check if the network configuration has already been retrieved and saved in this object
+	return $self->{network_configuration} if ($self->{network_configuration});
+	
+	my $system32_path = $self->get_system32_path();
 	my $management_node_keys = $self->data->get_management_node_keys();
 	my $computer_node_name   = $self->data->get_computer_node_name();
-	my $system32_path        = $self->get_system32_path() || return;
 	
 	# Get the computer private IP address
 	my $computer_private_ip_address = $self->data->get_computer_private_ip_address();
@@ -4922,542 +4918,106 @@ sub get_network_configuration {
 		return;
 	}
 	
-	
-	
-	my %network_configuration;
-	if (!$self->{network_configuration}) {
-		notify($ERRORS{'DEBUG'}, 0, "attempting to retrieve network configuration information from $computer_node_name");
-		
-		# Run ipconfig /all, try twice in case it fails the first time
-		my $ipconfig_attempt = 0;
-		my $ipconfig_attempt_limit = 2;
-		my ($ipconfig_exit_status, $ipconfig_output);
-		while (++$ipconfig_attempt) {
-			($ipconfig_exit_status, $ipconfig_output) = run_ssh_command($computer_node_name, $management_node_keys, $system32_path . '/ipconfig.exe /all', '', '', 1);
-			if (defined($ipconfig_exit_status) && $ipconfig_exit_status == 0) {
-				last;
-			}
-			elsif (defined($ipconfig_exit_status)) {
-				notify($ERRORS{'WARNING'}, 0, "attempt $ipconfig_attempt: failed to run ipconfig, exit status: $ipconfig_exit_status, output:\n@{$ipconfig_output}");
-			}
-			else {
-				notify($ERRORS{'WARNING'}, 0, "attempt $ipconfig_attempt: failed to run the SSH command to run ipconfig");
-			}
-			
-			if ($ipconfig_attempt >= $ipconfig_attempt_limit) {
-				notify($ERRORS{'WARNING'}, 0, "failed to get network configuration, made $ipconfig_attempt attempts to run ipconfig");
-				return;
-			}
-			
-			sleep 2;
-		}
-	
-		my $interface_name;
-		my $previous_ip = 0;
-		my $setting;
-		
-		for my $line (@{$ipconfig_output}) {
-			# Find beginning of interface section
-			if ($line =~ /\A[^\s].*adapter (.*):\s*\Z/i) {
-				# Get the interface name
-				$interface_name = $1;
-				notify($ERRORS{'DEBUG'}, 0, "found interface: $interface_name");
-				next;
-			}
-			
-			# Skip line if interface hasn't been found yet
-			next if !$interface_name;
-			
-			# Check if the interface should be ignored based on the name or description
-			if ($interface_name =~ /loopback|vmnet|afs|tunnel|6to4|isatap|teredo/i) {
-				next;
-			}
-			
-			# Take apart the line finding the setting name and value with a hideous regex
-			my ($line_setting, $value) = $line =~ /^[ ]{1,8}(\w[^\.]*\w)?[ \.:]+([^\r\n]*)/i;
-			
-			# If the setting was found in the line, use it
-			# Otherwise, use the last found setting
-			$setting = $line_setting if $line_setting;
-			
-			# Skip line if value wasn't found
-			next if !$value;
-			
-			# Normalize the setting format, make it lowercase, convert dashes and spaces to underscores
-			$setting = lc($setting);
-			$setting =~ s/[ -]/_/g;
-			
-			# Windows 6.x includes a version indicator in IP address lines such as IPv4, remove this
-			$setting =~ s/ip(v\d)?_address/ip_address/;
-			
-			# Autoconfiguration ip address will be displayed as "Autoconfiguration IP Address. . . : 169.x.x.x"
-			$setting =~ s/autoconfiguration_ip/ip/;
-			
-			# Remove the trailing s from dns_servers
-			$setting =~ s/dns_servers/dns_server/;
-			
-			# Check which setting was found and add to hash
-			if ($setting =~ /dns_servers/) {
-				push(@{$network_configuration{$interface_name}{$setting}}, $value);
-				#notify($ERRORS{'OK'}, 0, "$interface_name:$setting = @{$network_configuration{$interface_name}{$setting}}");
-			}
-			elsif ($setting =~ /ip_address/) {
-				$value =~ s/[^\.\d]//g;
-				$network_configuration{$interface_name}{$setting}{$value} = '';
-				$previous_ip = $value;
-			}
-			elsif ($setting =~ /subnet_mask/) {
-				$network_configuration{$interface_name}{ip_address}{$previous_ip} = $value;
-			}
-			elsif ($setting) {
-				$network_configuration{$interface_name}{$setting} = $value;
-			}
-		}
-		notify($ERRORS{'DEBUG'}, 0, 'saving network configuration in $self->{network_configuration}');
-		$self->{network_configuration} = \%network_configuration;
-	}
-	else {
-		#notify($ERRORS{'DEBUG'}, 0, "network configuration has already been retrieved");
-		%network_configuration = %{$self->{network_configuration}};
-	}
-	
-	# 'public' or 'private' wasn't specified, return all network interface information
-	if (!$network_type) {
-		notify($ERRORS{'DEBUG'}, 0, "retrieved network configuration:\n" . format_data(\%network_configuration));
-		return \%network_configuration;
-	}
-	
-	my $private_is_public = is_public_ip_address($computer_private_ip_address);
-	
-	my $public_interface_name;
-	my $private_interface_name;
-	
-	# Loop through all of the network interfaces found
-	INTERFACE: foreach my $interface_name (sort keys %network_configuration) {
-		my @ip_addresses  = keys %{$network_configuration{$interface_name}{ip_address}};
-		my $description = $network_configuration{$interface_name}{description};
-		$description = '' if !$description;
+	my $network_configuration;
 
-		# Make sure an IP address was found
-		if (!@ip_addresses) {
-			notify($ERRORS{'DEBUG'}, 0, "interface does not have an ip address: $interface_name");
+	notify($ERRORS{'DEBUG'}, 0, "attempting to retrieve network configuration information from $computer_node_name");
+	
+	# Run ipconfig /all, try twice in case it fails the first time
+	my $ipconfig_attempt = 0;
+	my $ipconfig_attempt_limit = 2;
+	
+	my $ipconfig_command = $system32_path . '/ipconfig.exe /all';
+	my ($ipconfig_exit_status, $ipconfig_output);
+	while (++$ipconfig_attempt) {
+		($ipconfig_exit_status, $ipconfig_output) = $self->execute($ipconfig_command);
+		if (defined($ipconfig_exit_status) && $ipconfig_exit_status == 0) {
+			last;
+		}
+		elsif (defined($ipconfig_exit_status)) {
+			notify($ERRORS{'WARNING'}, 0, "attempt $ipconfig_attempt: failed to run ipconfig, exit status: $ipconfig_exit_status, output:\n@{$ipconfig_output}");
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "attempt $ipconfig_attempt: failed to run the SSH command to run ipconfig");
+		}
+		
+		if ($ipconfig_attempt >= $ipconfig_attempt_limit) {
+			notify($ERRORS{'WARNING'}, 0, "failed to get network configuration, made $ipconfig_attempt attempts to run ipconfig");
+			return;
+		}
+		
+		sleep 2;
+	}
+
+	my $interface_name;
+	my $previous_ip = 0;
+	my $setting;
+	
+	for my $line (@{$ipconfig_output}) {
+		# Find beginning of interface section
+		if ($line =~ /\A[^\s].*adapter (.*):\s*\Z/i) {
+			# Get the interface name
+			$interface_name = $1;
+			notify($ERRORS{'DEBUG'}, 0, "found interface: $interface_name");
 			next;
 		}
 		
-		# Check if interface has private IP address assigned to it
-		if (grep { $_ eq $computer_private_ip_address } @ip_addresses) {
-			# If private interface information was requested, return a hash containing only this interface
-			notify($ERRORS{'DEBUG'}, 0, "private interface found: $interface_name, description: $description, address(es): " . join (", ", @ip_addresses));
-			$private_interface_name = $interface_name;
-			if ($network_type =~ /private/i) {
-				last INTERFACE;
-			}
-			else {
-				next INTERFACE;
-			}
-		}
-		elsif ($network_type =~ /private/i) {
-			notify($ERRORS{'DEBUG'}, 0, "interface is not assigned the private IP address: $interface_name (" . join (", ", @ip_addresses) . ")");
-			next INTERFACE;
-		}
+		# Skip line if interface hasn't been found yet
+		next if !$interface_name;
 		
-		# Check if the interface should be ignored based on the name or description
-		if ($interface_name =~ /(loopback|vmnet|afs|tunnel|6to4|isatap|teredo)/i) {
-			notify($ERRORS{'DEBUG'}, 0, "interface '$interface_name' ignored because name contains '$1', address(es): " . join (", ", @ip_addresses));
-			next INTERFACE;
-		}
-		elsif ($description =~ /(loopback|virtual|afs|tunnel|pseudo|6to4|isatap)/i) {
-			notify($ERRORS{'DEBUG'}, 0, "interface '$interface_name' ignored because description contains '$1': '$description', address(es): " . join (", ", @ip_addresses));
-			next INTERFACE;
-		}
+		## Check if the interface should be ignored based on the name or description
+		#if ($interface_name =~ /loopback|vmnet|afs|tunnel|6to4|isatap|teredo/i) {
+		#	next;
+		#}
 		
-		# Loop through the IP addresses for the interface
-		# Once a public address is found, return the data for that interface
-		IP_ADDRESS: for my $ip_address (@ip_addresses) {
-			my $is_public = is_public_ip_address($ip_address);
-			my $default_gateway = $network_configuration{$interface_name}{default_gateway};
-			
-			if ($is_public) {
-				if ($default_gateway) {
-					notify($ERRORS{'DEBUG'}, 0, "public interface found with default gateway: $interface_name, address(es): " . join (", ", @ip_addresses) . ", default gateway: $default_gateway");
-					$public_interface_name = $interface_name;
-					last INTERFACE;
-				}
-				else {
-					notify($ERRORS{'DEBUG'}, 0, "interface found with public address but default gateway is not set: $interface_name, address(es): " . join (", ", @ip_addresses));
-					$public_interface_name = $interface_name;
-				}
-			}
-			else {
-				notify($ERRORS{'DEBUG'}, 0, "interface found with non-public address not matching private address for reservation: $interface_name, address(es): " . join (", ", @ip_addresses));
-				
-				if ($private_is_public) {
-					notify($ERRORS{'DEBUG'}, 0, "private interface IP address is public, this will be returned unless another interface with a public IP address is found");
-					next;
-				}
-				elsif ($public_interface_name) {
-					notify($ERRORS{'DEBUG'}, 0, "already found another interface with a non-public address not matching private address for reservation, the one previously found will be used if a public address isn't found");
-					next;
-				}
-				else {
-					notify($ERRORS{'DEBUG'}, 0, "interface will be returned if another with a public address isn't found");
-					$public_interface_name = $interface_name;
-				}
-			}
-			
-		}
-	}
-	
-	if ($network_type =~ /private/i) {
-		if ($private_interface_name) {
-			return {$private_interface_name => $network_configuration{$private_interface_name}};
-		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "did not find an interface using the private IP address for the reservation: $computer_private_ip_address\n" . format_data(\%network_configuration));
-			return;
-		}
-	}
-	else {
-		if ($public_interface_name) {
-			return {$public_interface_name => $network_configuration{$public_interface_name}};
-		}
-		elsif ($private_interface_name) {
-			notify($ERRORS{'DEBUG'}, 0, "did not find a separate public interface, assuming a single interface is being used, returning private interface configuration: '$private_interface_name'");
-			return {$private_interface_name => $network_configuration{$private_interface_name}};
-		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "failed to find a public interface:\n" . format_data(\%network_configuration));
-			return;
-		}
-	}
-} ## end sub get_network_configuration
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 get_private_interface_name
-
- Parameters  : 
- Returns     : 
- Description : 
-
-=cut
-
-sub get_private_interface_name {
-	my $self = shift;
-	if (ref($self) !~ /windows/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-
-	# Make sure network configuration was retrieved
-	my $network_configuration = $self->get_network_configuration('private');
-	if (!$network_configuration) {
-		notify($ERRORS{'WARNING'}, 0, "unable to retrieve network configuration");
-		return;
-	}
-	
-	my $interface_name = (keys(%{$network_configuration}))[0];
-	notify($ERRORS{'DEBUG'}, 0, "returning private interface name: $interface_name");
-	
-	return $interface_name;
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 get_public_interface_name
-
- Parameters  : 
- Returns     : 
- Description : 
-
-=cut
-
-sub get_public_interface_name {
-	my $self = shift;
-	if (ref($self) !~ /windows/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-
-	# Make sure network configuration was retrieved
-	my $network_configuration = $self->get_network_configuration('public');
-	if (!$network_configuration) {
-		notify($ERRORS{'WARNING'}, 0, "unable to retrieve network configuration");
-		return;
-	}
-	
-	my $interface_name = (keys(%{$network_configuration}))[0];
-	notify($ERRORS{'DEBUG'}, 0, "returning public interface name: $interface_name");
-	
-	return $interface_name;
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 get_private_mac_address
-
- Parameters  : 
- Returns     : 
- Description : 
-
-=cut
-
-sub get_private_mac_address {
-	my $self = shift;
-	if (ref($self) !~ /windows/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-
-	# Make sure network configuration was retrieved
-	my $network_configuration = $self->get_network_configuration('private');
-	if (!$network_configuration) {
-		notify($ERRORS{'WARNING'}, 0, "unable to retrieve network configuration");
-		return;
-	}
-
-	my $interface_name = (keys(%{$network_configuration}))[0];
-	my $mac_address = $network_configuration->{$interface_name}{physical_address};
-	notify($ERRORS{'DEBUG'}, 0, "returning private MAC address: $mac_address");
-	return $mac_address;
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 get_public_mac_address
-
- Parameters  : 
- Returns     : 
- Description : 
-
-=cut
-
-sub get_public_mac_address {
-	my $self = shift;
-	if (ref($self) !~ /windows/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-
-	# Make sure network configuration was retrieved
-	my $network_configuration = $self->get_network_configuration('public');
-	if (!$network_configuration) {
-		notify($ERRORS{'WARNING'}, 0, "unable to retrieve network configuration");
-		return;
-	}
-
-	my $interface_name = (keys(%{$network_configuration}))[0];
-	my $mac_address = $network_configuration->{$interface_name}{physical_address};
-	notify($ERRORS{'DEBUG'}, 0, "returning public MAC address: $mac_address");
-	return $mac_address;
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 get_private_ip_address
-
- Parameters  : 
- Returns     : 
- Description : 
-
-=cut
-
-sub get_private_ip_address {
-	my $self = shift;
-	if (ref($self) !~ /windows/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-
-	# Make sure network configuration was retrieved
-	my $network_configuration = $self->get_network_configuration('private');
-	if (!$network_configuration) {
-		notify($ERRORS{'WARNING'}, 0, "unable to retrieve network configuration");
-		return;
-	}
-
-	my $interface_name = (keys(%{$network_configuration}))[0];
-	my $ip_address_config = $network_configuration->{$interface_name}{ip_address};
-	my $ip_address = (keys(%$ip_address_config))[0];
-	notify($ERRORS{'DEBUG'}, 0, "returning private IP address: $ip_address");
-	return $ip_address;
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 get_public_ip_address
-
- Parameters  : none
- Returns     : string
- Description : Retrieves the public IP address assigned to the computer. If an
-					auto-generated public IP address is detected (169.254.x.x or
-					0.0.0.0), the public interface is using DHCP, and the management
-					node is configured to use DHCP, an attempt will be made to call
-					'ipconfig /renew' to obtain a valid public IP address.
-
-=cut
-
-sub get_public_ip_address {
-	my $self = shift;
-	if (ref($self) !~ /windows/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-	
-	my $argument = shift;
-	
-	# Make sure network configuration was retrieved
-	my $network_configuration = $self->get_network_configuration('public');
-	if (!$network_configuration) {
-		notify($ERRORS{'WARNING'}, 0, "unable to retrieve network configuration");
-		return;
-	}
-	
-	my $public_ip_configuration = $self->data->get_management_node_public_ip_configuration();
-	
-	my $interface_name = (keys(%{$network_configuration}))[0];
-	
-	my $ip_address_config = $network_configuration->{$interface_name}{ip_address};
-	
-	my $ip_address;
-	
-	# If multiple IP addresses were found, loop through them until a public IP address was found
-	# If none of the addresses are public, use the first one found
-	for my $ip_address_check (keys(%$ip_address_config)) {
-		if (is_public_ip_address($ip_address_check)) {
-			$ip_address = $ip_address_check;
-			last;
-		}
-		elsif (!$ip_address) {
-			# Only set $ip_address for the first non-public address found
-			$ip_address = $ip_address_check;
-		}
-	}
-	
-	my $dhcp_enabled = $network_configuration->{$interface_name}{dhcp_enabled};
-	
-	# Check if DHCP is to be used and an auto-generated IP address is detected
-	if ($public_ip_configuration =~ /dhcp/i && $dhcp_enabled =~ /yes/i && $ip_address =~ /^(169\.254\.|0\.0\.0\.0)/) {
-		# Check if this is the 2nd attempt to retrieve the public IP address
-		# This subroutine calls itself with a 'renewed' argument if an auto-generated IP address was detected and 'ipconfig /renew' was called
-		if ($argument && $argument eq 'renewed') {
-			notify($ERRORS{'WARNING'}, 0, "unable to retrieve public IP address, public interface '$interface_name' is still assigned an auto-generated IP address after attempting 'ipconfig /renew \"$interface_name\"'");
-			return;
-		}
+		# Take apart the line finding the setting name and value with a hideous regex
+		my ($line_setting, $value) = $line =~ /^[ ]{1,8}(\w[^\.]*\w)?[ \.:]+([^\r\n]*)/i;
 		
-		notify($ERRORS{'WARNING'}, 0, "public interface '$interface_name' has DHCP enabled and is assigned an auto-generated IP address: $ip_address, management node DHCP configuration: '$public_ip_configuration'");
+		# If the setting was found in the line, use it
+		# Otherwise, use the last found setting
+		$setting = $line_setting if $line_setting;
 		
-		# Attempt to renew the IP address
-		if (!$self->ipconfig_renew($interface_name)) {
-			notify($ERRORS{'WARNING'}, 0, "unable to retrieve public IP address, failed to renew the IP address for the public interface '$interface_name'");
-			return;
-		}
+		# Skip line if value wasn't found
+		next if !$value;
 		
-		# Call this subroutine again, pass the 'renewed' argument so that 'ipconfig /renew' isn't called again (prevent infinite loop)
-		return $self->get_public_ip_address('renewed');
-	}
-	
-	notify($ERRORS{'DEBUG'}, 0, "returning public IP address: $ip_address");
-	return $ip_address;
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 get_public_default_gateway
-
- Parameters  : None
- Returns     : If successful: string containing IP address
-               If failed: false
- Description : Returns the default gateway currently configured for the
-               computer's public interface.
-
-=cut
-
-sub get_public_default_gateway {
-	my $self = shift;
-	if (ref($self) !~ /windows/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-	
-	my $computer_nodename = $self->data->get_computer_node_name() || 'node';
-	
-	my $default_gateway;
-	
-	# Check the management node's DHCP IP configuration mode (static or dynamic)
-	my $ip_configuration = $self->data->get_management_node_public_ip_configuration();
-	notify($ERRORS{'DEBUG'}, 0, "IP configuration mode in use: $ip_configuration");
-	if ($ip_configuration !~ /static/i) {
-		# Management node is using dynamic public IP addresses
-		# Retrieve public network configuration currently in use on computer
-		my $network_configuration = $self->get_network_configuration('public');
-		if ($network_configuration) {
-			# Get the default gateway out of the network configuration currently being used
-			my $interface_name = (keys(%{$network_configuration}))[0];
-			$default_gateway = $network_configuration->{$interface_name}{default_gateway};
-			if ($default_gateway) {
-				notify($ERRORS{'DEBUG'}, 0, "returning default gateway currently in use on $computer_nodename: $default_gateway");
-				return $default_gateway;
-			}
-			else {
-				notify($ERRORS{'WARNING'}, 0, "unable to determine default gateway currently in use on $computer_nodename");
-			}
+		# Normalize the setting format, make it lowercase, convert dashes and spaces to underscores
+		$setting = lc($setting);
+		$setting =~ s/[ -]/_/g;
+		
+		# Windows 6.x includes a version indicator in IP address lines such as IPv4, remove this
+		$setting =~ s/ip(v\d)?_address/ip_address/;
+		
+		# Autoconfiguration ip address will be displayed as "Autoconfiguration IP Address. . . : 169.x.x.x"
+		$setting =~ s/autoconfiguration_ip/ip/;
+		
+		# Remove the trailing s from dns_servers
+		$setting =~ s/dns_servers/dns_server/;
+		
+		# Check which setting was found and add to hash
+		if ($setting =~ /dns_servers/) {
+			push(@{$network_configuration->{$interface_name}{$setting}}, $value);
+			#notify($ERRORS{'OK'}, 0, "$interface_name:$setting = @{$network_configuration->{$interface_name}{$setting}}");
 		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "unable to retrieve public network configuration currently in use on $computer_nodename");
+		elsif ($setting =~ /ip_address/) {
+			$value =~ s/[^\.\d]//g;
+			$network_configuration->{$interface_name}{$setting}{$value} = '';
+			$previous_ip = $value;
+		}
+		elsif ($setting =~ /subnet_mask/) {
+			$network_configuration->{$interface_name}{ip_address}{$previous_ip} = $value;
+		}
+		elsif ($setting =~ /physical_address/) {
+			# Change '-' characters in MAC address to ':' to be consistent with Linux
+			$value =~ s/-/:/g;
+			$network_configuration->{$interface_name}{physical_address} = $value;
+		}
+		elsif ($setting) {
+			$network_configuration->{$interface_name}{$setting} = $value;
 		}
 	}
 	
-	# Static addresses used, get default gateway address configured for management node
-	$default_gateway = $self->data->get_management_node_public_default_gateway();
-	
-	# Make sure default gateway was retrieved
-	if ($default_gateway) {
-		notify($ERRORS{'DEBUG'}, 0, "returning management node's default gateway address: $default_gateway");
-		return $default_gateway;
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "unable to retrieve management node's default gateway address");
-		return;
-	}
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 get_private_subnet_mask
-
- Parameters  : 
- Returns     : 
- Description : 
-
-=cut
-
-sub get_private_subnet_mask {
-	my $self = shift;
-	if (ref($self) !~ /windows/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-		
-	# Get private network configuration
-	my $network_configuration = $self->get_network_configuration('private');
-	if (!$network_configuration) {
-		notify($ERRORS{'WARNING'}, 0, "unable to retrieve network configuration");
-		return;
-	}
-	
-	my $interface_name = (keys(%{$network_configuration}))[0];	
-	my $ip_addresses = $network_configuration->{$interface_name}{ip_address};
-	my $ip_address = (keys(%$ip_addresses))[0];
-	my $subnet_mask = $ip_addresses->{$ip_address};
-	
-	if (!$subnet_mask) {
-		notify($ERRORS{'WARNING'}, 0, "unable to determine private subnet mask, network configuration:\n" . format_data($network_configuration));
-		return;
-	}
-	
-	notify($ERRORS{'DEBUG'}, 0, "returning private subnet mask: $subnet_mask");
-	return $subnet_mask;
+	$self->{network_configuration} = $network_configuration;
+	notify($ERRORS{'DEBUG'}, 0, "retrieved network configuration:\n" . format_data($self->{network_configuration}));
+	return $self->{network_configuration};
 }
 
 #/////////////////////////////////////////////////////////////////////////////

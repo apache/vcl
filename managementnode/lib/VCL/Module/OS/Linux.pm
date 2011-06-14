@@ -2559,40 +2559,17 @@ EOF
 
 =head2 get_network_configuration
 
- Parameters  : $network_type (optional)
+ Parameters  : 
  Returns     : hash reference
  Description : Retrieves the network configuration on the Linux computer and
-					constructs a hash. A $network_type argument can be supplied
-					containing either 'private' or 'public'. If the $network_type
-					argument is not supplied, the hash keys are the network interface
-					names and the hash reference returned is formatted as follows:
-					|--%{eth0}
-					   |--%{eth0}{ip_address}
-					      |--{eth0}{ip_address}{10.10.4.35} = '255.255.240.0'
-					   |--{eth0}{name} = 'eth0'
-					   |--{eth0}{physical_address} = '00:50:56:08:00:f8'
-					|--%{eth1}
-					   |--%{eth1}{ip_address}
-					      |--{eth1}{ip_address}{152.1.14.200} = '255.255.255.0'
-					   |--{eth1}{name} = 'eth1'
-					   |--{eth1}{physical_address} = '00:50:56:08:00:f9'
-					|--%{eth2}
-					   |--%{eth2}{ip_address}
-					      |--{eth2}{ip_address}{10.1.2.33} = '255.255.240.0'
-					   |--{eth2}{name} = 'eth2'
-					   |--{eth2}{physical_address} = '00:0c:29:ba:c1:77'
-					|--%{lo}
-					   |--%{lo}{ip_address}
-					      |--{lo}{ip_address}{127.0.0.1} = '255.0.0.0'
-					   |--{lo}{name} = 'lo'
-						
-					If the $network_type argument is supplied, a hash reference is
-					returned containing only the configuration for the specified
-					interface:
-					|--%{ip_address}
-						|--{ip_address}{10.1.2.33} = '255.255.240.0'
-					|--{name} = 'eth2'
-					|--{physical_address} = '00:0c:29:ba:c1:77'
+               constructs a hash. The hash reference returned is formatted as
+               follows:
+               |--%{eth0}
+					   |--%{eth0}{default_gateway} '10.10.4.1'
+                  |--%{eth0}{ip_address}
+                     |--{eth0}{ip_address}{10.10.4.3} = '255.255.240.0'
+                  |--{eth0}{name} = 'eth0'
+                  |--{eth0}{physical_address} = '00:50:56:08:00:f8'
 
 =cut
 
@@ -2603,186 +2580,75 @@ sub get_network_configuration {
 		return;
 	}
 	
-	# Check if a 'public' or 'private' network type argument was specified
-	my $network_type = lc(shift());
-	if ($network_type && $network_type !~ /(public|private)/i) {
-		notify($ERRORS{'WARNING'}, 0, "network type argument can only be 'public' or 'private'");
-		return;
-	}
-	
-	my %network_configuration;
-	
 	# Check if the network configuration has already been retrieved and saved in this object
-	if (!$self->{network_configuration}) {
-		# Run ipconfig
-		my $command = "ifconfig -a";
-		my ($exit_status, $output) = $self->execute($command);
-		if (!defined($output)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to run command to retrieve network configuration: $command");
-			return;
-		}
-		
-		# Loop through the ifconfig output lines
-		my $interface_name;
-		for my $line (@$output) {
-			# Extract the interface name from the Link line:
-			# eth2      Link encap:Ethernet  HWaddr 00:0C:29:78:77:AB
-			if ($line =~ /^([^\s]+).*Link/) {
-				$interface_name = $1;
-				$network_configuration{$interface_name}{name} = $interface_name;
-			}
-			
-			# Skip to the next line if the interface name has not been determined yet
-			next if !$interface_name;
-			
-			# Parse the HWaddr line:
-			# eth2      Link encap:Ethernet  HWaddr 00:0C:29:78:77:AB
-			if ($line =~ /HWaddr\s+([\w:]+)/) {
-				$network_configuration{$interface_name}{physical_address} = lc($1);
-			}
-			
-			# Parse the IP address line:
-			# inet addr:10.10.4.35  Bcast:10.10.15.255  Mask:255.255.240.0
-			if ($line =~ /inet addr:([\d\.]+).*Mask:([\d\.]+)/) {
-				$network_configuration{$interface_name}{ip_address}{$1} = $2;
-			}
-		}
-		
-		$self->{network_configuration} = \%network_configuration;
-		notify($ERRORS{'DEBUG'}, 0, "retrieved network configuration:\n" . format_data(\%network_configuration));
-	}
-	else {
-		notify($ERRORS{'DEBUG'}, 0, "network configuration has already been retrieved");
-		%network_configuration = %{$self->{network_configuration}};
+	return $self->{network_configuration} if ($self->{network_configuration});
+	
+	# Run ipconfig
+	my $ifconfig_command = "/sbin/ifconfig -a";
+	my ($ifconfig_exit_status, $ifconfig_output) = $self->execute($ifconfig_command);
+	if (!defined($ifconfig_output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run command to retrieve network configuration: $ifconfig_command");
+		return;
 	}
 	
-	# 'public' or 'private' wasn't specified, return all network interface information
-	if (!$network_type) {
-		return \%network_configuration;
-	}
-	
-	# Determine either the private or public interface name based on the $network_type argument
+	# Loop through the ifconfig output lines
+	my $network_configuration;
 	my $interface_name;
-	if ($network_type =~ /private/i) {
-		$interface_name = $self->get_private_interface_name();
+	for my $ifconfig_line (@$ifconfig_output) {
+		# Extract the interface name from the Link line:
+		# eth2      Link encap:Ethernet  HWaddr 00:0C:29:78:77:AB
+		if ($ifconfig_line =~ /^([^\s]+).*Link/) {
+			$interface_name = $1;
+			$network_configuration->{$interface_name}{name} = $interface_name;
+		}
+		
+		# Skip to the next line if the interface name has not been determined yet
+		next if !$interface_name;
+		
+		# Parse the HWaddr line:
+		# eth2      Link encap:Ethernet  HWaddr 00:0C:29:78:77:AB
+		if ($ifconfig_line =~ /HWaddr\s+([\w:]+)/) {
+			$network_configuration->{$interface_name}{physical_address} = lc($1);
+		}
+		
+		# Parse the IP address line:
+		# inet addr:10.10.4.35  Bcast:10.10.15.255  Mask:255.255.240.0
+		if ($ifconfig_line =~ /inet addr:([\d\.]+)\s+Bcast:([\d\.]+)\s+Mask:([\d\.]+)/) {
+			$network_configuration->{$interface_name}{ip_address}{$1} = $3;
+			$network_configuration->{$interface_name}{broadcast_address} = $2;
+		}
 	}
-	else {
-		$interface_name = $self->get_public_interface_name();
-	}
-	if (!$interface_name) {
-		notify($ERRORS{'WARNING'}, 0, "failed to determine the $network_type interface name");
+	
+	# Run route
+	my $route_command = "/sbin/route -n";
+	my ($route_exit_status, $route_output) = $self->execute($route_command);
+	if (!defined($route_output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run command to retrieve routing configuration: $route_command");
 		return;
 	}
 	
-	# Extract the network configuration specific to the public or private interface
-	my $return_network_configuration = $network_configuration{$interface_name};
-	if (!$return_network_configuration) {
-		notify($ERRORS{'WARNING'}, 0, "network configuration does not exist for interface: $interface_name, network configuration:\n" . format_data(\%network_configuration));
-		return;
-	}
-	notify($ERRORS{'DEBUG'}, 0, "returning $network_type network configuration");
-	return $return_network_configuration;
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 get_private_mac_address
-
- Parameters  : none
- Returns     : string
- Description : Returns the MAC address of the interface assigned the private IP
-               address.
-
-=cut
-
-sub get_private_mac_address {
-	my $self = shift;
-	if (ref($self) !~ /VCL::Module/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
+	# Loop through the route output lines
+	for my $route_line (@$route_output) {
+		my ($default_gateway, $interface_name) = $route_line =~ /^0\.0\.0\.0\s+([\d\.]+).*\s([^\s]+)$/g;
+		
+		if (!defined($interface_name) || !defined($default_gateway)) {
+			notify($ERRORS{'DEBUG'}, 0, "route output line does not contain a default gateway: '$route_line'");
+		}
+		elsif (!defined($network_configuration->{$interface_name})) {
+			notify($ERRORS{'WARNING'}, 0, "found default gateway for '$interface_name' interface but the network configuration for '$interface_name' was not previously retrieved, route output:\n" . join("\n", @$route_output) . "\nnetwork configuation:\n" . format_data($network_configuration));
+		}
+		elsif (defined($network_configuration->{$interface_name}{default_gateway})) {
+			notify($ERRORS{'WARNING'}, 0, "multiple default gateway are configured for '$interface_name' interface, route output:\n" . join("\n", @$route_output));
+		}
+		else {
+			$network_configuration->{$interface_name}{default_gateway} = $default_gateway;
+			notify($ERRORS{'DEBUG'}, 0, "found default route configured for '$interface_name' interface: $default_gateway");
+		}
 	}
 	
-	my $private_network_configuration = $self->get_network_configuration('private');
-	if (!$private_network_configuration) {
-		notify($ERRORS{'WARNING'}, 0, "failed to retrieve private network configuration");
-		return;
-	}
-
-	my $private_mac_address = $private_network_configuration->{physical_address};
-	if (!$private_mac_address) {
-		notify($ERRORS{'WARNING'}, 0, "'physical_address' key is not set in the private network configuration hash:\n" . format_data($private_network_configuration));
-		return;
-	}
-	
-	notify($ERRORS{'DEBUG'}, 0, "retrieved private MAC address: $private_mac_address");
-	return $private_mac_address;
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 get_public_mac_address
-
- Parameters  : none
- Returns     : string
- Description : Returns the MAC address of the interface assigned the public IP
-               address.
-
-=cut
-
-sub get_public_mac_address {
-	my $self = shift;
-	if (ref($self) !~ /VCL::Module/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-	
-	my $public_network_configuration = $self->get_network_configuration('public');
-	if (!$public_network_configuration) {
-		notify($ERRORS{'WARNING'}, 0, "failed to retrieve public network configuration");
-		return;
-	}
-
-	my $public_mac_address = $public_network_configuration->{physical_address};
-	if (!$public_mac_address) {
-		notify($ERRORS{'WARNING'}, 0, "'physical_address' key is not set in the public network configuration hash:\n" . format_data($public_network_configuration));
-		return;
-	}
-	
-	notify($ERRORS{'DEBUG'}, 0, "retrieved public MAC address: $public_mac_address");
-	return $public_mac_address;
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 get_public_ip_address
-
- Parameters  : none
- Returns     : string
- Description : Returns the public IP address assigned to the computer.
-
-=cut
-
-sub get_public_ip_address {
-	my $self = shift;
-	if (ref($self) !~ /VCL::Module/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-	
-	my $public_network_configuration = $self->get_network_configuration('public');
-	if (!$public_network_configuration) {
-		notify($ERRORS{'WARNING'}, 0, "failed to retrieve public network configuration");
-		return;
-	}
-	
-	my $public_ip_address = (keys %{$public_network_configuration->{ip_address}})[0];
-	if (!$public_ip_address) {
-		notify($ERRORS{'WARNING'}, 0, "'ip_address' key is not set in the public network configuration hash:\n" . format_data($public_network_configuration));
-		return;
-	}
-	
-	notify($ERRORS{'DEBUG'}, 0, "retrieved public IP address: $public_ip_address");
-	return $public_ip_address;
+	$self->{network_configuration} = $network_configuration;
+	notify($ERRORS{'DEBUG'}, 0, "retrieved network configuration:\n" . format_data($self->{network_configuration}));
+	return $self->{network_configuration};
 }
 
 #/////////////////////////////////////////////////////////////////////////////
