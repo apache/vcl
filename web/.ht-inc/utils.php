@@ -19,6 +19,7 @@
 require_once(".ht-inc/secrets.php");
 @include_once("itecsauth/itecsauth.php");
 require_once(".ht-inc/authentication.php");
+require_once(".ht-inc/phpseclib/Crypt/AES.php");
 if(file_exists(".ht-inc/vcldocs.php"))
 	require_once(".ht-inc/vcldocs.php");
 
@@ -2155,13 +2156,19 @@ function getKey($data) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function encryptData($data) {
-	global $mcryptkey, $mcryptiv;
+	/*global $mcryptkey, $mcryptiv;
 	if(! $data)
 		return false;
 
 	$cryptdata = mcrypt_encrypt(MCRYPT_BLOWFISH, $mcryptkey, $data, MCRYPT_MODE_CBC, $mcryptiv);
+	return trim(base64_encode($cryptdata));*/
+	global $cryptkey;
+	if(! $data)
+		return false;
+	$aes = new Crypt_AES();
+	$aes->setKey($cryptkey);
+	$cryptdata = $aes->encrypt($data);
 	return trim(base64_encode($cryptdata));
-	#return base64_encode($cryptdata);
 }
  
 ////////////////////////////////////////////////////////////////////////////////
@@ -2176,12 +2183,20 @@ function encryptData($data) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function decryptData($data) {
-	global $mcryptkey, $mcryptiv;
+	/*global $mcryptkey, $mcryptiv;
 	if(! $data)
 		return false;
 
 	$cryptdata = base64_decode($data);
 	$decryptdata = mcrypt_decrypt(MCRYPT_BLOWFISH, $mcryptkey, $cryptdata, MCRYPT_MODE_CBC, $mcryptiv);
+	return trim($decryptdata);*/
+	global $cryptkey;
+	if(! $data)
+		return false;
+	$aes = new Crypt_AES();
+	$aes->setKey($cryptkey);
+	$cryptdata = base64_decode($data);
+	$decryptdata = $aes->decrypt($cryptdata);
 	return trim($decryptdata);
 }
 
@@ -3505,7 +3520,8 @@ function getBlockAllocationIDs($user) {
 ////////////////////////////////////////////////////////////////////////////////
 ///
 /// \fn isAvailable($images, $imageid, $imagerevisionid, $start, $end,
-///                 $requestid, $userid, $ignoreprivileges, $forimaging)
+///                 $requestid, $userid, $ignoreprivileges, $forimaging, $ip,
+///                 $mac)
 ///
 /// \param $images - array as returned from getImages
 /// \param $imageid - imageid from the image table
@@ -3522,6 +3538,10 @@ function getBlockAllocationIDs($user) {
 /// and that $userid has been granted access to through the privilege tree
 /// \param $forimaging - (optional, default=0) - 0 if normal reservation, 1 if
 /// an imaging reservation
+/// \param $ip - (optional, default='') ip address to be assigned; assumed to
+/// be a server profile reservation if defined
+/// \param $mac - (optional, default='') mac address to be assigned; assumed to
+/// be a server profile reservation if defined
 ///
 /// \return -1 if $imageid is limited in the number of concurrent reservations
 ///         available, and the limit has been reached
@@ -3532,7 +3552,8 @@ function getBlockAllocationIDs($user) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function isAvailable($images, $imageid, $imagerevisionid, $start, $end,
-                  $requestid=0, $userid=0, $ignoreprivileges=0, $forimaging=0) {
+                     $requestid=0, $userid=0, $ignoreprivileges=0,
+                     $forimaging=0, $ip='', $mac='') {
 	global $requestInfo;
 	$requestInfo["start"] = $start;
 	$requestInfo["end"] = $end;
@@ -3605,10 +3626,35 @@ function isAvailable($images, $imageid, $imagerevisionid, $start, $end,
 	if(! semLock())
 		abort(3);
 
-	if($requestid)
-		$requestData = getRequestInfo($requestid);
 	$startstamp = unixToDatetime($start);
 	$endstamp = unixToDatetime($end + 900);
+
+	# check for overlapping use of mac or ip
+	if(! empty($mac) || ! empty($ip)) {
+		$query = "SELECT rq.id "
+		       . "FROM reservation rs, "
+		       .      "request rq, "
+		       .      "serverrequest sr "
+		       . "WHERE '$startstamp' < (rq.end + INTERVAL 900 SECOND) AND "
+		       .       "'$endstamp' > rq.start AND "
+		       .       "sr.requestid = rq.id AND "
+		       .       "rs.requestid = rq.id AND "
+		       .       "(sr.fixedIP = '$ip' OR "
+		       .       "sr.fixedMAC = '$mac') AND "
+		       .       "rq.stateid NOT IN (1,5,11,12) ";
+		if($requestid)
+			$query .=   "AND rq.id != $requestid ";
+		$query .= "LIMIT 1";
+		$qh = doQuery($query, 101);
+		if(mysql_num_rows($qh)) {
+			semUnlock();
+			return 0;
+		}
+	}
+
+	if($requestid)
+		$requestData = getRequestInfo($requestid);
+
 	$vmhostcheckdone = 0;
 	foreach($requestInfo["images"] as $key => $imageid) {
 		# check for max concurrent usage of image
@@ -4469,7 +4515,9 @@ function findManagementNode($compid, $start, $nowfuture) {
 /// \b forimaging - 0 if request is normal, 1 if it is for imaging\n
 /// \b serverrequest - 0 if request is normal, 1 if it is a server request\n
 /// \b admingroupid - id of admin user group if server request\n
-/// \b logingroupid - id of login user group if server request\n\n
+/// \b logingroupid - id of login user group if server request\n
+/// \b fixedIP - possible fixed IP address if server request\n
+/// \b fixedMAC - possible fixed MAC address if server request\n\n
 /// an array of reservations associated with the request whose key is
 /// 'reservations', each with the following items:\n
 /// \b imageid - id of the image\n
@@ -4560,7 +4608,9 @@ function getRequestInfo($id, $returnNULL=0) {
 		array_push($data["reservations"], $row);
 	$query = "SELECT id, "
 	       .        "admingroupid, "
-	       .        "logingroupid "
+	       .        "logingroupid, "
+	       .        "fixedIP, "
+	       .        "fixedMAC "
 	       . "FROM serverrequest "
 	       . "WHERE requestid = $id";
 	$qh = doQuery($query, 101);
@@ -4568,6 +4618,8 @@ function getRequestInfo($id, $returnNULL=0) {
 		$data['serverrequest'] = 1;
 		$data['admingroupid'] = $row['admingroupid'];
 		$data['logingroupid'] = $row['logingroupid'];
+		$data['fixedIP'] = $row['fixedIP'];
+		$data['fixedMAC'] = $row['fixedMAC'];
 	}
 	else
 		$data['serverrequest'] = 0;
