@@ -54,7 +54,7 @@ function viewNodes() {
 	# tree
 	if($hasManagePerms) {
 		print "<div id=\"mainTabContainer\" dojoType=\"dijit.layout.TabContainer\"\n";
-		print "     style=\"width:800px;height:600px\">\n";
+		print "     style=\"width:750px;height:600px\">\n";
 		print "<div id=\"privtreetab\" dojoType=\"dijit.layout.ContentPane\" title=\"Privilege Tree\">\n";
 	}
 	print "<H2>Privilege Tree</H2>\n";
@@ -1185,6 +1185,7 @@ function userLookup() {
 		if(! mysql_num_rows($qh))
 			print "<font color=red>$userid not currently found in VCL user database, will try to add...</font><br>\n";
 		elseif($force) {
+			$_SESSION['userresources'] = array();
 			$row = mysql_fetch_assoc($qh);
 			$newtime = unixToDatetime(time() - SECINDAY - 5);
 			$query = "UPDATE user SET lastupdated = '$newtime' WHERE id = {$row['id']}";
@@ -1897,6 +1898,8 @@ function jsonGetResourceGroupMembers() {
 		elseif($type == 'image')
 			$field = 'prettyname';
 		elseif($type == 'schedule')
+			$field = 'name';
+		elseif($type == 'serverprofile')
 			$field = 'name';
 		$query = "SELECT t.$field AS item "
 		       . "FROM $type t, "
