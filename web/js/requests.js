@@ -436,6 +436,12 @@ function submitEditReservationCB(data, ioArgs) {
 		resRefresh();
 		return;
 	}
+	else if(data.items.status == 'unavailable') {
+		dojo.byId('editResDlgErrMsg').innerHTML = data.items.errmsg;
+		dojo.byId('editrescont').value = data.items.cont;
+		dojo.byId('editresid').value = '';
+		return;
+	}
 	dijit.byId('editResDlg').hide();
 	resRefresh();
 }

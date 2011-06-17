@@ -56,11 +56,11 @@ function populateProfileStore(cont) {
 function populateProfileStoreCB(data, ioArgs) {
 	var store = profilesstore;
 	for(var i = 0; i < data.items.length; i++) {
-		store.newItem({id: data.items[i].id, name: data.items[i].name, desc: data.items[i].desc});
+		store.newItem({id: data.items[i].id, name: data.items[i].name, desc: data.items[i].desc, access: data.items[i].access});
 	}
 	dijit.byId('deployprofileid').setStore(profilesstore, '', {query: {id:new RegExp("^(?:(?!70000).)*$")}});
-	dijit.byId('profileid').setStore(profilesstore, '', {query: {id:new RegExp("^(?:(?!70000).)*$")}});
-	dijit.byId('profiles').setStore(profilesstore, '', {query: {id:new RegExp("^(?:(?!70000).)*$")}});
+	dijit.byId('profileid').setStore(profilesstore, '', {query: {id:new RegExp("^(?:(?!70000).)*$"),access:'admin'}});
+	dijit.byId('profiles').setStore(profilesstore, '', {query: {id:new RegExp("^(?:(?!70000).)*$"),access:'admin'}});
 	getGroups();
 }
 
@@ -72,7 +72,7 @@ function selectProfileChanged() {
 	dijit.byId('delProfilesBtn').set('disabled', false);
 	if(dijit.byId('profileid').getOptions(0) &&
 	   dijit.byId('profileid').getOptions(0).value == 70000)
-		dijit.byId('profileid').setStore(profilesstore, '', {query: {id:new RegExp("^(?:(?!70000).)*$")}});
+		dijit.byId('profileid').setStore(profilesstore, '', {query: {id:new RegExp("^(?:(?!70000).)*$"),access:'admin'}});
 }
 
 function deployProfileChanged() {
@@ -89,7 +89,7 @@ function deployProfileChanged() {
 }
 
 function newServerProfile(cont) {
-	dijit.byId('profileid').setStore(profilesstore, '', {query: {id: '*'}});
+	dijit.byId('profileid').setStore(profilesstore, '', {query: {id: '*',access:'admin'}});
 	dijit.byId('profileid').set('value', '70000');
 	clearProfileItems();
 	dijit.byId('fetchProfilesBtn').set('disabled', true);
@@ -152,13 +152,14 @@ function saveServerProfileCB(data, ioArgs) {
 		return;
 	}
 	var selobj = dijit.byId('profileid');
-	selobj.setStore(profilesstore, '', {query: {id:new RegExp("^(?:(?!70000).)*$")}});
+	selobj.setStore(profilesstore, '', {query: {id:new RegExp("^(?:(?!70000).)*$"),access:'admin'}});
 	if(data.items.newprofile == 1) {
 		dojo.removeClass('serverprofiledata', 'hidden');
 		if(allprofiles.length == 0)
 			dojo.removeClass('profileslist', 'hidden');
 		profilesstore.newItem({id: data.items.id,
 		                       name: data.items.name,
+		                       access: data.items.access,
 		                       desc: data.items.desc});
 		selobj.set('value', data.items.id);
 		getProfiles();
