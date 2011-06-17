@@ -907,7 +907,7 @@ function viewRequests() {
 				else
 					$text .= "    <TD></TD>\n";
 			}
-			elseif($requests[$i]['forimaging'] == 0)
+			else
 				$text .= "    <TD></TD>\n";
 
 			# print name of image, add (Testing) if it is the test version of an image
@@ -1812,7 +1812,11 @@ function AJeditRequest() {
 		}
 		$h .= "<br><br>";
 		$cont = addContinuationsEntry('AJsubmitEditRequest', $cdata, SECINDAY, 1, 0);
-		sendJSON(array('status' => 'modify', 'html' => $h, 'cont' => $cont));
+		$data = array('status' => 'modify',
+		              'html' => $h,
+		              'requestid' => $requestid,
+		              'cont' => $cont);
+		sendJSON($data);
 		return;
 	}
 	# check for max time being reached
@@ -2140,12 +2144,20 @@ function AJsubmitEditRequest() {
 		return;
 	}
 
+	if($request['serverrequest'] &&
+		(! empty($request['fixedIP']) || ! empty($request['fixedMAC']))) {
+		$ip = $request['fixedIP'];
+		$mac = $request['fixedMAC'];
+	}
+	else {
+		$ip = '';
+		$mac = '';
+	}
 	$rc = isAvailable(getImages(), $request['reservations'][0]['imageid'],
 	                  $request['reservations'][0]['imagerevisionid'], $startts,
-	                  $endts, $requestid);
+	                  $endts, $requestid, 0, 0, 0, $ip, $mac);
 	if($rc == -1) {
 		$h .= "The time you requested overlaps with another reservation<br>";
-
 		$h .= "You have requested an environment that is limited in the<br>";
 		$h .= "number of concurrent reservations that can be made. No further<br>";
 		$h .= "reservations for the environment can be made for the time you<br>";
@@ -2175,7 +2187,11 @@ function AJsubmitEditRequest() {
 		return;
 	}
 	else {
-		sendJSON(array('status' => 'unavailable'));
+		$h .= "The time period you have requested is not available.<br>";
+		$h .= "Please select a different time.";
+		$cdata = getContinuationVar();
+		$cont = addContinuationsEntry('AJsubmitEditRequest', $cdata, SECINDAY, 1, 0);
+		sendJSON(array('status' => 'unavailable', 'errmsg' => $h, 'cont' => $cont));
 		return;
 		# TODO what to do here (timetable)?
 		$cdata = array('imageid' => $data['imageid'],
