@@ -77,7 +77,7 @@ function deployHTML() {
 	$h .= "<legend>Description:</legend>\n";
 	$h .= "<div id=\"deploydesc\"></div>\n";
 	$h .= "</fieldset>\n";
-	$cont = addContinuationsEntry('AJserverProfileData');
+	$cont = addContinuationsEntry('AJserverProfileData', array('mode' => 'checkout'));
 	$h .= "<button dojoType=\"dijit.form.Button\" id=\"deployFetchProfilesBtn\">\n";
 	$h .= "	Apply Profile\n";
 	$h .= "	<script type=\"dojo/method\" event=onClick>\n";
@@ -94,6 +94,10 @@ function deployHTML() {
 	$h .= "    <td>\n";
 	$resources = getUserResources(array("imageAdmin", "imageCheckOut"));
 	$images = removeNoCheckout($resources["image"]);
+	$extraimages = getServerProfileImages($user['id']);
+	foreach($extraimages as $id => $image)
+		$images[$id] = $image;
+	uasort($images, 'sortKeepIndex');
 	if(USEFILTERINGSELECT && count($images) < FILTERINGSELECTTHRESHOLD) {
 		$h .= "      <select dojoType=\"dijit.form.FilteringSelect\" id=\"deployimage\" ";
 		$h .= "style=\"width: 400px\" queryExpr=\"*\${0}*\" required=\"true\" ";
@@ -224,7 +228,7 @@ function manageProfilesHTML() {
 	$h .= "Profile: ";
 	$h .= "<select dojoType=\"dijit.form.Select\" id=\"profileid\" ";
 	$h .= "onChange=\"selectProfileChanged();\" sortByLabel=\"true\"></select>\n";
-	$cont = addContinuationsEntry('AJserverProfileData');
+	$cont = addContinuationsEntry('AJserverProfileData', array('mode' => 'admin'));
 	$h .= "<button dojoType=\"dijit.form.Button\" id=\"fetchProfilesBtn\">\n";
 	$h .= "	Configure Profile\n";
 	$h .= "	<script type=\"dojo/method\" event=onClick>\n";
@@ -533,7 +537,12 @@ function manageGroupingHTML() {
 ////////////////////////////////////////////////////////////////////////////////
 function AJserverProfileData() {
 	$profileid = processInputVar('id', ARG_NUMERIC);
-	$resources = getUserResources(array("serverProfileAdmin"), array("administer"));
+	$mode = getContinuationVar('mode');
+	if($mode == 'admin')
+		$resources = getUserResources(array("serverProfileAdmin"), array("administer"));
+	else
+		$resources = getUserResources(array("serverCheckOut", "serverProfileAdmin"),
+		                              array("available","administer"));
 	if(! array_key_exists($profileid, $resources['serverprofile'])) {
 		sendJSON(array('error' => 1, 'msg' => 'noaccess'));
 		return;
@@ -565,15 +574,24 @@ function AJserverProfileData() {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function AJserverProfileStoreData() {
-	$resources = getUserResources(array("serverProfileAdmin"), array("administer"));
 	$profiles = getServerProfiles();
 	$data = array();
+	$resources = getUserResources(array("serverCheckOut"), array("available"));
 	foreach($resources['serverprofile'] as $id => $name)
-		$data[] = array('id' => $id,
-		                'name' => $name,
-		                'desc' => preg_replace("/\n/", "<br>", $profiles[$id]['description']));
+		$data[$id] = array('id' => $id,
+		                   'name' => $name,
+		                   'access' => 'checkout',
+		                   'desc' => preg_replace("/\n/", "<br>", $profiles[$id]['description']));
+	$resources = getUserResources(array("serverProfileAdmin"), array("administer"));
+	foreach($resources['serverprofile'] as $id => $name)
+		$data[$id] = array('id' => $id,
+		                   'name' => $name,
+		                   'access' => 'admin',
+		                   'desc' => preg_replace("/\n/", "<br>", $profiles[$id]['description']));
+	$data = array_values($data);
 	$data[] = array('id' => 70000,
 	                'name' => '(New Profile)',
+	                'access' => 'admin',
 	                'desc' => '');
 	sendJSON($data);
 }
@@ -591,12 +609,13 @@ function AJdeployServer() {
 	$imageid = processInputVar('imageid', ARG_NUMERIC);
 	$resources = getUserResources(array("imageAdmin", "imageCheckOut"));
 	$images = removeNoCheckout($resources["image"]);
-	if(! array_key_exists($imageid, $images)) {
+	$extraimages = getServerProfileImages($user['id']);
+	if(! array_key_exists($imageid, $images) &&
+	   ! array_key_exists($imageid, $extraimages)) {
 		$cont = addContinuationsEntry('AJdeployServer', array(), SECINDAY, 1, 0);
 		$data = array('error' => 1,
 		              'cont' => $cont,
 		              'msg' => 'You do not have access to use this environment.');
-		// TODO deal with problem of having access to a profile with an image user doesn't have access to
 		sendJSON($data);
 		return;
 	}
@@ -706,7 +725,9 @@ function AJdeployServer() {
 
 	$revisionid = getProductionRevisionid($imageid);
 	$images = getImages(0, $imageid);
-	$availablerc = isAvailable($images, $imageid, $revisionid, $startts, $endts);
+	$availablerc = isAvailable($images, $imageid, $revisionid, $startts, $endts,
+	                           0, 0, 0, 0, $ipaddr, $macaddr);
+	# TODO give better error message if due to ip or mac conflict
 	$max = getMaxOverlap($user['id']);
 	if($availablerc != 0 && checkOverlap($startts, $endts, $max)) {
 		$cont = addContinuationsEntry('AJdeployServer', array(), SECINDAY, 1, 0);
@@ -854,7 +875,8 @@ function AJsaveServerProfile() {
 		$ret['name'] = $data['name'];
 		$ret['id'] = $data['profileid'];
 		$ret['newprofile'] = 0;
-	}     
+	}
+	$ret['access'] = 'admin';
 	$ret['desc'] = preg_replace("/\n/", "<br>", $data['desc']);
 	$_SESSION['usersessiondata'] = array();
 	$_SESSION['userresources'] = array();
@@ -886,6 +908,8 @@ function AJdelServerProfile() {
 		sendJSON($data);
 		return;
 	}
+	$query = "DELETE FROM resource WHERE subid = $profileid AND resourcetypeid = 17";
+	doQuery($query, 101);
 	$_SESSION['usersessiondata'] = array();
 	$_SESSION['userresources'] = array();
 	sendJSON(array('success' => 1, 'id' => $profileid));
@@ -1083,6 +1107,44 @@ function getServerProfiles($id=0) {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
+/// \fn getServerProfileImages($userid)
+///
+/// \param $userid - id from user table
+///
+/// \return array where the key is the id of the image and the value is the
+/// prettyname of the image
+///
+/// \brief builds an array of images that user has access to via server profiles
+///
+////////////////////////////////////////////////////////////////////////////////
+function getServerProfileImages($userid) {
+	$key = getKey(array('getServerProfileImages', $userid));
+	if(array_key_exists($key, $_SESSION['usersessiondata']))
+		return $_SESSION['usersessiondata'][$key];
+	$resources = getUserResources(array('serverCheckOut', 'serverProfileAdmin'),
+	                              array('available', 'administer'));
+	$ids = array_keys($resources['serverprofile']);
+	$inids = implode(',', $ids);
+	if(empty($inids)) {
+		$_SESSION['usersessiondata'][$key] = array();
+		return array();
+	}
+	$query = "SELECT i.id, "
+	       .        "i.prettyname AS image "
+	       . "FROM serverprofile s, "
+	       .      "image i "
+	       . "WHERE s.imageid = i.id AND "
+	       .       "s.id IN ($inids)";
+	$qh = doQuery($query, 101);
+	$profiles = array();
+	while($row = mysql_fetch_assoc($qh))
+		$profiles[$row['id']] = $row['image'];
+	$_SESSION['usersessiondata'][$key] = $profiles;
+	return $profiles;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
 /// \fn jsonProfileGroupingGroups()
 ///
 /// \brief sends data about which profile groups are assigned to a profile
@@ -1196,6 +1258,7 @@ function AJaddGroupToProfile() {
 	$query .= implode(',', $adds);
 	doQuery($query, 101);
 	$_SESSION['userresources'] = array();
+	$_SESSION['usersessiondata'] = array();
 	$arr = array('groups' => $groupids, 'addrem' => 1);
 	sendJSON($arr);
 }
@@ -1240,6 +1303,7 @@ function AJremGroupFromProfile() {
 	}
 	$arr = array('groups' => $groupids, 'addrem' => 0, 'removedaccess' => 0);
 	$_SESSION['userresources'] = array();
+	$_SESSION['usersessiondata'] = array();
 	$resources = getUserResources(array("serverProfileAdmin"), array("manageGroup"));
 	if(! array_key_exists($profileid, $resources['serverprofile'])) {
 		$arr['removedaccess'] = 1;
@@ -1289,6 +1353,7 @@ function AJaddProfileToGroup() {
 	$query .= implode(',', $adds);
 	doQuery($query, 287);
 	$_SESSION['userresources'] = array();
+	$_SESSION['usersessiondata'] = array();
 	$arr = array('profiles' => $profileids, 'addrem' => 1);
 	sendJSON($arr);
 }
@@ -1335,6 +1400,7 @@ function AJremProfileFromGroup() {
 	             'addrem' => 0,
 	             'removedaccess' => 0);
 	$_SESSION['userresources'] = array();
+	$_SESSION['usersessiondata'] = array();
 	$resources = getUserResources(array("serverProfileAdmin"), array("manageGroup"));
 	foreach($profileids as $id) {
 		if(! array_key_exists($id, $resources['serverprofile'])) {
