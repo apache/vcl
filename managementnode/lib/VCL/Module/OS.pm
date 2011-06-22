@@ -1728,11 +1728,14 @@ sub manage_server_access {
 		next if (!($userid));
 		if(!exists($res_accounts{$userid})){
 			#check affiliation
-			my $affiliation_name = get_user_affiliation($userid); 
-			if(!(grep(/$affiliation_name/, split(/,/, $not_standalone_list) ))) {
-				$standalone = 1;
+			notify($ERRORS{'OK'}, 0, "checking affiliation for $userid");
+			my $affiliation_name = get_user_affiliation($user_hash{$userid}{vcl_user_id}); 
+			if(defined($affiliation_name)) {
+
+				if(!(grep(/$affiliation_name/, split(/,/, $not_standalone_list) ))) {
+					$standalone = 1;
+				}
 			}
-			
 			#IF standalone - generate password
 			if($standalone) {
 				$user_hash{$userid}{"passwd"} = getpw();

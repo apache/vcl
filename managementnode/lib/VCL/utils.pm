@@ -3247,7 +3247,8 @@ sub getusergroupmembers {
    SELECT
 
    user.unityid,
-   user.uid
+   user.uid,
+   user.id
 
    FROM
    user,
@@ -3271,7 +3272,7 @@ sub getusergroupmembers {
 
 	for (@selected_rows) {
 		my %hash = %{$_};
-		push(@retarray, "$hash{unityid}:$hash{uid}");
+		push(@retarray, "$hash{unityid}:$hash{uid}:$hash{id}");
 	}
 
 	return @retarray;
