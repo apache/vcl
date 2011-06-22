@@ -22,14 +22,14 @@
 # description: VCL management node daemon
 
 # DAEMON: Name of the daemon executable
-DAEMON=vcld
+DAEMON=vcldfap
 
 # DAEMON_PATH: Path to the daemon, no trailing '/'
-DAEMON_PATH=/usr/local/vcl/bin
+DAEMON_PATH=/usr/local/vcldev/fap/managementnode/bin
 
 # DAEMON_OPTIONS: options for the daemon, these can be overridden by
 # setting DAEMON_OPTIONS in /etc/sysconfig/$DAEMON
-DAEMON_OPTIONS='-v -conf=/etc/vcl/vcld.conf'
+DAEMON_OPTIONS='-v -conf=/usr/local/vcldev/fap/managementnode/etc/vcl/vcld.conf'
 
 
 # You shouldn't need to edit anything below here

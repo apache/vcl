@@ -1744,13 +1744,13 @@ sub manage_server_access {
 				$user_hash{$userid}{"passwd"} = 0;
 			}
 			
-			if (!(update_reservation_accounts($reservation_id,$user_hash{$userid}{vcl_user_id},$user_hash{$userid}{passwd}))) {
-				notify($ERRORS{'WARNING'}, 0, "Failed to insert $reservation_id,$user_hash{$userid}{vcl_user_id},$user_hash{$userid}{passwd} into reservationsaccounts table");
+			if (update_reservation_accounts($reservation_id,$user_hash{$userid}{vcl_user_id},$user_hash{$userid}{passwd})) {
+				notify($ERRORS{'OK'}, 0, "Inserted $reservation_id,$user_hash{$userid}{vcl_user_id},$user_hash{$userid}{passwd} into reservationsaccounts table");
 			
 			}
 			
 			# Create user on the OS
-			if($self->OS->create_user($user_hash{$userid}{username},$user_hash{passwd},$user_hash{$userid}{uid},$user_hash{$userid}{rootaccess},$standalone)) {
+			if($self->create_user($user_hash{$userid}{username},$user_hash{passwd},$userid,$user_hash{$userid}{rootaccess},$standalone)) {
 				notify($ERRORS{'OK'}, 0, "Successfully created user $user_hash{$userid}{username} on $computer_node_name");
 			}
 			else {

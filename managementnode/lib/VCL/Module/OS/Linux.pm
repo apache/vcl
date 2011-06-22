@@ -2722,15 +2722,15 @@ sub create_user {
 
         my $management_node_keys = $self->data->get_management_node_keys();
         my $computer_node_name   = $self->data->get_computer_node_name();
-	my $user_standalone      = $self->data->get_user_standalone();
         my $imagemeta_rootaccess = $self->data->get_imagemeta_rootaccess();
 
         # Attempt to get the username from the arguments
         # If no argument was supplied, use the user specified in the DataStructure
         my $user_name = shift;
         my $password = shift;
-	my $adminoverride = shift;
 	my $user_uid = shift;
+	my $adminoverride = shift;
+	my $user_standalone = shift;
 	
         if (!$user_name) {
                 $user_name = $self->data->get_user_login_id();
@@ -2743,6 +2743,10 @@ sub create_user {
 	}
 	if (!$user_uid) {
 		$user_uid = $self->data->get_user_uid();	
+	}
+	
+	if (!$user_standalone) {
+		$user_standalone      = $self->data->get_user_standalone();
 	}
 
 	#adminoverride, if 0 use value from database for $imagemeta_rootaccess
