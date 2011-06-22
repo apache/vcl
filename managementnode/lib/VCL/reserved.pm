@@ -111,6 +111,9 @@ sub process {
 	my $imagemeta_checkuser   = $self->data->get_imagemeta_checkuser();
 	my $reservation_count     = $self->data->get_reservation_count();
 	my $imagemeta_usergroupid = $self->data->get_imagemeta_usergroupid();
+	my $server_request_id	  = $self->data->get_server_request_id();
+	my $server_request_admingroupid = $self->data->get_server_request_admingroupid();
+	my $server_request_logingroupid = $self->data->get_server_request_logingroupid();
 	
 	# Update the log table, set the loaded time to now for this request
 	if (update_log_loaded_time($request_logid)) {
@@ -227,6 +230,20 @@ sub process {
 		else {
 			notify($ERRORS{'DEBUG'}, 0, ref($self->os) . "->post_reserve() not implemented by " . ref($self->os));
 		}
+		
+		notify($ERRORS{'OK'}, 0, "server_request_id = $server_request_id");
+
+		#IF server_request_id
+		if ($server_request_id) {
+			if($server_request_admingroupid || $server_request_logingroupid ) {
+				notify($ERRORS{'OK'}, 0, "calling " . ref($self->os) . "::manage_server_access() subroutine");
+				if ($self->os->manage_server_access()) {
+					notify($ERRORS{'DEBUG'}, 0, "Added users to server reservation");
+				
+				}
+			}
+		}
+		
 		
 	}    # close if defined remoteIP
 

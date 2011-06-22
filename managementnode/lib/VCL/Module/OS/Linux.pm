@@ -823,69 +823,16 @@ sub reserve {
 	my $computer_node_name   = $self->data->get_computer_node_name();
 	my $image_identity       = $self->data->get_image_identity;
 	my $imagemeta_rootaccess = $self->data->get_imagemeta_rootaccess();
-	my $user_standalone      = $self->data->get_user_standalone();
-	my $user_uid				 = $self->data->get_user_uid();
+	my $user_uid		 = $self->data->get_user_uid();
 
 	if($self->add_vcl_usergroup()){
 
 	}
-
-	my $useradd_string; 
-	if(defined($user_uid) && $user_uid != 0){
-		$useradd_string = "/usr/sbin/useradd -u $user_uid -d /home/$user_name -m $user_name -g vcl";
+	
+	if (!$self->create_user()) {
+		notify($ERRORS{'CRITICAL'}, 0, "Failed to add user $user_name to $computer_node_name");
+	 	return 0;	
 	}
-	else{
-		$useradd_string = "/usr/sbin/useradd -d /home/$user_name -m $user_name -g vcl";
-	}
-
-
-	my @sshcmd = run_ssh_command($computer_node_name, $image_identity, $useradd_string, "root");
-	foreach my $l (@{$sshcmd[1]}) {
-		if ($l =~ /$user_name exists/) {
-			notify($ERRORS{'OK'}, 0, "detected user already has account");
-			if ($self->delete_user()) {
-				notify($ERRORS{'OK'}, 0, "user has been deleted from $computer_node_name");
-				@sshcmd = run_ssh_command($computer_node_name, $image_identity, $useradd_string, "root");
-			}
-		}
-	}
-
-
-	if ($user_standalone) {
-		notify($ERRORS{'DEBUG'}, 0, "Standalone user setting single-use password");
-		my $reservation_password = $self->data->get_reservation_password();
-
-		#Set password
-		if ($self->changepasswd($computer_node_name, $user_name, $reservation_password)) {
-			notify($ERRORS{'OK'}, 0, "Successfully set password on useracct: $user_name on $computer_node_name");
-		}
-		else {
-			notify($ERRORS{'CRITICAL'}, 0, "Failed to set password on useracct: $user_name on $computer_node_name");
-			return 0;
-		}
-	} ## end if ($user_standalone)
-
-
-	#Check image profile for allowed root access
-	if ($imagemeta_rootaccess) {
-		# Add to sudoers file
-		#clear user from sudoers file to prevent dups
-		my $clear_cmd = "sed -i -e \"/^$user_name .*/d\" /etc/sudoers";
-		if (run_ssh_command($computer_node_name, $image_identity, $clear_cmd, "root")) {
-			notify($ERRORS{'DEBUG'}, 0, "cleared $user_name from /etc/sudoers");
-		}
-		else {
-			notify($ERRORS{'CRITICAL'}, 0, "failed to clear $user_name from /etc/sudoers");
-		}
-		my $sudoers_cmd = "echo \"$user_name ALL= NOPASSWD: ALL\" >> /etc/sudoers";
-		if (run_ssh_command($computer_node_name, $image_identity, $sudoers_cmd, "root")) {
-			notify($ERRORS{'DEBUG'}, 0, "added $user_name to /etc/sudoers");
-		}
-		else {
-			notify($ERRORS{'CRITICAL'}, 0, "failed to add $user_name to /etc/sudoers");
-		}
-	} ## end if ($imagemeta_rootaccess)
-
 
 	return 1;
 } ## end sub reserve
@@ -2755,6 +2702,134 @@ sub reboot {
 	}
 
 } ## end sub reboot
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 create_user
+
+ Parameters  : username,password,adminoverride(0,1,2),user_uid
+ Returns     : 1
+ Description : 
+
+=cut
+
+sub create_user {
+        my $self = shift;
+        if (ref($self) !~ /linux/i) {
+                notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+                return;
+        }
+
+        my $management_node_keys = $self->data->get_management_node_keys();
+        my $computer_node_name   = $self->data->get_computer_node_name();
+	my $user_standalone      = $self->data->get_user_standalone();
+        my $imagemeta_rootaccess = $self->data->get_imagemeta_rootaccess();
+
+        # Attempt to get the username from the arguments
+        # If no argument was supplied, use the user specified in the DataStructure
+        my $user_name = shift;
+        my $password = shift;
+	my $adminoverride = shift;
+	my $user_uid = shift;
+	
+        if (!$user_name) {
+                $user_name = $self->data->get_user_login_id();
+        }
+        if (!$password) {
+                $password = $self->data->get_reservation_password();
+        }
+	if (!$adminoverride) {
+		$adminoverride = 0;	
+	}
+	if (!$user_uid) {
+		$user_uid = $self->data->get_user_uid();	
+	}
+
+	#adminoverride, if 0 use value from database for $imagemeta_rootaccess
+	# if 1 or 2 override database
+	# 1 - allow admin access, set $imagemeta_rootaccess=1
+	# 2 - disallow admin access, set $imagemeta_rootaccess=0
+	if ($adminoverride eq '1') {
+		$imagemeta_rootaccess = 1;
+	}
+	elsif ($adminoverride eq '2') {
+                $imagemeta_rootaccess = 0;
+	}
+	else {
+		#no override detected, do not change database value
+	}
+
+	my $useradd_string;
+        if(defined($user_uid) && $user_uid != 0){
+                $useradd_string = "/usr/sbin/useradd -u $user_uid -d /home/$user_name -m $user_name -g vcl";
+        }
+        else{
+                $useradd_string = "/usr/sbin/useradd -d /home/$user_name -m $user_name -g vcl";
+        }
+
+
+        my @sshcmd = run_ssh_command($computer_node_name, $management_node_keys, $useradd_string, "root");
+        foreach my $l (@{$sshcmd[1]}) {
+                if ($l =~ /$user_name exists/) {
+                        notify($ERRORS{'OK'}, 0, "detected user already has account");
+                        if ($self->delete_user()) {
+                                notify($ERRORS{'OK'}, 0, "user has been deleted from $computer_node_name");
+                                @sshcmd = run_ssh_command($computer_node_name, $management_node_keys, $useradd_string, "root");
+                        }
+                }
+        }
+
+        if ($user_standalone) {
+                notify($ERRORS{'DEBUG'}, 0, "Standalone user setting single-use password");
+
+                #Set password
+                if ($self->changepasswd($computer_node_name, $user_name, $password)) {
+                        notify($ERRORS{'OK'}, 0, "Successfully set password on useracct: $user_name on $computer_node_name");
+                }
+                else {
+                        notify($ERRORS{'CRITICAL'}, 0, "Failed to set password on useracct: $user_name on $computer_node_name");
+                        return 0;
+                }
+        } ## end if ($user_standalone)
+
+
+        #Check image profile for allowed root access
+        if ($imagemeta_rootaccess) {
+                # Add to sudoers file
+                #clear user from sudoers file to prevent dups
+                my $clear_cmd = "sed -i -e \"/^$user_name .*/d\" /etc/sudoers";
+                if (run_ssh_command($computer_node_name, $management_node_keys, $clear_cmd, "root")) {
+                        notify($ERRORS{'DEBUG'}, 0, "cleared $user_name from /etc/sudoers");
+                }
+                else {
+                        notify($ERRORS{'CRITICAL'}, 0, "failed to clear $user_name from /etc/sudoers");
+                }
+                my $sudoers_cmd = "echo \"$user_name ALL= NOPASSWD: ALL\" >> /etc/sudoers";
+                if (run_ssh_command($computer_node_name, $management_node_keys, $sudoers_cmd, "root")) {
+                        notify($ERRORS{'DEBUG'}, 0, "added $user_name to /etc/sudoers");
+                }
+                else {
+                        notify($ERRORS{'CRITICAL'}, 0, "failed to add $user_name to /etc/sudoers");
+                }
+        } ## end if ($imagemeta_rootaccess)
+
+        return 1;	
+} ## end sub create_user
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 update_server_access
+
+ Parameters  : 
+ Returns     : 
+ Description : 
+
+=cut
+
+sub update_server_access {
+
+
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 

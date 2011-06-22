@@ -67,6 +67,7 @@ use DBI;
 #----------GLOBALS--------------
 our $LOG = "/var/log/healthcheckvcl.log";
 our $MYDBH;
+set_logfile_path($LOG);
 
 #////////////////////////////////////////////////////////////////////////////////
 

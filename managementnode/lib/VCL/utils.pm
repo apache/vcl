@@ -136,8 +136,10 @@ our @EXPORT = qw(
   get_request_by_computerid
   get_request_end
   get_request_info
+  get_reservation_accounts
   get_resource_groups
   get_managable_resource_groups
+  get_user_affiliation
   get_user_info
   get_vmhost_info
   getimagesize
@@ -212,6 +214,7 @@ our @EXPORT = qw(
   update_preload_flag
   update_request_password
   update_request_state
+  update_reservation_accounts
   update_reservation_lastcheck
   update_sublog_ipaddress
   write_currentimage_txt
@@ -2271,6 +2274,113 @@ sub is_request_imaging {
 		return 0;
 	}
 } ## end sub is_request_imaging
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_next_image_default
+
+ Parameters  : $reservationid
+ Returns     : userid,password,affiliation
+ Description : Used for server loads, provides list of users for group access
+
+=cut
+
+sub get_reservation_accounts {
+        my ($reservationid) = @_;
+        my ($calling_package, $calling_filename, $calling_line, $calling_sub) = caller(0);
+
+        if (!defined($reservationid)) {
+                notify($ERRORS{'WARNING'}, 0, "$calling_sub $calling_package missing mandatory variable: reservationid ");
+                return 0;
+        }
+
+        my $select_statement = "
+	SELECT DISTINCT
+	reservationaccounts.userid AS reservationaccounts_userid,
+	reservationaccounts.password AS reservationaccounts_password,
+	affiliation.name AS affiliation_name
+	FROM
+	reservationaccounts,
+	affiliation,
+	user
+	WHERE
+	user.id = reservationaccounts.userid AND
+	affiliation.id = user.affiliationid AND
+	reservationaccounts.reservationid = $reservationid
+	";
+
+        # Call the database select subroutine
+        # This will return an array of one or more rows based on the select statement
+        my @selected_rows = database_select($select_statement);
+
+        my @ret_array;
+	my %user_info;
+
+        # Check to make sure 1 or more rows were returned
+        if (scalar @selected_rows > 0) {
+		# It contains a hash
+                for (@selected_rows) {
+                        my %reservation_acct= %{$_};
+			my $userid = $reservation_acct{reservationaccounts_userid};
+			$user_info{$userid}{"userid"} = $userid;
+			$user_info{$userid}{"password"} = $reservation_acct{reservationaccounts_password};
+			$user_info{$userid}{"affiliation"} = $reservation_acct{affiliation_name};
+		}
+		
+		return %user_info;
+
+	}
+		
+	return ();
+
+}
+	
+sub update_reservation_accounts {
+	my $resid = shift;
+	my $userid = shift;
+	my $password = shift;
+
+	if ( !$resid ) {
+		notify($ERRORS{'WARNING'}, 0, "resid argument was not specified");
+                return;
+	}
+	
+	if ( !$userid ) {
+		notify($ERRORS{'WARNING'}, 0, "userid argument was not specified");
+                return;
+        }
+	
+	if ( !$password ) {
+		$password = '';
+	}
+
+	my $insert_statement = "
+	INSERT INTO 
+	reservationaccounts
+	(
+		reservationid,
+		userid,
+		password
+	)
+	VALUES
+	(
+		'$resid',
+		'$userid',
+		'$password'
+	)
+	";
+	
+	notify($ERRORS{'OK'}, 0, "$insert_statement");
+
+	if( database_execute($insert_statement) ) {
+		notify($ERRORS{'OK'}, 0, "inserted new reservationaccount info $resid $userid");
+		return 1;
+	}
+	else {
+		return 0;
+		notify($ERRORS{'OK'}, 0, "failed to insert new reservationaccount info $resid $userid");
+	}
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -4427,11 +4537,11 @@ sub get_request_info {
 			elsif ($key =~ /computerprovisioningmodule_/) {
 				$request_info{reservation}{$reservation_id}{computer}{provisioning}{module}{$original_key} = $value;
 			}
-			elsif ($key =~ /serverrequest_/) {
-				$request_info{reservation}{$reservation_id}{$original_key} = $value;
-			}
 			else {
 				notify($ERRORS{'WARNING'}, 0, "unknown key found in SQL data: $key");
+			}
+			if ($key =~ /serverrequest_/) {
+				$request_info{reservation}{$reservation_id}{serverrequest}{$original_key} = $value;
 			}
 
 		}    # Close foreach key in reservation row
@@ -4523,7 +4633,7 @@ sub get_request_info {
 
 	# Loop through all the reservations
 	foreach my $reservation_id (keys %{$request_info{reservation}}) {
-	
+
 		# Set server request NULL values to 0
 		if (defined($request_info{reservation}{$reservation_id}{serverrequest}{id})) {
 			
@@ -7957,6 +8067,63 @@ EOF
 		}
 	}
 	return \%user_info;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_user_affiliation
+
+ Parameters  : $user_id
+ Returns     : scalar - affiliation name
+ Description :
+
+=cut
+
+sub get_user_affiliation {
+	my ($user_id) = shift;
+	
+	if(!defined($user_id)){
+                notify($ERRORS{'WARNING'}, $LOGFILE, "user_id was not supplied");
+                return 0;
+        }
+
+        my $select_statement = <<EOF;
+SELECT DISTINCT
+affiliation.name
+FROM
+user,
+affiliation
+WHERE
+affiliation.id = user.affiliationid AND
+user.id = $user_id
+EOF
+
+# Call the database select subroutine
+        # This will return an array of one or more rows based on the select statement
+        my @selected_rows = database_select($select_statement);
+
+        # Check to make sure 1 row was returned
+        if (scalar @selected_rows == 0) {
+                notify($ERRORS{'WARNING'}, 0, "zero rows were returned from database select");
+                return ();
+        }
+        elsif (scalar @selected_rows > 1) {
+                notify($ERRORS{'WARNING'}, 0, "" . scalar @selected_rows . " rows were returned from database select");
+                return ();
+        }
+
+        # Get the single returned row
+        # It contains a hash
+
+        # Make sure we return undef if the column wasn't found
+        if (defined $selected_rows[0]{name}) {
+                my $name = $selected_rows[0]{name};
+                return $name;
+        }
+        else {
+                return undef;
+        }
+	
 }
 
 #/////////////////////////////////////////////////////////////////////////////

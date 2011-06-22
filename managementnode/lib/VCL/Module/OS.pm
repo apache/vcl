@@ -1661,6 +1661,113 @@ sub get_os_type {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+sub manage_server_access {
+
+	my $self = shift;
+        if (ref($self) !~ /VCL::Module/i) {
+                notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+                return;
+        }
+
+        my $computer_node_name = $self->data->get_computer_node_name() || return;
+	my $reservation_id        = $self->data->get_reservation_id();
+	my $server_request_id     = $self->data->get_server_request_id();
+        my $server_request_admingroupid = $self->data->get_server_request_admingroupid();
+        my $server_request_logingroupid = $self->data->get_server_request_logingroupid();
+
+	#Build list of users.
+	#If in admin group set admin flag
+	#If in both login and admin group, only use admin setting
+	#Check if user is in reserverationaccounts table, add user if needed
+	#Check if user exists on server, add if needed
+	
+	my @userlist_admin;
+	my @userlist_login;
+	my %user_hash;
+
+	if ( $server_request_admingroupid ) {
+		@userlist_admin = getusergroupmembers($server_request_admingroupid);
+	}
+	if ( $server_request_logingroupid ) {
+		@userlist_login = getusergroupmembers($server_request_logingroupid);
+	}	
+	
+	if ( scalar @userlist_admin > 0 ) {
+		foreach my $str (@userlist_admin) {
+			my ($username,$uid,$vcl_user_id) = split(/:/, $str);
+			$user_hash{$uid}{"username"} = $username;
+			$user_hash{$uid}{"uid"}	= $uid;
+			$user_hash{$uid}{"vcl_user_id"}	= $vcl_user_id;
+			$user_hash{$uid}{"rootaccess"} = 1;
+		}
+	}		
+	if ( scalar @userlist_login > 0 ) {
+		foreach my $str (@userlist_admin) {
+			my ($username, $uid,$vcl_user_id) = split(/:/, $str);
+			if (!exists($user_hash{$uid})) {
+				$user_hash{$uid}{"username"} = $username;
+				$user_hash{$uid}{"uid"}	= $uid;
+				$user_hash{$uid}{"vcl_user_id"}	= $vcl_user_id;
+				$user_hash{$uid}{"rootaccess"} = 0;
+			}
+			else {
+				notify($ERRORS{'OK'}, 0, "$uid for $username exists in user_hash, skipping");
+			}
+		}
+	}	
+
+	#Collect users in reservationaccounts table
+	my %res_accounts = get_reservation_accounts($reservation_id);
+	my $not_standalone_list = "";
+	my $standalone = 0;
+	if(defined($ENV{management_node_info}{NOT_STANDALONE}) && $ENV{management_node_info}{NOT_STANDALONE}){
+                $not_standalone_list = $ENV{management_node_info}{NOT_STANDALONE};
+        }
+
+	foreach my $userid (sort keys %user_hash) {
+		next if (!($userid));
+		if(!exists($res_accounts{$userid})){
+			#check affiliation
+			my $affiliation_name = get_user_affiliation($userid); 
+			if(!(grep(/$affiliation_name/, split(/,/, $not_standalone_list) ))) {
+				$standalone = 1;
+			}
+			
+			#IF standalone - generate password
+			if($standalone) {
+				$user_hash{$userid}{"passwd"} = getpw();
+			}
+			else {
+				$user_hash{$userid}{"passwd"} = 0;
+			}
+			
+			if (!(update_reservation_accounts($reservation_id,$user_hash{$userid}{vcl_user_id},$user_hash{$userid}{passwd}))) {
+				notify($ERRORS{'WARNING'}, 0, "Failed to insert $reservation_id,$user_hash{$userid}{vcl_user_id},$user_hash{$userid}{passwd} into reservationsaccounts table");
+			
+			}
+			
+			# Create user on the OS
+			if($self->OS->create_user($user_hash{$userid}{username},$user_hash{passwd},$user_hash{$userid}{uid},$user_hash{$userid}{rootaccess},$standalone)) {
+				notify($ERRORS{'OK'}, 0, "Successfully created user $user_hash{$userid}{username} on $computer_node_name");
+			}
+			else {
+				notify($ERRORS{'WARNING'}, 0, "Failed to create user on $computer_node_name ");
+			}
+
+		
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "$userid exists in reservationaccounts table, assuming it exists on OS");
+		}
+			
+	}
+	
+	return 1;
+
+}
+
+#///////////////////////////////////////////////////////////////////////////
+
 1;
 __END__
 
