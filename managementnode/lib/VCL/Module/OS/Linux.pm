@@ -2726,14 +2726,14 @@ sub create_user {
 
         # Attempt to get the username from the arguments
         # If no argument was supplied, use the user specified in the DataStructure
-        my $user_name = shift;
+        my $username = shift;
         my $password = shift;
 	my $user_uid = shift;
 	my $adminoverride = shift;
 	my $user_standalone = shift;
 	
-        if (!$user_name) {
-                $user_name = $self->data->get_user_login_id();
+        if (!$username) {
+                $username = $self->data->get_user_login_id();
         }
         if (!$password) {
                 $password = $self->data->get_reservation_password();
@@ -2765,16 +2765,16 @@ sub create_user {
 
 	my $useradd_string;
         if(defined($user_uid) && $user_uid != 0){
-                $useradd_string = "/usr/sbin/useradd -u $user_uid -d /home/$user_name -m $user_name -g vcl";
+                $useradd_string = "/usr/sbin/useradd -u $user_uid -d /home/$username -m $username -g vcl";
         }
         else{
-                $useradd_string = "/usr/sbin/useradd -d /home/$user_name -m $user_name -g vcl";
+                $useradd_string = "/usr/sbin/useradd -d /home/$username -m $username -g vcl";
         }
 
 
         my @sshcmd = run_ssh_command($computer_node_name, $management_node_keys, $useradd_string, "root");
         foreach my $l (@{$sshcmd[1]}) {
-                if ($l =~ /$user_name exists/) {
+                if ($l =~ /$username exists/) {
                         notify($ERRORS{'OK'}, 0, "detected user already has account");
                         if ($self->delete_user()) {
                                 notify($ERRORS{'OK'}, 0, "user has been deleted from $computer_node_name");
@@ -2787,11 +2787,11 @@ sub create_user {
                 notify($ERRORS{'DEBUG'}, 0, "Standalone user setting single-use password");
 
                 #Set password
-                if ($self->changepasswd($computer_node_name, $user_name, $password)) {
-                        notify($ERRORS{'OK'}, 0, "Successfully set password on useracct: $user_name on $computer_node_name");
+                if ($self->changepasswd($computer_node_name, $username, $password)) {
+                        notify($ERRORS{'OK'}, 0, "Successfully set password on useracct: $username on $computer_node_name");
                 }
                 else {
-                        notify($ERRORS{'CRITICAL'}, 0, "Failed to set password on useracct: $user_name on $computer_node_name");
+                        notify($ERRORS{'CRITICAL'}, 0, "Failed to set password on useracct: $username on $computer_node_name");
                         return 0;
                 }
         } ## end if ($user_standalone)
@@ -2801,19 +2801,19 @@ sub create_user {
         if ($imagemeta_rootaccess) {
                 # Add to sudoers file
                 #clear user from sudoers file to prevent dups
-                my $clear_cmd = "sed -i -e \"/^$user_name .*/d\" /etc/sudoers";
+                my $clear_cmd = "sed -i -e \"/^$username .*/d\" /etc/sudoers";
                 if (run_ssh_command($computer_node_name, $management_node_keys, $clear_cmd, "root")) {
-                        notify($ERRORS{'DEBUG'}, 0, "cleared $user_name from /etc/sudoers");
+                        notify($ERRORS{'DEBUG'}, 0, "cleared $username from /etc/sudoers");
                 }
                 else {
-                        notify($ERRORS{'CRITICAL'}, 0, "failed to clear $user_name from /etc/sudoers");
+                        notify($ERRORS{'CRITICAL'}, 0, "failed to clear $username from /etc/sudoers");
                 }
-                my $sudoers_cmd = "echo \"$user_name ALL= NOPASSWD: ALL\" >> /etc/sudoers";
+                my $sudoers_cmd = "echo \"$username ALL= NOPASSWD: ALL\" >> /etc/sudoers";
                 if (run_ssh_command($computer_node_name, $management_node_keys, $sudoers_cmd, "root")) {
-                        notify($ERRORS{'DEBUG'}, 0, "added $user_name to /etc/sudoers");
+                        notify($ERRORS{'DEBUG'}, 0, "added $username to /etc/sudoers");
                 }
                 else {
-                        notify($ERRORS{'CRITICAL'}, 0, "failed to add $user_name to /etc/sudoers");
+                        notify($ERRORS{'CRITICAL'}, 0, "failed to add $username to /etc/sudoers");
                 }
         } ## end if ($imagemeta_rootaccess)
 
