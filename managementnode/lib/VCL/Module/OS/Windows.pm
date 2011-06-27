@@ -1708,12 +1708,31 @@ sub create_user {
 	# If no argument was supplied, use the user specified in the DataStructure
 	my $username = shift;
 	my $password = shift;
+	my $user_uid = shift;
+        my $adminoverride = shift;
+        my $user_standalone = shift;
+
 	if (!$username) {
 		$username = $self->data->get_user_login_id();
 	}
 	if (!$password) {
 		$password = $self->data->get_reservation_password();
 	}
+	
+	#adminoverride, if 0 use value from database for $imagemeta_rootaccess
+        # if 1 or 2 override database
+        # 1 - allow admin access, set $imagemeta_rootaccess=1
+        # 2 - disallow admin access, set $imagemeta_rootaccess=0
+        if ($adminoverride eq '1') {
+                $imagemeta_rootaccess = 1;
+        }
+        elsif ($adminoverride eq '2') {
+                $imagemeta_rootaccess = 0;
+        }
+        else {
+                #no override detected, do not change database value
+        }
+
 
 	# Check if user already exists
 	if ($self->user_exists($username)) {
