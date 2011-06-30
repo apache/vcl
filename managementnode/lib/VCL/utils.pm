@@ -4487,6 +4487,9 @@ sub get_request_info {
 			elsif ($key =~ /reservation_/) {
 				$request_info{reservation}{$reservation_id}{$original_key} = $value;
 			}
+			elsif ($key =~ /serverrequest_/) {
+                                $request_info{reservation}{$reservation_id}{serverrequest}{$original_key} = $value;
+                        }
 		}    # Close foreach key in reservation row
 		
 		# Retrieve the image, imagerevision, and computer info and add to the hash
