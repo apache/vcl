@@ -4491,7 +4491,7 @@ sub get_request_info {
 		
 		# Retrieve the image, imagerevision, and computer info and add to the hash
 		my $image_id = $request_info{reservation}{$reservation_id}{imageid};
-		my $image_info = get_image_info($image_id)) {
+		my $image_info = get_image_info($image_id);
 		$request_info{reservation}{$reservation_id}{image} = $image_info;
 		
 		my $imagerevision_id = $request_info{reservation}{$reservation_id}{imagerevisionid};
