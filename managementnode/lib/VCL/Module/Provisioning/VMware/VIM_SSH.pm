@@ -169,7 +169,7 @@ sub _run_vim_cmd {
 	my $command = "$self->{vim_cmd} $vim_arguments";
 	
 	my $attempt = 0;
-	my $attempt_limit = 3;
+	my $attempt_limit = 5;
 	my $wait_seconds = 2;
 	
 	while ($attempt++ < $attempt_limit) {

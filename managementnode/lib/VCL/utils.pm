@@ -71,6 +71,8 @@ use HTTP::Headers;
 use RPC::XML::Client;
 use Scalar::Util 'blessed';
 use Data::Dumper;
+use Cwd;
+use Sys::Hostname;
 
 #use Date::Calc qw(Delta_DHMS Time_to_Date Date_to_Time);
 
@@ -124,6 +126,7 @@ our @EXPORT = qw(
   get_image_info
   get_imagemeta_info
   get_imagerevision_info
+  get_local_user_info
   get_management_node_blockrequests
   get_management_node_id
   get_management_node_info
@@ -146,6 +149,7 @@ our @EXPORT = qw(
   getnewdbh
   getpw
   getusergroupmembers
+  get_user_group_member_info
   help
   hostname
   insert_reload_request
@@ -280,8 +284,11 @@ INIT {
 	our $BIN_PATH = $FindBin::Bin;
 	
 	# Set a default config file path
-	our ($CONF_FILE_PATH) = 'C:/vcldev.conf';
+	my $hostname = hostname();
+	my $cwd = getcwd();
+	our $CONF_FILE_PATH = "$cwd/$hostname.conf";
 	if (!-f $CONF_FILE_PATH) {
+		print STDOUT "file does not exist: $CONF_FILE_PATH\n";
 		if ($BIN_PATH =~ /dev/) {
 			$CONF_FILE_PATH = "/etc/vcl/vcldev.conf";
 		}
@@ -303,11 +310,12 @@ INIT {
 	
 	# Make sure the config file exists
 	if (!-f $CONF_FILE_PATH) {
-		print STDOUT "ERROR: config file does not exist: $CONF_FILE_PATH\n";
-		help();
+		if (!$SETUP_MODE) {
+			print STDOUT "ERROR: config file does not exist: $CONF_FILE_PATH\n";
+			help();
+		}
 	}
-
-	if (open(CONF, $CONF_FILE_PATH)) {
+	elsif (open(CONF, $CONF_FILE_PATH)) {
 		my @conf = <CONF>;
 		close(CONF);
 		foreach my $l (@conf) {
@@ -436,7 +444,7 @@ INIT {
 	}    # Close open conf file
 
 	else {
-		die "VCLD : $CONF_FILE_PATH does not exist, exiting --  $! \n";
+		die "failed to open vcld configuration file: $CONF_FILE_PATH, exiting --  $! \n";
 	}
 
 	if (!$PROCESSNAME) {
@@ -2678,7 +2686,7 @@ sub _machine_os {
 
 =head2 nmap_port
 
- Parameters  : $hostname, $port
+ Parameters  : $hostname,n $port
  Returns     : 1 open 0 closed
  Description : use nmap port scanning tool to determine if port is open
 
@@ -3076,79 +3084,6 @@ sub getpw {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 hostname
-
- Parameters  : NA
- Returns     : hostname of this machine
- Description : attempts to check local hostname using hostname cmd
-					if global FQDN is set the routine returns this instead
-=cut
-
-sub hostname {
-	my ($package, $filename, $line, $sub) = caller(0);
-	my @host;
-	my $h;
-	#hack
-	my $osname = lc($^O);
-
-	if ($osname eq 'linux') {
-		if ($FQDN) {
-			@host = ($FQDN, "linux");
-			return @host;
-		}
-		if (open(HOST, "/bin/hostname -f 2>&1 |")) {
-			@host = <HOST>;
-			close(HOST);
-			foreach $h (@host) {
-				if ($h =~ /([-a-z0-9]*)([.a-z]*)/) {
-					chomp($h);
-					
-					@host = ($h, "linux");
-					return @host;
-				}
-			} ## end foreach $h (@host)
-		} ## end if (open(HOST, "/bin/hostname -f 2>&1 |"))
-		else {
-			notify($ERRORS{'CRITICAL'}, 0, "can't $!");
-			return 0;
-		}
-	} ## end if ($osname eq 'linux')
-	elsif ($osname eq 'solaris') {
-		if ($FQDN) {
-			@host = ($FQDN, "linux");
-			return @host;
-		}
-		if (open(NODENAME, "< /etc/nodename")) {
-			@host = <NODENAME>;
-			close(NODENAME);
-			foreach $h (@host) {
-				if ($h =~ /([-a-z0-9]*)([.a-z]*)/) {
-					chomp($h);
-					my @host = ($h, "solaris");
-					return @host;
-				}
-			}
-		} ## end if (open(NODENAME, "< /etc/nodename"))
-		else {
-			notify($ERRORS{'CRITICAL'}, 0, "can't open /etc/nodename $!");
-			return 0;
-		}
-	} ## end elsif ($osname eq 'solaris')  [ if ($osname eq 'linux')
-	elsif ($osname eq 'mswin32') {
-		if ($FQDN) {
-			@host = ($FQDN, "windows");
-			return @host;
-		}
-	}
-	else {
-		notify($ERRORS{'CRITICAL'}, 0, "unknown OS type: $osname");
-		return 0;
-	}
-	return 0;
-} ## end sub hostname
-
-#/////////////////////////////////////////////////////////////////////////////
-
 =head2 known_hosts
 
  Parameters  : $node , management OS, $ipaddress
@@ -3278,6 +3213,55 @@ sub getusergroupmembers {
 	return @retarray;
 
 } ## end sub getusergroupmembers
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_user_group_member_info
+
+ Parameters  : $usergroupid
+ Returns     : array of user group memebers
+ Description : queries database and collects user members of supplied usergroupid
+
+=cut
+
+sub get_user_group_member_info {
+	my ($user_group_id) = @_;
+	
+	if (!defined($user_group_id)) {
+		notify($ERRORS{'WARNING'}, 0, "user group ID argument was not specified");
+		return;
+	}
+
+	my $select_statement = <<EOF;
+SELECT
+user.*
+FROM
+user,
+usergroupmembers
+WHERE
+user.id = usergroupmembers.userid
+AND usergroupmembers.usergroupid = '$user_group_id'
+EOF
+
+	# Call the database select subroutine
+	my @selected_rows = database_select($select_statement);
+	if (!@selected_rows) {
+		notify($ERRORS{'DEBUG'}, 0, "no data was returned for user group ID $user_group_id, returning an empty list");
+		return {};
+	}
+	
+	my $user_group_member_info;
+	for my $row (@selected_rows) {
+		my $user_id = $row->{id};
+		for my $column (keys %$row) {
+			next if $column eq 'id';
+			$user_group_member_info->{$user_id}{$column} = $row->{$column};
+		}
+	}
+	
+	#notify($ERRORS{'DEBUG'}, 0, "retrieved member info for user group ID $user_group_id:\n" . format_data($user_group_member_info));
+	return $user_group_member_info;
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -4049,8 +4033,9 @@ sub kill_reservation_process {
 
 sub database_select {
 	my ($select_statement, $database) = @_;
-	my ($package, $filename, $line, $sub) = caller(0);
-
+	
+	$ENV{database_select_count}++;
+	
 	my $dbh;
 	if (!($dbh = getnewdbh($database))) {
 		# Try again if first attempt failed
@@ -4084,6 +4069,15 @@ sub database_select {
 	my @return_rows = @{$select_handle->fetchall_arrayref({})};
 	$select_handle->finish;
 	$dbh->disconnect if !defined $ENV{dbh};
+	
+	if (@return_rows) {
+		my $row_count = scalar(@return_rows);
+		my $column_count = scalar(keys %{$return_rows[0]});
+		$ENV{database_select_row_count} += $row_count;
+		$ENV{database_select_column_count} += $column_count;
+		$ENV{database_select_field_count} += ($column_count * $row_count);
+	}
+	
 	return @return_rows;
 } ## end sub database_select
 
@@ -4389,10 +4383,10 @@ sub get_request_info {
 
 	for (@selected_rows) {
 		my %reservation_row = %{$_};
-
+		
 		# Grab the reservation ID to make the code a little cleaner
 		my $reservation_id = $reservation_row{reservation_id};
-
+		
 		# If this request only has 1 reservation, populate the RESERVATIONID key
 		# This is mainly for testing convenience
 		# Calling program is responsible for setting this based on which reservation it's processing
@@ -4400,14 +4394,14 @@ sub get_request_info {
 
 		# Check if the image associated with this reservation has meta data
 		# get_imagemeta_info will return default values if image_imagemetaid is undefined
-		my %imagemeta_info = get_imagemeta_info($reservation_row{image_imagemetaid});
+		my $imagemeta_info = get_imagemeta_info($reservation_row{image_imagemetaid});
 		# Make sure metadata was located if imagemetaid was specified for the image
-		if (!%imagemeta_info) {
+		if (!$imagemeta_info) {
 			notify($ERRORS{'WARNING'}, 0, "imagemetaid=" . $reservation_row{image_imagemetaid} . " was specified for image id=" . $reservation_row{image_id} . " but imagemeta could not be found");
 		}
 		else {
 			# Image meta data found, add it to the hash
-			$request_info{reservation}{$reservation_id}{image}{imagemeta} = \%imagemeta_info;
+			$request_info{reservation}{$reservation_id}{image}{imagemeta} = $imagemeta_info;
 
 			# If request_checkuser flag is set to 0 then disable user checks here by setting imagemetacheckuser to 0
 			unless ($reservation_row{request_checkuser}){
@@ -4420,25 +4414,25 @@ sub get_request_info {
 
 		# Check if the computer associated with this reservation has a vmhostid set
 		if ($reservation_row{computer_vmhostid}) {
-			my %vmhost_info = get_vmhost_info($reservation_row{computer_vmhostid});
+			my $vmhost_info = get_vmhost_info($reservation_row{computer_vmhostid});
 			# Make sure vmhost was located if vmhostid was specified for the image
-			if (!%vmhost_info) {
+			if (!$vmhost_info) {
 				notify($ERRORS{'WARNING'}, 0, "vmhostid=" . $reservation_row{computer_vmhostid} . " was specified for computer id=" . $reservation_row{computer_id} . " but vmhost could not be found");
 			}
 			else {
 				# Image meta data found, add it to the hash
-				$request_info{reservation}{$reservation_id}{computer}{vmhost} = \%vmhost_info;
+				$request_info{reservation}{$reservation_id}{computer}{vmhost} = $vmhost_info;
 			}
 		} ## end if ($reservation_row{computer_vmhostid})
 
 		# Get the computer's next image information
 		if ($reservation_row{computer_nextimageid}) {
-			if (my %computer_nextimage_info = get_image_info($reservation_row{computer_nextimageid})) {
-				$request_info{reservation}{$reservation_id}{computer}{nextimage} = \%computer_nextimage_info;
+			if (my $computer_nextimage_info = get_image_info($reservation_row{computer_nextimageid})) {
+				$request_info{reservation}{$reservation_id}{computer}{nextimage} = $computer_nextimage_info;
 
 				# For next imageid get the production imagerevision info
-				if (my %next_imagerevision_info = get_production_imagerevision_info($reservation_row{computer_nextimageid})) {
-					$request_info{reservation}{$reservation_id}{computer}{nextimagerevision} = \%next_imagerevision_info;
+				if (my $next_imagerevision_info = get_production_imagerevision_info($reservation_row{computer_nextimageid})) {
+					$request_info{reservation}{$reservation_id}{computer}{nextimagerevision} = $next_imagerevision_info;
 				}
 				else {
 					notify($ERRORS{'WARNING'}, 0, "unable to get next image revision info for computer, image revision ID is not set, tried to get production image for image ID " . $reservation_row{computer_nextimageid});
@@ -4454,13 +4448,13 @@ sub get_request_info {
 
 		# Get the computer's current imagerevision information
 		if ($reservation_row{computer_imagerevisionid}) {
-			if (my %computer_currentimagerevision_info = get_imagerevision_info($reservation_row{computer_imagerevisionid})) {
-				if (my %computer_currentimage_info = get_image_info($computer_currentimagerevision_info{imageid})) {
-					$request_info{reservation}{$reservation_id}{computer}{currentimagerevision} = \%computer_currentimagerevision_info;
-					$request_info{reservation}{$reservation_id}{computer}{currentimage} = \%computer_currentimage_info;
+			if (my $computer_currentimagerevision_info = get_imagerevision_info($reservation_row{computer_imagerevisionid})) {
+				if (my $computer_currentimage_info = get_image_info($computer_currentimagerevision_info->{imageid})) {
+					$request_info{reservation}{$reservation_id}{computer}{currentimagerevision} = $computer_currentimagerevision_info;
+					$request_info{reservation}{$reservation_id}{computer}{currentimage} = $computer_currentimage_info;
 				}
 				else {
-					notify($ERRORS{'WARNING'}, 0, "unable to get current image info for computer, image ID: $computer_currentimagerevision_info{imageid}");
+					notify($ERRORS{'WARNING'}, 0, "unable to get current image info for computer, image ID: $computer_currentimagerevision_info->{imageid}");
 				}
 			}
 			else {
@@ -4490,63 +4484,30 @@ sub get_request_info {
 			elsif ($key =~ /requestlaststate_/) {
 				$request_info{laststate}{$original_key} = $value if (!$request_info{laststate}{$original_key});
 			}
-			elsif ($key =~ /user_/) {
-				$request_info{user}{$original_key} = $value;
-			}
 			elsif ($key =~ /reservation_/) {
 				$request_info{reservation}{$reservation_id}{$original_key} = $value;
 			}
-			elsif ($key =~ /image_/) {
-				$request_info{reservation}{$reservation_id}{image}{$original_key} = $value;
-			}
-			elsif ($key =~ /imageplatform_/) {
-				$request_info{reservation}{$reservation_id}{image}{platform}{$original_key} = $value;
-			}
-			elsif ($key =~ /imagerevision_/) {
-				$request_info{reservation}{$reservation_id}{imagerevision}{$original_key} = $value;
-			}
-			elsif ($key =~ /OS_/) {
-				$request_info{reservation}{$reservation_id}{image}{OS}{$original_key} = $value;
-			}
-			elsif ($key =~ /imageOSmodule_/) {
-				$request_info{reservation}{$reservation_id}{image}{OS}{module}{$original_key} = $value;
-			}
-			elsif ($key =~ /adminlevel_/) {
-				$request_info{user}{adminlevel}{$original_key} = $value;
-			}
-			elsif ($key =~ /affiliation_/) {
-				$request_info{user}{affiliation}{$original_key} = $value;
-			}
-			elsif ($key =~ /IMtype_/) {
-				$request_info{user}{IMtype}{$original_key} = $value;
-			}
-			elsif ($key =~ /computer_/) {
-				$request_info{reservation}{$reservation_id}{computer}{$original_key} = $value;
-			}
-			elsif ($key =~ /computerplatform_/) {
-				$request_info{reservation}{$reservation_id}{computer}{platform}{$original_key} = $value;
-			}
-			elsif ($key =~ /computerschedule_/) {
-				$request_info{reservation}{$reservation_id}{computer}{schedule}{$original_key} = $value;
-			}
-			elsif ($key =~ /computerstate_/) {
-				$request_info{reservation}{$reservation_id}{computer}{state}{$original_key} = $value;
-			}
-			elsif ($key =~ /computerprovisioning_/) {
-				$request_info{reservation}{$reservation_id}{computer}{provisioning}{$original_key} = $value;
-			}
-			elsif ($key =~ /computerprovisioningmodule_/) {
-				$request_info{reservation}{$reservation_id}{computer}{provisioning}{module}{$original_key} = $value;
-			}
-			else {
-				notify($ERRORS{'WARNING'}, 0, "unknown key found in SQL data: $key");
-			}
-			if ($key =~ /serverrequest_/) {
-				$request_info{reservation}{$reservation_id}{serverrequest}{$original_key} = $value;
-			}
-
 		}    # Close foreach key in reservation row
+		
+		# Retrieve the image, imagerevision, and computer info and add to the hash
+		my $image_id = $request_info{reservation}{$reservation_id}{imageid};
+		my $image_info = get_image_info($image_id)) {
+		$request_info{reservation}{$reservation_id}{image} = $image_info;
+		
+		my $imagerevision_id = $request_info{reservation}{$reservation_id}{imagerevisionid};
+		my $imagerevision_info = get_imagerevision_info($imagerevision_id);
+		$request_info{reservation}{$reservation_id}{imagerevision} = $imagerevision_info;
+		
+		my $computer_id = $request_info{reservation}{$reservation_id}{computerid};
+		my $computer_info = get_computer_info($computer_id);
+		$request_info{reservation}{$reservation_id}{computer} = $computer_info;
+		
 	}    # Close loop through selected rows
+	
+	# Retrieve the user info and add to the hash
+	my $user_id = $request_info{userid};
+	my $user_info = get_user_info($user_id);
+	$request_info{user} = $user_info;
 
 	# Set some default non-database values for the entire request
 	# All data ever added to the hash should be initialized here
@@ -4930,130 +4891,156 @@ sub get_management_node_requests {
 
 =head2  get_image_info
 
- Parameters  : Image ID
- Returns     : Hash containing image data
- Description : collects data from database on supplied image_id
+ Parameters  : $image_identifier
+ Returns     : hash reference
+ Description : Retrieves info for the image specified by the argument. The
+               argument can either be the image ID or image name.
 
 =cut
 
 
 sub get_image_info {
-	my ($image_id) = @_;
-	
-	# Check the passed parameter
-	if (!(defined($image_id))) {
-		notify($ERRORS{'WARNING'}, 0, "image ID was not specified");
-		return ();
+	my ($image_identifier) = @_;
+	if (!defined($image_identifier)) {
+		notify($ERRORS{'WARNING'}, 0, "image identifier argument was not specified");
+		return;
 	}
+	
+	return $ENV{image_info}{$image_identifier} if $ENV{image_info}{$image_identifier};
+	
+	# Get a hash ref containing the database column names
+	my $database_table_columns = get_database_table_columns();
+	
+	my @tables = (
+		'image',
+		'platform',
+		'OS',
+		'module',
+	);
+	
+	# Construct the select statement
+	my $select_statement = "SELECT DISTINCT\n";
+	
+	# Get the column names for each table and add them to the select statement
+	for my $table (@tables) {
+		my @columns = @{$database_table_columns->{$table}};
+		for my $column (@columns) {
+			$select_statement .= "$table.$column AS '$table-$column',\n";
+		}
+	}
+	
+	# Remove the comma after the last column line
+	$select_statement =~ s/,$//;
+	
+	# Complete the select statement
+	$select_statement .= <<EOF;
+FROM
+image,
+platform,
+OS,
+module
 
-	# If imagemetaid isnt' NULL, perform another query to get the meta info
-	my $select_statement = "
-	SELECT
-	image.*,
+WHERE
+platform.id = image.platformid
+AND OS.id = image.OSid
+AND module.id = OS.moduleid
+AND 
+EOF
 	
-	imageplatform.name AS imageplatform_name,
+	if ($image_identifier =~ /^\d+$/){
+		$select_statement .= "image.id = $image_identifier";
+	}
+	else {
+		$image_identifier =~ s/(-v)\d+$/$1/g;
+		$select_statement .= "image.name LIKE '$image_identifier\%'";
+	}
 	
-	OS.name AS OS_name,
-	OS.prettyname AS OS_prettyname,
-	OS.type AS OS_type,
-	OS.installtype AS OS_installtype,
-	OS.sourcepath AS OS_sourcepath,
-	OS.moduleid AS OS_moduleid,
-	
-	imageOSmodule.name AS imageOSmodule_name,
-	imageOSmodule.prettyname AS imageOSmodule_prettyname,
-	imageOSmodule.description AS imageOSmodule_description,
-	imageOSmodule.perlpackage AS imageOSmodule_perlpackage
-	
-	FROM
-	image,
-	platform imageplatform,
-	OS,
-	module imageOSmodule
-	
-	WHERE
-	image.id = $image_id
-	AND imageplatform.id = image.platformid
-	AND OS.id = image.OSid
-	AND imageOSmodule.id = OS.moduleid
-	";
-
 	# Call the database select subroutine
-	# This will return an array of one or more rows based on the select statement
 	my @selected_rows = database_select($select_statement);
 
 	# Check to make sure 1 row was returned
 	if (scalar @selected_rows == 0) {
-		notify($ERRORS{'OK'}, 0, "image id $image_id does not exist in the database, 0 rows were returned");
-		return ();
+		notify($ERRORS{'WARNING'}, 0, "zero rows were returned from database select statement:\n$select_statement");
+		return;
 	}
 	elsif (scalar @selected_rows > 1) {
-		notify($ERRORS{'WARNING'}, 0, "" . scalar @selected_rows . " rows were returned from database select");
-		return ();
+		notify($ERRORS{'WARNING'}, 0, scalar @selected_rows . " rows were returned from database select statement:\n$select_statement");
+		return;
 	}
-	
-	# Loop through all the columns returned for the reservation
-	my %image_info;
-	my %image_row = %{$selected_rows[0]};
-	foreach my $key (keys %image_row) {
-		my $value = $image_row{$key};
 
-		# Create another variable by stripping off the column_ part of each key
-		# This variable stores the original (correct) column name
-		(my $original_key = $key) =~ s/^.+_//;
+	# Get the single row returned from the select statement
+	my $row = $selected_rows[0];
+	
+	# Construct a hash with all of the image info
+	my $image_info;
+	
+	# Loop through all the columns returned
+	for my $key (keys %$row) {
+		my $value = $row->{$key};
 		
-		if ($key =~ /imageplatform_/) {
-			$image_info{platform}{$original_key} = $value;
+		# Split the table-column names
+		my ($table, $column) = $key =~ /^([^-]+)-(.+)/;
+		
+		# Add the values for the primary table to the hash
+		# Add values for other tables under separate keys
+		if ($table eq $tables[0]) {
+			$image_info->{$column} = $value;
 		}
-		elsif ($key =~ /OS_/) {
-			$image_info{OS}{$original_key} = $value;
-		}
-		elsif ($key =~ /imageOSmodule_/) {
-			$image_info{OS}{module}{$original_key} = $value;
+		elsif ($table eq 'module') {
+			$image_info->{OS}{$table}{$column} = $value;
 		}
 		else {
-			$image_info{$original_key} = $value;
+			$image_info->{$table}{$column} = $value;
 		}
-	}  
-
-	# Return the hash
-	return %image_info;
-} ## end sub get_image_info
+	}
+	
+	# Retrieve the imagemeta info and add it to the hash
+	my $imagemeta_id = $image_info->{imagemetaid};
+	my $imagemeta_info = get_imagemeta_info($imagemeta_id);
+	$image_info->{imagemeta} = $imagemeta_info;
+	
+	my $image_owner_id = $image_info->{ownerid};
+	my $image_owner_user_info = get_user_info($image_owner_id);
+	$image_info->{owner} = $image_owner_user_info;
+	
+	#notify($ERRORS{'DEBUG'}, 0, "retrieved info for image '$image_identifier':\n" . format_data($image_info));
+	$ENV{image_info}{$image_identifier} = $image_info;
+	return $ENV{image_info}{$image_identifier};
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 
 =head2 get_imagerevision_info
 
- Parameters  : Imagerevision ID
- Returns     : Hash containing image data
+ Parameters  : $imagerevision_identifier
+ Returns     : Hash reference
  Description : collects data from database on supplied $imagerevision_id
 
 =cut
 
 sub get_imagerevision_info {
-	my ($imagerevision) = @_;
-	my ($package, $filename, $line, $sub) = caller(0);
-
-	# Check the passed parameter
-	if (!(defined($imagerevision))) {
-		notify($ERRORS{'WARNING'}, 0, "imagerevision ID was not specified");
-		return ();
+	my ($imagerevision_identifier) = @_;
+	if (!defined($imagerevision_identifier)) {
+		notify($ERRORS{'WARNING'}, 0, "imagerevision identifier argument was not specified");
+		return;
 	}
+	
+	return $ENV{imagerevision_info}{$imagerevision_identifier} if $ENV{imagerevision_info}{$imagerevision_identifier};
 
-	my $select_statement = "
-   SELECT
-   imagerevision.*
-   FROM
-   imagerevision
-   WHERE
-   ";
+	my $select_statement = <<EOF;
+SELECT
+imagerevision.*
+FROM
+imagerevision
+WHERE
+EOF
 
-	#Check input value - complete select_statement
-	if($imagerevision =~ /^\d/){
-		$select_statement .= "imagerevision.id = '$imagerevision'";
+	# Check input value - complete select_statement
+	if($imagerevision_identifier =~ /^\d/){
+		$select_statement .= "imagerevision.id = '$imagerevision_identifier'";
 	}
 	else{
-		$select_statement .= "imagerevision.imagename = '$imagerevision'";
+		$select_statement .= "imagerevision.imagename = '$imagerevision_identifier'";
 	}
 
 	# Call the database select subroutine
@@ -5061,19 +5048,33 @@ sub get_imagerevision_info {
 	my @selected_rows = database_select($select_statement);
 
 	# Check to make sure 1 row was returned
-	if (scalar @selected_rows == 0) {
-		notify($ERRORS{'OK'}, 0, "imagerevision id $imagerevision was not found in the database, 0 rows were returned");
-		return ();
+	if (!@selected_rows) {
+		notify($ERRORS{'DEBUG'}, 0, "imagerevision '$imagerevision_identifier' was not found in the database, 0 rows were returned from database select statement:\n$select_statement");
+		return;
 	}
 	elsif (scalar @selected_rows > 1) {
-		notify($ERRORS{'WARNING'}, 0, "" . scalar @selected_rows . " rows were returned from database select");
-		return ();
+		notify($ERRORS{'WARNING'}, 0, scalar @selected_rows . " rows were returned from database select statement:\n$select_statement");
+		return;
 	}
-
-	# A single row was returned (good)
-	# Return the hash
-	return %{$selected_rows[0]};
-} ## end sub get_imagerevision_info
+	
+	my $imagerevision_info = $selected_rows[0];
+	
+	# Retrieve the image info
+	my $imagerevision_image_id = $imagerevision_info->{imageid};
+	my $imagerevision_image_info = get_image_info($imagerevision_image_id);
+	$imagerevision_info->{image} = $imagerevision_image_info;
+	
+	# Retrieve the imagerevision user info
+	my $imagerevision_user_id = $imagerevision_info->{userid};
+	my $imagerevision_user_info = get_user_info($imagerevision_user_id);
+	my $imagerevision_user_info_address = sprintf('%x', $imagerevision_user_info);
+	$imagerevision_info->{user_address} = $imagerevision_user_info_address;
+	$imagerevision_info->{user} = $imagerevision_user_info;
+	
+	$ENV{imagerevision_info}{$imagerevision_identifier} = $imagerevision_info;
+	#notify($ERRORS{'DEBUG'}, 0, "retrieved info from database for imagerevision '$imagerevision_identifier':\n" . format_data($ENV{imagerevision_info}{$imagerevision_identifier}));
+	return $ENV{imagerevision_info}{$imagerevision_identifier};
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -5088,50 +5089,46 @@ sub get_imagerevision_info {
 
 sub get_production_imagerevision_info {
 	my ($image_id) = @_;
-	my ($package, $filename, $line, $sub) = caller(0);
 
 	# Check the passed parameter
-	if (!(defined($image_id))) {
+	if (!defined($image_id)) {
 		notify($ERRORS{'WARNING'}, 0, "image ID was not specified");
-		return ();
+		return;
 	}
-
-	# If imagemetaid isnt' NULL, perform another query to get the meta info
-	my $select_statement = "
-	SELECT
-	imagerevision.*
-	FROM
-	imagerevision
-	WHERE
-	imagerevision.imageid = '$image_id'
-	AND imagerevision.production = '1'
-   ";
+	
+	my $select_statement = <<EOF;
+SELECT
+id
+FROM
+imagerevision
+WHERE
+imageid = '$image_id'
+AND production = '1'
+EOF
 
 	# Call the database select subroutine
-	# This will return an array of one or more rows based on the select statement
 	my @selected_rows = database_select($select_statement);
 
 	# Check to make sure 1 row was returned
-	if (scalar @selected_rows == 0) {
-		notify($ERRORS{'OK'}, 0, "production imagerevision for image id $image_id was not found in the database, 0 rows were returned");
-		return ();
+	if (!@selected_rows) {
+		notify($ERRORS{'WARNING'}, 0, "production imagerevision for image $image_id was not found in the database, 0 rows were returned");
+		return;
 	}
 	elsif (scalar @selected_rows > 1) {
 		notify($ERRORS{'WARNING'}, 0, "" . scalar @selected_rows . " rows were returned from database select");
-		return ();
+		return;
 	}
 
-	# A single row was returned (good)
-	# Return the hash
-	return %{$selected_rows[0]};
+	my $imagerevision_id = $selected_rows[0]{id};
+	return get_imagerevision_info($imagerevision_id);
 } ## end sub get_production_imagerevision_info
 
 #/////////////////////////////////////////////////////////////////////////////
 
 =head2 get_imagemeta_info
 
- Parameters  : Imagemata ID
- Returns     : Hash containing imagemeta columns
+ Parameters  : $imagemeta_id
+ Returns     : Hash reference
  Description :
 
 =cut
@@ -5140,213 +5137,229 @@ sub get_production_imagerevision_info {
 sub get_imagemeta_info {
 	my ($imagemeta_id) = @_;
 
-	# Create a hash with the default values in case imagemeta data can't be found
-	my %default_usergroupmembers = ();
-	my %default_imagemeta = ('id'                   => '',
-									 'checkuser'            => '1',
-									 'subimages'            => '0',
-									 'usergroupid'          => '',
-									 'sysprep'              => '1',
-									 'postoption'           => '',
-									 'rootaccess'           => '1',
-									 'USERGROUPMEMBERS'     => \%default_usergroupmembers,
-									 'USERGROUPMEMBERCOUNT' => 0);
-
 	# Return defaults if nothing was passed as the imagemeta id
-	if (!defined($imagemeta_id) || $imagemeta_id eq '') {
-		#notify($ERRORS{'DEBUG'}, 0, "imagemeta data does not exist for image, default values will be used");
-		return %default_imagemeta;
+	if (!$imagemeta_id) {
+		return get_default_imagemeta_info();
 	}
+	
+	return $ENV{imagemeta_info}{$imagemeta_id} if $ENV{imagemeta_info}{$imagemeta_id};
 
 	# If imagemetaid isnt' NULL, perform another query to get the meta info
-	my $select_statement = "
-   SELECT
-   imagemeta.*
-   FROM
-   imagemeta
-   WHERE
-   imagemeta.id = '$imagemeta_id'
-   ";
+	my $select_statement = <<EOF;
+SELECT
+imagemeta.*
+FROM
+imagemeta
+WHERE
+imagemeta.id = '$imagemeta_id'
+EOF
 
 	# Call the database select subroutine
-	# This will return an array of one or more rows based on the select statement
 	my @selected_rows = database_select($select_statement);
-
+	
 	# Check to make sure 1 row was returned
-	if (scalar @selected_rows == 0) {
-		notify($ERRORS{'OK'}, 0, "imagemeta data does not exist for image, using default values", \%default_imagemeta);
-		return %default_imagemeta;
+	if (!@selected_rows) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve imagemeta ID=$imagemeta_id, zero rows were returned from database, returning default imagemeta values");
+		$ENV{imagemeta_info}{$imagemeta_id} = get_default_imagemeta_info();
+		return $ENV{imagemeta_info}{$imagemeta_id};
 	}
 	elsif (scalar @selected_rows > 1) {
-		notify($ERRORS{'WARNING'}, 0, "" . scalar @selected_rows . " rows were returned from database select, using default values", \%default_imagemeta);
-		return %default_imagemeta;
+		notify($ERRORS{'WARNING'}, 0, scalar @selected_rows . " rows were returned from database select statement:\n$select_statement, returning default imagemeta values");
+		$ENV{imagemeta_info}{$imagemeta_id} = get_default_imagemeta_info();
+		return $ENV{imagemeta_info}{$imagemeta_id};
 	}
 
-	my %imagemeta = %{$selected_rows[0]};
-
+	# Get the single row returned from the select statement
+	my $imagemeta_info = $selected_rows[0];
+	
 	# Collect additional information
-	if (defined($imagemeta{usergroupid})) {
-		my @userlist = getusergroupmembers($imagemeta{usergroupid});
-		if (scalar @userlist > 0) {
-			foreach my $userstring (@userlist) {
-				my ($username, $uid) = split(/:/, $userstring);
-				$imagemeta{"usergrpmembers"}{$uid}{"username"} = $username;
-				$imagemeta{"usergrpmembers"}{$uid}{"uid"}      = $uid;
-				$imagemeta{USERGROUPMEMBERS}{$uid}             = $username;
-			}
+	if (my $user_group_id = $imagemeta_info->{usergroupid}) {
+		
+		my $user_group_member_info = get_user_group_member_info($user_group_id);
+		
+		for my $user_id (keys %$user_group_member_info) {
+			my $user_unityid = $user_group_member_info->{$user_id}{unityid};
+			my $user_uid = $user_group_member_info->{$user_id}{uid} || 0;
+			
+			$imagemeta_info->{USERGROUPMEMBERS}{$user_uid} = $user_unityid;
+		}
+	}
+	# Populate the count of user group members
+	$imagemeta_info->{USERGROUPMEMBERCOUNT} = scalar(keys(%{$imagemeta_info->{USERGROUPMEMBERS}}));
+	
+	my $default_imagemeta_info = get_default_imagemeta_info();
+	for my $column (keys %$imagemeta_info) {
+		if (!defined($imagemeta_info->{$column})) {
+			$imagemeta_info->{$column} = $default_imagemeta_info->{$column};
+		}
+	}
+	
+	#notify($ERRORS{'DEBUG'}, 0, "retrieved imagemeta info:\n" . format_data($imagemeta_info));
+	$ENV{imagemeta_info}{$imagemeta_id} = $imagemeta_info;
+	return $ENV{imagemeta_info}{$imagemeta_id};
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_default_imagemeta_info
+
+ Parameters  : 
+ Returns     : Hash reference
+ Description :
+
+=cut
+
+
+sub get_default_imagemeta_info {
+	return $ENV{imagemeta_info}{default} if $ENV{imagemeta_info}{default};
+	
+	# Call the database select subroutine to retrieve the imagemeta table structure
+	my $describe_imagemeta_statement = "DESCRIBE imagemeta";
+	my @describe_imagemeta_rows = database_select($describe_imagemeta_statement);
+	if (!@describe_imagemeta_rows) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve imagemeta table structure, SQL statement:\n$describe_imagemeta_statement");
+		return;
+	}
+	
+	my $imagemeta_default_info;
+	for my $describe_imagemeta_row (@describe_imagemeta_rows) {
+		my $field = $describe_imagemeta_row->{Field};
+		my $default_value = $describe_imagemeta_row->{Default};
+		if (defined($default_value)) {
+			$imagemeta_default_info->{$field} = $default_value;
 		}
 		else {
-			notify($ERRORS{'WARNING'}, 0, "imagemeta data has usergroupid set $imagemeta{usergroupid} - user group was not found");
+			$imagemeta_default_info->{$field} = '';
 		}
-	} ## end if (defined($imagemeta{usergroupid}))
+	}
+	
+	$imagemeta_default_info->{USERGROUPMEMBERS} = {};
+	$imagemeta_default_info->{USERGROUPMEMBERCOUNT} = 0;
+	
+	#notify($ERRORS{'DEBUG'}, 0, "retrieved default imagemeta values:\n" . format_data($imagemeta_default_info));
+	$ENV{imagemeta_info}{default} = $imagemeta_default_info;
+	return $ENV{imagemeta_info}{default};
+}
 
-	# Set values to 0 if database values are null to avoid DataStructure warnings and concat errors
-	$imagemeta{usergroupid}  = 0 if !defined($imagemeta{usergroupid});
-	$imagemeta{postoption}   = 0 if !defined($imagemeta{postoption});
-	$imagemeta{architecture} = 0 if !defined($imagemeta{architecture});
-	$imagemeta{rootaccess} = 1 if !defined($imagemeta{rootaccess});
-
-	# Populate the count of user group members
-	$imagemeta{USERGROUPMEMBERCOUNT} = scalar(keys(%{$imagemeta{USERGROUPMEMBERS}}));
-
-	# Return the hash
-	return %imagemeta;
-} ## end sub get_imagemeta_info
 
 #/////////////////////////////////////////////////////////////////////////////
 
 =head2  get_vmhost_info
 
- Parameters  : vmhost ID
- Returns     : Hash containing vmhost, vmprofile, and vmtype data
- Description :
+ Parameters  : $vmhost_id
+ Returns     : Hash reference
+ Description : Retrieves info from the database for the vmhost, vmprofile, and
+               vmtype.
 
 =cut
 
 
 sub get_vmhost_info {
 	my ($vmhost_id) = @_;
-	my ($package, $filename, $line, $sub) = caller(0);
-
+	
 	# Check the passed parameter
-	if (!(defined($vmhost_id))) {
-		notify($ERRORS{'WARNING'}, 0, "vmhost ID was not specified");
-		return ();
+	if (!defined($vmhost_id)) {
+		notify($ERRORS{'WARNING'}, 0, "vmhost ID argument was not specified");
+		return;
 	}
+	
+	# Get a hash ref containing the database column names
+	my $database_table_columns = get_database_table_columns();
+	
+	my @tables = (
+		'vmhost',
+		'vmprofile',
+		'vmtype',
+	);
+	
+	# Construct the select statement
+	my $select_statement = "SELECT\n";
+	
+	# Get the column names for each table and add them to the select statement
+	for my $table (@tables) {
+		my @columns = @{$database_table_columns->{$table}};
+		for my $column (@columns) {
+			$select_statement .= "$table.$column AS '$table-$column',\n";
+		}
+	}
+	
+	# Remove the comma after the last column line
+	$select_statement =~ s/,$//;
+	
+	# Complete the select statement
+	$select_statement .= <<EOF;
+FROM
+vmhost,
+vmprofile,
+vmtype
 
-	# If imagemetaid isnt' NULL, perform another query to get the meta info
-	my $select_statement = "
-   SELECT
-
-   vmhost.id AS vmhost_id,
-   vmhost.computerid AS vmhost_computerid,
-   vmhost.vmprofileid AS vmhost_vmprofileid,
-   vmhost.vmlimit AS vmhost_vmlimit,
-   vmhost.vmkernalnic AS vmhost_vmkernalnic,
-
-   vmprofile.id AS vmprofile_id,
-	vmprofile.imageid AS vmprofile_imageid,
-   vmprofile.profilename AS vmprofile_profilename,
-   vmprofile.vmtypeid AS vmprofile_vmtypeid,
-   vmprofile.repositorypath AS vmprofile_repositorypath,
-   vmprofile.datastorepath AS vmprofile_datastorepath,
-   vmprofile.vmpath AS vmprofile_vmpath,
-   vmprofile.virtualswitch0 AS vmprofile_virtualswitch0,
-   vmprofile.virtualswitch1 AS vmprofile_virtualswitch1,
-   vmprofile.virtualswitch2 AS vmprofile_virtualswitch2,
-   vmprofile.virtualswitch3 AS vmprofile_virtualswitch3,
-   vmprofile.vmdisk AS vmprofile_vmdisk,
-   vmprofile.username AS vmprofile_username,
-   vmprofile.password AS vmprofile_password,
-   vmprofile.vmware_mac_eth0_generated AS vmprofile_eth0generated,
-   vmprofile.vmware_mac_eth1_generated AS vmprofile_eth1generated,
-
-   vmtype.id AS vmtype_id,
-	vmtype.name AS vmtype_name,
-
-   state.name AS vmhost_state,
-	image.id AS vmhost_imageid,
-	image.name AS vmhost_imagename,
-   computer.RAM AS vmhost_RAM,
-	computer.hostname AS vmhost_hostname,
-	computer.type AS vmhost_type
-
-   FROM
-   vmhost,
-   vmprofile,
-	vmtype,
-   computer,
-   state,
-	image
-
-   WHERE
-   vmhost.id = '$vmhost_id'
-   AND vmprofile.id = vmhost.vmprofileid
-	AND vmtype.id = vmprofile.vmtypeid
-   AND computer.id = vmhost.computerid
-   AND state.id = computer.stateid
-	AND image.id = computer.currentimageid
-   ";
+WHERE
+vmhost.id = '$vmhost_id'
+AND vmprofile.id = vmhost.vmprofileid
+AND vmtype.id = vmprofile.vmtypeid
+EOF
 
 	# Call the database select subroutine
-	# This will return an array of one or more rows based on the select statement
 	my @selected_rows = database_select($select_statement);
 
 	# Check to make sure 1 row was returned
 	if (scalar @selected_rows == 0) {
-		notify($ERRORS{'WARNING'}, 0, "zero rows were returned from database select");
-		return ();
+		notify($ERRORS{'WARNING'}, 0, "zero rows were returned from database select statement:\n$select_statement");
+		return;
 	}
 	elsif (scalar @selected_rows > 1) {
-		notify($ERRORS{'WARNING'}, 0, "" . scalar @selected_rows . " rows were returned from database select");
-		return ();
+		notify($ERRORS{'WARNING'}, 0, scalar @selected_rows . " rows were returned from database select statement:\n$select_statement");
+		return;
 	}
 
-	# Get the single returned row
-	my %vmhost_row = %{$selected_rows[0]};
-
-	# Create a hash
-	my %vmhost_info;
-
-	# Loop through all the columns returned for the reservation
-	foreach my $key (keys %vmhost_row) {
-		my $value = $vmhost_row{$key};
-
-		# Create another variable by stripping off the column_ part of each key
-		# This variable stores the original (correct) column name
-		(my $original_key = $key) =~ s/^.+_//;
-		#notify($ERRORS{'OK'}, 0, "key=$key original_key=$original_key  value=$value");
-
-		if ($key =~ /vmhost_/) {
-			$vmhost_info{$original_key} = $value;
+	# Get the single row returned from the select statement
+	my $row = $selected_rows[0];
+	
+	# Construct a hash with all of the vmhost info
+	my $vmhost_info;
+	
+	# Loop through all the columns returned
+	for my $key (keys %$row) {
+		my $value = $row->{$key};
+		
+		# Split the table-column names
+		my ($table, $column) = $key =~ /^([^-]+)-(.+)/;
+		
+		# Add the values for the vmhost table to the hash
+		# Add values for other tables under separate keys
+		if ($table eq $tables[0]) {
+			$vmhost_info->{$column} = $value;
 		}
-		elsif ($key =~ /vmprofile_/) {
-			# Set values to 0 if database values are null to avoid DataStructure warnings and concat errors
-			if(!defined($value)){
-			   $vmhost_info{"vmprofile"}{$original_key} = 0;
-			}
-			else{
-			   $vmhost_info{"vmprofile"}{$original_key} = $value;
-			}
-		}
-		elsif ($key =~ /vmtype_/) {
-			$vmhost_info{"vmprofile"}{"vmtype"}{$original_key} = $value;
+		elsif ($table eq 'vmtype') {
+			$vmhost_info->{vmprofile}{$table}{$column} = $value;
 		}
 		else {
-			notify($ERRORS{'WARNING'}, 0, "unknown key found in SQL data: $key");
+			$vmhost_info->{$table}{$column} = $value;
 		}
-	}    # Close loop through hash keys (columns)
-
-	$vmhost_info{vmprofile}{"datastorepath4vmx"} = $vmhost_info{vmprofile}{datastorepath};
-	# FIXME - set vmpath to not null in database and update frontend 
-	# IF vmpath is not defined set it to the datastorepath variable
-	$vmhost_info{vmprofile}{"vmpath"} = $vmhost_info{vmprofile}{datastorepath} if (!($vmhost_info{vmprofile}{vmpath}));
-	$vmhost_info{vmprofile}{datastorepath} =~ s/(\s+)/\\ /g;    #detect/handle any spaces;
-	$vmhost_info{vmprofile}{vmpath}        =~ s/(\s+)/\\ /g;    #detect/handle any spaces;
-
-
-	return %vmhost_info;
-} ## end sub get_vmhost_info
+	}
+	
+	# Get the vmhost computer info and add it to the hash
+	my $computer_id = $vmhost_info->{computerid};
+	my $computer_info = get_computer_info($computer_id);
+	if ($computer_info) {
+		$vmhost_info->{computer} = $computer_info;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve vmhost computer info, computer ID: $computer_id");
+	}
+	
+	# Get the vmprofile image info and add it to the hash
+	my $vmprofile_image_id = $vmhost_info->{vmprofile}{imageid};
+	my $vmprofile_image_info = get_image_info($vmprofile_image_id);
+	if ($vmprofile_image_info) {
+		$vmhost_info->{vmprofile}{image} = $vmprofile_image_info;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve vmprofile image info, image ID: $vmprofile_image_id");
+	}
+	
+	return $vmhost_info;
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -5467,7 +5480,7 @@ sub run_ssh_command {
 	# -p <port>, Port to connect to on the remote host.
 	# -x, Disables X11 forwarding.
 	# Dont use: -q, Quiet mode.  Causes all warning and diagnostic messages to be suppressed.
-	my $ssh_command = "$ssh_path $identity_paths -o StrictHostKeyChecking=no -l $user -p $port -x $node '$command' 2>&1";
+	my $ssh_command = "$ssh_path $identity_paths -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -l $user -p $port -x $node '$command' 2>&1";
 	
 	# Execute the command
 	my $ssh_output;
@@ -5563,7 +5576,7 @@ sub run_ssh_command {
 		# ssh exits with the exit status of the remote command or with 255 if an error occurred.
 		# Check for vmware-cmd usage message, it returns 255 if the vmware-cmd usage output is returned
 		if ($ssh_output_formatted =~ /^ssh:/ && (($exit_status == 255 && $ssh_command !~ /(vmware-cmd|vim-cmd|vmkfstools)/i) ||
-			 $ssh_output_formatted =~ /(lost connection|reset by peer|no route to host|connection refused|connection timed out|resource temporarily unavailable)/i)) {
+			 $ssh_output_formatted =~ /(lost connection|reset by peer|no route to host|connection refused|connection timed out|resource temporarily unavailable|connection reset)/i)) {
 			notify($ERRORS{'WARNING'}, 0, "attempt $attempts/$max_attempts: failed to execute SSH command on $node: '$command', exit status: $exit_status, SSH exits with the exit status of the remote command or with 255 if an error occurred, output:\n$ssh_output_formatted") if $output_level;
 			next;
 		}
@@ -5984,6 +5997,14 @@ sub get_management_node_info {
 		notify($ERRORS{'WARNING'}, 0, "management node hostname or ID was not specified and hostname could not be determined");
 		return;
 	}
+	
+	if (defined($ENV{management_node_info}) && ref($ENV{management_node_info}) eq 'HASH') {
+		my $lastcheckin_age = (time - convert_to_epoch_seconds($ENV{management_node_info}{lastcheckin}));
+		
+		if ($lastcheckin_age < 60) {
+			return $ENV{management_node_info};
+		}
+	}
 
 	my $select_statement = "
 SELECT
@@ -6112,7 +6133,7 @@ AND managementnode.id != $management_node_id
 	$management_node_info->{SHARED_EMAIL_BOX} = $management_node_info->{sharedMailBox};
 	
 	# Add affiliations that are not to use the standalone passwords
-	$management_node_info->{NOT_STANDALONE}	= $management_node_info->{NOT_STANDALONE};
+	$management_node_info->{NOT_STANDALONE}	= $management_node_info->{NOT_STANDALONE} || '';
 	
 	# Set the management_node_info environment variable if the info was retrieved for this computer
 	$ENV{management_node_info} = $management_node_info if ($management_node_identifier eq $hostname);
@@ -6145,8 +6166,8 @@ sub update_computer_imagename {
 	}
 
 	#get computer infomation based on imagename
-	my %info;
-	if( %info = get_imagerevision_info($imagename)){
+	my $imagerevision_info;
+	if( $imagerevision_info = get_imagerevision_info($imagename)){
 		notify($ERRORS{'DEBUG'}, 0, "successfully retreived image info for $imagename");
 	}
 	else{
@@ -6154,8 +6175,8 @@ sub update_computer_imagename {
 		return 0;
 	}
 
-	my $image_id  = $info{imageid};
-	my $imagerevision_id = $info{id};
+	my $image_id  = $imagerevision_info->{imageid};
+	my $imagerevision_id = $imagerevision_info->{id};
 
 	if(update_currentimage($computerid, $image_id, $imagerevision_id)){
 		notify($ERRORS{'DEBUG'}, 0, "successfully updated computerid= $computerid image_id= $image_id imagerevision_id= $imagerevision_id");
@@ -7300,44 +7321,43 @@ sub set_logfile_path {
 
 sub get_highest_imagerevision_info {
 	my ($image_id) = @_;
-	my ($package, $filename, $line, $sub) = caller(0);
-
+	
 	# Check the passed parameter
-	if (!(defined($image_id))) {
-		notify($ERRORS{'WARNING'}, 0, "image ID was not specified");
-		return ();
+	if (!defined($image_id)) {
+		notify($ERRORS{'WARNING'}, 0, "image ID argument was not specified");
+		return;
 	}
 
 	# Select the highest image revision id for the specified image id
-	my $select_statement = "
-   SELECT
-   MAX(imagerevision.id) AS id
-   FROM
-   imagerevision
-   WHERE
-   imagerevision.imageid = '$image_id'
-   ";
+	my $select_statement = <<EOF;
+SELECT
+MAX(imagerevision.id) AS id
+FROM
+imagerevision
+WHERE
+imagerevision.imageid = '$image_id'
+EOF
 
 	# Call the database select subroutine
 	# This will return an array of one or more rows based on the select statement
 	my @selected_rows = database_select($select_statement);
 
 	# Check to make sure 1 row was returned
-	if (scalar @selected_rows == 0) {
-		notify($ERRORS{'OK'}, 0, "image revision data for image id $image_id was not found in the database, 0 rows were returned");
-		return -1;
+	if (!@selected_rows) {
+		notify($ERRORS{'WARNING'}, 0, "image revision data for image ID $image_id was not found in the database, 0 rows were returned");
+		return;
 	}
 	elsif (scalar @selected_rows > 1) {
-		notify($ERRORS{'WARNING'}, 0, "" . scalar @selected_rows . " rows were returned from database select");
+		notify($ERRORS{'WARNING'}, 0, scalar @selected_rows . " rows were returned from database select statement:\n$select_statement");
 		return ();
 	}
 
-	# A single row was returned (good)
-	my $imagerevision_id = $selected_rows[0]{id};
+	# A single row was returned
+	my $row = $selected_rows[0];
+	my $imagerevision_id = $row->{id};
 
 	return get_imagerevision_info($imagerevision_id);
-
-} ## end sub get_highest_imagerevision_info
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -7951,50 +7971,22 @@ sub get_computer_grp_members {
  Returns     : hash reference
  Description : Retrieves user information from the database. The user identifier
                argument can either be a user ID or unityid. A hash reference is
-               returned. Example:
-               my $user_info = user_info('vclreload');
-               
-               %{$user_info->{adminlevel}}
-                  |---$user_info->{adminlevel}{name} = 'none'
-               $user_info->{adminlevelid} = '1'
-               %{$user_info->{affiliation}}
-                  |---$user_info->{affiliation}{dataUpdateText} = ''
-                  |---$user_info->{affiliation}{helpaddress} = NULL
-                  |---$user_info->{affiliation}{name} = 'Local'
-                  |---$user_info->{affiliation}{shibname} = NULL
-                  |---$user_info->{affiliation}{shibonly} = '0'
-                  |---$user_info->{affiliation}{sitewwwaddress} = 'http://vcl.ncsu.edu'
-               $user_info->{affiliationid} = '4'
-               $user_info->{audiomode} = 'local'
-               $user_info->{bpp} = '16'
-               $user_info->{email} = ''
-               $user_info->{emailnotices} = '0'
-               $user_info->{firstname} = 'vcl'
-               $user_info->{height} = '768'
-               $user_info->{id} = '2'
-               $user_info->{IMid} = NULL
-               %{$user_info->{IMtype}}
-                  |---$user_info->{IMtype}{name} = 'none'
-               $user_info->{IMtypeid} = '1'
-               $user_info->{lastname} = 'reload'
-               $user_info->{lastupdated} = '0000-00-00 00:00:00'
-               $user_info->{mapdrives} = '1'
-               $user_info->{mapprinters} = '1'
-               $user_info->{mapserial} = '0'
-               $user_info->{preferredname} = NULL
-               $user_info->{showallgroups} = '0'
-               $user_info->{uid} = NULL
-               $user_info->{unityid} = 'vclreload'
-               $user_info->{width} = '1024'
+               returned.
 
 =cut
 
 sub get_user_info {
 	my ($user_identifier, $affiliation_identifier) = @_;
+	
 	if (!defined($user_identifier)) {
 		notify($ERRORS{'WARNING'}, 0, "user identifier argument was not specified");
 		return;
 	}
+	
+	return $ENV{user_info}{$user_identifier} if $ENV{user_info}{$user_identifier};
+	
+	# If affiliation identifier argument wasn't supplied, set it to % wildcard
+	$affiliation_identifier = '%' if !$affiliation_identifier;
 	
 	my $select_statement = <<EOF;
 SELECT DISTINCT
@@ -8006,12 +7998,20 @@ affiliation.dataUpdateText AS affiliation_dataUpdateText,
 affiliation.sitewwwaddress AS affiliation_sitewwwaddress,
 affiliation.helpaddress AS affiliation_helpaddress,
 affiliation.shibonly AS affiliation_shibonly,
-IMtype.name AS IMtype_name
+
+IMtype.name AS IMtype_name,
+
+localauth.passhash AS localauth_passhash,
+localauth.salt AS localauth_salt,
+localauth.lastupdated AS localauth_lastupdated,
+localauth.lockedout AS localauth_lockedout
+
 FROM
 user
 LEFT JOIN (adminlevel) ON (adminlevel.id = user.adminlevelid)
 LEFT JOIN (affiliation) ON (affiliation.id = user.affiliationid)
 LEFT JOIN (IMtype) ON (IMtype.id = user.IMtypeid)
+LEFT JOIN (localauth) ON (localauth.userid = user.id)
 WHERE
 EOF
 	
@@ -8021,7 +8021,7 @@ EOF
 		$select_statement .= "user.id = $user_identifier";
 	}
 	else {
-		$select_statement .= "user.unityid = '$user_identifier'";
+		$select_statement .= "user.unityid LIKE '$user_identifier'";
 	}
 	
 	# If the affiliation identifier argument was specified add affiliation table clause
@@ -8038,36 +8038,44 @@ EOF
 	# This will return an array of one or more rows based on the select statement
 	my @selected_rows = database_select($select_statement);
 	
-	# Check to make sure 1 row was returned
-	if (scalar @selected_rows == 0) {
-		notify($ERRORS{'OK'}, 0, "user was not found in the database: $user_identifier, 0 rows were returned");
+	# Check to make sure row was returned
+	if (!@selected_rows) {
+		notify($ERRORS{'OK'}, 0, "user was not found in the database: '$user_identifier', SQL statement:\n$select_statement");
 		return;
 	}
 	elsif (scalar @selected_rows > 1) {
-		notify($ERRORS{'WARNING'}, 0, "" . scalar @selected_rows . " rows were returned from database select for user: $user_identifier");
+		my $user_ids;
+		for my $row (@selected_rows) {
+			$user_ids->{$row->{id}} = $row->{unityid} . '@' . $row->{affiliation_name};
+		}
+		
+		notify($ERRORS{'WARNING'}, 0, scalar @selected_rows . " rows were returned from database select for user: '$user_identifier', affiliation '$affiliation_identifier':\n" . format_data($user_ids) . "\nSQL statement:\n$select_statement");
 		return;
 	}
 	
-	my %row = %{$selected_rows[0]};
-	
-	my %user_info;
+	# Transform the database row into a hash
+	my $row = $selected_rows[0];
+	my $user_info;
 	
 	# Loop through all the columns returned
-	foreach my $key (keys %row) {
-		my $value = $row{$key};
+	for my $key (keys %$row) {
+		my $value = $row->{$key};
 		
 		# Create another variable by stripping off the column_ part of each key
 		# This variable stores the original (correct) column name
 		(my $original_key = $key) =~ s/^.+_//;
 		
 		if ($key =~ /^(.+)_/) {
-			 $user_info{$1}{$original_key} = $value;
+			 $user_info->{$1}{$original_key} = $value;
 		}
 		else {
-			$user_info{$original_key} = $value;
+			$user_info->{$original_key} = $value;
 		}
 	}
-	return \%user_info;
+	
+	#notify($ERRORS{'DEBUG'}, 0, "retrieved info for user '$user_identifier', affiliation: '$affiliation_identifier':\n" . format_data($user_info));
+	$ENV{user_info}{$user_identifier} = $user_info;
+	return $ENV{user_info}{$user_identifier};	
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -8128,6 +8136,49 @@ EOF
 }
 
 #/////////////////////////////////////////////////////////////////////////////
+		  
+		  
+=head2 get_local_user_info
+
+ Parameters  : none
+ Returns     : hash reference
+ Description : Retrieves info for all local users and returns a hash reference.
+               The keys of the hash are user IDs.
+
+=cut
+
+sub get_local_user_info {
+	my $select_statement = <<EOF;
+SELECT
+userid
+FROM
+localauth
+EOF
+
+	# Call the database select subroutine
+	# This will return an array of one or more rows based on the select statement
+	my @selected_rows = database_select($select_statement);
+	
+	# Check to make sure 1 row was returned
+	if (scalar @selected_rows == 0) {
+		notify($ERRORS{'OK'}, 0, "local user was not found in the database, 0 rows were returned");
+		return;
+	}
+	
+	# Transform the array of database rows into a hash
+	my $local_user_info;
+	for my $row (@selected_rows) {
+		my $user_id = $row->{userid};
+		
+		my $user_info = get_user_info($user_id);
+		$local_user_info->{$user_id} = $user_info;
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "retrieved local user info:\n" . format_data($local_user_info));
+	return $local_user_info;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
 
 =head2 get_group_name
 
@@ -8155,254 +8206,215 @@ WHERE
 usergroup.id = $group_id
 EOF
 
-
- # Call the database select subroutine
-        # This will return an array of one or more rows based on the select statement
-        my @selected_rows = database_select($select_statement);
-
-        # Check to make sure 1 row was returned
-        if (scalar @selected_rows == 0) {
-                notify($ERRORS{'WARNING'}, 0, "zero rows were returned from database select");
-                return ();
-        }
-        elsif (scalar @selected_rows > 1) {
-                notify($ERRORS{'WARNING'}, 0, "" . scalar @selected_rows . " rows were returned from database select");
-                return ();
-        }
-
-        # Get the single returned row
-        # It contains a hash
-        my $end;
-
-        # Make sure we return undef if the column wasn't found
-        if (defined $selected_rows[0]{name}) {
-                my $groupname = $selected_rows[0]{name};
-                return $groupname;
-        }
-        else {
-                return undef;
-        }
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 get_computer_info
-
- Parameters  : $computer_id
- Returns     : hash containing information on computer id
- Description :
-
-=cut
-
-sub get_computer_info {
-	my ($computer_id) = @_;
-
-	if(!defined($computer_id)){
-		notify($ERRORS{'WARNING'}, $LOGFILE, "computer_id was not supplied");
-		return 0;
-	}
-
-	my $select_statement = <<EOF;
-SELECT DISTINCT
-computer.id AS computer_id,
-computer.ownerid AS computer_ownerid,
-computer.platformid AS computer_platformid,
-computer.currentimageid AS computer_currentimageid,
-computer.imagerevisionid AS computer_imagerevisionid,
-computer.RAM AS computer_RAM,
-computer.procnumber AS computer_procnumber,
-computer.procspeed AS computer_procspeed,
-computer.hostname AS computer_hostname,
-computer.IPaddress AS computer_IPaddress,
-computer.privateIPaddress AS computer_privateIPaddress,
-computer.eth0macaddress AS computer_eth0macaddress,
-computer.eth1macaddress AS computer_eth1macaddress,
-computer.type AS computer_type,
-computer.provisioningid AS computer_provisioningid,
-computer.drivetype AS computer_drivetype,
-computer.deleted AS computer_deleted,
-computer.notes AS computer_notes,
-computer.lastcheck AS computer_lastcheck,
-computer.location AS computer_location,
-computer.vmhostid AS computer_vmhostid,
-
-computerstate.name AS computerstate_name,
-
-computerplatform.name AS computerplatform_name,
-
-computerprovisioning.name AS computerprovisioning_name,
-computerprovisioning.prettyname AS computerprovisioning_prettyname,
-computerprovisioning.moduleid AS computerprovisioning_moduleid,
-
-computerprovisioningmodule.name AS computerprovisioningmodule_name,
-computerprovisioningmodule.prettyname AS computerprovisioningmodule_prettyname,
-computerprovisioningmodule.perlpackage AS computerprovisioningmodule_perlpackage,
-
-image.id AS image_id,
-image.name AS image_name,
-image.prettyname AS image_prettyname,
-image.platformid AS image_platformid,
-image.OSid AS image_OSid,
-image.imagemetaid AS image_imagemetaid,
-image.architecture AS image_architecture,
-
-imagerevision.id AS imagerevision_id,
-imagerevision.revision AS imagerevision_revision,
-imagerevision.imagename AS imagerevision_imagename,
-
-imageplatform.name AS imageplatform_name,
-
-OS.name AS OS_name,
-OS.prettyname AS OS_prettyname,
-OS.type AS OS_type,
-OS.installtype AS OS_installtype,
-OS.sourcepath AS OS_sourcepath,
-
-imageOSmodule.name AS imageOSmodule_name,
-imageOSmodule.perlpackage AS imageOSmodule_perlpackage
-
-FROM
-computer
-
-LEFT JOIN (state computerstate) ON (computerstate.id = computer.stateid)
-
-LEFT JOIN (platform computerplatform) ON (computerplatform.id = computer.platformid)
-
-LEFT JOIN (
-	provisioning computerprovisioning,
-	module computerprovisioningmodule
-)
-ON (
-	computerprovisioning.id = computer.provisioningid
-	AND computerprovisioningmodule.id = computerprovisioning.moduleid
-)
-
-LEFT JOIN (
-	imagerevision,
-	image,
-	OS,
-	module imageOSmodule,
-	platform imageplatform
-)
-ON (
-	computer.imagerevisionid = imagerevision.id
-	AND image.id = imagerevision.imageid
-	AND OS.id = image.OSid
-	AND imageOSmodule.id = OS.moduleid
-	AND imageplatform.id = image.platformid
-)
-
-WHERE
-computer.id = $computer_id
-AND computer.deleted != '1'
-EOF
-
 	# Call the database select subroutine
 	# This will return an array of one or more rows based on the select statement
 	my @selected_rows = database_select($select_statement);
-
-	# Check to make sure only 1 row was returned
+	
+	# Check to make sure 1 row was returned
 	if (scalar @selected_rows == 0) {
-		notify($ERRORS{'DEBUG'}, 0, "zero rows were returned from database select for computer id $computer_id");
+		notify($ERRORS{'WARNING'}, 0, "zero rows were returned from database select");
 		return ();
 	}
 	elsif (scalar @selected_rows > 1) {
 		notify($ERRORS{'WARNING'}, 0, "" . scalar @selected_rows . " rows were returned from database select");
 		return ();
 	}
-
-	# Build the hash
-   my %comp_info;
-
-	my %computer_row = %{$selected_rows[0]};
 	
-	# Check if the computer associated with this reservation has a vmhostid set
-	if ($computer_row{computer_vmhostid}) {
-		my %vmhost_info = get_vmhost_info($computer_row{computer_vmhostid});
-		# Make sure vmhost was located if vmhostid was specified for the image
-		if (!%vmhost_info) {
-			notify($ERRORS{'WARNING'}, 0, "vmhostid=" . $computer_row{computer_vmhostid} . " was specified for computer id=" . $computer_row{computer_id} . " but vmhost could not be found");
+	# Get the single returned row
+	# It contains a hash
+	my $end;
+	
+	# Make sure we return undef if the column wasn't found
+	if (defined $selected_rows[0]{name}) {
+		my $groupname = $selected_rows[0]{name};
+		return $groupname;
+	}
+	else {
+		return undef;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_computer_info
+
+ Parameters  : $computer_identifier
+ Returns     : hash reference
+ Description :
+
+=cut
+
+sub get_computer_info {
+	my ($computer_identifier) = @_;
+	if (!defined($computer_identifier)){
+		notify($ERRORS{'WARNING'}, 0, "computer identifier argument was not supplied");
+		return;
+	}
+	
+	return $ENV{computer_info}{$computer_identifier} if $ENV{computer_info}{$computer_identifier};
+	
+	# Get a hash ref containing the database column names
+	my $database_table_columns = get_database_table_columns();
+	
+	my @tables = (
+		'computer',
+		'state',
+		'provisioning',
+		'module',
+		'schedule',
+		'platform',
+	);
+	
+	# Construct the select statement
+	my $select_statement = "SELECT DISTINCT\n";
+	
+	# Get the column names for each table and add them to the select statement
+	for my $table (@tables) {
+		my @columns = @{$database_table_columns->{$table}};
+		for my $column (@columns) {
+			$select_statement .= "$table.$column AS '$table-$column',\n";
+		}
+	}
+	
+	# Remove the comma after the last column line
+	$select_statement =~ s/,$//;
+	
+	# Complete the select statement
+	$select_statement .= <<EOF;
+FROM
+computer
+
+LEFT JOIN (state) ON (state.id = computer.stateid)
+LEFT JOIN (platform) ON (platform.id = computer.platformid)
+LEFT JOIN (
+	provisioning,
+	module
+)
+ON (
+	provisioning.id = computer.provisioningid
+	AND module.id = provisioning.moduleid
+)
+LEFT JOIN (schedule) ON (schedule.id = computer.scheduleid)
+
+WHERE
+computer.deleted != '1'
+AND 
+EOF
+
+	# If the computer identifier is all digits match it to computer.id
+	# Otherwise, match computer.hostname
+	if ($computer_identifier =~ /^\d+$/) {
+		$select_statement .= "computer.id = $computer_identifier";
+	}
+	else {
+		$select_statement .= "computer.hostname LIKE '$computer_identifier'";
+	}
+	
+	# Call the database select subroutine
+	my @selected_rows = database_select($select_statement);
+
+	# Check to make sure 1 row was returned
+	if (scalar @selected_rows == 0) {
+		notify($ERRORS{'WARNING'}, 0, "zero rows were returned from database select statement:\n$select_statement");
+		return;
+	}
+	elsif (scalar @selected_rows > 1) {
+		notify($ERRORS{'WARNING'}, 0, scalar @selected_rows . " rows were returned from database select statement:\n$select_statement");
+		return;
+	}
+
+	# Get the single row returned from the select statement
+	my $row = $selected_rows[0];
+	
+	# Construct a hash with all of the computer info
+	my $computer_info;
+	
+	# Loop through all the columns returned
+	for my $key (keys %$row) {
+		my $value = $row->{$key};
+		
+		# Split the table-column names
+		my ($table, $column) = $key =~ /^([^-]+)-(.+)/;
+		
+		# Add the values for the primary table to the hash
+		# Add values for other tables under separate keys
+		if ($table eq $tables[0]) {
+			$computer_info->{$column} = $value;
+		}
+		elsif ($table eq 'module') {
+			$computer_info->{provisioning}{$table}{$column} = $value;
 		}
 		else {
-			# Image meta data found, add it to the hash
-			$comp_info{vmhost} = \%vmhost_info;
-			$comp_info{computer}{vmhost} = \%vmhost_info;
-		}
-	} ## end if ($reservation_row{computer_vmhostid})
-
-
-	# Loop through all the columns returned for the reservation
-	foreach my $key (keys %computer_row) {
-		my $value = $computer_row{$key};
-		# Create another variable by stripping off the column_ part of each key
-		# This variable stores the original (correct) column name
-		(my $original_key = $key) =~ s/^.+_//;
-
-		if ($key =~ /computer_/) {
-			 $comp_info{computer}{$original_key} = $value;
-		}
-		elsif ($key =~ /computerplatform_/) {
-			$comp_info{computer}{platform}{$original_key} = $value;
-		}
-		elsif ($key =~ /computerstate_/) {
-			$comp_info{computer}{state}{$original_key} = $value;
-		}
-		elsif ($key =~ /computerprovisioning_/) {
-			$comp_info{computer}{provisioning}{$original_key} = $value;
-		}
-		elsif ($key =~ /computerprovisioningmodule_/) {
-			$comp_info{computer}{provisioning}{module}{$original_key} = $value;
-		}
-		elsif ($key =~ /image_/) {
-			$comp_info{image}{$original_key} = $value;
-		}
-		elsif ($key =~ /imageplatform_/) {
-			$comp_info{image}{platform}{$original_key} = $value;
-		}
-		elsif ($key =~ /imagerevision_/) {
-			$comp_info{imagerevision}{$original_key} = $value;
-		}
-		elsif ($key =~ /OS_/) {
-			$comp_info{image}{OS}{$original_key} = $value;
-		}
-		elsif ($key =~ /imageOSmodule_/) {
-			$comp_info{image}{OS}{module}{$original_key} = $value;
-		}
-		elsif ($key =~ /user_/) {
-			$comp_info{user}{$original_key} = $value;
-		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "unknown key found in SQL data: $key");
+			$computer_info->{$table}{$column} = $value;
 		}
 	}
 	
 	# Set the short name of the computer based on the hostname
-	my $computer_hostname = $comp_info{computer}{hostname};
-	$computer_hostname =~ /([-_a-zA-Z0-9]*)(\.?)/;
-	my $computer_shortname = $1;
-	$comp_info{computer}{SHORTNAME} = $computer_shortname;
+	my $computer_hostname = $computer_info->{hostname};
+	my ($computer_shortname) = $computer_hostname =~ /^([^\.]+)/;
+	$computer_info->{SHORTNAME} = $computer_shortname;
 	
-	# Set the node name based on the type of computer
-	my $computer_type = $comp_info{computer}{type};
-	
-	# Figure out the nodename based on the type of computer
-	my $computer_nodename;
-	if ($computer_type eq "blade") {
-		$computer_nodename = $computer_shortname;
-	}
-	elsif ($computer_type eq "lab") {
-		$computer_nodename = $computer_hostname;
-	}
-	elsif ($computer_type eq "virtualmachine") {
-		$computer_nodename = $computer_shortname;
+	# Set the NODENAME key based on the type of computer
+	# Use the full hostname if the computer type is lab
+	# Use the short name otherwise
+	my $computer_type = $computer_info->{type};
+	if ($computer_type eq "lab") {
+		$computer_info->{NODENAME} = $computer_hostname;
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "computer=$computer_id is of an unknown or unusual type=$computer_type");
+		$computer_info->{NODENAME} = $computer_shortname;
 	}
-	$comp_info{computer}{NODENAME} = $computer_nodename;
 	
-	return \%comp_info;
-
+	# Get the imagerevision info and add it to the hash
+	my $imagerevision_id = $computer_info->{imagerevisionid};
+	if ($imagerevision_id && (my $imagerevision_info = get_imagerevision_info($imagerevision_id))) {
+		$computer_info->{currentimagerevision} = $imagerevision_info;
+		$computer_info->{currentimage} = $imagerevision_info->{image};
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "unable to retrieve image revision info for $computer_hostname, imagerevision ID=$imagerevision_id, attempting to retrieve image revision info for the 'noimage' image");
+		
+		my $imagerevision_info = get_imagerevision_info('noimage');
+		if ($imagerevision_info) {
+			$computer_info->{currentimagerevision} = $imagerevision_info;
+			$computer_info->{currentimage} = $imagerevision_info->{image};
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to retrieve 'noimage' image revision info for $computer_hostname");
+		}
+	}
+	
+	# 
+	my $next_image_id = $computer_info->{nextimageid};
+	if ($next_image_id && (my $nextimage_info = get_image_info($next_image_id))) {
+		my $next_image_name = $nextimage_info->{name};
+		
+		my $next_imagerevision_info = get_imagerevision_info($next_image_name);
+		if ($next_imagerevision_info) {
+			$computer_info->{nextimagerevision} = $next_imagerevision_info;
+			$computer_info->{nextimage} = $next_imagerevision_info->{image};
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to retrieve nextimage info for $computer_hostname, nextimageid=$next_image_id");
+		}
+		
+	}
+	
+	# Check if the computer associated with this reservation has a vmhostid set
+	if (my $vmhost_id = $computer_info->{vmhostid}) {
+		my $vmhost_info = get_vmhost_info($vmhost_id);
+		
+		if ($vmhost_info) {
+			$computer_info->{vmhost} = $vmhost_info;
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "vmhostid $vmhost_id is set for $computer_hostname but the vmhost info could not be retrieved");
+		}
+	}
+	
+	#notify($ERRORS{'DEBUG'}, 0, "retrieved info for computer '$computer_identifier':\n" . format_data($computer_info));
+	$ENV{computer_info}{$computer_identifier} = $computer_info;
+	return $ENV{computer_info}{$computer_identifier};
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -8860,7 +8872,8 @@ sub get_management_node_id {
 #/////////////////////////////////////////////////////////////////////////////
 
 sub get_database_table_columns {
-
+	return $ENV{database_table_columns} if $ENV{database_table_columns};
+	
 	my $database = 'information_schema';
 
 	my $select_all_table_columns = "
@@ -8888,10 +8901,13 @@ TABLES.TABLE_NAME = COLUMNS.TABLE_NAME
 	# Use the map function to populate a hash of arrays
 	# The hash keys are the table names
 	# The hash values are arrays of column names
-	my %return_hash;
-	map({push @{$return_hash{$_->{TABLE_NAME}}}, $_->{COLUMN_NAME}} @rows);
-	return \%return_hash;
-} ## end sub get_database_table_columns
+	my %database_table_columns;
+	map({push @{$database_table_columns{$_->{TABLE_NAME}}}, $_->{COLUMN_NAME}} @rows);
+	
+	$ENV{database_table_columns} = \%database_table_columns;
+	
+	return $ENV{database_table_columns};
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -9264,39 +9280,83 @@ sub string_to_ascii {
 
 =head2 xmlrpc_call
 
- Parameters  : statement
- Returns     : array containing hash references to rows returned
- Description : runs xmlrpc call
+ Parameters  : @arguments
+ Returns     : RPC::XML::Client response value
+ Description : Calls the RPC::XML function defined in the arguments
 
 =cut
 sub xmlrpc_call {
-	my @argument_string = @_;
-
-	notify($ERRORS{'DEBUG'}, 0, "argument_string= @argument_string ");
-
-	# Make sure method and args were passed
-	my $number_of_args = @argument_string;
-	if ($number_of_args == 0) {
-		notify($ERRORS{'WARNING'}, 0, "argument string is empty number_of_args= $number_of_args argument_string= @argument_string ");
-		return 0;
+	my @arguments = @_;
+	if (!@arguments) {
+		notify($ERRORS{'WARNING'}, 0, "no arguments were passed to subroutine");
+		return;
 	}
-
-	my $cli = RPC::XML::Client->new($XMLRPC_URL);
-	$cli->{'__request'}{'_headers'}->push_header('X-User' => $XMLRPC_USER);
-	$cli->{'__request'}{'_headers'}->push_header('X-Pass' => $XMLRPC_PASS);
-	$cli->{'__request'}{'_headers'}->push_header('X-APIVERSION' => 2);
-
-	my $response = $cli->send_request(@argument_string);
-
-	if ($response->type =~ /fault/){
-		notify($ERRORS{'WARNING'}, 0, "fault occured:\n" .
-		" Response class = ".(ref $response)."\n".
-   		" Response type = ".$response->type."\n".
-   		" Response string = ".$response->as_string."\n".
-   		" Response value = ".$response->value."\n"
+	
+	if (!$XMLRPC_URL || !$XMLRPC_USER || !$XMLRPC_PASS) {
+		notify($ERRORS{'WARNING'}, 0, "unable to call " . join(", ", @arguments) . " function - RPC::XML values have not been set in the vcld.ini file");
+		return;
+	}
+	
+	# Create a Client object
+	my $client = RPC::XML::Client->new($XMLRPC_URL);
+	$client->{'__request'}{'_headers'}->push_header('X-User' => $XMLRPC_USER);
+	$client->{'__request'}{'_headers'}->push_header('X-Pass' => $XMLRPC_PASS);
+	$client->{'__request'}{'_headers'}->push_header('X-APIVERSION' => 2);
+	if (defined($client)) {
+		notify($ERRORS{'DEBUG'}, 0, "created RPC::XML client object:\n" .
+				 "URL: $XMLRPC_URL\n" .
+				 "username: $XMLRPC_USER"
 		);
 	}
-
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to create a new RPC::XML client object, error: " . ($RPC::XML::ERROR || '<none>'));
+		return;
+	}
+	
+	# Call send_request
+	my $response = $client->send_request(@arguments);
+	$ENV{rpc_xml_response} = $response;
+	
+	if (!ref($response)) {	
+		notify($ERRORS{'WARNING'}, 0, "RPC::XML::Client::send_request failed\n" .
+			"URL: $XMLRPC_URL\n" .
+			"username: $XMLRPC_USER\n" .
+			"password: $XMLRPC_PASS\n" ."error: " . ($RPC::XML::ERROR || '<none>') . "\n" .
+			"arguments: " . join(", ", @arguments) . "\n" .
+			"response: '$response'\n" . format_data($response)
+			#"client: '$client'\n" . format_data($client)
+		);
+		
+		$ENV{rpc_xml_error} = $response;
+		$ENV{rpc_xml_error} =~ s/^RPC::XML::Client::send_request:\s*//;
+		return;
+	}
+	
+	# Check if fault occurred
+	if ($response->is_fault) {
+		notify($ERRORS{'WARNING'}, 0, "RPC::XML::Client::send_request fault occurred\n" .
+			"URL: $XMLRPC_URL\n" .
+			"username: $XMLRPC_USER\n" .
+			"password: $XMLRPC_PASS\n" .
+			"arguments: " . join(", ", @arguments) . "\n" .
+			"fault code: " . $response->code . "\n" .
+			"fault string: " . $response->string .
+			format_data($response)
+		);
+		$ENV{rpc_xml_error} = $response->string;
+		return;
+	}
+	
+	# Display the response details
+	notify($ERRORS{'OK'}, 0, "called RPC::XML::Client::send_request:\n" .
+		"arguments: " . join(", ", @arguments) . "\n" .
+		"response class: " . ref($response) . "\n" .
+		"response type: " . $response->type  . "\n" .
+		"response value type: " . ref($response->value)  . "\n" .
+		"response value:\n" . format_data($response->value)
+	);
+	
+	# Return the response
 	return $response;
 
 }
@@ -9915,7 +9975,7 @@ sub get_affiliation_info {
 		}
 	}
 	
-	notify($ERRORS{'DEBUG'}, 0, "retrieved affiliation info:\n" . format_data(\%affiliation_info_hash));
+	#notify($ERRORS{'DEBUG'}, 0, "retrieved affiliation info:\n" . format_data(\%affiliation_info_hash));
 	return \%affiliation_info_hash;
 }
 
@@ -10070,7 +10130,7 @@ sub escape_file_path {
 	$path = quotemeta $path;
 	
 	# Unescape wildcard * characters or else subroutines will fail which accept a wildcard file path
-	$path =~ s/\\+\*/\*/g;
+	$path =~ s/\\+([\*\+])/$1/g;
 	
 	return $path;
 }

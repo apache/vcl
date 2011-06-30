@@ -405,7 +405,7 @@ sub load {
 	}
 	
 	# Power on the VM
-	if (!$self->api->vm_power_on($vmx_file_path)) {
+	if (!$self->power_on($vmx_file_path)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to power on VM $computer_name on VM host: $vmhost_hostname");
 		return;
 	}
@@ -634,7 +634,7 @@ sub capture {
 			if (!$virtual_disk_type) {
 				notify($ERRORS{'WARNING'}, 0, "failed to determine the virtual disk type of the vmdk being captured: $vmdk_file_path_renamed");
 			}
-			elsif ($virtual_disk_type =~ /sparse/) {
+			elsif ($virtual_disk_type =~ /sparse/i) {
 				# Virtual disk is sparse, get a list of the vmdk file paths
 				notify($ERRORS{'DEBUG'}, 0, "vmdk can be copied directly from VM host $vmhost_hostname to the image repository because the virtual disk type is sparse: $virtual_disk_type");
 				@vmdk_copy_paths = $self->vmhost_os->find_files($vmdk_directory_path_renamed, '*.vmdk');
@@ -706,7 +706,7 @@ sub capture {
 				# Attempt to power the VM back on
 				# This saves a step when troubleshooting the problem
 				notify($ERRORS{'DEBUG'}, 0, "attempting to power the VM back on so that it can be captured again");
-				$self->api->vm_power_on($vmx_file_path_original);
+				$self->power_on($vmx_file_path_original);
 			}
 			else {
 				if ($self->rename_vmdk($vmdk_file_path_renamed, $vmdk_file_path_original)) {
@@ -718,7 +718,7 @@ sub capture {
 					# Attempt to power the VM back on
 					# This saves a step when troubleshooting the problem
 					notify($ERRORS{'DEBUG'}, 0, "attempting to power the VM back on so that it can be captured again");
-					$self->api->vm_power_on($vmx_file_path_original);
+					$self->power_on($vmx_file_path_original);
 				}
 				else {
 					notify($ERRORS{'WARNING'}, 0, "failed to rename the vmdk files back to the original name after copying to the repository failed: '$vmdk_file_path_renamed' --> '$vmdk_file_path_original'");
@@ -1241,7 +1241,7 @@ sub get_vmhost_datastructure {
 	# This acts as a test to make sure the DataStructure object is working
 	my $vmhost_computer_node_name = $vmhost_data->get_computer_node_name();
 	if (!$vmhost_computer_node_name) {
-		notify($ERRORS{'WARNING'}, 0, "unable to determine VM host node name from DataStructure object created for VM host");
+		notify($ERRORS{'WARNING'}, 0, "unable to determine VM host node name from DataStructure object created for VM host\n");
 		return;
 	}
 	
@@ -2447,8 +2447,8 @@ sub reclaim_vmhost_disk_space {
 				my $vmdk_directory_name = $self->_get_file_name($vmdk_directory_path);
 				$vmdk_directories->{$vmdk_directory_path}{directory_name} = $vmdk_directory_name;
 				
-				my %imagerevision_info = get_imagerevision_info($vmdk_directory_name);
-				if (!%imagerevision_info) {
+				my $imagerevision_info = get_imagerevision_info($vmdk_directory_name);
+				if (!$imagerevision_info) {
 					notify($ERRORS{'WARNING'}, 0, "failed to retrieve info for the image revision matching the vmdk directory name: '$vmdk_directory_name'");
 					$vmdk_directories->{$vmdk_directory_path}{deletable} = 0;
 					next;
@@ -2456,19 +2456,19 @@ sub reclaim_vmhost_disk_space {
 				else {
 					#notify($ERRORS{'DEBUG'}, 0, "retrieved info for the image revision matching the vmdk directory name: '$vmdk_directory_name'\n" . format_data(\%imagerevision_info));
 					
-					$vmdk_directories->{$vmdk_directory_path}{image_id} = $imagerevision_info{imageid};
-					$vmdk_directories->{$vmdk_directory_path}{imagerevision_id} = $imagerevision_info{id};
-					$vmdk_directories->{$vmdk_directory_path}{image_deleted} = $imagerevision_info{deleted};
-					$vmdk_directories->{$vmdk_directory_path}{imagerevision_production} = $imagerevision_info{production};
+					$vmdk_directories->{$vmdk_directory_path}{image_id} = $imagerevision_info->{imageid};
+					$vmdk_directories->{$vmdk_directory_path}{imagerevision_id} = $imagerevision_info->{id};
+					$vmdk_directories->{$vmdk_directory_path}{image_deleted} = $imagerevision_info->{deleted};
+					$vmdk_directories->{$vmdk_directory_path}{imagerevision_production} = $imagerevision_info->{production};
 					
-					my %image_info = get_image_info($imagerevision_info{imageid});
-					if (!%image_info) {
-						notify($ERRORS{'WARNING'}, 0, "failed to retrieve info for the image ID contained in the image revision info: $imagerevision_info{imageid}");
+					my $image_info = get_image_info($imagerevision_info->{imageid});
+					if (!$image_info) {
+						notify($ERRORS{'WARNING'}, 0, "failed to retrieve info for the image ID contained in the image revision info: $imagerevision_info->{imageid}");
 					}
 					else {
-						#notify($ERRORS{'DEBUG'}, 0, "retrieved info for the image ID contained in the image revision info: $imagerevision_info{imageid}\n" . format_data(\%image_info));
+						#notify($ERRORS{'DEBUG'}, 0, "retrieved info for the image ID contained in the image revision info: $imagerevision_info->{imageid}\n" . format_data($image_info));
 						# Use the 'or' operator to set the 'deleted' key so this value is set to 1 if either the image revision or image has deleted=1
-						$vmdk_directories->{$vmdk_directory_path}{image_deleted} |= $image_info{deleted};
+						$vmdk_directories->{$vmdk_directory_path}{image_deleted} |= $image_info->{deleted};
 					}
 				}
 				
@@ -3214,10 +3214,39 @@ sub get_vmdk_base_directory_path {
 		}
 	}
 	
-	# Get the vmprofile.datastorepath
-	$vmdk_base_directory_path = $self->data->get_vmhost_profile_datastore_path();
-	if (!$vmdk_base_directory_path) {
-		notify($ERRORS{'WARNING'}, 0, "unable to determine the vmdk base directory path, failed to retrieve either the datastore path for the VM profile");
+	if ($self->is_vm_persistent()) {
+		return $self->get_vmdk_base_directory_path_persistent();
+	}
+	else {
+		return $self->get_vmdk_base_directory_path_nonpersistent();
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_vmdk_base_directory_path_nonpersistent
+
+ Parameters  : 
+ Returns     : string
+ Description : 
+
+=cut
+
+sub get_vmdk_base_directory_path_nonpersistent {
+	my $self = shift;
+	if (ref($self) !~ /vmware/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $vmdk_base_directory_path;
+	
+	# Get the vmprofile.datastore
+	if ($vmdk_base_directory_path = $self->data->get_vmhost_profile_datastore_path()) {
+		notify($ERRORS{'DEBUG'}, 0, "using VM profile datastore path as the vmdk base directory path: $vmdk_base_directory_path");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine the vmdk base directory path, failed to retrieve the datastore path for the VM profile");
 		return;
 	}
 	
@@ -3231,7 +3260,54 @@ sub get_vmdk_base_directory_path {
 		return $vmdk_base_directory_normal_path;
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "unable to determine the vmdk base directory path, failed to convert path configured in the VM profile to a normal path: $vmdk_base_directory_path");
+		notify($ERRORS{'WARNING'}, 0, "unable to determine the nonpersistent vmdk base directory path, failed to convert datastore path configured in the VM profile to a normal path: $vmdk_base_directory_path");
+		return;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_vmdk_base_directory_path_persistent
+
+ Parameters  : 
+ Returns     : string
+ Description : 
+
+=cut
+
+sub get_vmdk_base_directory_path_persistent {
+	my $self = shift;
+	if (ref($self) !~ /vmware/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $vmdk_base_directory_path;
+	
+	# Get the vmprofile.virtualdiskpath
+	# If virtualdiskpath isn't set, try to use the datastore path
+	if ($vmdk_base_directory_path = $self->data->get_vmhost_profile_virtual_disk_path()) {
+		notify($ERRORS{'DEBUG'}, 0, "using VM profile virtual disk path as the vmdk base directory path: $vmdk_base_directory_path");
+	}
+	elsif ($vmdk_base_directory_path = $self->data->get_vmhost_profile_datastore_path()) {
+		notify($ERRORS{'DEBUG'}, 0, "using VM profile datastore path as the vmdk base directory path: $vmdk_base_directory_path");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine the vmdk base directory path, failed to retrieve either the virtual disk or datastore path for the VM profile");
+		return;
+	}
+	
+	# Convert the path to a normal path
+	# The path configured in the VM profile may be:
+	# -normal absolute path: /vmfs/volumes/vcl-datastore
+	# -datastore path: [vcl-datastore]
+	# -datastore name: vcl-datastore
+	my $vmdk_base_directory_normal_path = $self->_get_normal_path($vmdk_base_directory_path);
+	if ($vmdk_base_directory_normal_path) {
+		return $vmdk_base_directory_normal_path;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine the nonpersistent vmdk base directory path, failed to convert path configured in the VM profile to a normal path: $vmdk_base_directory_path");
 		return;
 	}
 }
@@ -3403,8 +3479,7 @@ sub get_vmdk_directory_path_persistent {
 	}
 	
 	# Get the vmdk base directory path
-	# Pass '1' to the subroutine to specify that the path should be retrieved directly from the vmprofile table
-	my $vmdk_base_directory_path = $self->get_vmdk_base_directory_path(1);
+	my $vmdk_base_directory_path = $self->get_vmdk_base_directory_path_persistent();
 	if (!$vmdk_base_directory_path) {
 		notify($ERRORS{'WARNING'}, 0, "unable to determine the nonpersistent vmdk base directory path, failed to retrieve datastore path for the VM profile");
 		return;
@@ -3439,7 +3514,7 @@ sub get_vmdk_directory_path_nonpersistent {
 	
 	# Get the vmdk base directory path
 	# Pass '1' to the subroutine to specify that the path should be retrieved directly from the vmprofile table
-	my $vmdk_base_directory_path = $self->get_vmdk_base_directory_path(1);
+	my $vmdk_base_directory_path = $self->get_vmdk_base_directory_path_nonpersistent();
 	if (!$vmdk_base_directory_path) {
 		notify($ERRORS{'WARNING'}, 0, "unable to determine the nonpersistent vmdk base directory path, failed to retrieve datastore path for the VM profile");
 		return;
@@ -4252,18 +4327,17 @@ sub get_vm_virtual_hardware_version {
 			if ($vmx_key =~ /virtualHW\.version/i) {
 				$hardware_version = $reference_vmx_file_info->{$vmx_key};
 				notify($ERRORS{'DEBUG'}, 0, "retrieved VM virtual hardware version from reference vmx file: $hardware_version");
-				return $hardware_version;
 			}
 		}
 		notify($ERRORS{'DEBUG'}, 0, "unable to retrieve VM virtual hardware version from reference vmx file, 'virtualHW.version' key does not exist");
 	}
 	
 	
-	if ($self->api->can("get_virtual_disk_hardware_version")) {
+	if (!$hardware_version && $self->api->can("get_virtual_disk_hardware_version")) {
 		$hardware_version = $self->api->get_virtual_disk_hardware_version($self->get_vmdk_file_path());
 		notify($ERRORS{'DEBUG'}, 0, "retrieved hardware version from api object: $hardware_version");
 	}
-	else {
+	elsif (!$hardware_version) {
 		$hardware_version = $self->get_vmdk_parameter_value('virtualHWVersion');
 		notify($ERRORS{'DEBUG'}, 0, "retrieved hardware version stored in the vmdk file: $hardware_version");
 	}
@@ -5062,7 +5136,33 @@ sub copy_vmdk {
 			notify($ERRORS{'CRITICAL'}, 0, "failed to copy virtual disk, no space is left on the destination device on VM host $vmhost_name: '$destination_directory_path'\ncommand: '$command'\noutput:\n" . join("\n", @$output));
 			return;
 		}
-		elsif (grep(/Failed to clone disk/, @$output) || !grep(/(100\% done|success)/, @$output)) {
+		
+		elsif (grep(/needs.*repair/i, @$output)) {
+			# The source disk needs to be repaired. Try option -x
+			notify($ERRORS{'WARNING'}, 0, "virtual disk needs to be repaired, output:\n" . join("\n", @$output));
+			
+			my $vdisk_repair_command = "vmkfstools -x repair \"$source_vmdk_file_path\"";
+			notify($ERRORS{'DEBUG'}, 0, "attempting to repair virtual disk using vmkfstools: '$source_vmdk_file_path'");
+			
+			my ($vdisk_repair_exit_status, $vdisk_repair_output) = $self->vmhost_os->execute($vdisk_repair_command);
+			if (!defined($vdisk_repair_output)) {
+				notify($ERRORS{'WARNING'}, 0, "failed to run command to repair the virtual disk: '$vdisk_repair_command'");
+			}
+			elsif (grep(/(successfully repaired|no errors)/i, @$vdisk_repair_output)) {
+				notify($ERRORS{'DEBUG'}, 0, "repaired virtual disk using vmkfstools, output:\n" . join("\n", @$vdisk_repair_output));
+				
+				# Attempt to run the copy command again
+				notify($ERRORS{'DEBUG'}, 0, "making a 2nd attempt to copy virtual disk using vmkfstools after the source was repaired:\n'$source_vmdk_file_path' --> '$destination_vmdk_file_path'");
+				$start_time = time;
+				($exit_status, $output) = $self->vmhost_os->execute($command);
+			}
+			else {
+				notify($ERRORS{'WARNING'}, 0, "failed to repair the virtual disk on VM host $vmhost_name, output:\n" . join("\n", @$vdisk_repair_output));
+				return;
+			}
+		}
+		
+		if (grep(/Failed to clone disk/, @$output) || !grep(/(100\% done|success)/, @$output)) {
 			notify($ERRORS{'WARNING'}, 0, "failed to copy virtual disk\ncommand: '$command'\noutput:\n" . join("\n", @$output));
 		}
 		else {
@@ -5096,7 +5196,7 @@ sub copy_vmdk {
 				notify($ERRORS{'DEBUG'}, 0, "attempting to repair virtual disk using vmware-vdiskmanager: '$source_vmdk_file_path'");
 				
 				my ($vdisk_repair_exit_status, $vdisk_repair_output) = $self->vmhost_os->execute($vdisk_repair_command);
-				if (!defined($output)) {
+				if (!defined($vdisk_repair_output)) {
 					notify($ERRORS{'WARNING'}, 0, "failed to run command to repair the virtual disk: '$vdisk_repair_command'");
 				}
 				elsif (grep(/(has been successfully repaired|no errors)/i, @$vdisk_repair_output)) {
@@ -5512,16 +5612,29 @@ sub power_on {
 		return;
 	}
 	
+	my $vmhost_hostname = $self->data->get_vmhost_hostname() || return;
+	
 	# Get the vmx file path
 	# Use the argument if one was supplied
 	my $vmx_file_path = shift || $self->get_vmx_file_path();
 	if (!$vmx_file_path) {
-		notify($ERRORS{'WARNING'}, 0, "vmx file path argument was not specified and default vmx file path could not be determined");		
+		notify($ERRORS{'WARNING'}, 0, "vmx file path argument was not specified and default vmx file path could not be determined");
 		return;
 	}
 	$vmx_file_path = normalize_file_path($vmx_file_path);
 	
-	return $self->api->vm_power_on($vmx_file_path);
+	#my $power_on_throttle_delay_seconds = 2;
+	#my $power_on_semaphore_id = "$vmhost_hostname-power-on";
+	#my $power_on_semaphore = $self->get_semaphore($power_on_semaphore_id, (60 * 100), (int(rand(10)))) || return;
+	
+	if ($self->api->vm_power_on($vmx_file_path)) {
+		#notify($ERRORS{'OK'}, 0, "powered on $vmx_file_path, sleeping $power_on_throttle_delay_seconds seconds before releasing $power_on_semaphore_id semaphore to throttle VMs being powered on");
+		#sleep $power_on_throttle_delay_seconds;
+		return 1;
+	}
+	else {
+		return;
+	}
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -5580,8 +5693,8 @@ sub power_reset {
 	$vmx_file_path = normalize_file_path($vmx_file_path);
 	
 	# Power off and then power on the VM
-	$self->api->vm_power_off($vmx_file_path);
-	return$self->api->vm_power_on($vmx_file_path);
+	$self->power_off($vmx_file_path);
+	return$self->power_on($vmx_file_path);
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -6498,12 +6611,15 @@ sub _check_datastore_paths {
 			'get_vmx_file_path',
 			
 			'get_vmdk_base_directory_path',
+			
 			'get_vmdk_directory_path',
 			'get_vmdk_file_path',
 			
+			'get_vmdk_base_directory_path_nonpersistent',
 			'get_vmdk_directory_path_nonpersistent',
 			'get_vmdk_file_path_nonpersistent',
 			
+			'get_vmdk_base_directory_path_persistent',
 			'get_vmdk_directory_path_persistent',
 			'get_vmdk_file_path_persistent',
 			

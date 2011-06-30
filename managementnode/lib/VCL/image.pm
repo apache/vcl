@@ -559,7 +559,7 @@ sub setup_capture_base_image {
 		
 		# Get information from the database for all of the computers found
 		for my $computer_id (@computer_ids) {
-			$computer_info{$computer_id} = get_computer_info($computer_id)->{computer};
+			$computer_info{$computer_id} = get_computer_info($computer_id);
 			if (!$computer_info{$computer_id}) {
 				print "ERROR: unable to retrieve information for computer ID: $computer_id\n";
 				return;

@@ -119,7 +119,8 @@ sub initialize {
 
 sub process {
 	my $self = shift;
-	
+	my ($package, $filename, $line) = caller;
+
 	# Retrieve data from the data structure
 	my $blockrequest_id              = $self->data->get_blockrequest_id();
 	my $blockrequest_mode            = $self->data->get_blockrequest_mode();
@@ -131,13 +132,14 @@ sub process {
 	my $blocktime_start              = $self->data->get_blocktime_start();
 	my $blocktime_end                = $self->data->get_blocktime_end();
 	my $blockrequest_name            = $self->data->get_blockrequest_name();
-	my $blockrequest_owner_id	      = $self->data->get_blockrequest_owner_id();
-	my $block_group_name		         = $self->data->get_blockrequest_group_name();
+	my $blockrequest_owner_id	 = $self->data->get_blockrequest_owner_id();
+	my $block_group_id		 = $self->data->get_blockrequest_group_id();
+	my $block_group_name		 = $self->data->get_blockrequest_group_name();
 
 	# Get user info	
 	my $user_info;
-	my %image_info;
-        my $image_prettyname;
+	my $image_info;
+   my $image_prettyname;
 	my $owner_affiliation_helpaddress;
 	my $owner_email;
 
@@ -147,10 +149,10 @@ sub process {
 	}
 
 	#Get image info
-        if(%image_info = get_image_info($blockrequest_image_id)){
-                $image_prettyname = $image_info{prettyname};
+	if ($image_info = get_image_info($blockrequest_image_id)){
+		$image_prettyname = $image_info->{prettyname};
 
-        }
+	}
 	
 	#Set local timer
 	my $localtimer = convert_to_epoch_seconds();
@@ -245,7 +247,7 @@ sub process {
 			if($allocated < $blockrequest_number_machines){
 			$subject = "VCL Block allocation warning for $blockrequest_name";
 	
-			$mailstring .= <<"EOF";
+			$mailstring .= << "EOF";
 WARNING - The block allocation for $blockrequest_name was not successfully processed for the following session.
 
 REASON: machines allocated were less than requested
@@ -410,7 +412,9 @@ sub process_block_time {
 
 sub update_blockTimes_processing {
 	my ($blockTimes_id, $processing) = @_;
-	
+
+	my ($package, $filename, $line, $sub) = caller(0);
+
 	# Check the arguments
 	if (!defined($blockTimes_id)) {
 		notify($ERRORS{'WARNING'}, 0, "blockTimes ID was not specified");
@@ -534,7 +538,9 @@ sub udpate_block_request_status {
 
 sub clear_blockTimes {
 	my ($blockTimes_id) = @_;
-	
+
+	my ($package, $filename, $line, $sub) = caller(0);
+
 	# Check the arguments
 	if (!defined($blockTimes_id)) {
 		notify($ERRORS{'WARNING'}, 0, "blockTimes ID was not specified");
@@ -572,7 +578,9 @@ sub clear_blockTimes {
 
 sub clear_blockComputers {
 	my ($blockTimes_id) = @_;
-	
+
+	my ($package, $filename, $line, $sub) = caller(0);
+
 	# Check the arguments
 	if (!defined($blockTimes_id)) {
 		notify($ERRORS{'WARNING'}, 0, "blockTimes ID was not specified");

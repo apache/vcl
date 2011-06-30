@@ -1032,8 +1032,6 @@ sub _get_public_interface_name_helper {
 		return;
 	}
 	
-print "\n\n" . '.' x 100 . "\n\n";
-	
 	my ($interface_name_1, $interface_name_2, $condition) = @_;
 	
 	if (!$interface_name_1 || !$interface_name_2) {

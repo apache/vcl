@@ -851,6 +851,23 @@ sub DESTROY {
 	else {
 		notify($ERRORS{'DEBUG'}, 0, "state process created unknown number of database handles, \$ENV{dbh_count} is undefined");
 	}
+	
+	if (defined $ENV{database_select_count}) {
+		notify($ERRORS{'DEBUG'}, 0, "number of database select queries: $ENV{database_select_count}");
+	}
+	
+	if (defined $ENV{database_select_row_count}) {
+		notify($ERRORS{'DEBUG'}, 0, "number of database select rows returned: $ENV{database_select_row_count}");
+	}
+	if (defined $ENV{database_select_field_count}) {
+		notify($ERRORS{'DEBUG'}, 0, "number of database select fields returned: $ENV{database_select_field_count}");
+	}
+	
+	for my $key (sort keys %ENV) {
+		if ($key =~ /^db_/) {
+			print "$key: $ENV{$key}\n";
+		}
+	}
 
 	# Close the database handle
 	if (defined $ENV{dbh}) {

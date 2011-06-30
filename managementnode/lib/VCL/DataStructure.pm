@@ -229,22 +229,21 @@ $SUBROUTINE_MAPPINGS{computer_provisioning_module_description}  = '$self->reques
 $SUBROUTINE_MAPPINGS{computer_provisioning_module_perl_package} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{provisioning}{module}{perlpackage}';
 
 $SUBROUTINE_MAPPINGS{vmhost_computer_id} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{computerid}';
-$SUBROUTINE_MAPPINGS{vmhost_hostname}   = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{hostname}';
+$SUBROUTINE_MAPPINGS{vmhost_hostname}   = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{computer}{hostname}';
 $SUBROUTINE_MAPPINGS{vmhost_id}         = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{id}';
-$SUBROUTINE_MAPPINGS{vmhost_image_id} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{imageid}';
-$SUBROUTINE_MAPPINGS{vmhost_image_name} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{imagename}';
-$SUBROUTINE_MAPPINGS{vmhost_ram}        = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{RAM}';
-$SUBROUTINE_MAPPINGS{vmhost_state}      = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{state}';
-#$SUBROUTINE_MAPPINGS{vmhost_type} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{type}';
+$SUBROUTINE_MAPPINGS{vmhost_image_id} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{vmprofile}{imageid}';
+$SUBROUTINE_MAPPINGS{vmhost_image_name} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{vmprofile}{image}{name}';
+$SUBROUTINE_MAPPINGS{vmhost_ram}        = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{computer}{RAM}';
+$SUBROUTINE_MAPPINGS{vmhost_state}      = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{computer}{state}{name}';
+#$SUBROUTINE_MAPPINGS{vmhost_type} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{computer}{type}';
 $SUBROUTINE_MAPPINGS{vmhost_kernal_nic} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{vmkernalnic}';
 $SUBROUTINE_MAPPINGS{vmhost_vm_limit}   = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{vmlimit}';
 $SUBROUTINE_MAPPINGS{vmhost_profile_id} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{vmprofileid}';
-$SUBROUTINE_MAPPINGS{vmhost_type}       = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{type}';
-#$SUBROUTINE_MAPPINGS{vmhost_type_id} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{vmtypeid}';
+#$SUBROUTINE_MAPPINGS{vmhost_type_id} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{vmtype}{vmtypeid}';
 
 $SUBROUTINE_MAPPINGS{vmhost_profile_repository_path}    = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{vmprofile}{repositorypath}';
 $SUBROUTINE_MAPPINGS{vmhost_profile_datastore_path}     = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{vmprofile}{datastorepath}';
-$SUBROUTINE_MAPPINGS{vmhost_profile_datastorepath_4vmx} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{vmprofile}{datastorepath4vmx}';
+$SUBROUTINE_MAPPINGS{vmhost_profile_virtual_disk_path}     = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{vmprofile}{virtualdiskpath}';
 #$SUBROUTINE_MAPPINGS{vmhost_profile_id} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{vmprofile}{id}';
 $SUBROUTINE_MAPPINGS{vmhost_profile_image_id} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{vmprofile}{imageid}';
 $SUBROUTINE_MAPPINGS{vmhost_profile_name}           = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{vmprofile}{profilename}';
@@ -261,6 +260,7 @@ $SUBROUTINE_MAPPINGS{vmhost_profile_eth1generated}         = '$self->request_dat
 
 #$SUBROUTINE_MAPPINGS{vmhost_typeid} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{vmprofile}{vmtypeid}';
 $SUBROUTINE_MAPPINGS{vmhost_type_id}   = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{vmprofile}{vmtype}{id}';
+$SUBROUTINE_MAPPINGS{vmhost_type}       = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{vmprofile}{vmtype}{name}';
 $SUBROUTINE_MAPPINGS{vmhost_type_name} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{vmprofile}{vmtype}{name}';
 
 $SUBROUTINE_MAPPINGS{computer_currentimage_architecture}        = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{currentimage}{architecture}';
@@ -268,7 +268,6 @@ $SUBROUTINE_MAPPINGS{computer_currentimage_deleted}             = '$self->reques
 $SUBROUTINE_MAPPINGS{computer_currentimage_forcheckout}         = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{currentimage}{forcheckout}';
 $SUBROUTINE_MAPPINGS{computer_currentimage_id}                  = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{currentimage}{id}';
 $SUBROUTINE_MAPPINGS{computer_currentimage_imagemetaid}         = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{currentimage}{imagemetaid}';
-$SUBROUTINE_MAPPINGS{computer_currentimage_imagetypeid}         = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{currentimage}{imagetypeid}';
 $SUBROUTINE_MAPPINGS{computer_currentimage_lastupdate}          = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{currentimage}{lastupdate}';
 $SUBROUTINE_MAPPINGS{computer_currentimage_maxconcurrent}       = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{currentimage}{maxconcurrent}';
 $SUBROUTINE_MAPPINGS{computer_currentimage_maxinitialtime}      = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{currentimage}{maxinitialtime}';
@@ -302,7 +301,6 @@ $SUBROUTINE_MAPPINGS{computer_nextimage_deleted}        = '$self->request_data->
 $SUBROUTINE_MAPPINGS{computer_nextimage_forcheckout}    = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{nextimage}{forcheckout}';
 $SUBROUTINE_MAPPINGS{computer_nextimage_id}             = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{nextimage}{id}';
 $SUBROUTINE_MAPPINGS{computer_nextimage_imagemetaid}    = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{nextimage}{imagemetaid}';
-$SUBROUTINE_MAPPINGS{computer_nextimage_imagetypeid}    = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{nextimage}{imagetypeid}';
 $SUBROUTINE_MAPPINGS{computer_nextimage_lastupdate}     = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{nextimage}{lastupdate}';
 $SUBROUTINE_MAPPINGS{computer_nextimage_maxconcurrent}  = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{nextimage}{maxconcurrent}';
 $SUBROUTINE_MAPPINGS{computer_nextimage_maxinitialtime} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{nextimage}{maxinitialtime}';
@@ -483,6 +481,8 @@ $SUBROUTINE_MAPPINGS{management_node_predictive_module_pretty_name}  = '$ENV{man
 $SUBROUTINE_MAPPINGS{management_node_predictive_module_description}  = '$ENV{management_node_info}{predictive_description}';
 $SUBROUTINE_MAPPINGS{management_node_predictive_module_perl_package} = '$ENV{management_node_info}{predictive_perlpackage}';
 
+$SUBROUTINE_MAPPINGS{subroutine_mappings} = '\%SUBROUTINE_MAPPINGS';
+
 ##############################################################################
 
 =head1 OBJECT ATTRIBUTES
@@ -613,11 +613,6 @@ sub _initialize : Init {
 	
 	# Get the computer info if the computer_id argument was specified and add it to this object
 	if ($computer_id) {
-		my $vmhost_info_save;
-		if (defined($self->request_data->{reservation}{$self->reservation_id}{computer}{vmhost})) {
-			$vmhost_info_save = $self->request_data->{reservation}{$self->reservation_id}{computer}{vmhost};
-		}
-		
 		notify($ERRORS{'DEBUG'}, 0, "computer ID argument was specified, retrieving data for computer ID: " . $self->computer_id);
 		my $computer_info = get_computer_info($self->computer_id);
 		if (!$computer_info) {
@@ -628,28 +623,22 @@ sub _initialize : Init {
 			return;
 		}
 		
-		# Check if the new computer info doesn't contain VM host info but the original data does
-		# Add the VM host info to the new hash so that it's available
-		if (!$computer_info->{computer}{vmhost} && $vmhost_info_save) {
-			$computer_info->{computer}{vmhost} = $vmhost_info_save;
-		}
-		
-		$self->request_data->{reservation}{$self->reservation_id}{computer} = $computer_info->{computer};
+		$self->request_data->{reservation}{$self->reservation_id}{computer} = $computer_info;
 	}
 	
 	
 	# If either the computer ID, image ID, or imagerevision ID arguments are specified, retrieve appropriate image and imagerevision data
 	if ($imagerevision_id || $image_id || $computer_id) {
-		my %imagerevision_info;
+		my $imagerevision_info;
 		
 		if ($imagerevision_id) {
 			notify($ERRORS{'DEBUG'}, 0, "imagerevision ID argument was specified: $imagerevision_id, DataStructure object will contain image information for this imagerevision ID: $imagerevision_id");
-			%imagerevision_info = get_imagerevision_info($imagerevision_id);
+			$imagerevision_info = get_imagerevision_info($imagerevision_id);
 		}
 		
 		elsif ($image_id) {
 			notify($ERRORS{'DEBUG'}, 0, "image ID argument was specified: $image_id, DataStructure object will contain image information for the production imagerevision of this image");
-			%imagerevision_info = get_production_imagerevision_info($image_id);
+			$imagerevision_info = get_production_imagerevision_info($image_id);
 		}
 		
 		elsif ($computer_id) {
@@ -660,29 +649,29 @@ sub _initialize : Init {
 				Exception::Class::Base->throw( error => "DataStructure object could not be initialized, computer's current imagerevision ID could not be retrieved from the current DataStructure data:\n" . format_data($self->get_request_data));
 				return;
 			}
-			%imagerevision_info = get_imagerevision_info($imagerevision_id);
+			$imagerevision_info = get_imagerevision_info($imagerevision_id);
 		}
 		
-		if (%imagerevision_info) {
-			$imagerevision_id = $imagerevision_info{id};
+		if ($imagerevision_info) {
+			$imagerevision_id = $imagerevision_info->{id};
 			notify($ERRORS{'DEBUG'}, 0, "retrieved data for imagerevision ID: $imagerevision_id");
-			$self->request_data->{reservation}{$self->reservation_id}{imagerevision} = \%imagerevision_info;
+			$self->request_data->{reservation}{$self->reservation_id}{imagerevision} = $imagerevision_info;
 		}
 		else {
 			Exception::Class::Base->throw( error => "DataStructure object could not be initialized, failed to retrieve imagerevision data: ");
 			return;
 		}
 		
-		$image_id = $imagerevision_info{imageid};
+		$image_id = $imagerevision_info->{imageid};
 		if (!defined($image_id)) {
-			Exception::Class::Base->throw( error => "DataStructure object could not be initialized, failed to retrieve image ID from the imagerevision data retrieved for imagerevision ID $imagerevision_id:\n" . format_data(\%imagerevision_info));
+			Exception::Class::Base->throw( error => "DataStructure object could not be initialized, failed to retrieve image ID from the imagerevision data retrieved for imagerevision ID $imagerevision_id:\n" . format_data($imagerevision_info));
 			return;
 		}
 		
-		my %image_info = get_image_info($image_id);
-		if (%image_info) {
+		my $image_info = get_image_info($image_id);
+		if ($image_info) {
 			notify($ERRORS{'DEBUG'}, 0, "retrieved data for image ID: $image_id");
-			$self->request_data->{reservation}{$self->reservation_id}{image} = \%image_info;
+			$self->request_data->{reservation}{$self->reservation_id}{image} = $image_info;
 		}
 		else {
 			Exception::Class::Base->throw( error => "DataStructure object could not be initialized, failed to retrieve data for image ID: " . $self->image_id);

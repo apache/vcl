@@ -1131,7 +1131,7 @@ sub setup_test_rpc_xml {
 				my $digest = sha1_hex("$XMLRPC_PASS$salt");
 				
 				if ($passhash eq $digest) {
-					print "OK: verfied xmlrpc_pass value configured in $CONF_FILE_PATH is correct\n";
+					print "OK: verfied xmlrpc_pass value is the correct password for $XMLRPC_USER\n";
 				}
 				else {
 					print "PROBLEM: xmlrpc_pass value configured in $CONF_FILE_PATH is not correct\n";
@@ -1163,9 +1163,9 @@ sub setup_test_rpc_xml {
 		$xmlrpc_function,
 	);
 	
-	my $result = xmlrpc_call(@xmlrpc_arguments);
-	if ($result) {
-		print "SUCCESS: RPC-XML access is configured correctly\n";
+	my $response = xmlrpc_call(@xmlrpc_arguments);
+	if ($response && $response->value) {
+		print "SUCCESS: RPC-XML access is configured correctly\n" . format_data($response->value) . "\n";
 		return;
 	}
 	
@@ -1175,7 +1175,7 @@ sub setup_test_rpc_xml {
 		return;
 	}
 	
-	print "FAILURE: RPC-XML access is not configured correctly: $ENV{rpc_xml_error}\n\n";
+	print "FAILURE: RPC-XML access is not configured correctly, error message:\n$ENV{rpc_xml_error}\n\n";
 	
 	if ($ENV{rpc_xml_error} =~ /access denied/i) {
 		# Affiliation not correct
@@ -1218,7 +1218,7 @@ sub setup_set_local_account_password {
 	
 	my $local_user_info = get_local_user_info();
 	
-	print "Select an local VCL user account:\n";
+	print "Select a local VCL user account:\n";
 	my $user_id = setup_get_hash_choice($local_user_info, 'unityid');
 	return if (!defined($user_id));
 	
