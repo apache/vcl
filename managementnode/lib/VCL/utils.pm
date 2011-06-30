@@ -5358,6 +5358,12 @@ EOF
 		notify($ERRORS{'WARNING'}, 0, "unable to retrieve vmprofile image info, image ID: $vmprofile_image_id");
 	}
 	
+	$vmhost_info->{vmprofile}{username} = '' if !$vmhost_info->{vmprofile}{username};
+	$vmhost_info->{vmprofile}{password} = '' if !$vmhost_info->{vmprofile}{password};
+	
+	$vmhost_info->{vmprofile}{vmpath} = $vmhost_info->{vmprofile}{datastorepath} if !$vmhost_info->{vmprofile}{vmpath};
+	$vmhost_info->{vmprofile}{virtualdiskpath} = $vmhost_info->{vmprofile}{vmpath} if !$vmhost_info->{vmprofile}{virtualdiskpath};
+	
 	return $vmhost_info;
 }
 
