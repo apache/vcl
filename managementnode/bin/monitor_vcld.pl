@@ -65,10 +65,17 @@ main();
 
 
 sub main () {
-	my ($managementnodeid, $lci, $lastcheckin, $mnid, $selh, $updhdle, $rows, $timestamp);
-	my @hostinfo       = hostname;
-	my $MN             = $hostinfo[0];
-	my $MNos           = $hostinfo[1];
+	my ($managementnodeid, $lci, $mnid, $selh, $updhdle, $rows, $timestamp);
+	my %info;
+	if ($info{managementnode} = get_management_node_info()) {
+                notify($ERRORS{'DEBUG'}, $LOG, "retrieved management node information from database");
+        }
+        else {
+                notify($ERRORS{'WARNING'}, $LOG, "unable to retrieve management node information from database");
+                exit;
+        }
+	my $MN             = $info{managementnode}{hostname};
+	my $lastcheckin   = $info{managementnode}{lastcheckin};
 	my $pidjuststarted = 0;
 
 	#check if local vcld is running
@@ -96,32 +103,9 @@ sub main () {
 	}
 
 	#check on the last checkin time, if older then X, restart vcld core process
-
-	# --- Make connection to DB
-	my $dbh = DBI->connect(qq{dbi:mysql:$DATABASE:$SERVER}, $WRTUSER, $WRTPASS, {PrintError => 0});
-	$selh = $dbh->prepare("SELECT id,lastcheckin FROM managementnode WHERE hostname = ?") or notify($ERRORS{'WARNING'}, $LOG, "Could not prepare select for management node id" . $dbh->errstr());
-	RECHECK:
-	$selh->execute($MN) or notify($ERRORS{'WARNING'}, $LOG, "Could not execute management node id" . $dbh->errstr());
-	my $dbretval = $selh->bind_columns(\($managementnodeid, $lastcheckin));
-	$rows = $selh->rows;
-	if ($rows != 0) {
-		$selh->fetch;
-		$mnid = $managementnodeid;
-		$lci  = $lastcheckin;
-		notify($ERRORS{'OK'}, $LOG, "monitor_vcld.pl managementnodeid $managementnodeid set for $MN");
-		$selh->finish;
-		$dbh->disconnect;
-	}
-	else {
-		notify($ERRORS{'CRITICAL'}, $LOG, "monitor_vcld.pl No management id for $MN.");
-		$selh->finish;
-		$dbh->disconnect;
-		exit;
-	}
-
 	my $currenttime = makedatestring;
 	my $ctime       = convert_to_epoch_seconds($currenttime);
-	my $lchecktime  = convert_to_epoch_seconds($lci);
+	my $lchecktime  = convert_to_epoch_seconds($lastcheckin);
 	my $diff        = $ctime - $lchecktime;
 	if ($diff >= (3 * 60)) {
 		notify($ERRORS{'OK'}, $LOG, "monitor_vcld.pl managementnodeid $managementnodeid checkin time is old currenttime= $currenttime lastcheckintime= $lci");
@@ -141,7 +125,7 @@ sub main () {
 		}
 	} ## end if ($diff >= (3 * 60))
 	else {
-		notify($ERRORS{'OK'}, $LOG, "monitor_vcld.pl managementnodeid $MN is fresh lastcheckintime= $lci");
+		notify($ERRORS{'OK'}, $LOG, "monitor_vcld.pl managementnodeid $MN is fresh lastcheckintime= $lastcheckin");
 	}
 } ## end sub main ()
 
