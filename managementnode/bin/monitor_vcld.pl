@@ -60,7 +60,7 @@ use Getopt::Long;
 
 sub main ();
 our $LOG     = "/var/log/monitor_vcld.log";
-our $STARTUP = "/etc/init.d/vcld.start";
+our $STARTUP = "/etc/init.d/vcld";
 main();
 
 
