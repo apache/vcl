@@ -713,7 +713,8 @@ END
 		# Add the formatted data to the message body if data was passed
 		$body .= "\n\nDATA:\n$formatted_data\n" if $formatted_data;
 		
-		my $subject = "PROBLEM -- ";
+		my ($management_node_short_name) = $FQDN =~ /^([^.]+)/;
+		my $subject = "PROBLEM -- $management_node_short_name|";
 		
 		# Assemble the process identifier string
 		if (defined $ENV{request_id} && defined $ENV{reservation_id} && defined $ENV{state}) {
@@ -1105,9 +1106,9 @@ sub check_time {
 		} ## end else [ if ($start_diff_minutes > 0)
 	} ## end if ($request_state_name =~ /new|imageprep|reload|tomaintenance|tovmhostinuse/)
 
-	elsif ($request_state_name =~ /inuse|imageinuse/) {
+	elsif ($request_state_name =~ /inuse/) {
 		if ($end_diff_minutes <= 10) {
-			#notify($ERRORS{'DEBUG'}, 0, "reservation will end in 10 minutes or less ($end_diff_minutes)");
+			notify($ERRORS{'DEBUG'}, 0, "reservation will end in 10 minutes or less ($end_diff_minutes)");
 			return "end";
 		}
 		else {
@@ -1740,10 +1741,10 @@ sub check_connection {
 					} ## end elsif ($osname =~ /rhel/)  [ if ($osname =~ /sun4x_/)
 				}    #foreach
 			}    #if lab
-		}    #else
-		     #sleep 30;
+		} 
+		notify($ERRORS{'DEBUG'}, 0, "sleeping for 20 seconds");
 		sleep 20;
-	}    #while
+	}
 	return $ret_val;
 } ## end sub check_connection
 
@@ -4497,8 +4498,8 @@ sub get_request_info {
 				$request_info{reservation}{$reservation_id}{$original_key} = $value;
 			}
 			elsif ($key =~ /serverrequest_/) {
-                                $request_info{reservation}{$reservation_id}{serverrequest}{$original_key} = $value;
-                        }
+				$request_info{reservation}{$reservation_id}{serverrequest}{$original_key} = $value;
+         }
 		}    # Close foreach key in reservation row
 		
 		# Retrieve the image, imagerevision, and computer info and add to the hash
@@ -5498,7 +5499,7 @@ sub run_ssh_command {
 	# -p <port>, Port to connect to on the remote host.
 	# -x, Disables X11 forwarding.
 	# Dont use: -q, Quiet mode.  Causes all warning and diagnostic messages to be suppressed.
-	my $ssh_command = "$ssh_path $identity_paths -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -l $user -p $port -x $node '$command' 2>&1";
+	my $ssh_command = "$ssh_path $identity_paths -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectionAttempts=1 -o ConnectTimeout=3 -l $user -p $port -x $node '$command' 2>&1";
 	
 	# Execute the command
 	my $ssh_output;
@@ -5512,7 +5513,7 @@ sub run_ssh_command {
 		
 		# Delay performing next attempt if this isn't the first attempt
 		if ($attempts > 1) {
-			my $delay_seconds = 2;
+			my $delay_seconds = (2 * ($attempts - 1));
 			notify($ERRORS{'DEBUG'}, 0, "sleeping for $delay_seconds seconds before making next SSH attempt") if $output_level;
 			sleep $delay_seconds;
 		}
@@ -7447,16 +7448,27 @@ sub switch_state {
 		notify($ERRORS{'DEBUG'}, 0, "child: parent reservation ID for this request: $parent_reservation_id");
 		$is_parent_reservation = 0;
 	}
-
-	# Update the notify prefix now that we have request info
-	my $notify_prefix = "req=$request_id:";
+	
+	# Don't set request state to failed if previous state is image or inuse
+	if ($request_state_name_new && $request_state_name_new eq 'failed') {
+		if ($request_state_name_old eq 'image') {
+			notify($ERRORS{'DEBUG'}, 0, "previous request state is $request_state_name_old, not setting request state to $request_state_name_new, setting request state to maintenance");
+			$request_state_name_new = 'maintenance';
+			$computer_state_name_new = 'maintenance';
+		}
+		elsif ($request_state_name_old eq 'inuse') {
+			notify($ERRORS{'DEBUG'}, 0, "previous request state is $request_state_name_old, not setting request state to $request_state_name_new, setting request state back to $request_state_name_old");
+			$request_state_name_new = 'inuse';
+			$computer_state_name_new = 'inuse';
+		}
+	}
 
 	# Check if new request state was passed
 	if (!$request_state_name_new) {
-		notify($ERRORS{'DEBUG'}, 0, "$notify_prefix request state was not specified, state not changed");
+		notify($ERRORS{'DEBUG'}, 0, "request state was not specified, state not changed");
 	}
 	elsif (!$is_parent_reservation) {
-		notify($ERRORS{'DEBUG'}, 0, "$notify_prefix child reservation, request state not changed");
+		notify($ERRORS{'DEBUG'}, 0, "child reservation, request state not changed");
 	}
 	else {
 		# Add an entry to the loadlog
@@ -7464,18 +7476,18 @@ sub switch_state {
 
 		# Update the request state to $request_state_name_new and set laststate to current state
 		if (update_request_state($request_id, $request_state_name_new, $request_state_name_old)) {
-			notify($ERRORS{'OK'}, 0, "$notify_prefix request state changed: $request_state_name_old->$request_state_name_new, laststate: $request_laststate_name_old->$request_state_name_old");
+			notify($ERRORS{'OK'}, 0, "request state changed: $request_state_name_old->$request_state_name_new, laststate: $request_laststate_name_old->$request_state_name_old");
 			insertloadlog($reservation_id, $computer_id, "info", "$caller: request state changed to $request_state_name_new, laststate to $request_state_name_old");
 		}
 		else {
-			notify($ERRORS{'WARNING'}, 0, "$notify_prefix request state could not be changed: $request_state_name_old --> $request_state_name_new, laststate: $request_laststate_name_old->$request_state_name_old");
+			notify($ERRORS{'WARNING'}, 0, "request state could not be changed: $request_state_name_old --> $request_state_name_new, laststate: $request_laststate_name_old->$request_state_name_old");
 			insertloadlog($reservation_id, $computer_id, "info", "$caller: unable to change request state to $request_state_name_new, laststate to $request_state_name_old");
 		}
 	} ## end else [ if (!$request_state_name_new)  [elsif (!$is_parent_reservation)
 
 	# Update the computer state
 	if (!$computer_state_name_new) {
-		notify($ERRORS{'DEBUG'}, 0, "$notify_prefix computer state not specified, $computer_shortname state not changed");
+		notify($ERRORS{'DEBUG'}, 0, "computer state not specified, $computer_shortname state not changed");
 	}
 	else {
 		# Add an entry to the loadlog
@@ -7483,36 +7495,36 @@ sub switch_state {
 
 		# Update the computer state
 		if (update_computer_state($computer_id, $computer_state_name_new)) {
-			notify($ERRORS{'OK'}, 0, "$notify_prefix computer $computer_shortname state changed: $computer_state_name_old->$computer_state_name_new");
+			notify($ERRORS{'OK'}, 0, "computer $computer_shortname state changed: $computer_state_name_old->$computer_state_name_new");
 		}
 		else {
-			notify($ERRORS{'CRITICAL'}, 0, "$notify_prefix unable to computer $computer_shortname state: $computer_state_name_old->$computer_state_name_new");
+			notify($ERRORS{'CRITICAL'}, 0, "unable to computer $computer_shortname state: $computer_state_name_old->$computer_state_name_new");
 		}
 	} ## end else [ if (!$computer_state_name_new)
 
 	# Update log table for this request
 	# Ending can be deleted, released, failed, noack, nologin, timeout, EOR, none
 	if (!$request_log_ending) {
-		notify($ERRORS{'DEBUG'}, 0, "$notify_prefix log table id=$request_logid will not be updated");
+		notify($ERRORS{'DEBUG'}, 0, "log table id=$request_logid will not be updated");
 	}
 	elsif (!$is_parent_reservation) {
-		notify($ERRORS{'DEBUG'}, 0, "$notify_prefix child reservation, log table id=$request_logid will not be updated");
+		notify($ERRORS{'DEBUG'}, 0, "child reservation, log table id=$request_logid will not be updated");
 	}
 	elsif (update_log_ending($request_logid, $request_log_ending)) {
-		notify($ERRORS{'OK'}, 0, "$notify_prefix log table id=$request_logid, ending set to $request_log_ending");
+		notify($ERRORS{'OK'}, 0, "log table id=$request_logid, ending set to $request_log_ending");
 	}
 	else {
-		notify($ERRORS{'CRITICAL'}, 0, "$notify_prefix unable to set log table id=$request_logid, ending to $request_log_ending");
+		notify($ERRORS{'CRITICAL'}, 0, "unable to set log table id=$request_logid, ending to $request_log_ending");
 	}
 
 	# Call exit if the state changed, return otherwise
 	if ($exit) {
 		insertloadlog($reservation_id, $computer_id, "info", "$caller: process exiting");
-		notify($ERRORS{'OK'}, 0, "$notify_prefix process exiting");
+		notify($ERRORS{'OK'}, 0, "process exiting");
 		exit;
 	}
 	else {
-		notify($ERRORS{'OK'}, 0, "$notify_prefix returning");
+		notify($ERRORS{'OK'}, 0, "returning");
 		return;
 	}
 
