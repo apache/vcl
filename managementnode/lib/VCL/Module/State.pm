@@ -853,20 +853,22 @@ sub DESTROY {
 	}
 	
 	if (defined $ENV{database_select_count}) {
-		notify($ERRORS{'DEBUG'}, 0, "number of database select queries: $ENV{database_select_count}");
+		notify($ERRORS{'DEBUG'}, 0, "database select queries: $ENV{database_select_count}");
 	}
 	
-	if (defined $ENV{database_select_row_count}) {
-		notify($ERRORS{'DEBUG'}, 0, "number of database select rows returned: $ENV{database_select_row_count}");
-	}
-	if (defined $ENV{database_select_field_count}) {
-		notify($ERRORS{'DEBUG'}, 0, "number of database select fields returned: $ENV{database_select_field_count}");
-	}
-	
-	for my $key (sort keys %ENV) {
-		if ($key =~ /^db_/) {
-			print "$key: $ENV{$key}\n";
+	if (defined $ENV{database_select_calls}) {
+		my $database_select_calls_string;
+		my %hash = %{$ENV{database_select_calls}};
+		my @sorted_keys = sort { $hash{$b} cmp $hash{$a} } keys(%hash);
+		for my $key (@sorted_keys) {
+			$database_select_calls_string .= "($ENV{database_select_calls}{$key}) $key\n";
 		}
+		
+		notify($ERRORS{'DEBUG'}, 0, "database select called from:\n$database_select_calls_string");
+	}
+	
+	if (defined $ENV{database_execute_count}) {
+		notify($ERRORS{'DEBUG'}, 0, "database execute queries: $ENV{database_execute_count}");
 	}
 
 	# Close the database handle

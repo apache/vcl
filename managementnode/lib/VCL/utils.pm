@@ -285,6 +285,7 @@ INIT {
 	
 	# Set a default config file path
 	my $hostname = hostname();
+	$hostname =~ s/\..*//g;
 	my $cwd = getcwd();
 	our $CONF_FILE_PATH = "$cwd/$hostname.conf";
 	if (!-f $CONF_FILE_PATH) {
@@ -598,13 +599,13 @@ sub notify {
 
 	# Confirm sysadmin address exists
 	my $sysadmin = 0;
-	if(defined($ENV{management_node_info}{SYSADMIN_EMAIL}) && $ENV{management_node_info}{SYSADMIN_EMAIL}){
+	if(ref($ENV{management_node_info}) && defined($ENV{management_node_info}{SYSADMIN_EMAIL}) && $ENV{management_node_info}{SYSADMIN_EMAIL}){
 		$sysadmin = $ENV{management_node_info}{SYSADMIN_EMAIL};
 	}
 	
 	# Confirm shared mail box exists
 	my $shared_mail_box = 0;
-	if(defined($ENV{management_node_info}{SHARED_EMAIL_BOX}) && $ENV{management_node_info}{SHARED_EMAIL_BOX}){
+	if(ref($ENV{management_node_info}) && defined($ENV{management_node_info}{SHARED_EMAIL_BOX}) && $ENV{management_node_info}{SHARED_EMAIL_BOX}){
 		my $shared_mail_box = $ENV{management_node_info}{SHARED_EMAIL_BOX};
 	}
 
@@ -1207,7 +1208,7 @@ sub mail {
 	my $mailer = Mail::Mailer->new("sendmail", $localreturnpath);
 	
 	my $shared_mail_box = 0;
-	if(defined($ENV{management_node_info}{SHARED_EMAIL_BOX}) && $ENV{management_node_info}{SHARED_EMAIL_BOX}){
+	if(ref($ENV{management_node_info}) && defined($ENV{management_node_info}{SHARED_EMAIL_BOX}) && $ENV{management_node_info}{SHARED_EMAIL_BOX}){
 		$shared_mail_box = $ENV{management_node_info}{SHARED_EMAIL_BOX};
 	}
 
@@ -4034,7 +4035,21 @@ sub kill_reservation_process {
 sub database_select {
 	my ($select_statement, $database) = @_;
 	
+	my $calling_sub = (caller(1))[3];
+	
+	# Initialize the database_select_calls element if not already initialized
+	if (!ref($ENV{database_select_calls})) {
+		$ENV{database_select_calls} = {};
+	}
+	
+	# For performance tuning - count the number of calls
 	$ENV{database_select_count}++;
+	if (!defined($ENV{database_select_calls}{$calling_sub})) {
+		$ENV{database_select_calls}{$calling_sub} = 1;
+	}
+	else {
+		$ENV{database_select_calls}{$calling_sub}++;
+	}
 	
 	my $dbh;
 	if (!($dbh = getnewdbh($database))) {
@@ -4070,14 +4085,6 @@ sub database_select {
 	$select_handle->finish;
 	$dbh->disconnect if !defined $ENV{dbh};
 	
-	if (@return_rows) {
-		my $row_count = scalar(@return_rows);
-		my $column_count = scalar(keys %{$return_rows[0]});
-		$ENV{database_select_row_count} += $row_count;
-		$ENV{database_select_column_count} += $column_count;
-		$ENV{database_select_field_count} += ($column_count * $row_count);
-	}
-	
 	return @return_rows;
 } ## end sub database_select
 
@@ -4094,6 +4101,8 @@ sub database_select {
 sub database_execute {
 	my ($sql_statement, $database) = @_;
 	my ($package, $filename, $line, $sub) = caller(0);
+	
+	$ENV{database_execute_count}++;
 
 	my $dbh;
 	if (!($dbh = getnewdbh($database))) {
@@ -4494,15 +4503,15 @@ sub get_request_info {
 		
 		# Retrieve the image, imagerevision, and computer info and add to the hash
 		my $image_id = $request_info{reservation}{$reservation_id}{imageid};
-		my $image_info = get_image_info($image_id);
+		my $image_info = get_image_info($image_id, 1);
 		$request_info{reservation}{$reservation_id}{image} = $image_info;
 		
 		my $imagerevision_id = $request_info{reservation}{$reservation_id}{imagerevisionid};
-		my $imagerevision_info = get_imagerevision_info($imagerevision_id);
+		my $imagerevision_info = get_imagerevision_info($imagerevision_id, 1);
 		$request_info{reservation}{$reservation_id}{imagerevision} = $imagerevision_info;
 		
 		my $computer_id = $request_info{reservation}{$reservation_id}{computerid};
-		my $computer_info = get_computer_info($computer_id);
+		my $computer_info = get_computer_info($computer_id, 1);
 		$request_info{reservation}{$reservation_id}{computer} = $computer_info;
 		
 	}    # Close loop through selected rows
@@ -4894,7 +4903,7 @@ sub get_management_node_requests {
 
 =head2  get_image_info
 
- Parameters  : $image_identifier
+ Parameters  : $image_identifier, $no_cache (optional)
  Returns     : hash reference
  Description : Retrieves info for the image specified by the argument. The
                argument can either be the image ID or image name.
@@ -4903,13 +4912,13 @@ sub get_management_node_requests {
 
 
 sub get_image_info {
-	my ($image_identifier) = @_;
+	my ($image_identifier, $no_cache) = @_;
 	if (!defined($image_identifier)) {
 		notify($ERRORS{'WARNING'}, 0, "image identifier argument was not specified");
 		return;
 	}
 	
-	return $ENV{image_info}{$image_identifier} if $ENV{image_info}{$image_identifier};
+	return $ENV{image_info}{$image_identifier} if (!$no_cache && $ENV{image_info}{$image_identifier});
 	
 	# Get a hash ref containing the database column names
 	my $database_table_columns = get_database_table_columns();
@@ -5015,20 +5024,20 @@ EOF
 
 =head2 get_imagerevision_info
 
- Parameters  : $imagerevision_identifier
+ Parameters  : $imagerevision_identifier, $no_cache (optional)
  Returns     : Hash reference
  Description : collects data from database on supplied $imagerevision_id
 
 =cut
 
 sub get_imagerevision_info {
-	my ($imagerevision_identifier) = @_;
+	my ($imagerevision_identifier, $no_cache) = @_;
 	if (!defined($imagerevision_identifier)) {
 		notify($ERRORS{'WARNING'}, 0, "imagerevision identifier argument was not specified");
 		return;
 	}
 	
-	return $ENV{imagerevision_info}{$imagerevision_identifier} if $ENV{imagerevision_info}{$imagerevision_identifier};
+	return $ENV{imagerevision_info}{$imagerevision_identifier} if (!$no_cache && $ENV{imagerevision_info}{$imagerevision_identifier});
 
 	my $select_statement = <<EOF;
 SELECT
@@ -5130,7 +5139,7 @@ EOF
 
 =head2 get_imagemeta_info
 
- Parameters  : $imagemeta_id
+ Parameters  : $imagemeta_id, $no_cache (optional)
  Returns     : Hash reference
  Description :
 
@@ -5138,14 +5147,14 @@ EOF
 
 
 sub get_imagemeta_info {
-	my ($imagemeta_id) = @_;
+	my ($imagemeta_id, $no_cache) = @_;
 
 	# Return defaults if nothing was passed as the imagemeta id
 	if (!$imagemeta_id) {
 		return get_default_imagemeta_info();
 	}
 	
-	return $ENV{imagemeta_info}{$imagemeta_id} if $ENV{imagemeta_info}{$imagemeta_id};
+	return $ENV{imagemeta_info}{$imagemeta_id} if (!$no_cache && $ENV{imagemeta_info}{$imagemeta_id});
 
 	# If imagemetaid isnt' NULL, perform another query to get the meta info
 	my $select_statement = <<EOF;
@@ -5584,8 +5593,11 @@ sub run_ssh_command {
 		# Check the exit status
 		# ssh exits with the exit status of the remote command or with 255 if an error occurred.
 		# Check for vmware-cmd usage message, it returns 255 if the vmware-cmd usage output is returned
-		if ($ssh_output_formatted =~ /^ssh:/ && (($exit_status == 255 && $ssh_command !~ /(vmware-cmd|vim-cmd|vmkfstools)/i) ||
-			 $ssh_output_formatted =~ /(lost connection|reset by peer|no route to host|connection refused|connection timed out|resource temporarily unavailable|connection reset)/i)) {
+		if ($ssh_output_formatted =~ /ssh:.*(lost connection|reset by peer|no route to host|connection refused|connection timed out|resource temporarily unavailable|connection reset)/i) {
+			notify($ERRORS{'WARNING'}, 0, "attempt $attempts/$max_attempts: failed to execute SSH command on $node: '$command', exit status: $exit_status, output:\n$ssh_output_formatted");
+			next;
+		}
+		elsif ($exit_status == 255 && $ssh_command !~ /(vmware-cmd|vim-cmd|vmkfstools)/i) {
 			notify($ERRORS{'WARNING'}, 0, "attempt $attempts/$max_attempts: failed to execute SSH command on $node: '$command', exit status: $exit_status, SSH exits with the exit status of the remote command or with 255 if an error occurred, output:\n$ssh_output_formatted") if $output_level;
 			next;
 		}
@@ -7976,7 +7988,7 @@ sub get_computer_grp_members {
 
 =head2 get_user_info
 
- Parameters  : $user_identifier, $affiliation_identifier (optional)
+ Parameters  : $user_identifier, $affiliation_identifier (optional), $no_cache (optional)
  Returns     : hash reference
  Description : Retrieves user information from the database. The user identifier
                argument can either be a user ID or unityid. A hash reference is
@@ -7985,14 +7997,14 @@ sub get_computer_grp_members {
 =cut
 
 sub get_user_info {
-	my ($user_identifier, $affiliation_identifier) = @_;
+	my ($user_identifier, $affiliation_identifier, $no_cache) = @_;
 	
 	if (!defined($user_identifier)) {
 		notify($ERRORS{'WARNING'}, 0, "user identifier argument was not specified");
 		return;
 	}
 	
-	return $ENV{user_info}{$user_identifier} if $ENV{user_info}{$user_identifier};
+	return $ENV{user_info}{$user_identifier} if (!$no_cache && $ENV{user_info}{$user_identifier});
 	
 	# If affiliation identifier argument wasn't supplied, set it to % wildcard
 	$affiliation_identifier = '%' if !$affiliation_identifier;
@@ -8247,20 +8259,20 @@ EOF
 
 =head2 get_computer_info
 
- Parameters  : $computer_identifier
+ Parameters  : $computer_identifier, $no_cache (optional)
  Returns     : hash reference
  Description :
 
 =cut
 
 sub get_computer_info {
-	my ($computer_identifier) = @_;
+	my ($computer_identifier, $no_cache) = @_;
 	if (!defined($computer_identifier)){
 		notify($ERRORS{'WARNING'}, 0, "computer identifier argument was not supplied");
 		return;
 	}
 	
-	return $ENV{computer_info}{$computer_identifier} if $ENV{computer_info}{$computer_identifier};
+	return $ENV{computer_info}{$computer_identifier} if (!$no_cache && $ENV{computer_info}{$computer_identifier});
 	
 	# Get a hash ref containing the database column names
 	my $database_table_columns = get_database_table_columns();
@@ -8316,7 +8328,7 @@ EOF
 		$select_statement .= "computer.id = $computer_identifier";
 	}
 	else {
-		$select_statement .= "computer.hostname LIKE '$computer_identifier'";
+		$select_statement .= "computer.hostname REGEXP '$computer_identifier(\\\\.|\$)'";
 	}
 	
 	# Call the database select subroutine
@@ -9307,10 +9319,21 @@ sub xmlrpc_call {
 	}
 	
 	# Create a Client object
-	my $client = RPC::XML::Client->new($XMLRPC_URL);
-	$client->{'__request'}{'_headers'}->push_header('X-User' => $XMLRPC_USER);
-	$client->{'__request'}{'_headers'}->push_header('X-Pass' => $XMLRPC_PASS);
-	$client->{'__request'}{'_headers'}->push_header('X-APIVERSION' => 2);
+	my $client;
+	
+	if (LWP::UserAgent->new->can('ssl_opts')) {
+		notify($ERRORS{'DEBUG'}, 0, "RPC::XML version supports useragent options, setting verify_hostname to 0");
+		$client = RPC::XML::Client->new($XMLRPC_URL, useragent => ['ssl_opts' => {verify_hostname => 0}]);
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "RPC::XML version does not support useragent options");
+		$client = RPC::XML::Client->new($XMLRPC_URL);
+	}
+	
+	$client->request->header('X-User' => $XMLRPC_USER);
+	$client->request->header('X-Pass' => $XMLRPC_PASS);
+	$client->request->header('X-APIVERSION' => 2);
+	
 	if (defined($client)) {
 		notify($ERRORS{'DEBUG'}, 0, "created RPC::XML client object:\n" .
 				 "URL: $XMLRPC_URL\n" .
@@ -9359,9 +9382,6 @@ sub xmlrpc_call {
 	# Display the response details
 	notify($ERRORS{'OK'}, 0, "called RPC::XML::Client::send_request:\n" .
 		"arguments: " . join(", ", @arguments) . "\n" .
-		"response class: " . ref($response) . "\n" .
-		"response type: " . $response->type  . "\n" .
-		"response value type: " . ref($response->value)  . "\n" .
 		"response value:\n" . format_data($response->value)
 	);
 	
