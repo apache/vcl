@@ -859,9 +859,9 @@ sub DESTROY {
 	if (defined $ENV{database_select_calls}) {
 		my $database_select_calls_string;
 		my %hash = %{$ENV{database_select_calls}};
-		my @sorted_keys = sort { $hash{$b} cmp $hash{$a} } keys(%hash);
+		my @sorted_keys = sort { $hash{$b} <=> $hash{$a} } keys(%hash);
 		for my $key (@sorted_keys) {
-			$database_select_calls_string .= "($ENV{database_select_calls}{$key}) $key\n";
+			$database_select_calls_string .= "$ENV{database_select_calls}{$key}: $key\n";
 		}
 		
 		notify($ERRORS{'DEBUG'}, 0, "database select called from:\n$database_select_calls_string");
