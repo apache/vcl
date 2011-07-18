@@ -197,9 +197,13 @@ sub main () {
 			my $request_end            = $info{request}{$request_id}{end};
 			my $request_preload        = $info{request}{$request_id}{preload};
 			
-			$ENV{request_id}     = $request_id;
-			$ENV{reservation_id}     = 0;
-			$ENV{state}     = $request_state_name;
+			$ENV{request_id} = $request_id;
+			$ENV{reservation_id} = 0;
+			$ENV{state} = $request_state_name;
+			
+			$ENV{database_select_count} = 0;
+			$ENV{database_execute_count} = 0;
+			$ENV{database_select_calls} = {};
 
 			# Make sure the request state is valid
 			if ($request_state_name !~ /inuse|reserved|deleted|timeout|reclaim|reload|new|tomaintenance|image|imageprep|makeproduction|imageinuse|complete|failed|pending|maintenance|tovmhostinuse|rebootsoft|reboothard|reinstall/) {
