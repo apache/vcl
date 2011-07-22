@@ -4484,7 +4484,10 @@ sub get_request_info {
 			# This variable stores the original (correct) column name
 			(my $original_key = $key) =~ s/^.+_//;
 
-			if ($key =~ /request_/) {
+			if ($key =~ /serverrequest_/) {
+				$request_info{reservation}{$reservation_id}{serverrequest}{$original_key} = $value;
+         		}
+			elsif ($key =~ /request_/) {
 				# Set the top-level key if not already set
 				$request_info{$original_key} = $value if (!$request_info{$original_key});
 			}
@@ -4497,9 +4500,6 @@ sub get_request_info {
 			elsif ($key =~ /reservation_/) {
 				$request_info{reservation}{$reservation_id}{$original_key} = $value;
 			}
-			elsif ($key =~ /serverrequest_/) {
-				$request_info{reservation}{$reservation_id}{serverrequest}{$original_key} = $value;
-         }
 		}    # Close foreach key in reservation row
 		
 		# Retrieve the image, imagerevision, and computer info and add to the hash
