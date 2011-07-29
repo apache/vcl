@@ -450,7 +450,7 @@ sub capture {
 	my $vmhost_hostname = $self->data->get_vmhost_hostname();
 	my $vmprofile_name = $self->data->get_vmhost_profile_name();
 	my $vmprofile_vmdisk = $self->data->get_vmhost_profile_vmdisk();
-	my $vmdk_base_directory_path = $self->get_vmdk_base_directory_path(1);
+	my $vmdk_base_directory_path_nonpersistent = $self->get_vmdk_base_directory_path_nonpersistent();
 	
 	# Make sure the VM profile repository path is configured if the VM profile disk type is local
 	if ($vmprofile_vmdisk =~ /local/ && !$self->get_repository_vmdk_base_directory_path()) {
@@ -533,7 +533,7 @@ sub capture {
 	
 	
 	# Construct the vmdk directory and file path where the captured image will be saved
-	my $vmdk_directory_path_renamed = "$vmdk_base_directory_path/$image_name";
+	my $vmdk_directory_path_renamed = "$vmdk_base_directory_path_nonpersistent/$image_name";
 	my $vmdk_file_path_renamed = "$vmdk_directory_path_renamed/$image_name.vmdk";
 	
 	# Construct the path of the reference vmx file to be saved with the vmdk
@@ -585,8 +585,8 @@ sub capture {
 		notify($ERRORS{'DEBUG'}, 0, "vmdk files will not be renamed, vmdk file path being captured is already named as the image being captured: '$vmdk_file_path_original'");
 	}
 	else {
-		if (!$self->rename_vmdk($vmdk_file_path_original, $vmdk_file_path_renamed)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to rename the vmdk files after the VM was powered off: '$vmdk_file_path_original' --> '$vmdk_file_path_renamed'");
+		if (!$self->move_vmdk($vmdk_file_path_original, $vmdk_file_path_renamed)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to move the vmdk files after the VM was powered off: '$vmdk_file_path_original' --> '$vmdk_file_path_renamed'");
 			return;
 		}
 	}
@@ -709,9 +709,9 @@ sub capture {
 				$self->power_on($vmx_file_path_original);
 			}
 			else {
-				if ($self->rename_vmdk($vmdk_file_path_renamed, $vmdk_file_path_original)) {
+				if ($self->move_vmdk($vmdk_file_path_renamed, $vmdk_file_path_original)) {
 					if ($vmdk_directory_path_original ne $vmdk_directory_path_renamed) {
-						notify($ERRORS{'DEBUG'}, 0, "attempting to delete directory where renamed vmdk resided before reverting the name back to the original: $vmdk_directory_path_renamed");
+						notify($ERRORS{'DEBUG'}, 0, "attempting to delete directory where moved vmdk resided before reverting the name back to the original: $vmdk_directory_path_renamed");
 						$self->vmhost_os->delete_file($vmdk_directory_path_renamed);
 					}
 					
@@ -721,7 +721,7 @@ sub capture {
 					$self->power_on($vmx_file_path_original);
 				}
 				else {
-					notify($ERRORS{'WARNING'}, 0, "failed to rename the vmdk files back to the original name after copying to the repository failed: '$vmdk_file_path_renamed' --> '$vmdk_file_path_original'");
+					notify($ERRORS{'WARNING'}, 0, "failed to move the vmdk files back to the original name after copying to the repository failed: '$vmdk_file_path_renamed' --> '$vmdk_file_path_original'");
 				}
 			}
 			return;
@@ -1882,15 +1882,20 @@ sub prepare_vmdk {
 	}
 	
 	# Check if the VM is persistent, if so, attempt to copy files locally from the nonpersistent directory if they exist
-	if ($is_vm_persistent && $nonpersistent_vmdk_exists) {
-		notify($ERRORS{'DEBUG'}, 0, "VM is persistent and nonpersistent vmdk exists on the VM host $vmhost_hostname, attempting to make a copy");
-		if ($self->copy_vmdk($host_vmdk_file_path_nonpersistent, $host_vmdk_file_path)) {
-			notify($ERRORS{'OK'}, 0, "copied vmdk from nonpersistent to persistent directory on VM host $vmhost_hostname");
-			return 1;
+	if ($is_vm_persistent) {
+		if ($nonpersistent_vmdk_exists) {
+			notify($ERRORS{'DEBUG'}, 0, "VM is persistent and nonpersistent vmdk exists on the VM host $vmhost_hostname, attempting to make a copy");
+			if ($self->copy_vmdk($host_vmdk_file_path_nonpersistent, $host_vmdk_file_path)) {
+				notify($ERRORS{'OK'}, 0, "copied vmdk from nonpersistent to persistent directory on VM host $vmhost_hostname");
+				return 1;
+			}
+			else {
+				notify($ERRORS{'WARNING'}, 0, "failed to copy vmdk from nonpersistent to persistent directory on VM host $vmhost_hostname");
+				return;
+			}
 		}
 		else {
-			notify($ERRORS{'WARNING'}, 0, "failed to copy vmdk from nonpersistent to persistent directory on VM host $vmhost_hostname");
-			return;
+			notify($ERRORS{'DEBUG'}, 0, "VM is persistent, nonpersistent vmdk does not exist on the VM host $vmhost_hostname: $host_vmdk_file_path_nonpersistent");
 		}
 	}
 	
@@ -1955,7 +1960,7 @@ sub prepare_vmdk {
 	notify($ERRORS{'OK'}, 0, "copied vmdk files from management node image repository to the VM host, took " . format_number($duration) . " seconds");
 	
 	# If SCP is used, the names of the vmdk files will be the image name
-	if ("$host_vmdk_directory_path/$image_name.vmdk" ne $host_vmdk_file_path && !$self->rename_vmdk("$host_vmdk_directory_path/$image_name.vmdk", $host_vmdk_file_path)) {
+	if ("$host_vmdk_directory_path/$image_name.vmdk" ne $host_vmdk_file_path && !$self->move_vmdk("$host_vmdk_directory_path/$image_name.vmdk", $host_vmdk_file_path)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to rename the vmdk that was copied via SCP to the VM host $vmhost_hostname: '$host_vmdk_directory_path/$image_name.vmdk' --> '$host_vmdk_file_path'");
 		return;
 	}
@@ -3124,7 +3129,6 @@ sub get_vmdk_file_path_persistent {
 		return;
 	}
 	
-	# Get the vmprofile.datastorepath
 	my $vmdk_directory_path_persistent = $self->get_vmdk_directory_path_persistent();
 	if (!$vmdk_directory_path_persistent) {
 		notify($ERRORS{'WARNING'}, 0, "unable to determine the persistent vmdk file path");
@@ -3160,10 +3164,9 @@ sub get_vmdk_file_path_nonpersistent {
 		return;
 	}
 	
-	# Get the vmprofile.datastorepath
-	my $vmdk_base_directory_path = $self->get_vmdk_base_directory_path(1);
-	if (!$vmdk_base_directory_path) {
-		notify($ERRORS{'WARNING'}, 0, "unable to determine the nonpersistent vmdk file path, failed to retrieve datastore path for the VM profile");
+	my $vmdk_directory_path_nonpersistent = $self->get_vmdk_directory_path_nonpersistent();
+	if (!$vmdk_directory_path_nonpersistent) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine the nonpersistent vmdk file path");
 		return;
 	}
 	
@@ -3173,7 +3176,7 @@ sub get_vmdk_file_path_nonpersistent {
 		return;
 	}
 	
-	return "$vmdk_base_directory_path/$vmdk_directory_name_nonpersistent/$vmdk_directory_name_nonpersistent.vmdk";
+	return "$vmdk_directory_path_nonpersistent/$vmdk_directory_name_nonpersistent.vmdk";
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -3513,7 +3516,6 @@ sub get_vmdk_directory_path_nonpersistent {
 	}
 	
 	# Get the vmdk base directory path
-	# Pass '1' to the subroutine to specify that the path should be retrieved directly from the vmprofile table
 	my $vmdk_base_directory_path = $self->get_vmdk_base_directory_path_nonpersistent();
 	if (!$vmdk_base_directory_path) {
 		notify($ERRORS{'WARNING'}, 0, "unable to determine the nonpersistent vmdk base directory path, failed to retrieve datastore path for the VM profile");
@@ -4012,7 +4014,7 @@ sub get_image_size_bytes {
 	my $vmhost_hostname = $self->data->get_vmhost_hostname() || return;
 	my $vmprofile_vmdisk = $self->data->get_vmhost_profile_vmdisk() || return;
 	my $management_node_hostname = $self->data->get_management_node_short_name() || 'management node';
-	my $vmdk_base_directory_path = $self->get_vmdk_base_directory_path() || return;
+	my $vmdk_base_directory_path_nonpersistent = $self->get_vmdk_base_directory_path_nonpersistent() || return;
 	
 	# Attempt to get the image name argument
 	my $image_name = shift;
@@ -4048,7 +4050,7 @@ sub get_image_size_bytes {
 	}
 	
 	# Attempt to retrieve size from the datastore on the VM host whether or not the size was retrieved from the image repository
-	my $search_path_datastore = "$vmdk_base_directory_path/$image_name/$image_name*.vmdk";
+	my $search_path_datastore = "$vmdk_base_directory_path_nonpersistent/$image_name/$image_name*.vmdk";
 	$image_size_bytes_datastore = $self->vmhost_os->get_file_size($search_path_datastore);
 	if (defined($image_size_bytes_datastore)) {
 		notify($ERRORS{'DEBUG'}, 0, "retrieved the size of the image from the datastore on the VM host: " . format_number($image_size_bytes_datastore));
@@ -5327,16 +5329,16 @@ sub copy_vmdk {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 rename_vmdk
+=head2 move_vmdk
 
  Parameters  : $source_vmdk_file_path, $destination_vmdk_file_path
  Returns     : boolean
- Description : Renames a vmdk. The full paths to the source and destination vmdk
-               paths are required.
+ Description : Moves or renames a vmdk. The full paths to the source and
+               destination vmdk paths are required.
 
 =cut
 
-sub rename_vmdk {
+sub move_vmdk {
 	my $self = shift;
 	if (ref($self) !~ /vmware/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
@@ -5368,7 +5370,7 @@ sub rename_vmdk {
 		return;
 	}
 	
-	notify($ERRORS{'DEBUG'}, 0, "attempting to rename vmdk: '$source_vmdk_file_path' --> '$destination_vmdk_file_path'");
+	notify($ERRORS{'DEBUG'}, 0, "attempting to move vmdk: '$source_vmdk_file_path' --> '$destination_vmdk_file_path'");
 	
 	# Determine the destination vmdk directory path and create the directory
 	my ($destination_vmdk_directory_path) = $destination_vmdk_file_path =~ /(.+)\/[^\/]+\.vmdk$/;
@@ -5380,14 +5382,14 @@ sub rename_vmdk {
 	
 	# Check if the API object has implented a move_virtual_disk subroutine
 	if ($self->api->can("move_virtual_disk")) {
-		notify($ERRORS{'OK'}, 0, "attempting to rename vmdk file using API's 'move_virtual_disk' subroutine: $source_vmdk_file_path --> $destination_vmdk_file_path");
+		notify($ERRORS{'OK'}, 0, "attempting to move vmdk file using API's 'move_virtual_disk' subroutine: $source_vmdk_file_path --> $destination_vmdk_file_path");
 		
 		if ($self->api->move_virtual_disk($source_vmdk_file_path, $destination_vmdk_file_path)) {
-			notify($ERRORS{'OK'}, 0, "renamed vmdk using API's 'move_virtual_disk' subroutine: '$source_vmdk_file_path' --> '$destination_vmdk_file_path'");
+			notify($ERRORS{'OK'}, 0, "moved vmdk using API's 'move_virtual_disk' subroutine: '$source_vmdk_file_path' --> '$destination_vmdk_file_path'");
 			return 1;
 		}
 		else {
-			notify($ERRORS{'DEBUG'}, 0, "failed to rename vmdk using API's 'move_virtual_disk' subroutine");
+			notify($ERRORS{'DEBUG'}, 0, "failed to move vmdk using API's 'move_virtual_disk' subroutine");
 		}
 	}
 	else {
@@ -5398,26 +5400,26 @@ sub rename_vmdk {
 	if ($self->vmhost_os->can("execute")) {
 		
 		# Try vmware-vdiskmanager
-		notify($ERRORS{'OK'}, 0, "attempting to rename vmdk file using vmware-vdiskmanager: $source_vmdk_file_path --> $destination_vmdk_file_path");
+		notify($ERRORS{'OK'}, 0, "attempting to move vmdk file using vmware-vdiskmanager: $source_vmdk_file_path --> $destination_vmdk_file_path");
 		my $vdisk_command = "vmware-vdiskmanager -n \"$source_vmdk_file_path\" \"$destination_vmdk_file_path\"";
 		my ($vdisk_exit_status, $vdisk_output) = $self->vmhost_os->execute($vdisk_command);
 		if (!defined($vdisk_output)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to execute 'vmware-vdiskmanager' command on VM host to rename vmdk file:\n$vdisk_command");
+			notify($ERRORS{'WARNING'}, 0, "failed to execute 'vmware-vdiskmanager' command on VM host to move vmdk file:\n$vdisk_command");
 		}
 		elsif (grep(/success/i, @$vdisk_output)) {
-			notify($ERRORS{'OK'}, 0, "renamed vmdk file by executing 'vmware-vdiskmanager' command on VM host:\ncommand: $vdisk_command\noutput: " . join("\n", @$vdisk_output));
+			notify($ERRORS{'OK'}, 0, "moved vmdk file by executing 'vmware-vdiskmanager' command on VM host:\ncommand: $vdisk_command\noutput: " . join("\n", @$vdisk_output));
 			return 1;
 		}
 		elsif (grep(/not found/i, @$vdisk_output)) {
-			notify($ERRORS{'DEBUG'}, 0, "unable to rename vmdk using 'vmware-vdiskmanager' because the command is not available on VM host");
+			notify($ERRORS{'DEBUG'}, 0, "unable to move vmdk using 'vmware-vdiskmanager' because the command is not available on VM host");
 		}
 		else {
-			notify($ERRORS{'WARNING'}, 0, "failed to execute 'vmware-vdiskmanager' command on VM host to rename vmdk file:\n$vdisk_command\noutput:\n" . join("\n", @$vdisk_output));
+			notify($ERRORS{'WARNING'}, 0, "failed to execute 'vmware-vdiskmanager' command on VM host to move vmdk file:\n$vdisk_command\noutput:\n" . join("\n", @$vdisk_output));
 		}
 		
 		
 		# Try vmkfstools
-		notify($ERRORS{'OK'}, 0, "attempting to rename vmdk file using vmkfstools: $source_vmdk_file_path --> $destination_vmdk_file_path");
+		notify($ERRORS{'OK'}, 0, "attempting to move vmdk file using vmkfstools: $source_vmdk_file_path --> $destination_vmdk_file_path");
 		my $vmkfs_command = "vmkfstools -E \"$source_vmdk_file_path\" \"$destination_vmdk_file_path\"";
 		my ($vmkfs_exit_status, $vmkfs_output) = $self->vmhost_os->execute($vmkfs_command);
 		
@@ -5427,16 +5429,16 @@ sub rename_vmdk {
 			notify($ERRORS{'WARNING'}, 0, "failed to execute 'vmkfstools' command on VM host: $vmkfs_command");
 		}
 		elsif (grep(/command not found/i, @$vmkfs_output)) {
-			notify($ERRORS{'DEBUG'}, 0, "unable to rename vmdk using 'vmkfstools' because the command is not available on VM host");
+			notify($ERRORS{'DEBUG'}, 0, "unable to move vmdk using 'vmkfstools' because the command is not available on VM host");
 		}
 		elsif ($self->vmhost_os->file_exists($source_vmdk_file_path)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to rename vmdk file using vmkfstools, source file still exists: '$source_vmdk_file_path' --> '$destination_vmdk_file_path'");
+			notify($ERRORS{'WARNING'}, 0, "failed to move vmdk file using vmkfstools, source file still exists: '$source_vmdk_file_path' --> '$destination_vmdk_file_path'");
 		}
 		elsif (!$self->vmhost_os->file_exists($destination_vmdk_file_path)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to rename vmdk file using vmkfstools, destination file does not exist: '$source_vmdk_file_path' --> '$destination_vmdk_file_path'");
+			notify($ERRORS{'WARNING'}, 0, "failed to move vmdk file using vmkfstools, destination file does not exist: '$source_vmdk_file_path' --> '$destination_vmdk_file_path'");
 		}
 		else {
-			notify($ERRORS{'OK'}, 0, "renamed vmdk file using vmkfstools: '$source_vmdk_file_path' --> '$destination_vmdk_file_path'");
+			notify($ERRORS{'OK'}, 0, "moved vmdk file using vmkfstools: '$source_vmdk_file_path' --> '$destination_vmdk_file_path'");
 			return 1;
 		}
 	}
@@ -5444,8 +5446,8 @@ sub rename_vmdk {
 		notify($ERRORS{'DEBUG'}, 0, "unable to execute 'vmware-vdiskmanager' or 'vmkfstools' on VM host because 'execute' subroutine has not been implemented by the VM host OS: " . ref($self->vmhost_os));
 	}
 	
-	# Unable to rename vmdk file using any VMware utilities or APIs
-	# Attempt to manually rename the files
+	# Unable to move vmdk file using any VMware utilities or APIs
+	# Attempt to manually move the files
 	
 	# Determine the source vmdk directory path
 	my ($source_vmdk_directory_path) = $source_vmdk_file_path =~ /(.+)\/[^\/]+\.vmdk$/;
@@ -5492,9 +5494,9 @@ sub rename_vmdk {
 		return;
 	}
 	
-	# Loop through the source vmdk paths, figure out the destination file path, rename the file
-	my %renamed_file_paths;
-	my $rename_error_occurred = 0;
+	# Loop through the source vmdk paths, figure out the destination file path, move the file
+	my %moved_file_paths;
+	my $move_error_occurred = 0;
 	for my $source_vmdk_copy_path (@source_vmdk_file_paths) {
 		# Determine the extent identifier = "vmwinxp-image-s003.vmdk" --> "s003"
 		my ($extent_identifier) = $source_vmdk_copy_path =~ /\/$source_vmdk_file_prefix([^\/]*)\.vmdk$/;
@@ -5503,25 +5505,25 @@ sub rename_vmdk {
 		# Construct the destination vmdk path
 		my $destination_vmdk_copy_path = "$destination_vmdk_directory_path/$destination_vmdk_file_prefix$extent_identifier.vmdk";
 		
-		# Call the VM host OS's move_file subroutine to rename the vmdk file
-		notify($ERRORS{'DEBUG'}, 0, "attempting to rename vmdk file:\n'$source_vmdk_copy_path' --> '$destination_vmdk_copy_path'");
+		# Call the VM host OS's move_file subroutine to move the vmdk file
+		notify($ERRORS{'DEBUG'}, 0, "attempting to move vmdk file:\n'$source_vmdk_copy_path' --> '$destination_vmdk_copy_path'");
 		if (!$self->vmhost_os->move_file($source_vmdk_copy_path, $destination_vmdk_copy_path)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to rename vmdk file: '$source_vmdk_copy_path' --> '$destination_vmdk_copy_path'");
-			$rename_error_occurred = 1;
+			notify($ERRORS{'WARNING'}, 0, "failed to move vmdk file: '$source_vmdk_copy_path' --> '$destination_vmdk_copy_path'");
+			$move_error_occurred = 1;
 			last;
 		}
 		
 		# Add the source and destination vmdk file paths to a hash which will be used in case an error occurs and the files need to be reverted back to their original names
-		$renamed_file_paths{$source_vmdk_copy_path} = $destination_vmdk_copy_path;
+		$moved_file_paths{$source_vmdk_copy_path} = $destination_vmdk_copy_path;
 
-		# Delay next rename or else VMware may crash - "[2010-05-24 05:59:01.267 'App' 3083897744 error] Caught signal 11"
+		# Delay next move or else VMware may crash - "[2010-05-24 05:59:01.267 'App' 3083897744 error] Caught signal 11"
 		sleep 5;
 	}
 	
 	# If multiple vmdk file paths were found, edit the base vmdk file and update the extents
 	# Don't do this if a single vmdk file was found because it will be very large and won't contain the extent information
 	# This could happen if a virtual disk is in raw format
-	if ($rename_error_occurred) {
+	if ($move_error_occurred) {
 		notify($ERRORS{'DEBUG'}, 0, "vmdk file extents not updated because an error occurred moving the files");
 	}
 	elsif (scalar(@source_vmdk_file_paths) > 1) {
@@ -5555,29 +5557,29 @@ sub rename_vmdk {
 				}
 				else {
 					notify($ERRORS{'WARNING'}, 0, "failed to copy temp file containing updated vmdk contents to VM host:\n'$temp_file_path' --> '$destination_vmdk_file_path'");
-					$rename_error_occurred = 1;
+					$move_error_occurred = 1;
 				}
 			}
 			else {
 				notify($ERRORS{'WARNING'}, 0, "failed to create temp file to store updated vmdk contents which will be copied to the VM host");
-				$rename_error_occurred = 1;
+				$move_error_occurred = 1;
 			}
 		}
 		else {
 			notify($ERRORS{'WARNING'}, 0, "failed to retrieve vmdk file contents: '$destination_vmdk_file_path'");
-			$rename_error_occurred = 1;
+			$move_error_occurred = 1;
 		}
 	}
 	else {
 		notify($ERRORS{'DEBUG'}, 0, "vmdk file extents not updated because a single source vmdk file was found");
 	}
 	
-	# Check if an error occurred, revert the file renames if necessary
-	if ($rename_error_occurred) {
-		for my $destination_vmdk_revert_path (sort keys(%renamed_file_paths)) {
-			my $source_vmdk_revert_path = $renamed_file_paths{$destination_vmdk_revert_path};
+	# Check if an error occurred, revert the file moves if necessary
+	if ($move_error_occurred) {
+		for my $destination_vmdk_revert_path (sort keys(%moved_file_paths)) {
+			my $source_vmdk_revert_path = $moved_file_paths{$destination_vmdk_revert_path};
 			
-			# Call the VM host OS's move_file subroutine to rename the vmdk file back to what it was originally
+			# Call the VM host OS's move_file subroutine to move the vmdk file back to what it was originally
 			notify($ERRORS{'DEBUG'}, 0, "attempting to revert the vmdk file move:\n'$source_vmdk_revert_path' --> '$destination_vmdk_revert_path'");
 			if (!$self->vmhost_os->move_file($source_vmdk_revert_path, $destination_vmdk_revert_path)) {
 				notify($ERRORS{'WARNING'}, 0, "failed to revert the vmdk file move:\n'$source_vmdk_revert_path' --> '$destination_vmdk_revert_path'");
@@ -5586,11 +5588,11 @@ sub rename_vmdk {
 			sleep 5;
 		}
 		
-		notify($ERRORS{'WARNING'}, 0, "failed to rename vmdk using any available methods: '$source_vmdk_file_path' --> '$destination_vmdk_file_path'");
+		notify($ERRORS{'WARNING'}, 0, "failed to move vmdk using any available methods: '$source_vmdk_file_path' --> '$destination_vmdk_file_path'");
 		return;
 	}
 	else {
-		notify($ERRORS{'OK'}, 0, "renamed vmdk file: '$source_vmdk_file_path' --> '$destination_vmdk_file_path'");
+		notify($ERRORS{'OK'}, 0, "moved vmdk file: '$source_vmdk_file_path' --> '$destination_vmdk_file_path'");
 		return 1;
 	}
 }
