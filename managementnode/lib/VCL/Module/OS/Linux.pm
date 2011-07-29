@@ -105,93 +105,65 @@ sub get_node_configuration_directory {
 
 sub pre_capture {
 	my $self = shift;
-	if (ref($self) !~ /linux/i) {
+	if (ref($self) !~ /VCL::Module/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return 0;
+		return;
 	}
-
-	my $request_id               = $self->data->get_request_id();
-	my $reservation_id           = $self->data->get_reservation_id();
-	my $image_id                 = $self->data->get_image_id();
-	my $image_os_name            = $self->data->get_image_os_name();
-	my $management_node_keys     = $self->data->get_management_node_keys();
-	my $image_os_type            = $self->data->get_image_os_type();
-	my $image_name               = $self->data->get_image_name();
-	my $computer_id              = $self->data->get_computer_id();
-	my $computer_short_name      = $self->data->get_computer_short_name();
+	
 	my $computer_node_name       = $self->data->get_computer_node_name();
-	my $computer_type            = $self->data->get_computer_type();
-	my $user_id                  = $self->data->get_user_id();
-	my $user_unityid             = $self->data->get_user_login_id();
-	my $managementnode_shortname = $self->data->get_management_node_short_name();
-	my $computer_private_ip      = $self->data->get_computer_private_ip_address();
-	my $ip_configuration 	     = $self->data->get_management_node_public_ip_configuration();
-
-	notify($ERRORS{'OK'}, 0, "beginning Linux-specific image capture preparation tasks: $image_name on $computer_short_name");
-
-	my @sshcmd;
-
+	notify($ERRORS{'OK'}, 0, "beginning Linux-specific image capture preparation tasks");
+	
 	# Force user off computer 
-	if ($self->logoff_user()){
-		notify($ERRORS{'OK'}, 0, "forced $user_unityid off $computer_node_name");
+	if (!$self->logoff_user()) {
+		notify($ERRORS{'WARNING'}, 0, "unable to log user off $computer_node_name");
 	}
 
 	# Remove user and clean external ssh file
 	if ($self->delete_user()) {
-		notify($ERRORS{'OK'}, 0, "$user_unityid deleted from $computer_node_name");
+		notify($ERRORS{'OK'}, 0, "deleted user from $computer_node_name");
 	}
 
-	# try to clear /tmp
-	if (run_ssh_command($computer_node_name, $management_node_keys, "/usr/sbin/tmpwatch -f 0 /tmp; /bin/cp /dev/null /var/log/wtmp", "root")) {
-		notify($ERRORS{'DEBUG'}, 0, "cleartmp precapture $computer_node_name ");
+	# Try to clear /tmp
+	if ($self->execute("/usr/sbin/tmpwatch -f 0 /tmp; /bin/cp /dev/null /var/log/wtmp")) {
+		notify($ERRORS{'DEBUG'}, 0, "cleared /tmp on $computer_node_name");
 	}
 
-	# Clear ssh idenity keys from /root/.ssh 
+	# Clear SSH idenity keys from /root/.ssh 
 	if (!$self->clear_private_keys()) {
 		notify($ERRORS{'WARNING'}, 0, "unable to clear known identity keys");
 	}
 
-	if ($ip_configuration eq "static") {
-		if ($self->can("set_static_public_address") && $self->set_static_public_address()) {
-			notify($ERRORS{'DEBUG'}, 0, "set static public IP address on $computer_node_name using set_static_public_address() method");
-		}
-	} ## end if ($ip_configuration eq "static")
-
 	# Write /etc/rc.local script
-	if(!$self->generate_rc_local()){
+	if (!$self->generate_rc_local()){
 		notify($ERRORS{'WARNING'}, 0, "unable to generate /etc/rc.local script on $computer_node_name");
-		return 0;
+		return;
 	}
 
 	# Generate external_sshd_config
 	if(!$self->generate_ext_sshd_config()){
 		notify($ERRORS{'WARNING'}, 0, "unable to generate /etc/ssh/external_sshd_config on $computer_node_name");
-		return 0;
+		return;
 	}
 
 	# Generate ext_sshd init script
 	if(!$self->generate_ext_sshd_init()){
 		notify($ERRORS{'WARNING'}, 0, "unable to generate /etc/init.d/ext_sshd on $computer_node_name");
+		return;
+	}
+	
+	# Configure the private and public interfaces to use DHCP
+	if (!$self->enable_dhcp()) {
+		notify($ERRORS{'WARNING'}, 0, "failed to enable DHCP on the public and private interfaces");
+		return 0;
+	}
+	
+	# Shut the computer down
+	if (!$self->shutdown()) {
+		notify($ERRORS{'WARNING'}, 0, "failed to shut down $computer_node_name");
 		return 0;
 	}
 
-	# Shutdown node
-	notify($ERRORS{'OK'}, 0, "shutting down node for Linux imaging sequence");
-	run_ssh_command($computer_node_name, $management_node_keys, "/sbin/shutdown -h now", "root");
-	
-	# Wait maximum of 5 minutes for computer to power off
-	my $power_off = $self->provisioner->wait_for_power_off(120, 3, 3);
-	if (!defined($power_off)) {
-		# wait_for_power_off result will be undefined if the provisioning module doesn't implement a power_status subroutine
-		notify($ERRORS{'OK'}, 0, "unable to determine power status of $computer_node_name from provisioning module, sleeping 1 minute to allow computer time to shutdown");
-		sleep 60;
-	}
-	elsif (!$power_off) {
-		notify($ERRORS{'WARNING'}, 0, "$computer_node_name never powered off");
-		return;
-	}
-
-	notify($ERRORS{'OK'}, 0, "returning 1");
+	notify($ERRORS{'OK'}, 0, "Linux pre-capture steps complete");
 	return 1;
 }
 
@@ -539,19 +511,9 @@ EOF
 	}
 	
 	# Restart the interface
-	notify($ERRORS{'DEBUG'}, 0, "attempting to restart public interface $interface_name on $computer_name");
-	my $interface_restart_command = "$network_scripts_path/ifdown $interface_name ; $network_scripts_path/ifup $interface_name";
-	my ($interface_restart_exit_status, $interface_restart_output) = $self->execute($interface_restart_command);
-	if (!defined($interface_restart_output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to run command to restart public interface $interface_name on $computer_name: '$interface_restart_command'");
+	if (!$self->restart_network_interface($interface_name)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to restart public interface $interface_name on $computer_name");
 		return;
-	}
-	elsif ($interface_restart_exit_status) {
-		notify($ERRORS{'WARNING'}, 0, "failed to restart public interface $interface_name on $computer_name, exit status: $interface_restart_exit_status, command: '$interface_restart_command', output:\n" . join("\n", @$interface_restart_output));
-		return;
-	}
-	else {
-		notify($ERRORS{'DEBUG'}, 0, "restarted public interface $interface_name on $computer_name");
 	}
 	
 	# Delete existing default route
@@ -659,6 +621,51 @@ EOF
 	}
 	
 	notify($ERRORS{'OK'}, 0, "successfully set static public IP address on $computer_name");
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 restart_network_interface
+
+ Parameters  : $interface_name
+ Returns     :
+ Description : Calls ifdown and then ifup on the network interface.
+
+=cut
+
+sub restart_network_interface {
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return 0;
+	}
+	
+	my $interface_name = shift;
+	if (!$interface_name) {
+		notify($ERRORS{'WARNING'}, 0, "unable to restart network interface, interface name argument was not supplied");
+		return;
+	}
+	
+	my $computer_name = $self->data->get_computer_short_name();
+	my $network_scripts_path = "/etc/sysconfig/network-scripts";
+	
+	# Restart the interface
+	notify($ERRORS{'DEBUG'}, 0, "attempting to restart network interface $interface_name on $computer_name");
+	my $interface_restart_command = "$network_scripts_path/ifdown $interface_name ; $network_scripts_path/ifup $interface_name";
+	my ($interface_restart_exit_status, $interface_restart_output) = $self->execute($interface_restart_command);
+	if (!defined($interface_restart_output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run command to restart interface $interface_name on $computer_name: '$interface_restart_command'");
+		return;
+	}
+	elsif ($interface_restart_exit_status) {
+		notify($ERRORS{'WARNING'}, 0, "failed to restart network interface $interface_name on $computer_name, exit status: $interface_restart_exit_status, command: '$interface_restart_command', output:\n" . join("\n", @$interface_restart_output));
+		return;
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "restarted network interface $interface_name on $computer_name");
+	}
+	
 	return 1;
 }
 
@@ -2600,7 +2607,6 @@ sub get_network_configuration {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-
 =head2 reboot
 
  Parameters  : $wait_for_reboot
@@ -2610,98 +2616,162 @@ sub get_network_configuration {
 =cut
 
 sub reboot {
-        my $self = shift;
-        if (ref($self) !~ /linux/i) {
-                notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-                return;
-        }
-
-        my $management_node_keys = $self->data->get_management_node_keys();
-        my $computer_node_name   = $self->data->get_computer_node_name();
-
-        # Check if an argument was supplied
-        my $wait_for_reboot = shift;
-        if (!defined($wait_for_reboot) || $wait_for_reboot !~ /0/) {
-                notify($ERRORS{'DEBUG'}, 0, "rebooting $computer_node_name and waiting for ssh to become active");
-                $wait_for_reboot = 1;
-        }
-        else {
-                notify($ERRORS{'DEBUG'}, 0, "rebooting $computer_node_name and NOT waiting");
-                $wait_for_reboot = 0;
-        }
-
-        my $reboot_start_time = time();
-        notify($ERRORS{'DEBUG'}, 0, "reboot will be attempted on $computer_node_name");
-
-        # Check if computer responds to ssh before preparing for reboot
-        if ($self->wait_for_ssh(0)) {
-
-                # Check if shutdown exists on the computer
-                my $reboot_command;
-                if ( $self->file_exists("/sbin/shutdown")) {
-                        $reboot_command = "/sbin/shutdown -r now";
-                }
-                else {
-                        notify($ERRORS{'WARNING'}, 0, "reboot not attempted, /sbin/shutdown did not exists on OS");
-                        return 0;
-                }
-
-                my ($reboot_exit_status, $reboot_output) = run_ssh_command($computer_node_name, $management_node_keys, $reboot_command);
-                if (!defined($reboot_output)) {
-                        notify($ERRORS{'WARNING'}, 0, "failed to execute ssh command to reboot $computer_node_name");
-                        return;
-                }
-
-                if ($reboot_exit_status == 0) {
-                        notify($ERRORS{'OK'}, 0, "executed reboot command on $computer_node_name");
-                }
-                else {
-                        notify($ERRORS{'WARNING'}, 0, "failed to reboot $computer_node_name, attempting power reset, output:\n" . join("\n", @$reboot_output));
-
-                        # Call provisioning module's power_reset() subroutine
-                        if ($self->provisioner->power_reset()) {
-                                notify($ERRORS{'OK'}, 0, "initiated power reset on $computer_node_name");
-                        }
-                        else {
-                                notify($ERRORS{'WARNING'}, 0, "reboot failed, failed to initiate power reset on $computer_node_name");
-                                return;
-                        }
-                }
-        }
-        else {
-                # Computer did not respond to ssh
-                notify($ERRORS{'WARNING'}, 0, "$computer_node_name did not respond to ssh, graceful reboot cannot be performed, attempting hard reset");
-
-                # Call provisioning module's power_reset() subroutine
-                if ($self->provisioner->power_reset()) {
-                        notify($ERRORS{'OK'}, 0, "initiated power reset on $computer_node_name");
-                }
-                else {
-                        notify($ERRORS{'WARNING'}, 0, "reboot failed, failed to initiate power reset on $computer_node_name");
-                        return 0;
-                }
-        } ## end else [ if ($self->wait_for_ssh(0))
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
 	
-	my $wait_attempt_limit = 2;
-        # Check if wait for reboot is set
-        if (!$wait_for_reboot) {
-                return 1;
-        }
+	my $computer_node_name   = $self->data->get_computer_node_name();
+	
+	# Check if an argument was supplied
+	my $wait_for_reboot = shift || 1;
+	if ($wait_for_reboot) {
+		notify($ERRORS{'DEBUG'}, 0, "rebooting $computer_node_name and waiting for SSH to become active");
+	}
 	else {
-		if($self->wait_for_reboot($wait_attempt_limit)){
-			# Reboot was successful, calculate how long reboot took
-                	my $reboot_end_time = time();
-                	my $reboot_duration = ($reboot_end_time - $reboot_start_time);
-                	notify($ERRORS{'OK'}, 0, "reboot complete on $computer_node_name, took $reboot_duration seconds");
-			return 1;
+		notify($ERRORS{'DEBUG'}, 0, "rebooting $computer_node_name and NOT waiting");
+	}
+	
+	my $reboot_start_time = time();
+	
+	# Check if computer responds to ssh before preparing for reboot
+	if ($self->wait_for_ssh(0)) {
+		# Check if shutdown exists on the computer
+		my $reboot_command;
+		if ($self->file_exists("/sbin/shutdown")) {
+			$reboot_command = "/sbin/shutdown -r now";
 		}
 		else {
-        		notify($ERRORS{'WARNING'}, 0, "reboot failed on $computer_node_name, made $wait_attempt_limit attempts");
-			return 0;
+			notify($ERRORS{'WARNING'}, 0, "reboot not attempted, /sbin/shutdown did not exists on $computer_node_name");
+			return;
+		}
+		
+		my ($reboot_exit_status, $reboot_output) = $self->execute($reboot_command);
+		if (!defined($reboot_output)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to execute command to reboot $computer_node_name");
+			return;
+		}
+		elsif ($reboot_exit_status == 0) {
+			notify($ERRORS{'OK'}, 0, "executed reboot command on $computer_node_name");
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to reboot $computer_node_name, attempting power reset, output:\n" . join("\n", @$reboot_output));
+			
+			# Call provisioning module's power_reset() subroutine
+			if ($self->provisioner->power_reset()) {
+				notify($ERRORS{'OK'}, 0, "initiated power reset on $computer_node_name");
+			}
+			else {
+				notify($ERRORS{'WARNING'}, 0, "reboot failed, failed to initiate power reset on $computer_node_name");
+				return;
+			}
 		}
 	}
+	else {
+		# Computer did not respond to SSH
+		notify($ERRORS{'WARNING'}, 0, "$computer_node_name is not responding to SSH, graceful reboot cannot be performed, attempting hard reset");
+		
+		# Call provisioning module's power_reset() subroutine
+		if ($self->provisioner->power_reset()) {
+			notify($ERRORS{'OK'}, 0, "initiated power reset on $computer_node_name");
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "reboot failed, failed to initiate power reset on $computer_node_name");
+			return;
+		}
+	}
+	
+	# Check if wait for reboot is set
+	if (!$wait_for_reboot) {
+		return 1;
+	}
+	
+	my $wait_attempt_limit = 2;
+	if ($self->wait_for_reboot($wait_attempt_limit)){
+		# Reboot was successful, calculate how long reboot took
+		my $reboot_end_time = time();
+		my $reboot_duration = ($reboot_end_time - $reboot_start_time);
+		notify($ERRORS{'OK'}, 0, "reboot complete on $computer_node_name, took $reboot_duration seconds");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "reboot failed on $computer_node_name, made $wait_attempt_limit attempts");
+		return 0;
+	}
 
-} ## end sub reboot
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 shutdown
+
+ Parameters  : 
+ Returns     : 
+ Description : 
+
+=cut
+
+sub shutdown {
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $computer_node_name   = $self->data->get_computer_node_name();
+	
+	# Check if an argument was supplied
+	my $wait_for_power_off = shift || 1;
+	if ($wait_for_power_off) {
+		notify($ERRORS{'DEBUG'}, 0, "shutting down $computer_node_name and waiting for power off");
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "shutting down $computer_node_name and NOT waiting for power off");
+	}
+	
+	# Check if computer responds to ssh before preparing for shut down
+	if ($self->wait_for_ssh(0)) {
+		my $command = '/sbin/shutdown -h now';
+		
+		my ($exit_status, $output) = $self->execute($command);
+		
+		if (defined $exit_status && $exit_status == 0) {
+			notify($ERRORS{'DEBUG'}, 0, "executed command to shut down $computer_node_name");
+		}
+		else {
+			if (!defined($output)) {
+				notify($ERRORS{'WARNING'}, 0, "failed to execute command to shut down $computer_node_name, attempting power off");
+			}
+			else {
+				notify($ERRORS{'WARNING'}, 0, "failed to shut down $computer_node_name, attempting power off, output:\n" . join("\n", @$output));
+			}
+			
+			# Call provisioning module's power_off() subroutine
+			if (!$self->provisioner->power_off()) {
+				notify($ERRORS{'WARNING'}, 0, "failed to shut down $computer_node_name, failed to initiate power off");
+				return;
+			}
+		}
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "$computer_node_name is not responding to SSH, attempting power off");
+		
+		# Call provisioning module's power_off() subroutine
+		if (!$self->provisioner->power_off()) {
+			notify($ERRORS{'WARNING'}, 0, "failed to shut down $computer_node_name, failed to initiate power off");
+			return;
+		}
+	}
+	
+	if (!$wait_for_power_off || $self->provisioner->wait_for_power_off(300, 10)) {
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to shut down $computer_node_name, computer never powered off");
+		return;
+	}
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -2833,6 +2903,74 @@ sub create_user {
 sub update_server_access {
 
 
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 enable_dhcp
+
+ Parameters  : $interface_name (optional)
+ Returns     : boolean
+ Description : Configures the ifcfg-* file(s) to use DHCP. If an interface name
+               argument is specified, only the ifcfg file for that interface
+               will be configured. If no argument is specified, the files for
+               the public and private interfaces will be configured.
+
+=cut
+
+sub enable_dhcp {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+
+	my $computer_node_name   = $self->data->get_computer_node_name();
+	
+	my $interface_name_argument = shift;
+	my @interface_names;
+	if (!$interface_name_argument) {
+		push(@interface_names, $self->get_private_interface_name());
+		push(@interface_names, $self->get_public_interface_name());
+	}
+	elsif ($interface_name_argument =~ /private/i) {
+		push(@interface_names, $self->get_private_interface_name());
+	}
+	elsif ($interface_name_argument =~ /public/i) {
+		push(@interface_names, $self->get_public_interface_name());
+	}
+	else {
+		push(@interface_names, $interface_name_argument);
+	}
+	
+	for my $interface_name (@interface_names) {
+print "\n\n" . '-' x 100 . "\n\n";
+		my $ifcfg_file_path = "/etc/sysconfig/network-scripts/ifcfg-$interface_name";
+		notify($ERRORS{'DEBUG'}, 0, "attempting to enable DHCP on interface: $interface_name\nifcfg file path: $ifcfg_file_path");
+		
+		my $ifcfg_file_contents = <<EOF;
+DEVICE=$interface_name
+BOOTPROTO=dhcp
+ONBOOT=yes
+EOF
+		
+		# Remove the last newline
+		$ifcfg_file_contents =~ s/\n$//s;
+		
+		# Write the contents to the ifcfg file
+		if ($self->create_text_file($ifcfg_file_path, $ifcfg_file_contents)) {
+			notify($ERRORS{'DEBUG'}, 0, "updated $ifcfg_file_path:\n$ifcfg_file_contents");
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to update $ifcfg_file_path");
+			return;
+		}
+		
+		# Remove any leftover ifcfg-*.bak files
+		$self->delete_file('/etc/sysconfig/network-scripts/ifcfg-eth*.bak');
+	}
+	
+	return 1;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
