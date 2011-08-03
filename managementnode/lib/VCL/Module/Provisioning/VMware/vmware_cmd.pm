@@ -748,6 +748,47 @@ sub _get_datastore_info {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 create_snapshot
+
+ Parameters  : $vmx_file_path
+ Returns     : boolean
+ Description : Creates a snapshot of the VM.
+
+=cut
+
+sub create_snapshot {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get the vmx file path argument
+	my $vmx_file_path = shift;
+	if (!$vmx_file_path) {
+		notify($ERRORS{'WARNING'}, 0, "vmx file path argument was not supplied");
+		return;
+	}
+	
+	my $command = "vmrun snapshot \"$vmx_file_path\"";
+	
+	my ($exit_status, $output) = $self->vmhost_os->execute($command, 1);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute vmrun to create a snapshot of VM: $vmx_file_path, command: '$command'");
+		return;
+	}
+	elsif ($exit_status != 0 || grep(/error/i, @$output)) {
+		notify($ERRORS{'WARNING'}, 0, "error occurred executing vmrun to create a snapshot of VM: $vmx_file_path, command: '$command', output:\n" . join("\n", @$output));
+		return;
+	}
+	else {
+		notify($ERRORS{'OK'}, 0, "created snapshot of VM: $vmx_file_path, output:\n" . join("\n", @$output));
+		return 1;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 1;
 __END__
 

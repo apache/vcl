@@ -5075,15 +5075,16 @@ EOF
 	# Retrieve the image info
 	my $imagerevision_image_id = $imagerevision_info->{imageid};
 	my $imagerevision_image_info = get_image_info($imagerevision_image_id);
+	if (!$imagerevision_image_info) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve imagerevision info, image info could not be retrieved for image ID: $imagerevision_image_id");
+		return;
+	}
 	$imagerevision_info->{image} = $imagerevision_image_info;
 	
 	# Retrieve the imagerevision user info
-	my $imagerevision_user_id = $imagerevision_info->{userid};
-	my $imagerevision_user_info = get_user_info($imagerevision_user_id);
-	my $imagerevision_user_info_address = sprintf('%x', $imagerevision_user_info);
-	$imagerevision_info->{user_address} = $imagerevision_user_info_address;
-	$imagerevision_info->{user} = $imagerevision_user_info;
+	$imagerevision_info->{user} = get_user_info($imagerevision_info->{userid});
 	
+	# Add the info to %ENV so it doesn't need to be retrieved from the database again
 	$ENV{imagerevision_info}{$imagerevision_identifier} = $imagerevision_info;
 	#notify($ERRORS{'DEBUG'}, 0, "retrieved info from database for imagerevision '$imagerevision_identifier':\n" . format_data($ENV{imagerevision_info}{$imagerevision_identifier}));
 	return $ENV{imagerevision_info}{$imagerevision_identifier};
@@ -5598,7 +5599,7 @@ sub run_ssh_command {
 			notify($ERRORS{'WARNING'}, 0, "attempt $attempts/$max_attempts: failed to execute SSH command on $node: '$command', exit status: $exit_status, output:\n$ssh_output_formatted");
 			next;
 		}
-		elsif ($exit_status == 255 && $ssh_command !~ /(vmware-cmd|vim-cmd|vmkfstools)/i) {
+		elsif ($exit_status == 255 && $ssh_command !~ /(vmware-cmd|vim-cmd|vmkfstools|vmrun)/i) {
 			notify($ERRORS{'WARNING'}, 0, "attempt $attempts/$max_attempts: failed to execute SSH command on $node: '$command', exit status: $exit_status, SSH exits with the exit status of the remote command or with 255 if an error occurred, output:\n$ssh_output_formatted") if $output_level;
 			next;
 		}
@@ -8073,7 +8074,7 @@ EOF
 	
 	# Check to make sure row was returned
 	if (!@selected_rows) {
-		notify($ERRORS{'OK'}, 0, "user was not found in the database: '$user_identifier', SQL statement:\n$select_statement");
+		notify($ERRORS{'WARNING'}, 0, "user was not found in the database: '$user_identifier'");
 		return;
 	}
 	elsif (scalar @selected_rows > 1) {
@@ -10421,7 +10422,7 @@ EOF
 		}
 	}
 	
-	notify($ERRORS{'DEBUG'}, 0, "retrieved OS info:\n" . format_data(\%info));
+	#notify($ERRORS{'DEBUG'}, 0, "retrieved OS info:\n" . format_data(\%info));
 	return \%info;
 }
 

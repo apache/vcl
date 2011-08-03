@@ -105,7 +105,7 @@ $SUBROUTINE_MAPPINGS{blockrequest_name}               = '$self->blockrequest_dat
 $SUBROUTINE_MAPPINGS{blockrequest_image_id}           = '$self->blockrequest_data->{BLOCKREQUEST_ID}{imageid}';
 $SUBROUTINE_MAPPINGS{blockrequest_number_machines}    = '$self->blockrequest_data->{BLOCKREQUEST_ID}{numMachines}';
 $SUBROUTINE_MAPPINGS{blockrequest_group_id}           = '$self->blockrequest_data->{BLOCKREQUEST_ID}{groupid}';
-$SUBROUTINE_MAPPINGS{blockrequest_group_name}         = '$self->blockrequest_data->{BLOCKREQUEST_ID}{groupname}';
+$SUBROUTINE_MAPPINGS{blockrequest_group_name}         = '$self->blockrequest_data->{BLOCKREQUEST_ID}{usergroup}{name}';
 $SUBROUTINE_MAPPINGS{blockrequest_repeating}          = '$self->blockrequest_data->{BLOCKREQUEST_ID}{repeating}';
 $SUBROUTINE_MAPPINGS{blockrequest_owner_id}           = '$self->blockrequest_data->{BLOCKREQUEST_ID}{ownerid}';
 $SUBROUTINE_MAPPINGS{blockrequest_admin_group_id}     = '$self->blockrequest_data->{BLOCKREQUEST_ID}{admingroupid}';
@@ -113,6 +113,13 @@ $SUBROUTINE_MAPPINGS{blockrequest_management_node_id} = '$self->blockrequest_dat
 $SUBROUTINE_MAPPINGS{blockrequest_expire}             = '$self->blockrequest_data->{BLOCKREQUEST_ID}{expireTime}';
 $SUBROUTINE_MAPPINGS{blockrequest_processing}         = '$self->blockrequest_data->{BLOCKREQUEST_ID}{processing}';
 $SUBROUTINE_MAPPINGS{blockrequest_mode}               = '$self->blockrequest_data->{BLOCKREQUEST_ID}{MODE}';
+
+$SUBROUTINE_MAPPINGS{blockrequest_blocktimes_id}       = '$self->blockrequest_data->{BLOCKREQUEST_ID}{BLOCKTIMES_ID}';
+
+$SUBROUTINE_MAPPINGS{blockrequest_owner_email}                   = '$self->blockrequest_data->{BLOCKREQUEST_ID}{owner}{email}';
+$SUBROUTINE_MAPPINGS{blockrequest_owner_affiliation_helpaddress} = '$self->blockrequest_data->{BLOCKREQUEST_ID}{owner}{affiliation}{helpaddress}';
+
+$SUBROUTINE_MAPPINGS{blockrequest_image_prettyname} = '$self->blockrequest_data->{BLOCKREQUEST_ID}{image}{prettyname}';
 
 $SUBROUTINE_MAPPINGS{blocktime_id} = '$self->blockrequest_data->{BLOCKREQUEST_ID}{blockTimes}{BLOCKTIME_ID}{id}';
 #$SUBROUTINE_MAPPINGS{blocktime_blockrequest_id} = '$self->blockrequest_data->{BLOCKREQUEST_ID}{blockTimes}{BLOCKTIME_ID}{blockRequestid}';
@@ -230,6 +237,7 @@ $SUBROUTINE_MAPPINGS{computer_provisioning_module_perl_package} = '$self->reques
 
 $SUBROUTINE_MAPPINGS{vmhost_computer_id} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{computerid}';
 $SUBROUTINE_MAPPINGS{vmhost_hostname}   = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{computer}{hostname}';
+$SUBROUTINE_MAPPINGS{vmhost_short_name}   = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{computer}{SHORTNAME}';
 $SUBROUTINE_MAPPINGS{vmhost_id}         = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{id}';
 $SUBROUTINE_MAPPINGS{vmhost_image_id} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{vmprofile}{imageid}';
 $SUBROUTINE_MAPPINGS{vmhost_image_name} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{vmprofile}{image}{name}';
@@ -2128,6 +2136,29 @@ sub is_blockrequest {
 	else {
 		return 0;
 	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 is_server_request
+
+ Parameters  : None.
+ Returns     : 
+ Description : This subroutine determines whether or not the DataStructure
+               contains data for a server request.
+
+=cut
+
+sub is_server_request {
+	my $self = shift;
+	
+	# Check if subroutine was called as an object method
+	unless (ref($self) && $self->isa('VCL::DataStructure')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a VCL::DataStructure module object method");
+		return;
+	}
+	
+	return $self->get_server_request_id() ? 1 : 0;
 }
 
 #/////////////////////////////////////////////////////////////////////////////

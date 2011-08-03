@@ -1666,6 +1666,131 @@ sub get_network_names {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 create_snapshot
+
+ Parameters  : $vmx_file_path, $name (optional)
+ Returns     : boolean
+ Description : Creates a snapshot of the VM.
+
+=cut
+
+sub create_snapshot {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get the vmx file path argument
+	my $vmx_file_path = shift;
+	if (!$vmx_file_path) {
+		notify($ERRORS{'WARNING'}, 0, "vmx file path argument was not supplied");
+		return;
+	}
+	
+	my $snapshot_name = shift || ("VCL: " . convert_to_datetime());
+	
+	# Get the VM ID
+	my $vm_id = $self->_get_vm_id($vmx_file_path);
+	if (!defined($vm_id)) {
+		notify($ERRORS{'WARNING'}, 0, "unable to create snapshot because VM ID could not be determined");
+		return;
+	}
+	
+	my $vim_cmd_arguments = "vmsvc/snapshot.create $vm_id '$snapshot_name'";
+	my ($exit_status, $output) = $self->_run_vim_cmd($vim_cmd_arguments);
+	return if !$output;
+	
+	notify($ERRORS{'DEBUG'}, 0, "create snapshot output:\n" . join("\n", @$output));
+	
+	if (grep(/failed|invalid/i, @$output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to create snapshot of VM $vmx_file_path, VIM command arguments: '$vim_cmd_arguments', output:\n" . join("\n", @$output));
+		return;
+	}
+	
+	# Get the task ID
+	my @task_ids = $self->_get_task_ids($vmx_file_path, 'createSnapshot');
+	if (!@task_ids) {
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve the ID of the task created to create snapshot");
+		return;
+	}
+	
+	# Wait for the task to complete
+	if ($self->_wait_for_task($task_ids[0])) {
+		notify($ERRORS{'OK'}, 0, "created snapshot of VM: $vmx_file_path, snapshot name: $snapshot_name");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to create snapshot VM: $vmx_file_path, the vim task did not complete successfully, vim-cmd $vim_cmd_arguments output:\n" . join("\n", @$output));
+		return;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 snapshot_exists
+
+ Parameters  : $vmx_file_path
+ Returns     : boolean
+ Description : Determines if a snapshot exists for the VM.
+
+=cut
+
+sub snapshot_exists {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get the vmx file path argument
+	my $vmx_file_path = shift;
+	if (!$vmx_file_path) {
+		notify($ERRORS{'WARNING'}, 0, "vmx file path argument was not supplied");
+		return;
+	}
+	
+	# Get the VM ID
+	my $vm_id = $self->_get_vm_id($vmx_file_path);
+	if (!defined($vm_id)) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine if snapshot exists because VM ID could not be determined");
+		return;
+	}
+	
+	my $vim_cmd_arguments = "vmsvc/snapshot.get $vm_id";
+	my ($exit_status, $output) = $self->_run_vim_cmd($vim_cmd_arguments);
+	return if !$output;
+	
+	notify($ERRORS{'DEBUG'}, 0, "snapshot.get output:\n" . join("\n", @$output));
+	
+	if (grep(/failed|invalid/i, @$output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to determine if snapshot exists for VM $vmx_file_path, VIM command arguments: '$vim_cmd_arguments', output:\n" . join("\n", @$output));
+		return;
+	}
+	
+	# Expected output if shapshot exists:
+	# Get Snapshot:
+	# |-ROOT
+	# --Snapshot Name        : 1311966951
+	# --Snapshot Desciption  :
+	# --Snapshot Created On  : 7/29/2011 19:15:59
+	# --Snapshot State       : powered off
+	
+	# Expected output if snapshot does not exist:
+	# Get Snapshot:
+
+	if (grep(/-ROOT/, @$output)) {
+		notify($ERRORS{'DEBUG'}, 0, "snapshot exists for VM $vmx_file_path");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "snapshot does NOT exist for VM $vmx_file_path");
+		return 0;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 DESTROY
 
  Parameters  : none

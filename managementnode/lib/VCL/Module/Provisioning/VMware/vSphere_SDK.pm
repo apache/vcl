@@ -337,6 +337,7 @@ sub get_vm_power_state {
    }
 	
 	my $power_state = $vm->runtime->powerState->val;
+	
 	my $return_power_state;
 	if ($power_state =~ /on/i) {
 		$return_power_state = 'on';
@@ -1831,17 +1832,18 @@ sub initialize {
 	my $vmhost_hostname = $self->data->get_vmhost_hostname();
 	my $vmhost_username = $self->data->get_vmhost_profile_username();
 	my $vmhost_password = $self->data->get_vmhost_profile_password();
+	my $vmhost_profile_id = $self->data->get_vmhost_profile_id();
 	
 	if (!$vmhost_hostname) {
 		notify($ERRORS{'WARNING'}, 0, "VM host name could not be retrieved");
 		return;
 	}
 	elsif (!$vmhost_username) {
-		notify($ERRORS{'DEBUG'}, 0, "unable to use vSphere SDK, VM host username is not configured in the database for the VM profile");
+		notify($ERRORS{'DEBUG'}, 0, "unable to use vSphere SDK, VM host username is not configured in the database for VM profile: $vmhost_profile_id");
 		return;
 	}
 	elsif (!$vmhost_password) {
-		notify($ERRORS{'DEBUG'}, 0, "unable to use vSphere SDK, VM host password is not configured in the database for the VM profile");
+		notify($ERRORS{'DEBUG'}, 0, "unable to use vSphere SDK, VM host password is not configured in the database for VM profile: $vmhost_profile_id");
 		return;
 	}
 	
@@ -2172,6 +2174,93 @@ sub _get_datastore_info {
 	}
 	
 	return $datastore_info;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 create_snapshot
+
+ Parameters  : $vmx_file_path, $name (optional)
+ Returns     : boolean
+ Description : Creates a snapshot of the VM.
+
+=cut
+
+sub create_snapshot {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get the vmx path argument and convert it to a datastore path
+	my $vmx_path = $self->_get_datastore_path(shift) || return;
+	
+	my $snapshot_name = shift || ("VCL: " . convert_to_datetime());
+	
+	# Override the die handler
+	local $SIG{__DIE__} = sub{};
+	
+	my $vm;
+	eval { $vm = Vim::find_entity_view(view_type => 'VirtualMachine', filter => {'config.files.vmPathName' => $vmx_path}); };
+	if (!$vm) {
+		notify($ERRORS{'WARNING'}, 0, "unable to create snapshop because VM is not registered: $vmx_path");
+		return;
+   }
+	
+	eval { $vm->CreateSnapshot(name => $snapshot_name,
+										memory => 0,
+										quiesce => 0,
+										);
+			};
+	
+	if ($@) {
+		notify($ERRORS{'WARNING'}, 0, "failed to create snapshot of VM: $vmx_path, error:\n$@");
+		return;
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "created snapshot '$snapshot_name' of VM: $vmx_path");
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 snapshot_exists
+
+ Parameters  : $vmx_file_path
+ Returns     : boolean
+ Description : Determines if a snapshot exists for the VM.
+
+=cut
+
+sub snapshot_exists {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get the vmx path argument and convert it to a datastore path
+	my $vmx_path = $self->_get_datastore_path(shift) || return;
+	
+	# Override the die handler because fileManager may call it
+	local $SIG{__DIE__} = sub{};
+	
+	my $vm;
+	eval { $vm = Vim::find_entity_view(view_type => 'VirtualMachine', filter => {'config.files.vmPathName' => $vmx_path}); };
+	if (!$vm) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine if snapshot exists because VM is not registered: $vmx_path");
+		return;
+   }
+	
+	if (defined($vm->snapshot)) {
+		notify($ERRORS{'DEBUG'}, 0, "snapshot exists for VM: $vmx_path");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "snapshot does NOT exist for VM: $vmx_path");
+		return 0;
+	}
 }
 
 #/////////////////////////////////////////////////////////////////////////////
