@@ -1008,6 +1008,7 @@ sub node_status {
 	my $reservation_id = $self->data->get_reservation_id();
 	my $computer_name = $self->data->get_computer_node_name();
 	my $image_name = $self->data->get_image_name();
+	my $request_forimaging = $self->data->get_request_forimaging();
 	
 	notify($ERRORS{'DEBUG'}, 0, "attempting to check the status of computer $computer_name, image: $image_name");
 	
@@ -1068,7 +1069,8 @@ sub node_status {
 	}
 	
 	# If the VM is dedicated, check if the vmdk of the VM already loaded is shared or dedicated
-	if ($self->is_vm_dedicated()) {
+	my $is_vm_dedicated = $self->is_vm_dedicated();
+	if ($request_forimaging || $is_vm_dedicated) {
 		# Determine the vmx file path actively being used by the VM
 		my $vmx_file_path = $self->get_active_vmx_file_path();
 		if (!$vmx_file_path) {
@@ -1102,7 +1104,6 @@ sub node_status {
 			notify($ERRORS{'WARNING'}, 0, "vmdk file path was not found in the vmx file info, returning 'RELOAD':\n" . format_data($vmx_info));
 			return $status;
 		}
-		notify($ERRORS{'DEBUG'}, 0, "vmdk file path used by the VM already loaded: $vmdk_file_path");
 		
 		# Get the vmdk mode from the vmx information and make sure it is not nonpersistent
 		my $vmdk_mode = $vmx_info->{vmdk}{$vmdk_identifiers[0]}{mode};
@@ -1111,17 +1112,22 @@ sub node_status {
 			return $status;
 		}
 		
+		notify($ERRORS{'DEBUG'}, 0, "vmdk file path used by the VM already loaded: $vmdk_file_path, mode: $vmdk_mode");
+		
+		# Can't use if nonpersistent
 		if ($vmdk_mode =~ /nonpersistent/i) {
 			notify($ERRORS{'OK'}, 0, "VM already loaded may NOT be used, vmdk mode: '$vmdk_mode', returning 'RELOAD'");
 			return $status;
 		}
 		
-		if ($self->is_vmdk_shared($vmdk_file_path)) {
-			notify($ERRORS{'OK'}, 0, "VM already loaded may NOT be used, the vmdk appears to be shared");
-			return $status;
-		}
-		else {
-			notify($ERRORS{'DEBUG'}, 0, "VM already loaded may be used, the vmdk does NOT appear to be shared");
+		if ($is_vm_dedicated) {
+			if ($self->is_vmdk_shared($vmdk_file_path)) {
+				notify($ERRORS{'OK'}, 0, "VM already loaded may NOT be used, the vmdk appears to be shared");
+				return $status;
+			}
+			else {
+				notify($ERRORS{'DEBUG'}, 0, "VM already loaded may be used, the vmdk does NOT appear to be shared");
+			}
 		}
 	}
 	
@@ -3082,9 +3088,9 @@ sub get_reference_vmx_file_path {
 	
 	return $ENV{reference_vmx_file_path} if defined($ENV{reference_vmx_file_path});
 	
-	my $vmdk_directory_path = $self->get_vmdk_directory_path();
-	if (!$vmdk_directory_path) {
-		notify($ERRORS{'WARNING'}, 0, "unable to construct reference vmx file path, vmdk directory path could not be determined");
+	my $vmdk_directory_path_shared = $self->get_vmdk_directory_path_shared();
+	if (!$vmdk_directory_path_shared) {
+		notify($ERRORS{'WARNING'}, 0, "unable to construct reference vmx file path, shared vmdk directory path could not be determined");
 		return;
 	}
 	
@@ -3094,7 +3100,7 @@ sub get_reference_vmx_file_path {
 		return;
 	}
 	
-	$ENV{reference_vmx_file_path} = "$vmdk_directory_path/$reference_vmx_file_name";
+	$ENV{reference_vmx_file_path} = "$vmdk_directory_path_shared/$reference_vmx_file_name";
 	notify($ERRORS{'DEBUG'}, 0, "determined reference vmx file path: $ENV{reference_vmx_file_path}");
 	return $ENV{reference_vmx_file_path};
 }
@@ -6019,7 +6025,7 @@ sub get_datastore_info {
 		return;
 	}
 	else {
-		notify($ERRORS{'DEBUG'}, 0, "retrieved datastore info from VM host:\n" . join("\n", sort keys(%$datastore_info)));
+		notify($ERRORS{'DEBUG'}, 0, "retrieved datastore info from VM host:\n" . join(", ", sort keys(%$datastore_info)));
 		$self->{datastore_info} = $datastore_info;
 		return $datastore_info;
 	}
@@ -6366,6 +6372,13 @@ sub _get_parent_directory_normal_path {
 		return;
 	}
 	
+	# If this is a normal path - remove the part after the last '/'
+	if ($path_argument !~ /\[.+\]/) {
+		$path_argument =~ s/[^\/]*\/?$//g;
+		return $self->_get_normal_path($path_argument);
+	}
+	
+	# Datastore path was passed, call datastore sub and return normal path
 	my $parent_directory_datastore_path = $self->_get_parent_directory_datastore_path($path_argument);
 	if (!$parent_directory_datastore_path) {
 		notify($ERRORS{'WARNING'}, 0, "unable to determine parent directory normal path, parent directory datastore path could not be determined on which the normal path is based: '$path_argument'");

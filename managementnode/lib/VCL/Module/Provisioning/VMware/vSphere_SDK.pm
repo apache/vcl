@@ -122,12 +122,12 @@ sub vm_register {
 	# Get the vmx path argument and convert it to a datastore path
 	my $vmx_path = $self->_get_datastore_path(shift) || return;
 	
-	my $host_view = VIExt::get_host_view(1) || return;
-	my $datacenter = Vim::find_entity_view (view_type => 'Datacenter') || return;
+	my $host_view = $self->_get_host_view() || return;
+	my $datacenter = $self->_get_datacenter_view() || return;
 	my $vm_folder = Vim::get_view(mo_ref => $datacenter->{vmFolder}) || return;
    my $resource_pool = Vim::find_entity_view(view_type => 'ResourcePool') || return;
    
-	# Override the die handler because fileManager may call it
+	# Override the die handler
 	local $SIG{__DIE__} = sub{};
 	
 	my $vm_mo_ref;
@@ -181,12 +181,7 @@ sub vm_unregister {
 	# Override the die handler
 	local $SIG{__DIE__} = sub{};
 	
-   my $vm;
-	eval { $vm = Vim::find_entity_view(view_type => 'VirtualMachine', filter => {'config.files.vmPathName' => $vmx_path}); };
-	if (!$vm) {
-		notify($ERRORS{'DEBUG'}, 0, "VM is not registered: $vmx_path");
-		return 1;
-   }
+   my $vm = $self->_get_vm_view($vmx_path) || return;
 	
 	# Make sure the VM is powered off or unregister will fail
 	$self->vm_power_off($vmx_path) || return;
@@ -196,6 +191,9 @@ sub vm_unregister {
 		notify($ERRORS{'WARNING'}, 0, "failed to unregister vmx path: $vmx_path, error:\n$@");
 		return;
 	}
+	
+	# Delete the cached VM object
+	delete $self->{vm_view_objects}{$vmx_path};
 	
 	notify($ERRORS{'DEBUG'}, 0, "unregistered VM: $vmx_path");
 	return 1;
@@ -226,12 +224,7 @@ sub vm_power_on {
 	# Override the die handler
 	local $SIG{__DIE__} = sub{};
 	
-	my $vm;
-	eval { $vm = Vim::find_entity_view(view_type => 'VirtualMachine', filter => {'config.files.vmPathName' => $vmx_path}); };
-	if (!$vm) {
-		notify($ERRORS{'WARNING'}, 0, "unable to power on VM because it is not registered: $vmx_path");
-		return;
-   }
+	my $vm = $self->_get_vm_view($vmx_path) || return;
 	
 	eval { $vm->PowerOnVM(); };
 	if ($@) {
@@ -273,15 +266,10 @@ sub vm_power_off {
 	# Get the vmx path argument and convert it to a datastore path
 	my $vmx_path = $self->_get_datastore_path(shift) || return;
 	
-	# Override the die handler because fileManager may call it
+	# Override the die handler
 	local $SIG{__DIE__} = sub{};
 	
-	my $vm;
-	eval { $vm = Vim::find_entity_view(view_type => 'VirtualMachine', filter => {'config.files.vmPathName' => $vmx_path}); };
-	if (!$vm) {
-		notify($ERRORS{'WARNING'}, 0, "unable to power off VM because it is not registered: $vmx_path");
-		return;
-   }
+	my $vm = $self->_get_vm_view($vmx_path) || return;
 	
 	eval { $vm->PowerOffVM(); };
 	if ($@) {
@@ -326,15 +314,10 @@ sub get_vm_power_state {
 	# Get the vmx path argument and convert it to a datastore path
 	my $vmx_path = $self->_get_datastore_path(shift) || return;
 	
-	# Override the die handler because fileManager may call it
+	# Override the die handler
 	local $SIG{__DIE__} = sub{};
 	
-	my $vm;
-	eval { $vm = Vim::find_entity_view(view_type => 'VirtualMachine', filter => {'config.files.vmPathName' => $vmx_path}); };
-	if (!$vm) {
-		notify($ERRORS{'WARNING'}, 0, "unable to retrieve power state of VM because it is not registered: $vmx_path");
-		return;
-   }
+	my $vm = $self->_get_vm_view($vmx_path) || return;
 	
 	my $power_state = $vm->runtime->powerState->val;
 	
@@ -457,40 +440,28 @@ sub copy_virtual_disk {
 		return;
 	}
 	
-	my $destination_adapter_type = shift;
+	my $adapter_type = shift;
 	
 	# If the adapter type was not specified, retrieve it from the source vmdk file
-	if (!$destination_adapter_type) {
-		$destination_adapter_type = $self->get_virtual_disk_controller_type($source_path);
-		if (!$destination_adapter_type) {
-			notify($ERRORS{'WARNING'}, 0, "destination adapter type argument was not specifed and unable to retrieve adapter type from source vmdk file: $source_path, using lsiLogic");
-			$destination_adapter_type = 'lsiLogic';
+	if (!$adapter_type) {
+		$adapter_type = $self->get_vm_disk_adapter_type($source_path);
+		if (!$adapter_type) {
+			notify($ERRORS{'WARNING'}, 0, "adapter type argument was not specifed and unable to retrieve adapter type from source vmdk file: $source_path, using lsiLogic");
+			$adapter_type = 'lsiLogic';
 		}
-	}
-	
-	# Check the adapter type argument, the string must match exactly or the copy will fail
-	my @valid_adapter_types = qw( busLogic lsiLogic ide );
-	if (!grep(/^$destination_adapter_type$/, @valid_adapter_types)) {
-		notify($ERRORS{'WARNING'}, 0, "adapter type argument is not valid: '$destination_adapter_type', it must exactly match (case sensitive) one of the following strings:\n" . join("\n", @valid_adapter_types));
-		return;
 	}
 	
 	my $vmhost_name = $self->data->get_vmhost_hostname();
 	
 	# Get a virtual disk manager object
-	my $service_content = Vim::get_service_content() || return;
-	if (!$service_content->{virtualDiskManager}) {
-		notify($ERRORS{'WARNING'}, 0, "unable to copy virtual disk on VM host $vmhost_name, virtual disk manager is not available through the vSphere SDK");
-		return;
-	}
-	my $virtual_disk_manager = Vim::get_view(mo_ref => $service_content->{virtualDiskManager}) || return;
+	my $virtual_disk_manager = $self->_get_virtual_disk_manager_view() || return;
 	
 	# Get the destination partent directory path and create the directory
 	my $destination_directory_path = $self->_get_parent_directory_datastore_path($destination_path) || return;
 	$self->create_directory($destination_directory_path) || return;
 	
 	# Create a virtual disk spec object
-	my $virtual_disk_spec = VirtualDiskSpec->new(adapterType => $destination_adapter_type,
+	my $virtual_disk_spec = VirtualDiskSpec->new(adapterType => $adapter_type,
 																diskType => $destination_disk_type,
 	);
 	
@@ -500,10 +471,9 @@ sub copy_virtual_disk {
 	my @file_names = keys(%{$source_info});
 	my $info_file_name = $file_names[0];
 	
-	my $source_adapter_type = $source_info->{$info_file_name}{controllerType};
-	my $source_disk_type = $source_info->{$info_file_name}{diskType};
-	my $source_file_size_bytes = $source_info->{$info_file_name}{fileSize};
-	if ($source_adapter_type !~ /\w/ || $source_disk_type !~ /\w/ || $source_file_size_bytes !~ /\d/) {
+	my $source_disk_type = $source_info->{$info_file_name}{diskType} || 'unknown';
+	my $source_file_size_bytes = $source_info->{$info_file_name}{fileSize} || 'unknown';
+	if ($adapter_type !~ /\w/ || $source_disk_type !~ /\w/ || $source_file_size_bytes !~ /\d/) {
 		notify($ERRORS{'WARNING'}, 0, "unable to retrieve adapter type, disk type, and file size of source file on VM host $vmhost_name: '$source_path', file info:\n" . format_data($source_info));
 		return;
 	}
@@ -513,7 +483,7 @@ sub copy_virtual_disk {
 	
 	# Attempt to copy the file
 	notify($ERRORS{'DEBUG'}, 0, "attempting to copy file on VM host $vmhost_name: '$source_path' --> '$destination_path'
-			 adapter type: $source_adapter_type --> $destination_adapter_type
+			 adapter type: $adapter_type
 			 disk type: $source_disk_type --> $destination_disk_type
 			 source file size: " . format_number($source_file_size_bytes));
 	
@@ -590,27 +560,10 @@ sub move_virtual_disk {
 	$self->create_directory($destination_parent_directory_path) || return;
 	
 	# Check if a virtual disk manager object is available
-	my $service_content = Vim::get_service_content() || return;
-	
-	# Check if the virtual disk manager is available
-	if (!$service_content->{virtualDiskManager}) {
-		notify($ERRORS{'OK'}, 0, "unable to move virtual disk using vSphere SDK because virtual disk manager object is not available on VM host $vmhost_name");
-		return 0;
-	}
-	
-	# Create a virtual disk manager object
-	my $virtual_disk_manager = Vim::get_view(mo_ref => $service_content->{virtualDiskManager});
-	if (!$virtual_disk_manager) {
-		notify($ERRORS{'WARNING'}, 0, "failed to create vSphere SDK virtual disk manager object on VM host $vmhost_name");
-		return;
-	}
+	my $virtual_disk_manager = $self->_get_virtual_disk_manager_view() || return;
 	
 	# Create a datacenter object
-	my $datacenter = Vim::find_entity_view(view_type => 'Datacenter');
-	if (!$datacenter) {
-		notify($ERRORS{'WARNING'}, 0, "failed to create vSphere SDK datacenter object on VM host $vmhost_name");
-		return;
-	}
+	my $datacenter = $self->_get_datacenter_view() || return;
 	
 	# Override the die handler
 	local $SIG{__DIE__} = sub{};
@@ -835,7 +788,7 @@ sub get_virtual_disk_controller_type {
 	
 	# Check if the controllerType key exists in the vmdk file info
 	if (!defined($vmdk_file_info->{controllerType}) || !$vmdk_file_info->{controllerType}) {
-		notify($ERRORS{'WARNING'}, 0, "unable to retrieve controllerType value from file info: $vmdk_file_path\n" . format_data($vmdk_file_info));
+		notify($ERRORS{'DEBUG'}, 0, "unable to retrieve controllerType value from file info: $vmdk_file_path\n" . format_data($vmdk_file_info));
 		return;
 	}
 	
@@ -980,7 +933,7 @@ sub get_vmware_product_name {
 	my $vmhost_hostname = $self->data->get_vmhost_hostname();
 	
 	# Get the host view
-	my $host_view = VIExt::get_host_view(1);
+	my $host_view = $self->_get_host_view();
 	my $product_name = $host_view->config->product->fullName;
 	
 	if ($product_name) {
@@ -1017,7 +970,7 @@ sub get_vmware_product_version {
 	my $vmhost_hostname = $self->data->get_vmhost_hostname();
 	
 	# Get the host view
-	my $host_view = VIExt::get_host_view(1);
+	my $host_view = $self->_get_host_view();
 	my $product_version = $host_view->config->product->version;
 	
 	if ($product_version) {
@@ -1049,7 +1002,7 @@ sub get_network_names {
 	}
 	
 	# Get the host view
-	my $host_view = VIExt::get_host_view(1);
+	my $host_view = $self->_get_host_view();
 	
 	# Retrieve the network info, check if each network is accessible
 	my @network_names;
@@ -1160,8 +1113,7 @@ sub create_directory {
 	my $vmhost_hostname = $self->data->get_vmhost_hostname();
 	
 	# Get a fileManager object
-	my $service_content = Vim::get_service_content() || return;
-	my $file_manager = Vim::get_view(mo_ref => $service_content->{fileManager}) || return;
+	my $file_manager = $self->_get_file_manager_view() || return;
 	
 	# Override the die handler because MakeDirectory may call it
 	local $SIG{__DIE__} = sub{};
@@ -1226,10 +1178,9 @@ sub delete_file {
 	}
 	
 	# Get a fileManager object
-	my $service_content = Vim::get_service_content() || return;
-	my $file_manager = Vim::get_view(mo_ref => $service_content->{fileManager}) || return;
+	my $file_manager = $self->_get_file_manager_view() || return;
 	
-	# Override the die handler because fileManager may call it
+	# Override the die handler
 	local $SIG{__DIE__} = sub{};
 
 	# Attempt to delete the file
@@ -1282,11 +1233,10 @@ sub copy_file {
 	$self->create_directory($destination_directory_path) || return;
 	
 	# Get a fileManager object
-	my $service_content = Vim::get_service_content() || return;
-	my $file_manager = Vim::get_view(mo_ref => $service_content->{fileManager}) || return;
-	my $datacenter = Vim::find_entity_view(view_type => 'Datacenter') || return;
+	my $file_manager = $self->_get_file_manager_view() || return;
+	my $datacenter = $self->_get_datacenter_view() || return;
 	
-	# Override the die handler because fileManager may call it
+	# Override the die handler
 	local $SIG{__DIE__} = sub{};
 	
 	# Attempt to copy the file
@@ -1540,11 +1490,10 @@ sub move_file {
 	$self->create_directory($destination_directory_path) || return;
 	
 	# Get a fileManager and Datacenter object
-	my $service_content = Vim::get_service_content() || return;
-	my $file_manager = Vim::get_view(mo_ref => $service_content->{fileManager}) || return;
-	my $datacenter = Vim::find_entity_view(view_type => 'Datacenter') || return;
+	my $file_manager = $self->_get_file_manager_view() || return;
+	my $datacenter = $self->_get_datacenter_view() || return;
 	
-	# Override the die handler because fileManager may call it
+	# Override the die handler
 	local $SIG{__DIE__} = sub{};
 
 	# Attempt to copy the file
@@ -1753,6 +1702,50 @@ sub find_files {
 }
 
 #/////////////////////////////////////////////////////////////////////////////
+ 
+=head2 get_total_space 
+
+ Parameters  : $path 
+ Returns     : integer 
+ Description : Returns the total size (in bytes) of the volume specified by the
+               argument. 
+
+=cut 
+
+sub get_total_space { 
+	my $self = shift; 
+	if (ref($self) !~ /VCL::Module/i) { 
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return; 
+	} 
+	
+	# Get the path argument 
+	my $path = shift; 
+	if (!$path) { 
+		notify($ERRORS{'WARNING'}, 0, "path argument was not specified"); 
+		return; 
+	} 
+	
+	# Get the datastore name 
+	my $datastore_name = $self->_get_datastore_name($path) || return; 
+	
+	my $vmhost_hostname = $self->data->get_vmhost_hostname(); 
+	
+	# Get the datastore info hash 
+	my $datastore_info = $self->_get_datastore_info() || return; 
+	
+	my $total_bytes = $datastore_info->{$datastore_name}{capacity}; 
+	if (!defined($total_bytes)) { 
+		notify($ERRORS{'WARNING'}, 0, "datastore $datastore_name capacity key does not exist in datastore info:\n" . format_data($datastore_info));
+		return; 
+	} 
+	
+	notify($ERRORS{'DEBUG'}, 0, "capacity of $datastore_name datastore on $vmhost_hostname: " . get_file_size_info_string($total_bytes));
+	return $total_bytes; 
+} 
+
+
+#/////////////////////////////////////////////////////////////////////////////
 
 =head2 get_available_space
 
@@ -1783,7 +1776,7 @@ sub get_available_space {
 	my $vmhost_hostname = $self->data->get_vmhost_hostname();
 	
 	# Get the datastore info hash
-	my $datastore_info = $self->_get_datastore_info() || return;
+	my $datastore_info = $self->_get_datastore_info(1) || return;
 	
 	my $available_bytes = $datastore_info->{$datastore_name}{freeSpace};
 	if (!defined($available_bytes)) {
@@ -1791,7 +1784,7 @@ sub get_available_space {
 		return;
 	}
 	
-	notify($ERRORS{'DEBUG'}, 0, "space available in $datastore_name datastore on $vmhost_hostname: " . format_number($available_bytes) . " bytes");
+	notify($ERRORS{'DEBUG'}, 0, "space available in $datastore_name datastore on $vmhost_hostname: " . get_file_size_info_string($available_bytes));
 	return $available_bytes;
 }
 
@@ -1996,7 +1989,7 @@ sub _get_file_info {
 		query => [@file_queries],
 	);
 	
-	# Override the die handler because fileManager may call it
+	# Override the die handler
 	local $SIG{__DIE__} = sub{};
 	
 	# Searches the folder specified by the datastore path and all subfolders based on the searchSpec
@@ -2056,8 +2049,164 @@ sub _get_file_info {
 		}
 	}
 	
-	#notify($ERRORS{'DEBUG'}, 0, "retrieved info for " . scalar(keys(%file_info)) . " matching files:\n" . format_data(\%file_info));
+	notify($ERRORS{'DEBUG'}, 0, "retrieved info for " . scalar(keys(%file_info)) . " matching files:\n" . format_data(\%file_info));
 	return \%file_info;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 _get_host_view
+
+ Parameters  : 
+ Returns     : vSphere SDK host object
+ Description : Retrieves a host object.
+
+=cut
+
+sub _get_host_view {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	return $self->{host_view_object} if $self->{host_view_object};
+	
+	# Get the host view
+	$self->{host_view_object} = VIExt::get_host_view(1);
+	return $self->{host_view_object};
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 _get_datacenter_view
+
+ Parameters  : 
+ Returns     : vSphere SDK datacenter view object
+ Description : Retrieves a vSphere SDK datacenter view object.
+
+=cut
+
+sub _get_datacenter_view {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	return $self->{datacenter_view_object} if $self->{datacenter_view_object};
+	
+	# Get the host view
+	my $datacenter = Vim::find_entity_view(view_type => 'Datacenter');
+	if (!$datacenter) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve datacenter view object");
+		return;
+	}
+	else {
+		$self->{datacenter_view_object} = $datacenter;
+		return $self->{datacenter_view_object};
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 _get_vm_view
+
+ Parameters  : $vmx_file_path (optional)
+ Returns     : 
+ Description : 
+
+=cut
+
+sub _get_vm_view {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get the vmx path argument and convert it to a datastore path
+	my $vmx_path = shift || $self->get_vmx_file_path();
+	$vmx_path = $self->_get_datastore_path($vmx_path);
+	
+	# Override the die handler
+	local $SIG{__DIE__} = sub{};
+	
+	my $vm_view;
+	eval { $vm_view = Vim::find_entity_view(view_type => 'VirtualMachine', filter => {'config.files.vmPathName' => $vmx_path}); };
+	if (!$vm_view) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve view object for VM: $vmx_path");
+		return;
+   }
+	
+	$self->{vm_view_objects}{$vmx_path} = $vm_view;
+	return $self->{vm_view_objects}{$vmx_path};
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 _get_virtual_disk_manager_view
+
+ Parameters  : 
+ Returns     : vSphere SDK virtual disk manager view object
+ Description : Retrieves a vSphere SDK virtual disk manager view object.
+
+=cut
+
+sub _get_virtual_disk_manager_view {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	return $self->{virtual_disk_manager_object} if $self->{virtual_disk_manager_object};
+	
+	# Get a virtual disk manager object
+	my $service_content = Vim::get_service_content() || return;
+	if (!$service_content->{virtualDiskManager}) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve virtual disk manager object, it is not available via the vSphere SDK");
+		return;
+	}
+	
+	my $virtual_disk_manager = Vim::get_view(mo_ref => $service_content->{virtualDiskManager});
+	if (!$virtual_disk_manager) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve virtual disk manager object");
+		return;
+	}
+	
+	$self->{virtual_disk_manager_object} = $virtual_disk_manager;
+	return $self->{virtual_disk_manager_object};
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 _get_file_manager_view
+
+ Parameters  : 
+ Returns     : vSphere SDK file manager view object
+ Description : Retrieves a vSphere SDK file manager view object.
+
+=cut
+
+sub _get_file_manager_view {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	return $self->{file_manager_object} if $self->{file_manager_object};
+	
+	my $service_content = Vim::get_service_content() || return;
+	my $file_manager = Vim::get_view(mo_ref => $service_content->{fileManager});
+	if (!$file_manager) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve file manager object");
+		return;
+	}
+	
+	$self->{file_manager_object} = $file_manager;
+	return $self->{file_manager_object};
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -2079,14 +2228,16 @@ sub _get_datastore_object {
 	}
 	
 	# Get the datastore name argument
-	my $datastore_name = shift;
-	if (!$datastore_name) {
+	my $datastore_name_argument = shift;
+	if (!$datastore_name_argument) {
 		notify($ERRORS{'WARNING'}, 0, "datastore name argument was not specified");
 		return;
 	}
 	
+	return $self->{datastore_objects}{$datastore_name_argument} if ($self->{datastore_objects}{$datastore_name_argument});
+	
 	# Get the host view
-	my $host_view = VIExt::get_host_view(1);
+	my $host_view = $self->_get_host_view();
 	
 	# Get an array containing datastore managed object references
 	my @datastore_mo_refs = @{$host_view->datastore};
@@ -2096,11 +2247,13 @@ sub _get_datastore_object {
 	my @datastore_names_found;
 	for my $datastore_mo_ref (@datastore_mo_refs) {
 		my $datastore = Vim::get_view(mo_ref => $datastore_mo_ref);
-		return $datastore if ($datastore_name eq $datastore->summary->name);
-		push @datastore_names_found, $datastore->summary->name;
+		my $datastore_name = $datastore->summary->name;
+		$self->{datastore_objects}{$datastore_name} = $datastore;
 	}
 	
-	notify($ERRORS{'WARNING'}, 0, "failed to find datastore named $datastore_name, datastore names found:\n" . join("\n", @datastore_names_found));
+	return $self->{datastore_objects}{$datastore_name_argument} if ($self->{datastore_objects}{$datastore_name_argument});
+	
+	notify($ERRORS{'WARNING'}, 0, "failed to find datastore named $datastore_name_argument, datastore names found:\n" . join("\n", keys(%{$self->{datastore_objects}})));
 	return;
 }
 
@@ -2134,10 +2287,14 @@ sub _get_datastore_info {
 		return;
 	}
 	
+	# If the datastore info was previously retrieved, return the cached data unless an argument was specified
+	my $no_cache = shift;
+	return $self->{datastore_info} if (!$no_cache && $self->{datastore_info});
+	
 	my $vmhost_hostname = $self->data->get_vmhost_hostname();
 	
 	# Get the host view
-	my $host_view = VIExt::get_host_view(1);
+	my $host_view = $self->_get_host_view();
 	
 	# Get an array containing datastore managed object references
 	my @datastore_mo_refs = @{$host_view->datastore};
@@ -2173,6 +2330,8 @@ sub _get_datastore_info {
 		$datastore_info->{$datastore_name} = $datastore_view->summary;
 	}
 	
+	#notify($ERRORS{'DEBUG'}, 0, "retrieved datastore info:\n" . format_data($datastore_info));
+	$self->{datastore_info} = $datastore_info;
 	return $datastore_info;
 }
 
@@ -2201,12 +2360,7 @@ sub create_snapshot {
 	# Override the die handler
 	local $SIG{__DIE__} = sub{};
 	
-	my $vm;
-	eval { $vm = Vim::find_entity_view(view_type => 'VirtualMachine', filter => {'config.files.vmPathName' => $vmx_path}); };
-	if (!$vm) {
-		notify($ERRORS{'WARNING'}, 0, "unable to create snapshop because VM is not registered: $vmx_path");
-		return;
-   }
+	my $vm = $self->_get_vm_view($vmx_path) || return;
 	
 	eval { $vm->CreateSnapshot(name => $snapshot_name,
 										memory => 0,
@@ -2243,18 +2397,13 @@ sub snapshot_exists {
 	# Get the vmx path argument and convert it to a datastore path
 	my $vmx_path = $self->_get_datastore_path(shift) || return;
 	
-	# Override the die handler because fileManager may call it
+	# Override the die handler
 	local $SIG{__DIE__} = sub{};
 	
-	my $vm;
-	eval { $vm = Vim::find_entity_view(view_type => 'VirtualMachine', filter => {'config.files.vmPathName' => $vmx_path}); };
-	if (!$vm) {
-		notify($ERRORS{'WARNING'}, 0, "unable to determine if snapshot exists because VM is not registered: $vmx_path");
-		return;
-   }
+	my $vm = $self->_get_vm_view($vmx_path) || return;
 	
 	if (defined($vm->snapshot)) {
-		notify($ERRORS{'DEBUG'}, 0, "snapshot exists for VM: $vmx_path");
+		notify($ERRORS{'DEBUG'}, 0, "snapshot exists for VM: $vmx_path\n" . format_data($vm->snapshot));
 		return 1;
 	}
 	else {
