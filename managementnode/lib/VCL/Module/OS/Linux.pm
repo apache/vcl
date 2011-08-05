@@ -864,6 +864,7 @@ sub grant_access {
 	my $user               = $self->data->get_user_login_id();
 	my $computer_node_name = $self->data->get_computer_node_name();
 	my $identity           = $self->data->get_image_identity;
+	my $server_request_id	  = $self->data->get_server_request_id();
 
 	notify($ERRORS{'OK'}, 0, "In grant_access routine $user,$computer_node_name");
 	my @sshcmd;
@@ -883,9 +884,26 @@ sub grant_access {
 		notify($ERRORS{'CRITICAL'}, 0, "failed to add AllowUsers $user to external_sshd_config");
 		return 0;
 	}
+	
+	notify($ERRORS{'OK'}, 0, "server_request_id= $server_request_id");
+
+	if ( $server_request_id ) {
+		my $server_allow_user_list = $self->data->get_server_ssh_allow_users();
+		notify($ERRORS{'OK'}, 0, "server_allow_user_list= $server_allow_user_list");
+		if ( $server_allow_user_list ) {
+
+			$cmd = "echo \"AllowUsers $server_allow_user_list\" >> /etc/ssh/external_sshd_config";
+			if (run_ssh_command($computer_node_name, $identity, $cmd, "root")) {
+				notify($ERRORS{'DEBUG'}, 0, "added AllowUsers $server_allow_user_list to external_sshd_config");
+			}
+			else {
+				notify($ERRORS{'CRITICAL'}, 0, "failed to add AllowUsers $server_allow_user_list to external_sshd_config");
+			}
+		}
+	}
 
 	undef @sshcmd;
-	@sshcmd = run_ssh_command($computer_node_name, $identity, "/etc/init.d/ext_sshd restart", "root");
+	@sshcmd = run_ssh_command($computer_node_name, $identity, "/etc/init.d/ext_sshd stop; /etc/init.d/ext_sshd start", "root");
 
 	foreach my $l (@{$sshcmd[1]}) {
 		if ($l =~ /Stopping ext_sshd:/i) {
@@ -896,6 +914,8 @@ sub grant_access {
 		}
 	}    #foreach
 	notify($ERRORS{'OK'}, 0, "started ext_sshd on $computer_node_name");
+
+	
 	return 1;
 } ## end sub grant_access
 
@@ -2846,7 +2866,7 @@ sub create_user {
         foreach my $l (@{$sshcmd[1]}) {
                 if ($l =~ /$username exists/) {
                         notify($ERRORS{'OK'}, 0, "detected user already has account");
-                        if ($self->delete_user()) {
+                        if ($self->delete_user($username)) {
                                 notify($ERRORS{'OK'}, 0, "user has been deleted from $computer_node_name");
                                 @sshcmd = run_ssh_command($computer_node_name, $management_node_keys, $useradd_string, "root");
                         }
@@ -2901,7 +2921,37 @@ sub create_user {
 =cut
 
 sub update_server_access {
+	
+	my ($self) = shift;
 
+	if (ref($self) !~ /linux/i) {
+                notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+                return;
+        }
+
+	my ($server_allow_user_list) = shift;
+
+        my $computer_node_name = $self->data->get_computer_node_name();
+        my $identity           = $self->data->get_image_identity;
+
+
+	if ( !$server_allow_user_list ) {
+		my $server_allow_user_list = $self->data->get_server_ssh_allow_users();
+	}
+	
+        notify($ERRORS{'OK'}, 0, "server_allow_user_list= $server_allow_user_list");
+        if ( $server_allow_user_list ) {
+
+             my $cmd = "echo \"AllowUsers $server_allow_user_list\" >> /etc/ssh/external_sshd_config";
+             if (run_ssh_command($computer_node_name, $identity, $cmd, "root")) {
+                 notify($ERRORS{'DEBUG'}, 0, "added AllowUsers $server_allow_user_list to external_sshd_config");
+             }
+             else {
+                 notify($ERRORS{'CRITICAL'}, 0, "failed to add AllowUsers $server_allow_user_list to external_sshd_config");
+             }
+        }
+	
+	return 1;
 
 }
 
