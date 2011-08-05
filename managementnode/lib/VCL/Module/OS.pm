@@ -1682,6 +1682,7 @@ sub manage_server_access {
 	my @userlist_admin;
 	my @userlist_login;
 	my %user_hash;
+	my $ssh_allow_list;
 
 	if ( $server_request_admingroupid ) {
 		@userlist_admin = getusergroupmembers($server_request_admingroupid);
@@ -1690,6 +1691,10 @@ sub manage_server_access {
 		@userlist_login = getusergroupmembers($server_request_logingroupid);
 	}	
 	
+	notify($ERRORS{'OK'}, 0, " admin list= @userlist_admin");
+	notify($ERRORS{'OK'}, 0, " login list= @userlist_login");
+
+	
 	if ( scalar @userlist_admin > 0 ) {
 		foreach my $str (@userlist_admin) {
 			my ($username,$uid,$vcl_user_id) = split(/:/, $str);
@@ -1697,16 +1702,19 @@ sub manage_server_access {
 			$user_hash{$uid}{"uid"}	= $uid;
 			$user_hash{$uid}{"vcl_user_id"}	= $vcl_user_id;
 			$user_hash{$uid}{"rootaccess"} = 1;
+			notify($ERRORS{'OK'}, 0, "adding admin $uid for $username ");
 		}
 	}		
 	if ( scalar @userlist_login > 0 ) {
-		foreach my $str (@userlist_admin) {
+		foreach my $str (@userlist_login) {
+			notify($ERRORS{'OK'}, 0, "admin str= $str");
 			my ($username, $uid,$vcl_user_id) = split(/:/, $str);
 			if (!exists($user_hash{$uid})) {
 				$user_hash{$uid}{"username"} = $username;
 				$user_hash{$uid}{"uid"}	= $uid;
 				$user_hash{$uid}{"vcl_user_id"}	= $vcl_user_id;
 				$user_hash{$uid}{"rootaccess"} = 0;
+				notify($ERRORS{'OK'}, 0, "adding $uid for $username ");
 			}
 			else {
 				notify($ERRORS{'OK'}, 0, "$uid for $username exists in user_hash, skipping");
@@ -1754,6 +1762,8 @@ sub manage_server_access {
 			else {
 				notify($ERRORS{'WARNING'}, 0, "Failed to create user on $computer_node_name ");
 			}
+			
+			$ssh_allow_list .= " $user_hash{$userid}{username}";
 
 		
 		}
@@ -1761,6 +1771,15 @@ sub manage_server_access {
 			notify($ERRORS{'WARNING'}, 0, "$userid exists in reservationaccounts table, assuming it exists on OS");
 		}
 			
+	}
+	notify($ERRORS{'OK'}, 0, "ssh_allow_list= $ssh_allow_list");
+
+	$self->data->set_server_ssh_allow_users($ssh_allow_list);
+	
+	if ( $self->can("update_server_access") ) {
+		if ( $self->update_server_access($ssh_allow_list) ) {
+			notify($ERRORS{'OK'}, 0, "updated remote access list");
+		}
 	}
 	
 	return 1;
