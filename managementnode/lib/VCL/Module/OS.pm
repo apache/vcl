@@ -1713,7 +1713,7 @@ sub manage_server_access {
 				$user_hash{$uid}{"username"} = $username;
 				$user_hash{$uid}{"uid"}	= $uid;
 				$user_hash{$uid}{"vcl_user_id"}	= $vcl_user_id;
-				$user_hash{$uid}{"rootaccess"} = 0;
+				$user_hash{$uid}{"rootaccess"} = 2;
 				notify($ERRORS{'OK'}, 0, "adding $uid for $username ");
 			}
 			else {
