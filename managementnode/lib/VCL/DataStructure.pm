@@ -837,7 +837,7 @@ sub _automethod : Automethod {
 		# Make sure the value was set in the hash
 		my $check_value = eval $hash_path;
 		if ($check_value eq $set_data) {
-			notify($ERRORS{'DEBUG'}, 0, "data structure updated: $hash_path\n$data_identifier = $set_data");
+			#notify($ERRORS{'DEBUG'}, 0, "data structure updated: $hash_path\n$data_identifier = $set_data");
 			return sub {1;};
 		}
 		else {
@@ -1650,6 +1650,40 @@ sub get_computer_private_ip_address {
 	
 	notify($ERRORS{'DEBUG'}, 0, "returning IP address from /etc/hosts file: $ip_address");
 	return $ip_address;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 set_computer_private_ip_address
+
+ Parameters  : $private_ip_address
+ Returns     : boolean
+ Description : Sets the computer private IP address in the DataStructure.
+
+=cut
+
+sub set_computer_private_ip_address {
+	my $self = shift;
+	
+	# Check if subroutine was called as an object method
+	unless (ref($self) && $self->isa('VCL::DataStructure')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a VCL::DataStructure module object method");
+		return;
+	}
+	
+	my $private_ip_address = shift;
+	if (!$private_ip_address) {
+		notify($ERRORS{'WARNING'}, 0, "computer private IP address argument was not supplied");
+		return;
+	}
+	elsif (!is_valid_ip_address($private_ip_address)) {
+		notify($ERRORS{'WARNING'}, 0, "computer private IP address argument is not valid: '$private_ip_address'");
+		return;
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "updated computer private IP address: '$private_ip_address'");
+	$self->request_data->{reservation}{$self->reservation_id}{computer}{PRIVATE_IP_ADDRESS} = $private_ip_address;
+	return 1;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
