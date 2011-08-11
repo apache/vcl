@@ -3100,7 +3100,25 @@ sub get_reference_vmx_file_path {
 		return;
 	}
 	
-	$ENV{reference_vmx_file_path} = "$vmdk_directory_path_shared/$reference_vmx_file_name";
+	my $reference_vmx_file_path = "$vmdk_directory_path_shared/$reference_vmx_file_name";
+	
+	if ($self->vmhost_os->file_exists($reference_vmx_file_path)) {
+		$ENV{reference_vmx_file_path} = $reference_vmx_file_path;
+		notify($ERRORS{'DEBUG'}, 0, "determined reference vmx file path: $ENV{reference_vmx_file_path}");
+		return $ENV{reference_vmx_file_path};
+	}
+	
+	my $repository_vmdk_file_path = $self->get_repository_vmdk_file_path();
+	if ($self->is_repository_mounted_on_vmhost()) {
+		if ($self->vmhost_os->file_exists($repository_vmdk_file_path)) {
+			$ENV{reference_vmx_file_path} = $repository_vmdk_file_path;
+			notify($ERRORS{'DEBUG'}, 0, "determined reference vmx file path: $ENV{reference_vmx_file_path}");
+			return $ENV{reference_vmx_file_path};
+		}
+	}
+	else {
+	}
+	
 	notify($ERRORS{'DEBUG'}, 0, "determined reference vmx file path: $ENV{reference_vmx_file_path}");
 	return $ENV{reference_vmx_file_path};
 }
@@ -4374,6 +4392,8 @@ sub get_vm_disk_adapter_type {
 		return;
 	}
 	
+	my $vmdk_file_path = shift || $self->get_vmdk_file_path_shared();
+	
 	my $vmdk_controller_type;
 	
 	# Attempt to retrieve the type from the reference vmx file for the image
@@ -4391,7 +4411,7 @@ sub get_vm_disk_adapter_type {
 	
 	# Try to get the type from the API module's get_virtual_disk_controller_type subroutine
 	if ($self->api->can("get_virtual_disk_controller_type")) {
-		if ($vmdk_controller_type = $self->api->get_virtual_disk_controller_type($self->get_vmdk_file_path())) {
+		if ($vmdk_controller_type = $self->api->get_virtual_disk_controller_type($vmdk_file_path)) {
 			notify($ERRORS{'DEBUG'}, 0, "retrieved VM disk adapter type from api object: $vmdk_controller_type");
 			return $vmdk_controller_type;
 		}
@@ -4708,7 +4728,7 @@ sub get_vmx_file_paths {
 
 =head2 get_vmx_info
 
- Parameters  : $vmx_file_path
+ Parameters  : $vmx_file_path, $vmx_resides_on_management_node (optional)
  Returns     : hash
  Description : Reads the contents of the vmx file indicated by the
                $vmx_file_path argument and returns a hash containing the info:
@@ -4752,6 +4772,8 @@ sub get_vmx_info {
 		return;
 	}
 	
+	my $vmx_resides_on_management_node = shift;
+	
 	# Return previously retrieved data if defined
 	if ($self->{vmx_info}{$vmx_file_path}) {
 		notify($ERRORS{'DEBUG'}, 0, "returning previously retrieved info from vmx file: $vmx_file_path");
@@ -4762,7 +4784,14 @@ sub get_vmx_info {
 	
 	my %vmx_info;
 	
-	my @vmx_file_contents = $self->vmhost_os->get_file_contents($vmx_file_path);
+	my @vmx_file_contents;
+	if ($vmx_resides_on_management_node) {
+		@vmx_file_contents = $self->mn_os->get_file_contents($vmx_file_path);
+	}
+	else {
+		@vmx_file_contents = $self->vmhost_os->get_file_contents($vmx_file_path);
+	}
+	
 	if (!@vmx_file_contents) {
 		notify($ERRORS{'WARNING'}, 0, "unable to retrieve the contents of vmx file: $vmx_file_path");
 		return;
@@ -4880,32 +4909,65 @@ sub get_reference_vmx_info {
 		return;
 	}
 	
-	# Check if the reference vmx info has already been retrieved
-	if ($self->{reference_vmx_info}) {
+	# Check if it was already determined that the reference vmx file doesn't exist
+	# $self->{reference_vmx_info} is set to 0 if the file doesn't exist
+	if (defined($self->{reference_vmx_info})) {
 		return $self->{reference_vmx_info};
 	}
 	
-	# Check if it was already determined that the reference vmx file doesn't exist
-	# $self->{reference_vmx_info} is set to 0 if the file doesn't exist
-	if (defined($self->{reference_vmx_info}) && !$self->{reference_vmx_info}) {
-		return 0;
+	my $vmdk_directory_path_shared = $self->get_vmdk_directory_path_shared();
+	if (!$vmdk_directory_path_shared) {
+		notify($ERRORS{'WARNING'}, 0, "unable to construct reference vmx file path, shared vmdk directory path could not be determined");
+		return;
 	}
 	
-	# Get the reference vmx file path and check if the file exists
-	my $reference_vmx_file_path = $self->get_reference_vmx_file_path();
-	if (!$self->vmhost_os->file_exists($reference_vmx_file_path)) {
-		notify($ERRORS{'DEBUG'}, 0, "reference vmx file does not exist: $reference_vmx_file_path");
-		# Set $self->{reference_vmx_info} to 0 so this subroutine doesn't have to check if it exists again on subsequent calls
-		$self->{reference_vmx_info} = 0;
-		return 0;
+	my $reference_vmx_file_name = $self->get_reference_vmx_file_name();
+	if (!$reference_vmx_file_name) {
+		notify($ERRORS{'WARNING'}, 0, "unable to construct reference vmx file path, reference vmx file name could not be determined");
+		return;
 	}
 	
+	# Check if reference vmx file exists on the host or management node
 	# Retrieve the info from the file
-	my $reference_vmx_info = $self->get_vmx_info($reference_vmx_file_path);
+	my $reference_vmx_file_path = "$vmdk_directory_path_shared/$reference_vmx_file_name";
+	my $reference_vmx_info;
+	
+	if ($self->vmhost_os->file_exists($reference_vmx_file_path)) {
+		notify($ERRORS{'DEBUG'}, 0, "found reference vmx file in shared vmdk directory on VM host: $reference_vmx_file_path");
+		$reference_vmx_info = $self->get_vmx_info($reference_vmx_file_path);
+	}
+	else {
+		my $repository_vmdk_directory_path = $self->get_repository_vmdk_directory_path();
+		if (!$repository_vmdk_directory_path) {
+			notify($ERRORS{'DEBUG'}, 0, "unable to locate reference vmx file, it does NOT exist in shared vmdk directory on VM host and repository path is not configured");
+			$self->{reference_vmx_info} = 0;
+			return $self->{reference_vmx_info};
+		}
+		
+		notify($ERRORS{'DEBUG'}, 0, "reference vmx file does NOT exist in shared vmdk directory on VM host, checking repository");
+		$reference_vmx_file_path = "$repository_vmdk_directory_path/$reference_vmx_file_name";
+		
+		if ($self->is_repository_mounted_on_vmhost() && $self->vmhost_os->file_exists($reference_vmx_file_path)) {
+			notify($ERRORS{'DEBUG'}, 0, "found reference vmx file in repository directory on VM host: $reference_vmx_file_path");
+			$reference_vmx_info = $self->get_vmx_info($reference_vmx_file_path);
+		}
+		elsif ($self->mn_os->file_exists($reference_vmx_file_path)) {
+			notify($ERRORS{'DEBUG'}, 0, "found reference vmx file in repository on management node: $reference_vmx_file_path");
+			# Pass argument to get_vmx_info indicating file resides on managment node
+			$reference_vmx_info = $self->get_vmx_info($reference_vmx_file_path, 1);
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "reference vmx file does NOT exist in repository on management node: $reference_vmx_file_path");
+			$self->{reference_vmx_info} = 0;
+			return $self->{reference_vmx_info};
+		}
+	}
+	
+	# Check if the info was successfully retrieved
 	if ($reference_vmx_info) {
 		notify($ERRORS{'DEBUG'}, 0, "retrieved reference vmx info from file: $reference_vmx_file_path");
 		$self->{reference_vmx_info} = $reference_vmx_info;
-		return $reference_vmx_info;
+		return $self->{reference_vmx_info};
 	}
 	else {
 		notify($ERRORS{'WARNING'}, 0, "failed to retrieve reference vmx info from file: $reference_vmx_file_path");

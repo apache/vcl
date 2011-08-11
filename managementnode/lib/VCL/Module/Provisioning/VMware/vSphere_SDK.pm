@@ -451,6 +451,16 @@ sub copy_virtual_disk {
 		}
 	}
 	
+	if ($adapter_type =~ /bus/i) {
+		$adapter_type = 'busLogic';
+	}
+	elsif ($adapter_type =~ /lsi/) {
+		$adapter_type = 'lsiLogic';
+	}
+	else {
+		$adapter_type = 'ide';
+	}
+	
 	my $vmhost_name = $self->data->get_vmhost_hostname();
 	
 	# Get a virtual disk manager object
