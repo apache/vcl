@@ -1666,35 +1666,6 @@ sub prepare_vmx {
 		"sched.mem.pshare.enable" => "FALSE",
 		"mainMem.useNamedFile" => "FALSE",
 	);
-
-if ($image_id eq '2513') {
-	notify($ERRORS{'DEBUG'}, 0, "image ID is $image_id, setting CastIron values");
-	
-	$vmx_parameters{"uuid.location"} = "56 4d dd 15 c3 c6 83 6e-58 a3 f8 0a b7 25 fc 4a";
-	$vmx_parameters{"uuid.bios"} = "56 4d 45 1a 26 1b 62 31-e5 d3 05 34 b6 c3 f9 da";
-	
-	$vmx_parameters{"ethernet0.addressType"} = "static";
-	$vmx_parameters{"ethernet0.address"} = "$vm_eth0_mac";
-	$vmx_parameters{"ethernet0.present"} = "TRUE";
-	$vmx_parameters{"ethernet0.virtualDev"} = "$vm_ethernet_adapter_type";
-	$vmx_parameters{"ethernet0.$network_parameter"} = "$virtual_switch_1";
-	
-	$vmx_parameters{"ethernet1.addressType"} = "generated";
-	$vmx_parameters{"ethernet1.present"} = "TRUE";
-	$vmx_parameters{"ethernet1.virtualDev"} = "$vm_ethernet_adapter_type";
-	$vmx_parameters{"ethernet1.$network_parameter"} = "$virtual_switch_1";
-	
-	$vmx_parameters{"ethernet2.addressType"} = "static";
-	$vmx_parameters{"ethernet2.address"} = "$vm_eth1_mac";
-	$vmx_parameters{"ethernet2.present"} = "TRUE";
-	$vmx_parameters{"ethernet2.virtualDev"} = "$vm_ethernet_adapter_type";
-	$vmx_parameters{"ethernet2.$network_parameter"} = "$virtual_switch_0";
-}
-else {
-	notify($ERRORS{'DEBUG'}, 0, "image ID is $image_id, NOT setting CastIron values");
-}
-
-
 	
 	#my $reservation_password     = $self->data->get_reservation_password();
 	#if (defined($reservation_password)) {
