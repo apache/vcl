@@ -2994,7 +2994,6 @@ sub enable_dhcp {
 	}
 	
 	for my $interface_name (@interface_names) {
-print "\n\n" . '-' x 100 . "\n\n";
 		my $ifcfg_file_path = "/etc/sysconfig/network-scripts/ifcfg-$interface_name";
 		notify($ERRORS{'DEBUG'}, 0, "attempting to enable DHCP on interface: $interface_name\nifcfg file path: $ifcfg_file_path");
 		
@@ -3004,12 +3003,15 @@ BOOTPROTO=dhcp
 ONBOOT=yes
 EOF
 		
+		# Remove any Windows carriage returns
+		$ifcfg_file_contents =~ s/\r//g;
+		
 		# Remove the last newline
 		$ifcfg_file_contents =~ s/\n$//s;
 		
 		# Write the contents to the ifcfg file
 		if ($self->create_text_file($ifcfg_file_path, $ifcfg_file_contents)) {
-			notify($ERRORS{'DEBUG'}, 0, "updated $ifcfg_file_path:\n$ifcfg_file_contents");
+			notify($ERRORS{'DEBUG'}, 0, "updated $ifcfg_file_path:\n" . string_to_ascii($ifcfg_file_contents));
 		}
 		else {
 			notify($ERRORS{'WARNING'}, 0, "failed to update $ifcfg_file_path");
@@ -3018,6 +3020,9 @@ EOF
 		
 		# Remove any leftover ifcfg-*.bak files
 		$self->delete_file('/etc/sysconfig/network-scripts/ifcfg-eth*.bak');
+		
+		# Remove dhclient lease files
+		$self->delete_file('/var/lib/dhclient/*.leases');
 	}
 	
 	return 1;
