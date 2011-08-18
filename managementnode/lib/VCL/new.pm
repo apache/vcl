@@ -103,54 +103,42 @@ sub process {
 	my $imagerevision_id                = $self->data->get_imagerevision_id();
 	my $user_standalone                 = $self->data->get_user_standalone();
 	
-	# If state is tomaintenance, place machine into maintenance state and set request to complete
-	if ($request_state_name =~ /tomaintenance/) {
-		notify($ERRORS{'OK'}, 0, "this is a 'tomaintenance' request");
-
-		# Update the request state to complete, update the computer state to maintenance, exit
-		# Do not update log.ending for tomaintenance reservations
-		if (switch_state($request_data, 'complete', 'maintenance', '', '0')) {
-			notify($ERRORS{'OK'}, 0, "$computer_short_name set to maintenance");
-		}
-
-
-		if ($self->provisioner->can("post_maintenance_action")) {
-			if ($self->provisioner->post_maintenance_action()) {
-				notify($ERRORS{'OK'}, 0, "post action completed $computer_short_name");
-			}
-		}
-		else {
-			notify($ERRORS{'OK'}, 0, "post action skipped, post_maintenance_action not implemented by " . ref($self->provisioner) . ", assuming no steps required");
-		}
+	#If reload state is reload and computer is part of block allocation confirm imagerevisionid is the production image.
+	if ($request_state_name eq 'reload' && is_inblockrequest($computer_id)) {
+		notify($ERRORS{'OK'}, 0, "request state is '$request_state_name', computer $computer_id is in blockrequest, making sure reservation is assigned production image revision");
+		my $imagerev_info = get_production_imagerevision_info($image_id);
 		
-		notify($ERRORS{'OK'}, 0, "exiting");
-		exit;
-	}
-
-	#If reload state is not new (reload) and computer is part of block allocation
-	#confirm imagerevisionid is the production image.
-	if($request_state_name !~ /^(new|reinstall)$/) {
-		notify($ERRORS{'OK'}, 0, "request_state_name is not new");
-		if(is_inblockrequest($computer_id)){
-			notify($ERRORS{'OK'}, 0, "computer_id $computer_id is in blockrequest");
-			my $imagerev_info = get_production_imagerevision_info($image_id);
-			unless($imagerevision_id == $imagerev_info->{id}){
-				notify($ERRORS{'OK'}, 0, "imagerevision_id does not match imagerevision_id= $imagerevision_id imagerev_info $imagerev_info->{id}");	
-				$self->data->set_imagerevision_id($imagerev_info->{id});
-				$self->data->set_sublog_imagerevisionid($imagerev_info->{id});
-				$self->data->set_image_name($imagerev_info->{imagename});
-				$self->data->set_imagerevision_revision($imagerev_info->{revision});
-				
-				#reset variables in this scope
-				$imagerevision_id = $imagerev_info->{id};
-				$image_name = $imagerev_info->{imagename};
-			}
+		unless($imagerevision_id == $imagerev_info->{id}){
+			notify($ERRORS{'OK'}, 0, "imagerevision_id does not match imagerevision_id= $imagerevision_id imagerev_info $imagerev_info->{id}");	
+			$self->data->set_imagerevision_id($imagerev_info->{id});
+			$self->data->set_sublog_imagerevisionid($imagerev_info->{id});
+			$self->data->set_image_name($imagerev_info->{imagename});
+			$self->data->set_imagerevision_revision($imagerev_info->{revision});
+			
+			# Reset variables in this scope
+			$imagerevision_id = $imagerev_info->{id};
+			$image_name = $imagerev_info->{imagename};
 		}
+
 	}
 	
 	# Confirm requested computer is available
 	if ($self->computer_not_being_used()) {
 		notify($ERRORS{'OK'}, 0, "$computer_short_name is not being used");
+	}
+	elsif ($request_state_name eq 'tomaintenance') {
+		notify($ERRORS{'CRITICAL'}, 0, "$computer_short_name could not be put into maintenance because it is NOT available");
+		
+		# Return request state back to the original
+		if (update_request_state($request_id, 'failed', $request_state_name)) {
+			notify($ERRORS{'OK'}, 0, "request state set to 'failed'/'$request_state_name'");
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to set request state back to 'failed'/'$request_state_name'");
+		}
+		
+		notify($ERRORS{'OK'}, 0, "exiting");
+		exit;
 	}
 	elsif ($request_state_name ne 'new') {
 		# Computer is not available, not a new request (most likely a simple reload)
@@ -201,8 +189,7 @@ sub process {
 
 		# Only the parent reservation  is allowed to modify the request state in this module
 		if (!$reservation_is_parent) {
-			notify($ERRORS{'OK'}, 0, "child preload reservation, computer is not available, states will be changed by the parent");
-			notify($ERRORS{'OK'}, 0, "exiting");
+			notify($ERRORS{'OK'}, 0, "child preload reservation, computer is not available, states will be changed by the parent, exiting");
 			exit;
 		}
 
@@ -239,9 +226,50 @@ sub process {
 	else {
 		# Computer not available, state=new, PRELOADONLY = false
 		notify($ERRORS{'WARNING'}, 0, "$computer_short_name is NOT available");
-
+		
 		# Call reservation_failed
 		$self->reservation_failed("process failed because computer is not available");
+	}
+
+	# If state is tomaintenance, place machine into maintenance state and set request to complete
+	if ($request_state_name =~ /tomaintenance/) {
+		notify($ERRORS{'OK'}, 0, "setting computer $computer_short_name state to 'maintenance'");
+		
+		# Set the computer state to 'maintenance' first
+		if (update_computer_state($computer_id, 'maintenance')) {
+			notify($ERRORS{'OK'}, 0, "$computer_short_name state set to 'maintenance'");
+		}
+		else {
+			notify($ERRORS{'CRITICAL'}, 0, "failed to set $computer_short_name state to 'maintenance', exiting");
+			exit;
+		}
+		
+		if ($self->provisioner->can("post_maintenance_action")) {
+			notify($ERRORS{'DEBUG'}, 0, "attempting to perform post maintenance actions for provisioning engine: " . ref($self->provisioner));
+			
+			if ($self->provisioner->post_maintenance_action()) {
+				notify($ERRORS{'OK'}, 0, "post maintenance actions completed $computer_short_name");
+			}
+			else {
+				notify($ERRORS{'CRITICAL'}, 0, "failed to complete post maintenance actions on $computer_short_name");
+			}
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "post maintenance actions skipped, post_maintenance_action subroutine not implemented by " . ref($self->provisioner));
+		}
+		
+		
+		# Update the request state to complete
+		# Do not update log.ending for tomaintenance reservations
+		if (update_request_state($request_id, 'complete', $request_state_name)) {
+			notify($ERRORS{'OK'}, 0, "request state set to 'complete'/'$request_state_name'");
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to set request state to 'complete'/'$request_state_name'");
+		}
+		
+		notify($ERRORS{'OK'}, 0, "exiting");
+		exit;
 	}
 
 	# Confirm requested resouces are available

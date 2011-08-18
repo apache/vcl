@@ -289,7 +289,6 @@ INIT {
 	my $cwd = getcwd();
 	our $CONF_FILE_PATH = "$cwd/$hostname.conf";
 	if (!-f $CONF_FILE_PATH) {
-		print STDOUT "file does not exist: $CONF_FILE_PATH\n";
 		if ($BIN_PATH =~ /dev/) {
 			$CONF_FILE_PATH = "/etc/vcl/vcldev.conf";
 		}
@@ -1020,9 +1019,7 @@ sub check_blockrequest_time {
 
 sub check_time {
 	my ($request_start, $request_end, $reservation_lastcheck, $request_state_name, $request_laststate_name) = @_;
-
-	my ($package, $filename, $line, $sub) = caller(0);
-
+	
 	# Check the arguments
 	if (!defined($request_state_name)) {
 		notify($ERRORS{'WARNING'}, 0, "\$request_state_name argument is not defined");
@@ -1075,10 +1072,10 @@ sub check_time {
 	#notify($ERRORS{'OK'}, 0, "request end time difference:      $end_diff_minutes minutes");
 
 	# Check the state, and then figure out the return code
-	if ($request_state_name =~ /new|imageprep|reload|tomaintenance|tovmhostinuse/) {
+	if ($request_state_name =~ /new|imageprep|reload|tovmhostinuse/) {
 		if ($start_diff_minutes > 0) {
 			# Start time is either now or in future, $start_diff_minutes is positive
-
+			
 			if ($start_diff_minutes > 35) {
 				#notify($ERRORS{'DEBUG'}, 0, "reservation will start in more than 35 minutes ($start_diff_minutes)");
 				return "0";
@@ -1094,18 +1091,29 @@ sub check_time {
 		} ## end if ($start_diff_minutes > 0)
 		else {
 			# Start time is in past, $start_diff_minutes is negative
-
+			
 			#Start time is fairly old - something is off
 			#send warning to log for tracking purposes
 			if ($start_diff_minutes < -17) {
 				notify($ERRORS{'WARNING'}, 0, "reservation start time was in the past 17 minutes ($start_diff_minutes)");
 			}
-
+			
 			return "start";
-
+			
 		} ## end else [ if ($start_diff_minutes > 0)
-	} ## end if ($request_state_name =~ /new|imageprep|reload|tomaintenance|tovmhostinuse/)
-
+	}
+	elsif ($request_state_name =~ /tomaintenance/) {
+		if ($start_diff_minutes > 0) {
+			# Start time is either now or in future, $start_diff_minutes is positive
+			notify($ERRORS{'DEBUG'}, 0, "$request_state_name request will be processed in $start_diff_minutes minutes");
+			return "0";
+		}
+		else {
+			# Start time is in past, $start_diff_minutes is negative
+			notify($ERRORS{'DEBUG'}, 0, "$request_state_name request will be processed now");
+			return "start";
+		}
+	}
 	elsif ($request_state_name =~ /inuse/) {
 		if ($end_diff_minutes <= 10) {
 			notify($ERRORS{'DEBUG'}, 0, "reservation will end in 10 minutes or less ($end_diff_minutes)");
@@ -7600,16 +7608,16 @@ sub firewall_compare_update {
 						my @sshcmd1      = run_ssh_command($node, $identity, $netshcmd, "root");
 						foreach my $line (@{$sshcmd1[1]}) {
 							if ($line =~ /Ok./) {
-								notify($ERRORS{'OK'}, 0, "firewall_compare_update: firewall updated with $scopeaddress");
+								notify($ERRORS{'OK'}, 0, "firewall updated with $scopeaddress");
 								return 1;
 							}
 							else {
-								notify($ERRORS{'DEBUG'}, 0, "firewall_compare_update netsh output $line ");
+								notify($ERRORS{'DEBUG'}, 0, "netsh output: $line ");
 							}
 						}
 					} ## end if ($update_scope)
 					else {
-						notify($ERRORS{'DEBUG'}, 0, "firewall_compare_update scope of ipaddess matches no change needed");
+						notify($ERRORS{'DEBUG'}, 0, "scope of ipaddess matches no change needed");
 					}
 				} ## end if ($l =~ /(\s*Scope:\s*)([.0-9]*)(\/)([.0-9]*)/)
 			} ## end if ($scopelook)
