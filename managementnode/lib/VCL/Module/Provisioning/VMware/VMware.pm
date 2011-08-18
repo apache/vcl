@@ -469,6 +469,7 @@ sub capture {
 	my $vmprofile_name = $self->data->get_vmhost_profile_name();
 	my $vmprofile_vmdisk = $self->data->get_vmhost_profile_vmdisk();
 	my $vmdk_base_directory_path_shared = $self->get_vmdk_base_directory_path_shared();
+	my $repository_mounted_on_vmhost = $self->is_repository_mounted_on_vmhost();
 	
 	# Make sure the VM profile repository path is configured if the VM profile disk type is local
 	if ($vmprofile_vmdisk =~ /local/ && !$self->get_repository_vmdk_base_directory_path()) {
@@ -597,27 +598,34 @@ sub capture {
 		}
 	}
 	
-	# Rename the vmdk to the new image directory and file name
-	# First check if vmdk file path already matches the destination file path
-	if ($vmdk_file_path_original eq $vmdk_file_path_renamed) {
-		notify($ERRORS{'DEBUG'}, 0, "vmdk files will not be renamed, vmdk file path being captured is already named as the image being captured: '$vmdk_file_path_original'");
+	if ($vmprofile_vmdisk =~ /local/ && $repository_mounted_on_vmhost) {
+		notify($ERRORS{'DEBUG'}, 0, "vmx and vmdk files will not be copied or renamed directly on the host, the VM profile disk type is $vmprofile_vmdisk and the image repository is mounted on the host");
+		$vmdk_file_path_renamed = $vmdk_file_path_original;
+		$vmx_file_path_renamed = $vmx_file_path_original;
 	}
 	else {
-		if (!$self->copy_vmdk($vmdk_file_path_original, $vmdk_file_path_renamed)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to copy the vmdk files after the VM was powered off: '$vmdk_file_path_original' --> '$vmdk_file_path_renamed'");
-			return;
+		# Rename the vmdk to the new image directory and file name
+		# First check if vmdk file path already matches the destination file path
+		if ($vmdk_file_path_original eq $vmdk_file_path_renamed) {
+			notify($ERRORS{'DEBUG'}, 0, "vmdk files will not be renamed, vmdk file path being captured is already named as the image being captured: '$vmdk_file_path_original'");
 		}
-	}
-	
-	# Copy the vmx file to the new image directory for later reference
-	# First check if vmx file already exists (could happen if base image VM was manually created)
-	if ($vmx_file_path_original eq $vmx_file_path_renamed) {
-		notify($ERRORS{'DEBUG'}, 0, "vmx file will not be copied, vmx file path being captured is already named as the image being captured: '$vmx_file_path_original'");
-	}
-	else {
-		if (!$self->vmhost_os->copy_file($vmx_file_path_original, $vmx_file_path_renamed)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to copy the reference vmx file after the VM was powered off: '$vmx_file_path_original' --> '$vmx_file_path_renamed'");
-			return;
+		else {
+			if (!$self->copy_vmdk($vmdk_file_path_original, $vmdk_file_path_renamed)) {
+				notify($ERRORS{'WARNING'}, 0, "failed to copy the vmdk files after the VM was powered off: '$vmdk_file_path_original' --> '$vmdk_file_path_renamed'");
+				return;
+			}
+		}
+		
+		# Copy the vmx file to the new image directory for later reference
+		# First check if vmx file already exists (could happen if base image VM was manually created)
+		if ($vmx_file_path_original eq $vmx_file_path_renamed) {
+			notify($ERRORS{'DEBUG'}, 0, "vmx file will not be copied, vmx file path being captured is already named as the image being captured: '$vmx_file_path_original'");
+		}
+		else {
+			if (!$self->vmhost_os->copy_file($vmx_file_path_original, $vmx_file_path_renamed)) {
+				notify($ERRORS{'WARNING'}, 0, "failed to copy the reference vmx file after the VM was powered off: '$vmx_file_path_original' --> '$vmx_file_path_renamed'");
+				return;
+			}
 		}
 	}
 	
@@ -627,7 +635,6 @@ sub capture {
 		my $repository_copy_successful = 0;
 		
 		# Check if the image repository path configured in the VM profile is mounted on the host or on the management node
-		my $repository_mounted_on_vmhost = $self->is_repository_mounted_on_vmhost();
 		if ($repository_mounted_on_vmhost) {
 			notify($ERRORS{'DEBUG'}, 0, "vmdk will be copied directly from VM host $vmhost_name to the image repository in the 2gbsparse disk format");
 			
