@@ -6018,24 +6018,31 @@ sub get_management_predictive_info {
 =cut
 
 sub get_management_node_info {
-	# Get the hostname of the computer this is running on
-	my $hostname = (hostname())[0];
-	
 	# Get the management node identifier argument
 	# If argument was not passed, assume management node is this machine
-	my $management_node_identifier = shift || $hostname;
+	my $management_node_identifier = shift;
+	
+	# Get the hostname of the computer this is running on
+	my $hostname = (hostname())[0];
+		
+	if (!$management_node_identifier) {
+		$management_node_identifier = $hostname;
+		
+		if (defined($ENV{management_node_info}) && ref($ENV{management_node_info}) eq 'HASH') {
+			my $lastcheckin_age = (time - convert_to_epoch_seconds($ENV{management_node_info}{lastcheckin}));
+			
+			if ($lastcheckin_age < 60) {
+				return $ENV{management_node_info};
+			}
+		}
+	}
+	
 	if (!$management_node_identifier) {
 		notify($ERRORS{'WARNING'}, 0, "management node hostname or ID was not specified and hostname could not be determined");
 		return;
 	}
 	
-	if (defined($ENV{management_node_info}) && ref($ENV{management_node_info}) eq 'HASH') {
-		my $lastcheckin_age = (time - convert_to_epoch_seconds($ENV{management_node_info}{lastcheckin}));
-		
-		if ($lastcheckin_age < 60) {
-			return $ENV{management_node_info};
-		}
-	}
+	notify($ERRORS{'DEBUG'}, 0, "attempting to retrieve management node info: '$management_node_identifier'");
 
 	my $select_statement = "
 SELECT
@@ -6122,10 +6129,10 @@ AND resource.id = resourcegroupmembers.resourceid
 AND resource.subid = managementnode.id
 AND managementnode.id != $management_node_id
 		";
-
+		
 		# Call the database select subroutine
 		my @imagelib_rows = database_select($imagelib_statement);
-
+		
 		# Check to make sure 1 row was returned
 		if (scalar @imagelib_rows == 0) {
 			notify($ERRORS{'WARNING'}, 0, "zero rows were returned from database select, image library functions will be disabled");
