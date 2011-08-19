@@ -491,6 +491,7 @@ DEVICE=$interface_name
 BOOTPROTO=static
 IPADDR=$ip_address
 NETMASK=$subnet_mask
+GATEWAY=$default_gateway
 STARTMODE=onboot
 ONBOOT=yes
 EOF
