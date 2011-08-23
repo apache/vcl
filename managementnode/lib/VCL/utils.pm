@@ -164,6 +164,7 @@ our @EXPORT = qw(
   is_valid_ip_address
   isconnected
   isfilelocked
+  kill_child_processes
   kill_reservation_process
   known_hosts
   lockfile
@@ -5393,16 +5394,17 @@ EOF
 
 =head2 run_ssh_command
 
- Parameters  : $node, $identity_path, $command, $user, $port
+ Parameters  : $node, $identity_path, $command, $user, $port, $output_level, $timeout_seconds
 					-or-
 					Hash reference with the following keys:
-					node - node name (required)
-					command - command to be executed remotely (required)
-					identity_paths - string containing paths to identity key files separated by commas (optional)
-					user - user to run remote command as (optional, default is 'root')
-					port - SSH port number (optional, default is 22)
-					output_level - allows the amount of output to be controlled: 0, 1, or 2 (optional)
-					max_attempts - maximum number of SSH attempts to make
+						node - node name (required)
+						command - command to be executed remotely (required)
+						identity_paths - string containing paths to identity key files separated by commas (optional)
+						user - user to run remote command as (optional, default is 'root')
+						port - SSH port number (optional, default is 22)
+						output_level - allows the amount of output to be controlled: 0, 1, or 2 (optional)
+						max_attempts - maximum number of SSH attempts to make
+						timeout_seconds - maximum number seconds SSH process can run before being terminated
  Returns     : If successful: array:
                   $array[0] = the exit status of the command
 					   $array[1] = reference to array containing lines of output
@@ -5412,7 +5414,7 @@ EOF
 =cut
 
 sub run_ssh_command {
-	my ($node, $identity_paths, $command, $user, $port, $output_level) = @_;
+	my ($node, $identity_paths, $command, $user, $port, $output_level, $timeout_seconds) = @_;
 
 	my $max_attempts = 3;
 	
@@ -5426,7 +5428,7 @@ sub run_ssh_command {
 		$port = $arguments->{port} || '22';
 		$output_level = $arguments->{output_level};
 		$max_attempts = $arguments->{max_attempts} || 3;
-		
+		$timeout_seconds = $arguments->{timeout_seconds};
 	}
 	
 	# Determine the output level if it was specified
@@ -5456,7 +5458,8 @@ sub run_ssh_command {
 
 	# Set default values if not passed as an argument
 	$user = "root" if (!$user);
-	$port = 22     if (!$port);
+	$port = 22 if (!$port);
+	$timeout_seconds = 0 if (!$timeout_seconds);
 	$identity_paths = $ENV{management_node_info}{keys} if (!defined $identity_paths || length($identity_paths) == 0);
 	
 	# TODO: Add ssh path to config file and set global variable
@@ -5511,9 +5514,9 @@ sub run_ssh_command {
 	my $ssh_command = "$ssh_path $identity_paths -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectionAttempts=1 -o ConnectTimeout=3 -l $user -p $port -x $node '$command' 2>&1";
 	
 	# Execute the command
-	my $ssh_output;
-	my $ssh_output_formatted;
-	my $attempts        = 0;
+	my $ssh_output = '';
+	my $ssh_output_formatted = '';
+	my $attempts = 0;
 	my $exit_status = 255;
 
 	# Make multiple attempts if failure occurs
@@ -5538,28 +5541,53 @@ sub run_ssh_command {
 			notify($ERRORS{'DEBUG'}, 0, "attempt $attempts/$max_attempts: executing SSH command on $node:\n$ssh_command") if $output_level;
 		}
 		
-		# Execute the command
-		$ssh_output = `$ssh_command`;
-
-		# Bits 0-7 of $? are set to the signal the child process received that caused it to die
-		my $signal_number = $? & 127;
+		# Enclose SSH command in an eval block and use alarm to eventually timeout the SSH command if it hangs
+		my $start_time = time;
+		eval {
+			# Override the die and alarm handlers
+			local $SIG{__DIE__} = sub{};
+			local $SIG{ALRM} = sub { die "alarm\n" };
+			
+			if ($timeout_seconds) {
+				notify($ERRORS{'DEBUG'}, 0, "waiting up to $timeout_seconds seconds for SSH process to finish");
+				alarm $timeout_seconds;
+			}
+			
+			# Execute the command
+			$ssh_output = `$ssh_command`;
+			
+			# Save the exit status
+			$exit_status = $? >> 8;
+			
+			# Ignore the returned value of $? if it is -1
+			# This likely means a Perl bug was encountered
+			# Assume command was successful
+			if ($? == -1) {
+				notify($ERRORS{'DEBUG'}, 0, "exit status changed from $exit_status to 0, Perl bug likely encountered") if $output_level;
+				$exit_status = 0;
+			}
+			
+			if ($timeout_seconds) {
+				# Cancel the timer
+				alarm 0;
+			}
+		};
+	
+		my $duration = (time - $start_time);
 		
-		# Bit 8 of $? will be true if a core dump occurred
-		my $core_dump = $? & 128;
-		
-		# Bits 9-16 of $? contain the child process exit status
-		$exit_status = $? >> 8;
-		
-		# Ignore the returned value of $? if it is -1
-		# This likely means a Perl bug was encountered
-		# Assume command was successful
-		if ($? == -1) {
-			notify($ERRORS{'DEBUG'}, 0, "exit status changed from $exit_status to 0, Perl bug likely encountered") if $output_level;
-			$exit_status = 0;
+		# Check if the timeout was reached
+		if ($EVAL_ERROR && $EVAL_ERROR eq "alarm\n") {
+			notify($ERRORS{'CRITICAL'}, 0, "attempt $attempts/$max_attempts: SSH command timed out after $duration seconds, timeout threshold: $timeout_seconds seconds, command: $node:\n$ssh_command");
+			
+			# Kill the child processes of this reservation process
+			kill_child_processes($PID);
+			next;
+		}
+		elsif ($EVAL_ERROR) {
+			notify($ERRORS{'CRITICAL'}, 0, "attempt $attempts/$max_attempts: eval error was generated attempting to run SSH command: $node:\n$ssh_command, error: $EVAL_ERROR");
+			next;
 		}
 		
-		#notify($ERRORS{'DEBUG'}, 0, "\$?: $?, signal: $signal_number, core dump: $core_dump, exit status: $exit_status");
-
 		# Strip out the key warning message from the output
 		$ssh_output =~ s/\@{10,}.*man-in-the-middle attacks\.//igs;
 		
@@ -10439,6 +10467,66 @@ EOF
 	
 	#notify($ERRORS{'DEBUG'}, 0, "retrieved OS info:\n" . format_data(\%info));
 	return \%info;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 kill_child_processes
+
+ Parameters  : $parent_pid
+ Returns     : boolean
+ Description : Kills all child processes belonging to the parent PID specified
+               as the argument.
+
+=cut
+
+sub kill_child_processes {
+	my @parent_pids = @_;
+	my $parent_pid = $parent_pids[-1];
+	my $parent_process_string = "parent PID: " . join(">", @parent_pids);
+	
+	# Make sure the parent vcld daemon process didn't call this subroutine for safety
+	# Prevents all reservations being processed from being killed
+	if ($ENV{vcld}) {
+		notify($ERRORS{'CRITICAL'}, 0, "kill_child_processes subroutine called from the parent vcld process, not killing any processes for safety");
+		return;
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "$parent_process_string: attempting to kill child processes");
+	
+	my $command = "pgrep -flP $parent_pid | sort -r";
+	my ($exit_status, $output) = run_command($command, 1);
+	
+	for my $line (@$output) {
+		# Make sure the line only contains a PID
+		my ($child_pid, $child_command) = $line =~ /^(\d+)\s+(.*)/;
+		if (!defined($child_pid) || !defined($child_command)) {
+			notify($ERRORS{'WARNING'}, 0, "$parent_process_string: pgrep output line does not contain a PID and command:\nline: '$child_pid'\ncommand: '$command'");
+			next;
+		}
+		elsif ($child_command =~ /$command/) {
+			# Ignore the pgrep command called to determine child processes
+			next;
+		}
+		
+		# Create a string containing the beginning and end of the child process command to make log output more readable
+		my $child_command_summary = join('...', ($child_command =~ /^(.{10,20}).*(.{20,30})$/));
+		
+		notify($ERRORS{'DEBUG'}, 0, "$parent_process_string, found child process: $child_pid '$child_command_summary'");
+		
+		# Recursively kill the child processes of the child process
+		kill_child_processes(@parent_pids, $child_pid);
+		
+		my $kill_count = kill 9, $child_pid;
+		if ($kill_count) {
+			notify($ERRORS{'DEBUG'}, 0, "$parent_process_string, killed child process: $child_pid (kill count: $kill_count)");
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "$parent_process_string, kill command returned 0 attempting to kill child process: $child_pid");
+		}
+	}
+	
+	return 1;
 }
 
 #/////////////////////////////////////////////////////////////////////////////

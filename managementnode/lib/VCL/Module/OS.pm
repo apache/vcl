@@ -471,6 +471,7 @@ sub is_ssh_responding {
 			command => "echo testing ssh on $computer_node_name",
 			max_attempts => $max_attempts,
 			output_level => 0,
+			timeout_seconds => 15,
 		});
 		
 		# The exit status will be 0 if the command succeeded
@@ -957,21 +958,16 @@ sub get_public_interface_name {
 		my $description = $network_configuration->{$check_interface_name}{description} || '';
 		
 		# Check if the interface should be ignored based on the name or description
-		if ($check_interface_name =~ /(loopback|vmnet|afs|tunnel|6to4|isatap|teredo)/i) {
+		if ($check_interface_name =~ /^(lo|sit\d)$/i) {
+			notify($ERRORS{'DEBUG'}, 0, "interface '$check_interface_name' ignored because its name is '$1'");
+			next INTERFACE;
+		}
+		elsif ($check_interface_name =~ /(loopback|vmnet|afs|tunnel|6to4|isatap|teredo)/i) {
 			notify($ERRORS{'DEBUG'}, 0, "interface '$check_interface_name' ignored because its name contains '$1'");
 			next INTERFACE;
 		}
 		elsif ($description =~ /(loopback|virtual|afs|tunnel|pseudo|6to4|isatap)/i) {
 			notify($ERRORS{'DEBUG'}, 0, "interface '$check_interface_name' ignored because its description contains '$1'");
-			next INTERFACE;
-		}
-		
-		# Get the IP addresses assigned to the interface
-		my @check_ip_addresses  = keys %{$network_configuration->{$check_interface_name}{ip_address}};
-		
-		# Ignore interface if it doesn't have an IP address
-		if (!@check_ip_addresses) {
-			notify($ERRORS{'DEBUG'}, 0, "interface '$check_interface_name' ignored because it is not assigned an IP address");
 			next INTERFACE;
 		}
 		
@@ -1501,13 +1497,17 @@ sub get_public_default_gateway {
 
 =head2 create_text_file
 
- Parameters  : $file_path, $file_contents
+ Parameters  : $file_path, $file_contents, $no_correct_line_endings (optional)
  Returns     : boolean
  Description : Creates a text file on the computer. The $file_contents
                string argument is converted to ASCII hex values. These values
                are echo'd on the computer which avoids problems with special
                characters and escaping. If the file already exists it is
                overwritten.
+               The line endings within the $file_contents string are corrected
+               by default to Windows-style (\r\n) or Linux-style (\n) depending
+               on the OS. An optional boolean 3rd argument can be specified to
+               prevent the string from being altered.
 
 =cut
 
@@ -1524,8 +1524,16 @@ sub create_text_file {
 		return;
 	}
 	
-	my $management_node_keys = $self->data->get_management_node_keys();
-	my $computer_node_name   = $self->data->get_computer_node_name();
+	my $computer_node_name = $self->data->get_computer_node_name();
+	my $image_os_type = $self->data->get_image_os_type();
+	
+	# Remove Windows-style carriage returns if the image OS isn't Windows
+	if ($image_os_type =~ /windows/) {
+		$file_contents_string =~ s/\r*\n/\r\n/g;
+	}
+	else {
+		$file_contents_string =~ s/\r//g;
+	}
 	
 	# Convert the string to a string containing the hex value of each character
 	# This is done to avoid problems with special characters in the file contents
@@ -1541,8 +1549,8 @@ sub create_text_file {
 	
 	# Create a command to echo the hex string to the file
 	# Use -e to enable interpretation of backslash escapes
-	my $command .= "echo -e \"$hex_string\" > $file_path";
-	my ($exit_status, $output) = run_ssh_command($computer_node_name, $management_node_keys, $command, '', '', 0);
+	my $command .= "echo -n -e \"$hex_string\" > $file_path";
+	my ($exit_status, $output) = $self->execute($command);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute ssh command to create file on $computer_node_name: $file_path");
 		return;

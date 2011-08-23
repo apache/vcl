@@ -8038,7 +8038,8 @@ sub user_logged_in {
 	notify($ERRORS{'DEBUG'}, 0, "checking if $username is logged in to $computer_node_name");
 
 	# Run qwinsta.exe to display terminal session information
-	my ($exit_status, $output) = run_ssh_command($computer_node_name, $management_node_keys, "$system32_path/qwinsta.exe");
+	# Set command timeout argument because this command occasionally hangs
+	my ($exit_status, $output) = run_ssh_command($computer_node_name, $management_node_keys, "$system32_path/qwinsta.exe", '', '', 1, 20);
 	if ($exit_status > 0) {
 		notify($ERRORS{'WARNING'}, 0, "failed to run qwinsta.exe on $computer_node_name, exit status: $exit_status, output:\n@{$output}");
 		return;
