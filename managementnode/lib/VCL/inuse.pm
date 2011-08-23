@@ -123,29 +123,29 @@ sub process {
 	my $is_parent_reservation = $self->data->is_parent_reservation();
 	my $identity_key          = $self->data->get_image_identity();
 	my $request_state_name    = $self->data->get_request_state_name();
-
+	
 	if ($request_state_name =~ /reboot|rebootsoft|reboothard/) {
 		notify($ERRORS{'OK'}, 0, "this is a 'reboot' request");
-		if($self->os->can('reboot')){
-			if($self->os->reboot()){
+		if ($self->os->can('reboot')) {
+			if ($self->os->reboot()) {
 				notify($ERRORS{'OK'}, 0, "successfuly rebooted $computer_nodename");
-			
 			}
 			else {
 				notify($ERRORS{'WARNING'}, 0, "failed to reboot $computer_nodename");
-				#do not fail request or machine
+				# Do not fail request or machine
 			}
+			
 			# Put this request back into the inuse state
-                       	if (update_request_state($request_id, "inuse", "inuse")) {
-                               	notify($ERRORS{'OK'}, 0, "request state set back to inuse");
-                        }
-                        else {
-                               	notify($ERRORS{'WARNING'}, 0, "unable to set request state back to inuse");
-                        }
+			if (update_request_state($request_id, "inuse", "inuse")) {
+				notify($ERRORS{'OK'}, 0, "request state set back to inuse");
+			}
+			else {
+				notify($ERRORS{'WARNING'}, 0, "unable to set request state back to inuse");
+			}
+			
 			notify($ERRORS{'OK'}, 0, "exiting");
-        		exit;
+			exit;
 		}
-		
 	}
 	
 	# Set the user connection timeout limit in minutes
@@ -154,7 +154,7 @@ sub process {
 	# Check if request imaging status has changed
 	# Check if this is an imaging request, causes process to exit if state or laststate = image
 	$request_forimaging = $self->_check_imaging_request();
-
+	
 	# Remove rows from computerloadlog for this reservation, don't remove the loadstate=begin row
 	if (delete_computerloadlog_reservation($reservation_id, '!begin')) {
 		notify($ERRORS{'OK'}, 0, "rows removed from computerloadlog table for reservation $reservation_id");
@@ -162,7 +162,7 @@ sub process {
 	else {
 		notify($ERRORS{'OK'}, 0, "unable to remove rows from computerloadlog table for reservation $reservation_id");
 	}
-
+	
 	# Update the lastcheck value for this reservation to now
 	if (update_reservation_lastcheck($reservation_id)) {
 		notify($ERRORS{'OK'}, 0, "updated lastcheck time for reservation $reservation_id");
@@ -170,13 +170,13 @@ sub process {
 	else {
 		notify($ERRORS{'CRITICAL'}, 0, "unable to update lastcheck time for reservation $reservation_id");
 	}
-
+	
 	# For inuse state, check_time should return 'end', 'poll', or 'nothing'
-
+	
 	# Is this a poll or end time
 	if ($request_checktime eq "poll") {
 		notify($ERRORS{'OK'}, 0, "beginning to poll");
-
+		
 		if ($image_os_type =~ /windows/) {
 			if (firewall_compare_update($computer_nodename, $reservation_remoteip, $identity_key, $image_os_type)) {
 				notify($ERRORS{'OK'}, 0, "confirmed firewall scope has been updated");
@@ -195,7 +195,7 @@ sub process {
 			if ($reservation_count > 1) {
 				notify($ERRORS{'OK'}, 0, "reservation count is $reservation_count, skipping user connection check");
 			}
-
+			
 			# Get a date string for the current time
 			my $date_string;
 			# If duration is greater than 24hrs 5minutes then perform end time notice checks
@@ -203,13 +203,13 @@ sub process {
 				# Check end time for a notice interval
 				# This returns 0 if no notice is to be given
 				my $notice_interval = check_endtimenotice_interval($request_end);
-
+				
 				if ($notice_interval && $is_parent_reservation) {
 					notify($ERRORS{'OK'}, 0, "notice interval is set to $notice_interval");
-
+					
 					# Notify the user of the end time
 					$self->_notify_user_endtime($notice_interval);
-
+					
 					# Set lastcheck time ahead by 16 minutes for all notices except the last (30 minute) notice
 					if ($notice_interval ne "30 minutes") {
 						my $epoch_now = convert_to_epoch_seconds();
@@ -227,11 +227,11 @@ sub process {
 				notify($ERRORS{'OK'}, 0, "user has deleted the request, quietly exiting");
 				exit;
 			}
-
+			
 			# Check if request imaging status has changed
 			# Check if this is an imaging request, causes process to exit if state or laststate = image
 			$request_forimaging = $self->_check_imaging_request();
-
+			
 			# Put this request back into the inuse state
 			if ($is_parent_reservation && update_request_state($request_id, "inuse", "inuse")) {
 				notify($ERRORS{'OK'}, 0, "request state set back to inuse");
@@ -242,7 +242,7 @@ sub process {
 			else {
 				notify($ERRORS{'WARNING'}, 0, "unable to set request state back to inuse");
 			}
-
+			
 			# Update the lastcheck time for this reservation
 			if (update_reservation_lastcheck($reservation_id)) {
 				my $dstring = convert_to_datetime();
@@ -251,12 +251,12 @@ sub process {
 			else {
 				notify($ERRORS{'WARNING'}, 0, "unable to update lastcheck time for this reservation to $date_string");
 			}
-
+			
 			notify($ERRORS{'OK'}, 0, "exiting");
 			exit;
 		}    # if (!$imagemeta_checkuser || $request_forimaging.......
-
-
+		
+		
 		# Poll:
 		# Simply check for user connection
 		# If not connected:
@@ -264,18 +264,18 @@ sub process {
 		#   If not connected within 15 minutes -- timeout
 		#   If end time is near prepare
 		notify($ERRORS{'OK'}, 0, "proceeding to check for user connection");
-
+		
 		# Get epoch seconds for current and end time, calculate difference
 		my $now_epoch       = convert_to_epoch_seconds();
 		my $end_epoch       = convert_to_epoch_seconds($request_end);
 		my $time_difference = $end_epoch - $now_epoch;
-
+		
 		# If end time is 10-15 minutes from now:
 		#    Sleep difference
 		#    Go to end mode
 		if ($time_difference >= (10 * 60) && $time_difference <= (15 * 60)) {
 			notify($ERRORS{'OK'}, 0, "end time ($time_difference seconds) is 10-15 minutes from now");
-
+			
 			# Calculate the sleep time = time until the request end - 10 minutes
 			# User will have 10 minutes after this sleep call before disconnected
 			my $sleep_time = $time_difference - (10 * 60);
@@ -283,24 +283,24 @@ sub process {
 			sleep $sleep_time;
 			$request_checktime = "end";
 			goto ENDTIME;
-		}    # Close if poll, checkuser=1, and end time is 10-15 minutes away
-
+		}  # Close if poll, checkuser=1, and end time is 10-15 minutes away
+		
 		notify($ERRORS{'OK'}, 0, "end time not yet reached, polling machine for user connection");
-
+		
 		# Check the user connection, this will loop until user connects or time limit is reached
 		my $check_connection = check_connection($computer_nodename, $computer_ip_address, $computer_type, $reservation_remoteip, $connect_timeout_limit, $image_os_name, 0, $request_id, $user_login_id,$image_os_type);
-
+		
 		#TESTING
 		#$check_connection = 'timeout';
-
+		
 		# Proceed based on status of check_connection
 		if ($check_connection eq "connected" || $check_connection eq "conn_wrong_ip") {
 			notify($ERRORS{'OK'}, 0, "user connected");
-
+			
 			# Check if request imaging status has changed
 			# Check if this is an imaging request, causes process to exit if state or laststate = image
 			$request_forimaging = $self->_check_imaging_request();
-	
+			
 			# Put this request back into the inuse state
 			if (update_request_state($request_id, "inuse", "inuse")) {
 				notify($ERRORS{'OK'}, 0, "request state set back to inuse");
@@ -308,7 +308,7 @@ sub process {
 			else {
 				notify($ERRORS{'WARNING'}, 0, "unable to set request state back to inuse");
 			}
-
+			
 			# Update the lastcheck time for this reservation
 			if (update_reservation_lastcheck($reservation_id)) {
 				notify($ERRORS{'OK'}, 0, "updated lastcheck time for this reservation to now");
@@ -316,21 +316,21 @@ sub process {
 			else {
 				notify($ERRORS{'WARNING'}, 0, "unable to update lastcheck time for this reservation to now");
 			}
-
+			
 			notify($ERRORS{'OK'}, 0, "exiting");
 			exit;
-		}    # Close check_connection is connected
-
+		} # Close check_connection is connected
+		
 		elsif (!$request_forimaging && $check_connection eq "timeout") {
 			notify($ERRORS{'OK'}, 0, "user did not reconnect within $connect_timeout_limit minute time limit");
-
+			
 			# Check if request imaging status has changed
 			# Check if this is an imaging request, causes process to exit if state or laststate = image
 			$request_forimaging = $self->_check_imaging_request();
-	
+			
 			notify($ERRORS{'OK'}, 0, "notifying user that request timed out");
 			$self->_notify_user_timeout();
-
+			
 			# Put this request into the timeout state
 			if (update_request_state($request_id, "timeout", "inuse")) {
 				notify($ERRORS{'OK'}, 0, "request state set to timeout");
@@ -338,7 +338,7 @@ sub process {
 			else {
 				notify($ERRORS{'WARNING'}, 0, "unable to set request state to timeout");
 			}
-
+			
 			# Get the current computer state directly from the database
 			my $computer_state;
 			if ($computer_state = get_computer_current_state_name($computer_id)) {
@@ -347,7 +347,7 @@ sub process {
 			else {
 				notify($ERRORS{'WARNING'}, 0, "unable to retrieve computer $computer_id state from database");
 			}
-
+			
 			# Check if computer is in maintenance state
 			if ($computer_state =~ /maintenance/) {
 				notify($ERRORS{'OK'}, 0, "computer $computer_short_name in maintenance state, skipping update");
@@ -361,7 +361,7 @@ sub process {
 					notify($ERRORS{'WARNING'}, 0, "unable to set computer $computer_id to the timeout state");
 				}
 			}
-
+			
 			# Update the entry in the log table with the current finalend time and ending set to timeout
 			if (update_log_ending($request_logid, "timeout")) {
 				notify($ERRORS{'OK'}, 0, "log id $request_logid finalend was updated to now and ending set to timeout");
@@ -369,20 +369,20 @@ sub process {
 			else {
 				notify($ERRORS{'WARNING'}, 0, "log id $request_logid finalend could not be updated to now and ending set to timeout");
 			}
-
+			
 			notify($ERRORS{'OK'}, 0, "exiting");
 			exit;
 		} ## end elsif ($check_connection eq "timeout")  [ if ($check_connection eq "connected")
-
+		
 		elsif ($check_connection eq "deleted") {
 			# Exit quietly
 			notify($ERRORS{'OK'}, 0, "user has deleted the request, quietly exiting");
 			exit;
 		}
-
+		
 		else {
 			notify($ERRORS{'CRITICAL'}, 0, "unexpected return value from check_connection: $check_connection, treating request as connected");
-
+			
 			# Check if request imaging status has changed
 			# Check if this is an imaging request, causes process to exit if state or laststate = image
 			$request_forimaging = $self->_check_imaging_request();
@@ -394,7 +394,7 @@ sub process {
 			else {
 				notify($ERRORS{'WARNING'}, 0, "unable to set request state back to inuse");
 			}
-
+			
 			# Update the lastcheck time for this reservation
 			if (update_reservation_lastcheck($reservation_id)) {
 				notify($ERRORS{'OK'}, 0, "updated lastcheck time for this reservation to now");
@@ -402,31 +402,30 @@ sub process {
 			else {
 				notify($ERRORS{'WARNING'}, 0, "unable to update lastcheck time for this reservation to now");
 			}
-
+			
 			notify($ERRORS{'OK'}, 0, "exiting");
 			exit;
 		} ## end else [ if ($check_connection eq "connected")  [... [elsif ($check_connection eq "deleted")
-
 	}    # Close if checktime is poll
-
+	
 	elsif ($request_checktime eq "end") {
 		# Time has ended
 		# Notify user to save work and exit within 10 minutes
-
+		
 		ENDTIME:
 		my $notified        = 0;
 		my $disconnect_time = 10;
-
+		
 		# Loop until disconnect time = 0
 		while ($disconnect_time != 0) {
 			notify($ERRORS{'OK'}, 0, "minutes left until user is disconnected: $disconnect_time");
-
+			
 			# Notify user at 10 minutes until disconnect
 			if ($disconnect_time == 10) {
 				$self->_notify_user_disconnect($disconnect_time);
 				insertloadlog($reservation_id, $computer_id, "inuseend10", "notifying user of disconnect");
 			}
-
+			
 			# Sleep one minute and decrement disconnect time by a minute
 			sleep 60;
 			$disconnect_time--;
@@ -450,7 +449,7 @@ sub process {
 					notify($ERRORS{'OK'}, 0, "user has disconnected from $computer_short_name, skipping additional notices");
 				}
 			}    # Close if disconnect time = 5
-
+			
 			# Check to see if the end time was extended
 			my $new_request_end;
 			if ($new_request_end = get_request_end($request_id)) {
@@ -459,7 +458,7 @@ sub process {
 			else {
 				notify($ERRORS{'WARNING'}, 0, "unable to retrieve updated request end value from database");
 			}
-
+			
 			# Convert the current and new end times to epoch seconds
 			my $new_request_end_epoch = convert_to_epoch_seconds($new_request_end);
 			my $request_end_epoch     = convert_to_epoch_seconds($request_end);
@@ -467,11 +466,11 @@ sub process {
 			# Check if request imaging status has changed
 			# Check if this is an imaging request, causes process to exit if state or laststate = image
 			$request_forimaging = $self->_check_imaging_request();
-
+			
 			# Check if request end is later than the original (user extended time)
 			if ($new_request_end_epoch > $request_end_epoch) {
 				notify($ERRORS{'OK'}, 0, "user extended end time, returning request to inuse state");
-
+				
 				# Put this request back into the inuse state
 				if ($is_parent_reservation && update_request_state($request_id, "inuse", "inuse")) {
 					notify($ERRORS{'OK'}, 0, "request state set back to inuse");
@@ -482,13 +481,12 @@ sub process {
 				else {
 					notify($ERRORS{'WARNING'}, 0, "unable to set request state back to inuse");
 				}
-
+				
 				notify($ERRORS{'OK'}, 0, "exiting");
 				exit;
 			} ## end if ($new_request_end_epoch > $request_end_epoch)
-
 		}    # Close while disconnect time is not 0
-
+		
 		# Check if this is an imaging request, causes process to exit if state or laststate = image
 		$request_forimaging = $self->_check_imaging_request();
 		
@@ -510,28 +508,28 @@ sub process {
 			else {
 				notify($ERRORS{'CRITICAL'}, 0, "_start_imaging_request xmlrpc call failed putting request and node into maintenance");
 				# Update the request state to maintenance, laststate to image
-        			if (update_request_state($request_id, "maintenance", "image")) {
-                			notify($ERRORS{'OK'}, 0, "request state set to maintenance, laststate to image");
-        			}
-        			else {
-                			notify($ERRORS{'CRITICAL'}, 0, "unable to set request state to maintenance, laststate to image");
-        			}
-
-        			# Update the computer state to maintenance
-        			if (update_computer_state($computer_id, "maintenance")) {
-               	 			notify($ERRORS{'OK'}, 0, "$computer_short_name state set to maintenance");
-        			}
-        			else {
-                			notify($ERRORS{'CRITICAL'}, 0, "unable to set $computer_short_name state to maintenance");
-       	 			}
+				if (update_request_state($request_id, "maintenance", "image")) {
+					notify($ERRORS{'OK'}, 0, "request state set to maintenance, laststate to image");
+				}
+				else {
+					notify($ERRORS{'CRITICAL'}, 0, "unable to set request state to maintenance, laststate to image");
+				}
+				
+				# Update the computer state to maintenance
+				if (update_computer_state($computer_id, "maintenance")) {
+					notify($ERRORS{'OK'}, 0, "$computer_short_name state set to maintenance");
+				}
+				else {
+					notify($ERRORS{'CRITICAL'}, 0, "unable to set $computer_short_name state to maintenance");
+				}
 				exit;
 			}
 		}
-
+		
 		# Insert an entry into the load log
 		insertloadlog($reservation_id, $computer_id, "timeout", "endtime reached moving to timeout");
 		notify($ERRORS{'OK'}, 0, "end time reached, setting request to timeout state");
-
+		
 		# Put this request into the timeout state
 		if ($is_parent_reservation && update_request_state($request_id, "timeout", "inuse")) {
 			notify($ERRORS{'OK'}, 0, "request state set to timeout");
@@ -542,7 +540,7 @@ sub process {
 		else {
 			notify($ERRORS{'WARNING'}, 0, "unable to set request state to timout");
 		}
-
+		
 		# Get the current computer state directly from the database
 		my $computer_state;
 		if ($computer_state = get_computer_current_state_name($computer_id)) {
@@ -551,7 +549,7 @@ sub process {
 		else {
 			notify($ERRORS{'WARNING'}, 0, "unable to retrieve computer $computer_id state from database");
 		}
-
+		
 		# Check if computer is in maintenance state
 		if ($computer_state =~ /maintenance/) {
 			notify($ERRORS{'OK'}, 0, "computer $computer_short_name in maintenance state, skipping computer state update");
@@ -566,10 +564,10 @@ sub process {
 				notify($ERRORS{'WARNING'}, 0, "unable to set computer $computer_id to the timeout state");
 			}
 		} ## end else [ if ($computer_state =~ /maintenance/)
-
+		
 		# Notify user about ending request
 		$self->_notify_user_request_ended();
-
+		
 		# Update the entry in the log table with the current finalend time and ending set to timeout
 		if ($is_parent_reservation && update_log_ending($request_logid, "EOR")) {
 			notify($ERRORS{'OK'}, 0, "log id $request_logid finalend was updated to now and ending set to EOR");
@@ -580,18 +578,17 @@ sub process {
 		else {
 			notify($ERRORS{'WARNING'}, 0, "log id $request_logid finalend could not be updated to now and ending set to EOR");
 		}
-
+		
 		notify($ERRORS{'OK'}, 0, "exiting");
 		exit;
-
 	}    # Close if request checktime is end
-
+	
 	# Not poll or end
 	else {
 		notify($ERRORS{'OK'}, 0, "returning \'$request_checktime\', exiting");
 		exit;
 	}
-
+	
 	notify($ERRORS{'OK'}, 0, "exiting");
 	exit;
 } ## end sub process
@@ -641,11 +638,11 @@ sub _notify_user_endtime {
 	my $user_im_id                      = $self->data->get_user_im_id();
 	my $request_forimaging 		    = $self->_check_imaging_request();	
 	my $request_id                      = $self->data->get_request_id();
-
+	
 	my $message;
 	my $subject;
 	my $short_message = "You have $notice_interval until the scheduled end time of your reservation. VCL Team";
-
+	
 	$message  = <<"EOF";
 
 You have $notice_interval until the scheduled end time of your reservation for image $image_prettyname.
@@ -674,7 +671,7 @@ To disable email notices
 EOF
 
 	$subject = "VCL -- $notice_interval until end of reservation for $image_prettyname";
-
+	
 	# Send mail
 	if ($user_emailnotices) {
 		notify($ERRORS{'DEBUG'}, 0, "user $user_login_id email notices enabled - notifying user of endtime");
@@ -683,24 +680,24 @@ EOF
 	else {
 		notify($ERRORS{'DEBUG'}, 0, "user $user_login_id email notices disabled - not notifying user of endtime");
 	}
-        # Send message to machine
-        if ($computer_type =~ /blade|virtualmachine/) {
-                if ($image_os_type =~ /windows/) {
-                        # Notify via windows msg cmd
-                        $user_login_id= "administrator" if($request_forimaging);
-                        notify_via_msg($computer_short_name, $user_login_id, $short_message);
-                }
-                elsif ($image_os_type =~ /linux/){
-                        # Notify via wall
-                        notify_via_wall($computer_short_name, $user_login_id, $short_message, $image_os_name, $computer_type);
-                }
-        } ## end if ($computer_type =~ /blade|virtualmachine/)
-        elsif ($computer_type eq "lab") {
-                # Notify via wall
-                notify_via_wall($computer_ip_address, $user_login_id, $short_message, $image_os_name, $computer_type);
-        }
-
-
+	
+	# Send message to machine
+	if ($computer_type =~ /blade|virtualmachine/) {
+		if ($image_os_type =~ /windows/) {
+			# Notify via windows msg cmd
+			$user_login_id= "administrator" if($request_forimaging);
+			notify_via_msg($computer_short_name, $user_login_id, $short_message);
+		}
+		elsif ($image_os_type =~ /linux/){
+			# Notify via wall
+			notify_via_wall($computer_short_name, $user_login_id, $short_message, $image_os_name, $computer_type);
+		}
+	} ## end if ($computer_type =~ /blade|virtualmachine/)
+	elsif ($computer_type eq "lab") {
+		# Notify via wall
+		notify_via_wall($computer_ip_address, $user_login_id, $short_message, $image_os_name, $computer_type);
+	}
+	
 	# Send IM
 	if ($user_imtype_name ne "none") {
 		notify($ERRORS{'DEBUG'}, 0, "user $user_login_id IM type: $user_imtype_name - notifying user of endtime");
@@ -709,7 +706,7 @@ EOF
 	else {
 		notify($ERRORS{'DEBUG'}, 0, "user $user_login_id IM type: $user_imtype_name - not notifying user of endtime");
 	}
-
+	
 	return 1;
 } ## end sub _notify_user_endtime
 #/////////////////////////////////////////////////////////////////////////////
@@ -735,23 +732,23 @@ sub _notify_user_disconnect {
 		notify($ERRORS{'WARNING'}, 0, "disconnect time message not set, disconnect time was not passed");
 		return 0;
 	}
-
+	
 	my $computer_short_name             = $self->data->get_computer_short_name();
-        my $computer_type                   = $self->data->get_computer_type();
-        my $computer_ip_address             = $self->data->get_computer_ip_address();
-        my $image_os_name                   = $self->data->get_image_os_name();
-        my $image_prettyname                = $self->data->get_image_prettyname();
-        my $image_os_type                   = $self->data->get_image_os_type();
-        my $user_affiliation_sitewwwaddress = $self->data->get_user_affiliation_sitewwwaddress();
-        my $user_affiliation_helpaddress    = $self->data->get_user_affiliation_helpaddress();
-        my $user_login_id                   = $self->data->get_user_login_id();
-        my $user_email                      = $self->data->get_user_email();
-        my $user_emailnotices               = $self->data->get_user_emailnotices();
-        my $user_imtype_name                = $self->data->get_user_imtype_name();
-        my $user_im_id                      = $self->data->get_user_im_id();
-        my $is_parent_reservation           = $self->data->is_parent_reservation();
+	my $computer_type                   = $self->data->get_computer_type();
+	my $computer_ip_address             = $self->data->get_computer_ip_address();
+	my $image_os_name                   = $self->data->get_image_os_name();
+	my $image_prettyname                = $self->data->get_image_prettyname();
+	my $image_os_type                   = $self->data->get_image_os_type();
+	my $user_affiliation_sitewwwaddress = $self->data->get_user_affiliation_sitewwwaddress();
+	my $user_affiliation_helpaddress    = $self->data->get_user_affiliation_helpaddress();
+	my $user_login_id                   = $self->data->get_user_login_id();
+	my $user_email                      = $self->data->get_user_email();
+	my $user_emailnotices               = $self->data->get_user_emailnotices();
+	my $user_imtype_name                = $self->data->get_user_imtype_name();
+	my $user_im_id                      = $self->data->get_user_im_id();
+	my $is_parent_reservation           = $self->data->is_parent_reservation();
 	my $request_forimaging		    = $self->_check_imaging_request();
-
+	
 	my $disconnect_string;
 	if ($disconnect_time == 0) {
 		$disconnect_string = "0 minutes";
@@ -762,15 +759,13 @@ sub _notify_user_disconnect {
 	else {
 		$disconnect_string = "$disconnect_time minutes";
 	}
-
+	
 	my $short_message;
 	my $subject;
 	my $message;
-
-	if(!$request_forimaging){
-		
-
-	$message = <<"EOF";
+	
+	if (!$request_forimaging) {
+		$message = <<"EOF";
 
 You have $disconnect_string until the end of your reservation for image $image_prettyname, please save all work and prepare to exit.
 
@@ -796,15 +791,11 @@ To disable email notices
 EOF
 
 		$short_message = "You have $disconnect_string until the end of your reservation. Please save all work and prepare to log off.";
-
 		$subject = "VCL -- $disconnect_string until end of reservation";
-	
 	}
 	else {
 		$short_message = "You have $disconnect_string until the auto capture process is started.";
-
 		$subject = "VCL Imaging Reservation -- $disconnect_string until starting auto capture";
-		
 		$message = <<"EOF";
 
 You have $disconnect_string until the end of your reservation for image $image_prettyname. 
@@ -831,19 +822,19 @@ To disable email notices
 
 ******************************************************************
 EOF
-		
-	
+
 	}
+	
 	# Send mail
 	if ($is_parent_reservation && $user_emailnotices) {
 		mail($user_email, $subject, $message, $user_affiliation_helpaddress);
 	}
-
+	
 	# Send IM
 	if ($is_parent_reservation && $user_imtype_name ne "none") {
 		notify_via_IM($user_imtype_name, $user_im_id, $message);
 	}
-
+	
 	# Send message to machine
 	if ($computer_type =~ /blade|virtualmachine/) {
 		if ($image_os_type =~ /windows/) {
@@ -860,7 +851,7 @@ EOF
 		# Notify via wall
 		notify_via_wall($computer_ip_address, $user_login_id, $short_message, $image_os_name, $computer_type);
 	}
-
+	
 	return 1;
 } ## end sub _notify_user_disconnect
 #/////////////////////////////////////////////////////////////////////////////
@@ -892,7 +883,7 @@ sub _notify_user_timeout {
 	my $user_imtype_name                = $self->data->get_user_imtype_name();
 	my $user_im_id                      = $self->data->get_user_im_id();
 	my $is_parent_reservation           = $self->data->is_parent_reservation();
-
+	
 	my $message = <<"EOF";
 
 Your reservation has timed out due to inactivity for image $image_prettyname at address $computer_ip_address.
@@ -918,17 +909,17 @@ To disable email notices
 EOF
 
 	my $subject = "VCL -- reservation timeout";
-
+	
 	# Send mail
 	if ($is_parent_reservation && $user_emailnotices) {
 		mail($user_email, $subject, $message, $user_affiliation_helpaddress);
 	}
-
+	
 	# Send IM
 	if ($is_parent_reservation && $user_imtype_name ne "none") {
 		notify_via_IM($user_imtype_name, $user_im_id, $message);
 	}
-
+	
 	return 1;
 } ## end sub _notify_user_timeout
 #/////////////////////////////////////////////////////////////////////////////
@@ -945,7 +936,7 @@ EOF
 
 sub _notify_user_request_ended {
 	my $self = shift;
-
+	
 	my $request_id                      = $self->data->get_request_id();
 	my $request_logid                   = $self->data->get_request_log_id();
 	my $request_forimaging              = $self->data->get_request_forimaging();
@@ -969,10 +960,10 @@ sub _notify_user_request_ended {
 	my $is_parent_reservation           = $self->data->is_parent_reservation();
 	my $subject;
 	my $message;
-
+	
 	if(!$request_forimaging) {
 	$subject = "VCL -- End of reservation";
-
+	
 	$message = <<"EOF";
 
 Your reservation of $image_prettyname has ended. Thank you for using $user_affiliation_sitewwwaddress.
@@ -1021,18 +1012,18 @@ To disable email notices
 ******************************************************************
 EOF
 
-	}	
-
+	}
+	
 	# Send mail
 	if ($is_parent_reservation && $user_emailnotices) {
 		mail($user_email, $subject, $message, $user_affiliation_helpaddress);
 	}
-
+	
 	# Send IM
 	if ($is_parent_reservation && $user_imtype_name ne "none") {
 		notify_via_IM($user_imtype_name, $user_im_id, $message);
 	}
-
+	
 	return 1;
 } ## end sub _notify_user_request_ended
 
@@ -1100,14 +1091,13 @@ sub _check_imaging_request {
 =cut
 
 sub _start_imaging_request {
-
 	my $self            = shift;
 	my $request_id = $self->data->get_request_id();
-
+	
 	my $method = "XMLRPCautoCapture";
 	my @argument_string = ($method,$request_id);
 	my $xml_ret = xmlrpc_call(@argument_string);
-
+	
 	if($xml_ret->value->{status} =~ /success/ ){
 		return 1;
 	}
@@ -1116,9 +1106,8 @@ sub _start_imaging_request {
 	if($xml_ret->value->{status} =~ /error/i){
 		notify($ERRORS{'WARNING'}, 0, "errorcode= $xml_ret->value->{errorcode} errormsg= $xml_ret->value->{errormsg}");
 	}
-
+	
 	return 0;
-
 }
 
 #/////////////////////////////////////////////////////////////////////////////
