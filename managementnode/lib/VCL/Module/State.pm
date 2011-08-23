@@ -79,6 +79,8 @@ sub initialize {
 	
 	$self->{start_time} = time;
 	
+	my $reservation_id = $self->data->get_reservation_id();
+	
 	# Initialize the database handle count
 	$ENV{dbh_count} = 0;
 
@@ -88,12 +90,16 @@ sub initialize {
 	}
 	else {
 		notify($ERRORS{'WARNING'}, 0, "unable to obtain a database handle for this state process");
+		return;
 	}
+	
+	# Update reservation lastcheck value to prevent processes from being forked over and over if a problem occurs
+	update_reservation_lastcheck($reservation_id);
 	
 	# Check the image OS before creating OS object
 	if (!$self->check_image_os()) {
 		notify($ERRORS{'WARNING'}, 0, "failed to check if image OS is correct");
-		$self->reservation_failed();
+		return;
 	}
 	
 	# Rename this process to include some request info
@@ -125,7 +131,6 @@ sub initialize {
 	
 	notify($ERRORS{'DEBUG'}, 0, "returning 1");
 	return 1;
-
 } ## end sub initialize
 
 #/////////////////////////////////////////////////////////////////////////////
