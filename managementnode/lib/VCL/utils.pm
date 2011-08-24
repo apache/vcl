@@ -5577,10 +5577,16 @@ sub run_ssh_command {
 		
 		# Check if the timeout was reached
 		if ($EVAL_ERROR && $EVAL_ERROR eq "alarm\n") {
-			notify($ERRORS{'CRITICAL'}, 0, "attempt $attempts/$max_attempts: SSH command timed out after $duration seconds, timeout threshold: $timeout_seconds seconds, command: $node:\n$ssh_command");
-			
 			# Kill the child processes of this reservation process
 			kill_child_processes($PID);
+			
+			if ($max_attempts == 1 || $attempts < $max_attempts) {
+				notify($ERRORS{'WARNING'}, 0, "attempt $attempts/$max_attempts: SSH command timed out after $duration seconds, timeout threshold: $timeout_seconds seconds, command: $node:\n$ssh_command");
+			}
+			else {
+				notify($ERRORS{'CRITICAL'}, 0, "attempt $attempts/$max_attempts: SSH command timed out after $duration seconds, timeout threshold: $timeout_seconds seconds, command: $node:\n$ssh_command");
+				return;
+			}
 			next;
 		}
 		elsif ($EVAL_ERROR) {
