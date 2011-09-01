@@ -65,6 +65,7 @@ use 5.008000;
 use strict;
 use warnings;
 use diagnostics;
+use English '-no_match_vars';
 
 use VCL::utils;
 
@@ -127,18 +128,32 @@ sub process {
 		notify($ERRORS{'OK'}, 0, "$computer_short_name is not being used");
 	}
 	elsif ($request_state_name eq 'tomaintenance') {
-		notify($ERRORS{'CRITICAL'}, 0, "$computer_short_name could not be put into maintenance because it is NOT available");
+		# Computer is being used
+		# Loop until computer is not being used
 		
-		# Return request state back to the original
-		if (update_request_state($request_id, 'failed', $request_state_name)) {
-			notify($ERRORS{'OK'}, 0, "request state set to 'failed'/'$request_state_name'");
-		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "failed to set request state back to 'failed'/'$request_state_name'");
-		}
+		# Wait a maximum of 3 hours
+		my $total_wait_seconds = (60 * 60 * 3);
 		
-		notify($ERRORS{'OK'}, 0, "exiting");
-		exit;
+		# Check every 5 minutes
+		my $attempt_delay_seconds = (60 * 5);
+		
+		my $sub_ref = $self->can("computer_not_being_used");
+		my $message = "waiting for existing reservations on $computer_short_name to end";
+	
+		if (!$self->code_loop_timeout($sub_ref, [$self], $message, $total_wait_seconds, $attempt_delay_seconds)) {
+			notify($ERRORS{'CRITICAL'}, 0, "$computer_short_name could not be put into maintenance because it is NOT available");
+			
+			# Return request state back to the original
+			if (update_request_state($request_id, 'failed', $request_state_name)) {
+				notify($ERRORS{'OK'}, 0, "request state set to 'failed'/'$request_state_name'");
+			}
+			else {
+				notify($ERRORS{'WARNING'}, 0, "failed to set request state back to 'failed'/'$request_state_name'");
+			}
+			
+			notify($ERRORS{'OK'}, 0, "exiting");
+			exit;
+		}
 	}
 	elsif ($request_state_name ne 'new') {
 		# Computer is not available, not a new request (most likely a simple reload)
@@ -677,210 +692,194 @@ sub reload_image {
 
 =head2 computer_not_being_used
 
- Parameters  :
- Returns     :
- Description :
+ Parameters  : none
+ Returns     : boolean
+ Description : Checks if any other reservations are currently using the
+               computer.
 
 =cut
 
 sub computer_not_being_used {
 	my $self = shift;
-
-	my $reservation_id                  = $self->data->get_reservation_id();
+	my $request_id                      = $self->data->get_request_id();
 	my $computer_id                     = $self->data->get_computer_id();
 	my $computer_short_name             = $self->data->get_computer_short_name();
 	my $computer_state_name             = $self->data->get_computer_state_name();
+	my $imagerevision_id                = $self->data->get_imagerevision_id();
 	my $image_name                      = $self->data->get_image_name();
 	my $image_reloadtime                = $self->data->get_image_reload_time();
 	my $request_state_name              = $self->data->get_request_state_name();
-
-	# Possible computer states:
-	# available
-	# deleted
-	# failed
-	# inuse
-	# maintenance
-	# reloading
-	# reserved
-	# vmhostinuse
-
-	notify($ERRORS{'DEBUG'}, 0, "$computer_short_name state is $computer_state_name");
-		
-	# Return 0 if computer state is maintenance or deleted
-	if ($computer_state_name =~ /^(deleted|maintenance)$/) {
+	
+	# Return 0 if computer state is maintenance, deleted, vmhostinuse
+	if ($computer_state_name =~ /^(deleted|maintenance|vmhostinuse)$/) {
 		notify($ERRORS{'WARNING'}, 0, "$computer_short_name is NOT available, its state is $computer_state_name");
 		return 0;
 	}
-
-	# Check if request is reinstall
-	if ($request_state_name =~ /^(reinstall)$/) {
-		notify($ERRORS{'OK'}, 0, "$computer_short_name is to be reinstalled");
+	
+	# Warn if computer state isn't available or reload - except for reinstall requests
+	if ($request_state_name !~ /^(reinstall)$/ && $computer_state_name !~ /^(available|reload)$/) {
+		notify($ERRORS{'WARNING'}, 0, "$computer_short_name state is $computer_state_name, checking if any conflicting reservations are active");
+	}
+	
+	# Check if there is another request using this machine
+	# Get a hash containing all of the reservations for the computer
+	notify($ERRORS{'OK'}, 0, "retrieving info for reservations assigned to $computer_short_name");
+	my $competing_request_info = get_request_by_computerid($computer_id);
+	
+	# There should be at least 1 request -- the one being processed
+	if (!$competing_request_info) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve any requests for computer id=$computer_id, there should be at least 1");
+		return;
+	}
+	
+	# Remove the request currently being processed from the hash
+	delete $competing_request_info->{$request_id};
+	
+	if (!keys(%$competing_request_info)) {
+		notify($ERRORS{'OK'}, 0, "$computer_short_name is not assigned to any other reservations");
 		return 1;
 	}
 	
-	# Check if computer state is available
-	if ($computer_state_name =~ /^(available|reload)$/) {
-		notify($ERRORS{'OK'}, 0, "$computer_short_name is available, its state is $computer_state_name");
-		return 1;
-	}
-	# Warn if computer state is failed, proceed to check for neighbor reservations
-	else {
-		notify($ERRORS{'WARNING'}, 0, "$computer_short_name state is $computer_state_name, checking if any conflicting requests are active");
-	}
-
-	# Set variables to control how may attempts are made to wait for an existing inuse reservation to end
-	my $inuse_loop_attempts = 4;
-	my $inuse_loop_wait     = 30;
-
-	INUSE_LOOP: for (my $inuse_loop_count = 0; $inuse_loop_count < $inuse_loop_attempts; $inuse_loop_count++) {
-
-		# Check if this isn't the first iteration meaning something conflicting was found
-		if ($inuse_loop_count > 0) {
-			notify($ERRORS{'OK'}, 0, "attempt $inuse_loop_count/$inuse_loop_attempts: waiting for $inuse_loop_wait seconds before checking neighbor requests again");
-			sleep $inuse_loop_wait;
+	# Loop through the competing requests
+	COMPETING_REQUESTS: for my $competing_request_id (sort keys %$competing_request_info) {
+		my $competing_reservation_id    = $competing_request_info->{$competing_request_id}{data}->get_reservation_id();
+		my $competing_request_state     = $competing_request_info->{$competing_request_id}{data}->get_request_state_name();
+		my $competing_request_laststate = $competing_request_info->{$competing_request_id}{data}->get_request_laststate_name();
+		my $competing_imagerevision_id  = $competing_request_info->{$competing_request_id}{data}->get_imagerevision_id();
+		my $competing_request_start     = $competing_request_info->{$competing_request_id}{data}->get_request_start_time();
+		my $competing_request_end       = $competing_request_info->{$competing_request_id}{data}->get_request_end_time();
+		
+		my $competing_request_start_epoch = convert_to_epoch_seconds($competing_request_start);
+		my $competing_request_end_epoch   = convert_to_epoch_seconds($competing_request_end);
+		
+		my $now_epoch = time;
+		
+		my $competing_request_info_string;
+		$competing_request_info_string .= "request:reservation ID: $competing_request_id:$competing_reservation_id\n";
+		$competing_request_info_string .= "request state: $competing_request_state/$competing_request_laststate\n";
+		$competing_request_info_string .= "request start time: $competing_request_start\n";
+		$competing_request_info_string .= "request end time: $competing_request_end";
+		
+		notify($ERRORS{'DEBUG'}, 0, "checking reservation assigned to $computer_short_name:\n$competing_request_info_string");
+		
+		# Check for existing image creation requests
+		if ($competing_request_state =~ /^(image)$/ || $competing_request_laststate =~ /^(image)$/) {
+			notify($ERRORS{'WARNING'}, 0, "$computer_short_name is NOT available, it is assigned to an existing imaging reservation:\n$competing_request_info_string");
+			return 0;
 		}
-
-		# Check if there is another request using this machine
-		# Get a hash containing all of the reservations for the computer
-		notify($ERRORS{'OK'}, 0, "checking neighbor reservations for $computer_short_name");
-		my %neighbor_requests = get_request_by_computerid($computer_id);
-
-		# There should be at least 1 request -- the one being processed
-		if (!%neighbor_requests) {
-			notify($ERRORS{'WARNING'}, 0, "failed to retrieve any requests for computer id=$computer_id, there should be at least 1");
-			return;
+		
+		# Check for any requests in the maintenance state
+		if ($competing_request_state =~ /^(maintenance)$/) {
+			notify($ERRORS{'WARNING'}, 0, "$computer_short_name is NOT available, it is assigned to an existing request in the '$competing_request_state' state:\n$competing_request_info_string");
+			return 0;
 		}
-
-		notify($ERRORS{'OK'}, 0, "found " . scalar keys(%neighbor_requests) . " total reservations for $computer_short_name");
-
-		# Loop through the neighbor requests
-		NEIGHBOR_REQUESTS: foreach my $neighbor_request_key (keys %neighbor_requests) {
-			my $neighbor_request_id     = $neighbor_requests{$neighbor_request_key}{requestid};
-			my $neighbor_reservation_id = $neighbor_requests{$neighbor_request_key}{reservationid};
-			my $neighbor_state_name     = $neighbor_requests{$neighbor_request_key}{currentstate};
-			my $neighbor_laststate_name = $neighbor_requests{$neighbor_request_key}{laststate};
-			my $neighbor_request_start  = $neighbor_requests{$neighbor_request_key}{requeststart};
-
-			my $neighbor_request_start_epoch = convert_to_epoch_seconds($neighbor_request_start);
-			my $now_epoch                    = time();
-			my $neighbor_start_diff          = $neighbor_request_start_epoch - $now_epoch;
-
-			# Ignore the request currently being processed and any complete requests
-			if ($neighbor_reservation_id == $reservation_id) {
-				next NEIGHBOR_REQUESTS;
+		
+		# Ignore 'complete', 'failed' requests
+		if ($competing_request_state =~ /^(complete|failed)$/) {
+			notify($ERRORS{'DEBUG'}, 0, "ignoring request in state: $competing_request_state/$competing_request_laststate");
+			next COMPETING_REQUESTS;
+		}
+		
+		# Check if the other reservation assigned to computer hasn't started yet
+		if ($competing_request_start_epoch > $now_epoch) {
+			# If they overlap, let the other reservation worry about it
+			notify($ERRORS{'OK'}, 0, "request $competing_request_id:$competing_reservation_id start time is in the future: $competing_request_start");
+			next COMPETING_REQUESTS;
+		}
+		
+		# Check if the other reservation is a 'reload' reservation for the same image revision
+		if ($competing_imagerevision_id eq $imagerevision_id && $competing_request_state eq 'pending' && $competing_request_laststate =~ /(reload)/) {
+			notify($ERRORS{'OK'}, 0, "reservation $competing_reservation_id is currently loading $computer_short_name with the correct image: $image_name, waiting for the other reload process to complete");
+			
+			my $message = "reload reservation $competing_request_id:$competing_reservation_id is still loading $computer_short_name with $image_name";
+			my $total_wait_seconds = (60 * $image_reloadtime);
+			my $attempt_delay_seconds = 30;
+			
+			# Loop until other process is done
+			if ($self->code_loop_timeout(sub{return !reservation_being_processed(@_)}, [$competing_reservation_id], $message, $total_wait_seconds, $attempt_delay_seconds)) {
+				notify($ERRORS{'DEBUG'}, 0, "reload reservation $competing_reservation_id finished loading $computer_short_name with $image_name");
+				
+				# Call this subroutine again in order to retrieve a current list of competing reservations
+				# The list of competing reservations may have changed while waiting
+				notify($ERRORS{'OK'}, 0, "calling this subroutine again to retrieve the current list of competing reservations assigned to $computer_short_name");
+				return $self->computer_not_being_used();
 			}
-
-			notify($ERRORS{'DEBUG'}, 0, "checking neighbor request=$neighbor_request_id, reservation=$neighbor_reservation_id, state=$neighbor_state_name, laststate=$neighbor_laststate_name");
-			notify($ERRORS{'DEBUG'}, 0, "neighbor start time: $neighbor_request_start ($neighbor_start_diff)");
-
-			# Ignore any complete requests
-			if ($neighbor_state_name eq "complete") {
-				notify($ERRORS{'OK'}, 0, "neighbor request is complete: id=$neighbor_request_id, state=$neighbor_state_name");
-				next NEIGHBOR_REQUESTS;
+			else {
+				notify($ERRORS{'WARNING'}, 0, "reload reservation $competing_reservation_id has NOT finished loading $computer_short_name with $image_name, waited $total_wait_seconds seconds");
 			}
-
-			# Check for overlapping reservations which user is involved or image is being created
-			# Don't check for state = new, it could be a future reservation
-			if ($neighbor_state_name =~ /^(maintenance|reserved|inuse|image)$/) {
-				notify($ERRORS{'WARNING'}, 0, "detected overlapping reservation on $computer_short_name: req=$neighbor_request_id, res=$neighbor_reservation_id, request state=$neighbor_state_name, laststate=$neighbor_laststate_name, computer state=$computer_state_name");
+		}
+		
+		# Check if the other reservation assigned to computer end time has been reached
+		# -or-
+		# Reload reservation -- either for a different image or the previous check loop monitoring the reload process for the same image timed out
+		# 
+		if ($competing_request_end_epoch <= $now_epoch ||
+			 ($competing_request_state =~ /(timeout|deleted|reload)/) ||
+			 ($competing_request_state eq 'pending' && $competing_request_laststate =~ /(timeout|deleted|reload)/)) {
+			
+			# Update the competing request state to complete
+			# If this fails, check if the competing request has already been deleted
+			# Do this before checking if the reservation is being processed to prevent new processes from being created
+			if (update_request_state($competing_request_id, "complete", ($competing_request_state eq 'pending') ? $competing_request_laststate : $competing_request_state)) {
+				notify($ERRORS{'OK'}, 0, "request state set to 'complete' for competing reservation $competing_reservation_id");
+			}
+			elsif (is_request_deleted($competing_request_id)) {
+				notify($ERRORS{'OK'}, 0, "request state not set to 'complete' for competing reservation $competing_reservation_id because request has been deleted");
+			}
+			else {
+				notify($ERRORS{'WARNING'}, 0, "computer $computer_short_name is NOT available, failed to set request state to 'complete', competing request has NOT been deleted:\n$competing_request_info_string");
 				return 0;
 			}
-
-			# Check for other currently pending requests
-			elsif ($neighbor_state_name eq "pending") {
-
-				# Make sure neighbor request process is actually running
-				my $neighbor_process_count = checkonprocess($neighbor_laststate_name, $neighbor_request_id);
-				if ($neighbor_process_count) {
-					notify($ERRORS{'OK'}, 0, "detected neighbor request $neighbor_request_id is active");
-				}
-				elsif ($neighbor_process_count == 0) {
-					notify($ERRORS{'OK'}, 0, "detected neighbor request $neighbor_request_id is NOT active, setting its state to 'complete'");
-					# Process was not found, set neighbor request to complete
-					if (update_request_state($neighbor_request_id, "complete", $neighbor_laststate_name)) {
-						notify($ERRORS{'OK'}, 0, "neighbor request $neighbor_request_id state set to 'complete'");
-					}
-					else {
-						notify($ERRORS{'WARNING'}, 0, "failed to set neighbor request $neighbor_request_id state to 'complete'");
-					}
-					# Check other neighbor requests
-					next NEIGHBOR_REQUESTS;
-				} ## end elsif ($neighbor_process_count == 0)  [ if ($neighbor_process_count)
-				else {
-					# Undefined was returned from checkonprocess(), meaning error occurred
-					notify($ERRORS{'CRITICAL'}, 0, "error occurred while checking if neighbor request $neighbor_request_id process is running");
-
-					# Wait then try again
-					next INUSE_LOOP;
-				}
-
-				# Check for state = pending and laststate = new, reserved, inuse, or image
-				# Just return 0 for these, don't bother waiting
-				if ($neighbor_laststate_name =~ /^(new|reserved|inuse|image)$/) {
-					notify($ERRORS{'WARNING'}, 0, "detected overlapping reservation on $computer_short_name: req=$neighbor_request_id, res=$neighbor_reservation_id, request state=$neighbor_state_name, laststate=$neighbor_laststate_name, computer state=$computer_state_name");
+			
+			# Check if the other reservation is still being processed
+			if (reservation_being_processed($competing_reservation_id)) {
+				notify($ERRORS{'OK'}, 0, "reservation $competing_reservation_id is currently being processed, making sure the process doesn't have any Semaphore objects open before attempting to kill it");
+				
+				# Create a Semaphore object and check if the competing process owns any of its own Semaphore objects
+				# This would indicate it's doing something such as retrieving an image
+				# Don't kill it or a partial image may be copied
+				my $semaphore = VCL::Module::Semaphore->new();
+				if ($semaphore->get_reservation_semaphore_ids($competing_reservation_id)) {
+					notify($ERRORS{'WARNING'}, 0, "computer $computer_short_name is NOT available, reservation $competing_reservation_id is still being processed and owns a Semaphore object, not killing the competing process, it may be transferring an image:\n$competing_request_info_string");
 					return 0;
 				}
-
-				# Neighbor request state is pending and process is actively running
-				# Neighbor request state should be deleted|timeout|reload|reclaim
-				if ($neighbor_laststate_name !~ /^(deleted|timeout|reload|reclaim)$/) {
-					notify($ERRORS{'WARNING'}, 0, "unexpected neighbor request laststate: $neighbor_laststate_name");
+				
+				# Kill competing process and update request state to complete
+				notify($ERRORS{'OK'}, 0, "attempting to kill process of competing reservation $competing_reservation_id assigned to $computer_short_name");
+				if (kill_reservation_process($competing_reservation_id)) {
+					notify($ERRORS{'OK'}, 0, "killed process for competing reservation $competing_reservation_id");
 				}
-
-				# Computer should be loading
-				if (monitorloading($neighbor_reservation_id, $image_name, $computer_id, $computer_short_name, $image_reloadtime)) {
-					# Returns 1 if specified image has been successfully loaded
-					# Returns 0 if another image is being loaded or if loading fails
-					notify($ERRORS{'OK'}, 0, "$image_name should have been loaded on $computer_short_name by reservation $neighbor_reservation_id");
-
-					# Check other neighbor requests
-					next NEIGHBOR_REQUESTS;
+				
+				# Wait for competing process to end before verifying that it was successfully killed
+				sleep 2;
+				
+				# Verify that the competing reservation process was killed
+				if (reservation_being_processed($competing_reservation_id)) {
+					notify($ERRORS{'WARNING'}, 0, "computer $computer_short_name is NOT available, failed to kill process for competing reservation, competing reservation is still being processed:\n$competing_request_info_string");
+					return 0;
 				}
-
-				# Computer is not being loaded with the correct image or loading failed
-				# Take evasive action - recheck on neighbor process
-				if (checkonprocess($neighbor_laststate_name, $neighbor_request_id)) {
-					notify($ERRORS{'OK'}, 0, "neighbor request=$neighbor_request_id, reservation=$neighbor_reservation_id owning $computer_short_name is not loading correct image or taking too long, attempting to kill process for reservation $neighbor_reservation_id");
-					
-					# Kill competing neighbor process - set it's state to complete
-					if (kill_reservation_process($neighbor_reservation_id)) {
-						notify($ERRORS{'OK'}, 0, "killed competing process for reservation $neighbor_reservation_id");
-					}
-					else {
-						notify($ERRORS{'WARNING'}, 0, "failed to kill competing process for reservation $neighbor_reservation_id");
-					}
-				} ## end if (checkonprocess($neighbor_laststate_name...
-
-				# Either neighbor process was not found or competing process was just killed
-				# Set neighbor request to complete
-				if (update_request_state($neighbor_request_id, "deleted", $neighbor_laststate_name)) {
-					notify($ERRORS{'OK'}, 0, "neighbor request $neighbor_request_id state set to 'deleted'");
-					# Check other neighbor requests
-					next NEIGHBOR_REQUESTS;
-				}
-				else {
-					notify($ERRORS{'WARNING'}, 0, "failed to set neighbor request $neighbor_request_id state to 'deleted'");
-				}
-			} ## end elsif ($neighbor_state_name eq "pending")  [ if ($neighbor_state_name =~ /^(reserved|inuse|image)$/)
-
-			# Check for other requests
-			else {
-				notify($ERRORS{'OK'}, 0, "neighbor request state is OK: $neighbor_state_name/$neighbor_laststate_name");
 			}
-
-		} ## end foreach my $neighbor_request_key (keys %neighbor_requests)
-
-		# Checked all neighbor requests and didn't find any conflicting reservations
-		notify($ERRORS{'OK'}, 0, "checked neighbor requests and didn't find any conflicting reservations for $computer_short_name");
-		return 1;
-
-	} ## end for (my $inuse_loop_count = 0; $inuse_loop_count...
-
-	# Checked all neighbor requests several times and find something conflicting every time
-	notify($ERRORS{'WARNING'}, 0, "$computer_short_name does not appear to be available");
-	return 0;
-
-} ## end sub computer_not_being_used
+			
+			# Call this subroutine again in order to retrieve a current list of competing reservations
+			# The list of competing reservations may have changed
+			# A new reload reservation may have been added by timeout/deleted processes
+			notify($ERRORS{'OK'}, 0, "calling this subroutine again to retrieve the current list of competing reservations assigned to $computer_short_name");
+			return $self->computer_not_being_used();
+		}
+		elsif (reservation_being_processed($competing_reservation_id)) {
+			notify($ERRORS{'WARNING'}, 0, "computer $computer_short_name is NOT available, assigned overlapping reservations, competing reservation is currently being processed:\n$competing_request_info_string");
+			return 0;
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "computer $computer_short_name is NOT available, assigned overlapping reservations, competing reservation is NOT currently being processed:\n$competing_request_info_string");
+			return 0;
+		}
+	}
+	
+	# Checked all competing requests and didn't find any conflicting reservations
+	notify($ERRORS{'OK'}, 0, "$computer_short_name is available, did not find any conflicting reservations");
+	return 1;
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 

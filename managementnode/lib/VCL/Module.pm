@@ -169,7 +169,7 @@ sub new {
 		next if ($arg_key eq 'data_structure');
 		
 		$self->{$arg_key} = $args->{$arg_key};
-		notify($ERRORS{'DEBUG'}, 0, "set '$arg_key' key for $class object from arguments");
+		#notify($ERRORS{'DEBUG'}, 0, "set '$arg_key' key for $class object from arguments");
 	}
 
 	# Bless the object as the class which new was called with
@@ -347,7 +347,7 @@ sub create_mn_os_object {
 	# Check if an OS object has already been stored in the calling object
 	if ($ENV{mn_os}) {
 		my $address = sprintf('%x', $ENV{mn_os});
-		notify($ERRORS{'DEBUG'}, 0, "management node OS object has already been created, address: $address, returning 1");
+		#notify($ERRORS{'DEBUG'}, 0, "management node OS object has already been created, address: $address, returning 1");
 		return 1;
 	}
 	
@@ -813,14 +813,14 @@ sub code_loop_timeout {
                Examples:
                
                Semaphore is released when it is undefined:
-               my $semaphore = $self->get_semaphore('/tmp/test.lock');
+               my $semaphore = $self->get_semaphore('test');
                ... <exclusive lock is in place>
                undef $semaphore;
                ... <exclusive lock released>
                
                Semaphore is released when it goes out of scope:
                if (blah) {
-                  my $semaphore = $self->get_semaphore('/tmp/test.lock');
+                  my $semaphore = $self->get_semaphore('test');
                   ... <exclusive lock is in place>
                }
                ... <exclusive lock released>
@@ -841,10 +841,6 @@ sub get_semaphore {
 		return;
 	}
 	
-	$semaphore_id =~ s/\W+/-/g;
-	$semaphore_id =~ s/(^-|-$)//g;
-	my $file_path = "/tmp/$semaphore_id.lock";
-	
 	# Attempt to create a new semaphore object
 	my $semaphore = VCL::Module::Semaphore->new({'data_structure' => $self->data});
 	if (!$semaphore) {
@@ -853,14 +849,14 @@ sub get_semaphore {
 	}
 	
 	# Attempt to open and exclusively lock the file
-	if ($semaphore->get_lockfile($file_path, $total_wait_seconds, $attempt_delay_seconds)) {
+	if ($semaphore->get_lockfile($semaphore_id, $total_wait_seconds, $attempt_delay_seconds)) {
 		# Return the semaphore object
 		my $address = sprintf('%x', $semaphore);
-		notify($ERRORS{'DEBUG'}, 0, "created Semaphore object, memory address: $address");
+		notify($ERRORS{'DEBUG'}, 0, "created '$semaphore_id' Semaphore object, memory address: $address");
 		return $semaphore;
 	}
 	else {
-		notify($ERRORS{'DEBUG'}, 0, "failed to open and optain exclusive lock on file: $file_path");
+		notify($ERRORS{'DEBUG'}, 0, "failed to create '$semaphore_id' Semaphore object");
 		return;
 	}
 }

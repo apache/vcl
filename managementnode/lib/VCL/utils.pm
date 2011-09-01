@@ -4578,10 +4578,10 @@ sub get_request_info {
 		$not_standalone_list = $ENV{management_node_info}{NOT_STANDALONE};
 	} 
 	if (grep(/$request_info{user}{affiliation}{name}/, split(/,/, $not_standalone_list))) {
-		notify($ERRORS{'DEBUG'}, 0, "non-standalone affiliation found: $request_info{user}{affiliation}{name}");
+		#notify($ERRORS{'DEBUG'}, 0, "non-standalone affiliation found: $request_info{user}{affiliation}{name}");
 	}
 	else {
-		notify($ERRORS{'DEBUG'}, 0, "standalone affiliation found: $request_info{user}{affiliation}{name}");
+		#notify($ERRORS{'DEBUG'}, 0, "standalone affiliation found: $request_info{user}{affiliation}{name}");
 		$request_info{user}{STANDALONE} = 1;
 	}
 
@@ -4590,7 +4590,7 @@ sub get_request_info {
 		$request_info{user}{STANDALONE} = 1;
 		notify($ERRORS{'OK'}, 0, "found NULL uid setting standalone flag: $request_info{user}{unityid}, uid: NULL");
 	}
-
+	
 	# Fix the unityid if if the user's UID is >= 1000000
 	# Remove the domain section if the user's unityid contains @...
 	if(defined($request_info{user}{uid})) {
@@ -5415,7 +5415,7 @@ EOF
 
 sub run_ssh_command {
 	my ($node, $identity_paths, $command, $user, $port, $output_level, $timeout_seconds) = @_;
-
+	
 	my $max_attempts = 3;
 	
 	if (ref($_[0]) eq 'HASH') {
@@ -6543,33 +6543,29 @@ sub get_request_end {
 sub get_request_by_computerid {
 	my ($computer_id) = @_;
 
-	my ($package, $filename, $line, $sub) = caller(0);
-
 	# Check the passed parameter
-	if (!(defined($computer_id))) {
-		notify($ERRORS{'WARNING'}, 0, "computer ID was not specified");
-		return ();
+	if (!defined($computer_id)) {
+		notify($ERRORS{'WARNING'}, 0, "computer ID argument was not specified");
+		return
 	}
 
 	# Create the select statement
-	my $select_statement = "
-	SELECT DISTINCT
-	res.id AS reservationid,
-	s.name AS currentstate,
-	ls.name AS laststate,
-	req.id AS requestid,
-    req.start AS requeststart
-	FROM
-	request req,reservation res,state s,state ls
-	WHERE
-	req.stateid=s.id AND
-	req.laststateid = ls.id AND
-	req.id=res.requestid AND
-	res.computerid = $computer_id
+	my $select_statement = <<EOF;
+SELECT DISTINCT
+request.id AS request_id,
+reservation.id AS reservation_id
 
-	ORDER BY
-	res.id
-	 ";
+FROM
+request,
+reservation
+
+WHERE
+request.id = reservation.requestid
+AND reservation.computerid = $computer_id
+
+ORDER BY
+reservation.id
+EOF
 
 	# Call the database select subroutine
 	# This will return an array of one or more rows based on the select statement
@@ -6577,26 +6573,36 @@ sub get_request_by_computerid {
 
 	# Check to make sure 1 row was returned
 	if (scalar @selected_rows == 0) {
-		notify($ERRORS{'OK'}, 0, "zero rows were returned from database select $computer_id");
+		notify($ERRORS{'OK'}, 0, "$computer_id is not assigned to any reservations");
 		return ();
 	}
 
-	my %returnhash;
+	my $computer_request_info;
 
 	# It contains a hash
-	for (@selected_rows) {
-		my %reservation_row = %{$_};
-		# Grab the reservation ID to make the code a little cleaner
-		my $reservation_id = $reservation_row{reservationid};
-		$returnhash{$reservation_id}{"reservationid"} = $reservation_id;
-		$returnhash{$reservation_id}{"currentstate"}  = $reservation_row{currentstate};
-		$returnhash{$reservation_id}{"laststate"}     = $reservation_row{laststate};
-		$returnhash{$reservation_id}{"requestid"}     = $reservation_row{requestid};
-		$returnhash{$reservation_id}{"requeststart"}  = $reservation_row{requeststart};
-	} ## end for (@selected_rows)
+	for my $row (@selected_rows) {
+		my $request_id = $row->{request_id};
+		my $reservation_id = $row->{reservation_id};
+		
+		my %request_info = get_request_info($request_id);
+		if (!%request_info) {
+			notify($ERRORS{'CRITICAL'}, 0, "failed to retrieve request info, request ID: $request_id");
+			return;
+		}
+		
+		my $data_structure;
+		eval {$data_structure = new VCL::DataStructure({request_data => \%request_info, reservation_id => $reservation_id});};
+		if (my $exception = Exception::Class::Base->caught()) {
+			notify($ERRORS{'CRITICAL'}, 0, "unable to create DataStructure object" . $exception->message);
+			return;
+		}
+		
+		notify($ERRORS{'DEBUG'}, 0, "retrieved info and DataStructure object for $request_id:$reservation_id");
+		$computer_request_info->{$request_id}{data} = $data_structure;
+	}
 
-	return %returnhash;
-} ## end sub get_request_by_computerid
+	return $computer_request_info;
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 

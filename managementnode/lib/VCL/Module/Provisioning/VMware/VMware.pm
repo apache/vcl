@@ -2371,12 +2371,13 @@ sub reclaim_vmhost_disk_space {
 		
 		
 		# Check if any reservations have been assigned to the computer
-		my %computer_requests = get_request_by_computerid($check_computer_id);
+		my $computer_requests = get_request_by_computerid($check_computer_id);
+		
 		# Remove the ID for the current reservation
-		delete $computer_requests{$reservation_id};
-		if (%computer_requests) {
-			notify($ERRORS{'DEBUG'}, 0, "$vmx_file_name can't be deleted because it is assigned to another reservation: " . join(", ", sort keys(%computer_requests)));
-			$vmx_files->{$vmx_file_path}{reservations} = [sort keys(%computer_requests)];
+		delete $computer_requests->{$reservation_id};
+		if (!keys(%$computer_requests)) {
+			notify($ERRORS{'DEBUG'}, 0, "$vmx_file_name can't be deleted because it is assigned to another reservation: " . join(", ", sort keys(%$computer_requests)));
+			$vmx_files->{$vmx_file_path}{reservations} = [sort keys(%$computer_requests)];
 			$vmx_files->{$vmx_file_path}{deletable} = 0;
 			next;
 		}

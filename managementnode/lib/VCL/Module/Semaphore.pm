@@ -25,7 +25,7 @@ VCL::Module::Semaphore - VCL module to control semaphores
 =head1 SYNOPSIS
 
  my $semaphore = VCL::Module::Semaphore->new({data_structure => $self->data});
- $semaphore->get_lockfile($file_path, $total_wait_seconds, $attempt_delay_seconds);
+ $semaphore->get_lockfile($semaphore_id, $total_wait_seconds, $attempt_delay_seconds);
 
 =head1 DESCRIPTION
 
@@ -66,6 +66,30 @@ use VCL::utils;
 
 ##############################################################################
 
+=head1 CLASS VARIABLES
+
+=cut
+
+=head2 $LOCKFILE_DIRECTORY_PATH
+
+ Data type   : String
+ Description : Location on the management node of the lockfiles are stored.
+
+=cut
+
+our $LOCKFILE_DIRECTORY_PATH = "/tmp";
+
+=head2 $LOCKFILE_EXTENSION
+
+ Data type   : String
+ Description : File extension to be used for lockfiles.
+
+=cut
+
+our $LOCKFILE_EXTENSION = "semaphore";
+
+##############################################################################
+
 =head1 OBJECT METHODS
 
 =cut
@@ -74,7 +98,7 @@ use VCL::utils;
 
 =head2 get_lockfile
 
- Parameters  : $file_path, $total_wait_seconds (optional), $attempt_delay_seconds (optional)
+ Parameters  : $semaphore_id, $total_wait_seconds (optional), $attempt_delay_seconds (optional)
  Returns     : filehandle
  Description : Attempts to open and obtain an exclusive lock on the file
                specified by the file path argument. If unable to obtain an
@@ -92,12 +116,17 @@ sub get_lockfile {
 		return;
 	}
 	
-	# Get the file path argument
-	my ($file_path, $total_wait_seconds, $attempt_delay_seconds) = @_;
-	if (!$file_path) {
-		notify($ERRORS{'WARNING'}, 0, "file path argument was not supplied");
+	# Get the semaphore ID argument
+	my ($semaphore_id, $total_wait_seconds, $attempt_delay_seconds) = @_;
+	if (!$semaphore_id) {
+		notify($ERRORS{'WARNING'}, 0, "semaphore ID argument was not supplied");
 		return;
 	}
+	
+	$semaphore_id =~ s/\W+/-/g;
+	$semaphore_id =~ s/(^-|-$)//g;
+	
+	my $file_path = "$LOCKFILE_DIRECTORY_PATH/$semaphore_id.$LOCKFILE_EXTENSION";
 	
 	# Set the wait defaults if not supplied as arguments
 	$total_wait_seconds = 30 if !defined($total_wait_seconds);
@@ -148,6 +177,9 @@ sub open_lockfile {
 			# Truncate and print the process information to the file
 			$file_handle->truncate(0);
 			print $file_handle "$$ $0\n";
+			$file_handle->setpos($file_handle->getpos());
+			 
+			notify($ERRORS{'DEBUG'}, 0, "wrote to file: $file_path, contents:\n '$$ $0'");
 			
 			$self->{file_handles}{$file_path} = $file_handle;
 			return $file_handle;
@@ -254,6 +286,70 @@ sub release_lockfile {
 	
 	delete $self->{file_handles}{$file_path};
 	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_reservation_semaphore_ids
+
+ Parameters  : $reservation_id
+ Returns     : array
+ Description : Returns the Semaphore IDs opened by the reservation specified by
+               the argument. An empty list is returned if no Semaphores are
+               open.
+
+=cut
+
+sub get_reservation_semaphore_ids {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $reservation_id = shift || $self->data->get_reservation_id();
+	if (!$reservation_id) {
+		notify($ERRORS{'WARNING'}, 0, "reservation ID argument was not supplied");
+		return;
+	}
+	
+	my @lockfile_paths = $self->mn_os->find_files($LOCKFILE_DIRECTORY_PATH, "*.$LOCKFILE_EXTENSION");
+	if (!@lockfile_paths) {
+		notify($ERRORS{'DEBUG'}, 0, "did not find any lockfiles on this management node");
+		return ();
+	}
+	
+	my @reservation_semaphore_ids;
+	
+	for my $lockfile_path (@lockfile_paths) {
+		my ($semaphore_id) = $lockfile_path =~ /([^\/]+)\.$LOCKFILE_EXTENSION/;
+		
+		my @lockfile_contents = $self->mn_os->get_file_contents($lockfile_path);
+		if (!@lockfile_contents) {
+			notify($ERRORS{'WARNING'}, 0, "failed to retrieve contents of lockfile: $lockfile_path");
+			next;
+		}
+		
+		my $lockfile_line = $lockfile_contents[0];
+		
+		# Line should contain a string similar to this:
+		# 31862 vclark 2376:3116 tomaintenance vclv1-42>vclh3-12.hpc.ncsu.edu vmwarewinxp-base234-v14 admin
+		my ($lockfile_reservation_id) = $lockfile_line =~ / \d+:(\d+) /;
+		
+		if (!defined($lockfile_reservation_id)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to determine reservation ID from 1st line in $lockfile_path: '$lockfile_line'");
+			next;
+		}
+		
+		if ($lockfile_reservation_id == $reservation_id) {
+			notify($ERRORS{'DEBUG'}, 0, "semaphore '$semaphore_id' belongs to reservation $reservation_id");
+			push @reservation_semaphore_ids, $semaphore_id;
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "semaphore '$semaphore_id' does NOT belong to reservation $reservation_id");
+		}
+	}
+	return @reservation_semaphore_ids;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
