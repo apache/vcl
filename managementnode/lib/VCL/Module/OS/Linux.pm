@@ -2976,7 +2976,7 @@ sub enable_dhcp {
 		return;
 	}
 
-	my $computer_node_name   = $self->data->get_computer_node_name();
+	my $computer_node_name = $self->data->get_computer_node_name();
 	
 	my $interface_name_argument = shift;
 	my @interface_names;
@@ -3030,6 +3030,141 @@ EOF
 }
 
 #/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_cpu_core_count
+
+ Parameters  : none
+ Returns     : integer
+ Description : Retrieves the quantitiy of CPU cores the computer has.
+
+=cut
+
+sub get_cpu_core_count {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $computer_node_name = $self->data->get_computer_node_name();
+	
+	my $command = "cat /proc/cpuinfo";
+	my ($exit_status, $output) = $self->execute($command);
+	
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve CPU info from $computer_node_name");
+		return;
+	}
+	
+	# Get the number of 'processor :' lines and the 'cpu cores :' and 'siblings :' values from the cpuinfo output
+	my $processor_count = scalar(grep(/^processor\s*:/, @$output));
+	if (!$processor_count) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine $computer_node_name CPU core count, output does not contain any 'processor :' lines:\n" . join("\n", @$output));
+		return;
+	}
+	my ($cpu_cores) = map { $_ =~ /cpu cores\s*:\s*(\d+)/ } @$output;
+	$cpu_cores = 1 unless $cpu_cores;
+	
+	my ($siblings) = map { $_ =~ /siblings\s*:\s*(\d+)/ } @$output;
+	$siblings = 1 unless $siblings;
+	
+	# The actual CPU core count can be determined by the equation:
+	my $cpu_core_count = ($processor_count * $cpu_cores / $siblings);
+	
+	# If hyperthreading is enabled, siblings will be greater than CPU cores
+	# If hyperthreading is not enabled, they will be equal
+	my $hyperthreading_enabled = ($siblings > $cpu_cores) ? 'yes' : 'no';
+	
+	notify($ERRORS{'DEBUG'}, 0, "retrieved $computer_node_name CPU core count: $cpu_core_count
+			 cpuinfo 'processor' line count: $processor_count
+			 cpuinfo 'cpu cores': $cpu_cores
+			 cpuinfo 'siblings': $siblings
+			 hyperthreading enabled: $hyperthreading_enabled");
+	
+	return $cpu_core_count;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_cpu_speed
+
+ Parameters  : none
+ Returns     : integer
+ Description : Retrieves the speed of the computer's CPUs in MHz.
+
+=cut
+
+sub get_cpu_speed {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $computer_node_name = $self->data->get_computer_node_name();
+	
+	my $command = "cat /proc/cpuinfo";
+	my ($exit_status, $output) = $self->execute($command);
+	
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve CPU info from $computer_node_name");
+		return;
+	}
+	
+	my ($mhz) = map { $_ =~ /cpu MHz\s*:\s*(\d+)/ } @$output;
+	if ($mhz) {
+		$mhz = int($mhz);
+		notify($ERRORS{'DEBUG'}, 0, "retrieved $computer_node_name CPU speed: $mhz MHz");
+		return $mhz;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to determine $computer_node_name CPU speed CPU speed, 'cpu MHz :' line does not exist in the cpuinfo output:\n" . join("\n", @$output));
+		return;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_total_memory
+
+ Parameters  : none
+ Returns     : integer
+ Description : Retrieves the computer's total memory capacity in MB.
+
+=cut
+
+sub get_total_memory {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $computer_node_name = $self->data->get_computer_node_name();
+	
+	my $command = "dmesg | grep Memory:";
+	my ($exit_status, $output) = $self->execute($command);
+	
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve memory info from $computer_node_name");
+		return;
+	}
+	
+	# Output should look like this:
+	# Memory: 1024016k/1048576k available (2547k kernel code, 24044k reserved, 1289k data, 208k init)
+	my ($memory_kb) = map { $_ =~ /Memory:.*\/(\d+)k available/ } @$output;
+	if ($memory_kb) {
+		my $memory_mb = int($memory_kb / 1024);
+		notify($ERRORS{'DEBUG'}, 0, "retrieved $computer_node_name total memory capacity: $memory_mb MB");
+		return $memory_mb;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to determine $computer_node_name total memory capacity from command: '$command', output:\n" . join("\n", @$output));
+		return;
+	}
+}
+
+##/////////////////////////////////////////////////////////////////////////////
 
 1;
 __END__

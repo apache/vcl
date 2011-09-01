@@ -1798,6 +1798,106 @@ sub get_available_space {
 	return $available_bytes;
 }
 
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_cpu_core_count
+
+ Parameters  : none
+ Returns     : integer
+ Description : Retrieves the quantitiy of CPU cores the VM host has.
+
+=cut
+
+sub get_cpu_core_count {
+	my $self = shift;
+	if (ref($self) !~ /module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $vmhost_hostname = $self->data->get_vmhost_hostname();
+	
+	# Get the host view
+	my $host_view = $self->_get_host_view() || return;
+	
+	my $cpu_core_count = $host_view->hardware->cpuInfo->numCpuCores;
+	if ($cpu_core_count) {
+		notify($ERRORS{'DEBUG'}, 0, "retrieved VM host $vmhost_hostname CPU core count: $cpu_core_count");
+		return $cpu_core_count;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to determine VM host $vmhost_hostname CPU core count");
+		return;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_cpu_speed
+
+ Parameters  : none
+ Returns     : integer
+ Description : Retrieves the speed of the VM host's CPUs in MHz.
+
+=cut
+
+sub get_cpu_speed {
+	my $self = shift;
+	if (ref($self) !~ /module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $vmhost_hostname = $self->data->get_vmhost_hostname();
+	
+	# Get the host view
+	my $host_view = $self->_get_host_view() || return;
+	
+	my $hz = $host_view->hardware->cpuInfo->hz;
+	if ($hz) {
+		my $mhz = int($hz / 1000000);
+		notify($ERRORS{'DEBUG'}, 0, "retrieved VM host $vmhost_hostname CPU speed: $mhz MHz");
+		return $mhz;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to determine VM host $vmhost_hostname CPU speed");
+		return;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_total_memory
+
+ Parameters  : none
+ Returns     : integer
+ Description : Retrieves the VM host's total memory capacity in MB.
+
+=cut
+
+sub get_total_memory {
+	my $self = shift;
+	if (ref($self) !~ /module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $vmhost_hostname = $self->data->get_vmhost_hostname();
+	
+	# Get the host view
+	my $host_view = $self->_get_host_view() || return;
+	
+	my $memory_bytes = $host_view->hardware->memorySize;
+	if (!$memory_bytes) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine VM host $vmhost_hostname total memory capacity");
+		return;
+	}
+	
+	my $memory_mb = int($memory_bytes / 1024 / 1024);
+	notify($ERRORS{'DEBUG'}, 0, "retrieved VM host $vmhost_hostname total memory capacity: $memory_mb MB");
+	return $memory_mb;
+}
+
 ##############################################################################
 
 =head1 PRIVATE OBJECT METHODS

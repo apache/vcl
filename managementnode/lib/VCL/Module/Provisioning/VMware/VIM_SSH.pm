@@ -1791,6 +1791,144 @@ sub snapshot_exists {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 get_cpu_core_count
+
+ Parameters  : none
+ Returns     : integer
+ Description : Retrieves the quantitiy of CPU cores the VM host has.
+
+=cut
+
+sub get_cpu_core_count {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $vmhost_hostname = $self->data->get_vmhost_hostname();
+	
+	my $vim_cmd_arguments = "hostsvc/hosthardware";
+	my ($exit_status, $output) = $self->_run_vim_cmd($vim_cmd_arguments);
+	return if !$output;
+	
+	# The CPU info should be contained in the output:
+	#	cpuInfo = (vim.host.CpuInfo) {
+	#      dynamicType = <unset>,
+	#      numCpuPackages = 2,
+	#      numCpuCores = 8,
+	#      numCpuThreads = 8,
+	#      hz = 2000070804,
+	#   },
+	
+	my ($cpu_cores_line) = grep(/^\s*numCpuCores\s*=/i, @$output);
+	if (!$cpu_cores_line) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine VM host $vmhost_hostname CPU core count, output does not contain a 'numCpuCores =' line:\n" . join("\n", @$output));
+		return;
+	}
+	elsif ($cpu_cores_line =~ /(\d+)/) {
+		my $cpu_core_count = $1;
+		notify($ERRORS{'DEBUG'}, 0, "retrieved VM host $vmhost_hostname CPU core count: $cpu_core_count");
+		return $cpu_core_count;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to determine VM host $vmhost_hostname CPU core count from line: $cpu_cores_line");
+		return;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_cpu_speed
+
+ Parameters  : none
+ Returns     : integer
+ Description : Retrieves the speed of the VM host's CPUs in MHz.
+
+=cut
+
+sub get_cpu_speed {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $vmhost_hostname = $self->data->get_vmhost_hostname();
+	
+	my $vim_cmd_arguments = "hostsvc/hosthardware";
+	my ($exit_status, $output) = $self->_run_vim_cmd($vim_cmd_arguments);
+	return if !$output;
+	
+	# The CPU info should be contained in the output:
+	#	cpuInfo = (vim.host.CpuInfo) {
+	#      dynamicType = <unset>,
+	#      numCpuPackages = 2,
+	#      numCpuCores = 8,
+	#      numCpuThreads = 8,
+	#      hz = 2000070804,
+	#   },
+	
+	my ($hz_line) = grep(/^\s*hz\s*=/i, @$output);
+	if (!$hz_line) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine VM host $vmhost_hostname CPU speed, output does not contain a 'hz =' line:\n" . join("\n", @$output));
+		return;
+	}
+	elsif ($hz_line =~ /(\d+)/) {
+		my $mhz = int($1 / 1000000);
+		notify($ERRORS{'DEBUG'}, 0, "retrieved VM host $vmhost_hostname CPU speed: $mhz MHz");
+		return $mhz;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to determine VM host $vmhost_hostname CPU speed from line: $hz_line");
+		return;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_total_memory
+
+ Parameters  : none
+ Returns     : integer
+ Description : Retrieves the VM host's total memory capacity in MB.
+
+=cut
+
+sub get_total_memory {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $vmhost_hostname = $self->data->get_vmhost_hostname();
+	
+	my $vim_cmd_arguments = "hostsvc/hosthardware";
+	my ($exit_status, $output) = $self->_run_vim_cmd($vim_cmd_arguments);
+	return if !$output;
+	
+	# The following line should be contained in the output:
+	#	 memorySize = 17178869760,
+	
+	my ($memory_size_line) = grep(/^\s*memorySize\s*=/i, @$output);
+	if (!$memory_size_line) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine VM host $vmhost_hostname total memory capacity, output does not contain a 'memorySize =' line:\n" . join("\n", @$output));
+		return;
+	}
+	elsif ($memory_size_line =~ /(\d+)/) {
+		my $memory_mb = int($1 / 1024 / 1024);
+		notify($ERRORS{'DEBUG'}, 0, "retrieved VM host $vmhost_hostname total memory capacity: $memory_mb MB");
+		return $memory_mb;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to determine VM host $vmhost_hostname total memory capacity from line: $memory_size_line");
+		return;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 DESTROY
 
  Parameters  : none

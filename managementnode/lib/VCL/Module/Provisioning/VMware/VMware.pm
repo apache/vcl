@@ -171,6 +171,16 @@ our %VM_OS_CONFIGURATION = (
 	},
 );
 
+=head2 $VM_MINIMUM_MEMORY_MB
+
+ Data type   : string
+ Description : Minimum amount of memory in megabytes to be allocated to any VM.
+
+=cut
+
+our $VM_MINIMUM_MEMORY_MB = 512;
+
+
 =head2 $VSPHERE_SDK_PACKAGE
 
  Data type   : string
@@ -243,12 +253,12 @@ sub initialize {
 	}
 	
 	my $request_state_name = $self->data->get_request_state_name();
-	
 	my $vm_computer_name = $self->data->get_computer_node_name();
-	
 	my $vmhost_computer_name = $vmhost_data->get_computer_node_name();
 	my $vmhost_image_name = $vmhost_data->get_image_name();
 	my $vmhost_os_module_package = $vmhost_data->get_image_os_module_perl_package();
+	my $vmhost_lastcheck_time = $vmhost_data->get_computer_lastcheck_time(0);
+	my $vmhost_computer_id = $self->data->get_vmhost_computer_id();
 	
 	my $vmware_api;
 	
@@ -308,13 +318,6 @@ sub initialize {
 		return;
 	}
 	
-	# Configure the SSH authorized_keys file to persist through reboots if the VM host is running VMware ESXi
-	# This shouldn't need to be done more than once, only call this if the state is 'new' to reduce the number of times it is called
-	notify($ERRORS{'DEBUG'}, 0, "product: $vmhost_product_name, OS object: " . ref($self->{vmhost_os}));
-	if ($request_state_name eq 'new' && ref($self->{vmhost_os}) =~ /Linux/i && $vmhost_product_name =~ /ESXi/) {
-		$self->configure_vmhost_dedicated_ssh_key();
-	}
-	
 	# Make sure the vmx and vmdk base directories can be accessed
 	my $vmx_base_directory_path = $self->get_vmx_base_directory_path();
 	if (!$vmx_base_directory_path) {
@@ -337,6 +340,80 @@ sub initialize {
 	elsif (!$self->vmhost_os->file_exists($vmdk_base_directory_path)) {
 		notify($ERRORS{'WARNING'}, 0, "unable to access vmdk base directory path: $vmdk_base_directory_path");
 		return;
+	}
+	
+	# Retrieve the VM host's hardware info if:
+	#    -request state is 'timeout', don't slow down user reservations
+	#    -VM host computer.lastcheck is NULL or more than 30 days old
+	if ($request_state_name eq 'timeout' && (!$vmhost_lastcheck_time || (time - convert_to_epoch_seconds($vmhost_lastcheck_time)) > (60 * 60 * 24 * 30))) {
+		# Configure the SSH authorized_keys file to persist through reboots if the VM host is running VMware ESXi
+		# This shouldn't need to be done more than once, only call this if the state is 'reclaim'
+		if (ref($self->{vmhost_os}) =~ /Linux/i && $vmhost_product_name =~ /ESXi/) {
+			$self->configure_vmhost_dedicated_ssh_key();
+		}
+		
+		# Retrieve the CPU core count, update the database if necessary
+		my $cpu_core_count;
+		if ($self->api->can('get_cpu_core_count')) {
+			$cpu_core_count = $self->api->get_cpu_core_count();
+		}
+		elsif (!$cpu_core_count && $self->vmhost_os->can('get_cpu_core_count')) {
+			$cpu_core_count = $self->vmhost_os->get_cpu_core_count();
+		}
+		
+		if (!$cpu_core_count) {
+			notify($ERRORS{'OK'}, 0, "VM host computer.procnumber not updated, CPU core count could not be retrieved from the API or VM host OS object");
+		}
+		elsif ($cpu_core_count eq $vmhost_data->get_computer_processor_count()) {
+			notify($ERRORS{'DEBUG'}, 0, "VM host computer.procnumber is already correct in the database");
+		}
+		else {
+			update_computer_procnumber($vmhost_computer_id, $cpu_core_count);
+		}
+		
+		# Retrieve the CPU speed, update the database if necessary
+		my $cpu_speed;
+		if ($self->api->can('get_cpu_speed')) {
+			$cpu_speed = $self->api->get_cpu_speed();
+		}
+		elsif (!$cpu_speed && $self->vmhost_os->can('get_cpu_speed')) {
+			$cpu_speed = $self->vmhost_os->get_cpu_speed();
+		}
+		
+		if (!$cpu_speed) {
+			notify($ERRORS{'OK'}, 0, "VM host computer.procspeed not updated, CPU speed could not be retrieved from the API or VM host OS object");
+		}
+		elsif ($cpu_speed eq $vmhost_data->get_computer_processor_speed()) {
+			notify($ERRORS{'DEBUG'}, 0, "VM host computer.procspeed is already correct in the database");
+		}
+		else {
+			update_computer_procspeed($vmhost_computer_id, $cpu_speed);
+		}
+		
+		# Retrieve the RAM, update the database if necessary
+		my $ram_mb;
+		if ($self->api->can('get_total_memory')) {
+			$ram_mb = $self->api->get_total_memory();
+		}
+		elsif (!$ram_mb && $self->vmhost_os->can('get_total_memory')) {
+			$ram_mb = $self->vmhost_os->get_total_memory();
+		}
+		
+		if (!$ram_mb) {
+			notify($ERRORS{'OK'}, 0, "VM host computer.RAM not updated, total memory could not be retrieved from the API or VM host OS object");
+		}
+		elsif ($ram_mb eq $vmhost_data->get_computer_ram()) {
+			notify($ERRORS{'DEBUG'}, 0, "VM host computer.RAM is already correct in the database");
+		}
+		else {
+			update_computer_ram($vmhost_computer_id, $ram_mb);
+		}
+		
+		# Update the VM host computer lastcheck time to now
+		update_computer_lastcheck($vmhost_computer_id);
+	}
+	elsif ($request_state_name eq 'timeout') {
+		notify($ERRORS{'DEBUG'}, 0, "VM host hardware parameters not updated in the database, last check is less than 30 days ago: $vmhost_lastcheck_time");
 	}
 	
 	return 1;
@@ -4626,7 +4703,8 @@ sub get_vm_ethernet_adapter_type {
                If not, the value is rounded down.
                
                The RAM value is also checked to make sure it is not lower than
-               512 MB. If so, 512 MB is returned.
+               the $VM_MINIMUM_MEMORY_MB value. If so, the $VM_MINIMUM_MEMORY_MB
+               is returned.
 
 =cut
 
@@ -4655,7 +4733,7 @@ sub get_vm_ram {
 	# Get the minimum memory size for the OS
 	my $vm_os_configuration = $self->get_vm_os_configuration();
 	my $vm_guest_os = $vm_os_configuration->{guestOS} || 'unknown';
-	my $vm_os_memsize = $vm_os_configuration->{memsize} || 512;
+	my $vm_os_memsize = $vm_os_configuration->{memsize} || $VM_MINIMUM_MEMORY_MB;
 	if ($image_minram_mb < $vm_os_memsize) {
 		notify($ERRORS{'DEBUG'}, 0, "image minimum RAM value ($image_minram_mb MB) is too low for the $vm_guest_os guest OS, adjusting to $vm_os_memsize MB");
 		return $vm_os_memsize;

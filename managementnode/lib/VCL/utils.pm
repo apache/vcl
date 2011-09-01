@@ -210,6 +210,9 @@ our @EXPORT = qw(
   update_computer_address
   update_computer_state
   update_computer_lastcheck
+  update_computer_procnumber
+  update_computer_procspeed
+  update_computer_ram
   update_currentimage
   update_computer_imagename
   update_image_name
@@ -2035,7 +2038,6 @@ sub update_computer_lastcheck {
 	$log = 0 unless (defined $log);
 
 	notify($ERRORS{'WARNING'}, $log, "computer id is not defined") unless (defined($computer_id));
-	notify($ERRORS{'WARNING'}, $log, "$datestring is not defined") unless (defined($datestring));
 	return 0 unless (defined $computer_id);
 
 	unless (defined($datestring) ) {
@@ -2062,6 +2064,125 @@ sub update_computer_lastcheck {
 		return 0;
 	}
 } ## end
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 update_computer_procnumber
+
+ Parameters  : $computer_id, $cpu_count
+ Returns     : boolean
+ Description : Updates the computer.procnumber value for the specified computer.
+
+=cut
+
+sub update_computer_procnumber {
+	my ($computer_id, $cpu_count) = @_;
+
+	if (!$computer_id || !$cpu_count) {
+		notify($ERRORS{'WARNING'}, 0, "computer ID and CPU count arguments were not supplied correctly");
+		return;
+	}
+
+	my $update_statement = <<EOF;
+UPDATE
+computer
+SET
+computer.procnumber = '$cpu_count'
+WHERE
+computer.id = $computer_id
+EOF
+
+	# Call the database execute subroutine
+	if (database_execute($update_statement)) {
+		notify($ERRORS{'DEBUG'}, 0, "updated the procnumber value to $cpu_count for computer ID $computer_id");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to update the procnumber value to $cpu_count for computer ID $computer_id");
+		return 0;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 update_computer_procspeed
+
+ Parameters  : $computer_id, $cpu_speed
+ Returns     : boolean
+ Description : Updates the computer.procspeed value for the specified computer.
+					The $cpu_speed argument should contain an integer value of the
+					CPU speed in MHz.
+
+=cut
+
+sub update_computer_procspeed {
+	my ($computer_id, $cpu_speed_mhz) = @_;
+
+	if (!$computer_id || !$cpu_speed_mhz) {
+		notify($ERRORS{'WARNING'}, 0, "computer ID and CPU speed arguments were not supplied correctly");
+		return;
+	}
+
+	my $update_statement = <<EOF;
+UPDATE
+computer
+SET
+computer.procspeed = '$cpu_speed_mhz'
+WHERE
+computer.id = $computer_id
+EOF
+
+	# Call the database execute subroutine
+	if (database_execute($update_statement)) {
+		notify($ERRORS{'DEBUG'}, 0, "updated the procspeed value to $cpu_speed_mhz for computer ID $computer_id");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to update the procspeed value to $cpu_speed_mhz for computer ID $computer_id");
+		return 0;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 update_computer_ram
+
+ Parameters  : $computer_id, $ram_mb
+ Returns     : boolean
+ Description : Updates the computer.ram value for the specified computer.
+					The $ram_mb argument should contain an integer value of the
+					RAM in MB.
+
+=cut
+
+sub update_computer_ram {
+	my ($computer_id, $ram_mb) = @_;
+
+	if (!$computer_id || !$ram_mb) {
+		notify($ERRORS{'WARNING'}, 0, "computer ID and RAM arguments were not supplied correctly");
+		return;
+	}
+
+	my $update_statement = <<EOF;
+UPDATE
+computer
+SET
+computer.ram = '$ram_mb'
+WHERE
+computer.id = $computer_id
+EOF
+
+	# Call the database execute subroutine
+	if (database_execute($update_statement)) {
+		notify($ERRORS{'DEBUG'}, 0, "updated the RAM value to $ram_mb for computer ID $computer_id");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to update the RAM value to $ram_mb for computer ID $computer_id");
+		return 0;
+	}
+}
+
 #/////////////////////////////////////////////////////////////////////////////
 
 =head2 update_request_password
