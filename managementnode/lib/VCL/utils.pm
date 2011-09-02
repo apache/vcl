@@ -4644,6 +4644,9 @@ sub get_request_info {
 		my $computer_id = $request_info{reservation}{$reservation_id}{computerid};
 		my $computer_info = get_computer_info($computer_id, 1);
 		$request_info{reservation}{$reservation_id}{computer} = $computer_info;
+
+		my $connect_methods = get_connect_methods($image_id, $imagerevision_id);
+		$request_info{reservation}{$reservation_id}{connect_methods} = $connect_methods;
 		
 	}    # Close loop through selected rows
 	
@@ -10660,6 +10663,87 @@ sub kill_child_processes {
 	}
 	
 	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_connect_method
+
+ Parameters  : reservationid
+ Returns     : hash reference
+ Description : Returns the contents of connect method for reservationid.
+
+=cut
+
+sub get_connect_methods {
+
+        my ($imageid, $imagerevisionid) = @_;
+        my ($calling_package, $calling_filename, $calling_line, $calling_sub) = caller(0);
+
+        if (!defined($imagerevisionid)) {
+                notify($ERRORS{'WARNING'}, 0, "$calling_sub $calling_package missing mandatory variable: imagerevisionid ");
+                return 0;
+        }
+        
+        if (!defined($imageid)) {
+                notify($ERRORS{'WARNING'}, 0, "$calling_sub $calling_package missing mandatory variable: imageid ");
+                return 0;
+        }
+
+        my $select_statement = "
+        SELECT DISTINCT
+        c.id AS CM_id,
+        c.description AS CM_description,
+        c.port AS CM_port,
+        c.servicename AS CM_servicename,
+        c.startupscript AS CM_startupscript,
+        cm.autoprovisioned AS CM_autoprovisioned,
+        cm.disabled AS CM_disabled
+        FROM
+        connectmethod c,
+        connectmethodmap cm,
+        image i
+        LEFT JOIN OS o ON (o.id = i.OSid)
+        LEFT JOIN OStype ot ON (ot.name = o.type)
+        WHERE 
+        i.id = $imageid AND
+        cm.connectmethodid = c.id AND
+        cm.autoprovisioned IS NULL AND
+        (cm.OStypeid = ot.id OR
+        cm.OSid = o.id OR 
+        cm.imagerevisionid = $imagerevisionid)
+        ORDER BY cm.disabled, c.description";
+
+        # Call the database select subroutine
+        # This will return an array of one or more rows based on the select statement
+        my @selected_rows = database_select($select_statement);
+
+        my @ret_array;
+        my %connect_info;
+	
+	        # Check to make sure 1 or more rows were returned
+        if (scalar @selected_rows > 0) {
+                # It contains a hash
+                for (@selected_rows) {
+                        my %connectMethod = %{$_};
+                        next if($connectMethod{CM_disabled});
+                        my $CMid = $connectMethod{CM_id};
+                        $connect_info{$CMid}{"id"} = $CMid;
+                        $connect_info{$CMid}{"description"} = $connectMethod{CM_description};
+                        $connect_info{$CMid}{"port"} = $connectMethod{CM_port};
+                        $connect_info{$CMid}{"servicename"} = $connectMethod{CM_servicename};
+                        $connect_info{$CMid}{"startupscript"} = $connectMethod{CM_startupscript};
+                        $connect_info{$CMid}{"autoprovisioned"} = $connectMethod{CM_autoprovisioned};
+			
+			notify($ERRORS{'OK'}, 0, "CONNECT METHOD CMid= $CMid description= $connect_info{$CMid}{description}");
+        
+                }
+                
+                return \%connect_info;
+        }       
+        
+        return();       
+
 }
 
 #/////////////////////////////////////////////////////////////////////////////

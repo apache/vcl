@@ -409,6 +409,8 @@ $SUBROUTINE_MAPPINGS{imagerevision_production} = '$self->request_data->{reservat
 $SUBROUTINE_MAPPINGS{imagerevision_revision}   = '$self->request_data->{reservation}{RESERVATION_ID}{imagerevision}{revision}';
 $SUBROUTINE_MAPPINGS{imagerevision_userid}     = '$self->request_data->{reservation}{RESERVATION_ID}{imagerevision}{userid}';
 
+$SUBROUTINE_MAPPINGS{connect_methods}		= '$self->request_data->{reservation}{RESERVATION_ID}{connect_methods}';
+
 #$SUBROUTINE_MAPPINGS{management_node_id} = '$self->request_data->{reservation}{RESERVATION_ID}{managementnode}{id}';
 #$SUBROUTINE_MAPPINGS{management_node_ipaddress} = '$self->request_data->{reservation}{RESERVATION_ID}{managementnode}{IPaddress}';
 #$SUBROUTINE_MAPPINGS{management_node_hostname} = '$self->request_data->{reservation}{RESERVATION_ID}{managementnode}{hostname}';

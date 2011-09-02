@@ -1788,6 +1788,198 @@ sub manage_server_access {
 
 }
 
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 process_connect_methods
+
+ Parameters  : None
+ Returns     : If successful: 1
+               If failed: 0
+ Description : starts and open port for available connection methods
+
+=cut
+
+sub process_connect_methods {
+	my $self = shift;
+        if (ref($self) !~ /VCL::Module/i) {
+                notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+                return;
+        }
+
+	my $mode = shift;
+	if (!$mode) {
+		notify($ERRORS{'OK'}, 0, "Mode variable not passed in as an argument");
+		return 0;
+	}
+	
+	my $computer_node_name   = $self->data->get_computer_node_name();
+	my $connect_methods	 = $self->data->get_connect_methods();
+
+	foreach my $CMid (sort keys %{$connect_methods} ) {
+		
+                notify($ERRORS{'OK'}, 0, "id= $$connect_methods{$CMid}{id}") if(defined ($$connect_methods{$CMid}{id}) );
+                notify($ERRORS{'OK'}, 0, "description= $$connect_methods{$CMid}{description}") if(defined ($$connect_methods{$CMid}{description}) );
+                notify($ERRORS{'OK'}, 0, "port== $$connect_methods{$CMid}{port}") if(defined ($$connect_methods{$CMid}{port}) );
+                notify($ERRORS{'OK'}, 0, "servicename= $$connect_methods{$CMid}{servicename}") if(defined ($$connect_methods{$CMid}{servicename}) );
+                notify($ERRORS{'OK'}, 0, "startupscript= $$connect_methods{$CMid}{startupscript}") if(defined ($$connect_methods{$CMid}{startupscript}) );
+                notify($ERRORS{'OK'}, 0, "autoprov= $$connect_methods{$CMid}{autoprovisioned}") if(defined ($$connect_methods{$CMid}{autoprovisioned}) );
+		my $description = $$connect_methods{$CMid}{description};
+		my $port = $$connect_methods{$CMid}{port};
+		
+		my $service_started = 0;	
+		notify($ERRORS{'OK'}, 0, "checking if servicename exists ");
+	 	if( defined ($$connect_methods{$CMid}{servicename}) && $$connect_methods{$CMid}{servicename} ) {	
+                	# does service exist
+			my $servicename = $$connect_methods{$CMid}{servicename};
+			notify($ERRORS{'OK'}, 0, "trying to start servicename $servicename ");
+			if( $self->can("service_exists")) {
+				if($self->service_exists($servicename)) {
+					if( $self->can("start_service")) {
+						if( $self->start_service($servicename) ) {
+							notify($ERRORS{'OK'}, 0, "Service $servicename started");
+							$service_started = 1;
+						}
+						else {
+							notify($ERRORS{'WARNING'}, 0, "Service $servicename failed to start");
+						}
+					}
+				}
+				else {
+					notify($ERRORS{'WARNING'}, 0, "Service $servicename does not exist on $computer_node_name");
+				}
+			}
+			else {
+				notify($ERRORS{'WARNING'}, 0, "service_exists not implemented by OS module" . ref($self));
+			}
+		}
+		
+		if ( !$service_started && defined ($$connect_methods{$CMid}{startupscript} ) ) {
+			notify($ERRORS{'OK'}, 0, "startupscript exists and service NOT started ");
+
+			#Service command did not work or does not exist
+			# Try to use startup script
+			my $cmd = $$connect_methods{$CMid}{startupscript} . " start";
+			notify($ERRORS{'OK'}, 0, "service not started, attempt to run $cmd ");
+			if( $self->can("execute") ) {
+				if( $self->execute($cmd, 1) ){
+				$service_started = 1;	
+				}	
+			}
+			else {
+				notify($ERRORS{'OK'}, 0, "execute routing not available by module" . ref($self) );	
+			}
+		}	
+		
+		if ( $service_started ) {
+			#open firewall port
+			notify($ERRORS{'OK'}, 0, "service started ");
+			if($self->can("enable_firewall_port")) {
+			notify($ERRORS{'OK'}, 0, "trying to enable firewall port $port on $computer_node_name ");
+				if(!$self->enable_firewall_port($port)) {
+				notify($ERRORS{'CRITICAL'}, 0, "Failed to enable firewall Connect Method $CMid $description on $computer_node_name");
+				}
+			}
+		}
+		else {
+			notify($ERRORS{'CRITICAL'}, 0, "Connect Method $CMid $description failed to start on $computer_node_name");
+		}
+          }
+
+	return 1;	
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 is_user_connected
+
+ Parameters  : None
+ Returns     : If successful: string
+               If failed: false
+ Description : Determines is user is connected.
+
+=cut
+
+sub is_user_connected {
+	
+	my $self = shift;
+        if (ref($self) !~ /VCL::Module/i) {
+                notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+                return;
+        }
+	my $time_limit = shift;
+	if ( !$time_limit ) {
+		notify($ERRORS{'WARNING'}, 0, "time_limit variable not passed as an argument");
+		return "failed";
+	}
+
+	my $request_id           = $self->data->get_request_id();	
+        my $computer_node_name   = $self->data->get_computer_node_name();
+	my $request_state_name	 = $self->data->get_request_state_name();
+	my $user_unityid         = $self->data->get_user_login_id();
+	my $computer_ip_address  = $self->data->get_computer_ip_address();
+	my $remote_ip 		 = $self->data->get_reservation_remote_ip();
+	my $connect_methods      = $self->data->get_connect_methods();	
+	
+	my $start_time    = time();
+        my $time_exceeded = 0;
+        my $break         = 0;
+        my $ret_val       = "no";
+
+        # Figure out number of loops for log messages
+        my $maximum_loops = $time_limit * 2;
+        my $loop_count    = 0;
+	
+ 	while (!$break) {
+                $loop_count++;
+
+                notify($ERRORS{'OK'}, 0, "checking for connection by $user_unityid on $computer_node_name, attempt $loop_count ");
+
+                if (is_request_deleted($request_id)) {
+                        notify($ERRORS{'OK'}, 0, "user has deleted request");
+                        $break   = 1;
+                        $ret_val = "deleted";
+                        return $ret_val;
+                }
+		
+		$time_exceeded = time_exceeded($start_time, $time_limit);
+                if ($time_exceeded) {
+                        notify($ERRORS{'OK'}, 0, "$time_limit minute time limit exceeded begin cleanup process");
+                        #time_exceeded, begin cleanup process
+                        $break = 1;
+                        if ($request_state_name =~ /reserved/) {
+                                notify($ERRORS{'OK'}, 0, "user never logged in returning nologin");
+                                $ret_val = "nologin";
+                        }
+                        else {
+                                $ret_val = "timeout";
+                        }
+                        return $ret_val;
+                } ## end if ($time_exceeded)
+		else {    #time not exceeded check for connection
+			foreach my $CMid (sort keys %{$connect_methods} ) {
+				if($self->can("check_connection_on_port")) {
+					if(defined($$connect_methods{$CMid}{port}) && $$connect_methods{$CMid}{port}) {
+						my $connect_state = $self->check_connection_on_port($$connect_methods{$CMid}{port});
+						if($connect_state =~ /(connected|conn_wrong_ip|timeout|failed)/i){
+						 	return $connect_state	
+						}
+					}
+					else {
+						notify($ERRORS{'WARNING'}, 0, "port not defined for connectMethod id $CMid");
+					}
+				}
+				else {
+					notify($ERRORS{'CRITICAL'}, 0, "OS module does not support check_connection" . ref($self));
+					return;
+				}
+			}
+		}
+		notify($ERRORS{'DEBUG'}, 0, "sleeping for 20 seconds");
+                sleep 20;
+	}	
+	return $ret_val;
+}
+
 #///////////////////////////////////////////////////////////////////////////
 
 1;

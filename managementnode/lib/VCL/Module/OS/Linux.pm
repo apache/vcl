@@ -916,6 +916,10 @@ sub grant_access {
 	}    #foreach
 	notify($ERRORS{'OK'}, 0, "started ext_sshd on $computer_node_name");
 
+	if($self->process_connect_methods('start') ){
+		notify($ERRORS{'OK'}, 0, "processed connection methods on $computer_node_name");
+	}
+
 	
 	return 1;
 } ## end sub grant_access
@@ -1201,53 +1205,6 @@ sub call_post_load_custom {
 	}
 
 	return 1;
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 execute
-
- Parameters  : $command, $display_output (optional)
- Returns     : array ($exit_status, $output)
- Description : Executes a command on the Linux computer via SSH.
-
-=cut
-
-sub execute {
-	my $self = shift;
-	unless (ref($self) && $self->isa('VCL::Module')) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as an object method");
-		return;
-	}
-	
-	# Get the command argument
-	my $command = shift;
-	if (!$command) {
-		notify($ERRORS{'WARNING'}, 0, "command argument was not specified");
-		return;
-	}
-	
-	# Get 2nd display output argument if supplied, or set default value
-	my $display_output = shift || '0';
-	
-	# Get the computer node name
-	my $computer_name = $self->data->get_computer_node_name() || return;
-	
-	# Get the identity keys used by the management node
-	my $management_node_keys = $self->data->get_management_node_keys() || '';
-	
-	# Run the command via SSH
-	my ($exit_status, $output) = run_ssh_command($computer_name, $management_node_keys, $command, '', '', $display_output);
-	if (defined($exit_status) && defined($output)) {
-		if ($display_output) {
-			notify($ERRORS{'OK'}, 0, "executed command: '$command', exit status: $exit_status, output:\n" . join("\n", @$output));
-		}
-		return ($exit_status, $output);
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to run command on $computer_name: $command");
-		return;
-	}
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -3027,6 +2984,217 @@ EOF
 	}
 	
 	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 service_exists
+
+ Parameters  : $service_name
+ Returns     : If service exists: 1
+               If service does not exist: 0
+               If error occurred: undefined
+ Description : 
+
+=cut
+
+sub service_exists {
+        my $self = shift;
+        if (ref($self) !~ /linux/i) {
+                notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+                return;
+        }
+
+        my $management_node_keys = $self->data->get_management_node_keys();
+        my $computer_node_name   = $self->data->get_computer_node_name();
+
+        my $service_name = shift;
+        if (!$service_name) {
+                notify($ERRORS{'WARNING'}, 0, "service name was not passed as an argument");
+                return;
+        }
+
+	my $command = "/sbin/chkconfig --list $service_name";
+	my ($status, $output) = run_ssh_command($computer_node_name, $management_node_keys, $command, '', '', 1);
+	if (defined($output) && grep(/error reading information on service/i, @{$output})) {
+                notify($ERRORS{'DEBUG'}, 0, "service does not exist: $service_name");
+                return 0;
+        }
+        elsif (defined($status) && $status == 0) {
+                notify($ERRORS{'DEBUG'}, 0, "service exists: $service_name");
+        }
+        elsif (defined($status)) {
+                notify($ERRORS{'WARNING'}, 0, "unable to determine if service exists: $service_name, exit status: $status, output:\n@{$output}");
+                return;
+        }
+        else {
+                notify($ERRORS{'WARNING'}, 0, "unable to run ssh command to determine if service exists");
+                return;
+        }
+
+        return 1;
+	
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 start_service
+
+ Parameters  : $service_name
+ Returns     : If service started: 1
+               If service not started: 0
+               If error occurred: undefined
+ Description : 
+
+=cut
+
+sub start_service {
+        my $self = shift;
+        if (ref($self) !~ /linux/i) {
+                notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+                return;
+        }
+
+        my $management_node_keys = $self->data->get_management_node_keys();
+        my $computer_node_name   = $self->data->get_computer_node_name();
+
+        my $service_name = shift;
+        if (!$service_name) {
+                notify($ERRORS{'WARNING'}, 0, "service name was not passed as an argument");
+                return;
+        }
+
+	my $command = "/sbin/service $service_name start";
+	my ($status, $output) = run_ssh_command($computer_node_name, $management_node_keys, $command, '', '', 1);
+        if (defined($output) && grep(/failed/i, @{$output})) {
+                notify($ERRORS{'DEBUG'}, 0, "service does not exist: $service_name");
+                return 0;
+        }
+        elsif (defined($status) && $status == 0) {
+                notify($ERRORS{'DEBUG'}, 0, "service exists: $service_name");
+        }
+        elsif (defined($status)) {
+                notify($ERRORS{'WARNING'}, 0, "unable to determine if service exists: $service_name, exit status: $status, output:\n@{$output}");
+                return;
+        }
+        else {
+                notify($ERRORS{'WARNING'}, 0, "unable to run ssh command to determine if service exists");
+                return;
+        }
+
+        return 1;
+	
+
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 start_service
+
+ Parameters  : $service_name
+ Returns     : If service started: 1
+               If service not started: 0
+               If error occurred: undefined
+ Description : 
+
+=cut
+
+sub stop_service {
+        my $self = shift;
+        if (ref($self) !~ /linux/i) {
+                notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+                return;
+        }
+
+        my $management_node_keys = $self->data->get_management_node_keys();
+        my $computer_node_name   = $self->data->get_computer_node_name();
+
+        my $service_name = shift;
+        if (!$service_name) {
+                notify($ERRORS{'WARNING'}, 0, "service name was not passed as an argument");
+                return;
+        }
+
+        my $command = "/sbin/service $service_name stop";
+        my ($status, $output) = run_ssh_command($computer_node_name, $management_node_keys, $command, '', '', 1);
+        if (defined($output) && grep(/failed/i, @{$output})) {
+                notify($ERRORS{'DEBUG'}, 0, "service does not exist: $service_name");
+                return 0;
+        }
+        elsif (defined($status) && $status == 0) {
+                notify($ERRORS{'DEBUG'}, 0, "service exists: $service_name");
+        }
+        elsif (defined($status)) {
+                notify($ERRORS{'WARNING'}, 0, "unable to determine if service exists: $service_name, exit status: $status, output:\n@{$output}");
+                return;
+        }
+        else {
+                notify($ERRORS{'WARNING'}, 0, "unable to run ssh command to determine if service exists");
+                return;
+        }
+
+        return 1;
+
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 check_connection
+
+ Parameters  : $port
+ Returns     : (connected|conn_wrong_ip|timeout|failed)
+ Description : uses netstat to see if any thing is connected to the provided port
+
+=cut
+
+sub check_connection_on_port {
+	my $self = shift;
+        if (ref($self) !~ /linux/i) {
+                notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+                return;
+        }
+
+        my $management_node_keys 	= $self->data->get_management_node_keys();
+        my $computer_node_name   	= $self->data->get_computer_node_name();
+	my $remote_ip 			= $self->data->get_reservation_remote_ip();
+	my $computer_ip_address   	= $self->data->get_computer_ip_address();
+	my $request_state_name   	= $self->data->get_request_state_name();
+
+        my $port = shift;
+        if (!$port) {
+                notify($ERRORS{'WARNING'}, 0, "port variable was not passed as an argument");
+                return "failed";
+        }
+	
+	my $ret_val = "no";	
+	my $command = "netstat -an";
+	my ($status, $output) = run_ssh_command($computer_node_name, $management_node_keys, $command, '', '', 1);
+	notify($ERRORS{'DEBUG'}, 0, "checking connections on node $computer_node_name on port $port");
+	foreach my $line (@{$output}) {
+		if ($line =~ /Connection refused|Permission denied/) {
+                    chomp($line);
+                    notify($ERRORS{'WARNING'}, 0, "$line");
+                    if ($request_state_name =~ /reserved/) {
+                        $ret_val = "failed";
+                    }
+                    else {
+                         $ret_val = "timeout";
+                    }
+                    return $ret_val;
+                 } ## end if ($line =~ /Connection refused|Permission denied/)
+                 if ($line =~ /tcp\s+([0-9]*)\s+([0-9]*)\s($computer_ip_address:$port)\s+([.0-9]*):([0-9]*)(.*)(ESTABLISHED)/) {
+                     if ($4 eq $remote_ip) {
+                         $ret_val = "connected";
+                         return $ret_val;
+                     }
+                     else {
+                    	  #this isn't the remoteIP
+                          $ret_val = "conn_wrong_ip";
+                     	  return $ret_val;
+                     }
+                 }    # tcp check
+	}
+	return $ret_val;
 }
 
 #/////////////////////////////////////////////////////////////////////////////

@@ -954,6 +954,10 @@ sub grant_access {
 
 	# Set the $remote_ip_range variable to the string 'all' if it isn't already set (for display purposes)
 	$remote_ip_range = 'all' if !$remote_ip_range;
+	
+	if($self->process_connect_methods('start') ){
+                notify($ERRORS{'OK'}, 0, "processed connection methods on $computer_node_name");
+        }
 
 	# Allow RDP connections
 	if ($self->firewall_enable_rdp($remote_ip_range)) {
@@ -10011,6 +10015,66 @@ sub get_environment_variable_value {
 		notify($ERRORS{'DEBUG'}, 0, "retrieved value of '$environment_variable_name' environment variable on $computer_node_name: '$value'");
 		return $value;
 	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 check_connection
+
+ Parameters  : $port
+ Returns     : (connected|conn_wrong_ip|timeout|failed)
+ Description : uses netstat to see if any thing is connected to the provided port
+
+=cut
+
+sub check_connection_on_port {
+        my $self = shift;
+        if (ref($self) !~ /windows/i) {
+                notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+                return;
+        }
+
+        my $management_node_keys 	= $self->data->get_management_node_keys();
+        my $computer_node_name   	= $self->data->get_computer_node_name();
+        my $remote_ip 			= $self->data->get_reservation_remote_ip();
+        my $computer_ip_address   	= $self->data->get_computer_ip_address();
+	my $request_state_name          = $self->data->get_request_state_name();
+
+        my $port = shift;
+        if (!$port) {
+                notify($ERRORS{'WARNING'}, 0, "port variable was not passed as an argument");
+                return "failed";
+        }
+	
+	my $ret_val = "no";
+        my $command = "netstat -an";
+        my ($status, $output) = run_ssh_command($computer_node_name, $management_node_keys, $command, '', '', 1);
+        notify($ERRORS{'DEBUG'}, 0, "checking connections on node $computer_node_name on port $port");
+        foreach my $line (@{$output}) {
+                if ($line =~ /Connection refused|Permission denied/) {
+                    chomp($line);
+                    notify($ERRORS{'WARNING'}, 0, "$line");
+                    if ($request_state_name =~ /reserved/) {
+                        $ret_val = "failed";
+                    }
+                    else {
+                         $ret_val = "timeout";
+                    }
+                    return $ret_val;
+                 } ## end if ($line =~ /Connection refused|Permission denied/)
+		if ($line =~ /\s+($computer_ip_address:$port)\s+([.0-9]*):([0-9]*)\s+(ESTABLISHED)/) {
+                     if ($2 eq $remote_ip) {
+                         $ret_val = "connected";
+                         return $ret_val;
+                     }
+                     else {
+                          #this isn't the remoteIP
+                          $ret_val = "conn_wrong_ip";
+                          return $ret_val;
+                     }
+                 }    # tcp check
+        }
+	return $ret_val;
 }
 
 #/////////////////////////////////////////////////////////////////////////////

@@ -124,6 +124,17 @@ sub process {
 	my $identity_key          = $self->data->get_image_identity();
 	my $request_state_name    = $self->data->get_request_state_name();
 	
+	my $connect_info      = $self->data->get_connect_methods();
+        
+        foreach my $CMid (sort keys % {$connect_info}) {
+                notify($ERRORS{'OK'}, 0, "id= $$connect_info{$CMid}{id}") if(defined ($$connect_info{$CMid}{id}) );
+                notify($ERRORS{'OK'}, 0, "description= $$connect_info{$CMid}{description}") if(defined ($$connect_info{$CMid}{description}) );
+                notify($ERRORS{'OK'}, 0, "port== $$connect_info{$CMid}{port}") if(defined ($$connect_info{$CMid}{port}) );
+                notify($ERRORS{'OK'}, 0, "servicename= $$connect_info{$CMid}{servicename}") if(defined ($$connect_info{$CMid}{servicename}) );
+                notify($ERRORS{'OK'}, 0, "startupscript= $$connect_info{$CMid}{startupscript}") if(defined ($$connect_info{$CMid}{startupscript}) );
+                notify($ERRORS{'OK'}, 0, "autoprov= $$connect_info{$CMid}{autoprovisioned}") if(defined ($$connect_info{$CMid}{autoprovisioned}) );
+          }
+	
 	if ($request_state_name =~ /reboot|rebootsoft|reboothard/) {
 		notify($ERRORS{'OK'}, 0, "this is a 'reboot' request");
 		if ($self->os->can('reboot')) {
@@ -287,8 +298,17 @@ sub process {
 		
 		notify($ERRORS{'OK'}, 0, "end time not yet reached, polling machine for user connection");
 		
-		# Check the user connection, this will loop until user connects or time limit is reached
-		my $check_connection = check_connection($computer_nodename, $computer_ip_address, $computer_type, $reservation_remoteip, $connect_timeout_limit, $image_os_name, 0, $request_id, $user_login_id,$image_os_type);
+		my $check_connection;
+		if($self->os->can("is_user_connected")) {
+
+                        #Use new code if it exists
+                        $check_connection = $self->os->is_user_connected($connect_timeout_limit);
+                }	
+		else {
+		
+			# Check the user connection, this will loop until user connects or time limit is reached
+		 	$check_connection = check_connection($computer_nodename, $computer_ip_address, $computer_type, $reservation_remoteip, $connect_timeout_limit, $image_os_name, 0, $request_id, $user_login_id,$image_os_type);
+		}
 		
 		#TESTING
 		#$check_connection = 'timeout';

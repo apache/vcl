@@ -310,7 +310,16 @@ sub process {
 	}
 	else {
 		notify($ERRORS{'OK'}, 0, "checkuser flag=1 imageosname is $image_os_name, checking for user connection by $user_unityid");
-		$retval_conn = check_connection($nodename, $computer_ip_address, $computer_type, $remote_ip, $time_limit, $image_os_name, 0, $request_id, $user_unityid,$image_os_type);
+
+		if($self->os->can("is_user_connected")) {
+			
+			#Use new code if it exists
+			$retval_conn = $self->os->is_user_connected($time_limit);
+		}
+		else {
+			#use old code
+			$retval_conn = check_connection($nodename, $computer_ip_address, $computer_type, $remote_ip, $time_limit, $image_os_name, 0, $request_id, $user_unityid,$image_os_type);
+		}
 	} ## end else [ if (!$imagemeta_checkuser)
 
 	RETVALCONN:
