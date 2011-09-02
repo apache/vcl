@@ -621,19 +621,10 @@ sub post_load {
 
 	if (!$self->wait_for_logoff('root', 2)) {
 		notify($ERRORS{'WARNING'}, 0, "root account never logged off");
-	}
-
-=item *
-
- Log off all currently logged on users
-
- Do this in case autoadminlogon was enabled during the load process and the user
- account was not properly logged off.
-
-=cut
-
-	if (!$self->logoff_users()) {
-		notify($ERRORS{'WARNING'}, 0, "failed to log off all currently logged in users");
+		
+		if (!$self->logoff_users()) {
+			notify($ERRORS{'WARNING'}, 0, "failed to log off all currently logged in users");
+		}
 	}
 
 =item *
@@ -7823,13 +7814,12 @@ sub get_system32_path {
 	
 	my $computer_name = $self->data->get_computer_short_name();
 	
-	# Make sure SSH is responding
-	if (!$self->is_ssh_responding()) {
-		notify($ERRORS{'WARNING'}, 0, "unable to determine System32 path to use for $computer_name, computer is not responding to SSH");
-		return;	
+	my $is_64_bit = $self->is_64_bit();
+	if (!defined($is_64_bit)) {
+		notify($ERRORS{'DEBUG'}, 0, "failed to determine the architecture of the Windows OS installed on $computer_name, unable to determine correct system32 path");
+		return;
 	}
-	
-	if ($self->is_64_bit()) {
+	elsif ($is_64_bit) {
 		$self->{SYSTEM32_PATH} = 'C:/Windows/Sysnative';
 		notify($ERRORS{'DEBUG'}, 0, "64-bit Windows OS installed on $computer_name, using $self->{SYSTEM32_PATH}");
 	}
@@ -8043,7 +8033,7 @@ sub user_logged_in {
 
 	# Run qwinsta.exe to display terminal session information
 	# Set command timeout argument because this command occasionally hangs
-	my ($exit_status, $output) = run_ssh_command($computer_node_name, $management_node_keys, "$system32_path/qwinsta.exe", '', '', 1, 20);
+	my ($exit_status, $output) = run_ssh_command($computer_node_name, $management_node_keys, "$system32_path/qwinsta.exe", '', '', 1, 60);
 	if ($exit_status > 0) {
 		notify($ERRORS{'WARNING'}, 0, "failed to run qwinsta.exe on $computer_node_name, exit status: $exit_status, output:\n@{$output}");
 		return;
@@ -8943,6 +8933,13 @@ sub disable_hibernation {
 	if (defined($powercfg_exit_status) && $powercfg_exit_status == 0) {
 		notify($ERRORS{'OK'}, 0, "disabled hibernation");
 	}
+	elsif (grep(/PAE mode/i, @$powercfg_output)) {
+		# The following may be displayed:
+		#    Hibernation failed with the following error: The request is not supported.
+		#    The following items are preventing hibernation on this system.
+		#    The system is running in PAE mode, and hibernation is not allowed in PAE mode.
+		notify($ERRORS{'OK'}, 0, "hibernation NOT disabled because $computer_node_name is running in PAE mode");
+	}
 	elsif ($powercfg_exit_status) {
 		notify($ERRORS{'WARNING'}, 0, "failed to disable hibernation, exit status: $powercfg_exit_status, output:\n" . join("\n", @$powercfg_output));
 		return;
@@ -9703,8 +9700,10 @@ sub sanitize_files {
 	}
 	
 	# Get the file path arguments, add the node configuration directory
+	my $node_configuration_directory = $self->get_node_configuration_directory();
 	my @file_paths = @_;
-	push @file_paths, $self->get_node_configuration_directory();
+	push @file_paths, "$node_configuration_directory/Scripts";
+	push @file_paths, "$node_configuration_directory/Logs";
 	
 	# Loop through each file path, remove the Windows root password from each
 	my $error_occurred = 0;

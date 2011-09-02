@@ -471,7 +471,7 @@ sub is_ssh_responding {
 			command => "echo testing ssh on $computer_node_name",
 			max_attempts => $max_attempts,
 			output_level => 0,
-			timeout_seconds => 15,
+			timeout_seconds => 30,
 		});
 		
 		# The exit status will be 0 if the command succeeded
