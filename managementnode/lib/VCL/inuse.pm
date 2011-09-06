@@ -125,15 +125,15 @@ sub process {
 	my $request_state_name    = $self->data->get_request_state_name();
 	
 	my $connect_info      = $self->data->get_connect_methods();
-        
-        foreach my $CMid (sort keys % {$connect_info}) {
-                notify($ERRORS{'OK'}, 0, "id= $$connect_info{$CMid}{id}") if(defined ($$connect_info{$CMid}{id}) );
-                notify($ERRORS{'OK'}, 0, "description= $$connect_info{$CMid}{description}") if(defined ($$connect_info{$CMid}{description}) );
-                notify($ERRORS{'OK'}, 0, "port== $$connect_info{$CMid}{port}") if(defined ($$connect_info{$CMid}{port}) );
-                notify($ERRORS{'OK'}, 0, "servicename= $$connect_info{$CMid}{servicename}") if(defined ($$connect_info{$CMid}{servicename}) );
-                notify($ERRORS{'OK'}, 0, "startupscript= $$connect_info{$CMid}{startupscript}") if(defined ($$connect_info{$CMid}{startupscript}) );
-                notify($ERRORS{'OK'}, 0, "autoprov= $$connect_info{$CMid}{autoprovisioned}") if(defined ($$connect_info{$CMid}{autoprovisioned}) );
-          }
+	
+	foreach my $CMid (sort keys % {$connect_info}) {
+		notify($ERRORS{'OK'}, 0, "id= $$connect_info{$CMid}{id}") if(defined ($$connect_info{$CMid}{id}) );
+		notify($ERRORS{'OK'}, 0, "description= $$connect_info{$CMid}{description}") if(defined ($$connect_info{$CMid}{description}) );
+		notify($ERRORS{'OK'}, 0, "port== $$connect_info{$CMid}{port}") if(defined ($$connect_info{$CMid}{port}) );
+		notify($ERRORS{'OK'}, 0, "servicename= $$connect_info{$CMid}{servicename}") if(defined ($$connect_info{$CMid}{servicename}) );
+		notify($ERRORS{'OK'}, 0, "startupscript= $$connect_info{$CMid}{startupscript}") if(defined ($$connect_info{$CMid}{startupscript}) );
+		notify($ERRORS{'OK'}, 0, "autoprov= $$connect_info{$CMid}{autoprovisioned}") if(defined ($$connect_info{$CMid}{autoprovisioned}) );
+	}
 	
 	if ($request_state_name =~ /reboot|rebootsoft|reboothard/) {
 		notify($ERRORS{'OK'}, 0, "this is a 'reboot' request");
@@ -301,13 +301,13 @@ sub process {
 		my $check_connection;
 		if($self->os->can("is_user_connected")) {
 
-                        #Use new code if it exists
-                        $check_connection = $self->os->is_user_connected($connect_timeout_limit);
-                }	
+			#Use new code if it exists
+			$check_connection = $self->os->is_user_connected($connect_timeout_limit);
+		}	
 		else {
 		
 			# Check the user connection, this will loop until user connects or time limit is reached
-		 	$check_connection = check_connection($computer_nodename, $computer_ip_address, $computer_type, $reservation_remoteip, $connect_timeout_limit, $image_os_name, 0, $request_id, $user_login_id,$image_os_type);
+			$check_connection = check_connection($computer_nodename, $computer_ip_address, $computer_type, $reservation_remoteip, $connect_timeout_limit, $image_os_name, 0, $request_id, $user_login_id,$image_os_type);
 		}
 		
 		#TESTING
@@ -519,7 +519,7 @@ sub process {
 				notify($ERRORS{'OK'}, 0, "user has deleted the request, quietly exiting");
 				exit;
 			}
-			if($self->_start_imaging_request){
+			if ($self->_start_imaging_request){
 				notify($ERRORS{'OK'}, 0, "Started image capture process. This process is Exiting.");
 				#notify user - endtime and image capture has started
 				$self->_notify_user_request_ended();
@@ -527,12 +527,12 @@ sub process {
 			}	
 			else {
 				notify($ERRORS{'CRITICAL'}, 0, "_start_imaging_request xmlrpc call failed putting request and node into maintenance");
-				# Update the request state to maintenance, laststate to image
-				if (update_request_state($request_id, "maintenance", "image")) {
-					notify($ERRORS{'OK'}, 0, "request state set to maintenance, laststate to image");
+				# Update the request state to maintenance, laststate to inuse
+				if (update_request_state($request_id, "maintenance", "inuse")) {
+					notify($ERRORS{'OK'}, 0, "request state set to maintenance, laststate to inuse");
 				}
 				else {
-					notify($ERRORS{'CRITICAL'}, 0, "unable to set request state to maintenance, laststate to image");
+					notify($ERRORS{'CRITICAL'}, 0, "unable to set request state to maintenance, laststate to inuse");
 				}
 				
 				# Update the computer state to maintenance
@@ -620,10 +620,9 @@ sub process {
  Parameters  : $request_data_hash_reference, $notice_interval
  Returns     : 1 if successful, 0 otherwise
  Description : Notifies the user how long they have until the end of the
-               request. Based on the user configuration, an e-mail message,
-               IM message, or wall message may be sent.
-               A notice interval string must be passed. Its value should be
-               something like "5 minutes".
+               request. Based on the user configuration, an e-mail message, IM
+               message, or wall message may be sent. A notice interval string
+               must be passed. Its value should be something like "5 minutes".
 
 =cut
 
@@ -737,9 +736,9 @@ EOF
  Returns     : 1 if successful, 0 otherwise
  Description : Notifies the user that the session will be disconnected soon.
                Based on the user configuration, an e-mail message, IM message,
-               Windows msg, or Linux wall message may be sent.
-               A scalar containing the number of minutes until the user is
-               disconnected must be passed as the 2nd parameter.
+               Windows msg, or Linux wall message may be sent. A scalar
+               containing the number of minutes until the user is disconnected
+               must be passed as the 2nd parameter.
 
 =cut
 
@@ -1104,30 +1103,37 @@ sub _check_imaging_request {
 
 =head2 _start_imaging_request
 
- Parameters  :   
- Returns     : 1 if successfully inserted image capture, undefined if an error occurred, exits otherwise
- Description : If request is forimaging and timesout, this inserts a imaging reservation. 
+ Parameters  : none
+ Returns     : boolean
+ Description : If request is forimaging and times out, this inserts a imaging
+               reservation. 
 
 =cut
 
 sub _start_imaging_request {
-	my $self            = shift;
+	my $self = shift;
+	
 	my $request_id = $self->data->get_request_id();
 	
 	my $method = "XMLRPCautoCapture";
-	my @argument_string = ($method,$request_id);
+	my @argument_string = ($method, $request_id);
 	my $xml_ret = xmlrpc_call(@argument_string);
 	
-	if($xml_ret->value->{status} =~ /success/ ){
+	# Check if the XML::RPC call failed
+	if (!defined($xml_ret)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to start imaging request, XML::RPC '$method' call failed");
+		return;
+	}
+	elsif ($xml_ret->value->{status} !~ /success/) {
+		notify($ERRORS{'WARNING'}, 0, "failed to start imaging request, XML::RPC '$method' status: $xml_ret->value->{status}\n" .
+				 "error code $xml_ret->value->{errorcode}\n" .
+				 "error message: $xml_ret->value->{errormsg}"
+		);
+		return;
+	}
+	else {
 		return 1;
 	}
-	
-	notify($ERRORS{'WARNING'}, 0, "$xml_ret->value->{status}");
-	if($xml_ret->value->{status} =~ /error/i){
-		notify($ERRORS{'WARNING'}, 0, "errorcode= $xml_ret->value->{errorcode} errormsg= $xml_ret->value->{errormsg}");
-	}
-	
-	return 0;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
