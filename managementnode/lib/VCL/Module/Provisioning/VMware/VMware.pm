@@ -2208,6 +2208,10 @@ sub check_vmhost_disk_space {
 	my $vmdk_base_directory_path = $self->get_vmdk_base_directory_path();
 	
 	my $vmx_volume_available_space = $self->vmhost_os->get_available_space($vmx_base_directory_path);
+	if (!defined($vmx_volume_available_space)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to determine available space for the vmx directory on VM host $vmhost_name");
+		return;
+	}
 	
 	# Figure out how much additional space is required for the vmx and vmdk directories
 	my $vmx_additional_bytes_required = $self->get_vm_additional_vmx_bytes_required();
@@ -2241,6 +2245,10 @@ sub check_vmhost_disk_space {
 	}
 	else {
 		my $vmdk_volume_available_space = $self->vmhost_os->get_available_space($vmdk_base_directory_path);
+		if (!defined($vmdk_volume_available_space)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to determine available space for the vmdk directory on VM host $vmhost_name");
+			return;
+		}
 		
 		$space_message .= "vmx additional space required:          " . get_file_size_info_string($vmx_additional_bytes_required) . "\n";
 		$space_message .= "vmx volume available space:             " . get_file_size_info_string($vmx_volume_available_space) . "\n";
@@ -4524,16 +4532,13 @@ sub get_vm_virtual_hardware_version {
 	}
 	
 	
-	if (!$hardware_version && $self->api->can("get_virtual_disk_hardware_version")) {
-		$hardware_version = $self->api->get_virtual_disk_hardware_version($self->get_vmdk_file_path());
+	if (!$hardware_version && $self->api->can("get_virtual_disk_hardware_version") && ($hardware_version = $self->api->get_virtual_disk_hardware_version($self->get_vmdk_file_path()))) {
 		notify($ERRORS{'DEBUG'}, 0, "retrieved hardware version from api object: $hardware_version");
 	}
-	elsif (!$hardware_version) {
-		$hardware_version = $self->get_vmdk_parameter_value('virtualHWVersion');
-		notify($ERRORS{'DEBUG'}, 0, "retrieved hardware version stored in the vmdk file: $hardware_version");
+	elsif (!$hardware_version && ($hardware_version = $self->get_vmdk_parameter_value('virtualHWVersion'))) {
+		notify($ERRORS{'DEBUG'}, 0, "retrieved hardware version stored in the vmdk file: $hardware_version") if $hardware_version;
 	}
-	
-	if (!$hardware_version) {
+	elsif (!$hardware_version) {
 		notify($ERRORS{'WARNING'}, 0, "unable to determine hardware version of vmdk file, returning 7");
 		return 7;
 	}
@@ -5064,7 +5069,7 @@ sub delete_vm {
 	delete $self->{vmx_info}{$vmx_file_path};
 	
 	# Unregister the VM
-	if (!$self->api->vm_unregister($vmx_file_path)) {
+	if ($self->is_vm_registered($vmx_file_path) && !$self->api->vm_unregister($vmx_file_path)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to unregister VM: $vmx_file_path, VM not deleted");
 		return;
 	}

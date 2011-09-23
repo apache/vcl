@@ -1607,9 +1607,11 @@ sub get_available_space {
 	
 	# Extract the block size value
 	# Search case sensitive for 'Block size:' because the line may also contain "Fundamental block size:"
-	my ($block_size) = $output_string =~ /Block size: (\d+)/;
+	# Some versions of Linux may not display a "Size:" value instead of "Block size:"
+	# Blocks: Total: 8720776    Free: 8288943    Available: 7845951    Size: 4096
+	my ($block_size) = $output_string =~ /(?:Block size|Size): (\d+)/;
 	if (!$block_size) {
-		notify($ERRORS{'WARNING'}, 0, "unable to locate 'Block size:' value in stat output:\ncommand: $command\noutput:\n" . join("\n", @$output));
+		notify($ERRORS{'WARNING'}, 0, "unable to locate 'Block size:' or 'Size:' value in stat output:\ncommand: $command\noutput:\n" . join("\n", @$output));
 		return;
 	}
 	
@@ -1676,9 +1678,11 @@ sub get_total_space {
 	
 	# Extract the block size value
 	# Search case sensitive for 'Block size:' because the line may also contain "Fundamental block size:"
-	my ($block_size) = $output_string =~ /Block size: (\d+)/;
+	# Some versions of Linux may not display a "Size:" value instead of "Block size:"
+	# Blocks: Total: 8720776    Free: 8288943    Available: 7845951    Size: 4096
+	my ($block_size) = $output_string =~ /(?:Block size|Size): (\d+)/;
 	if (!$block_size) {
-		notify($ERRORS{'WARNING'}, 0, "unable to locate 'Block size:' value in stat output:\ncommand: $command\noutput:\n" . join("\n", @$output));
+		notify($ERRORS{'WARNING'}, 0, "unable to locate 'Block size:' or 'Size:' value in stat output:\ncommand: $command\noutput:\n" . join("\n", @$output));
 		return;
 	}
 	
