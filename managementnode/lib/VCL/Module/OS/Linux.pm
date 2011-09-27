@@ -134,7 +134,7 @@ sub pre_capture {
 	}
 	
 	# Clear files
-	if (!$self->remove_known_files()) {
+	if (!$self->clear_known_files()) {
 		notify($ERRORS{'WARNING'}, 0, "unable to remove known files");
 	}
 
