@@ -130,7 +130,12 @@ sub pre_capture {
 
 	# Clear SSH idenity keys from /root/.ssh 
 	if (!$self->clear_private_keys()) {
-		notify($ERRORS{'WARNING'}, 0, "unable to clear known identity keys");
+	  notify($ERRORS{'WARNING'}, 0, "unable to clear known identity keys");
+	}
+	
+	# Clear files
+	if (!$self->remove_known_files()) {
+		notify($ERRORS{'WARNING'}, 0, "unable to remove known files");
 	}
 
 	# Write /etc/rc.local script
@@ -427,6 +432,42 @@ sub clear_private_keys {
 		notify($ERRORS{'CRITICAL'}, 0, "failed to clear any id_rsa keys from /root/.ssh");
 		return 0;
 	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 clear_known_files
+
+ Parameters  :
+ Returns     :
+ Description :
+
+=cut
+
+sub clear_known_files {
+   my $self = shift;
+      unless (ref($self) && $self->isa('VCL::Module')) {
+      notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a VCL::Module module object method");
+      return;
+   }
+
+   notify($ERRORS{'DEBUG'}, 0, "perparing to clear known files");
+   my $management_node_keys = $self->data->get_management_node_keys();
+   my $computer_short_name  = $self->data->get_computer_short_name();
+   my $computer_node_name   = $self->data->get_computer_node_name();
+	
+	my $filelist = "/etc/udev/rules.d/70-persistent-net.rules";
+
+   #Clear ssh idenity keys from /root/.ssh 
+   my $clear_known_files = "/bin/rm -f $filelist";
+   if (run_ssh_command($computer_node_name, $management_node_keys, $clear_known_files, "root")) {
+      notify($ERRORS{'DEBUG'}, 0, "cleared known files, filelist: $filelist");
+      return 1;
+   }
+   else {
+      notify($ERRORS{'CRITICAL'}, 0, "failed to clear known files");
+      return 0;
+   }
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -3153,22 +3194,22 @@ sub stop_service {
 
 sub check_connection_on_port {
 	my $self = shift;
-        if (ref($self) !~ /linux/i) {
-                notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-                return;
-        }
+   if (ref($self) !~ /linux/i) {
+       notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+       return;
+   }
 
-        my $management_node_keys 	= $self->data->get_management_node_keys();
-        my $computer_node_name   	= $self->data->get_computer_node_name();
+	my $management_node_keys 	= $self->data->get_management_node_keys();
+	my $computer_node_name   	= $self->data->get_computer_node_name();
 	my $remote_ip 			= $self->data->get_reservation_remote_ip();
 	my $computer_ip_address   	= $self->data->get_computer_ip_address();
 	my $request_state_name   	= $self->data->get_request_state_name();
 
-        my $port = shift;
-        if (!$port) {
-                notify($ERRORS{'WARNING'}, 0, "port variable was not passed as an argument");
-                return "failed";
-        }
+	my $port = shift;
+	if (!$port) {
+		notify($ERRORS{'WARNING'}, 0, "port variable was not passed as an argument");
+		return "failed";
+	}
 	
 	my $ret_val = "no";	
 	my $command = "netstat -an";
@@ -3334,6 +3375,132 @@ sub get_total_memory {
 		notify($ERRORS{'WARNING'}, 0, "failed to determine $computer_node_name total memory capacity from command: '$command', output:\n" . join("\n", @$output));
 		return;
 	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 enable_firewall_port
+ 
+  Parameters  : none
+  Returns     : 1 successful, 0 failed
+  Description : updates iptables for given port for collect IPaddress range and mode
+ 
+=cut
+
+sub enable_firewall_port {
+	my $self = shift;
+   if (ref($self) !~ /VCL::Module/i) {
+      notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+      return;
+   }
+	
+	my $port = shift;
+	if(!$port) {
+		notify($ERRORS{'CRITICAL'}, 0, "Input variable port was not passed in as an argument");
+		return 0;
+	} 
+	
+	my $mode = shift;
+	if(!$mode) {
+		notify($ERRORS{'DEBUG'}, 0, "firewall mode not passed in as an argument setting to loose");
+		$mode = "medium";
+	}
+	
+   my $computer_node_name = $self->data->get_computer_node_name();
+	my $remote_ip = $self->data->get_reservation_remote_ip();
+	
+	my $scope;
+	my $command;
+		
+	if ( $mode =~ /loose/i ) {
+		$command = "/sbin/iptables -I INPUT 1 -m state --state NEW,RELATED,ESTABLISHED -m tcp -p tcp --dport $port -j ACCEPT";
+	}	 
+	elsif($mode =~ /medium/i) {	
+		$scope = "$remote_ip/16";
+		$command = "/sbin/iptables -I INPUT 1 -s $scope -m state --state NEW,RELATED,ESTABLISHED -m tcp -p tcp --dport $port -j ACCEPT";
+	}
+	elsif( $mode =~ /tight/i) {
+		$scope = "$remote_ip/24";
+		$command = "/sbin/iptables -I INPUT 1 -s $scope -m state --state NEW,RELATED,ESTABLISHED -m tcp -p tcp --dport $port -j ACCEPT";
+	}
+	elsif( $mode =~ /locked/i) {
+		$command = "/sbin/iptables -I INPUT 1 -s $remote_ip -m state --state NEW,RELATED,ESTABLISHED -m tcp -p tcp --dport $port -j ACCEPT";
+	}
+
+	#copy original config
+	my $cp_iptables_config = "cp /etc/sysconfig/iptables /etc/sysconfig/iptables_pre_$port";
+	my ($status_cp, $output_cp) = $self->execute($cp_iptables_config);	
+	if (defined $status_cp && $status_cp == 0) {
+		notify($ERRORS{'DEBUG'}, 0, "executed command $cp_iptables_config on $computer_node_name");
+	}
+	
+	# Add rule
+	my ($status, $output) = $self->execute($command);	
+	if (defined $status && $status == 0) {
+		notify($ERRORS{'DEBUG'}, 0, "executed command $command on $computer_node_name");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "output from iptables:" . join("\n", @$output));
+	}
+	
+	#Save rules to sysconfig/iptables -- incase of reboot
+	my $iptables_save_cmd = "/sbin/iptables-save > /etc/sysconfig/iptables";
+	my ($status_save, $output_save) = $self->execute($iptables_save_cmd);	
+	if (defined $status_save && $status_save == 0) {
+		notify($ERRORS{'DEBUG'}, 0, "executed command $iptables_save_cmd on $computer_node_name");
+	}
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 disable_firewall_port
+ 
+  Parameters  : none
+  Returns     : 1 successful, 0 failed
+  Description : updates iptables for given port for collect IPaddress range and mode
+ 
+=cut
+
+sub disable_firewall_port {
+   my $self = shift;
+   if (ref($self) !~ /VCL::Module/i) {
+      notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+      return;
+   }
+
+   my $port = shift;
+   if(!$port) {
+      notify($ERRORS{'CRITICAL'}, 0, "Input variable port was not passed in as an argument");
+      return 0;
+   }
+
+   my $computer_node_name = $self->data->get_computer_node_name();
+   my $remote_ip = $self->data->get_reservation_remote_ip();
+
+	my $command = "sed -i -e '/.*-p tcp --dport $port -j ACCEPT$/d' /etc/sysconfig/iptables";
+	my ($status, $output) = $self->execute($command);
+
+	if (defined $status && $status == 0) {
+      notify($ERRORS{'DEBUG'}, 0, "executed command $command on $computer_node_name");
+   }
+   else {
+      notify($ERRORS{'WARNING'}, 0, "output from iptables:" . join("\n", @$output));
+   }
+	
+	#restart iptables
+	$command = "/etc/init.d/iptables restart";
+	my ($status_iptables,$output_iptables) = $self->execute($command);
+	if (defined $status_iptables && $status_iptables == 0) {
+      notify($ERRORS{'DEBUG'}, 0, "executed command $command on $computer_node_name");
+	}
+	else {
+      notify($ERRORS{'WARNING'}, 0, "output from iptables:" . join("\n", @$output));
+	}
+
+	return 1;
+
 }
 
 ##/////////////////////////////////////////////////////////////////////////////
