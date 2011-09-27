@@ -633,18 +633,7 @@ function XMLRPCextendRequest($requestid, $extendtime) {
 function XMLRPCsetRequestEnding($requestid, $end) {
 	global $user;
 
-	// make sure user is a member of the 'Specify End Time' group
-	$groupid = getUserGroupID('Specify End Time');
-	$members = getUserGroupMembers($groupid);
-	if(! array_key_exists($user['id'], $members)) {
-		return array('status' => 'error',
-		             'errorcode' => 35,
-		             'errormsg' => "access denied to specify end time");
-	}
-
 	$requestid = processInputData($requestid, ARG_NUMERIC);
-	$end = processInputData($end, ARG_NUMERIC);
-
 	$userRequests = getUserRequests('all', $user['id']);
 	$found = 0;
 	foreach($userRequests as $req) {
@@ -658,6 +647,17 @@ function XMLRPCsetRequestEnding($requestid, $end) {
 		return array('status' => 'error',
 		             'errorcode' => 1,
 		             'errormsg' => 'unknown requestid');
+
+	// make sure user is a member of the 'Specify End Time' group
+	$groupid = getUserGroupID('Specify End Time');
+	$members = getUserGroupMembers($groupid);
+	if(! $request['serverrequest'] && ! array_key_exists($user['id'], $members)) {
+		return array('status' => 'error',
+		             'errorcode' => 35,
+		             'errormsg' => "access denied to specify end time");
+	}
+
+	$end = processInputData($end, ARG_NUMERIC);
 
 	$startts = datetimeToUnix($request['start']);
 	if($end % (15 * 60))
@@ -1786,6 +1786,7 @@ function XMLRPCautoCapture($requestid) {
 		      . "captured from image: {$reqData['reservations'][0]['prettyimage']}<br>"
 		      . "captured on: $captime<br>"
 		      . "owner: {$ownerdata['unityid']}@{$ownerdata['affiliation']}<br>";
+		$connectmethods = getImageConnectMethods($imageid, $reqData['reservations'][0]['imagerevisionid']);
 		$data = array('requestid' => $requestid,
 		              'description' => $desc,
 		              'usage' => '',
@@ -1799,7 +1800,8 @@ function XMLRPCautoCapture($requestid) {
 		              'checkuser' => 1,
 		              'rootaccess' => 1,
 		              'sysprep' => 1,
-		              'comments' => $comments);
+		              'comments' => $comments,
+		              'connectmethodids' => implode(',', array_keys($connectmethods)));
 		$rc = submitAddImage($data, 1);
 		if($rc == 0) {
 			return array('status' => 'error',
@@ -1808,6 +1810,207 @@ function XMLRPCautoCapture($requestid) {
 		}
 	}
 	return array('status' => 'success');
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn XMLRPCdeployServer($imageid, $start, $end, $admingroup, $logingroup,
+///                        $ipaddr, $macaddr, $foruser)
+///
+/// \param $imageid - id of an image
+/// \param $start - "now" or unix timestamp for start of reservation; will
+/// use a floor function to round down to the nearest 15 minute increment
+/// for actual reservation
+/// \param $end - "indefinite" or unix timestamp for end of reservation; will
+/// use a floor function to round up to the nearest 15 minute increment
+/// for actual reservation
+/// \param $admingroup - (optional, default='') admin user group for reservation
+/// \param $logingroup - (optional, default='') login user group for reservation
+/// \param $ipaddr - (optional, default='') IP address to use for public IP of
+/// server
+/// \param $macaddr - (optional, default='') MAC address to use for public NIC
+/// of server
+/// \param $foruser - (optional) login to be used when setting up the account
+/// on the reserved machine - CURRENTLY, THIS IS UNSUPPORTED
+///
+/// \return an array with at least one index named '\b status' which will have
+/// one of these values:\n
+/// \b error - error occurred; there will be 2 additional elements in the array:
+/// \li \b errorcode - error number\n
+/// \li \b errormsg - error string\n
+///
+/// \b notavailable - no computers were available for the request\n
+/// \b success - there will be an additional element in the array:
+/// \li \b requestid - identifier that should be passed to later calls when
+/// acting on the request
+///
+/// \brief tries to make a server request
+///
+////////////////////////////////////////////////////////////////////////////////
+function XMLRPCdeployServer($imageid, $start, $end, $admingroup='',
+                            $logingroup='', $ipaddr='', $macaddr='',
+                            $foruser='') {
+	global $user;
+	if(! in_array("serverProfileAdmin", $user["privileges"])) {
+		return array('status' => 'error',
+		             'errorcode' => 60,
+		             'errormsg' => "access denied to deploy server");
+	}
+	$imageid = processInputData($imageid, ARG_NUMERIC);
+	$resources = getUserResources(array("imageAdmin", "imageCheckOut"));
+	$images = removeNoCheckout($resources["image"]);
+	$extraimages = getServerProfileImages($user['id']);
+	if(! array_key_exists($imageid, $images) &&
+	   ! array_key_exists($imageid, $extraimages)) {
+		return array('status' => 'error',
+		             'errorcode' => 3,
+		             'errormsg' => "access denied to $imageid");
+	}
+	if($admingroup != '' || $logingroup != '')
+		$usergroups = getUserEditGroups($user['id']);
+	if($admingroup != '') {
+		$admingroup = processInputData($admingroup, ARG_STRING);
+		if(preg_match('@', $admingroup)) {
+			$tmp = explode('@', $admingroup);
+			$escadmingroup = mysql_real_escape_string($tmp[0]);
+			$affilid = getAffiliationID(mysql_real_escape_string($tmp[1]));
+			if(is_null($affilid)) {
+				return array('status' => 'error',
+				             'errorcode' => 51,
+				             'errormsg' => "unknown affiliation for admin user group: {$tmp[1]}");
+			}
+		}
+		else {
+			$escadmingroup = mysql_real_escape_string($admingroup);
+			$affilid = DEFAULT_AFFILID;
+		}
+		$query = "SELECT id "
+		       . "FROM usergroup "
+		       . "WHERE name = '$escadmingroup' AND "
+		       .       "affiliationid = $affilid";
+		$qh = doQuery($query, 300);
+		if($row = mysql_fetch_assoc($qh))
+			$admingroupid = $row['id'];
+		else {
+			return array('status' => 'error',
+			             'errorcode' => 52,
+			             'errormsg' => "unknown admin user group: $admingroup");
+		}
+		if(! array_key_exists($admingroupid, $usergroups)) {
+			return array('status' => 'error',
+			             'errorcode' => 53,
+			             'errormsg' => "access denied to admin user group: $admingroup");
+		}
+	}
+	if($logingroup != '') {
+		$logingroup = processInputData($logingroup, ARG_STRING);
+		if(preg_match('@', $logingroup)) {
+			$tmp = explode('@', $logingroup);
+			$esclogingroup = mysql_real_escape_string($tmp[0]);
+			$affilid = getAffiliationID(mysql_real_escape_string($tmp[1]));
+			if(is_null($affilid)) {
+				return array('status' => 'error',
+				             'errorcode' => 54,
+				             'errormsg' => "unknown affiliation for login user group: {$tmp[1]}");
+			}
+		}
+		else {
+			$esclogingroup = mysql_real_escape_string($logingroup);
+			$affilid = DEFAULT_AFFILID;
+		}
+		$query = "SELECT id "
+		       . "FROM usergroup "
+		       . "WHERE name = '$esclogingroup' AND "
+		       .       "affiliationid = $affilid";
+		$qh = doQuery($query, 300);
+		if($row = mysql_fetch_assoc($qh))
+			$logingroupid = $row['id'];
+		else {
+			return array('status' => 'error',
+			             'errorcode' => 55,
+			             'errormsg' => "unknown login user group: $logingroup");
+		}
+		if(! array_key_exists($logingroupid, $usergroups)) {
+			return array('status' => 'error',
+			             'errorcode' => 56,
+			             'errormsg' => "access denied to login user group: $logingroup");
+		}
+	}
+	$ipaddr = processInputData($ipaddr, ARG_STRING);
+	$ipaddrArr = explode('.', $ipaddr);
+	if($ipaddr != '' && (! preg_match('/^(([0-9]){1,3}\.){3}([0-9]){1,3}$/', $ipaddr) ||
+		$ipaddrArr[0] < 1 || $ipaddrArr[0] > 255 ||
+		$ipaddrArr[1] < 0 || $ipaddrArr[1] > 255 ||
+		$ipaddrArr[2] < 0 || $ipaddrArr[2] > 255 ||
+		$ipaddrArr[3] < 0 || $ipaddrArr[3] > 255)) {
+		return array('status' => 'error',
+		             'errorcode' => 57,
+		             'errormsg' => "Invalid IP address. Must be w.x.y.z with each of "
+		                         . "w, x, y, and z being between 1 and 255 (inclusive)");
+	}
+	$macaddr = processInputData($macaddr, ARG_STRING);
+	if($macaddr != '' && ! preg_match('/^(([A-Fa-f0-9]){2}:){5}([A-Fa-f0-9]){2}$/', $macaddr)) {
+		return array('status' => 'error',
+		             'errorcode' => 58,
+		             'errormsg' => "Invalid MAC address.  Must be XX:XX:XX:XX:XX:XX "
+		                         . "with each pair of XX being from 00 to FF (inclusive)");
+	}
+	$monitored = processInputData($monitored, ARG_NUMERIC);
+	if($monitored != 0 && $monitored != 1)
+		$monitored = 0;
+	$start = processInputData($start, ARG_STRING, 1);
+	$end = processInputData($end, ARG_STRING, 1);
+	#$foruser = processInputData($foruser, ARG_STRING, 1);
+
+	# validate $start
+	if($start != 'now' && ! is_numeric($start)) {
+		return array('status' => 'error',
+		             'errorcode' => 4,
+		             'errormsg' => "received invalid input for start");
+	}
+	# validate $end
+	if($end != 'indefinite' && ! is_numeric($end)) {
+		return array('status' => 'error',
+		             'errorcode' => 59,
+		             'errormsg' => "received invalid input for end");
+	}
+
+	$nowfuture = 'future';
+	if($start == 'now') {
+		$start = unixFloor15(time());
+		$nowfuture = 'now';
+	}
+	else
+		if($start < (time() - 30))
+			return array('status' => 'error',
+			             'errorcode' => 5,
+			             'errormsg' => "start time is in the past");
+	if($end == 'indefinite')
+		$end = datetimeToUnix("2038-01-01 00:00:00");
+	elseif($end % (15 * 60))
+		$end = unixFloor15($end) + (15 * 60);
+
+	$max = getMaxOverlap($user['id']);
+	if(checkOverlap($start, $end, $max)) {
+		return array('status' => 'error',
+		             'errorcode' => 7,
+		             'errormsg' => "reservation overlaps with another one you "
+		                         . "have, and you are allowed $max "
+		                         . "overlapping reservations at a time");
+	}
+
+	$images = getImages();
+	$revisionid = getProductionRevisionid($imageid);
+	$rc = isAvailable($images, $imageid, $revisionid, $start, $end,
+	                  0, 0, 0, 0, $ipaddr, $macaddr);
+	if($rc < 1) {
+		addLogEntry($nowfuture, unixToDatetime($start), 
+		            unixToDatetime($end), 0, $imageid);
+		return array('status' => 'notavailable');
+	}
+	$return['requestid']= addRequest();
+	$return['status'] = 'success';
+	return $return;
 }
 
 ////////////////////////////////////////////////////////////////////////////////

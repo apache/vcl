@@ -175,6 +175,7 @@ $noHTMLwrappers = array('sendRDPfile',
                         'AJsubmitEditRequest',
                         'AJrebootRequest',
                         'AJreinstallRequest',
+                        'AJshowRequestSuggestedTimes',
 );
 
 # main
@@ -187,12 +188,14 @@ $actions['mode']['submitRequest'] = "submitRequest";
 $actions['mode']['AJupdateWaitTime'] = "AJupdateWaitTime";
 $actions['mode']['submitTestProd'] = "submitRequest";
 $actions['mode']['selectTimeTable'] = "showTimeTable";
+$actions['mode']['AJshowRequestSuggestedTimes'] = "AJshowRequestSuggestedTimes";
 $actions['args']['selectTimeTable'] = 1;
 $actions['pages']['newRequest'] = "newReservations";
 $actions['pages']['submitRequest'] = "newReservations";
 $actions['pages']['AJupdateWaitTime'] = "newReservations";
 $actions['pages']['submitTestProd'] = "newReservations";
 $actions['pages']['selectTimeTable'] = "newReservations";
+$actions['pages']['AJshowRequestSuggestedTimes'] = "newReservations";
 $actions['nextmodes']['newRequest'] = array();
 
 # current reservations

@@ -62,6 +62,11 @@ function generateGraphs() {
 }
 
 function generateColGraphsCB(data, ioArgs) {
+	if(data.items.nodata) {
+		dojo.byId(data.items.id).innerHTML = data.items.nodata;
+		dojo.removeClass(data.items.id, 'statgraph');
+		return;
+	}
 	dojo.byId(data.items.id).innerHTML = '';
 	var graph = new dojox.charting.Chart2D(data.items.id);
 	if(data.items.maxy <= 50)

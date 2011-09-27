@@ -1976,24 +1976,34 @@ function getNodePrivileges($node, $type="all", $privs=0) {
 		$privs = array("resources" => array(),
 		               "users" => array(),
 		               "usergroups" => array());
-	if($type == "resources" || $type == "all") {
+	static $resourcedata = array();
+	if(empty($resourcedata)) {
 		$query = "SELECT g.id AS id, "
 		       .        "p.type AS privtype, "
 		       .        "g.name AS name, "
-		       .        "t.name AS type "
+		       .        "t.name AS type, "
+		       .        "p.privnodeid "
 		       . "FROM resourcepriv p, "
 		       .      "resourcetype t, "
 		       .      "resourcegroup g "
-		       . "WHERE p.privnodeid = $node AND "
-		       .       "p.resourcegroupid = g.id AND "
-		       .       "g.resourcetypeid = t.id";
+		       . "WHERE p.resourcegroupid = g.id AND "
+		       .       "g.resourcetypeid = t.id "
+		       . "ORDER BY p.privnodeid";
 		$qh = doQuery($query, 350);
 		while($row = mysql_fetch_assoc($qh)) {
-			$name = $row["type"] . "/" . $row["name"] . "/" . $row["id"];
-			if(array_key_exists($name, $privs["resources"]))
-				array_push($privs["resources"][$name], $row["privtype"]);
-			else
-				$privs["resources"][$name] = array($row["privtype"]);
+			if(! array_key_exists($row['privnodeid'], $resourcedata))
+				$resourcedata[$row['privnodeid']] = array();
+			$resourcedata[$row['privnodeid']][] = $row;
+		}
+	}
+	if($type == "resources" || $type == "all") {
+		if(array_key_exists($node, $resourcedata)) {
+			foreach($resourcedata[$node] as $data) {
+				$name = "{$data["type"]}/{$data["name"]}/{$data["id"]}";
+				if(! array_key_exists($name, $privs["resources"]))
+					$privs["resources"][$name] = array();
+				$privs["resources"][$name][] = $data["privtype"];
+			}
 		}
 	}
 	if($type == "users" || $type == "all") {
@@ -2103,56 +2113,87 @@ function getNodeCascadePrivileges($node, $type="all", $privs=0) {
 	# get node's parents
 	$nodelist = getParentNodes($node);
 
+	# get all block data
+	static $allblockdata = array();
+	if(empty($allblockdata)) {
+		$query = "SELECT g.name AS name, "
+		       .        "t.name AS type, "
+		       .        "p.privnodeid "
+		       . "FROM resourcepriv p, "
+		       .      "resourcetype t, "
+		       .      "resourcegroup g "
+		       . "WHERE p.resourcegroupid = g.id AND "
+		       .       "g.resourcetypeid = t.id AND "
+		       .       "p.type = 'block'";
+		$qh = doQuery($query);
+		while($row = mysql_fetch_assoc($qh))
+			if(! array_key_exists($row['privnodeid'], $allblockdata))
+				$allblockdata[$row['privnodeid']] = array();
+			$allblockdata[$row['privnodeid']][] = "{$row["type"]}/{$row["name"]}";
+	}
+
+	# get resource group block data
+	$inlist = implode(',', $nodelist);
+	$blockdata = array();
+	foreach($nodelist as $nodeid) {
+		if(array_key_exists($nodeid, $allblockdata))
+			$blockdata[$nodeid] = $allblockdata[$nodeid];
+	}
+
+	# get all cascade data
+	static $allcascadedata = array();
+	if(empty($allcascadedata)) {
+		$query = "SELECT g.id AS id, "
+		       .        "p.type AS privtype, "
+		       .        "g.name AS name, "
+		       .        "t.name AS type, "
+		       .        "p.privnodeid "
+		       . "FROM resourcepriv p, "
+		       .      "resourcetype t, "
+		       .      "resourcegroup g, "
+		       .      "resourcepriv p2 "
+		       . "WHERE p.resourcegroupid = g.id AND "
+		       .       "g.resourcetypeid = t.id AND "
+		       .       "p.type != 'block' AND "
+		       .       "p.type != 'cascade' AND "
+		       .       "p.resourcegroupid = p2.resourcegroupid AND "
+		       .       "p.privnodeid = p2.privnodeid AND "
+		       .       "p2.type = 'cascade'";
+		$qh = doQuery($query);
+		while($row = mysql_fetch_assoc($qh)) {
+			if(! array_key_exists($row['privnodeid'], $allcascadedata))
+				$allcascadedata[$row['privnodeid']] = array();
+			$allcascadedata[$row['privnodeid']][] =
+			   array('name' => "{$row["type"]}/{$row["name"]}/{$row["id"]}",
+			         'type' => $row['privtype']);
+		}
+	}
+
+	# get all privs for users with cascaded privs
+	$cascadedata = array();
+	foreach($nodelist as $nodeid) {
+		if(array_key_exists($nodeid, $allcascadedata))
+			$cascadedata[$nodeid] = $allcascadedata[$nodeid];
+	}
+
 	if($type == "resources" || $type == "all") {
 		$mynodelist = $nodelist;
 		# loop through each node, starting at the root
 		while(count($mynodelist)) {
 			$node = array_pop($mynodelist);
 			# get all resource groups with block set at this node and remove any cascaded privs
-			$query = "SELECT g.name AS name, "
-			       .        "t.name AS type "
-			       . "FROM resourcepriv p, "
-			       .      "resourcetype t, "
-			       .      "resourcegroup g "
-			       . "WHERE p.privnodeid = $node AND "
-			       .       "p.resourcegroupid = g.id AND "
-			       .       "g.resourcetypeid = t.id AND "
-			       .       "p.type = 'block'";
-
-			$qh = doQuery($query, 353);
-			while($row = mysql_fetch_assoc($qh)) {
-				$name = $row["type"] . "/" . $row["name"];
-				unset($privs["resources"][$name]);
+			if(array_key_exists($node, $blockdata)) {
+				foreach($blockdata[$node] as $name)
+					unset($privs["resources"][$name]);
 			}
 
 			# get all privs for users with cascaded privs
-			$query = "SELECT g.id AS id, "
-			       .        "p.type AS privtype, "
-			       .        "g.name AS name, "
-			       .        "t.name AS type "
-			       . "FROM resourcepriv p, "
-			       .      "resourcetype t, "
-			       .      "resourcegroup g "
-			       . "WHERE p.privnodeid = $node AND "
-			       .       "p.resourcegroupid = g.id AND "
-			       .       "g.resourcetypeid = t.id AND "
-			       .       "p.type != 'block' AND "
-			       .       "p.type != 'cascade' AND "
-			       .       "p.resourcegroupid IN (SELECT resourcegroupid "
-			       .                             "FROM resourcepriv "
-			       .                             "WHERE type = 'cascade' AND "
-			       .                                   "privnodeid = $node)";
-			$qh = doQuery($query, 354);
-			while($row = mysql_fetch_assoc($qh)) {
-				$name = $row["type"] . "/" . $row["name"] . "/" . $row["id"];
-				// if we've already seen this resource group, add it to the
-				# resource group's privs
-				if(array_key_exists($name, $privs["resources"]))
-					array_push($privs["resources"][$name], $row["privtype"]);
-				// if we haven't seen this resource group, create an array containing
-				# this priv
-				else
-					$privs["resources"][$name] = array($row["privtype"]);
+			if(array_key_exists($node, $cascadedata)) {
+				foreach($cascadedata[$node] as $data) {
+					if(! array_key_exists($data['name'], $privs["resources"]))
+						$privs["resources"][$data['name']] = array();
+					$privs["resources"][$data['name']][] = $data["type"];
+				}
 			}
 		}
 	}

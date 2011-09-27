@@ -438,8 +438,6 @@ function generalCB(data, ioArgs) {
 
 function updateRevisionProduction(cont) {
    document.body.style.cursor = 'wait';
-	var data = {continuation: obj.value,
-	            imagegrpid: imagegrpid};
 	RPCwrapper({continuation: cont}, generalCB);
 }
 

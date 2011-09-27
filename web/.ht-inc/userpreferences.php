@@ -254,25 +254,21 @@ function userpreferences() {
 	print "      <legend>General Preferences</legend>\n";
 	print "      <FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
 	$cdata = array();
-	if(in_array("userGrant", $user["privileges"])) {
-		if($user['showallgroups']) {
-			$selected['affiliation'] = '';
-			$selected['allgroups'] = 'checked';
-		}
-		else {
-			$selected['affiliation'] = 'checked';
-			$selected['allgroups'] = '';
-		}
-		print "      <p>View User Groups:<br>\n";
-		print "      <INPUT type=radio id=r1 name=groupview value=affiliation ";
-		print "{$selected['affiliation']}><label for=r1>matching my affiliation";
-		print "</label><br>\n";
-		print "      <INPUT type=radio id=r2 name=groupview value=allgroups ";
-		print "{$selected['allgroups']}><label for=r2>from all affiliations";
-		print "</label></p>\n";
+	if($user['showallgroups']) {
+		$selected['affiliation'] = '';
+		$selected['allgroups'] = 'checked';
 	}
-	else
-		$cdata['groupview'] = 'affiliation';
+	else {
+		$selected['affiliation'] = 'checked';
+		$selected['allgroups'] = '';
+	}
+	print "      <p>View User Groups:<br>\n";
+	print "      <INPUT type=radio id=r1 name=groupview value=affiliation ";
+	print "{$selected['affiliation']}><label for=r1>matching my affiliation";
+	print "</label><br>\n";
+	print "      <INPUT type=radio id=r2 name=groupview value=allgroups ";
+	print "{$selected['allgroups']}><label for=r2>from all affiliations";
+	print "</label></p>\n";
 	if($user['emailnotices']) {
 		$selected['enabled'] = 'checked';
 		$selected['disabled'] = '';

@@ -124,9 +124,9 @@ var genericCB = function(type, data, evt) {
 }
 
 var errorHandler = function(error, ioArgs) {
-	if(error.name == 'cancel')
+	/*if(error.name == 'cancel')
 		return;
-	alert('AJAX Error: ' + error.message + '\nLine ' + error.lineNumber + ' in ' + error.fileName);
+	alert('AJAX Error: ' + error.message + '\nLine ' + error.lineNumber + ' in ' + error.fileName);*/
 }
 
 function errorHandler(data, ioArgs) {
@@ -308,4 +308,26 @@ function getSelectValue(objid) {
 	if(dijit.byId(objid))
 		return dijit.byId(objid).value;
 	return dojo.byId(objid).value;
+}
+
+function get12from24(hour) {
+	if(hour == 0)
+		return {hour: 12, meridian: 'am'};
+	if(hour < 12)
+		return {hour: hour, meridian: 'am'};
+	if(hour == 12)
+		return {hour: hour, meridian: 'pm'};
+	return {hour: hour - 12, meridian: 'pm'};
+}
+
+function hideDijitButton(id) {
+	dojo.style(dijit.byId(id).domNode, {
+		display: 'none'
+	});
+}
+
+function showDijitButton(id) {
+	dojo.style(dijit.byId(id).domNode, {
+		display: 'inline'
+	});
 }

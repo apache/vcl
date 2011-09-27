@@ -31,9 +31,10 @@
 ////////////////////////////////////////////////////////////////////////////////
 function blockAllocations() {
 	global $user;
-	if(! checkUserHasPerm('Manage Block Allocations')) {
+	if(! checkUserHasPerm('Manage Block Allocations (global)') &&
+	   ! checkUserHasPerm('Manage Block Allocations (affiliation only)')) {
 		print "<H2>Block Allocations</H2>\n";
-		print "Block Allocations are a way to have a set of machines preloaded with a particular environment at specified times and made available to a specific group of users. This is very useful for classroom use and for workshops. They can be made available on a repeating schedule such as when a course meets each week. Block Allocations only allocate machines for the group of users - they do not create the actual, end user reservations for the machines. All users still must log in to the VCL web site and make their own reservations DURING the period a block allocation is active.<br><br>\n";
+		print "Block Allocations are a way to have a set of machines preloaded with a particular environment at specified times and made available to a specific group of users. This is very useful for classroom use and for workshops. They can be made available on a repeating schedule such as when a course meets each week. Block Allocations only allocate machines for the group of users - they do not create the actual, end user reservations for the machines. All users still must log in to the VCL web site and make their own reservations DURING the period a block allocation is active. The forms here provide a way for you to submit a request for a Block Allocation for review by a sysadmin. If you just need to use a machine through VCL, use the New Reservation page for that.<br><br>\n";
 		print "<button dojoType=\"dijit.form.Button\" type=\"button\">\n";
 		print "  Request New Block Allocation\n";
 		print "  <script type=\"dojo/method\" event=\"onClick\">\n";
@@ -1090,8 +1091,7 @@ function deleteBlockSkipDuplicates($blockid) {
 ////////////////////////////////////////////////////////////////////////////////
 function getCurrentBlockHTML($listonly=0) {
 	global $user, $days;
-	$groups = getUserEditGroups($user['id']);
-	$groupids = implode(',', array_keys($groups));
+	$groupids = implode(',', array_keys($user['groups']));
 	$query = "SELECT b.id, "
 	       .        "b.name AS blockname, "
 	       .        "b.ownerid, "
@@ -1723,6 +1723,8 @@ function getPendingBlockHTML($listonly=0) {
 	       . "WHERE status = 'requested' AND "
 	       .       "b.imageid = i.id AND "
 	       .       "b.ownerid = u.id";
+	if(! checkUserHasPerm('Manage Block Allocations (global)'))
+		$query .= " AND u.affiliationid = {$user['affiliationid']}";
 	$qh = doQuery($query, 101);
 	$h  = "<table>\n";
 	$h .= "  <tr align=center>\n";
@@ -3527,6 +3529,7 @@ function getChartHTML($id) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function AJgetBlockAllocatedMachineData() {
+	global $user;
 	$start = processInputVar('start', ARG_STRING);
 	if(! preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/', $start)) {
 		$start = unixFloor15(time() - 3600);
@@ -3542,32 +3545,58 @@ function AJgetBlockAllocatedMachineData() {
 
 	# bare
 	$data = array();
-	$query = "SELECT COUNT(id) "
-	       . "FROM computer "
-	       . "WHERE stateid IN (2, 3, 6, 8, 11) AND "
-	       .       "type = 'blade'";
-	$qh = doQuery($query, 101);
-	if($row = mysql_fetch_row($qh))
-		$data['total'] = $row[0];
+	if(checkUserHasPerm('Manage Block Allocations (global)')) {
+		$query = "SELECT COUNT(id) "
+		       . "FROM computer "
+		       . "WHERE stateid IN (2, 3, 6, 8, 11) AND "
+		       .       "type = 'blade'";
+		$qh = doQuery($query, 101);
+		if($row = mysql_fetch_row($qh))
+			$data['total'] = $row[0];
+	}
+	else
+		// TODO once we allow limiting total machines by affiliation, put that value here
+		$data['total'] = 0;
 	for($time = $start, $i = 0; $time < $end; $time += 900, $i++) {
 		$fmttime = date('g:i a', $time);
 		$data["points"][$i] = array('x' => $i, 'y' => 0, 'value' => $i, 'text' => $fmttime);
 	}
 	$data['maxy'] = 0;
-	$query = "SELECT UNIX_TIMESTAMP(bt.start) as start, "
-	       .        "UNIX_TIMESTAMP(bt.end) as end, "
-	       .        "br.numMachines "
-	       . "FROM blockTimes bt, "
-	       .      "blockRequest br, "
-	       .      "image i, "
-	       .      "OS o "
-	       . "WHERE bt.blockRequestid = br.id AND "
-	       .       "bt.skip = 0 AND "
-	       .       "bt.start < '$enddt' AND "
-	       .       "bt.end > '$startdt' AND "
-	       .       "br.imageid = i.id AND "
-	       .       "i.OSid = o.id AND "
-	       .       "o.installtype != 'vmware'";
+	if(checkUserHasPerm('Manage Block Allocations (global)')) {
+		$query = "SELECT UNIX_TIMESTAMP(bt.start) as start, "
+		       .        "UNIX_TIMESTAMP(bt.end) as end, "
+		       .        "br.numMachines "
+		       . "FROM blockTimes bt, "
+		       .      "blockRequest br, "
+		       .      "image i, "
+		       .      "OS o "
+		       . "WHERE bt.blockRequestid = br.id AND "
+		       .       "bt.skip = 0 AND "
+		       .       "bt.start < '$enddt' AND "
+		       .       "bt.end > '$startdt' AND "
+		       .       "br.imageid = i.id AND "
+		       .       "i.OSid = o.id AND "
+		       .       "o.installtype != 'vmware'";
+	}
+	else {
+		$query = "SELECT UNIX_TIMESTAMP(bt.start) as start, "
+		       .        "UNIX_TIMESTAMP(bt.end) as end, "
+		       .        "br.numMachines "
+		       . "FROM blockTimes bt, "
+		       .      "blockRequest br, "
+		       .      "image i, "
+		       .      "OS o, "
+		       .      "user u "
+		       . "WHERE bt.blockRequestid = br.id AND "
+		       .       "bt.skip = 0 AND "
+		       .       "bt.start < '$enddt' AND "
+		       .       "bt.end > '$startdt' AND "
+		       .       "br.imageid = i.id AND "
+		       .       "i.OSid = o.id AND "
+		       .       "o.installtype != 'vmware' AND "
+		       .       "br.ownerid = u.id AND "
+		       .       "u.affiliationid = {$user['affiliationid']}";
+	}
 	$qh = doQuery($query, 101);
 	while($row = mysql_fetch_assoc($qh)) {
 		for($binstart = $start, $binend = $start + 900, $binindex = 0; 
@@ -3590,32 +3619,58 @@ function AJgetBlockAllocatedMachineData() {
 
 	# virtual
 	$data = array();
-	$query = "SELECT COUNT(id) "
-	       . "FROM computer "
-	       . "WHERE stateid IN (2, 3, 6, 8, 11) AND "
-	       .       "type = 'virtualmachine'";
-	$qh = doQuery($query, 101);
-	if($row = mysql_fetch_row($qh))
-		$data['total'] = $row[0];
+	if(checkUserHasPerm('Manage Block Allocations (global)')) {
+		$query = "SELECT COUNT(id) "
+		       . "FROM computer "
+		       . "WHERE stateid IN (2, 3, 6, 8, 11) AND "
+		       .       "type = 'virtualmachine'";
+		$qh = doQuery($query, 101);
+		if($row = mysql_fetch_row($qh))
+			$data['total'] = $row[0];
+	}
+	else
+		// TODO once we allow limiting total machines by affiliation, put that value here
+		$data['total'] = 0;
 	for($time = $start, $i = 0; $time < $end; $time += 900, $i++) {
 		$fmttime = date('g:i a', $time);
 		$data["points"][$i] = array('x' => $i, 'y' => 0, 'value' => $i, 'text' => $fmttime);
 	}
 	$data['maxy'] = 0;
-	$query = "SELECT UNIX_TIMESTAMP(bt.start) as start, "
-	       .        "UNIX_TIMESTAMP(bt.end) as end, "
-	       .        "br.numMachines "
-	       . "FROM blockTimes bt, "
-	       .      "blockRequest br, "
-	       .      "image i, "
-	       .      "OS o "
-	       . "WHERE bt.blockRequestid = br.id AND "
-	       .       "bt.skip = 0 AND "
-	       .       "bt.start < '$enddt' AND "
-	       .       "bt.end > '$startdt' AND "
-	       .       "br.imageid = i.id AND "
-	       .       "i.OSid = o.id AND "
-	       .       "o.installtype = 'vmware'";
+	if(checkUserHasPerm('Manage Block Allocations (global)')) {
+		$query = "SELECT UNIX_TIMESTAMP(bt.start) as start, "
+		       .        "UNIX_TIMESTAMP(bt.end) as end, "
+		       .        "br.numMachines "
+		       . "FROM blockTimes bt, "
+		       .      "blockRequest br, "
+		       .      "image i, "
+		       .      "OS o "
+		       . "WHERE bt.blockRequestid = br.id AND "
+		       .       "bt.skip = 0 AND "
+		       .       "bt.start < '$enddt' AND "
+		       .       "bt.end > '$startdt' AND "
+		       .       "br.imageid = i.id AND "
+		       .       "i.OSid = o.id AND "
+		       .       "o.installtype = 'vmware'";
+	}
+	else {
+		$query = "SELECT UNIX_TIMESTAMP(bt.start) as start, "
+		       .        "UNIX_TIMESTAMP(bt.end) as end, "
+		       .        "br.numMachines "
+		       . "FROM blockTimes bt, "
+		       .      "blockRequest br, "
+		       .      "image i, "
+		       .      "OS o, "
+		       .      "user u "
+		       . "WHERE bt.blockRequestid = br.id AND "
+		       .       "bt.skip = 0 AND "
+		       .       "bt.start < '$enddt' AND "
+		       .       "bt.end > '$startdt' AND "
+		       .       "br.imageid = i.id AND "
+		       .       "i.OSid = o.id AND "
+		       .       "o.installtype = 'vmware' AND "
+		       .       "br.ownerid = u.id AND "
+		       .       "u.affiliationid = {$user['affiliationid']}";
+	}
 	$qh = doQuery($query, 101);
 	while($row = mysql_fetch_assoc($qh)) {
 		for($binstart = $start, $binend = $start + 900, $binindex = 0; 

@@ -208,6 +208,7 @@ function getServerProfileDataDeployCB(data, ioArgs) {
 		alert('You do not have access to apply this server profile.');
 		return;
 	}
+	dojo.byId('appliedprofileid').value = data.items.id;
 	dijit.byId('deployimage').set('value', data.items.imageid);
 	dijit.byId('deployfixedIP').set('value', data.items.fixedIP);
 	dijit.byId('deployfixedMAC').set('value', data.items.fixedMAC);
@@ -536,23 +537,31 @@ function addRemProfileCB(data, ioArgs) {
 function setStartNow() {
 	dijit.byId('deploystarttime').set('required', false);
 	dijit.byId('deploystartdate').set('required', false);
+	dojo.addClass('deployerr', 'hidden');
+	dijit.byId('deploybtn').set('label', 'Deploy Server');
 }
 
 function setStartLater() {
 	dojo.byId('startlater').checked = true;
 	dijit.byId('deploystarttime').set('required', true);
 	dijit.byId('deploystartdate').set('required', true);
+	dojo.addClass('deployerr', 'hidden');
+	dijit.byId('deploybtn').set('label', 'Deploy Server');
 }
 
 function setEndIndef() {
 	dijit.byId('deployendtime').set('required', false);
 	dijit.byId('deployenddate').set('required', false);
+	dojo.addClass('deployerr', 'hidden');
+	dijit.byId('deploybtn').set('label', 'Deploy Server');
 }
 
 function setEndAt() {
 	dojo.byId('endat').checked = true;
 	dijit.byId('deployendtime').set('required', true);
 	dijit.byId('deployenddate').set('required', true);
+	dojo.addClass('deployerr', 'hidden');
+	dijit.byId('deploybtn').set('label', 'Deploy Server');
 }
 
 function submitDeploy() {
@@ -621,7 +630,13 @@ function submitDeploy() {
 			return;
 		}
 	}
-	var data = {continuation: cont};
+	if(dijit.byId('deploybtn').get('label') == 'View Available Times') {
+		dijit.byId('suggestDlgBtn').set('disabled', true);
+		showSuggestedTimes();
+		return;
+	}
+	var data = {continuation: cont,
+	            profileid: dojo.byId('appliedprofileid').value};
 	if(dijit.byId('deployimage'))
 		data.imageid = dijit.byId('deployimage').get('value');
 	else
@@ -668,16 +683,52 @@ function submitDeploy() {
 		                                time.getHours(),
 		                                time.getMinutes());
 	}
+	dijit.byId('deploybtn').set('label', 'Working...');
+	dijit.byId('deploybtn').set('disabled', true);
 	RPCwrapper(data, submitDeployCB, 1);
 }
 
 function submitDeployCB(data, ioArgs) {
 	if(data.items.error) {
-		alert(data.items.msg);
+		dojo.byId('deployerr').innerHTML = data.items.msg;
+		dojo.removeClass('deployerr', 'hidden');
 		dojo.byId('deploycont').value = data.items.cont;
+		dijit.byId('deploybtn').set('disabled', false);
+		if(data.items.error == 2) {
+			dijit.byId('deploybtn').set('label', 'View Available Times');
+			dojo.byId('suggestcont').value = data.items.sugcont;
+		}
+		else
+			dijit.byId('deploybtn').set('label', 'Deploy Server');
 		return;
 	}
 	if(data.items.success) {
 		window.location.href = data.items.redirecturl;
 	}
+}
+
+function useSuggestedDeploySlot() {
+	var slot = suggestTimeData[dojo.byId('selectedslot').value];
+	dojo.byId('startlater').checked = true;
+	var tmp = parseInt(slot['startts'] + '000');
+	var s = new Date(tmp);
+	var e = new Date(tmp + parseInt(slot['duration'] + '000'));
+	dijit.byId('deploystartdate').set('value', s);
+	dijit.byId('deploystarttime').set('value', s);
+
+	var testend = new Date(2038, 0, 1, 0, 0, 0, 0);
+	if(e >= testend) {
+		dojo.byId('endindef').checked = true;
+	}
+	else {
+		dojo.byId('endat').checked = true;
+		dijit.byId('deployenddate').set('value', e);
+		dijit.byId('deployendtime').set('value', e);
+	}
+
+	//dojo.byId('waittime').className = 'hidden';
+	dijit.byId('suggestedTimes').hide();
+	dijit.byId('deploybtn').set('label', 'Shake &amp; Bake Server');
+	dojo.addClass('deployerr', 'hidden');
+	//updateWaitTime(0);
 }

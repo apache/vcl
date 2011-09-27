@@ -15,6 +15,7 @@
 * limitations under the License.
 */
 var resSubmitted = 0;
+var suggestTimeData = {}
 
 function RPCwrapper(data, CB, dojson) {
 	if(dojson) {
@@ -24,7 +25,7 @@ function RPCwrapper(data, CB, dojson) {
 			handleAs: "json",
 			error: errorHandler,
 			content: data,
-			timeout: 15000
+			timeout: 30000
 		});
 	}
 	else {
@@ -33,7 +34,7 @@ function RPCwrapper(data, CB, dojson) {
 			load: CB,
 			error: errorHandler,
 			content: data,
-			timeout: 15000
+			timeout: 30000
 		});
 	}
 }
@@ -83,8 +84,80 @@ function updateWaitTime(cleardesc) {
 	RPCwrapper(data, generalReqCB);
 }
 
+function showSuggestedTimes() {
+	if(dojo.byId('suggestcont').value == 'cluster') {
+		alert('Times cannot be suggested for cluster reservations');
+		return;
+	}
+	dijit.byId('suggestedTimes').show();
+	dojo.byId('suggestContent').innerHTML = '';
+	dojo.removeClass('suggestloading', 'hidden');
+	showDijitButton('suggestDlgBtn');
+	dijit.byId('suggestDlgCancelBtn').set('label', 'Cancel');
+	var data = {continuation: dojo.byId('suggestcont').value};
+	RPCwrapper(data, showSuggestedTimesCB, 1);
+	document.body.style.cursor = 'wait';
+}
+
+function showSuggestedTimesCB(data, ioArgs) {
+	document.body.style.cursor = 'default';
+	dojo.addClass('suggestloading', 'hidden');
+	dojo.byId('suggestContent').innerHTML = data.items.html;
+	if(data.items.status == 'resgone') {
+		dijit.byId('suggestedTimes').hide();
+		resGone();
+		resRefresh();
+		return;
+	}
+	else if(data.items.status == 'error') {
+		hideDijitButton('suggestDlgBtn');
+		dijit.byId('suggestDlgCancelBtn').set('label', 'Okay');
+		return;
+	}
+	else if(data.items.status == 'noextend') {
+		dijit.byId('suggestedTimes').hide();
+		dojo.byId('editResDlgContent').innerHTML = data.items.html;
+		dojo.byId('editResDlgErrMsg').innerHTML = '';
+		dijit.byId('editResDlgBtn').set('style', 'display: none');
+		dijit.byId('editResCancelBtn').set('label', 'Okay');
+		if(dijit.byId('editResDlg')._relativePosition)
+			delete dijit.byId('editResDlg')._relativePosition;
+		dijit.byId('editResDlg')._position();
+		return;
+	}
+	if(dijit.byId('suggestedTimes')._relativePosition)
+		delete dijit.byId('suggestedTimes')._relativePosition;
+	dijit.byId('suggestedTimes')._position();
+	suggestTimeData = data.items.data;
+}
+
+function setSuggestSlot(slot) {
+	dojo.byId('selectedslot').value = slot;
+	dijit.byId('suggestDlgBtn').set('disabled', false);
+}
+
+function useSuggestedSlot() {
+	var slot = suggestTimeData[dojo.byId('selectedslot').value];
+	dojo.byId('laterradio').checked = true;
+	var s = new Date(parseInt(slot['startts'] + '000'));
+	dojo.byId('reqday').value = dojox.string.sprintf('%d/%d/%d', s.getMonth() + 1, s.getDate(), s.getFullYear());
+	var hm = get12from24(s.getHours());
+	dojo.byId('reqhour').value = hm['hour'];
+	dojo.byId('reqmeridian').value = hm['meridian'];
+	var min = s.getMinutes();
+	if(min == 0)
+		dojo.byId('reqmin').value = 'zero';
+	else
+		dojo.byId('reqmin').value = min;
+	dojo.byId('reqlength').value = slot['duration'] / 60;
+	dojo.byId('waittime').className = 'hidden';
+	dijit.byId('suggestedTimes').hide();
+	updateWaitTime(0);
+}
+
 function selectLater() {
 	dojo.byId('laterradio').checked = true;
+	dojo.byId('waittime').innerHTML = '';
 }
 
 function selectDuration() {
@@ -100,6 +173,8 @@ function selectLength() {
 function selectEnding() {
 	if(dojo.byId('dateradio'))
 		dojo.byId('dateradio').checked = true;
+	dijit.byId('editResDlgBtn').set('label', 'Modify Reservation');
+	resetEditResBtn();
 }
 
 function setOpenEnd() {
@@ -128,6 +203,10 @@ function checkValidImage() {
 		return false;
 	if(dijit.byId('imagesel') && ! dijit.byId('imagesel').isValid()) {
 		alert('Please select a valid environment.');
+		return false;
+	}
+	if(dojo.byId('newsubmit').value == 'View Available Times') {
+		showSuggestedTimes();
 		return false;
 	}
 	resSubmitted = 1;
@@ -347,6 +426,12 @@ function hideEditResDlg() {
 	dojo.byId('editResDlgErrMsg').innerHTML = '';
 	dojo.byId('editrescont').value = '';
 	dojo.byId('editresid').value = '';
+	resetEditResBtn();
+}
+
+function resetEditResBtn() {
+	dojo.byId('editResDlgErrMsg').innerHTML = '';
+	dijit.byId('editResDlgBtn').set('label', 'Modify Reservation');
 }
 
 function editResOpenEnd() {
@@ -369,7 +454,52 @@ function editResOpenEnd() {
 	                             t.getMinutes());
 }
 
+function useSuggestedEditSlot() {
+	var slot = suggestTimeData[dojo.byId('selectedslot').value];
+	var tmp = parseInt(slot['startts'] + '000');
+	var s = new Date(tmp);
+	if(slot['startts'] == dojo.byId('selectedslot').value)
+		var e = new Date(tmp + parseInt(slot['duration'] + '000'));
+	else
+		var e = new Date(parseInt(dojo.byId('selectedslot').value + '000'));
+	var testend = new Date(2038, 0, 1, 0, 0, 0, 0);
+	if(dijit.byId('day')) {
+		var day = dojox.string.sprintf('%d%02d%02d', s.getFullYear(), s.getMonth() + 1, s.getDate());
+		dijit.byId('day').set('value', day);
+	}
+	if(dijit.byId('editstarttime'))
+		dijit.byId('editstarttime').set('value', s);
+	if(! dojo.byId('indefiniteradio') || e < testend) {
+		if(dijit.byId('openenddate'))
+			dijit.byId('openenddate').set('value', e);
+		if(dijit.byId('openendtime'))
+			dijit.byId('openendtime').set('value', e);
+	}
+
+	var len = slot['duration'] / 60; 
+	if(dojo.byId('indefiniteradio') && e >= testend) {
+		dojo.byId('indefiniteradio').checked = true;
+	}
+	else if(dijit.byId('length') && dijit.byId('length').getOptions(len.toString())) {
+		dijit.byId('length').set('value', len);
+		if(dojo.byId('lengthradio'))
+			dojo.byId('lengthradio').checked = true;
+	}
+	else if(dojo.byId('dateradio')) {
+		dojo.byId('dateradio').checked = true;
+	}
+
+	dijit.byId('suggestedTimes').hide();
+}
+
 function submitEditReservation() {
+	if(dijit.byId('editResDlgBtn').get('label') == 'View Available Times') {
+		dijit.byId('suggestDlgBtn').set('disabled', true);
+		showDijitButton('suggestDlgBtn');
+		dijit.byId('suggestDlgCancelBtn').set('label', 'Cancel');
+		showSuggestedTimes();
+		return;
+	}
 	var cont = dojo.byId('editrescont').value;
 	var data = {continuation: cont};
 	if(dijit.byId('day'))
@@ -434,6 +564,14 @@ function submitEditReservationCB(data, ioArgs) {
 		dijit.byId('editResDlgBtn').set('style', 'display: none');
 		dijit.byId('editResCancelBtn').set('label', 'Okay');
 		resRefresh();
+		return;
+	}
+	else if(data.items.status == 'conflict') {
+		dojo.byId('editResDlgErrMsg').innerHTML = data.items.errmsg;
+		dojo.byId('editrescont').value = data.items.cont;
+		//dojo.byId('editresid').value = '';
+		dojo.byId('suggestcont').value = data.items.sugcont;
+		dijit.byId('editResDlgBtn').set('label', 'View Available Times');
 		return;
 	}
 	else if(data.items.status == 'unavailable') {

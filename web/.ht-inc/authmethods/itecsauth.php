@@ -62,6 +62,7 @@ function addITECSUser($loginid) {
 		       .        "lastname, "
 		       .        "email, "
 		       .        "emailnotices, "
+		       .        "showallgroups, "
 		       .        "lastupdated) "
 		       . "VALUES ("
 		       .        "{$row['uid']}, "
@@ -71,6 +72,7 @@ function addITECSUser($loginid) {
 		       .        "'$last', "
 		       .        "'$email', "
 		       .        "0, "
+		       .        "1, "
 		       .        "NOW())";
 		// FIXME might want this logged
 		doQuery($query, 101, 'vcl', 1);

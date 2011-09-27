@@ -272,3 +272,27 @@
 	width: 400px;
 	height: 310px;
 }
+
+.collapsetable {
+	border-collapse: collapse;
+}
+
+.tablerow0 td {
+	background-color: #dddddd;
+	padding: 2px, 0, 0, 0;
+	color: black;
+}
+
+.tablerow1 td {
+	background-color: #ffffff;
+	padding: 2px, 0, 0, 0;
+	color: black;
+}
+
+.advoptions tr th {
+	text-align: right;
+}
+
+.advoptions tr td {
+	text-align: left;
+}

@@ -912,7 +912,6 @@ function getStatGraphConBladeUserData($start, $end, $affilid) {
 		$data = array('nodata' => '(too much computational time required to generate this graph)');
 		return $data;
 	}
-	$data['here'] = ''; # todo is this leftover debugging?
 	for($daystart = $startunix; $daystart < $endunix; $daystart += SECINDAY) {
 		$cnt++;
 		$startdt = unixToDatetime($daystart);
@@ -922,7 +921,6 @@ function getStatGraphConBladeUserData($start, $end, $affilid) {
 		if(array_key_exists($key, $cachepts))
 			$value = $cachepts[$key];
 		else {
-			$data['here'] .= "$startdt, ";
 			$count = array();
 			for($j = 0; $j < 24; $j++)
 				$count[$j] = 0;
@@ -1061,7 +1059,6 @@ function getStatGraphConVMUserData($start, $end, $affilid) {
 		$data = array('nodata' => '(too much computational time required to generate this graph)');
 		return $data;
 	}
-	$data['here'] = '';
 	for($daystart = $startunix; $daystart < $endunix; $daystart += SECINDAY) {
 		$cnt++;
 		$startdt = unixToDatetime($daystart);
@@ -1071,7 +1068,6 @@ function getStatGraphConVMUserData($start, $end, $affilid) {
 		if(array_key_exists($key, $cachepts))
 			$value = $cachepts[$key];
 		else {
-			$data['here'] .= "$startdt, ";
 			$count = array();
 			for($j = 0; $j < 24; $j++)
 				$count[$j] = 0;

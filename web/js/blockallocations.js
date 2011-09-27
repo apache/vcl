@@ -1362,8 +1362,14 @@ function updateAllocatedMachinesCB(data, ioArgs) {
 	graph.updateSeries('Main', data.items.virtual.points);
 	graph.labeldata = data.items.virtual.points;
 	graph.render();
-	dojo.byId('totalbare').innerHTML = 'Total online: ' + data.items.bare.total;
-	dojo.byId('totalvirtual').innerHTML = 'Total online: ' + data.items.virtual.total;
+	if(data.items.bare.total != 0)
+		dojo.byId('totalbare').innerHTML = 'Total online: ' + data.items.bare.total;
+	else
+		dojo.byId('totalbare').innerHTML = '';
+	if(data.items.virtual.total != 0)
+		dojo.byId('totalvirtual').innerHTML = 'Total online: ' + data.items.virtual.total;
+	else
+		dojo.byId('totalvirtual').innerHTML = '';
 }
 
 function timestampToTimeBare(val) {

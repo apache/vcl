@@ -32,7 +32,7 @@ function serverProfiles() {
 	print "data=\"profilesstoredata\"></div>\n";
 	print "<div id=\"mainTabContainer\" dojoType=\"dijit.layout.TabContainer\"\n";
 	print "     style=\"width:630px;height:600px\">\n";
-	print "<div id=\"deploytab\" dojoType=\"dijit.layout.ContentPane\" title=\"Shake &amp; Bake\" selected=\"true\">\n";
+	print "<div id=\"deploytab\" dojoType=\"dijit.layout.ContentPane\" title=\"Deploy Server\" selected=\"true\">\n";
 	$data = deployHTML();
 	print $data['html'];
 	print "</div>\n"; # deploy tab
@@ -61,11 +61,11 @@ function serverProfiles() {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function deployHTML() {
-	global $user;
+	global $user, $skin;
 	$profiles = getServerProfiles();
 
 	$h = '';
-	$h .= "<h2>Shake &amp; Bake</h2>\n";
+	$h .= "<h2>Deploy Server</h2>\n";
 	$h .= "<span id=\"deployprofileslist\"";
 	if(! count($profiles))
 		$h .= " class=\"hidden\"";
@@ -85,6 +85,7 @@ function deployHTML() {
 	$h .= "	</script>\n";
 	$h .= "</button>";
 	$h .= "<br><hr><br>\n";
+	$h .= "<input type=\"hidden\" id=\"appliedprofileid\" value=\"0\">\n";
 	$h .= "</span>\n"; # deployprofileslist
 
 	$h .= "<div id=\"deployprofilediv\">\n";
@@ -126,9 +127,14 @@ function deployHTML() {
 	$h .= "  </tr>\n";
 	$h .= "  <tr>\n";
 	$h .= "    <th align=right>Admin User Group:</th>\n";
-	$usergroups = getUserEditGroups($user['id']);
 	$h .= "    <td>\n";
-	if(USEFILTERINGSELECT && count($usergroups) < FILTERINGSELECTTHRESHOLD) {
+	$admingroups = getUserEditGroups($user['id']);
+	$logingroups = $admingroups;
+	$extraadmingroups = getServerProfileGroups($user['id'], 'admin');
+	foreach($extraadmingroups as $id => $group)
+		$admingroups[$id] = $group;
+	uasort($admingroups, 'sortKeepIndex');
+	if(USEFILTERINGSELECT && count($admingroups) < FILTERINGSELECTTHRESHOLD) {
 		$h .= "      <select dojoType=\"dijit.form.FilteringSelect\" id=\"deployadmingroup\" ";
 		$h .= "style=\"width: 400px\" queryExpr=\"*\${0}*\" required=\"true\" ";
 		$h .= "highlightMatch=\"all\" autoComplete=\"false\">\n";
@@ -136,7 +142,7 @@ function deployHTML() {
 	else
 		$h .= "      <select dojoType=\"dijit.form.Select\" id=\"deployadmingroup\">\n";
 	$h .= "        <option value=\"0\">None</option>\n";
-	foreach($usergroups as $id => $group)
+	foreach($admingroups as $id => $group)
 		$h .= "        <option value=\"$id\">$group</option>\n";
 	$h .= "      </select>\n";
 	$h .= "    </td>\n";
@@ -144,7 +150,11 @@ function deployHTML() {
 	$h .= "  <tr>\n";
 	$h .= "    <th align=right>Access User Group:</th>\n";
 	$h .= "    <td>\n";
-	if(USEFILTERINGSELECT && count($usergroups) < FILTERINGSELECTTHRESHOLD) {
+	$extralogingroups = getServerProfileGroups($user['id'], 'login');
+	foreach($extralogingroups as $id => $group)
+		$logingroups[$id] = $group;
+	uasort($logingroups, 'sortKeepIndex');
+	if(USEFILTERINGSELECT && count($logingroups) < FILTERINGSELECTTHRESHOLD) {
 		$h .= "      <select dojoType=\"dijit.form.FilteringSelect\" id=\"deploylogingroup\" ";
 		$h .= "style=\"width: 400px\" queryExpr=\"*\${0}*\" required=\"true\" ";
 		$h .= "highlightMatch=\"all\" autoComplete=\"false\">\n";
@@ -152,7 +162,7 @@ function deployHTML() {
 	else
 		$h .= "      <select dojoType=\"dijit.form.Select\" id=\"deploylogingroup\">\n";
 	$h .= "        <option value=\"0\">None</option>\n";
-	foreach($usergroups as $id => $group)
+	foreach($logingroups as $id => $group)
 		$h .= "        <option value=\"$id\">$group</option>\n";
 	$h .= "      </select>\n";
 	$h .= "    </td>\n";
@@ -163,7 +173,7 @@ function deployHTML() {
 	$h .= "id=\"deploymonitored\" dojoType=\"dijit.form.CheckBox\"></td>\n";
 	$h .= "  </tr>\n";
 	$h .= "</table><br><br>\n";
-	$h .= "When would you like to Shake &amp; Bake the server?<br>\n";
+	$h .= "When would you like to deploy the server?<br>\n";
 	$h .= "&nbsp;&nbsp;&nbsp;";
 	$h .= "<input type=\"radio\" id=\"startnow\" name=\"deploystart\" ";
 	$h .= "onclick=\"setStartNow();\" checked>\n";
@@ -174,14 +184,14 @@ function deployHTML() {
 	$h .= "<label for=\"startlater\">Later:</label>\n";
 	$h .= "<div dojoType=\"dijit.form.DateTextBox\" ";
 	$h .= "id=\"deploystartdate\" onChange=\"setStartLater();\" ";
-	$h .= "style=\"width: 78px\"></div>\n";
+	$h .= "style=\"width: 88px\"></div>\n";
 	$h .= "<div id=\"deploystarttime\" dojoType=\"dijit.form.TimeTextBox\" ";
-	$h .= "style=\"width: 78px\" onChange=\"setStartLater();\"></div>\n";
+	$h .= "style=\"width: 88px\" onChange=\"setStartLater();\"></div>\n";
 	$h .= "<small>(" . date('T') . ")</small><br><br>\n";
 	$h .= "Ending for server:<br>\n";
 	$h .= "&nbsp;&nbsp;&nbsp;";
 	$h .= "<input type=\"radio\" id=\"endindef\" name=\"deployend\" ";
-	$h .= "onclick=\"setEndIndef();\" checked>\n"; # todo should this 'checked' be hard coded?
+	$h .= "onclick=\"setEndIndef();\" checked>\n"; # TODO should this 'checked' be hard coded?
 	$h .= "<label for=\"endindef\">Indefinite</label><br>\n";
 	$h .= "&nbsp;&nbsp;&nbsp;";
 	$h .= "<input type=\"radio\" id=\"endat\" name=\"deployend\" ";
@@ -189,19 +199,48 @@ function deployHTML() {
 	$h .= "<label for=\"endat\">At this time:</label>\n";
 	$h .= "<div type=\"text\" dojoType=\"dijit.form.DateTextBox\" ";
 	$h .= "id=\"deployenddate\" onChange=\"setEndAt();\" ";
-	$h .= "style=\"width: 78px\"></div>\n";
+	$h .= "style=\"width: 88px\"></div>\n";
 	$h .= "<div type=\"text\" id=\"deployendtime\" dojoType=\"dijit.form.TimeTextBox\" ";
-	$h .= "style=\"width: 78px\" onChange=\"setEndAt();\"></div>\n";
+	$h .= "style=\"width: 88px\" onChange=\"setEndAt();\"></div>\n";
 	$h .= "<small>(" . date('T') . ")</small><br><br>\n";
+	$h .= "<div class=\"rederrormsg hidden\" id=\"deployerr\"></div>\n";
 	$cont = addContinuationsEntry('AJdeployServer', array(), SECINDAY, 1, 0);
-	$h .= "<button dojoType=\"dijit.form.Button\">\n";
-	$h .= "	Shake &amp; Bake Server\n";
-	$h .= "	<script type=\"dojo/method\" event=onClick>\n";
-	$h .= "		submitDeploy();\n";
-	$h .= "	</script>\n";
+	$h .= "<button dojoType=\"dijit.form.Button\" id=\"deploybtn\">\n";
+	$h .= "  Deploy Server\n";
+	$h .= "  <script type=\"dojo/method\" event=onClick>\n";
+	$h .= "    submitDeploy();\n";
+	$h .= "  </script>\n";
 	$h .= "</button><br><br>\n";
 	$h .= "<input type=\"hidden\" id=\"deploycont\" value=\"$cont\">\n";
-	$h .= "</div>\n"; # serverprofilediv
+	$h .= "</div>\n"; # deployprofilediv
+
+	$h .= "<div dojoType=dijit.Dialog\n";
+	$h .= "      id=\"suggestedTimes\"\n";
+	$h .= "      title=\"Available Times\"\n";
+	$h .= "      duration=250\n";
+	$h .= "      draggable=true>\n";
+	$h .= "   <div id=\"suggestloading\" style=\"text-align: center\">";
+	$h .= "<img src=\"themes/$skin/css/dojo/images/loading.gif\" style=\"vertical-align: middle;\"> Loading...</div>\n";
+	$h .= "   <div id=\"suggestContent\"></div>\n";
+	$h .= "   <input type=\"hidden\" id=\"suggestcont\">\n";
+	$h .= "   <input type=\"hidden\" id=\"selectedslot\">\n";
+	$h .= "   <div align=\"center\">\n";
+	$h .= "   <button id=\"suggestDlgBtn\" dojoType=\"dijit.form.Button\" disabled>\n";
+	$h .= "     Use Selected Time\n";
+	$h .= "	   <script type=\"dojo/method\" event=\"onClick\">\n";
+	$h .= "       useSuggestedDeploySlot();\n";
+	$h .= "     </script>\n";
+	$h .= "   </button>\n";
+	$h .= "   <button id=\"suggestDlgCancelBtn\" dojoType=\"dijit.form.Button\">\n";
+	$h .= "     Cancel\n";
+	$h .= "	   <script type=\"dojo/method\" event=\"onClick\">\n";
+	$h .= "       dijit.byId('suggestDlgBtn').set('disabled', true);\n";
+	$h .= "       dijit.byId('suggestedTimes').hide();\n";
+	$h .= "       dojo.byId('suggestContent').innerHTML = '';\n";
+	$h .= "     </script>\n";
+	$h .= "   </button>\n";
+	$h .= "   </div>\n";
+	$h .= "</div>\n";
 	return array('html' => $h);
 }
 
@@ -295,9 +334,14 @@ function manageProfilesHTML() {
 	$h .= "  </tr>\n";
 	$h .= "  <tr>\n";
 	$h .= "    <th align=right>Admin User Group:</th>\n";
-	$usergroups = getUserEditGroups($user['id']);
 	$h .= "    <td>\n";
-	if(USEFILTERINGSELECT && count($usergroups) < FILTERINGSELECTTHRESHOLD) {
+	$admingroups = getUserEditGroups($user['id']);
+	$logingroups = $admingroups;
+	$extraadmingroups = getServerProfileGroups($user['id'], 'admin');
+	foreach($extraadmingroups as $id => $group)
+		$admingroups[$id] = $group;
+	uasort($admingroups, 'sortKeepIndex');
+	if(USEFILTERINGSELECT && count($admingroups) < FILTERINGSELECTTHRESHOLD) {
 		$h .= "      <select dojoType=\"dijit.form.FilteringSelect\" id=\"profileadmingroup\" ";
 		$h .= "style=\"width: 400px\" name=\"profileadmingroup\" queryExpr=\"*\${0}*\" ";
 		$h .= "highlightMatch=\"all\" autoComplete=\"false\">\n";
@@ -305,7 +349,7 @@ function manageProfilesHTML() {
 	else
 		$h .= "      <select dojoType=\"dijit.form.Select\" name=\"profileadmingroup\" id=\"profileadmingroup\">\n";
 	$h .= "        <option value=\"0\">None</option>\n";
-	foreach($usergroups as $id => $group)
+	foreach($admingroups as $id => $group)
 		$h .= "        <option value=\"$id\">$group</option>\n";
 	$h .= "      </select>\n";
 	$h .= "    </td>\n";
@@ -313,7 +357,11 @@ function manageProfilesHTML() {
 	$h .= "  <tr>\n";
 	$h .= "    <th align=right>Access User Group:</th>\n";
 	$h .= "    <td>\n";
-	if(USEFILTERINGSELECT && count($usergroups) < FILTERINGSELECTTHRESHOLD) {
+	$extralogingroups = getServerProfileGroups($user['id'], 'login');
+	foreach($extralogingroups as $id => $group)
+		$logingroups[$id] = $group;
+	uasort($logingroups, 'sortKeepIndex');
+	if(USEFILTERINGSELECT && count($logingroups) < FILTERINGSELECTTHRESHOLD) {
 		$h .= "      <select dojoType=\"dijit.form.FilteringSelect\" id=\"profilelogingroup\" ";
 		$h .= "style=\"width: 400px\" name=\"profilelogingroup\" queryExpr=\"*\${0}*\" ";
 		$h .= "highlightMatch=\"all\" autoComplete=\"false\">\n";
@@ -321,7 +369,7 @@ function manageProfilesHTML() {
 	else
 		$h .= "      <select dojoType=\"dijit.form.Select\" name=\"profilelogingroup\" id=\"profilelogingroup\">\n";
 	$h .= "        <option value=\"0\">None</option>\n";
-	foreach($usergroups as $id => $group)
+	foreach($logingroups as $id => $group)
 		$h .= "        <option value=\"$id\">$group</option>\n";
 	$h .= "      </select>\n";
 	$h .= "    </td>\n";
@@ -606,6 +654,7 @@ function AJserverProfileStoreData() {
 ////////////////////////////////////////////////////////////////////////////////
 function AJdeployServer() {
 	global $user;
+	$profileid = processInputVar('profileid', ARG_NUMERIC);
 	$imageid = processInputVar('imageid', ARG_NUMERIC);
 	$resources = getUserResources(array("imageAdmin", "imageCheckOut"));
 	$images = removeNoCheckout($resources["image"]);
@@ -625,7 +674,7 @@ function AJdeployServer() {
 		$ipaddrArr[0] < 1 || $ipaddrArr[0] > 255 ||
 		$ipaddrArr[1] < 0 || $ipaddrArr[1] > 255 ||
 		$ipaddrArr[2] < 0 || $ipaddrArr[2] > 255 ||
-		$ipaddrArr[3] < 1 || $ipaddrArr[3] > 255)) {
+		$ipaddrArr[3] < 0 || $ipaddrArr[3] > 255)) {
 		$cont = addContinuationsEntry('AJdeployServer', array(), SECINDAY, 1, 0);
 		$data = array('error' => 1,
 		              'cont' => $cont,
@@ -646,7 +695,9 @@ function AJdeployServer() {
 	}
 	$admingroupid = processInputVar('admingroupid', ARG_NUMERIC);
 	$usergroups = getUserEditGroups($user['id']);
-	if($admingroupid != 0 && ! array_key_exists($admingroupid, $usergroups)) {
+	$extraadmingroups = getServerProfileGroups($user['id'], 'admin');
+	if($admingroupid != 0 && ! array_key_exists($admingroupid, $usergroups) &&
+	   ! array_key_exists($admingroupid, $extraadmingroups)) {
 		$cont = addContinuationsEntry('AJdeployServer', array(), SECINDAY, 1, 0);
 		$data = array('error' => 1,
 		              'cont' => $cont,
@@ -655,7 +706,9 @@ function AJdeployServer() {
 		return;
 	}
 	$logingroupid = processInputVar('logingroupid', ARG_NUMERIC);
-	if($logingroupid != 0 && ! array_key_exists($logingroupid, $usergroups)) {
+	$extralogingroups = getServerProfileGroups($user['id'], 'login');
+	if($logingroupid != 0 && ! array_key_exists($logingroupid, $usergroups) &&
+	   ! array_key_exists($logingroupid, $extralogingroups)) {
 		$cont = addContinuationsEntry('AJdeployServer', array(), SECINDAY, 1, 0);
 		$data = array('error' => 1,
 		              'cont' => $cont,
@@ -717,6 +770,19 @@ function AJdeployServer() {
 		$endts = datetimeToUnix("2038-01-01 00:00:00");
 	}
 
+	$resources = getUserResources(array("serverCheckOut", "serverProfileAdmin"),
+	                              array("available","administer"));
+	if(! array_key_exists($profileid, $resources['serverprofile']))
+		$profileid = 0;
+	elseif($profileid != 0) {
+		$tmp = getServerProfiles($profileid);
+		$tmp = $tmp[$profileid];
+		if($tmp['imageid'] != $imageid &&
+		   (($tmp['fixedIP'] != $ipaddr && $tmp['fixedMAC'] != $macaddr) ||
+		   ($tmp['fixedIP'] == $ipaddr && $ipaddr == '' && $tmp['fixedMAC'] == $macaddr && $macaddr == '')))
+			$profileid = 0;
+	}
+
 	// TODO handle selection of multiple revisions
 
 	// get semaphore lock
@@ -727,9 +793,34 @@ function AJdeployServer() {
 	$images = getImages(0, $imageid);
 	$availablerc = isAvailable($images, $imageid, $revisionid, $startts, $endts,
 	                           0, 0, 0, 0, $ipaddr, $macaddr);
-	# TODO give better error message if due to ip or mac conflict
+	if($availablerc < 1) {
+		$cdata = array('start' => $startts, 
+		               'end' => $endts,
+		               'imageid' => $imageid,
+		               'server' => 1,
+		               'ip' => $ipaddr,
+		               'mac' => $macaddr);
+		if($startmode == 0)
+			$cdata['now'] = 1;
+		else 
+			$cdata['now'] = 0;
+		$sugcont = addContinuationsEntry('AJshowRequestSuggestedTimes', $cdata);
+	}
+	if($availablerc == -3) {
+		$cont = addContinuationsEntry('AJdeployServer', array(), SECINDAY, 1, 0);
+		$msg = "The IP or MAC address you specified overlaps with another "
+		     . "reservation using the same IP or MAC address you specified. "
+		     . "Please use a different IP or MAC or select a different time "
+		     . "to deploy the server.";
+		$data = array('error' => 2,
+		              'cont' => $cont,
+		              'sugcont' => $sugcont,
+		              'msg' => $msg);
+		sendJSON($data);
+		return;
+	}
 	$max = getMaxOverlap($user['id']);
-	if($availablerc != 0 && checkOverlap($startts, $endts, $max)) {
+	if($availablerc > 0 && checkOverlap($startts, $endts, $max)) {
 		$cont = addContinuationsEntry('AJdeployServer', array(), SECINDAY, 1, 0);
 		if($max == 0)
 			$msg = "The time you specified overlaps with another reservation you "
@@ -756,26 +847,40 @@ function AJdeployServer() {
 		     . "reservations for the environment can be made for the time you "
 		     . "have selected. Please select another time to use the "
 		     . "environment.";
-		$data = array('error' => 1,
+		$data = array('error' => 2,
 		              'cont' => $cont,
+		              'sugcont' => $sugcont,
+		              'msg' => $msg);
+		sendJSON($data);
+		return;
+	}
+	if($availablerc == -2) {
+		$cont = addContinuationsEntry('AJdeployServer', array(), SECINDAY, 1, 0);
+		$msg = "The time period you selected is not available due to scheduled "
+		     . "system downtime for maintenance. Please select another time to use "
+		     . "the environment.";
+		$data = array('error' => 2,
+		              'cont' => $cont,
+		              'sugcont' => $sugcont,
 		              'msg' => $msg);
 		sendJSON($data);
 		return;
 	}
 	if($availablerc == 0) {
-		// TODO what about timetable?
 		$cont = addContinuationsEntry('AJdeployServer', array(), SECINDAY, 1, 0);
 		$msg = "The requested time period is not available. Please select a "
 		     . "different time.";
-		$data = array('error' => 1,
+		$data = array('error' => 2,
 		              'cont' => $cont,
+		              'sugcont' => $sugcont,
 		              'msg' => $msg);
 		sendJSON($data);
 		return;
 	}
 	$requestid = addRequest();
-	$fields = array('requestid');
-	$values = array($requestid);
+	$fields = array('requestid', 'serverprofileid');
+	# 	TODO test deploying server with various combinations of profile items changed
+	$values = array($requestid, $profileid);
 	if($ipaddr != '') {
 		$fields[] = 'fixedIP';
 		$values[] = "'$ipaddr'";
@@ -1008,17 +1113,21 @@ function processProfileInput() {
 	}
 
 	$usergroups = getUserEditGroups($user['id']);
+	$extraadmingroups = getServerProfileGroups($user['id'], 'admin');
 	if($ret['admingroupid'] == 0)
 		$ret['admingroupid'] = 'NULL';
-	elseif(! array_key_exists($ret['admingroupid'], $usergroups)) {
+	elseif(! array_key_exists($ret['admingroupid'], $usergroups) &&
+	       ! array_key_exists($ret['admingroupid'], $extraadmingroups)) {
 	   $err['msg'] = "Invalid Admin User Group selected";
 		$err['field'] = 'admingroupid';
 		$err['error'] = 1;
 		return $err;
 	}
+	$extralogingroups = getServerProfileGroups($user['id'], 'login');
 	if($ret['logingroupid'] == 0)
 		$ret['logingroupid'] = 'NULL';
-	elseif(! array_key_exists($ret['logingroupid'], $usergroups)) {
+	elseif(! array_key_exists($ret['logingroupid'], $usergroups) &&
+	       ! array_key_exists($ret['logingroupid'], $extralogingroups)) {
 	   $err['msg'] = "Invalid Access User Group selected";
 		$err['field'] = 'logingroupid';
 		$err['error'] = 1;
@@ -1141,6 +1250,65 @@ function getServerProfileImages($userid) {
 		$profiles[$row['id']] = $row['image'];
 	$_SESSION['usersessiondata'][$key] = $profiles;
 	return $profiles;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn getServerProfileGroups($userid, $type)
+///
+/// \param $userid - id from user table
+/// \param $type - 'admin' or 'user'
+///
+/// \return array where the key is the id of the user group and the value is the
+/// name of the user group
+///
+/// \brief builds an array of user group that user has access to via server
+/// profiles
+///
+////////////////////////////////////////////////////////////////////////////////
+function getServerProfileGroups($userid, $type) {
+	global $user;
+	$key = getKey(array('getServerProfileAdminGroups', $userid, $type));
+	if(array_key_exists($key, $_SESSION['usersessiondata']))
+		return $_SESSION['usersessiondata'][$key];
+	$resources = getUserResources(array('serverCheckOut', 'serverProfileAdmin'),
+	                              array('available', 'administer'));
+	$ids = array_keys($resources['serverprofile']);
+	$inids = implode(',', $ids);
+	if(empty($inids)) {
+		$_SESSION['usersessiondata'][$key] = array();
+		return array();
+	}
+	if($type == 'admin')
+		$field = 'admingroupid';
+	else
+		$field = 'logingroupid';
+	if($user['showallgroups']) {
+		$query = "SELECT DISTINCT(u.id), "
+		       .        "CONCAT(u.name, '@', a.name) AS name "
+		       . "FROM serverprofile s, "
+		       .      "usergroup u, "
+		       .      "affiliation a "
+		       . "WHERE s.$field = u.id AND "
+		       .       "u.affiliationid = a.id AND "
+		       .       "s.id IN ($inids) "
+		       . "ORDER BY name";
+	}
+	else {
+		$query = "SELECT DISTINCT(u.id), "
+		       .        "u.name "
+		       . "FROM serverprofile s, "
+		       .      "usergroup u "
+		       . "WHERE s.$field = u.id AND "
+		       .       "s.id IN ($inids) "
+		       . "ORDER BY name";
+	}
+	$qh = doQuery($query, 101);
+	$groups = array();
+	while($row = mysql_fetch_assoc($qh))
+		$groups[$row['id']] = $row['name'];
+	$_SESSION['usersessiondata'][$key] = $groups;
+	return $groups;
 }
 
 ////////////////////////////////////////////////////////////////////////////////

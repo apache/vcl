@@ -98,7 +98,7 @@ function editVMInfo() {
 	print "</table><br><br>\n";
 
 	print "<div id=movevms class=hidden>\n";
-	print "The followig VM(s) will removed from this host at the listed ";
+	print "The following VM(s) will removed from this host at the listed ";
 	print "time(s):<br>\n";
 	print "<select name=movevmssel multiple id=movevmssel size=3>\n";
 	print "</select><br>\n";

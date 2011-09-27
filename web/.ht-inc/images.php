@@ -923,7 +923,7 @@ function editOrAddImage($state) {
 	print "<div dojoType=\"dijit.TitlePane\" title=\"Advanced Options - leave ";
 	print "default values unless you really know what you are doing<br>(click to ";
 	print "expand)\" open=false style=\"width: 500px\">\n";
-	print "<TABLE>\n";
+	print "<TABLE class=\"advoptions\">\n";
 	print "  <TR>\n";
 	print "    <TD colspan=3 id=hide1><hr></TD>\n";
 	print "  </TR>\n";
@@ -931,7 +931,7 @@ function editOrAddImage($state) {
 	print "    <TD colspan=3 id=hide2><strong>Advanced Options - leave default values unless you really know what you are doing</strong><br><br></TD>\n";
 	print "  </TR>\n";
 	print "  <TR>\n";
-	print "    <TH align=right>Minimum RAM (MB):</TH>\n";
+	print "    <TH>Minimum RAM (MB):</TH>\n";
 	print "    <TD><INPUT type=text name=minram value=\"";
 	print $data["minram"] . "\" maxlength=5 size=6></TD>\n";
 	print "    <TD>";
@@ -939,7 +939,7 @@ function editOrAddImage($state) {
 	print "</TD>\n";
 	print "  </TR>\n";
 	print "  <TR>\n";
-	print "    <TH align=right>Minimum Num of Processors:</TH>\n";
+	print "    <TH>Minimum Num of Processors:</TH>\n";
 	print "    <TD>\n";
 	$tmpArr = array("1" => "1", "2" => "2", "4" => "4", "8" => "8");
 	printSelectInput("minprocnumber", $tmpArr, $data["minprocnumber"]);
@@ -947,7 +947,7 @@ function editOrAddImage($state) {
 	print "    <TD></TD>\n";
 	print "  </TR>\n";
 	print "  <TR>\n";
-	print "    <TH align=right>Minimum Processor Speed (MHz):</TH>\n";
+	print "    <TH>Minimum Processor Speed (MHz):</TH>\n";
 	print "    <TD><INPUT type=text name=minprocspeed value=\"";
 	print $data["minprocspeed"] . "\" maxlength=5 size=5></TD>\n";
 	print "    <TD>";
@@ -955,7 +955,7 @@ function editOrAddImage($state) {
 	print "</TD>\n";
 	print "  </TR>\n";
 	print "  <TR>\n";
-	print "    <TH align=right>Minimum Network Speed (Mbps):</TH>\n";
+	print "    <TH>Minimum Network Speed (Mbps):</TH>\n";
 	print "    <TD>\n";
 	$tmpArr = array("10" => "10", "100" => "100", "1000" => "1000");
 	printSelectInput("minnetwork", $tmpArr, $data["minnetwork"]);
@@ -963,7 +963,7 @@ function editOrAddImage($state) {
 	print "    <TD></TD>\n";
 	print "  </TR>\n";
 	print "  <TR>\n";
-	print "    <TH align=right>Maximum Concurrent Usage:</TH>\n";
+	print "    <TH>Maximum Concurrent Usage:</TH>\n";
 	print "    <TD><INPUT type=text name=maxconcurrent value=\"";
 	print $data["maxconcurrent"] . "\" maxlength=3 size=4>(leave empty for unlimited)</TD>\n";
 	print "    <TD>";
@@ -973,7 +973,7 @@ function editOrAddImage($state) {
 	print "  </TR>\n";
 	if(! $state) {
 		print "  <TR>\n";
-		print "    <TH align=right>Estimated Reload Time (min):</TH>\n";
+		print "    <TH>Estimated Reload Time (min):</TH>\n";
 		print "    <TD><INPUT type=text name=reloadtime value=\"";
 		print $data["reloadtime"] . "\" maxlength=3 size=4></TD>\n";
 		print "    <TD>";
@@ -982,13 +982,13 @@ function editOrAddImage($state) {
 		print "  </TR>\n";
 	}
 	print "  <TR>\n";
-	print "    <TH align=right>Available for checkout:</TH>\n";
+	print "    <TH>Available for checkout:</TH>\n";
 	print "    <TD>\n";
 	$yesno = array(1 => "Yes", 0 => "No");
 	printSelectInput("forcheckout", $yesno, $data["forcheckout"]);
 	print "  </TR>\n";
 	print "  <TR>\n";
-	print "    <TH align=right>Check for logged in user:</TH>\n";
+	print "    <TH>Check for logged in user:</TH>\n";
 	if(array_key_exists("checkuser", $data) && ! $data["checkuser"])
 	   $default = 0;
 	else
@@ -998,7 +998,7 @@ function editOrAddImage($state) {
 	print "    </TD>\n";
 	print "  </TR>\n";
 	print "  <TR>\n";
-	print "    <TH align=right>Users have administrative access:</TH>\n";
+	print "    <TH>Users have administrative access:</TH>\n";
 	if(array_key_exists("rootaccess", $data) && ! $data["rootaccess"])
 		$default = 0;
 	else
@@ -1013,16 +1013,29 @@ function editOrAddImage($state) {
 		else
 			$default = 1;
 		print "  <TR>\n";
-		print "    <TH style=\"vertical-align:top; text-align:right;\">Use sysprep:</TH>\n";
+		print "    <TH style=\"vertical-align:top;\">Use sysprep:</TH>\n";
 		print "    <TD>\n";
 		printSelectInput("sysprep", $yesno, $default);
 		print "    </TD>\n";
 		print "  </TR>\n";
 	}
 	print "  <TR>\n";
-	print "    <TH style=\"vertical-align:top; text-align:right;\">Connection methods:</TH>\n";
+	print "    <TH style=\"vertical-align:top;\">Connection methods:</TH>\n";
 	print "    <TD>\n";
 	print "    <div id=\"connectmethodlist\">\n";
+
+
+	if($state)
+		$methods = $data['connectmethods'];
+	else
+		$methods = getImageConnectMethods($data['imageid']);
+	foreach($methods as $id => $method) {
+		if(! array_key_exists($id, $methods))
+			continue;
+		print "      $method<br>\n";
+	}
+
+
 	print "    </div>\n";
 	$cdata = array('imageid' => $data['imageid'],
 	               'newimage' => $state,
@@ -1274,7 +1287,7 @@ function connectmethodDialogContent() {
 	$cont = addContinuationsEntry('AJremImageConnectMethod', $data, 3600, 1, 0);
 	$h .= "<INPUT type=hidden id=remcmcont value=\"$cont\">";
 	if(! $newimage) {
-		$h .= "NOTE: Connection Method changes take effect immediately; you do<br>";
+		$h .= "NOTE: Connection Method changes take effect immediately; you<br>do ";
 		$h .= "<strong>not</strong> need to click \"Confirm Changes\" to submit them.";
 	}
 	print $h;
@@ -1397,6 +1410,8 @@ function AJaddImageConnectMethod() {
 	             'addcont' => $addcont,
 	             'remcont' => $remcont);
 	sendJSON($arr);
+	$key = getKey(array('getImageConnectMethods', $imageid, $revid));
+	unset($_SESSION['usersessiondata'][$key]);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1477,6 +1492,8 @@ function AJremImageConnectMethod() {
 	$arr = array('addcont' => $addcont,
 	             'remcont' => $remcont);
 	sendJSON($arr);
+	$key = getKey(array('getImageConnectMethods', $imageid, $revid));
+	unset($_SESSION['usersessiondata'][$key]);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -2560,7 +2577,7 @@ function confirmDeleteImage() {
 	print "$question<br><br>\n";
 	print "<TABLE>\n";
 	print "  <TR>\n";
-	print "    <TH align=right>Long Name:</TH>\n";
+	print "    <TH align=right>Name:</TH>\n";
 	print "    <TD>" . $images[$imageid]["prettyname"] . "</TD>\n";
 	print "  </TR>\n";
 	print "  <TR>\n";
@@ -2662,7 +2679,7 @@ function viewImageDetails() {
 	print "<H2>Image Details</H2>\n";
 	print "<TABLE>\n";
 	print "  <TR>\n";
-	print "    <TH align=right>Long Name:</TH>\n";
+	print "    <TH align=right>Name:</TH>\n";
 	print "    <TD>" . $images[$imageid]["prettyname"] . "</TD>\n";
 	print "  </TR>\n";
 	print "  <TR>\n";
@@ -3004,7 +3021,7 @@ function processImageInput($checks=1) {
 	if(preg_match('/-/', $return["prettyname"]) ||
 		strlen($return["prettyname"]) > 60 || strlen($return["prettyname"]) < 2) {
 	   $submitErr |= PRETTYNAMEERR;
-	   $submitErrMsg[PRETTYNAMEERR] = "Long Name must be from 2 to 60 characters "
+	   $submitErrMsg[PRETTYNAMEERR] = "Name must be from 2 to 60 characters "
 		                             . "and cannot contain any dashes (-).";
 	}
 	if(! ($submitErr & PRETTYNAMEERR) &&
@@ -3171,6 +3188,16 @@ function addImage($data) {
 	$data['description'] = mysql_real_escape_string($data['description']);
 	$data['usage'] = mysql_real_escape_string($data['usage']);
 
+	# get architecture of base image
+	$query = "SELECT i.architecture "
+	       . "FROM image i, "
+	       .      "imagerevision ir "
+	       . "WHERE ir.imageid = i.id AND "
+	       .       "ir.id = {$data['basedoffrevisionid']}";
+	$qh = doQuery($query);
+	$row = mysql_fetch_assoc($qh);
+	$arch = $row['architecture'];
+
 	$ownerdata = getUserInfo($data['owner'], 1);
 	$ownerid = $ownerdata['id'];
 	if(empty($data['maxconcurrent']) || ! is_numeric($data['maxconcurrent']))
@@ -3187,6 +3214,7 @@ function addImage($data) {
 	       .         "maxconcurrent, "
 	       .         "reloadtime, "
 	       .         "deleted, "
+	       .         "architecture, "
 	       .         "description, "
 	       .         "`usage`, "
 	       .         "basedoffrevisionid) "
@@ -3201,6 +3229,7 @@ function addImage($data) {
 	       .         "{$data["maxconcurrent"]}, "
 	       .         "{$data["reloadtime"]}, "
 	       .         "1, "
+	       .         "'$arch', "
 	       .         "'{$data['description']}', "
 	       .         "'{$data['usage']}', "
 	       .         "{$data['basedoffrevisionid']})";
