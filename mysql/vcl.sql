@@ -318,7 +318,7 @@ CREATE TABLE IF NOT EXISTS `connectmethodmap` (
   KEY `connectmethodid` (`connectmethodid`),
   KEY `OStypeid` (`OStypeid`),
   KEY `OSid` (`OSid`),
-  KEY `imageid` (`imageid`)
+  KEY `imagerevisionid` (`imagerevisionid`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
@@ -1123,9 +1123,9 @@ CREATE TABLE IF NOT EXISTS `userpriv` (
   `privnodeid` mediumint(8) unsigned NOT NULL default '0',
   `userprivtypeid` smallint(5) unsigned NOT NULL default '0',
   PRIMARY KEY  (`id`,`privnodeid`,`userprivtypeid`),
-  UNIQUE KEY `userid` (`userid`,`usergroupid`,`privnodeid`,`userprivtypeid`),
+  UNIQUE KEY `userid` (`userid`,`privnodeid`,`userprivtypeid`),
+  UNIQUE KEY `usergroupid` (`usergroupid`,`privnodeid`,`userprivtypeid`),
   KEY `privnodeid` (`privnodeid`),
-  KEY `usergroupid` (`usergroupid`),
   KEY `userprivtypeid` (`userprivtypeid`)
 ) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
 
@@ -1867,7 +1867,7 @@ ALTER TABLE `connectmethodmap`
   ADD CONSTRAINT `connectmethodmap_ibfk_1` FOREIGN KEY (`connectmethodid`) REFERENCES `connectmethod` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
   ADD CONSTRAINT `connectmethodmap_ibfk_2` FOREIGN KEY (`OStypeid`) REFERENCES `OStype` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
   ADD CONSTRAINT `connectmethodmap_ibfk_3` FOREIGN KEY (`OSid`) REFERENCES `OS` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
-  ADD CONSTRAINT `connectmethodmap_ibfk_4` FOREIGN KEY (`imageid`) REFERENCES `image` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+  ADD CONSTRAINT `connectmethodmap_ibfk_4` FOREIGN KEY (`imagerevisionid`) REFERENCES `imagerevision` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- 
 -- Constraints for table `continuations`
