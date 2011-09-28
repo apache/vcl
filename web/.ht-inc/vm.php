@@ -56,117 +56,122 @@ function editVMInfo() {
 	if(empty($vmhosts)) {
 		print "You do not have access to manage any existing virtual hosts.<br><br>\n";
 		print $newmsg;
-		return;
 	}
-	print $newmsg;
-	print "Select a Virtual Host:<br>\n";
-	printSelectInput("vmhostid", $vmhosts, -1, 0, 0, 'vmhostid', 'onChange="dojo.byId(\'vmhostdata\').className = \'hidden\';"');
-	$cont = addContinuationsEntry('vmhostdata');
-	print "<button dojoType=\"dijit.form.Button\" id=\"fetchCompGrpsButton\">\n";
-	print "	Configure Host\n";
-	print "	<script type=\"dojo/method\" event=onClick>\n";
-	print "		getVMHostData('$cont');\n";
-	print "	</script>\n";
-	print "</button><br><br>\n";
-	print "<div id=vmhostdata class=hidden>\n";
-	print "<table summary=\"\">\n";
-	print "  <tr>\n";
-	print "    <th align=right>VM limit:</th>\n";
-	print "    <td>\n";
-	$cont = addContinuationsEntry('updateVMlimit');
-	print "      <input dojoType=\"dijit.form.NumberSpinner\"\n";
-	print "             constraints=\"{min:1,max:" . MAXVMLIMIT . "}\"\n";
-	print "             maxlength=\"3\"\n";
-	print "             id=\"vmlimit\"\n";
-	print "             onChange=\"updateVMlimit('$cont')\">\n";
-	print "    </td>\n";
-	print "  </tr>\n";
-	#$cont = addContinuationsEntry('changeVMprofile');
-	print "  <tr>\n";
-	print "    <th align=right>VM Profile:</th>\n";
-	print "    <td>\n";
-	#printSelectInput("vmprofileid", $profiles, -1, 0, 0, 'vmprofileid', "onchange=changeVMprofile('$cont')");
-	print "      <div dojoType=\"dijit.TitlePane\" id=vmprofile></div>\n";
-	print "    </td>\n";
-	print "  </tr>\n";
-	/*if(! empty($data['vmkernalnic'])) {
+	else {
+		print $newmsg;
+		print "Select a Virtual Host:<br>\n";
+		printSelectInput("vmhostid", $vmhosts, -1, 0, 0, 'vmhostid', 'onChange="dojo.byId(\'vmhostdata\').className = \'hidden\';"');
+		$cont = addContinuationsEntry('vmhostdata');
+		print "<button dojoType=\"dijit.form.Button\" id=\"fetchCompGrpsButton\">\n";
+		print "	Configure Host\n";
+		print "	<script type=\"dojo/method\" event=onClick>\n";
+		print "		getVMHostData('$cont');\n";
+		print "	</script>\n";
+		print "</button><br><br>\n";
+		print "<div id=vmhostdata class=hidden>\n";
+		print "<table summary=\"\">\n";
 		print "  <tr>\n";
-		print "    <th align=right>VM Kernal NIC:</th>\n";
-		print "    <td>{$data['vmkernalnic']}</td>\n";
+		print "    <th align=right>VM limit:</th>\n";
+		print "    <td>\n";
+		$cont = addContinuationsEntry('updateVMlimit');
+		print "      <input dojoType=\"dijit.form.NumberSpinner\"\n";
+		print "             constraints=\"{min:1,max:" . MAXVMLIMIT . "}\"\n";
+		print "             maxlength=\"3\"\n";
+		print "             id=\"vmlimit\"\n";
+		print "             onChange=\"updateVMlimit('$cont')\">\n";
+		print "    </td>\n";
 		print "  </tr>\n";
-	}*/
-	print "</table><br><br>\n";
+		#$cont = addContinuationsEntry('changeVMprofile');
+		print "  <tr>\n";
+		print "    <th align=right>VM Profile:</th>\n";
+		print "    <td>\n";
+		#printSelectInput("vmprofileid", $profiles, -1, 0, 0, 'vmprofileid', "onchange=changeVMprofile('$cont')");
+		print "      <div dojoType=\"dijit.TitlePane\" id=vmprofile></div>\n";
+		print "    </td>\n";
+		print "  </tr>\n";
+		/*if(! empty($data['vmkernalnic'])) {
+			print "  <tr>\n";
+			print "    <th align=right>VM Kernal NIC:</th>\n";
+			print "    <td>{$data['vmkernalnic']}</td>\n";
+			print "  </tr>\n";
+		}*/
+		print "</table><br><br>\n";
 
-	print "<div id=movevms class=hidden>\n";
-	print "The following VM(s) will removed from this host at the listed ";
-	print "time(s):<br>\n";
-	print "<select name=movevmssel multiple id=movevmssel size=3>\n";
-	print "</select><br>\n";
-	print "<button dojoType=\"dijit.form.Button\" id=\"cancelBtn\">\n";
-	print "	<div>Cancel Removing of Selected VMs</div>\n";
-	print "	<script type=\"dojo/method\" event=onClick>\n";
-	$cont = addContinuationsEntry('AJcancelVMmove');
-	print "		cancelVMmove('$cont');\n";
-	print "	</script>\n";
-	print "</button>\n";
-	print "<br><br></div>\n";
+		print "<div id=movevms class=hidden>\n";
+		print "The following VM(s) will removed from this host at the listed ";
+		print "time(s):<br>\n";
+		print "<select name=movevmssel multiple id=movevmssel size=3>\n";
+		print "</select><br>\n";
+		print "<button dojoType=\"dijit.form.Button\" id=\"cancelBtn\">\n";
+		print "	<div>Cancel Removing of Selected VMs</div>\n";
+		print "	<script type=\"dojo/method\" event=onClick>\n";
+		$cont = addContinuationsEntry('AJcancelVMmove');
+		print "		cancelVMmove('$cont');\n";
+		print "	</script>\n";
+		print "</button>\n";
+		print "<br><br></div>\n";
 
-	print "<table summary=\"\"><tbody><tr>\n";
+		print "<table summary=\"\"><tbody><tr>\n";
 
-	# select for vms on host
-	print "<td valign=top>\n";
-	print "VMs assigned to host:<br>\n";
-	print "<select name=currvms multiple id=currvms size=15 onChange=showVMstate()>\n";
-	print "</select><br>\n";
-	print "State of selected vm:<br>\n";
-	print "<span id=vmstate></span>\n";
-	print "</td>\n";
-	# transfer buttons
-	print "<td style=\"vertical-align: middle;\">\n";
-	print "<button dojoType=\"dijit.form.Button\" id=\"addBtn1\">\n";
-	print "  <div style=\"width: 50px;\">&lt;-Add</div>\n";
-	print "	<script type=\"dojo/method\" event=onClick>\n";
-	$cont = addContinuationsEntry('AJvmToHost');
-	print "		vmToHost('$cont');\n";
-	print "	</script>\n";
-	print "</button>\n";
-	print "<br>\n";
-	print "<br>\n";
-	print "<br>\n";
-	print "<button dojoType=\"dijit.form.Button\" id=\"remBtn1\">\n";
-	print "	<div style=\"width: 50px;\">Remove</div>\n";
-	print "	<script type=\"dojo/method\" event=onClick>\n";
-	$cont = addContinuationsEntry('AJvmFromHost');
-	print "		vmFromHost('$cont');\n";
-	print "	</script>\n";
-	print "</button>\n";
-	print "</td>\n";
-	# select for unassigned vms
-	print "<td valign=top>\n";
-	print "Unassigned VMs:<br>\n";
-	print "<select name=freevms multiple id=freevms size=20>\n";
-	print "</select>\n";
-	print "</td>\n";
-	print "</tr><tbody/></table>\n";
-	print "</div><br><br>\n";
+		# select for vms on host
+		print "<td valign=top>\n";
+		print "VMs assigned to host:<br>\n";
+		print "<select name=currvms multiple id=currvms size=15 onChange=showVMstate()>\n";
+		print "</select><br>\n";
+		print "State of selected vm:<br>\n";
+		print "<span id=vmstate></span>\n";
+		print "</td>\n";
+		# transfer buttons
+		print "<td style=\"vertical-align: middle;\">\n";
+		print "<button dojoType=\"dijit.form.Button\" id=\"addBtn1\">\n";
+		print "  <div style=\"width: 50px;\">&lt;-Add</div>\n";
+		print "	<script type=\"dojo/method\" event=onClick>\n";
+		$cont = addContinuationsEntry('AJvmToHost');
+		print "		vmToHost('$cont');\n";
+		print "	</script>\n";
+		print "</button>\n";
+		print "<br>\n";
+		print "<br>\n";
+		print "<br>\n";
+		print "<button dojoType=\"dijit.form.Button\" id=\"remBtn1\">\n";
+		print "	<div style=\"width: 50px;\">Remove</div>\n";
+		print "	<script type=\"dojo/method\" event=onClick>\n";
+		$cont = addContinuationsEntry('AJvmFromHost');
+		print "		vmFromHost('$cont');\n";
+		print "	</script>\n";
+		print "</button>\n";
+		print "</td>\n";
+		# select for unassigned vms
+		print "<td valign=top>\n";
+		print "Unassigned VMs:<br>\n";
+		print "<select name=freevms multiple id=freevms size=20>\n";
+		print "</select>\n";
+		print "</td>\n";
+		print "</tr><tbody/></table>\n";
+		print "</div><br><br>\n";
 
-	/*print "<div dojoType=\"dijit.Dialog\"\n";
-	print "     id=\"profileDlg\"\n";
-	print "     title=\"Change Profile\">\n";
-	print "You have selected to change the VM Profile for this host.<br>\n";
-	print "Doing this will attempt to move any future reservations on the<br>\n";
-	print "host's VMs to other VMs and will submit a reload reservation for this<br>\n";
-	print "host after any active reservations on its VMs.<br><br>\n";
-	print "Are you sure you want to do this?<br><br>\n";
-	print "<button onclick=\"submitChangeProfile()\">Update VM Profile</button>\n";
-	print "<button onclick=\"dijit.byId('profileDlg').hide()\">Cancel</button>\n";
-	print "<input type=hidden id=changevmcont>\n";
-	print "</div>\n";*/
+		/*print "<div dojoType=\"dijit.Dialog\"\n";
+		print "     id=\"profileDlg\"\n";
+		print "     title=\"Change Profile\">\n";
+		print "You have selected to change the VM Profile for this host.<br>\n";
+		print "Doing this will attempt to move any future reservations on the<br>\n";
+		print "host's VMs to other VMs and will submit a reload reservation for this<br>\n";
+		print "host after any active reservations on its VMs.<br><br>\n";
+		print "Are you sure you want to do this?<br><br>\n";
+		print "<button onclick=\"submitChangeProfile()\">Update VM Profile</button>\n";
+		print "<button onclick=\"dijit.byId('profileDlg').hide()\">Cancel</button>\n";
+		print "<input type=hidden id=changevmcont>\n";
+		print "</div>\n";*/
+	}
 	print "</div>\n";
 
 	if(! checkUserHasPerm('Manage VM Profiles'))
 		return;
 	print "<div id=\"vmprofiles\" dojoType=\"dijit.layout.ContentPane\" title=\"VM Host Profiles\">\n";
+	if(count($profiles))
+		print "<span id=\"selectprofilediv\">";
+	else
+		print "<span id=\"selectprofilediv\" class=\"hidden\">";
 	print "<br>Select a profile to configure:<br>\n";
 	print "<select name=\"profileid\" id=\"profileid\" onChange=\"dojo.byId('vmprofiledata').className = 'hidden';\">\n";
 	foreach($profiles as $id => $item)
@@ -178,7 +183,8 @@ function editVMInfo() {
 	print "	<script type=\"dojo/method\" event=onClick>\n";
 	print "		getVMprofileData('$cont');\n";
 	print "	</script>\n";
-	print "</button>";
+	print "</button>\n";
+	print "</span>\n";
 	$cont = addContinuationsEntry('AJnewProfile');
 	print "<button dojoType=\"dijit.form.Button\" id=\"newProfilesBtn\">\n";
 	print "	New Profile...\n";

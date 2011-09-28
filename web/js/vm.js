@@ -22,7 +22,7 @@ var curprofile = '';
 
 function getVMHostData(cont) {
 	var hostid = document.getElementById('vmhostid').value;
-   document.body.style.cursor = 'wait';
+	document.body.style.cursor = 'wait';
 	dijit.byId('messages').hide();
 	document.getElementById('vmhostdata').className = 'hidden';
 	document.getElementById('movevms').className = 'hidden';
@@ -118,7 +118,7 @@ function VMHostDataCB(data, ioArgs) {
 function updateVMlimit(cont) {
 	var hostid = document.getElementById('vmhostid').value;
 	var newlimit = document.getElementById('vmlimit').value;
-   document.body.style.cursor = 'wait';
+	document.body.style.cursor = 'wait';
 
 	dojo.xhrPost({
 		url: 'index.php',
@@ -205,7 +205,7 @@ function submitChangeProfileCB(data, ioArgs) {
 }
 
 function vmToHost(cont) {
-   document.body.style.cursor = 'wait';
+	document.body.style.cursor = 'wait';
 	var hostid = document.getElementById('vmhostid').value;
 
 	var obj = document.getElementById('freevms');
@@ -343,7 +343,7 @@ function vmToHostCB(data, ioArgs) {
 }
 
 function vmFromHost(cont) {
-   document.body.style.cursor = 'wait';
+	document.body.style.cursor = 'wait';
 	var hostid = document.getElementById('vmhostid').value;
 
 	var obj = document.getElementById('currvms');
@@ -508,7 +508,7 @@ function setMessageWindow(title, okbtntext, content, submitFunc) {
 }
 
 function cancelVMmove(cont) {
-   document.body.style.cursor = 'wait';
+	document.body.style.cursor = 'wait';
 	var hostid = document.getElementById('vmhostid').value;
 
 	var obj = document.getElementById('movevmssel');
@@ -535,7 +535,7 @@ function cancelVMmove(cont) {
 }
 
 function getVMprofileData(cont) {
-   document.body.style.cursor = 'wait';
+	document.body.style.cursor = 'wait';
 	document.getElementById('vmprofiledata').className = 'hidden';
 	var profileid = document.getElementById('profileid').value;
 
@@ -637,6 +637,7 @@ function newProfileCB(data, ioArgs) {
 	var obj = document.getElementById('profileid');
 	obj.options[obj.options.length] = new Option(data.items.profile.profilename, data.items.profile.id);
 	obj.options[obj.options.length - 1].selected = true;
+	dojo.removeClass('selectprofilediv', 'hidden');
 	// TODO insert new entry in correct order
 	getVMprofileDataCB(data, ioArgs);
 }
@@ -731,10 +732,13 @@ function delProfileCB(data, ioArgs) {
 	var obj = document.getElementById('profileid');
 	obj.remove(obj.selectedIndex);
 	document.getElementById('vmprofiledata').className = 'hidden';
+	if(obj.options.length == 0)
+		dojo.addClass('selectprofilediv', 'hidden');
 	document.body.style.cursor = 'default';
 }
 
 function updateProfile(id, field) {
+	dojo.removeClass('selectprofilediv', 'hidden');
 	if(dijit.byId(id))
 		var newvalue = dijit.byId(id).value;
 	else
@@ -743,7 +747,7 @@ function updateProfile(id, field) {
 		return;
 	if(field == 'password')
 		document.getElementById('savestatus').innerHTML = 'Saving...';
-   document.body.style.cursor = 'wait';
+	document.body.style.cursor = 'wait';
 	
 	var profileid = document.getElementById('profileid').value;
 	var cont = document.getElementById('pcont').value;
