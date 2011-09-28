@@ -111,7 +111,13 @@ function viewGroups() {
 	print "</TD>\n";
 	print "    <TD><INPUT type=text name=owner size=15></TD>\n";
 	print "    <TD>\n";
-	printSelectInput("editgroupid", $affilusergroups);
+	$cdata = array('type' => 'user');
+	if(empty($affilusergroups)) {
+		$cdata['groupwasnone'] = 1;
+		$cdata['editgroupid'] = 0;
+	}
+	else
+		printSelectInput("editgroupid", $affilusergroups);
 	print "    </TD>\n";
 	print "    <TD><INPUT type=text name=initialmax maxlength=4 size=4 ";
 	print "value=240></TD>\n";
@@ -123,7 +129,7 @@ function viewGroups() {
 		print "    <TD><INPUT type=text name=overlap maxlength=4 size=4 value=0>";
 		print "</TD>\n";
 	}
-	$cont = addContinuationsEntry('submitAddGroup', array('type' => 'user'));
+	$cont = addContinuationsEntry('submitAddGroup', $cdata);
 	print "    <INPUT type=hidden name=continuation value=\"$cont\">\n";
 	print "    </FORM>\n";
 	print "  </TR>\n";
@@ -199,6 +205,12 @@ function viewGroups() {
 			print "</font><br><br>\n";
 		}
 	}
+
+	if(empty($dispUserGrpIDs) && empty($resources)) {
+		print "You do not have access to any resource groups.<br>\n";
+		return;
+	}
+
 	print "<TABLE class=resourcegrouptable border=1>\n";
 	print "  <TR>\n";
 	print "    <TD></TD>\n";
@@ -417,7 +429,7 @@ function editOrAddGroup($state) {
 			if($submitErr & EDITGROUPERR) {
 				if($state == 0)
 					$data['editgroupid'] = $usergroups[$data['groupid']]['editgroupid'];
-				else {
+				elseif(count($affilusergroups)) {
 					$tmp = array_keys($affilusergroups);
 					$data['editgroupid'] = $tmp[0];
 				}
@@ -432,12 +444,16 @@ function editOrAddGroup($state) {
 				        . "edit membership of this group. Select a<br>user group here "
 				        . "to allow members of that<br>group to edit membership of this one.";
 			}
-			elseif(! array_key_exists($data['editgroupid'], $affilusergroups)) {
+			elseif(! array_key_exists($data['editgroupid'], $affilusergroups) &&
+			       $data['editgroupid'] != 0) {
 				$affilusergroups[$data['editgroupid']] =
 				      array('name' => getUserGroupName($data['editgroupid'], 1));
 				uasort($affilusergroups, "sortKeepIndex");
 			}
-			printSelectInput("editgroupid", $affilusergroups, $data["editgroupid"]);
+			if($state == 1 && $data['editgroupid'] == 0)
+				print "None\n";
+			else
+				printSelectInput("editgroupid", $affilusergroups, $data["editgroupid"]);
 			print "    </TD>\n";
 			print "    <TD>";
 			if($submitErr & EDITGROUPERR)
@@ -501,6 +517,10 @@ function editOrAddGroup($state) {
 		if($state) {
 			$cdata = array('type' => $data['type'],
 			               'isowner' => $data['isowner']);
+			if($data['editgroupid'] == 0) {
+				$cdata['editgroupid'] = 0;
+				$cdata['groupwasnone'] = 1;
+			}
 			$cont = addContinuationsEntry('submitAddGroup', $cdata);
 			print "      <INPUT type=hidden name=continuation value=\"$cont\">\n";
 			print "      <INPUT type=submit value=\"Add Group\">\n";
@@ -508,7 +528,8 @@ function editOrAddGroup($state) {
 		else {
 			$cdata = array('type' => $data['type'],
 			               'groupid' => $data['groupid'],
-			               'isowner' => $data['isowner']);
+			               'isowner' => $data['isowner'],
+			               'groupwasnone' => $groupwasnone);
 			if($data['type'] == 'resource')
 				$cdata['resourcetypeid'] = $resourcetypeid;
 			else {
@@ -754,6 +775,8 @@ function updateGroup($data) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function addGroup($data) {
+	if($data['editgroupid'] == 0 || $data['edigroupid'] == '')
+		$data['editgroupid'] = 'NULL';
 	if($data["type"] == "user") {
 		if(! array_key_exists('custom', $data))
 			$data['custom'] = 1;
