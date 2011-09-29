@@ -4459,7 +4459,7 @@ function addRequest($forimaging=0, $revisionid=array()) {
 	foreach($requestInfo["images"] as $key => $imageid) {
 		if(array_key_exists($imageid, $revisionid) &&
 		   ! empty($revisionid[$imageid]))
-			$imagerevisionid = $revisionid[$imageid];
+			$imagerevisionid = array_shift($revisionid[$imageid]);
 		else
 			$imagerevisionid = getProductionRevisionid($imageid);
 		$computerid = $requestInfo["computers"][$key];

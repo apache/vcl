@@ -486,12 +486,16 @@ function submitRequest() {
 
 	if($mode == 'submitTestProd') {
 		$data = getContinuationVar();
-		$data["revisionid"] = processInputVar("revisionid", ARG_MULTINUMERIC);
+		$data["revisionid"] = $_POST['revisionid'];
 		# TODO check for valid revisionids for each image
 		if(! empty($data["revisionid"])) {
-			foreach($data['revisionid'] as $key => $val) {
-				if(! is_numeric($val) || $val < 0)
-					unset($data['revisionid']);
+			foreach($data['revisionid'] as $val) {
+				foreach($val as $val2) {
+					if(! is_numeric($val2) || $val2 < 0) {
+						unset($data['revisionid']);
+						break 2; // TODO make sure this breaks as far as needed
+					}
+				}
 			}
 		}
 	}
@@ -602,8 +606,10 @@ function submitRequest() {
 		abort(3);
 
 	if(array_key_exists('revisionid', $data) &&
-		array_key_exists($data['imageid'], $data['revisionid']))
-		$revisionid = $data['revisionid'][$data['imageid']];
+	   array_key_exists($data['imageid'], $data['revisionid']) &&
+	   array_key_exists(0, $data['revisionid'][$data['imageid']])) {
+		$revisionid = $data['revisionid'][$data['imageid']][0];
+	}
 	else
 		$revisionid = getProductionRevisionid($data['imageid']);
 	$availablerc = isAvailable($images, $data["imageid"], $revisionid, $start,
@@ -664,6 +670,7 @@ function submitRequest() {
 		if(! array_key_exists('subimages', $images[$data['imageid']]))
 			$images[$data['imageid']]['subimages'] = array();
 		array_unshift($images[$data['imageid']]['subimages'], $data['imageid']);
+		$cnt = 0;
 		foreach($images[$data['imageid']]['subimages'] as $subimage) {
 			print "{$images[$subimage]['prettyname']}:<br>\n";
 			print "<table summary=\"lists versions of the selected environment, one must be selected to continue\">\n";
@@ -676,13 +683,15 @@ function submitRequest() {
 			print "  </TR>\n";
 			foreach($images[$subimage]['imagerevision'] as $revision) {
 				print "  <TR>\n";
-				if(array_key_exists($subimage, $data['revisionid']) && 
-				   $data['revisionid'][$subimage] == $revision['id'])
-					print "    <TD align=center><INPUT type=radio name=revisionid[$subimage] value={$revision['id']} checked></TD>\n";
-				elseif($revision['production'])
-					print "    <TD align=center><INPUT type=radio name=revisionid[$subimage] value={$revision['id']} checked></TD>\n";
+				// if revision was selected or it wasn't selected but it is the production revision, show checked
+				if((array_key_exists('revisionid', $data) &&
+				   array_key_exists($subimage, $data['revisionid']) &&
+					array_key_exists($cnt, $data['revisionid'][$subimage]) &&
+				   $data['revisionid'][$subimage][$cnt] == $revisionid['id']) ||
+				   $revision['production'])
+					print "    <TD align=center><INPUT type=radio name=revisionid[$subimage][$cnt] value={$revision['id']} checked></TD>\n";
 				else
-					print "    <TD align=center><INPUT type=radio name=revisionid[$subimage] value={$revision['id']}></TD>\n";
+					print "    <TD align=center><INPUT type=radio name=revisionid[$subimage][$cnt] value={$revision['id']}></TD>\n";
 				print "    <TD align=center>{$revision['revision']}</TD>\n";
 				print "    <TD align=center>{$revision['user']}</TD>\n";
 				print "    <TD align=center>{$revision['prettydate']}</TD>\n";
@@ -693,6 +702,7 @@ function submitRequest() {
 				print "  </TR>\n";
 			}
 			print "</table>\n";
+			$cnt++;
 		}
 		$cont = addContinuationsEntry('submitTestProd', $data);
 		print "<br><INPUT type=hidden name=continuation value=\"$cont\">\n";
