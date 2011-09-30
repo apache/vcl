@@ -2948,7 +2948,7 @@ function getAffiliationDataUpdateText($affilid=0) {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn processInputVar($vartag, $type, $defaultvalue)
+/// \fn processInputVar($vartag, $type, $defaultvalue, $stripwhitespace)
 ///
 /// \param $vartag - name of GET or POST variable
 /// \param $type - tag type:\n
@@ -2956,6 +2956,8 @@ function getAffiliationDataUpdateText($affilid=0) {
 /// \b ARG_STRING - string\n
 /// \b ARG_MULTINUMERIC - an array of numbers
 /// \param $defaultvalue - default value for the variable (NULL if not passed in)
+/// \param $stripwhitespace - (optional, default=0) - set to 1 to strip
+/// whitespace from the beginning and end of the value
 ///
 /// \return safe value for the GET or POST variable
 ///
@@ -2963,7 +2965,7 @@ function getAffiliationDataUpdateText($affilid=0) {
 /// sanitizes the variable to make sure it doesn't contain anything malicious
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function processInputVar($vartag, $type, $defaultvalue=NULL) {
+function processInputVar($vartag, $type, $defaultvalue=NULL, $stripwhitespace=0) {
 	if((array_key_exists($vartag, $_POST) &&
 	   strncmp("$_POST[$vartag]", "0", 1) == 0 &&
 	   $type == ARG_NUMERIC &&
@@ -2995,6 +2997,8 @@ function processInputVar($vartag, $type, $defaultvalue=NULL) {
 	if($type == ARG_MULTINUMERIC) {
 		foreach($return as $index => $value) {
 			$return[$index] = strip_tags($value);
+			if($stripwhitespace)
+				$return[$index] = trim($return[$index]);
 			if($return[$index] == 'zero')
 				$return[$index] = '0';
 		}
@@ -3002,10 +3006,14 @@ function processInputVar($vartag, $type, $defaultvalue=NULL) {
 	elseif($type == ARG_MULTISTRING) {
 		foreach($return as $index => $value) {
 			$return[$index] = strip_tags($value);
+			if($stripwhitespace)
+				$return[$index] = trim($return[$index]);
 		}
 	}
 	else {
 		$return = strip_tags($return);
+		if($stripwhitespace)
+			$return = trim($return);
 	}
 
 	if(! empty($return) && $type == ARG_NUMERIC) {

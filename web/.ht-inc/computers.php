@@ -3080,17 +3080,17 @@ function processComputerInput($checks=1) {
 	$return = processComputerInput2();
 
 	$return["bulk"] = getContinuationVar("bulk", processInputVar("bulk", ARG_NUMERIC));
-	$return["ipaddress"] = getContinuationVar("ipaddress", processInputVar("ipaddress", ARG_STRING));
+	$return["ipaddress"] = getContinuationVar("ipaddress", processInputVar("ipaddress", ARG_STRING, NULL, 1));
 	$return["stateid"] = getContinuationVar("stateid", processInputVar("stateid", ARG_NUMERIC));
-	$return["owner"] = getContinuationVar("owner", processInputVar("owner", ARG_STRING));
+	$return["owner"] = getContinuationVar("owner", processInputVar("owner", ARG_STRING, NULL, 1));
 	$return["platformid"] = getContinuationVar("platformid", processInputVar("platformid", ARG_NUMERIC));
 	$return["scheduleid"] = getContinuationVar("scheduleid", processInputVar("scheduleid", ARG_NUMERIC));
 	$return["currentimgid"] = getContinuationVar("currentimgid", processInputVar("currentimgid", ARG_NUMERIC));
-	$return["ram"] = getContinuationVar("ram", processInputVar("ram", ARG_NUMERIC));
+	$return["ram"] = getContinuationVar("ram", processInputVar("ram", ARG_NUMERIC, NULL, 1));
 	$return["numprocs"] = getContinuationVar("numprocs", processInputVar("numprocs", ARG_NUMERIC));
-	$return["procspeed"] = getContinuationVar("procspeed", processInputVar("procspeed", ARG_NUMERIC));
+	$return["procspeed"] = getContinuationVar("procspeed", processInputVar("procspeed", ARG_NUMERIC, NULL, 1));
 	$return["network"] = getContinuationVar("network", processInputVar("network", ARG_NUMERIC));
-	$return["hostname"] = getContinuationVar("hostname", processInputVar("hostname", ARG_STRING));
+	$return["hostname"] = getContinuationVar("hostname", processInputVar("hostname", ARG_STRING, NULL, 1));
 	$return["compid"] = getContinuationVar("compid", processInputVar("compid", ARG_NUMERIC));
 	$return["type"] = getContinuationVar("type", processInputVar("type", ARG_STRING, "lab"));
 	$return["provisioningid"] = getContinuationVar("provisioningid", processInputVar("provisioningid", ARG_NUMERIC));
@@ -3229,7 +3229,7 @@ function processComputerInput3() {
 function processBulkComputerInput($checks=1) {
 	global $submitErr, $submitErrMsg;
 	$return = processComputerInput2();
-	$ipaddress = getContinuationVar("ipaddress", processInputVar("ipaddress", ARG_STRING));
+	$ipaddress = getContinuationVar("ipaddress", processInputVar("ipaddress", ARG_STRING, NULL, 1));
 	if(! empty($ipaddress)) {
 		$return["startipaddress"] = $ipaddress;
 		$tmp = $ipaddress;
@@ -3240,24 +3240,24 @@ function processBulkComputerInput($checks=1) {
 		$return["endhostval"] = "";
 	}
 	else {
-		$return["startipaddress"] = getContinuationVar("startipaddress", processInputVar("startipaddress", ARG_STRING));
-		$return["endipaddress"] = getContinuationVar("endipaddress", processInputVar("endipaddress", ARG_STRING));
-		$return["starthostval"] = getContinuationVar("starthostval", processInputVar("starthostval", ARG_NUMERIC));
-		$return["endhostval"] = getContinuationVar("endhostval", processInputVar("endhostval", ARG_NUMERIC));
+		$return["startipaddress"] = getContinuationVar("startipaddress", processInputVar("startipaddress", ARG_STRING, NULL, 1));
+		$return["endipaddress"] = getContinuationVar("endipaddress", processInputVar("endipaddress", ARG_STRING, NULL, 1));
+		$return["starthostval"] = getContinuationVar("starthostval", processInputVar("starthostval", ARG_NUMERIC, NULL, 1));
+		$return["endhostval"] = getContinuationVar("endhostval", processInputVar("endhostval", ARG_NUMERIC, NULL, 1));
 	}
-	$return["startpripaddress"] = getContinuationVar("startpripaddress", processInputVar("startpripaddress", ARG_STRING));
-	$return["endpripaddress"] = getContinuationVar("endpripaddress", processInputVar("endpripaddress", ARG_STRING));
-	$return["startmac"] = getContinuationVar("startmac", processInputVar("startmac", ARG_STRING));
+	$return["startpripaddress"] = getContinuationVar("startpripaddress", processInputVar("startpripaddress", ARG_STRING, NULL, 1));
+	$return["endpripaddress"] = getContinuationVar("endpripaddress", processInputVar("endpripaddress", ARG_STRING, NULL, 1));
+	$return["startmac"] = getContinuationVar("startmac", processInputVar("startmac", ARG_STRING, NULL, 1));
 
 	$return["stateid"] = getContinuationVar("stateid", processInputVar("stateid", ARG_NUMERIC));
-	$return["owner"] = getContinuationVar("owner", processInputVar("owner", ARG_STRING));
+	$return["owner"] = getContinuationVar("owner", processInputVar("owner", ARG_STRING, NULL, 1));
 	$return["platformid"] = getContinuationVar("platformid", processInputVar("platformid", ARG_NUMERIC));
 	$return["scheduleid"] = getContinuationVar("scheduleid", processInputVar("scheduleid", ARG_NUMERIC));
-	$return["ram"] = getContinuationVar("ram", processInputVar("ram", ARG_NUMERIC));
+	$return["ram"] = getContinuationVar("ram", processInputVar("ram", ARG_NUMERIC, NULL, 1));
 	$return["numprocs"] = getContinuationVar("numprocs", processInputVar("numprocs", ARG_NUMERIC));
-	$return["procspeed"] = getContinuationVar("procspeed", processInputVar("procspeed", ARG_NUMERIC));
+	$return["procspeed"] = getContinuationVar("procspeed", processInputVar("procspeed", ARG_NUMERIC, NULL, 1));
 	$return["network"] = getContinuationVar("network", processInputVar("network", ARG_NUMERIC));
-	$return["hostname"] = getContinuationVar("hostname", processInputVar("hostname", ARG_STRING));
+	$return["hostname"] = getContinuationVar("hostname", processInputVar("hostname", ARG_STRING, NULL, 1));
 	$return["type"] = getContinuationVar("type", processInputVar("type", ARG_STRING));
 	$return["provisioningid"] = getContinuationVar("provisioningid", processInputVar("provisioningid", ARG_NUMERIC));
 	$return["computergroup"] = getContinuationVar("computergroup", processInputVar("computergroup", ARG_MULTINUMERIC));
