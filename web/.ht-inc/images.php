@@ -706,6 +706,9 @@ function startImage() {
 		$imageData = getImages(0, $imageid);
 		if($imageData[$imageid]['ownerid'] == $user['id'])
 			$disableUpdate = 0;
+		if($imageData[$imageid]['installtype'] == 'none' ||
+		   $imageData[$imageid]['installtype'] == 'kickstart')
+			$disableUpdate = 1;
 	}
 	print "<H2>Create / Update an Image</H2>\n";
 	print "Are you creating a new image from a base image or updating an ";
