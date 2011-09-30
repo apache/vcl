@@ -3026,8 +3026,7 @@ function connectRequest() {
 				print "<FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
 				$cdata = array('requestid' => $requestid,
 				               'resid' => $res['reservationid']);
-				$expire = datetimeToUnix($requestData['end']) -
-				          datetimeToUnix($requestData['start']) + 1800; # reservation time plus 30 min
+				$expire = datetimeToUnix($requestData['end']) - time() + 1800; # remaining reservation time plus 30 min
 				$cont = addContinuationsEntry('sendRDPfile', $cdata, $expire);
 				print "<INPUT type=hidden name=continuation value=\"$cont\">\n";
 				print "<INPUT type=submit value=\"Get RDP File\">\n";
