@@ -143,6 +143,8 @@ sub install_linux_packages {
 		'perl-Digest-SHA1',
 		'perl-MailTools',
 		'perl-Net-Jabber',
+		'perl-Net-Netmask',
+		'perl-Net-SSH-Expect',
 		'perl-RPC-XML',
 		'perl-YAML',
 		'xmlsec1-openssl',
