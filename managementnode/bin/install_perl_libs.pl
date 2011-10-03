@@ -107,20 +107,40 @@ sub install_linux_packages {
 		$rhel_version = $1;
 	}
 	
+	
 	if ($rhel_version) {
-		my $epel_url = "http://download.fedora.redhat.com/pub/epel/$rhel_version/$arch/epel-release-5-4.noarch.rpm";
-		print "constructed EPEL URL:\n$epel_url\n\n";
+		print "Attempting to install 'Extra Packages for Enterprise Linux (EPEL)'\n";
+		my $epel_url = "http://download.fedora.redhat.com/pub/epel/$rhel_version/$arch";
 		
-		my $rpm_command = "rpm -Uvh $epel_url";
-		my $rpm_output = `$rpm_command 2>&1`;
-		my $rpm_exit_status = $? >> 8;
-		if ($rpm_exit_status ne '0' && $rpm_output !~ /already installed/i) {
-			print "WARNING: failed to install EPEL, some Perl modules may not install correctly\nrpm command: $rpm_command\nrpm exit status: $rpm_exit_status\nrpm output:\n$rpm_output\n";
-			push @ERRORS, 'EPEL';
+		# Run wget to retrieve the list of files available in the repository
+		# Do this to determine the EPEL RPM file name
+		my $wget_command = "wget  --output-document=- $epel_url";
+		my ($wget_exit_status, $wget_output) = run_command($wget_command);
+		if ($wget_exit_status eq '0' && $wget_output =~ /(epel-release-[\d-]+\.noarch\.rpm)/) {
+			my $rpm_file_name = $1;
+			$epel_url .= "/$rpm_file_name";
+			print "constructed EPEL URL: '$epel_url'\n\n";
+			
+			# Download the EPEL RPM file
+			my $rpm_command = "rpm -Uvh $epel_url";
+			my ($rpm_exit_status, $rpm_output) = run_command($rpm_command);
+			if ($rpm_exit_status ne '0' && $rpm_output !~ /already installed/i) {
+				print "WARNING: failed to install EPEL, some Perl modules may not install correctly\nrpm command: $rpm_command\nrpm exit status: $rpm_exit_status\nrpm output:\n$rpm_output\n";
+				push @ERRORS, 'EPEL';
+			}
+			elsif ($rpm_output =~ /already installed/i) {
+				print "SUCCESS: EPEL is already installed\n";
+			}
+			else {
+				print "SUCCESS: installed EPEL\n";
+			}
 		}
 		else {
-			print "SUCCESS: installed EPEL\n";
+			print "WARNING: failed to determine name of EPEL RPM, did not locate 'epel-relase' line in wget output, some Perl modules may not install correctly\nwget command: '$wget_command'\nexit status: $wget_exit_status\noutput:\n$wget_output\n";
+			push @ERRORS, 'EPEL';
 		}
+		
+		
 	}
 	else {
 		print "OS version does not appear to be RHEL: $version, skipping EPEL installation\n";
@@ -152,7 +172,7 @@ sub install_linux_packages {
 	
 	for my $linux_package (@linux_packages) {
 		print_break('*');
-		print "attempting to install Linux package using yum: $linux_package\n";
+		print "Attempting to install Linux package using yum: '$linux_package'\n";
 		
 		my $yum_command = "yum install $linux_package -y";
 		print "yum command: $yum_command\n";
@@ -164,17 +184,17 @@ sub install_linux_packages {
 		print "$yum_output\n\n";
 		
 		if ($yum_exit_status ne '0') {
-			print "WARNING: failed to install Linux package: $linux_package, exit status: $yum_exit_status\n";
+			print "WARNING: failed to install Linux package: '$linux_package', exit status: $yum_exit_status\n";
 			#push @ERRORS, "Linux package: $linux_package";
 		}
 		elsif ($yum_output =~ /$linux_package[^\n]*already installed/i) {
-			print "SUCCESS: Linux package is already installed: $linux_package\n";
+			print "SUCCESS: Linux package is already installed: '$linux_package'\n";
 		}
 		elsif ($yum_output =~ /Complete\!/i) {
-			print "SUCCESS: installed Linux package: $linux_package\n";
+			print "SUCCESS: installed Linux package: '$linux_package'\n";
 		}
 		else {
-			print "WARNING: unexpected output returned while installing Linux package: $linux_package\n";
+			print "WARNING: unexpected output returned while installing Linux package: '$linux_package'\n";
 			#push @ERRORS, "Linux package: $linux_package";
 		}
 		
@@ -267,7 +287,6 @@ sub install_perl_modules {
 	
 	eval { CPAN::Config->commit($config_file_path) };
 	if ($EVAL_ERROR) {
-		print "CPAN configuration:\n";
 		print Dumper($CPAN::Config) . "\n";
 	
 		print "\nERROR: failed to create CPAN configuration file: $config_file_path\n";
@@ -277,7 +296,7 @@ sub install_perl_modules {
 		print "created CPAN configuration file: $config_file_path\n";
 	}
 	
-	print_cpan_configuration();
+	#print_cpan_configuration();
 	
 	my @perl_modules = (
 		'DBI',
@@ -290,12 +309,12 @@ sub install_perl_modules {
 	
 	for my $perl_module (@perl_modules) {
 		print_break('-');
-		print "attempting to install Perl module using CPAN: $perl_module\n";
+		print "Attempting to install Perl module using CPAN: '$perl_module'\n";
 		
 		eval { CPAN::Shell->install($perl_module) };
 		
 		if (!is_perl_module_installed($perl_module)) {
-			print "ERROR: failed to install Perl module: $perl_module\n";
+			print "ERROR: failed to install Perl module: '$perl_module'\n";
 			push @ERRORS, "Perl module: $perl_module";
 		}
 	}
@@ -338,10 +357,10 @@ sub is_perl_module_installed {
 sub run_command {
 	my $command = shift;
 	
-	print "attempting to run command: $command\n";
+	print "attempting to execute command: '$command'\n";
 	my $output = `$command 2>&1`; 
 	my $exit_status = $? >> 8;
-	print "ran command: $command, exit status: $exit_status\n";
+	print "executed command: '$command', exit status: $exit_status\n";
 	return ($exit_status, $output);
 }
 
