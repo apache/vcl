@@ -1691,7 +1691,7 @@ INSERT INTO `usergroup` (`id`, `name`, `affiliationid`, `ownerid`, `editusergrou
 INSERT INTO `usergroupmembers` (`userid`, `usergroupid`) VALUES 
 (1, 1),
 (1, 3),
-(1, 4);
+(1, 4),
 (1, 5);
 
 -- 
