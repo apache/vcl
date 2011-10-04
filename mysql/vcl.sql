@@ -297,9 +297,12 @@ CREATE TABLE IF NOT EXISTS `connectmethod` (
   `id` tinyint(3) unsigned NOT NULL auto_increment,
   `name` varchar(80) NOT NULL,
   `description` varchar(255) NOT NULL,
+  `protocol` varchar(32) NOT NULL,
   `port` smallint(5) unsigned NOT NULL,
   `connecttext` text NOT NULL,
-  PRIMARY KEY  (`id`)
+  `servicename` varchar(32) NOT NULL,
+  `startupscript` varchar(256) DEFAULT NULL,
+  PRIMARY KEY (`id`)
 ) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
@@ -1190,6 +1193,7 @@ CREATE TABLE IF NOT EXISTS `vmprofile` (
   `imageid` smallint(5) unsigned NOT NULL,
   `repositorypath` varchar(128) default NULL,
   `datastorepath` varchar(128) NOT NULL,
+  `virtualdiskpath` varchar(128) default NULL,
   `vmpath` varchar(128) default NULL,
   `virtualswitch0` varchar(80) NOT NULL default 'VMnet0',
   `virtualswitch1` varchar(80) NOT NULL default 'VMnet2',

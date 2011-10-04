@@ -251,9 +251,12 @@ CREATE TABLE IF NOT EXISTS `connectmethod` (
   `id` tinyint(3) unsigned NOT NULL auto_increment,
   `name` varchar(80) NOT NULL,
   `description` varchar(255) NOT NULL,
+  `protocol` varchar(32) NOT NULL,
   `port` smallint(5) unsigned NOT NULL,
   `connecttext` text NOT NULL,
-  PRIMARY KEY  (`id`)
+  `servicename` varchar(32) NOT NULL,
+  `startupscript` varchar(256) DEFAULT NULL,
+  PRIMARY KEY (`id`)
 ) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
@@ -272,7 +275,7 @@ CREATE TABLE IF NOT EXISTS `connectmethodmap` (
   KEY `connectmethodid` (`connectmethodid`),
   KEY `OStypeid` (`OStypeid`),
   KEY `OSid` (`OSid`),
-  KEY `imageid` (`imageid`)
+  KEY `imagerevisionid` (`imagerevisionid`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
@@ -502,6 +505,7 @@ CALL AddIndexIfNotExists('vmhost', 'vmprofileid');
 
 CALL DropColumnIfExists('vmprofile', 'nasshare');
 CALL AddColumnIfNotExists('vmprofile', 'repositorypath', "varchar(128) default NULL AFTER imageid");
+CALL AddColumnIfNotExists('vmprofile', 'virtualdiskpath', "varchar(128) default NULL AFTER imageid");
 CALL AddColumnIfNotExists('vmprofile', 'virtualswitch2', "varchar(80) NULL default NULL AFTER `virtualswitch1`");
 CALL AddColumnIfNotExists('vmprofile', 'virtualswitch3', "varchar(80) NULL default NULL AFTER `virtualswitch2`");
 CALL AddColumnIfNotExists('vmprofile', 'vmware_mac_eth0_generated', "tinyint(1) NOT NULL default '0'");
