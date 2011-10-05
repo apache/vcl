@@ -4594,6 +4594,7 @@ function findManagementNode($compid, $start, $nowfuture) {
 	       . "FROM reservation rs, "
 	       .      "request rq "
 	       . "WHERE rs.managementnodeid IN ($inlist) AND "
+	       .       "rs.requestid = rq.id AND "
 	       .       "rq.start > \"$start\" AND "
 	       .       "rq.start < \"$end\" "
 	       . "GROUP BY rs.managementnodeid "
