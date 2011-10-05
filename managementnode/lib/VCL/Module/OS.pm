@@ -1801,11 +1801,11 @@ sub manage_server_access {
 
 sub process_connect_methods {
 	my $self = shift;
-        if (ref($self) !~ /VCL::Module/i) {
-                notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-                return;
-        }
-
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
 	my $mode = shift;
 	if (!$mode) {
 		notify($ERRORS{'OK'}, 0, "Mode variable not passed in as an argument");
@@ -1814,22 +1814,21 @@ sub process_connect_methods {
 	
 	my $computer_node_name   = $self->data->get_computer_node_name();
 	my $connect_methods	 = $self->data->get_connect_methods();
-
+	
 	foreach my $CMid (sort keys %{$connect_methods} ) {
-		
-                notify($ERRORS{'OK'}, 0, "id= $$connect_methods{$CMid}{id}") if(defined ($$connect_methods{$CMid}{id}) );
-                notify($ERRORS{'OK'}, 0, "description= $$connect_methods{$CMid}{description}") if(defined ($$connect_methods{$CMid}{description}) );
-                notify($ERRORS{'OK'}, 0, "port== $$connect_methods{$CMid}{port}") if(defined ($$connect_methods{$CMid}{port}) );
-                notify($ERRORS{'OK'}, 0, "servicename= $$connect_methods{$CMid}{servicename}") if(defined ($$connect_methods{$CMid}{servicename}) );
-                notify($ERRORS{'OK'}, 0, "startupscript= $$connect_methods{$CMid}{startupscript}") if(defined ($$connect_methods{$CMid}{startupscript}) );
-                notify($ERRORS{'OK'}, 0, "autoprov= $$connect_methods{$CMid}{autoprovisioned}") if(defined ($$connect_methods{$CMid}{autoprovisioned}) );
+		notify($ERRORS{'OK'}, 0, "id= $$connect_methods{$CMid}{id}") if(defined ($$connect_methods{$CMid}{id}) );
+		notify($ERRORS{'OK'}, 0, "description= $$connect_methods{$CMid}{description}") if(defined ($$connect_methods{$CMid}{description}) );
+		notify($ERRORS{'OK'}, 0, "port== $$connect_methods{$CMid}{port}") if(defined ($$connect_methods{$CMid}{port}) );
+		notify($ERRORS{'OK'}, 0, "servicename= $$connect_methods{$CMid}{servicename}") if(defined ($$connect_methods{$CMid}{servicename}) );
+		notify($ERRORS{'OK'}, 0, "startupscript= $$connect_methods{$CMid}{startupscript}") if(defined ($$connect_methods{$CMid}{startupscript}) );
+		notify($ERRORS{'OK'}, 0, "autoprov= $$connect_methods{$CMid}{autoprovisioned}") if(defined ($$connect_methods{$CMid}{autoprovisioned}) );
 		my $description = $$connect_methods{$CMid}{description};
 		my $port = $$connect_methods{$CMid}{port};
 		
 		my $service_started = 0;	
 		notify($ERRORS{'OK'}, 0, "checking if servicename exists ");
-	 	if( defined ($$connect_methods{$CMid}{servicename}) && $$connect_methods{$CMid}{servicename} ) {	
-                	# does service exist
+		if( defined ($$connect_methods{$CMid}{servicename}) && $$connect_methods{$CMid}{servicename} ) {
+			# does service exist
 			my $servicename = $$connect_methods{$CMid}{servicename};
 			notify($ERRORS{'OK'}, 0, "trying to start servicename $servicename ");
 			if( $self->can("service_exists")) {
@@ -1855,14 +1854,14 @@ sub process_connect_methods {
 		
 		if ( !$service_started && defined ($$connect_methods{$CMid}{startupscript} ) ) {
 			notify($ERRORS{'OK'}, 0, "startupscript exists and service NOT started ");
-
+			
 			#Service command did not work or does not exist
 			# Try to use startup script
 			my $cmd = $$connect_methods{$CMid}{startupscript} . " start";
 			notify($ERRORS{'OK'}, 0, "service not started, attempt to run $cmd ");
 			if( $self->can("execute") ) {
 				if( $self->execute($cmd, 1) ){
-				$service_started = 1;	
+					$service_started = 1;	
 				}	
 			}
 			else {
@@ -1874,17 +1873,17 @@ sub process_connect_methods {
 			#open firewall port
 			notify($ERRORS{'OK'}, 0, "service started ");
 			if($self->can("enable_firewall_port")) {
-			notify($ERRORS{'OK'}, 0, "trying to enable firewall port $port on $computer_node_name ");
+				notify($ERRORS{'OK'}, 0, "trying to enable firewall port $port on $computer_node_name ");
 				if(!$self->enable_firewall_port($port)) {
-				notify($ERRORS{'CRITICAL'}, 0, "Failed to enable firewall Connect Method $CMid $description on $computer_node_name");
+					notify($ERRORS{'CRITICAL'}, 0, "Failed to enable firewall Connect Method $CMid $description on $computer_node_name");
 				}
 			}
 		}
 		else {
-			notify($ERRORS{'CRITICAL'}, 0, "Connect Method $CMid $description failed to start on $computer_node_name");
+			notify($ERRORS{'WARNING'}, 0, "Connect Method $CMid $description failed to start on $computer_node_name");
 		}
-          }
-
+	}
+	
 	return 1;	
 }
 
