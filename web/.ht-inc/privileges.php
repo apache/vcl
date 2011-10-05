@@ -1713,7 +1713,8 @@ function jsonGetUserGroupMembers() {
 	$usergrpid = processInputVar('groupid', ARG_NUMERIC);
 	$domid = processInputVar('domid', ARG_STRING);
 	$query = "SELECT g.ownerid, "
-	       .        "g2.name AS editgroup "
+	       .        "g2.name AS editgroup, "
+	       .        "g2.editusergroupid AS editgroupid "
 	       . "FROM usergroup g "
 	       . "LEFT JOIN usergroup g2 ON (g.editusergroupid = g2.id) "
 	       . "WHERE g.id = $usergrpid";
@@ -1725,7 +1726,7 @@ function jsonGetUserGroupMembers() {
 		sendJSON($arr);
 		return;
 	}
-	if($grpdata["ownerid"] != $user["id"] && ! (in_array($grpdata["editgroup"], $user["groups"]))) {
+	if($grpdata["ownerid"] != $user["id"] && ! (array_key_exists($grpdata["editgroupid"], $user["groups"]))) {
 		# user doesn't have access to view membership
 		$msg = '(not authorized to view membership)';
 		$arr = array('members' => $msg, 'domid' => $domid);
@@ -2637,15 +2638,18 @@ function checkUserHasPriv($priv, $uid, $node, $privs=0, $cascadePrivs=0) {
 		return 1;
 	}
 
-	foreach($_user["groups"] as $groupname) {
+	foreach($_user["groups"] as $groupid => $groupname) {
 		// if group (has $priv at this node) ||
 		# (has cascaded $priv && ! have block at this node) return 1
 		if((array_key_exists($groupname, $privs["usergroups"]) &&
+		   $groupid == $privs['usergroups'][$groupname]['id'] &&
 		   in_array($priv, $privs["usergroups"][$groupname]['privs'])) ||
 		   ((array_key_exists($groupname, $cascadePrivs["usergroups"]) &&
+		   $groupid == $cascadePrivs['usergroups'][$groupname]['id'] &&
 		   in_array($priv, $cascadePrivs["usergroups"][$groupname]['privs'])) &&
 		   (! array_key_exists($groupname, $privs["usergroups"]) ||
-		   ! in_array("block", $privs["usergroups"][$groupname]['privs'])))) {
+			(! in_array("block", $privs["usergroups"][$groupname]['privs']) && 
+		   $groupid == $privs['usergroups'][$groupname]['id'])))) {
 			$_SESSION['userhaspriv'][$key] = 1;
 			return 1;
 		}

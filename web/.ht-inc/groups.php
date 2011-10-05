@@ -140,8 +140,8 @@ function viewGroups() {
 		$editor = 0;
 		if($usergroups[$id]["ownerid"] == $user["id"])
 			$owner = 1;
-		if(array_key_exists("editgroup", $usergroups[$id]) &&
-		   in_array($usergroups[$id]["editgroup"], $user["groups"]))
+		if(array_key_exists("editgroupid", $usergroups[$id]) &&
+		   array_key_exists($usergroups[$id]["editgroupid"], $user["groups"]))
 			$editor = 1;
 		if(! $owner && ! $editor)
 			continue;
