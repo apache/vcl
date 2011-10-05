@@ -1830,6 +1830,8 @@ function XMLRPCautoCapture($requestid) {
 /// server
 /// \param $macaddr - (optional, default='') MAC address to use for public NIC
 /// of server
+/// \param $monitored - (optional, default=0) whether or not the server should
+/// be monitored - CURRENTLY, THIS IS UNSUPPORTED
 /// \param $foruser - (optional) login to be used when setting up the account
 /// on the reserved machine - CURRENTLY, THIS IS UNSUPPORTED
 ///
@@ -1849,7 +1851,7 @@ function XMLRPCautoCapture($requestid) {
 ////////////////////////////////////////////////////////////////////////////////
 function XMLRPCdeployServer($imageid, $start, $end, $admingroup='',
                             $logingroup='', $ipaddr='', $macaddr='',
-                            $foruser='') {
+                            $monitored=0, $foruser='') {
 	global $user;
 	if(! in_array("serverProfileAdmin", $user["privileges"])) {
 		return array('status' => 'error',
@@ -1902,6 +1904,8 @@ function XMLRPCdeployServer($imageid, $start, $end, $admingroup='',
 			             'errormsg' => "access denied to admin user group: $admingroup");
 		}
 	}
+	else
+		$admingroupid = '';
 	if($logingroup != '') {
 		$logingroup = processInputData($logingroup, ARG_STRING);
 		if(preg_match('@', $logingroup)) {
@@ -1936,6 +1940,8 @@ function XMLRPCdeployServer($imageid, $start, $end, $admingroup='',
 			             'errormsg' => "access denied to login user group: $logingroup");
 		}
 	}
+	else
+		$logingroupid = '';
 	$ipaddr = processInputData($ipaddr, ARG_STRING);
 	$ipaddrArr = explode('.', $ipaddr);
 	if($ipaddr != '' && (! preg_match('/^(([0-9]){1,3}\.){3}([0-9]){1,3}$/', $ipaddr) ||
@@ -2009,6 +2015,32 @@ function XMLRPCdeployServer($imageid, $start, $end, $admingroup='',
 		return array('status' => 'notavailable');
 	}
 	$return['requestid']= addRequest();
+	$fields = array('requestid');
+	$values = array($return['requestid']);
+	if($ipaddr != '') {
+		$fields[] = 'fixedIP';
+		$values[] = "'$ipaddr'";
+	}
+	if($macaddr != '') {
+		$fields[] = 'fixedMAC';
+		$values[] = "'$macaddr'";
+	}
+	if($admingroupid != 0) {
+		$fields[] = 'admingroupid';
+		$values[] = $admingroupid;
+	}
+	if($logingroupid != 0) {
+		$fields[] = 'logingroupid';
+		$values[] = $logingroupid;
+	}
+	if($monitored != 0) {
+		$fields[] = 'monitored';
+		$values[] = 1;
+	}
+	$allfields = implode(',', $fields);
+	$allvalues = implode(',', $values);
+	$query = "INSERT INTO serverrequest ($allfields) VALUES ($allvalues)";
+	doQuery($query, 101);
 	$return['status'] = 'success';
 	return $return;
 }
