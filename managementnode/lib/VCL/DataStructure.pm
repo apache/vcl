@@ -2319,6 +2319,28 @@ sub get_management_node_public_dns_servers {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 get_management_node_identity_key_paths
+
+ Parameters  : None
+ Returns     : If successful: array containing paths to SSH identity keys
+               If failed: false
+ Description : Returns an array containing the paths to SSH identity keys
+               configured for the management node.
+
+=cut
+
+sub get_management_node_identity_key_paths {
+	my $keys_string = $ENV{management_node_info}{keys};
+	if (!$keys_string) {
+		notify($ERRORS{'WARNING'}, 0, "no identity key paths are configured for the management node");
+		return ();
+	}
+	
+	return split(/\s*[,;]\s*/, $keys_string);
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 get_computer_state_name
 
  Parameters  : computer name (optional

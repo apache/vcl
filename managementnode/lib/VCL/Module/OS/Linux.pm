@@ -3044,41 +3044,42 @@ EOF
 =cut
 
 sub service_exists {
-        my $self = shift;
-        if (ref($self) !~ /linux/i) {
-                notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-                return;
-        }
-
-        my $management_node_keys = $self->data->get_management_node_keys();
-        my $computer_node_name   = $self->data->get_computer_node_name();
-
-        my $service_name = shift;
-        if (!$service_name) {
-                notify($ERRORS{'WARNING'}, 0, "service name was not passed as an argument");
-                return;
-        }
-
-	my $command = "/sbin/chkconfig --list $service_name";
-	my ($status, $output) = run_ssh_command($computer_node_name, $management_node_keys, $command, '', '', 1);
-	if (defined($output) && grep(/error reading information on service/i, @{$output})) {
-                notify($ERRORS{'DEBUG'}, 0, "service does not exist: $service_name");
-                return 0;
-        }
-        elsif (defined($status) && $status == 0) {
-                notify($ERRORS{'DEBUG'}, 0, "service exists: $service_name");
-        }
-        elsif (defined($status)) {
-                notify($ERRORS{'WARNING'}, 0, "unable to determine if service exists: $service_name, exit status: $status, output:\n@{$output}");
-                return;
-        }
-        else {
-                notify($ERRORS{'WARNING'}, 0, "unable to run ssh command to determine if service exists");
-                return;
-        }
-
-        return 1;
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
 	
+	my $management_node_keys = $self->data->get_management_node_keys();
+	my $computer_node_name   = $self->data->get_computer_node_name();
+	
+	my $service_name = shift;
+	if (!$service_name) {
+		notify($ERRORS{'WARNING'}, 0, "service name was not passed as an argument");
+		return;
+	}
+	
+	my $command = "/sbin/chkconfig --list $service_name";
+	my ($exit_status, $output) = run_ssh_command($computer_node_name, $management_node_keys, $command, '', '', 1);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to determine if '$service_name' service exists on $computer_node_name");
+		return;
+	}
+	elsif (grep(/error reading information on service/i, @$output)) {
+		notify($ERRORS{'DEBUG'}, 0, "'$service_name' service does not exist on $computer_node_name");
+		return 0;
+	}
+	elsif ($exit_status == 0 || grep(/not referenced in any runlevel/i, @$output)) {
+		# chkconfig may display the following if the service exists but has not been added:
+		# service ext_sshd supports chkconfig, but is not referenced in any runlevel (run 'chkconfig --add ext_sshd')
+		notify($ERRORS{'DEBUG'}, 0, "'$service_name' service exists but is not referenced in any runlevel");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine if '$service_name' service exists, exit status: $exit_status, output:\n" . join("\n", @$output));
+		return;
+	}
+	
+	return 1;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -3381,9 +3382,9 @@ sub get_total_memory {
 
 =head2 enable_firewall_port
  
-  Parameters  : none
-  Returns     : 1 successful, 0 failed
-  Description : updates iptables for given port for collect IPaddress range and mode
+  Parameters  : $protocol, $port, $scope (optional), $overwrite_existing (optional), $name (optional), $description (optional)
+  Returns     : boolean
+  Description : Updates iptables for given port for collect IPaddress range and mode
  
 =cut
 
@@ -3394,56 +3395,42 @@ sub enable_firewall_port {
       return;
    }
 	
-	my $port = shift;
-	if(!$port) {
-		notify($ERRORS{'CRITICAL'}, 0, "Input variable port was not passed in as an argument");
-		return 0;
-	} 
-	
-	my $mode = shift;
-	if(!$mode) {
-		notify($ERRORS{'DEBUG'}, 0, "firewall mode not passed in as an argument setting to loose");
-		$mode = "medium";
+	my ($protocol, $port, $scope_argument, $overwrite_existing, $name, $description) = @_;
+	if (!defined($protocol) || !defined($port)) {
+		notify($ERRORS{'WARNING'}, 0, "protocol and port arguments were not supplied");
+		return;
 	}
 	
    my $computer_node_name = $self->data->get_computer_node_name();
-	my $remote_ip = $self->data->get_reservation_remote_ip();
 	
-	my $scope;
-	my $command;
-		
-	if ( $mode =~ /loose/i ) {
-		$command = "/sbin/iptables -I INPUT 1 -m state --state NEW,RELATED,ESTABLISHED -m tcp -p tcp --dport $port -j ACCEPT";
-	}	 
-	elsif($mode =~ /medium/i) {	
-		$scope = "$remote_ip/16";
-		$command = "/sbin/iptables -I INPUT 1 -s $scope -m state --state NEW,RELATED,ESTABLISHED -m tcp -p tcp --dport $port -j ACCEPT";
-	}
-	elsif( $mode =~ /tight/i) {
-		$scope = "$remote_ip/24";
-		$command = "/sbin/iptables -I INPUT 1 -s $scope -m state --state NEW,RELATED,ESTABLISHED -m tcp -p tcp --dport $port -j ACCEPT";
-	}
-	elsif( $mode =~ /locked/i) {
-		$command = "/sbin/iptables -I INPUT 1 -s $remote_ip -m state --state NEW,RELATED,ESTABLISHED -m tcp -p tcp --dport $port -j ACCEPT";
+	$protocol = lc($protocol);
+	
+	my $command = "/sbin/iptables -I INPUT 1 -m state --state NEW,RELATED,ESTABLISHED -m $protocol -p $protocol --dport $port -j ACCEPT";
+	
+	if ($scope_argument) {
+		$command .= " -s $scope_argument";
 	}
 
-	#copy original config
-	my $cp_iptables_config = "cp /etc/sysconfig/iptables /etc/sysconfig/iptables_pre_$port";
-	my ($status_cp, $output_cp) = $self->execute($cp_iptables_config);	
-	if (defined $status_cp && $status_cp == 0) {
-		notify($ERRORS{'DEBUG'}, 0, "executed command $cp_iptables_config on $computer_node_name");
+	# Make backup copy of original iptables configuration
+	my $iptables_backup_file_path = "/etc/sysconfig/iptables_pre_$port";
+	if ($self->copy_file("/etc/sysconfig/iptables", $iptables_backup_file_path)) {
+		notify($ERRORS{'DEBUG'}, 0, "backed up original iptables file to: '$iptables_backup_file_path'");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to back up original iptables file to: '$iptables_backup_file_path'");
 	}
 	
 	# Add rule
+	notify($ERRORS{'DEBUG'}, 0, "attempting to execute command on $computer_node_name: '$command'");
 	my ($status, $output) = $self->execute($command);	
 	if (defined $status && $status == 0) {
-		notify($ERRORS{'DEBUG'}, 0, "executed command $command on $computer_node_name");
+		notify($ERRORS{'DEBUG'}, 0, "executed command on $computer_node_name: '$command'");
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "output from iptables:" . join("\n", @$output));
+		notify($ERRORS{'WARNING'}, 0, "output from iptables:\n" . join("\n", @$output));
 	}
 	
-	#Save rules to sysconfig/iptables -- incase of reboot
+	# Save rules to sysconfig/iptables -- incase of reboot
 	my $iptables_save_cmd = "/sbin/iptables-save > /etc/sysconfig/iptables";
 	my ($status_save, $output_save) = $self->execute($iptables_save_cmd);	
 	if (defined $status_save && $status_save == 0) {

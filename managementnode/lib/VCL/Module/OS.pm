@@ -52,6 +52,8 @@ use strict;
 use warnings;
 use diagnostics;
 use English '-no_match_vars';
+use Net::SSH::Expect;
+
 use VCL::utils;
 
 ##############################################################################
@@ -547,7 +549,7 @@ sub wait_for_response {
 	my $end_time = time();
 	my $duration = ($end_time - $start_time);
 	
-	#insertloadlog($reservation_id, $computer_id, "osrespond", "$computer_node_name is responding to SSH after $duration seconds");
+	# insertloadlog($reservation_id, $computer_id, "osrespond", "$computer_node_name is responding to SSH after $duration seconds");
 	notify($ERRORS{'OK'}, 0, "$computer_node_name is responding to SSH after $duration seconds");
 	return 1;
 }
@@ -1577,6 +1579,7 @@ sub create_text_file {
 =cut
 
 sub execute {
+#return execute_new(@_);
 	my $self = shift;
 	unless (ref($self) && $self->isa('VCL::Module')) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as an object method");
@@ -1611,6 +1614,177 @@ sub execute {
 		notify($ERRORS{'WARNING'}, 0, "failed to run command on $computer_name: $command");
 		return;
 	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 execute_new
+
+ Parameters  : $computer_name (conditional), $command, $display_output, $timeout_seconds, $max_attempts, $port, $user, $password
+ Returns     : array ($exit_status, $output)
+ Description : Executes a command on the computer via SSH.
+
+=cut
+
+sub execute_new {
+	my $argument = shift;
+	my ($computer_name, $command, $display_output, $timeout_seconds, $max_attempts, $port, $user, $password);
+	
+	if (!ref($argument) || $argument->isa('VCL::Module')) {
+		if ($argument->isa('VCL::Module')) {
+			$computer_name = $argument->data->get_computer_node_name();
+		}
+		else {
+			$computer_name = $argument;
+		}
+		($command, $display_output, $timeout_seconds, $max_attempts, $port, $user, $password) = @_;
+	}
+	else {
+		$computer_name = $argument->{node};
+		$command = $argument->{command};
+		$display_output = $argument->{display_output};
+		$timeout_seconds = $argument->{timeout};
+		$max_attempts = $argument->{max_attempts};
+		$port = $argument->{port};
+		$user = $argument->{user};
+		$password = $argument->{password};
+	}
+	
+	if (!$computer_name) {
+		notify($ERRORS{'WARNING'}, 0, "computer name could not be determined");
+		return;
+	}
+	if (!$command) {
+		notify($ERRORS{'WARNING'}, 0, "command argument was not specified");
+		return;
+	}
+	
+	$display_output = 0 unless $display_output;
+	$timeout_seconds = 60 unless $timeout_seconds;
+	$max_attempts = 1 unless $max_attempts;
+	$port = 22 unless $port;
+	$user = 'root' unless $user;
+	
+	# Override the die handler
+	local $SIG{__DIE__} = sub{};
+	
+	my $ssh;
+	my $attempt = 0;
+	my $attempt_delay = 5;
+	my $attempt_string = '';
+	
+	ATTEMPT: while ($attempt < $max_attempts) {
+		if ($attempt > 0) {
+			$attempt_string = "attempt $attempt/$max_attempts: ";
+			$ssh->close() if $ssh;
+			
+			notify($ERRORS{'DEBUG'}, 0, $attempt_string . "sleeping for $attempt_delay seconds before making next attempt");
+			sleep $attempt_delay;
+		}
+		
+		$attempt++;
+		$attempt_string = "attempt $attempt/$max_attempts: " if ($attempt > 1);
+		
+		
+		if (!$ENV{net_ssh_expect}{$computer_name}) {
+			eval {
+				$ssh = Net::SSH::Expect->new(
+					host => $computer_name,
+					user => $user,
+					port => $port,
+					raw_pty => 1,
+					no_terminal => 1,
+					ssh_option => '-o StrictHostKeyChecking=no',
+					timeout => 3,
+				);
+				
+				if ($ssh) {
+					notify($ERRORS{'DEBUG'}, 0, "created " . ref($ssh) . " object to control $computer_name");
+				}
+				else {
+					notify($ERRORS{'WARNING'}, 0, "failed to create Net::SSH::Expect object to control $computer_name, $!");
+					next ATTEMPT;
+				}
+				
+				if ($ssh->run_ssh()) {
+					notify($ERRORS{'DEBUG'}, 0, ref($ssh) . " object forked SSH process to control $computer_name");
+				}
+				else {
+					notify($ERRORS{'WARNING'}, 0, ref($ssh) . " object failed to fork SSH process to control $computer_name, $!");
+					next ATTEMPT;
+				}
+				
+				#$ssh->exec("stty -echo");
+				#$ssh->exec("stty raw -echo");
+				
+				# Set the timeout counter behaviour:
+				# If true, sets the timeout to "inactivity timeout"
+				# If false sets it to "absolute timeout"
+				#$ssh->restart_timeout_upon_receive(1);
+			};
+			if ($EVAL_ERROR) {
+				if ($EVAL_ERROR =~ /^(\w+) at \//) {
+					notify($ERRORS{'DEBUG'}, 0, $attempt_string . "$1 error occurred initializing Net::SSH::Expect object for $computer_name");
+				}
+				else {
+					notify($ERRORS{'DEBUG'}, 0, $attempt_string . "error occurred initializing Net::SSH::Expect object for $computer_name");
+				}
+				next ATTEMPT;
+			}
+		}
+		else {
+			$ssh = $ENV{net_ssh_expect}{$computer_name};
+			
+			# Delete the stored SSH object to make sure it isn't saved if the command fails
+			# The SSH object will be added back to %ENV if the command completes successfully
+			delete $ENV{net_ssh_expect}{$computer_name};
+		}
+		
+		notify($ERRORS{'DEBUG'}, 0, $attempt_string . "executing command on $computer_name: '$command', timeout: $timeout_seconds seconds") if ($display_output);
+		$ssh->send($command . ' 2>&1 ; echo exitstatus:$?');
+		
+		my $ssh_wait_status;
+		eval {
+			$ssh_wait_status = $ssh->waitfor('exitstatus:[0-9]+', $timeout_seconds);
+		};
+		
+		if ($EVAL_ERROR) {
+			if ($EVAL_ERROR =~ /^(\w+) at \//) {
+				notify($ERRORS{'DEBUG'}, 0, $attempt_string . "$1 error occurred executing command on $computer_name: '$command'");
+			}
+			else {
+				notify($ERRORS{'DEBUG'}, 0, $attempt_string . "error occurred executing command on $computer_name: '$command'\nerror: $EVAL_ERROR");
+			}
+			next ATTEMPT;
+		}
+		elsif (!$ssh_wait_status) {
+			notify($ERRORS{'DEBUG'}, 0, $attempt_string . "command timed out after $timeout_seconds seconds on $computer_name: '$command'");
+			next ATTEMPT;
+		}
+		
+		my $output = $ssh->before() || '';
+		$output =~ s/(^\s+)|(\s+$)//g;
+		
+		my $exit_status_string = $ssh->match() || '';
+		my ($exit_status) = $exit_status_string =~ /(\d)+/;
+		if (!$exit_status_string || !defined($exit_status)) {
+			my $all_output = $ssh->read_all() || '';
+			notify($ERRORS{'WARNING'}, 0, $attempt_string . "failed to determine exit status from string: '$exit_status_string', output:\n$all_output");
+			next ATTEMPT;
+		}
+		
+		my @output_lines = split(/[\r\n]+/, $output);
+		
+		notify($ERRORS{'OK'}, 0, "executed command on $computer_name: '$command', exit status: $exit_status, output:\n$output") if ($display_output);
+		
+		# Save the SSH object for later use
+		$ENV{net_ssh_expect}{$computer_name} = $ssh;
+		
+		return ($exit_status, \@output_lines);
+	}
+	
+	notify($ERRORS{'WARNING'}, 0, $attempt_string . "failed to execute command on $computer_name: '$command'") if ($display_output);
+	return;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -1661,43 +1835,51 @@ sub get_os_type {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 manage_server_access
+
+ Parameters  : None
+ Returns     : 
+ Description : 
+
+=cut
+
 sub manage_server_access {
 
 	my $self = shift;
-        if (ref($self) !~ /VCL::Module/i) {
-                notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-                return;
-        }
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
 
-        my $computer_node_name = $self->data->get_computer_node_name() || return;
-	my $reservation_id        = $self->data->get_reservation_id();
-	my $server_request_id     = $self->data->get_server_request_id();
-        my $server_request_admingroupid = $self->data->get_server_request_admingroupid();
-        my $server_request_logingroupid = $self->data->get_server_request_logingroupid();
+	my $computer_node_name          = $self->data->get_computer_node_name() || return;
+	my $reservation_id              = $self->data->get_reservation_id();
+	my $server_request_id           = $self->data->get_server_request_id();
+	my $server_request_admingroupid = $self->data->get_server_request_admingroupid();
+	my $server_request_logingroupid = $self->data->get_server_request_logingroupid();
 
-	#Build list of users.
-	#If in admin group set admin flag
-	#If in both login and admin group, only use admin setting
-	#Check if user is in reserverationaccounts table, add user if needed
-	#Check if user exists on server, add if needed
+	# Build list of users.
+	# If in admin group set admin flag
+	# If in both login and admin group, only use admin setting
+	# Check if user is in reserverationaccounts table, add user if needed
+	# Check if user exists on server, add if needed
 	
 	my @userlist_admin;
 	my @userlist_login;
 	my %user_hash;
 	my $ssh_allow_list;
 
-	if ( $server_request_admingroupid ) {
+	if ($server_request_admingroupid) {
 		@userlist_admin = getusergroupmembers($server_request_admingroupid);
 	}
-	if ( $server_request_logingroupid ) {
+	if ($server_request_logingroupid) {
 		@userlist_login = getusergroupmembers($server_request_logingroupid);
 	}	
 	
 	notify($ERRORS{'OK'}, 0, " admin list= @userlist_admin");
 	notify($ERRORS{'OK'}, 0, " login list= @userlist_login");
-
 	
-	if ( scalar @userlist_admin > 0 ) {
+	
+	if (scalar @userlist_admin > 0) {
 		foreach my $str (@userlist_admin) {
 			my ($username,$uid,$vcl_user_id) = split(/:/, $str);
 			$user_hash{$uid}{"username"} = $username;
@@ -1707,7 +1889,7 @@ sub manage_server_access {
 			notify($ERRORS{'OK'}, 0, "adding admin $uid for $username ");
 		}
 	}		
-	if ( scalar @userlist_login > 0 ) {
+	if (scalar @userlist_login > 0) {
 		foreach my $str (@userlist_login) {
 			notify($ERRORS{'OK'}, 0, "admin str= $str");
 			my ($username, $uid,$vcl_user_id) = split(/:/, $str);
@@ -1724,18 +1906,18 @@ sub manage_server_access {
 		}
 	}	
 
-	#Collect users in reservationaccounts table
+	# Collect users in reservationaccounts table
 	my %res_accounts = get_reservation_accounts($reservation_id);
 	my $not_standalone_list = "";
 	my $standalone = 0;
 	if(defined($ENV{management_node_info}{NOT_STANDALONE}) && $ENV{management_node_info}{NOT_STANDALONE}){
-                $not_standalone_list = $ENV{management_node_info}{NOT_STANDALONE};
-        }
+		$not_standalone_list = $ENV{management_node_info}{NOT_STANDALONE};
+	}
 
 	foreach my $userid (sort keys %user_hash) {
 		next if (!($userid));
 		if(!exists($res_accounts{$userid})){
-			#check affiliation
+			# check affiliation
 			notify($ERRORS{'OK'}, 0, "checking affiliation for $userid");
 			my $affiliation_name = get_user_affiliation($user_hash{$userid}{vcl_user_id}); 
 			if(defined($affiliation_name)) {
@@ -1744,7 +1926,7 @@ sub manage_server_access {
 					$standalone = 1;
 				}
 			}
-			#IF standalone - generate password
+			# IF standalone - generate password
 			if($standalone) {
 				$user_hash{$userid}{"passwd"} = getpw();
 			}
@@ -1792,10 +1974,9 @@ sub manage_server_access {
 
 =head2 process_connect_methods
 
- Parameters  : None
- Returns     : If successful: 1
-               If failed: 0
- Description : starts and open port for available connection methods
+ Parameters  : none
+ Returns     : boolean
+ Description : Processes the connect methods configured for the image revision.
 
 =cut
 
@@ -1806,84 +1987,111 @@ sub process_connect_methods {
 		return;
 	}
 	
-	my $mode = shift;
-	if (!$mode) {
-		notify($ERRORS{'OK'}, 0, "Mode variable not passed in as an argument");
-		return 0;
+	my $computer_node_name = $self->data->get_computer_node_name();
+	my $imagerevision_id   = $self->data->get_imagerevision_id();
+	
+	# Retrieve the connect method info hash
+	my $connect_method_info = get_connect_method_info($imagerevision_id);
+	if (!$connect_method_info) {
+		notify($ERRORS{'WARNING'}, 0, "no connect methods are configured for image revision $imagerevision_id");
 	}
 	
-	my $computer_node_name   = $self->data->get_computer_node_name();
-	my $connect_methods	 = $self->data->get_connect_methods();
+	my $remote_ip = $self->data->get_reservation_remote_ip();
+	if (!$remote_ip) {
+		notify($ERRORS{'WARNING'}, 0, "reservation remote IP address is not defined, connect methods will be available from any IP address");
+		$remote_ip = '0.0.0.0/0.0.0.0';
+	}
 	
-	foreach my $CMid (sort keys %{$connect_methods} ) {
-		notify($ERRORS{'OK'}, 0, "id= $$connect_methods{$CMid}{id}") if(defined ($$connect_methods{$CMid}{id}) );
-		notify($ERRORS{'OK'}, 0, "description= $$connect_methods{$CMid}{description}") if(defined ($$connect_methods{$CMid}{description}) );
-		notify($ERRORS{'OK'}, 0, "port== $$connect_methods{$CMid}{port}") if(defined ($$connect_methods{$CMid}{port}) );
-		notify($ERRORS{'OK'}, 0, "servicename= $$connect_methods{$CMid}{servicename}") if(defined ($$connect_methods{$CMid}{servicename}) );
-		notify($ERRORS{'OK'}, 0, "startupscript= $$connect_methods{$CMid}{startupscript}") if(defined ($$connect_methods{$CMid}{startupscript}) );
-		notify($ERRORS{'OK'}, 0, "autoprov= $$connect_methods{$CMid}{autoprovisioned}") if(defined ($$connect_methods{$CMid}{autoprovisioned}) );
-		my $description = $$connect_methods{$CMid}{description};
-		my $port = $$connect_methods{$CMid}{port};
+	CONNECT_METHOD: for my $connect_method_id (sort keys %{$connect_method_info} ) {
+		notify($ERRORS{'DEBUG'}, 0, "processing connect method:\n" . format_data($connect_method_info->{$connect_method_id}));
 		
-		my $service_started = 0;	
-		notify($ERRORS{'OK'}, 0, "checking if servicename exists ");
-		if( defined ($$connect_methods{$CMid}{servicename}) && $$connect_methods{$CMid}{servicename} ) {
-			# does service exist
-			my $servicename = $$connect_methods{$CMid}{servicename};
-			notify($ERRORS{'OK'}, 0, "trying to start servicename $servicename ");
-			if( $self->can("service_exists")) {
-				if($self->service_exists($servicename)) {
-					if( $self->can("start_service")) {
-						if( $self->start_service($servicename) ) {
-							notify($ERRORS{'OK'}, 0, "Service $servicename started");
-							$service_started = 1;
-						}
-						else {
-							notify($ERRORS{'WARNING'}, 0, "Service $servicename failed to start");
-						}
-					}
-				}
-				else {
-					notify($ERRORS{'WARNING'}, 0, "Service $servicename does not exist on $computer_node_name");
-				}
-			}
-			else {
-				notify($ERRORS{'WARNING'}, 0, "service_exists not implemented by OS module" . ref($self));
-			}
-		}
+		my $name            = $connect_method_info->{$connect_method_id}{name};
+		my $description     = $connect_method_info->{$connect_method_id}{description};
+		my $protocol        = $connect_method_info->{$connect_method_id}{protocol} || 'TCP';
+		my $port            = $connect_method_info->{$connect_method_id}{port};
+		my $service_name    = $connect_method_info->{$connect_method_id}{servicename};
+		my $startup_script  = $connect_method_info->{$connect_method_id}{startupscript};
+		my $install_script  = $connect_method_info->{$connect_method_id}{installscript};
+		my $disabled        = $connect_method_info->{$connect_method_id}{connectmethodmap}{disabled};
 		
-		if ( !$service_started && defined ($$connect_methods{$CMid}{startupscript} ) ) {
-			notify($ERRORS{'OK'}, 0, "startupscript exists and service NOT started ");
-			
-			#Service command did not work or does not exist
-			# Try to use startup script
-			my $cmd = $$connect_methods{$CMid}{startupscript} . " start";
-			notify($ERRORS{'OK'}, 0, "service not started, attempt to run $cmd ");
-			if( $self->can("execute") ) {
-				if( $self->execute($cmd, 1) ){
-					$service_started = 1;	
-				}	
-			}
-			else {
-				notify($ERRORS{'OK'}, 0, "execute routing not available by module" . ref($self) );	
-			}
-		}	
-		
-		if ( $service_started ) {
-			#open firewall port
-			notify($ERRORS{'OK'}, 0, "service started ");
-			if($self->can("enable_firewall_port")) {
-				notify($ERRORS{'OK'}, 0, "trying to enable firewall port $port on $computer_node_name ");
-				if(!$self->enable_firewall_port($port)) {
-					notify($ERRORS{'CRITICAL'}, 0, "Failed to enable firewall Connect Method $CMid $description on $computer_node_name");
-				}
-			}
+		if ($disabled) {
+			# TODO: Add code to disable the service, close the firewall port, etc
+			notify($ERRORS{'OK'}, 0, "skipping '$name' connect method configuration, it should be disabled on $computer_node_name");
 		}
 		else {
-			notify($ERRORS{'WARNING'}, 0, "Connect Method $CMid $description failed to start on $computer_node_name");
+			# Attempt to start and configure the connect method
+			my $service_started = 0;
+			
+			# Attempt to start the service if the service name has been defined for the connect method
+			if ($service_name) {
+				# Check if service exists
+				notify($ERRORS{'DEBUG'}, 0, "checking if '$service_name' service exists for '$name' connect method on $computer_node_name");
+				if ($self->service_exists($service_name)) {
+					notify($ERRORS{'DEBUG'}, 0, "attempting to start '$service_name' service for '$name' connect method on $computer_node_name");
+					if ($self->start_service($service_name)) {
+						notify($ERRORS{'OK'}, 0, "'$service_name' started on $computer_node_name");
+						$service_started = 1;
+					}
+					else {
+						notify($ERRORS{'WARNING'}, 0, "failed to start '$service_name' service for '$name' connect method on $computer_node_name");
+					}
+				}
+				#elsif ($install_script) {
+				#	notify($ERRORS{'DEBUG'}, 0, "'$service_name' service for '$name' connect method does not exist on $computer_node_name, attempting to execute connect method install script");
+				#	my ($install_exit_status, $install_output) = $self->execute($install_script, 1, 600, 1);
+				#	if (!defined($install_output)) {
+				#		notify($ERRORS{'WARNING'}, 0, "failed to run command to execute install script for '$name' connect method on $computer_node_name, command: '$install_script'");
+				#	}
+				#	else {
+				#		notify($ERRORS{'OK'}, 0, "executed install script for '$name' connect method on $computer_node_name, command: '$install_script', exit status: $install_exit_status, output:\n" . join("\n", @$install_output));
+				#		
+				#		if ($self->service_exists($service_name)) {
+				#			if ($self->start_service($service_name)) {
+				#				notify($ERRORS{'OK'}, 0, "'$service_name' started on $computer_node_name");
+				#				$service_started = 1;
+				#			}
+				#			else {
+				#				notify($ERRORS{'WARNING'}, 0, "failed to start '$service_name' service after executing install script for '$name' connect method on $computer_node_name");
+				#			}
+				#		}
+				#		else {
+				#			notify($ERRORS{'WARNING'}, 0, "'$service_name' service does NOT exist after executing install script for '$name' connect method on $computer_node_name");
+				#		}
+				#	}
+				#}
+				else {
+					notify($ERRORS{'WARNING'}, 0, "'$service_name' service for '$name' connect method does NOT exist on $computer_node_name, connect method install script is not defined");
+				}
+			}
+			
+			# Run the startup script if the service is not started
+			if (!$service_started && defined($startup_script)) {
+				notify($ERRORS{'DEBUG'}, 0, "attempting to run startup script '$startup_script' for '$name' connect method on $computer_node_name");
+				my ($startup_exit_status, $startup_output) = $self->execute($startup_script, 1);
+				if (!defined($startup_output)) {
+					notify($ERRORS{'WARNING'}, 0, "failed to run command to execute startup script '$startup_script' for '$name' connect method on $computer_node_name, command: '$startup_script'");
+				}
+				elsif ($startup_exit_status == 0){
+					notify($ERRORS{'OK'}, 0, "executed startup script '$startup_script' for '$name' connect method on $computer_node_name, command: '$startup_script', exit status: $startup_exit_status, output:\n" . join("\n", @$startup_output));	
+				}
+				else {
+					notify($ERRORS{'WARNING'}, 0, "failed to execute startup script '$startup_script' for '$name' connect method on $computer_node_name, command: '$startup_script', exit status: $startup_exit_status, output:\n" . join("\n", @$startup_output));
+				}
+			}
+			
+			# Open the firewall port
+			if (defined($port)) {
+				notify($ERRORS{'DEBUG'}, 0, "attempting to open firewall port $port on $computer_node_name for '$name' connect method");
+				if ($self->enable_firewall_port($protocol, $port, "$remote_ip/24", 1)) {
+					notify($ERRORS{'OK'}, 0, "opened firewall port $port on $computer_node_name for '$name' connect method");
+				}
+				else {
+					notify($ERRORS{'WARNING'}, 0, "failed to open firewall port $port on $computer_node_name for '$name' connect method");
+				}
+			}
 		}
 	}
-	
+
 	return 1;	
 }
 
@@ -1901,10 +2109,10 @@ sub process_connect_methods {
 sub is_user_connected {
 	
 	my $self = shift;
-        if (ref($self) !~ /VCL::Module/i) {
-                notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-                return;
-        }
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
 	my $time_limit = shift;
 	if ( !$time_limit ) {
 		notify($ERRORS{'WARNING'}, 0, "time_limit variable not passed as an argument");
@@ -1912,7 +2120,7 @@ sub is_user_connected {
 	}
 
 	my $request_id           = $self->data->get_request_id();	
-        my $computer_node_name   = $self->data->get_computer_node_name();
+	my $computer_node_name   = $self->data->get_computer_node_name();
 	my $request_state_name	 = $self->data->get_request_state_name();
 	my $user_unityid         = $self->data->get_user_login_id();
 	my $computer_ip_address  = $self->data->get_computer_ip_address();
@@ -1920,41 +2128,41 @@ sub is_user_connected {
 	my $connect_methods      = $self->data->get_connect_methods();	
 	
 	my $start_time    = time();
-        my $time_exceeded = 0;
-        my $break         = 0;
-        my $ret_val       = "no";
+	my $time_exceeded = 0;
+	my $break         = 0;
+	my $ret_val       = "no";
 
-        # Figure out number of loops for log messages
-        my $maximum_loops = $time_limit * 2;
-        my $loop_count    = 0;
+	# Figure out number of loops for log messages
+	my $maximum_loops = $time_limit * 2;
+	my $loop_count    = 0;
 	
  	while (!$break) {
-                $loop_count++;
+		$loop_count++;
 
-                notify($ERRORS{'OK'}, 0, "checking for connection by $user_unityid on $computer_node_name, attempt $loop_count ");
+		notify($ERRORS{'OK'}, 0, "checking for connection by $user_unityid on $computer_node_name, attempt $loop_count ");
 
-                if (is_request_deleted($request_id)) {
-                        notify($ERRORS{'OK'}, 0, "user has deleted request");
-                        $break   = 1;
-                        $ret_val = "deleted";
-                        return $ret_val;
-                }
+		if (is_request_deleted($request_id)) {
+			notify($ERRORS{'OK'}, 0, "user has deleted request");
+			$break   = 1;
+			$ret_val = "deleted";
+			return $ret_val;
+		}
 		
 		$time_exceeded = time_exceeded($start_time, $time_limit);
-                if ($time_exceeded) {
-                        notify($ERRORS{'OK'}, 0, "$time_limit minute time limit exceeded begin cleanup process");
-                        #time_exceeded, begin cleanup process
-                        $break = 1;
-                        if ($request_state_name =~ /reserved/) {
-                                notify($ERRORS{'OK'}, 0, "user never logged in returning nologin");
-                                $ret_val = "nologin";
-                        }
-                        else {
-                                $ret_val = "timeout";
-                        }
-                        return $ret_val;
-                } ## end if ($time_exceeded)
-		else {    #time not exceeded check for connection
+		if ($time_exceeded) {
+			notify($ERRORS{'OK'}, 0, "$time_limit minute time limit exceeded begin cleanup process");
+			# time_exceeded, begin cleanup process
+			$break = 1;
+			if ($request_state_name =~ /reserved/) {
+				notify($ERRORS{'OK'}, 0, "user never logged in returning nologin");
+				$ret_val = "nologin";
+			}
+			else {
+				$ret_val = "timeout";
+			}
+			return $ret_val;
+		} ## end if ($time_exceeded)
+		else {    # time not exceeded check for connection
 			foreach my $CMid (sort keys %{$connect_methods} ) {
 				if($self->can("check_connection_on_port")) {
 					if(defined($$connect_methods{$CMid}{port}) && $$connect_methods{$CMid}{port}) {
@@ -1974,8 +2182,8 @@ sub is_user_connected {
 			}
 		}
 		notify($ERRORS{'DEBUG'}, 0, "sleeping for 20 seconds");
-                sleep 20;
-	}	
+		sleep 20;
+	}
 	return $ret_val;
 }
 

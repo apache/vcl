@@ -117,6 +117,7 @@ our @EXPORT = qw(
   get_computer_ids
   get_computer_info
   get_computers_controlled_by_MN
+  get_connect_method_info
   get_current_file_name
   get_current_package_name
   get_current_subroutine_name
@@ -4645,8 +4646,8 @@ sub get_request_info {
 		my $computer_info = get_computer_info($computer_id, 1);
 		$request_info{reservation}{$reservation_id}{computer} = $computer_info;
 
-		my $connect_methods = get_connect_methods($image_id, $imagerevision_id);
-		$request_info{reservation}{$reservation_id}{connect_methods} = $connect_methods;
+		my $connect_method_info = get_connect_method_info($imagerevision_id);
+		$request_info{reservation}{$reservation_id}{connect_methods} = $connect_method_info;
 		
 	}    # Close loop through selected rows
 	
@@ -4797,7 +4798,7 @@ sub get_request_info {
 		$request_info{reservation}{$reservation_id}{computer}{SHORTNAME} = $computer_shortname;
 
 		# Add the managementnode info to the hash
-		my $management_node_id   = $request_info{reservation}{$reservation_id}{managementnodeid};
+		my $management_node_id = $request_info{reservation}{$reservation_id}{managementnodeid};
 		my $management_node_info = get_management_node_info($management_node_id);
 		if (!$management_node_info) {
 			notify($ERRORS{'WARNING'}, 0, "failed to retrieve management node info");
@@ -5061,6 +5062,7 @@ sub get_image_info {
 		'image',
 		'platform',
 		'OS',
+		'OStype',
 		'module',
 	);
 	
@@ -5084,12 +5086,14 @@ FROM
 image,
 platform,
 OS,
+OStype,
 module
 
 WHERE
 platform.id = image.platformid
 AND OS.id = image.OSid
 AND module.id = OS.moduleid
+AND OS.type = OStype.name
 AND 
 EOF
 	
@@ -5132,7 +5136,7 @@ EOF
 		if ($table eq $tables[0]) {
 			$image_info->{$column} = $value;
 		}
-		elsif ($table eq 'module') {
+		elsif ($table =~ /^(module|OStype)$/) {
 			$image_info->{OS}{$table}{$column} = $value;
 		}
 		else {
@@ -5585,6 +5589,8 @@ sub run_ssh_command {
 	$port = 22 if (!$port);
 	$timeout_seconds = 0 if (!$timeout_seconds);
 	$identity_paths = $ENV{management_node_info}{keys} if (!defined $identity_paths || length($identity_paths) == 0);
+	
+#return VCL::Module::OS::execute($node, $command, $output_level, $timeout_seconds, $max_attempts, $port, $user);
 	
 	# TODO: Add ssh path to config file and set global variable
 	# Locate the path to the ssh binary
@@ -9564,8 +9570,7 @@ sub xmlrpc_call {
 			"password: $XMLRPC_PASS\n" .
 			"arguments: " . join(", ", @arguments) . "\n" .
 			"fault code: " . $response->code . "\n" .
-			"fault string: " . $response->string .
-			format_data($response)
+			"fault string: " . $response->string
 		);
 		$ENV{rpc_xml_error} = $response->string;
 		return;
@@ -10667,83 +10672,119 @@ sub kill_child_processes {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 get_connect_method
+=head2 get_connect_method_info
 
- Parameters  : reservationid
+ Parameters  : $imagerevision_id
  Returns     : hash reference
- Description : Returns the contents of connect method for reservationid.
+ Description : Returns the connect methods for the image revision specified as
+               the argument.
 
 =cut
 
-sub get_connect_methods {
-
-        my ($imageid, $imagerevisionid) = @_;
-        my ($calling_package, $calling_filename, $calling_line, $calling_sub) = caller(0);
-
-        if (!defined($imagerevisionid)) {
-                notify($ERRORS{'WARNING'}, 0, "$calling_sub $calling_package missing mandatory variable: imagerevisionid ");
-                return 0;
-        }
-        
-        if (!defined($imageid)) {
-                notify($ERRORS{'WARNING'}, 0, "$calling_sub $calling_package missing mandatory variable: imageid ");
-                return 0;
-        }
-
-        my $select_statement = "
-        SELECT DISTINCT
-        c.id AS CM_id,
-        c.description AS CM_description,
-        c.port AS CM_port,
-        c.servicename AS CM_servicename,
-        c.startupscript AS CM_startupscript,
-        cm.autoprovisioned AS CM_autoprovisioned,
-        cm.disabled AS CM_disabled
-        FROM
-        connectmethod c,
-        connectmethodmap cm,
-        image i
-        LEFT JOIN OS o ON (o.id = i.OSid)
-        LEFT JOIN OStype ot ON (ot.name = o.type)
-        WHERE 
-        i.id = $imageid AND
-        cm.connectmethodid = c.id AND
-        cm.autoprovisioned IS NULL AND
-        (cm.OStypeid = ot.id OR
-        cm.OSid = o.id OR 
-        cm.imagerevisionid = $imagerevisionid)
-        ORDER BY cm.disabled, c.description";
-
-        # Call the database select subroutine
-        # This will return an array of one or more rows based on the select statement
-        my @selected_rows = database_select($select_statement);
-
-        my @ret_array;
-        my %connect_info;
+sub get_connect_method_info {
+	my ($imagerevision_id) = @_;
+	if (!defined($imagerevision_id)) {
+		notify($ERRORS{'WARNING'}, 0, "imagerevision ID argument was not supplied");
+		return;
+	}
 	
-	        # Check to make sure 1 or more rows were returned
-        if (scalar @selected_rows > 0) {
-                # It contains a hash
-                for (@selected_rows) {
-                        my %connectMethod = %{$_};
-                        next if($connectMethod{CM_disabled});
-                        my $CMid = $connectMethod{CM_id};
-                        $connect_info{$CMid}{"id"} = $CMid;
-                        $connect_info{$CMid}{"description"} = $connectMethod{CM_description};
-                        $connect_info{$CMid}{"port"} = $connectMethod{CM_port};
-                        $connect_info{$CMid}{"servicename"} = $connectMethod{CM_servicename};
-                        $connect_info{$CMid}{"startupscript"} = $connectMethod{CM_startupscript};
-                        $connect_info{$CMid}{"autoprovisioned"} = $connectMethod{CM_autoprovisioned};
-			
-			notify($ERRORS{'OK'}, 0, "CONNECT METHOD CMid= $CMid description= $connect_info{$CMid}{description}");
-        
-                }
-                
-                return \%connect_info;
-        }       
-        
-        return();       
+	my $imagerevision_info = get_imagerevision_info($imagerevision_id);
+	
+	notify($ERRORS{'DEBUG'}, 0, "attempting to retrieve connect method info:\n" .
+		"imagerevision: $imagerevision_id - " . $imagerevision_info->{imagename} . "\n" .
+		"OS: " . $imagerevision_info->{image}{OS}{id} . " - " . $imagerevision_info->{image}{OS}{name} . "\n" .
+		"OS type: " . $imagerevision_info->{image}{OS}{OStype}{id} . " - " . $imagerevision_info->{image}{OS}{OStype}{name}
+	);
+	
+	# Get a hash ref containing the database column names
+	my $database_table_columns = get_database_table_columns();
+	
+	my @tables = (
+		'connectmethod',
+		'connectmethodmap'
+	);
+	
+	# Construct the select statement
+	my $select_statement = "SELECT DISTINCT\n";
+	
+	# Get the column names for each table and add them to the select statement
+	for my $table (@tables) {
+		my @columns = @{$database_table_columns->{$table}};
+		for my $column (@columns) {
+			$select_statement .= "$table.$column AS '$table-$column',\n";
+		}
+	}
+	
+	# Remove the comma after the last column line
+	$select_statement =~ s/,$//;
+	
+	# Complete the select statement
+	$select_statement .= <<EOF;
+FROM
+connectmethod,
+connectmethodmap,
+imagerevision
 
+LEFT JOIN image ON (image.id = imagerevision.imageid)
+LEFT JOIN OS ON (OS.id = image.OSid)
+LEFT JOIN OStype ON (OStype.name = OS.type)
+
+WHERE
+connectmethodmap.connectmethodid = connectmethod.id
+AND imagerevision.id = $imagerevision_id
+AND connectmethodmap.autoprovisioned IS NOT NULL
+AND (
+	connectmethodmap.OStypeid = OStype.id
+	OR connectmethodmap.OSid = OS.id 
+	OR connectmethodmap.imagerevisionid = imagerevision.id
+)
+
+ORDER BY
+connectmethod.id,
+connectmethodmap.imagerevisionid,
+connectmethodmap.OSid,
+connectmethodmap.OStypeid,
+connectmethodmap.disabled
+EOF
+
+	# Call the database select subroutine
+	my @selected_rows = database_select($select_statement);
+	
+	# Transform the array of database rows into a hash
+	my $connect_method_info = {};
+	
+	for my $row (@selected_rows) {	
+		notify($ERRORS{'DEBUG'}, 0, $row->{"connectmethod-name"} . ": " .
+		"connectmethodid=" . $row->{"connectmethod-id"} . ", " .
+		"OStypeid=" . ($row->{"connectmethodmap-OStypeid"} || 'NULL') . ", " .
+		"OSid=" . ($row->{"connectmethodmap-OSid"} || 'NULL') . ", " .
+		"imagerevisionid=" . ($row->{"connectmethodmap-imagerevisionid"} || 'NULL') . ", " .
+		"disabled=" . $row->{"connectmethodmap-disabled"});
+		
+		my $connectmethod_id = $row->{'connectmethod-id'};
+		
+		# Loop through all the columns returned
+		for my $key (keys %$row) {
+			next if $key eq 'connectmethod-connecttext';
+			
+			my $value = $row->{$key};
+			
+			# Split the table-column names
+			my ($table, $column) = $key =~ /^([^-]+)-(.+)/;
+			
+			# Add the values for the primary table to the hash
+			# Add values for other tables under separate keys
+			if ($table eq $tables[0]) {
+				$connect_method_info->{$connectmethod_id}{$column} = $value;
+			}
+			else {
+				$connect_method_info->{$connectmethod_id}{$table}{$column} = $value;
+			}
+		}
+	}
+
+	notify($ERRORS{'DEBUG'}, 0, "retrieved connect method info:\n" . format_data($connect_method_info));
+	return $connect_method_info;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
