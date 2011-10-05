@@ -5545,15 +5545,17 @@ sub get_network_configuration {
 	my ($ipconfig_exit_status, $ipconfig_output);
 	while (++$ipconfig_attempt) {
 		($ipconfig_exit_status, $ipconfig_output) = $self->execute($ipconfig_command);
-		if (defined($ipconfig_exit_status) && $ipconfig_exit_status == 0) {
-			last;
-		}
-		elsif (defined($ipconfig_exit_status)) {
-			notify($ERRORS{'WARNING'}, 0, "attempt $ipconfig_attempt: failed to run ipconfig, exit status: $ipconfig_exit_status, output:\n@{$ipconfig_output}");
-		}
-		else {
+		if (!defined($ipconfig_output)) {
 			notify($ERRORS{'WARNING'}, 0, "attempt $ipconfig_attempt: failed to run the SSH command to run ipconfig");
 		}
+		elsif (grep(/Subnet Mask/i, @$ipconfig_output)) {
+			# Make sure output was returned
+			last;
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "attempt $ipconfig_attempt: failed to run ipconfig, exit status: $ipconfig_exit_status, output:\n" . join("\n", @$ipconfig_output));
+		}
+		
 		
 		if ($ipconfig_attempt >= $ipconfig_attempt_limit) {
 			notify($ERRORS{'WARNING'}, 0, "failed to get network configuration, made $ipconfig_attempt attempts to run ipconfig");
