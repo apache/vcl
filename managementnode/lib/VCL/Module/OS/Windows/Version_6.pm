@@ -1435,6 +1435,271 @@ sub get_firewall_state {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 get_firewall_configuration
+
+ Parameters  : none
+ Returns     : hash reference
+ Description : Retrieves information about the open firewall ports on the
+               computer and constructs a hash. The hash keys are protocol names.
+               Each protocol key contains a hash reference. The keys are either
+               port numbers or ICMP types.
+               Example:
+               "ICMP" => {
+                 8 => {
+                   "description" => "VCL: allow ICMP/8 from 10.10.14.14",
+                   "local_ip" => "Any",
+                   "name" => "VCL: allow ICMP/8 from 10.10.14.14",
+                   "scope" => "10.10.14.14/32"
+                 }
+               },
+               "TCP" => {
+                 3389 => {
+                   "description" => "Allows incoming TCP port 3389 traffic",
+                   "local_ip" => "Any",
+                   "name" => "VCL: allow RDP port 3389",
+                   "scope" => "Any"
+                 },
+               },
+
+=cut
+
+sub get_firewall_configuration {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	return $self->{firewall_configuration} if $self->{firewall_configuration};
+	
+	my $computer_node_name = $self->data->get_computer_node_name();
+	my $system32_path = $self->get_system32_path() || return;
+	
+	my $firewall_configuration;
+	
+	my $command = "$system32_path/netsh.exe advfirewall firewall show rule name=all verbose";
+	my ($exit_status, $output) = $self->execute($command);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run command to show firewall rules on $computer_node_name");
+		return;
+	}
+	elsif (!grep(/Rule Name:/i, @$output)) {
+		notify($ERRORS{'WARNING'}, 0, "unexpected output returned from command to show firewall rules on $computer_node_name, command: '$command', exit status: $exit_status, output:\n" . join("\n", @$output));
+		return;
+	}
+	
+	# Execute the netsh.exe command to retrieve firewall rules
+	#   Rule Name:                            VCL: allow RDP port 3389
+	#   ----------------------------------------------------------------------
+	#   Enabled:                              Yes
+	#   Direction:                            In
+	#   Profiles:                             Domain,Private,Public
+	#   Grouping:
+	#   LocalIP:                              Any
+	#   RemoteIP:                             152.14.53.0/26,10.10.1.2-10.10.2.22
+	#   Protocol:                             TCP
+	#   LocalPort:                            3389
+	#   RemotePort:                           Any
+	#   Edge traversal:                       No
+	#   Action:                               Allow
+	#   Rule Name:                            VCL: allow ping to/from any address
+	#   ----------------------------------------------------------------------
+	#   Enabled:                              Yes
+	#   Direction:                            In
+	#   Profiles:                             Domain,Private,Public
+	#   Grouping:
+	#   LocalIP:                              Any
+	#   RemoteIP:                             Any
+	#   Protocol:                             ICMPv4
+	#                                         Type    Code
+	#                                         8       Any
+	#   Edge traversal:                       No
+	#   Action:                               Allow
+	
+	# Split the output into rule sections
+	my @rule_sections = split(/Rule Name:\s*/, join("\n", @$output));
+	
+	RULE: for my $rule_section (@rule_sections) {
+		my @lines = split(/\n+/, $rule_section);
+		
+		my $rule_name = shift(@lines);
+		
+		# The first rule section will probably be blank because of the way split works
+		next RULE if (!$rule_name);
+		
+		my $rule_info;
+		for my $line (@lines) {
+			if (my ($parameter, $value) = $line =~ /^(\w+):\s*(.*)/g) {
+				$rule_info->{$parameter} = $value;
+			}
+			elsif ($rule_info->{Protocol} && $rule_info->{Protocol} =~ /icmp/i) {
+				if (my ($icmp_type, $icmp_code) = $line =~ /^\s*(\d+)\s+(.*)/g) {
+					push @{$rule_info->{ICMPTypes}{$icmp_type}}, $icmp_code;
+				}
+			}
+		}
+		
+		if (!defined($rule_info->{Enabled}) || $rule_info->{Enabled} !~ /yes/i) {
+			#notify($ERRORS{'DEBUG'}, 0, "ignoring disabled rule: '$rule_name'");
+			next RULE;
+		}
+		if (!defined($rule_info->{Direction}) || $rule_info->{Direction} !~ /in/i) {
+			#notify($ERRORS{'DEBUG'}, 0, "ignoring outgoing rule: '$rule_name'");
+			next RULE;
+		}
+		elsif (!defined($rule_info->{Action}) || $rule_info->{Action} !~ /allow/i) {
+			#notify($ERRORS{'DEBUG'}, 0, "ignoring rule: '$rule_name', Action is NOT allow");
+			next RULE;
+		}
+		elsif (!defined($rule_info->{Protocol})) {
+			#notify($ERRORS{'DEBUG'}, 0, "ignoring rule: '$rule_name', Protocol is not defined:\n$rule_section");
+			next RULE;
+		}
+		
+		my @ports;
+		
+		if ($rule_info->{Protocol} =~ /icmp/i) {
+			if (!defined($rule_info->{ICMPTypes})) {
+				notify($ERRORS{'DEBUG'}, 0, "ignoring rule: '$rule_name', ICMP type could not be determined:\n$rule_section");
+				next RULE;
+			}
+			
+			@ports = sort keys(%{$rule_info->{ICMPTypes}})
+		}
+		else {
+			if (!defined($rule_info->{LocalPort})) {
+				notify($ERRORS{'DEBUG'}, 0, "ignoring rule: '$rule_name', LocalPort is not defined");
+				next RULE;
+			}
+			
+			@ports = split(",", $rule_info->{LocalPort});
+		}
+		
+		if (!@ports) {
+			notify($ERRORS{'WARNING'}, 0, "ignoring rule: '$rule_name', no ports defined:\n" . format_data($rule_info) . "\n$rule_section");
+			next RULE;
+		}
+		
+		for my $port (@ports) {
+			$firewall_configuration->{$rule_info->{Protocol}}{$port}{name} = $rule_name;
+			$firewall_configuration->{$rule_info->{Protocol}}{$port}{description} = $rule_info->{Description};
+			$firewall_configuration->{$rule_info->{Protocol}}{$port}{scope} = $rule_info->{RemoteIP};
+			$firewall_configuration->{$rule_info->{Protocol}}{$port}{local_ip} = $rule_info->{LocalIP};
+		}
+		
+	}
+	
+	# Copy the ICMPv4 key to one named ICMP for compatibility
+	if (defined($firewall_configuration->{ICMPv4})) {
+		$firewall_configuration->{ICMP} = $firewall_configuration->{ICMPv4};
+	}
+	
+	$self->{firewall_configuration} = $firewall_configuration;
+	
+	notify($ERRORS{'DEBUG'}, 0, "retrieved firewall info from $computer_node_name:\n" . format_data($firewall_configuration));
+	return $firewall_configuration;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 _enable_firewall_port_helper
+
+ Parameters  : 
+ Returns     : boolean
+ Description : This subroutine is called by enable_firewall_port. It runs the
+               necessary 'netsh advfirewall' command to configure the firewall.
+
+=cut
+
+sub _enable_firewall_port_helper {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my ($protocol, $port, $scope, $overwrite_existing, $name, $description) = @_;
+	if (!defined($protocol) || !defined($port) || !defined($scope) || !defined($name)) {
+		notify($ERRORS{'WARNING'}, 0, "protocol, port, scope, and name arguments were not supplied");
+		return;
+	}
+	
+	my $computer_node_name   = $self->data->get_computer_node_name();
+	my $system32_path        = $self->get_system32_path() || return;
+	
+	$scope = 'any' if $scope eq '0.0.0.0/0.0.0.0';
+	
+	my $netsh_command;
+	
+	if ($protocol =~ /icmp/i) {
+		$netsh_command .= "$system32_path/netsh.exe advfirewall firewall delete rule";
+		$netsh_command .= " name=all";
+		$netsh_command .= " dir=in";
+		$netsh_command .= " protocol=icmpv4:$port,any";
+		$netsh_command .= " ; ";
+		
+		$netsh_command .= " $system32_path/netsh.exe advfirewall firewall add rule";
+		$netsh_command .= " name=\"$name\"";
+		$netsh_command .= " description=\"$description\"";
+		$netsh_command .= " protocol=icmpv4:$port,any";
+		$netsh_command .= " action=allow";
+		$netsh_command .= " enable=yes";
+		$netsh_command .= " dir=in";
+		$netsh_command .= " localip=any";
+		$netsh_command .= " remoteip=$scope";
+	}
+	else {
+		$netsh_command .= "$system32_path/netsh.exe advfirewall firewall delete rule";
+		$netsh_command .= " name=all";
+		$netsh_command .= " dir=in";
+		$netsh_command .= " protocol=$protocol";
+		$netsh_command .= " localport=$port";
+		$netsh_command .= " ;";
+		
+		$netsh_command .= " $system32_path/netsh.exe advfirewall firewall add rule";
+		$netsh_command .= " name=\"$name\"";
+		$netsh_command .= " description=\"$description\"";
+		$netsh_command .= " protocol=$protocol";
+		$netsh_command .= " action=allow";
+		$netsh_command .= " enable=yes";
+		$netsh_command .= " dir=in";
+		$netsh_command .= " localip=any";
+		$netsh_command .= " localport=$port";
+		$netsh_command .= " remoteip=$scope";
+	}
+
+	# Execute the netsh.exe command
+	my ($netsh_exit_status, $netsh_output) = $self->execute($netsh_command, 1);
+	
+	if (!defined($netsh_output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to open firewall on $computer_node_name, command: '$netsh_command'");
+		return;
+	}
+	elsif (@$netsh_output[-1] =~ /(Ok|The object already exists)/i) {
+		notify($ERRORS{'OK'}, 0, "opened firewall on $computer_node_name:\n" .
+				 "name: '$name'\n" .
+				 "protocol: $protocol\n" .
+				 "port/type: $port\n" .
+				 "scope: $scope"
+		);
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to open firewall on $computer_node_name:\n" .
+			"name: '$name'\n" .
+			"protocol: $protocol\n" .
+			"port/type: $port\n" .
+			"scope: $scope\n" .
+			"command : '$netsh_command'" .
+			"exit status: $netsh_exit_status\n" .
+			"output:\n" . join("\n", @$netsh_output)
+		);
+		return;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 run_sysprep
 
  Parameters  : None

@@ -55,6 +55,7 @@ use diagnostics;
 use English '-no_match_vars';
 use VCL::utils;
 use File::Basename;
+use Net::Netmask;
 
 ##############################################################################
 
@@ -601,7 +602,7 @@ sub post_load {
 	my $imagemeta_postoption = $self->data->get_imagemeta_postoption();
 	
 	notify($ERRORS{'OK'}, 0, "beginning Windows post-load tasks on $computer_node_name");
-
+	
 =item 1
 
  Wait for computer to respond to SSH
@@ -803,7 +804,7 @@ sub post_load {
 			return 0;
 		}
 	}
-
+	
 =item *
 
  Add a line to currentimage.txt indicating post_load has run
@@ -947,8 +948,8 @@ sub grant_access {
 	$remote_ip_range = 'all' if !$remote_ip_range;
 	
 	if($self->process_connect_methods('start') ){
-                notify($ERRORS{'OK'}, 0, "processed connection methods on $computer_node_name");
-        }
+		notify($ERRORS{'OK'}, 0, "processed connection methods on $computer_node_name");
+	}
 
 	# Allow RDP connections
 	if ($self->firewall_enable_rdp($remote_ip_range)) {
@@ -1447,19 +1448,19 @@ sub logoff_users {
 	my $computer_node_name   = $self->data->get_computer_node_name();
 	my $system32_path        = $self->get_system32_path() || return;
 
-	my ($exit_status, $output) = run_ssh_command($computer_node_name, $management_node_keys, "$system32_path/qwinsta.exe");
+	my ($exit_status, $output) = run_ssh_command($computer_node_name, $management_node_keys, "$system32_path/qwinsta.exe", '', '', 1, 60);
 	if ($exit_status > 0) {
-		notify($ERRORS{'WARNING'}, 0, "failed to run qwinsta.exe on $computer_node_name, exit status: $exit_status, output:\n@{$output}");
+		notify($ERRORS{'WARNING'}, 0, "failed to run qwinsta.exe on $computer_node_name, exit status: $exit_status, output:\n" . join("\n", @$output));
 		return;
 	}
 	elsif (!defined($exit_status)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to run qwinsta.exe SSH command on $computer_node_name");
+		notify($ERRORS{'WARNING'}, 0, "failed to run qwinsta.exe command on $computer_node_name");
 		return;
 	}
 	
 	# Find lines with the state = Active or Disc
 	# Disc will occur if the user disconnected the RDP session but didn't logoff
-	my @connection_lines = grep(/(Active)/, @{$output});
+	my @connection_lines = grep(/(Active)/, @$output);
 	return 1 if !@connection_lines;
 	
 	#notify($ERRORS{'OK'}, 0, "connections on $computer_node_name:\n@connection_lines");
@@ -1498,7 +1499,7 @@ sub logoff_users {
 			notify($ERRORS{'OK'}, 0, "logged off session: $session_identifier, output:\n" . join("\n", @$logoff_output));
 		}
 		else {
-			notify($ERRORS{'WARNING'}, 0, "failed to log off session: $session_identifier, exit status: $logoff_exit_status, output:\n@{$logoff_output}");
+			notify($ERRORS{'WARNING'}, 0, "failed to log off session: $session_identifier, exit status: $logoff_exit_status, output:\n" . join("\n", @$logoff_output));
 		}
 	}
 	return 1;
@@ -1900,6 +1901,7 @@ sub delete_user {
  Description : 
 
 =cut
+
 sub set_password {
 	my $self = shift;
 	if (ref($self) !~ /windows/i) {
@@ -1907,7 +1909,6 @@ sub set_password {
 		return;
 	}
 	
-	my $management_node_keys = $self->data->get_management_node_keys();
 	my $computer_node_name   = $self->data->get_computer_node_name();
 	my $system32_path        = $self->get_system32_path() || return;
 	
@@ -1931,79 +1932,40 @@ sub set_password {
 
 	# Attempt to set the password
 	notify($ERRORS{'DEBUG'}, 0, "setting password of $username to $password on $computer_node_name");
-	my ($set_password_exit_status, $set_password_output) = run_ssh_command($computer_node_name, $management_node_keys, "$system32_path/net.exe user $username '$password'");
+	my ($set_password_exit_status, $set_password_output) = $self->execute("$system32_path/net.exe user $username '$password'");
 	if ($set_password_exit_status == 0) {
 		notify($ERRORS{'OK'}, 0, "password changed to '$password' for user '$username' on $computer_node_name");
 	}
 	elsif (defined $set_password_exit_status) {
-		notify($ERRORS{'WARNING'}, 0, "failed to change password to '$password' for user '$username' on $computer_node_name, exit status: $set_password_exit_status, output:\n@{$set_password_output}");
+		notify($ERRORS{'WARNING'}, 0, "failed to change password to '$password' for user '$username' on $computer_node_name, exit status: $set_password_exit_status, output:\n" . join("\n", @$set_password_output));
 		return 0;
 	}
 	else {
 		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to change password to '$password' for user '$username' on $computer_node_name");
 		return 0;
 	}
-
-	# Check if root user, must set sshd service password too
-	if ($username eq 'root') {
-		notify($ERRORS{'DEBUG'}, 0, "root account password changed, must also change sshd service credentials");
-		if (!$self->set_service_credentials('sshd', $username, $password)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to set sshd service credentials to $username ($password)");
-			return 0;
+	
+	# Get the list of services
+	my @services = $self->get_services_using_login_id($username);
+	for my $service (@services) {
+		notify($ERRORS{'DEBUG'}, 0, "$service service is configured to run as $username, updating service credentials");
+		if (!$self->set_service_credentials($service, $username, $password)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to set $service service credentials to $username ($password)");
 		}
 	}
-
-	# Attempt to change scheduled task passwords
-	notify($ERRORS{'DEBUG'}, 0, "changing passwords for scheduled tasks");
-	my ($schtasks_query_exit_status, $schtasks_query_output) = run_ssh_command($computer_node_name, $management_node_keys, "$system32_path/schtasks.exe /Query /V /FO LIST", '', '', 0);
-	if (defined($schtasks_query_exit_status) && $schtasks_query_exit_status == 0) {
-		notify($ERRORS{'DEBUG'}, 0, "queried scheduled tasks on $computer_node_name");
-	}
-	elsif (defined $schtasks_query_exit_status) {
-		notify($ERRORS{'WARNING'}, 0, "failed to query scheduled tasks on $computer_node_name, exit status: $schtasks_query_exit_status, output:\n@{$schtasks_query_output}");
-		return 0;
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to query scheduled tasks on $computer_node_name");
-		return 0;
-	}
-
-	# Find scheduled tasks configured to run as this user
-	my $task_name;
-	my @task_names_to_update;
-	for my $schtasks_output_line (@{$schtasks_query_output}) {
-		if ($schtasks_output_line =~ /TaskName:\s+(.+)/i) {
-			$task_name = $1;
-		}
-		if ($schtasks_output_line =~ /Run As User.*[\W]$username\s*$/) {
-			notify($ERRORS{'DEBUG'}, 0, "password needs to be updated for scheduled task: '$task_name'");
-			push @task_names_to_update, $task_name;
-		}
-	}
-
-	# Loop through the scheduled tasks configured to run as the user, update the password
-	for my $task_name_to_update (@task_names_to_update) {
-		my $schtasks_command = "$system32_path/schtasks.exe /Change /RU \"$username\" /RP \"$password\" /TN \"$task_name_to_update\"";
-		my ($schtasks_change_exit_status, $schtasks_change_output) = run_ssh_command($computer_node_name, $management_node_keys, $schtasks_command, '', '', 0);
-		if (!defined($schtasks_change_output)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to change password for scheduled task: $task_name_to_update");
-			return;
-		}
-		elsif (grep (/^SUCCESS:/, @$schtasks_change_output)) {
-			notify($ERRORS{'OK'}, 0, "changed password for scheduled task: $task_name_to_update");
-		}
-		elsif (grep (/The parameter is incorrect/, @$schtasks_change_output)) {
-			notify($ERRORS{'WARNING'}, 0, "encountered Windows bug while attempting to change password for scheduled task: $task_name_to_update, output:\n@{$schtasks_change_output}");
-			# Don't return - There is a bug in Windows 7
-			# If a scheduled task is created using the GUI using a schedule the password cannot be set via schtasks.exe
-			# schtasks.exe displays: ERROR: The parameter is incorrect.
-			# If the same task is changed to run on an event such as logon it works
-		}
-		elsif (grep (/^ERROR:/, @$schtasks_change_output)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to change password for scheduled task: $task_name_to_update, command:\n$schtasks_command\noutput:\n@{$schtasks_change_output}");
-		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "unexpected output returned while attempting to change password for scheduled task: $task_name_to_update, command:\n$schtasks_command\noutput:\n@{$schtasks_change_output}");
+	
+	# Get the scheduled tasks - check if any are configured to run as the user
+	my $scheduled_task_info = $self->get_scheduled_task_info();
+	for my $task_name (keys %$scheduled_task_info) {
+		my $run_as_user = $scheduled_task_info->{$task_name}{'Run As User'};
+		if ($run_as_user && $run_as_user =~ /^(.+\\)?$username$/i) {
+			notify($ERRORS{'DEBUG'}, 0, "password needs to be updated for scheduled task '$task_name' set to run as user '$run_as_user'");
+			
+			# Attempt to update the scheduled task credentials
+			# Don't return false if this fails - not extremely vital
+			if (!$self->set_scheduled_task_credentials($task_name, $username, $password)) {
+				notify($ERRORS{'WARNING'}, 0, "failed to set '$task_name' scheduled task credentials to $username ($password)");
+			}
 		}
 	}
 	
@@ -2488,15 +2450,15 @@ sub reg_query {
 		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to query registry key: $key_argument");
 		return;
 	}
-	elsif (grep(/^Error:/, @$output)) {
+	elsif (!grep(/REG.EXE VERSION|HKEY/, @$output)) {
 		my $message = "failed to query registry:\nkey: '$key_argument'\n";
 		$message .= "value: '$value_argument'\n" if defined($value_argument);
-		$message .= "command: '$command'\noutput:\n" . join("\n", @{$output});
+		$message .= "command: '$command'\n";
+		$message .= "exit status: $exit_status\n";
+		$message .= "output:\n" . join("\n", @{$output});
 		notify($ERRORS{'WARNING'}, 0, $message);
 		return;
 	}
-	
-	notify($ERRORS{'DEBUG'}, 0, "reg.exe QUERY output:\n" . join("\n", @$output));
 	
 	# If value argument was specified, parse and return the data
 	if (defined($value_argument)) {
@@ -2545,11 +2507,28 @@ sub reg_query {
 						 #"data: " . string_to_ascii($data)
 						 #);
 				
-				#$registry_hash{$key}{$value}{type} = $type;
-				$registry_hash{$key}{$value} = $data;
+				if (!defined($key) || !defined($value) || !defined($data) || !defined($type)) {
+					my $message = "some registry data is undefined:\n";
+					$message .= "line: '$line'\n";
+					$message .= "key: '" . ($key || 'undefined') . "'\n";
+					$message .= "value: '" . ($value || 'undefined') . "'\n";
+					$message .= "data: '" . ($data || 'undefined') . "'\n";
+					$message .= "type: '" . ($type || 'undefined') . "'";
+					notify($ERRORS{'WARNING'}, 0, $message);
+				}
+				else {
+					$registry_hash{$key}{$value}{type} = $type;
+					$registry_hash{$key}{$value} = $data;
+				}
 			}
 			elsif ($line =~ /^!/) {
 				# Ignore lines beginning with '!'
+				next;
+			}
+			elsif ($line =~ /^Error:/) {
+				# Ignore lines beginning with 'Error:' -- this is common and probably not a problem
+				# Example:
+				#    Error:  Access is denied in the key HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\services\MRxDAV\EncryptedDirectories
 				next;
 			}
 			else {
@@ -2557,7 +2536,12 @@ sub reg_query {
 			}
 		}
 		
-		notify($ERRORS{'DEBUG'}, 0, "retrieved registry data:\n" . format_data(\%registry_hash));
+		my $message = "retrieved registry data:\n";
+		$message .= "key: '$key_argument'\n";
+		$message .= "value: '$value_argument'\n" if defined($value_argument);
+		$message .= "keys found: " . scalar(keys %registry_hash);
+		notify($ERRORS{'DEBUG'}, 0, $message);
+		
 		return \%registry_hash;
 	}
 }
@@ -2723,6 +2707,10 @@ sub reg_delete {
 	my ($delete_registry_exit_status, $delete_registry_output) = run_ssh_command($computer_node_name, $management_node_keys, $delete_registry_command, '', '', 1);
 	if (defined($delete_registry_exit_status) && $delete_registry_exit_status == 0) {
 		notify($ERRORS{'DEBUG'}, 0, "deleted registry key: $registry_key, value: $registry_value, output:\n" . join("\n", @$delete_registry_output));
+	}
+	elsif ($delete_registry_output && grep(/unable to find/i, @$delete_registry_output)) {
+		# Error: The system was unable to find the specified registry key or value
+		notify($ERRORS{'DEBUG'}, 0, "registry key does NOT exist: $registry_key");
 	}
 	elsif ($delete_registry_exit_status) {
 		notify($ERRORS{'WARNING'}, 0, "failed to delete registry key: $registry_key, value: $registry_value, exit status: $delete_registry_exit_status, output:\n@{$delete_registry_output}");
@@ -3072,6 +3060,60 @@ sub delete_hklm_run_registry_key {
 	}
 	
 	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 set_scheduled_task_credentials
+
+ Parameters  : $task_name, $username, $password
+ Returns     : boolean
+ Description : Sets the credentials under which a scheduled task runs.
+
+=cut
+
+sub set_scheduled_task_credentials {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my ($task_name, $username, $password) = @_;
+	if (!defined($task_name) || !defined($username) || !defined($password)) {
+		notify($ERRORS{'WARNING'}, 0, "scheduled task name, username, and password arguments were not supplied");
+		return;
+	}
+	
+	my $computer_node_name   = $self->data->get_computer_node_name();
+	my $system32_path        = $self->get_system32_path() || return;
+	
+	my $command = "$system32_path/schtasks.exe /Change /RU \"$username\" /RP \"$password\" /TN \"$task_name\"";
+	my ($exit_status, $output) = $self->execute($command);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to change password for scheduled task: $task_name");
+		return;
+	}
+	elsif (grep (/^SUCCESS:/, @$output)) {
+		notify($ERRORS{'OK'}, 0, "changed password for scheduled task: $task_name");
+		return 1;
+	}
+	elsif (grep (/The parameter is incorrect/, @$output)) {
+		notify($ERRORS{'WARNING'}, 0, "unable to change password for scheduled task '$task_name' due to Windows bug\ncommand: '$command'\noutput:\n" . join("\n", @$output));
+		# Don't return false - There is a bug in Windows 7
+		# If a scheduled task is created using the GUI using a schedule the password cannot be set via schtasks.exe
+		# schtasks.exe displays: ERROR: The parameter is incorrect.
+		# If the same task is changed to run on an event such as logon it works
+		return 1;
+	}
+	elsif (grep (/^ERROR:/, @$output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to change password for scheduled task: $task_name, command:\n$command\noutput:\n" . join("\n", @$output));
+		return 0;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unexpected output returned while attempting to change password for scheduled task: $task_name, command:\n$command\noutput:\n" . join("\n", @$output));
+		return 0;
+	}
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -3790,9 +3832,9 @@ sub set_service_credentials {
 
 =head2 get_service_list
 
- Parameters  : 
- Returns     : 
- Description : 
+ Parameters  : none
+ Returns     : array
+ Description : Retrieves the names of the services installed on the computer.
 
 =cut
 
@@ -3803,15 +3845,14 @@ sub get_service_list {
 		return;
 	}
 
-	my $management_node_keys = $self->data->get_management_node_keys();
 	my $computer_node_name   = $self->data->get_computer_node_name();
 	my $system32_path        = $self->get_system32_path() || return;
 	
-	# Attempt to delete the user account
-	my $sc_query_command = $system32_path . "/sc.exe query | grep SERVICE_NAME | cut --fields=2 --delimiter=' '";
-	my ($sc_query_exit_status, $sc_query_output) = run_ssh_command($computer_node_name, $management_node_keys, $sc_query_command);
+	# Call sc query
+	my $sc_query_command = $system32_path . "/sc.exe query";
+	my ($sc_query_exit_status, $sc_query_output) = $self->execute($sc_query_command);
 	if (defined($sc_query_exit_status) && $sc_query_exit_status == 0) {
-		notify($ERRORS{'OK'}, 0, "retrieved service list on $computer_node_name");
+		#notify($ERRORS{'OK'}, 0, "retrieved service list on $computer_node_name:\n" . join("\n", @$sc_query_output));
 	}
 	elsif (defined($sc_query_exit_status)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to retrieve service list from $computer_node_name, exit status: $sc_query_exit_status, output:\n@{$sc_query_output}");
@@ -3821,19 +3862,95 @@ sub get_service_list {
 		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to failed to retrieve service list from $computer_node_name");
 		return;
 	}
+	
+	my @service_names;
+	for my $line (@$sc_query_output) {
+		if ($line =~ /SERVICE_NAME: (.*)/) {
+			push @service_names, $1;
+		}
+	}
 
-	my @service_name_array = split("\n", $sc_query_output);
-	notify($ERRORS{'DEBUG'}, 0, "found " . @service_name_array . " services on $computer_node_name");
-	return @service_name_array;
+	notify($ERRORS{'DEBUG'}, 0, "found " . scalar(@service_names) . " services on $computer_node_name");
+	return @service_names;
 } ## end sub get_service_list
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_service_info
+
+ Parameters  : none
+ Returns     : hash reference
+ Description : Retrieves info for all services installed on the computer. A hash
+               reference is returned. The hash keys are service names.
+               Example:
+                  "sshd" => {
+                    "BINARY_PATH_NAME" => "C:\\cygwin\\bin\\cygrunsrv.exe",
+                    "DEPENDENCIES" => "tcpip",
+                    "DISPLAY_NAME" => "CYGWIN sshd",
+                    "ERROR_CONTROL" => "1   NORMAL",
+                    "LOAD_ORDER_GROUP" => "",
+                    "SERVICE_NAME" => "sshd",
+                    "SERVICE_START_NAME" => ".\\root",
+                    "START_TYPE" => "2   AUTO_START",
+                    "TAG" => 0,
+                    "TYPE" => "10  WIN32_OWN_PROCESS "
+                  },
+
+=cut
+
+sub get_service_info {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	return $self->{service_info} if $self->{service_info};
+
+	my $computer_node_name   = $self->data->get_computer_node_name();
+	my $system32_path        = $self->get_system32_path() || return;
+	
+	my @service_list = $self->get_service_list();
+	
+	my $service_info;
+	for my $service (@service_list) {
+		# Call sc query
+		my $command = "$system32_path/sc.exe qc \"$service\"";
+		my ($exit_status, $output) = $self->execute($command);
+		if (defined($exit_status) && $exit_status == 0) {
+			#notify($ERRORS{'DEBUG'}, 0, "retrieved '$service' service info:\n" . join("\n", @$output));
+			
+			for my $line (@$output) {
+				if (my ($property, $value) = $line =~ /^[\s\t]*(\w+)[\s\t]*:[\s\t]*(.*)/g) {
+					$service_info->{$service}{$property} = $value;
+				}
+			}
+		}
+		elsif (defined($exit_status)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to retrieve '$service' service info from $computer_node_name, exit status: $exit_status, output:\n" . join("\n", @$output));
+			next SERVICE;
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to run command to retrieve '$service' service info from $computer_node_name");
+			next SERVICE;
+		}
+	}
+	
+	$self->{service_info} = $service_info;
+	#notify($ERRORS{'DEBUG'}, 0, "retrieved service info:\n" . format_data($service_info));
+	return $service_info;
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 
 =head2 get_service_login_ids
 
- Parameters  : 
- Returns     : 
- Description : 
+ Parameters  : $login_id
+ Returns     : array
+ Description : Enumerates the services installed on the computer and returns an
+               array containing the names of the services which are configured
+               to run using the credentials of the login ID specified as the
+               argument.
 
 =cut
 
@@ -3843,48 +3960,33 @@ sub get_services_using_login_id {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
-
-	my $management_node_keys = $self->data->get_management_node_keys();
+	
 	my $computer_node_name   = $self->data->get_computer_node_name();
-	my $system32_path        = $self->get_system32_path() || return;
 	
 	my $login_id = shift;
 	if (!$login_id) {
 		notify($ERRORS{'WARNING'}, 0, "unable to get services using login id, login id argument was not passed correctly");
 		return;
 	}
-
-	# Get a list of the services on the node
-	my @service_list = $self->get_service_list();
-	if (!@service_list) {
-		notify($ERRORS{'WARNING'}, 0, "unable to get service logon ids, failed to retrieve service name list from $computer_node_name, service credentials cannot be changed");
-		return 0;
+	
+	# Get infor for all the services installed on the computer
+	my $service_info = $self->get_service_info() || return;
+	
+	my @matching_service_names;
+	for my $service_name (sort keys %$service_info) {
+		my $service_start_name = $service_info->{$service_name}{SERVICE_START_NAME};
+		
+		# The service start name may be in any of the following forms:
+		#    LocalSystem
+		#    NT AUTHORITY\LocalService
+		#    .\root
+		if ($service_start_name && $service_start_name =~ /^((NT AUTHORITY|\.)\\)?$login_id$/i) {
+			push @matching_service_names, $service_name;
+		}
 	}
-
-	my @services_using_login_id;
-	for my $service_name (@service_list) {
-		# Attempt to get the service start name using sc.exe qc
-		my $sc_qc_command = $system32_path . "/sc.exe qc $service_name | grep SERVICE_START_NAME | cut --fields=2 --delimiter='\\'";
-		my ($sc_qc_exit_status, $sc_qc_output) = run_ssh_command($computer_node_name, $management_node_keys, $sc_qc_command);
-		if (defined($sc_qc_exit_status) && $sc_qc_exit_status == 0) {
-			notify($ERRORS{'OK'}, 0, "retrieved $service_name service start name from $computer_node_name");
-		}
-		elsif (defined($sc_qc_exit_status)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to retrieve $service_name service start name from $computer_node_name, exit status: $sc_qc_exit_status, output:\n@{$sc_qc_output}");
-			return 0;
-		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to failed to retrieve $service_name service start name from $computer_node_name");
-			return;
-		}
-
-		my $service_logon_id = @{$sc_qc_output}[0];
-		if ($service_logon_id =~ /^$login_id$/i) {
-			push @services_using_login_id, $service_logon_id;
-		}
-	} ## end for my $service_name (@service_list)
-
-	return @services_using_login_id;
+	
+	notify($ERRORS{'DEBUG'}, 0, "found " . scalar(@matching_service_names) . " services using login ID '$login_id': " . join(", ", @matching_service_names));
+	return @matching_service_names;
 } ## end sub get_services_using_login_id
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -3939,116 +4041,118 @@ sub disable_scheduled_task {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 get_scheduled_tasks
+=head2 get_scheduled_task_info
 
  Parameters  : 
- Returns     : array reference if successful, false if failed
+ Returns     : hash reference
  Description : Queries the scheduled tasks on a computer and returns the
-               configuration for each task. An array reference is returned.
-               Each array element represents a scheduled task and contains
-               a hash reference. The hash contains the schedule task
-               configuration.  The hash keys are:
-                  $scheduled_task_hash{"HostName"},
-                  $scheduled_task_hash{"TaskName"},
-                  $scheduled_task_hash{"Next Run Time"},
-                  $scheduled_task_hash{"Status"},
-                  $scheduled_task_hash{"Last Run Time"},
-                  $scheduled_task_hash{"Last Result"},
-                  $scheduled_task_hash{"Creator"},
-                  $scheduled_task_hash{"Schedule"},
-                  $scheduled_task_hash{"Task To Run"},
-                  $scheduled_task_hash{"Start In"},
-                  $scheduled_task_hash{"Comment"},
-                  $scheduled_task_hash{"Scheduled Task State"},
-                  $scheduled_task_hash{"Scheduled Type"},
-                  $scheduled_task_hash{"Start Time"},
-                  $scheduled_task_hash{"Start Date"},
-                  $scheduled_task_hash{"End Date"},
-                  $scheduled_task_hash{"Days"},
-                  $scheduled_task_hash{"Months"},
-                  $scheduled_task_hash{"Run As User"},
-                  $scheduled_task_hash{"Delete Task If Not Rescheduled"},
-                  $scheduled_task_hash{"Stop Task If Runs X Hours and X Mins"},
-                  $scheduled_task_hash{"Repeat: Every"},
-                  $scheduled_task_hash{"Repeat: Until: Time"},
-                  $scheduled_task_hash{"Repeat: Until: Duration"},
-                  $scheduled_task_hash{"Repeat: Stop If Still Running"},
-                  $scheduled_task_hash{"Idle Time"},
-                  $scheduled_task_hash{"Power Management"}
+               configuration for each task. A hash reference is returned. The
+               hash keys are the scheduled task names.
+					Example:
+               "\\Microsoft\\Windows\\Time Synchronization\\SynchronizeTime" => {
+                    "Author" => "Microsoft Corporation",
+                    "Comment" => "Maintains date and time synchronization...",
+                    "Days" => "1/1/2005",
+                    "Delete Task If Not Rescheduled" => "Stop On Battery Mode",
+                    "End Date" => "1:00:00 AM",
+                    "HostName" => "WIN7-64BIT",
+                    "Idle Time" => " any services that explicitly depend on it will fail to start.",
+                    "Last Result" => 1056,
+                    "Last Run Time" => "9/11/2011 1:00:00 AM",
+                    "Logon Mode" => "Interactive/Background",
+                    "Months" => "N/A",
+                    "Next Run Time" => "9/18/2011 1:00:00 AM",
+                    "Power Management" => "Enabled",
+                    "Repeat: Every" => "SUN",
+                    "Repeat: Stop If Still Running" => "Disabled",
+                    "Repeat: Until: Duration" => "Disabled",
+                    "Repeat: Until: Time" => "Every 1 week(s)",
+                    "Run As User" => "Disabled",
+                    "Schedule" => "Enabled",
+                    "Schedule Type" => "72:00:00",
+                    "Scheduled Task State" => " date and time synchronization will be unavailable. If this service is disabled",
+                    "Start Date" => "Weekly",
+                    "Start In" => "N/A",
+                    "Start Time" => "Scheduling data is not available in this format.",
+                    "Status" => "Ready",
+                    "Stop Task If Runs X Hours and X Mins" => "LOCAL SERVICE",
+                    "Task To Run" => "%windir%\\system32\\sc.exe start w32time task_started"
+               },
 
 =cut
 
-sub get_scheduled_tasks {
+sub get_scheduled_task_info {
 	my $self = shift;
 	if (ref($self) !~ /windows/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
+	
+	return $self->{scheduled_task_info} if $self->{scheduled_task_info};
 
-	my $management_node_keys = $self->data->get_management_node_keys();
 	my $computer_node_name   = $self->data->get_computer_node_name();
 	my $system32_path        = $self->get_system32_path() || return;
 	
 	# Attempt to retrieve scheduled task information
-	my $schtasks_command = $system32_path . '/schtasks.exe /Query /NH /V /FO CSV';
-	my ($schtasks_exit_status, $schtasks_output) = run_ssh_command($computer_node_name, $management_node_keys, $schtasks_command);
-	if (defined($schtasks_exit_status) && $schtasks_exit_status == 0) {
-		notify($ERRORS{'OK'}, 0, "retrieved scheduled task information");
-	}
-	elsif (defined($schtasks_exit_status)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to retrieve scheduled task information, exit status: $schtasks_exit_status, output:\n@{$schtasks_output}");
-		return 0;
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to retrieve scheduled task information");
+	my $command = $system32_path . '/schtasks.exe /Query /V /FO CSV';
+	my ($exit_status, $output) = $self->execute($command);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run command to retrieve scheduled task information");
 		return;
 	}
-	
-	my @scheduled_task_data;
-	for my $scheduled_task_line (@{$schtasks_output}) {
-		# Remove quotes from the hash values
-		$scheduled_task_line =~ s/"//g;
+	elsif ($exit_status == 0) {
+		#notify($ERRORS{'DEBUG'}, 0, "retrieved scheduled task information, output:\n" . join("\n", @$output));
 		
-		# Split the line up
-		my @scheduled_task_fields = split(/,/, $scheduled_task_line);
-		
-		# Create a hash containing the line data
-		my %scheduled_task_hash;
-		($scheduled_task_hash{"HostName"},
-		$scheduled_task_hash{"TaskName"},
-		$scheduled_task_hash{"Next Run Time"},
-		$scheduled_task_hash{"Status"},
-		$scheduled_task_hash{"Last Run Time"},
-		$scheduled_task_hash{"Last Result"},
-		$scheduled_task_hash{"Creator"},
-		$scheduled_task_hash{"Schedule"},
-		$scheduled_task_hash{"Task To Run"},
-		$scheduled_task_hash{"Start In"},
-		$scheduled_task_hash{"Comment"},
-		$scheduled_task_hash{"Scheduled Task State"},
-		$scheduled_task_hash{"Scheduled Type"},
-		$scheduled_task_hash{"Start Time"},
-		$scheduled_task_hash{"Start Date"},
-		$scheduled_task_hash{"End Date"},
-		$scheduled_task_hash{"Days"},
-		$scheduled_task_hash{"Months"},
-		$scheduled_task_hash{"Run As User"},
-		$scheduled_task_hash{"Delete Task If Not Rescheduled"},
-		$scheduled_task_hash{"Stop Task If Runs X Hours and X Mins"},
-		$scheduled_task_hash{"Repeat: Every"},
-		$scheduled_task_hash{"Repeat: Until: Time"},
-		$scheduled_task_hash{"Repeat: Until: Duration"},
-		$scheduled_task_hash{"Repeat: Stop If Still Running"},
-		$scheduled_task_hash{"Idle Time"},
-		$scheduled_task_hash{"Power Management"}) = @scheduled_task_fields;
-		
-		push @scheduled_task_data, \%scheduled_task_hash;
+		if (grep(/no scheduled tasks/i, @$output)) {
+			notify($ERRORS{'DEBUG'}, 0, "there are no scheduled tasks on $computer_node_name, output:\n" . join("\n", @$output));
+			return {};
+		}
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve scheduled task information, exit status: $exit_status, output:\n" . join("\n", @$output));
+		return 0;
 	}
 	
-	notify($ERRORS{'DEBUG'}, 0, "found " . scalar(@scheduled_task_data) . " scheduled tasks");
+	my @properties;
+	my $scheduled_task_info;
+	for my $line (@$output) {
+		
+		# Split the line into an array and remove quotes from beginning and end of each value
+		my @values = split(/\",\"/, $line);
+		
+		if (grep { $_ eq 'TaskName' } @values) {
+			@properties = @values;
+			next;
+		}
+		elsif (!@properties) {
+			notify($ERRORS{'WARNING'}, 0, "unable to parse scheduled task info, column definition line containing 'TaskName' was not found before line: '$line'");
+			return;
+		}
+		
+		
+		if (scalar(@properties) != scalar(@values)) {
+			notify($ERRORS{'WARNING'}, 0, "property count (" . scalar(@properties) . ") does not equal value count (" . scalar(@values) . ")\nproperties line: '$line'\nvalues: '" . join(",", @values));
+			next;
+		}
+		
+		my $info;
+		for (my $i=0; $i<scalar(@values); $i++) {
+			$info->{$properties[$i]} = $values[$i];
+		}
+		
+		my $task_name = $info->{TaskName};
+		if (defined($task_name)) {
+			$scheduled_task_info->{$task_name} = $info;
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to determine scheduled task name from line: '$line', info:\n" . format_data($info));
+		}
+	}
 	
-	return \@scheduled_task_data;
-} ## end sub disable_scheduled_task
+	$self->{scheduled_task_info} = $scheduled_task_info;
+	notify($ERRORS{'DEBUG'}, 0, "found " . scalar(keys %$scheduled_task_info) . " scheduled tasks:\n" . join("\n", sort keys(%$scheduled_task_info)));
+	return $scheduled_task_info;
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -4266,6 +4370,509 @@ sub set_my_computer_name {
 
 	return 1;
 } ## end sub set_my_computer_name
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_firewall_configuration
+
+ Parameters  : none
+ Returns     : hash reference
+ Description : Retrieves information about the open firewall ports on the
+               computer and constructs a hash. The hash keys are protocol names.
+               Each protocol key contains a hash reference. The keys are either
+               port numbers or ICMP types.
+               Example:
+               
+                  "ICMP" => {
+                    8 => {
+                      "description" => "Allow inbound echo request"
+                    }
+                  },
+                  "TCP" => {
+                    22 => {
+                      "interface_names" => [
+                        "Local Area Connection 3"
+                      ],
+                      "name" => "sshd"
+                    },
+                    3389 => {
+                      "name" => "Remote Desktop",
+                      "scope" => "192.168.53.54/255.255.255.255"
+                    },
+
+=cut
+
+sub get_firewall_configuration {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	return $self->{firewall_configuration} if $self->{firewall_configuration};
+	
+	my $computer_node_name = $self->data->get_computer_node_name();
+	my $system32_path = $self->get_system32_path() || return;
+	
+	my $network_configuration = $self->get_network_configuration() || return;
+	
+	my $firewall_configuration = {};
+	
+	my $port_command = "$system32_path/netsh.exe firewall show portopening verbose = ENABLE";
+	my ($port_exit_status, $port_output) = $self->execute($port_command);
+	if (!defined($port_output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run command to show open firewall ports on $computer_node_name");
+		return;
+	}
+	elsif (!grep(/Port\s+Protocol/i, @$port_output)) {
+		notify($ERRORS{'WARNING'}, 0, "unexpected output returned from command to show open firewall ports on $computer_node_name, command: '$port_command', exit status: $port_exit_status, output:\n" . join("\n", @$port_output));
+		return;
+	}
+	
+	# Execute the netsh.exe command to retrieve firewall port openings
+	# Expected output:
+	# Port configuration for Local Area Connection 4:
+	# Port   Protocol  Mode     Name
+	# -------------------------------------------------------------------
+	# 443    TCP       Disable  Secure Web Server (HTTPS)
+	# 22     TCP       Disable  Cygwin SSHD
+	
+	my $configuration;
+	my $previous_protocol;
+	my $previous_port;
+	for my $line (@$port_output) {
+		if ($line =~ /^Port configuration for (.+):/ig) {
+			$configuration = $1;
+		}
+		elsif ($line =~ /^(\d+)\s+(\w+)\s+(\w+)\s+(.*)/ig) {
+			my $port = $1;
+			my $protocol = $2;
+			my $mode = $3;
+			my $name = $4;
+			
+			$previous_protocol = $protocol;
+			$previous_port = $port;
+			
+			next if ($mode !~ /enable/i);
+			
+			$firewall_configuration->{$protocol}{$port}{name}= $name;
+			
+			if ($configuration !~ /\w+ profile/i) {
+				push @{$firewall_configuration->{$protocol}{$port}{interface_names}}, $configuration;
+			}
+		}
+		elsif (!defined($previous_protocol) ||
+				 !defined($previous_port) ||
+				 !defined($firewall_configuration->{$previous_protocol}) ||
+				 !defined($firewall_configuration->{$previous_protocol}{$previous_port})
+				 ) {
+			next;
+		}
+		elsif (my ($scope) = $line =~ /Scope:\s+(.+)/ig) {
+			$firewall_configuration->{$previous_protocol}{$previous_port}{scope} = $scope;
+		}
+	}
+	
+	# Execute the netsh.exe ICMP command
+	my $icmp_command = "$system32_path/netsh.exe firewall show icmpsetting verbose = ENABLE";
+	my ($icmp_exit_status, $icmp_output) = $self->execute($icmp_command);
+	if (!defined($icmp_output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run command to show firewall ICMP settings on $computer_node_name");
+		return;
+	}
+	elsif (!grep(/Mode\s+Type/i, @$icmp_output)) {
+		notify($ERRORS{'WARNING'}, 0, "unexpected output returned from command to show firewall ICMP settings on $computer_node_name, command: '$icmp_command', exit status: $icmp_exit_status, output:\n" . join("\n", @$icmp_output));
+		return;
+	}
+	
+	# ICMP configuration for Local Area Connection 4:
+	# Mode     Type  Description
+	# -------------------------------------------------------------------
+	# Disable  3     Allow outbound destination unreachable
+	# Disable  4     Allow outbound source quench
+
+	for my $line (@$icmp_output) {
+		if ($line =~ /^ICMP configuration for (.+):/ig) {
+			$configuration = $1;
+		}
+		elsif ($line =~ /^(\w+)\s+(\d+)\s+(.*)/ig) {
+			my $mode = $1;
+			my $type = $2;
+			my $description = $3;
+			
+			next if ($mode !~ /enable/i);
+			
+			$firewall_configuration->{ICMP}{$type}{description} = $description || '';
+			
+			if ($configuration !~ /\w+ profile/i) {
+				push @{$firewall_configuration->{ICMP}{$type}{interface_names}}, $configuration;
+			}
+		}
+	}
+	
+	$self->{firewall_configuration} = $firewall_configuration;
+	
+	notify($ERRORS{'DEBUG'}, 0, "retrieved firewall configuration from $computer_node_name:\n" . format_data($firewall_configuration));
+	return $firewall_configuration;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 parse_firewall_scope
+
+ Parameters  : @scope_strings
+ Returns     : string
+ Description : Parses an array of firewall scope strings and collpases them into
+               a simplified scope if possible. A comma-separated string is
+               returned. The scope string argument may be in the form:
+                  -192.168.53.54/255.255.255.192
+                  -192.168.53.54/24
+                  -192.168.53.54
+                  -*
+                  -Any
+                  -LocalSubnet
+
+=cut
+
+sub parse_firewall_scope {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my @scope_strings = @_;
+	if (!@scope_strings) {
+		notify($ERRORS{'WARNING'}, 0, "scope array argument was not supplied");
+		return;
+	}
+	
+	my @netmask_objects;
+	
+	for my $scope_string (@scope_strings) {
+		if ($scope_string =~ /(\*|Any)/i) {
+			my $netmask_object = new Net::Netmask('any');
+			push @netmask_objects, $netmask_object;
+		}
+		
+		elsif ($scope_string =~ /LocalSubnet/i) {
+			my $network_configuration = $self->get_network_configuration() || return;
+			
+			for my $interface_name (sort keys %$network_configuration) {
+				for my $ip_address (keys %{$network_configuration->{$interface_name}{ip_address}}) {
+					my $subnet_mask = $network_configuration->{$interface_name}{ip_address}{$ip_address};
+					
+					my $netmask_object = new Net::Netmask("$ip_address/$subnet_mask");
+					if ($netmask_object) {
+						push @netmask_objects, $netmask_object;
+					}
+					else {
+						notify($ERRORS{'WARNING'}, 0, "failed to create Net::Netmask object, IP address: $ip_address, subnet mask: $subnet_mask");
+						return;
+					}
+				}
+			}
+		}
+		
+		elsif (my @scope_sections = split(/,/, $scope_string)) {
+			for my $scope_section (@scope_sections) {
+				
+				if (my ($start_address, $end_address) = $scope_section =~ /^([\d\.]+)-([\d\.]+)$/) {
+					my @netmask_range_objects = Net::Netmask::range2cidrlist($start_address, $end_address);
+					if (@netmask_range_objects) {
+						push @netmask_objects, @netmask_range_objects;
+					}
+					else {
+						notify($ERRORS{'WARNING'}, 0, "failed to call Net::Netmask::range2cidrlist to create an array of objects covering IP range: $start_address-$end_address");
+						return;
+					}
+				}
+				
+				elsif (my ($ip_address, $subnet_mask) = $scope_section =~ /^([\d\.]+)\/([\d\.]+)$/) {
+					my $netmask_object = new Net::Netmask("$ip_address/$subnet_mask");
+					if ($netmask_object) {
+						push @netmask_objects, $netmask_object;
+					}
+					else {
+						notify($ERRORS{'WARNING'}, 0, "failed to create Net::Netmask object, IP address: $ip_address, subnet mask: $subnet_mask");
+						return;
+					}
+				}
+				
+				elsif (($ip_address) = $scope_section =~ /^([\d\.]+)$/) {
+					my $netmask_object = new Net::Netmask("$ip_address");
+					if ($netmask_object) {
+						push @netmask_objects, $netmask_object;
+					}
+					else {
+						notify($ERRORS{'WARNING'}, 0, "failed to create Net::Netmask object, IP address: $ip_address");
+						return;
+					}
+				}
+				
+				else {
+					notify($ERRORS{'WARNING'}, 0, "unable to parse '$scope_section' section of scope: '$scope_string'");
+					return;
+				}
+			}
+		}
+		
+		else {
+			notify($ERRORS{'WARNING'}, 0, "unexpected scope format: '$scope_string'");
+			return
+		}
+	}
+	
+	my @netmask_objects_collapsed = cidrs2cidrs(@netmask_objects);
+	if (@netmask_objects_collapsed) {
+		my $scope_result_string;
+		my @ip_address_ranges;
+		for my $netmask_object (@netmask_objects_collapsed) {
+			
+			if ($netmask_object->first() eq $netmask_object->last()) {
+				push @ip_address_ranges, $netmask_object->first();
+				$scope_result_string .= $netmask_object->base() . ",";
+			}
+			else {
+				push @ip_address_ranges, $netmask_object->first() . "-" . $netmask_object->last();
+				$scope_result_string .= $netmask_object->base() . "/" . $netmask_object->mask() . ",";
+			}
+		}
+		
+		$scope_result_string =~ s/,+$//;
+		my $argument_string = join(",", @scope_strings);
+		if ($argument_string ne $scope_result_string) {
+			notify($ERRORS{'DEBUG'}, 0, "parsed firewall scope:\n" .
+				"argument: '$argument_string'\n" .
+				"result: '$scope_result_string'\n" .
+				"IP address ranges:\n" . join(", ", @ip_address_ranges)
+			);
+		}
+		return $scope_result_string;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to parse firewall scope: '" . join(",", @scope_strings) . "', no Net::Netmask objects were created");
+		return;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 enable_firewall_port
+
+ Parameters  : $protocol, $port, $scope (optional), $overwrite_existing (optional), $name (optional), $description (optional)
+ Returns     : 1 if succeeded, 0 otherwise
+ Description : Enables a firewall port on the computer. The protocol and port
+               arguments are required. An optional scope argument may supplied.
+               A boolean overwrite existing may be supplied following the scope
+               argument. The default is false. If false, the existing firewall
+               configuration will be retrieved. If an exception already exists
+               for the given protocol and port, the existing and new scopes will
+               be joined. If set to true, any existing exception matching the
+               protocol and port will be removed and a new exception added.
+
+=cut
+
+sub enable_firewall_port {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my ($protocol, $port, $scope_argument, $overwrite_existing, $name, $description) = @_;
+	if (!defined($protocol) || !defined($port)) {
+		notify($ERRORS{'WARNING'}, 0, "protocol and port arguments were not supplied");
+		return;
+	}
+	
+	my $computer_node_name   = $self->data->get_computer_node_name();
+	my $system32_path        = $self->get_system32_path() || return;
+	
+	# Make sure the protocol is uppercase
+	$protocol = uc($protocol);
+	
+	$scope_argument = '*' if (!defined($scope_argument));
+	
+	$name = '' if !$name;
+	$description = '' if !$description;
+	
+	my $scope;
+	
+	my $firewall_configuration = $self->get_firewall_configuration() || return;
+	my $existing_scope = $firewall_configuration->{$protocol}{$port}{scope} || '';
+	my $existing_name = $firewall_configuration->{$protocol}{$port}{name} || '';
+	my $existing_description = $firewall_configuration->{$protocol}{$port}{name} || '';
+	if ($existing_scope) {
+		
+		if ($overwrite_existing) {
+			$scope = $self->parse_firewall_scope($scope_argument);
+			if (!$scope) {
+				notify($ERRORS{'WARNING'}, 0, "failed to parse firewall scope argument: '$scope_argument'");
+				return;
+			}
+			
+			notify($ERRORS{'DEBUG'}, 0, "existing firewall opening on $computer_node_name will be replaced:\n" .
+				"name: '$existing_name'\n" .
+				"protocol: $protocol\n" .
+				"port/type: $port\n" .
+				"existing scope: '$existing_scope'\n" .
+				"new scope: $scope\n" .
+				"overwrite existing rule: " . ($overwrite_existing ? 'yes' : 'no')
+			);
+		}
+		else {
+			my $parsed_existing_scope = $self->parse_firewall_scope($existing_scope);
+			if (!$parsed_existing_scope) {
+				notify($ERRORS{'WARNING'}, 0, "failed to parse existing firewall scope: '$existing_scope'");
+				return;
+			}
+			
+			$scope = $self->parse_firewall_scope("$scope_argument,$existing_scope");
+			if (!$scope) {
+				notify($ERRORS{'WARNING'}, 0, "failed to parse firewall scope argument appended with existing scope: '$scope_argument,$existing_scope'");
+				return;
+			}
+			
+			if ($scope eq $parsed_existing_scope) {
+				notify($ERRORS{'DEBUG'}, 0, "firewall is already open on $computer_node_name, existing scope matches scope argument:\n" .
+					"name: '$existing_name'\n" .
+					"protocol: $protocol\n" .
+					"port/type: $port\n" .
+					"scope: $scope\n" .
+					"overwrite existing rule: " . ($overwrite_existing ? 'yes' : 'no')
+				);
+				return 1;
+			}
+		}
+	}
+	else {
+		$scope = $self->parse_firewall_scope($scope_argument);
+		if (!$scope) {
+			notify($ERRORS{'WARNING'}, 0, "failed to parse firewall scope argument: '$scope_argument'");
+			return;
+		}
+		
+		notify($ERRORS{'DEBUG'}, 0, "$protocol/$port firewall opening will be added to $computer_node_name, scope: $scope"
+		);
+	}
+	
+	$name = "VCL: allow $protocol/$port from $scope" if !$name;
+	$description = "VCL: allow $protocol/$port from $scope" if !$description;
+	
+	$name = substr($name, 0, 60) . "..." if length($name) > 60;
+	
+	if ($self->_enable_firewall_port_helper($protocol, $port, $scope, $overwrite_existing, $name, $description)) {
+		$firewall_configuration->{$protocol}{$port} = {
+			name => $name,
+			name => $description,
+			scope => $scope,
+		};
+		
+		return 1;
+	}
+	else {
+		return;
+	}
+}
+	
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 _enable_firewall_port_helper
+
+ Parameters  : 
+ Returns     : 1 if succeeded, 0 otherwise
+ Description : 
+
+=cut
+
+sub _enable_firewall_port_helper {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my ($protocol, $port, $scope, $overwrite_existing, $name, $description) = @_;
+	if (!defined($protocol) || !defined($port) || !defined($scope) || !defined($name)) {
+		notify($ERRORS{'WARNING'}, 0, "protocol and port arguments were not supplied");
+		return;
+	}
+	
+	my $computer_node_name   = $self->data->get_computer_node_name();
+	my $system32_path        = $self->get_system32_path() || return;
+	
+	my $netsh_command;
+	
+	if ($protocol =~ /icmp/i) {
+		$netsh_command .= "$system32_path/netsh.exe firewall set icmpsetting";
+		$netsh_command .= " type = $port";
+		$netsh_command .= " mode = ENABLE";
+		$netsh_command .= " profile = ALL";
+	}
+	else {
+		if ($overwrite_existing) {
+			my $firewall_configuration = $self->get_firewall_configuration() || return;
+			
+			if (defined($firewall_configuration->{$protocol}{$port}{interface_names})) {
+				for my $interface_name (@{$firewall_configuration->{$protocol}{$port}{interface_names}}) {
+					$netsh_command .= "$system32_path/netsh.exe firewall delete portopening";
+					$netsh_command .= " protocol = $protocol";
+					$netsh_command .= " port = $port";
+					$netsh_command .= " interface = \"$interface_name\"";
+					$netsh_command .= " ; ";
+				}
+			}
+		}
+		
+		$netsh_command .= "$system32_path/netsh.exe firewall delete portopening";
+		$netsh_command .= " protocol = $protocol";
+		$netsh_command .= " port = $port";
+		$netsh_command .= " ; ";
+		
+		$netsh_command .= "$system32_path/netsh.exe firewall set portopening";
+		$netsh_command .= " name = \"$name\"";
+		$netsh_command .= " protocol = $protocol";
+		$netsh_command .= " port = $port";
+		$netsh_command .= " mode = ENABLE";
+	}
+	
+	if ($scope eq '0.0.0.0/0.0.0.0') {
+		$netsh_command .= " scope = ALL";
+	}
+	else {
+		$netsh_command .= " scope = CUSTOM";
+		$netsh_command .= " addresses = $scope";
+	}
+
+	# Execute the netsh.exe command
+	my ($netsh_exit_status, $netsh_output) = $self->execute($netsh_command);
+	
+	if (!defined($netsh_output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to open firewall on $computer_node_name, command: '$netsh_command'");
+		return;
+	}
+	elsif (@$netsh_output[-1] =~ /(Ok|The object already exists)/i) {
+		notify($ERRORS{'OK'}, 0, "opened firewall on $computer_node_name:\n" .
+				 "name: '$name'\n" .
+				 "protocol: $protocol\n" .
+				 "port/type: $port\n" .
+				 "scope: $scope"
+		);
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to open firewall on $computer_node_name:\n" .
+			"name: '$name'\n" .
+			"protocol: $protocol\n" .
+			"port/type: $port\n" .
+			"command : '$netsh_command'\n" .
+			"exit status: $netsh_exit_status\n" .
+			"output:\n" . join("\n", @$netsh_output)
+		);
+		return;
+	}
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 
