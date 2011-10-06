@@ -2444,6 +2444,9 @@ sub reg_query {
 		$command .= "/v \"$value_argument_escaped\"";
 	}
 	
+	# Ignore error lines, it will throw off parsing
+	$command .= " 2>/dev/null";
+	
 	# Run reg.exe QUERY
 	my ($exit_status, $output) = run_ssh_command($computer_node_name, $management_node_keys, $command, '', '', 0);
 	if (!defined($output)) {
@@ -2497,6 +2500,11 @@ sub reg_query {
 				$value =~ s/(^\s+|\s+$)//g;
 				$type =~ s/(^\s+|\s+$)//g;
 				$data =~ s/(^\s+|\s+$)//g;
+				
+				if ($type =~ /binary/i) {
+					#notify($ERRORS{'DEBUG'}, 0, "ignoring $type data, key: $key, value: $value");
+					next;
+				}
 				
 				$value = '(Default)' if $value =~ /NO NAME/;
 				
@@ -2570,6 +2578,12 @@ sub reg_query_convert_data {
 	}
 	
 	if ($type eq 'REG_DWORD') {
+		# Make sure a valid hex value was returned
+		if ($data !~ /^0x[a-fA-F0-9]+$/) {
+			notify($ERRORS{'WARNING'}, 0, "invalid $type value: '$data'");
+			return;
+		}
+		
 		# Convert the hex value to decimal
 		$data = hex($data);
 	}
@@ -2804,13 +2818,13 @@ sub reg_export {
 		notify($ERRORS{'WARNING'}, 0, "registry file path was not passed correctly as an argument");
 		return;
 	}
-	$registry_file_path = $self->format_path_unix($registry_file_path);
+	$registry_file_path = $self->format_path_dos($registry_file_path);
 	
-	# Escape backslashes in the root key
-	$root_key =~ s/\\+/\\\\/;
+	# Replace forward slashes with backslashes in registry key
+	$root_key =~ s/\//\\\\/g;
 	
 	# Run reg.exe EXPORT
-	my $command .= $system32_path . "/reg.exe EXPORT $root_key $registry_file_path /y";
+	my $command .= "cmd.exe /c \"$system32_path/reg.exe EXPORT $root_key $registry_file_path.tmp /y && type $registry_file_path.tmp > $registry_file_path\"";
 	my ($exit_status, $output) = run_ssh_command($computer_node_name, $management_node_keys, $command, '', '', 1);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to export registry key $root_key to file: $registry_file_path");
@@ -3830,53 +3844,7 @@ sub set_service_credentials {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 get_service_list
-
- Parameters  : none
- Returns     : array
- Description : Retrieves the names of the services installed on the computer.
-
-=cut
-
-sub get_service_list {
-	my $self = shift;
-	if (ref($self) !~ /windows/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-
-	my $computer_node_name   = $self->data->get_computer_node_name();
-	my $system32_path        = $self->get_system32_path() || return;
-	
-	# Call sc query
-	my $sc_query_command = $system32_path . "/sc.exe query";
-	my ($sc_query_exit_status, $sc_query_output) = $self->execute($sc_query_command);
-	if (defined($sc_query_exit_status) && $sc_query_exit_status == 0) {
-		#notify($ERRORS{'OK'}, 0, "retrieved service list on $computer_node_name:\n" . join("\n", @$sc_query_output));
-	}
-	elsif (defined($sc_query_exit_status)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to retrieve service list from $computer_node_name, exit status: $sc_query_exit_status, output:\n@{$sc_query_output}");
-		return 0;
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to failed to retrieve service list from $computer_node_name");
-		return;
-	}
-	
-	my @service_names;
-	for my $line (@$sc_query_output) {
-		if ($line =~ /SERVICE_NAME: (.*)/) {
-			push @service_names, $1;
-		}
-	}
-
-	notify($ERRORS{'DEBUG'}, 0, "found " . scalar(@service_names) . " services on $computer_node_name");
-	return @service_names;
-} ## end sub get_service_list
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 get_service_info
+=head2 get_service_configuration
 
  Parameters  : none
  Returns     : hash reference
@@ -3884,61 +3852,51 @@ sub get_service_list {
                reference is returned. The hash keys are service names.
                Example:
                   "sshd" => {
-                    "BINARY_PATH_NAME" => "C:\\cygwin\\bin\\cygrunsrv.exe",
-                    "DEPENDENCIES" => "tcpip",
-                    "DISPLAY_NAME" => "CYGWIN sshd",
-                    "ERROR_CONTROL" => "1   NORMAL",
-                    "LOAD_ORDER_GROUP" => "",
-                    "SERVICE_NAME" => "sshd",
                     "SERVICE_START_NAME" => ".\\root",
-                    "START_TYPE" => "2   AUTO_START",
-                    "TAG" => 0,
-                    "TYPE" => "10  WIN32_OWN_PROCESS "
                   },
 
 =cut
 
-sub get_service_info {
+sub get_service_configuration {
 	my $self = shift;
 	if (ref($self) !~ /windows/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
 	
-	return $self->{service_info} if $self->{service_info};
+	return $self->{service_configuration} if $self->{service_configuration};
 
 	my $computer_node_name   = $self->data->get_computer_node_name();
-	my $system32_path        = $self->get_system32_path() || return;
 	
-	my @service_list = $self->get_service_list();
+	notify($ERRORS{'DEBUG'}, 0, "retrieving service configuration information from the registry");
+	my $services_key = 'HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Services';
+	my $node_reg_file_path = "\$TMP/services_$computer_node_name.reg";
+	if (!$self->reg_export($services_key, $node_reg_file_path)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve service credential information from the registry on $computer_node_name");
+		return;
+	}
 	
-	my $service_info;
-	for my $service (@service_list) {
-		# Call sc query
-		my $command = "$system32_path/sc.exe qc \"$service\"";
-		my ($exit_status, $output) = $self->execute($command);
-		if (defined($exit_status) && $exit_status == 0) {
-			#notify($ERRORS{'DEBUG'}, 0, "retrieved '$service' service info:\n" . join("\n", @$output));
-			
-			for my $line (@$output) {
-				if (my ($property, $value) = $line =~ /^[\s\t]*(\w+)[\s\t]*:[\s\t]*(.*)/g) {
-					$service_info->{$service}{$property} = $value;
-				}
-			}
+	my @reg_file_contents = $self->get_file_contents($node_reg_file_path);
+	if (!@reg_file_contents) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve contents of file on $computer_node_name containing exported service credential information from the registry: $node_reg_file_path");
+		return;
+	}
+	
+	my $service_configuration;
+	my $service_name;
+	for my $line (@reg_file_contents) {
+		if ($line =~ /Services\\([^\\]+)\]$/i) {
+			$service_name = $1;
+			$service_configuration->{$service_name} = {};
 		}
-		elsif (defined($exit_status)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to retrieve '$service' service info from $computer_node_name, exit status: $exit_status, output:\n" . join("\n", @$output));
-			next SERVICE;
-		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "failed to run command to retrieve '$service' service info from $computer_node_name");
-			next SERVICE;
+		elsif ($line =~ /"ObjectName"="(.+)"/i) {
+			my $object_name = $1;
+			$service_configuration->{$service_name}{SERVICE_START_NAME} = $object_name;
 		}
 	}
 	
-	$self->{service_info} = $service_info;
-	#notify($ERRORS{'DEBUG'}, 0, "retrieved service info:\n" . format_data($service_info));
-	return $service_info;
+	$self->{service_configuration} = $service_configuration;
+	return $self->{service_configuration};
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -3969,23 +3927,23 @@ sub get_services_using_login_id {
 		return;
 	}
 	
-	# Get infor for all the services installed on the computer
-	my $service_info = $self->get_service_info() || return;
+	# Get configuration for all the services installed on the computer
+	my $service_configuration = $self->get_service_configuration();
 	
 	my @matching_service_names;
-	for my $service_name (sort keys %$service_info) {
-		my $service_start_name = $service_info->{$service_name}{SERVICE_START_NAME};
+	for my $service_name (sort keys %$service_configuration) {
+		my $service_start_name = $service_configuration->{$service_name}{SERVICE_START_NAME};
 		
 		# The service start name may be in any of the following forms:
 		#    LocalSystem
 		#    NT AUTHORITY\LocalService
 		#    .\root
-		if ($service_start_name && $service_start_name =~ /^((NT AUTHORITY|\.)\\)?$login_id$/i) {
+		if ($service_start_name && $service_start_name =~ /^((NT AUTHORITY|\.)\\+)?$login_id$/i) {
 			push @matching_service_names, $service_name;
 		}
 	}
-	
-	notify($ERRORS{'DEBUG'}, 0, "found " . scalar(@matching_service_names) . " services using login ID '$login_id': " . join(", ", @matching_service_names));
+
+	notify($ERRORS{'DEBUG'}, 0, "services found using login ID '$login_id' (" . scalar(@matching_service_names) . "): " . join(", ", @matching_service_names));
 	return @matching_service_names;
 } ## end sub get_services_using_login_id
 

@@ -1558,51 +1558,6 @@ sub move_file {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 get_file_contents
-
- Parameters  : $file_path
- Returns     : array
- Description : Returns an array containing the contents of the file specified by
-               the file path argument. Each array element contains a line from
-               the file.
-
-=cut
-
-sub get_file_contents {
-	my $self = shift;
-	if (ref($self) !~ /module/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-	
-	# Get the path argument
-	my $path = shift;
-	if (!$path) {
-		notify($ERRORS{'WARNING'}, 0, "path argument was not specified");
-		return;
-	}
-	
-	my $computer_short_name = $self->data->get_computer_short_name();
-	
-	# Run cat to retrieve the contents of the file
-	my $command = "cat \"$path\"";
-	my ($exit_status, $output) = $self->execute($command);
-	if (!defined($output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to run command to read file on $computer_short_name:\n path: '$path'\ncommand: '$command'");
-		return;
-	}
-	elsif (grep(/^cat: /, @$output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to read contents of file on $computer_short_name: '$path', exit status: $exit_status, output:\n" . join("\n", @$output));
-		return;
-	}
-	else {
-		notify($ERRORS{'DEBUG'}, 0, "retrieved " . scalar(@$output) . " lines from file on $computer_short_name: '$path'");
-		return @$output;
-	}
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
 =head2 get_available_space
 
  Parameters  : $path
