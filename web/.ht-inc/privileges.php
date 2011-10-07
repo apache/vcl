@@ -1354,7 +1354,7 @@ function userLookup() {
 		       .      "image i, "
 		       .      "computer c, "
 		       .      "sublog s "
-		       . "WHERE l.userid = {$userdata["id"]} AND "
+		       . "WHERE l.userid = {$userdata['id']} AND "
 		       .        "s.logid = l.id AND "
 		       .        "i.id = s.imageid AND "
 		       .        "c.id = s.computerid "

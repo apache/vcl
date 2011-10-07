@@ -1178,7 +1178,7 @@ function updateMgmtnode($data) {
 		$data['sharedmailbox'] = 'NULL';
 	else
 		$data['sharedmailbox'] = "'" . mysql_real_escape_string($data['sharedmailbox']) . "'";
-	$ownerid = getUserlistID($data["owner"]);
+	$ownerid = getUserlistID($data['owner']);
 	$data['installpath'] = mysql_real_escape_string($data['installpath']);
 	$data['keys'] = mysql_real_escape_string($data['keys']);
 	$data['imagelibuser'] = mysql_real_escape_string($data['imagelibuser']);
@@ -1204,28 +1204,28 @@ function updateMgmtnode($data) {
 		$data['publicdnsserver'] = "'" . mysql_real_escape_string($data['publicdnsserver']) . "'";
 	}
 	$query = "UPDATE managementnode "
-	       . "SET hostname = '{$data["hostname"]}', "
-	       .     "IPaddress = '{$data["IPaddress"]}', "
+	       . "SET hostname = '{$data['hostname']}', "
+	       .     "IPaddress = '{$data['IPaddress']}', "
 	       .     "ownerid = $ownerid, "
-	       .     "stateid = {$data["stateid"]}, "
-	       .     "predictivemoduleid = {$data["premoduleid"]}, "
-	       .     "checkininterval = {$data["checkininterval"]}, "
-	       .     "installpath = '{$data["installpath"]}', "
-	       .     "`keys` = {$data["keys"]}, "
-	       .     "sshport = {$data["sshport"]}, "
-	       .     "imagelibenable = {$data["imagelibenable"]}, "
-	       .     "imagelibgroupid = {$data["imagelibgroupid"]}, "
-	       .     "imagelibuser = {$data["imagelibuser"]}, "
-	       .     "imagelibkey = {$data["imagelibkey"]}, "
-	       .     "publicIPconfiguration = '{$data["publicIPconfig"]}', "
-	       .     "publicSubnetMask = {$data["publicnetmask"]}, "
-	       .     "publicDefaultGateway = {$data["publicgateway"]}, "
-	       .     "publicDNSserver = {$data["publicdnsserver"]}, "
-	       .     "sysadminEmailAddress = {$data["sysadminemail"]}, "
-	       .     "sharedMailBox = {$data["sharedmailbox"]} "
-	       . "WHERE id = " . $data["mgmtnodeid"];
+	       .     "stateid = {$data['stateid']}, "
+	       .     "predictivemoduleid = {$data['premoduleid']}, "
+	       .     "checkininterval = {$data['checkininterval']}, "
+	       .     "installpath = '{$data['installpath']}', "
+	       .     "`keys` = {$data['keys']}, "
+	       .     "sshport = {$data['sshport']}, "
+	       .     "imagelibenable = {$data['imagelibenable']}, "
+	       .     "imagelibgroupid = {$data['imagelibgroupid']}, "
+	       .     "imagelibuser = {$data['imagelibuser']}, "
+	       .     "imagelibkey = {$data['imagelibkey']}, "
+	       .     "publicIPconfiguration = '{$data['publicIPconfig']}', "
+	       .     "publicSubnetMask = {$data['publicnetmask']}, "
+	       .     "publicDefaultGateway = {$data['publicgateway']}, "
+	       .     "publicDNSserver = {$data['publicdnsserver']}, "
+	       .     "sysadminEmailAddress = {$data['sysadminemail']}, "
+	       .     "sharedMailBox = {$data['sharedmailbox']} "
+	       . "WHERE id = {$data['mgmtnodeid']}";
 	$qh = doQuery($query, 101);
-	return mysql_affected_rows($GLOBALS["mysql_link_vcl"]);
+	return mysql_affected_rows($GLOBALS['mysql_link_vcl']);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1293,25 +1293,25 @@ function addMgmtnode($data) {
 	       .         "publicDNSserver, "
 	       .         "sysadminEmailAddress, "
 	       .         "sharedMailBox) "
-	       . "VALUES ('{$data["hostname"]}', "
-	       .         "'{$data["IPaddress"]}', "
+	       . "VALUES ('{$data['hostname']}', "
+	       .         "'{$data['IPaddress']}', "
 	       .         "$ownerid, "
-	       .         "{$data["stateid"]}, "
-	       .         "{$data["checkininterval"]}, "
-	       .         "'{$data["installpath"]}', "
-	       .         "{$data["imagelibenable"]}, "
-	       .         "{$data["imagelibgroupid"]}, "
-	       .         "{$data["imagelibuser"]}, "
-	       .         "{$data["imagelibkey"]}, "
-	       .         "{$data["keys"]}, "
-	       .         "{$data["premoduleid"]}, "
-	       .         "{$data["sshport"]}, "
-	       .         "'{$data["publicIPconfig"]}', "
-	       .         "{$data["publicnetmask"]}, "
-	       .         "{$data["publicgateway"]}, "
-	       .         "{$data["publicdnsserver"]}, "
-			 .         "{$data["sysadminemail"]}, "
-	       .         "{$data["sharedmailbox"]})";
+	       .         "{$data['stateid']}, "
+	       .         "{$data['checkininterval']}, "
+	       .         "'{$data['installpath']}', "
+	       .         "{$data['imagelibenable']}, "
+	       .         "{$data['imagelibgroupid']}, "
+	       .         "{$data['imagelibuser']}, "
+	       .         "{$data['imagelibkey']}, "
+	       .         "{$data['keys']}, "
+	       .         "{$data['premoduleid']}, "
+	       .         "{$data['sshport']}, "
+	       .         "'{$data['publicIPconfig']}', "
+	       .         "{$data['publicnetmask']}, "
+	       .         "{$data['publicgateway']}, "
+	       .         "{$data['publicdnsserver']}, "
+			 .         "{$data['sysadminemail']}, "
+	       .         "{$data['sharedmailbox']})";
 	doQuery($query, 205);
 
 	// get last insert id

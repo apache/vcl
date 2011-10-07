@@ -1560,16 +1560,16 @@ function submitAddBulkComputers() {
 			$query .=    "eth0macaddress, "
 			       .     "eth1macaddress, ";
 		$query .=       "type) "
-		       . "VALUES ({$data["stateid"]}, "
+		       . "VALUES ({$data['stateid']}, "
 		       .         "$ownerid, "
-		       .         "{$data["platformid"]}, "
-		       .         "{$data["provisioningid"]}, "
-		       .         "{$data["scheduleid"]}, "
+		       .         "{$data['platformid']}, "
+		       .         "{$data['provisioningid']}, "
+		       .         "{$data['scheduleid']}, "
 		       .         "4, "
-		       .         "{$data["ram"]}, "
-		       .         "{$data["numprocs"]}, "
-		       .         "{$data["procspeed"]}, "
-		       .         "{$data["network"]}, "
+		       .         "{$data['ram']}, "
+		       .         "{$data['numprocs']}, "
+		       .         "{$data['procspeed']}, "
+		       .         "{$data['network']}, "
 		       .         "'$hostname', "
 		       .         "'$ipaddress', ";
 		if($dopr)
@@ -1577,7 +1577,7 @@ function submitAddBulkComputers() {
 		if($domacs)
 			$query .=     "'$eth0', "
 			       .      "'$eth1', ";
-		$query .=        "'{$data["type"]}')";
+		$query .=        "'{$data['type']}')";
 		$qh = doQuery($query, 235);
 		$addedrows += mysql_affected_rows($mysql_link_vcl);
 		$compid = dbLastInsertID();
@@ -3501,24 +3501,24 @@ function getCompIdList($groups) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function updateComputer($data) {
-	$ownerid = getUserlistID($data["owner"]);
+	$ownerid = getUserlistID($data['owner']);
 	$query = "UPDATE computer "
-	       . "SET stateid = {$data["stateid"]}, "
+	       . "SET stateid = {$data['stateid']}, "
 	       .     "ownerid = $ownerid, "
-	       .     "platformid = {$data["platformid"]}, "
-	       .     "scheduleid = {$data["scheduleid"]}, "
-	       .     "RAM = {$data["ram"]}, "
-	       .     "procnumber = {$data["numprocs"]}, "
-	       .     "procspeed = {$data["procspeed"]}, "
-	       .     "network = {$data["network"]}, "
-	       .     "hostname = '{$data["hostname"]}', "
-	       .     "IPaddress = '{$data["ipaddress"]}', "
-	       .     "type = '{$data["type"]}', "
-	       .     "provisioningid = {$data["provisioningid"]}, "
-	       .     "notes = '{$data["notes"]}' "
-	       . "WHERE id = {$data["compid"]}";
+	       .     "platformid = {$data['platformid']}, "
+	       .     "scheduleid = {$data['scheduleid']}, "
+	       .     "RAM = {$data['ram']}, "
+	       .     "procnumber = {$data['numprocs']}, "
+	       .     "procspeed = {$data['procspeed']}, "
+	       .     "network = {$data['network']}, "
+	       .     "hostname = '{$data['hostname']}', "
+	       .     "IPaddress = '{$data['ipaddress']}', "
+	       .     "type = '{$data['type']}', "
+	       .     "provisioningid = {$data['provisioningid']}, "
+	       .     "notes = '{$data['notes']}' "
+	       . "WHERE id = {$data['compid']}";
 	$qh = doQuery($query, 185);
-	return mysql_affected_rows($GLOBALS["mysql_link_vcl"]);
+	return mysql_affected_rows($GLOBALS['mysql_link_vcl']);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -3534,7 +3534,7 @@ function updateComputer($data) {
 ////////////////////////////////////////////////////////////////////////////////
 function addComputer($data) {
 	global $user;
-	$ownerid = getUserlistID($data["owner"]);
+	$ownerid = getUserlistID($data['owner']);
 	if($data['stateid'] == 10) {
 		$now = unixToDatetime(time());
 		$notes = "'{$user['unityid']} $now@in maintenance state when added to database'";
@@ -3556,20 +3556,20 @@ function addComputer($data) {
 	       .        "type, "
 	       .        "notes, "
 	       .        "provisioningid) "
-	       . "VALUES ({$data["stateid"]}, "
+	       . "VALUES ({$data['stateid']}, "
 	       .         "$ownerid, "
-	       .         "{$data["platformid"]}, "
-	       .         "{$data["scheduleid"]}, "
+	       .         "{$data['platformid']}, "
+	       .         "{$data['scheduleid']}, "
 	       .         "4, "
-	       .         "{$data["ram"]}, "
-	       .         "{$data["numprocs"]}, "
-	       .         "{$data["procspeed"]}, "
-	       .         "{$data["network"]}, "
-	       .         "'{$data["hostname"]}', "
-	       .         "'{$data["ipaddress"]}', "
-	       .         "'{$data["type"]}', "
+	       .         "{$data['ram']}, "
+	       .         "{$data['numprocs']}, "
+	       .         "{$data['procspeed']}, "
+	       .         "{$data['network']}, "
+	       .         "'{$data['hostname']}', "
+	       .         "'{$data['ipaddress']}', "
+	       .         "'{$data['type']}', "
 	       .         "$notes, "
-	       .         "'{$data["provisioningid"]}')";
+	       .         "'{$data['provisioningid']}')";
 	doQuery($query, 195);
 	$compid = dbLastInsertID();
 
@@ -3583,7 +3583,7 @@ function addComputer($data) {
 
 	// add computer into selected groups
 	$vals = array();
-	foreach(array_keys($data["computergroup"]) as $groupid)
+	foreach(array_keys($data['computergroup']) as $groupid)
 		$vals[] = "($resid, $groupid)";
 	$allvals = implode(',', $vals);
 	$query = "INSERT INTO resourcegroupmembers "

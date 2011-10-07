@@ -195,7 +195,7 @@ function updateLDAPUser($authtype, $userid) {
 	       .       "af.id = $affilid AND ";
 	if(array_key_exists('numericid', $userData) &&
 	   is_numeric($userData['numericid']))
-		$query .=   "u.uid = " . $userData["numericid"];
+		$query .=   "u.uid = {$userData['numericid']}";
 	else {
 		$query .=   "u.unityid = '$userid' AND "
 		       .    "u.affiliationid = $affilid";
@@ -218,7 +218,7 @@ function updateLDAPUser($authtype, $userid) {
 		       .     "lastupdated = '$now' ";
 		if(array_key_exists('numericid', $userData) &&
 		   is_numeric($userData['numericid']))
-			$query .= "WHERE uid = " . $userData["numericid"];
+			$query .= "WHERE uid = {$userData['numericid']}";
 		else
 			$query .= "WHERE unityid = '$userid' AND "
 			       .        "affiliationid = $affilid";

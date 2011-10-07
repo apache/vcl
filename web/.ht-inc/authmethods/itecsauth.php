@@ -184,7 +184,7 @@ function updateITECSUser($userid) {
 	       .      "affiliation af "
 	       . "WHERE u.IMtypeid = i.id AND "
 	       .       "u.affiliationid = af.id AND "
-		    .       "u.uid = " . $userData["uid"];
+		    .       "u.uid = {$userData['uid']}";
 	$qh = doQuery($query, 255);
 	// if get a row
 	//    update db
@@ -205,7 +205,7 @@ function updateITECSUser($userid) {
 		       .     "lastname = '$last', "
 		       .     "email = '$email', "
 		       .     "lastupdated = '$now' "
-		       . "WHERE uid = " . $userData["uid"];
+		       . "WHERE uid = {$userData['uid']}";
 		doQuery($query, 256, 'vcl', 1);
 	}
 	else {

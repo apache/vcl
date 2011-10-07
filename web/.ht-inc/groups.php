@@ -737,30 +737,30 @@ function checkForGroupName($name, $type, $id, $extraid) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function updateGroup($data) {
-	if($data["type"] == "user") {
+	if($data['type'] == "user") {
 		if($data['editgroupid'] == 0)
 			$data['editgroupid'] = 'NULL';
-		$ownerid = getUserlistID($data["owner"]);
+		$ownerid = getUserlistID($data['owner']);
 		$query = "UPDATE usergroup "
-		       . "SET name = '{$data["name"]}', "
+		       . "SET name = '{$data['name']}', "
 		       .     "affiliationid = {$data['affiliationid']}, "
 		       .     "ownerid = $ownerid, "
-		       .     "editusergroupid = {$data["editgroupid"]}, "
-		       .     "initialmaxtime = {$data["initialmax"]}, "
-		       .     "totalmaxtime = {$data["totalmax"]}, ";
+		       .     "editusergroupid = {$data['editgroupid']}, "
+		       .     "initialmaxtime = {$data['initialmax']}, "
+		       .     "totalmaxtime = {$data['totalmax']}, ";
 		if(checkUserHasPerm('Set Overlapping Reservation Count'))
-			$query .= "overlapResCount = {$data["overlap"]}, ";
-		$query .=    "maxextendtime = {$data["maxextend"]} "
-		       . "WHERE id = {$data["groupid"]}";
+			$query .= "overlapResCount = {$data['overlap']}, ";
+		$query .=    "maxextendtime = {$data['maxextend']} "
+		       . "WHERE id = {$data['groupid']}";
 	}
 	else {
 		$query = "UPDATE resourcegroup "
-		       . "SET name = '{$data["name"]}', "
-		       .     "ownerusergroupid = {$data["ownergroup"]} "
-		       . "WHERE id = {$data["groupid"]}";
+		       . "SET name = '{$data['name']}', "
+		       .     "ownerusergroupid = {$data['ownergroup']} "
+		       . "WHERE id = {$data['groupid']}";
 	}
 	$qh = doQuery($query, 300);
-	return mysql_affected_rows($GLOBALS["mysql_link_vcl"]);
+	return mysql_affected_rows($GLOBALS['mysql_link_vcl']);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -777,7 +777,7 @@ function updateGroup($data) {
 function addGroup($data) {
 	if($data['editgroupid'] == 0 || $data['edigroupid'] == '')
 		$data['editgroupid'] = 'NULL';
-	if($data["type"] == "user") {
+	if($data['type'] == "user") {
 		if(! array_key_exists('custom', $data))
 			$data['custom'] = 1;
 		elseif($data['custom'] == 0) {
@@ -785,7 +785,7 @@ function addGroup($data) {
 			$data['editgroupid'] = 'NULL';
 		}
 		if($data['custom'])
-			$ownerid = getUserlistID($data["owner"]);
+			$ownerid = getUserlistID($data['owner']);
 		$query = "INSERT INTO usergroup "
 				 .         "(name, "
 				 .         "affiliationid, "
@@ -797,29 +797,29 @@ function addGroup($data) {
 		if(checkUserHasPerm('Set Overlapping Reservation Count'))
 			$query .=     "overlapResCount, ";
 		$query .=        "maxextendtime) "
-				 . "VALUES ('{$data["name"]}', "
-				 .        "{$data["affiliationid"]}, "
+				 . "VALUES ('{$data['name']}', "
+				 .        "{$data['affiliationid']}, "
 				 .        "$ownerid, "
-				 .        "{$data["editgroupid"]}, "
+				 .        "{$data['editgroupid']}, "
 		       .        "{$data['custom']}, "
-		       .        "{$data["initialmax"]}, "
-		       .        "{$data["totalmax"]}, ";
+		       .        "{$data['initialmax']}, "
+		       .        "{$data['totalmax']}, ";
 		if(checkUserHasPerm('Set Overlapping Reservation Count'))
-			$query .=    "{$data["overlap"]}, ";
-		$query .=       "{$data["maxextend"]})";
+			$query .=    "{$data['overlap']}, ";
+		$query .=       "{$data['maxextend']})";
 	}
 	else {
 		$query = "INSERT INTO resourcegroup "
 				 .         "(name, "
 				 .         "ownerusergroupid, "
 		       .         "resourcetypeid) "
-				 . "VALUES ('" . $data["name"] . "', "
-		       .         $data["ownergroup"] . ", "
-		       .         "'" . $data["resourcetypeid"] . "')";
+				 . "VALUES ('{$data['name']}', "
+		       .         "{$data['ownergroup']}, "
+		       .         "'{$data['resourcetypeid']}')";
 	}
 	$qh = doQuery($query, 305);
 	clearPrivCache();
-	return mysql_affected_rows($GLOBALS["mysql_link_vcl"]);
+	return mysql_affected_rows($GLOBALS['mysql_link_vcl']);
 }
 
 ////////////////////////////////////////////////////////////////////////////////

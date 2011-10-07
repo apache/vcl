@@ -4595,8 +4595,8 @@ function findManagementNode($compid, $start, $nowfuture) {
 	       .      "request rq "
 	       . "WHERE rs.managementnodeid IN ($inlist) AND "
 	       .       "rs.requestid = rq.id AND "
-	       .       "rq.start > \"$start\" AND "
-	       .       "rq.start < \"$end\" "
+	       .       "rq.start > '$start' AND "
+	       .       "rq.start < '$end' "
 	       . "GROUP BY rs.managementnodeid "
 	       . "ORDER BY count";
 	$qh = doQuery($query, 101);
@@ -4836,7 +4836,7 @@ function deleteRequest($request) {
 			$query = "UPDATE request "
 			       . "SET stateid = 1, "
 			       .     "laststateid = 3 "
-			       . "WHERE id = " . $request["id"];
+			       . "WHERE id = {$request['id']}";
 		}
 		# current: reserved, last: new OR
 		# current: pending, last: reserved
@@ -4845,7 +4845,7 @@ function deleteRequest($request) {
 			$query = "UPDATE request "
 			       . "SET stateid = 1, "
 			       .     "laststateid = 3 "
-			       . "WHERE id = " . $request["id"];
+			       . "WHERE id = {$request['id']}";
 		}
 		# current: inuse, last: reserved OR
 		# current: pending, last: inuse
@@ -4854,7 +4854,7 @@ function deleteRequest($request) {
 			$query = "UPDATE request "
 			       . "SET stateid = 1, "
 			       .     "laststateid = 8 "
-			       . "WHERE id = " . $request["id"];
+			       . "WHERE id = {$request['id']}";
 		}
 		# shouldn't happen, but if current: pending, set to deleted or
 		// if not current: pending, set laststate to current state and
@@ -4863,7 +4863,7 @@ function deleteRequest($request) {
 			if($request["stateid"] == 14) {
 				$query = "UPDATE request "
 				       . "SET stateid = 1 "
-				       . "WHERE id = " . $request["id"];
+				       . "WHERE id = {$request['id']}";
 				}
 			else {
 				# somehow a user submitted a deleteRequest where the current
@@ -4872,8 +4872,8 @@ function deleteRequest($request) {
 					$request["stateid"] = 1;
 				$query = "UPDATE request "
 				       . "SET stateid = 1, "
-				       .     "laststateid = " . $request["stateid"] . " "
-				       . "WHERE id = " . $request["id"];
+				       .     "laststateid = {$request['stateid']} "
+				       . "WHERE id = {$request['id']}";
 			}
 		}
 		$qh = doQuery($query, 150);
@@ -4884,14 +4884,14 @@ function deleteRequest($request) {
 	}
 
 	if($request['serverrequest']) {
-		$query = "DELETE FROM serverrequest WHERE requestid = {$request["id"]}";
+		$query = "DELETE FROM serverrequest WHERE requestid = {$request['id']}";
 		$qh = doQuery($query, 152);
 	}
 
-	$query = "DELETE FROM request WHERE id = {$request["id"]}";
+	$query = "DELETE FROM request WHERE id = {$request['id']}";
 	$qh = doQuery($query, 153);
 
-	$query = "DELETE FROM reservation WHERE requestid = {$request["id"]}";
+	$query = "DELETE FROM reservation WHERE requestid = {$request['id']}";
 	doQuery($query, 154);
 
 	addChangeLogEntry($request["logid"], NULL, NULL, NULL, NULL, "deleted");
@@ -4985,7 +4985,7 @@ function moveReservationsOffComputer($compid=0, $count=0) {
 			$query = "UPDATE reservation "
 			       . "SET computerid = $newcompid, "
 			       .     "managementnodeid = $mgmtnodeid "
-			       . "WHERE id = {$res["id"]}";
+			       . "WHERE id = {$res['id']}";
 			doQuery($query, 101);
 			# add changelog entry
 			addChangeLogEntry($res['logid'], NULL, NULL, NULL, $newcompid);
@@ -8202,7 +8202,7 @@ function addLogEntry($nowfuture, $start, $end, $wasavailable, $imageid) {
 	       .        "ending, "
 	       .        "imageid) "
 	       . "VALUES "
-	       .        "(" . $user["id"] . ", "
+	       .        "({$user['id']}, "
 	       .        "'$nowfuture', "
 	       .        "'$start', "
 	       .        "'$end', "
@@ -8871,8 +8871,8 @@ function timeToNextReservation($request) {
 	$query = "SELECT rq.start "
 	       . "FROM reservation rs, "
 	       .      "request rq "
-	       . "WHERE rs.computerid = {$res["computerid"]} AND "
-	       .       "rq.start >= '{$request["end"]}' AND "
+	       . "WHERE rs.computerid = {$res['computerid']} AND "
+	       .       "rq.start >= '{$request['end']}' AND "
 	       .       "rs.requestid = rq.id "
 	       . "ORDER BY start "
 	       . "LIMIT 1";

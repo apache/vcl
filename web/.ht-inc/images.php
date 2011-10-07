@@ -3119,34 +3119,34 @@ function checkForImageName($name, $longshort, $id) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function updateImage($data) {
-	$imgdata = getImages(0, $data["imageid"]);
+	$imgdata = getImages(0, $data['imageid']);
 	$imagenotes = getImageNotes($data['imageid']);
-	$ownerid = getUserlistID($data["owner"]);
+	$ownerid = getUserlistID($data['owner']);
 	if(empty($data['maxconcurrent']) || ! is_numeric($data['maxconcurrent']))
 		$data['maxconcurrent'] = 'NULL';
 	$query = "UPDATE image "
-	       . "SET prettyname = '{$data["prettyname"]}', "
+	       . "SET prettyname = '{$data['prettyname']}', "
 	       .     "ownerid = $ownerid, "
-	       .     "minram = {$data["minram"]}, "
-	       .     "minprocnumber = {$data["minprocnumber"]}, "
-	       .     "minprocspeed = {$data["minprocspeed"]}, "
-	       .     "minnetwork = {$data["minnetwork"]}, "
-	       .     "maxconcurrent = {$data["maxconcurrent"]}, "
-	       .     "reloadtime = {$data["reloadtime"]}, "
-	       .     "forcheckout = {$data["forcheckout"]}, "
-	       .     "description = '{$data["description"]}', "
-	       .     "`usage` = '{$data["usage"]}' "
-	       . "WHERE id = {$data["imageid"]}";
+	       .     "minram = {$data['minram']}, "
+	       .     "minprocnumber = {$data['minprocnumber']}, "
+	       .     "minprocspeed = {$data['minprocspeed']}, "
+	       .     "minnetwork = {$data['minnetwork']}, "
+	       .     "maxconcurrent = {$data['maxconcurrent']}, "
+	       .     "reloadtime = {$data['reloadtime']}, "
+	       .     "forcheckout = {$data['forcheckout']}, "
+	       .     "description = '{$data['description']}', "
+	       .     "`usage` = '{$data['usage']}' "
+	       . "WHERE id = {$data['imageid']}";
 	$qh = doQuery($query, 200);
-	$return = mysql_affected_rows($GLOBALS["mysql_link_vcl"]);
-	if(empty($imgdata[$data["imageid"]]["imagemetaid"]) &&
-	   ($data["checkuser"] == 0 ||
+	$return = mysql_affected_rows($GLOBALS['mysql_link_vcl']);
+	if(empty($imgdata[$data['imageid']]['imagemetaid']) &&
+	   ($data['checkuser'] == 0 ||
 	   $data['rootaccess'] == 0)) {
 		$query = "INSERT INTO imagemeta "
 		       .        "(checkuser, "
 		       .        "rootaccess) "
-		       . "VALUES ({$data["checkuser"]}, "
-		       .        "{$data["rootaccess"]})";
+		       . "VALUES ({$data['checkuser']}, "
+		       .        "{$data['rootaccess']})";
 		doQuery($query, 101);
 		$qh = doQuery("SELECT LAST_INSERT_ID() FROM imagemeta", 101);
 		if(! $row = mysql_fetch_row($qh))
@@ -3154,16 +3154,16 @@ function updateImage($data) {
 		$imagemetaid = $row[0];
 		$query = "UPDATE image "
 		       . "SET imagemetaid = $imagemetaid "
-		       . "WHERE id = {$data["imageid"]}";
+		       . "WHERE id = {$data['imageid']}";
 		doQuery($query, 101);
 	}
-	elseif(! empty($imgdata[$data["imageid"]]["imagemetaid"])) {
-	  if($data["checkuser"] != $imgdata[$data["imageid"]]["checkuser"] ||
-	   $data["rootaccess"] != $imgdata[$data["imageid"]]["rootaccess"]) {
+	elseif(! empty($imgdata[$data['imageid']]['imagemetaid'])) {
+	  if($data['checkuser'] != $imgdata[$data['imageid']]['checkuser'] ||
+	   $data['rootaccess'] != $imgdata[$data['imageid']]['rootaccess']) {
 			$query = "UPDATE imagemeta "
-			       . "SET checkuser = {$data["checkuser"]}, "
-			       .     "rootaccess = {$data["rootaccess"]} "
-			       . "WHERE id = {$imgdata[$data["imageid"]]["imagemetaid"]}";
+			       . "SET checkuser = {$data['checkuser']}, "
+			       .     "rootaccess = {$data['rootaccess']} "
+			       . "WHERE id = {$imgdata[$data['imageid']]['imagemetaid']}";
 			doQuery($query, 101);
 		}
 	  checkClearImageMeta($imgdata[$data['imageid']]['imagemetaid'], $data['imageid']);
@@ -3221,16 +3221,16 @@ function addImage($data) {
 	       .         "description, "
 	       .         "`usage`, "
 	       .         "basedoffrevisionid) "
-	       . "VALUES ('{$data["prettyname"]}', "
+	       . "VALUES ('{$data['prettyname']}', "
 	       .         "$ownerid, "
-	       .         "{$data["platformid"]}, "
-	       .         "{$data["osid"]}, "
-	       .         "{$data["minram"]}, "
-	       .         "{$data["minprocnumber"]}, "
-	       .         "{$data["minprocspeed"]}, "
-	       .         "{$data["minnetwork"]}, "
-	       .         "{$data["maxconcurrent"]}, "
-	       .         "{$data["reloadtime"]}, "
+	       .         "{$data['platformid']}, "
+	       .         "{$data['osid']}, "
+	       .         "{$data['minram']}, "
+	       .         "{$data['minprocnumber']}, "
+	       .         "{$data['minprocspeed']}, "
+	       .         "{$data['minnetwork']}, "
+	       .         "{$data['maxconcurrent']}, "
+	       .         "{$data['reloadtime']}, "
 	       .         "1, "
 	       .         "'$arch', "
 	       .         "'{$data['description']}', "
@@ -3276,8 +3276,8 @@ function addImage($data) {
 
 	// create name from pretty name, os, and last insert id
 	$OSs = getOSList();
-	$name = $OSs[$data["osid"]]["name"] . "-" .
-	        preg_replace('/\W/', '', $data["prettyname"]) . $imageid . "-v0";
+	$name = $OSs[$data['osid']]['name'] . "-" .
+	        preg_replace('/\W/', '', $data['prettyname']) . $imageid . "-v0";
 	if($imagemetaid) {
 		$query = "UPDATE image "
 		       . "SET name = '$name', "

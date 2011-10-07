@@ -693,13 +693,13 @@ function checkForScheduleName($name, $id) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function updateSchedule($data) {
-	$ownerid = getUserlistID($data["owner"]);
+	$ownerid = getUserlistID($data['owner']);
 	$query = "UPDATE schedule "
-	       . "SET name = '" . $data["name"] . "', "
+	       . "SET name = '{$data['name']}', "
 	       .     "ownerid = $ownerid "
-	       . "WHERE id = " . $data["scheduleid"];
+	       . "WHERE id = {$data['scheduleid']}";
 	$qh = doQuery($query, 215);
-	return mysql_affected_rows($GLOBALS["mysql_link_vcl"]);
+	return mysql_affected_rows($GLOBALS['mysql_link_vcl']);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -714,14 +714,14 @@ function updateSchedule($data) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function addSchedule($data) {
-	$ownerid = getUserlistID($data["owner"]);
+	$ownerid = getUserlistID($data['owner']);
 	$query = "INSERT INTO schedule "
 	       .         "(name, "
 	       .         "ownerid) "
-	       . "VALUES ('" . $data["name"] . "', "
+	       . "VALUES ('{$data['name']}', "
 	       .         "$ownerid)";
 	doQuery($query, 220);
-	$affectedrows = mysql_affected_rows($GLOBALS["mysql_link_vcl"]);
+	$affectedrows = mysql_affected_rows($GLOBALS['mysql_link_vcl']);
 
 	$qh = doQuery("SELECT LAST_INSERT_ID() FROM schedule", 221);
 	if(! $row = mysql_fetch_row($qh)) {
@@ -731,7 +731,7 @@ function addSchedule($data) {
 			 .        "(resourcetypeid, "
 			 .        "subid) "
 			 . "VALUES (15, "
-			 .         $row[0] . ")";
+			 .         "{$row[0]})";
 	doQuery($query, 223);
 	return $row[0];
 }
