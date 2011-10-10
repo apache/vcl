@@ -2824,7 +2824,7 @@ sub reg_export {
 	$root_key =~ s/\//\\\\/g;
 	
 	# Run reg.exe EXPORT
-	my $command .= "cmd.exe /c \"$system32_path/reg.exe EXPORT $root_key $registry_file_path.tmp /y && type $registry_file_path.tmp > $registry_file_path\"";
+	my $command .= "cmd.exe /c \"$system32_path/reg.exe EXPORT $root_key \\\"$registry_file_path.tmp\\\" /y && type \\\"$registry_file_path.tmp\\\" > \\\"$registry_file_path\\\" && del -q \\\"$registry_file_path.tmp\\\"\"";
 	my ($exit_status, $output) = run_ssh_command($computer_node_name, $management_node_keys, $command, '', '', 1);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to export registry key $root_key to file: $registry_file_path");
@@ -3870,7 +3870,7 @@ sub get_service_configuration {
 	
 	notify($ERRORS{'DEBUG'}, 0, "retrieving service configuration information from the registry");
 	my $services_key = 'HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Services';
-	my $node_reg_file_path = "\$TMP/services_$computer_node_name.reg";
+	my $node_reg_file_path = "C:/cygwin/tmp/services_$computer_node_name.reg";
 	if (!$self->reg_export($services_key, $node_reg_file_path)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to retrieve service credential information from the registry on $computer_node_name");
 		return;
@@ -3881,6 +3881,9 @@ sub get_service_configuration {
 		notify($ERRORS{'WARNING'}, 0, "failed to retrieve contents of file on $computer_node_name containing exported service credential information from the registry: $node_reg_file_path");
 		return;
 	}
+	
+	# Delete the registry file
+	$self->delete_file($node_reg_file_path);
 	
 	my $service_configuration;
 	my $service_name;
