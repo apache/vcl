@@ -112,6 +112,13 @@ sub pre_capture {
 	
 	my $computer_node_name       = $self->data->get_computer_node_name();
 	notify($ERRORS{'OK'}, 0, "beginning Linux-specific image capture preparation tasks");
+
+	if (!$self->file_exists("/root/.vclcontrol/vcl_exclude_list.sample")) {
+      notify($ERRORS{'DEBUG'}, 0, "/root/.vclcontrol/vcl_exclude_list.sample does not exists");
+		if(!$self->generate_vclcontrol_sample_files() ){
+      	notify($ERRORS{'DEBUG'}, 0, "could not create /root/.vclcontrol/vcl_exclude_list.sample");
+		}
+   }
 	
 	# Force user off computer 
 	if (!$self->logoff_user()) {
@@ -123,6 +130,11 @@ sub pre_capture {
 		notify($ERRORS{'OK'}, 0, "deleted user from $computer_node_name");
 	}
 
+	#Clean up connection methods
+	if($self->process_connect_methods() ){
+		notify($ERRORS{'OK'}, 0, "processed connection methods on $computer_node_name");
+	}
+
 	# Try to clear /tmp
 	if ($self->execute("/usr/sbin/tmpwatch -f 0 /tmp; /bin/cp /dev/null /var/log/wtmp")) {
 		notify($ERRORS{'DEBUG'}, 0, "cleared /tmp on $computer_node_name");
@@ -132,30 +144,57 @@ sub pre_capture {
 	if (!$self->clear_private_keys()) {
 	  notify($ERRORS{'WARNING'}, 0, "unable to clear known identity keys");
 	}
-	
-	# Clear files
-	if (!$self->clear_known_files()) {
-		notify($ERRORS{'WARNING'}, 0, "unable to remove known files");
-	}
 
+	#Fetch exclude_list
+	my @exclude_list = $self->get_exclude_list();
+
+	if (@exclude_list ) {
+		notify($ERRORS{'DEBUG'}, 0, "skipping files listed in exclude_list\n" . join("\n", @exclude_list));
+	}
+	
+	#Remove files
+	if(!(grep( /70-persistent-net.rules/ , @exclude_list ) ) ){
+		if(!$self->delete_file("/etc/udev/rules.d/70-persistent-net.rules")){
+			notify($ERRORS{'WARNING'}, 0, "unable to remove /etc/udev/rules.d/70-persistent-net.rules");
+		}
+	}
+	
+	if(!(grep( /\/var\/log\/secure/ , @exclude_list ) ) ){
+		if(!$self->delete_file("/var/log/secure")){
+			notify($ERRORS{'WARNING'}, 0, "unable to remove /var/log/secure");
+		}
+	}
+	
+	if(!(grep( /\/var\/log\/messages/ , @exclude_list ) ) ){
+		if(!$self->delete_file("/var/log/messages")){
+			notify($ERRORS{'WARNING'}, 0, "unable to remove /var/log/secure");
+		}
+	}
+	
 	# Write /etc/rc.local script
-	if (!$self->generate_rc_local()){
-		notify($ERRORS{'WARNING'}, 0, "unable to generate /etc/rc.local script on $computer_node_name");
-		return;
+	if(!(grep( /rc.local/ , @exclude_list ) ) ){
+		if (!$self->generate_rc_local()){
+			notify($ERRORS{'WARNING'}, 0, "unable to generate /etc/rc.local script on $computer_node_name");
+			return;
+		}
 	}
 
 	# Generate external_sshd_config
-	if(!$self->generate_ext_sshd_config()){
-		notify($ERRORS{'WARNING'}, 0, "unable to generate /etc/ssh/external_sshd_config on $computer_node_name");
-		return;
+	if(!(grep( /\/etc\/ssh\/external_sshd_config/ , @exclude_list ) ) ){
+		if(!$self->generate_ext_sshd_config()){
+			notify($ERRORS{'WARNING'}, 0, "unable to generate /etc/ssh/external_sshd_config on $computer_node_name");
+			return;
+		}
 	}
 
 	# Generate ext_sshd init script
-	if(!$self->generate_ext_sshd_init()){
-		notify($ERRORS{'WARNING'}, 0, "unable to generate /etc/init.d/ext_sshd on $computer_node_name");
-		return;
+	if(!(grep( /init.d\/ext_sshd/ , @exclude_list ) ) ){
+		if(!$self->generate_ext_sshd_init()){
+			notify($ERRORS{'WARNING'}, 0, "unable to generate /etc/init.d/ext_sshd on $computer_node_name");
+			return;
+		}
 	}
-	
+
 	# Configure the private and public interfaces to use DHCP
 	if (!$self->enable_dhcp()) {
 		notify($ERRORS{'WARNING'}, 0, "failed to enable DHCP on the public and private interfaces");
@@ -432,42 +471,6 @@ sub clear_private_keys {
 		notify($ERRORS{'CRITICAL'}, 0, "failed to clear any id_rsa keys from /root/.ssh");
 		return 0;
 	}
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 clear_known_files
-
- Parameters  :
- Returns     :
- Description :
-
-=cut
-
-sub clear_known_files {
-   my $self = shift;
-      unless (ref($self) && $self->isa('VCL::Module')) {
-      notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a VCL::Module module object method");
-      return;
-   }
-
-   notify($ERRORS{'DEBUG'}, 0, "perparing to clear known files");
-   my $management_node_keys = $self->data->get_management_node_keys();
-   my $computer_short_name  = $self->data->get_computer_short_name();
-   my $computer_node_name   = $self->data->get_computer_node_name();
-	
-	my $filelist = "/etc/udev/rules.d/70-persistent-net.rules";
-
-   #Clear ssh idenity keys from /root/.ssh 
-   my $clear_known_files = "/bin/rm -f $filelist";
-   if (run_ssh_command($computer_node_name, $management_node_keys, $clear_known_files, "root")) {
-      notify($ERRORS{'DEBUG'}, 0, "cleared known files, filelist: $filelist");
-      return 1;
-   }
-   else {
-      notify($ERRORS{'CRITICAL'}, 0, "failed to clear known files");
-      return 0;
-   }
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -1035,6 +1038,11 @@ sub sanitize {
 		#relcaim will reload
 		return 0;
 	}
+	
+	#Clean up connection methods
+   if($self->process_connect_methods() ){
+      notify($ERRORS{'OK'}, 0, "processed connection methods on $computer_node_name");
+   }
 
 	# Delete all user associated with the reservation
 	if ($self->delete_user()) {
@@ -2158,6 +2166,8 @@ sub generate_rc_local {
         push(@array2print, '# This file will get overwritten during image capture. Any customizations' . "\n");
         push(@array2print, '# should be put into /etc/init.d/vcl_post_reserve or /etc/init.d/vcl_post_load' . "\n");
         push(@array2print, '# Note these files do not exist by default.' . "\n");
+        push(@array2print, "\n");
+        push(@array2print, "#Use the /root/.vclcontrol/vcl_exclude_list to prevent vcld from updating this file.");
         push(@array2print, "\n");
         push(@array2print, 'touch /var/lock/subsys/local' . "\n");
         push(@array2print, "\n");
@@ -3438,14 +3448,113 @@ sub disable_firewall_port {
       notify($ERRORS{'DEBUG'}, 0, "executed command $command on $computer_node_name");
 	}
 	else {
-      notify($ERRORS{'WARNING'}, 0, "output from iptables:" . join("\n", @$output));
+      notify($ERRORS{'WARNING'}, 0, "output from iptables:" . join("\n", @$output_iptables));
 	}
 
 	return 1;
 
 }
 
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_exclude_list
+ 
+  Parameters  : none
+  Returns     : array, empty or contents of exclude list
+  Description : 
+ 
+=cut
+
+sub get_exclude_list {
+   my $self = shift;
+   if (ref($self) !~ /VCL::Module/i) {
+      notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+      return;
+   }
+
+	my $computer_node_name = $self->data->get_computer_node_name();
+	
+	# Does /etc/vcl_exclude_list exists
+	my $filename = "/root/.vclcontrol/vcl_exclude_list";
+	if(!$self->file_exists($filename) ) {
+		return;
+	}
+	
+	#Get the list
+	my $command = "cat $filename";	
+	my ($status,$output) = $self->execute($command);
+	
+	if (!defined($output)) {
+      notify($ERRORS{'DEBUG'}, 0, "empty exclude_list from $computer_node_name");
+      return;
+   }
+	
+	return @$output;		
+
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 generate_exclude_list_sample
+ 
+  Parameters  : none
+  Returns     :boolean
+  Description : Generates sample exclude list for users to assist in customizing
+ 
+=cut
+
+sub generate_vclcontrol_sample_files {
+
+	my $self = shift;
+   if (ref($self) !~ /VCL::Module/i) {
+      notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+      return;
+   }
+
+	my $request_id               = $self->data->get_request_id();
+   my $management_node_keys     = $self->data->get_management_node_keys();
+   my $computer_short_name      = $self->data->get_computer_short_name();
+   my $computer_node_name       = $self->data->get_computer_node_name();
+	
+	my @array2print;
+
+   push(@array2print, '#' . "\n");
+   push(@array2print, '# /root/.vclcontrol/vcl_exclude_list' . "\n");
+   push(@array2print, '# List any files here that vcld should exclude updating  during the capture process' . "\n");
+   push(@array2print, "# Format is one file per line including the full path name". "\n");
+   push(@array2print, "\n");
+
+   #write to tmpfile
+   my $tmpfile = "/tmp/$request_id.vcl_exclude_list.sample";
+   if (open(TMP, ">$tmpfile")) {
+      print TMP @array2print;
+      close(TMP);
+   }
+   else {
+      #print "could not write $tmpfile $!\n";
+      notify($ERRORS{'OK'}, 0, "could not write $tmpfile $!");
+      return 0;
+   }
+	
+	# Make directory
+	my $mkdir = "mkdir /root/.vclcontrol";
+	
+	if($self->execute($mkdir)) {
+		notify($ERRORS{'DEBUG'}, 0, "created /root/.vclcontrol directory");
+	}
+	
+   #copy to node
+   if (run_scp_command($tmpfile, "$computer_node_name:/root/.vclcontrol/vcl_exclude_list.sample", $management_node_keys)) {
+   }
+   else{
+      return 0;
+   }
+
+	return 1;	
+
+}
 ##/////////////////////////////////////////////////////////////////////////////
+
 
 1;
 __END__
