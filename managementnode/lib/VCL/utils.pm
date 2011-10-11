@@ -10732,7 +10732,7 @@ LEFT JOIN OStype ON (OStype.name = OS.type)
 WHERE
 connectmethodmap.connectmethodid = connectmethod.id
 AND imagerevision.id = $imagerevision_id
-AND connectmethodmap.autoprovisioned IS NOT NULL
+AND connectmethodmap.autoprovisioned IS NULL
 AND (
 	connectmethodmap.OStypeid = OStype.id
 	OR connectmethodmap.OSid = OS.id 
