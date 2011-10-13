@@ -154,9 +154,11 @@ sub install_linux_packages {
 		'krb5-devel',
 		'libxml2',
 		'libxml2-devel',
+		'make',
 		'nmap',
 		'openssl',
 		'openssl-devel',
+		'perl-Archive-Tar',
 		'perl-CPAN',
 		'perl-DBD-MySQL',
 		'perl-DBI',
@@ -296,7 +298,7 @@ sub install_perl_modules {
 		print "created CPAN configuration file: $config_file_path\n";
 	}
 	
-	#print_cpan_configuration();
+	print_cpan_configuration();
 	
 	my @perl_modules = (
 		'DBI',
@@ -311,7 +313,8 @@ sub install_perl_modules {
 		print_break('-');
 		print "Attempting to install Perl module using CPAN: '$perl_module'\n";
 		
-		eval { CPAN::Shell->install($perl_module) };
+		eval { CPAN::Shell->notest("install", $perl_module) };
+		#eval { CPAN::Shell->install($perl_module) };
 		
 		if (!is_perl_module_installed($perl_module)) {
 			print "ERROR: failed to install Perl module: '$perl_module'\n";
