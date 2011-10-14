@@ -1947,6 +1947,10 @@ sub set_password {
 	
 	# Get the list of services
 	my @services = $self->get_services_using_login_id($username);
+	if ($username eq 'root' && !@services) {
+		@services = ('sshd');
+	}
+	
 	for my $service (@services) {
 		notify($ERRORS{'DEBUG'}, 0, "$service service is configured to run as $username, updating service credentials");
 		if (!$self->set_service_credentials($service, $username, $password)) {
@@ -2824,7 +2828,7 @@ sub reg_export {
 	$root_key =~ s/\//\\\\/g;
 	
 	# Run reg.exe EXPORT
-	my $command .= "cmd.exe /c \"$system32_path/reg.exe EXPORT $root_key \\\"$registry_file_path.tmp\\\" /y && type \\\"$registry_file_path.tmp\\\" > \\\"$registry_file_path\\\" && del -q \\\"$registry_file_path.tmp\\\"\"";
+	my $command .= "cmd.exe /c \"del /Q \\\"$registry_file_path.tmp\\\" 2>NUL & $system32_path/reg.exe EXPORT $root_key \\\"$registry_file_path.tmp\\\" && type \\\"$registry_file_path.tmp\\\" > \\\"$registry_file_path\\\" && del /Q \\\"$registry_file_path.tmp\\\"\"";
 	my ($exit_status, $output) = run_ssh_command($computer_node_name, $management_node_keys, $command, '', '', 1);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to export registry key $root_key to file: $registry_file_path");
