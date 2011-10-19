@@ -571,12 +571,12 @@ INSERT IGNORE INTO `connectmethod` (`id`, `name`, `description`, `port`, `connec
 -- Inserts for table `connectmethodmap`
 --
 
-INSERT IGNORE INTO `connectmethodmap` (`connectmethodid`, `OStypeid`, `OSid`, `imageid`, `disabled`, `autoprovisioned`) VALUES (1, 2, NULL, NULL, 0, 1);
-INSERT IGNORE INTO `connectmethodmap` (`connectmethodid`, `OStypeid`, `OSid`, `imageid`, `disabled`, `autoprovisioned`) VALUES (1, 3, NULL, NULL, 0, 1);
-INSERT IGNORE INTO `connectmethodmap` (`connectmethodid`, `OStypeid`, `OSid`, `imageid`, `disabled`, `autoprovisioned`) VALUES (2, 1, NULL, NULL, 0, 1);
-INSERT IGNORE INTO `connectmethodmap` (`connectmethodid`, `OStypeid`, `OSid`, `imageid`, `disabled`, `autoprovisioned`) VALUES (1, 2, NULL, NULL, 0, NULL);
-INSERT IGNORE INTO `connectmethodmap` (`connectmethodid`, `OStypeid`, `OSid`, `imageid`, `disabled`, `autoprovisioned`) VALUES (1, 3, NULL, NULL, 0, NULL);
-INSERT IGNORE INTO `connectmethodmap` (`connectmethodid`, `OStypeid`, `OSid`, `imageid`, `disabled`, `autoprovisioned`) VALUES (2, 1, NULL, NULL, 0, NULL);
+INSERT IGNORE INTO `connectmethodmap` (`connectmethodid`, `OStypeid`, `OSid`, `imagerevisionid`, `disabled`, `autoprovisioned`) VALUES (1, 2, NULL, NULL, 0, 1);
+INSERT IGNORE INTO `connectmethodmap` (`connectmethodid`, `OStypeid`, `OSid`, `imagerevisionid`, `disabled`, `autoprovisioned`) VALUES (1, 3, NULL, NULL, 0, 1);
+INSERT IGNORE INTO `connectmethodmap` (`connectmethodid`, `OStypeid`, `OSid`, `imagerevisionid`, `disabled`, `autoprovisioned`) VALUES (2, 1, NULL, NULL, 0, 1);
+INSERT IGNORE INTO `connectmethodmap` (`connectmethodid`, `OStypeid`, `OSid`, `imagerevisionid`, `disabled`, `autoprovisioned`) VALUES (1, 2, NULL, NULL, 0, NULL);
+INSERT IGNORE INTO `connectmethodmap` (`connectmethodid`, `OStypeid`, `OSid`, `imagerevisionid`, `disabled`, `autoprovisioned`) VALUES (1, 3, NULL, NULL, 0, NULL);
+INSERT IGNORE INTO `connectmethodmap` (`connectmethodid`, `OStypeid`, `OSid`, `imagerevisionid`, `disabled`, `autoprovisioned`) VALUES (2, 1, NULL, NULL, 0, NULL);
 
 -- --------------------------------------------------------
 
@@ -642,7 +642,7 @@ INSERT IGNORE provisioningOSinstalltype (provisioningid, OSinstalltypeid) SELECT
 -- Inserts for table `resourcetype`
 --
 
-INSERT IGNORE INTO resourcetype (id, name) VALUES (17, serverprofile);
+INSERT IGNORE INTO resourcetype (id, name) VALUES (17, 'serverprofile');
 
 -- --------------------------------------------------------
 
@@ -708,7 +708,7 @@ CALL AddConstraintIfNotExists('computer', 'currentimageid', 'image', 'id');
 CALL AddConstraintIfNotExists('connectmethodmap', 'connectmethodid', 'connectmethod', 'id');
 CALL AddConstraintIfNotExists('connectmethodmap', 'OStypeid', 'OStype', 'id');
 CALL AddConstraintIfNotExists('connectmethodmap', 'OSid', 'OS', 'id');
-CALL AddConstraintIfNotExists('connectmethodmap', 'imageid', 'image', 'id');
+CALL AddConstraintIfNotExists('connectmethodmap', 'imagerevisionid', 'imagerevision', 'id');
 
 -- --------------------------------------------------------
 
