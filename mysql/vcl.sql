@@ -436,6 +436,7 @@ CREATE TABLE IF NOT EXISTS `imagerevision` (
   `production` tinyint(1) unsigned NOT NULL,
   `comments` text,
   `imagename` varchar(75) NOT NULL,
+  `autocaptured` tinyint(1) unsigned NOT NULL DEFAULT '0',
   PRIMARY KEY  (`id`),
   UNIQUE KEY `production` (`production`,`imagename`),
   UNIQUE KEY `imageid` (`imageid`,`revision`),

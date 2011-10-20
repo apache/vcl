@@ -280,6 +280,14 @@ CREATE TABLE IF NOT EXISTS `connectmethodmap` (
 
 -- --------------------------------------------------------
 
+-- 
+--  Table structure for table `imagerevision`
+--
+
+CALL AddColumnIfNotExists('imagerevision', 'autocaptured', "tinyint(1) unsigned NOT NULL default '0'");
+
+-- --------------------------------------------------------
+
 --
 -- Table structure for table `loginlog`
 --
