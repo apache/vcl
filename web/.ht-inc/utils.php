@@ -3924,7 +3924,10 @@ function isAvailable($images, $imageid, $imagerevisionid, $start, $end,
 			       . "LEFT JOIN computer c ON (v.vmhostid = c.vmhostid) "
 			       . "LEFT JOIN image i ON (c.currentimageid = i.id) "
 			       . "WHERE c.id IN ($inids) AND "
-			       .       "(v.allocRAM - i.minram + {$images[$imageid]['minram']}) < v.RAM";
+			       .       "(v.allocRAM - i.minram + {$images[$imageid]['minram']}) < v.RAM "
+			       . "ORDER BY (c.procspeed * c.procnumber) DESC, "
+			       .          "c.RAM DESC, "
+			       .          "c.network DESC";
 			$qh = doQuery($query, 101);
 			$newcompids = array();
 			while($row = mysql_fetch_assoc($qh))
