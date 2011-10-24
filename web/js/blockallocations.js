@@ -480,10 +480,6 @@ function blockFormVerifyWeekly(mode) {
 		dojo.byId('confgroup').innerHTML = 'specified in comments';
 	else
 		dojo.byId('confgroup').innerHTML = getSelectText('groupsel');
-	if(mode != 'request') {
-		dojo.byId('confadmintitle').innerHTML = 'Managing User Group:';
-		dojo.byId('confadmingroup').innerHTML = getSelectText('admingroupsel');
-	}
 	dojo.byId('confrepeat').innerHTML = 'Weekly';
 	dojo.byId('conftitle1').innerHTML = 'First Date:';
 	dojo.byId('confvalue1').innerHTML = dijit.byId('wkfirstdate').getDisplayedValue();
@@ -565,7 +561,6 @@ function blockFormSubmitWeekly(mode) {
 	if(mode != 'request') {
 		data.name = dijit.byId('brname').value;
 		data.owner = dijit.byId('browner').value;
-		data.admingroupid = getSelectValue('admingroupsel');
 	}
 	else
 		data.comments = dijit.byId('comments').value;
@@ -629,10 +624,6 @@ function blockFormVerifyMonthly(mode) {
 		dojo.byId('confgroup').innerHTML = 'specified in comments';
 	else
 		dojo.byId('confgroup').innerHTML = getSelectText('groupsel');
-	if(mode != 'request') {
-		dojo.byId('confadmintitle').innerHTML = 'Managing User Group:';
-		dojo.byId('confadmingroup').innerHTML = getSelectText('admingroupsel');
-	}
 	dojo.byId('confrepeat').innerHTML = 'Monthly';
 	dojo.byId('conftitle1').innerHTML = 'First Date:';
 	dojo.byId('confvalue1').innerHTML = dijit.byId('mnfirstdate').getDisplayedValue();
@@ -705,7 +696,6 @@ function blockFormSubmitMonthly(mode) {
 	if(mode != 'request') {
 		data.name = dijit.byId('brname').value;
 		data.owner = dijit.byId('browner').value;
-		data.admingroupid = getSelectValue('admingroupsel');
 	}
 	else
 		data.comments = dijit.byId('comments').value;
@@ -739,10 +729,6 @@ function blockFormVerifyList(mode) {
 		dojo.byId('confgroup').innerHTML = 'specified in comments';
 	else
 		dojo.byId('confgroup').innerHTML = getSelectText('groupsel');
-	if(mode != 'request') {
-		dojo.byId('confadmintitle').innerHTML = 'Managing User Group:';
-		dojo.byId('confadmingroup').innerHTML = getSelectText('admingroupsel');
-	}
 	dojo.byId('confrepeat').innerHTML = 'List of Dates/Times';
 	dojo.byId('conftitle1').innerHTML = 'Repeat on:';
 	var slots = new Array();
@@ -795,7 +781,6 @@ function blockFormSubmitList(mode) {
 	if(mode != 'request') {
 		data.name = dijit.byId('brname').value;
 		data.owner = dijit.byId('browner').value;
-		data.admingroupid = getSelectValue('admingroupsel');
 	}
 	else
 		data.comments = dijit.byId('comments').value;
@@ -811,8 +796,6 @@ function clearHideConfirmForm() {
 	dojo.byId('confimage').innerHTML = '';
 	dojo.byId('confseats').innerHTML = '';
 	dojo.byId('confgroup').innerHTML = '';
-	dojo.byId('confadmintitle').innerHTML = '';
-	dojo.byId('confadmingroup').innerHTML = '';
 	dojo.byId('confrepeat').innerHTML = '';
 	dojo.byId('conftitle1').innerHTML = '';
 	dojo.byId('confvalue1').innerHTML = '';
@@ -832,7 +815,6 @@ function clearHideConfirmDelete() {
 	dojo.byId('confimage').innerHTML = '';
 	dojo.byId('confseats').innerHTML = '';
 	dojo.byId('confgroup').innerHTML = '';
-	dojo.byId('confadmingroup').innerHTML = '';
 	dojo.byId('confrepeat').innerHTML = '';
 	dojo.byId('conftitle1').innerHTML = '';
 	dojo.byId('confvalue1').innerHTML = '';
@@ -883,10 +865,6 @@ function clearHideConfirmAccept() {
 	else
 		dojo.byId('groupsel').value = 0;
 	dojo.byId('brname').value = '';
-	if(dijit.byId('admingroupsel'))
-		dijit.byId('admingroupsel').attr('displayedValue', 'None (owner only)');
-	else
-		dojo.byId('admingroupsel').value = 0;
 	dojo.byId('acceptemailuser').innerHTML = '';
 	dijit.byId('acceptemailtext').attr('value', '');
 }
@@ -924,7 +902,6 @@ function deleteBlockConfirmCB(data, ioArgs) {
 		dojo.byId('confimage').innerHTML = data.items.image;
 		dojo.byId('confseats').innerHTML = data.items.seats;
 		dojo.byId('confgroup').innerHTML = data.items.usergroup;
-		dojo.byId('confadmingroup').innerHTML = data.items.admingroup;
 		dojo.byId('confrepeat').innerHTML = 'Weekly';
 		dojo.byId('conftitle1').innerHTML = 'First Date:';
 		dojo.byId('confvalue1').innerHTML = data.items.startdate;
@@ -941,7 +918,6 @@ function deleteBlockConfirmCB(data, ioArgs) {
 		dojo.byId('confimage').innerHTML = data.items.image;
 		dojo.byId('confseats').innerHTML = data.items.seats;
 		dojo.byId('confgroup').innerHTML = data.items.usergroup;
-		dojo.byId('confadmingroup').innerHTML = data.items.admingroup;
 		dojo.byId('confrepeat').innerHTML = 'Monthly';
 		dojo.byId('conftitle1').innerHTML = 'First Date:';
 		dojo.byId('confvalue1').innerHTML = data.items.startdate;
@@ -958,7 +934,6 @@ function deleteBlockConfirmCB(data, ioArgs) {
 		dojo.byId('confimage').innerHTML = data.items.image;
 		dojo.byId('confseats').innerHTML = data.items.seats;
 		dojo.byId('confgroup').innerHTML = data.items.usergroup;
-		dojo.byId('confadmingroup').innerHTML = data.items.admingroup;
 		dojo.byId('confrepeat').innerHTML = 'List of Dates/Times';
 		dojo.byId('conftitle1').innerHTML = 'Repeat on:';
 		dojo.byId('confvalue1').innerHTML = data.items.slots.join('<br>');
@@ -1099,7 +1074,6 @@ function acceptBlockSubmit() {
 	var data = {continuation: cont,
 	            groupid: getSelectValue('groupsel'),
 	            brname: dijit.byId('brname').value,
-	            admingroupid: getSelectValue('admingroupsel'),
 	            emailtext: dijit.byId('acceptemailtext').attr('value')};
    document.body.style.cursor = 'wait';
 	RPCwrapper(data, generalReqCB);
@@ -1173,7 +1147,6 @@ function rejectBlockSubmit() {
 	var data = {continuation: cont,
 	            groupid: getSelectValue('groupsel'),
 	            brname: dijit.byId('brname').value,
-	            admingroupid: getSelectValue('admingroupsel'),
 	            emailtext: dijit.byId('rejectemailtext').attr('value')};
    document.body.style.cursor = 'wait';
 	RPCwrapper(data, generalReqCB);

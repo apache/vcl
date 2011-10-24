@@ -184,35 +184,6 @@ function blockAllocationForm() {
 	print "      <img src=\"images/helpicon.png\" id=\"grouphelp\" />\n";
 	print "    </td>\n";
 	print "  </tr>\n";
-	if($mode != 'requestBlockAllocation') {
-		if(! empty($data['admingroupid']) && ! array_key_exists($data['admingroupid'], $groups)) {
-			$groups[$data['admingroupid']] = array('name' => getUserGroupName($data['admingroupid'], 1));
-			$extragroups[$data['admingroupid']] = array('name' => getUserGroupName($data['admingroupid'], 1));
-			uasort($groups, "sortKeepIndex");
-		}
-		print "  <tr>\n";
-		print "    <th align=right>Managing User Group</th>\n";
-		print "    <td>\n";
-		if(USEFILTERINGSELECT && count($groups) < FILTERINGSELECTTHRESHOLD) {
-			print "      <select dojoType=\"dijit.form.FilteringSelect\" id=admingroupsel style=\"width: 300px\" ";
-			print "queryExpr=\"*\${0}*\" highlightMatch=\"all\" autoComplete=\"false\">\n";
-		}
-		else
-			print "      <select id=admingroupsel>\n";
-		print "        <option value=\"0\">None (owner only)</option>\n";
-		foreach($groups as $id => $group) {
-			if($group['name'] == ' None@')
-				continue;
-			if($id == $data['admingroupid'])
-				print "        <option value=\"$id\" selected>{$group['name']}</option>\n";
-			else
-				print "        <option value=\"$id\">{$group['name']}</option>\n";
-		}
-		print "      </select>\n";
-		print "      <img src=\"images/helpicon.png\" id=\"admingrouphelp\" />\n";
-		print "    </td>\n";
-		print "  </tr>\n";
-	}
 	print "  <tr>\n";
 	print "    <th align=right>Number of seats:</th>\n";
 	print "    <td>\n";
@@ -450,10 +421,6 @@ function blockAllocationForm() {
 	print "    <td><span id=\"confgroup\"></span></td>\n";
 	print "  </tr>\n";
 	print "  <tr>\n";
-	print "    <th align=\"right\"><span id=\"confadmintitle\"></span></th>\n";
-	print "    <td><span id=\"confadmingroup\"></span></td>\n";
-	print "  </tr>\n";
-	print "  <tr>\n";
 	print "    <th align=\"right\">Seats:</th>\n";
 	print "    <td><span id=\"confseats\"></span></td>\n";
 	print "  </tr>\n";
@@ -619,7 +586,6 @@ function AJblockAllocationSubmit() {
 		       .        "groupid, "
 		       .        "repeating, "
 		       .        "ownerid, "
-		       .        "admingroupid, "
 		       .        "managementnodeid, "
 		       .        "expireTime, "
 		       .        "status) "
@@ -630,7 +596,6 @@ function AJblockAllocationSubmit() {
 		       .        "{$data['groupid']}, "
 		       .        "'{$data['type']}', "
 		       .        "{$data['ownerid']}, "
-		       .        "{$data['admingroupid']}, "
 		       .        "$mnid, "
 		       .        "'{$data['expiretime']}', "
 		       .        "'accepted')";
@@ -674,7 +639,6 @@ function AJblockAllocationSubmit() {
 		       .     "numMachines = {$data['seats']}, "
 		       .     "groupid = {$data['groupid']}, "
 		       .     "ownerid = {$data['ownerid']}, "
-		       .     "admingroupid = {$data['admingroupid']}, "
 		       .     "repeating = '{$data['type']}', "
 		       .     "expireTime = '{$data['expiretime']}' "
 		       . "WHERE  id = $blockreqid";
@@ -703,7 +667,6 @@ function AJblockAllocationSubmit() {
 		       .        "groupid, "
 		       .        "repeating, "
 		       .        "ownerid, "
-		       .        "admingroupid, "
 		       .        "expireTime, "
 		       .        "status, "
 		       .        "comments) "
@@ -714,7 +677,6 @@ function AJblockAllocationSubmit() {
 		       .        "{$data['groupid']}, "
 		       .        "'{$data['type']}', "
 		       .        "{$user['id']}, "
-		       .        "0, "
 		       .        "'{$data['expiretime']}', "
 		       .        "'requested', "
 		       .        "'$esccomments')";
@@ -1101,21 +1063,15 @@ function getCurrentBlockHTML($listonly=0) {
 	       .        "b.numMachines AS machinecnt, "
 	       .        "b.groupid as usergroupid, "
 	       .        "CONCAT(g.name, '@', a.name) AS `group`, "
-	       .        "b.admingroupid as admingroupid, "
-	       .        "CONCAT(ga.name, '@', aa.name) AS `admingroup`, "
 	       .        "b.repeating AS available "
 	       . "FROM image i, "
 	       .      "blockRequest b "
 	       . "LEFT JOIN usergroup g ON (b.groupid = g.id) "
 	       . "LEFT JOIN affiliation a ON (g.affiliationid = a.id) "
-	       . "LEFT JOIN usergroup ga ON (b.admingroupid = ga.id) "
-	       . "LEFT JOIN affiliation aa ON (ga.affiliationid = aa.id) "
 	       . "LEFT JOIN user u ON (b.ownerid = u.id) "
 	       . "LEFT JOIN affiliation ua ON (u.affiliationid = ua.id) "
-	       . "WHERE (b.ownerid = {$user['id']} ";
-	if(! empty($groupids))
-		$query .=   "OR b.admingroupid IN ($groupids) ";
-	$query .=      ") AND b.imageid = i.id AND "
+	       . "WHERE b.ownerid = {$user['id']} AND "
+	       .       "b.imageid = i.id AND "
 	       .       "b.status = 'accepted' "
 	       . "ORDER BY b.name";
 	$allblockids = array();
@@ -1265,7 +1221,6 @@ function getCurrentBlockHTML($listonly=0) {
 	$rt .= "    <TH>Environment</TH>\n";
 	$rt .= "    <TH>Reserved<br>Machines</TH>\n";
 	$rt .= "    <TH>Reserved<br>For</TH>\n";
-	$rt .= "    <TH>Manageable<br>By</TH>\n";
 	$rt .= "    <TH>Repeating</TH>\n";
 	$rt .= "    <TH>Next Start Time</TH>\n";
 	$rt .= "  </TR>\n";
@@ -1302,10 +1257,6 @@ function getCurrentBlockHTML($listonly=0) {
 		$rt .= "    <TD>{$block['image']}</TD>\n";
 		$rt .= "    <TD>{$block['machinecnt']}</TD>\n";
 		$rt .= "    <TD>{$block['group']}</TD>\n";
-		if(empty($block['admingroup']))
-			$rt .= "    <TD>None (owner only)</TD>\n";
-		else
-			$rt .= "    <TD>{$block['admingroup']}</TD>\n";
 		$rt .= "    <TD>{$block['available']}</TD>\n";
 		if($block['nextstartactive']) {
 			$cont = addContinuationsEntry('viewBlockStatus', array('id' => $block['id']));
@@ -1339,10 +1290,6 @@ function getCurrentBlockHTML($listonly=0) {
 	$rt .= "  <tr>\n";
 	$rt .= "    <th align=\"right\">User Group:</th>\n";
 	$rt .= "    <td><span id=\"confgroup\"></span></td>\n";
-	$rt .= "  </tr>\n";
-	$rt .= "  <tr>\n";
-	$rt .= "    <th align=\"right\">Managing User Group:</th>\n";
-	$rt .= "    <td><span id=\"confadmingroup\"></span></td>\n";
 	$rt .= "  </tr>\n";
 	$rt .= "  <tr>\n";
 	$rt .= "    <th align=\"right\">Seats:</th>\n";
@@ -1972,24 +1919,6 @@ function getPendingBlockHTML($listonly=0) {
 	$rt .= "regExp=\"^([-a-zA-Z0-9\. ]){3,80}$\">\n";
 	$rt .= "    </td>\n";
 	$rt .= "  </tr>\n";
-	$rt .= "  <tr>\n";
-	$rt .= "    <th align=right>Managing User Group:</th>\n";
-	$rt .= "    <td>\n";
-	if(USEFILTERINGSELECT && count($groups) < FILTERINGSELECTTHRESHOLD) {
-		$rt .= "      <select dojoType=\"dijit.form.FilteringSelect\" id=admingroupsel ";
-		$rt .= "queryExpr=\"*\${0}*\" highlightMatch=\"none\" autoComplete=\"false\">\n";
-	}
-	else
-		$rt .= "      <select id=admingroupsel>\n";
-	$rt .= "        <option value=\"0\">None (owner only)</option>\n";
-	foreach($groups as $id => $group) {
-		if($group['name'] == ' None@')
-			continue;
-		$rt .= "        <option value=\"$id\">{$group['name']}</option>\n";
-	}
-	$rt .= "      </select>\n";
-	$rt .= "    </td>\n";
-	$rt .= "  </tr>\n";
 	$rt .= "</table><br>\n";
 	$rt .= "<div id=\"acceptemailblock\">\n";
 	$rt .= "The following text will be emailed to <span id=\"acceptemailuser\"></span>:<br>\n";
@@ -2104,7 +2033,6 @@ function AJdeleteBlockAllocationConfirm() {
 		            'image' => $data['image'],
 		            'seats' => $data['machinecnt'],
 		            'usergroup' => $data['group'],
-		            'admingroup' => $data['admingroup'],
 		            'repeating' => $data['available'],
 		            'startdate' => $data['swdate'],
 		            'lastdate' => $data['ewdate'],
@@ -2124,7 +2052,6 @@ function AJdeleteBlockAllocationConfirm() {
 		            'image' => $data['image'],
 		            'seats' => $data['machinecnt'],
 		            'usergroup' => $data['group'],
-		            'admingroup' => $data['admingroup'],
 		            'repeating' => $data['available'],
 		            'startdate' => $data['smdate'],
 		            'lastdate' => $data['emdate']);
@@ -2149,7 +2076,6 @@ function AJdeleteBlockAllocationConfirm() {
 		            'image' => $data['image'],
 		            'seats' => $data['machinecnt'],
 		            'usergroup' => $data['group'],
-		            'admingroup' => $data['admingroup'],
 		            'repeating' => $data['available']);
 		$slots = array();
 		foreach($data['date'] as $key => $val) {
@@ -2160,8 +2086,6 @@ function AJdeleteBlockAllocationConfirm() {
 		}
 		$rt['slots'] = $slots;
 	}
-	if($data['admingroupid'] == 0)
-		$rt['admingroup'] = 'None (owner only)';
 	$cont = addContinuationsEntry('AJdeleteBlockAllocationSubmit', array('blockid' => $data['id']), SECINDAY, 0, 0);
 	$rt['cont'] = $cont;
 	sendJSON($rt);
@@ -2387,7 +2311,6 @@ function AJacceptBlockAllocationSubmit() {
 	if($setusergroup)
 		$usergroupid = processInputVar('groupid', ARG_NUMERIC);
 	$name = processInputVar('brname', ARG_STRING);
-	$admingroupid = processInputVar('admingroupid', ARG_NUMERIC);
 	$emailtext = processInputVar('emailtext', ARG_STRING);
 
 	$err = 0;
@@ -2408,10 +2331,6 @@ function AJacceptBlockAllocationSubmit() {
 		}
 	}
 	$groups = getUserGroups(0, $user['affiliationid']);
-	if(! $err && $admingroupid != 0 && ! array_key_exists($admingroupid, $groups)) {
-		$errmsg = "Invalid managing user group submitted.";
-		$err = 1;
-	}
 	if(! $err && $setusergroup && ! array_key_exists($usergroupid, $groups)) {
 		$errmsg = "Invalid user group submitted.";
 		$err = 1;
@@ -2431,8 +2350,7 @@ function AJacceptBlockAllocationSubmit() {
 		else
 			$esccomments = mysql_real_escape_string("COMMENTS: $comments|USER NOT EMAILED");
 		$query = "UPDATE blockRequest "
-				 . "SET name = '$name', "
-				 .     "admingroupid = $admingroupid, ";
+				 . "SET name = '$name', ";
 		if($setusergroup)
 			$query .= "groupid = $usergroupid, ";
 		$query .=    "status = 'accepted', "
@@ -2940,7 +2858,6 @@ function AJupdateBlockStatus() {
 /// \b imageid - selected image id\n
 /// \b seats - number of machines to allocate\n
 /// \b groupid - user group id for selected user group\n
-/// \b admingroupid - user group id for selected admin user group\n
 /// \b type - 'weekly', 'monthly', or 'list'\n
 /// \b slots - array of date/time slots in 'YYYY-MM-DD|HH:MM|HH:MM' format (date|start|end)\n
 /// \b times - array of times in HH:MM|HH:MM format (start|end)\n
@@ -2967,7 +2884,6 @@ function processBlockAllocationInput() {
 	$return['imageid'] = processInputVar('imageid', ARG_NUMERIC);
 	$return['seats'] = processInputVar('seats', ARG_NUMERIC);
 	$return['groupid'] = processInputVar('groupid', ARG_NUMERIC);
-	$return['admingroupid'] = processInputVar('admingroupid', ARG_NUMERIC);
 	$type = processInputVar('type', ARG_STRING);
 	$err = 0;
 	if($method != 'request' && ! preg_match('/^([-a-zA-Z0-9\. \(\)]){3,80}$/', $return['name'])) {
@@ -2992,10 +2908,6 @@ function processBlockAllocationInput() {
 	   ! array_key_exists($return['groupid'], $extragroups) &&
 	   $return['groupid'] != 0) {
 		$errmsg = 'The submitted user group is invalid.';
-		$err = 1;
-	}
-	if(! $err && $method != 'request' && ! array_key_exists($return['admingroupid'], $groups) && $return['admingroupid'] != 0) {
-		$errmsg = 'The submitted admin user group is invalid.';
 		$err = 1;
 	}
 	if(! $err && ($return['seats'] < MIN_BLOCK_MACHINES || $return['seats'] > MAX_BLOCK_MACHINES)) {
@@ -3245,7 +3157,6 @@ function getBlockAllocationStatus($id) {
 /// \b ownerid - id from user table of block allocation owner\n
 /// \b owner - block allocation owner\n
 /// \b usergroupid - id of group associated with block allocation\n
-/// \b admingroupid - id of admin group associated with block allocation\n
 /// \b repeating - weekly, monthly, or list\n
 /// \b type - array with weekly, monthly, or list set to 'checked' and the
 ///    others set to an empty string\n
@@ -3271,7 +3182,6 @@ function getBlockAllocationData($blockid) {
 	            'ownerid' => '',
 	            'owner' => '',
 	            'usergroupid' => '',
-	            'admingroupid' => '',
 	            'repeating' => '',
 	            'swdate' => '',
 	            'ewdate' => '',
@@ -3296,7 +3206,6 @@ function getBlockAllocationData($blockid) {
 	       .        "b.ownerid, "
 	       .        "CONCAT(u.unityid, '@', a.name) AS owner, "
 	       .        "b.groupid AS usergroupid, "
-	       .        "b.admingroupid, "
 	       .        "b.repeating, "
 	       .        "d.start AS swdate, "
 	       .        "d.end AS ewdate, "
