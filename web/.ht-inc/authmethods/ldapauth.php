@@ -40,6 +40,7 @@ function addLDAPUser($authtype, $userid) {
 		return NULL;
 
 	$loweruserid = strtolower($userid);
+	$loweruserid = mysql_real_escape_string($loweruserid);
 
 	# check for existance of an expired user if a numericid exists
 	if(array_key_exists('numericid', $data)) {
@@ -164,6 +165,7 @@ function validateLDAPUser($type, $loginid) {
 ////////////////////////////////////////////////////////////////////////////////
 function updateLDAPUser($authtype, $userid) {
 	global $authMechs;
+	$esc_userid = mysql_real_escape_string($userid);
 	$userData = getLDAPUserData($authtype, $userid);
 	if(is_null($userData))
 		return NULL;
@@ -197,7 +199,7 @@ function updateLDAPUser($authtype, $userid) {
 	   is_numeric($userData['numericid']))
 		$query .=   "u.uid = {$userData['numericid']}";
 	else {
-		$query .=   "u.unityid = '$userid' AND "
+		$query .=   "u.unityid = '$esc_userid' AND "
 		       .    "u.affiliationid = $affilid";
 	}
 	$qh = doQuery($query, 255);
@@ -211,7 +213,7 @@ function updateLDAPUser($authtype, $userid) {
 		$user["email"] = $userData["email"];
 		$user["lastupdated"] = $now;
 		$query = "UPDATE user "
-		       . "SET unityid = '$userid', "
+		       . "SET unityid = '$esc_userid', "
 		       .     "firstname = '{$userData['first']}', "
 		       .     "lastname = '{$userData['last']}', "
 		       .     "email = '{$userData['email']}', "
@@ -220,7 +222,7 @@ function updateLDAPUser($authtype, $userid) {
 		   is_numeric($userData['numericid']))
 			$query .= "WHERE uid = {$userData['numericid']}";
 		else
-			$query .= "WHERE unityid = '$userid' AND "
+			$query .= "WHERE unityid = '$esc_userid' AND "
 			       .        "affiliationid = $affilid";
 		doQuery($query, 256, 'vcl', 1);
 	}

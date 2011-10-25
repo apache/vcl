@@ -233,6 +233,8 @@ function printLoginPage($servertimeout=0) {
 	$authtype = getContinuationVar("authtype", processInputVar("authtype", ARG_STRING));
 	if($authtype == '' && array_key_exists('VCLAUTHSEL', $_COOKIE))
 		$authtype = $_COOKIE['VCLAUTHSEL'];
+	if(isset($_GET['userid']))
+		unset($_GET['userid']);
 	$userid = processInputVar('userid', ARG_STRING, '');
 	if($userid == 'Proceed to Login')
 		$userid = '';
@@ -241,6 +243,9 @@ function printLoginPage($servertimeout=0) {
 		dbDisconnect();
 		exit;
 	}
+	if(get_magic_quotes_gpc())
+		$userid = stripslashes($userid);
+	$userid = htmlspecialchars($userid);
 	$extrafailedmsg = '';
 	if($servertimeout)
 		$extrafailedmsg = " (unable to connect to authentication server)";
@@ -326,14 +331,18 @@ function submitLogin() {
 		dbDisconnect();
 		exit;
 	}
+	if(isset($_GET['userid']))
+		unset($_GET['userid']);
 	$userid = processInputVar('userid', ARG_STRING, '');
 	$passwd = $_POST['password'];
 	if(empty($userid) || empty($passwd)) {
 		selectAuth();
 		return;
 	}
-	if(get_magic_quotes_gpc())
+	if(get_magic_quotes_gpc()) {
+		$userid = stripslashes($userid);
 		$passwd = stripslashes($passwd);
+	}
 	if($authMechs[$authtype]['type'] == 'ldap')
 		ldapLogin($authtype, $userid, $passwd);
 	elseif($authMechs[$authtype]['type'] == 'local')
@@ -356,6 +365,7 @@ function submitLogin() {
 ////////////////////////////////////////////////////////////////////////////////
 function ldapLogin($authtype, $userid, $passwd) {
 	global $HTMLheader, $printedHTMLheader, $authMechs, $phpVer;
+	$esc_userid = mysql_real_escape_string($userid);
 	if(! $fh = fsockopen($authMechs[$authtype]['server'], 636, $errno, $errstr, 5)) {
 		printLoginPageWithSkin($authtype, 1);
 		return;
@@ -443,7 +453,7 @@ function ldapLogin($authtype, $userid, $passwd) {
 		// see if user in our db
 		$query = "SELECT id "
 		       . "FROM user "
-		       . "WHERE unityid = '$userid' AND "
+		       . "WHERE unityid = '$esc_userid' AND "
 		       .       "affiliationid = {$authMechs[$authtype]['affiliationid']}";
 		$qh = doQuery($query, 101);
 		if(! mysql_num_rows($qh)) {
@@ -522,6 +532,7 @@ function localLogin($userid, $passwd) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function validateLocalAccount($user, $pass) {
+	$user = mysql_real_escape_string($user);
 	$query = "SELECT l.salt "
 	       . "FROM localauth l, "
 	       .      "user u, "
@@ -565,6 +576,8 @@ function validateLocalAccount($user, $pass) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function addLoginLog($login, $mech, $affiliationid, $passfail) {
+	$login = mysql_real_escape_string($login);
+	$mech = mysql_real_escape_string($mech);
 	$query = "INSERT INTO loginlog "
 	       .        "(user, "
 	       .        "authmech, "
