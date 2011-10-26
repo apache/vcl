@@ -276,7 +276,7 @@ $diff = array_diff($requiredexts, $exts);
 print "<ul>\n";
 if(count($diff)) {
 	$missing = implode(', ', $diff);
-	fail("Missing these extensiosn: $missing. Depending on the extension, some or all of VCL will not work.");
+	fail("Missing these extensions: $missing. Depending on the extension, some or all of VCL will not work.");
 }
 else
 	pass("All required modules are installed");
