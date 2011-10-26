@@ -51,6 +51,8 @@ function getAuthCookieData($loginid, $valid=600, $shibauthid=0) {
 	if(! openssl_private_encrypt($cdata, $cryptdata, $keys["private"]))
 		return "Failed to encrypt cookie data";
 
+	$cryptdata = base64_encode($cryptdata);
+
 	return array("data" => $cryptdata, "ts" => $ts);
 }
 
@@ -72,6 +74,7 @@ function readAuthCookie() {
 		$cookie = stripslashes($_COOKIE["VCLAUTH"]);
 	else
 		$cookie = $_COOKIE["VCLAUTH"];
+	$cookie = base64_decode($cookie);
    if(! openssl_public_decrypt($cookie, $tmp, $keys['public'])) {
       $AUTHERROR["code"] = 3;
       $AUTHERROR["message"] = "Failed to decrypt auth cookie";
