@@ -3141,7 +3141,8 @@ function processComputerInput($checks=1) {
 	   $submitErr |= OWNERERR;
 	   $submitErrMsg[OWNERERR] = "Submitted ID is not valid";
 	}
-	if($return['type'] == 'virtualmachine' && $return['stateid'] == 2) {
+	if($mode == 'confirmAddComputer' &&
+	   $return['type'] == 'virtualmachine' && $return['stateid'] != 10) {
 	   $submitErr |= VMAVAILERR;
 	   $submitErrMsg[VMAVAILERR] = "Virtual machines can only be added in the maintenance state.";
 	}
