@@ -325,7 +325,8 @@ function vmhostdata() {
 	       .       "c.stateid = s.id AND "
 	       .       "(vmhostid IS NULL OR "
 	       .       "vmhostid NOT IN (SELECT id FROM vmhost) OR "
-	       .       "c.vmhostid = $vmhostid) "
+	       .       "c.vmhostid = $vmhostid) AND "
+	       .       "c.deleted = 0 "
 	       . "ORDER BY c.hostname";
 	$qh = doQuery($query, 101);
 	$ids = array();
