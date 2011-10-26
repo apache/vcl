@@ -1591,15 +1591,17 @@ function submitAddBulkComputers() {
 		$resid = dbLastInsertID();
 
 		// add computer into selected groups
-		$vals = array();
-		foreach(array_keys($data["computergroup"]) as $groupid)
-			$vals[] = "($resid, $groupid)";
-		$allvals = implode(',', $vals);
-		$query = "INSERT INTO resourcegroupmembers "
-	          .        "(resourceid, "
-	          .        "resourcegroupid) "
-	          . "VALUES $allvals";
-		doQuery($query, 101);
+		if(! empty($data['computergroup'])) {
+			$vals = array();
+			foreach(array_keys($data["computergroup"]) as $groupid)
+				$vals[] = "($resid, $groupid)";
+			$allvals = implode(',', $vals);
+			$query = "INSERT INTO resourcegroupmembers "
+		          .        "(resourceid, "
+		          .        "resourcegroupid) "
+		          . "VALUES $allvals";
+			doQuery($query, 101);
+		}
 
 		if($data['stateid'] == 20) {
 			# create vmhost entry
@@ -3374,20 +3376,22 @@ function processBulkComputerInput($checks=1) {
 	   $submitErrMsg[IPADDRERR2] = "The number of IP addresses ($numipaddrs) "
 		      . "does not match the number of hostnames ($numhostnames).";
 	   $submitErr |= ENDHOSTVALERR;
-	   $submitErrMsg[ENDHOSTVALERR] = "The number of IP addresses ($numipaddrs) "
-		      . "does not match the number of hostnames ($numhostnames).";
+	   $submitErrMsg[ENDHOSTVALERR] = $submitErrMsg[IPADDRERR2];
 	}
 	if(! empty($return['startpripaddress']) && ! empty($return['endpripaddress']) &&
-	   (! ($submitErr & IPADDRERR2 || $submitErr & IPADDRERR4) && 
+	   (! ($submitErr & IPADDRERR4) && 
 	   ! empty($endpraddrArr) &&
-		($endaddrArr[3] - $startaddrArr[3] != $endpraddrArr[3] - $startpraddrArr[3]))) {
-		$numpubaddrs = $endaddrArr[3] - $startaddrArr[3] + 1;
+		($return["endhostval"] - $return["starthostval"] != $endpraddrArr[3] - $startpraddrArr[3]))) {
 		$numpraddrs = $endpraddrArr[3] - $startpraddrArr[3] + 1;
-	   $submitErr |= IPADDRERR2;
-	   $submitErrMsg[IPADDRERR2] = "The number of public IP addresses ($numpubaddrs) "
-		      . "does not match the number of private IP addresses ($numpraddrs).";
+		$numhostnames = $return["endhostval"] - $return["starthostval"] + 1;
+
 	   $submitErr |= IPADDRERR4;
-	   $submitErrMsg[IPADDRERR4] = $submitErrMsg[IPADDRERR2];
+	   $submitErrMsg[IPADDRERR4] = "The number of private IP addresses ($numpraddrs) "
+		      . "does not match the number of hostnames ($numhostnames).";
+		if(! ($submitErr & ENDHOSTVALERR)) {
+			$submitErr |= ENDHOSTVALERR;
+			$submitErrMsg[ENDHOSTVALERR] = $submitErrMsg[IPADDRERR4];
+		}
 	}
 	if(! validateUserid($return["owner"])) {
 	   $submitErr |= OWNERERR;
