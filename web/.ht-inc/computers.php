@@ -3582,15 +3582,17 @@ function addComputer($data) {
 	$resid = dbLastInsertID();
 
 	// add computer into selected groups
-	$vals = array();
-	foreach(array_keys($data['computergroup']) as $groupid)
-		$vals[] = "($resid, $groupid)";
-	$allvals = implode(',', $vals);
-	$query = "INSERT INTO resourcegroupmembers "
-	       .        "(resourceid, "
-	       .        "resourcegroupid) "
-	       . "VALUES $allvals";
-	doQuery($query, 101);
+	if(! empty($data['computergroup'])) {
+		$vals = array();
+		foreach(array_keys($data['computergroup']) as $groupid)
+			$vals[] = "($resid, $groupid)";
+		$allvals = implode(',', $vals);
+		$query = "INSERT INTO resourcegroupmembers "
+		       .        "(resourceid, "
+		       .        "resourcegroupid) "
+		       . "VALUES $allvals";
+		doQuery($query, 101);
+	}
 
 	if($data['stateid'] == 20) {
 		$profileid = processInputVar('profileid', ARG_NUMERIC);
