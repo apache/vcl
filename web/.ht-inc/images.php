@@ -867,6 +867,9 @@ function editOrAddImage($state) {
 		$data['usage'] = $tmp['usage'];
 	}
 
+	$data['description'] = preg_replace("/<br>/", "\n", $data['description']);
+	$data['usage'] = preg_replace("/<br>/", "\n", $data['usage']);
+
 	print "<FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
 	print "<DIV align=center>\n";
 	if($state)
