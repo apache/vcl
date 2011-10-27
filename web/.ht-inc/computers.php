@@ -1622,7 +1622,7 @@ function submitAddBulkComputers() {
 	else
 		print $count - $addedrows . " computers failed to get added<br><br>\n";
 	print "</div>\n";
-	if($domacs)
+	if($domacs && $dopr)
 		generateDhcpForm($dhcpdata);
 	clearPrivCache();
 }
@@ -3328,6 +3328,9 @@ function processBulkComputerInput($checks=1) {
 			$topplus = implode(':', str_split(dechex($topdec + 1), 2));
 			$start = $botdec;
 			$return['macs'] = array();
+			$eth0macs = array();
+			$eth1macs = array();
+			$toggle = 0;
 			$end = $start + (($endaddrArr[3] - $startaddrArr[3] + 1) * 2);
 			for($i = $start; $i < $end; $i++) {
 				if($i > 16777215) {
@@ -3341,8 +3344,27 @@ function processBulkComputerInput($checks=1) {
 					$tmp2 = str_split($tmp, 2);
 					$return['macs'][] = $topmac . ':' . implode(':', $tmp2);
 				}
+				if($toggle % 2)
+					$eth1macs[] = $topmac . ':' . implode(':', $tmp2);
+				else
+					$eth0macs[] = $topmac . ':' . implode(':', $tmp2);
+				$toggle++;
 			}
-			if($i > 16777215 && $topdec == 16777215) {
+			$ineth0s = implode("','", $eth0macs);
+			$ineth1s = implode("','", $eth1macs);
+			$query = "SELECT id "
+			       . "FROM computer "
+			       . "WHERE eth0macaddress IN ('$ineth0s') OR "
+			       .       "eth1macaddress IN ('$ineth1s')";
+			$qh = doQuery($query);
+			if(mysql_num_rows($qh)) {
+				$submitErr |= MACADDRERR;
+				$submitErrMsg[MACADDRERR] = "The specified starting MAC address "
+				                          . "combined with the number of computers "
+				                          . "entered will result in a MAC address "
+				                          . "already assigned to another computer.";
+			}
+			elseif($i > 16777215 && $topdec == 16777215) {
 				$submitErr |= MACADDRERR;
 				$submitErrMsg[MACADDRERR] = "Starting MAC address too large for given "
 				                          . "given number of machines";
