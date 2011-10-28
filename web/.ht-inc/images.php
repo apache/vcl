@@ -2655,12 +2655,27 @@ function submitDeleteImage() {
 				 . "SET deleted = 0 "
 				 . "WHERE id = $imageid";
 		$qh = doQuery($query, 210);
+		$query = "UPDATE imagerevision i1, "
+		       .        "imagerevision i2 "
+		       . "SET i1.deleted = 0, "
+		       .     "i1.datedeleted = NULL "
+		       . "WHERE i1.imageid = $imageid AND "
+		       .       "i2.imageid = $imageid AND "
+		       .       "i2.production = 1 AND "
+		       .       "i1.datedeleted = i2.datedeleted";
+		$qh = doQuery($query);
 	}
 	else {
 		$query = "UPDATE image "
 				 . "SET deleted = 1 "
 				 . "WHERE id = $imageid";
 		$qh = doQuery($query, 211);
+		$query = "UPDATE imagerevision "
+				 . "SET deleted = 1, "
+				 .     "datedeleted = NOW() "
+				 . "WHERE imageid = $imageid AND "
+				 .       "deleted = 0";
+		$qh = doQuery($query);
 		$query = "UPDATE computer "
 				 . "SET nextimageid = 0 "
 				 . "WHERE nextimageid = $imageid";
