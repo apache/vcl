@@ -907,6 +907,7 @@ CREATE TABLE IF NOT EXISTS `serverprofile` (
 
 CREATE TABLE IF NOT EXISTS `serverrequest` (
   `id` mediumint(8) unsigned NOT NULL auto_increment,
+  `serverprofileid` smallint(5) unsigned NOT NULL default '0',
   `requestid` mediumint(8) unsigned NOT NULL,
   `fixedIP` varchar(15) default NULL,
   `fixedMAC` varchar(17) default NULL,
@@ -914,7 +915,10 @@ CREATE TABLE IF NOT EXISTS `serverrequest` (
   `logingroupid` smallint(5) unsigned default NULL,
   `monitored` tinyint(1) unsigned NOT NULL default '0',
   PRIMARY KEY  (`id`),
-  UNIQUE KEY `requestid` (`requestid`)
+  UNIQUE KEY `requestid` (`requestid`),
+  KEY `admingroupid` (`admingroupid`),
+  KEY `logingroupid` (`logingroupid`),
+  KEY `serverprofileid` (`serverprofileid`)
 ) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
@@ -2030,7 +2034,9 @@ ALTER TABLE `serverprofile`
 -- Constraints for table `serverrequest`
 --
 ALTER TABLE `serverrequest`
-  ADD CONSTRAINT `serverrequest_ibfk_1` FOREIGN KEY (`requestid`) REFERENCES `request` (`id`) ON DELETE CASCADE;
+  ADD CONSTRAINT `serverrequest_ibfk_1` FOREIGN KEY (`requestid`) REFERENCES `request` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `serverrequest_ibfk_2` FOREIGN KEY (`admingroupid`) REFERENCES `usergroup` (`id`) ON UPDATE CASCADE,
+  ADD CONSTRAINT `serverrequest_ibfk_3` FOREIGN KEY (`logingroupid`) REFERENCES `usergroup` (`id`) ON UPDATE CASCADE;
 
 -- 
 -- Constraints for table `user`

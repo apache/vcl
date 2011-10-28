@@ -408,6 +408,7 @@ CREATE TABLE IF NOT EXISTS `serverprofile` (
 
 CREATE TABLE IF NOT EXISTS `serverrequest` (
   `id` mediumint(8) unsigned NOT NULL auto_increment,
+  `serverprofileid` smallint(5) unsigned NOT NULL default '0',
   `requestid` mediumint(8) unsigned NOT NULL,
   `fixedIP` varchar(15) default NULL,
   `fixedMAC` varchar(17) default NULL,
@@ -415,7 +416,10 @@ CREATE TABLE IF NOT EXISTS `serverrequest` (
   `logingroupid` smallint(5) unsigned default NULL,
   `monitored` tinyint(1) unsigned NOT NULL default '0',
   PRIMARY KEY  (`id`),
-  UNIQUE KEY `requestid` (`requestid`)
+  UNIQUE KEY `requestid` (`requestid`),
+  KEY `admingroupid` (`admingroupid`),
+  KEY `logingroupid` (`logingroupid`),
+  KEY `serverprofileid` (`serverprofileid`)
 ) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
@@ -754,6 +758,8 @@ CALL AddConstraintIfNotExists('serverprofile', 'imageid', 'image', 'id');
 --
 
 CALL AddConstraintIfNotExists('serverrequest', 'requestid', 'request', 'id');
+CALL AddConstraintIfNotExists('serverrequest', 'admingroupid', 'usergroup', 'id');
+CALL AddConstraintIfNotExists('serverrequest', 'logingroupid', 'usergroup', 'id');
 
 -- --------------------------------------------------------
 
