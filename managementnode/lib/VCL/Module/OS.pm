@@ -1928,7 +1928,8 @@ sub manage_server_access {
 	if (scalar @userlist_admin > 0) {
 		foreach my $str (@userlist_admin) {
 			my ($username,$uid,$vcl_user_id) = split(/:/, $str);
-			$user_hash{$uid}{"username"} = $username;
+			my ($correct_username, $user_domain) = split /@/, $username;
+         $user_hash{$uid}{"username"} = $correct_username;
 			$user_hash{$uid}{"uid"}	= $uid;
 			$user_hash{$uid}{"vcl_user_id"}	= $vcl_user_id;
 			$user_hash{$uid}{"rootaccess"} = 1;
@@ -1939,8 +1940,9 @@ sub manage_server_access {
 		foreach my $str (@userlist_login) {
 			notify($ERRORS{'OK'}, 0, "admin str= $str");
 			my ($username, $uid,$vcl_user_id) = split(/:/, $str);
+			my ($correct_username, $user_domain) = split /@/, $username;
 			if (!exists($user_hash{$uid})) {
-				$user_hash{$uid}{"username"} = $username;
+				$user_hash{$uid}{"username"} = $correct_username;
 				$user_hash{$uid}{"uid"}	= $uid;
 				$user_hash{$uid}{"vcl_user_id"}	= $vcl_user_id;
 				$user_hash{$uid}{"rootaccess"} = 2;
@@ -1955,13 +1957,13 @@ sub manage_server_access {
 	# Collect users in reservationaccounts table
 	my %res_accounts = get_reservation_accounts($reservation_id);
 	my $not_standalone_list = "";
-	my $standalone = 0;
 	if(defined($ENV{management_node_info}{NOT_STANDALONE}) && $ENV{management_node_info}{NOT_STANDALONE}){
 		$not_standalone_list = $ENV{management_node_info}{NOT_STANDALONE};
 	}
 
 	foreach my $userid (sort keys %user_hash) {
 		next if (!($userid));
+		my $standalone = 0;
 		if(!exists($res_accounts{$userid})){
 			# check affiliation
 			notify($ERRORS{'OK'}, 0, "checking affiliation for $userid");
@@ -1972,6 +1974,7 @@ sub manage_server_access {
 					$standalone = 1;
 				}
 			}
+			
 			# IF standalone - generate password
 			if($standalone) {
 				$user_hash{$userid}{"passwd"} = getpw();
@@ -1986,7 +1989,7 @@ sub manage_server_access {
 			}
 			
 			# Create user on the OS
-			if($self->create_user($user_hash{$userid}{username},$user_hash{passwd},$userid,$user_hash{$userid}{rootaccess},$standalone)) {
+			if($self->create_user($user_hash{$userid}{username},$user_hash{$userid}{passwd},$userid,$user_hash{$userid}{rootaccess},$standalone)) {
 				notify($ERRORS{'OK'}, 0, "Successfully created user $user_hash{$userid}{username} on $computer_node_name");
 			}
 			else {

@@ -2917,6 +2917,10 @@ sub update_server_access {
              else {
                  notify($ERRORS{'CRITICAL'}, 0, "failed to add AllowUsers $server_allow_user_list to external_sshd_config");
              }
+
+				if ($self->execute("/etc/init.d/ext_sshd stop; sleep 2; /etc/init.d/ext_sshd start")) {
+					notify($ERRORS{'DEBUG'}, 0, "restarted ext_sshd");
+				}
         }
 	
 	return 1;
