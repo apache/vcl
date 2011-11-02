@@ -1902,6 +1902,7 @@ sub manage_server_access {
 	my $server_request_id           = $self->data->get_server_request_id();
 	my $server_request_admingroupid = $self->data->get_server_request_admingroupid();
 	my $server_request_logingroupid = $self->data->get_server_request_logingroupid();
+	my $user_login_id_owner         = $self->data->get_user_login_id();
 
 	# Build list of users.
 	# If in admin group set admin flag
@@ -1963,6 +1964,8 @@ sub manage_server_access {
 
 	foreach my $userid (sort keys %user_hash) {
 		next if (!($userid));
+		#Skip reservation owner, this account is processed in the new and reserved states
+		next if ($userid eq $user_login_id_owner);
 		my $standalone = 0;
 		if(!exists($res_accounts{$userid})){
 			# check affiliation
