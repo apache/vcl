@@ -241,6 +241,9 @@ SET @nextimageid_noimage = CONCAT('ALTER TABLE computer CHANGE nextimageid nexti
 PREPARE nextimageid_noimage FROM @nextimageid_noimage;
 EXECUTE nextimageid_noimage;
 
+-- change RAM to mediumint
+ALTER TABLE `computer` CHANGE `RAM` `RAM` MEDIUMINT UNSIGNED NOT NULL DEFAULT '0';
+
 -- --------------------------------------------------------
 
 --
@@ -277,6 +280,15 @@ CREATE TABLE IF NOT EXISTS `connectmethodmap` (
   KEY `OSid` (`OSid`),
   KEY `imagerevisionid` (`imagerevisionid`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+
+-- --------------------------------------------------------
+
+-- 
+--  Table structure for table `image`
+--
+
+-- change minram to mediumint
+ALTER TABLE `image` CHANGE `minram` `minram` MEDIUMINT UNSIGNED NOT NULL DEFAULT '0';
 
 -- --------------------------------------------------------
 
