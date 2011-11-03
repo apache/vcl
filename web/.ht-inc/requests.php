@@ -2986,7 +2986,10 @@ function connectRequest() {
 	foreach($requestData["reservations"] as $key => $res) {
 		$serverIP = $res["reservedIP"];
 		$osname = $res["OS"];
-		$passwd = $res["password"];
+		if(array_key_exists($user['id'], $requestData['passwds'][$res['reservationid']]))
+			$passwd = $requestData['passwds'][$res['reservationid']][$user['id']];
+		else
+			$passwd = '';
 		$connectData = getImageConnectMethodTexts($res['imageid'],
 		                                          $res['imagerevisionid']);
 		$first = 1;

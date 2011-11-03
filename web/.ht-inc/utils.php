@@ -4653,7 +4653,10 @@ function findManagementNode($compid, $start, $nowfuture) {
 /// \b password - password for this computer\n
 /// \b connectIP - IP to which user will connect\n
 /// \b connectport - port to which user will connect\n
-/// \b remoteIP - IP of remote user
+/// \b remoteIP - IP of remote user\n\n
+/// an array of arrays of passwords whose key is 'passwds', with the next key
+/// being the reservationid and the elements being the userid as a key and that
+/// user's password as the value
 ///
 /// \brief creates an array with info about request $id
 ///
@@ -4722,8 +4725,13 @@ function getRequestInfo($id, $returnNULL=0) {
 	       . "ORDER BY rs.id";
 	$qh = doQuery($query, 101);
 	$data["reservations"] = array();
-	while($row = mysql_fetch_assoc($qh))
+	$data['passwds'] = array();
+	$resids = array();
+	while($row = mysql_fetch_assoc($qh)) {
 		array_push($data["reservations"], $row);
+		$resids[] = $row['reservationid'];
+		$data['passwds'][$row['reservationid']][$data['userid']] = $row['password'];
+	}
 	$query = "SELECT id, "
 	       .        "admingroupid, "
 	       .        "logingroupid, "
@@ -4738,6 +4746,15 @@ function getRequestInfo($id, $returnNULL=0) {
 		$data['logingroupid'] = $row['logingroupid'];
 		$data['fixedIP'] = $row['fixedIP'];
 		$data['fixedMAC'] = $row['fixedMAC'];
+		$inids = implode(',', $resids);
+		$query = "SELECT reservationid, "
+		       .        "userid, "
+		       .        "password "
+		       . "FROM reservationaccounts "
+		       . "WHERE reservationid IN ($inids)";
+		$qh = doQuery($query);
+		while($row = mysql_fetch_assoc($qh))
+			$data['passwds'][$row['reservationid']][$row['userid']] = $row['password'];
 	}
 	else
 		$data['serverrequest'] = 0;
@@ -5050,6 +5067,8 @@ function moveReservationsOffComputer($compid=0, $count=0) {
 /// \b serverlogingroupid - id of login user group\n
 /// \b serverlogingroup - name of login user group\n
 /// \b monitored - whether or not request is to be monitored (0 or 1)\n
+/// \b useraccountready - whether or not all accounts for this user have been
+/// created on the reserved machine(s)\n
 /// and an array of subimages named reservations with the following elements
 /// for each subimage:\n
 /// \b resid - id of reservation\n
@@ -5062,7 +5081,11 @@ function moveReservationsOffComputer($compid=0, $count=0) {
 /// \b computerstateid - current stateid of computer\n
 /// \b computerid - id of reserved computer\n
 /// \b IPaddress - IP address of reserved computer\n
-/// \b type - type of computer
+/// \b type - type of computer\n
+/// \b resacctuserid - empty if user account has not been created on this machine
+/// yet, the user's numeric id if it has\n
+/// \b password - password for this user on the machine; if it is empty but
+/// resacctuserid is not empty, the user should use a federated password
 ///
 /// \brief builds an array of current requests made by the user
 ///
@@ -5139,36 +5162,40 @@ function getUserRequests($type, $id=0) {
 		$query .=   "AND sp.requestid IS NOT NULL ";
 	$query .= "ORDER BY rq.start, "
 	       .           "rs.id";
-
-	$qbase2 = "SELECT rs.id AS resid, "
-	        .        "i.name AS image, "
-	        .        "i.prettyname, "
-	        .        "i.id AS imageid, "
-	        .        "rs.imagerevisionid, "
-	        .        "o.prettyname as OS, "
-	        .        "rs.computerid, "
-	        .        "c.currentimageid AS compimageid, "
-	        .        "c.stateid AS computerstateid, "
-	        .        "c.IPaddress, "
-	        .        "c.type AS comptype "
-	        . "FROM reservation rs, "
-	        .      "image i, "
-	        .      "OS o, "
-	        .      "computer c "
-	        . "WHERE rs.imageid = i.id AND "
-	        .       "rs.computerid = c.id AND "
-	        .       "i.OSid = o.id AND "
-	        .       "rs.id != %d AND "
-	        .       "rs.requestid = %d";
 	$qh = doQuery($query, 160);
-	$count = 0;
+	$count = -1;
 	$data = array();
 	$foundids = array();
+	$lastreqid = 0;
 	while($row = mysql_fetch_assoc($qh)) {
-		if(array_key_exists($row['id'], $foundids))
+		if($row['id'] != $lastreqid) {
+			$lastreqid = $row['id'];
+			$count++;
+			$data[$count] = $row;
+			$data[$count]['useraccountready'] = 1;
+			$data[$count]['reservations'] = array();
+		}
+		if(array_key_exists($row['id'], $foundids)) {
+			$data[$count]['reservations'][] = array(
+				'resid' => $row['resid'],
+				'image' => $row['image'],
+				'prettyname' => $row['prettyimage'],
+				'imageid' => $row['imageid'],
+				'imagerevisionid' => $row['imagerevisionid'],
+				'OS' => $row['OS'],
+				'computerid' => $row['computerid'],
+				'compimageid' => $row['compimageid'],
+				'computerstateid' => $row['computerstateid'],
+				'IPaddress' => $row['IPaddress'],
+				'comptype' => $row['comptype'],
+				'password' => $row['password'],
+				'resacctuserid' => $row['resacctuserid']
+			);
+			if(empty($row['resacctuserid']))
+				$data[$count]['useraccountready'] = 0;
 			continue;
+		}
 		$foundids[$row['id']] = 1;
-		$data[$count] = $row;
 		if(! is_null($row['serverrequestid'])) {
 			$data[$count]['server'] = 1;
 			$data[$count]['longterm'] = 0;
@@ -5197,17 +5224,8 @@ function getUserRequests($type, $id=0) {
 			$data[$count]['serverowner'] = 1;
 			$data[$count]['serveradmin'] = 1;
 		}
-		if(! empty($row['resacctuserid']) || $row['userid'] == $id)
-			$data[$count]['useraccountready'] = 1;
-		else
+		if($row['userid'] != $id && empty($row['resacctuserid']))
 			$data[$count]['useraccountready'] = 0;
-		$data[$count]["reservations"] = array();
-		$query2 = sprintf($qbase2, $row['resid'], $row['id']);
-		$qh2 = doQuery($query2, 160);
-		while($row2 = mysql_fetch_assoc($qh2)) {
-			array_push($data[$count]["reservations"], $row2);
-		}
-		$count++;
 	}
 	return $data;
 }
