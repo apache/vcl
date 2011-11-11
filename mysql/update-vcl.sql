@@ -172,7 +172,9 @@ CREATE PROCEDURE `AddConstraintIfNotExists`(
   IN tableName tinytext,
   IN columnName tinytext,
   IN referencedTableName tinytext,
-  IN referencedColumnName tinytext
+  IN referencedColumnName tinytext,
+  IN constraintType tinytext,
+  IN constraintAction tinytext
 )
 BEGIN
   IF NOT EXISTS (
@@ -184,7 +186,18 @@ BEGIN
     AND REFERENCED_COLUMN_NAME=referencedColumnName
   )
   THEN
-    SET @statement_array = CONCAT('ALTER TABLE ', Database(), '.', tableName, ' ADD FOREIGN KEY (', columnName, ') REFERENCES ', Database(), '.', referencedTableName, ' (', referencedColumnName, ') ON UPDATE CASCADE');
+    IF constraintType = 'update'
+    THEN
+      SET @statement_array = CONCAT('ALTER TABLE ', Database(), '.', tableName, ' ADD FOREIGN KEY (', columnName, ') REFERENCES ', Database(), '.', referencedTableName, ' (', referencedColumnName, ') ON UPDATE ', constraintAction);
+    ELSEIF constraintType = 'delete'
+    THEN
+      SET @statement_array = CONCAT('ALTER TABLE ', Database(), '.', tableName, ' ADD FOREIGN KEY (', columnName, ') REFERENCES ', Database(), '.', referencedTableName, ' (', referencedColumnName, ') ON DELETE ', constraintAction);
+    ELSEIF constraintType = 'both'
+    THEN
+      SET @statement_array = CONCAT('ALTER TABLE ', Database(), '.', tableName, ' ADD FOREIGN KEY (', columnName, ') REFERENCES ', Database(), '.', referencedTableName, ' (', referencedColumnName, ') ON DELETE ', constraintAction, ' ON UPDATE ', constraintAction);
+    ELSE
+      SET @statement_array = CONCAT('ALTER TABLE ', Database(), '.', tableName, ' ADD FOREIGN KEY (', columnName, ') REFERENCES ', Database(), '.', referencedTableName, ' (', referencedColumnName, ')');
+    END IF;
     PREPARE statement_string FROM @statement_array;
     EXECUTE statement_string;
   END IF;
@@ -721,7 +734,7 @@ INSERT IGNORE userpriv (usergroupid, privnodeid, userprivtypeid) SELECT usergrou
 -- Constraints for table `computer`
 --
 
-CALL AddConstraintIfNotExists('computer', 'currentimageid', 'image', 'id');
+CALL AddConstraintIfNotExists('computer', 'currentimageid', 'image', 'id', 'update', 'CASCADE');
 
 -- --------------------------------------------------------
 
@@ -729,10 +742,10 @@ CALL AddConstraintIfNotExists('computer', 'currentimageid', 'image', 'id');
 -- Constraints for table `connectmethodmap`
 --
 
-CALL AddConstraintIfNotExists('connectmethodmap', 'connectmethodid', 'connectmethod', 'id');
-CALL AddConstraintIfNotExists('connectmethodmap', 'OStypeid', 'OStype', 'id');
-CALL AddConstraintIfNotExists('connectmethodmap', 'OSid', 'OS', 'id');
-CALL AddConstraintIfNotExists('connectmethodmap', 'imagerevisionid', 'imagerevision', 'id');
+CALL AddConstraintIfNotExists('connectmethodmap', 'connectmethodid', 'connectmethod', 'id', 'both', 'CASCADE');
+CALL AddConstraintIfNotExists('connectmethodmap', 'OStypeid', 'OStype', 'id', 'both', 'CASCADE');
+CALL AddConstraintIfNotExists('connectmethodmap', 'OSid', 'OS', 'id', 'both', 'CASCADE');
+CALL AddConstraintIfNotExists('connectmethodmap', 'imagerevisionid', 'imagerevision', 'id', 'both', 'CASCADE');
 
 -- --------------------------------------------------------
 
@@ -740,8 +753,8 @@ CALL AddConstraintIfNotExists('connectmethodmap', 'imagerevisionid', 'imagerevis
 -- Constraints for table `provisioningOSinstalltype`
 --
  
-CALL AddConstraintIfNotExists('provisioningOSinstalltype', 'provisioningid', 'provisioning', 'id');
-CALL AddConstraintIfNotExists('provisioningOSinstalltype', 'OSinstalltypeid', 'OSinstalltype', 'id');
+CALL AddConstraintIfNotExists('provisioningOSinstalltype', 'provisioningid', 'provisioning', 'id', 'both', 'CASCADE');
+CALL AddConstraintIfNotExists('provisioningOSinstalltype', 'OSinstalltypeid', 'OSinstalltype', 'id', 'both', 'CASCADE');
 
 -- --------------------------------------------------------
 
@@ -749,8 +762,8 @@ CALL AddConstraintIfNotExists('provisioningOSinstalltype', 'OSinstalltypeid', 'O
 -- Constraints for table `reservationaccounts`
 --
 
-CALL AddConstraintIfNotExists('reservationaccounts', 'reservationid', 'reservation', 'id');
-CALL AddConstraintIfNotExists('reservationaccounts', 'userid', 'user', 'id');
+CALL AddConstraintIfNotExists('reservationaccounts', 'reservationid', 'reservation', 'id', 'both', 'CASCADE');
+CALL AddConstraintIfNotExists('reservationaccounts', 'userid', 'user', 'id', 'both', 'CASCADE');
 
 -- --------------------------------------------------------
 
@@ -758,10 +771,10 @@ CALL AddConstraintIfNotExists('reservationaccounts', 'userid', 'user', 'id');
 -- Constraints for table `serverprofile`
 --
 
-CALL AddConstraintIfNotExists('serverprofile', 'ownerid', 'user', 'id');
-CALL AddConstraintIfNotExists('serverprofile', 'admingroupid', 'usergroup', 'id');
-CALL AddConstraintIfNotExists('serverprofile', 'logingroupid', 'usergroup', 'id');
-CALL AddConstraintIfNotExists('serverprofile', 'imageid', 'image', 'id');
+CALL AddConstraintIfNotExists('serverprofile', 'ownerid', 'user', 'id', 'none', '');
+CALL AddConstraintIfNotExists('serverprofile', 'admingroupid', 'usergroup', 'id', 'none', '');
+CALL AddConstraintIfNotExists('serverprofile', 'logingroupid', 'usergroup', 'id', 'none', '');
+CALL AddConstraintIfNotExists('serverprofile', 'imageid', 'image', 'id', 'none', '');
 
 -- --------------------------------------------------------
 
@@ -769,9 +782,9 @@ CALL AddConstraintIfNotExists('serverprofile', 'imageid', 'image', 'id');
 -- Constraints for table `serverrequest`
 --
 
-CALL AddConstraintIfNotExists('serverrequest', 'requestid', 'request', 'id');
-CALL AddConstraintIfNotExists('serverrequest', 'admingroupid', 'usergroup', 'id');
-CALL AddConstraintIfNotExists('serverrequest', 'logingroupid', 'usergroup', 'id');
+CALL AddConstraintIfNotExists('serverrequest', 'requestid', 'request', 'id', 'delete', 'CASCADE');
+CALL AddConstraintIfNotExists('serverrequest', 'admingroupid', 'usergroup', 'id', 'update', 'CASCADE');
+CALL AddConstraintIfNotExists('serverrequest', 'logingroupid', 'usergroup', 'id', 'update', 'CASCADE');
 
 -- --------------------------------------------------------
 
@@ -779,7 +792,8 @@ CALL AddConstraintIfNotExists('serverrequest', 'logingroupid', 'usergroup', 'id'
 -- Constraints for table `vmhost`
 --
  
-CALL AddConstraintIfNotExists('vmhost', 'vmprofileid', 'vmprofile', 'id');
+CALL AddConstraintIfNotExists('vmhost', 'vmprofileid', 'vmprofile', 'id', 'update', 'CASCADE');
+CALL AddConstraintIfNotExists('vmhost', 'computerid', 'computer', 'id', 'update', 'CASCADE');
 
 -- --------------------------------------------------------
 
@@ -787,7 +801,7 @@ CALL AddConstraintIfNotExists('vmhost', 'vmprofileid', 'vmprofile', 'id');
 -- Constraints for table `winKMS`
 --
 
-CALL AddConstraintIfNotExists('winKMS', 'affiliationid', 'affiliation', 'id');
+CALL AddConstraintIfNotExists('winKMS', 'affiliationid', 'affiliation', 'id', 'update', 'CASCADE');
  
 -- --------------------------------------------------------
 
@@ -795,7 +809,7 @@ CALL AddConstraintIfNotExists('winKMS', 'affiliationid', 'affiliation', 'id');
 -- Constraints for table `winProductKey`
 --
 
-CALL AddConstraintIfNotExists('winProductKey', 'affiliationid', 'affiliation', 'id');
+CALL AddConstraintIfNotExists('winProductKey', 'affiliationid', 'affiliation', 'id', 'update', 'CASCADE');
  
 -- --------------------------------------------------------
 
