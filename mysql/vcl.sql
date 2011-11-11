@@ -1949,8 +1949,8 @@ ALTER TABLE `provisioning`
 -- Constraints for table `provisioningOSinstalltype`
 --
 ALTER TABLE `provisioningOSinstalltype`
-  ADD CONSTRAINT `provisioningOSinstalltype_ibfk_2` FOREIGN KEY (`OSinstalltypeid`) REFERENCES `OSinstalltype` (`id`) ON UPDATE CASCADE,
-  ADD CONSTRAINT `provisioningOSinstalltype_ibfk_1` FOREIGN KEY (`provisioningid`) REFERENCES `provisioning` (`id`) ON UPDATE CASCADE;
+  ADD CONSTRAINT `provisioningOSinstalltype_ibfk_2` FOREIGN KEY (`OSinstalltypeid`) REFERENCES `OSinstalltype` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  ADD CONSTRAINT `provisioningOSinstalltype_ibfk_1` FOREIGN KEY (`provisioningid`) REFERENCES `provisioning` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- 
 -- Constraints for table `querylog`
