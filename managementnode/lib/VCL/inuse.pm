@@ -187,6 +187,12 @@ sub process {
 	# Is this a poll or end time
 	if ($request_checktime eq "poll") {
 		notify($ERRORS{'OK'}, 0, "beginning to poll");
+
+		if ($self->os->can('firewall_compare_update')) {
+         if ($self->os->firewall_compare_update()) {
+				notify($ERRORS{'OK'}, 0, "confirmed firewall scope has been updated");
+			}
+		}	
 		
 		if ($image_os_type =~ /windows/) {
 			if (firewall_compare_update($computer_nodename, $reservation_remoteip, $identity_key, $image_os_type)) {

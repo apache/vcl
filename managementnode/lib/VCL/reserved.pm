@@ -336,6 +336,10 @@ sub process {
 		notify($ERRORS{'OK'}, 0, "$remote_ip connected to $nodename");
 
 		insertloadlog($reservation_id, $computer_id, "connected", "reserved: user connected to remote machine");
+		
+		if($self->os->process_connect_methods($remote_ip, 1)) {
+			notify($ERRORS{'OK'}, 0, "process_connect_methods return successfully  $remote_ip $nodename");
+		}
 
 		# Update the request state to either inuse or imageinuse
 		if (update_request_state($request_id, "inuse", "reserved")) {
@@ -368,6 +372,10 @@ sub process {
 	elsif ($retval_conn eq "conn_wrong_ip") {
 		# does the same as above, until we make a firm decision as to how to handle this
 
+		if($self->os->process_connect_methods($remote_ip, 1)) {
+         notify($ERRORS{'OK'}, 0, "process_connect_methods return successfully  $remote_ip $nodename");
+      }
+
 		# Update the request state to inuse
 		if (update_request_state($request_id, "inuse", "reserved")) {
 			notify($ERRORS{'OK'}, 0, "setting request into inuse state");
@@ -391,6 +399,7 @@ sub process {
 		else {
 			notify($ERRORS{'CRITICAL'}, 0, "unable to update lastcheck time for reservation $reservation_id");
 		}
+	
 
 		notify($ERRORS{'OK'}, 0, "exiting");
 		exit;

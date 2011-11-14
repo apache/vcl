@@ -2046,13 +2046,31 @@ sub process_connect_methods {
 	my $connect_method_info = get_connect_method_info($imagerevision_id);
 	if (!$connect_method_info) {
 		notify($ERRORS{'WARNING'}, 0, "no connect methods are configured for image revision $imagerevision_id");
+		return;
 	}
 	
-	my $remote_ip = $self->data->get_reservation_remote_ip();
+	my $remote_ip = shift;
 	if (!$remote_ip) {
-		notify($ERRORS{'WARNING'}, 0, "reservation remote IP address is not defined, connect methods will be available from any IP address");
-		$remote_ip = '0.0.0.0/0.0.0.0';
+		notify($ERRORS{'OK'}, 0, "reservation remote IP address is not defined, connect methods will be available from any IP address");
+		$remote_ip = '0.0.0.0/0';
 	}
+	elsif ($remote_ip =~ /any/i){
+		notify($ERRORS{'OK'}, 0, "reservation remote IP address is set to ANY, connect methods will be available from any IP address");
+		$remote_ip = '0.0.0.0/0';
+	}
+	else {
+		$remote_ip .= "/24";
+	}
+	
+	my $overwrite = shift;
+	if (!$overwrite) {
+		notify($ERRORS{'DEBUG'}, 0, "overwrite value was not passed as an argument setting to 0");
+		$overwrite = 0;
+	}
+	
+	my $state = $self->data->get_request_state_name();
+	notify($ERRORS{'DEBUG'}, 0, "state = $state");
+	
 	
 	CONNECT_METHOD: for my $connect_method_id (sort keys %{$connect_method_info} ) {
 		notify($ERRORS{'DEBUG'}, 0, "processing connect method:\n" . format_data($connect_method_info->{$connect_method_id}));
@@ -2065,10 +2083,33 @@ sub process_connect_methods {
 		my $startup_script  = $connect_method_info->{$connect_method_id}{startupscript};
 		my $install_script  = $connect_method_info->{$connect_method_id}{installscript};
 		my $disabled        = $connect_method_info->{$connect_method_id}{connectmethodmap}{disabled};
+
+		if( $state =~ /deleted|timeout/) {
+			$disabled = 1;
+		}
 		
 		if ($disabled) {
-			# TODO: Add code to disable the service, close the firewall port, etc
-			notify($ERRORS{'OK'}, 0, "skipping '$name' connect method configuration, it should be disabled on $computer_node_name");
+			if ($self->service_exists($service_name)) {
+               notify($ERRORS{'DEBUG'}, 0, "attempting to stop '$service_name' service for '$name' connect method on $computer_node_name");
+               if ($self->stop_service($service_name)) {
+                  notify($ERRORS{'OK'}, 0, "'$service_name' stop on $computer_node_name");
+               }
+               else {
+                  notify($ERRORS{'WARNING'}, 0, "failed to stop '$service_name' service for '$name' connect method on $computer_node_name");
+               }
+         }
+			
+			#Disable firewall port
+			if (defined($port)) {
+            notify($ERRORS{'DEBUG'}, 0, "attempting to open firewall port $port on $computer_node_name for '$name' connect method");
+            if ($self->disable_firewall_port($protocol, $port, $remote_ip, 1)) {
+               notify($ERRORS{'OK'}, 0, "closing firewall port $port on $computer_node_name for $remote_ip $name connect method");
+            }
+            else {
+               notify($ERRORS{'WARNING'}, 0, "failed to close firewall port $port on $computer_node_name for $remote_ip $name connect method");
+            }
+         }
+			
 		}
 		else {
 			# Attempt to start and configure the connect method
@@ -2088,29 +2129,6 @@ sub process_connect_methods {
 						notify($ERRORS{'WARNING'}, 0, "failed to start '$service_name' service for '$name' connect method on $computer_node_name");
 					}
 				}
-				#elsif ($install_script) {
-				#	notify($ERRORS{'DEBUG'}, 0, "'$service_name' service for '$name' connect method does not exist on $computer_node_name, attempting to execute connect method install script");
-				#	my ($install_exit_status, $install_output) = $self->execute($install_script, 1, 600, 1);
-				#	if (!defined($install_output)) {
-				#		notify($ERRORS{'WARNING'}, 0, "failed to run command to execute install script for '$name' connect method on $computer_node_name, command: '$install_script'");
-				#	}
-				#	else {
-				#		notify($ERRORS{'OK'}, 0, "executed install script for '$name' connect method on $computer_node_name, command: '$install_script', exit status: $install_exit_status, output:\n" . join("\n", @$install_output));
-				#		
-				#		if ($self->service_exists($service_name)) {
-				#			if ($self->start_service($service_name)) {
-				#				notify($ERRORS{'OK'}, 0, "'$service_name' started on $computer_node_name");
-				#				$service_started = 1;
-				#			}
-				#			else {
-				#				notify($ERRORS{'WARNING'}, 0, "failed to start '$service_name' service after executing install script for '$name' connect method on $computer_node_name");
-				#			}
-				#		}
-				#		else {
-				#			notify($ERRORS{'WARNING'}, 0, "'$service_name' service does NOT exist after executing install script for '$name' connect method on $computer_node_name");
-				#		}
-				#	}
-				#}
 				else {
 					notify($ERRORS{'WARNING'}, 0, "'$service_name' service for '$name' connect method does NOT exist on $computer_node_name, connect method install script is not defined");
 				}
@@ -2134,11 +2152,11 @@ sub process_connect_methods {
 			# Open the firewall port
 			if (defined($port)) {
 				notify($ERRORS{'DEBUG'}, 0, "attempting to open firewall port $port on $computer_node_name for '$name' connect method");
-				if ($self->enable_firewall_port($protocol, $port, "$remote_ip/24", 1)) {
-					notify($ERRORS{'OK'}, 0, "opened firewall port $port on $computer_node_name for '$name' connect method");
+				if ($self->enable_firewall_port($protocol, $port, $remote_ip, 1)) {
+					notify($ERRORS{'OK'}, 0, "opened firewall port $port on $computer_node_name for $remote_ip $name connect method");
 				}
 				else {
-					notify($ERRORS{'WARNING'}, 0, "failed to open firewall port $port on $computer_node_name for '$name' connect method");
+					notify($ERRORS{'WARNING'}, 0, "failed to open firewall port $port on $computer_node_name for $remote_ip $name connect method");
 				}
 			}
 		}

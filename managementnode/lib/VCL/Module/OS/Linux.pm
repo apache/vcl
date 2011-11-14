@@ -54,6 +54,7 @@ use diagnostics;
 no warnings 'redefine';
 
 use VCL::utils;
+use Net::Netmask;
 
 ##############################################################################
 
@@ -112,6 +113,7 @@ sub pre_capture {
 	
 	my $computer_node_name       = $self->data->get_computer_node_name();
 	notify($ERRORS{'OK'}, 0, "beginning Linux-specific image capture preparation tasks");
+	
 
 	if (!$self->file_exists("/root/.vclcontrol/vcl_exclude_list.sample")) {
       notify($ERRORS{'DEBUG'}, 0, "/root/.vclcontrol/vcl_exclude_list.sample does not exists");
@@ -131,8 +133,12 @@ sub pre_capture {
 	}
 
 	#Clean up connection methods
-	if($self->process_connect_methods() ){
+	if($self->process_connect_methods("any", 1) ){
 		notify($ERRORS{'OK'}, 0, "processed connection methods on $computer_node_name");
+	}
+	
+	if(!$self->clean_iptables()) {
+		return 0;
 	}
 
 	# Try to clear /tmp
@@ -233,6 +239,8 @@ sub post_load {
 	my $computer_short_name   = $self->data->get_computer_short_name();
 	my $computer_node_name    = $self->data->get_computer_node_name();
 	my $image_os_install_type = $self->data->get_image_os_install_type();
+	my $management_node_ip	  = $self->data->get_management_node_ipaddress();
+	my $mn_private_ip 		  = $self->mn_os->get_private_ip_address();
 	
 	notify($ERRORS{'OK'}, 0, "initiating Linux post_load: $image_name on $computer_short_name");
 
@@ -302,6 +310,10 @@ sub post_load {
 	else {
 		notify($ERRORS{'DEBUG'}, 0, "ran $script_path");
 	}
+	
+	if($self->enable_firewall_port("tcp", "any", $mn_private_ip, 1) ){
+      notify($ERRORS{'OK'}, 0, "added MN_Priv_IP $mn_private_ip to firewall on $computer_short_name");
+   }
 	
 	# Attempt to generate ifcfg-eth* files and ifup any interfaces which the file does not exist
 	$self->activate_interfaces();
@@ -960,8 +972,8 @@ sub grant_access {
 	}    #foreach
 	notify($ERRORS{'OK'}, 0, "started ext_sshd on $computer_node_name");
 
-	if($self->process_connect_methods('start') ){
-		notify($ERRORS{'OK'}, 0, "processed connection methods on $computer_node_name");
+	if($self->process_connect_methods("", 1) ){
+		notify($ERRORS{'OK'}, 0, "processed connection methods on $computer_node_name setting 0.0.0.0 for all allowed ports");
 	}
 
 	
@@ -1024,6 +1036,7 @@ sub sanitize {
 	}
 
 	my $computer_node_name = $self->data->get_computer_node_name();
+	my $mn_private_ip         = $self->mn_os->get_private_ip_address();
 
 	# Make sure user is not connected
 	if ($self->is_connected()) {
@@ -1040,7 +1053,7 @@ sub sanitize {
 	}
 	
 	#Clean up connection methods
-   if($self->process_connect_methods() ){
+   if($self->process_connect_methods($mn_private_ip, 1) ){
       notify($ERRORS{'OK'}, 0, "processed connection methods on $computer_node_name");
    }
 
@@ -3038,10 +3051,14 @@ sub service_exists {
 		notify($ERRORS{'DEBUG'}, 0, "'$service_name' service does not exist on $computer_node_name");
 		return 0;
 	}
-	elsif ($exit_status == 0 || grep(/not referenced in any runlevel/i, @$output)) {
+	elsif (defined($exit_status) && $exit_status == 0 ) {
+		notify($ERRORS{'DEBUG'}, 0, "'$service_name' service exists");
+		return 1;
+	}
+	elsif (defined($exit_status) && grep(/not referenced in any runlevel/i, @$output)) {
 		# chkconfig may display the following if the service exists but has not been added:
 		# service ext_sshd supports chkconfig, but is not referenced in any runlevel (run 'chkconfig --add ext_sshd')
-		notify($ERRORS{'DEBUG'}, 0, "'$service_name' service exists but is not referenced in any runlevel");
+		notify($ERRORS{'DEBUG'}, 0, "'$service_name' service exists but is not referenced in any runlevel: output:\n" . join("\n", @$output));
 	}
 	else {
 		notify($ERRORS{'WARNING'}, 0, "unable to determine if '$service_name' service exists, exit status: $exit_status, output:\n" . join("\n", @$output));
@@ -3349,6 +3366,45 @@ sub get_total_memory {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 sanitize_firewall
+ 
+  Parameters  : $scope (optional), 
+  Returns     : boolean
+  Description : Removes all entries for INUPT chain and Sets iptables firewall for private management node IP
+ 
+=cut
+
+sub sanitize_firewall {
+   my $self = shift;
+   if (ref($self) !~ /VCL::Module/i) {
+      notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+      return;
+   }
+
+	my $scope = shift;
+	if(!defined($scope)) {
+		notify($ERRORS{'CRITICAL'}, 0, "scope variable was not passed in as an arguement");
+      return;
+	}
+	
+	my $computer_node_name = $self->data->get_computer_node_name();
+   my $mn_private_ip = $self->mn_os->get_private_ip_address();
+	
+	my $firewall_configuration = $self->get_firewall_configuration() || return;
+   my $chain;
+   my $iptables_del_cmd;
+	my $INPUT_CHAIN = "INPUT";
+
+   for my $num (sort keys %{$firewall_configuration->{$INPUT_CHAIN}} ) {
+
+	
+	}
+
+
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 enable_firewall_port
  
   Parameters  : $protocol, $port, $scope (optional), $overwrite_existing (optional), $name (optional), $description (optional)
@@ -3364,6 +3420,13 @@ sub enable_firewall_port {
       return;
    }
 	
+	# Check to see if this distro has iptables
+	# If not return 1 so it does not fail
+	if (!($self->service_exists("iptables"))) {
+		notify($ERRORS{'WARNING'}, 0, "iptables does not exist on this OS");	
+		return 1;
+	}
+	
 	my ($protocol, $port, $scope_argument, $overwrite_existing, $name, $description) = @_;
 	if (!defined($protocol) || !defined($port)) {
 		notify($ERRORS{'WARNING'}, 0, "protocol and port arguments were not supplied");
@@ -3371,12 +3434,114 @@ sub enable_firewall_port {
 	}
 	
    my $computer_node_name = $self->data->get_computer_node_name();
+	my $mn_private_ip = $self->mn_os->get_private_ip_address();
 	
 	$protocol = lc($protocol);
 	
-	my $command = "/sbin/iptables -I INPUT 1 -m state --state NEW,RELATED,ESTABLISHED -m $protocol -p $protocol --dport $port -j ACCEPT";
+	$scope_argument = '' if (!defined($scope_argument));
+
+   $name = '' if !$name;
+   $description = '' if !$description;
+
+   my $scope;
+
+	my $INPUT_CHAIN = "INPUT";
+
 	
-	if ($scope_argument) {
+	my $firewall_configuration = $self->get_firewall_configuration() || return;
+	my $chain;
+	my $iptables_del_cmd;
+
+	for my $num (sort keys %{$firewall_configuration->{$INPUT_CHAIN}} ) {
+   	my $existing_scope = $firewall_configuration->{$INPUT_CHAIN}{$num}{$protocol}{$port}{scope} || '';
+   	my $existing_name = $firewall_configuration->{$INPUT_CHAIN}{$num}{$protocol}{$port}{name} || '';
+   	my $existing_description = $firewall_configuration->{$INPUT_CHAIN}{$num}{$protocol}{$port}{name} || '';
+	
+   	if ($existing_scope) {
+			notify($ERRORS{'DEBUG'}, 0, " num= $num protocol= $protocol port= $port existing_scope= $existing_scope existing_name= $existing_name existing_description= $existing_description ");
+
+			if ($overwrite_existing) {
+         	$scope = $self->parse_firewall_scope($scope_argument);
+				$iptables_del_cmd = "iptables -D $INPUT_CHAIN $num";
+         	if (!$scope) {
+            	notify($ERRORS{'WARNING'}, 0, "failed to parse firewall scope argument: '$scope_argument'");
+            	return;
+         	}
+
+         	notify($ERRORS{'DEBUG'}, 0, "existing firewall opening on $computer_node_name will be replaced:\n" .
+            "name: '$existing_name'\n" .
+				"num: '$num'\n" .
+            "protocol: $protocol\n" .
+				"port/type: $port\n" .
+            "existing scope: '$existing_scope'\n" .
+            "new scope: $scope\n" .
+            "overwrite existing rule: " . ($overwrite_existing ? 'yes' : 'no')
+         	);
+      	}
+			else {
+         	my $parsed_existing_scope = $self->parse_firewall_scope($existing_scope);
+         	if (!$parsed_existing_scope) {
+            	notify($ERRORS{'WARNING'}, 0, "failed to parse existing firewall scope: '$existing_scope'");
+           	 return;
+         	}
+
+         	$scope = $self->parse_firewall_scope("$scope_argument,$existing_scope");
+         	if (!$scope) {
+            	notify($ERRORS{'WARNING'}, 0, "failed to parse firewall scope argument appended with existing scope: '$scope_argument,$existing_scope'");
+            	return;
+         	}
+
+         	if ($scope eq $parsed_existing_scope) {
+            	notify($ERRORS{'DEBUG'}, 0, "firewall is already open on $computer_node_name, existing scope matches scope argument:\n" .
+               "name: '$existing_name'\n" .
+               "protocol: $protocol\n" .
+               "port/type: $port\n" .
+               "scope: $scope\n" .
+               "overwrite existing rule: " . ($overwrite_existing ? 'yes' : 'no')
+            	);
+            	return 1;
+         	}
+      	}
+		}
+		else {
+			next;
+   	}
+	}
+
+     	if(!$scope) {
+			$scope = $self->parse_firewall_scope($scope_argument);
+     		if (!$scope) {
+        		notify($ERRORS{'WARNING'}, 0, "failed to parse firewall scope argument: '$scope_argument'");
+        		return;
+     		}
+		}
+
+  
+   	$name = "VCL: allow $protocol/$port from $scope" if !$name;
+
+   	$name = substr($name, 0, 60) . "..." if length($name) > 60;
+
+		my $command;
+
+		if ($iptables_del_cmd ){
+			$command = "$iptables_del_cmd ; ";
+		
+		}
+
+		$command .= "/sbin/iptables -I INPUT 1 -m state --state NEW,RELATED,ESTABLISHED -m $protocol -p $protocol -j ACCEPT";
+	
+		if ($port =~ /\d+/){
+			$command .= " --dport $port";
+		}
+
+		if ($scope_argument) {
+		#	if($scope_argument eq '0.0.0.0') {
+		#		$scope_argument .= "/0";
+		#	}
+		#	else {
+		#		$scope_argument .= "/24";	
+		#	}	
+	
 		$command .= " -s $scope_argument";
 	}
 
@@ -3426,36 +3591,61 @@ sub disable_firewall_port {
       return;
    }
 
-   my $port = shift;
-   if(!$port) {
-      notify($ERRORS{'CRITICAL'}, 0, "Input variable port was not passed in as an argument");
-      return 0;
-   }
-
-   my $computer_node_name = $self->data->get_computer_node_name();
-   my $remote_ip = $self->data->get_reservation_remote_ip();
-
-	my $command = "sed -i -e '/.*-p tcp --dport $port -j ACCEPT$/d' /etc/sysconfig/iptables";
-	my ($status, $output) = $self->execute($command);
-
-	if (defined $status && $status == 0) {
-      notify($ERRORS{'DEBUG'}, 0, "executed command $command on $computer_node_name");
-   }
-   else {
-      notify($ERRORS{'WARNING'}, 0, "output from iptables:" . join("\n", @$output));
+	# Check to see if this distro has iptables
+   # If not return 1 so it does not fail
+   if (!($self->service_exists("iptables"))) {
+      notify($ERRORS{'WARNING'}, 0, "iptables does not exist on this OS");
+      return 1;
    }
 	
-	#restart iptables
-	$command = "/etc/init.d/iptables restart";
-	my ($status_iptables,$output_iptables) = $self->execute($command);
-	if (defined $status_iptables && $status_iptables == 0) {
-      notify($ERRORS{'DEBUG'}, 0, "executed command $command on $computer_node_name");
-	}
-	else {
-      notify($ERRORS{'WARNING'}, 0, "output from iptables:" . join("\n", @$output_iptables));
+	my ($protocol, $port, $scope_argument, $overwrite_existing, $name, $description) = @_;
+	if (!defined($protocol) || !defined($port)) {
+     notify($ERRORS{'WARNING'}, 0, "protocol and port arguments were not supplied");
+     return;
 	}
 
-	return 1;
+   my $computer_node_name = $self->data->get_computer_node_name();
+	my $mn_private_ip = $self->mn_os->get_private_ip_address();
+
+   $protocol = lc($protocol);
+
+   $scope_argument = '' if (!defined($scope_argument));
+
+   $name = '' if !$name;
+   $description = '' if !$description;
+
+   my $scope;
+
+   my $INPUT_CHAIN = "INPUT";
+
+   my $firewall_configuration = $self->get_firewall_configuration() || return;
+   my $chain;
+   my $command;
+
+   for my $num (sort keys %{$firewall_configuration->{$INPUT_CHAIN}} ) {
+		my $existing_scope = $firewall_configuration->{$INPUT_CHAIN}{$num}{$protocol}{$port}{scope} || '';
+		my $existing_name = $firewall_configuration->{$INPUT_CHAIN}{$num}{$protocol}{$port}{name} || '';
+		if($existing_scope) {
+			$command = "iptables -D $INPUT_CHAIN $num";
+
+			notify($ERRORS{'DEBUG'}, 0, "attempting to execute command on $computer_node_name: '$command'");
+   		my ($status, $output) = $self->execute($command);
+   		if (defined $status && $status == 0) {
+       		notify($ERRORS{'DEBUG'}, 0, "executed command on $computer_node_name: '$command'");
+   		}
+   		else {
+       		notify($ERRORS{'WARNING'}, 0, "output from iptables:\n" . join("\n", @$output));
+   		}
+
+   		# Save rules to sysconfig/iptables -- incase of reboot
+   		my $iptables_save_cmd = "/sbin/iptables-save > /etc/sysconfig/iptables";
+   		my ($status_save, $output_save) = $self->execute($iptables_save_cmd);
+   		if (defined $status_save && $status_save == 0) {
+       		notify($ERRORS{'DEBUG'}, 0, "executed command $iptables_save_cmd on $computer_node_name");
+   		}
+		}
+	}
+   return 1;
 
 }
 
@@ -3557,9 +3747,486 @@ sub generate_vclcontrol_sample_files {
 	return 1;	
 
 }
+
+=head2 get_firewall_configuration
+
+ Parameters  : none
+ Returns     : hash reference
+ Description : Retrieves information about the open firewall ports on the
+               computer and constructs a hash. The hash keys are protocol names.
+               Each protocol key contains a hash reference. The keys are either
+               port numbers or ICMP types.
+               Example:
+               
+                  "ICMP" => {
+                    8 => {
+                      "description" => "Allow inbound echo request"
+                    }
+                  },
+                  "TCP" => {
+                    22 => {
+                      "interface_names" => [
+                        "Local Area Connection 3"
+                      ],
+                      "name" => "sshd"
+                    },
+                    3389 => {
+                      "name" => "Remote Desktop",
+                      "scope" => "192.168.53.54/255.255.255.255"
+                    },
+
+=cut
+
+sub get_firewall_configuration {
+   my $self = shift;
+   if (ref($self) !~ /linux/i) {
+      notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+      return;
+   }
+
+	my $computer_node_name = $self->data->get_computer_node_name();	
+	my $firewall_configuration = {};
+
+	# Check to see if this distro has iptables
+   # If not return 1 so it does not fail
+   if (!($self->service_exists("iptables"))) {
+      notify($ERRORS{'WARNING'}, 0, "iptables does not exist on this OS");
+      return 1;
+   }
+	
+	my $port_command = "iptables -L --line-number -n";
+	my ($iptables_exit_status, $output_iptables) = $self->execute($port_command);
+   if (!defined($output_iptables)) {
+      notify($ERRORS{'WARNING'}, 0, "failed to run command to show open firewall ports on $computer_node_name");
+      return;
+   }
+
+	#notify($ERRORS{'DEBUG'}, 0, "output from iptables:\n" . join("\n", @$output_iptables));
+	
+
+	# Execute the iptables -L --line-number -n command to retrieve firewall port openings
+   # Expected output:
+	#Chain INPUT (policy ACCEPT 0 packets, 0 bytes)
+	#num  target     prot opt source               destination         
+	#1    RH-Firewall-1-INPUT  all  --  0.0.0.0/0            0.0.0.0/0           
+
+	#Chain FORWARD (policy ACCEPT)
+	#num  target     prot opt source               destination         
+	#1    RH-Firewall-1-INPUT  all  --  0.0.0.0/0            0.0.0.0/0           
+
+	#Chain OUTPUT (policy ACCEPT)
+	#num  target     prot opt source               destination         
+
+	#Chain RH-Firewall-1-INPUT (2 references)
+	#num  target     prot opt source               destination         
+	#1    ACCEPT     all  --  0.0.0.0/0            0.0.0.0/0           
+	#2    ACCEPT     all  --  0.0.0.0/0            0.0.0.0/0           
+	#3    ACCEPT     icmp --  0.0.0.0/0            0.0.0.0/0           icmp type 255 
+	#4    ACCEPT     esp  --  0.0.0.0/0            0.0.0.0/0           
+	#5    ACCEPT     ah   --  0.0.0.0/0            0.0.0.0/0           
+	#6    ACCEPT     all  --  0.0.0.0/0            0.0.0.0/0           state RELATED,ESTABLISHED 
+	#7    ACCEPT     tcp  --  0.0.0.0/0            0.0.0.0/0           state NEW tcp dpt:22 
+	#8    ACCEPT     tcp  --  0.0.0.0/0            0.0.0.0/0           state NEW tcp dpt:3389 
+	#9    REJECT     all  --  0.0.0.0/0            0.0.0.0/0           reject-with icmp-host-prohibited
+
+
+   my $chain;
+   my $previous_protocol;
+   my $previous_port;
+
+	for my $line (@$output_iptables) {
+		if ($line =~ /^Chain\s+(\S+)\s+(.*)/ig) {
+         $chain = $1;
+			notify($ERRORS{'DEBUG'}, 0, "output Chain = $chain");
+      }
+		elsif($line =~ /^(\d+)\s+([A-Z]*)\s+([a-z]*)\s+(--)\s+(\S+)\s+(\S+)\s+(.*)/ig ) {
+		
+			my $num = $1;
+			my $target = $2;
+			my $protocol = $3;
+			my $scope = $5;
+			my $destination =$6;
+			my $port_string = $7 if (defined($7));
+			my $port = ''; 
+			my $name;
+		
+		
+			if (defined($port_string) && ($port_string =~ /([\s(a-zA-Z)]*)(dpt:)(\d+)/ig )){
+				$port = $3;	
+				notify($ERRORS{'DEBUG'}, 0, "output rule: $num, $target, $protocol, $scope, $destination, $port ");
+			}
+
+			if (!$port) {
+				$port = "any";
+			}
+			
+			my $services_cmd = "cat /etc/services";
+			my ($services_status, $service_output) = $self->execute($services_cmd);
+			if (!defined($service_output)) {
+      		notify($ERRORS{'DEBUG'}, 0, "failed to get /etc/services");
+   		}
+   		else {
+				for my $sline (@$service_output) {
+					if ( $sline =~ /(^[_-a-zA-Z1-9]+)\s+($port\/$protocol)\s+(.*) /ig ){
+						$name = $1;
+					} 
+				}
+				
+			}		
+			
+			$name = $port if (!$name);
+
+			$firewall_configuration->{$chain}->{$num}{$protocol}{$port}{name}= $name;
+			$firewall_configuration->{$chain}->{$num}{$protocol}{$port}{number}= $num;
+			$firewall_configuration->{$chain}->{$num}{$protocol}{$port}{scope}= $scope;
+			$firewall_configuration->{$chain}->{$num}{$protocol}{$port}{target}= $target;
+			$firewall_configuration->{$chain}->{$num}{$protocol}{$port}{destination}= $destination;
+			
+
+			if (!defined($previous_protocol) ||
+             !defined($previous_port) ||
+             !defined($firewall_configuration->{$previous_protocol}) ||
+             !defined($firewall_configuration->{$previous_protocol}{$previous_port})
+             ) {
+         	next;
+      	}
+			elsif ($scope !~ /0.0.0.0\/0/) {
+				$firewall_configuration->{$previous_protocol}{$previous_port}{scope} = $scope;
+			}
+		}
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "retrieved firewall configuration from $computer_node_name:\n" . format_data($firewall_configuration));
+   return $firewall_configuration;
+	
+	
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 parse_firewall_scope
+
+ Parameters  : @scope_strings
+ Returns     : string
+ Description : Parses an array of firewall scope strings and collpases them into
+               a simplified scope if possible. A comma-separated string is
+               returned. The scope string argument may be in the form:
+                  -192.168.53.54/255.255.255.192
+                  -192.168.53.54/24
+                  -192.168.53.54
+                  -*
+                  -Any
+                  -LocalSubnet
+
+=cut
+
+sub parse_firewall_scope {
+   my $self = shift;
+   if (ref($self) !~ /linux/i) {
+      notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+      return;
+   }
+
+   my @scope_strings = @_;
+   if (!@scope_strings) {
+      notify($ERRORS{'WARNING'}, 0, "scope array argument was not supplied");
+      return;
+   }
+
+   my @netmask_objects;
+
+   for my $scope_string (@scope_strings) {
+      if ($scope_string =~ /(\*|Any)/i) {
+         my $netmask_object = new Net::Netmask('any');
+         push @netmask_objects, $netmask_object;
+      }
+
+      elsif ($scope_string =~ /LocalSubnet/i) {
+         my $network_configuration = $self->get_network_configuration() || return;
+
+         for my $interface_name (sort keys %$network_configuration) {
+            for my $ip_address (keys %{$network_configuration->{$interface_name}{ip_address}}) {
+               my $subnet_mask = $network_configuration->{$interface_name}{ip_address}{$ip_address};
+
+               my $netmask_object_1 = new Net::Netmask("$ip_address/$subnet_mask");
+               if ($netmask_object_1) {
+                  push @netmask_objects, $netmask_object_1;
+               }
+               else {
+                  notify($ERRORS{'WARNING'}, 0, "failed to create Net::Netmask object, IP address: $ip_address, subnet mask: $subnet_mask");
+                  return;
+               }
+            }
+         }
+      }
+
+      elsif (my @scope_sections = split(/,/, $scope_string)) {
+         for my $scope_section (@scope_sections) {
+
+            if (my ($start_address, $end_address) = $scope_section =~ /^([\d\.]+)-([\d\.]+)$/) {
+               my @netmask_range_objects = Net::Netmask::range2cidrlist($start_address, $end_address);
+               if (@netmask_range_objects) {
+                  push @netmask_objects, @netmask_range_objects;
+               }
+               else {
+                  notify($ERRORS{'WARNING'}, 0, "failed to call Net::Netmask::range2cidrlist to create an array of objects covering IP range: $start_address-$end_address");
+                  return;
+               }
+            }
+
+            elsif (my ($ip_address, $subnet_mask) = $scope_section =~ /^([\d\.]+)\/([\d\.]+)$/) {
+               my $netmask_object = new Net::Netmask("$ip_address/$subnet_mask");
+               if ($netmask_object) {
+                  push @netmask_objects, $netmask_object;
+               }
+               else {
+                  notify($ERRORS{'WARNING'}, 0, "failed to create Net::Netmask object, IP address: $ip_address, subnet mask: $subnet_mask");
+                  return;
+               }
+            }
+
+            elsif (($ip_address) = $scope_section =~ /^([\d\.]+)$/) {
+               my $netmask_object = new Net::Netmask("$ip_address");
+               if ($netmask_object) {
+                  push @netmask_objects, $netmask_object;
+               }
+               else {
+                  notify($ERRORS{'WARNING'}, 0, "failed to create Net::Netmask object, IP address: $ip_address");
+                  return;
+               }
+            }
+
+            else {
+               notify($ERRORS{'WARNING'}, 0, "unable to parse '$scope_section' section of scope: '$scope_string'");
+               return;
+            }
+         }
+      }
+
+      else {
+         notify($ERRORS{'WARNING'}, 0, "unexpected scope format: '$scope_string'");
+         return
+      }
+   }
+
+   my @netmask_objects_collapsed = cidrs2cidrs(@netmask_objects);
+   if (@netmask_objects_collapsed) {
+      my $scope_result_string;
+      my @ip_address_ranges;
+      for my $netmask_object (@netmask_objects_collapsed) {
+
+         if ($netmask_object->first() eq $netmask_object->last()) {
+            push @ip_address_ranges, $netmask_object->first();
+            $scope_result_string .= $netmask_object->base() . ",";
+         }
+         else {
+            push @ip_address_ranges, $netmask_object->first() . "-" . $netmask_object->last();
+            $scope_result_string .= $netmask_object->base() . "/" . $netmask_object->mask() . ",";
+         }
+      }
+
+      $scope_result_string =~ s/,+$//;
+      my $argument_string = join(",", @scope_strings);
+      if ($argument_string ne $scope_result_string) {
+         notify($ERRORS{'DEBUG'}, 0, "parsed firewall scope:\n" .
+            "argument: '$argument_string'\n" .
+            "result: '$scope_result_string'\n" .
+            "IP address ranges:\n" . join(", ", @ip_address_ranges)
+         );
+      }
+      return $scope_result_string;
+   }
+   else {
+      notify($ERRORS{'WARNING'}, 0, "failed to parse firewall scope: '" . join(",", @scope_strings) . "', no Net::Netmask objects were created");
+      return;
+   }
+}
+
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 firewall_compare_update
+
+ Parameters  : @scope_strings
+ Returns     : 0 , 1
+ Description : Compare iptables for listed remote IP address in reservation
+
+=cut
+
+sub firewall_compare_update  {
+	my $self = shift;
+   if (ref($self) !~ /linux/i) {
+      notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+      return;
+   }
+	
+	# Check to see if this distro has iptables
+   # If not return 1 so it does not fail
+   if (!($self->service_exists("iptables"))) {
+      notify($ERRORS{'WARNING'}, 0, "iptables does not exist on this OS");
+      return 1;
+   }
+	
+	my $computer_node_name = $self->data->get_computer_node_name();
+   my $imagerevision_id   = $self->data->get_imagerevision_id();
+	my $remote_ip 			  = $self->data->get_reservation_remote_ip();
+	
+	#collect connection_methods
+	#collect firewall_config
+	#For each port defined in connection_methods
+	#compare rule source address with remote_IP address
+	
+   # Retrieve the connect method info hash
+   my $connect_method_info = get_connect_method_info($imagerevision_id);
+   if (!$connect_method_info) {
+      notify($ERRORS{'WARNING'}, 0, "no connect methods are configured for image revision $imagerevision_id");
+      return;
+   }
+
+	# Retrieve the firewall configuration
+   my $INPUT_CHAIN = "INPUT";
+   my $firewall_configuration = $self->get_firewall_configuration() || return;	
+		
+	for my $connect_method_id (sort keys %{$connect_method_info} ) {
+             
+      my $name            = $connect_method_info->{$connect_method_id}{name};
+      my $description     = $connect_method_info->{$connect_method_id}{description};
+      my $protocol        = $connect_method_info->{$connect_method_id}{protocol} || 'TCP';
+      my $port            = $connect_method_info->{$connect_method_id}{port};
+		my $scope;
+	
+		$protocol = lc($protocol);
+		
+		for my $num (sort keys %{$firewall_configuration->{$INPUT_CHAIN}} ) {
+			my $existing_scope = $firewall_configuration->{$INPUT_CHAIN}{$num}{$protocol}{$port}{scope} || '';
+			if(!$existing_scope ) {
+
+			}
+			else {
+				my $parsed_existing_scope = $self->parse_firewall_scope($existing_scope);
+				if (!$parsed_existing_scope) {
+                notify($ERRORS{'WARNING'}, 0, "failed to parse existing firewall scope: '$existing_scope'");
+                return;
+            }	
+				$scope = $self->parse_firewall_scope("$remote_ip,$existing_scope");
+            if (!$scope) {
+                notify($ERRORS{'WARNING'}, 0, "failed to parse firewall scope argument appended with existing scope: '$remote_ip,$existing_scope'");
+                return;
+            }
+			
+				if ($scope eq $parsed_existing_scope) {
+                notify($ERRORS{'DEBUG'}, 0, "firewall is already open on $computer_node_name, existing scope matches scope argument:\n" .
+               "name: '$name'\n" .
+               "protocol: $protocol\n" .
+               "port/type: $port\n" .
+               "scope: $scope\n");
+                return 1;
+            }
+				else {
+					if ($self->enable_firewall_port($protocol, $port, "$remote_ip/24", 0)) {
+                   notify($ERRORS{'OK'}, 0, "opened firewall port $port on $computer_node_name for $remote_ip $name connect method");
+               }
+				}
+				
+
+			}			
+		}
+	}
+
+	return 1;	
+
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 clean_iptables
+
+ Parameters  : 
+ Returns     : 0 , 1
+ Description : Deletes rules with any leftover -s addresses 
+
+=cut
+
+sub clean_iptables {
+	my $self = shift;
+   if (ref($self) !~ /linux/i) {
+      notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+      return;
+   }
+	
+	# Check to see if this distro has iptables
+   # If not return 1 so it does not fail
+   if (!($self->service_exists("iptables"))) {
+      notify($ERRORS{'WARNING'}, 0, "iptables does not exist on this OS");
+      return 1;
+   }
+	
+	my $computer_node_name = $self->data->get_computer_node_name();
+	my $reservation_id                  = $self->data->get_reservation_id();
+	my $management_node_keys  = $self->data->get_management_node_keys();
+
+   # Retrieve the firewall configuration
+   my $INPUT_CHAIN = "INPUT";
+	
+	# Retrieve the iptables file to work on locally	
+	my $tmpfile = "/tmp/" . $reservation_id . "_iptables";
+	my $source_file_path = "/etc/sysconfig/iptables";
+	if (run_scp_command("$computer_node_name:\"$source_file_path\"", $tmpfile, $management_node_keys)) {
+		my @lines;
+		if(open(IPTAB_TMPFILE, $tmpfile)){
+			@lines = <IPTAB_TMPFILE>;
+			close(IPTAB_TMPFILE);	
+		}
+		foreach my $line (@lines){
+			if ($line =~ s/-A INPUT -s .*\n//) {
+         }
+		}
+	
+		#Rewrite array to tmpfile
+		if(open(IPTAB_TMPFILE, ">$tmpfile")){
+			print IPTAB_TMPFILE @lines;
+			close (IPTAB_TMPFILE);
+		}
+	
+		# Copy iptables file back to node
+		if (run_scp_command($tmpfile, "$computer_node_name:\"$source_file_path\"", $management_node_keys)) {
+			notify($ERRORS{'DEBUG'}, 0, "copied $tmpfile to $computer_node_name $source_file_path");
+		}
+	}	
+	
+
+	#my $command = "sed -i -e '/-A INPUT -s */d' /etc/sysconfig/iptables";
+   #my ($status, $output) = $self->execute($command);	
+	
+	#if (defined $status && $status == 0) {
+   #   notify($ERRORS{'DEBUG'}, 0, "executed command $command on $computer_node_name");
+   #}
+   #else {
+   #   notify($ERRORS{'WARNING'}, 0, "output from iptables:" . join("\n", @$output));
+   #}
+        
+	#restart iptables
+   my $command = "/etc/init.d/iptables restart";
+   my ($status_iptables,$output_iptables) = $self->execute($command);
+   if (defined $status_iptables && $status_iptables == 0) {
+		notify($ERRORS{'DEBUG'}, 0, "executed command $command on $computer_node_name");
+   }
+   else {
+      notify($ERRORS{'WARNING'}, 0, "output from iptables:" . join("\n", @$output_iptables));
+   }
+	
+	if ($self->wait_for_ssh(0)) {
+   	return 1;
+	}
+	else { 
+		notify($ERRORS{'CRITICAL'}, 0, "not able to login via ssh after cleaning_iptables");
+		return 0;
+	}
+
+}
+
+
 ##/////////////////////////////////////////////////////////////////////////////
-
-
 1;
 __END__
 

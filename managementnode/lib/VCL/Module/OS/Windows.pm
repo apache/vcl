@@ -947,7 +947,7 @@ sub grant_access {
 	# Set the $remote_ip_range variable to the string 'all' if it isn't already set (for display purposes)
 	$remote_ip_range = 'all' if !$remote_ip_range;
 	
-	if($self->process_connect_methods('start') ){
+	if($self->process_connect_methods("0.0.0.0", 1) ){
 		notify($ERRORS{'OK'}, 0, "processed connection methods on $computer_node_name");
 	}
 
