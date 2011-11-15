@@ -528,8 +528,7 @@ function editOrAddGroup($state) {
 		else {
 			$cdata = array('type' => $data['type'],
 			               'groupid' => $data['groupid'],
-			               'isowner' => $data['isowner'],
-			               'groupwasnone' => $groupwasnone);
+			               'isowner' => $data['isowner']);
 			if($data['type'] == 'resource')
 				$cdata['resourcetypeid'] = $resourcetypeid;
 			else {
