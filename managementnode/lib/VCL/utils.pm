@@ -4699,7 +4699,7 @@ sub get_request_info {
 	# Affiliation specific changes
 	# Check if the user's affiliation is listed in the $NOT_STANDALONE variable
 	my $not_standalone_list = "";
-	if(defined($ENV{management_node_info}{NOT_STANDALONE}) && $ENV{management_node_info}{NOT_STANDALONE}){
+	if (defined($ENV{management_node_info}{NOT_STANDALONE}) && $ENV{management_node_info}{NOT_STANDALONE}){
 		$not_standalone_list = $ENV{management_node_info}{NOT_STANDALONE};
 	} 
 	if (grep(/$request_info{user}{affiliation}{name}/, split(/,/, $not_standalone_list))) {
@@ -4711,14 +4711,14 @@ sub get_request_info {
 	}
 
 	#if uid is 0 set STANDALONE
-	if($request_info{user}{uid} == 0) {
+	if ($request_info{user}{uid} == 0) {
 		$request_info{user}{STANDALONE} = 1;
 		notify($ERRORS{'OK'}, 0, "found NULL uid setting standalone flag: $request_info{user}{unityid}, uid: NULL");
 	}
 	
 	# Fix the unityid if if the user's UID is >= 1000000
 	# Remove the domain section if the user's unityid contains @...
-	if(defined($request_info{user}{uid})) {
+	if (defined($request_info{user}{uid})) {
 		if ($request_info{user}{uid} >= 1000000 ) {
 			my ($correct_unity_id, $user_domain) = split /@/, $request_info{user}{unityid};
 			$request_info{user}{unityid}    = $correct_unity_id;
@@ -4742,6 +4742,7 @@ sub get_request_info {
 
 	# Loop through all the reservations
 	foreach my $reservation_id (keys %{$request_info{reservation}}) {
+		$request_info{reservation}{$reservation_id}{users} = {};
 
 		# Set server request NULL values to 0
 		if (defined($request_info{reservation}{$reservation_id}{serverrequest}{id})) {
@@ -4774,7 +4775,40 @@ sub get_request_info {
 			$request_info{reservation}{$reservation_id}{serverrequest}{logingroupid} = 0;
 			$request_info{reservation}{$reservation_id}{serverrequest}{monitored} = 0;
 		}
-
+		
+		my $root_access = $request_info{reservation}{$reservation_id}{image}{imagemeta}{rootaccess};
+		
+		# Add the reservation user to the hash, set ROOTACCESS to value configured for image
+		$request_info{reservation}{$reservation_id}{users}{$user_id} = get_user_info($user_id);
+		$request_info{reservation}{$reservation_id}{users}{$user_id}{ROOTACCESS} = $root_access;
+		
+		# If imagemeta.usergroupid is set, add the user group members to the hash, set ROOTACCESS to value configured for image
+		if (my $imagemeta_group_id = $request_info{reservation}{$reservation_id}{image}{imagemeta}{usergroupid}) {
+			my $imagemeta_group_member_info = get_user_group_member_info($imagemeta_group_id);
+			for my $imagemeta_user_id (keys %$imagemeta_group_member_info, $user_id) {
+				$request_info{reservation}{$reservation_id}{users}{$imagemeta_user_id} = get_user_info($imagemeta_user_id);
+				$request_info{reservation}{$reservation_id}{users}{$imagemeta_user_id}{ROOTACCESS} = $root_access;
+			}
+		}
+		
+		# If server request and logingroupid is set, add user group members to hash, set ROOTACCESS to 0
+		if (my $login_group_id = $request_info{reservation}{$reservation_id}{serverrequest}{logingroupid}) {
+			my $login_group_member_info = get_user_group_member_info($login_group_id);
+			for my $login_user_id (keys %$login_group_member_info) {
+				$request_info{reservation}{$reservation_id}{users}{$login_user_id} = get_user_info($login_user_id);
+				$request_info{reservation}{$reservation_id}{users}{$login_user_id}{ROOTACCESS} = 0;
+			}
+		}
+		
+		# If server request and admingroupid is set, add user group members to hash, set ROOTACCESS to 1
+		if (my $admin_group_id = $request_info{reservation}{$reservation_id}{serverrequest}{admingroupid}) {
+			my $admin_group_member_info = get_user_group_member_info($admin_group_id);
+			for my $admin_user_id (keys %$admin_group_member_info, $user_id) {
+				$request_info{reservation}{$reservation_id}{users}{$admin_user_id} = get_user_info($admin_user_id);
+				$request_info{reservation}{$reservation_id}{users}{$admin_user_id}{ROOTACCESS} = 1;
+			}
+		}
+		
 		# Confirm lastcheck time is not NULL
 		if (!defined($request_info{reservation}{$reservation_id}{lastcheck})) {
 			$request_info{reservation}{$reservation_id}{lastcheck} = 0;

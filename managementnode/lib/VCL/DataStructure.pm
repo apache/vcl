@@ -188,6 +188,7 @@ $SUBROUTINE_MAPPINGS{reservation_password}  = '$self->request_data->{reservation
 #$SUBROUTINE_MAPPINGS{reservation_remote_ip} = '$self->request_data->{reservation}{RESERVATION_ID}{remoteIP}';
 #$SUBROUTINE_MAPPINGS{reservation_requestid} = '$self->request_data->{reservation}{RESERVATION_ID}{requestid}';
 $SUBROUTINE_MAPPINGS{reservation_ready} = '$self->request_data->{reservation}{RESERVATION_ID}{READY}';
+$SUBROUTINE_MAPPINGS{reservation_users} = '$self->request_data->{reservation}{RESERVATION_ID}{users}';
 
 $SUBROUTINE_MAPPINGS{computer_data}             = '$self->request_data->{reservation}{RESERVATION_ID}{computer}';
 $SUBROUTINE_MAPPINGS{computer_current_image_id} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{currentimageid}';
