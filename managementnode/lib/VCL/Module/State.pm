@@ -742,6 +742,7 @@ sub check_image_os {
 	my $image_name         = $self->data->get_image_name();
 	my $image_os_name      = $self->data->get_image_os_name();
 	my $imagerevision_id   = $self->data->get_imagerevision_id();
+	my $image_architecture    = $self->data->get_image_architecture();
 
 	# Only make corrections if state is image
 	if ($request_state_name ne 'image') {
@@ -771,6 +772,11 @@ sub check_image_os {
 	# Change the image name
 	$image_name =~ /^[^-]+-(.*)/;
 	my $image_name_new = "$image_os_name_new-$1";
+	
+	my $new_architecture = $image_architecture;
+	if ($image_architecture eq "x86_64" ) {
+		$new_architecture = "x86";
+	}
 
 	notify($ERRORS{'OK'}, 0, "Kickstart image OS needs to be changed: $image_os_name -> $image_os_name_new, image name: $image_name -> $image_name_new");
 
@@ -782,6 +788,7 @@ sub check_image_os {
 	imagerevision
 	SET
 	image.OSid = OS.id,
+	image.architecture = \'$new_architecture'\,
 	image.name = \'$image_name_new\',
 	imagerevision.imagename = \'$image_name_new\'
 	WHERE
@@ -806,7 +813,7 @@ sub check_image_os {
 		notify($ERRORS{'WARNING'}, 0, "failed to update DataStructure updated correcting image OS, returning 0");
 		return 0;
 	}
-
+	
 	notify($ERRORS{'DEBUG'}, 0, "returning 1");
 	return 1;
 } ## end sub check_image_os
