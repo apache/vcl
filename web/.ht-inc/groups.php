@@ -774,7 +774,7 @@ function updateGroup($data) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function addGroup($data) {
-	if($data['editgroupid'] == 0 || $data['edigroupid'] == '')
+	if($data['editgroupid'] == 0 || $data['editgroupid'] == '')
 		$data['editgroupid'] = 'NULL';
 	if($data['type'] == "user") {
 		if(! array_key_exists('custom', $data))
