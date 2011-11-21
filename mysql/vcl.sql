@@ -826,7 +826,7 @@ CREATE TABLE IF NOT EXISTS `resourcepriv` (
   `id` mediumint(8) unsigned NOT NULL auto_increment,
   `resourcegroupid` smallint(5) unsigned NOT NULL default '0',
   `privnodeid` mediumint(8) unsigned NOT NULL default '0',
-  `type` enum('block','cascade','available','administer','manageGroup') NOT NULL default 'block',
+  `type` enum('block','cascade','available','administer','manageGroup','manageMapping') NOT NULL default 'block',
   PRIMARY KEY  (`id`),
   UNIQUE KEY `resourcegroupid` (`resourcegroupid`,`privnodeid`,`type`),
   KEY `privnodeid` (`privnodeid`)

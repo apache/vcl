@@ -402,6 +402,13 @@ CREATE TABLE IF NOT EXISTS `reservationaccounts` (
 -- --------------------------------------------------------
 
 --
+-- Table structure for table `resourcepriv`
+--
+ALTER TABLE resourcepriv MODIFY COLUMN `type` ENUM('block','cascade','available','administer','manageGroup','manageMapping') NOT NULL default 'block';
+
+-- --------------------------------------------------------
+
+--
 -- Table structure for table `serverprofile`
 --
 
