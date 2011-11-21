@@ -3191,6 +3191,7 @@ sub check_connection_on_port {
 	my $remote_ip 			= $self->data->get_reservation_remote_ip();
 	my $computer_ip_address   	= $self->data->get_computer_ip_address();
 	my $request_state_name   	= $self->data->get_request_state_name();
+	my $username = $self->data->get_user_login_id();
 
 	my $port = shift;
 	if (!$port) {
@@ -3220,9 +3221,21 @@ sub check_connection_on_port {
                          return $ret_val;
                      }
                      else {
-                    	  #this isn't the remoteIP
-                          $ret_val = "conn_wrong_ip";
-                     	  return $ret_val;
+							  my $new_remote_ip = $4;
+                    	  #this isn't the defined remoteIP
+								# Confirm the user is logged in
+								# Is user logged in
+                        if (!$self->user_logged_in()) {
+                           notify($ERRORS{'OK'}, 0, "Detected $new_remote_ip is connected. $username is not logged in yet. Returning no connection");
+                           $ret_val = "no";
+                           return $ret_val;
+                        }
+                        else {	
+										  $self->data->set_reservation_remote_ip($new_remote_ip);	
+										  notify($ERRORS{'OK'}, 0, "Updating reservation remote_ip with $new_remote_ip");
+										  $ret_val = "conn_wrong_ip";
+										  return $ret_val;
+								}
                      }
                  }    # tcp check
 	}
@@ -4222,6 +4235,57 @@ sub clean_iptables {
 		notify($ERRORS{'CRITICAL'}, 0, "not able to login via ssh after cleaning_iptables");
 		return 0;
 	}
+
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 user_logged_in
+
+ Parameters  : 
+ Returns     : 
+ Description : 
+
+=cut
+
+sub user_logged_in {
+   my $self = shift;
+   if (ref($self) !~ /linux/i) {
+      notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+      return;
+   }
+
+   my $management_node_keys = $self->data->get_management_node_keys();
+   my $computer_node_name   = $self->data->get_computer_node_name();
+
+   # Attempt to get the username from the arguments
+   # If no argument was supplied, use the user specified in the DataStructure
+   my $username = shift;
+
+   # Remove spaces from beginning and end of username argument
+   # Fixes problem if string containing only spaces is passed
+   $username =~ s/(^\s+|\s+$)//g if $username;
+
+   # Check if username argument was passed
+   if (!$username) {
+      $username = $self->data->get_user_login_id();
+   }
+   notify($ERRORS{'DEBUG'}, 0, "checking if $username is logged in to $computer_node_name");
+
+	my $cmd = "users";
+	my ($logged_in_status, $logged_in_output) = $self->execute($cmd);
+   if (!defined($logged_in_output)) {
+      notify($ERRORS{'WARNING'}, 0, "failed to run who command ");
+      return;
+   }
+   elsif (grep(/$username/i, @$logged_in_output)) {
+		notify($ERRORS{'DEBUG'}, 0, "username $username is logged into $computer_node_name\n" . join("\n", @$logged_in_output));
+		return 1;
+	
+	}
+	
+	
+	return 0;	
 
 }
 

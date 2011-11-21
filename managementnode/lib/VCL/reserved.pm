@@ -371,6 +371,8 @@ sub process {
 
 	elsif ($retval_conn eq "conn_wrong_ip") {
 		# does the same as above, until we make a firm decision as to how to handle this
+		#update remote_ip
+		$remote_ip = $self->data->get_reservation_remote_ip();
 
 		if($self->os->process_connect_methods($remote_ip, 1)) {
          notify($ERRORS{'OK'}, 0, "process_connect_methods return successfully  $remote_ip $nodename");

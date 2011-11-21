@@ -1058,6 +1058,52 @@ sub get_reservation_data {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 set_reservation_remote_ip
+
+ Parameters  : None
+ Returns     : string
+ Description : 
+
+=cut
+
+sub set_reservation_remote_ip {
+   my $self = shift;
+   my $reservation_id  = $self->get_reservation_id();
+	
+	my $new_remote_ip = shift;
+	
+	# Check to make sure reservation ID was passed
+   if (!$new_remote_ip) {
+        notify($ERRORS{'WARNING'}, 0, "new_remote_ip was not specified, returning self");
+        return 0;;
+   }
+
+	
+	my $update_statement = "
+		  UPDATE
+		  reservation
+		  SET
+		  remoteIP = \'$new_remote_ip\'
+		  WHERE
+		  id = \'$reservation_id\'
+			  ";
+
+        # Call the database execute subroutine
+        if (database_execute($update_statement)) {
+                # Update successful
+                notify($ERRORS{'OK'}, 0, "new remoteIP $new_remote_ip for reservation id $reservation_id updated");
+                return 1;
+        }
+        else {
+                notify($ERRORS{'CRITICAL'}, 0, "unable to update new remote ip for reservation id $reservation_id");
+                return 0;
+        }
+
+
+} ## end sub set_reservation_remote_ip
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 get_reservation_remote_ip
 
  Parameters  : None

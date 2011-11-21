@@ -947,18 +947,18 @@ sub grant_access {
 	# Set the $remote_ip_range variable to the string 'all' if it isn't already set (for display purposes)
 	$remote_ip_range = 'all' if !$remote_ip_range;
 	
-	if($self->process_connect_methods("0.0.0.0", 1) ){
+	if($self->process_connect_methods("", 1) ){
 		notify($ERRORS{'OK'}, 0, "processed connection methods on $computer_node_name");
 	}
 
 	# Allow RDP connections
-	if ($self->firewall_enable_rdp($remote_ip_range)) {
-		notify($ERRORS{'OK'}, 0, "firewall was configured to allow RDP access from $remote_ip_range on $computer_node_name");
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "firewall could not be configured to grant RDP access from $remote_ip_range on $computer_node_name");
-		return 0;
-	}
+	#if ($self->firewall_enable_rdp($remote_ip_range)) {
+	#	notify($ERRORS{'OK'}, 0, "firewall was configured to allow RDP access from $remote_ip_range on $computer_node_name");
+	#}
+	#else {
+	#	notify($ERRORS{'WARNING'}, 0, "firewall could not be configured to grant RDP access from $remote_ip_range on $computer_node_name");
+	#	return 0;
+	#}
 
 	# If this is an imaging request, make sure the Administrator account is enabled
 	if ($request_forimaging) {
@@ -10611,43 +10611,141 @@ sub check_connection_on_port {
         my $computer_node_name   	= $self->data->get_computer_node_name();
         my $remote_ip 			= $self->data->get_reservation_remote_ip();
         my $computer_ip_address   	= $self->data->get_computer_ip_address();
-	my $request_state_name          = $self->data->get_request_state_name();
+		  my $request_state_name          = $self->data->get_request_state_name();
 
-        my $port = shift;
-        if (!$port) {
-                notify($ERRORS{'WARNING'}, 0, "port variable was not passed as an argument");
-                return "failed";
-        }
-	
-	my $ret_val = "no";
-        my $command = "netstat -an";
-        my ($status, $output) = run_ssh_command($computer_node_name, $management_node_keys, $command, '', '', 1);
-        notify($ERRORS{'DEBUG'}, 0, "checking connections on node $computer_node_name on port $port");
-        foreach my $line (@{$output}) {
-                if ($line =~ /Connection refused|Permission denied/) {
-                    chomp($line);
-                    notify($ERRORS{'WARNING'}, 0, "$line");
-                    if ($request_state_name =~ /reserved/) {
-                        $ret_val = "failed";
-                    }
-                    else {
-                         $ret_val = "timeout";
-                    }
-                    return $ret_val;
-                 } ## end if ($line =~ /Connection refused|Permission denied/)
-		if ($line =~ /\s+($computer_ip_address:$port)\s+([.0-9]*):([0-9]*)\s+(ESTABLISHED)/) {
+		  my $port = shift;
+		  if (!$port) {
+					 notify($ERRORS{'WARNING'}, 0, "port variable was not passed as an argument");
+					 return "failed";
+		  }
+
+		  my $ret_val = "no";
+		  my $command = "netstat -an";
+		  my ($status, $output) = run_ssh_command($computer_node_name, $management_node_keys, $command, '', '', 1);
+		  notify($ERRORS{'DEBUG'}, 0, "checking connections on node $computer_node_name on port $port");
+		  foreach my $line (@{$output}) {
+					 if ($line =~ /Connection refused|Permission denied/) {
+						  chomp($line);
+						  notify($ERRORS{'WARNING'}, 0, "$line");
+						  if ($request_state_name =~ /reserved/) {
+								$ret_val = "failed";
+						  }
+						  else {
+								 $ret_val = "timeout";
+						  }
+						  return $ret_val;
+					  } ## end if ($line =~ /Connection refused|Permission denied/)
+					 if ($line =~ /\s+($computer_ip_address:$port)\s+([.0-9]*):([0-9]*)\s+(ESTABLISHED)/) {
                      if ($2 eq $remote_ip) {
                          $ret_val = "connected";
                          return $ret_val;
                      }
                      else {
                           #this isn't the remoteIP
-                          $ret_val = "conn_wrong_ip";
-                          return $ret_val;
+								# Is user logged in
+								if (!$self->user_logged_in()) {
+									notify($ERRORS{'OK'}, 0, "Detected $4 is connected. user is not logged in yet. Returning no connection");
+									$ret_val = "no";
+									return $ret_val;
+								}
+								else {
+										my $new_remote_ip = $2;
+										  $self->data->set_reservation_remote_ip($new_remote_ip);  
+										  notify($ERRORS{'OK'}, 0, "Updating reservation remote_ip with $new_remote_ip");
+										  $ret_val = "conn_wrong_ip";
+										  return $ret_val;
+								}
                      }
                  }    # tcp check
         }
 	return $ret_val;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 firewall_compare_update
+
+ Parameters  : $node,$reote_IP, $identity, $type
+ Returns     : 0 or 1 (nochange or updated)
+ Description : compares and updates the firewall for rdp port, specfically for windows
+                                        Currently only handles windows and allows two seperate scopes
+
+=cut
+
+sub firewall_compare_update {
+   my $self = shift;
+   if (ref($self) !~ /windows/i) {
+      notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+      return;
+   }
+  
+   my $computer_node_name = $self->data->get_computer_node_name();
+   my $imagerevision_id   = $self->data->get_imagerevision_id();
+   my $remote_ip          = $self->data->get_reservation_remote_ip();
+  
+   #collect connection_methods
+   #collect firewall_config
+   #For each port defined in connection_methods
+   #compare rule source address with remote_IP address
+	notify($ERRORS{'OK'}, 0, "pulling connect methods");
+  
+   # Retrieve the connect method info hash
+   my $connect_method_info = get_connect_method_info($imagerevision_id);
+   if (!$connect_method_info) {
+      notify($ERRORS{'WARNING'}, 0, "no connect methods are configured for image revision $imagerevision_id");
+      return;
+   }
+
+   # Retrieve the firewall configuration
+   my $firewall_configuration = $self->get_firewall_configuration() || return;
+
+   for my $connect_method_id (sort keys %{$connect_method_info} ) {
+		
+      my $name            = $connect_method_info->{$connect_method_id}{name};
+      my $description     = $connect_method_info->{$connect_method_id}{description};
+      my $protocol        = $connect_method_info->{$connect_method_id}{protocol} || 'TCP';
+      my $port            = $connect_method_info->{$connect_method_id}{port};
+      my $scope;
+		
+		next if ( !$port );
+
+     # $protocol = lc($protocol);
+
+		my $existing_scope = $firewall_configuration->{$protocol}{$port}{scope} || '';
+		if(!$existing_scope ) {
+			notify($ERRORS{'WARNING'}, 0, "No existing scope defined for protocol= $protocol port= $port ");
+			return 1;
+      }
+		else {
+            my $parsed_existing_scope = $self->parse_firewall_scope($existing_scope);
+            if (!$parsed_existing_scope) {
+                notify($ERRORS{'WARNING'}, 0, "failed to parse existing firewall scope: '$existing_scope'");
+                return;
+            }
+            $scope = $self->parse_firewall_scope("$remote_ip,$existing_scope");
+            if (!$scope) {
+                notify($ERRORS{'WARNING'}, 0, "failed to parse firewall scope argument appended with existing scope: '$remote_ip,$existing_scope'");
+                return;
+            }
+
+            if ($scope eq $parsed_existing_scope) {
+                notify($ERRORS{'DEBUG'}, 0, "firewall is already open on $computer_node_name, existing scope matches scope argument:\n" .
+               "name: '$name'\n" .
+               "protocol: $protocol\n" .
+               "port/type: $port\n" .
+               "scope: $scope\n");
+                return 1;
+            }
+				else {
+               if ($self->enable_firewall_port($protocol, $port, "$remote_ip/24", 0)) {
+                   notify($ERRORS{'OK'}, 0, "opened firewall port $port on $computer_node_name for $remote_ip $name connect method");
+               }
+            }
+			}
+	
+	}
+	return 1;
+
 }
 
 #/////////////////////////////////////////////////////////////////////////////
