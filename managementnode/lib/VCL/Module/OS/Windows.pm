@@ -4074,8 +4074,8 @@ sub get_scheduled_task_info {
 		}
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to retrieve scheduled task information, exit status: $exit_status, output:\n" . join("\n", @$output));
-		return 0;
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve scheduled task information, exit status: $exit_status\ncommand: '$command'\noutput:\n" . join("\n", @$output));
+		return;
 	}
 	
 	my @properties;
@@ -7137,11 +7137,11 @@ sub get_installed_applications {
 	}
 	if (!%installed_products && $regex_filter) {
 		notify($ERRORS{'DEBUG'}, 0, "did not find any installed applications matching filter:\n$regex_filter");
-		return 0;
+		return {};
 	}
 	elsif (!%installed_products && !$regex_filter) {
 		notify($ERRORS{'DEBUG'}, 0, "did not find any installed applications");
-		return 0;
+		return {};
 	}
 } ## end sub get_installed_applications
 
@@ -7181,7 +7181,7 @@ sub get_task_list {
 	}
 	elsif (defined($tasklist_exit_status)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to run tasklist.exe, exit status: $tasklist_exit_status, output:\n@{$tasklist_output}");
-		return 0;
+		return;
 	}
 	else {
 		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to run tasklist.exe");
@@ -7906,7 +7906,7 @@ sub registry_query_value {
 	}
 	elsif (defined($reg_query_exit_status)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to query registry key, exit status: $reg_query_exit_status, output:\n@{$reg_query_output}");
-		return 0;
+		return;
 	}
 	else {
 		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to query registry key");
