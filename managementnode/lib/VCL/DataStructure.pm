@@ -654,7 +654,8 @@ sub _initialize : Init {
 		}
 		
 		elsif ($computer_id) {
-			if ($imagerevision_id = $self->get_computer_imagerevision_id()) {
+			$imagerevision_id = $self->get_computer_imagerevision_id();
+			if (defined($imagerevision_id)) {
 				notify($ERRORS{'DEBUG'}, 0, "computer ID argument was specified ($computer_id) but image and imagerevision ID arguments were not, DataStructure object will contain image information for the computer's current imagerevision ID: $imagerevision_id");
 			}
 			else {
@@ -690,6 +691,7 @@ sub _initialize : Init {
 			return;
 		}
 	}
+	
 
 	return 1;
 }
