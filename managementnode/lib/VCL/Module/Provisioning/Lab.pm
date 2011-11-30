@@ -154,12 +154,12 @@ sub node_status {
 			notify($ERRORS{'DEBUG'}, 0, "self is a array reference");
 		}
 
-		$computer_node_name      = $self->{computer}->{hostname};
+		$computer_node_name      = $self->{hostname};
 		$management_node_os_name = $self->{managementnode}->{OSNAME};
 		$management_node_keys    = $self->{managementnode}->{keys};
-		$computer_host_name      = $self->{computer}->{hostname};
-		$computer_ip_address     = $self->{computer}->{IPaddress};
-		$image_os_name           = $self->{image}->{OS}->{name};
+		$computer_host_name      = $self->{hostname};
+		$computer_ip_address     = $self->{IPaddress};
+		$image_os_name           = $self->{currentimage}->{OS}->{name};
 
 		$log = 0 if !$log;
 		$computer_short_name = $1 if ($computer_node_name =~ /([-_a-zA-Z0-9]*)(\.?)/);

@@ -106,7 +106,6 @@ our @EXPORT = qw(
   delete_request
   disablesshd
   escape_file_path
-  firewall_compare_update
   format_data
   format_number
   get_affiliation_info
@@ -301,6 +300,7 @@ INIT {
 			$CONF_FILE_PATH = "/etc/vcl/vcld.conf";
 		}
 	}
+#$CONF_FILE_PATH ="/usr/local/vcldev/fap/managementnode/etc/vcl/vcld.conf";
 
 	# Store the command line options in hash
 	our %OPTIONS;
@@ -5224,7 +5224,7 @@ EOF
 		$select_statement .= "imagerevision.id = '$imagerevision_identifier'";
 	}
 	else{
-		$select_statement .= "imagerevision.imagename = '$imagerevision_identifier'";
+		$select_statement .= "imagerevision.imagename = \'$imagerevision_identifier\'";
 	}
 
 	# Call the database select subroutine
@@ -5233,7 +5233,7 @@ EOF
 
 	# Check to make sure 1 row was returned
 	if (!@selected_rows) {
-		notify($ERRORS{'DEBUG'}, 0, "imagerevision '$imagerevision_identifier' was not found in the database, 0 rows were returned from database select statement:\n$select_statement");
+		notify($ERRORS{'WARNING'}, 0, "imagerevision '$imagerevision_identifier' was not found in the database, 0 rows were returned from database select statement:\n$select_statement");
 		return;
 	}
 	elsif (scalar @selected_rows > 1) {
@@ -8098,12 +8098,15 @@ sub get_computer_grp_members {
    FROM 
 	resourcegroupmembers,
 	resourcetype,
-	resource
+	resource,
+	computer
    WHERE 
 	resourcegroupmembers.resourceid = resource.id 
 	AND resourcetype.id = resource.resourcetypeid 
 	AND resourcetype.name = 'computer' 
 	AND resourcegroupmembers.resourcegroupid = $computer_grp_id
+	AND computer.deleted != '1'
+	AND computer.id = resource.subid
 	";
 
 	# Call the database select subroutine
@@ -8466,7 +8469,7 @@ EOF
 	# If the computer identifier is all digits match it to computer.id
 	# Otherwise, match computer.hostname
 	if ($computer_identifier =~ /^\d+$/) {
-		$select_statement .= "computer.id = $computer_identifier";
+		$select_statement .= "computer.id = \'$computer_identifier\'";
 	}
 	else {
 		$select_statement .= "computer.hostname REGEXP '$computer_identifier(\\\\.|\$)'";
@@ -8550,6 +8553,8 @@ EOF
 	my $next_image_id = $computer_info->{nextimageid};
 	if ($next_image_id && (my $nextimage_info = get_image_info($next_image_id))) {
 		my $next_image_name = $nextimage_info->{name};
+		#trim trailing white space
+		$next_image_name =~ s/\s+$//;
 		
 		my $next_imagerevision_info = get_imagerevision_info($next_image_name);
 		if ($next_imagerevision_info) {
@@ -8557,7 +8562,7 @@ EOF
 			$computer_info->{nextimage} = $next_imagerevision_info->{image};
 		}
 		else {
-			notify($ERRORS{'WARNING'}, 0, "failed to retrieve nextimage info for $computer_hostname, nextimageid=$next_image_id");
+			notify($ERRORS{'WARNING'}, 0, "failed to retrieve nextimage info for $computer_hostname, nextimageid=$next_image_id next_image_name=$next_image_name");
 		}
 		
 	}

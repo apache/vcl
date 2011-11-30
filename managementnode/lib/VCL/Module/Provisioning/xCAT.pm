@@ -2052,32 +2052,34 @@ sub _fix_rpower {
 
 sub node_status {
 	my $self = shift;
-	my ($computer_node_name, $log);
+	my ($log);
 
 	my $management_node_os_name = 0;
 	my $management_node_keys    = 0;
 	my $computer_host_name      = 0;
 	my $computer_short_name     = 0;
+	my $computer_node_name      = 0;
 	my $computer_ip_address     = 0;
 	my $image_os_name           = 0;
 	my $image_name              = 0;
 	my $image_os_type           = 0;
+
 
 	# Check if subroutine was called as a class method
 	if (ref($self) !~ /xcat/i) {
 
 		if (ref($self) eq 'HASH') {
 			$log = $self->{logfile};
-			notify($ERRORS{'DEBUG'}, $log, "self is a hash reference");
+			notify($ERRORS{'OK'}, $log, "self is a hash reference");
 
-			$computer_node_name      = $self->{computer}->{hostname};
+			$computer_node_name      = $self->{hostname};
 			$management_node_os_name = $self->{managementnode}->{OSNAME};
 			$management_node_keys    = $self->{managementnode}->{keys};
-			$computer_host_name      = $self->{computer}->{hostname};
-			$computer_ip_address     = $self->{computer}->{IPaddress};
-			$image_os_name           = $self->{image}->{OS}->{name};
-			$image_name              = $self->{imagerevision}->{imagename};
-			$image_os_type           = $self->{image}->{OS}->{type};
+			$computer_host_name      = $self->{hostname};
+			$computer_ip_address     = $self->{IPaddress};
+			$image_os_name           = $self->{currentimage}->{OS}->{name};
+			$image_name              = $self->{currentimagerevision}->{name};
+			$image_os_type           = $self->{currentimage}->{OS}->{type};
 
 		} ## end if (ref($self) eq 'HASH')
 		# Check if node_status returned an array ref
@@ -2109,15 +2111,15 @@ sub node_status {
 		notify($ERRORS{'WARNING'}, 0, "node name could not be determined");
 		return;
 	}
-	notify($ERRORS{'DEBUG'}, $log, "checking status of node: $computer_node_name");
-	notify($ERRORS{'DEBUG'}, $log, "computer_short_name= $computer_short_name ");
-	notify($ERRORS{'DEBUG'}, $log, "computer_node_name= $computer_node_name ");
-	notify($ERRORS{'DEBUG'}, $log, "image_os_name= $image_os_name");
-	notify($ERRORS{'DEBUG'}, $log, "management_node_os_name= $management_node_os_name");
-	notify($ERRORS{'DEBUG'}, $log, "computer_ip_address= $computer_ip_address");
-	notify($ERRORS{'DEBUG'}, $log, "management_node_keys= $management_node_keys");
-	notify($ERRORS{'DEBUG'}, $log, "image_name=  $image_name");
-	notify($ERRORS{'DEBUG'}, $log, "image_os_type=  $image_os_type");
+	notify($ERRORS{'OK'}, $log, "checking status of node: $computer_node_name");
+	notify($ERRORS{'OK'}, $log, "computer_short_name= $computer_short_name ");
+	notify($ERRORS{'OK'}, $log, "computer_node_name= $computer_node_name ");
+	notify($ERRORS{'OK'}, $log, "image_os_name= $image_os_name");
+	notify($ERRORS{'OK'}, $log, "management_node_os_name= $management_node_os_name");
+	notify($ERRORS{'OK'}, $log, "computer_ip_address= $computer_ip_address");
+	notify($ERRORS{'OK'}, $log, "management_node_keys= $management_node_keys");
+	notify($ERRORS{'OK'}, $log, "image_name=  $image_name");
+	notify($ERRORS{'OK'}, $log, "image_os_type=  $image_os_type");
 
 
 	# Create a hash to store status components

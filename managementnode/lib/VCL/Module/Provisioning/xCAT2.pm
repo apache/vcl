@@ -1710,21 +1710,21 @@ sub node_status {
 	if (ref($self) !~ /xcat/i) {
 		if (ref($self) eq 'HASH') {
 			$log = $self->{logfile};
-			notify($ERRORS{'DEBUG'}, $log, "self is a hash reference");
+			notify($ERRORS{'OK'}, $log, "self is a hash reference");
 
-			$computer_node_name      = $self->{computer}->{hostname};
+			$computer_node_name      = $self->{hostname};
 			$management_node_os_name = $self->{managementnode}->{OSNAME};
 			$management_node_keys    = $self->{managementnode}->{keys};
-			$computer_host_name      = $self->{computer}->{hostname};
-			$computer_ip_address     = $self->{computer}->{IPaddress};
-			$image_os_name           = $self->{image}->{OS}->{name};
-			$image_name              = $self->{imagerevision}->{imagename};
-			$image_os_type           = $self->{image}->{OS}->{type};
+			$computer_host_name      = $self->{hostname};
+			$computer_ip_address     = $self->{IPaddress};
+			$image_os_name           = $self->{currentimage}->{OS}->{name};
+			$image_name              = $self->{currentimagerevision}->{imagename};
+			$image_os_type           = $self->{currentimage}->{OS}->{type};
 
 		} ## end if (ref($self) eq 'HASH')
 		    # Check if node_status returned an array ref
 		elsif (ref($self) eq 'ARRAY') {
-			notify($ERRORS{'DEBUG'}, 0, "self is a array reference");
+			notify($ERRORS{'OK'}, 0, "self is a array reference");
 		}
 
 		$log = 0 if !$log;
@@ -1749,7 +1749,7 @@ sub node_status {
 		notify($ERRORS{'WARNING'}, 0, "node name could not be determined");
 		return;
 	}
-	notify($ERRORS{'DEBUG'}, 0, "checking status of node: $computer_node_name");
+	notify($ERRORS{'OK'}, 0, "checking status of node: $computer_node_name");
 
 
 
@@ -1766,14 +1766,14 @@ sub node_status {
 	$status{ssh}          = 0;
 
 	# Check the profile in the nodetype table
-	notify($ERRORS{'DEBUG'}, $log, "checking the current image listed in nodetype table for $computer_short_name");
+	notify($ERRORS{'OK'}, $log, "checking the current image listed in nodetype table for $computer_short_name");
 	if (open(NODELS, "$XCAT_ROOT/bin/nodels $computer_short_name nodetype.profile 2>&1 |")) {
 		my @file = <NODELS>;
 		close(NODELS);
 		foreach my $l (@file) {
 			if ($l =~ /^$computer_short_name:\s+(.+)/) {
 				my $nodetype_image_name = $1;
-				notify($ERRORS{'DEBUG'}, 0, "found image for $computer_short_name in nodetype table: $nodetype_image_name");
+				notify($ERRORS{'OK'}, 0, "found image for $computer_short_name in nodetype table: $nodetype_image_name");
 				$status{nodetype} = $nodetype_image_name;
 			}
 		}
@@ -1784,7 +1784,7 @@ sub node_status {
 	}
 
 	# Check if node is pingable
-	notify($ERRORS{'DEBUG'}, $log, "checking if $computer_host_name is pingable");
+	notify($ERRORS{'OK'}, $log, "checking if $computer_host_name is pingable");
 	if (_pingnode($computer_host_name)) {
 		$status{ping} = 1;
 		notify($ERRORS{'OK'}, $log, "$computer_host_name is pingable ($status{ping})");
@@ -1795,7 +1795,7 @@ sub node_status {
 	}
 
 	# Check the rpower status
-	notify($ERRORS{'DEBUG'}, $log, "checking $computer_short_name xCAT rpower status");
+	notify($ERRORS{'OK'}, $log, "checking $computer_short_name xCAT rpower status");
 	my $rpower_status = $self->_rpower($computer_short_name, "stat");
 	if ($rpower_status =~ /on/i) {
 		$status{rpower} = 1;
@@ -1806,22 +1806,22 @@ sub node_status {
 	notify($ERRORS{'OK'}, $log, "$computer_short_name rpower status: $rpower_status ($status{rpower})");
 
 	# Check the xCAT nodeset status
-	notify($ERRORS{'DEBUG'}, $log, "checking $computer_short_name xCAT nodeset status");
+	notify($ERRORS{'OK'}, $log, "checking $computer_short_name xCAT nodeset status");
 	my $nodeset_status = _nodeset($computer_short_name);
 	notify($ERRORS{'OK'}, $log, "$computer_short_name nodeset status: $nodeset_status");
 	$status{nodeset} = $nodeset_status;
 
 	# Check the sshd status
-	notify($ERRORS{'DEBUG'}, $log, "checking if $computer_short_name sshd service is accessible");
+	notify($ERRORS{'OK'}, $log, "checking if $computer_short_name sshd service is accessible");
 	my $sshd_status = _sshd_status($computer_short_name, $status{nodetype}, $log);
 
 	# If sshd is accessible, perform sshd-dependent checks
 	if ($sshd_status =~ /on/) {
 		$status{ssh} = 1;
-		notify($ERRORS{'DEBUG'}, $log, "$computer_short_name sshd service is accessible, performing dependent checks");
+		notify($ERRORS{'OK'}, $log, "$computer_short_name sshd service is accessible, performing dependent checks");
 
 		# Check the currentimage.txt file on the node
-		notify($ERRORS{'DEBUG'}, $log, "checking image specified in currentimage.txt file on $computer_short_name");
+		notify($ERRORS{'OK'}, $log, "checking image specified in currentimage.txt file on $computer_short_name");
 		my $status_currentimage = _getcurrentimage($computer_short_name);
 		if ($status_currentimage) {
 			notify($ERRORS{'OK'}, $log, "$computer_short_name currentimage.txt has: $status_currentimage");
@@ -1881,11 +1881,11 @@ sub node_status {
 		
 		# Check if the OS post_load tasks have run
 		if ($self->os->get_vcld_post_load_status()) {
-			notify($ERRORS{'DEBUG'}, 0, "OS module post_load tasks have been completed on $computer_short_name");
+			notify($ERRORS{'OK'}, 0, "OS module post_load tasks have been completed on $computer_short_name");
 			$status{status} = 'READY';
 		}
 		else {
-			notify($ERRORS{'DEBUG'}, 0, "OS module post_load tasks have not been completed on $computer_short_name, returning 'POST_LOAD'");
+			notify($ERRORS{'OK'}, 0, "OS module post_load tasks have not been completed on $computer_short_name, returning 'POST_LOAD'");
 			$status{status} = 'POST_LOAD';
 		}
 	}

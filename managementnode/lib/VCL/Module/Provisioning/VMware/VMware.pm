@@ -1036,7 +1036,7 @@ sub node_status {
 		my $computer_id;
 		if (ref($argument)) {
 			# Hash reference was passed
-			$computer_id = $argument->{computer}{id};
+			$computer_id = $argument->{id};
 		}
 		elsif ($argument =~ /^\d+$/) {
 			# Computer ID was passed
@@ -1048,10 +1048,10 @@ sub node_status {
 		}
 		
 		if ($computer_id) {
-			notify($ERRORS{'DEBUG'}, 0, "computer ID: $computer_id");
+			notify($ERRORS{'OK'}, 0, "computer ID: $computer_id");
 		}
 		else {
-			notify($ERRORS{'DEBUG'}, 0, "unable to determine computer ID from argument:\n" . format_data($argument));
+			notify($ERRORS{'OK'}, 0, "unable to determine computer ID from argument:\n" . format_data($argument));
 			return;
 		}
 		
@@ -1094,7 +1094,7 @@ sub node_status {
 	my $image_name = $self->data->get_image_name();
 	my $request_forimaging = $self->data->get_request_forimaging();
 	
-	notify($ERRORS{'DEBUG'}, 0, "attempting to check the status of computer $computer_name, image: $image_name");
+	notify($ERRORS{'OK'}, 0, "attempting to check the status of computer $computer_name, image: $image_name");
 	
 	# Create a hash reference and populate it with the default values
 	my $status;
@@ -1110,24 +1110,27 @@ sub node_status {
 	# Skip the ping and power status checks for a normal reservation to speed things up
 	if (!$reservation_id) {
 		if (_pingnode($computer_name)) {
-			notify($ERRORS{'DEBUG'}, 0, "VM $computer_name is pingable");
+			notify($ERRORS{'OK'}, 0, "VM $computer_name is pingable");
 			$status->{ping} = 1;
 		}
 		else {
-			notify($ERRORS{'DEBUG'}, 0, "VM $computer_name is not pingable");
+			notify($ERRORS{'OK'}, 0, "VM $computer_name is not pingable");
 			$status->{ping} = 0;
 		}
 		
 		$status->{vmstate} = $self->power_status();
+		if (!defined($status->{vmstate})) {
+			$status->{vmstate} = "off";
+		}
 	}
 	
 	# Check if SSH is available
 	if ($self->os->is_ssh_responding()) {
-		notify($ERRORS{'DEBUG'}, 0, "VM $computer_name is responding to SSH");
+		notify($ERRORS{'OK'}, 0, "VM $computer_name is responding to SSH");
 		$status->{ssh} = 1;
 	}
 	else {
-		notify($ERRORS{'DEBUG'}, 0, "VM $computer_name is not responding to SSH, returning 'RELOAD'");
+		notify($ERRORS{'OK'}, 0, "VM $computer_name is not responding to SSH, returning 'RELOAD'");
 		$status->{status} = 'RELOAD';
 		$status->{ssh} = 0;
 		
@@ -1140,15 +1143,15 @@ sub node_status {
 	$status->{currentimage} = $current_image_name;
 	
 	if (!$current_image_name) {
-		notify($ERRORS{'DEBUG'}, 0, "unable to retrieve image name from currentimage.txt on VM $computer_name, returning 'RELOAD'");
+		notify($ERRORS{'OK'}, 0, "unable to retrieve image name from currentimage.txt on VM $computer_name, returning 'RELOAD'");
 		return $status;
 	}
 	elsif ($current_image_name eq $image_name) {
-		notify($ERRORS{'DEBUG'}, 0, "currentimage.txt image ($current_image_name) matches requested image name ($image_name) on VM $computer_name");
+		notify($ERRORS{'OK'}, 0, "currentimage.txt image ($current_image_name) matches requested image name ($image_name) on VM $computer_name");
 		$status->{image_match} = 1;
 	}
 	else {
-		notify($ERRORS{'DEBUG'}, 0, "currentimage.txt image ($current_image_name) does not match requested image name ($image_name) on VM $computer_name, returning 'RELOAD'");
+		notify($ERRORS{'OK'}, 0, "currentimage.txt image ($current_image_name) does not match requested image name ($image_name) on VM $computer_name, returning 'RELOAD'");
 		return $status;
 	}
 	
@@ -1196,7 +1199,7 @@ sub node_status {
 			return $status;
 		}
 		
-		notify($ERRORS{'DEBUG'}, 0, "vmdk file path used by the VM already loaded: $vmdk_file_path, mode: $vmdk_mode");
+		notify($ERRORS{'OK'}, 0, "vmdk file path used by the VM already loaded: $vmdk_file_path, mode: $vmdk_mode");
 		
 		# Can't use if nonpersistent
 		if ($vmdk_mode =~ /nonpersistent/i) {
@@ -1210,18 +1213,18 @@ sub node_status {
 				return $status;
 			}
 			else {
-				notify($ERRORS{'DEBUG'}, 0, "VM already loaded may be used, the vmdk does NOT appear to be shared");
+				notify($ERRORS{'OK'}, 0, "VM already loaded may be used, the vmdk does NOT appear to be shared");
 			}
 		}
 	}
 	
 	# Check if the OS post_load tasks have run
 	if ($self->os->get_vcld_post_load_status()) {
-		notify($ERRORS{'DEBUG'}, 0, "OS module post_load tasks have been completed on VM $computer_name");
+		notify($ERRORS{'OK'}, 0, "OS module post_load tasks have been completed on VM $computer_name");
 		$status->{status} = 'READY';
 	}
 	else {
-		notify($ERRORS{'DEBUG'}, 0, "OS module post_load tasks have not been completed on VM $computer_name, returning 'POST_LOAD'");
+		notify($ERRORS{'OK'}, 0, "OS module post_load tasks have not been completed on VM $computer_name, returning 'POST_LOAD'");
 		$status->{status} = 'POST_LOAD';
 	}
 	

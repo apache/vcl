@@ -54,6 +54,8 @@ use diagnostics;
 use English qw( -no_match_vars );
 
 use VCL::utils;
+use VCL::DataStructure;
+#use VCL::Module::Provisioning::xCAT2;
 use DBI;
 
 ##############################################################################
@@ -112,7 +114,7 @@ sub _initialize {
 		notify($ERRORS{'OK'}, $LOG, "retrieved management node information from database");
 	}
 	else {
-		notify($ERRORS{'CRITICAL'}, $LOG, "unable to retrieve management node information from database");
+		notify($ERRORS{'WARNING'}, $LOG, "unable to retrieve management node information from database");
 		exit;
 	}
 
@@ -121,20 +123,9 @@ sub _initialize {
 		notify($ERRORS{'OK'}, $LOG, "retrieved management node resource groups from database");
 	}
 	else {
-		notify($ERRORS{'CRITICAL'}, $LOG, "unable to retrieve management node resource groups from database");
+		notify($ERRORS{'WARNING'}, $LOG, "unable to retrieve management node resource groups from database");
 		exit;
 	}
-
-	foreach my $cid (keys %{$info->{computertable}}) {
-		#notify($ERRORS{'OK'}, $LOGFILE, "computer_id= $info->{computertable}->{$cid}->{computer_id}");
-		#get computer information
-		if ($info->{computertable}->{$cid} = get_computer_info($cid)) {
-
-		}
-		else {
-			delete $info->{computertable}->{$cid};
-		}
-	} ## end foreach my $cid (keys %{$info->{computertable}})
 
 }    ### end sub _initialize
 
@@ -154,9 +145,10 @@ sub process {
 	$info->{"globalmsg"}->{"body"} = "Summary of VCL node monitoring system:\n\n";
 
 	my $mn_hostname = $info->{managementnode}->{hostname};
+	my $last_check;
 
 	if($powerdownstage =~ /^(available|all)$/){
-		notify($ERRORS{'CRITICAL'}, $LOG, "ALERT: powerdown stage triggered,placing MN $mn_hostname in maintenance");
+		notify($ERRORS{'WARNING'}, $LOG, "ALERT: powerdown stage triggered,placing MN $mn_hostname in maintenance");
 		if (set_managementnode_state($info->{managementnode}, "maintenance")) {
 			notify($ERRORS{'OK'}, $LOG, "Successfully set $mn_hostname into maintenance");
 		}
@@ -165,7 +157,7 @@ sub process {
 		}
 	}
 	elsif($powerdownstage =~ /^restore/){
-		notify($ERRORS{'CRITICAL'}, $LOG, "ALERT: Environment OK: restoring state of MN $mn_hostname in available");
+		notify($ERRORS{'WARNING'}, $LOG, "ALERT: Environment OK: restoring state of MN $mn_hostname in available");
 		if (set_managementnode_state($info->{managementnode}, "available")) {
 			notify($ERRORS{'OK'}, $LOG, "Successfully set $mn_hostname into available");
 		}
@@ -177,36 +169,106 @@ sub process {
 		#proceed standard checks
 	}
 
+	
+
 	foreach my $cid (keys %{$info->{computertable}}) {
 		#set some local variables
-		my $comp_hostname             = $info->{computertable}->{$cid}->{computer}->{hostname};
-		my $comp_type                 = $info->{computertable}->{$cid}->{computer}->{type};
-		my $comp_state                = $info->{computertable}->{$cid}->{computer}->{state}->{name};
-		my $provisioning_perl_package = $info->{computertable}->{$cid}->{computer}->{provisioning}->{module}->{perlpackage};
-		my $last_check                = $info->{computertable}->{$cid}->{computer}->{lastcheck};
-		my $image_os_name             = $info->{computertable}->{$cid}->{image}->{OS}->{name};
-		my $comp_id                   = $cid;
+		#notify($ERRORS{'OK'}, $LOG, " dumping data for computer id $cid\n" . format_data($info->{computertable}->{$cid}));
+		# Create a DataStructure object containing data for the computer specified as the argument
+                my $data;
+		my $self;
+		my $computer_id = $cid;
+                eval {
+                        $data= new VCL::DataStructure({computer_id => $computer_id});
+                };
+                if ($EVAL_ERROR) {
+                        notify($ERRORS{'WARNING'}, 0, "failed to create DataStructure object for computer ID: $computer_id, error: $EVAL_ERROR");
+                        return;
+                }
+                elsif (!$data) {
+                        notify($ERRORS{'WARNING'}, 0, "failed to create DataStructure object for computer ID: $computer_id, DataStructure object is not defined");
+                        return;
+                }
+                else {
+								#notify($ERRORS{'OK'}, 0, "created DataStructure object for computer ID: $computer_id\n". format_data($data->get_request_data));
+                }
+		
+		my $computer_state = $data->get_computer_state_name();
+		$last_check = $data->get_computer_lastcheck_time();
+		my $computer_currentimage_name = $data->get_computer_currentimage_name();
 
-		#next if ($comp_type eq "lab");
-		#next if($comp_type eq "blade");
-		#next if ($comp_type eq "virtualmachine");
+                #Only preform actions on available or failed computers
+                #skip if is inuse, maintenance, tovmhost, etc.
+                if ($computer_state !~ /available|failed/) {
+
+                        notify($ERRORS{'OK'}, $LOG, "NODE computer_id $computer_id is in computer_state $computer_state skipping");
+                        $info->{computers}->{$cid}->{"skip"} = 1;
+                        $info->{"computersskipped"} += 1;
+                        next;
+                }
+
+                #check lastcheck
+                if (defined($last_check) && $computer_state !~ /failed/) {
+                        my $lastcheckepoch  = convert_to_epoch_seconds($last_check);
+                        my $currentimeepoch = convert_to_epoch_seconds();
+                        my $delta           = ($currentimeepoch - $lastcheckepoch);
+
+                        my $delta_minutes = round($delta / 60);
+
+                        if ($delta_minutes <= (60)) {
+                                notify($ERRORS{'OK'}, $LOG, "NODE $computer_id recently checked $delta_minutes minutes ago skipping");
+                                #this node was recently checked
+                                $info->{computers}->{$cid}->{"skip"} = 1;
+                                $info->{"computersskipped"} += 1;
+                                next;
+                        }
+                        $info->{"computerschecked"} += 1;
+                } ## end if (defined($last_check) && $computer_state !~...
+
+					 my $object_type = $data->get_computer_provisioning_module_perl_package();
+					 notify($ERRORS{'OK'}, 0, " object_type= $object_type" );
+					 eval "use $object_type";
+
+					 # Create a provisioning object
+                if ($self = ($object_type)->new({data_structure => $data})) {
+                        #notify($ERRORS{'OK'}, 0, "created $object_type object to check the status of computer ID: $computer_id\n" . format_data($self));
+                }
+                else {
+                        notify($ERRORS{'WARNING'}, 0, "failed to create $object_type object to check the status of computer ID: $computer_id");
+                        next;
+                }
+	
+
+
+
+		my $computer_hostname             = $data->get_computer_host_name();
+		my $computer_type                 = $data->get_computer_type(); 
+
+		#next if ($computer_type eq "lab");
+		#next if($computer_type eq "blade");
+		#next if ($computer_type eq "virtualmachine");
 		#need to pass some of the management node info to provisioing module node_status
 		$info->{computertable}->{$cid}->{"managementnode"} = $info->{managementnode};
 		$info->{computertable}->{$cid}->{"logfile"}        = $info->{logfile};
 
-		notify($ERRORS{'DEBUG'}, $LOG, "cid= $cid");
-		notify($ERRORS{'DEBUG'}, $LOG, "comp_hostname= $comp_hostname");
-		notify($ERRORS{'DEBUG'}, $LOG, "comp_type= $comp_type");
-		notify($ERRORS{'DEBUG'}, $LOG, "comp_state= $comp_state");
-		notify($ERRORS{'DEBUG'}, $LOG, "provisioning_perl_package= $provisioning_perl_package");
-		notify($ERRORS{'DEBUG'}, $LOG, "image_os_name= $image_os_name");
+		notify($ERRORS{'OK'}, $LOG, "cid= $cid");
+		notify($ERRORS{'OK'}, $LOG, "computer_hostname= $computer_hostname");
+		notify($ERRORS{'OK'}, $LOG, "computer_type= $computer_type");
+		notify($ERRORS{'OK'}, $LOG, "computer_state= $computer_state");
 
 		my ($datestring, $node_status_string);
+		my $node_status;
+
+		 # Create an OS object for the VMware object to access
+		  if (!$self->create_os_object()) {
+					 notify($ERRORS{'WARNING'}, 0, "failed to create OS object");
+					 next;
+		  }
 
 		# Collect current state of node - it could have changed since we started
 		if (my $comp_current_state = get_computer_current_state_name($cid)) {
 			$info->{computertable}->{$cid}->{computer}->{state}->{name} = $comp_current_state;
-			$comp_state = $comp_current_state;
+			$computer_state = $comp_current_state;
 		}
 		else {
 			#could not get it, use existing data
@@ -217,10 +279,10 @@ sub process {
 		if($powerdownstage =~ /^(available|all)$/){
 			$info->{computertable}->{$cid}->{"powerdownstage"} = $powerdownstage;
 			if(powerdown_event($info->{computertable}->{$cid})){
-				notify($ERRORS{'OK'}, $LOG, "Successfully powered down $comp_hostname");
+				notify($ERRORS{'OK'}, $LOG, "Successfully powered down $computer_hostname");
 			}
 			else {
-				#notify($ERRORS{'OK'}, $LOG, "Could not powerdown $comp_hostname");
+				#notify($ERRORS{'OK'}, $LOG, "Could not powerdown $computer_hostname");
 			}
 			next;
 		}
@@ -228,97 +290,106 @@ sub process {
 		 #proceed as normal
 		}
 
-		#Only preform actions on these available or failed computer states
-		#skip if is inuse, maintenance, tovmhost, etc.
-		if ($comp_state !~ /available|failed/) {
+		if ($self->can("node_status")) {
+			notify($ERRORS{'OK'}, 0, "calling " . ref($self) . "->node_status()");
 
-			notify($ERRORS{'OK'}, $LOG, "NODE $comp_hostname $comp_state skipping");
-			$info->{computers}->{$cid}->{"skip"} = 1;
-			$info->{"computersskipped"} += 1;
-			next;
-		}
+			# Call node_status(), check the return value
+			$node_status = $self->node_status();
 
-		#check lastcheck
-		if (defined($last_check) && $comp_state !~ /failed/) {
-			my $lastcheckepoch  = convert_to_epoch_seconds($last_check);
-			my $currentimeepoch = convert_to_epoch_seconds();
-			my $delta           = ($currentimeepoch - $lastcheckepoch);
-
-			my $delta_minutes = round($delta / 60);
-
-			if ($delta_minutes <= (60)) {
-				notify($ERRORS{'OK'}, $LOG, "NODE $comp_hostname recently checked $delta_minutes minutes ago skipping");
-				#this node was recently checked
-				$info->{computers}->{$cid}->{"skip"} = 1;
-				$info->{"computersskipped"} += 1;
+			# Make sure a return value is defined, an error occurred if it is undefined
+			if (!defined($node_status)) {
+				notify($ERRORS{'WARNING'}, 0, ref($self) . "->node_status() returned an undefined value, returning");
 				next;
 			}
-			$info->{"computerschecked"} += 1;
-		} ## end if (defined($last_check) && $comp_state !~...
+
+			# Check what node_status returned and try to get the "status" string
+			# First see if it returned a hashref
+			if (ref($node_status) eq 'HASH') {
+				notify($ERRORS{'OK'}, 0, "node_status returned a hash reference");
+
+				# Check if the hash contains a key called "status"
+				if (defined $node_status->{status}) {
+					$node_status_string = $node_status->{status};
+					notify($ERRORS{'OK'}, 0, "node_status hash reference contains key {status}=$node_status_string");
+				}
+				else {
+					notify($ERRORS{'OK'}, 0, "node_status hash reference does not contain a key called 'status'");
+				}
+			} ## end if (ref($node_status) eq 'HASH')
+
+			# Check if node_status returned an array ref
+			elsif (ref($node_status) eq 'ARRAY') {
+				notify($ERRORS{'OK'}, 0, "node_status returned an array reference");
+
+				# Check if the hash contains a key called "status"
+				if (defined((@{$node_status})[0])) {
+					$node_status_string = (@{$node_status})[0];
+					notify($ERRORS{'OK'}, 0, "node_status array reference contains index [0]=$node_status_string");
+				}
+				else {
+					notify($ERRORS{'OK'}, 0, "node_status array reference is empty");
+				}
+			} ## end elsif (ref($node_status) eq 'ARRAY')  [ if (ref($node_status) eq 'HASH')
+
+                # Check if node_status didn't return a reference
+                # Assume string was returned
+                elsif (!ref($node_status)) {
+                        # Use scalar value of node_status's return value
+                        $node_status_string = $node_status;
+                        notify($ERRORS{'OK'}, 0, "node_status returned a scalar: $node_status");
+                }
+                else {
+                        notify($ERRORS{'WARNING'}, 0, ref($self->provisioner) . "->node_status() returned an unsupported reference type: " . ref($node_status) . ", returning");
+                        next;
+                }
+		} ## end if ($self->provisioner->can("node_status"))        
+		else {
+					 notify($ERRORS{'OK'}, 0, "node status not checked, node_status() not implemented by " . ref($self->provisioner) . ", assuming load=true ");
+					 next;
+        }
 
 		#count the nodes processed
 		$info->{"computercount"} += 1;
-		eval "use $provisioning_perl_package";
-		if ($EVAL_ERROR) {
-			notify($ERRORS{'WARNING'}, $LOG, "$provisioning_perl_package module could not be loaded");
-			notify($ERRORS{'OK'},      $LOG, "returning 0");
-			return 0;
-		}
 
-		my $node_status = eval "&$provisioning_perl_package" . '::node_status($info->{computertable}->{$cid});';
-		if (!$EVAL_ERROR) {
-			notify($ERRORS{'OK'}, $LOG, "loaded $provisioning_perl_package");
-		}
-		else {
-			notify($ERRORS{'WARNING'}, $LOG, "$provisioning_perl_package module could not be loaded $@");
-		}
-
-		if (defined $node_status->{status}) {
-			$node_status_string = $node_status->{status};
-			notify($ERRORS{'DEBUG'}, $LOG, "node_status hash reference contains key {status}=$node_status_string");
-		}
-		else {
-			notify($ERRORS{'DEBUG'}, $LOG, "node_status hash reference does not contain a key called 'status'");
-		}
-
-		if ($node_status_string =~ /^ready/i) {
+		if ($node_status_string =~ /(^ready)|(post_load)/i) {
 			#proceed
-			notify($ERRORS{'OK'}, $LOG, "nodestatus reports  $node_status_string for $comp_hostname");
+			notify($ERRORS{'OK'}, $LOG, "nodestatus reports  $node_status_string for $computer_hostname");
 
 			#update lastcheck datetime
 			$datestring = makedatestring;
-			if (update_computer_lastcheck($comp_id, $datestring, $LOG)) {
-				notify($ERRORS{'OK'}, $LOG, "updated lastcheckin for $comp_hostname");
+			if (update_computer_lastcheck($computer_id, $datestring, $LOG)) {
+				notify($ERRORS{'OK'}, $LOG, "updated lastcheckin for $computer_hostname");
 			}
 
 			#udpate state to available if old state is failed
-			if ($comp_state =~ /failed/i) {
-				if (update_computer_state($comp_id, "available", $LOG)) {
-					notify($ERRORS{'OK'}, $LOG, "updated state to available for $comp_hostname");
+			if ($computer_state =~ /failed/i) {
+				if (update_computer_state($computer_id, "available", $LOG)) {
+					notify($ERRORS{'OK'}, $LOG, "updated state to available for $computer_hostname");
 				}
 			}
 		} ## end if ($node_status_string =~ /^ready/i)
 		elsif ($node_status_string =~ /^reload/i) {
 
 			$info->{computertable}->{$cid}->{node_status} = \%{$node_status};
+			$info->{computertable}->{$cid}->{"computer_currentimage_name"} = $computer_currentimage_name;
 
-			notify($ERRORS{'OK'}, $LOG, "nodestatus reports $node_status_string for $comp_hostname");
+			notify($ERRORS{'OK'}, $LOG, "nodestatus reports $node_status_string for $computer_hostname");
 
 			#additional steps
 			my $node_available = 0;
 
-			if ($comp_type eq "lab") {
+			if ($computer_type eq "lab") {
 				#no additional checks required for lab type
 				#if(lab_investigator($info->{computertable}->{$cid})){
 				#	$node_available =1;
 				#}
 			}
-			elsif ($comp_type eq "virtualmachine") {
+			elsif ($computer_type eq "virtualmachine") {
 				if (_virtualmachine_investigator($info->{computertable}->{$cid})) {
 					$node_available = 1;
 				}
 			}
-			elsif ($comp_type eq "blade") {
+			elsif ($computer_type eq "blade") {
 				if (_blade_investigator($info->{computertable}->{$cid})) {
 					$node_available = 1;
 				}
@@ -326,22 +397,22 @@ sub process {
 
 			if ($node_available) {
 				#update state to available
-				if (update_computer_state($comp_id, "available", $LOG)) {
-					notify($ERRORS{'OK'}, $LOG, "updated state to available for $comp_hostname");
+				if (update_computer_state($computer_id, "available", $LOG)) {
+					notify($ERRORS{'OK'}, $LOG, "updated state to available for $computer_hostname");
 				}
 				#update lastcheck datetime
 				$datestring = makedatestring;
-				if (update_computer_lastcheck($comp_id, $datestring, $LOG)) {
-					notify($ERRORS{'OK'}, $LOG, "updated lastcheckin for $comp_hostname");
+				if (update_computer_lastcheck($computer_id, $datestring, $LOG)) {
+					notify($ERRORS{'OK'}, $LOG, "updated lastcheckin for $computer_hostname");
 				}
 			} ## end if ($node_available)
 			else{
-				$info->{globalmsg}->{failedbody} .= "$comp_hostname type= $comp_type offline\n";
+				$info->{globalmsg}->{failedbody} .= "$computer_hostname type= $computer_type offline\n";
 			}
 
 		} ## end elsif ($node_status_string =~ /^reload/i)  [ if ($node_status_string =~ /^ready/i)
 		else {
-			notify($ERRORS{'OK'}, $LOG, "node_status reports unknown value for $comp_hostname node_status_string= $node_status_string ");
+			notify($ERRORS{'OK'}, $LOG, "node_status reports unknown value for $computer_hostname node_status_string= $node_status_string ");
 
 		}
 
@@ -368,9 +439,9 @@ sub _blade_investigator {
 	my ($self) = @_;
 
 	my $retval                  = 0;
-	my $comp_hostname           = $self->{computer}->{hostname};
-	my $comp_imagename          = $self->{imagerevision}->{imagename};
-	my $comp_id                 = $self->{computer}->{id};
+	my $computer_hostname           = $self->{computer}->{hostname};
+	my $comp_imagename          = $self->{computer_currentimage_name};
+	my $computer_id                 = $self->{computer_id};
 	my $nodestatus_status       = $self->{node_status}->{status};
 	my $nodestatus_nodetype     = $self->{node_status}->{nodetype};
 	my $nodestatus_currentimage = $self->{node_status}->{currentimage};
@@ -379,18 +450,18 @@ sub _blade_investigator {
 	my $nodestatus_nodeset      = $self->{node_status}->{nodeset};
 	my $nodestatus_ssh          = $self->{node_status}->{ssh};
 
-	notify($ERRORS{'OK'}, $LOG, "comp_hostname= $comp_hostname node_status_status= $nodestatus_status");
+	notify($ERRORS{'OK'}, $LOG, "computer_hostname= $computer_hostname node_status_status= $nodestatus_status");
 
 	#If can ping and can ssh into it, compare loaded image with database imagename
 	if ($nodestatus_ping && $nodestatus_ssh) {
-		if (_image_revision_check($comp_id, $comp_imagename, $nodestatus_currentimage)) {
+		if (_image_revision_check($computer_id, $comp_imagename, $nodestatus_currentimage)) {
 			#return success
-			notify($ERRORS{'OK'}, $LOG, "comp_hostname= $comp_hostname imagename updated");
+			notify($ERRORS{'OK'}, $LOG, "computer_hostname= $computer_hostname imagename updated");
 			$retval = 1;
 		}
 	}
 	else {
-		notify($ERRORS{'OK'}, $LOG, "comp_hostname= $comp_hostname is confirmed down");
+		notify($ERRORS{'OK'}, $LOG, "computer_hostname= $computer_hostname is confirmed down");
 	}
 
 	return $retval;
@@ -414,12 +485,11 @@ sub powerdown_event {
 	my $computer_host_name      = $self->{computer}->{hostname};
 	my $computer_short_name     = 0;
 	my $computer_ip_address     = $self->{computer}->{IPaddress};
-	my $image_os_name           = $self->{image}->{OS}->{name};
 	my $image_name              = $self->{imagerevision}->{imagename};
 	my $image_os_type           = $self->{image}->{OS}->{type};
 	my $provisioning_perl_package = $self->{computer}->{provisioning}->{module}->{perlpackage};
-	my $comp_type                 = $self->{computer}->{type};
-	my $comp_state						= $self->{computer}->{state}->{name};
+	my $computer_type                 = $self->{computer}->{type};
+	my $computer_state						= $self->{computer}->{state}->{name};
 	my $computer_node_name 			= $self->{computer}->{hostname};
 	my $power_down_stage				= $self->{powerdownstage};
 
@@ -428,7 +498,7 @@ sub powerdown_event {
 	#If blade or vm and available|failed|maintenance - simply power-off
 	#If blade and vmhostinuse - check vms, if available power-down all
 
-	if(($comp_type =~ /blade/) && ($comp_state =~ /^(available|failed|maintenance)/)){
+	if(($computer_type =~ /blade/) && ($computer_state =~ /^(available|failed|maintenance)/)){
 		notify($ERRORS{'OK'}, $LOG, "calling provision module $provisioning_perl_package power_off routine $computer_short_name");
 		
 		eval "use $provisioning_perl_package";
@@ -446,7 +516,7 @@ sub powerdown_event {
 		return 0;
 	}
 	else{
-		 notify($ERRORS{'OK'}, $LOG, "SKIPPING $computer_short_name comp_type= $comp_type in   comp_state= $comp_state");
+		 notify($ERRORS{'OK'}, $LOG, "SKIPPING $computer_short_name computer_type= $computer_type in   computer_state= $computer_state");
 		 return 0;
 	}
 
@@ -468,9 +538,9 @@ sub _virtualmachine_investigator {
 	my ($self) = @_;
 
 	my $retval                  = 0;
-	my $comp_hostname           = $self->{computer}->{hostname};
-	my $comp_imagename          = $self->{imagerevision}->{imagename};
-	my $comp_id                 = $self->{computer}->{id};
+	my $computer_hostname           = $self->{computer}->{hostname};
+	my $comp_imagename          = $self->{computer_currentimage_name};
+	my $computer_id                 = $self->{computer_id};
 	my $nodestatus_status       = $self->{node_status}->{status};
 	my $nodestatus_currentimage = $self->{node_status}->{currentimage};
 	my $nodestatus_ping         = $self->{node_status}->{ping};
@@ -485,14 +555,14 @@ sub _virtualmachine_investigator {
 	}
 
 	if ($nodestatus_currentimage && $nodestatus_ssh) {
-		if (_image_revision_check($comp_id, $comp_imagename, $nodestatus_currentimage)) {
+		if (_image_revision_check($computer_id, $comp_imagename, $nodestatus_currentimage)) {
 			#return success
-			notify($ERRORS{'OK'}, $LOG, "comp_hostname= $comp_hostname imagename updated");
+			notify($ERRORS{'OK'}, $LOG, "computer_hostname= $computer_hostname imagename updated");
 			$retval = 1;
 		}
 	}
 	else {
-		notify($ERRORS{'OK'}, $LOG, "comp_hostname= $comp_hostname is confirmed down nodestatus_vmstate= $nodestatus_vmstate nodestatus_ssh= $nodestatus_ssh");
+		notify($ERRORS{'OK'}, $LOG, "computer_hostname= $computer_hostname is confirmed down nodestatus_vmstate= $nodestatus_vmstate nodestatus_ssh= $nodestatus_ssh");
 	}
 
 	return $retval;
@@ -512,13 +582,13 @@ sub _virtualmachine_investigator {
 
 sub _image_revision_check {
 
-	my ($comp_id, $comp_imagename, $nodestatus_currentimage) = @_;
+	my ($computer_id, $comp_imagename, $nodestatus_currentimage) = @_;
 
 	my $retval = 1;
 	#Return retval=1 only if update_computer_imagename fails
 	if ($comp_imagename !~ /$nodestatus_currentimage/) {
 		#update computer entry
-		if (update_computer_imagename($comp_id, $nodestatus_currentimage, $LOG)) {
+		if (update_computer_imagename($computer_id, $nodestatus_currentimage, $LOG)) {
 			$retval = 1;
 		}
 		else {
@@ -527,6 +597,9 @@ sub _image_revision_check {
 			$retval = 0;
 		}
 	} ## end if ($comp_imagename !~ /$nodestatus_currentimage/)
+	else {
+		notify($ERRORS{'OK'}, $LOG, " image revisions match - no update required");
+	}
 
 	return $retval;
 

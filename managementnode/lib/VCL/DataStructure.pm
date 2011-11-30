@@ -618,7 +618,13 @@ sub _initialize : Init {
 	# Set the request and reservation IDs in the request data hash if they are undefined
 	$self->request_data->{id} = ($self->request_id || 0) if (!defined($self->request_data->{id}));
 	$self->request_data->{RESERVATIONID} = ($self->reservation_id || 0) if (!defined($self->request_data->{RESERVATIONID}));
-	
+	if ($self->request_data->{RESERVATIONID} == 0) {
+		$self->request_data->{reservation}{0}{serverrequest}{id} = 0;
+		$self->request_data->{forimaging} = 0;
+		$self->request_data->{state}{name} = "available";
+		
+	}
+
 	my $computer_id = $self->computer_id;
 	my $image_id = $self->image_id;
 	my $imagerevision_id = $self->imagerevision_id;
@@ -656,13 +662,26 @@ sub _initialize : Init {
 		elsif ($computer_id) {
 			$imagerevision_id = $self->get_computer_imagerevision_id();
 			if (defined($imagerevision_id)) {
-				notify($ERRORS{'DEBUG'}, 0, "computer ID argument was specified ($computer_id) but image and imagerevision ID arguments were not, DataStructure object will contain image information for the computer's current imagerevision ID: $imagerevision_id");
+				notify($ERRORS{'OK'}, 0, "computer ID argument was specified ($computer_id) but image and imagerevision ID arguments were not, DataStructure object will contain image information for the computer's current imagerevision ID: $imagerevision_id");
+					  if(!$imagerevision_id) {
+						  notify($ERRORS{'OK'}, 0, "computer ID argument was specified ($computer_id) imagerevision_id is set to $imagerevision_id");
+						  $image_id = $self->get_computer_currentimage_id();
+						  if(defined($image_id)) {
+							  $imagerevision_info = get_production_imagerevision_info($image_id);
+						  }
+						  else {
+							  Exception::Class::Base->throw( error => "DataStructure object could not be initialized, computer's current imagerevision ID could not be retrieved from the current DataStructure data:\n" . format_data($self->get_request_data));
+								return;
+						  }
+					  }
+					  else {
+						  $imagerevision_info = get_imagerevision_info($imagerevision_id);
+					  }
 			}
 			else {
 				Exception::Class::Base->throw( error => "DataStructure object could not be initialized, computer's current imagerevision ID could not be retrieved from the current DataStructure data:\n" . format_data($self->get_request_data));
-				return;
+                        return;
 			}
-			$imagerevision_info = get_imagerevision_info($imagerevision_id);
 		}
 		
 		if ($imagerevision_info) {
