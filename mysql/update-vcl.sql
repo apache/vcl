@@ -256,6 +256,7 @@ EXECUTE nextimageid_noimage;
 
 -- change RAM to mediumint
 ALTER TABLE `computer` CHANGE `RAM` `RAM` MEDIUMINT UNSIGNED NOT NULL DEFAULT '0';
+ALTER TABLE `computer` CHANGE `location` `location` VARCHAR(255) NULL DEFAULT NULL;
 
 -- --------------------------------------------------------
 

@@ -212,7 +212,7 @@ CREATE TABLE IF NOT EXISTS `computer` (
   `deleted` tinyint(1) unsigned NOT NULL default '0',
   `notes` text,
   `lastcheck` datetime default NULL,
-  `location` varchar(10) default NULL,
+  `location` varchar(255) default NULL,
   `dsa` mediumtext,
   `dsapub` mediumtext,
   `rsa` mediumtext,
