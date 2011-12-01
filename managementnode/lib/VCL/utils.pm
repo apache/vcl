@@ -300,7 +300,6 @@ INIT {
 			$CONF_FILE_PATH = "/etc/vcl/vcld.conf";
 		}
 	}
-#$CONF_FILE_PATH ="/usr/local/vcldev/fap/managementnode/etc/vcl/vcld.conf";
 
 	# Store the command line options in hash
 	our %OPTIONS;
