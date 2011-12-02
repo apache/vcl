@@ -176,6 +176,7 @@ $noHTMLwrappers = array('sendRDPfile',
                         'AJrebootRequest',
                         'AJreinstallRequest',
                         'AJshowRequestSuggestedTimes',
+                        'AJgenerateUtilData',
 );
 
 # main
@@ -446,6 +447,7 @@ $actions['mode']['compStateChange'] = "compStateChange";
 $actions['mode']['submitCompStateChange'] = "submitCompStateChange";
 $actions['mode']['compScheduleChange'] = "compScheduleChange";
 $actions['mode']['submitCompScheduleChange'] = "submitCompScheduleChange";
+$actions['mode']['AJgenerateUtilData'] = "AJgenerateUtilData";
 $actions['mode']['editComputer'] = "editOrAddComputer";
 $actions['args']['editComputer'] = 0;
 $actions['mode']['addComputer'] = "editOrAddComputer";
@@ -482,6 +484,7 @@ $actions['pages']['compStateChange'] = "manageComputers";
 $actions['pages']['submitCompStateChange'] = "manageComputers";
 $actions['pages']['compScheduleChange'] = "manageComputers";
 $actions['pages']['submitCompScheduleChange'] = "manageComputers";
+$actions['pages']['AJgenerateUtilData'] = "manageComputers";
 $actions['pages']['editComputer'] = "manageComputers";
 $actions['pages']['addComputer'] = "manageComputers";
 $actions['pages']['confirmEditComputer'] = "manageComputers";

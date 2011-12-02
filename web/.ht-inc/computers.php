@@ -40,10 +40,12 @@ define("OWNERERR", 1 << 7);
 define("IPADDRERR3", 1 << 8);
 /// signifies an error with the submitted end private IP address
 define("IPADDRERR4", 1 << 9);
-/// signifies an error with the submitted start mac address
+/// signifies an error with the submitted start mac address or public mac address
 define("MACADDRERR", 1 << 10);
 /// signifies an error with the submitted machine type/state combination
 define("VMAVAILERR", 1 << 11);
+/// signifies an error with the submitted private mac address
+define("MACADDRERR2", 1 << 12);
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
@@ -91,6 +93,14 @@ function selectComputers() {
 
 		print "<div id=\"mainTabContainer\" dojoType=\"dijit.layout.TabContainer\"\n";
 		print "     style=\"width:300px;height:275px\">\n";
+		# by groups
+		$size = count($computergroups);
+		if($size > 13)
+			$size = 13;
+		print "<div id=\"groups\" dojoType=\"dijit.layout.ContentPane\" ";
+		print "title=\"Computer Groups\" align=center selected=\"true\">\n";
+		printSelectInput("groups[]", $computergroups, -1, 0, 1, '', "size=$size");
+		print "</div>\n";
 		# by platform/schedule
 		print "<div id=\"platsch\" dojoType=\"dijit.layout.ContentPane\" title=\"Platforms/Schedules\">\n";
 		print "<TABLE summary=\"\">\n";
@@ -123,14 +133,6 @@ function selectComputers() {
 		}
 		print "  </TR>\n";
 		print "</TABLE>\n";
-		print "</div>\n";
-		# by groups
-		$size = count($computergroups);
-		if($size > 13)
-			$size = 13;
-		print "<div id=\"groups\" dojoType=\"dijit.layout.ContentPane\" ";
-		print "title=\"Computer Groups\" align=center selected=\"true\">\n";
-		printSelectInput("groups[]", $computergroups, -1, 0, 1, '', "size=$size");
 		print "</div>\n";
 		print "</div><br>\n";
 
@@ -185,7 +187,7 @@ function selectComputers() {
 		print "    <TD><INPUT type=checkbox id=showstate name=showstate value=1 ";
 		print "checked><label for=showstate>State</label></TD>\n";
 		print "    <TD><INPUT type=checkbox id=showprocnumber name=showprocnumber ";
-		print "value=1><label for=showprocnumber>No. Processors</label></TD>\n";
+		print "value=1><label for=showprocnumber>No. Cores</label></TD>\n";
 		print "  </TR>\n";
 		print "  <TR nowrap>\n";
 		print "    <TD><INPUT type=checkbox id=showcurrentimage name=";
@@ -222,7 +224,8 @@ function selectComputers() {
 		print "    <TD><INPUT type=checkbox id=showprovisioning ";
 		print "name=showprovisioning value=1>";
 		print "<label for=showprovisioning>Provisioning Engine</label></TD>\n";
-		print "    <TD></TD>\n";
+		print "    <TD><INPUT type=checkbox id=showlocation name=showlocation ";
+		print "value=1><label for=showlocation>Location</label></TD>\n";
 		print "  </TR>\n";
 		print "</TABLE>\n";
 	}
@@ -283,16 +286,16 @@ function viewComputers($showall=0) {
 		$deleted = getContinuationVar("deleted");
 		if($deleted) {
 			print "<font color=\"#008000\">computer successfully restored to the normal ";
-			print "state</font>\n";
+			print "state</font><br><br>\n";
 		}
 		else {
 			print "<font color=\"#008000\">computer successfully set to the deleted ";
-			print "state</font>\n";
+			print "state</font><br><br>\n";
 		}
 	}
 	elseif($mode == "submitAddComputer") {
 		print "<H2>Add Computer</H2>\n";
-		print "<font color=\"#008000\">computer successfully added</font>\n";
+		print "<font color=\"#008000\">computer successfully added</font><br><br>\n";
 	}
 	if(! count($schedules)) {
 		print "You don't have access to manage any schedules.  You must be able ";
@@ -300,6 +303,23 @@ function viewComputers($showall=0) {
 		print "<br>\n";
 		return;
 	}
+
+	print "<FORM action=\"" . BASEURL . SCRIPT . "\" method=post style=\"display: inline\">\n";
+	print "<INPUT type=submit value=\"Add Single Computer\">\n";
+	$cdata = getComputerSelection($data);
+	$cdata['states'] = $states;
+	$cont = addContinuationsEntry('addComputer', $cdata);
+	print "<INPUT type=hidden name=continuation value=\"$cont\">\n";
+	print "</FORM>\n";
+
+	print "<FORM action=\"" . BASEURL . SCRIPT . "\" method=post style=\"display: inline\">\n";
+	print "<INPUT type=submit value=\"Add Multiple Computers\">\n";
+	$cdata = getComputerSelection($data);
+	$cdata['states'] = $states;
+	$cont = addContinuationsEntry('bulkAddComputer', $cdata);
+	print "<INPUT type=hidden name=continuation value=\"$cont\">\n";
+	print "</FORM><br><br>\n";
+
 	print "<TABLE border=1 id=layouttable>\n";
 	print "  <TR>\n";
 	print "    <TD></TD>\n";
@@ -323,7 +343,7 @@ function viewComputers($showall=0) {
 	if($data["showram"] || $showall)
 		print "    <TH>RAM(MB)</TH>\n";
 	if($data["showprocnumber"] || $showall)
-		print "    <TH>No. Processors</TH>\n";
+		print "    <TH>No. Cores</TH>\n";
 	if($data["showprocspeed"] || $showall)
 		print "    <TH>Processor Speed(MHz)</TH>\n";
 	if($data["shownetwork"] || $showall)
@@ -340,83 +360,8 @@ function viewComputers($showall=0) {
 		print "    <TH>Notes</TH>\n";
 	if($data["showcounts"] || $showall)
 		print "    <TH>No. of Reservations</TH>\n";
-	print "  </TR>\n";
-	print "  <TR>\n";
-	print "    <FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
-	print "    <TD align=center>Add&nbsp;Multiple?";
-	print "<INPUT type=checkbox name=bulk value=1></TD>\n";
-	print "    <TD>\n";
-	print "      <INPUT type=submit value=Add>\n";
-	print "    </TD>\n";
-	if($data["showhostname"] || $showall)
-		print "    <TD><INPUT type=text name=hostname maxlength=36></TD>\n";
-	if($data["showipaddress"] || $showall) {
-		print "    <TD><INPUT type=text name=ipaddress size=15 maxlength=15>";
-		print "</TD>\n";
-	}
-	if($data["showstate"] || $showall) {
-		print "    <TD>\n";
-		printSelectInput("stateid", $states, 2);
-		print "    </TD>\n";
-	}
-	if($data["showowner"] || $showall) {
-		print "    <TD><INPUT type=text name=owner size=15 value=\"";
-		print "{$user["unityid"]}@{$user['affiliation']}\"></TD>\n";
-	}
-	if($data["showplatform"] || $showall) {
-		print "    <TD>\n";
-		printSelectInput("platformid", $platforms);
-		print "    </TD>\n";
-	}
-	if($data["showschedule"] || $showall) {
-		print "    <TD>\n";
-		printSelectInput("scheduleid", $schedules);
-		print "    </TD>\n";
-	}
-	if($data["showcurrentimage"] || $showall)
-		print "    <TD><img src=\"images/blank.gif\" width=190 height=1></TD>\n";
-	if($data["shownextimage"] || $showall)
-		print "    <TD></TD>\n";
-	if($data["showram"] || $showall)
-		print "    <TD><INPUT type=text name=ram size=5 maxlength=5></TD>\n";
-	if($data["showprocnumber"] || $showall) {
-		print "    <TD>\n";
-		printSelectInput("numprocs", 
-		   array("1" => "1", "2" => "2", "4" => "4", "8" => "8"));
-		print "    </TD>\n";
-	}
-	if($data["showprocspeed"] || $showall) {
-		print "    <TD><INPUT type=text name=procspeed size=5 maxlength=5>";
-		print "</TD>\n";
-	}
-	if($data["shownetwork"] || $showall) {
-		print "    <TD>\n";
-		printSelectInput("network", 
-		   array("10" => "10", "100" => "100", "1000" => "1000"));
-		print "    </TD>\n";
-	}
-	if($data["showcomputerid"] || $showall)
-		print "    <TD></TD>\n";
-	if($data["showtype"] || $showall) {
-		print "    <TD>\n";
-		printSelectInput("type", array("blade" => "blade", "lab" => "lab"), "lab");
-		print "    </TD>\n";
-	}
-	if($data["showprovisioning"] || $showall) {
-		print "    <TD>\n";
-		printSelectInput("provisioningid", $provisioning);
-		print "    </TD>\n";
-	}
-	if($data["showdeleted"])
-		print "    <TD align=center>N/A</TD>\n";
-	if($data["shownotes"])
-		print "    <TD>&nbsp;</TD>\n";
-	if($data["showcounts"])
-		print "    <TD>&nbsp;</TD>\n";
-	$cdata = getComputerSelection($data);
-	$cont = addContinuationsEntry('confirmAddComputer', $cdata);
-	print "    <INPUT type=hidden name=continuation value=\"$cont\">\n";
-	print "    </FORM>\n";
+	if($data["showlocation"] || $showall)
+		print "    <TH>Location</TH>\n";
 	print "  </TR>\n";
 	$count = 0;
 	foreach(array_keys($computers) as $id) {
@@ -509,6 +454,8 @@ function viewComputers($showall=0) {
 			}
 		if($data["showcounts"])
 			print "    <TD>{$computers[$id]["counts"]}</TD>\n";
+		if($data["showlocation"])
+			print "    <TD>{$computers[$id]["location"]}</TD>\n";
 		print "  </TR>\n";
 		$count++;
 	}
@@ -574,27 +521,35 @@ function editOrAddComputer($state) {
 	if($submitErr) {
 		$data = processComputerInput();
 	}
-	elseif($nocomps) {
+	elseif($nocomps || $state == 1) {
+		$data = array();
 		$data["ipaddress"] = '';
+		$data["pripaddress"] = '';
+		$data["eth0macaddress"] = '';
+		$data["eth1macaddress"] = '';
 		$data["stateid"] = '';
 		$data["owner"] = '';
 		$data["platformid"] = '';
 		$data["scheduleid"] = '';
 		$data["currentimgid"] = '';
 		$data["ram"] = '';
-		$data["numprocs"] = '';
+		$data["numprocs"] = '1';
 		$data["procspeed"] = '';
-		$data["network"] = '';
+		$data["network"] = '1000';
 		$data["hostname"] = '';
-		$data["type"] = '';
+		$data["type"] = 'blade';
 		$data["notes"] = '';
 		$data["computergroup"] = array();
 		$data["provisioningid"] = '';
+		$data["location"] = '';
 	}
 	else {
 		$data["compid"] = getContinuationVar("compid");
 		$id = $data["compid"];
 		$data["ipaddress"] = $computers[$id]["IPaddress"];
+		$data["pripaddress"] = $computers[$id]["privateIPaddress"];
+		$data["eth0macaddress"] = $computers[$id]["eth0macaddress"];
+		$data["eth1macaddress"] = $computers[$id]["eth1macaddress"];
 		$data["stateid"] = $computers[$id]["stateid"];
 		$data["owner"] = $computers[$id]["owner"];
 		$data["platformid"] = $computers[$id]["platformid"];
@@ -608,13 +563,18 @@ function editOrAddComputer($state) {
 		$data["type"] = $computers[$id]["type"];
 		$data["notes"] = $computers[$id]["notes"];
 		$data["provisioningid"] = $computers[$id]["provisioningid"];
+		$data["location"] = $computers[$id]["location"];
 	}
 	
 	$tmpstates = getStates();
-	if($data["stateid"]) {
-		$states = array($data["stateid"] => $tmpstates[$data["stateid"]],
-		                2 => "available",
-		                10 => "maintenance");
+	if($data["stateid"] && array_key_exists($data['stateid'], $tmpstates)) {
+		if($state == 0 && $data['type'] == 'virtualmachine' &&
+		   $computers[$data['compid']]['vmhostid'] == '')
+			$states = array(10 => "maintenance");
+		else
+			$states = array($data["stateid"] => $tmpstates[$data["stateid"]],
+			                2 => "available",
+			                10 => "maintenance");
 	}
 	else {
 		$states = array(2 => "available",
@@ -622,12 +582,43 @@ function editOrAddComputer($state) {
 	}
 	if($state)
 		$states[20] = 'vmhostinuse';
+	print "<script type=\"text/javascript\">\n";
+	$tmp = array();
+	foreach($states as $id => $val)
+		$tmp[] = "{value: '$id', label: '$val'}";
+	print "var allowedstates = [";
+	print implode(',', $tmp);
+	print "];\n";
 	$platforms = getPlatforms();
 	$tmp = getUserResources(array("scheduleAdmin"), array("manageGroup"));
 	$schedules = $tmp["schedule"];
 	$allschedules = getSchedules();
 	$images = getImages();
 	$provisioning = getProvisioning();
+	$showprovisioning = array();
+	$allowedprovisioning = array();
+	foreach($provisioning as $id => $val) {
+		if($val['name'] == 'lab') {
+			$allowedprovisioning['lab'][] = array('id' => $id, 'name' => $val['prettyname']);
+			if($data['type'] == 'lab')
+				$showprovisioning[$id] = $val['prettyname'];
+		}
+		elseif(preg_match('/^xcat/', $val['name'])) {
+			$allowedprovisioning['blade'][] = array('id' => $id, 'name' => $val['prettyname']);
+			if($data['type'] == 'blade')
+				$showprovisioning[$id] = $val['prettyname'];
+		}
+		else {
+			$allowedprovisioning['virtualmachine'][] = array('id' => $id, 'name' => $val['prettyname']);
+			if($data['type'] == 'virtualmachine')
+				$showprovisioning[$id] = $val['prettyname'];
+		}
+	}
+	$allowedprovisioning['lab']['length'] = count($allowedprovisioning['lab']);
+	$allowedprovisioning['blade']['length'] = count($allowedprovisioning['blade']);
+	$allowedprovisioning['virtualmachine']['length'] = count($allowedprovisioning['virtualmachine']);
+	print "var allowedprovs = " . json_encode($allowedprovisioning) . ";\n";
+	print "</script>\n";
 
 	if($state) {
 		print "<H2>Add Computer</H2>\n";
@@ -638,7 +629,7 @@ function editOrAddComputer($state) {
 	print "<FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
 	print "<TABLE>\n";
 	print "  <TR>\n";
-	print "    <TH align=right>Hostname:</TH>\n";
+	print "    <TH align=right>Hostname*:</TH>\n";
 	print "    <TD><INPUT type=text name=hostname maxlength=36 value=";
 	print $data["hostname"] . "></TD>\n";
 	print "    <TD>";
@@ -646,7 +637,14 @@ function editOrAddComputer($state) {
 	print "</TD>\n";
 	print "  </TR>\n";
 	print "  <TR>\n";
-	print "    <TH align=right>IP Address:</TH>\n";
+	print "    <TH align=right>Type:</TH>\n";
+	print "    <TD>\n";
+	$tmpArr = array("blade" => "blade", "lab" => "lab", "virtualmachine" => "virtualmachine");
+	printSelectInput('type', $tmpArr, $data['type'], 0, 0, 'type', 'dojoType="dijit.form.Select" onChange="editComputerSelectType();"');
+	print "    </TD>\n";
+	print "  </TR>\n";
+	print "  <TR>\n";
+	print "    <TH align=right nowrap>Public IP Address*:</TH>\n";
 	print "    <TD><INPUT type=text name=ipaddress maxlength=15 value=\"";
 	print $data["ipaddress"] . "\"></TD>\n";
 	print "    <TD>";
@@ -654,16 +652,40 @@ function editOrAddComputer($state) {
 	print "</TD>\n";
 	print "  </TR>\n";
 	print "  <TR>\n";
+	print "    <TH align=right nowrap>Private IP Address:</TH>\n";
+	print "    <TD><INPUT type=text name=pripaddress maxlength=15 value=\"";
+	print $data["pripaddress"] . "\"></TD>\n";
+	print "    <TD>";
+	printSubmitErr(IPADDRERR2);
+	print "</TD>\n";
+	print "  </TR>\n";
+	print "  <TR>\n";
+	print "    <TH align=right nowrap>Public MAC Address:</TH>\n";
+	print "    <TD><INPUT type=text name=eth1macaddress maxlength=17 value=\"";
+	print $data["eth1macaddress"] . "\"></TD>\n";
+	print "    <TD>";
+	printSubmitErr(MACADDRERR);
+	print "</TD>\n";
+	print "  </TR>\n";
+	print "  <TR>\n";
+	print "    <TH align=right nowrap>Private MAC Address:</TH>\n";
+	print "    <TD><INPUT type=text name=eth0macaddress maxlength=17 value=\"";
+	print $data["eth0macaddress"] . "\"></TD>\n";
+	print "    <TD>";
+	printSubmitErr(MACADDRERR2);
+	print "</TD>\n";
+	print "  </TR>\n";
+	print "  <TR>\n";
 	print "    <TH align=right>State:</TH>\n";
 	print "    <TD>\n";
-	printSelectInput("stateid", $states, $data["stateid"]);
+	printSelectInput('stateid', $states, $data['stateid'], 0, 0, 'stateid', 'dojoType="dijit.form.Select"');
 	print "    </TD>\n";
 	print "    <TD>";
 	printSubmitErr(VMAVAILERR);
 	print "</TD>\n";
 	print "  </TR>\n";
 	print "  <TR>\n";
-	print "    <TH align=right>Owner:</TH>\n";
+	print "    <TH align=right>Owner*:</TH>\n";
 	print "    <TD><INPUT type=text name=owner value=\"";
 	print $data["owner"] . "\"></TD>\n";
 	print "    <TD>";
@@ -673,7 +695,7 @@ function editOrAddComputer($state) {
 	print "  <TR>\n";
 	print "    <TH align=right>Platform:</TH>\n";
 	print "    <TD>\n";
-	printSelectInput("platformid", $platforms, $data["platformid"]);
+	printSelectInput("platformid", $platforms, $data["platformid"], 0, 0, 'platformid', 'dojoType="dijit.form.Select"');
 	print "    </TD>\n";
 	print "  </TR>\n";
 	print "  <TR colspan=2>\n";
@@ -685,10 +707,10 @@ function editOrAddComputer($state) {
 			      $allschedules[$data["scheduleid"]]["name"];
 			uasort($schedules, "sortKeepIndex");
 		}
-		printSelectInput("scheduleid", $schedules, $data["scheduleid"]);
+		printSelectInput("scheduleid", $schedules, $data["scheduleid"], 0, 0, 'scheduleid', 'dojoType="dijit.form.Select"');
 	}
 	else
-		printSelectInput("scheduleid", $schedules);
+		printSelectInput("scheduleid", $schedules, '', 0, 0, 'scheduleid', 'dojoType="dijit.form.Select"');
 	print "    </TD>\n";
 	print "  </TR>\n";
 	if(! $state) {
@@ -698,22 +720,27 @@ function editOrAddComputer($state) {
 		print "  </TR>\n";
 	}
 	print "  <TR>\n";
-	print "    <TH align=right>RAM (MB):</TH>\n";
-	print "    <TD><INPUT type=text name=ram maxlength=6 value=";
+	print "    <TH align=right>RAM (MB)*:</TH>\n";
+	print "    <TD><INPUT type=text name=ram maxlength=7 value=";
 	print $data["ram"] . "></TD>\n";
 	print "    <TD>";
 	printSubmitErr(RAMERR);
 	print "</TD>\n";
 	print "  </TR>\n";
 	print "  <TR>\n";
-	print "    <TH align=right>No. Processors:</TH>\n";
+	print "    <TH align=right>No. Cores:</TH>\n";
 	print "    <TD>\n";
-	$tmpArr = array("1" => "1", "2" => "2", "4" => "4", "8" => "8");
-	printSelectInput("numprocs", $tmpArr, $data["numprocs"]);
+	print "      <input dojoType=\"dijit.form.NumberSpinner\"\n";
+	print "             constraints=\"{min:1,max:255}\"\n";
+	print "             maxlength=\"3\"\n";
+	print "             id=\"numprocs\"\n";
+	print "             name=\"numprocs\"\n";
+	print "             value=\"{$data['numprocs']}\"\n";
+	print "             style=\"width: 40px;\">\n";
 	print "    </TD>\n";
 	print "  </TR>\n";
 	print "  <TR>\n";
-	print "    <TH align=right>Processor Speed (MHz):</TH>\n";
+	print "    <TH align=right>Processor Speed (MHz)*:</TH>\n";
 	print "    <TD><INPUT type=text name=procspeed maxlength=5 value=";
 	print $data["procspeed"] . "></TD>\n";
 	print "    <TD>";
@@ -723,8 +750,8 @@ function editOrAddComputer($state) {
 	print "  <TR>\n";
 	print "    <TH align=right>Network Speed (Mbps):</TH>\n";
 	print "    <TD>\n";
-	$tmpArr = array("10" => "10", "100" => "100", "1000" => "1000");
-	printSelectInput("network", $tmpArr, $data["network"]);
+	$tmpArr = array("10" => "10", "100" => "100", "1000" => "1000", "10000" => "10000");
+	printSelectInput("network", $tmpArr, $data["network"], 0, 0, 'network', 'dojoType="dijit.form.Select"');
 	print "    </TD>\n";
 	print "  </TR>\n";
 	if(! $state) {
@@ -734,17 +761,19 @@ function editOrAddComputer($state) {
 		print "  </TR>\n";
 	}
 	print "  <TR>\n";
-	print "    <TH align=right>Type:</TH>\n";
+	print "    <TH align=right>Provisioning Engine:</TH>\n";
 	print "    <TD>\n";
-	$tmpArr = array("blade" => "blade", "lab" => "lab", "virtualmachine" => "virtualmachine");
-	printSelectInput("type", $tmpArr, $data["type"]);
+	printSelectInput("provisioningid", $showprovisioning, $data["provisioningid"], 0, 0, 'provisioningid', 'dojoType="dijit.form.Select"');
 	print "    </TD>\n";
 	print "  </TR>\n";
 	print "  <TR>\n";
-	print "    <TH align=right>Provisioning Engine:</TH>\n";
-	print "    <TD>\n";
-	printSelectInput("provisioningid", $provisioning, $data["provisioningid"]);
-	print "    </TD>\n";
+	print "    <TH align=right>Physical Location:</TH>\n";
+	print "    <TD><INPUT type=text name=location id=location value=";
+	if($state == 0 && $data['type'] == 'virtualmachine')
+		print "\"{$data["location"]}\" disabled=\"true\"></TD>\n";
+	else
+		print "\"{$data["location"]}\"></TD>\n";
+	print "    <TD></TD>\n";
 	print "  </TR>\n";
 	print "</TABLE>\n";
 	if($state) {
@@ -776,6 +805,7 @@ function editOrAddComputer($state) {
 	print "<TABLE>\n";
 	print "  <TR valign=top>\n";
 	print "    <TD>\n";
+	$data2['states'] = $states;
 	if($state) {
 		$cont = addContinuationsEntry('confirmAddComputer', $data2, SECINDAY, 0, 1, 1);
 		print "      <INPUT type=submit value=\"Confirm Computer\">\n";
@@ -813,12 +843,6 @@ function confirmEditOrAddComputer($state) {
 	global $submitErr;
 
 	$data = processComputerInput();
-	
-	if($data["bulk"]) {
-		$submitErr = 0;
-		bulkAddComputer();
-		return;
-	}
 
 	if($submitErr) {
 		editOrAddComputer($state);
@@ -833,6 +857,8 @@ function confirmEditOrAddComputer($state) {
 		$question = "Submit the following new computer?";
 	}
 	else {
+		if($data['type'] == 'virtualmachine')
+			$data['location'] = '';
 		$nextmode = "submitEditComputer";
 		$title = "Edit Computer";
 		$question = "Submit the following changes?";
@@ -840,7 +866,10 @@ function confirmEditOrAddComputer($state) {
 
 	print "<H2>$title</H2>\n";
 	print "<H3>$question</H3>\n";
-	printComputerInfo($data["ipaddress"],
+	printComputerInfo($data["pripaddress"],
+	                  $data["ipaddress"],
+	                  $data["eth0macaddress"],
+	                  $data["eth1macaddress"],
 	                  $data["stateid"],
 	                  $data["owner"],
 	                  $data["platformid"],
@@ -853,7 +882,8 @@ function confirmEditOrAddComputer($state) {
 	                  $data["hostname"],
 	                  $data["compid"],
 	                  $data["type"],
-	                  $data["provisioningid"]);
+	                  $data["provisioningid"],
+	                  $data["location"]);
 	if($state) {
 		$tmp = getUserResources(array("computerAdmin"),
 		                        array("manageGroup"), 1);
@@ -925,16 +955,23 @@ function submitEditComputer() {
 		if($testdata[1] == $data["notes"]) 
 			// don't update the notes field
 			$data["notes"] = $compdata[$data["compid"]]["notes"];
-		else
+		else {
+			if(get_magic_quotes_gpc())
+				$data['notes'] = stripslashes($data['notes']);
+			$data['notes'] = mysql_real_escape_string($data['notes']);
 			// update user, timestamp, and text
 			$data["notes"] = $user["unityid"] . " " . unixToDatetime(time()) . "@"
 		                  . $data["notes"];
+		}
 	}
 	# available or failed to maintenance
 	if(($compdata[$data["compid"]]["stateid"] == 2 ||
 	   $compdata[$data["compid"]]["stateid"] == 5) &&
 	   $data["stateid"] == 10) {
 		// set notes to new data
+		if(get_magic_quotes_gpc())
+			$data['notes'] = stripslashes($data['notes']);
+		$data['notes'] = mysql_real_escape_string($data['notes']);
 		$data["notes"] = $user["unityid"] . " " . unixToDatetime(time()) . "@"
 		               . $data["notes"];
 	}
@@ -960,13 +997,14 @@ function submitEditComputer() {
 ////////////////////////////////////////////////////////////////////////////////
 function computerAddMaintenanceNote() {
 	$data = processComputerInput();
+	unset($data['notes']);
 	$compdata = getComputers(0, 0, $data["compid"]);
 	$notes = explode('@', $compdata[$data["compid"]]["notes"]);
 	if(count($notes) != 2)
 		$notes[1] = "";
 	print "<DIV align=center>\n";
 	print "<H2>Edit Computer</H2>\n";
-	print "Why are placing this computer in the maintenance state?\n";
+	print "Why are you placing this computer in the maintenance state?\n";
 	print "<FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
 	print "<TEXTAREA name=notes rows=4 cols=35>{$notes[1]}</TEXTAREA>\n";
 	print "<TABLE>\n";
@@ -1064,7 +1102,10 @@ function confirmDeleteComputer() {
 	print "<DIV align=center>\n";
 	print "<H2>$title</H2>\n";
 	print "<H3>$question</H3>\n";
-	printComputerInfo($computers[$compid]["IPaddress"],
+	printComputerInfo($computers[$compid]["privateIPaddress"],
+	                  $computers[$compid]["IPaddress"],
+	                  $computers[$compid]["eth0macaddress"],
+	                  $computers[$compid]["eth1macaddress"],
 	                  $computers[$compid]["stateid"],
 	                  $computers[$compid]["owner"],
 	                  $computers[$compid]["platformid"],
@@ -1077,7 +1118,8 @@ function confirmDeleteComputer() {
 	                  $computers[$compid]["hostname"],
 	                  $compid,
 	                  $computers[$compid]["type"],
-	                  $computers[$compid]["provisioningid"]);
+	                  $computers[$compid]["provisioningid"],
+	                  $computers[$compid]["location"]);
 	print "<TABLE>\n";
 	print "  <TR>\n";
 	print "    <TD>\n";
@@ -1144,11 +1186,42 @@ function bulkAddComputer() {
 	$states = array("2" => "available",
 	                "10" => "maintenance",
 	                "20" => "vmhostinuse");
+	print "<script type=\"text/javascript\">\n";
+	$tmp = array();
+	foreach($states as $id => $val)
+		$tmp[] = "{value: '$id', label: '$val'}";
+	print "var allowedstates = [";
+	print implode(',', $tmp);
+	print "];\n";
 	$platforms = getPlatforms();
 	$tmp = getUserResources(array("scheduleAdmin"), array("manageGroup"));
 	$schedules = $tmp["schedule"];
 	$images = getImages();
 	$provisioning = getProvisioning();
+	$showprovisioning = array();
+	$allowedprovisioning = array();
+	foreach($provisioning as $id => $val) {
+		if($val['name'] == 'lab') {
+			$allowedprovisioning['lab'][] = array('id' => $id, 'name' => $val['prettyname']);
+			if($data['type'] == 'lab')
+				$showprovisioning[$id] = $val['prettyname'];
+		}
+		elseif(preg_match('/^xcat/', $val['name'])) {
+			$allowedprovisioning['blade'][] = array('id' => $id, 'name' => $val['prettyname']);
+			if($data['type'] == 'blade')
+				$showprovisioning[$id] = $val['prettyname'];
+		}
+		else {
+			$allowedprovisioning['virtualmachine'][] = array('id' => $id, 'name' => $val['prettyname']);
+			if($data['type'] == 'virtualmachine')
+				$showprovisioning[$id] = $val['prettyname'];
+		}
+	}
+	$allowedprovisioning['lab']['length'] = count($allowedprovisioning['lab']);
+	$allowedprovisioning['blade']['length'] = count($allowedprovisioning['blade']);
+	$allowedprovisioning['virtualmachine']['length'] = count($allowedprovisioning['virtualmachine']);
+	print "var allowedprovs = " . json_encode($allowedprovisioning) . ";\n";
+	print "</script>\n";
 
 	print "<H2>Add Multiple Computers</H2>\n";
 	print "<div>\n";
@@ -1187,7 +1260,15 @@ function bulkAddComputer() {
 	printSubmitErr(ENDHOSTVALERR);
 	print "  </TR>\n";
 	print "  <TR>\n";
-	print "    <TH align=right nowrap>Start IP Address*:</TH>\n";
+	print "    <TH align=right>Type:</TH>\n";
+	print "    <TD>\n";
+	$tmpArr = array("blade" => "blade", "lab" => "lab", "virtualmachine" => "virtualmachine");
+	printSelectInput('type', $tmpArr, $data['type'], 0, 0, 'type', 'dojoType="dijit.form.Select" onChange="editComputerSelectType();"');
+	print "    </TD>\n";
+	print "  </TR>\n";
+
+	print "  <TR>\n";
+	print "    <TH align=right nowrap>Start Public IP Address*:</TH>\n";
 	print "    <TD><INPUT type=text name=startipaddress maxlength=15 value=\"";
 	print $data["startipaddress"] . "\"></TD>\n";
 	print "    <TD>";
@@ -1195,7 +1276,7 @@ function bulkAddComputer() {
 	print "</TD>\n";
 	print "  </TR>\n";
 	print "  <TR>\n";
-	print "    <TH align=right nowrap>End IP Address*:</TH>\n";
+	print "    <TH align=right nowrap>End Public IP Address*:</TH>\n";
 	print "    <TD><INPUT type=text name=endipaddress maxlength=15 value=\"";
 	print $data["endipaddress"] . "\"></TD>\n";
 	print "    <TD>";
@@ -1204,7 +1285,7 @@ function bulkAddComputer() {
 	print "  </TR>\n";
 
 	print "  <TR>\n";
-	print "    <TH align=right nowrap>Start private IP Address:</TH>\n";
+	print "    <TH align=right nowrap>Start Private IP Address:</TH>\n";
 	print "    <TD><INPUT type=text name=startpripaddress maxlength=15 value=\"";
 	print $data["startpripaddress"] . "\"></TD>\n";
 	print "    <TD>";
@@ -1212,13 +1293,14 @@ function bulkAddComputer() {
 	print "</TD>\n";
 	print "  </TR>\n";
 	print "  <TR>\n";
-	print "    <TH align=right nowrap>End private IP Address:</TH>\n";
+	print "    <TH align=right nowrap>End Private IP Address:</TH>\n";
 	print "    <TD><INPUT type=text name=endpripaddress maxlength=15 value=\"";
 	print $data["endpripaddress"] . "\"></TD>\n";
 	print "    <TD>";
 	printSubmitErr(IPADDRERR4);
 	print "</TD>\n";
 	print "  </TR>\n";
+
 	print "  <TR>\n";
 	print "    <TH align=right nowrap>Start MAC Address:</TH>\n";
 	print "    <TD><INPUT type=text name=startmac maxlength=17 value=\"";
@@ -1231,7 +1313,9 @@ function bulkAddComputer() {
 	print "  <TR>\n";
 	print "    <TH align=right nowrap>State:</TH>\n";
 	print "    <TD>\n";
-	printSelectInput("stateid", $states, $data["stateid"]);
+	if($submitErr && $data['type'] == 'virtualmachine')
+		$states = array('10' => 'maintenance');
+	printSelectInput('stateid', $states, $data['stateid'], 0, 0, 'stateid', 'dojoType="dijit.form.Select"');
 	print "    </TD>\n";
 	print "  </TR>\n";
 	print "  <TR>\n";
@@ -1245,28 +1329,33 @@ function bulkAddComputer() {
 	print "  <TR>\n";
 	print "    <TH align=right nowrap>Platform:</TH>\n";
 	print "    <TD>\n";
-	printSelectInput("platformid", $platforms, $data["platformid"]);
+	printSelectInput("platformid", $platforms, $data["platformid"], 0, 0, 'platformid', 'dojoType="dijit.form.Select"');
 	print "    </TD>\n";
 	print "  </TR>\n";
 	print "  <TR>\n";
 	print "    <TH align=right nowrap>Schedule:</TH>\n";
 	print "    <TD>\n";
-	printSelectInput("scheduleid", $schedules, $data["scheduleid"]);
+	printSelectInput("scheduleid", $schedules, $data["scheduleid"], 0, 0, 'scheduleid', 'dojoType="dijit.form.Select"');
 	print "    </TD>\n";
 	print "  </TR>\n";
 	print "  <TR>\n";
 	print "    <TH align=right nowrap>RAM (MB)*:</TH>\n";
-	print "    <TD><INPUT type=text name=ram maxlength=6 value=";
+	print "    <TD><INPUT type=text name=ram maxlength=7 value=";
 	print $data["ram"] . "></TD>\n";
 	print "    <TD>";
 	printSubmitErr(RAMERR);
 	print "</TD>\n";
 	print "  </TR>\n";
 	print "  <TR>\n";
-	print "    <TH align=right nowrap>No. Processors:</TH>\n";
+	print "    <TH align=right nowrap>No. Cores:</TH>\n";
 	print "    <TD>\n";
-	$tmpArr = array("1" => "1", "2" => "2", "4" => "4", "8" => "8");
-	printSelectInput("numprocs", $tmpArr, $data["numprocs"]);
+	print "      <input dojoType=\"dijit.form.NumberSpinner\"\n";
+	print "             constraints=\"{min:1,max:255}\"\n";
+	print "             maxlength=\"3\"\n";
+	print "             id=\"numprocs\"\n";
+	print "             name=\"numprocs\"\n";
+	print "             value=\"{$data['numprocs']}\"\n";
+	print "             style=\"width: 40px;\">\n";
 	print "    </TD>\n";
 	print "  </TR>\n";
 	print "  <TR>\n";
@@ -1280,22 +1369,24 @@ function bulkAddComputer() {
 	print "  <TR>\n";
 	print "    <TH align=right nowrap>Network Speed&nbsp;(Mbps):</TH>\n";
 	print "    <TD>\n";
-	$tmpArr = array("10" => "10", "100" => "100", "1000" => "1000");
-	printSelectInput("network", $tmpArr, $data["network"]);
-	print "    </TD>\n";
-	print "  </TR>\n";
-	print "  <TR>\n";
-	print "    <TH align=right>Type:</TH>\n";
-	print "    <TD>\n";
-	$tmpArr = array("blade" => "blade", "lab" => "lab", "virtualmachine" => "virtualmachine");
-	printSelectInput("type", $tmpArr, $data["type"]);
+	$tmpArr = array("10" => "10", "100" => "100", "1000" => "1000", "10000" => "10000");
+	printSelectInput("network", $tmpArr, $data["network"], 0, 0, 'network', 'dojoType="dijit.form.Select"');
 	print "    </TD>\n";
 	print "  </TR>\n";
 	print "  <TR>\n";
 	print "    <TH align=right nowrap>Provisioning Engine:</TH>\n";
 	print "    <TD>\n";
-	printSelectInput("provisioningid", $provisioning, $data["provisioningid"]);
+	printSelectInput("provisioningid", $showprovisioning, $data["provisioningid"], 0, 0, 'provisioningid', 'dojoType="dijit.form.Select"');
 	print "    </TD>\n";
+	print "  </TR>\n";
+	print "  <TR>\n";
+	print "    <TH align=right>Physical Location:</TH>\n";
+	print "    <TD><INPUT type=text name=location id=location value=";
+	if($data['type'] == 'virtualmachine')
+		print "\"{$data["location"]}\" disabled=\"true\"></TD>\n";
+	else
+		print "\"{$data["location"]}\"></TD>\n";
+	print "    <TD></TD>\n";
 	print "  </TR>\n";
 	print "</TABLE>\n";
 	$tmp = getUserResources(array("computerAdmin"),
@@ -1374,6 +1465,10 @@ function confirmAddBulkComputers() {
 	print "    <TD>$first - $last</TD>\n";
 	print "  </TR>\n";
 	print "  <TR>\n";
+	print "    <TH align=right>Type:</TH>\n";
+	print "    <TD>" . $data["type"] . "</TD>\n";
+	print "  </TR>\n";
+	print "  <TR>\n";
 	print "    <TH align=right nowrap>IP Addresses:</TH>\n";
 	print "    <TD>" . $data["startipaddress"] . " - ";
 	print $data["endipaddress"] . "</TD>\n";
@@ -1413,7 +1508,7 @@ function confirmAddBulkComputers() {
 	print "    <TD>" . $data["ram"] . "</TD>\n";
 	print "  </TR>\n";
 	print "  <TR>\n";
-	print "    <TH align=right nowrap>No. Processors:</TH>\n";
+	print "    <TH align=right nowrap>No. Cores:</TH>\n";
 	print "    <TD>" . $data["numprocs"] . "</TD>\n";
 	print "  </TR>\n";
 	print "  <TR>\n";
@@ -1425,12 +1520,12 @@ function confirmAddBulkComputers() {
 	print "    <TD>" . $data["network"] . "</TD>\n";
 	print "  </TR>\n";
 	print "  <TR>\n";
-	print "    <TH align=right>Type:</TH>\n";
-	print "    <TD>" . $data["type"] . "</TD>\n";
-	print "  </TR>\n";
-	print "  <TR>\n";
 	print "    <TH align=right>Provisioning Engine:</TH>\n";
 	print "    <TD>" . $provisioning[$data["provisioningid"]]['prettyname'] . "</TD>\n";
+	print "  </TR>\n";
+	print "  <TR>\n";
+	print "    <TH align=right>Location:</TH>\n";
+	print "    <TD>{$data['location']}</TD>\n";
 	print "  </TR>\n";
 	print "</TABLE>\n";
 	$tmp = getUserResources(array("computerAdmin"),
@@ -1525,9 +1620,19 @@ function submitAddBulkComputers() {
 		}
 	}
 
+	$doloc = 0;
+	if($data['location'] != '') {
+		$doloc = 1;
+		if(get_magic_quotes_gpc())
+			$location = stripslashes($data['location']);
+		$location = mysql_real_escape_string($location);
+	}
+
 	$dhcpdata = array();
 	$count = 0;
 	$addedrows = 0;
+	$noimageid = getImageId('noimage');
+	$noimagerevisionid = getProductionRevisionid($noimageid);
 	for($i = $startip, $j = $data["starthostval"]; $i <= $endip; $i++, $j++, $count++) {
 		$hostname = str_replace('%', $j, $data["hostname"]);
 		$ipaddress = $baseaddr . ".$i";
@@ -1548,6 +1653,7 @@ function submitAddBulkComputers() {
 		       .        "provisioningid, "
 		       .        "scheduleid, "
 		       .        "currentimageid, "
+		       .        "imagerevisionid, "
 		       .        "RAM, "
 		       .        "procnumber, "
 		       .        "procspeed, "
@@ -1559,13 +1665,16 @@ function submitAddBulkComputers() {
 		if($domacs)
 			$query .=    "eth0macaddress, "
 			       .     "eth1macaddress, ";
+		if($doloc)
+			$query .=    "location, ";
 		$query .=       "type) "
 		       . "VALUES ({$data['stateid']}, "
 		       .         "$ownerid, "
 		       .         "{$data['platformid']}, "
 		       .         "{$data['provisioningid']}, "
 		       .         "{$data['scheduleid']}, "
-		       .         "4, "
+		       .         "$noimageid, "
+		       .         "$noimagerevisionid, "
 		       .         "{$data['ram']}, "
 		       .         "{$data['numprocs']}, "
 		       .         "{$data['procspeed']}, "
@@ -1577,6 +1686,8 @@ function submitAddBulkComputers() {
 		if($domacs)
 			$query .=     "'$eth0', "
 			       .      "'$eth1', ";
+		if($doloc)
+			$query .=     "'$location', ";
 		$query .=        "'{$data['type']}')";
 		$qh = doQuery($query, 235);
 		$addedrows += mysql_affected_rows($mysql_link_vcl);
@@ -1622,76 +1733,8 @@ function submitAddBulkComputers() {
 	else
 		print $count - $addedrows . " computers failed to get added<br><br>\n";
 	print "</div>\n";
-	if($domacs && $dopr)
-		generateDhcpForm($dhcpdata);
+	print "You can download data for /etc/hosts and dhcpd.conf or dhcpd.leases from the Computer Utilities page.\n";
 	clearPrivCache();
-}
-
-////////////////////////////////////////////////////////////////////////////////
-///
-/// \fn generateDhcpForm($data)
-///
-/// \brief prints a form for entering an ip address for a management node so
-/// that data for a dhcpd.conf file can be generated
-///
-////////////////////////////////////////////////////////////////////////////////
-function generateDhcpForm($data) {
-	global $submitErr;
-	$mnipaddr = processInputVar('mnipaddr', ARG_STRING, "");
-	print "<div>\n";
-	print "<h3>Generate Data for dhcpd.conf File (Optional)</h3>\n";
-	print "<form action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
-	print "Enter the private address for the management node<br>";
-	print "on which the data will be used:<br>\n";
-	print "<INPUT type=text name=mnipaddr value=\"$mnipaddr\" maxlength=15>\n";
-	printSubmitErr(IPADDRERR);
-	print "<br>\n";
-	print "<input type=submit value=\"Download Data\">\n";
-	$cont = addContinuationsEntry('generateDHCP', $data, SECINDAY, 1, 0);
-	print "<input type=hidden name=continuation value=\"$cont\">\n";
-	print "</form>\n";
-	print "</div>\n";
-}
-
-////////////////////////////////////////////////////////////////////////////////
-///
-/// \fn generateDHCP()
-///
-/// \brief prints content for a dhcpd.conf file from saved continuation data
-///
-////////////////////////////////////////////////////////////////////////////////
-function generateDHCP() {
-	global $submitErr, $submitErrMsg, $HTMLheader, $printedHTMLheader;
-	$mnipaddr = processInputVar('mnipaddr', ARG_STRING);
-	$data = getContinuationVar();
-	$addrArr = explode('.', $mnipaddr);
-	if(! preg_match('/^(([0-9]){1,3}\.){3}([0-9]){1,3}$/', $mnipaddr) ||
-		$addrArr[0] < 1 || $addrArr[0] > 255 ||
-		$addrArr[1] < 0 || $addrArr[1] > 255 ||
-		$addrArr[2] < 0 || $addrArr[2] > 255 ||
-		$addrArr[3] < 1 || $addrArr[3] > 255) {
-	   $submitErr |= IPADDRERR;
-	   $submitErrMsg[IPADDRERR] = "Invalid IP address. Must be w.x.y.z with each of "
-		                         . "w, x, y, and z being between 1 and 255 (inclusive)";
-		print $HTMLheader;
-		$printedHTMLheader = 1;
-		generateDhcpForm($data);
-		print getFooter();
-		return;
-	}
-	header("Content-type: text/plain");
-	header("Content-Disposition: inline; filename=\"dhcpdata.txt\"");
-	foreach($data as $comp) {
-		$tmp = explode('.', $comp['hostname']);
-		print "\t\thost {$tmp[0]} {\n";
-		print "\t\t\toption host-name \"{$tmp[0]}\";\n";
-		print "\t\t\thardware ethernet {$comp['eth0mac']};\n";
-		print "\t\t\tfixed-address {$comp['prip']};\n";
-		print "\t\t\tfilename \"/tftpboot/pxelinux.0\";\n";
-		print "\t\t\toption dhcp-server-identifier $mnipaddr;\n";
-		print "\t\t\tnext-server $mnipaddr;\n";
-		print "\t\t}\n\n";
-	}
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -2115,7 +2158,7 @@ function submitComputerGroups() {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function computerUtilities() {
-	global $user, $mode;
+	global $user, $mode, $skin;
 	$data = processComputerInput(0);
 	if(empty($data['groups']))
 		$bygroups = 0;
@@ -2134,7 +2177,7 @@ function computerUtilities() {
 	$images = getImages(1);
 
 	print "<H2>Computer Utilities</H2>\n";
-	print "<FORM action=\"" . BASEURL . SCRIPT . "\" method=post id=utilform>\n";
+	print "<FORM dojoType=\"dijit.form.Form\" action=\"" . BASEURL . SCRIPT . "\" method=post id=utilform>\n";
 	print "<TABLE border=1 id=layouttable summary=\"information about selected computers\">\n";
 	print "  <TR>\n";
 	print "    <TD></TD>\n";
@@ -2148,7 +2191,7 @@ function computerUtilities() {
 	print "    <TH>Next Image</TH>\n";
 	print "    <TH>VM Host</TH>\n";
 	/*print "    <TH>RAM(MB)</TH>\n";
-	print "    <TH>No. Processors</TH>\n";
+	print "    <TH>No. Cores</TH>\n";
 	print "    <TH>Processor Speed(MHz)</TH>\n";
 	print "    <TH>Network Speed(Mbps)</TH>\n";
 	print "    <TH>Computer ID</TH>\n";
@@ -2157,6 +2200,15 @@ function computerUtilities() {
 	print "    <TH>Notes</TH>\n";
 	print "  </TR>\n";
 	$count = 0;
+
+	$statecolor = array(
+	   'available' => '#008000',
+		'reloading' => '#e58304',
+	   'failed' => 'red'
+	);
+
+	$dispcompids = array();
+
 	foreach(array_keys($computers) as $id) {
 		if($bygroups) {
 			if(! array_key_exists($id, $compidlist))
@@ -2168,13 +2220,14 @@ function computerUtilities() {
 		if(! in_array($id, $userCompIDs)) {
 			continue;
 		}
+		$dispcompids[] = $id;
 		print "  <TR align=center id=compid$count>\n";
 		print "    <TD><INPUT type=checkbox name=computerids[] value=$id ";
 		print "id=comp$count onclick=\"toggleRowSelect('compid$count');\"></TD>\n";
 		print "    <TD>" . $computers[$id]["hostname"] . "</TD>\n";
 		print "    <TD>" . $computers[$id]["IPaddress"] . "</TD>\n";
-		if($computers[$id]['state'] == 'failed')
-			print "    <TD><font color=red>{$computers[$id]["state"]}</font></TD>\n";
+		if(isset($statecolor[$computers[$id]['state']]))
+			print "    <TD><font color={$statecolor[$computers[$id]['state']]}>{$computers[$id]["state"]}</font></TD>\n";
 		else
 			print "    <TD>" . $computers[$id]["state"] . "</TD>\n";
 		print "    <TD>" . $computers[$id]["owner"] . "</TD>\n";
@@ -2252,10 +2305,64 @@ function computerUtilities() {
 		print "    <INPUT type=hidden id=schcont value=\"$cont\">\n";
 		print "  </TR>\n";
 	}
+	print "  <TR>\n";
+	print "    <TD>For selected computers, generate computer data for:</TD>";
+	print "    <TD>\n";
+	$tmp = array('dhcpd' => 'dhcpd.conf', 'hosts' => '/etc/hosts');
+	printSelectInput('generatetype', $tmp, -1, 0, 0, 'generatetype');
+	print "    <INPUT type=button onclick=generateCompData(); value=\"Generate Data\">";
+	print "    </TD>\n";
+	print "  </TR>\n";
 	print "</TABLE>\n";
 	print "<INPUT type=hidden name=continuation id=continuation>\n";
 	print "</FORM>\n";
+
 	print "<br>$count computers found<br>\n";
+
+	print "<div dojoType=dijit.Dialog\n";
+	print "      id=\"utildialog\"\n";
+	print "      title=\"Generate Data\"\n";
+	print "      duration=250\n";
+	print "      draggable=true>\n";
+	print "   <div id=\"utilloading\" style=\"text-align: center\" class=\"hidden\">";
+	print "<img src=\"themes/$skin/css/dojo/images/loading.gif\" ";
+	print "style=\"vertical-align: middle;\"> Loading...</div>\n";
+	print "   <div id=\"utilerror\" style=\"text-align: center\" ";
+	print "class=\"hidden rederrormsg\"></div>\n";
+	print "   <div class=\"hidden\" id=\"mgmtipdiv\">\n";
+	print "     Enter Management Node Private IP Address:<br>\n";
+	print "     <input type=\"text\" id=\"mnip\">\n";
+	print "     <button id=\"gendhcpbtn\" dojoType=\"dijit.form.Button\">\n";
+	print "     Generate Data\n";
+	print "     <script type=\"dojo/method\" event=\"onClick\">\n";
+	print "       generateDHCPDdata();\n";
+	print "     </script>\n";
+	print "     </button>\n";
+	print "   </div>\n";
+	print "   <div id=\"utilcontent\"></div>\n";
+	$cdata = array('dispcompids' => $dispcompids);
+	$cont = addContinuationsEntry('AJgenerateUtilData', $cdata, SECINDAY);
+	print "   <input type=\"hidden\" id=\"utilcont\" value=\"$cont\">\n";
+	print "   <div align=\"center\">\n";
+	/*print "   <button id=\"utilsubmit\" dojoType=\"dijit.form.Button\" disabled>\n";
+	print "     Generate Data\n";
+	print "	   <script type=\"dojo/method\" event=\"onClick\">\n";
+	#print "       useSuggestedSlot();\n";
+	print "     </script>\n";
+	print "   </button>\n";*/
+	print "   <button id=\"utilcancel\" dojoType=\"dijit.form.Button\">\n";
+	print "     Close\n";
+	print "	   <script type=\"dojo/method\" event=\"onClick\">\n";
+	/*print "       dijit.byId('suggestDlgBtn').set('disabled', true);\n";
+	print "       showDijitButton('suggestDlgBtn');\n";
+	print "       dijit.byId('suggestDlgCancelBtn').set('label', 'Cancel');\n";*/
+	print "       dijit.byId('utildialog').hide();\n";
+	print "       dojo.byId('utilcontent').innerHTML = '';\n";
+	print "       dojo.addClass('mgmtipdiv', 'hidden');\n";
+	print "     </script>\n";
+	print "   </button>\n";
+	print "   </div>\n";
+	print "</div>\n";
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -3083,23 +3190,28 @@ function processComputerInput($checks=1) {
 
 	$return["bulk"] = getContinuationVar("bulk", processInputVar("bulk", ARG_NUMERIC));
 	$return["ipaddress"] = getContinuationVar("ipaddress", processInputVar("ipaddress", ARG_STRING, NULL, 1));
+	$return["pripaddress"] = getContinuationVar("pripaddress", processInputVar("pripaddress", ARG_STRING, NULL, 1));
+	$return["eth0macaddress"] = getContinuationVar("eth0macaddress", processInputVar("eth0macaddress", ARG_STRING, NULL, 1));
+	$return["eth1macaddress"] = getContinuationVar("eth1macaddress", processInputVar("eth1macaddress", ARG_STRING, NULL, 1));
 	$return["stateid"] = getContinuationVar("stateid", processInputVar("stateid", ARG_NUMERIC));
 	$return["owner"] = getContinuationVar("owner", processInputVar("owner", ARG_STRING, NULL, 1));
 	$return["platformid"] = getContinuationVar("platformid", processInputVar("platformid", ARG_NUMERIC));
 	$return["scheduleid"] = getContinuationVar("scheduleid", processInputVar("scheduleid", ARG_NUMERIC));
 	$return["currentimgid"] = getContinuationVar("currentimgid", processInputVar("currentimgid", ARG_NUMERIC));
 	$return["ram"] = getContinuationVar("ram", processInputVar("ram", ARG_NUMERIC, NULL, 1));
-	$return["numprocs"] = getContinuationVar("numprocs", processInputVar("numprocs", ARG_NUMERIC));
+	$return["numprocs"] = getContinuationVar("numprocs", processInputVar("numprocs", ARG_NUMERIC, 1));
 	$return["procspeed"] = getContinuationVar("procspeed", processInputVar("procspeed", ARG_NUMERIC, NULL, 1));
 	$return["network"] = getContinuationVar("network", processInputVar("network", ARG_NUMERIC));
 	$return["hostname"] = getContinuationVar("hostname", processInputVar("hostname", ARG_STRING, NULL, 1));
 	$return["compid"] = getContinuationVar("compid", processInputVar("compid", ARG_NUMERIC));
-	$return["type"] = getContinuationVar("type", processInputVar("type", ARG_STRING, "lab"));
+	$return["type"] = getContinuationVar("type", processInputVar("type", ARG_STRING, "blade"));
 	$return["provisioningid"] = getContinuationVar("provisioningid", processInputVar("provisioningid", ARG_NUMERIC));
 	$return["notes"] = getContinuationVar("notes", processInputVar("notes", ARG_STRING));
 	$return["computergroup"] = getContinuationVar("computergroup", processInputVar("computergroup", ARG_MULTINUMERIC));
 	$return["showcounts"] = getContinuationVar("showcounts", processInputVar("showcounts", ARG_NUMERIC));
+	$return["location"] = getContinuationVar('location', processInputVar('location', ARG_STRING));
 	$return["showdeleted"] = getContinuationVar('showdeleted', 0);
+	$return['states'] = getContinuationVar('states');
 
 	if(! $checks) {
 		return $return;
@@ -3110,19 +3222,42 @@ function processComputerInput($checks=1) {
 		$ipaddressArr[0] < 1 || $ipaddressArr[0] > 255 ||
 		$ipaddressArr[1] < 0 || $ipaddressArr[1] > 255 ||
 		$ipaddressArr[2] < 0 || $ipaddressArr[2] > 255 ||
-		$ipaddressArr[3] < 1 || $ipaddressArr[3] > 255) {
+		$ipaddressArr[3] < 0 || $ipaddressArr[3] > 255) {
 	   $submitErr |= IPADDRERR;
 	   $submitErrMsg[IPADDRERR] = "Invalid IP address. Must be w.x.y.z with each of "
 		                         . "w, x, y, and z being between 1 and 255 (inclusive)";
+	}
+	$pripaddressArr = explode('.', $return["pripaddress"]);
+	if(strlen($return['pripaddress']) &&
+	   (! preg_match('/^(([0-9]){1,3}\.){3}([0-9]){1,3}$/', $return["pripaddress"]) ||
+		$pripaddressArr[0] < 1 || $pripaddressArr[0] > 255 ||
+		$pripaddressArr[1] < 0 || $pripaddressArr[1] > 255 ||
+		$pripaddressArr[2] < 0 || $pripaddressArr[2] > 255 ||
+		$pripaddressArr[3] < 0 || $pripaddressArr[3] > 255)) {
+	   $submitErr |= IPADDRERR2;
+	   $submitErrMsg[IPADDRERR2] = "Invalid IP address. Must be w.x.y.z with each of "
+		                          . "w, x, y, and z being between 1 and 255 (inclusive)";
+	}
+	if(strlen($return['eth0macaddress']) &&
+	   ! preg_match('/^(([A-Fa-f0-9]){2}:){5}([A-Fa-f0-9]){2}$/', $return["eth0macaddress"])) {
+		$submitErr |= MACADDRERR2;
+		$submitErrMsg[MACADDRERR2] = "Invalid MAC address.  Must be XX:XX:XX:XX:XX:XX "
+		                           . "with each pair of XX being from 00 to FF (inclusive)";
+	}
+	if(strlen($return['eth1macaddress']) &&
+	   ! preg_match('/^(([A-Fa-f0-9]){2}:){5}([A-Fa-f0-9]){2}$/', $return["eth1macaddress"])) {
+		$submitErr |= MACADDRERR;
+		$submitErrMsg[MACADDRERR] = "Invalid MAC address.  Must be XX:XX:XX:XX:XX:XX "
+		                          . "with each pair of XX being from 00 to FF (inclusive)";
 	}
 	/*if(! ($submitErr & IPADDRERR) && 
 	   checkForIPaddress($return["ipaddress"], $return["compid"])) {
 	   $submitErr |= IPADDRERR;
 	   $submitErrMsg[IPADDRERR] = "There is already a computer with this IP address.";
 	}*/
-	if($return["ram"] < 32 || $return["ram"] > 512000) {
+	if($return["ram"] < 32 || $return["ram"] > 8388607) {
 	   $submitErr |= RAMERR;
-	   $submitErrMsg[RAMERR] = "RAM must be between 32 and 512000";
+	   $submitErrMsg[RAMERR] = "RAM must be between 32 and 8388607";
 	}
 	if($return["procspeed"] < 500 || $return["procspeed"] > 20000) {
 	   $submitErr |= PROCSPEEDERR;
@@ -3141,6 +3276,10 @@ function processComputerInput($checks=1) {
 	   $submitErr |= OWNERERR;
 	   $submitErrMsg[OWNERERR] = "Submitted ID is not valid";
 	}
+	if($return['type'] != 'blade' && $return['type'] != 'lab' && $return['type'] != 'virtualmachine')
+		$return['type'] = 'blade';
+	if($return['stateid'] != '' && ! array_key_exists($return['stateid'], $return['states']))
+	   $submitErr |= 1 << 15;
 	if($mode == 'confirmAddComputer' &&
 	   $return['type'] == 'virtualmachine' && $return['stateid'] != 10) {
 	   $submitErr |= VMAVAILERR;
@@ -3187,6 +3326,7 @@ function processComputerInput2() {
 	$return["showprovisioning"] = getContinuationVar('showprovisioning', processInputVar("showprovisioning", ARG_NUMERIC, 0));
 	$return["shownotes"] = getContinuationVar('shownotes', processInputVar("shownotes", ARG_NUMERIC, 0));
 	$return["showcounts"] = getContinuationVar('showcounts', processInputVar("showcounts", ARG_NUMERIC, 0));
+	$return["showlocation"] = getContinuationVar('showlocation', processInputVar("showlocation", ARG_NUMERIC, 0));
 	return $return;
 }
 
@@ -3257,12 +3397,13 @@ function processBulkComputerInput($checks=1) {
 	$return["platformid"] = getContinuationVar("platformid", processInputVar("platformid", ARG_NUMERIC));
 	$return["scheduleid"] = getContinuationVar("scheduleid", processInputVar("scheduleid", ARG_NUMERIC));
 	$return["ram"] = getContinuationVar("ram", processInputVar("ram", ARG_NUMERIC, NULL, 1));
-	$return["numprocs"] = getContinuationVar("numprocs", processInputVar("numprocs", ARG_NUMERIC));
+	$return["numprocs"] = getContinuationVar("numprocs", processInputVar("numprocs", ARG_NUMERIC, 1));
 	$return["procspeed"] = getContinuationVar("procspeed", processInputVar("procspeed", ARG_NUMERIC, NULL, 1));
-	$return["network"] = getContinuationVar("network", processInputVar("network", ARG_NUMERIC));
+	$return["network"] = getContinuationVar("network", processInputVar("network", ARG_NUMERIC, 1000));
 	$return["hostname"] = getContinuationVar("hostname", processInputVar("hostname", ARG_STRING, NULL, 1));
-	$return["type"] = getContinuationVar("type", processInputVar("type", ARG_STRING));
+	$return["type"] = getContinuationVar("type", processInputVar("type", ARG_STRING, 'blade'));
 	$return["provisioningid"] = getContinuationVar("provisioningid", processInputVar("provisioningid", ARG_NUMERIC));
+	$return["location"] = getContinuationVar("location", processInputVar("location", ARG_STRING));
 	$return["computergroup"] = getContinuationVar("computergroup", processInputVar("computergroup", ARG_MULTINUMERIC));
 	$return['macs'] = getContinuationVar('macs', array());
 
@@ -3383,6 +3524,27 @@ function processBulkComputerInput($checks=1) {
 	   $submitErr |= HOSTNAMEERR;
 	   $submitErrMsg[HOSTNAMEERR] = "Hostname must be <= 36 characters";
 	}
+
+	if(! ($submitErr & HOSTNAMEERR)) {
+		$checkhosts = array();
+		for($i = $return["starthostval"]; $i <= $return["endhostval"]; $i++) {
+			$checkhosts[] = str_replace('%', $i, $return["hostname"]);
+		}
+		$allhosts = implode("','", $checkhosts);
+		$query = "SELECT hostname FROM computer "
+		       . "WHERE hostname IN ('$allhosts')";
+		$qh = doQuery($query);
+		$exists = array();
+		while($row = mysql_fetch_assoc($qh))
+			$exists[] = $row['hostname'];
+		if(count($exists)) {
+			$hosts = implode(', ', $exists);
+			$submitErr |= HOSTNAMEERR;
+			$submitErrMsg[HOSTNAMEERR] = "There are already computers with these hostnames: $hosts";
+		}
+	}
+
+
 	if(empty($return["starthostval"]) && $return["starthostval"] != 0) {
 	   $submitErr |= STARTHOSTVALERR;
 	   $submitErrMsg[STARTHOSTVALERR] = "Start value can only be numeric.";
@@ -3529,6 +3691,26 @@ function getCompIdList($groups) {
 ////////////////////////////////////////////////////////////////////////////////
 function updateComputer($data) {
 	$ownerid = getUserlistID($data['owner']);
+	if($data['eth0macaddress'] == '')
+		$eth0 = 'NULL';
+	else
+		$eth0 = "'{$data['eth0macaddress']}'";
+	if($data['eth1macaddress'] == '')
+		$eth1 = 'NULL';
+	else
+		$eth1 = "'{$data['eth1macaddress']}'";
+	if($data['pripaddress'] == '')
+		$privateip = 'NULL';
+	else
+		$privateip = "'{$data['pripaddress']}'";
+	if($data['location'] == '')
+		$location = 'NULL';
+	else {
+		if(get_magic_quotes_gpc())
+			$location = stripslashes($data['location']);
+		$location = mysql_real_escape_string($location);
+		$location = "'$location'";
+	}
 	$query = "UPDATE computer "
 	       . "SET stateid = {$data['stateid']}, "
 	       .     "ownerid = $ownerid, "
@@ -3540,9 +3722,13 @@ function updateComputer($data) {
 	       .     "network = {$data['network']}, "
 	       .     "hostname = '{$data['hostname']}', "
 	       .     "IPaddress = '{$data['ipaddress']}', "
+	       .     "privateIPaddress = $privateip, "
+	       .     "eth0macaddress = $eth0, "
+	       .     "eth1macaddress = $eth1, "
 	       .     "type = '{$data['type']}', "
 	       .     "provisioningid = {$data['provisioningid']}, "
-	       .     "notes = '{$data['notes']}' "
+	       .     "notes = '{$data['notes']}', "
+	       .     "location = $location "
 	       . "WHERE id = {$data['compid']}";
 	$qh = doQuery($query, 185);
 	return mysql_affected_rows($GLOBALS['mysql_link_vcl']);
@@ -3568,35 +3754,67 @@ function addComputer($data) {
 	}
 	else
 		$notes = 'NULL';
+	if($data['eth0macaddress'] == '')
+		$eth0 = 'NULL';
+	else
+		$eth0 = "'{$data['eth0macaddress']}'";
+	if($data['eth1macaddress'] == '')
+		$eth1 = 'NULL';
+	else
+		$eth1 = "'{$data['eth1macaddress']}'";
+	if($data['pripaddress'] == '')
+		$privateip = 'NULL';
+	else
+		$privateip = "'{$data['pripaddress']}'";
+	if($data['location'] == '')
+		$location = 'NULL';
+	else {
+		if(get_magic_quotes_gpc())
+			$location = stripslashes($data['location']);
+		$location = mysql_real_escape_string($location);
+		$location = "'$location'";
+	}
+	$noimageid = getImageId('noimage');
+	$noimagerevisionid = getProductionRevisionid($noimageid);
 	$query = "INSERT INTO computer "
 	       .        "(stateid, "
 	       .        "ownerid, "
 	       .        "platformid, "
 	       .        "scheduleid, "
 	       .        "currentimageid, "
+	       .        "imagerevisionid, "
 	       .        "RAM, "
 	       .        "procnumber, "
 	       .        "procspeed, "
 	       .        "network, "
 	       .        "hostname, "
 	       .        "IPaddress, "
+	       .        "privateIPaddress, "
+	       .        "eth0macaddress, "
+	       .        "eth1macaddress, "
 	       .        "type, "
 	       .        "notes, "
-	       .        "provisioningid) "
+	       .        "provisioningid, "
+	       .        "location) "
 	       . "VALUES ({$data['stateid']}, "
 	       .         "$ownerid, "
 	       .         "{$data['platformid']}, "
 	       .         "{$data['scheduleid']}, "
-	       .         "4, "
+	       .         "$noimageid, "
+	       .         "$noimagerevisionid, "
 	       .         "{$data['ram']}, "
 	       .         "{$data['numprocs']}, "
 	       .         "{$data['procspeed']}, "
 	       .         "{$data['network']}, "
 	       .         "'{$data['hostname']}', "
 	       .         "'{$data['ipaddress']}', "
+	       .         "$privateip, "
+	       .         "$eth0, "
+	       .         "$eth1, "
 	       .         "'{$data['type']}', "
 	       .         "$notes, "
-	       .         "'{$data['provisioningid']}')";
+	       .         "'{$data['provisioningid']}', "
+	       .         "$location)";
 	doQuery($query, 195);
 	$compid = dbLastInsertID();
 
@@ -3642,12 +3860,16 @@ function addComputer($data) {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn printComputerInfo($ipaddress, $stateid, $owner, $platformid,
+/// \fn printComputerInfo($pripaddress, $ipaddress, $eth0macaddress,
+///                       $eth1macaddress, $stateid, $owner, $platformid,
 ///                       $scheduleid, $currentimgid, $ram, $numprocs,
 ///                       $procspeed, $network,  $hostname, $compid, $type,
-///                       $provisioningid)
+///                       $provisioningid, $location)
 ///
-/// \param $ipaddress -  IP address of computer
+/// \param $pripaddress - private IP address of computer
+/// \param $ipaddress - public IP address of computer
+/// \param $eth0macaddress - private MAC address
+/// \param $eth1macaddress - public MAC address
 /// \param $stateid - stateid of computer
 /// \param $owner - owner of computer
 /// \param $platformid - platformid of computer
@@ -3661,14 +3883,16 @@ function addComputer($data) {
 /// \param $compid - id of computer from computer table
 /// \param $type - type of computer (blade or lab)
 /// \param $provisioningid - id of provisioning engine
+/// \param $location - location of computer
 ///
 /// \brief prints a table of information about the computer
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function printComputerInfo($ipaddress, $stateid, $owner, $platformid,
+function printComputerInfo($pripaddress, $ipaddress, $eth0macaddress,
+                           $eth1macaddress, $stateid, $owner, $platformid,
                            $scheduleid, $currentimgid, $ram, $numprocs,
                            $procspeed, $network, $hostname, $compid, $type,
-                           $provisioningid) {
+                           $provisioningid, $location) {
 
 	$states = getStates();
 	$platforms = getPlatforms();
@@ -3682,8 +3906,24 @@ function printComputerInfo($ipaddress, $stateid, $owner, $platformid,
 	print "    <TD>$hostname</TD>\n";
 	print "  </TR>\n";
 	print "  <TR>\n";
-	print "    <TH align=right>IP&nbsp;Address:</TH>\n";
+	print "    <TH align=right>Type:</TH>\n";
+	print "    <TD>$type</TD>\n";
+	print "  </TR>\n";
+	print "  <TR>\n";
+	print "    <TH align=right nowrap>Public IP Address:</TH>\n";
 	print "    <TD>$ipaddress</TD>\n";
+	print "  </TR>\n";
+	print "  <TR>\n";
+	print "    <TH align=right nowrap>Private IP Address:</TH>\n";
+	print "    <TD>$pripaddress</TD>\n";
+	print "  </TR>\n";
+	print "  <TR>\n";
+	print "    <TH align=right nowrap>Public MAC Address:</TH>\n";
+	print "    <TD>$eth1macaddress</TD>\n";
+	print "  </TR>\n";
+	print "  <TR>\n";
+	print "    <TH align=right nowrap>Private MAC Address:</TH>\n";
+	print "    <TD>$eth0macaddress</TD>\n";
 	print "  </TR>\n";
 	print "  <TR>\n";
 	print "    <TH align=right>State:</TH>\n";
@@ -3703,7 +3943,7 @@ function printComputerInfo($ipaddress, $stateid, $owner, $platformid,
 	print "  </TR>\n";
 	if(! empty($currentimgid)) {
 		print "  <TR>\n";
-		print "    <TH align=right>Current&nbsp;Image:</TH>\n";
+		print "    <TH align=right nowrap>Current Image:</TH>\n";
 		print "    <TD>" . $images[$currentimgid]["prettyname"] . "</TD>\n";
 		print "  </TR>\n";
 	}
@@ -3712,30 +3952,30 @@ function printComputerInfo($ipaddress, $stateid, $owner, $platformid,
 	print "    <TD>$ram</TD>\n";
 	print "  </TR>\n";
 	print "  <TR>\n";
-	print "    <TH align=right>No.&nbsp;Processors:</TH>\n";
+	print "    <TH align=right nowrap>No. Cores:</TH>\n";
 	print "    <TD>$numprocs</TD>\n";
 	print "  </TR>\n";
 	print "  <TR>\n";
-	print "    <TH align=right>Processor&nbsp;Speed&nbsp;(MHz):</TH>\n";
+	print "    <TH align=right nowrap>Processor Speed (MHz):</TH>\n";
 	print "    <TD>$procspeed</TD>\n";
 	print "  </TR>\n";
 	print "  <TR>\n";
-	print "    <TH align=right>Network&nbsp;Speed&nbsp;(Mbps):</TH>\n";
+	print "    <TH align=right nowrap>Network Speed (Mbps):</TH>\n";
 	print "    <TD>$network</TD>\n";
 	print "  </TR>\n";
 	if(! empty($compid)) {
 		print "  <TR>\n";
-		print "    <TH align=right>Computer&nbsp;ID:</TH>\n";
+		print "    <TH align=right nowrap>Computer ID:</TH>\n";
 		print "    <TD>$compid</TD>\n";
 		print "  </TR>\n";
 	}
 	print "  <TR>\n";
-	print "    <TH align=right>Type:</TH>\n";
-	print "    <TD>$type</TD>\n";
-	print "  </TR>\n";
-	print "  <TR>\n";
 	print "    <TH align=right>Provisioning Engine:</TH>\n";
 	print "    <TD>" . $provisioning[$provisioningid]['prettyname'] . "</TD>\n";
+	print "  </TR>\n";
+	print "  <TR>\n";
+	print "    <TH align=right>Location:</TH>\n";
+	print "    <TD>$location</TD>\n";
 	print "  </TR>\n";
 	print "</TABLE>\n";
 }
@@ -3761,7 +4001,7 @@ function getComputerSelection($data) {
 	              "showowner", "showprocspeed", "showplatform", "shownetwork",
 	              "showschedule", "showcomputerid", "showcurrentimage",
 	              "showtype", "showdeleted", "shownotes", "showcounts",
-	              "showprovisioning");
+	              "showprovisioning", "showlocation");
 	foreach($keys as $key)
 		$ret[$key] = $data[$key];
 	return $ret;
@@ -3781,8 +4021,7 @@ function jsonCompGroupingComps() {
 	$groups = getUserResources(array("computerAdmin"), array("manageGroup"), 1);
 	if(! array_key_exists($groupid, $groups['computer'])) {
 		$arr = array('incomps' => array(), 'outcomps' => array(), 'all' => array());
-		header('Content-Type: text/json-comment-filtered; charset=utf-8');
-		print '/*{"items":' . json_encode($arr) . '}*/';
+		sendJSON($arr);
 		return;
 	}
 
@@ -3821,8 +4060,7 @@ function jsonCompGroupingGroups() {
 	$resources = getUserResources(array("computerAdmin"), array("manageGroup"));
 	if(! array_key_exists($compid, $resources['computer'])) {
 		$arr = array('ingroups' => array(), 'outgroups' => array(), 'all' => array());
-		header('Content-Type: text/json-comment-filtered; charset=utf-8');
-		print '/*{"items":' . json_encode($arr) . '}*/';
+		sendJSON($arr);
 		return;
 	}
 	$groups = getUserResources(array('computerAdmin'), array('manageGroup'), 1);
@@ -3859,8 +4097,7 @@ function AJaddCompToGroup() {
 	$groups = getUserResources(array("computerAdmin"), array("manageGroup"), 1);
 	if(! array_key_exists($groupid, $groups['computer'])) {
 		$arr = array('comps' => array(), 'addrem' => 1);
-		header('Content-Type: text/json-comment-filtered; charset=utf-8');
-		print '/*{"items":' . json_encode($arr) . '}*/';
+		sendJSON($arr);
 		return;
 	}
 
@@ -3873,8 +4110,7 @@ function AJaddCompToGroup() {
 			continue;
 		if(! array_key_exists($id, $resources['computer'])) {
 			$arr = array('comps' => array(), 'addrem' => 1);
-			header('Content-Type: text/json-comment-filtered; charset=utf-8');
-			print '/*{"items":' . json_encode($arr) . '}*/';
+			sendJSON($arr);
 			return;
 		}
 		$compids[] = $id;
@@ -3891,8 +4127,7 @@ function AJaddCompToGroup() {
 	doQuery($query, 287);
 	$_SESSION['userresources'] = array();
 	$arr = array('comps' => $compids, 'addrem' => 1);
-	header('Content-Type: text/json-comment-filtered; charset=utf-8');
-	print '/*{"items":' . json_encode($arr) . '}*/';
+	sendJSON($arr);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -3909,8 +4144,7 @@ function AJremCompFromGroup() {
 	$groups = getUserResources(array("computerAdmin"), array("manageGroup"), 1);
 	if(! array_key_exists($groupid, $groups['computer'])) {
 		$arr = array('comps' => array(), 'addrem' => 0);
-		header('Content-Type: text/json-comment-filtered; charset=utf-8');
-		print '/*{"items":' . json_encode($arr) . '}*/';
+		sendJSON($arr);
 		return;
 	}
 
@@ -3923,8 +4157,7 @@ function AJremCompFromGroup() {
 			continue;
 		if(! array_key_exists($id, $resources['computer'])) {
 			$arr = array('comps' => array(), 'addrem' => 0, 'id' => $id, 'extra' => $resources['computer']);
-			header('Content-Type: text/json-comment-filtered; charset=utf-8');
-			print '/*{"items":' . json_encode($arr) . '}*/';
+			sendJSON($arr);
 			return;
 		}
 		$compids[] = $id;
@@ -3939,8 +4172,7 @@ function AJremCompFromGroup() {
 	}
 	$_SESSION['userresources'] = array();
 	$arr = array('comps' => $compids, 'addrem' => 0);
-	header('Content-Type: text/json-comment-filtered; charset=utf-8');
-	print '/*{"items":' . json_encode($arr) . '}*/';
+	sendJSON($arr);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -3957,8 +4189,7 @@ function AJaddGroupToComp() {
 	$resources = getUserResources(array("computerAdmin"), array("manageGroup"));
 	if(! array_key_exists($compid, $resources['computer'])) {
 		$arr = array('groups' => array(), 'addrem' => 1);
-		header('Content-Type: text/json-comment-filtered; charset=utf-8');
-		print '/*{"items":' . json_encode($arr) . '}*/';
+		sendJSON($arr);
 		return;
 	}
 
@@ -3971,8 +4202,7 @@ function AJaddGroupToComp() {
 			continue;
 		if(! array_key_exists($id, $groups['computer'])) {
 			$arr = array('groups' => array(), 'addrem' => 1);
-			header('Content-Type: text/json-comment-filtered; charset=utf-8');
-			print '/*{"items":' . json_encode($arr) . '}*/';
+			sendJSON($arr);
 			return;
 		}
 		$groupids[] = $id;
@@ -3989,8 +4219,7 @@ function AJaddGroupToComp() {
 	doQuery($query, 101);
 	$_SESSION['userresources'] = array();
 	$arr = array('groups' => $groupids, 'addrem' => 1);
-	header('Content-Type: text/json-comment-filtered; charset=utf-8');
-	print '/*{"items":' . json_encode($arr) . '}*/';
+	sendJSON($arr);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -4007,8 +4236,7 @@ function AJremGroupFromComp() {
 	$resources = getUserResources(array("computerAdmin"), array("manageGroup"));
 	if(! array_key_exists($compid, $resources['computer'])) {
 		$arr = array('groups' => array(), 'addrem' => 0);
-		header('Content-Type: text/json-comment-filtered; charset=utf-8');
-		print '/*{"items":' . json_encode($arr) . '}*/';
+		sendJSON($arr);
 		return;
 	}
 
@@ -4021,8 +4249,7 @@ function AJremGroupFromComp() {
 			continue;
 		if(! array_key_exists($id, $groups['computer'])) {
 			$arr = array('groups' => array(), 'addrem' => 0);
-			header('Content-Type: text/json-comment-filtered; charset=utf-8');
-			print '/*{"items":' . json_encode($arr) . '}*/';
+			sendJSON($arr);
 			return;
 		}
 		$groupids[] = $id;
@@ -4037,8 +4264,114 @@ function AJremGroupFromComp() {
 	}
 	$_SESSION['userresources'] = array();
 	$arr = array('groups' => $groupids, 'addrem' => 0);
-	header('Content-Type: text/json-comment-filtered; charset=utf-8');
-	print '/*{"items":' . json_encode($arr) . '}*/';
+	sendJSON($arr);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn AJgenerateUtilData()
+///
+/// \brief generates /etc/hosts or dhcpd.conf and dhcpd.leases for submitted
+/// computer
+///
+////////////////////////////////////////////////////////////////////////////////
+function AJgenerateUtilData() {
+	$mnip = processInputVar('mnip', ARG_STRING);
+	if(empty($mnip))
+		$method = 'hosts';
+	else {
+		$method = 'dhcpd';
+		$octets = explode('.', $mnip);
+		if(! preg_match('/^(([0-9]){1,3}\.){3}([0-9]){1,3}$/', $mnip) ||
+		   $octets[0] < 1 || $octets[0] > 255 ||
+		   $octets[1] < 0 || $octets[1] > 255 ||
+		   $octets[2] < 0 || $octets[2] > 255 ||
+		   $octets[3] < 0 || $octets[3] > 255) {
+			sendJSON(array('status' => 'error', 'errmsg' => 'invalid IP address submitted'));
+			return;
+		}
+		$hexmnip = sprintf('%02x:%02x:%02x:%02x', $octets[0], $octets[1], $octets[2], $octets[3]);
+	}
+	$dispcompids = getContinuationVar('dispcompids');
+	$compids = processInputVar('compids', ARG_STRING);
+	if(! preg_match('/[0-9,]*/', $compids)) {
+		sendJSON(array('status' => 'error', 'errmsg' => 'invalid data submitted'));
+		return;
+	}
+	$compids = explode(',', $compids);
+	$others = array_diff($compids, $dispcompids);
+	if(! empty($others)) {
+		$arr = array('status' => 'error',
+		             'errmsg' => 'invalid computer id submitted');
+		sendJSON($arr);
+		return;
+	}
+	$comps = getComputers(1);
+	$noips = array();
+	$hosts = '';
+	$dhcpd = '';
+	$leases = '';
+	foreach($compids as $id) {
+		if($method == 'hosts') {
+			if(! empty($comps[$id]['privateIPaddress']))
+				$hosts .= "{$comps[$id]['privateIPaddress']}\t{$comps[$id]['hostname']}\n";
+			else
+				$noips[] = $comps[$id]['hostname'];
+		}
+		else {
+			if(! empty($comps[$id]['privateIPaddress']) &&
+			   ! empty($comps[$id]['eth0macaddress'])) {
+				$tmp = explode('.', $comps[$id]['hostname']);
+				$dhcpd .= "\t\thost {$tmp[0]} {\n";
+				$dhcpd .= "\t\t\toption host-name \"{$tmp[0]}\";\n";
+				$dhcpd .= "\t\t\thardware ethernet {$comps[$id]['eth0macaddress']};\n";
+				$dhcpd .= "\t\t\tfixed-address {$comps[$id]['privateIPaddress']};\n";
+				$dhcpd .= "\t\t\tfilename \"/tftpboot/pxelinux.0\";\n";
+				$dhcpd .= "\t\t\toption dhcp-server-identifier $mnip;\n";
+				$dhcpd .= "\t\t\tnext-server $mnip;\n";
+				$dhcpd .= "\t\t}\n\n";
+
+				$leases .= "host {$tmp[0]} {\n";
+				$leases .= "\tdynamic;\n";
+				$leases .= "\thardware ethernet {$comps[$id]['eth0macaddress']};\n";
+				$leases .= "\tfixed-address {$comps[$id]['privateIPaddress']};\n";
+				$leases .= "\tsupersede server.ddns-hostname = \"{$tmp[0]}\";\n";
+				$leases .= "\tsupersede host-name = \"{$tmp[0]}\";\n";
+				$leases .= "\tif option vendor-class-identifier = \"ScaleMP\" {\n";
+				$leases .= "\t\tsupersede server.filename = \"vsmp/pxelinux.0\";\n";
+				$leases .= "\t} else {\n";
+				$leases .= "\t\tsupersede server.filename = \"pxelinux.0\";\n";
+				$leases .= "\t}\n";
+				$leases .= "\tsupersede server.next-server = $hexmnip;\n";
+				$leases .= "}\n";
+			}
+			else
+				$noips[] = $comps[$id]['hostname'];
+		}
+	}
+	$h = '';
+	if(! empty($noips)) {
+		if($method == 'hosts')
+			$h .= "The following computers did not have private IP address entries:<br>";
+		else
+			$h .= "The following computers did not have private IP address or private MAC entries:<br>";
+		$h .= "<pre>";
+		$h .= implode("\n", $noips);
+		$h .= "</pre>";
+	}
+	if(! empty($hosts) && $method == 'hosts') {
+		$h .= "Data to be added to /etc/hosts:<br>";
+		$h .= "<pre>$hosts</pre>";
+	}
+	elseif(! empty($dhcpd) && $method == 'dhcpd') {
+		$h .= "Data to be added to dhcpd.conf:<br>";
+		$h .= "<pre>$dhcpd</pre>";
+		$h .= "Data to be added to dhcpd.leases:<br>";
+		$h .= "<pre>$leases</pre>";
+	}
+	$arr = array('status' => 'success',
+	             'html' => $h);
+	sendJSON($arr);
 }
 
 ?>

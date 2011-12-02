@@ -6928,9 +6928,13 @@ function sortAvailableTimesByStart($a, $b) {
 /// \b network - speed of computer's NIC\n
 /// \b hostname - computer's hostname\n
 /// \b IPaddress - computer's IP address\n
+/// \b privateIPaddress - computer's private IP address\n
+/// \b eth0macaddress - computer's eth0 mac address\n
+/// \b eth1macaddress - computer's eth1 mac address\n
 /// \b type - either 'blade' or 'lab' - used to determine what backend utilities\n
 /// \b deleted - 0 or 1; whether or not this computer has been deleted\n
 /// \b resourceid - computer's resource id from the resource table\n
+/// \b location - computer's location\n
 /// \b provisioningid - id of provisioning engine\n
 /// \b provisioning - pretty name of provisioning engine
 /// need to be used to manage computer
@@ -6960,6 +6964,9 @@ function getComputers($sort=0, $includedeleted=0, $compid="") {
 	       .        "c.network AS network, "
 	       .        "c.hostname AS hostname, "
 	       .        "c.IPaddress AS IPaddress, "
+	       .        "c.privateIPaddress, "
+	       .        "c.eth0macaddress, "
+	       .        "c.eth1macaddress, "
 	       .        "c.type AS type, "
 	       .        "c.deleted AS deleted, "
 	       .        "r.id AS resourceid, "
@@ -6967,6 +6974,7 @@ function getComputers($sort=0, $includedeleted=0, $compid="") {
 	       .        "c.vmhostid, "
 	       .        "c.vmtypeid, "
 	       .        "c2.hostname AS vmhost, "
+	       .        "c.location, "
 	       .        "c.provisioningid, "
 	       .        "pr.prettyname AS provisioning "
 	       . "FROM state st, "
@@ -7563,7 +7571,7 @@ function printSelectInput($name, $dataArr, $selectedid=-1, $skip=0, $multiple=0,
 			continue;
 		}
 		if($id == $selectedid) {
-		   print "        <OPTION value=\"$id\" selected>";
+		   print "        <OPTION value=\"$id\" selected=\"selected\">";
 		}
 		else {
 		   print "        <OPTION value=\"$id\">";
@@ -10273,6 +10281,22 @@ function getDojoHTML($refresh) {
 			                      'dijit.layout.TabContainer',
 			                      'dijit.form.Button');
 			break;
+		case 'editComputer':
+		case 'addComputer':
+		case 'confirmEditComputer':
+		case 'confirmAddComputer':
+		case 'bulkAddComputer':
+		case 'confirmAddBulkComputers':
+			$dojoRequires = array('dojo.parser',
+			                      'dijit.form.Select',
+			                      'dijit.form.NumberSpinner');
+			break;
+		case 'computerUtilities':
+			$dojoRequires = array('dojo.parser',
+			                      'dijit.form.Button',
+			                      'dijit.form.Form',
+			                      'dijit.Dialog');
+			break;
 		case 'viewGroups':
 		case 'submitEditGroup':
 		case 'submitAddGroup':
@@ -10644,6 +10668,29 @@ function getDojoHTML($refresh) {
 				$rt .= "   dojo.addOnLoad(getCompsButton);\n";
 				$rt .= "   dojo.addOnLoad(getGroupsButton);\n";
 			}
+			$rt .= "</script>\n";
+			return $rt;
+		case 'editComputer':
+		case 'addComputer':
+		case 'bulkAddComputer':
+		case 'confirmEditComputer':
+		case 'confirmAddComputer':
+		case 'confirmAddBulkComputers':
+		case 'computerUtilities':
+			$rt .= "<style type=\"text/css\">\n";
+			$rt .= "   @import \"themes/$skin/css/dojo/$skin.css\";\n";
+			#$rt .= "   @import \"dojo/dojo/resources/dojo.css\";\n";
+			$rt .= "</style>\n";
+			$rt .= "<script type=\"text/javascript\" src=\"js/computers.js\"></script>\n";
+			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
+			$rt .= "   djConfig=\"parseOnLoad: true\">\n";
+			$rt .= "</script>\n";
+			$rt .= "<script type=\"text/javascript\">\n";
+			$rt .= "   dojo.addOnLoad(function() {\n";
+			foreach($dojoRequires as $req) {
+				$rt .= "   dojo.require(\"$req\");\n";
+			}
+			$rt .= "   });\n";
 			$rt .= "</script>\n";
 			return $rt;
 		case 'selectauth':

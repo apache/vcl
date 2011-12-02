@@ -18,6 +18,28 @@ var allcomps = '';
 var allgroups = '';
 var allcompgroups = '';
 
+function RPCwrapper(data, CB, dojson) {
+	if(dojson) {
+		dojo.xhrPost({
+			url: 'index.php',
+			load: CB,
+			handleAs: "json",
+			error: errorHandler,
+			content: data,
+			timeout: 15000
+		});
+	}
+	else {
+		dojo.xhrPost({
+			url: 'index.php',
+			load: CB,
+			error: errorHandler,
+			content: data,
+			timeout: 15000
+		});
+	}
+}
+
 function addRemItem(cont, objid1, objid2, cb) {
    document.body.style.cursor = 'wait';
 	var obj = document.getElementById(objid1);
@@ -33,16 +55,10 @@ function addRemItem(cont, objid1, objid2, cb) {
 	}
 	if(listids == "")
 		return;
-	dojo.xhrPost({
-		url: 'index.php',
-		load: cb,
-		handleAs: "json-comment-filtered",
-		error: errorHandler,
-		content: {continuation: cont,
-					 listids: listids,
-					 id: id},
-		timeout: 15000
-	});
+	var data = {continuation: cont,
+	            listids: listids,
+	            id: id};
+	RPCwrapper(data, cb, 1);
 }
 
 function addRemGroup2(data, ioArgs) {
@@ -178,15 +194,9 @@ function getCompsButton() {
 
 	obj = document.getElementById('compcont');
 
-	dojo.xhrPost({
-		url: 'index.php',
-		handleAs: "json-comment-filtered",
-		load: compsCallback,
-		error: errorHandler,
-		content: {continuation: obj.value,
-					 groupid: groupid},
-		timeout: 15000
-	});
+	var data = {continuation: obj.value,
+	            groupid: groupid};
+	RPCwrapper(data, compsCallback, 1);
 }
 
 function compsCallback(data, ioArgs) {
@@ -221,15 +231,9 @@ function getGroupsButton() {
 
 	obj = document.getElementById('grpcont');
 
-	dojo.xhrPost({
-		url: 'index.php',
-		handleAs: "json-comment-filtered",
-		load: groupsCallback,
-		error: errorHandler,
-		content: {continuation: obj.value,
-					 compid: compid},
-		timeout: 15000
-	});
+	var data = {continuation: obj.value,
+	            compid: compid};
+	RPCwrapper(data, groupsCallback, 1);
 }
 
 function groupsCallback(data, ioArgs) {
@@ -243,4 +247,99 @@ function groupsCallback(data, ioArgs) {
 	}
 	allgroups = data.items.all;
 	document.body.style.cursor = 'default';
+}
+
+function editComputerSelectType() {
+	var sobj = dijit.byId('stateid');
+	sobj.removeOption(sobj.getOptions());
+	var type = dijit.byId('type').get('value');
+	for(var i = 0; i < allowedstates.length; i++) {
+		if(type == 'virtualmachine' && allowedstates[i].label != 'maintenance')
+			continue;
+		if(type == 'lab' && allowedstates[i].label != 'available' &&
+			allowedstates[i].label != 'maintenance')
+			continue;
+		sobj.addOption({value: allowedstates[i].value, label: allowedstates[i].label});
+	}
+	var pobj = dijit.byId('provisioningid');
+	pobj.removeOption(pobj.getOptions());
+	for(var i = 0; i < allowedprovs[type].length; i++) {
+		pobj.addOption({value: allowedprovs[type][i].id, label: allowedprovs[type][i].name});
+	}
+	if(dojo.byId('location')) {
+		if(type == 'virtualmachine')
+			dojo.byId('location').disabled = true;
+		else
+			dojo.byId('location').disabled = false;
+	}
+}
+
+function generateCompData() {
+	var count = 0;
+	var obj;
+	var compids = new Array();
+	while(obj = dojo.byId('comp' + count)) {
+		if(obj.checked)
+			compids.push(obj.value);
+		count++;
+	}
+	if(compids.length == 0) {
+		alert('You must select some computers first.');
+		return;
+	}
+	if(dojo.byId('generatetype').value == 'dhcpd') {
+		dojo.removeClass('mgmtipdiv', 'hidden');
+		dojo.addClass('utilerror', 'hidden');
+		dijit.byId('utildialog').show();
+	}
+	else {
+		dojo.removeClass('utilloading', 'hidden');
+		dojo.addClass('utilcontent', 'hidden');
+		generateHostsData(compids);
+	}
+}
+
+function generateDHCPDdata() {
+	if(dojo.byId('mnip').value == '') {
+		alert('You must fill in an IP address first.');
+		return;
+	}
+	var count = 0;
+	var obj;
+	var compids = new Array();
+	while(obj = dojo.byId('comp' + count)) {
+		if(obj.checked)
+			compids.push(obj.value);
+		count++;
+	}
+	var allcompids = compids.join(',');
+	var data = {continuation: dojo.byId('utilcont').value,
+	            mnip: dojo.byId('mnip').value,
+	            compids: allcompids};
+	RPCwrapper(data, generateCompDataCB, 1);
+}
+
+function generateHostsData(compids) {
+	dojo.addClass('utilerror', 'hidden');
+	dijit.byId('utildialog').show();
+	var allcompids = compids.join(',');
+	var data = {continuation: dojo.byId('utilcont').value,
+	            compids: allcompids};
+	RPCwrapper(data, generateCompDataCB, 1);
+}
+
+function generateCompDataCB(data, ioArgs) {
+	dojo.addClass('utilloading', 'hidden');
+	if(data.items.status == 'success') {
+		dojo.removeClass('utilcontent', 'hidden');
+		dojo.byId('utilcontent').innerHTML = data.items.html;
+		if(dijit.byId('utildialog')._relativePosition)
+			delete dijit.byId('utildialog')._relativePosition;
+		dijit.byId('utildialog')._size();
+		dijit.byId('utildialog')._position();
+	}
+	else if(data.items.status == 'error') {
+		dojo.removeClass('utilerror', 'hidden');
+		dojo.byId('utilerror').innerHTML = 'Error: ' + data.items.errmsg + '<br><br>';
+	}
 }
