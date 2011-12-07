@@ -2567,11 +2567,16 @@ function confirmDeleteImage() {
 		$question = "Undelete the following image?";
 	}
 
-	if(! $deleted && checkForImageUsage($imageid)) {
-		print "<H2 align=center>Delete Image</H2>\n";
-		print "The image you selected is currently in use. You cannot delete ";
-		print "the image until it is no longer being used.<br>\n";
-		return;
+	if(! $deleted) {
+		$last = checkForImageUsage($imageid);
+		if(! empty($last)) {
+			$last = date('g:i a \o\n n/j/Y', $last);
+			print "<H2 align=center>Delete Image</H2>\n";
+			print "There are currently reservations for this image. It cannot be ";
+			print "deleted until the reservations are over. The last reservation ";
+			print "for it is currently scheduled to end at $last.<br>\n";
+			return;
+		}
 	}
 
 	$platforms = getPlatforms();
@@ -2680,6 +2685,24 @@ function submitDeleteImage() {
 				 . "SET nextimageid = 0 "
 				 . "WHERE nextimageid = $imageid";
 		doQuery($query, 212);
+		$noimageid = getImageId('noimage');
+		$revisionid = getProductionRevisionid($noimageid);
+		$query = "UPDATE computer "
+		       . "SET currentimageid = $noimageid, "
+		       .     "imagerevisionid = $revisionid "
+		       . "WHERE currentimageid = $imageid OR "
+		       .       "imagerevisionid IN "
+		       .       "("
+		       .          "SELECT id "
+		       .          "FROM imagerevision "
+		       .          "WHERE imageid = $imageid"
+		       .       ")";
+		doQuery($query);
+		$query = "UPDATE computer "
+		       . "SET preferredimageid = $noimageid "
+		       . "WHERE preferredimageid = $imageid";
+		doQuery($query);
+
 	}
 	viewImages();
 }
@@ -3486,30 +3509,25 @@ function addImage($data) {
 ///
 /// \param $imageid - id of an image
 ///
-/// \return 0 if image is not used on any computers, 1 if it is
+/// \return empty string if not used, end time of last reservation in unix
+/// timestamp form if reservations found
 ///
-/// \brief checks for $imageid being the current imageid for any computers in
-/// the computer table or the imageid for any active reservations
+/// \brief checks $imageid being used by any reservations
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function checkForImageUsage($imageid) {
-	$query = "SELECT id "
-	       . "FROM computer "
-	       . "WHERE currentimageid = $imageid";
-	$qh = doQuery($query, 250);
-	if(mysql_num_rows($qh))
-		return 1;
-	$query = "SELECT rs.id "
+	$query = "SELECT UNIX_TIMESTAMP(rq.end) AS end "
 	       . "FROM reservation rs, "
 	       .      "request rq "
 	       . "WHERE rs.requestid = rq.id "
 	       .   "AND rs.imageid = $imageid "
 	       .   "AND rq.end > NOW() "
-	       .   "AND rq.stateid NOT IN (1, 5, 12)";
+	       .   "AND rq.stateid NOT IN (1, 5, 12) "
+	       . "ORDER BY rq.end DESC";
 	$qh = doQuery($query, 250);
-	if(mysql_num_rows($qh))
-		return 1;
-	return 0;
+	if($row = mysql_fetch_assoc($qh))
+		return $row['end'];
+	return '';
 }
 
 ////////////////////////////////////////////////////////////////////////////////
