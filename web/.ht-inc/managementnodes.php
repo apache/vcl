@@ -258,9 +258,10 @@ function editOrAddMgmtnode($state) {
 	else {
 		print "<H2>Edit Management Node</H2>\n";
 	}
+	print "<small>* denotes required fields</small>\n";
 	print "<TABLE>\n";
 	print "  <TR>\n";
-	print "    <TH align=right>Hostname:</TH>\n";
+	print "    <TH align=right>Hostname*:</TH>\n";
 	print "    <TD><INPUT type=text name=hostname value=\"{$data["hostname"]}\" ";
 	print "maxlength=50></TD>\n";
 	print "    <TD>";
@@ -268,7 +269,7 @@ function editOrAddMgmtnode($state) {
 	print "</TD>\n";
 	print "  </TR>\n";
 	print "  <TR>\n";
-	print "    <TH align=right>IP address:</TH>\n";
+	print "    <TH align=right>IP address*:</TH>\n";
 	print "    <TD><INPUT type=text name=IPaddress value=\"";
 	print $data["IPaddress"] . "\" maxlength=15></TD>\n";
 	print "    <TD>";
@@ -276,7 +277,7 @@ function editOrAddMgmtnode($state) {
 	print "</TD>\n";
 	print "  </TR>\n";
 	print "  <TR>\n";
-	print "    <TH align=right>Owner:</TH>\n";
+	print "    <TH align=right>Owner*:</TH>\n";
 	print "    <TD><INPUT type=text name=owner value=\"" . $data["owner"];
 	print "\"></TD>\n";
 	print "    <TD>";
@@ -1420,9 +1421,10 @@ function processMgmtnodeInput($checks=1) {
 		$submitErrMsg[MNOWNERERR] = "Submitted ID is not valid";
 	}
 
-	if(! preg_match('/^([-a-zA-Z0-9_\.\/]){2,100}$/', $return["installpath"])) {
+	if($return['installpath'] != '' &&
+	   ! preg_match('/^([-a-zA-Z0-9_\.\/]){2,100}$/', $return["installpath"])) {
 	   $submitErr |= MNINSTPATHERR;
-	   $submitErrMsg[MNINSTPATHERR] = "This can only contain letters, numbers, dashes(-), periods(.), underscores(_), and forward slashes(/). It can be from 2 to 100 characters long";
+	   $submitErrMsg[MNINSTPATHERR] = "This must be empty or only contain letters, numbers, dashes(-), periods(.), underscores(_), and forward slashes(/) and be from 2 to 100 characters long";
 	}
 	if(! empty($return['keys']) && ! preg_match('/^([-a-zA-Z0-9_\.\/,]){2,1024}$/', $return["keys"])) {
 	   $submitErr |= MNSSHIDKEYSERR;
