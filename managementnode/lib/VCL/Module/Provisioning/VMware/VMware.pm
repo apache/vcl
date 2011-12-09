@@ -1118,7 +1118,8 @@ sub node_status {
 			$status->{ping} = 0;
 		}
 		
-		$status->{vmstate} = $self->power_status();
+		my $vmx_file_path = $self->get_vmx_file_path();	
+		$status->{vmstate} = $self->power_status($vmx_file_path);
 		if (!defined($status->{vmstate})) {
 			$status->{vmstate} = "off";
 		}
@@ -2841,7 +2842,11 @@ sub get_vmx_file_path {
 		return;
 	}
 	
-	return $ENV{vmx_file_path} if $ENV{vmx_file_path};
+	my $reservation_id = $self->data->get_reservation_id();
+	
+	if ($reservation_id) {
+		return $ENV{vmx_file_path} if $ENV{vmx_file_path};
+	}
 	
 	my $vmx_base_directory_path = $self->get_vmx_base_directory_path();
 	if (!$vmx_base_directory_path) {
@@ -2857,7 +2862,7 @@ sub get_vmx_file_path {
 	
 	my $vmx_file_path = "$vmx_base_directory_path/$vmx_directory_name/$vmx_directory_name.vmx";
 	$ENV{vmx_file_path} = $vmx_file_path;
-	notify($ERRORS{'DEBUG'}, 0, "determined vmx file path: $vmx_file_path");
+	notify($ERRORS{'OK'}, 0, "determined vmx file path: $vmx_file_path");
 	return $vmx_file_path;
 }
 
@@ -2886,17 +2891,22 @@ sub get_vmx_base_directory_path {
 	# Check if vmx_file_path environment variable has been set
 	# If set, parse the path to return the directory name preceding the vmx file name and directory name
 	# /<vmx base directory path>/<vmx directory name>/<vmx file name>
-	if ($ENV{vmx_file_path}) {
-		($vmx_base_directory_path) = $ENV{vmx_file_path} =~ /(.+)\/[^\/]+\/[^\/]+.vmx$/i;
-		if ($vmx_base_directory_path) {
-			return $vmx_base_directory_path;
-		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "vmx base directory path could not be determined from vmx file path: '$ENV{vmx_file_path}'");
-			return;
+	
+	my $reservation_id = $self->data->get_reservation_id();
+	
+	if ($reservation_id) {
+		if ($ENV{vmx_file_path}) {
+			($vmx_base_directory_path) = $ENV{vmx_file_path} =~ /(.+)\/[^\/]+\/[^\/]+.vmx$/i;
+			if ($vmx_base_directory_path) {
+				return $vmx_base_directory_path;
+			}
+			else {
+				notify($ERRORS{'WARNING'}, 0, "vmx base directory path could not be determined from vmx file path: '$ENV{vmx_file_path}'");
+				return;
+			}
 		}
 	}
-	
+
 	# Get the vmprofile.vmpath
 	# If this is not set, use vmprofile.datastorepath
 	$vmx_base_directory_path = $self->data->get_vmhost_profile_vmpath() || $self->data->get_vmhost_profile_datastore_path();
@@ -2941,21 +2951,24 @@ sub get_vmx_directory_name {
 	}
 	
 	my $vmx_directory_name;
+	my $reservation_id = $self->data->get_reservation_id();
+	
 	
 	# Check if vmx_file_path environment variable has been set
 	# If set, parse the path to return the directory name preceding the vmx file name
 	# /<vmx base directory path>/<vmx directory name>/<vmx file name>
-	if ($ENV{vmx_file_path}) {
-		($vmx_directory_name) = $ENV{vmx_file_path} =~ /([^\/]+)\/[^\/]+.vmx$/i;
-		if ($vmx_directory_name) {
-			return $vmx_directory_name;
+	if ($reservation_id) {
+		if ($ENV{vmx_file_path}) {
+			($vmx_directory_name) = $ENV{vmx_file_path} =~ /([^\/]+)\/[^\/]+.vmx$/i;
+			if ($vmx_directory_name) {
+				return $vmx_directory_name;
+			}
+			else {
+				notify($ERRORS{'WARNING'}, 0, "vmx directory name could not be determined from vmx file path: '$ENV{vmx_file_path}'");
+				return;
+			}
 		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "vmx directory name could not be determined from vmx file path: '$ENV{vmx_file_path}'");
-			return;
-		}
-	}
-	
+	}	
 	# Get the computer name
 	my $computer_short_name = $self->data->get_computer_short_name();
 	if (!$computer_short_name) {
