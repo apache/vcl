@@ -372,6 +372,8 @@ sub process {
 
 			$info->{computertable}->{$cid}->{node_status} = \%{$node_status};
 			$info->{computertable}->{$cid}->{"computer_currentimage_name"} = $computer_currentimage_name;
+			$info->{computertable}->{$cid}->{"computer_hostname"} = $computer_hostname;
+			
 
 			notify($ERRORS{'OK'}, $LOG, "nodestatus reports $node_status_string for $computer_hostname");
 
