@@ -7546,7 +7546,7 @@ sub round {
 sub set_logfile_path {
 	my ($package, $filename, $line, $sub) = caller(0);
 	($LOGFILE) = @_;
-	print STDOUT "log file path changed to \'$LOGFILE\'\n";
+	#print STDOUT "log file path changed to \'$LOGFILE\'\n";
 }
 
 #/////////////////////////////////////////////////////////////////////////////

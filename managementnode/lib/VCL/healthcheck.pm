@@ -418,11 +418,9 @@ sub process {
 
 		}
 
+		# 
+		sleep 3;
 
-		if ($info->{computers}->{$cid}->{skip}) {
-			#update lastcheck time
-			$datestring = makedatestring;
-		}
 
 	}    #for loop
 	return 1;
