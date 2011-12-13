@@ -390,6 +390,89 @@ sub create_mn_os_object {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 create_vmhost_os_object
+
+ Parameters  : None
+ Returns     : boolean
+ Description : Creates an OS object for the VM host.
+
+=cut
+
+sub create_vmhost_os_object {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Check if an OS object has already been stored in the calling object
+	if ($ENV{vmhost_os}) {
+		return 1;
+	}
+	
+	# Make sure calling object isn't an OS module to avoid an infinite loop
+	if ($self->isa('VCL::Module::OS')) {
+		notify($ERRORS{'WARNING'}, 0, "this subroutine cannot be called from an existing OS module: " . ref($self));
+		return;
+	}
+	
+	my $request_data = $self->data->get_request_data();
+	my $reservation_id = $self->data->get_reservation_id();
+	my $vmhost_computer_id = $self->data->get_vmhost_computer_id();
+	my $vmhost_profile_image_id = $self->data->get_vmhost_profile_image_id();
+	
+	# Create a DataStructure object containing computer data for the VM host
+	my $vmhost_data;
+	eval {
+		$vmhost_data = new VCL::DataStructure({
+															request_data => $request_data,
+															reservation_id => $reservation_id,
+															computer_id => $vmhost_computer_id,
+															image_id => $vmhost_profile_image_id
+															}
+														  );
+	};
+	
+	if ($EVAL_ERROR) {
+		notify($ERRORS{'WARNING'}, 0, "unable to create DataStructure object for VM host, error: $EVAL_ERROR");
+		return;
+	}
+	elsif (!$vmhost_data) {
+		notify($ERRORS{'WARNING'}, 0, "unable to create DataStructure object for VM host, DataStructure object is not defined");
+		return;
+	}
+	
+	# Get the VM host OS module Perl package name
+	my $vmhost_os_perl_package = $vmhost_data->get_image_os_module_perl_package();
+	if (!$vmhost_os_perl_package) {
+		notify($ERRORS{'WARNING'}, 0, "unable to create DataStructure or OS object for VM host, failed to retrieve VM host image OS module Perl package name");
+		return;
+	}
+	
+	# Load the VM host OS module
+	notify($ERRORS{'DEBUG'}, 0, "attempting to load VM host OS module: $vmhost_os_perl_package");
+	eval "use $vmhost_os_perl_package";
+	if ($EVAL_ERROR) {
+		notify($ERRORS{'WARNING'}, 0, "VM host OS module could NOT be loaded: $vmhost_os_perl_package, error: $EVAL_ERROR");
+		return;
+	}
+	notify($ERRORS{'DEBUG'}, 0, "VM host OS module loaded: $vmhost_os_perl_package");
+	
+	# Attempt to create the object
+	if (my $vmhost_os = ($vmhost_os_perl_package)->new({data_structure => $vmhost_data})) {
+		my $address = sprintf('%x', $vmhost_os);
+		notify($ERRORS{'OK'}, 0, "$vmhost_os_perl_package OS object created, address: $address");
+		$self->set_vmhost_os($vmhost_os);
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to create VM host OS object");
+		return;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 create_provisioning_object
 
  Parameters  : None
@@ -435,7 +518,7 @@ sub create_provisioning_object {
 	notify($ERRORS{'DEBUG'}, 0, "$provisioning_perl_package module loaded");
 
 	# Create provisioner object
-	if (my $provisioner = ($provisioning_perl_package)->new({data_structure => $self->data})) {
+	if (my $provisioner = ($provisioning_perl_package)->new({data_structure => $self->data, os => $self->{os}})) {
 		my $provisioner_address = sprintf('%x', $provisioner);
 		my $provisioner_computer_name = $provisioner->data->get_computer_short_name();
 		notify($ERRORS{'OK'}, 0, "$provisioning_perl_package provisioner object created for $provisioner_computer_name, address: $provisioner_address");
@@ -494,6 +577,28 @@ sub mn_os {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 vmhost_os
+
+ Parameters  : None
+ Returns     : VM hosts's OS object
+ Description : Allows modules to access the VM host's OS object.
+
+=cut
+
+sub vmhost_os {
+	my $self = shift;
+	
+	if (!$ENV{vmhost_os}) {
+		notify($ERRORS{'WARNING'}, 0, "unable to return VM host OS object, \$self->{vmhost_os} is not set");
+		return;
+	}
+	else {
+		return $ENV{vmhost_os};
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 provisioner
 
  Parameters  : None
@@ -545,6 +650,22 @@ sub set_mn_os {
 	my $self = shift;
 	my $mn_os = shift;
 	$ENV{mn_os} = $mn_os;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 set_vmhost_os
+
+ Parameters  : None
+ Returns     : 
+ Description : Sets the VM host OS object for the module to access.
+
+=cut
+
+sub set_vmhost_os {
+	my $self = shift;
+	my $vmhost_os = shift;
+	$ENV{vmhost_os} = $vmhost_os;
 }
 
 #/////////////////////////////////////////////////////////////////////////////

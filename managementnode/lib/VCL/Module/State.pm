@@ -119,6 +119,12 @@ sub initialize {
 		return;
 	}
 	
+	# Create a VM host OS object if vmhostid is set for the computer
+	if ($self->data->get_computer_vmhost_id() && !$self->create_vmhost_os_object()) {
+		notify($ERRORS{'WARNING'}, 0, "failed to create VM host OS object");
+		return;
+	}
+	
 	# Create a provisioning object
 	if (!$self->create_provisioning_object()) {
 		notify($ERRORS{'WARNING'}, 0, "failed to create provisioning object");
@@ -126,8 +132,9 @@ sub initialize {
 	}
 	
 	# Allow the provisioning object to access the OS object and vice-versa
-	$self->{provisioner}->set_os($self->{os});
-	$self->{os}->set_provisioner($self->{provisioner});
+	$self->provisioner->set_os($self->os());
+	$self->provisioner->set_vmhost_os($self->vmhost_os());
+	$self->os->set_provisioner($self->provisioner());
 	
 	notify($ERRORS{'DEBUG'}, 0, "returning 1");
 	return 1;
@@ -838,7 +845,7 @@ sub DESTROY {
 	my $self = shift;
 	
 	my $address = sprintf('%x', $self);
-	notify($ERRORS{'DEBUG'}, 0, ref($self) . " destructor called, address: $address");
+	#notify($ERRORS{'DEBUG'}, 0, ref($self) . " destructor called, address: $address");
 	
 	# If not a blockrequest, delete computerloadlog entry
 	if ($self && $self->data && !$self->data->is_blockrequest()) {
@@ -858,14 +865,14 @@ sub DESTROY {
 
 	# Print the number of database handles this process created for testing/development
 	if (defined $ENV{dbh_count}) {
-		notify($ERRORS{'DEBUG'}, 0, "number of database handles state process created: $ENV{dbh_count}");
+		#notify($ERRORS{'DEBUG'}, 0, "number of database handles state process created: $ENV{dbh_count}");
 	}
 	else {
 		notify($ERRORS{'DEBUG'}, 0, "state process created unknown number of database handles, \$ENV{dbh_count} is undefined");
 	}
 	
 	if (defined $ENV{database_select_count}) {
-		notify($ERRORS{'DEBUG'}, 0, "database select queries: $ENV{database_select_count}");
+		#notify($ERRORS{'DEBUG'}, 0, "database select queries: $ENV{database_select_count}");
 	}
 	
 	if (defined $ENV{database_select_calls}) {
@@ -876,11 +883,11 @@ sub DESTROY {
 			$database_select_calls_string .= "$ENV{database_select_calls}{$key}: $key\n";
 		}
 		
-		notify($ERRORS{'DEBUG'}, 0, "database select called from:\n$database_select_calls_string");
+		#notify($ERRORS{'DEBUG'}, 0, "database select called from:\n$database_select_calls_string");
 	}
 	
 	if (defined $ENV{database_execute_count}) {
-		notify($ERRORS{'DEBUG'}, 0, "database execute queries: $ENV{database_execute_count}");
+		#notify($ERRORS{'DEBUG'}, 0, "database execute queries: $ENV{database_execute_count}");
 	}
 
 	# Close the database handle

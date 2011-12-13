@@ -155,9 +155,9 @@ sub get_currentimage_txt_contents {
 
 	# Attempt to retrieve the contents of currentimage.txt
 	my $cat_command = "cat ~/currentimage.txt";
-	my ($cat_exit_status, $cat_output) = run_ssh_command($computer_node_name, $management_node_keys, $cat_command, '', '', 0);
+	my ($cat_exit_status, $cat_output) = run_ssh_command($computer_node_name, $management_node_keys, $cat_command);
 	if (defined($cat_exit_status) && $cat_exit_status == 0) {
-		notify($ERRORS{'DEBUG'}, 0, "retrieved currentimage.txt contents from $computer_node_name");
+		notify($ERRORS{'DEBUG'}, 0, "retrieved currentimage.txt contents from $computer_node_name:\n" . join("\n", @$cat_output));
 	}
 	elsif (defined($cat_exit_status)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to retrieve currentimage.txt from $computer_node_name, exit status: $cat_exit_status, output:\n@{$cat_output}");
@@ -1038,7 +1038,31 @@ sub _get_public_interface_name_helper {
 	my @ip_addresses_1 = keys %{$network_configuration->{$interface_name_1}{ip_address}};
 	my @ip_addresses_2 = keys %{$network_configuration->{$interface_name_2}{ip_address}};
 	
-	if (!$condition || $condition eq 'assigned_public') {
+	if (!$condition || $condition eq 'matches_private') {
+		# Get the computer private IP address
+		my $computer_private_ip_address = $self->data->get_computer_private_ip_address();
+		if (!$computer_private_ip_address) {
+			notify($ERRORS{'DEBUG'}, 0, "unable to retrieve computer private IP address from reservation data");
+			return;
+		}
+		
+		my $matches_private_1 = (grep { $_ eq $computer_private_ip_address } @ip_addresses_1) ? 1 : 0;
+		my $matches_private_2 = (grep { $_ eq $computer_private_ip_address } @ip_addresses_2) ? 1 : 0;
+		
+		if ($matches_private_1 eq $matches_private_2) {
+			notify($ERRORS{'DEBUG'}, 0, "tie: both interfaces are/are not assigned the private IP address: $computer_private_ip_address, proceeding to check if either interface is assigned a public IP address");
+			return $self->_get_public_interface_name_helper($interface_name_1, $interface_name_2, 'assigned_public');
+		}
+		elsif ($matches_private_1) {
+			notify($ERRORS{'DEBUG'}, 0, "'$interface_name_2' is more likely the public interface, it is NOT assigned the private IP address: $computer_private_ip_address");
+			return $interface_name_2;
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "'$interface_name_1' is more likely the public interface, it is NOT assigned the private IP address: $computer_private_ip_address");
+			return $interface_name_1;
+		}
+	}
+	elsif ($condition eq 'assigned_public') {
 		my $assigned_public_1 = (grep { is_public_ip_address($_) } @ip_addresses_1) ? 1 : 0;
 		my $assigned_public_2 = (grep { is_public_ip_address($_) } @ip_addresses_2) ? 1 : 0;
 		
@@ -1060,8 +1084,8 @@ sub _get_public_interface_name_helper {
 		my $assigned_default_gateway_2 = defined($network_configuration->{$interface_name_2}{default_gateway}) ? 1 : 0;
 		
 		if ($assigned_default_gateway_1 eq $assigned_default_gateway_2) {
-			notify($ERRORS{'DEBUG'}, 0, "tie: both interfaces are/are not assigned a default gateway, proceeding to check if either is assigned the private IP address");
-			return $self->_get_public_interface_name_helper($interface_name_1, $interface_name_2, 'matches_private');
+			notify($ERRORS{'DEBUG'}, 0, "tie: both interfaces are/are not assigned a default gateway, returning '$interface_name_2'");
+			return $interface_name_2;
 		}
 		elsif ($assigned_default_gateway_1) {
 			notify($ERRORS{'DEBUG'}, 0, "'$interface_name_1' is more likely the public interface, it is assigned a default gateway, '$interface_name_2' is not");
@@ -1070,30 +1094,6 @@ sub _get_public_interface_name_helper {
 		else {
 			notify($ERRORS{'DEBUG'}, 0, "'$interface_name_2' is more likely the public interface, it is assigned a default gateway, '$interface_name_1' is not");
 			return $interface_name_2;
-		}
-	}
-	elsif ($condition eq 'matches_private') {
-		# Get the computer private IP address
-		my $computer_private_ip_address = $self->data->get_computer_private_ip_address();
-		if (!$computer_private_ip_address) {
-			notify($ERRORS{'DEBUG'}, 0, "unable to retrieve computer private IP address from reservation data");
-			return;
-		}
-		
-		my $matches_private_1 = (grep { $_ eq $computer_private_ip_address } @ip_addresses_1) ? 1 : 0;
-		my $matches_private_2 = (grep { $_ eq $computer_private_ip_address } @ip_addresses_2) ? 1 : 0;
-		
-		if ($matches_private_1 eq $matches_private_2) {
-			notify($ERRORS{'DEBUG'}, 0, "tie: both interfaces are/are not assigned the private IP address: $computer_private_ip_address, returning '$interface_name_1'");
-			return $interface_name_1;
-		}
-		elsif ($matches_private_1) {
-			notify($ERRORS{'DEBUG'}, 0, "'$interface_name_2' is more likely the public interface, it is NOT assigned the private IP address: $computer_private_ip_address");
-			return $interface_name_2;
-		}
-		else {
-			notify($ERRORS{'DEBUG'}, 0, "'$interface_name_1' is more likely the public interface, it is NOT assigned the private IP address: $computer_private_ip_address");
-			return $interface_name_1;
 		}
 	}
 	else {
@@ -1529,6 +1529,12 @@ sub create_text_file {
 	my $computer_node_name = $self->data->get_computer_node_name();
 	my $image_os_type = $self->data->get_image_os_type();
 	
+	# Attempt to create the parent directory if it does not exist
+	if ($self->can('create_directory')) {
+		my $parent_directory_path = parent_directory_path($file_path);
+		$self->create_directory($parent_directory_path);
+	}
+	
 	# Remove Windows-style carriage returns if the image OS isn't Windows
 	if ($image_os_type =~ /windows/) {
 		$file_contents_string =~ s/\r*\n/\r\n/g;
@@ -1767,6 +1773,7 @@ sub execute_new {
 				# If true, sets the timeout to "inactivity timeout"
 				# If false sets it to "absolute timeout"
 				#$ssh->restart_timeout_upon_receive(1);
+				$ssh->read_all();
 			};
 			if ($EVAL_ERROR) {
 				if ($EVAL_ERROR =~ /^(\w+) at \//) {
