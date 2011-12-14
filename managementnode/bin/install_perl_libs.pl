@@ -168,6 +168,7 @@ sub install_linux_packages {
 		'perl-Net-Netmask',
 		'perl-Net-SSH-Expect',
 		'perl-RPC-XML',
+		'perl-XML-Simple',
 		'perl-YAML',
 		'xmlsec1-openssl',
 	);
