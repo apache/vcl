@@ -300,15 +300,17 @@ sub post_load {
 	
 	# Run the vcl_post_load script if it exists in the image
 	my $script_path = '/etc/init.d/vcl_post_load';
-	my $result = $self->run_script($script_path);
-	if (!defined($result)) {
-		notify($ERRORS{'WARNING'}, 0, "error occurred running $script_path");
-	}
-	elsif ($result == 0) {
-		notify($ERRORS{'DEBUG'}, 0, "$script_path does not exist in image: $image_name");
-	}
-	else {
-		notify($ERRORS{'DEBUG'}, 0, "ran $script_path");
+	if ($self->file_exists($script_path)) {
+		my $result = $self->run_script($script_path);
+		if (!defined($result)) {
+			notify($ERRORS{'WARNING'}, 0, "error occurred running $script_path");
+		}
+		elsif ($result == 0) {
+			notify($ERRORS{'DEBUG'}, 0, "$script_path does not exist in image: $image_name");
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "ran $script_path");
+		}
 	}
 	
 	if($self->enable_firewall_port("tcp", "any", $mn_private_ip, 1) ){
@@ -1381,7 +1383,7 @@ sub file_exists {
 		return;
 	}
 	elsif (grep(/no such file/i, @$output)) {
-		notify($ERRORS{'DEBUG'}, 0, "file or directory does not exist on $computer_short_name: '$path'");
+		#notify($ERRORS{'DEBUG'}, 0, "file or directory does not exist on $computer_short_name: '$path'");
 		return 0;
 	}
 	elsif (grep(/stat: /i, @$output)) {
@@ -1464,7 +1466,7 @@ sub delete_file {
 		return;
 	}
 	else {
-		notify($ERRORS{'DEBUG'}, 0, "confirmed file does not exist on $computer_short_name: '$path'");
+		#notify($ERRORS{'DEBUG'}, 0, "confirmed file does not exist on $computer_short_name: '$path'");
 		return 1;
 	}
 }
@@ -1928,85 +1930,88 @@ sub get_file_size {
 	my $calling_sub = (caller(1))[3] || '';
 	
 	# Get the path argument
-	my $file_path = shift;
-	if (!$file_path) {
-		notify($ERRORS{'WARNING'}, 0, "path argument was not specified");
+	my @file_paths = @_;
+	if (!@file_paths) {
+		notify($ERRORS{'WARNING'}, 0, "file paths argument was not specified");
 		return;
 	}
-	
-	# Normalize the file path
-	$file_path = normalize_file_path($file_path);
-	
-	# Escape all spaces in the path
-	my $escaped_file_path = escape_file_path($file_path);
 	
 	# Get the computer name
 	my $computer_node_name = $self->data->get_computer_node_name() || return;
 	
-	# Run stat rather than du because du is not available on VMware ESX
-	# -L     Dereference links
-	# %F     File type
-	# %n     File name
-	# %b     Number of blocks allocated (see %B)
-	# %B     The size in bytes of each block reported by %b
-	# %s     Total size, in bytes
-	
-	my $command = 'stat -L -c "%F:%n:%s:%b:%B" ' . $escaped_file_path;
-	my ($exit_status, $output) = $self->execute($command);
-	if (!defined($output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to run command to determine file size on $computer_node_name: $file_path\ncommand: '$command'");
-		return;
-	}
-	elsif (grep(/no such file/i, @$output)) {
-		if ($calling_sub !~ /get_file_size/) {
-			notify($ERRORS{'DEBUG'}, 0, "unable to determine size of file on $computer_node_name because it does not exist: $file_path\ncommand: '$command'");
-		}
-		return;
-	}
-	elsif (grep(/^stat:/i, @$output)) {
-		notify($ERRORS{'WARNING'}, 0, "error occurred attempting to determine file size on $computer_node_name: $file_path\ncommand: $command\noutput:\n" . join("\n", @$output));
-		return;
-	}
-	
-	# Loop through the stat output lines
 	my $file_count = 0;
 	my $total_bytes_reserved = 0;
 	my $total_bytes_used = 0;
-	for my $line (@$output) {
-		# Take the stat output line apart
-		my ($type, $path, $file_bytes, $file_blocks, $block_size) = split(/:/, $line);
-		if (!defined($type) || !defined($file_bytes) || !defined($file_blocks) || !defined($block_size) || !defined($path)) {
-			notify($ERRORS{'WARNING'}, 0, "unexpected output returned from stat, line: $line\ncommand: $command\noutput:\n" . join("\n", @$output));
+	
+	for my $file_path (@file_paths) {
+		# Normalize the file path
+		$file_path = normalize_file_path($file_path);
+		
+		# Escape all spaces in the path
+		my $escaped_file_path = escape_file_path($file_path);
+		
+		# Run stat rather than du because du is not available on VMware ESX
+		# -L     Dereference links
+		# %F     File type
+		# %n     File name
+		# %b     Number of blocks allocated (see %B)
+		# %B     The size in bytes of each block reported by %b
+		# %s     Total size, in bytes
+		
+		my $command = 'stat -L -c "%F:%n:%s:%b:%B" ' . $escaped_file_path;
+		my ($exit_status, $output) = $self->execute($command);
+		if (!defined($output)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to run command to determine file size on $computer_node_name: $file_path\ncommand: '$command'");
+			return;
+		}
+		elsif (grep(/no such file/i, @$output)) {
+			if ($calling_sub !~ /get_file_size/) {
+				notify($ERRORS{'DEBUG'}, 0, "unable to determine size of file on $computer_node_name because it does not exist: $file_path\ncommand: '$command'");
+			}
+			return;
+		}
+		elsif (grep(/^stat:/i, @$output)) {
+			notify($ERRORS{'WARNING'}, 0, "error occurred attempting to determine file size on $computer_node_name: $file_path\ncommand: $command\noutput:\n" . join("\n", @$output));
 			return;
 		}
 		
-		# Add the size to the total if the type is file
-		if ($type =~ /file/) {
-			$file_count++;
-			
-			my $file_bytes_allocated = ($file_blocks * $block_size);
-			
-			$total_bytes_used += $file_bytes_allocated;
-			$total_bytes_reserved += $file_bytes;
-		}
-		elsif ($type =~ /directory/) {
-			$path =~ s/[\\\/\*]+$//g;
-			#notify($ERRORS{'DEBUG'}, 0, "recursively retrieving size of files under directory: '$path'");
-			my ($subdirectory_bytes_allocated, $subdirectory_bytes_used, $subdirectory_file_count) = $self->get_file_size("$path/*");
-			
-			# Values will be null if there are no files under the subdirectory
-			if (!defined($subdirectory_bytes_allocated)) {
-				next;
+		# Loop through the stat output lines
+		for my $line (@$output) {
+			# Take the stat output line apart
+			my ($type, $path, $file_bytes, $file_blocks, $block_size) = split(/:/, $line);
+			if (!defined($type) || !defined($file_bytes) || !defined($file_blocks) || !defined($block_size) || !defined($path)) {
+				notify($ERRORS{'WARNING'}, 0, "unexpected output returned from stat, line: $line\ncommand: $command\noutput:\n" . join("\n", @$output));
+				return;
 			}
 			
-			$file_count += $subdirectory_file_count;
-			$total_bytes_reserved += $subdirectory_bytes_used;
-			$total_bytes_used += $subdirectory_bytes_allocated;
+			# Add the size to the total if the type is file
+			if ($type =~ /file/) {
+				$file_count++;
+				
+				my $file_bytes_allocated = ($file_blocks * $block_size);
+				
+				$total_bytes_used += $file_bytes_allocated;
+				$total_bytes_reserved += $file_bytes;
+			}
+			elsif ($type =~ /directory/) {
+				$path =~ s/[\\\/\*]+$//g;
+				#notify($ERRORS{'DEBUG'}, 0, "recursively retrieving size of files under directory: '$path'");
+				my ($subdirectory_bytes_allocated, $subdirectory_bytes_used, $subdirectory_file_count) = $self->get_file_size("$path/*");
+				
+				# Values will be null if there are no files under the subdirectory
+				if (!defined($subdirectory_bytes_allocated)) {
+					next;
+				}
+				
+				$file_count += $subdirectory_file_count;
+				$total_bytes_reserved += $subdirectory_bytes_used;
+				$total_bytes_used += $subdirectory_bytes_allocated;
+			}
 		}
 	}
 	
 	if ($calling_sub !~ /get_file_size/) {
-		notify($ERRORS{'DEBUG'}, 0, "size of '$file_path' on $computer_node_name:\n" .
+		notify($ERRORS{'DEBUG'}, 0, "size of " . join(", ", @file_paths) . " on $computer_node_name:\n" .
 				 "file count: $file_count\n" .
 				 "reserved: " . get_file_size_info_string($total_bytes_reserved) . "\n" .
 				 "used: " . get_file_size_info_string($total_bytes_used));
@@ -2024,11 +2029,16 @@ sub get_file_size {
 
 =head2 find_files
 
- Parameters  : $base_directory_path, $file_pattern
+ Parameters  : $base_directory_path, $file_pattern, $search_type (optional)
  Returns     : array
  Description : Finds files under the base directory and any subdirectories path
                matching the file pattern. The search is not case sensitive. An
                array is returned containing matching file paths.
+               
+               A third argument can be supplied specifying the search type.
+               'regex' is currently the only supported type. If supplied, the
+               $file_pattern argument is assumed to be a regular expression.
+               Otherwise it is assumed to be a normal search pattern.
 
 =cut
 
@@ -2040,7 +2050,7 @@ sub find_files {
 	}
 	
 	# Get the arguments
-	my ($base_directory_path, $file_pattern) = @_;
+	my ($base_directory_path, $file_pattern, $search_type) = @_;
 	if (!$base_directory_path || !$file_pattern) {
 		notify($ERRORS{'WARNING'}, 0, "base directory path and file pattern arguments were not specified");
 		return;
@@ -2057,7 +2067,13 @@ sub find_files {
 	my $computer_node_name = $self->data->get_computer_node_name() || return;
 	
 	# Run the find command
-	my $command = "find \"$base_directory_path\" -iname \"$file_pattern\"";
+	my $command;
+	if ($search_type && $search_type =~ /regex/i) {
+		$command = "find \"$base_directory_path\" -iregex \"$file_pattern\"";
+	}
+	else {
+		$command = "find \"$base_directory_path\" -iname \"$file_pattern\"";
+	}
 	notify($ERRORS{'DEBUG'}, 0, "attempting to find files on $computer_node_name, base directory path: '$base_directory_path', pattern: $file_pattern, command: $command");
 	
 	my ($exit_status, $output) = $self->execute($command);

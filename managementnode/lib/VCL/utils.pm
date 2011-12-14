@@ -73,6 +73,7 @@ use Scalar::Util 'blessed';
 use Data::Dumper;
 use Cwd;
 use Sys::Hostname;
+use XML::Simple;
 
 #use Date::Calc qw(Delta_DHMS Time_to_Date Date_to_Time);
 
@@ -117,6 +118,7 @@ our @EXPORT = qw(
   get_computer_info
   get_computers_controlled_by_MN
   get_connect_method_info
+  get_copy_speed_info_string
   get_current_file_name
   get_current_package_name
   get_current_subroutine_name
@@ -136,6 +138,7 @@ our @EXPORT = qw(
   get_next_image_default
   get_os_info
   get_production_imagerevision_info
+  get_random_mac_address
   get_request_by_computerid
   get_request_end
   get_request_info
@@ -8920,6 +8923,12 @@ sub format_data {
 		return '<undefined>';
 	}
 	
+	# If a string was passed which appears to be XML, convert it to a hash using XML::Simple
+	if (scalar(@data) == 1 && !ref($data[0]) && $data[0] =~ /^</) {
+		my $xml = XMLin($data[0], 'ForceArray' => 0, 'KeyAttr' => []);
+		return format_data($xml);
+	}
+	
 	$Data::Dumper::Indent    = 1;
 	$Data::Dumper::Purity    = 1;
 	$Data::Dumper::Useqq     = 1;      # Use double quotes for representing string values
@@ -10187,7 +10196,7 @@ sub format_number {
 
 sub get_file_size_info_string {
 	my ($size_bytes, $separator) = @_;
-	$separator = ", " if !$separator;
+	$separator = " - " if !$separator;
 	
 	my $size_mb = format_number(($size_bytes / 1024 / 1024), 1);
 	my $size_gb = format_number(($size_bytes / 1024 / 1024 / 1024), 2);
@@ -10199,6 +10208,79 @@ sub get_file_size_info_string {
 	$size_info .=  "$size_gb GB";
 	$size_info .=  "$separator$size_tb TB" if ($size_tb >= 1);
 	return $size_info;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_copy_speed_info_string
+
+ Parameters  : $copied_bytes, $duration_seconds
+ Returns     : string
+ Description : Calculates various copy rates based on the amount of data copied
+               and time the copy took.
+
+=cut
+
+sub get_copy_speed_info_string {
+	my ($copied_bytes, $duration_seconds) = @_;
+	
+	my $minutes = ($duration_seconds / 60);
+	$minutes =~ s/\..*//g;
+	my $seconds = ($duration_seconds - ($minutes * 60));
+	if (length($seconds) == 0) {
+		$seconds = "00";
+	}
+	elsif (length($seconds) == 1) {
+		$seconds = "0$seconds";
+	}
+	
+	my $copied_bits = ($copied_bytes * 8);
+	
+	my $copied_kb = ($copied_bytes / 1024);
+	my $copied_mb = ($copied_bytes / 1024 / 1024);
+	my $copied_gb = ($copied_bytes / 1024 / 1024 / 1024);
+	
+	my $copied_kbit = ($copied_bits / 1024);
+	my $copied_mbit = ($copied_bits / 1024 / 1024);
+	my $copied_gbit = ($copied_bits / 1024 / 1024 / 1024);
+	
+	my $bytes_per_second = ($copied_bytes / $duration_seconds);
+	my $kb_per_second = ($copied_kb / $duration_seconds);
+	my $mb_per_second = ($copied_mb / $duration_seconds);
+	my $gb_per_second = ($copied_gb / $duration_seconds);
+	
+	my $bits_per_second = ($copied_bits / $duration_seconds);
+	my $kbit_per_second = ($copied_kbit / $duration_seconds);
+	my $mbit_per_second = ($copied_mbit / $duration_seconds);
+	my $gbit_per_second = ($copied_gbit / $duration_seconds);
+	
+	my $bytes_per_minute = ($copied_bytes / $duration_seconds * 60);
+	my $kb_per_minute = ($copied_kb / $duration_seconds * 60);
+	my $mb_per_minute = ($copied_mb / $duration_seconds * 60);
+	my $gb_per_minute = ($copied_gb / $duration_seconds * 60);
+	
+	my $info_string;
+	
+	$info_string .= "data copied: " . get_file_size_info_string($copied_bytes) . "\n";
+	$info_string .= "time to copy: $minutes:$seconds (" . format_number($duration_seconds) . " seconds)\n";
+	$info_string .= "---\n";
+	$info_string .= "bits copied:  " . format_number($copied_bits) . " ($copied_bits)\n";
+	$info_string .= "bytes copied: " . format_number($copied_bytes) . " ($copied_bytes)\n";
+	$info_string .= "MB copied:    " . format_number($copied_mb, 1) . "\n";
+	$info_string .= "GB copied:    " . format_number($copied_gb, 2) . "\n";
+	$info_string .= "---\n";
+	$info_string .= "B/m:    " . format_number($bytes_per_minute) . "\n";
+	$info_string .= "MB/m:   " . format_number($mb_per_minute, 1) . "\n";
+	$info_string .= "GB/m:   " . format_number($gb_per_minute, 2) . "\n";
+	$info_string .= "---\n";
+	$info_string .= "B/s:    " . format_number($bytes_per_second) . "\n";
+	$info_string .= "MB/s:   " . format_number($mb_per_second, 1) . "\n";
+	$info_string .= "GB/s:   " . format_number($gb_per_second, 2) . "\n";
+	$info_string .= "---\n";
+	$info_string .= "Mbit/s: " . format_number($mbit_per_second, 1) . "\n";
+	$info_string .= "Gbit/s: " . format_number($gbit_per_second, 2);
+	
+	return $info_string;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -10732,6 +10814,52 @@ EOF
 
 	notify($ERRORS{'DEBUG'}, 0, "retrieved connect method info:\n" . format_data($connect_method_info));
 	return $connect_method_info;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_random_mac_address
+
+ Parameters  : $prefix (optional)
+ Returns     : string
+ Description : Generates a random MAC address.
+
+=cut
+
+sub get_random_mac_address {
+	my ($prefix) = @_;
+	
+	if ($prefix) {
+		# Add a trailing colon if not supplied in the argument
+		$prefix =~ s/:+$/:/;
+		
+		if ($prefix !~ /([a-f0-9]{2}:)+/i) {
+			notify($ERRORS{'WARNING'}, 0, "invalid MAC address prefix argument: $prefix");
+			return;
+		}
+		elsif (length($prefix) % 3 != 0) {
+			notify($ERRORS{'WARNING'}, 0, "invalid MAC address prefix length: '$prefix'");
+			return;
+		}
+		
+	}
+	else {
+		$prefix = '52:54:';
+	}
+	
+	my $random_octet_count = (6 - (length($prefix) / 3));
+	
+	# Remove the trailing colon
+	$prefix =~ s/:+$//;
+	
+	my $mac_address = uc($prefix);
+	
+	for (my $i=0; $i<$random_octet_count; $i++) {
+		$mac_address .= ":" . sprintf("%02X",int(rand(255)));
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "generated random MAC address: '$mac_address'");
+	return $mac_address;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
