@@ -103,7 +103,7 @@ sub process {
 	my $image_name                      = $self->data->get_image_name();
 	my $imagerevision_id                = $self->data->get_imagerevision_id();
 	my $user_standalone                 = $self->data->get_user_standalone();
-	
+
 	#If reload state is reload and computer is part of block allocation confirm imagerevisionid is the production image.
 	if ($request_state_name eq 'reload' && is_inblockrequest($computer_id)) {
 		notify($ERRORS{'OK'}, 0, "request state is '$request_state_name', computer $computer_id is in blockrequest, making sure reservation is assigned production image revision");
@@ -931,7 +931,7 @@ sub reserve_computer {
 	if ($computer_type =~ /blade|virtualmachine/) {
 		
 		if (!$self->os->update_public_ip_address()) {
-			$self->reservation_failed("failed to update private IP address");
+			$self->reservation_failed("failed to update public IP address");
 		}
 		
 		insertloadlog($reservation_id, $computer_id, "info", "node ready adding user account");
