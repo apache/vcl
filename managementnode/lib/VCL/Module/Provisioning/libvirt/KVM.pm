@@ -175,7 +175,7 @@ sub get_disk_format {
 
 =cut
 
-sub get_disk_format {
+sub get_disk_file_extension {
 	my $self = shift;
 	unless (ref($self) && $self->isa('VCL::Module')) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
@@ -517,7 +517,7 @@ sub copy_virtual_disk {
 	}
 	
 	if (!$disk_format) {
-		$disk_format = $self->data->get_vmhost_profile_vmdisk_format() || 'qcow2';
+		$disk_format = $self->get_disk_format();
 	}
 	
 	my $node_name = $self->data->get_vmhost_short_name();
@@ -604,7 +604,7 @@ sub create_copy_on_write_image {
 	my $node_name = $self->data->get_vmhost_short_name();
 	
 	if (!$disk_format) {
-		$disk_format = $self->data->get_vmhost_profile_vmdisk_format() || 'qcow2';
+		$disk_format = $self->get_disk_format();
 	}
 	
 	notify($ERRORS{'DEBUG'}, 0, "creating copy on write image on $node_name\nmaster disk image: $master_image_file_path\ncopy on write image: $copy_on_write_file_path\nformat: $disk_format");

@@ -861,8 +861,8 @@ sub get_master_image_file_path {
 	}
 	
 	# File was not found, construct it
-	my $vmdisk_format = $self->data->get_vmhost_profile_vmdisk_format();
-	return "$master_image_directory_path/$image_name.$vmdisk_format";
+	my $disk_file_extension = $self->driver->get_disk_file_extension();
+	return "$master_image_directory_path/$image_name.$disk_file_extension";
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -886,9 +886,9 @@ sub get_copy_on_write_file_path {
 	
 	my $vmhost_vmpath       = $self->data->get_vmhost_profile_vmpath();
 	my $domain_file_name    = $self->get_domain_file_base_name();
-	my $vmdisk_format       = $self->data->get_vmhost_profile_vmdisk_format();
+	my $disk_file_extension = $self->driver->get_disk_file_extension();
 	
-	return "$vmhost_vmpath/$domain_file_name.$vmdisk_format";
+	return "$vmhost_vmpath/$domain_file_name.$disk_file_extension";
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -1036,7 +1036,7 @@ sub generate_domain_xml {
 	my $domain_type = $self->driver->get_domain_type();
 	
 	my $copy_on_write_file_path = $self->get_copy_on_write_file_path();
-	my $disk_format = $self->data->get_vmhost_profile_vmdisk_format();
+	my $disk_format = $self->driver->get_disk_format();
 	my $disk_driver_name = $self->driver->get_disk_driver_name();
 	
 	my $eth0_source_device = $self->data->get_vmhost_profile_virtualswitch0();
