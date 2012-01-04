@@ -286,41 +286,40 @@ sub process {
 		# Skipping check_connection code
 		goto RETVALCONN;
 	} ## end else [ if (defined $remote_ip && $remote_ip eq '0') [... [elsif ($acknowledge_attempts < 180)
-
-
-	# Determine if connection needs to be checked based on imagemeta checkuser flag
-	if (!$imagemeta_checkuser) {
-		# If checkuser = 1, check for a user connection
-		# If checkuser = 0, set as inuse and return
-		notify($ERRORS{'OK'}, 0, "checkuser flag set to 0, skipping user connection");
-		$retval_conn = "connected";
-		goto RETVALCONN;
-	}
-	# Check if cluster request
-	elsif ($reservation_count > 1) {
-		notify($ERRORS{'OK'}, 0, "reservation count is $reservation_count, skipping user connection check");
-		$retval_conn = "connected";
-		goto RETVALCONN;
-	}
-	# Check if forimaging 
-	elsif ($request_forimaging){
-		notify($ERRORS{'OK'}, 0, "reservation is for image creation skipping user connection check");
-		$retval_conn = "connected";
-		goto RETVALCONN;
-	}
-	else {
-		notify($ERRORS{'OK'}, 0, "checkuser flag=1 imageosname is $image_os_name, checking for user connection by $user_unityid");
-
-		if($self->os->can("is_user_connected")) {
-			
-			#Use new code if it exists
-			$retval_conn = $self->os->is_user_connected($time_limit);
+	
+	if($self->os->can("is_user_connected")) {
+                #Use new code if it exists
+                $retval_conn = $self->os->is_user_connected($time_limit);
+        }
+        else {
+                #use old code  
+                $retval_conn = check_connection($nodename, $computer_ip_address, $computer_type, $remote_ip, $time_limit, $image_os_name, 0, $request_id, $user_unityid,$image_os_type);
+        }
+	
+	if ($retval_conn eq "nologin") {
+	
+		# Determine if connection needs to be checked based on imagemeta checkuser flag
+		if (!$imagemeta_checkuser) {
+			# If checkuser = 1, check for a user connection
+			# If checkuser = 0, set as inuse and return
+			notify($ERRORS{'OK'}, 0, "checkuser flag set to 0, skipping user connection");
+			$retval_conn = "connected";
+			goto RETVALCONN;
 		}
-		else {
-			#use old code
-			$retval_conn = check_connection($nodename, $computer_ip_address, $computer_type, $remote_ip, $time_limit, $image_os_name, 0, $request_id, $user_unityid,$image_os_type);
+		# Check if cluster request
+		elsif ($reservation_count > 1) {
+			notify($ERRORS{'OK'}, 0, "reservation count is $reservation_count, skipping user connection check");
+			$retval_conn = "connected";
+			goto RETVALCONN;
 		}
-	} ## end else [ if (!$imagemeta_checkuser)
+		# Check if forimaging 
+		elsif ($request_forimaging){
+			notify($ERRORS{'OK'}, 0, "reservation is for image creation skipping user connection check");
+			$retval_conn = "connected";
+			goto RETVALCONN;
+		}
+	
+	}
 
 	RETVALCONN:
 	notify($ERRORS{'OK'}, 0, "retval_conn = $retval_conn");
