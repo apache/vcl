@@ -1750,9 +1750,9 @@ sub prepare_vmx {
 		
 		"virtualHW.version" => "$vm_hardware_version",
 		
-		"MemTrimRate" => "0",
-		"sched.mem.pshare.enable" => "FALSE",
-		"mainMem.useNamedFile" => "FALSE",
+		#"MemTrimRate" => "0",
+		#"sched.mem.pshare.enable" => "FALSE",
+		#"mainMem.useNamedFile" => "FALSE",
 	);
 	
 	#my $reservation_password     = $self->data->get_reservation_password();
@@ -1975,19 +1975,19 @@ sub prepare_vmdk {
 		
 		# Check if the vmdk file exists in the mounted repository
 		my $repository_vmdk_file_path = $self->get_repository_vmdk_file_path();
-		if (!$self->vmhost_os->file_exists($repository_vmdk_file_path)) {
-			notify($ERRORS{'WARNING'}, 0, "vmdk file does not exist in image repository directory mounted on VM host $vmhost_name: $repository_vmdk_file_path");
-			return;
-		}
-		
-		# Attempt to copy the vmdk file from the mounted repository to the VM host datastore
-		if ($self->copy_vmdk($repository_vmdk_file_path, $host_vmdk_file_path)) {
-			notify($ERRORS{'OK'}, 0, "copied vmdk from image repository to VM host $vmhost_name");
-			return 1;
+		if ($self->vmhost_os->file_exists($repository_vmdk_file_path)) {
+			# Attempt to copy the vmdk file from the mounted repository to the VM host datastore
+			if ($self->copy_vmdk($repository_vmdk_file_path, $host_vmdk_file_path)) {
+				notify($ERRORS{'OK'}, 0, "copied vmdk from image repository to VM host $vmhost_name");
+				return 1;
+			}
+			else {
+				notify($ERRORS{'WARNING'}, 0, "failed to copy vmdk from image repository to VM host $vmhost_name");
+				return;
+			}
 		}
 		else {
-			notify($ERRORS{'WARNING'}, 0, "failed to copy vmdk from image repository to VM host $vmhost_name");
-			return;
+			notify($ERRORS{'DEBUG'}, 0, "vmdk file does not exist in image repository directory mounted on VM host $vmhost_name: $repository_vmdk_file_path");
 		}
 	}
 	
@@ -4694,7 +4694,10 @@ sub get_vm_guest_os {
  Parameters  : none
  Returns     : string
  Description : Returns the appropriate ethernet virtualDev value to be used in
-               the vmx file.
+               the vmx file. If the reference vmx file exists for the image, the
+               type is retrieved from the ethernet0.virtualdev line in the file.
+               Otherwise the default adapter type for the OS being loaded is
+               returned.
 
 =cut
 
@@ -4703,6 +4706,21 @@ sub get_vm_ethernet_adapter_type {
 	if (ref($self) !~ /vmware/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
+	}
+	
+	my $vm_ethernet_adapter_type;
+	
+	# Attempt to retrieve the type from the reference vmx file for the image
+	my $reference_vmx_file_info = $self->get_reference_vmx_info();
+	if ($reference_vmx_file_info) {
+		for my $vmx_key (keys %$reference_vmx_file_info) {
+			if ($vmx_key =~ /ethernet0\.virtualDev/i) {
+				$vm_ethernet_adapter_type = $reference_vmx_file_info->{$vmx_key};
+				notify($ERRORS{'DEBUG'}, 0, "retrieved VM ethernet adapter type from reference vmx file: $vm_ethernet_adapter_type");
+				return $vm_ethernet_adapter_type;
+			}
+		}
+		notify($ERRORS{'DEBUG'}, 0, "unable to retrieve VM ethernet adapter type from reference vmx file, 'ethernet0\virtualDev' key does not exist");
 	}
 	
 	my $vm_os_configuration = $self->get_vm_os_configuration() || return;
@@ -5364,7 +5382,7 @@ sub copy_vmdk {
 		notify($ERRORS{'DEBUG'}, 0, "attempting to copy virtual disk using vmkfstools, disk type: $virtual_disk_type:\n'$source_vmdk_file_path' --> '$destination_vmdk_file_path'");
 		
 		$start_time = time;
-		my ($exit_status, $output) = $self->vmhost_os->execute($command);
+		my ($exit_status, $output) = $self->vmhost_os->execute($command, 1, 7200);
 		if (!defined($output)) {
 			notify($ERRORS{'WARNING'}, 0, "failed to run command on VM host: $command");
 		}
@@ -5388,7 +5406,7 @@ sub copy_vmdk {
 			my $vdisk_repair_command = "vmkfstools -x repair \"$source_vmdk_file_path\"";
 			notify($ERRORS{'DEBUG'}, 0, "attempting to repair virtual disk using vmkfstools: '$source_vmdk_file_path'");
 			
-			my ($vdisk_repair_exit_status, $vdisk_repair_output) = $self->vmhost_os->execute($vdisk_repair_command);
+			my ($vdisk_repair_exit_status, $vdisk_repair_output) = $self->vmhost_os->execute($vdisk_repair_command, 1, 3600);
 			if (!defined($vdisk_repair_output)) {
 				notify($ERRORS{'WARNING'}, 0, "failed to run command to repair the virtual disk: '$vdisk_repair_command'");
 			}
@@ -5421,7 +5439,7 @@ sub copy_vmdk {
 		notify($ERRORS{'DEBUG'}, 0, "attempting to copy virtual disk using vmware-vdiskmanager, disk type: 2gbsparse:\n'$source_vmdk_file_path' --> '$destination_vmdk_file_path'");
 		
 		$start_time = time;
-		my ($exit_status, $output) = $self->vmhost_os->execute($vdisk_command);
+		my ($exit_status, $output) = $self->vmhost_os->execute($vdisk_command, 1, 7200);
 		if (!defined($output)) {
 			notify($ERRORS{'WARNING'}, 0, "failed to run command on VM host: $vdisk_command");
 		}
@@ -5438,7 +5456,7 @@ sub copy_vmdk {
 				my $vdisk_repair_command = "vmware-vdiskmanager -R \"$source_vmdk_file_path\"";
 				notify($ERRORS{'DEBUG'}, 0, "attempting to repair virtual disk using vmware-vdiskmanager: '$source_vmdk_file_path'");
 				
-				my ($vdisk_repair_exit_status, $vdisk_repair_output) = $self->vmhost_os->execute($vdisk_repair_command);
+				my ($vdisk_repair_exit_status, $vdisk_repair_output) = $self->vmhost_os->execute($vdisk_repair_command, 1, 3600);
 				if (!defined($vdisk_repair_output)) {
 					notify($ERRORS{'WARNING'}, 0, "failed to run command to repair the virtual disk: '$vdisk_repair_command'");
 				}
@@ -5643,7 +5661,7 @@ sub move_vmdk {
 		# Try vmware-vdiskmanager
 		notify($ERRORS{'OK'}, 0, "attempting to move vmdk file using vmware-vdiskmanager: $source_vmdk_file_path --> $destination_vmdk_file_path");
 		my $vdisk_command = "vmware-vdiskmanager -n \"$source_vmdk_file_path\" \"$destination_vmdk_file_path\"";
-		my ($vdisk_exit_status, $vdisk_output) = $self->vmhost_os->execute($vdisk_command);
+		my ($vdisk_exit_status, $vdisk_output) = $self->vmhost_os->execute($vdisk_command, 1, 7200);
 		if (!defined($vdisk_output)) {
 			notify($ERRORS{'WARNING'}, 0, "failed to execute 'vmware-vdiskmanager' command on VM host to move vmdk file:\n$vdisk_command");
 		}
@@ -5662,7 +5680,7 @@ sub move_vmdk {
 		# Try vmkfstools
 		notify($ERRORS{'OK'}, 0, "attempting to move vmdk file using vmkfstools: $source_vmdk_file_path --> $destination_vmdk_file_path");
 		my $vmkfs_command = "vmkfstools -E \"$source_vmdk_file_path\" \"$destination_vmdk_file_path\"";
-		my ($vmkfs_exit_status, $vmkfs_output) = $self->vmhost_os->execute($vmkfs_command);
+		my ($vmkfs_exit_status, $vmkfs_output) = $self->vmhost_os->execute($vmkfs_command, 1, 7200);
 		
 		# There is no output if the command succeeded
 		# Check to make sure the source file doesn't exist and the destination file does exist
