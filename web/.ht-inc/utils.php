@@ -10514,10 +10514,11 @@ function getDojoHTML($refresh) {
 			foreach($dojoRequires as $req) {
 				$rt .= "   dojo.require(\"$req\");\n";
 			}
-			$id = getContinuationVar("scheduleid");
-			$cont = addContinuationsEntry('AJgetScheduleTimesData', array('id' => $id), SECINDAY, 1, 0);
-			$rt .= "   populateTimeStore('$cont');\n";
-			#$rt .= "   setTimeout(function() {populateTimeStore('$cont');}, 1000);\n";
+			if($mode != 'submitAddSchedule') {
+				$id = getContinuationVar("scheduleid");
+				$cont = addContinuationsEntry('AJgetScheduleTimesData', array('id' => $id), SECINDAY, 1, 0);
+				$rt .= "   populateTimeStore('$cont');\n";
+			}
 			$rt .= "   });\n";
 			$rt .= "</script>\n";
 			return $rt;
