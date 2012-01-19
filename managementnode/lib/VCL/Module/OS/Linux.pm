@@ -98,22 +98,42 @@ sub get_node_configuration_directory {
 
 =head2 pre_capture
 
- Parameters  : none
+ Parameters  : $arguments->{end_state}
  Returns     : boolean
- Description :
+ Description : Performs the Linux-specific tasks that must be done to the
+               computer prior to capturing an image.
+               An optional hash reference argument may be passed. By default,
+               the computer is shutdown by this subroutine. If this hash
+               contains a key named 'end_state' with a value of anything other
+               than 'off', the computer will not be shutdown.
+               Examples:
+               Computer will be shutdown:
+                  $self->os->pre_capture();
+                  $self->os->pre_capture({'end_state' => 'off'});
+               Computer will not be shutdown:
+                  $self->os->pre_capture({'end_state' => 'on'});
 
 =cut
 
 sub pre_capture {
 	my $self = shift;
+	my $args = shift;
 	if (ref($self) !~ /VCL::Module/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
 	
-	my $computer_node_name       = $self->data->get_computer_node_name();
-	notify($ERRORS{'OK'}, 0, "beginning Linux-specific image capture preparation tasks");
+	# Check if end_state argument was passed
+	# This argument allows provisioning modules to specify whether or not the computer should be shutdown when the pre-capture tasks are complete
+	if (defined $args->{end_state}) {
+		$self->{end_state} = $args->{end_state};
+	}
+	else {
+		$self->{end_state} = 'off';
+	}
 	
+	my $computer_node_name = $self->data->get_computer_node_name();
+	notify($ERRORS{'OK'}, 0, "beginning Linux-specific image capture preparation tasks");
 
 	if (!$self->file_exists("/root/.vclcontrol/vcl_exclude_list.sample")) {
       notify($ERRORS{'DEBUG'}, 0, "/root/.vclcontrol/vcl_exclude_list.sample does not exists");
@@ -208,9 +228,14 @@ sub pre_capture {
 	}
 	
 	# Shut the computer down
-	if (!$self->shutdown()) {
-		notify($ERRORS{'WARNING'}, 0, "failed to shut down $computer_node_name");
-		return 0;
+	if ($self->{end_state} eq 'off') {
+		if (!$self->shutdown()) {
+			notify($ERRORS{'WARNING'}, 0, "failed to shut down $computer_node_name");
+			return 0;
+		}
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "not shutting down $computer_node_name, '$self->{end_state}' end state argument was passed");
 	}
 
 	notify($ERRORS{'OK'}, 0, "Linux pre-capture steps complete");
@@ -1426,7 +1451,7 @@ sub delete_file {
 	# Get the path argument
 	my $path = shift;
 	if (!$path) {
-		notify($ERRORS{'WARNING'}, 0, "path argument were not specified");
+		notify($ERRORS{'WARNING'}, 0, "path argument was not specified");
 		return;
 	}
 	
@@ -1499,6 +1524,10 @@ sub create_directory {
 	# Remove any quotes from the beginning and end of the path
 	$directory_path = normalize_file_path($directory_path);
 	
+	# If ~ is passed as the directory path, skip directory creation attempt
+	# The command will create a /root/~ directory since the path is enclosed in quotes
+	return 1 if $directory_path eq '~';
+	
 	my $computer_short_name = $self->data->get_computer_short_name();
 	
 	# Attempt to create the directory
@@ -1514,7 +1543,7 @@ sub create_directory {
 	}
 	elsif (grep(/^\s*$directory_path\s*$/, @$output)) {
 		if (grep(/ls:/, @$output)) {
-			notify($ERRORS{'OK'}, 0, "directory created on $computer_short_name: '$directory_path'");
+			notify($ERRORS{'OK'}, 0, "directory created on $computer_short_name: '$directory_path'\ncommand: '$command'\nexit status: $exit_status\noutput:\n" . join("\n", @$output));
 		}
 		else {
 			notify($ERRORS{'OK'}, 0, "directory already exists on $computer_short_name: '$directory_path'");
@@ -1658,8 +1687,8 @@ sub get_available_space {
  Returns     : If successful: integer
                If failed: undefined
  Description : Returns the total size in bytes of the volume where the path
-					resides specified by the argument. Undefined is returned if an
-					error occurred.
+               resides specified by the argument. Undefined is returned if an
+               error occurred.
 
 =cut
 
