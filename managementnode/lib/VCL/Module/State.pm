@@ -120,21 +120,36 @@ sub initialize {
 	}
 	
 	# Create a VM host OS object if vmhostid is set for the computer
-	if ($self->data->get_computer_vmhost_id() && !$self->create_vmhost_os_object()) {
-		notify($ERRORS{'WARNING'}, 0, "failed to create VM host OS object");
-		return;
+	my $is_vm = $self->data->get_computer_vmhost_id(0);
+	if ($is_vm) {
+		notify($ERRORS{'DEBUG'}, 0, "computer is a VM, attempting to create VM host OS object");
+		if (!$self->create_vmhost_os_object()) {
+			notify($ERRORS{'WARNING'}, 0, "failed to create VM host OS object");
+			return;
+		}
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "computer is NOT a VM, VM host OS object not created");
 	}
 	
 	# Create a provisioning object
-	if (!$self->create_provisioning_object()) {
+	if ($self->create_provisioning_object()) {
+		# Allow the provisioning object to access the OS object
+		$self->provisioner->set_os($self->os());
+		
+		# Allow the OS object to access the provisioning object
+		# This is necessary to allow the OS code to be able to call the provisioning power* subroutines if the OS reboot or shutdown fails
+		$self->os->set_provisioner($self->provisioner());
+	}
+	else {
 		notify($ERRORS{'WARNING'}, 0, "failed to create provisioning object");
 		return;
 	}
 	
-	# Allow the provisioning object to access the OS object and vice-versa
-	$self->provisioner->set_os($self->os());
-	$self->provisioner->set_vmhost_os($self->vmhost_os());
-	$self->os->set_provisioner($self->provisioner());
+	# Allow the provisioning object to access the VM host OS object
+	if ($is_vm) {
+		$self->provisioner->set_vmhost_os($self->vmhost_os());
+	}
 	
 	notify($ERRORS{'DEBUG'}, 0, "returning 1");
 	return 1;
