@@ -2655,7 +2655,7 @@ sub get_network_configuration {
 
 =head2 reboot
 
- Parameters  : $wait_for_reboot
+ Parameters  : 
  Returns     : 
  Description : 
 
@@ -2669,15 +2669,7 @@ sub reboot {
 	}
 	
 	my $computer_node_name   = $self->data->get_computer_node_name();
-	
-	# Check if an argument was supplied
-	my $wait_for_reboot = shift || 1;
-	if ($wait_for_reboot) {
-		notify($ERRORS{'DEBUG'}, 0, "rebooting $computer_node_name and waiting for SSH to become active");
-	}
-	else {
-		notify($ERRORS{'DEBUG'}, 0, "rebooting $computer_node_name and NOT waiting");
-	}
+	notify($ERRORS{'DEBUG'}, 0, "rebooting $computer_node_name");
 	
 	my $reboot_start_time = time();
 	
@@ -2728,13 +2720,7 @@ sub reboot {
 		}
 	}
 	
-	# Check if wait for reboot is set
-	if (!$wait_for_reboot) {
-		return 1;
-	}
-	
-	my $wait_attempt_limit = 2;
-	if ($self->wait_for_reboot($wait_attempt_limit)){
+	if ($self->wait_for_reboot()){
 		# Reboot was successful, calculate how long reboot took
 		my $reboot_end_time = time();
 		my $reboot_duration = ($reboot_end_time - $reboot_start_time);
@@ -2742,7 +2728,7 @@ sub reboot {
 		return 1;
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "reboot failed on $computer_node_name, made $wait_attempt_limit attempts");
+		notify($ERRORS{'WARNING'}, 0, "reboot failed on $computer_node_name");
 		return 0;
 	}
 

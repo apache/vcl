@@ -132,6 +132,51 @@ sub get_source_configuration_directories {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 create_currentimage_txt
+
+ Parameters  : None
+ Returns     : boolean
+ Description : Creates the currentimage.txt file on the computer.
+
+=cut
+
+sub create_currentimage_txt {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $image_id                   = $self->data->get_image_id();
+	my $image_name                 = $self->data->get_image_name();
+	my $image_prettyname           = $self->data->get_image_prettyname();
+	my $imagerevision_id           = $self->data->get_imagerevision_id();
+	my $imagerevision_date_created = $self->data->get_imagerevision_date_created();
+	my $computer_id                = $self->data->get_computer_id();
+	my $computer_host_name         = $self->data->get_computer_host_name();
+	
+	my $file_contents = <<EOF;
+$image_name
+id=$image_id
+prettyname=$image_prettyname
+imagerevision_id=$imagerevision_id
+imagerevision_datecreated=$imagerevision_date_created
+computer_id=$computer_id
+computer_hostname=$computer_host_name
+EOF
+	
+	# Create the file
+	if ($self->create_text_file('~/currentimage.txt', $file_contents)) {
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to create currentimage.txt file on $computer_host_name");
+		return;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 get_currentimage_txt_contents
 
  Parameters  : None
@@ -150,26 +195,22 @@ sub get_currentimage_txt_contents {
 		return;
 	}
 
-	my $management_node_keys = $self->data->get_management_node_keys();
 	my $computer_node_name   = $self->data->get_computer_node_name();
 
 	# Attempt to retrieve the contents of currentimage.txt
 	my $cat_command = "cat ~/currentimage.txt";
-	my ($cat_exit_status, $cat_output) = run_ssh_command($computer_node_name, $management_node_keys, $cat_command);
-	if (defined($cat_exit_status) && $cat_exit_status == 0) {
-		notify($ERRORS{'DEBUG'}, 0, "retrieved currentimage.txt contents from $computer_node_name:\n" . join("\n", @$cat_output));
+	my ($cat_exit_status, $cat_output) = $self->execute($cat_command);
+	if (!defined($cat_output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to failed to retrieve currentimage.txt from $computer_node_name");
+		return;
 	}
-	elsif (defined($cat_exit_status)) {
+	elsif ($cat_exit_status ne '0') {
 		notify($ERRORS{'WARNING'}, 0, "failed to retrieve currentimage.txt from $computer_node_name, exit status: $cat_exit_status, output:\n@{$cat_output}");
 		return;
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to failed to retrieve currentimage.txt from $computer_node_name");
-		return;
+		notify($ERRORS{'DEBUG'}, 0, "retrieved currentimage.txt contents from $computer_node_name:\n" . join("\n", @$cat_output));
 	}
-
-	notify($ERRORS{'DEBUG'}, 0, "found " . @{$cat_output} . " lines in currentimage.txt on $computer_node_name");
-
 	return @{$cat_output};
 } ## end sub get_currentimage_txt_contents
 
@@ -224,9 +265,10 @@ sub get_current_image_name {
 
 =head2 wait_for_reboot
 
- Parameters  : Maximum number of seconds to wait (optional), delay between attempts (optional)
- Returns     : If computer is pingable before the maximum amount of time has elapsed: 1
- Description : 
+ Parameters  : $total_wait_seconds, $attempt_delay_seconds, $attempt_limit
+ Returns     : boolean
+ Description : Waits for the computer to become unresponsive, respond to ping,
+               then respond to SSH.
 
 =cut
 
@@ -237,63 +279,107 @@ sub wait_for_reboot {
 		return;
 	}
 	
-	my $computer_node_name   = $self->data->get_computer_node_name();
+	my $computer_node_name = $self->data->get_computer_node_name();
 	
-	# Make multiple attempts to wait for the reboot to complete
-	my $wait_attempt_limit = shift;
-	
-	if (!defined($wait_attempt_limit)) {
-		$wait_attempt_limit = 2;
+	# Attempt to get the total number of seconds to wait from the arguments
+	my $total_wait_seconds_argument = shift;
+	if (!defined($total_wait_seconds_argument) || $total_wait_seconds_argument !~ /^\d+$/) {
+		$total_wait_seconds_argument = 300;
 	}
 	
-	WAIT_ATTEMPT:
-	for (my $wait_attempt = 1; $wait_attempt <= $wait_attempt_limit; $wait_attempt++) {
-		if ($wait_attempt > 1) {
-			# Computer did not become fully responsive on previous wait attempt
+	# Seconds to wait in between loop attempts
+	my $attempt_delay_seconds_argument = shift;
+	if (!defined($attempt_delay_seconds_argument) || $attempt_delay_seconds_argument !~ /^\d+$/) {
+		$attempt_delay_seconds_argument = 15;
+	}
+	
+	# Number of power reset attempts to make if reboot fails
+	my $attempt_limit = shift;
+	if (!defined($attempt_limit) || $attempt_limit !~ /^\d+$/) {
+		$attempt_limit = 2;
+	}
+	elsif (!$attempt_limit) {
+		$attempt_limit = 1;
+	}
+	
+	ATTEMPT:
+	for (my $attempt = 1; $attempt <= $attempt_limit; $attempt++) {
+		my $total_wait_seconds = $total_wait_seconds_argument;
+		my $attempt_delay_seconds = $attempt_delay_seconds_argument;
+		
+		if ($attempt > 1) {
+			# Computer did not become responsive on previous attempt
 			notify($ERRORS{'OK'}, 0, "$computer_node_name reboot failed to complete on previous attempt, attempting hard power reset");
+			
 			# Call provisioning module's power_reset() subroutine
 			if ($self->provisioner->power_reset()) {
-				notify($ERRORS{'OK'}, 0, "reboot attempt $wait_attempt/$wait_attempt_limit: initiated power reset on $computer_node_name");
+				notify($ERRORS{'OK'}, 0, "reboot attempt $attempt/$attempt_limit: initiated power reset on $computer_node_name");
 			}
 			else {
 				notify($ERRORS{'WARNING'}, 0, "reboot failed, failed to initiate power reset on $computer_node_name");
 				return 0;
 			}
-		} ## end if ($wait_attempt > 1)
-		
-		# Wait maximum of 3 minutes for the computer to become unresponsive
-		if (!$self->wait_for_no_ping(180, 3)) {
-			# Computer never stopped responding to ping
-			notify($ERRORS{'WARNING'}, 0, "$computer_node_name never became unresponsive to ping");
-			next WAIT_ATTEMPT;
+			
+			# Add 2 minutes for each attempt to $total_wait_seconds in case argument supplied wasn't long enough
+			$total_wait_seconds += (120 * $attempt);
 		}
 		
+		my $start_time = time;
+		
+		notify($ERRORS{'DEBUG'}, 0, "waiting for $computer_node_name to reboot:
+				attempt: $attempt/$attempt_limit
+				maximum wait time: $total_wait_seconds seconds
+				wait delay: $attempt_delay_seconds");
+		
+		# Wait for the computer to become unresponsive to ping
+		if (!$self->wait_for_no_ping($total_wait_seconds, $attempt_delay_seconds)) {
+			# Computer never stopped responding to ping
+			notify($ERRORS{'WARNING'}, 0, "$computer_node_name never became unresponsive to ping");
+			next ATTEMPT;
+		}
+		
+		# Decrease $total_wait_seconds by the amount of time elapsed so far
+		my $no_ping_elapsed_seconds = (time - $start_time);
+		$total_wait_seconds -= $no_ping_elapsed_seconds;
+		
 		# Computer is unresponsive, reboot has begun
-		# Wait for 5 seconds before beginning to check if computer is back online
+		# Wait 5 seconds before beginning to check if computer is back online
 		notify($ERRORS{'DEBUG'}, 0, "$computer_node_name reboot has begun, sleeping for 5 seconds");
 		sleep 5;
 		
-		# Wait maximum of 6 minutes for the computer to come back up
-		if (!$self->wait_for_ping(360, 5)) {
+		# Wait for the computer to respond to ping
+		if (!$self->wait_for_ping($total_wait_seconds, $attempt_delay_seconds)) {
 			# Check if the computer was ever offline, it should have been or else reboot never happened
 			notify($ERRORS{'WARNING'}, 0, "$computer_node_name never responded to ping");
-			next WAIT_ATTEMPT;
+			next ATTEMPT;
 		}
 		
-		notify($ERRORS{'DEBUG'}, 0, "$computer_node_name is pingable, waiting for ssh to respond");
+		# Decrease $total_wait_seconds by the amount of time elapsed so far
+		my $ping_elapsed_seconds = (time - $start_time);
+		my $ping_actual_seconds = ($ping_elapsed_seconds - $no_ping_elapsed_seconds);
+		$total_wait_seconds -= $ping_elapsed_seconds;
+		
+		notify($ERRORS{'DEBUG'}, 0, "$computer_node_name is pingable, waiting for SSH to respond");
 		
 		# Wait maximum of 3 minutes for ssh to respond
-		if (!$self->wait_for_ssh(180, 5)) {
-			notify($ERRORS{'WARNING'}, 0, "ssh never responded on $computer_node_name");
-			next WAIT_ATTEMPT;
+		if (!$self->wait_for_ssh($total_wait_seconds, $attempt_delay_seconds)) {
+			notify($ERRORS{'WARNING'}, 0, "$computer_node_name never responded to SSH");
+			next ATTEMPT;
 		}
 		
-		notify($ERRORS{'DEBUG'}, 0, "$computer_node_name responded to ssh");
+		# Decrease $total_wait_seconds by the amount of time elapsed so far
+		my $ssh_elapsed_seconds = (time - $start_time);
+		my $ssh_actual_seconds = ($ssh_elapsed_seconds - $ping_elapsed_seconds);
+		
+		notify($ERRORS{'OK'}, 0, "$computer_node_name responded to SSH:
+				 unresponsive: $no_ping_elapsed_seconds seconds
+				 respond to ping: $ping_elapsed_seconds seconds ($ping_actual_seconds seconds after unresponsive)
+				 respond to SSH $ssh_elapsed_seconds seconds ($ssh_actual_seconds seconds after ping)");
 		return 1;
-	} ## end for (my $wait_attempt = 1; $wait_attempt <=...
+	}
 	
 	# If loop completed, maximum number of reboot attempts was reached
-	notify($ERRORS{'WARNING'}, 0, "reboot failed on $computer_node_name, made $wait_attempt_limit attempts");
+	notify($ERRORS{'WARNING'}, 0, "$computer_node_name reboot failed");
 	return 0;
 }
 
@@ -1680,18 +1766,10 @@ sub execute {
 
 sub execute_new {
 	my $argument = shift;
-	my ($computer_name, $command, $display_output, $timeout_seconds, $max_attempts, $port, $user, $password);
-	
-	if (!ref($argument) || $argument->isa('VCL::Module')) {
-		if ($argument->isa('VCL::Module')) {
-			$computer_name = $argument->data->get_computer_node_name();
-		}
-		else {
-			$computer_name = $argument;
-		}
-		($command, $display_output, $timeout_seconds, $max_attempts, $port, $user, $password) = @_;
-	}
-	else {
+	my ($computer_name, $command, $display_output, $timeout_seconds, $max_attempts, $port, $user, $password, $identity_key);
+
+	# Check the argument type
+	if (ref($argument) && ref($argument) eq 'HASH') {
 		$computer_name = $argument->{node};
 		$command = $argument->{command};
 		$display_output = $argument->{display_output};
@@ -1700,6 +1778,26 @@ sub execute_new {
 		$port = $argument->{port};
 		$user = $argument->{user};
 		$password = $argument->{password};
+		$identity_key = $argument->{identity_key};
+	}
+	else {
+		if (ref($argument)) {
+			# Reference passed, not a hash reference, must be VCL Module reference
+			if ($argument->isa('VCL::Module')) {
+				$computer_name = $argument->data->get_computer_node_name();
+			}
+			else {
+				notify($ERRORS{'WARNING'}, 0, "invalid argument reference type passed: " . ref($argument) . ", if a reference is passed as the argument it may only be a hash or VCL::Module reference");
+				return;
+			}
+		}
+		else {
+			# Argument is not a reference, computer name must be the first argument
+			$computer_name = $argument;
+		}
+		
+		# Get the remaining arguments
+		($command, $display_output, $timeout_seconds, $max_attempts, $port, $user, $password, $identity_key) = @_;
 	}
 	
 	if (!$computer_name) {
@@ -1713,9 +1811,14 @@ sub execute_new {
 	
 	$display_output = 0 unless $display_output;
 	$timeout_seconds = 60 unless $timeout_seconds;
-	$max_attempts = 1 unless $max_attempts;
+	$max_attempts = 3 unless $max_attempts;
 	$port = 22 unless $port;
 	$user = 'root' unless $user;
+	
+	my $ssh_options = '-o StrictHostKeyChecking=no';
+	if ($identity_key) {
+		$ssh_options .= " -i $identity_key";
+	}
 	
 	# Override the die handler
 	local $SIG{__DIE__} = sub{};
@@ -1737,6 +1840,9 @@ sub execute_new {
 		$attempt++;
 		$attempt_string = "attempt $attempt/$max_attempts: " if ($attempt > 1);
 		
+		# Calling 'return' in the EVAL block doesn't exit this subroutine
+		# Use a flag to determine if null should be returned without making another attempt
+		my $return_null;
 		
 		if (!$ENV{net_ssh_expect}{$computer_name}) {
 			eval {
@@ -1746,7 +1852,7 @@ sub execute_new {
 					port => $port,
 					raw_pty => 1,
 					no_terminal => 1,
-					ssh_option => '-o StrictHostKeyChecking=no',
+					ssh_option => $ssh_options,
 					timeout => 3,
 				);
 				
@@ -1758,10 +1864,7 @@ sub execute_new {
 					next ATTEMPT;
 				}
 				
-				if ($ssh->run_ssh()) {
-					notify($ERRORS{'DEBUG'}, 0, ref($ssh) . " object forked SSH process to control $computer_name");
-				}
-				else {
+				if (!$ssh->run_ssh()) {
 					notify($ERRORS{'WARNING'}, 0, ref($ssh) . " object failed to fork SSH process to control $computer_name, $!");
 					next ATTEMPT;
 				}
@@ -1773,8 +1876,24 @@ sub execute_new {
 				# If true, sets the timeout to "inactivity timeout"
 				# If false sets it to "absolute timeout"
 				#$ssh->restart_timeout_upon_receive(1);
-				$ssh->read_all();
+				my $initialization_output = $ssh->read_all();
+				#notify($ERRORS{'DEBUG'}, 0, "SSH initialization output:\n$initialization_output");
+				if (defined($initialization_output) && $initialization_output =~ /password:/i) {
+					if (defined($password)) {
+						notify($ERRORS{'WARNING'}, 0, "unable to connect to $computer_name, SSH is requesting a password but password authentication is not implemented, password is configured, output:\n$initialization_output");
+						$return_null = 1;
+						return;
+					}
+					else {
+						notify($ERRORS{'WARNING'}, 0, "unable to connect to $computer_name, SSH is requesting a password but password authentication is not implemented, password is not configured, output:\n$initialization_output");
+						$return_null = 1;
+						return;
+					}
+				}
 			};
+			
+			return if ($return_null);
+			
 			if ($EVAL_ERROR) {
 				if ($EVAL_ERROR =~ /^(\w+) at \//) {
 					notify($ERRORS{'DEBUG'}, 0, $attempt_string . "$1 error occurred initializing Net::SSH::Expect object for $computer_name");

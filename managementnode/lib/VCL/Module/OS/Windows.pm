@@ -436,9 +436,9 @@ sub pre_capture {
 
 =cut
 
-	if ($image_os_install_type =~ /vm/i) {
-		if (!$self->disable_security_center_notifications()) {
-			notify($ERRORS{'WARNING'}, 0, "unable to disable Security Center notifications");
+	if ($self->data->get_computer_vmhost_id(0)) {
+		if (!$self->disable_login_screensaver()) {
+			notify($ERRORS{'WARNING'}, 0, "unable to disable login screensaver");
 		}
 	}
 
@@ -1088,6 +1088,10 @@ sub create_directory {
 		notify($ERRORS{'WARNING'}, 0, "directory path argument was not specified");
 		return;
 	}
+	
+	# If ~ is passed as the directory path, skip directory creation attempt
+	# The command will create a /root/~ directory since the path is enclosed in quotes
+	return 1 if $path eq '~';
 
 	notify($ERRORS{'DEBUG'}, 0, "attempting to create directory: '$path'");
 
@@ -3429,8 +3433,8 @@ sub create_eventlog_entry {
 
 =head2 reboot
 
- Parameters  : $wait_for_reboot
- Returns     : 
+ Parameters  : $total_wait_seconds, $attempt_delay_seconds, $attempt_limit, $pre_configure
+ Returns     : boolean
  Description : 
 
 =cut
@@ -3441,47 +3445,61 @@ sub reboot {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
+	
+	# Check if an arguments were supplied
+	
+	# Attempt to get the total number of seconds to wait from the arguments
+	my $total_wait_seconds = shift;
+	if (!defined($total_wait_seconds) || $total_wait_seconds !~ /^\d+$/) {
+		$total_wait_seconds = 300;
+	}
+	
+	# Seconds to wait in between loop attempts
+	my $attempt_delay_seconds = shift;
+	if (!defined($attempt_delay_seconds) || $attempt_delay_seconds !~ /^\d+$/) {
+		$attempt_delay_seconds = 15;
+	}
+	
+	# Number of power reset attempts to make if reboot fails
+	my $attempt_limit = shift;
+	if (!defined($attempt_limit) || $attempt_limit !~ /^\d+$/) {
+		$attempt_limit = 2;
+	}
+	
+	my $pre_configure = shift;
+	$pre_configure = 1 unless defined $pre_configure;
 
-	my $management_node_keys = $self->data->get_management_node_keys();
 	my $computer_node_name   = $self->data->get_computer_node_name();
 	my $system32_path        = $self->get_system32_path() || return;
-	
-	# Check if an argument was supplied
-	my $wait_for_reboot = shift;
-	if (!defined($wait_for_reboot) || $wait_for_reboot !~ /0/) {
-		notify($ERRORS{'DEBUG'}, 0, "rebooting $computer_node_name and waiting for ssh to become active");
-		$wait_for_reboot = 1;
-	}
-	else {
-		notify($ERRORS{'DEBUG'}, 0, "rebooting $computer_node_name and NOT waiting");
-		$wait_for_reboot = 0;
-	}
 
 	my $reboot_start_time = time();
 	notify($ERRORS{'DEBUG'}, 0, "reboot will be attempted on $computer_node_name");
 
 	# Check if computer responds to ssh before preparing for reboot
 	if ($self->wait_for_ssh(0)) {
-		# Make sure SSH access is enabled from private IP addresses
-		if (!$self->firewall_enable_ssh_private()) {
-			notify($ERRORS{'WARNING'}, 0, "reboot not attempted, failed to enable ssh from private IP addresses");
-			return 0;
+		# Perform pre-reboot configuration tasks unless $pre_configure argument was supplied and is false
+		if ($pre_configure) {
+			# Make sure SSH access is enabled from private IP addresses
+			if (!$self->firewall_enable_ssh_private()) {
+				notify($ERRORS{'WARNING'}, 0, "reboot not attempted, failed to enable ssh from private IP addresses");
+				return 0;
+			}
+	
+			# Set sshd service startup mode to auto
+			if (!$self->set_service_startup_mode('sshd', 'auto')) {
+				notify($ERRORS{'WARNING'}, 0, "reboot not attempted, unable to set sshd service startup mode to auto");
+				return 0;
+			}
+	
+			# Make sure ping access is enabled from private IP addresses
+			if (!$self->firewall_enable_ping_private()) {
+				notify($ERRORS{'WARNING'}, 0, "reboot not attempted, failed to enable ping from private IP addresses");
+				return 0;
+			}
+			
+			# Kill the screen saver process, it occasionally prevents reboots and shutdowns from working
+			$self->kill_process('logon.scr');
 		}
-
-		# Set sshd service startup mode to auto
-		if (!$self->set_service_startup_mode('sshd', 'auto')) {
-			notify($ERRORS{'WARNING'}, 0, "reboot not attempted, unable to set sshd service startup mode to auto");
-			return 0;
-		}
-
-		# Make sure ping access is enabled from private IP addresses
-		if (!$self->firewall_enable_ping_private()) {
-			notify($ERRORS{'WARNING'}, 0, "reboot not attempted, failed to enable ping from private IP addresses");
-			return 0;
-		}
-		
-		# Kill the screen saver process, it occasionally prevents reboots and shutdowns from working
-		$self->kill_process('logon.scr');
 		
 		# Check if tsshutdn.exe exists on the computer
 		# tsshutdn.exe is the preferred utility, shutdown.exe often fails on Windows Server 2003
@@ -3494,13 +3512,12 @@ sub reboot {
 			$reboot_command = "$system32_path/shutdown.exe /r /t 0 /f";
 		}
 		
-		my ($reboot_exit_status, $reboot_output) = run_ssh_command($computer_node_name, $management_node_keys, $reboot_command);
+		my ($reboot_exit_status, $reboot_output) = $self->execute($reboot_command);
 		if (!defined($reboot_output)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to execute ssh command to reboot $computer_node_name");
+			notify($ERRORS{'WARNING'}, 0, "failed to execute command to reboot $computer_node_name");
 			return;
 		}
-		
-		if ($reboot_exit_status == 0) {
+		elsif ($reboot_exit_status == 0) {
 			notify($ERRORS{'OK'}, 0, "executed reboot command on $computer_node_name");
 		}
 		else {
@@ -3532,31 +3549,18 @@ sub reboot {
 		}
 	} ## end else [ if ($self->wait_for_ssh(0))
 
-	# Check if wait for reboot is set
-	if (!$wait_for_reboot) {
+	# Wait for the reboot to complete
+	my $result = $self->wait_for_reboot($total_wait_seconds, $attempt_delay_seconds, $attempt_limit);
+	my $reboot_duration = (time - $reboot_start_time);
+	if ($result){
+		# Reboot was successful, calculate how long reboot took
+		notify($ERRORS{'OK'}, 0, "reboot complete on $computer_node_name, took $reboot_duration seconds");
 		return 1;
 	}
-
-	# Make multiple attempts to wait for the reboot to complete
-	my $wait_attempt_limit = 2;
-	# Check if wait for reboot is set
-        if (!$wait_for_reboot) {
-                return 1;
-        }
-        else {
-                if($self->wait_for_reboot($wait_attempt_limit)){
-                        # Reboot was successful, calculate how long reboot took
-                        my $reboot_end_time = time();
-                        my $reboot_duration = ($reboot_end_time - $reboot_start_time);
-                        notify($ERRORS{'OK'}, 0, "reboot complete on $computer_node_name, took $reboot_duration seconds");
-                        return 1;
-                }
-                else {
-                        notify($ERRORS{'WARNING'}, 0, "reboot failed on $computer_node_name, made $wait_attempt_limit attempts");
-                        return 0;
-                }
-        }
-
+	else {
+		notify($ERRORS{'WARNING'}, 0, "reboot failed on $computer_node_name, waited $reboot_duration seconds for computer to respond");
+		return 0;
+	}
 } ## end sub reboot
 
 #/////////////////////////////////////////////////////////////////////////////
