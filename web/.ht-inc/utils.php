@@ -4280,7 +4280,8 @@ function checkOverlap($start, $end, $max, $requestid=0) {
 		   $requests[$id]["currstateid"] != 5 &&
 		   $requests[$id]["id"] != $requestid &&
 		   ($start < datetimeToUnix($requests[$id]["end"]) &&
-		   $end > datetimeToUnix($requests[$id]["start"]))) {
+		   $end > datetimeToUnix($requests[$id]["start"])) &&
+		   $requests[$id]['serverowner'] == 1) {
 			$count++;
 			if($count > $max)
 				return 1;
