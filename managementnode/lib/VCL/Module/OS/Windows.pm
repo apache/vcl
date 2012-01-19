@@ -866,6 +866,49 @@ sub reserve {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 post_reserve
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Runs $SYSTEMROOT/vcl_post_reserve.cmd if it exists in the image.
+               Does not check if the actual script succeeded or not.
+
+=cut
+
+sub post_reserve {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return 0;
+	}
+	
+	my $image_name = $self->data->get_image_name();
+	my $computer_short_name = $self->data->get_computer_short_name();
+	my $script_path = '$SYSTEMROOT/vcl_post_reserve.cmd';
+	
+	# Check if script exists
+	if (!$self->file_exists($script_path)) {
+		notify($ERRORS{'DEBUG'}, 0, "post_reserve script does NOT exist: $script_path");
+		return 1;
+	}
+	
+	# Run the vcl_post_reserve.cmd script if it exists in the image
+	my $result = $self->run_script($script_path);
+	if (!defined($result)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run post_reserve script: $script_path");
+	}
+	elsif ($result == 0) {
+		notify($ERRORS{'DEBUG'}, 0, "$script_path does not exist in image: $image_name");
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "ran $script_path");
+	}
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 sanitize
 
  Parameters  :
@@ -9746,6 +9789,7 @@ sub setup_product_keys {
 	my @product_names = (
 		'Windows XP',
 		'Windows Server 2003',
+		'Windows Server 2003 R2',
 		'Windows Vista Business',
 		'Windows Vista Business N',
 		'Windows Vista Enterprise',
@@ -10746,6 +10790,147 @@ sub firewall_compare_update {
 	}
 	return 1;
 
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_cpu_core_count
+
+ Parameters  : none
+ Returns     : integer
+ Description : Retrieves the number of CPU cores the computer has by querying
+               the NUMBER_OF_PROCESSORS environment variable.
+
+=cut
+
+sub get_cpu_core_count {
+	my $self = shift;
+	if (ref($self) !~ /module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	return $self->get_environment_variable_value('NUMBER_OF_PROCESSORS');
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 run_script
+
+ Parameters  : script path
+ Returns     : boolean
+ Description : Checks if script exists on the computer and attempts to run it.
+
+=cut
+
+sub run_script {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get the script path argument
+	my $script_path = shift;
+	if (!$script_path) {
+		notify($ERRORS{'WARNING'}, 0, "script path argument was not specified");
+		return;
+	}
+	
+	my $computer_node_name = $self->data->get_computer_node_name();
+	
+	# Check if script exists
+	if (!$self->file_exists($script_path)) {
+		notify($ERRORS{'WARNING'}, 0, "script does NOT exist on $computer_node_name: $script_path");
+		return;
+	}
+	
+	# Determine the script name
+	my ($script_name, $script_directory_path, $script_extension) = fileparse($script_path, qr/\.[^.]*/);
+	
+	notify($ERRORS{'DEBUG'}, 0, "script name: '$script_name', directory: '$script_directory_path', extension: '$script_extension'");
+	
+	# Get the node configuration directory, make sure it exists, create if necessary
+	my $node_log_directory = $self->get_node_configuration_directory() . '/Logs';
+	if (!$self->create_directory($node_log_directory)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to create node log file directory: $node_log_directory");
+		return;
+	}
+	
+	# Assemble the log file path
+	my $log_file_path = $node_log_directory . "/$script_name.log";
+	
+	# Assemble the command
+	my $command;
+	$command .= "chmod +rx \"$script_path\"";
+	$command .= "&& echo \"" . '=' x 80 . "\" >> \"$log_file_path\"";
+	
+	my $timestamp = makedatestring();
+	$command .= "&& echo \"$timestamp - $script_path executed by vcld\" >> \"$log_file_path\"";
+	
+	$command .= "&& \"$script_path\" >> \"$log_file_path\" 2>&1";
+	
+	# Execute the command
+	my ($exit_status, $output) = $self->execute($command);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute script on $computer_node_name: '$script_path', command: '$command'");
+		return;
+	}
+	
+	# Format the line breaks in the log file for the OS
+	$self->format_text_file($log_file_path);
+	
+	if ($exit_status == 0) {
+		notify($ERRORS{'OK'}, 0, "successfully executed script on $computer_node_name: '$script_path', output saved to '$log_file_path'");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "script '$script_path' returned a non-zero exit status: $exit_status, output saved to '$log_file_path'\ncommand: '$command'\noutput:\n" . join("\n", @$output));
+		return 0;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 format_text_file
+
+ Parameters  : $file_path
+ Returns     : boolean
+ Description : Runs unix2dos on the text file to format the line endings for
+               Windows.
+
+=cut
+
+sub format_text_file {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $file_path = shift;
+	if (!$file_path) {
+		notify($ERRORS{'WARNING'}, 0, "file path argument was not specified");
+		return;
+	}
+	
+	my $computer_node_name = $self->data->get_computer_node_name();
+	
+	# Execute the command
+	my $command = "unix2dos $file_path";
+	my ($exit_status, $output) = $self->execute($command);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to format text file for Windows on $computer_node_name: command: '$command'");
+		return;
+	}
+	elsif ($exit_status == 0) {
+		notify($ERRORS{'OK'}, 0, "formatted text file for Windows on $computer_node_name: '$file_path'");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to format text file for Windows on $computer_node_name, command: '$command'\noutput:\n" . join("\n", @$output));
+		return;
+	}
 }
 
 #/////////////////////////////////////////////////////////////////////////////

@@ -631,7 +631,6 @@ sub run_slmgr_skms {
 	# Run slmgr.vbs -skms to configure the computer to use the KMS server
 	# slmgr.vbs must be run in a command shell using the correct System32 path or the task it's supposed to do won't really take effect
 	my $skms_command = "$system32_path/cscript.exe //NoLogo \$SYSTEMROOT/System32/slmgr.vbs -skms $kms_address:$kms_port";
-	$skms_command .= " && $system32_path/cscript.exe //NoLogo \$SYSTEMROOT/System32/slmgr.vbs -ato";
 	
 	my ($skms_exit_status, $skms_output) = run_ssh_command($computer_node_name, $management_node_keys, $skms_command);
 	if (defined($skms_exit_status) && $skms_exit_status == 0 && grep(/successfully/i, @$skms_output)) {
