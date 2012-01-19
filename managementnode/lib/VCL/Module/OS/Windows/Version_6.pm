@@ -1896,15 +1896,15 @@ EOF
 		return 0;
 	}
 	
-	# Wait maximum of 12 minutes for the computer to become unresponsive
-	if (!$self->wait_for_no_ping(720)) {
+	# Wait maximum of 30 minutes for the computer to become unresponsive
+	if (!$self->wait_for_no_ping(1800)) {
 		# Computer never stopped responding to ping
 		notify($ERRORS{'WARNING'}, 0, "$computer_node_name never became unresponsive to ping");
 		return;
 	}
 	
-	# Wait maximum of 10 minutes for computer to power off
-	my $power_off = $self->provisioner->wait_for_power_off(600);
+	# Wait maximum of 15 minutes for computer to power off
+	my $power_off = $self->provisioner->wait_for_power_off(900);
 	if (!defined($power_off)) {
 		# wait_for_power_off result will be undefined if the provisioning module doesn't implement a power_status subroutine
 		notify($ERRORS{'OK'}, 0, "unable to determine power status of $computer_node_name from provisioning module, sleeping 5 minutes to allow computer time to shutdown");
