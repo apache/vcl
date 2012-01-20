@@ -64,6 +64,70 @@ use VCL::utils;
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 pre_capture
+
+ Parameters  : $arguments->{end_state}
+ Returns     : boolean
+ Description : Performs the tasks common to all OS's that must be done to the
+               computer prior to capturing an image:
+               -Check if the computer is responding to SSH
+               -If not responding, check if computer is powered on
+               -Power on computer if powered off and wait for SSH to respond
+               -Create currentimage.txt file
+
+=cut
+
+sub pre_capture {
+	my $self = shift;
+	my $args = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $computer_node_name = $self->data->get_computer_node_name();
+	notify($ERRORS{'OK'}, 0, "beginning common image capture preparation tasks");
+	
+	# Make sure the computer is responding to SSH
+	# If it is not, check if it is powered on
+	if (!$self->is_ssh_responding()) {
+		notify($ERRORS{'OK'}, 0, "$computer_node_name is not responding to SSH, checking if it is powered on");
+		my $power_status = $self->provisioner->power_status();
+		if (!$power_status) {
+			notify($ERRORS{'WARNING'}, 0, "unable to complete capture preparation tasks, $computer_node_name is not responding to SSH and the power status could not be determined");
+			return;
+		}
+		elsif ($power_status =~ /on/i) {
+			notify($ERRORS{'WARNING'}, 0, "unable to complete capture preparation tasks, $computer_node_name is powered on but not responding to SSH");
+			return;
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "$computer_node_name is powered off, attempting to power it on");
+			if (!$self->provisioner->power_on()) {
+				notify($ERRORS{'WARNING'}, 0, "unable to complete capture preparation tasks, $computer_node_name could not be powered on");
+				return;
+			}
+			
+			# Wait for computer to respond to SSH
+			if (!$self->wait_for_response(30, 300, 10)) {
+				notify($ERRORS{'WARNING'}, 0, "unable to complete capture preparation tasks, $computer_node_name never responded to SSH after it was powered on");
+				return;
+			}
+		}
+	}
+	
+	# Create the currentimage.txt file
+	if (!$self->create_currentimage_txt()) {
+		notify($ERRORS{'WARNING'}, 0, "failed to create currentimage.txt on $computer_node_name");
+		return 0;
+	}
+	
+	notify($ERRORS{'OK'}, 0, "completed common image capture preparation tasks");
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 get_source_configuration_directories
 
  Parameters  : None

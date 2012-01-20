@@ -228,6 +228,12 @@ sub pre_capture {
 
 	my $computer_node_name = $self->data->get_computer_node_name();
 	my $image_os_install_type = $self->data->get_image_os_install_type();
+	
+	# Call OS::pre_capture to perform the pre-capture tasks common to all OS's
+	if (!$self->SUPER::pre_capture($args)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute parent class pre_capture() subroutine");
+		return 0;
+	}
 
 	notify($ERRORS{'OK'}, 0, "beginning Windows image capture preparation tasks on $computer_node_name");
 

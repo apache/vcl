@@ -133,8 +133,15 @@ sub pre_capture {
 	}
 	
 	my $computer_node_name = $self->data->get_computer_node_name();
+	
+	# Call OS::pre_capture to perform the pre-capture tasks common to all OS's
+	if (!$self->SUPER::pre_capture($args)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute parent class pre_capture() subroutine");
+		return 0;
+	}
+	
 	notify($ERRORS{'OK'}, 0, "beginning Linux-specific image capture preparation tasks");
-
+	
 	if (!$self->file_exists("/root/.vclcontrol/vcl_exclude_list.sample")) {
       notify($ERRORS{'DEBUG'}, 0, "/root/.vclcontrol/vcl_exclude_list.sample does not exists");
 		if(!$self->generate_vclcontrol_sample_files() ){
@@ -270,7 +277,7 @@ sub post_load {
 	notify($ERRORS{'OK'}, 0, "initiating Linux post_load: $image_name on $computer_short_name");
 
 	# Wait for computer to respond to SSH
-	if (!$self->wait_for_response(60, 600)) {
+	if (!$self->wait_for_response(30, 600, 10)) {
 		notify($ERRORS{'WARNING'}, 0, "$computer_node_name never responded to SSH");
 		return 0;
 	}
