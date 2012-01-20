@@ -1929,6 +1929,114 @@ sub get_total_memory {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 get_license_info
+
+ Parameters  : none
+ Returns     : hash reference
+ Description : Retrieves the license information from the host. A hash reference
+               is returned:
+               {
+                 "name" => "vSphere 4 Hypervisor",
+                 "properties" => {
+                   "FileVersion" => "4.1.1.0",
+                   "LicenseFilePath" => [
+                     "/usr/lib/vmware/licenses/site/license-esx-40-e1-4core-200803",
+                     ...
+                     "/usr/lib/vmware/licenses/site/license-esx-40-e9-vm-200803"
+                   ],
+                   "ProductName" => "VMware ESX Server",
+                   "ProductVersion" => "4.0",
+                   "count_disabled" => "This license is unlimited",
+                   "feature" => {
+                     "maxRAM:256g" => "Up to 256 GB of memory",
+                     "vsmp:4" => "Up to 4-way virtual SMP"
+                   }
+                 },
+                 "serial" => "XXXXX-XXXXX-XXXXX-XXXXX-XXXXX",
+                 "total" => 0,
+                 "unit" => "cpuPackage:6core",
+                 "used" => 2
+               }
+
+=cut
+
+sub get_license_info {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	return $self->{license_info} if $self->{license_info};
+	
+	my $vmhost_hostname = $self->data->get_vmhost_hostname();
+	
+	my $vim_cmd_arguments = "vimsvc/license --show";
+	my ($exit_status, $output) = $self->_run_vim_cmd($vim_cmd_arguments);
+	return if !$output;
+	
+	# Typical output:
+	# [200] Sending request for installed licenses...[200] Complete, result is:
+	#   serial: XXXXX-XXXXX-XXXXX-XXXXX-XXXXX
+	#   vmodl key: esxBasic
+	#   name: vSphere 4 Hypervisor
+	#   total: 0
+	#   used:  2
+	#   unit: cpuPackage:6core
+	#   Properties:
+	#     [ProductName] = VMware ESX Server
+	#     [ProductVersion] = 4.0
+	#     [count_disabled] = This license is unlimited
+	#     [feature] = maxRAM:256g ("Up to 256 GB of memory")
+	#     [feature] = vsmp:4 ("Up to 4-way virtual SMP")
+	#     [FileVersion] = 4.1.1.0
+	#     [LicenseFilePath] = /usr/lib/vmware/licenses/site/license-esx-40-e1-4core-200803
+	#	  ...
+	# [200] End of report.
+	
+	my $license_info;
+	for my $line (@$output) {
+		
+		# Find lines formatted as 'property: value'
+		if ($line =~ /^\s*(\w+):\s+(.+)$/) {
+			$license_info->{$1} = $2;
+			next;
+		}
+		
+		# Find '[feature] = ' lines
+		elsif ($line =~ /\[feature\]\s*=\s*([^\s]+)\s+\(\"(.+)\"\)/) {
+			my $feature_name = $1;
+			my $feature_description = $2;
+			$license_info->{properties}{feature}{$feature_name} = $feature_description;
+		}
+		
+		# Find '[LicenseFilePath] = ' lines
+		elsif ($line =~ /\[LicenseFilePath\]\s*=\s*(.+)/) {
+			# Leave this out of data for now, not used anywhere, clutters display of license info
+			#push @{$license_info->{properties}{LicenseFilePath}}, $1;
+		}
+		
+		# Find '[xxx] = ' lines
+		elsif ($line =~ /\[(\w+)\]\s*=\s*(.+)$/) {
+			my $property = $1;
+			my $value = $2;
+			$license_info->{properties}{$property} = $value;
+		}
+	}
+	
+	# Make sure something was found
+	if (!$license_info) {
+		notify($ERRORS{'WARNING'}, 0, "failed to parse 'vim-cmd $vim_cmd_arguments' output:\n" . join("\n", @$output));
+		return;
+	}
+	
+	$self->{license_info} = $license_info;
+	notify($ERRORS{'DEBUG'}, 0, "retrieved VM host license info:\n" . format_data($license_info));
+	return $license_info;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 DESTROY
 
  Parameters  : none

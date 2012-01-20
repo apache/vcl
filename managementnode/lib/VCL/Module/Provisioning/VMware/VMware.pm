@@ -96,56 +96,66 @@ our %VM_OS_CONFIGURATION = (
 		"guestOS" => "winXPPro",
 		"ethernet-virtualDev" => "vlance",
 		"scsi-virtualDev" => "busLogic",
+		"cpu_socket_limit" => 2,
 	},
 	"winxp-x86_64" => {
 		"guestOS" => "winXPPro-64",
 		"ethernet-virtualDev" => "e1000",
 		"scsi-virtualDev" => "lsiLogic",
+		"cpu_socket_limit" => 2,
 	},
 	"winvista-x86" => {
 		"guestOS" => "winvista",
 		"ethernet-virtualDev" => "e1000",
 		"scsi-virtualDev" => "lsiLogic",
 		"memsize" => 1024,
+		"cpu_socket_limit" => 2,
 	},
 	"vista-x86_64" => {
 		"guestOS" => "winvista-64",
 		"ethernet-virtualDev" => "e1000",
 		"scsi-virtualDev" => "lsiLogic",
 		"memsize" => 1024,
+		"cpu_socket_limit" => 2,
 	}, 
 	"win7-x86" => {
 		"guestOS" => "windows7",
 		"ethernet-virtualDev" => "e1000",
 		"scsi-virtualDev" => "lsiLogic",
 		"memsize" => 1024,
+		"cpu_socket_limit" => 2,
 	},
 	"win7-x86_64" => {
 		"guestOS" => "windows7-64",
 		"ethernet-virtualDev" => "e1000",
 		"scsi-virtualDev" => "lsiLogic",
 		"memsize" => 2048,
+		"cpu_socket_limit" => 2,
 	}, 
 	"win2003-x86" => {
 		"guestOS" => "winNetEnterprise",
 		"ethernet-virtualDev" => "vlance",
 		"scsi-virtualDev" => "lsiLogic",
+		"cpu_socket_limit" => 64,
 	},
 	"win2003-x86_64" => {
 		"guestOS" => "winNetEnterprise-64",
 		"ethernet-virtualDev" => "e1000",
 		"scsi-virtualDev" => "lsiLogic",
 		"memsize" => 1024,
+		"cpu_socket_limit" => 64,
 	},
 	"win2008-x86" => {
 		"guestOS" => "winServer2008Enterprise-32",
 		"ethernet-virtualDev" => "e1000",
 		"scsi-virtualDev" => "lsiLogic",
+		"cpu_socket_limit" => 64,
 	},
 	"win2008-x86_64" => {
 		"guestOS" => "winServer2008Enterprise-64",
 		"ethernet-virtualDev" => "e1000",
 		"scsi-virtualDev" => "lsiLogic",
+		"cpu_socket_limit" => 64,
 	},
 	# Default Windows configuration if Windows version isn't found above:
 	"windows-x86" => {
@@ -518,6 +528,42 @@ sub load {
 	}
 	else {
 		insertloadlog($reservation_id, $computer_id, "loadimagecomplete", "OS post-load tasks not necessary on $computer_name");
+	}
+	
+	# Check if the VM has the expected number of CPUs
+	# Some OS's don't recognize additional CPUs when the VM is first loaded if the computer used to capture the image had fewer CPUs
+	# Reboot the computer if it has fewer CPUs than expected
+	my $vm_os_reported_cpu_count = $self->os->get_cpu_core_count();
+	my $vm_expected_cpu_count = $self->get_vm_cpu_configuration();
+	
+	if (!$vm_os_reported_cpu_count) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine if VM OS recognized all CPUs, CPU count could not be retrieved from the VM OS");
+	}
+	elsif (!$vm_expected_cpu_count) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine if VM OS recognized all CPUs, expected CPU count could not be determined");
+	}
+	elsif ($vm_os_reported_cpu_count == $vm_expected_cpu_count) {
+		notify($ERRORS{'DEBUG'}, 0, "verified VM OS recognized correct number of CPUs: $vm_os_reported_cpu_count");
+	}
+	elsif ($vm_os_reported_cpu_count > $vm_expected_cpu_count) {
+		notify($ERRORS{'WARNING'}, 0, "VM OS recognized more CPUs than expected:\nrecognized CPU count: $vm_os_reported_cpu_count\nexpected CPU count: $vm_expected_cpu_count");
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "VM OS did not recognize all CPUs, rebooting VM:\nrecognized CPU count: $vm_os_reported_cpu_count\nexpected CPU count: $vm_expected_cpu_count");
+		$self->os->reboot(240, 4, 1, 0) || return;
+		
+		$vm_os_reported_cpu_count = $self->os->get_cpu_core_count();
+		if ($vm_os_reported_cpu_count) {
+			if ($vm_os_reported_cpu_count < $vm_expected_cpu_count) {
+				notify($ERRORS{'WARNING'}, 0, "VM OS did not recognize all CPUs after rebooting VM:\nrecognized CPU count: $vm_os_reported_cpu_count\nexpected CPU count: $vm_expected_cpu_count");
+			}
+			else {
+				notify($ERRORS{'DEBUG'}, 0, "VM OS recognized correct number of CPUs after rebooting: $vm_os_reported_cpu_count");
+			}
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "unable to determine if VM OS recognized all CPUs, CPU count could not be retrieved from the VM OS after rebooting");
+		}
 	}
 	
 	return 1;
@@ -1209,7 +1255,7 @@ sub node_status {
 		}
 		
 		if ($is_vm_dedicated) {
-			if ($self->is_vmdk_shared($vmdk_file_path)) {
+			if ($self->is_vmdk_file_shared($vmdk_file_path)) {
 				notify($ERRORS{'OK'}, 0, "VM already loaded may NOT be used, the vmdk appears to be shared");
 				return $status;
 			}
@@ -1641,7 +1687,6 @@ sub prepare_vmx {
 	my $computer_name             = $self->data->get_computer_short_name() || return;
 	my $image_name                = $self->data->get_image_name() || return;
 	my $vm_ram                    = $self->get_vm_ram() || return;
-	my $vm_cpu_count              = $self->data->get_image_minprocnumber() || 1;
 	my $vm_ethernet_adapter_type  = $self->get_vm_ethernet_adapter_type() || return;
 	my $vm_eth0_mac               = $self->data->get_computer_eth0_mac_address() || return;
 	my $vm_eth1_mac               = $self->data->get_computer_eth1_mac_address() || return;	
@@ -1652,6 +1697,8 @@ sub prepare_vmx {
 	my $is_vm_dedicated           = $self->is_vm_dedicated();
 	my $guest_os                  = $self->get_vm_guest_os() || return;
 	my $vmware_product_name       = $self->get_vmhost_product_name();
+	
+	(my ($vm_cpu_count, $vm_cores_per_socket) = $self->get_vm_cpu_configuration()) || return;
 	
 	# Create the .vmx directory on the host
 	if (!$self->vmhost_os->create_directory($vmx_directory_path)) {
@@ -1699,7 +1746,7 @@ sub prepare_vmx {
 		
 		"config.version" => "8",
 		
-		"disk.locking" => "false",
+		"cpuid.coresPerSocket" => "$vm_cores_per_socket",
 		
 		"displayName" => "$display_name",
 		
@@ -1734,7 +1781,9 @@ sub prepare_vmx {
 		"powerType.reset" => "soft",
 		"powerType.suspend" => "hard",
 		
-		"snapshot.disabled" => "FALSE",
+		"sched.swap.dir" => "$vmx_directory_path/",
+		
+		"snapshot.redoNotWithParent" => "TRUE",
 		
 		"svga.autodetect" => "TRUE",
 		
@@ -1750,9 +1799,7 @@ sub prepare_vmx {
 		
 		"virtualHW.version" => "$vm_hardware_version",
 		
-		#"MemTrimRate" => "0",
-		#"sched.mem.pshare.enable" => "FALSE",
-		#"mainMem.useNamedFile" => "FALSE",
+		"workingDir" => "$vmx_directory_path",
 	);
 	
 	#my $reservation_password     = $self->data->get_reservation_password();
@@ -2399,7 +2446,7 @@ sub reclaim_vmhost_disk_space {
 		for my $storage_identifier (keys %{$vmx_info->{vmdk}}) {
 			my $vmdk_file_path = $vmx_info->{vmdk}{$storage_identifier}{vmdk_file_path};
 			
-			if ($self->is_vmdk_shared($vmdk_file_path)) {
+			if ($self->is_vmdk_file_shared($vmdk_file_path)) {
 				$vmx_files->{$vmx_file_path}{vmdk_shared} = 1;
 			}
 			else {
@@ -3421,9 +3468,10 @@ sub get_vmdk_base_directory_path_shared {
 
 =head2 get_vmdk_base_directory_path_dedicated
 
- Parameters  : 
+ Parameters  : none
  Returns     : string
- Description : 
+ Description : Determines the base directory under which vmdk files are stored
+               if the vmdk is dedicated for the VM being loaded.
 
 =cut
 
@@ -3436,11 +3484,21 @@ sub get_vmdk_base_directory_path_dedicated {
 	
 	my $vmdk_base_directory_path;
 	
+	my $computer_name = $self->data->get_computer_short_name();
+	my @datastore_names = $self->_get_datastore_names();
+	
+	# Check if a datastore exists named after the computer being loaded
+	if (grep { $_ eq $computer_name } @datastore_names) {
+		$vmdk_base_directory_path = "[$computer_name]";
+		notify($ERRORS{'DEBUG'}, 0, "using datastore named after the computer being loaded as the dedicated vmdk base directory path: $vmdk_base_directory_path");
+	}
+	
 	# Get the vmprofile.virtualdiskpath
-	# If virtualdiskpath isn't set, try to use the datastore path
-	if ($vmdk_base_directory_path = $self->data->get_vmhost_profile_virtual_disk_path()) {
+	elsif ($vmdk_base_directory_path = $self->data->get_vmhost_profile_virtual_disk_path()) {
 		notify($ERRORS{'DEBUG'}, 0, "using VM profile virtual disk path as the vmdk base directory path: $vmdk_base_directory_path");
 	}
+	
+	# If virtualdiskpath isn't set, try to use the datastore path
 	elsif ($vmdk_base_directory_path = $self->data->get_vmhost_profile_datastore_path()) {
 		notify($ERRORS{'DEBUG'}, 0, "using VM profile datastore path as the vmdk base directory path: $vmdk_base_directory_path");
 	}
@@ -4083,18 +4141,19 @@ sub is_vm_dedicated {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 is_vmdk_shared
+=head2 is_vmdk_file_shared
 
  Parameters  : $vmdk_file_path
  Returns     : boolean
- Description : Checks if the vmdk file appears to be shared by checking if it is
-               located under the shared vmdk base directory path and if
-               the vmdk's parent directory name begins with any of the OS names
-               in the VCL database.
+ Description : Checks if the vmdk directory appears to be shared. A vmdk is
+               not considered shared if any of the following are true:
+               -The vmdk file name doesn't begin with any of the OS names defined in the
+                VCL database
+               -The vmdk file appears to be a snaphot
 
 =cut
 
-sub is_vmdk_shared {
+sub is_vmdk_file_shared {
 	my $self = shift;
 	if (ref($self) !~ /vmware/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
@@ -4114,19 +4173,92 @@ sub is_vmdk_shared {
 	
 	# Get the vmdk file name
 	my $vmdk_file_name = $self->_get_file_name($vmdk_file_path);
-	my $vmdk_file_base_name = $self->_get_file_base_name($vmdk_file_path);
 	
 	# Get an array containing the OS names stored in the database
 	my $os_info = get_os_info();
 	my @os_names = sort(map { $os_info->{$_}{name} } keys %$os_info);
 	
 	# Check if the vmdk file name begins with any of the OS names
-	if (my @matching_os_names = map { $vmdk_file_base_name =~ /^($_)-/ } @os_names) {
-		notify($ERRORS{'DEBUG'}, 0, "vmdk appears to be shared, file name '$vmdk_file_name' begins with the name of an OS in the database: " . join(' ,', @matching_os_names));
+	# Shared:
+	#    vmwarewinxp-base234-v23.vmdk
+	#    vmwarewinxp-base234-v23-flat.vmdk
+	#    vmwarewinxp-base234-v23-s004.vmdk
+	#    vmwarewinxp-base234-v23-f004.vmdk
+	
+	# Snapshots - not shared:
+	# monolithicSparse snapshot:
+	#    *-00000*.vmdk        (vmwarewinxp-base234-v23-000001.vmdk)
+	# twoGbMaxExtentSparse snapshot:
+	#    *-00000*.vmdk        (vmwarewinxp-base234-v23-000001.vmdk)
+	#    *-00000*-s00*.vmd    (vmwarewinxp-base234-v23-000001-s001.vmdk)
+	# vmfsSparse snapshot:
+	#    *-00000*.vmdk        (vmwarewinxp-base234-v23-000001.vmdk)
+	#    *-00000*-delta.vmdk  (vmwarewinxp-base234-v23-000001-delta.vmdk)
+	
+	if (my @matching_os_names = map { $vmdk_file_name =~ /^($_)-/ } @os_names) {
+		if ($vmdk_file_name =~ /-\d+(-delta|-s\d+)?\.vmdk$/i) {
+			notify($ERRORS{'DEBUG'}, 0, "vmdk file does NOT appear to be shared, it is a snapshot file: '$vmdk_file_name'");
+			return 0;
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "vmdk file appears to be shared: '$vmdk_file_name', it is not a snapshot file and begins with the name of an OS in the database: " . join(' ,', @matching_os_names));
+			return 1;
+		}
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "vmdk file does NOT appear to be shared, file name '$vmdk_file_name' does NOT begin with the name of an OS in the database");
+		return 0;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 is_vmdk_directory_shared
+
+ Parameters  : $vmdk_directory_path
+ Returns     : boolean
+ Description : Checks if the vmdk directory appears to be shared. A vmdk is
+               not considered shared if any of the following are true:
+               -The vmdk file name doesn't begin with any of the OS names defined in the
+                VCL database
+               -The vmdk file appears to be a snaphot
+
+=cut
+
+sub is_vmdk_directory_shared {
+	my $self = shift;
+	if (ref($self) !~ /vmware/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get the vmdk directory path
+	my $vmdk_directory_path = shift || $self->get_vmdk_directory_path();
+	if (!$vmdk_directory_path) {
+		notify($ERRORS{'WARNING'}, 0, "vmdk directory path argument was not supplied and path could not be retrieved");
+		return;
+	}
+	elsif ($vmdk_directory_path =~ /\.vmdk$/i) {
+		$vmdk_directory_path = $self->_get_parent_directory_normal_path($vmdk_directory_path);
+	}
+	
+	# Get the directory name
+	my $vmdk_directory_name = $self->_get_file_name($vmdk_directory_path);
+	if (!$vmdk_directory_name) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine if vmdk directory is shared, directory name could not be determined from path: $vmdk_directory_path");
+		return;
+	}
+	
+	# Get an array containing the OS names stored in the database
+	my $os_info = get_os_info();
+	my @os_names = sort(map { $os_info->{$_}{name} } keys %$os_info);
+	
+	if (my @matching_os_names = map { $vmdk_directory_name =~ /^($_)-/ } @os_names) {
+		notify($ERRORS{'DEBUG'}, 0, "vmdk directory appears to be shared: '$vmdk_directory_path', it begins with the name of an OS in the database: " . join(' ,', @matching_os_names));
 		return 1;
 	}
 	else {
-		notify($ERRORS{'DEBUG'}, 0, "vmdk appears to be dedicated, file name '$vmdk_file_name' does NOT begin with the name of an OS in the database");
+		notify($ERRORS{'DEBUG'}, 0, "vmdk directory does NOT appear to be shared: '$vmdk_directory_path', it does NOT begin with the name of an OS in the database");
 		return 0;
 	}
 }
@@ -4689,6 +4821,29 @@ sub get_vm_guest_os {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 get_vm_cpu_socket_limit
+
+ Parameters  : none
+ Returns     : string
+ Description : Returns the maximum number of CPU sockets which may be allocated
+               to the VM based on the OS being loaded.
+
+=cut
+
+sub get_vm_cpu_socket_limit {
+	my $self = shift;
+	if (ref($self) !~ /vmware/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $vm_os_configuration = $self->get_vm_os_configuration() || return;
+	return $vm_os_configuration->{"cpu_socket_limit"};
+}
+
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 get_vm_ethernet_adapter_type
 
  Parameters  : none
@@ -4720,7 +4875,7 @@ sub get_vm_ethernet_adapter_type {
 				return $vm_ethernet_adapter_type;
 			}
 		}
-		notify($ERRORS{'DEBUG'}, 0, "unable to retrieve VM ethernet adapter type from reference vmx file, 'ethernet0\virtualDev' key does not exist");
+		notify($ERRORS{'DEBUG'}, 0, "unable to retrieve VM ethernet adapter type from reference vmx file, 'ethernet0.virtualDev' key does not exist");
 	}
 	
 	my $vm_os_configuration = $self->get_vm_os_configuration() || return;
@@ -4779,6 +4934,164 @@ sub get_vm_ram {
 	}
 	else {
 		return $image_minram_mb;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_vm_cpu_configuration
+
+ Parameters  : none
+ Returns     : array or integer
+ Description : Determines the total number of cores (vmx: numvcpus) and cores
+               per socket (vmx: cpuid.coresPerSocket) that should be allocated
+               to the VM. The image.minprocnumber value is used as a starting
+               point. Checks are done to make the the VMware license vCPU limit
+               isn't exceeded and that the host has at least as many cores as
+               being assiged to the VM.
+               
+               Some VM guest OS's have CPU socket count limitations (2 for
+               Windows 7) but can handle multicore CPU configurations. If this
+               is the case, an attempt is made to determine a valid multicore
+               configuration.
+               
+               This subroutine can be called expecting either a scalar or array
+               returned. If called expecting an array, the total number of cores
+               assigned to the VM and cores per socket are returned:
+               my ($total_core_count, $cores_per_socket) = $self->get_vm_cpu_configuration();
+               
+               If called expecting a scalar, the total number of cores assigned
+               to the VM is returned:
+               my $total_core_count = $self->get_vm_cpu_configuration();
+
+=cut
+
+sub get_vm_cpu_configuration {
+	my $self = shift;
+	if (ref($self) !~ /vmware/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get the image minimum processor number setting
+	my $total_core_count = $self->data->get_image_minprocnumber() || 1;
+	if (!defined($total_core_count)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve image.minprocnumber value, returning numvcpus=1, cpuid.coresPerSocket=1)");
+		return;
+	}
+	
+	my $image_name = $self->data->get_image_name();
+	my $image_os_prettyname = $self->data->get_image_os_prettyname();
+
+	my $socket_count = 1;
+	my $cores_per_socket = 1;
+	if ($total_core_count > 1) {
+		# Check if the image.minprocnumber is greater than the VM host's CPUs/VM limit according the the VMware license
+		my $vmhost_cpu_limit = $self->get_vm_cpu_limit();
+		if ($total_core_count > $vmhost_cpu_limit) {
+			notify($ERRORS{'WARNING'}, 0, "$image_name image minimum CPU value ($total_core_count) is greater than the VM CPU limit for the VM host ($vmhost_cpu_limit), reducing to $vmhost_cpu_limit");
+			$total_core_count = $vmhost_cpu_limit;
+		}
+		
+		# Check if the image.minprocnumber is greater than the number of physical cores the VM host has
+		# VMs can't be configured with more CPUs than the host has cores
+		my $vmhost_cpu_core_count = $self->api->get_cpu_core_count();
+		if ($vmhost_cpu_core_count && $total_core_count > $vmhost_cpu_core_count) {
+			notify($ERRORS{'WARNING'}, 0, "$image_name image minimum CPU value ($total_core_count) is greater than the VM host's physical CPU cores ($vmhost_cpu_core_count), reducing to $vmhost_cpu_core_count");
+			$total_core_count = $vmhost_cpu_core_count;
+		}
+		
+		# Check if the VM guest OS has a socket limit and if image.minprocnumber is greater than this limit
+		# This is defined as %VM_OS_CONFIGURATION{cpu_socket_limit}
+		# Attempt to determine a valid multicore configuration
+		my $vm_os_cpu_socket_limit = $self->get_vm_cpu_socket_limit();
+		if ($vm_os_cpu_socket_limit && $total_core_count > $vm_os_cpu_socket_limit) {
+			notify($ERRORS{'DEBUG'}, 0, "'$image_os_prettyname' image OS CPU socket limit: $vm_os_cpu_socket_limit, CPU count configured for image: $total_core_count, VM will be configured with multicore CPUs");
+			
+			# Loop through multicore configurations attempting to determine a valid one
+			for ($cores_per_socket = 2; $cores_per_socket <= $total_core_count; $cores_per_socket++) {
+				$socket_count = ($total_core_count / $cores_per_socket);
+				
+				# Check if the socket count result is a whole number
+				if ($socket_count !~ /^\d+$/) {
+					notify($ERRORS{'DEBUG'}, 0, "multicore configuration not valid, fractional socket count:\nOS CPU socket limit: $vm_os_cpu_socket_limit\ntotal core count: $total_core_count\ncores per CPU: $cores_per_socket\nfractional socket count: $socket_count");
+					undef $socket_count;
+				}
+				elsif ($socket_count > $vm_os_cpu_socket_limit) {
+					notify($ERRORS{'DEBUG'}, 0, "multicore configuration not valid, socket count ($socket_count) > OS socket limit ($vm_os_cpu_socket_limit):\nOS CPU socket limit: $vm_os_cpu_socket_limit\ntotal core count: $total_core_count\ncores per CPU: $cores_per_socket\ninvalid socket count: $socket_count");
+					undef $socket_count;
+				}
+				else {
+					last;
+				}
+			}
+			
+			if (!$socket_count) {
+				notify($ERRORS{'WARNING'}, 0, "unable to determine valid multicore CPU configuration:\nOS CPU socket limit: $vm_os_cpu_socket_limit\ntotal core count: $total_core_count\n");
+				return;
+			}
+		}
+		else {
+			# No OS socket limit defined, assign single-core CPUs
+			$socket_count = $total_core_count;
+		}
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "VM CPU configuration:\nsockets: $socket_count\ncores per socket: $cores_per_socket\ntotal cores: $total_core_count");
+	if (wantarray) {
+		return ($total_core_count, $cores_per_socket);
+	}
+	else {
+		return $total_core_count;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_vm_cpu_limit
+
+ Parameters  : none
+ Returns     : integer
+ Description : Retrieves the maximum number of vCPUs which may be assigned to
+               the VM based on the vsmp license feature used on the host. If
+               this cannot be determined, 4 is returned.
+
+=cut
+
+sub get_vm_cpu_limit {
+	my $self = shift;
+	if (ref($self) !~ /vmware/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $default_value = 4;
+	
+	if ($self->api->can('get_license_info')) {
+		my $license_info = $self->api->get_license_info();
+		if (!$license_info) {
+			notify($ERRORS{'WARNING'}, 0, "failed to retrieve VM host license information, assuming VM CPU limit is $default_value");
+			return $default_value;
+		}
+		
+		# Get the vsmp feature from the license info
+		# There should be a key under $license_info->{properties}{feature} that looks like:
+		#    "vsmp:32" => "Up to 32-way virtual SMP"
+		#    "vsmp:4" => "Up to 4-way virtual SMP"
+		my ($vsmp_value) = map { ($_) =~ /^vsmp:(\d+)/ } keys %{$license_info->{properties}{feature}};
+		
+		if ($vsmp_value) {
+			notify($ERRORS{'DEBUG'}, 0, "retrieved VM CPU limit from host license information: $vsmp_value");
+			return $vsmp_value;
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to retrieve VM CPU limit from host license information, assuming VM CPU limit is $default_value");
+			return $default_value;
+		}
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "unable to retrieve VM host license information assuming VM CPU limit is: $default_value");
+		return $default_value;
 	}
 }
 
@@ -4910,8 +5223,8 @@ sub get_vmx_info {
 	}
 	
 	# Get the vmx file name and directory from the full path
-	($vmx_info{vmx_file_name}) = $vmx_file_path =~ /([^\/]+)$/;
-	($vmx_info{vmx_directory_path}) = $vmx_file_path =~ /(.*)\/[^\/]+$/;
+	$vmx_info{vmx_file_name} = $self->_get_file_name($vmx_file_path);
+	$vmx_info{vmx_directory_path} = $self->_get_parent_directory_normal_path($vmx_file_path);
 	
 	
 	# Check if the computer_id value exists in the vmx file
@@ -4978,7 +5291,8 @@ sub get_vmx_info {
 		
 		$vmx_info{vmdk}{$storage_identifier}{vmdk_file_path} = $vmdk_file_path;
 		delete $vmx_info{vmdk}{$storage_identifier}{filename};
-		($vmx_info{vmdk}{$storage_identifier}{vmdk_file_name}) = $vmdk_file_path =~ /([^\/]+)\.vmdk$/i;
+		$vmx_info{vmdk}{$storage_identifier}{vmdk_file_name} = $self->_get_file_name($vmdk_file_path);
+		$vmx_info{vmdk}{$storage_identifier}{vmdk_file_base_name} = $self->_get_file_base_name($vmdk_file_path);
 	}
 	
 	# Store the vmx file info so it doesn't have to be retrieved again
@@ -5102,10 +5416,12 @@ sub delete_vm {
 	notify($ERRORS{'OK'}, 0, "attempting to delete VM: $vmx_file_path");
 	delete $self->{vmx_info}{$vmx_file_path};
 	
-	# Unregister the VM
-	if ($self->is_vm_registered($vmx_file_path) && !$self->api->vm_unregister($vmx_file_path)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to unregister VM: $vmx_file_path, VM not deleted");
-		return;
+	if ($self->is_vm_registered($vmx_file_path)) {
+		# Unregister the VM
+		if (!$self->api->vm_unregister($vmx_file_path)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to unregister VM: $vmx_file_path, VM not deleted");
+			return;
+		}
 	}
 	
 	# Get the vmx info
@@ -5123,7 +5439,6 @@ sub delete_vm {
 		
 		notify($ERRORS{'OK'}, 0, "deleted VM, successfully unregistered VM but it vmx directory was not deleted because the vmx file does not exist: $vmx_file_path");
 		return 1;
-		
 	}
 	
 	my $vmx_directory_path = $vmx_info->{vmx_directory_path};
@@ -5153,15 +5468,41 @@ sub delete_vm {
 		}
 	}
 	
+	# Delete the vmdk files belonging to the VM
 	for my $storage_identifier (keys %{$vmx_info->{vmdk}}) {
-		my $vmdk_file_path = $vmx_info->{vmdk}{$storage_identifier}{vmdk_file_path};
 		my $vmdk_directory_path = $vmx_info->{vmdk}{$storage_identifier}{vmdk_directory_path};
+		if ($vmdk_directory_path eq $vmx_directory_path) {
+			notify($ERRORS{'DEBUG'}, 0, "vmdk directory matches the vmx directory path which has already been deleted: $vmdk_directory_path");
+			next;
+		}
 		
-		if ($self->is_vmdk_shared($vmdk_file_path)) {
+		# Check if the directory containing the vmdk is shared among different VMs or dedicated to the VM being deleted
+		if ($self->is_vmdk_directory_shared($vmdk_directory_path)) {
+			# Directory is shared, entire directory can't be deleted
 			notify($ERRORS{'DEBUG'}, 0, "vmdk directory will NOT be deleted because the vmdk appears to be shared");
+			
+			# Directory can't be deleted, check if individual files can be deleted
+			my $vmdk_file_path = $vmx_info->{vmdk}{$storage_identifier}{vmdk_file_path};
+			if ($self->is_vmdk_file_shared($vmdk_file_path)) {
+				notify($ERRORS{'DEBUG'}, 0, "vmdk file will NOT be deleted because the vmdk appears to be shared: $vmdk_file_path");
+			}
+			else {
+				# vmdk file not shared, can be deleted
+				# Find all files matching pattern in order to remove all files
+				# For snapshots, the vmdk will in the format:
+				#    vmwarewin7-Windows764bit1846-v3-000001.vmdk
+				# Also have to delete the delta file:
+				#    vmwarewin7-Windows764bit1846-v3-000001-delta.vmd
+				my $vmdk_file_base_name = $vmx_info->{vmdk}{$storage_identifier}{vmdk_file_base_name};
+				my $vmdk_search_path = "$vmdk_directory_path/$vmdk_file_base_name*.vmdk";
+				if (!$self->vmhost_os->delete_file($vmdk_search_path)) {
+					notify($ERRORS{'WARNING'}, 0, "failed to delete vmdk files: $vmdk_search_path");
+					return;
+				}
+			}
 		}
 		else {
-			notify($ERRORS{'DEBUG'}, 0, "vmdk does NOT appear to be shared, attempting to delete vmdk directory");
+			notify($ERRORS{'DEBUG'}, 0, "vmdk directory does NOT appear to be shared, attempting to delete directory: $vmdk_directory_path");
 			if (!$self->vmhost_os->delete_file($vmdk_directory_path)) {
 				notify($ERRORS{'WARNING'}, 0, "failed to delete vmdk directory: $vmdk_directory_path");
 				return;

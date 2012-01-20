@@ -1898,6 +1898,87 @@ sub get_total_memory {
 	return $memory_mb;
 }
 
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_license_info
+
+ Parameters  : none
+ Returns     : hash reference
+ Description : Retrieves the license information from the host. A hash reference
+               is returned:
+               {
+                 "costUnit" => "cpuPackage",
+                 "editionKey" => "esxBasic.vram",
+                 "licenseKey" => "XXXXX-XXXXX-XXXXX-XXXXX-XXXXX",
+                 "name" => "VMware vSphere 5 Hypervisor",
+                 "properties" => {
+                   "FileVersion" => "5.0.0.19",
+                   "LicenseFilePath" => [
+                     "/usr/lib/vmware/licenses/site/license-esx-50-e03-c3-t2-201006",
+                     ...
+                     "/usr/lib/vmware/licenses/site/license-esx-50-e01-v1-l0-201006"
+                   ],
+                   "ProductName" => "VMware ESX Server",
+                   "ProductVersion" => "5.0",
+                   "count_disabled" => "This license is unlimited",
+                   "feature" => {
+                     "maxRAM:32g" => "Up to 32 GB of memory",
+                     "vsmp:8" => "Up to 8-way virtual SMP"
+                   },
+                   "vram" => "32g"
+                 },
+                 "total" => 0,
+                 "used" => 2
+               }
+
+=cut
+
+sub get_license_info {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	return $self->{license_info} if $self->{license_info};
+	
+	# Get the host view
+	my $host_view = $self->_get_host_view() || return;
+
+	my $service_content = Vim::get_service_content() || return;
+	my $licenses = Vim::get_view(mo_ref => $service_content->{licenseManager})->licenses;
+	
+	my $license_info;
+	for my $license (@$licenses) {
+		$license_info->{costUnit} = $license->costUnit;
+		$license_info->{editionKey} = $license->editionKey;
+		$license_info->{licenseKey} = $license->licenseKey;
+		$license_info->{name} = $license->name;
+		$license_info->{total} = $license->total;
+		$license_info->{used} = $license->used;
+		
+		my $properties = $license->properties;
+		for my $property (@$properties) {
+			if ($property->key eq 'feature') {
+				my $feature_name = $property->value->key;
+				my $feature_description = $property->value->value;
+				$license_info->{properties}{feature}{$feature_name} = $feature_description;
+			}
+			elsif ($property->key eq 'LicenseFilePath') {
+				# Leave this out of data for now, not used anywhere, clutters display of license info
+				#push @{$license_info->{properties}{LicenseFilePath}}, $property->value;
+			}
+			else {
+				$license_info->{properties}{$property->key} = $property->value;
+			}
+		}
+	}
+	
+	$self->{license_info} = $license_info;
+	notify($ERRORS{'DEBUG'}, 0, "retrieved license info:\n" . format_data($license_info));
+	return $license_info;
+}
+
 ##############################################################################
 
 =head1 PRIVATE OBJECT METHODS
