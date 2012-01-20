@@ -692,6 +692,14 @@ INSERT IGNORE INTO resourcetype (id, name) VALUES (17, 'serverprofile');
 -- --------------------------------------------------------
 
 -- 
+-- Inserts for table `state`
+--
+
+INSERT IGNORE INTO state (id, name) VALUES (24, 'checkpoint'), (25, 'serverinuse'), (26, 'rebootsoft'), (27, 'reinstall'), (28, 'reboothard'), (29, 'servermodified');
+
+-- --------------------------------------------------------
+
+-- 
 -- Inserts for table `usergroupprivtype`
 --
 

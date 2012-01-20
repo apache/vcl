@@ -1672,7 +1672,13 @@ INSERT INTO `state` (`id`, `name`) VALUES
 (22, 'tohpc'),
 (18, 'tomaintenance'),
 (21, 'tovmhostinuse'),
-(20, 'vmhostinuse');
+(20, 'vmhostinuse'),
+(24, 'checkpoint'),
+(25, 'serverinuse'),
+(26, 'rebootsoft'),
+(27, 'reinstall'),
+(28, 'reboothard'),
+(29, 'servermodified');
 
 -- 
 -- Dumping data for table `user`
