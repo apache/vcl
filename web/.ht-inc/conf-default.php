@@ -150,6 +150,11 @@ foreach($authMechs as $key => $item) {
 		$updateUserFunc[$item['affiliationid']] = create_function('', 'return 0;');
 	}
 }
+# if adding a Shibboleth option, uncomment the following 4 lines and change '4' to match the affiliation id, create additional entries for further shibboleth affiliations
+#$affilValFunc[4] = create_function('', 'return 1;');
+#$addUserFunc[4] = 'addShibUserStub';
+#$addUserFuncArgs[4] = 4;
+#$updateUserFunc[4] = create_function('', 'return NULL;');
 
 # any affiliation that is shibboleth authenticated without a corresponding
 # LDAP server needs an entry in addUserFunc
