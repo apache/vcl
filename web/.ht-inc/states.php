@@ -177,6 +177,7 @@ $noHTMLwrappers = array('sendRDPfile',
                         'AJreinstallRequest',
                         'AJshowRequestSuggestedTimes',
                         'AJgenerateUtilData',
+                        'AJcanceltovmhostinuse',
 );
 
 # main
@@ -458,8 +459,10 @@ $actions['mode']['confirmAddComputer'] = "confirmEditOrAddComputer";
 $actions['args']['confirmAddComputer'] = 1;
 $actions['mode']['submitEditComputer'] = "submitEditComputer";
 $actions['mode']['computerAddMaintenanceNote'] = "computerAddMaintenanceNote";
+$actions['mode']['AJcanceltovmhostinuse'] = "AJcanceltovmhostinuse";
 $actions['mode']['addComputerSetVMHostProfile'] = "addComputerSetVMHostProfile";
 $actions['mode']['submitAddComputer'] = "submitAddComputer";
+$actions['mode']['submitComputerVMHostLater'] = "submitComputerVMHostLater";
 $actions['mode']['submitComputerGroups'] = "submitComputerGroups";
 $actions['mode']['confirmDeleteComputer'] = "confirmDeleteComputer";
 $actions['mode']['submitDeleteComputer'] = "submitDeleteComputer";
@@ -491,9 +494,11 @@ $actions['pages']['confirmEditComputer'] = "manageComputers";
 $actions['pages']['confirmAddComputer'] = "manageComputers";
 $actions['pages']['submitEditComputer'] = "manageComputers";
 $actions['pages']['computerAddMaintenanceNote'] = "manageComputers";
+$actions['pages']['AJcanceltovmhostinuse'] = "manageComputers";
 $actions['pages']['computerAddedMaintenceNote'] = "manageComputers";
 $actions['pages']['addComputerSetVMHostProfile'] = "manageComputers";
 $actions['pages']['submitAddComputer'] = "manageComputers";
+$actions['pages']['submitComputerVMHostLater'] = "manageComputers";
 $actions['pages']['submitComputerGroups'] = "manageComputers";
 $actions['pages']['confirmDeleteComputer'] = "manageComputers";
 $actions['pages']['submitDeleteComputer'] = "manageComputers";

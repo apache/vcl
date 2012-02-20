@@ -296,3 +296,17 @@
 .advoptions tr td {
 	text-align: left;
 }
+
+.highlightnoticewarn {
+	background-color: #ffcccc;
+	border: 2px solid #ff0000;
+	padding: 3px;
+	margin: 10px;
+}
+
+.highlightnoticenotify {
+	background-color: #ccffcc;
+	border: 2px solid #00ff00;
+	padding: 3px;
+	margin: 10px;
+}

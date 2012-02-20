@@ -65,6 +65,7 @@ function initGlobals() {
 	global $semislocked, $days, $phpVer, $keys, $pemkey, $AUTHERROR;
 	global $passwdArray, $skin, $contdata, $lastmode, $inContinuation;
 	global $totalQueries, $ERRORS, $queryTimes, $actions;
+	global $affilValFunc, $addUserFunc, $updateUserFunc;
 
 	define("SECINDAY", 86400);
 	define("SECINWEEK", 604800);
@@ -246,6 +247,19 @@ function initGlobals() {
 	   $_SESSION['dirtyprivs']) {
 		clearPrivCache();
 		$_SESSION['dirtyprivs'] = 0;
+	}
+
+	# set up $affilValFunc, $addUserFunc, $updateUserFunc for any shibonly affiliations
+	$query = "SELECT id FROM affiliation WHERE shibonly = 1";
+	$qh = doQuery($query);
+	while($row = mysql_fetch_assoc($qh)) {
+		$id = $row['id'];
+		if(! array_key_exists($id, $affilValFunc))
+			$affilValFunc[$id] = create_function('', 'return 0;');
+		if(! array_key_exists($id, $addUserFunc))
+			$addUserFunc[$id] = create_function('', 'return 0;');
+		if(! array_key_exists($id, $updateUserFunc))
+			$updateUserFunc[$id] = create_function('', 'return NULL;');
 	}
 
 	// get the semaphore id
@@ -543,9 +557,31 @@ function maintenanceCheck() {
 	$reg = "|" . SCRIPT . "$|";
 	$search = preg_replace($reg, '', $_SERVER['SCRIPT_FILENAME']);
 	$search .= "/.ht-inc/maintenance/";
-	$files = glob("$search*");
+	$files = glob("{$search}[0-9]*");
 	if(! is_array($files))
 		return;
+	if(empty($files)) {
+		dbConnect();
+		$query = "SELECT id "
+		       . "FROM sitemaintenance "
+		       . "WHERE start <= NOW() AND "
+		       .       "end > NOW()";
+		$qh = doQuery($query);
+		$ids = array();
+		while($row = mysql_fetch_assoc($qh))
+			$ids[] = $row['id'];
+		if(empty($ids)) {
+			dbDisconnect();
+			return;
+		}
+		$allids = implode(',', $ids);
+		$query = "UPDATE sitemaintenance "
+		       . "SET end = NOW() "
+		       . "WHERE id IN ($allids)";
+		doQuery($query, 101, 'vcl', 1);
+		dbDisconnect();
+		return;
+	}  
 	$inmaintenance = 0;
 	foreach($files as $file) {
 		if(! preg_match("|^$search([0-9]{4})([0-9]{2})([0-9]{2})([0-9]{2})([0-9]{2})$|", $file, $matches))
@@ -607,7 +643,7 @@ function maintenanceCheck() {
 ///
 /// \fn maintenanceNotice()
 ///
-/// \brief checks nformhoursahead for upcoming maintenance items and prints
+/// \brief checks informhoursahead for upcoming maintenance items and prints
 /// message about upcoming maintenance if currently within warning window
 ///
 ////////////////////////////////////////////////////////////////////////////////
@@ -883,13 +919,6 @@ function validateUserid($loginid) {
 	$qh = doQuery($query, 101);
 	if(mysql_num_rows($qh))
 		return 1;
-	
-	$query = "SELECT shibonly FROM affiliation WHERE id = $affilid";
-	$qh = doQuery($query, 101);
-	if(! $row = mysql_fetch_assoc($qh))
-		return 0;
-	if($row['shibonly'] == 1)
-		return 0;
 
 	$valfunc = $affilValFunc[$affilid];
 	if(array_key_exists($affilid, $affilValFuncArgs))
@@ -5025,6 +5054,45 @@ function moveReservationsOffComputer($compid=0, $count=0) {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
+/// \fn getCompFinalReservationTime($compid)
+///
+/// \param $compid - a computer id
+///
+/// \return unix timestamp of last end time of any reservations for $compid
+///
+/// \brief determines the final end time of all reservations on a computer
+///
+////////////////////////////////////////////////////////////////////////////////
+function getCompFinalReservationTime($compid) {
+	$end = 0;
+	$query = "SELECT UNIX_TIMESTAMP(rq.end) as end "
+	       . "FROM request rq, "
+	       .      "reservation rs "
+	       . "WHERE rs.requestid = rq.id AND "
+	       .       "rs.computerid = $compid AND "
+	       .       "rq.stateid NOT IN (1,5,12) "
+	       . "ORDER BY rq.end DESC "
+	       . "LIMIT 1";
+	$qh = doQuery($query, 101);
+	if($row = mysql_fetch_assoc($qh))
+		$end = $row['end'];
+	$query = "SELECT UNIX_TIMESTAMP(t.end) as end "
+	       . "FROM blockComputers c, "
+	       .      "blockTimes t "
+	       . "WHERE c.computerid = $compid AND "
+	       .       "c.blockTimeid = t.id AND "
+	       .       "t.end > NOW() "
+	       . "ORDER BY t.end DESC "
+	       . "LIMIT 1";
+	$qh = doQuery($query, 101);
+	if($row = mysql_fetch_assoc($qh))
+		if($row['end'] > $end)
+			$end = $row['end'];
+	return $end;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
 /// \fn getUserRequests($type, $id)
 ///
 /// \param $type - "normal", "forimaging", or "all"
@@ -6937,7 +7005,8 @@ function sortAvailableTimesByStart($a, $b) {
 /// \b resourceid - computer's resource id from the resource table\n
 /// \b location - computer's location\n
 /// \b provisioningid - id of provisioning engine\n
-/// \b provisioning - pretty name of provisioning engine
+/// \b provisioning - pretty name of provisioning engine\n
+/// \b vmprofileid - if vmhost, id of vmprofile
 /// need to be used to manage computer
 ///
 /// \brief builds an array of computers
@@ -6977,7 +7046,8 @@ function getComputers($sort=0, $includedeleted=0, $compid="") {
 	       .        "c2.hostname AS vmhost, "
 	       .        "c.location, "
 	       .        "c.provisioningid, "
-	       .        "pr.prettyname AS provisioning "
+	       .        "pr.prettyname AS provisioning, "
+	       .        "vh.vmprofileid "
 	       . "FROM state st, "
 	       .      "platform p, "
 	       .      "schedule sc, "
@@ -6987,7 +7057,7 @@ function getComputers($sort=0, $includedeleted=0, $compid="") {
 	       .      "user u, "
 	       .      "affiliation a, "
 	       .      "computer c "
-	       . "LEFT JOIN vmhost vh ON (c.vmhostid = vh.id) "
+	       . "LEFT JOIN vmhost vh ON (c.id = vh.computerid) "
 	       . "LEFT JOIN vmtype vt ON (c.vmtypeid = vt.id) "
 	       . "LEFT JOIN computer c2 ON (c2.id = vh.computerid) "
 	       . "LEFT JOIN image next ON (c.nextimageid = next.id) "
@@ -9049,6 +9119,7 @@ function generateString($length=8) {
 /// \return an array of profiles where each key is the profile id and each 
 /// element is an array with these keys:\n
 /// \b profilename - name of profile\n
+/// \b name - name of profile (so array can be passed to printSelectInput)\n
 /// \b type - name of vm type\n
 /// \b typeid - id of vm type\n
 /// \b image - name of image used for this profile\n
@@ -9069,6 +9140,7 @@ function generateString($length=8) {
 function getVMProfiles($id="") {
 	$query = "SELECT vp.id, "
 	       .        "vp.profilename, "
+	       .        "vp.profilename AS name, "
 	       .        "vt.name AS type, "
 	       .        "vp.vmtypeid, "
 	       .        "i.prettyname AS image, "
@@ -10290,6 +10362,8 @@ function getDojoHTML($refresh) {
 		case 'confirmAddBulkComputers':
 			$dojoRequires = array('dojo.parser',
 			                      'dijit.form.Select',
+			                      'dijit.form.Button',
+			                      'dijit.Dialog',
 			                      'dijit.form.NumberSpinner');
 			break;
 		case 'computerUtilities':

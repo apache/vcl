@@ -286,6 +286,7 @@ function updateLDAPUser($authtype, $userid) {
 /// \b first - first name of user (escaped with mysql_real_escape_string)\n
 /// \b last - last name of user (escaped with mysql_real_escape_string)\n
 /// \b email - email address of user (escaped with mysql_real_escape_string)\n
+/// \b emailnotices - 0 or 1, whether or not emails should be sent to user\n
 /// \b numericid - numeric id of user if $authtype is configured to include it
 ///
 /// \brief gets user information from ldap

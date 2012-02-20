@@ -46,6 +46,8 @@ define("MACADDRERR", 1 << 10);
 define("VMAVAILERR", 1 << 11);
 /// signifies an error with the submitted private mac address
 define("MACADDRERR2", 1 << 12);
+/// signifies an error about moving node to vmhostinuse state
+define("VMHOSTINUSEERR", 1 << 13);
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
@@ -279,7 +281,7 @@ function viewComputers($showall=0) {
 		print "<H2>Computers</H2>\n";
 	elseif($mode == "submitEditComputer" || $mode == "computerAddedMaintenceNote") {
 		print "<H2>Edit Computer</H2>\n";
-		print "<font color=\"#008000\">computer successfully updated</font>\n";
+		print "<font color=\"#008000\">computer successfully updated</font><br><br>\n";
 	}
 	elseif($mode == "submitDeleteComputer") {
 		print "<H2>Delete Computer</H2>\n";
@@ -512,7 +514,7 @@ function addComputerPrompt() {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function editOrAddComputer($state) {
-	global $submitErr;
+	global $submitErr, $submitErrMsg;
 	$data2 = processComputerInput2();
 
 	$computers = getComputers();
@@ -542,6 +544,7 @@ function editOrAddComputer($state) {
 		$data["computergroup"] = array();
 		$data["provisioningid"] = '';
 		$data["location"] = '';
+		$data["vmprofileid"] = '';
 	}
 	else {
 		$data["compid"] = getContinuationVar("compid");
@@ -564,6 +567,7 @@ function editOrAddComputer($state) {
 		$data["notes"] = $computers[$id]["notes"];
 		$data["provisioningid"] = $computers[$id]["provisioningid"];
 		$data["location"] = $computers[$id]["location"];
+		$data["vmprofileid"] = $computers[$id]['vmprofileid'];
 	}
 	
 	$tmpstates = getStates();
@@ -574,14 +578,34 @@ function editOrAddComputer($state) {
 		else
 			$states = array($data["stateid"] => $tmpstates[$data["stateid"]],
 			                2 => "available",
-			                10 => "maintenance");
+			                10 => "maintenance",
+			                20 => "vmhostinuse");
 	}
-	else {
+	else
 		$states = array(2 => "available",
-		                10 => "maintenance");
+		                10 => "maintenance",
+		                20 => "vmhostinuse");
+	# check for reservation to move computer to vmhostinuse
+	$tovmhostinuse = 0;
+	if($state == 0 && $computers[$data['compid']]['stateid'] != 20) {
+		$query = "SELECT UNIX_TIMESTAMP(rq.start) AS start "
+		       . "FROM request rq, "
+		       .      "reservation rs, "
+		       .      "state ls, "
+		       .      "state cs "
+		       . "WHERE rs.requestid = rq.id AND "
+		       .       "rs.computerid = {$data['compid']} AND "
+		       .       "rq.laststateid = ls.id AND "
+		       .       "rq.stateid = cs.id AND "
+		       .       "ls.name = 'tovmhostinuse' AND "
+		       .       "cs.name NOT IN ('failed', 'maintenance', 'complete', 'deleted') AND "
+		       .       "rq.end > NOW() "
+		       . "ORDER BY rq.start "
+		       . "LIMIT 1";
+		$qh = doQuery($query);
+		if($row = mysql_fetch_assoc($qh))
+			$tovmhostinuse = $row['start'];
 	}
-	if($state)
-		$states[20] = 'vmhostinuse';
 	print "<script type=\"text/javascript\">\n";
 	$tmp = array();
 	foreach($states as $id => $val)
@@ -589,11 +613,13 @@ function editOrAddComputer($state) {
 	print "var allowedstates = [";
 	print implode(',', $tmp);
 	print "];\n";
+	$data2['states'] = $states;
 	$platforms = getPlatforms();
 	$tmp = getUserResources(array("scheduleAdmin"), array("manageGroup"));
 	$schedules = $tmp["schedule"];
 	$allschedules = getSchedules();
 	$images = getImages();
+	$profiles = getVMProfiles();
 	$provisioning = getProvisioning();
 	$showprovisioning = array();
 	$allowedprovisioning = array();
@@ -603,7 +629,7 @@ function editOrAddComputer($state) {
 			if($data['type'] == 'lab')
 				$showprovisioning[$id] = $val['prettyname'];
 		}
-		elseif(preg_match('/^xcat/', $val['name'])) {
+		elseif(preg_match('/^xcat/', $val['name']) || $val['name'] == 'none') {
 			$allowedprovisioning['blade'][] = array('id' => $id, 'name' => $val['prettyname']);
 			if($data['type'] == 'blade')
 				$showprovisioning[$id] = $val['prettyname'];
@@ -625,6 +651,28 @@ function editOrAddComputer($state) {
 	}
 	else {
 		print "<H2>Edit Computer</H2>\n";
+		if($tovmhostinuse) {
+			print "<div class=\"highlightnoticewarn\" id=\"cancelvmhostinusediv\">\n";
+			$nicestart = date('g:i A \o\n l, F jS, Y', $tovmhostinuse);
+			if($tovmhostinuse > time())
+				print "NOTICE: This computer is scheduled to start being reloaded as a vmhost at $nicestart. You may cancel this scheduled reload by clicking the button below.<br><br>\n";
+			else
+				print "NOTICE: This computer is currently being reloaded as a vmhost. You may cancel this process by clicking on the button below. After canceling the reload, it may take several minutes for the cancellation process to complete.<br><br>\n";
+			print "<button dojoType=\"dijit.form.Button\">\n";
+			print "	Cancel Scheduled Reload\n";
+			print "	<script type=\"dojo/method\" event=onClick>\n";
+			$cdata = array('compid' => $data['compid']);
+			$cont = addContinuationsEntry('AJcanceltovmhostinuse', $cdata, 300, 1, 0);
+			print "		cancelScheduledtovmhostinuse('$cont');\n";
+			print "	</script>\n";
+			print "</button>\n";
+			print "</div>\n";
+		}
+	}
+	if($submitErr & VMHOSTINUSEERR) {
+		print "<div class=\"highlightnoticewarn\">\n";
+		print $submitErrMsg[VMHOSTINUSEERR];
+		print "</div>\n";
 	}
 	print "<FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
 	print "<TABLE>\n";
@@ -640,7 +688,7 @@ function editOrAddComputer($state) {
 	print "    <TH align=right>Type:</TH>\n";
 	print "    <TD>\n";
 	$tmpArr = array("blade" => "blade", "lab" => "lab", "virtualmachine" => "virtualmachine");
-	printSelectInput('type', $tmpArr, $data['type'], 0, 0, 'type', 'dojoType="dijit.form.Select" onChange="editComputerSelectType();"');
+	printSelectInput('type', $tmpArr, $data['type'], 0, 0, 'type', 'dojoType="dijit.form.Select" onChange="editComputerSelectType(0);"');
 	print "    </TD>\n";
 	print "  </TR>\n";
 	print "  <TR>\n";
@@ -678,11 +726,23 @@ function editOrAddComputer($state) {
 	print "  <TR>\n";
 	print "    <TH align=right>State:</TH>\n";
 	print "    <TD>\n";
-	printSelectInput('stateid', $states, $data['stateid'], 0, 0, 'stateid', 'dojoType="dijit.form.Select"');
+	if($state == 1 || ($state == 0 && $computers[$data['compid']]['provisioning'] == 'None'))
+		unset_by_val('available', $states);
+	printSelectInput('stateid', $states, $data['stateid'], 0, 0, 'stateid', 'dojoType="dijit.form.Select" onChange="editComputerSelectState();"');
 	print "    </TD>\n";
 	print "    <TD>";
 	printSubmitErr(VMAVAILERR);
 	print "</TD>\n";
+	print "  </TR>\n";
+	if($data['stateid'] == 20)
+		print "  <TR id=\"vmhostprofiletr\">\n";
+	else
+		print "  <TR id=\"vmhostprofiletr\" class=\"hidden\">\n";
+	print "    <TH align=right>VM Host Profile:</TH>\n";
+	print "    <TD>\n";
+	printSelectInput("vmprofileid", $profiles, $data["vmprofileid"], 0, 0, 'vmprofileid', 'dojoType="dijit.form.Select"');
+	print "    </TD>\n";
+	print "    <TD></TD>\n";
 	print "  </TR>\n";
 	print "  <TR>\n";
 	print "    <TH align=right>Owner*:</TH>\n";
@@ -763,7 +823,7 @@ function editOrAddComputer($state) {
 	print "  <TR>\n";
 	print "    <TH align=right>Provisioning Engine:</TH>\n";
 	print "    <TD>\n";
-	printSelectInput("provisioningid", $showprovisioning, $data["provisioningid"], 0, 0, 'provisioningid', 'dojoType="dijit.form.Select"');
+	printSelectInput("provisioningid", $showprovisioning, $data["provisioningid"], 0, 0, 'provisioningid', 'dojoType="dijit.form.Select" onChange="editComputerSelectType(1);"');
 	print "    </TD>\n";
 	print "  </TR>\n";
 	print "  <TR>\n";
@@ -778,7 +838,7 @@ function editOrAddComputer($state) {
 	print "</TABLE>\n";
 	if($state) {
 		$tmp = getUserResources(array("computerAdmin"),
-										array("manageGroup"), 1);
+		                        array("manageGroup"), 1);
 		$computergroups = $tmp["computer"];
 		uasort($computergroups, "sortKeepIndex");
 		print "<H3>Computer Groups</H3>";
@@ -805,7 +865,7 @@ function editOrAddComputer($state) {
 	print "<TABLE>\n";
 	print "  <TR valign=top>\n";
 	print "    <TD>\n";
-	$data2['states'] = $states;
+	$data2['provisioning'] = $provisioning;
 	if($state) {
 		$cont = addContinuationsEntry('confirmAddComputer', $data2, SECINDAY, 0, 1, 1);
 		print "      <INPUT type=submit value=\"Confirm Computer\">\n";
@@ -813,6 +873,10 @@ function editOrAddComputer($state) {
 	else {
 		$data2['currentimgid'] = $data['currentimgid'];
 		$data2['compid'] = $data['compid'];
+		if($submitErr & VMHOSTINUSEERR)
+			$data2['allowvmhostinuse'] = 1;
+		else
+			$data2['allowvmhostinuse'] = 0;
 		$cont = addContinuationsEntry('confirmEditComputer', $data2, SECINDAY, 0);
 		print "      <INPUT type=submit value=\"Confirm Changes\">\n";
 	}
@@ -840,7 +904,7 @@ function editOrAddComputer($state) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function confirmEditOrAddComputer($state) {
-	global $submitErr;
+	global $submitErr, $submitErrMsg;
 
 	$data = processComputerInput();
 
@@ -849,12 +913,42 @@ function confirmEditOrAddComputer($state) {
 		return;
 	}
 
+	$warnend = '';
+	if($state == 0) {
+		$data['reloadstart'] = 0;
+		$compdata = getComputers(0, 0, $data['compid']);
+		if($data['stateid'] == 20 &&
+			$compdata[$data['compid']]['stateid'] != 20) {
+			$compid = $data['compid'];
+			$end = 0;
+			moveReservationsOffComputer($compid);
+			# get end time of last reservation
+			$end = getCompFinalReservationTime($compid);
+			$data['reloadstart'] = $end;
+			$allowvmhostinuse = getContinuationVar('allowvmhostinuse', 0);
+			if($end && ! $allowvmhostinuse) {
+				$submitErr |= VMHOSTINUSEERR;
+				$end = date('n/j/y g:i a', $end);
+				if($data['deploymode'] == 1)
+					$submitErrMsg[VMHOSTINUSEERR] = "This node currently has reservations that will not end until $end. Clicking Confirm Changes again will cause this node to be reloaded as a vmhost at $end.";
+				else
+					$submitErrMsg[VMHOSTINUSEERR] = "This computer is currently allocated until $end and cannot be converted to a VM host until then. Clicking Confirm Changes again will cause the computer to be placed into the maintenance state at $end.  VCL will then prevent it from being used beyond $end. Confirming changes will do that now, or you can simply try this process again after $end. If you schedule it to be placed into maintenance, you will still need to edit this computer again to change it to the vmhostinuse state sometime after $end.<br>\n";
+				editOrAddComputer(0);
+				return;
+			}
+			if($end)
+				$warnend = date('n/j/y g:i a', $end);
+		}
+	}
+
 	if($state) {
 		$data["currentimgid"] = "";
 		$data["compid"] = "";
 		$nextmode = "submitAddComputer";
 		$title = "Add Computer";
 		$question = "Submit the following new computer?";
+		if($data['stateid'] != '20')
+			$data['vmprofileid'] = '';
 	}
 	else {
 		if($data['type'] == 'virtualmachine')
@@ -866,6 +960,14 @@ function confirmEditOrAddComputer($state) {
 
 	print "<H2>$title</H2>\n";
 	print "<H3>$question</H3>\n";
+	if(! $state && ! empty($warnend)) {
+		print "<div class=\"highlightnoticewarn\">\n";
+		if($data['deploymode'] == 1)
+			print "Clicking Submit will cause a reservation to be created to deploy this node as a VM Host at $warnend. It will remain in the current state until that time.\n";
+		else
+			print "Clicking Submit will cause a reservation to be created to place this node in the maintenance state at $warnend. It will remain in the current state until that time.\n";
+		print "</div>\n";
+	}
 	printComputerInfo($data["pripaddress"],
 	                  $data["ipaddress"],
 	                  $data["eth0macaddress"],
@@ -883,7 +985,9 @@ function confirmEditOrAddComputer($state) {
 	                  $data["compid"],
 	                  $data["type"],
 	                  $data["provisioningid"],
-	                  $data["location"]);
+	                  $data["location"],
+	                  $data["vmprofileid"],
+	                  $data["deploymode"]);
 	if($state) {
 		$tmp = getUserResources(array("computerAdmin"),
 		                        array("manageGroup"), 1);
@@ -917,8 +1021,10 @@ function confirmEditOrAddComputer($state) {
 		$cont = addContinuationsEntry('computerAddMaintenanceNote', $data, SECINDAY, 0);
 	elseif($state && $data['stateid'] == 20)
 		$cont = addContinuationsEntry('addComputerSetVMHostProfile', $data, SECINDAY, 0);
-	else
+	else {
+		$data['provisioning'] = getContinuationVar('provisioning');
 		$cont = addContinuationsEntry($nextmode, $data, SECINDAY, 0, 0);
+	}
 	print "      <INPUT type=hidden name=continuation value=\"$cont\">\n";
 	print "      <INPUT type=submit value=Submit>\n";
 	print "      </FORM>\n";
@@ -945,16 +1051,18 @@ function submitEditComputer() {
 	global $mode, $user;
 	$data = processComputerInput();
 	$compdata = getComputers(0, 0, $data["compid"]);
+	$compid = $data['compid'];
+	$profileid = $data['vmprofileid'];
 	# maintenance to maintenance
-	if($compdata[$data["compid"]]["stateid"] == 10 &&
+	if($compdata[$compid]["stateid"] == 10 &&
 	   $data["stateid"] == 10) {
 		// possibly update notes with new text
-		$testdata = explode('@', $compdata[$data["compid"]]["notes"]);
+		$testdata = explode('@', $compdata[$compid]["notes"]);
 		if(count($testdata) != 2)
 			$testdata[1] = "";
 		if($testdata[1] == $data["notes"]) 
 			// don't update the notes field
-			$data["notes"] = $compdata[$data["compid"]]["notes"];
+			$data["notes"] = $compdata[$compid]["notes"];
 		else {
 			if(get_magic_quotes_gpc())
 				$data['notes'] = stripslashes($data['notes']);
@@ -965,8 +1073,8 @@ function submitEditComputer() {
 		}
 	}
 	# available or failed to maintenance
-	if(($compdata[$data["compid"]]["stateid"] == 2 ||
-	   $compdata[$data["compid"]]["stateid"] == 5) &&
+	elseif(($compdata[$compid]["stateid"] == 2 ||
+	   $compdata[$compid]["stateid"] == 5) &&
 	   $data["stateid"] == 10) {
 		// set notes to new data
 		if(get_magic_quotes_gpc())
@@ -976,10 +1084,313 @@ function submitEditComputer() {
 		               . $data["notes"];
 	}
 	# maintenance or failed to available
-	if(($compdata[$data["compid"]]["stateid"] == 10 ||
-	   $compdata[$data["compid"]]["stateid"] == 5) &&
+	elseif(($compdata[$compid]["stateid"] == 10 ||
+	   $compdata[$compid]["stateid"] == 5) &&
 	   $data["stateid"] == 2) {
 		$data["notes"] = "";
+	}
+	# anything to vmhostinuse
+	elseif($compdata[$compid]["stateid"] != 20 && $data["stateid"] == 20) {
+		$data["notes"] = "";
+		moveReservationsOffComputer($compid);
+		$knownreloadstart = getContinuationVar('reloadstart');
+		$delayed = 0;
+		# get end time of last reservation
+		$reloadstart = getCompFinalReservationTime($compid);
+		if($data['deploymode'] == 1) {
+			# VCL deployed
+			if($reloadstart > 0 && $knownreloadstart == 0) {
+				print "<H2>Edit Computer</H2>\n";
+				$end = date('n/j/y g:i a', $reloadstart);
+				unset($data['stateid']);
+				$cnt = updateComputer($data);
+				if($cnt) {
+					print "Changes to this computer's information were successfully ";
+					print "saved. However, this ";
+				}
+				else
+					print "This ";
+				print "computer is currently allocated until $end. So, it cannot ";
+				print "be converted to a VM host server until then. Do you ";
+				print "want to schedule VCL to convert it to a VM host server at ";
+				print "$end, or wait and initiate this process again later?<br><br>\n";
+				print "<table>\n";
+				print "  <tr>\n";
+				print "    <td>\n";
+				print "      <form action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
+				$cdata = $data;
+				$cdata['maintenanceonly'] = 0;
+				$cdata['scheduletime'] = $reloadstart;
+				$cont = addContinuationsEntry('submitComputerVMHostLater', $cdata, SECINDAY, 1, 0);
+				print "      <input type=hidden name=continuation value=\"$cont\">\n";
+				print "      <input type=submit value=\"Schedule Later Conversion\">\n";
+				print "      </form>\n";
+				print "    </td>\n";
+				print "    <td>\n";
+				print "      <form action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
+				$cont = addContinuationsEntry('viewComputers', $data);
+				print "      <input type=hidden name=continuation value=\"$cont\">\n";
+				print "      <input type=submit value=\"Cancel and Initiate Later\">\n";
+				print "      </form>\n";
+				print "    </td>\n";
+				print "  </tr>\n";
+				print "</table>\n";
+				return;
+			}
+			else {
+				# change to vmhostinuse state
+				# create a reload reservation to load machine with image
+				#   corresponding to selected vm profile
+				$vclreloadid = getUserlistID('vclreload@Local');
+				$profiles = getVMProfiles();
+				$imagerevisionid = getProductionRevisionid($profiles[$profileid]['imageid']);
+				if($reloadstart)
+					$start = $reloadstart;
+				else
+					$start = getReloadStartTime();
+				$end = $start + SECINYEAR; # don't want anyone making a future reservation for this machine
+				$start = unixToDatetime($start);
+				$end = unixToDatetime($end);
+				unset($data['stateid']);
+				if(! (simpleAddRequest($compid, $profiles[$profileid]['imageid'],
+				                    $imagerevisionid, $start, $end, 21, $vclreloadid))) {
+					$cnt = updateComputer($data);
+					print "<H2>Edit Computer</H2>\n";
+					print "An error was encountered while trying to convert this ";
+					print "computer to a VM host server.<br><br>\n";
+					if($cnt) {
+						print "Other changes you made to this computer's information ";
+						print "were saved successfully.<br>\n";
+					}
+					return;
+				}
+
+				# check for existing vmhost entry
+				$query = "SELECT id, "
+				       .        "vmprofileid "
+				       . "FROM vmhost "
+				       . "WHERE computerid = $compid";
+				$qh = doQuery($query, 101);
+				if($row = mysql_fetch_assoc($qh)) {
+					if($row['vmprofileid'] != $profileid) {
+						# update vmprofile
+						$query = "UPDATE vmhost "
+						       . "SET vmprofileid = $profileid "
+						       . "WHERE id = {$row['id']}";
+						doQuery($query, 101);
+					}
+				}
+				else {
+					# create vmhost entry
+					$query = "INSERT INTO vmhost "
+					       .        "(computerid, "
+					       .        "vmlimit, "
+					       .        "vmprofileid) "
+					       . "VALUES ($compid, "
+					       .        "2, "
+					       .        "$profileid)";
+					doQuery($query, 101);
+				}
+
+				if($knownreloadstart > 0 && $reloadstart > $knownreloadstart) {
+					print "<H2>Edit Computer</H2>\n";
+					$end = date('n/j/y g:i a', $reloadstart);
+					unset($data['stateid']);
+					$cnt = updateComputer($data);
+					if($cnt) {
+						print "Changes to this computer's information were successfully ";
+						print "saved.<br><br>\n";
+					}
+					print "Reload reservation successfully created.<br><br>\n";
+					print "<strong>NOTE: The end of the last reservation for the computer changed ";
+					print "from the previous page. The computer will now be ";
+					print "reloaded at $end.</strong>";
+					return;
+				}
+			}
+		}
+		else {
+			# manually installed
+			if($reloadstart > 0 && $knownreloadstart == 0) {
+				# notify that need to try after $reloadstart
+				$end = date('n/j/y g:i a', $reloadstart);
+				print "<H2>Edit Computer</H2>\n";
+				unset($data['stateid']);
+				$cnt = updateComputer($data);
+				if($cnt) {
+					print "Changes to this computer's information were successfully ";
+					print "saved. However, this ";
+				}
+				else
+					print "This ";
+				print "computer is currently allocated until $end and cannot ";
+				print "be converted to a VM host until then. If you schedule the ";
+				print "computer to be placed into the maintenance state at $end, ";
+				print "VCL will prevent it from being used beyond $end. You can ";
+				print "select to do that now, or you can simply try this process ";
+				print "again after $end. If you schedule it to be placed into ";
+				print "maintenance, you will still need to edit this computer again ";
+				print "to change it to the vmhostinuse state sometime after $end.<br><br>\n";
+				print "<table>\n";
+				print "  <tr>\n";
+				print "    <td>\n";
+				print "      <form action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
+				$cdata = $data;
+				$cdata['maintenanceonly'] = 1;
+				$cdata['scheduletime'] = $reloadstart;
+				$cont = addContinuationsEntry('submitComputerVMHostLater', $cdata, SECINDAY, 1, 0);
+				print "      <input type=hidden name=continuation value=\"$cont\">\n";
+				print "      <input type=submit value=\"Schedule Maintenance State\">\n";
+				print "      </form>\n";
+				print "    </td>\n";
+				print "    <td>\n";
+				print "      <form action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
+				$cont = addContinuationsEntry('viewComputers', $data);
+				print "      <input type=hidden name=continuation value=\"$cont\">\n";
+				print "      <input type=submit value=\"Cancel and Initiate Later\">\n";
+				print "      </form>\n";
+				print "    </td>\n";
+				print "  </tr>\n";
+				print "</table>\n";
+				return;
+			}
+			elseif($reloadstart > 0) {
+				$vclreloadid = getUserlistID('vclreload@Local');
+				$end = $reloadstart + SECINYEAR; # don't want anyone making a future reservation for this machine
+				$startdt = unixToDatetime($reloadstart);
+				$enddt = unixToDatetime($end);
+				$imageid = getImageId('noimage');
+				$imagerevisionid = getProductionRevisionid($imageid);
+				if(! (simpleAddRequest($compid, $imageid, $imagerevisionid, $startdt, $enddt,
+				                       18, $vclreloadid))) {
+					unset($data['stateid']);
+					$cnt = updateComputer($data);
+					print "<H2>Edit Computer</H2>\n";
+					print "An error was encountered while trying to convert this ";
+					print "computer to a VM host server.<br><br>\n";
+					if($cnt) {
+						print "Other changes you made to this computer's information ";
+						print "were saved successfully.<br>\n";
+					}
+					return;
+				}
+				print "<H2>Edit Computer</H2>\n";
+				$end = date('n/j/y g:i a', $reloadstart);
+				unset($data['stateid']);
+				$cnt = updateComputer($data);
+				if($cnt) {
+					print "Changes to this computer's information were successfully ";
+					print "saved.<br><br>\n";
+				}
+				print "Maintenance reservation successfully created.<br><br>\n";
+				if($reloadstart > $knownreloadstart) {
+					print "<strong>NOTE: The end of the last reservation for the computer changed ";
+					print "from the previous page. The computer will now be ";
+					print "placed into the maintenance state at $end.</strong>";
+				}
+				return;
+			}
+			else {
+				# set to vmhostinuse
+				# check for existing vmhost entry
+				$query = "SELECT id, "
+				       .        "vmprofileid "
+				       . "FROM vmhost "
+				       . "WHERE computerid = $compid";
+				$qh = doQuery($query, 101);
+				if($row = mysql_fetch_assoc($qh)) {
+					if($row['vmprofileid'] != $profileid) {
+						# update vmprofile
+						$query = "UPDATE vmhost "
+						       . "SET vmprofileid = $profileid "
+						       . "WHERE id = {$row['id']}";
+						doQuery($query, 101);
+					}
+				}
+				else {
+					# create vmhost entry
+					$query = "INSERT INTO vmhost "
+					       .        "(computerid, "
+					       .        "vmlimit, "
+					       .        "vmprofileid) "
+					       . "VALUES ($compid, "
+					       .        "2, "
+					       .        "$profileid)";
+					doQuery($query, 101);
+				}
+				if($reloadstart == 0 && $knownreloadstart > 0) {
+					print "<H2>Edit Computer</H2>\n";
+					$cnt = updateComputer($data);
+					if($cnt) {
+						print "Changes to this computer's information were successfully ";
+						print "saved.<br><br>\n";
+					}
+					print "<strong>NOTE: Reservations for this computer completed since the previous page. The computer has now been placed into the vmhostinuse state.</strong>\n";
+					return;
+				}
+			}
+		}
+	}
+	elseif($compdata[$compid]["stateid"] == 20 && $data["stateid"] == 20 &&
+	      ($profileid != $compdata[$compid]['vmprofileid'])) {
+		# check for assigned VMs
+		$query = "SELECT COUNT(c.id) AS cnt "
+		       . "FROM computer c, "
+		       .      "vmhost v "
+		       . "WHERE v.computerid = $compid AND "
+		       .       "c.vmhostid = v.id";
+		$qh = doQuery($query);
+		$row = mysql_fetch_assoc($qh);
+		if($row['cnt'] > 0) {
+			print "<H2>Edit Computer</H2>\n";
+			unset($data['stateid']);
+			$cnt = updateComputer($data);
+			if($cnt) {
+				print "Changes to this computer's information were successfully ";
+				print "saved. However, there ";
+			}
+			else
+				print "There ";
+			print "are currently VMs assigned to this VM host. You must remove ";
+			print "all VMs from the host before changing it to a different VM Host ";
+			print "Profile.\n";
+			return;
+		}
+		if($data['deploymode'] == 1) {
+			# reload with new profile
+			$vclreloadid = getUserlistID('vclreload@Local');
+			$profiles = getVMProfiles();
+			$imagerevisionid = getProductionRevisionid($profiles[$profileid]['imageid']);
+			$start = getReloadStartTime();
+			$end = $start + SECINYEAR; # don't want anyone making a future reservation for this machine
+			$start = unixToDatetime($start);
+			$end = unixToDatetime($end);
+			if(! (simpleAddRequest($compid, $profiles[$profileid]['imageid'],
+			      $imagerevisionid, $start, $end, 21, $vclreloadid))) {
+				unset($data['stateid']);
+				$cnt = updateComputer($data);
+				print "<H2>Edit Computer</H2>\n";
+				print "An error was encountered while trying to convert this ";
+				print "computer to the new VM Host Profile.<br><br>\n";
+				if($cnt) {
+					print "Other changes you made to this computer's information ";
+					print "were saved successfully.<br>\n";
+				}
+				return;
+			}
+			# set computer to reserved state
+			$query = "UPDATE computer "
+			       . "SET stateid = (SELECT id "
+			       .                "FROM state "
+			       .                "WHERE name = 'reserved') "
+			       . "WHERE id = $compid";
+			doQuery($query);
+		}
+		# update vmprofile
+		$query = "UPDATE vmhost "
+				 . "SET vmprofileid = $profileid "
+				 . "WHERE id = {$row['id']}";
+		doQuery($query, 101);
 	}
 	updateComputer($data);
 	viewComputers();
@@ -1021,6 +1432,70 @@ function computerAddMaintenanceNote() {
 	print "  </TR>\n";
 	print "</TABLE>\n";
 }
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn AJcanceltovmhostinuse()
+///
+/// \brief cancels any reservations to place the computer in the vmhostinuse
+/// state
+///
+////////////////////////////////////////////////////////////////////////////////
+function AJcanceltovmhostinuse() {
+	global $mysql_link_vcl;
+	$compid = getContinuationVar('compid');
+	$type = 'none';
+	$query = "DELETE FROM request "
+	       . "WHERE start > NOW() AND "
+	       .       "stateid = 21 AND "
+	       .       "id IN (SELECT requestid "
+	       .              "FROM reservation "
+	       .              "WHERE computerid = $compid)";
+	doQuery($query);
+	if(mysql_affected_rows($mysql_link_vcl))
+		$type = 'future';
+	$query = "UPDATE request rq, "
+	       .         "reservation rs, "
+	       .         "state ls "
+	       . "SET rq.stateid = 1 "
+	       . "WHERE rs.requestid = rq.id AND "
+	       .       "rs.computerid = $compid AND "
+	       .       "rq.start <= NOW() AND "
+	       .       "rq.laststateid = ls.id AND "
+	       .       "ls.name = 'tovmhostinuse'";
+	doQuery($query);
+	if(mysql_affected_rows($mysql_link_vcl))
+		$type = 'current';
+	$query = "SELECT rq.start "
+	       . "FROM request rq, "
+	       .      "reservation rs, "
+	       .      "state ls, "
+	       .      "state cs "
+	       . "WHERE rs.requestid = rq.id AND "
+	       .       "rs.computerid = $compid AND "
+	       .       "rq.laststateid = ls.id AND "
+	       .       "rq.stateid = cs.id AND "
+	       .       "ls.name = 'tovmhostinuse' AND "
+	       .       "cs.name NOT IN ('failed', 'maintenance', 'complete', 'deleted') AND "
+	       .       "rq.end > NOW() "
+	       . "ORDER BY rq.start";
+	$qh = doQuery($query);
+	if(mysql_num_rows($qh))
+		$arr = array('status' => 'failed');
+	else {
+		if($type == 'now')
+			$msg = "The reservation currently being processed to place this "
+			     . "computer in the vmhostinuse state has been flagged for "
+			     . "deletion. As soon as the deletion can be processed, the "
+			     . "computer will be set to the available state.";
+		else
+			$msg = "The reservation scheduled to place this computer in the "
+			     . "vmhostinuse state has been deleted.";
+		$arr = array('status' => 'success', 'msg' => $msg);
+	}
+	sendJSON($arr);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
@@ -1071,6 +1546,97 @@ function submitAddComputer() {
 	addComputer($data);
 	clearPrivCache();
 	viewComputers();
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn submitComputerVMHostLater()
+///
+/// \brief schedules a computer to be converted to vmhostinuse state at a future
+/// time
+///
+////////////////////////////////////////////////////////////////////////////////
+function submitComputerVMHostLater() {
+	$data = getContinuationVar();
+	$delayed = 0;
+	$compid = $data['compid'];
+	$start = $data['scheduletime'];
+	moveReservationsOffComputer($compid);
+	$tmp = getCompFinalReservationTime($compid);
+	if($tmp > $data['scheduletime']) {
+		$delayed = 1;
+		$start = $tmp;
+	}
+	# create a reload reservation to load machine with image
+	#   corresponding to selected vm profile
+	$vclreloadid = getUserlistID('vclreload@Local');
+	$end = $start + SECINYEAR; # don't want anyone making a future reservation for this machine
+	$startdt = unixToDatetime($start);
+	$end = unixToDatetime($end);
+	if($data['maintenanceonly']) {
+		$imageid = getImageId('noimage');
+		$imagerevisionid = getProductionRevisionid($imageid);
+		if(! (simpleAddRequest($compid, $imageid, $imagerevisionid, $startdt, $end,
+		                       18, $vclreloadid))) {
+			print "<H2>Edit Computer</H2>\n";
+			print "An error was encountered while trying to schedule this ";
+			print "computer for the maintenance state. Please try again later.\n";
+			return;
+		}
+	}
+	else {
+		$profiles = getVMProfiles();
+		$imagerevisionid = getProductionRevisionid($profiles[$data['vmprofileid']]['imageid']);
+		if(! (simpleAddRequest($compid, $profiles[$data['vmprofileid']]['imageid'],
+		                       $imagerevisionid, $startdt, $end, 21, $vclreloadid))) {
+			print "<H2>Edit Computer</H2>\n";
+			print "An error was encountered while trying to convert this ";
+			print "computer to a VM host server. Please try again later.\n";
+			return;
+		}
+
+		# check for existing vmhost entry
+		$query = "SELECT id, "
+		       .        "vmprofileid "
+		       . "FROM vmhost "
+		       . "WHERE computerid = $compid";
+		$qh = doQuery($query, 101);
+		if($row = mysql_fetch_assoc($qh)) {
+			if($row['vmprofileid'] != $data['vmprofileid']) {
+				# update vmprofile
+				$query = "UPDATE vmhost "
+				       . "SET vmprofileid = $profileid "
+				       . "WHERE id = {$row['id']}";
+				doQuery($query, 101);
+			}
+		}
+		else {
+			# create vmhost entry
+			$query = "INSERT INTO vmhost "
+			       .        "(computerid, "
+			       .        "vmlimit, "
+			       .        "vmprofileid) "
+			       . "VALUES ($compid, "
+			       .        "2, "
+			       .        "$profileid)";
+			doQuery($query, 101);
+		}
+	}
+	print "<H2>Edit Computer</H2>\n";
+	$schtime = date('n/j/y g:i a', $start);
+	if($delayed) {
+		print "<strong>NOTE: The end time for the final reservation for this ";
+		print "computer changed from what was previously reported.</strong>";
+		print "<br><br>\n";
+	}
+	if($data['maintenanceonly']) {
+		print "The computer has been scheduled to be placed into the maintenance ";
+		print "state at $schtime.";
+	}
+	else {
+		print "The computer has been scheduled to be converted to a VM host at ";
+		print "$schtime.";
+	}
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1206,7 +1772,7 @@ function bulkAddComputer() {
 			if($data['type'] == 'lab')
 				$showprovisioning[$id] = $val['prettyname'];
 		}
-		elseif(preg_match('/^xcat/', $val['name'])) {
+		elseif(preg_match('/^xcat/', $val['name']) || $val['name'] == 'none') {
 			$allowedprovisioning['blade'][] = array('id' => $id, 'name' => $val['prettyname']);
 			if($data['type'] == 'blade')
 				$showprovisioning[$id] = $val['prettyname'];
@@ -1263,7 +1829,7 @@ function bulkAddComputer() {
 	print "    <TH align=right>Type:</TH>\n";
 	print "    <TD>\n";
 	$tmpArr = array("blade" => "blade", "lab" => "lab", "virtualmachine" => "virtualmachine");
-	printSelectInput('type', $tmpArr, $data['type'], 0, 0, 'type', 'dojoType="dijit.form.Select" onChange="editComputerSelectType();"');
+	printSelectInput('type', $tmpArr, $data['type'], 0, 0, 'type', 'dojoType="dijit.form.Select" onChange="editComputerSelectType(0);"');
 	print "    </TD>\n";
 	print "  </TR>\n";
 
@@ -1315,6 +1881,7 @@ function bulkAddComputer() {
 	print "    <TD>\n";
 	if($submitErr && $data['type'] == 'virtualmachine')
 		$states = array('10' => 'maintenance');
+	unset_by_val('available', $states);
 	printSelectInput('stateid', $states, $data['stateid'], 0, 0, 'stateid', 'dojoType="dijit.form.Select"');
 	print "    </TD>\n";
 	print "  </TR>\n";
@@ -1376,7 +1943,7 @@ function bulkAddComputer() {
 	print "  <TR>\n";
 	print "    <TH align=right nowrap>Provisioning Engine:</TH>\n";
 	print "    <TD>\n";
-	printSelectInput("provisioningid", $showprovisioning, $data["provisioningid"], 0, 0, 'provisioningid', 'dojoType="dijit.form.Select"');
+	printSelectInput("provisioningid", $showprovisioning, $data["provisioningid"], 0, 0, 'provisioningid', 'dojoType="dijit.form.Select" onChange="editComputerSelectType(1);"');
 	print "    </TD>\n";
 	print "  </TR>\n";
 	print "  <TR>\n";
@@ -3210,6 +3777,7 @@ function processComputerInput($checks=1) {
 	$return["computergroup"] = getContinuationVar("computergroup", processInputVar("computergroup", ARG_MULTINUMERIC));
 	$return["showcounts"] = getContinuationVar("showcounts", processInputVar("showcounts", ARG_NUMERIC));
 	$return["location"] = getContinuationVar('location', processInputVar('location', ARG_STRING));
+	$return["vmprofileid"] = getContinuationVar('vmprofileid', processInputVar('vmprofileid', ARG_NUMERIC));
 	$return["showdeleted"] = getContinuationVar('showdeleted', 0);
 	$return['states'] = getContinuationVar('states');
 
@@ -3285,6 +3853,14 @@ function processComputerInput($checks=1) {
 	   $submitErr |= VMAVAILERR;
 	   $submitErrMsg[VMAVAILERR] = "Virtual machines can only be added in the maintenance state.";
 	}
+
+	$provs = getContinuationVar('provisioning');
+	if(is_array($provs) &&
+	   array_key_exists($return['provisioningid'], $provs) &&
+	   $provs[$return['provisioningid']]['name'] == 'none')
+		$return['deploymode'] = 0;
+	else
+		$return['deploymode'] = 1;
 	return $return;
 }
 
@@ -3712,9 +4288,10 @@ function updateComputer($data) {
 		$location = "'$location'";
 	}
 	$query = "UPDATE computer "
-	       . "SET stateid = {$data['stateid']}, "
-	       .     "ownerid = $ownerid, "
-	       .     "platformid = {$data['platformid']}, "
+	       . "SET ownerid = $ownerid, ";
+	if(array_key_exists('stateid', $data))
+		$query .= "stateid = {$data['stateid']}, ";
+	$query .=    "platformid = {$data['platformid']}, "
 	       .     "scheduleid = {$data['scheduleid']}, "
 	       .     "RAM = {$data['ram']}, "
 	       .     "procnumber = {$data['numprocs']}, "
@@ -3864,7 +4441,8 @@ function addComputer($data) {
 ///                       $eth1macaddress, $stateid, $owner, $platformid,
 ///                       $scheduleid, $currentimgid, $ram, $numprocs,
 ///                       $procspeed, $network,  $hostname, $compid, $type,
-///                       $provisioningid, $location)
+///                       $provisioningid, $location, $vmprofileid='',
+///                       $deploymode='')
 ///
 /// \param $pripaddress - private IP address of computer
 /// \param $ipaddress - public IP address of computer
@@ -3884,6 +4462,11 @@ function addComputer($data) {
 /// \param $type - type of computer (blade or lab)
 /// \param $provisioningid - id of provisioning engine
 /// \param $location - location of computer
+/// \param $vmprofileid - (optional) id of vmprofile if node is in vmhostinuse
+/// state
+/// \param $deploymode - (optional) 0 to print that node will be manually
+/// installed with hypervisor, 1 to print that it will be automatically
+/// installed
 ///
 /// \brief prints a table of information about the computer
 ///
@@ -3892,13 +4475,16 @@ function printComputerInfo($pripaddress, $ipaddress, $eth0macaddress,
                            $eth1macaddress, $stateid, $owner, $platformid,
                            $scheduleid, $currentimgid, $ram, $numprocs,
                            $procspeed, $network, $hostname, $compid, $type,
-                           $provisioningid, $location) {
+                           $provisioningid, $location, $vmprofileid='',
+                           $deploymode='') {
 
 	$states = getStates();
 	$platforms = getPlatforms();
 	$schedules = getSchedules();
 	$images = getImages();
 	$provisioning = getProvisioning();
+	if(! empty($vmprofileid))
+		$profiles = getVMProfiles();
 
 	print "<TABLE>\n";
 	print "  <TR>\n";
@@ -3929,6 +4515,12 @@ function printComputerInfo($pripaddress, $ipaddress, $eth0macaddress,
 	print "    <TH align=right>State:</TH>\n";
 	print "    <TD>" . $states[$stateid] . "</TD>\n";
 	print "  </TR>\n";
+	if(! empty($vmprofileid)) {
+		print "  <TR>\n";
+		print "    <TH align=right>VM Host Profile:</TH>\n";
+		print "    <TD>{$profiles[$vmprofileid]['profilename']}</TD>\n";
+		print "  </TR>\n";
+	}
 	print "  <TR>\n";
 	print "    <TH align=right>Owner:</TH>\n";
 	print "    <TD>$owner</TD>\n";
@@ -4043,7 +4635,7 @@ function jsonCompGroupingComps() {
 		}
 	}
 	$arr = array('incomps' => $in, 'outcomps' => $out, 'all' => $all);
-	print '/*{"items":' . json_encode($arr) . '}*/';
+	sendJSON($arr);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -4080,7 +4672,7 @@ function jsonCompGroupingGroups() {
 		}
 	}
 	$arr = array('ingroups' => $in, 'outgroups' => $out, 'all' => $all);
-	print '/*{"items":' . json_encode($arr) . '}*/';
+	sendJSON($arr);
 }
 
 ////////////////////////////////////////////////////////////////////////////////

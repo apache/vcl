@@ -191,4 +191,41 @@ function updateShibGroups($usernid, $groups) {
 		updateGroups($newusergroups, $usernid);
 }
 
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn addShibUserStub($affilid, $userid)
+///
+/// \param $affilid - id of user's affiliation
+/// \param $userid - user's login id
+///
+/// \return an array of user information with the following keys:\n
+/// \b first - empty string\n
+/// \b last - empty string\n
+/// \b email - empty string\n
+/// \b emailnotices - 0 or 1, whether or not emails should be sent to user
+///
+/// \brief adds $userid to database with both lastupdate and validated set to 0
+///
+////////////////////////////////////////////////////////////////////////////////
+function addShibUserStub($affilid, $userid) {
+	global $mysql_link_vcl;
+	$query = "INSERT INTO user "
+	       .        "(unityid, "
+	       .        "affiliationid, "
+	       .        "emailnotices, "
+	       .        "lastupdated, "
+	       .        "validated) "
+	       . "VALUES ("
+	       .        "'$userid', "
+	       .        "'$affilid', "
+	       .        "0, "
+	       .        "0, "
+	       .        "0)";
+	doQuery($query);
+	if(mysql_affected_rows($mysql_link_vcl))
+		return dbLastInsertID();
+	else
+		return NULL;
+}
+
 ?>

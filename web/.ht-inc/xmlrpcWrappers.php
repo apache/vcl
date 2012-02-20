@@ -1815,7 +1815,7 @@ function XMLRPCautoCapture($requestid) {
 ////////////////////////////////////////////////////////////////////////////////
 ///
 /// \fn XMLRPCdeployServer($imageid, $start, $end, $admingroup, $logingroup,
-///                        $ipaddr, $macaddr, $foruser)
+///                        $ipaddr, $macaddr, $monitored, $foruser)
 ///
 /// \param $imageid - id of an image
 /// \param $start - "now" or unix timestamp for start of reservation; will

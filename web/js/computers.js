@@ -249,28 +249,65 @@ function groupsCallback(data, ioArgs) {
 	document.body.style.cursor = 'default';
 }
 
-function editComputerSelectType() {
+function cancelScheduledtovmhostinuse(cont) {
+	var data = {continuation: cont};
+	RPCwrapper(data, cancelScheduledtovmhostinuseCB, 1);
+}
+
+function cancelScheduledtovmhostinuseCB(data, ioArgs) {
+	if(data.items.status == 'success') {
+		dojo.byId('cancelvmhostinusediv').innerHTML = data.items.msg;
+		dojo.removeClass('cancelvmhostinusediv', 'highlightnoticewarn');
+		dojo.addClass('cancelvmhostinusediv', 'highlightnoticenotify');
+	}
+	else if(data.items.status == 'failed') {
+		dojo.byId('cancelvmhostinusediv').innerHTML = "An error was encountered that prevented the reservation to place this computer in the vmhostinuse state from being deleted.";
+	}
+}
+
+function editComputerSelectType(skipprov) {
 	var sobj = dijit.byId('stateid');
+	var savestate = sobj.get('value');
+	var restorestate = 0;
 	sobj.removeOption(sobj.getOptions());
 	var type = dijit.byId('type').get('value');
+	var prov = dijit.byId('provisioningid').attr('displayedValue');
 	for(var i = 0; i < allowedstates.length; i++) {
 		if(type == 'virtualmachine' && allowedstates[i].label != 'maintenance')
 			continue;
 		if(type == 'lab' && allowedstates[i].label != 'available' &&
 			allowedstates[i].label != 'maintenance')
 			continue;
+		if(type == 'blade' && prov == 'None' && allowedstates[i].label == 'available')
+			continue;
+		if(allowedstates[i].value == savestate)
+			restorestate = 1;
 		sobj.addOption({value: allowedstates[i].value, label: allowedstates[i].label});
 	}
-	var pobj = dijit.byId('provisioningid');
-	pobj.removeOption(pobj.getOptions());
-	for(var i = 0; i < allowedprovs[type].length; i++) {
-		pobj.addOption({value: allowedprovs[type][i].id, label: allowedprovs[type][i].name});
+	if(restorestate)
+		sobj.set('value', savestate);
+	if(! skipprov) {
+		var pobj = dijit.byId('provisioningid');
+		pobj.removeOption(pobj.getOptions());
+		for(var i = 0; i < allowedprovs[type].length; i++) {
+			pobj.addOption({value: allowedprovs[type][i].id, label: allowedprovs[type][i].name});
+		}
 	}
 	if(dojo.byId('location')) {
 		if(type == 'virtualmachine')
 			dojo.byId('location').disabled = true;
 		else
 			dojo.byId('location').disabled = false;
+	}
+}
+
+function editComputerSelectState() {
+	var state = dijit.byId('stateid').get('value');
+	if(state == 20) {
+		dojo.removeClass('vmhostprofiletr', 'hidden');
+	}
+	else {
+		dojo.addClass('vmhostprofiletr', 'hidden');
 	}
 }
 
