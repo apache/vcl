@@ -167,7 +167,7 @@ function viewImages() {
 	}
 	print "  </TR>\n";
 	foreach(array_keys($images) as $id) {
-		if(! in_array($id, $userImageIDs))
+		if(! in_array($id, $userImageIDs) || $images[$id]['name'] == 'noimage')
 			continue;
 		print "  <TR>\n";
 		print "    <TD align=center>\n";
@@ -257,6 +257,8 @@ function viewImageGrouping() {
 	$images = $tmp['image'];
 	uasort($images, 'sortKeepIndex');
 	foreach($images as $id => $image) {
+		if($image == 'No Image')
+			continue;
 		print "<option value=$id>$image</option>\n";
 	}
 	print "</select>\n";
@@ -1522,8 +1524,11 @@ function subimageDialogContent() {
 
 	$content  = "<h3>Add New Subimage</h3>";
 	$content .= "<select dojoType=\"dijit.form.FilteringSelect\" id=addsubimagesel>";
-	foreach($resources['image'] as $id => $name)
+	foreach($resources['image'] as $id => $name) {
+		if($name == 'No Image')
+			continue;
 		$content .= "<option value=$id>$name</option>";
+	}
 	$content .= "</select>";
 	$content .= "<button dojoType=\"dijit.form.Button\" id=addbtn>";
 	$content .= "Add Subimage";

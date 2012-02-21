@@ -774,8 +774,11 @@ function AJprofileData($profileid="") {
 	$types = getVMtypes();
 	$allimages = getImages();
 	$images = array();
-	foreach($allimages as $key => $image)
+	foreach($allimages as $key => $image) {
+		if($image['name'] == 'noimage')
+			continue;
 		$images[] = array('id' => $key, 'name' => $image['prettyname']);
+	}
 	$imagedata = array('identifier' => 'id', 'items' => $images);
 	
 	$types2 = array();
