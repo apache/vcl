@@ -3753,20 +3753,40 @@ function isAvailable($images, $imageid, $imagerevisionid, $start, $end,
 	foreach($requestInfo["images"] as $key => $imageid) {
 		# check for max concurrent usage of image
 		if($images[$imageid]['maxconcurrent'] != NULL) {
-			$query = "SELECT COUNT(rs.imageid) AS currentusage "
+			$compids = array();
+			$reloadid = getUserlistID('vclreload@Local');
+			$query = "SELECT rs.computerid "
 			       . "FROM reservation rs, "
 			       .      "request rq "
 			       . "WHERE '$startstamp' < (rq.end + INTERVAL 900 SECOND) AND "
 			       .       "'$endstamp' > rq.start AND "
 			       .       "rs.requestid = rq.id AND "
 			       .       "rs.imageid = $imageid AND "
-			       .       "rq.stateid NOT IN (1,5,11,12,16,17)";
+			       .       "rq.stateid NOT IN (1,5,11,12,16,17) AND "
+			       .       "rq.userid != $reloadid";
 			$qh = doQuery($query, 101);
+			while($row = mysql_fetch_assoc($qh))
+				$compids[] = $row['computerid'];
+			$usagecnt = count($compids);
+			$allids = implode("','", $compids);
+			$query = "SELECT COUNT(bc.imageid) AS currentusage "
+			       . "FROM blockComputers bc, "
+			       .      "blockRequest br, "
+			       .      "blockTimes bt "
+			       . "WHERE bc.blockTimeid = bt.id AND "
+			       .       "bt.blockRequestid = br.id AND "
+			       .       "bc.imageid = $imageid AND "
+			       .       "bc.computerid NOT IN ('$allids') AND "
+			       .       "'$startstamp' < (bt.end + INTERVAL 900 SECOND) AND "
+			       .       "'$endstamp' > bt.start AND "
+			       .       "bt.skip != 1 AND "
+			       .       "br.status != 'deleted'";
+			$qh = doQuery($query);
 			if(! $row = mysql_fetch_assoc($qh)) {
 				semUnlock();
 				return 0;
 			}
-			if($row['currentusage'] >= $images[$imageid]['maxconcurrent']) {
+			if(($usagecnt + $row['currentusage']) >= $images[$imageid]['maxconcurrent']) {
 				semUnlock();
 				return -1;
 			}

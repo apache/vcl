@@ -2915,6 +2915,16 @@ function processBlockAllocationInput() {
 		        . ' and ' . MAX_BLOCK_MACHINES . '.';
 		$err = 1;
 	}
+	if(! $err) {
+		$imgdata = getImages(0, $return['imageid']);
+		$concur = $imgdata[$return['imageid']]['maxconcurrent'];
+		if($return['seats'] > $concur) {
+			$errmsg = "The selected image can only have $concur concurrent "
+			        . "reservations. Please reduce the number of requested "
+			        . "seats to $concur or less.";
+			$err = 1;
+		}
+	}
 	if(! $err && $type != 'weekly' && $type != 'monthly' && $type != 'list') {
 		$errmsg = 'You must select one of "Repeating Weekly", "Repeating Monthly", '
 		        . 'or "List of Dates/Times".';
