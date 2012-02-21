@@ -145,7 +145,7 @@ sub install_linux_packages {
 	
 	if ($rhel_version) {
 		print "Attempting to install 'Extra Packages for Enterprise Linux (EPEL)'\n";
-		my $epel_url = "http://download.fedora.redhat.com/pub/epel/$rhel_version/$arch";
+		my $epel_url = "http://dl.fedoraproject.org/pub/epel/$rhel_version/$arch";
 		
 		# Run wget to retrieve the list of files available in the repository
 		# Do this to determine the EPEL RPM file name
