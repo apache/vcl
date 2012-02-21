@@ -19,8 +19,8 @@
 ###############################################################################
 
 email=
-if ! /etc/init.d/vcld.start status &> /dev/null; then
-   if /etc/init.d/vcld.start start &> /dev/null; then
+if ! service vcld status &> /dev/null; then
+   if service vcld start &> /dev/null; then
   	 echo "restarted vcld on `hostname`" |mail -s "vcld restarted" $email 
    else
 	echo "restart of vcld failed on `hostname`" |mail -s "vcld restart failed" $email
