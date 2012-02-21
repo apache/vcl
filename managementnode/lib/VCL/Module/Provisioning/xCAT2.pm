@@ -131,6 +131,34 @@ sub initialize {
 	return 1;
 } ## end sub initialize
 
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 DESTROY
+
+ Parameters  : none
+ Returns     : nothing
+ Description : Destroys the xCAT2.pm module and resets node to boot state
+
+=cut
+
+sub DESTROY {
+	my $self 	= shift;
+	my $address = sprintf('%x', $self);
+	my $node		= $self->data->get_computer_node_name();
+	my $request_state_name = $self->data->get_request_state_name();
+
+	if($request_state_name =~ /^(new|reload|image)$/) {
+		if(_nodeset_option($node, "boot")){
+			notify($ERRORS{'DEBUG'}, 0, "set $node to boot state during $request_state_name state");
+		} 
+	}
+	
+	# Check for an overridden destructor
+   $self->SUPER::DESTROY if $self->can("SUPER::DESTROY");		
+
+} ## end sub DESTROY
+
 #/////////////////////////////////////////////////////////////////////////////
 
 =head2 load
