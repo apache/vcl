@@ -1142,48 +1142,76 @@ function AJsubmitRenameNode() {
 function userLookup() {
 	global $user;
 	$userid = processInputVar("userid", ARG_STRING);
+	$affilid = processInputVar('affiliationid', ARG_NUMERIC, $user['affiliationid']);
 	$force = processInputVar('force', ARG_NUMERIC, 0);
 	print "<div align=center>\n";
 	print "<H2>User Lookup</H2>\n";
 	print "<FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
 	print "<TABLE>\n";
 	print "  <TR>\n";
-	print "    <TH>User ID:</TH>\n";
+	print "    <TH>Name (last, first) or User ID:</TH>\n";
 	print "    <TD><INPUT type=text name=userid value=\"$userid\" size=25></TD>\n";
+	if(checkUserHasPerm('User Lookup (global)')) {
+		$affils = getAffiliations();
+		print "    <TD>\n";
+		print "@";
+		printSelectInput("affiliationid", $affils, $affilid);
+		print "    </TD>\n";
+	}
 	print "  </TR>\n";
 	print "  <TR>\n";
 	print "    <TD colspan=2>\n";
 	print "      <input type=checkbox id=force name=force value=1>\n";
-	print "      <label for=force>Attempt forcing an update from LDAP</label>\n";
+	print "      <label for=force>Attempt forcing an update from LDAP (User ID only)</label>\n";
 	print "    </TD>\n";
 	print "  </TR>\n";
 	print "  <TR>\n";
-	print "    <TD></TD>\n";
-	print "    <TD align=right><INPUT type=submit value=Submit>\n";
+	print "    <TD colspan=3 align=center><INPUT type=submit value=Submit>\n";
 	print "  </TR>\n";
 	print "</TABLE>\n";
 	$cont = addContinuationsEntry('submitUserLookup');
 	print "<INPUT type=hidden name=continuation value=\"$cont\">\n";
-	print "</FORM>\n";
+	print "</FORM><br>\n";
 	if(! empty($userid)) {
-		$loginid = $userid;
-		getAffilidAndLogin($loginid, $affilid);
-		if(empty($affilid)) {
-			print "specified affiliation is unknown<br>\n";
-			return;
+		if(preg_match('/,/', $userid)) {
+			$mode = 'name';
+			$force = 0;
 		}
+		else
+			$mode = 'userid';
 		if(! checkUserHasPerm('User Lookup (global)') &&
 		   $user['affiliationid'] != $affilid) {
-			print "You are only allowed to look up users from your own affiliation.<br>\n";
+			print "<font color=red>$userid not found</font><br>\n";
 			return;
 		}
-		$query = "SELECT id "
-		       . "FROM user "
-		       . "WHERE unityid = '$loginid' AND "
-		       .       "affiliationid = $affilid";
+		if($mode == 'userid') {
+			$query = "SELECT id "
+			       . "FROM user "
+			       . "WHERE unityid = '$userid' AND "
+			       .       "affiliationid = $affilid";
+			$userid = "$userid@" . getAffiliationName($affilid);
+		}
+		else {
+			$tmp = explode(',', $userid);
+			$last = mysql_real_escape_string(trim($tmp[0]));
+			$first = mysql_real_escape_string(trim($tmp[1]));
+			$query = "SELECT CONCAT(u.unityid, '@', a.name) AS unityid "
+			       . "FROM user u, "
+			       .      "affiliation a "
+			       . "WHERE u.firstname = '$first' AND "
+			       .       "u.lastname = '$last' AND "
+			       .       "u.affiliationid = $affilid AND "
+			       .       "a.id = $affilid";
+		}
 		$qh = doQuery($query, 101);
-		if(! mysql_num_rows($qh))
-			print "<font color=red>$userid not currently found in VCL user database, will try to add...</font><br>\n";
+		if(! mysql_num_rows($qh)) {
+			if($mode == 'name') {
+				print "<font color=red>User not found</font><br>\n";
+				return;
+			}
+			else
+				print "<font color=red>$userid not currently found in VCL user database, will try to add...</font><br>\n";
+		}
 		elseif($force) {
 			$_SESSION['userresources'] = array();
 			$row = mysql_fetch_assoc($qh);
@@ -1191,8 +1219,13 @@ function userLookup() {
 			$query = "UPDATE user SET lastupdated = '$newtime' WHERE id = {$row['id']}";
 			doQuery($query, 101);
 		}
+		elseif($mode == 'name') {
+			$row = mysql_fetch_assoc($qh);
+			$userid = $row['unityid'];
+		}
 
 		$userdata = getUserInfo($userid);
+		$userdata["groups"] = getUsersGroups($userdata["id"], 1, 1);
 		if(is_null($userdata)) {
 			$userdata = getUserInfo($userid, 1);
 			if(is_null($userdata)) {
@@ -1201,6 +1234,12 @@ function userLookup() {
 			}
 		}
 		print "<TABLE>\n";
+		if(! empty($userdata['unityid'])) {
+			print "  <TR>\n";
+			print "    <TH align=right>User ID:</TH>\n";
+			print "    <TD>{$userdata["unityid"]}</TD>\n";
+			print "  </TR>\n";
+		}
 		if(! empty($userdata['firstname'])) {
 			print "  <TR>\n";
 			print "    <TH align=right>First Name:</TH>\n";
@@ -1217,6 +1256,12 @@ function userLookup() {
 			print "  <TR>\n";
 			print "    <TH align=right>Preferred Name:</TH>\n";
 			print "    <TD>{$userdata["preferredname"]}</TD>\n";
+			print "  </TR>\n";
+		}
+		if(! empty($userdata['affiliation'])) {
+			print "  <TR>\n";
+			print "    <TH align=right>Affiliation:</TH>\n";
+			print "    <TD>{$userdata["affiliation"]}</TD>\n";
 			print "  </TR>\n";
 		}
 		if(! empty($userdata['email'])) {
