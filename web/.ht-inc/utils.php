@@ -3375,10 +3375,20 @@ function getUsersGroups($userid, $includeowned=0, $includeaffil=0) {
 		$groups[$row["usergroupid"]] = $row["name"];
 	}
 	if($includeowned) {
-		$query = "SELECT id AS usergroupid, "
-		       .        "name "
-		       . "FROM usergroup "
-		       . "WHERE ownerid = $userid";
+		if($includeaffil) {
+			$query = "SELECT g.id AS usergroupid, "
+			       .        "CONCAT(g.name, '@', a.name) AS name "
+			       . "FROM usergroup g, "
+			       .      "affiliation a "
+			       . "WHERE g.ownerid = $userid AND "
+			       .       "g.affiliationid = a.id";
+		}
+		else {
+			$query = "SELECT id AS usergroupid, "
+			       .        "name "
+			       . "FROM usergroup "
+			       . "WHERE ownerid = $userid";
+		}
 		$qh = doQuery($query, "101");
 		while($row = mysql_fetch_assoc($qh)) {
 			$groups[$row["usergroupid"]] = $row["name"];
