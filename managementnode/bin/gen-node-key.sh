@@ -106,26 +106,9 @@ else
 fi
 print_hr
 
-# Remove existing entries for the node from xCAT gkh file
-if [ `grep -ic "^$NODE " /opt/xcat/etc/gkh` -ne 0 ];
-then
-  echo Removing $C entries for $NODE from '/opt/xcat/etc/gkh'
-  sed -i -r -e "s/^$NODE .*//" /opt/xcat/etc/gkh
-else
-  echo Entry does not exist for $NODE in '/opt/xcat/etc/gkh'
-fi
-print_hr
-
 # Add the node's key to the known hosts file
-which makesshgkh
-if [ $? == 0 ];
-then
-	echo Running xCAT makesshgkh utility for $NODE
-	makesshgkh $NODE
-else
-	echo Scanning host key for $NODE and adding it to '/root/.ssh/known_hosts'
-	ssh-keyscan -t rsa $NODE >> /root/.ssh/known_hosts
-fi
+echo Scanning host key for $NODE and adding it to '/root/.ssh/known_hosts'
+ssh-keyscan -t rsa $NODE >> /root/.ssh/known_hosts
 print_hr
 
 echo Copying public key to authorized_keys on $NODE
