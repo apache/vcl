@@ -2250,12 +2250,6 @@ function getKey($data) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function encryptData($data) {
-	/*global $mcryptkey, $mcryptiv;
-	if(! $data)
-		return false;
-
-	$cryptdata = mcrypt_encrypt(MCRYPT_BLOWFISH, $mcryptkey, $data, MCRYPT_MODE_CBC, $mcryptiv);
-	return trim(base64_encode($cryptdata));*/
 	global $cryptkey;
 	if(! $data)
 		return false;
@@ -2277,13 +2271,6 @@ function encryptData($data) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function decryptData($data) {
-	/*global $mcryptkey, $mcryptiv;
-	if(! $data)
-		return false;
-
-	$cryptdata = base64_decode($data);
-	$decryptdata = mcrypt_decrypt(MCRYPT_BLOWFISH, $mcryptkey, $cryptdata, MCRYPT_MODE_CBC, $mcryptiv);
-	return trim($decryptdata);*/
 	global $cryptkey;
 	if(! $data)
 		return false;
@@ -4000,28 +3987,39 @@ function isAvailable($images, $imageid, $imagerevisionid, $start, $end,
 		# remove any recently reserved computers that could have been an
 		#   undetected failure
 		$failedids = getPossibleRecentFailures($userid, $imageid);
+		$shortened = 0;
 		if(! empty($failedids)) {
+			$origcomputerids = $computerids;
+			$origcurrentids = $currentids;
+			$origblockids = $blockids;
 			if(! empty($computerids)) {
 				$testids = array_diff($computerids, $failedids);
 				if(! empty($testids)) {
+					$shortened = 1;
 					$computerids = $testids;
 					$currentids = array_diff($currentids, $failedids);
 				}
 			}
 			if(! empty($blockids)) {
 				$testids = array_diff($blockids, $failedids);
-				if(! empty($testids))
+				if(! empty($testids)) {
+					$shortened = 1;
 					$blockids = $testids;
+				}
 			}
 		}
 
 		# allocate a computer
 		$comparr = allocComputer($blockids, $currentids, $computerids,
 		                         $startstamp, $nowfuture);
+		if(empty($comparr) && $shortened)
+			$comparr = allocComputer($origblockids, $origcurrentids,
+			                         $origcomputerids, $startstamp, $nowfuture);
 		if(empty($comparr)) {
 			semUnlock();
 			return 0;
 		}
+
 		$requestInfo["computers"][$key] = $comparr['compid'];
 		$requestInfo["mgmtnodes"][$key] = $comparr['mgmtid'];
 		$requestInfo["loaded"][$key] = $comparr['loaded'];
