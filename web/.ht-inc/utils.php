@@ -3644,7 +3644,7 @@ function getBlockAllocationIDs($user) {
 ///
 /// \fn isAvailable($images, $imageid, $imagerevisionid, $start, $end,
 ///                 $requestid, $userid, $ignoreprivileges, $forimaging, $ip,
-///                 $mac)
+///                 $mac, $skipconcurrentcheck)
 ///
 /// \param $images - array as returned from getImages
 /// \param $imageid - imageid from the image table
@@ -3665,6 +3665,8 @@ function getBlockAllocationIDs($user) {
 /// be a server profile reservation if defined
 /// \param $mac - (optional, default='') mac address to be assigned; assumed to
 /// be a server profile reservation if defined
+/// \param $skipconcurrentcheck (optional, default=0) - set to 1 to skip check
+/// for concurrent use of image; useful for setting up reload reservations
 ///
 /// \return -3 if unavailable due to an ip/mac conflict
 ///         -2 if specified time period is during a maintenance window
@@ -3678,7 +3680,7 @@ function getBlockAllocationIDs($user) {
 ////////////////////////////////////////////////////////////////////////////////
 function isAvailable($images, $imageid, $imagerevisionid, $start, $end,
                      $requestid=0, $userid=0, $ignoreprivileges=0,
-                     $forimaging=0, $ip='', $mac='') {
+                     $forimaging=0, $ip='', $mac='', $skipconcurrentcheck=0) {
 	global $requestInfo;
 	$requestInfo["start"] = $start;
 	$requestInfo["end"] = $end;
@@ -3752,7 +3754,8 @@ function isAvailable($images, $imageid, $imagerevisionid, $start, $end,
 		$ignorestates .= ",'reloading','reload','timeout','inuse'";
 	foreach($requestInfo["images"] as $key => $imageid) {
 		# check for max concurrent usage of image
-		if($images[$imageid]['maxconcurrent'] != NULL) {
+		if(! $skipconcurrentcheck && 
+		   $images[$imageid]['maxconcurrent'] != NULL) {
 			$compids = array();
 			$reloadid = getUserlistID('vclreload@Local');
 			$query = "SELECT rs.computerid "

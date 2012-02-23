@@ -1004,6 +1004,100 @@ function XMLRPCprocessBlockTime($blockTimesid, $ignoreprivileges=0) {
 		             'errormsg' => 'invalid image associated with block allocation');
 	}
 
+	$unixstart = datetimeToUnix($rqdata['start']);
+	$unixend = datetimeToUnix($rqdata['end']);
+	$revisionid = getProductionRevisionid($rqdata['imageid']);
+	$imgLoadTime = getImageLoadEstimate($rqdata['imageid']);
+	if($imgLoadTime == 0)
+		$imgLoadTime = $images[$rqdata['imageid']]['reloadtime'] * 60;
+	$vclreloadid = getUserlistID('vclreload@Local');
+	$groupmembers = getUserGroupMembers($rqdata['groupid']);
+	$userids = array_keys($groupmembers);
+
+	# add any computers from future reservations users in the group made
+	if(! empty($groupmembers)) {
+		## find reservations by users
+		$allids = implode(',', $userids);
+		$query = "SELECT rq.id AS reqid, "
+		       .        "UNIX_TIMESTAMP(rq.start) AS start, "
+		       .        "rq.userid "
+		       . "FROM request rq, "
+		       .      "reservation rs "
+		       . "WHERE rs.requestid = rq.id AND "
+		       .       "rq.userid IN ($allids) AND "
+		       .       "rq.start < '{$rqdata['end']}' AND "
+		       .       "rq.end > '{$rqdata['start']}' AND "
+		       .       "rs.imageid = {$rqdata['imageid']} AND "
+		       .       "rs.computerid NOT IN (SELECT computerid "
+		       .                             "FROM blockComputers "
+		       .                             "WHERE blockTimeid = $blockTimesid)";
+		$qh = doQuery($query);
+		$donereqids = array();
+		$blockCompVals = array();
+		$checkstartbase = $unixstart - $imgLoadTime - 300;
+		$reloadstartbase = unixToDatetime($checkstartbase);
+		$rows = mysql_num_rows($qh);
+		while($row = mysql_fetch_assoc($qh)) {
+			if(array_key_exists($row['reqid'], $donereqids))
+				continue;
+			$donereqids[$row['reqid']] = 1;
+			if($row['start'] < datetimeToUnix($rqdata['start'])) {
+				$checkstart = $row['start'] - $imgLoadTime - 300;
+				$reloadstart = unixToDatetime($checkstart);
+				$reloadend = unixToDatetime($row['start']);
+			}
+			else {
+				$checkstart = $checkstartbase;
+				$reloadstart = $reloadstartbase;
+				$reloadend = $rqdata['start'];
+			}
+			# check to see if computer is available for whole block
+			$rc = isAvailable($images, $rqdata['imageid'], $revisionid, $checkstart,
+			                  $unixend, $row['reqid'], $row['userid'],
+			                  $ignoreprivileges, 0, '', '', 1);
+			// if not available for whole block, just skip this one
+			if($rc < 1)
+				continue;
+			$compid = $requestInfo['computers'][0];
+			# create reload reservation
+			$reqid = simpleAddRequest($compid, $rqdata['imageid'], $revisionid,
+			                          $reloadstart, $reloadend, 19, $vclreloadid);
+			if($reqid == 0)
+				continue;
+			# add to blockComputers
+			$blockCompVals[] = "($blockTimesid, $compid, {$rqdata['imageid']}, $reqid)";
+			# process any subimages
+			for($key = 1; $key < count($requestInfo['computers']); $key++) {
+				$subimageid = $requestInfo['images'][$key];
+				$subrevid = getProductionRevisionid($subimageid);
+				$compid = $requestInfo['computers'][$key];
+				$mgmtnodeid = $requestInfo['mgmtnodes'][$key];
+				$blockCompVals[] = "($blockTimesid, $compid, $subimageid, $reqid)";
+
+				$query = "INSERT INTO reservation "
+						 .        "(requestid, "
+						 .        "computerid, "
+						 .        "imageid, "
+						 .        "imagerevisionid, "
+						 .        "managementnodeid) "
+						 . "VALUES "
+						 .       "($reqid, "
+						 .       "$compid, "
+						 .       "$subimageid, "
+						 .       "$subrevid, "
+						 .       "$mgmtnodeid)";
+				doQuery($query, 101);
+			}
+		}
+		if(count($blockCompVals)) {
+			$blockComps = implode(',', $blockCompVals);
+			$query = "INSERT INTO blockComputers "
+			       .        "(blockTimeid, computerid, imageid, reloadrequestid) "
+			       . "VALUES $blockComps";
+			doQuery($query);
+		}
+	}
+
 	# check to see if all computers have been allocated
 	$query = "SELECT COUNT(computerid) AS allocated "
 	       . "FROM blockComputers "
@@ -1020,19 +1114,23 @@ function XMLRPCprocessBlockTime($blockTimesid, $ignoreprivileges=0) {
 	else
 		$compsPerAlloc = 1;
 	$toallocate = ($rqdata['numMachines'] * $compsPerAlloc) - $compCompleted;
-	if($toallocate == 0)
+	if($toallocate == 0) {
+		if(count($blockCompVals)) {
+			return array('status' => 'success',
+			             'allocated' => $rqdata['numMachines'],
+			             'unallocated' => 0);
+		}
 		return array('status' => 'completed');
+	}
 	$reqToAlloc = $toallocate / $compsPerAlloc;
 
 	if(! $ignoreprivileges) {
 		# get userids in user group
-		$tmp = getUserGroupMembers($rqdata['groupid']);
-		if(empty($tmp)) {
+		if(empty($groupmembers)) {
 			return array('status' => 'error',
 			             'errorcode' => 11,
 			             'errormsg' => 'empty user group and ignoreprivileges set to 0');
 		}
-		$userids = array_keys($tmp);
 		# make length of $userids match $reqToAlloc by duplicating or trimming some users
 		while($reqToAlloc > count($userids))
 			$userids = array_merge($userids, $userids);
@@ -1046,23 +1144,16 @@ function XMLRPCprocessBlockTime($blockTimesid, $ignoreprivileges=0) {
 	$stagExtra = $reqToAlloc * 60;
 
 	# determine estimated load time
-	$imgLoadTime = getImageLoadEstimate($rqdata['imageid']);
-	if($imgLoadTime == 0)
-		$imgLoadTime = $images[$rqdata['imageid']]['reloadtime'] * 60;
 	$loadtime = $imgLoadTime + (10 * 60); # add 10 minute fudge factor
-	$unixstart = datetimeToUnix($rqdata['start']);
 	if((time() + $loadtime + $stagExtra) > $unixstart) {
 		$return['status'] = 'warning';
 		$return['warningcode'] = 13;
 		$return['warningmsg'] = 'possibly insufficient time to load machines';
 	}
 	$start = unixToDatetime($unixstart - $loadtime);
-	$unixend = datetimeToUnix($rqdata['end']);
 
 	$userid = 0;
 	$allocated = 0;
-	$vclreloadid = getUserlistID('vclreload@Local');
-	$revisionid = getProductionRevisionid($rqdata['imageid']);
 	$blockCompVals = array();
 	# FIXME (maybe) - if some subset of users in the user group have available
 	# computers, but others do not, $allocated will be less than the desired
