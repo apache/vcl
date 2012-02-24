@@ -9030,7 +9030,7 @@ function timeToNextReservation($request) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function getImageText($text) {
-	return "<img src=\"" . BASEURL . "/images/textimage.php?text=$text\">";
+	return "<img alt=\"$text\" src=\"" . BASEURL . "/images/textimage.php?text=$text\">";
 }
 
 ////////////////////////////////////////////////////////////////////////////////
