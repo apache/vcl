@@ -205,6 +205,85 @@ END$$
 
 -- --------------------------------------------------------
 
+/*
+Procedure   : AddConnectMethodMapIfNotExists
+Parameters  : myconnectmethod, myOStype, myOS, myimagerevisionid, mydisabled, myautoprovisioned
+Description : Adds an entry to the connectmethodmap table if it does not already exist
+              For myOStype, myOS, and myimagerevisionid set to 0 if NULL should be inserted
+              For myautoprovisioned set to 2 if NULL should be inserted
+*/
+
+DROP PROCEDURE IF EXISTS `AddConnectMethodMapIfNotExists`$$
+CREATE PROCEDURE `AddConnectMethodMapIfNotExists`(
+  IN myconnectmethod tinytext,
+  IN myOStype tinytext,
+  IN myOS tinytext,
+  IN myimagerevisionid mediumint unsigned,
+  IN mydisabled tinyint unsigned,
+  IN myautoprovisioned tinyint unsigned
+)
+BEGIN
+  DECLARE query mediumtext;
+  DECLARE insrt mediumtext;
+
+  SET @connectmethodid = 0;
+
+  SELECT id INTO @connectmethodid FROM connectmethod WHERE name = myconnectmethod;
+
+  SET insrt = CONCAT('INSERT INTO connectmethodmap (connectmethodid, OStypeid, OSid, imagerevisionid, disabled, autoprovisioned) VALUES (', @connectmethodid);
+
+  SET @cnt = 0;
+
+  SET query = CONCAT('SELECT COUNT(*) INTO @cnt FROM connectmethodmap WHERE connectmethodid = ', @connectmethodid);
+  IF NOT STRCMP(myOStype, 0) THEN
+    SET query = CONCAT(query, ' AND OStypeid IS NULL');
+    SET insrt = CONCAT(insrt, ',NULL');
+  ELSE
+    SET @OStypeid = 0;
+    SELECT id INTO @OStypeid FROM OStype WHERE name = myOStype;
+    SET query = CONCAT(query, ' AND OStypeid = ', @OStypeid);
+    SET insrt = CONCAT(insrt, ',', @OStypeid);
+  END IF;
+  IF NOT STRCMP(myOS, 0) THEN
+    SET query = CONCAT(query, ' AND OSid IS NULL');
+    SET insrt = CONCAT(insrt, ',NULL');
+  ELSE
+    SET @OSid = 0;
+    SELECT id INTO @OSid FROM OS WHERE name = myOS;
+    SET query = CONCAT(query, ' AND OSid = ', @OSid);
+    SET insrt = CONCAT(insrt, ',', @OSid);
+  END IF;
+  IF myimagerevisionid = 0 THEN
+    SET query = CONCAT(query, ' AND imagerevisionid IS NULL');
+    SET insrt = CONCAT(insrt, ',NULL');
+  ELSE
+    SET query = CONCAT(query, ' AND imagerevisionid = ', myimagerevisionid);
+    SET insrt = CONCAT(insrt, ',', myimagerevisionid);
+  END IF;
+  SET insrt = CONCAT(insrt, ',', mydisabled);
+  IF myautoprovisioned = 2 THEN
+    SET query = CONCAT(query, ' AND autoprovisioned IS NULL');
+    SET insrt = CONCAT(insrt, ',NULL');
+  ELSE
+    SET query = CONCAT(query, ' AND autoprovisioned = ', myautoprovisioned);
+    SET insrt = CONCAT(insrt, ',', myautoprovisioned);
+  END IF;
+  SET @query = query;
+  PREPARE query_string FROM @query;
+  EXECUTE query_string;
+
+  SET insrt = CONCAT(insrt, ')');
+
+  IF @cnt = 0 THEN
+    SET @insrt = insrt;
+    PREPARE statement_string FROM @insrt;
+    EXECUTE statement_string;
+  END IF;
+
+END$$
+
+-- --------------------------------------------------------
+
 --
 --  Table structure for table `affiliation`
 --
@@ -273,7 +352,8 @@ CREATE TABLE IF NOT EXISTS `connectmethod` (
   `connecttext` text NOT NULL,
   `servicename` varchar(32) NOT NULL,
   `startupscript` varchar(256) DEFAULT NULL,
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `name` (`name`,`description`)
 ) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
@@ -601,30 +681,6 @@ UPDATE `computer` SET `imagerevisionid` = (SELECT `id` FROM `imagerevision` WHER
 
 -- --------------------------------------------------------
 
---
--- Inserts for table `connectmethod`
---
-
-INSERT IGNORE INTO `connectmethod` (`id`, `name`, `description`, `port`, `connecttext`) VALUES
-(1, 'ssh', 'ssh on port 22', 22, 'You will need to have an X server running on your local computer and use an ssh client to connect to the system. If you did not click on the <b>Connect!</b> button from the computer you will be using to access the VCL system, you will need to return to the <strong>Current Reservations</strong> page and click the <strong>Connect!</strong> button from a web browser running on the same computer from which you will be connecting to the VCL system. Otherwise, you may be denied access to the remote computer.<br><br>\r\nUse the following information when you are ready to connect:<br>\r\n<UL>\r\n<LI><b>Remote Computer</b>: #connectIP#</LI>\r\n<LI><b>User ID</b>: #userid#</LI>\r\n<LI><b>Password</b>: #password#<br></LI>\r\n</UL>\r\n<b>NOTE</b>: The given password is for <i>this reservation only</i>. You will be given a different password for any other reservations.<br>\r\n<strong><big>NOTE:</big> You cannot use the Windows Remote Desktop Connection to connect to this computer. You must use an ssh client.</strong>');
-INSERT IGNORE INTO `connectmethod` (`id`, `name`, `description`, `port`, `connecttext`) VALUES
-(2, 'RDP', 'Remote Desktop', 3389, 'You will need to use a Remote Desktop program to connect to the system. If you did not click on the <b>Connect!</b> button from the computer you will be using to access the VCL system, you will need to return to the <strong>Current Reservations</strong> page and click the <strong>Connect!</strong> button from a web browser running on the same computer from which you will be connecting to the VCL system. Otherwise, you may be denied access to the remote computer.<br><br>\r\n\r\nUse the following information when you are ready to connect:<br>\r\n<UL>\r\n<LI><b>Remote Computer</b>: #connectIP#</LI>\r\n<LI><b>User ID</b>: #userid#</LI>\r\n<LI><b>Password</b>: #password#<br></LI>\r\n</UL>\r\n<b>NOTE</b>: The given password is for <i>this reservation only</i>. You will be given a different password for any other reservations.<br>\r\n<br>\r\nFor automatic connection, you can download an RDP file that can be opened by the Remote Desktop Connection program.<br><br>\r\n');
-
--- --------------------------------------------------------
-
---
--- Inserts for table `connectmethodmap`
---
-
-INSERT IGNORE INTO `connectmethodmap` (`connectmethodid`, `OStypeid`, `OSid`, `imagerevisionid`, `disabled`, `autoprovisioned`) VALUES (1, 2, NULL, NULL, 0, 1);
-INSERT IGNORE INTO `connectmethodmap` (`connectmethodid`, `OStypeid`, `OSid`, `imagerevisionid`, `disabled`, `autoprovisioned`) VALUES (1, 3, NULL, NULL, 0, 1);
-INSERT IGNORE INTO `connectmethodmap` (`connectmethodid`, `OStypeid`, `OSid`, `imagerevisionid`, `disabled`, `autoprovisioned`) VALUES (2, 1, NULL, NULL, 0, 1);
-INSERT IGNORE INTO `connectmethodmap` (`connectmethodid`, `OStypeid`, `OSid`, `imagerevisionid`, `disabled`, `autoprovisioned`) VALUES (1, 2, NULL, NULL, 0, NULL);
-INSERT IGNORE INTO `connectmethodmap` (`connectmethodid`, `OStypeid`, `OSid`, `imagerevisionid`, `disabled`, `autoprovisioned`) VALUES (1, 3, NULL, NULL, 0, NULL);
-INSERT IGNORE INTO `connectmethodmap` (`connectmethodid`, `OStypeid`, `OSid`, `imagerevisionid`, `disabled`, `autoprovisioned`) VALUES (2, 1, NULL, NULL, 0, NULL);
-
--- --------------------------------------------------------
-
 -- 
 -- Inserts for table `module`
 -- 
@@ -637,6 +693,15 @@ INSERT IGNORE INTO `module` (`name`, `prettyname`, `description`, `perlpackage`)
 INSERT IGNORE INTO `module` (`name`, `prettyname`, `description`, `perlpackage`) VALUES ('base_module', 'VCL Base Module', '', 'VCL::Module');
 INSERT IGNORE INTO `module` (`name`, `prettyname`, `description`, `perlpackage`) VALUES ('provisioning_vbox', 'Virtual Box Provisioning Module', '', 'VCL::Module::Provisioning::vbox');
 INSERT IGNORE INTO `module` (`name`, `prettyname`, `description`, `perlpackage`) VALUES ('os_esxi', 'VMware ESXi OS Module', '', 'VCL::Module::OS::Linux::ESXi');
+INSERT IGNORE INTO `module` (`name`, `prettyname`, `description`, `perlpackage`) VALUES ('os_osx', 'OSX OS Module', '', 'VCL::Module::OS::OSX');
+
+-- --------------------------------------------------------
+
+--
+-- Inserts for table `OStype`
+--
+
+INSERT IGNORE INTO `OStype` (`name`) VALUES ('osx');
 
 -- --------------------------------------------------------
 
@@ -649,6 +714,7 @@ INSERT IGNORE INTO `OS` (`name`, `prettyname`, `type`, `installtype`, `sourcepat
 INSERT IGNORE INTO `OS` (`name`, `prettyname`, `type`, `installtype`, `sourcepath`, `moduleid`) VALUES ('vmwarelinux', 'VMware Generic Linux', 'linux', 'vmware', 'vmware_images', (SELECT `id` FROM `module` WHERE `name` LIKE 'os_linux'));
 INSERT IGNORE INTO `OS` (`name`, `prettyname`, `type`, `installtype`, `sourcepath`, `moduleid`) VALUES ('vmwarewin2003', 'VMware Windows 2003 Server', 'windows', 'vmware', 'vmware_images', (SELECT `id` FROM `module` WHERE `name` LIKE 'os_win2003'));
 INSERT IGNORE INTO `OS` (`name`, `prettyname`, `type`, `installtype`, `sourcepath`, `moduleid`) VALUES ('esxi4.1', 'VMware ESXi 4.1', 'linux', 'kickstart', 'esxi4.1', (SELECT `id` FROM `module` WHERE `name` LIKE 'os_esxi'));
+INSERT IGNORE INTO `OS` (`name`, `prettyname`, `type`, `installtype`, `sourcepath`, `moduleid`) VALUES ('vmwareosx', 'OSX Snow Leopard (VMware)', 'osx', 'vmware', 'vmware_images', (SELECT `id` FROM `module` WHERE `name` LIKE 'os_osx'));
 
 -- --------------------------------------------------------
 
@@ -680,6 +746,34 @@ INSERT IGNORE provisioningOSinstalltype (provisioningid, OSinstalltypeid) SELECT
 INSERT IGNORE provisioningOSinstalltype (provisioningid, OSinstalltypeid) SELECT provisioning.id, OSinstalltype.id FROM provisioning, OSinstalltype WHERE provisioning.name LIKE '%esx%' AND OSinstalltype.name = 'vmware';
 INSERT IGNORE provisioningOSinstalltype (provisioningid, OSinstalltypeid) SELECT provisioning.id, OSinstalltype.id FROM provisioning, OSinstalltype WHERE provisioning.name LIKE '%vbox%' AND OSinstalltype.name = 'vbox';
 INSERT IGNORE provisioningOSinstalltype (provisioningid, OSinstalltypeid) SELECT provisioning.id, OSinstalltype.id FROM provisioning, OSinstalltype WHERE provisioning.name LIKE '%lab%' AND OSinstalltype.name = 'none';
+
+-- --------------------------------------------------------
+
+--
+-- Inserts for table `connectmethod`
+--
+
+INSERT IGNORE INTO `connectmethod` (`name`, `description`, `port`, `connecttext`, `servicename`, `startupscript`) VALUES
+('ssh', 'ssh on port 22', 22, 'You will need to have an X server running on your local computer and use an ssh client to connect to the system. If you did not click on the <b>Connect!</b> button from the computer you will be using to access the VCL system, you will need to return to the <strong>Current Reservations</strong> page and click the <strong>Connect!</strong> button from a web browser running on the same computer from which you will be connecting to the VCL system. Otherwise, you may be denied access to the remote computer.<br><br>\r\nUse the following information when you are ready to connect:<br>\r\n<UL>\r\n<LI><b>Remote Computer</b>: #connectIP#</LI>\r\n<LI><b>User ID</b>: #userid#</LI>\r\n<LI><b>Password</b>: #password#<br></LI>\r\n</UL>\r\n<b>NOTE</b>: The given password is for <i>this reservation only</i>. You will be given a different password for any other reservations.<br>\r\n<strong><big>NOTE:</big> You cannot use the Windows Remote Desktop Connection to connect to this computer. You must use an ssh client.</strong>', 'ext_sshd', '/etc/init.d/ext_sshd');
+INSERT IGNORE INTO `connectmethod` (`name`, `description`, `port`, `connecttext`, `servicename`, `startupscript`) VALUES
+('RDP', 'Remote Desktop', 3389, 'You will need to use a Remote Desktop program to connect to the system. If you did not click on the <b>Connect!</b> button from the computer you will be using to access the VCL system, you will need to return to the <strong>Current Reservations</strong> page and click the <strong>Connect!</strong> button from a web browser running on the same computer from which you will be connecting to the VCL system. Otherwise, you may be denied access to the remote computer.<br><br>\r\n\r\nUse the following information when you are ready to connect:<br>\r\n<UL>\r\n<LI><b>Remote Computer</b>: #connectIP#</LI>\r\n<LI><b>User ID</b>: #userid#</LI>\r\n<LI><b>Password</b>: #password#<br></LI>\r\n</UL>\r\n<b>NOTE</b>: The given password is for <i>this reservation only</i>. You will be given a different password for any other reservations.<br>\r\n<br>\r\nFor automatic connection, you can download an RDP file that can be opened by the Remote Desktop Connection program.<br><br>\r\n', 'TermService', NULL);
+INSERT IGNORE INTO `connectmethod` (`name`, `description`, `port`, `connecttext`, `servicename`, `startupscript`) VALUES
+('iRAPP RDP', 'Remote Desktop for OS X', 3389, 'You will need to use a Remote Desktop program to connect to the system. If you did not click on the <b>Connect!</b> button from the computer you will be using to access the VCL system, you will need to return to the <strong>Current Reservations</strong> page and click the <strong>Connect!</strong> button from a web browser running on the same computer from which you will be connecting to the VCL system. Otherwise, you may be denied access to the remote computer.<br><br>\r\n\r\nUse the following information when you are ready to connect:<br>\r\n<UL>\r\n<LI><b>Remote Computer</b>: #connectIP#</LI>\r\n<LI><b>User ID</b>: #userid#</LI>\r\n<LI><b>Password</b>: #password#<br></LI>\r\n</UL>\r\n<b>NOTE</b>: The given password is for <i>this reservation only</i>. You will be given a different password for any other reservations.<br>\r\n<br>\r\nFor automatic connection, you can download an RDP file that can be opened by the Remote Desktop Connection program.<br><br>\r\n', NULL, NULL);
+
+-- --------------------------------------------------------
+
+--
+-- Inserts for table `connectmethodmap`
+--
+
+CALL AddConnectMethodMapIfNotExists('ssh', 'linux', 0, 0, 0, 1);
+CALL AddConnectMethodMapIfNotExists('ssh', 'unix', 0, 0, 0, 1);
+CALL AddConnectMethodMapIfNotExists('RDP', 'windows', 0, 0, 0, 1);
+CALL AddConnectMethodMapIfNotExists('iRAPP RDP', 'osx', 0, 0, 0, 1);
+CALL AddConnectMethodMapIfNotExists('ssh', 'linux', 0, 0, 0, 2);
+CALL AddConnectMethodMapIfNotExists('ssh', 'unix', 0, 0, 0, 2);
+CALL AddConnectMethodMapIfNotExists('RDP', 'linux', 0, 0, 0, 2);
+CALL AddConnectMethodMapIfNotExists('iRAPP RDP', 'osx', 0, 0, 0, 2);
 
 -- --------------------------------------------------------
 
@@ -844,4 +938,6 @@ DROP TABLE IF EXISTS `xmlrpcKey`;
 DROP PROCEDURE IF EXISTS `AddColumnIfNotExists`;
 DROP PROCEDURE IF EXISTS `DropColumnIfExists`;
 DROP PROCEDURE IF EXISTS `AddIndexIfNotExists`;
+DROP PROCEDURE IF EXISTS `AddUniqueIndex`;
 DROP PROCEDURE IF EXISTS `AddConstraintIfNotExists`;
+DROP PROCEDURE IF EXISTS `AddConnectMethodMapIfNotExists`;

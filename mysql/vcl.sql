@@ -302,7 +302,8 @@ CREATE TABLE IF NOT EXISTS `connectmethod` (
   `connecttext` text NOT NULL,
   `servicename` varchar(32) NOT NULL,
   `startupscript` varchar(256) DEFAULT NULL,
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `name` (`name`,`description`)
 ) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
@@ -1371,9 +1372,10 @@ INSERT INTO `computerloadstate` (`id`, `loadstatename`, `prettyname`, `est`) VAL
 -- Dumping data for table `connectmethod`
 --
 
-INSERT INTO `connectmethod` (`id`, `name`, `description`, `port`, `connecttext`) VALUES
-(1, 'ssh', 'ssh on port 22', 22, 'You will need to have an X server running on your local computer and use an ssh client to connect to the system. If you did not click on the <b>Connect!</b> button from the computer you will be using to access the VCL system, you will need to return to the <strong>Current Reservations</strong> page and click the <strong>Connect!</strong> button from a web browser running on the same computer from which you will be connecting to the VCL system. Otherwise, you may be denied access to the remote computer.<br><br>\r\nUse the following information when you are ready to connect:<br>\r\n<UL>\r\n<LI><b>Remote Computer</b>: #connectIP#</LI>\r\n<LI><b>User ID</b>: #userid#</LI>\r\n<LI><b>Password</b>: #password#<br></LI>\r\n</UL>\r\n<b>NOTE</b>: The given password is for <i>this reservation only</i>. You will be given a different password for any other reservations.<br>\r\n<strong><big>NOTE:</big> You cannot use the Windows Remote Desktop Connection to connect to this computer. You must use an ssh client.</strong>'),
-(2, 'RDP', 'Remote Desktop', 3389, 'You will need to use a Remote Desktop program to connect to the system. If you did not click on the <b>Connect!</b> button from the computer you will be using to access the VCL system, you will need to return to the <strong>Current Reservations</strong> page and click the <strong>Connect!</strong> button from a web browser running on the same computer from which you will be connecting to the VCL system. Otherwise, you may be denied access to the remote computer.<br><br>\r\n\r\nUse the following information when you are ready to connect:<br>\r\n<UL>\r\n<LI><b>Remote Computer</b>: #connectIP#</LI>\r\n<LI><b>User ID</b>: #userid#</LI>\r\n<LI><b>Password</b>: #password#<br></LI>\r\n</UL>\r\n<b>NOTE</b>: The given password is for <i>this reservation only</i>. You will be given a different password for any other reservations.<br>\r\n<br>\r\nFor automatic connection, you can download an RDP file that can be opened by the Remote Desktop Connection program.<br><br>\r\n');
+INSERT INTO `connectmethod` (`id`, `name`, `description`, `port`, `connecttext`, `servicename`, `startupscript`) VALUES
+(1, 'ssh', 'ssh on port 22', 22, 'You will need to have an X server running on your local computer and use an ssh client to connect to the system. If you did not click on the <b>Connect!</b> button from the computer you will be using to access the VCL system, you will need to return to the <strong>Current Reservations</strong> page and click the <strong>Connect!</strong> button from a web browser running on the same computer from which you will be connecting to the VCL system. Otherwise, you may be denied access to the remote computer.<br><br>\r\nUse the following information when you are ready to connect:<br>\r\n<UL>\r\n<LI><b>Remote Computer</b>: #connectIP#</LI>\r\n<LI><b>User ID</b>: #userid#</LI>\r\n<LI><b>Password</b>: #password#<br></LI>\r\n</UL>\r\n<b>NOTE</b>: The given password is for <i>this reservation only</i>. You will be given a different password for any other reservations.<br>\r\n<strong><big>NOTE:</big> You cannot use the Windows Remote Desktop Connection to connect to this computer. You must use an ssh client.</strong>', 'ext_sshd', '/etc/init.d/ext_sshd'),
+(2, 'RDP', 'Remote Desktop', 3389, 'You will need to use a Remote Desktop program to connect to the system. If you did not click on the <b>Connect!</b> button from the computer you will be using to access the VCL system, you will need to return to the <strong>Current Reservations</strong> page and click the <strong>Connect!</strong> button from a web browser running on the same computer from which you will be connecting to the VCL system. Otherwise, you may be denied access to the remote computer.<br><br>\r\n\r\nUse the following information when you are ready to connect:<br>\r\n<UL>\r\n<LI><b>Remote Computer</b>: #connectIP#</LI>\r\n<LI><b>User ID</b>: #userid#</LI>\r\n<LI><b>Password</b>: #password#<br></LI>\r\n</UL>\r\n<b>NOTE</b>: The given password is for <i>this reservation only</i>. You will be given a different password for any other reservations.<br>\r\n<br>\r\nFor automatic connection, you can download an RDP file that can be opened by the Remote Desktop Connection program.<br><br>\r\n', 'TermService', NULL),
+(3, 'iRAPP RDP', 'Remote Desktop for OS X', 3389, 'You will need to use a Remote Desktop program to connect to the system. If you did not click on the <b>Connect!</b> button from the computer you will be using to access the VCL system, you will need to return to the <strong>Current Reservations</strong> page and click the <strong>Connect!</strong> button from a web browser running on the same computer from which you will be connecting to the VCL system. Otherwise, you may be denied access to the remote computer.<br><br>\r\n\r\nUse the following information when you are ready to connect:<br>\r\n<UL>\r\n<LI><b>Remote Computer</b>: #connectIP#</LI>\r\n<LI><b>User ID</b>: #userid#</LI>\r\n<LI><b>Password</b>: #password#<br></LI>\r\n</UL>\r\n<b>NOTE</b>: The given password is for <i>this reservation only</i>. You will be given a different password for any other reservations.<br>\r\n<br>\r\nFor automatic connection, you can download an RDP file that can be opened by the Remote Desktop Connection program.<br><br>\r\n', NULL, NULL);
 
 
 --
@@ -1384,9 +1386,11 @@ INSERT INTO `connectmethodmap` (`connectmethodid`, `OStypeid`, `OSid`, `imagerev
 (1, 2, NULL, NULL, 0, 1),
 (1, 3, NULL, NULL, 0, 1),
 (2, 1, NULL, NULL, 0, 1),
+(3, 4, NULL, NULL, 0, 1),
 (1, 2, NULL, NULL, 0, NULL),
 (1, 3, NULL, NULL, 0, NULL),
-(2, 1, NULL, NULL, 0, NULL);
+(2, 1, NULL, NULL, 0, NULL),
+(3, 4, NULL, NULL, 0, NULL);
 
 -- 
 -- Dumping data for table `documentation`
@@ -1453,7 +1457,8 @@ INSERT INTO `module` (`id`, `name`, `prettyname`, `description`, `perlpackage`) 
 (22, 'state_image', 'VCL Image State Module', '', 'VCL::image'),
 (23, 'base_module', 'VCL Base Module', '', 'VCL::Module'),
 (24, 'provisioning_vbox', 'Virtual Box Provisioning Module', '', 'VCL::Module::Provisioning::vbox'),
-(25, 'os_esxi', 'VMware ESXi OS Module', '', 'VCL::Module::OS::Linux::ESXi');
+(25, 'os_esxi', 'VMware ESXi OS Module', '', 'VCL::Module::OS::Linux::ESXi'),
+(26, 'os_osx', 'OSX OS Module', '', 'VCL::Module::OS::OSX');
 
 -- 
 -- Dumping data for table `OS`
@@ -1494,7 +1499,8 @@ INSERT INTO `OS` (`id`, `name`, `prettyname`, `type`, `installtype`, `sourcepath
 (35, 'vmwarewin7', 'Windows 7 (VMware)', 'windows', 'vmware', 'vmware_images', 17),
 (36, 'vmwarelinux', 'Generic Linux (VMware)', 'linux', 'vmware', 'vmware_images', 5),
 (37, 'vmwarewin2003', 'Windows 2003 Server (VMware)', 'windows', 'vmware', 'vmware_images', 13),
-(38, 'esxi4.1', 'VMware ESXi 4.1', 'linux', 'kickstart', 'esxi4.1', 25);
+(38, 'esxi4.1', 'VMware ESXi 4.1', 'linux', 'kickstart', 'esxi4.1', 25),
+(39, 'vmwareosx', 'OSX Snow Leopard (VMware)', 'osx', 'vmware', 'vmware_images', 26);
 
 -- 
 -- Dumping data for table `OSinstalltype`
@@ -1514,7 +1520,8 @@ INSERT INTO `OSinstalltype` (`id`, `name`) VALUES
 INSERT INTO `OStype` (`id`, `name`) VALUES
 (2, 'linux'),
 (3, 'unix'),
-(1, 'windows');
+(1, 'windows'),
+(4, 'osx');
 
 -- 
 -- Dumping data for table `platform`
