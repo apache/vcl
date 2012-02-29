@@ -146,8 +146,8 @@ foreach($authMechs as $key => $item) {
 	}
 	elseif($item['type'] == 'local') {
 		$affilValFunc[$item['affiliationid']] = create_function('', 'return 0;');
-		$addUserFunc[$item['affiliationid']] = create_function('', 'return 0;');
-		$updateUserFunc[$item['affiliationid']] = create_function('', 'return 0;');
+		$addUserFunc[$item['affiliationid']] = create_function('', 'return NULL;');
+		$updateUserFunc[$item['affiliationid']] = create_function('', 'return NULL;');
 	}
 }
 # if adding a Shibboleth option, uncomment the following 4 lines and change '4' to match the affiliation id, create additional entries for further shibboleth affiliations
