@@ -527,10 +527,10 @@ function submitScheduleGroups() {
 	$schedules = getSchedules();
 
 	# build an array of memberships currently in the db
-	$tmp = getUserResources(array("groupAdmin"), array("administer"), 1);
+	$tmp = getUserResources(array("scheduleAdmin"), array("manageGroup"), 1);
 	$schedulegroupsIDs = array_keys($tmp["schedule"]);  // ids of groups that user can administer
 	$resources = getUserResources(array("scheduleAdmin"), 
-	                              array("administer"), 0, 0);
+	                              array("manageGroup"), 0, 0);
 	$userScheduleIDs = array_keys($resources["schedule"]); // ids of schedules that user can administer
 	$schedulemembership = getResourceGroupMemberships("schedule");
 	$baseschedulegroups = $schedulemembership["schedule"]; // all schedule group memberships
