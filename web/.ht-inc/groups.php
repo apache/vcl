@@ -405,6 +405,10 @@ function editOrAddGroup($state) {
 		if($data["type"] == "user") {
 			print "<H2>Edit User Group</H2>\n";
 			print "{$usergroups[$data['groupid']]['name']}<br><br>\n";
+			if($data['courseroll'] == 1)
+				print "Type: Course Roll<br><br>\n";
+			elseif($data['custom'] == 0)
+				print "Type: Federated<br><br>\n";
 			$editusergroup = 1;
 		}
 		else
@@ -591,8 +595,7 @@ function editOrAddGroup($state) {
 		print "</TABLE>\n";
 	}
 
-	if($data["type"] != "user" || $data['courseroll'] == 1 ||
-	   $data['custom'] == 0)
+	if($data["type"] != "user")
 		return;
 	if($editusergroup) {
 		print "<H3>Group Membership</H3>\n";
@@ -605,35 +608,44 @@ function editOrAddGroup($state) {
 			print "group</font><br><br>\n";
 		}
 		$groupmembers = getUserGroupMembers($data["groupid"]);
+		$edit = 1;
+		if($data['courseroll'] == 1 || $data['custom'] == 0)
+			$edit = 0;
+		if(empty($groupmembers) && ! $edit)
+			print "(empty group)<br>\n";
 		print "<TABLE border=1>\n";
-		print "  <TR>\n";
-		print "  <FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
-		print "    <TD align=right><INPUT type=submit value=Add></TD>\n";
-		print "    <TD><INPUT type=text name=newuser maxlength=80 size=40 ";
-		if($submitErr & IDNAMEERR)
-			print "value=\"$newuser\"></TD>\n";
-		else 
-			print "></TD>\n";
-		if($submitErr) {
-			print "    <TD>\n";
-			printSubmitErr(IDNAMEERR);
-			print "    </TD>\n";
+		if($edit) {
+			print "  <TR>\n";
+			print "  <FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
+			print "    <TD align=right><INPUT type=submit value=Add></TD>\n";
+			print "    <TD><INPUT type=text name=newuser maxlength=80 size=40 ";
+			if($submitErr & IDNAMEERR)
+				print "value=\"$newuser\"></TD>\n";
+			else 
+				print "></TD>\n";
+			if($submitErr) {
+				print "    <TD>\n";
+				printSubmitErr(IDNAMEERR);
+				print "    </TD>\n";
+			}
+			$cont = addContinuationsEntry('addGroupUser', $data);
+			print "  <INPUT type=hidden name=continuation value=\"$cont\">\n";
+			print "  </FORM>\n";
+			print "  </TR>\n";
 		}
-		$cont = addContinuationsEntry('addGroupUser', $data);
-		print "  <INPUT type=hidden name=continuation value=\"$cont\">\n";
-		print "  </FORM>\n";
-		print "  </TR>\n";
 		foreach($groupmembers as $id => $login) {
 			print "  <TR>\n";
-			print "    <TD>\n";
-			print "      <FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
-			print "      <INPUT type=submit value=Delete>\n";
-			$data['userid'] = $id;
-			$data['newuser'] = $login;
-			$cont = addContinuationsEntry('deleteGroupUser', $data);
-			print "      <INPUT type=hidden name=continuation value=\"$cont\">\n";
-			print "      </FORM>\n";
-			print "    </TD>\n";
+			if($edit) {
+				print "    <TD>\n";
+				print "      <FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
+				print "      <INPUT type=submit value=Delete>\n";
+				$data['userid'] = $id;
+				$data['newuser'] = $login;
+				$cont = addContinuationsEntry('deleteGroupUser', $data);
+				print "      <INPUT type=hidden name=continuation value=\"$cont\">\n";
+				print "      </FORM>\n";
+				print "    </TD>\n";
+			}
 			print "    <TD>$login</TD>\n";
 			print "  </TR>\n";
 		}
