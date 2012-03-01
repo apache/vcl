@@ -1727,7 +1727,8 @@ function submitDeleteComputer() {
 	}
 	else {
 		$query = "UPDATE computer "
-				 . "SET deleted = 1 "
+				 . "SET deleted = 1, "
+				 .     "vmhostid = NULL "
 				 . "WHERE id = $compid";
 		$qh = doQuery($query, 191);
 	}
@@ -3654,11 +3655,13 @@ function submitCompStateChange() {
 			print "<br>\n";
 		}
 	}
+	# set to deleted
 	elseif($data['stateid'] == 999) {
 		$compids = implode(',', $data['computerids']);
 		$query = "UPDATE computer "
 		       . "SET deleted = 1, "
-		       .     "notes = '' "
+		       .     "notes = '', "
+		       .     "vmhostid = NULL "
 		       . "WHERE id IN ($compids)";
 		doQuery($query, 999);
 		print "The following computers were deleted:\n";
