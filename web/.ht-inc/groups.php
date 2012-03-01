@@ -48,7 +48,7 @@ function viewGroups() {
 	global $user, $mode;
 	$modetype = getContinuationVar("type");
 
-	$usergroups = getUserGroups(1);
+	$usergroups = getUserGroups();
 	if($user['showallgroups'])
 		$affilusergroups = $usergroups;
 	else
@@ -68,6 +68,12 @@ function viewGroups() {
 		}
 	}
 
+	$showfederatedall = 0;
+	$showfederatedaffil = 0;
+	if(checkUserHasPerm('Manage Federated User Groups (global)'))
+		$showfederatedall = 1;
+	elseif(checkUserHasPerm('Manage Federated User Groups (affiliation only)'))
+		$showfederatedaffil = 1;
 	print "<H2>User Groups</H2>\n";
 	if($modetype == "user") {
 		if($mode == "submitAddGroup") {
@@ -89,6 +95,8 @@ function viewGroups() {
 	print "    <TD></TD>\n";
 	print "    <TH>Name</TH>\n";
 	print "    <TH>Owner</TH>\n";
+	if($showfederatedall || $showfederatedaffil)
+		print "    <TH>Type</TH>\n";
 	print "    <TH>Editable by</TH>\n";
 	print "    <TH>Initial Max Time (minutes)</TH>\n";
 	print "    <TH>Total Max Time (minutes)</TH>\n";
@@ -110,6 +118,7 @@ function viewGroups() {
 		print "    <TD nowrap><INPUT type=text name=name maxlength=30 size=20>";
 	print "</TD>\n";
 	print "    <TD><INPUT type=text name=owner size=15></TD>\n";
+	print "    <TD>Normal</TD>\n";
 	print "    <TD>\n";
 	$cdata = array('type' => 'user');
 	if(empty($affilusergroups)) {
@@ -143,6 +152,13 @@ function viewGroups() {
 		if(array_key_exists("editgroupid", $usergroups[$id]) &&
 		   array_key_exists($usergroups[$id]["editgroupid"], $user["groups"]))
 			$editor = 1;
+		if($showfederatedall && ($usergroups[$id]['custom'] == 0 ||
+		   $usergroups[$id]['courseroll'] == 1))
+			$owner = 1;
+		elseif($showfederatedaffil && ($usergroups[$id]['custom'] == 0 ||
+		   $usergroups[$id]['courseroll'] == 1) && 
+		   $usergroups[$id]['groupaffiliationid'] == $user['affiliationid'])
+			$owner = 1;
 		if(! $owner && ! $editor)
 			continue;
 		if($user['showallgroups'])
@@ -173,7 +189,18 @@ function viewGroups() {
 		print "      </FORM>\n";
 		print "    </TD>\n";
 		print "    <TD valign=bottom>{$usergroups[$id]["name"]}</TD>\n";
-		print "    <TD>{$usergroups[$id]["owner"]}</TD>\n";
+		if(! empty($usergroups[$id]["owner"]))
+			print "    <TD>{$usergroups[$id]["owner"]}</TD>\n";
+		else
+			print "    <TD>N/A</TD>\n";
+		if($showfederatedall || $showfederatedaffil) {
+			if($usergroups[$id]['courseroll'] == 1)
+				print "    <TD>Course&nbsp;Roll</TD>\n";
+			elseif($usergroups[$id]['custom'] == 0)
+				print "    <TD>Federated</TD>\n";
+			else
+				print "    <TD>Normal</TD>\n";
+		}
 		if(! empty($usergroups[$id]["editgroup"])) {
 			print "    <TD>{$usergroups[$id]["editgroup"]}@";
 			print "{$usergroups[$id]['editgroupaffiliation']}</TD>\n";
@@ -295,7 +322,7 @@ function viewGroups() {
 function editOrAddGroup($state) {
 	global $submitErr, $user, $mode;
 
-	$usergroups = getUserGroups(1);
+	$usergroups = getUserGroups();
 	if($user['showallgroups'])
 		$affilusergroups = $usergroups;
 	else
@@ -345,6 +372,8 @@ function editOrAddGroup($state) {
 			$data["totalmax"] = $usergroups[$id]["totalmaxtime"];
 			$data["maxextend"] = $usergroups[$id]["maxextendtime"];
 			$data["overlap"] = $usergroups[$id]["overlapResCount"];
+			$data["custom"] = $usergroups[$id]["custom"];
+			$data["courseroll"] = $usergroups[$id]["courseroll"];
 			$tmp = explode('@', $data['name']);
 			$data['name'] = $tmp[0];
 			if($user['showallgroups'] ||
@@ -375,7 +404,7 @@ function editOrAddGroup($state) {
 	else {
 		if($data["type"] == "user") {
 			print "<H2>Edit User Group</H2>\n";
-			print "{$usergroups[$data['groupid']]['name']}<br>\n";
+			print "{$usergroups[$data['groupid']]['name']}<br><br>\n";
 			$editusergroup = 1;
 		}
 		else
@@ -400,68 +429,75 @@ function editOrAddGroup($state) {
 			print "    <TD></TD>\n";
 			print "  </TR>\n";
 		}
-		print "  <TR>\n";
-		print "    <TH align=right>Name:</TH>\n";
-		print "    <TD><INPUT type=text name=name value=\"{$data['name']}\" ";
-		print "maxlength=30>";
-		if($data['type'] == 'user' && $selectAffil) {
-			print "@";
-			printSelectInput('affiliationid', $affils, $data['affiliationid']);
-		}
-		print "</TD>\n";
-		print "    <TD>";
-		printSubmitErr(GRPNAMEERR);
-		print "</TD>\n";
-		print "  </TR>\n";
-		if($data["type"] == "user") {
+		if($data['type'] == 'resource' ||
+		   ($data['courseroll'] == 0 && $data['custom'] == 1)) {
 			print "  <TR>\n";
-			print "    <TH align=right>Owner:</TH>\n";
-			print "    <TD><INPUT type=text name=owner value=\"" . $data["owner"];
-			print "\"></TD>\n";
+			print "    <TH align=right>Name:</TH>\n";
+			print "    <TD><INPUT type=text name=name value=\"{$data['name']}\" ";
+			print "maxlength=30>";
+			if($data['type'] == 'user' && $selectAffil) {
+				print "@";
+				printSelectInput('affiliationid', $affils, $data['affiliationid']);
+			}
+			print "</TD>\n";
 			print "    <TD>";
-			printSubmitErr(GRPOWNER);
+			printSubmitErr(GRPNAMEERR);
 			print "</TD>\n";
 			print "  </TR>\n";
-			print "  <TR>\n";
-			print "    <TH align=right>Editable by:</TH>\n";
-			print "    <TD valign=\"top\">\n";
-			$groupwasnone = 0;
-			if($submitErr & EDITGROUPERR) {
-				if($state == 0)
-					$data['editgroupid'] = $usergroups[$data['groupid']]['editgroupid'];
-				elseif(count($affilusergroups)) {
-					$tmp = array_keys($affilusergroups);
-					$data['editgroupid'] = $tmp[0];
+		}
+		if($data["type"] == "user") {
+		   if($data['courseroll'] == 0 && $data['custom'] == 1) {
+				print "  <TR>\n";
+				print "    <TH align=right>Owner:</TH>\n";
+				print "    <TD><INPUT type=text name=owner value=\"" . $data["owner"];
+				print "\"></TD>\n";
+				print "    <TD>";
+				printSubmitErr(GRPOWNER);
+				print "</TD>\n";
+				print "  </TR>\n";
+				print "  <TR>\n";
+				print "    <TH align=right>Editable by:</TH>\n";
+				print "    <TD valign=\"top\">\n";
+				$groupwasnone = 0;
+				if($submitErr & EDITGROUPERR) {
+					if($state == 0)
+						$data['editgroupid'] = $usergroups[$data['groupid']]['editgroupid'];
+					elseif(count($affilusergroups)) {
+						$tmp = array_keys($affilusergroups);
+						$data['editgroupid'] = $tmp[0];
+					}
 				}
+				$notice = '';
+				if($state == 0 && empty($usergroups[$data['groupid']]["editgroup"])) {
+					$affilusergroups = array_reverse($affilusergroups, TRUE);
+					$affilusergroups[0] = array('name' => 'None');
+					$affilusergroups = array_reverse($affilusergroups, TRUE);
+					$groupwasnone = 1;
+					$notice = "<strong>Note:</strong> You are the only person that can<br>"
+					        . "edit membership of this group. Select a<br>user group here "
+					        . "to allow members of that<br>group to edit membership of this one.";
+				}
+				elseif(! array_key_exists($data['editgroupid'], $affilusergroups) &&
+				       $data['editgroupid'] != 0) {
+					$affilusergroups[$data['editgroupid']] =
+					      array('name' => getUserGroupName($data['editgroupid'], 1));
+					uasort($affilusergroups, "sortKeepIndex");
+				}
+				if($state == 1 && $data['editgroupid'] == 0)
+					print "None\n";
+				else
+					printSelectInput("editgroupid", $affilusergroups, $data["editgroupid"]);
+				print "    </TD>\n";
+				print "    <TD>";
+				if($submitErr & EDITGROUPERR)
+					printSubmitErr(EDITGROUPERR);
+				else
+					print $notice;
+				print "</TD>";
+				print "  </TR>\n";
 			}
-			$notice = '';
-			if($state == 0 && empty($usergroups[$data['groupid']]["editgroup"])) {
-				$affilusergroups = array_reverse($affilusergroups, TRUE);
-				$affilusergroups[0] = array('name' => 'None');
-				$affilusergroups = array_reverse($affilusergroups, TRUE);
+			else
 				$groupwasnone = 1;
-				$notice = "<strong>Note:</strong> You are the only person that can<br>"
-				        . "edit membership of this group. Select a<br>user group here "
-				        . "to allow members of that<br>group to edit membership of this one.";
-			}
-			elseif(! array_key_exists($data['editgroupid'], $affilusergroups) &&
-			       $data['editgroupid'] != 0) {
-				$affilusergroups[$data['editgroupid']] =
-				      array('name' => getUserGroupName($data['editgroupid'], 1));
-				uasort($affilusergroups, "sortKeepIndex");
-			}
-			if($state == 1 && $data['editgroupid'] == 0)
-				print "None\n";
-			else
-				printSelectInput("editgroupid", $affilusergroups, $data["editgroupid"]);
-			print "    </TD>\n";
-			print "    <TD>";
-			if($submitErr & EDITGROUPERR)
-				printSubmitErr(EDITGROUPERR);
-			else
-				print $notice;
-			print "</TD>";
-			print "  </TR>\n";
 			print "  <TR>\n";
 			print "    <TH align=right>Initial Max Time (minutes):</TH>\n";
 			print "    <TD><INPUT type=text name=initialmax value=\"";
@@ -532,8 +568,12 @@ function editOrAddGroup($state) {
 			if($data['type'] == 'resource')
 				$cdata['resourcetypeid'] = $resourcetypeid;
 			else {
+				if($data['courseroll'] == 1 || $data['custom'] == 0)
+					$cdata['name'] = $data['name'];
 				$cdata['selectAffil'] = $selectAffil;
 				$cdata['groupwasnone'] = $groupwasnone;
+				$cdata['custom'] = $data['custom'];
+				$cdata['courseroll'] = $data['courseroll'];
 			}
 			$cont = addContinuationsEntry('confirmEditGroup', $cdata);
 			print "      <INPUT type=hidden name=continuation value=\"$cont\">\n";
@@ -551,7 +591,8 @@ function editOrAddGroup($state) {
 		print "</TABLE>\n";
 	}
 
-	if($data["type"] != "user")
+	if($data["type"] != "user" || $data['courseroll'] == 1 ||
+	   $data['custom'] == 0)
 		return;
 	if($editusergroup) {
 		print "<H3>Group Membership</H3>\n";
@@ -618,6 +659,8 @@ function processGroupInput($checks=1) {
 	$return = array();
 	$return["groupid"] = getContinuationVar("groupid");
 	$return["type"] = getContinuationVar("type");
+	$return["custom"] = getContinuationVar("custom", 1);
+	$return["courseroll"] = getContinuationVar("courseroll", 0);
 	$return["name"] = getContinuationVar('name', processInputVar("name", ARG_STRING));
 	$return["affiliationid"] = getContinuationVar('affiliationid', processInputVar("affiliationid", ARG_NUMERIC, $user['affiliationid']));
 	$return["resourcetypeid"] = getContinuationVar('resourcetypeid', processInputVar("resourcetypeid", ARG_NUMERIC));
@@ -639,7 +682,8 @@ function processGroupInput($checks=1) {
 		return $return;
 	}
 	
-	if(! preg_match('/^[-a-zA-Z0-9_\.: ]{3,30}$/', $return["name"])) {
+	if($return['custom'] == 1 && $return['courseroll'] == 0 &&
+	   ! preg_match('/^[-a-zA-Z0-9_\.: ]{3,30}$/', $return["name"])) {
 	   $submitErr |= GRPNAMEERR;
 	   $submitErrMsg[GRPNAMEERR] = "Name must be between 3 and 30 characters "
 		                       . "and can only contain letters, numbers, and "
@@ -656,7 +700,8 @@ function processGroupInput($checks=1) {
 	   $submitErr |= GRPNAMEERR;
 	   $submitErrMsg[GRPNAMEERR] = "A group already exists with this name.";
 	}
-	if($return["type"] == "user" && ! validateUserid($return["owner"])) {
+	if($return['custom'] == 1 && $return['courseroll'] == 0 &&
+	   $return["type"] == "user" && ! validateUserid($return["owner"])) {
 		$submitErr |= GRPOWNER;
 	   $submitErrMsg[GRPOWNER] = "Submitted ID is not valid";
 	}
@@ -737,9 +782,15 @@ function checkForGroupName($name, $type, $id, $extraid) {
 ////////////////////////////////////////////////////////////////////////////////
 function updateGroup($data) {
 	if($data['type'] == "user") {
-		if($data['editgroupid'] == 0)
+		if($data['courseroll'] == 1 || $data['custom'] == 0) {
 			$data['editgroupid'] = 'NULL';
-		$ownerid = getUserlistID($data['owner']);
+			$ownerid = 'NULL';
+		}
+		else {
+			if($data['editgroupid'] == 0)
+				$data['editgroupid'] = 'NULL';
+			$ownerid = getUserlistID($data['owner']);
+		}
 		$query = "UPDATE usergroup "
 		       . "SET name = '{$data['name']}', "
 		       .     "affiliationid = {$data['affiliationid']}, "
@@ -758,7 +809,7 @@ function updateGroup($data) {
 		       .     "ownerusergroupid = {$data['ownergroup']} "
 		       . "WHERE id = {$data['groupid']}";
 	}
-	$qh = doQuery($query, 300);
+	doQuery($query, 300);
 	return mysql_affected_rows($GLOBALS['mysql_link_vcl']);
 }
 
@@ -920,6 +971,12 @@ function confirmEditOrAddGroup($state) {
 	print "<DIV align=center>\n";
 	print "<H2>$title</H2>\n";
 	print "$question<br><br>\n";
+	if($data['courseroll'] == 1 || $data['custom'] == 0) {
+		if($user['showallgroups'])
+			print "{$data['name']}@{$affils[$data['affiliationid']]}<br><br>\n";
+		else
+			print "{$data['name']}<br><br>\n";
+	}
 	print "<TABLE>\n";
 	if($data["type"] == "resource") {
 		print "  <TR>\n";
@@ -928,30 +985,34 @@ function confirmEditOrAddGroup($state) {
 		print "</TD>\n";
 		print "  </TR>\n";
 	}
-	print "  <TR>\n";
-	print "    <TH align=right>Name:</TH>\n";
-	if($data['type'] == 'user' && ($user['showallgroups'] ||
-	   $data['affiliationid'] != $user['affiliationid']))
-		print "    <TD>{$data["name"]}@{$affils[$data['affiliationid']]}</TD>\n";
-	else
-		print "    <TD>{$data["name"]}</TD>\n";
-	print "  </TR>\n";
+	if($data['courseroll'] == 0 && $data['custom'] == 1) {
+		print "  <TR>\n";
+		print "    <TH align=right>Name:</TH>\n";
+		if($data['type'] == 'user' && ($user['showallgroups'] ||
+		   $data['affiliationid'] != $user['affiliationid']))
+			print "    <TD>{$data["name"]}@{$affils[$data['affiliationid']]}</TD>\n";
+		else
+			print "    <TD>{$data["name"]}</TD>\n";
+		print "  </TR>\n";
+	}
 	if($data["type"] == "user") {
-		print "  <TR>\n";
-		print "    <TH align=right>Owner:</TH>\n";
-		print "    <TD>" . $data["owner"] . "</TD>\n";
-		print "  </TR>\n";
-		print "  <TR>\n";
-		print "    <TH align=right>Editable by:</TH>\n";
-		if($state == 0 && $data['editgroupid'] == 0)
-			$usergroups[0]['name'] = 'None';
-		elseif(! $user['showallgroups']) {
-			$tmp = explode('@', $usergroups[$data["editgroupid"]]["name"]);
-			if($tmp[1] == $user['affiliation'])
-				$usergroups[$data["editgroupid"]]["name"] = $tmp[0];
+		if($data['courseroll'] == 0 && $data['custom'] == 1) {
+			print "  <TR>\n";
+			print "    <TH align=right>Owner:</TH>\n";
+			print "    <TD>" . $data["owner"] . "</TD>\n";
+			print "  </TR>\n";
+			print "  <TR>\n";
+			print "    <TH align=right>Editable by:</TH>\n";
+			if($state == 0 && $data['editgroupid'] == 0)
+				$usergroups[0]['name'] = 'None';
+			elseif(! $user['showallgroups']) {
+				$tmp = explode('@', $usergroups[$data["editgroupid"]]["name"]);
+				if($tmp[1] == $user['affiliation'])
+					$usergroups[$data["editgroupid"]]["name"] = $tmp[0];
+			}
+			print "    <TD>" . $usergroups[$data["editgroupid"]]["name"] . "</TD>\n";
+			print "  </TR>\n";
 		}
-		print "    <TD>" . $usergroups[$data["editgroupid"]]["name"] . "</TD>\n";
-		print "  </TR>\n";
 		print "  <TR>\n";
 		print "    <TH align=right>Initial Max Time (minutes):</TH>\n";
 		print "    <TD>{$data["initialmax"]}</TD>\n";
@@ -1049,7 +1110,7 @@ function confirmDeleteGroup() {
 	$groupid = getContinuationVar("groupid");
 	$type = getContinuationVar("type");
 
-	$usergroups = getUserGroups(1);
+	$usergroups = getUserGroups();
 	$resourcegroups = getResourceGroups();
 
 	if($type == "user") {
@@ -1096,6 +1157,21 @@ function confirmDeleteGroup() {
 		print "    <TH align=right>Owning User Group:</TH>\n";
 		print "    <TD>" . $resourcegroups[$groupid]["owner"] . "</TD>\n";
 		print "  </TR>\n";
+	}
+	elseif($usergroups[$groupid]['courseroll'] == 1 ||
+	   $usergroups[$groupid]['custom'] == 0) {
+		print "<TR>\n";
+		print "  <TH align=right>Type:</TH>\n";
+		if($usergroups[$groupid]['courseroll'] == 1)
+			print "  <TD>Course Roll</TD>\n";
+		elseif($usergroups[$groupid]['custom'] == 0)
+			print "  <TD>Federated</TD>\n";
+		print "</TR>\n";
+		print "<TR>\n";
+		print "  <TD colspan=2><strong>Note</strong>: This type of group is ";
+		print "created from external sources<br>and could be recreated from ";
+		print "those sources at any time.</TD>\n";
+		print "</TR>\n";
 	}
 	print "</TABLE>\n";
 	print "<TABLE>\n";
