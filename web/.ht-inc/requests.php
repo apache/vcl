@@ -3029,6 +3029,8 @@ function connectRequest() {
 			             $res['connectport']);
 			print preg_replace($froms, $tos, $method['connecttext']);
 			if($method['description'] == 'Remote Desktop') {
+				print "<div id=\"counterdiv\"></div>\n";
+				print "<div id=\"connectdiv\" class=\"hidden\">\n";
 				print "<FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
 				$cdata = array('requestid' => $requestid,
 				               'resid' => $res['reservationid']);
@@ -3037,6 +3039,7 @@ function connectRequest() {
 				print "<INPUT type=hidden name=continuation value=\"$cont\">\n";
 				print "<INPUT type=submit value=\"Get RDP File\">\n";
 				print "</FORM>\n";
+				print "</div>\n";
 			}
 		}
 		if($cluster)

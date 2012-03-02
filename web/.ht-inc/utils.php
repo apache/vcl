@@ -10282,6 +10282,9 @@ function getDojoHTML($refresh) {
 			                      'dojox.layout.FloatingPane',
 			                      'dijit.form.FilteringSelect');
 			break;
+		case 'connectRequest':
+			$dojoRequires = array('dojo.parser');
+			break;
 		case 'viewRequestInfo':
 			$dojoRequires = array('dojo.parser',
 			                      'dijit.Dialog',
@@ -10485,6 +10488,16 @@ function getDojoHTML($refresh) {
 	if(empty($dojoRequires))
 		return '';
 	switch($mode) {
+		case "connectRequest":
+			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
+			$rt .= "   djConfig=\"parseOnLoad: true\">\n";
+			$rt .= "</script>\n";
+			$rt .= "<script type=\"text/javascript\" src=\"js/requests.js\"></script>\n";
+			$rt .= "<script type=\"text/javascript\">\n";
+			$rt .= "   dojo.addOnLoad(showRDPbutton);\n";
+			$rt .= "</script>\n";
+			return $rt;
+
 		case "viewRequests":
 			$rt .= "<style type=\"text/css\">\n";
 			$rt .= "   @import \"themes/$skin/css/dojo/$skin.css\";\n";

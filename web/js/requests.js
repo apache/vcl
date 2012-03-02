@@ -656,3 +656,32 @@ function submitRebReinstReservation() {
 	dijit.byId('rebootreinstalldlg').hide();
 	RPCwrapper(data, generalReqCB);
 }
+
+function showRDPbutton() {
+	if(! dojo.byId('counterdiv') || ! dojo.byId('connectdiv'))
+		return;
+	var timeInterval = 5;
+	if(typeof timeInterval === 'undefined' || parseInt(timeInterval) <= 0) {
+		timeInterval = 1
+	}
+	if(timeInterval == 1)
+		dojo.byId('counterdiv').innerHTML = " Ready to connect in " + timeInterval + " second";
+	else
+		dojo.byId('counterdiv').innerHTML = " Ready to connect in " + timeInterval + " seconds";
+	var si = setInterval(function() {
+		if(timeInterval === 0) {
+			clearInterval(si);
+		} else {
+			timeInterval--;
+			if(timeInterval !== 0) {
+				if(timeInterval == 1)
+					dojo.byId('counterdiv').innerHTML = " Ready to connect in " + timeInterval + " second";
+				else
+					dojo.byId('counterdiv').innerHTML = " Ready to connect in " + timeInterval + " seconds";
+			} else {
+				dojo.addClass('counterdiv', 'hidden');
+				dojo.removeClass('connectdiv', 'hidden');
+			}
+		}
+	}, 1000);
+}
