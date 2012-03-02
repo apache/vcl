@@ -34,7 +34,7 @@ function blockAllocations() {
 	if(! checkUserHasPerm('Manage Block Allocations (global)') &&
 	   ! checkUserHasPerm('Manage Block Allocations (affiliation only)')) {
 		print "<H2>Block Allocations</H2>\n";
-		print "Block Allocations are a way to have a set of machines preloaded with a particular environment at specified times and made available to a specific group of users. This is very useful for classroom use and for workshops. They can be made available on a repeating schedule such as when a course meets each week. Block Allocations only allocate machines for the group of users - they do not create the actual, end user reservations for the machines. All users still must log in to the VCL web site and make their own reservations DURING the period a block allocation is active. The forms here provide a way for you to submit a request for a Block Allocation for review by a sysadmin. If you just need to use a machine through VCL, use the New Reservation page for that.<br><br>\n";
+		print "Block Allocations are a way to have a set of machines preloaded with a particular environment at specified times and made available to a specific group of users. This is very useful for classroom use and for workshops. They can be made available on a repeating schedule such as when a course meets each week. Block Allocations only allocate machines for the group of users - they do not create the actual, end user reservations for the machines. All users still must log in to the VCL web site and make their own reservations DURING the period a block allocation is active. The forms here provide a way for you to submit a request for a Block Allocation for review by a sysadmin. If you just need to use a machine through VCL, use the New Reservation page for that.<br><br>Please submit Block Allocation requests at least one full business day in advance to allow time for them to be approved.<br><br>\n";
 		print "<button dojoType=\"dijit.form.Button\" type=\"button\">\n";
 		print "  Request New Block Allocation\n";
 		print "  <script type=\"dojo/method\" event=\"onClick\">\n";
@@ -557,7 +557,7 @@ END;
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function AJblockAllocationSubmit() {
-	global $user, $blockNotifyUsers;
+	global $user;
 	$data = processBlockAllocationInput();
 	if($data['err'])
 		return;
@@ -645,20 +645,6 @@ function AJblockAllocationSubmit() {
 		doQuery($query, 101);
 	}
 	elseif($method == 'request') {
-		# send email notifying about a new block allocation request
-		$message = "A new block allocation request has been submitted by ";
-		if(! empty($user['firstname']) && ! empty($user['lastname']) && ! empty($user['email']))
-			$message .= "{$user['firstname']} {$user['lastname']} ({$user['email']}). ";
-		elseif(! empty($user['email']))
-			$message .= "{$user['email']}. ";
-		else
-			$message .= "{$user['unityid']}. ";
-		$message .= "Please visit the following URL to accept or reject it:\n\n"
-		         .  BASEURL . SCRIPT . "?mode=blockAllocations\n\n"
-		         .  "(This is an automated message sent by VCL.)\n";
-		$mailParams = "-f" . ENVELOPESENDER;
-		mail($blockNotifyUsers, "VCL Block Allocation Request ({$user['unityid']})", $message, '', $mailParams);
-
 		$esccomments = mysql_real_escape_string($data['comments']);
 		$query = "INSERT INTO blockRequest "
 		       .        "(name, "
@@ -682,6 +668,35 @@ function AJblockAllocationSubmit() {
 		       .        "'$esccomments')";
 		doQuery($query, 101);
 		$blockreqid = dbLastInsertID();
+
+		# send email notifying about a new block allocation request
+		$imagedata = getImages(0, $data['imageid']);
+		if($data['groupid'] == 0)
+			$grpname = "(Unspecified)";
+		else
+			$grpname = getUserGroupName($data['groupid']);
+		if(! empty($data['comments']))
+			$comments = "Comments:\n{$data['comments']}\n";
+		else
+			$comments = '';
+		$message = "A new block allocation request has been submitted by ";
+		if(! empty($user['firstname']) && ! empty($user['lastname']) && ! empty($user['email']))
+			$message .= "{$user['firstname']} {$user['lastname']} ({$user['email']}). ";
+		elseif(! empty($user['email']))
+			$message .= "{$user['email']}. ";
+		else
+			$message .= "{$user['unityid']}. ";
+		$message .= "Please visit the following URL to accept or reject it:\n\n"
+		         .  BASEURL . SCRIPT . "?mode=blockAllocations\n\n"
+		         .  "Image: {$imagedata[$data['imageid']]['prettyname']}\n"
+		         .  "Seats: {$data['seats']}\n"
+		         .  "User Group: $grpname\n$comments\n\n"
+		         .  "This is an automated message sent by VCL.\n"
+		         .  "You are receiving this message because you have access "
+		         .  "to create and approve block allocations.";
+		$mailParams = "-f" . ENVELOPESENDER;
+		$blockNotifyUsers = getBlockNotifyUsers($user['affiliationid']);
+		mail($blockNotifyUsers, "VCL Block Allocation Request ({$user['unityid']})", $message, '', $mailParams);
 	}
 
 	if($data['type'] == 'weekly') {
@@ -993,6 +1008,44 @@ function createListBlockData($blockid, $slots, $method) {
 		doQuery($query, 101);
 		deleteBlockSkipDuplicates($blockid);
 	}
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn getBlockNotifyUsers($affiliationid)
+///
+/// \param $affiliationid - an affiliation id
+///
+/// \return string of comma delimited email addresses
+///
+/// \brief gets email addresses for all users that should be notified about a
+/// block allocation
+///
+////////////////////////////////////////////////////////////////////////////////
+function getBlockNotifyUsers($affiliationid) {
+	$query = "SELECT DISTINCT(u.email) "
+	       . "FROM user u, "
+	       .      "usergroupmembers ugm, "
+	       .      "usergroup ug, "
+	       .      "usergrouppriv ugp, "
+	       .      "usergroupprivtype ugpt "
+	       . "WHERE ((ugpt.name = 'Manage Block Allocations (global)' AND "
+	       .       "ugp.userprivtypeid = ugpt.id AND "
+	       .       "ugp.usergroupid = ugm.usergroupid AND "
+	       .       "ugp.usergroupid = ug.id AND "
+	       .       "ugm.userid = u.id) OR "
+	       .       "(ugpt.name = 'Manage Block Allocations (affiliation only)' AND "
+	       .       "ugp.userprivtypeid = ugpt.id AND "
+	       .       "ugp.usergroupid = ugm.usergroupid AND "
+	       .       "ugm.userid = u.id AND "
+	       .       "ugp.usergroupid = ug.id AND "
+	       .       "ug.affiliationid = $affiliationid)) AND "
+	       .       "u.email != ''";
+	$qh = doQuery($query);
+	$addrs = array();
+	while($row = mysql_fetch_assoc($qh))
+		$addrs[] = $row['email'];
+	return implode(',', $addrs);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -2918,7 +2971,7 @@ function processBlockAllocationInput() {
 	if(! $err) {
 		$imgdata = getImages(0, $return['imageid']);
 		$concur = $imgdata[$return['imageid']]['maxconcurrent'];
-		if($return['seats'] > $concur) {
+		if(! is_null($concur) && $return['seats'] > $concur) {
 			$errmsg = "The selected image can only have $concur concurrent "
 			        . "reservations. Please reduce the number of requested "
 			        . "seats to $concur or less.";
