@@ -2689,7 +2689,7 @@ sub _getcurrentimage {
 			#else {
 			#}
 		}
-		if ($s =~ /^(rh|win|fc|vmware|cent)/) {
+		if ($s =~ /^(rh|win|fc|vmware|cent|fe)/) {
 			chomp($s);
 			if ($s =~ s/\x0d//) {
 				notify($ERRORS{'OK'}, 0, "stripped dos newline $s");

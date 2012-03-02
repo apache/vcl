@@ -98,49 +98,22 @@ sub get_node_configuration_directory {
 
 =head2 pre_capture
 
- Parameters  : $arguments->{end_state}
+ Parameters  : none
  Returns     : boolean
- Description : Performs the Linux-specific tasks that must be done to the
-               computer prior to capturing an image.
-               An optional hash reference argument may be passed. By default,
-               the computer is shutdown by this subroutine. If this hash
-               contains a key named 'end_state' with a value of anything other
-               than 'off', the computer will not be shutdown.
-               Examples:
-               Computer will be shutdown:
-                  $self->os->pre_capture();
-                  $self->os->pre_capture({'end_state' => 'off'});
-               Computer will not be shutdown:
-                  $self->os->pre_capture({'end_state' => 'on'});
+ Description :
 
 =cut
 
 sub pre_capture {
 	my $self = shift;
-	my $args = shift;
 	if (ref($self) !~ /VCL::Module/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
 	
-	# Check if end_state argument was passed
-	# This argument allows provisioning modules to specify whether or not the computer should be shutdown when the pre-capture tasks are complete
-	if (defined $args->{end_state}) {
-		$self->{end_state} = $args->{end_state};
-	}
-	else {
-		$self->{end_state} = 'off';
-	}
-	
-	my $computer_node_name = $self->data->get_computer_node_name();
-	
-	# Call OS::pre_capture to perform the pre-capture tasks common to all OS's
-	if (!$self->SUPER::pre_capture($args)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to execute parent class pre_capture() subroutine");
-		return 0;
-	}
-	
+	my $computer_node_name       = $self->data->get_computer_node_name();
 	notify($ERRORS{'OK'}, 0, "beginning Linux-specific image capture preparation tasks");
+	
 	
 	if (!$self->file_exists("/root/.vclcontrol/vcl_exclude_list.sample")) {
       notify($ERRORS{'DEBUG'}, 0, "/root/.vclcontrol/vcl_exclude_list.sample does not exists");
@@ -165,7 +138,7 @@ sub pre_capture {
 	}
 	
 	if(!$self->clean_iptables()) {
-		return 0;
+		return;
 	}
 
 	# Try to clear /tmp
@@ -221,8 +194,8 @@ sub pre_capture {
 	}
 
 	# Generate ext_sshd init script
-	if(!(grep( /init.d\/ext_sshd/ , @exclude_list ) ) ){
-		if(!$self->generate_ext_sshd_init()){
+	if(!(grep( /ext_sshd/ , @exclude_list ) ) ){
+		if(!$self->generate_ext_sshd_start()){
 			notify($ERRORS{'WARNING'}, 0, "unable to generate /etc/init.d/ext_sshd on $computer_node_name");
 			return;
 		}
@@ -231,18 +204,13 @@ sub pre_capture {
 	# Configure the private and public interfaces to use DHCP
 	if (!$self->enable_dhcp()) {
 		notify($ERRORS{'WARNING'}, 0, "failed to enable DHCP on the public and private interfaces");
-		return 0;
+		return;
 	}
 	
 	# Shut the computer down
-	if ($self->{end_state} eq 'off') {
-		if (!$self->shutdown()) {
-			notify($ERRORS{'WARNING'}, 0, "failed to shut down $computer_node_name");
-			return 0;
-		}
-	}
-	else {
-		notify($ERRORS{'DEBUG'}, 0, "not shutting down $computer_node_name, '$self->{end_state}' end state argument was passed");
+	if (!$self->shutdown()) {
+		notify($ERRORS{'WARNING'}, 0, "failed to shut down $computer_node_name");
+		return;
 	}
 
 	notify($ERRORS{'OK'}, 0, "Linux pre-capture steps complete");
@@ -263,7 +231,7 @@ sub post_load {
 	my $self = shift;
 	if (ref($self) !~ /linux/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return 0;
+		return;
 	}
 
 	my $management_node_keys  = $self->data->get_management_node_keys();
@@ -283,31 +251,46 @@ sub post_load {
 	}
 	
 	if ($image_os_install_type eq "kickstart"){
-		notify($ERRORS{'OK'}, 0, "detected kickstart install on $computer_short_name, writing current_image.txt");
-		if (write_currentimage_txt($self->data)){
+		  notify($ERRORS{'OK'}, 0, "detected kickstart install on $computer_short_name, writing current_image.txt");
+		  if (write_currentimage_txt($self->data)){
 			notify($ERRORS{'OK'}, 0, "wrote current_image.txt on $computer_short_name");
-		}
-		else {
+		  }
+		  else {
 			notify($ERRORS{'WARNING'}, 0, "failed to write current_image.txt on $computer_short_name");
-		}
+		  }
+
+
+		  #Generate ext_sshd_config
+		  if(!$self->generate_ext_sshd_config()){
+			notify($ERRORS{'WARNING'}, 0, "unable to generate /etc/ssh/external_sshd_config on $computer_node_name");
+			#return 0;
+		  }
+
+		  # Generate ext_sshd init script
+		  if(!$self->generate_ext_sshd_start()){
+		  notify($ERRORS{'WARNING'}, 0, "unable to generate /etc/init.d/ext_sshd on $computer_node_name");
+		  #return 0;
+		  }
+		
+		  #Generate rc.local
+		  if (!$self->generate_rc_local()){
+			notify($ERRORS{'WARNING'}, 0, "unable to generate /etc/rc.local script on $computer_node_name");
+			#return 0;
+		  }
+
 	}
 	
 	# Change password
 	if ($self->changepasswd($computer_node_name, "root")) {
 		notify($ERRORS{'OK'}, 0, "successfully changed root password on $computer_node_name");
-		#insertloadlog($reservation_id, $computer_id, "info", "SUCCESS randomized roots password");
 	}
 	else {
 		notify($ERRORS{'OK'}, 0, "failed to edit root password on $computer_node_name");
 	}
 	
 	#disable ext_sshd
-	my @stopsshd = run_ssh_command($computer_short_name, $management_node_keys, "/etc/init.d/ext_sshd stop", "root");
-	foreach my $l (@{$stopsshd[1]}) {
-		if ($l =~ /Stopping ext_sshd/) {
+	if($self->stop_service("ext_sshd")){
 			notify($ERRORS{'OK'}, 0, "ext sshd stopped on $computer_node_name");
-			last;
-		}
 	}
 
 	#Clear user from external_sshd_config
@@ -994,17 +977,24 @@ sub grant_access {
 	}
 
 	undef @sshcmd;
-	@sshcmd = run_ssh_command($computer_node_name, $identity, "/etc/init.d/ext_sshd stop; /etc/init.d/ext_sshd start", "root");
+	
+	#@sshcmd = run_ssh_command($computer_node_name, $identity, "/etc/init.d/ext_sshd stop; /etc/init.d/ext_sshd start", "root");
 
-	foreach my $l (@{$sshcmd[1]}) {
-		if ($l =~ /Stopping ext_sshd:/i) {
-			#notify($ERRORS{'OK'},0,"stopping sshd on $computer_node_name ");
-		}
-		if ($l =~ /Starting ext_sshd:[  OK  ]/i) {
-			notify($ERRORS{'OK'}, 0, "ext_sshd on $computer_node_name started");
-		}
-	}    #foreach
-	notify($ERRORS{'OK'}, 0, "started ext_sshd on $computer_node_name");
+	if($self->stop_service("ext_sshd")) {
+	
+	}
+	if($self->start_service("ext_sshd")) {
+		notify($ERRORS{'OK'}, 0, "started ext_sshd on $computer_node_name");
+	}
+
+	#foreach my $l (@{$sshcmd[1]}) {
+	#	if ($l =~ /Stopping ext_sshd:/i) {
+	#		#notify($ERRORS{'OK'},0,"stopping sshd on $computer_node_name ");
+	#	}
+	#	if ($l =~ /Starting ext_sshd:[  OK  ]/i) {
+	#		notify($ERRORS{'OK'}, 0, "ext_sshd on $computer_node_name started");
+	#	}
+	#}    #foreach
 
 	if($self->process_connect_methods("", 1) ){
 		notify($ERRORS{'OK'}, 0, "processed connection methods on $computer_node_name setting 0.0.0.0 for all allowed ports");
@@ -1458,7 +1448,7 @@ sub delete_file {
 	# Get the path argument
 	my $path = shift;
 	if (!$path) {
-		notify($ERRORS{'WARNING'}, 0, "path argument was not specified");
+		notify($ERRORS{'WARNING'}, 0, "path argument were not specified");
 		return;
 	}
 	
@@ -1531,10 +1521,6 @@ sub create_directory {
 	# Remove any quotes from the beginning and end of the path
 	$directory_path = normalize_file_path($directory_path);
 	
-	# If ~ is passed as the directory path, skip directory creation attempt
-	# The command will create a /root/~ directory since the path is enclosed in quotes
-	return 1 if $directory_path eq '~';
-	
 	my $computer_short_name = $self->data->get_computer_short_name();
 	
 	# Attempt to create the directory
@@ -1550,7 +1536,7 @@ sub create_directory {
 	}
 	elsif (grep(/^\s*$directory_path\s*$/, @$output)) {
 		if (grep(/ls:/, @$output)) {
-			notify($ERRORS{'OK'}, 0, "directory created on $computer_short_name: '$directory_path'\ncommand: '$command'\nexit status: $exit_status\noutput:\n" . join("\n", @$output));
+			notify($ERRORS{'OK'}, 0, "directory created on $computer_short_name: '$directory_path'");
 		}
 		else {
 			notify($ERRORS{'OK'}, 0, "directory already exists on $computer_short_name: '$directory_path'");
@@ -1694,8 +1680,8 @@ sub get_available_space {
  Returns     : If successful: integer
                If failed: undefined
  Description : Returns the total size in bytes of the volume where the path
-               resides specified by the argument. Undefined is returned if an
-               error occurred.
+					resides specified by the argument. Undefined is returned if an
+					error occurred.
 
 =cut
 
@@ -2244,11 +2230,11 @@ sub generate_rc_local {
         push(@array2print, 'echo "AllowUsers root" >> /etc/ssh/sshd_config' . "\n");
         push(@array2print, 'echo "ListenAddress $IP0" >> /etc/ssh/sshd_config' . "\n");
         push(@array2print, 'echo "ListenAddress $IP1" >> /etc/ssh/external_sshd_config' . "\n");
-        push(@array2print, '/etc/rc.d/init.d/ext_sshd stop' . "\n");
-        push(@array2print, '/etc/rc.d/init.d/sshd stop' . "\n");
+        push(@array2print, 'service ext_sshd stop' . "\n");
+        push(@array2print, 'service sshd reload' . "\n");
         push(@array2print, 'sleep 2' . "\n");
-        push(@array2print, '/etc/rc.d/init.d/sshd start' . "\n");
-        push(@array2print, '/etc/rc.d/init.d/ext_sshd start' . "\n");
+        #push(@array2print, 'service sshd start' . "\n");
+        push(@array2print, 'service ext_sshd start' . "\n");
 
 	#write to tmpfile
 	my $tmpfile = "/tmp/$request_id.rc.local";
@@ -2262,14 +2248,14 @@ sub generate_rc_local {
 		return 0;
 	}
 	#copy to node
-	if (run_scp_command($tmpfile, "$computer_node_name:/etc/rc.local", $management_node_keys)) {
+	if (run_scp_command($tmpfile, "$computer_node_name:/etc/rc.d/rc.local", $management_node_keys)) {
 	}
 	else{
 		return 0;
 	}
 	
 	# Assemble the command
-	my $command = "chmod +rx /etc/rc.local";
+	my $command = "chmod +rx /etc/rc.d/rc.local";
 	
 	# Execute the command
 	my ($exit_status, $output) = run_ssh_command($computer_node_name, $management_node_keys, $command, '', '', 1);
@@ -2277,18 +2263,72 @@ sub generate_rc_local {
 		notify($ERRORS{'OK'}, 0, "executed $command, exit status: $exit_status");
 	}
 	elsif (defined($exit_status)) {
-		notify($ERRORS{'WARNING'}, 0, "setting rx on /etc/rc.local returned a non-zero exit status: $exit_status");
+		notify($ERRORS{'WARNING'}, 0, "setting rx on /etc/rc.d/rc.local returned a non-zero exit status: $exit_status");
 		return;
 	}
 	else {
 		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to execute script_path");
 		return 0;
 	}
-	
+
 	unlink($tmpfile);
+	
+	#confirm /etc/rc.local is symbolic link to /etc/rc.d/rc.local
+	$command = "file /etc/rc.local";
+	my $symlink = 0;
+	
+	my ($echo_exit_status, $echo_output) = $self->execute($command, 1);
+		  if (!defined($echo_output)) {
+             notify($ERRORS{'WARNING'}, 0, "failed to run command to check file of /etc/rc.local");
+        }
+        elsif (grep(/symbolic/, @$echo_output)) {
+					 notify($ERRORS{'OK'}, 0, "confirmed /etc/rc.local is symbolic link \n" . join("\n", @$echo_output));
+					 $symlink = 1;
+        }
+	
+	if(!$symlink) {
+		my $symlink_command = "mv /etc/rc.local /etc/_orig.rc.local ; ln -s /etc/rc.d/rc.local /etc/rc.local";
+		my ($sym_exit_status, $sym_output) = $self->execute($symlink_command, 1);
+      if (!defined($sym_output)) {
+           		notify($ERRORS{'WARNING'}, 0, "failed to run symlink_command $symlink_command on node $computer_node_name");
+      }
+		else {
+             		notify($ERRORS{'OK'}, 0, "successfully ran $symlink_command on $computer_node_name");
+		}
+	}
+	
+	# If systemd managed; confirm rc-local.service is enabled
+	if($self->file_exists("/lib/systemd") ) {
+		my $systemctl_command = "systemctl enable rc-local.service";
+		my ($systemctl_exit_status, $systemctl_output) = $self->execute($systemctl_command, 1);
+      	if (!defined($systemctl_output)) {
+           		notify($ERRORS{'WARNING'}, 0, "failed to run $systemctl_command on node $computer_node_name");
+      	}
+			else {
+      	  	notify($ERRORS{'OK'}, 0, "successfully ran $systemctl_command on $computer_node_name \n" . join("\n", @$systemctl_output));
+				#Start rc-local.service
+				if($self->start_service("rc-local")) {
+					notify($ERRORS{'OK'}, 0, "started rc-local.service on $computer_node_name");
+				}
+				else {
+					notify($ERRORS{'OK'}, 0, "failed to start rc-local.service on $computer_node_name");
+					return 0
+				}
+			}
+	}
+	else {
+		#Re-run rc.local
+		my ($rclocal_exit_status, $rclocal_output) = $self->execute("/etc/rc.local");
+		if (!defined($rclocal_exit_status)) {
+          notify($ERRORS{'WARNING'}, 0, "failed to run /etc/rc.local on node $computer_node_name");
+      }
+		else {
+			notify($ERRORS{'OK'}, 0, "successfully ran /etc/rc.local");
+		}
+
+	}
 
 	return 1;
-	
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -2379,7 +2419,7 @@ sub generate_ext_sshd_config {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 generate_ext_sshd_init
+=head2 generate_ext_sshd_start
 
  Parameters  : none
  Returns     : boolean
@@ -2387,7 +2427,108 @@ sub generate_ext_sshd_config {
 
 =cut
 
-sub generate_ext_sshd_init {
+sub generate_ext_sshd_start {
+   my $self = shift;
+   if (ref($self) !~ /linux/i) {
+      notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+      return 0;
+   }
+
+	if($self->file_exists("/lib/systemd") ) {
+		if(!($self->generate_ext_sshd_systemd)) {
+			return 0;
+		}
+	}
+	else {
+		if(!($self->generate_ext_sshd_sysVinit)) {
+			return 0;
+		}
+	}
+	return 1;
+
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 generate_ext_sshd_systemd
+
+ Parameters  : none
+ Returns     : boolean
+ Description :
+
+=cut
+
+sub generate_ext_sshd_systemd {
+   my $self = shift;
+   if (ref($self) !~ /linux/i) {
+      notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+      return 0;
+   }
+   
+   my $computer_short_name      = $self->data->get_computer_short_name();
+   my $computer_node_name       = $self->data->get_computer_node_name();
+	my $request_id               = $self->data->get_request_id();
+	my $management_node_keys  = $self->data->get_management_node_keys();
+
+	my $tmpfile = "/tmp/$request_id.ext_sshd.service";
+	my @array2print;
+
+	push(@array2print, '[Unit]' . "\n");
+	push(@array2print, 'Description=External OpenSSH server daemon.' . "\n");
+	push(@array2print, 'After=syslog.target network.target auditd.service' . "\n");
+	push(@array2print, "\n");
+	push(@array2print, '[Service]' . "\n");
+	push(@array2print, 'ExecStart=/usr/sbin/sshd -D -f /etc/ssh/external_sshd_config' . "\n");
+	push(@array2print, "\n");
+	push(@array2print, '[Install]' . "\n");
+	push(@array2print, 'WantedBy=multi-user.target' . "\n");
+	
+	#save to file
+   if(open(WRITEFILE,">$tmpfile")){
+      print WRITEFILE @array2print;
+      close(WRITEFILE);
+   }
+
+   #copy temp file to node
+   if (run_scp_command($tmpfile, "$computer_node_name:/lib/systemd/system/ext_sshd.service", $management_node_keys)) {
+      notify($ERRORS{'DEBUG'}, 0, "copied $tmpfile to $computer_node_name:/lib/systemd/system/ext_sshd.service");
+   }
+   else{
+      notify($ERRORS{'WARNING'}, 0, "failed to copied $tmpfile to $computer_node_name:/lib/systemd/system/ext_sshd.service");
+      return 0;
+   }
+	
+	#Enable ext_sshd.service
+	my $systemctl_command = "systemctl enable ext_sshd.service";
+   my ($systemctl_exit_status, $systemctl_output) = $self->execute($systemctl_command, 1);
+   if (!defined($systemctl_output)) {
+       notify($ERRORS{'WARNING'}, 0, "failed to run $systemctl_command on node $computer_node_name");
+   }
+   else {
+       notify($ERRORS{'OK'}, 0, "successfully ran $systemctl_command on $computer_node_name \n" . join("\n", @$systemctl_output));
+   }
+
+   #delete local tmpfile
+   unlink($tmpfile);
+
+   return 1;	
+	
+	
+
+}
+
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 generate_ext_sshd_sysVinit
+
+ Parameters  : none
+ Returns     : boolean
+ Description :
+
+=cut
+
+sub generate_ext_sshd_sysVinit {
 	my $self = shift;
 	if (ref($self) !~ /linux/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
@@ -2662,7 +2803,7 @@ sub get_network_configuration {
 
 =head2 reboot
 
- Parameters  : 
+ Parameters  : $wait_for_reboot
  Returns     : 
  Description : 
 
@@ -2676,7 +2817,15 @@ sub reboot {
 	}
 	
 	my $computer_node_name   = $self->data->get_computer_node_name();
-	notify($ERRORS{'DEBUG'}, 0, "rebooting $computer_node_name");
+	
+	# Check if an argument was supplied
+	my $wait_for_reboot = shift || 1;
+	if ($wait_for_reboot) {
+		notify($ERRORS{'DEBUG'}, 0, "rebooting $computer_node_name and waiting for SSH to become active");
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "rebooting $computer_node_name and NOT waiting");
+	}
 	
 	my $reboot_start_time = time();
 	
@@ -2727,7 +2876,13 @@ sub reboot {
 		}
 	}
 	
-	if ($self->wait_for_reboot()){
+	# Check if wait for reboot is set
+	if (!$wait_for_reboot) {
+		return 1;
+	}
+	
+	my $wait_attempt_limit = 2;
+	if ($self->wait_for_reboot($wait_attempt_limit)){
 		# Reboot was successful, calculate how long reboot took
 		my $reboot_end_time = time();
 		my $reboot_duration = ($reboot_end_time - $reboot_start_time);
@@ -2735,7 +2890,7 @@ sub reboot {
 		return 1;
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "reboot failed on $computer_node_name");
+		notify($ERRORS{'WARNING'}, 0, "reboot failed on $computer_node_name, made $wait_attempt_limit attempts");
 		return 0;
 	}
 
@@ -3072,20 +3227,33 @@ sub service_exists {
 	
 	my $management_node_keys = $self->data->get_management_node_keys();
 	my $computer_node_name   = $self->data->get_computer_node_name();
+
 	
 	my $service_name = shift;
 	if (!$service_name) {
 		notify($ERRORS{'WARNING'}, 0, "service name was not passed as an argument");
 		return;
 	}
+	my $command;
 	
-	my $command = "/sbin/chkconfig --list $service_name";
+	# Check if OS is using systemd or SysVinit
+	if($self->file_exists("/lib/systemd")) {
+		$command = "systemctl is-enabled $service_name" . ".service";	
+	}
+	else {
+		$command = "/sbin/chkconfig --list $service_name";
+	}	
+	
 	my ($exit_status, $output) = run_ssh_command($computer_node_name, $management_node_keys, $command, '', '', 1);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute command to determine if '$service_name' service exists on $computer_node_name");
 		return;
 	}
 	elsif (grep(/error reading information on service/i, @$output)) {
+		notify($ERRORS{'DEBUG'}, 0, "'$service_name' service does not exist on $computer_node_name");
+		return 0;
+	}
+	elsif (grep(/Failed to issue method call/i, @$output)) {
 		notify($ERRORS{'DEBUG'}, 0, "'$service_name' service does not exist on $computer_node_name");
 		return 0;
 	}
@@ -3133,9 +3301,17 @@ sub start_service {
                 notify($ERRORS{'WARNING'}, 0, "service name was not passed as an argument");
                 return;
         }
+		  my $command;
 
-	my $command = "/sbin/service $service_name start";
-	my ($status, $output) = run_ssh_command($computer_node_name, $management_node_keys, $command, '', '', 1);
+		  # Check if OS is using systemd or SysVinit
+		  if($self->file_exists("/lib/systemd")){
+					 $command = "systemctl start $service_name" . ".service";
+		  }
+		  else {
+				  $command = "/sbin/service $service_name start";
+		  }
+
+		  my ($status, $output) = run_ssh_command($computer_node_name, $management_node_keys, $command, '', '', 1);
         if (defined($output) && grep(/failed/i, @{$output})) {
                 notify($ERRORS{'DEBUG'}, 0, "service does not exist: $service_name");
                 return 0;
@@ -3153,13 +3329,12 @@ sub start_service {
         }
 
         return 1;
-	
 
 }
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 start_service
+=head2 stop_service
 
  Parameters  : $service_name
  Returns     : If service started: 1
@@ -3184,8 +3359,16 @@ sub stop_service {
                 notify($ERRORS{'WARNING'}, 0, "service name was not passed as an argument");
                 return;
         }
+        my $command;
 
-        my $command = "/sbin/service $service_name stop";
+        # Check if OS is using systemd or SysVinit
+        if($self->file_exists("/lib/systemd")){
+                $command = "systemctl stop $service_name" . ".service";
+        }
+        else {
+              $command = "/sbin/service $service_name stop";
+        }
+
         my ($status, $output) = run_ssh_command($computer_node_name, $management_node_keys, $command, '', '', 1);
         if (defined($output) && grep(/failed/i, @{$output})) {
                 notify($ERRORS{'DEBUG'}, 0, "service does not exist: $service_name");
