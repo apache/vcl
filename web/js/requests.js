@@ -658,6 +658,7 @@ function submitRebReinstReservation() {
 }
 
 function showRDPbutton() {
+	// submitted by Gerhard Harti from ODU
 	if(! dojo.byId('counterdiv') || ! dojo.byId('connectdiv'))
 		return;
 	var timeInterval = 5;
