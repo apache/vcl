@@ -272,43 +272,37 @@ sub initialize {
 	
 	my $vmware_api;
 	
-	notify($ERRORS{'DEBUG'}, 0, "attempting to create OS object for the image currently loaded on the VM host: $vmhost_computer_name\nimage name: $vmhost_image_name\nOS module: $vmhost_os_module_package");
-	if (my $vmhost_os = $self->get_vmhost_os_object($vmhost_os_module_package)) {
-		# Check if SSH is responding
-		if ($vmhost_os->is_ssh_responding(3)) {
-			$self->{vmhost_os} = $vmhost_os;
-			notify($ERRORS{'OK'}, 0, "OS on VM host $vmhost_computer_name will be controlled using a " . ref($self->{vmhost_os}) . " OS object");
-		}
-		else {
-			notify($ERRORS{'DEBUG'}, 0, "unable to control OS of VM host $vmhost_computer_name using $vmhost_os_module_package OS object because VM host is not responding to SSH");
-		}
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "unable to create $vmhost_os_module_package OS object to control the OS of VM host: $vmhost_computer_name");
-	}
-	
 	# Create an API object which will be used to control the VM (register, power on, etc.)
 	if (($vmware_api = $self->get_vmhost_api_object($VSPHERE_SDK_PACKAGE)) && !$vmware_api->is_restricted()) {
 		notify($ERRORS{'DEBUG'}, 0, "vSphere SDK object will be used to control the VM host $vmhost_computer_name and the VM: $vm_computer_name");
 		
-		$self->{vmhost_os} = $vmware_api if (!$self->{vmhost_os});
+		$self->set_vmhost_os($vmware_api);
 	}
 	else {
 		# SSH access to the VM host OS is required if the vSphere SDK can't be used
-		if (!$self->{vmhost_os}) {
-			notify($ERRORS{'WARNING'}, 0, "no methods are available to control VM host $vmhost_computer_name, the vSphere SDK cannot be used to control the VM host and the host OS cannot be controlled via SSH");
+		if (!$self->vmhost_os) {
+			notify($ERRORS{'WARNING'}, 0, "unable to control VM host $vmhost_computer_name, vSphere SDK cannot be used and the VM host OS object is not available");
+			return;
+		}
+		
+		# Check if SSH is responding
+		if ($self->vmhost_os->is_ssh_responding(3)) {
+			notify($ERRORS{'OK'}, 0, "OS on VM host $vmhost_computer_name will be controlled using " . ref($self->vmhost_os) . " OS object");
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "unable to control OS of VM host $vmhost_computer_name using $vmhost_os_module_package OS object because VM host is not responding to SSH");
 			return;
 		}
 		
 		# Try to create one of the other types of objects to control the VM host
 		if ($vmware_api = $self->get_vmhost_api_object($VIM_SSH_PACKAGE)) {
-			notify($ERRORS{'DEBUG'}, 0, "VMware on VM host $vmhost_computer_name will be controlled using vim-cmd via SSH");
+			notify($ERRORS{'DEBUG'}, 0, "VM host $vmhost_computer_name will be controlled using vim-cmd via SSH");
 		}
 		elsif ($vmware_api = $self->get_vmhost_api_object($VMWARE_CMD_PACKAGE)) {
-			notify($ERRORS{'DEBUG'}, 0, "VMware on VM host $vmhost_computer_name will be controlled using vmware-cmd via SSH");
+			notify($ERRORS{'DEBUG'}, 0, "VM host $vmhost_computer_name will be controlled using vmware-cmd via SSH");
 		}
 		else {
-			notify($ERRORS{'WARNING'}, 0, "failed to create an object to control VMware on VM host: $vmhost_computer_name");
+			notify($ERRORS{'WARNING'}, 0, "failed to create an object to control VM host: $vmhost_computer_name");
 			return;
 		}
 	}
@@ -317,14 +311,14 @@ sub initialize {
 	$self->{api} = $vmware_api;
 	
 	notify($ERRORS{'DEBUG'}, 0, "VMware OS and API objects created for VM host $vmhost_computer_name:\n" .
-			 "VM host OS object type: " . ref($self->{vmhost_os}) . "\n" .
-			 "VMware API object type: " . ref($self->{api}) . "\n"
+			 "VM host OS object type: " . ref($self->vmhost_os) . "\n" .
+			 "VMware API object type: " . ref($self->api) . "\n"
 	);
-
+	
 	# Make sure the VMware product name can be retrieved
 	my $vmhost_product_name = $self->get_vmhost_product_name();
 	if (!$vmhost_product_name) {
-		notify($ERRORS{'WARNING'}, 0, "unable to determine VMware product installed on VM host $vmhost_computer_name");
+		notify($ERRORS{'WARNING'}, 0, "VMware module initialization failed, unable to determine VMware product installed on VM host $vmhost_computer_name");
 		return;
 	}
 	
@@ -358,7 +352,7 @@ sub initialize {
 	if ($request_state_name eq 'timeout' && (!$vmhost_lastcheck_time || (time - convert_to_epoch_seconds($vmhost_lastcheck_time)) > (60 * 60 * 24 * 30))) {
 		# Configure the SSH authorized_keys file to persist through reboots if the VM host is running VMware ESXi
 		# This shouldn't need to be done more than once, only call this if the state is 'reclaim'
-		if (ref($self->{vmhost_os}) =~ /Linux/i && $vmhost_product_name =~ /ESXi/) {
+		if (ref($self->vmhost_os) =~ /Linux/i && $vmhost_product_name =~ /ESXi/) {
 			$self->configure_vmhost_dedicated_ssh_key();
 		}
 		
@@ -1305,31 +1299,6 @@ sub vmhost_data {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 vmhost_os
-
- Parameters  : none
- Returns     : OS object reference
- Description : Returns the OS object that is used to control the VM host.
-
-=cut
-
-sub vmhost_os {
-	my $self = shift;
-	if (ref($self) !~ /vmware/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-	
-	if (!$self->{vmhost_os}) {
-		notify($ERRORS{'WARNING'}, 0, "VM host OS object is not defined as \$self->{vmhost_os}");
-		return;
-	}
-	
-	return $self->{vmhost_os};
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
 =head2 api
 
  Parameters  : none
@@ -1521,7 +1490,7 @@ sub get_vmhost_api_object {
 	my $api;
 	eval { $api = ($api_perl_package)->new({data_structure => $self->data,
 														 vmhost_data => $vmhost_datastructure,
-														 vmhost_os => $self->{vmhost_os}
+														 vmhost_os => $self->vmhost_os
 														 })};
 	if (!$api) {
 		if ($EVAL_ERROR) {
@@ -1794,6 +1763,8 @@ sub prepare_vmx {
 		"toolScripts.afterResume" => "FALSE",
 		"toolScripts.beforeSuspend" => "FALSE",
 		"toolScripts.beforePowerOff" => "FALSE",
+		
+		"usb.present" => "TRUE",
 		
 		"uuid.action" => "keep",	# Keep the VM's uuid, keeps existing MAC								
 		
@@ -3493,11 +3464,6 @@ sub get_vmdk_base_directory_path_dedicated {
 		notify($ERRORS{'DEBUG'}, 0, "using datastore named after the computer being loaded as the dedicated vmdk base directory path: $vmdk_base_directory_path");
 	}
 	
-	# Get the vmprofile.virtualdiskpath
-	elsif ($vmdk_base_directory_path = $self->data->get_vmhost_profile_virtual_disk_path()) {
-		notify($ERRORS{'DEBUG'}, 0, "using VM profile virtual disk path as the vmdk base directory path: $vmdk_base_directory_path");
-	}
-	
 	# If virtualdiskpath isn't set, try to use the datastore path
 	elsif ($vmdk_base_directory_path = $self->data->get_vmhost_profile_datastore_path()) {
 		notify($ERRORS{'DEBUG'}, 0, "using VM profile datastore path as the vmdk base directory path: $vmdk_base_directory_path");
@@ -4988,7 +4954,7 @@ sub get_vm_cpu_configuration {
 	if ($total_core_count > 1) {
 		# Check if the image.minprocnumber is greater than the VM host's CPUs/VM limit according the the VMware license
 		my $vmhost_cpu_limit = $self->get_vm_cpu_limit();
-		if ($total_core_count > $vmhost_cpu_limit) {
+		if ($vmhost_cpu_limit && $total_core_count > $vmhost_cpu_limit) {
 			notify($ERRORS{'WARNING'}, 0, "$image_name image minimum CPU value ($total_core_count) is greater than the VM CPU limit for the VM host ($vmhost_cpu_limit), reducing to $vmhost_cpu_limit");
 			$total_core_count = $vmhost_cpu_limit;
 		}
@@ -5054,7 +5020,7 @@ sub get_vm_cpu_configuration {
  Returns     : integer
  Description : Retrieves the maximum number of vCPUs which may be assigned to
                the VM based on the vsmp license feature used on the host. If
-               this cannot be determined, 4 is returned.
+               this cannot be determined, undefined is returned.
 
 =cut
 
@@ -5065,13 +5031,11 @@ sub get_vm_cpu_limit {
 		return;
 	}
 	
-	my $default_value = 4;
-	
 	if ($self->api->can('get_license_info')) {
 		my $license_info = $self->api->get_license_info();
 		if (!$license_info) {
-			notify($ERRORS{'WARNING'}, 0, "failed to retrieve VM host license information, assuming VM CPU limit is $default_value");
-			return $default_value;
+			notify($ERRORS{'WARNING'}, 0, "failed to retrieve VM host license information");
+			return;
 		}
 		
 		# Get the vsmp feature from the license info
@@ -5085,13 +5049,13 @@ sub get_vm_cpu_limit {
 			return $vsmp_value;
 		}
 		else {
-			notify($ERRORS{'WARNING'}, 0, "failed to retrieve VM CPU limit from host license information, assuming VM CPU limit is $default_value");
-			return $default_value;
+			notify($ERRORS{'DEBUG'}, 0, "unable to retrieve VM CPU limit from host license information");
+			return;
 		}
 	}
 	else {
-		notify($ERRORS{'DEBUG'}, 0, "unable to retrieve VM host license information assuming VM CPU limit is: $default_value");
-		return $default_value;
+		notify($ERRORS{'DEBUG'}, 0, "unable to retrieve VM host license information");
+		return;
 	}
 }
 
@@ -5417,6 +5381,9 @@ sub delete_vm {
 	delete $self->{vmx_info}{$vmx_file_path};
 	
 	if ($self->is_vm_registered($vmx_file_path)) {
+		# Make sure the VM is powered off
+		$self->api->power_off($vmx_file_path);
+		
 		# Unregister the VM
 		if (!$self->api->vm_unregister($vmx_file_path)) {
 			notify($ERRORS{'WARNING'}, 0, "failed to unregister VM: $vmx_file_path, VM not deleted");
@@ -6524,7 +6491,7 @@ sub get_datastore_info {
 		return;
 	}
 	else {
-		notify($ERRORS{'DEBUG'}, 0, "retrieved datastore info from VM host:\n" . join(", ", sort keys(%$datastore_info)));
+		notify($ERRORS{'DEBUG'}, 0, "retrieved datastore info from VM host:\n" . format_data($datastore_info));
 		$self->{datastore_info} = $datastore_info;
 		return $datastore_info;
 	}
@@ -6818,7 +6785,7 @@ sub _get_datastore_name {
 	$path = normalize_file_path($path);
 	
 	# Get the datastore information
-	my $datastore_info = $self->get_datastore_info();
+	my $datastore_info = $self->get_datastore_info() || return;
 	my @datastore_normal_paths;
 	
 	# Loop through the datastores, check if the path begins with the datastore path
