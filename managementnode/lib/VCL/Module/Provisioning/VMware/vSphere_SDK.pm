@@ -69,6 +69,113 @@ use VCL::utils;
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 initialize
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Initializes the vSphere SDK object by establishing a connection
+               to the VM host.
+
+=cut
+
+sub initialize {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Override the die handler because process will die if VMware Perl libraries aren't installed
+	local $SIG{__DIE__} = sub{};
+	
+	eval "use VMware::VIRuntime; use VMware::VILib; use VMware::VIExt";
+	if ($EVAL_ERROR) {
+		notify($ERRORS{'OK'}, 0, "vSphere SDK for Perl does not appear to be installed on this managment node, unable to load VMware vSphere SDK Perl modules");
+		return 0;
+	}
+	notify($ERRORS{'DEBUG'}, 0, "loaded VMware vSphere SDK modules");
+	
+	my $vmhost_hostname = $self->data->get_vmhost_hostname();
+	my $vmhost_username = $self->data->get_vmhost_profile_username();
+	my $vmhost_password = $self->data->get_vmhost_profile_password();
+	my $vmhost_profile_id = $self->data->get_vmhost_profile_id();
+	
+	if (!$vmhost_hostname) {
+		notify($ERRORS{'WARNING'}, 0, "VM host name could not be retrieved");
+		return;
+	}
+	elsif (!$vmhost_username) {
+		notify($ERRORS{'DEBUG'}, 0, "unable to use vSphere SDK, VM host username is not configured in the database for VM profile: $vmhost_profile_id");
+		return;
+	}
+	elsif (!$vmhost_password) {
+		notify($ERRORS{'DEBUG'}, 0, "unable to use vSphere SDK, VM host password is not configured in the database for VM profile: $vmhost_profile_id");
+		return;
+	}
+	
+	Opts::set_option('username', $vmhost_username);
+	Opts::set_option('password', $vmhost_password);
+	
+	# Override the die handler
+	local $SIG{__DIE__} = sub{};
+	
+	# Assemble the URLs to try, URL will vary based on the VMware product
+	my @possible_vmhost_urls = (
+		"https://$vmhost_hostname/sdk",
+		"https://$vmhost_hostname:8333/sdk",
+	);
+	
+	# Also add URLs containing the short host name if the VM hostname is a full DNS name
+	if ($vmhost_hostname =~ /\./) {
+		my ($vmhost_short_name) = $vmhost_hostname =~ /^([^\.]+)/;
+		push @possible_vmhost_urls, "https://$vmhost_short_name/sdk";
+		push @possible_vmhost_urls, "https://$vmhost_short_name:8333/sdk";
+	}
+	
+	# Call HostConnect, check how long it takes to connect
+	my $vim;
+	for my $host_url (@possible_vmhost_urls) {
+		Opts::set_option('url', $host_url);
+		
+		notify($ERRORS{'DEBUG'}, 0, "attempting to connect to VM host: $host_url ($vmhost_username)");
+		eval { $vim = Util::connect(); };
+		$vim = 'undefined' if !defined($vim);
+		my $error_message = $@;
+		undef $@;
+		
+		# It's normal if some connection attempts fail - SSH will be used if the vSphere SDK isn't available
+		# Don't display a warning unless the error indicates a configuration problem (wrong username or password)
+		# Possible error messages:
+		#    Cannot complete login due to an incorrect user name or password.
+		#    Error connecting to server at 'https://<VM host>/sdk': Connection refused
+		if ($error_message && $error_message =~ /incorrect/) {
+			notify($ERRORS{'WARNING'}, 0, "unable to connect to VM host because username or password is incorrectly configured in the VM profile ($vmhost_username/$vmhost_password), error: $error_message");
+		}
+		elsif (!$vim || $error_message) {
+			notify($ERRORS{'DEBUG'}, 0, "unable to connect to VM host using URL: $host_url, error:\n$error_message");
+		}
+		else {
+			notify($ERRORS{'OK'}, 0, "connected to VM host: $host_url, username: '$vmhost_username'");
+			last;
+		}
+	}
+	
+	if (!$vim) {
+		notify($ERRORS{'WARNING'}, 0, "failed to connect to VM host $vmhost_hostname");
+		return;
+	}
+	elsif (!ref($vim)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to connect to VM host $vmhost_hostname, Util::connect returned '$vim'");
+		return;
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "connected to $vmhost_hostname, VIM object type: " . ref($vim));
+		return 1;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 get_registered_vms
 
  Parameters  : none
@@ -89,7 +196,7 @@ sub get_registered_vms {
 	local $SIG{__DIE__} = sub{};
 	
 	my @vms;
-	eval { @vms = @{Vim::find_entity_views(view_type => 'VirtualMachine')}; };
+	eval { @vms = @{Vim::find_entity_views(view_type => 'VirtualMachine', begin_entity => $self->_get_datacenter_view())}; };
 	
 	my @vmx_paths;
 	for my $vm (@vms) {
@@ -122,20 +229,20 @@ sub vm_register {
 	# Get the vmx path argument and convert it to a datastore path
 	my $vmx_path = $self->_get_datastore_path(shift) || return;
 	
-	my $host_view = $self->_get_host_view() || return;
 	my $datacenter = $self->_get_datacenter_view() || return;
 	my $vm_folder = Vim::get_view(mo_ref => $datacenter->{vmFolder}) || return;
-   my $resource_pool = Vim::find_entity_view(view_type => 'ResourcePool') || return;
-   
+	
+	my $resource_pool = $self->_get_resource_pool_view() || return;
+	
 	# Override the die handler
 	local $SIG{__DIE__} = sub{};
 	
 	my $vm_mo_ref;
-   eval { $vm_mo_ref = $vm_folder->RegisterVM(path => $vmx_path,
+	eval { $vm_mo_ref = $vm_folder->RegisterVM(path => $vmx_path,
 											  asTemplate => 'false',
-											  pool => $resource_pool,
-											  host => $host_view);
-   };
+											  pool => $resource_pool
+											);
+	};
 	
 	if ($@) {
 		if ($@->isa('SoapFault') && ref($@->detail) eq 'AlreadyExists') {
@@ -160,7 +267,7 @@ sub vm_register {
 
 =head2 vm_unregister
 
- Parameters  : $vmx_file_path
+ Parameters  : $vmx_file_path or $vm_view or $vm_mo_ref
  Returns     : boolean
  Description : Unregisters the VM specified by vmx file path argument. Returns
                true if the VM is not registered or if the VM was successfully
@@ -175,27 +282,50 @@ sub vm_unregister {
 		return;
 	}
 	
-	# Get the vmx path argument and convert it to a datastore path
-	my $vmx_path = $self->_get_datastore_path(shift) || return;
+	my $argument = shift;
+	my $vm_view;
+	my $vm_name;
+	if (my $type = ref($argument)) {
+		if ($type eq 'ManagedObjectReference') {
+			notify($ERRORS{'DEBUG'}, 0, "argument is a ManagedObjectReference, retrieving VM view");
+			$vm_view = Vim::get_view(mo_ref => $argument)
+		}
+		elsif ($type eq 'VirtualMachine') {
+			$vm_view = $argument;
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "invalid argument reference type: '$type', must be either VirtualMachine or ManagedObjectReference");
+			return;
+		}
+		
+		$vm_name = $vm_view->{name};
+		if (!$vm_name) {
+			notify($ERRORS{'WARNING'}, 0, "failed to unregister VM, name could not be determined from VM view:\n" . format_data($vm_view));
+			return;
+		}
+	}
+	else {
+		$vm_name = $argument;
+		$vm_view = $self->_get_vm_view($argument);
+	}
+	
+	my $vmx_path = $vm_view->{summary}{config}{vmPathName};
 	
 	# Override the die handler
 	local $SIG{__DIE__} = sub{};
 	
-   my $vm = $self->_get_vm_view($vmx_path) || return;
+	notify($ERRORS{'DEBUG'}, 0, "attempting to unregister VM: '$vm_name' ($vmx_path)");
 	
-	# Make sure the VM is powered off or unregister will fail
-	$self->vm_power_off($vmx_path) || return;
-
-	eval { $vm->UnregisterVM(); };
+	eval { $vm_view->UnregisterVM(); };
 	if ($@) {
-		notify($ERRORS{'WARNING'}, 0, "failed to unregister vmx path: $vmx_path, error:\n$@");
+		notify($ERRORS{'WARNING'}, 0, "failed to unregister VM: $vm_name, error:\n$@");
 		return;
 	}
 	
 	# Delete the cached VM object
 	delete $self->{vm_view_objects}{$vmx_path};
 	
-	notify($ERRORS{'DEBUG'}, 0, "unregistered VM: $vmx_path");
+	notify($ERRORS{'DEBUG'}, 0, "unregistered VM: $vm_name");
 	return 1;
 }
 
@@ -424,6 +554,13 @@ sub copy_virtual_disk {
 	my $source_path = $self->_get_datastore_path(shift) || return;
 	my $destination_path = $self->_get_datastore_path(shift) || return;
 	
+	# Make sure the source path ends with .vmdk
+	if ($source_path !~ /\.vmdk$/i || $destination_path !~ /\.vmdk$/i) {
+		notify($ERRORS{'WARNING'}, 0, "source and destination path arguments must end with .vmdk:\nsource path argument: $source_path\ndestination path argument: $destination_path");
+		return;
+	}
+	
+	
 	# Get the adapter type and disk type arguments if they were specified
 	# If not specified, set the default values
 	my $destination_disk_type = shift || 'thin';
@@ -440,68 +577,268 @@ sub copy_virtual_disk {
 		return;
 	}
 	
-	my $adapter_type = shift;
-	
-	# If the adapter type was not specified, retrieve it from the source vmdk file
-	if (!$adapter_type) {
-		$adapter_type = $self->get_vm_disk_adapter_type($source_path);
-		if (!$adapter_type) {
-			notify($ERRORS{'WARNING'}, 0, "adapter type argument was not specifed and unable to retrieve adapter type from source vmdk file: $source_path, using lsiLogic");
-			$adapter_type = 'lsiLogic';
-		}
-	}
-	
-	if ($adapter_type =~ /bus/i) {
-		$adapter_type = 'busLogic';
-	}
-	elsif ($adapter_type =~ /lsi/) {
-		$adapter_type = 'lsiLogic';
-	}
-	else {
-		$adapter_type = 'ide';
-	}
-	
 	my $vmhost_name = $self->data->get_vmhost_hostname();
 	
-	# Get a virtual disk manager object
-	my $virtual_disk_manager = $self->_get_virtual_disk_manager_view() || return;
+	my $source_datastore_name = $self->_get_datastore_name($source_path) || return;
+	my $destination_datastore_name = $self->_get_datastore_name($destination_path) || return;
+	
+	my $source_datastore = $self->_get_datastore_object($source_datastore_name) || return;
+	my $destination_datastore = $self->_get_datastore_object($destination_datastore_name) || return;
+	
+	my $destination_base_name = $self->_get_file_base_name($destination_path);
+	
+	
+	my $datacenter_view = $self->_get_datacenter_view() || return;
+	my $virtual_disk_manager_view = $self->_get_virtual_disk_manager_view() || return;
+	
+	
+	
+	# Get the source vmdk file info so the source adapter and disk type can be displayed
+	my $source_info = $self->_get_file_info($source_path) || return;
+	if (scalar(keys %$source_info) != 1) {
+		notify($ERRORS{'WARNING'}, 0, "unable to copy virtual disk, multiple source files were found:\n" . format_data($source_info));
+	}
+	
+	my $source_info_file_path = (keys(%$source_info))[0];
+	
+	my $source_adapter_type = $source_info->{$source_info_file_path}{controllerType} || 'lsiLogic';
+	my $source_disk_type = $source_info->{$source_info_file_path}{diskType} || '';
+	my $source_file_size_bytes = $source_info->{$source_info_file_path}{fileSize} || '0';
+	my $source_file_capacity_kb = $source_info->{$source_info_file_path}{capacityKb} || '0';
+	my $source_file_capacity_bytes = ($source_file_capacity_kb * 1024);
+	
+	# Set the destination adapter type to the source adapter type if it wasn't specified as an argument
+	my $destination_adapter_type = shift || $source_adapter_type;
+	
+	if ($destination_adapter_type =~ /bus/i) {
+		$destination_adapter_type = 'busLogic';
+	}
+	elsif ($destination_adapter_type =~ /lsi/) {
+		$destination_adapter_type = 'lsiLogic';
+	}
+	else {
+		$destination_adapter_type = 'ide';
+	}
+	
+	if ($source_adapter_type !~ /\w/ || $source_disk_type !~ /\w/ || $source_file_size_bytes !~ /\d/) {
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve adapter type, disk type, and file size of source file on VM host $vmhost_name: '$source_path', file info:\n" . format_data($source_info));
+		return;
+	}
 	
 	# Get the destination partent directory path and create the directory
 	my $destination_directory_path = $self->_get_parent_directory_datastore_path($destination_path) || return;
 	$self->create_directory($destination_directory_path) || return;
 	
-	# Create a virtual disk spec object
-	my $virtual_disk_spec = VirtualDiskSpec->new(adapterType => $adapter_type,
-																diskType => $destination_disk_type,
+	notify($ERRORS{'DEBUG'}, 0, "attempting to copy virtual disk on VM host $vmhost_name: '$source_path' --> '$destination_path'\n" .
+		"source adapter type: $source_adapter_type\n" .
+		"destination adapter type: $destination_adapter_type\n" .
+		"disk type: $source_disk_type\n" .
+		"source capacity: " . get_file_size_info_string($source_file_capacity_bytes) . "\n" .
+		"source space used: " . get_file_size_info_string($source_file_size_bytes)
 	);
 	
-	# Get the source vmdk file info so the source adapter and disk type can be displayed
-	my $source_info = $self->_get_file_info($source_path) || return;
-	notify($ERRORS{'DEBUG'}, 0, "source file info:\n" . format_data($source_info));
-	my @file_names = keys(%{$source_info});
-	my $info_file_name = $file_names[0];
-	
-	my $source_disk_type = $source_info->{$info_file_name}{diskType} || 'unknown';
-	my $source_file_size_bytes = $source_info->{$info_file_name}{fileSize} || 'unknown';
-	if ($adapter_type !~ /\w/ || $source_disk_type !~ /\w/ || $source_file_size_bytes !~ /\d/) {
-		notify($ERRORS{'WARNING'}, 0, "unable to retrieve adapter type, disk type, and file size of source file on VM host $vmhost_name: '$source_path', file info:\n" . format_data($source_info));
-		return;
-	}
 	
 	# Override the die handler
 	local $SIG{__DIE__} = sub{};
 	
-	# Attempt to copy the file
-	notify($ERRORS{'DEBUG'}, 0, "attempting to copy file on VM host $vmhost_name: '$source_path' --> '$destination_path'
-			 adapter type: $adapter_type
-			 disk type: $source_disk_type --> $destination_disk_type
-			 source file size: " . format_number($source_file_size_bytes));
+	# Create a virtual disk spec object
+	my $virtual_disk_spec = VirtualDiskSpec->new(
+		adapterType => $destination_adapter_type,
+		diskType => $destination_disk_type,
+	);
 	
-	my $start_time = time;
-	eval { $virtual_disk_manager->CopyVirtualDisk(sourceName => $source_path,
-																 destName => $destination_path,
-																 destSpec => $virtual_disk_spec,
-																 force => 1);
+	my $copy_virtual_disk_result;
+	eval {
+		$copy_virtual_disk_result = $virtual_disk_manager_view->CopyVirtualDisk(
+			sourceName => $source_path,
+			#sourceDatacenter => $datacenter_view,
+			destName => $destination_path,
+			#destDatacenter => $datacenter_view,
+			destSpec => $virtual_disk_spec,
+			force => 1
+		);
+	};
+	
+	# Check if an error occurred
+	if (my $copy_virtual_disk_fault = $@) {
+		if ($copy_virtual_disk_fault =~ /No space left/i) {
+			# Check if the output indicates there is not enough space to copy the vmdk
+			# Output will contain:
+			#    Fault string: A general system error occurred: No space left on device
+			#    Fault detail: SystemError
+			notify($ERRORS{'CRITICAL'}, 0, "failed to copy vmdk on VM host $vmhost_name using CopyVirtualDisk function, no space is left on the destination device: '$destination_path'\nerror:\n$copy_virtual_disk_fault");
+			return;
+		}
+		elsif ($copy_virtual_disk_fault =~ /not implemented/i) {
+			notify($ERRORS{'DEBUG'}, 0, "unable to copy vmdk using CopyVirtualDisk function, VM host $vmhost_name not implement the CopyVirtualDisk function");
+			
+			# Delete the destination directory path previously created
+			$self->delete_file($destination_directory_path);
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to copy vmdk on VM host $vmhost_name using CopyVirtualDisk function: '$source_path' --> '$destination_path'\nerror:\n$copy_virtual_disk_fault");
+			return;
+		}
+	}
+	else {
+		notify($ERRORS{'OK'}, 0, "copied vmdk on VM host $vmhost_name using CopyVirtualDisk function:\n" . format_data($copy_virtual_disk_result));
+		return 1;
+	}
+	
+	
+	my $source_vm_name = "source_$destination_base_name";
+	my $clone_vm_name = $destination_base_name;
+	
+	my $source_vm_directory_path = "[$source_datastore_name] $source_vm_name";
+	my $clone_vm_directory_path = "[$destination_datastore_name] $clone_vm_name";
+	
+	# Make sure the source and clone directories don't exist
+	# Otherwise the VM creation/cloning process will create another directory with '_1' appended and the files won't be deleted
+	if ($self->file_exists($source_vm_directory_path)) {
+		notify($ERRORS{'WARNING'}, 0, "unable to copy virtual disk, source VM directory path already exists: $source_vm_directory_path");
+		return;
+	}
+	if ($self->file_exists($clone_vm_directory_path)) {
+		notify($ERRORS{'WARNING'}, 0, "unable to copy virtual disk, clone VM directory path already exists: $clone_vm_directory_path");
+		return;
+	}
+	
+	
+	my $file_manager = $self->_get_file_manager_view() || return;
+	my $resource_pool_view = $self->_get_resource_pool_view() || return;
+	
+	my $folder_view = Vim::find_entity_view(
+		view_type => "Folder",
+		begin_entity => $datacenter_view,
+		filter => { name => "vm" }
+	);
+	
+	if (!$folder_view){
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve VM folder view");
+		return;
+	}
+	
+	# Create a virtual machine on top of this virtual disk
+	# First, create a controller for the virtual disk
+	my $controller;
+	if ($destination_adapter_type eq 'lsiLogic') {
+		$controller = VirtualLsiLogicController->new(
+			key => 0,
+			device => [0],
+			busNumber => 0,
+			sharedBus => VirtualSCSISharing->new('noSharing')
+		);
+	}
+	else {
+		$controller = VirtualBusLogicController->new(
+			key => 0,
+			device => [0],
+			busNumber => 0,
+			sharedBus => VirtualSCSISharing->new('noSharing')
+		);
+	}
+	
+	# Next create a disk type (it will be the same as the source disk)   
+	my $disk_backing_info = ($source_disk_type)->new(
+		datastore => $source_datastore,
+		fileName => $source_path,
+		diskMode => "independent_persistent"
+	);
+	
+	# Create the actual virtual disk
+	my $source_vm_disk = VirtualDisk->new(
+		key => 0,
+		backing => $disk_backing_info,
+		capacityInKB => $source_file_capacity_kb,
+		controllerKey => 0,
+		unitNumber => 0
+	);
+	
+	# Create the specification for creating a source VM
+	my $source_vm_config = VirtualMachineConfigSpec->new(
+		name => $source_vm_name,
+		deviceChange => [
+			VirtualDeviceConfigSpec->new(
+				operation => VirtualDeviceConfigSpecOperation->new('add'),
+				device => $controller
+			),
+			VirtualDeviceConfigSpec->new(
+				operation => VirtualDeviceConfigSpecOperation->new('add'),
+				device => $source_vm_disk
+			)
+		],
+		files => VirtualMachineFileInfo->new(
+			logDirectory => $source_vm_directory_path,
+			snapshotDirectory => $source_vm_directory_path,
+			suspendDirectory => $source_vm_directory_path,
+			vmPathName => $source_vm_directory_path
+		)
+	);
+	
+	# Create the specification for cloning the VM
+	my $clone_spec = VirtualMachineCloneSpec->new(
+		config => VirtualMachineConfigSpec->new(
+			name => $clone_vm_name,
+			files => VirtualMachineFileInfo->new(
+				logDirectory => $clone_vm_directory_path,
+				snapshotDirectory => $clone_vm_directory_path,
+				suspendDirectory => $clone_vm_directory_path,
+				vmPathName => $clone_vm_directory_path
+			)
+		),
+		powerOn => 0,
+		template => 0,
+		location => VirtualMachineRelocateSpec->new(
+			datastore => $destination_datastore,
+			pool => $resource_pool_view,
+			diskMoveType => 'moveAllDiskBackingsAndDisallowSharing',
+			transform => VirtualMachineRelocateTransformation->new('sparse'),
+		)
+	);
+	
+	
+	notify($ERRORS{'DEBUG'}, 0, "attempting to copy virtual disk by cloning temporary VM: '$source_path' --> '$destination_path'\n" .
+		"adapter type: $source_adapter_type\n" .
+		"disk type: $source_disk_type\n" .
+		"source capacity: " . get_file_size_info_string($source_file_capacity_bytes) . "\n" .
+		"source space used: " . get_file_size_info_string($source_file_size_bytes) . "\n" .
+		"source VM name: $source_vm_name\n" .
+		"clone VM name: $clone_vm_name\n" .
+		"source VM directory path: $source_vm_directory_path\n" .
+		"clone VM directory path: $clone_vm_directory_path"
+	);
+	
+	
+	my $source_vm_view;
+	my $clone_vm_view;
+	eval {
+		my $source_vm = $folder_view->CreateVM(
+			config => $source_vm_config,
+			pool => $resource_pool_view
+		);
+		if ($source_vm) {
+			notify($ERRORS{'DEBUG'}, 0, "created temporary source VM which will be cloned: $source_vm_name");
+			$source_vm_view = Vim::get_view(mo_ref => $source_vm);
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to create temporary source VM which will be cloned: $source_vm_name");
+			return;
+		}
+		
+		notify($ERRORS{'DEBUG'}, 0, "cloning VM: $source_vm_name --> $clone_vm_name");
+		my $clone_vm = $source_vm_view->CloneVM(
+			folder => $folder_view,
+			name => $clone_vm_name,
+			spec => $clone_spec
+		);
+		if ($clone_vm) {
+			$clone_vm_view = Vim::get_view(mo_ref => $clone_vm);
+			notify($ERRORS{'DEBUG'}, 0, "cloned VM: $source_vm_name --> $clone_vm_name" . format_data($clone_vm_view));
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to clone VM: $source_vm_name --> $clone_vm_name");
+			return;
+		}
 	};
 	
 	# Check if an error occurred
@@ -520,7 +857,20 @@ sub copy_virtual_disk {
 		return;
 	}
 	
-	notify($ERRORS{'OK'}, 0, "copied vmdk on VM host $vmhost_name: '$source_path' --> '$destination_path'");
+	notify($ERRORS{'DEBUG'}, 0, "deleting source VM: $source_vm_name");
+	$self->vm_unregister($source_vm_view);
+	notify($ERRORS{'DEBUG'}, 0, "deleting source VM directory: $source_vm_directory_path");
+	$self->delete_file($source_vm_directory_path);
+	
+	notify($ERRORS{'DEBUG'}, 0, "deleting cloned VM: $clone_vm_name");
+	$self->vm_unregister($clone_vm_view);
+	my @clone_files = $self->find_files($clone_vm_directory_path, '*', 1);
+	for my $clone_file_path (grep(!/\.(vmdk)$/i, @clone_files)) {
+		notify($ERRORS{'DEBUG'}, 0, "deleting cloned VM file: $clone_file_path");
+		$self->delete_file($clone_file_path);
+	}
+	
+	notify($ERRORS{'OK'}, 0, "copied virtual disk on VM host $vmhost_name: '$source_path' --> '$destination_path'");
 	return 1;
 }
 
@@ -629,7 +979,7 @@ sub set_file_permissions {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
-
+	
 	# 
 	my $service_content = Vim::get_service_content() || return;
 	if (!$service_content->{authorizationManager}) {
@@ -732,7 +1082,7 @@ sub create_nfs_datastore {
 	}
 	
 	# Get the datastore system object
-	my $datastore_system = Vim::get_view(mo_ref => VIExt::get_host_view(1)->configManager->datastoreSystem);
+	my $datastore_system = Vim::get_view(mo_ref => $self->_get_datastore_view->configManager->datastoreSystem);
 	if (!$datastore_system) {
 		notify($ERRORS{'WARNING'}, 0, "failed to retrieve datastore system object");
 		return;
@@ -942,10 +1292,8 @@ sub get_vmware_product_name {
 	
 	my $vmhost_hostname = $self->data->get_vmhost_hostname();
 	
-	# Get the host view
-	my $host_view = $self->_get_host_view();
-	my $product_name = $host_view->config->product->fullName;
-	
+	my $service_content = Vim::get_service_content();
+	my $product_name = $service_content->{about}->{fullName};
 	if ($product_name) {
 		notify($ERRORS{'DEBUG'}, 0, "VMware product being used on VM host $vmhost_hostname: '$product_name'");
 		$self->{product_name} = $product_name;
@@ -979,9 +1327,8 @@ sub get_vmware_product_version {
 	
 	my $vmhost_hostname = $self->data->get_vmhost_hostname();
 	
-	# Get the host view
-	my $host_view = $self->_get_host_view();
-	my $product_version = $host_view->config->product->version;
+	my $datacenter_view = $self->_get_datacenter_view();
+	my $product_version = $datacenter_view->config->product->version;
 	
 	if ($product_version) {
 		notify($ERRORS{'DEBUG'}, 0, "retrieved product version for VM host $vmhost_hostname: $product_version");
@@ -1011,12 +1358,11 @@ sub get_network_names {
 		return;
 	}
 	
-	# Get the host view
-	my $host_view = $self->_get_host_view();
+	my $datacenter_view = $self->_get_datacenter_view();
 	
 	# Retrieve the network info, check if each network is accessible
 	my @network_names;
-	for my $network (@{Vim::get_views(mo_ref_array => $host_view->network)}) {
+	for my $network (@{Vim::get_views(mo_ref_array => $datacenter_view->network)}) {
 		push @network_names, $network->name;
 	}
 	
@@ -1047,7 +1393,7 @@ sub is_restricted {
 	
 	my $service_content = Vim::get_service_content();
 	if (!$service_content) {
-		notify($ERRORS{'WARNING'}, 0, "unable to vSphere SDK service content object, assuming access to the VM host via the vSphere SDK is restricted");
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve vSphere SDK service content object, assuming access to the VM host via the vSphere SDK is restricted");
 		return 1;
 	}
 	
@@ -1130,6 +1476,7 @@ sub create_directory {
 
 	# Attempt to create the directory
 	eval { $file_manager->MakeDirectory(name => $directory_path,
+													datacenter => $self->_get_datacenter_view(),
 													createParentDirectories => 1);
 	};
 	
@@ -1195,7 +1542,7 @@ sub delete_file {
 
 	# Attempt to delete the file
 	notify($ERRORS{'OK'}, 0, "attempting to delete file: $datastore_path");
-	eval { $file_manager->DeleteDatastoreFile(name => $datastore_path); };
+	eval { $file_manager->DeleteDatastoreFile(name => $datastore_path, datacenter => $self->_get_datacenter_view()); };
 	if ($@) {
 		if ($@->isa('SoapFault') && ref($@->detail) eq 'FileNotFound') {
 			notify($ERRORS{'DEBUG'}, 0, "file does not exist: $datastore_path");
@@ -1315,6 +1662,8 @@ sub copy_file_to {
 	# Get the VM host name
 	my $vmhost_hostname = $self->data->get_vmhost_hostname();
 	
+	my $datacenter_name = $self->_get_datacenter_name();
+	
 	# Get the destination datastore name and relative datastore path
 	my $destination_datastore_name = $self->_get_datastore_name($destination_file_path);
 	my $destination_relative_datastore_path = $self->_get_relative_datastore_path($destination_file_path);
@@ -1325,13 +1674,13 @@ sub copy_file_to {
 	# Attempt to copy the file
 	notify($ERRORS{'DEBUG'}, 0, "attempting to copy file from management node to VM host: '$source_file_path' --> $vmhost_hostname:'[$destination_datastore_name] $destination_relative_datastore_path'");
 	my $response;
-	eval { $response = VIExt::http_put_file("folder" , $source_file_path, $destination_relative_datastore_path, $destination_datastore_name, "ha-datacenter"); };
+	eval { $response = VIExt::http_put_file("folder" , $source_file_path, $destination_relative_datastore_path, $destination_datastore_name, $datacenter_name); };
 	if ($response->is_success) {
 		notify($ERRORS{'DEBUG'}, 0, "copied file from management node to VM host: '$source_file_path' --> $vmhost_hostname:'[$destination_datastore_name] $destination_relative_datastore_path'");
 		return 1;
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to copy file from management node to VM host: '$source_file_path' --> $vmhost_hostname:'$destination_file_path'\nerror: " . $response->message);
+		notify($ERRORS{'WARNING'}, 0, "failed to copy file from management node to VM host: '$source_file_path' --> $vmhost_hostname($datacenter_name):'$destination_file_path'\nerror: " . $response->message);
 		return;
 	}
 }
@@ -1388,6 +1737,8 @@ sub copy_file_from {
 	# Get the VM host name
 	my $vmhost_hostname = $self->data->get_vmhost_hostname();
 	
+	my $datacenter_name = $self->_get_datacenter_name();
+	
 	# Get the source datastore name
 	my $source_datastore_name = $self->_get_datastore_name($source_file_path) || return;
 	
@@ -1400,7 +1751,7 @@ sub copy_file_from {
 	# Attempt to copy the file
 	notify($ERRORS{'DEBUG'}, 0, "attempting to copy file from VM host to management node: $vmhost_hostname:'[$source_datastore_name] $source_file_relative_datastore_path' --> '$destination_file_path'");
 	my $response;
-	eval { $response = VIExt::http_get_file("folder", $source_file_relative_datastore_path, $source_datastore_name, "ha-datacenter", $destination_file_path); };
+	eval { $response = VIExt::http_get_file("folder", $source_file_relative_datastore_path, $source_datastore_name, $datacenter_name, $destination_file_path); };
 	if ($response->is_success) {
 		notify($ERRORS{'DEBUG'}, 0, "copied file from VM host to management node: $vmhost_hostname:'[$source_datastore_name] $source_file_relative_datastore_path' --> '$destination_file_path'");
 		return 1;
@@ -1608,8 +1959,8 @@ sub get_file_size {
 	}
 	
 	# Get and check the file path argument
-	my $file_path = shift;
-	if (!$file_path) {
+	my $file_path_argument = shift;
+	if (!$file_path_argument) {
 		notify($ERRORS{'WARNING'}, 0, "file path argument was not specified");
 		return;
 	}
@@ -1617,21 +1968,21 @@ sub get_file_size {
 	my $vmhost_hostname = $self->data->get_vmhost_hostname();
 	
 	# Get the file info
-	my $file_info = $self->_get_file_info($file_path);
+	my $file_info = $self->_get_file_info($file_path_argument);
 	if (!defined($file_info)) {
-		notify($ERRORS{'WARNING'}, 0, "unable to get file size, failed to get file info for: $file_path");
+		notify($ERRORS{'WARNING'}, 0, "unable to get file size, failed to get file info for: $file_path_argument");
 		return;
 	}
 	
 	# Make sure the file info is not null or else an error occurred
 	if (!$file_info) {
-		notify($ERRORS{'WARNING'}, 0, "unable to retrieve info for file on $vmhost_hostname: $file_path");
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve info for file on $vmhost_hostname: $file_path_argument");
 		return;
 	}
 	
 	# Check if there are any keys in the file info hash - no keys indicates no files were found
 	if (!keys(%{$file_info})) {
-		notify($ERRORS{'DEBUG'}, 0, "unable to determine size of file on $vmhost_hostname because it does not exist: $file_path");
+		notify($ERRORS{'DEBUG'}, 0, "unable to determine size of file on $vmhost_hostname because it does not exist: $file_path_argument");
 		return;
 	}
 	
@@ -1647,7 +1998,7 @@ sub get_file_size {
 	my $total_size_mb_string = format_number(($total_size_bytes / 1024 / 1024), 2);
 	my $total_size_gb_string = format_number(($total_size_bytes / 1024 / 1024 /1024), 2);
 	
-	notify($ERRORS{'DEBUG'}, 0, "total file size of '$file_path': $total_size_bytes_string bytes ($total_size_mb_string MB, $total_size_gb_string GB)");
+	notify($ERRORS{'DEBUG'}, 0, "total file size of '$file_path_argument': $total_size_bytes_string bytes ($total_size_mb_string MB, $total_size_gb_string GB)");
 	return $total_size_bytes;
 }
 
@@ -1815,20 +2166,28 @@ sub get_cpu_core_count {
 		return;
 	}
 	
-	my $vmhost_hostname = $self->data->get_vmhost_hostname();
+	return $self->{cpu_core_count} if $self->{cpu_core_count};
 	
-	# Get the host view
-	my $host_view = $self->_get_host_view() || return;
+	my $cpu_core_count;
+	if (my $host_system_view = $self->_get_host_system_view()) {
+		my $vmhost_hostname = $self->data->get_vmhost_hostname();
+		$cpu_core_count = $host_system_view->{hardware}->{cpuInfo}->{numCpuCores};
+		notify($ERRORS{'DEBUG'}, 0, "retrieved CPU core count for VM host '$vmhost_hostname': $cpu_core_count");
+	}
+	elsif (my $cluster = $self->_get_cluster_view()) {
+		# Try to get CPU core count of cluster if cluster is being used
+		my $cluster_name = $cluster->{name};
+		$cpu_core_count = $cluster->{summary}->{numCpuCores};
+		notify($ERRORS{'DEBUG'}, 0, "retrieved CPU core count for '$cluster_name' cluster: $cpu_core_count");
 	
-	my $cpu_core_count = $host_view->hardware->cpuInfo->numCpuCores;
-	if ($cpu_core_count) {
-		notify($ERRORS{'DEBUG'}, 0, "retrieved VM host $vmhost_hostname CPU core count: $cpu_core_count");
-		return $cpu_core_count;
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to determine VM host $vmhost_hostname CPU core count");
+		notify($ERRORS{'WARNING'}, 0, "unable to determine CPU core count of VM host");
 		return;
 	}
+	
+	$self->{cpu_core_count} = $cpu_core_count;
+	return $self->{cpu_core_count};
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -1848,19 +2207,28 @@ sub get_cpu_speed {
 		return;
 	}
 	
+	return $self->{cpu_speed} if $self->{cpu_speed};
+	
 	my $vmhost_hostname = $self->data->get_vmhost_hostname();
 	
-	# Get the host view
-	my $host_view = $self->_get_host_view() || return;
-	
-	my $hz = $host_view->hardware->cpuInfo->hz;
-	if ($hz) {
-		my $mhz = int($hz / 1000000);
-		notify($ERRORS{'DEBUG'}, 0, "retrieved VM host $vmhost_hostname CPU speed: $mhz MHz");
-		return $mhz;
+	# Try to get CPU speed of resource pool
+	if (my $resource_pool = $self->_get_resource_pool_view()) {
+		my $resource_pool_name = $resource_pool->{name};
+		
+		my $mhz = $resource_pool->{runtime}{cpu}{maxUsage};
+		
+		# maxUsage reports sum of all CPUs - divide by core count
+		# This isn't exact - will be lower than acutal clock rate of CPUs in host
+		if (my $cpu_core_count = $self->get_cpu_core_count()) {
+			$mhz = int($mhz / $cpu_core_count);
+		}
+		
+		$self->{cpu_speed} = $mhz;
+		notify($ERRORS{'DEBUG'}, 0, "retrieved total CPU speed of '$resource_pool_name' resource pool: $self->{cpu_speed} MHz");
+		return $self->{cpu_speed};
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to determine VM host $vmhost_hostname CPU speed");
+		notify($ERRORS{'WARNING'}, 0, "unable to determine CPU speed of VM host, resource pool view object could not be retrieved");
 		return;
 	}
 }
@@ -1882,20 +2250,26 @@ sub get_total_memory {
 		return;
 	}
 	
+	return $self->{total_memory} if $self->{total_memory};
+	
 	my $vmhost_hostname = $self->data->get_vmhost_hostname();
 	
-	# Get the host view
-	my $host_view = $self->_get_host_view() || return;
 	
-	my $memory_bytes = $host_view->hardware->memorySize;
-	if (!$memory_bytes) {
-		notify($ERRORS{'WARNING'}, 0, "unable to determine VM host $vmhost_hostname total memory capacity");
+	# Try to get total memory of resource pool
+	if (my $resource_pool = $self->_get_resource_pool_view()) {
+		my $resource_pool_name = $resource_pool->{name};
+		
+		my $memory_bytes = $resource_pool->{runtime}{memory}{maxUsage};
+		my $memory_mb = int($memory_bytes / 1024 / 1024);
+		
+		$self->{total_memory} = $memory_mb;
+		notify($ERRORS{'DEBUG'}, 0, "retrieved total memory of '$resource_pool_name' resource pool: $self->{total_memory} MB");
+		return $self->{total_memory};
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine total memory on VM host, resource pool view object could not be retrieved");
 		return;
 	}
-	
-	my $memory_mb = int($memory_bytes / 1024 / 1024);
-	notify($ERRORS{'DEBUG'}, 0, "retrieved VM host $vmhost_hostname total memory capacity: $memory_mb MB");
-	return $memory_mb;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -1942,9 +2316,6 @@ sub get_license_info {
 	
 	return $self->{license_info} if $self->{license_info};
 	
-	# Get the host view
-	my $host_view = $self->_get_host_view() || return;
-
 	my $service_content = Vim::get_service_content() || return;
 	my $licenses = Vim::get_view(mo_ref => $service_content->{licenseManager})->licenses;
 	
@@ -1984,104 +2355,6 @@ sub get_license_info {
 =head1 PRIVATE OBJECT METHODS
 
 =cut
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 initialize
-
- Parameters  : none
- Returns     : boolean
- Description : Initializes the vSphere SDK object by establishing a connection
-               to the VM host.
-
-=cut
-
-sub initialize {
-	my $self = shift;
-	if (ref($self) !~ /VCL::Module/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-	
-	# Override the die handler because process will die if VMware Perl libraries aren't installed
-	local $SIG{__DIE__} = sub{};
-	
-	eval "use VMware::VIRuntime; use VMware::VILib; use VMware::VIExt";
-	if ($EVAL_ERROR) {
-		notify($ERRORS{'OK'}, 0, "vSphere SDK for Perl does not appear to be installed on this managment node, unable to load VMware vSphere SDK Perl modules");
-		return 0;
-	}
-	notify($ERRORS{'DEBUG'}, 0, "loaded VMware vSphere SDK modules");
-	
-	my $vmhost_hostname = $self->data->get_vmhost_hostname();
-	my $vmhost_username = $self->data->get_vmhost_profile_username();
-	my $vmhost_password = $self->data->get_vmhost_profile_password();
-	my $vmhost_profile_id = $self->data->get_vmhost_profile_id();
-	
-	if (!$vmhost_hostname) {
-		notify($ERRORS{'WARNING'}, 0, "VM host name could not be retrieved");
-		return;
-	}
-	elsif (!$vmhost_username) {
-		notify($ERRORS{'DEBUG'}, 0, "unable to use vSphere SDK, VM host username is not configured in the database for VM profile: $vmhost_profile_id");
-		return;
-	}
-	elsif (!$vmhost_password) {
-		notify($ERRORS{'DEBUG'}, 0, "unable to use vSphere SDK, VM host password is not configured in the database for VM profile: $vmhost_profile_id");
-		return;
-	}
-	
-	Opts::set_option('username', $vmhost_username);
-	Opts::set_option('password', $vmhost_password);
-	
-	# Override the die handler
-	local $SIG{__DIE__} = sub{};
-	
-	# Assemble the URLs to try, URL will vary based on the VMware product
-	my @possible_vmhost_urls = (
-		"https://$vmhost_hostname/sdk",
-		"https://$vmhost_hostname:8333/sdk",
-	);
-	
-	# Also add URLs containing the short host name if the VM hostname is a full DNS name
-	if ($vmhost_hostname =~ /\./) {
-		my ($vmhost_short_name) = $vmhost_hostname =~ /^([^\.]+)/;
-		push @possible_vmhost_urls, "https://$vmhost_short_name/sdk";
-		push @possible_vmhost_urls, "https://$vmhost_short_name:8333/sdk";
-	}
-	
-	# Call HostConnect, check how long it takes to connect
-	for my $host_url (@possible_vmhost_urls) {
-		Opts::set_option('url', $host_url);
-		
-		notify($ERRORS{'DEBUG'}, 0, "attempting to connect to VM host: $host_url");
-		my $result;
-		eval { $result = Util::connect(); };
-		$result = 'undefined' if !defined($result);
-		my $error_message = $@;
-		undef $@;
-		
-		# It's normal if some connection attempts fail - SSH will be used if the vSphere SDK isn't available
-		# Don't display a warning unless the error indicates a configuration problem (wrong username or password)
-		# Possible error messages:
-		#    Cannot complete login due to an incorrect user name or password.
-		#    Error connecting to server at 'https://<VM host>/sdk': Connection refused
-		if ($error_message && $error_message =~ /incorrect/) {
-			notify($ERRORS{'WARNING'}, 0, "unable to connect to VM host because username or password is incorrectly configured in the VM profile ($vmhost_username/$vmhost_password), error: $error_message");
-			return;
-		}
-		elsif (!$result || $error_message) {
-			notify($ERRORS{'DEBUG'}, 0, "unable to connect to VM host using URL: $host_url, error:\n$error_message");
-		}
-		else {
-			notify($ERRORS{'OK'}, 0, "connected to VM host: $host_url, username: '$vmhost_username'");
-			return 1;
-		}
-	}
-	
-	notify($ERRORS{'OK'}, 0, "unable connect to VM host: $vmhost_hostname");
-	return;
-}
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -2246,35 +2519,11 @@ sub _get_file_info {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 _get_host_view
-
- Parameters  : 
- Returns     : vSphere SDK host object
- Description : Retrieves a host object.
-
-=cut
-
-sub _get_host_view {
-	my $self = shift;
-	if (ref($self) !~ /VCL::Module/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-	
-	return $self->{host_view_object} if $self->{host_view_object};
-	
-	# Get the host view
-	$self->{host_view_object} = VIExt::get_host_view(1);
-	return $self->{host_view_object};
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
 =head2 _get_datacenter_view
 
  Parameters  : 
- Returns     : vSphere SDK datacenter view object
- Description : Retrieves a vSphere SDK datacenter view object.
+ Returns     : vSphere SDK Datacenter view object
+ Description : Retrieves a vSphere SDK Datacenter view object.
 
 =cut
 
@@ -2287,15 +2536,428 @@ sub _get_datacenter_view {
 	
 	return $self->{datacenter_view_object} if $self->{datacenter_view_object};
 	
-	# Get the host view
-	my $datacenter = Vim::find_entity_view(view_type => 'Datacenter');
+	my $vmhost_name = $self->data->get_vmhost_short_name();
+	
+	my $datacenter;
+	
+	# Get the resource pool view - attempt to get the parent datacenter of the resource pool
+	my $resource_pool = $self->_get_resource_pool_view();
+	if ($resource_pool) {
+		$datacenter = $self->_get_parent_managed_object_view($resource_pool, 'Datacenter');
+	}
+	
 	if (!$datacenter) {
-		notify($ERRORS{'WARNING'}, 0, "failed to retrieve datacenter view object");
+		# Unable to get parent datacenter of resource view, get all datacenter views
+		# Return datacenter view only if 1 datacenter was retrieved
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve parent datacenter for resource pool object");
+		
+		my @datacenters = @{Vim::find_entity_views(view_type => 'Datacenter')};
+		if (!scalar(@datacenters)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to retrieve Datacenter view from VM host $vmhost_name");
+			return;
+		}
+		elsif (scalar(@datacenters) > 1) {
+			notify($ERRORS{'WARNING'}, 0, "unable to determine correct Datacenter to use, multiple Datacenter views were found on VM host $vmhost_name");
+			return;
+		}
+		else {
+			$datacenter = $datacenters[0];
+		}
+	}
+	
+	my $datacenter_name = $datacenter->{name};
+	notify($ERRORS{'DEBUG'}, 0, "found datacenter VM host on $vmhost_name: $datacenter_name");
+	
+	$self->{datacenter_view_object} = $datacenter;
+	return $self->{datacenter_view_object};
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 _get_datacenter_name
+
+ Parameters  : 
+ Returns     : 
+ Description : 
+
+=cut
+
+sub _get_datacenter_name {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
+	
+	my $datacenter_view_object = $self->_get_datacenter_view() || return;
+	return $datacenter_view_object->{name};
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 _get_cluster_view
+
+ Parameters  : 
+ Returns     : vSphere SDK ClusterComputeResource view object
+ Description : Retrieves a vSphere SDK ClusterComputeResource view object.
+
+=cut
+
+sub _get_cluster_view {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	return $self->{cluster_view_object} if $self->{cluster_view_object};
+	
+	my $vmhost_name = $self->data->get_vmhost_short_name();
+	
+	my $resource_pool = $self->_get_resource_pool_view() || return;
+
+	my $cluster = $self->_get_parent_managed_object_view($resource_pool, 'ClusterComputeResource');
+	if (!$cluster) {
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve cluster view object");
+		return;
+	}
+	
+	my $cluster_name = $cluster->{name};
+	notify($ERRORS{'DEBUG'}, 0, "retrieved '$cluster_name' cluster view");
+	
+	$self->{cluster_view_object} = $cluster;
+	return $self->{cluster_view_object};
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 _get_host_system_view
+
+ Parameters  : 
+ Returns     : vSphere SDK HostSystem view object
+ Description : Retrieves a vSphere SDK HostSystem view object.
+
+=cut
+
+sub _get_host_system_view {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	return $self->{host_system_view_object} if $self->{host_system_view_object};
+	
+	## Check if host is using vCenter - can only retrieve HostSystem view for standalone hosts
+	#if ($self->_is_vcenter()) {
+	#	notify($ERRORS{'DEBUG'}, 0, "HostSystem view cannot be retrieved for vCenter host");
+	#	return;
+	#}
+	
+	my $vmhost_name = $self->data->get_vmhost_short_name();
+	
+	my @host_system_views = @{Vim::find_entity_views(view_type => 'HostSystem')};
+	if (!scalar(@host_system_views)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve HostSystem views");
+		return;
+	}
+	elsif (scalar(@host_system_views) == 1) {
+		$self->{host_system_view_object} = $host_system_views[0];
+		return $self->{host_system_view_object};
+	}
+	
+	my @host_system_names;
+	for my $host_system_view (@host_system_views) {
+		my $host_system_name = $host_system_view->{name};
+		push @host_system_names, $host_system_name;
+		
+		if ($host_system_name =~ /^$vmhost_name(\.|$)/i || $host_system_name =~ /^$vmhost_name(\.|$)/i) {
+			notify($ERRORS{'DEBUG'}, 0, "retrieved matching HostSystem view: '$host_system_name', VCL VM host name: '$vmhost_name'");
+			$self->{host_system_view_object} = $host_system_view;
+			return $self->{host_system_view_object};
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "name of HostSystem '$host_system_name' does NOT match VCL VM host name: '$vmhost_name'");
+		}
+	}
+	
+	return $host_system_views[0];
+	notify($ERRORS{'WARNING'}, 0, "did not find a HostSystem view with a name matching the VCL VM host name: '$vmhost_name', HostSystem names:\n" . join("\n", @host_system_names));
+	return;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 _get_resource_pool_view
+
+ Parameters  : 
+ Returns     : vSphere SDK ResourcePool view object
+ Description : Retrieves a vSphere SDK ResourcePool view object.
+
+=cut
+
+sub _get_resource_pool_view {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	return $self->{resource_pool_view_object} if $self->{resource_pool_view_object};
+	
+	my $vmhost_name = $self->data->get_vmhost_short_name();
+	
+	# Get the resource path from the VM host profile if it is configured
+	my $vmhost_profile_resource_path = $self->data->get_vmhost_profile_resource_path(0);
+	
+	# Retrieve all of the ResourcePool views on the VM host
+	my @resource_pools = @{Vim::find_entity_views(view_type => 'ResourcePool')};
+	if (!@resource_pools) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve any resource pool views from VM host $vmhost_name");
+		return;
+	}
+	
+	my @resource_pool_paths;
+	my %potential_matches;
+	for my $resource_pool (@resource_pools) {
+		# Assemble the full path to the resource view - including Datacenters, folders, clusters...
+		my $resource_pool_path = $self->_get_managed_object_path($resource_pool->{mo_ref});
+		
+		# The path of the resource pool retrieved from the VM host will contain levels which don't appear in vCenter
+		# For example, 'host' and 'Resources' don't appear in the tree view:
+		#   /DC1/host/Folder1/cl1/Resources/rp1
+		# Check the actual path retrieved from the VM host and the path with these entries removed
+		my $resource_pool_path_fixed = $resource_pool_path;
+		$resource_pool_path_fixed =~ s/\/host\//\//g;
+		$resource_pool_path_fixed =~ s/\/Resources($|\/?)/$1/g;
+		
+		push @resource_pool_paths, $resource_pool_path_fixed;
+		
+		
+		# If only 1 resource pool was found on the host, ignore the VM profile resource path setting and use the resource pool that was found
+		if (scalar(@resource_pools) == 1) {
+			notify($ERRORS{'DEBUG'}, 0, "single resource pool found on VM host $vmhost_name will be used: $resource_pool_path_fixed");
+			$self->{resource_pool_view_object} = $resource_pool;
+			return $resource_pool;
+		}
+		
+		# Check if the retrieved resource pool matches the profile resource path
+		if ($vmhost_profile_resource_path =~ /$resource_pool_path/i) {
+			notify($ERRORS{'DEBUG'}, 0, "found resource pool on VM host $vmhost_name matching VM host profile resource path: $resource_pool_path");
+			$self->{resource_pool_view_object} = $resource_pool;
+			return $resource_pool;
+		}
+		
+		# Check if the fixed retrieved resource pool path matches the profile resource path
+		if ($vmhost_profile_resource_path =~ /$resource_pool_path_fixed/i) {
+			notify($ERRORS{'DEBUG'}, 0, "found resource pool on VM host $vmhost_name matching VM host profile resource path with default hidden levels removed:\n" .
+					 "path on VM host: '$resource_pool_path'\n" .
+					 "modified path on VM host: '$resource_pool_path_fixed'\n" .
+					 "VM profile path: '$vmhost_profile_resource_path'"
+			);
+			$self->{resource_pool_view_object} = $resource_pool;
+			return $resource_pool;
+		}
+		
+		# Check if this is a potential match - resource pool path retrieved from VM host begins or ends with the profile value
+		if ($resource_pool_path_fixed =~ /^\/?$vmhost_profile_resource_path\//i) {
+			notify($ERRORS{'DEBUG'}, 0, "resource pool on VM host $vmhost_name '$resource_pool_path_fixed' is a potential match, it begins with VM host profile resource path '$vmhost_profile_resource_path'");
+			$potential_matches{$resource_pool_path_fixed} = $resource_pool;
+		}
+		elsif ($resource_pool_path_fixed =~ /\/$vmhost_profile_resource_path$/i) {
+			notify($ERRORS{'DEBUG'}, 0, "resource pool on VM host $vmhost_name '$resource_pool_path_fixed' is a potential match, it ends with VM host profile resource path '$vmhost_profile_resource_path'");
+			$potential_matches{$resource_pool_path_fixed} = $resource_pool;
+		}
+		else {
+			#notify($ERRORS{'DEBUG'}, 0, "resource pool on VM host $vmhost_name does NOT match VM host profile resource path:\n" .
+			#	"path on VM host: '$resource_pool_path'\n" .
+			#	"VM profile path: '$vmhost_profile_resource_path'"
+			#);
+		}
+	}
+	
+	# Check if a single potential match was found - if so, assume it should be used
+	if (scalar(keys %potential_matches) == 1) {
+		my $resource_pool_path = (keys %potential_matches)[0];
+		my $resource_pool = $potential_matches{$resource_pool_path};
+		$self->{resource_pool_view_object} = $resource_pool;
+		notify($ERRORS{'DEBUG'}, 0, "single resource pool on VM host $vmhost_name which potentially matches VM host profile resource path will be used:\n" .
+			"path on VM host: '$resource_pool_path'\n" .
+			"VM profile path: '$vmhost_profile_resource_path'"
+		);
+		return $resource_pool;
+	}
+	
+	# Resource pool was found
+	if ($vmhost_profile_resource_path) {
+		notify($ERRORS{'WARNING'}, 0, "resource path '$vmhost_profile_resource_path' configured in VM host profile does NOT match any of resource pool paths found on VM host $vmhost_name:\n" . join("\n", sort @resource_pool_paths));
+	}
+	elsif (scalar(@resource_pools) > 1) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine correct resource pool to use, VM host $vmhost_name contains multiple resource pool paths, VM host profile resource path MUST be configured to one of the following values:\n" . join("\n", sort @resource_pool_paths));
+	}
 	else {
-		$self->{datacenter_view_object} = $datacenter;
-		return $self->{datacenter_view_object};
+		notify($ERRORS{'WARNING'}, 0, "failed to determine resource pool to use on VM host $vmhost_name:\n" . join("\n", sort @resource_pool_paths));
+	}
+	
+	return;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 _get_managed_object_path
+
+ Parameters  : $mo_ref
+ Returns     : string
+ Description : Constructs a path string from the root of a vCenter or standalone
+               host to the managed object specified by the $mo_ref argument.
+               Example, if the tree structure in vCenter is:
+               DC1
+               |---Folder1
+                  |---ClusterA
+                     |---ResourcePool5
+                        |---vm100
+               
+               The following string is returned:
+               /DC1/host/Folder1/ClusterA/Resources/ResourcePool5/vm100
+               
+               Note: 'host' and 'Resources' are not displayed in the vSphere
+               Client.
+
+=cut
+
+sub _get_managed_object_path {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $mo_ref_argument = shift;
+	if (!$mo_ref_argument) {
+		notify($ERRORS{'WARNING'}, 0, "managed object reference argument was not supplied");
+		return;
+	}
+	elsif (!ref($mo_ref_argument)) {
+		notify($ERRORS{'WARNING'}, 0, "managed object reference argument is not a reference");
+		return;
+	}
+	elsif (!$mo_ref_argument->isa('ManagedObjectReference')) {
+		if (defined($mo_ref_argument->{mo_ref})) {
+			$mo_ref_argument = $mo_ref_argument->{mo_ref};
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "managed object reference argument is not a ManagedObjectReference object");
+			return;
+		}
+	}
+	
+	my $type = $mo_ref_argument->{type};
+	my $value = $mo_ref_argument->{value};
+	
+	my $view = Vim::get_view('mo_ref' => $mo_ref_argument) || return;
+	my $name = $view->{name} || return;
+	
+	my $parent_mo_ref;
+	if ($type eq 'VirtualMachine' && $view->{resourcePool}) {
+		$parent_mo_ref = $view->{resourcePool};
+	}
+	elsif ($view->{parent}) {
+		$parent_mo_ref = $view->{parent};
+	}
+	else {
+		# No parent, found root of path
+		return;
+	}
+	
+	#notify($ERRORS{'DEBUG'}, 0, format_data($parent_mo_ref));	
+	
+	my $parent_type = $parent_mo_ref->{type};
+	my $parent_value = $parent_mo_ref->{value};
+	#notify($ERRORS{'DEBUG'}, 0, "'$name' ($type: $value) --> parent: ($parent_type: $parent_value)");	
+	
+	my $parent_path = $self->_get_managed_object_path($parent_mo_ref) || '';
+	return "$parent_path/$name";
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 _get_parent_managed_object_view
+
+ Parameters  : $mo_ref, $parent_view_type
+ Returns     : string
+ Description : Finds a parent of the managed object of the one specified by the
+               $mo_ref argument matching the $parent_view_type argument.
+               Examples of $parent_view_type are 'Datacenter',
+               'ClusterComputeResource', etc. This is useful if you have a VM or
+               resource pool and need to retrieve the datacenter or cluster
+               managed object which it belongs to.
+
+=cut
+
+sub _get_parent_managed_object_view {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get the managed object reference argument
+	# Check if a mo_ref was passed or a view
+	# If a view was passed, get the mo_ref from it
+	my $mo_ref_argument = shift;
+	if (!$mo_ref_argument) {
+		notify($ERRORS{'WARNING'}, 0, "managed object reference argument was not supplied");
+		return;
+	}
+	elsif (!ref($mo_ref_argument)) {
+		notify($ERRORS{'WARNING'}, 0, "managed object reference argument is not a reference");
+		return;
+	}
+	elsif (!$mo_ref_argument->isa('ManagedObjectReference')) {
+		if (defined($mo_ref_argument->{mo_ref})) {
+			$mo_ref_argument = $mo_ref_argument->{mo_ref};
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "managed object reference argument is not a ManagedObjectReference object");
+			return;
+		}
+	}
+	
+	my $parent_type_argument = shift;
+	if (!$parent_type_argument) {
+		notify($ERRORS{'WARNING'}, 0, "parent type argument was not supplied");
+		return;
+	}
+	
+	# Retrieve a view for the mo_ref argument
+	my $view = Vim::get_view('mo_ref' => $mo_ref_argument);
+	if (!$view) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve view for managed object reference argument:\n" . format_data($mo_ref_argument));
+		return;
+	}
+	
+	# Check if the view has a parent
+	if ($view->{parent}) {
+		my $parent_mo_ref = $view->{parent};
+		my $parent_type = $parent_mo_ref->{type};
+		my $parent_value = $parent_mo_ref->{value};
+		
+		# Check if the parent matches the type argument
+		if ($parent_type eq $parent_type_argument) {
+			#notify($ERRORS{'DEBUG'}, 0, "found parent view matching type '$parent_type_argument': $parent_value");
+			
+			my $parent_view = Vim::get_view('mo_ref' => $parent_mo_ref);
+			return $parent_view;
+		}
+		else {
+			# Parent type does not match the type argument, recursively search upward
+			return $self->_get_parent_managed_object_view($parent_mo_ref, $parent_type_argument);
+		}
+	}
+	else {
+		# No parent, found root of path
+		notify($ERRORS{'WARNING'}, 0, "failed to find parent object matching type '$parent_type_argument'");
+		return;
 	}
 }
 
@@ -2324,11 +2986,11 @@ sub _get_vm_view {
 	local $SIG{__DIE__} = sub{};
 	
 	my $vm_view;
-	eval { $vm_view = Vim::find_entity_view(view_type => 'VirtualMachine', filter => {'config.files.vmPathName' => $vmx_path}); };
+	eval { $vm_view = Vim::find_entity_view(view_type => 'VirtualMachine', begin_entity => $self->_get_datacenter_view(), filter => {'config.files.vmPathName' => $vmx_path}); };
 	if (!$vm_view) {
 		notify($ERRORS{'WARNING'}, 0, "failed to retrieve view object for VM: $vmx_path");
 		return;
-   }
+	}
 	
 	$self->{vm_view_objects}{$vmx_path} = $vm_view;
 	return $self->{vm_view_objects}{$vmx_path};
@@ -2361,7 +3023,10 @@ sub _get_virtual_disk_manager_view {
 	}
 	
 	my $virtual_disk_manager = Vim::get_view(mo_ref => $service_content->{virtualDiskManager});
-	if (!$virtual_disk_manager) {
+	if ($virtual_disk_manager) {
+		#notify($ERRORS{'DEBUG'}, 0, "retrieved virtual disk manager object:\n" . format_data($virtual_disk_manager));
+	}
+	else {
 		notify($ERRORS{'WARNING'}, 0, "failed to retrieve virtual disk manager object");
 		return;
 	}
@@ -2427,11 +3092,10 @@ sub _get_datastore_object {
 	
 	return $self->{datastore_objects}{$datastore_name_argument} if ($self->{datastore_objects}{$datastore_name_argument});
 	
-	# Get the host view
-	my $host_view = $self->_get_host_view();
+	my $datacenter_view = $self->_get_datacenter_view();
 	
 	# Get an array containing datastore managed object references
-	my @datastore_mo_refs = @{$host_view->datastore};
+	my @datastore_mo_refs = @{$datacenter_view->datastore};
 	
 	# Loop through the datastore managed object references
 	# Get a datastore view, add the view's summary to the return hash
@@ -2484,11 +3148,10 @@ sub _get_datastore_info {
 	
 	my $vmhost_hostname = $self->data->get_vmhost_hostname();
 	
-	# Get the host view
-	my $host_view = $self->_get_host_view();
+	my $datacenter_view = $self->_get_datacenter_view() || return;
 	
 	# Get an array containing datastore managed object references
-	my @datastore_mo_refs = @{$host_view->datastore};
+	my @datastore_mo_refs = @{$datacenter_view->datastore};
 	
 	# Loop through the datastore managed object references
 	# Get a datastore view, add the view's summary to the return hash
@@ -2511,7 +3174,7 @@ sub _get_datastore_info {
 			next;
 		}
 		
-		if ($datastore_url =~ /^\/vmfs\/volumes/i) {
+		if ($datastore_url =~ /^(\/vmfs\/volumes|\w+fs)/i) {
 			$datastore_view->summary->{normal_path} = "/vmfs/volumes/$datastore_name";
 		}
 		else {
@@ -2521,7 +3184,7 @@ sub _get_datastore_info {
 		$datastore_info->{$datastore_name} = $datastore_view->summary;
 	}
 	
-	#notify($ERRORS{'DEBUG'}, 0, "retrieved datastore info:\n" . format_data($datastore_info));
+	notify($ERRORS{'DEBUG'}, 0, "retrieved datastore info:\n" . format_data($datastore_info));
 	$self->{datastore_info} = $datastore_info;
 	return $datastore_info;
 }
@@ -2601,6 +3264,33 @@ sub snapshot_exists {
 		notify($ERRORS{'DEBUG'}, 0, "snapshot does NOT exist for VM: $vmx_path");
 		return 0;
 	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 _is_vcenter
+
+ Parameters  : 
+ Returns     : boolean
+ Description : Determines if the VM host is vCenter or standalone.
+
+=cut
+
+sub _is_vcenter {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $service_content = Vim::get_service_content();
+	my $api_type = $service_content->{about}->{apiType};
+	
+	# apiType should either be:
+	#    'VirtualCenter' - VirtualCenter instance
+	#    'HostAgent' - standalone ESX/ESXi or VMware Server host
+	
+	return ($api_type =~ /VirtualCenter/) ? 1 : 0;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
