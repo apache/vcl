@@ -48,33 +48,7 @@ function viewGroups() {
 	global $user, $mode;
 	$modetype = getContinuationVar("type");
 
-	$usergroups = getUserGroups();
-	if($user['showallgroups'])
-		$affilusergroups = $usergroups;
-	else
-		$affilusergroups = getUserGroups(1, $user['affiliationid']);
-	$resourcetypes = getTypes("resources");
-	$resourcegroups = getResourceGroups();
-	$resources = array();
-	$userresources = getUserResources(array("groupAdmin"), 
-	                                  array("manageGroup"), 1);
-	foreach(array_keys($userresources) as $type) {
-		foreach($userresources[$type] as $id => $group) {
-			if(array_key_exists($id, $resourcegroups)) { // have to make sure it exists in case something was deleted from the session priv cache
-				$resources[$id]["type"] = $type;
-				$resources[$id]["name"] = $group;
-				$resources[$id]["owner"] = $resourcegroups[$id]["owner"];
-			}
-		}
-	}
-
-	$showfederatedall = 0;
-	$showfederatedaffil = 0;
-	if(checkUserHasPerm('Manage Federated User Groups (global)'))
-		$showfederatedall = 1;
-	elseif(checkUserHasPerm('Manage Federated User Groups (affiliation only)'))
-		$showfederatedaffil = 1;
-	print "<H2>User Groups</H2>\n";
+	print "<H2 id=\"startscroll\">User Groups</H2>\n";
 	if($modetype == "user") {
 		if($mode == "submitAddGroup") {
 			print "<font color=\"#008000\">User group successfully added";
@@ -89,132 +63,101 @@ function viewGroups() {
 			print "</font><br><br>\n";
 		}
 	}
-	print "<TABLE class=usergrouptable border=1>\n";
-	print "  <TR>\n";
-	print "    <TD></TD>\n";
-	print "    <TD></TD>\n";
-	print "    <TH>Name</TH>\n";
-	print "    <TH>Owner</TH>\n";
-	if($showfederatedall || $showfederatedaffil)
-		print "    <TH>Type</TH>\n";
-	print "    <TH>Editable by</TH>\n";
-	print "    <TH>Initial Max Time (minutes)</TH>\n";
-	print "    <TH>Total Max Time (minutes)</TH>\n";
-	print "    <TH>Max Extend Time (minutes)</TH>\n";
-	if(checkUserHasPerm('Set Overlapping Reservation Count'))
-		print "    <TH>Max Overlapping Reservations</TH>\n";
-	print "  </TR>\n";
-	print "  <TR>\n";
-	print "    <FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
-	print "    <TD></TD>\n";
-	print "    <TD><INPUT type=submit value=Add></TD>\n";
-	if($user['showallgroups']) {
-		$affils = getAffiliations();
-		print "    <TD nowrap><INPUT type=text name=name maxlength=30 size=10>";
-		print "@";
-		printSelectInput("affiliationid", $affils, $user['affiliationid']);
-	}
-	else
-		print "    <TD nowrap><INPUT type=text name=name maxlength=30 size=20>";
-	print "</TD>\n";
-	print "    <TD><INPUT type=text name=owner size=15></TD>\n";
-	print "    <TD>Normal</TD>\n";
-	print "    <TD>\n";
+	$showusergrouptype = 0;
+	if(checkUserHasPerm('Manage Federated User Groups (global)') ||
+	   checkUserHasPerm('Manage Federated User Groups (affiliation only)'))
+		$showusergrouptype = 1;
 	$cdata = array('type' => 'user');
-	if(empty($affilusergroups)) {
-		$cdata['groupwasnone'] = 1;
-		$cdata['editgroupid'] = 0;
+	$cont = addContinuationsEntry('addGroup', $cdata);
+	print "<form action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
+	print "<button type=\"submit\" dojoType=\"dijit.form.Button\">\n";
+	print "  Add New User Group\n";
+	print "</button>\n";
+	print "<input type=\"hidden\" name=\"continuation\" value=\"$cont\">\n";
+	print "</form><br>\n";
+
+	print "<div id=\"usergroupcontainer\">\n";
+
+	# hidden elements
+	$cont = addContinuationsEntry('editGroup', $cdata);
+	print "<input type=\"hidden\" id=\"editgroupcont\" value=\"$cont\">\n";
+	$cont = addContinuationsEntry('confirmDeleteGroup', $cdata);
+	print "<input type=\"hidden\" id=\"deletegroupcont\" value=\"$cont\">\n";
+	$cont = addContinuationsEntry('jsonUserGroupStore');
+	print "<div dojoType=\"dojo.data.ItemFileReadStore\" url=\"" . BASEURL;
+	print SCRIPT . "?continuation=$cont\" jsid=\"usergroupstore\"></div>\n";
+	print "<div dojoType=\"dojo.data.ItemFileWriteStore\"\n";
+	print "data=\"{'identifier':'id', 'label':'name', 'items':[]}\" \n";
+	print "jsid=\"affiliationstore\"></div>\n";
+	print "<div dojoType=\"dojo.data.ItemFileWriteStore\"\n";
+	print "data=\"{'identifier':'id', 'label':'name', 'items':[]}\" \n";
+	print "jsid=\"ownerstore\"></div>\n";
+	print "<div dojoType=\"dojo.data.ItemFileWriteStore\"\n";
+	print "data=\"{'identifier':'id', 'label':'name', 'items':[]}\" \n";
+	print "jsid=\"editgroupstore\"></div>\n";
+
+	# filters
+	print "<div dojoType=\"dijit.TitlePane\" title=\"Filters (click to expand)\" ";
+	print "open=\"false\">\n";
+	print "<strong>Name</strong>:\n";
+	print "<div dojoType=\"dijit.form.TextBox\" id=\"namefilter\" length=\"40\">";
+	print "  <script type=\"dojo/connect\" event=\"onKeyUp\" args=\"event\">\n";
+	print "    if(event.keyCode == 13) usergroupGridFilter();\n";
+	print "  </script>\n";
+	print "</div>\n";
+	print "<button dojoType=\"dijit.form.Button\">\n";
+	print "  Apply Name Filter\n";
+	print "  <script type=\"dojo/method\" event=\"onClick\">\n";
+	print "    usergroupGridFilter();\n";
+	print "  </script>\n";
+	print "</button><br>\n";
+	print "<strong>Affiliation</strong>:\n";
+	print "<select dojoType=\"dijit.form.Select\" id=\"affiliationfilter\" ";
+	print "onChange=\"usergroupGridFilter();\" maxHeight=\"250\"></select><br>\n";
+	print "<strong>Owner</strong>:\n";
+	print "<select dojoType=\"dijit.form.Select\" id=\"ownerfilter\" ";
+	print "onChange=\"usergroupGridFilter();\" maxHeight=\"250\"></select><br>\n";
+	if($showusergrouptype) {
+		print "<strong>Type</strong>:\n";
+		print "<label for=\"shownormal\">Normal</label>\n";
+		print "<input type=\"checkbox\" dojoType=\"dijit.form.CheckBox\" ";
+		print "id=\"shownormal\" onChange=\"usergroupGridFilter();\" ";
+		print "checked=\"checked\"> | \n";
+		print "<label for=\"showfederated\">Federated</label>\n";
+		print "<input type=\"checkbox\" dojoType=\"dijit.form.CheckBox\" ";
+		print "id=\"showfederated\" onChange=\"usergroupGridFilter();\" ";
+		print "checked=\"checked\"> | \n";
+		print "<label for=\"showcourseroll\">Course Roll</label>\n";
+		print "<input type=\"checkbox\" dojoType=\"dijit.form.CheckBox\" ";
+		print "id=\"showcourseroll\" onChange=\"usergroupGridFilter();\" ";
+		print "checked=\"checked\"><br>\n";
 	}
-	else
-		printSelectInput("editgroupid", $affilusergroups);
-	print "    </TD>\n";
-	print "    <TD><INPUT type=text name=initialmax maxlength=4 size=4 ";
-	print "value=240></TD>\n";
-	print "    <TD><INPUT type=text name=totalmax maxlength=4 size=4 value=360>";
-	print "</TD>\n";
-	print "    <TD><INPUT type=text name=maxextend maxlength=4 size=4 value=30>";
-	print "</TD>\n";
-	if(checkUserHasPerm('Set Overlapping Reservation Count')) {
-		print "    <TD><INPUT type=text name=overlap maxlength=4 size=4 value=0>";
-		print "</TD>\n";
-	}
-	$cont = addContinuationsEntry('submitAddGroup', $cdata);
-	print "    <INPUT type=hidden name=continuation value=\"$cont\">\n";
-	print "    </FORM>\n";
-	print "  </TR>\n";
-	$dispUserGrpIDs = array();
-	foreach(array_keys($usergroups) as $id) {
-		# figure out if user is owner or in editor group
-		$owner = 0;
-		$editor = 0;
-		if($usergroups[$id]["ownerid"] == $user["id"])
-			$owner = 1;
-		if(array_key_exists("editgroupid", $usergroups[$id]) &&
-		   array_key_exists($usergroups[$id]["editgroupid"], $user["groups"]))
-			$editor = 1;
-		if($showfederatedall && ($usergroups[$id]['custom'] == 0 ||
-		   $usergroups[$id]['courseroll'] == 1))
-			$owner = 1;
-		elseif($showfederatedaffil && ($usergroups[$id]['custom'] == 0 ||
-		   $usergroups[$id]['courseroll'] == 1) && 
-		   $usergroups[$id]['groupaffiliationid'] == $user['affiliationid'])
-			$owner = 1;
-		if(! $owner && ! $editor)
-			continue;
-		if($user['showallgroups'])
-			$dispUserGrpIDs[$id] = $usergroups[$id]['name'];
-		elseif($usergroups[$id]['groupaffiliation'] == $user['affiliation'] &&
-		   array_key_exists($id, $affilusergroups))
-			$dispUserGrpIDs[$id] = $affilusergroups[$id]['name'];
-		print "  <TR>\n";
-		print "    <TD>\n";
-		if($owner) {
-			print "      <FORM action=\"" . BASEURL . SCRIPT . "\" method=post>";
-			$cdata = array('type' => 'user',
-			               'groupid' => $id);
-			$cont = addContinuationsEntry('confirmDeleteGroup', $cdata);
-			print "      <INPUT type=hidden name=continuation value=\"$cont\">";
-			print "      <INPUT type=submit value=Delete>";
-			print "      </FORM>";
-		}
-		print "    </TD>\n";
-		print "    <TD>\n";
-		print "      <FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
-		$cdata = array('type' => 'user',
-		               'groupid' => $id,
-		               'isowner' => $owner);
-		$cont = addContinuationsEntry('editGroup', $cdata);
-		print "      <INPUT type=hidden name=continuation value=\"$cont\">\n";
-		print "      <INPUT type=submit value=Edit>\n";
-		print "      </FORM>\n";
-		print "    </TD>\n";
-		print "    <TD valign=bottom>{$usergroups[$id]["name"]}</TD>\n";
-		if(! empty($usergroups[$id]["owner"]))
-			print "    <TD>{$usergroups[$id]["owner"]}</TD>\n";
-		else
-			print "    <TD>N/A</TD>\n";
-		if($showfederatedall || $showfederatedaffil) {
-			if($usergroups[$id]['courseroll'] == 1)
-				print "    <TD>Course&nbsp;Roll</TD>\n";
-			elseif($usergroups[$id]['custom'] == 0)
-				print "    <TD>Federated</TD>\n";
-			else
-				print "    <TD>Normal</TD>\n";
-		}
-		if(! empty($usergroups[$id]["editgroup"])) {
-			print "    <TD>{$usergroups[$id]["editgroup"]}@";
-			print "{$usergroups[$id]['editgroupaffiliation']}</TD>\n";
-		}
-		else
-			print "    <TD>None</TD>\n";
-		print "    <TD align=center>{$usergroups[$id]["initialmaxtime"]}</TD>\n";
-		print "    <TD align=center>{$usergroups[$id]["totalmaxtime"]}</TD>\n";
-		print "    <TD align=center>{$usergroups[$id]["maxextendtime"]}</TD>\n";
-		if(checkUserHasPerm('Set Overlapping Reservation Count'))
-			print "    <TD align=center>{$usergroups[$id]["overlapResCount"]}</TD>\n";
-		print "  </TR>\n";
-	}
-	print "</TABLE>\n";
+	print "<strong>Editable by</strong>:\n";
+	print "<select dojoType=\"dijit.form.Select\" id=\"editgroupfilter\" ";
+	print "onChange=\"usergroupGridFilter();\" maxHeight=\"250\"></select><br>\n";
+	print "</div>\n";
+
+	print "<table dojoType=\"dojox.grid.DataGrid\" jsId=\"usergroupgrid\" ";
+	print "sortInfo=3 store=\"usergroupstore\" autoWidth=\"true\" style=\"";
+	print "height: 580px;\" query=\"{type: new RegExp('normal|federated|courseroll')}\">\n";
+	print "<thead>\n";
+	print "<tr>\n";
+	print "<th field=\"id\" width=\"4.5em\" formatter=\"fmtUserGroupDeleteBtn\">&nbsp;</th>\n";
+	print "<th field=\"id\" width=\"3em\" formatter=\"fmtUserGroupEditBtn\">&nbsp;</th>\n";
+	print "<th field=\"name\" width=\"17em\">Name</th>\n";
+	print "<th field=\"owner\" width=\"12em\">Owner</th>\n";
+	if($showusergrouptype)
+		print "<th field=\"prettytype\" width=\"5em\">Type</th>\n";
+	print "<th field=\"editgroup\" width=\"12em\">Editable by</th>\n";
+	print "<th field=\"initialmaxtime\" width=\"5em\">Initial Max<br>Time<br>(minutes)</th>\n";
+	print "<th field=\"totalmaxtime\" width=\"5em\">Total Max<br>Time<br>(minutes)</th>\n";
+	print "<th field=\"maxextendtime\" width=\"5.6em\">Max Extend<br>Time<br>(minutes)</th>\n";
+	if(checkUserHasPerm('Set Overlapping Reservation Count'))
+		print "<th field=\"overlapResCount\" width=\"6.3em\">Max<br>Overlapping<br>Reservations</th>\n";
+	print "</tr>\n";
+	print "</thead>\n";
+	print "</table>\n";
+	print "</div>\n";
 
 	print "<a name=resources></a>\n";
 	print "<H2>Resource Groups</H2>\n";
@@ -233,81 +176,217 @@ function viewGroups() {
 		}
 	}
 
-	if(empty($dispUserGrpIDs) && empty($resources)) {
-		print "You do not have access to any resource groups.<br>\n";
-		return;
+	$showaddresource = 0;
+	$usergroups = getUserGroups(1);
+	foreach(array_keys($usergroups) as $id) {
+		if($usergroups[$id]["ownerid"] == $user["id"]) {
+			$showaddresource = 1;
+			break;
+		}
+		if(array_key_exists("editgroupid", $usergroups[$id]) &&
+		   array_key_exists($usergroups[$id]["editgroupid"], $user["groups"])) {
+			$showaddresource = 1;
+			break;
+		}
 	}
 
-	print "<TABLE class=resourcegrouptable border=1>\n";
-	print "  <TR>\n";
-	print "    <TD></TD>\n";
-	print "    <TD></TD>\n";
-	print "    <TH>Type</TH>\n";
-	print "    <TH>Name</TH>\n";
-	print "    <TH>Owning User Group</TH>\n";
-	print "    <TD><a onmouseover=\"mouseoverHelp();\" ";
-	print "onmouseout=\"showGroupInfoCancel(0);\" id=listicon0>";
-	print "<img alt=\"\" src=\"images/list.gif\"></a></TD>\n";
-	print "  </TR>\n";
-	if(! empty($dispUserGrpIDs)) {
-		print "  <TR>\n";
-		print "    <FORM action=\"" . BASEURL . SCRIPT . "#resources\" method=post>\n";
-		print "    <TD></TD>\n";
-		print "    <TD><INPUT type=submit value=Add></TD>\n";
-		print "    <TD>\n";
-		printSelectInput("resourcetypeid", $resourcetypes["resources"]);
-		print "    </TD>\n";
-		print "    <TD><INPUT type=text name=name maxlength=30 size=10></TD>\n";
-		print "    <TD colspan=2>\n";
-		# find a custom group the user is in and make it the default
-		$defaultgroupkey = "";
-		foreach(array_keys($user["groups"]) as $grpid) {
-			if(array_key_exists($grpid, $usergroups)) {
-				$defaultgroupkey = $grpid;
-				break;
+	$cdata = array('type' => 'resource');
+
+	if($showaddresource) {
+		$cont = addContinuationsEntry('addGroup', $cdata);
+		print "<form action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
+		print "<button type=\"submit\" dojoType=\"dijit.form.Button\">\n";
+		print "  Add New Resource Group\n";
+		print "</button>\n";
+		print "<input type=\"hidden\" name=\"continuation\" value=\"$cont\">\n";
+		print "</form><br>\n";
+	}
+
+	print "<div id=\"resourcegroupcontainer\">\n";
+
+	# hidden elements
+	$cont = addContinuationsEntry('editGroup', $cdata);
+	print "<input type=\"hidden\" id=\"editresgroupcont\" value=\"$cont\">\n";
+	$cont = addContinuationsEntry('confirmDeleteGroup', $cdata);
+	print "<input type=\"hidden\" id=\"deleteresgroupcont\" value=\"$cont\">\n";
+	$jscont = addContinuationsEntry('jsonGetGroupInfo');
+	print "<input type=\"hidden\" id=\"jsongroupinfocont\" value=\"$jscont\">\n";
+	$cont = addContinuationsEntry('jsonResourceGroupStore');
+	print "<div dojoType=\"dojo.data.ItemFileReadStore\" url=\"" . BASEURL;
+	print SCRIPT . "?continuation=$cont\" jsid=\"resourcegroupstore\"></div>\n";
+	print "<div dojoType=\"dojo.data.ItemFileWriteStore\"\n";
+	print "data=\"{'identifier':'id', 'label':'name', 'items':[]}\" \n";
+	print "jsid=\"owninggroupstore\"></div>\n";
+
+	# filters
+	print "<div dojoType=\"dijit.TitlePane\" title=\"Filters (click to expand)\" ";
+	print "open=\"false\">\n";
+	print "<strong>Name</strong>:\n";
+	print "<div dojoType=\"dijit.form.TextBox\" id=\"resnamefilter\" length=\"40\">";
+	print "  <script type=\"dojo/connect\" event=\"onKeyUp\" args=\"event\">\n";
+	print "    if(event.keyCode == 13) resourcegroupGridFilter();\n";
+	print "  </script>\n";
+	print "</div>\n";
+	print "<button dojoType=\"dijit.form.Button\">\n";
+	print "  Apply Name Filter\n";
+	print "  <script type=\"dojo/method\" event=\"onClick\">\n";
+	print "    resourcegroupGridFilter();\n";
+	print "  </script>\n";
+	print "</button><br>\n";
+	$resourcetypes = getTypes("resources");
+	print "<strong>Type</strong>:\n";
+	print "<span id=\"resourcetypes\">\n";
+	$first = 1;
+	foreach($resourcetypes['resources'] as $type) {
+		if($first)
+			$first = 0;
+		else
+			print ' | ';
+		print "<label for=\"show$type\">$type</label>\n";
+		print "<input type=\"checkbox\" dojoType=\"dijit.form.CheckBox\" ";
+		print "id=\"show$type\" onChange=\"resourcegroupGridFilter();\" ";
+		print "checked=\"checked\">\n";
+	}
+	print "</span>\n";
+	print "<br>\n";
+	print "<strong>Owning User Group</strong>:\n";
+	print "<select dojoType=\"dijit.form.Select\" id=\"owninggroupfilter\" ";
+	print "onChange=\"resourcegroupGridFilter();\" maxHeight=\"250\"></select><br>\n";
+	print "</div>\n";
+
+	print "<table dojoType=\"dojox.grid.DataGrid\" jsId=\"resourcegroupgrid\" ";
+	print "sortInfo=3 store=\"resourcegroupstore\" autoWidth=\"true\" style=\"";
+	print "height: 580px;\" query=\"{type: new RegExp('.*')}\">\n";
+	print "<thead>\n";
+	print "<tr>\n";
+	print "<th field=\"id\" width=\"4.5em\" formatter=\"fmtResourceGroupDeleteBtn\">&nbsp;</th>\n";
+	print "<th field=\"id\" width=\"3em\" formatter=\"fmtResourceGroupEditBtn\">&nbsp;</th>\n";
+	print "<th field=\"type\" width=\"9em\">Type</th>\n";
+	print "<th field=\"name\" width=\"20em\">Name</th>\n";
+	print "<th field=\"owninggroup\" width=\"20em\">Owning User Group</th>\n";
+	print "<th field=\"id\" width=\"1.2em\" formatter=\"fmtGroupInfo\">\n";
+	print "<a onmouseover=\"mouseoverHelp();\" ";
+	print "onmouseout=\"showGroupInfoCancel(0);\" id=\"listicon0\">\n";
+	print "<img alt=\"\" src=\"images/list.gif\"></a></th>\n";
+	print "</tr>\n";
+	print "</thead>\n";
+	print "</table>\n";
+	print "</div>\n";
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn jsonUserGroupStore()
+///
+/// \brief generates json data for populating user group datagrid
+///
+////////////////////////////////////////////////////////////////////////////////
+function jsonUserGroupStore() {
+	global $user;
+	$usergroups = getUserGroups();
+	if($user['showallgroups'])
+		$affilusergroups = $usergroups;
+	else
+		$affilusergroups = getUserGroups(0, $user['affiliationid']);
+
+	$showfederatedall = 0;
+	$showfederatedaffil = 0;
+	if(checkUserHasPerm('Manage Federated User Groups (global)'))
+		$showfederatedall = 1;
+	elseif(checkUserHasPerm('Manage Federated User Groups (affiliation only)'))
+		$showfederatedaffil = 1;
+	$items = array();
+	foreach($affilusergroups as $id => $group) {
+		if($group['name'] == 'None' || preg_match('/^\s*None/', $group['name']))
+			continue;
+		$owner = 0;
+		$editor = 0;
+		if($group["ownerid"] == $user["id"])
+			$owner = 1;
+		if(array_key_exists("editgroupid", $group) &&
+		   array_key_exists($group["editgroupid"], $user["groups"]))
+			$editor = 1;
+		if($showfederatedall && ($group['custom'] == 0 ||
+		   $group['courseroll'] == 1))
+			$owner = 1;
+		elseif($showfederatedaffil && ($group['custom'] == 0 ||
+		   $group['courseroll'] == 1) && 
+		   $group['groupaffiliationid'] == $user['affiliationid'])
+			$owner = 1;
+		if(! $owner && ! $editor)
+			continue;
+		$g = array('id' => $id,
+		           'name' => $group['name'],
+		           'owner' => $group['owner'],
+		           'editgroup' => $group['editgroup'],
+		           'editgroupid' => $group['editgroupid'],
+		           'groupaffiliation' => $group['groupaffiliation'],
+		           'groupaffiliationid' => $group['groupaffiliationid'],
+		           'initialmaxtime' => intval($group['initialmaxtime']),
+		           'totalmaxtime' => intval($group['totalmaxtime']),
+		           'maxextendtime' => intval($group['maxextendtime']),
+		           'overlapResCount' => intval($group['overlapResCount']));
+		if($group['courseroll']) {
+			$g['type'] = 'courseroll';
+			$g['prettytype'] = 'Course Roll';
+			$g['owner'] = 'N/A';
+			$g['editgroup'] = 'None';
+			$g['editgroupid'] = 'NULL';
+		}
+		elseif($group['custom'] == 0) {
+			$g['type'] = 'federated';
+			$g['prettytype'] = 'Federated';
+			$g['owner'] = 'N/A';
+			$g['editgroup'] = 'None';
+			$g['editgroupid'] = 'NULL';
+		}
+		else {
+			$g['type'] = 'normal';
+			$g['prettytype'] = 'Normal';
+			$g['editgroup'] = "{$group['editgroup']}@{$group['editgroupaffiliation']}";
+		}
+		if($owner)
+			$g['deletable'] = 1;
+		else
+			$g['deletable'] = 0;
+		$items[] = $g;
+	}
+	sendJSON($items, 'id');
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn jsonResourceGroupStore()
+///
+/// \brief generates json data for populating resource group datagrid
+///
+////////////////////////////////////////////////////////////////////////////////
+function jsonResourceGroupStore() {
+	$resourcegroups = getResourceGroups();
+	$resources = array();
+	$userresources = getUserResources(array("groupAdmin"), 
+	                                  array("manageGroup"), 1);
+	foreach(array_keys($userresources) as $type) {
+		foreach($userresources[$type] as $id => $group) {
+			if(array_key_exists($id, $resourcegroups)) { // have to make sure it exists in case something was deleted from the session priv cache
+				$resources[$id]["type"] = $type;
+				$resources[$id]["name"] = $group;
+				$resources[$id]["owner"] = $resourcegroups[$id]["owner"];
+				$resources[$id]["ownerid"] = $resourcegroups[$id]["ownerid"];
 			}
 		}
-		printSelectInput("ownergroup", $dispUserGrpIDs, $defaultgroupkey);
-		print "    </TD>\n";
-		$cdata = array('type' => 'resource'/*,
-		               'dispUserGrpIDs' => $dispUserGrpIDs*/);
-		$cont = addContinuationsEntry('submitAddGroup', $cdata);
-		print "    <INPUT type=hidden name=continuation value=\"$cont\">\n";
-		print "    </FORM>\n";
-		print "  </TR>\n";
 	}
-	$jscont = addContinuationsEntry('jsonGetGroupInfo');
+
+	$items = array();
 	foreach(array_keys($resources) as $id) {
-		print "  <TR>\n";
-		print "    <TD>\n";
-		print "      <FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
-		$cdata = array('type' => 'resource',
-		               'groupid' => $id);
-		$cont = addContinuationsEntry('confirmDeleteGroup', $cdata);
-		print "      <INPUT type=hidden name=continuation value=\"$cont\">\n";
-		print "      <INPUT type=submit value=Delete>\n";
-		print "      </FORM>\n";
-		print "    </TD>\n";
-		print "    <TD>\n";
-		print "      <FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
-		$cdata = array('type' => 'resource',
-		               'groupid' => $id,
-		               'dispUserGrpIDs' => $dispUserGrpIDs);
-		$cont = addContinuationsEntry('editGroup', $cdata);
-		print "      <INPUT type=hidden name=continuation value=\"$cont\">\n";
-		print "      <INPUT type=submit value=Edit>\n";
-		print "      </FORM>\n";
-		print "    </TD>\n";
-		print "    <TD>" . $resources[$id]["type"] . "</TD>\n";
-		print "    <TD>" . $resources[$id]["name"] . "</TD>\n";
-		print "    <TD>" . $resources[$id]["owner"] . "</TD>\n";
-		print "    <TD><a onmouseover=\"getGroupInfo('$jscont', $id);\" ";
-		print "onmouseout=\"showGroupInfoCancel($id);\" id=listicon$id>";
-		print "<img alt=\"mouseover for list of resources in the group\" ";
-		print "title=\"\" src=\"images/list.gif\"></a></TD>\n";
-		print "  </TR>\n";
+		$g = array('id' => $id,
+		           'type' => $resources[$id]['type'],
+		           'name' => $resources[$id]['name'],
+		           'owninggroup' => $resourcegroups[$id]['owner'],
+		           'owninggroupid' => $resourcegroups[$id]['ownerid']);
+		$items[] = $g;
 	}
-	print "</TABLE>\n";
+	sendJSON($items, 'id');
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -323,17 +402,95 @@ function editOrAddGroup($state) {
 	global $submitErr, $user, $mode;
 
 	$usergroups = getUserGroups();
+
+	$type = getContinuationVar("type");
+	if($state)
+		$isowner = 1;
+	elseif($type == 'resource') {
+		$isowner = getContinuationVar('isowner');
+	}
+	if(! $state) {
+		$groupid = getContinuationVar('groupid', processInputVar('groupid', ARG_NUMERIC));
+		if($type == 'user') {
+			if(! array_key_exists($groupid, $usergroups)) {
+				print "<h2>Edit User Group</h2>\n";
+				print "The selected user group does not exist.\n";
+				return;
+			}
+			$isowner = 0;
+			if($usergroups[$groupid]['ownerid'] != $user['id']) {
+				if(($usergroups[$groupid]['custom'] == 0 ||
+					$usergroups[$groupid]['courseroll'] == 1)) {
+					if(! checkUserHasPerm('Manage Federated User Groups (global)') &&
+						(! checkUserHasPerm('Manage Federated User Groups (affiliation only)') ||
+						$usergroups[$groupid]['groupaffiliationid'] != $user['affiliationid'])) {
+						print "<h2>Edit User Group</h2>\n";
+						print "You do not have access to modify the selected user group.\n";
+						return;
+					}
+					else
+						$isowner = 1;
+				}
+				elseif(! array_key_exists("editgroupid", $usergroups[$groupid]) ||
+					! array_key_exists($usergroups[$groupid]["editgroupid"], $user["groups"])) {
+					print "<h2>Edit User Group</h2>\n";
+					print "You do not have access to modify the selected user group.\n";
+					return;
+				}
+			}
+			else
+				$isowner = 1;
+		}
+		else {
+			$userresources = getUserResources(array("groupAdmin"), 
+			                                  array("manageGroup"), 1);
+			$noaccess = 1;
+			foreach(array_keys($userresources) as $rtype) {
+				if(array_key_exists($groupid, $userresources[$rtype])) {
+					$noaccess = 0;
+					break;
+				}
+			}
+			if($noaccess) {
+				print "<h2>Edit Resource Group</h2>\n";
+				print "You do not have access to modify the selected resource group.\n";
+				return;
+			}
+		}
+	}
+
 	if($user['showallgroups'])
-		$affilusergroups = $usergroups;
+		$affilusergroups = getUserGroups(1);
 	else
 		$affilusergroups = getUserGroups(1, $user['affiliationid']);
+
+	if($type == 'resource') {
+		$dispUserGrpIds = array();
+		foreach(array_keys($affilusergroups) as $id) {
+			# figure out if user is owner or in editor group
+			$owner = 0;
+			$editor = 0;
+			if($affilusergroups[$id]["ownerid"] == $user["id"])
+				$owner = 1;
+			if(array_key_exists("editgroupid", $affilusergroups[$id]) &&
+				array_key_exists($affilusergroups[$id]["editgroupid"], $user["groups"]))
+				$editor = 1;
+			if(! $owner && ! $editor)
+				continue;
+			if($user['showallgroups'])
+				$dispUserGrpIDs[$id] = $affilusergroups[$id]['name'];
+			elseif($affilusergroups[$id]['groupaffiliation'] == $user['affiliation'] &&
+				array_key_exists($id, $affilusergroups))
+				$dispUserGrpIDs[$id] = $affilusergroups[$id]['name'];
+		}
+	}
+
 	$resourcegroups = getResourceGroups();
 	$affils = getAffiliations();
 	$resourcetypes = getTypes("resources");
 
 	if($submitErr) {
 		$data = processGroupInput(0);
-		$newuser = processInputVar("newuser", ARG_STRING);
 		if($mode == "submitEditGroup") {
 			$id = $data["groupid"];
 			if($data["type"] == "resource") {
@@ -353,39 +510,89 @@ function editOrAddGroup($state) {
 			else {
 				$selectAffil = getContinuationVar('selectAffil');
 				if(empty($selectAffil) && $user['showallgroups'])
-						$selectAffil = 1;
+					$selectAffil = 1;
 			}
 		}
 	}
 	else {
-		$newuser = processInputVar("newuser", ARG_STRING);
 		$data["groupid"] = getContinuationVar("groupid");
 		$data["type"] = getContinuationVar("type");
-		$data["isowner"] = getContinuationVar("isowner");
-		$id = $data["groupid"];
+		$data["isowner"] = $isowner;
+		if(! $state) {
+			$id = $groupid;
+			$data['groupid'] = $id;
+		}
+		else
+			$id = $data["groupid"];
 		if($data["type"] == "user") {
-			$data["name"] = $usergroups[$id]["name"];
-			$data["affiliationid"] = $usergroups[$id]["groupaffiliationid"];
-			$data["owner"] = $usergroups[$id]["owner"];
-			$data["editgroupid"] = $usergroups[$id]["editgroupid"];
-			$data["initialmax"] = $usergroups[$id]["initialmaxtime"];
-			$data["totalmax"] = $usergroups[$id]["totalmaxtime"];
-			$data["maxextend"] = $usergroups[$id]["maxextendtime"];
-			$data["overlap"] = $usergroups[$id]["overlapResCount"];
-			$data["custom"] = $usergroups[$id]["custom"];
-			$data["courseroll"] = $usergroups[$id]["courseroll"];
-			$tmp = explode('@', $data['name']);
-			$data['name'] = $tmp[0];
-			if($user['showallgroups'] ||
-				(array_key_exists(1, $tmp) && $tmp[1] != $user['affiliation']))
-				$selectAffil = 1;
-			else
-				$selectAffil = 0;
+			if($state) {
+				$data["name"] = '';
+				$data["affiliationid"] = $user['affiliationid'];
+				$data["owner"] = $user['unityid'];
+				$data["editgroupid"] = '';
+				if(count($affilusergroups)) {
+					$tmp = array_keys($affilusergroups);
+					if(preg_match('/^\s*None/', $affilusergroups[$tmp[0]]['name'])) {
+						if(array_key_exists(1, $tmp))
+							$data['editgroupid'] = $tmp[1];
+						else
+							$data['editgroupid'] = 0;
+					}
+					else
+						$data['editgroupid'] = $tmp[0];
+				}
+				else
+					$data['editgroupid'] = 0;
+				$data["initialmax"] = 240;
+				$data["totalmax"] = 360;
+				$data["maxextend"] = 30;
+				$data["overlap"] = 0;
+				$data["custom"] = 1;
+				$data["courseroll"] = 0;
+				$tmp = explode('@', $data['name']);
+				$data['name'] = $tmp[0];
+				if($user['showallgroups'])
+					$selectAffil = 1;
+				else
+					$selectAffil = 0;
+			}
+			else {
+				$data["name"] = $usergroups[$id]["name"];
+				$data["affiliationid"] = $usergroups[$id]["groupaffiliationid"];
+				$data["owner"] = $usergroups[$id]["owner"];
+				$data["editgroupid"] = $usergroups[$id]["editgroupid"];
+				$data["initialmax"] = $usergroups[$id]["initialmaxtime"];
+				$data["totalmax"] = $usergroups[$id]["totalmaxtime"];
+				$data["maxextend"] = $usergroups[$id]["maxextendtime"];
+				$data["overlap"] = $usergroups[$id]["overlapResCount"];
+				$data["custom"] = $usergroups[$id]["custom"];
+				$data["courseroll"] = $usergroups[$id]["courseroll"];
+				$tmp = explode('@', $data['name']);
+				$data['name'] = $tmp[0];
+				if($user['showallgroups'] ||
+				   (array_key_exists(1, $tmp) && $tmp[1] != $user['affiliation']))
+					$selectAffil = 1;
+				else
+					$selectAffil = 0;
+			}
 		}
 		else {
-			list($grouptype, $data["name"]) = 
-			   explode('/', $resourcegroups[$id]["name"]);
-			$ownerid = $resourcegroups[$id]["ownerid"];
+			if($state) {
+				$grouptype = 'computer';
+				$data['name'] = '';
+				$ownerid = "";
+				foreach(array_keys($user["groups"]) as $grpid) {
+					if(array_key_exists($grpid, $dispUserGrpIDs)) {
+						$ownerid = $grpid;
+						break;
+					}
+				}
+			}
+			else {
+				list($grouptype, $data["name"]) = 
+				   explode('/', $resourcegroups[$id]["name"]);
+				$ownerid = $resourcegroups[$id]["ownerid"];
+			}
 		}
 	}
 
@@ -541,11 +748,11 @@ function editOrAddGroup($state) {
 			print "  <TR>\n";
 			print "    <TH align=right>Owning User Group:</TH>\n";
 			print "    <TD>\n";
-			if(! array_key_exists($ownerid, $affilusergroups)) {
-				$affilusergroups[$ownerid] = $usergroups[$ownerid];
-				uasort($affilusergroups, "sortKeepIndex");
+			if(! array_key_exists($ownerid, $dispUserGrpIDs)) {
+				$dispUserGrpIDs[$ownerid] = $usergroups[$ownerid]['name'];
+				uasort($dispUserGrpIDs, "sortKeepIndex");
 			}
-			printSelectInput("ownergroup", $affilusergroups, $ownerid);
+			printSelectInput("ownergroup", $dispUserGrpIDs, $ownerid);
 			print "    </TD>\n";
 			print "    <TD></TD>\n";
 			print "  </TR>\n";
@@ -555,11 +762,13 @@ function editOrAddGroup($state) {
 		print "  <TR valign=top>\n";
 		print "    <TD>\n";
 		if($state) {
-			$cdata = array('type' => $data['type'],
-			               'isowner' => $data['isowner']);
-			if($data['editgroupid'] == 0) {
-				$cdata['editgroupid'] = 0;
-				$cdata['groupwasnone'] = 1;
+			$cdata = array('type' => $data['type']);
+			if($data['type'] == 'user') {
+				$cdata['isowner'] = $data['isowner'];
+				if($data['editgroupid'] == 0) {
+					$cdata['editgroupid'] = 0;
+					$cdata['groupwasnone'] = 1;
+				}
 			}
 			$cont = addContinuationsEntry('submitAddGroup', $cdata);
 			print "      <INPUT type=hidden name=continuation value=\"$cont\">\n";
@@ -598,6 +807,7 @@ function editOrAddGroup($state) {
 	if($data["type"] != "user")
 		return;
 	if($editusergroup) {
+		$newuser = processInputVar("newuser", ARG_STRING);
 		print "<H3>Group Membership</H3>\n";
 		if($mode == "addGroupUser" && ! ($submitErr & IDNAMEERR)) {
 			print "<font color=\"#008000\">$newuser successfully added to group";
@@ -1119,10 +1329,54 @@ function submitAddGroup() {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function confirmDeleteGroup() {
+	global $user;
 	$groupid = getContinuationVar("groupid");
 	$type = getContinuationVar("type");
 
 	$usergroups = getUserGroups();
+
+	$groupid = processInputVar('groupid', ARG_NUMERIC);
+	if($type == 'user') {
+		if(! array_key_exists($groupid, $usergroups)) {
+			print "<h2>Delete User Group</h2>\n";
+			print "The selected user group does not exist.\n";
+			return;
+		}
+		if($usergroups[$groupid]['ownerid'] != $user['id']) {
+			if(($usergroups[$groupid]['custom'] == 0 ||
+			   $usergroups[$groupid]['courseroll'] == 1)) {
+				if(! checkUserHasPerm('Manage Federated User Groups (global)') &&
+				   (! checkUserHasPerm('Manage Federated User Groups (affiliation only)') ||
+				   $usergroups[$groupid]['groupaffiliationid'] != $user['affiliationid'])) {
+					print "<h2>Delete User Group</h2>\n";
+					print "You do not have access to delete the selected user group.\n";
+					return;
+				}
+			}
+			else {
+				print "<h2>Delete User Group</h2>\n";
+				print "You do not have access to delete the selected user group.\n";
+				return;
+			}
+		}
+	}
+	else {
+		$userresources = getUserResources(array("groupAdmin"), 
+		                                  array("manageGroup"), 1);
+		$noaccess = 1;
+		foreach(array_keys($userresources) as $rtype) {
+			if(array_key_exists($groupid, $userresources[$rtype])) {
+				$noaccess = 0;
+				break;
+			}
+		}
+		if($noaccess) {
+			print "<h2>Delete Resource Group</h2>\n";
+			print "You do not have access to delete the selected resource group.\n";
+			return;
+		}
+	}
+
 	$resourcegroups = getResourceGroups();
 
 	if($type == "user") {
@@ -1180,9 +1434,9 @@ function confirmDeleteGroup() {
 			print "  <TD>Federated</TD>\n";
 		print "</TR>\n";
 		print "<TR>\n";
-		print "  <TD colspan=2><strong>Note</strong>: This type of group is ";
+		print "  <TD colspan=2><br><strong>Note</strong>: This type of group is ";
 		print "created from external sources<br>and could be recreated from ";
-		print "those sources at any time.</TD>\n";
+		print "those sources at any time.<br><br></TD>\n";
 		print "</TR>\n";
 	}
 	print "</TABLE>\n";

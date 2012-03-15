@@ -845,7 +845,8 @@ function abort($errcode, $query="") {
 			$message .= $query . "\n";
 		}
 		$message .= "ERROR($errcode): " . $ERRORS["$errcode"] . "\n";
-		$message .= "Logged in user was " . $user["unityid"] . "\n";
+		if(is_array($user) && array_key_exists('unityid', $user))
+			$message .= "Logged in user was " . $user["unityid"] . "\n";
 		$message .= "Mode was $mode\n\n";
 		if($errcode == 20) {
 			$urlArray = explode('?', $_SERVER["HTTP_REFERER"]);
@@ -2355,9 +2356,17 @@ function getChildNodes($parent=DEFAULT_PRIVNODE) {
 /// \return an array where each index is an id from usergroup and the values
 /// are arrays with the indexes:\n
 /// name\n
+/// groupaffiliation\n
+/// groupaffiliationid\n
 /// ownerid\n
 /// owner\n
+/// affiliation\n
+/// editgroupid\n
+/// editgroup\n
+/// editgroupaffiliationid\n
+/// editgroupaffiliation\n
 /// custom\n
+/// courseroll\n
 /// initialmaxtime\n
 /// totalmaxtime\n
 /// maxextendtime\n
@@ -8820,6 +8829,12 @@ function sortKeepIndex($a, $b) {
 		else
 			return 0;
 	}
+	elseif(preg_match('/[0-9]-[0-9]/', $a) ||
+	       preg_match('/\.edu$|\.com$|\.net$|\.org$/', $a) ||
+	       preg_match('/[0-9]-[0-9]/', $b) ||
+	       preg_match('/\.edu$|\.com$|\.net$|\.org$/', $b))
+		return compareDashedNumbers($a, $b);
+
 	return strcasecmp($a, $b);
 }
 
@@ -9867,16 +9882,21 @@ function json_encode($a=false) {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn sendJSON($arr)
+/// \fn sendJSON($arr, $identifier='')
 ///
 /// \param $arr - an array of data
+/// \param $identifier - (optional, default='') set to non-empty string to have
+/// $identifier printed as the identifier for a dojo datastore
 ///
 /// \brief sets the content type and sends $arr in json format
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function sendJSON($arr) {
+function sendJSON($arr, $identifier='') {
 	header('Content-Type: text/json; charset=utf-8');
-	print '{} && {"items":' . json_encode($arr) . '}';
+	if(empty($identifier))
+		print '{} && {"items":' . json_encode($arr) . '}';
+	else
+		print "{} && {identifier: '$identifier', 'items':" . json_encode($arr) . '}';
 }
 
 
@@ -10411,6 +10431,14 @@ function getDojoHTML($refresh) {
 		case 'submitAddGroup':
 		case 'submitDeleteGroup':
 			$dojoRequires = array('dojo.parser',
+			                      'dojo.data.ItemFileReadStore',
+			                      'dojo.data.ItemFileWriteStore',
+			                      'dijit.form.Select',
+			                      'dijit.form.Button',
+			                      'dijit.form.CheckBox',
+			                      'dijit.form.TextBox',
+			                      'dojox.grid.DataGrid',
+			                      'dijit.TitlePane',
 			                      'dijit.Tooltip');
 			break;
 		case 'editMgmtNode':
@@ -10710,9 +10738,12 @@ function getDojoHTML($refresh) {
 		case 'submitDeleteGroup':
 			$rt .= "<style type=\"text/css\">\n";
 			$rt .= "   @import \"themes/$skin/css/dojo/$skin.css\";\n";
-			#$rt .= "    @import \"dojo/dojo/resources/dojo.css\";\n";
+			$rt .= "   @import \"dojo/dojox/grid/resources/Grid.css\";\n";
 			$rt .= "</style>\n";
-			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"></script>\n";
+			#$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"></script>\n";
+			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
+			$rt .= "   djConfig=\"parseOnLoad: true\">\n";
+			$rt .= "</script>\n";
 			$rt .= "<script type=\"text/javascript\">\n";
 			$rt .= "   dojo.addOnLoad(function() {\n";
 			foreach($dojoRequires as $req) {
@@ -10720,6 +10751,14 @@ function getDojoHTML($refresh) {
 			}
 			$rt .= "   });\n";
 			$rt .= "   dojo.addOnLoad(function() {document.onmousemove = updateMouseXY;});\n";
+			$rt .= "   dojo.ready(function() {\n";
+			$rt .= "     buildUserFilterStores();\n";
+			$rt .= "     buildResourceFilterStores();\n";
+			$rt .= "   });\n";
+			if($mode == 'viewGroups')
+				$rt .= "  var firstscroll = 1;\n";
+			else
+				$rt .= " var firstscroll = 0;\n";
 			$rt .= "</script>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"js/groups.js\"></script>\n";
 			return $rt;

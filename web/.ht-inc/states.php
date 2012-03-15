@@ -178,6 +178,8 @@ $noHTMLwrappers = array('sendRDPfile',
                         'AJshowRequestSuggestedTimes',
                         'AJgenerateUtilData',
                         'AJcanceltovmhostinuse',
+                        'jsonUserGroupStore',
+                        'jsonResourceGroupStore',
 );
 
 # main
@@ -284,6 +286,8 @@ $actions['pages']['submitgeneralprefs'] = "userPreferences";
 $actions['mode']['viewGroups'] = "viewGroups"; # entry
 $actions['mode']['editGroup'] = "editOrAddGroup";
 $actions['args']['editGroup'] = 0;
+$actions['mode']['addGroup'] = "editOrAddGroup";
+$actions['args']['addGroup'] = 1;
 $actions['mode']['confirmEditGroup'] = "confirmEditOrAddGroup";
 $actions['args']['confirmEditGroup'] = 0;
 $actions['mode']['submitEditGroup'] = "submitEditGroup";
@@ -295,8 +299,11 @@ $actions['mode']['submitDeleteGroup'] = "submitDeleteGroup";
 $actions['mode']['addGroupUser'] = "addGroupUser";
 $actions['mode']['deleteGroupUser'] = "deleteGroupUser";
 $actions['mode']['jsonGetGroupInfo'] = "jsonGetGroupInfo";
+$actions['mode']['jsonUserGroupStore'] = "jsonUserGroupStore";
+$actions['mode']['jsonResourceGroupStore'] = "jsonResourceGroupStore";
 $actions['pages']['viewGroups'] = "manageGroups";
 $actions['pages']['editGroup'] = "manageGroups";
+$actions['pages']['addGroup'] = "manageGroups";
 $actions['pages']['confirmEditGroup'] = "manageGroups";
 $actions['pages']['submitEditGroup'] = "manageGroups";
 $actions['pages']['confirmAddGroup'] = "manageGroups";
@@ -306,6 +313,8 @@ $actions['pages']['submitDeleteGroup'] = "manageGroups";
 $actions['pages']['addGroupUser'] = "manageGroups";
 $actions['pages']['deleteGroupUser'] = "manageGroups";
 $actions['pages']['jsonGetGroupInfo'] = "manageGroups";
+$actions['pages']['jsonUserGroupStore'] = "manageGroups";
+$actions['pages']['jsonResourceGroupStore'] = "manageGroups";
 
 # manage images
 $actions['mode']['selectImageOption'] = "selectImageOption"; # entry

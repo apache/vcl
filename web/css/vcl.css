@@ -310,3 +310,10 @@
 	padding: 3px;
 	margin: 10px;
 }
+
+#usergroupcontainer table th,
+#usergroupcontainer table td,
+#resourcegroupcontainer table th,
+#resourcegroupcontainer table td {
+	font-size: 1em;
+}
