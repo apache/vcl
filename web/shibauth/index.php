@@ -179,8 +179,10 @@ if($row['shibonly']) {
 }
 else {
 	$usernid = getUserlistID($userid, 1);
-	if(is_null($usernid))
-		$usernid = updateShibUser($userid);
+	if(is_null($usernid)) {
+		$tmp = updateShibUser($userid);
+		$usernid = $tmp['id'];
+	}
 }
 
 $affilid = getAffiliationID($affil);
