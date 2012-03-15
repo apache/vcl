@@ -152,19 +152,27 @@ function submitHelpForm() {
 	}
 
 	$computers = getComputers();
-	$requests = getUserRequests("all");
-	$query = "SELECT l.start AS start, "
+	$requests = array();
+	$query = "SELECT l.id, "
+	       .        "l.start, "
 	       .        "l.finalend AS end, "
-	       .        "l.computerid AS computerid, "
+	       .        "s.computerid, "
 	       .        "i.prettyname AS prettyimage "
 	       . "FROM log l, "
-	       .      "image i "
-	       . "WHERE l.userid = " . $user["id"] . " AND "
+	       .      "image i, "
+	       .      "sublog s "
+	       . "WHERE l.userid = {$user["id"]} AND "
 	       .        "i.id = l.imageid AND "
-	       .        "(unix_timestamp(NOW()) - unix_timestamp(l.finalend)) < 14400";
+	       .        "s.logid = l.id AND "
+	       .        "l.finalend < DATE_ADD(NOW(), INTERVAL 1 DAY) "
+	       . "ORDER BY l.finalend DESC "
+	       . "LIMIT 5";
 	$qh = doQuery($query, 290);
 	while($row = mysql_fetch_assoc($qh)) {
-		array_push($requests, $row);
+		# only include 1 computer from cluster reservations
+		if(array_key_exists($row['id'], $requests))
+			continue;
+		$requests[$row['id']] =  $row;
 	}
 
 	$from = $user["email"];
@@ -175,21 +183,16 @@ function submitHelpForm() {
 	         . "Name: " . $testname . "\n"
 	         . "Email: " . $email . "\n"
 	         . "Problem description:\n\n$text\n\n";
-	$end = time();
-	$start = $end - 14400;
 	$recentrequests = "";
 	foreach($requests as $request) {
-		if(datetimeToUnix($request["end"]) > $start ||
-		   datetimeToUnix($request["start"] < $end)) {
-			$thisstart = str_replace('&nbsp;', ' ', 
-			      prettyDatetime($request["start"]));
-			$thisend = str_replace('&nbsp;', ' ', 
-			      prettyDatetime($request["end"]));
-			$recentrequests .= "Image: " . $request["prettyimage"] . "\n"
-			   . "Computer: " . $computers[$request["computerid"]]["hostname"] . "\n"
-			   . "Start: $thisstart\n"
-			   . "End: $thisend\n\n";
-		}
+		$thisstart = str_replace('&nbsp;', ' ', 
+				prettyDatetime($request["start"]));
+		$thisend = str_replace('&nbsp;', ' ', 
+				prettyDatetime($request["end"]));
+		$recentrequests .= "Image: {$request["prettyimage"]}\n"
+		                .  "Computer: {$computers[$request["computerid"]]["hostname"]}\n"
+		                .  "Start: $thisstart\n"
+		                .  "End: $thisend\n\n";
 	}
 	if(! empty($recentrequests)) {
 		$message .= "-----------------------------------------------\n";
@@ -198,7 +201,6 @@ function submitHelpForm() {
 	else {
 		$message .= "User has no recent reservations\n";
 	}
-
 
 	$indrupal = getContinuationVar('indrupal', 0);
 	if(! $indrupal)
