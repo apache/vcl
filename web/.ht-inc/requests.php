@@ -842,7 +842,7 @@ function viewRequests() {
 		$now = time();
 		for($i = 0, $failed = 0, $timedout = 0, $text = '', $showcreateimage = 0, $cluster = 0;
 		   $i < $count;
-		   $i++, $failed = 0, $timedout = 0, $text = '') {
+		   $i++, $failed = 0, $timedout = 0, $text = '', $cluster = 0) {
 			if($requests[$i]['forcheckout'] == 0 &&
 			   $requests[$i]['forimaging'] == 0)
 				continue;
