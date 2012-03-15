@@ -60,6 +60,7 @@ function dashboard() {
 
 	print "</tr>\n";
 	print "</table>\n";
+	print addWidget('newreservations', 'Loading Reservations', '');
 	$cont = addContinuationsEntry('AJupdateDashboard', array('val' => 0), 90, 1, 0);
 	print "<input type=\"hidden\" id=\"updatecont\" value=\"$cont\">\n";
 }
@@ -82,6 +83,7 @@ function AJupdateDashboard() {
 	$data['topfailedcomputers'] = getTopFailedComputersData();
 	$data['reschart'] = getActiveResChartData();
 	$data['blockallocation'] = getBlockAllocationData();
+	$data['newreservations'] = getNewReservationData();
 	sendJSON($data);
 }
 
@@ -629,6 +631,56 @@ function getBlockAllocationData() {
 	$data[] = array('title' => 'Active Block Allocations', 'val' => $blockcount);
 	$data[] = array('title' => 'Block Computer Usage', 'val' => $compused);
 	$data[] = array('title' => 'Failed Block Computers', 'val' => $failed);
+	return $data;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn getNewReservationData()
+///
+/// \return array of data with these keys:\n
+/// \b computer - hostname of computer (without domain)\n
+/// \b image - image being loaded\n
+/// \b id - id of request\n
+/// \b start - start date\n
+/// \b state - current and last state\n
+/// \b installtype - install for reservation\n
+/// \b managementnode - hostname of mangementnode
+///
+/// \brief gets information about loading reservations
+///
+////////////////////////////////////////////////////////////////////////////////
+function getNewReservationData() {
+	$query = "SELECT c.hostname AS computer, "
+	       .        "i.prettyname AS image, "
+	       .        "rq.id, "
+	       .        "rq.start, "
+	       .        "CONCAT(s1.name, '|', s2.name) AS state, "
+	       .        "o.installtype, "
+	       .        "m.hostname AS managementnode "
+	       . "FROM request rq "
+	       . "LEFT JOIN reservation rs ON (rs.requestid = rq.id) "
+	       . "LEFT JOIN computer c ON (c.id = rs.computerid) "
+	       . "LEFT JOIN image i ON (i.id = rs.imageid) "
+	       . "LEFT JOIN OS o ON (o.id = i.OSid) "
+	       . "LEFT JOIN state s1 ON (s1.id = rq.stateid) "
+	       . "LEFT JOIN state s2 ON (s2.id = rq.laststateid) "
+	       . "LEFT JOIN managementnode m ON (m.id = rs.managementnodeid) "
+	       . "WHERE (rq.stateid IN (13, 19, 6) OR "
+	       .       "(rq.stateid = 14 AND rq.laststateid IN (6, 13, 19))) AND "
+	       .       "rq.start < NOW() "
+	       . "ORDER BY rq.start";
+	$qh = doQuery($query, 101);
+	$data = array();
+	while($row = mysql_fetch_assoc($qh)) {
+		$tmp = explode('.', $row['computer']);
+		$row['computer'] = $tmp[0];
+		$tmp = explode(' ', $row['start']);
+		$row['start'] = $tmp[1];
+		$tmp = explode('.', $row['managementnode']);
+		$row['managementnode'] = $tmp[0];
+		$data[] = $row;
+	}
 	return $data;
 }
 
