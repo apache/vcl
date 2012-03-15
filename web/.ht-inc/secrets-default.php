@@ -21,8 +21,7 @@ $vcldb = 'vcl';         # name of mysql database
 $vclusername = '';      # username to access database
 $vclpassword = '';      # password to access database
 
-$mcryptkey = '';  # random password - won't ever have to type it so make it long
-$mcryptiv = '12345678'; // must be 8 hex chars
+$cryptkey  = '';  # random password - won't ever have to type it so make it long
 
 $pemkey = ''; # random passphrase - same as given to genkeys.sh - should be long
 ?>
