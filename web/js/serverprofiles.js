@@ -101,19 +101,21 @@ function clearProfileItems() {
 	dijit.byId('profilename').set('value', '');
 	dijit.byId('profiledesc').set('value', '');
 	dijit.byId('profileimage').reset();
-	dijit.byId('profilefixedIP').set('value', '');
-	dijit.byId('profilefixedMAC').set('value', '');
-	dijit.byId('profileadmingroup').reset();
-	dijit.byId('profilelogingroup').reset();
+	//dijit.byId('profilefixedIP').set('value', '');
+	//dijit.byId('profilefixedMAC').set('value', '');
+	//dijit.byId('profileadmingroup').reset();
+	//dijit.byId('profilelogingroup').reset();
+	dojo.byId('profileadmingroup').value = 0;
+	dojo.byId('profilelogingroup').value = 0;
 	dijit.byId('profilemonitored').reset();
 }
 
 function saveServerProfile(cont) {
 	if((dijit.byId('profileimage') && ! dijit.byId('profileimage').isValid()) ||
 	   (dijit.byId('profileadmingroup') && ! dijit.byId('profileadmingroup').isValid()) ||
-	   (dijit.byId('profilelogingroup') && ! dijit.byId('profilelogingroup').isValid()) ||
+	   (dijit.byId('profilelogingroup') && ! dijit.byId('profilelogingroup').isValid()) /*||
 	   ! dijit.byId('profilefixedIP').isValid() ||
-	   ! dijit.byId('profilefixedMAC').isValid()) {
+	   ! dijit.byId('profilefixedMAC').isValid()*/) {
 		alert('Please correct the fields with invalid input');
 		return;
 	}
@@ -136,8 +138,8 @@ function saveServerProfile(cont) {
 	            name: dijit.byId('profilename').get('value'),
 	            desc: dijit.byId('profiledesc').get('value'),
 	            imageid: imageid,
-	            fixedIP: dijit.byId('profilefixedIP').get('value'),
-	            fixedMAC: dijit.byId('profilefixedMAC').get('value'),
+	            //fixedIP: dijit.byId('profilefixedIP').get('value'),
+	            //fixedMAC: dijit.byId('profilefixedMAC').get('value'),
 	            admingroupid: admingroupid,
 	            logingroupid: logingroupid,
 	            monitored: dijit.byId('profilemonitored').get('value')};
@@ -210,10 +212,12 @@ function getServerProfileDataDeployCB(data, ioArgs) {
 	}
 	dojo.byId('appliedprofileid').value = data.items.id;
 	dijit.byId('deployimage').set('value', data.items.imageid);
-	dijit.byId('deployfixedIP').set('value', data.items.fixedIP);
-	dijit.byId('deployfixedMAC').set('value', data.items.fixedMAC);
-	dijit.byId('deployadmingroup').set('value', data.items.admingroupid);
-	dijit.byId('deploylogingroup').set('value', data.items.logingroupid);
+	//dijit.byId('deployfixedIP').set('value', data.items.fixedIP);
+	//dijit.byId('deployfixedMAC').set('value', data.items.fixedMAC);
+	//dijit.byId('deployadmingroup').set('value', data.items.admingroupid);
+	//dijit.byId('deploylogingroup').set('value', data.items.logingroupid);
+	dojo.byId('deployadmingroup').value = data.items.admingroupid;
+	dojo.byId('deploylogingroup').value = data.items.logingroupid;
 	dijit.byId('deploymonitored').set('value', parseInt(data.items.monitored));
 }
 
@@ -229,10 +233,12 @@ function getServerProfileDataManageCB(data, ioArgs) {
 	dijit.byId('profilename').set('value', data.items.name);
 	dijit.byId('profiledesc').set('value', data.items.description);
 	dijit.byId('profileimage').set('value', data.items.imageid);
-	dijit.byId('profilefixedIP').set('value', data.items.fixedIP);
-	dijit.byId('profilefixedMAC').set('value', data.items.fixedMAC);
-	dijit.byId('profileadmingroup').set('value', data.items.admingroupid);
-	dijit.byId('profilelogingroup').set('value', data.items.logingroupid);
+	//dijit.byId('profilefixedIP').set('value', data.items.fixedIP);
+	//dijit.byId('profilefixedMAC').set('value', data.items.fixedMAC);
+	//dijit.byId('profileadmingroup').set('value', data.items.admingroupid);
+	//dijit.byId('profilelogingroup').set('value', data.items.logingroupid);
+	dojo.byId('profileadmingroup').value = data.items.admingroupid;
+	dojo.byId('profilelogingroup').value = data.items.logingroupid;
 	dijit.byId('profilemonitored').set('value', parseInt(data.items.monitored));
 	dojo.removeClass('serverprofiledata', 'hidden');
 }
@@ -649,8 +655,8 @@ function submitDeploy() {
 		data.logingroupid = dijit.byId('deploylogingroup').get('value');
 	else
 		data.logingroupid = dojo.byId('deploylogingroup').value;
-	data.ipaddr = dijit.byId('deployfixedIP').get('value');
-	data.macaddr = dijit.byId('deployfixedMAC').get('value');
+	//data.ipaddr = dijit.byId('deployfixedIP').get('value');
+	//data.macaddr = dijit.byId('deployfixedMAC').get('value');
 	if(dijit.byId('deploymonitored').get('value') == 'on')
 		data.monitored = 1;
 	else
