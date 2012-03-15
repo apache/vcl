@@ -172,7 +172,7 @@ function selectAuth() {
 		printSelectInput("authtype", $methods, -1, 0, 0, '', 'tabindex=1');
 	print "<br><INPUT type=hidden name=mode value=selectauth>\n";
 	print "<input type=checkbox id=remsel name=remsel value=1 tabindex=2>\n";
-	print "<label for=remsel>Remember my selection</label><br>\n";
+	print "Remember my selection<br>\n";
 	print "<INPUT type=submit value=\"Proceed to Login\" tabindex=3 name=userid>\n";
 	print "</FORM>\n";
 	print "</TD>\n";
@@ -447,7 +447,11 @@ function ldapLogin($authtype, $userid, $passwd) {
 	$res = ldap_bind($ds, $ldapuser, $passwd);
 	if(! $res) {
 		// login failed
-		addLoginLog($userid, $authtype, $authMechs[$authtype]['affiliationid'], 0);
+		$err = ldap_error($ds);
+		if($err == 'Invalid credentials')
+			addLoginLog($userid, $authtype, $authMechs[$authtype]['affiliationid'], 0, $err);
+		else
+			addLoginLog($userid, $authtype, $authMechs[$authtype]['affiliationid'], 0);
 		printLoginPageWithSkin($authtype);
 		return;
 	}
@@ -568,17 +572,18 @@ function validateLocalAccount($user, $pass) {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn addLoginLog($login, $mech, $affiliationid, $passfail)
+/// \fn addLoginLog($login, $mech, $affiliationid, $passfail, $code)
 ///
 /// \param $login - user id entered in login screen
 /// \param $mech - authentication mechanism used
 /// \param $affiliationid - affiliation id of authentication mechanism
 /// \param $passfail - 1 for successful login, 0 for failed login
+/// \param $code - (optional, default='none') additional code to save
 ///
 /// \brief adds an entry to the loginlog table
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function addLoginLog($login, $mech, $affiliationid, $passfail) {
+function addLoginLog($login, $mech, $affiliationid, $passfail, $code='none') {
 	$login = mysql_real_escape_string($login);
 	$mech = mysql_real_escape_string($mech);
 	$query = "INSERT INTO loginlog "
@@ -586,13 +591,15 @@ function addLoginLog($login, $mech, $affiliationid, $passfail) {
 	       .        "authmech, "
 	       .        "affiliationid, "
 	       .        "passfail, "
-	       .        "remoteIP) "
+	       .        "remoteIP, "
+	       .        "code) "
 	       . "VALUES "
 	       .        "('$login', "
 	       .        "'$mech', "
 	       .        "$affiliationid, "
 	       .        "$passfail, "
-	       .        "'{$_SERVER['REMOTE_ADDR']}')";
+	       .        "'{$_SERVER['REMOTE_ADDR']}', "
+	       .        "'$code')";
 	doQuery($query, 101);
 }
 
