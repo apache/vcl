@@ -54,6 +54,8 @@ function selectEnvironment() {
 }
 
 function updateWaitTime(cleardesc) {
+	if(! dojo.byId('waittime'))
+		return;
 	var desconly = 0;
 	if(cleardesc)
 		dojo.byId('imgdesc').innerHTML = '';
