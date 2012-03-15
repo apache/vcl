@@ -2912,18 +2912,9 @@ function computerUtilities() {
 	$cont = addContinuationsEntry('AJgenerateUtilData', $cdata, SECINDAY);
 	print "   <input type=\"hidden\" id=\"utilcont\" value=\"$cont\">\n";
 	print "   <div align=\"center\">\n";
-	/*print "   <button id=\"utilsubmit\" dojoType=\"dijit.form.Button\" disabled>\n";
-	print "     Generate Data\n";
-	print "	   <script type=\"dojo/method\" event=\"onClick\">\n";
-	#print "       useSuggestedSlot();\n";
-	print "     </script>\n";
-	print "   </button>\n";*/
 	print "   <button id=\"utilcancel\" dojoType=\"dijit.form.Button\">\n";
 	print "     Close\n";
 	print "	   <script type=\"dojo/method\" event=\"onClick\">\n";
-	/*print "       dijit.byId('suggestDlgBtn').set('disabled', true);\n";
-	print "       showDijitButton('suggestDlgBtn');\n";
-	print "       dijit.byId('suggestDlgCancelBtn').set('label', 'Cancel');\n";*/
 	print "       dijit.byId('utildialog').hide();\n";
 	print "       dojo.byId('utilcontent').innerHTML = '';\n";
 	print "       dojo.addClass('mgmtipdiv', 'hidden');\n";
