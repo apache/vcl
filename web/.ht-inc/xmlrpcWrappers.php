@@ -1943,7 +1943,7 @@ function XMLRPCautoCapture($requestid) {
 function XMLRPCdeployServer($imageid, $start, $end, $admingroup='',
                             $logingroup='', $ipaddr='', $macaddr='',
                             $monitored=0, $foruser='') {
-	global $user;
+	global $user, $remoteIP;
 	if(! in_array("serverProfileAdmin", $user["privileges"])) {
 		return array('status' => 'error',
 		             'errorcode' => 60,
@@ -2106,6 +2106,10 @@ function XMLRPCdeployServer($imageid, $start, $end, $admingroup='',
 		return array('status' => 'notavailable');
 	}
 	$return['requestid']= addRequest();
+	$query = "UPDATE reservation "
+	       . "SET remoteIP = '$remoteIP' "
+	       . "WHERE requestid = {$return['requestid']}";
+	doQuery($query);
 	$fields = array('requestid');
 	$values = array($return['requestid']);
 	if($ipaddr != '') {

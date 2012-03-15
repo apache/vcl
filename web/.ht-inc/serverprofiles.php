@@ -62,12 +62,12 @@ function serverProfiles() {
 ////////////////////////////////////////////////////////////////////////////////
 function deployHTML() {
 	global $user, $skin;
-	$profiles = getServerProfiles();
+	$profiles = getUserResources(array("serverCheckOut"), array("available"));
 
 	$h = '';
 	$h .= "<h2>Deploy Server</h2>\n";
 	$h .= "<span id=\"deployprofileslist\"";
-	if(! count($profiles))
+	if(! count($profiles['serverprofile']))
 		$h .= " class=\"hidden\"";
 	$h .= ">\n";
 	$h .= "Profile: ";
@@ -113,57 +113,69 @@ function deployHTML() {
 	$h .= "      </select>\n";
 	$h .= "    </td>\n";
 	$h .= "  </tr>\n";
-	$h .= "  <tr>\n";
+	/*$h .= "  <tr>\n";
 	$h .= "    <th align=right>Fixed IP Address:</th>\n";
 	$h .= "    <td><input type=\"text\" id=\"deployfixedIP\" ";
 	$h .= "dojoType=\"dijit.form.ValidationTextBox\" ";
 	$h .= "regExp=\"([0-9]{1,3}\\.){3}([0-9]{1,3})\">(optional)</td>\n";
-	$h .= "  </tr>\n";
-	$h .= "  <tr>\n";
+	$h .= "  </tr>\n";*/
+	/*$h .= "  <tr>\n";
 	$h .= "    <th align=right>Fixed MAC Address:</th>\n";
 	$h .= "    <td><input type=\"text\" id=\"deployfixedMAC\" ";
 	$h .= "dojoType=\"dijit.form.ValidationTextBox\" ";
 	$h .= "regExp=\"([0-9a-fA-F]{2}:){5}([0-9a-fA-F]{2})\">(optional)</td>\n";
-	$h .= "  </tr>\n";
+	$h .= "  </tr>\n";*/
 	$h .= "  <tr>\n";
 	$h .= "    <th align=right>Admin User Group:</th>\n";
 	$h .= "    <td>\n";
-	$admingroups = getUserEditGroups($user['id']);
+	$admingroups = getUserGroups();
+	$logingroups = $admingroups;
+	/*$admingroups = getUserEditGroups($user['id']);
 	$logingroups = $admingroups;
 	$extraadmingroups = getServerProfileGroups($user['id'], 'admin');
 	foreach($extraadmingroups as $id => $group)
 		$admingroups[$id] = $group;
-	uasort($admingroups, 'sortKeepIndex');
+	uasort($admingroups, 'sortKeepIndex');*/
 	if(USEFILTERINGSELECT && count($admingroups) < FILTERINGSELECTTHRESHOLD) {
 		$h .= "      <select dojoType=\"dijit.form.FilteringSelect\" id=\"deployadmingroup\" ";
 		$h .= "style=\"width: 400px\" queryExpr=\"*\${0}*\" required=\"true\" ";
 		$h .= "highlightMatch=\"all\" autoComplete=\"false\">\n";
 	}
 	else
-		$h .= "      <select dojoType=\"dijit.form.Select\" id=\"deployadmingroup\">\n";
+		$h .= "      <select id=\"deployadmingroup\">\n";
 	$h .= "        <option value=\"0\">None</option>\n";
-	foreach($admingroups as $id => $group)
-		$h .= "        <option value=\"$id\">$group</option>\n";
+	foreach($admingroups as $id => $group) {
+		if($group['name'] == 'None' || preg_match('/^None@.*$/', $group['name']))
+			continue;
+		$h .= "        <option value=\"$id\">{$group['name']}</option>\n";
+	}
+	#foreach($admingroups as $id => $group)
+	#	$h .= "        <option value=\"$id\">$group</option>\n";
 	$h .= "      </select>\n";
 	$h .= "    </td>\n";
 	$h .= "  </tr>\n";
 	$h .= "  <tr>\n";
 	$h .= "    <th align=right>Access User Group:</th>\n";
 	$h .= "    <td>\n";
-	$extralogingroups = getServerProfileGroups($user['id'], 'login');
+	/*$extralogingroups = getServerProfileGroups($user['id'], 'login');
 	foreach($extralogingroups as $id => $group)
 		$logingroups[$id] = $group;
-	uasort($logingroups, 'sortKeepIndex');
+	uasort($logingroups, 'sortKeepIndex');*/
 	if(USEFILTERINGSELECT && count($logingroups) < FILTERINGSELECTTHRESHOLD) {
 		$h .= "      <select dojoType=\"dijit.form.FilteringSelect\" id=\"deploylogingroup\" ";
 		$h .= "style=\"width: 400px\" queryExpr=\"*\${0}*\" required=\"true\" ";
 		$h .= "highlightMatch=\"all\" autoComplete=\"false\">\n";
 	}
 	else
-		$h .= "      <select dojoType=\"dijit.form.Select\" id=\"deploylogingroup\">\n";
+		$h .= "      <select id=\"deploylogingroup\">\n";
 	$h .= "        <option value=\"0\">None</option>\n";
-	foreach($logingroups as $id => $group)
-		$h .= "        <option value=\"$id\">$group</option>\n";
+	foreach($logingroups as $id => $group) {
+		if($group['name'] == 'None' || preg_match('/^None@.*$/', $group['name']))
+			continue;
+		$h .= "        <option value=\"$id\">{$group['name']}</option>\n";
+	}
+	#foreach($logingroups as $id => $group)
+	#	$h .= "        <option value=\"$id\">$group</option>\n";
 	$h .= "      </select>\n";
 	$h .= "    </td>\n";
 	$h .= "  </tr>\n";
@@ -256,12 +268,12 @@ function deployHTML() {
 ////////////////////////////////////////////////////////////////////////////////
 function manageProfilesHTML() {
 	global $user;
-	$profiles = getServerProfiles();
+	$profiles = getUserResources(array("serverProfileAdmin"), array("administer"));
 
 	$h = '';
 	$h .= "<h2>Manage Server Profiles</h2>\n";
 	$h .= "<span id=\"profileslist\"";
-	if(! count($profiles))
+	if(! count($profiles['serverprofile']))
 		$h .= " class=\"hidden\"";
 	$h .= ">\n";
 	$h .= "Profile: ";
@@ -320,57 +332,69 @@ function manageProfilesHTML() {
 	$h .= "      </select>\n";
 	$h .= "    </td>\n";
 	$h .= "  </tr>\n";
-	$h .= "  <tr>\n";
+	/*$h .= "  <tr>\n";
 	$h .= "    <th align=right>Fixed IP Address:</th>\n";
 	$h .= "    <td><input type=\"text\" name=\"profilefixedIP\" id=\"profilefixedIP\" ";
 	$h .= "dojoType=\"dijit.form.ValidationTextBox\" ";
 	$h .= "regExp=\"([0-9]{1,3}\\.){3}([0-9]{1,3})\">(optional)</td>\n";
-	$h .= "  </tr>\n";
-	$h .= "  <tr>\n";
+	$h .= "  </tr>\n";*/
+	/*$h .= "  <tr>\n";
 	$h .= "    <th align=right>Fixed MAC Address:</th>\n";
 	$h .= "    <td><input type=\"text\" name=\"profilefixedMAC\" id=\"profilefixedMAC\" ";
 	$h .= "dojoType=\"dijit.form.ValidationTextBox\" ";
 	$h .= "regExp=\"([0-9a-fA-F]{2}:){5}([0-9a-fA-F]{2})\">(optional)</td>\n";
-	$h .= "  </tr>\n";
+	$h .= "  </tr>\n";*/
 	$h .= "  <tr>\n";
 	$h .= "    <th align=right>Admin User Group:</th>\n";
 	$h .= "    <td>\n";
-	$admingroups = getUserEditGroups($user['id']);
+	$admingroups = getUserGroups();
+	$logingroups = $admingroups;
+	/*$admingroups = getUserEditGroups($user['id']);
 	$logingroups = $admingroups;
 	$extraadmingroups = getServerProfileGroups($user['id'], 'admin');
 	foreach($extraadmingroups as $id => $group)
 		$admingroups[$id] = $group;
-	uasort($admingroups, 'sortKeepIndex');
+	uasort($admingroups, 'sortKeepIndex');*/
 	if(USEFILTERINGSELECT && count($admingroups) < FILTERINGSELECTTHRESHOLD) {
 		$h .= "      <select dojoType=\"dijit.form.FilteringSelect\" id=\"profileadmingroup\" ";
 		$h .= "style=\"width: 400px\" name=\"profileadmingroup\" queryExpr=\"*\${0}*\" ";
 		$h .= "highlightMatch=\"all\" autoComplete=\"false\">\n";
 	}
 	else
-		$h .= "      <select dojoType=\"dijit.form.Select\" name=\"profileadmingroup\" id=\"profileadmingroup\">\n";
+		$h .= "      <select name=\"profileadmingroup\" id=\"profileadmingroup\">\n";
 	$h .= "        <option value=\"0\">None</option>\n";
-	foreach($admingroups as $id => $group)
-		$h .= "        <option value=\"$id\">$group</option>\n";
+	foreach($admingroups as $id => $group) {
+		if($group['name'] == 'None' || preg_match('/^None@.*$/', $group['name']))
+			continue;
+		$h .= "        <option value=\"$id\">{$group['name']}</option>\n";
+	}
+	#foreach($admingroups as $id => $group) {
+	#	$h .= "        <option value=\"$id\">$group</option>\n";
 	$h .= "      </select>\n";
 	$h .= "    </td>\n";
 	$h .= "  </tr>\n";
 	$h .= "  <tr>\n";
 	$h .= "    <th align=right>Access User Group:</th>\n";
 	$h .= "    <td>\n";
-	$extralogingroups = getServerProfileGroups($user['id'], 'login');
+	/*$extralogingroups = getServerProfileGroups($user['id'], 'login');
 	foreach($extralogingroups as $id => $group)
 		$logingroups[$id] = $group;
-	uasort($logingroups, 'sortKeepIndex');
+	uasort($logingroups, 'sortKeepIndex');*/
 	if(USEFILTERINGSELECT && count($logingroups) < FILTERINGSELECTTHRESHOLD) {
 		$h .= "      <select dojoType=\"dijit.form.FilteringSelect\" id=\"profilelogingroup\" ";
 		$h .= "style=\"width: 400px\" name=\"profilelogingroup\" queryExpr=\"*\${0}*\" ";
 		$h .= "highlightMatch=\"all\" autoComplete=\"false\">\n";
 	}
 	else
-		$h .= "      <select dojoType=\"dijit.form.Select\" name=\"profilelogingroup\" id=\"profilelogingroup\">\n";
+		$h .= "      <select name=\"profilelogingroup\" id=\"profilelogingroup\">\n";
 	$h .= "        <option value=\"0\">None</option>\n";
-	foreach($logingroups as $id => $group)
-		$h .= "        <option value=\"$id\">$group</option>\n";
+	foreach($logingroups as $id => $group) {
+		if($group['name'] == 'None' || preg_match('/^None@.*$/', $group['name']))
+			continue;
+		$h .= "        <option value=\"$id\">{$group['name']}</option>\n";
+	}
+	#foreach($logingroups as $id => $group)
+	#	$h .= "        <option value=\"$id\">$group</option>\n";
 	$h .= "      </select>\n";
 	$h .= "    </td>\n";
 	$h .= "  </tr>\n";
@@ -653,7 +677,7 @@ function AJserverProfileStoreData() {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function AJdeployServer() {
-	global $user;
+	global $user, $remoteIP;
 	$profileid = processInputVar('profileid', ARG_NUMERIC);
 	$imageid = processInputVar('imageid', ARG_NUMERIC);
 	$resources = getUserResources(array("imageAdmin", "imageCheckOut"));
@@ -878,6 +902,10 @@ function AJdeployServer() {
 		return;
 	}
 	$requestid = addRequest();
+	$query = "UPDATE reservation "
+	       . "SET remoteIP = '$remoteIP' "
+	       . "WHERE requestid = $requestid";
+	doQuery($query);
 	$fields = array('requestid', 'serverprofileid');
 	# 	TODO test deploying server with various combinations of profile items changed
 	$values = array($requestid, $profileid);
