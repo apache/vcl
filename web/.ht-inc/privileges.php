@@ -1142,6 +1142,8 @@ function AJsubmitRenameNode() {
 function userLookup() {
 	global $user;
 	$userid = processInputVar("userid", ARG_STRING);
+	if(get_magic_quotes_gpc())
+		$userid = stripslashes($userid);
 	$affilid = processInputVar('affiliationid', ARG_NUMERIC, $user['affiliationid']);
 	$force = processInputVar('force', ARG_NUMERIC, 0);
 	print "<div align=center>\n";
@@ -1173,6 +1175,7 @@ function userLookup() {
 	print "<INPUT type=hidden name=continuation value=\"$cont\">\n";
 	print "</FORM><br>\n";
 	if(! empty($userid)) {
+		$esc_userid = mysql_real_escape_string($userid);
 		if(preg_match('/,/', $userid)) {
 			$mode = 'name';
 			$force = 0;
@@ -1187,9 +1190,11 @@ function userLookup() {
 		if($mode == 'userid') {
 			$query = "SELECT id "
 			       . "FROM user "
-			       . "WHERE unityid = '$userid' AND "
+			       . "WHERE unityid = '$esc_userid' AND "
 			       .       "affiliationid = $affilid";
-			$userid = "$userid@" . getAffiliationName($affilid);
+			$affilname = getAffiliationName($affilid);
+			$userid = "$userid@$affilname";
+			$esc_userid = "$esc_userid@$affilname";
 		}
 		else {
 			$tmp = explode(',', $userid);
@@ -1222,17 +1227,18 @@ function userLookup() {
 		elseif($mode == 'name') {
 			$row = mysql_fetch_assoc($qh);
 			$userid = $row['unityid'];
+			$esc_userid = $row['unityid'];
 		}
 
-		$userdata = getUserInfo($userid);
-		$userdata["groups"] = getUsersGroups($userdata["id"], 1, 1);
+		$userdata = getUserInfo($esc_userid);
 		if(is_null($userdata)) {
-			$userdata = getUserInfo($userid, 1);
+			$userdata = getUserInfo($esc_userid, 1);
 			if(is_null($userdata)) {
 				print "<font color=red>$userid not found in any known systems</font><br>\n";
 				return;
 			}
 		}
+		$userdata["groups"] = getUsersGroups($userdata["id"], 1, 1);
 		print "<TABLE>\n";
 		if(! empty($userdata['unityid'])) {
 			print "  <TR>\n";
