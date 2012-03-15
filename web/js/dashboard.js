@@ -59,6 +59,8 @@ function updateDashboardCB(data, ioArgs) {
 	updateTopFailedComputers(data.items.topfailedcomputers);
 	updateResChart(data.items.reschart);
 	updateBlockAllocation(data.items.blockallocation);
+	if(dojo.byId('newreservations'))
+		updateNewReservations(data.items.newreservations);
 	setTimeout(updateDashboard, 15000);
 }
 
@@ -203,6 +205,43 @@ function updateResChart(data) {
 	graph.updateSeries('Main', data.points);
 	graph.labeldata = data.points;
 	graph.render();
+}
+
+function updateNewReservations(data) {
+	var obj = dojo.byId('newreservations');
+	var txt = '<table>';
+	txt += '<tr>'
+	    +  '<th>Start</th>'
+	    +  '<th>ReqID</th>'
+	    +  '<th>Computer</th>'
+	    +  '<th>States</th>'
+	    +  '<th>Image</th>'
+	    +  '<th>Install Type</th>'
+	    +  '<th>Management Node</th>'
+	    +  '</tr>';
+	for(var i = 0; i < data.length; i++) {
+		if(i % 2)
+			txt += '<tr style=\"background-color: #D8D8D8;\">';
+		else
+			txt += '<tr style=\"background-color: #EEEEEE;\">';
+		txt += '<td style=\"padding: 1px; border-right: 1px solid;\">'
+		    + data[i].start
+		    + '</td><td style=\"padding: 1px; border-right: 1px solid;\">'
+		    + data[i].id
+		    + '</td><td style=\"padding: 1px; border-right: 1px solid;\">'
+		    + data[i].computer
+		    + '</td><td style=\"padding: 1px; border-right: 1px solid;\">'
+		    + data[i].state
+		    + '</td><td style=\"padding: 1px; border-right: 1px solid;\">'
+		    + data[i].image
+		    + '</td><td style=\"padding: 1px; border-right: 1px solid;\">'
+		    + data[i].installtype
+		    + '</td><td style=\"padding: 1px; border-right: 1px solid;\">'
+		    + data[i].managementnode
+		    + '</td></tr>';
+	}
+	txt += '</table>';
+	obj.innerHTML = txt;
 }
 
 function timestampToTime(val) {
