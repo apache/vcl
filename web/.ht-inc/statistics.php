@@ -100,8 +100,11 @@ function selectStatistics() {
 	printSelectInput("day2", $days, $daykey2);
 	printSelectInput("year2", $years, $yearkey2);
 	print "<br>\n";
+	$cont = addContinuationsEntry('viewstats');
 	if(checkUserHasPerm('View Statistics by Affiliation')) {
-		print "Select an affiliation:<br>\n";
+		print "<input type=radio id=stattype1 name=continuation value=\"$cont\" checked>\n";
+		print "<label for=stattype1>View General Statistics</label> - \n";
+		print "Select an affiliation:\n";
 		$affils = getAffiliations();
 		if(! array_key_exists($affilid, $affils))
 			$affilid = $user['affiliationid'];
@@ -110,9 +113,25 @@ function selectStatistics() {
 		$affils = array_reverse($affils, TRUE);
 		printSelectInput("affilid", $affils, $affilid);
 		print "<br>\n";
+
+		$query = "SELECT id, "
+		       .        "prettyname "
+		       . "FROM provisioning "
+		       . "ORDER BY prettyname";
+		$qh = doQuery($query);
+		$provs = array();
+		while($row = mysql_fetch_assoc($qh))
+			$provs[$row['id']] = $row['prettyname'];
+		$cdata = array('mode' => 'provisioning',
+		               'provs' => $provs);
+		$cont2 = addContinuationsEntry('viewstats', $cdata);
+		print "<input type=radio id=stattype3 name=continuation value=\"$cont2\">\n";
+		print "<label for=stattype3>View Statistics by provisioning engine</label>:\n";
+		printSelectInput("provid", $provs);
+		print "<br>\n";
 	}
-	$cont = addContinuationsEntry('viewstats');
-	print "<INPUT type=hidden name=continuation value=\"$cont\">\n";
+	else
+		print "<INPUT type=hidden name=continuation value=\"$cont\">\n";
 	print "<INPUT type=submit value=Submit>\n";
 	print "</FORM>\n";
 }
@@ -137,6 +156,18 @@ function viewStatistics() {
 	$day2 = processInputVar("day2", ARG_NUMERIC);
 	$year2 = processInputVar("year2", ARG_NUMERIC);
 	$affilid = processInputVar("affilid", ARG_NUMERIC, $user['affiliationid']);
+	$mode2 = getContinuationVar('mode', 'default');
+	$provid = processInputVar('provid', ARG_NUMERIC, 0);
+	if($mode2 == 'provisioning') {
+		$affilid = 0;
+		$provs = getContinuationVar('provs');
+		if(! array_key_exists($provid, $provs)) {
+			$ids = array_keys($provs);
+			$provid = $ids[0];
+		}
+	}
+	else
+		$provid = 0;
 
 	$affils = getAffiliations();
 	if(! checkUserHasPerm('View Statistics by Affiliation') ||
@@ -172,29 +203,65 @@ function viewStatistics() {
 	}
 
 	$timestart = microtime(1);
-	print "<H2>Statistic Information for $statsfor</H2>\n";
+	if($mode2 == 'default')
+		print "<H2>Statistic Information for $statsfor</H2>\n";
+	elseif($mode2 == 'provisioning')
+		print "<H2>Statistic Information for {$provs[$provid]}</H2>\n";
 	print "<H3>Reservation information between $month1/$day1/$year1 and ";
 	print "$month2/$day2/$year2:\n";
 	print "</H3>\n";
-	$reloadid = getUserlistID('vclreload@Local');
-	$query = "SELECT l.userid, "
-	       .        "l.nowfuture, "
-	       .        "UNIX_TIMESTAMP(l.start) AS start, "
-	       .        "(UNIX_TIMESTAMP(l.loaded) - UNIX_TIMESTAMP(l.start)) AS loadtime, "
-	       .        "UNIX_TIMESTAMP(l.finalend) AS finalend, "
-	       .        "l.wasavailable, "
-	       .        "l.ending, "
-	       .        "i.prettyname, "
-	       .        "o.prettyname AS OS "
-	       . "FROM log l, "
-	       .      "image i, "
-	       .      "user u, "
-	       .      "OS o "
-	       . "WHERE l.start >= '$start' AND "
-	       .       "l.finalend <= '$end' AND "
-	       .       "i.id = l.imageid AND "
-	       .       "i.OSid = o.id AND "
-	       .       "l.userid != $reloadid AND ";
+	$reloadid = getUserlistID('vclreload@local');
+	if($mode2 == 'default') {
+		$query = "SELECT l.userid, "
+		       .        "u.affiliationid, "
+		       .        "l.nowfuture, "
+		       .        "UNIX_TIMESTAMP(l.start) AS start, "
+		       .        "(UNIX_TIMESTAMP(l.loaded) - UNIX_TIMESTAMP(l.start)) AS loadtime, "
+		       .        "UNIX_TIMESTAMP(l.finalend) AS finalend, "
+		       .        "l.wasavailable, "
+		       .        "l.ending, "
+		       .        "i.prettyname, "
+		       .        "o.prettyname AS OS "
+		       . "FROM log l, "
+		       .      "image i, "
+		       .      "user u, "
+		       .      "OS o "
+		       . "WHERE l.start >= '$start' AND "
+		       .       "l.finalend <= '$end' AND "
+		       .       "i.id = l.imageid AND "
+		       .       "i.OSid = o.id AND "
+		       .       "l.userid != $reloadid AND ";
+	}
+	elseif($mode2 == 'provisioning') {
+		$query = "SELECT l.userid, "
+		       .        "u.affiliationid, "
+		       .        "l.nowfuture, "
+		       .        "UNIX_TIMESTAMP(l.start) AS start, "
+		       .        "(UNIX_TIMESTAMP(l.loaded) - UNIX_TIMESTAMP(l.start)) AS loadtime, "
+		       .        "UNIX_TIMESTAMP(l.finalend) AS finalend, "
+		       .        "l.wasavailable, "
+		       .        "l.ending, "
+		       .        "i.prettyname, "
+		       .        "o.prettyname AS OS "
+		       . "FROM image i, "
+		       .      "user u, "
+		       .      "OS o, "
+		       .      "log l "
+		       . "JOIN ("
+		       .       "SELECT s.logid, "
+		       .              "MIN(s.computerid) AS computerid "
+		       .       "FROM sublog s, "
+		       .            "computer c "
+		       .       "WHERE s.computerid = c.id AND "
+		       .             "c.provisioningid = $provid "
+		       .       "GROUP BY logid "
+		       .       ") AS s ON (s.logid = l.id) "
+		       . "WHERE l.start >= '$start' AND "
+		       .       "l.finalend <= '$end' AND "
+		       .       "i.id = l.imageid AND "
+		       .       "i.OSid = o.id AND "
+		       .       "l.userid != $reloadid AND ";
+	}
 	if($affilid != 0)
 		$query .=   "u.affiliationid = $affilid AND ";
 	$query .=      "l.userid = u.id "
@@ -460,7 +527,9 @@ function viewStatistics() {
 	$end = date('Y-m-d', $unixend);
 	$cdata = array('start' => $start,
 	               'end' => $end,
-	               'affilid' => $affilid);
+	               'affilid' => $affilid,
+	               'mode' => $mode2,
+	               'provid' => $provid);
 	print "<H2>Reservations by Day</H2>\n";
 	print "<small>(Reservations with start time on given day)</small><br>\n";
 	$cdata['divid'] = 'resbyday';
@@ -510,27 +579,40 @@ function AJgetStatData() {
 	$end = getContinuationVar("end");
 	$affilid = getContinuationVar("affilid");
 	$divid = getContinuationVar('divid');
+	$mode = getContinuationVar('mode');
+	$provid = getContinuationVar('provid');
 	if($divid == 'resbyday')
-		$data = getStatGraphDayData($start, $end, $affilid);
+		$data = getStatGraphDayData($start, $end, $affilid, $mode, $provid);
 	elseif($divid == 'maxconcurresday')
-		$data = getStatGraphDayConUsersData($start, $end, $affilid);
+		$data = getStatGraphDayConUsersData($start, $end, $affilid, $mode, $provid);
 	elseif($divid == 'maxconcurbladeday')
-		$data = getStatGraphConBladeUserData($start, $end, $affilid);
+		$data = getStatGraphConBladeUserData($start, $end, $affilid, $mode, $provid);
 	elseif($divid == 'maxconcurvmday')
-		$data = getStatGraphConVMUserData($start, $end, $affilid);
+		$data = getStatGraphConVMUserData($start, $end, $affilid, $mode, $provid);
 	elseif($divid == 'resbyhour')
-		$data = getStatGraphHourData($start, $end, $affilid);
+		$data = getStatGraphHourData($start, $end, $affilid, $mode, $provid);
+	elseif(preg_match('/^resbyday/', $divid))
+		$data = getStatGraphDayData($start, $end, $affilid, $mode, $provid);
+	elseif(preg_match('/^maxconcurresday/', $divid))
+		$data = getStatGraphDayConUsersData($start, $end, $affilid, $mode, $provid);
+	elseif(preg_match('/^maxconcurbladeday/', $divid))
+		$data = getStatGraphConBladeUserData($start, $end, $affilid, $mode, $provid);
+	elseif(preg_match('/^maxconcurvmday/', $divid))
+		$data = getStatGraphConVMUserData($start, $end, $affilid, $mode, $provid);
 	$data['id'] = $divid;
 	sendJSON($data);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn getStatGraphDayData($start, $end, $affilid)
+/// \fn getStatGraphDayData($start, $end, $affilid, $mode, $provid)
 ///
 /// \param $start - starting day in YYYY-MM-DD format
 /// \param $end - ending day in YYYY-MM-DD format
 /// \param $affilid - affiliationid of data to gather
+/// \param $mode - stat mode - 'default' or 'provisioning'
+/// \param $provid - provisioning id - set to 0 for $mode = 'default', set to
+/// > 0 otherwise
 ///
 /// \return an array with three keys:\n
 /// \b points - an array with y and tooltip keys that have the same value which
@@ -544,7 +626,7 @@ function AJgetStatData() {
 /// and creates an array with the number of reservations on each day
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function getStatGraphDayData($start, $end, $affilid) {
+function getStatGraphDayData($start, $end, $affilid, $mode, $provid) {
 	$startunix = datetimeToUnix($start . " 00:00:00");
 	$endunix = datetimeToUnix($end . " 23:59:59");
 
@@ -562,7 +644,8 @@ function getStatGraphDayData($start, $end, $affilid) {
 	       . "WHERE graphtype = 'totalres' AND "
 			 .       "affiliationid = $affilid AND "
 	       .       "statdate >= '$start' AND "
-	       .       "statdate <= '$end'";
+	       .       "statdate <= '$end' AND "
+	       .       "provisioningid = $provid";
 	$qh = doQuery($query, 101);
 	while($row = mysql_fetch_assoc($qh))
 		$cachepts[$row['statdate']] = $row['value'];
@@ -587,12 +670,31 @@ function getStatGraphDayData($start, $end, $affilid) {
 				       .       "u.affiliationid = $affilid";
 			}
 			else {
-				$query = "SELECT count(l.id) "
-				       . "FROM log l "
-				       . "WHERE l.start >= '$startdt' AND "
-				       .       "l.start < '$enddt' AND "
-				       .       "l.userid != $reloadid AND "
-				       .       "l.wasavailable = 1";
+				if($mode == 'default') {
+					$query = "SELECT count(l.id) "
+					       . "FROM log l "
+					       . "WHERE l.start >= '$startdt' AND "
+					       .       "l.start < '$enddt' AND "
+					       .       "l.userid != $reloadid AND "
+					       .       "l.wasavailable = 1";
+				}
+				elseif($mode == 'provisioning') {
+					$query = "SELECT count(l.id) "
+					       . "FROM log l "
+					       . "JOIN ("
+					       .       "SELECT s.logid, "
+					       .              "MIN(s.computerid) AS computerid "
+					       .       "FROM sublog s, "
+					       .            "computer c "
+					       .       "WHERE s.computerid = c.id AND "
+					       .             "c.provisioningid = $provid "
+					       .       "GROUP BY logid "
+					       .       ") AS s ON (s.logid = l.id) "
+					       . "WHERE l.start >= '$startdt' AND "
+					       .       "l.start < '$enddt' AND "
+					       .       "l.userid != $reloadid AND "
+					       .       "l.wasavailable = 1";
+				}
 			}
 			$qh = doQuery($query, 295);
 			if($row = mysql_fetch_row($qh))
@@ -608,17 +710,19 @@ function getStatGraphDayData($start, $end, $affilid) {
 		$data['xlabels'][] = array('value' => $cnt, 'text' => $label);
 	}
 	if(count($addcache))
-		addToStatGraphCache('totalres', $addcache, $affilid);
+		addToStatGraphCache('totalres', $addcache, $affilid, $provid);
 	return($data);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn getStatGraphHourData($start, $end, $affilid)
+/// \fn getStatGraphHourData($start, $end, $affilid, $mode, $provid)
 ///
 /// \param $start - starting day in YYYY-MM-DD format
 /// \param $end - ending day in YYYY-MM-DD format
 /// \param $affilid - affiliationid of data to gather
+/// \param $mode - stat mode - 'default' or 'provisioning'
+/// \param $provid - provisioning id - ignored unless $mode is 'provisioning'
 ///
 /// \return an array with two keys:\n
 /// \b points - an array with 5 keys:\n
@@ -637,7 +741,7 @@ function getStatGraphDayData($start, $end, $affilid) {
 /// and creates an array with the number of reservations on each day
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function getStatGraphHourData($start, $end, $affilid) {
+function getStatGraphHourData($start, $end, $affilid, $mode, $provid) {
 	$startdt = $start . " 00:00:00";
 	$enddt = $end . " 23:59:59";
 	$startunix = datetimeToUnix($startdt);
@@ -668,15 +772,37 @@ function getStatGraphHourData($start, $end, $affilid) {
 		       .       "u.affiliationid = $affilid";
 	}
 	else {
-		$query = "SELECT DATE_FORMAT(l.start, '%k') AS shour, "
-		       .        "DATE_FORMAT(l.start, '%i') AS smin, "
-		       .        "DATE_FORMAT(l.finalend, '%k') AS ehour, "
-		       .        "DATE_FORMAT(l.finalend, '%i') AS emin "
-		       . "FROM log l "
-		       . "WHERE l.start < '$enddt' AND "
-		       .       "l.finalend > '$startdt' AND "
-		       .       "l.userid != $reloadid AND "
-		       .       "l.wasavailable = 1";
+		if($mode == 'default') {
+			$query = "SELECT DATE_FORMAT(l.start, '%k') AS shour, "
+			       .        "DATE_FORMAT(l.start, '%i') AS smin, "
+			       .        "DATE_FORMAT(l.finalend, '%k') AS ehour, "
+			       .        "DATE_FORMAT(l.finalend, '%i') AS emin "
+			       . "FROM log l "
+			       . "WHERE l.start < '$enddt' AND "
+			       .       "l.finalend > '$startdt' AND "
+			       .       "l.userid != $reloadid AND "
+			       .       "l.wasavailable = 1";
+		}
+		else {
+			$query = "SELECT DATE_FORMAT(l.start, '%k') AS shour, "
+			       .        "DATE_FORMAT(l.start, '%i') AS smin, "
+			       .        "DATE_FORMAT(l.finalend, '%k') AS ehour, "
+			       .        "DATE_FORMAT(l.finalend, '%i') AS emin "
+			       . "FROM log l "
+			       . "JOIN ("
+			       .       "SELECT s.logid, "
+			       .              "MIN(s.computerid) AS computerid "
+			       .       "FROM sublog s, "
+			       .            "computer c "
+			       .       "WHERE s.computerid = c.id AND "
+			       .             "c.provisioningid = $provid "
+			       .       "GROUP BY logid "
+			       .       ") AS s ON (s.logid = l.id) "
+			       . "WHERE l.start < '$enddt' AND "
+			       .       "l.finalend > '$startdt' AND "
+			       .       "l.userid != $reloadid AND "
+			       .       "l.wasavailable = 1";
+		}
 	}
 	$qh = doQuery($query, 296);
 	while($row = mysql_fetch_assoc($qh)) {
@@ -735,11 +861,13 @@ function statHourFormatX($val) {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn getStatGraphDayConUsersData($start, $end, $affilid)
+/// \fn getStatGraphDayConUsersData($start, $end, $affilid, $mode, $provid)
 ///
 /// \param $start - starting day in YYYY-MM-DD format
 /// \param $end - ending day in YYYY-MM-DD format
 /// \param $affilid - affiliationid of data to gather
+/// \param $mode - stat mode - 'default' or 'provisioning'
+/// \param $provid - provisioning id - ignored unless $mode is 'provisioning'
 ///
 /// \return an array with three keys:\n
 /// \b points - an array with y and tooltip keys that have the same value which
@@ -753,7 +881,7 @@ function statHourFormatX($val) {
 /// and creates an array with the max concurrent users per day
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function getStatGraphDayConUsersData($start, $end, $affilid) {
+function getStatGraphDayConUsersData($start, $end, $affilid, $mode, $provid) {
 	$startdt = $start . " 00:00:00";
 	$enddt = $end . " 23:59:59";
 	$startunix = datetimeToUnix($startdt);
@@ -782,7 +910,8 @@ function getStatGraphDayConUsersData($start, $end, $affilid) {
 	       . "WHERE graphtype = 'concurres' AND "
 			 .       "affiliationid = $affilid AND "
 	       .       "statdate >= '$start' AND "
-	       .       "statdate <= '$end'";
+	       .       "statdate <= '$end' AND "
+	       .       "provisioningid = $provid";
 	$qh = doQuery($query, 101);
 	while($row = mysql_fetch_assoc($qh))
 		$cachepts[$row['statdate']] = $row['value'];
@@ -814,12 +943,31 @@ function getStatGraphDayConUsersData($start, $end, $affilid) {
 					    .       "u.affiliationid = $affilid";
 			}
 			else {
-				$query = "SELECT UNIX_TIMESTAMP(l.start) AS start, "
-				       .        "UNIX_TIMESTAMP(l.finalend) AS end "
-				       . "FROM log l "
-				       . "WHERE l.start < '$enddt' AND "
-				       .       "l.finalend > '$startdt' AND "
-				       .       "l.userid != $reloadid";
+				if($mode == 'default') {
+					$query = "SELECT UNIX_TIMESTAMP(l.start) AS start, "
+					       .        "UNIX_TIMESTAMP(l.finalend) AS end "
+					       . "FROM log l "
+					       . "WHERE l.start < '$enddt' AND "
+					       .       "l.finalend > '$startdt' AND "
+					       .       "l.userid != $reloadid";
+				}
+				elseif($mode == 'provisioning') {
+					$query = "SELECT UNIX_TIMESTAMP(l.start) AS start, "
+					       .        "UNIX_TIMESTAMP(l.finalend) AS end "
+					       . "FROM log l "
+					       . "JOIN ("
+					       .       "SELECT s.logid, "
+					       .              "MIN(s.computerid) AS computerid "
+					       .       "FROM sublog s, "
+					       .            "computer c "
+					       .       "WHERE s.computerid = c.id AND "
+					       .             "c.provisioningid = $provid "
+					       .       "GROUP BY logid "
+					       .       ") AS s ON (s.logid = l.id) "
+					       . "WHERE l.start < '$enddt' AND "
+					       .       "l.finalend > '$startdt' AND "
+					       .       "l.userid != $reloadid";
+				}
 			}
 			$qh = doQuery($query, 101);
 			while($row = mysql_fetch_assoc($qh)) {
@@ -851,17 +999,19 @@ function getStatGraphDayConUsersData($start, $end, $affilid) {
 		$data['xlabels'][] = array('value' => $cnt, 'text' => $label);
 	}
 	if(count($addcache))
-		addToStatGraphCache('concurres', $addcache, $affilid);
+		addToStatGraphCache('concurres', $addcache, $affilid, $provid);
 	return($data);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn getStatGraphConBladeUserData($start, $end, $affilid)
+/// \fn getStatGraphConBladeUserData($start, $end, $affilid, $mode, $provid)
 ///
 /// \param $start - starting day in YYYY-MM-DD format
 /// \param $end - ending day in YYYY-MM-DD format
 /// \param $affilid - affiliationid of data to gather
+/// \param $mode - stat mode - 'default' or 'provisioning'
+/// \param $provid - provisioning id - ignored unless $mode is 'provisioning'
 ///
 /// \return an array with three keys:\n
 /// \b points - an array with y and tooltip keys that have the same value which
@@ -875,7 +1025,7 @@ function getStatGraphDayConUsersData($start, $end, $affilid) {
 /// and creates an array with the max concurrent users of blades per day
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function getStatGraphConBladeUserData($start, $end, $affilid) {
+function getStatGraphConBladeUserData($start, $end, $affilid, $mode, $provid) {
 	$startdt = $start . " 00:00:00";
 	$enddt = $end . " 23:59:59";
 	$startunix = datetimeToUnix($startdt);
@@ -904,7 +1054,8 @@ function getStatGraphConBladeUserData($start, $end, $affilid) {
 	       . "WHERE graphtype = 'concurblade' AND "
 			 .       "affiliationid = $affilid AND "
 	       .       "statdate >= '$start' AND "
-	       .       "statdate <= '$end'";
+	       .       "statdate <= '$end' AND "
+	       .       "provisioningid = $provid";
 	$qh = doQuery($query, 101);
 	while($row = mysql_fetch_assoc($qh))
 		$cachepts[$row['statdate']] = $row['value'];
@@ -945,21 +1096,49 @@ function getStatGraphConBladeUserData($start, $end, $affilid) {
 						 .       "u.affiliationid = $affilid";
 			}
 			else {
-				$query = "SELECT s.hostcomputerid, "
-				       .        "l.start AS start, "
-				       .        "l.finalend AS end, "
-				       .        "c.type "
-						 . "FROM log l, "
-				       .      "sublog s "
-				       . "LEFT JOIN computer c ON (s.computerid = c.id) "
-				       . "LEFT JOIN computer c2 ON (s.hostcomputerid = c2.id) "
-				       . "WHERE l.start < '$enddt' AND "
-				       .       "l.finalend > '$startdt' AND "
-				       .       "s.logid = l.id AND "
-				       .       "l.wasavailable = 1 AND "
-				       .       "l.userid != $reloadid AND "
-						 .       "(c.type = 'blade' OR "
-				       .       " (c.type = 'virtualmachine' AND c2.type = 'blade'))";
+				if($mode == 'default') {
+					$query = "SELECT s.hostcomputerid, "
+					       .        "l.start AS start, "
+					       .        "l.finalend AS end, "
+					       .        "c.type "
+							 . "FROM log l, "
+					       .      "sublog s "
+					       . "LEFT JOIN computer c ON (s.computerid = c.id) "
+					       . "LEFT JOIN computer c2 ON (s.hostcomputerid = c2.id) "
+					       . "WHERE l.start < '$enddt' AND "
+					       .       "l.finalend > '$startdt' AND "
+					       .       "s.logid = l.id AND "
+					       .       "l.wasavailable = 1 AND "
+					       .       "l.userid != $reloadid AND "
+							 .       "(c.type = 'blade' OR "
+					       .       " (c.type = 'virtualmachine' AND c2.type = 'blade'))";
+				}
+				elseif($mode == 'provisioning') {
+					$query = "SELECT s.hostcomputerid, "
+					       .        "l.start AS start, "
+					       .        "l.finalend AS end, "
+					       .        "c.type "
+							 . "FROM log l "
+					       . "JOIN ("
+					       .       "SELECT s.logid, "
+					       .              "MIN(s.computerid) AS computerid "
+					       .       "FROM sublog s, "
+					       .            "computer c "
+					       .       "WHERE s.computerid = c.id AND "
+					       .             "c.provisioningid = $provid "
+					       .       "GROUP BY logid "
+					       .       ") AS s2 ON (s2.logid = l.id), "
+					       .      "sublog s "
+					       . "LEFT JOIN computer c ON (s.computerid = c.id) "
+					       . "LEFT JOIN computer c2 ON (s.hostcomputerid = c2.id) "
+					       . "WHERE l.start < '$enddt' AND "
+					       .       "l.finalend > '$startdt' AND "
+					       .       "s.logid = l.id AND "
+					       .       "l.wasavailable = 1 AND "
+					       .       "l.userid != $reloadid AND "
+							 .       "(c.type = 'blade' OR "
+					       .       " (c.type = 'virtualmachine' AND c2.type = 'blade'))";
+				}
 			}
 			$qh = doQuery($query, 101);
 			$comps = array();
@@ -998,17 +1177,19 @@ function getStatGraphConBladeUserData($start, $end, $affilid) {
 		$data['xlabels'][] = array('value' => $cnt, 'text' => $label);
 	}
 	if(count($addcache))
-		addToStatGraphCache('concurblade', $addcache, $affilid);
+		addToStatGraphCache('concurblade', $addcache, $affilid, $provid);
 	return($data);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn getStatGraphConVMUserData($start, $end, $affilid)
+/// \fn getStatGraphConVMUserData($start, $end, $affilid, $mode, $provid)
 ///
 /// \param $start - starting day in YYYY-MM-DD format
 /// \param $end - ending day in YYYY-MM-DD format
 /// \param $affilid - affiliationid of data to gather
+/// \param $mode - stat mode - 'default' or 'provisioning'
+/// \param $provid - provisioning id - ignored unless $mode is 'provisioning'
 ///
 /// \return an array with three keys:\n
 /// \b points - an array with y and tooltip keys that have the same value which
@@ -1022,7 +1203,7 @@ function getStatGraphConBladeUserData($start, $end, $affilid) {
 /// and creates an array with the max concurrent users of vms per day
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function getStatGraphConVMUserData($start, $end, $affilid) {
+function getStatGraphConVMUserData($start, $end, $affilid, $mode, $provid) {
 	$startdt = $start . " 00:00:00";
 	$enddt = $end . " 23:59:59";
 	$startunix = datetimeToUnix($startdt);
@@ -1051,7 +1232,8 @@ function getStatGraphConVMUserData($start, $end, $affilid) {
 	       . "WHERE graphtype = 'concurvm' AND "
 			 .       "affiliationid = $affilid AND "
 	       .       "statdate >= '$start' AND "
-	       .       "statdate <= '$end'";
+	       .       "statdate <= '$end' AND "
+	       .       "provisioningid = $provid";
 	$qh = doQuery($query, 101);
 	while($row = mysql_fetch_assoc($qh))
 		$cachepts[$row['statdate']] = $row['value'];
@@ -1089,18 +1271,43 @@ function getStatGraphConVMUserData($start, $end, $affilid) {
 						 .       "u.affiliationid = $affilid";
 			}
 			else {
-				$query = "SELECT l.start AS start, "
-				       .        "l.finalend AS end "
-				       . "FROM log l, "
-				       .      "sublog s, "
-				       .      "computer c "
-				       . "WHERE l.start < '$enddt' AND "
-				       .       "l.finalend > '$startdt' AND "
-				       .       "s.logid = l.id AND "
-				       .       "s.computerid = c.id AND "
-				       .       "l.wasavailable = 1 AND "
-				       .       "c.type = 'virtualmachine' AND "
-				       .       "l.userid != $reloadid";
+				if($mode == 'default') {
+					$query = "SELECT l.start AS start, "
+					       .        "l.finalend AS end "
+					       . "FROM log l, "
+					       .      "sublog s, "
+					       .      "computer c "
+					       . "WHERE l.start < '$enddt' AND "
+					       .       "l.finalend > '$startdt' AND "
+					       .       "s.logid = l.id AND "
+					       .       "s.computerid = c.id AND "
+					       .       "l.wasavailable = 1 AND "
+					       .       "c.type = 'virtualmachine' AND "
+					       .       "l.userid != $reloadid";
+				}
+				elseif($mode == 'provisioning') {
+					$query = "SELECT l.start AS start, "
+					       .        "l.finalend AS end "
+					       . "FROM computer c, "
+					       .      "sublog s, "
+					       .      "log l "
+					       . "JOIN ("
+					       .       "SELECT s.logid, "
+					       .              "MIN(s.computerid) AS computerid "
+					       .       "FROM sublog s, "
+					       .            "computer c "
+					       .       "WHERE s.computerid = c.id AND "
+					       .             "c.provisioningid = $provid "
+					       .       "GROUP BY logid "
+					       .       ") AS s2 ON (s2.logid = l.id) "
+					       . "WHERE l.start < '$enddt' AND "
+					       .       "l.finalend > '$startdt' AND "
+					       .       "s.logid = l.id AND "
+					       .       "s.computerid = c.id AND "
+					       .       "l.wasavailable = 1 AND "
+					       .       "c.type = 'virtualmachine' AND "
+					       .       "l.userid != $reloadid";
+				}
 			}
 			$qh = doQuery($query, 101);
 			while($row = mysql_fetch_assoc($qh)) {
@@ -1132,24 +1339,25 @@ function getStatGraphConVMUserData($start, $end, $affilid) {
 		$data['xlabels'][] = array('value' => $cnt, 'text' => $label);
 	}
 	if(count($addcache))
-		addToStatGraphCache('concurvm', $addcache, $affilid);
+		addToStatGraphCache('concurvm', $addcache, $affilid, $provid);
 	return($data);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn addToStatGraphCache($type, $addcache, $affilid)
+/// \fn addToStatGraphCache($type, $addcache, $affilid, $provid)
 ///
 /// \param $type - type of data to add, one of totalres, concurres, concurblade,
 /// or concurvm
 /// \param $addcache - array of data where the keys are a date and the values
 /// are the stat value for that date
 /// \param $affilid - affiliation id for which the data is associated
+/// \param $provid - provisioning id - 0 for all provisioning ids, > 0 otherwise
 ///
 /// \brief adds passed in data to statgraphcache table
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function addToStatGraphCache($type, $addcache, $affilid) {
+function addToStatGraphCache($type, $addcache, $affilid, $provid) {
 	$nosave = time() - SECINDAY;
 	$values = array();
 	foreach($addcache as $date => $value) {
@@ -1157,13 +1365,13 @@ function addToStatGraphCache($type, $addcache, $affilid) {
 		if($startts < $nosave) {
 			$tmp = explode(' ', $date);
 			$statdate = $tmp[0];
-			$values[] = "('$type', '$statdate', $affilid, $value)";
+			$values[] = "('$type', '$statdate', $affilid, $value, $provid)";
 		}
 	}
 	if(count($values)) {
 		$insval = implode(',', $values);
-		$query = "INSERT INTO statgraphcache "
-		       . "(graphtype, statdate, affiliationid, value) "
+		$query = "INSERT IGNORE INTO statgraphcache "
+		       . "(graphtype, statdate, affiliationid, value, provisioningid) "
 		       . "VALUES $insval";
 		doQuery($query, 101);
 	}
