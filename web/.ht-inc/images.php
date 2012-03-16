@@ -3067,12 +3067,17 @@ function processImageInput($checks=1) {
 		return $return;
 	}
 	
-	if(preg_match('/-/', $return["prettyname"]) ||
+	if(preg_match("/[-'\"]/", $return["prettyname"]) ||
 		strlen($return["prettyname"]) > 60 || strlen($return["prettyname"]) < 2) {
 	   $submitErr |= PRETTYNAMEERR;
 	   $submitErrMsg[PRETTYNAMEERR] = "Name must be from 2 to 60 characters "
-		                             . "and cannot contain any dashes (-).";
+		                             . "and cannot contain any dashes (-), single (') or double (\") quotes.";
 	}
+	elseif(! preg_match('/^[\x20-\x7E]+$/', $return["prettyname"])) {
+		$submitErr |= PRETTYNAMEERR;
+		$submitErrMsg[PRETTYNAMEERR] = "Name can only contain alphabets, numbers, signs, and spaces.";
+	}
+
 	if(! ($submitErr & PRETTYNAMEERR) &&
 	   checkForImageName($return["prettyname"], "long", $return["imageid"])) {
 	   $submitErr |= PRETTYNAMEERR;
