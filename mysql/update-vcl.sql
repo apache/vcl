@@ -405,9 +405,12 @@ CREATE TABLE IF NOT EXISTS `loginlog` (
   `timestamp` timestamp NOT NULL default CURRENT_TIMESTAMP,
   `passfail` tinyint(1) unsigned NOT NULL default '0',
   `remoteIP` varchar(15) NOT NULL,
+  `code` enum('none','invalid credentials') NOT NULL DEFAULT 'none',
   KEY `user` (`user`),
   KEY `affiliationid` (`affiliationid`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+
+CALL AddColumnIfNotExists('loginlog', 'code', "enum('none','invalid credentials') NOT NULL DEFAULT 'none'");
 
 -- --------------------------------------------------------
 
@@ -521,6 +524,7 @@ CREATE TABLE IF NOT EXISTS `serverprofile` (
 
 CREATE TABLE IF NOT EXISTS `serverrequest` (
   `id` mediumint(8) unsigned NOT NULL auto_increment,
+  `name` varchar(255) NOT NULL,
   `serverprofileid` smallint(5) unsigned NOT NULL default '0',
   `requestid` mediumint(8) unsigned NOT NULL,
   `fixedIP` varchar(15) default NULL,
@@ -568,10 +572,15 @@ CREATE TABLE IF NOT EXISTS `statgraphcache` (
 	  `statdate` date NOT NULL,
 	  `affiliationid` mediumint(8) unsigned NOT NULL,
 	  `value` mediumint(8) unsigned NOT NULL,
+	  `provisioningid` smallint(5) unsigned NOT NULL,
 	  KEY `graphtype` (`graphtype`),
 	  KEY `statdate` (`statdate`),
-	  KEY `affiliationid` (`affiliationid`)
+	  KEY `affiliationid` (`affiliationid`),
+	  KEY `provisioningid` (`provisioningid`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+
+CALL AddColumnIfNotExists('statgraphcache', 'provisioningid', "smallint(5) unsigned default NULL");
+CALL AddIndexIfNotExists('statgraphcache', 'provisioningid');
 
 -- --------------------------------------------------------
 
