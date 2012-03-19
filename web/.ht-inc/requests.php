@@ -134,11 +134,14 @@ function newReservation() {
 			print "onChange=\"selectEnvironment();\" tabIndex=1 style=\"width: 400px\" ";
 			print "queryExpr=\"*\${0}*\" highlightMatch=\"all\" autoComplete=\"false\" ";
 			print "name=imageid>\n";
-			foreach($resources['image'] as $id => $image)
+			foreach($resources['image'] as $id => $image) {
+				if($image == 'No Image')
+					continue;
 				if($id == $imageid)
 					print "        <option value=\"$id\" selected>$image</option>\n";
 				else
 					print "        <option value=\"$id\">$image</option>\n";
+			}
 			print "      </select>\n";
 		}
 		else
@@ -856,55 +859,21 @@ function viewRequests() {
 			if(requestIsReady($requests[$i]) && $requests[$i]['useraccountready']) {
 				$connect = 1;
 				# request is ready, print Connect! and End buttons
-				$text .= "    <TD>\n";
-				$text .= "      <FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
 				$cont = addContinuationsEntry('connectRequest', $cdata, SECINDAY);
-				$text .= "      <INPUT type=hidden name=continuation value=\"$cont\">\n";
-				$text .= "      <button type=submit dojoType=\"dijit.form.Button\">\n";
-				$text .= "      Connect!\n";
-				$text .= "      </button>\n";
-				$text .= "      </FORM>\n";
-				$text .= "    </TD>\n";
+				$text .= getViewRequestHTMLitem('connectbtn', $cont);
 				if($requests[$i]['serveradmin']) {
-					$text .= "    <TD>\n";
 					$cont = addContinuationsEntry('AJconfirmDeleteRequest', $cdata, SECINDAY);
-					$text .= "      <button dojoType=\"dijit.form.Button\">\n";
-					$text .= "        Delete\n";
-					$text .= "	      <script type=\"dojo/method\" event=\"onClick\">\n";
-					$text .= "          endReservation('$cont');\n";
-					$text .= "        </script>\n";
-					$text .= "      </button>\n";
-					$text .= "    </TD>\n";
+					$text .= getViewRequestHTMLitem('deletebtn', $cont);
 				}
 				else
 					$text .= "    <TD></TD>\n";
-				$startstamp = datetimeToUnix($requests[$i]["start"]);
 			}
 			elseif($requests[$i]["currstateid"] == 5) {
 				# request has failed
-				$text .= "    <TD nowrap>\n";
-				$text .= "      <span class=scriptonly>\n";
-				$text .= "      <span class=compstatelink>";
-				$text .= "<a onClick=\"showResStatusPane({$requests[$i]['id']}); ";
-				$text .= "return false;\" href=\"#\">Reservation failed</a></span>\n";
-				$text .= "      </span>\n";
-				$text .= "      <noscript>\n";
-				$text .= "      <span class=scriptoff>\n";
-				$text .= "      <span class=compstatelink>";
-				$text .= "Reservation failed</span>\n";
-				$text .= "      </span>\n";
-				$text .= "      </noscript>\n";
-				$text .= "    </TD>\n";
+				$text .= getViewRequestHTMLitem('failedblock', $requests[$i]['id']);
 				if($requests[$i]['serveradmin']) {
-					$text .= "    <TD>\n";
 					$cont = addContinuationsEntry('AJconfirmRemoveRequest', $cdata, SECINDAY);
-					$text .= "      <button dojoType=\"dijit.form.Button\">\n";
-					$text .= "        Remove\n";
-					$text .= "	      <script type=\"dojo/method\" event=\"onClick\">\n";
-					$text .= "          removeReservation('$cont');\n";
-					$text .= "        </script>\n";
-					$text .= "      </button>\n";
-					$text .= "    </TD>\n";
+					$text .= getViewRequestHTMLitem('removebtn', $cont);
 				}
 				else
 					$text .= "    <TD></TD>\n";
@@ -918,24 +887,11 @@ function viewRequests() {
 					($requests[$i]["currstateid"] == 14 &&
 					$requests[$i]["laststateid"] == 11)) {
 					# request has timed out
-					if($requests[$i]['forimaging'])
-						$text .= "    <TD colspan=2>\n";
-					else
-						$text .= "    <TD>\n";
-					$text .= "      <span class=compstatelink>Reservation has ";
-					$text .= "timed out</span>\n";
+					$text .= getViewRequestHTMLitem('timeoutblock');
 					$timedout = 1;
-					$text .= "    </TD>\n";
 					if($requests[$i]['serveradmin']) {
-						$text .= "    <TD>\n";
 						$cont = addContinuationsEntry('AJconfirmRemoveRequest', $cdata, SECINDAY);
-						$text .= "      <button dojoType=\"dijit.form.Button\">\n";
-						$text .= "        Remove\n";
-						$text .= "	      <script type=\"dojo/method\" event=\"onClick\">\n";
-						$text .= "          removeReservation('$cont');\n";
-						$text .= "        </script>\n";
-						$text .= "      </button>\n";
-						$text .= "    </TD>\n";
+						$text .= getViewRequestHTMLitem('removebtn', $cont);
 					}
 					else
 						$text .= "    <TD></TD>\n";
@@ -962,18 +918,7 @@ function viewRequests() {
 							$remaining = 1;
 						}
 					}
-					$text .= "    <TD>\n";
-					$text .= "      <span class=scriptonly>\n";
-					$text .= "      <span class=compstatelink><i>";
-					$text .= "<a onClick=\"showResStatusPane({$requests[$i]['id']}); ";
-					$text .= "return false;\" href=\"#\">Pending...</a></i></span>\n";
-					$text .= "      </span>\n";
-					$text .= "      <noscript>\n";
-					$text .= "      <span class=scriptoff>\n";
-					$text .= "      <span class=compstatelink>";
-					$text .= "<i>Pending...</i></span>\n";
-					$text .= "      </span>\n";
-					$text .= "      </noscript>\n";
+					$data = array('text' => '');
 					if($requests[$i]['currstateid'] != 26 &&
 					   $requests[$i]['currstateid'] != 27 &&
 					   $requests[$i]['currstateid'] != 28 &&
@@ -981,19 +926,12 @@ function viewRequests() {
 					   ($requests[$i]['laststateid'] != 26 &&
 					    $requests[$i]['laststateid'] != 27 &&
 					    $requests[$i]['laststateid'] != 28)))
-						$text .= "<br>Est:&nbsp;$remaining&nbsp;min remaining\n";
+						$data['text'] = "<br>Est:&nbsp;$remaining&nbsp;min remaining\n";
+					$text .= getViewRequestHTMLitem('pendingblock', $requests[$i]['id'], $data);
 					$refresh = 1;
-					$text .= "    </TD>\n";
 					if($requests[$i]['serveradmin']) {
-						$text .= "    <TD>\n";
 						$cont = addContinuationsEntry('AJconfirmDeleteRequest', $cdata, SECINDAY);
-						$text .= "      <button dojoType=\"dijit.form.Button\">\n";
-						$text .= "        Delete\n";
-						$text .= "	      <script type=\"dojo/method\" event=\"onClick\">\n";
-						$text .= "          endReservation('$cont');\n";
-						$text .= "        </script>\n";
-						$text .= "      </button>\n";
-						$text .= "    </TD>\n";
+						$text .= getViewRequestHTMLitem('deletebtn', $cont);
 					}
 					else
 						$text .= "    <TD></TD>\n";
@@ -1003,15 +941,8 @@ function viewRequests() {
 				# reservation is in the future
 				$text .= "    <TD></TD>\n";
 				if($requests[$i]['serveradmin']) {
-					$text .= "    <TD>\n";
 					$cont = addContinuationsEntry('AJconfirmDeleteRequest', $cdata, SECINDAY);
-					$text .= "      <button dojoType=\"dijit.form.Button\">\n";
-					$text .= "        Delete\n";
-					$text .= "	      <script type=\"dojo/method\" event=\"onClick\">\n";
-					$text .= "          endReservation('$cont');\n";
-					$text .= "        </script>\n";
-					$text .= "      </button>\n";
-					$text .= "    </TD>\n";
+					$text .= getViewRequestHTMLitem('deletebtn', $cont);
 				}
 				else
 					$text .= "    <TD></TD>\n";
@@ -1022,53 +953,30 @@ function viewRequests() {
 				$imgcont = addContinuationsEntry('startImage', $cdata, SECINDAY);
 				$imgurl = BASEURL . SCRIPT . "?continuation=$imgcont";
 				if($requests[$i]['serveradmin']) {
-					$text .= "    <TD align=right>\n";
-					$text .= "      <div dojoType=\"dijit.form.DropDownButton\">\n";
-					$text .= "        <span>More Options...</span>\n";
-					$text .= "        <div dojoType=\"dijit.Menu\">\n";
-					$text .= "          <div dojoType=\"dijit.MenuItem\"\n";
-					$text .= "               iconClass=\"noicon\"\n";
-					$text .= "               label=\"Edit\"\n";
-					$text .= "               onClick=\"editReservation('$editcont');\">\n";
-					$text .= "          </div>\n";
+					$text .= getViewRequestHTMLitem('openmoreoptions');
+					$text .= getViewRequestHTMLitem('editoption', $editcont);
 					if(array_key_exists($imageid, $resources['image']) && ! $cluster &&            # imageAdmin access, not a cluster,
 					   ($requests[$i]['currstateid'] == 8 || $requests[$i]['laststateid'] == 8)) { # reservation has been in inuse state
-						$text .= "          <div dojoType=\"dijit.MenuItem\"\n";
-						$text .= "               iconClass=\"noicon\"\n";
-						$text .= "               label=\"End Reservation & Create Image\"\n";
-						if($mode != 'AJviewRequests')
-							$text .= "               onClick=\"window.location.href='$imgurl';\">\n";
-						else
-							$text .= "               onClick=\"window.location.href=\'$imgurl\';\">\n";
-						$text .= "          </div>\n";
+						$data = array('doescape' => 0);
+						if($mode == 'AJviewRequests')
+							$data['doescape'] = 1;
+						$text .= getViewRequestHTMLitem('endcreateoption', $imgurl, $data);
 					}
-					/*else {
-						$text .= "          <div dojoType=\"dijit.MenuItem\"\n";
-						$text .= "               iconClass=\"noicon\"\n";
-						$text .= "               label=\"End Reservation & Create Image\" disabled>\n";
-						$text .= "          </div>\n";
-					}*/
+					/*else
+						$text .= getViewRequestHTMLitem('endcreateoptiondisable');*/
 					// todo uncomment the following when live imaging works
 					// todo add a check to ensure it is a VM
 					/*if($requests[$i]['server'] && ($requests[$i]['currstateid'] == 8 ||
 						($requests[$i]['currstateid'] == 14 && $requests[$i]['laststateid'] == 8))) {
 						$cont = addContinuationsEntry('startCheckpoint', $cdata, SECINDAY);
 						$url = BASEURL . SCRIPT . "?continuation=$cont";
-						$text .= "          <div dojoType=\"dijit.MenuItem\"\n";
-						$text .= "               iconClass=\"noicon\"\n";
-						$text .= "               label=\"Create Image\"\n";
-						if($mode != 'AJviewRequests')
-							$text .= "               onClick=\"window.location.href='$url';\">\n";
-						else
-							$text .= "               onClick=\"window.location.href=\'$url\';\">\n";
-						$text .= "          </div>\n";
+						$data = array('doescape' => 0);
+						if($mode == 'AJviewRequests')
+							$data['doescape'] = 1;
+						$text .= getViewRequestHTMLitem('checkpointoption', $imgurl, $data);
 					}
-					elseif($requests[$i]['server'] && $requests[$i]['currstateid'] == 24) {
-						$text .= "          <div dojoType=\"dijit.MenuItem\"\n";
-						$text .= "               iconClass=\"noicon\"\n";
-						$text .= "               label=\"Create Image\" disabled>\n";
-						$text .= "          </div>\n";
-					}*/
+					elseif($requests[$i]['server'] && $requests[$i]['currstateid'] == 24)
+						$text .= getViewRequestHTMLitem('checkpointoptiondisable');*/
 					if(! $cluster &&
 					   $requests[$i]['OSinstalltype'] != 'none' &&
 					   $requests[$i]['currstateid'] != 13 &&
@@ -1084,31 +992,13 @@ function viewRequests() {
 					   $requests[$i]['currstateid'] != 27 &&
 					   $requests[$i]['laststateid'] != 27) {
 						$cont = addContinuationsEntry('AJrebootRequest', $cdata, SECINDAY);
-						$text .= "          <div dojoType=\"dijit.MenuItem\"\n";
-						$text .= "               iconClass=\"noicon\"\n";
-						$text .= "               label=\"Reboot\">\n";
-						$text .= "	          <script type=\"dojo/method\" event=\"onClick\">\n";
-						$text .= "              rebootRequest('$cont');\n";
-						$text .= "            </script>\n";
-						$text .= "          </div>\n";
+						$text .= getViewRequestHTMLitem('rebootoption', $cont);
 						$cont = addContinuationsEntry('AJreinstallRequest', $cdata, SECINDAY);
-						$text .= "          <div dojoType=\"dijit.MenuItem\"\n";
-						$text .= "               iconClass=\"noicon\"\n";
-						$text .= "               label=\"Reinstall\">\n";
-						$text .= "	          <script type=\"dojo/method\" event=\"onClick\">\n";
-						$text .= "              reinstallRequest('$cont');\n";
-						$text .= "            </script>\n";
-						$text .= "          </div>\n";
+						$text .= getViewRequestHTMLitem('reinstalloption', $cont);
 					}
 					else {
-						$text .= "          <div dojoType=\"dijit.MenuItem\"\n";
-						$text .= "               iconClass=\"noicon\"\n";
-						$text .= "               label=\"Reboot\" disabled>\n";
-						$text .= "          </div>\n";
-						$text .= "          <div dojoType=\"dijit.MenuItem\"\n";
-						$text .= "               iconClass=\"noicon\"\n";
-						$text .= "               label=\"Reinstall\" disabled>\n";
-						$text .= "          </div>\n";
+						$text .= getViewRequestHTMLitem('rebootoptiondisable');
+						$text .= getViewRequestHTMLitem('reinstalloptiondisable');
 					}
 					$text .= "       </div>\n";
 					$text .= "     </div>\n";
@@ -1120,29 +1010,47 @@ function viewRequests() {
 			else
 				$text .= "    <TD></TD>\n";
 
+			# print name of server request
+			if($requests[$i]['server']) {
+				if($requests[$i]['servername'] == '')
+					$text .= getViewRequestHTMLitem('servername', $requests[$i]['prettyimage']);
+				else
+					$text .= getViewRequestHTMLitem('servername', $requests[$i]['servername']);
+			}
+
 			# print name of image, add (Testing) if it is the test version of an image
-			$text .= "    <TD>" . str_replace("'", "&#39;", $requests[$i]["prettyimage"]);
-			if($requests[$i]["test"])
-				$text .= " (Testing)";
-			$text .= "</TD>\n";
+			if(!$requests[$i]['server']) {
+				$data = array('addtest' => 0);
+				if($requests[$i]["test"])
+					$data['addtest'] = 1;
+				$text .= getViewRequestHTMLitem('imagename', $requests[$i]['prettyimage'], $data);
+			}
 
 			# print start time
-			if(datetimeToUnix($requests[$i]["start"]) < 
-			   datetimeToUnix($requests[$i]["daterequested"])) {
-				$text .= "    <TD>" . prettyDatetime($requests[$i]["daterequested"], 1) . "</TD>\n";
-			}
-			else {
-				$text .= "    <TD>" . prettyDatetime($requests[$i]["start"], 1) . "</TD>\n";
+			if(! $requests[$i]['server']) {
+				$data = array('start' => $requests[$i]['start'],
+				              'requested' => $requests[$i]['daterequested']);
+				$text .= getViewRequestHTMLitem('starttime', '', $data);
 			}
 
 			# print end time
-			if($requests[$i]['server'] && $requests[$i]['end'] == '2038-01-01 00:00:00')
-				$text .= "    <TD>(none)</TD>\n";
-			else
-				$text .= "    <TD>" . prettyDatetime($requests[$i]["end"], 1) . "</TD>\n";
+			$data = array('end' => $requests[$i]['end']);
+			$text .= getViewRequestHTMLitem('endtime', '', $data);
 
 			# print date requested
-			$text .= "    <TD>" . prettyDatetime($requests[$i]["daterequested"], 1) . "</TD>\n";
+			if(! $requests[$i]['server'])
+				$text .= getViewRequestHTMLitem('requesttime', $requests[$i]['daterequested']);
+
+			# print server request details
+			if($requests[$i]['server']) {
+				$data = array('owner' => getUserUnityID($requests[$i]['userid']),
+				              'requesttime' => $requests[$i]['daterequested'],
+				              'admingroup' => $requests[$i]['serveradmingroup'],
+				              'logingroup' => $requests[$i]['serverlogingroup'],
+				              'image' => $requests[$i]['prettyimage'],
+				              'starttime' => $requests[$i]['start']);
+				$text .= getViewRequestHTMLitem('serverdetails', $requests[$i]['id'], $data);
+			}
 
 			if(checkUserHasPerm('View Debug Information')) {
 				if(! is_null($requests[$i]['vmhostid'])) {
@@ -1155,19 +1063,19 @@ function viewRequests() {
 					$row = mysql_fetch_assoc($qh);
 					$vmhost = $row['hostname'];
 				}
-				$text .= "    <TD align=center><span id=\"req{$requests[$i]['id']}\">";
-				$text .= "{$requests[$i]["id"]}</span>\n";
+				$text .= "    <TD align=center><a id=\"req{$requests[$i]['id']}\" ";
+				$text .= "tabindex=0>{$requests[$i]["id"]}</a>\n";
 				$text .= "<div dojoType=\"vcldojo.HoverTooltip\" connectId=\"req{$requests[$i]['id']}\">";
-				$text .= "Mgmt node: {$nodes[$requests[$i]["managementnodeid"]]['hostname']}<br>\n";
-				$text .= "Computer ID: {$requests[$i]['computerid']}<br>\n";
-				$text .= "Comp hostname: {$computers[$requests[$i]["computerid"]]["hostname"]}<br>\n";
-				$text .= "Comp IP: {$requests[$i]["IPaddress"]}<br>\n";
-				$text .= "Comp State ID: {$computers[$requests[$i]["computerid"]]["stateid"]}<br>\n";
-				$text .= "Comp Type: {$requests[$i]['comptype']}<br>\n";
+				$text .= "<strong>Mgmt node</strong>: {$nodes[$requests[$i]["managementnodeid"]]['hostname']}<br>\n";
+				$text .= "<strong>Computer ID</strong>: {$requests[$i]['computerid']}<br>\n";
+				$text .= "<strong>Comp hostname</strong>: {$computers[$requests[$i]["computerid"]]["hostname"]}<br>\n";
+				$text .= "<strong>Comp IP</strong>: {$requests[$i]["IPaddress"]}<br>\n";
+				$text .= "<strong>Comp State ID</strong>: {$computers[$requests[$i]["computerid"]]["stateid"]}<br>\n";
+				$text .= "<strong>Comp Type</strong>: {$requests[$i]['comptype']}<br>\n";
 				if(! is_null($requests[$i]['vmhostid']))
-					$text .= "VM Host: $vmhost<br>\n";
-				$text .= "Current State ID: {$requests[$i]["currstateid"]}<br>\n";
-				$text .= "Last State ID: {$requests[$i]["laststateid"]}<br>\n";
+					$text .= "<strong>VM Host</strong>: $vmhost<br>\n";
+				$text .= "<strong>Current State ID</strong>: {$requests[$i]["currstateid"]}<br>\n";
+				$text .= "<strong>Last State ID</strong>: {$requests[$i]["laststateid"]}<br>\n";
 				$text .= "</div></TD>\n";
 			}
 			$text .= "  </TR>\n";
@@ -1250,11 +1158,10 @@ function viewRequests() {
 		$text .= "<table id=\"longreslisttable\" summary=\"lists server reservations you currently have\" cellpadding=5>\n";
 		$text .= "  <TR>\n";
 		$text .= "    <TD colspan=3></TD>\n";
-		$text .= "    <TH>Environment</TH>\n";
-		$text .= "    <TH>Starting</TH>\n";
+		$text .= "    <TH>Name</TH>\n";
 		$text .= "    <TH>Ending</TH>\n";
-		$text .= "    <TH>Initially requested</TH>\n";
 		$computers = getComputers();
+		$text .= "    <TH>Details</TH>\n";
 		if(checkUserHasPerm('View Debug Information'))
 			$text .= "    <TH>Req ID</TH>\n";
 		$text .= "  </TR>\n";
@@ -1284,6 +1191,7 @@ function viewRequests() {
 		$text .= "this may have caused.\n";
 	}
 
+	# TODO problem with auto refresh not happening when server load not ready due to user account?
 	$cont = addContinuationsEntry('AJviewRequests', array(), SECINDAY);
 	$text .= "<INPUT type=hidden id=resRefreshCont value=\"$cont\">\n";
 
@@ -1476,6 +1384,233 @@ function viewRequests() {
 		}
 		print "checkResGone(" . json_encode($reqids) . ");";
 		return;
+	}
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn getViewRequestHTMLitem($item, $var1, $data)
+///
+/// \param $item - name of HTML section to be generated
+/// \param $var1 - generic variable to be used in HTML
+/// \param $data - an array of any extra data to be used in HTML
+///
+/// \return a string of HTML
+///
+/// \brief generates HTML for a specific portion of the current reservations
+/// page
+///
+////////////////////////////////////////////////////////////////////////////////
+function getViewRequestHTMLitem($item, $var1='', $data=array()) {
+	$r = '';
+	if($item == 'connectbtn') {
+		$r .= "    <TD>\n";
+		$r .= "      <FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
+		$r .= "      <INPUT type=hidden name=continuation value=\"$var1\">\n";
+		$r .= "      <button type=submit dojoType=\"dijit.form.Button\">\n";
+		$r .= "      Connect!\n";
+		$r .= "      </button>\n";
+		$r .= "      </FORM>\n";
+		$r .= "    </TD>\n";
+		return $r;
+	}
+	if($item == 'deletebtn') {
+		$r .= "    <TD>\n";
+		$r .= "      <button dojoType=\"dijit.form.Button\">\n";
+		$r .= "        Delete\n";
+		$r .= "	      <script type=\"dojo/method\" event=\"onClick\">\n";
+		$r .= "          endReservation('$var1');\n";
+		$r .= "        </script>\n";
+		$r .= "      </button>\n";
+		$r .= "    </TD>\n";
+		return $r;
+	}
+	if($item == 'failedblock') {
+		$r .= "    <TD nowrap>\n";
+		$r .= "      <span class=scriptonly>\n";
+		$r .= "      <span class=compstatelink>";
+		$r .= "<a onClick=\"showResStatusPane($var1); return false;\" ";
+		$r .= "href=\"#\">Reservation failed</a></span>\n";
+		$r .= "      </span>\n";
+		$r .= "      <noscript>\n";
+		$r .= "      <span class=scriptoff>\n";
+		$r .= "      <span class=compstatelink>";
+		$r .= "Reservation failed</span>\n";
+		$r .= "      </span>\n";
+		$r .= "      </noscript>\n";
+		$r .= "    </TD>\n";
+		return $r;
+	}
+	if($item == 'removebtn') {
+		$r .= "    <TD>\n";
+		$r .= "      <button dojoType=\"dijit.form.Button\">\n";
+		$r .= "        Remove\n";
+		$r .= "	      <script type=\"dojo/method\" event=\"onClick\">\n";
+		$r .= "          removeReservation('$var1');\n";
+		$r .= "        </script>\n";
+		$r .= "      </button>\n";
+		$r .= "    </TD>\n";
+		return $r;
+	}
+	if($item == 'timeoutblock') {
+		$r .= "    <TD>\n";
+		$r .= "      <span class=compstatelink>Reservation has timed out</span>\n";
+		$r .= "    </TD>\n";
+		return $r;
+	}
+	if($item == 'pendingblock') {
+		$r .= "    <TD>\n";
+		$r .= "      <span class=scriptonly>\n";
+		$r .= "      <span class=compstatelink><i>";
+		$r .= "<a onClick=\"showResStatusPane($var1); ";
+		$r .= "return false;\" href=\"#\">Pending...</a></i></span>\n";
+		$r .= "      </span>\n";
+		$r .= "      <noscript>\n";
+		$r .= "      <span class=scriptoff>\n";
+		$r .= "      <span class=compstatelink>";
+		$r .= "<i>Pending...</i></span>\n";
+		$r .= "      </span>\n";
+		$r .= "      </noscript>\n";
+		if(! empty($data['text']))
+			$r .= "      {$data['text']}";
+		$r .= "    </TD>\n";
+		return $r;
+	}
+	if($item == 'openmoreoptions') {
+		$r .= "    <TD align=right>\n";
+		$r .= "      <div dojoType=\"dijit.form.DropDownButton\">\n";
+		$r .= "        <span>More Options...</span>\n";
+		$r .= "        <div dojoType=\"dijit.Menu\">\n";
+		return $r;
+	}
+	if($item == 'editoption') {
+		$r .= "          <div dojoType=\"dijit.MenuItem\"\n";
+		$r .= "               iconClass=\"noicon\"\n";
+		$r .= "               label=\"Edit\"\n";
+		$r .= "               onClick=\"editReservation('$var1');\">\n";
+		$r .= "          </div>\n";
+		return $r;
+	}
+	if($item == 'endcreateoption') {
+		$r .= "          <div dojoType=\"dijit.MenuItem\"\n";
+		$r .= "               iconClass=\"noicon\"\n";
+		$r .= "               label=\"End Reservation & Create Image\"\n";
+		if($data['doescape'])
+			$r .= "               onClick=\"window.location.href=\'$var1\';\">\n";
+		else
+			$r .= "               onClick=\"window.location.href='$var1';\">\n";
+		$r .= "          </div>\n";
+		return $r;
+	}
+	if($item == 'endcreateoptiondisable') {
+		$r .= "          <div dojoType=\"dijit.MenuItem\"\n";
+		$r .= "               iconClass=\"noicon\"\n";
+		$r .= "               label=\"End Reservation & Create Image\" disabled\n";
+		$r .= "          </div>\n";
+		return $r;
+	}
+	if($item == 'checkpointoption') {
+		$r .= "          <div dojoType=\"dijit.MenuItem\"\n";
+		$r .= "               iconClass=\"noicon\"\n";
+		$r .= "               label=\"Create Image\"\n";
+		if($data['doescape'])
+			$r .= "               onClick=\"window.location.href=\'$var1\';\">\n";
+		else
+			$r .= "               onClick=\"window.location.href='$var1';\">\n";
+		$r .= "          </div>\n";
+		return $r;
+	}
+	if($item == 'checkpointoptiondisable') {
+		$r .= "          <div dojoType=\"dijit.MenuItem\"\n";
+		$r .= "               iconClass=\"noicon\"\n";
+		$r .= "               label=\"Create Image\" disabled\n";
+		$r .= "          </div>\n";
+		return $r;
+	}
+	if($item == 'rebootoption') {
+		$r .= "          <div dojoType=\"dijit.MenuItem\"\n";
+		$r .= "               iconClass=\"noicon\"\n";
+		$r .= "               label=\"Reboot\">\n";
+		$r .= "	          <script type=\"dojo/method\" event=\"onClick\">\n";
+		$r .= "              rebootRequest('$var1');\n";
+		$r .= "            </script>\n";
+		$r .= "          </div>\n";
+		return $r;
+	}
+	if($item == 'rebootoptiondisable') {
+		$r .= "          <div dojoType=\"dijit.MenuItem\"\n";
+		$r .= "               iconClass=\"noicon\"\n";
+		$r .= "               label=\"Reboot\" disabled>\n";
+		$r .= "          </div>\n";
+		return $r;
+	}
+	if($item == 'reinstalloption') {
+		$r .= "          <div dojoType=\"dijit.MenuItem\"\n";
+		$r .= "               iconClass=\"noicon\"\n";
+		$r .= "               label=\"Reinstall\">\n";
+		$r .= "	          <script type=\"dojo/method\" event=\"onClick\">\n";
+		$r .= "              reinstallRequest('$var1');\n";
+		$r .= "            </script>\n";
+		$r .= "          </div>\n";
+		return $r;
+	}
+	if($item == 'reinstalloptiondisable') {
+		$r .= "          <div dojoType=\"dijit.MenuItem\"\n";
+		$r .= "               iconClass=\"noicon\"\n";
+		$r .= "               label=\"Reinstall\" disabled>\n";
+		$r .= "          </div>\n";
+		return $r;
+	}
+	if($item == 'imagename') {
+		$r .= "    <TD>" . str_replace("'", "&#39;", $var1);
+		if($data['addtest'])
+			$r .= " (Testing)";
+		$r .= "</TD>\n";
+		return $r;
+	}
+	if($item == 'starttime') {
+		if(datetimeToUnix($data['start']) < datetimeToUnix($data['requested']))
+			$r .= "    <TD>" . prettyDatetime($data['requested'], 1) . "</TD>\n";
+		else
+			$r .= "    <TD>" . prettyDatetime($data['start'], 1) . "</TD>\n";
+		return $r;
+	}
+	if($item == 'endtime') {
+		if($data['end'] == '2038-01-01 00:00:00')
+			$r .= "    <TD>(none)</TD>\n";
+		else
+			$r .= "    <TD>" . prettyDatetime($data['end'], 1) . "</TD>\n";
+		return $r;
+	}
+	if($item == 'requesttime') {
+		$r .= "    <TD>" . prettyDatetime($var1, 1) . "</TD>\n";
+		return $r;
+	}
+	if($item == 'servername') {
+		$r .= "    <TD>$var1</TD>\n";
+		return $r;
+	}
+	if($item == 'serverdetails') {
+		$r .= "<TD>\n";
+		$r .= "<a id=\"serverdetails$var1\" tabindex=0>";
+		$r .= "<img alt=\"details\" src=\"images/list.gif\"></a>\n";
+		$r .= "<div dojoType=\"vcldojo.HoverTooltip\" connectId=\"";
+		$r .= "serverdetails$var1\">\n";
+		$r .= "<strong>Owner</strong>: {$data['owner']}<br>\n";
+		$r .= "<strong>Environment</strong>: {$data['image']}<br>\n";
+		$r .= "<strong>Start Time</strong>: " . prettyDatetime($data['starttime'], 1) . "<br>\n";
+		$r .= "<strong>Initially Requested</strong>: " . prettyDatetime($data['requesttime'], 1) . "<br>\n";
+		if(empty($data['admingroup']))
+			$r .= "<strong>Admin User Group</strong>: (none)<br>\n";
+		else
+			$r .= "<strong>Admin User Group</strong>: {$data['admingroup']}<br>\n";
+		if(empty($data['logingroup']))
+			$r .= "<strong>Access User Group</strong>: (none)\n";
+		else
+			$r .= "<strong>Access User Group</strong>: {$data['logingroup']}\n";
+		$r .= "</div>\n";
+		$r .= "</TD>\n";
+		return $r;
 	}
 }
 
@@ -1917,10 +2052,15 @@ function AJeditRequest() {
 	               'modifystart' => 0,
 	               'allowindefiniteend' => 0);
 	if($request['serverrequest']) {
+		if(empty($request['servername']))
+			$request['servername'] = $request['reservations'][0]['prettyimage'];
+		$h .= "Name: <input type=\"text\" name=\"servername\" id=\"servername\" ";
+		$h .= "dojoType=\"dijit.form.TextBox\" style=\"width: 400px\" ";
+		$h .= "value=\"{$request['servername']}\"><br>";
 		if($user['showallgroups'])
-			$groups = getUserGroups(1);
+			$groups = getUserGroups();
 		else
-			$groups = getUserGroups(1, $user['affiliationid']);
+			$groups = getUserGroups(0, $user['affiliationid']);
 		$h .= "Admin User Group: ";
 		if(USEFILTERINGSELECT && count($groups) < FILTERINGSELECTTHRESHOLD) {
 			$h .= "<select dojoType=\"dijit.form.FilteringSelect\" id=\"admingrpsel\" ";
@@ -2384,6 +2524,7 @@ function AJsubmitEditRequest() {
 		return;
 	}
 	$updategroups = 0;
+	$updateservername = 0;
 	if($request['serverrequest']) {
 		if($user['showallgroups'])
 			$groups = getUserGroups(1);
@@ -2400,9 +2541,30 @@ function AJsubmitEditRequest() {
 			               'cont' => $cont));
 			return;
 		}
-		if($admingroupid != $request['admingroupid'] ||
-			$logingroupid != $request['logingroupid'])
+		$testadmingroupid = $admingroupid;
+		if($admingroupid == 0)
+			$testadmingroupid = '';
+		$testlogingroupid = $logingroupid;
+		if($logingroupid == 0)
+			$testlogingroupid = '';
+		if($testadmingroupid != $request['admingroupid'] ||
+			$testlogingroupid != $request['logingroupid'])
 			$updategroups = 1;
+		$servername = processInputVar('servername', ARG_STRING);
+		if(! preg_match('/^([-a-zA-Z0-9\. ]){3,255}$/', $servername)) {
+			$cdata = getContinuationVar();
+			$cont = addContinuationsEntry('AJsubmitEditRequest', $cdata, SECINDAY, 1, 0);
+			sendJSON(array('status' => 'error',
+			               'errmsg' => "The name can only contain letters, numbers, "
+			                        .  "spaces, dashes(-), and periods(.) and can "
+			                        .  "be from 3 to 255 characters long",
+			               'cont' => $cont));
+			return;
+		}
+		if($servername != $request['servername']) {
+			$servername = mysql_real_escape_string($servername);
+			$updateservername = 1;
+		}
 	}
 
 	// get semaphore lock
@@ -2512,6 +2674,10 @@ function AJsubmitEditRequest() {
 	elseif($rc > 0) {
 		updateRequest($requestid);
 		if($updategroups) {
+			if($admingroupid == 0)
+				$admingroupid = 'NULL';
+			if($logingroupid == 0)
+				$logingroupid = 'NULL';
 			$query = "UPDATE serverrequest "
 			       . "SET admingroupid = $admingroupid, "
 			       .     "logingroupid = $logingroupid "
@@ -2520,6 +2686,12 @@ function AJsubmitEditRequest() {
 			$query = "UPDATE request "
 			       . "SET stateid = 29 "
 			       . "WHERE id = $requestid";
+			doQuery($query, 101);
+		}
+		if($updateservername) {
+			$query = "UPDATE serverrequest "
+			       . "SET name = '$servername' "
+			       . "WHERE requestid = $requestid";
 			doQuery($query, 101);
 		}
 		sendJSON(array('status' => 'success'));

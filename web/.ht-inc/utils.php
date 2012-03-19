@@ -4702,6 +4702,7 @@ function findManagementNode($compid, $start, $nowfuture) {
 /// \b test - test flag\n
 /// \b forimaging - 0 if request is normal, 1 if it is for imaging\n
 /// \b serverrequest - 0 if request is normal, 1 if it is a server request\n
+/// \b servername - name of server if server request\n
 /// \b admingroupid - id of admin user group if server request\n
 /// \b logingroupid - id of login user group if server request\n
 /// \b fixedIP - possible fixed IP address if server request\n
@@ -4803,6 +4804,7 @@ function getRequestInfo($id, $returnNULL=0) {
 		$data['passwds'][$row['reservationid']][$data['userid']] = $row['password'];
 	}
 	$query = "SELECT id, "
+	       .        "name, "
 	       .        "admingroupid, "
 	       .        "logingroupid, "
 	       .        "fixedIP, "
@@ -4812,6 +4814,7 @@ function getRequestInfo($id, $returnNULL=0) {
 	$qh = doQuery($query, 101);
 	if($row = mysql_fetch_assoc($qh)) {
 		$data['serverrequest'] = 1;
+		$data['servername'] = $row['name'];
 		$data['admingroupid'] = $row['admingroupid'];
 		$data['logingroupid'] = $row['logingroupid'];
 		$data['fixedIP'] = $row['fixedIP'];
@@ -5168,6 +5171,7 @@ function getCompFinalReservationTime($compid) {
 /// \b vmhostid - if VM, id of host's entry in vmhost table, NULL otherwise\n
 /// the following additional items if a server request (values will be NULL
 /// if not a server request), some values can be NULL:\n
+/// \b servername - name of server request\n
 /// \b serverrequestid - from server request table\n
 /// \b fixedIP - if specified for request\n
 /// \b fixedMAC - if specified for request\n
@@ -5231,6 +5235,7 @@ function getUserRequests($type, $id=0) {
 	       .        "rs.managementnodeid, "
 	       .        "rs.imagerevisionid, "
 	       .        "rq.test,"
+	       .        "sp.name AS servername, "
 	       .        "sp.requestid AS serverrequestid, "
 	       .        "sp.fixedIP, "
 	       .        "sp.fixedMAC, "

@@ -421,6 +421,8 @@ function hideEditResDlg() {
 		dijit.byId('openenddate').destroy();
 	if(dijit.byId('openendtime'))
 		dijit.byId('openendtime').destroy();
+	if(dijit.byId('servername'))
+		dijit.byId('servername').destroy();
 	if(dijit.byId('admingrpsel'))
 		dijit.byId('admingrpsel').destroy();
 	if(dijit.byId('logingrpsel'))
@@ -514,6 +516,8 @@ function submitEditReservation() {
 		var tmp = dijit.byId('day').value.match(/([0-9]{4})([0-9]{2})([0-9]{2})/);
 		var teststart = new Date(tmp[1], tmp[2] - 1, tmp[3], t.getHours(), t.getMinutes(), 0, 0);
 	}
+	if(dijit.byId('servername'))
+		data.servername = dijit.byId('servername').get('value');
 	if(dijit.byId('admingrpsel')) {
 		data.admingroupid = dijit.byId('admingrpsel').get('value');
 		data.logingroupid = dijit.byId('logingrpsel').get('value');

@@ -91,6 +91,11 @@ function deployHTML() {
 	$h .= "<div id=\"deployprofilediv\">\n";
 	$h .= "<table summary=\"\">\n";
 	$h .= "  <tr>\n";
+	$h .= "    <th align=right>Name:</th>\n";
+	$h .= "    <td><input type=\"text\" name=\"deployname\" id=\"deployname\" ";
+	$h .= "dojoType=\"dijit.form.TextBox\" style=\"width: 400px\"></td>\n";
+	$h .= "  </tr>\n";
+	$h .= "  <tr>\n";
 	$h .= "    <th align=right>Environment:</th>\n";
 	$h .= "    <td>\n";
 	$resources = getUserResources(array("imageAdmin", "imageCheckOut"));
@@ -678,6 +683,7 @@ function AJserverProfileStoreData() {
 ////////////////////////////////////////////////////////////////////////////////
 function AJdeployServer() {
 	global $user, $remoteIP;
+	$profilename = processInputVar('name', ARG_STRING);
 	$profileid = processInputVar('profileid', ARG_NUMERIC);
 	$imageid = processInputVar('imageid', ARG_NUMERIC);
 	$resources = getUserResources(array("imageAdmin", "imageCheckOut"));
@@ -689,6 +695,15 @@ function AJdeployServer() {
 		$data = array('error' => 1,
 		              'cont' => $cont,
 		              'msg' => 'You do not have access to use this environment.');
+		sendJSON($data);
+		return;
+	}
+	if(! preg_match('/^([-a-zA-Z0-9_\. ]){0,255}$/', $profilename)) {
+		$cont = addContinuationsEntry('AJdeployServer', array(), SECINDAY, 1, 0);
+		$data = array('error' => 1,
+		              'cont' => $cont,
+		              'msg' => "The name can only contain letters, numbers, spaces, dashes(-), "
+		                    . "underscores(_), and periods(.) and can be up to 255 characters long");
 		sendJSON($data);
 		return;
 	}
@@ -718,10 +733,11 @@ function AJdeployServer() {
 		return;
 	}
 	$admingroupid = processInputVar('admingroupid', ARG_NUMERIC);
-	$usergroups = getUserEditGroups($user['id']);
-	$extraadmingroups = getServerProfileGroups($user['id'], 'admin');
-	if($admingroupid != 0 && ! array_key_exists($admingroupid, $usergroups) &&
-	   ! array_key_exists($admingroupid, $extraadmingroups)) {
+	$usergroups = getUserGroups();
+	/*$usergroups = getUserEditGroups($user['id']);
+	$extraadmingroups = getServerProfileGroups($user['id'], 'admin');*/
+	if($admingroupid != 0 && ! array_key_exists($admingroupid, $usergroups) /*&&
+		! array_key_exists($admingroupid, $extraadmingroups)*/) {
 		$cont = addContinuationsEntry('AJdeployServer', array(), SECINDAY, 1, 0);
 		$data = array('error' => 1,
 		              'cont' => $cont,
@@ -730,9 +746,9 @@ function AJdeployServer() {
 		return;
 	}
 	$logingroupid = processInputVar('logingroupid', ARG_NUMERIC);
-	$extralogingroups = getServerProfileGroups($user['id'], 'login');
-	if($logingroupid != 0 && ! array_key_exists($logingroupid, $usergroups) &&
-	   ! array_key_exists($logingroupid, $extralogingroups)) {
+	#$extralogingroups = getServerProfileGroups($user['id'], 'login');
+	if($logingroupid != 0 && ! array_key_exists($logingroupid, $usergroups) /*&&
+		! array_key_exists($logingroupid, $extralogingroups)*/) {
 		$cont = addContinuationsEntry('AJdeployServer', array(), SECINDAY, 1, 0);
 		$data = array('error' => 1,
 		              'cont' => $cont,
@@ -907,8 +923,17 @@ function AJdeployServer() {
 	       . "WHERE requestid = $requestid";
 	doQuery($query);
 	$fields = array('requestid', 'serverprofileid');
-	# 	TODO test deploying server with various combinations of profile items changed
 	$values = array($requestid, $profileid);
+	if($profilename == '') {
+		$fields[] = 'name';
+		$profilename = $images[$imageid]['prettyname'];
+		$values[] = "'$profilename'";
+	}
+	else {
+		$fields[] = 'name';
+		$profilename = mysql_real_escape_string($profilename);
+		$values[] = "'$profilename'";
+	}
 	if($ipaddr != '') {
 		$fields[] = 'fixedIP';
 		$values[] = "'$ipaddr'";
@@ -1090,9 +1115,9 @@ function processProfileInput() {
 		return $err;
 	}
 
-	if(! preg_match('/^([-a-zA-Z0-9\. ]){3,255}$/', $ret['name'])) {
+	if(! preg_match('/^([-a-zA-Z0-9_\. ]){3,255}$/', $ret['name'])) {
 		$err['msg'] = "The name can only contain letters, numbers, spaces, dashes(-), "
-		            . "and periods(.) and can be from 3 to 255 characters long";
+		            . "underscores(_), and periods(.) and can be from 3 to 255 characters long";
 		$err['field'] = 'name';
 		$err['error'] = 1;
 		return $err;

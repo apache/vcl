@@ -210,14 +210,19 @@ function getServerProfileDataDeployCB(data, ioArgs) {
 		alert('You do not have access to apply this server profile.');
 		return;
 	}
+	dijit.byId('deployname').set('value', data.items.name);
 	dojo.byId('appliedprofileid').value = data.items.id;
 	dijit.byId('deployimage').set('value', data.items.imageid);
 	//dijit.byId('deployfixedIP').set('value', data.items.fixedIP);
 	//dijit.byId('deployfixedMAC').set('value', data.items.fixedMAC);
-	//dijit.byId('deployadmingroup').set('value', data.items.admingroupid);
-	//dijit.byId('deploylogingroup').set('value', data.items.logingroupid);
-	dojo.byId('deployadmingroup').value = data.items.admingroupid;
-	dojo.byId('deploylogingroup').value = data.items.logingroupid;
+	if(dijit.byId('deployadmingroup'))
+		dijit.byId('deployadmingroup').set('value', data.items.admingroupid);
+	else
+		dojo.byId('deployadmingroup').value = data.items.admingroupid;
+	if(dijit.byId('deploylogingroup'))
+		dijit.byId('deploylogingroup').set('value', data.items.logingroupid);
+	else
+		dojo.byId('deploylogingroup').value = data.items.logingroupid;
 	dijit.byId('deploymonitored').set('value', parseInt(data.items.monitored));
 }
 
@@ -643,6 +648,7 @@ function submitDeploy() {
 	}
 	var data = {continuation: cont,
 	            profileid: dojo.byId('appliedprofileid').value};
+	data.name = dijit.byId('deployname').get('value');
 	if(dijit.byId('deployimage'))
 		data.imageid = dijit.byId('deployimage').get('value');
 	else
