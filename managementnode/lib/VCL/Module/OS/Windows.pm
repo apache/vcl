@@ -293,6 +293,17 @@ sub pre_capture {
 
 =item *
 
+ Enable DHCP on the private and public interfaces
+
+=cut
+
+	if (!$self->enable_dhcp()) {
+		notify($ERRORS{'WARNING'}, 0, "failed to enable DHCP");
+		return;
+	}
+
+=item *
+
  Copy the capture configuration files to the computer (scripts, utilities, drivers...)
 
 =cut
@@ -1968,6 +1979,7 @@ sub set_password {
 	# Attempt to get the username from the arguments
 	my $username = shift;
 	my $password = shift;
+	my $user_password_only = shift;
 
 	# If no argument was supplied, use the user specified in the DataStructure
 	if (!defined($username)) {
@@ -1997,6 +2009,8 @@ sub set_password {
 		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to change password to '$password' for user '$username' on $computer_node_name");
 		return 0;
 	}
+	
+	return 1 if $user_password_only;
 	
 	# Get the list of services
 	my @services = $self->get_services_using_login_id($username);
@@ -2082,6 +2096,50 @@ sub enable_user {
 
 	return 1;
 } ## end sub enable_user
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 disable_user
+
+ Parameters  : $username
+ Returns     : boolean
+ Description : Disables the user account specified by the argument.
+
+=cut
+
+sub disable_user {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $computer_node_name = $self->data->get_computer_node_name();
+	
+	# Attempt to get the username from the arguments
+	my $username = shift;
+	if (!defined($username)) {
+		notify($ERRORS{'WARNING'}, 0, "username argument was not supplied");
+		return;
+	}
+
+	# Attempt to enable the user account (set ACTIVE=NO)
+	notify($ERRORS{'DEBUG'}, 0, "disbling user $username on $computer_node_name");
+	my ($exit_status, $output) = $self->execute("net user $username /ACTIVE:NO");
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run command to disable user $username on $computer_node_name");
+		return;
+	}
+	elsif (grep(/ successfully/, @$output)) {
+		notify($ERRORS{'OK'}, 0, "user $username disabled on $computer_node_name");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to disable user $username on $computer_node_name, exit status: $exit_status, output:\n" . join("\n", @$output));
+		return;
+	}
+
+	return 1;
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -3587,7 +3645,7 @@ sub shutdown {
 	}
 	
 	# Get the argument that determines whether or not to disable DHCP before shutting down computer
-	my $disable_dhcp = shift;
+	my $enable_dhcp = shift;
 
 	my $management_node_keys = $self->data->get_management_node_keys();
 	my $computer_node_name   = $self->data->get_computer_node_name();
@@ -3601,7 +3659,7 @@ sub shutdown {
 	
 	my $shutdown_command = "/bin/cygstart.exe \$SYSTEMROOT/system32/cmd.exe /c \"";
 	
-	if ($disable_dhcp) {
+	if ($enable_dhcp) {
 		notify($ERRORS{'DEBUG'}, 0, "enabling DHCP and shutting down $computer_node_name");
 		
 		my $private_interface_name = $self->get_private_interface_name();
@@ -5691,30 +5749,43 @@ sub enable_dhcp {
 	else {
 		push(@interface_names, $interface_name_argument);
 	}
-
+	
+	# Delete cached network configuration information so it is retrieved next time it is needed
+	delete $self->{network_configuration};
+	
+	# Delete any default routes
+	$self->delete_default_routes();
+	
 	for my $interface_name (@interface_names) {
 		# Use netsh.exe to set the NIC to use DHCP
-		my $set_dhcp_command = $system32_path . '/netsh.exe interface ip set address name="' . $interface_name . '" source=dhcp';
+		my $set_dhcp_command;
+		$set_dhcp_command .= "$system32_path/ipconfig.exe /release \"$interface_name\" 2>&1";
+		$set_dhcp_command .= " ; $system32_path/netsh.exe interface ip set address name=\"$interface_name\" source=dhcp 2>&1";
+		$set_dhcp_command .= " ; $system32_path/netsh.exe interface ip set dns name=\"$interface_name\" source=dhcp register=none 2>&1";
+		
 		my ($set_dhcp_status, $set_dhcp_output) = run_ssh_command($computer_node_name, $management_node_keys, $set_dhcp_command);
-		if (defined($set_dhcp_status) && $set_dhcp_status == 0) {
-			notify($ERRORS{'OK'}, 0, "set interface '$interface_name' to use dhcp");
+		if (!defined($set_dhcp_output)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to execute command to enable DHCP for interface '$interface_name'");
+			return 0;
 		}
-		elsif (defined($set_dhcp_output) && grep(/dhcp is already enabled/i, @{$set_dhcp_output})) {
-			notify($ERRORS{'OK'}, 0, "dhcp is already enabled on interface '$interface_name'");
-		}
-		elsif (defined($set_dhcp_status)) {
-			notify($ERRORS{'WARNING'}, 0, "unable to set interface '$interface_name' to use dhcp, exit status: $set_dhcp_status, output:\n@{$set_dhcp_output}");
+		elsif ($set_dhcp_status ne '0') {
+			notify($ERRORS{'WARNING'}, 0, "failed to enable DHCP for interface '$interface_name', exit status: $set_dhcp_status, output:\n" . join("\n", @$set_dhcp_output));
 			return 0;
 		}
 		else {
-			notify($ERRORS{'WARNING'}, 0, "unable to run ssh command to set interface '$interface_name' to use dhcp");
-			return 0;
+			notify($ERRORS{'OK'}, 0, "enabled DHCP for interface '$interface_name', exit status: $set_dhcp_status, output:\n" . join("\n", @$set_dhcp_output));
+		}
+		
+		# Run ipconfig /renew
+		if (!$self->ipconfig_renew()) {
+			return;
 		}
 	} ## end for my $interface_name (@interface_names)
 	
-	# Run ipconfig /renew after setting the adapters to use DHCP
-	# The default gateway gets lost otherwise
-	return $self->ipconfig_renew();
+	# Add persistent static public default route
+	$self->set_public_default_route();
+	
+	return 1;
 } ## end sub enable_dhcp
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -5734,7 +5805,6 @@ sub ipconfig_renew {
 		return;
 	}
 
-	my $management_node_keys = $self->data->get_management_node_keys();
 	my $computer_node_name   = $self->data->get_computer_node_name();
 	my $system32_path        = $self->get_system32_path() || return;
 	
@@ -5746,24 +5816,30 @@ sub ipconfig_renew {
 		$ipconfig_command .= " \"$interface_name_argument\"";
 	}
 	
-	# Run ipconfig
-	my ($ipconfig_status, $ipconfig_output) = run_ssh_command($computer_node_name, $management_node_keys, $ipconfig_command);
-	if (defined($ipconfig_status) && $ipconfig_status == 0) {
-		notify($ERRORS{'OK'}, 0, "ran ipconfig /renew");
+	# Undefined previously retrieved network configuration so that it is retrieved again
+	$self->{network_configuration} = undef;
+	
+	my $attempt_limit = 3;
+	my $attempt = 0;
+	
+	while ($attempt < $attempt_limit) {
+		$attempt++;
 		
-		# Undefined previously retrieved network configuration so that it is retrieved again
-		$self->{network_configuration} = undef;
-	}
-	elsif (defined($ipconfig_status)) {
-		notify($ERRORS{'WARNING'}, 0, "unable to run ipconfig /renew, exit status: $ipconfig_status, output:\n@{$ipconfig_output}");
-		return 0;
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "unable to run ssh command to to run ipconfig /renew");
-		return 0;
+		# Run ipconfig
+		my ($ipconfig_status, $ipconfig_output) = $self->execute($ipconfig_command, 1, 65);
+		if (!defined($ipconfig_output)) {
+			notify($ERRORS{'WARNING'}, 0, "attempt $attempt/$attempt_limit: failed to execute command to renew IP configuration");
+		}
+		elsif ($ipconfig_status ne '0' || grep(/error occurred/i, @$ipconfig_output) || !grep(/IP Address/i, @$ipconfig_output)) {
+			notify($ERRORS{'WARNING'}, 0, "attempt $attempt/$attempt_limit: failed to renew IP configuration, exit status: $ipconfig_status, output:\n" . join("\n", @$ipconfig_output));
+		}
+		else {
+			notify($ERRORS{'OK'}, 0, "renewed IP configuration, output:\n" . join("\n", @$ipconfig_output));
+			return 1;
+		}
 	}
 	
-	return 1;
+	return;
 } 
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -7083,7 +7159,7 @@ sub get_installed_applications {
 
 	# Attempt to query the registry for installed applications
 	my $reg_query_command = $system32_path . '/reg.exe QUERY "HKLM\Software\Microsoft\Windows\CurrentVersion\Uninstall" /s';
-	my ($reg_query_exit_status, $reg_query_output) = run_ssh_command($computer_node_name, $management_node_keys, $reg_query_command, '', '', 1);
+	my ($reg_query_exit_status, $reg_query_output) = run_ssh_command($computer_node_name, $management_node_keys, $reg_query_command, '', '', 0);
 	if (defined($reg_query_exit_status) && $reg_query_exit_status == 0) {
 		notify($ERRORS{'DEBUG'}, 0, "queried Uninstall registry keys");
 	}
@@ -8054,67 +8130,34 @@ EOF
 		notify($ERRORS{'OK'}, 0, "attempting to set static public IP address on $computer_name:\n$configuration_info_string");
 	}
 	
-	# Set the static public IP address
-	my $address_command = "$system32_path/netsh.exe interface ip set address name=\"$interface_name\" source=static addr=$ip_address mask=$subnet_mask gateway=$default_gateway gwmetric=0";
-	
-	# Set number of attempts to try netsh.exe commands
-	my $max_attempts = 3;
-	my $address_attempts = 0;
-	while ($address_attempts < $max_attempts) {
-		$address_attempts++;
-		my ($address_exit_status, $address_output) = run_ssh_command($computer_node_name, $management_node_keys, $address_command);
-		if (defined($address_exit_status) && $address_exit_status == 0) {
-			notify($ERRORS{'DEBUG'}, 0, "set static public IP address to $ip_address");
-			last;
-		}
-		elsif (defined($address_exit_status)) {
-			notify($ERRORS{'WARNING'}, 0, "attempt $address_attempts/$max_attempts: failed to set static public IP address to $ip_address, exit status: $address_exit_status, output:\n@{$address_output}");
-		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "attempt $address_attempts/$max_attempts: failed to run ssh command to set static public IP address to $ip_address");
-		}
-		
-		# Check if max attempts has been reached.
-		if ($address_attempts >= $max_attempts) {
-			notify($ERRORS{'WARNING'}, 0, "failed to set static public IP address after making $address_attempts attempts");
-			return 0;
-		}
-		
-		sleep 2;
-	}
-	
 	my $primary_dns_server_address = shift @dns_servers;
 	notify($ERRORS{'DEBUG'}, 0, "primary DNS server address: $primary_dns_server_address\nalternate DNS server address(s):\n" . (join("\n", @dns_servers) || '<none>'));
 	
+	# Delete any default routes
+	$self->delete_default_routes();
+	
+	# Set the static public IP address
+	my $command = "$system32_path/netsh.exe interface ip set address name=\"$interface_name\" source=static addr=$ip_address mask=$subnet_mask gateway=$default_gateway gwmetric=0";
+	
 	# Set the static DNS server address
-	my $dns_command = "$system32_path/netsh.exe interface ip set dns name=\"$interface_name\" source=static addr=$primary_dns_server_address register=none";
-	my ($dns_exit_status, $dns_output) = run_ssh_command($computer_node_name, $management_node_keys, $dns_command);
-	if (!defined($dns_output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to set static primary DNS server address to $primary_dns_server_address");
+	$command .= " && $system32_path/netsh.exe interface ip set dns name=\"$interface_name\" source=static addr=$primary_dns_server_address register=none";
+	
+	# Add commands to set the alternate DNS server addresses
+	for my $alternate_dns_server_address (@dns_servers) {
+		$command .= " && $system32_path/netsh.exe interface ip add dns name=\"$interface_name\" addr=$alternate_dns_server_address";
+	}
+	
+	my ($exit_status, $output) = $self->execute($command, 1, 60, 3);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to set static public IP address");
 		return;
 	}
-	elsif ($dns_exit_status) {
-		notify($ERRORS{'WARNING'}, 0, "failed to set static primary DNS server address to $primary_dns_server_address, exit status: $dns_exit_status, output:\n@{$dns_output}");
-		return 0;
+	elsif ($exit_status ne '0') {
+		notify($ERRORS{'WARNING'}, 0, "failed to set static public IP address, exit status: $exit_status, output:\n" . join("\n", @$output));
+		return;
 	}
 	else {
-		notify($ERRORS{'DEBUG'}, 0, "set static primary DNS server address to $primary_dns_server_address");
-	}
-	
-	
-	# We are only going to set up alternate dns server		
-	for my $alternate_dns_server_address (@dns_servers) {
-		my $alternate_dns_command = "$system32_path/netsh.exe interface ip add dns name=\"$interface_name\" addr=$alternate_dns_server_address";
-		my ($alternate_dns_exit_status, $alternate_dns_output) = run_ssh_command($computer_node_name, $management_node_keys, $dns_command);
-		if (!defined($alternate_dns_output)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to set static alternate DNS server address to $alternate_dns_server_address");
-		}
-		elsif ($alternate_dns_exit_status) {
-			notify($ERRORS{'WARNING'}, 0, "failed to set static alternate DNS server address to $alternate_dns_server_address, exit status: $alternate_dns_exit_status, output:\n" . join("\n", @$alternate_dns_output));
-		}
-		else {
-			notify($ERRORS{'DEBUG'}, 0, "set static alternate DNS server address to $alternate_dns_server_address");
-		}
+		notify($ERRORS{'OK'}, 0, "set static public IP address");
 	}
 	
 	# Add persistent static public default route
@@ -8220,16 +8263,16 @@ sub set_public_default_route {
 	# Add a persistent route to the public default gateway
 	my $route_add_command    = "route -p ADD 0.0.0.0 MASK 0.0.0.0 $default_gateway METRIC 1";
 	my ($route_add_exit_status, $route_add_output) = run_ssh_command($computer_node_name, $management_node_keys, $route_add_command);
-	if (defined($route_add_exit_status) && $route_add_exit_status == 0) {
-		notify($ERRORS{'OK'}, 0, "added persistent route to public default gateway: $default_gateway");
+	if (!defined($route_add_output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to add persistent route to public default gateway: $default_gateway");
+		return;
 	}
-	elsif (defined($route_add_exit_status)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to add persistent route to public default gateway: $default_gateway, exit status: $route_add_exit_status, output:\n@{$route_add_output}");
+	elsif ($route_add_exit_status ne '0' || grep(/failed/i, @$route_add_output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to add persistent route to public default gateway: $default_gateway, exit status: $route_add_exit_status, output:\n" . join("\n", @$route_add_output));
 		return;
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to add persistent route to public default gateway: $default_gateway");
-		return;
+		notify($ERRORS{'OK'}, 0, "added persistent route to public default gateway: $default_gateway");
 	}
 	
 	return 1;
@@ -10857,47 +10900,207 @@ sub run_script {
 	
 	# Determine the script name
 	my ($script_name, $script_directory_path, $script_extension) = fileparse($script_path, qr/\.[^.]*/);
-	
-	notify($ERRORS{'DEBUG'}, 0, "script name: '$script_name', directory: '$script_directory_path', extension: '$script_extension'");
+	(my $script_path_escaped = $script_path) =~ s/( )/\^$1/g;
 	
 	# Get the node configuration directory, make sure it exists, create if necessary
 	my $node_log_directory = $self->get_node_configuration_directory() . '/Logs';
-	if (!$self->create_directory($node_log_directory)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to create node log file directory: $node_log_directory");
-		return;
-	}
 	
 	# Assemble the log file path
 	my $log_file_path = $node_log_directory . "/$script_name.log";
 	
-	# Assemble the command
-	my $command;
-	$command .= "chmod +rx \"$script_path\"";
-	$command .= "&& echo \"" . '=' x 80 . "\" >> \"$log_file_path\"";
-	
 	my $timestamp = makedatestring();
-	$command .= "&& echo \"$timestamp - $script_path executed by vcld\" >> \"$log_file_path\"";
 	
-	$command .= "&& \"$script_path\" >> \"$log_file_path\" 2>&1";
+	# Assemble the command
+	my $command = "cmd.exe /c \"$script_path_escaped & exit %ERRORLEVEL%\"";
 	
 	# Execute the command
+	notify($ERRORS{'DEBUG'}, 0, "executing command: '$command'");
 	my ($exit_status, $output) = $self->execute($command);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute script on $computer_node_name: '$script_path', command: '$command'");
 		return;
 	}
 	
-	# Format the line breaks in the log file for the OS
-	$self->format_text_file($log_file_path);
+	# Create a log file containing the output
+	my $logfile_contents = "$timestamp - $script_path executed by vcld";
+	my $header_line_length = length($logfile_contents);
+	$logfile_contents = '=' x $header_line_length . "\r\n$logfile_contents\r\n" . '=' x $header_line_length . "\r\n";
+	$logfile_contents .= join("\r\n", @$output) . "\r\n";
+	$self->create_text_file($log_file_path, $logfile_contents, 1);
 	
 	if ($exit_status == 0) {
-		notify($ERRORS{'OK'}, 0, "successfully executed script on $computer_node_name: '$script_path', output saved to '$log_file_path'");
+		notify($ERRORS{'OK'}, 0, "successfully executed script on $computer_node_name: '$script_path', output saved to '$log_file_path', command:\n$command, output:\n" . join("\n". @$output));
 		return 1;
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "script '$script_path' returned a non-zero exit status: $exit_status, output saved to '$log_file_path'\ncommand: '$command'\noutput:\n" . join("\n", @$output));
+		notify($ERRORS{'WARNING'}, 0, "script '$script_path' returned a non-zero exit status: $exit_status\nlogfile path: '$log_file_path'\ncommand: '$command'\noutput:\n" . join("\n", @$output));
 		return 0;
 	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 run_scripts
+
+ Parameters  : $stage
+ Returns     : boolean
+ Description : Runs scripts on the computer intended for the state specified by
+               the argument. The stage argument may be any of the following:
+               -pre_capture
+               -post_load
+               -post_reserve
+               
+               Scripts are stored in various directories under tools matching
+               the OS of the image being loaded. For example, scripts residing
+               in any of the following directories would be executed if the
+               stage argument is 'post_load' and the OS of the image being
+               loaded is Windows XP 32-bit:
+               -tools/Windows/Scripts/post_load
+               -tools/Windows/Scripts/post_load/x86
+               -tools/Windows_Version_5/Scripts/post_load
+               -tools/Windows_Version_5/Scripts/post_load/x86
+               -tools/Windows_XP/Scripts/post_load
+               -tools/Windows_XP/Scripts/post_load/x86
+               
+               The order the scripts are executed is determined by the script
+               file names. The directory where the script resides has no affect
+               on the order. Script files can be named beginning with a number.
+               The scripts sorted numerically and processed from the lowest
+               number to the highest:
+               -1.cmd
+               -50.cmd
+               -100.cmd
+               
+               Scripts which do not begin with a number are sorted
+               alphabetically and processed after any scripts which begin with a
+               number:
+               -1.cmd
+               -50.cmd
+               -100.cmd
+               -Blah.cmd
+               -foo.cmd
+
+=cut
+
+sub run_scripts {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a VCL::Module:: module object method");
+		return;
+	}
+	
+	# Get the stage argument
+	my $stage = shift;
+	if (!$stage) {
+		notify($ERRORS{'WANING'}, 0, "unable to run scripts, stage argument was not supplied");
+		return;
+	}
+	elsif ($stage !~ /(pre_capture|post_load|post_reserve)/) {
+		notify($ERRORS{'WANING'}, 0, "invalid stage argument was supplied: $stage");
+		return;
+	}
+	
+	my $computer_node_name = $self->data->get_computer_node_name();
+	
+	my @source_configuration_directories = $self->get_source_configuration_directories();
+	if (!@source_configuration_directories) {
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve source configuration directories");
+		return;
+	}
+	
+	my $architecture = $self->is_64_bit() ? 'x86_64' : 'x86';
+	
+	# Find any script files already on the computer residing in the Scripts/<stage> directory
+	my $computer_directory_path = "$NODE_CONFIGURATION_DIRECTORY/Scripts/$stage";
+	my $computer_files = $self->find_files($computer_directory_path, '*');
+
+	my $mn_files = {};
+	
+	# Loop through the directories on the management node
+	DIRECTORY: for my $source_configuration_directory (@source_configuration_directories) {
+		# Find script files on the managment node intended for the computer
+		my $mn_directory_path = "$source_configuration_directory/Scripts/$stage";
+		my $mn_directory_files = $self->mn_os->find_files($mn_directory_path, '*');
+		
+		# Loop through the files found on the management node
+		MN_FILE: for my $mn_file_path (keys(%$mn_directory_files)) {
+			# Determine the relative path - this is used to match up files on the MN and files on the computer
+			# The base directories differ but the path proceeding 'Scripts' is the same
+			# Example:
+			#    MN file path:       /usr/local/vcl/tools/Windows_Version_5/Scripts/post_load/x86/myscript.cmd
+			#    Relative file path:                                                          x86/myscript.cmd
+			#    Computer file path:                C:/cygwin/home/root/VCL/Scripts/post_load/x86/myscript.cmd
+			my ($relative_file_path) = $mn_file_path =~ /$mn_directory_path\/(.+)/;
+			
+			# Add the file to the hash containing all script files found in all directories
+			# This is used later to determine if any extra files exist on the computer but not on the MN
+			$mn_files->{$relative_file_path} = $mn_directory_files->{$mn_file_path};
+			
+			# Check if the script file resides in an architecture-specific directory (/x86*/) not matching the architecture of the computer
+			if ($relative_file_path !~ /^$architecture\// && $relative_file_path =~ /^x86/) {
+				notify($ERRORS{'DEBUG'}, 0, "ignoring file intended for different computer architecture: $mn_file_path");
+				next MN_FILE;
+			}
+			
+			# Retrieve the checksum of the file on the management node from the file info returned by find_files
+			my $mn_file_checksum = $mn_directory_files->{$mn_file_path}{checksum};
+			
+			notify($ERRORS{'DEBUG'}, 0, "checking if file on management node needs to be copied to $computer_node_name: $mn_file_path");
+			
+			# Assemble the script file path on the computer
+			my $computer_file_path = "$computer_directory_path/$relative_file_path";
+			
+			# Check if the file already exists on the computer
+			if ($computer_files->{$computer_file_path}) {
+				# Check if the file already on the computer is exactly the same as the one on the MN by comparing checksums
+				my $computer_file_checksum = $computer_files->{$computer_file_path}{checksum};
+				if ($computer_file_checksum eq $mn_file_checksum) {
+					notify($ERRORS{'DEBUG'}, 0, "identical file exists on $computer_node_name: $computer_file_path");
+					next MN_FILE;
+				}
+				else {
+					notify($ERRORS{'DEBUG'}, 0, "file exists on $computer_node_name but checksum is different: $computer_file_path\n" .
+						"MN file checksum: $mn_file_checksum\n" .
+						"computer file checksum: $computer_file_checksum"
+					);
+				}
+			}
+			else {
+				notify($ERRORS{'DEBUG'}, 0, "file does not exist on $computer_node_name: $computer_file_path");
+			}
+			
+			# File either doesn't already exist on the computer or file on computer is different than file on MN
+			if (!$self->copy_file_to($mn_file_path, $computer_file_path)) {
+				notify($ERRORS{'WARNING'}, 0, "file could not be copied from management node to $computer_node_name: $mn_file_path --> $computer_file_path");
+				next MN_FILE;
+			}
+			
+			# Add the file to the hash of files on the computer
+			$computer_files->{$computer_file_path} = $mn_directory_files->{$mn_file_path};
+		}
+	}
+	
+	# Loop through all files found and/or copied to the computer
+	COMPUTER_FILE: for my $computer_file_path (sort_by_file_name(keys(%$computer_files))) {
+		my ($relative_file_path) = $computer_file_path =~ /$computer_directory_path\/(.+)/;
+		
+		# Check if file on the computer was not found on the management node
+		# If so, delete it from the computer
+		if (!defined($mn_files->{$relative_file_path})) {
+			notify($ERRORS{'DEBUG'}, 0, "file exists on $computer_node_name but not on management node: $computer_file_path");
+			$self->delete_file($computer_file_path);
+			delete($computer_files->{$computer_file_path});
+			next COMPUTER_FILE;
+		}
+		elsif ($computer_file_path !~ /\.(cmd|bat)$/i) {
+			notify($ERRORS{'DEBUG'}, 0, "file on $computer_node_name not executed because extension is not .cmd or .bat: $computer_file_path");
+			next COMPUTER_FILE;
+		}
+		
+		$self->run_script($computer_file_path);
+	}
+	
+	return 1;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -10927,7 +11130,7 @@ sub format_text_file {
 	my $computer_node_name = $self->data->get_computer_node_name();
 	
 	# Execute the command
-	my $command = "unix2dos $file_path";
+	my $command = "unix2dos \"$file_path\"";
 	my ($exit_status, $output) = $self->execute($command);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to format text file for Windows on $computer_node_name: command: '$command'");
@@ -10941,6 +11144,278 @@ sub format_text_file {
 		notify($ERRORS{'WARNING'}, 0, "failed to format text file for Windows on $computer_node_name, command: '$command'\noutput:\n" . join("\n", @$output));
 		return;
 	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_user_names
+
+ Parameters  : none
+ Returns     : array
+ Description : Retrieves the user account names which exist on the computer.
+
+=cut
+
+sub get_user_names {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $image_name = $self->data->get_image_name();
+	
+	my $command = "net user";
+	my ($exit_status, $output) = $self->execute($command);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to retrieve user info from OS");
+		return;
+	}
+	
+	my $found_dash_line;
+	my @user_names;
+	for my $line (@$output) {
+		if ($line =~ /^---/) {
+			$found_dash_line = 1;
+			next;
+		}
+		elsif (!$found_dash_line || $line =~ /command completed/) {
+			next;
+		}
+		
+		my @line_user_names = split(/[ \t]{2,}/, $line);
+		push @user_names, @line_user_names if @line_user_names;
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "retrieved user names from $image_name: " . join(", ", sort { lc($a) cmp lc($b) } @user_names));
+	return @user_names;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 check_image
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Checks the image currently loaded on the computer and updates the
+               imagerevision table if necessary.
+					Note: This feature is not complete and is not currently called.
+
+=cut
+
+sub check_image {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	#$self->data->set_variable('ignore_users', 'Administrator,cyg_server,Guest,root,sshd,HelpAssistant,SUPPORT_388945a0,ASPNET');
+	#$self->data->set_variable('disable_users', 'test');
+	
+	my $imagerevision_id = $self->data->get_imagerevision_id();
+	my $image_name = $self->data->get_image_name();
+	my $computer_node_name = $self->data->get_computer_node_name();
+	
+	# Get list of user names from loaded image
+	my @image_user_names = $self->get_user_names();
+	if (!@image_user_names) {
+		notify($ERRORS{'DEBUG'}, 0, "skipping image check, unable to retrieve user names from $computer_node_name");
+		return;
+	}
+	
+	# Get the list of reservation users - includes imagemeta users and server profile users
+	my $reservation_user_hashref = $self->data->get_reservation_users();
+	my @reservation_user_names = sort {lc($a) cmp lc($b)} (map { $reservation_user_hashref->{$_}{unityid} } (keys %$reservation_user_hashref));
+	my $reservation_user_names_regex = join("|", @reservation_user_names);
+
+	# Get list of user names which should be ignored in images (safe, normal users: Administrator, guest...)
+	my $ignore_user_names_variable = $self->data->get_variable('ignore_users') || '';
+	my @ignore_user_names = sort {lc($a) cmp lc($b)} (split(/[,;]+/, $ignore_user_names_variable));
+	my $ignore_user_names_regex = join("|", @ignore_user_names);
+	
+	# Get list of user names which should be disabled in images - known bad, unsafe
+	my $disable_user_names_variable = $self->data->get_variable('disable_users') || '';
+	my @disable_user_names = sort {lc($a) cmp lc($b)} (split(/[,;]+/, $disable_user_names_variable));
+	my $disable_user_names_regex = join("|", @disable_user_names);
+	
+	notify($ERRORS{'DEBUG'}, 0, "image users:\n" .
+			 "users on $image_name: " . join(", ", @image_user_names) . "\n" .
+			 "reservation users: " . join(", ", @reservation_user_names) . "\n" .
+			 "users which should be disabled for all images: " . join(", ", @disable_user_names) . "\n" .
+			 "users which can be ignored for all images: " . join(", ", @ignore_user_names) . "\n"
+	);
+	
+	my @image_user_names_reservation = ();
+	my @image_user_names_ignore = ();
+	my @image_user_names_report = ();
+	
+	OS_USER_NAME: for my $image_user_name (sort {lc($a) cmp lc($b)} @image_user_names) {
+		for my $disable_user_name_pattern (@disable_user_names) {
+			if ($image_user_name =~ /$disable_user_name_pattern/i) {
+				notify($ERRORS{'DEBUG'}, 0, "found user on $image_name which should be disabled: '$image_user_name' (matches pattern: '$disable_user_name_pattern')");
+				
+				my $random_password = getpw(11);
+				if (!$self->set_password($image_user_name, $random_password, 1)) {
+					notify($ERRORS{'WARNING'}, 0, "failed to set random password for user: '$image_user_name'");
+				}
+				else {
+					notify($ERRORS{'OK'}, 0, "set random password for user: '$image_user_name', '$random_password'");
+				}
+				
+				$self->disable_user($image_user_name);
+			}
+		}
+		
+		if ($image_user_name =~ /^($reservation_user_names_regex)$/i) {
+			notify($ERRORS{'DEBUG'}, 0, "ignoring reservation user on image: '$image_user_name'");
+			push @image_user_names_reservation, $image_user_name;
+		}
+		elsif ($image_user_name =~ /^($ignore_user_names_regex)$/i) {
+			notify($ERRORS{'DEBUG'}, 0, "ignoring user on image: '$image_user_name'");
+			push @image_user_names_ignore, $image_user_name;
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "reporting user on image: '$image_user_name'");
+			push @image_user_names_report, $image_user_name;
+		}
+	}
+	
+	my $firewall_state = $self->get_firewall_state();
+	
+	if (scalar(@image_user_names_report) > 0 || !$firewall_state || $firewall_state !~ /(1|yes|on|enabled)/i) {
+		notify($ERRORS{'DEBUG'}, 0, "reporting $image_name image to imagerevisioninfo table (imagerevision ID: $imagerevision_id):\n" .
+				 "firewall state: $firewall_state\n" .
+				 "reservation users found on image: " . join(", ", @image_user_names_reservation) . "\n" .
+				 "ignored users found on image: " . join(", ", @image_user_names_ignore) . "\n" .
+				 "users which might not belong on image: " . join(", ", @image_user_names_report)
+		);
+		
+		$self->update_imagerevision_info($imagerevision_id, join(",", @image_user_names_report), $firewall_state);
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 update_imagerevision_info
+
+ Parameters  : $imagerevision_id, $usernames, $firewall_enabled
+ Returns     : boolean
+ Description : Updates the imagerevisioninfo table in the database.
+
+=cut
+
+sub update_imagerevision_info {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $imagerevision_id = shift;
+	my $usernames = shift;
+	my $firewall_enabled = shift;
+	
+	if (!defined($imagerevision_id)) {
+		notify($ERRORS{'WARNING'}, 0, "imagerevision ID argument was not specified");
+		return;
+	}
+	elsif (!defined($usernames) && !defined($firewall_enabled)) {
+		notify($ERRORS{'WARNING'}, 0, "usernames or firewall_enabled argument was not specified");
+		return;
+	}
+	
+	$usernames = '' if !$usernames;
+	
+	if (!defined($firewall_enabled)) {
+		$firewall_enabled = 'unknown';
+	}
+	elsif ($firewall_enabled =~ /^(1|yes|on|enabled)$/i) {
+		$firewall_enabled = 'yes';
+	}
+	elsif ($firewall_enabled =~ /^(0|no|off|disabled)$/i) {
+		$firewall_enabled = 'no';
+	}
+	else {
+		$firewall_enabled = 'unknown';
+	}
+	
+	my $update_statement = <<EOF;
+INSERT INTO imagerevisioninfo
+(
+imagerevisionid,
+usernames,
+firewallenabled
+)
+VALUES
+(
+'$imagerevision_id',
+'$usernames',
+'$firewall_enabled'
+)
+ON DUPLICATE KEY UPDATE
+imagerevisionid=VALUES(imagerevisionid),
+usernames=VALUES(usernames),
+firewallenabled=VALUES(firewallenabled)
+EOF
+	
+	return database_execute($update_statement);
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_firewall_state
+
+ Parameters  : None
+ Returns     : If successful: string "ON" or "OFF"
+ Description : Determines if the Windows firewall is on or off.
+
+=cut
+
+sub get_firewall_state {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $computer_node_name   = $self->data->get_computer_node_name();
+	my $system32_path        = $self->get_system32_path() || return;
+	
+	# Run netsh.exe to get the state of the current firewall profile
+	my $command = "$system32_path/netsh.exe firewall show state";
+	my ($exit_status, $output) = $self->execute($command);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to retrieve firewall state");
+		return;
+	}
+	
+	# Get the lines containing 'Operational mode'
+	# Operational mode                  = Enable
+	my @mode_lines = grep(/Operational mode/i, @$output);
+	if (!@mode_lines) {
+		notify($ERRORS{'WARNING'}, 0, "unable to find 'Operational mode' line in output:\n" . join("\n", @$output));
+		return;
+	}
+	
+	# Loop through lines, if any contain "ON", return "ON"
+	for my $mode_line (@mode_lines) {
+		if ($mode_line =~ /on/i) {
+			notify($ERRORS{'OK'}, 0, "firewall state: ON");
+			return "ON";
+		}
+		elsif ($mode_line =~ /off/i) {
+			notify($ERRORS{'OK'}, 0, "firewall state: OFF");
+			return "OFF";
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "firewall state line does not contain ON or OFF: '$mode_line'");
+		}
+	}
+	
+	# No lines were found containing "ON", return "OFF"
+	notify($ERRORS{'WARNING'}, 0, "unable to determine firewall state, output:\n" . join("\n", @$output));
+	return;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
