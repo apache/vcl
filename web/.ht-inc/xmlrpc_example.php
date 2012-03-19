@@ -21,7 +21,7 @@ session_start();
 $url = "http://{$_SERVER['HTTP_HOST']}{$_SERVER['PHP_SELF']}";
 print "<a href=\"$url?state=test\">Test</a><br>\n";
 print "<a href=\"$url?state=listimages\">List Available Images</a><br>\n";
-print "<a href=\"$url?state=addrequest\">Add request for Maple 10</a><br>\n";
+print "<a href=\"$url?state=addrequest\">Add request for Test Image 1</a><br>\n";
 print "<a href=\"$url?state=requeststatus\">Get status of request</a><br>\n";
 print "<a href=\"$url?state=connectdata\">Get connection data</a><br>\n";
 print "<a href=\"$url?state=endrequest\">End request</a><br>\n";
@@ -91,7 +91,7 @@ function remoteVCLCall($method, $args) {
 	$header  = "Content-Type: text/xml\r\n";
 	$header .= "X-User: userid\r\n";    // user your userid here
 	$header .= "X-Pass: password\r\n";  // user your password here
-	$header .= "X-APIVERSION: 1";       // this is to allow for future changes to the api
+	$header .= "X-APIVERSION: 2";       // this is to allow for future changes to the api
 	$context = stream_context_create(
 		array(
 			'http' => array(
