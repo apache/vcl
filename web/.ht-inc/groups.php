@@ -149,9 +149,9 @@ function viewGroups() {
 	if($showusergrouptype)
 		print "<th field=\"prettytype\" width=\"5em\">Type</th>\n";
 	print "<th field=\"editgroup\" width=\"12em\">Editable by</th>\n";
-	print "<th field=\"initialmaxtime\" width=\"5em\">Initial Max<br>Time<br>(minutes)</th>\n";
-	print "<th field=\"totalmaxtime\" width=\"5em\">Total Max<br>Time<br>(minutes)</th>\n";
-	print "<th field=\"maxextendtime\" width=\"5.6em\">Max Extend<br>Time<br>(minutes)</th>\n";
+	print "<th field=\"initialmaxtime\" width=\"5em\" formatter=\"fmtDuration\">Initial Max<br>Time</th>\n";
+	print "<th field=\"totalmaxtime\" width=\"5em\" formatter=\"fmtDuration\">Total Max<br>Time</th>\n";
+	print "<th field=\"maxextendtime\" width=\"5.6em\" formatter=\"fmtDuration\">Max Extend<br>Time</th>\n";
 	if(checkUserHasPerm('Set Overlapping Reservation Count'))
 		print "<th field=\"overlapResCount\" width=\"6.3em\">Max<br>Overlapping<br>Reservations</th>\n";
 	print "</tr>\n";
@@ -296,6 +296,7 @@ function jsonUserGroupStore() {
 	elseif(checkUserHasPerm('Manage Federated User Groups (affiliation only)'))
 		$showfederatedaffil = 1;
 	$items = array();
+	$lengths = getReservationLengths(65535);
 	foreach($affilusergroups as $id => $group) {
 		if($group['name'] == 'None' || preg_match('/^\s*None/', $group['name']))
 			continue;
@@ -315,6 +316,12 @@ function jsonUserGroupStore() {
 			$owner = 1;
 		if(! $owner && ! $editor)
 			continue;
+		if(! array_key_exists($group['initialmaxtime'], $lengths))
+			$group['initialmaxtime'] = getReservationLengthCeiling($group['initialmaxtime']);
+		if(! array_key_exists($group['totalmaxtime'], $lengths))
+			$group['totalmaxtime'] = getReservationLengthCeiling($group['totalmaxtime']);
+		if(! array_key_exists($group['maxextendtime'], $lengths))
+			$group['maxextendtime'] = getReservationLengthCeiling($group['maxextendtime']);
 		$g = array('id' => $id,
 		           'name' => $group['name'],
 		           'owner' => $group['owner'],
@@ -323,8 +330,11 @@ function jsonUserGroupStore() {
 		           'groupaffiliation' => $group['groupaffiliation'],
 		           'groupaffiliationid' => $group['groupaffiliationid'],
 		           'initialmaxtime' => intval($group['initialmaxtime']),
+		           'initialmaxtimedisp' => $lengths[$group['initialmaxtime']],
 		           'totalmaxtime' => intval($group['totalmaxtime']),
+		           'totalmaxtimedisp' => $lengths[$group['totalmaxtime']],
 		           'maxextendtime' => intval($group['maxextendtime']),
+		           'maxextendtimedisp' => $lengths[$group['maxextendtime']],
 		           'overlapResCount' => intval($group['overlapResCount']));
 		if($group['courseroll']) {
 			$g['type'] = 'courseroll';
@@ -710,25 +720,35 @@ function editOrAddGroup($state) {
 			else
 				$groupwasnone = 1;
 			print "  <TR>\n";
-			print "    <TH align=right>Initial Max Time (minutes):</TH>\n";
-			print "    <TD><INPUT type=text name=initialmax value=\"";
-			print $data["initialmax"] . "\" maxlength=4></TD>\n";
+			print "    <TH align=right>Initial Max Time:</TH>\n";
+			print "    <TD>";
+			$lengths = getReservationLengths(65535);
+			if(! array_key_exists($data['initialmax'], $lengths))
+				$data['initialmax'] = getReservationLengthCeiling($data['initialmax']);
+			printSelectInput("initialmax", $lengths, $data['initialmax']);
+			print "    </TD>";
 			print "    <TD>";
 			printSubmitErr(INITIALMAXERR);
 			print "</TD>\n";
 			print "  </TR>\n";
 			print "  <TR>\n";
-			print "    <TH align=right>Total Max Time (minutes):</TH>\n";
-			print "    <TD><INPUT type=text name=totalmax value=\"";
-			print $data["totalmax"] . "\" maxlength=4></TD>\n";
+			print "    <TH align=right>Total Max Time:</TH>\n";
+			print "    <TD>";
+			if(! array_key_exists($data['totalmax'], $lengths))
+				$data['totalmax'] = getReservationLengthCeiling($data['totalmax']);
+			printSelectInput("totalmax", $lengths, $data['totalmax']);
+			print "    </TD>\n";
 			print "    <TD>";
 			printSubmitErr(TOTALMAXERR);
 			print "</TD>\n";
 			print "  </TR>\n";
 			print "  <TR>\n";
-			print "    <TH align=right>Max Extend Time (minutes):</TH>\n";
-			print "    <TD><INPUT type=text name=maxextend value=\"";
-			print $data["maxextend"] . "\" maxlength=4></TD>\n";
+			print "    <TH align=right>Max Extend Time:</TH>\n";
+			print "    <TD>";
+			if(! array_key_exists($data['maxextend'], $lengths))
+				$data['maxextend'] = getReservationLengthCeiling($data['maxextend']);
+			printSelectInput("maxextend", $lengths, $data['maxextend']);
+			print "    </TD>\n";
 			print "    <TD>";
 			printSubmitErr(MAXEXTENDERR);
 			print "</TD>\n";
@@ -1235,16 +1255,18 @@ function confirmEditOrAddGroup($state) {
 			print "    <TD>" . $usergroups[$data["editgroupid"]]["name"] . "</TD>\n";
 			print "  </TR>\n";
 		}
+		$lengths = getReservationLengths(65535);
 		print "  <TR>\n";
-		print "    <TH align=right>Initial Max Time (minutes):</TH>\n";
-		print "    <TD>{$data["initialmax"]}</TD>\n";
-		print "  </TR>\n";
-		print "  <TR>\n"; print "    <TH align=right>Total Max Time (minutes):</TH>\n";
-		print "    <TD>{$data["totalmax"]}</TD>\n";
+		print "    <TH align=right>Initial Max Time:</TH>\n";
+		print "    <TD>{$lengths[$data["initialmax"]]}</TD>\n";
 		print "  </TR>\n";
 		print "  <TR>\n";
-		print "    <TH align=right>Max Extend Time (minutes):</TH>\n";
-		print "    <TD>{$data["maxextend"]}</TD>\n";
+		print "    <TH align=right>Total Max Time:</TH>\n";
+		print "    <TD>{$lengths[$data["totalmax"]]}</TD>\n";
+		print "  </TR>\n";
+		print "  <TR>\n";
+		print "    <TH align=right>Max Extend Time:</TH>\n";
+		print "    <TD>{$lengths[$data["maxextend"]]}</TD>\n";
 		print "  </TR>\n";
 		if(checkUserHasPerm('Set Overlapping Reservation Count')) {
 			print "  <TR>\n";

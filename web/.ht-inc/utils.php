@@ -8709,6 +8709,38 @@ function getReservationExtenstion($length) {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
+/// \fn getReservationLengthCeiling($length)
+///
+/// \param $length - a length in minutes
+///
+/// \return a length in minutes
+///
+/// \brief gets nearest, higher length that would be in array returned by
+/// getReservationLengths
+///
+////////////////////////////////////////////////////////////////////////////////
+function getReservationLengthCeiling($length) {
+	if($length < 30)
+		return 30;
+	if($length < 45)
+		return 45;
+	if($length < 60)
+		return 60;
+	if($length < 2880) {
+		for($i = 120; $i < 2880; $i += 120) {
+			if($length < $i)
+				return $i;
+		}
+	}
+	for($i = 2880; $i <= 64800; $i += 1440) {
+		if($length < $i)
+			return $i;
+	}
+	return 64800;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
 /// \fn getResourceGroupID($groupname)
 ///
 /// \param $groupname - resource group name of the form type/name

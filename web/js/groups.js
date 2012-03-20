@@ -311,3 +311,9 @@ function doInitialScroll() {
 	var pos = dojo.position(dojo.byId('startscroll'));
 	window.scroll(pos.x, pos.y);
 }
+
+function fmtDuration(len, rowIndex, cell) {
+	var rowdata = this.grid.getItem(rowIndex);
+	var field = cell.field + 'disp';
+	return rowdata[field];
+}
