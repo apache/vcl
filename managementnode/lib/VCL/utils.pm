@@ -110,6 +110,7 @@ our @EXPORT = qw(
   format_data
   format_number
   get_affiliation_info
+  get_array_summary_string
   get_block_request_image_info
   get_caller_trace
   get_computer_current_state_name
@@ -153,6 +154,7 @@ our @EXPORT = qw(
   getpw
   getusergroupmembers
   get_user_group_member_info
+  hash_to_xml_string
   help
   hostname
   insert_reload_request
@@ -196,12 +198,12 @@ our @EXPORT = qw(
   set_managementnode_state
   setimageid
   setnextimage
-  setstaticaddress
   setup_confirm
   setup_get_array_choice
   setup_get_hash_choice
   setup_get_input_string
   setup_print_wrap
+  sort_by_file_name
   string_to_ascii
   switch_state
   switch_vmhost_id
@@ -230,6 +232,7 @@ our @EXPORT = qw(
   update_sublog_ipaddress
   write_currentimage_txt
   xmlrpc_call
+  xml_string_to_hash
 
   $CONF_FILE_PATH
   $DAEMON_MODE
@@ -603,18 +606,6 @@ sub notify {
 	# Just return if DEBUG and verbose isn't enabled
 	return if ($error == 6 && !$VERBOSE);
 
-	# Confirm sysadmin address exists
-	my $sysadmin = 0;
-	if(ref($ENV{management_node_info}) && defined($ENV{management_node_info}{SYSADMIN_EMAIL}) && $ENV{management_node_info}{SYSADMIN_EMAIL}){
-		$sysadmin = $ENV{management_node_info}{SYSADMIN_EMAIL};
-	}
-	
-	# Confirm shared mail box exists
-	my $shared_mail_box = 0;
-	if(ref($ENV{management_node_info}) && defined($ENV{management_node_info}{SHARED_EMAIL_BOX}) && $ENV{management_node_info}{SHARED_EMAIL_BOX}){
-		my $shared_mail_box = $ENV{management_node_info}{SHARED_EMAIL_BOX};
-	}
-
 	# Get the current time
 	my $currenttime = makedatestring();
 	
@@ -677,6 +668,20 @@ sub notify {
 	# Assemble an email message body if CRITICAL
 	my $body;
 	my $body_separator = '-' x 72;
+	
+	my $sysadmin = 'nobody@example.com';
+	my $shared_mail_box = 'nobody@example.com';
+	
+	if ($error == 2 || $error == 5) {
+		my $caller_trace = get_caller_trace(999);
+		if ($caller_trace !~ /get_management_node_info/) {
+			my $management_node_info = get_management_node_info();
+			if ($management_node_info) {
+				$sysadmin = $management_node_info->{SYSADMIN_EMAIL} if $management_node_info->{SYSADMIN_EMAIL};
+				$shared_mail_box = $management_node_info->{SHARED_EMAIL_BOX} if $management_node_info->{SHARED_EMAIL_BOX};
+			}
+		}
+	}
 	
 	# WARNING
 	if ($error == 1) {
@@ -1223,9 +1228,10 @@ sub mail {
 	my $localreturnpath = "-f $RETURNPATH";
 	my $mailer = Mail::Mailer->new("sendmail", $localreturnpath);
 	
-	my $shared_mail_box = 0;
-	if(ref($ENV{management_node_info}) && defined($ENV{management_node_info}{SHARED_EMAIL_BOX}) && $ENV{management_node_info}{SHARED_EMAIL_BOX}){
-		$shared_mail_box = $ENV{management_node_info}{SHARED_EMAIL_BOX};
+	my $shared_mail_box = 'nobody@example.com';
+	my $management_node_info = get_management_node_info();
+	if ($management_node_info) {
+		$shared_mail_box = $management_node_info->{SHARED_EMAIL_BOX} if $management_node_info->{SHARED_EMAIL_BOX};
 	}
 
 	if ($shared_mail_box) {
@@ -1257,233 +1263,6 @@ sub mail {
 		}
 	} ## end else [ if ($shared_mail_box)
 } ## end sub mail
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 setstaticaddress
-
- Parameters  : $node, $osname, $IPaddress
- Returns     : 1,0 -- success failure
- Description : assigns statically assigned IPaddress
-=cut
-
-sub setstaticaddress {
-	my ($node, $osname, $IPaddress, $image_os_type) = @_;
-	my ($package, $filename, $line, $sub) = caller(0);
-	notify($ERRORS{'OK'},       0, "nodename not set")  if (!defined($node));
-	notify($ERRORS{'OK'},       0, "osname not set")    if (!defined($osname));
-	notify($ERRORS{'CRITICAL'}, 0, "IPaddress not set") if (!defined($IPaddress));
-
-	my $subnetmask = $ENV{management_node_info}{PUBLIC_SUBNET_MASK};
-	my $default_gateway = $ENV{management_node_info}{PUBLIC_DEFAULT_GATEWAY}; 
-	my $dns_server	    = $ENV{management_node_info}{PUBLIC_DNS_SERVER};
-
-	#collect private address -- read hosts file only useful if running
-	# xcat setup and private addresses are listsed in the local
-	# /etc/hosts file
-	#should also store/pull private address from the database
-	my $privateIP;
-	if (open(HOSTS, "/etc/hosts")) {
-		my @hosts = <HOSTS>;
-		close(HOSTS);
-		foreach my $line (@hosts) {
-			if ($line =~ /([0-9]*.[0-9]*.[0-9]*.[0-9]*)\s+($node)/) {
-				$privateIP = $1;
-				notify($ERRORS{'OK'}, 0, "PrivateIP address for $node collected $privateIP");
-				last;
-			}
-		}
-	} ## end if (open(HOSTS, "/etc/hosts"))
-	if (!defined($privateIP)) {
-		notify($ERRORS{'WARNING'}, 0, "private IP address not found for $node, possible issue with regex");
-
-	}
-
-	my $identity = $ENV{management_node_info}{keys};
-	my @sshcmd;
-	if ($image_os_type =~ /linux/i) {
-		#create local tmp file
-		# down interface
-		#copy tmpfile to  /etc/sysconfig/network-scripts/ifcfg-eth1
-		# up interface
-		#set route for correct gateway
-		my @eth1file;
-		my $tmpfile = "/tmp/ifcfg-eth_device-$node";
-		push(@eth1file, "DEVICE=eth1\n");
-		push(@eth1file, "BOOTPROTO=static\n");
-		push(@eth1file, "IPADDR=$IPaddress\n");
-		push(@eth1file, "NETMASK=$subnetmask\n");
-		push(@eth1file, "STARTMODE=onboot\n");
-		push(@eth1file, "ONBOOT=yes\n");
-
-		#write to tmpfile
-		if (open(TMP, ">$tmpfile")) {
-			print TMP @eth1file;
-			close(TMP);
-		}
-		else {
-			#print "could not write $tmpfile $!\n";
-
-		}
-		@sshcmd = run_ssh_command($node, $identity, "/etc/sysconfig/network-scripts/ifdown eth1", "root");
-		foreach my $l (@{$sshcmd[1]}) {
-			if ($l) {
-				#potential problem
-				notify($ERRORS{'OK'}, 0, "sshcmd outpuer ifdown $node $l");
-			}
-		}
-		#copy new ifcfg-Device
-		if (run_scp_command($tmpfile, "$node:/etc/sysconfig/network-scripts/ifcfg-eth1", $identity)) {
-
-			#confirm it got there
-			undef @sshcmd;
-			@sshcmd = run_ssh_command($node, $identity, "cat /etc/sysconfig/network-scripts/ifcfg-eth1", "root");
-			my $success = 0;
-			foreach my $i (@{$sshcmd[1]}) {
-				if ($i =~ /$IPaddress/) {
-					notify($ERRORS{'OK'}, 0, "SUCCESS - copied ifcfg_eth1\n");
-					$success = 1;
-				}
-			}
-			if (unlink($tmpfile)) {
-				notify($ERRORS{'OK'}, 0, "unlinking $tmpfile");
-			}
-
-			if (!$success) {
-				notify($ERRORS{'WARNING'}, 0, "unable to copy $tmpfile to $node file ifcfg-eth1 did get updated with $IPaddress ");
-				return 0;
-			}
-		} ## end if (run_scp_command($tmpfile, "$node:/etc/sysconfig/network-scripts/ifcfg-eth1"...
-
-		#bring device up
-		undef @sshcmd;
-		@sshcmd = run_ssh_command($node, $identity, "/etc/sysconfig/network-scripts/ifup eth1", "root");
-		#should be empty
-		foreach my $l (@{$sshcmd[1]}) {
-			if ($l) {
-				#potential problem
-				notify($ERRORS{'OK'}, 0, "possible problem with ifup eth1 $l");
-			}
-		}
-		#correct route table - delete old default and add new in same line
-		undef @sshcmd;
-		@sshcmd = run_ssh_command($node, $identity, "/sbin/route del default", "root");
-		#should be empty
-		foreach my $l (@{$sshcmd[1]}) {
-			if ($l =~ /Usage:/) {
-				#potential problem
-				notify($ERRORS{'OK'}, 0, "possible problem with route del default $l");
-			}
-			if ($l =~ /No such process/) {
-				notify($ERRORS{'OK'}, 0, "$l - ok  just no default route since we downed eth device");
-			}
-		}
-
-		notify($ERRORS{'OK'}, 0, "Setting default route");
-		undef @sshcmd;
-		@sshcmd = run_ssh_command($node, $identity, "/sbin/route add default gw $default_gateway metric 0 eth1", "root");
-		#should be empty
-		foreach my $l (@{$sshcmd[1]}) {
-			if ($l =~ /Usage:/) {
-				#potential problem
-				notify($ERRORS{'OK'}, 0, "possible problem with route add default gw $default_gateway metric 0 eth1");
-			}
-			if ($l =~ /No such process/) {
-				notify($ERRORS{'CRITICAL'}, 0, "problem with $node $l add default gw $default_gateway metric 0 eth1 ");
-				return 0;
-			}
-		} ## end foreach my $l (@{$sshcmd[1]})
-
-		#correct external sshd file
-		undef @sshcmd;
-		@sshcmd = run_ssh_command($node, $identity, "cat /etc/ssh/external_sshd_config", "root");
-		foreach my $i (@{$sshcmd[1]}) {
-			if ($i =~ /No such file or directory/) {
-				notify($ERRORS{'OK'}, 0, "possible problem $i could not read $node /etc/ssh/external_sshd_config");
-				#problem
-			}
-
-			if ($i =~ s/ListenAddress (.*)/ListenAddress $IPaddress/) {
-				notify($ERRORS{'OK'}, 0, "changed Listen Address on $node");
-			}
-
-		} ## end foreach my $i (@{$sshcmd[1]})
-
-		#Write contents to tmp file
-		my $extsshtmpfile = "/tmp/extsshtmpfile$node";
-		if (open(TMPFILE, ">$extsshtmpfile")) {
-			print TMPFILE @{$sshcmd[1]};
-			close(TMPFILE);
-		}
-		else {
-			notify($ERRORS{'OK'}, 0, "could not write tmpfile $extsshtmpfile $!");
-		}
-
-		#copy back to host
-		if (run_scp_command($extsshtmpfile, "$node:/etc/ssh/external_sshd_config", $identity)) {
-			notify($ERRORS{'OK'}, 0, "success copied $extsshtmpfile to $node");
-		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "could not write copy $extsshtmpfile to $node");
-		}
-		if (unlink($extsshtmpfile)) {
-			notify($ERRORS{'OK'}, 0, "unlinking $extsshtmpfile");
-		}
-
-		#modify /etc/resolve.conf
-		my $search;
-		undef @sshcmd;
-		@sshcmd = run_ssh_command($node, $identity, "cat /etc/resolv.conf", "root");
-		foreach my $l (@{$sshcmd[1]}) {
-			chomp($l);
-			if ($l =~ /search/) {
-				$search = $l;
-			}
-		}
-		
-		
-
-		if (defined($search)) {
-			my @resolvconf;
-			push(@resolvconf, "$search\n");
-			my ($s1, $s2, $s3);
-			if ( $dns_server =~ /,/) {
-				($s1, $s2, $s3) = split(/,/, $dns_server);
-			}
-			else {
-				$s1 = $dns_server;
-			}
-			push(@resolvconf, "nameserver $s1\n");
-			push(@resolvconf, "nameserver $s2\n") if (defined($s2));
-			push(@resolvconf, "nameserver $s3\n") if (defined($s3));
-			my $rtmpfile = "/tmp/resolvconf$node";
-			if (open(RES, ">$rtmpfile")) {
-				print RES @resolvconf;
-				close(RES);
-			}
-			else {
-				notify($ERRORS{'OK'}, 0, "could not write to $rtmpfile $!");
-			}
-			#put resolve.conf  file back on node
-			notify($ERRORS{'OK'}, 0, "copying in new resolv.conf");
-			if (run_scp_command($rtmpfile, "$node:/etc/resolv.conf", $identity)) {
-				notify($ERRORS{'OK'}, 0, "SUCCESS copied new resolv.conf to $node");
-			}
-			else {
-				notify($ERRORS{'OK'}, 0, "FALIED to copied new resolv.conf to $node");
-				return 0;
-			}
-
-			if (unlink($rtmpfile)) {
-				notify($ERRORS{'OK'}, 0, "unlinking $rtmpfile");
-			}
-		} ## end if (defined($search))
-		else {
-			notify($ERRORS{'WARNING'}, 0, "pulling resolve.conf from $node failed output= @{ $sshcmd[1] }");
-		}
-	} ## end if 
-
-} ## end sub setstaticaddress
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -1575,7 +1354,7 @@ sub check_connection {
 	my $ret_val       = "no";
 
 	$dbh = getnewdbh() if !$dbh;
-	my $identity_keys = $ENV{management_node_info}{keys};
+	my $identity_keys = get_management_node_info()->{keys};
 
 	# Figure out number of loops for log messates
 	my $maximum_loops = $time_limit * 2;
@@ -1783,7 +1562,7 @@ sub isconnected {
 	notify($ERRORS{'OK'}, 0, "image_os_type not set")    if (!defined($image_os_type));
 	notify($ERRORS{'OK'}, 0, "ipaddress not set") if (!defined($ipaddress));
 
-	my $identity= $ENV{management_node_info}{keys};
+	my $identity_keys = get_management_node_info()->{keys};
 
 	my @netstat;
 	my @SSHCMD;
@@ -1798,7 +1577,7 @@ sub isconnected {
 		if ($image_os_type =~ /windows/i) {
 			#notify($ERRORS{'OK'},0,"checking $nodename $ipaddress");
 			undef @SSHCMD;
-			@SSHCMD = run_ssh_command($shortname, $identity, "netstat -an", "root", 22, 1);
+			@SSHCMD = run_ssh_command($shortname, $identity_keys, "netstat -an", "root", 22, 1);
 			foreach my $line (@{$SSHCMD[1]}) {
 				chomp($line);
 				if ($line =~ /Connection refused/) {
@@ -1818,7 +1597,7 @@ sub isconnected {
 		} ## end if ($osname =~ /win|vmwarewin/)
 		elsif ($image_os_type =~ /linux/i) {
 			undef @SSHCMD;
-			@SSHCMD = run_ssh_command($nodename, $identity, "netstat -an", "root", 22, 1);
+			@SSHCMD = run_ssh_command($nodename, $identity_keys, "netstat -an", "root", 22, 1);
 			foreach my $line (@{$SSHCMD[1]}) {
 				chomp($line);
 				if ($line =~ /Warning/) {
@@ -1844,7 +1623,7 @@ sub isconnected {
 	} ## end if ($type =~ /blade|virtualmachine/)
 	elsif ($type eq "lab") {
 		undef @SSHCMD;
-		@SSHCMD = run_ssh_command($nodename, $identity, "netstat -an", "vclstaff", 24, 1);
+		@SSHCMD = run_ssh_command($nodename, $identity_keys, "netstat -an", "vclstaff", 24, 1);
 		foreach my $line (@{$SSHCMD[1]}) {
 			chomp($line);
 			if ($line =~ /Connection refused/) {
@@ -2672,13 +2451,12 @@ sub setnextimage {
 =cut
 
 sub _getcurrentimage {
-
 	my $node = $_[0];
 	my ($package, $filename, $line, $sub) = caller(0);
 	notify($ERRORS{'WARNING'}, 0, "node is not defined") if (!(defined($node)));
 	# TODO - loop through the available ssh keys to figure out which one works
-	my $identity = $ENV{management_node_info}{keys};
-	my @sshcmd = run_ssh_command($node, $identity, "cat currentimage.txt");
+	my $identity_keys = get_management_node_info()->{keys};
+	my @sshcmd = run_ssh_command($node, $identity_keys, "cat currentimage.txt");
 	foreach my $s (@{$sshcmd[1]}) {
 		if ($s =~ /Warning: /) {
 			#need to run makesshgkh
@@ -2755,9 +2533,9 @@ sub _sshd_status {
 		return "off";
 	}
 
-	my $identity = $ENV{management_node_info}{keys};
+	my $identity_keys = get_management_node_info()->{keys};
 
-	my @sshcmd = run_ssh_command($node, $identity, "uname -s", "root");
+	my @sshcmd = run_ssh_command($node, $identity_keys, "uname -s", "root");
 	
 	return "off" if (!defined($sshcmd[0]) || !defined($sshcmd[1]) || $sshcmd[0] == 1);
 	foreach my $l (@{$sshcmd[1]}) {
@@ -2790,8 +2568,8 @@ sub _machine_os {
 		notify($ERRORS{'OK'}, 0, "ssh port not open cannot check $node OS");
 		return 0;
 	}
-	my $identity = $ENV{management_node_info}{keys};
-	my @sshcmd = run_ssh_command($node, $identity, "uname -s", "root");
+	my $identity_keys = get_management_node_info()->{keys};
+	my @sshcmd = run_ssh_command($node, $identity_keys, "uname -s", "root");
 	foreach my $l (@{$sshcmd[1]}) {
 		if ($l =~ /CYGWIN_NT-5\.1/) {
 			return "WinXp";
@@ -3036,7 +2814,7 @@ sub notify_via_wall {
 	else {
 		notify($ERRORS{'WARNING'}, 0, "could not open tmp file $!");
 	}
-	my $identity_keys = $ENV{management_node_info}{keys};
+	my $identity_keys = get_management_node_info()->{keys};
 	if ($type eq "blade") {
 		#this is only going to be rhel
 		if (run_scp_command("/tmp/wall.$hostname", "$hostname:/root/wall.txt", $identity_keys)) {
@@ -3181,8 +2959,9 @@ sub notify_via_msg {
 	notify($ERRORS{'DEBUG'}, 0, "message:\n$message");
 
 	my $command = "msg $user /TIME:180 '$message'";
-
-	if (run_ssh_command($node, $ENV{management_node_info}{keys}, $command)) {
+	
+	my $identity_keys = get_management_node_info()->{keys};
+	if (run_ssh_command($node, $identity_keys, $command)) {
 		notify($ERRORS{'OK'}, 0, "successfully sent message to Windows user $user on $node");
 		return 1;
 	}
@@ -3437,7 +3216,7 @@ sub collectsshkeys {
 	}
 
 	#what identity do we use
-	my $key = $ENV{management_node_info}{keys};
+	my $key = get_management_node_info()->{keys};
 
 	#send fetch keys flag to node
 	my @sshcmd = run_ssh_command($ipaddress, $key, "echo fetch > /home/vclstaff/clientdata; echo 1 > /home/vclstaff/flag", "vclstaff", "24");
@@ -3696,9 +3475,9 @@ sub check_uptime {
 	notify($ERRORS{'WARNING'}, $log, "type is not defined")      if (!(defined($type)));
 
 	if ($type eq "lab") {
-		my $identity = $ENV{management_node_info}{keys};
+		my $identity_keys = get_management_node_info()->{keys};
 
-		my @sshcmd = run_ssh_command($node, $identity, "uptime", "vclstaff", "24");
+		my @sshcmd = run_ssh_command($node, $identity_keys, "uptime", "vclstaff", "24");
 		my $l;
 		foreach $l (@{$sshcmd[1]}) {
 			if ($l =~ /(\s*\d*:\d*:\d*\s*up\s*)(\d*)(\s*days,)/) {
@@ -4698,11 +4477,13 @@ sub get_request_info {
 		$request_info{user}{IMid} = '';
 	}
 	
+	my $management_node_info = get_management_node_info();
+	
 	# Affiliation specific changes
 	# Check if the user's affiliation is listed in the $NOT_STANDALONE variable
 	my $not_standalone_list = "";
-	if (defined($ENV{management_node_info}{NOT_STANDALONE}) && $ENV{management_node_info}{NOT_STANDALONE}){
-		$not_standalone_list = $ENV{management_node_info}{NOT_STANDALONE};
+	if ($management_node_info && $management_node_info->{NOT_STANDALONE}){
+		$not_standalone_list = $management_node_info->{NOT_STANDALONE};
 	} 
 	if (grep(/$request_info{user}{affiliation}{name}/, split(/,/, $not_standalone_list))) {
 		#notify($ERRORS{'DEBUG'}, 0, "non-standalone affiliation found: $request_info{user}{affiliation}{name}");
@@ -4867,10 +4648,10 @@ sub get_request_info {
 		# Set the image identity file path
 		my $imagerevision_imagename = $request_info{reservation}{$reservation_id}{imagerevision}{imagename};
 		my $image_os_type = $request_info{reservation}{$reservation_id}{image}{OS}{type};
-
-		my $identity_file_path = $ENV{management_node_info}{keys};
+		
+		my $identity_file_path = $management_node_info->{keys};
 		$request_info{reservation}{$reservation_id}{image}{IDENTITY} = $identity_file_path;
-
+		
 		# Set some non-database defaults
 		# All data ever added to the hash should be initialized here
 		$request_info{reservation}{$reservation_id}{READY}                  = '0';
@@ -5099,6 +4880,7 @@ sub get_image_info {
 		'platform',
 		'OS',
 		'OStype',
+		'imagetype',
 		'module',
 	);
 	
@@ -5123,13 +4905,15 @@ image,
 platform,
 OS,
 OStype,
+imagetype,
 module
 
 WHERE
 platform.id = image.platformid
 AND OS.id = image.OSid
-AND module.id = OS.moduleid
 AND OS.type = OStype.name
+AND image.imagetypeid = imagetype.id
+AND module.id = OS.moduleid
 AND 
 EOF
 	
@@ -5275,11 +5059,11 @@ EOF
 
 
 sub get_production_imagerevision_info {
-	my ($image_id) = @_;
+	my ($image_identifier) = @_;
 
 	# Check the passed parameter
-	if (!defined($image_id)) {
-		notify($ERRORS{'WARNING'}, 0, "image ID was not specified");
+	if (!defined($image_identifier)) {
+		notify($ERRORS{'WARNING'}, 0, "imagerevision identifier argument was not specified");
 		return;
 	}
 	
@@ -5289,20 +5073,28 @@ id
 FROM
 imagerevision
 WHERE
-imageid = '$image_id'
-AND production = '1'
+imagerevision.production = '1'
+AND 
 EOF
+
+	# Check input value - complete select_statement
+	if($image_identifier =~ /^\d/){
+		$select_statement .= "imagerevision.imageid = '$image_identifier'";
+	}
+	else{
+		$select_statement .= "imagerevision.imagename = \'$image_identifier\'";
+	}
 
 	# Call the database select subroutine
 	my @selected_rows = database_select($select_statement);
 
 	# Check to make sure 1 row was returned
 	if (!@selected_rows) {
-		notify($ERRORS{'WARNING'}, 0, "production imagerevision for image $image_id was not found in the database, 0 rows were returned");
+		notify($ERRORS{'WARNING'}, 0, "production imagerevision for image '$image_identifier' was not found in the database, 0 rows were returned, select statement:\n$select_statement");
 		return;
 	}
 	elsif (scalar @selected_rows > 1) {
-		notify($ERRORS{'WARNING'}, 0, "" . scalar @selected_rows . " rows were returned from database select");
+		notify($ERRORS{'WARNING'}, 0, "" . scalar @selected_rows . " rows were returned from database select statement:\n$select_statement");
 		return;
 	}
 
@@ -5436,7 +5228,7 @@ sub get_default_imagemeta_info {
  Parameters  : $vmhost_id
  Returns     : Hash reference
  Description : Retrieves info from the database for the vmhost, vmprofile, and
-               vmtype.
+               repository and datastore imagetypes.
 
 =cut
 
@@ -5453,20 +5245,22 @@ sub get_vmhost_info {
 	# Get a hash ref containing the database column names
 	my $database_table_columns = get_database_table_columns();
 	
-	my @tables = (
-		'vmhost',
-		'vmprofile',
-		'vmtype',
+	my %tables = (
+		'vmhost' => 'vmhost',
+		'vmprofile' => 'vmprofile',
+		'repositoryimagetype' => 'imagetype',
+		'datastoreimagetype' => 'imagetype',
 	);
 	
 	# Construct the select statement
 	my $select_statement = "SELECT\n";
 	
 	# Get the column names for each table and add them to the select statement
-	for my $table (@tables) {
-		my @columns = @{$database_table_columns->{$table}};
+	for my $table_alias (keys %tables) {
+		my $table_name = $tables{$table_alias};
+		my @columns = @{$database_table_columns->{$table_name}};
 		for my $column (@columns) {
-			$select_statement .= "$table.$column AS '$table-$column',\n";
+			$select_statement .= "$table_alias.$column AS '$table_alias-$column',\n";
 		}
 	}
 	
@@ -5478,12 +5272,14 @@ sub get_vmhost_info {
 FROM
 vmhost,
 vmprofile,
-vmtype
+imagetype repositoryimagetype,
+imagetype datastoreimagetype
 
 WHERE
 vmhost.id = '$vmhost_id'
 AND vmprofile.id = vmhost.vmprofileid
-AND vmtype.id = vmprofile.vmtypeid
+AND vmprofile.repositoryimagetypeid = repositoryimagetype.id
+AND vmprofile.datastoreimagetypeid = datastoreimagetype.id
 EOF
 
 	# Call the database select subroutine
@@ -5514,11 +5310,8 @@ EOF
 		
 		# Add the values for the vmhost table to the hash
 		# Add values for other tables under separate keys
-		if ($table eq $tables[0]) {
+		if ($table eq 'vmhost') {
 			$vmhost_info->{$column} = $value;
-		}
-		elsif ($table eq 'vmtype') {
-			$vmhost_info->{vmprofile}{$table}{$column} = $value;
 		}
 		else {
 			$vmhost_info->{$table}{$column} = $value;
@@ -5624,9 +5417,9 @@ sub run_ssh_command {
 	$user = "root" if (!$user);
 	$port = 22 if (!$port);
 	$timeout_seconds = 0 if (!$timeout_seconds);
-	$identity_paths = $ENV{management_node_info}{keys} if (!defined $identity_paths || length($identity_paths) == 0);
+	$identity_paths = get_management_node_info()->{keys} if (!defined $identity_paths || length($identity_paths) == 0);
 	
-#return VCL::Module::OS::execute($node, $command, $output_level, $timeout_seconds, $max_attempts, $port, $user);
+#return VCL::Module::OS::execute_new($node, $command, $output_level, $timeout_seconds, $max_attempts, $port, $user);
 	
 	# TODO: Add ssh path to config file and set global variable
 	# Locate the path to the ssh binary
@@ -6222,27 +6015,30 @@ sub get_management_node_info {
 	# If argument was not passed, assume management node is this machine
 	my $management_node_identifier = shift;
 	
-	# Get the hostname of the computer this is running on
-	my $hostname = (hostname())[0];
-		
+	# If a management node identifier argument wasn't specified get the hostname of this management node
 	if (!$management_node_identifier) {
-		$management_node_identifier = $hostname;
+		$management_node_identifier = (hostname())[0];
+	}
+	
+	if (!defined($ENV{management_node_info}) || !ref($ENV{management_node_info}) || ref($ENV{management_node_info}) ne 'HASH') {
+		notify($ERRORS{'DEBUG'}, 0, "initializing management node info hash reference");
+		$ENV{management_node_info} = {};
+	}
+	
+	if (defined($ENV{management_node_info}{$management_node_identifier})) {
+		my $data_age_seconds = (time - $ENV{management_node_info}{$management_node_identifier}{RETRIEVAL_TIME});
 		
-		if (defined($ENV{management_node_info}) && ref($ENV{management_node_info}) eq 'HASH') {
-			my $lastcheckin_age = (time - convert_to_epoch_seconds($ENV{management_node_info}{lastcheckin}));
-			
-			if ($lastcheckin_age < 60) {
-				return $ENV{management_node_info};
-			}
+		if ($data_age_seconds < 60) {
+			#notify($ERRORS{'DEBUG'}, 0, "returning previously retrieved management node info for '$management_node_identifier'");
+			return $ENV{management_node_info}{$management_node_identifier};
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "retrieving current management node info for '$management_node_identifier' from database, cached data is stale: $data_age_seconds seconds old");
 		}
 	}
-	
-	if (!$management_node_identifier) {
-		notify($ERRORS{'WARNING'}, 0, "management node hostname or ID was not specified and hostname could not be determined");
-		return;
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "management node info for '$management_node_identifier' is not stored in \$ENV{management_node_info}");
 	}
-	
-	notify($ERRORS{'DEBUG'}, 0, "attempting to retrieve management node info: '$management_node_identifier'");
 
 	my $select_statement = "
 SELECT
@@ -6279,7 +6075,7 @@ AND ";
 	}
 	else {
 		# Assume hostname was specified
-		$select_statement .= "managementnode.hostname like \'$management_node_identifier%\'";
+		$select_statement .= "managementnode.hostname REGEXP '^$management_node_identifier(\\\\.|\$)'";
 	}
 	
 	# Call the database select subroutine
@@ -6371,11 +6167,20 @@ AND managementnode.id != $management_node_id
 	$management_node_info->{SHARED_EMAIL_BOX} = $management_node_info->{sharedMailBox};
 	
 	# Add affiliations that are not to use the standalone passwords
-	$management_node_info->{NOT_STANDALONE}	= $management_node_info->{NOT_STANDALONE} || '';
+	$management_node_info->{NOT_STANDALONE} = $management_node_info->{NOT_STANDALONE} || '';
 	
-	# Set the management_node_info environment variable if the info was retrieved for this computer
-	$ENV{management_node_info} = $management_node_info if ($management_node_identifier eq $hostname);
-
+	# Store the info in $ENV{management_node_info}
+	# Add keys for all of the unique identifiers that may be passed as an argument to this subroutine
+	$ENV{management_node_info}{$management_node_identifier} = $management_node_info;
+	$ENV{management_node_info}{$management_node_info->{hostname}} = $management_node_info;
+	$ENV{management_node_info}{$management_node_info->{SHORTNAME}} = $management_node_info;
+	$ENV{management_node_info}{$management_node_info->{id}} = $management_node_info;
+	$ENV{management_node_info}{$management_node_info->{IPaddress}} = $management_node_info;
+	
+	# Save the time when the data was retrieved
+	$ENV{management_node_info}{$management_node_identifier}{RETRIEVAL_TIME} = time;
+	
+	notify($ERRORS{'DEBUG'}, 0, "retrieved management node info: '$management_node_identifier'");
 	return $management_node_info;
 } ## end sub get_management_node_info
 
@@ -8925,17 +8730,18 @@ sub format_data {
 	
 	# If a string was passed which appears to be XML, convert it to a hash using XML::Simple
 	if (scalar(@data) == 1 && !ref($data[0]) && $data[0] =~ /^</) {
-		my $xml = XMLin($data[0], 'ForceArray' => 0, 'KeyAttr' => []);
-		return format_data($xml);
+		my $xml_hashref = xml_string_to_hash($data[0]);
+		return format_data($xml_hashref);
 	}
 	
 	$Data::Dumper::Indent    = 1;
-	$Data::Dumper::Purity    = 1;
+	$Data::Dumper::Purity    = 0;
 	$Data::Dumper::Useqq     = 1;      # Use double quotes for representing string values
 	$Data::Dumper::Terse     = 1;
 	$Data::Dumper::Quotekeys = 1;      # Quote hash keys
 	$Data::Dumper::Pair      = ' => '; # Specifies the separator between hash keys and values
 	$Data::Dumper::Sortkeys  = 1;      # Hash keys are dumped in sorted order
+	$Data::Dumper::Deparse   = 0;
 	
 	my $formatted_string = Dumper(@data);
 	
@@ -10037,7 +9843,7 @@ sub disablesshd {
 	}
 	my @lines;
 	my $l;
-	my $identity = $ENV{management_node_info}{keys};
+	my $identity_keys = get_management_node_info()->{keys};
 	# create clientdata file
 	my $clientdata = "/tmp/clientdata.$hostname";
 	if (open(CLIENTDATA, ">$clientdata")) {
@@ -10048,12 +9854,12 @@ sub disablesshd {
 
 		# scp to hostname
 		my $target = "vclstaff\@$hostname:/home/vclstaff/clientdata";
-		if (run_scp_command($clientdata, $target, $identity, "24")) {
+		if (run_scp_command($clientdata, $target, $identity_keys, "24")) {
 			notify($ERRORS{'OK'}, $log, "Success copied $clientdata to $target");
 			unlink($clientdata);
 
 			# send flag to activate changes
-			my @sshcmd = run_ssh_command($hostname, $identity, "echo 1 > /home/vclstaff/flag", "vclstaff", "24");
+			my @sshcmd = run_ssh_command($hostname, $identity_keys, "echo 1 > /home/vclstaff/flag", "vclstaff", "24");
 			notify($ERRORS{'OK'}, $log, "setting flag to 1 on $hostname");
 
 			my $nmapchecks = 0;
@@ -10198,12 +10004,14 @@ sub get_file_size_info_string {
 	my ($size_bytes, $separator) = @_;
 	$separator = " - " if !$separator;
 	
-	my $size_mb = format_number(($size_bytes / 1024 / 1024), 1);
-	my $size_gb = format_number(($size_bytes / 1024 / 1024 / 1024), 2);
-	my $size_tb = format_number(($size_bytes / 1024 / 1024 / 1024 / 1024), 2);
+	my $size_kb = format_number(($size_bytes / 1024), 1);
+	my $size_mb = format_number(($size_bytes / 1024 ** 2), 1);
+	my $size_gb = format_number(($size_bytes / 1024 ** 3), 2);
+	my $size_tb = format_number(($size_bytes / 1024 ** 4), 2);
 	
 	my $size_info;
 	$size_info .= format_number($size_bytes) . " bytes$separator";
+	$size_info .= "$size_kb KB$separator";
 	$size_info .= "$size_mb MB$separator";
 	$size_info .=  "$size_gb GB";
 	$size_info .=  "$separator$size_tb TB" if ($size_tb >= 1);
@@ -10411,7 +10219,7 @@ sub parent_directory_path {
 	
 	$path = normalize_file_path($path);
 	
-	# Remove everthing after the last forward or backslash
+	# Remove everything after the last forward or backslash
 	$path =~ s/\/[^\/\\]+$//g;
 	
 	return $path;
@@ -10860,6 +10668,222 @@ sub get_random_mac_address {
 	
 	notify($ERRORS{'DEBUG'}, 0, "generated random MAC address: '$mac_address'");
 	return $mac_address;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 xml_string_to_hash
+
+ Parameters  : $xml_text
+ Returns     : hash reference
+ Description : Converts XML text to a hash using XML::Simple:XMLin. The argument
+               may be a string of XML text, an array, or array reference of
+               lines of XML text.
+
+=cut
+
+sub xml_string_to_hash {
+	my @arguments = @_;
+	if (!@arguments) {
+		notify($ERRORS{'WARNING'}, 0, "XML text argument was not specified");
+		return;
+	}
+	
+	my $xml_text;
+	
+	# Check if the argument is an array of lines, array reference, or string
+	if (scalar(@arguments) == 1) {
+		my $argument = $arguments[0];
+		if (my $type = ref($argument)) {
+			if ($type eq 'ARRAY') {
+				$xml_text = join("\n", @$argument);
+			}
+			else {
+				notify($ERRORS{'WARNING'}, 0, "XML text argument is a $type reference, it may only be a string or array reference");
+				return;
+			}
+		}
+		else {
+			$xml_text = $argument;
+		}
+	}
+	else {
+		$xml_text = join("\n", @arguments);
+	}
+	
+	# Override the die handler 
+	local $SIG{__DIE__} = sub{};
+	
+	# Convert the XML to a hash using XML::Simple
+	my $xml_hashref;
+	eval {
+		$xml_hashref = XMLin($xml_text, 'ForceArray' => 1, 'KeyAttr' => []);
+	};
+	
+	if ($xml_hashref) {
+		return $xml_hashref;
+	}
+	elsif ($EVAL_ERROR) {
+		notify($ERRORS{'WARNING'}, 0, "failed to convert XML text to hash, error: $EVAL_ERROR\nXML text:$xml_text");
+		return;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to convert XML text to hash, XML text:$xml_text");
+		return;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 hash_to_xml_string
+
+ Parameters  : $xml_hashref
+ Returns     : string
+ Description : Converts an XML hash reference to text to a hash using
+               XML::Simple:XMLout.
+
+=cut
+
+sub hash_to_xml_string {
+	my $xml_hashref = shift;
+	if (!$xml_hashref) {
+		notify($ERRORS{'WARNING'}, 0, "XML hash reference argument was not specified");
+		return;
+	}
+	elsif (!ref($xml_hashref) || ref($xml_hashref) ne 'HASH') {
+		notify($ERRORS{'WARNING'}, 0, "argument is not a hash reference");
+		return;
+	}
+	
+	my $root_name = shift;
+	
+	# Override the die handler 
+	local $SIG{__DIE__} = sub{};
+	
+	# Convert the XML hashref to text using XML::Simple::XMLout
+	my $xml_text;
+	eval {
+		$xml_text = XMLout($xml_hashref, 'RootName' => $root_name, 'KeyAttr' => []);
+	};
+	
+	if ($xml_text) {
+		return $xml_text;
+	}
+	elsif ($EVAL_ERROR) {
+		notify($ERRORS{'WARNING'}, 0, "failed to convert XML hash reference to text, error: $EVAL_ERROR\nXML hash reference:" . format_data($xml_hashref));
+		return;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to convert XML hash reference to text, XML hash reference:" . format_data($xml_hashref));
+		return;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_array_summary_string
+
+ Parameters  : $array_ref or @array
+ Returns     : string
+ Description : Formats a string from an array. If there are more than 3 elements
+               in the array, the values are summarized:
+					/vmwarelinux-RHEL54Small2251-v1-s001.vmdk
+               ...14 additional entries...
+               /vmwarelinux-RHEL54Small2251-v1-s016.vmdk
+
+
+=cut
+
+sub get_array_summary_string {
+	my @arguments = @_;
+	if (!@arguments) {
+		return '';
+	}
+	elsif (scalar(@arguments) == 1) {
+		if (!ref($arguments[0])) {
+			return $arguments[0];
+		}
+		elsif (ref($arguments[0]) eq 'ARRAY') {
+			@arguments = @{$arguments[0]};
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "argument is not an array reference: " . ref($arguments[0]));
+			return '';
+		}
+	}
+
+	my $array_size = scalar(@arguments);
+	if ($array_size == 1) {
+		return $arguments[0];
+	}
+	if ($array_size > 3) {
+		return "$arguments[0]\n..." . ($array_size-2) . " additional entries...\n$arguments[-1]";
+	}
+	else {
+		return join("\n", @arguments);
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 sort_by_file_name
+
+ Parameters  : @file_paths
+ Returns     : array
+ Description : Sorts a list of file paths by file name. Directory paths are
+               ignored. File names beginning with numbers are sorted
+               numerically.
+               Example:
+               
+               Input array:
+                  /var/file_a.txt
+                  /tmp/file_b.txt
+                  /var/1 file.txt
+                  100 file.txt
+                  /tmp/99 data.txt
+                  50 file.txt
+               
+               Sorted result:
+                  /var/1 file.txt
+                  50 file.txt
+                  /tmp/99 data.txt
+                  100 file.txt
+                  /var/file_a.txt
+                  /tmp/file_b.txt
+
+=cut
+
+sub sort_by_file_name {
+	if (!defined($a) && !defined($b)) {
+		my @file_paths = @_;
+		if (scalar(@file_paths)) {
+			notify($ERRORS{'DEBUG'}, 0, "not called by sort, \$a and \$b are not defined, array argument was passed");
+			return sort sort_by_file_name @file_paths;
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "not called by sort, \$a and \$b are not defined, array argument was NOT passed");
+			return;
+		}
+	}
+	
+	# Get the file names from the 2 file paths being compared
+	my $a_file_name = ($a =~ /([^\/]+)$/g)[0];
+	my $b_file_name = ($b =~ /([^\/]+)$/g)[0];
+	
+	# Check if both file names begin with a number
+	my $a_number = ($a_file_name =~ /^(\d+)/g)[0];
+	my $b_number = ($b_file_name =~ /^(\d+)/g)[0];
+	
+	# If both file names begin with a number, sort numerically
+	# Otherwise, sort alphabetically
+	if (defined($a_number) && defined($b_number) && $a_number != $b_number) {
+		#notify($ERRORS{'DEBUG'}, 0, "numeric comparison - a: $a_file_name ($a_number), b: $b_file_name ($b_number)");
+		return $a_number <=> $b_number;
+	}
+	else {
+		#notify($ERRORS{'DEBUG'}, 0, "alphabetic comparison - a: $a_file_name, b: $b_file_name");
+		return lc($a_file_name) cmp lc($b_file_name);
+	}
 }
 
 #/////////////////////////////////////////////////////////////////////////////

@@ -250,7 +250,9 @@ $SUBROUTINE_MAPPINGS{vmhost_vm_limit} = '$self->request_data->{reservation}{RESE
 $SUBROUTINE_MAPPINGS{vmhost_profile_id} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{vmprofileid}';
 
 $SUBROUTINE_MAPPINGS{vmhost_profile_repository_path} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{vmprofile}{repositorypath}';
+$SUBROUTINE_MAPPINGS{vmhost_profile_repository_imagetype_id} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{vmprofile}{repositoryimagetypeid}';
 $SUBROUTINE_MAPPINGS{vmhost_profile_datastore_path} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{vmprofile}{datastorepath}';
+$SUBROUTINE_MAPPINGS{vmhost_profile_repository_imagetype_id} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{vmprofile}{datastoreimagetypeid}';
 #$SUBROUTINE_MAPPINGS{vmhost_profile_id} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{vmprofile}{id}';
 $SUBROUTINE_MAPPINGS{vmhost_profile_image_id} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{vmprofile}{imageid}';
 $SUBROUTINE_MAPPINGS{vmhost_profile_resource_path} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{vmprofile}{resourcepath}';
@@ -265,6 +267,9 @@ $SUBROUTINE_MAPPINGS{vmhost_profile_username} = '$self->request_data->{reservati
 $SUBROUTINE_MAPPINGS{vmhost_profile_password} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{vmprofile}{password}';
 $SUBROUTINE_MAPPINGS{vmhost_profile_eth0generated} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{vmprofile}{eth0generated}';
 $SUBROUTINE_MAPPINGS{vmhost_profile_eth1generated} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{vmprofile}{eth1generated}';
+
+$SUBROUTINE_MAPPINGS{vmhost_repository_imagetype_name} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{repositoryimagetype}{name}';
+$SUBROUTINE_MAPPINGS{vmhost_datastore_imagetype_name} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{datastoreimagetype}{name}';
 
 $SUBROUTINE_MAPPINGS{computer_currentimage_architecture} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{currentimage}{architecture}';
 $SUBROUTINE_MAPPINGS{computer_currentimage_deleted} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{currentimage}{deleted}';
@@ -383,6 +388,8 @@ $SUBROUTINE_MAPPINGS{image_os_module_description} = '$self->request_data->{reser
 $SUBROUTINE_MAPPINGS{image_os_module_perl_package} = '$self->request_data->{reservation}{RESERVATION_ID}{image}{OS}{module}{perlpackage}';
 
 $SUBROUTINE_MAPPINGS{image_platform_name} = '$self->request_data->{reservation}{RESERVATION_ID}{image}{platform}{name}';
+
+$SUBROUTINE_MAPPINGS{imagetype_name} = '$self->request_data->{reservation}{RESERVATION_ID}{image}{imagetype}{name}';
 
 $SUBROUTINE_MAPPINGS{server_request_id} = '$self->request_data->{reservation}{RESERVATION_ID}{serverrequest}{id}';
 $SUBROUTINE_MAPPINGS{server_request_fixedIP} = '$self->request_data->{reservation}{RESERVATION_ID}{serverrequest}{fixedIP}';
@@ -584,7 +591,6 @@ sub _initialize : Init {
 		notify($ERRORS{'WARNING'}, 0, "unable to obtain management node info for this node");
 		return;
 	}
-	$ENV{management_node_info} = $management_node_info;
 	
 	# Replace the request data with a deep copy if itself
 	# This creates entirely separate copies in case multiple DataStructure objects are used
@@ -788,24 +794,17 @@ sub _automethod : Automethod {
 				return sub { };
 			}
 		}
-		elsif ($data_identifier =~ /^(management_node)/ && $args[0]) {
-			# Data about a specific management node was requested by passing an argument:
-			# get_management_node_xxx(<management node identifier>)
-			#notify($ERRORS{'DEBUG'}, 0, "attempting to retrieve data for management node identifier: $args[0]");
-			
-			# Get the management node info hash ref for the management node specified by the argument
+		elsif ($data_identifier =~ /^(management_node)/) {
+			# Get the management node info
+			# If no argument was specified get_management_node_info will return data for this management node
 			my $management_node_info_retrieved = get_management_node_info($args[0]);
 			unless ($management_node_info_retrieved) {
 				notify($ERRORS{'WARNING'}, 0, "failed to retrieve data for management node: $args[0]");
 				return sub { };
 			}
 			
-			my $management_node_id = $management_node_info_retrieved->{id};
-			my $management_node_hostname = $management_node_info_retrieved->{hostname};
-			#notify($ERRORS{'DEBUG'}, 0, "retrieved data for management node: id=$management_node_id, hostname=$management_node_hostname");
-			
-			# The normal reservation management node data is stored in $ENV{management_node_info}
-			# We don't want to overwrite this, but want to temporarily store the data retrieved for the different management node
+			# The normal reservation management node data is stored in $ENV{management_node_info}{<identifier>}
+			# We don't want to overwrite this, but want to temporarily store the data retrieved
 			# This allows the $hash_path mechanism to work without alterations
 			# Temporarily overwrite this data by using 'local', and set it to the data just retrieved
 			# Once the current scope is exited, $ENV{management_node_info} will return to its original value
@@ -1226,11 +1225,12 @@ sub get_next_image_dataStructure {
 	}
 
 	#update ENV in case other modules need to know
-	$ENV{management_node_info}{predictivemoduleid} = $management_predictive_info->{predictivemoduleid};
-	$ENV{management_node_info}{predictive_name} = $management_predictive_info->{predictive_name};
-	$ENV{management_node_info}{predictive_prettyname} = $management_predictive_info->{predictive_prettyname};
-	$ENV{management_node_info}{predictive_description} = $management_predictive_info->{predictive_description};
-	$ENV{management_node_info}{predictive_perlpackage} = $management_predictive_info->{predictive_perlpackage};
+	my $management_node_info = get_management_node_info();
+	$management_node_info->{predictivemoduleid} = $management_predictive_info->{predictivemoduleid};
+	$management_node_info->{predictive_name} = $management_predictive_info->{predictive_name};
+	$management_node_info->{predictive_prettyname} = $management_predictive_info->{predictive_prettyname};
+	$management_node_info->{predictive_description} = $management_predictive_info->{predictive_description};
+	$management_node_info->{predictive_perlpackage} = $management_predictive_info->{predictive_perlpackage};
 
 	my $predictive_perl_package = $management_predictive_info->{predictive_perlpackage};
 	my @nextimage;
@@ -2266,7 +2266,7 @@ sub get_management_node_public_default_gateway {
 	my $default_gateway;
 	
 	# Attempt to retrieve the default gateway explicitly configured for this management node
-	$default_gateway = $ENV{management_node_info}{PUBLIC_DEFAULT_GATEWAY};
+	$default_gateway = get_management_node_info()->{PUBLIC_DEFAULT_GATEWAY};
 	if ($default_gateway && is_valid_ip_address($default_gateway)) {
 		notify($ERRORS{'DEBUG'}, 0, "returning default gateway configured in vcld.conf: $default_gateway");
 		return $default_gateway;
@@ -2352,7 +2352,7 @@ sub get_management_node_public_default_gateway {
 
 sub get_management_node_public_dns_servers {
 	# Attempt to retrieve the DNS server addresses configured for this management node
-	my $dns_address_string = $ENV{management_node_info}{PUBLIC_DNS_SERVER};
+	my $dns_address_string = get_management_node_info()->{PUBLIC_DNS_SERVER};
 	if (!$dns_address_string) {
 		notify($ERRORS{'DEBUG'}, 0, "no public dns server addresses are configured for the management node");
 		return ();
@@ -2374,7 +2374,7 @@ sub get_management_node_public_dns_servers {
 =cut
 
 sub get_management_node_identity_key_paths {
-	my $keys_string = $ENV{management_node_info}{keys};
+	my $keys_string = get_management_node_info()->{keys};
 	if (!$keys_string) {
 		notify($ERRORS{'WARNING'}, 0, "no identity key paths are configured for the management node");
 		return ();
