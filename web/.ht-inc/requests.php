@@ -151,7 +151,7 @@ function newReservation() {
 
 	$imagenotes = getImageNotes($imageid);
 	$desc = '';
-	if(preg_match('/\w/', $imagenotes['description'])) {
+	if(! preg_match('/^\s*$/', $imagenotes['description'])) {
 		$desc = preg_replace("/\n/", '<br>', $imagenotes['description']);
 		$desc = preg_replace("/\r/", '', $desc);
 		$desc = "<strong>Image Description</strong>:<br>\n$desc<br><br>\n";
@@ -270,7 +270,7 @@ function AJupdateWaitTime() {
 	$desconly = processInputVar('desconly', ARG_NUMERIC, 1);
 
 	$imagenotes = getImageNotes($imageid);
-	if(preg_match('/\w/', $imagenotes['description'])) {
+	if(! preg_match('/^\s*$/', $imagenotes['description'])) {
 		$desc = preg_replace("/\n/", '<br>', $imagenotes['description']);
 		$desc = preg_replace("/\r/", '', $desc);
 		$desc = preg_replace("/'/", '&#39;', $desc);
@@ -3144,7 +3144,7 @@ function connectRequest() {
 		<a href=\"" . BASEURL . SCRIPT . "?mode=imageClickThrough\">click-through agreement</a> about software licensing.</big></font><br><br>\n";
 	}
 	$imagenotes = getImageNotes($requestData['reservations'][0]['imageid']);
-	if(preg_match('/\w/', $imagenotes['usage'])) {
+	if(! preg_match('/^\s*$/', $imagenotes['usage'])) {
 		print "<h3>Notes on using this environment:</h3>\n";
 		print "{$imagenotes['usage']}<br><br><br>\n";
 	}
