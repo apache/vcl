@@ -3011,7 +3011,7 @@ function AJrebootRequest() {
 ///
 /// \fn AJshowReinstallRequest()
 ///
-/// \brief 
+/// \brief generates text for prompting user about reinstalling reservation
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function AJshowReinstallRequest() {
@@ -3030,7 +3030,7 @@ function AJshowReinstallRequest() {
 	if(count($reqdata['reservations']) == 1 &&
 		($imgdata[$imageid]['ownerid'] == $user['id'] ||
 	   checkUserHasPerm('View Debug Information')) &&
-	   count($imgdata[$imageid]['imagerevision'] > 1)) {
+	   count($imgdata[$imageid]['imagerevision']) > 1) {
 		# prompt for which revision to use for reinstall
 		$t .= "This will cause the reserved machine to be reinstalled. ";
 		$t .= "You may select which version<br>of the environment you would ";
@@ -3068,8 +3068,8 @@ function AJshowReinstallRequest() {
 	else {
 		# prompt for reinstall confirmation
 		$t .= "This will cause the reserved machine to be reinstalled. Any<br>";
-		$t .= "data saved only to the reserved machine will be lost. Are<br>";
-		$t .= "you sure you want to continue?<br><br>";
+		$t .= "data saved only to the reserved machine <strong>will be lost";
+		$t .= "</strong>. Are<br>you sure you want to continue?<br><br>";
 	}
 	sendJSON(array('status' => 'success', 'txt' => $t, 'cont' => $cont));
 }

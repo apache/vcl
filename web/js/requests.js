@@ -637,7 +637,6 @@ function submitRebootReservation() {
 }
 
 function hideReinstallResDlg() {
-	dijit.byId('reinstalldlg').hide();
 	dojo.addClass('reinstallbtns', 'hidden');
 	dojo.byId('reinstallResDlgContent').innerHTML = '';
 	dojo.byId('reinstallResDlgErrMsg').innerHTML = '';
