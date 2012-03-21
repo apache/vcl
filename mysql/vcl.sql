@@ -161,6 +161,7 @@ CREATE TABLE IF NOT EXISTS `changelog` (
   `remoteIP` varchar(15) default NULL,
   `wasavailable` tinyint(1) unsigned default NULL,
   `timestamp` datetime NOT NULL default '0000-00-00 00:00:00',
+  `other` varchar(255) default NULL,
   PRIMARY KEY  (`id`),
   KEY `logid` (`logid`)
 ) ENGINE=InnoDB  DEFAULT CHARSET=latin1;

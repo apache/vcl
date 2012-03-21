@@ -317,6 +317,14 @@ CALL AddColumnIfNotExists('blockTimes', 'skip', "tinyint(1) unsigned NOT NULL de
 
 -- --------------------------------------------------------
 
+--
+--  Table structure for table `changelog`
+--
+
+CALL AddColumnIfNotExists('changelog', 'other', "varchar(255) default NULL");
+
+-- --------------------------------------------------------
+
 -- 
 --  Table structure for table `computer`
 --
