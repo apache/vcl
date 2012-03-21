@@ -6548,9 +6548,15 @@ function showTimeTable($links) {
 /// \param $ip - (optional, default='') desired IP address
 /// \param $mac - (optional, default='') desired MAC address
 ///
-/// \return 
+/// \return an array where each key is a unix timestamp for the start time of 
+/// the available slot and each element is an array with these items:\n
+/// \b start - start of slot in datetime format\n
+/// \b startts - start of slot in unix timestamp format\n
+/// \b duration - length of slot in minutes\n
+/// \b compid - id of computer for slot
 ///
-/// \brief 
+/// \brief builds an array of available time slots close to the submitted
+/// parameters
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function findAvailableTimes($start, $end, $imageid, $userid, $usedaysahead,
@@ -8486,6 +8492,29 @@ function addChangeLogEntry($logid, $remoteIP, $end=NULL, $start=NULL,
 			doQuery($query2, 267);
 		}
 	}
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn addChangeLogEntryOther($logid, $data)
+///
+/// \param $logid - id matching entry in log table
+/// \param $data - data to be inserted in the other field
+///
+/// \brief adds an entry to the other field in the changelog table
+///
+////////////////////////////////////////////////////////////////////////////////
+function addChangeLogEntryOther($logid, $data) {
+	$data = mysql_real_escape_string($data);
+	$query = "INSERT INTO changelog "
+	       .        "(logid, "
+	       .        "timestamp, "
+	       .        "other) "
+	       . "VALUES "
+	       .        "($logid, "
+	       .        "NOW(), "
+	       .        "'$data')";
+	doQuery($query);
 }
 
 ////////////////////////////////////////////////////////////////////////////////

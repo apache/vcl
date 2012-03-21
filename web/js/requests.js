@@ -107,7 +107,7 @@ function showSuggestedTimesCB(data, ioArgs) {
 	dojo.byId('suggestContent').innerHTML = data.items.html;
 	if(data.items.status == 'resgone') {
 		dijit.byId('suggestedTimes').hide();
-		resGone();
+		resGone('edit');
 		resRefresh();
 		return;
 	}
@@ -122,14 +122,10 @@ function showSuggestedTimesCB(data, ioArgs) {
 		dojo.byId('editResDlgErrMsg').innerHTML = '';
 		dijit.byId('editResDlgBtn').set('style', 'display: none');
 		dijit.byId('editResCancelBtn').set('label', 'Okay');
-		if(dijit.byId('editResDlg')._relativePosition)
-			delete dijit.byId('editResDlg')._relativePosition;
-		dijit.byId('editResDlg')._position();
+		recenterDijitDialog('editResDlg');
 		return;
 	}
-	if(dijit.byId('suggestedTimes')._relativePosition)
-		delete dijit.byId('suggestedTimes')._relativePosition;
-	dijit.byId('suggestedTimes')._position();
+	recenterDijitDialog('suggestedTimes');
 	suggestTimeData = data.items.data;
 }
 
@@ -389,7 +385,7 @@ function editReservationCB(data, ioArgs) {
 	if(data.items.status == 'resgone') {
 		document.body.style.cursor = 'default';
 		dijit.byId('editResDlg').show();
-		resGone();
+		resGone('edit');
 		resRefresh();
 		return;
 	}
@@ -598,69 +594,111 @@ function checkResGone(reqids) {
 		if(editresid == reqids[i])
 			return;
 	}
-	resGone();
+	resGone('edit');
 }
 
-function resGone() {
+function resGone(type) {
+	if(type == 'edit') {
+		dojo.byId('editResDlgContent').innerHTML = "The reservation you selected<br>to edit has expired.<br><br>";
+	}
+	else if(type == 'reboot') {
+		dojo.byId('editResDlgContent').innerHTML = "The reservation you selected<br>to reboot has expired.<br><br>";
+	}
+	else if(type == 'reinstall') {
+		dojo.byId('editResDlgContent').innerHTML = "The reservation you selected<br>to reinstall has expired.<br><br>";
+	}
 	dojo.byId('editresid').value = '';
-	dojo.byId('editResDlgContent').innerHTML = "The reservation you selected<br>to edit has expired.<br><br>";
 	dojo.byId('editResDlgErrMsg').innerHTML = '';
 	dijit.byId('editResDlgBtn').set('style', 'display: none');
 	dijit.byId('editResCancelBtn').set('label', 'Okay');
-	if(dijit.byId('editResDlg')._relativePosition)
-		delete dijit.byId('editResDlg')._relativePosition;
-	dijit.byId('editResDlg')._position();
+	recenterDijitDialog('editResDlg');
 }
 
-function hideRebReinstResDlg() {
-	dijit.byId('rebootreinstalldlg').set('title', 'Reboot Reservation');
-	dojo.byId('rebreinstResDlgContent').innerHTML = '';
-	dojo.removeClass('rebootRadios', 'hidden');
+function hideRebootResDlg() {
 	dojo.byId('softreboot').checked = true;
-	dojo.byId('rebreinstrescont').value = '';
-	//dojo.byId('rebreinstresid').value = '';
-	dojo.byId('rebreinstResDlgErrMsg').innerHTML = '';
-	dijit.byId('rebreinstResDlgBtn').set('label', 'Reboot Reservation');
+	dojo.byId('rebootrescont').value = '';
+	dojo.byId('rebootResDlgErrMsg').innerHTML = '';
 }
 
 function rebootRequest(cont) {
-	dijit.byId('rebootreinstalldlg').set('title', 'Reboot Reservation');
-	var txt = 'You can select either a soft or a hard reboot. A soft reboot<br>'
-	        + 'issues a reboot command to the operating system. A hard reboot<br>'
-	        + 'is akin to toggling the power switch on a computer. After<br>'
-	        + 'issuing the reboot, it may take several minutes before the<br>'
-	        + 'machine is available again. It is also possible that it will<br>'
-	        + 'not come back up at all. Are you sure you want to continue?<br><br>';
-	dojo.removeClass('rebootRadios', 'hidden');
-	dojo.byId('rebreinstResDlgContent').innerHTML = txt;
-	dojo.byId('rebreinstrescont').value = cont;
-	dijit.byId('rebreinstResDlgBtn').set('label', 'Reboot Reservation');
-	dijit.byId('rebootreinstalldlg').show();
+	dojo.byId('rebootrescont').value = cont;
+	dijit.byId('rebootdlg').show();
 }
 
-function reinstallRequest(cont) {
-	dijit.byId('rebootreinstalldlg').set('title', 'Reinstall Reservation');
-	var txt = 'This will cause the reserved machine to be reinstalled. Any<br>'
-	        + 'data saved only to the reserved machine will be lost. Are<br>'
-	        + 'you sure you want to continue?<br><br>';
-	dojo.addClass('rebootRadios', 'hidden');
-	dojo.byId('rebreinstResDlgContent').innerHTML = txt;
-	dojo.byId('rebreinstrescont').value = cont;
-	dijit.byId('rebreinstResDlgBtn').set('label', 'Reinstall Reservation');
-	dijit.byId('rebootreinstalldlg').show();
-}
-
-function submitRebReinstReservation() {
-	var data = {continuation: dojo.byId('rebreinstrescont').value};
+function submitRebootReservation() {
+	var data = {continuation: dojo.byId('rebootrescont').value};
 	document.body.style.cursor = 'wait';
-	if(dijit.byId('rebreinstResDlgBtn').get('label') == 'Reboot Reservation') {
-		if(dojo.byId('hardreboot').checked)
-			data.reboottype = 1;
-		else
-			data.reboottype = 0;
-	}
-	dijit.byId('rebootreinstalldlg').hide();
+	if(dojo.byId('hardreboot').checked)
+		data.reboottype = 1;
+	else
+		data.reboottype = 0;
+	dijit.byId('rebootdlg').hide();
 	RPCwrapper(data, generalReqCB);
+}
+
+function hideReinstallResDlg() {
+	dijit.byId('reinstalldlg').hide();
+	dojo.addClass('reinstallbtns', 'hidden');
+	dojo.byId('reinstallResDlgContent').innerHTML = '';
+	dojo.byId('reinstallResDlgErrMsg').innerHTML = '';
+	dojo.byId('reinstallrescont').value = '';
+}
+
+function showReinstallRequest(cont) {
+	dojo.removeClass('reinstallloading', 'hidden');
+	dijit.byId('reinstalldlg').show();
+	var data = {continuation: cont};
+	RPCwrapper(data, showReinstallRequestCB, 1);
+	document.body.style.cursor = 'wait';
+}
+
+function showReinstallRequestCB(data, ioArgs) {
+	document.body.style.cursor = 'default';
+	if(data.items.status == 'resgone') {
+		dijit.byId('reinstalldlg').hide();
+		resGone('reinstall');
+		dijit.byId('editResDlg').show();
+		setTimeout(resRefresh, 1500);
+		return;
+	}
+	dojo.addClass('reinstallloading', 'hidden');
+	dojo.removeClass('reinstallbtns', 'hidden');
+	dojo.byId('reinstallrescont').value = data.items.cont;
+	dojo.byId('reinstallResDlgContent').innerHTML = data.items.txt;
+	recenterDijitDialog('reinstalldlg');
+}
+
+function submitReinstallReservation() {
+	var data = {continuation: dojo.byId('reinstallrescont').value};
+	var inputs = document.getElementsByName('revisionid');
+	for(var i = 0; i < inputs.length; i++) {
+		if(inputs[i].checked) {
+			data.revisionid = inputs[i].value;
+			break;
+		}
+	}
+	document.body.style.cursor = 'wait';
+	RPCwrapper(data, submitReinstallReservationCB, 1);
+}
+
+function submitReinstallReservationCB(data, ioArgs) {
+	document.body.style.cursor = 'default';
+	if(data.items.status == 'resgone') {
+		dijit.byId('reinstalldlg').hide();
+		resGone('reinstall');
+		dijit.byId('editResDlg').show();
+		setTimeout(resRefresh, 1500);
+		return;
+	}
+	if(data.items.status == 'invalidrevisionid') {
+		dojo.byId('reinstallResDlgErrMsg').innerHTML = 'An invalid version was submitted.';
+		dojo.byId('reinstallrescont').value = data.items.cont;
+		return;
+	}
+	if(data.items.status == 'success') {
+		dijit.byId('reinstalldlg').hide();
+		resRefresh();
+	}
 }
 
 function showRDPbutton() {

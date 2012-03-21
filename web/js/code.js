@@ -331,3 +331,9 @@ function showDijitButton(id) {
 		display: 'inline'
 	});
 }
+
+function recenterDijitDialog(id) {
+	if(dijit.byId(id)._relativePosition)
+		delete dijit.byId(id)._relativePosition;
+	dijit.byId(id)._position();
+}

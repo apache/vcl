@@ -841,7 +841,6 @@ function viewRequests() {
 	if(checkUserHasPerm('View Debug Information'))
 		$nodes = getManagementNodes();
 	if($count = count($requests)) {
-		# TODO display admin and login groups somewhere
 		$now = time();
 		for($i = 0, $failed = 0, $timedout = 0, $text = '', $showcreateimage = 0, $cluster = 0;
 		   $i < $count;
@@ -993,7 +992,7 @@ function viewRequests() {
 					   $requests[$i]['laststateid'] != 27) {
 						$cont = addContinuationsEntry('AJrebootRequest', $cdata, SECINDAY);
 						$text .= getViewRequestHTMLitem('rebootoption', $cont);
-						$cont = addContinuationsEntry('AJreinstallRequest', $cdata, SECINDAY);
+						$cont = addContinuationsEntry('AJshowReinstallRequest', $cdata, SECINDAY);
 						$text .= getViewRequestHTMLitem('reinstalloption', $cont);
 					}
 					else {
@@ -1049,6 +1048,10 @@ function viewRequests() {
 				              'logingroup' => $requests[$i]['serverlogingroup'],
 				              'image' => $requests[$i]['prettyimage'],
 				              'starttime' => $requests[$i]['start']);
+				if($requests[$i]['currstateid'] == 14)
+				  $data['stateid'] = $requests[$i]['laststateid'];
+				else
+				  $data['stateid'] = $requests[$i]['currstateid'];
 				$text .= getViewRequestHTMLitem('serverdetails', $requests[$i]['id'], $data);
 			}
 
@@ -1191,7 +1194,6 @@ function viewRequests() {
 		$text .= "this may have caused.\n";
 	}
 
-	# TODO problem with auto refresh not happening when server load not ready due to user account?
 	$cont = addContinuationsEntry('AJviewRequests', array(), SECINDAY);
 	$text .= "<INPUT type=hidden id=resRefreshCont value=\"$cont\">\n";
 
@@ -1226,22 +1228,19 @@ function viewRequests() {
 		$text .= "      title=\"Delete Reservation\"\n";
 		$text .= "      duration=250\n";
 		$text .= "      draggable=true>\n";
-		#$text .= "	  <script type=\"dojo/connect\" event=onCancel>\n";
-		#$text .= "      endResDlgHide();\n";
-		#$text .= "    </script>\n";
 		$text .= "   <div id=\"endResDlgContent\"></div>\n";
 		$text .= "   <input type=\"hidden\" id=\"endrescont\">\n";
 		$text .= "   <input type=\"hidden\" id=\"endresid\">\n";
 		$text .= "   <div align=\"center\">\n";
 		$text .= "   <button id=\"endResDlgBtn\" dojoType=\"dijit.form.Button\">\n";
 		$text .= "     Delete Reservation\n";
-		$text .= "	   <script type=\"dojo/method\" event=\"onClick\">\n";
+		$text .= "     <script type=\"dojo/method\" event=\"onClick\">\n";
 		$text .= "       submitDeleteReservation();\n";
 		$text .= "     </script>\n";
 		$text .= "   </button>\n";
 		$text .= "   <button dojoType=\"dijit.form.Button\">\n";
 		$text .= "     Cancel\n";
-		$text .= "	   <script type=\"dojo/method\" event=\"onClick\">\n";
+		$text .= "     <script type=\"dojo/method\" event=\"onClick\">\n";
 		$text .= "       dijit.byId('endResDlg').hide();\n";
 		$text .= "       dojo.byId('endResDlgContent').innerHTML = '';\n";
 		$text .= "     </script>\n";
@@ -1259,13 +1258,13 @@ function viewRequests() {
 		$text .= "   <div align=\"center\">\n";
 		$text .= "   <button id=\"remResDlgBtn\" dojoType=\"dijit.form.Button\">\n";
 		$text .= "     Remove Reservation\n";
-		$text .= "	   <script type=\"dojo/method\" event=\"onClick\">\n";
+		$text .= "     <script type=\"dojo/method\" event=\"onClick\">\n";
 		$text .= "       submitRemoveReservation();\n";
 		$text .= "     </script>\n";
 		$text .= "   </button>\n";
 		$text .= "   <button dojoType=\"dijit.form.Button\">\n";
 		$text .= "     Cancel\n";
-		$text .= "	   <script type=\"dojo/method\" event=\"onClick\">\n";
+		$text .= "     <script type=\"dojo/method\" event=\"onClick\">\n";
 		$text .= "       dijit.byId('remResDlg').hide();\n";
 		$text .= "       dojo.byId('remResDlgContent').innerHTML = '';\n";
 		$text .= "     </script>\n";
@@ -1278,7 +1277,7 @@ function viewRequests() {
 		$text .= "      title=\"Modify Reservation\"\n";
 		$text .= "      duration=250\n";
 		$text .= "      draggable=true>\n";
-		$text .= "	  <script type=\"dojo/connect\" event=onHide>\n";
+		$text .= "    <script type=\"dojo/connect\" event=onHide>\n";
 		$text .= "      hideEditResDlg();\n";
 		$text .= "    </script>\n";
 		$text .= "   <div id=\"editResDlgContent\"></div>\n";
@@ -1288,13 +1287,13 @@ function viewRequests() {
 		$text .= "   <div align=\"center\">\n";
 		$text .= "   <button id=\"editResDlgBtn\" dojoType=\"dijit.form.Button\">\n";
 		$text .= "     Modify Reservation\n";
-		$text .= "	   <script type=\"dojo/method\" event=\"onClick\">\n";
+		$text .= "     <script type=\"dojo/method\" event=\"onClick\">\n";
 		$text .= "       submitEditReservation();\n";
 		$text .= "     </script>\n";
 		$text .= "   </button>\n";
 		$text .= "   <button dojoType=\"dijit.form.Button\" id=\"editResCancelBtn\">\n";
 		$text .= "     Cancel\n";
-		$text .= "	   <script type=\"dojo/method\" event=\"onClick\">\n";
+		$text .= "     <script type=\"dojo/method\" event=\"onClick\">\n";
 		$text .= "       dijit.byId('editResDlg').hide();\n";
 		$text .= "     </script>\n";
 		$text .= "   </button>\n";
@@ -1302,34 +1301,69 @@ function viewRequests() {
 		$text .= "</div>\n";
 
 		$text .= "<div dojoType=dijit.Dialog\n";
-		$text .= "      id=\"rebootreinstalldlg\"\n";
+		$text .= "      id=\"rebootdlg\"\n";
 		$text .= "      title=\"Reboot Reservation\"\n";
 		$text .= "      duration=250\n";
 		$text .= "      draggable=true>\n";
-		$text .= "	  <script type=\"dojo/connect\" event=onHide>\n";
-		$text .= "      hideRebReinstResDlg();\n";
+		$text .= "    <script type=\"dojo/connect\" event=onHide>\n";
+		$text .= "      hideRebootResDlg();\n";
 		$text .= "    </script>\n";
-		$text .= "   <div id=\"rebreinstResDlgContent\"></div>\n";
+		$text .= "   <div id=\"rebootResDlgContent\">You can select either a ";
+		$text .= "soft or a hard reboot. A soft reboot<br>issues a reboot ";
+		$text .= "command to the operating system. A hard reboot<br>is akin to ";
+		$text .= "toggling the power switch on a computer. After<br>issuing the ";
+		$text .= "reboot, it may take several minutes before the<br>machine is ";
+		$text .= "available again. It is also possible that it will<br>not come ";
+		$text .= "back up at all. Are you sure you want to continue?<br><br></div>\n";
 		$text .= "   <div id=\"rebootRadios\" style=\"margin-left: 90px;\">\n";
 		$text .= "   <input type=\"radio\" name=\"reboottype\" id=\"softreboot\" checked>\n";
 		$text .= "   <label for=\"softreboot\">Soft Reboot</label><br>\n";
 		$text .= "   <input type=\"radio\" name=\"reboottype\" id=\"hardreboot\">\n";
 		$text .= "   <label for=\"hardreboot\">Hard Reboot</label><br><br>\n";
 		$text .= "   </div>\n";
-		$text .= "   <input type=\"hidden\" id=\"rebreinstrescont\">\n";
-		#$text .= "   <input type=\"hidden\" id=\"rebreinstresid\">\n";
-		$text .= "   <div id=\"rebreinstResDlgErrMsg\" class=\"rederrormsg\"></div>\n";
+		$text .= "   <input type=\"hidden\" id=\"rebootrescont\">\n";
+		$text .= "   <div id=\"rebootResDlgErrMsg\" class=\"rederrormsg\"></div>\n";
 		$text .= "   <div align=\"center\">\n";
-		$text .= "   <button id=\"rebreinstResDlgBtn\" dojoType=\"dijit.form.Button\">\n";
+		$text .= "   <button id=\"rebootResDlgBtn\" dojoType=\"dijit.form.Button\">\n";
 		$text .= "     Reboot Reservation\n";
-		$text .= "	   <script type=\"dojo/method\" event=\"onClick\">\n";
-		$text .= "       submitRebReinstReservation();\n";
+		$text .= "     <script type=\"dojo/method\" event=\"onClick\">\n";
+		$text .= "       submitRebootReservation();\n";
 		$text .= "     </script>\n";
 		$text .= "   </button>\n";
-		$text .= "   <button dojoType=\"dijit.form.Button\" id=\"rebreinstResCancelBtn\">\n";
+		$text .= "   <button dojoType=\"dijit.form.Button\">\n";
 		$text .= "     Cancel\n";
-		$text .= "	   <script type=\"dojo/method\" event=\"onClick\">\n";
-		$text .= "       dijit.byId('rebootreinstalldlg').hide();\n";
+		$text .= "     <script type=\"dojo/method\" event=\"onClick\">\n";
+		$text .= "       dijit.byId('rebootdlg').hide();\n";
+		$text .= "     </script>\n";
+		$text .= "   </button>\n";
+		$text .= "   </div>\n";
+		$text .= "</div>\n";
+
+		$text .= "<div dojoType=dijit.Dialog\n";
+		$text .= "      id=\"reinstalldlg\"\n";
+		$text .= "      title=\"Reinstall Reservation\"\n";
+		$text .= "      duration=250\n";
+		$text .= "      draggable=true>\n";
+		$text .= "    <script type=\"dojo/connect\" event=onHide>\n";
+		$text .= "      hideReinstallResDlg();\n";
+		$text .= "    </script>\n";
+		$text .= "   <div id=\"reinstallloading\" style=\"text-align: center\">";
+		$text .= "<img src=\"themes/$skin/css/dojo/images/loading.gif\" ";
+		$text .= "style=\"vertical-align: middle;\"> Loading...</div>\n";
+		$text .= "   <div id=\"reinstallResDlgContent\"></div>\n";
+		$text .= "   <input type=\"hidden\" id=\"reinstallrescont\">\n";
+		$text .= "   <div id=\"reinstallResDlgErrMsg\" class=\"rederrormsg\"></div>\n";
+		$text .= "   <div align=\"center\" id=\"reinstallbtns\" class=\"hidden\">\n";
+		$text .= "   <button id=\"reinstallResDlgBtn\" dojoType=\"dijit.form.Button\">\n";
+		$text .= "     Reinstall Reservation\n";
+		$text .= "     <script type=\"dojo/method\" event=\"onClick\">\n";
+		$text .= "       submitReinstallReservation();\n";
+		$text .= "     </script>\n";
+		$text .= "   </button>\n";
+		$text .= "   <button dojoType=\"dijit.form.Button\">\n";
+		$text .= "     Cancel\n";
+		$text .= "     <script type=\"dojo/method\" event=\"onClick\">\n";
+		$text .= "       dijit.byId('reinstalldlg').hide();\n";
 		$text .= "     </script>\n";
 		$text .= "   </button>\n";
 		$text .= "   </div>\n";
@@ -1349,13 +1383,13 @@ function viewRequests() {
 		$text .= "   <div align=\"center\">\n";
 		$text .= "   <button id=\"suggestDlgBtn\" dojoType=\"dijit.form.Button\" disabled>\n";
 		$text .= "     Use Selected Time\n";
-		$text .= "	   <script type=\"dojo/method\" event=\"onClick\">\n";
+		$text .= "     <script type=\"dojo/method\" event=\"onClick\">\n";
 		$text .= "       useSuggestedEditSlot();\n";
 		$text .= "     </script>\n";
 		$text .= "   </button>\n";
 		$text .= "   <button id=\"suggestDlgCancelBtn\" dojoType=\"dijit.form.Button\">\n";
 		$text .= "     Cancel\n";
-		$text .= "	   <script type=\"dojo/method\" event=\"onClick\">\n";
+		$text .= "     <script type=\"dojo/method\" event=\"onClick\">\n";
 		$text .= "       dijit.byId('suggestDlgBtn').set('disabled', true);\n";
 		$text .= "       dojo.removeClass('suggestDlgBtn', 'hidden');\n";
 		$text .= "       showDijitButton('suggestDlgBtn');\n";
@@ -1549,7 +1583,7 @@ function getViewRequestHTMLitem($item, $var1='', $data=array()) {
 		$r .= "               iconClass=\"noicon\"\n";
 		$r .= "               label=\"Reinstall\">\n";
 		$r .= "	          <script type=\"dojo/method\" event=\"onClick\">\n";
-		$r .= "              reinstallRequest('$var1');\n";
+		$r .= "              showReinstallRequest('$var1');\n";
 		$r .= "            </script>\n";
 		$r .= "          </div>\n";
 		return $r;
@@ -1605,9 +1639,29 @@ function getViewRequestHTMLitem($item, $var1='', $data=array()) {
 		else
 			$r .= "<strong>Admin User Group</strong>: {$data['admingroup']}<br>\n";
 		if(empty($data['logingroup']))
-			$r .= "<strong>Access User Group</strong>: (none)\n";
+			$r .= "<strong>Access User Group</strong>: (none)<br>\n";
 		else
-			$r .= "<strong>Access User Group</strong>: {$data['logingroup']}\n";
+			$r .= "<strong>Access User Group</strong>: {$data['logingroup']}<br>\n";
+		if($data['stateid'] == 8)
+			$r .= "<strong>Status</strong>: In Use\n";
+		elseif($data['stateid'] == 24)
+			$r .= "<strong>Status</strong>: Checkpointing\n";
+		elseif($data['stateid'] == 5)
+			$r .= "<strong>Status</strong>: Failed\n";
+		elseif($data['stateid'] == 13)
+			$r .= "<strong>Status</strong>: New\n";
+		elseif($data['stateid'] == 28)
+			$r .= "<strong>Status</strong>: Hard Rebooting\n";
+		elseif($data['stateid'] == 26)
+			$r .= "<strong>Status</strong>: Soft Rebooting\n";
+		elseif($data['stateid'] == 27)
+			$r .= "<strong>Status</strong>: Reinstalling\n";
+		elseif($data['stateid'] == 6)
+			$r .= "<strong>Status</strong>: Loading\n";
+		elseif($data['stateid'] == 3)
+			$r .= "<strong>Status</strong>: In Use\n";
+		elseif($data['stateid'] == 11)
+			$r .= "<strong>Status</strong>: Timed Out\n";
 		$r .= "</div>\n";
 		$r .= "</TD>\n";
 		return $r;
@@ -2683,6 +2737,7 @@ function AJsubmitEditRequest() {
 			       .     "logingroupid = $logingroupid "
 			       . "WHERE requestid = $requestid";
 			doQuery($query, 101);
+			addChangeLogEntryOther($request['logid'], "event:usergroups|admingroupid:$admingroupid|logingroupid:$logingroupid");
 			$query = "UPDATE request "
 			       . "SET stateid = 29 "
 			       . "WHERE id = $requestid";
@@ -2932,13 +2987,91 @@ function AJsubmitRemoveRequest() {
 ////////////////////////////////////////////////////////////////////////////////
 function AJrebootRequest() {
 	$requestid = getContinuationVar('requestid');
+	$reqdata = getRequestInfo($requestid, 1);
+	if(is_null($reqdata)) {
+		print "resGone('reboot'); ";
+		print "dijit.byId('editResDlg').show();";
+		print "setTimeout(resRefresh, 1500);";
+		return;
+	}
 	$reboottype = processInputVar('reboottype', ARG_NUMERIC);
 	$newstateid = 26;
-	if($reboottype == 1)
+	if($reboottype == 1) {
 		$newstateid = 28;
+		addChangeLogEntryOther($reqdata['logid'], "event:reboothard");
+	}
+	else
+		addChangeLogEntryOther($reqdata['logid'], "event:rebootsoft");
 	$query = "UPDATE request SET stateid = $newstateid WHERE id = $requestid";
 	doQuery($query, 101);
 	print "resRefresh();";
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn AJshowReinstallRequest()
+///
+/// \brief 
+///
+////////////////////////////////////////////////////////////////////////////////
+function AJshowReinstallRequest() {
+	global $user;
+	$requestid = getContinuationVar('requestid');
+	$reqdata = getRequestInfo($requestid, 1);
+	if(is_null($reqdata)) {
+		sendJSON(array('status' => 'resgone'));
+		return;
+	}
+	$imageid = $reqdata['reservations'][0]['imageid'];
+	$imgdata = getImages(0, $imageid);
+	$t = '';
+	$cdata = getContinuationVar();
+	$cont = addContinuationsEntry('AJreinstallRequest', $cdata, 300, 1, 0);
+	if(count($reqdata['reservations']) == 1 &&
+		($imgdata[$imageid]['ownerid'] == $user['id'] ||
+	   checkUserHasPerm('View Debug Information')) &&
+	   count($imgdata[$imageid]['imagerevision'] > 1)) {
+		# prompt for which revision to use for reinstall
+		$t .= "This will cause the reserved machine to be reinstalled. ";
+		$t .= "You may select which version<br>of the environment you would ";
+		$t .= "like to use for the reinstall. The currently installed<br>";
+		$t .= "version what is selected.<br>";
+		$t .= "<table summary=\"lists versions of the environment\">";
+		$t .= "<TR>";
+		$t .= "<TD></TD>";
+		$t .= "<TH>Version</TH>";
+		$t .= "<TH>Creator</TH>";
+		$t .= "<TH>Created</TH>";
+		$t .= "<TH>Currently in Production</TH>";
+		$t .= "</TR>";
+		foreach($imgdata[$imageid]['imagerevision'] as $revision) {
+			$t .= "<TR>";
+			// if revision was selected or it wasn't selected but it is the production revision, show checked
+			if($reqdata['reservations'][0]['imagerevisionid'] == $revision['id'])
+				$t .= "<TD align=center><INPUT type=radio name=revisionid value={$revision['id']} checked></TD>";
+			else
+				$t .= "<TD align=center><INPUT type=radio name=revisionid value={$revision['id']}></TD>";
+			$t .= "<TD align=center>{$revision['revision']}</TD>";
+			$t .= "<TD align=center>{$revision['user']}</TD>";
+			$t .= "<TD align=center>{$revision['prettydate']}</TD>";
+			if($revision['production'])
+				$t .= "<TD align=center>Yes</TD>";
+			else
+				$t .= "<TD align=center>No</TD>";
+			$t .= "</TR>";
+		}
+		$t .= "</table><br>";
+		$t .= "<strong>NOTE</strong>: Any data saved only to the reserved ";
+		$t .= "machine <strong>will be lost</strong>. Are you sure you<br>";
+		$t .= "want to continue?<br><br>";
+	}
+	else {
+		# prompt for reinstall confirmation
+		$t .= "This will cause the reserved machine to be reinstalled. Any<br>";
+		$t .= "data saved only to the reserved machine will be lost. Are<br>";
+		$t .= "you sure you want to continue?<br><br>";
+	}
+	sendJSON(array('status' => 'success', 'txt' => $t, 'cont' => $cont));
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -2951,9 +3084,34 @@ function AJrebootRequest() {
 ////////////////////////////////////////////////////////////////////////////////
 function AJreinstallRequest() {
 	$requestid = getContinuationVar('requestid');
+	$reqdata = getRequestInfo($requestid, 1);
+	if(is_null($reqdata)) {
+		sendJSON(array('status' => 'resgone'));
+		return;
+	}
+	$revisionid = processInputVar('revisionid', ARG_NUMERIC, 0);
+	if($revisionid != 0) {
+		$imageid = $reqdata['reservations'][0]['imageid'];
+		$imgdata = getImages(0, $imageid);
+		if(! array_key_exists($revisionid, $imgdata[$imageid]['imagerevision'])) {
+			$cdata = getContinuationVar();
+			$cont = addContinuationsEntry('AJreinstallRequest', $cdata, 300, 1, 0);
+			sendJSON(array('status' => 'invalidrevisionid', 'cont' => $cont));
+			return;
+		}
+		if($reqdata['reservations'][0]['imagerevisionid'] != $revisionid) {
+			$query = "UPDATE reservation "
+			       . "SET imagerevisionid = $revisionid "
+			       . "WHERE id = {$reqdata['reservations'][0]['reservationid']}";
+			doQuery($query, 101);
+		}
+		addChangeLogEntryOther($reqdata['logid'], "event:reinstall|revisionid:$revisionid");
+	}
+	else
+		addChangeLogEntryOther($reqdata['logid'], "event:reinstall");
 	$query = "UPDATE request SET stateid = 27 WHERE id = $requestid";
 	doQuery($query, 101);
-	print "resRefresh();";
+	sendJSON(array('status' => 'success'));
 }
 
 ////////////////////////////////////////////////////////////////////////////////

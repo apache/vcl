@@ -174,6 +174,7 @@ $noHTMLwrappers = array('sendRDPfile',
                         'AJeditRequest',
                         'AJsubmitEditRequest',
                         'AJrebootRequest',
+                        'AJshowReinstallRequest',
                         'AJreinstallRequest',
                         'AJshowRequestSuggestedTimes',
                         'AJgenerateUtilData',
@@ -367,6 +368,7 @@ $actions['mode']['subimageDialogContent'] = "subimageDialogContent";
 $actions['mode']['AJaddSubimage'] = "AJaddSubimage";
 $actions['mode']['AJremSubimage'] = "AJremSubimage";
 $actions['mode']['AJrebootRequest'] = "AJrebootRequest";
+$actions['mode']['AJshowReinstallRequest'] = "AJshowReinstallRequest";
 $actions['mode']['AJreinstallRequest'] = "AJreinstallRequest";
 $actions['pages']['selectImageOption'] = "manageImages";
 $actions['pages']['viewImages'] = "manageImages";
@@ -417,6 +419,7 @@ $actions['pages']['subimageDialogContent'] = "manageImages";
 $actions['pages']['AJaddSubimage'] = "manageImages";
 $actions['pages']['AJremSubimage'] = "manageImages";
 $actions['pages']['AJrebootRequest'] = "manageImages";
+$actions['pages']['AJshowReinstallRequest'] = "manageImages";
 $actions['pages']['AJreinstallRequest'] = "manageImages";
 
 # manage schedules
