@@ -42,7 +42,7 @@ BEGIN
     AND TABLE_NAME=tableName
   )
   THEN
-    SET @statement_array = CONCAT('ALTER TABLE ', Database(), '.', tableName, ' ADD COLUMN ', columnName, ' ', columnDefinition);
+    SET @statement_array = CONCAT('ALTER TABLE `', Database(), '`.', tableName, ' ADD COLUMN ', columnName, ' ', columnDefinition);
     PREPARE statement_string FROM @statement_array;
     EXECUTE statement_string;
   END IF;
@@ -69,10 +69,93 @@ BEGIN
     AND TABLE_NAME=tableName
   )
   THEN
-    SET @statement_array = CONCAT('ALTER TABLE ', Database(), '.', tableName, ' DROP COLUMN ', columnName);
+    CALL DropExistingConstraints(tableName, columnName);
+    CALL DropExistingIndices(tableName, columnName);
+  
+    SET @statement_array = CONCAT('ALTER TABLE `', Database(), '`.', tableName, ' DROP COLUMN ', columnName);
     PREPARE statement_string FROM @statement_array;
     EXECUTE statement_string;
   END IF;
+END$$
+
+-- --------------------------------------------------------
+
+/*
+Procedure   : DropExistingConstraints
+Parameters  : tableName, columnName
+Description : Drops all constraints set for an existing column.
+*/
+
+DROP PROCEDURE IF EXISTS `DropExistingConstraints`$$
+CREATE PROCEDURE `DropExistingConstraints`(
+  IN tableName tinytext,
+  IN columnName tinytext
+)
+BEGIN
+  DECLARE done INT DEFAULT 0;
+  DECLARE existing_constraint_name CHAR(16);
+  DECLARE database_name CHAR(16);
+
+  DECLARE select_existing_constraint_names CURSOR FOR
+    SELECT CONSTRAINT_NAME, TABLE_SCHEMA FROM information_schema.KEY_COLUMN_USAGE WHERE
+    TABLE_SCHEMA = Database()
+    AND TABLE_NAME = tableName
+    AND COLUMN_NAME = columnName;
+  
+  DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = 1;
+  OPEN select_existing_constraint_names;
+
+  REPEAT
+    FETCH select_existing_constraint_names INTO existing_constraint_name, database_name;
+    -- SELECT existing_constraint_name, database_name;
+    IF NOT done THEN
+      SET @drop_existing_constraint = CONCAT('ALTER TABLE `', Database(), '`.', tableName, ' DROP FOREIGN KEY ', existing_constraint_name);
+      PREPARE drop_existing_constraint FROM @drop_existing_constraint;
+      EXECUTE drop_existing_constraint;
+    END IF;
+  UNTIL done END REPEAT;
+
+  CLOSE select_existing_constraint_names;
+END$$
+
+-- --------------------------------------------------------
+
+/*
+Procedure   : DropExistingIndices
+Parameters  : tableName, columnName
+Description : Drops all indices set for an existing column.
+*/
+
+DROP PROCEDURE IF EXISTS `DropExistingIndices`$$
+CREATE PROCEDURE `DropExistingIndices`(
+  IN tableName tinytext,
+  IN columnName tinytext
+)
+BEGIN
+  DECLARE done INT DEFAULT 0;
+  DECLARE existing_index_name CHAR(16);
+  DECLARE database_name CHAR(16);
+  
+  DECLARE select_existing_index_names CURSOR FOR
+    SELECT INDEX_NAME, TABLE_SCHEMA FROM information_schema.STATISTICS WHERE
+    TABLE_SCHEMA = Database()
+    AND TABLE_NAME = tableName
+    AND COLUMN_NAME = columnName;
+
+  DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = 1;
+  OPEN select_existing_index_names;
+
+  REPEAT
+    FETCH select_existing_index_names INTO existing_index_name, database_name;
+    -- SELECT existing_index_name, database_name;
+    IF NOT done THEN
+      SET @drop_existing_index = CONCAT('ALTER TABLE `', Database(), '`.', tableName, ' DROP INDEX ', existing_index_name);
+      PREPARE drop_existing_index FROM @drop_existing_index;
+      EXECUTE drop_existing_index;
+    END IF;
+  UNTIL done END REPEAT;
+
+  CLOSE select_existing_index_names;
 END$$
 
 -- --------------------------------------------------------
@@ -97,7 +180,7 @@ BEGIN
     AND COLUMN_NAME=columnName
   )
   THEN
-    SET @statement_array = CONCAT('ALTER TABLE ', Database(), '.', tableName, ' ADD INDEX (', columnName, ')');
+    SET @statement_array = CONCAT('ALTER TABLE `', Database(), '`.', tableName, ' ADD INDEX (', columnName, ')');
     PREPARE statement_string FROM @statement_array;
     EXECUTE statement_string;
   END IF;
@@ -136,7 +219,7 @@ BEGIN
   REPEAT
     FETCH select_nonunique_index_names INTO nonunique_index_name;
     IF NOT done THEN
-      SET @drop_nonunique_index = CONCAT('ALTER TABLE ', Database(), '.', tableName, ' DROP INDEX ', nonunique_index_name);
+      SET @drop_nonunique_index = CONCAT('ALTER TABLE `', Database(), '`.', tableName, ' DROP INDEX ', nonunique_index_name);
       PREPARE drop_nonunique_index FROM @drop_nonunique_index;
       EXECUTE drop_nonunique_index;
     END IF;
@@ -152,7 +235,7 @@ BEGIN
     AND NON_UNIQUE = 0
   )
   THEN
-    SET @add_unique_index = CONCAT('ALTER TABLE ', Database(), '.', tableName, ' ADD UNIQUE (', columnName, ')');
+    SET @add_unique_index = CONCAT('ALTER TABLE `', Database(), '`.', tableName, ' ADD UNIQUE (', columnName, ')');
     PREPARE add_unique_index FROM @add_unique_index;
     EXECUTE add_unique_index;
   END IF;
@@ -188,15 +271,15 @@ BEGIN
   THEN
     IF constraintType = 'update'
     THEN
-      SET @statement_array = CONCAT('ALTER TABLE ', Database(), '.', tableName, ' ADD FOREIGN KEY (', columnName, ') REFERENCES ', Database(), '.', referencedTableName, ' (', referencedColumnName, ') ON UPDATE ', constraintAction);
+      SET @statement_array = CONCAT('ALTER TABLE `', Database(), '`.', tableName, ' ADD FOREIGN KEY (', columnName, ') REFERENCES `', Database(), '`.', referencedTableName, ' (', referencedColumnName, ') ON UPDATE ', constraintAction);
     ELSEIF constraintType = 'delete'
     THEN
-      SET @statement_array = CONCAT('ALTER TABLE ', Database(), '.', tableName, ' ADD FOREIGN KEY (', columnName, ') REFERENCES ', Database(), '.', referencedTableName, ' (', referencedColumnName, ') ON DELETE ', constraintAction);
+      SET @statement_array = CONCAT('ALTER TABLE `', Database(), '`.', tableName, ' ADD FOREIGN KEY (', columnName, ') REFERENCES `', Database(), '`.', referencedTableName, ' (', referencedColumnName, ') ON DELETE ', constraintAction);
     ELSEIF constraintType = 'both'
     THEN
-      SET @statement_array = CONCAT('ALTER TABLE ', Database(), '.', tableName, ' ADD FOREIGN KEY (', columnName, ') REFERENCES ', Database(), '.', referencedTableName, ' (', referencedColumnName, ') ON DELETE ', constraintAction, ' ON UPDATE ', constraintAction);
+      SET @statement_array = CONCAT('ALTER TABLE `', Database(), '`.', tableName, ' ADD FOREIGN KEY (', columnName, ') REFERENCES `', Database(), '`.', referencedTableName, ' (', referencedColumnName, ') ON DELETE ', constraintAction, ' ON UPDATE ', constraintAction);
     ELSE
-      SET @statement_array = CONCAT('ALTER TABLE ', Database(), '.', tableName, ' ADD FOREIGN KEY (', columnName, ') REFERENCES ', Database(), '.', referencedTableName, ' (', referencedColumnName, ')');
+      SET @statement_array = CONCAT('ALTER TABLE `', Database(), '`.', tableName, ' ADD FOREIGN KEY (', columnName, ') REFERENCES `', Database(), '`.', referencedTableName, ' (', referencedColumnName, ')');
     END IF;
     PREPARE statement_string FROM @statement_array;
     EXECUTE statement_string;
@@ -576,15 +659,15 @@ CREATE TABLE IF NOT EXISTS `sitemaintenance` (
 --
 
 CREATE TABLE IF NOT EXISTS `statgraphcache` (
-	  `graphtype` enum('totalres','concurres','concurblade','concurvm') NOT NULL,
-	  `statdate` date NOT NULL,
-	  `affiliationid` mediumint(8) unsigned NOT NULL,
-	  `value` mediumint(8) unsigned NOT NULL,
-	  `provisioningid` smallint(5) unsigned NOT NULL,
-	  KEY `graphtype` (`graphtype`),
-	  KEY `statdate` (`statdate`),
-	  KEY `affiliationid` (`affiliationid`),
-	  KEY `provisioningid` (`provisioningid`)
+  `graphtype` enum('totalres','concurres','concurblade','concurvm') NOT NULL,
+  `statdate` date NOT NULL,
+  `affiliationid` mediumint(8) unsigned NOT NULL,
+  `value` mediumint(8) unsigned NOT NULL,
+  `provisioningid` smallint(5) unsigned NOT NULL,
+  KEY `graphtype` (`graphtype`),
+  KEY `statdate` (`statdate`),
+  KEY `affiliationid` (`affiliationid`),
+  KEY `provisioningid` (`provisioningid`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 CALL AddColumnIfNotExists('statgraphcache', 'provisioningid', "smallint(5) unsigned default NULL");
@@ -646,12 +729,17 @@ CALL AddIndexIfNotExists('vmhost', 'vmprofileid');
 -- 
 
 CALL DropColumnIfExists('vmprofile', 'nasshare');
-CALL AddColumnIfNotExists('vmprofile', 'repositorypath', "varchar(128) default NULL AFTER imageid");
-CALL AddColumnIfNotExists('vmprofile', 'virtualdiskpath', "varchar(128) default NULL AFTER imageid");
+CALL DropColumnIfExists('vmprofile', 'vmtypeid');
+CALL DropColumnIfExists('vmprofile', 'virtualdiskpath');
+
+CALL AddColumnIfNotExists('vmprofile', 'resourcepath', "varchar(256) default NULL AFTER imageid");
+CALL AddColumnIfNotExists('vmprofile', 'repositorypath', "varchar(128) default NULL AFTER resourcepath");
 CALL AddColumnIfNotExists('vmprofile', 'virtualswitch2', "varchar(80) NULL default NULL AFTER `virtualswitch1`");
 CALL AddColumnIfNotExists('vmprofile', 'virtualswitch3', "varchar(80) NULL default NULL AFTER `virtualswitch2`");
 CALL AddColumnIfNotExists('vmprofile', 'vmware_mac_eth0_generated', "tinyint(1) NOT NULL default '0'");
 CALL AddColumnIfNotExists('vmprofile', 'vmware_mac_eth1_generated', "tinyint(1) NOT NULL default '0'");
+
+CALL AddUniqueIndex('vmprofile', 'profilename');
 
 -- --------------------------------------------------------
 
@@ -711,6 +799,7 @@ INSERT IGNORE INTO `module` (`name`, `prettyname`, `description`, `perlpackage`)
 INSERT IGNORE INTO `module` (`name`, `prettyname`, `description`, `perlpackage`) VALUES ('provisioning_vbox', 'Virtual Box Provisioning Module', '', 'VCL::Module::Provisioning::vbox');
 INSERT IGNORE INTO `module` (`name`, `prettyname`, `description`, `perlpackage`) VALUES ('os_esxi', 'VMware ESXi OS Module', '', 'VCL::Module::OS::Linux::ESXi');
 INSERT IGNORE INTO `module` (`name`, `prettyname`, `description`, `perlpackage`) VALUES ('os_osx', 'OSX OS Module', '', 'VCL::Module::OS::OSX');
+INSERT IGNORE INTO `module` (`name`, `prettyname`, `description`, `perlpackage`) VALUES ('provisioning_libvirt', 'Libvirt Provisioning Module', '', 'VCL::Module::Provisioning::libvirt');
 
 -- --------------------------------------------------------
 
@@ -750,6 +839,7 @@ INSERT IGNORE INTO `OSinstalltype` (`name`) VALUES ('vbox');
 INSERT IGNORE INTO `provisioning` (`name`, `prettyname`, `moduleid`) VALUES ('xcat_2x', 'xCAT 2.x', (SELECT `id` FROM `module` WHERE `name` LIKE 'provisioning_xcat_2x'));
 INSERT IGNORE INTO `provisioning` (`name`, `prettyname`, `moduleid`) VALUES ('vmware', 'VMware', (SELECT `id` FROM `module` WHERE `name` LIKE 'provisioning_vmware'));
 INSERT IGNORE INTO `provisioning` (`name`, `prettyname`, `moduleid`) VALUES ('vbox', 'Virtual Box', (SELECT `id` FROM `module` WHERE `name` LIKE 'provisioning_vbox'));
+INSERT IGNORE INTO `provisioning` (`name`, `prettyname`, `moduleid`) VALUES ('libvirt','Libvirt Virtualization API', (SELECT `id` FROM `module` WHERE `name` LIKE 'provisioning_libvirt'));
 
 -- --------------------------------------------------------
 

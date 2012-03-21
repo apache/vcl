@@ -1200,11 +1200,10 @@ CREATE TABLE IF NOT EXISTS `vmhost` (
 CREATE TABLE IF NOT EXISTS `vmprofile` (
   `id` smallint(5) unsigned NOT NULL auto_increment,
   `profilename` varchar(56) NOT NULL,
-  `vmtypeid` tinyint(3) unsigned NOT NULL,
   `imageid` smallint(5) unsigned NOT NULL,
+  `resourcepath` varchar(256) default NULL,
   `repositorypath` varchar(128) default NULL,
   `datastorepath` varchar(128) NOT NULL,
-  `virtualdiskpath` varchar(128) default NULL,
   `vmpath` varchar(128) default NULL,
   `virtualswitch0` varchar(80) NOT NULL default 'VMnet0',
   `virtualswitch1` varchar(80) NOT NULL default 'VMnet2',
@@ -1216,7 +1215,7 @@ CREATE TABLE IF NOT EXISTS `vmprofile` (
   `vmware_mac_eth0_generated` tinyint(1) NOT NULL default '0',
   `vmware_mac_eth1_generated` tinyint(1) NOT NULL default '0',
   PRIMARY KEY  (`id`),
-  KEY `vmtypeid` (`vmtypeid`,`imageid`),
+  UNIQUE KEY `profilename` (`profilename`),
   KEY `imageid` (`imageid`)
 ) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
 
@@ -1463,7 +1462,8 @@ INSERT INTO `module` (`id`, `name`, `prettyname`, `description`, `perlpackage`) 
 (23, 'base_module', 'VCL Base Module', '', 'VCL::Module'),
 (24, 'provisioning_vbox', 'Virtual Box Provisioning Module', '', 'VCL::Module::Provisioning::vbox'),
 (25, 'os_esxi', 'VMware ESXi OS Module', '', 'VCL::Module::OS::Linux::ESXi'),
-(26, 'os_osx', 'OSX OS Module', '', 'VCL::Module::OS::OSX');
+(26, 'os_osx', 'OSX OS Module', '', 'VCL::Module::OS::OSX'),
+(27, 'provisioning_libvirt', 'Libvirt Provisioning Module', '', 'VCL::Module::Provisioning::libvirt');
 
 -- 
 -- Dumping data for table `OS`
@@ -1558,7 +1558,8 @@ INSERT INTO `provisioning` (`id`, `name`, `prettyname`, `moduleid`) VALUES
 (5, 'xcat_21', 'xCAT 2.1', 11),
 (6, 'xcat_2x', 'xCAT 2.x', 20),
 (7, 'vmware', 'VMware', 21),
-(8, 'vbox', 'Virtual Box', 24);
+(8, 'vbox', 'Virtual Box', 24),
+(9, 'libvirt', 'Libvirt Virtualization API', 27);
 
 --
 -- Dumping data for table `provisioningOSinstalltype`
@@ -1817,13 +1818,13 @@ INSERT INTO `variable` (`id`, `name`, `serialization`, `value`) VALUES
 -- Dumping data for table `vmprofile`
 -- 
 
-INSERT INTO `vmprofile` (`id`, `profilename`, `vmtypeid`, `imageid`, `repositorypath`, `datastorepath`, `vmpath`, `virtualswitch0`, `virtualswitch1`, `vmdisk`) VALUES
-(1, 'VMware Server 1.x - local storage', 1, 4, NULL, '/var/lib/vmware/Virtual Machines', NULL, 'VMnet0', 'VMnet2', 'localdisk'),
-(2, 'VMware Server 2.x - local storage', 1, 4, NULL, '/var/lib/vmware/Virtual Machines', NULL, 'Bridged', 'Bridged (2)', 'localdisk'),
-(3, 'VMware Server 2.x - network storage', 1, 4, NULL, '/vmfs/volumes/nfs-datastore', '/var/lib/vmware/Virtual Machines', 'Bridged', 'Bridged (2)', 'networkdisk'),
-(4, 'VMware ESX - local storage', 5, 4, NULL, '/vmfs/volumes/local-datastore', NULL, 'Private', 'Public', 'localdisk'),
-(5, 'VMware ESX - network storage', 5, 4, NULL, '/vmfs/volumes/nfs-datastore', NULL, 'Private', 'Public', 'networkdisk'),
-(6, 'VMware ESX - local & network storage', 5, 4, NULL, '/vmfs/volumes/nfs-datastore1', '/vmfs/volumes/local-datastore', 'Private', 'Public', 'networkdisk');
+INSERT INTO `vmprofile` (`id`, `profilename`, `imageid`, `resourcepath`, `repositorypath`, `datastorepath`, `vmpath`, `virtualswitch0`, `virtualswitch1`, `vmdisk`) VALUES
+(1, 'VMware Server 1.x - local storage', 4, NULL, NULL, '/var/lib/vmware/Virtual Machines', NULL, 'VMnet0', 'VMnet2', 'localdisk'),
+(2, 'VMware Server 2.x - local storage', 4, NULL, NULL, '/var/lib/vmware/Virtual Machines', NULL, 'Bridged', 'Bridged (2)', 'localdisk'),
+(3, 'VMware Server 2.x - network storage', 4, NULL, NULL, '/vmfs/volumes/nfs-datastore', '/var/lib/vmware/Virtual Machines', 'Bridged', 'Bridged (2)', 'networkdisk'),
+(4, 'VMware ESX - local storage', 4, NULL, NULL, '/vmfs/volumes/local-datastore', NULL, 'Private', 'Public', 'localdisk'),
+(5, 'VMware ESX - network storage', 4, NULL, NULL, '/vmfs/volumes/nfs-datastore', NULL, 'Private', 'Public', 'networkdisk'),
+(6, 'VMware ESX - local & network storage', 4, NULL, NULL, '/vmfs/volumes/nfs-datastore1', '/vmfs/volumes/local-datastore', 'Private', 'Public', 'networkdisk');
 
 -- 
 -- Dumping data for table `vmtype`
@@ -2099,7 +2100,6 @@ ALTER TABLE `vmhost`
 -- Constraints for table `vmprofile`
 --
 ALTER TABLE `vmprofile`
-  ADD CONSTRAINT `vmprofile_ibfk_2` FOREIGN KEY (`vmtypeid`) REFERENCES `vmtype` (`id`) ON UPDATE CASCADE,
   ADD CONSTRAINT `vmprofile_ibfk_1` FOREIGN KEY (`imageid`) REFERENCES `image` (`id`) ON UPDATE CASCADE;
 
 --
