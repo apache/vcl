@@ -397,7 +397,7 @@ $SUBROUTINE_MAPPINGS{server_request_fixedMAC} = '$self->request_data->{reservati
 $SUBROUTINE_MAPPINGS{server_request_admingroupid} = '$self->request_data->{reservation}{RESERVATION_ID}{serverrequest}{admingroupid}';
 $SUBROUTINE_MAPPINGS{server_request_logingroupid} = '$self->request_data->{reservation}{RESERVATION_ID}{serverrequest}{logingroupid}';
 $SUBROUTINE_MAPPINGS{server_request_monitored} = '$self->request_data->{reservation}{RESERVATION_ID}{serverrequest}{monitored}';
-$SUBROUTINE_MAPPINGS{server_ssh_allow_users} = '$self->request_data->{user}{unityid}';
+$SUBROUTINE_MAPPINGS{server_allow_users} = '$self->request_data->{user}{unityid}';
 
 $SUBROUTINE_MAPPINGS{imagerevision_comments} = '$self->request_data->{reservation}{RESERVATION_ID}{imagerevision}{comments}';
 $SUBROUTINE_MAPPINGS{imagerevision_date_created} = '$self->request_data->{reservation}{RESERVATION_ID}{imagerevision}{datecreated}';

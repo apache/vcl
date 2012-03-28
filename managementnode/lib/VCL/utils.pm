@@ -2220,7 +2220,8 @@ sub get_reservation_accounts {
 	SELECT DISTINCT
 	reservationaccounts.userid AS reservationaccounts_userid,
 	reservationaccounts.password AS reservationaccounts_password,
-	affiliation.name AS affiliation_name
+	affiliation.name AS affiliation_name,
+	user.unityid AS user_name
 	FROM
 	reservationaccounts,
 	affiliation,
@@ -2247,6 +2248,7 @@ sub get_reservation_accounts {
 			$user_info{$userid}{"userid"} = $userid;
 			$user_info{$userid}{"password"} = $reservation_acct{reservationaccounts_password};
 			$user_info{$userid}{"affiliation"} = $reservation_acct{affiliation_name};
+			$user_info{$userid}{"username"} = $reservation_acct{user_name};
 		}
 		
 		return %user_info;
@@ -2261,6 +2263,12 @@ sub update_reservation_accounts {
 	my $resid = shift;
 	my $userid = shift;
 	my $password = shift;
+	my $mode = shift;
+	
+	if(!$mode) {
+		notify($ERRORS{'WARNING'}, 0, "mode argument was not specified, either add or delete");
+      return;
+	}
 
 	if ( !$resid ) {
 		notify($ERRORS{'WARNING'}, 0, "resid argument was not specified");
@@ -2275,32 +2283,47 @@ sub update_reservation_accounts {
 	if ( !$password ) {
 		$password = '';
 	}
-
-	my $insert_statement = "
-	INSERT INTO 
-	reservationaccounts
-	(
-		reservationid,
-		userid,
-		password
-	)
-	VALUES
-	(
-		'$resid',
-		'$userid',
-		'$password'
-	)
-	";
 	
-	notify($ERRORS{'OK'}, 0, "$insert_statement");
+	my $statement;
+	
+	#ADD
+	if($mode =~ /add/i) {
+			  $statement = "
+			  INSERT INTO 
+			  reservationaccounts
+			  (
+				  reservationid,
+				  userid,
+				  password
+			  )
+			  VALUES
+			  (
+				  '$resid',
+				  '$userid',
+				  '$password'
+			  )
+			  ";
+	}
+	elsif( $mode =~ /delete/i ) {
+			$statement = "
+			DELETE 
+			reservationaccounts
+			FROM
+			reservationaccounts
+			WHERE
+			reservationid = '$resid' AND
+			userid = '$userid'
+			"
+	
+	}
 
-	if( database_execute($insert_statement) ) {
-		notify($ERRORS{'OK'}, 0, "inserted new reservationaccount info $resid $userid");
+	if(database_execute($statement) ) {
+		#notify($ERRORS{'OK'}, 0, "executed $statement $resid $userid");
 		return 1;
 	}
 	else {
+		notify($ERRORS{'OK'}, 0, "failed to to execute statement= $statement");
 		return 0;
-		notify($ERRORS{'OK'}, 0, "failed to insert new reservationaccount info $resid $userid");
 	}
 }
 
@@ -3121,12 +3144,17 @@ sub getusergroupmembers {
 
 	for (@selected_rows) {
 		my %hash = %{$_};
+		if(!defined($hash{uid})){
+			$hash{uid} = 0;
+		}
 		push(@retarray, "$hash{unityid}:$hash{uid}:$hash{id}");
 	}
 
 	return @retarray;
 
 } ## end sub getusergroupmembers
+
+
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -4049,7 +4077,12 @@ sub database_execute {
 		my $sql_insertid = $statement_handle->{'mysql_insertid'};
 		$statement_handle->finish;
 		$dbh->disconnect if !defined $ENV{dbh};
-		return $sql_insertid;
+		if($sql_insertid) {
+			return $sql_insertid;
+		}
+		else { 
+			return 1;
+		}
 	}
 	else {
 		$statement_handle->finish;

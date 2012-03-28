@@ -140,43 +140,14 @@ sub pre_capture {
 	if(!$self->clean_iptables()) {
 		return;
 	}
-
-	# Try to clear /tmp
-	if ($self->execute("/usr/sbin/tmpwatch -f 0 /tmp; /bin/cp /dev/null /var/log/wtmp")) {
-		notify($ERRORS{'DEBUG'}, 0, "cleared /tmp on $computer_node_name");
-	}
-
-	# Clear SSH idenity keys from /root/.ssh 
-	if (!$self->clear_private_keys()) {
-	  notify($ERRORS{'WARNING'}, 0, "unable to clear known identity keys");
-	}
-
-	#Fetch exclude_list
-	my @exclude_list = $self->get_exclude_list();
-
-	if (@exclude_list ) {
-		notify($ERRORS{'DEBUG'}, 0, "skipping files listed in exclude_list\n" . join("\n", @exclude_list));
+	
+	if(!$self->clean_known_files()) {
+		notify($ERRORS{'WARNING'}, 0, "unable to clean known files");
 	}
 	
-	#Remove files
-	if(!(grep( /70-persistent-net.rules/ , @exclude_list ) ) ){
-		if(!$self->delete_file("/etc/udev/rules.d/70-persistent-net.rules")){
-			notify($ERRORS{'WARNING'}, 0, "unable to remove /etc/udev/rules.d/70-persistent-net.rules");
-		}
-	}
-	
-	if(!(grep( /\/var\/log\/secure/ , @exclude_list ) ) ){
-		if(!$self->delete_file("/var/log/secure")){
-			notify($ERRORS{'WARNING'}, 0, "unable to remove /var/log/secure");
-		}
-	}
-	
-	if(!(grep( /\/var\/log\/messages/ , @exclude_list ) ) ){
-		if(!$self->delete_file("/var/log/messages")){
-			notify($ERRORS{'WARNING'}, 0, "unable to remove /var/log/secure");
-		}
-	}
-	
+   #Fetch exclude_list
+   my @exclude_list = $self->get_exclude_list();
+
 	# Write /etc/rc.local script
 	if(!(grep( /rc.local/ , @exclude_list ) ) ){
 		if (!$self->generate_rc_local()){
@@ -835,6 +806,13 @@ sub delete_user {
 		notify($ERRORS{'WARNING'}, 0, "image identity keys could not be determined");
 		return 0;
 	}
+
+	if ($self->user_logged_in($user_login_id)) {
+		notify($ERRORS{'OK'}, 0, "user $user_login_id is logged in, logging of user");
+		if($self->logoff_user($user_login_id)) {
+		
+		}
+	}
 	# Use userdel to delete the user
 	# Do not use userdel -r, it will affect HPC user storage for HPC installs
 	my $user_delete_command = "/usr/sbin/userdel $user_login_id";
@@ -962,7 +940,7 @@ sub grant_access {
 	notify($ERRORS{'OK'}, 0, "server_request_id= $server_request_id");
 
 	if ( $server_request_id ) {
-		my $server_allow_user_list = $self->data->get_server_ssh_allow_users();
+		my $server_allow_user_list = $self->data->get_server_allow_users();
 		notify($ERRORS{'OK'}, 0, "server_allow_user_list= $server_allow_user_list");
 		if ( $server_allow_user_list ) {
 
@@ -2998,6 +2976,7 @@ sub create_user {
 	
         if (!$username) {
                 $username = $self->data->get_user_login_id();
+					notify($ERRORS{'OK'}, 0, "username not provided, pulling from datastructure");
         }
         if (!$password) {
                 $password = $self->data->get_reservation_password();
@@ -3007,10 +2986,12 @@ sub create_user {
 	}
 	if (!$user_uid) {
 		$user_uid = $self->data->get_user_uid();	
+		notify($ERRORS{'OK'}, 0, "user_uid not provided, pulling from datastructure");
 	}
 	
 	if (!$user_standalone) {
 		$user_standalone      = $self->data->get_user_standalone();
+		notify($ERRORS{'OK'}, 0, "user_standalone not provided, pulling from datastructure");
 	}
 
 	#adminoverride, if 0 use value from database for $imagemeta_rootaccess
@@ -3110,23 +3091,29 @@ sub update_server_access {
 
 
 	if ( !$server_allow_user_list ) {
-		my $server_allow_user_list = $self->data->get_server_ssh_allow_users();
+		my $server_allow_user_list = $self->data->get_server_allow_users();
 	}
 	
         notify($ERRORS{'OK'}, 0, "server_allow_user_list= $server_allow_user_list");
         if ( $server_allow_user_list ) {
 
-             my $cmd = "echo \"AllowUsers $server_allow_user_list\" >> /etc/ssh/external_sshd_config";
+             my $cmd = "sed -i -e \"/^AllowUsers */d\" /etc/ssh/external_sshd_config; echo \"AllowUsers $server_allow_user_list\" >> /etc/ssh/external_sshd_config";
              if (run_ssh_command($computer_node_name, $identity, $cmd, "root")) {
                  notify($ERRORS{'DEBUG'}, 0, "added AllowUsers $server_allow_user_list to external_sshd_config");
              }
              else {
                  notify($ERRORS{'CRITICAL'}, 0, "failed to add AllowUsers $server_allow_user_list to external_sshd_config");
              }
-
-				if ($self->execute("/etc/init.d/ext_sshd stop; sleep 2; /etc/init.d/ext_sshd start")) {
-					notify($ERRORS{'DEBUG'}, 0, "restarted ext_sshd");
+				
+				if(!$self->stop_service("ext_sshd")) {
+				
 				}
+				if(!$self->start_service("ext_sshd")) {
+					notify($ERRORS{'WARNING'}, 0, "failed to start ext_sshd");
+					return 0;	
+				}
+			
+				notify($ERRORS{'DEBUG'}, 0, "restarted ext_sshd");
         }
 	
 	return 1;
@@ -3308,7 +3295,7 @@ sub start_service {
 					 $command = "systemctl start $service_name" . ".service";
 		  }
 		  else {
-				  $command = "/sbin/service $service_name start";
+				  $command = "service $service_name start";
 		  }
 
 		  my ($status, $output) = run_ssh_command($computer_node_name, $management_node_keys, $command, '', '', 1);
@@ -3366,7 +3353,7 @@ sub stop_service {
                 $command = "systemctl stop $service_name" . ".service";
         }
         else {
-              $command = "/sbin/service $service_name stop";
+              $command = "service $service_name stop";
         }
 
         my ($status, $output) = run_ssh_command($computer_node_name, $management_node_keys, $command, '', '', 1);
@@ -4510,6 +4497,63 @@ sub user_logged_in {
 
 }
 
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 clean_known_files
+
+ Parameters  : 
+ Returns     : 1
+ Description : Removes or overwrites known files that are not excluded.
+
+=cut
+
+sub clean_known_files {
+	my $self = shift;
+   if (ref($self) !~ /linux/i) {
+      notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+      return;
+   }
+	
+	my $computer_node_name = $self->data->get_computer_node_name();
+
+	# Try to clear /tmp
+   if ($self->execute("/usr/sbin/tmpwatch -f 0 /tmp; /bin/cp /dev/null /var/log/wtmp")) {
+      notify($ERRORS{'DEBUG'}, 0, "cleared /tmp on $computer_node_name");
+   }
+
+	# Clear SSH idenity keys from /root/.ssh 
+   if (!$self->clear_private_keys()) {
+     notify($ERRORS{'WARNING'}, 0, "unable to clear known identity keys");
+   }
+
+	#Fetch exclude_list
+   my @exclude_list = $self->get_exclude_list();
+
+   if (@exclude_list ) {
+      notify($ERRORS{'DEBUG'}, 0, "skipping files listed in exclude_list\n" . join("\n", @exclude_list));
+   }
+   
+   #Remove files
+   if(!(grep( /70-persistent-net.rules/ , @exclude_list ) ) ){ 
+      if(!$self->delete_file("/etc/udev/rules.d/70-persistent-net.rules")){
+         notify($ERRORS{'WARNING'}, 0, "unable to remove /etc/udev/rules.d/70-persistent-net.rules");
+      }    
+   }
+   
+   if(!(grep( /\/var\/log\/secure/ , @exclude_list ) ) ){ 
+      if(!$self->delete_file("/var/log/secure")){
+         notify($ERRORS{'WARNING'}, 0, "unable to remove /var/log/secure");
+      }    
+   }	
+	
+	if(!(grep( /\/var\/log\/messages/ , @exclude_list ) ) ){ 
+      if(!$self->delete_file("/var/log/messages")){
+         notify($ERRORS{'WARNING'}, 0, "unable to remove /var/log/secure");
+      }    
+   }
+
+	return 1;
+}
 
 ##/////////////////////////////////////////////////////////////////////////////
 1;

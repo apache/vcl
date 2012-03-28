@@ -2093,6 +2093,7 @@ sub manage_server_access {
 	my $server_request_admingroupid = $self->data->get_server_request_admingroupid();
 	my $server_request_logingroupid = $self->data->get_server_request_logingroupid();
 	my $user_login_id_owner         = $self->data->get_user_login_id();
+	my $user_id_owner		           = $self->data->get_user_id();
 
 	# Build list of users.
 	# If in admin group set admin flag
@@ -2103,7 +2104,7 @@ sub manage_server_access {
 	my @userlist_admin;
 	my @userlist_login;
 	my %user_hash;
-	my $ssh_allow_list;
+	my $allow_list;
 
 	if ($server_request_admingroupid) {
 		@userlist_admin = getusergroupmembers($server_request_admingroupid);
@@ -2112,54 +2113,61 @@ sub manage_server_access {
 		@userlist_login = getusergroupmembers($server_request_logingroupid);
 	}	
 	
-	notify($ERRORS{'OK'}, 0, " admin list= @userlist_admin");
-	notify($ERRORS{'OK'}, 0, " login list= @userlist_login");
-	
+	notify($ERRORS{'OK'}, 0, " admin login list= @userlist_admin");
+	notify($ERRORS{'OK'}, 0, " nonadmin login list= @userlist_login");
 	
 	if (scalar @userlist_admin > 0) {
 		foreach my $str (@userlist_admin) {
-			my ($username,$uid,$vcl_user_id) = split(/:/, $str);
+			my ($username,$uid,$vcl_user_id) = 0;
+			($username,$uid,$vcl_user_id) = split(/:/, $str);
 			my ($correct_username, $user_domain) = split /@/, $username;
-         $user_hash{$uid}{"username"} = $correct_username;
-			$user_hash{$uid}{"uid"}	= $uid;
-			$user_hash{$uid}{"vcl_user_id"}	= $vcl_user_id;
-			$user_hash{$uid}{"rootaccess"} = 1;
-			notify($ERRORS{'OK'}, 0, "adding admin $uid for $username ");
+         $user_hash{$vcl_user_id}{"username"} = $correct_username;
+			$user_hash{$vcl_user_id}{"uid"} = $uid;
+			$user_hash{$vcl_user_id}{"vcl_user_id"} = $vcl_user_id;
+			$user_hash{$vcl_user_id}{"rootaccess"} = 1;
+			notify($ERRORS{'DEBUG'}, 0, "adding admin vcl_user_id= $vcl_user_id uid= $uid for $username ");
 		}
 	}		
 	if (scalar @userlist_login > 0) {
 		foreach my $str (@userlist_login) {
-			notify($ERRORS{'OK'}, 0, "admin str= $str");
-			my ($username, $uid,$vcl_user_id) = split(/:/, $str);
+			notify($ERRORS{'OK'}, 0, "nonadmin user str= $str");
+			my ($username, $uid,$vcl_user_id) = 0;
+			($username, $uid,$vcl_user_id) = split(/:/, $str);
 			my ($correct_username, $user_domain) = split /@/, $username;
 			if (!exists($user_hash{$uid})) {
-				$user_hash{$uid}{"username"} = $correct_username;
-				$user_hash{$uid}{"uid"}	= $uid;
-				$user_hash{$uid}{"vcl_user_id"}	= $vcl_user_id;
-				$user_hash{$uid}{"rootaccess"} = 2;
-				notify($ERRORS{'OK'}, 0, "adding $uid for $username ");
+				$user_hash{$vcl_user_id}{"username"} = $correct_username;
+				$user_hash{$vcl_user_id}{"uid"}	= $uid;
+				$user_hash{$vcl_user_id}{"vcl_user_id"}	= $vcl_user_id;
+				$user_hash{$vcl_user_id}{"rootaccess"} = 2;
+				notify($ERRORS{'DEBUG'}, 0, "adding $vcl_user_id for $username ");
 			}
 			else {
-				notify($ERRORS{'OK'}, 0, "$uid for $username exists in user_hash, skipping");
+				notify($ERRORS{'OK'}, 0, "$vcl_user_id for $username exists in user_hash, skipping");
 			}
 		}
 	}	
 
 	# Collect users in reservationaccounts table
 	my %res_accounts = get_reservation_accounts($reservation_id);
+	notify($ERRORS{'DEBUG'}, 0, "res_accounts:". format_data(%res_accounts));
 	my $not_standalone_list = "";
 	if(defined($ENV{management_node_info}{NOT_STANDALONE}) && $ENV{management_node_info}{NOT_STANDALONE}){
 		$not_standalone_list = $ENV{management_node_info}{NOT_STANDALONE};
 	}
 
+	#Add users
 	foreach my $userid (sort keys %user_hash) {
 		next if (!($userid));
 		#Skip reservation owner, this account is processed in the new and reserved states
-		next if ($userid eq $user_login_id_owner);
+		notify($ERRORS{'DEBUG'}, 0, "userid= $userid  user_id_owner= $user_id_owner ");
+		if ($userid eq $user_id_owner) {
+			$allow_list .= " $user_hash{$userid}{username}";
+			next;
+		}
 		my $standalone = 0;
 		if(!exists($res_accounts{$userid})){
 			# check affiliation
-			notify($ERRORS{'OK'}, 0, "checking affiliation for $userid");
+			notify($ERRORS{'DEBUG'}, 0, "checking affiliation for $userid");
 			my $affiliation_name = get_user_affiliation($user_hash{$userid}{vcl_user_id}); 
 			if(defined($affiliation_name)) {
 
@@ -2176,34 +2184,55 @@ sub manage_server_access {
 				$user_hash{$userid}{"passwd"} = 0;
 			}
 			
-			if (update_reservation_accounts($reservation_id,$user_hash{$userid}{vcl_user_id},$user_hash{$userid}{passwd})) {
-				notify($ERRORS{'OK'}, 0, "Inserted $reservation_id,$user_hash{$userid}{vcl_user_id},$user_hash{$userid}{passwd} into reservationsaccounts table");
-			
+			if (update_reservation_accounts($reservation_id,$userid,$user_hash{$userid}{passwd},"add")) {
+				notify($ERRORS{'OK'}, 0, "Inserted $reservation_id,$userid,$user_hash{$userid}{passwd} into reservationsaccounts table");
 			}
 			
 			# Create user on the OS
-			if($self->create_user($user_hash{$userid}{username},$user_hash{$userid}{passwd},$userid,$user_hash{$userid}{rootaccess},$standalone)) {
+			if($self->create_user($user_hash{$userid}{username},$user_hash{$userid}{passwd},$user_hash{$userid}{uid},$user_hash{$userid}{rootaccess},$standalone)) {
 				notify($ERRORS{'OK'}, 0, "Successfully created user $user_hash{$userid}{username} on $computer_node_name");
 			}
 			else {
 				notify($ERRORS{'WARNING'}, 0, "Failed to create user on $computer_node_name ");
 			}
 			
-			$ssh_allow_list .= " $user_hash{$userid}{username}";
+			$allow_list .= " $user_hash{$userid}{username}";
 
-		
 		}
 		else {
-			notify($ERRORS{'WARNING'}, 0, "$userid exists in reservationaccounts table, assuming it exists on OS");
+			notify($ERRORS{'DEBUG'}, 0, "$userid exists in reservationaccounts table, assuming it exists on OS");
 		}
 			
 	}
-	notify($ERRORS{'OK'}, 0, "ssh_allow_list= $ssh_allow_list");
-
-	$self->data->set_server_ssh_allow_users($ssh_allow_list);
 	
-	if ( $self->can("update_server_access") ) {
-		if ( $self->update_server_access($ssh_allow_list) ) {
+	#Remove anyone listed in reservationaccounts list that is not in user_hash
+	foreach my $res_userid (sort keys %res_accounts) {
+		notify($ERRORS{'OK'}, 0, "res_userid= $res_userid username= $res_accounts{$res_userid}{username}");
+		#Skip reservation owner, this account is processed in the new and reserved states
+      if ($res_userid eq $user_login_id_owner) {
+			$allow_list .= " $res_accounts{$res_userid}{username}";
+			next;
+		}
+		if(!exists($user_hash{$res_userid})) {
+				 notify($ERRORS{'OK'}, 0, "username= $res_accounts{$res_userid}{username} is not listed in reservationsaccounts, attempting to delete");
+				  #Delete from reservationaccounts
+				  if (update_reservation_accounts($reservation_id,$res_accounts{$res_userid}{userid},0,"delete")) {
+						  notify($ERRORS{'OK'}, 0, "Deleted $reservation_id,$res_accounts{$res_userid}{userid} from reservationsaccounts table");
+				  }
+				  #Delete from OS
+				  if($self->delete_user($res_accounts{$res_userid}{username},0,0)) {
+					  notify($ERRORS{'OK'}, 0, "Successfully removed user= $res_accounts{$res_userid}{username}");	
+				  }	
+				next;
+		}
+		$allow_list .= " $res_accounts{$res_userid}{username}";
+	}
+	notify($ERRORS{'OK'}, 0, "allow_list= $allow_list");
+
+	$self->data->set_server_allow_users($allow_list);
+	
+	if ($self->can("update_server_access") ) {
+		if ( $self->update_server_access($allow_list) ) {
 			notify($ERRORS{'OK'}, 0, "updated remote access list");
 		}
 	}

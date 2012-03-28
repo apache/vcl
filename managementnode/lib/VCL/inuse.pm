@@ -159,6 +159,32 @@ sub process {
 		}
 	}
 	
+	#Server modified
+	if($request_state_name =~ /servermodified/) {
+      notify($ERRORS{'OK'}, 0, "this is a 'servermodified' request");
+
+		#FIXME - a cmd queue is needed to tell vcld what to do
+		#for now we assume a user has been added/removed from a user group
+		# 
+		
+		if (!$self->os->manage_server_access()) {
+			notify($ERRORS{'WARNING'}, 0, "Failed to update server access");
+      }	
+
+
+		# Put this request back into the inuse state
+		if (update_request_state($request_id, "inuse", "inuse")) {
+			notify($ERRORS{'OK'}, 0, "request state set back to inuse");
+      }
+      else {
+         notify($ERRORS{'WARNING'}, 0, "unable to set request state back to inuse");
+      }
+         
+      notify($ERRORS{'OK'}, 0, "exiting");
+      exit;
+	
+	}
+	
 	# Set the user connection timeout limit in minutes
 	my $connect_timeout_limit = 15;
 	
