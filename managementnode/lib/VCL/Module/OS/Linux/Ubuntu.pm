@@ -51,6 +51,7 @@ use 5.008000;
 use strict;
 use warnings;
 use diagnostics;
+no warnings 'redefine';
 
 use VCL::utils;
 
@@ -62,91 +63,70 @@ use VCL::utils;
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 capture_prepare
-
- Parameters  :
- Returns     :
- Description :
-
-=cut
-
-sub capture_prepare {
+sub clean_iptables {
 	my $self = shift;
-	if (ref($self) !~ /ubuntu/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return 0;
-	}
+   if (ref($self) !~ /ubuntu/i) {
+      notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+      return;
+   }
 
-	my $request_id               = $self->data->get_request_id();
-	my $reservation_id           = $self->data->get_reservation_id();
-	my $image_id                 = $self->data->get_image_id();
-	my $image_os_name            = $self->data->get_image_os_name();
-	my $management_node_keys     = $self->data->get_management_node_keys();
-	my $image_os_type            = $self->data->get_image_os_type();
-	my $image_name               = $self->data->get_image_name();
-	my $computer_id              = $self->data->get_computer_id();
-	my $computer_short_name      = $self->data->get_computer_short_name();
-	my $computer_node_name       = $self->data->get_computer_node_name();
-	my $computer_type            = $self->data->get_computer_type();
-	my $user_id                  = $self->data->get_user_id();
-	my $user_unityid             = $self->data->get_user_login_id();
-	my $managementnode_shortname = $self->data->get_management_node_short_name();
-	my $computer_private_ip      = $self->data->get_computer_private_ip_address();
-	my $ip_configuration = $self->data->get_management_node_public_ip_configuration();
+	# Check to see if this distro has iptables
+   # If not return 1 so it does not fail
+   if (!($self->file_exists("/sbin/iptables"))) {
+      notify($ERRORS{'WARNING'}, 0, "iptables does not exist on this OS");
+      return 1;
+   }
 
-	notify($ERRORS{'OK'}, 0, "beginning Ubuntu-specific image capture preparation tasks: $image_name on $computer_short_name");
-
-	my @sshcmd;
-
-	# Remove user and clean external ssh file
-	if ($self->delete_user()) {
-		notify($ERRORS{'OK'}, 0, "$user_unityid deleted from $computer_node_name");
-	}
-	if ($ip_configuration eq "static") {
-		if ($self->can("set_static_public_address") && $self->set_static_public_address()) {
-                        notify($ERRORS{'DEBUG'}, 0, "set static public IP address on $computer_node_name using set_static_public_address() method");
-                }
-	} ## end if ($ip_configuration eq "static")
-	
-	#Write /etc/rc.local script
-        if(!$self->generate_rc_local()){
-                notify($ERRORS{'WARNING'}, 0, "unable to generate /etc/rc.local script on $computer_node_name");
-                return 0;
-        }
-
-        #Generate external_sshd_config
-        if(!$self->generate_ext_sshd_config()){
-                notify($ERRORS{'WARNING'}, 0, "unable to generate /etc/ssh/external_sshd_config on $computer_node_name");
-                return 0;
-        }
-
-        #Generate ext_sshd init script
-        if(!$self->generate_ext_sshd_init()){
-                notify($ERRORS{'WARNING'}, 0, "unable to generate /etc/init.d/ext_sshd on $computer_node_name");
-                return 0;
-        }
-
-        #shutdown node
-        notify($ERRORS{'OK'}, 0, "shutting down node for Linux imaging sequence");
-        run_ssh_command($computer_node_name, $management_node_keys, "/sbin/shutdown -h now", "root");
-        notify($ERRORS{'OK'}, 0, "sleeping for 60 seconds while machine shuts down");
-        sleep 60;
-	
+   my $computer_node_name = $self->data->get_computer_node_name();
+   my $reservation_id                  = $self->data->get_reservation_id();
+   my $management_node_keys  = $self->data->get_management_node_keys();
 	
 
-	notify($ERRORS{'OK'}, 0, "returning 1");
-	return 1;
-} ## end sub capture_prepare
+   # Retrieve the iptables file to work on locally 
+   my $tmpfile = "/tmp/" . $reservation_id . "_iptables";
+   my $source_file_path = "/etc/iptables.rules";
+   if (run_scp_command("$computer_node_name:\"$source_file_path\"", $tmpfile, $management_node_keys)) {
+      my @lines;
+      if(open(IPTAB_TMPFILE, $tmpfile)){
+         @lines = <IPTAB_TMPFILE>;
+         close(IPTAB_TMPFILE);
+      }
+      foreach my $line (@lines){
+         if ($line =~ s/-A INPUT -s .*\n//) {
+         }
+      }
 
-#/////////////////////////////////////////////////////////////////////////////
+      #Rewrite array to tmpfile
+      if(open(IPTAB_TMPFILE, ">$tmpfile")){
+         print IPTAB_TMPFILE @lines;
+         close (IPTAB_TMPFILE);
+      }
 
-=head2 capture_start
+      # Copy iptables file back to node
+      if (run_scp_command($tmpfile, "$computer_node_name:\"$source_file_path\"", $management_node_keys)) {
+         notify($ERRORS{'DEBUG'}, 0, "copied $tmpfile to $computer_node_name $source_file_path");
+      }
+   }
 
- Parameters  :
- Returns     :
- Description :
+   #restart iptables
+   my $command = "iptables -P INPUT ACCEPT;iptables -P OUTPUT ACCEPT; iptables -P FORWARD ACCEPT; iptables -F; iptables-restore < /etc/iptables.rules";
+   my ($status_iptables,$output_iptables) = $self->execute($command);
+   if (defined $status_iptables && $status_iptables == 0) {
+      notify($ERRORS{'DEBUG'}, 0, "executed command $command on $computer_node_name");
+   }
+   else {
+      notify($ERRORS{'WARNING'}, 0, "output from iptables:" . join("\n", @$output_iptables));
+   }
 
-=cut
+   if ($self->wait_for_ssh(0)) {
+      return 1;
+   }
+   else {
+      notify($ERRORS{'CRITICAL'}, 0, "not able to login via ssh after cleaning_iptables");
+      return 0;
+   }
+
+}
 
 sub capture_start {
 	my $self = shift;
@@ -171,78 +151,6 @@ sub capture_start {
 	return 1;
 } ## end sub capture_start
 
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 delete_user
-
- Parameters  :
- Returns     :
- Description :
-
-=cut
-
-sub delete_user {
-	my $self = shift;
-	if (ref($self) !~ /ubuntu/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return 0;
-	}
-
-	# Make sure the user login ID was passed
-	my $user_login_id = shift;
-	$user_login_id = $self->data->get_user_login_id() if (!$user_login_id);
-	if (!$user_login_id) {
-		notify($ERRORS{'WARNING'}, 0, "user could not be determined");
-		return 0;
-	}
-
-	# Make sure the user login ID was passed
-	my $computer_node_name = shift;
-	$computer_node_name = $self->data->get_computer_node_name() if (!$computer_node_name);
-	if (!$computer_node_name) {
-		notify($ERRORS{'WARNING'}, 0, "computer node name could not be determined");
-		return 0;
-	}
-
-	my $imagemeta_rootaccess = $self->data->get_imagemeta_rootaccess();
-	my $management_node_keys = $self->data->get_management_node_keys();
-
-	# Use userdel to delete the user
-	my $user_delete_command = "/usr/sbin/userdel $user_login_id";
-	my @user_delete_results = run_ssh_command($computer_node_name, $management_node_keys, $user_delete_command, "root");
-	foreach my $user_delete_line (@{$user_delete_results[1]}) {
-		if ($user_delete_line =~ /currently logged in/) {
-			notify($ERRORS{'WARNING'}, 0, "user not deleted, $user_login_id currently logged in");
-			return 0;
-		}
-	}
-
-	#Clear user from external_sshd_config
-	my $clear_extsshd = "sed -i -e \"/^AllowUsers .*/d\" /etc/ssh/external_sshd_config";
-	if (run_ssh_command($computer_node_name, $management_node_keys, $clear_extsshd, "root")) {
-		notify($ERRORS{'DEBUG'}, 0, "cleared AllowUsers directive from external_sshd_config");
-	}
-	else {
-		notify($ERRORS{'CRITICAL'}, 0, "failed to add AllowUsers $user_login_id to external_sshd_config");
-	}
-
-	#Clear user from sudoers
-
-	if ($imagemeta_rootaccess) {
-		#clear user from sudoers file
-		my $clear_cmd = "sed -i -e \"/^$user_login_id .*/d\" /etc/sudoers";
-		if (run_ssh_command($computer_node_name, $management_node_keys, $clear_cmd, "root")) {
-			notify($ERRORS{'DEBUG'}, 0, "cleared $user_login_id from /etc/sudoers");
-		}
-		else {
-			notify($ERRORS{'CRITICAL'}, 0, "failed to clear $user_login_id from /etc/sudoers");
-		}
-	} ## end if ($imagemeta_rootaccess)
-
-	return 1;
-
-} ## end sub delete_user
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -354,6 +262,188 @@ sub grant_access {
 } ## end sub grant_access
 
 #/////////////////////////////////////////////////////////////////////////////
+
+=head2 clean_known_files
+
+ Parameters  : 
+ Returns     : 1
+ Description : Removes or overwrites known files that are not excluded.
+
+=cut
+
+sub clean_known_files {
+	my $self = shift;
+    if (ref($self) !~ /ubuntu/i) {
+       notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+       return 0;
+    }	
+	
+	my $computer_node_name = $self->data->get_computer_node_name();
+
+	# Clear SSH idenity keys from /root/.ssh 
+   if (!$self->clear_private_keys()) {
+     notify($ERRORS{'WARNING'}, 0, "unable to clear known identity keys");
+   }
+	
+	# Try to clear /tmp
+   if ($self->execute("/bin/cp /dev/null /var/log/wtmp")) {
+      notify($ERRORS{'DEBUG'}, 0, "cleared /var/log/wtmp on $computer_node_name");
+   }
+
+	#Fetch exclude_list
+   my @exclude_list = $self->get_exclude_list();
+	
+	if (@exclude_list ) {
+      notify($ERRORS{'DEBUG'}, 0, "skipping files listed in exclude_list\n" . join("\n", @exclude_list));
+   }
+   
+   #Remove files
+   if(!(grep( /70-persistent-net.rules/ , @exclude_list ) ) ){ 
+      if(!$self->delete_file("/etc/udev/rules.d/70-persistent-net.rules")){
+         notify($ERRORS{'WARNING'}, 0, "unable to remove /etc/udev/rules.d/70-persistent-net.rules");
+      }    
+   }
+   
+   if(!(grep( /\/var\/log\/auth/ , @exclude_list ) ) ){ 
+      if(!$self->execute("cp /dev/null /var/log/auth.log")){
+         notify($ERRORS{'WARNING'}, 0, "unable to overwrite  /var/log/auth.log");
+      }    
+   }
+   
+   if(!(grep( /\/var\/log\/lastlog/ , @exclude_list ) ) ){ 
+      if(!$self->execute("cp /dev/null /var/log/lastlog")){
+         notify($ERRORS{'WARNING'}, 0, "unable to overwrite /var/log/lastlog");
+      }    
+   }
+
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 enable_dhcp
+
+ Parameters  : 
+ Returns     : boolean
+ Description : Overwrites interfaces file setting both to dhcp
+
+=cut
+
+#/////////////////////////////////////////////////////////////////////////////
+
+sub enable_dhcp {
+   if (ref($self) !~ /VCL::Module/i) {
+      notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+      return;
+   }
+
+	my $request_id               = $self->data->get_request_id();
+   my $computer_node_name = $self->data->get_computer_node_name();
+	my $management_node_keys     = $self->data->get_management_node_keys();
+   
+   my $interface_name_argument = shift;
+   my @interface_names;
+  # if (!$interface_name_argument) {
+  #    push(@interface_names, $self->get_private_interface_name());
+  #    push(@interface_names, $self->get_public_interface_name());
+  # }
+  # elsif ($interface_name_argument =~ /private/i) {
+  #    push(@interface_names, $self->get_private_interface_name());
+  # }
+  # elsif ($interface_name_argument =~ /public/i) {
+  #    push(@interface_names, $self->get_public_interface_name());
+  # }
+  # else {
+  #    push(@interface_names, $interface_name_argument);
+  # }
+
+	my @array2print;
+	
+	push(@array2print, '# This file describes the network interfaces available on your system'. "\n");
+	push(@array2print, '# and how to activate them. For more information, see interfaces(5).'. "\n");
+	push(@array2print, "\n");
+	push(@array2print, '# The loopback network interface'. "\n");
+	push(@array2print, 'auto lo'. "\n");
+	push(@array2print, 'iface lo inet loopback'. "\n");
+	push(@array2print, "\n");
+	push(@array2print, '# The primary network interface'. "\n");
+	push(@array2print, 'auto eth0 eth1'. "\n");
+	push(@array2print, 'iface eth0 inet dhcp'. "\n");
+	push(@array2print, 'iface eth1 inet dhcp'. "\n");
+
+	   #write to tmpfile
+   my $tmpfile = "/tmp/$request_id.interfaces";
+   if (open(TMP, ">$tmpfile")) {
+      print TMP @array2print;
+      close(TMP);
+   }
+   else {
+      notify($ERRORS{'OK'}, 0, "could not write $tmpfile $!");
+      return 0;
+   }
+
+   #copy to node
+   if (run_scp_command($tmpfile, "$computer_node_name:/etc/network/interfaces", $management_node_keys)) {
+   }
+   else{
+		unlink($tmpfile);
+      return 0;
+   }
+	
+	unlink($tmpfile);
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 changepasswd
+
+ Parameters  : called as an object
+ Returns     : 1 - success , 0 - failure
+ Description : changes or sets password for given account
+
+=cut
+
+sub changepasswd {
+   my $self = shift;
+   if (ref($self) !~ /linux/i) {
+      notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+      return 0;
+   }
+
+   my $management_node_keys = $self->data->get_management_node_keys();
+	my $computer_short_name = $self->data->get_computer_short_name();
+
+   # change the privileged account passwords on the blade images
+   my $node = shift;
+   my $account = shift;
+   my $passwd = shift;
+
+   notify($ERRORS{'WARNING'}, 0, "node is not defined")    if (!(defined($node)));
+   notify($ERRORS{'WARNING'}, 0, "account is not defined") if (!(defined($account)));
+
+   $passwd = getpw(15) if (!(defined($passwd)));
+
+	my $command = "echo $account:$passwd | chpasswd";
+	
+	my ($exit_status, $output) = $self->execute($command);
+   if (!defined($output)) {
+      notify($ERRORS{'WARNING'}, 0, "failed to run command to determine if file or directory exists on $computer_short_name:\ncommand: '$command'");
+      return;
+   }
+   elsif (grep(/no such file/i, @$output)) {
+      #notify($ERRORS{'DEBUG'}, 0, "file or directory does not exist on $computer_short_name: '$path'");
+      return 0;
+   }
+   elsif (grep(/stat: /i, @$output)) {
+      notify($ERRORS{'WARNING'}, 0, "failed to determine if file or directory exists on $computer_short_name:\ncommand: '$command'\nexit status: $exit_status, output:\n" . join("\n", @$output));
+      return;
+   }	
+
+	notify($ERRORS{'OK'}, 0, "changed password for account: $account");	
+	return 1;
+}
+
 
 1;
 __END__
