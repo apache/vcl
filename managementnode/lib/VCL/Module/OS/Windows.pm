@@ -616,7 +616,6 @@ sub post_load {
 	}
 	
 	my $computer_node_name   = $self->data->get_computer_node_name();
-	my $imagemeta_postoption = $self->data->get_imagemeta_postoption();
 	
 	notify($ERRORS{'OK'}, 0, "beginning Windows post-load tasks on $computer_node_name");
 	
@@ -814,7 +813,7 @@ sub post_load {
 
 =cut
 
-	if ($imagemeta_postoption =~ /reboot/i) {
+	if ($self->data->get_imagemeta_postoption() =~ /reboot/i) {
 		notify($ERRORS{'OK'}, 0, "imagemeta postoption reboot is set for image, rebooting computer");
 		if (!$self->reboot()) {
 			notify($ERRORS{'WARNING'}, 0, "failed to reboot the computer");
@@ -10903,10 +10902,19 @@ sub run_script {
 	(my $script_path_escaped = $script_path) =~ s/( )/\^$1/g;
 	
 	# Get the node configuration directory, make sure it exists, create if necessary
-	my $node_log_directory = $self->get_node_configuration_directory() . '/Logs';
+	my $node_configuration_directory = $self->get_node_configuration_directory();
+	my $node_log_directory = "$node_configuration_directory/Logs";
 	
 	# Assemble the log file path
-	my $log_file_path = $node_log_directory . "/$script_name.log";
+	my $log_file_path;
+	
+	# If the script resides in the VCL node configuration directory, append the intermediate directory paths to the logfile path
+	if ($script_directory_path =~ /$node_configuration_directory[\\\/](.+)/) {
+		$log_file_path = "$node_log_directory/$1$script_name.log";
+	}
+	else {
+		$log_file_path = "$node_log_directory/$script_name.log";
+	}
 	
 	my $timestamp = makedatestring();
 	
@@ -10914,7 +10922,7 @@ sub run_script {
 	my $command = "cmd.exe /c \"$script_path_escaped & exit %ERRORLEVEL%\"";
 	
 	# Execute the command
-	notify($ERRORS{'DEBUG'}, 0, "executing command: '$command'");
+	notify($ERRORS{'DEBUG'}, 0, "executing script on $computer_node_name:\nscript path: $script_path\nlog file path: $log_file_path");
 	my ($exit_status, $output) = $self->execute($command);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute script on $computer_node_name: '$script_path', command: '$command'");
@@ -10984,123 +10992,366 @@ sub run_script {
 
 sub run_scripts {
 	my $self = shift;
-	unless (ref($self) && $self->isa('VCL::Module')) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a VCL::Module:: module object method");
+	if (ref($self) !~ /VCL::Module/) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
 	
 	# Get the stage argument
 	my $stage = shift;
 	if (!$stage) {
-		notify($ERRORS{'WANING'}, 0, "unable to run scripts, stage argument was not supplied");
+		notify($ERRORS{'WARNING'}, 0, "unable to run scripts, stage argument was not supplied");
 		return;
 	}
 	elsif ($stage !~ /(pre_capture|post_load|post_reserve)/) {
-		notify($ERRORS{'WANING'}, 0, "invalid stage argument was supplied: $stage");
+		notify($ERRORS{'WARNING'}, 0, "invalid stage argument was supplied: $stage");
 		return;
 	}
 	
 	my $computer_node_name = $self->data->get_computer_node_name();
 	
-	my @source_configuration_directories = $self->get_source_configuration_directories();
-	if (!@source_configuration_directories) {
-		notify($ERRORS{'WARNING'}, 0, "unable to retrieve source configuration directories");
-		return;
-	}
+	my @computer_tools_files = $self->get_tools_file_paths("/Scripts/$stage/");
 	
-	my $architecture = $self->is_64_bit() ? 'x86_64' : 'x86';
-	
-	# Find any script files already on the computer residing in the Scripts/<stage> directory
-	my $computer_directory_path = "$NODE_CONFIGURATION_DIRECTORY/Scripts/$stage";
-	my $computer_files = $self->find_files($computer_directory_path, '*');
-
-	my $mn_files = {};
-	
-	# Loop through the directories on the management node
-	DIRECTORY: for my $source_configuration_directory (@source_configuration_directories) {
-		# Find script files on the managment node intended for the computer
-		my $mn_directory_path = "$source_configuration_directory/Scripts/$stage";
-		my $mn_directory_files = $self->mn_os->find_files($mn_directory_path, '*');
-		
-		# Loop through the files found on the management node
-		MN_FILE: for my $mn_file_path (keys(%$mn_directory_files)) {
-			# Determine the relative path - this is used to match up files on the MN and files on the computer
-			# The base directories differ but the path proceeding 'Scripts' is the same
-			# Example:
-			#    MN file path:       /usr/local/vcl/tools/Windows_Version_5/Scripts/post_load/x86/myscript.cmd
-			#    Relative file path:                                                          x86/myscript.cmd
-			#    Computer file path:                C:/cygwin/home/root/VCL/Scripts/post_load/x86/myscript.cmd
-			my ($relative_file_path) = $mn_file_path =~ /$mn_directory_path\/(.+)/;
-			
-			# Add the file to the hash containing all script files found in all directories
-			# This is used later to determine if any extra files exist on the computer but not on the MN
-			$mn_files->{$relative_file_path} = $mn_directory_files->{$mn_file_path};
-			
-			# Check if the script file resides in an architecture-specific directory (/x86*/) not matching the architecture of the computer
-			if ($relative_file_path !~ /^$architecture\// && $relative_file_path =~ /^x86/) {
-				notify($ERRORS{'DEBUG'}, 0, "ignoring file intended for different computer architecture: $mn_file_path");
-				next MN_FILE;
-			}
-			
-			# Retrieve the checksum of the file on the management node from the file info returned by find_files
-			my $mn_file_checksum = $mn_directory_files->{$mn_file_path}{checksum};
-			
-			notify($ERRORS{'DEBUG'}, 0, "checking if file on management node needs to be copied to $computer_node_name: $mn_file_path");
-			
-			# Assemble the script file path on the computer
-			my $computer_file_path = "$computer_directory_path/$relative_file_path";
-			
-			# Check if the file already exists on the computer
-			if ($computer_files->{$computer_file_path}) {
-				# Check if the file already on the computer is exactly the same as the one on the MN by comparing checksums
-				my $computer_file_checksum = $computer_files->{$computer_file_path}{checksum};
-				if ($computer_file_checksum eq $mn_file_checksum) {
-					notify($ERRORS{'DEBUG'}, 0, "identical file exists on $computer_node_name: $computer_file_path");
-					next MN_FILE;
-				}
-				else {
-					notify($ERRORS{'DEBUG'}, 0, "file exists on $computer_node_name but checksum is different: $computer_file_path\n" .
-						"MN file checksum: $mn_file_checksum\n" .
-						"computer file checksum: $computer_file_checksum"
-					);
-				}
-			}
-			else {
-				notify($ERRORS{'DEBUG'}, 0, "file does not exist on $computer_node_name: $computer_file_path");
-			}
-			
-			# File either doesn't already exist on the computer or file on computer is different than file on MN
-			if (!$self->copy_file_to($mn_file_path, $computer_file_path)) {
-				notify($ERRORS{'WARNING'}, 0, "file could not be copied from management node to $computer_node_name: $mn_file_path --> $computer_file_path");
-				next MN_FILE;
-			}
-			
-			# Add the file to the hash of files on the computer
-			$computer_files->{$computer_file_path} = $mn_directory_files->{$mn_file_path};
-		}
-	}
-	
-	# Loop through all files found and/or copied to the computer
-	COMPUTER_FILE: for my $computer_file_path (sort_by_file_name(keys(%$computer_files))) {
-		my ($relative_file_path) = $computer_file_path =~ /$computer_directory_path\/(.+)/;
-		
-		# Check if file on the computer was not found on the management node
-		# If so, delete it from the computer
-		if (!defined($mn_files->{$relative_file_path})) {
-			notify($ERRORS{'DEBUG'}, 0, "file exists on $computer_node_name but not on management node: $computer_file_path");
-			$self->delete_file($computer_file_path);
-			delete($computer_files->{$computer_file_path});
-			next COMPUTER_FILE;
-		}
-		elsif ($computer_file_path !~ /\.(cmd|bat)$/i) {
-			notify($ERRORS{'DEBUG'}, 0, "file on $computer_node_name not executed because extension is not .cmd or .bat: $computer_file_path");
-			next COMPUTER_FILE;
+	# Loop through all tools files on the computer
+	for my $computer_tools_file_path (@computer_tools_files) {
+		if ($computer_tools_file_path !~ /\.(cmd|bat)$/i) {
+			notify($ERRORS{'DEBUG'}, 0, "file on $computer_node_name not executed because extension is not .cmd or .bat: $computer_tools_file_path");
+			next;
 		}
 		
-		$self->run_script($computer_file_path);
+		notify($ERRORS{'DEBUG'}, 0, "executing script on $computer_node_name: $computer_tools_file_path");
+		
+		$self->run_script($computer_tools_file_path);
 	}
 	
 	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 install_updates
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Installs Windows update files stored in under the tools directory
+					on the management node. Update files which exist on the
+					management node but not on the computer are copied. Files which
+					are named the same but differ are replaced.
+
+=cut
+
+sub install_updates {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $computer_node_name   = $self->data->get_computer_node_name();
+	my $system32_path        = $self->get_system32_path() || return;
+	
+	# Get the node configuration directory, make sure it exists, create if necessary
+	my $node_configuration_directory = $self->get_node_configuration_directory();
+	
+	my @computer_tools_files = $self->get_tools_file_paths("/Updates/");
+	
+	my $logfile_directory_path = "$node_configuration_directory/Logs/Updates";
+	$self->create_directory($logfile_directory_path);
+	
+	my %installed_updates = map { $_ => 1 } $self->get_installed_updates();
+	
+	my @update_ids;
+	
+	# Loop through all update files on the computer
+	for my $file_path (@computer_tools_files) {
+		my ($file_name, $directory_path, $file_extension) = fileparse($file_path, qr/\.[^.]*/);
+		
+		if ($file_path !~ /\.(msu|exe)$/i) {
+			notify($ERRORS{'DEBUG'}, 0, "file on $computer_node_name not installed because file extension is not .exe or .msu: $file_path");
+			next;
+		}
+		
+		# Get the update ID (KBxxxxxx) from the file name
+		my ($update_id) = uc($file_name) =~ /(kb\d+)/i;
+		$update_id = $file_name if !$update_id;
+		
+		# Check if the update is already installed based on the list returned from the OS
+		if ($installed_updates{$update_id}) {
+			notify($ERRORS{'DEBUG'}, 0, "update $update_id is already installed on $computer_node_name");
+			next;
+		}
+		else {
+			# Add ID to @update_ids array, this list will be checked after all updates are installed to verify update is installed on computer
+			push @update_ids, $update_id;
+		}
+	
+		if ($file_path =~ /\.msu$/i) {
+			$self->install_msu_update($file_path);
+		}
+		elsif ($file_path =~ /\.exe$/i) {
+			$self->install_exe_update($file_path);
+		}
+	}
+	
+	# If any updates were installed, verify they appear on the OS
+	if (@update_ids) {
+		# Retrieve the installed updated from the OS to check if the update was installed
+		%installed_updates = map { $_ => 1 } $self->get_installed_updates(1);
+		for my $update_id (@update_ids) {
+			if ($installed_updates{$update_id}) {
+				notify($ERRORS{'DEBUG'}, 0, "verified update $update_id is installed on $computer_node_name");
+			}
+			else {
+				notify($ERRORS{'WARNING'}, 0, "update $update_id does not appear in the list of updates installed on $computer_node_name");
+			}
+		}
+	}
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 install_exe_update
+
+ Parameters  : $update_file_path
+ Returns     : boolean
+ Description : Installs a Windows Update .exe update package.
+
+=cut
+
+sub install_exe_update {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $file_path = shift;
+	if (!$file_path) {
+		notify($ERRORS{'WARNING'}, 0, "path to .msu update file was not supplied");
+		return;
+	}
+	
+	my $computer_node_name   = $self->data->get_computer_node_name();
+	my $system32_path        = $self->get_system32_path() || return;
+	
+	my ($file_name, $directory_path, $file_extension) = fileparse($file_path, qr/\.[^.]*/);
+	
+	my ($update_id) = uc($file_name) =~ /(kb\d+)/i;
+	$update_id = $file_name if !$update_id;
+	
+	# Assemble the log file path
+	# wusa.exe creates log files in the Event Log format - not plain text
+	my $node_configuration_directory = $self->get_node_configuration_directory();
+	my $logfile_directory_path = "$node_configuration_directory/Logs/Updates";
+	my $log_file_path = "$logfile_directory_path/$file_name.log";
+	
+	# Delete old log files for the update being installed so log output can be parsed without including old data
+	$self->delete_file("$logfile_directory_path/*$update_id*");
+	
+	my $command;
+	$command .= "chmod -Rv 755 \"$file_path\" ; ";
+	$command .= "\"$file_path\" /quiet /norestart /log:\"$log_file_path\"";
+	
+	notify($ERRORS{'DEBUG'}, 0, "installing update on $computer_node_name\ncommand: $command");
+	my ($exit_status, $output) = $self->execute($command, 1, 180);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to install update on $computer_node_name: $command");
+		return;
+	}
+	elsif ($exit_status eq 194) {
+		# Exit status 194 - installed but reboot required
+		notify($ERRORS{'DEBUG'}, 0, "installed update on $computer_node_name, exit status $exit_status indicates a reboot is required");
+		$self->data->set_imagemeta_postoption('reboot');
+		return 1;
+	}
+	elsif ($exit_status eq 0) {
+		notify($ERRORS{'DEBUG'}, 0, "installed update on $computer_node_name");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "command to install update on $computer_node_name returned exit status: $exit_status\ncommand: $command\noutput:\n" . join("\n", @$output));
+	}
+	
+	# Check the log file to determine if a reboot is required, skip if exit status was 194
+	my @log_file_lines = $self->get_file_contents($log_file_path);
+	for my $line (@log_file_lines) {
+		if ($line =~ /RebootNecessary = 1|reboot is required/i) {
+			$self->data->set_imagemeta_postoption('reboot');
+		}
+	}
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 install_msu_update
+
+ Parameters  : $msu_file_path
+ Returns     : boolean
+ Description : Installs a Windows Update Stand-alone Installer .msu update
+               package.
+=cut
+
+sub install_msu_update {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $file_path = shift;
+	if (!$file_path) {
+		notify($ERRORS{'WARNING'}, 0, "path to .msu update file was not supplied");
+		return;
+	}
+	
+	my $computer_node_name   = $self->data->get_computer_node_name();
+	my $system32_path        = $self->get_system32_path() || return;
+	
+	my ($file_name, $directory_path, $file_extension) = fileparse($file_path, qr/\.[^.]*/);
+	
+	my ($update_id) = uc($file_name) =~ /(kb\d+)/i;
+	$update_id = $file_name if !$update_id;
+	
+	# Assemble the log file path
+	# wusa.exe creates log files in the Event Log format - not plain text
+	my $node_configuration_directory = $self->get_node_configuration_directory();
+	my $logfile_directory_path = "$node_configuration_directory/Logs/Updates";
+	my $event_log_file_path = "$logfile_directory_path/$file_name.evtx";
+	my $log_file_path = "$logfile_directory_path/$file_name.log";
+	
+	# Delete old log files for the update being installed so log output can be parsed without including old data
+	$self->delete_file("$logfile_directory_path/*$update_id*");
+	
+	my $wusa_command;
+	$wusa_command .= "chmod -Rv 755 \"$file_path\" ; ";
+	$wusa_command .= "$system32_path/wusa.exe \"$file_path\" /quiet /norestart /log:\"$event_log_file_path\"";
+	
+	notify($ERRORS{'DEBUG'}, 0, "installing update on $computer_node_name\ncommand: $wusa_command");
+	my ($wusa_exit_status, $wusa_output) = $self->execute($wusa_command, 1, 180);
+	if (!defined($wusa_output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to install update on $computer_node_name: $wusa_command");
+		return;
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "executed command to install update on $computer_node_name, exit status: $wusa_exit_status\ncommand: $wusa_command\noutput:\n" . join("\n", @$wusa_output));
+	}
+	
+	# Convert Event Log format log file to plain text
+	# Use the wevtutil.exe - the Windows Events Command Line Utility
+	my $wevtutil_command = "$system32_path/wevtutil.exe qe \"$event_log_file_path\" /lf:true /f:XML /e:root > \"$log_file_path\"";
+	
+	my ($wevtutil_exit_status, $wevtutil_output) = $self->execute($wevtutil_command);
+	if (!defined($wevtutil_output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to convert event log file to plain text on $computer_node_name: $wevtutil_command");
+		return;
+	}
+	else {
+		#notify($ERRORS{'DEBUG'}, 0, "executed command to convert event log file to plain text $computer_node_name, exit status: $wevtutil_exit_status\ncommand: $wevtutil_command\noutput:\n" . join("\n", @$wevtutil_output));
+	}
+	
+	my @log_file_lines = $self->get_file_contents($log_file_path);
+	#notify($ERRORS{'DEBUG'}, 0, "log file contents from installation of $file_path:\n" . join("\n", @log_file_lines));
+	
+	my $log_xml_hash = xml_string_to_hash(@log_file_lines);
+	#notify($ERRORS{'DEBUG'}, 0, "XML hash:\n" . format_data($log_xml_hash));
+	
+	my @events = @{$log_xml_hash->{Event}};
+	for my $event (@events) {
+		my $event_record_id = $event->{System}[0]->{EventRecordID}[0];
+		my %event_data = map { $_->{Name} => $_->{content} } @{$event->{EventData}[0]->{Data}};
+		
+		#notify($ERRORS{'DEBUG'}, 0, "event $event_record_id:\n" . format_data(\%event_data));
+		
+		if (my $error_code = $event_data{ErrorCode}) {
+			my $error_string = $event_data{ErrorString} || '<none>';
+			
+			if ($error_code eq '2359302') {
+				# Already installed but reboot is required
+				notify($ERRORS{'DEBUG'}, 0, "update $update_id is already installed but a reboot is required:\n" . format_data(\%event_data));
+				$self->data->set_imagemeta_postoption('reboot');
+			}
+			else {
+				notify($ERRORS{'WARNING'}, 0, "error occurred installing update $update_id:\n" . format_data(\%event_data));
+			}
+		}
+		elsif (my $debug_message = $event_data{DebugMessage}) {
+			if ($debug_message =~ /IsRebootRequired: 1/i) {
+				# RebootIfRequested.01446: Reboot is not scheduled. IsRunWizardStarted: 0, IsRebootRequired: 0, RestartMode: 1
+				notify($ERRORS{'DEBUG'}, 0, "installed update $update_id, reboot is required:\n$debug_message");
+				$self->data->set_imagemeta_postoption('reboot');
+			}
+			elsif ($debug_message =~ /Update is already installed/i) {
+				# InstallWorker.01051: Update is already installed
+				notify($ERRORS{'DEBUG'}, 0, "update $update_id is already installed:\n$debug_message");
+			}
+			elsif ($debug_message =~ /0X240006/i) {
+				# InstallWorker.01051: Update is already installed
+				notify($ERRORS{'DEBUG'}, 0, "error 0X240006 indicates that update $update_id is already installed:\n$debug_message");
+			}
+			elsif ($debug_message =~ /0X80240017/i) {
+				notify($ERRORS{'WARNING'}, 0, "update is not intended for OS installed on $computer_node_name:\n$debug_message");
+				return;
+			}
+			elsif ($debug_message !~ /((start|end) of search|Failed to get message for error)/i) {
+				notify($ERRORS{'DEBUG'}, 0, "debug message for installation of update $update_id:\n$debug_message");
+			}
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "event generated while installing update $update_id:\n" . format_data(\%event_data));
+		}
+	}
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_installed_updates
+
+ Parameters  : $no_cache (optional)
+ Returns     : array
+ Description : Retrieves the list of updates installed on the computer.
+=cut
+
+sub get_installed_updates {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $no_cache = shift;
+	
+	return $self->{update_ids} if (!$no_cache && $self->{update_ids});
+	
+	my $computer_node_name   = $self->data->get_computer_node_name();
+	my $system32_path        = $self->get_system32_path() || return;
+	
+	# wmic.exe will hang if it is called by itself.  It has something to do with TTY/PTY
+	# Piping the echo command seems to prevent it from hanging
+	my $command = "echo | $system32_path/Wbem/wmic.exe QFE LIST BRIEF";
+	notify($ERRORS{'DEBUG'}, 0, "retrieving list of installed updates on $computer_node_name, command: $command");
+	my ($exit_status, $output) = $self->execute($command);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to list updates installed on $computer_node_name: $command");
+		return;
+	}
+	
+	# Add update IDs found to a hash and then convert it to an array to eliminate duplicates
+	my %update_id_hash;
+	for my $line (@$output) {
+		# Parse the update ID from the line, may be in the form KB000000
+		my ($update_id) = $line =~ /(kb\d+)/i;
+		$update_id_hash{$update_id} = 1 if $update_id;
+	}
+	
+	my @update_ids = sort keys %update_id_hash;
+	$self->{update_ids} = \@update_ids;
+	notify($ERRORS{'DEBUG'}, 0, "retrieved list updates installed on $computer_node_name(" . scalar(@update_ids) . "): " . join(", ", @update_ids));
+	return @update_ids;
 }
 
 #/////////////////////////////////////////////////////////////////////////////

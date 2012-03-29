@@ -732,35 +732,35 @@ sub logoff_user {
 	}
 
 	# Make sure the user login ID was passed
-	my $user_login_id = shift;
-	$user_login_id = $self->data->get_user_login_id() if (!$user_login_id);
+	my $user_login_id = shift || $self->data->get_user_login_id();
 	if (!$user_login_id) {
 		notify($ERRORS{'WARNING'}, 0, "user could not be determined");
 		return 0;
 	}
 
 	# Make sure the user login ID was passed
-	my $computer_node_name = shift;
-	$computer_node_name = $self->data->get_computer_node_name() if (!$computer_node_name);
+	my $computer_node_name = shift || $self->data->get_computer_node_name();
 	if (!$computer_node_name) {
 		notify($ERRORS{'WARNING'}, 0, "computer node name could not be determined");
 		return 0;
 	}
 
-	#Make sure the identity key was passed
-	my $image_identity = shift;
-	$image_identity = $self->data->get_image_identity() if (!$image_identity);
-	if (!$image_identity) {
-		notify($ERRORS{'WARNING'}, 0, "image identity keys could not be determined");
-		return 0;
-	}
-
 	my $logoff_cmd = "pkill -KILL -u $user_login_id";
-	if (run_ssh_command($computer_node_name, $image_identity, $logoff_cmd, "root")) {
-			notify($ERRORS{'DEBUG'}, 0, "logged off $user_login_id from $computer_node_name");
+	my ($exit_status, $output) = $self->execute($logoff_cmd);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to log off $user_login_id from $computer_node_name");
+		return;
+	}
+	elsif (grep(/invalid user name/i, @$output)) {
+		notify($ERRORS{'DEBUG'}, 0, "user $user_login_id does not exist on $computer_node_name");
+		return 1;
+	}
+	elsif ($exit_status ne '0') {
+		notify($ERRORS{'WARNING'}, 0, "error occurred attempting to log off $user_login_id from $computer_node_name, exit status: $exit_status, output:\n" . join("\n", @$output));
+		return;
 	}
 	else {
-		notify($ERRORS{'DEBUG'}, 0, "failed to log off $user_login_id from $computer_node_name");
+		notify($ERRORS{'OK'}, 0, "logged off $user_login_id from $computer_node_name");
 	}
 
 	return 1;
@@ -1773,57 +1773,6 @@ sub copy_file_from {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 copy_file_to
-
- Parameters  : $source_path, $destination_path
- Returns     : boolean
- Description : Copies file(s) from the management node to the Linux computer.
-               Wildcards are allowed in the source path.
-
-=cut
-
-sub copy_file_to {
-	my $self = shift;
-	if (ref($self) !~ /VCL::Module/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-	
-	# Get the source and destination arguments
-	my ($source_path, $destination_path) = @_;
-	if (!$source_path || !$destination_path) {
-		notify($ERRORS{'WARNING'}, 0, "source and destination path arguments were not specified");
-		return;
-	}
-	
-	# Get the computer short and hostname
-	my $computer_node_name = $self->data->get_computer_node_name() || return;
-	
-	# Get the destination parent directory path and create the directory
-	my $destination_directory_path = parent_directory_path($destination_path);
-	if (!$destination_directory_path) {
-		notify($ERRORS{'WARNING'}, 0, "unable to determine destination parent directory path: $destination_path");
-		return;
-	}
-	$self->create_directory($destination_directory_path) || return;
-	
-	# Get the identity keys used by the management node
-	my $management_node_keys = $self->data->get_management_node_keys() || '';
-	
-	# Run the SCP command
-	if (run_scp_command($source_path, "$computer_node_name:\"$destination_path\"", $management_node_keys)) {
-		notify($ERRORS{'DEBUG'}, 0, "copied file from management node to $computer_node_name: '$source_path' --> $computer_node_name:'$destination_path'");
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to copy file from management node to $computer_node_name: '$source_path' --> $computer_node_name:'$destination_path'");
-		return;
-	}
-	
-	return 1;
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
 =head2 copy_file
 
  Parameters  : $source_file_path, $destination_file_path
@@ -1901,7 +1850,7 @@ sub copy_file {
 
 =head2 get_file_size
 
- Parameters  : $file_path
+ Parameters  : @file_paths
  Returns     : integer or array
  Description : Determines the size of the file specified by the file path
                argument in bytes. The file path argument may be a directory or
@@ -2023,77 +1972,6 @@ sub get_file_size {
 	else {
 		return $total_bytes_used;
 	}
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 find_files
-
- Parameters  : $base_directory_path, $file_pattern, $search_type (optional)
- Returns     : array
- Description : Finds files under the base directory and any subdirectories path
-               matching the file pattern. The search is not case sensitive. An
-               array is returned containing matching file paths.
-               
-               A third argument can be supplied specifying the search type.
-               'regex' is currently the only supported type. If supplied, the
-               $file_pattern argument is assumed to be a regular expression.
-               Otherwise it is assumed to be a normal search pattern.
-
-=cut
-
-sub find_files {
-	my $self = shift;
-	if (ref($self) !~ /VCL::Module/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-	
-	# Get the arguments
-	my ($base_directory_path, $file_pattern, $search_type) = @_;
-	if (!$base_directory_path || !$file_pattern) {
-		notify($ERRORS{'WARNING'}, 0, "base directory path and file pattern arguments were not specified");
-		return;
-	}
-	
-	# Normalize the arguments
-	$base_directory_path = normalize_file_path($base_directory_path);
-	$file_pattern = normalize_file_path($file_pattern);
-	
-	# The base directory path must have a trailing slash or find won't work
-	$base_directory_path .= '/';
-	
-	# Get the computer short and hostname
-	my $computer_node_name = $self->data->get_computer_node_name() || return;
-	
-	# Run the find command
-	my $command;
-	if ($search_type && $search_type =~ /regex/i) {
-		$command = "find \"$base_directory_path\" -iregex \"$file_pattern\"";
-	}
-	else {
-		$command = "find \"$base_directory_path\" -iname \"$file_pattern\"";
-	}
-	notify($ERRORS{'DEBUG'}, 0, "attempting to find files on $computer_node_name, base directory path: '$base_directory_path', pattern: $file_pattern, command: $command");
-	
-	my ($exit_status, $output) = $self->execute($command);
-	if (!defined($output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to run command to find files on $computer_node_name, base directory path: '$base_directory_path', pattern: $file_pattern, command:\n$command");
-		return;
-	}
-	elsif (grep(/^find:.*No such file or directory/i, @$output)) {
-		notify($ERRORS{'DEBUG'}, 0, "base directory does not exist on $computer_node_name: $base_directory_path");
-		@$output = ();
-	}
-	elsif (grep(/^find: /i, @$output)) {
-		notify($ERRORS{'WARNING'}, 0, "error occurred attempting to find files on $computer_node_name\nbase directory path: $base_directory_path\npattern: $file_pattern\ncommand: $command\noutput:\n" . join("\n", @$output));
-		return;
-	}
-	
-	# Return the file list
-	my @file_paths = @$output;
-	notify($ERRORS{'DEBUG'}, 0, "matching file count: " . scalar(@file_paths));
-	return sort @file_paths;
 }
 
 #/////////////////////////////////////////////////////////////////////////////

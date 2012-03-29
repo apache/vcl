@@ -10890,7 +10890,7 @@ sub sort_by_file_name {
 	if (!defined($a) && !defined($b)) {
 		my @file_paths = @_;
 		if (scalar(@file_paths)) {
-			notify($ERRORS{'DEBUG'}, 0, "not called by sort, \$a and \$b are not defined, array argument was passed");
+			#notify($ERRORS{'DEBUG'}, 0, "not called by sort, \$a and \$b are not defined, array argument was passed");
 			return sort sort_by_file_name @file_paths;
 		}
 		else {

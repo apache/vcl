@@ -934,6 +934,9 @@ sub reserve_computer {
 			$self->reservation_failed("failed to update public IP address");
 		}
 		
+		# Update the $computer_ip_address varible in case the IP address was different than what was originally in the database
+		$computer_ip_address = $self->data->get_computer_ip_address();
+		
 		insertloadlog($reservation_id, $computer_id, "info", "node ready adding user account");
 		
 		# Only generate new password if:

@@ -840,8 +840,10 @@ sub update_public_ip_address {
 			return;
 		}
 		
-		# Update the computer table if the retrieved IP address does not match what is in the database
+		# Update the Datastructure and computer table if the retrieved IP address does not match what is in the database
 		if ($computer_ip_address ne $public_ip_address) {
+			$self->data->set_computer_ip_address($public_ip_address);
+			
 			if (update_computer_address($computer_id, $public_ip_address)) {
 				notify($ERRORS{'OK'}, 0, "updated dynamic public IP address in computer table for $computer_node_name, $public_ip_address");
 				insertloadlog($reservation_id, $computer_id, "dynamicDHCPaddress", "updated dynamic public IP address in computer table for $computer_node_name, $public_ip_address");
@@ -862,13 +864,10 @@ sub update_public_ip_address {
 		notify($ERRORS{'DEBUG'}, 0, "IP configuration is set to $public_ip_configuration, attempting to set public IP address");
 		
 		# Try to set the static public IP address using the OS module
-		if ($self->can("set_static_public_address") && $self->set_static_public_address()) {
-			notify($ERRORS{'DEBUG'}, 0, "set static public IP address on $computer_node_name using OS module's set_static_public_address() method");
-		}
-		else {
-			# Unable to set the static address using the OS module, try using utils.pm
-			if (setstaticaddress($computer_node_name, $image_os_name, $computer_ip_address, $image_os_type)) {
-				notify($ERRORS{'DEBUG'}, 0, "set static public IP address on $computer_node_name using utils.pm::setstaticaddress()");
+		if ($self->can("set_static_public_address")) {
+			if ($self->set_static_public_address()) {
+				notify($ERRORS{'DEBUG'}, 0, "set static public IP address on $computer_node_name using OS module's set_static_public_address() method");
+				insertloadlog($reservation_id, $computer_id, "staticIPaddress", "set static public IP address on $computer_node_name");
 			}
 			else {
 				notify($ERRORS{'WARNING'}, 0, "failed to set static public IP address on $computer_node_name");
@@ -876,7 +875,9 @@ sub update_public_ip_address {
 				return;
 			}
 		}
-		insertloadlog($reservation_id, $computer_id, "staticIPaddress", "set static public IP address on $computer_node_name");
+		else {
+			notify($ERRORS{'WARNING'}, 0, "unable to set static public IP address on $computer_node_name, " . ref($self) . " module does not implement a set_static_public_address subroutine");
+		}
 	}
 	
 	else {
@@ -1270,7 +1271,13 @@ sub get_private_network_configuration {
 		return;
 	}
 	
-	return $self->get_network_configuration()->{$self->get_private_interface_name()};
+	my $private_interface_name = $self->get_private_interface_name();
+	if (!$private_interface_name) {
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve private network configuration, private interface name could not be determined");
+		return;
+	}
+	
+	return $self->get_network_configuration()->{$private_interface_name};
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -1290,7 +1297,13 @@ sub get_public_network_configuration {
 		return;
 	}
 	
-	return $self->get_network_configuration()->{$self->get_public_interface_name()};
+	my $public_interface_name = $self->get_public_interface_name();
+	if (!$public_interface_name) {
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve public network configuration, public interface name could not be determined");
+		return;
+	}
+	
+	return $self->get_network_configuration()->{$public_interface_name};
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -1670,7 +1683,7 @@ sub create_text_file {
 		return;
 	}
 	
-	my ($file_path, $file_contents_string) = @_;
+	my ($file_path, $file_contents_string, $concatenate) = @_;
 	if (!$file_contents_string) {
 		notify($ERRORS{'WARNING'}, 0, "file contents argument was not supplied");
 		return;
@@ -1682,7 +1695,7 @@ sub create_text_file {
 	# Attempt to create the parent directory if it does not exist
 	if ($self->can('create_directory')) {
 		my $parent_directory_path = parent_directory_path($file_path);
-		$self->create_directory($parent_directory_path);
+		$self->create_directory($parent_directory_path) if $parent_directory_path;
 	}
 	
 	# Remove Windows-style carriage returns if the image OS isn't Windows
@@ -1707,14 +1720,21 @@ sub create_text_file {
 	
 	# Create a command to echo the hex string to the file
 	# Use -e to enable interpretation of backslash escapes
-	my $command .= "echo -n -e \"$hex_string\" > $file_path";
+	my $command .= "echo -n -e \"$hex_string\"";
+	if ($concatenate) {
+		$command .= " >> \"$file_path\"";
+	}
+	else {
+		$command .= " > \"$file_path\"";
+	}
+	
 	my ($exit_status, $output) = $self->execute($command);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute ssh command to create file on $computer_node_name: $file_path");
 		return;
 	}
 	elsif ($exit_status != 0 || grep(/^\w+:/i, @$output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to execute command to create a file on $computer_node_name: $file_path, exit status: $exit_status, output:\n" . join("\n", @$output));
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to create a file on $computer_node_name:\ncommand: '$command', exit status: $exit_status, output:\n" . join("\n", @$output));
 		return;
 	}
 	else {
@@ -1896,6 +1916,7 @@ sub execute_new {
 		if ($attempt > 0) {
 			$attempt_string = "attempt $attempt/$max_attempts: ";
 			$ssh->close() if $ssh;
+			delete $ENV{net_ssh_expect}{$computer_name};
 			
 			notify($ERRORS{'DEBUG'}, 0, $attempt_string . "sleeping for $attempt_delay seconds before making next attempt");
 			sleep $attempt_delay;
@@ -1976,7 +1997,8 @@ sub execute_new {
 			delete $ENV{net_ssh_expect}{$computer_name};
 		}
 		
-		notify($ERRORS{'DEBUG'}, 0, $attempt_string . "executing command on $computer_name: '$command', timeout: $timeout_seconds seconds") if ($display_output);
+		(my $command_formatted = $command) =~ s/\s+(;|&|&&)\s+/\n$1 /g;
+		notify($ERRORS{'DEBUG'}, 0, $attempt_string . "executing command on $computer_name (timeout: $timeout_seconds seconds):\n$command_formatted") if ($display_output);
 		$ssh->send($command . ' 2>&1 ; echo exitstatus:$?');
 		
 		my $ssh_wait_status;
@@ -2002,7 +2024,7 @@ sub execute_new {
 		$output =~ s/(^\s+)|(\s+$)//g;
 		
 		my $exit_status_string = $ssh->match() || '';
-		my ($exit_status) = $exit_status_string =~ /(\d)+/;
+		my ($exit_status) = $exit_status_string =~ /(\d+)/;
 		if (!$exit_status_string || !defined($exit_status)) {
 			my $all_output = $ssh->read_all() || '';
 			notify($ERRORS{'WARNING'}, 0, $attempt_string . "failed to determine exit status from string: '$exit_status_string', output:\n$all_output");
@@ -2149,11 +2171,7 @@ sub manage_server_access {
 
 	# Collect users in reservationaccounts table
 	my %res_accounts = get_reservation_accounts($reservation_id);
-	notify($ERRORS{'DEBUG'}, 0, "res_accounts:". format_data(%res_accounts));
-	my $not_standalone_list = "";
-	if(defined($ENV{management_node_info}{NOT_STANDALONE}) && $ENV{management_node_info}{NOT_STANDALONE}){
-		$not_standalone_list = $ENV{management_node_info}{NOT_STANDALONE};
-	}
+	my $not_standalone_list = $self->data->get_management_node_not_standalone();
 
 	#Add users
 	foreach my $userid (sort keys %user_hash) {
@@ -2204,7 +2222,7 @@ sub manage_server_access {
 		}
 			
 	}
-	
+
 	#Remove anyone listed in reservationaccounts list that is not in user_hash
 	foreach my $res_userid (sort keys %res_accounts) {
 		notify($ERRORS{'OK'}, 0, "res_userid= $res_userid username= $res_accounts{$res_userid}{username}");
@@ -2228,7 +2246,7 @@ sub manage_server_access {
 		$allow_list .= " $res_accounts{$res_userid}{username}";
 	}
 	notify($ERRORS{'OK'}, 0, "allow_list= $allow_list");
-
+	
 	$self->data->set_server_allow_users($allow_list);
 	
 	if ($self->can("update_server_access") ) {
@@ -2474,6 +2492,322 @@ sub is_user_connected {
 		sleep 20;
 	}
 	return $ret_val;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 copy_file_to
+
+ Parameters  : $source_path, $destination_path
+ Returns     : boolean
+ Description : Copies file(s) from the management node to the computer.
+               Wildcards are allowed in the source path.
+
+=cut
+
+sub copy_file_to {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get the source and destination arguments
+	my ($source_path, $destination_path) = @_;
+	if (!$source_path || !$destination_path) {
+		notify($ERRORS{'WARNING'}, 0, "source and destination path arguments were not specified");
+		return;
+	}
+	
+	# Get the computer short and hostname
+	my $computer_node_name = $self->data->get_computer_node_name() || return;
+	
+	# Get the destination parent directory path and create the directory
+	my $destination_directory_path = parent_directory_path($destination_path);
+	if (!$destination_directory_path) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine destination parent directory path: $destination_path");
+		return;
+	}
+	$self->create_directory($destination_directory_path) || return;
+	
+	# Get the identity keys used by the management node
+	my $management_node_keys = $self->data->get_management_node_keys() || '';
+	
+	# Run the SCP command
+	if (run_scp_command($source_path, "$computer_node_name:\"$destination_path\"", $management_node_keys)) {
+		notify($ERRORS{'DEBUG'}, 0, "copied file from management node to $computer_node_name: '$source_path' --> $computer_node_name:'$destination_path'");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to copy file from management node to $computer_node_name: '$source_path' --> $computer_node_name:'$destination_path'");
+		return;
+	}
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 find_files
+
+ Parameters  : $base_directory_path, $file_pattern, $search_type (optional)
+ Returns     : array
+ Description : Finds files under the base directory and any subdirectories path
+               matching the file pattern. The search is not case sensitive. An
+               array is returned containing matching file paths.
+               
+               A third argument can be supplied specifying the search type.
+               
+               If 'regex' is supplied, the $file_pattern argument is assumed to
+               be a regular expression.
+
+=cut
+
+sub find_files {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get the arguments
+	my ($base_directory_path, $file_pattern, $search_type) = @_;
+	if (!$base_directory_path || !$file_pattern) {
+		notify($ERRORS{'WARNING'}, 0, "base directory path and file pattern arguments were not specified");
+		return;
+	}
+	
+	# Normalize the arguments
+	$base_directory_path = normalize_file_path($base_directory_path);
+	$file_pattern = normalize_file_path($file_pattern);
+	
+	# The base directory path must have a trailing slash or find won't work
+	$base_directory_path .= '/';
+	
+	# Get the computer short and hostname
+	my $computer_node_name = $self->data->get_computer_node_name() || return;
+	
+	# Run the find command
+	my $command = "/usr/bin/find \"$base_directory_path\"";
+	if ($search_type) {
+		if ($search_type =~ /regex/i) {
+			$command .= " -type f -iregex \"$file_pattern\"";
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "invalid search type argument was specified: '$search_type'");
+			return;
+		}
+	}
+	else {
+		$command .= " -type f -iname \"$file_pattern\"";
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "attempting to find files on $computer_node_name, base directory path: '$base_directory_path', pattern: $file_pattern, command: $command");
+	
+	my ($exit_status, $output) = $self->execute($command, 0);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run command to find files on $computer_node_name, base directory path: '$base_directory_path', pattern: $file_pattern, command:\n$command");
+		return;
+	}
+	elsif (grep(/^find:.*No such file or directory/i, @$output)) {
+		notify($ERRORS{'DEBUG'}, 0, "base directory does not exist on $computer_node_name: $base_directory_path");
+		@$output = ();
+	}
+	elsif (grep(/^find: /i, @$output)) {
+		notify($ERRORS{'WARNING'}, 0, "error occurred attempting to find files on $computer_node_name\nbase directory path: $base_directory_path\npattern: $file_pattern\ncommand: $command\noutput:\n" . join("\n", @$output));
+		return;
+	}
+	
+	my @files;
+	LINE: for my $line (@$output) {
+		push @files, $line;
+	}
+	
+	my $file_count = scalar(@files);
+	
+	notify($ERRORS{'DEBUG'}, 0, "files found: $file_count, base directory: '$base_directory_path', pattern: '$file_pattern'");
+	return @files;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_file_checksum
+
+ Parameters  : $file_path
+ Returns     : integer
+ Description : Runs chsum on the file specified by the argument and returns the
+               checksum of the file.
+
+=cut
+
+sub get_file_checksum {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $file_path = shift;
+	if (!$file_path) {
+		notify($ERRORS{'WARNING'}, 0, "file path argument was not supplied");
+		return;
+	}
+	
+	# Escape $ characters
+	$file_path =~ s/([\$])/\\$1/g;
+	
+	my $command = "cksum \"$file_path\"";
+	my ($exit_status, $output) = $self->execute($command);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to determine checksum of file: $file_path");
+		return;
+	}
+	elsif (my ($checksum_line) = grep(/^\d+\s+/, @$output)) {
+		my ($checksum) = $checksum_line =~ /^(\d+)/;
+		#notify($ERRORS{'DEBUG'}, 0, "determined checksum of file '$file_path': $checksum");
+		return $checksum;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unexpected output in cksum output, command: '$command', output:\n" . join("\n", @$output));
+		return;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_tools_file_paths
+
+ Parameters  : $pattern
+ Returns     : boolean
+ Description : Scans the tools directory on the management node for any files
+               which are intended for the OS of the reservation image. The OS
+               name and architecture are considered. A list of file paths on the
+               reservation computer is returned.
+               
+               Files intended for the reservation image are synchronized from
+               the management node. Any files which don't exist on the
+               reservation computer are copied. Files which exist on the
+               computer but are different than the file on the management node
+               are replaced. Files which exist on the computer but not on the
+               management node are ignored.
+               
+               A pattern argument can be supplied to limit the results. For
+               example, to only return driver files supply '/Drivers/' as the
+               argument. To only return script files intended to for the
+               post_load stage, supply '/Scripts/post_load' as the argument.
+               
+               The list of files returned is sorted by the names of the files,
+               regardless of the directory where they reside. Files can be named
+               beginning with a number. This list returned is sorted numerically
+               from the lowest number to the highest:
+               -1.cmd
+               -50.cmd
+               -100.cmd
+               
+               File names which do not begin with a number are sorted
+               alphabetically and listed after any files beginning with a
+               number:
+               -1.cmd
+               -50.cmd
+               -100.cmd
+               -Blah.cmd
+               -foo.cmd
+
+=cut
+
+sub get_tools_file_paths {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a VCL::Module:: module object method");
+		return;
+	}
+	
+	my $pattern = shift || '.*';
+	
+	my $computer_node_name = $self->data->get_computer_node_name();
+	
+	my @source_configuration_directories = $self->get_source_configuration_directories();
+	if (!@source_configuration_directories) {
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve source configuration directories");
+		return;
+	}
+	
+	my $architecture = $self->is_64_bit() ? 'x86_64' : 'x86';
+	my $other_architecture = $self->is_64_bit() ? 'x86' : 'x86_64';
+	
+	notify($ERRORS{'DEBUG'}, 0, "attempting for find tools files:\npattern: $pattern\narchitecture: $architecture\nother architecture: $other_architecture");
+	
+	# Find files already on the computer
+	my $computer_directory_path = "$NODE_CONFIGURATION_DIRECTORY";
+	my @existing_computer_file_array = $self->find_files($computer_directory_path, '*');
+	my %existing_computer_files = map { $_ => 1 } @existing_computer_file_array;
+
+	my %computer_tools_file_paths;
+	
+	# Loop through the directories on the management node
+	DIRECTORY: for my $source_configuration_directory (@source_configuration_directories) {
+		# Find script files on the managment node intended for the computer
+		my $mn_directory_path = "$source_configuration_directory";
+		my @mn_directory_files = $self->mn_os->find_files($mn_directory_path, '*');
+		
+		# Loop through the files found on the management node
+		MN_FILE: for my $mn_file_path (@mn_directory_files) {
+			
+			# Ignore files not matching the pattern argument, Subversion files, and files intended for another architecture
+			if ($pattern && $mn_file_path !~ /$pattern/i) {
+				#notify($ERRORS{'DEBUG'}, 0, "ignoring file, it does not match pattern '$pattern': $mn_file_path");
+				next MN_FILE;
+			}
+			elsif ($mn_file_path =~ /\/\.svn\//i) {
+				notify($ERRORS{'DEBUG'}, 0, "ignoring Subversion file: $mn_file_path");
+				next MN_FILE;
+			}
+			elsif ($mn_file_path =~ /\/$other_architecture\//) {
+				notify($ERRORS{'DEBUG'}, 0, "ignoring file intended for different computer architecture: $mn_file_path");
+				next MN_FILE;
+			}
+			
+			my ($relative_file_path) = $mn_file_path =~ /$mn_directory_path\/(.+)/;
+			my $computer_file_path = "$computer_directory_path/$relative_file_path";
+			
+			# Add the computer file path to the list that will be returned
+			$computer_tools_file_paths{$computer_file_path} = 1;
+			
+			# Check if the file already exists on the computer
+			notify($ERRORS{'DEBUG'}, 0, "checking if file on management node needs to be copied to $computer_node_name: $mn_file_path");
+			if ($existing_computer_files{$computer_file_path}) {
+				
+				# Check if existing file on computer is identical to file on managment node
+				# Retrieve the checksums
+				my $mn_file_checksum = $self->mn_os->get_file_checksum($mn_file_path);
+				my $computer_file_checksum = $self->get_file_checksum($computer_file_path);
+				
+				# Check if the file already on the computer is exactly the same as the one on the MN by comparing checksums
+				if ($mn_file_checksum && $computer_file_checksum && $computer_file_checksum eq $mn_file_checksum) {
+					notify($ERRORS{'DEBUG'}, 0, "identical file exists on $computer_node_name: $computer_file_path");
+					next MN_FILE;
+				}
+				else {
+					notify($ERRORS{'DEBUG'}, 0, "file exists on $computer_node_name but checksum is different: $computer_file_path\n" .
+						"MN file checksum: " . ($mn_file_checksum || '<unknown>') . "\n" .
+						"computer file checksum: " . ($computer_file_checksum || '<unknown>')
+					);
+				}
+			}
+			else {
+				notify($ERRORS{'DEBUG'}, 0, "file does not exist on $computer_node_name: $computer_file_path");
+			}
+			
+			# File either doesn't already exist on the computer or file on computer is different than file on MN
+			if (!$self->copy_file_to($mn_file_path, $computer_file_path)) {
+				notify($ERRORS{'WARNING'}, 0, "file could not be copied from management node to $computer_node_name: $mn_file_path --> $computer_file_path");
+				return;
+			}
+		}
+	}
+
+	my @return_files = sort_by_file_name(keys %computer_tools_file_paths);
+	notify($ERRORS{'DEBUG'}, 0, "determined list of tools files intended for $computer_node_name, pattern: $pattern, architecture: $architecture:\n" . join("\n", @return_files));
+	return @return_files;
 }
 
 #///////////////////////////////////////////////////////////////////////////

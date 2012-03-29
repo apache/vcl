@@ -111,7 +111,7 @@ sub pre_capture {
 	}
 	
 	notify($ERRORS{'OK'}, 0, "beginning Windows version 5 image capture preparation tasks");
-	
+
 	# Check if Sysprep should be used
 	if ($self->data->get_imagemeta_sysprep()) {
 		if (!$self->run_sysprep()) {
