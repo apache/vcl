@@ -809,6 +809,16 @@ sub post_load {
 
 =item *
 
+ Install Windows updates saved under tools on the management node
+
+=cut
+
+	if (!$self->install_updates()) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run custom post_load scripts");
+	}
+
+=item *
+
  Check if the imagemeta postoption is set to reboot, reboot if necessary
 
 =cut
@@ -10869,7 +10879,7 @@ sub get_cpu_core_count {
 
 =head2 run_script
 
- Parameters  : script path
+ Parameters  : $script_path, $timeout_seconds (optional)
  Returns     : boolean
  Description : Checks if script exists on the computer and attempts to run it.
 
@@ -10888,6 +10898,8 @@ sub run_script {
 		notify($ERRORS{'WARNING'}, 0, "script path argument was not specified");
 		return;
 	}
+	
+	my $timeout_seconds = shift || 300;
 	
 	my $computer_node_name = $self->data->get_computer_node_name();
 	
@@ -10922,8 +10934,8 @@ sub run_script {
 	my $command = "cmd.exe /c \"$script_path_escaped & exit %ERRORLEVEL%\"";
 	
 	# Execute the command
-	notify($ERRORS{'DEBUG'}, 0, "executing script on $computer_node_name:\nscript path: $script_path\nlog file path: $log_file_path");
-	my ($exit_status, $output) = $self->execute($command);
+	notify($ERRORS{'DEBUG'}, 0, "executing script on $computer_node_name:\nscript path: $script_path\nlog file path: $log_file_path\nscript timeout: $timeout_seconds seconds");
+	my ($exit_status, $output) = $self->execute($command, 1, $timeout_seconds);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute script on $computer_node_name: '$script_path', command: '$command'");
 		return;
