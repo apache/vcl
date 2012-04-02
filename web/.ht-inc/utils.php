@@ -7098,7 +7098,7 @@ function getComputers($sort=0, $includedeleted=0, $compid="") {
 	       .        "c.location, "
 	       .        "c.provisioningid, "
 	       .        "pr.prettyname AS provisioning, "
-	       .        "vh.vmprofileid "
+	       .        "vh2.vmprofileid "
 	       . "FROM state st, "
 	       .      "platform p, "
 	       .      "schedule sc, "
@@ -7108,8 +7108,8 @@ function getComputers($sort=0, $includedeleted=0, $compid="") {
 	       .      "user u, "
 	       .      "affiliation a, "
 	       .      "computer c "
-	       . "LEFT JOIN vmhost vh ON (c.id = vh.computerid) "
-	       . "LEFT JOIN vmtype vt ON (c.vmtypeid = vt.id) "
+	       . "LEFT JOIN vmhost vh ON (c.vmhostid = vh.id) "
+	       . "LEFT JOIN vmhost vh2 ON (c.id = vh2.computerid) "
 	       . "LEFT JOIN computer c2 ON (c2.id = vh.computerid) "
 	       . "LEFT JOIN image next ON (c.nextimageid = next.id) "
 	       . "LEFT JOIN provisioning pr ON (c.provisioningid = pr.id) "
@@ -10369,7 +10369,9 @@ function getDojoHTML($refresh) {
 			                      'dijit.form.FilteringSelect');
 			break;
 		case 'connectRequest':
-			$dojoRequires = array('dojo.parser');
+			$dojoRequires = array('dojo.parser',
+			                      'dijit.form.Button',
+			                      'dijit.Dialog');
 			break;
 		case 'viewRequestInfo':
 			$dojoRequires = array('dojo.parser',
@@ -10583,12 +10585,20 @@ function getDojoHTML($refresh) {
 		return '';
 	switch($mode) {
 		case "connectRequest":
+			$rt .= "<style type=\"text/css\">\n";
+			$rt .= "   @import \"themes/$skin/css/dojo/$skin.css\";\n";
+			$rt .= "</style>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
 			$rt .= "   djConfig=\"parseOnLoad: true\">\n";
 			$rt .= "</script>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"js/requests.js\"></script>\n";
 			$rt .= "<script type=\"text/javascript\">\n";
-			$rt .= "   dojo.addOnLoad(showRDPbutton);\n";
+			$rt .= "   dojo.addOnLoad(function() {\n";
+			foreach($dojoRequires as $req)
+				$rt .= "   dojo.require(\"$req\");\n";
+			$rt .= "   showRDPbutton();\n";
+			$rt .= "   setTimeout(checkConnectTimeout, 15000);\n";
+			$rt .= "   });\n";
 			$rt .= "</script>\n";
 			return $rt;
 
@@ -10615,6 +10625,7 @@ function getDojoHTML($refresh) {
 			$rt .= "   });\n";
 			if($refresh)
 				$rt .= "   refresh_timer = setTimeout(resRefresh, 12000);\n";
+			$rt .= "   check_timeout_timer = setTimeout(checkTimeouts, 15000);\n";
 			$rt .= "</script>\n";
 			return $rt;
 

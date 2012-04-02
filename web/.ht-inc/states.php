@@ -169,6 +169,7 @@ $noHTMLwrappers = array('sendRDPfile',
                         'AJsubmitDeleteRequest',
                         'AJconfirmRemoveRequest',
                         'AJsubmitRemoveRequest',
+                        'AJcheckConnectTimeout',
                         'AJsetImageProduction',
                         'AJsubmitSetImageProduction',
                         'AJeditRequest',
@@ -214,6 +215,7 @@ $actions['mode']['AJconfirmRemoveRequest'] = "AJconfirmRemoveRequest";
 $actions['mode']['AJsubmitRemoveRequest'] = "AJsubmitRemoveRequest";
 $actions['mode']['connectRequest'] = "connectRequest";
 $actions['mode']['sendRDPfile'] = "sendRDPfile";
+$actions['mode']['AJcheckConnectTimeout'] = "AJcheckConnectTimeout";
 #$actions['mode']['connectMindterm'] = "connectMindterm";
 #$actions['mode']['connectRDPapplet'] = "connectRDPapplet";
 $actions['pages']['viewRequests'] = "currentReservations";
@@ -226,6 +228,7 @@ $actions['pages']['AJconfirmRemoveRequest'] = "currentReservations";
 $actions['pages']['AJsubmitRemoveRequest'] = "currentReservations";
 $actions['pages']['connectRequest'] = "currentReservations";
 $actions['pages']['sendRDPfile'] = "currentReservations";
+$actions['pages']['AJcheckConnectTimeout'] = "currentReservations";
 #$actions['pages']['connectMindterm'] = "currentReservations";
 #$actions['pages']['connectRDPapplet'] = "currentReservations";
 

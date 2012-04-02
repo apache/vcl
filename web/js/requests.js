@@ -265,6 +265,22 @@ function setMaxRequestLength(minutes) {
 	}
 }
 
+function checkTimeouts() {
+	var nextcheck = 15;
+	var nodes = dojo.query('.timeoutvalue');
+	var tmp = new Date();
+	var now = (tmp.getTime() - tmp.getMilliseconds()) / 1000;
+	for(var i = 0; i < nodes.length; i++) {
+		if(nodes[i].value <= now) {
+			resRefresh();
+			break;
+		}
+		else if(nodes[i].value - now < nextcheck)
+			nextcheck = nodes[i].value - now;
+	}
+	check_timeout_timer = setTimeout(checkTimeouts, nextcheck * 1000);
+}
+
 function resRefresh() {
 	if(! dojo.byId('resRefreshCont'))
 		return;
@@ -697,6 +713,34 @@ function submitReinstallReservationCB(data, ioArgs) {
 	if(data.items.status == 'success') {
 		dijit.byId('reinstalldlg').hide();
 		resRefresh();
+	}
+}
+
+function checkConnectTimeout() {
+	var nextcheck = 15;
+	if(! dojo.byId('timeoutvalue'))
+		return;
+	var timeout = dojo.byId('timeoutvalue').value;
+	var tmp = new Date();
+	var now = (tmp.getTime() - tmp.getMilliseconds()) / 1000;
+	if(timeout <= now) {
+		var cont = dojo.byId('refreshcont').value;
+		RPCwrapper({continuation: cont}, checkConnectTimeoutCB, 1);
+		return;
+	}
+	else if(timeout - now < nextcheck) {
+		nextcheck = timeout - now;
+	}
+	setTimeout(checkConnectTimeout, nextcheck * 1000);
+}
+
+function checkConnectTimeoutCB(data, ioArgs) {
+	if(data.items.status == 'timeout') {
+		dijit.byId('timeoutdlg').show();
+		return;
+	}
+	else if(data.items.status == 'inuse') {
+		setTimeout(checkConnectTimeout, 300000);
 	}
 }
 

@@ -1001,10 +1001,14 @@ function viewRequests() {
 					}
 					$text .= "       </div>\n";
 					$text .= "     </div>\n";
+					$text .= getViewRequestHTMLitem('timeoutdata', $requests[$i]['id'], $requests[$i]);
 					$text .= "    </TD>\n";
 				}
-				else
-					$text .= "    <TD></TD>\n";
+				else {
+					$text .= "    <TD>";
+					$text .= getViewRequestHTMLitem('timeoutdata', $requests[$i]['id'], $requests[$i]);
+					$text .= "</TD>\n";
+				}
 			}
 			else
 				$text .= "    <TD></TD>\n";
@@ -1452,7 +1456,7 @@ function getViewRequestHTMLitem($item, $var1='', $data=array()) {
 		$r .= "    <TD>\n";
 		$r .= "      <button dojoType=\"dijit.form.Button\">\n";
 		$r .= "        Delete\n";
-		$r .= "	      <script type=\"dojo/method\" event=\"onClick\">\n";
+		$r .= "        <script type=\"dojo/method\" event=\"onClick\">\n";
 		$r .= "          endReservation('$var1');\n";
 		$r .= "        </script>\n";
 		$r .= "      </button>\n";
@@ -1479,7 +1483,7 @@ function getViewRequestHTMLitem($item, $var1='', $data=array()) {
 		$r .= "    <TD>\n";
 		$r .= "      <button dojoType=\"dijit.form.Button\">\n";
 		$r .= "        Remove\n";
-		$r .= "	      <script type=\"dojo/method\" event=\"onClick\">\n";
+		$r .= "        <script type=\"dojo/method\" event=\"onClick\">\n";
 		$r .= "          removeReservation('$var1');\n";
 		$r .= "        </script>\n";
 		$r .= "      </button>\n";
@@ -1565,7 +1569,7 @@ function getViewRequestHTMLitem($item, $var1='', $data=array()) {
 		$r .= "          <div dojoType=\"dijit.MenuItem\"\n";
 		$r .= "               iconClass=\"noicon\"\n";
 		$r .= "               label=\"Reboot\">\n";
-		$r .= "	          <script type=\"dojo/method\" event=\"onClick\">\n";
+		$r .= "            <script type=\"dojo/method\" event=\"onClick\">\n";
 		$r .= "              rebootRequest('$var1');\n";
 		$r .= "            </script>\n";
 		$r .= "          </div>\n";
@@ -1582,7 +1586,7 @@ function getViewRequestHTMLitem($item, $var1='', $data=array()) {
 		$r .= "          <div dojoType=\"dijit.MenuItem\"\n";
 		$r .= "               iconClass=\"noicon\"\n";
 		$r .= "               label=\"Reinstall\">\n";
-		$r .= "	          <script type=\"dojo/method\" event=\"onClick\">\n";
+		$r .= "            <script type=\"dojo/method\" event=\"onClick\">\n";
 		$r .= "              showReinstallRequest('$var1');\n";
 		$r .= "            </script>\n";
 		$r .= "          </div>\n";
@@ -1664,6 +1668,19 @@ function getViewRequestHTMLitem($item, $var1='', $data=array()) {
 			$r .= "<strong>Status</strong>: Timed Out\n";
 		$r .= "</div>\n";
 		$r .= "</TD>\n";
+		return $r;
+	}
+	if($item == 'timeoutdata') {
+		if($data['currstateid'] == 8 ||
+		   ($data['currstateid'] == 14 && $data['laststateid'] == 8)) {
+			$end = datetimeToUnix($data['end']) + 15;
+			$r .= "     <input type=\"hidden\" class=\"timeoutvalue\" value=\"$end\">\n";
+		}
+		else {
+			$timeout = getReservationNextTimeout($data['resid']);
+			if(! is_null($timeout))
+				$r .= "     <input type=\"hidden\" class=\"timeoutvalue\" value=\"$timeout\">\n";
+		}
 		return $r;
 	}
 }
@@ -3285,8 +3302,13 @@ function connectRequest() {
 		print "is no longer available.<br>\n";
 		return;
 	}
+	$timeout = getReservationConnectTimeout($requestData['reservations'][0]['reservationid']);
+	if(is_null($timeout))
+		addConnectTimeout($requestData['reservations'][0]['reservationid'], 
+		                  $requestData['reservations'][0]['computerid']);
+	$now = time();
 	if($requestData['reservations'][0]['remoteIP'] != $remoteIP) {
-		$setback = unixToDatetime(time() - 600);
+		$setback = unixToDatetime($now - 600);
 		$query = "UPDATE reservation "
 		       . "SET remoteIP = '$remoteIP', "
 		       .     "lastcheck = '$setback' "
@@ -3295,6 +3317,9 @@ function connectRequest() {
 
 		addChangeLogEntry($requestData["logid"], $remoteIP);
 	}
+
+	if(! is_null($timeout))
+		print "<input type=\"hidden\" id=\"timeoutvalue\" value=\"$timeout\">\n";
 
 	print "<H2 align=center>Connect!</H2>\n";
 	if($requestData['forimaging']) {
@@ -3364,7 +3389,7 @@ function connectRequest() {
 				print "<FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
 				$cdata = array('requestid' => $requestid,
 				               'resid' => $res['reservationid']);
-				$expire = datetimeToUnix($requestData['end']) - time() + 1800; # remaining reservation time plus 30 min
+				$expire = datetimeToUnix($requestData['end']) - $now + 1800; # remaining reservation time plus 30 min
 				$cont = addContinuationsEntry('sendRDPfile', $cdata, $expire);
 				print "<INPUT type=hidden name=continuation value=\"$cont\">\n";
 				print "<INPUT type=submit value=\"Get RDP File\">\n";
@@ -3375,6 +3400,52 @@ function connectRequest() {
 		if($cluster)
 			print "</fieldset><br>\n";
 	}
+	$cdata = array('requestid' => $requestid);
+	$cont = addContinuationsEntry('AJcheckConnectTimeout', $cdata, SECINDAY);
+	print "<input type=\"hidden\" id=\"refreshcont\" value=\"$cont\">\n";
+	print "<div dojoType=dijit.Dialog\n";
+	print "      id=\"timeoutdlg\"\n";
+	print "      title=\"Reservation Timed Out\"\n";
+	print "      duration=250\n";
+	print "      draggable=false>\n";
+	print "This reservation has timed out<br>and is no longer available.<br><br>\n";
+	print "   <div align=\"center\">\n";
+	print "   <button dojoType=\"dijit.form.Button\">\n";
+	print "     Okay\n";
+	print "	   <script type=\"dojo/method\" event=\"onClick\">\n";
+	print "       dijit.byId('timeoutdlg').hide();\n";
+	print "     </script>\n";
+	print "   </button>\n";
+	print "   </div>\n";
+	print "</div>\n";
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn AJcheckConnectTimeout()
+///
+/// \brief checks to see if a reservation has timed out
+///
+////////////////////////////////////////////////////////////////////////////////
+function AJcheckConnectTimeout() {
+	$requestid = getContinuationVar('requestid');
+	$reqdata = getRequestInfo($requestid, 1);
+	$stateid = $reqdata['stateid'];
+	if($stateid == 14)
+		$stateid == $reqdata['laststateid'];
+	if(is_null($reqdata) ||
+	   $stateid == 1 ||
+	   $stateid == 11 ||
+	   $stateid == 12 ||
+	   $stateid == 16 ||
+	   $stateid == 17) {
+		$data['status'] = 'timeout';
+		sendJSON($data);
+		return;
+	}
+	$data['status'] = 'inuse';
+	sendJSON($data);
+	return;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -3593,5 +3664,102 @@ function processRequestInput($checks=1) {
 	if($return["testjavascript"] != 0 && $return['testjavascript'] != 1)
 		$return["testjavascript"] = 0;
 	return $return;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn getReservationNextTimeout($resid)
+///
+/// \param $resid - reservation id
+///
+/// \return unix timestamp
+///
+/// \brief determines the time at which the specified reservation will time out
+/// if not acknowledged or NULL if there is no entry
+///
+////////////////////////////////////////////////////////////////////////////////
+function getReservationNextTimeout($resid) {
+	$query = "SELECT UNIX_TIMESTAMP(cll.timestamp) AS timestamp, "
+	       .        "cll.loadstateid, "
+	       .        "v1.value AS acknowledgetimeout, "
+	       .        "v2.value AS connecttimeout "
+	       . "FROM computerloadlog cll, "
+	       .      "variable v1, "
+	       .      "variable v2 "
+	       . "WHERE cll.reservationid = $resid AND "
+	       .       "(cll.loadstateid = 18 OR "
+	       .       "cll.loadstateid = 55) AND "
+	       .       "v1.name = 'acknowledgetimeout' AND "
+	       .       "v2.name = 'connecttimeout' "
+	       . "ORDER BY cll.timestamp DESC "
+	       . "LIMIT 1";
+	#return $query; TODO debug
+	$qh = doQuery($query);
+	if($row = mysql_fetch_assoc($qh)) {
+		if(! is_numeric($row['timestamp']))
+			return NULL;
+		if($row['loadstateid'] == 18)
+			return $row['timestamp'] + $row['acknowledgetimeout'] + 15;
+		elseif($row['loadstateid'] == 55)
+			return $row['timestamp'] + $row['connecttimeout'] + 15;
+		else
+			return NULL;
+	}
+	else
+		return NULL;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn getReservationConnectTimeout($resid)
+///
+/// \param $resid - reservation id
+///
+/// \return unix timestamp
+///
+/// \brief determines the time at which the specified reservation will time out
+/// if not connected or NULL if there is no entry
+///
+////////////////////////////////////////////////////////////////////////////////
+function getReservationConnectTimeout($resid) {
+	$query = "SELECT UNIX_TIMESTAMP(cll.timestamp) AS timestamp, "
+	       .        "v.value AS connecttimeout "
+	       . "FROM computerloadlog cll, "
+	       .      "variable v "
+	       . "WHERE cll.reservationid = $resid AND "
+	       .       "cll.loadstateid = 55 AND "
+	       .       "v.name = 'connecttimeout'";
+	$qh = doQuery($query);
+	if($row = mysql_fetch_assoc($qh)) {
+		if(! is_numeric($row['timestamp']))
+			return NULL;
+		return $row['timestamp'] + $row['connecttimeout'] + 15;
+	}
+	else
+		return NULL;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn addConnectTimeout($resid, $compid)
+///
+/// \param $resid - reservation id
+/// \param $compid - computer id
+///
+/// \brief inserts a connecttimeout entry in computerloadlog for $resid/$compid
+///
+////////////////////////////////////////////////////////////////////////////////
+function addConnectTimeout($resid, $compid) {
+	$query = "INSERT INTO computerloadlog "
+	       .        "(reservationid, "
+	       .        "computerid, "
+	       .        "loadstateid, "
+	       .        "timestamp) "
+	       . "VALUES "
+	       .        "($resid, "
+	       .        "$compid, "
+	       .        "55, "
+	       .        "NOW())";
+	doQuery($query);
 }
 ?>
