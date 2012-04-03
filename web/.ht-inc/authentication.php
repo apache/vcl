@@ -201,17 +201,7 @@ function selectAuth() {
 ////////////////////////////////////////////////////////////////////////////////
 function printLoginPageWithSkin($authtype, $servertimeout=0) {
 	global $authMechs, $HTMLheader, $skin, $printedHTMLheader;
-	switch(getAffiliationName($authMechs[$authtype]['affiliationid'])) {
-		case 'EXAMPLE1':
-			$skin = 'example1';
-			break;
-		case 'EXAMPLE2':
-			$skin = 'example2';
-			break;
-		default:
-			$skin = 'default';
-			break;
-	}
+	$skin = getAffiliationTheme($authMechs[$authtype]['affiliationid']);
 	require_once("themes/$skin/page.php");
 	$HTMLheader = getHeader(0);
 	printHTMLHeader();
@@ -384,60 +374,34 @@ function ldapLogin($authtype, $userid, $passwd) {
 	}
 	ldap_set_option($ds, LDAP_OPT_PROTOCOL_VERSION, 3);
 	ldap_set_option($ds, LDAP_OPT_REFERRALS, 0);
-	/*if($authtype == 'EXAMPLE1 LDAP') {
+	/*if($authMechs[$authtype]['lookupuserbeforeauth']) {
 		# in this case, we have to look up what part of the tree the user is in
 		#   before we can actually look up the user
 		$auth = $authMechs[$authtype];
-		$res = ldap_bind($ds, $auth['masterlogin'],
-		                 $auth['masterpwd']);
+		if(array_key_exists('masterlogin', $auth) && strlen($auth['masterlogin']))
+			$res = ldap_bind($ds, $auth['masterlogin'], $auth['masterpwd']);
+		else
+			$res = ldap_bind($ds);
 		if(! $res) {
-			addLoginLog($userid, $authtype, $authMechs[$authtype]['affiliationid'], 0);
+			addLoginLog($userid, $authtype, $auth['affiliationid'], 0);
 			printLoginPageWithSkin($authtype);
 			return;
 		}
 		$search = ldap_search($ds,
 		                      $auth['binddn'], 
-		                      "cn=$userid",
+		                      "{$auth['lookupuserfield']}=$userid",
 		                      array('dn'), 0, 3, 15);
 		if($search) {
 			$tmpdata = ldap_get_entries($ds, $search);
 			if(! $tmpdata['count'] || ! array_key_exists('dn', $tmpdata[0])) {
-				addLoginLog($userid, $authtype, $authMechs[$authtype]['affiliationid'], 0);
+				addLoginLog($userid, $authtype, $auth['affiliationid'], 0);
 				printLoginPageWithSkin($authtype);
 				return;
 			}
 			$ldapuser = $tmpdata[0]['dn'];
 		}
 		else {
-			addLoginLog($userid, $authtype, $authMechs[$authtype]['affiliationid'], 0);
-			printLoginPageWithSkin($authtype);
-			return;
-		}
-	}
-	elseif($authtype == 'EXAMPLE2 LDAP') {
-		# this is similar to EXAMPLE1, but here we do an anonymous bind
-		$auth = $authMechs[$authtype];
-		$res = ldap_bind($ds);
-		if(! $res) {
-			addLoginLog($userid, $authtype, $authMechs[$authtype]['affiliationid'], 0);
-			printLoginPageWithSkin($authtype);
-			return;
-		}
-		$search = ldap_search($ds,
-		                      $auth['binddn'], 
-		                      "uid=$userid",
-		                      array('dn'), 0, 3, 15);
-		if($search) {
-			$tmpdata = ldap_get_entries($ds, $search);
-			if(! $tmpdata['count'] || ! array_key_exists('dn', $tmpdata[0])) {
-				addLoginLog($userid, $authtype, $authMechs[$authtype]['affiliationid'], 0);
-				printLoginPageWithSkin($authtype);
-				return;
-			}
-			$ldapuser = $tmpdata[0]['dn'];
-		}
-		else {
-			addLoginLog($userid, $authtype, $authMechs[$authtype]['affiliationid'], 0);
+			addLoginLog($userid, $authtype, $auth['affiliationid'], 0);
 			printLoginPageWithSkin($authtype);
 			return;
 		}

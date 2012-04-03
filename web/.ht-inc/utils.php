@@ -218,26 +218,10 @@ function initGlobals() {
 		$_SESSION['user'] = $user;
 	}
 
-	$affil = $user['affiliation'];
-
 	# setskin
-	switch($affil) {
-		case 'EXAMPLE1':
-			$skin = 'example1';
-			require_once('themes/example1/page.php');
-			break;
+	$skin = getAffiliationTheme($user['affiliationid']);
+	require_once("themes/$skin/page.php");
 
-		case 'EXAMPLE2':
-			$skin = 'example1';
-			require_once('themes/example2/page.php');
-			break;
-
-		default:
-			$skin = 'default';
-			require_once('themes/default/page.php');
-			break;
-
-	}
 	$_SESSION['mode'] = $mode;
 
 	// check for and possibly clear dirty permission cache
@@ -374,7 +358,8 @@ function checkAccess() {
 				exit;
 			}
 			if($authMechs[$authtype]['type'] == 'ldap') {
-				$ds = ldap_connect("ldaps://{$authMechs[$authtype]['server']}/");
+				$auth = $authMechs[$authtype];
+				$ds = ldap_connect("ldaps://{$auth['server']}/");
 				if(! $ds) {
 					printXMLRPCerror(5);    # failed to connect to auth server
 					dbDisconnect();
@@ -382,7 +367,43 @@ function checkAccess() {
 				}
 				ldap_set_option($ds, LDAP_OPT_PROTOCOL_VERSION, 3);
 				ldap_set_option($ds, LDAP_OPT_REFERRALS, 0);
-				$ldapuser = sprintf($authMechs[$authtype]['userid'], $user['unityid']);
+				if($auth['lookupuserbeforeauth']) {
+					# in this case, we have to look up what part of the tree the user is in
+					#   before we can actually look up the user
+					$auth = $authMechs[$authtype];
+					if(array_key_exists('masterlogin', $auth) && strlen($auth['masterlogin']))
+						$res = ldap_bind($ds, $auth['masterlogin'], $auth['masterpwd']);
+					else
+						$res = ldap_bind($ds);
+					if(! $res) {
+						addLoginLog($user['unityid'], $authtype, $user['affiliationid'], 0);
+						printXMLRPCerror(3);   # access denied
+						dbDisconnect();
+						exit;
+					}
+					$search = ldap_search($ds,
+					                      $auth['binddn'], 
+					                      "{$auth['lookupuserfield']}={$user['unityid']}",
+					                      array('dn'), 0, 3, 15);
+					if($search) {
+						$tmpdata = ldap_get_entries($ds, $search);
+						if(! $tmpdata['count'] || ! array_key_exists('dn', $tmpdata[0])) {
+							addLoginLog($user['unityid'], $authtype, $user['affiliationid'], 0);
+							printXMLRPCerror(3);   # access denied
+							dbDisconnect();
+							exit;
+						}
+						$ldapuser = $tmpdata[0]['dn'];
+					}
+					else {
+						addLoginLog($user['unityid'], $authtype, $user['affiliationid'], 0);
+						printXMLRPCerror(3);   # access denied
+						dbDisconnect();
+						exit;
+					}
+				}
+				else
+					$ldapuser = sprintf($auth['userid'], $user['unityid']);
 				$res = ldap_bind($ds, $ldapuser, $xmlpass);
 				if(! $res) {
 					addLoginLog($user['unityid'], $authtype, $user['affiliationid'], 0);
@@ -774,7 +795,7 @@ function stopSession() {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function main() {
-	global $user, $authed, $mode, $skin;
+	global $user, $authed, $mode;
 	print "<H2>Welcome to the Virtual Computing Lab</H2>\n";
 	if($authed) {
 		if(! empty($user['lastname']) && ! empty($user['preferredname']))
@@ -2969,6 +2990,26 @@ function getAffiliationDataUpdateText($affilid=0) {
 	while($row = mysql_fetch_assoc($qh))
 		$return[$row['id']] = $row['dataUpdateText'];
 	return $return;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn getAffiliationTheme($affilid)
+///
+/// \param $affilid - id of an affiliation
+///
+/// \return name of the affiliations's theme
+///
+/// \brief gets affiliation.theme for the specified affiliation
+///
+////////////////////////////////////////////////////////////////////////////////
+function getAffiliationTheme($affilid) {
+	$query = "SELECT theme FROM affiliation WHERE id = $affilid";
+	$qh = doQuery($query);
+	if($row = mysql_fetch_assoc($qh))
+		return $row['theme'];
+	else
+		return 'default';
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -9998,7 +10039,7 @@ function menulistLI($page) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function sendHeaders() {
-	global $mode, $user, $authed, $oldmode, $actionFunction, $skin;
+	global $mode, $user, $authed, $oldmode, $actionFunction;
 	global $shibauthed;
 	if(! $authed && $mode == "auth") {
 		header("Location: " . BASEURL . SCRIPT . "?mode=selectauth");
@@ -10127,7 +10168,7 @@ function sendHeaders() {
 ////////////////////////////////////////////////////////////////////////////////
 function printHTMLHeader() {
 	global $mode, $user, $authed, $oldmode, $HTMLheader, $contdata;
-	global $printedHTMLheader, $docreaders, $skin, $noHTMLwrappers, $actions;
+	global $printedHTMLheader, $docreaders, $noHTMLwrappers, $actions;
 	if($printedHTMLheader)
 		return;
 	$refresh = 0;
@@ -10177,7 +10218,7 @@ function printHTMLHeader() {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function getNavMenu($inclogout, $inchome, $homeurl=HOMEURL) {
-	global $user, $docreaders, $authed, $userlookupUsers, $skin;
+	global $user, $docreaders, $authed, $userlookupUsers;
 	global $mode;
 	if($authed && $mode != 'expiredemouser')
 		$computermetadata = getUserComputerMetaData();

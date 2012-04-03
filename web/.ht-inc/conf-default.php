@@ -121,6 +121,11 @@ $authMechs = array(
 	                           "masterlogin" => "vcluser",       # privileged login id for ldap server
 	                           "masterpwd" => "*********",       # privileged login password for ldap server
 	                           "affiliationid" => 3,             # id from affiliation id this login method is associated with
+	                           "lookupuserbeforeauth" => 0,      # set this to 1 to have VCL use masterlogin to lookup the full DN of the user
+	                                                             #   and use that for the ldap bind to auth the user instead of just using the userid
+	                                                             #   field from above
+	                           "lookupuserfield" => '',          # if lookupuserbeforeauth is set to 1, this is the attribute to use to search in ldap
+	                                                             #   for the user.  Typically either 'cn', 'uid', or 'samaccountname'
 	                           "help" => "Use EXAMPLE1 LDAP if you are using an EXAMPLE1 account"), # message to be displayed on login page about when
 	                                                                                                #   to use this login mechanism*/
 );
