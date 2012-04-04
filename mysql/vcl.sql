@@ -48,6 +48,7 @@ CREATE TABLE IF NOT EXISTS `affiliation` (
   `sitewwwaddress` varchar(56) default NULL,
   `helpaddress` varchar(32) default NULL,
   `shibonly` tinyint(1) unsigned NOT NULL default '0',
+  `theme` varchar(50) NOT NULL default 'default',
   PRIMARY KEY  (`id`),
   UNIQUE KEY `name` (`name`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
@@ -1289,7 +1290,7 @@ INSERT INTO `adminlevel` (`id`, `name`) VALUES
 -- Dumping data for table `affiliation`
 -- 
 
-INSERT INTO `affiliation` (`id`, `name`, `dataUpdateText`) VALUES 
+INSERT INTO `affiliation` (`id`, `name`, `dataUpdateText`, `theme`) VALUES 
 (1, 'Local', ''),
 (2, 'Global', '');
 

@@ -372,6 +372,7 @@ END$$
 --
 
 CALL AddUniqueIndex('affiliation', 'name');
+CALL AddColumnIfNotExists('affiliation', 'theme', "varchar(50) NOT NULL default 'default'");
 
 -- --------------------------------------------------------
 
