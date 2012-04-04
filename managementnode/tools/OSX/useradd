@@ -1,0 +1,131 @@
+#!/bin/bash
+
+# /var/db/dslocal/nodes/Default/users/jdoe.plist
+# dscl . list /Users
+# dscl . -read /Users/jdoe
+# dscl . list /Groups GroupMembership
+# dscl . search /Users name jdoe
+# dscl . read /Groups
+
+# Tiger created groupname = loginname
+# Leopard creates groupname = 'staff', e.g. '20'
+
+# useradd 899112222 password
+USERNAME="$1"
+PASSWORD="$2"
+
+if [[ $UID -ne 0 ]]; then
+   echo " sorry, must be root to run this script"
+   exit 1
+fi
+
+RESULT=$(dscl . list /Users | grep "^$USERNAME\$")
+if [ -n "$RESULT" ]; then
+  echo " user account: \"$USERNAME\" already exists"
+  exit 1
+fi
+
+MAXID=$(dscl . -list /Users UniqueID | awk '{print $2}' | sort -ug | tail -1)
+USERID=$((MAXID+1))
+
+# gleaned from Workgroup Manager
+MCXSETTINGS=$(cat<<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>mcx_application_data</key>
+	<dict>
+		<key>com.apple.finder</key>
+		<dict>
+			<key>Forced</key>
+			<array>
+				<dict>
+					<key>mcx_preference_settings</key>
+					<dict>
+						<key>ProhibitBurn</key>
+						<false/>
+						<key>ProhibitConnectTo</key>
+						<false/>
+						<key>ProhibitEject</key>
+						<false/>
+						<key>ProhibitGoToFolder</key>
+						<false/>
+						<key>ProhibitGoToiDisk</key>
+						<false/>
+					</dict>
+				</dict>
+			</array>
+		</dict>
+		<key>com.apple.loginwindow</key>
+		<dict>
+			<key>Forced</key>
+			<array>
+				<dict>
+					<key>mcx_preference_settings</key>
+					<dict>
+						<key>RestartDisabledWhileLoggedIn</key>
+						<true/>
+						<key>ShutDownDisabledWhileLoggedIn</key>
+						<true/>
+					</dict>
+				</dict>
+			</array>
+		</dict>
+	</dict>
+</dict>
+</plist>
+EOF)
+
+DESKTOP=$(cat<<EOF
+{
+    Background =     {
+        default =         {
+            BackgroundColor =             (
+                "0.2549019753932953",
+                "0.4117647111415863",
+                "0.6666666865348816"
+            );
+            Change = Never;
+            ChangePath = "/Library/Desktop Pictures/Solid Colors";
+            ChangeTime = 1800;
+            ChooseFolderPath = "/Library/Desktop Pictures/";
+            CollectionString = "Apple Background Images";
+            DrawBackgroundColor = 1;
+            ImageFilePath = "/Library/Desktop Pictures/Solid Colors/Solid Aqua Blue.png";
+            NewChangePath = "/Library/Desktop Pictures/Solid Colors";
+            NewChooseFolderPath = "/Library/Desktop Pictures/";
+            NewImageFilePath = "/Library/Desktop Pictures/Solid Colors/Solid Aqua Blue.png";
+            Placement = Crop;
+            PlacementKeyTag = 1;
+            Random = 0;
+            TimerPopUpTag = 6;
+        };
+    };
+}
+EOF)
+
+# Create 'standard' user account
+
+dscl . -create /Users/$USERNAME
+dscl . -create /Users/$USERNAME UserShell /bin/bash   
+dscl . -create /Users/$USERNAME RealName "$USERNAME"
+dscl . -create /Users/$USERNAME UniqueID "$USERID"
+dscl . -create /Users/$USERNAME MCXSettings "$MCXSETTINGS"
+dscl . -create /Users/$USERNAME PrimaryGroupID 20
+dscl . -create /Users/$USERNAME NFSHomeDirectory /Users/$USERNAME
+dscl . -create /Users/$USERNAME comment "user account \"$USERNAME\" created: $(/bin/date)"
+
+dscl . -passwd /Users/$USERNAME "$PASSWORD"
+
+# the following should work, but doesn't
+# /usr/sbin/createhomedir -l -u "$USERNAME" > /dev/null 
+cd /Users
+/usr/sbin/createhomedir -l -c > /dev/null 
+
+/usr/bin/defaults write /Users/$USERNAME/Library/Preferences/com.apple.desktop "$DESKTOP"
+/usr/sbin/chown $USERNAME:20 /Users/$USERNAME/Library/Preferences/com.apple.desktop.plist
+
+# show new account
+dscl . read /Users/$USERNAME | grep "user account"
+

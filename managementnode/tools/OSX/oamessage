@@ -1,0 +1,16 @@
+#!/bin/bash
+
+# oamessage '$message';
+# popup a message on the console
+
+osascript << eof
+   try -- catch AppleEvent timed out errors
+      with timeout of 2 seconds
+         tell application "Finder"
+            activate
+            display dialog "$1" with title "Message from VCL Manager"  buttons "OK" default button "OK"
+         end tell
+      end timeout
+   end try
+eof
+

@@ -1,0 +1,45 @@
+#!/bin/bash
+
+# USERNAME="jdoe"
+
+USERNAME="$1"
+
+if [[ $UID -ne 0 ]]; then
+   echo " sorry, must be root to run this script"
+   exit 1
+fi
+
+RESULT=$(dscl . list /Users | grep "^$USERNAME\$")
+if [ -z "$RESULT" ]; then
+  echo " user account \"$USERNAME\" does not exist"
+  exit 1
+fi
+
+# not needed for leopard. 'staff' is the effective group id, and
+# 'staff' doesn't exist in dscl
+#
+# this shows effective, real, and supplementary groups
+# USER_GROUPS="$(/usr/bin/id -Gn $USERNAME)"
+# USER_GROUPS=$(/usr/bin/dscl . -search /Groups GroupMembership $USERNAME)"
+# if [[ -n "$USER_GROUPS" ]]; then 
+#    # delete the USERNAME's group memberships
+#    for GROUP in $USER_GROUPS; do
+#       dscl . -delete "/Groups/$GROUP"  GroupMembership "$USERNAME"
+#    done
+# fi
+
+dscl . -delete /Users/$USERNAME
+
+rm -r /Users/$USERNAME > /dev/null
+
+# list current USERNAMEs
+# dscl . list /Users
+
+RESULT=$(dscl . list /Users | grep "^$USERNAME\$")
+if [ -z "$RESULT" ]; then
+  echo " User account \"$USERNAME\" deleted: `date`"
+else
+  echo " User account \"$USERNAME\" NOT deleted"
+fi
+
+

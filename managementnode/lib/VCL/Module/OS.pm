@@ -2737,7 +2737,8 @@ sub get_tools_file_paths {
 	notify($ERRORS{'DEBUG'}, 0, "attempting for find tools files:\npattern: $pattern\narchitecture: $architecture\nother architecture: $other_architecture");
 	
 	# Find files already on the computer
-	my $computer_directory_path = "$NODE_CONFIGURATION_DIRECTORY";
+	#my $computer_directory_path = "$NODE_CONFIGURATION_DIRECTORY";
+	my $computer_directory_path = $self->get_node_configuration_directory();
 	my @existing_computer_file_array = $self->find_files($computer_directory_path, '*');
 	my %existing_computer_files = map { $_ => 1 } @existing_computer_file_array;
 

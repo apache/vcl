@@ -1,0 +1,39 @@
+#!/bin/bash
+
+
+/usr/bin/killall loginwindow
+
+
+#        osascript -e 'tell application \"System Events\"
+
+# for i in `/usr/bin/users | sed 's/root//'`
+# do
+#    result=`ps -U $i | grep Finder | grep -v grep`
+#    if [ "$result" != "" ]; then
+# echo user is $i
+# #       su - $i -c "osascript -e \'tell application \"Finder\"
+# #       do shell script \"kill -9 \`ps -Axjc | grep loginwindow | cut -c 12-15\`\"
+# #         end tell\' "
+# #      su - $i -c "osascript -e \'tell application \"Finder\" to quit\'"
+#       su - $i -c "osascript -e \'tell application \"System Events\" to log out\'"
+# #        key down shift
+# #        key down option
+# #        key down command
+# #        keystroke \"q\"
+# #        key up shift
+# #        key up option
+# #        key up command
+# #        end tell' "
+#    fi
+# done
+
+
+#      su - $i -c "osascript -e \'tell application \"Finder\" to quit\'"
+#        key down shift
+#        key down option
+#        key down command
+#        keystroke \"q\"
+#        key up shift
+#        key up option
+#        key up command
+#        end tell' "

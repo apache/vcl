@@ -741,6 +741,10 @@ EOF
 			# Notify via wall
 			notify_via_wall($computer_short_name, $user_login_id, $short_message, $image_os_name, $computer_type);
 		}
+		elsif ($image_os_type =~ /osx/){
+        # Notify via oascript
+        notify_via_oascript($computer_short_name, $user_login_id, $short_message);
+     }
 	} ## end if ($computer_type =~ /blade|virtualmachine/)
 	elsif ($computer_type eq "lab") {
 		# Notify via wall

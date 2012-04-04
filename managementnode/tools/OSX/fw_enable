@@ -1,0 +1,21 @@
+#!/bin/bash
+
+# $1 = flag for persistence
+
+if [ -n "$1" ]; then
+   persist=1
+fi
+
+
+# this is non persistent
+sysctl -w net.inet.ip.fw.enable=1
+
+# could also have used
+# ipfw enable firewall
+
+if [ -n "$persist" ]; then
+   touch /etc/ipfilter/ipfwstate-on
+   chmod 444 /etc/ipfilter/ipfwstate-on
+fi
+
+

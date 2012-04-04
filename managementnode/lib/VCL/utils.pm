@@ -182,6 +182,7 @@ our @EXPORT = qw(
   notify_via_IM
   notify_via_msg
   notify_via_wall
+  notify_via_oascript
   parent_directory_path
   preplogfile
   read_file_to_array
@@ -1432,6 +1433,40 @@ sub check_connection {
 					}    #foreach
 
 				} ## end if ($osname =~ /win|vmwarewin/)
+				elsif ($image_os_type =~ /osx/i) {
+					 undef @SSHCMD;
+					 @SSHCMD = run_ssh_command($shortnodename, $identity_keys, "netstat -an", "root", 22, 1);
+					 foreach my $line (@{$SSHCMD[1]}) {
+								#check for rdp connections
+								# rdp:3389
+								#check for connection refused, if ssh is gone something
+								#has happenned put in timeout state
+								if ($line =~ /Connection refused|Permission denied/) {
+										  chomp($line);
+										  notify($ERRORS{'WARNING'}, 0, "$line");
+										  if ($package =~ /reserved/) {
+													 $ret_val = "failed";
+										  }
+										  else {
+													 $ret_val = "timeout";
+										  }
+										  return $ret_val;
+								} ## end if ($line =~ /Connection refused|Permission denied/)
+								 if ($line =~ /tcp4\s+([0-9]*)\s+([0-9]*)\s+($ipaddress.3389)\s+([.0-9]*).([0-9]*)(.*)(ESTABLISHED)/) {
+									 if ($4 eq $remoteIP) {
+										 $break   = 1;
+										 $ret_val = "connected";
+										 return $ret_val;
+									 }
+									 else {
+										 #this isn't the remoteIP
+										 $ret_val = "conn_wrong_ip";
+										 return $ret_val;
+									 }
+								} ## end tcp4 check
+					 }    #foreach
+
+             } ## end if ($osname =~ /osx/)
 				elsif ($image_os_type =~ /linux/i) {
 					#run two checks
 					# 1:check connected IP address
@@ -2807,6 +2842,42 @@ sub getnewdbh {
 	notify($ERRORS{'WARNING'}, 0, "failed to connect to database, attempts made: $attempt/$max_attempts, $dbi_result");
 	return 0;
 } ## end sub getnewdbh
+
+ #/////////////////////////////////////////////////////////////////////////////
+
+=head2 notify_via_oascript
+
+ Parameters  : $node, $user, $message
+ Returns     : 0 or 1
+ Description : using apple oascript write supplied $message to finder
+
+=cut
+
+sub notify_via_oascript {
+        my ($node, $user, $message) = @_;
+        my ($package, $filename, $line, $sub) = caller(0);
+
+        notify($ERRORS{'WARNING'}, 0, "node is not defined")    if (!(defined($node)));
+        notify($ERRORS{'WARNING'}, 0, "message is not defined") if (!(defined($message)));
+        notify($ERRORS{'WARNING'}, 0, "user is not defined")    if (!(defined($user)));
+
+        # Escape new lines
+        $message =~ s/\n/ /gs;
+        $message =~ s/\'/\\\\\\\'/gs;
+        notify($ERRORS{'DEBUG'}, 0, "message:\n$message");
+
+        my $command = "/var/root/VCL/oamessage \"$message\"";
+
+        if (run_ssh_command($node, $ENV{management_node_info}{keys}, $command)) {
+                notify($ERRORS{'OK'}, 0, "successfully sent message to OSX user $user on $node");
+                return 1;
+        }
+        else {
+                notify($ERRORS{'WARNING'}, 0, "failed to send message to OSX user $user on $node");
+                return 0;
+        }
+
+} ## end sub notify_via_oascript
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -5439,6 +5510,7 @@ sub write_currentimage_txt {
 	my $image_prettyname           = $data->get_image_prettyname();
 	my $imagerevision_id           = $data->get_imagerevision_id();
 	my $imagerevision_date_created = $data->get_imagerevision_date_created();
+	my $image_os_type					 = $data->get_image_os_type();
 
 	my @current_image_lines;
 	push @current_image_lines, "$image_name";
@@ -5460,7 +5532,15 @@ sub write_currentimage_txt {
 		notify($ERRORS{'OK'}, 0, "updated ownership and permissions  on currentimage.txt");
 	}
 
-	my $command = 'echo -e "' . $current_image_contents . '" > currentimage.txt && cat currentimage.txt';
+	my $command;
+	if($image_os_type =~ /osx/i) {
+		$command = 'echo "';
+	}
+	else {
+		$command = 'echo -e "';		
+	}
+
+	$command .= $current_image_contents . '" > currentimage.txt && cat currentimage.txt';
 
 	# Copy the temp file to the node as currentimage.txt
 	my ($ssh_exit_status, $ssh_output) = run_ssh_command($computer_node_name, $image_identity, $command);

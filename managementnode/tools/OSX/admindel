@@ -1,0 +1,10 @@
+#!/bin/bash
+
+new_user="jdoe"
+
+dscl . -delete /Groups/admin GroupMembership "$new_user"
+dscl . -delete /Groups/appserverusr GroupMembership "$new_user"
+dscl . -delete /Groups/appserveradm GroupMembership "$new_user"
+dscl . -delete /Groups/lpadmin GroupMembership "$new_user"
+
+dscl . list /Groups GroupMembership

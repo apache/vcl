@@ -1,0 +1,13 @@
+#!/bin/bash
+
+# less /var/db/dslocal/nodes/Default/groups/admin.plist
+
+new_user="jdoe"
+
+dscl . -append /Groups/admin GroupMembership "$new_user"
+dscl . -append /Groups/appserverusr GroupMembership "$new_user"
+dscl . -append /Groups/appserveradm GroupMembership "$new_user"
+dscl . -append /Groups/lpadmin GroupMembership "$new_user"
+
+# dscl . search /Groups GroupMembership jdoe
+dscl . list /Groups GroupMembership

@@ -1,0 +1,52 @@
+#!/bin/bash
+
+# $1 = source IP range
+# $2 = flag for persistence
+
+if [ -z "$1" ]; then
+   source="any"
+else
+   source="$1"
+fi
+
+if [ -n "$2" ]; then
+   persist=1
+fi
+
+# find available rule number
+unset -v i new_rule idvar
+declare -i new_rule=0 i=12300 idvar=0
+while [[ $idvar -eq 0 ]]; do 
+   if [[ -z "$(grep $i /etc/ipfilter/ipfw.conf.apple)" ]]; then
+      new_rule=$i
+      idvar=1
+      #break
+   fi
+   i=$[i-1]
+done
+
+declare -i i=$new_rule idvar=0
+while [[ $idvar -eq 0 ]]; do 
+   if [[ -z "$(grep $i /etc/ipfilter/ipfw.conf)" ]]; then
+      new_rule=$i
+      idvar=1
+      #break
+   fi
+   i=$[i-1]
+done
+
+if [ -n "$(ipfw list | grep 'dst-port 3389')" ]; then
+   echo "active firewall already contains rdp rule "
+else
+   ipfw add $new_rule allow tcp from $source to any dst-port 3389
+fi
+
+if [ -n "$persist" ]; then
+   if [ -n "$(grep 'dst-port 3389' /etc/ipfilter/ipfw.conf)" ]; then
+      echo "RDP persistence already set"
+   else
+      echo "add $new_rule allow tcp from $source to any dst-port 3389" >> /etc/ipfilter/ipfw.conf
+   fi
+fi
+
+

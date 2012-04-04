@@ -1,0 +1,23 @@
+#!/bin/bash
+
+# $1 = flag to remove persistence
+#
+# we rely on the explicit "deny" at the end of the filter table
+# all we need to do is remove the "allow" setting
+
+if [ -n "$1" ]; then
+   persist=1
+fi
+
+if [ -n "$(ipfw list | grep 'dst-port 3389')" ]; then
+   ipfw delete `ipfw list | grep "dst-port 3389" | cut -f1 -d" "`
+fi
+
+if [ -n "$persist" ]; then 
+   if [ -n "$(grep 'dst-port 3389' /etc/ipfilter/ipfw.conf)" ]; then
+      grep -v "dst-port 3389" /etc/ipfilter/ipfw.conf > /tmp/$$
+      cat /tmp/$$ > /etc/ipfilter/ipfw.conf
+      rm /tmp/$$
+   fi
+fi
+

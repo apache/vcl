@@ -1,0 +1,6 @@
+#!/bin/bash
+
+networksetup -listallnetworkservices
+networksetup -getinfo <networkservice>
+networksetup -setdhcp <networkservice> [clientid]
+
