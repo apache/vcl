@@ -4096,628 +4096,209 @@ sub database_execute {
 
 =head2  get_request_info
 
- Parameters  : databasehandle, management node id
- Returns     : hash0 or 1
- Description : gets all reservation related information
+ Parameters  : $request_id
+ Returns     : hash
+ Description : Retrieves all request/reservation information.
 
 =cut
 
 
 sub get_request_info {
 	my ($request_id) = @_;
-	my ($package, $filename, $line, $sub) = caller(0);
-
 	if (!(defined($request_id))) {
-		notify($ERRORS{'WARNING'}, 0, "request ID was not specified");
-		return 0;
+		notify($ERRORS{'WARNING'}, 0, "request ID argument was not specified");
+		return;
 	}
-
-	my $select_statement = "
-   SELECT DISTINCT
-
-   request.id AS request_id,
-   request.stateid AS request_stateid,
-   request.userid AS request_userid,
-   request.laststateid AS request_laststateid,
-   request.logid AS request_logid,
-   request.forimaging AS request_forimaging,
-   request.test AS request_test,
-   request.preload AS request_preload,
-   request.start AS request_start,
-   request.end AS request_end,
-   request.daterequested AS request_daterequested,
-   request.datemodified AS request_datemodified,
-   request.checkuser AS request_checkuser,
-
-   requeststate.name AS requeststate_name,
-
-   requestlaststate.name AS requestlaststate_name,
-
-   reservation.id AS reservation_id,
-   reservation.requestid AS reservation_requestid,
-   reservation.computerid AS reservation_computerid,
-   reservation.imageid AS reservation_imageid,
-   reservation.imagerevisionid AS reservation_imagerevisionid,
-   reservation.managementnodeid AS reservation_managementnodeid,
-   reservation.remoteIP AS reservation_remoteIP,
-   reservation.lastcheck AS reservation_lastcheck,
-   reservation.pw AS reservation_pw,
-
-   image.id AS image_id,
-   image.name AS image_name,
-   image.prettyname AS image_prettyname,
-   image.ownerid AS image_ownerid,
-   image.platformid AS image_platformid,
-   image.OSid AS image_OSid,
-   image.imagemetaid AS image_imagemetaid,
-   image.minram AS image_minram,
-   image.minprocnumber AS image_minprocnumber,
-   image.minprocspeed AS image_minprocspeed,
-   image.minnetwork AS image_minnetwork,
-   image.maxconcurrent AS image_maxconcurrent,
-   image.reloadtime AS image_reloadtime,
-   image.deleted AS image_deleted,
-   image.test AS image_test,
-   image.lastupdate AS image_lastupdate,
-   image.forcheckout AS image_forcheckout,
-   image.maxinitialtime AS image_maxinitialtime,
-   image.project AS image_project,
-   image.size AS image_size,
-   image.architecture AS image_architecture,
-
-   imagerevision.id AS imagerevision_id,
-   imagerevision.imageid AS imagerevision_imageid,
-   imagerevision.revision AS imagerevision_revision,
-   imagerevision.userid AS imagerevision_userid,
-   imagerevision.datecreated AS imagerevision_datecreated,
-   imagerevision.deleted AS imagerevision_deleted,
-   imagerevision.production AS imagerevision_production,
-   imagerevision.comments AS imagerevision_comments,
-   imagerevision.imagename AS imagerevision_imagename,
-
-   imageplatform.name AS imageplatform_name,
-
-   OS.name AS OS_name,
-   OS.prettyname AS OS_prettyname,
-	OS.type AS OS_type,
-	OS.installtype AS OS_installtype,
-	OS.sourcepath AS OS_sourcepath,
-	OS.moduleid AS OS_moduleid,
-
-	imageOSmodule.name AS imageOSmodule_name,
-	imageOSmodule.prettyname AS imageOSmodule_prettyname,
-	imageOSmodule.description AS imageOSmodule_description,
-	imageOSmodule.perlpackage AS imageOSmodule_perlpackage,
-
-   user.id AS user_id,
-   user.uid AS user_uid,
-   user.unityid AS user_unityid,
-   user.affiliationid AS user_affiliationid,
-   user.firstname AS user_firstname,
-   user.lastname AS user_lastname,
-   user.preferredname AS user_preferredname,
-   user.email AS user_email,
-   user.emailnotices AS user_emailnotices,
-   user.IMtypeid AS user_IMtypeid,
-   user.IMid AS user_IMid,
-   user.adminlevelid AS user_adminlevelid,
-   user.width AS user_width,
-   user.height AS user_height,
-   user.bpp AS user_bpp,
-   user.audiomode AS user_audiomode,
-   user.mapdrives AS user_mapdrives,
-   user.mapprinters AS user_mapprinters,
-   user.mapserial AS user_mapserial,
-   user.showallgroups AS user_showallgroups,
-   user.lastupdated AS user_lastupdated,
-
-   adminlevel.name AS adminlevel_name,
-
-   affiliation.name AS affiliation_name,
-   affiliation.dataUpdateText AS affiliation_dataUpdateText,
-   affiliation.sitewwwaddress AS affiliation_sitewwwaddress,
-   affiliation.helpaddress AS affiliation_helpaddress,
-
-
-   IMtype.name AS IMtype_name,
-
-   computer.id AS computer_id,
-   computer.stateid AS computer_stateid,
-   computer.ownerid AS computer_ownerid,
-   computer.platformid AS computer_platformid,
-   computer.scheduleid AS computer_scheduleid,
-   computer.currentimageid AS computer_currentimageid,
-   computer.nextimageid AS computer_nextimageid,
-   computer.imagerevisionid AS computer_imagerevisionid,
-   computer.RAM AS computer_RAM,
-   computer.procnumber AS computer_procnumber,
-   computer.procspeed AS computer_procspeed,
-   computer.network AS computer_network,
-   computer.hostname AS computer_hostname,
-   computer.IPaddress AS computer_IPaddress,
-   computer.privateIPaddress AS computer_privateIPaddress,
-   computer.eth0macaddress AS computer_eth0macaddress,
-   computer.eth1macaddress AS computer_eth1macaddress,
-   computer.type AS computer_type,
-	computer.provisioningid AS computer_provisioningid,
-   computer.drivetype AS computer_drivetype,
-   computer.deleted AS computer_deleted,
-   computer.notes AS computer_notes,
-   computer.lastcheck AS computer_lastcheck,
-   computer.location AS computer_location,
-   computer.dsa AS computer_dsa,
-   computer.dsapub AS computer_dsapub,
-   computer.rsa AS computer_rsa,
-   computer.rsapub AS computer_rsapub,
-   computer.host AS computer_host,
-   computer.hostpub AS computer_hostpub,
-   computer.vmhostid AS computer_vmhostid,
-
-   computerplatform.name AS computerplatform_name,
-
-   computerstate.name AS computerstate_name,
-
-   computerschedule.name AS computerschedule_name,
-
-	computerprovisioning.name AS computerprovisioning_name,
-	computerprovisioning.prettyname AS computerprovisioning_prettyname,
-	computerprovisioning.moduleid AS computerprovisioning_moduleid,
-
-	computerprovisioningmodule.name AS computerprovisioningmodule_name,
-	computerprovisioningmodule.prettyname AS computerprovisioningmodule_prettyname,
-	computerprovisioningmodule.description AS computerprovisioningmodule_description,
-	computerprovisioningmodule.perlpackage AS computerprovisioningmodule_perlpackage,
 	
-	serverrequest.id AS serverrequest_id,
-	serverrequest.requestid AS serverrequest_requestid,
-	serverrequest.fixedIP AS serverrequest_fixedIP,
-	serverrequest.fixedMAC AS serverrequest_fixedMAC,
-	serverrequest.admingroupid AS serverrequest_admingroupid,
-	serverrequest.logingroupid AS serverrequest_logingroupid,
-	serverrequest.monitored AS serverrequest_monitored
+	# Get a hash ref containing the database column names
+	my $database_table_columns = get_database_table_columns();
+	
+	my %tables = (
+		'request' => 'request',
+		'serverrequest' => 'serverrequest',
+		'reservation' => 'reservation',
+		'state' => 'state',
+		'laststate' => 'state',
+	);
+	
+	# Construct the select statement
+	my $select_statement = "SELECT DISTINCT\n";
+	
+	# Get the column names for each table and add them to the select statement
+	for my $table_alias (keys %tables) {
+		my $table_name = $tables{$table_alias};
+		my @columns = @{$database_table_columns->{$table_name}};
+		for my $column (@columns) {
+			$select_statement .= "$table_alias.$column AS '$table_alias-$column',\n";
+		}
+	}
+	
+	# Remove the comma after the last column line
+	$select_statement =~ s/,$//;
+	
+	# Complete the select statement
+	$select_statement .= <<EOF;
 
-   FROM
-   request 
-   LEFT JOIN (serverrequest) ON (serverrequest.requestid = request.id),
-   user,
-   adminlevel,
-   affiliation,
-   IMtype,
-   reservation,
-   image,
-   platform imageplatform,
-   imagerevision,
-   OS,
-	module imageOSmodule,
-   computer,
-	provisioning computerprovisioning,
-	module computerprovisioningmodule,
-   platform computerplatform,
-   schedule computerschedule,
-   state requeststate,
-   state requestlaststate,
-   state computerstate
+FROM
+request
+LEFT JOIN (serverrequest) ON (serverrequest.requestid = request.id),
+reservation,
+state,
+state laststate
 
-   WHERE
-   request.id = $request_id
-   AND user.id = request.userid
-   AND adminlevel.id = user.adminlevelid
-   AND affiliation.id = user.affiliationid
-   AND reservation.requestid = request.id
-   AND image.id = imagerevision.imageid
-   AND imageplatform.id = image.platformid
-   AND imagerevision.id = reservation.imagerevisionid
-   AND OS.id = image.OSid
-	AND imageOSmodule.id = OS.moduleid
-   AND computer.id = reservation.computerid
-   AND computerplatform.id = computer.platformid
-   AND computerschedule.id = computer.scheduleid
-   AND computerstate.id = computer.stateid
-	AND computerprovisioning.id = computer.provisioningid
-	AND computerprovisioningmodule.id = computerprovisioning.moduleid
-   AND requeststate.id = request.stateid
-   AND requestlaststate.id = request.laststateid
-	AND IMtype.id = user.IMtypeid
+WHERE
+request.id = $request_id
+AND reservation.requestid = request.id
+AND state.id = request.stateid
+AND laststate.id = request.laststateid
 
-   GROUP BY
-   reservation.id
-   ";
+GROUP BY
+reservation.id
+EOF
 
 	# Call the database select subroutine
 	# This will return an array of one or more rows based on the select statement
 	my @selected_rows = database_select($select_statement);
 	
 	# Check to make sure 1 or more rows were returned
-	if (scalar @selected_rows == 0) {
-		notify($ERRORS{'WARNING'}, 0, "request id $request_id information could not be retrieved");
-		return ();
+	if (!@selected_rows) {
+		notify($ERRORS{'WARNING'}, 0, "info for request $request_id could not be retrieved from the database, select statement:\n$select_statement");
+		return;
 	}
 
 	# Build the hash
-	my %request_info;
+	my $request_info;
 
-	for (@selected_rows) {
-		my %reservation_row = %{$_};
-		
-		# Grab the reservation ID to make the code a little cleaner
-		my $reservation_id = $reservation_row{reservation_id};
-		
-		# If this request only has 1 reservation, populate the RESERVATIONID key
-		# This is mainly for testing convenience
-		# Calling program is responsible for setting this based on which reservation it's processing
-		$request_info{RESERVATIONID} = $reservation_id if (scalar @selected_rows == 1);
-
-		# Check if the image associated with this reservation has meta data
-		# get_imagemeta_info will return default values if image_imagemetaid is undefined
-		my $imagemeta_info = get_imagemeta_info($reservation_row{image_imagemetaid});
-		# Make sure metadata was located if imagemetaid was specified for the image
-		if (!$imagemeta_info) {
-			notify($ERRORS{'WARNING'}, 0, "imagemetaid=" . $reservation_row{image_imagemetaid} . " was specified for image id=" . $reservation_row{image_id} . " but imagemeta could not be found");
+	for my $reservation_row (@selected_rows) {
+		my $reservation_id = $reservation_row->{'reservation-id'};
+		if (!$reservation_id) {
+			notify($ERRORS{'WARNING'}, 0, "failed to retrieve request info, row does not contain a reservation-id value:\n" . format_data($reservation_row));
+			return;
 		}
-		else {
-			# Image meta data found, add it to the hash
-			$request_info{reservation}{$reservation_id}{image}{imagemeta} = $imagemeta_info;
-
-			# If request_checkuser flag is set to 0 then disable user checks here by setting imagemetacheckuser to 0
-			unless ($reservation_row{request_checkuser}){
-				notify($ERRORS{'DEBUG'}, 0, "request checkuser flag is set to $reservation_row{request_checkuser}");
-				$request_info{reservation}{$reservation_id}{image}{imagemeta}{checkuser} = $reservation_row{request_checkuser};
-			}
-
-		}
+		$request_info->{RESERVATIONID} = $reservation_id if (scalar @selected_rows == 1);
 		
-
-		# Check if the computer associated with this reservation has a vmhostid set
-		if ($reservation_row{computer_vmhostid}) {
-			my $vmhost_info = get_vmhost_info($reservation_row{computer_vmhostid});
-			# Make sure vmhost was located if vmhostid was specified for the image
-			if (!$vmhost_info) {
-				notify($ERRORS{'WARNING'}, 0, "vmhostid=" . $reservation_row{computer_vmhostid} . " was specified for computer id=" . $reservation_row{computer_id} . " but vmhost could not be found");
-			}
-			else {
-				# Image meta data found, add it to the hash
-				$request_info{reservation}{$reservation_id}{computer}{vmhost} = $vmhost_info;
-			}
-		} ## end if ($reservation_row{computer_vmhostid})
-
-		# Get the computer's next image information
-		if ($reservation_row{computer_nextimageid}) {
-			if (my $computer_nextimage_info = get_image_info($reservation_row{computer_nextimageid})) {
-				$request_info{reservation}{$reservation_id}{computer}{nextimage} = $computer_nextimage_info;
-
-				# For next imageid get the production imagerevision info
-				if (my $next_imagerevision_info = get_production_imagerevision_info($reservation_row{computer_nextimageid})) {
-					$request_info{reservation}{$reservation_id}{computer}{nextimagerevision} = $next_imagerevision_info;
-				}
-				else {
-					notify($ERRORS{'WARNING'}, 0, "unable to get next image revision info for computer, image revision ID is not set, tried to get production image for image ID " . $reservation_row{computer_nextimageid});
-				}
-			}
-			else {
-				notify($ERRORS{'WARNING'}, 0, "unable to get nextimage image info for computer");
-			}
-		}
-		else {
-			notify($ERRORS{'DEBUG'}, 0, "nextimageid is not set for computer");
-		}
-
-		# Get the computer's current imagerevision information
-		if ($reservation_row{computer_imagerevisionid}) {
-			if (my $computer_currentimagerevision_info = get_imagerevision_info($reservation_row{computer_imagerevisionid})) {
-				if (my $computer_currentimage_info = get_image_info($computer_currentimagerevision_info->{imageid})) {
-					$request_info{reservation}{$reservation_id}{computer}{currentimagerevision} = $computer_currentimagerevision_info;
-					$request_info{reservation}{$reservation_id}{computer}{currentimage} = $computer_currentimage_info;
-				}
-				else {
-					notify($ERRORS{'WARNING'}, 0, "unable to get current image info for computer, image ID: $computer_currentimagerevision_info->{imageid}");
-				}
-			}
-			else {
-				notify($ERRORS{'WARNING'}, 0, "unable to get current image revision info for computer, image revision ID: $reservation_row{computer_imagerevisionid}");
-			}
-		}
-		else {
-			notify($ERRORS{'DEBUG'}, 0, "imagerevisionid is not set for computer");
-		}
-
-	
-		# Loop through all the columns returned for the reservation
-		foreach my $key (keys %reservation_row) {
-			my $value = $reservation_row{$key};
-
-			# Create another variable by stripping off the column_ part of each key
-			# This variable stores the original (correct) column name
-			(my $original_key = $key) =~ s/^.+_//;
-
-			if ($key =~ /serverrequest_/) {
-				$request_info{reservation}{$reservation_id}{serverrequest}{$original_key} = $value;
-         		}
-			elsif ($key =~ /request_/) {
-				# Set the top-level key if not already set
-				$request_info{$original_key} = $value if (!$request_info{$original_key});
-			}
-			elsif ($key =~ /requeststate_/) {
-				$request_info{state}{$original_key} = $value if (!$request_info{state}{$original_key});
-			}
-			elsif ($key =~ /requestlaststate_/) {
-				$request_info{laststate}{$original_key} = $value if (!$request_info{laststate}{$original_key});
-			}
-			elsif ($key =~ /reservation_/) {
-				$request_info{reservation}{$reservation_id}{$original_key} = $value;
-			}
-		}    # Close foreach key in reservation row
-		
-		# Retrieve the image, imagerevision, and computer info and add to the hash
-		my $image_id = $request_info{reservation}{$reservation_id}{imageid};
-		my $image_info = get_image_info($image_id, 1);
-		$request_info{reservation}{$reservation_id}{image} = $image_info;
-		
-		my $imagerevision_id = $request_info{reservation}{$reservation_id}{imagerevisionid};
-		my $imagerevision_info = get_imagerevision_info($imagerevision_id, 1);
-		$request_info{reservation}{$reservation_id}{imagerevision} = $imagerevision_info;
-		
-		my $computer_id = $request_info{reservation}{$reservation_id}{computerid};
-		my $computer_info = get_computer_info($computer_id, 1);
-		$request_info{reservation}{$reservation_id}{computer} = $computer_info;
-
-		my $connect_method_info = get_connect_method_info($imagerevision_id);
-		$request_info{reservation}{$reservation_id}{connect_methods} = $connect_method_info;
-		
-	}    # Close loop through selected rows
-	
-	# Retrieve the user info and add to the hash
-	my $user_id = $request_info{userid};
-	my $user_info = get_user_info($user_id);
-	$request_info{user} = $user_info;
-
-	# Set some default non-database values for the entire request
-	# All data ever added to the hash should be initialized here
-	$request_info{PID}              = '';
-	$request_info{PPID}             = '';
-	$request_info{PARENTIMAGE}      = '';
-	$request_info{PRELOADONLY}      = '0';
-	$request_info{SUBIMAGE}         = '';
-	$request_info{user}{STANDALONE} = '0';
-	$request_info{CHECKTIME}        = '';
-	$request_info{NOTICEINTERVAL}   = '';
-	$request_info{RESERVATIONCOUNT} = scalar keys %{$request_info{reservation}};
-	$request_info{UPDATED}          = '0';
-	$request_info{DURATION}		= '';
-
-	
-	# Store duration in epoch seconds format
-	my $startepoch 			= convert_to_epoch_seconds($request_info{start});
-	my $endepoch			= convert_to_epoch_seconds($request_info{end});
-	$request_info{DURATION}         = ($endepoch - $startepoch);
- 
-
-	# Each selected row represents a reservation associated with this request
-
-	# Fix some of the data
-	
-	# Set the user's preferred name to the first name if it isn't defined
-	if (!defined($request_info{user}{preferredname}) || !$request_info{user}{preferredname}) {
-		$request_info{user}{preferredname} = $request_info{user}{firstname};
-	}
-
-	## Set the user's uid to to the VCL user ID if it's NULL
-	if (!defined($request_info{user}{uid}) || !$request_info{user}{uid}) {
-		$request_info{user}{uid} = 0;
-	}
-
-	# Set the user's IMid to '' if it's NULL
-	if (!defined($request_info{user}{IMid}) || !$request_info{user}{IMid}) {
-		$request_info{user}{IMid} = '';
-	}
-	
-	my $management_node_info = get_management_node_info();
-	
-	# Affiliation specific changes
-	# Check if the user's affiliation is listed in the $NOT_STANDALONE variable
-	my $not_standalone_list = "";
-	if ($management_node_info && $management_node_info->{NOT_STANDALONE}){
-		$not_standalone_list = $management_node_info->{NOT_STANDALONE};
-	} 
-	if (grep(/$request_info{user}{affiliation}{name}/, split(/,/, $not_standalone_list))) {
-		#notify($ERRORS{'DEBUG'}, 0, "non-standalone affiliation found: $request_info{user}{affiliation}{name}");
-	}
-	else {
-		#notify($ERRORS{'DEBUG'}, 0, "standalone affiliation found: $request_info{user}{affiliation}{name}");
-		$request_info{user}{STANDALONE} = 1;
-	}
-
-	#if uid is 0 set STANDALONE
-	if ($request_info{user}{uid} == 0) {
-		$request_info{user}{STANDALONE} = 1;
-		notify($ERRORS{'OK'}, 0, "found NULL uid setting standalone flag: $request_info{user}{unityid}, uid: NULL");
-	}
-	
-	# Fix the unityid if if the user's UID is >= 1000000
-	# Remove the domain section if the user's unityid contains @...
-	if (defined($request_info{user}{uid})) {
-		if ($request_info{user}{uid} >= 1000000 ) {
-			my ($correct_unity_id, $user_domain) = split /@/, $request_info{user}{unityid};
-			$request_info{user}{unityid}    = $correct_unity_id;
-			$request_info{user}{STANDALONE} = 1;
-			notify($ERRORS{'OK'}, 0, "standalone user found: $request_info{user}{unityid}, uid: $request_info{user}{uid}");
-		}
-	}
-	
-	# For test account only
-	if ($request_info{user}{unityid} =~ /vcladmin/) {
-		$request_info{user}{STANDALONE} = 1;
-	}
-
-	# Set the user's affiliation sitewwwaddress and help address if not defined or blank
-	if (!defined($request_info{user}{affiliation}{sitewwwaddress}) || !$request_info{user}{affiliation}{sitewwwaddress}) {
-		$request_info{user}{affiliation}{sitewwwaddress} = 'http://cwiki.apache.org/VCL';
-	}
-	if (!defined($request_info{user}{affiliation}{helpaddress}) || !$request_info{user}{affiliation}{helpaddress}) {
-		$request_info{user}{affiliation}{helpaddress} = 'vcl-user@incubator.apache.org';
-	}
-
-	# Loop through all the reservations
-	foreach my $reservation_id (keys %{$request_info{reservation}}) {
-		$request_info{reservation}{$reservation_id}{users} = {};
-
-		# Set server request NULL values to 0
-		if (defined($request_info{reservation}{$reservation_id}{serverrequest}{id})) {
+		# Loop through all the columns returned
+		for my $key (keys %$reservation_row) {
+			my $value = $reservation_row->{$key};
 			
-			notify($ERRORS{'DEBUG'}, 0, "Server Request load - disabling user checks");
-			$request_info{reservation}{$reservation_id}{image}{imagemeta}{checkuser} = 0;
-
-			if (!defined($request_info{reservation}{$reservation_id}{serverrequest}{fixedIP})){
-				$request_info{reservation}{$reservation_id}{serverrequest}{fixedIP} = 0;
+			# Split the table-column names
+			my ($table, $column) = $key =~ /^([^-]+)-(.+)/;
+			
+			if ($table eq 'request') {
+				$request_info->{$column} = $value;
 			}
-			if (!defined($request_info{reservation}{$reservation_id}{serverrequest}{fixedMAC})){
-				$request_info{reservation}{$reservation_id}{serverrequest}{fixedMAC} = 0;
+			elsif ($table eq 'reservation') {
+				$request_info->{reservation}{$reservation_id}{$column} = $value;
 			}
-			if (!defined($request_info{reservation}{$reservation_id}{serverrequest}{admingroupid})){
-				$request_info{reservation}{$reservation_id}{serverrequest}{admingroupid} = 0;
+			elsif ($table eq 'serverrequest') {
+				$request_info->{reservation}{$reservation_id}{serverrequest}{$column} = $value;
 			}
-			if (!defined($request_info{reservation}{$reservation_id}{serverrequest}{logingroupid})){
-				$request_info{reservation}{$reservation_id}{serverrequest}{logingroupid} = 0;
-			}
-			if (!defined($request_info{reservation}{$reservation_id}{serverrequest}{monitored})){
-				$request_info{reservation}{$reservation_id}{serverrequest}{monitored} = 0;
+			else {
+				$request_info->{$table}{$column} = $value;
 			}
 		}
-		else {
-			#No server request, set all values to 0, so datastructure doesn't complain
-			$request_info{reservation}{$reservation_id}{serverrequest}{id} = 0;
-			$request_info{reservation}{$reservation_id}{serverrequest}{fixedIP} = 0;
-			$request_info{reservation}{$reservation_id}{serverrequest}{fixedMAC} = 0;
-			$request_info{reservation}{$reservation_id}{serverrequest}{admingroupid} = 0;
-			$request_info{reservation}{$reservation_id}{serverrequest}{logingroupid} = 0;
-			$request_info{reservation}{$reservation_id}{serverrequest}{monitored} = 0;
-		}
 		
-		my $root_access = $request_info{reservation}{$reservation_id}{image}{imagemeta}{rootaccess};
+		# Store duration in epoch seconds format
+		my $request_start_epoch = convert_to_epoch_seconds($request_info->{start});
+		my $request_end_epoch = convert_to_epoch_seconds($request_info->{end});
+		$request_info->{DURATION} = ($request_end_epoch - $request_start_epoch);
 		
-		# Add the reservation user to the hash, set ROOTACCESS to value configured for image
-		$request_info{reservation}{$reservation_id}{users}{$user_id} = get_user_info($user_id);
-		$request_info{reservation}{$reservation_id}{users}{$user_id}{ROOTACCESS} = $root_access;
+		# Add the image info to the hash
+		my $image_id = $request_info->{reservation}{$reservation_id}{imageid};
+		my $image_info = get_image_info($image_id, 1);
+		$request_info->{reservation}{$reservation_id}{image} = $image_info;
 		
+		# Add the imagerevision info to the hash
+		my $imagerevision_id = $request_info->{reservation}{$reservation_id}{imagerevisionid};
+		my $imagerevision_info = get_imagerevision_info($imagerevision_id, 1);
+		$request_info->{reservation}{$reservation_id}{imagerevision} = $imagerevision_info;
+		
+		# Add the computer info to the hash
+		my $computer_id = $request_info->{reservation}{$reservation_id}{computerid};
+		my $computer_info = get_computer_info($computer_id, 1);
+		$request_info->{reservation}{$reservation_id}{computer} = $computer_info;
+		
+		# Add the connect method info to the hash
+		my $connect_method_info = get_connect_method_info($imagerevision_id);
+		$request_info->{reservation}{$reservation_id}{connect_methods} = $connect_method_info;
+		
+		# Add the managementnode info to the hash
+		my $management_node_id = $request_info->{reservation}{$reservation_id}{managementnodeid};
+		my $management_node_info = get_management_node_info($management_node_id);
+		$request_info->{reservation}{$reservation_id}{managementnode} = $management_node_info;
+		
+		# Retrieve the user info and add to the hash
+		my $user_id = $request_info->{userid};
+		my $user_info = get_user_info($user_id);
+		$request_info->{user} = $user_info;
+		
+		my $imagemeta_root_access = $request_info->{reservation}{$reservation_id}{image}{imagemeta}{rootaccess};
+		
+		# Create an array containing the user IDs of the request user and users configured for the image
 		# If imagemeta.usergroupid is set, add the user group members to the hash, set ROOTACCESS to value configured for image
-		if (my $imagemeta_group_id = $request_info{reservation}{$reservation_id}{image}{imagemeta}{usergroupid}) {
+		my @image_user_ids = ($user_id);
+		if (my $imagemeta_group_id = $request_info->{reservation}{$reservation_id}{image}{imagemeta}{usergroupid}) {
 			my $imagemeta_group_member_info = get_user_group_member_info($imagemeta_group_id);
-			for my $imagemeta_user_id (keys %$imagemeta_group_member_info, $user_id) {
-				$request_info{reservation}{$reservation_id}{users}{$imagemeta_user_id} = get_user_info($imagemeta_user_id);
-				$request_info{reservation}{$reservation_id}{users}{$imagemeta_user_id}{ROOTACCESS} = $root_access;
-			}
+			push @image_user_ids, keys %$imagemeta_group_member_info;
+		}
+		for my $image_user_id (@image_user_ids) {
+			$request_info->{reservation}{$reservation_id}{users}{$image_user_id} = get_user_info($image_user_id);
+			$request_info->{reservation}{$reservation_id}{users}{$image_user_id}{ROOTACCESS} = $imagemeta_root_access;
 		}
 		
 		# If server request and logingroupid is set, add user group members to hash, set ROOTACCESS to 0
-		if (my $login_group_id = $request_info{reservation}{$reservation_id}{serverrequest}{logingroupid}) {
+		if (my $login_group_id = $request_info->{reservation}{$reservation_id}{serverrequest}{logingroupid}) {
 			my $login_group_member_info = get_user_group_member_info($login_group_id);
 			for my $login_user_id (keys %$login_group_member_info) {
-				$request_info{reservation}{$reservation_id}{users}{$login_user_id} = get_user_info($login_user_id);
-				$request_info{reservation}{$reservation_id}{users}{$login_user_id}{ROOTACCESS} = 0;
+				$request_info->{reservation}{$reservation_id}{users}{$login_user_id} = get_user_info($login_user_id);
+				$request_info->{reservation}{$reservation_id}{users}{$login_user_id}{ROOTACCESS} = 0;
 			}
 		}
 		
 		# If server request and admingroupid is set, add user group members to hash, set ROOTACCESS to 1
-		if (my $admin_group_id = $request_info{reservation}{$reservation_id}{serverrequest}{admingroupid}) {
+		if (my $admin_group_id = $request_info->{reservation}{$reservation_id}{serverrequest}{admingroupid}) {
 			my $admin_group_member_info = get_user_group_member_info($admin_group_id);
 			for my $admin_user_id (keys %$admin_group_member_info, $user_id) {
-				$request_info{reservation}{$reservation_id}{users}{$admin_user_id} = get_user_info($admin_user_id);
-				$request_info{reservation}{$reservation_id}{users}{$admin_user_id}{ROOTACCESS} = 1;
+				$request_info->{reservation}{$reservation_id}{users}{$admin_user_id} = get_user_info($admin_user_id);
+				$request_info->{reservation}{$reservation_id}{users}{$admin_user_id}{ROOTACCESS} = 1;
 			}
 		}
 		
-		# Confirm lastcheck time is not NULL
-		if (!defined($request_info{reservation}{$reservation_id}{lastcheck})) {
-			$request_info{reservation}{$reservation_id}{lastcheck} = 0;
+		# If server request or duration is greater >= 24 hrs disable user checks
+		if ($request_info->{reservation}{$reservation_id}{serverrequest}{id}) {
+			notify($ERRORS{'DEBUG'}, 0, "server sequest - disabling user checks");
+			$request_info->{checkuser} = 0;
 		}
-
-		# Set the reservation remote IP to 0 if it's NULL
-		if (!defined($request_info{reservation}{$reservation_id}{remoteIP})) {
-			$request_info{reservation}{$reservation_id}{remoteIP} = 0;
+		elsif ($request_info->{DURATION} >= (60 * 60 * 24) ){
+			notify($ERRORS{'DEBUG'}, 0, "request length > 24 hours, disabling user checks");
+			$request_info->{checkuser} = 0;
 		}
 		
-		# If duration is greater >= 24 hrs disable user checks
-		if($request_info{DURATION} >= (1 * 60 * 60 * 24) ){
-			notify($ERRORS{'DEBUG'}, 0, "DURATION greater than 24 hrs disabling checkuser flag by setting to 0");
-			$request_info{reservation}{$reservation_id}{image}{imagemeta}{checkuser} = 0;
-		}
-
-		# Set the short name of the computer based on the hostname
-		my $computer_hostname = $request_info{reservation}{$reservation_id}{computer}{hostname};
-		$computer_hostname =~ /([-_a-zA-Z0-9]*)(\.?)/;
-		my $computer_shortname = $1;
-		$request_info{reservation}{$reservation_id}{computer}{SHORTNAME} = $computer_shortname;
-
-		# Add the managementnode info to the hash
-		my $management_node_id = $request_info{reservation}{$reservation_id}{managementnodeid};
-		my $management_node_info = get_management_node_info($management_node_id);
-		if (!$management_node_info) {
-			notify($ERRORS{'WARNING'}, 0, "failed to retrieve management node info");
-			$request_info{reservation}{$reservation_id}{managementnode} = 0;
-		}
-		else {
-			$request_info{reservation}{$reservation_id}{managementnode} = $management_node_info;
-		}
-
-		# Set the node name based on the type of computer
-		my $computer_type = $request_info{reservation}{$reservation_id}{computer}{type};
-		my $computer_id = $request_info{reservation}{$reservation_id}{computer}{id};
-
-		# Figure out the nodename based on the type of computer
-		my $computer_nodename;
-		if ($computer_type eq "blade") {
-			$computer_nodename = $computer_shortname;
-		}
-		elsif ($computer_type eq "lab") {
-			$computer_nodename = $computer_hostname;
-		}
-		elsif ($computer_type eq "virtualmachine") {
-			$computer_nodename = $computer_shortname;
-		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "computer=$computer_id is of an unknown or unusual type=$computer_type");
-		}
-		$request_info{reservation}{$reservation_id}{computer}{NODENAME} = $computer_nodename;
-
-		# Set the image identity file path
-		my $imagerevision_imagename = $request_info{reservation}{$reservation_id}{imagerevision}{imagename};
-		my $image_os_type = $request_info{reservation}{$reservation_id}{image}{OS}{type};
+		$request_info->{reservation}{$reservation_id}{serverrequest}{id} ||= 0;
+		$request_info->{reservation}{$reservation_id}{serverrequest}{fixedIP} ||= 0;
+		$request_info->{reservation}{$reservation_id}{serverrequest}{fixedMAC} ||= 0;
+		$request_info->{reservation}{$reservation_id}{serverrequest}{admingroupid} ||= 0;
+		$request_info->{reservation}{$reservation_id}{serverrequest}{logingroupid} ||= 0;
+		$request_info->{reservation}{$reservation_id}{serverrequest}{monitored} ||= 0;
 		
-		my $identity_file_path = $management_node_info->{keys};
-		$request_info{reservation}{$reservation_id}{image}{IDENTITY} = $identity_file_path;
-		
-		# Set some non-database defaults
-		# All data ever added to the hash should be initialized here
-		$request_info{reservation}{$reservation_id}{READY}                  = '0';
-		$request_info{reservation}{$reservation_id}{image}{SETTESTFLAG}     = '';
-		$request_info{reservation}{$reservation_id}{image}{UPDATEIMAGENAME} = '';
-
-		# If machine type is virtual machine - build out a vmclient subhash
-		# Allows for ease of use with existing vm subroutines
-		if ($request_info{reservation}{$reservation_id}{computer}{type} eq "virtualmachine") {
-			$request_info{reservation}{$reservation_id}{computer}{"vmclient"}{"drivetype"}          = $request_info{reservation}{$reservation_id}{computer}{drivetype};
-			$request_info{reservation}{$reservation_id}{computer}{"vmclient"}{"shortname"}          = $request_info{reservation}{$reservation_id}{computer}{SHORTNAME};
-			$request_info{reservation}{$reservation_id}{computer}{"vmclient"}{"hostname"}           = $request_info{reservation}{$reservation_id}{computer}{hostname};
-			$request_info{reservation}{$reservation_id}{computer}{"vmclient"}{"eth0MAC"}            = $request_info{reservation}{$reservation_id}{computer}{eth0macaddress};
-			$request_info{reservation}{$reservation_id}{computer}{"vmclient"}{"eth1MAC"}            = $request_info{reservation}{$reservation_id}{computer}{eth1macaddress};
-			$request_info{reservation}{$reservation_id}{computer}{"vmclient"}{"publicIPaddress"}    = $request_info{reservation}{$reservation_id}{computer}{IPaddress};
-			$request_info{reservation}{$reservation_id}{computer}{"vmclient"}{"privateIPaddress"}   = $request_info{reservation}{$reservation_id}{computer}{privateIPaddress};
-			$request_info{reservation}{$reservation_id}{computer}{"vmclient"}{"imageminram"}        = $request_info{reservation}{$reservation_id}{image}{minram};
-			$request_info{reservation}{$reservation_id}{computer}{"vmclient"}{"requestedimagename"} = $request_info{reservation}{$reservation_id}{imagerevision}{imagename};
-			$request_info{reservation}{$reservation_id}{computer}{"vmclient"}{"imageid"}            = $request_info{reservation}{$reservation_id}{image}{id};
-			$request_info{reservation}{$reservation_id}{computer}{"vmclient"}{"reloadtime"}         = $request_info{reservation}{$reservation_id}{image}{reloadtime};
-			$request_info{reservation}{$reservation_id}{computer}{"vmclient"}{"project"}            = $request_info{reservation}{$reservation_id}{image}{project};
-			$request_info{reservation}{$reservation_id}{computer}{"vmclient"}{"OSname"}             = $request_info{reservation}{$reservation_id}{image}{OS}{name};
-			$request_info{reservation}{$reservation_id}{computer}{"vmclient"}{"forimaging"}         = $request_info{forimaging};
-			$request_info{reservation}{$reservation_id}{computer}{"vmclient"}{"persistent"}         = $request_info{forimaging};
-			$request_info{reservation}{$reservation_id}{computer}{"vmclient"}{"currentimageid"}     = $request_info{reservation}{$reservation_id}{computer}{currentimageid};
-			$request_info{reservation}{$reservation_id}{computer}{"vmclient"}{"reservationid"}      = $reservation_id;
-			$request_info{reservation}{$reservation_id}{computer}{"vmclient"}{"computerid"}         = $request_info{reservation}{$reservation_id}{computer}{id};
-			$request_info{reservation}{$reservation_id}{computer}{"vmclient"}{"state"}              = $request_info{state}{name};
-		} ## end if ($request_info{reservation}{$reservation_id...
-	} ## end foreach my $reservation_id (keys %{$request_info...
-
-	return %request_info;
-} ## end sub get_request_info
+		$request_info->{reservation}{$reservation_id}{READY} = '0';
+	}
+	
+	# Set some default non-database values for the entire request
+	# All data ever added to the hash should be initialized here
+	$request_info->{PID}              = '';
+	$request_info->{PPID}             = '';
+	$request_info->{PARENTIMAGE}      = '';
+	$request_info->{PRELOADONLY}      = '0';
+	$request_info->{SUBIMAGE}         = '';
+	$request_info->{CHECKTIME}        = '';
+	$request_info->{NOTICEINTERVAL}   = '';
+	$request_info->{RESERVATIONCOUNT} = scalar keys %{$request_info->{reservation}};
+	$request_info->{UPDATED}          = '0';
+	
+	#notify($ERRORS{'DEBUG'}, 0, "retrieved request info:\n" . format_data($request_info));
+	return %$request_info;
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -5006,6 +4587,8 @@ EOF
 	my $image_owner_user_info = get_user_info($image_owner_id);
 	$image_info->{owner} = $image_owner_user_info;
 	
+	$image_info->{IDENTITY} = get_management_node_info()->{keys};
+	
 	#notify($ERRORS{'DEBUG'}, 0, "retrieved info for image '$image_identifier':\n" . format_data($image_info));
 	$ENV{image_info}{$image_identifier} = $image_info;
 	return $ENV{image_info}{$image_identifier};
@@ -5148,14 +4731,18 @@ EOF
 
 sub get_imagemeta_info {
 	my ($imagemeta_id, $no_cache) = @_;
-
+	
+	my $default_imagemeta_info = get_default_imagemeta_info();
+	
 	# Return defaults if nothing was passed as the imagemeta id
 	if (!$imagemeta_id) {
-		return get_default_imagemeta_info();
+		return $default_imagemeta_info;
 	}
 	
-	return $ENV{imagemeta_info}{$imagemeta_id} if (!$no_cache && $ENV{imagemeta_info}{$imagemeta_id});
-
+	if (!$no_cache && $ENV{imagemeta_info}{$imagemeta_id}) {
+		return $ENV{imagemeta_info}{$imagemeta_id};
+	}
+	
 	# If imagemetaid isnt' NULL, perform another query to get the meta info
 	my $select_statement = <<EOF;
 SELECT
@@ -5170,14 +4757,10 @@ EOF
 	my @selected_rows = database_select($select_statement);
 	
 	# Check to make sure 1 row was returned
-	if (!@selected_rows) {
-		notify($ERRORS{'WARNING'}, 0, "failed to retrieve imagemeta ID=$imagemeta_id, zero rows were returned from database, returning default imagemeta values");
-		$ENV{imagemeta_info}{$imagemeta_id} = get_default_imagemeta_info();
-		return $ENV{imagemeta_info}{$imagemeta_id};
-	}
-	elsif (scalar @selected_rows > 1) {
-		notify($ERRORS{'WARNING'}, 0, scalar @selected_rows . " rows were returned from database select statement:\n$select_statement, returning default imagemeta values");
-		$ENV{imagemeta_info}{$imagemeta_id} = get_default_imagemeta_info();
+	if (!@selected_rows || scalar @selected_rows > 1) {
+		$ENV{imagemeta_info}{$imagemeta_id} = $default_imagemeta_info;
+		
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve imagemeta ID=$imagemeta_id, returning default imagemeta values");
 		return $ENV{imagemeta_info}{$imagemeta_id};
 	}
 
@@ -5199,14 +4782,13 @@ EOF
 	# Populate the count of user group members
 	$imagemeta_info->{USERGROUPMEMBERCOUNT} = scalar(keys(%{$imagemeta_info->{USERGROUPMEMBERS}}));
 	
-	my $default_imagemeta_info = get_default_imagemeta_info();
 	for my $column (keys %$imagemeta_info) {
 		if (!defined($imagemeta_info->{$column})) {
 			$imagemeta_info->{$column} = $default_imagemeta_info->{$column};
 		}
 	}
 	
-	#notify($ERRORS{'DEBUG'}, 0, "retrieved imagemeta info:\n" . format_data($imagemeta_info));
+	notify($ERRORS{'DEBUG'}, 0, "retrieved imagemeta info:\n" . format_data($imagemeta_info));
 	$ENV{imagemeta_info}{$imagemeta_id} = $imagemeta_info;
 	return $ENV{imagemeta_info}{$imagemeta_id};
 }
@@ -5223,7 +4805,13 @@ EOF
 
 
 sub get_default_imagemeta_info {
-	return $ENV{imagemeta_info}{default} if $ENV{imagemeta_info}{default};
+	if ($ENV{imagemeta_info}{default}) {
+		# Create a copy to ensure that the correct default data is returned
+		# Other processes may use the same cached copy
+		# If the same reference is returned for multiple processes, one process may alter the data
+		my %default_imagemeta_info = %{$ENV{imagemeta_info}{default}};
+		return \%default_imagemeta_info;
+	}
 	
 	# Call the database select subroutine to retrieve the imagemeta table structure
 	my $describe_imagemeta_statement = "DESCRIBE imagemeta";
@@ -5233,24 +4821,27 @@ sub get_default_imagemeta_info {
 		return;
 	}
 	
-	my $imagemeta_default_info;
+	my $default_imagemeta_info;
 	for my $describe_imagemeta_row (@describe_imagemeta_rows) {
 		my $field = $describe_imagemeta_row->{Field};
 		my $default_value = $describe_imagemeta_row->{Default};
 		if (defined($default_value)) {
-			$imagemeta_default_info->{$field} = $default_value;
+			$default_imagemeta_info->{$field} = $default_value;
 		}
 		else {
-			$imagemeta_default_info->{$field} = '';
+			$default_imagemeta_info->{$field} = '';
 		}
 	}
 	
-	$imagemeta_default_info->{USERGROUPMEMBERS} = {};
-	$imagemeta_default_info->{USERGROUPMEMBERCOUNT} = 0;
+	$default_imagemeta_info->{USERGROUPMEMBERS} = {};
+	$default_imagemeta_info->{USERGROUPMEMBERCOUNT} = 0;
 	
-	#notify($ERRORS{'DEBUG'}, 0, "retrieved default imagemeta values:\n" . format_data($imagemeta_default_info));
-	$ENV{imagemeta_info}{default} = $imagemeta_default_info;
-	return $ENV{imagemeta_info}{default};
+	$ENV{imagemeta_info}{default} = $default_imagemeta_info;
+	
+	my %default_imagemeta_info_copy = %{$ENV{imagemeta_info}{default}};
+	
+	notify($ERRORS{'DEBUG'}, 0, "retrieved default imagemeta info:\n" . format_data(\%default_imagemeta_info_copy));
+	return \%default_imagemeta_info_copy;
 }
 
 
@@ -6213,7 +5804,7 @@ AND managementnode.id != $management_node_id
 	# Save the time when the data was retrieved
 	$ENV{management_node_info}{$management_node_identifier}{RETRIEVAL_TIME} = time;
 	
-	notify($ERRORS{'DEBUG'}, 0, "retrieved management node info: '$management_node_identifier'");
+	notify($ERRORS{'DEBUG'}, 0, "retrieved management node info: '$management_node_identifier' ($management_node_info->{SHORTNAME})");
 	return $management_node_info;
 } ## end sub get_management_node_info
 
@@ -8078,7 +7669,67 @@ EOF
 		}
 	}
 	
-	#notify($ERRORS{'DEBUG'}, 0, "retrieved info for user '$user_identifier', affiliation: '$affiliation_identifier':\n" . format_data($user_info));
+	my $user_id = $user_info->{id};
+	my $user_login_id = $user_info->{unityid};
+	
+	# Set the user's preferred name to the first name if it isn't defined
+	if (!defined($user_info->{preferredname}) || $user_info->{preferredname} eq '') {
+		$user_info->{preferredname} = $user_info->{firstname};
+	}
+
+	# Set the user's IMid to '' if it's NULL
+	if (!defined($user_info->{IMid})) {
+		$user_info->{IMid} = '';
+	}
+	
+	# Affiliation specific changes
+	# Check if the user's affiliation is listed in the management node's NOT_STANDALONE parameter
+	$user_info->{STANDALONE} = 1;
+	
+	# Set the user's UID to the VCL user ID if it's not configured in the database, set STANDALONE = 1
+	if (!$user_info->{uid}) {
+		$user_info->{uid} = $user_info->{id};
+		$user_info->{STANDALONE} = 1;
+		notify($ERRORS{'DEBUG'}, 0, "UID value is not configured for user $user_login_id, setting UID to VCL user ID: $user_login_id, standalone: 1");
+	}
+	
+	# Fix the unityid if the user's UID is >= 1,000,000
+	# Remove the domain section if the user's unityid contains @...
+	elsif ($user_info->{uid} >= 1000000) {
+		$user_info->{STANDALONE} = 1;
+		notify($ERRORS{'DEBUG'}, 0, "UID value for user $user_login_id is >= 1000000, standalone: 1");
+	}
+	
+	# Check if the user's affiliation is listed in the management node's NOT_STANDALONE list
+	elsif (my $not_standalone_list = get_management_node_info()->{NOT_STANDALONE}) {
+		my $user_affiliation_name = $user_info->{affiliation}{name};
+		if (grep(/^$user_affiliation_name$/i, split(/[,;]/, $not_standalone_list))) {
+			notify($ERRORS{'DEBUG'}, 0, "non-standalone affiliation found for user $user_login_id:\nuser affiliation: $user_affiliation_name\nnot standalone list: $not_standalone_list");
+			$user_info->{STANDALONE} = 0;
+		}
+	}
+	
+	# If user's unityid is an email address, use only the first part
+	if ($user_login_id =~ /(.+)@/) {
+		my $corrected_unity_id = $1;
+		notify($ERRORS{'DEBUG'}, 0, "user's unityid value contains '\@': $user_login_id, changing to $corrected_unity_id");
+		$user_info->{unityid} = $corrected_unity_id;
+	}
+	
+	# For test account only
+	if ($user_login_id =~ /vcladmin/) {
+		$user_info->{STANDALONE} = 1;
+	}
+
+	# Set the user's affiliation sitewwwaddress and help address if not defined or blank
+	if (!$user_info->{affiliation}{sitewwwaddress}) {
+		$user_info->{affiliation}{sitewwwaddress} = 'http://cwiki.apache.org/VCL';
+	}
+	if (!$user_info->{affiliation}{helpaddress}) {
+		$user_info->{affiliation}{helpaddress} = 'vcl-user@incubator.apache.org';
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "retrieved info for user '$user_identifier', affiliation: '$affiliation_identifier':\n" . format_data($user_info));
 	$ENV{user_info}{$user_identifier} = $user_info;
 	return $ENV{user_info}{$user_identifier};	
 }
@@ -8097,11 +7748,11 @@ sub get_user_affiliation {
 	my ($user_id) = shift;
 	
 	if(!defined($user_id)){
-                notify($ERRORS{'WARNING'}, $LOGFILE, "user_id was not supplied");
-                return 0;
-        }
-
-        my $select_statement = <<EOF;
+		notify($ERRORS{'WARNING'}, $LOGFILE, "user_id was not supplied");
+		return 0;
+	}
+	
+	my $select_statement = <<EOF;
 SELECT DISTINCT
 affiliation.name
 FROM
@@ -8112,37 +7763,35 @@ affiliation.id = user.affiliationid AND
 user.id = $user_id
 EOF
 
-# Call the database select subroutine
-        # This will return an array of one or more rows based on the select statement
-        my @selected_rows = database_select($select_statement);
-
-        # Check to make sure 1 row was returned
-        if (scalar @selected_rows == 0) {
-                notify($ERRORS{'WARNING'}, 0, "zero rows were returned from database select");
-                return ();
-        }
-        elsif (scalar @selected_rows > 1) {
-                notify($ERRORS{'WARNING'}, 0, "" . scalar @selected_rows . " rows were returned from database select");
-                return ();
-        }
-
-        # Get the single returned row
-        # It contains a hash
-
-        # Make sure we return undef if the column wasn't found
-        if (defined $selected_rows[0]{name}) {
-                my $name = $selected_rows[0]{name};
-                return $name;
-        }
-        else {
-                return undef;
-        }
+	# Call the database select subroutine
+	# This will return an array of one or more rows based on the select statement
+	my @selected_rows = database_select($select_statement);
 	
+	# Check to make sure 1 row was returned
+	if (scalar @selected_rows == 0) {
+		notify($ERRORS{'WARNING'}, 0, "zero rows were returned from database select");
+		return ();
+	}
+	elsif (scalar @selected_rows > 1) {
+		notify($ERRORS{'WARNING'}, 0, "" . scalar @selected_rows . " rows were returned from database select");
+		return ();
+	}
+	
+	# Get the single returned row
+	# It contains a hash
+	
+	# Make sure we return undef if the column wasn't found
+	if (defined $selected_rows[0]{name}) {
+		my $name = $selected_rows[0]{name};
+		return $name;
+	}
+	else {
+		return undef;
+	}
 }
 
 #/////////////////////////////////////////////////////////////////////////////
-		  
-		  
+
 =head2 get_local_user_info
 
  Parameters  : none
@@ -9190,15 +8839,15 @@ sub run_command {
 	if ($pid = open(COMMAND, "$command 2>&1 |")) {
 		# Capture the output of the command
 		@output = <COMMAND>;
-	
+		
 		# Save the exit status
 		$exit_status = $? >> 8;
 		
-	if ($? == -1) {
-		notify($ERRORS{'OK'}, 0, "\$? is set to $?, setting exit status to 0, Perl bug likely encountered");
-		$exit_status = 0;
-	}
-	
+		if ($? == -1) {
+			notify($ERRORS{'OK'}, 0, "\$? is set to $?, setting exit status to 0, Perl bug likely encountered");
+			$exit_status = 0;
+		}
+		
 		# Close the command handle
 		close(COMMAND);
 	}
