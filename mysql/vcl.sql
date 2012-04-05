@@ -1022,6 +1022,9 @@ CREATE TABLE IF NOT EXISTS `sublog` (
   `managementnodeid` smallint(5) unsigned NOT NULL default '0',
   `predictivemoduleid` smallint(5) unsigned NOT NULL default '8',
   `hostcomputerid` smallint(5) unsigned default NULL,
+  `blockRequestid` mediumint(8) unsigned NOT NULL,
+  `blockStart` datetime NOT NULL,
+  `blockEnd` datetime NOT NULL,
   KEY `logid` (`logid`),
   KEY `imageid` (`imageid`),
   KEY `imagerevisionid` (`imagerevisionid`),
@@ -1506,7 +1509,11 @@ INSERT INTO `OS` (`id`, `name`, `prettyname`, `type`, `installtype`, `sourcepath
 (36, 'vmwarelinux', 'Generic Linux (VMware)', 'linux', 'vmware', 'vmware_images', 5),
 (37, 'vmwarewin2003', 'Windows 2003 Server (VMware)', 'windows', 'vmware', 'vmware_images', 13),
 (38, 'esxi4.1', 'VMware ESXi 4.1', 'linux', 'kickstart', 'esxi4.1', 25),
-(39, 'vmwareosx', 'OSX Snow Leopard (VMware)', 'osx', 'vmware', 'vmware_images', 26);
+(39, 'vmwareosx', 'OSX Snow Leopard (VMware)', 'osx', 'vmware', 'vmware_images', 26),
+(40, 'rhel6', 'Red Hat Enterprise Lev 6', 'linux', 'kickstart', 'rhel6', 5),
+(41, 'rh6image', 'Red Hat Enterprise 6 image', 'linux', 'partimage', 'image', 5),
+(42, 'fedora16', 'Fedora 16 kickstart', 'linux', 'kickstart', 'fedora16', 5),
+(43, 'fedoraimage', 'Fedora 16 image', 'linux', 'partimage', 'image', 5);
 
 -- 
 -- Dumping data for table `OSinstalltype`

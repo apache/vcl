@@ -681,6 +681,9 @@ CALL AddIndexIfNotExists('statgraphcache', 'provisioningid');
 --
 
 CALL AddColumnIfNotExists('sublog', 'hostcomputerid', "smallint(5) unsigned default NULL");
+CALL AddColumnIfNotExists('sublog', 'blockRequestid', "mediumint(8) unsigned NOT NULL");
+CALL AddColumnIfNotExists('sublog', 'blockStart', "datetime NOT NULL");
+CALL AddColumnIfNotExists('sublog', 'blockEnd', "datetime NOT NULL");
 
 -- --------------------------------------------------------
 
@@ -822,6 +825,10 @@ INSERT IGNORE INTO `OS` (`name`, `prettyname`, `type`, `installtype`, `sourcepat
 INSERT IGNORE INTO `OS` (`name`, `prettyname`, `type`, `installtype`, `sourcepath`, `moduleid`) VALUES ('vmwarewin2003', 'VMware Windows 2003 Server', 'windows', 'vmware', 'vmware_images', (SELECT `id` FROM `module` WHERE `name` LIKE 'os_win2003'));
 INSERT IGNORE INTO `OS` (`name`, `prettyname`, `type`, `installtype`, `sourcepath`, `moduleid`) VALUES ('esxi4.1', 'VMware ESXi 4.1', 'linux', 'kickstart', 'esxi4.1', (SELECT `id` FROM `module` WHERE `name` LIKE 'os_esxi'));
 INSERT IGNORE INTO `OS` (`name`, `prettyname`, `type`, `installtype`, `sourcepath`, `moduleid`) VALUES ('vmwareosx', 'OSX Snow Leopard (VMware)', 'osx', 'vmware', 'vmware_images', (SELECT `id` FROM `module` WHERE `name` LIKE 'os_osx'));
+INSERT IGNORE INTO `OS` (`name`, `prettyname`, `type`, `installtype`, `sourcepath`, `moduleid`) VALUES ('rhel6', 'Red Hat Enterprise Level 6', 'linux', 'kickstart', 'rhel6', (SELECT `id` FROM `module` WHERE `name` LIKE 'os_linux'));
+INSERT IGNORE INTO `OS` (`name`, `prettyname`, `type`, `installtype`, `sourcepath`, `moduleid`) VALUES ('rh6image', 'Red Hat 6 image', 'linux', 'partimage', 'image', (SELECT `id` FROM `module` WHERE `name` LIKE 'os_linux'));
+INSERT IGNORE INTO `OS` (`name`, `prettyname`, `type`, `installtype`, `sourcepath`, `moduleid`) VALUES ('fedora16', 'Fedora 16', 'linux', 'kickstart', 'fedora16', (SELECT `id` FROM `module` WHERE `name` LIKE 'os_linux'));
+INSERT IGNORE INTO `OS` (`name`, `prettyname`, `type`, `installtype`, `sourcepath`, `moduleid`) VALUES ('fedoraimage', 'Fedora 16 image', 'linux', 'partimage', 'image', (SELECT `id` FROM `module` WHERE `name` LIKE 'os_linux'));
 
 -- --------------------------------------------------------
 
