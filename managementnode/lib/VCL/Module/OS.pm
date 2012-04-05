@@ -620,7 +620,7 @@ sub is_ssh_responding {
 		# Run a test SSH command
 		my ($exit_status, $output) = run_ssh_command({
 			node => $computer_node_name,
-			command => "echo testing ssh on $computer_node_name",
+			command => "echo \"testing ssh on $computer_node_name\"",
 			max_attempts => $max_attempts,
 			output_level => 0,
 			timeout_seconds => 30,
