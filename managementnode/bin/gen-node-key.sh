@@ -116,13 +116,48 @@ scp $SSH_OPTIONS $KEY_PATH.pub root@$NODE:.ssh/authorized_keys
 if [ $? -ne 0 ]; then die "failed to copy $KEY_PATH.pub to $NODE:.ssh/authorized_keys"; fi;
 print_hr
 
+#Try to determine OS
+OS=`ssh $SSH_OPTIONS -i $KEY_PATH root@$NODE "uname -a"`
+case $OS in
+   *Ubuntu*) 
+      echo "detected Ubuntu OS"
+      SSHDCONFIG='/etc/ssh/sshd_config'
+      SSHSTOP='service ssh stop'
+      SSHSTART='service ssh start'
+      ;;  
+
+   *LINUX*) 
+      echo "detected Linux OS"
+      SSHDCONFIG='/etc/ssh/sshd_config'
+      SSHSTOP='service sshd stop'
+      SSHSTART='service sshd start'
+      ;;  
+   
+   *CYGWIN*) 
+      echo "detected Windows OS"
+      SSHDCONFIG='/etc/sshd_config'
+      SSHSTOP='net stop ssh'
+      SSHSTART='net start ssh'
+      ;;  
+
+   *Darwin*) 
+      echo "detected OSX"
+      SSHDCONFIG='/etc/sshd_config'
+      SSHSTOP='/bin/launchctl unload /System/Library/LaunchDaemons/ssh.plist'
+      SSHSTART='/bin/launchctl load -w /System/Library/LaunchDaemons/ssh.plist'
+      ;;  
+          
+   *)  
+      die "Unsupported OS found, OS call reported $OS";;
+esac
+
 echo Setting PasswordAuthentication to no in sshd_config on $NODE
-ssh $SSH_OPTIONS -i $KEY_PATH root@$NODE 'sed -i -r -e "s/^[ #]*(PasswordAuthentication).*/\1 no/" /etc/sshd_config'
-ssh $SSH_OPTIONS -i $KEY_PATH root@$NODE 'grep "^[ #]*PasswordAuthentication" /etc/sshd_config'
+ssh $SSH_OPTIONS -i $KEY_PATH root@$NODE 'sed -i -r -e "s/^[ #]*(PasswordAuthentication).*/\1 no/"' $SSHDCONFIG
+ssh $SSH_OPTIONS -i $KEY_PATH root@$NODE 'grep "^[ #]*PasswordAuthentication"' $SSHDCONFIG
 print_hr
 
 echo Restarting the sshd service on $NODE
-ssh $SSH_OPTIONS -i $KEY_PATH root@$NODE 'net stop sshd ; net start sshd'
+ssh $SSH_OPTIONS -i $KEY_PATH root@$NODE "$SSHSTOP ; $SSHSTART "
 if [ $? -ne 0 ]; then die "failed to restart the sshd service on $NODE"; fi;
 print_hr
 
