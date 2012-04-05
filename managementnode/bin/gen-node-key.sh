@@ -126,7 +126,7 @@ case $OS in
       SSHSTART='service ssh start'
       ;;  
 
-   *LINUX*) 
+   *Linux*) 
       echo "detected Linux OS"
       SSHDCONFIG='/etc/ssh/sshd_config'
       SSHSTOP='service sshd stop'
@@ -136,8 +136,8 @@ case $OS in
    *CYGWIN*) 
       echo "detected Windows OS"
       SSHDCONFIG='/etc/sshd_config'
-      SSHSTOP='net stop ssh'
-      SSHSTART='net start ssh'
+      SSHSTOP='net stop sshd'
+      SSHSTART='net start sshd'
       ;;  
 
    *Darwin*) 
