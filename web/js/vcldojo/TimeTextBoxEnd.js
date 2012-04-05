@@ -14,12 +14,11 @@
 * See the License for the specific language governing permissions and
 * limitations under the License.
 */
-if(! dojo._hasResource["vcldojo.TimeTextBoxEnd"]) {
-dojo._hasResource["vcldojo.TimeTextBoxEnd"] = true;
 dojo.provide("vcldojo.TimeTextBoxEnd");
+dojo.require('dijit.form.TimeTextBox');
 dojo.declare(
 	"vcldojo.TimeTextBoxEnd",
-	dijit.form.TimeTextBox,
+	[dijit.form.TimeTextBox],
 	{
 		startid: '',
 		invalidMessage: 'This must be a valid time that is greater than the start time',
@@ -33,4 +32,3 @@ dojo.declare(
 		}
 	}
 );
-}

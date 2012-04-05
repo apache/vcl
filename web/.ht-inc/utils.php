@@ -370,7 +370,6 @@ function checkAccess() {
 				if($auth['lookupuserbeforeauth']) {
 					# in this case, we have to look up what part of the tree the user is in
 					#   before we can actually look up the user
-					$auth = $authMechs[$authtype];
 					if(array_key_exists('masterlogin', $auth) && strlen($auth['masterlogin']))
 						$res = ldap_bind($ds, $auth['masterlogin'], $auth['masterpwd']);
 					else
@@ -3006,7 +3005,7 @@ function getAffiliationDataUpdateText($affilid=0) {
 function getAffiliationTheme($affilid) {
 	$query = "SELECT theme FROM affiliation WHERE id = $affilid";
 	$qh = doQuery($query);
-	if($row = mysql_fetch_assoc($qh))
+	if($row = mysql_fetch_assoc($qh) && ! empty($row['theme']))
 		return $row['theme'];
 	else
 		return 'default';
@@ -10364,14 +10363,26 @@ function getExtraCSS() {
 ////////////////////////////////////////////////////////////////////////////////
 function getDojoHTML($refresh) {
 	global $mode, $actions, $skin;
-	$rt = '';
+	$filename = '';
 	$dojoRequires = array();
+
+	# Below are START and END comments for parsing the content between the tags
+	# to generate a dojo profile.js file for custom dojo layers for each section
+	# of the site. The parser script is generateDojoProfile.js and can be found
+	# in the vcl/sandbox/useful_scripts part of the ASF VCL subversion repo.
+	# To run without the custom layer files, simply comment out the line after
+	# the first switch statement below that sets $customfile to something other
+	# than an empty string.
+
+	# START DOJO PARSING
 	switch($mode) {
 		case 'viewNodes':
 		case 'changeUserPrivs':
 		case 'submitAddResourcePriv':
 		case 'changeResourcePrivs':
-			$dojoRequires = array('dojo.data.ItemFileWriteStore',
+			$filename = 'vclPrivs.js';
+			$dojoRequires = array('dojo.parser',
+			                      'dojo.data.ItemFileWriteStore',
 			                      'dijit.Tree',
 			                      'dijit.form.Button',
 			                      'dijit.form.CheckBox',
@@ -10379,13 +10390,13 @@ function getDojoHTML($refresh) {
 			                      'dijit.Tooltip',
 			                      'dijit.Dialog',
 			                      'dijit.layout.ContentPane',
-			                      'dijit.layout.TabContainer',
-			                      'dojo.parser');
+			                      'dijit.layout.TabContainer');
 			break;
 		case 'newRequest':
 		case 'submitRequest':
 		case 'createSelectImage':
 		case 'submitCreateImage':
+			$filename = 'vclNewRequest.js';
 			$dojoRequires = array('dojo.parser',
 			                      'dijit.form.DateTextBox',
 			                      'dijit.form.TimeTextBox',
@@ -10395,6 +10406,7 @@ function getDojoHTML($refresh) {
 			                      'dijit.form.FilteringSelect');
 			break;
 		case 'viewRequests':
+			$filename = 'vclViewRequests.js';
 			$dojoRequires = array('dojo.parser',
 			                      'dijit.form.DateTextBox',
 			                      'dijit.form.TimeTextBox',
@@ -10410,16 +10422,14 @@ function getDojoHTML($refresh) {
 			                      'dijit.form.FilteringSelect');
 			break;
 		case 'connectRequest':
+		case 'viewRequestInfo':
+			$filename = 'vclConnectRequest.js';
 			$dojoRequires = array('dojo.parser',
 			                      'dijit.form.Button',
 			                      'dijit.Dialog');
 			break;
-		case 'viewRequestInfo':
-			$dojoRequires = array('dojo.parser',
-			                      'dijit.Dialog',
-			                      'dijit.form.Button');
-			break;
 		case 'blockAllocations':
+			$filename = 'vclViewBlockAllocations.js';
 			$dojoRequires = array('dojo.parser',
 			                      'dijit.form.Button',
 			                      'dijit.form.ValidationTextBox',
@@ -10433,6 +10443,7 @@ function getDojoHTML($refresh) {
 		case 'requestBlockAllocation':
 		case 'newBlockAllocation':
 		case 'editBlockAllocation':
+			$filename = 'vclEditBlockAllocation.js';
 			$dojoRequires = array('dojo.parser',
 			                      'dijit.layout.StackContainer',
 			                      'dijit.layout.ContentPane',
@@ -10449,9 +10460,12 @@ function getDojoHTML($refresh) {
 			                      'dojo.data.ItemFileWriteStore');
 			break;
 		case 'viewBlockStatus':
+		case 'selectauth':
+			$filename = 'vclBasic.js';
 			$dojoRequires = array('dojo.parser');
 			break;
 		case 'viewBlockAllocatedMachines':
+			$filename = 'vclBlockMachines.js';
 			$dojoRequires = array('dojo.parser',
 			                      'dojox.string.sprintf',
 			                      'dijit.form.Button',
@@ -10464,22 +10478,19 @@ function getDojoHTML($refresh) {
 			break;
 		case 'editSchedule':
 		case 'submitAddSchedule':
+			$filename = 'vclSchedule.js';
 			$dojoRequires = array('dojo.parser',
 			                      'dijit.form.TimeTextBox',
 			                      'dojox.grid.DataGrid',
 			                      'dojox.string.sprintf',
 			                      'dijit.form.Button',
 			                      'dojo.data.ItemFileWriteStore');
-		case 'viewImages':
-			/*$dojoRequires = array('dojo.data.ItemFileWriteStore',
-			                      'dojox.grid.Grid',
-			                      'dojox.grid.data.model',
-			                      'dojo.parser');*/
 			break;
 		case 'viewImageGrouping':
 		case 'submitImageGroups':
 		case 'viewImageMapping':
 		case 'submitImageMapping':
+			$filename = 'vclImageGroupingMapping.js';
 			$dojoRequires = array('dojo.parser',
 			                      'dijit.layout.LinkPane',
 			                      'dijit.layout.ContentPane',
@@ -10493,6 +10504,7 @@ function getDojoHTML($refresh) {
 		case 'submitAddSubimage':
 		case 'updateExistingImageComments':
 		case 'updateExistingImage':
+			$filename = 'vclImageProfiles.js';
 			$dojoRequires = array('dojo.parser',
 			                      'dijit.InlineEditBox',
 			                      'dijit.form.Textarea',
@@ -10505,12 +10517,14 @@ function getDojoHTML($refresh) {
 			                      'dojo.data.ItemFileWriteStore');
 			break;
 		case 'startCheckpoint':
+			$filename = 'vclCheckpoint.js';
 			$dojoRequires = array('dojo.parser',
 			                      'dijit.form.Textarea');
 			break;
 		case 'selectComputers':
 		case 'viewComputerGroups':
 		case 'submitComputerGroups':
+			$filename = 'vclComputerGroups.js';
 			$dojoRequires = array('dojo.parser',
 			                      'dijit.layout.LinkPane',
 			                      'dijit.layout.ContentPane',
@@ -10523,6 +10537,7 @@ function getDojoHTML($refresh) {
 		case 'confirmAddComputer':
 		case 'bulkAddComputer':
 		case 'confirmAddBulkComputers':
+			$filename = 'vclComputerProfiles.js';
 			$dojoRequires = array('dojo.parser',
 			                      'dijit.form.Select',
 			                      'dijit.form.Button',
@@ -10530,6 +10545,7 @@ function getDojoHTML($refresh) {
 			                      'dijit.form.NumberSpinner');
 			break;
 		case 'computerUtilities':
+			$filename = 'vclComputerUtilities.js';
 			$dojoRequires = array('dojo.parser',
 			                      'dijit.form.Button',
 			                      'dijit.form.Form',
@@ -10539,6 +10555,7 @@ function getDojoHTML($refresh) {
 		case 'submitEditGroup':
 		case 'submitAddGroup':
 		case 'submitDeleteGroup':
+			$filename = 'vclManageGroups.js';
 			$dojoRequires = array('dojo.parser',
 			                      'dojo.data.ItemFileReadStore',
 			                      'dojo.data.ItemFileWriteStore',
@@ -10554,11 +10571,13 @@ function getDojoHTML($refresh) {
 		case 'addMgmtNode':
 		case 'confirmEditMgmtnode':
 		case 'confirmAddMgmtnode':
+			$filename = 'vclManagementNodes.js';
 			$dojoRequires = array('dojo.parser',
 			                      'dijit.Tooltip',
 			                      'dijit.form.NumberSpinner');
 			break;
 		case 'serverProfiles':
+			$filename = 'vclServerProfiles.js';
 			$dojoRequires = array('dojo.parser',
 			                      'dijit.Dialog',
 			                      'dijit.form.DateTextBox',
@@ -10576,10 +10595,8 @@ function getDojoHTML($refresh) {
 			                      'dojox.string.sprintf',
 			                      'dojo.data.ItemFileWriteStore');
 			break;
-		case 'selectauth':
-			$dojoRequires = array('dojo.parser');
-			break;
 		case 'editVMInfo':
+			$filename = 'vclVirtualHosts.js';
 			$dojoRequires = array('dojo.parser',
 			                      'dijit.InlineEditBox',
 			                      'dijit.form.NumberSpinner',
@@ -10594,6 +10611,7 @@ function getDojoHTML($refresh) {
 			                      'dijit.Dialog');
 			break;
 		case 'siteMaintenance':
+			$filename = 'vclMaintenance.js';
 			$dojoRequires = array('dojo.parser',
 			                      'dijit.form.Button',
 			                      'dijit.form.NumberSpinner',
@@ -10607,6 +10625,7 @@ function getDojoHTML($refresh) {
 			                      'dijit.Dialog');
 			break;
 		case 'viewstats':
+			$filename = 'vclStats.js';
 			$dojoRequires = array('dojo.parser',
 			                      'dojox.charting.Chart2D',
 			                      'dojox.charting.action2d.Tooltip',
@@ -10614,6 +10633,7 @@ function getDojoHTML($refresh) {
 			                      'dojox.charting.themes.ThreeD');
 			break;
 		case 'dashboard':
+			$filename = 'vclDashboard.js';
 			$dojoRequires = array('dojo.parser',
 			                      'dijit.Tooltip',
 			                      'dojox.charting.widget.Chart2D',
@@ -10622,8 +10642,13 @@ function getDojoHTML($refresh) {
 			                      'dojox.charting.themes.ThreeD');
 			break;
 	}
+	# END DOJO PARSING
 	if(empty($dojoRequires))
 		return '';
+	$customfile = '';
+	if(! empty($filename))
+		$customfile = sprintf("<script type=\"text/javascript\" src=\"dojo/dojo/%s\"></script>\n", $filename);
+	$rt = '';
 	switch($mode) {
 		case "connectRequest":
 			$rt .= "<style type=\"text/css\">\n";
@@ -10633,6 +10658,7 @@ function getDojoHTML($refresh) {
 			$rt .= "   djConfig=\"parseOnLoad: true\">\n";
 			$rt .= "</script>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"js/requests.js\"></script>\n";
+			$rt .= $customfile;
 			$rt .= "<script type=\"text/javascript\">\n";
 			$rt .= "   dojo.addOnLoad(function() {\n";
 			foreach($dojoRequires as $req)
@@ -10646,7 +10672,6 @@ function getDojoHTML($refresh) {
 		case "viewRequests":
 			$rt .= "<style type=\"text/css\">\n";
 			$rt .= "   @import \"themes/$skin/css/dojo/$skin.css\";\n";
-			#$rt .= "   @import \"dojo/dojo/resources/dojo.css\";\n";
 			$rt .= "   @import \"dojo/dojox/layout/resources/FloatingPane.css\";\n";
 			$rt .= "   @import \"dojo/dojox/layout/resources/ResizeHandle.css\";\n";
 			$rt .= "</style>\n";
@@ -10654,12 +10679,12 @@ function getDojoHTML($refresh) {
 			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
 			$rt .= "   djConfig=\"parseOnLoad: true\">\n";
 			$rt .= "</script>\n";
+			$rt .= $customfile;
 			$rt .= "<script type=\"text/javascript\">\n";
 			$rt .= "   dojo.addOnLoad(function() {\n";
 			$rt .= "   dojo.registerModulePath(\"vcldojo\", \"../../js/vcldojo\");\n";
-			foreach($dojoRequires as $req) {
+			foreach($dojoRequires as $req)
 				$rt .= "   dojo.require(\"$req\");\n";
-			}
 			$rt .= "      testJS();\n";
 			$rt .= "      document.onmousemove = updateMouseXY;\n";
 			$rt .= "      showScriptOnly();\n";
@@ -10677,17 +10702,16 @@ function getDojoHTML($refresh) {
 		case 'viewRequestInfo':
 			$rt .= "<style type=\"text/css\">\n";
 			$rt .= "   @import \"themes/$skin/css/dojo/$skin.css\";\n";
-			#$rt .= "   @import \"dojo/dojo/resources/dojo.css\";\n";
 			$rt .= "</style>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"js/requests.js\"></script>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
 			$rt .= "   djConfig=\"parseOnLoad: true\">\n";
 			$rt .= "</script>\n";
+			$rt .= $customfile;
 			$rt .= "<script type=\"text/javascript\">\n";
 			$rt .= "   dojo.addOnLoad(function() {\n";
-			foreach($dojoRequires as $req) {
+			foreach($dojoRequires as $req)
 				$rt .= "   dojo.require(\"$req\");\n";
-			}
 			# TODO check flow of which modes should call updateWaitTime
 			if($mode == 'newRequest')
 				$rt .= "     setTimeout(function() {updateWaitTime(0);}, 1000);\n";
@@ -10702,18 +10726,17 @@ function getDojoHTML($refresh) {
 			$rt .= "<style type=\"text/css\">\n";
 			$rt .= "   @import \"themes/$skin/css/dojo/$skin.css\";\n";
 			$rt .= "   @import \"dojo/dojox/grid/resources/Grid.css\";\n";
-			#$rt .= "   @import \"dojo/dojox/grid/resources/tundra/Grid.css\";\n";
 			$rt .= "</style>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"js/blockallocations.js\"></script>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
 			$rt .= "   djConfig=\"parseOnLoad: true\">\n";
 			$rt .= "</script>\n";
+			$rt .= $customfile;
 			$rt .= "<script type=\"text/javascript\">\n";
 			$rt .= "   dojo.addOnLoad(function() {\n";
 			$rt .= "   dojo.registerModulePath(\"vcldojo\", \"../../js/vcldojo\");\n";
-			foreach($dojoRequires as $req) {
+			foreach($dojoRequires as $req)
 				$rt .= "   dojo.require(\"$req\");\n";
-			}
 			if($mode == 'editBlockAllocation') {
 				$blockid = getContinuationVar('blockid');
 				$cont = addContinuationsEntry('AJpopulateBlockStore', array('blockid' => $blockid), SECINDAY, 1, 0);
@@ -10730,17 +10753,16 @@ function getDojoHTML($refresh) {
 		case "viewBlockStatus":
 			$rt .= "<style type=\"text/css\">\n";
 			$rt .= "   @import \"themes/$skin/css/dojo/$skin.css\";\n";
-			#$rt .= "   @import \"dojo/dojo/resources/dojo.css\";\n";
 			$rt .= "</style>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"js/blockallocations.js\"></script>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
 			$rt .= "   djConfig=\"parseOnLoad: true\">\n";
 			$rt .= "</script>\n";
+			$rt .= $customfile;
 			$rt .= "<script type=\"text/javascript\">\n";
 			$rt .= "   dojo.addOnLoad(function() {\n";
-			foreach($dojoRequires as $req) {
+			foreach($dojoRequires as $req)
 				$rt .= "   dojo.require(\"$req\");\n";
-			}
 			$rt .= "   });\n";
 			$rt .= "   setTimeout(updateBlockStatus, 30000);\n";
 			$rt .= "</script>\n";
@@ -10754,10 +10776,10 @@ function getDojoHTML($refresh) {
 			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
 			$rt .= "   djConfig=\"parseOnLoad: true\">\n";
 			$rt .= "</script>\n";
+			$rt .= $customfile;
 			$rt .= "<script type=\"text/javascript\">\n";
-			foreach($dojoRequires as $req) {
+			foreach($dojoRequires as $req)
 				$rt .= "   dojo.require(\"$req\");\n";
-			}
 			$rt .= "   dojo.addOnLoad(function() {\n";
 			$rt .= "      updateAllocatedMachines();\n";
 			$rt .= "   });\n";
@@ -10774,11 +10796,11 @@ function getDojoHTML($refresh) {
 			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
 			$rt .= "   djConfig=\"parseOnLoad: true\">\n";
 			$rt .= "</script>\n";
+			$rt .= $customfile;
 			$rt .= "<script type=\"text/javascript\">\n";
 			$rt .= "   dojo.addOnLoad(function() {\n";
-			foreach($dojoRequires as $req) {
+			foreach($dojoRequires as $req)
 				$rt .= "   dojo.require(\"$req\");\n";
-			}
 			if($mode != 'submitAddSchedule') {
 				$id = getContinuationVar("scheduleid");
 				$cont = addContinuationsEntry('AJgetScheduleTimesData', array('id' => $id), SECINDAY, 1, 0);
@@ -10794,17 +10816,16 @@ function getDojoHTML($refresh) {
 		case "submitImageMapping":
 			$rt .= "<style type=\"text/css\">\n";
 			$rt .= "   @import \"themes/$skin/css/dojo/$skin.css\";\n";
-			#$rt .= "   @import \"dojo/dojo/resources/dojo.css\";\n";
 			$rt .= "</style>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"js/images.js\"></script>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
 			$rt .= "   djConfig=\"parseOnLoad: true\">\n";
 			$rt .= "</script>\n";
+			$rt .= $customfile;
 			$rt .= "<script type=\"text/javascript\">\n";
 			$rt .= "   dojo.addOnLoad(function() {\n";
-			foreach($dojoRequires as $req) {
+			foreach($dojoRequires as $req)
 				$rt .= "   dojo.require(\"$req\");\n";
-			}
 			$rt .= "   });\n";
 			if($mode == "viewImageGrouping" ||
 				$mode == "submitImageGroups") {
@@ -10828,17 +10849,16 @@ function getDojoHTML($refresh) {
 		case 'updateExistingImage':
 			$rt .= "<style type=\"text/css\">\n";
 			$rt .= "   @import \"themes/$skin/css/dojo/$skin.css\";\n";
-			#$rt .= "   @import \"dojo/dojo/resources/dojo.css\";\n";
 			$rt .= "</style>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"js/images.js\"></script>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
 			$rt .= "   djConfig=\"parseOnLoad: true\">\n";
 			$rt .= "</script>\n";
+			$rt .= $customfile;
 			$rt .= "<script type=\"text/javascript\">\n";
 			$rt .= "   dojo.addOnLoad(function() {\n";
-			foreach($dojoRequires as $req) {
+			foreach($dojoRequires as $req)
 				$rt .= "   dojo.require(\"$req\");\n";
-			}
 			$rt .= "   });\n";
 			$rt .= "   dojo.addOnLoad(function() {\n";
 			$rt .= "      if(document.getElementById('hide1')) {\n";
@@ -10858,15 +10878,14 @@ function getDojoHTML($refresh) {
 			$rt .= "   @import \"themes/$skin/css/dojo/$skin.css\";\n";
 			$rt .= "   @import \"dojo/dojox/grid/resources/Grid.css\";\n";
 			$rt .= "</style>\n";
-			#$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"></script>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
 			$rt .= "   djConfig=\"parseOnLoad: true\">\n";
 			$rt .= "</script>\n";
+			$rt .= $customfile;
 			$rt .= "<script type=\"text/javascript\">\n";
 			$rt .= "   dojo.addOnLoad(function() {\n";
-			foreach($dojoRequires as $req) {
+			foreach($dojoRequires as $req)
 				$rt .= "   dojo.require(\"$req\");\n";
-			}
 			$rt .= "   });\n";
 			$rt .= "   dojo.addOnLoad(function() {document.onmousemove = updateMouseXY;});\n";
 			$rt .= "   dojo.ready(function() {\n";
@@ -10887,17 +10906,15 @@ function getDojoHTML($refresh) {
 		case 'confirmAddMgmtnode':
 			$rt .= "<style type=\"text/css\">\n";
 			$rt .= "   @import \"themes/$skin/css/dojo/$skin.css\";\n";
-			#$rt .= "   @import \"dojo/dijit/themes/tundra/tundra.css\";\n";
-			#$rt .= "    @import \"dojo/dojo/resources/dojo.css\";\n";
 			$rt .= "</style>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
 			$rt .= "   djConfig=\"parseOnLoad: true\">\n";
 			$rt .= "</script>\n";
+			$rt .= $customfile;
 			$rt .= "<script type=\"text/javascript\">\n";
 			$rt .= "   dojo.addOnLoad(function() {\n";
-			foreach($dojoRequires as $req) {
+			foreach($dojoRequires as $req)
 				$rt .= "   dojo.require(\"$req\");\n";
-			}
 			$rt .= "   });\n";
 			$rt .= "   dojo.addOnLoad(function() {document.onmousemove = updateMouseXY;});\n";
 			$rt .= "</script>\n";
@@ -10913,6 +10930,7 @@ function getDojoHTML($refresh) {
 			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
 			$rt .= "   djConfig=\"parseOnLoad: true\">\n";
 			$rt .= "</script>\n";
+			$rt .= $customfile;
 			$rt .= "<script type=\"text/javascript\">\n";
 			$rt .= "   dojo.addOnLoad(function() {\n";
 			foreach($dojoRequires as $req)
@@ -10929,17 +10947,16 @@ function getDojoHTML($refresh) {
 		case "submitComputerGroups":
 			$rt .= "<style type=\"text/css\">\n";
 			$rt .= "   @import \"themes/$skin/css/dojo/$skin.css\";\n";
-			#$rt .= "   @import \"dojo/dojo/resources/dojo.css\";\n";
 			$rt .= "</style>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"js/computers.js\"></script>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
 			$rt .= "   djConfig=\"parseOnLoad: true\">\n";
 			$rt .= "</script>\n";
+			$rt .= $customfile;
 			$rt .= "<script type=\"text/javascript\">\n";
 			$rt .= "   dojo.addOnLoad(function() {\n";
-			foreach($dojoRequires as $req) {
+			foreach($dojoRequires as $req)
 				$rt .= "   dojo.require(\"$req\");\n";
-			}
 			$rt .= "   });\n";
 			if($mode != 'selectComputers') {
 				$rt .= "   dojo.addOnLoad(getCompsButton);\n";
@@ -10956,26 +10973,25 @@ function getDojoHTML($refresh) {
 		case 'computerUtilities':
 			$rt .= "<style type=\"text/css\">\n";
 			$rt .= "   @import \"themes/$skin/css/dojo/$skin.css\";\n";
-			#$rt .= "   @import \"dojo/dojo/resources/dojo.css\";\n";
 			$rt .= "</style>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"js/computers.js\"></script>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
 			$rt .= "   djConfig=\"parseOnLoad: true\">\n";
 			$rt .= "</script>\n";
+			$rt .= $customfile;
 			$rt .= "<script type=\"text/javascript\">\n";
 			$rt .= "   dojo.addOnLoad(function() {\n";
-			foreach($dojoRequires as $req) {
+			foreach($dojoRequires as $req)
 				$rt .= "   dojo.require(\"$req\");\n";
-			}
 			$rt .= "   });\n";
 			$rt .= "</script>\n";
 			return $rt;
 		case 'selectauth':
 			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"></script>\n";
+			$rt .= $customfile;
 			$rt .= "<script type=\"text/javascript\">\n";
-			foreach($dojoRequires as $req) {
+			foreach($dojoRequires as $req)
 				$rt .= "   dojo.require(\"$req\");\n";
-			}
 			$authtype = processInputVar("authtype", ARG_STRING);
 			$rt .= "   dojo.addOnLoad(function() {document.loginform.userid.focus(); document.loginform.userid.select();});\n";
 			$rt .= "</script>\n";
@@ -10983,17 +10999,16 @@ function getDojoHTML($refresh) {
 		case "editVMInfo":
 			$rt .= "<style type=\"text/css\">\n";
 			$rt .= "   @import \"themes/$skin/css/dojo/$skin.css\";\n";
-			#$rt .= "   @import \"dojo/dojo/resources/dojo.css\";\n";
 			$rt .= "</style>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"js/vm.js\"></script>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
 			$rt .= "   djConfig=\"parseOnLoad: true\">\n";
 			$rt .= "</script>\n";
+			$rt .= $customfile;
 			$rt .= "<script type=\"text/javascript\">\n";
 			$rt .= "   dojo.addOnLoad(function() {\n";
-			foreach($dojoRequires as $req) {
+			foreach($dojoRequires as $req)
 				$rt .= "   dojo.require(\"$req\");\n";
-			}
 			$rt .= "   });\n";
 			$rt .= "dojo.addOnLoad(function() {";
 			$rt .=                   "var dialog = dijit.byId('profileDlg'); ";
@@ -11007,18 +11022,16 @@ function getDojoHTML($refresh) {
 		case "viewNodes":
 			$rt .= "<style type=\"text/css\">\n";
 			$rt .= "   @import \"themes/$skin/css/dojo/$skin.css\";\n";
-			#$rt .= "   @import \"dojo/dijit/themes/tundra/tundra.css\";\n";
-			#$rt .= "   @import \"dojo/dojo/resources/dojo.css\";\n";
 			$rt .= "</style>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"js/privileges.js\"></script>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
 			$rt .= "   djConfig=\"parseOnLoad: true\">\n";
 			$rt .= "</script>\n";
+			$rt .= $customfile;
 			$rt .= "<script type=\"text/javascript\">\n";
 			$rt .= "   dojo.addOnLoad(function() {\n";
-			foreach($dojoRequires as $req) {
+			foreach($dojoRequires as $req)
 				$rt .= "   dojo.require(\"$req\");\n";
-			}
 			$rt .= "      document.onmousemove = updateMouseXY;\n";
 			$rt .= "   });\n";
 			$rt .= "</script>\n";
@@ -11031,11 +11044,11 @@ function getDojoHTML($refresh) {
 			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
 			$rt .= "   djConfig=\"parseOnLoad: true\">\n";
 			$rt .= "</script>\n";
+			$rt .= $customfile;
 			$rt .= "<script type=\"text/javascript\">\n";
 			$rt .= "   dojo.addOnLoad(function() {\n";
-			foreach($dojoRequires as $req) {
+			foreach($dojoRequires as $req)
 				$rt .= "   dojo.require(\"$req\");\n";
-			}
 			$rt .= "   });\n";
 			$rt .= "</script>\n";
 			return $rt;
@@ -11047,6 +11060,7 @@ function getDojoHTML($refresh) {
 			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
 			$rt .= "   djConfig=\"parseOnLoad: true\">\n";
 			$rt .= "</script>\n";
+			$rt .= $customfile;
 			$rt .= "<script type=\"text/javascript\">\n";
 			$rt .= "   dojo.addOnLoad(function() {\n";
 			foreach($dojoRequires as $req)
@@ -11064,6 +11078,7 @@ function getDojoHTML($refresh) {
 			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
 			$rt .= "   djConfig=\"parseOnLoad: true\">\n";
 			$rt .= "</script>\n";
+			$rt .= $customfile;
 			$rt .= "<script type=\"text/javascript\">\n";
 			$rt .= "   dojo.addOnLoad(function() {\n";
 			foreach($dojoRequires as $req)
@@ -11080,11 +11095,11 @@ function getDojoHTML($refresh) {
 			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
 			$rt .= "   djConfig=\"parseOnLoad: true\">\n";
 			$rt .= "</script>\n";
+			$rt .= $customfile;
 			$rt .= "<script type=\"text/javascript\">\n";
 			$rt .= "   dojo.addOnLoad(function() {\n";
-			foreach($dojoRequires as $req) {
+			foreach($dojoRequires as $req)
 				$rt .= "   dojo.require(\"$req\");\n";
-			}
 			$rt .= "   });\n";
 			$rt .= "</script>\n";
 			return $rt;
