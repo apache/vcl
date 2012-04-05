@@ -36,7 +36,8 @@ if(! array_key_exists('eppn', $_SERVER) ||
 
 	# check for eppn; if there, see if it is a user we already have
 	if(array_key_exists('eppn', $_SERVER)) {
-		$tmp = explode('@', $_SERVER['eppn']);
+		$tmp = explode(';', $_SERVER['eppn']);
+		$tmp = explode('@', $tmp[0]);
 		$query = "SELECT u.firstname, "
 				 .        "u.lastname "
 				 . "FROM user u, "
@@ -103,7 +104,8 @@ if(! $keys['public'])
 	abort(7);
 
 # get VCL affiliation from shib affiliation
-$tmp = explode('@', $_SERVER['eppn']);
+$tmp = explode(';', $_SERVER['eppn']);
+$tmp = explode('@', $tmp[0]);
 $username = strtolower($tmp[0]);
 $tmp1 = mysql_escape_string(strtolower($tmp[1]));
 $query = "SELECT name, shibonly FROM affiliation WHERE shibname = '$tmp1'";
@@ -193,7 +195,7 @@ $shibdata = array('Shib-Application-ID' => $_SERVER['Shib-Application-ID'],
                   'Shib-Identity-Provider' => $_SERVER['Shib-Identity-Provider'],
                   'Shib-AuthnContext-Dec' => $_SERVER['Shib-AuthnContext-Decl'],
                   'Shib-logouturl' => $_SERVER['Shib-logouturl'],
-                  'eppn' => $_SERVER['Shib-logouturl'],
+                  'eppn' => $_SERVER['eppn'],
                   'unscoped-affiliation' => $_SERVER['unscoped-affiliation'],
                   'affiliation' => $_SERVER['affiliation'],
 );
