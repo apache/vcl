@@ -271,7 +271,7 @@ sub main () {
 				
 				# Make sure reservation is not currently being processed
 				my $being_processed = reservation_being_processed($reservation_id);
-				if ($being_processed && $request_state_name ne 'deleted') {
+				if ($being_processed && $request_state_name !~ /^(deleted|image|reinstall)$/ ) {
 					notify($ERRORS{'WARNING'}, $LOGFILE, "reservation $reservation_id is already being processed");
 					next RESERVATION;
 				}
