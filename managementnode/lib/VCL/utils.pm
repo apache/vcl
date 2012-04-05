@@ -9340,7 +9340,7 @@ sub is_public_ip_address {
 	# Make sure the address is valid
 	unless (is_valid_ip_address($ip_address)) {
 		notify($ERRORS{'WARNING'}, 0, "unable to determine if IP address is private, the address is not valid: $ip_address");
-		return 1;
+		return 0;
 	}
 	
 	# Determine the type of address address
