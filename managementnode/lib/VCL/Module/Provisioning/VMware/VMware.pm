@@ -91,6 +91,17 @@ our %VM_OS_CONFIGURATION = (
 		"ethernet-virtualDev" => "e1000",
 		"scsi-virtualDev" => "lsiLogic",
 	},
+  # OSX configuration
+  "osx-x86" => {
+     "guestOS" => "darwin10-64",
+     "ethernet-virtualDev" => "e1000",
+     "scsi-virtualDev" => "lsiLogic",
+  },
+  "osx-x86_64" => {
+     "guestOS" => "darwin10-64",
+     "ethernet-virtualDev" => "e1000",
+     "scsi-virtualDev" => "lsiLogic",
+  },
 	# Windows configurations:
 	"winxp-x86" => {
 		"guestOS" => "winXPPro",
@@ -1671,6 +1682,7 @@ sub prepare_vmx {
 	my $is_vm_dedicated           = $self->is_vm_dedicated();
 	my $guest_os                  = $self->get_vm_guest_os() || return;
 	my $vmware_product_name       = $self->get_vmhost_product_name();
+	my $image_os_type            = $self->data->get_image_os_type();
 	
 	(my ($vm_cpu_count, $vm_cores_per_socket) = $self->get_vm_cpu_configuration()) || return;
 	
@@ -1819,6 +1831,31 @@ sub prepare_vmx {
 			"vmci0.present" => "TRUE",
 		));
 	}
+	# JIM
+	# ide needed for boot
+	# usb needed for mouse
+	# monitor, ich7m, smc for darwin
+  	if ($image_os_type =~ /osx/i) {
+		  %vmx_parameters = (%vmx_parameters, (
+		  "ide1:0.clientDevice" => "TRUE",
+        "ide1:0.deviceType" => "atapi-cdrom",
+        "ide1:0.fileName" => "",           
+        "ide1:0.present" => "TRUE", 
+        "ide1:0.startConnected" => "FALSE",
+        "usb.present" => "TRUE",                              
+        "usb:1.deviceType" => "hub",      
+        "usb:1.present" => "TRUE",    
+        "usb:2.deviceType" => "mouse",    
+        "usb:2.present" => "TRUE", 
+        "monitor.virtual_exec" => "hardware",
+        "monitor.virtual_mmu" => "software",
+        "ich7m.present" => "TRUE",
+        "smc.present" => "FALSE",
+        "keyboard.vusb.enable" => "TRUE",
+        "mouse.vusb.enable" => "TRUE",
+	  ));
+	}
+
 	
 	# Add ethernet adapter definitions to the hash
 	my $interface_index = 0;
