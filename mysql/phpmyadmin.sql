@@ -36,13 +36,15 @@ display" value for a table:
 -- Database: `phpmyadmin`
 --
 
+use `phpmyadmin`;
+
 -- --------------------------------------------------------
 
 --
 -- Dumping data for table `pma_table_info`
 --
 
-INSERT INTO `pma_table_info` (`db_name`, `table_name`, `display_field`) VALUES
+INSERT IGNORE INTO `pma_table_info` (`db_name`, `table_name`, `display_field`) VALUES
 ('vcl', 'IMtype', 'name'),
 ('vcl', 'OS', 'prettyname'),
 ('vcl', 'OSinstalltype', 'name'),
@@ -56,6 +58,7 @@ INSERT INTO `pma_table_info` (`db_name`, `table_name`, `display_field`) VALUES
 ('vcl', 'computerloadstate', 'loadstatename'),
 ('vcl', 'image', 'prettyname'),
 ('vcl', 'imagerevision', 'imagename'),
+('vcl', 'imagetype', 'name'),
 ('vcl', 'localauth', 'userid'),
 ('vcl', 'managementnode', 'hostname'),
 ('vcl', 'module', 'prettyname'),

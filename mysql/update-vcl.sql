@@ -21,6 +21,50 @@
 
 DELIMITER $$
 
+-- --------------------------------------------------------
+
+/*
+Procedure   : AddOrRenameColumn
+Parameters  : tableName, oldColumnName, newColumnName, columnDefinition
+Description : If oldColumnName already exists in the table, it is renamed to
+              newColumnName and its definition is updated. If it doesn't exist,
+              a new column is added.
+*/
+
+DROP PROCEDURE IF EXISTS `AddOrRenameColumn`$$
+CREATE PROCEDURE `AddOrRenameColumn`(
+  IN tableName tinytext,
+  IN oldColumnName tinytext,
+  IN newColumnName tinytext,
+  IN columnDefinition text
+)
+BEGIN
+  IF EXISTS (
+    SELECT * FROM information_schema.COLUMNS WHERE
+    TABLE_SCHEMA=Database()
+    AND TABLE_NAME=tableName
+    AND COLUMN_NAME=oldColumnName
+  )
+  THEN
+    SET @statement_array = CONCAT('ALTER TABLE `', Database(), '`.', tableName, ' CHANGE ', oldColumnName , ' ', newColumnName, ' ', columnDefinition);
+  ELSEIF EXISTS (
+    SELECT * FROM information_schema.COLUMNS WHERE
+    TABLE_SCHEMA=Database()
+    AND TABLE_NAME=tableName
+    AND COLUMN_NAME=newColumnName
+  )
+  THEN
+    SET @statement_array = CONCAT('ALTER TABLE `', Database(), '`.', tableName, ' CHANGE ', newColumnName , ' ', newColumnName, ' ', columnDefinition);
+  ELSE
+    SET @statement_array = CONCAT('ALTER TABLE `', Database(), '`.', tableName, ' ADD COLUMN ', newColumnName, ' ', columnDefinition);
+  END IF;
+  
+  PREPARE statement_string FROM @statement_array;
+  EXECUTE statement_string;
+END$$
+
+-- --------------------------------------------------------
+
 /*
 Procedure   : AddColumnIfNotExists
 Parameters  : tableName, columnName, columnDefinition
@@ -269,14 +313,11 @@ BEGIN
     AND REFERENCED_COLUMN_NAME=referencedColumnName
   )
   THEN
-    IF constraintType = 'update'
-    THEN
+    IF constraintType = 'update' THEN
       SET @statement_array = CONCAT('ALTER TABLE `', Database(), '`.', tableName, ' ADD FOREIGN KEY (', columnName, ') REFERENCES `', Database(), '`.', referencedTableName, ' (', referencedColumnName, ') ON UPDATE ', constraintAction);
-    ELSEIF constraintType = 'delete'
-    THEN
+    ELSEIF constraintType = 'delete' THEN
       SET @statement_array = CONCAT('ALTER TABLE `', Database(), '`.', tableName, ' ADD FOREIGN KEY (', columnName, ') REFERENCES `', Database(), '`.', referencedTableName, ' (', referencedColumnName, ') ON DELETE ', constraintAction);
-    ELSEIF constraintType = 'both'
-    THEN
+    ELSEIF constraintType = 'both' THEN
       SET @statement_array = CONCAT('ALTER TABLE `', Database(), '`.', tableName, ' ADD FOREIGN KEY (', columnName, ') REFERENCES `', Database(), '`.', referencedTableName, ' (', referencedColumnName, ') ON DELETE ', constraintAction, ' ON UPDATE ', constraintAction);
     ELSE
       SET @statement_array = CONCAT('ALTER TABLE `', Database(), '`.', tableName, ' ADD FOREIGN KEY (', columnName, ') REFERENCES `', Database(), '`.', referencedTableName, ' (', referencedColumnName, ')');
@@ -475,6 +516,8 @@ CREATE TABLE IF NOT EXISTS `connectmethodmap` (
 
 -- change minram to mediumint
 ALTER TABLE `image` CHANGE `minram` `minram` MEDIUMINT UNSIGNED NOT NULL DEFAULT '0';
+CALL AddColumnIfNotExists('image', 'imagetypeid', "smallint(5) unsigned NOT NULL default '1' AFTER ownerid");
+CALL AddIndexIfNotExists('image', 'imagetypeid');
 
 -- --------------------------------------------------------
 
@@ -483,6 +526,19 @@ ALTER TABLE `image` CHANGE `minram` `minram` MEDIUMINT UNSIGNED NOT NULL DEFAULT
 --
 
 CALL AddColumnIfNotExists('imagerevision', 'autocaptured', "tinyint(1) unsigned NOT NULL default '0'");
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `imagetype`
+--
+
+CREATE TABLE IF NOT EXISTS `imagetype` (
+  `id` smallint(5) unsigned NOT NULL auto_increment,
+  `name` varchar(16) NOT NULL,
+  PRIMARY KEY  (`id`),
+  UNIQUE KEY `name` (`name`)
+) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -572,7 +628,9 @@ CALL AddColumnIfNotExists('reservation', 'connectport', "smallint(5) unsigned de
 CREATE TABLE IF NOT EXISTS `reservationaccounts` (
   `reservationid` mediumint(8) unsigned NOT NULL,
   `userid` mediumint(8) unsigned NOT NULL,
-  `password` varchar(50) default NULL
+  `password` varchar(50) default NULL,
+  UNIQUE KEY `reservationid` (`reservationid`,`userid`),
+  KEY `userid` (`userid`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
@@ -702,7 +760,8 @@ CALL AddColumnIfNotExists('request', 'checkuser', "tinyint(1) unsigned NOT NULL 
 CREATE TABLE IF NOT EXISTS `usergrouppriv` (
   `usergroupid` smallint(5) unsigned NOT NULL,
   `userprivtypeid` tinyint(3) unsigned NOT NULL,
-  UNIQUE KEY `usergroupid` (`usergroupid`,`userprivtypeid`)
+  UNIQUE KEY `usergroupid` (`usergroupid`,`userprivtypeid`),
+  KEY `userprivtypeid` (`userprivtypeid`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
@@ -738,12 +797,17 @@ CALL DropColumnIfExists('vmprofile', 'virtualdiskpath');
 
 CALL AddColumnIfNotExists('vmprofile', 'resourcepath', "varchar(256) default NULL AFTER imageid");
 CALL AddColumnIfNotExists('vmprofile', 'repositorypath', "varchar(128) default NULL AFTER resourcepath");
+CALL AddColumnIfNotExists('vmprofile', 'repositoryimagetypeid', "smallint(5) unsigned NOT NULL default '1' AFTER repositorypath");
+CALL AddColumnIfNotExists('vmprofile', 'datastoreimagetypeid', "smallint(5) unsigned NOT NULL default '1' AFTER datastorepath");
 CALL AddColumnIfNotExists('vmprofile', 'virtualswitch2', "varchar(80) NULL default NULL AFTER `virtualswitch1`");
 CALL AddColumnIfNotExists('vmprofile', 'virtualswitch3', "varchar(80) NULL default NULL AFTER `virtualswitch2`");
-CALL AddColumnIfNotExists('vmprofile', 'vmware_mac_eth0_generated', "tinyint(1) NOT NULL default '0'");
-CALL AddColumnIfNotExists('vmprofile', 'vmware_mac_eth1_generated', "tinyint(1) NOT NULL default '0'");
+
+CALL AddOrRenameColumn('vmprofile', 'vmware_mac_eth0_generated', 'eth0generated', "tinyint(1) unsigned NOT NULL default '0'");
+CALL AddOrRenameColumn('vmprofile', 'vmware_mac_eth1_generated', 'eth1generated', "tinyint(1) unsigned NOT NULL default '0'");
 
 CALL AddUniqueIndex('vmprofile', 'profilename');
+CALL AddIndexIfNotExists('vmprofile', 'repositoryimagetypeid');
+CALL AddIndexIfNotExists('vmprofile', 'datastoreimagetypeid');
 
 -- --------------------------------------------------------
 
@@ -791,6 +855,36 @@ UPDATE `computer` SET `imagerevisionid` = (SELECT `id` FROM `imagerevision` WHER
 -- --------------------------------------------------------
 
 -- 
+-- Inserts for table `imagetype`
+-- 
+
+INSERT IGNORE INTO `imagetype` (`name`) VALUES ('none');
+INSERT IGNORE INTO `imagetype` (`name`) VALUES ('partimage');
+INSERT IGNORE INTO `imagetype` (`name`) VALUES ('partimage-ng');
+INSERT IGNORE INTO `imagetype` (`name`) VALUES ('lab');
+INSERT IGNORE INTO `imagetype` (`name`) VALUES ('kickstart');
+INSERT IGNORE INTO `imagetype` (`name`) VALUES ('vmdk');
+INSERT IGNORE INTO `imagetype` (`name`) VALUES ('qcow2');
+INSERT IGNORE INTO `imagetype` (`name`) VALUES ('vdi');
+
+-- --------------------------------------------------------
+
+-- 
+-- Inserts for table `image`
+-- 
+
+UPDATE image SET image.imagetypeid = (SELECT `id` FROM `imagetype` WHERE `name` = 'none') WHERE image.name = 'noimage';
+UPDATE image, OS SET image.imagetypeid = (SELECT `id` FROM `imagetype` WHERE `name` = 'vmdk') WHERE image.imagetypeid = 0 AND image.OSid = OS.id AND OS.installtype LIKE '%vmware%';
+UPDATE image, OS SET image.imagetypeid = (SELECT `id` FROM `imagetype` WHERE `name` = 'partimage') WHERE image.imagetypeid = 0 AND image.OSid = OS.id AND OS.installtype LIKE '%partimage%';
+UPDATE image, OS SET image.imagetypeid = (SELECT `id` FROM `imagetype` WHERE `name` = 'kickstart') WHERE image.imagetypeid = 0 AND image.OSid = OS.id AND OS.installtype LIKE '%kickstart%';
+UPDATE image, OS SET image.imagetypeid = (SELECT `id` FROM `imagetype` WHERE `name` = 'vdi') WHERE image.imagetypeid = 0 AND image.OSid = OS.id AND OS.installtype LIKE '%vbox%';
+UPDATE image, OS, module SET image.imagetypeid = (SELECT `id` FROM `imagetype` WHERE `name` = 'lab') WHERE image.imagetypeid = 0 AND image.OSid = OS.id AND OS.moduleid = module.id AND module.perlpackage LIKE '%lab%';
+UPDATE image, OS, module SET image.imagetypeid = (SELECT `id` FROM `imagetype` WHERE `name` = 'vmdk') WHERE image.imagetypeid = 0 AND image.OSid = OS.id AND OS.moduleid = module.id AND module.perlpackage REGEXP 'vmware|esx';
+UPDATE image SET image.imagetypeid = (SELECT `id` FROM `imagetype` WHERE `name` = 'none') WHERE image.imagetypeid = 0;
+
+-- --------------------------------------------------------
+
+-- 
 -- Inserts for table `module`
 -- 
 
@@ -819,16 +913,16 @@ INSERT IGNORE INTO `OStype` (`name`) VALUES ('osx');
 -- Inserts for table `OS`
 -- 
 
-INSERT IGNORE INTO `OS` (`name`, `prettyname`, `type`, `installtype`, `sourcepath`, `moduleid`) VALUES ('win7', 'Windows 7', 'windows', 'partimage', 'image', (SELECT `id` FROM `module` WHERE `name` LIKE 'os_win7'));
-INSERT IGNORE INTO `OS` (`name`, `prettyname`, `type`, `installtype`, `sourcepath`, `moduleid`) VALUES ('vmwarewin7', 'VMware Windows 7', 'windows', 'vmware', 'vmware_images', (SELECT `id` FROM `module` WHERE `name` LIKE 'os_win7'));
-INSERT IGNORE INTO `OS` (`name`, `prettyname`, `type`, `installtype`, `sourcepath`, `moduleid`) VALUES ('vmwarelinux', 'VMware Generic Linux', 'linux', 'vmware', 'vmware_images', (SELECT `id` FROM `module` WHERE `name` LIKE 'os_linux'));
-INSERT IGNORE INTO `OS` (`name`, `prettyname`, `type`, `installtype`, `sourcepath`, `moduleid`) VALUES ('vmwarewin2003', 'VMware Windows 2003 Server', 'windows', 'vmware', 'vmware_images', (SELECT `id` FROM `module` WHERE `name` LIKE 'os_win2003'));
-INSERT IGNORE INTO `OS` (`name`, `prettyname`, `type`, `installtype`, `sourcepath`, `moduleid`) VALUES ('esxi4.1', 'VMware ESXi 4.1', 'linux', 'kickstart', 'esxi4.1', (SELECT `id` FROM `module` WHERE `name` LIKE 'os_esxi'));
+INSERT IGNORE INTO `OS` (`name`, `prettyname`, `type`, `installtype`, `sourcepath`, `moduleid`) VALUES ('win7', 'Windows 7 (Bare Metal)', 'windows', 'partimage', 'image', (SELECT `id` FROM `module` WHERE `name` LIKE 'os_win7'));
+INSERT IGNORE INTO `OS` (`name`, `prettyname`, `type`, `installtype`, `sourcepath`, `moduleid`) VALUES ('vmwarewin7', 'Windows 7 (VMware)', 'windows', 'vmware', 'vmware_images', (SELECT `id` FROM `module` WHERE `name` LIKE 'os_win7'));
+INSERT IGNORE INTO `OS` (`name`, `prettyname`, `type`, `installtype`, `sourcepath`, `moduleid`) VALUES ('vmwarelinux', 'Generic Linux (VMware)', 'linux', 'vmware', 'vmware_images', (SELECT `id` FROM `module` WHERE `name` LIKE 'os_linux'));
+INSERT IGNORE INTO `OS` (`name`, `prettyname`, `type`, `installtype`, `sourcepath`, `moduleid`) VALUES ('vmwarewin2003', 'Windows 2003 Server (VMware)', 'windows', 'vmware', 'vmware_images', (SELECT `id` FROM `module` WHERE `name` LIKE 'os_win2003'));
+INSERT IGNORE INTO `OS` (`name`, `prettyname`, `type`, `installtype`, `sourcepath`, `moduleid`) VALUES ('esxi4.1', 'VMware ESXi 4.1 (Kickstart)', 'linux', 'kickstart', 'esxi4.1', (SELECT `id` FROM `module` WHERE `name` LIKE 'os_esxi'));
 INSERT IGNORE INTO `OS` (`name`, `prettyname`, `type`, `installtype`, `sourcepath`, `moduleid`) VALUES ('vmwareosx', 'OSX Snow Leopard (VMware)', 'osx', 'vmware', 'vmware_images', (SELECT `id` FROM `module` WHERE `name` LIKE 'os_osx'));
-INSERT IGNORE INTO `OS` (`name`, `prettyname`, `type`, `installtype`, `sourcepath`, `moduleid`) VALUES ('rhel6', 'Red Hat Enterprise Level 6', 'linux', 'kickstart', 'rhel6', (SELECT `id` FROM `module` WHERE `name` LIKE 'os_linux'));
-INSERT IGNORE INTO `OS` (`name`, `prettyname`, `type`, `installtype`, `sourcepath`, `moduleid`) VALUES ('rh6image', 'Red Hat 6 image', 'linux', 'partimage', 'image', (SELECT `id` FROM `module` WHERE `name` LIKE 'os_linux'));
-INSERT IGNORE INTO `OS` (`name`, `prettyname`, `type`, `installtype`, `sourcepath`, `moduleid`) VALUES ('fedora16', 'Fedora 16', 'linux', 'kickstart', 'fedora16', (SELECT `id` FROM `module` WHERE `name` LIKE 'os_linux'));
-INSERT IGNORE INTO `OS` (`name`, `prettyname`, `type`, `installtype`, `sourcepath`, `moduleid`) VALUES ('fedoraimage', 'Fedora 16 image', 'linux', 'partimage', 'image', (SELECT `id` FROM `module` WHERE `name` LIKE 'os_linux'));
+INSERT IGNORE INTO `OS` (`name`, `prettyname`, `type`, `installtype`, `sourcepath`, `moduleid`) VALUES ('rhel6', 'Red Hat Enterprise 6 (Kickstart)', 'linux', 'kickstart', 'rhel6', (SELECT `id` FROM `module` WHERE `name` LIKE 'os_linux'));
+INSERT IGNORE INTO `OS` (`name`, `prettyname`, `type`, `installtype`, `sourcepath`, `moduleid`) VALUES ('rh6image', 'Red Hat Enterprise 6 (Bare Metal)', 'linux', 'partimage', 'image', (SELECT `id` FROM `module` WHERE `name` LIKE 'os_linux'));
+INSERT IGNORE INTO `OS` (`name`, `prettyname`, `type`, `installtype`, `sourcepath`, `moduleid`) VALUES ('fedora16', 'Fedora 16 (Kickstart)', 'linux', 'kickstart', 'fedora16', (SELECT `id` FROM `module` WHERE `name` LIKE 'os_linux'));
+INSERT IGNORE INTO `OS` (`name`, `prettyname`, `type`, `installtype`, `sourcepath`, `moduleid`) VALUES ('fedoraimage', 'Fedora 16 (Bare Metal)', 'linux', 'partimage', 'image', (SELECT `id` FROM `module` WHERE `name` LIKE 'os_linux'));
 
 -- --------------------------------------------------------
 
@@ -887,7 +981,7 @@ CALL AddConnectMethodMapIfNotExists('RDP', 'windows', 0, 0, 0, 1);
 CALL AddConnectMethodMapIfNotExists('iRAPP RDP', 'osx', 0, 0, 0, 1);
 CALL AddConnectMethodMapIfNotExists('ssh', 'linux', 0, 0, 0, 2);
 CALL AddConnectMethodMapIfNotExists('ssh', 'unix', 0, 0, 0, 2);
-CALL AddConnectMethodMapIfNotExists('RDP', 'linux', 0, 0, 0, 2);
+CALL AddConnectMethodMapIfNotExists('RDP', 'windows', 0, 0, 0, 2);
 CALL AddConnectMethodMapIfNotExists('iRAPP RDP', 'osx', 0, 0, 0, 2);
 
 -- --------------------------------------------------------
@@ -905,6 +999,25 @@ INSERT IGNORE INTO resourcetype (id, name) VALUES (17, 'serverprofile');
 --
 
 INSERT IGNORE INTO state (id, name) VALUES (24, 'checkpoint'), (25, 'serverinuse'), (26, 'rebootsoft'), (27, 'reinstall'), (28, 'reboothard'), (29, 'servermodified');
+
+-- --------------------------------------------------------
+
+-- 
+-- Inserts for table `usergroup`
+--
+
+UPDATE IGNORE `usergroup` SET `overlapResCount` = '50' WHERE `usergroup`.`name` = 'adminUsers' AND `usergroup`.`overlapResCount` = 0;
+
+-- --------------------------------------------------------
+
+-- 
+-- Inserts for table `usergroupmembers`
+--
+
+INSERT IGNORE INTO `usergroupmembers` (`userid`, `usergroupid`) VALUES
+((SELECT `id` FROM `user` WHERE `unityid` = 'admin' AND `affiliationid` = (SELECT `id` FROM `affiliation` WHERE `name` = 'Local')), (SELECT `id` FROM `usergroup` WHERE `name` = 'adminUsers' AND `affiliationid` = (SELECT `id` FROM `affiliation` WHERE `name` = 'Local'))),
+((SELECT `id` FROM `user` WHERE `unityid` = 'admin' AND `affiliationid` = (SELECT `id` FROM `affiliation` WHERE `name` = 'Local')), (SELECT `id` FROM `usergroup` WHERE `name` = 'manageNewImages' AND `affiliationid` = (SELECT `id` FROM `affiliation` WHERE `name` = 'Local'))),
+((SELECT `id` FROM `user` WHERE `unityid` = 'admin' AND `affiliationid` = (SELECT `id` FROM `affiliation` WHERE `name` = 'Local')), (SELECT `id` FROM `usergroup` WHERE `name` = 'Specify End Time' AND `affiliationid` = (SELECT `id` FROM `affiliation` WHERE `name` = 'Local')));
 
 -- --------------------------------------------------------
 
@@ -955,6 +1068,16 @@ INSERT IGNORE INTO userprivtype (id, name) VALUES (9, 'serverProfileAdmin');
 INSERT IGNORE userpriv (usergroupid, privnodeid, userprivtypeid) SELECT usergroup.id, privnode.id, userprivtype.id FROM usergroup, privnode, userprivtype WHERE usergroup.name = 'adminUsers' AND usergroup.affiliationid = (SELECT id FROM affiliation WHERE name = 'Local') AND privnode.name = 'admin' AND privnode.parent = 3 AND userprivtype.name = 'serverCheckOut';
 INSERT IGNORE userpriv (usergroupid, privnodeid, userprivtypeid) SELECT usergroup.id, privnode.id, userprivtype.id FROM usergroup, privnode, userprivtype WHERE usergroup.name = 'adminUsers' AND usergroup.affiliationid = (SELECT id FROM affiliation WHERE name = 'Local') AND privnode.name = 'admin' AND privnode.parent = 3 AND userprivtype.name = 'serverProfileAdmin';
 
+
+-- --------------------------------------------------------
+
+-- 
+-- Inserts for table `vmprofile`
+--
+
+UPDATE vmprofile SET vmprofile.repositoryimagetypeid = (SELECT `id` FROM `imagetype` WHERE `name` = 'none') WHERE vmprofile.repositoryimagetypeid = 0;
+UPDATE vmprofile SET vmprofile.datastoreimagetypeid = (SELECT `id` FROM `imagetype` WHERE `name` = 'none') WHERE vmprofile.datastoreimagetypeid = 0;
+
 -- --------------------------------------------------------
 
 --
@@ -973,6 +1096,14 @@ CALL AddConstraintIfNotExists('connectmethodmap', 'connectmethodid', 'connectmet
 CALL AddConstraintIfNotExists('connectmethodmap', 'OStypeid', 'OStype', 'id', 'both', 'CASCADE');
 CALL AddConstraintIfNotExists('connectmethodmap', 'OSid', 'OS', 'id', 'both', 'CASCADE');
 CALL AddConstraintIfNotExists('connectmethodmap', 'imagerevisionid', 'imagerevision', 'id', 'both', 'CASCADE');
+
+-- --------------------------------------------------------
+
+--
+-- Constraints for table `image`
+--
+
+CALL AddConstraintIfNotExists('image', 'imagetypeid', 'imagetype', 'id', 'update', 'CASCADE');
 
 -- --------------------------------------------------------
 
@@ -1016,11 +1147,29 @@ CALL AddConstraintIfNotExists('serverrequest', 'logingroupid', 'usergroup', 'id'
 -- --------------------------------------------------------
 
 --
+-- Constraints for table `usergrouppriv`
+--
+
+CALL AddConstraintIfNotExists('usergrouppriv', 'usergroupid', 'usergroup', 'id', 'both', 'CASCADE');
+CALL AddConstraintIfNotExists('usergrouppriv', 'userprivtypeid', 'usergroupprivtype', 'id', 'both', 'CASCADE');
+
+-- --------------------------------------------------------
+
+--
 -- Constraints for table `vmhost`
 --
  
 CALL AddConstraintIfNotExists('vmhost', 'vmprofileid', 'vmprofile', 'id', 'update', 'CASCADE');
 CALL AddConstraintIfNotExists('vmhost', 'computerid', 'computer', 'id', 'update', 'CASCADE');
+
+-- --------------------------------------------------------
+
+--
+-- Constraints for table `vmprofile`
+--
+
+CALL AddConstraintIfNotExists('vmprofile', 'repositoryimagetypeid', 'imagetype', 'id', 'update', 'CASCADE');
+CALL AddConstraintIfNotExists('vmprofile', 'datastoreimagetypeid', 'imagetype', 'id', 'update', 'CASCADE');
 
 -- --------------------------------------------------------
 
@@ -1058,3 +1207,6 @@ DROP PROCEDURE IF EXISTS `AddIndexIfNotExists`;
 DROP PROCEDURE IF EXISTS `AddUniqueIndex`;
 DROP PROCEDURE IF EXISTS `AddConstraintIfNotExists`;
 DROP PROCEDURE IF EXISTS `AddConnectMethodMapIfNotExists`;
+DROP PROCEDURE IF EXISTS `AddOrRenameColumn`;
+DROP PROCEDURE IF EXISTS `DropExistingConstraints`;
+DROP PROCEDURE IF EXISTS `DropExistingIndices`;

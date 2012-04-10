@@ -196,9 +196,9 @@ CREATE TABLE IF NOT EXISTS `computer` (
   `ownerid` mediumint(8) unsigned default '1',
   `platformid` tinyint(3) unsigned NOT NULL default '0',
   `scheduleid` tinyint(3) unsigned default NULL,
-  `currentimageid` smallint(5) unsigned NOT NULL default '4',
-  `nextimageid` smallint(5) unsigned NOT NULL default '4',
-  `imagerevisionid` mediumint(8) unsigned NOT NULL default '4',
+  `currentimageid` smallint(5) unsigned NOT NULL default '1',
+  `nextimageid` smallint(5) unsigned NOT NULL default '1',
+  `imagerevisionid` mediumint(8) unsigned NOT NULL default '1',
   `RAM` mediumint(8) unsigned NOT NULL default '0',
   `procnumber` tinyint(5) unsigned NOT NULL default '1',
   `procspeed` smallint(5) unsigned NOT NULL default '0',
@@ -374,6 +374,7 @@ CREATE TABLE IF NOT EXISTS `image` (
   `name` varchar(70) NOT NULL default '',
   `prettyname` varchar(60) NOT NULL default '',
   `ownerid` mediumint(8) unsigned default '1',
+  `imagetypeid` smallint(5) unsigned NOT NULL default '1',
   `platformid` tinyint(3) unsigned NOT NULL default '0',
   `OSid` tinyint(3) unsigned NOT NULL default '0',
   `imagemetaid` smallint(5) unsigned default NULL,
@@ -400,7 +401,8 @@ CREATE TABLE IF NOT EXISTS `image` (
   KEY `ownerid` (`ownerid`),
   KEY `platformid` (`platformid`),
   KEY `OSid` (`OSid`),
-  KEY `imagemetaid` (`imagemetaid`)
+  KEY `imagemetaid` (`imagemetaid`),
+  KEY `imagetypeid` (`imagetypeid`)
 ) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
@@ -444,6 +446,19 @@ CREATE TABLE IF NOT EXISTS `imagerevision` (
   UNIQUE KEY `production` (`production`,`imagename`),
   UNIQUE KEY `imageid` (`imageid`,`revision`),
   KEY `userid` (`userid`)
+) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `imagetype`
+--
+
+CREATE TABLE IF NOT EXISTS `imagetype` (
+  `id` smallint(5) unsigned NOT NULL auto_increment,
+  `name` varchar(16) NOT NULL,
+  PRIMARY KEY  (`id`),
+  UNIQUE KEY `name` (`name`)
 ) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
@@ -757,7 +772,9 @@ CREATE TABLE IF NOT EXISTS `reservation` (
 CREATE TABLE IF NOT EXISTS `reservationaccounts` (
   `reservationid` mediumint(8) unsigned NOT NULL,
   `userid` mediumint(8) unsigned NOT NULL,
-  `password` varchar(50) default NULL
+  `password` varchar(50) default NULL,
+  UNIQUE KEY `reservationid` (`reservationid`,`userid`),
+  KEY `userid` (`userid`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
@@ -983,15 +1000,15 @@ CREATE TABLE IF NOT EXISTS `state` (
 --
 
 CREATE TABLE `statgraphcache` (
-	  `graphtype` enum('totalres','concurres','concurblade','concurvm') NOT NULL,
-	  `statdate` date NOT NULL,
-	  `affiliationid` mediumint(8) unsigned NOT NULL,
-	  `value` mediumint(8) unsigned NOT NULL,
-	  `provisioningid` smallint(5) unsigned NOT NULL,
-	  KEY `graphtype` (`graphtype`),
-	  KEY `statdate` (`statdate`),
-	  KEY `affiliationid` (`affiliationid`),
-	  KEY `provisioningid` (`provisioningid`)
+  `graphtype` enum('totalres','concurres','concurblade','concurvm') NOT NULL,
+  `statdate` date NOT NULL,
+  `affiliationid` mediumint(8) unsigned NOT NULL,
+  `value` mediumint(8) unsigned NOT NULL,
+  `provisioningid` smallint(5) unsigned NOT NULL,
+  KEY `graphtype` (`graphtype`),
+  KEY `statdate` (`statdate`),
+  KEY `affiliationid` (`affiliationid`),
+  KEY `provisioningid` (`provisioningid`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
@@ -1112,7 +1129,8 @@ CREATE TABLE IF NOT EXISTS `usergroupmembers` (
 CREATE TABLE IF NOT EXISTS `usergrouppriv` (
   `usergroupid` smallint(5) unsigned NOT NULL,
   `userprivtypeid` tinyint(3) unsigned NOT NULL,
-  UNIQUE KEY `usergroupid` (`usergroupid`,`userprivtypeid`)
+  UNIQUE KEY `usergroupid` (`usergroupid`,`userprivtypeid`),
+  KEY `userprivtypeid` (`userprivtypeid`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
@@ -1207,7 +1225,9 @@ CREATE TABLE IF NOT EXISTS `vmprofile` (
   `imageid` smallint(5) unsigned NOT NULL,
   `resourcepath` varchar(256) default NULL,
   `repositorypath` varchar(128) default NULL,
+  `repositoryimagetypeid` smallint(5) unsigned NOT NULL default '1',
   `datastorepath` varchar(128) NOT NULL,
+  `datastoreimagetypeid` smallint(5) unsigned NOT NULL default '1',
   `vmpath` varchar(128) default NULL,
   `virtualswitch0` varchar(80) NOT NULL default 'VMnet0',
   `virtualswitch1` varchar(80) NOT NULL default 'VMnet2',
@@ -1216,11 +1236,13 @@ CREATE TABLE IF NOT EXISTS `vmprofile` (
   `vmdisk` enum('localdisk','networkdisk') NOT NULL default 'localdisk',
   `username` varchar(80) NULL default NULL,
   `password` varchar(256) NULL default NULL,
-  `vmware_mac_eth0_generated` tinyint(1) NOT NULL default '0',
-  `vmware_mac_eth1_generated` tinyint(1) NOT NULL default '0',
+  `eth0generated` tinyint(1) unsigned NOT NULL default '0',
+  `eth1generated` tinyint(1) unsigned NOT NULL default '0',
   PRIMARY KEY  (`id`),
   UNIQUE KEY `profilename` (`profilename`),
-  KEY `imageid` (`imageid`)
+  KEY `imageid` (`imageid`),
+  KEY `repositoryimagetypeid` (`repositoryimagetypeid`),
+  KEY `datastoreimagetypeid` (`datastoreimagetypeid`)
 ) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
@@ -1294,8 +1316,8 @@ INSERT INTO `adminlevel` (`id`, `name`) VALUES
 -- 
 
 INSERT INTO `affiliation` (`id`, `name`, `dataUpdateText`, `theme`) VALUES 
-(1, 'Local', ''),
-(2, 'Global', '');
+(1, 'Local', '', 'default'),
+(2, 'Global', '', 'default');
 
 -- 
 -- Dumping data for table `computerloadflow`
@@ -1413,15 +1435,29 @@ INSERT INTO `documentation` (`name`, `title`, `data`) VALUES
 -- Dumping data for table `image`
 -- 
 
-INSERT INTO `image` (`id`, `name`, `prettyname`, `ownerid`, `platformid`, `OSid`, `imagemetaid`, `minram`, `minprocnumber`, `minprocspeed`, `minnetwork`, `maxconcurrent`, `reloadtime`, `deleted`, `test`, `lastupdate`, `forcheckout`, `maxinitialtime`, `project`, `size`) VALUES 
-(4, 'noimage', 'No Image', 1, 1, 2, NULL, 0, 1, 0, 10, NULL, 0, 0, 0, NULL, 0, 0, 'vcl', 1450);
+INSERT INTO `image` (`id`, `name`, `prettyname`, `ownerid`, `imagetypeid`, `platformid`, `OSid`, `imagemetaid`, `minram`, `minprocnumber`, `minprocspeed`, `minnetwork`, `maxconcurrent`, `reloadtime`, `deleted`, `test`, `lastupdate`, `forcheckout`, `maxinitialtime`, `project`, `size`) VALUES 
+(1, 'noimage', 'No Image', 1, 1, 1, 2, NULL, 0, 1, 0, 10, NULL, 0, 0, 0, NULL, 0, 0, 'vcl', 1450);
 
 -- 
 -- Dumping data for table `imagerevision`
 -- 
 
 INSERT INTO `imagerevision` (`id`, `imageid`, `revision`, `userid`, `datecreated`, `deleted`, `production`, `comments`, `imagename`) VALUES 
-(4, 4, 0, 1, '1980-01-01 00:00:00', 0, 1, NULL, 'noimage');
+(1, 1, 0, 1, '1980-01-01 00:00:00', 0, 1, NULL, 'noimage');
+
+--
+-- Dumping data for table `imagetype`
+--
+
+INSERT INTO `imagetype` (`id`, `name`) VALUES
+(1, 'none'),
+(2, 'partimage'),
+(3, 'partimage-ng'),
+(4, 'lab'),
+(5, 'kickstart'),
+(6, 'vmdk'),
+(7, 'qcow2'),
+(8, 'vdi');
 
 -- 
 -- Dumping data for table `IMtype`
@@ -1510,10 +1546,10 @@ INSERT INTO `OS` (`id`, `name`, `prettyname`, `type`, `installtype`, `sourcepath
 (37, 'vmwarewin2003', 'Windows 2003 Server (VMware)', 'windows', 'vmware', 'vmware_images', 13),
 (38, 'esxi4.1', 'VMware ESXi 4.1', 'linux', 'kickstart', 'esxi4.1', 25),
 (39, 'vmwareosx', 'OSX Snow Leopard (VMware)', 'osx', 'vmware', 'vmware_images', 26),
-(40, 'rhel6', 'Red Hat Enterprise Lev 6', 'linux', 'kickstart', 'rhel6', 5),
-(41, 'rh6image', 'Red Hat Enterprise 6 image', 'linux', 'partimage', 'image', 5),
-(42, 'fedora16', 'Fedora 16 kickstart', 'linux', 'kickstart', 'fedora16', 5),
-(43, 'fedoraimage', 'Fedora 16 image', 'linux', 'partimage', 'image', 5);
+(40, 'rhel6', 'Red Hat Enterprise 6 (Kickstart)', 'linux', 'kickstart', 'rhel6', 5),
+(41, 'rh6image', 'Red Hat Enterprise 6 (Bare Metal)', 'linux', 'partimage', 'image', 5),
+(42, 'fedora16', 'Fedora 16 (Kickstart)', 'linux', 'kickstart', 'fedora16', 5),
+(43, 'fedoraimage', 'Fedora 16 (Bare Metal)', 'linux', 'partimage', 'image', 5);
 
 -- 
 -- Dumping data for table `OSinstalltype`
@@ -1826,13 +1862,12 @@ INSERT INTO `variable` (`id`, `name`, `serialization`, `value`) VALUES
 -- Dumping data for table `vmprofile`
 -- 
 
-INSERT INTO `vmprofile` (`id`, `profilename`, `imageid`, `resourcepath`, `repositorypath`, `datastorepath`, `vmpath`, `virtualswitch0`, `virtualswitch1`, `vmdisk`) VALUES
-(1, 'VMware Server 1.x - local storage', 4, NULL, NULL, '/var/lib/vmware/Virtual Machines', NULL, 'VMnet0', 'VMnet2', 'localdisk'),
-(2, 'VMware Server 2.x - local storage', 4, NULL, NULL, '/var/lib/vmware/Virtual Machines', NULL, 'Bridged', 'Bridged (2)', 'localdisk'),
-(3, 'VMware Server 2.x - network storage', 4, NULL, NULL, '/vmfs/volumes/nfs-datastore', '/var/lib/vmware/Virtual Machines', 'Bridged', 'Bridged (2)', 'networkdisk'),
-(4, 'VMware ESX - local storage', 4, NULL, NULL, '/vmfs/volumes/local-datastore', NULL, 'Private', 'Public', 'localdisk'),
-(5, 'VMware ESX - network storage', 4, NULL, NULL, '/vmfs/volumes/nfs-datastore', NULL, 'Private', 'Public', 'networkdisk'),
-(6, 'VMware ESX - local & network storage', 4, NULL, NULL, '/vmfs/volumes/nfs-datastore1', '/vmfs/volumes/local-datastore', 'Private', 'Public', 'networkdisk');
+INSERT INTO `vmprofile` (`profilename`, `imageid`, `resourcepath`, `repositorypath`, `repositoryimagetypeid`, `datastorepath`, `datastoreimagetypeid`, `vmpath`, `virtualswitch0`, `virtualswitch1`, `vmdisk`, `username`, `password`) VALUES
+('VMware ESXi - local storage', (SELECT `id` FROM `image` WHERE `name` = 'noimage'), NULL, NULL, (SELECT `id` FROM `imagetype` WHERE `name` = 'none'), 'datastore1', (SELECT `id` FROM `imagetype` WHERE `name` = 'vmdk'), 'datastore1', 'Private', 'Public', 'localdisk', NULL, NULL),
+('VMware ESXi - network storage', (SELECT `id` FROM `image` WHERE `name` = 'noimage'), NULL, NULL, (SELECT `id` FROM `imagetype` WHERE `name` = 'none'), 'nfs-datastore', (SELECT `id` FROM `imagetype` WHERE `name` = 'vmdk'), 'nfs-datastore', 'Private', 'Public', 'networkdisk', NULL, NULL),
+('VMware ESXi - local & network storage', (SELECT `id` FROM `image` WHERE `name` = 'noimage'), NULL, NULL, (SELECT `id` FROM `imagetype` WHERE `name` = 'none'), 'nfs-datastore', (SELECT `id` FROM `imagetype` WHERE `name` = 'vmdk'), 'datastore1', 'Private', 'Public', 'networkdisk', NULL, NULL),
+('VMware vCenter', (SELECT `id` FROM `image` WHERE `name` = 'noimage'), '/DatacenterName/ClusterName/ResourcePoolName', 'repo-datastore', (SELECT `id` FROM `imagetype` WHERE `name` = 'vmdk'), 'nfs-datastore', (SELECT `id` FROM `imagetype` WHERE `name` = 'vmdk'), 'datastore1', 'Private', 'Public', 'networkdisk', 'vcenter-admin', 'vcenter-password'),
+('KVM - local storage', (SELECT `id` FROM `image` WHERE `name` = 'noimage'), NULL, NULL, (SELECT `id` FROM `imagetype` WHERE `name` = 'qcow2'), '/var/lib/libvirt/images', (SELECT `id` FROM `imagetype` WHERE `name` = 'qcow2'), '/var/lib/libvirt/images', 'br0', 'br1', 'localdisk', NULL, NULL);
 
 -- 
 -- Dumping data for table `vmtype`
@@ -1923,7 +1958,8 @@ ALTER TABLE `continuations`
 ALTER TABLE `image`
   ADD CONSTRAINT `image_ibfk_1` FOREIGN KEY (`ownerid`) REFERENCES `user` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
   ADD CONSTRAINT `image_ibfk_6` FOREIGN KEY (`platformid`) REFERENCES `platform` (`id`) ON UPDATE CASCADE,
-  ADD CONSTRAINT `image_ibfk_7` FOREIGN KEY (`OSid`) REFERENCES `OS` (`id`) ON UPDATE CASCADE;
+  ADD CONSTRAINT `image_ibfk_7` FOREIGN KEY (`OSid`) REFERENCES `OS` (`id`) ON UPDATE CASCADE,
+  ADD CONSTRAINT `image_ibfk_8` FOREIGN KEY (`imagetypeid`) REFERENCES `imagetype` (`id`) ON UPDATE CASCADE;
 
 -- 
 -- Constraints for table `imagerevision`
@@ -2088,6 +2124,13 @@ ALTER TABLE `usergroupmembers`
   ADD CONSTRAINT `usergroupmembers_ibfk_1` FOREIGN KEY (`userid`) REFERENCES `user` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
   ADD CONSTRAINT `usergroupmembers_ibfk_2` FOREIGN KEY (`usergroupid`) REFERENCES `usergroup` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
+--
+-- Constraints for table `usergrouppriv`
+--
+ALTER TABLE `usergrouppriv`
+  ADD CONSTRAINT `usergrouppriv_ibfk_2` FOREIGN KEY (`userprivtypeid`) REFERENCES `usergroupprivtype` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  ADD CONSTRAINT `usergrouppriv_ibfk_1` FOREIGN KEY (`usergroupid`) REFERENCES `usergroup` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
 -- 
 -- Constraints for table `userpriv`
 -- 
@@ -2108,7 +2151,9 @@ ALTER TABLE `vmhost`
 -- Constraints for table `vmprofile`
 --
 ALTER TABLE `vmprofile`
-  ADD CONSTRAINT `vmprofile_ibfk_1` FOREIGN KEY (`imageid`) REFERENCES `image` (`id`) ON UPDATE CASCADE;
+  ADD CONSTRAINT `vmprofile_ibfk_1` FOREIGN KEY (`imageid`) REFERENCES `image` (`id`) ON UPDATE CASCADE,
+  ADD CONSTRAINT `vmprofile_ibfk_3` FOREIGN KEY (`repositoryimagetypeid`) REFERENCES `imagetype` (`id`) ON UPDATE CASCADE,
+  ADD CONSTRAINT `vmprofile_ibfk_4` FOREIGN KEY (`datastoreimagetypeid`) REFERENCES `imagetype` (`id`) ON UPDATE CASCADE;
 
 --
 -- Constraints for table `winKMS`
