@@ -142,50 +142,6 @@ sub get_disk_driver_name {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 get_disk_format
-
- Parameters  : none
- Returns     : string
- Description : Returns 'qcow2'. The disk format is specified in the domain XML
-               definition:
-                  <domain ...>
-                     <devices>
-                        <disk ...>
-                           <driver type='qcow2' ...>
-
-=cut
-
-sub get_disk_format {
-	my $self = shift;
-	unless (ref($self) && $self->isa('VCL::Module')) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-	return 'qcow2';
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 get_disk_file_extension
-
- Parameters  : none
- Returns     : string
- Description : Returns 'qcow2'. This is used by libvirt.pm as the file extension
-               of the virtual disk file paths.
-
-=cut
-
-sub get_disk_file_extension {
-	my $self = shift;
-	unless (ref($self) && $self->isa('VCL::Module')) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-	return 'qcow2';
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
 =head2 pre_define
 
  Parameters  : none
@@ -206,9 +162,11 @@ sub pre_define {
 	}
 	
 	my $image_name = $self->data->get_image_name();
+	my $image_os_type = $self->data->get_image_os_type();
 	my $node_name = $self->data->get_vmhost_short_name();
 	my $copy_on_write_file_path = $self->get_copy_on_write_file_path();
 	my $master_image_file_path = $self->get_master_image_file_path();
+	my $datastore_image_type = $self->data->get_vmhost_datastore_imagetype_name();
 
 	if ($self->vmhost_os->file_exists($master_image_file_path)) {
 		notify($ERRORS{'DEBUG'}, 0, "master image file exists in the datastore on $node_name: $master_image_file_path");
@@ -220,12 +178,21 @@ sub pre_define {
 		# Attempt to determine which files are actual virtual disk files
 		my @repository_image_file_paths = $self->find_repository_image_file_paths();
 		if (@repository_image_file_paths) {
-			# Attempt to copy the virtual disk from the repository to the datastore
-			if ($self->copy_virtual_disk(\@repository_image_file_paths, $master_image_file_path)) {
-				notify($ERRORS{'DEBUG'}, 0, "copied master image from repository to datastore");
+			# Get a semaphore so that no other process can access this master image until the copy is complete
+			# Don't need a repository image semaphore - impossible that another process is copying it to the repository
+			# find_repository_image_file_paths must have successfully obtained one
+			if (my $semaphore = $self->get_master_image_semaphore()) {
+				# Attempt to copy the virtual disk from the repository to the datastore
+				if ($self->copy_virtual_disk(\@repository_image_file_paths, $master_image_file_path, $datastore_image_type)) {
+					notify($ERRORS{'DEBUG'}, 0, "copied master image from repository to datastore");
+				}
+				else {
+					notify($ERRORS{'WARNING'}, 0, "failed to copy master image from repository:\n" . join("\n", @repository_image_file_paths) . " --> $master_image_file_path");
+					return;
+				}
 			}
 			else {
-				notify($ERRORS{'WARNING'}, 0, "unable to prepare virtual disk, failed to copy master image from repository to datastore");
+				notify($ERRORS{'WARNING'}, 0, "unable to prepare virtual disk, failed to obtain repository image semaphore before creating master image from repository image:\n" . join("\n", @repository_image_file_paths) . " --> $master_image_file_path");
 				return;
 			}
 		}
@@ -233,11 +200,30 @@ sub pre_define {
 			notify($ERRORS{'WARNING'}, 0, "unable to prepare virtual disk, failed to locate virtual disk file in the repository");
 			return;
 		}
+		
+		# Update the registry if this is a Windows image
+		# This allows VMware images to run on KVM using an IDE disk
+		if ($image_os_type =~ /windows/i && !$self->update_windows_image($master_image_file_path)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to make Windows-specific changes to $master_image_file_path after it was copied/converted");
+			return;
+		}
 	}
 	
-	if (!$self->create_copy_on_write_image($master_image_file_path, $copy_on_write_file_path)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to prepare virtual disk, unable to create copy on write image");
-		return;
+	
+	if ($datastore_image_type =~ /^qcow2?$/) {
+		# Create a copy on write image which will be used by the VM being loaded
+		# This effectively makes the master image read only, all changes are written to the copy on write image
+		if (!$self->create_copy_on_write_image($master_image_file_path, $copy_on_write_file_path)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to prepare virtual disk, unable to create copy on write image");
+			return;
+		}
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "copy on write virtual disk is not supported for the datastore image type: $datastore_image_type, creating full copy of master image file");
+		if (!$self->copy_virtual_disk($master_image_file_path, $copy_on_write_file_path, $datastore_image_type)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to prepare virtual disk, unable to create $datastore_image_type copy of master image: $master_image_file_path --> $copy_on_write_file_path");
+			return;
+		}
 	}
 	
 	return 1;
@@ -306,7 +292,7 @@ sub get_virtual_disk_file_info {
 		return;
 	}
 	else {
-		notify($ERRORS{'DEBUG'}, 0, "retrieved image info, output:\n" . join("\n", @$output));
+		#notify($ERRORS{'DEBUG'}, 0, "retrieved image info, output:\n" . join("\n", @$output));
 		
 		my $virtual_disk_file_info;
 		for my $line (@$output) {
@@ -391,7 +377,7 @@ sub get_virtual_disk_file_info {
 			}
 		}
 		
-		notify($ERRORS{'DEBUG'}, 0, "retrieved virtual disk file info:\n" . format_data($virtual_disk_file_info));
+		#notify($ERRORS{'DEBUG'}, 0, "retrieved virtual disk file info:\n" . format_data($virtual_disk_file_info));
 		$self->{virtual_disk_file_info}{$virtual_disk_file_path} = $virtual_disk_file_info;
 		return $virtual_disk_file_info;
 	}
@@ -401,7 +387,7 @@ sub get_virtual_disk_file_info {
 
 =head2  get_virtual_disk_size_bytes
 
- Parameters  : $image_name (optional)
+ Parameters  : @virtual_disk_file_paths
  Returns     : integer
  Description : Returns the size of the virtual disk in bytes.
 
@@ -414,70 +400,42 @@ sub get_virtual_disk_size_bytes {
 		return;
 	}
 	
-	# Attempt to get the image name argument
-	my $image_name = shift;
-	if (!$image_name) {
-		$image_name = $self->data->get_image_name() || return;
+	# Attempt to get the argument
+	my @virtual_disk_file_paths = @_;
+	if (!@virtual_disk_file_paths) {
+		notify($ERRORS{'WARNING'}, 0, "virtual disk file paths argument was not supplied");
+		return;
 	}
 	
 	my $node_name = $self->data->get_vmhost_short_name();
 	
-	# Check if the virtual disk image files reside in the repository
-	my @virtual_disk_file_paths;
-	
-	# Check if the virtual disk image resides in the datastore
-	my $master_image_file_path = $self->get_master_image_file_path();
-
-	# Check if the virtual disk exists on the VM host
-	if ($self->vmhost_os->file_exists($master_image_file_path)) {
-		@virtual_disk_file_paths = ($master_image_file_path);
-	}
-	else {
-		@virtual_disk_file_paths = $self->find_repository_image_file_paths();
-		
-		if (!@virtual_disk_file_paths) {
-			notify($ERRORS{'WARNING'}, 0, "virtual disk for image $image_name does not exist in repository or datastore on $node_name");
-			return;
-		}
-	}
-	
-	my $total_used_bytes;
-	my $total_reserved_bytes;
-	my $total_virtual_bytes;
-	
+	my $virtual_disk_size_bytes = 0;
 	for my $virtual_disk_file_path (@virtual_disk_file_paths) {
-		# Get the bytes used from the VM host OS's 'du' command
-		my ($used_bytes, $reserved_bytes) = $self->vmhost_os->get_file_size($virtual_disk_file_path);
-		$total_used_bytes += $used_bytes;
-		$total_reserved_bytes += $reserved_bytes;
-		
 		# Attempt to retrieve the virtual disk file info
-		# get_virtual_disk_file_info will return false if it is unable to retrieve info for the file
 		my $virtual_disk_file_info = $self->get_virtual_disk_file_info($virtual_disk_file_path);
-		
-		if ($virtual_disk_file_info) {
-			my $virtual_bytes = $virtual_disk_file_info->{virtual_size_bytes};
-			$total_virtual_bytes += $virtual_bytes;
-		}
-		else {
+		if (!$virtual_disk_file_info) {
 			notify($ERRORS{'WARNING'}, 0, "unable to determine virtual disk size, information could not be retrieved for virtual disk file: $virtual_disk_file_path");
 			return;
 		}
+		
+		$virtual_disk_size_bytes += $virtual_disk_file_info->{disk_size_bytes};
+		
+		# Check if virtual disk has a backing file, size of both must be added
+		if ($virtual_disk_file_info->{backing_file_actual_path}) {
+			notify($ERRORS{'DEBUG'}, 0, "attempting to retrieve size of virtual disk backing file: $virtual_disk_file_info->{backing_file_actual_path}");		
+			my $backing_file_size_bytes = $self->get_virtual_disk_size_bytes($virtual_disk_file_info->{backing_file_actual_path});
+			if (!$backing_file_size_bytes) {
+				notify($ERRORS{'WARNING'}, 0, "unable to determine size of virtual disk: $virtual_disk_file_path, failed to determine size of backing file: $virtual_disk_file_info->{backing_file_actual_path}");
+				return;
+			}
+			
+			# Note: added total size is not accurate, it is larger than the actual size
+			$virtual_disk_size_bytes += $backing_file_size_bytes;
+		}
 	}
 	
-	notify($ERRORS{'DEBUG'}, 0, "size of $image_name image:\n" .
-			 "used: " . get_file_size_info_string($total_used_bytes) . "\n" .
-			 "reserved: " . get_file_size_info_string($total_reserved_bytes) . "\n" .
-			 "virtual: " . get_file_size_info_string($total_virtual_bytes)
-			 );
-	
-	if (wantarray) {
-		return ($total_used_bytes, $total_reserved_bytes, $total_virtual_bytes);
-	}
-	else {
-		return $total_reserved_bytes;
-	}
-	
+	notify($ERRORS{'DEBUG'}, 0, "retrieved size of virtual disk:\n" . join("\n", @virtual_disk_file_paths) . "\n" . get_file_size_info_string($virtual_disk_size_bytes));
+	return $virtual_disk_size_bytes;
 } ## end sub get_virtual_disk_size_bytes
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -499,51 +457,72 @@ sub copy_virtual_disk {
 		return;
 	}
 	
-	my ($source_file_paths, $destination_file_path, $disk_format) = @_;
-	
-	if (!$source_file_paths || !$destination_file_path) {
+	my $source_file_path_argument = shift;
+	my $destination_file_path = shift;
+	if (!$source_file_path_argument || !$destination_file_path) {
 		notify($ERRORS{'WARNING'}, 0, "unable to copy virtual disk, source and destination file path arguments were not passed");
 		return;
 	}
-	elsif (ref($source_file_paths)) {
-		if (ref($source_file_paths) ne 'ARRAY') {
-			notify($ERRORS{'WARNING'}, 0, "unable to copy virtual disk, source file path argument was passed as a reference by reference type is not ARRAY");
-			return;
-		}
-		else {
-			# Join the array of file paths into a string
-			$source_file_paths = join('" "', @$source_file_paths);
-		}
+	
+	my @source_file_paths;
+	if (!ref($source_file_path_argument)) {
+		push @source_file_paths, $source_file_path_argument;
+	}
+	elsif (ref($source_file_path_argument) eq 'ARRAY') {
+		@source_file_paths = @$source_file_path_argument;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unable to copy virtual disk, source file path argument was passed as a reference and type is not ARRAY");
+		return;
 	}
 	
-	if (!$disk_format) {
-		$disk_format = $self->get_disk_format();
-	}
+	# Get the disk format argument
+	my $disk_format = shift || $self->data->get_vmhost_datastore_imagetype_name();
 	
 	my $node_name = $self->data->get_vmhost_short_name();
-	my $image_os_type = $self->data->get_image_os_type();
 	
-	my $source_size_bytes = $self->get_image_size_bytes() || 0;
+	# Get the size of all of the source files
+	my $source_size_bytes = $self->get_virtual_disk_size_bytes(@source_file_paths) || 0;
 	
-	# Get a semaphore so that multiple processes don't try to copy the image at the same time
-	my $semaphore_id = "$node_name:$destination_file_path";
-	my $semaphore_timeout_minutes = 60;
-	my $semaphore = $self->get_semaphore($semaphore_id, (60 * $semaphore_timeout_minutes), 5) || return;
+	# Join the array of file paths into a string
+	my $source_file_paths_string = join('" "', @source_file_paths);
+	
+	# Make sure the destination file extension matches the disk format
+	my ($destination_file_name, $destination_directory_path, $destination_file_extension) = fileparse($destination_file_path, qr/\.[^.]*/);
+	if (!$destination_file_extension) {
+		notify($ERRORS{'WARNING'}, 0, "unable to copy virtual disk, file extension could not be determined from destination file path: $destination_file_path");
+		return;
+	}
+	elsif ($destination_file_extension !~ /^\.?$disk_format$/i) {
+		notify($ERRORS{'WARNING'}, 0, "unable to copy virtual disk, extension of destination file '$destination_file_extension' is not '$disk_format': $destination_file_path");
+		return;
+	}
+	
+	# Attempt to create the parent directory
+	if (!$self->vmhost_os->create_directory($destination_directory_path)) {
+		notify($ERRORS{'WARNING'}, 0, "unable to copy virtual disk, failed to create destination parent directory: $destination_directory_path");
+		return;
+	}
 	
 	my $start_time = time;
-	my $command = "qemu-img convert -O $disk_format -o preallocation=metadata \"$source_file_paths\" \"$destination_file_path\"";
-	notify($ERRORS{'DEBUG'}, 0, "attempting to copy/convert virtual disk:\nsource file path(s):\n" . join("\n", split(/" "/, $source_file_paths)) . "\ndestination file path: $destination_file_path\ndestination disk format: $disk_format\nsource image size: " . get_file_size_info_string($source_size_bytes));
+	#my $command = "qemu-img convert -O $disk_format -o preallocation=metadata \"$source_file_paths_string\" \"$destination_file_path\"";
+	my $command = "qemu-img convert -O $disk_format \"$source_file_paths_string\" \"$destination_file_path\"";
+	
+	my $source_file_count = scalar(@source_file_paths);
+	my $copy_info_string = "source file paths ($source_file_count):\n" . get_array_summary_string(@source_file_paths) . "\n";
+	$copy_info_string .= "source size: " . get_file_size_info_string($source_size_bytes) . "\n";
+	$copy_info_string .= "destination file path: $destination_file_path\n";
+	$copy_info_string .= "destination format: $disk_format\n";
+	
+	notify($ERRORS{'DEBUG'}, 0, "attempting to copy/convert virtual disk on $node_name:\n$copy_info_string");
 	my ($exit_status, $output) = $self->vmhost_os->execute($command, 0, 1800);
 	if (!defined($exit_status)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute command to convert image $node_name: '$command'");
 		return;
 	}
 	elsif ($exit_status) {
-		notify($ERRORS{'WARNING'}, 0, "unable to copy/convert virtual disk on $node_name\ncommand: '$command'\noutput:\n" . join("\n", @$output));
+		notify($ERRORS{'WARNING'}, 0, "failed to copy/convert virtual disk on $node_name\ncommand: '$command'\noutput:\n" . join("\n", @$output));
 		return;
-	}
-	else {
-		notify($ERRORS{'DEBUG'}, 0, "copied/converted virtual disk on $node_name, command: '$command', output:\n" . join("\n", @$output));
 	}
 	
 	# Calculate how long it took to copy
@@ -558,18 +537,13 @@ sub copy_virtual_disk {
 		$seconds = "0$seconds";
 	}
 	
-	my $image_size_bytes = $self->vmhost_os->get_file_size($destination_file_path);
+	my $destination_size_bytes = $self->get_virtual_disk_size_bytes($destination_file_path) || 0;
+	$copy_info_string .= "destination size: " . get_file_size_info_string($destination_size_bytes) . "\n" .
 	
 	# Get a string which displays various copy rate information
-	my $copy_speed_info_string = get_copy_speed_info_string($image_size_bytes, $duration_seconds);
-	notify($ERRORS{'OK'}, 0, "copied image on $node_name: $destination_file_path'\n$copy_speed_info_string");
+	$copy_info_string .= get_copy_speed_info_string($destination_size_bytes, $duration_seconds);
 	
-	# Update the registry if this is a Windows image
-	if ($image_os_type =~ /windows/i && !$self->update_windows_image($destination_file_path)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to make Windows-specific changes to $destination_file_path after it was copied/converted");
-		return;
-	}
-	
+	notify($ERRORS{'OK'}, 0, "copied virtual disk on $node_name:\n$copy_info_string");
 	return 1;
 }
 
@@ -604,7 +578,7 @@ sub create_copy_on_write_image {
 	my $node_name = $self->data->get_vmhost_short_name();
 	
 	if (!$disk_format) {
-		$disk_format = $self->get_disk_format();
+		$disk_format = $self->data->get_vmhost_datastore_imagetype_name();
 	}
 	
 	notify($ERRORS{'DEBUG'}, 0, "creating copy on write image on $node_name\nmaster disk image: $master_image_file_path\ncopy on write image: $copy_on_write_file_path\nformat: $disk_format");
@@ -873,6 +847,80 @@ EOF
 	$self->vmhost_os->delete_file($temp_reg_file_path);
 	
 	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 query_windows_image_registry
+
+ Parameters  : $virtual_disk_file_path
+ Returns     : boolean
+ Description : 
+
+=cut
+
+sub query_windows_image_registry {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a VCL::Module module object method");
+		return;	
+	}
+	
+	my $virtual_disk_file_path = shift;
+	if (!$virtual_disk_file_path) {
+		notify($ERRORS{'WARNING'}, 0, "virtual disk file path argument was not supplied");
+		return;	
+	}
+	
+	my $registry_key = shift;
+	if (!$registry_key) {
+		notify($ERRORS{'WARNING'}, 0, "registry key argument was not supplied");
+		return;	
+	}
+	
+	my $node_name = $self->data->get_vmhost_short_name();
+	
+	# 
+	notify($ERRORS{'DEBUG'}, 0, "attempting to query registry key '$registry_key' in image '$virtual_disk_file_path'");
+	my $command = "virt-win-reg $virtual_disk_file_path \"$registry_key\"";
+	my ($exit_status, $output) = $self->vmhost_os->execute("virt-win-reg $virtual_disk_file_path \"$registry_key\"");
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to query registry key '$registry_key' in image '$virtual_disk_file_path'");
+		return;
+	}
+	elsif (grep(/command not found/i, @$output)) {
+		notify($ERRORS{'OK'}, 0, "unable to query registry key in $virtual_disk_file_path, virt-win-reg is not installed on $node_name");
+		return 1;
+	}
+	elsif ($exit_status ne '0') {
+		notify($ERRORS{'WARNING'}, 0, "failed to query registry key '$registry_key' in image '$virtual_disk_file_path', exit status: $exit_status\ncommand: $command\noutput:\n" . join("\n", @$output));
+		return;
+	}
+	
+	my $registry_data = {};
+	my $current_key;
+	LINE: for my $line (@$output) {
+		if ($line =~ /^\[(.+)\]$/) {
+			$current_key = $1;
+			next LINE;
+		}
+		elsif ($line =~ /^"([^"]+)"=([^:]+):(.*)$/) {
+			my $value = $1;
+			my $type = $2;
+			my $data = $3;
+			
+			my $converted_data = $self->os->reg_query_convert_data($type, $data);
+
+			$registry_data->{$current_key}{$value} = $converted_data;
+			next LINE;
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "unable to parse virt-win-reg registry query output line: '$line'");
+		}
+	}
+	
+	notify($ERRORS{'OK'}, 0, "queried registry key '$registry_key' in image '$virtual_disk_file_path':\n" . format_data($registry_data));
+	return $registry_data;
 }
 
 #/////////////////////////////////////////////////////////////////////////////

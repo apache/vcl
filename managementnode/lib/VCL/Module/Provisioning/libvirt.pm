@@ -56,7 +56,6 @@ use warnings;
 use diagnostics;
 use English qw( -no_match_vars );
 use File::Basename;
-use XML::Simple qw(:strict);
 
 use VCL::utils;
 
@@ -91,8 +90,7 @@ sub initialize {
 		return;
 	}
 	
-	my $node_name     = $self->data->get_vmhost_short_name();
-	my $vmhost_type     = $self->data->get_vmhost_type_name();
+	my $node_name = $self->data->get_vmhost_short_name();
 	my $vmhost_username = $self->data->get_vmhost_profile_username();
 	my $vmhost_password = $self->data->get_vmhost_profile_password();
 
@@ -305,41 +303,148 @@ sub capture {
 		return;
 	}
 	
-	return 1;
-} ## end sub capture
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 node_status
-
- Parameters  : $computer_id (optional)
- Returns     : string
- Description : Checks the status of the computer in order to determine if the
-               computer is ready to be reserved or needs to be reloaded. A
-               string is returned depending on the status of the computer:
-               'READY':
-                  * Computer is ready to be reserved
-                  * It is accessible
-                  * It is loaded with the correct image
-                  * OS module's post-load tasks have run
-               'POST_LOAD':
-                  * Computer is loaded with the correct image
-                  * OS module's post-load tasks have not run
-               'RELOAD':
-                  * Computer is not accessible or not loaded with the correct
-                    image
-
-=cut
-
-sub node_status {
-	my $self = shift;
-	unless (ref($self) && $self->isa('VCL::Module')) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+	my $image_id = $self->data->get_image_id();
+	my $imagerevision_id = $self->data->get_imagerevision_id();
+	my $image_name = $self->data->get_image_name();
+	my $image_type = $self->data->get_imagetype_name();
+	my $domain_name = $self->get_domain_name();
+	my $node_name = $self->data->get_vmhost_short_name();
+	my $old_image_name = $self->data->get_image_name();
+	my $master_image_directory_path = $self->get_master_image_directory_path();
+	my $master_image_file_path = $self->get_master_image_file_path();
+	my $datastore_image_type = $self->data->get_vmhost_datastore_imagetype_name();
+	my $repository_image_directory_path = $self->get_repository_image_directory_path();
+	my $repository_image_file_path = $self->get_repository_image_file_path();
+	my $repository_image_type = $self->data->get_vmhost_repository_imagetype_name();
+	
+	# Set the imagemeta Sysprep value to 0 to prevent Sysprep from being used
+	$self->data->set_imagemeta_sysprep(0);
+	
+	# Construct the new image name
+	my $new_image_name = $self->get_new_image_name();
+	$self->data->set_image_name($new_image_name);
+	
+	# Make sure the master image file doesn't already exist
+	if ($self->vmhost_os->file_exists($master_image_file_path)) {
+		notify($ERRORS{'WARNING'}, 0, "master image file already exists on $node_name: $master_image_file_path");
 		return;
 	}
 	
-	return 'RELOAD';
-} ## end sub node_status
+	# Make sure the repository image file doesn't already exist if the repository path is configured
+	if ($repository_image_file_path && $self->vmhost_os->file_exists($repository_image_file_path)) {
+		notify($ERRORS{'WARNING'}, 0, "repository image file already exists on $node_name: $repository_image_file_path");
+		return;
+	}
+	
+	# Call the OS module's pre_capture() subroutine
+	if ($self->os->can("pre_capture") && !$self->os->pre_capture({end_state => 'off'})) {
+		notify($ERRORS{'WARNING'}, 0, "failed to complete OS module's pre_capture tasks");
+		return;
+	}
+	
+	# Update the image name in the database
+	if ($image_name ne $new_image_name && !update_image_name($image_id, $imagerevision_id, $new_image_name)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to update image name in the database: $image_name --> $new_image_name");
+		return;
+	}
+	
+	# Update the image type in the database to the datastore image type
+	if ($image_type ne $datastore_image_type && !update_image_type($image_id, $datastore_image_type)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to update image type in the database: $image_type --> $datastore_image_type");
+		return;
+	}
+	
+	# Wait for the domain to power off
+	if (!$self->wait_for_power_off(600)) {
+		notify($ERRORS{'WARNING'}, 0, "$domain_name has not powered off after the OS module's pre_capture tasks were completed, powering off forcefully");
+		
+		if (!$self->power_off($domain_name)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to power off $domain_name after the OS module's pre_capture tasks were completed");
+			return;
+		}
+	}
+	
+	# Get the disk file paths from the domain definition
+	my @disk_file_paths = $self->get_domain_disk_file_paths($domain_name);
+	if (scalar @disk_file_paths == 0) {
+		notify($ERRORS{'WARNING'}, 0, "did not find any disks defined in the XML definition for $domain_name:\n" . format_data($domain_name));
+		return;
+	}
+	elsif (scalar @disk_file_paths > 1) {
+		notify($ERRORS{'WARNING'}, 0, "found multiple disks defined in the XML definition for $domain_name, only domains with a single disk may be captured:\n" . format_data(\@disk_file_paths));
+		return;
+	}
+	
+	# Copy the linked clone to create a new master image file
+	my $linked_clone_file_path = $disk_file_paths[0];
+	notify($ERRORS{'DEBUG'}, 0, "retrieved linked clone file path from domain $domain_name: $linked_clone_file_path");
+	if ($self->driver->can('copy_virtual_disk')) {
+		# Get a semaphore so that multiple processes don't try to copy/access the image at the same time
+		# Since this is a new image, should get semaphore on 1st try
+		if (my $semaphore = $self->get_master_image_semaphore()) {
+			if ($self->driver->copy_virtual_disk($linked_clone_file_path, $master_image_file_path, $datastore_image_type)) {
+				notify($ERRORS{'DEBUG'}, 0, "created master image from linked clone: $linked_clone_file_path --> $master_image_file_path");
+			}
+			else {
+				notify($ERRORS{'WARNING'}, 0, "failed to create master image from linked clone: $linked_clone_file_path --> $master_image_file_path");
+				return;
+			}
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to capture image on $node_name, unable to obtain semaphore before creating master image from linked clone: $linked_clone_file_path --> $master_image_file_path");
+			return;
+		}
+		
+		# Get the domain XML definition
+		my $domain_xml = $self->get_domain_xml($domain_name);
+		if (!$domain_xml) {
+			notify($ERRORS{'WARNING'}, 0, "failed to capture image on $node_name, unable to retrieve domain XML definition: $domain_name");
+			return;
+		}
+		
+		# Save the domain XML definition to a file in the master image directory
+		my $master_xml_file_path = $self->get_master_xml_file_path();
+		if ($self->vmhost_os->create_text_file($master_xml_file_path, $domain_xml)) {
+			notify($ERRORS{'OK'}, 0, "saved domain XML definition text file to master image directory: $master_xml_file_path");
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to capture image on $node_name, unable to save domain XML definition text file: $master_xml_file_path");
+			return;
+		}
+		
+		# Copy the master image to the repository if the repository path is configured in the VM host profile
+		if ($repository_image_file_path) {
+			if (my $semaphore = $self->get_repository_image_semaphore()) {
+				if ($self->driver->copy_virtual_disk($master_image_file_path, $repository_image_file_path, $repository_image_type)) {
+					notify($ERRORS{'DEBUG'}, 0, "created repository image from master image: $master_image_file_path --> $repository_image_file_path");
+				}
+				else {
+					notify($ERRORS{'WARNING'}, 0, "failed to create repository image from master image: $master_image_file_path --> $repository_image_file_path");
+					return;
+				}
+			}
+			else {
+				notify($ERRORS{'WARNING'}, 0, "failed to capture image on $node_name, unable to obtain semaphore before copying master image to repository mounted on $node_name: $master_image_file_path --> $repository_image_file_path");
+				return;
+			}
+			
+			# Save the domain XML definition to a file in the repository image directory
+			my $repository_xml_file_path = $self->get_repository_xml_file_path();
+			if ($self->vmhost_os->create_text_file($repository_xml_file_path, $domain_xml)) {
+				notify($ERRORS{'OK'}, 0, "saved domain XML definition text file to repository image directory: $master_xml_file_path");
+			}
+			else {
+				notify($ERRORS{'WARNING'}, 0, "failed to capture image on $node_name, unable to save domain XML definition text file to repository image directory: $master_xml_file_path");
+				return;
+			}
+		}
+	}
+	
+	# Image has been captured, delete the domain
+	$self->delete_domain($domain_name);
+	
+	return 1;
+} ## end sub capture
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -366,14 +471,16 @@ sub does_image_exist {
 	my $master_image_file_path = $self->get_master_image_file_path($image_name);
 	
 	# Get a semaphore in case another process is currently copying to create the master image
-	my $semaphore_id = "$node_name:$master_image_file_path";
-	my $semaphore_timeout_minutes = 60;
-	my $semaphore = $self->get_semaphore($semaphore_id, (60 * $semaphore_timeout_minutes), 5) || return;	
-	
-	# Check if the master image file exists on the VM host
-	if ($self->vmhost_os->file_exists($master_image_file_path)) {
-		notify($ERRORS{'DEBUG'}, 0, "$image_name image exists on $node_name: $master_image_file_path");
-		return 1;
+	if (my $semaphore = $self->get_master_image_semaphore()) {
+		# Check if the master image file exists on the VM host
+		if ($self->vmhost_os->file_exists($master_image_file_path)) {
+			notify($ERRORS{'DEBUG'}, 0, "$image_name image exists on $node_name: $master_image_file_path");
+			return 1;
+		}
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to determine if $image_name exists on $node_name: $master_image_file_path, unable to obtain semaphore");
+		return;
 	}
 	
 	# Attempt to find the image files in the repository
@@ -410,29 +517,6 @@ sub get_image_size {
 	# Convert bytes to MB
 	return int($image_size_bytes / 1024 ** 2);
 } ## end sub get_image_size
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 get_image_repository_search_paths
-
- Parameters  : $management_node_identifier (optional)
- Returns     : array
- Description : Returns an array containing paths on the management node where an
-               image may reside. The paths may contain wildcards. This is used
-               to attempt to locate an image on another managment node in order
-               to retrieve it.
-
-=cut
-
-sub get_image_repository_search_paths {
-	my $self = shift;
-	unless (ref($self) && $self->isa('VCL::Module')) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-	
-	return ();
-} ## end sub get_image_repository_search_paths
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -715,7 +799,14 @@ sub get_driver_name {
  Returns     : string
  Description : Returns the name of the domain. This name is passed to various
                virsh commands. It is also the name displayed in virt-manager.
-               Example: 'vclv99-197:vmwarewin7-Windows764bit1846-v3'
+               
+               If the request state is 'image', the domain name is retrieved
+               from the list of defined domains on the node because the name
+               will vary based on the base image used.
+               
+               If the request state is anything other than 'image', the domain
+               name is constructed from the computer and image names, example:
+               'vclv99-197:vmwarewin7-Windows764bit1846-v3'
 
 =cut
 
@@ -726,12 +817,46 @@ sub get_domain_name {
 		return;
 	}
 	
-	my $computer_short_name = $self->data->get_computer_short_name();
-	my $image_id = $self->data->get_image_id();
-	my $image_name = $self->data->get_image_name();
-	my $image_revision = $self->data->get_imagerevision_revision();
+	return $self->{domain_name} if defined $self->{domain_name};
 	
-	return "$computer_short_name:$image_name";
+	my $node_name = $self->data->get_vmhost_short_name();
+	my $request_state_name = $self->data->get_request_state_name();
+	my $computer_short_name = $self->data->get_computer_short_name();
+	
+	# If request state is image the domain name will be that of the image used as the base image, not the image being created
+	# Must find existing loaded domain on node in order to determine name
+	if ($request_state_name eq 'image') {
+		# Must ensure that only 1 matching domain was found
+		my @matching_domain_names;
+		my $domain_info = $self->get_domain_info();
+		for my $domain_name (keys %$domain_info) {
+			if ($domain_name =~ /^$computer_short_name:/) {
+				push @matching_domain_names, $domain_name;
+			}
+		}
+		
+		# Make sure only 1 domain was found
+		if (scalar @matching_domain_names == 1) {
+			$self->{domain_name} = $matching_domain_names[0];
+			notify($ERRORS{'DEBUG'}, 0, "retrieved name of domain being captured from $node_name: '$self->{domain_name}'");
+			return $self->{domain_name};
+		}
+		elsif (@matching_domain_names) {
+			notify($ERRORS{'WARNING'}, 0, "unable to determine name of domain to be captured, found multiple domain names beginning with '$computer_short_name:' on $node_name:\n" . join("\n", @matching_domain_names));
+			return;
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "unable to determine name of domain to be captured, did not find a domain name beginning with '$computer_short_name:' on $node_name");
+			return;
+		}
+	}
+	
+	# Request state is not image, construct the domain name
+	my $image_name = $self->data->get_image_name();
+	
+	$self->{domain_name} = "$computer_short_name:$image_name";
+	notify($ERRORS{'DEBUG'}, 0, "constructed domain name: '$self->{domain_name}'");
+	return $self->{domain_name};
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -807,12 +932,35 @@ sub get_domain_xml_file_path {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 get_master_image_directory_path
+=head2 get_master_image_base_directory_path
 
  Parameters  : none
  Returns     : string
+ Description : Returns the directory path on the node where all master images
+               reside. Example: '/var/lib/libvirt/images'
+
+=cut
+
+sub get_master_image_base_directory_path {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $datastore_path = $self->data->get_vmhost_profile_datastore_path();
+	return $datastore_path;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_master_image_directory_path
+
+ Parameters  : $image_name (optional)
+ Returns     : string
  Description : Returns the directory path on the node where the master image
-               files reside. Example: '/var/lib/libvirt/images'
+               files reside. Example:
+               '/var/lib/libvirt/images/win7-Windows7Base64bitVM-1846-v3'
 
 =cut
 
@@ -823,8 +971,10 @@ sub get_master_image_directory_path {
 		return;
 	}
 	
-	my $datastore_path = $self->data->get_vmhost_profile_datastore_path();
-	return $datastore_path;
+	my $image_name = shift || $self->data->get_image_name();
+	my $master_image_base_directory_path = $self->get_master_image_base_directory_path();
+	
+	return "$master_image_base_directory_path/$image_name";
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -861,8 +1011,37 @@ sub get_master_image_file_path {
 	}
 	
 	# File was not found, construct it
-	my $disk_file_extension = $self->driver->get_disk_file_extension();
-	return "$master_image_directory_path/$image_name.$disk_file_extension";
+	my $datastore_imagetype = $self->data->get_vmhost_datastore_imagetype_name();
+	my  $master_image_file_path = "$master_image_directory_path/$image_name.$datastore_imagetype";
+	notify($ERRORS{'DEBUG'}, 0, "constructed master image file path: $master_image_file_path");
+	return $master_image_file_path;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_master_xml_file_path
+
+ Parameters  : $image_name (optional)
+ Returns     : string
+ Description : Returns the path on the node where the master (reference) XML
+ file resides. This file is a dump of the domain XML which was used to capture
+               the image.
+               Example:
+               '/var/lib/libvirt/images/vmwarelinux-RHEL54Small2251-v1.xml'
+
+=cut
+
+sub get_master_xml_file_path {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $image_name = shift || $self->data->get_image_name();
+	my $master_image_directory_path = $self->get_master_image_directory_path();
+	
+	return "$master_image_directory_path/$image_name.xml";
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -886,9 +1065,134 @@ sub get_copy_on_write_file_path {
 	
 	my $vmhost_vmpath       = $self->data->get_vmhost_profile_vmpath();
 	my $domain_file_name    = $self->get_domain_file_base_name();
-	my $disk_file_extension = $self->driver->get_disk_file_extension();
+	my $datastore_imagetype = $self->data->get_vmhost_datastore_imagetype_name();
 	
-	return "$vmhost_vmpath/$domain_file_name.$disk_file_extension";
+	return "$vmhost_vmpath/$domain_file_name.$datastore_imagetype";
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_repository_image_directory_path
+
+ Parameters  : $image_name (optional)
+ Returns     : string
+ Description : Returns the path of the directory in the repository mounted on
+               the node where the image file resides. Returns 0 if the
+               repository path is not configured in the VM host profile.
+               Example:
+               '/mnt/repository/win7-Windows7Base64bitVM-1846-v3'
+
+=cut
+
+sub get_repository_image_directory_path {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $image_name = shift || $self->data->get_image_name();
+	my $vmhost_repository_directory_path = $self->data->get_vmhost_profile_repository_path();
+	
+	if ($vmhost_repository_directory_path) {
+		return "$vmhost_repository_directory_path/$image_name";
+	}
+	else {
+		return 0;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_repository_image_file_path
+
+ Parameters  : $image_name (optional)
+ Returns     : string
+ Description : Returns the path in the repository mounted on the node where the
+               repository image file resides. Returns 0 if the repository path
+               is not configured in the VM host profile.
+               Example:
+               '/mnt/repository/win7-Windows7Base64bitVM-1846-v3/win7-Windows7Base64bitVM-1846-v3.qcow2'
+
+=cut
+
+sub get_repository_image_file_path {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $image_name = shift || $self->data->get_image_name();
+	my $repository_image_directory_path = $self->get_repository_image_directory_path();
+	
+	if ($repository_image_directory_path) {
+		my $repository_imagetype = $self->data->get_vmhost_repository_imagetype_name();
+		return "$repository_image_directory_path/$image_name.$repository_imagetype";
+	}
+	else {
+		return 0;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_repository_xml_file_path
+
+ Parameters  : $image_name (optional)
+ Returns     : string
+ Description : Returns the path on the node where the repository (reference) XML
+ file resides. This file is a dump of the domain XML which was used to capture
+               the image.
+               Example:
+               '/mnt/repository/vmwarelinux-RHEL54Small2251-v1.xml'
+
+=cut
+
+sub get_repository_xml_file_path {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $image_name = shift || $self->data->get_image_name();
+	my $repository_image_directory_path = $self->get_repository_image_directory_path();
+	
+	return "$repository_image_directory_path/$image_name.xml";
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_new_image_name
+
+ Parameters  : 
+ Returns     : string
+ Description : Constructs a new image name for images being captured. This is
+					used instead of the name in the database in case an image is
+					converted. The new image name shouldn't contain vmware.
+
+=cut
+
+sub get_new_image_name {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $image_id = $self->data->get_image_id();
+	my $image_os_name = $self->data->get_image_os_name();
+	my $image_prettyname = $self->data->get_image_prettyname();
+	my $imagerevision_revision = $self->data->get_imagerevision_revision();
+	
+	# Clean up the OS name
+	$image_os_name =~ s/(vmware|image)*//g;
+	
+	# Remove non-word characters and underscores from the image prettyname
+	$image_prettyname =~ s/[\W\_]+//ig;
+	
+	return "$image_os_name\-$image_prettyname\-$image_id\-v$imagerevision_revision"; 
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -913,6 +1217,7 @@ sub delete_existing_domains {
 	my $computer_name = $self->data->get_computer_short_name();
 	
 	my $domain_info = $self->get_domain_info();
+	
 	for my $domain_name (keys %$domain_info) {
 		next if ($domain_name !~ /^$computer_name:/);
 		
@@ -978,17 +1283,28 @@ sub delete_domain {
 		}
 	}
 	
-	# Delete volumes assigned to to domain
-	my $domain_xml = $self->get_domain_xml($domain_name);
-	my $disks = $domain_xml->{devices}->[0]->{disk};
-	for my $disk (@$disks) {
-		my $volume_path = $disk->{source}->[0]->{file};
-		notify($ERRORS{'DEBUG'}, 0, "deleting volume assigned to domain: " . $disk->{source}->[0]->{file});
-		
-		if (!$self->vmhost_os->delete_file($volume_path)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to delete '$domain_name' domain on $node_name, '$volume_path' volume could not be deleted");
-			return;
+	my ($computer_name) = $domain_name =~ /^([^:]+):/;
+	if ($computer_name) {
+		# Delete disks assigned to to domain
+		my @disk_file_paths = $self->get_domain_disk_file_paths($domain_name);
+		for my $disk_file_path (@disk_file_paths) {
+			# For safety, make sure the disk being deleted begins with the domain's computer name
+			my $disk_file_name = fileparse($disk_file_path, qr/\.[^\/]+$/i);
+			if ($disk_file_name !~ /^$computer_name\_/) {
+				notify($ERRORS{'WARNING'}, 0, "disk assigned to domain NOT deleted because the file name does not begin with '$computer_name\_':\nfile name: $disk_file_name\nfile path: $disk_file_path");
+				next;
+			}
+			else {
+				notify($ERRORS{'DEBUG'}, 0, "deleting disk assigned to domain, file name begins with '$computer_name\_': $disk_file_path");
+				if (!$self->vmhost_os->delete_file($disk_file_path)) {
+					notify($ERRORS{'WARNING'}, 0, "failed to delete '$domain_name' domain on $node_name, '$disk_file_path' disk could not be deleted");
+					return;
+				}
+			}
 		}
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine computer name from domain name '$domain_name' on $node_name, disks assigned domain will NOT be deleted for safety");
 	}
 	
 	# Undefine the domain
@@ -1036,7 +1352,7 @@ sub generate_domain_xml {
 	my $domain_type = $self->driver->get_domain_type();
 	
 	my $copy_on_write_file_path = $self->get_copy_on_write_file_path();
-	my $disk_format = $self->driver->get_disk_format();
+	my $image_type = $self->data->get_vmhost_datastore_imagetype_name();
 	my $disk_driver_name = $self->driver->get_disk_driver_name();
 	
 	my $eth0_source_device = $self->data->get_vmhost_profile_virtualswitch0();
@@ -1076,7 +1392,7 @@ sub generate_domain_xml {
 	#    Windows, however, expects it to be in so called 'localtime'."
 	my $clock_offset = ($image_os_type =~ /windows/) ? 'localtime' : 'utc';
 
-	my $xml = {
+	my $xml_hashref = {
 		'type' => $domain_type,
 		'description' => [$image_display_name],
 		'name' => [$domain_name],
@@ -1122,7 +1438,7 @@ sub generate_domain_xml {
 						'type' => 'file',
 						'driver' => {
 							'name' => $disk_driver_name,
-							'type' => $disk_format,
+							'type' => $image_type,
 							'cache' => 'none',
 						},
 						'source' => {
@@ -1182,12 +1498,7 @@ sub generate_domain_xml {
 		]
 	};
 	
-	my $domain_xml_definition = XMLout($xml,
-		'RootName' => 'domain',
-		'KeyAttr' => []
-	);
-
-	return $domain_xml_definition;
+	return hash_to_xml_string($xml_hashref, 'domain');
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -1228,7 +1539,7 @@ sub get_domain_info {
 		return;
 	}
 	else {
-		notify($ERRORS{'DEBUG'}, 0, "retrieved list of defined domains on $node_name:\n" . join("\n", @$output));
+		notify($ERRORS{'DEBUG'}, 0, "listed defined domains on $node_name\ncommand: $command\noutput:\n" . join("\n", @$output));
 	}
 	
 	# [root@vclh3-10 images]# virsh list --all
@@ -1239,15 +1550,24 @@ sub get_domain_info {
 	#   - vclv99-197: vmwarelinux-RHEL54Small2251-v1 shut off
 
 	my $defined_domains = {};
+	my $domain_info_string = '';
 	for my $line (@$output) {
 		my ($id, $name, $state) = $line =~ /^\s*([\d\-]+)\s(.+?)\s+(\w+|shut off)$/g;
 		next if (!defined($id));
 		
 		$defined_domains->{$name}{state} = $state;
 		$defined_domains->{$name}{id} = $id if ($id =~ /\d/);
+		
+		$domain_info_string .= "$id. $name ($state)\n";
 	}
 	
-	#notify($ERRORS{'DEBUG'}, 0, "retrieved domain info:\n" . format_data($defined_domains));
+	if ($defined_domains) {
+		notify($ERRORS{'DEBUG'}, 0, "retrieved domain info from $node_name:\n$domain_info_string");
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "no domains are defined on $node_name");
+	}
+	
 	return $defined_domains;
 }
 
@@ -1258,7 +1578,7 @@ sub get_domain_info {
  Parameters  : $domain_name
  Returns     : hash reference
  Description : Retrieves the XML definition of a domain already defined on the
-               node. Generates a hash using XML::Simple::XMLin.
+               node. Generates a hash.
 
 =cut
 
@@ -1288,17 +1608,53 @@ sub get_domain_xml {
 		return;
 	}
 	
-	# Convert the XML to a hash using XML::Simple
-	my $xml = XMLin(join("\n", @$output), 'ForceArray' => 1, 'KeyAttr' => []);
-	if ($xml) {
-		#notify($ERRORS{'DEBUG'}, 0, "retrieved XML definition for '$domain_name' domain on $node_name");
-		notify($ERRORS{'DEBUG'}, 0, "retrieved XML definition for '$domain_name' domain on $node_name:\n" . format_data($xml));
+	if (my $xml = xml_string_to_hash($output)) {
+		notify($ERRORS{'DEBUG'}, 0, "retrieved XML definition for '$domain_name' domain on $node_name");
+		#notify($ERRORS{'DEBUG'}, 0, "retrieved XML definition for '$domain_name' domain on $node_name:\n" . format_data($xml));
 		return $xml;
 	}
 	else {
 		notify($ERRORS{'WARNING'}, 0, "failed to convert XML definition for '$domain_name' domain to hash:\n" . join("\n", @$output));
 		return;
 	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_domain_disk_file_paths
+
+ Parameters  : $domain_name
+ Returns     : array
+ Description : Retrieves the XML definition for the domain and extracts the disk
+               file paths. An array containing the paths is returned.
+
+=cut
+
+sub get_domain_disk_file_paths {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $domain_name = shift;
+	if (!defined($domain_name)) {
+		notify($ERRORS{'WARNING'}, 0, "domain name argument was not specified");
+		return;
+	}
+	
+	# Get the domain XML definition
+	my $domain_xml = $self->get_domain_xml($domain_name);
+	
+	# Get the disk array ref section from the XML
+	my $disks = $domain_xml->{devices}->[0]->{disk};
+	
+	my @disk_file_paths = ();
+	for my $disk (@$disks) {
+		push @disk_file_paths, $disk->{source}->[0]->{file};
+	}
+	
+	return @disk_file_paths;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -1523,11 +1879,13 @@ sub get_image_size_bytes {
 	# Check if the master image file exists on the VM host
 	if ($self->vmhost_os->file_exists($master_image_file_path)) {
 		# Get a semaphore in case another process is currently copying to create the master image
-		my $semaphore_id = "$node_name:$master_image_file_path";
-		my $semaphore_timeout_minutes = 60;
-		my $semaphore = $self->get_semaphore($semaphore_id, (60 * $semaphore_timeout_minutes), 5) || return;
-		
-		$image_size_bytes = $self->vmhost_os->get_file_size($master_image_file_path)
+		if (my $semaphore = $self->get_master_image_semaphore()) {
+			$image_size_bytes = $self->vmhost_os->get_file_size($master_image_file_path);
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to determine size of $image_name on $node_name: $master_image_file_path, unable to obtain semaphore");
+			return;
+		}
 	}
 	
 	# Check the repository if the master image does not exist on the VM host or if failed to determine size
@@ -1539,7 +1897,6 @@ sub get_image_size_bytes {
 		}
 		
 		# Note - don't need semaphore because find_repository_image_file_paths gets one while it's checking
-		
 		$image_size_bytes = $self->vmhost_os->get_file_size(@repository_image_file_paths);
 		if (!$image_size_bytes) {
 			notify($ERRORS{'WARNING'}, 0, "failed to retrieved size of $image_name image from the repository mounted on $node_name");
@@ -1595,15 +1952,18 @@ sub find_repository_image_file_paths {
 	}
 	
 	# Get a semaphore in case another process is currently copying the image to the repository
-	my $semaphore_id = "$node_name:$vmhost_repository_directory_path";
-	my $semaphore_timeout_minutes = 60;
-	my $semaphore = $self->get_semaphore($semaphore_id, (60 * $semaphore_timeout_minutes), 5) || return;
-	
-	# Attempt to locate files in the repository matching the image name
-	my @matching_repository_file_paths = $self->vmhost_os->find_files($vmhost_repository_directory_path, "$image_name*.*");
-	if (!@matching_repository_file_paths) {
-		notify($ERRORS{'DEBUG'}, 0, "image $image_name does NOT exist in the repository on $node_name");
-		return ();
+	my @matching_repository_file_paths;
+	if (my $semaphore = $self->get_repository_image_semaphore()) {
+		# Attempt to locate files in the repository matching the image name
+		@matching_repository_file_paths = $self->vmhost_os->find_files($vmhost_repository_directory_path, "$image_name*.*");
+		if (!@matching_repository_file_paths) {
+			notify($ERRORS{'DEBUG'}, 0, "image $image_name does NOT exist in the repository mounted on $node_name");
+			return ();
+		}
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to determine if $image_name exists on in the repository mounted on $node_name, unable to obtain semaphore");
+		return;
 	}
 	
 	# Check the files found in the repository
@@ -1648,8 +2008,74 @@ sub find_repository_image_file_paths {
 	# Save the result so this doesn't have to be done again
 	$self->{repository_file_paths}{$image_name} = \@virtual_disk_repository_file_paths;
 	
-	notify($ERRORS{'DEBUG'}, 0, "retrieved " . scalar(@virtual_disk_repository_file_paths) . " repository file paths for image $image_name on $node_name");
+	notify($ERRORS{'DEBUG'}, 0, "retrieved " . scalar(@virtual_disk_repository_file_paths) . " repository file paths for image $image_name on $node_name:\n" . join("\n", @virtual_disk_repository_file_paths));
 	return @virtual_disk_repository_file_paths
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2  get_master_image_semaphore
+
+ Parameters  : $image_name (optional)
+ Returns     : Semaphore object
+ Description : Obtains a semaphore to be used to ensure that only a single
+					process is copying or querying the attributes of the master image
+					file at a time.
+
+=cut
+
+sub get_master_image_semaphore {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Attempt to get the image name argument
+	my $image_name = shift || $self->data->get_image_name();
+	
+	my $semaphore_id = "master:$image_name";
+	my $semaphore = $self->get_semaphore($semaphore_id, (60 * 120), 15);
+	if ($semaphore) {
+		return $semaphore;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unable to obtain semaphore for master image: $image_name");
+		return;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2  get_repository_image_semaphore
+
+ Parameters  : $image_name (optional)
+ Returns     : Semaphore object
+ Description : Obtains a semaphore to be used to ensure that only a single
+					process is copying or querying the attributes of the repository image
+					file at a time.
+
+=cut
+
+sub get_repository_image_semaphore {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Attempt to get the image name argument
+	my $image_name = shift || $self->data->get_image_name();
+	
+	my $semaphore_id = "repository:$image_name";
+	my $semaphore = $self->get_semaphore($semaphore_id, (60 * 120), 15);
+	if ($semaphore) {
+		return $semaphore;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unable to obtain semaphore for repository image: $image_name");
+		return;
+	}
 }
 
 #/////////////////////////////////////////////////////////////////////////////

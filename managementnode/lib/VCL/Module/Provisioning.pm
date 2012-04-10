@@ -51,6 +51,7 @@ use 5.008000;
 use strict;
 use warnings;
 use diagnostics;
+use English qw( -no_match_vars );
 
 use VCL::utils;
 
@@ -59,6 +60,194 @@ use VCL::utils;
 =head1 OBJECT METHODS
 
 =cut
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 node_status
+
+ Parameters  : $computer_id (optional)
+ Returns     : string
+ Description : Checks the status of the computer in order to determine if the
+               computer is ready to be reserved or needs to be reloaded. A
+               string is returned depending on the status of the computer:
+               'READY':
+                  * Computer is ready to be reserved
+                  * It is accessible
+                  * It is loaded with the correct image
+                  * OS module's post-load tasks have run
+               'POST_LOAD':
+                  * Computer is loaded with the correct image
+                  * OS module's post-load tasks have not run
+               'RELOAD':
+                  * Computer is not accessible or not loaded with the correct
+                    image
+
+=cut
+
+sub node_status {
+	my $self;
+	
+	# Get the argument
+	my $argument = shift;
+	
+	# Check if this subroutine was called an an object method or an argument was passed
+	if (ref($argument) =~ /VCL::Module/i) {
+		$self = $argument;
+	}
+	elsif (!ref($argument) || ref($argument) eq 'HASH') {
+		# An argument was passed, check its type and determine the computer ID
+		my $computer_id;
+		if (ref($argument)) {
+			# Hash reference was passed
+			$computer_id = $argument->{id};
+		}
+		elsif ($argument =~ /^\d+$/) {
+			# Computer ID was passed
+			$computer_id = $argument;
+		}
+		else {
+			# Computer name was passed
+			($computer_id) = get_computer_ids($argument);
+		}
+		
+		if ($computer_id) {
+			notify($ERRORS{'DEBUG'}, 0, "computer ID: $computer_id");
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "unable to determine computer ID from argument:\n" . format_data($argument));
+			return;
+		}
+		
+		# Create a DataStructure object containing data for the computer specified as the argument
+		my $data;
+		eval {
+			$data= new VCL::DataStructure({computer_id => $computer_id});
+		};
+		if ($EVAL_ERROR) {
+			notify($ERRORS{'WARNING'}, 0, "failed to create DataStructure object for computer ID: $computer_id, error: $EVAL_ERROR");
+			return;
+		}
+		elsif (!$data) {
+			notify($ERRORS{'WARNING'}, 0, "failed to create DataStructure object for computer ID: $computer_id, DataStructure object is not defined");
+			return;
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "created DataStructure object  for computer ID: $computer_id");
+		}
+		
+		# Create a provisioning object
+		my $provisioning_module_perl_package = $data->get_computer_provisioning_module_perl_package();
+		if ($self = ($provisioning_module_perl_package)->new({data_structure => $data})) {
+			notify($ERRORS{'DEBUG'}, 0, "created $provisioning_module_perl_package object to check the status of computer ID: $computer_id");
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to create $provisioning_module_perl_package object to check the status of computer ID: $computer_id");
+			return;
+		}
+		
+		# Create an OS object for the provisioning object to access
+		if (!$self->create_os_object()) {
+			notify($ERRORS{'WARNING'}, 0, "failed to create OS object");
+			return;
+		}
+	}
+	
+	my $reservation_id = $self->data->get_reservation_id();
+	my $computer_name = $self->data->get_computer_node_name();
+	my $image_name = $self->data->get_image_name();
+	my $request_forimaging = $self->data->get_request_forimaging();
+	
+	notify($ERRORS{'DEBUG'}, 0, "attempting to check the status of computer $computer_name, image: $image_name");
+	
+	# Create a hash reference and populate it with the default values
+	my $status;
+	$status->{currentimage} = '';
+	$status->{ssh} = 0;
+	$status->{image_match} = 0;
+	$status->{status} = 'RELOAD';
+	
+	# Check if SSH is available
+	if ($self->os->is_ssh_responding()) {
+		notify($ERRORS{'DEBUG'}, 0, "$computer_name is responding to SSH");
+		$status->{ssh} = 1;
+	}
+	else {
+		notify($ERRORS{'OK'}, 0, "$computer_name is not responding to SSH, returning 'RELOAD'");
+		$status->{status} = 'RELOAD';
+		$status->{ssh} = 0;
+		
+		# Skip remaining checks if SSH isn't available
+		return $status;
+	}
+	
+	# Get the contents of currentimage.txt and check if currentimage.txt matches the requested image name
+	my $current_image_name = $self->os->get_current_image_name();
+	$status->{currentimage} = $current_image_name;
+	
+	if (!$current_image_name) {
+		notify($ERRORS{'OK'}, 0, "unable to retrieve image name from currentimage.txt on $computer_name, returning 'RELOAD'");
+		return $status;
+	}
+	elsif ($current_image_name eq $image_name) {
+		notify($ERRORS{'DEBUG'}, 0, "currentimage.txt image ($current_image_name) matches requested image name ($image_name) on $computer_name");
+		$status->{image_match} = 1;
+	}
+	else {
+		notify($ERRORS{'OK'}, 0, "currentimage.txt image ($current_image_name) does not match requested image name ($image_name) on $computer_name, returning 'RELOAD'");
+		return $status;
+	}
+	
+	# Check if the OS post_load tasks have run
+	if ($self->os->get_vcld_post_load_status()) {
+		notify($ERRORS{'DEBUG'}, 0, "OS module post_load tasks have been completed on $computer_name");
+		$status->{status} = 'READY';
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "OS module post_load tasks have not been completed on $computer_name, returning 'POST_LOAD'");
+		$status->{status} = 'POST_LOAD';
+	}
+	
+	notify($ERRORS{'OK'}, 0, "status of $computer_name: $status->{status}");
+	return $status;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_image_repository_search_paths
+
+ Parameters  : $management_node_identifier (optional)
+ Returns     : array
+ Description : Returns an array containing paths on the management node where an
+               image may reside. The paths may contain wildcards. This is used
+               to attempt to locate an image on another managment node in order
+               to retrieve it.
+
+=cut
+
+sub get_image_repository_search_paths {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $management_node_identifier = shift;
+	
+	my $image_name = $self->data->get_image_name();
+	
+	my @search_paths;
+	
+	my $management_node_install_path = $self->data->get_management_node_install_path($management_node_identifier);
+	if ($management_node_install_path) {
+		push @search_paths, "$management_node_install_path/$image_name*";
+		push @search_paths, "$management_node_install_path/vmware_images/$image_name*";
+	}
+	
+	my $vmhost_profile_repository_path = $self->data->get_vmhost_profile_repository_path();
+	push @search_paths, "$vmhost_profile_repository_path/$image_name*" if $vmhost_profile_repository_path;
+	
+	return @search_paths;
+} ## end sub get_image_repository_search_paths
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -91,18 +280,10 @@ sub retrieve_image {
 		return;
 	}
 	
-	# Get the last digit of the reservation ID and sleep that number of seconds
-	# This is done in case 2 reservations for the same image were started at the same time
-	# Both may attempt to retrieve an image and execute the SCP command at nearly the same time
-	# does_image_exist() may not catch this and allow 2 SCP retrieval processes to start
-	# It's likely that the reservation IDs are consecutive and the the last digits will be different
-	my ($pre_retrieval_sleep) = $self->data->get_reservation_id() =~ /(\d)$/;
-	notify($ERRORS{'DEBUG'}, 0, "sleeping for $pre_retrieval_sleep seconds to prevent multiple SCP image retrieval processes");
-	sleep $pre_retrieval_sleep;
-	
 	# Get a semaphore so only 1 process is able to retrieve the image at a time
 	# Do this before checking if the image exists in case another process is retrieving the image
-	my $semaphore = $self->get_semaphore("retrieve_$image_name", (60 * 15)) || return;
+	# Wait up to 2 hours in case a large image is being retrieved
+	my $semaphore = $self->get_semaphore("retrieve_$image_name", (60 * 120)) || return;
 	
 	# Make sure image does not already exist on this management node
 	if ($self->does_image_exist($image_name)) {
@@ -124,8 +305,18 @@ sub retrieve_image {
 		return;
 	}
 	
-	# Get the local image repository path
-	my $image_repository_path_local = $self->get_image_repository_path();
+	# Get the image repository path
+	my $image_repository_path_local;
+	if ($self->can('get_image_repository_path')) {
+		$image_repository_path_local = $self->get_image_repository_path();
+	}
+	elsif ($self->can('get_image_repository_directory_path')) {
+		$image_repository_path_local = $self->get_image_repository_directory_path();
+	}
+	else {
+		$image_repository_path_local = $self->data->get_vmhost_profile_repository_path();
+	}
+	
 	if (!$image_repository_path_local) {
 		notify($ERRORS{'WARNING'}, 0, "unable to determine the local image repository path");
 		return;
@@ -150,15 +341,31 @@ sub retrieve_image {
 		
 		# Call the provisioning module's get_image_repository_search_paths() subroutine
 		# This returns an array of strings to pass to du
-		$partner_info{$partner}{search_paths} = [$self->get_image_repository_search_paths($partner)];
-		if (!$partner_info{$partner}{search_paths}) {
+		my @search_paths = $self->get_image_repository_search_paths($partner);
+		if (@search_paths) {
+			notify($ERRORS{'DEBUG'}, 0, "retrieved image repository search paths for partner $partner:\n" . join("\n", @search_paths));
+			$partner_info{$partner}{search_paths} = \@search_paths;
+		}
+		else {
 			notify($ERRORS{'WARNING'}, 0, "failed to retrieve image repository search paths for partner: $partner");
 			next;
 		}
 		
 		# Run du to get the size of the image files on the partner if the image exists in any of the search paths
 		my $du_command = "du -b " . join(" ", @{$partner_info{$partner}{search_paths}});
-		my ($du_exit_status, $du_output) = run_ssh_command($partner, $partner_info{$partner}{identity_key}, $du_command, $partner_info{$partner}{user}, $partner_info{$partner}{port}, 1);
+		my ($du_exit_status, $du_output) = VCL::Module::OS::execute(
+			{
+				node => $partner,
+				command => $du_command,
+				display_output => 0,
+				timeout => 30,
+				max_attempts => 2,
+				port => $partner_info{$partner}{port},
+				user => $partner_info{$partner}{user},
+				identity_key => $partner_info{$partner}{identity_key},
+			}
+		);
+		
 		if (!defined($du_output)) {
 			notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to determine if image $image_name exists on $partner_info{$partner}{hostname}: $du_command");
 			next;
@@ -177,7 +384,7 @@ sub retrieve_image {
 			notify($ERRORS{'OK'}, 0, "$image_name exists on $partner_info{$partner}{hostname}, size: " . format_number($partner_info{$partner}{image_size}) . " bytes");
 		}
 		else {
-			notify($ERRORS{'OK'}, 0, "$image_name does NOT exist on $partner_info{$partner}{hostname}");
+			notify($ERRORS{'OK'}, 0, "$image_name does NOT exist on $partner_info{$partner}{hostname}, output:\n" . join("\n", @$du_output));
 			next;
 		}
 
@@ -192,7 +399,7 @@ sub retrieve_image {
 			$largest_partner_image_size = $partner_info{$partner}{image_size};
 		}
 	}
-	
+
 	# Check if any partner was found
 	if (!@partners_with_image) {
 		notify($ERRORS{'WARNING'}, 0, "unable to find $image_name on other management nodes");
