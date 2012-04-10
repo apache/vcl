@@ -2154,7 +2154,7 @@ sub generate_rc_local {
 	}
 	
 	# If systemd managed; confirm rc-local.service is enabled
-	if($self->file_exists("/lib/systemd") ) {
+	if($self->file_exists("/bin/systemctl") ) {
 		my $systemctl_command = "systemctl enable rc-local.service";
 		my ($systemctl_exit_status, $systemctl_output) = $self->execute($systemctl_command, 1);
       	if (!defined($systemctl_output)) {
@@ -2289,8 +2289,9 @@ sub generate_ext_sshd_start {
       notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
       return 0;
    }
-
-	if($self->file_exists("/lib/systemd") ) {
+	
+	# If using systemd, check for the systemctl command
+	if($self->file_exists("/bin/systemctl") ) {
 		if(!($self->generate_ext_sshd_systemd)) {
 			return 0;
 		}
@@ -3102,11 +3103,15 @@ sub service_exists {
 	my $command;
 	
 	# Check if OS is using systemd or SysVinit
-	if($self->file_exists("/lib/systemd")) {
+	if($self->file_exists("/bin/systemctl")) {
 		$command = "systemctl is-enabled $service_name" . ".service";	
 	}
-	else {
+	elsif($self->file_exists("/sbin/chkconfig")) {
 		$command = "/sbin/chkconfig --list $service_name";
+	}	
+	else {
+		#Default to use the service cmd
+		$command = "service $service_name status";
 	}	
 	
 	my ($exit_status, $output) = run_ssh_command($computer_node_name, $management_node_keys, $command, '', '', 1);
@@ -3115,6 +3120,10 @@ sub service_exists {
 		return;
 	}
 	elsif (grep(/error reading information on service/i, @$output)) {
+		notify($ERRORS{'DEBUG'}, 0, "'$service_name' service does not exist on $computer_node_name");
+		return 0;
+	}
+	elsif (grep(/unrecognized service/i, @$output)) {
 		notify($ERRORS{'DEBUG'}, 0, "'$service_name' service does not exist on $computer_node_name");
 		return 0;
 	}
@@ -3169,7 +3178,7 @@ sub start_service {
 		  my $command;
 
 		  # Check if OS is using systemd or SysVinit
-		  if($self->file_exists("/lib/systemd")){
+		  if($self->file_exists("/bin/systemctl")){
 					 $command = "systemctl start $service_name" . ".service";
 		  }
 		  else {
@@ -3227,7 +3236,7 @@ sub stop_service {
         my $command;
 
         # Check if OS is using systemd or SysVinit
-        if($self->file_exists("/lib/systemd")){
+        if($self->file_exists("/bin/systemctl")){
                 $command = "systemctl stop $service_name" . ".service";
         }
         else {
