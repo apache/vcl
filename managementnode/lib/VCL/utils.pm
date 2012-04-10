@@ -222,6 +222,7 @@ our @EXPORT = qw(
   update_currentimage
   update_computer_imagename
   update_image_name
+  update_image_type
   update_lastcheckin
   update_log_ending
   update_log_loaded_time
@@ -6557,45 +6558,96 @@ sub update_log_loaded_time {
 
 =head2 update_image_name
 
- Parameters  : $image_id,$imagerevision_revision_id,$new_image_name
- Returns     : 0 or 1
- Description : Updates the name in the image and imagerevision table
+ Parameters  : $image_id, $imagerevision_id, $new_image_name
+ Returns     : boolean
+ Description : Updates the image.name and imagerevision.imagename values in the
+					database.
 
 =cut
 
 sub update_image_name {
-	my ($image_id, $imagerevision_revision_id, $new_image_name) = @_;
-
-	my ($package, $filename, $line, $sub) = caller(0);
+	my ($image_id, $imagerevision_id, $new_image_name) = @_;
 
 	# Check the passed parameter
-	if (!(defined($image_id))) {
-		notify($ERRORS{'WARNING'}, 0, "image ID was not specified");
-		return ();
+	unless (defined($image_id) && defined($imagerevision_id) && defined($new_image_name)) {
+		notify($ERRORS{'WARNING'}, 0, "image ID, imagerevision ID, and new image name arguments were not specified");
+		return;
 	}
 
 	# Construct the update statement
-	my $update_statement = "
-	UPDATE
-	image,
-	imagerevision
-	SET
-	name = \'$new_image_name\',
-	imagename = \'$new_image_name\'
-	WHERE
-	image.id = $image_id AND
-	imagerevision.id = $imagerevision_revision_id
-   ";
+	my $update_statement = <<EOF;
+UPDATE
+image,
+imagerevision
+SET
+image.name = \'$new_image_name\',
+imagerevision.imagename = \'$new_image_name\'
+WHERE
+image.id = $image_id AND
+imagerevision.id = $imagerevision_id
+EOF
 
 	# Call the database execute subroutine
 	if (database_execute($update_statement)) {
+		notify($ERRORS{'DEBUG'}, 0, "updated image.name and imagerevision.imagename in database to '$new_image_name' for image ID: $image_id, imagerevision ID: $imagerevision_id");
 		return 1;
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "unable to update database, imageID = $image_id imagerevisionID = $imagerevision_revision_id");
+		notify($ERRORS{'WARNING'}, 0, "failed to update image.name and imagerevision.imagename in database to '$new_image_name' for image ID: $image_id, imagerevision ID: $imagerevision_id");
 		return 0;
 	}
 } ## end sub update_image_name
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 update_image_type
+
+ Parameters  : $image_id, $image_type
+ Returns     : boolean
+ Description : Updates the image.imagetypeid value in the database. The
+               $image_type argument may either be an imagetype ID or name.
+
+=cut
+
+sub update_image_type {
+	my ($image_id, $image_type) = @_;
+
+	# Check the passed parameter
+	unless (defined($image_id) && defined($image_type)) {
+		notify($ERRORS{'WARNING'}, 0, "image ID and image type arguments were not specified");
+		return;
+	}
+
+	# Construct the update statement
+	my $update_statement = <<EOF;
+UPDATE
+image
+SET
+EOF
+	
+	# Check if the $image_type argument is an integer (imagetype.id) or string (imagetype.name)
+	if ($image_type =~ /^\d+$/) {
+		$update_statement .= "image.imagetypeid = \'$image_type\'";
+	}
+	else {
+		$update_statement .= "image.imagetypeid = (SELECT imagetype.id FROM imagetype WHERE imagetype.name = \'$image_type\')";
+	}
+	
+	$update_statement .= <<EOF;
+WHERE
+image.id = $image_id
+EOF
+
+	# Call the database execute subroutine
+	if (database_execute($update_statement)) {
+		notify($ERRORS{'DEBUG'}, 0, "updated image type in database to $image_type for image ID: $image_id");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to update image type in database to $image_type for image ID: $image_id");
+		return 0;
+	}
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -7800,7 +7852,7 @@ EOF
 	if ($user_login_id =~ /vcladmin/) {
 		$user_info->{STANDALONE} = 1;
 	}
-
+	
 	# Set the user's affiliation sitewwwaddress and help address if not defined or blank
 	if (!$user_info->{affiliation}{sitewwwaddress}) {
 		$user_info->{affiliation}{sitewwwaddress} = 'http://cwiki.apache.org/VCL';
