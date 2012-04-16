@@ -451,6 +451,10 @@ INIT {
 			if ($l =~ /^verbose=(.*)/i && !$VERBOSE) {
 				$VERBOSE = $1;
 			}
+
+            if ($l =~ /^defaulthelpemail=(.*)/i){
+                $DEFAULTHELPEMAIL = $1;
+            }
 			
 		}    # Close foreach line in conf file
 	}    # Close open conf file
