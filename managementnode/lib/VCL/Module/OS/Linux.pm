@@ -2051,46 +2051,77 @@ sub set_file_permissions {
 =cut
 
 sub generate_rc_local {
-        my $self = shift;
+		  my $self = shift;
         if (ref($self) !~ /linux/i) {
                 notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
                 return 0;
         }
 	
 	my $request_id               = $self->data->get_request_id();
-        my $management_node_keys     = $self->data->get_management_node_keys();
-        my $computer_short_name      = $self->data->get_computer_short_name();
-        my $computer_node_name       = $self->data->get_computer_node_name();
+   my $management_node_keys     = $self->data->get_management_node_keys();
+   my $computer_short_name      = $self->data->get_computer_short_name();
+   my $computer_node_name       = $self->data->get_computer_node_name();
 	
+	# Determine if /etc/rc.local is a symlink or not
+	my $command = "file /etc/rc.local";
+	my $symlink = 0;
+	my $rc_local_path;
+	
+	my ($echo_exit_status, $echo_output) = $self->execute($command, 1);
+	if (!defined($echo_output)) {
+        notify($ERRORS{'WARNING'}, 0, "failed to run command to check file of /etc/rc.local");
+   }
+   elsif (grep(/symbolic/, @$echo_output)) {
+		  notify($ERRORS{'OK'}, 0, "confirmed /etc/rc.local is symbolic link \n" . join("\n", @$echo_output));
+		  $symlink = 1;
+   }
+	
+	if(!$symlink) {
+		#my $symlink_command = "mv /etc/rc.local /etc/_orig.rc.local ; ln -s /etc/rc.d/rc.local /etc/rc.local";
+		#my ($sym_exit_status, $sym_output) = $self->execute($symlink_command, 1);
+      #if (!defined($sym_output)) {
+		#  notify($ERRORS{'WARNING'}, 0, "failed to run symlink_command $symlink_command on node $computer_node_name");
+      #}
+		#else {
+		#	 notify($ERRORS{'OK'}, 0, "successfully ran $symlink_command on $computer_node_name");
+		#}
+	
+		$rc_local_path = "/etc/rc.local";
+		
+	}
+	else {
+		$rc_local_path = "/etc/rc.d/rc.local";
+	}
+
 	my @array2print;
 
 	push(@array2print, '#!/bin/sh' . "\n");
 	push(@array2print, '#' . "\n");
-        push(@array2print, '# This script will be executed after all the other init scripts.' . "\n");
+   push(@array2print, '# This script will be executed after all the other init scripts.' . "\n");
 	push(@array2print, '#' . "\n");
-        push(@array2print, '# WARNING --- VCL IMAGE CREATORS --- WARNING' . "\n");
+   push(@array2print, '# WARNING --- VCL IMAGE CREATORS --- WARNING' . "\n");
 	push(@array2print, '#' . "\n");
-        push(@array2print, '# This file will get overwritten during image capture. Any customizations' . "\n");
-        push(@array2print, '# should be put into /etc/init.d/vcl_post_reserve or /etc/init.d/vcl_post_load' . "\n");
-        push(@array2print, '# Note these files do not exist by default.' . "\n");
-        push(@array2print, "\n");
-        push(@array2print, "#Use the /root/.vclcontrol/vcl_exclude_list to prevent vcld from updating this file.");
-        push(@array2print, "\n");
-        push(@array2print, 'touch /var/lock/subsys/local' . "\n");
-        push(@array2print, "\n");
-        push(@array2print, 'IP0=$(ifconfig eth0 | grep inet | awk \'{print $2}\' | awk -F: \'{print $2}\')' . "\n");
-        push(@array2print, 'IP1=$(ifconfig eth1 | grep inet | awk \'{print $2}\' | awk -F: \'{print $2}\')' . "\n");
-        push(@array2print, 'sed -i -e \'/.*AllowUsers .*$/d\' /etc/ssh/sshd_config' . "\n");
-        push(@array2print, 'sed -i -e \'/.*ListenAddress .*/d\' /etc/ssh/sshd_config' . "\n");
-        push(@array2print, 'sed -i -e \'/.*ListenAddress .*/d\' /etc/ssh/external_sshd_config' . "\n");
-        push(@array2print, 'echo "AllowUsers root" >> /etc/ssh/sshd_config' . "\n");
-        push(@array2print, 'echo "ListenAddress $IP0" >> /etc/ssh/sshd_config' . "\n");
-        push(@array2print, 'echo "ListenAddress $IP1" >> /etc/ssh/external_sshd_config' . "\n");
-        push(@array2print, 'service ext_sshd stop' . "\n");
-        push(@array2print, 'service sshd reload' . "\n");
-        push(@array2print, 'sleep 2' . "\n");
-        #push(@array2print, 'service sshd start' . "\n");
-        push(@array2print, 'service ext_sshd start' . "\n");
+   push(@array2print, '# This file will get overwritten during image capture. Any customizations' . "\n");
+   push(@array2print, '# should be put into /etc/init.d/vcl_post_reserve or /etc/init.d/vcl_post_load' . "\n");
+   push(@array2print, '# Note these files do not exist by default.' . "\n");
+   push(@array2print, "\n");
+   push(@array2print, "#Use the /root/.vclcontrol/vcl_exclude_list to prevent vcld from updating this file.");
+   push(@array2print, "\n");
+   push(@array2print, 'touch /var/lock/subsys/local' . "\n");
+   push(@array2print, "\n");
+   push(@array2print, 'IP0=$(ifconfig eth0 | grep inet | awk \'{print $2}\' | awk -F: \'{print $2}\')' . "\n");
+   push(@array2print, 'IP1=$(ifconfig eth1 | grep inet | awk \'{print $2}\' | awk -F: \'{print $2}\')' . "\n");
+   push(@array2print, 'sed -i -e \'/.*AllowUsers .*$/d\' /etc/ssh/sshd_config' . "\n");
+   push(@array2print, 'sed -i -e \'/.*ListenAddress .*/d\' /etc/ssh/sshd_config' . "\n");
+   push(@array2print, 'sed -i -e \'/.*ListenAddress .*/d\' /etc/ssh/external_sshd_config' . "\n");
+   push(@array2print, 'echo "AllowUsers root" >> /etc/ssh/sshd_config' . "\n");
+   push(@array2print, 'echo "ListenAddress $IP0" >> /etc/ssh/sshd_config' . "\n");
+   push(@array2print, 'echo "ListenAddress $IP1" >> /etc/ssh/external_sshd_config' . "\n");
+   push(@array2print, 'service ext_sshd stop' . "\n");
+   push(@array2print, 'service sshd reload' . "\n");
+   push(@array2print, 'sleep 2' . "\n");
+   #push(@array2print, 'service sshd start' . "\n");
+   push(@array2print, 'service ext_sshd start' . "\n");
 
 	#write to tmpfile
 	my $tmpfile = "/tmp/$request_id.rc.local";
@@ -2104,54 +2135,30 @@ sub generate_rc_local {
 		return 0;
 	}
 	#copy to node
-	if (run_scp_command($tmpfile, "$computer_node_name:/etc/rc.d/rc.local", $management_node_keys)) {
+	if (run_scp_command($tmpfile, "$computer_node_name:$rc_local_path", $management_node_keys)) {
 	}
 	else{
 		return 0;
 	}
 	
 	# Assemble the command
-	my $command = "chmod +rx /etc/rc.d/rc.local";
+	my $chmod_command = "chmod +rx $rc_local_path";
 	
 	# Execute the command
-	my ($exit_status, $output) = run_ssh_command($computer_node_name, $management_node_keys, $command, '', '', 1);
+	my ($exit_status, $output) = run_ssh_command($computer_node_name, $management_node_keys, $chmod_command, '', '', 1);
 	if (defined($exit_status) && $exit_status == 0) {
-		notify($ERRORS{'OK'}, 0, "executed $command, exit status: $exit_status");
+		notify($ERRORS{'OK'}, 0, "executed $chmod_command, exit status: $exit_status");
 	}
 	elsif (defined($exit_status)) {
-		notify($ERRORS{'WARNING'}, 0, "setting rx on /etc/rc.d/rc.local returned a non-zero exit status: $exit_status");
+		notify($ERRORS{'WARNING'}, 0, "setting rx on $rc_local_path returned a non-zero exit status: $exit_status");
 		return;
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to execute script_path");
+		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to execute $chmod_command");
 		return 0;
 	}
 
 	unlink($tmpfile);
-	
-	#confirm /etc/rc.local is symbolic link to /etc/rc.d/rc.local
-	$command = "file /etc/rc.local";
-	my $symlink = 0;
-	
-	my ($echo_exit_status, $echo_output) = $self->execute($command, 1);
-		  if (!defined($echo_output)) {
-             notify($ERRORS{'WARNING'}, 0, "failed to run command to check file of /etc/rc.local");
-        }
-        elsif (grep(/symbolic/, @$echo_output)) {
-					 notify($ERRORS{'OK'}, 0, "confirmed /etc/rc.local is symbolic link \n" . join("\n", @$echo_output));
-					 $symlink = 1;
-        }
-	
-	if(!$symlink) {
-		my $symlink_command = "mv /etc/rc.local /etc/_orig.rc.local ; ln -s /etc/rc.d/rc.local /etc/rc.local";
-		my ($sym_exit_status, $sym_output) = $self->execute($symlink_command, 1);
-      if (!defined($sym_output)) {
-           		notify($ERRORS{'WARNING'}, 0, "failed to run symlink_command $symlink_command on node $computer_node_name");
-      }
-		else {
-             		notify($ERRORS{'OK'}, 0, "successfully ran $symlink_command on $computer_node_name");
-		}
-	}
 	
 	# If systemd managed; confirm rc-local.service is enabled
 	if($self->file_exists("/bin/systemctl") ) {
@@ -2174,12 +2181,12 @@ sub generate_rc_local {
 	}
 	else {
 		#Re-run rc.local
-		my ($rclocal_exit_status, $rclocal_output) = $self->execute("/etc/rc.local");
+		my ($rclocal_exit_status, $rclocal_output) = $self->execute("$rc_local_path");
 		if (!defined($rclocal_exit_status)) {
-          notify($ERRORS{'WARNING'}, 0, "failed to run /etc/rc.local on node $computer_node_name");
+          notify($ERRORS{'WARNING'}, 0, "failed to run $rc_local_path on node $computer_node_name");
       }
 		else {
-			notify($ERRORS{'OK'}, 0, "successfully ran /etc/rc.local");
+			notify($ERRORS{'OK'}, 0, "successfully ran $rc_local_path");
 		}
 
 	}
