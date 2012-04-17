@@ -608,7 +608,7 @@ sub generate_rc_local {
 
 =cut
 
-sub generate_ext_sshd_start {
+sub generate_ext_sshd_sysVinit {
    my $self = shift;
    if (ref($self) !~ /ubuntu/i) {
       notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
@@ -720,7 +720,7 @@ sub generate_ext_sshd_start {
 	foreach my $l (@ext_ssh_conf_init) {
 		$l =~ s/OpenSSH\ server"/External\ OpenSSH\ server"/g;
 		$l =~ s/\/var\/run\/sshd/\/var\/run\/ext_sshd/g;
-		$l =~ s/exec\ \/usr\/sbin\/sshd\ -D/exec\ \/usr\/sbin\/sshd\ -D\ -f\ \/etc\/ssh\/external_ssh.config/g;
+		$l =~ s/exec\ \/usr\/sbin\/sshd\ -D/exec\ \/usr\/sbin\/sshd\ -D\ -f\ \/etc\/ssh\/external_sshd_config/g;
 	}
 
 	#write_array to file
