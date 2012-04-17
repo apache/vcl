@@ -1,0 +1,2585 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the PACKAGE package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: VCL 2.3\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2011-02-24 15:16+0900\n"
+"PO-Revision-Date: 2012-04-13 15:40-0500\n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: authentication.php:165
+#: utils.php:779
+msgid "<H2>Welcome to the Virtual Computing Lab</H2>\n"
+msgstr "<H2>ようこそVirtual Computing Labへ</H2>\n"
+
+#: authentication.php:169
+msgid "Please select an authentication method to use:<br><br>\n"
+msgstr "利用する認証方法を選択してください：<br><br>\n"
+
+#: authentication.php:171
+msgid "<font color=red>Selected method failed, please try again</font><br>\n"
+msgstr "<font color=red>選択された方法は失敗しました。やり直してください</font><br>\n"
+
+#: authentication.php:183
+msgid "<label for=remsel>Remember my selection</label><br>\n"
+msgstr "<label for=remsel>ログイン方法を記憶する</label><br>\n"
+
+#: authentication.php:184
+msgid "<INPUT type=submit value=\"Proceed to Login\" tabindex=3 name=userid>\n"
+msgstr "<INPUT type=submit value=\"ログイン画面に進む\" tabindex=3 name=userid>\n"
+
+#: authentication.php:188
+msgid "<h3>Explanation of authentication methods:</h3>\n"
+msgstr "<h3>認証方法の説明：</h3>\n"
+
+#: authentication.php:248
+msgid "Proceed to Login"
+msgstr "ログイン画面に進む"
+
+#: authentication.php:257
+msgid " (unable to connect to authentication server)"
+msgstr " (認証サーバに接続することができません。)"
+
+#: authentication.php:295
+msgid "Userid"
+msgstr "ユーザID"
+
+#: authentication.php:296
+msgid "Password"
+msgstr "パスワード"
+
+#: authentication.php:297
+msgid "Login with "
+msgstr "ログイン方法："
+
+#: authentication.php:303
+msgid "<font color=red>Login failed "
+msgstr "<font color=red>ログインに失敗しました"
+
+#: authentication.php:318
+msgid "    <TD colspan=2 align=right><INPUT type=submit value=Login></TD>\n"
+msgstr "    <TD colspan=2 align=right><INPUT type=submit value=\"ログイン\"></TD>\n"
+
+#: requests.php:57
+msgid "<H2>New Reservation</H2><br>\n"
+msgstr "<H2>新規予約</H2><br>\n"
+
+#: requests.php:78
+msgid "You don't have access to any environments and, therefore, cannot "
+msgstr "あなたは接続できる環境を持たない為、"
+
+#: requests.php:79
+msgid "make any reservations.<br>\n"
+msgstr "予約をすることはできません。<br>\n"
+
+#: requests.php:87
+msgid "Please select the environment you want to use from the list:<br>\n"
+msgstr "利用したい環境をリストから選択して下さい：<br>\n"
+
+#: requests.php:149
+msgid "<strong>Image Description</strong>:<br>\n"
+msgstr "<strong>イメージ説明</strong>：<br>\n"
+
+#: requests.php:157
+msgid "<legend>When would you like to use the application?</legend>\n"
+msgstr "<legend>アプリケーション利用日時を指定して下さい。</legend>\n"
+
+#: requests.php:159
+msgid "<label for=\"timenow\">Now</label><br>\n"
+msgstr "<label for=\"timenow\">今すぐ利用する</label><br>\n"
+
+#: requests.php:161
+msgid "<label for=\"laterradio\">Later:</label>\n"
+msgstr "<label for=\"laterradio\">後で利用する：</label>\n"
+
+#: requests.php:195
+msgid "<INPUT id=newsubmit type=submit value=\"Create Reservation\" "
+msgstr "<INPUT id=newsubmit type=submit value=\"予約\" "
+
+#: requests.php:236
+msgid "dojo.byId('imgdesc').innerHTML = '<strong>Image Description</strong>:<br>"
+msgstr "dojo.byId('imgdesc').innerHTML = '<strong>イメージ説明</strong>：<br>"
+
+#: requests.php:244
+#: requests.php:281
+msgid "if(dojo.byId('newsubmit')) dojo.byId('newsubmit').value = 'Create Reservation';"
+msgstr "if(dojo.byId('newsubmit')) dojo.byId('newsubmit').value = '予約';"
+
+#: requests.php:259
+msgid "'<font color=red>Selection not currently available due to scheduled system downtime for maintenance</font>'; "
+msgstr "'<font color=red>メンテナンス中のため、現在利用できません</font>'"
+
+#: requests.php:263
+msgid "'<font color=red>Selection not currently available</font>'; "
+msgstr "'<font color=red>現在利用できません</font>'; "
+
+#: requests.php:268
+msgid "'Estimated load time: &lt; 1 minute';"
+msgstr "'予想読込時間： &lt; 1分';"
+
+#: requests.php:273
+msgid "'Estimated load time: &lt; "
+msgstr "'予想読込時間： &lt; "
+
+#: requests.php:273
+msgid " minutes';"
+msgstr "分';"
+
+msgid "minutes"
+msgstr "分"
+
+#: requests.php:275
+#, php-format
+msgid "'Estimated load time: &lt; %2.0f minutes';"
+msgstr "'予想読込時間： &lt; %2.0f分';"
+
+#: requests.php:317
+#: requests.php:391
+#: requests.php:428
+#: requests.php:462
+#: requests.php:522
+#: requests.php:548
+msgid "<H2>New Reservation</H2>\n"
+msgstr "<H2>新規予約</H2>\n"
+
+#: requests.php:392
+msgid "<font color=\"#ff0000\">The time you requested is in the past."
+msgstr "<font color=\"#ff0000\">ご希望の時間は過ぎています。"
+
+#: requests.php:393
+msgid " Please select \"Now\" or use a time in the future.</font><br>\n"
+msgstr "\"今すぐ利用する\"または未来の時間を選択して下さい。</font><br>\n"
+
+#: requests.php:430
+#: requests.php:439
+#: requests.php:1794
+#: requests.php:1800
+msgid "<font color=\"#ff0000\">The time you requested overlaps with "
+msgstr "<font color=\"#ff0000\">ご希望の時間は別の予約時間と"
+
+#: requests.php:431
+#: requests.php:1795
+msgid "another reservation you currently have.  You are only allowed "
+msgstr "重複しています。同じ時間帯での"
+
+#: requests.php:432
+#: requests.php:1796
+msgid "to have a single reservation at any given time. Please select "
+msgstr "予約は1件のみ可能です。アプリケーション"
+
+#: requests.php:433
+msgid "another time to use the application. If you are finished with "
+msgstr "を利用する別の日時を選択して下さい。実行中の予約を"
+
+#: requests.php:434
+msgid "an active reservation, click \"Current Reservations\", "
+msgstr "終了する場合は、\"予約一覧\"をクリックして下さい。"
+
+#: requests.php:435
+msgid "then click the \"End\" button of your active reservation."
+msgstr "次に実行中の予約の\"終了\"ボタンをクリックして下さい。"
+
+#: requests.php:440
+#: requests.php:1801
+msgid "another reservation you currently have.  You are allowed "
+msgstr "重複しています。同じ時間帯での"
+
+#: requests.php:441
+#: requests.php:1802
+msgid "to have "
+msgstr "予約は"
+
+#: requests.php:441
+#: requests.php:1802
+msgid " overlapping reservations at any given time. "
+msgstr "件まで可能です。"
+
+#: requests.php:442
+msgid "Please select another time to use the application. If you are "
+msgstr "アプリケーションを利用する別の日時を選択して下さい。実行中の"
+
+#: requests.php:443
+msgid "finished with an active reservation, click \"Current "
+msgstr "予約を終了する場合は、\"予約"
+
+#: requests.php:444
+msgid "Reservations\", then click the \"End\" button of your active "
+msgstr "一覧\"をクリックして下さい。次に実行中の予約の\"終了\"ボタンをクリックして下さい。"
+
+#: requests.php:445
+msgid "reservation.</font><br><br>\n"
+msgstr "</font><br><br>\n"
+
+#: comment
+msgid "The time you requested overlaps with another reservation<br>"
+msgstr "別の予約との重複を要求され​​た時間"
+
+#: comment
+msgid "you currently have. You are only allowed to have a single<br>"
+msgstr "あなたが現在持っている。 あなただけがシングルを持って許可されている"
+
+#: comment
+msgid "reservation at any given time. Please select another time<br>"
+msgstr "任意の時点で予約。 別の時間を選択してください。"
+
+#: comment
+msgid "for the reservation.<br><br>"
+msgstr "予約のために。"
+
+#: comment
+msgid "you currently have. You are allowed to have "
+msgstr "あなたが現在持っている。 あなたが持つことができます"
+
+#: comment
+msgid "overlapping<br>"
+msgstr "重複"
+
+#: comment
+msgid "reservations at any given time. Please select another time<br>"
+msgstr "任意の時点で予約。 別の時間を選択してください。"
+
+#: requests.php:464
+msgid "This is a cluster environment. At least one image in the "
+msgstr "これはクラスター環境です。少なくとも１つのイメージには、"
+
+#: requests.php:465
+msgid "cluster has more than one version available. Please select "
+msgstr "利用可能なバージョンが１つ以上あります。各イメージの希望の"
+
+#: requests.php:466
+msgid "the version you desire for each image listed below:<br>\n"
+msgstr "バージョンを選択して下さい：<br>\n"
+
+#: requests.php:469
+msgid "There are multiple versions of this environment available.  Please "
+msgstr "利用可能な環境のバージョンが複数あります。"
+
+#: requests.php:470
+msgid "select the version you would like to check out:<br>\n"
+msgstr "利用したいバージョンを選択して下さい：<br>\n"
+
+#: requests.php:481
+msgid "Version"
+msgstr "バージョン"
+
+#: requests.php:482
+msgid "Creator"
+msgstr "作成者"
+
+#: requests.php:483
+msgid "Created"
+msgstr "作成日時"
+
+#: requests.php:484
+msgid "Currently in Production"
+msgstr "本番稼動"
+
+#: requests.php:499
+msgid "    <TD align=center>Yes</TD>\n"
+msgstr "    <TD align=center>はい</TD>\n"
+
+#: requests.php:501
+msgid "    <TD align=center>No</TD>\n"
+msgstr "    <TD align=center>いいえ</TD>\n"
+
+#: requests.php:511
+msgid "<INPUT type=submit value=\"Create Reservation\">\n"
+msgstr "<INPUT type=submit value=\"予約\">\n"
+
+#: requests.php:523
+#: requests.php:1813
+msgid "You have requested an environment that is limited in the number "
+msgstr "ご希望の環境は"
+
+#: requests.php:524
+#: requests.php:1814
+msgid "of concurrent reservations that can be made. No further "
+msgstr "同時利用数が制限されています。"
+
+#: requests.php:525
+#: requests.php:1815
+msgid "reservations for the environment can be made for the time you "
+msgstr "選択した時間はこれ以上予約できません。"
+
+#: requests.php:526
+#: requests.php:1816
+msgid "have selected. Please select another time to use the "
+msgstr "その環境を利用するには別の日時を選択して下さい。"
+
+#: requests.php:527
+#: requests.php:1817
+msgid "environment.<br>"
+msgstr "<br>"
+
+#: requests.php:552
+#: requests.php:842
+msgid "<font color=red>NOTE: The maximum allowed reservation "
+msgstr "<font color=red>注： この環境の最大予約"
+
+#: requests.php:553
+msgid "length for this environment is "
+msgstr "時間は"
+
+#: requests.php:553
+msgid ", and the length of "
+msgstr "です。予約の長さはそれに応じて"
+
+#: requests.php:554
+msgid "this reservation has been adjusted accordingly.</font>\n"
+msgstr "調整されました。</font>\n"
+
+#: requests.php:557
+#: requests.php:562
+#: requests.php:1839
+msgid "Your request to use <b>"
+msgstr "以下の予約を受け入れました。 環境：<b>"
+
+#: requests.php:558
+#: requests.php:1839
+msgid "</b> on "
+msgstr "</b> 開始日時："
+
+#: requests.php:558
+#: requests.php:1849
+msgid " for "
+msgstr " 継続時間："
+
+#: requests.php:558
+msgid " has been "
+msgstr " "
+
+#: requests.php:559
+msgid "accepted.<br><br>\n"
+msgstr "<br><br>\n"
+
+#: requests.php:563
+#: requests.php:1448
+#: requests.php:1696
+#: requests.php:1896
+#: requests.php:2018
+#: requests.php:2024
+msgid "</b> starting "
+msgstr "</b> 開始日時："
+
+#: requests.php:563
+msgid " and ending "
+msgstr " 終了日時："
+
+#: requests.php:566
+msgid "When your reservation time has been reached, the <strong>"
+msgstr "予約時間に達した時、<strong>"
+
+#: requests.php:567
+msgid "Current Reservations</strong> page will have further "
+msgstr "予約一覧</strong>ページには"
+
+#: requests.php:568
+msgid "instructions on connecting to the reserved computer.  If you "
+msgstr "コンピュータに接続する指示が表示されます。"
+
+#: requests.php:569
+msgid "would like to modify your reservation, you can do that from "
+msgstr "予約を変更したい場合は"
+
+#: requests.php:570
+msgid "the <b>Current Reservations</b> page as well.<br>\n"
+msgstr "<b>予約一覧</b>ページから変更できます。<br>\n"
+
+#: requests.php:640
+msgid "Connect!"
+msgstr "接続！"
+
+#: requests.php:664
+#: requests.php:1580
+#: requests.php:1745
+#: userpreferences.php:457
+msgid "      <INPUT type=submit value=Cancel>\n"
+msgstr "      <INPUT type=submit value=\"キャンセル\">\n"
+
+#: requests.php:686
+msgid "Reservation failed"
+msgstr "予約に失敗しました"
+
+#: requests.php:750
+msgid "Pending..."
+msgstr "処理中..."
+
+#: requests.php:753
+msgid "<br>Est:&nbsp;"
+msgstr "<br>推定：&nbsp;残り"
+
+#: requests.php:753
+msgid "&nbsp;min remaining\n"
+msgstr "分です\n"
+
+#: requests.php:761
+#: requests.php:774
+msgid "      <INPUT type=submit value=Delete>\n"
+msgstr "      <INPUT type=submit value=\"削除\">\n"
+
+#: requests.php:785
+msgid "      <INPUT type=submit value=Edit>\n"
+msgstr "      <INPUT type=submit value=\"編集\">\n"
+
+#: requests.php:795
+msgid " (Testing)"
+msgstr " (テスト中)"
+
+#: requests.php:835
+msgid "<H2>Current Reservations</H2>"
+msgstr "<H2>予約一覧</H2>"
+
+msgid "<H2>Current Reservations</H2>\n"
+msgstr "<H2>予約一覧</H2>\n"
+
+#: requests.php:838
+msgid "You currently have the following <strong>normal</strong> reservations:<br>\n"
+msgstr "現在、下記の<strong>通常</strong>予約がされています：<br>\n"
+
+#: requests.php:840
+msgid "You currently have the following normal reservations:<br>\n"
+msgstr "現在、下記の通常予約がされています：<br>\n"
+
+#: requests.php:843
+msgid "length for one of these reservations was less than the "
+msgstr "時間はあなたが定めた時間"
+
+#: requests.php:844
+msgid "length you submitted, and the length of that reservation "
+msgstr "より短く、予約の長さは"
+
+#: requests.php:845
+msgid "has been adjusted accordingly.</font>\n"
+msgstr "それに応じて調整されました。</font>\n"
+
+#: requests.php:850
+#: requests.php:874
+#: requests.php:899
+msgid "    <TH>Environment</TH>\n"
+msgstr "    <TH>環境</TH>\n"
+
+#: requests.php:851
+#: requests.php:875
+#: requests.php:900
+msgid "    <TH>Starting</TH>\n"
+msgstr "    <TH>開始日時</TH>\n"
+
+#: comment
+msgid "Starting"
+msgstr "開始日時"
+
+#: requests.php:852
+#: requests.php:876
+#: requests.php:901
+msgid "    <TH>Ending</TH>\n"
+msgstr "    <TH>終了日時</TH>\n"
+
+#: comment
+msgid "Ending"
+msgstr "終了日時"
+
+#: requests.php:853
+#: requests.php:877
+#: requests.php:902
+msgid "    <TH>Initially requested</TH>\n"
+msgstr "    <TH>予約日時</TH>\n"
+
+#: requests.php:855
+#: requests.php:880
+#: requests.php:905
+msgid "    <TH>Req ID</TH>\n"
+msgstr "    <TH>リクエストID</TH>\n"
+
+#: requests.php:870
+msgid "You currently have the following <strong>imaging</strong> reservations:<br>\n"
+msgstr "現在、下記の<strong>イメージ</strong>予約がされています：<br>\n"
+
+#: requests.php:895
+msgid "You currently have the following <strong>long term</strong> reservations:<br>\n"
+msgstr "現在、下記の<strong>長期</strong>予約がされています：<br>\n"
+
+#: requests.php:920
+msgid "<br><br>Click the <strong>"
+msgstr "<br><br>予約した仮想マシンに"
+
+#: requests.php:921
+msgid "Connect!</strong> button to get further "
+msgstr "接続するための詳細情報が必要な場合は"
+
+#: requests.php:922
+msgid "information about connecting to the reserved system. You must "
+msgstr "<strong>接続！</strong>ボタンをクリックして下さい。"
+
+#: requests.php:923
+msgid "click the button from a web browser running on the same computer "
+msgstr "仮想マシンに接続するコンピュータの"
+
+#: requests.php:924
+msgid "from which you will be connecting to the remote computer; "
+msgstr "Webブラウザからクリックして下さい。"
+
+#: requests.php:925
+msgid "otherwise, you may be denied access to the machine.\n"
+msgstr "さもなければ、リモートコンピュータへの接続が拒否されます。\n"
+
+#: requests.php:929
+msgid "<br><br>This page will automatically update "
+msgstr "<br><br>このページは予約の準備ができるまで"
+
+#: requests.php:930
+msgid "every 20 seconds until the <font color=red><i>Pending...</i>"
+msgstr "<font color=red><i>処理中...</i>の間、20秒毎に自動的に"
+
+#: requests.php:932
+msgid "</font> reservation is ready.\n"
+msgstr "</font>更新されます。\n"
+
+#: requests.php:938
+msgid "<br><br>An error has occurred that has kept one of your reservations "
+msgstr "<br><br>予約処理中に予約を妨げるエラーが発生"
+
+#: requests.php:939
+msgid "from being processed. We apologize for any inconvenience "
+msgstr "しました。ご迷惑をお掛けして申し訳ありません。"
+
+#: requests.php:940
+msgid "this may have caused.\n"
+msgstr " \n"
+
+#: requests.php:948
+msgid "You have no current reservations.<br>"
+msgstr "現在、予約はされていません。<br>"
+
+#: requests.php:957
+msgid "Detailed Reservation Status"
+msgstr "詳細な予約状況"
+
+#: requests.php:1013
+#: utils.php:4194
+msgid "The selected reservation is no longer available.  Go to "
+msgstr "選択された予約はもう利用可能ではありません。 "
+
+#: requests.php:1015
+msgid "New Reservations</a><br>to request a new reservation or to "
+msgstr "新規予約</a>ページに行って新規予約を行うか、利用可能な"
+
+#: requests.php:1016
+msgid "Current Reservations</a> to select<br>another one that is available."
+msgstr "現在のご予約</a> 使用可能な別のいずれかを選択します。"
+
+#: requests.php:1027
+msgid "No detailed loading information is available for this "
+msgstr "この予約に詳細情報は表示されません。"
+
+#: requests.php:1028
+#: requests.php:1179
+msgid "reservation."
+msgstr " "
+
+#: requests.php:1051
+msgid "<th align=right><br>State</th>"
+msgstr "<th align=right><br>状態</th>"
+
+#: requests.php:1052
+msgid "<th>Est/Act<br>Time</th>"
+msgstr "<th>推定/実行<br>時間</th>"
+
+#: requests.php:1053
+msgid "<th>Total<br>Time</th>"
+msgstr "<th>合計<br>時間</th>"
+
+#: requests.php:1077
+msgid "<td colspan=3><hr>problem at state "
+msgstr "<td colspan=3><hr>以下の処理で問題発生："
+
+#: requests.php:1087
+msgid "<br>retrying at state \""
+msgstr "<br>以下の処理を再実行中：\""
+
+#: requests.php:1178
+msgid "No detailed information is available for this "
+msgstr "この予約に詳細情報は表示されません。"
+
+#: requests.php:1193
+msgid "<br><font color=red>failed: "
+msgstr "<br><font color=red>失敗："
+
+#: requests.php:1409
+#: requests.php:1431
+msgid "The computer you are using has another reservation<br>"
+msgstr "使用しているコンピュータのすぐ後に別の"
+
+#: requests.php:1410
+#: requests.php:1432
+msgid "immediately following yours. Therefore, you cannot<br>extend "
+msgstr "予約があります。したがって、次の予約と"
+
+#: requests.php:1411
+#: requests.php:1433
+msgid "your reservation because it would overlap<br>with the next "
+msgstr "重複してしまうので予約を延長することはできません。"
+
+#: requests.php:1412
+#: requests.php:1434
+msgid "one.<br>"
+msgstr "<br>"
+
+#: requests.php:1425
+msgid "You can extend this reservation by up to "
+msgstr "合計予約時間内であれば延長することができます。 最大延長時間："
+
+#: requests.php:1426
+msgid ", but not<br>exceeding "
+msgstr "<br>合計予約時間："
+
+#: requests.php:1427
+msgid " for your total reservation time."
+msgstr " "
+
+#: requests.php:1441
+msgid "The computer you are using has another reservation following "
+msgstr "使用しているコンピュータの後に別の予約があります。"
+
+#: requests.php:1442
+msgid "yours. Therefore, you can only extend this reservation for "
+msgstr "したがって、別のコンピュータの予約まで予約を延長することができます。"
+
+#: requests.php:1443
+msgid "another "
+msgstr " 延長可能時間："
+
+#: requests.php:1443
+msgid ".<br><br>\n"
+msgstr "<br><br>\n"
+
+#: requests.php:1447
+msgid "Modify reservation for"
+msgstr "以下の予約を変更します。 環境："
+
+#: requests.php:1474
+msgid "You are only allowed to extend your reservation such that it "
+msgstr "予約可能な時間の"
+
+#: requests.php:1475
+msgid "has a total length of "
+msgstr "合計は"
+
+#: requests.php:1476
+msgid ". This reservation<br>already meets that length. Therefore, "
+msgstr "です。この予約は、既にその時間を満たしています。したがって、"
+
+#: requests.php:1477
+msgid "you are not allowed to extend your reservation any further.<br><br>"
+msgstr "予約をこれ以上延長すらｷとはできません。<br><br>"
+
+#: requests.php:1487
+#: requests.php:1498
+msgid "15 minutes"
+msgstr "15分"
+
+#: requests.php:1489
+#: requests.php:1500
+#: requests.php:2133
+msgid "30 minutes"
+msgstr "30分"
+
+#: requests.php:1491
+#: requests.php:1504
+#: requests.php:2135
+#: utils.php:6792
+#: utils.php:6839
+msgid "1 hour"
+msgstr "1時間"
+
+#: requests.php:1493
+#: requests.php:1506
+#: requests.php:2137
+#: utils.php:6841
+msgid " hours"
+msgstr "時間"
+
+#: comment
+msgid "hours"
+msgstr "時間"
+
+#: requests.php:1536
+msgid "Change ending to:"
+msgstr "変更後終了日時："
+
+#: requests.php:1545
+msgid "<br><font color=red><strong>NOTE:</strong> Due to an upcoming "
+msgstr "<br><font color=red><strong>注：</strong> 同じコンピュータに"
+
+#: requests.php:1546
+msgid "reservation on the same computer,<br>"
+msgstr "別の予約が控えている為、<br>"
+
+#: requests.php:1547
+msgid "you can only extend this reservation until "
+msgstr "以下の時間まで予約を延長できます。 時間："
+
+#: requests.php:1547
+msgid ".</font>\n"
+msgstr "</font>\n"
+
+#: requests.php:1573
+msgid "      <INPUT type=submit value=\"Confirm Changes\">\n"
+msgstr "      <INPUT type=submit value=\"変更確認\">\n"
+
+#: requests.php:1679
+msgid "to "
+msgstr " 終了日時："
+
+#: requests.php:1683
+msgid "by "
+msgstr " 延長時間："
+
+#: requests.php:1706
+msgid "start "
+msgstr " 開始日時："
+
+#: requests.php:1706
+#: requests.php:1714
+msgid " at "
+msgstr " "
+
+#: requests.php:1711
+msgid " and end "
+msgstr " 終了日時："
+
+#: requests.php:1723
+msgid "for "
+msgstr " 継続時間："
+
+#: requests.php:1738
+#: userpreferences.php:450
+msgid "      <INPUT type=submit value=Submit>\n"
+msgstr "      <INPUT type=submit value=\"送信\">\n"
+
+#: requests.php:1827
+msgid "has been accepted.<br><br>\n"
+msgstr "<br><br>\n"
+
+#: requests.php:1847
+msgid " until "
+msgstr " 終了日時："
+
+#: requests.php:1860
+msgid "system downtime for maintenance. "
+msgstr "ご希望の時間は利用できません。"
+
+#: requests.php:1894
+msgid "Delete Reservation"
+msgstr "予約削除"
+
+msgid "Delete Reservation\n"
+msgstr "予約削除\n"
+
+#: requests.php:1895
+msgid "Delete reservation for <b>"
+msgstr "以下の予約を削除しますか？ 環境：<b>"
+
+#: requests.php:1896
+#: requests.php:1922
+msgid "?<br>\n"
+msgstr "<br>\n"
+
+#: requests.php:1904
+msgid "End Reservation"
+msgstr "予約終了"
+
+#: requests.php:1906
+msgid "Are you finished with your reservation for <strong>"
+msgstr "以下の予約を終了しますか？ 環境：<strong>"
+
+#: requests.php:1907
+#: requests.php:1913
+msgid "</strong> that started "
+msgstr "</strong> 開始日時："
+
+#: requests.php:1911
+msgid "Delete reservation by "
+msgstr "以下の予約を削除しますか？ ユーザ："
+
+#: requests.php:1912
+msgid " for <strong>"
+msgstr " 環境：<strong>"
+
+#: requests.php:2083
+msgid "&nbsp;At&nbsp;\n"
+msgstr "&nbsp;\n"
+
+#: requests.php:2105
+msgid "Duration"
+msgstr "継続時間："
+
+#: requests.php:2139
+msgid " days"
+msgstr "日"
+
+#: requests.php:2145
+msgid "<label for=\"openend\">Until</label>\n"
+msgstr "<label for=\"openend\">終了日時</label>\n"
+
+#: requests.php:2177
+msgid "<H2 align=center>Connect!</H2>\n"
+msgstr "<H2 align=center>接続！</H2>\n"
+
+#: requests.php:2179
+msgid "<font color=red><big><strong>NOTICE:</strong> Later in this process, you must accept a "
+msgstr "<font color=red><big><strong>注：</strong> この後の処理で、ソフトウェアライセンスについて同意しなければなりません。"
+
+#: requests.php:2180
+msgid "click-through agreement</a> about software licensing.</big></font><br><br>\n"
+msgstr "（同意書）</a></big></font><br><br>\n"
+
+#: requests.php:2211
+#: requests.php:2266
+#: requests.php:2307
+#: requests.php:2337
+msgid "reservations.<br>\n"
+msgstr "<br>\n"
+
+#: requests.php:2214
+#: requests.php:2269
+#: requests.php:2310
+#: requests.php:2340
+msgid "(use your campus password)"
+msgstr "(大学のパスワードを使用して下さい)"
+
+#: requests.php:2328
+msgid "Get RDP File"
+msgstr "RDPファイルの取得"
+
+#: requests.php:2365
+msgid "<h3>Notes on using this environment:</h3>\n"
+msgstr "<h3>この環境の使用上の注意：</h3>\n"
+
+#: requests.php:2502
+msgid "Please select a valid environment"
+msgstr "有効な環境を選択して下さい"
+
+#: requests.php:2513
+msgid "The submitted start date is invalid. "
+msgstr "送信された開始日は無効です。"
+
+#: requests.php:2517
+msgid "The submitted hour must be from 1 to 12."
+msgstr "送信された時間は1～12まででなければなりません。"
+
+#: requests.php:2574
+#: requests.php:2578
+msgid "The submitted date/time is invalid."
+msgstr "送信された日付/時間は無効です。"
+
+#: utils.php:106
+msgid "Sunday"
+msgstr "日曜日"
+
+#: utils.php:106
+msgid "Monday"
+msgstr "月曜日"
+
+#: utils.php:106
+msgid "Tuesday"
+msgstr "火曜日"
+
+#: utils.php:106
+msgid "Wednesday"
+msgstr "水曜日"
+
+#: utils.php:106
+msgid "Thursday"
+msgstr "木曜日"
+
+#: utils.php:106
+msgid "Friday"
+msgstr "金曜日"
+
+#: utils.php:106
+msgid "Saturday"
+msgstr "土曜日"
+
+#: utils.php:215
+msgid "Failed to get user info from database.  userid was "
+msgstr "ユーザー情報の取得に失敗しました。ユーザID："
+
+#: utils.php:594
+msgid "<h2>Site Currently Under Maintenance</h2>\n"
+msgstr "<h2>メンテナンス中</h2>\n"
+
+#: utils.php:601
+msgid "This site is currently in maintenance.<br>\n"
+msgstr "メンテナンス中です。<br>\n"
+
+#: utils.php:603
+msgid "The maintenance is scheduled to end <b>"
+msgstr "メンテナンス終了予定：<b>"
+
+#: utils.php:603
+msgid "</b>.<br><br><br>\n"
+msgstr "</b><br><br><br>\n"
+
+#: utils.php:635
+msgid "<b>NOTICE</b>: This site will be down for maintenance during "
+msgstr "<b>注</b>： メンテナンスのため"
+
+#: utils.php:636
+msgid "the following times:<br><br>\n"
+msgstr "以下の時間帯にシステムを停止します。<br><br>\n"
+
+#: utils.php:637
+msgid "Start: "
+msgstr "開始日時："
+
+#: utils.php:638
+msgid "End: "
+msgstr "終了日時："
+
+#: utils.php:640
+msgid "You will be able to access your reserved machines during "
+msgstr "メンテナンス中も予約していた仮想マシンに接続することができます。"
+
+#: utils.php:641
+msgid "this maintenance. However, you will not be able to access "
+msgstr "ただし、予約していた仮想マシンに接続するための詳細情報を"
+
+#: utils.php:642
+msgid "information on how to connect to them.<br>\n"
+msgstr "見ることができません。<br>\n"
+
+#: utils.php:645
+msgid "You will not be able to access any of your reservations "
+msgstr "メンテナンス中は仮想マシンの予約を"
+
+#: utils.php:646
+msgid "during this maintenance.<br>\n"
+msgstr "行うことができません。<br>\n"
+
+#: utils.php:782
+#: utils.php:784
+msgid "Hello "
+msgstr "ログイン名："
+
+#: utils.php:796
+#: utils.php:799
+msgid "You currently have "
+msgstr "現在、"
+
+#: utils.php:796
+msgid " reservation</a>.<br>\n"
+msgstr "件の予約があります</a>。<br>\n"
+
+#: utils.php:799
+msgid " reservations</a>.<br>\n"
+msgstr "件の予約があります</a>。<br>\n"
+
+#: utils.php:803
+msgid "You do not have any current reservations.<br>\n"
+msgstr "現在、予約はされていません。<br>\n"
+
+#: utils.php:805
+msgid "Please make a selection from the menu to continue.<br>\n"
+msgstr "メニューを選択し、処理を継続して下さい。<br>\n"
+
+#: utils.php:4193
+msgid "<h1>OOPS! - Reservation Has Expired</h1>\n"
+msgstr "<h1>予約の期限が切れました</h1>\n"
+
+#: utils.php:4196
+msgid "Reservations</a><br>to request a new reservation or to "
+msgstr "予約</a><br>ページに行って、新規予約を行うか"
+
+#: utils.php:4198
+msgid "Reservations</a> to select<br>another one that is available."
+msgstr "一覧</a><br>ページに行って、利用可能な別の環境を選択して下さい。"
+
+#: utils.php:5570
+msgid "<H2>Time Table</H2>\n"
+msgstr "<H2>タイムテーブル</H2>\n"
+
+#: utils.php:5607
+msgid "There are currently no computers available that can run the application you selected.\n"
+msgstr "現在、選択したアプリケーションを実行できる利用可能なコンピュータがありません。\n"
+
+#: utils.php:5610
+msgid "There are no computers that meet the specified criteria\n"
+msgstr "指定された基準を満たすコンピュータがありません\n"
+
+#: utils.php:5615
+msgid "The time you have requested to use the environment is not "
+msgstr "その環境はご希望の時間では利用できません。"
+
+#: utils.php:5616
+msgid "available. You may select from the green blocks of time to "
+msgstr "予約が可能な緑色の時間帯より選択することができます。"
+
+#: utils.php:5617
+msgid "select an available time slot to make a reservation.<br>\n"
+msgstr "<br>\n"
+
+#: utils.php:5637
+#: utils.php:5940
+msgid "<INPUT type=submit value=Previous>\n"
+msgstr "<INPUT type=submit value=\"前へ\">\n"
+
+#: utils.php:5656
+#: utils.php:5959
+msgid "<INPUT type=submit value=Next>\n"
+msgstr "<INPUT type=submit value=\"次へ\">\n"
+
+#: utils.php:5900
+msgid "User: "
+msgstr "ユーザ： "
+
+#: utils.php:5901
+msgid " Image: "
+msgstr " イメージ： "
+
+#: utils.php:6790
+#: utils.php:6837
+#: utils.php:6846
+#: utils.php:6848
+msgid " minutes"
+msgstr "分"
+
+#: utils.php:8869
+msgid "HOME"
+msgstr "ホーム"
+
+#: utils.php:8873
+msgid "New Reservation</a></li>\n"
+msgstr "新規予約</a></li>\n"
+
+#: utils.php:8878
+msgid "Current Reservations</a></li>\n"
+msgstr "予約一覧</a></li>\n"
+
+#: utils.php:8901
+msgid "Block Allocations</a></li>\n"
+msgstr "ブロック予約</a></li>\n"
+
+#: utils.php:8906
+msgid "User Preferences</a></li>\n"
+msgstr "ユーザ設定</a></li>\n"
+
+#: utils.php:8910
+msgid "Manage Groups</a></li>\n"
+msgstr "グループ管理</a></li>\n"
+
+#: utils.php:8915
+msgid "Manage Images</a></li>\n"
+msgstr "イメージ管理</a></li>\n"
+
+#: utils.php:8920
+msgid "Manage Schedules</a></li>\n"
+msgstr "スケジュール管理</a></li>\n"
+
+#: utils.php:8925
+msgid "Manage Computers</a></li>\n"
+msgstr "コンピュータ管理</a></li>\n"
+
+#: utils.php:8930
+msgid "?mode=selectMgmtnodeOption\">Management Nodes</a></li>\n"
+msgstr "?mode=selectMgmtnodeOption\">ノード管理</a></li>\n"
+
+#: utils.php:8936
+msgid "View Time Table</a></li>\n"
+msgstr "タイムテーブル表示</a></li>\n"
+
+#: utils.php:8943
+msgid "Privileges</a></li>\n"
+msgstr "権限設定</a></li>\n"
+
+#: utils.php:8949
+msgid "User Lookup</a></li>\n"
+msgstr "ユーザ参照</a></li>\n"
+
+#: utils.php:8954
+msgid "Virtual Hosts</a></li>\n"
+msgstr "仮想ホスト</a></li>\n"
+
+#: utils.php:8959
+msgid "Site Maintenance</a></li>\n"
+msgstr "サイトメンテナンス</a></li>\n"
+
+#: utils.php:8963
+msgid "Statistics</a></li>\n"
+msgstr "統計情報</a></li>\n"
+
+#: utils.php:8966
+msgid "\">Help</a></li>\n"
+msgstr "\">ヘルプ</a></li>\n"
+
+#: utils.php:8979
+msgid "Documentation</a></li>\n"
+msgstr "ドキュメント</a></li>\n"
+
+#: utils.php:8984
+msgid "Logout</a></li>\n"
+msgstr "ログアウト</a></li>\n"
+
+#: statistics.php:59
+#: statistics.php:186
+msgid "<H2>Statistic Information</H2>\n"
+msgstr "<H2>統計情報</H2>\n"
+
+#: statistics.php:74
+msgid "Select a starting date:<br>\n"
+msgstr "開始日を選択して下さい：<br>\n"
+
+#: statistics.php:108
+msgid "Select an ending date:<br>\n"
+msgstr "終了日を選択して下さい：<br>\n"
+
+#: statistics.php:120
+msgid "Select an affiliation:\n"
+msgstr "認証方法を選択して下さい：\n"
+
+#: statistics.php:132
+msgid "<INPUT type=submit value=Submit>\n"
+msgstr "<INPUT type=submit value=\"送信\">\n"
+
+#: statistics.php:166
+msgid "The selected start date is not valid. Please "
+msgstr "選択された開始日は有効ではありません。"
+
+#: statistics.php:167
+#: statistics.php:172
+msgid "select a valid date.<br>\n"
+msgstr "有効な日付を選択して下さい。<br>\n"
+
+#: statistics.php:171
+msgid "The selected end date is not valid. Please "
+msgstr "選択された終了日は有効ではありません。"
+
+#: statistics.php:176
+msgid "The selected end date is before the selected "
+msgstr "選択された終了日は開始日の前です。"
+
+#: statistics.php:177
+msgid "start date.  Please select an end date equal "
+msgstr "終了日は、開始日と等しいまたは開始日より後を"
+
+#: statistics.php:178
+msgid "to or greater than the start date.<br>\n"
+msgstr "選択して下さい。<br>\n"
+
+#: statistics.php:187
+msgid "<H3>Reservation information between "
+msgstr "<H3>予約情報（期間）　："
+
+#: statistics.php:187
+msgid " and "
+msgstr " から "
+
+#: statistics.php:335
+msgid "    <TH align=right>Total Reservations:</TH>\n"
+msgstr "    <TH align=right>総予約数：</TH>\n"
+
+#: statistics.php:339
+msgid "    <TH align=right>Total Hours Used:</TH>\n"
+msgstr "    <TH align=right>総利用時間：</TH>\n"
+
+#: statistics.php:343
+msgid "    <TH align=right>\"Now\" Reservations:</TH>\n"
+msgstr "    <TH align=right>\"今すぐ利用\"予約数：</TH>\n"
+
+#: statistics.php:347
+msgid "    <TH align=right>\"Later\" Reservations:</TH>\n"
+msgstr "    <TH align=right>\"後で利用\"予約数：</TH>\n"
+
+#: statistics.php:351
+msgid "    <TH align=right>Unavailable:</TH>\n"
+msgstr "    <TH align=right>使用不可数：</TH>\n"
+
+#: statistics.php:356
+msgid "    <TH align=right>Load times &lt; 2 minutes:</TH>\n"
+msgstr "    <TH align=right>読込時間 &lt; 2分：</TH>\n"
+
+#: statistics.php:360
+msgid "    <TH align=right>Load times &gt;= 2 minutes:</TH>\n"
+msgstr "    <TH align=right>読込時間 &gt;= 2分：</TH>\n"
+
+#: statistics.php:365
+msgid "    <TH align=right>Total Unique Users:</TH>\n"
+msgstr "    <TH align=right>総ユニークユーザ数：</TH>\n"
+
+#: statistics.php:370
+msgid "    <TH align=right>Unique Users of "
+msgstr "    <TH align=right>OS別ユニークユーザ数："
+
+#: statistics.php:370
+msgid ":</TH>\n"
+msgstr "：</TH>\n"
+
+#: statistics.php:390
+msgid "    <TH>Reservations</TH>\n"
+msgstr "    <TH>予約</TH>\n"
+
+#: statistics.php:391
+msgid "    <TH>Unique Users</TH>\n"
+msgstr "    <TH>ユニークユーザ</TH>\n"
+
+#: statistics.php:392
+msgid "    <TH>Hours Used</TH>\n"
+msgstr "    <TH>利用時間</TH>\n"
+
+#: statistics.php:394
+msgid "    <TH>&lt; 2 min load time</TH>\n"
+msgstr "    <TH>読込時間 &lt; 2分</TH>\n"
+
+#: statistics.php:395
+msgid "    <TH>&gt;= 2 min load time</TH>\n"
+msgstr "    <TH>読込時間 &gt;= 2分</TH>\n"
+
+#: statistics.php:395
+msgid "    <TH>Failures</TH>\n"
+msgstr "    <TH>障害</TH>\n"
+
+#: statistics.php:439
+msgid "<H3>Durations:</H3>\n"
+msgstr "<H3>継続時間：</H3>\n"
+
+#: statistics.php:444
+msgid "<H3>Ending information:</H3>\n"
+msgstr "<H3>終了情報：</H3>\n"
+
+#: statistics.php:456
+msgid "    <TH align=right>0 - 30 Min:</TH>\n"
+msgstr "    <TH align=right>0 ～ 30分：</TH>\n"
+
+#: statistics.php:460
+msgid "    <TH align=right>30 Min - 1 Hour:</TH>\n"
+msgstr "    <TH align=right>30分 ～ 1時間：</TH>\n"
+
+#: statistics.php:464
+msgid "    <TH align=right>1 Hour - 2 Hours:</TH>\n"
+msgstr "    <TH align=right>1時間 ～ 2時間：</TH>\n"
+
+#: statistics.php:468
+msgid "    <TH align=right>2 Hours - 4 Hours:</TH>\n"
+msgstr "    <TH align=right>2時間 ～ 4時間：</TH>\n"
+
+#: statistics.php:472
+msgid "    <TH align=right>&gt; 4 Hours:</TH>\n"
+msgstr "    <TH align=right>4時間～：</TH>\n"
+
+#: statistics.php:489
+msgid "    <TH align=right>Deleted:</TH>\n"
+msgstr "    <TH align=right>削除：</TH>\n"
+
+#: statistics.php:495
+msgid "    <TD>(Future reservation deleted before start time reached)</TD>\n"
+msgstr "    <TD>(開始日時に達していない予約の削除)</TD>\n"
+
+#: statistics.php:498
+msgid "    <TH align=right>Released:</TH>\n"
+msgstr "    <TH align=right>終了：</TH>\n"
+
+#: statistics.php:500
+msgid "    <TD>(Reservation released before end time reached)</TD>\n"
+msgstr "    <TD>(終了日時に達していない予約の終了)</TD>\n"
+
+#: statistics.php:503
+msgid "    <TH align=right>Not Acknowledged:</TH>\n"
+msgstr "    <TH align=right>未承認：</TH>\n"
+
+#: statistics.php:505
+msgid "    <TD>(\"Connect!\" button never clicked)</TD>\n"
+msgstr "    <TD>(\"接続！\"ボタン未クリック)</TD>\n"
+
+#: statistics.php:508
+msgid "    <TH align=right>No Login:</TH>\n"
+msgstr "    <TH align=right>未ログイン：</TH>\n"
+
+#: statistics.php:510
+msgid "    <TD>(User never logged in)</TD>\n"
+msgstr "    <TD>(ユーザがログインしなかったケース)</TD>\n"
+
+#: statistics.php:513
+msgid "    <TH align=right>End of Reservation:</TH>\n"
+msgstr "    <TH align=right>予約終了：</TH>\n"
+
+#: statistics.php:515
+msgid "    <TD>(End of reservation reached)</TD>\n"
+msgstr "    <TD>(予約終了時刻に到達)</TD>\n"
+
+#: statistics.php:518
+msgid "    <TH align=right>Timed Out:</TH>\n"
+msgstr "    <TH align=right>時間切れ：</TH>\n"
+
+#: statistics.php:520
+msgid "    <TD>(Disconnect and no reconnection within 15 minutes)</TD>\n"
+msgstr "    <TD>(切断後、15分以内に再接続がなかったケース)</TD>\n"
+
+#: statistics.php:523
+msgid "    <TH align=right>Failed:</TH>\n"
+msgstr "    <TH align=right>失敗：</TH>\n"
+
+#: statistics.php:525
+msgid "    <TD>(Reserved computer failed to get prepared for user)</TD>\n"
+msgstr "    <TD>(予約コンピュータの準備に失敗)</TD>\n"
+
+#: statistics.php:552
+msgid "<H2>Reservations by Day</H2>\n"
+msgstr "<H2>日別予約</H2>\n"
+
+#: statistics.php:564
+msgid "<H2>Max Concurrent Reservations By Day</H2>\n"
+msgstr "<H2>日別最大同時予約</H2>\n"
+
+#: statistics.php:607
+msgid "<H2>Max Concurrent Blade Reservations By Day</H2>\n"
+msgstr "<H2>日別最大同時ブレード予約</H2>\n"
+
+#: statistics.php:616
+msgid "<H2>Reservations by Hour</H2>\n"
+msgstr "<H2>時間別予約</H2>\n"
+
+#: userpreferences.php:60
+msgid "<H2 align=center>User Preferences</H2>\n"
+msgstr "<H2 align=center>ユーザ設定</H2>\n"
+
+#: userpreferences.php:63
+msgid "<font color=green>User preferences successfully updated</font><br>\n"
+msgstr "<font color=green>ユーザ設定の更新に成功しました</font><br>\n"
+
+#: userpreferences.php:76
+msgid "show('personal'); return false;\">Personal&nbsp;Information</a>"
+msgstr "show('personal'); return false;\">個人情報</a>"
+
+#: userpreferences.php:80
+msgid "show('rdpfile'); return false;\">RDP&nbsp;File&nbsp;Preferences</a>"
+msgstr "show('rdpfile'); return false;\">リモートデスクトップ接続プログラムの設定</a>"
+
+#: userpreferences.php:83
+msgid "return false\">General&nbsp;Preferences</a></li>\n"
+msgstr "return false\">一般設定</a></li>\n"
+
+#: userpreferences.php:95
+msgid "      <legend>Personal</legend>\n"
+msgstr "      <legend>個人情報</legend>\n"
+
+#: userpreferences.php:101
+msgid "          <TH align=right>First Name<a href=#updateinfo>*</a>:</TH>\n"
+msgstr "          <TH align=right>名<a href=#updateinfo>*</a>：</TH>\n"
+
+#: userpreferences.php:108
+msgid "          <TH align=right>Last Name<a href=#updateinfo>*</a>:</TH>\n"
+msgstr "          <TH align=right>姓<a href=#updateinfo>*</a>：</TH>\n"
+
+#: userpreferences.php:116
+msgid "          <TH align=right>Preferred Name:</TH>\n"
+msgstr "          <TH align=right>ニックネーム：</TH>\n"
+
+#: userpreferences.php:128
+msgid "          <TH align=right>Email Address<a href=#updateinfo>*</a>:</TH>\n"
+msgstr "          <TH align=right>メールアドレス<a href=#updateinfo>*</a>：</TH>\n"
+
+#: userpreferences.php:135
+msgid "          <TD colspan=3 align=center><h3>Change Password</h3></TD>\n"
+msgstr "          <TD colspan=3 align=center><h3>パスワード変更</h3></TD>\n"
+
+#: userpreferences.php:138
+msgid "          <TH align=right>Current Password:</TH>\n"
+msgstr "          <TH align=right>現在のパスワード：</TH>\n"
+
+#: userpreferences.php:148
+msgid "          <TH align=right>New Password:</TH>\n"
+msgstr "          <TH align=right>新規パスワード：</TH>\n"
+
+#: userpreferences.php:157
+msgid "          <TH align=right>Confirm Password:</TH>\n"
+msgstr "          <TH align=right>確認用パスワード：</TH>\n"
+
+#: userpreferences.php:176
+#: userpreferences.php:258
+msgid "      <INPUT type=submit value=\"Submit Changes\">\n"
+msgstr "      <INPUT type=submit value=\"変更\">\n"
+
+#: userpreferences.php:184
+msgid "      <legend>RDP</legend>\n"
+msgstr "      <legend>リモートデスクトップ接続プログラム</legend>\n"
+
+#: userpreferences.php:190
+msgid "          <TD colspan=3><small>Try decreasing <em>Resolution</em> or <em>"
+msgstr "          <TD colspan=3><small>リモートコンピュータへの接続に時間が掛かる場合は、<em>解像度</em>か<em>画面色ビット数</em>を下げてみて下さい。<br>"
+
+#: userpreferences.php:191
+msgid "Color Depth</em> to<br>speed up your connection if things seem "
+msgstr "接続が速くなります。"
+
+#: userpreferences.php:192
+msgid "slow<br>when connected to a remote computer.</small></TD>\n"
+msgstr "</small></TD>\n"
+
+#: userpreferences.php:195
+msgid "          <TH align=right>Resolution:</TH>\n"
+msgstr "          <TH align=right>解像度：</TH>\n"
+
+#: userpreferences.php:216
+msgid "          <TH align=right>Color Depth:</TH>\n"
+msgstr "          <TH align=right>画面色ビット数：</TH>\n"
+
+#: userpreferences.php:225
+msgid "          <TH align=right>Audio:</TH>\n"
+msgstr "          <TH align=right>オーディオ：</TH>\n"
+
+#: userpreferences.php:227
+#: userpreferences.php:382
+msgid "None"
+msgstr "無"
+
+#: userpreferences.php:227
+#: userpreferences.php:384
+msgid "Use my speakers"
+msgstr "自分のスピーカを使用"
+
+#: userpreferences.php:233
+msgid "          <TH align=right>Map Local Drives:</TH>\n"
+msgstr "          <TH align=right>ローカルドライブにマッピング：</TH>\n"
+
+#: userpreferences.php:235
+#: userpreferences.php:388
+#: userpreferences.php:392
+#: userpreferences.php:396
+msgid "Yes"
+msgstr "はい"
+
+#: userpreferences.php:235
+#: userpreferences.php:386
+#: userpreferences.php:390
+#: userpreferences.php:394
+msgid "No"
+msgstr "いいえ"
+
+#: userpreferences.php:241
+msgid "          <TH align=right>Map Local Printers:</TH>\n"
+msgstr "          <TH align=right>ローカルプリンタにマッピング：</TH>\n"
+
+#: userpreferences.php:248
+msgid "          <TH align=right>Map Local Serial Ports:</TH>\n"
+msgstr "          <TH align=right>ローカルシリアルポートにマッピング：</TH>\n"
+
+#: userpreferences.php:265
+msgid "      <legend>General Preferences</legend>\n"
+msgstr "      <legend>一般設定</legend>\n"
+
+#: userpreferences.php:277
+msgid "      <p>View User Groups:<br>\n"
+msgstr "      <p>ユーザグループ表示<br>\n"
+
+#: userpreferences.php:279
+msgid "><label for=r1>matching my affiliation"
+msgstr "><label for=r1>現在の認証方法のみ表示"
+
+#: userpreferences.php:282
+msgid "><label for=r2>from all affiliations"
+msgstr "><label for=r2>全て表示"
+
+#: userpreferences.php:295
+msgid "      <p>Send email notifications about reservations:<br>\n"
+msgstr "      <p>予約通知メールの送信：<br>\n"
+
+#: userpreferences.php:297
+msgid "><label for=r3>Enabled"
+msgstr "><label for=r3>する"
+
+#: userpreferences.php:300
+msgid "><label for=r4>Disabled"
+msgstr "><label for=r4>しない"
+
+#: userpreferences.php:304
+msgid "      <INPUT type=submit value=\"Submit General Preferences\">\n"
+msgstr "      <INPUT type=submit value=\"変更\">\n"
+
+#: userpreferences.php:400
+msgid "<H2>Personal Information</H2>\n"
+msgstr "<H2>個人情報</H2>\n"
+
+#: userpreferences.php:401
+#: userpreferences.php:415
+msgid "<H3>Submit the following changes?</H3>\n"
+msgstr "<H3>以下の変更を送信しますか？</H3>\n"
+
+#: userpreferences.php:404
+msgid "    <TH align=right>Preferred Name:</TH>\n"
+msgstr "    <TH align=right>ニックネーム：</TH>\n"
+
+#: userpreferences.php:410
+msgid "New password will be submitted<br>\n"
+msgstr "新規パスワードを送信します<br>\n"
+
+#: userpreferences.php:414
+msgid "<H2>RDP File Preferences</H2>\n"
+msgstr "<H2>リモートデスクトップ接続プログラムの設定</H2>\n"
+
+#: userpreferences.php:418
+msgid "    <TH align=right>Resolution:</TH>\n"
+msgstr "    <TH align=right>解像度：</TH>\n"
+
+#: userpreferences.php:422
+msgid "    <TH align=right>Color Depth:</TH>\n"
+msgstr "    <TH align=right>画面色ビット数：</TH>\n"
+
+#: userpreferences.php:427
+msgid "    <TH align=right>Audio:</TH>\n"
+msgstr "    <TH align=right>オーディオ：</TH>\n"
+
+#: userpreferences.php:431
+msgid "    <TH align=right>Map Local Drives:</TH>\n"
+msgstr "    <TH align=right>ローカルドライブにマッピング：</TH>\n"
+
+#: userpreferences.php:435
+msgid "    <TH align=right>Map Local Printers:</TH>\n"
+msgstr "    <TH align=right>ローカルプリンタにマッピング：</TH>\n"
+
+#: userpreferences.php:439
+msgid "    <TH align=right>Map Local Serial Ports:</TH>\n"
+msgstr "    <TH align=right>ローカルシリアルポートにマッピング：</TH>\n"
+
+#: userpreferences.php:593
+msgid "Preferred name can only be up to 25 characters"
+msgstr "ニックネームは25字以内で入力して下さい"
+
+#: userpreferences.php:597
+msgid "Preferred name can only contain letters and spaces"
+msgstr "ニックネームは半角英字と空白のみで入力して下さい"
+
+#: userpreferences.php:616
+msgid "Password incorrect"
+msgstr "現在のパスワードを正しく入力して下さい"
+
+#: userpreferences.php:622
+msgid "Passwords do not match"
+msgstr "新規パスワードと確認用パスワードを一致するように入力して下さい"
+
+#: comment
+msgid "More Options"
+msgstr "その他のオプション"
+
+#: comment
+msgid "Edit"
+msgstr "編集"
+
+#: comment
+msgid "Reboot"
+msgstr "再起動"
+
+#: comment
+msgid "Reinstall"
+msgstr "再インストールする"
+
+#: comment
+msgid "End Reservation & Create Image"
+msgstr "予約を終了し、イメージを作成します。"
+
+#: comment
+msgid "Block Allocations"
+msgstr "ブロックの割り当て"
+
+#: comment
+msgid "Request New Block Allocation"
+msgstr "新規ブロックの割り当てを要求する"
+
+#: comment
+msgid "Block Allocations are a way to have a set of machines preloaded with a particular environment at specified times and made available to a specific group of users. This is very useful for classroom use and for workshops. They can be made available on a repeating schedule such as when a course meets each week. Block Allocations only allocate machines for the group of users - they do not create the actual, end user reservations for the machines. All users still must log in to the VCL web site and make their own reservations DURING the period a block allocation is active. The forms here provide a way for you to submit a request for a Block Allocation for review by a sysadmin. If you just need to use a machine through VCL, use the New Reservation page for that."
+msgstr "ブロックの割り当てが指定した時刻に特定の環境にプリロードされたと特定のユーザグループが利用できるようにマシンのセットを持っている方法です。 これは、教室での使用のための、ワークショップのために非常に便利です。 コー​​スは毎週満たしたときには、次のような繰り返しのスケジュールに基づいて利用することができます。 ブロックの割り当ては、ユーザーのグループのためにマシンを割り当てる - 彼らはマシンの実際のエンドユーザーの予約を作成しないでください。 すべてのユーザーがVCLのWebサイトにログインし、ブロックの割り当てがアクティブである期間中に自分の予約を行う必要があります。 ここでのフォームは、sysadminによるレビューのためにブロック割り当ての要求を送信するための方法を提供しています。 あなただけのVCLを介してマシンを使用する必要がある場合は、そのための新規予約ページを使用します。"
+
+#: comment
+msgid "Please submit Block Allocation requests at least one full business day in advance to allow time for them to be approved."
+msgstr "彼らのために時間が承認できるようにするために、事前に少なくとも1つの完全な営業日ブロック割り当て要求を提出してください。"
+
+#: comment
+msgid "Complete the following form to request a new block allocation. Your request will need to be approved by a VCL admin before it is created."
+msgstr "新しいブロックの割り当てを要求するには、以下のフォームに記入します。 あなたの要求は、それが作成される前にVCL管理者の承認が必要になることがあります。"
+
+#: comment
+msgid "Environment"
+msgstr "環境"
+
+#: comment
+msgid "User group"
+msgstr "ユーザグループ"
+
+#: comment
+msgid "Number of seats"
+msgstr "座席数"
+
+#: comment
+msgid "Specify dates/times by:\n"
+msgstr "日付と時刻を指定することによって\n"
+
+#: comment
+msgid "Repeating Weekly"
+msgstr "ウィークリーを繰り返す"
+
+#: comment
+msgid "Repeating Monthly"
+msgstr "月間繰り返し"
+
+#: comment
+msgid "List of Dates/Times"
+msgstr "日付と時刻のリスト"
+
+#: comment
+msgid "First Date of Usage"
+msgstr "使用の最初の日"
+
+#: comment
+msgid "Last Date of Usage"
+msgstr "使用方法の最後の日"
+
+#: comment
+msgid "Days"
+msgstr "日"
+
+#: comment
+msgid "Times"
+msgstr "タイムズ"
+
+#: comment
+msgid "Start"
+msgstr "開始日時："
+
+#: comment
+msgid "End"
+msgstr "終わり"
+
+#: comment
+msgid "Add"
+msgstr "加える"
+
+#: comment
+msgid "Remove"
+msgstr "削除する"
+
+#: comment
+msgid "Additional comments"
+msgstr "その他のコメント"
+
+#: comment
+msgid "Repeat on the "
+msgstr "を繰り返す "
+
+#: comment
+msgid " of every month"
+msgstr " 毎月の"
+
+#: comment
+msgid "Date"
+msgstr "日付"
+
+#: comment
+msgid "Confirm Block Allocation"
+msgstr "ブロック割り当てを確認する"
+
+#: comment
+msgid "Please confirm the following values and then click <strong>Submit Block Allocation Request</strong>"
+msgstr "次の値を確認して、ブロック割り当て要求を送信するをクリックしてください"
+
+#: comment
+msgid "Seats"
+msgstr "席"
+
+#: comment
+msgid "First Date"
+msgstr "最初の日"
+
+#: comment
+msgid "Last Date"
+msgstr "最後の日"
+
+#: comment
+msgid "Your additional comments will be submitted."
+msgstr "あなたの追加コメントが送信されます。"
+
+#: comment
+msgid "Submit Block Allocation Request\n"
+msgstr "ブロック割り当て要求を送信する\n"
+
+#: comment
+msgid "Cancel"
+msgstr "キャンセル"
+
+#: comment
+msgid "Manage Block Allocations"
+msgstr "ブロックの割り当てを管理する"
+
+#: comment
+msgid "View"
+msgstr "ビュー"
+
+#: comment
+msgid "View Times"
+msgstr "タイムズを見る"
+
+#: comment
+msgid "Name"
+msgstr "名"
+
+#: comment
+msgid "Reserved<br>Machines"
+msgstr "予約済み<br>マシン"
+
+#: comment
+msgid "Reserved<br>For"
+msgstr "予約済み<br>のために"
+
+#: comment
+msgid "Repeating"
+msgstr "繰り返しの"
+
+#: comment
+msgid "Owner"
+msgstr "所有者"
+
+#: comment
+msgid "Block Allocation Times"
+msgstr "割り当て時間をブロック"
+
+#: comment
+msgid "Skip"
+msgstr "スキップ"
+
+#: comment
+msgid "Use"
+msgstr "使用"
+
+#: comment
+msgid "Close"
+msgstr "閉じる"
+
+#: comment
+msgid "Statistic Information for"
+msgstr "の統計情報"
+
+#: comment
+msgid "(Reservations with start time on given day)"
+msgstr "(与えられた日の開始時刻と予約)"
+
+#: comment
+msgid "Max Concurrent Virtual Machine Reservations By Day"
+msgstr "デイ·バイ·最大同時仮想マシンの予約"
+
+#: comment
+msgid "Active reservations during given hour averaged over selected dates"
+msgstr "与えられた時間中にアクティブな予約は、選択した日付で平均"
+
+#: comment
+msgid "Block Allocation"
+msgstr "ブロックの割り当て"
+
+#: comment
+msgid "group not listed"
+msgstr "ブロックの割り当て"
+
+#: comment
+msgid "1st"
+msgstr "第一"
+
+#: comment
+msgid "2nd"
+msgstr "第二"
+
+#: comment
+msgid "3rd"
+msgstr "第三"
+
+#: comment
+msgid "4th"
+msgstr "第四"
+
+#: comment
+msgid "5th"
+msgstr "第五"
+
+#: comment
+msgid "Okay"
+msgstr "良い"
+
+#: comment
+msgid "Modify Reservation"
+msgstr "予約を変更する"
+
+#: comment
+msgid "View Available Times"
+msgstr "利用可能時間を表示"
+
+#: comment
+msgid "Available Times"
+msgstr "利用できる時間"
+
+#: comment
+msgid "Loading..."
+msgstr "負荷"
+
+#: comment
+msgid "The end time must be later than the start time."
+msgstr "終了時間は開始時間より後のでなければなりません"
+
+#: comment
+msgid "second"
+msgstr "2番目の"
+
+#: comment
+msgid "seconds"
+msgstr "秒"
+
+#: comment
+msgid "There are no available times that<br>the selected image can be used.<br><br>"
+msgstr "選択した画像を使用することができることなく利用できる時間はありません。<br><br>"
+
+#: comment
+msgid "Modify the end time for this reservation:<br><br>"
+msgstr "この予約の終了時刻を変更します。<br><br>"
+
+#: comment
+msgid "Extend reservation by:"
+msgstr "延長予約時間："
+
+#: comment
+msgid "Start Time"
+msgstr "開始時刻"
+
+#: comment
+msgid "Use Selected Time"
+msgstr "選択した時間を使用"
+
+#: comment
+msgid "You can extend this reservation by a selected amount or<br>"
+msgstr "選択した量によって、この予約を拡張したりできます。<br>"
+
+#: comment
+msgid "change the end time to a specified date and time.<br><br>"
+msgstr "指定した日付と時刻に終了時刻を変更します。<br><br>"
+
+#: comment
+msgid "You can select either a "
+msgstr "次のいずれかを選択できます。<br>"
+
+#: comment
+msgid "soft or a hard reboot. A soft reboot<br>issues a reboot "
+msgstr "ソフトまたはハードリブートします。 ソフトの再起動問題が再起動<br>"
+
+#: comment
+msgid "command to the operating system. A hard reboot<br>is akin to "
+msgstr "オペレーティングシステムにコマンドを実行します。 ハードリブートに似ている<br>"
+
+#: comment
+msgid "toggling the power switch on a computer. After<br>issuing the "
+msgstr "コンピュータの電源スイッチを切り替える。 発行後<br>"
+
+#: comment
+msgid "reboot, it may take several minutes before the<br>machine is "
+msgstr "マシンがリブートする前に、それは数分かかる場合があります<br>"
+
+#: comment
+msgid "available again. It is also possible that it will<br>not come "
+msgstr "再び使用可能に。 それが来ないことも可能です。<br>"
+
+#: comment
+msgid "back up at all. Are you sure you want to continue?"
+msgstr "すべてでバックアップ。 続行してもよろしいですか？"
+
+#: comment
+msgid "Reboot Reservation"
+msgstr "リブート予約"
+
+#: comment
+msgid "Soft Reboot"
+msgstr "ソフトリブート"
+
+#: comment
+msgid "Hard Reboot"
+msgstr "ハードリブート"
+
+#: comment
+msgid "Soft Rebooting"
+msgstr "再起動するソフト"
+
+#: comment
+msgid "Hard Rebooting"
+msgstr "ハードリブート"
+
+#: comment
+msgid "Reinstall Reservation"
+msgstr "予約を再インスト"
+
+#: comment
+msgid "This will cause the reserved machine to be reinstalled. "
+msgstr "これは予約されたマシンは再インストールされるようになります。"
+
+#: comment
+msgid "You may select which version"
+msgstr "あなたは、どのバージョンを選択することができます"
+
+#: comment
+msgid "of the environment you would like to use for the reinstall. The currently installed"
+msgstr "環境のあなたを再インストールするために使用したいと思います。 現在インストールされている"
+
+#: comment
+msgid "version what is selected."
+msgstr "バージョンは何を選択されています。"
+
+#: comment
+msgid "Any data saved only to the reserved machine "
+msgstr "すべてのデータは予約されたマシンにのみ保存"
+
+#: comment
+msgid "will be lost"
+msgstr "失われる"
+
+#: comment
+msgid "Are you sure you want to continue?"
+msgstr "続行してもよろしいですか？"
+
+#: comment
+msgid "NOTE"
+msgstr "気付く"
+
+#: comment
+msgid "Server Profiles"
+msgstr "サーバプロファイル"
+
+#: comment
+msgid "Dashboard"
+msgstr "ダッシュボード"
+
+#: comment
+msgid "Connect to reservation using"
+msgstr "を使用して予約に接続する"
+
+#: comment
+msgid "Reservation Timed Out"
+msgstr "予約はタイムアウト"
+
+#: comment
+msgid "The specified reservation no longer exists."
+msgstr "指定された予約は、もはや存在しません。"
+
+#: comment
+msgid "The reservation is no longer failed or timed out."
+msgstr "予約は、もはや失敗していませんまたはタイムアウトされています。"
+
+#: comment
+msgid "Remove timed out reservation from list of current reservations?"
+msgstr "現在の予約リストからタイムアウトしました予約を削除しますか？"
+
+#: comment
+msgid "Remove failed reservation from list of current reservations?"
+msgstr "現在の予約リストから失敗した予約を削除しますか？"
+
+#: comment
+msgid "Remove Reservation"
+msgstr "予約を削除します。"
+
+#: comment
+msgid "Reservation has timed out"
+msgstr "予約がタイムアウトしました"
+
+#: comment
+msgid "End Time"
+msgstr "終了時間"
+
+#: comment
+msgid "Extend By"
+msgstr "で拡張"
+
+#: comment
+msgid "Comp. ID"
+msgstr "コンピュータ"
+
+#: requests.php:838
+msgid "You currently have the following <strong>server</strong> reservations:<br>\n"
+msgstr "あなたは現在、以下のサーバの予約があります。<br>\n"
+
+#: comment
+msgid "Details"
+msgstr "細部"
+
+#: comment
+msgid "Req ID"
+msgstr "リクエスト番号"
+
+#: comment
+msgid "Initially Requested"
+msgstr "最初に要求"
+
+#: comment
+msgid "Admin User Group"
+msgstr "adminユーザー·グループ"
+
+#: comment
+msgid "Access User Group"
+msgstr "アクセスユーザグループ"
+
+#: comment
+msgid "In Use"
+msgstr "使用中の"
+
+#: comment
+msgid "Checkpointing"
+msgstr "チェックポイント"
+
+#: comment
+msgid "Failed"
+msgstr "失敗した"
+
+#: comment
+msgid "Reinstalling"
+msgstr "再インストール"
+
+#: comment
+msgid "Indefinite Ending"
+msgstr "不定エンディング"
+
+#: comment
+msgid "Invalid start time submitted"
+msgstr "無効な開始時刻は、提出された"
+
+#: comment
+msgid "Invalid duration submitted"
+msgstr "無効な期間は、提出された"
+
+#: comment
+msgid "Invalid end date/time submitted"
+msgstr "提出され無効な終了日/時刻"
+
+#: comment
+msgid "Invalid data submitted"
+msgstr "無効なデータが提出され"
+
+#: comment
+msgid "Invalid user group submitted"
+msgstr "無効なユーザー·グループは、提出された"
+
+#: comment
+msgid "The name can only contain letters, numbers, "
+msgstr "名前には、文字、数字、のみ含めることができます。"
+
+#: comment
+msgid "spaces, dashes(-), and periods(.) and can "
+msgstr "スペース、ダッシュ（ - ）、およびピリオドとすることができ（。）"
+
+#: comment
+msgid "be from 3 to 255 characters long"
+msgstr "3から255までの文字の長さ"
+
+#: comment
+msgid "The reserved IP"
+msgstr "予約済みのIP"
+
+#: comment
+msgid "or MAC address"
+msgstr "またはMACアドレス"
+
+#: comment
+msgid "conflicts with another"
+msgstr "他のと競合"
+
+#: comment
+msgid "reservation using the same IP or MAC address. Please"
+msgstr "同じIPアドレスまたはMACアドレスを使用して予約。 てください。"
+
+#: comment
+msgid "select a different time to use the image."
+msgstr "イメージを使用する別の時刻を選択します。"
+
+#: comment
+msgid "The time you requested overlaps with a maintenance window.<br>"
+msgstr "時間がメンテナンス·ウィンドウとの重複を要請した。<br>"
+
+#: comment
+msgid "Please select a different time to use the image.<br>"
+msgstr "イメージを使用する別の時間を選択してください。<br>"
+
+#: comment
+msgid "You have requested an environment that is limited in the<br>"
+msgstr "あなたは限られている環境を要求している<br>"
+
+#: comment
+msgid "number of concurrent reservations that can be made. No further<br>"
+msgstr "行うことができます同時予約数。 これ以上ない<br>"
+
+#: comment
+msgid "reservations for the environment can be made for the time you<br>"
+msgstr "環境への予約は時間あなたのために行うことができます<br>"
+
+#: comment
+msgid "have selected. Please select another time for the reservation.<br><br>"
+msgstr "選択されています。 予約のための別の時間を選択してください<br><br>"
+
+#: comment
+msgid "The time period you have requested is not available.<br>"
+msgstr "あなたが要求している期間は利用できません。<br>"
+
+#: comment
+msgid "Please select a different time."
+msgstr "異なる時間を選択してください。"
+
+#: comment
+msgid "<big><strong>End Reservation/Make Production</strong></big><br><br>"
+msgstr "<big><strong>予約を終了/生産を行います</strong></big><br><br>"
+
+#: comment
+msgid "Are you satisfied that this environment is ready to be made production"
+msgstr "この環境では、生産を行うこと準備ができていることを満足している"
+
+#: comment
+msgid "and replace the current production version, or would you just like to"
+msgstr "と現在の生産バージョンを置き換えるか、あるいは単にしたいと思い"
+
+#: comment
+msgid "end this reservation and test it again later?"
+msgstr "この予約を終了し、後でもう一度それをテスト？"
+
+#: comment
+msgid "<br><font color=\"red\">\nWARNING: This environment is part of "
+msgstr "<br><font color=\"red\">警告：この環境の一部である。"
+
+#: comment
+msgid "an active block allocation. Changing the production version of"
+msgstr "アクティブなブロックの割り当て。 の製品バージョ​​ンを変更する"
+
+#: comment
+msgid "the environment at this time will result in new reservations"
+msgstr "この時の環境では、新しい予約になります"
+
+#: comment
+msgid "under the block allocation to have full reload times instead of"
+msgstr "ブロックの割り当ての下で完全な再読み込みの時間の代わりを持つこと"
+
+#: comment
+msgid "a &lt; 1 minutes wait. You can change the production version"
+msgstr "&lt;1分待ちます。 本番バージョンを変更することができます"
+
+#: comment
+msgid "later by going to Manage Images-&gt;Edit Image Profiles and"
+msgstr "後で画像] -&gt; [編集]画像のプロファイルを管理しようとによって"
+
+#: comment
+msgid "clicking Edit for this environment.</font><br>"
+msgstr "この環境では、[編集]をクリックします。</font><br>"
+
+#: comment
+msgid "Make this the production version</label><br>"
+msgstr "この生産バージョンを確認</label><br>"
+
+#: comment
+msgid "Just end the reservation</label><br><br>"
+msgstr "単に予約を終了</label><br><br>"
+
+#: comment
+msgid "(You must have javascript enabled to use the 'Until' option.)"
+msgstr "（あなたはjavascriptがオプション 'まで'を使用する有効にする必要があります。）"
+
+#: comment
+msgid "This reservation has timed out due to lack of user activity and"
+msgstr "この予約は、ユーザー·アクティビティの不足のためにタイムアウトになったと"
+
+#: comment
+msgid "is no longer available.<br>\n"
+msgstr "使用できなくなります。<br>\n"
+
+#: comment
+msgid "<h2>Cluster Reservation</h2>\n"
+msgstr "<h2>クラスタ予約</h2>\n"
+
+#: comment
+msgid "This is a cluster reservation. Depending on the makeup of the"
+msgstr "これは、クラスタの予約です。 の構成に応じて"
+
+#: comment
+msgid "cluster, you may need to use different methods to connect to the"
+msgstr "クラスタでは、に接続するために異なる方法を使用する必要があります"
+
+#: comment
+msgid "different environments in your cluster.<br><br>\n"
+msgstr "クラスタ内の異なる環境。<br><br>\n"
+
+#: comment
+msgid "This reservation has timed out<br>and is no longer available."
+msgstr "この予約はタイムアウトになり、使用できなくなりました。"
+
+#: comment
+msgid "The submitted minute must be from 00 to 59."
+msgstr "提出分は00から59にする必要があります。"
+
+#: comment
+msgid "<h2>Error: Invalid Input</h2><br>\n"
+msgstr "<h2>エラー：無効な入力</h2><br>\n"
+
+#: comment
+msgid "You submitted input invalid for this web site. If you have no"
+msgstr "あなたは、このウェブサイトのために無効な入力を提出しました。 あなたはお持ちでいない場合"
+
+#: comment
+msgid "idea why this happened and the problem persists, please email"
+msgstr "アイデア、なぜこれが起こった問題が解決しない場合は、メールしてください"
+
+#: comment
+msgid "Problem%20With%20VCL"
+msgstr "VCLの問題"
+
+#: comment
+msgid "for further assistance.  Please include the "
+msgstr "さらなる支援のために。 記載してください。"
+
+#: comment
+msgid "steps you took that led up to this problem in your email message."
+msgstr "の手順では、あなたの電子メールメッセージでこの問題に至るまでのことだ。"
+
+#: comment
+msgid "You submitted expired data to this web site. Please restart the"
+msgstr "このウェブサイトに期限切れのデータを提出しました。 再起動してください"
+
+#: comment
+msgid "steps you were following without using your browser's <strong>"
+msgstr "あなたのブラウザのを使用せずに、次のとおりであった手順"
+
+#: comment
+msgid "Back</strong> button."
+msgstr "戻るボタンをクリックします。"
+
+#: comment
+msgid "An error has occurred.  If this problem persists, please email "
+msgstr "エラーが発生しました。 この問題が解決しない場合は、メールしてください"
+
+#: comment
+msgid "This reservation can no longer be extended due to<br>"
+msgstr "この予約は、もはやのために拡張することができません"
+
+#: comment
+msgid "a reservation immediately following yours.<br><br>"
+msgstr "あなたの直後に予約。<br><br>"
+
+#: comment
+msgid "The selected reservation no longer exists.<br><br>"
+msgstr "選択した予約は、もはや存在しません。<br><br>"
+
+#: comment
+msgid "Invalid start day submitted"
+msgstr "無効な開始日投稿"
+
+#: comment
+msgid "computer status check"
+msgstr "コンピュータの状態チェック"
+
+#: comment
+msgid "starting install process"
+msgstr "インストールプロセスを開始する"
+
+#: comment
+msgid "running post configuration"
+msgstr "実行コンフィギュレーション後"
+
+#: comment
+msgid "image loading"
+msgstr "画像の読み込み"
+
+#: comment
+msgid "rebooting node for reinstall"
+msgstr "再インストールするための再起動用ノード"
+
+#: comment
+msgid "ready for Connect"
+msgstr "接続の準備"
+
+#: comment
+msgid "starting reload process"
+msgstr "リロードプロセスを開始する"
+
+#: comment
+msgid "confirming image exists"
+msgstr "確認した画像が存在する"
+
+#: comment
+msgid "transferring image files to host server"
+msgstr "サーバをホストするためにイメージファイルを転送する"
+
+#: comment
+msgid "creating configuration file"
+msgstr "コンフィギュレーションファイルを作成する"
+
+#: comment
+msgid "starting load process"
+msgstr "ロード·プロセスを開始する"
+
+#: comment
+msgid "adding user account"
+msgstr "ユーザーアカウントを追加する"
+
+#: comment
+msgid "resource ready"
+msgstr "リソースの準備"
+
+#: comment
+msgid "machine booting"
+msgstr "ブートマシン"
+
+#: comment
+msgid "starting virtual machine"
+msgstr "仮想マシンを起動"
+
+#: comment
+msgid "Your request for a Block Allocation has been submitted for<br>"
+msgstr "ブロック割り当てのためのあなたの要求がために送信されました<br>"
+
+#: comment
+msgid "approval. "
+msgstr "承認。"
+
+#: comment
+msgid "You should be notified within a few business days<br>"
+msgstr "あなたは、いくつかの営業日以内に通知されるべきである<br>"
+
+#: comment
+msgid "of its acceptance or rejection."
+msgstr "その受諾または拒絶の。"
+
+#: comment
+msgid "<br><br><font color=\"red\"><b>Note:</b> You do not have an "
+msgstr "<br><br><font color=\"red\"><b>注：</b> あなたが持っていない"
+
+#: comment
+msgid "email address registered<br>with VCL. Therefore, you will "
+msgstr "VCLに登録されている電子メールアドレスを入力します。 したがって、なる"
+
+#: comment
+msgid "not receive automatic<br>notification when this block "
+msgstr "自動通知を受信しない場合は、このブロック"
+
+#: comment
+msgid "allocation is accepted<br>or rejected.</font>"
+msgstr "割り当ては、承認または拒否されています。</font>"
+
+#: comment
+msgid "The selected Block Request no longer exists."
+msgstr "選択したブロック要求はもはや存在しません。"
+
+#: comment
+msgid "This is the number of environments that<br>\n"
+msgstr "これは、環境の数です。<br>\n"
+
+#: comment
+msgid "will be loaded for the Block Allocation.\n"
+msgstr "ブロック割り当てのためにロードされます。\n"
+
+#: comment
+msgid "User in this user group will be able to make reservations<br>\n"
+msgstr "このユーザーグループのユーザーが予約を行うことができるようになります<br>\n"
+
+#: comment
+msgid "for the computers set aside for this block allocation.<br>\n"
+msgstr "コンピュータにはこのブロックの割り当てに脇に置きます。<br>\n"
+
+#: comment
+msgid "If you do not see an applicable user group listed, please<br>\n"
+msgstr "あなたが該当するユーザー·グループが表示されない場合は、してください。<br>\n"
+
+#: comment
+msgid "select \"<font color=\"blue\">(group not listed)</font>\" and describe the group you need<br>\n"
+msgstr "選択する \"<font color=\"blue\">（グループに記載されていない）</font>\" し、必要なグループを記述する<br>\n"
+
+#: comment
+msgid "in the <strong>Additional Comments</strong> section at the bottom of<br>\n"
+msgstr "で <strong>追加コメント</strong> 下部のセクション<br>\n"
+
+#: comment
+msgid "the page. If this is for a class, make sure to list the course<br>\n"
+msgstr "ページを参照してください。 これはクラスにある場合は、コースを一覧表示することを確認してください<br>\n"
+
+#: comment
+msgid "and section number.\n"
+msgstr "とセクション番号。\n"
+
+#: comment
+msgid "Users in this user group can modify this<br>\n"
+msgstr "このユーザーグループのユーザーは、これを変更することができます<br>\n"
+
+#: comment
+msgid "block allocation. Select None to keep<br>\n"
+msgstr "割り当てをブロックします。 保つためには、[なし]を選択し<br>\n"
+
+#: comment
+msgid "anyone else from being able to modify it.\n"
+msgstr "それを変更することができることから他の誰。\n"
+
+#: comment
+msgid "For repeating block allocations, there are three ways you can enter the dates and times:<br>\n"
+msgstr "ブロックの割り当てを繰り返すためには、日付と時刻を入力することができ、次の3つの方法があります。<br>\n"
+
+#: comment
+msgid "<li>Repeating Weekly - Use this if the block allocation needs to occur every week.<br>\n"
+msgstr "<li>毎週繰り返す - ブロックの割り当てが毎週発生する必要がある場合は、このを使用してください。<br>\n"
+
+#: comment
+msgid "You can make it repeat on a single day each week or on multiple days.  The time(s)<br>\n"
+msgstr "それは毎週一日または複数日に繰り返すことができます。 時間（s）<br>\n"
+
+#: comment
+msgid "that it occurs will be the same on all days. You can list as many times as needed.</li>\n"
+msgstr "それが発生していると、すべての日に同じになります。 あなたは、必要に応じて何度でも表示することもできます。</li>\n"
+
+#: comment
+msgid "<li>Repeating Monthly - Use this if the block allocation needs to occur on a certain<br>\n"
+msgstr "月間繰り返し - ブロックの割り当ては、特定の上で発生する必要がある場合は、これを使用し<br>\n"
+
+#: comment
+msgid "day of the month (i.e. 2nd Tuesday each month). You can list as many times as<br>\n"
+msgstr "月の日（すなわち、第2火曜日毎月）。 あなたは多くの倍のように一覧表示できます。<br>\n"
+
+#: comment
+msgid "needed for that day of the month.</li>\n"
+msgstr "月のその日のために必要。</li>\n"
+
+#: comment
+msgid "<li>List of Dates/Times - Use this to specify any other cases, including single<br>\n"
+msgstr "<li>日付/時刻の一覧 - シングルを含む、任意の他の例を指定するには、このを使用して、<br>\n"
+
+#: comment
+msgid "events. You can specify as many date/time combinations as needed.</li>\n"
+msgstr "イベント。 必要に応じて、多くの日付/時刻の組み合わせを指定することができます。</li>\n"
+
+#: comment
+msgid "This is the first date the block allocation will be used.\n"
+msgstr "これは、ブロックの割り当てが使用される最初の日付です。\n"
+
+#: comment
+msgid "This is the last date the block allocation will be used.\n"
+msgstr "これは、ブロックの割り当てが使用された最後の日付です。\n"
+
+#: comment
+msgid "Select the checkbox for each of the days you<br>\n"
+msgstr "日のそれぞれのあなたのためのチェックボックスを選択します。<br>\n"
+
+#: comment
+msgid "would like the block allocation to occur. For<br>\n"
+msgstr "ブロックの割り当てが発生したいと思います。 のために<br>\n"
+
+#: comment
+msgid "example, check Monday, Wednesday, and Friday<br>\n"
+msgstr "たとえば、月曜日、水曜日、金曜日をチェック<br>\n"
+
+#: comment
+msgid "for a class that meets on those days.\n"
+msgstr "それらの日に満たしているクラスの。\n"
+
+#: comment
+msgid "Here you specify the start and end times of the<br>\n"
+msgstr "ここでの開始時刻と終了時刻を指定する<br>\n"
+
+#: comment
+msgid "block allocation. The times will occur on each<br>\n"
+msgstr "割り当てをブロックします。 時間はそれぞれに発生します。<br>\n"
+
+#: comment
+msgid "of the selected days. You might specify more than<br>\n"
+msgstr "選択された日の。 あなたは、複数指定することがあります<br>\n"
+
+#: comment
+msgid "one start/end combination if you had multiple<br>\n"
+msgstr "1開始/終了の組み合わせが複数あった場合<br>\n"
+
+#: comment
+msgid "sections that met on the same day.\n"
+msgstr "同じ日に会ったセクションを参照してください。\n"
+
+#: comment
+msgid "block allocation. You might specify more than<br>\n"
+msgstr "割り当てをブロックします。 あなたは、複数指定することがあります<br>\n"
+
+#: comment
+msgid "Specify individual dates and times during<br>\n"
+msgstr "個々の日付と時間帯を指定します。<br>\n"
+
+#: comment
+msgid "which the block allocation will occur.\n"
+msgstr "どのブロックの割り当てが発生します。\n"
+
+#: comment
+msgid "Enter any additional information about this block allocation.<br>\n"
+msgstr "このブロックの割り当てに関する追加情報を入力してください。<br>\n"
+
+#: comment
+msgid "&lt; and &gt; are not allowed.<br>\n"
+msgstr "&lt; と &gt; は許可されていません。<br>\n"
+
+#: comment
+msgid "If you selected \"<font color=\"blue\">(group not listed)</font>\" as the User group, make sure<br>\n"
+msgstr "あなたが選択した場合 \"<font color=\"blue\">（グループに記載されていない）</font>\" ユーザグループとして、確認してください<br>\n"
+
+#: comment
+msgid "to clearly describe the requirements of a new user group that<br>\n"
+msgstr "明らかに新しいユーザーグループの要件を記述すること<br>\n"
+
+#: comment
+msgid "will be created for this block allocation.\n"
+msgstr "このブロックの割り当てが作成されます。\n"
+
+#: comment
+msgid "awaiting approval"
+msgstr "承認を待っている"
+
+#: comment
+msgid "weekly"
+msgstr "毎週"
+
+#: comment
+msgid "monthly"
+msgstr "毎月"
+
+#: comment
+msgid "list"
+msgstr "リスト"
+
+#: comment
+msgid "(unspecified)"
+msgstr "(詳細不明)"
+
+#: comment
+msgid "(too much computational time required to generate this graph)"
+msgstr "(このグラフを生成するために必要なすぎる計算時間)"
+
+#: comment
+msgid "Resources"
+msgstr "資源"
+
+#: comment
+msgid "Current status of computers"
+msgstr "コンピュータの現在のステータス"
+
+#: comment
+msgid "Available"
+msgstr "利用できる"
+
+#: comment
+msgid "Reloading"
+msgstr "リロード"
+
+#: comment
+msgid "Reserved/In use"
+msgstr "/使用で予約"
+
+#: comment
+msgid "Your Active Block Allocations"
+msgstr "あなたのアクティブなブロックの割り当て"
+
+#: comment
+msgid "You are currently a member of the following Block Allocations."
+msgstr "あなたは現在、次のブロックの割り当てのメンバーです。"
+
+#: comment
+msgid "Click an item to view its current status."
+msgstr "現在のステータスを表示するには、項目をクリックします。"
+

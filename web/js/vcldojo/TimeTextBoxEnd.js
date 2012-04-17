@@ -16,12 +16,14 @@
 */
 dojo.provide("vcldojo.TimeTextBoxEnd");
 dojo.require('dijit.form.TimeTextBox');
+dojo.require('dojo.i18n');
+dojo.requireLocalization("vcldojo", "TimeTextBoxEnd");
 dojo.declare(
 	"vcldojo.TimeTextBoxEnd",
 	[dijit.form.TimeTextBox],
 	{
 		startid: '',
-		invalidMessage: 'This must be a valid time that is greater than the start time',
+		invalidMessage: '(initial message)',
 		isValid: function(isFocused) {
 			if(dijit.byId(this.startid)) {
 				var start = dijit.byId(this.startid).value;
@@ -29,6 +31,11 @@ dojo.declare(
 					return false;
 			}
 			return this.inherited(arguments);
+		},
+		postCreate: function() {
+			var ln = dojo.i18n.getLocalization("vcldojo", "TimeTextBoxEnd");
+			this.invalidMessage = ln.invalidMessage;
+			this.inherited(arguments);
 		}
 	}
 );

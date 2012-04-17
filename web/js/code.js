@@ -35,6 +35,12 @@ function setBrowser() {
 }
 setBrowser();
 
+function _(str) {
+	if(! usenls || ! (str in nlsmessages))
+		return str;
+	return nlsmessages[str];
+}
+
 function testJS() {
 	if(document.getElementById('testjavascript'))
 		document.getElementById('testjavascript').value = '1';
@@ -266,10 +272,10 @@ function checkNewLocalPassword() {
 		stat.innerHTML = '';
 	}
 	else if(pwd1.value == pwd2.value) {
-		stat.innerHTML = '<font color="#008000">match</font>';
+		stat.innerHTML = '<font color="#008000">' + _('match') + '</font>';
 	}
 	else {
-		stat.innerHTML = '<font color="red">no match</font>';
+		stat.innerHTML = '<font color="red">' + _('no match') + '</font>';
 	}
 }
 

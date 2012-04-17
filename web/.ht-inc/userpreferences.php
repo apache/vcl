@@ -50,10 +50,10 @@ function userpreferences() {
 			$data["resolution"] = $user["width"] . "x" . $user["height"];
 	}
 
-	print "<H2 align=center>User Preferences</H2>\n";
+	print _("<H2 align=center>User Preferences</H2>\n");
 	print "<div align=center id=status class=visible>\n";
 	if($mode == "submituserprefs") {
-		print "<font color=green>User preferences successfully updated</font><br>\n";
+		print _("<font color=green>User preferences successfully updated</font><br>\n");
 	}
 	print "</div>\n";
 	print "<table summary=\"\">\n";
@@ -66,14 +66,14 @@ function userpreferences() {
 	   $user['affiliation'] == 'Local') {
 		$showpersonal = 1;
 		print "      <li><a href=#personal onclick=\"";
-		print "show('personal'); return false;\">Personal&nbsp;Information</a>";
+		print _("show('personal'); return false;\">Personal&nbsp;Information</a>");
 		print "</li>\n";
 	}
 	print "      <li><a href=#rdpfile onclick=\"";
-	print "show('rdpfile'); return false;\">RDP&nbsp;File&nbsp;Preferences</a>";
+	print _("show('rdpfile'); return false;\">RDP&nbsp;File&nbsp;Preferences</a>");
 	print "</li>\n";
 	print "      <li><a href=#uiprefs onclick=\"javascript:show('uiprefs'); ";
-	print "return false\">General&nbsp;Preferences</a></li>\n";
+	print _("return false\">General&nbsp;Preferences</a></li>\n");
 	print "      </ul>\n";
 	print "      </div>\n";
 	print "    </TD>\n";
@@ -81,20 +81,20 @@ function userpreferences() {
 	print "    <TD rowspan=2>\n";
 	if($showpersonal) {
 		print "      <fieldset id=personal class=shown>\n";
-		print "      <legend>Personal</legend>\n";
+		print _("      <legend>Personal</legend>\n");
 		print "      <FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
 		print "      <table summary=\"displays your personal information\">\n";
 		$showsubmit = 0;
 		if(! empty($user['firstname'])) {
 			print "        <TR>\n";
-			print "          <TH align=right>First Name<a href=#updateinfo>*</a>:</TH>\n";
+			print _("          <TH align=right>First Name<a href=#updateinfo>*</a>:</TH>\n");
 			print "          <TD>" . $user["firstname"] . "</TD>\n";
 			print "          <TD></TD>\n";
 			print "        </TR>\n";
 		}
 		if(! empty($user['lastname'])) {
 			print "        <TR>\n";
-			print "          <TH align=right>Last Name<a href=#updateinfo>*</a>:</TH>\n";
+			print _("          <TH align=right>Last Name<a href=#updateinfo>*</a>:</TH>\n");
 			print "          <TD>" . $user["lastname"] . "</TD>\n";
 			print "          <TD></TD>\n";
 			print "        </TR>\n";
@@ -102,7 +102,7 @@ function userpreferences() {
 		# preferred name is stored locally; allow setting preferred name if a firstname is defined
 		if(! empty($user['firstname'])) {
 			print "        <TR>\n";
-			print "          <TH align=right>Preferred Name:</TH>\n";
+			print _("          <TH align=right>Preferred Name:</TH>\n");
 			print "          <TD><label class=hidden for=preferredname>Preferred Name</label>\n";
 			print "              <INPUT type=text name=preferredname maxlength=100 ";
 			print "size=15 value=\"" . $data["preferredname"] . "\"></TD>\n";
@@ -114,17 +114,17 @@ function userpreferences() {
 		}
 		if(! empty($user['email'])) {
 			print "        <TR>\n";
-			print "          <TH align=right>Email Address<a href=#updateinfo>*</a>:</TH>\n";
+			print _("          <TH align=right>Email Address<a href=#updateinfo>*</a>:</TH>\n");
 			print "          <TD>" . $user["email"] . "</TD>\n";
 			print "          <TD></TD>\n";
 			print "        </TR>\n";
 		}
 		if($user['affiliation'] == 'Local') {
 			print "        <TR>\n";
-			print "          <TD colspan=3 align=center><h3>Change Password</h3></TD>\n";
+			print _("          <TD colspan=3 align=center><h3>Change Password</h3></TD>\n");
 			print "        </TR>\n";
 			print "        <TR>\n";
-			print "          <TH align=right>Current Password:</TH>\n";
+			print _("          <TH align=right>Current Password:</TH>\n");
 			print "          <TD>\n";
 			print "            <label class=hidden for=currentpassword>Current Password</label>\n";
 			print "            <INPUT type=password name=currentpassword maxlength=100 size=15>\n";
@@ -134,7 +134,7 @@ function userpreferences() {
 			print "</TD>\n";
 			print "        </TR>\n";
 			print "        <TR>\n";
-			print "          <TH align=right>New Password:</TH>\n";
+			print _("          <TH align=right>New Password:</TH>\n");
 			print "          <TD>\n";
 			print "            <label class=hidden for=newpassword>New Password</label>\n";
 			print "            <INPUT type=password name=newpassword maxlength=100 ";
@@ -143,7 +143,7 @@ function userpreferences() {
 			print "          <TD></TD>\n";
 			print "        </TR>\n";
 			print "        <TR>\n";
-			print "          <TH align=right>Confirm Password:</TH>\n";
+			print _("          <TH align=right>Confirm Password:</TH>\n");
 			print "          <TD>\n";
 			print "            <label class=hidden for=confirmpassword>Confirm Password</label>\n";
 			print "            <INPUT type=password name=confirmpassword maxlength=100 ";
@@ -162,7 +162,7 @@ function userpreferences() {
 			$cont = addContinuationsEntry('confirmpersonalprefs', array(), SECINDAY, 1, 1, 1);
 			print "      <INPUT type=hidden name=continuation value=\"$cont\">\n";
 			print "      <div align=center>\n";
-			print "      <INPUT type=submit value=\"Submit Changes\">\n";
+			print _("      <INPUT type=submit value=\"Submit Changes\">\n");
 			print "      </div>\n";
 		}
 		print "      </FORM>\n";
@@ -170,18 +170,18 @@ function userpreferences() {
 	}
 
 	print "      <fieldset id=rdpfile class=shown>\n";
-	print "      <legend>RDP</legend>\n";
+	print _("      <legend>RDP</legend>\n");
 	print "      <FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
 	print "      <table summary=\"lists adjustable preferences for the RDP ";
 	print "file that is sent when you click the Get RDP File button on the ";
 	print "Connect! page\">\n";
 	print "        <TR>\n";
-	print "          <TD colspan=3><small>Try decreasing <em>Resolution</em> or <em>";
-	print "Color Depth</em> to<br>speed up your connection if things seem ";
-	print "slow<br>when connected to a remote computer.</small></TD>\n";
+	print _("          <TD colspan=3><small>Try decreasing <em>Resolution</em> or <em>");
+	print _("Color Depth</em> to<br>speed up your connection if things seem ");
+	print _("slow<br>when connected to a remote computer.</small></TD>\n");
 	print "        </TR>\n";
 	print "        <TR>\n";
-	print "          <TH align=right>Resolution:</TH>\n";
+	print _("          <TH align=right>Resolution:</TH>\n");
 	$resolutionArray = array("Full Screen" => "Full Screen",
 	                         "1920x1440" => "1920x1440",
 	                         "1600x1200" => "1600x1200",
@@ -202,7 +202,7 @@ function userpreferences() {
 	print "          <TD></TD>\n";
 	print "        </TR>\n";
 	print "        <TR>\n";
-	print "          <TH align=right>Color Depth:</TH>\n";
+	print _("          <TH align=right>Color Depth:</TH>\n");
 	print "          <TD>\n";
 	#$colordepth = array("8" => "8", "16" => "16", "24" => "24");
 	$colordepth = array("8" => "8", "16" => "16", "24" => "24", "32" => "32 (Vista only)");
@@ -211,30 +211,30 @@ function userpreferences() {
 	print "          <TD></TD>\n";
 	print "        </TR>\n";
 	print "        <TR>\n";
-	print "          <TH align=right>Audio:</TH>\n";
+	print _("          <TH align=right>Audio:</TH>\n");
 	print "          <TD>\n";
-	$audio = array("none" => "None", "local" => "Use my speakers");
+	$audio = array("none" => _("None"), "local" => _("Use my speakers"));
 	printSelectInput("audiomode", $audio, $data["audiomode"]);
 	print "          </TD>\n";
 	print "          <TD></TD>\n";
 	print "        </TR>\n";
 	print "        <TR>\n";
-	print "          <TH align=right>Map Local Drives:</TH>\n";
+	print _("          <TH align=right>Map Local Drives:</TH>\n");
 	print "          <TD>\n";
-	$yesno = array(1 => "Yes", 0 => "No");
+	$yesno = array(1 => _("Yes"), 0 => _("No"));
 	printSelectInput("mapdrives", $yesno, $data["mapdrives"]);
 	print "          </TD>\n";
 	print "          <TD></TD>\n";
 	print "        </TR>\n";
 	print "        <TR>\n";
-	print "          <TH align=right>Map Local Printers:</TH>\n";
+	print _("          <TH align=right>Map Local Printers:</TH>\n");
 	print "          <TD>\n";
 	printSelectInput("mapprinters", $yesno, $data["mapprinters"]);
 	print "          </TD>\n";
 	print "          <TD></TD>\n";
 	print "        </TR>\n";
 	print "        <TR>\n";
-	print "          <TH align=right>Map Local Serial Ports:</TH>\n";
+	print _("          <TH align=right>Map Local Serial Ports:</TH>\n");
 	print "          <TD>\n";
 	printSelectInput("mapserial", $yesno, $data["mapserial"]);
 	print "          </TD>\n";
@@ -244,14 +244,14 @@ function userpreferences() {
 	$cont = addContinuationsEntry('confirmrdpprefs', array(), SECINDAY, 1, 1, 1);
 	print "      <INPUT type=hidden name=continuation value=\"$cont\">\n";
 	print "      <div align=center>\n";
-	print "      <INPUT type=submit value=\"Submit Changes\">\n";
+	print _("      <INPUT type=submit value=\"Submit Changes\">\n");
 	print "      </div>\n";
 	print "      </FORM>\n";
 	print "      </fieldset>\n";
 
 	print "      <div id=uiprefs class=shown>\n";
 	print "      <fieldset>\n";
-	print "      <legend>General Preferences</legend>\n";
+	print _("      <legend>General Preferences</legend>\n");
 	print "      <FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
 	$cdata = array();
 	if($user['showallgroups']) {
@@ -262,12 +262,12 @@ function userpreferences() {
 		$selected['affiliation'] = 'checked';
 		$selected['allgroups'] = '';
 	}
-	print "      <p>View User Groups:<br>\n";
+	print _("      <p>View User Groups:<br>\n");
 	print "      <INPUT type=radio id=r1 name=groupview value=affiliation ";
-	print "{$selected['affiliation']}><label for=r1>matching my affiliation";
+	print "{$selected['affiliation']}" . _("><label for=r1>matching my affiliation");
 	print "</label><br>\n";
 	print "      <INPUT type=radio id=r2 name=groupview value=allgroups ";
-	print "{$selected['allgroups']}><label for=r2>from all affiliations";
+	print "{$selected['allgroups']}" . _("><label for=r2>from all affiliations");
 	print "</label></p>\n";
 	if($user['emailnotices']) {
 		$selected['enabled'] = 'checked';
@@ -277,16 +277,16 @@ function userpreferences() {
 		$selected['enabled'] = '';
 		$selected['disabled'] = 'checked';
 	}
-	print "      <p>Send email notifications about reservations:<br>\n";
+	print _("      <p>Send email notifications about reservations:<br>\n");
 	print "      <INPUT type=radio id=r3 name=emailnotify value=2 ";
-	print "{$selected['enabled']}><label for=r3>Enabled";
+	print "{$selected['enabled']}" . _("><label for=r3>Enabled");
 	print "</label><br>\n";
 	print "      <INPUT type=radio id=r4 name=emailnotify value=1 ";
-	print "{$selected['disabled']}><label for=r4>Disabled";
+	print "{$selected['disabled']}" . _("><label for=r4>Disabled");
 	print "</label></p>\n";
 	$cont = addContinuationsEntry('submitgeneralprefs', $cdata, SECINDAY, 1, 0);
 	print "      <INPUT type=hidden name=continuation value=\"$cont\">\n";
-	print "      <INPUT type=submit value=\"Submit General Preferences\">\n";
+	print _("      <INPUT type=submit value=\"Submit General Preferences\">\n");
 	print "      </FORM>\n";
 	print "      </fieldset>\n";
 	print "      </div>\n";
@@ -316,64 +316,64 @@ function confirmUserPrefs($type) {
 	}
 
 	if($data["audiomode"] == "none")
-		$audio = "None";
+		$audio = _("None");
 	else
-		$audio = "Use my speakers";
+		$audio = _("Use my speakers");
 	if($data["mapdrives"] == 0)
-		$drives = "No";
+		$drives = _("No");
 	else
-		$drives = "Yes";
+		$drives = _("Yes");
 	if($data["mapprinters"] == 0)
-		$printers = "No";
+		$printers = _("No");
 	else
-		$printers = "Yes";
+		$printers = _("Yes");
 	if($data["mapserial"] == 0)
-		$serial = "No";
+		$serial = _("No");
 	else
-		$serial = "Yes";
+		$serial = _("Yes");
 
 	print "<DIV align=center>\n";
 	if($type == 0) {
-		print "<H2>Personal Information</H2>\n";
-		print "<H3>Submit the following changes?</H3>\n";
+		print _("<H2>Personal Information</H2>\n");
+		print _("<H3>Submit the following changes?</H3>\n");
 		print "<table>\n";
 		print "  <TR>\n";
-		print "    <TH align=right>Preferred Name:</TH>\n";
+		print _("    <TH align=right>Preferred Name:</TH>\n");
 		print "    <TD>" . $data["preferredname"] . "</TD>\n";
 		print "  </TR>\n";
 		print "</table>\n";
 		if($user['affiliation'] == 'Local' &&
 		   ! empty($data['newpassword'])) {
-			print "New password will be submitted<br>\n";
+			print _("New password will be submitted<br>\n");
 		}
 	}
 	elseif($type == 1) {
-		print "<H2>RDP File Preferences</H2>\n";
-		print "<H3>Submit the following changes?</H3>\n";
+		print _("<H2>RDP File Preferences</H2>\n");
+		print _("<H3>Submit the following changes?</H3>\n");
 		print "<table>\n";
 		print "  <TR>\n";
-		print "    <TH align=right>Resolution:</TH>\n";
+		print _("    <TH align=right>Resolution:</TH>\n");
 		print "    <TD>" . $data["resolution"] . "</TD>\n";
 		print "  </TR>\n";
 		print "  <TR>\n";
-		print "    <TH align=right>Color Depth:</TH>\n";
+		print _("    <TH align=right>Color Depth:</TH>\n");
 		$colordepth = array("8" => "8", "16" => "16", "24" => "24", "32" => "32 (Vista only)");
 		print "    <TD>" . $colordepth[$data["bpp"]] . "</TD>\n";
 		print "  </TR>\n";
 		print "  <TR>\n";
-		print "    <TH align=right>Audio:</TH>\n";
+		print _("    <TH align=right>Audio:</TH>\n");
 		print "    <TD>$audio</TD>\n";
 		print "  </TR>\n";
 		print "  <TR>\n";
-		print "    <TH align=right>Map Local Drives:</TH>\n";
+		print _("    <TH align=right>Map Local Drives:</TH>\n");
 		print "    <TD>$drives</TD>\n";
 		print "  </TR>\n";
 		print "  <TR>\n";
-		print "    <TH align=right>Map Local Printers:</TH>\n";
+		print _("    <TH align=right>Map Local Printers:</TH>\n");
 		print "    <TD>$printers</TD>\n";
 		print "  </TR>\n";
 		print "  <TR>\n";
-		print "    <TH align=right>Map Local Serial Ports:</TH>\n";
+		print _("    <TH align=right>Map Local Serial Ports:</TH>\n");
 		print "    <TD>$serial</TD>\n";
 		print "  </TR>\n";
 		print "</table>\n";
@@ -384,14 +384,14 @@ function confirmUserPrefs($type) {
 	print "      <FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
 	$cont = addContinuationsEntry('submituserprefs', $data, SECINWEEK, 0, 0);
 	print "      <INPUT type=hidden name=continuation value=\"$cont\">\n";
-	print "      <INPUT type=submit value=Submit>\n";
+	print _("      <INPUT type=submit value=Submit>\n");
 	print "      </FORM>\n";
 	print "    </TD>\n";
 	print "    <TD>\n";
 	print "      <FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
 	$cont = addContinuationsEntry('userpreferences');
 	print "      <INPUT type=hidden name=continuation value=\"$cont\">\n";
-	print "      <INPUT type=submit value=Cancel>\n";
+	print _("      <INPUT type=submit value=Cancel>\n");
 	print "      </FORM>\n";
 	print "    </TD>\n";
 	print "  </TR>\n";
@@ -526,11 +526,11 @@ function processUserPrefsInput($checks=1) {
 
 	if(strlen($return["preferredname"]) > 25) {
 	   $submitErr |= PREFNAMEERR;
-	   $submitErrMsg[PREFNAMEERR] = "Preferred name can only be up to 25 characters";
+	   $submitErrMsg[PREFNAMEERR] = _("Preferred name can only be up to 25 characters");
 	}
 	if(! preg_match('/^[a-zA-Z ]*$/', $return["preferredname"])) {
 	   $submitErr |= PREFNAMEERR;
-	   $submitErrMsg[PREFNAMEERR] = "Preferred name can only contain letters and spaces";
+	   $submitErrMsg[PREFNAMEERR] = _("Preferred name can only contain letters and spaces");
 	}
 	if($user['affiliation'] == 'Local' && array_key_exists('newpassword', $_POST)) {
 		$return['newpassword'] = $_POST['newpassword'];
@@ -544,13 +544,13 @@ function processUserPrefsInput($checks=1) {
 		if(! empty($return['newpassword']) && ! empty($confirmpwd) &&
 		   ! validateLocalAccount($user['unityid'], $curr)) {
 			$submitErr |= LOCALPASSWORDERR;
-			$submitErrMsg[LOCALPASSWORDERR] = "Password incorrect";
+			$submitErrMsg[LOCALPASSWORDERR] = _("Password incorrect");
 		}
 		elseif((empty($return['newpassword']) && ! empty($confirmpwd)) ||
 		   (! empty($return['newpassword']) && empty($confirmpwd)) ||
 		   ($return['newpassword'] != $confirmpwd)) {
 			$submitErr |= LOCALPASSWORDERR;
-			$submitErrMsg[LOCALPASSWORDERR] = "Passwords do not match";
+			$submitErrMsg[LOCALPASSWORDERR] = _("Passwords do not match");
 		}
 	}
 	return $return;

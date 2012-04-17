@@ -28,16 +28,26 @@
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function getHeader($refresh) {
-	global $user, $mode, $authed;
+	global $user, $mode, $authed, $locale;
 	$rt  = "<!DOCTYPE html PUBLIC \"-//W3C//DTD HTML 4.01 Transitional//EN\">\n";
-	$rt .= "<html lang=\"en\">\n";
+	$rt .= "<html lang=\"$locale\">\n";
 	$rt .= "<head>\n";
+	$usenls = 0;
+	$usenlsstr = "false";
+	if(! preg_match('/^en/', $locale)) {
+		$rt .= "<meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\">\n";
+		$usenls = 1;
+		$usenlsstr = "true";
+	}
 	$rt .= "<title>VCL :: Virtual Computing Lab</title>\n";
 	$rt .= "<link rel=stylesheet type=\"text/css\" href=\"css/vcl.css\">\n";
 	$rt .= "<link rel=stylesheet type=\"text/css\" href=\"themes/default/css/vcl.css\">\n";
 	$rt .= "<script src=\"js/code.js\" type=\"text/javascript\"></script>\n";
+	if($usenls)
+		$rt .= "<script type=\"text/javascript\" src=\"js/nls/$locale/messages.js\"></script>\n";
 	$rt .= "<script type=\"text/javascript\">\n";
 	$rt .= "var cookiedomain = '" . COOKIEDOMAIN . "';\n";
+	$rt .= "usenls = $usenlsstr;\n";
 	$rt .= "</script>\n";
 	$rt .= getDojoHTML($refresh);
 	if($refresh)
@@ -58,7 +68,9 @@ function getHeader($refresh) {
 	$rt .= "      <TR>\n";
 	$rt .= "        <TD width=1px background=\"themes/default/images/black.jpg\" nowrap></TD>\n";
 	$rt .= "        <TD width=215px nowrap><img src=\"themes/default/images/vclbanner_L.jpg\" alt=\"\"></TD>\n";
-	$rt .= "        <TD background=\"themes/default/images/vclbanner_C.jpg\" width=\"100%\"></TD>\n";
+	$rt .= "        <TD background=\"themes/default/images/vclbanner_C.jpg\" width=\"100%\">\n";
+	$rt .= getSelectLanguagePulldown();
+	$rt .= "        </TD>\n";
 	$rt .= "        <TD width=198px nowrap><img src=\"themes/default/images/vclbanner_R.jpg\" alt=\"\"></TD>\n";
 	$rt .= "        <TD width=3px background=\"themes/default/images/content_border_R.jpg\" nowrap></TD>\n";
 	$rt .= "      </TR>\n";

@@ -42,6 +42,7 @@ $cache['unityids'] = array();
 $cache['nodeprivs']['resources'] = array();
 $docreaders = array();
 $shibauthed = 0;
+$locale = '';
 
 require_once(".ht-inc/states.php");
 
@@ -54,6 +55,8 @@ maintenanceCheck();
 dbConnect();
 
 initGlobals();
+
+setVCLLocale();
 
 $modes = array_keys($actions['mode']);
 $args = array_keys($actions['args']);

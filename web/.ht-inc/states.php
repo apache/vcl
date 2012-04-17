@@ -35,12 +35,14 @@ $actions["entry"] = array('main',
                           'viewSchedules',
                           'selectComputers',
                           'selectMgmtnodeOption',
+                          'serverProfiles',
                           'pickTimeTable',
                           'viewNodes',
                           'userLookup',
+                          'editVMInfo',
+                          'siteMaintenance',
                           'selectstats',
                           'helpform',
-                          'viewdocs',
                           'logout',
                           'shiblogout',
                           'xmlrpccall',
@@ -51,12 +53,9 @@ $actions["entry"] = array('main',
                           'clearCache',
                           'errorrpt',
                           'auth',
-                          'editVMInfo',
                           'continuationsError',
                           'requestBlockAllocation',
-                          'siteMaintenance',
                           'dashboard',
-                          'serverProfiles',
 );
 
 $noHTMLwrappers = array('sendRDPfile',
@@ -182,6 +181,7 @@ $noHTMLwrappers = array('sendRDPfile',
                         'AJcanceltovmhostinuse',
                         'jsonUserGroupStore',
                         'jsonResourceGroupStore',
+                        'changeLocale',
 );
 
 # main
@@ -762,11 +762,13 @@ $actions['mode']['continuationsError'] = "continuationsError";
 $actions['mode']['clearCache'] = "clearPrivCache";
 $actions['mode']['errorrpt'] = "errorrpt";
 $actions['mode']['AJvalidateUserid'] = "AJvalidateUserid";
+$actions['mode']['changeLocale'] = "changeLocale";
 $actions['pages']['continuationsError'] = "misc";
 $actions['pages']['clearCache'] = "misc";
 $actions['pages']['errorrpt'] = "misc";
 $actions['pages']['logout'] = "misc";
 $actions['pages']['shiblogout'] = "misc";
 $actions['pages']['AJvalidateUserid'] = "misc";
+$actions['pages']['changeLocale'] = "misc";
 
 ?>

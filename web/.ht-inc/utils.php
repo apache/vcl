@@ -98,7 +98,7 @@ function initGlobals() {
 	$submitErr = 0;
 	$submitErrMsg = array();
 	$remoteIP = $_SERVER["REMOTE_ADDR"];
-	$days = array('Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday');
+	$days = array(_('Sunday'), _('Monday'), _('Tuesday'), _('Wednesday'), _('Thursday'), _('Friday'), _('Saturday'));
 	$phpVerArr = explode('.', phpversion());
 	$phpVer = $phpVerArr[0];
 
@@ -179,7 +179,8 @@ function initGlobals() {
 			$mode != "xmlrpccall" &&
 			$mode != "xmlrpcaffiliations" &&
 			$mode != "selectauth" &&
-			$mode != "submitLogin") {
+			$mode != "submitLogin" &&
+			$mode != "changeLocale") {
 			$oldmode = $mode;
 			$mode = "auth";
 		}
@@ -208,7 +209,7 @@ function initGlobals() {
 		if(! $user = getUserInfo($userid)) {
 			// if first call to getUserInfo fails, try calling with $noupdate set
 			if(! $user = getUserInfo($userid, 1)) {
-				$ERRORS[1] = "Failed to get user info from database.  userid was $userid";
+				$ERRORS[1] = _("Failed to get user info from database.  userid was ") . "$userid";
 				abort(1);
 			}
 		}
@@ -513,6 +514,13 @@ function checkAccess() {
 							return;
 						}
 						break;
+					case 'serverProfiles':
+						if(! in_array("serverProfileAdmin", $user["privileges"])) {
+							$mode = "";
+							$actionFunction = "main";
+							return;
+						}
+						break;
 					case 'pickTimeTable':
 						$computermetadata = getUserComputerMetaData();
 						if(! count($computermetadata["platforms"]) ||
@@ -546,11 +554,16 @@ function checkAccess() {
 							return;
 						}
 						break;
-					case 'viewdocs':
-						if(! in_array("userGrant", $user["privileges"]) &&
-						   ! in_array("resourceGrant", $user["privileges"]) &&
-						   ! in_array("nodeAdmin", $user["privileges"]) &&
-						   ! in_array($user['id'], $docreaders)) {
+					case 'siteMaintenance':
+						if(! checkUserHasPerm('Schedule Site Maintenance')) {
+							$mode = "";
+							$actionFunction = "main";
+							return;
+						}
+						break;
+					case 'dashboard':
+						if(! checkUserHasPerm('View Dashboard (global)') &&
+						   ! checkUserHasPerm('View Dashboard (affiliation only)')) {
 							$mode = "";
 							$actionFunction = "main";
 							return;
@@ -642,18 +655,19 @@ function maintenanceCheck() {
 			$skin = strtolower($_COOKIE['VCLSKIN']);
 		else
 			$skin = DEFAULTTHEME;
+		setVCLLocale();
 		require_once("themes/$skin/page.php");
 		printHTMLHeader();
-		print "<h2>Site Currently Under Maintenance</h2>\n";
+		print _("<h2>Site Currently Under Maintenance</h2>\n");
 		if(! empty($msg)) {
 			$msg = htmlentities($msg);
 			$msg = preg_replace("/\n/", "<br>\n", $msg);
 			print "$msg<br>\n";
 		}
 		else
-			print "This site is currently in maintenance.<br>\n";
-		$niceend = date('l, F jS, Y \a\t g:i A', $end);
-		print "The maintenance is scheduled to end <b>$niceend</b>.<br><br><br>\n";
+			print _("This site is currently in maintenance.<br>\n");
+		$niceend = strftime('%A, %x, %l:%M %P', $end);
+		print _("The maintenance is scheduled to end <b>") . "$niceend" . _("</b>.<br><br><br>\n");
 		printHTMLFooter();
 		exit;
 	}
@@ -682,21 +696,21 @@ function maintenanceNotice() {
 				$_SESSION['usersessiondata'] = array();
 				return;
 			}
-			$nicestart = date('g:i A \o\n l, F jS, Y', $start);
-			$niceend = date('g:i A \o\n l, F jS, Y', datetimeToUnix($item['end']));
+			$nicestart = strftime('%A, %x, %l:%M %P', $start);
+			$niceend = strftime('%A, %x, %l:%M %P', datetimeToUnix($item['end']));
 			print "<div id=\"maintenancenotice\">\n";
-			print "<b>NOTICE</b>: This site will be down for maintenance during ";
-			print "the following times:<br><br>\n";
-			print	"Start: $nicestart<br>\n";
-			print "End: $niceend.<br><br>\n";
+			print _("<b>NOTICE</b>: This site will be down for maintenance during ");
+			print _("the following times:<br><br>\n");
+			print	_("Start") . ": $nicestart<br>\n";
+			print _("End") . ": $niceend.<br><br>\n";
 			if($item['allowreservations']) {
-				print "You will be able to access your reserved machines during ";
-				print "this maintenance. However, you will not be able to access ";
-				print "information on how to connect to them.<br>\n";
+				print _("You will be able to access your reserved machines during ");
+				print _("this maintenance. However, you will not be able to access ");
+				print _("information on how to connect to them.<br>\n");
 			}
 			else {
-				print "You will not be able to access any of your reservations ";
-				print "during this maintenance.<br>\n";
+				print _("You will not be able to access any of your reservations ");
+				print _("during this maintenance.<br>\n");
 			}
 			print "</div>\n";
 			return;
@@ -720,6 +734,7 @@ function clearPrivCache() {
 	$_SESSION['compstateflow'] = array();
 	$_SESSION['usersessiondata'] = array();
 	unset($_SESSION['user']);
+	unset($_SESSION['locales']);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -795,12 +810,12 @@ function stopSession() {
 ////////////////////////////////////////////////////////////////////////////////
 function main() {
 	global $user, $authed, $mode;
-	print "<H2>Welcome to the Virtual Computing Lab</H2>\n";
+	print _("<H2>Welcome to the Virtual Computing Lab</H2>\n");
 	if($authed) {
 		if(! empty($user['lastname']) && ! empty($user['preferredname']))
-			print "Hello {$user["preferredname"]} {$user['lastname']}<br><br>\n";
+			print _("Hello ") . "{$user["preferredname"]} {$user['lastname']}<br><br>\n";
 		elseif(! empty($user['lastname']) && ! empty($user['firstname']))
-			print "Hello {$user["firstname"]} {$user['lastname']}<br><br>\n";
+			print _("Hello ") . "{$user["firstname"]} {$user['lastname']}<br><br>\n";
 		$tmp = array_values($user['groups']);
 		if(count($tmp) == 1 && $tmp[0] == 'nodemo') {
 			print "Your account is a demo account that has expired. ";
@@ -812,16 +827,16 @@ function main() {
 		$requests = getUserRequests("all", $user["id"]);
 		if($num = count($requests)) {
 			if($num == 1) {
-				print "You currently have $num reservation</a>.<br>\n";
+				print _("You currently have ") . "$num" . _(" reservation</a>.<br>\n");
 			}
 			else {
-				print "You currently have $num reservations</a>.<br>\n";
+				print _("You currently have ") . "$num" . _(" reservations</a>.<br>\n");
 			}
 		}
 		else {
-			print "You do not have any current reservations.<br>\n";
+			print _("You do not have any current reservations.<br>\n");
 		}
-		print "Please make a selection from the menu to continue.<br>\n";
+		print _("Please make a selection from the menu to continue.<br>\n");
 	}
 	else {
 		print "Click the <b>Log in to VCL</b> button at the top right part of ";
@@ -883,10 +898,10 @@ function abort($errcode, $query="") {
 		$message .= getBacktraceString(FALSE);
 		$mailParams = "-f" . ENVELOPESENDER;
 		mail(ERROREMAIL, "Error with VCL pages ($errcode)", $message, '', $mailParams);
-		print "An error has occurred.  If this problem persists, please email ";
-		print "<a href=\"mailto:" . HELPEMAIL . "?Subject=Problem%20With%20VCL\">";
-		print HELPEMAIL . "</a> for further assistance.  Please include the ";
-		print "steps you took that led up to this problem in your email message.";
+		print _("An error has occurred.  If this problem persists, please email ");
+		print "<a href=\"mailto:" . HELPEMAIL . "?Subject=" . _("Problem%20With%20VCL") . "\">";
+		print HELPEMAIL . "</a> " . _("for further assistance.  Please include the ");
+		print _("steps you took that led up to this problem in your email message.");
 	}
 	dbDisconnect();
 	printHTMLFooter();
@@ -1483,11 +1498,24 @@ function getImageConnectMethods($imageid, $revisionid=0) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function getImageConnectMethodTexts($imageid, $revisionid=0) {
+	global $locale;
+	$descfield = 'description';
+	$textfield = 'connecttext';
+	if(! preg_match('/^en/', $locale)) {
+		$query = "DESC connectmethod";
+		$qh = doQuery($query, 101);
+		while($row = mysql_fetch_assoc($qh)) {
+			if($row['Field'] == "description_$locale")
+				$descfield = "description_$locale";
+			if($row['Field'] == "connecttext_$locale")
+				$textfield = "connecttext_$locale";
+		}
+	}
 	if($revisionid == 0)
 		$revisionid = getProductionRevisionid($imageid);
 	$query = "SELECT c.id, "
-	       .        "c.description, "
-	       .        "c.connecttext, "
+	       .        "c.`$descfield` AS description, "
+	       .        "c.`$textfield` AS connecttext, "
 	       .        "cm.disabled "
 	       . "FROM connectmethod c, "
 	       .      "connectmethodmap cm, "
@@ -1501,7 +1529,7 @@ function getImageConnectMethodTexts($imageid, $revisionid=0) {
 	       .        "cm.OSid = o.id OR "
 	       .        "cm.imagerevisionid = $revisionid) "
 	       . "ORDER BY cm.disabled, "
-	       .          "c.description";
+	       .          "c.`$descfield`";
 	$methods = array();
 	$qh = doQuery($query, 101);
 	while($row = mysql_fetch_assoc($qh)) {
@@ -2894,7 +2922,7 @@ function getAffiliations() {
 	$qh = doQuery($query, 101);
 	$return = array();
 	while($row = mysql_fetch_assoc($qh))
-			$return[$row['id']] = $row['name'];
+		$return[$row['id']] = $row['name'];
 	return $return;
 }
 
@@ -3924,6 +3952,7 @@ function isAvailable($images, $imageid, $imagerevisionid, $start, $end,
 			       .       "c.procnumber >= i.minprocnumber AND "
 			       .       "c.procspeed >= i.minprocspeed AND "
 			       .       "c.network >= i.minnetwork AND "
+			       .       "c.deleted = 0 AND "
 			       .       "(c.type != 'virtualmachine' OR c.vmhostid IS NOT NULL) AND ";
 			if(! $ignoreprivileges)
 				$query .=   "c.id IN ($usercomputers) AND ";
@@ -4795,12 +4824,12 @@ function getRequestInfo($id, $returnNULL=0) {
 		# FIXME handle XMLRPC cases
 		if(! $printedHTMLheader) 
 			print $HTMLheader;
-		print "<h1>OOPS! - Reservation Has Expired</h1>\n";
-		print "The selected reservation is no longer available.  Go to ";
-		print "<a href=" . BASEURL . SCRIPT . "?mode=newRequest>New ";
-		print "Reservations</a><br>to request a new reservation or to ";
-		print "<a href=" . BASEURL . SCRIPT . "?mode=viewRequests>Current ";
-		print "Reservations</a> to select<br>another one that is available.";
+		print _("<h1>OOPS! - Reservation Has Expired</h1>\n");
+		print _("The selected reservation is no longer available.  Go to ");
+		print "<a href=" . BASEURL . SCRIPT . "?mode=newRequest>";
+		print _("New Reservations</a><br>to request a new reservation or to ");
+		print "<a href=" . BASEURL . SCRIPT . "?mode=viewRequests>";
+		print _("Current Reservations</a> to select<br>another one that is available.");
 		printHTMLFooter();
 		dbDisconnect();
 		exit;
@@ -6322,7 +6351,7 @@ function showTimeTable($links) {
 	}
 
 	print "<DIV align=center>\n";
-	print "<H2>Time Table</H2>\n";
+	print _("<H2>Time Table</H2>\n");
 	print "</DIV>\n";
 	$computeridrow = "";
 	$displayedids = array();
@@ -6359,17 +6388,17 @@ function showTimeTable($links) {
 	}
 	if(empty($displayedids)) {
 		if($links) {
-			print "There are currently no computers available that can run the application you selected.\n";
+			print _("There are currently no computers available that can run the application you selected.\n");
 		}
 		else {
-			print "There are no computers that meet the specified criteria\n";
+			print _("There are no computers that meet the specified criteria\n");
 		}
 		return;
 	}
 	if($showmessage) {
-		print "The time you have requested to use the environment is not ";
-		print "available. You may select from the green blocks of time to ";
-		print "select an available time slot to make a reservation.<br>\n";
+		print _("The time you have requested to use the environment is not ");
+		print _("available. You may select from the green blocks of time to ");
+		print _("select an available time slot to make a reservation.<br>\n");
 	}
 	print "<table summary=\"\">\n";
 	print "  <TR>\n";
@@ -6389,7 +6418,7 @@ function showTimeTable($links) {
 		               'imaging' => $imaging);
 		$cont = addContinuationsEntry($mode, $cdata, SECINDAY);
 		print "<INPUT type=hidden name=continuation value=\"$cont\">\n";
-		print "<INPUT type=submit value=Previous>\n";
+		print _("<INPUT type=submit value=Previous>\n");
 		print "</FORM>\n";
 	}
 	print "</TD>\n";
@@ -6408,7 +6437,7 @@ function showTimeTable($links) {
 		               'imaging' => $imaging);
 		$cont = addContinuationsEntry($mode, $cdata, SECINDAY);
 		print "<INPUT type=hidden name=continuation value=\"$cont\">\n";
-		print "<INPUT type=submit value=Next>\n";
+		print _("<INPUT type=submit value=Next>\n");
 		print "</FORM>\n";
 	}
 	print "</TD>\n";
@@ -6500,8 +6529,8 @@ function showTimeTable($links) {
 					print "          <TD bgcolor=\"#ff0000\"><font color=\"#ff0000\">used</font></TD>\n";
 				}
 				else {
-					$title = "User: " . $timeslots[$id][$stamp]["unityid"]
-					       . " Image: " . $timeslots[$id][$stamp]["prettyimage"];
+					$title = _("User: ") . $timeslots[$id][$stamp]["unityid"]
+					       . _(" Image: ") . $timeslots[$id][$stamp]["prettyimage"];
 					$ttdata = array('start' => $argstart,
 					                'end' => $argend,
 					                'imageid' => $imageid,
@@ -6541,7 +6570,7 @@ function showTimeTable($links) {
 		               'imaging' => $imaging);
 		$cont = addContinuationsEntry($mode, $cdata, SECINDAY);
 		print "<INPUT type=hidden name=continuation value=\"$cont\">\n";
-		print "<INPUT type=submit value=Previous>\n";
+		print _("<INPUT type=submit value=Previous>\n");
 		print "</FORM>\n";
 	}
 	print "</TD>\n";
@@ -6560,7 +6589,7 @@ function showTimeTable($links) {
 		               'imaging' => $imaging);
 		$cont = addContinuationsEntry($mode, $cdata, SECINDAY);
 		print "<INPUT type=hidden name=continuation value=\"$cont\">\n";
-		print "<INPUT type=submit value=Next>\n";
+		print _("<INPUT type=submit value=Next>\n");
 		print "</FORM>\n";
 	}
 	print "</TD>\n";
@@ -7871,19 +7900,13 @@ function printArray($array) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function prettyDatetime($stamp, $showyear=0) {
-	if(preg_match('/^[\d]+$/', $stamp)) {
-		if($showyear)
-			$return = date('l, M#jS,#Y, g:i a', $stamp);
-		else
-			$return = date('l, M#jS, g:i a', $stamp);
-	}
-	else {
-		if($showyear)
-			$return = date('l, M#jS,#Y, g:i a', datetimeToUnix($stamp));
-		else
-			$return = date('l, M#jS, g:i a', datetimeToUnix($stamp));
-	}
-	$return = str_replace('#', '&nbsp;', $return);
+	global $locale;
+	if(! preg_match('/^[\d]+$/', $stamp))
+		$stamp = datetimeToUnix($stamp);
+	if($showyear)
+		$return = strftime('%A, %b&nbsp;%-d,&nbsp;%Y, %l:%M %P', $stamp);
+	else
+		$return = strftime('%A, %b&nbsp;%-d, %l:%M %P', $stamp);
 	return $return;
 }
 
@@ -7900,15 +7923,15 @@ function prettyDatetime($stamp, $showyear=0) {
 ////////////////////////////////////////////////////////////////////////////////
 function minToHourMin($min) {
 	if($min < 60)
-		return $min . " minutes";
+		return $min . _(" minutes");
 	elseif($min == 60)
-		return "1 hour";
+		return _("1 hour");
 	elseif($min % 60 == 0)
-		return sprintf("%d hours", $min / 60);
+		return sprintf("%d " . _("hours"), $min / 60);
 	elseif($min % 30 == 0)
-		return sprintf("%.1f hours", $min / 60);
+		return sprintf("%.1f " . _("hours"), $min / 60);
 	else
-		return sprintf("%.2f hours", $min / 60);
+		return sprintf("%.2f " . _("hours"), $min / 60);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -7947,18 +7970,18 @@ function secToMinSec($sec) {
 ////////////////////////////////////////////////////////////////////////////////
 function prettyLength($minutes) {
 	if($minutes < 60)
-		return (int)$minutes . " minutes";
+		return (int)$minutes . _(" minutes");
 	elseif($minutes == 60)
-		return "1 hour";
+		return _("1 hour");
 	elseif($minutes % 60 == 0)
-		return $minutes / 60 . " hours";
+		return $minutes / 60 . _(" hours");
 	else {
 		$hours = (int)($minutes / 60);
 		$min = (int)($minutes % 60);
 		if($hours == 1)
-			return "$hours hour, $min minutes";
+			return "$hours " . _("hour") . ", $min " . _("minutes");
 		else
-			return "$hours hours, $min minutes";
+			return "$hours " . _("hours") . ", $min " . _("minutes");
 	}
 }
 
@@ -8718,15 +8741,15 @@ function getUserMaxTimes($uid=0) {
 function getReservationLengths($max) {
 	$lengths = array();
 	if($max >= 30)
-		$lengths["30"] = "30 minutes";
+		$lengths["30"] = "30 " . _("minutes");
 	if($max >= 45)
-		$lengths["45"] = "45 minutes";
+		$lengths["45"] = "45 " . _("minutes");
 	if($max >= 60)
-		$lengths["60"] = "1 hour";
+		$lengths["60"] = _("1 hour");
 	for($i = 120; $i <= $max && $i < 2880; $i += 120)
-		$lengths[$i] = $i / 60 . " hours";
+		$lengths[$i] = $i / 60 . _(" hours");
 	for($i = 2880; $i <= $max; $i += 1440)
-		$lengths[$i] = $i / 1440 . " days";
+		$lengths[$i] = $i / 1440 . _(" days");
 	return $lengths;
 }
 
@@ -8745,10 +8768,10 @@ function getReservationLength($length) {
 	if($length < 60)
 		return ($length % 60) - ($length % 60 % 15) . " minutes";
 	if($length < 120)
-		return "1 hour";
+		return _("1 hour");
 	if($length < 2880)
-		return intval($length / 60) . " hours";
-	return intval($length / 1440) . " days";
+		return intval($length / 60) . _(" hours");
+	return intval($length / 1440) . _(" days");
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -8764,16 +8787,16 @@ function getReservationLength($length) {
 ////////////////////////////////////////////////////////////////////////////////
 function getReservationExtenstion($length) {
 	if($length < 60)
-		return ($length % 60) - ($length % 60 % 15) . " minutes";
+		return ($length % 60) - ($length % 60 % 15) . _(" minutes");
 	if($length < 75)
-		return "1 hour";
+		return _("1 hour");
 	if($length < 120) {
 		$min = ($length % 60) - ($length % 60 % 15);
-		return sprintf('%d:%02d hours', intval($length / 60), $min);
+		return sprintf('%d:%02d ' . _('hours'), intval($length / 60), $min);
 	}
 	if($length < 2880)
-		return intval($length / 60) . " hours";
-	return intval($length / 1440) . " days";
+		return intval($length / 60) . _(" hours");
+	return intval($length / 1440) . _(" days");
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -9540,26 +9563,26 @@ function continuationsError() {
 	if(array_key_exists('error', $contdata)) {
 		switch($contdata['error']) {
 		case 'invalid input':
-			print "<h2>Error: Invalid Input</h2><br>\n";
-			print "You submitted input invalid for this web site. If you have no ";
-			print "idea why this happened and the problem persists, please email ";
-			print "<a href=\"mailto:" . HELPEMAIL . "?Subject=Problem%20With%20VCL\">";
-			print HELPEMAIL . "</a> for further assistance.  Please include the ";
-			print "steps you took that led up to this problem in your email message.";
+			print _("<h2>Error: Invalid Input</h2><br>\n");
+			print _("You submitted input invalid for this web site. If you have no ");
+			print _("idea why this happened and the problem persists, please email ");
+			print "<a href=\"mailto:" . HELPEMAIL . "?Subject=" . _("Problem%20With%20VCL\">");
+			print HELPEMAIL . "</a> " . _("for further assistance.  Please include the ");
+			print _("steps you took that led up to this problem in your email message.");
 			break;
 		case 'continuation does not exist':
 		case 'expired':
-			print "<h2>Error: Invalid Input</h2><br>\n";
-			print "You submitted expired data to this web site. Please restart the ";
-			print "steps you were following without using your browser's <strong>";
-			print "Back</strong> button.";
+			print _("<h2>Error: Invalid Input</h2><br>\n");
+			print _("You submitted expired data to this web site. Please restart the ");
+			print _("steps you were following without using your browser's <strong>");
+			print _("Back</strong> button.");
 			break;
 		default:
-			print "<h2>Error: Invalid Input</h2><br>\n";
-			print "An error has occurred.  If this problem persists, please email ";
-			print "<a href=\"mailto:" . HELPEMAIL . "?Subject=Problem%20With%20VCL\">";
-			print HELPEMAIL . "</a> for further assistance.  Please include the ";
-			print "steps you took that led up to this problem in your email message.";
+			print _("<h2>Error: Invalid Input</h2><br>\n");
+			print _("An error has occurred.  If this problem persists, please email ");
+			print "<a href=\"mailto:" . HELPEMAIL . "?Subject=" . _("Problem%20With%20VCL\">");
+			print HELPEMAIL . "</a> " . _("for further assistance.  Please include the ");
+			print _("steps you took that led up to this problem in your email message.");
 		}
 	}
 	if(! array_key_exists('noHTMLwrappers', $contdata) ||
@@ -10227,103 +10250,98 @@ function getNavMenu($inclogout, $inchome, $homeurl=HOMEURL) {
 	$rt = '';
 	if($inchome) {
 		$rt .= menulistLI('home');
-		$rt .= "<a href=\"$homeurl\">HOME</a></li>\n";
+		$rt .= "<a href=\"$homeurl\">" . _("HOME") . "</a></li>\n";
 	}
 	$rt .= menulistLI('newReservations');
 	$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=newRequest\">";
-	$rt .= "New Reservation</a></li>\n";
+	$rt .= _("New Reservation</a></li>\n");
 	if(in_array("imageCheckOut", $user["privileges"]) ||
 		in_array("imageAdmin", $user["privileges"])) {
 		$rt .= menulistLI('currentReservations');
 		$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=viewRequests\">";
-		$rt .= "Current Reservations</a></li>\n";
+		$rt .= _("Current Reservations</a></li>\n");
 	}
 	$rt .= menulistLI('blockAllocations');
 	$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=blockAllocations\">";
-	$rt .= "Block Allocations</a></li>\n";
+	$rt .= _("Block Allocations</a></li>\n");
 	$rt .= menulistLI('userPreferences');
 	$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=userpreferences\">";
-	$rt .= "User Preferences</a></li>\n";
+	$rt .= _("User Preferences</a></li>\n");
 	if(in_array("groupAdmin", $user["privileges"])) {
 		$rt .= menulistLI('manageGroups');
 		$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=viewGroups\">";
-		$rt .= "Manage Groups</a></li>\n";
+		$rt .= _("Manage Groups</a></li>\n");
 	}
 	if(in_array("imageAdmin", $user["privileges"])) {
 		$rt .= menulistLI('manageImages');
 		$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=selectImageOption\">";
-		$rt .= "Manage Images</a></li>\n";
+		$rt .= _("Manage Images</a></li>\n");
 	}
 	if(in_array("scheduleAdmin", $user["privileges"])) {
 		$rt .= menulistLI('manageSchedules');
 		$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=viewSchedules\">";
-		$rt .= "Manage Schedules</a></li>\n";
+		$rt .= _("Manage Schedules</a></li>\n");
 	}
 	if(in_array("computerAdmin", $user["privileges"])) {
 		$rt .= menulistLI('manageComputers');
 		$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=selectComputers\">";
-		$rt .= "Manage Computers</a></li>\n";
+		$rt .= _("Manage Computers</a></li>\n");
 	}
 	if(in_array("mgmtNodeAdmin", $user["privileges"])) {
 		$rt .= menulistLI('managementNodes');
 		$rt .= "<a href=\"" . BASEURL . SCRIPT;
-		$rt .= "?mode=selectMgmtnodeOption\">Management Nodes</a></li>\n";
+		$rt .= _("?mode=selectMgmtnodeOption\">Management Nodes</a></li>\n");
 	}
 	if(in_array("serverProfileAdmin", $user["privileges"])) {
 		$rt .= menulistLI('serverProfiles');
 		$rt .= "<a href=\"" . BASEURL . SCRIPT;
-		$rt .= "?mode=serverProfiles\">Server Profiles</a></li>\n";
+		$rt .= "?mode=serverProfiles\">" . _("Server Profiles") . "</a></li>\n";
 	}
 	if(count($computermetadata["platforms"]) &&
 		count($computermetadata["schedules"])) {
 		$rt .= menulistLI('timeTable');
 		$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=pickTimeTable\">";
-		$rt .= "View Time Table</a></li>\n";
+		$rt .= _("View Time Table</a></li>\n");
 	}
 	if(in_array("userGrant", $user["privileges"]) ||
 		in_array("resourceGrant", $user["privileges"]) ||
 		in_array("nodeAdmin", $user["privileges"])) {
 		$rt .= menulistLI('privileges');
 		$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=viewNodes\">";
-		$rt .= "Privileges</a></li>\n";
+		$rt .= _("Privileges</a></li>\n");
 	}
 	if(checkUserHasPerm('User Lookup (global)') ||
 	   checkUserHasPerm('User Lookup (affiliation only)')) {
 		$rt .= menulistLI('userLookup');
 		$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=userLookup\">";
-		$rt .= "User Lookup</a></li>\n";
+		$rt .= _("User Lookup</a></li>\n");
 	}
 	if(in_array("computerAdmin", $user["privileges"])) {
 		$rt .= menulistLI('vm');
 		$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=editVMInfo\">";
-		$rt .= "Virtual Hosts</a></li>\n";
+		$rt .= _("Virtual Hosts</a></li>\n");
 	}
 	if(checkUserHasPerm('Schedule Site Maintenance')) {
 		$rt .= menulistLI('sitemaintenance');
 		$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=siteMaintenance\">";
-		$rt .= "Site Maintenance</a></li>\n";
+		$rt .= _("Site Maintenance</a></li>\n");
 	}
 	$rt .= menulistLI('statistics');
 	$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=selectstats\">";
-	$rt .= "Statistics</a></li>\n";
+	$rt .= _("Statistics</a></li>\n");
 	if(checkUserHasPerm('View Dashboard (global)') ||
 	   checkUserHasPerm('View Dashboard (affiliation only)')) {
 		$rt .= menulistLI('dashboard');
 		$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=dashboard\">";
-		$rt .= "Dashboard</a></li>\n";
+		$rt .= _("Dashboard") . "</a></li>\n";
 	}
-	if(in_array("userGrant", $user["privileges"]) ||
-		in_array("resourceGrant", $user["privileges"]) ||
-		in_array("nodeAdmin", $user["privileges"]) ||
-		in_array($user['id'], $docreaders)) {
-		$rt .= menulistLI('codeDocumentation');
-		$rt .= "<a href=\"" . DOCUMENTATIONURL . "\">";
-		$rt .= "Documentation</a></li>\n";
-	}
+	$rt .= menulistLI('codeDocumentation');
+	$rt .= "<a href=\"" . DOCUMENTATIONURL . "\">";
+	$rt .= _("Documentation</a></li>\n");
 	if($inclogout) {
 		$rt .= menulistLI('authentication');
 		$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=logout\">";
-		$rt .= "Logout</a></li>\n";
+		$rt .= _("Logout</a></li>\n");
 	}
 	return $rt;
 }
@@ -10362,7 +10380,7 @@ function getExtraCSS() {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function getDojoHTML($refresh) {
-	global $mode, $actions, $skin;
+	global $mode, $actions, $skin, $locale;
 	$filename = '';
 	$dojoRequires = array();
 
@@ -10649,13 +10667,14 @@ function getDojoHTML($refresh) {
 	if(! empty($filename))
 		$customfile = sprintf("<script type=\"text/javascript\" src=\"dojo/dojo/%s\"></script>\n", $filename);
 	$rt = '';
+	$jslocale = strtolower(str_replace('_', '-', $locale));
 	switch($mode) {
 		case "connectRequest":
 			$rt .= "<style type=\"text/css\">\n";
 			$rt .= "   @import \"themes/$skin/css/dojo/$skin.css\";\n";
 			$rt .= "</style>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
-			$rt .= "   djConfig=\"parseOnLoad: true\">\n";
+			$rt .= "   djConfig=\"parseOnLoad: true, locale: '$jslocale'\">\n";
 			$rt .= "</script>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"js/requests.js\"></script>\n";
 			$rt .= $customfile;
@@ -10677,7 +10696,7 @@ function getDojoHTML($refresh) {
 			$rt .= "</style>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"js/requests.js\"></script>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
-			$rt .= "   djConfig=\"parseOnLoad: true\">\n";
+			$rt .= "   djConfig=\"parseOnLoad: true, locale: '$jslocale'\">\n";
 			$rt .= "</script>\n";
 			$rt .= $customfile;
 			$rt .= "<script type=\"text/javascript\">\n";
@@ -10703,9 +10722,9 @@ function getDojoHTML($refresh) {
 			$rt .= "<style type=\"text/css\">\n";
 			$rt .= "   @import \"themes/$skin/css/dojo/$skin.css\";\n";
 			$rt .= "</style>\n";
-			$rt .= "<script type=\"text/javascript\" src=\"js/requests.js\"></script>\n";
+         $rt .= "<script type=\"text/javascript\" src=\"js/requests.js\"></script>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
-			$rt .= "   djConfig=\"parseOnLoad: true\">\n";
+			$rt .= "   djConfig=\"parseOnLoad: true, locale: '$jslocale'\">\n";
 			$rt .= "</script>\n";
 			$rt .= $customfile;
 			$rt .= "<script type=\"text/javascript\">\n";
@@ -10729,7 +10748,7 @@ function getDojoHTML($refresh) {
 			$rt .= "</style>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"js/blockallocations.js\"></script>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
-			$rt .= "   djConfig=\"parseOnLoad: true\">\n";
+			$rt .= "   djConfig=\"parseOnLoad: true, locale: '$jslocale'\">\n";
 			$rt .= "</script>\n";
 			$rt .= $customfile;
 			$rt .= "<script type=\"text/javascript\">\n";
@@ -10756,7 +10775,7 @@ function getDojoHTML($refresh) {
 			$rt .= "</style>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"js/blockallocations.js\"></script>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
-			$rt .= "   djConfig=\"parseOnLoad: true\">\n";
+			$rt .= "   djConfig=\"parseOnLoad: true, locale: '$jslocale'\">\n";
 			$rt .= "</script>\n";
 			$rt .= $customfile;
 			$rt .= "<script type=\"text/javascript\">\n";
@@ -10774,7 +10793,7 @@ function getDojoHTML($refresh) {
 			$rt .= "</style>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"js/blockallocations.js\"></script>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
-			$rt .= "   djConfig=\"parseOnLoad: true\">\n";
+			$rt .= "   djConfig=\"parseOnLoad: true, locale: '$jslocale'\">\n";
 			$rt .= "</script>\n";
 			$rt .= $customfile;
 			$rt .= "<script type=\"text/javascript\">\n";
@@ -10794,7 +10813,7 @@ function getDojoHTML($refresh) {
 			$rt .= "</style>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"js/schedules.js\"></script>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
-			$rt .= "   djConfig=\"parseOnLoad: true\">\n";
+			$rt .= "   djConfig=\"parseOnLoad: true, locale: '$jslocale'\">\n";
 			$rt .= "</script>\n";
 			$rt .= $customfile;
 			$rt .= "<script type=\"text/javascript\">\n";
@@ -10819,7 +10838,7 @@ function getDojoHTML($refresh) {
 			$rt .= "</style>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"js/images.js\"></script>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
-			$rt .= "   djConfig=\"parseOnLoad: true\">\n";
+			$rt .= "   djConfig=\"parseOnLoad: true, locale: '$jslocale'\">\n";
 			$rt .= "</script>\n";
 			$rt .= $customfile;
 			$rt .= "<script type=\"text/javascript\">\n";
@@ -10852,7 +10871,7 @@ function getDojoHTML($refresh) {
 			$rt .= "</style>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"js/images.js\"></script>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
-			$rt .= "   djConfig=\"parseOnLoad: true\">\n";
+			$rt .= "   djConfig=\"parseOnLoad: true, locale: '$jslocale'\">\n";
 			$rt .= "</script>\n";
 			$rt .= $customfile;
 			$rt .= "<script type=\"text/javascript\">\n";
@@ -10879,7 +10898,7 @@ function getDojoHTML($refresh) {
 			$rt .= "   @import \"dojo/dojox/grid/resources/Grid.css\";\n";
 			$rt .= "</style>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
-			$rt .= "   djConfig=\"parseOnLoad: true\">\n";
+			$rt .= "   djConfig=\"parseOnLoad: true, locale: '$jslocale'\">\n";
 			$rt .= "</script>\n";
 			$rt .= $customfile;
 			$rt .= "<script type=\"text/javascript\">\n";
@@ -10908,7 +10927,7 @@ function getDojoHTML($refresh) {
 			$rt .= "   @import \"themes/$skin/css/dojo/$skin.css\";\n";
 			$rt .= "</style>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
-			$rt .= "   djConfig=\"parseOnLoad: true\">\n";
+			$rt .= "   djConfig=\"parseOnLoad: true, locale: '$jslocale'\">\n";
 			$rt .= "</script>\n";
 			$rt .= $customfile;
 			$rt .= "<script type=\"text/javascript\">\n";
@@ -10928,7 +10947,7 @@ function getDojoHTML($refresh) {
 			$rt .= "<script type=\"text/javascript\" src=\"js/serverprofiles.js\"></script>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"js/requests.js\"></script>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
-			$rt .= "   djConfig=\"parseOnLoad: true\">\n";
+			$rt .= "   djConfig=\"parseOnLoad: true, locale: '$jslocale'\">\n";
 			$rt .= "</script>\n";
 			$rt .= $customfile;
 			$rt .= "<script type=\"text/javascript\">\n";
@@ -10950,7 +10969,7 @@ function getDojoHTML($refresh) {
 			$rt .= "</style>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"js/computers.js\"></script>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
-			$rt .= "   djConfig=\"parseOnLoad: true\">\n";
+			$rt .= "   djConfig=\"parseOnLoad: true, locale: '$jslocale'\">\n";
 			$rt .= "</script>\n";
 			$rt .= $customfile;
 			$rt .= "<script type=\"text/javascript\">\n";
@@ -10976,7 +10995,7 @@ function getDojoHTML($refresh) {
 			$rt .= "</style>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"js/computers.js\"></script>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
-			$rt .= "   djConfig=\"parseOnLoad: true\">\n";
+			$rt .= "   djConfig=\"parseOnLoad: true, locale: '$jslocale'\">\n";
 			$rt .= "</script>\n";
 			$rt .= $customfile;
 			$rt .= "<script type=\"text/javascript\">\n";
@@ -11002,7 +11021,7 @@ function getDojoHTML($refresh) {
 			$rt .= "</style>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"js/vm.js\"></script>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
-			$rt .= "   djConfig=\"parseOnLoad: true\">\n";
+			$rt .= "   djConfig=\"parseOnLoad: true, locale: '$jslocale'\">\n";
 			$rt .= "</script>\n";
 			$rt .= $customfile;
 			$rt .= "<script type=\"text/javascript\">\n";
@@ -11025,7 +11044,7 @@ function getDojoHTML($refresh) {
 			$rt .= "</style>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"js/privileges.js\"></script>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
-			$rt .= "   djConfig=\"parseOnLoad: true\">\n";
+			$rt .= "   djConfig=\"parseOnLoad: true, locale: '$jslocale'\">\n";
 			$rt .= "</script>\n";
 			$rt .= $customfile;
 			$rt .= "<script type=\"text/javascript\">\n";
@@ -11042,7 +11061,7 @@ function getDojoHTML($refresh) {
 			$rt .= "</style>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"js/sitemaintenance.js\"></script>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
-			$rt .= "   djConfig=\"parseOnLoad: true\">\n";
+			$rt .= "   djConfig=\"parseOnLoad: true, locale: '$jslocale'\">\n";
 			$rt .= "</script>\n";
 			$rt .= $customfile;
 			$rt .= "<script type=\"text/javascript\">\n";
@@ -11058,7 +11077,7 @@ function getDojoHTML($refresh) {
 			$rt .= "</style>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"js/statistics.js\"></script>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
-			$rt .= "   djConfig=\"parseOnLoad: true\">\n";
+			$rt .= "   djConfig=\"parseOnLoad: true, locale: '$jslocale'\">\n";
 			$rt .= "</script>\n";
 			$rt .= $customfile;
 			$rt .= "<script type=\"text/javascript\">\n";
@@ -11076,7 +11095,7 @@ function getDojoHTML($refresh) {
 			$rt .= "</style>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"js/dashboard.js\"></script>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
-			$rt .= "   djConfig=\"parseOnLoad: true\">\n";
+			$rt .= "   djConfig=\"parseOnLoad: true, locale: '$jslocale'\">\n";
 			$rt .= "</script>\n";
 			$rt .= $customfile;
 			$rt .= "<script type=\"text/javascript\">\n";
@@ -11093,7 +11112,7 @@ function getDojoHTML($refresh) {
 			$rt .= "   @import \"themes/$skin/css/dojo/$skin.css\";\n";
 			$rt .= "</style>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
-			$rt .= "   djConfig=\"parseOnLoad: true\">\n";
+			$rt .= "   djConfig=\"parseOnLoad: true, locale: '$jslocale'\">\n";
 			$rt .= "</script>\n";
 			$rt .= $customfile;
 			$rt .= "<script type=\"text/javascript\">\n";
@@ -11121,4 +11140,149 @@ function printHTMLFooter() {
 	print getFooter();
 }
 
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn changeLocale()
+///
+/// \brief sets a cookie for the locale and redirects back to the site
+///
+////////////////////////////////////////////////////////////////////////////////
+function changeLocale() {
+	global $locale;
+	$newlocale = getContinuationVar('locale');
+	$oldmode = getContinuationVar('oldmode');
+	$authtype = getContinuationVar('authtype', '');
+	$locale = $newlocale;
+	setcookie("VCLLOCALE", $locale, (time() + (86400 * 31)), "/", COOKIEDOMAIN);
+	$extra = '';
+	if($oldmode == 'selectauth' && ! empty($authtype))
+		$extra = "&authtype=$authtype";
+	header("Location: " . BASEURL . SCRIPT . "?mode=$oldmode$extra");
+	dbDisconnect();
+	exit;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn setVCLLocale()
+///
+/// \brief sets a cookie for the locale; configures php for the locale
+///
+////////////////////////////////////////////////////////////////////////////////
+function setVCLLocale() {
+	global $locale;
+	# set a cookie for the locale if it has not been set already
+	if(! array_key_exists('VCLLOCALE', $_COOKIE)) {
+		setcookie("VCLLOCALE", 'en_US', (time() + (86400 * 31)), "/", COOKIEDOMAIN);
+		$locale = DEFAULTLOCALE;
+	}
+	// if a cookie has already been set, just update the expiration time for it
+	else {
+		setcookie("VCLLOCALE", $_COOKIE['VCLLOCALE'], (time() + (86400 * 31)), "/", COOKIEDOMAIN);
+		$locale = $_COOKIE['VCLLOCALE'];
+	}
+	
+	#putenv('LC_ALL=' . $locale);
+	# use UTF8 encoding for any locales other than English (we may just be able
+	#   to always use UTF8)
+	if(preg_match('/^en/', $locale))
+		setlocale(LC_ALL,  $locale);
+	else
+		setlocale(LC_ALL,  $locale . '.UTF8');
+	bindtextdomain('vcl', './locale');
+	textdomain('vcl');
+	bind_textdomain_codeset('vcl', 'UTF-8');
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn getSelectLanguagePulldown()
+///
+/// \return HTML for a select drop down
+///
+/// \brief generates HTML for a select drop down for changing the locale of
+/// the site
+///
+////////////////////////////////////////////////////////////////////////////////
+function getSelectLanguagePulldown() {
+	global $locale, $user, $remoteIP, $mode, $authMechs;
+	$tmp = explode('/', $_SERVER['SCRIPT_FILENAME']);
+	array_pop($tmp);
+	array_push($tmp, 'locale');
+
+	$locales = getFSlocales();
+
+	if(count($locales) < 1)
+		return '';
+
+	if(! is_array($user))
+		$user['id'] = 0;
+
+	$rt  = "<FORM name=\"localeform\" action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
+	$rt .= "<select name=\"continuation\" onChange=\"document.localeform.submit();\">\n";
+	$cdata = array('IP' => $remoteIP, 'oldmode' => $mode);
+	if($mode == 'selectauth') {
+		$type = processInputVar('authtype', ARG_STRING);
+		if(! empty($type) && array_key_exists($type, $authMechs))
+			$cdata['authtype'] = $type;
+	}
+	foreach($locales as $dir => $lang) {
+		$cdata['locale'] = $dir;
+		$tmp = explode('/', $dir);
+		$testlocale = array_pop($tmp);
+		$cont = addContinuationsEntry('changeLocale', $cdata, 300);
+		if($locale == $testlocale)
+			$rt .= "<option value=\"$cont\" selected>{$lang}</option>\n";
+		else
+			$rt .= "<option value=\"$cont\">{$lang}</option>\n";
+	}
+	$rt .= "</select>\n";
+	$rt .= "</form> \n";
+	return $rt;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn getFSlocales()
+///
+/// \return an array of locales supported in the filesystem where the key is
+/// the locale and the value is the name of the locale/language
+///
+/// \brief looks for supported locales in the filesystem and returns a list of
+/// them
+///
+////////////////////////////////////////////////////////////////////////////////
+function getFSlocales() {
+	if(isset($_SESSION) && array_key_exists('locales', $_SESSION))
+		return $_SESSION['locales'];
+	$tmp = explode('/', $_SERVER['SCRIPT_FILENAME']);
+	array_pop($tmp);
+	$mainpath = implode('/', $tmp);
+	array_push($tmp, 'locale');
+	$localedir = implode('/', $tmp);
+	$dirs = glob("{$localedir}/*");
+	$locales = array('en_US' => 'English');
+	foreach($dirs as $dir) {
+		if(! file_exists("{$dir}/LC_MESSAGES/vcl.mo"))
+			continue;
+		if(! file_exists("{$dir}/language"))
+			continue;
+		$fh = fopen("{$dir}/language", 'r');
+		if(! ($line = fgetss($fh))) {
+			fclose($fh);
+			continue;
+		}
+		fclose($fh);
+		$lang = htmlspecialchars(strip_tags(trim($line)));
+		$tmp = explode('/', $dir);
+		$dir = array_pop($tmp);
+		if($dir == 'po_files')
+			continue;
+		if(! file_exists("{$mainpath}/js/nls/{$dir}/messages.js"))
+			continue;
+		$locales[$dir] = $lang;
+	}
+	$_SESSION['locales'] = $locales;
+	return $locales;
+}
 ?>

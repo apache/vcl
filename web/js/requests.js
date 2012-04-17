@@ -88,14 +88,14 @@ function updateWaitTime(cleardesc) {
 
 function showSuggestedTimes() {
 	if(dojo.byId('suggestcont').value == 'cluster') {
-		alert('Times cannot be suggested for cluster reservations');
+		alert(_('Times cannot be suggested for cluster reservations'));
 		return;
 	}
 	dijit.byId('suggestedTimes').show();
 	dojo.byId('suggestContent').innerHTML = '';
 	dojo.removeClass('suggestloading', 'hidden');
 	showDijitButton('suggestDlgBtn');
-	dijit.byId('suggestDlgCancelBtn').set('label', 'Cancel');
+	dijit.byId('suggestDlgCancelBtn').set('label', _('Cancel'));
 	var data = {continuation: dojo.byId('suggestcont').value};
 	RPCwrapper(data, showSuggestedTimesCB, 1);
 	document.body.style.cursor = 'wait';
@@ -113,7 +113,9 @@ function showSuggestedTimesCB(data, ioArgs) {
 	}
 	else if(data.items.status == 'error') {
 		hideDijitButton('suggestDlgBtn');
-		dijit.byId('suggestDlgCancelBtn').set('label', 'Okay');
+		dijit.byId('suggestDlgCancelBtn').set('label', _('Okay'));
+		if(dijit.byId('suggestedTimes'))
+			recenterDijitDialog('suggestedTimes');
 		return;
 	}
 	else if(data.items.status == 'noextend') {
@@ -121,7 +123,7 @@ function showSuggestedTimesCB(data, ioArgs) {
 		dojo.byId('editResDlgContent').innerHTML = data.items.html;
 		dojo.byId('editResDlgErrMsg').innerHTML = '';
 		dijit.byId('editResDlgBtn').set('style', 'display: none');
-		dijit.byId('editResCancelBtn').set('label', 'Okay');
+		dijit.byId('editResCancelBtn').set('label', _('Okay'));
 		recenterDijitDialog('editResDlg');
 		return;
 	}
@@ -171,7 +173,7 @@ function selectLength() {
 function selectEnding() {
 	if(dojo.byId('dateradio'))
 		dojo.byId('dateradio').checked = true;
-	dijit.byId('editResDlgBtn').set('label', 'Modify Reservation');
+	dijit.byId('editResDlgBtn').set('label', _('Modify Reservation'));
 	resetEditResBtn();
 }
 
@@ -200,10 +202,10 @@ function checkValidImage() {
 	if(resSubmitted)
 		return false;
 	if(dijit.byId('imagesel') && ! dijit.byId('imagesel').isValid()) {
-		alert('Please select a valid environment.');
+		alert(_('Please select a valid environment.'));
 		return false;
 	}
-	if(dojo.byId('newsubmit').value == 'View Available Times') {
+	if(dojo.byId('newsubmit').value == _('View Available Times')) {
 		showSuggestedTimes();
 		return false;
 	}
@@ -225,7 +227,7 @@ function setMaxRequestLength(minutes) {
 		// if last option is < 60, add 1 hr
 		if(parseInt(obj.options[i].value) < 60 &&
 			minutes >= 60) {
-			text = '1 hour';
+			text = '1 ' + _('hour');
 			newminutes = 60;
 		}
 		// if option > 46 hours, add as days
@@ -237,9 +239,8 @@ function setMaxRequestLength(minutes) {
 				len = len - (len % 1440);
 			else
 				len = len + 1440;
-			text = len / 1440 + ' days';
+			text = len / 1440 + ' ' + _('days');
 			newminutes = len;
-			var foo = 'bar';
 		}
 		// else add in 2 hr chuncks up to max
 		else {
@@ -248,17 +249,17 @@ function setMaxRequestLength(minutes) {
 				tmp = tmp - (tmp % 120);
 			newminutes = tmp + 120;
 			if(newminutes < minutes)
-				text = (newminutes / 60) + ' hours';
+				text = (newminutes / 60) + ' ' + _('hours');
 			else {
 				newminutes = minutes;
 				tmp = newminutes - (newminutes % 60);
 				if(newminutes % 60)
 					if(newminutes % 60 < 10)
-						text = (tmp / 60) + ':0' + (newminutes % 60) + ' hours';
+						text = (tmp / 60) + ':0' + (newminutes % 60) + ' ' + _('hours');
 					else
-						text = (tmp / 60) + ':' + (newminutes % 60) + ' hours';
+						text = (tmp / 60) + ':' + (newminutes % 60) + ' ' + _('hours');
 				else
-					text = (tmp / 60) + ' hours';
+					text = (tmp / 60) + ' ' + _('hours');
 			}
 		}
 		obj.options[i + 1] = new Option(text, newminutes);
@@ -305,7 +306,7 @@ function showResStatusPane(reqid) {
 	var obj = dijit.byId('resStatusPane');
 	if(currdetailid != reqid) {
 		dojo.byId('detailreqid').value = reqid;
-		dojo.byId('resStatusText').innerHTML = 'Loading...';
+		dojo.byId('resStatusText').innerHTML = _('Loading...');
 	}
 	var disp = dijit.byId('resStatusPane').domNode.style.visibility;
 	if(disp == 'hidden')
@@ -410,11 +411,11 @@ function editReservationCB(data, ioArgs) {
 	AJdojoCreate('editResDlgContent');
 	if(data.items.status == 'nomodify') {
 		dijit.byId('editResDlgBtn').set('style', 'display: none');
-		dijit.byId('editResCancelBtn').set('label', 'Okay');
+		dijit.byId('editResCancelBtn').set('label', _('Okay'));
 	}
 	else {
 		dijit.byId('editResDlgBtn').set('style', 'display: inline');
-		dijit.byId('editResCancelBtn').set('label', 'Cancel');
+		dijit.byId('editResCancelBtn').set('label', _('Cancel'));
 		dojo.byId('editrescont').value = data.items.cont;
 		dojo.byId('editresid').value = data.items.requestid;
 	}
@@ -447,7 +448,7 @@ function hideEditResDlg() {
 
 function resetEditResBtn() {
 	dojo.byId('editResDlgErrMsg').innerHTML = '';
-	dijit.byId('editResDlgBtn').set('label', 'Modify Reservation');
+	dijit.byId('editResDlgBtn').set('label', _('Modify Reservation'));
 }
 
 function editResOpenEnd() {
@@ -509,10 +510,10 @@ function useSuggestedEditSlot() {
 }
 
 function submitEditReservation() {
-	if(dijit.byId('editResDlgBtn').get('label') == 'View Available Times') {
+	if(dijit.byId('editResDlgBtn').get('label') == _('View Available Times')) {
 		dijit.byId('suggestDlgBtn').set('disabled', true);
 		showDijitButton('suggestDlgBtn');
-		dijit.byId('suggestDlgCancelBtn').set('label', 'Cancel');
+		dijit.byId('suggestDlgCancelBtn').set('label', _('Cancel'));
 		showSuggestedTimes();
 		return;
 	}
@@ -557,7 +558,7 @@ function submitEditReservation() {
 		data.endmode = 'ending';
 		var testend = new Date(d.getFullYear(), d.getMonth(), d.getDate(), t.getHours(), t.getMinutes(), 0, 0);
 		if(dijit.byId('editstarttime') && testend <= teststart) {
-			dojo.byId('editResDlgErrMsg').innerHTML = "The end time must be later than the start time.";
+			dojo.byId('editResDlgErrMsg').innerHTML = _("The end time must be later than the start time.");
 			return;
 		}
 	}
@@ -580,7 +581,7 @@ function submitEditReservationCB(data, ioArgs) {
 		dojo.byId('editResDlgContent').innerHTML = data.items.html;
 		dojo.byId('editResDlgErrMsg').innerHTML = '';
 		dijit.byId('editResDlgBtn').set('style', 'display: none');
-		dijit.byId('editResCancelBtn').set('label', 'Okay');
+		dijit.byId('editResCancelBtn').set('label', _('Okay'));
 		resRefresh();
 		return;
 	}
@@ -589,7 +590,7 @@ function submitEditReservationCB(data, ioArgs) {
 		dojo.byId('editrescont').value = data.items.cont;
 		//dojo.byId('editresid').value = '';
 		dojo.byId('suggestcont').value = data.items.sugcont;
-		dijit.byId('editResDlgBtn').set('label', 'View Available Times');
+		dijit.byId('editResDlgBtn').set('label', _('View Available Times'));
 		return;
 	}
 	else if(data.items.status == 'unavailable') {
@@ -615,18 +616,18 @@ function checkResGone(reqids) {
 
 function resGone(type) {
 	if(type == 'edit') {
-		dojo.byId('editResDlgContent').innerHTML = "The reservation you selected<br>to edit has expired.<br><br>";
+		dojo.byId('editResDlgContent').innerHTML = _('The reservation you selected<br>to edit has expired.<br><br>');
 	}
 	else if(type == 'reboot') {
-		dojo.byId('editResDlgContent').innerHTML = "The reservation you selected<br>to reboot has expired.<br><br>";
+		dojo.byId('editResDlgContent').innerHTML = _('The reservation you selected<br>to reboot has expired.<br><br>');
 	}
 	else if(type == 'reinstall') {
-		dojo.byId('editResDlgContent').innerHTML = "The reservation you selected<br>to reinstall has expired.<br><br>";
+		dojo.byId('editResDlgContent').innerHTML = _('The reservation you selected<br>to reinstall has expired.<br><br>');
 	}
 	dojo.byId('editresid').value = '';
 	dojo.byId('editResDlgErrMsg').innerHTML = '';
 	dijit.byId('editResDlgBtn').set('style', 'display: none');
-	dijit.byId('editResCancelBtn').set('label', 'Okay');
+	dijit.byId('editResCancelBtn').set('label', _('Okay'));
 	recenterDijitDialog('editResDlg');
 }
 
@@ -706,7 +707,7 @@ function submitReinstallReservationCB(data, ioArgs) {
 		return;
 	}
 	if(data.items.status == 'invalidrevisionid') {
-		dojo.byId('reinstallResDlgErrMsg').innerHTML = 'An invalid version was submitted.';
+		dojo.byId('reinstallResDlgErrMsg').innerHTML = _('An invalid version was submitted.');
 		dojo.byId('reinstallrescont').value = data.items.cont;
 		return;
 	}
@@ -753,9 +754,9 @@ function showRDPbutton() {
 		timeInterval = 1
 	}
 	if(timeInterval == 1)
-		dojo.byId('counterdiv').innerHTML = " Ready to connect in " + timeInterval + " second";
+		dojo.byId('counterdiv').innerHTML = _(' Ready to connect in ') + timeInterval + _(' second');
 	else
-		dojo.byId('counterdiv').innerHTML = " Ready to connect in " + timeInterval + " seconds";
+		dojo.byId('counterdiv').innerHTML = _(' Ready to connect in ') + timeInterval + _(' seconds');
 	var si = setInterval(function() {
 		if(timeInterval === 0) {
 			clearInterval(si);
@@ -763,9 +764,9 @@ function showRDPbutton() {
 			timeInterval--;
 			if(timeInterval !== 0) {
 				if(timeInterval == 1)
-					dojo.byId('counterdiv').innerHTML = " Ready to connect in " + timeInterval + " second";
+					dojo.byId('counterdiv').innerHTML = _(' Ready to connect in ') + timeInterval + _(' second');
 				else
-					dojo.byId('counterdiv').innerHTML = " Ready to connect in " + timeInterval + " seconds";
+					dojo.byId('counterdiv').innerHTML = _(' Ready to connect in ') + timeInterval + _(' seconds');
 			} else {
 				dojo.addClass('counterdiv', 'hidden');
 				dojo.removeClass('connectdiv', 'hidden');
