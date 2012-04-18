@@ -5726,7 +5726,12 @@ sub get_management_node_info {
 	
 	# If a management node identifier argument wasn't specified get the hostname of this management node
 	if (!$management_node_identifier) {
-		$management_node_identifier = (hostname())[0];
+		if ($FQDN) {
+			$management_node_identifier = $FQDN;
+		}
+		else {
+			$management_node_identifier = (hostname())[0];
+		}
 	}
 	
 	if (!defined($ENV{management_node_info}) || !ref($ENV{management_node_info}) || ref($ENV{management_node_info}) ne 'HASH') {
