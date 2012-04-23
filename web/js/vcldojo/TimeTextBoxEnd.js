@@ -16,8 +16,6 @@
 */
 dojo.provide("vcldojo.TimeTextBoxEnd");
 dojo.require('dijit.form.TimeTextBox');
-dojo.require('dojo.i18n');
-dojo.requireLocalization("vcldojo", "TimeTextBoxEnd");
 dojo.declare(
 	"vcldojo.TimeTextBoxEnd",
 	[dijit.form.TimeTextBox],
@@ -33,8 +31,10 @@ dojo.declare(
 			return this.inherited(arguments);
 		},
 		postCreate: function() {
-			var ln = dojo.i18n.getLocalization("vcldojo", "TimeTextBoxEnd");
-			this.invalidMessage = ln.invalidMessage;
+			if(usenls && 'This must be a valid time that is greater than the start time' in nlsmessages)
+				this.invalidMessage = nlsmessages['This must be a valid time that is greater than the start time'];
+			else
+				this.invalidMessage = 'This must be a valid time that is greater than the start time';
 			this.inherited(arguments);
 		}
 	}

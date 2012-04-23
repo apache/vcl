@@ -73,5 +73,6 @@ nlsmessages = {
 'Wednesday': '水曜日',
 'Thursday': '木曜日',
 'Friday': '金曜日',
-'Saturday': '土曜日'
+'Saturday': '土曜日',
+'This must be a valid time that is greater than the start time': 'これは、開始時刻よりも大きい有効な時間でなければなりません'
 }
