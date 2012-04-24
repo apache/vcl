@@ -596,8 +596,8 @@ function getVMprofileDataCB(data, ioArgs) {
 	dijit.byId('pvs0').setValue(curprofile.virtualswitch0);
 	dijit.byId('pvs1').setValue(curprofile.virtualswitch1);
 	dijit.byId('pusername').setValue(curprofile.username);
-	dijit.byId('pgenmac0').setValue(curprofile.vmware_mac_eth0_generated);
-	dijit.byId('pgenmac1').setValue(curprofile.vmware_mac_eth1_generated);
+	dijit.byId('pgenmac0').setValue(curprofile.eth0generated);
+	dijit.byId('pgenmac1').setValue(curprofile.eth1generated);
 	document.getElementById('ppassword').value = curprofile.password;
 	document.getElementById('ppwdconfirm').value = curprofile.password;
 	checkProfilePassword();
@@ -687,14 +687,14 @@ function delProfile(cont) {
 	content += "</tr>";
 	content += "<tr>";
 	content += "<th align=right>Generate eth0 MAC:</th>";
-	if(curprofile.vmware_mac_eth0_generated == 0)
+	if(curprofile.eth0generated == 0)
 		content += "<td>No</td>";
 	else
 		content += "<td>Yes</td>";
 	content += "</tr>";
 	content += "<tr>";
 	content += "<th align=right>Generate eth1 MAC:</th>";
-	if(curprofile.vmware_mac_eth1_generated == 0)
+	if(curprofile.eth1generated == 0)
 		content += "<td>No</td>";
 	else
 		content += "<td>Yes</td>";

@@ -244,14 +244,14 @@ function editVMInfo() {
 	print "  </tr>\n";
 	print "  <tr>\n";
 	print "    <th align=right>Generate eth0 MAC:</th>\n";
-	print "    <td><select id=pgenmac0 dojoType=\"dijit.form.Select\" searchAttr=\"name\" onchange=\"updateProfile('pgenmac0', 'vmware_mac_eth0_generated');\">\n";
+	print "    <td><select id=pgenmac0 dojoType=\"dijit.form.Select\" searchAttr=\"name\" onchange=\"updateProfile('pgenmac0', 'eth0generated');\">\n";
 	print "    <option value=\"1\">Yes</option>\n";
 	print "    <option value=\"0\">No</option>\n";
 	print "    </select></td>\n";
 	print "  </tr>\n";
 	print "  <tr>\n";
 	print "    <th align=right>Generate eth1 MAC:</th>\n";
-	print "    <td><select id=pgenmac1 dojoType=\"dijit.form.Select\" searchAttr=\"name\" onchange=\"updateProfile('pgenmac1', 'vmware_mac_eth1_generated');\">\n";
+	print "    <td><select id=pgenmac1 dojoType=\"dijit.form.Select\" searchAttr=\"name\" onchange=\"updateProfile('pgenmac1', 'eth1generated');\">\n";
 	print "    <option value=\"1\">Yes</option>\n";
 	print "    <option value=\"0\">No</option>\n";
 	print "    </select></td>\n";
@@ -801,7 +801,7 @@ function AJupdateVMprofileItem() {
 	}
 	$profileid = processInputVar('profileid', ARG_NUMERIC);
 	$item = processInputVar('item', ARG_STRING);
-	if(! preg_match('/^(profilename|imageid|repositorypath|datastorepath|vmpath|virtualswitch0|virtualswitch1|vmdisk|username|password|vmware_mac_eth0_generated|vmware_mac_eth1_generated)$/', $item)) {
+	if(! preg_match('/^(profilename|imageid|repositorypath|datastorepath|vmpath|virtualswitch0|virtualswitch1|vmdisk|username|password|eth0generated|eth1generated)$/', $item)) {
 		print "alert('Invalid data submitted.');";
 		return;
 	}
