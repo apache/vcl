@@ -75,7 +75,6 @@ function VMHostDataCB(data, ioArgs) {
 	var obj = dijit.byId('vmprofile');
 	obj.setTitle(profile.profilename);
 	var ct = '<table>';
-	ct += '<tr><th align=right>VM type:</th><td>' + profile.type + '</td></tr>';
 	ct += '<tr><th align=right>Image:</th><td>' + profile.image + '</td></tr>';
 	ct += '<tr><th align=right>Repository Path:</th><td>' + profile.repositorypath + '</td></tr>';
 	ct += '<tr><th align=right>Datastore Path:</th><td>' + profile.datastorepath + '</td></tr>';
@@ -569,11 +568,6 @@ function getVMprofileDataCB(data, ioArgs) {
 		return;
 	}
 	curprofile = data.items.profile;
-	var obj = dijit.byId('ptype');
-	var store = new dojo.data.ItemFileReadStore({data: data.items.types});
-	obj.store = store;
-	if(curprofile.vmtypeid != 0)
-		obj.setValue(curprofile.vmtypeid);
 
 	var obj = dijit.byId('pimage');
 	var store = new dojo.data.ItemFileReadStore({data: data.items.images});
@@ -662,10 +656,6 @@ function delProfile(cont) {
 	content += "<tr>";
 	content += "<th align=right>Name:</th>";
 	content += "<td>" + curprofile.profilename + "</td>";
-	content += "</tr>";
-	content += "<tr>";
-	content += "<th align=right>Type:</th>";
-	content += "<td>" + curprofile.type + "</td>";
 	content += "</tr>";
 	content += "<tr>";
 	content += "<th align=right>Image:</th>";

@@ -7162,7 +7162,6 @@ function getComputers($sort=0, $includedeleted=0, $compid="") {
 	       .        "r.id AS resourceid, "
 	       .        "c.notes, "
 	       .        "c.vmhostid, "
-	       .        "c.vmtypeid, "
 	       .        "c2.hostname AS vmhost, "
 	       .        "c.location, "
 	       .        "c.provisioningid, "
@@ -9295,8 +9294,6 @@ function generateString($length=8) {
 /// element is an array with these keys:\n
 /// \b profilename - name of profile\n
 /// \b name - name of profile (so array can be passed to printSelectInput)\n
-/// \b type - name of vm type\n
-/// \b typeid - id of vm type\n
 /// \b image - name of image used for this profile\n
 /// \b imageid - id of image used for this profile\n
 /// \b repositorypath - share exported by nas to the vmhost\n
@@ -9316,8 +9313,6 @@ function getVMProfiles($id="") {
 	$query = "SELECT vp.id, "
 	       .        "vp.profilename, "
 	       .        "vp.profilename AS name, "
-	       .        "vt.name AS type, "
-	       .        "vp.vmtypeid, "
 	       .        "i.prettyname AS image, "
 	       .        "vp.imageid, "
 	       .        "vp.repositorypath, "
@@ -9331,7 +9326,6 @@ function getVMProfiles($id="") {
 	       .        "vp.vmware_mac_eth0_generated, "
 	       .        "vp.vmware_mac_eth1_generated "
 	       . "FROM vmprofile vp "
-	       . "LEFT JOIN vmtype vt ON (vp.vmtypeid = vt.id) "
 	       . "LEFT JOIN image i ON (vp.imageid = i.id)";
 	if(! empty($id))
 		$query .= " AND vp.id = $id";
@@ -9340,24 +9334,6 @@ function getVMProfiles($id="") {
 	while($row = mysql_fetch_assoc($qh))
 		$ret[$row['id']] = $row;
 	return $ret;
-}
-
-////////////////////////////////////////////////////////////////////////////////
-///
-/// \fn getVMtypes()
-///
-/// \return an array where each key is the id of the type and each element is
-/// the name of the type
-///
-/// \brief gets the entries from the vmtype table
-///
-////////////////////////////////////////////////////////////////////////////////
-function getVMtypes() {
-	$types = array();
-	$qh = doQuery("SELECT id, name FROM vmtype", 101);
-	while($row = mysql_fetch_assoc($qh))
-		$types[$row['id']] = $row['name'];
-	return $types;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -11230,7 +11206,7 @@ function getSelectLanguagePulldown() {
 		$cdata['locale'] = $dir;
 		$tmp = explode('/', $dir);
 		$testlocale = array_pop($tmp);
-		$cont = addContinuationsEntry('changeLocale', $cdata, 300);
+		$cont = addContinuationsEntry('changeLocale', $cdata, 86400);
 		if($locale == $testlocale)
 			$rt .= "<option value=\"$cont\" selected>{$lang}</option>\n";
 		else

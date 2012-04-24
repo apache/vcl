@@ -215,10 +215,6 @@ function editVMInfo() {
 	print "    <td><span id=pname dojoType=\"dijit.InlineEditBox\" onChange=\"updateProfile('pname', 'profilename');\"></span></td>\n";
 	print "  </tr>\n";
 	print "  <tr>\n";
-	print "    <th align=right>Type:</th>\n";
-	print "    <td><select id=ptype dojoType=\"dijit.form.FilteringSelect\" searchAttr=\"name\" onchange=\"updateProfile('ptype', 'vmtypeid');\"></span></td>\n";
-	print "  </tr>\n";
-	print "  <tr>\n";
 	print "    <th align=right>Image:</th>\n";
 	print "    <td><span id=pimage dojoType=\"dijit.form.FilteringSelect\" searchAttr=\"name\" onchange=\"updateProfile('pimage', 'imageid');\" style=\"width: 420px\"></span></td>\n";
 	print "  </tr>\n";
@@ -755,7 +751,6 @@ function AJcancelVMmove() {
 /// \brief prints json data about a submitted or passed in vm profile with these
 /// fields:\n
 /// \b profile - array returned from getVMProfiles\n
-/// \b types - array of vm types\n
 /// \b vmdisk - array of vm disk options\n
 /// \b images - array of images
 ///
@@ -771,7 +766,6 @@ function AJprofileData($profileid="") {
 		if(is_null($value))
 			$profiledata[$profileid][$key] = '';
 	}
-	$types = getVMtypes();
 	$allimages = getImages();
 	$images = array();
 	foreach($allimages as $key => $image) {
@@ -781,19 +775,12 @@ function AJprofileData($profileid="") {
 	}
 	$imagedata = array('identifier' => 'id', 'items' => $images);
 	
-	$types2 = array();
-	foreach($types as $id => $val) {
-		$types2[] = array('id' => $id, 'name' => $val);
-	}
-	$typedata = array('identifier' => 'id', 'items' => $types2);
-
 	$vmdiskitems = array();
 	$vmdiskitems[] = array('id' => 'localdisk', 'name' => 'localdisk');
 	$vmdiskitems[] = array('id' => 'networkdisk', 'name' => 'networkdisk');
 	$vmdisk = array('identifier' => 'id', 'items' => $vmdiskitems);
 
 	$arr = array('profile' => $profiledata[$profileid],
-	             'types' => $typedata,
 	             'vmdisk' => $vmdisk,
 	             'images' => $imagedata);
 	sendJSON($arr);
@@ -814,7 +801,7 @@ function AJupdateVMprofileItem() {
 	}
 	$profileid = processInputVar('profileid', ARG_NUMERIC);
 	$item = processInputVar('item', ARG_STRING);
-	if(! preg_match('/^(profilename|vmtypeid|imageid|repositorypath|datastorepath|vmpath|virtualswitch0|virtualswitch1|vmdisk|username|password|vmware_mac_eth0_generated|vmware_mac_eth1_generated)$/', $item)) {
+	if(! preg_match('/^(profilename|imageid|repositorypath|datastorepath|vmpath|virtualswitch0|virtualswitch1|vmdisk|username|password|vmware_mac_eth0_generated|vmware_mac_eth1_generated)$/', $item)) {
 		print "alert('Invalid data submitted.');";
 		return;
 	}
@@ -874,7 +861,7 @@ function AJnewProfile() {
 		return;
 	}
 	$imageid = getImageId('noimage');
-	$query = "INSERT INTO vmprofile (profilename, vmtypeid, imageid) VALUES ('$newprofile', 1, $imageid)";
+	$query = "INSERT INTO vmprofile (profilename, imageid) VALUES ('$newprofile', $imageid)";
 	doQuery($query, 101);
 	$qh = doQuery("SELECT LAST_INSERT_ID() FROM vmprofile", 101);
 	$row = mysql_fetch_row($qh);
