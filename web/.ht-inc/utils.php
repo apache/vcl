@@ -3971,8 +3971,9 @@ function isAvailable($images, $imageid, $imagerevisionid, $start, $end,
 				}
 			}
 			# get computer ids available from block allocations
-			$blockids = getAvailableBlockComputerids($imageid, $start, $end,
-			                                         $allocatedcompids);
+			$blockdata = getAvailableBlockComputerids($imageid, $start, $end,
+			                                          $allocatedcompids);
+			$blockids = $blockdata['compids'];
 		}
 
 		#remove computers from list that are already scheduled
@@ -4101,6 +4102,9 @@ function isAvailable($images, $imageid, $imagerevisionid, $start, $end,
 		$requestInfo["computers"][$key] = $comparr['compid'];
 		$requestInfo["mgmtnodes"][$key] = $comparr['mgmtid'];
 		$requestInfo["loaded"][$key] = $comparr['loaded'];
+		$requestInfo['fromblock'][$key] = $comparr['fromblock'];
+		if($comparr['fromblock'])
+			$requestInfo['blockdata'][$key] = $blockdata[$comparr['compid']];
 		array_push($allocatedcompids, $comparr['compid']);
 	}
 
@@ -4229,7 +4233,7 @@ function schCheckMaintenance($start, $end) {
 ////////////////////////////////////////////////////////////////////////////////
 function allocComputer($blockids, $currentids, $computerids, $start,
                        $nowfuture) {
-	$ret = array();
+	$ret = array('fromblock' => 0);
 	if(SCHEDULER_ALLOCATE_RANDOM_COMPUTER) {
 		shuffle($blockids);
 		shuffle($currentids);
@@ -4242,6 +4246,7 @@ function allocComputer($blockids, $currentids, $computerids, $start,
 		$ret['compid'] = $compid;
 		$ret['mgmtid'] = $mgmtnodeid;
 		$ret['loaded'] = 1;
+		$ret['fromblock'] = 1;
 		return $ret;
 	}
 	foreach($currentids as $compid) {
@@ -4613,8 +4618,12 @@ function addRequest($forimaging=0, $revisionid=array()) {
 		else
 			$imagerevisionid = getProductionRevisionid($imageid);
 		$computerid = $requestInfo["computers"][$key];
-
 		$mgmtnodeid = $requestInfo['mgmtnodes'][$key];
+		$fromblock = $requestInfo['fromblock'][$key];
+		if($fromblock)
+			$blockdata = $requestInfo['blockdata'][$key];
+		else
+			$blockdata = array();
 
 		$query = "INSERT INTO reservation "
 		       .        "(requestid, "
@@ -4629,7 +4638,8 @@ function addRequest($forimaging=0, $revisionid=array()) {
 		       .       "$imagerevisionid, "
 		       .       "$mgmtnodeid)";
 		doQuery($query, 133);
-		addSublogEntry($logid, $imageid, $imagerevisionid, $computerid, $mgmtnodeid);
+		addSublogEntry($logid, $imageid, $imagerevisionid, $computerid,
+		               $mgmtnodeid, $fromblock, $blockdata);
 	}
 	// release semaphore lock
 	semUnlock();
@@ -7525,7 +7535,12 @@ function sortComputers($a, $b) {
 /// \param $allocatedcompids - array of computer ids that have already been
 /// allocated while processing this reservation
 ///
-/// \return an array of computer ids
+/// \return an array with the key 'compids' that is an array of available
+/// computerids; additional keys exist for each computerid that are arrays
+/// of block data for that computer with these keys:\n
+/// \b start - start of block time\n
+/// \b end - end of block time\n
+/// \b blockid - id of block request
 ///
 /// \brief gets all computer ids that are part of a block allocation the logged
 /// in user is a part of that are available between $start and $end
@@ -7533,14 +7548,17 @@ function sortComputers($a, $b) {
 ////////////////////////////////////////////////////////////////////////////////
 function getAvailableBlockComputerids($imageid, $start, $end, $allocatedcompids) {
 	global $user;
-	$compids = array();
+	$data = array('compids' => array());
 	$groupids = implode(',', array_keys($user['groups']));
 	if(! count($user['groups']))
 		$groupids = "''";
 	$startdt = unixToDatetime($start);
 	$enddt = unixToDatetime($end);
 	$alloccompids = implode(",", $allocatedcompids);
-	$query = "SELECT c.computerid "
+	$query = "SELECT c.computerid, "
+	       .        "t.start, "
+	       .        "t.end, "
+	       .        "r.id AS blockid "
 	       . "FROM blockComputers c, "
 	       .      "blockRequest r, "
 	       .      "blockTimes t, "
@@ -7561,9 +7579,10 @@ function getAvailableBlockComputerids($imageid, $start, $end, $allocatedcompids)
 	       . "ORDER BY s.name";
 	$qh = doQuery($query, 101);
 	while($row = mysql_fetch_assoc($qh)) {
-		array_push($compids, $row['computerid']);
+		$data['compids'][] = $row['computerid'];
+		$data[$row['computerid']] = $row;
 	}
-	return $compids;
+	return $data;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -8582,19 +8601,23 @@ function addChangeLogEntryOther($logid, $data) {
 ////////////////////////////////////////////////////////////////////////////////
 ///
 /// \fn addSublogEntry($logid, $imageid, $imagerevisionid, $computerid,
-///                    $mgmtnodeid)
+///                    $mgmtnodeid, $fromblock, $blockdata)
 ///
 /// \param $logid - id of parent log entry
 /// \param $imageid - id of requested image
 /// \param $imagerevisionid - revision id of requested image
 /// \param $computerid - assigned computer id
 /// \param $mgmtnodeid - id of management node handling this reservation
+/// \param $fromblock - boolean telling if this computer is from a block
+/// allocation
+/// \param $blockdata - if $fromblock is 1, this contains data about the block
+/// allocation
 ///
 /// \brief adds an entry to the log table
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function addSublogEntry($logid, $imageid, $imagerevisionid, $computerid,
-                        $mgmtnodeid) {
+                        $mgmtnodeid, $fromblock, $blockdata) {
 	$query = "SELECT predictivemoduleid "
 	       . "FROM managementnode "
 	       . "WHERE id = $mgmtnodeid";
@@ -8618,16 +8641,26 @@ function addSublogEntry($logid, $imageid, $imagerevisionid, $computerid,
 	       .        "imagerevisionid, "
 	       .        "computerid, "
 	       .        "managementnodeid, "
-	       .        "predictivemoduleid, "
-	       .        "hostcomputerid) "
+			 .        "predictivemoduleid, ";
+	if($fromblock) {
+		$query .=    "blockRequestid, "
+		       .     "blockStart, "
+		       .     "blockEnd, ";
+	}
+	$query .=       "hostcomputerid) "
 	       . "VALUES "
 	       .        "($logid, "
 	       .        "$imageid, "
 	       .        "$imagerevisionid, "
 	       .        "$computerid, "
 	       .        "$mgmtnodeid, "
-	       .        "$predictiveid, "
-	       .        "$hostcomputerid)";
+	       .        "$predictiveid, ";
+	if($fromblock) {
+		$query .=    "{$blockdata['blockid']}, "
+		       .     "'{$blockdata['start']}', "
+		       .     "'{$blockdata['end']}', ";
+	}
+	$query .=       "$hostcomputerid)";
 	doQuery($query, 101);
 }
 
