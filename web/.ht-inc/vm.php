@@ -171,6 +171,7 @@ function editVMInfo() {
 
 	if(! checkUserHasPerm('Manage VM Profiles'))
 		return;
+	$imagetypes = getImageTypes();
 	print "<div id=\"vmprofiles\" dojoType=\"dijit.layout.ContentPane\" title=\"VM Host Profiles\">\n";
 	if(count($profiles))
 		print "<span id=\"selectprofilediv\">";
@@ -208,61 +209,88 @@ function editVMInfo() {
 	print "</button><br><br>";
 	$cont = addContinuationsEntry('AJupdateVMprofileItem');
 	print "(Click a value to edit it)<br>\n";
+	print "(* denotes required fields)<br>\n";
 	print "<input type=hidden id=pcont value=\"$cont\">\n";
 	print "<table summary=\"\">\n";
 	print "  <tr>\n";
-	print "    <th align=right>Name:</th>\n";
+	print "    <th align=right>Name:*</th>\n";
 	print "    <td><span id=pname dojoType=\"dijit.InlineEditBox\" onChange=\"updateProfile('pname', 'profilename');\"></span></td>\n";
 	print "  </tr>\n";
 	print "  <tr>\n";
-	print "    <th align=right>Image:</th>\n";
+	print "    <th align=right>Image:*</th>\n";
 	print "    <td><span id=pimage dojoType=\"dijit.form.FilteringSelect\" searchAttr=\"name\" onchange=\"updateProfile('pimage', 'imageid');\" style=\"width: 420px\"></span></td>\n";
 	print "  </tr>\n";
 	print "  <tr>\n";
+	print "    <th align=right>Resource Path:</th>\n";
+	print "    <td><span id=presourcepath dojoType=\"dijit.InlineEditBox\" onChange=\"updateProfile('presourcepath', 'resourcepath');\"></span><img tabindex=0 src=\"images/helpicon.png\" id=\"resourcepathhelp\" /></td>\n";
+	print "  </tr>\n";
+	print "  <tr>\n";
 	print "    <th align=right>Repository Path:</th>\n";
-	print "    <td><span id=prepositorypath dojoType=\"dijit.InlineEditBox\" onChange=\"updateProfile('prepositorypath', 'repositorypath');\"></span></td>\n";
+	print "    <td><span id=prepositorypath dojoType=\"dijit.InlineEditBox\" onChange=\"updateProfile('prepositorypath', 'repositorypath');\"></span><img tabindex=0 src=\"images/helpicon.png\" id=\"repositorypathhelp\" /></td>\n";
 	print "  </tr>\n";
 	print "  <tr>\n";
-	print "    <th align=right>Data Store Path:</th>\n";
-	print "    <td><span id=pdspath dojoType=\"dijit.InlineEditBox\" onChange=\"updateProfile('pdspath', 'datastorepath');\"></span></td>\n";
+	print "    <th align=right>Repository Image Type:</th>\n";
+	print "    <td>\n";
+	printSelectInput("", $imagetypes, -1, 0, 0, 'prepositoryimgtype', 'dojoType="dijit.form.Select" onChange="updateProfile(\'prepositoryimgtype\', \'repositoryimagetypeid\');"');
+	print "    <img tabindex=0 src=\"images/helpicon.png\" id=\"repositoryimgtypehelp\" />\n";
+	print "    </td>\n";
 	print "  </tr>\n";
 	print "  <tr>\n";
-	print "    <th align=right>VM Path:</th>\n";
-	print "    <td><span id=pvmpath dojoType=\"dijit.InlineEditBox\" onChange=\"updateProfile('pvmpath', 'vmpath');\"></span></td>\n";
+	print "    <th align=right>Virtual Disk Path:*</th>\n";
+	print "    <td><span id=pdspath dojoType=\"dijit.InlineEditBox\" onChange=\"updateProfile('pdspath', 'datastorepath');\"></span><img tabindex=0 src=\"images/helpicon.png\" id=\"dspathhelp\" /></td>\n";
 	print "  </tr>\n";
 	print "  <tr>\n";
-	print "    <th align=right>Virtual Switch 0:</th>\n";
-	print "    <td><span id=pvs0 dojoType=\"dijit.InlineEditBox\" onChange=\"updateProfile('pvs0', 'virtualswitch0');\"></span></td>\n";
+	print "    <th align=right>Virtual Disk Image Type:*</th>\n";
+	print "    <td>\n";
+	printSelectInput("", $imagetypes, -1, 0, 0, 'pdatastoreimgtype', 'dojoType="dijit.form.Select" onChange="updateProfile(\'pdatastoreimgtype\', \'datastoreimagetypeid\');"');
+	print "    <img tabindex=0 src=\"images/helpicon.png\" id=\"datastoreimgtypehelp\" />\n";
+	print "    </td>\n";
 	print "  </tr>\n";
 	print "  <tr>\n";
-	print "    <th align=right>Virtual Switch 1:</th>\n";
-	print "    <td><span id=pvs1 dojoType=\"dijit.InlineEditBox\" onChange=\"updateProfile('pvs1', 'virtualswitch1');\"></span></td>\n";
+	print "    <th align=right>Virtual Disk Mode:*</th>\n";
+	print "    <td><select id=pvmdisk dojoType=\"dijit.form.FilteringSelect\" searchAttr=\"name\" onchange=\"updateProfile('pvmdisk', 'vmdisk');\"></select><img tabindex=0 src=\"images/helpicon.png\" id=\"vmdiskhelp\" /></td>\n";
 	print "  </tr>\n";
 	print "  <tr>\n";
-	print "    <th align=right>VM Disk:</th>\n";
-	print "    <td><select id=pvmdisk dojoType=\"dijit.form.FilteringSelect\" searchAttr=\"name\" onchange=\"updateProfile('pvmdisk', 'vmdisk');\"></select></td>\n";
+	print "    <th align=right>VM Working Directory Path:</th>\n";
+	print "    <td><span id=pvmpath dojoType=\"dijit.InlineEditBox\" onChange=\"updateProfile('pvmpath', 'vmpath');\"></span><img tabindex=0 src=\"images/helpicon.png\" id=\"vmpathhelp\" /></td>\n";
 	print "  </tr>\n";
 	print "  <tr>\n";
-	print "    <th align=right>Generate eth0 MAC:</th>\n";
-	print "    <td><select id=pgenmac0 dojoType=\"dijit.form.Select\" searchAttr=\"name\" onchange=\"updateProfile('pgenmac0', 'eth0generated');\">\n";
+	print "    <th align=right>VM Network 0:*</th>\n";
+	print "    <td><span id=pvs0 dojoType=\"dijit.InlineEditBox\" onChange=\"updateProfile('pvs0', 'virtualswitch0');\"></span><img tabindex=0 src=\"images/helpicon.png\" id=\"vs0help\" /></td>\n";
+	print "  </tr>\n";
+	print "  <tr>\n";
+	print "    <th align=right>VM Network 1:*</th>\n";
+	print "    <td><span id=pvs1 dojoType=\"dijit.InlineEditBox\" onChange=\"updateProfile('pvs1', 'virtualswitch1');\"></span><img tabindex=0 src=\"images/helpicon.png\" id=\"vs1help\" /></td>\n";
+	print "  </tr>\n";
+	print "  <tr>\n";
+	print "    <th align=right>VM Network 2:</th>\n";
+	print "    <td><span id=pvs2 dojoType=\"dijit.InlineEditBox\" onChange=\"updateProfile('pvs2', 'virtualswitch2');\"></span><img tabindex=0 src=\"images/helpicon.png\" id=\"vs2help\" /></td>\n";
+	print "  </tr>\n";
+	print "  <tr>\n";
+	print "    <th align=right>VM Network 3:</th>\n";
+	print "    <td><span id=pvs3 dojoType=\"dijit.InlineEditBox\" onChange=\"updateProfile('pvs3', 'virtualswitch3');\"></span><img tabindex=0 src=\"images/helpicon.png\" id=\"vs3help\" /></td>\n";
+	print "  </tr>\n";
+	print "  <tr>\n";
+	print "    <th align=right>Generate eth0 MAC:*</th>\n";
+	print "    <td><select id=pgenmac0 dojoType=\"dijit.form.Select\" onchange=\"updateProfile('pgenmac0', 'eth0generated');\">\n";
 	print "    <option value=\"1\">Yes</option>\n";
 	print "    <option value=\"0\">No</option>\n";
-	print "    </select></td>\n";
+	print "    </select><img tabindex=0 src=\"images/helpicon.png\" id=\"genmac0help\" /></td>\n";
 	print "  </tr>\n";
 	print "  <tr>\n";
-	print "    <th align=right>Generate eth1 MAC:</th>\n";
-	print "    <td><select id=pgenmac1 dojoType=\"dijit.form.Select\" searchAttr=\"name\" onchange=\"updateProfile('pgenmac1', 'eth1generated');\">\n";
+	print "    <th align=right>Generate eth1 MAC:*</th>\n";
+	print "    <td><select id=pgenmac1 dojoType=\"dijit.form.Select\" onchange=\"updateProfile('pgenmac1', 'eth1generated');\">\n";
 	print "    <option value=\"1\">Yes</option>\n";
 	print "    <option value=\"0\">No</option>\n";
-	print "    </select></td>\n";
+	print "    </select><img tabindex=0 src=\"images/helpicon.png\" id=\"genmac1help\" /></td>\n";
 	print "  </tr>\n";
 	print "  <tr>\n";
 	print "    <th align=right>Username:</th>\n";
-	print "    <td><span id=pusername dojoType=\"dijit.InlineEditBox\" onChange=\"updateProfile('pusername', 'username');\"></span></td>\n";
+	print "    <td><span id=pusername dojoType=\"dijit.InlineEditBox\" onChange=\"updateProfile('pusername', 'username');\"></span><img tabindex=0 src=\"images/helpicon.png\" id=\"usernamehelp\" /></td>\n";
 	print "  </tr>\n";
 	print "  <tr>\n";
 	print "    <th align=right>Password:</th>\n";
-	print "    <td><input type=password id=ppassword onkeyup=\"checkProfilePassword();\"></input></td>\n";
+	print "    <td><input type=password id=ppassword onkeyup=\"checkProfilePassword();\"></input><img tabindex=0 src=\"images/helpicon.png\" id=\"passwordhelp\" /></td>\n";
 	print "  </tr>\n";
 	print "  <tr>\n";
 	print "    <th align=right>Confirm:</th>\n";
@@ -287,6 +315,52 @@ function editVMInfo() {
 	print "</div>\n";
 	print "</div>\n";
 
+	print "</div>\n";
+
+	print "<div dojoType=\"dijit.Tooltip\" connectId=\"resourcepathhelp\">\n";
+	print _("Resource Path only needs to be configured if VMware vCenter is used. It defines the location where VMs will be created in the vCenter inventory tree. The inventory tree contains at least one Datacenter, and may also contain Folders, Clusters, and Resource Pools.<br>Example: /DatacenterA/Folder1/Cluster2/ResourcePool3");
+	print "</div>\n";
+	print "<div dojoType=\"dijit.Tooltip\" connectId=\"repositorypathhelp\">\n";
+	print _("(Optional) The path where master copies of images are stored which are used to transfer images to VM host datastores or to other repositories. This is required if multiple management nodes need to share images. VMs do not run directly off of the images stored in the repository. It can refer to and be mounted on either the management node or VM host.");
+	print "</div>\n";
+	print "<div dojoType=\"dijit.Tooltip\" connectId=\"repositoryimgtypehelp\">\n";
+	print _("Virtual disk type of the images stored here.");
+	print "</div>\n";
+	print "<div dojoType=\"dijit.Tooltip\" connectId=\"dspathhelp\">\n";
+	print _("The location where master copies of images are stored which are used by running VMs. It can be either on local or network storge. If on network storage, it can be shared among multiple hosts.");
+	print "</div>\n";
+	print "<div dojoType=\"dijit.Tooltip\" connectId=\"datastoreimgtypehelp\">\n";
+	print _("Virtual disk type of the images stored here.");
+	print "</div>\n";
+	print "<div dojoType=\"dijit.Tooltip\" connectId=\"vmdiskhelp\">\n";
+	print _("Defines whether the Virtual Disk Path storage is dedicated to a single host or shared among multiple hosts. If set to dedicated, Repository Path must be definied and VCL will remove copies of images in the Virtual Disk Path to free up space if they are not being used.");
+	print "</div>\n";
+	print "<div dojoType=\"dijit.Tooltip\" connectId=\"vmpathhelp\">\n";
+	print _("(Optional) This is the path on VM host where VM working directories will reside. If not configured, the Datastore Path location will be used. It can be either on local or network storge. It should be dedicated for each VM host and should be optimized for read-write performance.");
+	print "</div>\n";
+	print "<div dojoType=\"dijit.Tooltip\" connectId=\"vs0help\">\n";
+	print _("The VM Network parameters should match the network names configured on the VM host. For ESXi, the Virtual Switch parameters must match the Virtual Machine Port Group Network Labels configured in the vSphere Client. VM Network 0 should be your public or private network.");
+	print "</div>\n";
+	print "<div dojoType=\"dijit.Tooltip\" connectId=\"vs1help\">\n";
+	print _("The VM Network parameters should match the network names configured on the VM host. For ESXi, the Virtual Switch parameters must match the Virtual Machine Port Group Network Labels configured in the vSphere Client. VM Network 1 should be your public or private network.");
+	print "</div>\n";
+	print "<div dojoType=\"dijit.Tooltip\" connectId=\"vs2help\">\n";
+	print _("(Optional) The VM Network parameters should match the network names configured on the VM host. For ESXi, the Virtual Switch parameters must match the Virtual Machine Port Group Network Labels configured in the vSphere Client. VM Network 2 is optional for connecting the VM to additional networks.");
+	print "</div>\n";
+	print "<div dojoType=\"dijit.Tooltip\" connectId=\"vs3help\">\n";
+	print _("(Optional) The VM Network parameters should match the network names configured on the VM host. For ESXi, the Virtual Switch parameters must match the Virtual Machine Port Group Network Labels configured in the vSphere Client. VM Network 3 is optional for connecting the VM to additional networks.");
+	print "</div>\n";
+	print "<div dojoType=\"dijit.Tooltip\" connectId=\"genmac0help\">\n";
+	print _("Specifies whether VMs are assigned MAC addresses defined in the VCL database or if random MAC addresses should be assigned.");
+	print "</div>\n";
+	print "<div dojoType=\"dijit.Tooltip\" connectId=\"genmac1help\">\n";
+	print _("Specifies whether VMs are assigned MAC addresses defined in the VCL database or if random MAC addresses should be assigned.");
+	print "</div>\n";
+	print "<div dojoType=\"dijit.Tooltip\" connectId=\"usernamehelp\">\n";
+	print _("Name of the administrative or root user residing on the VM host.");
+	print "</div>\n";
+	print "<div dojoType=\"dijit.Tooltip\" connectId=\"passwordhelp\">\n";
+	print _("Password of the administrative or root user residing on the VM host.");
 	print "</div>\n";
 }
 
@@ -437,6 +511,10 @@ function getVMHostData($id='') {
 	$ret = array();
 	while($row = mysql_fetch_assoc($qh)) {
 		$ret[$row['id']] = $row;
+		foreach($profiles[$row['vmprofileid']] AS $key => $value) {
+			if(is_null($value))
+				$profiles[$row['vmprofileid']][$key] = '';
+		}
 		$ret[$row['id']]['vmprofiledata'] = $profiles[$row['vmprofileid']];
 	}
 	uasort($ret, 'sortKeepIndex');
@@ -776,8 +854,9 @@ function AJprofileData($profileid="") {
 	$imagedata = array('identifier' => 'id', 'items' => $images);
 	
 	$vmdiskitems = array();
-	$vmdiskitems[] = array('id' => 'localdisk', 'name' => 'localdisk');
-	$vmdiskitems[] = array('id' => 'networkdisk', 'name' => 'networkdisk');
+	$vmdisks = getENUMvalues('vmprofile', 'vmdisk');
+	foreach($vmdisks as $val)
+		$vmdiskitems[] = array('id' => $val, 'name' => $val);
 	$vmdisk = array('identifier' => 'id', 'items' => $vmdiskitems);
 
 	$arr = array('profile' => $profiledata[$profileid],
@@ -801,14 +880,26 @@ function AJupdateVMprofileItem() {
 	}
 	$profileid = processInputVar('profileid', ARG_NUMERIC);
 	$item = processInputVar('item', ARG_STRING);
-	if(! preg_match('/^(profilename|imageid|repositorypath|datastorepath|vmpath|virtualswitch0|virtualswitch1|vmdisk|username|password|eth0generated|eth1generated)$/', $item)) {
+	if(! preg_match('/^(profilename|imageid|resourcepath|repositorypath|repositoryimagetypeid|datastorepath|datastoreimagetypeid|vmdisk|vmpath|virtualswitch[0-3]|username|password|eth0generated|eth1generated)$/', $item)) {
 		print "alert('Invalid data submitted.');";
 		return;
 	}
-	if(preg_match('/^vmware_mac_eth[01]_generated$/', $item)) {
+	if(preg_match('/^eth[01]generated$/', $item)) {
 		$newvalue = processInputVar('newvalue', ARG_NUMERIC);
 		if($newvalue != 0 && $newvalue != 1)
 			$newvalue = 0;
+	}
+	elseif(preg_match('/imagetypeid$/', $item)) {
+		$newvalue = processInputVar('newvalue', ARG_STRING);
+		$imagetypes = getImageTypes();
+		if(! array_key_exists($newvalue, $imagetypes))
+			$newvalue = 1;
+	}
+	elseif($item == 'vmdisk') {
+		$newvalue = processInputVar('newvalue', ARG_STRING);
+		$vmdisks = getENUMvalues('vmprofile', 'vmdisk');
+		if(! in_array($newvalue, $vmdisks))
+			$newvalue = $vmdisks[0];
 	}
 	elseif($item == 'password')
 		$newvalue = $_POST['newvalue'];

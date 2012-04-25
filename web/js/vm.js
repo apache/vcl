@@ -21,22 +21,22 @@ var allvms = '';
 var curprofile = '';
 
 function getVMHostData(cont) {
-	var hostid = document.getElementById('vmhostid').value;
+	var hostid = dojo.byId('vmhostid').value;
 	document.body.style.cursor = 'wait';
 	dijit.byId('messages').hide();
-	document.getElementById('vmhostdata').className = 'hidden';
-	document.getElementById('movevms').className = 'hidden';
-	document.getElementById('vmstate').innerHTML = '';
+	dojo.byId('vmhostdata').className = 'hidden';
+	dojo.byId('movevms').className = 'hidden';
+	dojo.byId('vmstate').innerHTML = '';
 
-	var selobj1 = document.getElementById('currvms');
+	var selobj1 = dojo.byId('currvms');
 	for(var i = selobj1.options.length - 1; i >= 0; i--) {
 		selobj1.remove(i);
 	}
-	var selobj2 = document.getElementById('freevms');
+	var selobj2 = dojo.byId('freevms');
 	for(i = selobj2.options.length - 1; i >= 0; i--) {
 		selobj2.remove(i);
 	}
-	var selobj3 = document.getElementById('movevmssel');
+	var selobj3 = dojo.byId('movevmssel');
 	for(i = selobj3.options.length - 1; i >= 0; i--) {
 		selobj3.remove(i);
 	}
@@ -58,13 +58,13 @@ function VMHostDataCB(data, ioArgs) {
 		document.body.style.cursor = 'default';
 		return;
 	}
-	document.getElementById('vmlimit').value = data.items.vmlimit;
-	document.getElementById('vmhostdata').className = 'shown';
+	dojo.byId('vmlimit').value = data.items.vmlimit;
+	dojo.byId('vmhostdata').className = 'shown';
 
 	curprofileid = data.items.profileid;
 
 	// leave this block for allowing changing of profiles later
-	/*var selobj = document.getElementById('vmprofileid');
+	/*var selobj = dojo.byId('vmprofileid');
 	for(var i = 0; i < selobj.options.length; i++) {
 		if(selobj.options[i].value == data.items.profile.id) {
 			selobj.selectedIndex = i;
@@ -76,12 +76,19 @@ function VMHostDataCB(data, ioArgs) {
 	obj.setTitle(profile.profilename);
 	var ct = '<table>';
 	ct += '<tr><th align=right>Image:</th><td>' + profile.image + '</td></tr>';
+	ct += '<tr><th align=right>Resource Path:</th><td>' + profile.resourcepath + '</td></tr>';
 	ct += '<tr><th align=right>Repository Path:</th><td>' + profile.repositorypath + '</td></tr>';
-	ct += '<tr><th align=right>Datastore Path:</th><td>' + profile.datastorepath + '</td></tr>';
-	ct += '<tr><th align=right>VM Path:</th><td>' + profile.vmpath + '</td>';
-	ct += '<tr><th align=right>Virtual Switch 0:</th><td>' + profile.virtualswitch0 + '</td></tr>';
-	ct += '<tr><th align=right>Virtual Switch 1:</th><td>' + profile.virtualswitch1 + '</td></tr>';
-	ct += '<tr><th align=right>VM Disk:</th><td>' + profile.vmdisk + '</td></tr>';
+	ct += '<tr><th align=right>Repository Image Type:</th><td>' + profile.repositoryimagetype + '</td></tr>';
+	ct += '<tr><th align=right>Virtual Disk Path:</th><td>' + profile.datastorepath + '</td></tr>';
+	ct += '<tr><th align=right>Virtual Disk Image Type:</th><td>' + profile.datastoreimagetype + '</td></tr>';
+	ct += '<tr><th align=right>Virtual Disk Mode:</th><td>' + profile.vmdisk + '</td></tr>';
+	ct += '<tr><th align=right>VM Working Directory Path:</th><td>' + profile.vmpath + '</td>';
+	ct += '<tr><th align=right>VM Network 0:</th><td>' + profile.virtualswitch0 + '</td></tr>';
+	ct += '<tr><th align=right>VM Network 1:</th><td>' + profile.virtualswitch1 + '</td></tr>';
+	ct += '<tr><th align=right>VM Network 2:</th><td>' + profile.virtualswitch2 + '</td></tr>';
+	ct += '<tr><th align=right>VM Network 3:</th><td>' + profile.virtualswitch3 + '</td></tr>';
+	ct += '</table>';
+	ct += '</table>';
 	ct += '</table>';
 	obj.setContent(ct);
 	if(obj.open)
@@ -90,11 +97,11 @@ function VMHostDataCB(data, ioArgs) {
 	allvms = data.items.allvms;
 	currvms = data.items.currvms;
 
-	var inobj = document.getElementById('currvms');
+	var inobj = dojo.byId('currvms');
 	for(var i = 0; i < data.items.currvms.length; i++) {
 		inobj.options[inobj.options.length] = new Option(data.items.currvms[i].name, data.items.currvms[i].id);
 	}
-	var outobj = document.getElementById('freevms');
+	var outobj = dojo.byId('freevms');
 	for(var i = 0; i < data.items.freevms.length; i++) {
 		outobj.options[outobj.options.length] = new Option(data.items.freevms[i].name, data.items.freevms[i].id);
 	}
@@ -112,8 +119,8 @@ function VMHostDataCB(data, ioArgs) {
 	}
 
 	if(data.items.movevms.length) {
-		document.getElementById('movevms').className = 'shown';
-		obj = document.getElementById('movevmssel');
+		dojo.byId('movevms').className = 'shown';
+		obj = dojo.byId('movevmssel');
 		var movevms = data.items.movevms;
 		for(var i = 0; i < movevms.length; i++) {
 			var label = movevms[i]['hostname'] + ' (' + movevms[i]['time'] + ')';
@@ -121,14 +128,14 @@ function VMHostDataCB(data, ioArgs) {
 		}
 	}
 
-	//document.getElementById('changevmcont').value = data.items.continuation;
+	//dojo.byId('changevmcont').value = data.items.continuation;
 
 	document.body.style.cursor = 'default';
 }
 
 function updateVMlimit(cont) {
-	var hostid = document.getElementById('vmhostid').value;
-	var newlimit = document.getElementById('vmlimit').value;
+	var hostid = dojo.byId('vmhostid').value;
+	var newlimit = dojo.byId('vmlimit').value;
 	document.body.style.cursor = 'wait';
 
 	dojo.xhrPost({
@@ -150,7 +157,7 @@ function updateVMlimitCB(data, ioArgs) {
 }
 
 function showVMstate() {
-	var selobj = document.getElementById('currvms');
+	var selobj = dojo.byId('currvms');
 	var cnt = 0;
 	var state = '';
 	for(var i = 0; i < selobj.options.length; i++) {
@@ -160,14 +167,14 @@ function showVMstate() {
 		}
 	}
 	if(cnt == 1)
-		document.getElementById('vmstate').innerHTML = state;
+		dojo.byId('vmstate').innerHTML = state;
 	else
-		document.getElementById('vmstate').innerHTML = '';
+		dojo.byId('vmstate').innerHTML = '';
 }
 
 function changeVMprofile() {
-	var hostid = document.getElementById('vmhostid').value;
-	var selobj = document.getElementById('vmprofileid');
+	var hostid = dojo.byId('vmhostid').value;
+	var selobj = dojo.byId('vmprofileid');
 	var newid = selobj.options[selobj.selectedIndex].value;
 	dijit.byId('profileDlg').show();
 }
@@ -177,7 +184,7 @@ function cancelVMprofileChange() {
 		fromok = 0;
 	}
 	else {
-		var selobj = document.getElementById('vmprofileid');
+		var selobj = dojo.byId('vmprofileid');
 		for(var i = 0; i < selobj.options.length; i++) {
 			if(selobj.options[i].value == curprofileid) {
 				selobj.selectedIndex = i;
@@ -189,9 +196,9 @@ function cancelVMprofileChange() {
 
 function submitChangeProfile() {
 	fromok = 1;
-	var hostid = document.getElementById('vmhostid').value;
-	var cont = document.getElementById('changevmcont').value;
-	var selobj = document.getElementById('vmprofileid');
+	var hostid = dojo.byId('vmhostid').value;
+	var cont = dojo.byId('changevmcont').value;
+	var selobj = dojo.byId('vmprofileid');
 	var oldid = curprofileid;
 	var newid = selobj.options[selobj.selectedIndex].value;
 	dijit.byId('profileDlg').hide();
@@ -209,17 +216,17 @@ function submitChangeProfile() {
 }
 
 function submitChangeProfileCB(data, ioArgs) {
-	var selobj = document.getElementById('vmprofileid');
+	var selobj = dojo.byId('vmprofileid');
 	curprofileid = selobj.options[selobj.selectedIndex].value;
-	document.getElementById('changevmcont').value = data.items.continuation;
+	dojo.byId('changevmcont').value = data.items.continuation;
 	alert(data.items.msg);
 }
 
 function vmToHost(cont) {
 	document.body.style.cursor = 'wait';
-	var hostid = document.getElementById('vmhostid').value;
+	var hostid = dojo.byId('vmhostid').value;
 
-	var obj = document.getElementById('freevms');
+	var obj = dojo.byId('freevms');
 	var listids = new Array();
 	for(var i = obj.options.length - 1; i >= 0; i--) {
 		if(obj.options[i].selected) {
@@ -227,8 +234,8 @@ function vmToHost(cont) {
 		}
 	}
 	//var limit = dijit.byId('vmlimit').value;
-	var limit = document.getElementById('vmlimit').value;
-	var currcnt = document.getElementById('currvms').options.length;
+	var limit = dojo.byId('vmlimit').value;
+	var currcnt = dojo.byId('currvms').options.length;
 	if(limit < currcnt + listids.length) {
 		alert('You\'re attempting to add more VMs to this host\nthan the current VM limit.  This is not allowed.');
 		document.body.style.cursor = 'default';
@@ -271,7 +278,7 @@ function vmToHostCB(data, ioArgs) {
 	var vms = data.items.vms;
 	var addrem = data.items.addrem; // 1 for add, 0 for rem
 	var fails = data.items.fails;
-	var obj = document.getElementById('freevms');
+	var obj = dojo.byId('freevms');
 	for(var i = obj.options.length - 1; i >= 0; i--) {
 		if(obj.options[i].selected) {
 			var remove = 1;
@@ -286,7 +293,7 @@ function vmToHostCB(data, ioArgs) {
 				obj.remove(i);
 		}
 	}
-	var obj = document.getElementById('currvms');
+	var obj = dojo.byId('currvms');
 	for(var i = 0; i < vms.length; i++) {
 		var lastid = -1;
 		for(var j = 0; j < allvms.length; j++) {
@@ -355,9 +362,9 @@ function vmToHostCB(data, ioArgs) {
 
 function vmFromHost(cont) {
 	document.body.style.cursor = 'wait';
-	var hostid = document.getElementById('vmhostid').value;
+	var hostid = dojo.byId('vmhostid').value;
 
-	var obj = document.getElementById('currvms');
+	var obj = dojo.byId('currvms');
 	var listids = new Array();
 	for(var i = obj.options.length - 1; i >= 0; i--) {
 		if(obj.options[i].selected)
@@ -397,7 +404,7 @@ function vmFromHostCB(data, ioArgs) {
 	var addrem = data.items.addrem; // 1 for add, 0 for rem
 	var checks = data.items.checks;
 	var fails = data.items.fails;
-	var obj = document.getElementById('currvms');
+	var obj = dojo.byId('currvms');
 	for(var i = obj.options.length - 1; i >= 0; i--) {
 		if(obj.options[i].selected) {
 			var remove = 1;
@@ -417,7 +424,7 @@ function vmFromHostCB(data, ioArgs) {
 			}
 			if(remove) {
 				obj.remove(i);
-				document.getElementById('vmstate').innerHTML = '';
+				dojo.byId('vmstate').innerHTML = '';
 				currvms.splice(i, 1);
 			}
 		}
@@ -432,8 +439,8 @@ function vmFromHostCB(data, ioArgs) {
 	}
 
 	if(data.items.vms.length) {
-		document.getElementById('movevms').className = 'shown';
-		obj = document.getElementById('movevmssel');
+		dojo.byId('movevms').className = 'shown';
+		obj = dojo.byId('movevmssel');
 		var vms = data.items.vms;
 		for(var i = 0; i < vms.length; i++) {
 			var label = vms[i]['hostname'] + ' (' + vms[i]['time'] + ')';
@@ -512,17 +519,17 @@ function reloadVMhostCB(data, ioArgs) {
 function setMessageWindow(title, okbtntext, content, submitFunc) {
 	obj = dijit.byId('messages');
 	obj.titleNode.innerHTML = title;
-	document.getElementById('messagestext').innerHTML = content;
-	document.getElementById('messagesokbtn').innerHTML = okbtntext;
-	document.getElementById('messagesokbtn').onclick = submitFunc;
+	dojo.byId('messagestext').innerHTML = content;
+	dojo.byId('messagesokbtn').innerHTML = okbtntext;
+	dojo.byId('messagesokbtn').onclick = submitFunc;
 	obj.show();
 }
 
 function cancelVMmove(cont) {
 	document.body.style.cursor = 'wait';
-	var hostid = document.getElementById('vmhostid').value;
+	var hostid = dojo.byId('vmhostid').value;
 
-	var obj = document.getElementById('movevmssel');
+	var obj = dojo.byId('movevmssel');
 	var listids = new Array();
 	for(var i = obj.options.length - 1; i >= 0; i--) {
 		if(obj.options[i].selected)
@@ -547,8 +554,8 @@ function cancelVMmove(cont) {
 
 function getVMprofileData(cont) {
 	document.body.style.cursor = 'wait';
-	document.getElementById('vmprofiledata').className = 'hidden';
-	var profileid = document.getElementById('profileid').value;
+	dojo.byId('vmprofiledata').className = 'hidden';
+	var profileid = dojo.byId('profileid').value;
 
 	dojo.xhrPost({
 		url: 'index.php',
@@ -582,26 +589,32 @@ function getVMprofileDataCB(data, ioArgs) {
 		obj.setValue(curprofile.vmdisk);
 
 	dijit.byId('pname').noValueIndicator = '(empty)';
+	dijit.byId('presourcepath').noValueIndicator = '(empty)';
 	dijit.byId('prepositorypath').noValueIndicator = '(empty)';
 	dijit.byId('pdspath').noValueIndicator = '(empty)';
 	dijit.byId('pvmpath').noValueIndicator = '(empty)';
 	dijit.byId('pvs0').noValueIndicator = '(empty)';
 	dijit.byId('pvs1').noValueIndicator = '(empty)';
+	dijit.byId('pvs2').noValueIndicator = '(empty)';
+	dijit.byId('pvs3').noValueIndicator = '(empty)';
 	dijit.byId('pusername').noValueIndicator = '(empty)';
 
 	dijit.byId('pname').setValue(curprofile.profilename);
+	dijit.byId('presourcepath').setValue(curprofile.resourcepath);
 	dijit.byId('prepositorypath').setValue(curprofile.repositorypath);
 	dijit.byId('pdspath').setValue(curprofile.datastorepath);
 	dijit.byId('pvmpath').setValue(curprofile.vmpath);
 	dijit.byId('pvs0').setValue(curprofile.virtualswitch0);
 	dijit.byId('pvs1').setValue(curprofile.virtualswitch1);
+	dijit.byId('pvs2').setValue(curprofile.virtualswitch2);
+	dijit.byId('pvs3').setValue(curprofile.virtualswitch3);
 	dijit.byId('pusername').setValue(curprofile.username);
 	dijit.byId('pgenmac0').setValue(curprofile.eth0generated);
 	dijit.byId('pgenmac1').setValue(curprofile.eth1generated);
-	document.getElementById('ppassword').value = curprofile.password;
-	document.getElementById('ppwdconfirm').value = curprofile.password;
+	dojo.byId('ppassword').value = curprofile.password;
+	dojo.byId('ppwdconfirm').value = curprofile.password;
 	checkProfilePassword();
-	document.getElementById('vmprofiledata').className = 'shown';
+	dojo.byId('vmprofiledata').className = 'shown';
 	document.body.style.cursor = 'default';
 }
 
@@ -612,7 +625,7 @@ function newProfile(cont) {
 	            + '<input type=text id=newprofile><br>'
 	            + '<font color=red><em><span id=nperrormsg></span></em></font><br>';
 	var func = function() {
-		var newname = document.getElementById('newprofile').value;
+		var newname = dojo.byId('newprofile').value;
 		var regex = new RegExp('^[-A-Za-z0-9:\(\)# ]{3,56}$');
 		if(! newname.match(regex)) {
 			alert('Name must be between 3 and 56 characters\nand can only include letters, numbers,\nspaces, and these characters -:()#');
@@ -634,13 +647,13 @@ function newProfile(cont) {
 
 function newProfileCB(data, ioArgs) {
 	if(data.items.failed) {
-		document.getElementById('nperrormsg').innerHTML =
+		dojo.byId('nperrormsg').innerHTML =
 		   'A profile with this name already exists';
 		return;
 	}
 	dijit.byId('messages').hide();
 	alert('Be sure to finish configuring this profile');
-	var obj = document.getElementById('profileid');
+	var obj = dojo.byId('profileid');
 	obj.options[obj.options.length] = new Option(data.items.profile.profilename, data.items.profile.id);
 	obj.options[obj.options.length - 1].selected = true;
 	dojo.removeClass('selectprofilediv', 'hidden');
@@ -662,28 +675,48 @@ function delProfile(cont) {
 	content += "<td>" + curprofile.image + "</td>";
 	content += "</tr>";
 	content += "<tr>";
+	content += "<th align=right>Resource Path:</th>";
+	content += "<td>" + curprofile.resourcepath + "</td>";
+	content += "</tr>";
+	content += "<tr>";
 	content += "<th align=right>Repository Path:</th>";
 	content += "<td>" + curprofile.repositorypath + "</td>";
 	content += "</tr>";
 	content += "<tr>";
-	content += "<th align=right>Data Store Path:</th>";
+	content += "<th align=right>Repository Image Type:</th>";
+	content += "<td>" + curprofile.repositoryimagetype + "</td>";
+	content += "</tr>";
+	content += "<tr>";
+	content += "<th align=right>Virtual Disk Path:</th>";
 	content += "<td>" + curprofile.datastorepath + "</td>";
 	content += "</tr>";
 	content += "<tr>";
-	content += "<th align=right>VM Path:</th>";
+	content += "<th align=right>Virtual Disk Image Type:</th>";
+	content += "<td>" + curprofile.datastoreimagetype + "</td>";
+	content += "</tr>";
+	content += "<tr>";
+	content += "<th align=right>Virtual Disk Mode:</th>";
+	content += "<td>" + curprofile.vmdisk + "</td>";
+	content += "</tr>";
+	content += "<tr>";
+	content += "<th align=right>VM Working Directory Path:</th>";
 	content += "<td>" + curprofile.vmpath + "</td>";
 	content += "</tr>";
 	content += "<tr>";
-	content += "<th align=right>Virtual Switch 0:</th>";
+	content += "<th align=right>VM Network 0:</th>";
 	content += "<td>" + curprofile.virtualswitch0 + "</td>";
 	content += "</tr>";
 	content += "<tr>";
-	content += "<th align=right>Virtual Switch 1:</th>";
+	content += "<th align=right>VM Network 1:</th>";
 	content += "<td>" + curprofile.virtualswitch1 + "</td>";
 	content += "</tr>";
 	content += "<tr>";
-	content += "<th align=right>VM Disk:</th>";
-	content += "<td>" + curprofile.vmdisk + "</td>";
+	content += "<th align=right>VM Network 2:</th>";
+	content += "<td>" + curprofile.virtualswitch2 + "</td>";
+	content += "</tr>";
+	content += "<tr>";
+	content += "<th align=right>VM Network 3:</th>";
+	content += "<td>" + curprofile.virtualswitch3 + "</td>";
 	content += "</tr>";
 	content += "<tr>";
 	content += "<th align=right>Generate eth0 MAC:</th>";
@@ -701,9 +734,9 @@ function delProfile(cont) {
 	content += "</tr>";
 	content += "</table>";
 	var func = function() {
-		var profileid = document.getElementById('profileid').value;
+		var profileid = dojo.byId('profileid').value;
 		if(profileid == curprofileid)
-			document.getElementById('vmhostdata').className = 'hidden';
+			dojo.byId('vmhostdata').className = 'hidden';
 		document.body.style.cursor = 'wait';
 		dojo.xhrPost({
 			url: 'index.php',
@@ -731,9 +764,9 @@ function delProfileCB(data, ioArgs) {
 		return;
 	}
 	dijit.byId('messages').hide();
-	var obj = document.getElementById('profileid');
+	var obj = dojo.byId('profileid');
 	obj.remove(obj.selectedIndex);
-	document.getElementById('vmprofiledata').className = 'hidden';
+	dojo.byId('vmprofiledata').className = 'hidden';
 	if(obj.options.length == 0)
 		dojo.addClass('selectprofilediv', 'hidden');
 	document.body.style.cursor = 'default';
@@ -744,17 +777,17 @@ function updateProfile(id, field) {
 	if(dijit.byId(id))
 		var newvalue = dijit.byId(id).value;
 	else
-		var newvalue = document.getElementById(id).value;
+		var newvalue = dojo.byId(id).value;
 	if(curprofile[field] == newvalue)
 		return;
 	if(field == 'password')
-		document.getElementById('savestatus').innerHTML = 'Saving...';
+		dojo.byId('savestatus').innerHTML = 'Saving...';
 	document.body.style.cursor = 'wait';
 	
-	var profileid = document.getElementById('profileid').value;
-	var cont = document.getElementById('pcont').value;
+	var profileid = dojo.byId('profileid').value;
+	var cont = dojo.byId('pcont').value;
 	if(profileid == curprofileid)
-		document.getElementById('vmhostdata').className = 'hidden';
+		dojo.byId('vmhostdata').className = 'hidden';
 
 	dojo.xhrPost({
 		url: 'index.php',
@@ -774,9 +807,9 @@ function updateProfileCB(data, ioArgs) {
 }
 
 function checkProfilePassword() {
-	var pobj = document.getElementById('ppassword');
-	var cobj = document.getElementById('ppwdconfirm');
-	var mobj = document.getElementById('ppwdmatch');
+	var pobj = dojo.byId('ppassword');
+	var cobj = dojo.byId('ppwdconfirm');
+	var mobj = dojo.byId('ppwdmatch');
 
 	if(pobj.value == "" && cobj.value == "") {
 		mobj.innerHTML = '';

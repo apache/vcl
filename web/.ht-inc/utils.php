@@ -1546,6 +1546,25 @@ function getImageConnectMethodTexts($imageid, $revisionid=0) {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
+/// \fn getImageTypes()
+///
+/// \return array of image types where each key is the id and each value is the
+/// name
+///
+/// \brief builds an array of image types from the imagetype table
+///
+////////////////////////////////////////////////////////////////////////////////
+function getImageTypes() {
+	$query = "SELECT id, name FROM imagetype ORDER BY name";
+	$qh = doQuery($query);
+	$data = array();
+	while($row = mysql_fetch_assoc($qh))
+		$data[$row['id']] = $row['name'];
+	return $data;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
 /// \fn checkClearImageMeta($imagemetaid, $imageid, $ignorefield)
 ///
 /// \param $imagemetaid - id from imagemeta table
@@ -7774,28 +7793,25 @@ function printSelectInput($name, $dataArr, $selectedid=-1, $skip=0, $multiple=0,
 		$multiple = "multiple";
 	else
 		$multiple = "";
-	print "      <SELECT name=$name $multiple $domid $extra>\n";
+	if($name != '')
+		print "      <select name=$name $multiple $domid $extra>\n";
+	else
+		print "      <select $multiple $domid $extra>\n";
 	foreach(array_keys($dataArr) as $id) {
-		if(($skip && $id == 4) || ($dataArr[$id] != 0 && empty($dataArr[$id]))) {
+		if(($skip && $id == 4) || ($dataArr[$id] != 0 && empty($dataArr[$id])))
 			continue;
-		}
-		if($id == $selectedid) {
-		   print "        <OPTION value=\"$id\" selected=\"selected\">";
-		}
-		else {
-		   print "        <OPTION value=\"$id\">";
-		}
-		if(is_array($dataArr[$id]) && array_key_exists("prettyname", $dataArr[$id])) {
-			print $dataArr[$id]["prettyname"] . "</OPTION>\n";
-		}
-		elseif(is_array($dataArr[$id]) && array_key_exists("name", $dataArr[$id])) {
-			print $dataArr[$id]["name"] . "</OPTION>\n";
-		}
-		else {
-			print $dataArr[$id] . "</OPTION>\n";
-		}
+		if($id == $selectedid)
+		   print "        <option value=\"$id\" selected=\"selected\">";
+		else
+		   print "        <option value=\"$id\">";
+		if(is_array($dataArr[$id]) && array_key_exists("prettyname", $dataArr[$id]))
+			print $dataArr[$id]["prettyname"] . "</option>\n";
+		elseif(is_array($dataArr[$id]) && array_key_exists("name", $dataArr[$id]))
+			print $dataArr[$id]["name"] . "</option>\n";
+		else
+			print $dataArr[$id] . "</option>\n";
 	}
-	print "      </SELECT>\n";
+	print "      </select>\n";
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -9352,18 +9368,27 @@ function getVMProfiles($id="") {
 	       .        "vp.profilename AS name, "
 	       .        "i.prettyname AS image, "
 	       .        "vp.imageid, "
+	       .        "vp.resourcepath, "
 	       .        "vp.repositorypath, "
+	       .        "vp.repositoryimagetypeid, "
+	       .        "t1.name AS repositoryimagetype, "
 	       .        "vp.datastorepath, "
+	       .        "vp.datastoreimagetypeid, "
+	       .        "t2.name AS datastoreimagetype, "
 	       .        "vp.vmpath, "
 	       .        "vp.virtualswitch0, "
 	       .        "vp.virtualswitch1, "
+	       .        "vp.virtualswitch2, "
+	       .        "vp.virtualswitch3, "
 	       .        "vp.vmdisk, "
 	       .        "vp.username, "
 	       .        "vp.password, "
 	       .        "vp.eth0generated, "
 	       .        "vp.eth1generated "
 	       . "FROM vmprofile vp "
-	       . "LEFT JOIN image i ON (vp.imageid = i.id)";
+	       . "LEFT JOIN image i ON (vp.imageid = i.id) "
+	       . "LEFT JOIN imagetype t1 ON (vp.repositoryimagetypeid = t1.id) "
+	       . "LEFT JOIN imagetype t2 ON (vp.datastoreimagetypeid = t2.id)";
 	if(! empty($id))
 		$query .= " AND vp.id = $id";
 	$qh = doQuery($query, 101);
@@ -9371,6 +9396,30 @@ function getVMProfiles($id="") {
 	while($row = mysql_fetch_assoc($qh))
 		$ret[$row['id']] = $row;
 	return $ret;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn getENUMvalues($table, $field)
+///
+/// \param $table - name of a table from the database
+/// \param $field - field in $table
+///
+/// \return array of valid values for $table.$field
+///
+/// \brief gets valid values for $table.$field
+///
+////////////////////////////////////////////////////////////////////////////////
+function getENUMvalues($table, $field) {
+	$query = "DESC $table";
+	$qh = doQuery($query);
+	while($row = mysql_fetch_assoc($qh)) {
+		if($row['Field'] == "$field") {
+			$data = preg_replace(array('/^enum\(/', "/'/", '/\)$/'), array('', '', ''), $row['Type']);
+			$types = explode(',', $data);
+			return $types;
+		}
+	}
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -10639,6 +10688,7 @@ function getDojoHTML($refresh) {
 			                      'dijit.layout.ContentPane',
 			                      'dijit.layout.TabContainer',
 			                      'dojo.data.ItemFileReadStore',
+			                      'dijit.Tooltip',
 			                      'dijit.Dialog');
 			break;
 		case 'siteMaintenance':
