@@ -618,7 +618,7 @@ sub _image_revision_check {
 sub send_report {
 	my ($hck) = @_;
 	
-	my $sysadmin_email = $ENV{management_node_info}{SYSADMIN_EMAIL};
+	my $sysadmin_email = get_management_node_info()->{SYSADMIN_EMAIL};
 
 	#notify($ERRORS{'OK'},$LOG,"$hck->{globalmsg}->{body}\n\n $hck->{globalmsg}->{failedbody}\n");
 	if (defined($hck->{computercount})) {
