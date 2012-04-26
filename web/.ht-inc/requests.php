@@ -2131,6 +2131,12 @@ function AJeditRequest() {
 		}
 		else
 			$h .= "<select id=\"admingrpsel\">";
+		if(! empty($request['admingroupid']) &&
+		   ! array_key_exists($request['admingroupid'], $groups)) {
+			$id = $request['admingroupid'];
+			$name = getUserGroupName($request['admingroupid'], 1);
+			$h .= "<option value=\"$id\">$name</option>\n";
+		}
 		$h .= "<option value=\"0\">" . _("None") . "</option>\n";
 		foreach($groups as $id => $group) {
 			if($id == $request['admingroupid'])
@@ -2146,6 +2152,12 @@ function AJeditRequest() {
 		}
 		else
 			$h .= "<select id=\"logingrpsel\">";
+		if(! empty($request['logingroupid']) &&
+		   ! array_key_exists($request['logingroupid'], $groups)) {
+			$id = $request['logingroupid'];
+			$name = getUserGroupName($request['logingroupid'], 1);
+			$h .= "<option value=\"$id\">$name</option>\n";
+		}
 		$h .= "<option value=\"0\">None</option>\n";
 		foreach($groups as $id => $group) {
 			if($id == $request['logingroupid'])
@@ -2590,13 +2602,17 @@ function AJsubmitEditRequest() {
 	$updateservername = 0;
 	if($request['serverrequest']) {
 		if($user['showallgroups'])
-			$groups = getUserGroups(1);
+			$groups = getUserGroups(0);
 		else
-			$groups = getUserGroups(1, $user['affiliationid']);
+			$groups = getUserGroups(0, $user['affiliationid']);
 		$admingroupid = processInputVar('admingroupid', ARG_NUMERIC);
 		$logingroupid = processInputVar('logingroupid', ARG_NUMERIC);
-		if(($admingroupid != 0 && ! array_key_exists($admingroupid, $groups)) ||
-			($logingroupid != 0 && ! array_key_exists($logingroupid, $groups))) {
+		if(($admingroupid != 0 &&
+		    ! array_key_exists($admingroupid, $groups) &&
+		    $admingroupid != $request['admingroupid']) ||
+		   ($logingroupid != 0 &&
+		    ! array_key_exists($logingroupid, $groups) &&
+		    $logingroupid != $request['logingroupid'])) {
 			$cdata = getContinuationVar();
 			$cont = addContinuationsEntry('AJsubmitEditRequest', $cdata, SECINDAY, 1, 0);
 			sendJSON(array('status' => 'error',
