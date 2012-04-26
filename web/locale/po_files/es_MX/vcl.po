@@ -110,11 +110,11 @@ msgstr "if(dojo.byId('newsubmit')) dojo.byId('newsubmit').value = 'Crear Reserva
 
 #: requests.php:259
 msgid "'<font color=red>Selection not currently available due to scheduled system downtime for maintenance</font>'; "
-msgstr "'<font color=red>Esa selección no esta disponible actualmente debido a un horario de mantenimiento</font>'"
+msgstr "'<font color=red>Esa selección no esta disponible actualmente debido a un horario de mantenimiento</font>'; "
 
 #: requests.php:263
 msgid "'<font color=red>Selection not currently available</font>'; "
-msgstr "'<font color=red>Selección no disponible actualmente</font>'"
+msgstr "'<font color=red>Selección no disponible actualmente</font>'; "
 
 #: requests.php:268
 msgid "'Estimated load time: &lt; 1 minute';"
@@ -126,7 +126,7 @@ msgstr "'Tiempo estimado de creación: &lt; "
 
 #: requests.php:273
 msgid " minutes';"
-msgstr "minutos"
+msgstr " minutos';"
 
 msgid "minutes"
 msgstr "minutos"
