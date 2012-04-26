@@ -945,22 +945,47 @@ sub move_virtual_disk {
 		# A FileNotFound fault will be generated if the source vmdk file exists but there is a problem with it
 		if ($fault->isa('SoapFault') && ref($fault->detail) eq 'FileNotFound' && defined($source_file_info->{type}) && $source_file_info->{type} !~ /vmdisk/i) {
 			notify($ERRORS{'WARNING'}, 0, "failed to move virtual disk on VM host $vmhost_name, source file is either not a virtual disk file or there is a problem with its configuration, check the 'Extent description' section of the vmdk file: '$source_path'\nsource file info:\n" . format_data($source_file_info));
+            return;
 		}
 		elsif ($fault =~ /No space left/i) {
 			notify($ERRORS{'CRITICAL'}, 0, "failed to move virtual disk on VM host $vmhost_name, no space is left on the destination device: '$destination_path'\nerror:\n$fault");
+            return;
 		}
+        elsif ($fault =~ /not implemented/i){
+            notify($ERRORS{'DEBUG'}, 0, "unable to move vmdk using MoveVirtualDisk function, VM host $vmhost_name does not implement the MoveVirtualDisk function");
+            $self->delete_file($destination_parent_directory_path);
+        }
 		elsif ($source_file_info) {
 			notify($ERRORS{'WARNING'}, 0, "failed to move virtual disk on VM host $vmhost_name:\n'$source_path' --> '$destination_path'\nsource file info:\n" . format_data($source_file_info) . "\n$fault");
+            return;
 		}
 		else {
 			notify($ERRORS{'WARNING'}, 0, "failed to move virtual disk on VM host $vmhost_name:\n'$source_path' --> '$destination_path'\nsource file info: unavailable\n$fault");
+            return;
 		}
 		
-		return;
-	}
-	
-	notify($ERRORS{'OK'}, 0, "moved virtual disk on VM host $vmhost_name:\n'$source_path' --> '$destination_path'");
-	return 1;
+	} else {
+        notify($ERRORS{'OK'}, 0, "moved virtual disk on VM host $vmhost_name:\n'$source_path' --> '$destination_path'");
+        return 1;
+    }
+    
+    # This section should apply only to vCenter hosts, i.e. hosts for which the
+    # MoveVirtualDisk method is not implemented. Instead, use the copy_virtual_disk
+    # method (where the CloneVM method is used) and cleanup source files afterward. 
+    if($self->copy_virtual_disk($source_path, $destination_path)){
+        my $file_manager = $self->_get_file_manager_view() || return;
+        my $source_parent_directory_path = $self->_get_parent_directory_datastore_path($source_path) || return;
+        notify($ERRORS{'DEBUG'}, 0, "Removing source directory: $source_parent_directory_path");
+        $file_manager->DeleteDatastoreFile(
+                    name => $source_parent_directory_path,
+                    datacenter => $datacenter);
+        
+        notify($ERRORS{'OK'}, 0, "moved virtual disk on VM host $vmhost_name:\n'$source_path' --> '$destination_path'");
+        return 1;
+    } else {
+        notify($ERRORS{'WARNING'}, 0, "Unable to move virtual disk from $vmhost_name: '$source_path' --> '$destination_path'");
+        return 0;
+    }
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -1671,18 +1696,21 @@ sub copy_file_to {
 	# Override the die handler
 	local $SIG{__DIE__} = sub{};
 	
-	# Attempt to copy the file
-	notify($ERRORS{'DEBUG'}, 0, "attempting to copy file from management node to VM host: '$source_file_path' --> $vmhost_hostname:'[$destination_datastore_name] $destination_relative_datastore_path'");
-	my $response;
-	eval { $response = VIExt::http_put_file("folder" , $source_file_path, $destination_relative_datastore_path, $destination_datastore_name, $datacenter_name); };
-	if ($response->is_success) {
-		notify($ERRORS{'DEBUG'}, 0, "copied file from management node to VM host: '$source_file_path' --> $vmhost_hostname:'[$destination_datastore_name] $destination_relative_datastore_path'");
-		return 1;
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to copy file from management node to VM host: '$source_file_path' --> $vmhost_hostname($datacenter_name):'$destination_file_path'\nerror: " . $response->message);
-		return;
-	}
+	# Attempt to copy the file -- make a few attempts since this can sometimes fail
+    return code_loop_timeout(
+        sub{
+            my $response;
+            eval { $response = VIExt::http_put_file("folder" , $source_file_path, $destination_relative_datastore_path, $destination_datastore_name, $datacenter_name); };
+            if ($response->is_success) {
+                notify($ERRORS{'DEBUG'}, 0, "copied file from management node to VM host: '$source_file_path' --> $vmhost_hostname:'[$destination_datastore_name] $destination_relative_datastore_path'");
+                return 1;
+            }
+            else {
+                notify($ERRORS{'WARNING'}, 0, "failed to copy file from management node to VM host: '$source_file_path' --> $vmhost_hostname($datacenter_name):'$destination_file_path'\nerror: " . $response->message);
+                return;
+            }
+        }, [], "attempting to copy file from management node to VM host: '$source_file_path' --> $vmhost_hostname:'[$destination_datastore_name] $destination_relative_datastore_path'", 50, 5);
+
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -1748,19 +1776,23 @@ sub copy_file_from {
 	# Override the die handler
 	local $SIG{__DIE__} = sub{};
 	
-	# Attempt to copy the file
-	notify($ERRORS{'DEBUG'}, 0, "attempting to copy file from VM host to management node: $vmhost_hostname:'[$source_datastore_name] $source_file_relative_datastore_path' --> '$destination_file_path'");
-	my $response;
-	eval { $response = VIExt::http_get_file("folder", $source_file_relative_datastore_path, $source_datastore_name, $datacenter_name, $destination_file_path); };
-	if ($response->is_success) {
-		notify($ERRORS{'DEBUG'}, 0, "copied file from VM host to management node: $vmhost_hostname:'[$source_datastore_name] $source_file_relative_datastore_path' --> '$destination_file_path'");
-		return 1;
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to copy file from VM host to management node: $vmhost_hostname:'[$source_datastore_name] $source_file_relative_datastore_path' --> '$destination_file_path'\nerror: " . $response->message);
-		return;
-	}
+    # Attempt to copy the file -- make a few attempts since this can sometimes fail
+    return code_loop_timeout(
+        sub{
+            my $response;
+            eval { $response = VIExt::http_get_file("folder", $source_file_relative_datastore_path, $source_datastore_name, $datacenter_name, $destination_file_path); };
+            if ($response->is_success) {
+                notify($ERRORS{'DEBUG'}, 0, "copied file from VM host to management node: $vmhost_hostname:'[$source_datastore_name] $source_file_relative_datastore_path' --> '$destination_file_path'");
+                return 1;
+            }
+            else {
+                notify($ERRORS{'WARNING'}, 0, "failed to copy file from VM host to management node: $vmhost_hostname:'[$source_datastore_name] $source_file_relative_datastore_path' --> '$destination_file_path'\nerror: " . $response->message);
+                return;
+            }
+        }, [], "attempting to copy file from VM host to management node:  $vmhost_hostname:'[$source_datastore_name] $source_file_relative_datastore_path' --> '$destination_file_path'", 50, 5);
+
 }
+
 
 #/////////////////////////////////////////////////////////////////////////////
 
