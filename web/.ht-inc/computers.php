@@ -2876,9 +2876,9 @@ function computerUtilities() {
 	print "  <TR>\n";
 	print "    <TD>For selected computers, generate computer data for:</TD>";
 	print "    <TD>\n";
-	$tmp = array('dhcpd' => 'dhcpd.conf', 'hosts' => '/etc/hosts');
+	$tmp = array('dhcpd' => 'dhcpd', 'hosts' => '/etc/hosts');
 	printSelectInput('generatetype', $tmp, -1, 0, 0, 'generatetype');
-	print "    <INPUT type=button onclick=generateCompData(); value=\"Generate Data\">";
+	print "    <INPUT type=button onclick=\"generateCompData();\" value=\"Generate Data\">";
 	print "    </TD>\n";
 	print "  </TR>\n";
 	print "</TABLE>\n";
@@ -2892,9 +2892,6 @@ function computerUtilities() {
 	print "      title=\"Generate Data\"\n";
 	print "      duration=250\n";
 	print "      draggable=true>\n";
-	print "   <div id=\"utilloading\" style=\"text-align: center\" class=\"hidden\">";
-	print "<img src=\"themes/$skin/css/dojo/images/loading.gif\" ";
-	print "style=\"vertical-align: middle;\"> Loading...</div>\n";
 	print "   <div id=\"utilerror\" style=\"text-align: center\" ";
 	print "class=\"hidden rederrormsg\"></div>\n";
 	print "   <div class=\"hidden\" id=\"mgmtipdiv\">\n";
@@ -2907,6 +2904,9 @@ function computerUtilities() {
 	print "     </script>\n";
 	print "     </button>\n";
 	print "   </div>\n";
+	print "   <div id=\"utilloading\" style=\"text-align: center\" class=\"hidden\">";
+	print "<img src=\"themes/$skin/css/dojo/images/loading.gif\" ";
+	print "style=\"vertical-align: middle;\"> Loading...</div>\n";
 	print "   <div id=\"utilcontent\"></div>\n";
 	$cdata = array('dispcompids' => $dispcompids);
 	$cont = addContinuationsEntry('AJgenerateUtilData', $cdata, SECINDAY);
@@ -2916,8 +2916,6 @@ function computerUtilities() {
 	print "     Close\n";
 	print "	   <script type=\"dojo/method\" event=\"onClick\">\n";
 	print "       dijit.byId('utildialog').hide();\n";
-	print "       dojo.byId('utilcontent').innerHTML = '';\n";
-	print "       dojo.addClass('mgmtipdiv', 'hidden');\n";
 	print "     </script>\n";
 	print "   </button>\n";
 	print "   </div>\n";

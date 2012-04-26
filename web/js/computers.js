@@ -318,13 +318,15 @@ function generateCompData() {
 		alert('You must select some computers first.');
 		return;
 	}
+	dojo.addClass('utilerror', 'hidden');
+	dojo.byId('utilcontent').innerHTML = '';
 	if(dojo.byId('generatetype').value == 'dhcpd') {
 		dojo.removeClass('mgmtipdiv', 'hidden');
-		dojo.addClass('utilerror', 'hidden');
 		dijit.byId('utildialog').show();
 	}
 	else {
 		dojo.removeClass('utilloading', 'hidden');
+		dojo.addClass('mgmtipdiv', 'hidden');
 		dojo.addClass('utilcontent', 'hidden');
 		generateHostsData(compids);
 	}
@@ -335,6 +337,8 @@ function generateDHCPDdata() {
 		alert('You must fill in an IP address first.');
 		return;
 	}
+	dojo.removeClass('utilloading', 'hidden');
+	dojo.addClass('utilcontent', 'hidden');
 	var count = 0;
 	var obj;
 	var compids = new Array();
@@ -344,6 +348,7 @@ function generateDHCPDdata() {
 		count++;
 	}
 	var allcompids = compids.join(',');
+	document.body.style.cursor = 'wait';
 	var data = {continuation: dojo.byId('utilcont').value,
 	            mnip: dojo.byId('mnip').value,
 	            compids: allcompids};
@@ -356,10 +361,12 @@ function generateHostsData(compids) {
 	var allcompids = compids.join(',');
 	var data = {continuation: dojo.byId('utilcont').value,
 	            compids: allcompids};
+	document.body.style.cursor = 'wait';
 	RPCwrapper(data, generateCompDataCB, 1);
 }
 
 function generateCompDataCB(data, ioArgs) {
+	document.body.style.cursor = 'default';
 	dojo.addClass('utilloading', 'hidden');
 	if(data.items.status == 'success') {
 		dojo.removeClass('utilcontent', 'hidden');
