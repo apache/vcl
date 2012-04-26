@@ -739,8 +739,8 @@ sub _automethod : Automethod {
 		$set_data = $args[0];
 	}
 	elsif ($mode =~ /set/) {
-		notify($ERRORS{'WARNING'}, 0, "data structure set function was called without an argument");
-		return;
+		notify($ERRORS{'WARNING'}, 0, "data structure $method_name function was called without an argument");
+		return sub { };
 	}
 	elsif ($mode =~ /get/ && defined $args[0] && !$args[0]) {
 		$show_warnings = 0;
@@ -836,11 +836,11 @@ sub _automethod : Automethod {
 		# Make sure the value was set in the hash
 		my $check_value = eval $hash_path;
 		if ($check_value eq $set_data) {
-			#notify($ERRORS{'DEBUG'}, 0, "data structure updated: $hash_path\n$data_identifier = $set_data");
+			notify($ERRORS{'DEBUG'}, 0, "data structure updated, hash path: $hash_path, data identifier: $data_identifier, data:\n" . format_data($set_data));
 			return sub {1;};
 		}
 		else {
-			notify($ERRORS{'WARNING'}, 0, "data structure could not be updated: $data_identifier");
+			notify($ERRORS{'WARNING'}, 0, "data structure could not be updated, hash path: $hash_path, data identifier: $data_identifier, data:\n" . format_data($set_data));
 			return sub {0;};
 		}
 	} ## end elsif ($mode =~ /set/)  [ if ($mode =~ /get/)
