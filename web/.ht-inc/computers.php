@@ -629,7 +629,7 @@ function editOrAddComputer($state) {
 			if($data['type'] == 'lab')
 				$showprovisioning[$id] = $val['prettyname'];
 		}
-		elseif(preg_match('/^xcat/', $val['name']) || $val['name'] == 'none') {
+		elseif(preg_match('/^xcat/i', $val['name']) || $val['name'] == 'none') {
 			$allowedprovisioning['blade'][] = array('id' => $id, 'name' => $val['prettyname']);
 			if($data['type'] == 'blade')
 				$showprovisioning[$id] = $val['prettyname'];
@@ -1387,10 +1387,16 @@ function submitEditComputer() {
 			doQuery($query);
 		}
 		# update vmprofile
-		$query = "UPDATE vmhost "
-				 . "SET vmprofileid = $profileid "
-				 . "WHERE id = {$row['id']}";
-		doQuery($query, 101);
+		$query = "SELECT id "
+		       . "FROM vmhost "
+		       . "WHERE computerid = $compid";
+		$qh = doQuery($query, 101);
+		if($row = mysql_fetch_assoc($qh)) {
+			$query = "UPDATE vmhost "
+			       . "SET vmprofileid = $profileid "
+			       . "WHERE id = {$row['id']}";
+			doQuery($query, 101);
+		}
 	}
 	updateComputer($data);
 	viewComputers();
@@ -2853,7 +2859,7 @@ function computerUtilities() {
 	                "999" => "DELETE");
 	print "    <TD colspan=2>\n";
 	printSelectInput("stateid", $states);
-	print "    <INPUT type=button onclick=compStateChangeSubmit(); value=\"Confirm Change\">";
+	print "    <INPUT type=button onclick=\"compStateChangeSubmit();\" value=\"Confirm Change\">";
 	print "    </TD>\n";
 	$cont = addContinuationsEntry('compStateChange', array(), SECINDAY, 0);
 	print "    <INPUT type=hidden id=statecont value=\"$cont\">\n";
@@ -2882,7 +2888,7 @@ function computerUtilities() {
 	print "    </TD>\n";
 	print "  </TR>\n";
 	print "</TABLE>\n";
-	print "<INPUT type=hidden name=continuation id=continuation>\n";
+	print "<INPUT type=\"hidden\" name=\"continuation\" id=\"utilformcont\">\n";
 	print "</FORM>\n";
 
 	print "<br>$count computers found<br>\n";

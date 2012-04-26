@@ -72,7 +72,7 @@ function uncheckAllCompUtils() {
 
 function reloadComputerSubmit() {
 	var formobj = document.getElementById('utilform');
-	var obj = document.getElementById('continuation');
+	var obj = document.getElementById('utilformcont');
 	var contobj = document.getElementById('reloadcont');
 	obj.value = contobj.value;
 	formobj.submit();
@@ -80,7 +80,7 @@ function reloadComputerSubmit() {
 
 function compStateChangeSubmit() {
 	var formobj = document.getElementById('utilform');
-	var obj = document.getElementById('continuation');
+	var obj = document.getElementById('utilformcont');
 	var contobj = document.getElementById('statecont');
 	obj.value = contobj.value;
 	formobj.submit();
@@ -88,7 +88,7 @@ function compStateChangeSubmit() {
 
 function compScheduleChangeSubmit() {
 	var formobj = document.getElementById('utilform');
-	var obj = document.getElementById('continuation');
+	var obj = document.getElementById('utilformcont');
 	var contobj = document.getElementById('schcont');
 	obj.value = contobj.value;
 	formobj.submit();
