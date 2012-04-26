@@ -1356,14 +1356,14 @@ sub file_exists {
 	my $self = shift;
 	if (ref($self) !~ /module/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
+		return 0;
 	}
 	
 	# Get the path from the subroutine arguments and make sure it was passed
 	my $path = shift;
 	if (!$path) {
 		notify($ERRORS{'WARNING'}, 0, "path argument was not specified");
-		return;
+		return 0;
 	}
 	
 	# Remove any quotes from the beginning and end of the path
@@ -1379,16 +1379,16 @@ sub file_exists {
 	my $command = "stat $escaped_path";
 	my ($exit_status, $output) = $self->execute($command);
 	if (!defined($output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to run command to determine if file or directory exists on $computer_short_name:\npath: '$path'\ncommand: '$command'");
-		return;
+		notify($ERRORS{'DEBUG'}, 0, "failed to run command to determine if file or directory exists on $computer_short_name:\npath: '$path'\ncommand: '$command'");
+		return 0;
 	}
 	elsif (grep(/no such file/i, @$output)) {
 		#notify($ERRORS{'DEBUG'}, 0, "file or directory does not exist on $computer_short_name: '$path'");
 		return 0;
 	}
 	elsif (grep(/stat: /i, @$output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to determine if file or directory exists on $computer_short_name:\npath: '$path'\ncommand: '$command'\nexit status: $exit_status, output:\n" . join("\n", @$output));
-		return;
+		notify($ERRORS{'DEBUG'}, 0, "failed to determine if file or directory exists on $computer_short_name:\npath: '$path'\ncommand: '$command'\nexit status: $exit_status, output:\n" . join("\n", @$output));
+		return 0;
 	}
 	
 	# Count the lines beginning with "Size:" and ending with "file", "directory", or "link" to determine how many files and/or directories were found
@@ -1401,8 +1401,8 @@ sub file_exists {
 		return 1;
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "unexpected output returned while attempting to determine if file or directory exists on $computer_short_name: '$path'\ncommand: '$command'\nexit status: $exit_status, output:\n" . join("\n", @$output));
-		return;
+		notify($ERRORS{'DEBUG'}, 0, "unexpected output returned while attempting to determine if file or directory exists on $computer_short_name: '$path'\ncommand: '$command'\nexit status: $exit_status, output:\n" . join("\n", @$output));
+		return 0;
 	}
 }
 
