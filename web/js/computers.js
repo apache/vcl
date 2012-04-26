@@ -293,12 +293,6 @@ function editComputerSelectType(skipprov) {
 			pobj.addOption({value: allowedprovs[type][i].id, label: allowedprovs[type][i].name});
 		}
 	}
-	if(dojo.byId('location')) {
-		if(type == 'virtualmachine')
-			dojo.byId('location').disabled = true;
-		else
-			dojo.byId('location').disabled = false;
-	}
 }
 
 function editComputerSelectState() {

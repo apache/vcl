@@ -829,10 +829,7 @@ function editOrAddComputer($state) {
 	print "  <TR>\n";
 	print "    <TH align=right>Physical Location:</TH>\n";
 	print "    <TD><INPUT type=text name=location id=location value=";
-	if($state == 0 && $data['type'] == 'virtualmachine')
-		print "\"{$data["location"]}\" disabled=\"true\"></TD>\n";
-	else
-		print "\"{$data["location"]}\"></TD>\n";
+	print "\"{$data["location"]}\"></TD>\n";
 	print "    <TD></TD>\n";
 	print "  </TR>\n";
 	print "</TABLE>\n";
@@ -1956,10 +1953,7 @@ function bulkAddComputer() {
 	print "  <TR>\n";
 	print "    <TH align=right>Physical Location:</TH>\n";
 	print "    <TD><INPUT type=text name=location id=location value=";
-	if($data['type'] == 'virtualmachine')
-		print "\"{$data["location"]}\" disabled=\"true\"></TD>\n";
-	else
-		print "\"{$data["location"]}\"></TD>\n";
+	print "\"{$data["location"]}\"></TD>\n";
 	print "    <TD></TD>\n";
 	print "  </TR>\n";
 	print "</TABLE>\n";
