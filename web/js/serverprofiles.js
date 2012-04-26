@@ -103,10 +103,14 @@ function clearProfileItems() {
 	dijit.byId('profileimage').reset();
 	//dijit.byId('profilefixedIP').set('value', '');
 	//dijit.byId('profilefixedMAC').set('value', '');
-	//dijit.byId('profileadmingroup').reset();
-	//dijit.byId('profilelogingroup').reset();
-	dojo.byId('profileadmingroup').value = 0;
-	dojo.byId('profilelogingroup').value = 0;
+	if(dijit.byId('profileadmingroup'))
+		dijit.byId('profileadmingroup').reset();
+	else
+		dojo.byId('profileadmingroup').value = 0;
+	if(dijit.byId('profilelogingroup'))
+		dijit.byId('profilelogingroup').reset();
+	else
+		dojo.byId('profilelogingroup').value = 0;
 	dijit.byId('profilemonitored').reset();
 }
 
@@ -240,10 +244,14 @@ function getServerProfileDataManageCB(data, ioArgs) {
 	dijit.byId('profileimage').set('value', data.items.imageid);
 	//dijit.byId('profilefixedIP').set('value', data.items.fixedIP);
 	//dijit.byId('profilefixedMAC').set('value', data.items.fixedMAC);
-	//dijit.byId('profileadmingroup').set('value', data.items.admingroupid);
-	//dijit.byId('profilelogingroup').set('value', data.items.logingroupid);
-	dojo.byId('profileadmingroup').value = data.items.admingroupid;
-	dojo.byId('profilelogingroup').value = data.items.logingroupid;
+	if(dijit.byId('profileadmingroup'))
+		dijit.byId('profileadmingroup').set('value', data.items.admingroupid);
+	else
+		dojo.byId('profileadmingroup').value = data.items.admingroupid;
+	if(dijit.byId('profilelogingroup'))
+		dijit.byId('profilelogingroup').set('value', data.items.logingroupid);
+	else
+		dojo.byId('profilelogingroup').value = data.items.logingroupid;
 	dijit.byId('profilemonitored').set('value', parseInt(data.items.monitored));
 	dojo.removeClass('serverprofiledata', 'hidden');
 }
