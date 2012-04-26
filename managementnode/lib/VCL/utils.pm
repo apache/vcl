@@ -4344,6 +4344,7 @@ EOF
 		if ($request_info->{reservation}{$reservation_id}{serverrequest}{id}) {
 			notify($ERRORS{'DEBUG'}, 0, "server sequest - disabling user checks");
 			$request_info->{checkuser} = 0;
+			$request_info->{reservation}{$reservation_id}{serverrequest}{ALLOW_USERS} = $request_info->{user}{unityid};
 		}
 		elsif ($request_info->{DURATION} >= (60 * 60 * 24) ){
 			notify($ERRORS{'DEBUG'}, 0, "request length > 24 hours, disabling user checks");
@@ -4356,6 +4357,7 @@ EOF
 		$request_info->{reservation}{$reservation_id}{serverrequest}{admingroupid} ||= 0;
 		$request_info->{reservation}{$reservation_id}{serverrequest}{logingroupid} ||= 0;
 		$request_info->{reservation}{$reservation_id}{serverrequest}{monitored} ||= 0;
+		$request_info->{reservation}{$reservation_id}{serverrequest}{ALLOW_USERS} ||= 0;
 		
 		$request_info->{reservation}{$reservation_id}{READY} = '0';
 	}
