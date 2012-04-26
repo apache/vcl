@@ -1191,8 +1191,6 @@ function getOSList() {
 /// \b imagemetaid - NULL or corresponding id from imagemeta table and the 
 /// following additional information:\n
 /// \b checkuser - whether or not vcld should check for a logged in user\n
-/// \b usergroupid - id of user group to use when creating local accounts\n
-/// \b usergroup - user group to use when creating local accounts\n
 /// \b sysprep - whether or not to use sysprep on creation of the image\n
 /// \b connectmethods - array of enabled connect methods\n
 /// \b subimages - an array of subimages to be loaded along with selected
@@ -1215,17 +1213,12 @@ function getImages($includedeleted=0, $imageid=0) {
 	}
 	# get all image meta data
 	$allmetadata = array();
-	$query = "SELECT i.checkuser, "
-	       .        "i.rootaccess, "
-	       .        "i.subimages, "
-	       .        "i.usergroupid, "
-	       .        "u.name AS usergroup, "
-	       .        "a.name AS affiliation, "
-	       .        "i.sysprep, "
-	       .        "i.id "
-	       . "FROM imagemeta i "
-	       . "LEFT JOIN usergroup u ON (i.usergroupid = u.id) "
-	       . "LEFT JOIN affiliation a ON (u.affiliationid = a.id)";
+	$query = "SELECT checkuser, "
+	       .        "rootaccess, "
+	       .        "subimages, "
+	       .        "sysprep, "
+	       .        "id "
+	       . "FROM imagemeta";
 	$qh = doQuery($query);
 	while($row = mysql_fetch_assoc($qh))
 		$allmetadata[$row['id']] = $row;
@@ -1303,11 +1296,6 @@ function getImages($includedeleted=0, $imageid=0) {
 				$metaid = $row['imagemetaid'];
 				$imagelist[$includedeleted][$row['id']]['checkuser'] = $allmetadata[$metaid]['checkuser'];
 				$imagelist[$includedeleted][$row['id']]['rootaccess'] = $allmetadata[$metaid]['rootaccess'];
-				$imagelist[$includedeleted][$row['id']]['usergroupid'] = $allmetadata[$metaid]['usergroupid'];
-				if(! empty($allmetadata[$metaid]['affiliation']))
-					$imagelist[$includedeleted][$row["id"]]["usergroup"] = "{$allmetadata[$metaid]["usergroup"]}@{$allmetadata[$metaid]['affiliation']}";
-				else
-					$imagelist[$includedeleted][$row["id"]]["usergroup"] = $allmetadata[$metaid]["usergroup"];
 				$imagelist[$includedeleted][$row['id']]['sysprep'] = $allmetadata[$metaid]['sysprep'];
 				$imagelist[$includedeleted][$row["id"]]["subimages"] = array();
 				if($allmetadata[$metaid]["subimages"]) {
@@ -11281,7 +11269,7 @@ function getSelectLanguagePulldown() {
 	if(! is_array($user))
 		$user['id'] = 0;
 
-	$rt  = "<FORM name=\"localeform\" action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
+	$rt  = "<form name=\"localeform\" action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
 	$rt .= "<select name=\"continuation\" onChange=\"document.localeform.submit();\">\n";
 	$cdata = array('IP' => $remoteIP, 'oldmode' => $mode);
 	if($mode == 'selectauth') {
