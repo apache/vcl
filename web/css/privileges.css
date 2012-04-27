@@ -27,7 +27,7 @@
 .privtreediv .dijitFolderClosed {
 	background-image: none;
 }
-.privtreediv .dijitTreeNodeSelected .dijitTreeLabel {
+.privtreediv .dijitTreeRowSelected .dijitTreeLabel {
 	background-color: #678DB2;
 	color: white;
 }

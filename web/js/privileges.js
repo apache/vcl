@@ -126,20 +126,33 @@ function focusFirstNode(id) {
 	if(tree._itemNodesMap && tree._itemNodesMap[id]) {
 		var children = tree.rootNode.getChildren();
 		var fc = children[0];
-		if(fc === tree._itemNodesMap[id][0]) {
-		}
-		else {
+		if(fc !== tree._itemNodesMap[id][0]) {
 			fc.setSelected(false);
-			//tree._itemNodesMap[id][0].setSelected(true);
-			//tree._selectNode(tree._itemNodesMap[id][0]);
-			//dojo.addClass(tree._itemNodesMap[id][0].labelNode, 'privtreeselected');
 		}
-		tree._selectNode(tree._itemNodesMap[id][0]);
+		tree._onNodeFocus(tree._itemNodesMap[id][0]);
 		tree.lastLabel = tree._itemNodesMap[id][0].labelNode;
 		dojo.addClass(tree._itemNodesMap[id][0].labelNode, 'privtreeselected');
 		tree.lastFocused = tree._itemNodesMap[id][0];
 		var nodename = tree.lastLabel.innerHTML;
 		updateNodeLabels(nodename);
+	}
+	else if(tree._itemNodesMap &&
+	        tree.model.root.children &&
+	        tree._itemNodesMap[tree.model.root.children[0].name[0]]) {
+		var pnodeids = new Array();
+		var node = tree.store._itemsByIdentity[id];
+		while(node._RRM) {
+			for(var pid in node._RRM) {
+				pnodeids.push(pid);
+				node = tree.store._itemsByIdentity[pid];
+			}
+		}
+		var pid;
+		while(pid = pnodeids.pop()) {
+			var pnode = tree._itemNodesMap[pid][0];
+			tree._expandNode(pnode);
+		}
+		setTimeout(function() {focusFirstNode(id);}, 10);
 	}
 	else {
 		setTimeout(function() {focusFirstNode(id);}, 500);

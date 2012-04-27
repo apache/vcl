@@ -241,8 +241,8 @@ function updateITECSUser($userid) {
 		$user = mysql_fetch_assoc($qh);
 
 		# add account to demo group
-		$demoid = getUserGroupID('demo', getAffiliationID('ITECS'));
-		updateGroups(array($demoid), $user['id']);
+		#$demoid = getUserGroupID('demo', getAffiliationID('ITECS'));
+		#updateGroups(array($demoid), $user['id']);
 	}
 
 	$user["groups"] = getUsersGroups($user["id"], 1);

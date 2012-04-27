@@ -356,7 +356,7 @@ function AJshowRequestSuggestedTimes() {
 	$requestid = getContinuationVar('requestid', '');
 	$extendonly = getContinuationVar('extendonly', 0);
 	if($now && $start < time()) {
-		# $start sould have been decreased by 15 minutes
+		# $start should have been decreased by 15 minutes
 		$start = $start + 900;
 	}
 	if($server)

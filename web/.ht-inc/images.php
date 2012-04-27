@@ -2547,7 +2547,8 @@ function AJsubmitSetImageProduction() {
 		.   "</button>"
 	   .   "</div>';"
 	   . "dlg.set(\"content\", content);"
-	   . "dlg.show();";
+	   . "dlg.show();"
+	   . "resRefresh();";
 	print $a;
 }
 
