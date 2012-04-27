@@ -4240,7 +4240,7 @@ function schCheckMaintenance($start, $end) {
 ////////////////////////////////////////////////////////////////////////////////
 function allocComputer($blockids, $currentids, $computerids, $start,
                        $nowfuture) {
-	$ret = array('fromblock' => 0);
+	$ret = array();
 	if(SCHEDULER_ALLOCATE_RANDOM_COMPUTER) {
 		shuffle($blockids);
 		shuffle($currentids);
@@ -4263,6 +4263,7 @@ function allocComputer($blockids, $currentids, $computerids, $start,
 		$ret['compid'] = $compid;
 		$ret['mgmtid'] = $mgmtnodeid;
 		$ret['loaded'] = 1;
+		$ret['fromblock'] = 0;
 		return $ret;
 	}
 	foreach($computerids as $compid) {
@@ -4272,6 +4273,7 @@ function allocComputer($blockids, $currentids, $computerids, $start,
 		$ret['compid'] = $compid;
 		$ret['mgmtid'] = $mgmtnodeid;
 		$ret['loaded'] = 0;
+		$ret['fromblock'] = 0;
 		return $ret;
 	}
 	return $ret;
