@@ -107,6 +107,7 @@ sub process {
 	my $request_duration      = $self->data->get_request_duration_epoch();
 	my $request_logid         = $self->data->get_request_log_id();
 	my $request_checktime     = $self->data->get_request_check_time();
+	my $request_checkuser     = $self->data->get_request_checkuser();
 	my $reservation_remoteip  = $self->data->get_reservation_remote_ip();
 	my $computer_id           = $self->data->get_computer_id();
 	my $computer_short_name   = $self->data->get_computer_short_name();
@@ -121,22 +122,10 @@ sub process {
 	my $image_os_type         = $self->data->get_image_os_type();
 	my $reservation_count     = $self->data->get_reservation_count();
 	my $is_parent_reservation = $self->data->is_parent_reservation();
-	my $identity_key          = $self->data->get_image_identity();
 	my $request_state_name    = $self->data->get_request_state_name();
 	
-	my $connect_info      = $self->data->get_connect_methods();
-	
-	foreach my $CMid (sort keys % {$connect_info}) {
-		notify($ERRORS{'OK'}, 0, "id= $$connect_info{$CMid}{id}") if(defined ($$connect_info{$CMid}{id}) );
-		notify($ERRORS{'OK'}, 0, "description= $$connect_info{$CMid}{description}") if(defined ($$connect_info{$CMid}{description}) );
-		notify($ERRORS{'OK'}, 0, "port== $$connect_info{$CMid}{port}") if(defined ($$connect_info{$CMid}{port}) );
-		notify($ERRORS{'OK'}, 0, "servicename= $$connect_info{$CMid}{servicename}") if(defined ($$connect_info{$CMid}{servicename}) );
-		notify($ERRORS{'OK'}, 0, "startupscript= $$connect_info{$CMid}{startupscript}") if(defined ($$connect_info{$CMid}{startupscript}) );
-		notify($ERRORS{'OK'}, 0, "autoprov= $$connect_info{$CMid}{autoprovisioned}") if(defined ($$connect_info{$CMid}{autoprovisioned}) );
-	}
-	
 	if ($request_state_name =~ /reboot|rebootsoft|reboothard/) {
-		notify($ERRORS{'OK'}, 0, "this is a 'reboot' request");
+		notify($ERRORS{'OK'}, 0, "this is a '$request_state_name' request");
 		if ($self->os->can('reboot')) {
 			if ($self->os->reboot()) {
 				notify($ERRORS{'OK'}, 0, "successfuly rebooted $computer_nodename");
@@ -145,33 +134,34 @@ sub process {
 				notify($ERRORS{'WARNING'}, 0, "failed to reboot $computer_nodename");
 				# Do not fail request or machine
 			}
-			
-			# Put this request back into the inuse state
-			if (update_request_state($request_id, "inuse", "inuse")) {
-				notify($ERRORS{'OK'}, 0, "request state set back to inuse");
-			}
-			else {
-				notify($ERRORS{'WARNING'}, 0, "unable to set request state back to inuse");
-			}
-			
-			notify($ERRORS{'OK'}, 0, "exiting");
-			exit;
 		}
+		else {
+			notify($ERRORS{'CRITICAL'}, 0, "'$request_state_name' operation requested, " . ref($self->os) . " does not implement a 'reboot' subroutine");
+		}
+		
+		# Put this request back into the inuse state
+		if (update_request_state($request_id, "inuse", "inuse")) {
+			notify($ERRORS{'OK'}, 0, "request state set back to inuse");
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "unable to set request state back to inuse");
+		}
+		
+		notify($ERRORS{'OK'}, 0, "exiting");
+		exit;
 	}
 	
-	#Server modified
-	if($request_state_name =~ /servermodified/) {
-      notify($ERRORS{'OK'}, 0, "this is a 'servermodified' request");
+	# Server modified
+	if ($request_state_name =~ /servermodified/) {
+      notify($ERRORS{'OK'}, 0, "this is a '$request_state_name' request");
 
 		#FIXME - a cmd queue is needed to tell vcld what to do
 		#for now we assume a user has been added/removed from a user group
-		# 
 		
 		if (!$self->os->manage_server_access()) {
-			notify($ERRORS{'WARNING'}, 0, "Failed to update server access");
-      }	
-
-
+			notify($ERRORS{'CRITICAL'}, 0, "failed to update server access");
+      }
+		
 		# Put this request back into the inuse state
 		if (update_request_state($request_id, "inuse", "inuse")) {
 			notify($ERRORS{'OK'}, 0, "request state set back to inuse");
@@ -179,7 +169,7 @@ sub process {
       else {
          notify($ERRORS{'WARNING'}, 0, "unable to set request state back to inuse");
       }
-         
+      
       notify($ERRORS{'OK'}, 0, "exiting");
       exit;
 	
@@ -207,26 +197,37 @@ sub process {
 	else {
 		notify($ERRORS{'CRITICAL'}, 0, "unable to update lastcheck time for reservation $reservation_id");
 	}
-	
+
 	# For inuse state, check_time should return 'end', 'poll', or 'nothing'
-	
 	# Is this a poll or end time
 	if ($request_checktime eq "poll") {
 		notify($ERRORS{'OK'}, 0, "beginning to poll");
-
-				notify($ERRORS{'OK'}, 0, "confirming firewall scope needs to be updated");
-		if ($self->os->can('firewall_compare_update')) {
-         if ($self->os->firewall_compare_update()) {
-				notify($ERRORS{'OK'}, 0, "confirmed firewall scope has been updated");
+		
+		# Check if the computer is responding to SSH before attempting to poll it or do any other checks done on the computer
+		# This is done to prevent unnecessary looping and to reduce log file output
+		my $is_ssh_responding = $self->os->is_ssh_responding();
+		
+		if ($is_ssh_responding) {
+			notify($ERRORS{'DEBUG'}, 0, "checking if firewall needs to be updated");
+			if ($self->os->can('firewall_compare_update')) {
+				if ($self->os->firewall_compare_update()) {
+					notify($ERRORS{'DEBUG'}, 0, "confirmed firewall scope has been updated");
+				}
+			}	
+			else {
+				notify($ERRORS{'DEBUG'}, 0, ref($self->os) . " OS module does not implement a 'firewall_compare_update' subroutine");
 			}
-		}	
+		}
 		else {
-			notify($ERRORS{'OK'}, 0, "OS does not support firewall_compare_update");
+			notify($ERRORS{'DEBUG'}, 0, "unable to check if firewall needs to be updated, $computer_short_name is not responding to SSH");
 		}
 		
 		# Check the imagemeta checkuser flag, request forimaging flag, and if cluster request
-		if (!$imagemeta_checkuser || $request_forimaging || ($reservation_count > 1)) {
+		if (!$request_checkuser || !$imagemeta_checkuser || $request_forimaging || ($reservation_count > 1) || !$is_ssh_responding) {
 			# Either imagemeta checkuser flag = 0, forimaging = 1, or cluster request
+			if (!$request_checkuser) {
+				notify($ERRORS{'OK'}, 0, "request checkuser flag not set, skipping user connection check");
+			}
 			if (!$imagemeta_checkuser) {
 				notify($ERRORS{'OK'}, 0, "imagemeta checkuser flag not set, skipping user connection check");
 			}
@@ -236,11 +237,21 @@ sub process {
 			if ($reservation_count > 1) {
 				notify($ERRORS{'OK'}, 0, "reservation count is $reservation_count, skipping user connection check");
 			}
+			if (!$is_ssh_responding) {
+				notify($ERRORS{'OK'}, 0, "$computer_short_name is not responding to SSH, skipping user connection check");
+			}
 			
-			# Get a date string for the current time
-			my $date_string;
-			# If duration is greater than 24hrs 5minutes then perform end time notice checks
-			if($request_duration >= 86640 ){
+			# Check if the user deleted the request
+			if (is_request_deleted($request_id)) {
+				# User deleted request, exit
+				notify($ERRORS{'OK'}, 0, "user deleted request, exiting");
+				exit;
+			}
+			
+			# If duration is greater than 24 hours and 5 minutes perform end time notice checks
+			if ($request_duration > (24 * 60 * 60 + 5 * 60)) {
+				notify($ERRORS{'DEBUG'}, 0, "request duration greater than 24 hours ($request_duration seconds), checking if endtime notice should be sent to user");
+				
 				# Check end time for a notice interval
 				# This returns 0 if no notice is to be given
 				my $notice_interval = check_endtimenotice_interval($request_end);
@@ -250,22 +261,16 @@ sub process {
 					
 					# Notify the user of the end time
 					$self->_notify_user_endtime($notice_interval);
-					
-					# Set lastcheck time ahead by 16 minutes for all notices except the last (30 minute) notice
-					if ($notice_interval ne "30 minutes") {
-						my $epoch_now = convert_to_epoch_seconds();
-						$date_string = convert_to_datetime(($epoch_now + (16 * 60)));
-					}
-					else {
-						my $epoch_now = convert_to_epoch_seconds();
-						$date_string = convert_to_datetime($epoch_now);
-					}
-				} ## end if ($notice_interval)
+				}
 			}
+			else {
+				notify($ERRORS{'DEBUG'}, 0, "request duration less than 24 hours ($request_duration seconds), skipping endtime notice check");
+			}
+			
 			# Check if the user deleted the request
 			if (is_request_deleted($request_id)) {
-				# User deleted request, exit queitly
-				notify($ERRORS{'OK'}, 0, "user has deleted the request, quietly exiting");
+				# User deleted request, exit
+				notify($ERRORS{'OK'}, 0, "user deleted request, exiting");
 				exit;
 			}
 			
@@ -273,24 +278,26 @@ sub process {
 			# Check if this is an imaging request, causes process to exit if state or laststate = image
 			$request_forimaging = $self->_check_imaging_request();
 			
-			# Put this request back into the inuse state
-			if ($is_parent_reservation && update_request_state($request_id, "inuse", "inuse")) {
-				notify($ERRORS{'OK'}, 0, "request state set back to inuse");
-			}
-			elsif (!$is_parent_reservation) {
-				notify($ERRORS{'OK'}, 0, "child reservation, request state NOT set back to inuse");
-			}
-			else {
-				notify($ERRORS{'WARNING'}, 0, "unable to set request state back to inuse");
-			}
-			
 			# Update the lastcheck time for this reservation
 			if (update_reservation_lastcheck($reservation_id)) {
 				my $dstring = convert_to_datetime();
-				notify($ERRORS{'OK'}, 0, "updated lastcheck time for this reservation to $dstring");
+				notify($ERRORS{'OK'}, 0, "updated reservation lastcheck time to now");
 			}
 			else {
-				notify($ERRORS{'WARNING'}, 0, "unable to update lastcheck time for this reservation to $date_string");
+				notify($ERRORS{'WARNING'}, 0, "failed to update reservation lastcheck time to now");
+			}
+			
+			# Put this request back into the inuse state
+			if ($is_parent_reservation) {
+				if (update_request_state($request_id, "inuse", "inuse")) {
+					notify($ERRORS{'OK'}, 0, "request state set back to inuse");
+				}
+				else {
+					notify($ERRORS{'CRITICAL'}, 0, "unable to set request state back to inuse");
+				}
+			}
+			else {
+				notify($ERRORS{'OK'}, 0, "child reservation, request state NOT set back to inuse");
 			}
 			
 			notify($ERRORS{'OK'}, 0, "exiting");
@@ -328,19 +335,9 @@ sub process {
 		
 		notify($ERRORS{'OK'}, 0, "end time not yet reached, polling machine for user connection");
 		
-		my $check_connection;
-		if($self->os->can("is_user_connected")) {
-
-			#Use new code if it exists
-			$check_connection = $self->os->is_user_connected($connect_timeout_limit);
-		}	
-		else {
+		my $check_connection = $self->os->is_user_connected($connect_timeout_limit);
 		
-			# Check the user connection, this will loop until user connects or time limit is reached
-			$check_connection = check_connection($computer_nodename, $computer_ip_address, $computer_type, $reservation_remoteip, $connect_timeout_limit, $image_os_name, 0, $request_id, $user_login_id,$image_os_type);
-		}
-		
-		#TESTING
+		# FOR TESTING
 		#$check_connection = 'timeout';
 		
 		# Proceed based on status of check_connection
@@ -1091,9 +1088,9 @@ EOF
 =cut
 
 sub _check_imaging_request {
-	my $self            = shift;
-	my $request_id = $self->data->get_request_id();
-	my $reservation_id = $self->data->get_reservation_id();
+	my $self               = shift;
+	my $request_id         = $self->data->get_request_id();
+	my $reservation_id     = $self->data->get_reservation_id();
 	my $request_forimaging = $self->data->get_request_forimaging();
 	
 	notify($ERRORS{'DEBUG'}, 0, "checking if request is imaging or if forimaging flag has changed");
