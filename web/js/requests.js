@@ -157,6 +157,8 @@ function useSuggestedSlot() {
 
 function selectLater() {
 	dojo.byId('laterradio').checked = true;
+	if(dojo.byId('newsubmit'))
+		dojo.byId('newsubmit').value = 'Create Reservation';
 	dojo.byId('waittime').innerHTML = '';
 }
 

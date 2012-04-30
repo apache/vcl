@@ -6945,27 +6945,6 @@ function findAvailableTimes($start, $end, $imageid, $userid, $usedaysahead,
 		}
 	}
 
-	# remove slots that would cause a concurrent use violation
-	$imgdata = getImages(0, $imageid);
-	if($imgdata[$imageid]['maxconcurrent'] != NULL) {
-		$query = "SELECT UNIX_TIMESTAMP(rq.start) AS start, "
-		       .        "UNIX_TIMESTAMP(rq.end) AS end, "
-		       .        "rs.computerid AS compid "
-		       . "FROM request rq, "
-		       .      "reservation rs "
-		       . "WHERE rq.id = rs.requestid AND "
-		       .       "rs.imageid = $imageid AND "
-		       .       "rq.start < '$maxenddt' AND ";
-		if($reqid != '')
-			$query .=   "rq.id != $reqid AND ";
-		$query .=      "rq.end > '$minstartdt'";
-		$qh = doQuery($query);
-		while($row = mysql_fetch_assoc($qh)) {
-			if(array_key_exists($row['compid'], $slots))
-				fATremoveOverlaps($slots, $row['compid'], $row['start'], $row['end'], 0);
-		}
-	}
-
 	# remove slots overlapping with scheduled maintenance
 	$query = "SELECT UNIX_TIMESTAMP(start) AS start, "
 	       .        "UNIX_TIMESTAMP(end) AS end, "
@@ -6980,6 +6959,7 @@ function findAvailableTimes($start, $end, $imageid, $userid, $usedaysahead,
 			                  $row['allowreservations']);
 	}
 
+	$imgdata = getImages(0, $imageid);
 	$options = array();
 	foreach($slots AS $comp) {
 		foreach($comp AS $data) {
@@ -6992,6 +6972,15 @@ function findAvailableTimes($start, $end, $imageid, $userid, $usedaysahead,
 				elseif($data['duration'] > (SECINDAY * 2))
 					$data['duration'] = $data['duration'] - ($data['duration'] % SECINDAY);
 			}
+			# skip computers that have no controlling management node
+			if(! findManagementNode($data['compid'], $data['start'], 'future'))
+				continue;
+			# skip slots that would cause a concurrent use violation
+			if($imgdata[$imageid]['maxconcurrent'] != NULL &&
+				fATconcurrentOverlap($data['startts'], $data['duration'], $imageid,
+				                     $imgdata[$imageid]['maxconcurrent'], $ignorestates,
+				                     $extendonly, $reqid))
+				continue;
 			if(array_key_exists($data['startts'], $options)) {
 				if($data['duration'] > $options[$data['startts']]['duration']) {
 					$options[$data['startts']]['duration'] = $data['duration'];
@@ -7080,6 +7069,49 @@ function fATremoveOverlaps(&$array, $compid, $start, $end, $allowstart) {
 				unset($array[$compid][$key]);
 		}
 	}
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn fATconcurrentOverlap($start, $length, $imageid, $maxoverlap,
+//                           $ignorestates, $extendonly, $reqid)
+///
+/// \param $start - start time (epoch time)
+/// \param $length - desired duration in seconds
+/// \param $imageid - id of image
+/// \param $maxoverlap - max allowed overlapping reservations for image
+/// \param $ignorestates - computers with these states should be ignored
+/// \param $extendonly - 1 if this is an extension, 0 otherwise
+/// \param $reqid - id of request if $extendonly is 1
+///
+/// \return 1 if this would violate max concurrent use of the image, 0 if not
+///
+/// \brief determines if a reservation during the specified time slot would
+/// violate the max concurrent reservations for $imageid
+///
+////////////////////////////////////////////////////////////////////////////////
+function fATconcurrentOverlap($start, $length, $imageid, $maxoverlap,
+                              $ignorestates, $extendonly, $reqid) {
+	$end = $start + $length;
+	$query = "SELECT rq.start, "
+	       .        "rq.end "
+	       . "FROM request rq, "
+	       .      "reservation rs, "
+	       .      "state s, "
+	       .      "computer c "
+	       . "WHERE rs.requestid = rq.id AND "
+	       .       "rs.computerid = c.id AND "
+	       .       "rs.imageid = $imageid AND "
+	       .       "UNIX_TIMESTAMP(rq.start) < $end AND "
+	       .       "UNIX_TIMESTAMP(rq.end) > $start AND "
+	       .       "c.stateid = s.id AND "
+	       .       "s.name NOT IN ($ignorestates)";
+	if($extendonly)
+		$query .= " AND rq.id != $reqid";
+	$qh = doQuery($query);
+	if(mysql_num_rows($qh) >= $maxoverlap)
+		return 1;
+	return 0;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
