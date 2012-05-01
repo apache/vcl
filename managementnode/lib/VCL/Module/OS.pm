@@ -1801,7 +1801,7 @@ sub get_file_contents {
 =cut
 
 sub execute {
-#return execute_new(@_);
+return execute_new(@_);
 	my $self = shift;
 	unless (ref($self) && $self->isa('VCL::Module')) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as an object method");
@@ -2116,6 +2116,7 @@ sub manage_server_access {
 	my $server_request_logingroupid = $self->data->get_server_request_logingroupid();
 	my $user_login_id_owner         = $self->data->get_user_login_id();
 	my $user_id_owner		           = $self->data->get_user_id();
+	my $image_os_type 		= $self->data->get_image_os_type();
 
 	# Build list of users.
 	# If in admin group set admin flag
@@ -2194,12 +2195,10 @@ sub manage_server_access {
 				}
 			}
 			
-			# IF standalone - generate password
-			if($standalone) {
+			$user_hash{$userid}{"passwd"} = 0;
+			# Generate password if linux and standalone affiliation
+			unless ($image_os_type =~ /linux/ && !$standalone) {
 				$user_hash{$userid}{"passwd"} = getpw();
-			}
-			else {
-				$user_hash{$userid}{"passwd"} = 0;
 			}
 			
 			if (update_reservation_accounts($reservation_id,$userid,$user_hash{$userid}{passwd},"add")) {
