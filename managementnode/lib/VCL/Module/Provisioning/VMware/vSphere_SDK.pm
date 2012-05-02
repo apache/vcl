@@ -161,11 +161,11 @@ sub initialize {
 	}
 	
 	if (!$vim) {
-		notify($ERRORS{'WARNING'}, 0, "failed to connect to VM host $vmhost_hostname");
+		notify($ERRORS{'DEBUG'}, 0, "failed to connect to VM host $vmhost_hostname");
 		return;
 	}
 	elsif (!ref($vim)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to connect to VM host $vmhost_hostname, Util::connect returned '$vim'");
+		notify($ERRORS{'DEBUG'}, 0, "failed to connect to VM host $vmhost_hostname, Util::connect returned '$vim'");
 		return;
 	}
 	else {

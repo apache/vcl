@@ -5901,6 +5901,40 @@ sub copy_vmdk {
 			notify($ERRORS{'DEBUG'}, 0, "unable to copy virtual disk using vmware-vdiskmanager because the command is not available on VM host $vmhost_name");
 		}
 		else {
+			my $partial_chains_error = 0;
+			my $delta_vmdk_file_path = $source_vmdk_file_path;
+			
+			# Check if the following error was displayed:
+			# Failed to convert disk: The called function cannot be performed on partial chains. Please open the parent virtual disk (0x500003e83).
+			# This occurs on VMware Server 2.0 when attempting to copy a delta vmdk created for a linked-clone VM
+			# The workaround is to make a copy of the original master image, change the VM's .vmsd file and the delta .vmdk file to point to the copy, and then remove the snapshots from the VM
+			# This effectively merges the delta changes into the copy of the master
+			if (grep(/function cannot be performed on partial chains/i, @$output)) {
+				$partial_chains_error = 1;
+				
+				# Find the parentFileNameHint line in the vmdk descriptor file, this desribes which vmdk is the master for the linked clone delta vmdk
+				# parentFileNameHint="/var/lib/vmware/Virtual Machines/vmwarewinxp-base234-v28/vmwarewinxp-base234-v28.vmdk"
+				
+				my @source_vmdk_file_contents = $self->vmhost_os->get_file_contents($source_vmdk_file_path);
+				my ($parent_vmdk_file_path) = join("\n", @source_vmdk_file_contents) =~ /parentFileNameHint="([^"]+)"/;
+				if ($parent_vmdk_file_path) {
+					notify($ERRORS{'DEBUG'}, 0, "retrieved parent file path from source vmdk descriptor file: '$parent_vmdk_file_path'");
+					
+					# Change $source_vmdk_file_path to the path of the original master vmdk, a copy of this will be created
+					# Use $source_vmdk_file_path rather than a new variable name so that the repair code below doesn't need to be changed
+					$source_vmdk_file_path = $parent_vmdk_file_path;
+					
+					$vdisk_command = "vmware-vdiskmanager -r \"$source_vmdk_file_path\" -t 1 \"$destination_vmdk_file_path\"";
+					notify($ERRORS{'DEBUG'}, 0, "attempting to copy parent virtual disk using vmware-vdiskmanager, disk type: 2gbsparse:\n'$source_vmdk_file_path' --> '$destination_vmdk_file_path'");
+					
+					$start_time = time;
+					($exit_status, $output) = $self->vmhost_os->execute($vdisk_command, 1, 7200);
+				}
+				else {
+					notify($ERRORS{'WARNING'}, 0, "failed to copy virtual disk, unable to retrieve parent file path from source vmdk descriptor file contents:\n" . join("\n", @source_vmdk_file_contents));
+				}
+			}
+			
 			# Check if virtual disk needs to be repaired, vmware-vdisk manager may display the following:
 			# Failed to convert diskCreating disk '<path>'
 			# The specified virtual disk needs repair (0xe00003e86).
@@ -5914,13 +5948,14 @@ sub copy_vmdk {
 				if (!defined($vdisk_repair_output)) {
 					notify($ERRORS{'WARNING'}, 0, "failed to run command to repair the virtual disk: '$vdisk_repair_command'");
 				}
+				
 				elsif (grep(/(has been successfully repaired|no errors)/i, @$vdisk_repair_output)) {
 					notify($ERRORS{'DEBUG'}, 0, "repaired virtual disk using vmware-vdiskmanage, output:\n" . join("\n", @$vdisk_repair_output));
 					
 					# Attempt to run the vmware-vdiskmanager copy command again
 					notify($ERRORS{'DEBUG'}, 0, "making a 2nd attempt to copy virtual disk using vmware-vdiskmanager after the source was repaired, disk type: 2gbsparse:\n'$source_vmdk_file_path' --> '$destination_vmdk_file_path'");
 					$start_time = time;
-					($exit_status, $output) = $self->vmhost_os->execute($vdisk_command);
+					($exit_status, $output) = $self->vmhost_os->execute($vdisk_command, 1, 7200);
 				}
 				else {
 					notify($ERRORS{'WARNING'}, 0, "failed to repair the virtual disk on VM host $vmhost_name, output:\n" . join("\n", @$vdisk_repair_output));
@@ -5938,6 +5973,50 @@ sub copy_vmdk {
 			}
 			elsif (!grep(/(100\% done|success)/, @$output)) {
 				notify($ERRORS{'WARNING'}, 0, "failed to copy virtual disk on VM host $vmhost_name, output does not contain '100% done' or 'success', command: '$vdisk_command', output:\n" . join("\n", @$output));
+			}
+			elsif ($partial_chains_error) {
+				# Had to make a copy of the original master vmdk earlier, not the desired source vmdk
+				# Still need to merge the delta vmdk into this copy
+				$copy_result = 1;
+				
+				# Determine the .vmsd file path
+				my $vmx_file_path = $self->get_vmx_file_path();
+				(my $vmsd_file_path = $vmx_file_path) =~ s/\.vmx$/\.vmsd/;
+				
+				# Escape the strings which will be found/replaced in the files
+				(my $source_vmdk_file_path_escaped = $source_vmdk_file_path) =~ s/\//\\\//g;
+				(my $destination_vmdk_file_path_escaped = $destination_vmdk_file_path) =~ s/\//\\\//g;
+				
+				# Modify the .vmsd and delta .vmdk files
+				# Change them to point to the copy of the original base image vmdk instead of the original master vmdk
+				for my $replace_file_path ($vmsd_file_path, $delta_vmdk_file_path) {
+					my $sed_command = "sed -i -e 's/$source_vmdk_file_path_escaped/$destination_vmdk_file_path_escaped/' \"$replace_file_path\"";
+					my ($sed_exit_status, $sed_output) = $self->vmhost_os->execute($sed_command);
+					if (!defined($sed_output)) {
+						notify($ERRORS{'WARNING'}, 0, "failed to execute command to replace original vmdk file path with copied vmdk file path in $replace_file_path");
+						$copy_result = 0;
+						last;
+					}
+					elsif (grep(/sed: /, @$sed_output)) {
+						notify($ERRORS{'WARNING'}, 0, "failed to replace original vmdk file path with copied vmdk file path in '$replace_file_path'\n'$source_vmdk_file_path' --> '$destination_vmdk_file_path'\ncommand: '$sed_command'\noutput:\n" . join("\n", @$sed_output));
+						$copy_result = 0;
+						last;
+					}
+					else {
+						notify($ERRORS{'DEBUG'}, 0, "replaced original vmdk file path with copied vmdk file path in '$replace_file_path'\n'$source_vmdk_file_path' --> '$destination_vmdk_file_path'\ncommand: '$sed_command'\noutput:\n" . join("\n", @$sed_output));
+					}
+				}
+				
+				# Remove the VM's snapshots, this merges the delta vmdk into the copy of the original master vmdk
+				if ($copy_result) {
+					if ($self->api->remove_snapshots($vmx_file_path)) {
+						notify($ERRORS{'DEBUG'}, 0, "removed snapshots from VM, the merged delta vmdk '$delta_vmdk_file_path' with destination vmdk '$destination_vmdk_file_path'");
+					}
+					else {
+						notify($ERRORS{'WARNING'}, 0, "failed to remove snapshots from VM, delta vmdk '$delta_vmdk_file_path' was NOT merged with destination vmdk '$destination_vmdk_file_path'");
+						return;
+					}
+				}
 			}
 			else {
 				notify($ERRORS{'OK'}, 0, "copied virtual disk on VM host $vmhost_name using vmware-vdiskmanager:\n'$source_vmdk_file_path' --> '$destination_vmdk_file_path'");
