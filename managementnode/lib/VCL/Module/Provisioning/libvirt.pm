@@ -89,7 +89,7 @@ sub initialize {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
-	
+
 	my $node_name = $self->data->get_vmhost_short_name();
 	my $vmhost_username = $self->data->get_vmhost_profile_username();
 	my $vmhost_password = $self->data->get_vmhost_profile_password();
@@ -129,10 +129,11 @@ sub initialize {
 			notify($ERRORS{'DEBUG'}, 0, "libvirt $driver_name driver object could not be initialized to control $node_name");
 		}
 	}
-	
+
 	# Make sure the driver module object was successfully initialized
 	if (!$self->driver()) {
 		notify($ERRORS{'WARNING'}, 0, "failed to initialize libvirt provisioning module, driver object could not be created and initialized");
+		return;
 	}
 	
 	notify($ERRORS{'DEBUG'}, 0, ref($self) . " provisioning module initialized");

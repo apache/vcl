@@ -82,15 +82,36 @@ sub initialize {
 	my $node_name = $self->data->get_vmhost_short_name();
 	my ($driver_name) = ref($self) =~ /::([^:]+)$/;
 	
-	# Check to see if qemu exists on the VM host
-	my $test_file_path = '/usr/bin/qemu';
-	if ($self->vmhost_os->file_exists($test_file_path)) {
-		notify($ERRORS{'DEBUG'}, 0, "$driver_name driver module successfully initialized, verified '$test_file_path' exists on $node_name");
-		return 1;
+	# Check to see if required commands exist on the VM host
+	my @test_commands = (
+		'virsh',
+		'qemu-img',
+		'virt-win-reg',
+	);
+	
+	my @missing_commands;
+	for my $command (@test_commands) {
+		my ($exit_status, $output) = $self->vmhost_os->execute("which $command");
+		if (!defined($output)) {
+			notify($ERRORS{'WARNING'}, 0, "unable to initialize $driver_name driver module to control $node_name, failed to execute command to determine if the '$command' command is available");
+			return;
+		}
+		elsif (grep(/(which:|no $command)/, @$output)) {
+			notify($ERRORS{'DEBUG'}, 0, "'$command' command is NOT available on $node_name");
+			push @missing_commands, $command;
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "verified '$command' command is available on $node_name");
+		}
+	}
+	
+	if (@missing_commands) {
+		notify($ERRORS{'DEBUG'}, 0, "unable to initialize $driver_name driver module to control $node_name, the following commands are not available:\n" . join("\n", @missing_commands));
+		return;
 	}
 	else {
-		notify($ERRORS{'DEBUG'}, 0, "$driver_name driver module not initialized, '$test_file_path' does NOT exist on $node_name");
-		return;
+		notify($ERRORS{'DEBUG'}, 0, "$driver_name driver module successfully initialized to control $node_name");
+		return 1;
 	}
 }
 
@@ -197,7 +218,7 @@ sub pre_define {
 			}
 		}
 		else {
-			notify($ERRORS{'WARNING'}, 0, "unable to prepare virtual disk, failed to locate virtual disk file in the repository");
+			notify($ERRORS{'WARNING'}, 0, "unable to prepare virtual disk, master image file could NOT be located, it does not exist in the datastore and node $node_name is not configured to use an image repository");
 			return;
 		}
 		
@@ -484,9 +505,6 @@ sub copy_virtual_disk {
 	# Get the size of all of the source files
 	my $source_size_bytes = $self->get_virtual_disk_size_bytes(@source_file_paths) || 0;
 	
-	# Join the array of file paths into a string
-	my $source_file_paths_string = join('" "', @source_file_paths);
-	
 	# Make sure the destination file extension matches the disk format
 	my ($destination_file_name, $destination_directory_path, $destination_file_extension) = fileparse($destination_file_path, qr/\.[^.]*/);
 	if (!$destination_file_extension) {
@@ -498,26 +516,70 @@ sub copy_virtual_disk {
 		return;
 	}
 	
+	# Remove trailing space from directory path
+	$destination_directory_path =~ s/\/+$//;
+	
 	# Attempt to create the parent directory
 	if (!$self->vmhost_os->create_directory($destination_directory_path)) {
 		notify($ERRORS{'WARNING'}, 0, "unable to copy virtual disk, failed to create destination parent directory: $destination_directory_path");
 		return;
 	}
 	
-	my $start_time = time;
-	#my $command = "qemu-img convert -O $disk_format -o preallocation=metadata \"$source_file_paths_string\" \"$destination_file_path\"";
-	my $command = "qemu-img convert -O $disk_format \"$source_file_paths_string\" \"$destination_file_path\"";
-	
 	my $source_file_count = scalar(@source_file_paths);
-	my $copy_info_string = "source file paths ($source_file_count):\n" . get_array_summary_string(@source_file_paths) . "\n";
-	$copy_info_string .= "source size: " . get_file_size_info_string($source_size_bytes) . "\n";
-	$copy_info_string .= "destination file path: $destination_file_path\n";
-	$copy_info_string .= "destination format: $disk_format\n";
+	my $source_file_paths_string;
+	my $convert_to_raw = 0;
 	
-	notify($ERRORS{'DEBUG'}, 0, "attempting to copy/convert virtual disk on $node_name:\n$copy_info_string");
+	# Check if the source file paths appear to be in the 2GB sparse vmdk format
+	# qemu-img included in anything earlier than Fedora 16 doesn't handle this properly
+	if ($source_file_count > 1 && $source_file_paths[0] =~ /-s\d+\.vmdk$/i) {
+		$convert_to_raw = 1;
+		for my $source_file_path (@source_file_paths) {
+			my ($source_file_name, $source_directory_path, $source_file_extension) = fileparse($source_file_path, qr/\.[^.]*/);
+			
+			my $raw_file_path = "$destination_directory_path/$source_file_name.raw";
+			$source_file_paths_string .= "\"$raw_file_path\" ";
+			
+			# Convert from raw to raw
+			# There seems to be a bug in qemu-img if you specify "-f vmdk", it results in a empty file
+			# Leaving the -f option off also results in an empty file
+			my $command = "qemu-img convert -f raw \"$source_file_path\" -O raw \"$raw_file_path\" && qemu-img info \"$raw_file_path\"";
+			
+			notify($ERRORS{'DEBUG'}, 0, "attempting to convert vmdk file to raw format: $source_file_path --> $raw_file_path");
+			my ($exit_status, $output) = $self->vmhost_os->execute($command, 0, 1800);
+			if (!defined($exit_status)) {
+				notify($ERRORS{'WARNING'}, 0, "failed to execute command to convert vmdk file to raw format:\n$command");
+				return;
+			}
+			elsif ($exit_status) {
+				notify($ERRORS{'WARNING'}, 0, "failed to convert vmdk file to raw format on $node_name\ncommand: '$command'\noutput:\n" . join("\n", @$output));
+				return;
+			}
+			else {
+				notify($ERRORS{'DEBUG'}, 0, "converted vmdk file to raw format on $node_name: $source_file_path --> $raw_file_path, output:\n" . join("\n", @$output));
+			}
+		}
+		
+		# Remove trailing last space
+		$source_file_paths_string =~ s/\s+$//;
+	}
+	else {
+		# Join the array of file paths into a string
+		$source_file_paths_string = join('" "', @source_file_paths);
+	}
+	
+	my $command = "qemu-img convert $source_file_paths_string -O $disk_format \"$destination_file_path\" && qemu-img info \"$destination_file_path\"";
+	
+	# If the image had to be converted to raw format first, add command to delete raw files
+	if ($convert_to_raw) {
+		$command .= " ; rm -f $source_file_paths_string";
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "attempting to copy/convert virtual disk to $disk_format format --> $destination_file_path");
+	
+	my $start_time = time;
 	my ($exit_status, $output) = $self->vmhost_os->execute($command, 0, 1800);
 	if (!defined($exit_status)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to execute command to convert image $node_name: '$command'");
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to copy/convert virtual disk on $node_name:\n$command");
 		return;
 	}
 	elsif ($exit_status) {
@@ -538,12 +600,11 @@ sub copy_virtual_disk {
 	}
 	
 	my $destination_size_bytes = $self->get_virtual_disk_size_bytes($destination_file_path) || 0;
-	$copy_info_string .= "destination size: " . get_file_size_info_string($destination_size_bytes) . "\n" .
 	
 	# Get a string which displays various copy rate information
-	$copy_info_string .= get_copy_speed_info_string($destination_size_bytes, $duration_seconds);
+	my $copy_speed_info_string = get_copy_speed_info_string($destination_size_bytes, $duration_seconds);
 	
-	notify($ERRORS{'OK'}, 0, "copied virtual disk on $node_name:\n$copy_info_string");
+	notify($ERRORS{'OK'}, 0, "copied virtual disk on $node_name, output:\n" . join("\n", @$output) . "\n---\n$copy_speed_info_string");
 	return 1;
 }
 

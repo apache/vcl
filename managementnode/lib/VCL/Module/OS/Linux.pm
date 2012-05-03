@@ -148,14 +148,6 @@ sub pre_capture {
    #Fetch exclude_list
    my @exclude_list = $self->get_exclude_list();
 
-	# Write /etc/rc.local script
-	if(!(grep( /rc.local/ , @exclude_list ) ) ){
-		if (!$self->generate_rc_local()){
-			notify($ERRORS{'WARNING'}, 0, "unable to generate /etc/rc.local script on $computer_node_name");
-			return;
-		}
-	}
-
 	# Generate external_sshd_config
 	if(!(grep( /\/etc\/ssh\/external_sshd_config/ , @exclude_list ) ) ){
 		if(!$self->generate_ext_sshd_config()){
@@ -168,6 +160,14 @@ sub pre_capture {
 	if(!(grep( /ext_sshd/ , @exclude_list ) ) ){
 		if(!$self->generate_ext_sshd_start()){
 			notify($ERRORS{'WARNING'}, 0, "unable to generate /etc/init.d/ext_sshd on $computer_node_name");
+			return;
+		}
+	}
+	
+	# Write /etc/rc.local script
+	if(!(grep( /rc.local/ , @exclude_list ) ) ){
+		if (!$self->generate_rc_local()){
+			notify($ERRORS{'WARNING'}, 0, "unable to generate /etc/rc.local script on $computer_node_name");
 			return;
 		}
 	}
@@ -1773,81 +1773,6 @@ sub copy_file_from {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 copy_file
-
- Parameters  : $source_file_path, $destination_file_path
- Returns     : boolean
- Description : Copies a single file on the Linux computer to another location on
-               the computer. The source and destination file path arguments may
-               not be directory paths nor may they contain wildcards. 
-
-=cut
-
-sub copy_file {
-	my $self = shift;
-	if (ref($self) !~ /VCL::Module/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-	
-	# Get the path arguments
-	my $source_file_path = shift;
-	my $destination_file_path = shift;
-	if (!$source_file_path || !$destination_file_path) {
-		notify($ERRORS{'WARNING'}, 0, "source and destination file path arguments were not specified");
-		return;
-	}
-	
-	# Normalize the source and destination paths
-	$source_file_path = normalize_file_path($source_file_path);
-	$destination_file_path = normalize_file_path($destination_file_path);
-	
-	# Escape all spaces in the path
-	my $escaped_source_path = escape_file_path($source_file_path);
-	my $escaped_destination_path = escape_file_path($destination_file_path);
-	
-	# Make sure the source and destination paths are different
-	if ($escaped_source_path eq $escaped_destination_path) {
-		notify($ERRORS{'WARNING'}, 0, "unable to copy file, source and destination file path arguments are the same: $escaped_source_path");
-		return;
-	}
-	
-	# Get the destination parent directory path and create the directory if it does not exist
-	my $destination_directory_path = parent_directory_path($destination_file_path);
-	if (!$destination_directory_path) {
-		notify($ERRORS{'WARNING'}, 0, "unable to determine destination parent directory path: $destination_file_path");
-		return;
-	}
-	$self->create_directory($destination_directory_path) || return;
-	
-	my $computer_node_name = $self->data->get_computer_node_name();
-	
-	# Execute the command to copy the file
-	my $command = "cp -fr $escaped_source_path $escaped_destination_path";
-	notify($ERRORS{'DEBUG'}, 0, "attempting to copy file on $computer_node_name: '$source_file_path' -> '$destination_file_path'");
-	my ($exit_status, $output) = $self->execute($command);
-	if (!defined($output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to run command to copy file on $computer_node_name:\nsource path: '$source_file_path'\ndestination path: '$destination_file_path'\ncommand: '$command'");
-		return;
-	}
-	elsif (grep(/^cp: /i, @$output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to copy file on $computer_node_name:\nsource path: '$source_file_path'\ndestination path: '$destination_file_path'\ncommand: '$command'\noutput:\n" . join("\n", @$output));
-		return;
-	}
-	elsif (!@$output || grep(/->/i, @$output)) {
-		notify($ERRORS{'OK'}, 0, "copied file on $computer_node_name: '$source_file_path' --> '$destination_file_path'");
-		return 1;
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "unexpected output returned from command to copy file on $computer_node_name:\nsource path: '$source_file_path'\ndestination path: '$destination_file_path'\ncommand: '$command'\noutput:\n" . join("\n", @$output));
-		return;
-	}
-	
-	return 1;
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
 =head2 get_file_size
 
  Parameters  : @file_paths
@@ -2051,11 +1976,11 @@ sub set_file_permissions {
 =cut
 
 sub generate_rc_local {
-		  my $self = shift;
-        if (ref($self) !~ /linux/i) {
-                notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-                return 0;
-        }
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return 0;
+	}
 	
 	my $request_id               = $self->data->get_request_id();
    my $management_node_keys     = $self->data->get_management_node_keys();
@@ -2190,7 +2115,7 @@ sub generate_rc_local {
 		}
 
 	}
-
+	
 	return 1;
 }
 
@@ -2296,7 +2221,7 @@ sub generate_ext_sshd_start {
       notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
       return 0;
    }
-	
+
 	# If using systemd, check for the systemctl command
 	if($self->file_exists("/bin/systemctl") ) {
 		if(!($self->generate_ext_sshd_systemd)) {
@@ -3273,7 +3198,7 @@ sub stop_service {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 check_connection
+=head2 check_connection_on_port
 
  Parameters  : $port
  Returns     : (connected|conn_wrong_ip|timeout|failed)

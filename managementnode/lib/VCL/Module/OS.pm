@@ -396,7 +396,7 @@ sub wait_for_reboot {
 				wait delay: $attempt_delay_seconds");
 		
 		# Wait for the computer to become unresponsive to ping
-		if (!$self->wait_for_no_ping($total_wait_seconds, $attempt_delay_seconds)) {
+		if (!$self->wait_for_no_ping($total_wait_seconds, 5)) {
 			# Computer never stopped responding to ping
 			notify($ERRORS{'WARNING'}, 0, "$computer_node_name never became unresponsive to ping");
 			next ATTEMPT;
@@ -990,9 +990,6 @@ sub set_vcld_post_load_status {
 
 	if ($image_os_type =~ /windows/i) {
 		$command .= " && unix2dos currentimage.txt";
-	}
-	else {
-		$command .= " && dos2unix currentimage.txt";
 	}
 	
 	my ($exit_status, $output) = run_ssh_command($computer_node_name, $management_node_keys, $command, '', '', 1);
@@ -1718,14 +1715,19 @@ sub create_text_file {
 	# Join the hex values together into a string
 	my $hex_string = join('', @hex_values);
 	
+	# Enclose the file path in quotes if it contains any spaces
+	if ($file_path =~ / /) {
+		$file_path = "\"$file_path\"";
+	}
+	
 	# Create a command to echo the hex string to the file
 	# Use -e to enable interpretation of backslash escapes
 	my $command .= "echo -n -e \"$hex_string\"";
 	if ($concatenate) {
-		$command .= " >> \"$file_path\"";
+		$command .= " >> $file_path";
 	}
 	else {
-		$command .= " > \"$file_path\"";
+		$command .= " > $file_path";
 	}
 	
 	my ($exit_status, $output) = $self->execute($command);
@@ -1849,39 +1851,60 @@ return execute_new(@_);
 =cut
 
 sub execute_new {
-	my $argument = shift;
-	my ($computer_name, $command, $display_output, $timeout_seconds, $max_attempts, $port, $user, $password, $identity_key);
-
-	# Check the argument type
-	if (ref($argument) && ref($argument) eq 'HASH') {
-		$computer_name = $argument->{node};
-		$command = $argument->{command};
-		$display_output = $argument->{display_output};
-		$timeout_seconds = $argument->{timeout};
-		$max_attempts = $argument->{max_attempts};
-		$port = $argument->{port};
-		$user = $argument->{user};
-		$password = $argument->{password};
-		$identity_key = $argument->{identity_key};
+	my ($argument) = @_;
+	my ($computer_name, $command, $display_output, $timeout_seconds, $max_attempts, $port, $user, $password, $identity_key, $ignore_error);
+	
+	# Check if this subroutine was called as an object method
+	if (ref($argument) && ref($argument) =~ /VCL::Module/) {
+		# Subroutine was called as an object method ($self->execute)
+		my $self = shift;
+		($argument) = @_;
+		
+		#notify($ERRORS{'DEBUG'}, 0, "called as an object method: " . ref($self));
+		
+		# Get the computer name from the reservation data
+		$computer_name = $self->data->get_computer_node_name();
+		if (!$computer_name) {
+			notify($ERRORS{'WARNING'}, 0, "called as an object method, failed to retrieve computer name from reservation data");
+			return;
+		}
+		#notify($ERRORS{'DEBUG'}, 0, "retrieved computer name from reservation data: $computer_name");
 	}
-	else {
-		if (ref($argument)) {
-			# Reference passed, not a hash reference, must be VCL Module reference
-			if ($argument->isa('VCL::Module')) {
-				$computer_name = $argument->data->get_computer_node_name();
-			}
-			else {
-				notify($ERRORS{'WARNING'}, 0, "invalid argument reference type passed: " . ref($argument) . ", if a reference is passed as the argument it may only be a hash or VCL::Module reference");
-				return;
-			}
+	
+	# Check the argument type
+	if (ref($argument)) {
+		if (ref($argument) eq 'HASH') {
+			#notify($ERRORS{'DEBUG'}, 0, "first argument is a hash reference:\n" . format_data($argument));
+			
+			$computer_name = $argument->{node} if (!$computer_name);
+			$command = $argument->{command};
+			$display_output = $argument->{display_output};
+			$timeout_seconds = $argument->{timeout};
+			$max_attempts = $argument->{max_attempts};
+			$port = $argument->{port};
+			$user = $argument->{user};
+			$password = $argument->{password};
+			$identity_key = $argument->{identity_key};
+			$ignore_error = $argument->{ignore_error};
 		}
 		else {
-			# Argument is not a reference, computer name must be the first argument
-			$computer_name = $argument;
+			notify($ERRORS{'WARNING'}, 0, "invalid argument reference type passed: " . ref($argument) . ", if a reference is passed as the argument it may only be a hash or VCL::Module reference");
+			return;
+		}
+	}
+	else {
+		# Argument is not a reference, computer name must be the first argument unless this subroutine was called as an object method
+		# If called as an object method, $computer_name will already be populated
+		if (!$computer_name) {
+			$computer_name = shift;
+			#notify($ERRORS{'DEBUG'}, 0, "first argument is a scalar, should be the computer name: $computer_name, remaining arguments:\n" . format_data(\@_));
+		}
+		else {
+			#notify($ERRORS{'DEBUG'}, 0, "first argument should be the command:\n" . format_data(\@_));
 		}
 		
 		# Get the remaining arguments
-		($command, $display_output, $timeout_seconds, $max_attempts, $port, $user, $password, $identity_key) = @_;
+		($command, $display_output, $timeout_seconds, $max_attempts, $port, $user, $password, $identity_key, $ignore_error) = @_;
 	}
 	
 	if (!$computer_name) {
@@ -1938,7 +1961,7 @@ sub execute_new {
 					raw_pty => 1,
 					no_terminal => 1,
 					ssh_option => $ssh_options,
-					timeout => 3,
+					timeout => 5,
 				);
 				
 				if ($ssh) {
@@ -1962,18 +1985,25 @@ sub execute_new {
 				# If false sets it to "absolute timeout"
 				#$ssh->restart_timeout_upon_receive(1);
 				my $initialization_output = $ssh->read_all();
-				#notify($ERRORS{'DEBUG'}, 0, "SSH initialization output:\n$initialization_output");
-				if (defined($initialization_output) && $initialization_output =~ /password:/i) {
-					if (defined($password)) {
-						notify($ERRORS{'WARNING'}, 0, "unable to connect to $computer_name, SSH is requesting a password but password authentication is not implemented, password is configured, output:\n$initialization_output");
-						$return_null = 1;
-						return;
+				if (defined($initialization_output)) {
+					notify($ERRORS{'DEBUG'}, 0, "SSH initialization output:\n$initialization_output");
+					if ($initialization_output =~ /password:/i) {
+						if (defined($password)) {
+							notify($ERRORS{'WARNING'}, 0, "unable to connect to $computer_name, SSH is requesting a password but password authentication is not implemented, password is configured, output:\n$initialization_output");
+							
+							# In EVAL block here, 'return' won't return from entire subroutine, set flag
+							$return_null = 1;
+							return;
+						}
+						else {
+							notify($ERRORS{'WARNING'}, 0, "unable to connect to $computer_name, SSH is requesting a password but password authentication is not implemented, password is not configured, output:\n$initialization_output");
+							$return_null = 1;
+							return;
+						}
 					}
-					else {
-						notify($ERRORS{'WARNING'}, 0, "unable to connect to $computer_name, SSH is requesting a password but password authentication is not implemented, password is not configured, output:\n$initialization_output");
-						$return_null = 1;
-						return;
-					}
+				}
+				else {
+					notify($ERRORS{'DEBUG'}, 0, "SSH initialization output is undefined");
 				}
 			};
 			
@@ -2007,16 +2037,20 @@ sub execute_new {
 		};
 		
 		if ($EVAL_ERROR) {
-			if ($EVAL_ERROR =~ /^(\w+) at \//) {
-				notify($ERRORS{'DEBUG'}, 0, $attempt_string . "$1 error occurred executing command on $computer_name: '$command'");
+			if ($ignore_error) {
+				notify($ERRORS{'DEBUG'}, 0, "executed command on $computer_name: '$command', ignoring error, returning null");
+				return;
+			}
+			elsif ($EVAL_ERROR =~ /^(\w+) at \//) {
+				notify($ERRORS{'WARNING'}, 0, $attempt_string . "$1 error occurred executing command on $computer_name: '$command'");
 			}
 			else {
-				notify($ERRORS{'DEBUG'}, 0, $attempt_string . "error occurred executing command on $computer_name: '$command'\nerror: $EVAL_ERROR");
+				notify($ERRORS{'WARNING'}, 0, $attempt_string . "error occurred executing command on $computer_name: '$command'\nerror: $EVAL_ERROR");
 			}
 			next ATTEMPT;
 		}
 		elsif (!$ssh_wait_status) {
-			notify($ERRORS{'DEBUG'}, 0, $attempt_string . "command timed out after $timeout_seconds seconds on $computer_name: '$command'");
+			notify($ERRORS{'WARNING'}, 0, $attempt_string . "command timed out after $timeout_seconds seconds on $computer_name: '$command'");
 			next ATTEMPT;
 		}
 		
@@ -2127,7 +2161,7 @@ sub manage_server_access {
 	my @userlist_admin;
 	my @userlist_login;
 	my %user_hash;
-	my $allow_list;
+	my $allow_list = '';
 
 	if ($server_request_admingroupid) {
 		@userlist_admin = getusergroupmembers($server_request_admingroupid);
@@ -2244,6 +2278,7 @@ sub manage_server_access {
 		}
 		$allow_list .= " $res_accounts{$res_userid}{username}";
 	}
+	
 	notify($ERRORS{'OK'}, 0, "allow_list= $allow_list");
 	
 	$self->data->set_server_allow_users($allow_list);
@@ -2337,7 +2372,7 @@ sub process_connect_methods {
 			
 			#Disable firewall port
 			if (defined($port)) {
-            notify($ERRORS{'DEBUG'}, 0, "attempting to open firewall port $port on $computer_node_name for '$name' connect method");
+            notify($ERRORS{'DEBUG'}, 0, "attempting to close firewall port $port on $computer_node_name for '$name' connect method");
             if ($self->disable_firewall_port($protocol, $port, $remote_ip, 1)) {
                notify($ERRORS{'OK'}, 0, "closing firewall port $port on $computer_node_name for $remote_ip $name connect method");
             }
@@ -2429,24 +2464,18 @@ sub is_user_connected {
 	my $computer_node_name   = $self->data->get_computer_node_name();
 	my $request_state_name	 = $self->data->get_request_state_name();
 	my $user_unityid         = $self->data->get_user_login_id();
-	my $computer_ip_address  = $self->data->get_computer_ip_address();
-	my $remote_ip 		 = $self->data->get_reservation_remote_ip();
 	my $connect_methods      = $self->data->get_connect_methods();	
 	
 	my $start_time    = time();
+	my $timeout_time  = ($start_time + ($time_limit * 60));
 	my $time_exceeded = 0;
 	my $break         = 0;
 	my $ret_val       = "no";
 
 	# Figure out number of loops for log messages
-	my $maximum_loops = $time_limit * 2;
-	my $loop_count    = 0;
-	
- 	while (!$break) {
-		$loop_count++;
-
-		notify($ERRORS{'OK'}, 0, "checking for connection by $user_unityid on $computer_node_name, attempt $loop_count ");
-
+	while (!$break) {
+		notify($ERRORS{'OK'}, 0, "checking for connection by $user_unityid on $computer_node_name");
+		
 		if (is_request_deleted($request_id)) {
 			notify($ERRORS{'OK'}, 0, "user has deleted request");
 			$break   = 1;
@@ -2482,15 +2511,94 @@ sub is_user_connected {
 					}
 				}
 				else {
-					notify($ERRORS{'CRITICAL'}, 0, "OS module does not support check_connection" . ref($self));
+					notify($ERRORS{'CRITICAL'}, 0, "OS module does not support check_connection_on_port: " . ref($self));
 					return;
 				}
 			}
 		}
-		notify($ERRORS{'DEBUG'}, 0, "sleeping for 20 seconds");
-		sleep 20;
+		
+		my $current_time = time();
+		my $seconds_elapsed = ($current_time - $start_time);
+		my $seconds_until_timeout = ($timeout_time - $current_time);
+		
+		notify($ERRORS{'DEBUG'}, 0, "$user_unityid has not connected to $computer_node_name ($seconds_elapsed/$seconds_until_timeout seconds elapsed/remaining), sleeping for 15 seconds");
+		sleep 15;
 	}
 	return $ret_val;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 copy_file
+
+ Parameters  : $source_file_path, $destination_file_path
+ Returns     : boolean
+ Description : Copies a file or directory on the computer to another location on
+               the computer.
+
+=cut
+
+sub copy_file {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get the path arguments
+	my $source_file_path = shift;
+	my $destination_file_path = shift;
+	if (!$source_file_path || !$destination_file_path) {
+		notify($ERRORS{'WARNING'}, 0, "source and destination file path arguments were not specified");
+		return;
+	}
+	
+	# Normalize the source and destination paths
+	$source_file_path = normalize_file_path($source_file_path);
+	$destination_file_path = normalize_file_path($destination_file_path);
+	
+	# Escape all spaces in the path
+	my $escaped_source_path = escape_file_path($source_file_path);
+	my $escaped_destination_path = escape_file_path($destination_file_path);
+	
+	# Make sure the source and destination paths are different
+	if ($escaped_source_path eq $escaped_destination_path) {
+		notify($ERRORS{'WARNING'}, 0, "unable to copy file, source and destination file path arguments are the same: $escaped_source_path");
+		return;
+	}
+	
+	# Get the destination parent directory path and create the directory if it does not exist
+	my $destination_directory_path = parent_directory_path($destination_file_path);
+	if (!$destination_directory_path) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine destination parent directory path: $destination_file_path");
+		return;
+	}
+	$self->create_directory($destination_directory_path) || return;
+	
+	my $computer_node_name = $self->data->get_computer_node_name();
+	
+	# Execute the command to copy the file
+	my $command = "cp -fr $escaped_source_path $escaped_destination_path";
+	notify($ERRORS{'DEBUG'}, 0, "attempting to copy file on $computer_node_name: '$source_file_path' -> '$destination_file_path'");
+	my ($exit_status, $output) = $self->execute($command);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run command to copy file on $computer_node_name:\nsource path: '$source_file_path'\ndestination path: '$destination_file_path'\ncommand: '$command'");
+		return;
+	}
+	elsif (grep(/^cp: /i, @$output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to copy file on $computer_node_name:\nsource path: '$source_file_path'\ndestination path: '$destination_file_path'\ncommand: '$command'\noutput:\n" . join("\n", @$output));
+		return;
+	}
+	elsif (!@$output || grep(/->/i, @$output)) {
+		notify($ERRORS{'OK'}, 0, "copied file on $computer_node_name: '$source_file_path' --> '$destination_file_path'");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unexpected output returned from command to copy file on $computer_node_name:\nsource path: '$source_file_path'\ndestination path: '$destination_file_path'\ncommand: '$command'\noutput:\n" . join("\n", @$output));
+		return;
+	}
+	
+	return 1;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -2585,46 +2693,61 @@ sub find_files {
 	# Get the computer short and hostname
 	my $computer_node_name = $self->data->get_computer_node_name() || return;
 	
-	# Run the find command
-	my $command = "/usr/bin/find \"$base_directory_path\"";
-	if ($search_type) {
-		if ($search_type =~ /regex/i) {
-			$command .= " -type f -iregex \"$file_pattern\"";
+	my @find_commands = (
+		'/usr/bin/find',
+		'find',
+	);
+	
+	COMMAND: for my $find_command (@find_commands) {
+		# Run the find command
+		my $command = "$find_command \"$base_directory_path\"";
+		
+		if ($search_type) {
+			if ($search_type =~ /regex/i) {
+				$command .= " -type f -iregex \"$file_pattern\"";
+			}
+			else {
+				notify($ERRORS{'WARNING'}, 0, "invalid search type argument was specified: '$search_type'");
+				return;
+			}
 		}
 		else {
-			notify($ERRORS{'WARNING'}, 0, "invalid search type argument was specified: '$search_type'");
+			$command .= " -type f -iname \"$file_pattern\"";
+		}
+		
+		notify($ERRORS{'DEBUG'}, 0, "attempting to find files on $computer_node_name, base directory path: '$base_directory_path', pattern: $file_pattern, command: $command");
+		
+		my ($exit_status, $output) = $self->execute($command, 0);
+		if (!defined($output)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to run command to find files on $computer_node_name, base directory path: '$base_directory_path', pattern: $file_pattern, command:\n$command");
 			return;
 		}
-	}
-	else {
-		$command .= " -type f -iname \"$file_pattern\"";
+		elsif (grep(/find:.*No such file or directory/i, @$output)) {
+			notify($ERRORS{'DEBUG'}, 0, "base directory does not exist on $computer_node_name: $base_directory_path");
+			@$output = ();
+		}
+		elsif (grep(/find: not found/i, @$output)) {
+			# /usr/bin/find doesn't exist, try command without the full path
+			notify($ERRORS{'DEBUG'}, 0, "'$find_command' command is not present on $computer_node_name");
+			next;
+		}
+		elsif (grep(/find: /i, @$output)) {
+			notify($ERRORS{'WARNING'}, 0, "error occurred attempting to find files on $computer_node_name\nbase directory path: $base_directory_path\npattern: $file_pattern\ncommand: $command\noutput:\n" . join("\n", @$output));
+			return;
+		}
+		
+		my @files;
+		LINE: for my $line (@$output) {
+			push @files, $line;
+		}
+		
+		my $file_count = scalar(@files);
+		
+		notify($ERRORS{'DEBUG'}, 0, "files found: $file_count, base directory: '$base_directory_path', pattern: '$file_pattern'\ncommand: '$command', output:\n" . join("\n", @$output));
+		return @files;
 	}
 	
-	notify($ERRORS{'DEBUG'}, 0, "attempting to find files on $computer_node_name, base directory path: '$base_directory_path', pattern: $file_pattern, command: $command");
-	
-	my ($exit_status, $output) = $self->execute($command, 0);
-	if (!defined($output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to run command to find files on $computer_node_name, base directory path: '$base_directory_path', pattern: $file_pattern, command:\n$command");
-		return;
-	}
-	elsif (grep(/^find:.*No such file or directory/i, @$output)) {
-		notify($ERRORS{'DEBUG'}, 0, "base directory does not exist on $computer_node_name: $base_directory_path");
-		@$output = ();
-	}
-	elsif (grep(/^find: /i, @$output)) {
-		notify($ERRORS{'WARNING'}, 0, "error occurred attempting to find files on $computer_node_name\nbase directory path: $base_directory_path\npattern: $file_pattern\ncommand: $command\noutput:\n" . join("\n", @$output));
-		return;
-	}
-	
-	my @files;
-	LINE: for my $line (@$output) {
-		push @files, $line;
-	}
-	
-	my $file_count = scalar(@files);
-	
-	notify($ERRORS{'DEBUG'}, 0, "files found: $file_count, base directory: '$base_directory_path', pattern: '$file_pattern'");
-	return @files;
+	return;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -2736,7 +2859,6 @@ sub get_tools_file_paths {
 	notify($ERRORS{'DEBUG'}, 0, "attempting for find tools files:\npattern: $pattern\narchitecture: $architecture\nother architecture: $other_architecture");
 	
 	# Find files already on the computer
-	#my $computer_directory_path = "$NODE_CONFIGURATION_DIRECTORY";
 	my $computer_directory_path = $self->get_node_configuration_directory();
 	my @existing_computer_file_array = $self->find_files($computer_directory_path, '*');
 	my %existing_computer_files = map { $_ => 1 } @existing_computer_file_array;

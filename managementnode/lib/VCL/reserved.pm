@@ -287,14 +287,7 @@ sub process {
 		goto RETVALCONN;
 	} ## end else [ if (defined $remote_ip && $remote_ip eq '0') [... [elsif ($acknowledge_attempts < 180)
 	
-	if($self->os->can("is_user_connected")) {
-                #Use new code if it exists
-                $retval_conn = $self->os->is_user_connected($time_limit);
-        }
-        else {
-                #use old code  
-                $retval_conn = check_connection($nodename, $computer_ip_address, $computer_type, $remote_ip, $time_limit, $image_os_name, 0, $request_id, $user_unityid,$image_os_type);
-        }
+	$retval_conn = $self->os->is_user_connected($time_limit);
 	
 	if ($retval_conn eq "nologin") {
 	

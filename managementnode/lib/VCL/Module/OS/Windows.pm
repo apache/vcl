@@ -10709,7 +10709,7 @@ sub get_environment_variable_value {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 check_connection
+=head2 check_connection_on_port
 
  Parameters  : $port
  Returns     : (connected|conn_wrong_ip|timeout|failed)

@@ -363,7 +363,7 @@ sub create_mn_os_object {
 	# Create a DataStructure object containing computer data for the management node
 	my $mn_data;
 	eval {
-		$mn_data = new VCL::DataStructure();
+		$mn_data = new VCL::DataStructure('image_id' => 'noimage');
 	};
 	
 	# Attempt to load the OS module
@@ -386,6 +386,7 @@ sub create_mn_os_object {
 		notify($ERRORS{'WARNING'}, 0, "failed to create management node OS object");
 		return;
 	}
+	
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -450,7 +451,7 @@ sub create_vmhost_os_object {
 	}
 	
 	# Load the VM host OS module
-	notify($ERRORS{'DEBUG'}, 0, "attempting to load VM host OS module: $vmhost_os_perl_package");
+	notify($ERRORS{'DEBUG'}, 0, "attempting to load VM host OS module: $vmhost_os_perl_package (image: $vmhost_profile_image_id)");
 	eval "use $vmhost_os_perl_package";
 	if ($EVAL_ERROR) {
 		notify($ERRORS{'WARNING'}, 0, "VM host OS module could NOT be loaded: $vmhost_os_perl_package, error: $EVAL_ERROR");
@@ -888,11 +889,11 @@ sub code_loop_timeout {
 			my $seconds_elapsed = $current_time - $start_time;
 			my $seconds_remaining = $end_time - $current_time;
 			
-			notify($ERRORS{'OK'}, 0, "attempt " . ($attempt_count-1) . ": code returned false, seconds elapsed/remaining: $seconds_elapsed/$seconds_remaining, sleeping for $attempt_delay_seconds seconds");
+			notify($ERRORS{'OK'}, 0, "attempt " . ($attempt_count-1) . ": $message ($seconds_elapsed/$seconds_remaining seconds) sleeping for $attempt_delay_seconds seconds");
 			sleep $attempt_delay_seconds;
 		}
 		
-		notify($ERRORS{'OK'}, 0, "attempt $attempt_count: $message");
+		#notify($ERRORS{'OK'}, 0, "attempt $attempt_count: $message");
 		
 		if (&$code_ref(@{$args_array_ref})) {
 			notify($ERRORS{'OK'}, 0, "$message, code returned true");
