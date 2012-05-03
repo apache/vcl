@@ -297,8 +297,8 @@ sub pre_capture {
 
 =cut
 
-	if (!$self->enable_dhcp()) {
-		notify($ERRORS{'WARNING'}, 0, "failed to enable DHCP");
+	if (!$self->enable_dhcp('public')) {
+		notify($ERRORS{'WARNING'}, 0, "failed to enable DHCP on the public interface");
 		return;
 	}
 
@@ -825,7 +825,7 @@ sub post_load {
 
 	if ($self->data->get_imagemeta_postoption() =~ /reboot/i) {
 		notify($ERRORS{'OK'}, 0, "imagemeta postoption reboot is set for image, rebooting computer");
-		if (!$self->reboot()) {
+		if (!$self->reboot('', '', '', 0)) {
 			notify($ERRORS{'WARNING'}, 0, "failed to reboot the computer");
 			return 0;
 		}
@@ -2701,7 +2701,11 @@ sub reg_query_convert_data {
 		return;
 	}
 	
-	if ($type eq 'REG_DWORD') {
+	if ($type =~ /dword/i) {
+		if ($data =~ /^[a-fA-F0-9]+$/) {
+			$data = "0x$data";
+		}
+		
 		# Make sure a valid hex value was returned
 		if ($data !~ /^0x[a-fA-F0-9]+$/) {
 			notify($ERRORS{'WARNING'}, 0, "invalid $type value: '$data'");
@@ -2711,10 +2715,20 @@ sub reg_query_convert_data {
 		# Convert the hex value to decimal
 		$data = hex($data);
 	}
-	if ($type eq 'REG_MULTI_SZ') {
+	elsif ($type eq 'REG_MULTI_SZ') {
 		# Split data into an array, data values are separated in the output by '\0'
 		my @data_values = split(/\\0/, $data);
 		$data = \@data_values;
+	}
+	elsif ($type =~ /hex/) {
+		# Split data into an array, data values are separated in the output by ',00'
+		my @hex_values = split(/,00,?/, $data);
+		my $string;
+		for my $hex_value (@hex_values) {
+			my $decimal_value = hex $hex_value;
+			$string .= pack("C*", $decimal_value);
+		}
+		return $string;
 	}
 	
 	return $data;
@@ -3834,7 +3848,7 @@ sub defragment_hard_drive {
 	
 	# Defragment the hard drive
 	notify($ERRORS{'OK'}, 0, "beginning to defragment the hard drive on $computer_node_name");
-	my ($defrag_exit_status, $defrag_output) = run_ssh_command($computer_node_name, $management_node_keys, $system32_path . '/defrag.exe $SYSTEMDRIVE -v');
+	my ($defrag_exit_status, $defrag_output) = $self->execute({ command => "$system32_path/defrag.exe \$SYSTEMDRIVE -v", timeout => (15 * 60)});
 	if (defined($defrag_exit_status) && $defrag_exit_status == 0) {
 		notify($ERRORS{'OK'}, 0, "hard drive defragmentation complete on $computer_node_name");
 		return 1;
@@ -5635,6 +5649,7 @@ sub get_network_configuration {
 		}
 		elsif (grep(/Subnet Mask/i, @$ipconfig_output)) {
 			# Make sure output was returned
+			notify($ERRORS{'DEBUG'}, 0, "ran ipconfig on $computer_node_name:\n" . join("\n", @$ipconfig_output));
 			last;
 		}
 		else {
@@ -5739,69 +5754,101 @@ sub enable_dhcp {
 		return;
 	}
 
-	my $management_node_keys = $self->data->get_management_node_keys();
 	my $computer_node_name   = $self->data->get_computer_node_name();
 	my $system32_path        = $self->get_system32_path() || return;
 	
-	my $interface_name_argument = shift;
-	my @interface_names;
-	if (!$interface_name_argument) {
-		push(@interface_names, $self->get_public_interface_name());
-		push(@interface_names, $self->get_private_interface_name());
+	my $interface_name = shift;
+	if (!$interface_name) {
+		notify($ERRORS{'WARNING'}, 0, "interface name argument was not supplied");
+		return;
 	}
-	elsif ($interface_name_argument =~ /public/i) {
-		push(@interface_names, $self->get_public_interface_name());
+	elsif ($interface_name =~ /^public$/i) {
+		$interface_name = $self->get_public_interface_name() || return;
 	}
-	elsif ($interface_name_argument =~ /private/i) {
-		push(@interface_names, $self->get_private_interface_name());
+	elsif ($interface_name =~ /^private$/i) {
+		$interface_name = $self->get_private_interface_name() || return;
 	}
-	else {
-		push(@interface_names, $interface_name_argument);
+	
+	if ($self->is_dhcp_enabled($interface_name)) {
+		notify($ERRORS{'DEBUG'}, 0, "DHCP is already enabled on interface '$interface_name'");
+		return 1;
 	}
 	
 	# Delete cached network configuration information so it is retrieved next time it is needed
 	delete $self->{network_configuration};
 	
-	# Delete any default routes
-	$self->delete_default_routes();
+	# Use netsh.exe to set the NIC to use DHCP
+	my $set_dhcp_command;
+	$set_dhcp_command .= "$system32_path/ipconfig.exe /release \"$interface_name\" 2>NUL";
+	$set_dhcp_command .= " ; $system32_path/netsh.exe interface ip set address name=\"$interface_name\" source=dhcp 2>&1";
+	$set_dhcp_command .= " ; $system32_path/netsh.exe interface ip set dns name=\"$interface_name\" source=dhcp register=none 2>&1";
+	$set_dhcp_command .= " ; $system32_path/ipconfig.exe /renew \"$interface_name\"";
 	
-	for my $interface_name (@interface_names) {
-		# Use netsh.exe to set the NIC to use DHCP
-		my $set_dhcp_command;
-		$set_dhcp_command .= "$system32_path/ipconfig.exe /release \"$interface_name\" 2>&1";
-		$set_dhcp_command .= " ; $system32_path/netsh.exe interface ip set address name=\"$interface_name\" source=dhcp 2>&1";
-		$set_dhcp_command .= " ; $system32_path/netsh.exe interface ip set dns name=\"$interface_name\" source=dhcp register=none 2>&1";
-		
-		my ($set_dhcp_status, $set_dhcp_output) = run_ssh_command($computer_node_name, $management_node_keys, $set_dhcp_command);
-		if (!defined($set_dhcp_output)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to execute command to enable DHCP for interface '$interface_name'");
-			return 0;
-		}
-		elsif ($set_dhcp_status ne '0') {
-			notify($ERRORS{'WARNING'}, 0, "failed to enable DHCP for interface '$interface_name', exit status: $set_dhcp_status, output:\n" . join("\n", @$set_dhcp_output));
-			return 0;
-		}
-		else {
-			notify($ERRORS{'OK'}, 0, "enabled DHCP for interface '$interface_name', exit status: $set_dhcp_status, output:\n" . join("\n", @$set_dhcp_output));
-		}
-		
-		# Run ipconfig /renew
-		if (!$self->ipconfig_renew()) {
-			return;
-		}
-	} ## end for my $interface_name (@interface_names)
+	# Just execute the command, SSH connection may be terminated while running it
+	$self->execute({command => $set_dhcp_command, display_output => 1, timeout => 90, ignore_error => 1});
 	
-	# Add persistent static public default route
-	$self->set_public_default_route();
-	
-	return 1;
+	my $wait_message = "waiting for DHCP to be enabled on $interface_name";
+	if ($self->code_loop_timeout(\&is_dhcp_enabled, [$self, $interface_name], $wait_message, 65, 5)) {
+		notify($ERRORS{'DEBUG'}, 0, "enabled DHCP on interface '$interface_name'");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to enable DHCP on interface '$interface_name'");
+		return;
+	}
 } ## end sub enable_dhcp
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 is_dhcp_enabled
+
+ Parameters  : $interface_name
+ Returns     : 0, 1, or undefined
+ Description : Determines if DHCP is enabled on the interface.
+
+=cut
+
+sub is_dhcp_enabled {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $interface_name = shift;
+	if (!$interface_name) {
+		notify($ERRORS{'WARNING'}, 0, "interface name argument was not supplied");
+		return;
+	}
+	
+	my $computer_node_name   = $self->data->get_computer_node_name();
+	my $system32_path        = $self->get_system32_path() || return;
+	
+	my $show_dhcp_command = "$system32_path/netsh.exe interface ip show address name=\"$interface_name\"";
+	my ($show_dhcp_status, $show_dhcp_output) = $self->execute($show_dhcp_command);
+	if (!defined($show_dhcp_output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to determine if DHCP is enabled on interface '$interface_name'");
+		return;
+	}
+	elsif (grep(/DHCP enabled.*yes/i, @$show_dhcp_output)) {
+		notify($ERRORS{'DEBUG'}, 0, "DHCP is enabled on interface '$interface_name'");
+		return 1;
+	}
+	elsif (grep(/DHCP enabled.*no/i, @$show_dhcp_output)) {
+		notify($ERRORS{'DEBUG'}, 0, "DHCP is NOT enabled on interface '$interface_name'");
+		return 0;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine if DHCP is enabled on interface '$interface_name', command: $show_dhcp_command, output:\n" . join("\n", @$show_dhcp_output));
+		return;
+	}
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 
 =head2 ipconfig_renew
 
- Parameters  : 
+ Parameters  : $interface_name, $release_first (optional)
  Returns     :
  Description : 
 
@@ -5817,16 +5864,29 @@ sub ipconfig_renew {
 	my $computer_node_name   = $self->data->get_computer_node_name();
 	my $system32_path        = $self->get_system32_path() || return;
 	
-	my $interface_name_argument = shift;
-	
-	# Assemble the ipconfig command, include the interface name if argument was specified
-	my $ipconfig_command = $system32_path . '/ipconfig.exe /renew';
-	if ($interface_name_argument) {
-		$ipconfig_command .= " \"$interface_name_argument\"";
+	my $interface_name = shift;
+	if (!$interface_name) {
+		notify($ERRORS{'WARNING'}, 0, "interface name argument was not supplied");
+		return;
+	}
+	elsif ($interface_name =~ /^public$/i) {
+		$interface_name = $self->get_public_interface_name() || return;
+	}
+	elsif ($interface_name =~ /^private$/i) {
+		$interface_name = $self->get_private_interface_name() || return;
 	}
 	
-	# Undefined previously retrieved network configuration so that it is retrieved again
-	$self->{network_configuration} = undef;
+	my $release_first = shift;
+	
+	# Assemble the ipconfig command, include the interface name if argument was specified
+	my $ipconfig_command;
+	if ($release_first) {
+		$ipconfig_command = "$system32_path/ipconfig.exe /release \"$interface_name\" ; ";
+	}
+	$ipconfig_command .= "$system32_path/ipconfig.exe /renew \"$interface_name\"";
+	
+	# Delete cached network configuration information so it is retrieved next time it is needed
+	delete $self->{network_configuration};
 	
 	my $attempt_limit = 3;
 	my $attempt = 0;
@@ -5835,15 +5895,20 @@ sub ipconfig_renew {
 		$attempt++;
 		
 		# Run ipconfig
-		my ($ipconfig_status, $ipconfig_output) = $self->execute($ipconfig_command, 1, 65);
+		my ($ipconfig_status, $ipconfig_output) = $self->execute({command => $ipconfig_command, timeout => 65, ignore_error => 1});
+		
 		if (!defined($ipconfig_output)) {
-			notify($ERRORS{'WARNING'}, 0, "attempt $attempt/$attempt_limit: failed to execute command to renew IP configuration");
+			notify($ERRORS{'WARNING'}, 0, "attempt $attempt/$attempt_limit: failed to execute command to renew IP configuration for interface '$interface_name'");
+		}
+		elsif (grep(/error occurred/i, @$ipconfig_output)) {
+			notify($ERRORS{'WARNING'}, 0, "attempt $attempt/$attempt_limit: failed to renew IP configuration for interface '$interface_name', exit status: $ipconfig_status, output:\n" . join("\n", @$ipconfig_output));
+			return;
 		}
 		elsif ($ipconfig_status ne '0' || grep(/error occurred/i, @$ipconfig_output) || !grep(/IP Address/i, @$ipconfig_output)) {
-			notify($ERRORS{'WARNING'}, 0, "attempt $attempt/$attempt_limit: failed to renew IP configuration, exit status: $ipconfig_status, output:\n" . join("\n", @$ipconfig_output));
+			notify($ERRORS{'WARNING'}, 0, "attempt $attempt/$attempt_limit: failed to renew IP configuration for interface '$interface_name', exit status: $ipconfig_status, command: '$ipconfig_command', output:\n" . join("\n", @$ipconfig_output));
 		}
 		else {
-			notify($ERRORS{'OK'}, 0, "renewed IP configuration, output:\n" . join("\n", @$ipconfig_output));
+			notify($ERRORS{'OK'}, 0, "renewed IP configuration for interface '$interface_name', output:\n" . join("\n", @$ipconfig_output));
 			return 1;
 		}
 	}
@@ -7153,9 +7218,7 @@ sub get_installed_applications {
 		return;
 	}
 
-	my $management_node_keys = $self->data->get_management_node_keys();
 	my $computer_node_name   = $self->data->get_computer_node_name();
-	my $system32_path        = $self->get_system32_path() || return;
 	
 	# Get an optional regex filter string
 	my $regex_filter = shift;
@@ -7165,122 +7228,67 @@ sub get_installed_applications {
 	else {
 		notify($ERRORS{'DEBUG'}, 0, "attempting to retrieve all applications installed on $computer_node_name");
 	}
-
-	# Attempt to query the registry for installed applications
-	my $reg_query_command = $system32_path . '/reg.exe QUERY "HKLM\Software\Microsoft\Windows\CurrentVersion\Uninstall" /s';
-	my ($reg_query_exit_status, $reg_query_output) = run_ssh_command($computer_node_name, $management_node_keys, $reg_query_command, '', '', 0);
-	if (defined($reg_query_exit_status) && $reg_query_exit_status == 0) {
-		notify($ERRORS{'DEBUG'}, 0, "queried Uninstall registry keys");
-	}
-	elsif (defined($reg_query_exit_status)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to query Uninstall registry keys, exit status: $reg_query_exit_status, output:\n@{$reg_query_output}");
-		return;
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to query Uninstall registry keys");
-		return;
-	}
-
-	# Make sure output was retrieved
-	if (!$reg_query_output || scalar @{$reg_query_output} == 0) {
-		notify($ERRORS{'WARNING'}, 0, "registry query did not product any output");
-		return;
-	}
-
-	#notify($ERRORS{'DEBUG'}, 0, "reg.exe query output: " . join("\n", @{$reg_query_output}));
-
-	# Loop through the lines of output
-	my $product_key;
-	my %installed_products;
-	for my $query_output_line (@{$reg_query_output}) {
-		#notify($ERRORS{'DEBUG'}, 0, "reg.exe query output line: '" . string_to_ascii($query_output_line) . "'");
-
-		# Remove spaces from beginning and end of line
-		$query_output_line =~ s/(^\s+)|(\s+$)//g;
-
-		# Skip lines which don't contain a word character and lines starting with ! like this one:
-		#    ! REG.EXE VERSION 3.0
-		if ($query_output_line =~ /^!/ || $query_output_line !~ /\w/) {
-			next;
-		}
-
-		# Check if line starts with HKEY, as in:
-		#    HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\Uninstall\ATI Display Driver
-		if ($query_output_line =~ /^HKEY.*\\(.*)\s*/) {
-			# Skip first line showing the base key that was searched for:
-			#    HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\Uninstall
-			next if ($1 eq 'Uninstall');
-
-			$product_key = $1;
-			#notify($ERRORS{'DEBUG'}, 0, "found product key: '" . string_to_ascii($product_key) . "'");
-			next;
-		}
-
-		# Line is a child key of one of the products, take apart the line, looks like this:
-		#    <NO NAME>       REG_SZ
-		#    DisplayName     REG_SZ  F-Secure SSH Client
-		my ($info_key, $info_value) = ($query_output_line =~ /\s*([^\t]+)\s+\w+\s*([^\r\n]*)/);
-
-		# Make sure the regex found the registry key name, if not, regex needs improvement
-		if (!$info_key) {
-			notify($ERRORS{'WARNING'}, 0, "regex didn't work correctly finding key name and value, line:\n" . string_to_ascii($query_output_line));
-			next;
-		}
-
-		# Make sure the product key was found by this point, it should have been
+	
+	my $uninstall_key = 'HKLM\Software\Microsoft\Windows\CurrentVersion\Uninstall';
+	my $registry_data = $self->reg_query($uninstall_key);
+	#notify($ERRORS{'DEBUG'}, 0, "retrieved installed application registry data: " . format_data($registry_data));
+	
+	my $installed_products = {};
+	
+	# Loop through registry keys
+	REGISTRY_KEY: for my $registry_key (keys %$registry_data) {
+		my ($product_key) = $registry_key =~ /Uninstall\\([^\\]+)$/;
+		
 		if (!$product_key) {
-			notify($ERRORS{'WARNING'}, 0, "product key was not determined by the time the following line was processed, line:\n$query_output_line\nreg.exe query output: @{$reg_query_output}");
-			next;
+			notify($ERRORS{'WARNING'}, 0, "unable to parse product key from registry key: $registry_key");
+			next REGISTRY_KEY;
 		}
-
-		# Add the key and value to the hash
-		$installed_products{$product_key}{$info_key} = $info_value;
-	} ## end for my $query_output_line (@{$reg_query_output...
-
-	# If filter was specified, remove keys not matching filter
-	if ($regex_filter) {
-		notify($ERRORS{'DEBUG'}, 0, "finding applications matching filter: $regex_filter");
-		my %matching_products;
-		foreach my $product_key (sort keys %installed_products) {
-			#notify($ERRORS{'DEBUG'}, 0, "checking product key: $product_key");
-			if (eval "\$product_key =~ $regex_filter") {
-				notify($ERRORS{'DEBUG'}, 0, "found matching product key:\n$product_key");
-				$matching_products{$product_key} = $installed_products{$product_key};
-				next;
+		notify($ERRORS{'DEBUG'}, 0, "product key: $product_key");
+		$installed_products->{$product_key} = $registry_data->{$registry_key};
+		
+		if ($regex_filter) {
+			if ($product_key =~ /$regex_filter/i) {
+				notify($ERRORS{'DEBUG'}, 0, "found product key matching filter '$regex_filter':\n$product_key");
+				$installed_products->{$product_key} = $registry_data->{$registry_key};
+				next REGISTRY_KEY;
 			}
-
-			foreach my $info_key (sort keys %{$installed_products{$product_key}}) {
-				my $info_value = $installed_products{$product_key}{$info_key};
-				#notify($ERRORS{'DEBUG'}, 0, "checking value of {$info_key}: $info_value");
-				if (eval "\$info_value =~ $regex_filter") {
-					notify($ERRORS{'DEBUG'}, 0, "found matching value:\n{$product_key}{$info_key} = '$info_value'");
-					$matching_products{$product_key} = $installed_products{$product_key};
-					last;
+			foreach my $info_key (keys %{$registry_data->{$product_key}}) {
+				my $info_value = $registry_data->{$registry_key}{$info_key} || '';
+				if ($info_value =~ /$regex_filter/i) {
+					notify($ERRORS{'DEBUG'}, 0, "found value matching filter '$regex_filter':\n{$product_key}{$info_key} = '$info_value'");
+					$installed_products->{$product_key} = $registry_data->{$registry_key};
+					next REGISTRY_KEY;
 				}
 				else {
-					next;
+					notify($ERRORS{'DEBUG'}, 0, "value does not match filter '$regex_filter':\n{$product_key}{$info_key} = '$info_value'");
+					next REGISTRY_KEY;
 				}
-			} ## end foreach my $info_key (sort keys %{$installed_products...
-		} ## end foreach my $product_key (sort keys %installed_products)
-		%installed_products = %matching_products;
-	} ## end if ($regex_filter)
-
-	if (%installed_products && $regex_filter) {
-		notify($ERRORS{'DEBUG'}, 0, "found the following installed applications matching filter:\n$regex_filter\n" . format_data(\%installed_products));
-		return \%installed_products;
+			}
+		}
+		else {
+			$installed_products->{$product_key} = $registry_data->{$registry_key};
+		}
 	}
-	elsif (%installed_products && !$regex_filter) {
-		notify($ERRORS{'DEBUG'}, 0, "found the following installed applications:\n" . format_data(\%installed_products));
-		return \%installed_products;
+	
+	my $installed_product_count = scalar(keys(%$installed_products));
+	if ($installed_product_count) {
+		if ($regex_filter) {
+			notify($ERRORS{'DEBUG'}, 0, "found $installed_product_count installed applications matching filter '$regex_filter':\n" . format_data($installed_products));
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "found $installed_product_count installed applications:\n" . format_data($installed_products));
+		}
 	}
-	if (!%installed_products && $regex_filter) {
-		notify($ERRORS{'DEBUG'}, 0, "did not find any installed applications matching filter:\n$regex_filter");
-		return {};
+	else {
+		if ($regex_filter) {
+			notify($ERRORS{'DEBUG'}, 0, "no applications are installed matching filter: '$regex_filter'");
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "no applications are installed");
+		}
 	}
-	elsif (!%installed_products && !$regex_filter) {
-		notify($ERRORS{'DEBUG'}, 0, "did not find any installed applications");
-		return {};
-	}
+	
+	return $installed_products;
 } ## end sub get_installed_applications
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -8144,6 +8152,9 @@ EOF
 	
 	# Delete any default routes
 	$self->delete_default_routes();
+	
+	# Delete cached network configuration information so it is retrieved next time it is needed
+	delete $self->{network_configuration};
 	
 	# Set the static public IP address
 	my $command = "$system32_path/netsh.exe interface ip set address name=\"$interface_name\" source=static addr=$ip_address mask=$subnet_mask gateway=$default_gateway gwmetric=0";
@@ -10707,63 +10718,68 @@ sub get_environment_variable_value {
 =cut
 
 sub check_connection_on_port {
-        my $self = shift;
-        if (ref($self) !~ /windows/i) {
-                notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-                return;
-        }
-
-        my $management_node_keys 	= $self->data->get_management_node_keys();
-        my $computer_node_name   	= $self->data->get_computer_node_name();
-        my $remote_ip 			= $self->data->get_reservation_remote_ip();
-        my $computer_ip_address   	= $self->data->get_computer_ip_address();
-		  my $request_state_name          = $self->data->get_request_state_name();
-
-		  my $port = shift;
-		  if (!$port) {
-					 notify($ERRORS{'WARNING'}, 0, "port variable was not passed as an argument");
-					 return "failed";
-		  }
-
-		  my $ret_val = "no";
-		  my $command = "netstat -an";
-		  my ($status, $output) = run_ssh_command($computer_node_name, $management_node_keys, $command, '', '', 1);
-		  notify($ERRORS{'DEBUG'}, 0, "checking connections on node $computer_node_name on port $port");
-		  foreach my $line (@{$output}) {
-					 if ($line =~ /Connection refused|Permission denied/) {
-						  chomp($line);
-						  notify($ERRORS{'WARNING'}, 0, "$line");
-						  if ($request_state_name =~ /reserved/) {
-								$ret_val = "failed";
-						  }
-						  else {
-								 $ret_val = "timeout";
-						  }
-						  return $ret_val;
-					  } ## end if ($line =~ /Connection refused|Permission denied/)
-					 if ($line =~ /\s+($computer_ip_address:$port)\s+([.0-9]*):([0-9]*)\s+(ESTABLISHED)/) {
-                     if ($2 eq $remote_ip) {
-                         $ret_val = "connected";
-                         return $ret_val;
-                     }
-                     else {
-                          #this isn't the remoteIP
-								# Is user logged in
-								if (!$self->user_logged_in()) {
-									notify($ERRORS{'OK'}, 0, "Detected $4 is connected. user is not logged in yet. Returning no connection");
-									$ret_val = "no";
-									return $ret_val;
-								}
-								else {
-										my $new_remote_ip = $2;
-										  $self->data->set_reservation_remote_ip($new_remote_ip);  
-										  notify($ERRORS{'OK'}, 0, "Updating reservation remote_ip with $new_remote_ip");
-										  $ret_val = "conn_wrong_ip";
-										  return $ret_val;
-								}
-                     }
-                 }    # tcp check
-        }
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $management_node_keys 	= $self->data->get_management_node_keys();
+	my $computer_node_name   	= $self->data->get_computer_node_name();
+	my $remote_ip 			= $self->data->get_reservation_remote_ip();
+	my $computer_ip_address   	= $self->data->get_computer_ip_address();
+	my $request_state_name          = $self->data->get_request_state_name();
+	
+	my $port = shift;
+	if (!$port) {
+		notify($ERRORS{'WARNING'}, 0, "port variable was not passed as an argument");
+		return "failed";
+	}
+	
+	my $ret_val = "no";
+	my $command = "netstat -an";
+	my ($status, $output) = $self->execute($command, 0, 30, 1);
+	
+	notify($ERRORS{'DEBUG'}, 0, "checking connections on node $computer_node_name on port $port");
+	
+	foreach my $line (@{$output}) {
+		if ($line =~ /Connection refused|Permission denied/) {
+			chomp($line);
+			notify($ERRORS{'WARNING'}, 0, "$line");
+			if ($request_state_name =~ /reserved/) {
+				$ret_val = "failed";
+			}
+			else {
+				$ret_val = "timeout";
+			}
+			return $ret_val;
+		} ## end if ($line =~ /Connection refused|Permission denied/)
+		
+		if ($line =~ /\s+($computer_ip_address:$port)\s+([.0-9]*):([0-9]*)\s+(ESTABLISHED)/) {
+			if ($2 eq $remote_ip) {
+				$ret_val = "connected";
+				return $ret_val;
+			}
+			else {
+				# this isn't the remoteIP
+				# Is user logged in
+				if (!$self->user_logged_in()) {
+					notify($ERRORS{'OK'}, 0, "Detected $4 is connected. user is not logged in yet. Returning no connection");
+					$ret_val = "no";
+					return $ret_val;
+				}
+				else {
+					my $new_remote_ip = $2;
+					$self->data->set_reservation_remote_ip($new_remote_ip);  
+					notify($ERRORS{'OK'}, 0, "Updating reservation remote_ip with $new_remote_ip");
+					$ret_val = "conn_wrong_ip";
+					return $ret_val;
+				}
+			}
+		}
+	}
+	
+	
 	return $ret_val;
 }
 
