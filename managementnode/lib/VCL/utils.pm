@@ -2298,71 +2298,78 @@ sub get_reservation_accounts {
 	return ();
 
 }
-	
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 update_reservation_accounts
+
+ Parameters  : $reservation_id, $userid, $password, $mode
+ Returns     : boolean
+ Description : 
+
+=cut
+
 sub update_reservation_accounts {
-	my $resid = shift;
-	my $userid = shift;
+	my $reservation_id = shift;
+	my $user_id = shift;
 	my $password = shift;
 	my $mode = shift;
 	
-	if(!$mode) {
-		notify($ERRORS{'WARNING'}, 0, "mode argument was not specified, either add or delete");
-      return;
-	}
-
-	if ( !$resid ) {
-		notify($ERRORS{'WARNING'}, 0, "resid argument was not specified");
-                return;
+	if (!$mode) {
+		notify($ERRORS{'WARNING'}, 0, "mode argument was not specified, it must be either add or delete");
+		return;
 	}
 	
-	if ( !$userid ) {
-		notify($ERRORS{'WARNING'}, 0, "userid argument was not specified");
-                return;
-        }
+	if (!$reservation_id) {
+		notify($ERRORS{'WARNING'}, 0, "reservation ID argument was not specified");
+		return;
+	}
 	
-	if ( !$password ) {
+	if (!$user_id) {
+		notify($ERRORS{'WARNING'}, 0, "user ID argument was not specified");
+		return;
+	}
+	
+	if (!$password) {
 		$password = '';
 	}
 	
 	my $statement;
-	
-	#ADD
-	if($mode =~ /add/i) {
-			  $statement = "
-			  INSERT INTO 
-			  reservationaccounts
-			  (
-				  reservationid,
-				  userid,
-				  password
-			  )
-			  VALUES
-			  (
-				  '$resid',
-				  '$userid',
-				  '$password'
-			  )
-			  ";
+	if ($mode =~ /add/i) {
+		$statement = <<EOF;
+INSERT IGNORE INTO 
+reservationaccounts
+(
+	reservationid,
+	userid,
+	password
+)
+VALUES
+(
+	'$reservation_id',
+	'$user_id',
+	'$password'
+)
+EOF
 	}
-	elsif( $mode =~ /delete/i ) {
-			$statement = "
-			DELETE 
-			reservationaccounts
-			FROM
-			reservationaccounts
-			WHERE
-			reservationid = '$resid' AND
-			userid = '$userid'
-			"
-	
+	elsif ($mode =~ /delete/i) {
+		$statement = <<EOF;
+DELETE 
+reservationaccounts
+FROM
+reservationaccounts
+WHERE
+reservationid = '$reservation_id' AND
+userid = '$user_id'
+EOF
 	}
-
-	if(database_execute($statement) ) {
-		#notify($ERRORS{'OK'}, 0, "executed $statement $resid $userid");
+	
+	if (database_execute($statement)) {
+		#notify($ERRORS{'OK'}, 0, "executed $statement $reservation_id $user_id");
 		return 1;
 	}
 	else {
-		notify($ERRORS{'OK'}, 0, "failed to to execute statement= $statement");
+		notify($ERRORS{'OK'}, 0, "failed to to execute statement to update reservationaccounts table:\n$statement");
 		return 0;
 	}
 }
@@ -5121,7 +5128,7 @@ sub run_ssh_command {
 	$timeout_seconds = 0 if (!$timeout_seconds);
 	$identity_paths = get_management_node_info()->{keys} if (!defined $identity_paths || length($identity_paths) == 0);
 	
-#return VCL::Module::OS::execute_new($node, $command, $output_level, $timeout_seconds, $max_attempts, $port, $user);
+return VCL::Module::OS::execute_new($node, $command, $output_level, $timeout_seconds, $max_attempts, $port, $user);
 	
 	# TODO: Add ssh path to config file and set global variable
 	# Locate the path to the ssh binary
