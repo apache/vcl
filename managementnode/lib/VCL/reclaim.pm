@@ -97,6 +97,7 @@ sub process {
 	my $computer_shortname                  = $self->data->get_computer_short_name();
 	my $computer_state_name                 = $self->data->get_computer_state_name();
 	my $computer_currentimage_name          = $self->data->get_computer_currentimage_name(0);
+	my $server_request_id     					 = $self->data->get_server_request_id();
 	
 	# Insert into computerloadlog if request state = timeout
 	if ($request_state_name =~ /timeout|deleted/) {
@@ -123,6 +124,12 @@ sub process {
 	elsif ($request_laststate_name =~ /reserved/) {
 		notify($ERRORS{'DEBUG'}, 0, "request laststate is $request_laststate_name, checking if computer table current image matches image currently loaded on $computer_shortname");
 		
+		# If server reservations and in reserved - reload
+		if ($server_request_id) {
+			notify($ERRORS{'OK'}, 0, "Detected server reservations, computer will be reloaded");
+			$self->insert_reload_and_exit();
+		}
+
 		# Make sure computer current image name was retrieved from the database
 		if (!$computer_currentimage_name) {
 			notify($ERRORS{'WARNING'}, 0, "failed to retrieve computer current image name from the database, computer will be reloaded");
