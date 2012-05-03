@@ -2043,7 +2043,7 @@ sub generate_rc_local {
    push(@array2print, 'echo "ListenAddress $IP0" >> /etc/ssh/sshd_config' . "\n");
    push(@array2print, 'echo "ListenAddress $IP1" >> /etc/ssh/external_sshd_config' . "\n");
    push(@array2print, 'service ext_sshd stop' . "\n");
-   push(@array2print, 'service sshd reload' . "\n");
+   push(@array2print, 'service sshd restart' . "\n");
    push(@array2print, 'sleep 2' . "\n");
    #push(@array2print, 'service sshd start' . "\n");
    push(@array2print, 'service ext_sshd start' . "\n");
