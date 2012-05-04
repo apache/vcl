@@ -2087,22 +2087,11 @@ sub generate_rc_local {
 	
 	# If systemd managed; confirm rc-local.service is enabled
 	if($self->file_exists("/bin/systemctl") ) {
-		my $systemctl_command = "systemctl enable rc-local.service";
-		my ($systemctl_exit_status, $systemctl_output) = $self->execute($systemctl_command, 1);
-      	if (!defined($systemctl_output)) {
-           		notify($ERRORS{'WARNING'}, 0, "failed to run $systemctl_command on node $computer_node_name");
-      	}
-			else {
-      	  	notify($ERRORS{'OK'}, 0, "successfully ran $systemctl_command on $computer_node_name \n" . join("\n", @$systemctl_output));
-				#Start rc-local.service
-				if($self->start_service("rc-local")) {
-					notify($ERRORS{'OK'}, 0, "started rc-local.service on $computer_node_name");
-				}
-				else {
-					notify($ERRORS{'OK'}, 0, "failed to start rc-local.service on $computer_node_name");
-					return 0
-				}
-			}
+		
+		if(!$self->generate_rc_local_systemd() ) {
+			return 0;
+		}
+		
 	}
 	else {
 		#Re-run rc.local
@@ -2416,6 +2405,85 @@ sub generate_ext_sshd_sysVinit {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 generate_rc_local_systemd
+
+ Parameters  : none
+ Returns     : boolean
+ Description : If OS is using systemd, create and enable rc_local.service file
+
+=cut
+
+sub generate_rc_local_systemd {
+   my $self = shift;
+   if (ref($self) !~ /linux/i) {
+      notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+      return 0;
+   }
+   
+   my $computer_short_name      = $self->data->get_computer_short_name();
+   my $computer_node_name       = $self->data->get_computer_node_name();
+   my $request_id               = $self->data->get_request_id();
+   my $management_node_keys  = $self->data->get_management_node_keys();
+
+   my $tmpfile = "/tmp/$request_id.rc-local.service";
+   my @array2print;
+
+   push(@array2print, '[Unit]' . "\n");
+   push(@array2print, 'Description=rc.local Compatibility' . "\n");
+   push(@array2print, 'After=network.target' . "\n");
+   push(@array2print, "\n");
+   push(@array2print, '[Service]' . "\n");
+   push(@array2print, 'Type=forking' . "\n");
+   push(@array2print, 'ExecStart=/etc/rc.d/rc.local' . "\n");
+   push(@array2print, 'StandardOutput=tty' . "\n");
+   push(@array2print, 'RemainAfterExit=yes' . "\n");
+   push(@array2print, 'SysVStartPriority=99' . "\n");
+   push(@array2print, "\n");
+   push(@array2print, '[Install]' . "\n");
+   push(@array2print, 'WantedBy=multi-user.target' . "\n");
+   
+   #save to file
+   if(open(WRITEFILE,">$tmpfile")){
+      print WRITEFILE @array2print;
+      close(WRITEFILE);
+   }
+
+	#copy temp file to node
+   if (run_scp_command($tmpfile, "$computer_node_name:/lib/systemd/system/rc-local.service", $management_node_keys)) {
+      notify($ERRORS{'DEBUG'}, 0, "copied $tmpfile to $computer_node_name:/lib/systemd/system/rc-local.service");
+   }
+   else{
+      notify($ERRORS{'WARNING'}, 0, "failed to copied $tmpfile to $computer_node_name:/lib/systemd/system/rc-local.service");
+      return 0;
+   }
+   
+   #Enable ext_sshd.service
+   my $systemctl_command = "systemctl enable rc-local.service";
+   my ($systemctl_exit_status, $systemctl_output) = $self->execute($systemctl_command, 1);
+   if (!defined($systemctl_output)) {
+       notify($ERRORS{'WARNING'}, 0, "failed to run $systemctl_command on node $computer_node_name");
+   }
+  else {
+       notify($ERRORS{'OK'}, 0, "successfully ran $systemctl_command on $computer_node_name \n" . join("\n", @$systemctl_output));
+   }
+
+	#Start rc-local.service
+	if($self->start_service("rc-local")) {
+		notify($ERRORS{'OK'}, 0, "started rc-local.service on $computer_node_name");
+	}  
+	else {
+		notify($ERRORS{'OK'}, 0, "failed to start rc-local.service on $computer_node_name");
+	}  
+
+   #delete local tmpfile
+   unlink($tmpfile);
+
+   return 1;
+
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 activate_interfaces
 
  Parameters  : none
@@ -2717,25 +2785,23 @@ sub shutdown {
 	if ($self->wait_for_ssh(0)) {
 		my $command = '/sbin/shutdown -h now';
 		
-		my ($exit_status, $output) = $self->execute($command);
+		my ($exit_status, $output) = $self->execute({command => $command, timeout => 90, ignore_error => 1});
 		
-		if (defined $exit_status && $exit_status == 0) {
-			notify($ERRORS{'DEBUG'}, 0, "executed command to shut down $computer_node_name");
-		}
-		else {
-			if (!defined($output)) {
-				notify($ERRORS{'WARNING'}, 0, "failed to execute command to shut down $computer_node_name, attempting power off");
-			}
-			else {
-				notify($ERRORS{'WARNING'}, 0, "failed to shut down $computer_node_name, attempting power off, output:\n" . join("\n", @$output));
-			}
-			
+		# Wait maximum of 5 minutes for computer to power off
+   	my $power_off = $self->provisioner->wait_for_power_off(300);
+   	if (!defined($power_off)) {
+      	# wait_for_power_off result will be undefined if the provisioning module doesn't implement a power_status subroutine
+      	notify($ERRORS{'OK'}, 0, "unable to determine power status of $computer_node_name from provisioning module, sleeping 1 minute to allow computer time to shutdown");
+      	sleep 60;
+   	}
+   	elsif (!$power_off) {
+      	notify($ERRORS{'WARNING'}, 0, "$computer_node_name never powered off");
 			# Call provisioning module's power_off() subroutine
 			if (!$self->provisioner->power_off()) {
 				notify($ERRORS{'WARNING'}, 0, "failed to shut down $computer_node_name, failed to initiate power off");
 				return;
 			}
-		}
+   	}
 	}
 	else {
 		notify($ERRORS{'DEBUG'}, 0, "$computer_node_name is not responding to SSH, attempting power off");
