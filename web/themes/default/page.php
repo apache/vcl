@@ -29,7 +29,8 @@
 ////////////////////////////////////////////////////////////////////////////////
 function getHeader($refresh) {
 	global $user, $mode, $authed, $locale;
-	$rt  = "<!DOCTYPE html PUBLIC \"-//W3C//DTD HTML 4.01 Transitional//EN\">\n";
+	#$rt  = "<!DOCTYPE html PUBLIC \"-//W3C//DTD HTML 4.01 Frameset//EN\">\n";
+	$rt  = "<!DOCTYPE html>\n";
 	$rt .= "<html lang=\"$locale\">\n";
 	$rt .= "<head>\n";
 	$usenls = 0;
@@ -58,31 +59,33 @@ function getHeader($refresh) {
 	$rt .= "</head>\n\n";
 	$rt .= "<body class=default>\n\n";
 	$rt .= "<a class=hidden href=\"#content\" accesskey=2>Skip to content</a>\n";
-	$rt .= "<table border=0 cellpadding=0 cellspacing=0 summary=\"\">\n";
+	$rt .= "<table class=\"themelayouttable\" summary=\"\">\n";
 	$rt .= "  <TR>\n";
-	$rt .= "    <TD width=80px nowrap></TD>\n";
-	$rt .= "    <TD width=6px background=\"themes/default/images/background_L.png\" nowrap></TD>\n";
-	$rt .= "    <TD width=8px background=\"themes/default/images/background_gradient.gif\" nowrap></TD>\n";
-	$rt .= "    <TD background=\"themes/default/images/background_gradient.gif\" width=\"100%\">\n";
-	$rt .= "    <table border=0 cellpadding=0 cellspacing=0 width=\"100%\" summary=\"\">\n";
-	$rt .= "      <TR>\n";
-	$rt .= "        <TD width=1px background=\"themes/default/images/black.jpg\" nowrap></TD>\n";
-	$rt .= "        <TD width=215px nowrap><img src=\"themes/default/images/vclbanner_L.jpg\" alt=\"\"></TD>\n";
-	$rt .= "        <TD background=\"themes/default/images/vclbanner_C.jpg\" width=\"100%\">\n";
-	$rt .= getSelectLanguagePulldown();
+	$rt .= "    <TD class=\"themelayoutsidespacer\"></TD>\n";
+	$rt .= "    <TD class=\"themelayoutsidetrim\"></TD>\n";
+	$rt .= "    <TD class=\"themelayoutsidetrim2\"></TD>\n";
+	$rt .= "    <TD class=\"themelayoutcentercell\">\n";
+	$rt .= "    <table class=\"themeheadertable\" summary=\"\">\n";
+	$rt .= "      <TR style=\"background-color: white;\">\n";
+	$rt .= "        <TD class=\"themelayoutsidetrim4\"></TD>\n";
+	$rt .= "        <TD class=\"nopadding\"><img src=\"themes/default/images/vclbanner_L.jpg\" alt=\"\"></TD>\n";
+	$rt .= "        <TD class=\"themelayoutbannercenter\">\n";
+	if($mode != 'inmaintenance')
+		$rt .= getSelectLanguagePulldown();
 	$rt .= "        </TD>\n";
-	$rt .= "        <TD width=198px nowrap><img src=\"themes/default/images/vclbanner_R.jpg\" alt=\"\"></TD>\n";
-	$rt .= "        <TD width=3px background=\"themes/default/images/content_border_R.jpg\" nowrap></TD>\n";
+	$rt .= "        <TD class=\"nopadding\"><img src=\"themes/default/images/vclbanner_R.jpg\" alt=\"\"></TD>\n";
+	$rt .= "        <TD class=\"themelayoutsidetrim5\"></TD>\n";
 	$rt .= "      </TR>\n";
 	$rt .= "      <TR>\n";
-	$rt .= "        <TD width=1px background=\"themes/default/images/black.jpg\" nowrap></TD>\n";
-	$rt .= "        <TD background=\"themes/default/images/bar_bg.jpg\" width=\"100%\" colspan=3 height=23px></TD>\n";
-	$rt .= "        <TD width=3px background=\"themes/default/images/content_border_R.jpg\" nowrap></TD>\n";
+	$rt .= "        <TD class=\"themelayoutsidetrim4\"></TD>\n";
+	$rt .= "        <TD class=\"themelayouttopseparator\" colspan=3></TD>\n";
+	$rt .= "        <TD class=\"themelayoutsidetrim5\"></TD>\n";
 	$rt .= "      </TR>\n";
 	$rt .= "    </table>\n";
-	$rt .= "    <table border=0 cellpadding=0 cellspacing=0 width=\"100%\" summary=\"\">\n";
+
+	$rt .= "    <table class=\"themelayouttable\" summary=\"\">\n";
 	$rt .= "      <TR valign=top>\n";
-	$rt .= "        <TD width=160px background=\"themes/default/images/menu_bg.jpg\" nowrap>\n";
+	$rt .= "        <TD class=\"thememenu\">\n";
 	$rt .= "<div id=menulist>\n";
 	$rt .= "<h3 class=hidden>Resources</h3>\n";
 	$rt .= "<ul>\n";
@@ -95,7 +98,7 @@ function getHeader($refresh) {
 		$rt .= "<img src=\"themes/default/images/menu_dividerblock.jpg\" border=0 width=158 height=83 alt=\"\"><br/>\n";
 	$rt .= "</div>\n";
 	$rt .= "        </TD>\n";
-	$rt .= "        <TD width=\"100%\" style=\"align: left; background: #ffffff;\">\n";
+	$rt .= "        <TD class=\"themecontent\">\n";
 	$rt .= "<div id=content>\n";
 	return $rt;
 }
@@ -113,12 +116,12 @@ function getFooter() {
 	$year = date("Y");
 	$rt  = "</div>\n";
 	$rt .= "        </TD>\n";
-	$rt .= "        <TD width=3px background=\"themes/default/images/content_border_R.jpg\" nowrap></TD>\n";
+	$rt .= "        <TD class=\"themelayoutsidetrim5\"></TD>\n";
 	$rt .= "      </TR>\n";
 	$rt .= "      <TR>\n";
-	$rt .= "        <TD width=160px nowrap><img src=\"themes/default/images/background_bottom_L.jpg\" alt=\"\"></TD>\n";
-	$rt .= "        <TD background=\"themes/default/images/background_bottom_C.jpg\" width=\"100%\"></TD>\n";
-	$rt .= "        <TD width=3px nowrap><img src=\"themes/default/images/background_bottom_R.jpg\" alt=\"\"></TD>\n";
+	$rt .= "        <TD class=\"themebottomleft\"></TD>\n";
+	$rt .= "        <TD class=\"themebottomcenter\"></TD>\n";
+	$rt .= "        <TD class=\"themebottomright\"></TD>\n";
 	$rt .= "      </TR>\n";
 	$rt .= "    </table>\n";
 	$rt .= "<div id=\"footer\">\n";
@@ -128,11 +131,10 @@ function getFooter() {
 	$rt .= "</p>\n";
 	$rt .= "</div>\n";
 	$rt .= "</div>\n";
-	$rt .= "<!-- end footer -->\n";
 	$rt .= "</TD>\n";
-	$rt .= "<TD width=8px background=\"themes/default/images/background_gradient.gif\" nowrap></TD>\n";
-	$rt .= "<TD width=6px background=\"themes/default/images/background_R.png\" nowrap></TD>\n";
-	$rt .= "<TD width=80px nowrap></TD>\n";
+	$rt .= "<TD class=\"themelayoutsidetrim2\"></TD>\n";
+	$rt .= "<TD class=\"themelayoutsidetrim3\"></TD>\n";
+	$rt .= "<TD class=\"themelayoutsidespacer\"></TD>\n";
 	$rt .= "</TR>\n";
 	$rt .= "</table>\n";
 	$rt .= "</body>\n";

@@ -74,6 +74,95 @@ form {
 	margin-bottom: 0;
 }
 
+.themelayouttable {
+	border-collapse: collapse;
+}
+
+.themelayouttable td.nopadding {
+	padding: 0;
+}
+
+.themeheadertable {
+	border-collapse: collapse;
+}
+
+.themelayoutsidespacer {
+	padding: 0 40px 0 40px;
+}
+
+.themelayoutsidetrim {
+	padding: 0 3px 0 3px;
+	background: url(../images/background_L.png) repeat-y;
+}
+
+.themelayoutsidetrim2 {
+	padding: 0 3px 0 4px;
+	background: url(../images/background_gradient.gif) repeat-y;
+}
+
+.themelayoutsidetrim3 {
+	padding: 0 3px 0 3px;
+	background: url(../images/background_R.png) repeat-y;
+}
+
+.themelayoutsidetrim4 {
+	padding: 0 0 0 1px;
+	background: url(../images/black.jpg) repeat-y;
+}
+
+.themelayoutsidetrim5 {
+	padding: 0 0 0 3px;
+	background: url(../images/content_border_R.jpg) repeat-y;
+}
+
+.themelayoutbannercenter {
+	padding: 0;
+	background: url(../images/vclbanner_C.jpg) repeat-x;
+	width: 100%;
+}
+
+.themelayoutcentercell {
+	padding: 0;
+	width: 100%;
+	background: url(../images/background_gradient.gif);
+}
+
+.themelayouttopseparator {
+	margin: 0;
+	padding: 23px 0 0 0;
+	width: 100%;
+	background: url(../images/bar_bg.jpg);
+}
+
+.themelayouttable td.thememenu {
+	width: 160px;
+	background: url(../images/menu_bg.jpg) repeat-y;
+	border-spacing: 0;
+	padding: 0 1px 0 0;
+}
+
+.themelayouttable td.themecontent {
+	width: 100%;
+	text-align: left;
+	background-color: white;
+	padding: 0;
+}
+
+.themebottomleft {
+	background: url(../images/background_bottom_L.jpg) repeat-x;
+	padding: 0;
+}
+
+.themebottomcenter {
+	background: url(../images/background_bottom_C.jpg) repeat-x;
+	padding: 3px 0 0 0;
+}
+
+.themebottomright {
+	background: url(../images/background_bottom_R.jpg) no-repeat;
+	padding: 0;
+}
+
 #container {
 	background: #E5E5E5 url(../images/background.gif) repeat-y center;
 	display: block;

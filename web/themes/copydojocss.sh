@@ -60,7 +60,13 @@ if [[ -r tundra_rtl.css.commented.css ]]; then
 	mv tundra_rtl.css.commented.css ${skin}_rtl.css.commented.css
 fi
 
-for f in $(grep -l '\.tundra' *.css); do
+if [[ -r ${skin}_rtl.css ]] && grep -q tundra_rtl.css ${skin}.css; then
+	sed -i "s/tundra_rtl/${skin}_rtl/" ${skin}.css
+	sed -i "s|\.\./dijit_rtl|../../../../dojo/dijit/themes/dijit_rtl|" ${skin}_rtl.css
+	sed -i "s|\.\./\.\./icons/editorIcons_rtl|../../../../dojo/dijit/icons/editorIcons_rtl|" ${skin}_rtl.css
+fi
+
+for f in $(grep -l '\.tundra' *.css layout/*.css form/*.css); do
 	if ! sed -i "s/\.tundra/\.$skin/g" $f; then
 		echo failed to change string \"tundra\" to \"$skin\" in $path/$skin/css/dojo/$f
 		echo remove $path/$skin/css/dojo before retrying
@@ -73,6 +79,16 @@ if ! sed -i "s/\.\.\/dijit.css/..\/..\/..\/..\/dojo\/dijit\/themes\/dijit.css/" 
 	echo failed to change path to dijit.css in $path/$skin/css/dojo/$skin.css
 	echo remove $path/$skin/css/dojo before retrying
 	exit 6
+fi
+if ! sed -i "s|\.\./\.\./icons/commonIcons|../../../../dojo/dijit/icons/commonIcons|" $skin.css; then
+	echo failed to change path to commonIcons.css in $path/$skin/css/dojo/$skin.css
+	echo remove $path/$skin/css/dojo before retrying
+	exit 7
+fi
+if ! sed -i "s|\.\./\.\./icons/editorIcons|../../../../dojo/dijit/icons/editorIcons|" $skin.css; then
+	echo failed to change path to commonIcons.css in $path/$skin/css/dojo/$skin.css
+	echo remove $path/$skin/css/dojo before retrying
+	exit 7
 fi
 
 echo Successfully copied dojo css to $skin
