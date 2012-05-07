@@ -179,19 +179,24 @@ sub reserve {
 
 	}
 
-	my $encrypted_pass;
-	undef @sshcmd;
-	@sshcmd = run_ssh_command($computer_node_name, $image_identity, "/usr/bin/mkpasswd $reservation_password", "root");
-	foreach my $l (@{$sshcmd[1]}) {
-		$encrypted_pass = $l;
-		notify($ERRORS{'DEBUG'}, 0, "Found the encrypted password as $encrypted_pass");
+	if(!$self->changepasswd($user_name, $reservation_password) ) {
+		notify($ERRORS{'WARNING'}, 0, "Unable to change or set the password for $user_name" );
+		return 0;
 	}
 
-	undef @sshcmd;
-	@sshcmd = run_ssh_command($computer_node_name, $image_identity, "usermod -p $encrypted_pass $user_name", "root");
-	foreach my $l (@{$sshcmd[1]}) {
-		notify($ERRORS{'DEBUG'}, 0, "Updated the user password .... L is $l");
-	}
+	#my $encrypted_pass;
+	#undef @sshcmd;
+	#@sshcmd = run_ssh_command($computer_node_name, $image_identity, "/usr/bin/mkpasswd $reservation_password", "root");
+	#foreach my $l (@{$sshcmd[1]}) {
+	#	$encrypted_pass = $l;
+	#	notify($ERRORS{'DEBUG'}, 0, "Found the encrypted password as $encrypted_pass");
+	#}
+
+	#undef @sshcmd;
+	#@sshcmd = run_ssh_command($computer_node_name, $image_identity, "usermod -p $encrypted_pass $user_name", "root");
+	#foreach my $l (@{$sshcmd[1]}) {
+	#	notify($ERRORS{'DEBUG'}, 0, "Updated the user password .... L is $l");
+	#}
 
 	#Check image profile for allowed root access
 	if ($imagemeta_rootaccess) {
@@ -416,13 +421,14 @@ sub changepasswd {
 	my $computer_short_name = $self->data->get_computer_short_name();
 
    # change the privileged account passwords on the blade images
-   my $node = shift;
    my $account = shift;
    my $passwd = shift;
 
-   notify($ERRORS{'WARNING'}, 0, "node is not defined")    if (!(defined($node)));
-   notify($ERRORS{'WARNING'}, 0, "account is not defined") if (!(defined($account)));
-
+	if(!defined($account)) {
+		$account = $self->data->get_user_login_id();
+	}
+	
+	
    $passwd = getpw(15) if (!(defined($passwd)));
 
 	my $command = "echo $account:$passwd | chpasswd";
@@ -522,9 +528,9 @@ sub generate_rc_local {
    push(@array2print, 'echo "ListenAddress $IP0" >> /etc/ssh/sshd_config' . "\n");
    push(@array2print, 'echo "ListenAddress $IP1" >> /etc/ssh/external_sshd_config' . "\n");
    push(@array2print, 'service ext_sshd stop' . "\n");
-   push(@array2print, 'service ssh reload' . "\n");
+   push(@array2print, 'service ssh stop' . "\n");
    push(@array2print, 'sleep 2' . "\n");
-   #push(@array2print, 'service sshd start' . "\n");
+   push(@array2print, 'service ssh start' . "\n");
    push(@array2print, 'service ext_sshd start' . "\n");
 
    #write to tmpfile
@@ -745,10 +751,197 @@ sub generate_ext_sshd_sysVinit {
    #delete local tmpfile
    unlink($tmpfile);
 	
-exit;
    return 1;
 
 }
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_network_configuration
+
+ Parameters  : 
+ Returns     : hash reference
+ Description : Retrieves the network configuration on the Linux computer and
+               constructs a hash. The hash reference returned is formatted as
+               follows:
+               |--%{eth0}
+                  |--%{eth0}{default_gateway} '10.10.4.1'
+                  |--%{eth0}{ip_address}
+                     |--{eth0}{ip_address}{10.10.4.3} = '255.255.240.0'
+                  |--{eth0}{name} = 'eth0'
+                  |--{eth0}{physical_address} = '00:50:56:08:00:f8'
+
+=cut
+
+sub get_network_configuration {
+   my $self = shift;
+   if (ref($self) !~ /VCL::Module/i) {
+      notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+      return;
+   }
+
+   # Check if the network configuration has already been retrieved and saved in this object
+   return $self->{network_configuration} if ($self->{network_configuration});
+
+   # Run ipconfig
+   my $ifconfig_command = "/sbin/ifconfig -a";
+   my ($ifconfig_exit_status, $ifconfig_output) = $self->execute($ifconfig_command);
+   if (!defined($ifconfig_output)) {
+      notify($ERRORS{'WARNING'}, 0, "failed to run command to retrieve network configuration: $ifconfig_command");
+      return;
+   }
+
+   # Loop through the ifconfig output lines
+   my $network_configuration;
+   my $interface_name;
+   for my $ifconfig_line (@$ifconfig_output) {
+      # Extract the interface name from the Link line:
+      # eth2      Link encap:Ethernet  HWaddr 00:0C:29:78:77:AB
+      if ($ifconfig_line =~ /^([^\s]+).*Link/) {
+         $interface_name = $1;
+         $network_configuration->{$interface_name}{name} = $interface_name;
+      }
+
+      # Skip to the next line if the interface name has not been determined yet
+      next if !$interface_name;
+
+      # Parse the HWaddr line:
+      # eth2      Link encap:Ethernet  HWaddr 00:0C:29:78:77:AB
+      if ($ifconfig_line =~ /HWaddr\s+([\w:]+)/) {
+         $network_configuration->{$interface_name}{physical_address} = lc($1);
+      }
+		
+	# Parse the IP address line:
+      # inet addr:10.10.4.35  Bcast:10.10.15.255  Mask:255.255.240.0
+      if ($ifconfig_line =~ /inet addr:([\d\.]+)\s+Bcast:([\d\.]+)\s+Mask:([\d\.]+)/) {
+         $network_configuration->{$interface_name}{ip_address}{$1} = $3;
+         $network_configuration->{$interface_name}{broadcast_address} = $2;
+      }
+   }
+
+   # Run route
+   my $route_command = "/sbin/route -n";
+   my ($route_exit_status, $route_output) = $self->execute($route_command);
+   if (!defined($route_output)) {
+      notify($ERRORS{'WARNING'}, 0, "failed to run command to retrieve routing configuration: $route_command");
+      return;
+   }
+
+	# Loop through the route output lines
+   for my $route_line (@$route_output) {
+      my ($default_gateway, $interface_name) = $route_line =~ /^0\.0\.0\.0\s+([\d\.]+).*\s([^\s]+)$/g;
+
+      if (!defined($interface_name) || !defined($default_gateway)) {
+         notify($ERRORS{'DEBUG'}, 0, "route output line does not contain a default gateway: '$route_line'");
+      }
+      elsif (!defined($network_configuration->{$interface_name})) {
+         notify($ERRORS{'WARNING'}, 0, "found default gateway for '$interface_name' interface but the network configuration for '$interface_name' was not previously retrieved, route output:\n" . join("\n", @$route_output) . "\nnetwork configuation:\n" . format_data($network_configuration));
+      }
+      elsif (defined($network_configuration->{$interface_name}{default_gateway})) {
+         notify($ERRORS{'WARNING'}, 0, "multiple default gateway are configured for '$interface_name' interface, route output:\n" . join("\n", @$route_output));
+      }
+      else {
+         $network_configuration->{$interface_name}{default_gateway} = $default_gateway;
+         notify($ERRORS{'DEBUG'}, 0, "found default route configured for '$interface_name' interface: $default_gateway");
+      }
+   }
+
+   $self->{network_configuration} = $network_configuration;
+   notify($ERRORS{'DEBUG'}, 0, "retrieved network configuration:\n" . format_data($self->{network_configuration}));
+   return $self->{network_configuration};
+		
+}
+
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 enable_firewall_port
+ 
+  Parameters  : $protocol, $port, $scope (optional), $overwrite_existing (optional), $name (optional), $description (optional)
+  Returns     : boolean
+  Description : Updates iptables for given port for collect IPaddress range and mode
+ 
+=cut
+
+sub enable_firewall_port {
+   my $self = shift;
+   if (ref($self) !~ /VCL::Module/i) {
+      notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+      return;
+   }
+
+	   # If not return 1 so it does not fail
+   if (!($self->service_exists("ufw"))) {
+      notify($ERRORS{'WARNING'}, 0, "iptables does not exist on this OS");
+      return 1;
+   }
+
+   my ($protocol, $port, $scope_argument, $overwrite_existing, $name, $description) = @_;
+   if (!defined($protocol) || !defined($port)) {
+     notify($ERRORS{'WARNING'}, 0, "protocol and port arguments were not supplied");
+     return;
+   }
+
+   my $computer_node_name = $self->data->get_computer_node_name();
+   my $mn_private_ip = $self->mn_os->get_private_ip_address();
+
+   $protocol = lc($protocol);
+
+   $scope_argument = '' if (!defined($scope_argument));
+
+	my $scope;
+	
+	return 1;
+
+}
+
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 disable_firewall_port
+ 
+  Parameters  : none
+  Returns     : 1 successful, 0 failed
+  Description : updates iptables for given port for collect IPaddress range and mode
+ 
+=cut
+
+sub disable_firewall_port {
+   my $self = shift;
+   if (ref($self) !~ /VCL::Module/i) {
+      notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+      return;
+   }
+
+   # Check to see if this distro has iptables
+   # If not return 1 so it does not fail
+   if (!($self->service_exists("ufw"))) {
+      notify($ERRORS{'WARNING'}, 0, "iptables does not exist on this OS");
+      return 1;
+   }
+
+	   my ($protocol, $port, $scope_argument, $overwrite_existing, $name, $description) = @_;
+   if (!defined($protocol) || !defined($port)) {
+     notify($ERRORS{'WARNING'}, 0, "protocol and port arguments were not supplied");
+     return;
+   }
+
+   my $computer_node_name = $self->data->get_computer_node_name();
+   my $mn_private_ip = $self->mn_os->get_private_ip_address();
+
+   $protocol = lc($protocol);
+
+   $scope_argument = '' if (!defined($scope_argument));
+
+   $name = '' if !$name;
+   $description = '' if !$description;
+
+   my $scope;
+
+	return 1;
+
+}
+
 
 1;
 __END__
