@@ -307,7 +307,11 @@ function AJupdateWaitTime() {
 			print "dojo.byId('suggestcont').value = 'cluster';";
 		else
 			print "dojo.byId('suggestcont').value = '$cont';";
-		print "if(dojo.byId('newsubmit')) dojo.byId('newsubmit').value = _('View Available Times');";
+		print "if(dojo.byId('newsubmit')) {";
+		print "if(dojo.byId('newsubmit').value != _('View Available Times')) ";
+		print "resbtntxt = dojo.byId('newsubmit').value; ";
+		print "dojo.byId('newsubmit').value = _('View Available Times');";
+		print "}";
 	}
 	print "dojo.byId('waittime').innerHTML = ";
 	if($rc == -2)

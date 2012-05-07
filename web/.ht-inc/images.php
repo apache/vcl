@@ -1568,7 +1568,7 @@ function subimageDialogContent() {
 	$data = array('imageid' => $imageid,
 	              'adminids' => $adminids,
 	              'imagemetaid' => $image['imagemetaid'],
-	              'userimages' => $resources['image'],
+	              'userimageids' => array_keys($resources['image']),
 	              'subimages' => $image['subimages']);
 	$cont = addContinuationsEntry('AJaddSubimage', $data, SECINDAY, 1, 0);
 	$content .= "<INPUT type=hidden id=addsubimagecont value=\"$cont\">";
@@ -1589,7 +1589,7 @@ function subimageDialogContent() {
 function AJaddSubimage() {
 	$imageid = getContinuationVar('imageid');
 	$adminids = getContinuationVar('adminids');
-	$userimages = getContinuationVar('userimages');
+	$userimageids = getContinuationVar('userimageids');
 	$subimages = getContinuationVar('subimages');
 	$imagemetaid = getContinuationVar('imagemetaid');
 	if(! in_array($imageid, $adminids)) {
@@ -1599,7 +1599,7 @@ function AJaddSubimage() {
 		return;
 	}
 	$newid = processInputVar('imageid', ARG_NUMERIC);
-	if(! array_key_exists($newid, $userimages)) {
+	if(! in_array($newid, $userimageids)) {
 		$arr = array('error' => 'nosubimageaccess',
 	                'msg' => 'You do not have access to add this subimage.');
 		sendJSON($arr);
@@ -1632,7 +1632,7 @@ function AJaddSubimage() {
 	$data = array('imageid' => $imageid,
 	              'adminids' => $adminids,
 	              'imagemetaid' => $imagemetaid,
-	              'userimages' => $userimages,
+	              'userimageids' => $userimageids,
 	              'subimages' => $subimages);
 	$addcont = addContinuationsEntry('AJaddSubimage', $data, SECINDAY, 1, 0);
 	$remcont = addContinuationsEntry('AJremSubimage', $data, SECINDAY, 1, 0);
@@ -1655,7 +1655,7 @@ function AJaddSubimage() {
 function AJremSubimage() {
 	$imageid = getContinuationVar('imageid');
 	$adminids = getContinuationVar('adminids');
-	$userimages = getContinuationVar('userimages');
+	$userimageids = getContinuationVar('userimageids');
 	$subimages = getContinuationVar('subimages');
 	$imagemetaid = getContinuationVar('imagemetaid');
 	if(! in_array($imageid, $adminids)) {
@@ -1715,7 +1715,7 @@ function AJremSubimage() {
 	$data = array('imageid' => $imageid,
 	              'adminids' => $adminids,
 	              'imagemetaid' => $imagemetaid,
-	              'userimages' => $userimages,
+	              'userimageids' => $userimageids,
 	              'subimages' => $subimages);
 	$addcont = addContinuationsEntry('AJaddSubimage', $data, SECINDAY, 1, 0);
 	$remcont = addContinuationsEntry('AJremSubimage', $data, SECINDAY, 1, 0);

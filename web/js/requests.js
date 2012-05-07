@@ -16,6 +16,7 @@
 */
 var resSubmitted = 0;
 var suggestTimeData = {}
+var resbtntxt = '';
 
 function RPCwrapper(data, CB, dojson) {
 	if(dojson) {
@@ -157,8 +158,12 @@ function useSuggestedSlot() {
 
 function selectLater() {
 	dojo.byId('laterradio').checked = true;
-	if(dojo.byId('newsubmit'))
-		dojo.byId('newsubmit').value = 'Create Reservation';
+	if(dojo.byId('newsubmit')) {
+		if(resbtntxt != '')
+			dojo.byId('newsubmit').value = resbtntxt;
+		else
+			dojo.byId('newsubmit').value = _('Create Reservation');
+	}
 	dojo.byId('waittime').innerHTML = '';
 }
 
@@ -751,7 +756,7 @@ function showRDPbutton() {
 	// submitted by Gerhard Harti from ODU
 	if(! dojo.byId('counterdiv') || ! dojo.byId('connectdiv'))
 		return;
-	var timeInterval = 5;
+	var timeInterval = 2;
 	if(typeof timeInterval === 'undefined' || parseInt(timeInterval) <= 0) {
 		timeInterval = 1
 	}

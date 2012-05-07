@@ -204,8 +204,7 @@ function userpreferences() {
 	print "        <TR>\n";
 	print _("          <TH align=right>Color Depth:</TH>\n");
 	print "          <TD>\n";
-	#$colordepth = array("8" => "8", "16" => "16", "24" => "24");
-	$colordepth = array("8" => "8", "16" => "16", "24" => "24", "32" => "32 (Vista only)");
+	$colordepth = array("8" => "8", "16" => "16", "24" => "24", "32" => "32");
 	printSelectInput("bpp", $colordepth, $data["bpp"]);
 	print "          </TD>\n";
 	print "          <TD></TD>\n";

@@ -142,18 +142,22 @@ function viewGroups() {
 	print "height: 580px;\" query=\"{type: new RegExp('normal|federated|courseroll')}\">\n";
 	print "<thead>\n";
 	print "<tr>\n";
-	print "<th field=\"id\" width=\"4.5em\" formatter=\"fmtUserGroupDeleteBtn\">&nbsp;</th>\n";
-	print "<th field=\"id\" width=\"3em\" formatter=\"fmtUserGroupEditBtn\">&nbsp;</th>\n";
-	print "<th field=\"name\" width=\"17em\">Name</th>\n";
-	print "<th field=\"owner\" width=\"12em\">Owner</th>\n";
+	if(preg_match('/MSIE/i', $_SERVER['HTTP_USER_AGENT']))
+		$w = array('54px', '38px', '200px', '142px', '65px', '142px', '59px', '58px', '63px', '73px');
+	else
+		$w = array('4.5em', '3em', '17em', '12em', '5em', '12em', '5em', '5em', '5.6em', '6.3em');
+	print "<th field=\"id\" width=\"{$w[0]}\" formatter=\"fmtUserGroupDeleteBtn\">&nbsp;</th>\n";
+	print "<th field=\"id\" width=\"{$w[1]}\" formatter=\"fmtUserGroupEditBtn\">&nbsp;</th>\n";
+	print "<th field=\"name\" width=\"{$w[2]}\">Name</th>\n";
+	print "<th field=\"owner\" width=\"{$w[3]}\">Owner</th>\n";
 	if($showusergrouptype)
-		print "<th field=\"prettytype\" width=\"5em\">Type</th>\n";
-	print "<th field=\"editgroup\" width=\"12em\">Editable by</th>\n";
-	print "<th field=\"initialmaxtime\" width=\"5em\" formatter=\"fmtDuration\">Initial Max<br>Time</th>\n";
-	print "<th field=\"totalmaxtime\" width=\"5em\" formatter=\"fmtDuration\">Total Max<br>Time</th>\n";
-	print "<th field=\"maxextendtime\" width=\"5.6em\" formatter=\"fmtDuration\">Max Extend<br>Time</th>\n";
+		print "<th field=\"prettytype\" width=\"{$w[4]}\">Type</th>\n";
+	print "<th field=\"editgroup\" width=\"{$w[5]}\">Editable by</th>\n";
+	print "<th field=\"initialmaxtime\" width=\"{$w[6]}\" formatter=\"fmtDuration\">Initial Max<br>Time</th>\n";
+	print "<th field=\"totalmaxtime\" width=\"{$w[7]}\" formatter=\"fmtDuration\">Total Max<br>Time</th>\n";
+	print "<th field=\"maxextendtime\" width=\"{$w[8]}\" formatter=\"fmtDuration\">Max Extend<br>Time</th>\n";
 	if(checkUserHasPerm('Set Overlapping Reservation Count'))
-		print "<th field=\"overlapResCount\" width=\"6.3em\">Max<br>Overlapping<br>Reservations</th>\n";
+		print "<th field=\"overlapResCount\" width=\"{$w[9]}\">Max<br>Overlapping<br>Reservations</th>\n";
 	print "</tr>\n";
 	print "</thead>\n";
 	print "</table>\n";
@@ -259,12 +263,17 @@ function viewGroups() {
 	print "height: 580px;\" query=\"{type: new RegExp('.*')}\">\n";
 	print "<thead>\n";
 	print "<tr>\n";
-	print "<th field=\"id\" width=\"4.5em\" formatter=\"fmtResourceGroupDeleteBtn\">&nbsp;</th>\n";
-	print "<th field=\"id\" width=\"3em\" formatter=\"fmtResourceGroupEditBtn\">&nbsp;</th>\n";
-	print "<th field=\"type\" width=\"9em\">Type</th>\n";
-	print "<th field=\"name\" width=\"20em\">Name</th>\n";
-	print "<th field=\"owninggroup\" width=\"20em\">Owning User Group</th>\n";
-	print "<th field=\"id\" width=\"1.2em\" formatter=\"fmtGroupInfo\">\n";
+	if(preg_match('/MSIE/i', $_SERVER['HTTP_USER_AGENT']))
+		$w = array('54px', '38px', '108px', '240px', '250px', '24px');
+	else
+		$w = array('4.5em', '3em', '9em', '20em', '21em', '1.6em');
+
+	print "<th field=\"id\" width=\"{$w[0]}\" formatter=\"fmtResourceGroupDeleteBtn\">&nbsp;</th>\n";
+	print "<th field=\"id\" width=\"{$w[1]}\" formatter=\"fmtResourceGroupEditBtn\">&nbsp;</th>\n";
+	print "<th field=\"type\" width=\"{$w[2]}\">Type</th>\n";
+	print "<th field=\"name\" width=\"{$w[3]}\">Name</th>\n";
+	print "<th field=\"owninggroup\" width=\"{$w[4]}\">Owning User Group</th>\n";
+	print "<th field=\"id\" width=\"{$w[5]}\" formatter=\"fmtGroupInfo\">\n";
 	print "<a onmouseover=\"mouseoverHelp();\" ";
 	print "onmouseout=\"showGroupInfoCancel(0);\" id=\"listicon0\">\n";
 	print "<img alt=\"\" src=\"images/list.gif\"></a></th>\n";

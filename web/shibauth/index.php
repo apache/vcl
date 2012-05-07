@@ -242,10 +242,10 @@ switch($affil) {
 	case 'Example1':
 	case 'EXAMPLE2':
 		$skin = strtoupper($affil);
-		setcookie("VCLSKIN", $skin, (time() + (SECINDAY * 31)), "/", COOKIEDOMAIN);
+		setcookie("VCLSKIN", $skin, (time() + 2678400), "/", COOKIEDOMAIN);
 		break;
 	default:
-		setcookie("VCLSKIN", "default", (time() + (SECINDAY * 31)), "/", COOKIEDOMAIN);
+		setcookie("VCLSKIN", "default", (time() + 2678400), "/", COOKIEDOMAIN);
 }
 header("Location: " . BASEURL . "/");
 dbDisconnect();

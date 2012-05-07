@@ -29,7 +29,7 @@ function getGroupInfo(groupid) {
 		handleAs: "json",
 		error: errorHandler,
 		content: {continuation: cont,
-					 groupid: groupid},
+		          groupid: groupid},
 		timeout: 15000
 	});
 }
@@ -115,7 +115,7 @@ function usergroupGridFilter() {
 	if(owner == 'all')
 		owner = '*';
 
-   var query = new Array();
+	var query = new Array();
 	if(! dijit.byId('shownormal') &&
 	   ! dijit.byId('showfederated') &&
 	   ! dijit.byId('showcourseroll')) {
@@ -129,9 +129,9 @@ function usergroupGridFilter() {
 		if(dijit.byId('showcourseroll').get('value'))
 			query.push('courseroll');
 	}
-   var type = query.join('|');
-   if(query.length == 0)
-      type = 'foo';
+	var type = query.join('|');
+	if(query.length == 0)
+		type = 'foo';
 
 	var editid = dijit.byId('editgroupfilter').get('value');
 	if(editid == 0)
@@ -139,7 +139,7 @@ function usergroupGridFilter() {
 	if(editid == -1)
 		editid = 'NULL';
 
-   usergroupgrid.setQuery({type: new RegExp(type),
+	usergroupgrid.setQuery({type: new RegExp(type),
 	                        owner: owner,
 	                        name: new RegExp(name, 'i'),
 	                        groupaffiliationid: affilid,
@@ -168,8 +168,16 @@ function buildUserFilterStores() {
 				usergroupstore.editgroups[editid] = edit;
 		},
 		onComplete: function() {
-			if(Object.keys(usergroupstore.owners).length == 0)
+			var cnt = 0;
+			for(var p in usergroupstore.owners) {
+				if(usergroupstore.owners.hasOwnProperty(p))
+					cnt = 1;
+					break;
+			}
+			if(cnt == 0) {
 				dojo.byId('usergroupcontainer').innerHTML = "You do not have access to any user groups.";
+				return;
+			}
 			var newitem = {};
 			newitem = {'id': '0', 'name': ' Any'};
 			affiliationstore.newItem(newitem);
@@ -258,22 +266,22 @@ function resourcegroupGridFilter() {
 	if(dojo.byId('resnamefilter') && dojo.byId('resnamefilter').value.length)
 		name += dojo.byId('resnamefilter').value + '.*';
 
-   var query = new Array();
+	var query = new Array();
 	var nodes = dojo.query('label', dojo.byId('resourcetypes'));
 	for(var i = 0; i < nodes.length; i++) {
-		var showtype = nodes[i].getAttribute('for');
+		var showtype = 'show' + nodes[i].innerHTML;
 		if(dijit.byId(showtype) && dijit.byId(showtype).get('value'))
 			query.push(nodes[i].innerHTML);
 	}
-   var restype = query.join('|');
-   if(query.length == 0)
-      restype = 'foo';
+	var restype = query.join('|');
+	if(query.length == 0)
+		restype = 'foo';
 
 	var owninggroupid = dijit.byId('owninggroupfilter').get('value');
 	if(owninggroupid == 0)
 		owninggroupid = '*';
 
-   resourcegroupgrid.setQuery({type: new RegExp(restype),
+	resourcegroupgrid.setQuery({type: new RegExp(restype),
 	                            name: new RegExp(name, 'i'),
 	                            owninggroupid: owninggroupid});
 }
@@ -293,8 +301,16 @@ function buildResourceFilterStores() {
 			resourcegroupstore.ownergroups[ownerid] = owner;
 		},
 		onComplete: function() {
-			if(Object.keys(resourcegroupstore.ownergroups).length == 0)
+			var cnt = 0;
+			for(var p in resourcegroupstore.ownergroups) {
+				if(resourcegroupstore.ownergroups.hasOwnProperty(p))
+					cnt = 1;
+					break;
+			}
+			if(cnt == 0) {
 				dojo.byId('resourcegroupcontainer').innerHTML = "You do not have access to any resource groups.";
+				return;
+			}
 			var newitem = {};
 			newitem = {'id': '0', 'name': ' Any'};
 			owninggroupstore.newItem(newitem);

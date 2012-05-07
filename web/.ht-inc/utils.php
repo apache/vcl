@@ -377,7 +377,7 @@ function checkAccess() {
 						$res = ldap_bind($ds);
 					if(! $res) {
 						addLoginLog($user['unityid'], $authtype, $user['affiliationid'], 0);
-						printXMLRPCerror(3);   # access denied
+						printXMLRPCerror(5);    # failed to connect to auth server
 						dbDisconnect();
 						exit;
 					}
@@ -472,8 +472,10 @@ function checkAccess() {
 				# check that user has access to this area
 				switch($mode) {
 					case 'viewRequests':
+						$requests = getUserRequests("all", $user["id"]);
 						if(! in_array("imageCheckOut", $user["privileges"]) &&
-							! in_array("imageAdmin", $user["privileges"])) {
+							! in_array("imageAdmin", $user["privileges"]) &&
+						   ! count($requests)) {
 							$mode = "";
 							$actionFunction = "main";
 							return;
@@ -2906,7 +2908,7 @@ function getUsersLastImage($userid) {
 	$query = "SELECT imageid "
 	       . "FROM log "
 	       . "WHERE userid = $userid "
-	       . "ORDER BY start DESC "
+	       . "ORDER BY id DESC "
 	       . "LIMIT 1";
 	$qh = doQuery($query, 101);
 	if($row = mysql_fetch_assoc($qh))
@@ -10300,7 +10302,8 @@ function printHTMLHeader() {
 		$HTMLheader .= getHeader($refresh);
 
 	if(! in_array($mode, $noHTMLwrappers) &&
-	   (! array_key_exists('noHTMLwrappers', $contdata) ||
+		(! is_array($contdata) ||
+	    ! array_key_exists('noHTMLwrappers', $contdata) ||
 	    $contdata['noHTMLwrappers'] == 0)) {
 		print $HTMLheader;
 		if($mode != 'inmaintenance')
@@ -10326,8 +10329,10 @@ function printHTMLHeader() {
 function getNavMenu($inclogout, $inchome, $homeurl=HOMEURL) {
 	global $user, $docreaders, $authed, $userlookupUsers;
 	global $mode;
-	if($authed && $mode != 'expiredemouser')
+	if($authed && $mode != 'expiredemouser') {
 		$computermetadata = getUserComputerMetaData();
+		$requests = getUserRequests("all", $user["id"]);
+	}
 	else
 		$computermetadata = array("platforms" => array(),
 		                          "schedules" => array());
@@ -10340,7 +10345,8 @@ function getNavMenu($inclogout, $inchome, $homeurl=HOMEURL) {
 	$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=newRequest\">";
 	$rt .= _("New Reservation</a></li>\n");
 	if(in_array("imageCheckOut", $user["privileges"]) ||
-		in_array("imageAdmin", $user["privileges"])) {
+		in_array("imageAdmin", $user["privileges"]) ||
+	   count($requests)) {
 		$rt .= menulistLI('currentReservations');
 		$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=viewRequests\">";
 		$rt .= _("Current Reservations</a></li>\n");
@@ -10807,7 +10813,7 @@ function getDojoHTML($refresh) {
 			$rt .= "<style type=\"text/css\">\n";
 			$rt .= "   @import \"themes/$skin/css/dojo/$skin.css\";\n";
 			$rt .= "</style>\n";
-         $rt .= "<script type=\"text/javascript\" src=\"js/requests.js\"></script>\n";
+			$rt .= "<script type=\"text/javascript\" src=\"js/requests.js\"></script>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
 			$rt .= "   djConfig=\"parseOnLoad: true, locale: '$jslocale'\">\n";
 			$rt .= "</script>\n";

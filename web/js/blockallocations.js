@@ -1342,6 +1342,10 @@ function updateAllocatedMachinesCB(data, ioArgs) {
 		dojo.byId('totalvirtual').innerHTML = _('Total online: ') + data.items.virtual.total;
 	else
 		dojo.byId('totalvirtual').innerHTML = '';
+	dojo.byId('allocatedBareMachines').style.height = '320px';
+	dojo.byId('allocatedBareMachines').childNodes[0].attributes[1].nodeValue = '320';
+	dojo.byId('allocatedVirtualMachines').style.height = '320px';
+	dojo.byId('allocatedVirtualMachines').childNodes[0].attributes[1].nodeValue = '320';
 }
 
 function timestampToTimeBare(val) {
@@ -1358,4 +1362,8 @@ function timestampToTimeVirtual(val) {
 	else
 		var data = dijit.byId('allocatedVirtualMachines').chart.labeldata;
 	return data[val]['text'];
+}
+
+function machinecntfilter(val) {
+	return parseInt(val);
 }

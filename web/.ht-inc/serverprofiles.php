@@ -1165,22 +1165,23 @@ function processProfileInput() {
 		return $err;
 	}
 
-	$usergroups = getUserEditGroups($user['id']);
-	$extraadmingroups = getServerProfileGroups($user['id'], 'admin');
+	$usergroups = getUserGroups();
+	/*$usergroups = getUserEditGroups($user['id']);
+	$extraadmingroups = getServerProfileGroups($user['id'], 'admin');*/
 	if($ret['admingroupid'] == 0)
 		$ret['admingroupid'] = 'NULL';
-	elseif(! array_key_exists($ret['admingroupid'], $usergroups) &&
-	       ! array_key_exists($ret['admingroupid'], $extraadmingroups)) {
+	elseif(! array_key_exists($ret['admingroupid'], $usergroups) /*&&
+	       ! array_key_exists($ret['admingroupid'], $extraadmingroups)*/) {
 	   $err['msg'] = "Invalid Admin User Group selected";
 		$err['field'] = 'admingroupid';
 		$err['error'] = 1;
 		return $err;
 	}
-	$extralogingroups = getServerProfileGroups($user['id'], 'login');
+	#$extralogingroups = getServerProfileGroups($user['id'], 'login');
 	if($ret['logingroupid'] == 0)
 		$ret['logingroupid'] = 'NULL';
-	elseif(! array_key_exists($ret['logingroupid'], $usergroups) &&
-	       ! array_key_exists($ret['logingroupid'], $extralogingroups)) {
+	elseif(! array_key_exists($ret['logingroupid'], $usergroups) /*&&
+	       ! array_key_exists($ret['logingroupid'], $extralogingroups)*/) {
 	   $err['msg'] = "Invalid Access User Group selected";
 		$err['field'] = 'logingroupid';
 		$err['error'] = 1;

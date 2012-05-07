@@ -191,7 +191,7 @@ function blockAllocationForm() {
 	print "    <td>\n";
 	print "      <input dojoType=\"dijit.form.NumberSpinner\" value=\"{$data['seats']}\" ";
 	print "smallDelta=1 largeDelta=5 constraints=\"{min:" . MIN_BLOCK_MACHINES . ", max:";
-	print MAX_BLOCK_MACHINES . "}\" id=machinecnt required=\"true\" style=\"width: 70px\"/>\n";
+	print MAX_BLOCK_MACHINES . "}\" id=machinecnt required=\"true\" style=\"width: 70px\" filter=\"machinecntfilter\"/>\n";
 	print "      <img src=\"images/helpicon.png\" id=\"seathelp\" />\n";
 	print "    </td>\n";
 	print "  </tr>\n";
@@ -3485,7 +3485,7 @@ function viewBlockAllocatedMachines() {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function getChartHTML($id) {
-	$txt  = "<div class=\"dashwidget\">\n";
+	$txt  = "<div style=\"width:500px; height: 320px;\">\n";
 	$txt .= "<div dojoType=\"dojox.charting.widget.Chart2D\" id=\"$id\"\n";
 	$txt .= "     theme=\"dojox.charting.themes.ThreeD\"\n";
 	$txt .= "     style=\"width: 500px; height: 300px;\">\n";
@@ -3495,7 +3495,8 @@ function getChartHTML($id) {
 		$txt .= "     labelFunc=\"timestampToTimeBare\"\n";
 	elseif($id == 'allocatedVirtualMachines')
 		$txt .= "     labelFunc=\"timestampToTimeVirtual\"\n";
-	$txt .= "     maxLabelSize=\"35\"\n";
+	$txt .= "     maxLabelSize=\"85\"\n";
+	$txt .= "     maxLabelCharCount=\"8\"\n";
 	$txt .= "     rotation=\"-90\"\n";
 	$txt .= "     majorTickStep=\"4\"\n";
 	$txt .= "     minorTickStep=\"1\">\n";
