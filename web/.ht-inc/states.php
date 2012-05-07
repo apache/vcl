@@ -182,6 +182,7 @@ $noHTMLwrappers = array('sendRDPfile',
                         'jsonUserGroupStore',
                         'jsonResourceGroupStore',
                         'changeLocale',
+                        'submitEditImage',
 );
 
 # main

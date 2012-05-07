@@ -1946,7 +1946,9 @@ function confirmEditOrAddImage($state) {
 function submitEditImage() {
 	$data = getContinuationVar();
 	updateImage($data);
-	viewImages();
+	$cdata = array('showimageupdated' => 1);
+	$cont = addContinuationsEntry('viewImages', $cdata);
+	header("Location: " . BASEURL . SCRIPT . "?continuation=$cont");
 }
 
 ////////////////////////////////////////////////////////////////////////////////
