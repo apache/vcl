@@ -319,9 +319,11 @@ function getLDAPUserData($authtype, $userid) {
 	# FIXME hack
 	array_push($ldapsearch, 'gecos');
 
+	$searchuser = stripslashes($userid);
+
 	$search = ldap_search($ds,
 	                      $auth['binddn'], 
-	                      "{$auth['unityid']}=$userid",
+	                      "{$auth['unityid']}=$searchuser",
 	                      $ldapsearch, 0, 3, 15);
 	$return = array();
 	if($search) {
