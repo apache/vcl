@@ -962,7 +962,7 @@ msgstr "durante el mantenimiento<br>\n"
 #: utils.php:782
 #: utils.php:784
 msgid "Hello "
-msgstr "Hola"
+msgstr "Hola "
 
 #: utils.php:796
 #: utils.php:799
