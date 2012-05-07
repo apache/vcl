@@ -311,6 +311,11 @@ sub process {
 			$retval_conn = "connected";
 			goto RETVALCONN;
 		}
+		elsif ($server_request_id) {
+			notify($ERRORS{'OK'}, 0, "reservation is for server reservation skipping user connection check");
+			$retval_conn = "connected";
+			goto RETVALCONN;
+		}
 	
 	}
 
