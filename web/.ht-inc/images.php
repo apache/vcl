@@ -118,6 +118,7 @@ function viewImages() {
 	$showdeleted = getContinuationVar("showdeleted", 0);
 	$deleted = getContinuationVar("deleted");
 	$details = processInputVar("details", ARG_NUMERIC);
+	$showimageupdated = getContinuationVar('showimageupdated', 0);
 
 	if($showdeleted) {
 		$images = getImages(1);
@@ -143,7 +144,7 @@ function viewImages() {
 			print "state</font><br><br>\n";
 		}
 	}
-	elseif($mode == "submitEditImage") {
+	elseif($showimageupdated) {
 		print "<font color=\"#008000\">Image successfully updated";
 		print "</font><br><br>\n";
 	}
