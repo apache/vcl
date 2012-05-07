@@ -441,12 +441,9 @@ function ldapLogin($authtype, $userid, $passwd) {
 		else
 			setcookie("VCLAUTH", "{$cookie['data']}", 0, "/", COOKIEDOMAIN, 0);
 		# set skin cookie based on affiliation
-		/*if(getAffiliationName($authMechs[$authtype]['affiliationid']) == 'EXAMPLE1')
-			setcookie("VCLSKIN", "EXAMPLE1", (time() + (SECINDAY * 31)), "/", COOKIEDOMAIN);
-		elseif(getAffiliationName($authMechs[$authtype]['affiliationid']) == 'EXAMPLE2')
-			setcookie("VCLSKIN", "EXAMPLE2", (time() + (SECINDAY * 31)), "/", COOKIEDOMAIN);
-		else*/
-			setcookie("VCLSKIN", "DEFAULT", (time() + (SECINDAY * 31)), "/", COOKIEDOMAIN);
+		$skin = getAffiliationTheme($authMechs[$authtype]['affiliationid']);
+		$ucskin = strtoupper($skin);
+		setcookie("VCLSKIN", "$ucskin", (time() + (SECINDAY * 31)), "/", COOKIEDOMAIN);
 		// redirect to main page
 		header("Location: " . BASEURL . SCRIPT);
 		dbDisconnect();
