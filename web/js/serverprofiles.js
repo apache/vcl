@@ -353,10 +353,11 @@ function getProfiles() {
 	var obj = dijit.byId('profileGroups');
 	if(! obj)
 		return;
-	var groupname = obj.getOptions(dijit.byId('profileGroups').get('value')).label;
-
-	dojo.byId('ingroupname').innerHTML = groupname;
-	dojo.byId('outgroupname').innerHTML = groupname;
+	if(obj.options.length) {
+		var groupname = obj.getOptions(dijit.byId('profileGroups').get('value')).label;
+		dojo.byId('ingroupname').innerHTML = groupname;
+		dojo.byId('outgroupname').innerHTML = groupname;
+	}
 
 	var data = {continuation: dojo.byId('profilecont').value,
 	            groupid: dijit.byId('profileGroups').get('value')};
@@ -376,15 +377,18 @@ function getProfilesCB(data, ioArgs) {
 	allprofiles = data.items.all;
 	if(allprofiles.length == 0) {
 		dojo.addClass('profileslist', 'hidden');
-		dojo.addClass('deployprofileslist', 'hidden');
+		if(! dijit.byId('deployprofileid').options.length)
+			dojo.addClass('deployprofileslist', 'hidden');
 		dojo.addClass('groupprofilesspan', 'hidden');
 		dojo.removeClass('noprofilegroupsspan', 'hidden');
 	}
 	else {
 		dojo.removeClass('profileslist', 'hidden');
 		dojo.removeClass('deployprofileslist', 'hidden');
-		dojo.removeClass('groupprofilesspan', 'hidden');
-		dojo.addClass('noprofilegroupsspan', 'hidden');
+		if(dijit.byId('profileGroups').options.length) {
+			dojo.removeClass('groupprofilesspan', 'hidden');
+			dojo.addClass('noprofilegroupsspan', 'hidden');
+		}
 	}
 	dojo.removeClass('profilesdiv', 'hidden');
 	document.body.style.cursor = 'default';
@@ -418,6 +422,8 @@ function addRemGroupCB(data, ioArgs) {
 		we find the previous item in the select.options array
 		we insert a new option right after that one
 	*/
+	var byprofileselid = dijit.byId('profiles').get('value');
+	var reloadbyprofile = 0;
 	var profiles = data.items.profiles;
 	var addrem = data.items.addrem; // 1 for add, 0 for rem
 	if(addrem == 0 && data.items.removedaccess == 1) {
@@ -442,6 +448,8 @@ function addRemGroupCB(data, ioArgs) {
 	else
 		var obj = document.getElementById('outprofiles');
 	for(var i = 0; i < profiles.length; i++) {
+		if(profiles[i] == byprofileselid )
+			reloadbyprofile = 1;
 		var lastid = -1;
 		for(var j = 0; j < allprofiles.length; j++) {
 			if(allprofiles[j].id == profiles[i]) {
@@ -485,9 +493,13 @@ function addRemGroupCB(data, ioArgs) {
 		}
 	}
 	document.body.style.cursor = 'default';
+	if(reloadbyprofile)
+		getGroups();
 }
 
 function addRemProfileCB(data, ioArgs) {
+	var bygroupselid = dijit.byId('profileGroups').get('value');
+	var reloadbygroup = 0;
 	var groups = data.items.groups;
 	var addrem = data.items.addrem; // 1 for add, 0 for rem
 	if(addrem)
@@ -495,6 +507,8 @@ function addRemProfileCB(data, ioArgs) {
 	else
 		var obj = dojo.byId('outgroups');
 	for(var i = 0; i < groups.length; i++) {
+		if(groups[i] == bygroupselid )
+			reloadbygroup = 1;
 		var lastid = -1;
 		for(var j = 0; j < allgroups.length; j++) {
 			if(allgroups[j].id == groups[i]) {
@@ -551,6 +565,8 @@ function addRemProfileCB(data, ioArgs) {
 		});
 	}
 	document.body.style.cursor = 'default';
+	if(reloadbygroup)
+		getProfiles();
 }
 
 function setStartNow() {

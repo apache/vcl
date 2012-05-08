@@ -85,17 +85,18 @@ function getHeader($refresh) {
 
 	$rt .= "    <table class=\"themelayouttable\" summary=\"\">\n";
 	$rt .= "      <TR valign=top>\n";
-	$rt .= "        <TD class=\"thememenu\">\n";
+	if($authed)
+		$rt .= "        <TD class=\"thememenu\">\n";
+	else
+		$rt .= "        <TD class=\"thememenunoauth\">\n";
 	$rt .= "<div id=menulist>\n";
 	$rt .= "<h3 class=hidden>Resources</h3>\n";
-	$rt .= "<ul>\n";
-	if($authed)
+	if($authed) {
+		$rt .= "<ul>\n";
 		$rt .= getNavMenu(1, 1);
-	/*else
-		$rt .= "<img src=\"themes/default/images/belltower.jpg\" height=200 width=160 alt=\"\">\n";*/
-	$rt .= "</ul>\n";
-	if($authed)
-		$rt .= "<img src=\"themes/default/images/menu_dividerblock.jpg\" border=0 width=158 height=83 alt=\"\"><br/>\n";
+		$rt .= "</ul>\n";
+		$rt .= "<img src=\"themes/default/images/menu_dividerblock.jpg\" border=0 width=\"158px\" height=\"83px\" alt=\"\"><br/>\n";
+	}
 	$rt .= "</div>\n";
 	$rt .= "        </TD>\n";
 	$rt .= "        <TD class=\"themecontent\">\n";

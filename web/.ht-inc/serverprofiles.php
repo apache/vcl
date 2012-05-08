@@ -456,6 +456,8 @@ function manageGroupingHTML() {
 	global $mode;
 	$resources = getUserResources(array("serverProfileAdmin"),
 	                              array("manageGroup"));
+	$resourcegroups = getUserResources(array("serverProfileAdmin"),
+	                                   array("manageGroup"), 1);
 	$h = '';
 	if($mode == 'submitServerProfileGroups')
 		$gridSelected = "selected=\"true\"";
@@ -464,13 +466,13 @@ function manageGroupingHTML() {
 	
 	$h .= "<H2>Server Profile Grouping</H2>\n";
 	$h .= "<span id=\"noprofilegroupsspan\"";
-	if(count($resources["serverprofile"]))
+	if(count($resources["serverprofile"]) && count($resourcegroups['serverprofile']))
 		$h .= " class=\"hidden\"";
 	$h .= ">\n";
 	$h .= "You don't have access to modify any server profile groups.<br>\n";
 	$h .= "</span>\n";
 	$h .= "<span id=\"groupprofilesspan\"";
-	if(! count($resources["serverprofile"]))
+	if(! count($resources["serverprofile"]) || ! count($resourcegroups['serverprofile']))
 		$h .= " class=\"hidden\"";
 	$h .= ">\n";
 	$h .= "<div id=\"groupTabContainer\" dojoType=\"dijit.layout.TabContainer\"\n";
@@ -1410,11 +1412,9 @@ function jsonProfileGroupingGroups() {
 function jsonProfileGroupingProfiles() {
 	$groupid = processInputVar('groupid', ARG_NUMERIC);
 	$groups = getUserResources(array("serverProfileAdmin"), array("manageGroup"), 1);
-	if(! array_key_exists($groupid, $groups['serverprofile'])) {
-		$arr = array('inprofiles' => array(), 'outprofiles' => array(), 'all' => array());
-		sendJSON($arr);
-		return;
-	}
+	$emptyinout = 0;
+	if(! array_key_exists($groupid, $groups['serverprofile']))
+		$emptyinout = 1;
 
 	$resources = getUserResources(array('serverProfileAdmin'), array('manageGroup'));
 	uasort($resources['serverprofile'], 'sortKeepIndex');
@@ -1423,7 +1423,9 @@ function jsonProfileGroupingProfiles() {
 	$in = array();
 	$out = array();
 	foreach($resources['serverprofile'] as $id => $profile) {
-		if(array_key_exists($id, $memberships['serverprofile']) &&
+		if($emptyinout)
+			$all[] = array('inout' => 0, 'id' => $id, 'name' => $profile);
+		elseif(array_key_exists($id, $memberships['serverprofile']) &&
 			in_array($groupid, $memberships['serverprofile'][$id])) {
 			$all[] = array('inout' => 1, 'id' => $id, 'name' => $profile);
 			$in[] = array('name' => $profile, 'id' => $id);

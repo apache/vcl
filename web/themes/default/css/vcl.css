@@ -141,6 +141,12 @@ form {
 	padding: 0 1px 0 0;
 }
 
+.themelayouttable td.thememenunoauth {
+	background: url(../images/menu_bg.jpg) repeat-y;
+	border-spacing: 0;
+	padding: 0 0 0 160px;
+}
+
 .themelayouttable td.themecontent {
 	width: 100%;
 	text-align: left;
