@@ -365,6 +365,7 @@ sub install_perl_modules {
 	my @perl_modules = (
 		'CPAN',
 		'DBI',
+		'Scalar::Util',
 		'Digest::SHA1',
 		'LWP::Protocol::https',
 		'Mail::Mailer',
