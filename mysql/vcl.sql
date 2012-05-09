@@ -1621,7 +1621,7 @@ INSERT IGNORE provisioningOSinstalltype (provisioningid, OSinstalltypeid) SELECT
 -- 
 
 INSERT INTO `resource` (`id`, `resourcetypeid`, `subid`) VALUES 
-(4, 13, 4),
+(4, 13, 1),
 (8, 15, 1);
 
 -- 
