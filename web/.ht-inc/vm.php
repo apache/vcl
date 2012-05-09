@@ -89,12 +89,6 @@ function editVMInfo() {
 		print "      <div dojoType=\"dijit.TitlePane\" id=vmprofile></div>\n";
 		print "    </td>\n";
 		print "  </tr>\n";
-		/*if(! empty($data['vmkernalnic'])) {
-			print "  <tr>\n";
-			print "    <th align=right>VM Kernal NIC:</th>\n";
-			print "    <td>{$data['vmkernalnic']}</td>\n";
-			print "  </tr>\n";
-		}*/
 		print "</table><br><br>\n";
 
 		print "<div id=movevms class=hidden>\n";
@@ -486,7 +480,6 @@ function vmhostdata() {
 /// \b hostname - hostname of computer\n
 /// \b vmlimit - maximum number of vm's host can handle\n
 /// \b vmprofileid - id of vm profile\n
-/// \b vmkernalnic - name of kernel nic\n
 /// \b vmprofiledata - array of data about the vm's profile as returned from
 /// getVMProfiles
 ///
@@ -500,8 +493,7 @@ function getVMHostData($id='') {
 	       .        "c.hostname AS name, "
 	       .        "c.hostname, "
 	       .        "vh.vmlimit, "
-	       .        "vh.vmprofileid, "
-	       .        "vh.vmkernalnic "
+	       .        "vh.vmprofileid "
 	       . "FROM vmhost vh, " 
 	       .      "computer c "
 	       . "WHERE vh.computerid = c.id";
