@@ -8369,8 +8369,29 @@ sub configure_time_synchronization {
 	my $computer_node_name   = $self->data->get_computer_node_name();
 	my $system32_path        = $self->get_system32_path() || return;
 	
-	my $time_source = "time.nist.gov time-a.nist.gov time-b.nist.gov time.windows.com";
+
+	#get Throttle source value from database if set
+	my $time_source;
+   my $variable_name = "timesource|" . $self->data->get_management_node_hostname();
+   my $variable_name_global = "timesource|global";
+   if($self->data->is_variable_set($variable_name)){
+       #fetch variable
+       $time_source = $self->data->get_variable($variable_name);
+       notify($ERRORS{'DEBUG'}, 0, "time_source is $time_source  set for $variable_name");
+    }
+    elsif($self->data->is_variable_set($variable_name_global) ) {
+       #fetch variable
+       $time_source = $self->data->get_variable($variable_name_global);
+       notify($ERRORS{'DEBUG'}, 0, "time_source is $time_source  set for $variable_name");
+    }
+	 else {
+       $time_source = "time.nist.gov time-a.nist.gov time-b.nist.gov time.windows.com";
+       notify($ERRORS{'DEBUG'}, 0, "time_source is not set for $variable_name using hardcoded values of $time_source");
+	}	
 	
+	# Replace commas with single whitespace 
+	$time_source =~ s/,/ /g;
+
 	# Assemble the time command
 	my $time_command;
 	
