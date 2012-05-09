@@ -777,6 +777,24 @@ CREATE TABLE IF NOT EXISTS `usergroupprivtype` (
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
+
+-- --------------------------------------------------------
+
+-- 
+-- Table structure for table `variable`
+-- 
+
+CREATE TABLE IF NOT EXISTS `variable` (
+  `id` smallint(5) unsigned NOT NULL auto_increment,
+  `name` varchar(128) NOT NULL,
+  `serialization` enum('none','yaml','phpserialize') NOT NULL default 'none',
+  `value` longtext NOT NULL,
+  `setby` varchar(128) default NULL,
+  `timestamp` datetime NOT NULL,
+  PRIMARY KEY  (`id`),
+  UNIQUE KEY `name` (`name`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+
 -- --------------------------------------------------------
 
 -- 
@@ -1070,6 +1088,13 @@ INSERT IGNORE userpriv (usergroupid, privnodeid, userprivtypeid) SELECT usergrou
 
 
 -- --------------------------------------------------------
+
+-- 
+-- Inserts for table `variable`
+--
+
+INSERT IGNORE INTO `variable` (`id`, `name`, `serialization`, `value`) VALUES (1, 'schema-version', 'none', '1');
+INSERT IGNORE INTO `variable` (`id`, `name`, `serialization`, `value`) VALUES (2, 'timesource|global', 'none','time.nist.gov,time-a.nist.gov,time-b.nist.gov,time.windows.com');
 
 -- 
 -- Inserts for table `vmprofile`
