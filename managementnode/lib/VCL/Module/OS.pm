@@ -1922,9 +1922,15 @@ sub execute_new {
 	$port = 22 unless $port;
 	$user = 'root' unless $user;
 	
-	my $ssh_options = '-o StrictHostKeyChecking=no';
+	my $ssh_options = '-o StrictHostKeyChecking=no -o ConnectTimeout=30';
 	if ($identity_key) {
 		$ssh_options .= " -i $identity_key";
+	}
+	else {
+		my @identity_key_paths = VCL::DataStructure::get_management_node_identity_key_paths();
+		for my $identity_key_path (@identity_key_paths) {
+			$ssh_options .= " -i $identity_key_path";
+		}
 	}
 	
 	# Override the die handler
@@ -1965,7 +1971,7 @@ sub execute_new {
 				);
 				
 				if ($ssh) {
-					notify($ERRORS{'DEBUG'}, 0, "created " . ref($ssh) . " object to control $computer_name");
+					notify($ERRORS{'DEBUG'}, 0, "created " . ref($ssh) . " object to control $computer_name, options: $ssh_options");
 				}
 				else {
 					notify($ERRORS{'WARNING'}, 0, "failed to create Net::SSH::Expect object to control $computer_name, $!");
