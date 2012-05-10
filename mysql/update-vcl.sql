@@ -408,6 +408,75 @@ END$$
 
 -- --------------------------------------------------------
 
+/*
+Procedure   : AlterVMDiskValues
+Description : Changes vmprofile.vmdisk enum values from
+              localdisk,networkdisk to dedicated,shared
+*/
+
+DROP PROCEDURE IF EXISTS `AlterVMDiskValues`$$
+CREATE PROCEDURE `AlterVMDiskValues`()
+BEGIN
+  DECLARE data TEXT;
+  SET data = (SELECT COLUMN_TYPE FROM information_schema.COLUMNS WHERE
+              TABLE_SCHEMA = Database()
+              AND TABLE_NAME = 'vmprofile'
+              AND COLUMN_NAME = 'vmdisk');
+  SET data = SUBSTRING_INDEX(data, "enum(", -1);
+  SET data = SUBSTRING_INDEX(data, ")", 1);
+  IF NOT STRCMP(data, "'localdisk','networkdisk'") THEN
+    ALTER TABLE vmprofile
+    CHANGE vmdisk
+    vmdisk ENUM('localdisk','networkdisk','dedicated','shared') NOT NULL DEFAULT 'dedicated';
+
+    UPDATE vmprofile
+    SET vmdisk = 'dedicated'
+    WHERE vmdisk = 'localdisk';
+
+    UPDATE vmprofile
+    SET vmdisk = 'shared'
+    WHERE vmdisk = 'networkdisk';
+
+    ALTER TABLE vmprofile
+    CHANGE vmdisk
+    vmdisk ENUM('dedicated','shared') NOT NULL DEFAULT 'dedicated';
+  END IF;
+END$$
+
+-- --------------------------------------------------------
+
+/*
+Procedure   : AddManageMapping
+Description : adds the manageMapping resource attribute
+              and assigns it everywhere manageGroup is
+              assigned
+*/
+
+DROP PROCEDURE IF EXISTS `AddManageMapping`$$
+CREATE PROCEDURE `AddManageMapping`()
+BEGIN
+  DECLARE data TEXT;
+  SET data = (SELECT COLUMN_TYPE FROM information_schema.COLUMNS WHERE
+              TABLE_SCHEMA = Database()
+              AND TABLE_NAME = 'resourcepriv'
+              AND COLUMN_NAME = 'type');
+  IF NOT LOCATE('manageMapping', data) THEN
+    /* add manageMapping attribute */
+    ALTER TABLE resourcepriv
+    CHANGE `type`
+    `type` ENUM('block','cascade','available','administer','manageGroup','manageMapping') NOT NULL default 'block';
+
+    /* grant manageMapping everywhere manageGroup is currently granted */
+    INSERT IGNORE INTO resourcepriv (resourcegroupid, privnodeid, type)
+    SELECT resourcegroupid, privnodeid, 'manageMapping'
+    FROM resourcepriv WHERE `type` = 'manageGroup';
+  END IF;
+END$$
+
+/* ============= End of Stored Procedures ===============*/
+
+-- --------------------------------------------------------
+
 --
 --  Table structure for table `affiliation`
 --
@@ -638,7 +707,7 @@ CREATE TABLE IF NOT EXISTS `reservationaccounts` (
 --
 -- Table structure for table `resourcepriv`
 --
-ALTER TABLE resourcepriv MODIFY COLUMN `type` ENUM('block','cascade','available','administer','manageGroup','manageMapping') NOT NULL default 'block';
+CALL AddManageMapping();
 
 -- --------------------------------------------------------
 
@@ -660,7 +729,7 @@ CREATE TABLE IF NOT EXISTS `serverprofile` (
   `monitored` tinyint(1) unsigned NOT NULL default '0',
   PRIMARY KEY  (`id`),
   KEY `ownerid` (`ownerid`),
-  KEY `name` (`name`),
+  UNIQUE KEY `name` (`name`),
   KEY `admingroupid` (`admingroupid`),
   KEY `logingroupid` (`logingroupid`),
   KEY `imageid` (`imageid`)
@@ -822,6 +891,8 @@ CALL AddColumnIfNotExists('vmprofile', 'virtualswitch3', "varchar(80) NULL defau
 
 CALL AddOrRenameColumn('vmprofile', 'vmware_mac_eth0_generated', 'eth0generated', "tinyint(1) unsigned NOT NULL default '0'");
 CALL AddOrRenameColumn('vmprofile', 'vmware_mac_eth1_generated', 'eth1generated', "tinyint(1) unsigned NOT NULL default '0'");
+
+CALL AlterVMDiskValues()
 
 CALL AddUniqueIndex('vmprofile', 'profilename');
 CALL AddIndexIfNotExists('vmprofile', 'repositoryimagetypeid');
@@ -1013,6 +1084,33 @@ INSERT IGNORE INTO resourcetype (id, name) VALUES (17, 'serverprofile');
 -- --------------------------------------------------------
 
 -- 
+-- Inserts for table `resourcegroup`
+--
+
+INSERT IGNORE INTO resourcegroup (name, ownerusergroupid, resourcetypeid) VALUES ('all profiles', 3, 17);
+
+-- --------------------------------------------------------
+
+-- 
+-- Inserts for table `resourcepriv`
+--
+
+INSERT IGNORE INTO resourcepriv (resourcegroupid, privnodeid, `type`) SELECT resourcegroup.id, privnode.id, 'available' FROM resourcegroup, privnode WHERE resourcegroup.name = 'all profiles' AND resourcegroup.resourcetypeid = 17 AND privnode.name = 'admin' AND privnode.parent = 3;
+INSERT IGNORE INTO resourcepriv (resourcegroupid, privnodeid, `type`) SELECT resourcegroup.id, privnode.id, 'administer' FROM resourcegroup, privnode WHERE resourcegroup.name = 'all profiles' AND resourcegroup.resourcetypeid = 17 AND privnode.name = 'admin' AND privnode.parent = 3;
+INSERT IGNORE INTO resourcepriv (resourcegroupid, privnodeid, `type`) SELECT resourcegroup.id, privnode.id, 'manageGroup' FROM resourcegroup, privnode WHERE resourcegroup.name = 'all profiles' AND resourcegroup.resourcetypeid = 17 AND privnode.name = 'admin' AND privnode.parent = 3;
+INSERT IGNORE INTO resourcepriv (resourcegroupid, privnodeid, `type`) SELECT resourcegroup.id, privnode.id, 'manageMapping' FROM resourcegroup, privnode WHERE resourcegroup.name = 'all profiles' AND resourcegroup.resourcetypeid = 17 AND privnode.name = 'admin' AND privnode.parent = 3;
+INSERT IGNORE INTO resourcepriv (resourcegroupid, privnodeid, `type`) SELECT resourcegroup.id, privnode.id, 'available' FROM resourcegroup, privnode WHERE resourcegroup.name = 'All VM Computers' AND resourcegroup.resourcetypeid = 12 AND privnode.name = 'admin' AND privnode.parent = 3;
+INSERT IGNORE INTO resourcepriv (resourcegroupid, privnodeid, `type`) SELECT resourcegroup.id, privnode.id, 'administer' FROM resourcegroup, privnode WHERE resourcegroup.name = 'All VM Computers' AND resourcegroup.resourcetypeid = 12 AND privnode.name = 'admin' AND privnode.parent = 3;
+INSERT IGNORE INTO resourcepriv (resourcegroupid, privnodeid, `type`) SELECT resourcegroup.id, privnode.id, 'manageGroup' FROM resourcegroup, privnode WHERE resourcegroup.name = 'All VM Computers' AND resourcegroup.resourcetypeid = 12 AND privnode.name = 'admin' AND privnode.parent = 3;
+INSERT IGNORE INTO resourcepriv (resourcegroupid, privnodeid, `type`) SELECT resourcegroup.id, privnode.id, 'manageMapping' FROM resourcegroup, privnode WHERE resourcegroup.name = 'All VM Computers' AND resourcegroup.resourcetypeid = 12 AND privnode.name = 'admin' AND privnode.parent = 3;
+INSERT IGNORE INTO resourcepriv (resourcegroupid, privnodeid, `type`) SELECT resourcegroup.id, privnode.id, 'available' FROM resourcegroup, privnode WHERE resourcegroup.name = 'allVMimages' AND resourcegroup.resourcetypeid = 13 AND privnode.name = 'admin' AND privnode.parent = 3;
+INSERT IGNORE INTO resourcepriv (resourcegroupid, privnodeid, `type`) SELECT resourcegroup.id, privnode.id, 'administer' FROM resourcegroup, privnode WHERE resourcegroup.name = 'allVMimages' AND resourcegroup.resourcetypeid = 13 AND privnode.name = 'admin' AND privnode.parent = 3;
+INSERT IGNORE INTO resourcepriv (resourcegroupid, privnodeid, `type`) SELECT resourcegroup.id, privnode.id, 'manageGroup' FROM resourcegroup, privnode WHERE resourcegroup.name = 'allVMimages' AND resourcegroup.resourcetypeid = 13 AND privnode.name = 'admin' AND privnode.parent = 3;
+INSERT IGNORE INTO resourcepriv (resourcegroupid, privnodeid, `type`) SELECT resourcegroup.id, privnode.id, 'manageMapping' FROM resourcegroup, privnode WHERE resourcegroup.name = 'allVMimages' AND resourcegroup.resourcetypeid =137 AND privnode.name = 'admin' AND privnode.parent = 3;
+
+-- --------------------------------------------------------
+
+-- 
 -- Inserts for table `state`
 --
 
@@ -1083,6 +1181,8 @@ INSERT IGNORE INTO userprivtype (id, name) VALUES (9, 'serverProfileAdmin');
 -- Inserts for table `userpriv`
 --
 
+INSERT IGNORE userpriv (userid, privnodeid, userprivtypeid) SELECT user.id, privnode.id, userprivtype.id FROM user, privnode, userprivtype WHERE user.unityid = 'admin' AND user.affiliationid = (SELECT id FROM affiliation WHERE name = 'Local') AND privnode.name = 'admin' AND privnode.parent = 3 AND userprivtype.name = 'serverCheckOut';
+INSERT IGNORE userpriv (userid, privnodeid, userprivtypeid) SELECT user.id, privnode.id, userprivtype.id FROM user, privnode, userprivtype WHERE user.unityid = 'admin' AND user.affiliationid = (SELECT id FROM affiliation WHERE name = 'Local') AND privnode.name = 'admin' AND privnode.parent = 3 AND userprivtype.name = 'serverProfileAdmin';
 INSERT IGNORE userpriv (usergroupid, privnodeid, userprivtypeid) SELECT usergroup.id, privnode.id, userprivtype.id FROM usergroup, privnode, userprivtype WHERE usergroup.name = 'adminUsers' AND usergroup.affiliationid = (SELECT id FROM affiliation WHERE name = 'Local') AND privnode.name = 'admin' AND privnode.parent = 3 AND userprivtype.name = 'serverCheckOut';
 INSERT IGNORE userpriv (usergroupid, privnodeid, userprivtypeid) SELECT usergroup.id, privnode.id, userprivtype.id FROM usergroup, privnode, userprivtype WHERE usergroup.name = 'adminUsers' AND usergroup.affiliationid = (SELECT id FROM affiliation WHERE name = 'Local') AND privnode.name = 'admin' AND privnode.parent = 3 AND userprivtype.name = 'serverProfileAdmin';
 
@@ -1232,6 +1332,8 @@ DROP PROCEDURE IF EXISTS `AddIndexIfNotExists`;
 DROP PROCEDURE IF EXISTS `AddUniqueIndex`;
 DROP PROCEDURE IF EXISTS `AddConstraintIfNotExists`;
 DROP PROCEDURE IF EXISTS `AddConnectMethodMapIfNotExists`;
+DROP PROCEDURE IF EXISTS `AlterVMDiskValues`;
 DROP PROCEDURE IF EXISTS `AddOrRenameColumn`;
 DROP PROCEDURE IF EXISTS `DropExistingConstraints`;
 DROP PROCEDURE IF EXISTS `DropExistingIndices`;
+DROP PROCEDURE IF EXISTS `AddManageMapping`;

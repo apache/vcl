@@ -914,7 +914,7 @@ CREATE TABLE IF NOT EXISTS `serverprofile` (
   `monitored` tinyint(1) unsigned NOT NULL default '0',
   PRIMARY KEY  (`id`),
   KEY `ownerid` (`ownerid`),
-  KEY `name` (`name`),
+  UNIQUE KEY `name` (`name`),
   KEY `admingroupid` (`admingroupid`),
   KEY `logingroupid` (`logingroupid`),
   KEY `imageid` (`imageid`)
@@ -1206,8 +1206,6 @@ CREATE TABLE IF NOT EXISTS `vmhost` (
   `computerid` smallint(5) unsigned NOT NULL,
   `vmlimit` tinyint(3) unsigned NOT NULL,
   `vmprofileid` smallint(5) unsigned NOT NULL,
-  `vmkernalnic` varchar(15) default NULL,
-  `vmwaredisk` enum('localdisk','networkdisk') NOT NULL default 'localdisk',
   PRIMARY KEY  (`id`),
   UNIQUE KEY `computerid` (`computerid`),
   KEY `vmprofileid` (`vmprofileid`)
@@ -1233,7 +1231,7 @@ CREATE TABLE IF NOT EXISTS `vmprofile` (
   `virtualswitch1` varchar(80) NOT NULL default 'VMnet2',
   `virtualswitch2` varchar(80) NULL default NULL,
   `virtualswitch3` varchar(80) NULL default NULL,
-  `vmdisk` enum('localdisk','networkdisk') NOT NULL default 'localdisk',
+  `vmdisk` enum('dedicated','shared') NOT NULL default 'dedicated',
   `username` varchar(80) NULL default NULL,
   `password` varchar(256) NULL default NULL,
   `eth0generated` tinyint(1) unsigned NOT NULL default '0',
@@ -1636,7 +1634,8 @@ INSERT INTO `resourcegroup` (`id`, `name`, `ownerusergroupid`, `resourcetypeid`)
 (5, 'All VM Computers', 3, 12),
 (8, 'newimages', 4, 12),
 (9, 'newvmimages', 4, 12),
-(10, 'allVMimages', 4, 13);
+(10, 'allVMimages', 4, 13),
+(11, 'all profiles', 3, 17);
 
 -- 
 -- Dumping data for table `resourcegroupmembers`
@@ -1675,7 +1674,23 @@ INSERT INTO `resourcepriv` (`id`, `resourcegroupid`, `privnodeid`, `type`) VALUE
 (11, 4, 4, 'administer'),
 (12, 4, 4, 'manageGroup'),
 (15, 8, 5, 'cascade'),
-(16, 8, 5, 'available');
+(16, 8, 5, 'available'),
+(17, 1, 4, 'manageMapping'),
+(18, 2, 4, 'manageMapping'),
+(19, 3, 4, 'manageMapping'),
+(20, 4, 4, 'manageMapping'),
+(21, 5, 4, 'available'),
+(22, 5, 4, 'administer'),
+(23, 5, 4, 'manageGroup'),
+(24, 5, 4, 'manageMapping'),
+(25, 10, 4, 'available'),
+(26, 10, 4, 'administer'),
+(27, 10, 4, 'manageGroup'),
+(28, 10, 4, 'manageMapping'),
+(29, 11, 4, 'available'),
+(30, 11, 4, 'administer'),
+(31, 11, 4, 'manageGroup'),
+(32, 11, 4, 'manageMapping');
 
 -- 
 -- Dumping data for table `resourcetype`
@@ -1827,6 +1842,8 @@ INSERT INTO `userpriv` (`id`, `userid`, `usergroupid`, `privnodeid`, `userprivty
 (7, 1, NULL, 3, 5),
 (3, 1, NULL, 3, 6),
 (8, 1, NULL, 3, 7),
+(22, 1, NULL, 3, 8),
+(23, 1, NULL, 3, 9),
 (4, 1, NULL, 3, 10),
 (9, 1, NULL, 3, 11),
 (5, 1, NULL, 3, 12),
