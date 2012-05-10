@@ -29,13 +29,10 @@ dbConnect();
 header("Cache-Control: no-cache, must-revalidate");
 header("Expires: Sat, 1 Jan 2000 00:00:00 GMT");
 
-if(! array_key_exists('eppn', $_SERVER) ||
-   (! (array_key_exists('sn', $_SERVER) &&
-   array_key_exists('givenName', $_SERVER)) &&
-   ! array_key_exists('displayName', $_SERVER))) {
-
+/*
 	# check for eppn; if there, see if it is a user we already have
 	if(array_key_exists('eppn', $_SERVER)) {
+		#$tmp = explode('@', $_SERVER['eppn']);
 		$tmp = explode(';', $_SERVER['eppn']);
 		$tmp = explode('@', $tmp[0]);
 		$query = "SELECT u.firstname, "
@@ -51,42 +48,41 @@ if(! array_key_exists('eppn', $_SERVER) ||
 			$_SERVER['givenName'] = $row['firstname'];
 		}
 		else {
-			# check to see if any shib stuff in $_SERVER, if not redirect
-			$keys = array_keys($_SERVER);
-			$allkeys = '{' . implode('{', $keys);
-			if(! preg_match('/\{Shib-/', $allkeys)) {
-				# no shib data, clear _shibsession cookie
-				foreach(array_keys($_COOKIE) as $key) {
-					if(preg_match('/^_shibsession[_0-9a-fA-F]+$/', $key))
-						setcookie($key, "", time() - 10, "/", $_SERVER['SERVER_NAME']);
-				}
-				# redirect to main select auth page
-				header("Location: " . BASEURL . SCRIPT . "?mode=selectauth");
-				dbDisconnect();
-				exit;
-			}
-			print "<h2>Error with Shibboleth authentication</h2>\n";
-			print "You have attempted to log in using Shibboleth from an<br>\n";
-			print "institution that does not allow VCL to see all of these<br>\n";
-			print "attributes:<br>\n";
-			print "<ul>\n";
-			print "<li>eduPersonPrincipalName</li>\n";
-			print "</ul>\n";
-			print "and either:\n";
-			print "<ul>\n";
-			print "<li>sn and givenName</li>\n";
-			print "</ul>\n";
-			print "or:\n";
-			print "<ul>\n";
-			print "<li>displayName</li>\n";
-			print "</ul>\n";
-			print "You need to contact the administrator of your institution's<br>\n";
-			print "IdP to have all of those attributes be available to VCL in<br>\n";
-			print "order to log in using Shibboleth.\n";
-			dbDisconnect();
-			exit;
+*/
+
+if(! array_key_exists('eppn', $_SERVER)) {
+	# check to see if any shib stuff in $_SERVER, if not redirect
+	$keys = array_keys($_SERVER);
+	$allkeys = '{' . implode('{', $keys);
+	if(! preg_match('/\{Shib-/', $allkeys)) {
+		# no shib data, clear _shibsession cookie
+		#print "$allkeys<br>\n";
+		foreach(array_keys($_COOKIE) as $key) {
+			if(preg_match('/^_shibsession[_0-9a-fA-F]+$/', $key))
+				setcookie($key, "", time() - 10, "/", $_SERVER['SERVER_NAME']);
 		}
+		# redirect to main select auth page
+		header("Location: " . BASEURL . SCRIPT . "?mode=selectauth");
+		dbDisconnect();
+		exit;
 	}
+	print "<h2>Error with Shibboleth authentication</h2>\n";
+	print "You have attempted to log in using Shibboleth from an<br>\n";
+	print "institution that does not allow VCL to see your<br><br>\n";
+	print "eduPersonPrincipalName.<br><br>\n";
+	print "You need to contact the administrator of your institution's<br>\n";
+	print "IdP to have eduPersonPrincipalName made available to VCL in<br>\n";
+	print "order to log in using Shibboleth.\n";
+
+	$msg = "Someone tried to log in to VCL using Shibboleth from an IdP "
+	     . "that does not release eppn to us.\n\n"
+	     . "The following data was in \$_SERVER:\n\n";
+	foreach($_SERVER as $key => $val)
+		$msg .= "$key => $val\n";
+	$mailParams = "-f" . ENVELOPESENDER;
+	mail(ERROREMAIL, "Error with VCL pages (eppn not provided)", $msg, '', $mailParams);
+	dbDisconnect();
+	exit;
 }
 
 // open keys
@@ -134,7 +130,7 @@ if(! ($row = mysql_fetch_assoc($qh))) {
 			$newaffilname = $affilname;
 		}
 		else {
-			$msg = "Someone tried to log in to VCL using Shibboleth from an idp "
+			$msg = "Someone tried to log in to VCL using Shibboleth from an IdP "
 			     . "affiliation that could not be automatically added.\n\n"
 			     . "eppn: {$_SERVER['eppn']}\n"
 			     . "givenName: {$_SERVER['givenName']}\n"
@@ -190,11 +186,26 @@ else {
 $affilid = getAffiliationID($affil);
 addLoginLog($userid, 'shibboleth', $affilid, 1);
 
+# uncomment the following and change EXAMPLE1 to match your needs to add all
+# users from a specific affiliation to a particular user group
+/*if($affil == 'EXAMPLE1') {
+	$gid = getUserGroupID('All EXAMPLE1 Users', $affilid);
+	$query = "INSERT IGNORE INTO usergroupmembers "
+	       . "(userid, usergroupid) "
+	       . "VALUES ($usernid, $gid)";
+	doQuery($query, 307);
+}*/
+
+if(array_key_exists('Shib-logouturl', $_SERVER))
+	$logouturl = $_SERVER['Shib-logouturl'];
+else
+	$logouturl = '';
+
 # save data to shibauth table
 $shibdata = array('Shib-Application-ID' => $_SERVER['Shib-Application-ID'],
                   'Shib-Identity-Provider' => $_SERVER['Shib-Identity-Provider'],
-                  'Shib-AuthnContext-Dec' => $_SERVER['Shib-AuthnContext-Decl'],
-                  'Shib-logouturl' => $_SERVER['Shib-logouturl'],
+                  #'Shib-AuthnContext-Dec' => $_SERVER['Shib-AuthnContext-Decl'],
+                  'Shib-logouturl' => $logouturl,
                   'eppn' => $_SERVER['eppn'],
                   'unscoped-affiliation' => $_SERVER['unscoped-affiliation'],
                   'affiliation' => $_SERVER['affiliation'],

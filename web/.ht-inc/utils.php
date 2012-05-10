@@ -239,10 +239,20 @@ function initGlobals() {
 	$qh = doQuery($query);
 	while($row = mysql_fetch_assoc($qh)) {
 		$id = $row['id'];
-		if(! array_key_exists($id, $affilValFunc))
-			$affilValFunc[$id] = create_function('', 'return 0;');
-		if(! array_key_exists($id, $addUserFunc))
-			$addUserFunc[$id] = create_function('', 'return 0;');
+		if(! array_key_exists($id, $affilValFunc)) {
+			if(ALLOWADDSHIBUSERS)
+				$affilValFunc[$id] = create_function('', 'return 1;');
+			else
+				$affilValFunc[$id] = create_function('', 'return 0;');
+		}
+		if(! array_key_exists($id, $addUserFunc)) {
+			if(ALLOWADDSHIBUSERS) {
+				$addUserFunc[$id] = 'addShibUserStub';
+				$addUserFuncArgs[$id] = $id;
+			}
+			else
+				$addUserFunc[$id] = create_function('', 'return 0;');
+		}
 		if(! array_key_exists($id, $updateUserFunc))
 			$updateUserFunc[$id] = create_function('', 'return NULL;');
 	}
@@ -315,7 +325,7 @@ function initGlobals() {
 function checkAccess() {
 	global $mode, $user, $actionFunction, $authMechs;
 	global $itecsauthkey, $ENABLE_ITECSAUTH, $actions, $noHTMLwrappers;
-	global $inContinuation, $docreaders, $userlookupUsers;
+	global $inContinuation, $docreaders;
 	if($mode == 'xmlrpccall') {
 		// double check for SSL
 		if(! isset($_SERVER['HTTPS']) || $_SERVER['HTTPS'] != "on") {
@@ -3042,7 +3052,7 @@ function getAffiliationDataUpdateText($affilid=0) {
 function getAffiliationTheme($affilid) {
 	$query = "SELECT theme FROM affiliation WHERE id = $affilid";
 	$qh = doQuery($query);
-	if($row = mysql_fetch_assoc($qh) && ! empty($row['theme']))
+	if(($row = mysql_fetch_assoc($qh)) && ! empty($row['theme']))
 		return $row['theme'];
 	else
 		return 'default';
@@ -10327,7 +10337,7 @@ function printHTMLHeader() {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function getNavMenu($inclogout, $inchome, $homeurl=HOMEURL) {
-	global $user, $docreaders, $authed, $userlookupUsers;
+	global $user, $docreaders, $authed;
 	global $mode;
 	if($authed && $mode != 'expiredemouser') {
 		$computermetadata = getUserComputerMetaData();

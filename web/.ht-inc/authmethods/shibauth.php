@@ -44,6 +44,7 @@ function updateShibUser($userid) {
 	if($rc == -1)
 		return NULL;
 
+	$displast = '';
 	if(array_key_exists('displayName', $_SERVER) &&
 	   ! empty($_SERVER['displayName'])) {
 		# split displayName into first and last names
@@ -60,9 +61,14 @@ function updateShibUser($userid) {
 			$user['firstname'] = array_shift($names);
 		}
 	}
-	else
+	elseif(array_key_exists('givenName', $_SERVER) &&
+	   ! empty($_SERVER['givenName']))
 		$user['firstname'] = $_SERVER['givenName'];
-	if(array_key_exists('sn', $_SERVER))
+	else
+		$user['firstname'] = '';
+
+	if(array_key_exists('sn', $_SERVER) &&
+	   ! empty($_SERVER['sn']))
 		$user["lastname"] = $_SERVER['sn'];
 	else
 		$user['lastname'] = $displast;

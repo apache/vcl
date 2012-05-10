@@ -1395,6 +1395,61 @@ function userLookup() {
 		print "  </tr>\n";
 		print "</table>\n";
 
+		# login history
+		$query = "SELECT authmech, "
+		       .        "timestamp, "
+		       .        "passfail, "
+		       .        "remoteIP, "
+		       .        "code "
+		       . "FROM loginlog "
+		       . "WHERE user = '{$userdata['unityid']}' AND "
+		       .       "affiliationid = {$userdata['affiliationid']} "
+		       . "ORDER BY timestamp DESC "
+		       . "LIMIT 8";
+		$logins = array();
+		$qh = doQuery($query);
+		while($row = mysql_fetch_assoc($qh))
+			$logins[] = $row;
+		if(count($logins)) {
+			$logins = array_reverse($logins);
+			print "<h3>Login History (last 8 attempts)</h3>\n";
+			print "<table summary=\"login attempts\">\n";
+			print "<colgroup>\n";
+			print "<col class=\"logincol\" />\n";
+			print "<col class=\"logincol\" />\n";
+			print "<col class=\"logincol\" />\n";
+			print "<col class=\"logincol\" />\n";
+			print "<col />\n";
+			print "</colgroup>\n";
+			print "  <tr>\n";
+			print "    <th>Authentication Method</th>\n";
+			print "    <th>Timestamp</th>\n";
+			print "    <th>Result</th>\n";
+			print "    <th>Remote IP</th>\n";
+			print "    <th>Extra Info</th>\n";
+			print "  </tr>\n";
+			foreach($logins as $login) {
+				print "  <tr>\n";
+				print "    <td class=\"logincell\">{$login['authmech']}</td>\n";
+				$ts = prettyDatetime($login['timestamp'], 1);
+				print "    <td class=\"logincell\">$ts</td>\n";
+				if($login['passfail'])
+					print "    <td class=\"logincell\"><font color=\"#008000\">Pass</font></td>\n";
+				else
+					print "    <td class=\"logincell\"><font color=\"red\">Fail</font></td>\n";
+				print "    <td class=\"logincell\">{$login['remoteIP']}</td>\n";
+				print "    <td class=\"logincell\">{$login['code']}</td>\n";
+				print "  </tr>\n";
+			}
+			print "</table>\n";
+		}
+		else {
+			print "<h3>Login History</h3>\n";
+			print "There are no login attempts by this user.<br>\n";
+		}
+
+
+		# reservation history
 		$requests = array();
 		$query = "SELECT DATE_FORMAT(l.start, '%W, %b %D, %Y, %h:%i %p') AS start, "
 		       .        "DATE_FORMAT(l.finalend, '%W, %b %D, %Y, %h:%i %p') AS end, "

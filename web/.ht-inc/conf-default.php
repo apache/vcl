@@ -88,10 +88,15 @@ define("FILTERINGSELECTTHRESHOLD", 1000); // if USEFILTERINGSELECT = 1, only use
 define("DEFAULTTHEME", 'default'); // this is the theme that will be used when the site is placed in maintenance if $_COOKIE['VCLSKIN'] is not set
 define("HELPFAQURL", "http://vcl.example.org/help-faq/");
 
-$ENABLE_ITECSAUTH = 0;     // use ITECS accounts (also called "Non-NCSU" accounts)
+define("ALLOWADDSHIBUSERS", 0); // this is only related to using Shibboleth authentication for an affiliation that does not
+                                // also have LDAP set up (i.e. affiliation.shibonly = 1)
+                                // set this to 1 to allow users be manually added to VCL before they have ever logged in
+                                // through things such as adding a user to a user group or directly granting a user a
+                                // privilege somewhere in the privilege tree. Note that if you enable this and typo
+                                // a userid, there is no way to verify that it was entered incorrectly so the user
+                                // will be added to the database with the typoed userid
 
-$userlookupUsers = array(1, # admin
-);
+$ENABLE_ITECSAUTH = 0;     // use ITECS accounts (also called "Non-NCSU" accounts)
 
 $xmlrpcBlockAPIUsers = array(3, # 3 = vclsystem
 );
@@ -104,7 +109,7 @@ $authMechs = array(
 	                            "help" => "Only use Local Account if there are no other options"),
 	/*"Shibboleth (UNC Federation)" => array("type" => "redirect",
 	                     "URL" => "https://federation.northcarolina.edu/wayf/wayf_framed.php?fed=FED_SHIB_UNC_DEV&version=dropdown&entityID=https%3A%2F%2Fvcl.ncsu.edu%2Fsp%2Fshibboleth&return=http%3A%2F%2Fvcl.ncsu.edu%2FShibboleth.sso%2FDS%3FSAMLDS%3D1%26target%3Dhttp%3A%2F%2Fvcl.ncsu.edu%2Fscheduling%2Fshibauth%2F",
-	                     "affiliationid" => 0,
+	                     "affiliationid" => 0, // this should always be 0 for Shibboleth authentication
 	                     "help" => "Use Shibboleth (UNC Federation) if you are from a University in the UNC system and do not see another method specifically for your university"),*/
 	/*"EXAMPLE1 LDAP" => array("type" => "ldap",
 	                           "server" => "ldap.example.com",   # hostname of the ldap server
@@ -153,16 +158,6 @@ foreach($authMechs as $key => $item) {
 		$updateUserFunc[$item['affiliationid']] = create_function('', 'return NULL;');
 	}
 }
-# if adding a Shibboleth option, uncomment the following 4 lines and change '4' to match the affiliation id, create additional entries for further shibboleth affiliations
-#$affilValFunc[4] = create_function('', 'return 1;');
-#$addUserFunc[4] = 'addShibUserStub';
-#$addUserFuncArgs[4] = 4;
-#$updateUserFunc[4] = create_function('', 'return NULL;');
-
-# any affiliation that is shibboleth authenticated without a corresponding
-# LDAP server needs an entry in addUserFunc
-# $addUserFunc[affiliationid goes here] = create_function('', 'return 0;');
-
 
 $findAffilFuncs = array("testGeneralAffiliation");
 
