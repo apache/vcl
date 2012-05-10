@@ -1697,7 +1697,7 @@ sub copy_file_to {
 	local $SIG{__DIE__} = sub{};
 	
 	# Attempt to copy the file -- make a few attempts since this can sometimes fail
-    return code_loop_timeout(
+    return $self->code_loop_timeout(
         sub{
             my $response;
             eval { $response = VIExt::http_put_file("folder" , $source_file_path, $destination_relative_datastore_path, $destination_datastore_name, $datacenter_name); };
@@ -1777,7 +1777,7 @@ sub copy_file_from {
 	local $SIG{__DIE__} = sub{};
 	
     # Attempt to copy the file -- make a few attempts since this can sometimes fail
-    return code_loop_timeout(
+    return $self->code_loop_timeout(
         sub{
             my $response;
             eval { $response = VIExt::http_get_file("folder", $source_file_relative_datastore_path, $source_datastore_name, $datacenter_name, $destination_file_path); };
