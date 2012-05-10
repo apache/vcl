@@ -261,13 +261,13 @@ sub pre_capture {
 
 =item *
 
- Delete the users assigned to this reservation
+ Delete the user assigned to this reservation
 
 =cut
 
-	my $deleted_users = $self->delete_users();
-	if (!$deleted_users) {
-		notify($ERRORS{'WARNING'}, 0, "unable to delete users, will try again after reboot");
+	my $deleted_user = $self->delete_user();
+	if (!$deleted_user) {
+		notify($ERRORS{'WARNING'}, 0, "unable to delete user, will try again after reboot");
 	}
 
 =item *
@@ -516,12 +516,12 @@ sub pre_capture {
 
 =item *
 
- Delete the users assigned to this reservation if attempt before reboot failed
+ Delete the user assigned to this reservation if attempt before reboot failed
 
 =cut
 
-	if (!$deleted_users && !$self->delete_users()) {
-		notify($ERRORS{'WARNING'}, 0, "unable to delete users after reboot");
+	if (!$deleted_user && !$self->delete_user()) {
+		notify($ERRORS{'WARNING'}, 0, "unable to delete user after reboot");
 		return 0;
 	}
 
@@ -724,6 +724,16 @@ sub post_load {
 	
 =item *
 
+ Update the public IP address
+
+=cut
+
+	if (!$self->update_public_ip_address()) {
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve or set the public IP address");
+	}
+	
+=item *
+
  Configure and synchronize time
 
 =cut
@@ -878,10 +888,9 @@ sub reserve {
 		}
 	}
 	else {
-		# Add the users to the computer
-		# The add_users() subroutine will add the primary reservation user and any imagemeta group users
-		if (!$self->add_users()) {
-			notify($ERRORS{'WARNING'}, 0, "unable to add users");
+		# Add the user to the computer
+		if (!$self->create_user()) {
+			notify($ERRORS{'WARNING'}, 0, "unable to add user to computer");
 			return 0;
 		}
 	}
@@ -958,13 +967,12 @@ sub sanitize {
 		return 0;
 	}
 
-	# Delete all users associated with the reservation
-	# This includes the primary reservation user and users listed in imagemeta group if it's configured
-	if ($self->delete_users()) {
-		notify($ERRORS{'OK'}, 0, "users have been deleted from $computer_node_name");
+	# Delete the request user
+	if ($self->delete_user()) {
+		notify($ERRORS{'OK'}, 0, "user deleted from $computer_node_name");
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to delete users from $computer_node_name");
+		notify($ERRORS{'WARNING'}, 0, "failed to delete user from $computer_node_name");
 		return 0;
 	}
 
@@ -993,16 +1001,12 @@ sub grant_access {
 	my $computer_node_name   = $self->data->get_computer_node_name();
 	my $system32_path        = $self->get_system32_path();
 	my $remote_ip            = $self->data->get_reservation_remote_ip();
-	my $multiple_users       = $self->data->get_imagemeta_usergroupmembercount();
 	my $request_forimaging   = $self->data->get_request_forimaging();
 
 	# Check to make sure remote IP is defined
 	my $remote_ip_range;
 	if (!$remote_ip) {
 		notify($ERRORS{'WARNING'}, 0, "reservation remote IP address is not set in the data structure, opening RDP to any address");
-	}
-	elsif ($multiple_users) {
-		notify($ERRORS{'OK'}, 0, "reservation has multiple users, opening RDP to any address");
 	}
 	elsif ($remote_ip !~ /^(\d{1,3}\.?){4}$/) {
 		notify($ERRORS{'WARNING'}, 0, "reservation remote IP address format is invalid: $remote_ip, opening RDP to any address");
@@ -1577,127 +1581,6 @@ sub logoff_users {
 	}
 	return 1;
 }
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 add_users
-
- Parameters  : 
- Returns     : 
- Description : 
-
-=cut
-
-sub add_users {
-	my $self = shift;
-	if (ref($self) !~ /windows/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-	
-	my $computer_node_name   = $self->data->get_computer_node_name();
-	
-	# Attempt to get the user array from the arguments
-	# If no argument was supplied, use the users specified in the DataStructure
-	my $user_array_ref = shift;
-	my @users;
-	if ($user_array_ref) {
-		$user_array_ref = $self->data->get_imagemeta_usergroupmembers();
-		@users          = @{$user_array_ref};
-	}
-	else {
-		# User list was not specified as an argument
-		# Use the imagemeta group members and the primary reservation user
-		my $user_login_id      = $self->data->get_user_login_id();
-		my $user_group_members = $self->data->get_imagemeta_usergroupmembers();
-
-		push @users, $user_login_id;
-
-		foreach my $user_group_member_uid (keys(%{$user_group_members})) {
-			my $user_group_member_login_id = $user_group_members->{$user_group_member_uid};
-			push @users, $user_group_member_login_id;
-		}
-
-		# Remove duplicate users
-		@users = keys %{{map {$_, 1} @users}};
-	}
-
-	notify($ERRORS{'DEBUG'}, 0, "attempting to add " . scalar @users . " users to $computer_node_name: " . join(", ", @users));
-
-	# Attempt to get the password from the arguments
-	# If no argument was supplied, use the password specified in the DataStructure
-	my $password = shift;
-	if (!$password) {
-		$password = $self->data->get_reservation_password();
-	}
-
-	# Loop through the users in the imagemeta group and attempt to add them
-	for my $username (@users) {
-		if (!$self->create_user($username, $password)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to add users to $computer_node_name");
-			return 0;
-		}
-	}
-
-	notify($ERRORS{'OK'}, 0, "added " . scalar @users . " users to $computer_node_name");
-	return 1;
-} ## end sub add_users
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 delete_users
-
- Parameters  : 
- Returns     : 
- Description : 
-
-=cut
-
-sub delete_users {
-	my $self = shift;
-	if (ref($self) !~ /windows/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-	
-	my $computer_node_name   = $self->data->get_computer_node_name();
-
-	# Attempt to get the user array from the arguments
-	# If no argument was supplied, use the users specified in the DataStructure
-	my $user_array_ref = shift;
-	my @users;
-	if ($user_array_ref) {
-		$user_array_ref = $self->data->get_imagemeta_usergroupmembers();
-		@users          = @{$user_array_ref};
-	}
-	else {
-		# User list was not specified as an argument
-		# Use the imagemeta group members and the primary reservation user
-		my $user_login_id      = $self->data->get_user_login_id();
-		my $user_group_members = $self->data->get_imagemeta_usergroupmembers();
-
-		push @users, $user_login_id;
-
-		foreach my $user_group_member_uid (keys(%{$user_group_members})) {
-			my $user_group_member_login_id = $user_group_members->{$user_group_member_uid};
-			push @users, $user_group_member_login_id;
-		}
-
-		# Remove duplicate users
-		@users = keys %{{map {$_, 1} @users}};
-	} ## end else [ if ($user_array_ref)
-
-	# Loop through the users and attempt to delete them
-	for my $username (@users) {
-		if (!$self->delete_user($username)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to delete user $username from $computer_node_name");
-			return 0;
-		}
-	}
-
-	notify($ERRORS{'OK'}, 0, "deleted " . scalar @users . " users from $computer_node_name");
-	return 1;
-} ## end sub delete_users
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -3587,6 +3470,9 @@ sub reboot {
 			# Kill the screen saver process, it occasionally prevents reboots and shutdowns from working
 			$self->kill_process('logon.scr');
 		}
+		
+		# Delete cached network configuration information so it is retrieved next time it is needed
+		delete $self->{network_configuration};
 		
 		# Check if tsshutdn.exe exists on the computer
 		# tsshutdn.exe is the preferred utility, shutdown.exe often fails on Windows Server 2003
@@ -7229,7 +7115,7 @@ sub get_installed_applications {
 		notify($ERRORS{'DEBUG'}, 0, "attempting to retrieve all applications installed on $computer_node_name");
 	}
 	
-	my $uninstall_key = 'HKLM\Software\Microsoft\Windows\CurrentVersion\Uninstall';
+	my $uninstall_key = 'HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\Uninstall';
 	my $registry_data = $self->reg_query($uninstall_key);
 	#notify($ERRORS{'DEBUG'}, 0, "retrieved installed application registry data: " . format_data($registry_data));
 	
@@ -7239,12 +7125,14 @@ sub get_installed_applications {
 	REGISTRY_KEY: for my $registry_key (keys %$registry_data) {
 		my ($product_key) = $registry_key =~ /Uninstall\\([^\\]+)$/;
 		
-		if (!$product_key) {
+		if ($registry_key eq $uninstall_key) {
+			next REGISTRY_KEY;
+		}
+		elsif (!$product_key) {
 			notify($ERRORS{'WARNING'}, 0, "unable to parse product key from registry key: $registry_key");
 			next REGISTRY_KEY;
 		}
-		notify($ERRORS{'DEBUG'}, 0, "product key: $product_key");
-		$installed_products->{$product_key} = $registry_data->{$registry_key};
+		#notify($ERRORS{'DEBUG'}, 0, "product key: $product_key");
 		
 		if ($regex_filter) {
 			if ($product_key =~ /$regex_filter/i) {
@@ -7252,6 +7140,7 @@ sub get_installed_applications {
 				$installed_products->{$product_key} = $registry_data->{$registry_key};
 				next REGISTRY_KEY;
 			}
+			
 			foreach my $info_key (keys %{$registry_data->{$product_key}}) {
 				my $info_value = $registry_data->{$registry_key}{$info_key} || '';
 				if ($info_value =~ /$regex_filter/i) {
