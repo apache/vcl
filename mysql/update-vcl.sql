@@ -892,7 +892,7 @@ CALL AddColumnIfNotExists('vmprofile', 'virtualswitch3', "varchar(80) NULL defau
 CALL AddOrRenameColumn('vmprofile', 'vmware_mac_eth0_generated', 'eth0generated', "tinyint(1) unsigned NOT NULL default '0'");
 CALL AddOrRenameColumn('vmprofile', 'vmware_mac_eth1_generated', 'eth1generated', "tinyint(1) unsigned NOT NULL default '0'");
 
-CALL AlterVMDiskValues()
+CALL AlterVMDiskValues();
 
 CALL AddUniqueIndex('vmprofile', 'profilename');
 CALL AddIndexIfNotExists('vmprofile', 'repositoryimagetypeid');
