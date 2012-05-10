@@ -344,30 +344,27 @@ if($includesecrets && include('.ht-inc/secrets.php')) {
 }
 
 # test mcrypt
-title("Testing mcrypt");
+title("Testing phpseclib");
+require_once(".ht-inc/phpseclib/Crypt/AES.php");
 print "<ul>\n";
-if(in_array('mcrypt', $exts)) {
-	if($includesecrets && ! empty($mcryptkey) && ! empty($mcryptiv) && strlen($mcryptiv) == 8) {
-		$teststring = 'testing';
-		if($cryptdata = mcrypt_encrypt(MCRYPT_BLOWFISH, $mcryptkey, $teststring, MCRYPT_MODE_CBC, $mcryptiv)) {
-			pass("Successfully encrypted test string");
-			$decrypted = mcrypt_decrypt(MCRYPT_BLOWFISH, $mcryptkey, $cryptdata, MCRYPT_MODE_CBC, $mcryptiv);
-			if(trim($decrypted) == $teststring)
-				pass("Successfully decrypted test string");
-			else
-				fail("Failed to decrypt test string");
-		}
-		else {
-			fail("Failed to encrypt data with mcrypt");
-		}
+if($includesecrets && ! empty($cryptkey)) {
+	$teststring = 'testing';
+	$aes = new Crypt_AES();
+	$aes->setKey($cryptkey);
+	if($cryptdata = $aes->encrypt($teststring)) {
+		pass("Successfully encrypted test string");
+		$decrypted = $aes->decrypt($cryptdata);
+		if(trim($decrypted) == $teststring)
+			pass("Successfully decrypted test string");
+		else
+			fail("Failed to decrypt test string");
 	}
-	elseif($includesecrets && strlen($mcryptiv) != 8)
-		fail("Cannot test encryption when \$mcryptiv is not exactly 8 characters");
-	else
-		fail("Cannot test encryption without \$mcryptkey and \$mcryptiv from .ht-inc/secrets.php");
+	else {
+		fail("Failed to encrypt data with phpseclib");
+	}
 }
 else
-	fail("mcrypt extension missing");
+	fail("Cannot test encryption without \$cryptkey from .ht-inc/secrets.php");
 print "</ul>\n";
 
 # encryption keys
