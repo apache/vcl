@@ -268,9 +268,9 @@ if($includeconf && include('.ht-inc/conf.php')) {
 # required extentions
 title("Testing for required php extensions");
 if(version_compare(phpversion(), "5.2", "<"))
-	$requiredexts = array('gd', 'mcrypt', 'mysql', 'openssl', 'sysvsem', 'xml', 'xmlrpc', 'session', 'pcre', 'sockets', 'ldap');
+	$requiredexts = array('gd', 'mysql', 'openssl', 'sysvsem', 'xml', 'xmlrpc', 'session', 'pcre', 'sockets', 'ldap');
 else
-	$requiredexts = array('gd', 'mcrypt', 'mysql', 'openssl', 'sysvsem', 'xml', 'xmlrpc', 'session', 'pcre', 'sockets', 'json', 'ldap');
+	$requiredexts = array('gd', 'mysql', 'openssl', 'sysvsem', 'xml', 'xmlrpc', 'session', 'pcre', 'sockets', 'json', 'ldap');
 $exts = get_loaded_extensions();
 $diff = array_diff($requiredexts, $exts);
 print "<ul>\n";
@@ -311,16 +311,8 @@ if($includesecrets && include('.ht-inc/secrets.php')) {
 		$trymysqlconnect = 0;
 		$allok = 0;
 	}
-	if(empty($mcryptkey)) {
-		fail("\$mcryptkey in .ht-inc/secrets.php is not set");
-		$allok = 0;
-	}
-	if(empty($mcryptiv)) {
-		fail("\$mcryptiv in .ht-inc/secrets.php is not set");
-		$allok = 0;
-	}
-	elseif(strlen($mcryptiv) != 8) {
-		fail("\$mcryptiv in .ht-inc/secrets.php needs to be 8 characters");
+	if(empty($cryptkey)) {
+		fail("\$cryptkey in .ht-inc/secrets.php is not set");
 		$allok = 0;
 	}
 	if(empty($pemkey)) {
