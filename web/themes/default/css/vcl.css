@@ -75,6 +75,7 @@ form {
 }
 
 .themelayouttable {
+    width: 100%;
 	border-collapse: collapse;
 }
 
