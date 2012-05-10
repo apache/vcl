@@ -1601,7 +1601,8 @@ INSERT INTO `provisioning` (`id`, `name`, `prettyname`, `moduleid`) VALUES
 (6, 'xcat_2x', 'xCAT 2.x', 20),
 (7, 'vmware', 'VMware', 21),
 (8, 'vbox', 'Virtual Box', 24),
-(9, 'libvirt', 'Libvirt Virtualization API', 27);
+(9, 'libvirt', 'Libvirt Virtualization API', 27),
+(10, 'none', 'None', 23);
 
 --
 -- Dumping data for table `provisioningOSinstalltype`
