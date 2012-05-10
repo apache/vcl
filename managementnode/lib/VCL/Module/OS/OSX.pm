@@ -172,10 +172,10 @@ sub pre_capture {
 #		}
 #	}
 
-	# Delete the users assigned to this reservation
-        my $deleted_users = $self->delete_users();
-        if (!$deleted_users) {
-                notify($ERRORS{'WARNING'}, 0, "pre_capture was unable to delete users");
+	# Delete the user assigned to this reservation
+        my $deleted_user = $self->delete_user();
+        if (!$deleted_user) {
+                notify($ERRORS{'WARNING'}, 0, "pre_capture was unable to delete user");
         }
 
 
@@ -460,18 +460,6 @@ sub sanitize {
 		notify($ERRORS{'WARNING'}, 0, "failed to delete users from $computer_node_name");
 		return 0;
 	}
-
-# XXX
-#        # Delete all users associated with the reservation
-#        # This includes the primary reservation user and users listed in imagemeta group if it's configured
-#        if ($self->delete_users()) {
-#                notify($ERRORS{'OK'}, 0, "users have been deleted from $computer_node_name");
-#        }
-#        else {
-#                notify($ERRORS{'WARNING'}, 0, "failed to delete users from $computer_node_name");
-#                return 0;
-#        }
-# XXX
 
 	notify($ERRORS{'OK'}, 0, "$computer_node_name has been sanitized");
 	return 1;
@@ -769,7 +757,6 @@ sub grant_access {
 #	my $identity           = $self->data->get_image_identity;
 #	my $management_node_keys = $self->data->get_management_node_keys();
 #	my $system32_path        = $self->get_system32_path();
-#	my $multiple_users       = $self->data->get_imagemeta_usergroupmembercount();
 	my $request_forimaging   = $self->data->get_request_forimaging();
 
 
@@ -969,68 +956,6 @@ sub delete_capture_configuration_files {
 	return 1;
 }
 
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 delete_users
-
- Parameters  :
- Returns     :
- Description :
-
-# pre_capture
-# sanitize
-
-=cut
-
-sub delete_users {
-        my $self = shift;
-        if (ref($self) !~ /osx/i) {
-                notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-                return;
-        }
-
-        my $computer_node_name   = $self->data->get_computer_node_name();
-
-        # Attempt to get the user array from the arguments
-        # If no argument was supplied, use the users specified in the DataStructure
-        my $user_array_ref = shift;
-        my @users;
-        if ($user_array_ref) {
-                $user_array_ref = $self->data->get_imagemeta_usergroupmembers();
-                @users          = @{$user_array_ref};
-        }
-        else {
-                # User list was not specified as an argument
-                # Use the imagemeta group members and the primary reservation user
-                my $user_login_id      = $self->data->get_user_login_id();
-                my $user_group_members = $self->data->get_imagemeta_usergroupmembers();
-
-                push @users, $user_login_id;
-
-                foreach my $user_group_member_uid (keys(%{$user_group_members})) {
-                        my $user_group_member_login_id = $user_group_members->{$user_group_member_uid};
-                        push @users, $user_group_member_login_id;
-                }
-
-                # Remove duplicate users
-                @users = keys %{{map {$_, 1} @users}};
-        } ## end else [ if ($user_array_ref)
-
-        # Loop through the users and attempt to delete them
-        for my $username (@users) {
-		if (!$self->delete_user($username)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to delete user $username from $computer_node_name");
-			return 0;
-		}
-        }
-
-        notify($ERRORS{'OK'}, 0, "deleted " . scalar @users . " users from $computer_node_name");
-        return 1;
-} ## end sub delete_users
-
-
-
 #/////////////////////////////////////////////////////////////////////////////
 
 =head2 delete_user
@@ -1038,8 +963,6 @@ sub delete_users {
  Parameters  :
  Returns     :
  Description :
-
-# delete_users
 
 =cut
 
@@ -2131,4 +2054,3 @@ sub activate_irapp {
 
 1;
 __END__
-
