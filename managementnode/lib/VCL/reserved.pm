@@ -110,7 +110,6 @@ sub process {
 	my $user_standalone       = $self->data->get_user_standalone();
 	my $imagemeta_checkuser   = $self->data->get_imagemeta_checkuser();
 	my $reservation_count     = $self->data->get_reservation_count();
-	my $imagemeta_usergroupid = $self->data->get_imagemeta_usergroupid();
 	my $server_request_id	  = $self->data->get_server_request_id();
 	my $server_request_admingroupid = $self->data->get_server_request_admingroupid();
 	my $server_request_logingroupid = $self->data->get_server_request_logingroupid();
@@ -122,16 +121,6 @@ sub process {
 	else {
 		notify($ERRORS{'WARNING'}, 0, "unable to update log table while attempting to set id:$request_logid loaded time to now");
 	}
-
-	# Figure out if image has usergroupid set in meta data and how many members it has
-	my @user_group_members;
-	my $user_group_member_count = 0;
-	if ($imagemeta_usergroupid) {
-		notify($ERRORS{'OK'}, 0, "imagemeta user group defined: $imagemeta_usergroupid");
-		@user_group_members      = $self->data->get_imagemeta_usergroupmembers();
-		$user_group_member_count = $self->data->get_imagemeta_usergroupmembercount();
-	}
-	notify($ERRORS{'OK'}, 0, "imagemeta user group membership count = $user_group_member_count");
 
 	my $nodename;
 	my $retval_conn;
@@ -316,7 +305,6 @@ sub process {
 			$retval_conn = "connected";
 			goto RETVALCONN;
 		}
-	
 	}
 
 	RETVALCONN:
