@@ -525,6 +525,10 @@ CALL AddColumnIfNotExists('changelog', 'other', "varchar(255) default NULL");
 
 CALL DropColumnIfExists('computer', 'preferredimageid');
 CALL AddIndexIfNotExists('computer', 'imagerevisionid');
+CALL DropExistingIndices('computer', 'eth0macaddress');
+CALL AddIndexIfNotExists('computer', 'eth0macaddress');
+CALL DropExistingIndices('computer', 'eth1macaddress');
+CALL AddIndexIfNotExists('computer', 'eth1macaddress');
 
 -- Set the default values for the currentimage and next image columns to 'noimage'
 SET @currentimageid_noimage = CONCAT('ALTER TABLE computer CHANGE currentimageid currentimageid SMALLINT(5) UNSIGNED NOT NULL DEFAULT ', (SELECT id FROM image WHERE name LIKE 'noimage'));
