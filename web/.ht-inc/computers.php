@@ -620,6 +620,7 @@ function editOrAddComputer($state) {
 	$allschedules = getSchedules();
 	$images = getImages();
 	$profiles = getVMProfiles();
+	$data2['profiles'] = $profiles;
 	$provisioning = getProvisioning();
 	$showprovisioning = array();
 	$allowedprovisioning = array();
@@ -724,6 +725,12 @@ function editOrAddComputer($state) {
 	print "</TD>\n";
 	print "  </TR>\n";
 	print "  <TR>\n";
+	print "    <TH align=right>Provisioning Engine:</TH>\n";
+	print "    <TD>\n";
+	printSelectInput("provisioningid", $showprovisioning, $data["provisioningid"], 0, 0, 'provisioningid', 'dojoType="dijit.form.Select" onChange="editComputerSelectType(1);"');
+	print "    </TD>\n";
+	print "  </TR>\n";
+	print "  <TR>\n";
 	print "    <TH align=right>State:</TH>\n";
 	print "    <TD>\n";
 	if($state == 1 || ($state == 0 && $computers[$data['compid']]['provisioning'] == 'None'))
@@ -820,12 +827,6 @@ function editOrAddComputer($state) {
 		print "    <TD>" . $data["compid"] . "</TD>\n";
 		print "  </TR>\n";
 	}
-	print "  <TR>\n";
-	print "    <TH align=right>Provisioning Engine:</TH>\n";
-	print "    <TD>\n";
-	printSelectInput("provisioningid", $showprovisioning, $data["provisioningid"], 0, 0, 'provisioningid', 'dojoType="dijit.form.Select" onChange="editComputerSelectType(1);"');
-	print "    </TD>\n";
-	print "  </TR>\n";
 	print "  <TR>\n";
 	print "    <TH align=right>Physical Location:</TH>\n";
 	print "    <TD><INPUT type=text name=location id=location value=";
@@ -1016,8 +1017,6 @@ function confirmEditOrAddComputer($state) {
 	print "      <FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
 	if(! $state && $data['stateid'] == 10)
 		$cont = addContinuationsEntry('computerAddMaintenanceNote', $data, SECINDAY, 0);
-	elseif($state && $data['stateid'] == 20)
-		$cont = addContinuationsEntry('addComputerSetVMHostProfile', $data, SECINDAY, 0);
 	else {
 		$data['provisioning'] = getContinuationVar('provisioning');
 		$cont = addContinuationsEntry($nextmode, $data, SECINDAY, 0, 0);
@@ -1499,44 +1498,6 @@ function AJcanceltovmhostinuse() {
 	sendJSON($arr);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////
-///
-/// \fn addComputerSetVMHostProfile()
-///
-/// \brief prints a page for user to select a vm host profile for the
-/// computer(s)
-///
-////////////////////////////////////////////////////////////////////////////////
-function addComputerSetVMHostProfile() {
-	$dobulk = getContinuationVar('dobulk', 0);
-	print "<div align=center>\n";
-	print "<H2>Add Computer</H2>\n";
-	print "Select a VM Host Profile to be used on this computer:<br><br>\n";
-	$profiles = getVMProfiles();
-	print "<FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
-	print "<select name=\"profileid\">\n";
-	foreach($profiles as $id => $profile)
-		print "<option value=\"$id\">{$profile['profilename']}</option>\n";
-	print "</select><br><br>\n";
-	print "VM Host Profiles can be created/modified under <a href=\"";
-	print	BASEURL . SCRIPT . "?mode=editVMInfo\">Virtual Hosts</a><br><br>\n";
-	if($dobulk) {
-		$data = processBulkComputerInput();
-		$data['profiles'] = $profiles;
-		$cont = addContinuationsEntry('submitAddBulkComputers', $data, SECINDAY, 0, 0);
-		print "<INPUT type=submit value=\"Add Computers\">\n";
-	}
-	else {
-		$data = processComputerInput();
-		$data['profiles'] = $profiles;
-		$cont = addContinuationsEntry('submitAddComputer', $data, SECINDAY, 0, 0);
-		print "<INPUT type=submit value=\"Add Computer\">\n";
-	}
-	print "<INPUT type=hidden name=continuation value=\"$cont\">\n";
-	print "</FORM>\n";
-}
-
 ////////////////////////////////////////////////////////////////////////////////
 ///
 /// \fn submitAddComputer()
@@ -1767,6 +1728,8 @@ function bulkAddComputer() {
 	$tmp = getUserResources(array("scheduleAdmin"), array("manageGroup"));
 	$schedules = $tmp["schedule"];
 	$images = getImages();
+	$profiles = getVMProfiles();
+	$data2['profiles'] = $profiles;
 	$provisioning = getProvisioning();
 	$showprovisioning = array();
 	$allowedprovisioning = array();
@@ -1881,13 +1844,26 @@ function bulkAddComputer() {
 	print "  </TR>\n";
 
 	print "  <TR>\n";
+	print "    <TH align=right nowrap>Provisioning Engine:</TH>\n";
+	print "    <TD>\n";
+	printSelectInput("provisioningid", $showprovisioning, $data["provisioningid"], 0, 0, 'provisioningid', 'dojoType="dijit.form.Select" onChange="editComputerSelectType(1);"');
+	print "    </TD>\n";
+	print "  </TR>\n";
+	print "  <TR>\n";
 	print "    <TH align=right nowrap>State:</TH>\n";
 	print "    <TD>\n";
 	if($submitErr && $data['type'] == 'virtualmachine')
 		$states = array('10' => 'maintenance');
 	unset_by_val('available', $states);
-	printSelectInput('stateid', $states, $data['stateid'], 0, 0, 'stateid', 'dojoType="dijit.form.Select"');
+	printSelectInput('stateid', $states, $data['stateid'], 0, 0, 'stateid', 'dojoType="dijit.form.Select" onChange="editComputerSelectState();"');
 	print "    </TD>\n";
+	print "  </TR>\n";
+	print "  <TR id=\"vmhostprofiletr\" class=\"hidden\">\n";
+	print "    <TH align=right>VM Host Profile:</TH>\n";
+	print "    <TD>\n";
+	printSelectInput("vmprofileid", $profiles, $data["vmprofileid"], 0, 0, 'vmprofileid', 'dojoType="dijit.form.Select"');
+	print "    </TD>\n";
+	print "    <TD></TD>\n";
 	print "  </TR>\n";
 	print "  <TR>\n";
 	print "    <TH align=right nowrap>Owner*:</TH>\n";
@@ -1942,12 +1918,6 @@ function bulkAddComputer() {
 	print "    <TD>\n";
 	$tmpArr = array("10" => "10", "100" => "100", "1000" => "1000", "10000" => "10000");
 	printSelectInput("network", $tmpArr, $data["network"], 0, 0, 'network', 'dojoType="dijit.form.Select"');
-	print "    </TD>\n";
-	print "  </TR>\n";
-	print "  <TR>\n";
-	print "    <TH align=right nowrap>Provisioning Engine:</TH>\n";
-	print "    <TD>\n";
-	printSelectInput("provisioningid", $showprovisioning, $data["provisioningid"], 0, 0, 'provisioningid', 'dojoType="dijit.form.Select" onChange="editComputerSelectType(1);"');
 	print "    </TD>\n";
 	print "  </TR>\n";
 	print "  <TR>\n";
@@ -2056,9 +2026,19 @@ function confirmAddBulkComputers() {
 		print "  </TR>\n";
 	}
 	print "  <TR>\n";
+	print "    <TH align=right>Provisioning Engine:</TH>\n";
+	print "    <TD>" . $provisioning[$data["provisioningid"]]['prettyname'] . "</TD>\n";
+	print "  </TR>\n";
+	print "  <TR>\n";
 	print "    <TH align=right>State:</TH>\n";
 	print "    <TD>" . $states[$data["stateid"]] . "</TD>\n";
 	print "  </TR>\n";
+	if(! empty($data['vmprofileid'])) {
+		print "  <TR>\n";
+		print "    <TH align=right>VM Host Profile:</TH>\n";
+		print "    <TD>{$data['profiles'][$data['vmprofileid']]['profilename']}</TD>\n";
+		print "  </TR>\n";
+	}
 	print "  <TR>\n";
 	print "    <TH align=right>Owner:</TH>\n";
 	print "    <TD>" . $data["owner"] . "</TD>\n";
@@ -2086,10 +2066,6 @@ function confirmAddBulkComputers() {
 	print "  <TR>\n";
 	print "    <TH align=right nowrap>Network Speed (Mbps):</TH>\n";
 	print "    <TD>" . $data["network"] . "</TD>\n";
-	print "  </TR>\n";
-	print "  <TR>\n";
-	print "    <TH align=right>Provisioning Engine:</TH>\n";
-	print "    <TD>" . $provisioning[$data["provisioningid"]]['prettyname'] . "</TD>\n";
 	print "  </TR>\n";
 	print "  <TR>\n";
 	print "    <TH align=right>Location:</TH>\n";
@@ -2122,12 +2098,7 @@ function confirmAddBulkComputers() {
 	print "  <TR>\n";
 	print "    <TD>\n";
 	print "      <FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
-	if($data['stateid'] == 20) {
-		$data['dobulk'] = 1;
-		$cont = addContinuationsEntry('addComputerSetVMHostProfile', $data, SECINDAY, 0);
-	}
-	else
-		$cont = addContinuationsEntry('submitAddBulkComputers', $data, SECINDAY, 0, 0);
+	$cont = addContinuationsEntry('submitAddBulkComputers', $data, SECINDAY, 0, 0);
 	print "      <INPUT type=hidden name=continuation value=\"$cont\">\n";
 	print "      <INPUT type=submit value=Submit>\n";
 	print "      </FORM>\n";
@@ -2179,20 +2150,12 @@ function submitAddBulkComputers() {
 		$maccnt = 0;
 	}
 
-	if($data['stateid'] == 20) {
-		$profileid = processInputVar('profileid', ARG_NUMERIC);
-		$profiles = getContinuationVar('profiles');
-		if(! array_key_exists($profileid, $profiles)) {
-			$tmp = array_keys($profiles);
-			$profileid = $tmp[0];
-		}
-	}
-
 	$doloc = 0;
 	if($data['location'] != '') {
 		$doloc = 1;
+		$location = $data['location'];
 		if(get_magic_quotes_gpc())
-			$location = stripslashes($data['location']);
+			$location = stripslashes($location);
 		$location = mysql_real_escape_string($location);
 	}
 
@@ -2290,7 +2253,7 @@ function submitAddBulkComputers() {
 			       .        "vmprofileid) "
 			       . "VALUES ($compid, "
 			       .        "2, "
-			       .        "$profileid)";
+			       .        "{$data['vmprofileid']})";
 			doQuery($query, 101);
 		}
 	}
@@ -3772,6 +3735,7 @@ function processComputerInput($checks=1) {
 	$return["vmprofileid"] = getContinuationVar('vmprofileid', processInputVar('vmprofileid', ARG_NUMERIC));
 	$return["showdeleted"] = getContinuationVar('showdeleted', 0);
 	$return['states'] = getContinuationVar('states');
+	$return['profiles'] = getContinuationVar('profiles', array());
 
 	if(! $checks) {
 		return $return;
@@ -3844,6 +3808,10 @@ function processComputerInput($checks=1) {
 	   $return['type'] == 'virtualmachine' && $return['stateid'] != 10) {
 	   $submitErr |= VMAVAILERR;
 	   $submitErrMsg[VMAVAILERR] = "Virtual machines can only be added in the maintenance state.";
+	}
+	if(! empty($return['vmprofileid']) && ! array_key_exists($return['vmprofileid'], $return['profiles'])) {
+		$keys = array_keys($return['profiles']);
+		$return['vmprofileid'] = array_shift($keys);
 	}
 
 	$provs = getContinuationVar('provisioning');
@@ -3974,6 +3942,8 @@ function processBulkComputerInput($checks=1) {
 	$return["location"] = getContinuationVar("location", processInputVar("location", ARG_STRING));
 	$return["computergroup"] = getContinuationVar("computergroup", processInputVar("computergroup", ARG_MULTINUMERIC));
 	$return['macs'] = getContinuationVar('macs', array());
+	$return["vmprofileid"] = getContinuationVar("vmprofileid", processInputVar("vmprofileid", ARG_NUMERIC));
+	$return["profiles"] = getContinuationVar("profiles", array());
 
 	if(! $checks) {
 		return $return;
@@ -4146,6 +4116,10 @@ function processBulkComputerInput($checks=1) {
 			$submitErrMsg[ENDHOSTVALERR] = $submitErrMsg[IPADDRERR4];
 		}
 	}
+	if(! empty($return['vmprofileid']) && ! array_key_exists($return['vmprofileid'], $return['profiles'])) {
+		$keys = array_keys($return['profiles']);
+		$return['vmprofileid'] = array_shift($keys);
+	}
 	if(! validateUserid($return["owner"])) {
 	   $submitErr |= OWNERERR;
 	   $submitErrMsg[OWNERERR] = "Submitted ID is not valid";
@@ -4274,8 +4248,9 @@ function updateComputer($data) {
 	if($data['location'] == '')
 		$location = 'NULL';
 	else {
+		$location = $data['location'];
 		if(get_magic_quotes_gpc())
-			$location = stripslashes($data['location']);
+			$location = stripslashes($location);
 		$location = mysql_real_escape_string($location);
 		$location = "'$location'";
 	}
@@ -4338,8 +4313,9 @@ function addComputer($data) {
 	if($data['location'] == '')
 		$location = 'NULL';
 	else {
+		$location = $data['location'];
 		if(get_magic_quotes_gpc())
-			$location = stripslashes($data['location']);
+			$location = stripslashes($location);
 		$location = mysql_real_escape_string($location);
 		$location = "'$location'";
 	}
@@ -4409,12 +4385,6 @@ function addComputer($data) {
 	}
 
 	if($data['stateid'] == 20) {
-		$profileid = processInputVar('profileid', ARG_NUMERIC);
-		$profiles = getContinuationVar('profiles');
-		if(! array_key_exists($profileid, $profiles)) {
-			$tmp = array_keys($profiles);
-			$profileid = $tmp[0];
-		}
 		# create vmhost entry
 		$query = "INSERT INTO vmhost "
 		       .        "(computerid, "
@@ -4422,7 +4392,7 @@ function addComputer($data) {
 		       .        "vmprofileid) "
 		       . "VALUES ($compid, "
 		       .        "2, "
-		       .        "$profileid)";
+		       .        "{$data['vmprofileid']})";
 		doQuery($query, 101);
 	}
 }
@@ -4504,6 +4474,10 @@ function printComputerInfo($pripaddress, $ipaddress, $eth0macaddress,
 	print "    <TD>$eth0macaddress</TD>\n";
 	print "  </TR>\n";
 	print "  <TR>\n";
+	print "    <TH align=right>Provisioning Engine:</TH>\n";
+	print "    <TD>" . $provisioning[$provisioningid]['prettyname'] . "</TD>\n";
+	print "  </TR>\n";
+	print "  <TR>\n";
 	print "    <TH align=right>State:</TH>\n";
 	print "    <TD>" . $states[$stateid] . "</TD>\n";
 	print "  </TR>\n";
@@ -4553,10 +4527,6 @@ function printComputerInfo($pripaddress, $ipaddress, $eth0macaddress,
 		print "    <TD>$compid</TD>\n";
 		print "  </TR>\n";
 	}
-	print "  <TR>\n";
-	print "    <TH align=right>Provisioning Engine:</TH>\n";
-	print "    <TD>" . $provisioning[$provisioningid]['prettyname'] . "</TD>\n";
-	print "  </TR>\n";
 	print "  <TR>\n";
 	print "    <TH align=right>Location:</TH>\n";
 	print "    <TD>$location</TD>\n";
