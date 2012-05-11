@@ -470,6 +470,52 @@ sub get_vm_power_state {
 	return $return_power_state;
 }
 
+=head2 _clean_vm_name
+ Parameters  : $vm_name
+ Returns     : string
+ Description : VMWare vCenter supports VM Names of up to 80 characters, but if
+               the name is greater than 29 characters, it will truncate the 
+               corresponding name and enclosing directory of the virtual disks.
+
+=cut
+
+sub _clean_vm_name {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+
+    my $vm_name = shift || return;
+
+    # if the length of the name is > 29, then truncate it in such a way that
+    # the image name remains unique in the VCL database
+    my $MAX_VMNAME_LEN = 29;
+    if(length $vm_name > $MAX_VMNAME_LEN){
+        notify($ERRORS{'DEBUG'}, 0, "truncating VM name $vm_name");
+        my $newname = "";
+        if($vm_name =~ m/^(\w+)-(\w+?)(\d*)-(v\d+)$/){
+            my $base = $1;
+            my $name = $2;
+            my $imgid = $3;
+            my $version = $4;
+            my $shortened = substr($name, 0, $MAX_VMNAME_LEN - 2 - length($imgid) - length($base) - length($version));
+            $newname = $base . "-" . $shortened . $imgid . "-" . $version; 
+        } else {
+            my ($pre_len, $post_len) = ($MAX_VMNAME_LEN - 10, 10);
+            my ($pre, $post) = $vm_name =~ m/^(.{$pre_len}).*(.{$post_len})$/;
+            $newname = $pre . $post;
+        }
+        if(get_image_info($newname)){
+            notify($ERRORS{'WARNING'}, 0, "Naming conflict: $newname already exists in the database");
+        } else {
+            notify($ERRORS{'DEBUG'}, 0, "Changed image name to: $newname");
+            $vm_name = $newname;
+        }
+    }
+    return $vm_name;
+}
+
 #/////////////////////////////////////////////////////////////////////////////
 
 =head2 copy_virtual_disk
@@ -670,7 +716,7 @@ sub copy_virtual_disk {
 			return;
 		}
 		elsif ($copy_virtual_disk_fault =~ /not implemented/i) {
-			notify($ERRORS{'DEBUG'}, 0, "unable to copy vmdk using CopyVirtualDisk function, VM host $vmhost_name not implement the CopyVirtualDisk function");
+			notify($ERRORS{'DEBUG'}, 0, "unable to copy vmdk using CopyVirtualDisk function, VM host $vmhost_name does not implement the CopyVirtualDisk function");
 			
 			# Delete the destination directory path previously created
 			$self->delete_file($destination_directory_path);
@@ -686,9 +732,9 @@ sub copy_virtual_disk {
 	}
 	
 	
-	my $source_vm_name = "source_$destination_base_name";
-	my $clone_vm_name = $destination_base_name;
-	
+	my $source_vm_name = $self->_clean_vm_name("source_$destination_base_name");
+	my $clone_vm_name = $self->_clean_vm_name($destination_base_name);
+
 	my $source_vm_directory_path = "[$source_datastore_name] $source_vm_name";
 	my $clone_vm_directory_path = "[$destination_datastore_name] $clone_vm_name";
 	
@@ -870,6 +916,10 @@ sub copy_virtual_disk {
 		$self->delete_file($clone_file_path);
 	}
 	
+    # Set this as a class value so that it is retrievable from within 
+    # the calling context, i.e. capture(), routine. This way, in case 
+    # the name changes, it is possible to update the database with the new value.
+    $self->{new_image_name} = $clone_vm_name;
 	notify($ERRORS{'OK'}, 0, "copied virtual disk on VM host $vmhost_name: '$source_path' --> '$destination_path'");
 	return 1;
 }
@@ -981,7 +1031,7 @@ sub move_virtual_disk {
                     datacenter => $datacenter);
         
         notify($ERRORS{'OK'}, 0, "moved virtual disk on VM host $vmhost_name:\n'$source_path' --> '$destination_path'");
-        return 1;
+        return 1; 
     } else {
         notify($ERRORS{'WARNING'}, 0, "Unable to move virtual disk from $vmhost_name: '$source_path' --> '$destination_path'");
         return 0;
