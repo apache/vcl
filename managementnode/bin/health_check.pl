@@ -59,7 +59,7 @@ use Getopt::Long;
 
 #------- Subroutine declarations -------
 sub main();
-sub _help();
+sub help_healthcheck();
 sub print_usage(); 
 
 #----------GLOBALS--------------
@@ -70,24 +70,24 @@ our $STAGE = 0;
 our $HELP = 0;
 
 
-GetOptions(\%OPTIONS, 'help', 'powerdown=s');
+#GetOptions(\%OPTIONS, 'help', 'powerdown=s');
 
 
 # Get the remaining command line parameters
-$HELP = $OPTIONS{help} if (defined($OPTIONS{help} && $OPTIONS{help}));
-$STAGE = $OPTIONS{powerdown} if (defined($OPTIONS{powerdown} && $OPTIONS{powerdown}));
+#$HELP = $OPTIONS{help} if (defined($OPTIONS{help} && $OPTIONS{help}));
+#$STAGE = $OPTIONS{powerdown} if (defined($OPTIONS{powerdown} && $OPTIONS{powerdown}));
 
 if($STAGE){
 
 	unless($STAGE =~ /available|all/){ 
 		print "\nInvalid powerdown option\n\n";
-		_help();
+		help;
 		exit;
 	}
 
 }
 if($HELP){
-	_help();
+	help_healthcheck();
 	exit;
 }
 ##############################################################################
@@ -141,7 +141,7 @@ sub print_usage() {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 _help
+=head2 help_healthcheck
 
  Parameters  : 
  Returns     : 
@@ -149,7 +149,7 @@ sub print_usage() {
 
 =cut
 
-sub _help() {
+sub help_healthcheck() {
 	my $message = <<"END";
 --------------------------------------------
 
@@ -160,7 +160,7 @@ END
 	print $message;
 	print_usage();
 	exit;
-} ## end sub _help
+} ## end sub help_healthcheck
 #/////////////////////////////////////////////////////////////////////////////
 
 1;
