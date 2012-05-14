@@ -5518,8 +5518,39 @@ sub get_network_configuration {
 		return;
 	}
 	
+	# Check if OS may still be initializing before attempting to retrieve network information
+	# Windows may respond to SSH before all network interface drivers are installed and interfaces brought up
+	# This causes many problems
+	# Get the list of running tasks, check if drvinst.exe is running
+	my $initialization_check = 0;
+	my $initialization_check_limit = 12;
+	my $initialization_check_delay = 10;
+	while (++$initialization_check) {
+		# Get the list of running tasks (this returns an array reference of the raw tasklist.exe output)
+		my $task_list_output = $self->get_task_list();
+		if (!$task_list_output) {
+			notify($ERRORS{'WARNING'}, 0, "attempt $initialization_check/$initialization_check_limit: unable to determine if devices are still being initialized, no task list output was retrieved, sleeping for $initialization_check_delay seconds");
+			sleep $initialization_check_delay;
+			next;
+		}
+		
+		# Check if any running tasks match known patterns which run only when the OS is being initialized
+		my @matching_tasks = grep(/drvinst/, @$task_list_output);
+		if (!@matching_tasks) {
+			notify($ERRORS{'DEBUG'}, 0, "no devices appear to still be initializing, task list output:\n" . join("\n", @$task_list_output));
+			last;
+		}
+		elsif ($initialization_check >= $initialization_check_limit) {
+			notify($ERRORS{'WARNING'}, 0, "attempt $initialization_check/$initialization_check_limit: devices still appear to be initializing, matching tasks:\n" . join("\n", @matching_tasks) . "\n---\ntask list output:\n" . join("\n", @$task_list_output));
+			last;
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "attempt $initialization_check/$initialization_check_limit: devices still appear to be initializing, sleeping for $initialization_check_delay seconds, matching tasks:\n" . join("\n", @matching_tasks));
+			sleep $initialization_check_delay;
+		}
+	}
+	
 	my $network_configuration;
-
 	notify($ERRORS{'DEBUG'}, 0, "attempting to retrieve network configuration information from $computer_node_name");
 	
 	# Run ipconfig /all, try twice in case it fails the first time
@@ -7210,7 +7241,7 @@ sub get_task_list {
 	
 	# Attempt to run tasklist.exe with /NH for no header
 	my $tasklist_command = $system32_path . '/tasklist.exe /NH /V';
-	my ($tasklist_exit_status, $tasklist_output) = run_ssh_command($computer_node_name, $management_node_keys, $tasklist_command, '', '', 1);
+	my ($tasklist_exit_status, $tasklist_output) = run_ssh_command($computer_node_name, $management_node_keys, $tasklist_command, '', '', 0);
 	if (defined($tasklist_exit_status) && $tasklist_exit_status == 0) {
 		notify($ERRORS{'DEBUG'}, 0, "ran tasklist.exe");
 	}
