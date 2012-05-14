@@ -273,7 +273,10 @@ function editComputerSelectType(skipprov) {
 	var type = dijit.byId('type').get('value');
 	var prov = dijit.byId('provisioningid').attr('displayedValue');
 	for(var i = 0; i < allowedstates.length; i++) {
-		if(type == 'virtualmachine' && allowedstates[i].label != 'maintenance')
+		if(type == 'virtualmachine' && allowedstates[i].label != 'maintenance' &&
+		   startstate != 'available')
+			continue;
+		if(type == 'virtualmachine' && allowedstates[i].label == 'vmhostinuse')
 			continue;
 		if(type == 'lab' && allowedstates[i].label != 'available' &&
 			allowedstates[i].label != 'maintenance')
@@ -286,12 +289,20 @@ function editComputerSelectType(skipprov) {
 	}
 	if(restorestate)
 		sobj.set('value', savestate);
-	if(! skipprov) {
+	if(skipprov) {
+		for(var i = 0; i < dijit.byId('provisioningid').options.length; i++) {
+			if(provval == dijit.byId('provisioningid').options[i].value) {
+				provval = dijit.byId('provisioningid').get('value');
+			}
+		}
+	}
+	else {
 		var pobj = dijit.byId('provisioningid');
 		pobj.removeOption(pobj.getOptions());
 		for(var i = 0; i < allowedprovs[type].length; i++) {
-			pobj.addOption({value: allowedprovs[type][i].id, label: allowedprovs[type][i].name});
+			pobj.addOption({value: String(allowedprovs[type][i].id), label: allowedprovs[type][i].name});
 		}
+		dijit.byId('provisioningid').set('value', String(provval));
 	}
 }
 

@@ -572,14 +572,10 @@ function editOrAddComputer($state) {
 	
 	$tmpstates = getStates();
 	if($data["stateid"] && array_key_exists($data['stateid'], $tmpstates)) {
-		if($state == 0 && $data['type'] == 'virtualmachine' &&
-		   $computers[$data['compid']]['vmhostid'] == '')
-			$states = array(10 => "maintenance");
-		else
-			$states = array($data["stateid"] => $tmpstates[$data["stateid"]],
-			                2 => "available",
-			                10 => "maintenance",
-			                20 => "vmhostinuse");
+		$states = array($data["stateid"] => $tmpstates[$data["stateid"]],
+		                2 => "available",
+		                10 => "maintenance",
+		                20 => "vmhostinuse");
 	}
 	else
 		$states = array(2 => "available",
@@ -613,6 +609,7 @@ function editOrAddComputer($state) {
 	print "var allowedstates = [";
 	print implode(',', $tmp);
 	print "];\n";
+	print "var provval = {$data['provisioningid']};\n";
 	$data2['states'] = $states;
 	$platforms = getPlatforms();
 	$tmp = getUserResources(array("scheduleAdmin"), array("manageGroup"));
@@ -733,8 +730,13 @@ function editOrAddComputer($state) {
 	print "  <TR>\n";
 	print "    <TH align=right>State:</TH>\n";
 	print "    <TD>\n";
-	if($state == 1 || ($state == 0 && $computers[$data['compid']]['provisioning'] == 'None'))
+	if($state == 1 ||
+		($state == 0 && ($computers[$data['compid']]['provisioning'] == 'None' ||
+		($data['type'] == 'virtualmachine' && $data['stateid'] != 2)) ||
+		($data['type'] == 'virtualmachine' && $computers[$data['compid']]['vmhostid'] == '')))
 		unset_by_val('available', $states);
+	if($state == 0 && $computers[$data['compid']]['type'] == 'virtualmachine')
+		unset_by_val('vmhostinuse', $states);
 	printSelectInput('stateid', $states, $data['stateid'], 0, 0, 'stateid', 'dojoType="dijit.form.Select" onChange="editComputerSelectState();"');
 	print "    </TD>\n";
 	print "    <TD>";
