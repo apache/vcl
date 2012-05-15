@@ -760,6 +760,8 @@ function showRDPbutton() {
 	if(typeof timeInterval === 'undefined' || parseInt(timeInterval) <= 0) {
 		timeInterval = 1
 	}
+	dojo.addClass('connectdiv', 'hidden');
+	dojo.removeClass('counterdiv', 'hidden');
 	if(timeInterval == 1)
 		dojo.byId('counterdiv').innerHTML = _(' Ready to connect in ') + timeInterval + _(' second');
 	else
