@@ -603,6 +603,7 @@ function editOrAddComputer($state) {
 			$tovmhostinuse = $row['start'];
 	}
 	print "<script type=\"text/javascript\">\n";
+	print "var startstate = '{$computers[$data['compid']]['state']}';\n";
 	$tmp = array();
 	foreach($states as $id => $val)
 		$tmp[] = "{value: '$id', label: '$val'}";
