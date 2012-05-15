@@ -251,37 +251,6 @@ sub post_load {
 
 	}
 	
-	my $krb5_conf_file_path = '/etc/krb5.conf';
-	my @krb5_conf_contents = $self->get_file_contents($krb5_conf_file_path);
-	if (@krb5_conf_contents) {
-		notify($ERRORS{'DEBUG'}, 0, "retrieved $krb5_conf_file_path contents:\n" . join("\n", @krb5_conf_contents));
-		
-		my $new_krb5_contents_string;
-		for my $line (@krb5_conf_contents) {
-			if ($line =~ /(krb4_convert|krb4_use_as_req)/i) {
-				next;
-			}
-			
-			$new_krb5_contents_string .= "$line\n";
-			
-			if ($line =~ /pam\s*=\s*\{/i) {
-				$new_krb5_contents_string .= "   krb4_convert = false\n";
-				$new_krb5_contents_string .= "   krb4_use_as_req = false\n";
-				$new_krb5_contents_string .= "   krb4_convert_524 = false\n";
-			}
-		}
-		
-		if ($self->create_text_file("$krb5_conf_file_path", $new_krb5_contents_string)) {
-			notify($ERRORS{'DEBUG'}, 0, "updated $krb5_conf_file_path file:\n$new_krb5_contents_string");
-		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "failed to update $krb5_conf_file_path file");
-		}
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to retrieve $krb5_conf_file_path contents");
-	}
-	
 	# Change password
 	if ($self->changepasswd($computer_node_name, "root")) {
 		notify($ERRORS{'OK'}, 0, "successfully changed root password on $computer_node_name");
