@@ -18,7 +18,7 @@
 
 $vclhost = 'localhost'; # name of mysql server
 $vcldb = 'vcl';         # name of mysql database
-$vclusername = '';      # username to access database
+$vclusername = 'vcluser';      # username to access database
 $vclpassword = '';      # password to access database
 
 $cryptkey  = '';  # random password - won't ever have to type it so make it long
