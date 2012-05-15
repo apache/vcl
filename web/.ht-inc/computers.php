@@ -603,14 +603,16 @@ function editOrAddComputer($state) {
 			$tovmhostinuse = $row['start'];
 	}
 	print "<script type=\"text/javascript\">\n";
-	print "var startstate = '{$computers[$data['compid']]['state']}';\n";
+	if($state)
+		print "var startstate = 'maintenance';\n";
+	else
+		print "var startstate = '{$computers[$data['compid']]['state']}';\n";
 	$tmp = array();
 	foreach($states as $id => $val)
 		$tmp[] = "{value: '$id', label: '$val'}";
 	print "var allowedstates = [";
 	print implode(',', $tmp);
 	print "];\n";
-	print "var provval = {$data['provisioningid']};\n";
 	$data2['states'] = $states;
 	$platforms = getPlatforms();
 	$tmp = getUserResources(array("scheduleAdmin"), array("manageGroup"));
@@ -642,6 +644,10 @@ function editOrAddComputer($state) {
 	$allowedprovisioning['lab']['length'] = count($allowedprovisioning['lab']);
 	$allowedprovisioning['blade']['length'] = count($allowedprovisioning['blade']);
 	$allowedprovisioning['virtualmachine']['length'] = count($allowedprovisioning['virtualmachine']);
+	if($state)
+		print "var provval = {$allowedprovisioning['blade'][0]['id']};\n";
+	else
+		print "var provval = {$data['provisioningid']};\n";
 	print "var allowedprovs = " . json_encode($allowedprovisioning) . ";\n";
 	print "</script>\n";
 
@@ -1727,6 +1733,7 @@ function bulkAddComputer() {
 	print "var allowedstates = [";
 	print implode(',', $tmp);
 	print "];\n";
+	print "var startstate = 'maintenance';\n";
 	$platforms = getPlatforms();
 	$tmp = getUserResources(array("scheduleAdmin"), array("manageGroup"));
 	$schedules = $tmp["schedule"];
@@ -1753,6 +1760,7 @@ function bulkAddComputer() {
 				$showprovisioning[$id] = $val['prettyname'];
 		}
 	}
+	print "var provval = {$allowedprovisioning['blade'][0]['id']};\n";
 	$allowedprovisioning['lab']['length'] = count($allowedprovisioning['lab']);
 	$allowedprovisioning['blade']['length'] = count($allowedprovisioning['blade']);
 	$allowedprovisioning['virtualmachine']['length'] = count($allowedprovisioning['virtualmachine']);
