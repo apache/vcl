@@ -251,6 +251,37 @@ sub post_load {
 
 	}
 	
+	my $krb5_conf_file_path = '/etc/krb5.conf';
+	my @krb5_conf_contents = $self->get_file_contents($krb5_conf_file_path);
+	if (@krb5_conf_contents) {
+		notify($ERRORS{'DEBUG'}, 0, "retrieved $krb5_conf_file_path contents:\n" . join("\n", @krb5_conf_contents));
+		
+		my $new_krb5_contents_string;
+		for my $line (@krb5_conf_contents) {
+			if ($line =~ /(krb4_convert|krb4_use_as_req)/i) {
+				next;
+			}
+			
+			$new_krb5_contents_string .= "$line\n";
+			
+			if ($line =~ /pam\s*=\s*\{/i) {
+				$new_krb5_contents_string .= "   krb4_convert = false\n";
+				$new_krb5_contents_string .= "   krb4_use_as_req = false\n";
+				$new_krb5_contents_string .= "   krb4_convert_524 = false\n";
+			}
+		}
+		
+		if ($self->create_text_file("$krb5_conf_file_path", $new_krb5_contents_string)) {
+			notify($ERRORS{'DEBUG'}, 0, "updated $krb5_conf_file_path file:\n$new_krb5_contents_string");
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to update $krb5_conf_file_path file");
+		}
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve $krb5_conf_file_path contents");
+	}
+	
 	# Change password
 	if ($self->changepasswd($computer_node_name, "root")) {
 		notify($ERRORS{'OK'}, 0, "successfully changed root password on $computer_node_name");
@@ -287,7 +318,7 @@ sub post_load {
 	# Run the vcl_post_load script if it exists in the image
 	my $script_path = '/etc/init.d/vcl_post_load';
 	if ($self->file_exists($script_path)) {
-		my $result = $self->run_script($script_path);
+		my $result = $self->run_script($script_path,'1','300','1');
 		if (!defined($result)) {
 			notify($ERRORS{'WARNING'}, 0, "error occurred running $script_path");
 		}
@@ -343,7 +374,7 @@ sub post_reserve {
 	}
 	
 	# Run the vcl_post_reserve script if it exists in the image
-	my $result = $self->run_script($script_path);
+	my $result = $self->run_script($script_path,'1','300','1');
 	if (!defined($result)) {
 		notify($ERRORS{'WARNING'}, 0, "error occurred running $script_path");
 	}
@@ -1205,74 +1236,6 @@ sub is_connected {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 call_post_load_custom
-
- Parameters  : none
- Returns     : If successfully ran post_load_custom script: 1
-               If post_load_custom script does not exist: 1
-               If error occurred: false
- Description : Checks if /etc/init.d/post_load_custom script exists on the
-               Linux node and attempts to run it. This script can be created by
-					the image creator and will run when the image is loaded.
-
-=cut
-
-sub call_post_load_custom {
-	my $self = shift;
-	if (ref($self) !~ /linux/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-	
-	# Check if post_load_custom exists
-	my $post_load_custom_path = '/etc/init.d/post_load_custom';
-	if ($self->file_exists($post_load_custom_path)) {
-		notify($ERRORS{'DEBUG'}, 0, "post_load_custom script exists: $post_load_custom_path");
-	}
-	else {
-		notify($ERRORS{'OK'}, 0, "post_load_custom script does NOT exist: $post_load_custom_path");
-		return 1;
-	}
-	
-	# Get the node configuration directory, make sure it exists, create if necessary
-	my $node_log_directory = $self->get_node_configuration_directory() . '/Logs';
-	if (!$self->create_directory($node_log_directory)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to create node log file directory: $node_log_directory");
-		return;
-	}
-	
-	my $management_node_keys = $self->data->get_management_node_keys();
-	my $computer_node_name   = $self->data->get_computer_node_name();
-	
-	# Assemble the log file path
-	my $post_load_custom_log_path = $node_log_directory . "/post_load_custom.log";
-	
-	# Assemble the command
-	my $post_load_custom_command;
-	# Make sure the script is readable and executable
-	$post_load_custom_command .= "chmod +rx \"$post_load_custom_path\"";
-	# Redirect the script output to the log file path
-	$post_load_custom_command .= " && \"$post_load_custom_path\" >> \"$post_load_custom_log_path\" 2>&1";
-	
-	# Execute the command
-	my ($post_load_custom_exit_status, $post_load_custom_output) = run_ssh_command($computer_node_name, $management_node_keys, $post_load_custom_command, '', '', 1);
-	if (defined($post_load_custom_exit_status) && $post_load_custom_exit_status == 0) {
-		notify($ERRORS{'OK'}, 0, "executed $post_load_custom_path, exit status: $post_load_custom_exit_status");
-	}
-	elsif (defined($post_load_custom_exit_status)) {
-		notify($ERRORS{'WARNING'}, 0, "$post_load_custom_path returned a non-zero exit status: $post_load_custom_exit_status, output:\n@{$post_load_custom_output}");
-		return 0;
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to execute $post_load_custom_path");
-		return;
-	}
-
-	return 1;
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
 =head2 run_script
 
  Parameters  : script path
@@ -1294,6 +1257,9 @@ sub run_script {
 		notify($ERRORS{'WARNING'}, 0, "script path argument was not specified");
 		return;
 	}
+	my $display_output = shift || 0;
+	my $timeout_seconds = shift || 60;
+	my $max_attempts = shift || 3;
 	
 	# Check if script exists
 	if ($self->file_exists($script_path)) {
@@ -1326,7 +1292,7 @@ sub run_script {
 	my $command = "chmod +rx \"$script_path\" && \"$script_path\" >> \"$log_file_path\" 2>&1";
 	
 	# Execute the command
-	my ($exit_status, $output) = run_ssh_command($computer_node_name, $management_node_keys, $command, '', '', 1);
+	my ($exit_status, $output) = $self->execute($command, $display_output, $timeout_seconds, $max_attempts);
 	if (defined($exit_status) && $exit_status == 0) {
 		notify($ERRORS{'OK'}, 0, "executed $script_path, exit status: $exit_status");
 	}
