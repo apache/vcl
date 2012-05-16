@@ -618,12 +618,13 @@ sub is_ssh_responding {
 	
 	if ($max_attempts) {
 		# Run a test SSH command
-		my ($exit_status, $output) = run_ssh_command({
+		my ($exit_status, $output) = $self->execute({
 			node => $computer_node_name,
 			command => "echo \"testing ssh on $computer_node_name\"",
 			max_attempts => $max_attempts,
-			output_level => 0,
+			display_output => 0,
 			timeout_seconds => 30,
+			ignore_error => 1,
 		});
 		
 		# The exit status will be 0 if the command succeeded
@@ -1923,14 +1924,19 @@ sub execute_new {
 	$user = 'root' unless $user;
 	
 	my $ssh_options = '-o StrictHostKeyChecking=no -o ConnectTimeout=30';
+	
+	# Figure out which identity key to use
+	# If identity key argument was supplied, it may be a single path or a comma-separated list
+	# If argument was not supplied, get the default management node paths
+	my @identity_key_paths;
 	if ($identity_key) {
-		$ssh_options .= " -i $identity_key";
+		@identity_key_paths = split(/\s*[,;]\s*/, $identity_key);
 	}
 	else {
-		my @identity_key_paths = VCL::DataStructure::get_management_node_identity_key_paths();
-		for my $identity_key_path (@identity_key_paths) {
-			$ssh_options .= " -i $identity_key_path";
-		}
+		@identity_key_paths = VCL::DataStructure::get_management_node_identity_key_paths();
+	}
+	for my $identity_key_path (@identity_key_paths) {
+		$ssh_options .= " -i $identity_key_path";
 	}
 	
 	# Override the die handler
@@ -1957,6 +1963,8 @@ sub execute_new {
 		# Calling 'return' in the EVAL block doesn't exit this subroutine
 		# Use a flag to determine if null should be returned without making another attempt
 		my $return_null;
+		my $initialization_output;
+		my $initialization_error;
 		
 		if (!$ENV{net_ssh_expect}{$computer_name}) {
 			eval {
@@ -1971,7 +1979,7 @@ sub execute_new {
 				);
 				
 				if ($ssh) {
-					notify($ERRORS{'DEBUG'}, 0, "created " . ref($ssh) . " object to control $computer_name, options: $ssh_options");
+					notify($ERRORS{'DEBUG'}, 0, "created " . ref($ssh) . " object to control $computer_name, options: $ssh_options") if ($display_output);
 				}
 				else {
 					notify($ERRORS{'WARNING'}, 0, "failed to create Net::SSH::Expect object to control $computer_name, $!");
@@ -1992,24 +2000,26 @@ sub execute_new {
 				#$ssh->restart_timeout_upon_receive(1);
 				my $initialization_output = $ssh->read_all();
 				if (defined($initialization_output)) {
-					notify($ERRORS{'DEBUG'}, 0, "SSH initialization output:\n$initialization_output");
+					notify($ERRORS{'DEBUG'}, 0, "SSH initialization output:\n$initialization_output") if ($display_output);
 					if ($initialization_output =~ /password:/i) {
 						if (defined($password)) {
-							notify($ERRORS{'WARNING'}, 0, "unable to connect to $computer_name, SSH is requesting a password but password authentication is not implemented, password is configured, output:\n$initialization_output");
+							notify($ERRORS{'WARNING'}, 0, "$attempt_string unable to connect to $computer_name, SSH is requesting a password but password authentication is not implemented, password is configured, output:\n$initialization_output");
 							
 							# In EVAL block here, 'return' won't return from entire subroutine, set flag
 							$return_null = 1;
 							return;
 						}
 						else {
-							notify($ERRORS{'WARNING'}, 0, "unable to connect to $computer_name, SSH is requesting a password but password authentication is not implemented, password is not configured, output:\n$initialization_output");
+							notify($ERRORS{'WARNING'}, 0, "$attempt_string unable to connect to $computer_name, SSH is requesting a password but password authentication is not implemented, password is not configured, output:\n$initialization_output");
 							$return_null = 1;
 							return;
 						}
 					}
 				}
 				else {
-					notify($ERRORS{'DEBUG'}, 0, "SSH initialization output is undefined");
+					notify($ERRORS{'DEBUG'}, 0, $attempt_string . "SSH initialization output is undefined") if ($display_output);
+					$initialization_error = 1;
+					return;
 				}
 			};
 			
@@ -2017,11 +2027,14 @@ sub execute_new {
 			
 			if ($EVAL_ERROR) {
 				if ($EVAL_ERROR =~ /^(\w+) at \//) {
-					notify($ERRORS{'DEBUG'}, 0, $attempt_string . "$1 error occurred initializing Net::SSH::Expect object for $computer_name");
+					notify($ERRORS{'DEBUG'}, 0, $attempt_string . "$1 error occurred initializing Net::SSH::Expect object for $computer_name") if ($display_output);
 				}
 				else {
-					notify($ERRORS{'DEBUG'}, 0, $attempt_string . "error occurred initializing Net::SSH::Expect object for $computer_name");
+					notify($ERRORS{'DEBUG'}, 0, $attempt_string . "$EVAL_ERROR error occurred initializing Net::SSH::Expect object for $computer_name") if ($display_output);
 				}
+				next ATTEMPT;
+			}
+			elsif ($initialization_error) {
 				next ATTEMPT;
 			}
 		}
@@ -2047,19 +2060,19 @@ sub execute_new {
 		
 		if ($EVAL_ERROR) {
 			if ($ignore_error) {
-				notify($ERRORS{'DEBUG'}, 0, "executed command on $computer_name: '$command', ignoring error, returning null");
+				notify($ERRORS{'DEBUG'}, 0, "executed command on $computer_name: '$command', ignoring error, returning null") if ($display_output);
 				return;
 			}
 			elsif ($EVAL_ERROR =~ /^(\w+) at \//) {
-				notify($ERRORS{'WARNING'}, 0, $attempt_string . "$1 error occurred executing command on $computer_name: '$command'");
+				notify($ERRORS{'WARNING'}, 0, $attempt_string . "$1 error occurred executing command on $computer_name: '$command'") if ($display_output);
 			}
 			else {
-				notify($ERRORS{'WARNING'}, 0, $attempt_string . "error occurred executing command on $computer_name: '$command'\nerror: $EVAL_ERROR");
+				notify($ERRORS{'WARNING'}, 0, $attempt_string . "error occurred executing command on $computer_name: '$command'\nerror: $EVAL_ERROR") if ($display_output);
 			}
 			next ATTEMPT;
 		}
 		elsif (!$ssh_wait_status) {
-			notify($ERRORS{'WARNING'}, 0, $attempt_string . "command timed out after $timeout_seconds seconds on $computer_name: '$command'");
+			notify($ERRORS{'WARNING'}, 0, $attempt_string . "command timed out after $timeout_seconds seconds on $computer_name: '$command'") if ($display_output);
 			next ATTEMPT;
 		}
 		
