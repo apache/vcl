@@ -7601,7 +7601,7 @@ EOF
 		$user_info->{affiliation}{helpaddress} = 'vcl-user@incubator.apache.org';
 	}
 	
-	notify($ERRORS{'DEBUG'}, 0, "retrieved info for user '$user_identifier', affiliation: '$affiliation_identifier':\n" . format_data($user_info));
+	#notify($ERRORS{'DEBUG'}, 0, "retrieved info for user '$user_identifier', affiliation: '$affiliation_identifier':\n" . format_data($user_info));
 	$ENV{user_info}{$user_identifier} = $user_info;
 	return $ENV{user_info}{$user_identifier};	
 }
