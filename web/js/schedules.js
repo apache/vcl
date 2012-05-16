@@ -150,7 +150,9 @@ function addTime() {
 		}
 	}
 
-	id = ++scheduleStore.nextid;
+	if(! scheduleStore.nextid)
+		scheduleStore.nextid = 0;
+	var id = ++scheduleStore.nextid;
 	var btn = new dijit.form.Button({
 		label: "Remove",
 		onClick: createRemoveFunc(removeTime, id)
