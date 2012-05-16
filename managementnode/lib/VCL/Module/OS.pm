@@ -1963,8 +1963,6 @@ sub execute_new {
 		# Calling 'return' in the EVAL block doesn't exit this subroutine
 		# Use a flag to determine if null should be returned without making another attempt
 		my $return_null;
-		my $initialization_output;
-		my $initialization_error;
 		
 		if (!$ENV{net_ssh_expect}{$computer_name}) {
 			eval {
@@ -2018,8 +2016,6 @@ sub execute_new {
 				}
 				else {
 					notify($ERRORS{'DEBUG'}, 0, $attempt_string . "SSH initialization output is undefined") if ($display_output);
-					$initialization_error = 1;
-					return;
 				}
 			};
 			
@@ -2032,9 +2028,6 @@ sub execute_new {
 				else {
 					notify($ERRORS{'DEBUG'}, 0, $attempt_string . "$EVAL_ERROR error occurred initializing Net::SSH::Expect object for $computer_name") if ($display_output);
 				}
-				next ATTEMPT;
-			}
-			elsif ($initialization_error) {
 				next ATTEMPT;
 			}
 		}
