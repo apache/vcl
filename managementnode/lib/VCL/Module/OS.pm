@@ -1967,7 +1967,7 @@ sub execute_new {
 					raw_pty => 1,
 					no_terminal => 1,
 					ssh_option => $ssh_options,
-					timeout => 5,
+					#timeout => 5,
 				);
 				
 				if ($ssh) {
@@ -2032,6 +2032,9 @@ sub execute_new {
 			# The SSH object will be added back to %ENV if the command completes successfully
 			delete $ENV{net_ssh_expect}{$computer_name};
 		}
+		
+		# Set the timeout
+		$ssh->timeout($timeout_seconds);
 		
 		(my $command_formatted = $command) =~ s/\s+(;|&|&&)\s+/\n$1 /g;
 		notify($ERRORS{'DEBUG'}, 0, $attempt_string . "executing command on $computer_name (timeout: $timeout_seconds seconds):\n$command_formatted") if ($display_output);

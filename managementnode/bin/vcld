@@ -152,7 +152,7 @@ sub main () {
 	#===========================================================================
 	while (1) {
 		SLEEP:
-			
+		
 		delete $ENV{request_id};
 		delete $ENV{reservation_id};
 		delete $ENV{state};
@@ -171,7 +171,7 @@ sub main () {
 		else {
 			notify($ERRORS{'CRITICAL'}, $LOGFILE, "could not update lastcheckin for management node $management_node_id");
 		}
-
+		
 		# Get all the requests assigned to this management node
 		# get_management_node_requests() gets a subset of the information available
 		if ($info{request} = {get_management_node_requests($management_node_id)}) {
@@ -184,7 +184,7 @@ sub main () {
 		# See if there's anything to do
 		my $request_count = scalar keys %{$info{request}};
 		#notify($ERRORS{'DEBUG'}, $LOGFILE, "number of requests assigned to management node $management_node_id: $request_count");
-
+		
 		#===========================================================================
 		# Loop through the requests assigned to this management node
 		REQUEST: foreach my $request_id (keys %{$info{request}}) {
@@ -271,7 +271,7 @@ sub main () {
 				
 				# Make sure reservation is not currently being processed
 				my $being_processed = reservation_being_processed($reservation_id);
-				if ($being_processed && $request_state_name !~ /^(deleted|image|reinstall|rebootsoft|reboothard|servermodified)$/ ) {
+				if ($being_processed && $request_state_name !~ /^(deleted|makeproduction|image|reinstall|rebootsoft|reboothard|servermodified)$/ ) {
 					notify($ERRORS{'WARNING'}, $LOGFILE, "reservation $reservation_id is already being processed");
 					next RESERVATION;
 				}
@@ -348,7 +348,6 @@ sub main () {
 
 				# Make a new child process, passing it the request/reservation info
 				make_new_child({request_info => \%request_info, data_structure => $data_structure});
-
 			} ## end foreach my $reservation_id (keys %{$info{request...
 		} ## end foreach my $request_id (keys %{$info{request}})
 		

@@ -527,54 +527,79 @@ sub copy_virtual_disk {
 	
 	my $source_file_count = scalar(@source_file_paths);
 	my $source_file_paths_string;
-	my $convert_to_raw = 0;
+	my $raw_file_directory_path;
 	
 	# Check if the source file paths appear to be in the 2GB sparse vmdk format
 	# qemu-img included in anything earlier than Fedora 16 doesn't handle this properly
-	if ($source_file_count > 1 && $source_file_paths[0] =~ /-s\d+\.vmdk$/i) {
-		$convert_to_raw = 1;
-		for my $source_file_path (@source_file_paths) {
-			my ($source_file_name, $source_directory_path, $source_file_extension) = fileparse($source_file_path, qr/\.[^.]*/);
-			
-			my $raw_file_path = "$destination_directory_path/$source_file_name.raw";
-			$source_file_paths_string .= "\"$raw_file_path\" ";
-			
-			# Convert from raw to raw
-			# There seems to be a bug in qemu-img if you specify "-f vmdk", it results in a empty file
-			# Leaving the -f option off also results in an empty file
-			my $command = "qemu-img convert -f raw \"$source_file_path\" -O raw \"$raw_file_path\" && qemu-img info \"$raw_file_path\"";
-			
-			notify($ERRORS{'DEBUG'}, 0, "attempting to convert vmdk file to raw format: $source_file_path --> $raw_file_path");
-			my ($exit_status, $output) = $self->vmhost_os->execute($command, 0, 1800);
-			if (!defined($exit_status)) {
-				notify($ERRORS{'WARNING'}, 0, "failed to execute command to convert vmdk file to raw format:\n$command");
-				return;
-			}
-			elsif ($exit_status) {
-				notify($ERRORS{'WARNING'}, 0, "failed to convert vmdk file to raw format on $node_name\ncommand: '$command'\noutput:\n" . join("\n", @$output));
-				return;
-			}
-			else {
-				notify($ERRORS{'DEBUG'}, 0, "converted vmdk file to raw format on $node_name: $source_file_path --> $raw_file_path, output:\n" . join("\n", @$output));
-			}
-		}
-		
-		# Remove trailing last space
-		$source_file_paths_string =~ s/\s+$//;
-	}
-	else {
+	#if ($source_file_count > 1 && $source_file_paths[0] =~ /-s\d+\.vmdk$/i) {
+	#	my $image_name = $self->data->get_image_name();
+	#	$raw_file_directory_path = "$destination_directory_path/raw_$image_name";
+	#	
+	#	# Attempt to create the directory where the raw files will be stored
+	#	if (!$self->vmhost_os->create_directory($raw_file_directory_path)) {
+	#		notify($ERRORS{'WARNING'}, 0, "unable to copy virtual disk, failed to create temporary directory to store raw files: $raw_file_directory_path");
+	#		return;
+	#	}
+	#	
+	#	for my $source_file_path (@source_file_paths) {
+	#		my ($source_file_name, $source_directory_path, $source_file_extension) = fileparse($source_file_path, qr/\.[^.]*/);
+	#		
+	#		my $raw_file_path = "$raw_file_directory_path/$source_file_name.raw";
+	#		$source_file_paths_string .= "\"$raw_file_path\" ";
+	#		
+	#		## Convert from raw to raw
+	#		## There seems to be a bug in qemu-img if you specify "-f vmdk", it results in a empty file
+	#		## Leaving the -f option off also results in an empty file
+	#		#my $command = "qemu-img convert -f raw \"$source_file_path\" -O raw \"$raw_file_path\" && qemu-img info \"$raw_file_path\"";
+	#		#notify($ERRORS{'DEBUG'}, 0, "attempting to convert vmdk file to raw format: $source_file_path --> $raw_file_path, command:\n$command");
+	#		#my ($exit_status, $output) = $self->vmhost_os->execute($command, 0, 1800);
+	#		#if (!defined($exit_status)) {
+	#		#	notify($ERRORS{'WARNING'}, 0, "failed to execute command to convert vmdk file to raw format:\n$command");
+	#		#	return;
+	#		#}
+	#		#elsif ($exit_status) {
+	#		#	notify($ERRORS{'WARNING'}, 0, "failed to convert vmdk file to raw format on $node_name\ncommand: '$command'\noutput:\n" . join("\n", @$output));
+	#		#	return;
+	#		#}
+	#		#else {
+	#		#	notify($ERRORS{'DEBUG'}, 0, "converted vmdk file to raw format on $node_name: $source_file_path --> $raw_file_path\ncommand: '$command'\noutput:\n" . join("\n", @$output));
+	#		#}
+	#	}
+	#	
+	#	# Remove trailing last space
+	#	$source_file_paths_string =~ s/\s+$//;
+	#	
+	#	#my $raw_file_path_merged = "$raw_file_directory_path/$image_name.raw";
+	#	#my $cat_command = "cat $source_file_paths_string > \"$raw_file_path_merged\"";
+	#	#notify($ERRORS{'DEBUG'}, 0, "attempting to merge split raw files into $raw_file_path_merged, command:\n$cat_command");
+	#	#my ($cat_exit_status, $cat_output) = $self->vmhost_os->execute($cat_command, 0, 1800);
+	#	#if (!defined($cat_exit_status)) {
+	#	#	notify($ERRORS{'WARNING'}, 0, "failed to execute command to merge split raw files into $raw_file_path_merged, command: $cat_command");
+	#	#	return;
+	#	#}
+	#	#elsif ($cat_exit_status) {
+	#	#	notify($ERRORS{'WARNING'}, 0, "failed to convert merge split raw files into $raw_file_path_merged\ncommand: '$cat_command'\noutput:\n" . join("\n", @$cat_output));
+	#	#	return;
+	#	#}
+	#	#else {
+	#	#	notify($ERRORS{'DEBUG'}, 0, "merged split raw files into $raw_file_path_merged\ncommand: '$cat_command'\noutput:\n" . join("\n", @$cat_output));
+	#	#	$source_file_paths_string = "\"$raw_file_path_merged\"";
+	#	#}
+	#}
+	#else {
 		# Join the array of file paths into a string
-		$source_file_paths_string = join('" "', @source_file_paths);
-	}
+		$source_file_paths_string = '"' . join('" "', @source_file_paths) . '"';
+	#}
 	
+	#my $command = "qemu-img convert -f vmdk -O $disk_format $source_file_paths_string \"$destination_file_path\" && qemu-img info \"$destination_file_path\"";
 	my $command = "qemu-img convert $source_file_paths_string -O $disk_format \"$destination_file_path\" && qemu-img info \"$destination_file_path\"";
+
+	## If the image had to be converted to raw format first, add command to delete raw files
+	#if ($raw_file_directory_path) {
+	#	$command .= " ; rm -f $raw_file_directory_path";
+	#}
 	
-	# If the image had to be converted to raw format first, add command to delete raw files
-	if ($convert_to_raw) {
-		$command .= " ; rm -f $source_file_paths_string";
-	}
-	
-	notify($ERRORS{'DEBUG'}, 0, "attempting to copy/convert virtual disk to $disk_format format --> $destination_file_path");
+	notify($ERRORS{'DEBUG'}, 0, "attempting to copy/convert virtual disk to $disk_format format --> $destination_file_path, command:\n$command");
 	
 	my $start_time = time;
 	my ($exit_status, $output) = $self->vmhost_os->execute($command, 0, 1800);
@@ -887,7 +912,8 @@ EOF
 	
 	# Attempt to run virt-win-reg to merge the registry contents into the registry on the virtual disk
 	notify($ERRORS{'DEBUG'}, 0, "attempting to merge $temp_reg_file_path into $virtual_disk_file_path");
-	my ($exit_status, $output) = $self->vmhost_os->execute("virt-win-reg --merge $virtual_disk_file_path $temp_reg_file_path");
+	my $command = "virt-win-reg --merge $virtual_disk_file_path $temp_reg_file_path";
+	my ($exit_status, $output) = $self->vmhost_os->execute($command);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute command to merge $temp_reg_file_path into $virtual_disk_file_path");
 		return;
@@ -897,7 +923,7 @@ EOF
 		return 1;
 	}
 	elsif ($exit_status ne '0') {
-		notify($ERRORS{'WARNING'}, 0, "failed to merge $temp_reg_file_path into $virtual_disk_file_path, exit status: $exit_status, output:\n" . join("\n", @$output));
+		notify($ERRORS{'WARNING'}, 0, "failed to merge $temp_reg_file_path into $virtual_disk_file_path, exit status: $exit_status, command: '$command', output:\n" . join("\n", @$output));
 		return;
 	}
 	else {

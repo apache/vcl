@@ -1847,7 +1847,7 @@ sub is_request_deleted {
 
 	#notify($ERRORS{'DEBUG'}, 0,"state=$state_name, laststate=$laststate_name");
 
-	if ($state_name eq 'deleted' || $laststate_name eq 'deleted') {
+	if ($state_name =~ /(deleted|makeproduction)/ || $laststate_name =~ /(deleted|makeproduction)/) {
 		return 1;
 	}
 
@@ -1909,7 +1909,7 @@ sub is_reservation_deleted {
 
 	#notify($ERRORS{'DEBUG'}, 0,"state=$state_name, laststate=$laststate_name");
 
-	if ($state_name eq 'deleted' || $laststate_name eq 'deleted') {
+	if ($state_name =~ /(deleted|makeproduction)/ || $laststate_name =~ /(deleted|makeproduction)/) {
 		return 1;
 	}
 
@@ -4065,17 +4065,9 @@ EOF
 		
 		my $imagemeta_root_access = $request_info->{reservation}{$reservation_id}{image}{imagemeta}{rootaccess};
 		
-		# Create an array containing the user IDs of the request user and users configured for the image
-		# If imagemeta.usergroupid is set, add the user group members to the hash, set ROOTACCESS to value configured for image
-		my @image_user_ids = ($user_id);
-		if (my $imagemeta_group_id = $request_info->{reservation}{$reservation_id}{image}{imagemeta}{usergroupid}) {
-			my $imagemeta_group_member_info = get_user_group_member_info($imagemeta_group_id);
-			push @image_user_ids, keys %$imagemeta_group_member_info;
-		}
-		for my $image_user_id (@image_user_ids) {
-			$request_info->{reservation}{$reservation_id}{users}{$image_user_id} = get_user_info($image_user_id);
-			$request_info->{reservation}{$reservation_id}{users}{$image_user_id}{ROOTACCESS} = $imagemeta_root_access;
-		}
+		# Add the request user to the hash, set ROOTACCESS to the value configured in imagemeta
+		$request_info->{reservation}{$reservation_id}{users}{$user_id} = get_user_info($user_id);
+		$request_info->{reservation}{$reservation_id}{users}{$user_id}{ROOTACCESS} = $imagemeta_root_access;
 		
 		# If server request and logingroupid is set, add user group members to hash, set ROOTACCESS to 0
 		if (my $login_group_id = $request_info->{reservation}{$reservation_id}{serverrequest}{logingroupid}) {
@@ -4600,21 +4592,6 @@ EOF
 	# Get the single row returned from the select statement
 	my $imagemeta_info = $selected_rows[0];
 	
-	# Collect additional information
-	if (my $user_group_id = $imagemeta_info->{usergroupid}) {
-		
-		my $user_group_member_info = get_user_group_member_info($user_group_id);
-		
-		for my $user_id (keys %$user_group_member_info) {
-			my $user_unityid = $user_group_member_info->{$user_id}{unityid};
-			my $user_uid = $user_group_member_info->{$user_id}{uid} || 0;
-			
-			$imagemeta_info->{USERGROUPMEMBERS}{$user_uid} = $user_unityid;
-		}
-	}
-	# Populate the count of user group members
-	$imagemeta_info->{USERGROUPMEMBERCOUNT} = scalar(keys(%{$imagemeta_info->{USERGROUPMEMBERS}}));
-	
 	for my $column (keys %$imagemeta_info) {
 		if (!defined($imagemeta_info->{$column})) {
 			$imagemeta_info->{$column} = $default_imagemeta_info->{$column};
@@ -4665,9 +4642,6 @@ sub get_default_imagemeta_info {
 			$default_imagemeta_info->{$field} = '';
 		}
 	}
-	
-	$default_imagemeta_info->{USERGROUPMEMBERS} = {};
-	$default_imagemeta_info->{USERGROUPMEMBERCOUNT} = 0;
 	
 	$ENV{imagemeta_info}{default} = $default_imagemeta_info;
 	
@@ -4875,8 +4849,8 @@ sub run_ssh_command {
 	$port = 22 if (!$port);
 	$timeout_seconds = 0 if (!$timeout_seconds);
 	$identity_paths = get_management_node_info()->{keys} if (!defined $identity_paths || length($identity_paths) == 0);
-	
-return VCL::Module::OS::execute_new($node, $command, $output_level, $timeout_seconds, $max_attempts, $port, $user);
+
+return VCL::Module::OS::execute_new($node, $command, $output_level, $timeout_seconds, $max_attempts, $port, $user, '', $identity_paths);
 	
 	# TODO: Add ssh path to config file and set global variable
 	# Locate the path to the ssh binary
@@ -7477,7 +7451,7 @@ sub get_user_info {
 		return;
 	}
 	
-	return $ENV{user_info}{$user_identifier} if (!$no_cache && $ENV{user_info}{$user_identifier});
+	#return $ENV{user_info}{$user_identifier} if (!$no_cache && $ENV{user_info}{$user_identifier});
 	
 	# If affiliation identifier argument wasn't supplied, set it to % wildcard
 	$affiliation_identifier = '%' if !$affiliation_identifier;

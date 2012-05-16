@@ -1198,6 +1198,9 @@ sub delete_file {
 	# Try to take ownership, set the permissions, then delete the file using both Cygwin bash and Windows commands
 	# This should allow files to be deleted with restrictive ownership, permissions, and attributes
 	
+	my $path_unix_directory = parent_directory_path($path_unix);
+	my ($path_unix_pattern) = $path_unix =~ /\/([^\/]+)$/;
+	
 	my $command;
 	$command .= "echo ---";
 	$command .= " ; echo Calling chown.exe to change owner to root...";
@@ -1210,6 +1213,12 @@ sub delete_file {
 	$command .= " ; echo ---";
 	$command .= " ; echo Calling \\\"rm.exe -rfv $path_unix\\\" to to delete file...";
 	$command .= " ; /usr/bin/rm.exe -rfv $path_unix 2>&1";
+	
+	if ($path_unix_pattern =~ /\*/) {
+		$command .= " ; echo ---";
+		$command .= " ; echo Calling \\\"rm.exe -rfv $path_unix_directory/.$path_unix_pattern\\\" to to delete file...";
+		$command .= " ; /usr/bin/rm.exe -rfv $path_unix_directory/.$path_unix_pattern 2>&1";
+	}
 	
 	# Add call to rmdir if the path does not contain a wildcard
 	# rmdir does not accept wildcards
@@ -1418,14 +1427,54 @@ sub file_exists {
 	my $path_dos = $self->format_path_dos($path);
 	
 	# Assemble the dir command and execute it
-	my $dir_command = "cmd.exe /c \"dir /a /b \\\"$path_dos\\\"\"";
+	my $dir_command = "cmd.exe /c \"dir /a \\\"$path_dos\\\"\"";
 	my ($dir_exit_status, $dir_output) = run_ssh_command($computer_node_name, $management_node_keys, $dir_command, '', '', 0);
 	if (!defined($dir_output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to determine if file exists on $computer_node_name: $path");
 		return;
 	}
 	
+	# Checking if directory exists, no wildcard: (directory exists)
+	# $ cmd.exe /c "dir /a C:\test"
+	# Volume in drive C has no label.
+	# Volume Serial Number is 4C9E-6C37
+	#
+	# Directory of C:\test
+	#
+	#05/16/2012  01:19 PM    <DIR>          .
+	#05/16/2012  01:19 PM    <DIR>          ..
+	#               0 File(s)              0 bytes
+	#               2 Dir(s)  17,999,642,624 bytes free
+	
+	# Checking if file or directory exists with wildcard: (file exists)
+	# $ cmd.exe /c "dir /a C:\te*"
+	# Volume in drive C has no label.
+	# Volume Serial Number is 4C9E-6C37
+	#
+	# Directory of C:\
+	#
+	#05/16/2012  01:19 PM    <DIR>          test
+	#               0 File(s)              0 bytes
+	#               1 Dir(s)  17,999,642,624 bytes free
+	
+	# Checking if file exists with wildcard: (file does not exist)
+	# $ cmd.exe /c "dir /a C:\test\*"
+	# Volume in drive C has no label.
+	# Volume Serial Number is 4C9E-6C37
+	#
+	# Directory of C:\test
+	#
+	#05/16/2012  01:19 PM    <DIR>          .
+	#05/16/2012  01:19 PM    <DIR>          ..
+	#               0 File(s)              0 bytes
+	#               2 Dir(s)  17,999,642,624 bytes free
+
 	if ($dir_exit_status == 1 || grep(/(file not found|cannot find)/i, @$dir_output)) {
+		notify($ERRORS{'DEBUG'}, 0, "file does NOT exist on $computer_node_name: '$path'");
+		return 0;
+	}
+	elsif ($path =~ /\*/ && grep(/\s0 File/, @$dir_output) && grep(/\s2 Dir/, @$dir_output)) {
+		#notify($ERRORS{'DEBUG'}, 0, "file does NOT exist on $computer_node_name: '$path', exit status: $dir_exit_status, command: '$dir_command', output:\n" . join("\n", @$dir_output));
 		notify($ERRORS{'DEBUG'}, 0, "file does NOT exist on $computer_node_name: '$path'");
 		return 0;
 	}
@@ -5855,8 +5904,14 @@ sub delete_capture_configuration_files {
 	my $system32_path        = $self->get_system32_path() || return;
 	
 	# Remove old logon and logoff scripts
-	$self->delete_files_by_pattern($system32_path . '/GroupPolicy/User/Scripts', '.*\(Prepare\|prepare\|Cleanup\|cleanup\|post_load\).*');
-
+	if ($self->file_exists($system32_path . '/GroupPolicy/User/Scripts/*VCL*')) {
+		$self->delete_files_by_pattern($system32_path . '/GroupPolicy/User/Scripts', '.*\(Prepare\|prepare\|Cleanup\|cleanup\|post_load\).*');
+		
+		# Remove VCLprepare.cmd and VCLcleanup.cmd lines from scripts.ini file
+		$self->remove_group_policy_script('logon', 'VCLprepare.cmd');
+		$self->remove_group_policy_script('logoff', 'VCLcleanup.cmd');
+	}
+	
 	# Remove old scripts and utilities
 	$self->delete_files_by_pattern('C:/Cygwin/home/root', '.*\(vbs\|exe\|cmd\|bat\|log\)');
 
@@ -5865,10 +5920,6 @@ sub delete_capture_configuration_files {
 
 	# Delete VCL scheduled task if it exists
 	$self->delete_scheduled_task('VCL Startup Configuration');
-
-	# Remove VCLprepare.cmd and VCLcleanup.cmd lines from scripts.ini file
-	$self->remove_group_policy_script('logon', 'VCLprepare.cmd');
-	$self->remove_group_policy_script('logoff', 'VCLcleanup.cmd');
 
 	# Remove old root Application Data/VCL directory
 	$self->delete_file('$SYSTEMDRIVE/Documents and Settings/root/Application Data/VCL');
@@ -6596,6 +6647,7 @@ sub copy_capture_configuration_files {
 
 	my $management_node_keys = $self->data->get_management_node_keys();
 	my $computer_node_name   = $self->data->get_computer_node_name();
+	my $system32_path        = $self->get_system32_path() || return;
 	
 	# Get an array containing the configuration directory paths on the management node
 	# This is made up of all the the $SOURCE_CONFIGURATION_DIRECTORY values for the OS class and it's parent classes
@@ -6629,21 +6681,18 @@ sub copy_capture_configuration_files {
 		notify($ERRORS{'OK'}, 0, "copying image capture configuration files from $source_configuration_directory to $computer_node_name");
 		if (run_scp_command("$source_configuration_directory/*", "$computer_node_name:$NODE_CONFIGURATION_DIRECTORY", $management_node_keys)) {
 			notify($ERRORS{'OK'}, 0, "copied $source_configuration_directory directory to $computer_node_name:$NODE_CONFIGURATION_DIRECTORY");
-	
-			notify($ERRORS{'DEBUG'}, 0, "attempting to set permissions on $computer_node_name:$NODE_CONFIGURATION_DIRECTORY");
-			if (run_ssh_command($computer_node_name, $management_node_keys, "/usr/bin/chmod.exe -R 777 $NODE_CONFIGURATION_DIRECTORY")) {
-				notify($ERRORS{'OK'}, 0, "chmoded -R 777 $computer_node_name:$NODE_CONFIGURATION_DIRECTORY");
-			}
-			else {
-				notify($ERRORS{'WARNING'}, 0, "could not chmod -R 777 $computer_node_name:$NODE_CONFIGURATION_DIRECTORY");
-				return;
-			}
 		} ## end if (run_scp_command("$source_configuration_directory/*"...
 		else {
 			notify($ERRORS{'WARNING'}, 0, "failed to copy $source_configuration_directory to $computer_node_name");
 			return;
 		}
 	}
+	
+	$self->set_file_owner($NODE_CONFIGURATION_DIRECTORY, 'root:Administrators');
+	$self->execute("/usr/bin/chmod.exe -Rv 777 $NODE_CONFIGURATION_DIRECTORY", 1);
+	
+	# Grant permissions to the SYSTEM user - this is needed or else Sysprep fails
+	$self->execute("cmd.exe /c \"$system32_path/icacls.exe $NODE_CONFIGURATION_DIRECTORY /grant SYSTEM:(OI)(CI)(F) /C\"", 1);
 	
 	# Delete any Subversion files which may have been copied
 	if (!$self->delete_files_by_pattern($NODE_CONFIGURATION_DIRECTORY, '.*\.svn.*')) {

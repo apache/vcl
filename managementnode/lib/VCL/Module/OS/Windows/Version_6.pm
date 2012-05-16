@@ -1715,98 +1715,129 @@ sub run_sysprep {
 	}
 
 	my $management_node_keys = $self->data->get_management_node_keys();
-	my $computer_node_name   = $self->data->get_computer_node_name();
-	my $system32_path        = $self->get_system32_path() || return;
-	
+	my $computer_node_name = $self->data->get_computer_node_name();
+	my $system32_path = $self->get_system32_path() || return;
 	my $node_configuration_directory = $self->get_node_configuration_directory();
 	
-	#my $source_configuration_directory = eval '$' . ref($self) . '::SOURCE_CONFIGURATION_DIRECTORY';
-	#run_scp_command("$source_configuration_directory/Utilities/Sysprep/Unattend.xml", "$computer_node_name:$node_configuration_directory/Utilities/sysprep/Unattend.xml");
-	
-	# Delete existing Panther directory, contains Sysprep log files
-	if (!$self->delete_file('C:/Windows/Panther')) {
-		notify($ERRORS{'WARNING'}, 0, "unable to delete Panther directory, Sysprep will proceed");
-	}
-	
-	# Delete existing sysprep/Panther directory, contains Sysprep log files
-	if (!$self->delete_file("$system32_path/sysprep/Panther")) {
-		notify($ERRORS{'WARNING'}, 0, "unable to delete Sysprep Panther directory, Sysprep will proceed");
-	}
-	
-	# Delete existing setupapi files
-	if (!$self->delete_file('C:/Windows/inf/setupapi*')) {
-		notify($ERRORS{'WARNING'}, 0, "unable to delete setupapi files, Sysprep will proceed");
-	}
-	
-	# Delete existing INFCACHE files
-	if (!$self->delete_file('C:/Windows/inf/INFCACHE*')) {
-		notify($ERRORS{'WARNING'}, 0, "unable to delete INFCACHE files, Sysprep will proceed");
-	}
-	
-	# Delete existing INFCACHE files
-	if (!$self->delete_file('C:/Windows/inf/oem*.inf')) {
-		notify($ERRORS{'WARNING'}, 0, "unable to delete INFCACHE files, Sysprep will proceed");
-	}
-	
-	# Delete existing Sysprep_succeeded.tag file
-	if (!$self->delete_file("$system32_path/sysprep/Sysprep*.tag")) {
-		notify($ERRORS{'WARNING'}, 0, "unable to delete Sysprep_succeeded.tag log file, Sysprep will proceed");
-	}
-	
-	# Delete existing Unattend.xml file
-	if (!$self->delete_file("$system32_path/sysprep/Unattend.xml")) {
-		notify($ERRORS{'WARNING'}, 0, "unable to delete Sysprep Unattend.xml file, Sysprep will NOT proceed");
-		return;
-	}
-	
-	# Update the Unattend.xml file with the time zone name configured for the management node
 	my $time_zone_name = $self->get_time_zone_name();
-	my $base_directory = "$node_configuration_directory/Utilities/Sysprep/Unattend.xml";
-	my $search_pattern = '<TimeZone>.*</TimeZone>';
-	my $replace_string = '<TimeZone>' . $time_zone_name . '</TimeZone>';
-	if ($self->search_and_replace_in_files($base_directory, $search_pattern, $replace_string)) {
-		notify($ERRORS{'DEBUG'}, 0, "updated Unattend.xml with the time zone configured for the management node: '$time_zone_name'");
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to update Unattend.xml with the time zone configured for the management node: '$time_zone_name'");
+	if (!$time_zone_name) {
+		notify($ERRORS{'WARNING'}, 0, "time zone name could not be retrieved");
 		return;
 	}
 	
-	# Update the Unattend.xml file with the KMS client product key for the installed OS
 	my $product_key = $self->get_kms_client_product_key();
 	if (!$product_key) {
 		notify($ERRORS{'WARNING'}, 0, "KMS client product key could not be retrieved");
 		return;
 	}
-	my $product_key_search_pattern = '<ProductKey>.*</ProductKey>';
-	my $product_key_replace_string = '<ProductKey>' . $product_key . '</ProductKey>';
-	if ($self->search_and_replace_in_files($base_directory, $product_key_search_pattern, $product_key_replace_string)) {
-		notify($ERRORS{'DEBUG'}, 0, "updated Unattend.xml with the KMS product key: $product_key");
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to update Unattend.xml with the KMS product key: $product_key");
+	
+	my $unattend_xml_file_path = "$system32_path/sysprep/Unattend.xml";
+	
+	my $unattend_xml_contents = <<EOF;
+<?xml version="1.0" encoding="utf-8"?>
+<unattend xmlns="urn:schemas-microsoft-com:unattend">
+	<settings pass="generalize">
+		<component name="Microsoft-Windows-PnpSysprep" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+			<PersistAllDeviceInstalls>true</PersistAllDeviceInstalls>
+		</component>
+		<component name="Microsoft-Windows-Security-SPP" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+			<SkipRearm>1</SkipRearm>
+		</component>
+	</settings>
+	<settings pass="specialize">
+		<component name="Microsoft-Windows-Shell-Setup" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+			<Display>
+				<ColorDepth>32</ColorDepth>
+				<DPI>120</DPI>
+				<HorizontalResolution>1024</HorizontalResolution>
+				<VerticalResolution>768</VerticalResolution>
+				<RefreshRate>72</RefreshRate>
+			</Display>
+			<ComputerName>*</ComputerName>
+			<TimeZone>$time_zone_name</TimeZone>
+			<ProductKey>$product_key</ProductKey>
+		</component>
+		<component name="Microsoft-Windows-Deployment" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+			<RunSynchronous>
+				<RunSynchronousCommand wcm:action="add">
+					<Path>C:\\Cygwin\\home\\root\\VCL\\Scripts\\sysprep_cmdlines.cmd &gt; C:\\cygwin\\home\\root\\VCL\\Logs\\sysprep_cmdlines.log 2&gt;&amp;1</Path>
+					<Order>1</Order>
+				</RunSynchronousCommand>
+			</RunSynchronous>
+		</component>
+		<component name="Microsoft-Windows-Security-SPP-UX" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+			<SkipAutoActivation>true</SkipAutoActivation>
+		</component>
+		<component name="Microsoft-Windows-UnattendedJoin" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+			<Identification>
+				<JoinWorkgroup>VCL</JoinWorkgroup>
+			</Identification>
+		</component>
+	</settings>
+	<settings pass="auditSystem">
+		<component name="Microsoft-Windows-PnpCustomizationsNonWinPE" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+			<DriverPaths>
+				<PathAndCredentials wcm:action="add" wcm:keyValue="1">
+					<Path>C:\\Cygwin\\home\\root\\VCL\\Drivers</Path>
+				</PathAndCredentials>
+			</DriverPaths>
+		</component>
+	</settings>
+	<settings pass="oobeSystem">
+		<component name="Microsoft-Windows-Shell-Setup" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+			<OOBE>
+				<HideEULAPage>true</HideEULAPage>
+				<NetworkLocation>Work</NetworkLocation>
+				<ProtectYourPC>3</ProtectYourPC>
+			</OOBE>
+			<UserAccounts>
+				<AdministratorPassword>
+					<Value>$WINDOWS_ROOT_PASSWORD</Value>
+					<PlainText>true</PlainText>
+				</AdministratorPassword>
+			</UserAccounts>
+		</component>
+		<component name="Microsoft-Windows-International-Core" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+			<InputLocale>en-US</InputLocale>
+			<SystemLocale>en-US</SystemLocale>
+			<UILanguage>en-US</UILanguage>
+			<UserLocale>en-US</UserLocale>
+		</component>
+	</settings>
+</unattend>
+EOF
+
+	#notify($ERRORS{'DEBUG'}, 0, "'$unattend_xml_file_path' contents:\n$unattend_xml_contents");
+	if (!$self->create_text_file($unattend_xml_file_path, $unattend_xml_contents)) {
 		return;
 	}
 	
-	# Copy Unattend.xml file to sysprep directory
-	my $cp_command = "cp -f $node_configuration_directory/Utilities/Sysprep/Unattend.xml $system32_path/sysprep/Unattend.xml";
-	my ($cp_status, $cp_output) = run_ssh_command($computer_node_name, $management_node_keys, $cp_command);
-	if (defined($cp_status) && $cp_status == 0) {
-		notify($ERRORS{'DEBUG'}, 0, "copied Unattend.xml to $system32_path/sysprep");
-	}
-	elsif (defined($cp_status)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to copy Unattend.xml to $system32_path/sysprep, exit status: $cp_status, output:\n@{$cp_output}");
-		return;
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "unable to run ssh command to copy Unattend.xml to $system32_path/sysprep");
-		return;
-	}
+	# Delete existing Panther directory, contains Sysprep log files
+	$self->delete_file('C:/Windows/Panther');
+	
+	# Delete existing sysprep/Panther directory, contains Sysprep log files
+	$self->delete_file("$system32_path/sysprep/Panther");
+	
+	# Delete existing setupapi files
+	$self->delete_file('C:/Windows/inf/setupapi*');
+	
+	# Delete existing INFCACHE files
+	$self->delete_file('C:/Windows/inf/INFCACHE*');
+	
+	# Delete existing INFCACHE files
+	$self->delete_file('C:/Windows/inf/oem*.inf');
+	
+	# Delete existing Sysprep_succeeded.tag file
+	$self->delete_file("$system32_path/sysprep/Sysprep*.tag");
 	
 	# Delete existing MSDTC.LOG file
-	if (!$self->delete_file("$system32_path/MsDtc/MSTTC.LOG")) {
-		notify($ERRORS{'WARNING'}, 0, "unable to delete MSTTC.LOG file, Sysprep will proceed");
-	}
+	$self->delete_file("$system32_path/MsDtc/MSTTC.LOG");
+	
+	# Delete existing VCL log files
+	$self->delete_file("C:/Cygwin/home/root/VCL/Logs/*");
+	
+	# Delete legacy Sysprep directory
+	$self->delete_file("C:/Cygwin/home/root/VCL/Utilities/Sysprep");
 	
 	# Uninstall and reinstall MsDTC
 	my $msdtc_command = "$system32_path/msdtc.exe -uninstall ; $system32_path/msdtc.exe -install";
@@ -2032,7 +2063,7 @@ sub wait_for_response {
 	my $ssh_response_timeout_seconds;
 	
 	if ($self->data->get_imagemeta_sysprep()) {
-		$initial_delay_seconds = 240;
+		$initial_delay_seconds = 30;
 		$ssh_response_timeout_seconds = 1800; 
 	}
 	else {

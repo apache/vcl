@@ -975,7 +975,8 @@ sub get_master_image_directory_path {
 	my $image_name = shift || $self->data->get_image_name();
 	my $master_image_base_directory_path = $self->get_master_image_base_directory_path();
 	
-	return "$master_image_base_directory_path/$image_name";
+	#return "$master_image_base_directory_path/$image_name";
+	return $master_image_base_directory_path;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
