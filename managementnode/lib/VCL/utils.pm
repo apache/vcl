@@ -10415,8 +10415,7 @@ sub sort_by_file_name {
 			return sort sort_by_file_name @file_paths;
 		}
 		else {
-			notify($ERRORS{'WARNING'}, 0, "not called by sort, \$a and \$b are not defined, array argument was NOT passed");
-			return;
+			return ();
 		}
 	}
 	
