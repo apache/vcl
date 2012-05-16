@@ -2596,7 +2596,11 @@ sub reg_query {
 				next;
 			}
 			else {
-				notify($ERRORS{'WARNING'}, 0, "unexpected output in line: '" . string_to_ascii($line) . "'");
+				# TODO: add support for registry values that span multiple lines. Example:
+				#    Comments    REG_SZ  This security update is for Microsoft .NET Framework 3.5 SP1.
+				#    If you later install a more recent service pack, this security update will be uninstalled automatically.
+				#    For more information, visit http://support.microsoft.com/kb/2416473.
+				#notify($ERRORS{'WARNING'}, 0, "unexpected output in line: '" . string_to_ascii($line) . "'\ncommand: '$command'");
 			}
 		}
 		
