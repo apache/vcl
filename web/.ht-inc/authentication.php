@@ -375,7 +375,7 @@ function ldapLogin($authtype, $userid, $passwd) {
 	ldap_set_option($ds, LDAP_OPT_PROTOCOL_VERSION, 3);
 	ldap_set_option($ds, LDAP_OPT_REFERRALS, 0);
 	if(array_key_exists('lookupuserbeforeauth', $authMechs[$authtype]) &&
-		$authMechs[$authtype]['lookupuserbeforeauth'] &&
+	   $authMechs[$authtype]['lookupuserbeforeauth'] &&
 	   array_key_exists('lookupuserfield', $authMechs[$authtype])) {
 		# in this case, we have to look up what part of the tree the user is in
 		#   before we can actually look up the user
