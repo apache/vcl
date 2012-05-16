@@ -8395,12 +8395,12 @@ function sendRDPfile() {
 	foreach($request["reservations"] as $res) {
 		if($res['reservationid'] == $resid) {
 			$ipaddress = $res["reservedIP"];
-			$passwd = $res["password"];
 			break;
 		}
 	}
 	if(empty($ipaddress))
 		return;
+	$passwd = $request['passwds'][$resid][$user['id']];
 
 	$width = $user["width"];
 	$height = $user["height"];
