@@ -1,4 +1,4 @@
-Installing VCL 2.2.1
+Installing VCL 2.3
 
 Install & Configure:
 I. Database
@@ -13,11 +13,11 @@ I. Install & Configure the Database
       a. If you have not already done so, download and the Apache VCL source to
          the database server: 
 
-         wget http://www.apache.org/dist/incubator/vcl/apache-VCL-2.2.1-incubating.tar.bz2 
+         wget http://www.apache.org/dist/incubator/vcl/apache-VCL-2.3-incubating.tar.bz2
 
       b. Extract the files: 
 
-         tar -jxvf apache-VCL-2.2.1-incubating.tar.bz2 
+			tar -jxvf apache-VCL-2.3-incubating.tar.bz2
 
    2. Install MySQL Server
       a. Install MySQL Server 5.x: 
@@ -32,12 +32,20 @@ I. Install & Configure the Database
 
          /sbin/service mysqld start 
 
-      d. Make sure the firewall on the database server is configured to allow
-         traffic from the web server and management node servers to connect to
-         the MySQL daemon TCP port: 3306.  See the firewall documentation for
-         more information. 
+      d. If the iptables firewall is being used and the web server and management nodes 
+			will be on different machines, port 3306 should be opend up
+		
+			Note the following rules are for Red Hat based distros.
 
-         man iptables 
+			vi /etc/sysconfig/iptables
+
+			Insert the following under the RH-Firewall-1-INPUT chain
+			-A RH-Firewall-1-INPUT -m state --state NEW -s <web server IP> -p tcp --dport 3306 -j ACCEPT
+			-A RH-Firewall-1-INPUT -m state --state NEW -s <management node IP> -p tcp --dport 3306 -j ACCEPT
+			service iptables restart
+
+			For more info on iptables:
+			man iptables
 
    3. Create the VCL Database
       a. Run the MySQL command-line client: 
@@ -50,13 +58,12 @@ I. Install & Configure the Database
 
       c. Create a user with SELECT, INSERT, UPDATE, DELETE, and 
          CREATE TEMPORARY TABLES privileges on the database you just created:
-
-         GRANT SELECT,INSERT,UPDATE,DELETE,CREATE TEMPORARY TABLES ON vcl.* \
-         TO 'vcluser'@'localhost' IDENTIFIED BY 'vcluserpassword'; 
-
-         NOTE: Replace vcluser and vcluserpassword with that of the user you 
-         want to use to connect to the database. The GRANT command will 
+         
+			Replace vcluser and vcluserpassword in the SQL statement with that of the 
+			user you want to use to connect to the database. The GRANT command will 
          automatically create the user if it doesn't already exist.
+
+         GRANT SELECT,INSERT,UPDATE,DELETE,CREATE TEMPORARY TABLES ON vcl.* TO 'vcluser'@'localhost' IDENTIFIED BY 'vcluserpassword'; 
 
       d. Exit the MySQL command-line client: 
 
@@ -64,19 +71,19 @@ I. Install & Configure the Database
 
       e. Import the vcl.sql file into the database: 
 
-         mysql vcl < apache-VCL-2.2.1-incubating/mysql/vcl.sql 
+         mysql vcl < apache-VCL-2.3-incubating/mysql/vcl.sql
 
          The vcl.sql file is included in the mysql directory within the Apache
          VCL source code 
 
-   4. Install & Configure phpMyAdmin (Optional):
+   4. (Optional) Install & Configure phpMyAdmin (Optional):
       phpMyAdmin is a free and optional tool which allows MySQL to be 
       administered using a web browser. It makes administering the VCL database 
       easier. This tool can be installed on the VCL web server.  To install 
       phpMyAdmin, follow the instructions on:
 
-            VCL 2.2.1 phpMyAdmin Installation & Configuration
-            http://cwiki.apache.org/VCL/vcl-221-phpmyadmin-installation-configuration.html
+            VCL 2.3 phpMyAdmin Installation & Configuration
+            http://cwiki.apache.org/VCL/vcl-23-phpmyadmin-installation-configuration.html
 
 --------------------------------------------------------------------------------
 
@@ -85,7 +92,7 @@ II. Install & Configure the Web Components
    Prerequisites:
 
    The following instructions assume these tasks have previously been completed:
-      * Apache VCL 2.2.1 has been downloaded
+      * Apache VCL 2.3 has been downloaded
       * VCL database has been installed and configured
 
    Web Server:
@@ -94,10 +101,16 @@ II. Install & Configure the Web Components
       The VCL web frontend may run under other web server platforms capable of
       running PHP code, but has only been tested to work with Apache HTTP Server
    
-   Required Linux Packages:
+   Required Linux Packages(See II.1 section below on installing)
+		* httpd - Apache HTTP Server
+		* mod_ssl - SSL/TLS module for the Apache HTTP server
+		* php - The PHP HTML-embedded scripting language
       * libmcrypt - Encryption algorithms library
+			
+			NOTE: libmycrypt can be removed if using a patch.
+			https://cwiki.apache.org/VCL/patch-to-remove-mcrypt-dependency.html
    
-   Required PHP Modules:
+   Required PHP Modules(See II.1 section below on installing):
    (Some of these may already be included with your PHP distribution)
       * php-gd
       * php-json (required if your PHP version is 5.2 or later)
@@ -112,17 +125,16 @@ II. Install & Configure the Web Components
    1. Install the Required Linux Packages & PHP Modules
       a. If your web server is running a Red Hat-based OS, the required
          components can be installed with: 
+			
+			For RHEL / CentOS 5
+         yum install httpd mod_ssl php-gd php-mcrypt php-mysql php-xml php-xmlrpc php-ldap -y 
 
-         yum install httpd mod_ssl php-gd php-mcrypt php-mysql php-xml \
-         php-xmlrpc php-ldap -y 
+			For RHEL / CentOS 6
+         yum install httpd mod_ssl php-gd php-mcrypt php-mysql php-xml php-xmlrpc php-ldap php-process -y 
 
-         * If you will be using a self-signed certificate for SSL, this is a
-           great HOWTO explaining how to set it up on CentOS:
-
-           http://wiki.centos.org/HowTos/Https
-
-         * It is useful to configure the server to be able to send debugging
-           emails
+			Note: You may need the optional server rpm repository for the php-process 
+			package to add this run the following command:
+			rhn-channel --add --channel=rhel-x86_64-server-optional-6
 
       b. Configure the web server daemon (httpd) to start automatically: 
 
@@ -136,12 +148,21 @@ II. Install & Configure the Web Components
          server to connect to the database: 
 
          /usr/sbin/setsebool -P httpd_can_network_connect=1 
+		
+		e. If the iptables firewall is being used, port 80 and 443 should be opened up:
+			
+			vi /etc/sysconfig/iptables
+			
+			Insert the following lines.
+			-A RH-Firewall-1-INPUT -m state --state NEW -p tcp --dport 80 -j ACCEPT
+			-A RH-Firewall-1-INPUT -m state --state NEW -p tcp --dport 443 -j ACCEPT
+			service iptables restart
 
    2. Install the VCL Frontend Web Code
       a. Copy the web directory to a location under the web root of your web
          server and navigate to the destination .ht-inc subdirectory: 
 
-         cp -r apache-VCL-2.2.1-incubating/web/ /var/www/html/vcl
+         cp -r apache-VCL-2.3-incubating/web/ /var/www/html/vcl
          cd /var/www/html/vcl/.ht-inc 
 
       b. Copy secrets-default.php to secrets.php: 
@@ -200,11 +221,15 @@ II. Install & Configure the Web Components
          * Enter the current password: adminVc1passw0rd
          * Enter a new password
          * Click Submit Changes
+
    4. Add a Management Node to the Database
       a. Click the Management Nodes link 
-         * Enter the hostname and IP address of your management node
          * Click Add
-         * Fill in these additional required fields: 
+         * Fill in these required fields: 
+			  * Hostname - The name of the management node server. This value doesn't necessarily 
+		 		 need to be a name registered in DNS nor does it need to be the value displayed by 
+				 the Linux hostname command. For example, if you are installing all of the VCL 
+			  	 components on the same machine you can set this value to localhost.	
            * SysAdmin Email Address - error emails will be sent to this address
            * Install Path - this is parent directory under which image files
              will be stored - only required if doing bare metal installs or
@@ -449,8 +474,8 @@ III. Install & Configure the Management Node Components
 
       The following management node installation instructions assume the
       instructions on the following pages have previously been completed:
-         * VCL 2.2.1 Database Installation
-         * VCL 2.2.1 Web Code Installation
+         * VCL 2.3 Database Installation
+         * VCL 2.3 Web Code Installation
       
    Supported Operating Systems:
 
@@ -459,7 +484,9 @@ III. Install & Configure the Management Node Components
       tested on the following:
          * Red Hat Enterprise Linux 4.x
          * Red Hat Enterprise Linux 5.x
+         * Red Hat Enterprise Linux 6.x
          * CentOS 5.x
+         * CentOS 6.x
       
    Required Linux Packages:
 
@@ -501,7 +528,7 @@ III. Install & Configure the Management Node Components
       Copy the managementnode directory to the location where you want it to
       reside (typically /usr/local): 
 
-         cp -r apache-VCL-2.2.1-incubating/managementnode /usr/local/vcl 
+         cp -r apache-VCL-2.3-incubating/managementnode /usr/local/vcl 
 
    2. Install the Required Linux Packages & Perl Modules
       Run the install_perl_libs.pl script:
@@ -552,6 +579,10 @@ III. Install & Configure the Management Node Components
             * server - the IP address or FQDN of the database server
             * LockerWrtUser - database user account with write privileges
             * wrtPass - database user password
+				* xmlrpc_pass - password for xmlrpc api from vcld to the web interface(can be long). This will be 
+					used later to sync the database vclsystem user account
+				* xmlrpc_url - URL for xmlrpc api https://my.server.org/vcl/index.php?mode=xmlrpccall
+
       d. Save the vcld.conf file
 
    4. Configure the SSH Client
@@ -620,8 +651,19 @@ III. Install & Configure the Management Node Components
    
             2009-06-16 16:57:15|15792|vcld:main(165)|lastcheckin time updated
             for management node 18: 2009-06-16 16:57:15
+	6. Set the vclsystem account password for xmlrpc api
+		Using the vcld -setup tool, set the vclsystem account. This is needed to properly use the block allocation features.
+		
+		/usr/local/vcl/bin/vcld -setup
+		
+		Select 1. VCL Base Module
+		Select 2. Set Local VCL User Account Password
+		Select 2. vclsystem 
+		
+		From the vcld.conf file, paste or type the password from xmlrpc_pass variable and hit enter.
+
                
-   6. Configure Windows Product Keys and/or KMS Server Addresses (Optional)
+   7. Configure Windows Product Keys and/or KMS Server Addresses (Optional)
       If you will be deploying Windows environments your institution's Windows 
       product key and/or KMS server addresses must be entered into the VCL 
       database. This can be done by running the following command:
@@ -629,7 +671,7 @@ III. Install & Configure the Management Node Components
          /usr/local/vcl/bin/vcld -setup 
          Select "Windows OS Module" and follow the prompts.
    
-   7. Download Windows Sysprep Utility (Optional)
+   8. Download Windows Sysprep Utility (Optional)
       If you will be using VCL to deploy bare-metal Windows XP or Windows Server
       2003 environments via xCAT, the appropriate versions of the Microsoft 
       Sysprep utility must be downloaded to the management node. The following 
@@ -664,7 +706,7 @@ III. Install & Configure the Management Node Components
 
            /usr/local/vcl/tools/Windows_Server_2003/Utilities/Sysprep
             
-   8.Download Windows Drivers (Optional)
+   9.Download Windows Drivers (Optional)
       
       Drivers which aren't included with Windows must be downloaded and saved to
       the management node. The drivers required will vary greatly depending on 
@@ -730,7 +772,7 @@ III. Install & Configure the Management Node Components
       /var/lib/vcl/tools/Windows_Version_XP/Drivers/Storage
       /var/lib/vcl/tools/Windows_Version_XP/Drivers/Video
    
-   8. Install & Configure Provisioning Engines and Hypervisors
+   10. Install & Configure Provisioning Engines and Hypervisors
       VCL supports the following, please see the related websites for
       installation and configuration instructions:
    
