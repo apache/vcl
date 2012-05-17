@@ -4375,6 +4375,59 @@ sub clean_known_files {
 	return 1;
 }
 
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 user_exists
+
+ Parameters  : 
+ Returns     : 
+ Description : 
+
+=cut
+
+sub user_exists {
+        my $self = shift;
+        if (ref($self) !~ /linux/i) {
+                notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+                return;
+        }
+
+        my $management_node_keys = $self->data->get_management_node_keys();
+        my $computer_node_name   = $self->data->get_computer_node_name();
+			# Attempt to get the username from the arguments
+        # If no argument was supplied, use the user specified in the DataStructure
+        my $username = shift;
+        if (!$username) {
+                $username = $self->data->get_user_login_id();
+        }
+
+
+			        notify($ERRORS{'DEBUG'}, 0, "checking if user $username exists on $computer_node_name");
+
+        # Attempt to query the user account
+        my $query_user_command = "id $username";
+        my ($query_user_exit_status, $query_user_output) = $self->execute($query_user_command,1);
+			
+		if (grep(/uid/, $query_user_output)) {
+               notify($ERRORS{'DEBUG'}, 0, "user $username exists on $computer_node_name");
+               return 1;
+       }
+       elsif (grep(/no such user/, $query_user_output)) {
+               notify($ERRORS{'DEBUG'}, 0, "user $username does not exist on $computer_node_name");
+               return 0;
+       }
+       elsif (defined($query_user_exit_status)) {
+               notify($ERRORS{'WARNING'}, 0, "failed to determine if user $username exists on $computer_node_name, exit status: $query_user_exit_status, output:\n@{$query_user_output}");
+               return;
+       }
+       else {
+               notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to determine if user $username exists on $computer_node_name");
+               return;
+       }
+
+}
+
+
 ##/////////////////////////////////////////////////////////////////////////////
 1;
 __END__
