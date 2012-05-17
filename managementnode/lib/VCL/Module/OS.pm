@@ -1813,30 +1813,78 @@ sub get_file_contents {
 
 sub execute {
 #return execute_new(@_);
-	my $self = shift;
-	unless (ref($self) && $self->isa('VCL::Module')) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as an object method");
-		return;
+		my $self = shift;
+		($argument) = @_;
+		
+		#notify($ERRORS{'DEBUG'}, 0, "called as an object method: " . ref($self));
+		
+		# Get the computer name from the reservation data
+		$computer_name = $self->data->get_computer_node_name();
+		if (!$computer_name) {
+			notify($ERRORS{'WARNING'}, 0, "called as an object method, failed to retrieve computer name from reservation data");
+			return;
+		}
+		#notify($ERRORS{'DEBUG'}, 0, "retrieved computer name from reservation data: $computer_name");
 	}
 	
-	# Get the command argument
-	my $command = shift;
+	# Check the argument type
+	if (ref($argument)) {
+		if (ref($argument) eq 'HASH') {
+			#notify($ERRORS{'DEBUG'}, 0, "first argument is a hash reference:\n" . format_data($argument));
+			
+			$computer_name = $argument->{node} if (!$computer_name);
+			$command = $argument->{command};
+			$display_output = $argument->{display_output};
+			$timeout_seconds = $argument->{timeout};
+			$max_attempts = $argument->{max_attempts};
+			$port = $argument->{port};
+			$user = $argument->{user};
+			$password = $argument->{password};
+			$identity_key = $argument->{identity_key};
+			$ignore_error = $argument->{ignore_error};
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "invalid argument reference type passed: " . ref($argument) . ", if a reference is passed as the argument it may only be a hash or VCL::Module reference");
+			return;
+		}
+	}
+	else {
+		# Argument is not a reference, computer name must be the first argument unless this subroutine was called as an object method
+		# If called as an object method, $computer_name will already be populated
+		if (!$computer_name) {
+			$computer_name = shift;
+			#notify($ERRORS{'DEBUG'}, 0, "first argument is a scalar, should be the computer name: $computer_name, remaining arguments:\n" . format_data(\@_));
+		}
+		else {
+			#notify($ERRORS{'DEBUG'}, 0, "first argument should be the command:\n" . format_data(\@_));
+		}
+		
+		# Get the remaining arguments
+		($command, $display_output, $timeout_seconds, $max_attempts, $port, $user, $password, $identity_key, $ignore_error) = @_;
+	}
+	
+	if (!$computer_name) {
+		notify($ERRORS{'WARNING'}, 0, "computer name could not be determined");
+		return;
+	}
 	if (!$command) {
 		notify($ERRORS{'WARNING'}, 0, "command argument was not specified");
 		return;
 	}
 	
-	# Get 2nd display output argument if supplied, or set default value
-	my $display_output = shift || '0';
-	
-	# Get the computer node name
-	my $computer_name = $self->data->get_computer_node_name() || return;
-	
-	# Get the identity keys used by the management node
-	my $management_node_keys = $self->data->get_management_node_keys() || '';
+	my $arguments = {
+		node => $computer_name,
+		command => $command,
+		identity_paths => $identity_key,
+		user => $user,
+		port => $port,
+		output_level => $display_output,
+		max_attempts => $max_attempts,
+		timeout_seconds => $timeout_seconds,
+	};
 	
 	# Run the command via SSH
-	my ($exit_status, $output) = run_ssh_command($computer_name, $management_node_keys, $command, '', '', $display_output);
+	my ($exit_status, $output) = run_ssh_command($arguments);
 	if (defined($exit_status) && defined($output)) {
 		if ($display_output) {
 			notify($ERRORS{'OK'}, 0, "executed command: '$command', exit status: $exit_status, output:\n" . join("\n", @$output));
