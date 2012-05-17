@@ -4850,7 +4850,7 @@ sub run_ssh_command {
 	$timeout_seconds = 0 if (!$timeout_seconds);
 	$identity_paths = get_management_node_info()->{keys} if (!defined $identity_paths || length($identity_paths) == 0);
 
-return VCL::Module::OS::execute_new($node, $command, $output_level, $timeout_seconds, $max_attempts, $port, $user, '', $identity_paths);
+#return VCL::Module::OS::execute_new($node, $command, $output_level, $timeout_seconds, $max_attempts, $port, $user, '', $identity_paths);
 	
 	# TODO: Add ssh path to config file and set global variable
 	# Locate the path to the ssh binary

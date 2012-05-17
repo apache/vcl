@@ -1804,7 +1804,7 @@ sub get_file_contents {
 =cut
 
 sub execute {
-return execute_new(@_);
+#return execute_new(@_);
 	my $self = shift;
 	unless (ref($self) && $self->isa('VCL::Module')) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as an object method");
