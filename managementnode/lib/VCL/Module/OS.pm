@@ -1813,6 +1813,12 @@ sub get_file_contents {
 
 sub execute {
 #return execute_new(@_);
+	my ($argument) = @_;
+	my ($computer_name, $command, $display_output, $timeout_seconds, $max_attempts, $port, $user, $password, $identity_key, $ignore_error);
+	
+	# Check if this subroutine was called as an object method
+	if (ref($argument) && ref($argument) =~ /VCL::Module/) {
+		# Subroutine was called as an object method ($self->execute)
 		my $self = shift;
 		($argument) = @_;
 		
