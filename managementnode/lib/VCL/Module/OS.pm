@@ -618,13 +618,21 @@ sub is_ssh_responding {
 	
 	if ($max_attempts) {
 		# Run a test SSH command
-		my ($exit_status, $output) = $self->execute({
+		#my ($exit_status, $output) = $self->execute({
+		#	node => $computer_node_name,
+		#	command => "echo \"testing ssh on $computer_node_name\"",
+		#	max_attempts => $max_attempts,
+		#	display_output => 0,
+		#	timeout_seconds => 30,
+		#	ignore_error => 1,
+		#});
+		
+		my ($exit_status, $output) = run_ssh_command({
 			node => $computer_node_name,
 			command => "echo \"testing ssh on $computer_node_name\"",
 			max_attempts => $max_attempts,
-			display_output => 0,
+			output_level => 0,
 			timeout_seconds => 30,
-			ignore_error => 1,
 		});
 		
 		# The exit status will be 0 if the command succeeded
