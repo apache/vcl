@@ -4401,8 +4401,7 @@ sub user_exists {
                 $username = $self->data->get_user_login_id();
         }
 
-
-			        notify($ERRORS{'DEBUG'}, 0, "checking if user $username exists on $computer_node_name");
+		  notify($ERRORS{'DEBUG'}, 0, "checking if user $username exists on $computer_node_name");
 
         # Attempt to query the user account
         my $query_user_command = "id $username";
@@ -4412,7 +4411,7 @@ sub user_exists {
                notify($ERRORS{'DEBUG'}, 0, "user $username exists on $computer_node_name");
                return 1;
        }
-       elsif (grep(/no such user/, $query_user_output)) {
+       elsif (grep(/No such user/i, $query_user_output)) {
                notify($ERRORS{'DEBUG'}, 0, "user $username does not exist on $computer_node_name");
                return 0;
        }

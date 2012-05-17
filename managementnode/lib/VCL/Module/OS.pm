@@ -2296,6 +2296,9 @@ sub manage_server_access {
 			next;
 		}
 		my $standalone = 0;
+		if(!$self->user_exists($user_hash{$userid}{username})){
+         delete($res_accounts{$userid});
+      }
 		if(!exists($res_accounts{$userid})){
 			# check affiliation
 			notify($ERRORS{'DEBUG'}, 0, "checking affiliation for $userid");
