@@ -6685,23 +6685,22 @@ sub copy_capture_configuration_files {
 		notify($ERRORS{'OK'}, 0, "copying image capture configuration files from $source_configuration_directory to $computer_node_name");
 		if (run_scp_command("$source_configuration_directory/*", "$computer_node_name:$NODE_CONFIGURATION_DIRECTORY", $management_node_keys)) {
 			notify($ERRORS{'OK'}, 0, "copied $source_configuration_directory directory to $computer_node_name:$NODE_CONFIGURATION_DIRECTORY");
-		} ## end if (run_scp_command("$source_configuration_directory/*"...
+			
+			notify($ERRORS{'DEBUG'}, 0, "setting permissions of $NODE_CONFIGURATION_DIRECTORY to 777 on $computer_node_name");
+			$self->execute("/usr/bin/chmod.exe -R 777 $NODE_CONFIGURATION_DIRECTORY");
+		}
 		else {
 			notify($ERRORS{'WARNING'}, 0, "failed to copy $source_configuration_directory to $computer_node_name");
 			return;
 		}
 	}
 	
-	$self->set_file_owner($NODE_CONFIGURATION_DIRECTORY, 'root:Administrators');
-	$self->execute("/usr/bin/chmod.exe -Rv 777 $NODE_CONFIGURATION_DIRECTORY", 1);
-	
-	# Grant permissions to the SYSTEM user - this is needed or else Sysprep fails
-	$self->execute("cmd.exe /c \"$system32_path/icacls.exe $NODE_CONFIGURATION_DIRECTORY /grant SYSTEM:(OI)(CI)(F) /C\"", 1);
-	
 	# Delete any Subversion files which may have been copied
 	if (!$self->delete_files_by_pattern($NODE_CONFIGURATION_DIRECTORY, '.*\.svn.*')) {
 		notify($ERRORS{'WARNING'}, 0, "unable to delete Subversion files under: $NODE_CONFIGURATION_DIRECTORY");
 	}
+	
+	$self->set_file_owner($NODE_CONFIGURATION_DIRECTORY, 'root');
 	
 	# Find any files containing a 'WINDOWS_ROOT_PASSWORD' string and replace it with the root password
 	if ($self->search_and_replace_in_files($NODE_CONFIGURATION_DIRECTORY, 'WINDOWS_ROOT_PASSWORD', $WINDOWS_ROOT_PASSWORD)) {

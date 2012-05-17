@@ -1839,6 +1839,9 @@ EOF
 	# Delete legacy Sysprep directory
 	$self->delete_file("C:/Cygwin/home/root/VCL/Utilities/Sysprep");
 	
+	# Grant permissions to the SYSTEM user - this is needed or else Sysprep fails
+	$self->execute("cmd.exe /c \"$system32_path/icacls.exe $node_configuration_directory /grant SYSTEM:(OI)(CI)(F) /C\"");
+	
 	# Uninstall and reinstall MsDTC
 	my $msdtc_command = "$system32_path/msdtc.exe -uninstall ; $system32_path/msdtc.exe -install";
 	my ($msdtc_status, $msdtc_output) = run_ssh_command($computer_node_name, $management_node_keys, $msdtc_command);
@@ -1853,7 +1856,7 @@ EOF
 	}
 	
 	# Get the node drivers directory and convert it to DOS format
-	my $drivers_directory = $self->get_node_configuration_directory() . '/Drivers';
+	my $drivers_directory = "$node_configuration_directory/Drivers";
 	$drivers_directory =~ s/\//\\\\/g;
 	
 	# Set the Installation Sources registry key
