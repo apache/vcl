@@ -2796,7 +2796,7 @@ sub create_user {
 	if (!$adminoverride) {
 		$adminoverride = 0;	
 	}
-	if (!$user_uid) {
+	if (!defined($user_uid)) {
 		$user_uid = $self->data->get_user_uid();	
 		notify($ERRORS{'OK'}, 0, "user_uid not provided, pulling from datastructure");
 	}

@@ -2176,7 +2176,7 @@ sub manage_server_access {
 	my @userlist_admin;
 	my @userlist_login;
 	my %user_hash;
-	my $allow_list = '';
+	my $allow_list = '$user_login_id_owner';
 
 	if ($server_request_admingroupid) {
 		@userlist_admin = getusergroupmembers($server_request_admingroupid);
