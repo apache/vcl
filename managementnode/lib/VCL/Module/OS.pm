@@ -2227,9 +2227,10 @@ sub manage_server_access {
 	foreach my $userid (sort keys %user_hash) {
 		next if (!($userid));
 		#Skip reservation owner, this account is processed in the new and reserved states
-		notify($ERRORS{'DEBUG'}, 0, "userid= $userid  user_id_owner= $user_id_owner ");
+		notify($ERRORS{'DEBUG'}, 0, "userid= $userid  user_id_owner= $user_id_owner login_id_owner= $user_login_id_owner ");
 		if ($userid eq $user_id_owner) {
-			$allow_list .= " $user_hash{$userid}{username}";
+			#Add owner's login id if does not already exist
+         $allow_list .= " $user_login_id_owner" if ($allow_list !~ /$user_login_id_owner/) ;
 			next;
 		}
 		my $standalone = 0;
@@ -2276,7 +2277,9 @@ sub manage_server_access {
 		notify($ERRORS{'OK'}, 0, "res_userid= $res_userid username= $res_accounts{$res_userid}{username}");
 		#Skip reservation owner, this account is processed in the new and reserved states
       if ($res_userid eq $user_login_id_owner) {
-			$allow_list .= " $res_accounts{$res_userid}{username}";
+			#Add owner's login id if it does not already exist
+         $allow_list .= " $user_login_id_owner" if ($allow_list !~ /$user_login_id_owner/) ;
+			#Skip group checks as the owner may not be a member
 			next;
 		}
 		if(!exists($user_hash{$res_userid})) {
