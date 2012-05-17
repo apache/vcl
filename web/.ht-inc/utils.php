@@ -3839,9 +3839,11 @@ function isAvailable($images, $imageid, $imagerevisionid, $start, $end,
 		# check for max concurrent usage of image
 		if(! $skipconcurrentcheck && 
 		   $images[$imageid]['maxconcurrent'] != NULL) {
+			$decforedit = 0;
 			$compids = array();
 			$reloadid = getUserlistID('vclreload@Local');
-			$query = "SELECT rs.computerid "
+			$query = "SELECT rs.computerid, "
+			       .        "rq.id AS reqid "
 			       . "FROM reservation rs, "
 			       .      "request rq "
 			       . "WHERE '$startstamp' < (rq.end + INTERVAL 900 SECOND) AND "
@@ -3851,8 +3853,11 @@ function isAvailable($images, $imageid, $imagerevisionid, $start, $end,
 			       .       "rq.stateid NOT IN (1,5,11,12,16,17) AND "
 			       .       "rq.userid != $reloadid";
 			$qh = doQuery($query, 101);
-			while($row = mysql_fetch_assoc($qh))
+			while($row = mysql_fetch_assoc($qh)) {
 				$compids[] = $row['computerid'];
+				if($row['reqid'] == $requestid)
+					$decforedit = 1;
+			}
 			$usagecnt = count($compids);
 			$allids = implode("','", $compids);
 			$query = "SELECT COUNT(bc.imageid) AS currentusage "
@@ -3872,7 +3877,7 @@ function isAvailable($images, $imageid, $imagerevisionid, $start, $end,
 				semUnlock();
 				return 0;
 			}
-			if(($usagecnt + $row['currentusage']) >= $images[$imageid]['maxconcurrent']) {
+			if(($usagecnt + $row['currentusage'] - $decforedit) >= $images[$imageid]['maxconcurrent']) {
 				semUnlock();
 				return -1;
 			}
@@ -11369,11 +11374,16 @@ function getFSlocales() {
 		if(! file_exists("{$dir}/language"))
 			continue;
 		$fh = fopen("{$dir}/language", 'r');
-		if(! ($line = fgetss($fh))) {
-			fclose($fh);
-			continue;
+		while($line = fgetss($fh)) {
+			if(preg_match('/(^#)|(^\s*$)/', $line)) {
+				continue;
+			}
+			else
+				break;
 		}
 		fclose($fh);
+		if(! $line)
+			continue;
 		$lang = htmlspecialchars(strip_tags(trim($line)));
 		$tmp = explode('/', $dir);
 		$dir = array_pop($tmp);
