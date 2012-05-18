@@ -3902,7 +3902,7 @@ sub get_firewall_configuration {
 			}
 			
 			my $services_cmd = "cat /etc/services";
-			my ($services_status, $service_output) = $self->execute($services_cmd);
+			my ($services_status, $service_output) = $self->execute($services_cmd,0);
 			if (!defined($service_output)) {
       		notify($ERRORS{'DEBUG'}, 0, "failed to get /etc/services");
    		}
@@ -4401,17 +4401,17 @@ sub user_exists {
                 $username = $self->data->get_user_login_id();
         }
 
-		  notify($ERRORS{'DEBUG'}, 0, "checking if user $username exists on $computer_node_name");
+	notify($ERRORS{'DEBUG'}, 0, "checking if user $username exists on $computer_node_name");
 
         # Attempt to query the user account
         my $query_user_command = "id $username";
         my ($query_user_exit_status, $query_user_output) = $self->execute($query_user_command,1);
 			
-		if (grep(/uid/, $query_user_output)) {
+	if (grep(/uid/, @$query_user_output)) {
                notify($ERRORS{'DEBUG'}, 0, "user $username exists on $computer_node_name");
                return 1;
        }
-       elsif (grep(/No such user/i, $query_user_output)) {
+       elsif (grep(/No such user/i, @$query_user_output)) {
                notify($ERRORS{'DEBUG'}, 0, "user $username does not exist on $computer_node_name");
                return 0;
        }

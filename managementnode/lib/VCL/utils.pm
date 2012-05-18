@@ -2098,6 +2098,7 @@ VALUES
 	'$user_id',
 	'$password'
 )
+ON DUPLICATE KEY UPDATE password = '$password'
 EOF
 	}
 	elsif ($mode =~ /delete/i) {
@@ -2108,7 +2109,7 @@ FROM
 reservationaccounts
 WHERE
 reservationid = '$reservation_id' AND
-userid = '$user_id'
+userid = '$user_id' 
 EOF
 	}
 	
