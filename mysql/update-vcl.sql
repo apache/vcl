@@ -1163,6 +1163,8 @@ INSERT IGNORE INTO `usergroupprivtype` (`id`, `name`, `help`) VALUES
 (14, 'Manage Federated User Groups (global)', 'Grants the ability to control attributes of user groups that are created through federated systems such as LDAP and Shibboleth. Does not grant control of user group membership.'),
 (15, 'Manage Federated User Groups (affiliation only)', 'Grants the ability to control attributes of user groups that are created through federated systems such as LDAP and Shibboleth. Does not grant control of user group membership.');
 
+UPDATE `usergroupprivtype` SET `name` = 'Manage Block Allocations (global)', `help` = 'Grants the ability to create, accept, and reject block allocations for any affiliation.' WHERE name = 'Manage Block Allocations';
+
 -- --------------------------------------------------------
 
 -- 
