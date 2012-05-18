@@ -10485,7 +10485,7 @@ function getExtraCSS() {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function getDojoHTML($refresh) {
-	global $mode, $actions, $skin, $locale;
+	global $mode, $actions, $skin, $locale, $VCLversion;
 	$filename = '';
 	$dojoRequires = array();
 
@@ -10774,6 +10774,7 @@ function getDojoHTML($refresh) {
 		$customfile = sprintf("<script type=\"text/javascript\" src=\"dojo/dojo/%s\"></script>\n", $filename);
 	$rt = '';
 	$jslocale = strtolower(str_replace('_', '-', $locale));
+	$v = $VCLversion;
 	switch($mode) {
 		case "connectRequest":
 			$rt .= "<style type=\"text/css\">\n";
@@ -10782,7 +10783,7 @@ function getDojoHTML($refresh) {
 			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
 			$rt .= "   djConfig=\"parseOnLoad: true, locale: '$jslocale'\">\n";
 			$rt .= "</script>\n";
-			$rt .= "<script type=\"text/javascript\" src=\"js/requests.js\"></script>\n";
+			$rt .= "<script type=\"text/javascript\" src=\"js/requests.js?v=$v\"></script>\n";
 			$rt .= $customfile;
 			$rt .= "<script type=\"text/javascript\">\n";
 			$rt .= "   dojo.addOnLoad(function() {\n";
@@ -10800,7 +10801,7 @@ function getDojoHTML($refresh) {
 			$rt .= "   @import \"dojo/dojox/layout/resources/FloatingPane.css\";\n";
 			$rt .= "   @import \"dojo/dojox/layout/resources/ResizeHandle.css\";\n";
 			$rt .= "</style>\n";
-			$rt .= "<script type=\"text/javascript\" src=\"js/requests.js\"></script>\n";
+			$rt .= "<script type=\"text/javascript\" src=\"js/requests.js?v=$v\"></script>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
 			$rt .= "   djConfig=\"parseOnLoad: true, locale: '$jslocale'\">\n";
 			$rt .= "</script>\n";
@@ -10828,7 +10829,7 @@ function getDojoHTML($refresh) {
 			$rt .= "<style type=\"text/css\">\n";
 			$rt .= "   @import \"themes/$skin/css/dojo/$skin.css\";\n";
 			$rt .= "</style>\n";
-			$rt .= "<script type=\"text/javascript\" src=\"js/requests.js\"></script>\n";
+			$rt .= "<script type=\"text/javascript\" src=\"js/requests.js?v=$v\"></script>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
 			$rt .= "   djConfig=\"parseOnLoad: true, locale: '$jslocale'\">\n";
 			$rt .= "</script>\n";
@@ -10852,7 +10853,7 @@ function getDojoHTML($refresh) {
 			$rt .= "   @import \"themes/$skin/css/dojo/$skin.css\";\n";
 			$rt .= "   @import \"dojo/dojox/grid/resources/Grid.css\";\n";
 			$rt .= "</style>\n";
-			$rt .= "<script type=\"text/javascript\" src=\"js/blockallocations.js\"></script>\n";
+			$rt .= "<script type=\"text/javascript\" src=\"js/blockallocations.js?v=$v\"></script>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
 			$rt .= "   djConfig=\"parseOnLoad: true, locale: '$jslocale'\">\n";
 			$rt .= "</script>\n";
@@ -10879,7 +10880,7 @@ function getDojoHTML($refresh) {
 			$rt .= "<style type=\"text/css\">\n";
 			$rt .= "   @import \"themes/$skin/css/dojo/$skin.css\";\n";
 			$rt .= "</style>\n";
-			$rt .= "<script type=\"text/javascript\" src=\"js/blockallocations.js\"></script>\n";
+			$rt .= "<script type=\"text/javascript\" src=\"js/blockallocations.js?v=$v\"></script>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
 			$rt .= "   djConfig=\"parseOnLoad: true, locale: '$jslocale'\">\n";
 			$rt .= "</script>\n";
@@ -10897,7 +10898,7 @@ function getDojoHTML($refresh) {
 			$rt .= "<style type=\"text/css\">\n";
 			$rt .= "   @import \"themes/$skin/css/dojo/$skin.css\";\n";
 			$rt .= "</style>\n";
-			$rt .= "<script type=\"text/javascript\" src=\"js/blockallocations.js\"></script>\n";
+			$rt .= "<script type=\"text/javascript\" src=\"js/blockallocations.js?v=$v\"></script>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
 			$rt .= "   djConfig=\"parseOnLoad: true, locale: '$jslocale'\">\n";
 			$rt .= "</script>\n";
@@ -10917,7 +10918,7 @@ function getDojoHTML($refresh) {
 			$rt .= "   @import \"themes/$skin/css/dojo/$skin.css\";\n";
 			$rt .= "   @import \"dojo/dojox/grid/resources/Grid.css\";\n";
 			$rt .= "</style>\n";
-			$rt .= "<script type=\"text/javascript\" src=\"js/schedules.js\"></script>\n";
+			$rt .= "<script type=\"text/javascript\" src=\"js/schedules.js?v=$v\"></script>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
 			$rt .= "   djConfig=\"parseOnLoad: true, locale: '$jslocale'\">\n";
 			$rt .= "</script>\n";
@@ -10942,7 +10943,7 @@ function getDojoHTML($refresh) {
 			$rt .= "<style type=\"text/css\">\n";
 			$rt .= "   @import \"themes/$skin/css/dojo/$skin.css\";\n";
 			$rt .= "</style>\n";
-			$rt .= "<script type=\"text/javascript\" src=\"js/images.js\"></script>\n";
+			$rt .= "<script type=\"text/javascript\" src=\"js/images.js?v=$v\"></script>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
 			$rt .= "   djConfig=\"parseOnLoad: true, locale: '$jslocale'\">\n";
 			$rt .= "</script>\n";
@@ -10975,7 +10976,7 @@ function getDojoHTML($refresh) {
 			$rt .= "<style type=\"text/css\">\n";
 			$rt .= "   @import \"themes/$skin/css/dojo/$skin.css\";\n";
 			$rt .= "</style>\n";
-			$rt .= "<script type=\"text/javascript\" src=\"js/images.js\"></script>\n";
+			$rt .= "<script type=\"text/javascript\" src=\"js/images.js?v=$v\"></script>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
 			$rt .= "   djConfig=\"parseOnLoad: true, locale: '$jslocale'\">\n";
 			$rt .= "</script>\n";
@@ -11022,7 +11023,7 @@ function getDojoHTML($refresh) {
 			else
 				$rt .= " var firstscroll = 0;\n";
 			$rt .= "</script>\n";
-			$rt .= "<script type=\"text/javascript\" src=\"js/groups.js\"></script>\n";
+			$rt .= "<script type=\"text/javascript\" src=\"js/groups.js?v=$v\"></script>\n";
 			return $rt;
 
 		case 'editMgmtNode':
@@ -11043,15 +11044,15 @@ function getDojoHTML($refresh) {
 			$rt .= "   });\n";
 			$rt .= "   dojo.addOnLoad(function() {document.onmousemove = updateMouseXY;});\n";
 			$rt .= "</script>\n";
-			$rt .= "<script type=\"text/javascript\" src=\"js/managementnodes.js\"></script>\n";
+			$rt .= "<script type=\"text/javascript\" src=\"js/managementnodes.js?v=$v\"></script>\n";
 			return $rt;
 
 		case "serverProfiles":
 			$rt .= "<style type=\"text/css\">\n";
 			$rt .= "   @import \"themes/$skin/css/dojo/$skin.css\";\n";
 			$rt .= "</style>\n";
-			$rt .= "<script type=\"text/javascript\" src=\"js/serverprofiles.js\"></script>\n";
-			$rt .= "<script type=\"text/javascript\" src=\"js/requests.js\"></script>\n";
+			$rt .= "<script type=\"text/javascript\" src=\"js/serverprofiles.js?v=$v\"></script>\n";
+			$rt .= "<script type=\"text/javascript\" src=\"js/requests.js?v=$v\"></script>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
 			$rt .= "   djConfig=\"parseOnLoad: true, locale: '$jslocale'\">\n";
 			$rt .= "</script>\n";
@@ -11073,7 +11074,7 @@ function getDojoHTML($refresh) {
 			$rt .= "<style type=\"text/css\">\n";
 			$rt .= "   @import \"themes/$skin/css/dojo/$skin.css\";\n";
 			$rt .= "</style>\n";
-			$rt .= "<script type=\"text/javascript\" src=\"js/computers.js\"></script>\n";
+			$rt .= "<script type=\"text/javascript\" src=\"js/computers.js?v=$v\"></script>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
 			$rt .= "   djConfig=\"parseOnLoad: true, locale: '$jslocale'\">\n";
 			$rt .= "</script>\n";
@@ -11099,7 +11100,7 @@ function getDojoHTML($refresh) {
 			$rt .= "<style type=\"text/css\">\n";
 			$rt .= "   @import \"themes/$skin/css/dojo/$skin.css\";\n";
 			$rt .= "</style>\n";
-			$rt .= "<script type=\"text/javascript\" src=\"js/computers.js\"></script>\n";
+			$rt .= "<script type=\"text/javascript\" src=\"js/computers.js?v=$v\"></script>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
 			$rt .= "   djConfig=\"parseOnLoad: true, locale: '$jslocale'\">\n";
 			$rt .= "</script>\n";
@@ -11125,7 +11126,7 @@ function getDojoHTML($refresh) {
 			$rt .= "<style type=\"text/css\">\n";
 			$rt .= "   @import \"themes/$skin/css/dojo/$skin.css\";\n";
 			$rt .= "</style>\n";
-			$rt .= "<script type=\"text/javascript\" src=\"js/vm.js\"></script>\n";
+			$rt .= "<script type=\"text/javascript\" src=\"js/vm.js?v=$v\"></script>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
 			$rt .= "   djConfig=\"parseOnLoad: true, locale: '$jslocale'\">\n";
 			$rt .= "</script>\n";
@@ -11148,7 +11149,7 @@ function getDojoHTML($refresh) {
 			$rt .= "<style type=\"text/css\">\n";
 			$rt .= "   @import \"themes/$skin/css/dojo/$skin.css\";\n";
 			$rt .= "</style>\n";
-			$rt .= "<script type=\"text/javascript\" src=\"js/privileges.js\"></script>\n";
+			$rt .= "<script type=\"text/javascript\" src=\"js/privileges.js?v=$v\"></script>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
 			$rt .= "   djConfig=\"parseOnLoad: true, locale: '$jslocale'\">\n";
 			$rt .= "</script>\n";
@@ -11165,7 +11166,7 @@ function getDojoHTML($refresh) {
 			$rt .= "<style type=\"text/css\">\n";
 			$rt .= "   @import \"themes/$skin/css/dojo/$skin.css\";\n";
 			$rt .= "</style>\n";
-			$rt .= "<script type=\"text/javascript\" src=\"js/sitemaintenance.js\"></script>\n";
+			$rt .= "<script type=\"text/javascript\" src=\"js/sitemaintenance.js?v=$v\"></script>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
 			$rt .= "   djConfig=\"parseOnLoad: true, locale: '$jslocale'\">\n";
 			$rt .= "</script>\n";
@@ -11181,7 +11182,7 @@ function getDojoHTML($refresh) {
 			$rt .= "<style type=\"text/css\">\n";
 			$rt .= "   @import \"themes/$skin/css/dojo/$skin.css\";\n";
 			$rt .= "</style>\n";
-			$rt .= "<script type=\"text/javascript\" src=\"js/statistics.js\"></script>\n";
+			$rt .= "<script type=\"text/javascript\" src=\"js/statistics.js?v=$v\"></script>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
 			$rt .= "   djConfig=\"parseOnLoad: true, locale: '$jslocale'\">\n";
 			$rt .= "</script>\n";
@@ -11199,7 +11200,7 @@ function getDojoHTML($refresh) {
 			$rt .= "   @import \"themes/$skin/css/dojo/$skin.css\";\n";
 			$rt .= "   @import \"css/dashboard.css\";\n";
 			$rt .= "</style>\n";
-			$rt .= "<script type=\"text/javascript\" src=\"js/dashboard.js\"></script>\n";
+			$rt .= "<script type=\"text/javascript\" src=\"js/dashboard.js?v=$v\"></script>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
 			$rt .= "   djConfig=\"parseOnLoad: true, locale: '$jslocale'\">\n";
 			$rt .= "</script>\n";

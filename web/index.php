@@ -17,6 +17,7 @@
 */
 
 # ASF VCL v2.3
+$VCLversion = '2.3';
 
 @include_once("fckeditor/fckeditor.php");
 require_once(".ht-inc/conf.php");

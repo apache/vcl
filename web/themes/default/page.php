@@ -28,7 +28,8 @@
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function getHeader($refresh) {
-	global $user, $mode, $authed, $locale;
+	global $user, $mode, $authed, $locale, $VCLversion;
+	$v = $VCLversion;
 	#$rt  = "<!DOCTYPE html PUBLIC \"-//W3C//DTD HTML 4.01 Frameset//EN\">\n";
 	$rt  = "<!DOCTYPE html>\n";
 	$rt .= "<html lang=\"$locale\">\n";
@@ -43,9 +44,9 @@ function getHeader($refresh) {
 	$rt .= "<title>VCL :: Virtual Computing Lab</title>\n";
 	$rt .= "<link rel=stylesheet type=\"text/css\" href=\"css/vcl.css\">\n";
 	$rt .= "<link rel=stylesheet type=\"text/css\" href=\"themes/default/css/vcl.css\">\n";
-	$rt .= "<script src=\"js/code.js\" type=\"text/javascript\"></script>\n";
+	$rt .= "<script src=\"js/code.js?v=$v\" type=\"text/javascript\"></script>\n";
 	if($usenls)
-		$rt .= "<script type=\"text/javascript\" src=\"js/nls/$locale/messages.js\"></script>\n";
+		$rt .= "<script type=\"text/javascript\" src=\"js/nls/$locale/messages.js?v=$v\"></script>\n";
 	$rt .= "<script type=\"text/javascript\">\n";
 	$rt .= "var cookiedomain = '" . COOKIEDOMAIN . "';\n";
 	$rt .= "usenls = $usenlsstr;\n";
