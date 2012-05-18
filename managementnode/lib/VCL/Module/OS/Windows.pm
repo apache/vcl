@@ -1709,6 +1709,7 @@ sub create_user {
 	# If no argument was supplied, use the user specified in the DataStructure
 	my $username = shift;
 	my $password = shift;
+	my $uid = shift || 0;
 	my $adminoverride = shift || 0;
 
 	if (!$username) {
