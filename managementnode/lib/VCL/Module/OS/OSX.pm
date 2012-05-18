@@ -120,14 +120,17 @@ our $NODE_CONFIGURATION_DIRECTORY = '/var/root/VCL';
 
 sub pre_capture {
 	my $self = shift;
-	my $args = shift;
-
-# print "*** ".ref($self)."***\n";
-
 	if (ref($self) !~ /osx/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return 0;
 	}
+
+	my $computer_node_name	   = $self->data->get_computer_node_name();
+
+	my $args = shift;
+
+#	print "*** ".ref($self)."***\n";
+
 
 	# Check if end_state argument was passed
 	if (defined $args->{end_state}) {
@@ -154,7 +157,6 @@ sub pre_capture {
 	#	my $ip_configuration 		 = $self->data->get_management_node_public_ip_configuration();
 	#	my $image_os_install_type	= $self->data->get_image_os_install_type();
 
-	my $computer_node_name	   = $self->data->get_computer_node_name();
 
 	notify($ERRORS{'OK'}, 0, "beginning OSX image PRE_CAPTURE() preparation tasks on $computer_node_name");
 
@@ -176,15 +178,6 @@ sub pre_capture {
 		return 0;
 	}
 
-	#	# delete user assigned to this reservation as long as it's not administrator, or root
-	#	my $pre_capture_user_login_id = $self->data->get_user_login_id();
-	#		if ($pre_capture_user_login_id ne 'administrator' && $pre_capture_user_login_id ne 'root') {
-	#		if (!$self->delete_user($pre_capture_user_login_id)) {
-	#			notify($ERRORS{'WARNING'}, 0, "unable to delete user");
-	#			return 0;
-	#		}
-	#	}
-
 	# Delete the user assigned to this reservation
 	my $deleted_user = $self->delete_user();
 	if (!$deleted_user) {
@@ -204,52 +197,6 @@ sub pre_capture {
 		return 0;
 	}
 
-	# XXX
-	#	# clear /tmp
-	#		if (!$self->clear_tmp()) {
-	#				notify($ERRORS{'WARNING'}, 0, "$computer_node_name failed to clear tmp");
-	#				return 0;
-	#		}
-	# XXX
-	
-	# XXX
-	#	# disable sleep 
-	#		if (!$self->disable_sleep()) {
-	#				notify($ERRORS{'WARNING'}, 0, "$computer_node_name failed to disable sleep");
-	#				return 0;
-	#		}
-	# XXX
-	
-	# XXX
-	#	# ensure firewall is enabled
-	#		if (!$self->firewall_enable()) {
-	#				notify($ERRORS{'WARNING'}, 0, "$computer_node_name failed to enable firewall");
-	#				return 0;
-	#		}
-	# XXX
-	
-	# XXX
-	#	# ensure ssh is enabled 
-	#		if (!$self->firewall_enable_ssh()) {
-	#		notify($ERRORS{'WARNING'}, 0, "$computer_node_name failed to enable ssh");
-	#				return 0;
-	#	}
-	# XXX
-	
-	# XXX	   # Enable SSH access from the private network interface
-	#	if (!$self->firewall_enable_ssh_private()) {
-	#		notify($ERRORS{'WARNING'}, 0, "unable to enable SSH from private IP address");
-	#		return 0;
-	#	}
-	# XXX
-	
-	# XXX	# Configure the private and public interfaces to use DHCP
-	#	if (!$self->enable_dhcp()) {
-	#		notify($ERRORS{'WARNING'}, 0, "failed to enable DHCP on the public and private interfaces");
-	#		return 0;
-	#	}
-	# XXX
-	
 	# Shutdown node
 	if (!$self->shutdown()) {
 		notify($ERRORS{'WARNING'}, 0, "$computer_node_name failed to shutdown");
@@ -258,6 +205,7 @@ sub pre_capture {
 	
 	notify($ERRORS{'OK'}, 0, "pre_capture returning 1");
 	return 1;
+
 } ## end sub pre_capture
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -297,13 +245,12 @@ sub post_load {
 		return 0;
 	}
 	
+	my $computer_node_name	  = $self->data->get_computer_node_name();
 	my $management_node_keys  = $self->data->get_management_node_keys();
-	my $image_name			= $self->data->get_image_name();
+	my $image_name	          = $self->data->get_image_name();
 	my $computer_short_name   = $self->data->get_computer_short_name();
 	my $image_os_install_type = $self->data->get_image_os_install_type();
-	
-	my $computer_node_name	= $self->data->get_computer_node_name();
-	my $imagemeta_postoption = $self->data->get_imagemeta_postoption();
+	my $imagemeta_postoption  = $self->data->get_imagemeta_postoption();
 	
 	notify($ERRORS{'OK'}, 0, "beginning OSX POST_LOAD() $image_name on $computer_short_name");
 	
@@ -313,61 +260,6 @@ sub post_load {
 		notify($ERRORS{'WARNING'}, 0, "$computer_node_name never responded to SSH");
 		return 0;
 	}
-	
-	# XXX
-	#		# Wait for root to log off - auto run scripts
-	#	if (!$self->wait_for_logoff('root', 2)) {
-	#		notify($ERRORS{'WARNING'}, 0, "root account never logged off");
-	#	}
-	# XXX
-	# XXX
-	#		# Log off all currently logged on users
-	#	if (!$self->logoff_users()) {
-	#		notify($ERRORS{'WARNING'}, 0, "failed to log off all currently logged in users");
-	#	}
-	# XXX
-	
-	# XXX - not necessary
-	#		# Update the SSH known_hosts file on the management node
-	#	if (!$self->update_ssh_known_hosts()) {
-	#		notify($ERRORS{'WARNING'}, 0, "unable to update the SSH known_hosts file on the management node");
-	#	}
-	# XXX
-	
-	# XXX	
-	#	   #Enable RDP access on the private network interface
-	#	if (!$self->firewall_enable_rdp_private()) {
-	#		notify($ERRORS{'WARNING'}, 0, "unable to enable RDP on private network");
-	#		return 0;
-	#	}
-	# XXX
-	
-	# XXX
-	#		# Enable ping on the private network interface
-	#	if (!$self->firewall_enable_ping_private()) {
-	#		notify($ERRORS{'WARNING'}, 0, "unable to enable ping from private IP address");
-	#		return 0;
-	#	}
-	# XXX
-	
-	# XXX - dchp provides default route - not necessary
-	#		 # Set persistent public default route
-	# 	if (!$self->set_public_default_route()) {
-	# 		notify($ERRORS{'WARNING'}, 0, "unable to set persistent public default route");
-	# 	}
-	# XXX
-	
-	# XXX
-	#		# Configure and synchronize time
-	#	if (!$self->configure_time_synchronization()) {
-	#		notify($ERRORS{'WARNING'}, 0, "unable to configure and synchronize time");
-	#	}
-	#
-	#		# Set the "My Computer" description to the image pretty name
-	#	if (!$self->set_my_computer_name()) {
-	#		notify($ERRORS{'WARNING'}, 0, "failed to rename My Computer");
-	#	}
-	# XXX
 	
 	my $root_random_password = getpw();
 	if ($self->set_password("root", $root_random_password)) {
@@ -396,15 +288,7 @@ sub post_load {
 		}
 	}
 	
-	# XXX
-	#	#Update Hostname to match Public assigned name
-	#	if($self->update_public_hostname()){
-	#		  notify($ERRORS{'OK'}, 0, "Updated hostname");
-	#	   }
-	# XXX
-	
 	$self->activate_irapp();
-	
 	
 	# Add a line to currentimage.txt indicating post_load has run
 	$self->set_vcld_post_load_status();
@@ -447,14 +331,6 @@ sub sanitize {
 		notify($ERRORS{'WARNING'}, 0, "$computer_node_name failed to disable rdp");
 		return 0;
 	}
-
-	# XXX
-	#	# Revoke user access
-	#	if (!$self->revoke_access()) {
-	#		notify($ERRORS{'WARNING'}, 0, "failed to revoke access to $computer_node_name");
-	#		return 0;
-	#	}
-	# XXX
 
 	# Delete user associated with the reservation
 	if ($self->delete_user()) {
@@ -499,9 +375,8 @@ sub reboot {
 		return;
 	}
 
-	my $management_node_keys = $self->data->get_management_node_keys();
-	my $computer_node_name   = $self->data->get_computer_node_name();
-	
+	my $computer_node_name = $self->data->get_computer_node_name();
+
 	notify($ERRORS{'OK'}, 0, "beginning OSX REBOOT() on $computer_node_name");
 
 	# Check if an argument was supplied
@@ -524,7 +399,7 @@ sub reboot {
 		# Make sure SSH access is enabled from private IP addresses
 		
 		my $reboot_command = "/sbin/shutdown -r now";
-		my ($reboot_exit_status, $reboot_output) = run_ssh_command($computer_node_name, $management_node_keys, $reboot_command);
+		my ($reboot_exit_status, $reboot_output) = $self->execute($reboot_command,1);
 		if (!defined($reboot_output)) {
 			notify($ERRORS{'WARNING'}, 0, "failed to execute ssh command to reboot $computer_node_name");
 			return 0;
@@ -602,15 +477,14 @@ sub shutdown {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
-	
-	my $management_node_keys = $self->data->get_management_node_keys();
-	my $computer_node_name   = $self->data->get_computer_node_name();
-	
+
+        my $computer_node_name = $self->data->get_computer_node_name();
+
 	notify($ERRORS{'OK'}, 0, "beginning OSX SHUTDOWN() on $computer_node_name");
 	
 	my $command = '/sbin/shutdown -h now';
 	
-	my ($exit_status, $output) = run_ssh_command($computer_node_name,$management_node_keys,$command);
+	my ($exit_status, $output) = $self->execute($command,1);
 	
 	if (defined $exit_status && $exit_status == 0) {
 		notify($ERRORS{'DEBUG'}, 0, "executed command to shut down $computer_node_name");
@@ -648,7 +522,9 @@ sub shutdown {
 		notify($ERRORS{'WARNING'}, 0, "$computer_node_name never powered off");
 		return;
 	}
+
 	return 1;
+
 } ## end sub shutdown
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -676,8 +552,8 @@ sub reserve {
 	
 	my $request_forimaging   = $self->data->get_request_forimaging();
 	my $reservation_password = $self->data->get_reservation_password();
-	my $username			 = $self->data->get_user_login_id();
-	my $computer_node_name = $self->data->get_computer_node_name();
+	my $username             = $self->data->get_user_login_id();
+	my $computer_node_name   = $self->data->get_computer_node_name();
 	
 	notify($ERRORS{'OK'}, 0, "beginning OSX RESERVE() on $computer_node_name");
 	
@@ -706,6 +582,7 @@ sub reserve {
 
 	notify($ERRORS{'OK'}, 0, "returning 1");
 	return 1;
+
 } ## end sub reserve
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -714,7 +591,7 @@ sub reserve {
 
  Parameters  : called as an object
  Returns     : 1 - success , 0 - failure
- Description :  adds username to external_sshd_config and and starts sshd with custom config
+ Description : opens port in firewall for external access
 
 #
 # gets called by reserved.pm after the user has clicked "Connect"
@@ -731,14 +608,10 @@ sub grant_access {
 		return 0;
 	}
 	
-	my $user				 = $self->data->get_user_login_id();
-	my $computer_node_name   = $self->data->get_computer_node_name();
-	my $remote_ip			= $self->data->get_reservation_remote_ip();
-	
-	#	my $identity		   = $self->data->get_image_identity;
-	#	my $management_node_keys = $self->data->get_management_node_keys();
-	#	my $system32_path		= $self->get_system32_path();
-	my $request_forimaging   = $self->data->get_request_forimaging();
+	my $user		= $self->data->get_user_login_id();
+	my $computer_node_name	= $self->data->get_computer_node_name();
+	my $remote_ip		= $self->data->get_reservation_remote_ip();
+	my $request_forimaging	= $self->data->get_request_forimaging();
 	
 	notify($ERRORS{'OK'}, 0, "GRANT_ACCESS() routine $user,$computer_node_name");
 	
@@ -752,14 +625,13 @@ sub grant_access {
 	}
 	else {
 		# Assemble the IP range string in CIDR notation
-		$remote_ip_range = "$remote_ip/16";
+		$remote_ip_range = "$remote_ip/24";
 		notify($ERRORS{'OK'}, 0, "RDP will be allowed from $remote_ip_range on $computer_node_name");
 	}
 	
 	# Set the $remote_ip_range variable to the string 'all' if it isn't already set (for display purposes)
 	$remote_ip_range = 'any' if !$remote_ip_range;
 	
-	# JIM
 	# Allow RDP connections
 	if ($request_forimaging) {
 		if ($self->firewall_enable_rdp($remote_ip_range,1)) {
@@ -782,20 +654,255 @@ sub grant_access {
 	
 	notify($ERRORS{'OK'}, 0, "access has been granted for reservation on $computer_node_name");
 	
-	# XXX
-	#	if($self->process_connect_methods('start') ){
-	#		notify($ERRORS{'OK'}, 0, "processed connection methods on $computer_node_name");
-	#	}
-	# XXX
-	
 	return 1;
+
 } ## end sub grant_access
 
-#####################################################################################
-#																				   #
-#		END OF GLOBAL REQUIRED OS MODULE SUBROUTINES						#
-#																				   #
-#####################################################################################
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 enable_firewall_port
+
+ Parameters  : $protocol, $port, $scope (optional)
+ Returns     : 1 if succeeded, 0 otherwise
+ Description : Enables a firewall port on the computer. The protocol and port
+               arguments are required. An optional scope argument may supplied.
+
+# called by OS::process_connect_methods()
+
+=cut
+
+sub enable_firewall_port {
+	my $self = shift;
+	if (ref($self) !~ /osx/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+
+        my $computer_node_name = $self->data->get_computer_node_name();
+
+	notify($ERRORS{'OK'}, 0, " beginning OSX ENABLE_FIREWALL_PORT()");
+
+	my $protocol = shift;
+	if (!$protocol) {
+		notify($ERRORS{'WARNING'}, 0, " protocol variable was not passed as an argument");
+		return 0;
+	}
+
+	my $port = shift;
+	if (!$port) {
+		notify($ERRORS{'WARNING'}, 0, " port variable was not passed as an argument");
+		return 0;
+	}
+
+	my $scope = shift;
+	if (!$scope) {
+		$scope = 'all';
+	}
+
+	my $command = "ipfw list";
+	my ($status, $output) = $self->execute($command, 1);
+	notify($ERRORS{'DEBUG'}, 0, " checking firewall rules on node $computer_node_name");
+
+	my $rule=0;
+	my $upper_limit=12300;
+	my $found=0;
+	while ( $rule == 0  &&  $upper_limit > 0 ) {
+		foreach my $line (@{$output}) {
+			if ($line =~ /^$upper_limit\s+/) {
+				$found=1;
+			}
+		}
+		if ($found) {
+			$upper_limit--;
+			$found=0;
+		} else {
+			$rule = $upper_limit;
+		}
+	}
+
+	$command = "ipfw add $rule allow $protocol from $scope to any dst-port $port";
+
+	($status, $output) = $self->execute($command, 1);
+	notify($ERRORS{'DEBUG'}, 0, "checking connections on node $computer_node_name on port $port");
+
+	return 1;
+
+} ## end sub enable_firewall_port
+
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_cpu_core_count
+
+ Parameters  : none
+ Returns     : integer
+ Description : Retrieves the number of CPU cores the computer has by querying
+               the NUMBER_OF_PROCESSORS environment variable.
+
+# called by Provisioning::VMware:VMware.pm
+#       Windows.pm only returns value from database
+#       return $self->get_environment_variable_value('NUMBER_OF_PROCESSORS');
+
+=cut
+
+sub get_cpu_core_count {
+	my $self = shift;
+	if (ref($self) !~ /osx/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+
+        my $computer_node_name = $self->data->get_computer_node_name();
+
+	my $num_cpus	= 0;
+	my $command	= "/usr/sbin/system_profiler SPHardwareDataType";
+
+# Hardware:
+#
+#     Hardware Overview:
+#
+#       Model Name: Mac mini
+#       Model Identifier: Macmini2,1
+#       Processor Speed: 2.66 GHz
+#       Number Of Processors: 2
+#       Total Number Of Cores: 2
+#       L2 Cache (per processor): 4 MB
+#       Memory: 7.88 GB
+#       Bus Speed: 367 MHz
+#       Boot ROM Version: MM21.009A.B00
+#       SMC Version (system): 1.30f3
+#       Serial Number (system): SOMESRLNMBR
+#       Hardware UUID: 9D002E7C-B39B-590F-B9E7-A7AE1554F9E2
+
+	my ($status, $output) = $self->execute($command, 1);
+	notify($ERRORS{'DEBUG'}, 0, " getting cpu count on node $computer_node_name ");
+
+	foreach my $line (@{$output}) {
+		if ($line =~ /\s+(Total)\s+(Number)\s+(Of)\s+(Cores:)\s+([0-9]*)/) {
+			$num_cpus = $line;
+			$num_cpus =~ s/ Total Number Of Cores: //;
+		}
+	}
+
+	notify($ERRORS{'DEBUG'}, 0, " get_cpu_core_count() is $num_cpus");
+
+	return $num_cpus;
+
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 check_connection_on_port
+
+ Parameters  : $port
+ Returns     : (connected|conn_wrong_ip|timeout|failed)
+ Description : uses netstat to see if any thing is connected to the provided port
+
+# called by OS.pm:is_user_connected()
+
+=cut
+
+sub check_connection_on_port {
+	my $self = shift;
+	if (ref($self) !~ /osx/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+
+        my $computer_node_name = $self->data->get_computer_node_name();
+
+	my $remote_ip                   = $self->data->get_reservation_remote_ip();
+	my $computer_ip_address         = $self->data->get_computer_ip_address();
+
+	my $port = shift;
+	if (!$port) {
+		notify($ERRORS{'WARNING'}, 0, "port variable was not passed as an argument");
+		return "failed";
+	}
+
+	my $ret_val = "no";
+	my $command = "netstat -an";
+
+	my ($status, $output) = $self->execute($command, 1);
+	notify($ERRORS{'DEBUG'}, 0, "checking connections on node $computer_node_name on port $port");
+
+
+	foreach my $line (@{$output}) {
+		if ($line =~ /tcp4\s+([0-9]*)\s+([0-9]*)\s+($computer_ip_address.$port)\s+($remote_ip).([0-9]*)(.*)(ESTABLISHED)/) {
+			$ret_val = "connected";
+		}
+	}
+
+	return $ret_val;
+
+}
+
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 user_exists
+
+ Parameters  :
+ Returns     :
+ Description :
+
+=cut
+
+sub user_exists {
+	my $self = shift;
+	if (ref($self) !~ /osx/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+
+        my $computer_node_name = $self->data->get_computer_node_name();
+
+	# Attempt to get the username from the arguments
+	# If no argument was supplied, use the user specified in the DataStructure
+	my $username = shift;
+	if (!$username) {
+		$username = $self->data->get_user_login_id();
+	}
+
+	notify($ERRORS{'DEBUG'}, 0, "checking if user $username exists on $computer_node_name");
+
+	# Attempt to query the user account
+	my $query_user_command = "id $username";
+	my ($query_user_exit_status, $query_user_output) = $self->execute($query_user_command,1);
+	if (grep(/uid/, @$query_user_output)) {
+		notify($ERRORS{'DEBUG'}, 0, "user $username exists on $computer_node_name");
+		return 1;
+	}
+	elsif (grep(/No such user/i, @$query_user_output)) {
+		notify($ERRORS{'DEBUG'}, 0, "user $username does not exist on $computer_node_name");
+		return 0;
+	}
+	elsif (defined($query_user_exit_status)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to determine if user $username exists on $computer_node_name, exit status: $query_user_exit_status, output:\n@{$query_user_output}");
+		return;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to determine if user $username exists on $computer_node_name");
+		return;
+	}
+
+}
+
+
+
+
+
+#########################################################################################
+#											#
+#		END OF GLOBALLY REQUIRED OS MODULE SUBROUTINES				#
+#											#
+#########################################################################################
+
+
+=head1 AUXILIARY OBJECT METHODS
+
+=cut
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -822,7 +929,7 @@ sub get_node_configuration_directory {
  Description : Copies all required configuration files to the computer,
                including scripts, needed to capture an image.
                
-               # from pre_capture
+# from pre_capture
 
 =cut
 
@@ -833,9 +940,11 @@ sub copy_capture_configuration_files {
 		return;	
 	}
 
-	my $management_node_keys = $self->data->get_management_node_keys();
-	my $computer_node_name   = $self->data->get_computer_node_name();
-	
+        my $computer_node_name		= $self->data->get_computer_node_name();
+	my $management_node_keys	= $self->data->get_management_node_keys();
+
+	my $command = "/bin/chmod -R 755 $NODE_CONFIGURATION_DIRECTORY";
+
 	# Get an array containing the configuration directory paths on the management node
 	# This is made up of all the the $SOURCE_CONFIGURATION_DIRECTORY values for the OS class and it's parent classes
 	# The first array element is the value from the top-most class the OS object inherits from
@@ -870,7 +979,7 @@ sub copy_capture_configuration_files {
 			notify($ERRORS{'OK'}, 0, "copied $source_configuration_directory directory to $computer_node_name:$NODE_CONFIGURATION_DIRECTORY");
 			
 			notify($ERRORS{'DEBUG'}, 0, "attempting to set permissions on $computer_node_name:$NODE_CONFIGURATION_DIRECTORY");
-			if (run_ssh_command($computer_node_name, $management_node_keys, "/bin/chmod -R 755 $NODE_CONFIGURATION_DIRECTORY")) {
+			if ($self->execute($command,1)) {
 				notify($ERRORS{'OK'}, 0, "chmoded -R 755 $computer_node_name:$NODE_CONFIGURATION_DIRECTORY");
 			}
 			else {
@@ -884,24 +993,8 @@ sub copy_capture_configuration_files {
 		}
 	}
 	
-	# XXX
-	#	# Delete any Subversion files which may have been copied
-	#	if (!$self->delete_files_by_pattern($NODE_CONFIGURATION_DIRECTORY, '.*\.svn.*')) {
-	#		notify($ERRORS{'WARNING'}, 0, "unable to delete Subversion files under: $NODE_CONFIGURATION_DIRECTORY");
-	#	}
-	# XXX
-	
-	# XXX
-	#	# Find any files containing a 'WINDOWS_ROOT_PASSWORD' string and replace it with the root password
-	#	if ($self->search_and_replace_in_files($NODE_CONFIGURATION_DIRECTORY, 'WINDOWS_ROOT_PASSWORD', $WINDOWS_ROOT_PASSWORD)) {
-	#		notify($ERRORS{'DEBUG'}, 0, "set the Windows root password in configuration files");
-	#	} else {
-	#		notify($ERRORS{'WARNING'}, 0, "failed to set the Windows root password in configuration files");
-	#		return;
-	#	}
-	# XXX
-	
 	return 1;
+
 } ## end sub copy_capture_configuration_files
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -949,10 +1042,8 @@ sub delete_user {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return 0;
 	}
-	
-	my $management_node_keys = $self->data->get_management_node_keys();
-	my $computer_node_name   = $self->data->get_computer_node_name();
-	
+
+        my $computer_node_name = $self->data->get_computer_node_name();
 	
 	# Make sure the user login ID was passed
 	my $user_login_id = shift;
@@ -969,30 +1060,15 @@ sub delete_user {
 	}
 
 	my $userdel_cmd = $self->get_node_configuration_directory() . "/userdel $user_login_id";
-	if (run_ssh_command($computer_node_name, $management_node_keys, $userdel_cmd)) {
+	if ($self->execute($userdel_cmd,1)) {
 		notify($ERRORS{'DEBUG'}, 0, "deleted user: $user_login_id from $computer_node_name");
 	}
 	else {
 		notify($ERRORS{'DEBUG'}, 0, "failed to delete user: $user_login_id from $computer_node_name");
 	}
 	
-	# XXX
-	#	my $imagemeta_rootaccess = $self->data->get_imagemeta_rootaccess();
-	#
-	#	#Clear user from sudoers
-	#
-	#	if ($imagemeta_rootaccess) {
-	#		#clear user from sudoers file
-	#		my $clear_cmd = "/usr/bin/sed -i '' -e \"/^$user_login_id .*/d\" /etc/sudoers";
-	#		if (run_ssh_command($computer_node_name, $image_identity, $clear_cmd)) {
-	#			notify($ERRORS{'DEBUG'}, 0, "cleared $user_login_id from /etc/sudoers");
-	#		} else {
-	#			notify($ERRORS{'CRITICAL'}, 0, "failed to clear $user_login_id from /etc/sudoers");
-	#		}
-	#	} ## end if ($imagemeta_rootaccess)
-	# XXX
-	
 	return 1;
+
 } ## end sub delete_user
 
 
@@ -1004,7 +1080,7 @@ sub delete_user {
  Returns     : 1 - success , 0 - failure
  Description : sets password for given username
                
-               # pre_capture
+# pre_capture
 
 =cut
 
@@ -1014,13 +1090,9 @@ sub set_password {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return 0;
 	}
+
+        my $computer_node_name = $self->data->get_computer_node_name();
 	
-	my $management_node_keys = $self->data->get_management_node_keys();
-	my $computer_node_name   = $self->data->get_computer_node_name();
-	
-	# Attempt to get the username from the arguments
-	# JIM
-	# my $mycomputer_node = shift;
 	my $username = shift;  
 	my $password = shift; 
 	
@@ -1041,8 +1113,7 @@ sub set_password {
 	# Attempt to set the password
 	notify($ERRORS{'DEBUG'}, 0, "setting password of $username to $password on $computer_node_name");
 	my $passwd_cmd = "/usr/bin/dscl . -passwd /Users/$username '$password'";
-	#		my $passwd_cmd = $self->get_node_configuration_directory() . "/password_reset $username $password";
-	my ($exit_status1, $output1) = run_ssh_command($computer_node_name, $management_node_keys, $passwd_cmd);
+	my ($exit_status1, $output1) = $self->execute($passwd_cmd,1);
 	if ($exit_status1 == 0) {
 		notify($ERRORS{'OK'}, 0, "password changed to '$password' for user '$username' on $computer_node_name");
 	}
@@ -1060,7 +1131,7 @@ sub set_password {
 		notify($ERRORS{'DEBUG'}, 0, "removing login.keychain of $username on $computer_node_name");
 		my $command2 = "find ~$username/Library/Keychains -type f -name login.keychain -exec rm {} \\;";
 		#		my $command2 = "/bin/rm /Users/$username/Library/Keychains/login.keychain";
-		my ($exit_status2, $output2) = run_ssh_command($computer_node_name, $management_node_keys, $command2);
+		my ($exit_status2, $output2) = $self->execute($command2,1);
 		if ($exit_status2 == 0) {
 			notify($ERRORS{'OK'}, 0, "removed login.keychain for user '$username' on $computer_node_name");
 		}
@@ -1098,9 +1169,6 @@ sub file_exists {
 		return;
 	}
 	
-	my $management_node_keys = $self->data->get_management_node_keys();
-	my $computer_node_name   = $self->data->get_computer_node_name();
-
 	# Get the path from the subroutine arguments and make sure it was passed
 	my $path = shift;
 	if (!$path) {
@@ -1119,7 +1187,7 @@ sub file_exists {
 	# Check if the file or directory exists
 	# Do not enclose the path in quotes or else wildcards won't work
 	my $command = "stat $escaped_path";
-	my ($exit_status, $output) = run_ssh_command($computer_node_name,$management_node_keys,$command,'','',0);
+	my ($exit_status, $output) = $self->execute($command,1);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to determine if file or directory exists on $computer_short_name:\npath: '$path'\ncommand: '$command'");
 		return;
@@ -1165,9 +1233,6 @@ sub delete_file {
 		return;
 	}
 	
-	my $management_node_keys = $self->data->get_management_node_keys();
-	my $computer_node_name   = $self->data->get_computer_node_name();
-	
 	# Get the path argument
 	my $path = shift;
 	if (!$path) {
@@ -1185,7 +1250,7 @@ sub delete_file {
 	
 	# Delete the file
 	my $command = "rm -rfv $escaped_path";
-	my ($exit_status, $output) = run_ssh_command($computer_node_name,$management_node_keys,$command,'','',0);
+	my ($exit_status, $output) = $self->execute($command,1);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to run command to delete file or directory on $computer_short_name:\npath: '$path'\ncommand: '$command'");
 		return;
@@ -1225,7 +1290,7 @@ sub delete_file {
  Description : Creates a directory on the OSX computer as indicated by the
                $directory_path argument.
                
-               # copy_capture_configuration_files
+# copy_capture_configuration_files
 
 =cut
 
@@ -1235,9 +1300,6 @@ sub create_directory {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
-	
-	my $management_node_keys = $self->data->get_management_node_keys();
-	my $computer_node_name   = $self->data->get_computer_node_name();
 	
 	# Get the directory path argument
 	my $directory_path = shift;
@@ -1252,10 +1314,9 @@ sub create_directory {
 	my $computer_short_name = $self->data->get_computer_short_name();
 	
 	# Attempt to create the directory
-	# JIM
 	#	my $command = "ls -d --color=never \"$directory_path\" 2>&1 || mkdir -p \"$directory_path\" 2>&1 && ls -d --color=never \"$directory_path\"";
 	my $command = "ls -d \"$directory_path\" 2>&1 || mkdir -p \"$directory_path\" 2>&1 && ls -d \"$directory_path\"";
-	my ($exit_status, $output) = run_ssh_command($computer_node_name,$management_node_keys,$command,'','',1);
+	my ($exit_status, $output) = $self->execute($command,1);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to run command to create directory on $computer_short_name:\npath: '$directory_path'\ncommand: '$command'");
 		return;
@@ -1295,13 +1356,12 @@ sub firewall_enable_rdp {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
+
+        my $computer_node_name = $self->data->get_computer_node_name();
 	
 	my $remote_ip_range = shift;
 	my $persist = shift;
 	my $fw_enable_rdp_cmd = "";
-	
-	my $management_node_keys = $self->data->get_management_node_keys();
-	my $computer_node_name   = $self->data->get_computer_node_name();
 	
 	# Make sure the remote ip range was passed
 	if (!$remote_ip_range) {
@@ -1315,7 +1375,7 @@ sub firewall_enable_rdp {
 	else {
 		$fw_enable_rdp_cmd = $self->get_node_configuration_directory() . "/fw_enable_rdp $remote_ip_range";
 	}
-	if (run_ssh_command($computer_node_name, $management_node_keys, $fw_enable_rdp_cmd)) {
+	if ($self->execute($fw_enable_rdp_cmd,1)) {
 		notify($ERRORS{'DEBUG'}, 0, "enabled rdp through firewall on $computer_node_name");
 	}
 	else {
@@ -1323,6 +1383,7 @@ sub firewall_enable_rdp {
 	}
 	
 	return 1;
+
 } ## end sub firewall_enable_rdp
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -1344,10 +1405,10 @@ sub firewall_disable_rdp {
 			notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 			return;
 	}
+
+        my $computer_node_name = $self->data->get_computer_node_name();
 	
 	my $persist = shift;
-		my $management_node_keys = $self->data->get_management_node_keys();
-		my $computer_node_name   = $self->data->get_computer_node_name();
 	my $fw_disable_rdp_cmd;
 	
 	if ($persist) {
@@ -1357,7 +1418,7 @@ sub firewall_disable_rdp {
 		$fw_disable_rdp_cmd = $self->get_node_configuration_directory() . "/fw_disable_rdp";
 	}
 	
-	if (run_ssh_command($computer_node_name, $management_node_keys, $fw_disable_rdp_cmd)) {
+	if ($self->execute($fw_disable_rdp_cmd,1)) {
 		notify($ERRORS{'DEBUG'}, 0, "disabled rdp through firewall on $computer_node_name");
 	}
 	else {
@@ -1365,6 +1426,7 @@ sub firewall_disable_rdp {
 	}
 	
 	return 1;
+
 } ## end sub firewall_disable_rdp
 
 
@@ -1376,7 +1438,7 @@ sub firewall_disable_rdp {
  Returns     : 1 if succeeded, 0 otherwise
  Description :
                
-               # pre_capture
+# pre_capture
 
 =cut
 
@@ -1386,12 +1448,11 @@ sub logoff_users {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return 0;
 	}
-	
-	my $management_node_keys = $self->data->get_management_node_keys();
-	my $computer_node_name   = $self->data->get_computer_node_name();
+
+        my $computer_node_name = $self->data->get_computer_node_name();
 	
 	my $logout_users_cmd = "/usr/bin/killall loginwindow";
-	if (run_ssh_command($computer_node_name, $management_node_keys, $logout_users_cmd)) {
+	if ($self->execute($logout_users_cmd,1)) {
 		notify($ERRORS{'DEBUG'}, 0, "logged off all users on $computer_node_name");
 	}
 	else {
@@ -1399,139 +1460,9 @@ sub logoff_users {
 	}
 	
 	return 1;
+
 } ## end sub logoff_users
 
-
-##/////////////////////////////////////////////////////////////////////////////
-#
-#=head2 clear_tmp
-#
-# Parameters  : 
-# Returns     : 1 if succeeded, 0 otherwise
-# Description : 
-#
-#=cut
-#
-#sub clear_tmp {
-#	my $self = shift;
-#	if (ref($self) !~ /osx/i) {
-#		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-#		return;
-#	}
-#
-#	my $management_node_keys = $self->data->get_management_node_keys();
-#	my $computer_node_name   = $self->data->get_computer_node_name();
-#
-#
-#		my $clear_tmp_cmd = "/etc/periodic/daily/110.clean-tmps; /etc/periodic/monthly/200.accounting";
-#		if (!run_ssh_command($computer_node_name, $management_node_keys, $clear_tmp_cmd)) {
-#				notify($ERRORS{'WARNING'}, 0, "unable to clear tmp $computer_node_name ");
-#		}
-#
-#
-#	return 1;
-#} ## end sub clear_tmp
-#
-#
-##/////////////////////////////////////////////////////////////////////////////
-#
-#=head2 disable_sleep
-#
-# Parameters  :
-# Returns     : 1 if succeeded, 0 otherwise
-# Description :
-#
-#=cut
-#
-#sub disable_sleep {
-#		my $self = shift;
-#		if (ref($self) !~ /osx/i) {
-#				notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-#				return;
-#		}
-#
-#		my $management_node_keys = $self->data->get_management_node_keys();
-#		my $computer_node_name   = $self->data->get_computer_node_name();
-#
-#
-#		my $disable_sleep_cmd = "/usr/bin/pmset -a sleep 0";
-#		if (!run_ssh_command($computer_node_name, $management_node_keys, $disable_sleep_cmd)) {
-#				notify($ERRORS{'WARNING'}, 0, "unable to disable sleep on $computer_node_name ");
-#				return 0;
-#		}
-#
-#
-#		return 1;
-#} ## end sub disable_sleep
-#
-#
-#
-#
-##/////////////////////////////////////////////////////////////////////////////
-#
-#=head2 enable_firewall
-#
-# Parameters  :
-# Returns     : 1 if succeeded, 0 otherwise
-# Description :
-#
-#=cut
-#
-#sub enable_firewall {
-#		my $self = shift;
-#		if (ref($self) !~ /osx/i) {
-#				notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-#				return 0;
-#		}
-#
-#		my $management_node_keys = $self->data->get_management_node_keys();
-#		my $computer_node_name   = $self->data->get_computer_node_name();
-#
-#
-#		my $enable_firewall_cmd = "/usr/bin/touch /etc/ipfilter/ipfwstate-on"
-#
-#		if (!run_ssh_command($computer_node_name, $management_node_keys, $enable_firewall_cmd)) {
-#				notify($ERRORS{'WARNING'}, 0, "unable to enable firewall on $computer_node_name ");
-#				return 0;
-#		}
-#
-#
-#		return 1;
-#} ## end sub enable_firewall
-#
-#
-##/////////////////////////////////////////////////////////////////////////////
-#
-#=head2 enable_ssh
-#
-# Parameters  :
-# Returns     : 1 if succeeded, 0 otherwise
-# Description :
-#
-#=cut
-#
-#sub enable_ssh {
-#		my $self = shift;
-#		if (ref($self) !~ /osx/i) {
-#				notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-#				return 0;
-#		}
-#
-#		my $management_node_keys = $self->data->get_management_node_keys();
-#		my $computer_node_name   = $self->data->get_computer_node_name();
-#
-#	# enabled/disabled values stored in '/private/var/db/launchd.db/com.apple.launchd/overrides.plist'
-#		my $enable_ssh_cmd = "/bin/launchctl load -w /System/Library/LaunchDaemons/ssh.plist";
-#
-#		if (!run_ssh_command($computer_node_name, $management_node_keys, $enable_ssh_cmd)) {
-#				notify($ERRORS{'WARNING'}, 0, "unable to enable ssh on $computer_node_name ");
-#				return 0;
-#		}
-#
-#
-#		return 1;
-#} ## end sub enable_ssh
-#
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -1657,15 +1588,12 @@ sub get_network_configuration {
 	}
 	
 	my %network_configuration;
-	my $management_node_keys = $self->data->get_management_node_keys();
-	my $computer_node_name   = $self->data->get_computer_node_name();
 	
 	# Check if the network configuration has already been retrieved and saved in this object
 	if (!$self->{network_configuration}) {
 		# Run ipconfig
-		# JIM
 		my $command = "ifconfig -a";
-		my ($exit_status, $output) = run_ssh_command($computer_node_name,$management_node_keys,$command); 
+		my ($exit_status, $output) = $self->execute($command,1); 
 		if (!defined($output)) {
 			notify($ERRORS{'WARNING'}, 0, "failed to run command to retrieve network configuration: $command");
 			return;
@@ -1757,32 +1685,49 @@ sub set_vcld_post_load_status {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
-	
-	my $image_os_type = $self->data->get_image_os_type();
-	my $management_node_keys = $self->data->get_management_node_keys();
-	my $computer_node_name   = $self->data->get_computer_node_name();
+
+        my $computer_node_name	= $self->data->get_computer_node_name();
+	my $image_os_type	= $self->data->get_image_os_type();
 	
 	my $time = localtime;
-	
 	my $post_load_line = "vcld_post_load=success ($time)";
-	
-	# Assemble the command
 	my $command;
 	
 	# Remove existing lines beginning with vcld_post_load
-	$command .= "sed -i '' -e \'/vcld_post_load.*/d\' currentimage.txt";
+	$command = "sed -i '' -e \'/vcld_post_load.*/d\' currentimage.txt";
+	my ($exit_status, $output) = $self->execute($command, 1);
+	if (defined($exit_status) && $exit_status == 0) {
+		notify($ERRORS{'DEBUG'}, 0, "added line to currentimage.txt on $computer_node_name: '$post_load_line'");
+	}
+	elsif ($exit_status) {
+		notify($ERRORS{'WARNING'}, 0, "failed to add line to currentimage.txt on $computer_node_name: '$post_load_line', exit status: $exit_status, output:\n" . join("\n", @$output));
+		return;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to add line to currentimage.txt on $computer_node_name");
+		return;
+	}
+	
 	
 	# Add a line to the end of currentimage.txt
-	$command .= " && echo >> currentimage.txt";
-	$command .= " && echo \"$post_load_line\" >> currentimage.txt";
+	$command = "echo \"$post_load_line\" >> currentimage.txt";
+	($exit_status, $output) = $self->execute($command, 1);
+	if (defined($exit_status) && $exit_status == 0) {
+		notify($ERRORS{'DEBUG'}, 0, "added line to currentimage.txt on $computer_node_name: '$post_load_line'");
+	}
+	elsif ($exit_status) {
+		notify($ERRORS{'WARNING'}, 0, "failed to add line to currentimage.txt on $computer_node_name: '$post_load_line', exit status: $exit_status, output:\n" . join("\n", @$output));
+		return;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to add line to currentimage.txt on $computer_node_name");
+		return;
+	}
+	
 	
 	# Remove blank lines
-	$command .= " && sed -i '' -e \'/^[\\s\\r\\n]*$/d\' currentimage.txt";
-	
-	#	# remove carriage returns
-	#		$command .= " && sed -i '' -e \'s///g\' currentimage.txt";
-	
-	my ($exit_status, $output) = run_ssh_command($computer_node_name, $management_node_keys, $command, '', '', 1);
+	$command .= " && sed -i '' -e \'/^[\\s\\r\\n]*\$/d\' currentimage.txt";
+	($exit_status, $output) = $self->execute($command, 1);
 	if (defined($exit_status) && $exit_status == 0) {
 		notify($ERRORS{'DEBUG'}, 0, "added line to currentimage.txt on $computer_node_name: '$post_load_line'");
 	}
@@ -1839,7 +1784,7 @@ sub get_public_ip_address {
  Returns     :
  Description :
                
-               # reserve
+# reserve
 
 =cut
 
@@ -1849,8 +1794,8 @@ sub add_user {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return 0;
 	}
-	
-	my $reservation_password = $self->data->get_reservation_password();
+
+	my $reservation_password	= $self->data->get_reservation_password();
 	
 	# Make sure the user login ID was passed
 	my $user_login_id = shift;
@@ -1877,37 +1822,15 @@ sub add_user {
 	}
 	
 	my $useradd_cmd = $self->get_node_configuration_directory() . "/useradd $user_login_id $reservation_password";
-	if (run_ssh_command($computer_node_name, $image_identity, $useradd_cmd)) {
+	if ($self->execute($useradd_cmd,1)) {
 		notify($ERRORS{'DEBUG'}, 0, "added user: $user_login_id to $computer_node_name");
 	}
 	else {
 		notify($ERRORS{'DEBUG'}, 0, "failed to add user: $user_login_id to $computer_node_name");
 	}
 	
-	# XXX
-	#	   my $imagemeta_rootaccess = $self->data->get_imagemeta_rootaccess();
-	#
-	#	   #Add user to sudoers
-	#
-	#	   if ($imagemeta_rootaccess) {
-	#				# Add to sudoers file
-	#				#clear user from sudoers file to prevent dups
-	#				my $clear_cmd = "sed -i '' -e \"/^$user_name .*/d\" /etc/sudoers";
-	#				if (run_ssh_command($computer_node_name, $image_identity, $clear_cmd, "root")) {
-	#						notify($ERRORS{'DEBUG'}, 0, "cleared $user_name from /etc/sudoers");
-	#				} else {
-	#						notify($ERRORS{'CRITICAL'}, 0, "failed to clear $user_name from /etc/sudoers");
-	#				}
-	#				my $sudoers_cmd = "echo \"$user_name ALL= NOPASSWD: ALL\" >> /etc/sudoers";
-	#				if (run_ssh_command($computer_node_name, $image_identity, $sudoers_cmd, "root")) {
-	#						notify($ERRORS{'DEBUG'}, 0, "added $user_name to /etc/sudoers");
-	#				} else {
-	#						notify($ERRORS{'CRITICAL'}, 0, "failed to add $user_name to /etc/sudoers");
-	#				}
-	#	   } ## end if ($imagemeta_rootaccess)
-	# XXX
-	
 	return 1;
+
 } ## end sub add_user
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -1928,12 +1851,11 @@ sub firewall_enable {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
+
+        my $computer_node_name = $self->data->get_computer_node_name();
 	
 	my $persist = shift;
 	my $fw_enable_cmd = "";
-	
-	my $management_node_keys = $self->data->get_management_node_keys();
-	my $computer_node_name   = $self->data->get_computer_node_name();
 	
 	if ($persist) {
 		$fw_enable_cmd = $self->get_node_configuration_directory() . "/fw_enable $persist";
@@ -1942,7 +1864,7 @@ sub firewall_enable {
 		$fw_enable_cmd = $self->get_node_configuration_directory() . "/fw_enable";
 	}
 	
-	if (run_ssh_command($computer_node_name, $management_node_keys, $fw_enable_cmd)) {
+	if ($self->execute($fw_enable_cmd,1)) {
 		notify($ERRORS{'DEBUG'}, 0, "enabled firewall on $computer_node_name");
 	}
 	else {
@@ -1950,6 +1872,7 @@ sub firewall_enable {
 	}
 	
 	return 1;
+
 } ## end sub firewall_enable
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -1969,13 +1892,12 @@ sub activate_irapp {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
-	
-	my $management_node_keys = $self->data->get_management_node_keys();
-	my $computer_node_name   = $self->data->get_computer_node_name();
+
+        my $computer_node_name = $self->data->get_computer_node_name();
 	
 	my $command = '/System/Library/CoreServices/rapserver.app/Contents/Tools/rapliccmd load -q -r -f /var/root/VCL/license.lic';
 	
-	my ($exit_status, $output) = run_ssh_command($computer_node_name,$management_node_keys,$command);
+	my ($exit_status, $output) = $self->execute($command,1);
 	
 	if (defined $exit_status && $exit_status == 0) {
 		notify($ERRORS{'DEBUG'}, 0, "executed command to load iRAPP license on $computer_node_name");
