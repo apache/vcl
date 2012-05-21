@@ -850,7 +850,6 @@ function viewRequests() {
 			$reqids[] = $requests[$i]['id'];
 			$imageid = $requests[$i]["imageid"];
 			$text .= "  <TR valign=top id=reqrow{$requests[$i]['id']}>\n";
-			# TODO probably should display current status somewhere if checkpointing, rebooting, or reinstalling
 			if(requestIsReady($requests[$i]) && $requests[$i]['useraccountready']) {
 				$connect = 1;
 				# request is ready, print Connect! and End buttons
@@ -980,10 +979,10 @@ function viewRequests() {
 					   $requests[$i]['laststateid'] != 24 &&
 					   $requests[$i]['currstateid'] != 16 &&
 					   $requests[$i]['laststateid'] != 16 &&
-					   /*$requests[$i]['currstateid'] != 26 && # TODO do we allow reboots again if already in reboot state?
+					   $requests[$i]['currstateid'] != 26 &&
 					   $requests[$i]['laststateid'] != 26 &&
 					   $requests[$i]['currstateid'] != 28 &&
-						$requests[$i]['laststateid'] != 28 &&*/
+						$requests[$i]['laststateid'] != 28 &&
 					   $requests[$i]['currstateid'] != 27 &&
 					   $requests[$i]['laststateid'] != 27) {
 						$cont = addContinuationsEntry('AJrebootRequest', $cdata, SECINDAY);

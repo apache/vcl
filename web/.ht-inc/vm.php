@@ -936,7 +936,6 @@ function AJnewProfile() {
 		$newprofile = stripslashes($newprofile);
 		$newprofile = mysql_real_escape_string($newprofile);
 	}
-	# TODO add check for existing name
 	$query = "SELECT id FROM vmprofile WHERE profilename = '$newprofile'";
 	$qh = doQuery($query, 101);
 	if($row = mysql_fetch_assoc($qh)) {
