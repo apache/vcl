@@ -874,6 +874,7 @@ CREATE TABLE IF NOT EXISTS `variable` (
 -- Table structure change for table `vmhost`
 -- 
 
+ALTER TABLE `vmhost` CHANGE `vmprofileid` `vmprofileid` SMALLINT(5) UNSIGNED NOT NULL DEFAULT '1';
 CALL AddIndexIfNotExists('vmhost', 'vmprofileid');
 
 -- --------------------------------------------------------
