@@ -11071,11 +11071,19 @@ sub install_updates {
 	
 	my $computer_node_name   = $self->data->get_computer_node_name();
 	my $system32_path        = $self->get_system32_path() || return;
+	my $image_name           = $self->data->get_image_name();
 	
 	# Get the node configuration directory, make sure it exists, create if necessary
 	my $node_configuration_directory = $self->get_node_configuration_directory();
 	
 	my @computer_tools_files = $self->get_tools_file_paths("/Updates/");
+	if (@computer_tools_files) {
+		notify($ERRORS{'DEBUG'}, 0, scalar(@computer_tools_files) . " updates found which apply to $image_name:\n" . join("\n", @computer_tools_files));
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "no updates have been saved to the management node which apply to $image_name");
+		return 1;
+	}
 	
 	my $logfile_directory_path = "$node_configuration_directory/Logs/Updates";
 	$self->create_directory($logfile_directory_path);
