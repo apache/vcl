@@ -274,7 +274,8 @@ function setMaxRequestLength(minutes) {
 }
 
 function checkTimeouts() {
-	var nextcheck = 15;
+	// TODO set nextcheck to 15 once VCL-568 is completed in vcld
+	var nextcheck = 16;
 	var nodes = dojo.query('.timeoutvalue');
 	var tmp = new Date();
 	var now = (tmp.getTime() - tmp.getMilliseconds()) / 1000;
