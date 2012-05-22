@@ -47,7 +47,7 @@ use lib "$FindBin::Bin/../../..";
 use base qw(VCL::Module::Provisioning::xCAT);
 
 # Specify the version of this module
-our $VERSION = '1.00';
+our $VERSION = '2.3';
 
 # Specify the version of Perl to use
 use 5.008000;

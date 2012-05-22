@@ -43,7 +43,7 @@ use lib "$FindBin::Bin/../lib";
 use base qw();
 
 # Specify the version of this module
-our $VERSION = '2.2.1';
+our $VERSION = '2.3';
 
 # Specify the version of Perl to use
 use 5.008000;

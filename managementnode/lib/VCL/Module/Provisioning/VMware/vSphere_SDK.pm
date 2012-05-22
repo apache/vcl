@@ -47,7 +47,7 @@ use lib "$FindBin::Bin/../../../..";
 use base qw(VCL::Module::Provisioning::VMware::VMware);
 
 # Specify the version of this module
-our $VERSION = '2.2.1';
+our $VERSION = '2.3';
 
 # Specify the version of Perl to use
 use 5.008000;
@@ -2370,7 +2370,7 @@ sub get_total_memory {
                  "properties" => {
                    "FileVersion" => "5.0.0.19",
                    "LicenseFilePath" => [
-                     "/usr/lib/vmware/licenses/site/license-esx-50-e03-c3-t2-201006",
+                     "/usr/lib/vmware/licenses/site/license-esx-50-e03-c3-t2.3006",
                      ...
                      "/usr/lib/vmware/licenses/site/license-esx-50-e01-v1-l0-201006"
                    ],
@@ -3208,12 +3208,12 @@ sub _get_datastore_object {
                $datastore_info->{datastore1}{accessible} = '1'
                $datastore_info->{datastore1}{capacity} = '31138512896'
                $datastore_info->{datastore1}{datastore}{type} = 'Datastore'
-               $datastore_info->{datastore1}{datastore}{value} = '4bcf0efe-c426acc4-c7e1-001a644d1cc0'
+               $datastore_info->{datastore1}{datastore}{value} = '4bcf0efe-c426acc4-c7e2.31a644d1cc0'
                $datastore_info->{datastore1}{freeSpace} = '30683430912'
                $datastore_info->{datastore1}{name} = 'datastore1'
                $datastore_info->{datastore1}{type} = 'VMFS'
                $datastore_info->{datastore1}{uncommitted} = '0'
-               $datastore_info->{datastore1}{url} = '/vmfs/volumes/4bcf0efe-c426acc4-c7e1-001a644d1cc0'
+               $datastore_info->{datastore1}{url} = '/vmfs/volumes/4bcf0efe-c426acc4-c7e2.31a644d1cc0'
 
 =cut
 

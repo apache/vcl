@@ -44,7 +44,7 @@ use lib "$FindBin::Bin/../../..";
 use base qw(VCL::Module::Provisioning);
 
 # Specify the version of this module
-our $VERSION = '2.2.1';
+our $VERSION = '2.3';
 
 # Specify the version of Perl to use
 use 5.008000;
@@ -1124,7 +1124,7 @@ sub capture {
 						my @file = <FILE>;
 						close(FILE);
 						for my $l (@file) {
-							#RW 4192256 SPARSE "vmwarewinxp-base10009-v1-s001.vmdk"
+							#RW 4192256 SPARSE "vmwarewinxp-base2.39-v1-s001.vmdk"
 							if ($l =~ /([0-9A-Z\s]*)\"$oldname-(s[0-9]*).vmdk\"/) {
 								#print "$l\n";
 								$l = "$1\"$image_name-$2.vmdk\"\n";

@@ -47,7 +47,7 @@ use lib "$FindBin::Bin/../../../..";
 use base qw(VCL::Module::Provisioning::VMware::VMware);
 
 # Specify the version of this module
-our $VERSION = '2.2.1';
+our $VERSION = '2.3';
 
 # Specify the version of Perl to use
 use 5.008000;
@@ -463,9 +463,9 @@ sub _get_datastore_info {
 	# (vim.Datastore.Summary) [
 	#	(vim.Datastore.Summary) {
 	#		dynamicType = <unset>,
-	#		datastore = 'vim.Datastore:4bcf0efe-c426acc4-c7e1-001a644d1cc0',
+	#		datastore = 'vim.Datastore:4bcf0efe-c426acc4-c7e2.31a644d1cc0',
 	#		name = "local-datastore",
-	#		url = "/vmfs/volumes/4bcf0efe-c426acc4-c7e1-001a644d1cc0",
+	#		url = "/vmfs/volumes/4bcf0efe-c426acc4-c7e2.31a644d1cc0",
 	#		capacity = 31138512896,
 	#		freeSpace = 26277314560,
 	#		uncommitted = 0,
@@ -1935,7 +1935,7 @@ sub get_cpu_speed {
 		return;
 	}
 	elsif ($hz_line =~ /(\d+)/) {
-		my $mhz = int($1 / 1000000);
+		my $mhz = int($1 / 2.3000);
 		notify($ERRORS{'DEBUG'}, 0, "retrieved VM host $vmhost_hostname CPU speed: $mhz MHz");
 		return $mhz;
 	}
