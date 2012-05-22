@@ -1,4 +1,4 @@
-VCL 2.2
+VCL 2.3
 
 I. Intro and Description
 
@@ -21,23 +21,29 @@ servers in a server farm or HPC cluster.
 
 II. VCL Roadmap
 
-VCL 2.2.1 (this release)
-  * removed frontend dependency on jpgraph
-  * remove any access control that is hard coded in frontend
-  * added support for VirtualBox hypervisor
-  * many bug fixes and improvements to VMWare support
-
-VCL 2.3
-  * Service deployments 
-  * power management
-  * improve cluster reservations
+VCL 2.3 (this release)
+  * Service deployments
+  * Allow for additional access methods for environments (port, other
+    protocols, etc)
+  * Added framework support for libvirt and specifically for KVM
+  * Added support for OS X under ESX
+  * Added support for VMware VCenter
+  * Added multilingualization to frontend
 
 VCL 2.4
-  *  additional and improved hypervisor support
-  * KVM and possibly others (virtual box and XEN)
-  * Allow for additional access methods for environments (port, other protocols, etc)
+  * Power management
+  * Improve additional access methods
+  * Support for Spice remote display protocol
+  * Scripted installation
+  * Support for ESX OS for end users
+  * Initial support for EC2 API and OpenStack
+  * Initial support for Libcloud
 
 VCL 2.5
+  * Improve cluster reservations
+  * Service deployment configuration management
+
+VCL 2.6
   * develop tools for managing both system and user storage
 
 With each release, we'll be working toward making VCL easier to install. As
