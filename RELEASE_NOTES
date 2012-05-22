@@ -23,7 +23,7 @@ II. VCL Roadmap
 
 VCL 2.3 (this release)
   * Service deployments
-  * Allow for additional access methods for environments (port, other
+  * Allow for additional connect methods for environments (port, other
     protocols, etc)
   * Added framework support for libvirt 
   * Added support for KVM
@@ -33,7 +33,7 @@ VCL 2.3 (this release)
 
 VCL 2.4
   * Power management
-  * Improve additional access methods
+  * Improve additional connect methods
   * Support for Spice remote display protocol
   * Scripted installation
   * Support for ESX OS for end users
