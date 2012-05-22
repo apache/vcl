@@ -33,6 +33,15 @@ This step updates the mysql schema.
    cd /root/apache-VCL-2.3-incubating
    mysql vcl < mysql/update-vcl.sql
 
+One item of note: A new resource group is added in update-vcl.sql - 
+"all profiles". Access to manage the group is added to the VCL->admin node
+in the privilege tree if that node exists. If not, you will need to add it
+manually after starting httpd again (step 6). To add it manually, pick a node
+in the privilege tree, scroll to Resources, click Add Resource Group, select
+"serverprofile/all profiles" from the drop-down box, check available,
+administer, manageGroup, and manageMapping, and click "Submit New Resource
+Group".
+
 4. FOR UPGRADING from 2.1 and 2.2 ONLY (skip to step 5 if upgrading from 2.2.1) 
 
 Grant CREATE TEMPORARY TABLES to mysql user
