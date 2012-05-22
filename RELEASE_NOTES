@@ -32,17 +32,19 @@ VCL 2.3 (this release)
   * Added multilingualization to frontend
 
 VCL 2.4
-  * Power management
   * Improve additional connect methods
+  * NAT support
+  * Remove requirement for 2 NICs
   * Support for Spice remote display protocol
   * Scripted installation
   * Support for ESX OS for end users
   * Initial support for EC2 API and OpenStack
-  * Initial support for Libcloud
 
 VCL 2.5
+  * Power management
   * Improve cluster reservations
   * Service deployment configuration management
+  * Initial support for Libcloud
 
 VCL 2.6
   * develop tools for managing both system and user storage
