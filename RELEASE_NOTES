@@ -25,7 +25,8 @@ VCL 2.3 (this release)
   * Service deployments
   * Allow for additional access methods for environments (port, other
     protocols, etc)
-  * Added framework support for libvirt and specifically for KVM
+  * Added framework support for libvirt 
+  * Added support for KVM
   * Added support for OS X under ESX
   * Added support for VMware VCenter
   * Added multilingualization to frontend
