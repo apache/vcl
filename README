@@ -33,7 +33,7 @@ Database:
 MySQL 5.0 or later
 
 Management Node Backend:
-OS - tested on CentOS 5, RedHat Advanced Server 4 and 5
+OS - tested on CentOS 5, RedHat Advanced Server 4,5, and 6
 Packages:
 - expat
 - expat-devel
@@ -45,7 +45,16 @@ Packages:
 - nmap
 - openssl
 - openssl-devel
+- perl-CPAN
+- perl-DBI
 - perl-DBD-MySQL
+- perl-Digest-SHA1
+- perl-MailTools
+- perl-Net-Netmask
+- perl-Net-SSH-Expect
+- perl-RPC-XML
+- perl-XML-Simple
+- perl-YAML
 - xmlsec1-openssl
 - MySQL 5 client
 - Nmap security scanner
@@ -91,11 +100,17 @@ Required Perl modules" section of the INSTALLATION file.
 - RPC-XML  
   http://search.cpan.org/dist/RPC-XML/
   License: Perl Artistic & LGPL
+- Scalar-List-Utils 
+  http://search.cpan.org/dist/Scalar-List-Utils
+  License: Perl Artistic & GPL
 - XML-Parser  
   http://search.cpan.org/dist/XML-Parser/
   License: Perl Artistic & GPL
 - YAML  
   http://search.cpan.org/dist/YAML/
+  License: Perl Artistic & GPL
+- URI  
+  http://search.cpan.org/dist/URI/
   License: Perl Artistic & GPL
 - Digest-SHA1 
   http://search.cpan.org/dist/Digest-SHA1/
@@ -118,8 +133,8 @@ Management Node Backend Conditional System Requirements:
   http://www.vmware.com/support/developer/viperltoolkit/
   This toolkit is a set of Perl modules. The toolkit is not required if using
   VMware Free server 1.x.
-- Windows XP/2003/Vista/2008
-  If provisioning Windows OS, you will need the following:
+- Windows XP/2003/Vista//7/2008
+  If provisioning Windows OS on bare-metal, you will need the following:
   - Sysprep - used for preparing Windows environments before an image is
 	 captured
 - Jabber Instant Message Notification(optional)s
