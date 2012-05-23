@@ -737,10 +737,11 @@ function editOrAddComputer($state) {
 	print "  <TR>\n";
 	print "    <TH align=right>State:</TH>\n";
 	print "    <TD>\n";
-	if($state == 1 ||
-		($state == 0 && ($computers[$data['compid']]['provisioning'] == 'None' ||
-		($data['type'] == 'virtualmachine' && $data['stateid'] != 2)) ||
-		($data['type'] == 'virtualmachine' && $computers[$data['compid']]['vmhostid'] == '')))
+	if(($state == 1 && ($data['provisioningid'] == '' ||
+	   $provisioning[$data['provisioningid']]['name'] == 'none')) ||
+	   ($state == 0 && ($computers[$data['compid']]['provisioning'] == 'None' ||
+	   ($data['type'] == 'virtualmachine' && $data['stateid'] != 2)) ||
+	   ($data['type'] == 'virtualmachine' && $computers[$data['compid']]['vmhostid'] == '')))
 		unset_by_val('available', $states);
 	if($state == 0 && $computers[$data['compid']]['type'] == 'virtualmachine')
 		unset_by_val('vmhostinuse', $states);
@@ -1865,7 +1866,8 @@ function bulkAddComputer() {
 	print "    <TD>\n";
 	if($submitErr && $data['type'] == 'virtualmachine')
 		$states = array('10' => 'maintenance');
-	unset_by_val('available', $states);
+	if($data['provisioningid'] == '' || $provisioning[$data['provisioningid']]['name'] == 'none')
+		unset_by_val('available', $states);
 	printSelectInput('stateid', $states, $data['stateid'], 0, 0, 'stateid', 'dojoType="dijit.form.Select" onChange="editComputerSelectState();"');
 	print "    </TD>\n";
 	print "  </TR>\n";

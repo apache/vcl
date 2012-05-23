@@ -211,8 +211,8 @@ function editVMInfo() {
 	print "    <td><span id=pname dojoType=\"dijit.InlineEditBox\" onChange=\"updateProfile('pname', 'profilename');\"></span></td>\n";
 	print "  </tr>\n";
 	print "  <tr>\n";
-	print "    <th align=right>Image:*</th>\n";
-	print "    <td><span id=pimage dojoType=\"dijit.form.FilteringSelect\" searchAttr=\"name\" onchange=\"updateProfile('pimage', 'imageid');\" style=\"width: 420px\"></span></td>\n";
+	print "    <th align=right>Image:</th>\n";
+	print "    <td><span id=pimage dojoType=\"dijit.form.FilteringSelect\" searchAttr=\"name\" onchange=\"updateProfile('pimage', 'imageid');\" style=\"width: 420px\" required=\"false\"></span></td>\n";
 	print "  </tr>\n";
 	print "  <tr>\n";
 	print "    <th align=right>Resource Path:</th>\n";
