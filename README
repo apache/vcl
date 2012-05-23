@@ -41,7 +41,6 @@ Packages:
 - krb5-devel
 - libxml2
 - libxml2-devel
-- nmap
 - openssl
 - openssl-devel
 - perl-CPAN
