@@ -25,6 +25,7 @@ php modules (some of these may be built in for your distro):
 - php-sysvsem
 - php-xml
 - php-xmlrpc
+- php-gettext
 - php-ldap (if you will be using ldap authentication)
 - php-process (for RHEL/CentOS 6)
 

@@ -5,6 +5,7 @@ Dependency changes:
 Web frontend:
 -removed dependency on mcrypt
 -php-process - this is an added requirement only on RHEL/CentOS 6 because php semaphore locking was separated out into this package
+-php-gettext - this was added for multilingualization
 
 database:
 -none
