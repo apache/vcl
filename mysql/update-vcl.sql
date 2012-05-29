@@ -1203,6 +1203,8 @@ INSERT IGNORE userpriv (usergroupid, privnodeid, userprivtypeid) SELECT usergrou
 
 INSERT IGNORE INTO `variable` (`id`, `name`, `serialization`, `value`) VALUES (1, 'schema-version', 'none', '1');
 INSERT IGNORE INTO `variable` (`id`, `name`, `serialization`, `value`) VALUES (2, 'timesource|global', 'none','time.nist.gov,time-a.nist.gov,time-b.nist.gov,time.windows.com');
+INSERT IGNORE INTO `variable` (`name`, `serialization`, `value`) VALUES ('acknowledgetimeout', 'none', '900');
+INSERT IGNORE INTO `variable` (`name`, `serialization`, `value`) VALUES ('connecttimeout', 'none', '900');
 
 -- 
 -- Inserts for table `vmprofile`

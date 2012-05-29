@@ -1874,7 +1874,9 @@ INSERT INTO `userprivtype` (`id`, `name`) VALUES
 -- 
 
 INSERT INTO `variable` (`id`, `name`, `serialization`, `value`) VALUES
-(1, 'schema-version', 'none', '1');
+(1, 'schema-version', 'none', '1'),
+(2, 'acknowledgetimeout', 'none', '900'),
+(3, 'connecttimeout', 'none', '900');
 
 -- 
 -- Dumping data for table `vmprofile`
