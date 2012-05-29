@@ -194,7 +194,7 @@ CREATE TABLE IF NOT EXISTS `computer` (
   `id` smallint(5) unsigned NOT NULL auto_increment,
   `stateid` tinyint(5) unsigned NOT NULL default '10',
   `ownerid` mediumint(8) unsigned default '1',
-  `platformid` tinyint(3) unsigned NOT NULL default '0',
+  `platformid` tinyint(3) unsigned NOT NULL default '1',
   `scheduleid` tinyint(3) unsigned default NULL,
   `currentimageid` smallint(5) unsigned NOT NULL default '1',
   `nextimageid` smallint(5) unsigned NOT NULL default '1',
@@ -1479,7 +1479,6 @@ INSERT INTO `localauth` (`userid`, `passhash`, `salt`, `lastupdated`, `lockedout
 
 INSERT INTO `module` (`id`, `name`, `prettyname`, `description`, `perlpackage`) VALUES 
 (1, 'provisioning_xcat_13', 'xCAT 1.3 Provisioning Module', '', 'VCL::Module::Provisioning::xCAT'),
-(2, 'provisioning_vmware_1x', 'VMware Server 1.x Provisioning Module', '', 'VCL::Module::Provisioning::vmware'),
 (3, 'provisioning_lab', 'Computing Lab Provisioning Module', '', 'VCL::Module::Provisioning::Lab'),
 (4, 'os_windows', 'Windows OS Module', '', 'VCL::Module::OS::Windows'),
 (5, 'os_linux', 'Linux OS Module', '', 'VCL::Module::OS::Linux'),
@@ -1873,10 +1872,11 @@ INSERT INTO `userprivtype` (`id`, `name`) VALUES
 -- Dumping data for table `variable`
 -- 
 
-INSERT INTO `variable` (`id`, `name`, `serialization`, `value`) VALUES
-(1, 'schema-version', 'none', '1'),
-(2, 'acknowledgetimeout', 'none', '900'),
-(3, 'connecttimeout', 'none', '900');
+INSERT INTO `variable` (`name`, `serialization`, `value`) VALUES
+('schema-version', 'none', '1'),
+('timesource|global', 'none','time.nist.gov,time-a.nist.gov,time-b.nist.gov,time.windows.com'),
+('acknowledgetimeout', 'none', '900'),
+('connecttimeout', 'none', '900');
 
 -- 
 -- Dumping data for table `vmprofile`

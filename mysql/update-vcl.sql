@@ -1201,8 +1201,8 @@ INSERT IGNORE userpriv (usergroupid, privnodeid, userprivtypeid) SELECT usergrou
 -- Inserts for table `variable`
 --
 
-INSERT IGNORE INTO `variable` (`id`, `name`, `serialization`, `value`) VALUES (1, 'schema-version', 'none', '1');
-INSERT IGNORE INTO `variable` (`id`, `name`, `serialization`, `value`) VALUES (2, 'timesource|global', 'none','time.nist.gov,time-a.nist.gov,time-b.nist.gov,time.windows.com');
+INSERT IGNORE INTO `variable` (`name`, `serialization`, `value`) VALUES ('schema-version', 'none', '1');
+INSERT IGNORE INTO `variable` (`name`, `serialization`, `value`) VALUES ('timesource|global', 'none','time.nist.gov,time-a.nist.gov,time-b.nist.gov,time.windows.com');
 INSERT IGNORE INTO `variable` (`name`, `serialization`, `value`) VALUES ('acknowledgetimeout', 'none', '900');
 INSERT IGNORE INTO `variable` (`name`, `serialization`, `value`) VALUES ('connecttimeout', 'none', '900');
 
@@ -1331,6 +1331,38 @@ CALL AddConstraintIfNotExists('winProductKey', 'affiliationid', 'affiliation', '
 DROP TABLE IF EXISTS `xmlrpcKey`;
 
 -- --------------------------------------------------------
+
+--
+-- Remove references to legacy vmware.pm provisioning module
+--
+
+UPDATE IGNORE computer, provisioning SET
+computer.provisioningid = (
+  SELECT DISTINCT
+  MIN(provisioning.id)
+  FROM
+  provisioning,
+  module
+  WHERE
+  provisioning.moduleid = (SELECT MIN(module.id) FROM module WHERE module.perlpackage = 'VCL::Module::Provisioning::VMware::VMware')
+)
+WHERE provisioning.moduleid IN (SELECT module.id FROM module WHERE module.perlpackage = 'VCL::Module::Provisioning::vmware');
+
+UPDATE IGNORE statgraphcache, provisioning SET
+statgraphcache.provisioningid = (
+  SELECT DISTINCT
+  MIN(provisioning.id)
+  FROM
+  provisioning,
+  module
+  WHERE
+  provisioning.moduleid = (SELECT MIN(module.id) FROM module WHERE module.perlpackage = 'VCL::Module::Provisioning::VMware::VMware')
+)
+WHERE provisioning.moduleid IN (SELECT module.id FROM module WHERE module.perlpackage = 'VCL::Module::Provisioning::vmware');
+
+DELETE FROM provisioning WHERE provisioning.moduleid IN (SELECT module.id FROM module WHERE module.perlpackage = 'VCL::Module::Provisioning::vmware');
+
+DELETE FROM module WHERE module.perlpackage = 'VCL::Module::Provisioning::vmware';
 
 --
 -- Remove Procedures
