@@ -65,7 +65,7 @@ function initGlobals() {
 	global $semislocked, $days, $phpVer, $keys, $pemkey, $AUTHERROR;
 	global $passwdArray, $skin, $contdata, $lastmode, $inContinuation;
 	global $totalQueries, $ERRORS, $queryTimes, $actions;
-	global $affilValFunc, $addUserFunc, $updateUserFunc;
+	global $affilValFunc, $addUserFunc, $updateUserFunc, $addUserFuncArgs;
 
 	define("SECINDAY", 86400);
 	define("SECINWEEK", 604800);

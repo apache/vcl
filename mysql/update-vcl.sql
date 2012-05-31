@@ -827,6 +827,14 @@ CALL AddColumnIfNotExists('request', 'checkuser', "tinyint(1) unsigned NOT NULL 
 -- --------------------------------------------------------
 
 --
+-- Table structure change for table `user`
+--
+
+-- --------------------------------------------------------
+
+CALL AddColumnIfNotExists('user', 'validated', "tinyint(1) unsigned NOT NULL default '1'");
+
+--
 -- Table structure for table `usergrouppriv`
 --
 

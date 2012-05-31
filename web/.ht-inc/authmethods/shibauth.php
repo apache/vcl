@@ -100,7 +100,8 @@ function updateShibUser($userid) {
 		$email = mysql_real_escape_string($user['email']);
 		$query .= "email = '$email', ";
 	}
-	$query .=    "lastupdated = NOW() " 
+    $query .=    "lastupdated = NOW(), "
+           . "validated = 1 " 
 	       . "WHERE id = {$user['id']}";
 	doQuery($query, 101, 'vcl', 1);
 	return $user;
