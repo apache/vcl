@@ -263,7 +263,7 @@ sub get_currentimage_txt_contents {
 
 	# Attempt to retrieve the contents of currentimage.txt
 	my $cat_command = "cat ~/currentimage.txt";
-	my ($cat_exit_status, $cat_output) = $self->execute($cat_command);
+	my ($cat_exit_status, $cat_output) = $self->execute($cat_command,1);
 	if (!defined($cat_output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute command to failed to retrieve currentimage.txt from $computer_node_name");
 		return;
@@ -1739,7 +1739,7 @@ sub create_text_file {
 		$command .= " > $file_path";
 	}
 	
-	my ($exit_status, $output) = $self->execute($command);
+	my ($exit_status, $output) = $self->execute($command,1);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute ssh command to create file on $computer_node_name: $file_path");
 		return;
@@ -1785,7 +1785,7 @@ sub get_file_contents {
 	
 	# Run cat to retrieve the contents of the file
 	my $command = "cat \"$path\"";
-	my ($exit_status, $output) = $self->execute($command);
+	my ($exit_status, $output) = $self->execute($command,0);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to run command to read file on $computer_short_name:\n path: '$path'\ncommand: '$command'");
 		return;
@@ -2179,7 +2179,7 @@ sub get_os_type {
 	my $computer_node_name = $self->data->get_computer_node_name() || return;
 	
 	my $command = 'uname -a';
-	my ($exit_status, $output) = $self->execute($command);
+	my ($exit_status, $output) = $self->execute($command,0);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to run command to determine OS type currently installed on $computer_node_name");
 		return;
@@ -2663,7 +2663,7 @@ sub copy_file {
 	# Execute the command to copy the file
 	my $command = "cp -fr $escaped_source_path $escaped_destination_path";
 	notify($ERRORS{'DEBUG'}, 0, "attempting to copy file on $computer_node_name: '$source_file_path' -> '$destination_file_path'");
-	my ($exit_status, $output) = $self->execute($command);
+	my ($exit_status, $output) = $self->execute($command,0);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to run command to copy file on $computer_node_name:\nsource path: '$source_file_path'\ndestination path: '$destination_file_path'\ncommand: '$command'");
 		return;
@@ -2861,7 +2861,7 @@ sub get_file_checksum {
 	$file_path =~ s/([\$])/\\$1/g;
 	
 	my $command = "cksum \"$file_path\"";
-	my ($exit_status, $output) = $self->execute($command);
+	my ($exit_status, $output) = $self->execute($command,1);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute command to determine checksum of file: $file_path");
 		return;

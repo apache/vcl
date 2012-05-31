@@ -2173,14 +2173,14 @@ sub node_status {
 	}
 
 	# Check if node is pingable
-	notify($ERRORS{'DEBUG'}, $log, "checking if $computer_host_name is pingable");
-	if (_pingnode($computer_host_name)) {
+	notify($ERRORS{'DEBUG'}, $log, "checking if $computer_short_name is pingable");
+	if (_pingnode($computer_short_name)) {
 		$status{ping} = 1;
-		notify($ERRORS{'OK'}, $log, "$computer_host_name is pingable ($status{ping})");
+		notify($ERRORS{'OK'}, $log, "$computer_short_name is pingable ($status{ping})");
 	}
 	else {
 		$status{ping} = 0;
-		notify($ERRORS{'OK'}, $log, "$computer_host_name is not pingable ($status{ping})");
+		notify($ERRORS{'OK'}, $log, "$computer_short_name is not pingable ($status{ping})");
 	}
 
 	# Check the rpower status
