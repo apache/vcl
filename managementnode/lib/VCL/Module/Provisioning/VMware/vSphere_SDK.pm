@@ -85,12 +85,17 @@ sub initialize {
 		return;
 	}
 	
+	# Newer versions of LWP::Protocol::https have strict SSL checking enabled by default
+	# The vSphere SDK won't be able to connect if ESXi or vCenter uses a self-signed certificate
+	# The following setting disables strict checking:
+	$ENV{PERL_LWP_SSL_VERIFY_HOSTNAME} = 0;
+	
 	# Override the die handler because process will die if VMware Perl libraries aren't installed
 	local $SIG{__DIE__} = sub{};
 	
 	eval "use VMware::VIRuntime; use VMware::VILib; use VMware::VIExt";
 	if ($EVAL_ERROR) {
-		notify($ERRORS{'OK'}, 0, "vSphere SDK for Perl does not appear to be installed on this managment node, unable to load VMware vSphere SDK Perl modules");
+		notify($ERRORS{'OK'}, 0, "vSphere SDK for Perl does not appear to be installed on this managment node, unable to load VMware vSphere SDK Perl modules, error:\n$EVAL_ERROR");
 		return 0;
 	}
 	notify($ERRORS{'DEBUG'}, 0, "loaded VMware vSphere SDK modules");
@@ -470,6 +475,8 @@ sub get_vm_power_state {
 	return $return_power_state;
 }
 
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 _clean_vm_name
  Parameters  : $vm_name
  Returns     : string
@@ -485,35 +492,37 @@ sub _clean_vm_name {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
-
-    my $vm_name = shift || return;
-
-    # if the length of the name is > 29, then truncate it in such a way that
-    # the image name remains unique in the VCL database
-    my $MAX_VMNAME_LEN = 29;
-    if(length $vm_name > $MAX_VMNAME_LEN){
-        notify($ERRORS{'DEBUG'}, 0, "truncating VM name $vm_name");
-        my $newname = "";
-        if($vm_name =~ m/^(\w+)-(\w+?)(\d*)-(v\d+)$/){
-            my $base = $1;
-            my $name = $2;
-            my $imgid = $3;
-            my $version = $4;
-            my $shortened = substr($name, 0, $MAX_VMNAME_LEN - 2 - length($imgid) - length($base) - length($version));
-            $newname = $base . "-" . $shortened . $imgid . "-" . $version; 
-        } else {
-            my ($pre_len, $post_len) = ($MAX_VMNAME_LEN - 10, 10);
-            my ($pre, $post) = $vm_name =~ m/^(.{$pre_len}).*(.{$post_len})$/;
-            $newname = $pre . $post;
-        }
-        if(get_image_info($newname)){
-            notify($ERRORS{'WARNING'}, 0, "Naming conflict: $newname already exists in the database");
-        } else {
-            notify($ERRORS{'DEBUG'}, 0, "Changed image name to: $newname");
-            $vm_name = $newname;
-        }
-    }
-    return $vm_name;
+	
+	my $vm_name = shift || return;
+	
+	# if the length of the name is > 29, then truncate it in such a way that
+	# the image name remains unique in the VCL database
+	my $MAX_VMNAME_LEN = 29;
+	if (length $vm_name > $MAX_VMNAME_LEN) {
+		notify($ERRORS{'DEBUG'}, 0, "truncating VM name $vm_name");
+		my $newname = "";
+		if ($vm_name =~ m/^(\w+)-(\w+?)(\d*)-(v\d+)$/) {
+			my $base = $1;
+			my $name = $2;
+			my $imgid = $3;
+			my $version = $4;
+			my $shortened = substr($name, 0, $MAX_VMNAME_LEN - 2 - length($imgid) - length($base) - length($version));
+			$newname = $base . "-" . $shortened . $imgid . "-" . $version; 
+		}
+		else {
+			my ($pre_len, $post_len) = ($MAX_VMNAME_LEN - 10, 10);
+			my ($pre, $post) = $vm_name =~ m/^(.{$pre_len}).*(.{$post_len})$/;
+			$newname = $pre . $post;
+		}
+		if (get_image_info($newname, 0, 1)) {
+			notify($ERRORS{'WARNING'}, 0, "Naming conflict: $newname already exists in the database");
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "Changed image name to: $newname");
+			$vm_name = $newname;
+		}
+	}
+	return $vm_name;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -633,11 +642,8 @@ sub copy_virtual_disk {
 	
 	my $destination_base_name = $self->_get_file_base_name($destination_path);
 	
-	
 	my $datacenter_view = $self->_get_datacenter_view() || return;
 	my $virtual_disk_manager_view = $self->_get_virtual_disk_manager_view() || return;
-	
-	
 	
 	# Get the source vmdk file info so the source adapter and disk type can be displayed
 	my $source_info = $self->_get_file_info($source_path) || return;
@@ -697,9 +703,9 @@ sub copy_virtual_disk {
 	eval {
 		$copy_virtual_disk_result = $virtual_disk_manager_view->CopyVirtualDisk(
 			sourceName => $source_path,
-			#sourceDatacenter => $datacenter_view,
+			sourceDatacenter => $datacenter_view,
 			destName => $destination_path,
-			#destDatacenter => $datacenter_view,
+			destDatacenter => $datacenter_view,
 			destSpec => $virtual_disk_spec,
 			force => 1
 		);
@@ -2825,13 +2831,16 @@ sub _get_resource_pool_view {
 		
 		# Check if the retrieved resource pool matches the profile resource path
 		if ($vmhost_profile_resource_path =~ /$resource_pool_path/i) {
-			notify($ERRORS{'DEBUG'}, 0, "found resource pool on VM host $vmhost_name matching VM host profile resource path: $resource_pool_path");
+			notify($ERRORS{'DEBUG'}, 0, "found matching resource pool on VM host $vmhost_name\n" .
+					 "VM host profile resource path: $vmhost_profile_resource_path\n" .
+					 "resource pool path on host: $resource_pool_path"
+			);
 			$self->{resource_pool_view_object} = $resource_pool;
 			return $resource_pool;
 		}
 		
 		# Check if the fixed retrieved resource pool path matches the profile resource path
-		if ($vmhost_profile_resource_path =~ /$resource_pool_path_fixed/i) {
+		if ($vmhost_profile_resource_path =~ /^$resource_pool_path_fixed$/i) {
 			notify($ERRORS{'DEBUG'}, 0, "found resource pool on VM host $vmhost_name matching VM host profile resource path with default hidden levels removed:\n" .
 					 "path on VM host: '$resource_pool_path'\n" .
 					 "modified path on VM host: '$resource_pool_path_fixed'\n" .
@@ -3256,7 +3265,7 @@ sub _get_datastore_info {
 			next;
 		}
 		
-		if ($datastore_url =~ /^(\/vmfs\/volumes|\w+fs)/i) {
+		if ($datastore_url =~ /^(\/vmfs\/volumes|\w+fs|ds:)/i) {
 			$datastore_view->summary->{normal_path} = "/vmfs/volumes/$datastore_name";
 		}
 		else {

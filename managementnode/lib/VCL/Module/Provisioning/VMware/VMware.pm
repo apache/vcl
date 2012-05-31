@@ -6043,7 +6043,10 @@ sub copy_vmdk {
 		notify($ERRORS{'WARNING'}, 0, "failed to copy virtual disk on VM host $vmhost_name using any available methods:\n'$source_vmdk_file_path' --> '$destination_vmdk_file_path'");
 		
 		# Delete the destination directory
-		if (!$self->vmhost_os->delete_file($destination_directory_path)) {
+		if ($self->_get_datastore_path($destination_directory_path) =~ /^\[.+\]$/) {
+			notify($ERRORS{'WARNING'}, 0, "destination directory not deleted, it is the root of a datastore: $destination_directory_path");
+		}
+		elsif (!$self->vmhost_os->delete_file($destination_directory_path)) {
 			notify($ERRORS{'WARNING'}, 0, "failed to delete destination directory after failing to copy virtual disk on VM host $vmhost_name: $destination_directory_path");
 		}
 		
@@ -6981,7 +6984,9 @@ sub _get_normal_path {
 		return;
 	}
 	
-	if ($path_argument =~ /[\\\/]/ && $path_argument !~ /\[.+\]/ && $path_argument !~ /^\/vmfs\/volumes\//i) {
+	# Check if the path is not on a datastore:
+	#   has a slash,                  does not contain [xxx],       is not under /vmfs/volumes
+	if ($path_argument =~ /[\\\/]/ && $path_argument !~ /\[.+\]/ && $path_argument !~ /\/vmfs\/volumes\//i) {
 		return normalize_file_path($path_argument);
 	}
 	
