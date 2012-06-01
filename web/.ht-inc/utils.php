@@ -527,7 +527,8 @@ function checkAccess() {
 						}
 						break;
 					case 'serverProfiles':
-						if(! in_array("serverProfileAdmin", $user["privileges"])) {
+						if(! in_array("serverProfileAdmin", $user["privileges"]) &&
+						   ! in_array("serverCheckOut", $user["privileges"])) {
 							$mode = "";
 							$actionFunction = "main";
 							return;
@@ -5410,7 +5411,7 @@ function getUserRequests($type, $id=0) {
 				'password' => $row['password'],
 				'resacctuserid' => $row['resacctuserid']
 			);
-			if(empty($row['resacctuserid']))
+			if($row['userid'] != $id && empty($row['resacctuserid']))
 				$data[$count]['useraccountready'] = 0;
 			continue;
 		}
@@ -7906,6 +7907,8 @@ function requestIsReady($request) {
 	   $request["computerstateid"] == 8) ||   //   and computer state inuse
 	   ($request["currstateid"] == 29 &&      // request current state servermodified
 	   $request["computerstateid"] == 8) ||   //   and computer state inuse
+	   ($request["currstateid"] == 29 &&      // request current state servermodified
+	   $request["computerstateid"] == 3) ||   //   and computer state reserved
 	   ($request["currstateid"] == 14 &&      // request current state pending
 	   $request["laststateid"] == 8 &&        //   and last state inuse and
 	   $request["computerstateid"] == 8) ||   //   computer inuse
@@ -10397,7 +10400,8 @@ function getNavMenu($inclogout, $inchome, $homeurl=HOMEURL) {
 		$rt .= "<a href=\"" . BASEURL . SCRIPT;
 		$rt .= _("?mode=selectMgmtnodeOption\">Management Nodes</a></li>\n");
 	}
-	if(in_array("serverProfileAdmin", $user["privileges"])) {
+	if(in_array("serverProfileAdmin", $user["privileges"]) ||
+	   in_array("serverCheckOut", $user["privileges"])) {
 		$rt .= menulistLI('serverProfiles');
 		$rt .= "<a href=\"" . BASEURL . SCRIPT;
 		$rt .= "?mode=serverProfiles\">" . _("Server Profiles") . "</a></li>\n";
@@ -11325,7 +11329,7 @@ function getSelectLanguagePulldown() {
 	if(! is_array($user))
 		$user['id'] = 0;
 
-	$rt  = "<form name=\"localeform\" action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
+	$rt  = "<form name=\"localeform\" id=\"localeform\" action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
 	$rt .= "<select name=\"continuation\" onChange=\"document.localeform.submit();\">\n";
 	$cdata = array('IP' => $remoteIP, 'oldmode' => $mode);
 	if($mode == 'selectauth') {

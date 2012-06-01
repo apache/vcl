@@ -28,24 +28,29 @@
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function serverProfiles() {
+	global $user;
 	print "<div dojoType=\"dojo.data.ItemFileWriteStore\" jsId=\"profilesstore\" ";
 	print "data=\"profilesstoredata\"></div>\n";
-	print "<div id=\"mainTabContainer\" dojoType=\"dijit.layout.TabContainer\"\n";
-	print "     style=\"width:630px;height:600px\">\n";
+	if(in_array("serverProfileAdmin", $user["privileges"])) {
+		print "<div id=\"mainTabContainer\" dojoType=\"dijit.layout.TabContainer\"\n";
+		print "     style=\"width:630px;height:600px\">\n";
+	}
 	print "<div id=\"deploytab\" dojoType=\"dijit.layout.ContentPane\" title=\"Deploy Server\" selected=\"true\">\n";
 	$data = deployHTML();
 	print $data['html'];
 	print "</div>\n"; # deploy tab
 
-	print "<div id=\"manageprofiles\" dojoType=\"dijit.layout.ContentPane\" title=\"Manage Profiles\">\n";
-	$data = manageProfilesHTML();
-	print $data['html'];
-	print "</div>\n"; # manageprofiles tab
+	if(in_array("serverProfileAdmin", $user["privileges"])) {
+		print "<div id=\"manageprofiles\" dojoType=\"dijit.layout.ContentPane\" title=\"Manage Profiles\">\n";
+		$data = manageProfilesHTML();
+		print $data['html'];
+		print "</div>\n"; # manageprofiles tab
 
-	print "<div id=\"grouping\" dojoType=\"dijit.layout.ContentPane\" title=\"Manage Grouping\">\n";
-	$data = manageGroupingHTML();
-	print $data['html'];
-	print "</div>\n"; # grouping tab
+		print "<div id=\"grouping\" dojoType=\"dijit.layout.ContentPane\" title=\"Manage Grouping\">\n";
+		$data = manageGroupingHTML();
+		print $data['html'];
+		print "</div>\n"; # grouping tab
+	}
 
 	print "</div>\n"; # tab container
 }

@@ -2633,7 +2633,7 @@ function AJsubmitEditRequest() {
 			$testlogingroupid != $request['logingroupid'])
 			$updategroups = 1;
 		$servername = processInputVar('servername', ARG_STRING);
-		if(! preg_match('/^([-a-zA-Z0-9\.\(\) ]){3,255}$/', $servername)) {
+		if(! preg_match('/^([-a-zA-Z0-9\.\(\)_ ]){3,255}$/', $servername)) {
 			$cdata = getContinuationVar();
 			$cont = addContinuationsEntry('AJsubmitEditRequest', $cdata, SECINDAY, 1, 0);
 			sendJSON(array('status' => 'error',
