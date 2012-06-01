@@ -3217,12 +3217,12 @@ sub _get_datastore_object {
                $datastore_info->{datastore1}{accessible} = '1'
                $datastore_info->{datastore1}{capacity} = '31138512896'
                $datastore_info->{datastore1}{datastore}{type} = 'Datastore'
-               $datastore_info->{datastore1}{datastore}{value} = '4bcf0efe-c426acc4-c7e2.31a644d1cc0'
+               $datastore_info->{datastore1}{datastore}{value} = '4bcf0efe-c426acc4-c7e1-001a644d1cc0'
                $datastore_info->{datastore1}{freeSpace} = '30683430912'
                $datastore_info->{datastore1}{name} = 'datastore1'
                $datastore_info->{datastore1}{type} = 'VMFS'
                $datastore_info->{datastore1}{uncommitted} = '0'
-               $datastore_info->{datastore1}{url} = '/vmfs/volumes/4bcf0efe-c426acc4-c7e2.31a644d1cc0'
+               $datastore_info->{datastore1}{url} = '/vmfs/volumes/4bcf0efe-c426acc4-c7e1-001a644d1cc0'
 
 =cut
 

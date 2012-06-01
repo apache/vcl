@@ -88,18 +88,18 @@ our %VM_OS_CONFIGURATION = (
 	},
 	"linux-x86_64" => {
 		"guestOS" => "otherlinux-64",
-		"ethernet-virtualDev" => "e2.3",
+		"ethernet-virtualDev" => "e1000",
 		"scsi-virtualDev" => "lsiLogic",
 	},
   # OSX configuration
   "osx-x86" => {
      "guestOS" => "darwin10-64",
-     "ethernet-virtualDev" => "e2.3",
+     "ethernet-virtualDev" => "e1000",
      "scsi-virtualDev" => "lsiLogic",
   },
   "osx-x86_64" => {
      "guestOS" => "darwin10-64",
-     "ethernet-virtualDev" => "e2.3",
+     "ethernet-virtualDev" => "e1000",
      "scsi-virtualDev" => "lsiLogic",
   },
 	# Windows configurations:
@@ -111,34 +111,34 @@ our %VM_OS_CONFIGURATION = (
 	},
 	"winxp-x86_64" => {
 		"guestOS" => "winXPPro-64",
-		"ethernet-virtualDev" => "e2.3",
+		"ethernet-virtualDev" => "e1000",
 		"scsi-virtualDev" => "lsiLogic",
 		"cpu_socket_limit" => 2,
 	},
 	"winvista-x86" => {
 		"guestOS" => "winvista",
-		"ethernet-virtualDev" => "e2.3",
+		"ethernet-virtualDev" => "e1000",
 		"scsi-virtualDev" => "lsiLogic",
 		"memsize" => 1024,
 		"cpu_socket_limit" => 2,
 	},
 	"vista-x86_64" => {
 		"guestOS" => "winvista-64",
-		"ethernet-virtualDev" => "e2.3",
+		"ethernet-virtualDev" => "e1000",
 		"scsi-virtualDev" => "lsiLogic",
 		"memsize" => 1024,
 		"cpu_socket_limit" => 2,
 	}, 
 	"win7-x86" => {
 		"guestOS" => "windows7",
-		"ethernet-virtualDev" => "e2.3",
+		"ethernet-virtualDev" => "e1000",
 		"scsi-virtualDev" => "lsiLogic",
 		"memsize" => 1024,
 		"cpu_socket_limit" => 2,
 	},
 	"win7-x86_64" => {
 		"guestOS" => "windows7-64",
-		"ethernet-virtualDev" => "e2.3",
+		"ethernet-virtualDev" => "e1000",
 		"scsi-virtualDev" => "lsiLogic",
 		"memsize" => 2048,
 		"cpu_socket_limit" => 2,
@@ -151,20 +151,20 @@ our %VM_OS_CONFIGURATION = (
 	},
 	"win2003-x86_64" => {
 		"guestOS" => "winNetEnterprise-64",
-		"ethernet-virtualDev" => "e2.3",
+		"ethernet-virtualDev" => "e1000",
 		"scsi-virtualDev" => "lsiLogic",
 		"memsize" => 1024,
 		"cpu_socket_limit" => 64,
 	},
 	"win2008-x86" => {
 		"guestOS" => "winServer2008Enterprise-32",
-		"ethernet-virtualDev" => "e2.3",
+		"ethernet-virtualDev" => "e1000",
 		"scsi-virtualDev" => "lsiLogic",
 		"cpu_socket_limit" => 64,
 	},
 	"win2008-x86_64" => {
 		"guestOS" => "winServer2008Enterprise-64",
-		"ethernet-virtualDev" => "e2.3",
+		"ethernet-virtualDev" => "e1000",
 		"scsi-virtualDev" => "lsiLogic",
 		"cpu_socket_limit" => 64,
 	},
@@ -176,7 +176,7 @@ our %VM_OS_CONFIGURATION = (
 	},
 	"windows-x86_64" => {
 		"guestOS" => "winXPPro-64",
-		"ethernet-virtualDev" => "e2.3",
+		"ethernet-virtualDev" => "e1000",
 		"scsi-virtualDev" => "lsiLogic",
 	},
 	# Default configuration if OS is not Windows or Linux:
@@ -187,7 +187,7 @@ our %VM_OS_CONFIGURATION = (
 	},
 	"default-x86_64" => {
 		"guestOS" => "other-64",
-		"ethernet-virtualDev" => "e2.3",
+		"ethernet-virtualDev" => "e1000",
 		"scsi-virtualDev" => "lsiLogic",
 	},
 );
@@ -5256,7 +5256,7 @@ sub get_vmx_file_paths {
                |--{displayname} = 'vm-ark-mcnc-9'
                |--{ethernet0.address} = '00:50:56:03:54:11'
                |--{ethernet0.addresstype} = 'static'
-               |--{ethernet0.virtualdev} = 'e2.3'
+               |--{ethernet0.virtualdev} = 'e1000'
                |--{ethernet0.vnet} = 'Private'
                |--{guestos} = 'winserver2008enterprise-32'
                |--{scsi0.present} = 'TRUE'

@@ -463,9 +463,9 @@ sub _get_datastore_info {
 	# (vim.Datastore.Summary) [
 	#	(vim.Datastore.Summary) {
 	#		dynamicType = <unset>,
-	#		datastore = 'vim.Datastore:4bcf0efe-c426acc4-c7e2.31a644d1cc0',
+	#		datastore = 'vim.Datastore:4bcf0efe-c426acc4-c7e1-001a644d1cc0',
 	#		name = "local-datastore",
-	#		url = "/vmfs/volumes/4bcf0efe-c426acc4-c7e2.31a644d1cc0",
+	#		url = "/vmfs/volumes/4bcf0efe-c426acc4-c7e1-001a644d1cc0",
 	#		capacity = 31138512896,
 	#		freeSpace = 26277314560,
 	#		uncommitted = 0,
