@@ -878,7 +878,7 @@ EOF
 "Type"=dword:00000001
 "DisplayName"="Standard IDE/ESDI Hard Disk Controller"
 "ImagePath"=hex(2):53,00,79,00,73,00,74,00,65,00,6d,00,33,00,32,00,5c,00,44,00,\ 
-  52,00,49,00,56,00,45,00,52,00,53,00,5c,00,61,74,00,61,70,00,69,00,2e,\ 
+  52,00,49,00,56,00,45,00,52,00,53,00,5c,00,61,00,74,00,61,00,70,00,69,00,2e,\ 
   00,73,00,79,00,73,00,00,00
 
 [HKEY_LOCAL_MACHINE\SYSTEM\ControlSet001\Services\IntelIde]
