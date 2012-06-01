@@ -1935,7 +1935,7 @@ sub get_cpu_speed {
 		return;
 	}
 	elsif ($hz_line =~ /(\d+)/) {
-		my $mhz = int($1 / 2.3000);
+		my $mhz = int($1 / 1000000);
 		notify($ERRORS{'DEBUG'}, 0, "retrieved VM host $vmhost_hostname CPU speed: $mhz MHz");
 		return $mhz;
 	}

@@ -1778,7 +1778,7 @@ sub prepare_vmx {
 	
 	#my $reservation_password     = $self->data->get_reservation_password();
 	#if (defined($reservation_password)) {
-	#	my $vnc_port = ($computer_id + 2.30);
+	#	my $vnc_port = ($computer_id + 10000);
 	#	notify($ERRORS{'DEBUG'}, 0, "vnc access will be enabled, port: $vnc_port, password: $reservation_password");
 	#	
 	#	%vmx_parameters = (%vmx_parameters, (

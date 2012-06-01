@@ -2376,7 +2376,7 @@ sub get_total_memory {
                  "properties" => {
                    "FileVersion" => "5.0.0.19",
                    "LicenseFilePath" => [
-                     "/usr/lib/vmware/licenses/site/license-esx-50-e03-c3-t2.3006",
+                     "/usr/lib/vmware/licenses/site/license-esx-50-e03-c3-t2-201006",
                      ...
                      "/usr/lib/vmware/licenses/site/license-esx-50-e01-v1-l0-201006"
                    ],

@@ -552,7 +552,7 @@ sub copy_virtual_disk {
 	#		## Leaving the -f option off also results in an empty file
 	#		#my $command = "qemu-img convert -f raw \"$source_file_path\" -O raw \"$raw_file_path\" && qemu-img info \"$raw_file_path\"";
 	#		#notify($ERRORS{'DEBUG'}, 0, "attempting to convert vmdk file to raw format: $source_file_path --> $raw_file_path, command:\n$command");
-	#		#my ($exit_status, $output) = $self->vmhost_os->execute($command, 0, 2.3);
+	#		#my ($exit_status, $output) = $self->vmhost_os->execute($command, 0, 1800);
 	#		#if (!defined($exit_status)) {
 	#		#	notify($ERRORS{'WARNING'}, 0, "failed to execute command to convert vmdk file to raw format:\n$command");
 	#		#	return;
@@ -572,7 +572,7 @@ sub copy_virtual_disk {
 	#	#my $raw_file_path_merged = "$raw_file_directory_path/$image_name.raw";
 	#	#my $cat_command = "cat $source_file_paths_string > \"$raw_file_path_merged\"";
 	#	#notify($ERRORS{'DEBUG'}, 0, "attempting to merge split raw files into $raw_file_path_merged, command:\n$cat_command");
-	#	#my ($cat_exit_status, $cat_output) = $self->vmhost_os->execute($cat_command, 0, 2.3);
+	#	#my ($cat_exit_status, $cat_output) = $self->vmhost_os->execute($cat_command, 0, 1800);
 	#	#if (!defined($cat_exit_status)) {
 	#	#	notify($ERRORS{'WARNING'}, 0, "failed to execute command to merge split raw files into $raw_file_path_merged, command: $cat_command");
 	#	#	return;
@@ -602,7 +602,7 @@ sub copy_virtual_disk {
 	notify($ERRORS{'DEBUG'}, 0, "attempting to copy/convert virtual disk to $disk_format format --> $destination_file_path, command:\n$command");
 	
 	my $start_time = time;
-	my ($exit_status, $output) = $self->vmhost_os->execute($command, 0, 2.3);
+	my ($exit_status, $output) = $self->vmhost_os->execute($command, 0, 1800);
 	if (!defined($exit_status)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute command to copy/convert virtual disk on $node_name:\n$command");
 		return;
@@ -782,7 +782,7 @@ EOF
 "ClassGUID"="{4D36E96A-E325-11CE-BFC1-08002BE10318}"
 "Service"="pciide"
 
-[HKEY_LOCAL_MACHINE\SYSTEM\ControlSet001\Control\CriticalDeviceDatabase\pci#ven_1042&dev_2.3]
+[HKEY_LOCAL_MACHINE\SYSTEM\ControlSet001\Control\CriticalDeviceDatabase\pci#ven_1042&dev_1000]
 "ClassGUID"="{4D36E96A-E325-11CE-BFC1-08002BE10318}"
 "Service"="pciide"
 
@@ -878,7 +878,7 @@ EOF
 "Type"=dword:00000001
 "DisplayName"="Standard IDE/ESDI Hard Disk Controller"
 "ImagePath"=hex(2):53,00,79,00,73,00,74,00,65,00,6d,00,33,00,32,00,5c,00,44,00,\ 
-  52,00,49,00,56,00,45,00,52,00,53,00,5c,00,62.3,74,00,62.3,70,00,69,00,2e,\ 
+  52,00,49,00,56,00,45,00,52,00,53,00,5c,00,61,74,00,61,70,00,69,00,2e,\ 
   00,73,00,79,00,73,00,00,00
 
 [HKEY_LOCAL_MACHINE\SYSTEM\ControlSet001\Services\IntelIde]
