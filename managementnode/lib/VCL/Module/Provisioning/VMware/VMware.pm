@@ -6003,7 +6003,7 @@ sub copy_vmdk {
 				# Modify the .vmsd and delta .vmdk files
 				# Change them to point to the copy of the original base image vmdk instead of the original master vmdk
 				for my $replace_file_path ($vmsd_file_path, $delta_vmdk_file_path) {
-					my $sed_command = "sed -i -e 's/$source_vmdk_file_path_escaped/$destination_vmdk_file_path_escaped/' \"$replace_file_path\"";
+					my $sed_command = "sed -i -e \"s/$source_vmdk_file_path_escaped/$destination_vmdk_file_path_escaped/\" \"$replace_file_path\"";
 					my ($sed_exit_status, $sed_output) = $self->vmhost_os->execute($sed_command);
 					if (!defined($sed_output)) {
 						notify($ERRORS{'WARNING'}, 0, "failed to execute command to replace original vmdk file path with copied vmdk file path in $replace_file_path");
