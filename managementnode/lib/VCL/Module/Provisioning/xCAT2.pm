@@ -518,7 +518,8 @@ sub load {
 						}
 					}
 					if (!$s3) {
-						if ($_ =~ /Serving pxelinux.0 to $computer_private_ip_address:/) {
+						if ($_ =~ /Serving pxelinux.0 to $computer_private_ip_address:/ ||
+						    $_ =~ /RRQ from $computer_private_ip_address filename pxelinux.0/) {
 							$s3 = 1;
 							chomp($_);
 							notify($ERRORS{'OK'}, 0, "$computer_node_name STAGE 3 set $_");
@@ -526,7 +527,8 @@ sub load {
 						}
 					}
 					if (!$s4) {
-						if ($_ =~ /Serving xcat\/.+ to $computer_private_ip_address:/) {
+						if ($_ =~ /Serving xcat\/.+ to $computer_private_ip_address:/ ||
+						    $_ =~ /RRQ from $computer_private_ip_address filename xcat\/.+/) {
 							$s4 = 1;
 							chomp($_);
 							notify($ERRORS{'OK'}, 0, "$computer_node_name STAGE 4 set $_");
