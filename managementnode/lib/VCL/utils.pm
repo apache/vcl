@@ -674,8 +674,8 @@ sub notify {
 	my $body;
 	my $body_separator = '-' x 72;
 	
-	my $sysadmin = 'nobody@example.com';
-	my $shared_mail_box = 'nobody@example.com';
+	my $sysadmin = '';
+	my $shared_mail_box = '';
 	
 	if ($error == 2 || $error == 5) {
 		my $caller_trace = get_caller_trace(999);
@@ -698,9 +698,10 @@ sub notify {
 	elsif ($error == 2) {
 		my $caller_trace = get_caller_trace(15);
 		$log_message = "\n---- CRITICAL ---- \n$log_message\n$caller_trace\n\n";
-		
-		# Assemble the e-mail message body
-		$body = <<"END";
+		if($sysadmin) {
+			
+			# Assemble the e-mail message body
+			$body = <<"END";
 $string
 $body_separator
 time: $currenttime
@@ -708,59 +709,60 @@ caller: $caller_info
 $caller_trace
 $body_separator
 END
-		
-		# Add the reservation info to the message if the DataStructure object is defined in %ENV
-		if ($ENV{data}) {
-			my $reservation_info_string = $ENV{data}->get_reservation_info_string();
-			if ($reservation_info_string) {
-				$reservation_info_string =~ s/\s+$//;
-				$body .= "$reservation_info_string\n";
-				$body .= "$body_separator\n";
+			
+			# Add the reservation info to the message if the DataStructure object is defined in %ENV
+			if ($ENV{data}) {
+				my $reservation_info_string = $ENV{data}->get_reservation_info_string();
+				if ($reservation_info_string) {
+					$reservation_info_string =~ s/\s+$//;
+					$body .= "$reservation_info_string\n";
+					$body .= "$body_separator\n";
+				}
 			}
-		}
-		
-		# Get the previous several log file entries for this process
-		my $log_history_count = 100;
-		my $log_history       = "RECENT LOG ENTRIES FOR THIS PROCESS:\n";
-		$log_history .= `grep "|$PID|" $log | tail -n $log_history_count` if $log;
-		chomp $log_history;
-		$body .= $log_history;
-		
-		# Add the formatted data to the message body if data was passed
-		$body .= "\n\nDATA:\n$formatted_data\n" if $formatted_data;
-		
-		my ($management_node_short_name) = $FQDN =~ /^([^.]+)/;
-		my $subject = "PROBLEM -- $management_node_short_name|";
-		
-		# Assemble the process identifier string
-		if (defined $ENV{request_id} && defined $ENV{reservation_id} && defined $ENV{state}) {
-			$subject .= "$ENV{request_id}:$ENV{reservation_id}|$ENV{state}|$filename";
-		}
-		else {
-			$subject .= "$caller_info";
-		}
-		
-		if (defined($ENV{data})) {
-			my $blockrequest_name = $ENV{data}->get_blockrequest_name(0);
-			$subject .= "|$blockrequest_name" if (defined $blockrequest_name);
 			
-			my $computer_name = $ENV{data}->get_computer_short_name(0);
-			$subject .= "|$computer_name" if (defined $computer_name);
+			# Get the previous several log file entries for this process
+			my $log_history_count = 100;
+			my $log_history       = "RECENT LOG ENTRIES FOR THIS PROCESS:\n";
+			$log_history .= `grep "|$PID|" $log | tail -n $log_history_count` if $log;
+			chomp $log_history;
+			$body .= $log_history;
 			
-			my $vmhost_hostname = $ENV{data}->get_vmhost_hostname(0);
-			$subject .= ">$vmhost_hostname" if (defined $vmhost_hostname);
+			# Add the formatted data to the message body if data was passed
+			$body .= "\n\nDATA:\n$formatted_data\n" if $formatted_data;
 			
-			my $image_name = $ENV{data}->get_image_name(0);
-			$subject .= "|$image_name" if (defined $image_name);
+			my ($management_node_short_name) = $FQDN =~ /^([^.]+)/;
+			my $subject = "PROBLEM -- $management_node_short_name|";
 			
-			my $user_name = $ENV{data}->get_user_login_id(0);
-			$subject .= "|$user_name" if (defined $user_name);
+			# Assemble the process identifier string
+			if (defined $ENV{request_id} && defined $ENV{reservation_id} && defined $ENV{state}) {
+				$subject .= "$ENV{request_id}:$ENV{reservation_id}|$ENV{state}|$filename";
+			}
+			else {
+				$subject .= "$caller_info";
+			}
+			
+			if (defined($ENV{data})) {
+				my $blockrequest_name = $ENV{data}->get_blockrequest_name(0);
+				$subject .= "|$blockrequest_name" if (defined $blockrequest_name);
+				
+				my $computer_name = $ENV{data}->get_computer_short_name(0);
+				$subject .= "|$computer_name" if (defined $computer_name);
+				
+				my $vmhost_hostname = $ENV{data}->get_vmhost_hostname(0);
+				$subject .= ">$vmhost_hostname" if (defined $vmhost_hostname);
+				
+				my $image_name = $ENV{data}->get_image_name(0);
+				$subject .= "|$image_name" if (defined $image_name);
+				
+				my $user_name = $ENV{data}->get_user_login_id(0);
+				$subject .= "|$user_name" if (defined $user_name);
+			}
+			
+			my $from    = "root\@$FQDN";
+			my $to      = $sysadmin;
+			
+			mail($to, $subject, $body, $from);
 		}
-		
-		my $from    = "root\@$FQDN";
-		my $to      = $sysadmin;
-		
-		mail($to, $subject, $body, $from);
 	} ## end elsif ($error == 2)  [ if ($error == 1)
 	
 	# MAILMASTERS - only for email notifications
@@ -1233,7 +1235,7 @@ sub mail {
 	my $localreturnpath = "-f $RETURNPATH";
 	my $mailer = Mail::Mailer->new("sendmail", $localreturnpath);
 	
-	my $shared_mail_box = 'nobody@example.com';
+	my $shared_mail_box = '';
 	my $management_node_info = get_management_node_info();
 	if ($management_node_info) {
 		$shared_mail_box = $management_node_info->{SHARED_EMAIL_BOX} if $management_node_info->{SHARED_EMAIL_BOX};
