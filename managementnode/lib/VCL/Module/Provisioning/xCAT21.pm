@@ -218,10 +218,6 @@ sub load {
 	if (!(_checknstartservice("xcatd"))) {
 		notify($ERRORS{'CRITICAL'}, 0, "xcatd is not running or failed to restart");
 	}
-	# Make sure atftpd is started on management node
-	if (!(_checknstartservice("tftpd"))) {
-		notify($ERRORS{'CRITICAL'}, 0, "atftpd is not running or failed to restart");
-	}
 
 	# Insert a computerloadlog record and edit nodetype table
 	insertloadlog($reservation_id, $computer_id, "editnodetype", "updating nodetype table");

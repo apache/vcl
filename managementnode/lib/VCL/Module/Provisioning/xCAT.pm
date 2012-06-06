@@ -220,11 +220,6 @@ sub load {
 		return 0;
 	}
 
-	# Make sure atftpd is started on management node
-	if (!(_checknstartservice("atftpd"))) {
-		notify($ERRORS{'CRITICAL'}, 0, "atftpd is not running or failed to restart");
-		return 0;
-	}
 	
 	# Make sure the image repository path can be retrieved and directory exists
 	my $image_repository_path = $self->_get_image_repository_path();
