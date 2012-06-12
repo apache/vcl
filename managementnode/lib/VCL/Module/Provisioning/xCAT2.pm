@@ -500,35 +500,17 @@ sub load {
 				notify($ERRORS{'OK'}, 0, "$computer_node_name ROUND 1 checks loop $sloop of $maxloops");
 				while (<TAIL>) {
 					if (!$s1) {
-						if ($_ =~ /dhcpd: DHCPDISCOVER from $eth0MACaddress/) {
+						if ($_ =~ /dhcpd: DHCPDISCOVER from $eth0MACaddress/i) {
 							$s1 = 1;
 							notify($ERRORS{'OK'}, 0, "$computer_node_name STAGE 1 set DHCPDISCOVER from $eth0MACaddress");
 							insertloadlog($reservation_id, $computer_id, "xcatstage1", "SUCCESS stage1 detected dhcp request for node");
 						}
 					}
 					if (!$s2) {
-						if ($_ =~ /dhcpd: DHCPACK on $computer_private_ip_address to $eth0MACaddress/) {
+						if ($_ =~ /dhcpd: DHCPACK on $computer_private_ip_address to $eth0MACaddress/i) {
 							$s2 = 1;
 							notify($ERRORS{'OK'}, 0, "$computer_node_name  STAGE 2 set DHCPACK on $computer_private_ip_address to $eth0MACaddress");
 							insertloadlog($reservation_id, $computer_id, "xcatstage2", "SUCCESS stage2 detected dhcp ack for node");
-						}
-					}
-					if (!$s3) {
-						if ($_ =~ /Serving pxelinux.0 to $computer_private_ip_address:/ ||
-						    $_ =~ /RRQ from $computer_private_ip_address filename pxelinux.0/) {
-							$s3 = 1;
-							chomp($_);
-							notify($ERRORS{'OK'}, 0, "$computer_node_name STAGE 3 set $_");
-							insertloadlog($reservation_id, $computer_id, "xcatstage3", "SUCCESS stage3 node received pxe");
-						}
-					}
-					if (!$s4) {
-						if ($_ =~ /Serving xcat\/.+ to $computer_private_ip_address:/ ||
-						    $_ =~ /RRQ from $computer_private_ip_address filename xcat\/.+/) {
-							$s4 = 1;
-							chomp($_);
-							notify($ERRORS{'OK'}, 0, "$computer_node_name STAGE 4 set $_");
-							insertloadlog($reservation_id, $computer_id, "xcatstage4", "SUCCESS stage4 node received pxe install instructions");
 						}
 					}
 
@@ -536,9 +518,11 @@ sub load {
 				}    #while
 				     #either stages are set or we loop or we rinstall again
 
-				if ($s4) {
+				if ($s2) {
 					notify($ERRORS{'OK'}, 0, "$computer_node_name ROUND1 stages are set proceeding to next round");
 					close(TAIL);
+					#Pause before continuing 
+					sleep 30;
 					goto ROUND2;
 				}
 				elsif ($sloop > $maxloops) {

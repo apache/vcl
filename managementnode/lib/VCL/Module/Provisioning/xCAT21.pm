@@ -492,53 +492,16 @@ sub load {
 							insertloadlog($reservation_id, $computer_id, "xcatstage2", "SUCCESS stage2 detected dhcp ack for node");
 						}
 					}
-					if (!$s3) {
-						if ($_ =~ /Serving pxelinux.0 to $computer_private_ip_address:/) {
-							$s3 = 1;
-							chomp($_);
-							notify($ERRORS{'OK'}, 0, "$computer_node_name STAGE 3 set $_");
-							insertloadlog($reservation_id, $computer_id, "xcatstage3", "SUCCESS stage3 node received pxe");
-						}
-					}
-					if (!$s4) {
-						if ($_ =~ /Serving xcat\/\w+\/x86(_64)?\/initrd.img to $computer_private_ip_address:/) {
-							$s4 = 1;
-							chomp($_);
-							notify($ERRORS{'OK'}, 0, "$computer_node_name STAGE 4 set $_");
-							insertloadlog($reservation_id, $computer_id, "xcatstage4", "SUCCESS stage4 node received pxe install instructions");
-						}
-					}
 
-=pod
-					#stage5 is where images and rhas(KS) are different
-					if (!$s5) {
-						#here we look for rpc.mountd
-						# TODO make sure s5 check is right
-						if ($_ =~ /authenticated mount request from $computer_node_name:(\d+) for/) {
-							$s5 = 1;
-							chomp($_);
-							notify($ERRORS{'OK'}, 0, "$computer_node_name STAGE 5 set $_");
-							insertloadlog($reservation_id, $computer_id, "xcatstage5", "SUCCESS stage5 node started installing via partimage");
-						}
-						#in case we miss the above statement
-						if ($image_os_type =~ /linux/i) {
-							# TODO make sure s5 check is right
-							if ($_ =~ /xcat: xcatd: $computer_node_name installing/) {
-								$s5 = 1;
-								chomp($_);
-								notify($ERRORS{'OK'}, 0, "$computer_node_name STAGE 5 set $_");
-								insertloadlog($reservation_id, $computer_id, "xcatstage5", "SUCCESS stage5 node started installing via kickstart");
-							}
-						}
-					} ## end if (!$s5)
-=cut
 
 				}    #while
 				     #either stages are set or we loop or we rinstall again
 				     #check s5 and counter for loop control
-				if ($s4) {
+				if ($s2) {
 					notify($ERRORS{'OK'}, 0, "$computer_node_name ROUND1 stages are set proceeding to next round");
 					close(TAIL);
+					#Pause here
+					sleep 30;
 					goto ROUND2;
 				}
 				elsif ($sloop > $maxloops) {
