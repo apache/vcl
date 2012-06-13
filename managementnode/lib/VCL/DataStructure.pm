@@ -1651,7 +1651,7 @@ sub get_computer_private_ip_address {
 		next if ($line =~ /^\s*#/);
 		
 		# Ignore lines which don't contain the computer name
-		next if ($line !~ /$computer_name($|\.|\s)/i);
+		next if ($line !~ /((?:[0-9]{1,3}\.?){4})\s+$computer_name($|\.|\s)/i);
 		
 		# Extract the IP address from the matching line
 		my ($ip_address) = $line =~ /\s*((?:[0-9]{1,3}\.?){4})\s/i;
