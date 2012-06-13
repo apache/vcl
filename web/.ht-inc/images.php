@@ -2708,8 +2708,8 @@ function submitDeleteImage() {
 		       .       ")";
 		doQuery($query);
 		$query = "UPDATE computer "
-		       . "SET preferredimageid = $noimageid "
-		       . "WHERE preferredimageid = $imageid";
+		       . "SET nextimageid = $noimageid "
+		       . "WHERE nextimageid = $imageid";
 		doQuery($query);
 
 	}
