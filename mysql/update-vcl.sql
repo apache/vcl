@@ -1025,6 +1025,7 @@ INSERT IGNORE INTO `OS` (`name`, `prettyname`, `type`, `installtype`, `sourcepat
 INSERT IGNORE INTO `OS` (`name`, `prettyname`, `type`, `installtype`, `sourcepath`, `moduleid`) VALUES ('rh6image', 'Red Hat Enterprise 6 (Bare Metal)', 'linux', 'partimage', 'image', (SELECT `id` FROM `module` WHERE `name` LIKE 'os_linux'));
 INSERT IGNORE INTO `OS` (`name`, `prettyname`, `type`, `installtype`, `sourcepath`, `moduleid`) VALUES ('fedora16', 'Fedora 16 (Kickstart)', 'linux', 'kickstart', 'fedora16', (SELECT `id` FROM `module` WHERE `name` LIKE 'os_linux'));
 INSERT IGNORE INTO `OS` (`name`, `prettyname`, `type`, `installtype`, `sourcepath`, `moduleid`) VALUES ('fedoraimage', 'Fedora 16 (Bare Metal)', 'linux', 'partimage', 'image', (SELECT `id` FROM `module` WHERE `name` LIKE 'os_linux'));
+INSERT IGNORE INTO `OS` (`name`, `prettyname`, `type`, `installtype`, `sourcepath`, `moduleid`) VALUES ('vmwareubuntu', 'Ubuntu (VMware)', 'linux', 'vmware', 'vmware_images', (SELECT `id` FROM `module` WHERE `name` LIKE 'os_linux_ubuntu'));
 
 -- --------------------------------------------------------
 

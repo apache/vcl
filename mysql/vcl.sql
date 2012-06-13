@@ -1547,7 +1547,8 @@ INSERT INTO `OS` (`id`, `name`, `prettyname`, `type`, `installtype`, `sourcepath
 (40, 'rhel6', 'Red Hat Enterprise 6 (Kickstart)', 'linux', 'kickstart', 'rhel6', 5),
 (41, 'rh6image', 'Red Hat Enterprise 6 (Bare Metal)', 'linux', 'partimage', 'image', 5),
 (42, 'fedora16', 'Fedora 16 (Kickstart)', 'linux', 'kickstart', 'fedora16', 5),
-(43, 'fedoraimage', 'Fedora 16 (Bare Metal)', 'linux', 'partimage', 'image', 5);
+(43, 'fedoraimage', 'Fedora 16 (Bare Metal)', 'linux', 'partimage', 'image', 5),
+(44, 'vmwareubuntu', 'Ubuntu (VMware)', 'linux', 'vmware', 'vmware_images', 14);
 
 -- 
 -- Dumping data for table `OSinstalltype`
