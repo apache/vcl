@@ -479,14 +479,14 @@ sub load {
 				notify($ERRORS{'OK'}, 0, "$computer_node_name ROUND 1 checks loop $sloop of $maxloops");
 				while (<TAIL>) {
 					if (!$s1) {
-						if ($_ =~ /dhcpd: DHCPDISCOVER from $eth0MACaddress/) {
+						if ($_ =~ /dhcpd: DHCPDISCOVER from $eth0MACaddress/i) {
 							$s1 = 1;
 							notify($ERRORS{'OK'}, 0, "$computer_node_name STAGE 1 set DHCPDISCOVER from $eth0MACaddress");
 							insertloadlog($reservation_id, $computer_id, "xcatstage1", "SUCCESS stage1 detected dhcp request for node");
 						}
 					}
 					if (!$s2) {
-						if ($_ =~ /dhcpd: DHCPACK on $computer_private_ip_address to $eth0MACaddress/) {
+						if ($_ =~ /dhcpd: DHCPACK on $computer_private_ip_address to $eth0MACaddress/i) {
 							$s2 = 1;
 							notify($ERRORS{'OK'}, 0, "$computer_node_name  STAGE 2 set DHCPACK on $computer_private_ip_address to $eth0MACaddress");
 							insertloadlog($reservation_id, $computer_id, "xcatstage2", "SUCCESS stage2 detected dhcp ack for node");
