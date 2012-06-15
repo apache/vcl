@@ -5581,25 +5581,20 @@ sub get_network_configuration {
 	my $initialization_check_delay = 10;
 	while (++$initialization_check) {
 		# Get the list of running tasks (this returns an array reference of the raw tasklist.exe output)
-		my $task_list_output = $self->get_task_list();
-		if (!$task_list_output) {
-			notify($ERRORS{'WARNING'}, 0, "attempt $initialization_check/$initialization_check_limit: unable to determine if devices are still being initialized, no task list output was retrieved, sleeping for $initialization_check_delay seconds");
+		notify($ERRORS{'DEBUG'}, 0, "attempt $initialization_check/$initialization_check_limit: checking if devices still appear to be initializing before retrieving network configuration");
+		my $task_info = $self->get_task_info('drvinst');
+		if (!defined($task_info)) {
+			notify($ERRORS{'WARNING'}, 0, "attempt $initialization_check/$initialization_check_limit: unable to determine if devices are still being initialized, task information could not be retrieved, sleeping for $initialization_check_delay seconds");
 			sleep $initialization_check_delay;
 			next;
 		}
-		
-		# Check if any running tasks match known patterns which run only when the OS is being initialized
-		my @matching_tasks = grep(/drvinst/, @$task_list_output);
-		if (!@matching_tasks) {
-			notify($ERRORS{'DEBUG'}, 0, "no devices appear to still be initializing, task list output:\n" . join("\n", @$task_list_output));
-			last;
-		}
-		elsif ($initialization_check >= $initialization_check_limit) {
-			notify($ERRORS{'WARNING'}, 0, "attempt $initialization_check/$initialization_check_limit: devices still appear to be initializing, matching tasks:\n" . join("\n", @matching_tasks) . "\n---\ntask list output:\n" . join("\n", @$task_list_output));
+		elsif (!keys(%$task_info)) {
+			#notify($ERRORS{'DEBUG'}, 0, "no devices appear to still be initializing");
+			notify($ERRORS{'DEBUG'}, 0, "no devices appear to still be initializing, tasks:\n" . format_data($task_info));
 			last;
 		}
 		else {
-			notify($ERRORS{'DEBUG'}, 0, "attempt $initialization_check/$initialization_check_limit: devices still appear to be initializing, sleeping for $initialization_check_delay seconds, matching tasks:\n" . join("\n", @matching_tasks));
+			notify($ERRORS{'DEBUG'}, 0, "attempt $initialization_check/$initialization_check_limit: devices still appear to be initializing, sleeping for $initialization_check_delay seconds, matching tasks:\n" . format_data($task_info));
 			sleep $initialization_check_delay;
 		}
 	}
@@ -5706,6 +5701,52 @@ sub get_network_configuration {
 	$self->{network_configuration} = $network_configuration;
 	notify($ERRORS{'DEBUG'}, 0, "retrieved network configuration:\n" . format_data($self->{network_configuration}));
 	return $self->{network_configuration};
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_public_ip_address
+
+ Parameters  : none
+ Returns     : string
+ Description : Retrieves the public IP address from the computer. If the
+               management node is configured to use DHCP for public IP
+               addresses, the IP address is checked to make sure it is valid. If
+               the computer has an invalid public IP address (169.254.*.*,
+               0.0.0.0), an attempt is made to run 'ipconfig /renew' and
+               retrieve the network configuration again.
+
+=cut
+
+sub get_public_ip_address {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $computer_node_name   = $self->data->get_computer_node_name();
+	my $public_ip_configuration = $self->data->get_management_node_public_ip_configuration();
+	
+	my $public_ip_address = $self->get_ip_address('public');
+	
+	# Check to make sure the address is valid if DHCP is used
+	if ($public_ip_configuration =~ /dhcp/i) {
+		if (!$public_ip_address || $public_ip_address =~ /^(169\.254|0\.0\.0\.0)/) {
+			notify($ERRORS{'WARNING'}, 0, "$computer_node_name is assigned an invalid public IP address: $public_ip_address, attempting to run ipconfig /renew");
+			delete $self->{network_configuration};
+			$self->ipconfig_renew('public');
+			
+			$public_ip_address = $self->get_ip_address('public');
+			if (!$public_ip_address || $public_ip_address =~ /^(169\.254|0\.0\.0\.0)/) {
+				notify($ERRORS{'CRITICAL'}, 0, "$computer_node_name failed to obtain a valid public IP address: $public_ip_address");
+				return;
+			}
+		}
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "retrieved public IP address of $computer_node_name: $public_ip_address");
+	return $public_ip_address;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -5875,7 +5916,7 @@ sub ipconfig_renew {
 			notify($ERRORS{'WARNING'}, 0, "attempt $attempt/$attempt_limit: failed to renew IP configuration for interface '$interface_name', exit status: $ipconfig_status, output:\n" . join("\n", @$ipconfig_output));
 			return;
 		}
-		elsif ($ipconfig_status ne '0' || grep(/error occurred/i, @$ipconfig_output) || !grep(/IP Address/i, @$ipconfig_output)) {
+		elsif ($ipconfig_status ne '0' || grep(/error occurred/i, @$ipconfig_output)) {
 			notify($ERRORS{'WARNING'}, 0, "attempt $attempt/$attempt_limit: failed to renew IP configuration for interface '$interface_name', exit status: $ipconfig_status, command: '$ipconfig_command', output:\n" . join("\n", @$ipconfig_output));
 		}
 		else {
@@ -7306,9 +7347,81 @@ sub get_task_list {
 		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to run tasklist.exe");
 		return;
 	}
-
+	
 	return $tasklist_output;
 } ## end sub get_task_list
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_task_info
+
+ Parameters  : $pattern (optional)
+ Returns     : hash reference
+ Description : Runs tasklist.exe and returns a hash reference containing
+               information about the processes running on the computer. The hash
+               keys are the process PIDs.
+
+=cut
+
+sub get_task_info {
+	my $self = shift;
+	if (!ref($self)) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $pattern = shift;
+	
+	my $management_node_keys = $self->data->get_management_node_keys();
+	my $computer_node_name   = $self->data->get_computer_node_name();
+	my $system32_path        = $self->get_system32_path() || return;
+	
+	# Attempt to run tasklist.exe with /NH for no header
+	my $tasklist_command = $system32_path . '/tasklist.exe /V /FO CSV';
+	my ($tasklist_exit_status, $tasklist_output) = run_ssh_command($computer_node_name, $management_node_keys, $tasklist_command, '', '', 0);
+	if (defined($tasklist_exit_status) && $tasklist_exit_status == 0) {
+		notify($ERRORS{'DEBUG'}, 0, "ran tasklist.exe");
+	}
+	elsif (defined($tasklist_exit_status)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run tasklist.exe, exit status: $tasklist_exit_status, output:\n@{$tasklist_output}");
+		return;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to run tasklist.exe");
+		return;
+	}
+	
+	use Text::CSV_XS;
+	use IO::String;
+	
+	my $csv = Text::CSV_XS->new();
+	
+	my $heading_line = shift @$tasklist_output;
+	$csv->parse($heading_line);
+	
+	my @column_names = $csv->fields();
+	
+	
+	notify($ERRORS{'DEBUG'}, 0, "column names: " . join(", ", @column_names));
+	$csv->column_names(@column_names);
+	
+	my $tasklist_io = IO::String->new(join("\n", @$tasklist_output));
+	
+	my $tasks = $csv->getline_hr_all($tasklist_io);
+	
+	my $task_info = {};
+	for my $task (@$tasks) {
+		my $task_pid = $task->{'PID'};
+		my $task_name = $task->{'Image Name'};
+		
+		if ($pattern && $task_name !~ /$pattern/i) {
+			next;
+		}
+		$task_info->{$task_pid} = $task;
+	}
+	notify($ERRORS{'DEBUG'}, 0, "task info:\n" . format_data($task_info));
+	return $task_info;
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 
