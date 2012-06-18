@@ -173,8 +173,7 @@ II. Install & Configure the Web Components
             * $cryptkey
             * $pemkey
             * Save the secrets.php file
-      d. Run the genkeys.sh script.  Enter the value you set for $pemkey in
-         secrets.php as the passphrase (3 times, copy/paste is a good idea) 
+      d. Run the genkeys.sh script
 
          ./genkeys.sh 
 
