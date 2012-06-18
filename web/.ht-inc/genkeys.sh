@@ -16,5 +16,7 @@
 # limitations under the License.
 
 
-openssl genrsa -aes256 -out keys.pem 2048
-openssl rsa -pubout -in keys.pem -out pubkey.pem
+cat secrets.php | grep pemkey | awk -F "'" '{print $2}' > tmpkeyfile
+openssl genrsa -aes256 -passout file:tmpkeyfile -out keys.pem 2048
+openssl rsa -passin file:tmpkeyfile -pubout -in keys.pem -out pubkey.pem
+rm -f tmpkeyfile

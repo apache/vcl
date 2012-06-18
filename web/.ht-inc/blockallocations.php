@@ -1181,8 +1181,8 @@ function getCurrentBlockHTML($listonly=0) {
 	}
 	foreach($blocks as $id => $request) {
 		if($request['available'] == 'weekly') {
-			$query = "SELECT DATE_FORMAT(start, '%m/%d/%y') AS swdate, "
-			       .        "DATE_FORMAT(end, '%m/%d/%y')AS ewdate, " 
+			$query = "SELECT DATE_FORMAT(start, '%m/%d/%Y') AS swdate, "
+			       .        "DATE_FORMAT(end, '%m/%d/%Y')AS ewdate, " 
 			       .        "days "
 			       . "FROM blockWebDate "
 			       . "WHERE blockRequestid = $id";
@@ -1218,8 +1218,8 @@ function getCurrentBlockHTML($listonly=0) {
 			}
 		}
 		elseif($request['available'] == 'monthly') {
-			$query = "SELECT DATE_FORMAT(start, '%m/%d/%y') AS smdate, "
-			       .        "DATE_FORMAT(end, '%m/%d/%y')AS emdate, " 
+			$query = "SELECT DATE_FORMAT(start, '%m/%d/%Y') AS smdate, "
+			       .        "DATE_FORMAT(end, '%m/%d/%Y')AS emdate, " 
 			       .        "days AS day, "
 			       .        "weeknum "
 			       . "FROM blockWebDate "
@@ -1249,7 +1249,7 @@ function getCurrentBlockHTML($listonly=0) {
 			}
 		}
 		elseif($request['available'] == 'list') {
-			$query = "SELECT DATE_FORMAT(start, '%m/%d/%y') AS date, "
+			$query = "SELECT DATE_FORMAT(start, '%m/%d/%Y') AS date, "
 			       .        "days AS `order` "
 			       . "FROM blockWebDate "
 			       . "WHERE blockRequestid = $id "

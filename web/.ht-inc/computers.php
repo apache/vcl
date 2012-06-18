@@ -1750,7 +1750,7 @@ function bulkAddComputer() {
 			if($data['type'] == 'lab')
 				$showprovisioning[$id] = $val['prettyname'];
 		}
-		elseif(preg_match('/^xcat/', $val['name']) || $val['name'] == 'none') {
+		elseif(preg_match('/^xcat/i', $val['name']) || $val['name'] == 'none') {
 			$allowedprovisioning['blade'][] = array('id' => $id, 'name' => $val['prettyname']);
 			if($data['type'] == 'blade')
 				$showprovisioning[$id] = $val['prettyname'];

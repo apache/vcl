@@ -971,8 +971,11 @@ function viewRequests() {
 					}
 					elseif($requests[$i]['server'] && $requests[$i]['currstateid'] == 24)
 						$text .= getViewRequestHTMLitem('checkpointoptiondisable');*/
-					if(! $cluster &&
+					if($requests[$i]['currstateid'] == 8 ||
+					   (! $cluster &&
 					   $requests[$i]['OSinstalltype'] != 'none' &&
+					   $requests[$i]['currstateid'] != 3 &&
+					   $requests[$i]['laststateid'] != 3 &&
 					   $requests[$i]['currstateid'] != 13 &&
 					   $requests[$i]['laststateid'] != 13 &&
 					   $requests[$i]['currstateid'] != 24 &&
@@ -984,7 +987,7 @@ function viewRequests() {
 					   $requests[$i]['currstateid'] != 28 &&
 						$requests[$i]['laststateid'] != 28 &&
 					   $requests[$i]['currstateid'] != 27 &&
-					   $requests[$i]['laststateid'] != 27) {
+					   $requests[$i]['laststateid'] != 27)) {
 						$cont = addContinuationsEntry('AJrebootRequest', $cdata, SECINDAY);
 						$text .= getViewRequestHTMLitem('rebootoption', $cont);
 						$cont = addContinuationsEntry('AJshowReinstallRequest', $cdata, SECINDAY);
