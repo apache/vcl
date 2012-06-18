@@ -5640,7 +5640,12 @@ sub get_network_configuration {
 		if ($line =~ /\A[^\s].*adapter (.*):\s*\Z/i) {
 			# Get the interface name
 			$interface_name = $1;
-			notify($ERRORS{'DEBUG'}, 0, "found interface: $interface_name");
+			if (defined($network_configuration->{$interface_name})) {
+				notify($ERRORS{'WARNING'}, 0, "interface with same name has already been found: $interface_name\n" . format_data($network_configuration->{$interface_name}));
+			}
+			else {
+				notify($ERRORS{'DEBUG'}, 0, "found interface: $interface_name");
+			}
 			next;
 		}
 		

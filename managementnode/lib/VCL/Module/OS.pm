@@ -1436,16 +1436,34 @@ sub get_ip_address {
 		return;
 	}
 	
-	# Return the first IP address listed
-	my $ip_address = (sort keys(%$ip_address_info))[0];
-	if ($ip_address) {
-		notify($ERRORS{'DEBUG'}, 0, "returning $network_type IP address: $ip_address");
-		return $ip_address;
-	}
-	else {
+	# Return the first valid IP address found
+	my $ip_address;
+	my @ip_addresses = keys %$ip_address_info;
+	if (!@ip_addresses) {
 		notify($ERRORS{'WARNING'}, 0, "unable to determine $network_type IP address, 'ip_address' value is not set in the network configuration info: \n" . format_data($network_configuration));
 		return;
 	}
+	elsif (scalar(@ip_addresses) == 1) {
+		$ip_address = $ip_addresses[0];
+		notify($ERRORS{'DEBUG'}, 0, "$network_type interface assigned a single IP address, returning $ip_address");
+		return $ip_address;
+	}
+	
+	# Interface has multiple IP addresses, try to find a valid one
+	for $ip_address (@ip_addresses) {
+		if ($ip_address !~ /(0\.0\.0\.0|169\.254\.)/) {
+			notify($ERRORS{'DEBUG'}, 0, "returning $network_type IP address: $ip_address");
+			return $ip_address;
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "skipping invalid IP address assigned to $network_type interface: $ip_address, checking if another valid IP address is assigned");
+		}
+	}
+	
+	# Multiple invalid IP addresses, return the first one
+	$ip_address = $ip_addresses[0];
+	notify($ERRORS{'WARNING'}, 0, "$network_type interface assigned a multiple invalid IP addresses (" . join(", ", @ip_addresses) . "), returning $ip_address");
+	return $ip_address;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -2039,7 +2057,7 @@ sub execute_new {
 				);
 				
 				if ($ssh) {
-					notify($ERRORS{'DEBUG'}, 0, "created " . ref($ssh) . " object to control $computer_name, options: $ssh_options") if ($display_output);
+					notify($ERRORS{'DEBUG'}, 0, "created " . ref($ssh) . " object to control $computer_name, options: $ssh_options");
 				}
 				else {
 					notify($ERRORS{'WARNING'}, 0, "failed to create Net::SSH::Expect object to control $computer_name, $!");
@@ -2057,7 +2075,7 @@ sub execute_new {
 				# Set the timeout counter behaviour:
 				# If true, sets the timeout to "inactivity timeout"
 				# If false sets it to "absolute timeout"
-				#$ssh->restart_timeout_upon_receive(1);
+				$ssh->restart_timeout_upon_receive(1);
 				my $initialization_output = $ssh->read_all();
 				if (defined($initialization_output)) {
 					notify($ERRORS{'DEBUG'}, 0, "SSH initialization output:\n$initialization_output") if ($display_output);
@@ -2106,6 +2124,7 @@ sub execute_new {
 		
 		(my $command_formatted = $command) =~ s/\s+(;|&|&&)\s+/\n$1 /g;
 		notify($ERRORS{'DEBUG'}, 0, $attempt_string . "executing command on $computer_name (timeout: $timeout_seconds seconds):\n$command_formatted") if ($display_output);
+		my $command_start_time = time;
 		$ssh->send($command . ' 2>&1 ; echo exitstatus:$?');
 		
 		my $ssh_wait_status;
@@ -2114,6 +2133,7 @@ sub execute_new {
 		};
 		
 		if ($EVAL_ERROR) {
+			
 			if ($ignore_error) {
 				notify($ERRORS{'DEBUG'}, 0, "executed command on $computer_name: '$command', ignoring error, returning null") if ($display_output);
 				return;
@@ -2826,7 +2846,8 @@ sub find_files {
 		
 		my $file_count = scalar(@files);
 		
-		notify($ERRORS{'DEBUG'}, 0, "files found: $file_count, base directory: '$base_directory_path', pattern: '$file_pattern'\ncommand: '$command', output:\n" . join("\n", @$output));
+		notify($ERRORS{'DEBUG'}, 0, "files found: $file_count, base directory: '$base_directory_path', pattern: '$file_pattern'\ncommand: '$command'");
+		#notify($ERRORS{'DEBUG'}, 0, "files found: $file_count, base directory: '$base_directory_path', pattern: '$file_pattern'\ncommand: '$command', output:\n" . join("\n", @$output));
 		return @files;
 	}
 	
