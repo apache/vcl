@@ -1036,17 +1036,17 @@ sub sanitize {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
-
+	
 	my $computer_node_name = $self->data->get_computer_node_name();
 	my $mn_private_ip         = $self->mn_os->get_private_ip_address();
-
+	
 	# Make sure user is not connected
 	if ($self->is_connected()) {
 		notify($ERRORS{'WARNING'}, 0, "user is connected to $computer_node_name, computer will be reloaded");
 		#return false - reclaim will reload
 		return 0;
 	}
-
+	
 	# Revoke access
 	if (!$self->revoke_access()) {
 		notify($ERRORS{'WARNING'}, 0, "failed to revoke access to $computer_node_name");
@@ -1433,6 +1433,10 @@ sub create_directory {
 	
 	# Remove any quotes from the beginning and end of the path
 	$directory_path = normalize_file_path($directory_path);
+	
+	# If ~ is passed as the directory path, skip directory creation attempt
+	# The command will create a /root/~ directory since the path is enclosed in quotes
+	return 1 if $directory_path eq '~';
 	
 	my $computer_short_name = $self->data->get_computer_short_name();
 	
@@ -2505,7 +2509,7 @@ EOF
                constructs a hash. The hash reference returned is formatted as
                follows:
                |--%{eth0}
-					   |--%{eth0}{default_gateway} '10.10.4.1'
+                  |--%{eth0}{default_gateway} '10.10.4.1'
                   |--%{eth0}{ip_address}
                      |--{eth0}{ip_address}{10.10.4.3} = '255.255.240.0'
                   |--{eth0}{name} = 'eth0'
@@ -2768,31 +2772,31 @@ sub shutdown {
 =cut
 
 sub create_user {
-        my $self = shift;
-        if (ref($self) !~ /linux/i) {
-                notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-                return;
-        }
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
 
-        my $management_node_keys = $self->data->get_management_node_keys();
-        my $computer_node_name   = $self->data->get_computer_node_name();
-        my $imagemeta_rootaccess = $self->data->get_imagemeta_rootaccess();
+	my $management_node_keys = $self->data->get_management_node_keys();
+	my $computer_node_name   = $self->data->get_computer_node_name();
+	my $imagemeta_rootaccess = $self->data->get_imagemeta_rootaccess();
 
-        # Attempt to get the username from the arguments
-        # If no argument was supplied, use the user specified in the DataStructure
-        my $username = shift;
-        my $password = shift;
+	# Attempt to get the username from the arguments
+	# If no argument was supplied, use the user specified in the DataStructure
+	my $username = shift;
+	my $password = shift;
 	my $user_uid = shift;
 	my $adminoverride = shift;
 	my $user_standalone = shift;
 	
-        if (!$username) {
-                $username = $self->data->get_user_login_id();
+	if (!$username) {
+		$username = $self->data->get_user_login_id();
 					notify($ERRORS{'OK'}, 0, "username not provided, pulling from datastructure");
-        }
-        if (!$password) {
-                $password = $self->data->get_reservation_password();
-        }
+	}
+	if (!$password) {
+		$password = $self->data->get_reservation_password();
+	}
 	if (!$adminoverride) {
 		$adminoverride = 0;	
 	}
@@ -2814,67 +2818,67 @@ sub create_user {
 		$imagemeta_rootaccess = 1;
 	}
 	elsif ($adminoverride eq '2') {
-                $imagemeta_rootaccess = 0;
+		$imagemeta_rootaccess = 0;
 	}
 	else {
 		#no override detected, do not change database value
 	}
 
 	my $useradd_string;
-        if(defined($user_uid) && $user_uid != 0){
-                $useradd_string = "/usr/sbin/useradd -u $user_uid -d /home/$username -m $username -g vcl";
-        }
-        else{
-                $useradd_string = "/usr/sbin/useradd -d /home/$username -m $username -g vcl";
-        }
+	if(defined($user_uid) && $user_uid != 0){
+		$useradd_string = "/usr/sbin/useradd -u $user_uid -d /home/$username -m $username -g vcl";
+	}
+	else{
+		$useradd_string = "/usr/sbin/useradd -d /home/$username -m $username -g vcl";
+	}
 
 
-        my @sshcmd = run_ssh_command($computer_node_name, $management_node_keys, $useradd_string, "root");
-        foreach my $l (@{$sshcmd[1]}) {
-                if ($l =~ /$username exists/) {
-                        notify($ERRORS{'OK'}, 0, "detected user already has account");
-                        if ($self->delete_user($username)) {
-                                notify($ERRORS{'OK'}, 0, "user has been deleted from $computer_node_name");
-                                @sshcmd = run_ssh_command($computer_node_name, $management_node_keys, $useradd_string, "root");
-                        }
-                }
-        }
+	my @sshcmd = run_ssh_command($computer_node_name, $management_node_keys, $useradd_string, "root");
+	foreach my $l (@{$sshcmd[1]}) {
+		if ($l =~ /$username exists/) {
+			notify($ERRORS{'OK'}, 0, "detected user already has account");
+			if ($self->delete_user($username)) {
+				notify($ERRORS{'OK'}, 0, "user has been deleted from $computer_node_name");
+				@sshcmd = run_ssh_command($computer_node_name, $management_node_keys, $useradd_string, "root");
+			}
+		}
+	}
 
-        if ($user_standalone) {
-                notify($ERRORS{'DEBUG'}, 0, "Standalone user setting single-use password");
+	if ($user_standalone) {
+		notify($ERRORS{'DEBUG'}, 0, "Standalone user setting single-use password");
 
-                #Set password
-                if ($self->changepasswd($computer_node_name, $username, $password)) {
-                        notify($ERRORS{'OK'}, 0, "Successfully set password on useracct: $username on $computer_node_name");
-                }
-                else {
-                        notify($ERRORS{'CRITICAL'}, 0, "Failed to set password on useracct: $username on $computer_node_name");
-                        return 0;
-                }
-        } ## end if ($user_standalone)
+		#Set password
+		if ($self->changepasswd($computer_node_name, $username, $password)) {
+			notify($ERRORS{'OK'}, 0, "Successfully set password on useracct: $username on $computer_node_name");
+		}
+		else {
+			notify($ERRORS{'CRITICAL'}, 0, "Failed to set password on useracct: $username on $computer_node_name");
+			return 0;
+		}
+	} ## end if ($user_standalone)
 
 
-        #Check image profile for allowed root access
-        if ($imagemeta_rootaccess) {
-                # Add to sudoers file
-                #clear user from sudoers file to prevent dups
-                my $clear_cmd = "sed -i -e \"/^$username .*/d\" /etc/sudoers";
-                if (run_ssh_command($computer_node_name, $management_node_keys, $clear_cmd, "root")) {
-                        notify($ERRORS{'DEBUG'}, 0, "cleared $username from /etc/sudoers");
-                }
-                else {
-                        notify($ERRORS{'CRITICAL'}, 0, "failed to clear $username from /etc/sudoers");
-                }
-                my $sudoers_cmd = "echo \"$username ALL= NOPASSWD: ALL\" >> /etc/sudoers";
-                if (run_ssh_command($computer_node_name, $management_node_keys, $sudoers_cmd, "root")) {
-                        notify($ERRORS{'DEBUG'}, 0, "added $username to /etc/sudoers");
-                }
-                else {
-                        notify($ERRORS{'CRITICAL'}, 0, "failed to add $username to /etc/sudoers");
-                }
-        } ## end if ($imagemeta_rootaccess)
+	#Check image profile for allowed root access
+	if ($imagemeta_rootaccess) {
+		# Add to sudoers file
+		#clear user from sudoers file to prevent dups
+		my $clear_cmd = "sed -i -e \"/^$username .*/d\" /etc/sudoers";
+		if (run_ssh_command($computer_node_name, $management_node_keys, $clear_cmd, "root")) {
+			notify($ERRORS{'DEBUG'}, 0, "cleared $username from /etc/sudoers");
+		}
+		else {
+			notify($ERRORS{'CRITICAL'}, 0, "failed to clear $username from /etc/sudoers");
+		}
+		my $sudoers_cmd = "echo \"$username ALL= NOPASSWD: ALL\" >> /etc/sudoers";
+		if (run_ssh_command($computer_node_name, $management_node_keys, $sudoers_cmd, "root")) {
+			notify($ERRORS{'DEBUG'}, 0, "added $username to /etc/sudoers");
+		}
+		else {
+			notify($ERRORS{'CRITICAL'}, 0, "failed to add $username to /etc/sudoers");
+		}
+	} ## end if ($imagemeta_rootaccess)
 
-        return 1;	
+	return 1;	
 } ## end sub create_user
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -2888,48 +2892,45 @@ sub create_user {
 =cut
 
 sub update_server_access {
-	
 	my ($self) = shift;
-
+	
 	if (ref($self) !~ /linux/i) {
-                notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-                return;
-        }
-
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
 	my ($server_allow_user_list) = shift;
-
-        my $computer_node_name = $self->data->get_computer_node_name();
-        my $identity           = $self->data->get_image_identity;
-
-
+	
+	my $computer_node_name = $self->data->get_computer_node_name();
+	my $identity           = $self->data->get_image_identity;
+	
 	if ( !$server_allow_user_list ) {
 		my $server_allow_user_list = $self->data->get_server_allow_users();
 	}
 	
-        notify($ERRORS{'OK'}, 0, "server_allow_user_list= $server_allow_user_list");
-        if ( $server_allow_user_list ) {
-
-             my $cmd = "sed -i -e \"/^AllowUsers */d\" /etc/ssh/external_sshd_config; echo \"AllowUsers $server_allow_user_list\" >> /etc/ssh/external_sshd_config";
-             if (run_ssh_command($computer_node_name, $identity, $cmd, "root")) {
-                 notify($ERRORS{'DEBUG'}, 0, "added AllowUsers $server_allow_user_list to external_sshd_config");
-             }
-             else {
-                 notify($ERRORS{'CRITICAL'}, 0, "failed to add AllowUsers $server_allow_user_list to external_sshd_config");
-             }
-				
-				if(!$self->stop_service("ext_sshd")) {
-				
-				}
-				if(!$self->start_service("ext_sshd")) {
-					notify($ERRORS{'WARNING'}, 0, "failed to start ext_sshd");
-					return 0;	
-				}
-			
-				notify($ERRORS{'DEBUG'}, 0, "restarted ext_sshd");
-        }
+	notify($ERRORS{'OK'}, 0, "server_allow_user_list= $server_allow_user_list");
+	if ( $server_allow_user_list ) {
+		my $cmd = "sed -i -e \"/^AllowUsers */d\" /etc/ssh/external_sshd_config; echo \"AllowUsers $server_allow_user_list\" >> /etc/ssh/external_sshd_config";
+		if (run_ssh_command($computer_node_name, $identity, $cmd, "root")) {
+			notify($ERRORS{'DEBUG'}, 0, "added AllowUsers $server_allow_user_list to external_sshd_config");
+		}
+		else {
+			notify($ERRORS{'CRITICAL'}, 0, "failed to add AllowUsers $server_allow_user_list to external_sshd_config");
+		}
+		
+		if(!$self->stop_service("ext_sshd")) {
+		
+		}
+		
+		if(!$self->start_service("ext_sshd")) {
+			notify($ERRORS{'WARNING'}, 0, "failed to start ext_sshd");
+			return 0;	
+		}
+		
+		notify($ERRORS{'DEBUG'}, 0, "restarted ext_sshd");
+	}
 	
 	return 1;
-
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -3094,49 +3095,48 @@ sub service_exists {
 =cut
 
 sub start_service {
-        my $self = shift;
-        if (ref($self) !~ /linux/i) {
-                notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-                return;
-        }
-
-        my $management_node_keys = $self->data->get_management_node_keys();
-        my $computer_node_name   = $self->data->get_computer_node_name();
-
-        my $service_name = shift;
-        if (!$service_name) {
-                notify($ERRORS{'WARNING'}, 0, "service name was not passed as an argument");
-                return;
-        }
-		  my $command;
-
-		  # Check if OS is using systemd or SysVinit
-		  if($self->file_exists("/bin/systemctl")){
-					 $command = "systemctl start $service_name" . ".service";
-		  }
-		  else {
-				  $command = "service $service_name start";
-		  }
-
-		  my ($status, $output) = run_ssh_command($computer_node_name, $management_node_keys, $command, '', '', 1);
-        if (defined($output) && grep(/failed/i, @{$output})) {
-                notify($ERRORS{'DEBUG'}, 0, "service does not exist: $service_name");
-                return 0;
-        }
-        elsif (defined($status) && $status == 0) {
-                notify($ERRORS{'DEBUG'}, 0, "service exists: $service_name");
-        }
-        elsif (defined($status)) {
-                notify($ERRORS{'WARNING'}, 0, "unable to determine if service exists: $service_name, exit status: $status, output:\n@{$output}");
-                return;
-        }
-        else {
-                notify($ERRORS{'WARNING'}, 0, "unable to run ssh command to determine if service exists");
-                return;
-        }
-
-        return 1;
-
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $management_node_keys = $self->data->get_management_node_keys();
+	my $computer_node_name   = $self->data->get_computer_node_name();
+	
+	my $service_name = shift;
+	if (!$service_name) {
+		notify($ERRORS{'WARNING'}, 0, "service name was not passed as an argument");
+		return;
+	}
+	my $command;
+	
+	# Check if OS is using systemd or SysVinit
+	if($self->file_exists("/bin/systemctl")){
+		$command = "systemctl start $service_name" . ".service";
+	}
+	else {
+		$command = "service $service_name start";
+	}
+	
+	my ($status, $output) = run_ssh_command($computer_node_name, $management_node_keys, $command, '', '', 1);
+	if (defined($output) && grep(/failed/i, @{$output})) {
+		notify($ERRORS{'DEBUG'}, 0, "service does not exist: $service_name");
+		return 0;
+	}
+	elsif (defined($status) && $status == 0) {
+		notify($ERRORS{'DEBUG'}, 0, "service exists: $service_name");
+	}
+	elsif (defined($status)) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine if service exists: $service_name, exit status: $status, output:\n@{$output}");
+		return;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unable to run ssh command to determine if service exists");
+		return;
+	}
+	
+	return 1;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -3152,49 +3152,48 @@ sub start_service {
 =cut
 
 sub stop_service {
-        my $self = shift;
-        if (ref($self) !~ /linux/i) {
-                notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-                return;
-        }
-
-        my $management_node_keys = $self->data->get_management_node_keys();
-        my $computer_node_name   = $self->data->get_computer_node_name();
-
-        my $service_name = shift;
-        if (!$service_name) {
-                notify($ERRORS{'WARNING'}, 0, "service name was not passed as an argument");
-                return;
-        }
-        my $command;
-
-        # Check if OS is using systemd or SysVinit
-        if($self->file_exists("/bin/systemctl")){
-                $command = "systemctl stop $service_name" . ".service";
-        }
-        else {
-              $command = "service $service_name stop";
-        }
-
-        my ($status, $output) = run_ssh_command($computer_node_name, $management_node_keys, $command, '', '', 1);
-        if (defined($output) && grep(/failed/i, @{$output})) {
-                notify($ERRORS{'DEBUG'}, 0, "service does not exist: $service_name");
-                return 0;
-        }
-        elsif (defined($status) && $status == 0) {
-                notify($ERRORS{'DEBUG'}, 0, "service exists: $service_name");
-        }
-        elsif (defined($status)) {
-                notify($ERRORS{'WARNING'}, 0, "unable to determine if service exists: $service_name, exit status: $status, output:\n@{$output}");
-                return;
-        }
-        else {
-                notify($ERRORS{'WARNING'}, 0, "unable to run ssh command to determine if service exists");
-                return;
-        }
-
-        return 1;
-
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $management_node_keys = $self->data->get_management_node_keys();
+	my $computer_node_name   = $self->data->get_computer_node_name();
+	
+	my $service_name = shift;
+	if (!$service_name) {
+		notify($ERRORS{'WARNING'}, 0, "service name was not passed as an argument");
+		return;
+	}
+	my $command;
+	
+	# Check if OS is using systemd or SysVinit
+	if($self->file_exists("/bin/systemctl")){
+		$command = "systemctl stop $service_name" . ".service";
+	}
+	else {
+		$command = "service $service_name stop";
+	}
+	
+	my ($status, $output) = run_ssh_command($computer_node_name, $management_node_keys, $command, '', '', 1);
+	if (defined($output) && grep(/failed/i, @{$output})) {
+		notify($ERRORS{'DEBUG'}, 0, "service does not exist: $service_name");
+		return 0;
+	}
+	elsif (defined($status) && $status == 0) {
+		notify($ERRORS{'DEBUG'}, 0, "service exists: $service_name");
+	}
+	elsif (defined($status)) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine if service exists: $service_name, exit status: $status, output:\n@{$output}");
+		return;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unable to run ssh command to determine if service exists");
+		return;
+	}
+	
+	return 1;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -3209,18 +3208,18 @@ sub stop_service {
 
 sub check_connection_on_port {
 	my $self = shift;
-   if (ref($self) !~ /linux/i) {
-       notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-       return;
-   }
-
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
 	my $management_node_keys 	= $self->data->get_management_node_keys();
 	my $computer_node_name   	= $self->data->get_computer_node_name();
 	my $remote_ip 			= $self->data->get_reservation_remote_ip();
 	my $computer_ip_address   	= $self->data->get_computer_ip_address();
 	my $request_state_name   	= $self->data->get_request_state_name();
 	my $username = $self->data->get_user_login_id();
-
+	
 	my $port = shift;
 	if (!$port) {
 		notify($ERRORS{'WARNING'}, 0, "port variable was not passed as an argument");
@@ -3233,39 +3232,39 @@ sub check_connection_on_port {
 	notify($ERRORS{'DEBUG'}, 0, "checking connections on node $computer_node_name on port $port");
 	foreach my $line (@{$output}) {
 		if ($line =~ /Connection refused|Permission denied/) {
-                    chomp($line);
-                    notify($ERRORS{'WARNING'}, 0, "$line");
-                    if ($request_state_name =~ /reserved/) {
-                        $ret_val = "failed";
-                    }
-                    else {
-                         $ret_val = "timeout";
-                    }
-                    return $ret_val;
-                 } ## end if ($line =~ /Connection refused|Permission denied/)
-                 if ($line =~ /tcp\s+([0-9]*)\s+([0-9]*)\s($computer_ip_address:$port)\s+([.0-9]*):([0-9]*)(.*)(ESTABLISHED)/) {
-                     if ($4 eq $remote_ip) {
-                         $ret_val = "connected";
-                         return $ret_val;
-                     }
-                     else {
-							  my $new_remote_ip = $4;
-                    	  #this isn't the defined remoteIP
-								# Confirm the user is logged in
-								# Is user logged in
-                        if (!$self->user_logged_in()) {
-                           notify($ERRORS{'OK'}, 0, "Detected $new_remote_ip is connected. $username is not logged in yet. Returning no connection");
-                           $ret_val = "no";
-                           return $ret_val;
-                        }
-                        else {	
-										  $self->data->set_reservation_remote_ip($new_remote_ip);	
-										  notify($ERRORS{'OK'}, 0, "Updating reservation remote_ip with $new_remote_ip");
-										  $ret_val = "conn_wrong_ip";
-										  return $ret_val;
-								}
-                     }
-                 }    # tcp check
+			chomp($line);
+			notify($ERRORS{'WARNING'}, 0, "$line");
+			if ($request_state_name =~ /reserved/) {
+				$ret_val = "failed";
+			}
+			else {
+				$ret_val = "timeout";
+			}
+			return $ret_val;
+		} ## end if ($line =~ /Connection refused|Permission denied/)
+		if ($line =~ /tcp\s+([0-9]*)\s+([0-9]*)\s($computer_ip_address:$port)\s+([.0-9]*):([0-9]*)(.*)(ESTABLISHED)/) {
+			if ($4 eq $remote_ip) {
+				$ret_val = "connected";
+				return $ret_val;
+			}
+			else {
+				my $new_remote_ip = $4;
+				#this isn't the defined remoteIP
+				# Confirm the user is logged in
+				# Is user logged in
+				if (!$self->user_logged_in()) {
+					notify($ERRORS{'OK'}, 0, "Detected $new_remote_ip is connected. $username is not logged in yet. Returning no connection");
+					$ret_val = "no";
+					return $ret_val;
+				}
+				else {	
+					$self->data->set_reservation_remote_ip($new_remote_ip);	
+					notify($ERRORS{'OK'}, 0, "Updating reservation remote_ip with $new_remote_ip");
+					$ret_val = "conn_wrong_ip";
+					return $ret_val;
+				}
+			}
+		}    # tcp check
 	}
 	return $ret_val;
 }
@@ -3416,32 +3415,28 @@ sub get_total_memory {
 =cut
 
 sub sanitize_firewall {
-   my $self = shift;
-   if (ref($self) !~ /VCL::Module/i) {
-      notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-      return;
-   }
-
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
 	my $scope = shift;
 	if(!defined($scope)) {
 		notify($ERRORS{'CRITICAL'}, 0, "scope variable was not passed in as an arguement");
-      return;
+		return;
 	}
 	
 	my $computer_node_name = $self->data->get_computer_node_name();
-   my $mn_private_ip = $self->mn_os->get_private_ip_address();
+	my $mn_private_ip = $self->mn_os->get_private_ip_address();
 	
 	my $firewall_configuration = $self->get_firewall_configuration() || return;
-   my $chain;
-   my $iptables_del_cmd;
+	my $chain;
+	my $iptables_del_cmd;
 	my $INPUT_CHAIN = "INPUT";
-
-   for my $num (sort keys %{$firewall_configuration->{$INPUT_CHAIN}} ) {
-
 	
+	for my $num (sort keys %{$firewall_configuration->{$INPUT_CHAIN}} ) {
 	}
-
-
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -3456,10 +3451,10 @@ sub sanitize_firewall {
 
 sub enable_firewall_port {
 	my $self = shift;
-   if (ref($self) !~ /VCL::Module/i) {
-      notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-      return;
-   }
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
 	
 	# Check to see if this distro has iptables
 	# If not return 1 so it does not fail
@@ -3474,17 +3469,17 @@ sub enable_firewall_port {
 		return;
 	}
 	
-   my $computer_node_name = $self->data->get_computer_node_name();
+	my $computer_node_name = $self->data->get_computer_node_name();
 	my $mn_private_ip = $self->mn_os->get_private_ip_address();
 	
 	$protocol = lc($protocol);
 	
 	$scope_argument = '' if (!defined($scope_argument));
 
-   $name = '' if !$name;
-   $description = '' if !$description;
+	$name = '' if !$name;
+	$description = '' if !$description;
 
-   my $scope;
+	my $scope;
 
 	my $INPUT_CHAIN = "INPUT";
 
@@ -3494,73 +3489,72 @@ sub enable_firewall_port {
 	my $iptables_del_cmd;
 
 	for my $num (sort keys %{$firewall_configuration->{$INPUT_CHAIN}} ) {
-   	my $existing_scope = $firewall_configuration->{$INPUT_CHAIN}{$num}{$protocol}{$port}{scope} || '';
-   	my $existing_name = $firewall_configuration->{$INPUT_CHAIN}{$num}{$protocol}{$port}{name} || '';
-   	my $existing_description = $firewall_configuration->{$INPUT_CHAIN}{$num}{$protocol}{$port}{name} || '';
+		my $existing_scope = $firewall_configuration->{$INPUT_CHAIN}{$num}{$protocol}{$port}{scope} || '';
+		my $existing_name = $firewall_configuration->{$INPUT_CHAIN}{$num}{$protocol}{$port}{name} || '';
+		my $existing_description = $firewall_configuration->{$INPUT_CHAIN}{$num}{$protocol}{$port}{name} || '';
 	
-   	if ($existing_scope) {
+		if ($existing_scope) {
 			notify($ERRORS{'DEBUG'}, 0, " num= $num protocol= $protocol port= $port existing_scope= $existing_scope existing_name= $existing_name existing_description= $existing_description ");
 
 			if ($overwrite_existing) {
-         	$scope = $self->parse_firewall_scope($scope_argument);
+				$scope = $self->parse_firewall_scope($scope_argument);
 				$iptables_del_cmd = "iptables -D $INPUT_CHAIN $num";
-         	if (!$scope) {
-            	notify($ERRORS{'WARNING'}, 0, "failed to parse firewall scope argument: '$scope_argument'");
-            	return;
-         	}
+				if (!$scope) {
+					notify($ERRORS{'WARNING'}, 0, "failed to parse firewall scope argument: '$scope_argument'");
+					return;
+				}
 
-         	notify($ERRORS{'DEBUG'}, 0, "existing firewall opening on $computer_node_name will be replaced:\n" .
-            "name: '$existing_name'\n" .
+				notify($ERRORS{'DEBUG'}, 0, "existing firewall opening on $computer_node_name will be replaced:\n" .
+				"name: '$existing_name'\n" .
 				"num: '$num'\n" .
-            "protocol: $protocol\n" .
+				"protocol: $protocol\n" .
 				"port/type: $port\n" .
-            "existing scope: '$existing_scope'\n" .
-            "new scope: $scope\n" .
-            "overwrite existing rule: " . ($overwrite_existing ? 'yes' : 'no')
-         	);
-      	}
+				"existing scope: '$existing_scope'\n" .
+				"new scope: $scope\n" .
+				"overwrite existing rule: " . ($overwrite_existing ? 'yes' : 'no')
+				);
+			}
 			else {
-         	my $parsed_existing_scope = $self->parse_firewall_scope($existing_scope);
-         	if (!$parsed_existing_scope) {
-            	notify($ERRORS{'WARNING'}, 0, "failed to parse existing firewall scope: '$existing_scope'");
-           	 return;
-         	}
+				my $parsed_existing_scope = $self->parse_firewall_scope($existing_scope);
+				if (!$parsed_existing_scope) {
+					notify($ERRORS{'WARNING'}, 0, "failed to parse existing firewall scope: '$existing_scope'");
+					return;
+				}
 
-         	$scope = $self->parse_firewall_scope("$scope_argument,$existing_scope");
-         	if (!$scope) {
-            	notify($ERRORS{'WARNING'}, 0, "failed to parse firewall scope argument appended with existing scope: '$scope_argument,$existing_scope'");
-            	return;
-         	}
+				$scope = $self->parse_firewall_scope("$scope_argument,$existing_scope");
+				if (!$scope) {
+					notify($ERRORS{'WARNING'}, 0, "failed to parse firewall scope argument appended with existing scope: '$scope_argument,$existing_scope'");
+					return;
+				}
 
-         	if ($scope eq $parsed_existing_scope) {
-            	notify($ERRORS{'DEBUG'}, 0, "firewall is already open on $computer_node_name, existing scope matches scope argument:\n" .
-               "name: '$existing_name'\n" .
-               "protocol: $protocol\n" .
-               "port/type: $port\n" .
-               "scope: $scope\n" .
-               "overwrite existing rule: " . ($overwrite_existing ? 'yes' : 'no')
-            	);
-            	return 1;
-         	}
-      	}
+				if ($scope eq $parsed_existing_scope) {
+					notify($ERRORS{'DEBUG'}, 0, "firewall is already open on $computer_node_name, existing scope matches scope argument:\n" .
+					"name: '$existing_name'\n" .
+					"protocol: $protocol\n" .
+					"port/type: $port\n" .
+					"scope: $scope\n" .
+					"overwrite existing rule: " . ($overwrite_existing ? 'yes' : 'no')
+					);
+					return 1;
+				}
+			}
 		}
 		else {
 			next;
-   	}
+		}
 	}
 
-     	if(!$scope) {
+		if(!$scope) {
 			$scope = $self->parse_firewall_scope($scope_argument);
-     		if (!$scope) {
-        		notify($ERRORS{'WARNING'}, 0, "failed to parse firewall scope argument: '$scope_argument'");
-        		return;
-     		}
+			if (!$scope) {
+				notify($ERRORS{'WARNING'}, 0, "failed to parse firewall scope argument: '$scope_argument'");
+				return;
+			}
 		}
 
-  
-   	$name = "VCL: allow $protocol/$port from $scope" if !$name;
+		$name = "VCL: allow $protocol/$port from $scope" if !$name;
 
-   	$name = substr($name, 0, 60) . "..." if length($name) > 60;
+		$name = substr($name, 0, 60) . "..." if length($name) > 60;
 
 		my $command;
 
@@ -3570,7 +3564,7 @@ sub enable_firewall_port {
 		}
 
 		$command .= "/sbin/iptables -I INPUT 1 -m state --state NEW,RELATED,ESTABLISHED -m $protocol -p $protocol -j ACCEPT";
-	
+		
 		if ($port =~ /\d+/){
 			$command .= " --dport $port";
 		}
@@ -3626,68 +3620,67 @@ sub enable_firewall_port {
 =cut
 
 sub disable_firewall_port {
-   my $self = shift;
-   if (ref($self) !~ /VCL::Module/i) {
-      notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-      return;
-   }
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
 
 	# Check to see if this distro has iptables
-   # If not return 1 so it does not fail
-   if (!($self->service_exists("iptables"))) {
-      notify($ERRORS{'WARNING'}, 0, "iptables does not exist on this OS");
-      return 1;
-   }
+	# If not return 1 so it does not fail
+	if (!($self->service_exists("iptables"))) {
+		notify($ERRORS{'WARNING'}, 0, "iptables does not exist on this OS");
+		return 1;
+	}
 	
 	my ($protocol, $port, $scope_argument, $overwrite_existing, $name, $description) = @_;
 	if (!defined($protocol) || !defined($port)) {
-     notify($ERRORS{'WARNING'}, 0, "protocol and port arguments were not supplied");
-     return;
+		notify($ERRORS{'WARNING'}, 0, "protocol and port arguments were not supplied");
+		return;
 	}
 
-   my $computer_node_name = $self->data->get_computer_node_name();
+	my $computer_node_name = $self->data->get_computer_node_name();
 	my $mn_private_ip = $self->mn_os->get_private_ip_address();
 
-   $protocol = lc($protocol);
+	$protocol = lc($protocol);
 
-   $scope_argument = '' if (!defined($scope_argument));
+	$scope_argument = '' if (!defined($scope_argument));
 
-   $name = '' if !$name;
-   $description = '' if !$description;
+	$name = '' if !$name;
+	$description = '' if !$description;
 
-   my $scope;
+	my $scope;
 
-   my $INPUT_CHAIN = "INPUT";
+	my $INPUT_CHAIN = "INPUT";
 
-   my $firewall_configuration = $self->get_firewall_configuration() || return;
-   my $chain;
-   my $command;
+	my $firewall_configuration = $self->get_firewall_configuration() || return;
+	my $chain;
+	my $command;
 
-   for my $num (sort keys %{$firewall_configuration->{$INPUT_CHAIN}} ) {
+	for my $num (sort keys %{$firewall_configuration->{$INPUT_CHAIN}} ) {
 		my $existing_scope = $firewall_configuration->{$INPUT_CHAIN}{$num}{$protocol}{$port}{scope} || '';
 		my $existing_name = $firewall_configuration->{$INPUT_CHAIN}{$num}{$protocol}{$port}{name} || '';
 		if($existing_scope) {
 			$command = "iptables -D $INPUT_CHAIN $num";
 
 			notify($ERRORS{'DEBUG'}, 0, "attempting to execute command on $computer_node_name: '$command'");
-   		my ($status, $output) = $self->execute($command);
-   		if (defined $status && $status == 0) {
-       		notify($ERRORS{'DEBUG'}, 0, "executed command on $computer_node_name: '$command'");
-   		}
-   		else {
-       		notify($ERRORS{'WARNING'}, 0, "output from iptables:\n" . join("\n", @$output));
-   		}
+			my ($status, $output) = $self->execute($command);
+			if (defined $status && $status == 0) {
+				notify($ERRORS{'DEBUG'}, 0, "executed command on $computer_node_name: '$command'");
+			}
+			else {
+				notify($ERRORS{'WARNING'}, 0, "output from iptables:\n" . join("\n", @$output));
+			}
 
-   		# Save rules to sysconfig/iptables -- incase of reboot
-   		my $iptables_save_cmd = "/sbin/iptables-save > /etc/sysconfig/iptables";
-   		my ($status_save, $output_save) = $self->execute($iptables_save_cmd);
-   		if (defined $status_save && $status_save == 0) {
-       		notify($ERRORS{'DEBUG'}, 0, "executed command $iptables_save_cmd on $computer_node_name");
-   		}
+			# Save rules to sysconfig/iptables -- incase of reboot
+			my $iptables_save_cmd = "/sbin/iptables-save > /etc/sysconfig/iptables";
+			my ($status_save, $output_save) = $self->execute($iptables_save_cmd);
+			if (defined $status_save && $status_save == 0) {
+				notify($ERRORS{'DEBUG'}, 0, "executed command $iptables_save_cmd on $computer_node_name");
+			}
 		}
 	}
-   return 1;
-
+	return 1;
 }
 
 #/////////////////////////////////////////////////////////////////////////////

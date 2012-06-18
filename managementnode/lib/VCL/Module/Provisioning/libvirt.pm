@@ -236,17 +236,8 @@ Define the domain on the node by calling 'virsh define <XML file>'.
 
 =cut
 
-	my $command = "virsh define \"$domain_xml_file_path\"";
-	my ($exit_status, $output) = $self->vmhost_os->execute($command);
-	if (!defined($output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to execute virsh command to define '$domain_name' domain on $node_name");
-		return;
-	}
-	elsif ($exit_status eq '0') {
-		notify($ERRORS{'OK'}, 0, "defined '$domain_name' domain on $node_name");
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to define '$domain_name' domain on $node_name\ncommand: $command\nexit status: $exit_status\noutput:\n" . join("\n", @$output));
+	if (!$self->define_domain($domain_xml_file_path, 1)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to load '$image_name' image on '$computer_name', unable to define domain");
 		return;
 	}
 
@@ -308,7 +299,6 @@ sub capture {
 	my $imagerevision_id = $self->data->get_imagerevision_id();
 	my $image_name = $self->data->get_image_name();
 	my $image_type = $self->data->get_imagetype_name();
-	my $domain_name = $self->get_domain_name();
 	my $node_name = $self->data->get_vmhost_short_name();
 	my $old_image_name = $self->data->get_image_name();
 	my $master_image_directory_path = $self->get_master_image_directory_path();
@@ -320,6 +310,24 @@ sub capture {
 	
 	# Set the imagemeta Sysprep value to 0 to prevent Sysprep from being used
 	$self->data->set_imagemeta_sysprep(0);
+	
+	# Get the domain name
+	my $domain_name = $self->get_domain_name();
+	if (!$domain_name) {
+		notify($ERRORS{'WARNING'}, 0, "unable to capture image on $node_name, domain name could not be determined");
+		return;
+	}
+	
+	# Check the power status before proceeding
+	my $power_status = $self->power_status();
+	if (!$power_status) {
+		notify($ERRORS{'WARNING'}, 0, "unable to capture image on $node_name, power status of '$domain_name' domain could not be determined");
+		return;
+	}
+	elsif ($power_status !~ /on/i) {
+		notify($ERRORS{'WARNING'}, 0, "unable to capture image on $node_name, power status of '$domain_name' domain is $power_status");
+		return;
+	}
 	
 	# Construct the new image name
 	my $new_image_name = $self->get_new_image_name();
@@ -334,6 +342,26 @@ sub capture {
 	# Make sure the repository image file doesn't already exist if the repository path is configured
 	if ($repository_image_file_path && $self->vmhost_os->file_exists($repository_image_file_path)) {
 		notify($ERRORS{'WARNING'}, 0, "repository image file already exists on $node_name: $repository_image_file_path");
+		return;
+	}
+	
+	# Get the domain XML definition
+	my $domain_xml_string = $self->get_domain_xml_string($domain_name);
+	if (!$domain_xml_string) {
+		notify($ERRORS{'WARNING'}, 0, "failed to capture image on $node_name, unable to retrieve domain XML definition: $domain_name");
+		return;
+	}
+	
+	# Delete existing XML definition files
+	$self->os->delete_file("~/*-v*.xml");
+	
+	# Save the domain XML definition to a file in the image
+	my $image_xml_file_path = "~/$new_image_name.xml";
+	if ($self->os->create_text_file($image_xml_file_path, $domain_xml_string)) {
+		notify($ERRORS{'OK'}, 0, "saved domain XML definition text file in image: $image_xml_file_path");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to capture image on $node_name, unable to save domain XML definition text file in image: $image_xml_file_path, contents:\n$domain_xml_string");
 		return;
 	}
 	
@@ -396,22 +424,15 @@ sub capture {
 			return;
 		}
 		
-		# Get the domain XML definition
-		my $domain_xml = $self->get_domain_xml($domain_name);
-		if (!$domain_xml) {
-			notify($ERRORS{'WARNING'}, 0, "failed to capture image on $node_name, unable to retrieve domain XML definition: $domain_name");
-			return;
-		}
-		
-		# Save the domain XML definition to a file in the master image directory
-		my $master_xml_file_path = $self->get_master_xml_file_path();
-		if ($self->vmhost_os->create_text_file($master_xml_file_path, $domain_xml)) {
-			notify($ERRORS{'OK'}, 0, "saved domain XML definition text file to master image directory: $master_xml_file_path");
-		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "failed to capture image on $node_name, unable to save domain XML definition text file: $master_xml_file_path");
-			return;
-		}
+		## Save the domain XML definition to a file in the master image directory
+		#my $master_xml_file_path = $self->get_master_xml_file_path();
+		#if ($self->vmhost_os->create_text_file($master_xml_file_path, $domain_xml)) {
+		#	notify($ERRORS{'OK'}, 0, "saved domain XML definition text file to master image directory: $master_xml_file_path");
+		#}
+		#else {
+		#	notify($ERRORS{'WARNING'}, 0, "failed to capture image on $node_name, unable to save domain XML definition text file: $master_xml_file_path");
+		#	return;
+		#}
 		
 		# Copy the master image to the repository if the repository path is configured in the VM host profile
 		if ($repository_image_file_path) {
@@ -429,15 +450,15 @@ sub capture {
 				return;
 			}
 			
-			# Save the domain XML definition to a file in the repository image directory
-			my $repository_xml_file_path = $self->get_repository_xml_file_path();
-			if ($self->vmhost_os->create_text_file($repository_xml_file_path, $domain_xml)) {
-				notify($ERRORS{'OK'}, 0, "saved domain XML definition text file to repository image directory: $master_xml_file_path");
-			}
-			else {
-				notify($ERRORS{'WARNING'}, 0, "failed to capture image on $node_name, unable to save domain XML definition text file to repository image directory: $master_xml_file_path");
-				return;
-			}
+			## Save the domain XML definition to a file in the repository image directory
+			#my $repository_xml_file_path = $self->get_repository_xml_file_path();
+			#if ($self->vmhost_os->create_text_file($repository_xml_file_path, $domain_xml)) {
+			#	notify($ERRORS{'OK'}, 0, "saved domain XML definition text file to repository image directory: $master_xml_file_path");
+			#}
+			#else {
+			#	notify($ERRORS{'WARNING'}, 0, "failed to capture image on $node_name, unable to save domain XML definition text file to repository image directory: $master_xml_file_path");
+			#	return;
+			#}
 		}
 	}
 	
@@ -827,27 +848,13 @@ sub get_domain_name {
 	# If request state is image the domain name will be that of the image used as the base image, not the image being created
 	# Must find existing loaded domain on node in order to determine name
 	if ($request_state_name eq 'image') {
-		# Must ensure that only 1 matching domain was found
-		my @matching_domain_names;
-		my $domain_info = $self->get_domain_info();
-		for my $domain_name (keys %$domain_info) {
-			if ($domain_name =~ /^$computer_short_name:/) {
-				push @matching_domain_names, $domain_name;
-			}
-		}
-		
-		# Make sure only 1 domain was found
-		if (scalar @matching_domain_names == 1) {
-			$self->{domain_name} = $matching_domain_names[0];
-			notify($ERRORS{'DEBUG'}, 0, "retrieved name of domain being captured from $node_name: '$self->{domain_name}'");
-			return $self->{domain_name};
-		}
-		elsif (@matching_domain_names) {
-			notify($ERRORS{'WARNING'}, 0, "unable to determine name of domain to be captured, found multiple domain names beginning with '$computer_short_name:' on $node_name:\n" . join("\n", @matching_domain_names));
-			return;
+		if (my $active_domain_name = $self->get_active_domain_name()) {
+			notify($ERRORS{'DEBUG'}, 0, "retrieved name of domain being captured: '$active_domain_name'");
+			$self->{domain_name} = $active_domain_name;
+			return $active_domain_name;
 		}
 		else {
-			notify($ERRORS{'WARNING'}, 0, "unable to determine name of domain to be captured, did not find a domain name beginning with '$computer_short_name:' on $node_name");
+			notify($ERRORS{'WARNING'}, 0, "unable to determine name of domain to be captured");
 			return;
 		}
 	}
@@ -858,6 +865,106 @@ sub get_domain_name {
 	$self->{domain_name} = "$computer_short_name:$image_name";
 	notify($ERRORS{'DEBUG'}, 0, "constructed domain name: '$self->{domain_name}'");
 	return $self->{domain_name};
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_active_domain_name
+
+ Parameters  : none
+ Returns     : string
+ Description : Determines the name of the domain assigned to the reservation.
+               This subroutine is mainly used when capturing base images. The
+               name of the domain is chosen by the person capturing it and may
+               not contain the name of the VCL computer.
+
+=cut
+
+sub get_active_domain_name {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $os_type = $self->data->get_image_os_type();
+	my $computer_name = $self->data->get_computer_short_name();
+	
+	my $active_os;
+	my $active_os_type = $self->os->get_os_type();
+	if (!$active_os_type) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine active domain, OS type currently installed on $computer_name could not be determined");
+		return;
+	}
+	elsif ($active_os_type ne $os_type) {
+		notify($ERRORS{'DEBUG'}, 0, "OS type currently installed on $computer_name does not match the OS type of the reservation image:\nOS type installed on $computer_name: $active_os_type\nreservation image OS type: $os_type");
+		
+		my $active_os_perl_package;
+		if ($active_os_type =~ /linux/i) {
+			$active_os_perl_package = 'VCL::Module::OS::Linux';
+		}
+		else {
+			$active_os_perl_package = 'VCL::Module::OS::Windows';
+		}
+		
+		if ($active_os = $self->create_os_object($active_os_perl_package)) {
+			notify($ERRORS{'DEBUG'}, 0, "created a '$active_os_perl_package' OS object for the '$active_os_type' OS type currently installed on $computer_name");
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "unable to determine active domain name, failed to create a '$active_os_perl_package' OS object for the '$active_os_type' OS type currently installed on $computer_name");
+			return;
+		}
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "'$active_os_type' OS type currently installed on $computer_name matches the OS type of the image assigned to this reservation");
+		$active_os = $self->os;
+	}
+	
+	# Make sure the active OS object implements the required subroutines called below
+	if (!$active_os->can('get_private_mac_address') || !$active_os->can('get_public_mac_address')) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine active domain name, " . ref($active_os) . " OS object does not implement 'get_private_mac_address' and 'get_public_mac_address' subroutines");
+		return;
+	}
+	
+	# Get the MAC addresses being used by the running VM for this reservation
+	my @domain_mac_addresses = ($active_os->get_private_mac_address(), $active_os->get_public_mac_address());
+	if (!@domain_mac_addresses) {
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve the private and public MAC address being used by $computer_name");
+		return;
+	}
+	
+	# Remove the colons from the MAC addresses and convert to lower case so they can be compared
+	map { s/[^\w]//g; $_ = lc($_) } (@domain_mac_addresses);
+	
+	my @matching_domain_names;
+	my $domain_info = $self->get_domain_info();
+	for my $domain_name (keys %$domain_info) {
+		my @check_mac_addresses = $self->get_domain_mac_addresses($domain_name);
+		map { s/[^\w]//g; $_ = lc($_) } (@check_mac_addresses);
+		
+		my @matching_mac_addresses = map { my $domain_mac_address = $_; grep(/$domain_mac_address/i, @check_mac_addresses) } @domain_mac_addresses;
+		if (!@matching_mac_addresses) {
+			notify($ERRORS{'DEBUG'}, 0, "ignoring domain '$domain_name' because MAC address does not match any being used by $computer_name");
+			next;
+		}
+		
+		notify($ERRORS{'DEBUG'}, 0, "found matching MAC address between $computer_name and domain '$domain_name':\n" . join("\n", sort(@matching_mac_addresses)));
+		push @matching_domain_names, $domain_name;
+	}
+	
+	if (!@matching_domain_names) {
+		notify($ERRORS{'WARNING'}, 0, "failed to determine active domain name, did not find any domains configured to use MAC address currently being used by $computer_name:\n" . join("\n", sort(@domain_mac_addresses)));
+		return;
+	}
+	elsif (scalar(@matching_domain_names) == 1) {
+		my $active_domain_name = $matching_domain_names[0];
+		notify($ERRORS{'DEBUG'}, 0, "determined active domain name: $active_domain_name");
+		return $active_domain_name;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to determine active domain name, multiple domains (" . join(', ', @matching_domain_names) . ") are configured to use MAC address currently being used by $computer_name:\n" . join("\n", sort(@domain_mac_addresses)));
+		return;
+	}
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -1199,6 +1306,75 @@ sub get_new_image_name {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 define_domain
+
+ Parameters  : $domain_xml_file_path, $autostart (optional)
+ Returns     : boolean
+ Description : Defines a domain on the node.
+
+=cut
+
+sub define_domain {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $domain_xml_file_path = shift;
+	if (!defined($domain_xml_file_path)) {
+		notify($ERRORS{'WARNING'}, 0, "domain XML file path argument was not specified");
+		return;
+	}
+	
+	my $autostart = shift;
+	
+	my $node_name = $self->data->get_vmhost_short_name();
+	
+	my $define_command = "virsh define \"$domain_xml_file_path\"";
+	my ($define_exit_status, $define_output) = $self->vmhost_os->execute($define_command);
+	if (!defined($define_output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute virsh command to define domain on $node_name: $domain_xml_file_path");
+		return;
+	}
+	elsif ($define_exit_status eq '0') {
+		notify($ERRORS{'OK'}, 0, "defined domain on $node_name, output:\n" . join("\n", @$define_output));
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to define domain on $node_name\ncommand: $define_command\nexit status: $define_exit_status\noutput:\n" . join("\n", @$define_output));
+		return;
+	}
+	
+	if ($autostart) {
+		# Parse the domain name from the 'virsh define' output, should look like this:
+		# Domain vclv11:linux-kvmimage-2935-v0 defined from /tmp/vcl/vcl11_2935-v0.xml
+		my ($domain_name) = join("\n", @$define_output) =~ /Domain\s+(.+)\s+defined/;
+		if ($domain_name) {
+			notify($ERRORS{'DEBUG'}, 0, "parsed domain name from 'virsh define' output: '$domain_name'");
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to parse domain name from 'virsh define' output:\n" . join("\n", @$define_output));
+			return 1;
+		}
+		
+		my $autostart_command = "virsh autostart \"$domain_name\"";
+		my ($autostart_exit_status, $autostart_output) = $self->vmhost_os->execute($autostart_command);
+		if (!defined($autostart_output)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to execute virsh command to configure '$domain_name' domain to autostart on $node_name");
+		}
+		elsif ($autostart_exit_status eq '0') {
+			notify($ERRORS{'OK'}, 0, "configured '$domain_name' domain to autostart on $node_name, output:\n" . join("\n", @$autostart_output));
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to configure '$domain_name' domain to autostart on $node_name\ncommand: $autostart_command\nexit status: $autostart_exit_status\noutput:\n" . join("\n", @$autostart_output));
+		}
+	}
+	
+	return 1;
+}
+	
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 delete_existing_domains
 
  Parameters  : none
@@ -1261,6 +1437,7 @@ sub delete_domain {
 	}
 	
 	my $node_name = $self->data->get_vmhost_short_name();
+	my $request_state_name = $self->data->get_request_state_name();
 	
 	# Make sure domain is defined
 	if (!$self->domain_exists($domain_name)) {
@@ -1286,18 +1463,18 @@ sub delete_domain {
 	}
 	
 	my ($computer_name) = $domain_name =~ /^([^:]+):/;
-	if ($computer_name) {
+	if ($request_state_name eq 'image' || $computer_name) {
 		# Delete disks assigned to to domain
 		my @disk_file_paths = $self->get_domain_disk_file_paths($domain_name);
 		for my $disk_file_path (@disk_file_paths) {
 			# For safety, make sure the disk being deleted begins with the domain's computer name
 			my $disk_file_name = fileparse($disk_file_path, qr/\.[^\/]+$/i);
-			if ($disk_file_name !~ /^$computer_name\_/) {
+			if ($request_state_name ne 'image' && $disk_file_name !~ /^$computer_name\_/) {
 				notify($ERRORS{'WARNING'}, 0, "disk assigned to domain NOT deleted because the file name does not begin with '$computer_name\_':\nfile name: $disk_file_name\nfile path: $disk_file_path");
 				next;
 			}
 			else {
-				notify($ERRORS{'DEBUG'}, 0, "deleting disk assigned to domain, file name begins with '$computer_name\_': $disk_file_path");
+				notify($ERRORS{'DEBUG'}, 0, "deleting disk assigned to domain: $disk_file_path");
 				if (!$self->vmhost_os->delete_file($disk_file_path)) {
 					notify($ERRORS{'WARNING'}, 0, "failed to delete '$domain_name' domain on $node_name, '$disk_file_path' disk could not be deleted");
 					return;
@@ -1575,16 +1752,16 @@ sub get_domain_info {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 get_domain_xml
+=head2 get_domain_xml_string
 
  Parameters  : $domain_name
- Returns     : hash reference
+ Returns     : string
  Description : Retrieves the XML definition of a domain already defined on the
-               node. Generates a hash.
+               node.
 
 =cut
 
-sub get_domain_xml {
+sub get_domain_xml_string {
 	my $self = shift;
 	unless (ref($self) && $self->isa('VCL::Module')) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
@@ -1610,13 +1787,43 @@ sub get_domain_xml {
 		return;
 	}
 	
-	if (my $xml = xml_string_to_hash($output)) {
+	return join("\n", @$output);
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_domain_xml
+
+ Parameters  : $domain_name
+ Returns     : hash reference
+ Description : Retrieves the XML definition of a domain already defined on the
+               node. Generates a hash.
+
+=cut
+
+sub get_domain_xml {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $domain_name = shift;
+	if (!defined($domain_name)) {
+		notify($ERRORS{'WARNING'}, 0, "domain name argument was not specified");
+		return;
+	}
+	
+	my $node_name = $self->data->get_vmhost_short_name();
+	
+	my $domain_xml_string = $self->get_domain_xml_string($domain_name) || return;
+	if (my $xml_hash = xml_string_to_hash($domain_xml_string)) {
 		notify($ERRORS{'DEBUG'}, 0, "retrieved XML definition for '$domain_name' domain on $node_name");
-		#notify($ERRORS{'DEBUG'}, 0, "retrieved XML definition for '$domain_name' domain on $node_name:\n" . format_data($xml));
-		return $xml;
+		#notify($ERRORS{'DEBUG'}, 0, "retrieved XML definition for '$domain_name' domain on $node_name:\n" . format_data($xml_hash));
+		return $xml_hash;
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to convert XML definition for '$domain_name' domain to hash:\n" . join("\n", @$output));
+		notify($ERRORS{'WARNING'}, 0, "failed to convert XML definition for '$domain_name' domain to hash:\n$domain_xml_string");
 		return;
 	}
 }
@@ -1653,10 +1860,66 @@ sub get_domain_disk_file_paths {
 	
 	my @disk_file_paths = ();
 	for my $disk (@$disks) {
+		# Make sure device type is 'disk'
+		if (!$disk->{device}) {
+			notify($ERRORS{'DEBUG'}, 0, "ignoring disk definition, 'device' key is not present:\n" . format_data($disk));
+			next;
+		}
+		elsif ($disk->{device} !~ /^disk$/i) {
+			notify($ERRORS{'DEBUG'}, 0, "ignoring disk definition, 'device' key value is not 'disk', value: '$disk->{device}'\n" . format_data($disk));
+			next;
+		}
+		
+		# Make sure $disk->{source}->[0]->{file}
+		if (!defined($disk->{source}->[0]->{file})) {
+			notify($ERRORS{'DEBUG'}, 0, "ignoring disk definition, '{source}->[0]->{file}' key is not present\n" . format_data($disk));
+			next;
+		}
+		
 		push @disk_file_paths, $disk->{source}->[0]->{file};
 	}
 	
 	return @disk_file_paths;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_domain_mac_addresses
+
+ Parameters  : $domain_name
+ Returns     : array
+ Description : Retrieves the XML definition for the domain and extracts the MAC
+               addresses. An array containing the addresses is returned.
+
+=cut
+
+sub get_domain_mac_addresses {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $domain_name = shift;
+	if (!defined($domain_name)) {
+		notify($ERRORS{'WARNING'}, 0, "domain name argument was not specified");
+		return;
+	}
+	
+	# Get the domain XML definition
+	my $domain_xml = $self->get_domain_xml($domain_name);
+	
+	# Get the interface array ref section from the XML
+	my $interfaces = $domain_xml->{devices}->[0]->{interface};
+	
+	my @mac_addresses = ();
+	for my $interface (@$interfaces) {
+		#notify($ERRORS{'DEBUG'}, 0, "interface configured for domain '$domain_name':\n" . format_data($interface));
+		push @mac_addresses, $interface->{mac}->[0]->{address};
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "retrieved MAC addresses assigned to domain '$domain_name':\n" . join("\n", @mac_addresses));
+	return @mac_addresses;
 }
 
 #/////////////////////////////////////////////////////////////////////////////

@@ -1757,7 +1757,7 @@ sub create_text_file {
 		$command .= " > $file_path";
 	}
 	
-	my ($exit_status, $output) = $self->execute($command,1);
+	my ($exit_status, $output) = $self->execute($command, 0);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute ssh command to create file on $computer_node_name: $file_path");
 		return;

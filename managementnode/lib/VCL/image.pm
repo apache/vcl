@@ -584,11 +584,11 @@ sub setup_capture_base_image {
 	my $computer_provisioning_module_name = $computer_info{$computer_id}{provisioning}{module}{name};
 	
 	my $install_type;
-	if ($computer_provisioning_module_name =~ /vm/i) {
-		$install_type = 'vmware';
+	if ($computer_provisioning_module_name =~ /xcat/i) {
+		$install_type = 'partimage';
 	}
 	else {
-		$install_type = 'partimage';
+		$install_type = 'vmware';
 	}
 	
 	print "\nComputer to be captured: $computer_hostname (ID: $computer_id)\n";

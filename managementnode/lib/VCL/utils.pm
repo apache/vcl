@@ -4297,7 +4297,7 @@ sub get_management_node_requests {
 
 =head2  get_image_info
 
- Parameters  : $image_identifier, $no_cache (optional)
+ Parameters  : $image_identifier, $no_cache (optional), $ignore_error (optional)
  Returns     : hash reference
  Description : Retrieves info for the image specified by the argument. The
                argument can either be the image ID or image name.
@@ -4306,7 +4306,7 @@ sub get_management_node_requests {
 
 
 sub get_image_info {
-	my ($image_identifier, $no_cache) = @_;
+	my ($image_identifier, $no_cache, $ignore_error) = @_;
 	if (!defined($image_identifier)) {
 		notify($ERRORS{'WARNING'}, 0, "image identifier argument was not specified");
 		return;
@@ -4372,7 +4372,12 @@ EOF
 
 	# Check to make sure 1 row was returned
 	if (scalar @selected_rows == 0) {
-		notify($ERRORS{'WARNING'}, 0, "zero rows were returned from database select statement:\n$select_statement");
+		if ($ignore_error) {
+			notify($ERRORS{'DEBUG'}, 0, "image does NOT exist in the database: $image_identifier");
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "zero rows were returned from database select statement:\n$select_statement");
+		}
 		return;
 	}
 	elsif (scalar @selected_rows > 1) {
@@ -4819,7 +4824,7 @@ sub run_ssh_command {
 		$port = $arguments->{port} || '22';
 		$output_level = $arguments->{output_level};
 		$max_attempts = $arguments->{max_attempts} || 3;
-		$timeout_seconds = $arguments->{timeout_seconds};
+		$timeout_seconds = $arguments->{timeout};
 	}
 	
 	# Determine the output level if it was specified
@@ -9749,8 +9754,8 @@ sub escape_file_path {
 	# Call quotemeta to escape all special character
 	$path = quotemeta $path;
 	
-	# Unescape wildcard * characters or else subroutines will fail which accept a wildcard file path
-	$path =~ s/\\+([\*\+])/$1/g;
+	# Unescape wildcard *, +, characters or else subroutines will fail which accept a wildcard file path
+	$path =~ s/\\+([\*\+\/\~])/$1/g;
 	
 	return $path;
 }

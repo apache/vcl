@@ -190,7 +190,7 @@ sub _run_vim_cmd {
 		# Keep a count of the number of times vim-cmd is executed for the entire vcld state process
 		# This will be used to improve performance by reducing the number of calls necessary
 		$self->{vim_cmd_calls}++;
-		notify($ERRORS{'DEBUG'}, 0, "vim-cmd call count: $self->{vim_cmd_calls} ($vim_arguments)");
+		#notify($ERRORS{'DEBUG'}, 0, "vim-cmd call count: $self->{vim_cmd_calls} ($vim_arguments)");
 		
 		my ($exit_status, $output) = $self->vmhost_os->execute($command);
 		if (!defined($output)) {
@@ -998,6 +998,13 @@ sub vm_power_off {
 	if (!$vmx_file_path) {
 		notify($ERRORS{'WARNING'}, 0, "vmx file path argument was not supplied");
 		return;
+	}
+	
+	# Check if the VM is already powered off
+	my $vm_power_state = $self->get_vm_power_state($vmx_file_path);
+	if ($vm_power_state && $vm_power_state =~ /off/i) {
+		notify($ERRORS{'DEBUG'}, 0, "VM is already powered off: $vmx_file_path");
+		return 1;
 	}
 	
 	# Get the VM ID
