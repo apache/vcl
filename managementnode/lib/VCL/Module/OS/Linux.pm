@@ -106,14 +106,29 @@ sub get_node_configuration_directory {
 
 sub pre_capture {
 	my $self = shift;
+	my $args = shift;
 	if (ref($self) !~ /VCL::Module/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
 	
-	my $computer_node_name       = $self->data->get_computer_node_name();
-	notify($ERRORS{'OK'}, 0, "beginning Linux-specific image capture preparation tasks");
+	# Check if end_state argument was passed
+	if (defined $args->{end_state}) {
+		$self->{end_state} = $args->{end_state};
+	}
+	else {
+		$self->{end_state} = 'off';
+	}
 	
+	my $computer_node_name  = $self->data->get_computer_node_name();
+	
+	# Call OS::pre_capture to perform the pre-capture tasks common to all OS's
+	if (!$self->SUPER::pre_capture($args)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute parent class pre_capture() subroutine");
+		return;
+	}
+	
+	notify($ERRORS{'OK'}, 0, "beginning Linux-specific image capture preparation tasks");
 	
 	if (!$self->file_exists("/root/.vclcontrol/vcl_exclude_list.sample")) {
       notify($ERRORS{'DEBUG'}, 0, "/root/.vclcontrol/vcl_exclude_list.sample does not exists");
@@ -179,9 +194,15 @@ sub pre_capture {
 	}
 	
 	# Shut the computer down
-	if (!$self->shutdown()) {
-		notify($ERRORS{'WARNING'}, 0, "failed to shut down $computer_node_name");
-		return;
+	if ($self->{end_state} =~ /off/i) {
+		notify($ERRORS{'DEBUG'}, 0, "shutting down $computer_node_name, provisioning module specified end state: $self->{end_state}");
+		if (!$self->shutdown()) {
+			notify($ERRORS{'WARNING'}, 0, "failed to shut down $computer_node_name");
+			return;
+		}
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "$computer_node_name not shut down, provisioning module specified end state: $self->{end_state}");
 	}
 
 	notify($ERRORS{'OK'}, 0, "Linux pre-capture steps complete");

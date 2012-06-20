@@ -102,7 +102,7 @@ sub process {
 	my $computer_type              = $self->data->get_computer_type();
 	my $computer_shortname         = $self->data->get_computer_short_name();
 	my $managementnode_shortname   = $self->data->get_management_node_short_name();
-	my $sysadmin_mail_address      = $self->data->get_management_node_sysadmin_email();
+	my $sysadmin_mail_address      = $self->data->get_management_node_sysadmin_email(1);
 
 	if ($sysadmin_mail_address) {
 		# Notify administrators that image creation is starting
@@ -300,7 +300,7 @@ sub reservation_successful {
 	my $computer_id                = $self->data->get_computer_id();
 	my $computer_shortname         = $self->data->get_computer_short_name();
 	my $managementnode_shortname   = $self->data->get_management_node_short_name();
-	my $sysadmin_mail_address      = $self->data->get_management_node_sysadmin_email();
+	my $sysadmin_mail_address      = $self->data->get_management_node_sysadmin_email(1);
 
 	# Send image creation successful email to user
 	my $body_user = <<"END";
@@ -316,7 +316,8 @@ END
 	mail($user_email, "VCL -- $image_prettyname Image Creation Succeeded", $body_user, $affiliation_helpaddress);
 
 	# Send mail to $sysadmin_mail_address
-	my $body_admin = <<"END";
+	if ($sysadmin_mail_address) {
+		my $body_admin = <<"END";
 VCL Image Creation Completed
 
 Request ID: $request_id
@@ -340,8 +341,9 @@ Computer name: $computer_shortname
 Use Sysprep: $imagemeta_sysprep
 END
 
-	mail($sysadmin_mail_address, "VCL IMAGE Creation Completed: $image_name", $body_admin, $affiliation_helpaddress);
-
+		mail($sysadmin_mail_address, "VCL IMAGE Creation Completed: $image_name", $body_admin, $affiliation_helpaddress);
+	}
+	
 	# Insert reload request data into the datbase
 	if (insert_reload_request($request_data)) {
 		notify($ERRORS{'OK'}, 0, "inserted reload request into database for computer id=$computer_id");
@@ -379,7 +381,7 @@ sub reservation_failed {
 	my $computer_id                = $self->data->get_computer_id();
 	my $computer_shortname         = $self->data->get_computer_short_name();
 	my $managementnode_shortname   = $self->data->get_management_node_short_name();
-	my $sysadmin_mail_address      = $self->data->get_management_node_sysadmin_email();
+	my $sysadmin_mail_address      = $self->data->get_management_node_sysadmin_email(1);
 
 	# Image process failed
 	notify($ERRORS{'CRITICAL'}, 0, "$image_name image creation failed");
@@ -408,7 +410,8 @@ END
 	mail($user_email, "VCL -- NOTICE DELAY Image Creation $image_prettyname", $body_user, $affiliation_helpaddress);
 
 	# Send mail to $sysadmin_mail_address
-	my $body_admin = <<"END";
+	if ($sysadmin_mail_address) {
+		my $body_admin = <<"END";
 VCL Image Creation Failed
 
 Request ID: $request_id
@@ -431,8 +434,9 @@ Computer name: $computer_shortname
 Use Sysprep: $imagemeta_sysprep
 END
 
-	mail($sysadmin_mail_address, "VCL -- NOTICE FAILED Image Creation $image_prettyname", $body_admin, $affiliation_helpaddress);
-
+		mail($sysadmin_mail_address, "VCL -- NOTICE FAILED Image Creation $image_prettyname", $body_admin, $affiliation_helpaddress);
+	}
+	
 	# Update the request state to maintenance, laststate to image
 	if (update_request_state($request_id, "maintenance", "image")) {
 		notify($ERRORS{'OK'}, 0, "request state set to maintenance, laststate to image");

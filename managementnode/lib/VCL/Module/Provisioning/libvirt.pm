@@ -167,6 +167,9 @@ sub load {
 	my $domain_name = $self->get_domain_name();
 	my $driver_name = $self->get_driver_name();
 	my $domain_xml_file_path = $self->get_domain_xml_file_path();
+	
+	insertloadlog($reservation_id, $computer_id, "doesimageexists", "image exists $image_name");
+	insertloadlog($reservation_id, $computer_id, "startload", "$computer_name $image_name");
 
 =item *
 
@@ -218,6 +221,7 @@ used prior to defining the domain.
 		notify($ERRORS{'WARNING'}, 0, "failed to load '$image_name' image on '$computer_name', $driver_name libvirt driver module failed to complete its steps prior to defining the domain");
 		return;
 	}
+	insertloadlog($reservation_id, $computer_id, "transfervm", "performed libvirt driver tasks before defining domain");
 
 =item *
 
@@ -240,6 +244,7 @@ Define the domain on the node by calling 'virsh define <XML file>'.
 		notify($ERRORS{'WARNING'}, 0, "failed to load '$image_name' image on '$computer_name', unable to define domain");
 		return;
 	}
+	insertloadlog($reservation_id, $computer_id, "vmsetupconfig", "defined $computer_name domain node $node_name");
 
 =item *
 
@@ -251,6 +256,7 @@ Power on the domain.
 		notify($ERRORS{'WARNING'}, 0, "failed to start '$domain_name' domain on $node_name");
 		return;
 	}
+	insertloadlog($reservation_id, $computer_id, "startvm", "powered on $computer_name domain node $node_name");
 
 =item *
 
@@ -295,12 +301,17 @@ sub capture {
 		return;
 	}
 	
+	my $old_image_name = $self->data->get_image_name();
+	
+	# Construct the new image name
+	my $new_image_name = $self->get_new_image_name();
+	$self->data->set_image_name($new_image_name);
+	
 	my $image_id = $self->data->get_image_id();
 	my $imagerevision_id = $self->data->get_imagerevision_id();
-	my $image_name = $self->data->get_image_name();
 	my $image_type = $self->data->get_imagetype_name();
 	my $node_name = $self->data->get_vmhost_short_name();
-	my $old_image_name = $self->data->get_image_name();
+	my $computer_name = $self->data->get_computer_short_name();
 	my $master_image_directory_path = $self->get_master_image_directory_path();
 	my $master_image_file_path = $self->get_master_image_file_path();
 	my $datastore_image_type = $self->data->get_vmhost_datastore_imagetype_name();
@@ -318,6 +329,27 @@ sub capture {
 		return;
 	}
 	
+	notify($ERRORS{'DEBUG'}, 0, "beginning image capture:\n" . <<EOF
+image id: $image_id
+imagerevision id: $imagerevision_id
+old image name: $old_image_name
+new image name: $new_image_name
+---
+host node: $node_name
+computer: $computer_name
+---
+master image directory path: $master_image_directory_path
+master image file path: $master_image_file_path
+---
+old image type: $image_type
+datastore image type: $datastore_image_type
+---
+repository image type: $repository_image_type
+repository image directory path: $repository_image_directory_path
+repository image file path: $repository_image_file_path
+EOF
+);
+	
 	# Check the power status before proceeding
 	my $power_status = $self->power_status();
 	if (!$power_status) {
@@ -328,10 +360,6 @@ sub capture {
 		notify($ERRORS{'WARNING'}, 0, "unable to capture image on $node_name, power status of '$domain_name' domain is $power_status");
 		return;
 	}
-	
-	# Construct the new image name
-	my $new_image_name = $self->get_new_image_name();
-	$self->data->set_image_name($new_image_name);
 	
 	# Make sure the master image file doesn't already exist
 	if ($self->vmhost_os->file_exists($master_image_file_path)) {
@@ -372,8 +400,8 @@ sub capture {
 	}
 	
 	# Update the image name in the database
-	if ($image_name ne $new_image_name && !update_image_name($image_id, $imagerevision_id, $new_image_name)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to update image name in the database: $image_name --> $new_image_name");
+	if ($old_image_name ne $new_image_name && !update_image_name($image_id, $imagerevision_id, $new_image_name)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to update image name in the database: $old_image_name --> $new_image_name");
 		return;
 	}
 	
