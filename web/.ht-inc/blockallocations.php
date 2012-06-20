@@ -882,7 +882,7 @@ function createWeeklyBlockTimes($blockid, $startts, $endts, $daymask, $times) {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn createMonthlyBlockTimes($blockid, $startts, $endts, $day, $weeknum,
+/// \fn createMonthlyBlockTimes($blockid, $startts, $endts, $dayweek, $weeknum,
 ///                             $times)
 ///
 /// \param $blockid - id of block allocation
@@ -898,6 +898,36 @@ function createWeeklyBlockTimes($blockid, $startts, $endts, $daymask, $times) {
 ////////////////////////////////////////////////////////////////////////////////
 function createMonthlyBlockTimes($blockid, $startts, $endts, $dayweek, $weeknum,
                                  $times) {
+	$vals = getMonthlyBlockTimes($blockid, $startts, $endts, $dayweek, $weeknum,
+	                             $times);
+	$allvals = implode(',', $vals);
+	$query = "INSERT INTO blockTimes "
+			 .        "(blockRequestid, "
+			 .        "start, "
+			 .        "end) "
+			 . "VALUES $allvals";
+	doQuery($query, 101);
+	deleteBlockSkipDuplicates($blockid);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn getMonthlyBlockTimes($blockid, $startts, $endts, $dayweek, $weeknum,
+///                          $times)
+///
+/// \param $blockid - id of block allocation
+/// \param $startts - unix timestamp for starting time
+/// \param $endts - unix timestamp for ending time
+/// \param $dayweek - day of the week (1 to 7)
+/// \param $weeknum - week of the month (1 to 5)
+/// \param $times - array of times in HH:MM|HH:MM (start|end) format
+///
+/// \brief generates query values for creating entries in the blockTimes table
+/// for a monthly repeating block allocation
+///
+////////////////////////////////////////////////////////////////////////////////
+function getMonthlyBlockTimes($blockid, $startts, $endts, $dayweek, $weeknum,
+                              $times) {
 	$vals = array();
 	$startts += 3600; # This is a simple way to deal with DST; without it. We end
 	                  # up starting at midnight.  When we go through the day DST
@@ -926,14 +956,7 @@ function createMonthlyBlockTimes($blockid, $startts, $endts, $dayweek, $weeknum,
 			}
 		}
 	}
-	$allvals = implode(',', $vals);
-	$query = "INSERT INTO blockTimes "
-			 .        "(blockRequestid, "
-			 .        "start, "
-			 .        "end) "
-			 . "VALUES $allvals";
-	doQuery($query, 101);
-	deleteBlockSkipDuplicates($blockid);
+	return $vals;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -3085,7 +3108,18 @@ function processBlockAllocationInput() {
 			}
 		}
 		if($type == 'weekly') {
+			$validdays = 0;
+			$errmsg = '';
+			for($day = $return['startts'], $i = 0;
+			   $i < 7, $day < ($return['endts'] + SECINDAY); 
+			   $i++, $day += SECINDAY) {
+				$daynum = date('w', $day);
+				$validdays |= (1 << $daynum);
+			}
 			$days = processInputVar('days', ARG_STRING);
+			$dayscheck = processInputVar('days', ARG_NUMERIC);
+			if($days == '' && $dayscheck == '0')
+				$days = 0;
 			$return['daymask'] = 0;
 			if(! $err) {
 				foreach(explode(',', $days) as $day) {
@@ -3097,8 +3131,8 @@ function processBlockAllocationInput() {
 					$return['daymask'] |= (1 << $day);
 				}
 			}
-			if(! $err && $return['daymask'] == 0) {
-				$errmsg = "No valid days submitted.";
+			if(! $err && ($return['daymask'] & $validdays) == 0) {
+				$errmsg = "No valid days submitted for the specified date range.";
 				$err = 1;
 			}
 		}
@@ -3111,6 +3145,12 @@ function processBlockAllocationInput() {
 			}
 			if(! $err && ($return['day'] < 1 || $return['day'] > 7)) {
 				$errmsg = "Invalid day of week submitted.";
+				$err = 1;
+			}
+			$times = getMonthlyBlockTimes('', $return['startts'], $return['endts'],
+			                 $return['day'], $return['weeknum'], $return['times']);
+			if(! $err && empty($times)) {
+				$errmsg = "Specified day of month not found in date range.";
 				$err = 1;
 			}
 		}
