@@ -60,10 +60,9 @@ III. Getting Involved in the ASF VCL Community
 There are five ways to become involved in the ASF VCL community.
 
 * Join the mailing lists and participate in discussion
-  There are two mailing lists: vcl-user@incubator.apache.org and 
-  vcl-dev@incubator.apache.org. To join vcl-user, send an empty message to
-  vcl-user-subscribe@incubator.apache.org. To join vcl-dev, send an empty
-  message to vcl-dev-subscribe@incubator.apache.org.
+  There are two mailing lists: user@vcl.apache.org and dev@vcl.apache.org.
+  To join user, send an empty message to user-subscribe@vcl.apache.org.
+  To join dev, send an empty message to dev-subscribe@vcl.apache.org.
 
 * Submit bug reports and feature requests to our JIRA bug tracking system.
   See section IV below for more information on doing this.

@@ -1,13 +1,3 @@
-ASF Incubation Disclaimer: Apache VCL is an effort undergoing incubation at the
-Apache Software Foundation (ASF), sponsored by the Apache Incubator PMC.
-Incubation is required of all newly accepted projects until a further review
-indicates that the infrastructure, communications, and decision making process
-have stabilized in a manner consistent with other successful ASF projects. While
-incubation status is not necessarily a reflection of the completeness or
-stability of the code, it does indicate that the project has yet to be fully
-endorsed by the ASF.
-
-
 Please see the INSTALLATION file or the Install guide at the apache vcl
 site. (https://cwiki.apache.org/VCL/new-install.html)
 This file is only a list of requirements, which are also stated in the Install guide.

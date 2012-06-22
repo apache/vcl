@@ -1,6 +1,6 @@
 This file explains how to upgrade an existing install of Apache VCL
 to Apache VCL 2.3. It assumed that you extracted the release archive
-to /root/apache-VCL-2.3-incubating
+to /root/apache-VCL-2.3
 
 The basic steps that will be performed:
 
@@ -30,7 +30,7 @@ if necessary.
 
 This step updates the mysql schema.
 
-   cd /root/apache-VCL-2.3-incubating
+   cd /root/apache-VCL-2.3
    mysql vcl < mysql/update-vcl.sql
 
 One item of note: A new resource group is added in update-vcl.sql - 
@@ -78,7 +78,7 @@ vcl web code at /var/www/html/vcl. If you installed it elsewhere, replace
 
    b. copy the new code in place
 
-      cd /root/apache-VCL-2.3-incubating
+      cd /root/apache-VCL-2.3
       cp -r web /var/www/html/vcl
 
    c. copy your config files from the previous version:
@@ -227,7 +227,7 @@ you've added.
    b. Copy in the 2.3 code base to /usr/local, copying in should preserve any
       drivers or other files you've added.
 
-      /bin/cp -r /root/apache-VCL-2.3-incubating/managementnode/* /usr/local/vcl
+      /bin/cp -r /root/apache-VCL-2.3/managementnode/* /usr/local/vcl
 
    c. (upgrading from 2.1 only) Make changes related to vcld.conf settings
 

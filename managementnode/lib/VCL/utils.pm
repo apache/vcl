@@ -7606,7 +7606,7 @@ EOF
 		$user_info->{affiliation}{sitewwwaddress} = 'http://cwiki.apache.org/VCL';
 	}
 	if (!$user_info->{affiliation}{helpaddress}) {
-		$user_info->{affiliation}{helpaddress} = 'vcl-user@incubator.apache.org';
+		$user_info->{affiliation}{helpaddress} = 'nobody@example.com';
 	}
 	
 	#notify($ERRORS{'DEBUG'}, 0, "retrieved info for user '$user_identifier', affiliation: '$affiliation_identifier':\n" . format_data($user_info));
