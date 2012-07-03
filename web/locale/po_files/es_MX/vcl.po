@@ -1381,11 +1381,11 @@ msgstr "      <legend>Personal</legend>\n"
 
 #: userpreferences.php:101
 msgid "          <TH align=right>First Name<a href=#updateinfo>*</a>:</TH>\n"
-msgstr "          <TH align=right>Nombre<a href=#updateinfo>*</a>Ôºö</TH>\n"
+msgstr "          <TH align=right>Nombre<a href=#updateinfo>*</a>:</TH>\n"
 
 #: userpreferences.php:108
 msgid "          <TH align=right>Last Name<a href=#updateinfo>*</a>:</TH>\n"
-msgstr "          <TH align=right>Apellido<a href=#updateinfo>*</a>Ôºö</TH>\n"
+msgstr "          <TH align=right>Apellido<a href=#updateinfo>*</a>:</TH>\n"
 
 #: userpreferences.php:116
 msgid "          <TH align=right>Preferred Name:</TH>\n"
