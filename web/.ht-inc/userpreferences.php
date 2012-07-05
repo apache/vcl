@@ -356,7 +356,7 @@ function confirmUserPrefs($type) {
 		print "  </TR>\n";
 		print "  <TR>\n";
 		print _("    <TH align=right>Color Depth:</TH>\n");
-		$colordepth = array("8" => "8", "16" => "16", "24" => "24", "32" => "32 (Vista only)");
+		$colordepth = array("8" => "8", "16" => "16", "24" => "24", "32" => "32");
 		print "    <TD>" . $colordepth[$data["bpp"]] . "</TD>\n";
 		print "  </TR>\n";
 		print "  <TR>\n";
