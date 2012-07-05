@@ -511,7 +511,7 @@ function processUserPrefsInput($checks=1) {
 	$return = array();
 
 	$defaultres = $user["width"] . 'x' . $user["height"];
-	$return["preferredname"] = processInputVar("preferredname" , ARG_STRING, $user["preferredname"]);
+	$return["preferredname"] = processInputVar("preferredname" , ARG_STRING);
 	$return["resolution"] = processInputVar("resolution" , ARG_STRING, $defaultres);
 	$return["bpp"] = processInputVar("bpp" , ARG_NUMERIC, $user["bpp"]);
 	$return["audiomode"] = processInputVar("audiomode" , ARG_STRING, $user["audiomode"]);
