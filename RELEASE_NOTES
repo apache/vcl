@@ -72,11 +72,11 @@ There are five ways to become involved in the ASF VCL community.
   content. (Note to current community: We should create a page explaining
   the layout so new people will know where to add content better.)
 
-* Submit patches through the vcl-dev mailing list and via the JIRA bug
+* Submit patches through the dev mailing list and via the JIRA bug
   tracking system. Once you have become familiar with VCL, you can begin
   assisting with the development of it by picking a JIRA issue to fix or by
   adding a feature needed at your site. Then, contribute a patch of your
-  changes through the JIRA tracking system and send a message to the vcl-dev
+  changes through the JIRA tracking system and send a message to the dev
   list explaining what you have done.
 
 * Become an official committer to the project. Once you have shown that you have
@@ -86,7 +86,7 @@ There are five ways to become involved in the ASF VCL community.
   project.
 
 * If you are interested in contributing something to the project, please discuss
-  it on the vcl-dev list BEFORE starting work on it. This allows the community
+  it on the dev list BEFORE starting work on it. This allows the community
   to be involved in decisions and allows current developers to provide some
   guidance.
 
@@ -95,13 +95,13 @@ IV. How to Submit Bugs and Feature Requests
 If you find a bug, please submit a bug report to our JIRA bug tracking system at
 http://issues.apache.org/jira/browse/VCL (you will need to set up an account
 there if you haven't already done so - it's free to anyone). Also, we would
-appreciate it if you mentioned that you filed a bug on the vcl-dev list to make
+appreciate it if you mentioned that you filed a bug on the dev list to make
 sure we don't miss it.
 
 If you would like to requrest a new feature, you can also submit that in the
 same way through JIRA (just select "New Feature" or "Improvement" as the Issue
 Type). Again, it would be helpful if you mentioned that you filed a feature
-request on the vcl-dev list.
+request on the dev list.
 
 After you have created a JIRA issue, you have the option to vote on it to help
 us know how to prioritize issues. You can also "watch" the issue to see when
