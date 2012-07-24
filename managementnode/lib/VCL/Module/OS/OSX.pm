@@ -260,6 +260,10 @@ sub post_load {
 		notify($ERRORS{'WARNING'}, 0, "$computer_node_name never responded to SSH");
 		return 0;
 	}
+
+   if (!$self->os->update_public_ip_address()) {
+      $self->reservation_failed("failed to update public IP address");
+   }
 	
 	my $root_random_password = getpw();
 	if ($self->set_password("root", $root_random_password)) {

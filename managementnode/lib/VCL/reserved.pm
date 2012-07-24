@@ -107,6 +107,7 @@ sub process {
 	my $request_forimaging    = $self->data->get_request_forimaging;
 	my $image_name            = $self->data->get_image_name();
 	my $user_unityid          = $self->data->get_user_login_id();
+	my $user_uid				  = $self->data->get_user_uid();
 	my $user_standalone       = $self->data->get_user_standalone();
 	my $imagemeta_checkuser   = $self->data->get_imagemeta_checkuser();
 	my $reservation_count     = $self->data->get_reservation_count();
@@ -141,7 +142,7 @@ sub process {
 	}
 
 	notify($ERRORS{'OK'}, 0, "computer info: id=$computer_id, type=$computer_type, hostname=$nodename");
-	notify($ERRORS{'OK'}, 0, "user info: login_id id=$user_unityid, standalone=$user_standalone");
+	notify($ERRORS{'OK'}, 0, "user info: login_id id=$user_unityid, uid=$user_uid, standalone=$user_standalone");
 	notify($ERRORS{'OK'}, 0, "imagemeta checkuser set to: $imagemeta_checkuser");
 	notify($ERRORS{'OK'}, 0, "formimaging set to: $request_forimaging");
 

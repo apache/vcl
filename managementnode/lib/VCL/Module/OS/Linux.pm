@@ -241,6 +241,10 @@ sub post_load {
 		notify($ERRORS{'WARNING'}, 0, "$computer_node_name never responded to SSH");
 		return 0;
 	}
+
+	if (!$self->update_public_ip_address()) {
+   	$self->reservation_failed("failed to update public IP address");
+   }
 	
 	if ($image_os_install_type eq "kickstart"){
 		  notify($ERRORS{'OK'}, 0, "detected kickstart install on $computer_short_name, writing current_image.txt");
@@ -427,19 +431,20 @@ sub update_public_hostname {
 	else {
 		notify($ERRORS{'DEBUG'}, 0, "failed to determine registered public hostname of $computer_node_name ($public_ip_address), command: '$ipcalc_command', output:\n" . join("\n", @$ipcalc_output));
 		
-		# Attempt to run the ipcalc command on the host
-		my ($ipcalc_exit_status, $ipcalc_output) = run_ssh_command($computer_node_name, $management_node_keys, $ipcalc_command);
-		if (!defined($ipcalc_output)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to run ipcalc command on $computer_node_name to determine its public hostname, command: '$ipcalc_command'");
+		# Attempt to run the host command on the host
+		my $host_command = "host $public_ip_address"; 
+		my ($host_exit_status, $host_output) = run_ssh_command($computer_node_name, $management_node_keys, $host_command);
+		if (!defined($host_output)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to run host command on $computer_node_name to determine its public hostname, command: '$host_command'");
 			return;
 		}
 		
-		($public_hostname) = ("@$ipcalc_output" =~ /HOSTNAME=(.*)/i);
+		($public_hostname) = $5 if ("@$host_output" =~ /([-\.0-9a-z]*)\s([a-z]*)\s([a-z]*)\s([a-z]*)\s(.*)\.$/);
 		if ($public_hostname) {
-			notify($ERRORS{'DEBUG'}, 0, "determined registered public hostname of $computer_node_name ($public_ip_address) by running ipcalc on $computer_node_name: '$public_hostname'");
+			notify($ERRORS{'DEBUG'}, 0, "determined registered public hostname of $computer_node_name ($public_ip_address) by running host on $computer_node_name: '$public_hostname'");
 		}
 		else {
-			notify($ERRORS{'WARNING'}, 0, "failed to determine registered public hostname of $computer_node_name ($public_ip_address) by running ipcalc on either the management node or $computer_node_name, command: '$ipcalc_command', output:\n" . join("\n", @$ipcalc_output));
+			notify($ERRORS{'WARNING'}, 0, "failed to determine registered public hostname of $computer_node_name ($public_ip_address) by running host on either the management node or $computer_node_name, command: '$host_command', output:\n" . join("\n", @$host_output));
 			return;
 		}
 	}
@@ -2846,11 +2851,14 @@ sub create_user {
 	}
 
 	my $useradd_string;
-	if(defined($user_uid) && $user_uid != 0){
-		$useradd_string = "/usr/sbin/useradd -u $user_uid -d /home/$username -m $username -g vcl";
-	}
-	else{
+	#if(defined($user_uid) && $user_uid != 0){
+	#	$useradd_string = "/usr/sbin/useradd -u $user_uid -d /home/$username -m $username -g vcl";
+	#}
+	if($user_standalone){
 		$useradd_string = "/usr/sbin/useradd -d /home/$username -m $username -g vcl";
+	}
+	else {
+		$useradd_string = "/usr/sbin/useradd -u $user_uid -d /home/$username -m $username -g vcl";
 	}
 
 

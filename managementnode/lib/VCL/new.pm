@@ -929,13 +929,14 @@ sub reserve_computer {
 	}
 
 	if ($computer_type =~ /blade|virtualmachine/) {
-		
-		if (!$self->os->update_public_ip_address()) {
-			$self->reservation_failed("failed to update public IP address");
-		}
-		
+	
+		#Confirm public IP address
+		if($self->confirm_public_ip_address()) {
+
+		}	
+			
 		# Update the $computer_ip_address varible in case the IP address was different than what was originally in the database
-		$computer_ip_address = $self->data->get_computer_ip_address();
+		#$computer_ip_address = $self->data->get_computer_ip_address();
 		
 		insertloadlog($reservation_id, $computer_id, "info", "node ready adding user account");
 		
@@ -1261,6 +1262,42 @@ sub wait_for_child_reservations {
 	return 0;
 
 } ## end sub wait_for_child_reservations
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 confirm_public_ip_address
+
+ Parameters  :
+ Returns     :
+ Description :
+
+=cut
+
+sub confirm_public_ip_address {
+	my $self = shift;
+
+	my $computer_short_name             = $self->data->get_computer_short_name();
+	my $public_ip_address;
+
+	#Try to get public IP address from OS module
+	if(!$self->os->can("get_public_ip_address")) {
+		 notify($ERRORS{'WARNING'}, 0, "unable to retrieve public IP address from $computer_short_name, OS module " . ref($self) . " does not implement a 'get_public_ip_address' subroutine");
+         return;
+	}
+	elsif ($public_ip_address = $self->os->get_public_ip_address()) {
+         notify($ERRORS{'DEBUG'}, 0, "retrieved public IP address from $computer_short_name using the OS module: $public_ip_address");
+   }
+   else {
+      notify($ERRORS{'WARNING'}, 0, "failed to retrieve dynamic public IP address from $computer_short_name");
+		#It might not exist or got droppred
+		if (!$self->os->update_public_ip_address()) {
+          $self->reservation_failed("failed to update public IP address");
+       }
+   }
+	
+	return 1;
+
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 

@@ -646,6 +646,15 @@ sub post_load {
 
 =item *
 
+	Collect or Set the public IP address
+=cut
+
+   if (!$self->update_public_ip_address()) {
+      $self->reservation_failed("failed to update public IP address");
+   }
+
+=item *
+
  Set root as the owner of /home/root
 
 =cut
