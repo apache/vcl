@@ -10182,7 +10182,7 @@ EOF
 		}
 	}
 
-	notify($ERRORS{'DEBUG'}, 0, "retrieved connect method info:\n" . format_data($connect_method_info));
+	#notify($ERRORS{'DEBUG'}, 0, "retrieved connect method info:\n" . format_data($connect_method_info));
 	return $connect_method_info;
 }
 

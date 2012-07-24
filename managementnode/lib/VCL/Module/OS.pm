@@ -2447,7 +2447,7 @@ sub process_connect_methods {
 	
 	
 	CONNECT_METHOD: for my $connect_method_id (sort keys %{$connect_method_info} ) {
-		notify($ERRORS{'DEBUG'}, 0, "processing connect method:\n" . format_data($connect_method_info->{$connect_method_id}));
+		#notify($ERRORS{'DEBUG'}, 0, "processing connect method:\n" . format_data($connect_method_info->{$connect_method_id}));
 		
 		my $name            = $connect_method_info->{$connect_method_id}{name};
 		my $description     = $connect_method_info->{$connect_method_id}{description};

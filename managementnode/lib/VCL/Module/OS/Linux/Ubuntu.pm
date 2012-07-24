@@ -128,146 +128,6 @@ sub clean_iptables {
 
 }
 
-#sub capture_start {
-#	my $self = shift;
-#	if (ref($self) !~ /ubuntu/i) {
-#		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-#		return 0;
-#	}
-#
-#	my $management_node_keys = $self->data->get_management_node_keys();
-#	my $image_name           = $self->data->get_image_name();
-#	my $computer_short_name  = $self->data->get_computer_short_name();
-#	my $computer_node_name   = $self->data->get_computer_node_name();
-#
-#	notify($ERRORS{'OK'}, 0, "initiating Ubuntu image capture: $image_name on $computer_short_name");
-#
-#	notify($ERRORS{'OK'}, 0, "initating reboot for Ubuntu imaging sequence");
-#	run_ssh_command($computer_node_name, $management_node_keys, "/sbin/shutdown -r now", "root");
-#	notify($ERRORS{'OK'}, 0, "sleeping for 90 seconds while machine shuts down and reboots");
-#	sleep 90;
-#
-#	notify($ERRORS{'OK'}, 0, "returning 1");
-#	return 1;
-#} ## end sub capture_start
-
-
-#/////////////////////////////////////////////////////////////////////////////
-
-sub reserve {
-	my $self = shift;
-	if (ref($self) !~ /ubuntu/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return 0;
-	}
-
-	notify($ERRORS{'DEBUG'}, 0, "Enterered reserve() in the Ubuntu OS module");
-
-	my $user_name            = $self->data->get_user_login_id();
-	my $computer_node_name   = $self->data->get_computer_node_name();
-	my $image_identity       = $self->data->get_image_identity;
-	my $reservation_password = $self->data->get_reservation_password();
-	my $imagemeta_rootaccess = $self->data->get_imagemeta_rootaccess();
-
-	my $useradd_string = "/usr/sbin/useradd -d /home/$user_name -m -g admin $user_name";
-
-	my @sshcmd = run_ssh_command($computer_node_name, $image_identity, $useradd_string, "root");
-	foreach my $l (@{$sshcmd[1]}) {
-		if ($l =~ /user $user_name exists/) {
-			notify($ERRORS{'OK'}, 0, "detected user already has account");
-		}
-
-	}
-
-	if(!$self->changepasswd($user_name, $reservation_password) ) {
-		notify($ERRORS{'WARNING'}, 0, "Unable to change or set the password for $user_name" );
-		return 0;
-	}
-
-	#my $encrypted_pass;
-	#undef @sshcmd;
-	#@sshcmd = run_ssh_command($computer_node_name, $image_identity, "/usr/bin/mkpasswd $reservation_password", "root");
-	#foreach my $l (@{$sshcmd[1]}) {
-	#	$encrypted_pass = $l;
-	#	notify($ERRORS{'DEBUG'}, 0, "Found the encrypted password as $encrypted_pass");
-	#}
-
-	#undef @sshcmd;
-	#@sshcmd = run_ssh_command($computer_node_name, $image_identity, "usermod -p $encrypted_pass $user_name", "root");
-	#foreach my $l (@{$sshcmd[1]}) {
-	#	notify($ERRORS{'DEBUG'}, 0, "Updated the user password .... L is $l");
-	#}
-
-	#Check image profile for allowed root access
-	if ($imagemeta_rootaccess) {
-		# Add to sudoers file
-		#clear user from sudoers file
-		my $clear_cmd = "sed -i -e \"/^$user_name .*/d\" /etc/sudoers";
-		if (run_ssh_command($computer_node_name, $image_identity, $clear_cmd, "root")) {
-			notify($ERRORS{'DEBUG'}, 0, "cleared $user_name from /etc/sudoers");
-		}
-		else {
-			notify($ERRORS{'CRITICAL'}, 0, "failed to clear $user_name from /etc/sudoers");
-		}
-		my $sudoers_cmd = "echo \"$user_name ALL= NOPASSWD: ALL\" >> /etc/sudoers";
-		if (run_ssh_command($computer_node_name, $image_identity, $sudoers_cmd, "root")) {
-			notify($ERRORS{'DEBUG'}, 0, "added $user_name to /etc/sudoers");
-		}
-		else {
-			notify($ERRORS{'CRITICAL'}, 0, "failed to add $user_name to /etc/sudoers");
-		}
-	} ## end if ($imagemeta_rootaccess)
-
-
-	return 1;
-} ## end sub reserve
-
-sub grant_access {
-	my $self = shift;
-	if (ref($self) !~ /ubuntu/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return 0;
-	}
-
-	my $user               = $self->data->get_user_login_id();
-	my $computer_node_name = $self->data->get_computer_node_name();
-	my $identity           = $self->data->get_image_identity;
-
-	notify($ERRORS{'OK'}, 0, "In grant_access routine $user,$computer_node_name");
-	my @sshcmd;
-	my $clear_extsshd = "sed -i -e \"/^AllowUsers .*/d\" /etc/ssh/external_sshd_config";
-	if (run_ssh_command($computer_node_name, $identity, $clear_extsshd, "root")) {
-		notify($ERRORS{'DEBUG'}, 0, "cleared AllowUsers directive from external_sshd_config");
-	}
-	else {
-		notify($ERRORS{'CRITICAL'}, 0, "failed to add AllowUsers $user to external_sshd_config");
-	}
-
-	my $cmd = "echo \"AllowUsers $user\" >> /etc/ssh/external_sshd_config";
-	if (run_ssh_command($computer_node_name, $identity, $cmd, "root")) {
-		notify($ERRORS{'DEBUG'}, 0, "added AllowUsers $user to external_sshd_config");
-	}
-	else {
-		notify($ERRORS{'CRITICAL'}, 0, "failed to add AllowUsers $user to external_sshd_config");
-		return 0;
-	}
-	undef @sshcmd;
-	@sshcmd = run_ssh_command($computer_node_name, $identity, "/etc/init.d/ext_sshd restart", "root");
-
-	foreach my $l (@{$sshcmd[1]}) {
-		if ($l =~ /Stopping ext_sshd:/i) {
-			#notify($ERRORS{'OK'},0,"stopping sshd on $computer_node_name ");
-		}
-		if ($l =~ /Starting ext_sshd:[  OK  ]/i) {
-			notify($ERRORS{'OK'}, 0, "ext_sshd on $computer_node_name started");
-		}
-	}    #foreach
-	notify($ERRORS{'OK'}, 0, "started ext_sshd on $computer_node_name");
-	return 1;
-} ## end sub grant_access
-
-#/////////////////////////////////////////////////////////////////////////////
-
 =head2 clean_known_files
 
  Parameters  : 
@@ -417,12 +277,17 @@ sub changepasswd {
       return 0;
    }
 
-   my $management_node_keys = $self->data->get_management_node_keys();
-	my $computer_short_name = $self->data->get_computer_short_name();
-
    # change the privileged account passwords on the blade images
+	my $computer_short_name = shift;
    my $account = shift;
    my $passwd = shift;
+
+   my $management_node_keys = $self->data->get_management_node_keys();
+	
+	if($computer_short_name) {
+		$computer_short_name = $self->data->get_computer_short_name();
+	}
+
 
 	if(!defined($account)) {
 		$account = $self->data->get_user_login_id();
@@ -438,9 +303,9 @@ sub changepasswd {
       notify($ERRORS{'WARNING'}, 0, "failed to run command to determine if file or directory exists on $computer_short_name:\ncommand: '$command'");
       return;
    }
-   elsif (grep(/no such file/i, @$output)) {
-      #notify($ERRORS{'DEBUG'}, 0, "file or directory does not exist on $computer_short_name: '$path'");
-      return 0;
+   elsif (grep(/token manipulation error/i, @$output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to change password fro $account on $computer_short_name:\ncommand: '$command'\nexit status: $exit_status, output:\n" . join("\n", @$output));
+      return;
    }
    elsif (grep(/stat: /i, @$output)) {
       notify($ERRORS{'WARNING'}, 0, "failed to determine if file or directory exists on $computer_short_name:\ncommand: '$command'\nexit status: $exit_status, output:\n" . join("\n", @$output));
@@ -942,7 +807,415 @@ sub disable_firewall_port {
 
 }
 
+=head2 get_firewall_configuration
 
+ Parameters  : none
+ Returns     : hash reference
+ Description : Retrieves information about the open firewall ports on the
+               computer and constructs a hash. The hash keys are protocol names.
+               Each protocol key contains a hash reference. The keys are either
+               port numbers or ICMP types.
+               Example:
+               
+                  "ICMP" => {
+                    8 => {
+                      "description" => "Allow inbound echo request"
+                    }
+                  },
+                  "TCP" => {
+                    22 => {
+                      "interface_names" => [
+                        "Local Area Connection 3"
+                      ],
+                      "name" => "sshd"
+                    },
+                    3389 => {
+                      "name" => "Remote Desktop",
+                      "scope" => "192.168.53.54/255.255.255.255"
+                    },
+
+=cut
+
+sub get_firewall_configuration {
+   my $self = shift;
+   if (ref($self) !~ /linux/i) {
+      notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+      return;
+   }
+
+   my $computer_node_name = $self->data->get_computer_node_name();   
+   my $firewall_configuration = {};
+
+   # Check to see if this distro has ufw
+   # If not return 1 so it does not fail
+   if (!($self->service_exists("ufw"))) {
+      notify($ERRORS{'WARNING'}, 0, "iptables does not exist on this OS");
+      return 1;
+   }
+   
+   my $port_command = "ufw status numbered";
+   my ($iptables_exit_status, $output_iptables) = $self->execute($port_command);
+   if (!defined($output_iptables)) {
+      notify($ERRORS{'WARNING'}, 0, "failed to run command to show open firewall ports on $computer_node_name");
+      return;
+   }
+
+	my $status;
+	my $chain = "INPUT";
+   my $previous_protocol;
+   my $previous_port;
+
+   for my $line (@$output_iptables) {
+      if ($line =~ /^Status: (inactive|active)/ig) {
+         $status = $1;
+         notify($ERRORS{'DEBUG'}, 0, "output Chain = $chain");
+			if ($status =~ /inactive/i) {
+				return;	
+			}
+      }    
+      elsif($line =~ /^(\d+)\s+([A-Z]*)\s+([a-z]*)\s+(--)\s+(\S+)\s+(\S+)\s+(.*)/ig ) {
+     
+         my $num = $1;
+         my $target = $2;
+         my $protocol = $3;
+         my $scope = $5;
+         my $destination =$6; 
+         my $port_string = $7 if (defined($7));
+         my $port = '';  
+         my $name;
+     
+     
+         if (defined($port_string) && ($port_string =~ /([\s(a-zA-Z)]*)(dpt:)(\d+)/ig )){
+            $port = $3;  
+            notify($ERRORS{'DEBUG'}, 0, "output rule: $num, $target, $protocol, $scope, $destination, $port ");
+         }    
+
+         if (!$port) {
+            $port = "any";
+         }    
+     
+         my $services_cmd = "cat /etc/services";
+         my ($services_status, $service_output) = $self->execute($services_cmd);
+         if (!defined($service_output)) {
+            notify($ERRORS{'DEBUG'}, 0, "failed to get /etc/services");
+         }
+         else {
+            for my $sline (@$service_output) {
+               if ( $sline =~ /(^[_-a-zA-Z1-9]+)\s+($port\/$protocol)\s+(.*) /ig ){
+                  $name = $1;
+               }
+            }
+
+         }
+
+         $name = $port if (!$name);
+
+         $firewall_configuration->{$chain}->{$num}{$protocol}{$port}{name}= $name;
+         $firewall_configuration->{$chain}->{$num}{$protocol}{$port}{number}= $num;
+         $firewall_configuration->{$chain}->{$num}{$protocol}{$port}{scope}= $scope;
+         $firewall_configuration->{$chain}->{$num}{$protocol}{$port}{target}= $target;
+         $firewall_configuration->{$chain}->{$num}{$protocol}{$port}{destination}= $destination;
+
+
+         if (!defined($previous_protocol) ||
+             !defined($previous_port) ||
+             !defined($firewall_configuration->{$previous_protocol}) ||
+             !defined($firewall_configuration->{$previous_protocol}{$previous_port})
+             ) {
+            next;
+         }
+         elsif ($scope !~ /0.0.0.0\/0/) {
+            $firewall_configuration->{$previous_protocol}{$previous_port}{scope} = $scope;
+         }
+      }
+   }
+
+   notify($ERRORS{'DEBUG'}, 0, "retrieved firewall configuration from $computer_node_name:\n" . format_data($firewall_configuration));
+   return $firewall_configuration;
+	
+
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 set_static_public_address
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Configures the public interface with a static IP address.
+
+=cut
+
+sub set_static_public_address {
+   my $self = shift;
+   if (ref($self) !~ /ubuntu/i) {
+      notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+      return 0;
+   }
+
+   my $computer_name = $self->data->get_computer_short_name();
+	my $request_id            = $self->data->get_request_id();
+	my $server_request_id     = $self->data->get_server_request_id();
+	my $management_node_keys     = $self->data->get_management_node_keys();
+	
+  	# Make sure public IP configuration is static or this is a server request
+   my $ip_configuration = $self->data->get_management_node_public_ip_configuration();
+   
+	if ($ip_configuration !~ /static/i || $server_request_id ) {
+      notify($ERRORS{'WARNING'}, 0, "static public address can only be set if IP configuration is static or through a server reservation, current value: $ip_configuration");
+      return;
+   }
+
+   # Get the IP configuration
+   my $interface_name = $self->get_public_interface_name() || '<undefined>';
+   my $ip_address = $self->data->get_computer_ip_address() || '<undefined>';
+   my $subnet_mask = $self->data->get_management_node_public_subnet_mask() || '<undefined>';
+   my $default_gateway = $self->data->get_management_node_public_default_gateway() || '<undefined>';
+   my @dns_servers = $self->data->get_management_node_public_dns_servers();
+
+   # Make sure required info was retrieved
+   if ("$interface_name $ip_address $subnet_mask $default_gateway" =~ /undefined/) {
+      notify($ERRORS{'WARNING'}, 0, "failed to retrieve required network configuration for $computer_name");
+      return;
+   }
+   else {
+      notify($ERRORS{'OK'}, 0, "attempting to set static public IP address on $computer_name");
+   }
+
+   # Assemble the ifcfg file path
+   my $network_interfaces_file = "/etc/network/interfaces";
+	my $network_interfaces_file_default = "/etc/network/interfaces";
+   notify($ERRORS{'DEBUG'}, 0, "interface file path: $network_interfaces_file");
+	
+	if($self->execute("cp network_interfaces_file /etc/network/interfaces_orig")) {
+		notify($ERRORS{'OK'}, 0, "Created backup of $network_interfaces_file");
+	}
+		
+	#Get interfaces file
+	my $tmpfile = "/tmp/$request_id.interfaces";
+   if (run_scp_command("$computer_name:$network_interfaces_file", $tmpfile, $management_node_keys)) {
+      notify($ERRORS{'DEBUG'}, 0, "copied sshd init script from $computer_name for local processing");
+   }
+   else{
+      notify($ERRORS{'WARNING'}, 0, "failed to copied ssh init script from $computer_name for local processing");
+      return 0;
+   }
+
+	my @interfaces = read_file_to_array($tmpfile);
+	#Build new interfaces file
+	my @new_interfaces_file;
+
+	foreach my $l (@interfaces) {
+		push(@new_interfaces_file, $l) if($l =~ /^(#.*)/ );
+		push(@new_interfaces_file, $l) if($l =~ /^auto lo/);
+		push(@new_interfaces_file, $l) if($l =~ /^\n$/);
+
+		if($l =~ /^iface/) {
+			push(@new_interfaces_file, $l) if($l !~ /$interface_name/ );
+		}	
+	
+		if($l =~ /^iface $interface_name/) {
+			push(@new_interfaces_file, "iface $interface_name inet static\n");
+			push(@new_interfaces_file, "address $ip_address\n");
+			push(@new_interfaces_file, "netmask $subnet_mask\n");
+			push(@new_interfaces_file, "gateway $default_gateway\n");
+		}
+	
+	}
+	
+	notify($ERRORS{'OK'}, 0, "output:\n" . format_data(@new_interfaces_file));
+	#Clear temp file
+	unlink($tmpfile);
+	#Write array to file	
+	if(open(FILE, ">$tmpfile")){
+      print FILE @new_interfaces_file;
+      close FILE;
+   }
+
+   #copy temp file to node
+   if (run_scp_command($tmpfile, "$computer_name:/etc/network/interfaces", $management_node_keys)) {
+      notify($ERRORS{'DEBUG'}, 0, "copied $tmpfile to $computer_name:/etc/network/interfaces");
+   }
+   else{
+      notify($ERRORS{'WARNING'}, 0, "failed to copied $tmpfile to $computer_name:/etc/network/interfaces");
+      return 0;
+   }
+   unlink($tmpfile);
+	
+
+   # Restart the interface
+   if (!$self->restart_network_interface($interface_name)) {
+      notify($ERRORS{'WARNING'}, 0, "failed to restart public interface $interface_name on $computer_name");
+      return;
+   }
+
+   # Delete existing default route
+   my $route_del_command = "/sbin/route del default";
+   my ($route_del_exit_status, $route_del_output) = $self->execute($route_del_command);
+   if (!defined($route_del_output)) {
+      notify($ERRORS{'WARNING'}, 0, "failed to run command to delete the existing default route on $computer_name: '$route_del_command'");
+      return;
+   }
+   elsif (grep(/No such process/i, @$route_del_output)) {
+      notify($ERRORS{'DEBUG'}, 0, "existing default route is not set");
+   }
+   elsif ($route_del_exit_status) {
+      notify($ERRORS{'WARNING'}, 0, "failed to delete existing default route on $computer_name, exit status: $route_del_exit_status, command: '$route_del_command', output:\n" . join("\n", @$route_del_output));
+      return;
+   }
+   else {
+      notify($ERRORS{'DEBUG'}, 0, "deleted existing default route on $computer_name, output:\n" . join("\n", @$route_del_output));
+   }
+
+   # Set default route
+   my $route_add_command = "/sbin/route add default gw $default_gateway metric 0 $interface_name 2>&1 && /sbin/route -n";
+   my ($route_add_exit_status, $route_add_output) = $self->execute($route_add_command);
+   if (!defined($route_add_output)) {
+      notify($ERRORS{'WARNING'}, 0, "failed to run command to add default route to $default_gateway on public interface $interface_name on $computer_name: '$route_add_command'");
+      return;
+   }
+   elsif ($route_add_exit_status) {
+      notify($ERRORS{'WARNING'}, 0, "failed to add default route to $default_gateway on public interface $interface_name on $computer_name, exit status: $route_add_exit_status, command: '$route_add_command', output:\n" . join("\n", @$route_add_output));
+      return;
+   }
+   else {
+      notify($ERRORS{'DEBUG'}, 0, "added default route to $default_gateway on public interface $interface_name on $computer_name, output:\n" . format_data($route_add_output));
+   }
+
+   # Remove existing ListenAddress lines using sed
+   # Add ListenAddress line to the end of the file
+   my $ext_sshd_command;
+   $ext_sshd_command .= "sed -i -e \"/ListenAddress .*/d \" /etc/ssh/external_sshd_config 2>&1";
+   $ext_sshd_command .= " && echo \"ListenAddress $ip_address\" >> /etc/ssh/external_sshd_config";
+   $ext_sshd_command .= " && tail -n1 /etc/ssh/external_sshd_config";
+   my ($ext_sshd_exit_status, $ext_sshd_output) = $self->execute($ext_sshd_command);
+   if (!defined($ext_sshd_output)) {
+      notify($ERRORS{'WARNING'}, 0, "failed to run command to update ListenAddress line in /etc/ssh/external_sshd_config on $computer_name: '$ext_sshd_command'");
+      return;
+   }
+   elsif ($ext_sshd_exit_status) {
+      notify($ERRORS{'WARNING'}, 0, "failed to update ListenAddress line in /etc/ssh/external_sshd_config on $computer_name, exit status: $ext_sshd_exit_status\ncommand:\n'$ext_sshd_command'\noutput:\n" . join("\n", @$ext_sshd_output));
+      return;
+   }
+   else {
+      notify($ERRORS{'DEBUG'}, 0, "updated ListenAddress line in /etc/ssh/external_sshd_config on $computer_name, output:\n" . join("\n", @$ext_sshd_output));
+   }
+
+   # Update resolv.conf if DNS server address is configured for the management node
+   my $resolv_conf_path = "/etc/resolv.conf";
+   if (@dns_servers) {
+      # Get the resolve.conf contents
+      my $cat_resolve_command = "cat $resolv_conf_path";
+      my ($cat_resolve_exit_status, $cat_resolve_output) = $self->execute($cat_resolve_command);
+      if (!defined($cat_resolve_output)) {
+         notify($ERRORS{'WARNING'}, 0, "failed to run command to retrieve existing $resolv_conf_path contents from $computer_name");
+         return;
+      }
+      elsif ($cat_resolve_exit_status || grep(/^(bash:|cat:)/, @$cat_resolve_output)) {
+         notify($ERRORS{'WARNING'}, 0, "failed to retrieve existing $resolv_conf_path contents from $computer_name, exit status: $cat_resolve_exit_status, command: '$cat_resolve_command', output:\n" . join("\n", @$cat_resolve_output));
+         return;
+      }
+      else {
+         notify($ERRORS{'DEBUG'}, 0, "retrieved existing $resolv_conf_path contents from $computer_name:\n" . join("\n", @$cat_resolve_output));
+      }
+
+      # Remove lines containing nameserver
+      my @resolv_conf_lines = grep(!/nameserver/i, @$cat_resolve_output);
+
+      # Add a nameserver line for each configured DNS server
+      for my $dns_server_address (@dns_servers) {
+         push @resolv_conf_lines, "nameserver $dns_server_address";
+      }
+
+      # Remove newlines for consistency
+      map { chomp $_ } @resolv_conf_lines;
+
+      # Assemble the lines into an array
+      my $resolv_conf_contents = join("\n", @resolv_conf_lines);
+
+      # Echo the updated contents to resolv.conf
+      my $echo_resolve_command = "echo \"$resolv_conf_contents\" > $resolv_conf_path 2>&1 && cat $resolv_conf_path";
+      my ($echo_resolve_exit_status, $echo_resolve_output) = $self->execute($echo_resolve_command);
+      if (!defined($echo_resolve_output)) {
+         notify($ERRORS{'WARNING'}, 0, "failed to run command to update $resolv_conf_path on $computer_name:\n$echo_resolve_command");
+         return;
+      }
+      elsif ($echo_resolve_exit_status) {
+         notify($ERRORS{'WARNING'}, 0, "failed to update $resolv_conf_path on $computer_name, exit status: $echo_resolve_exit_status\ncommand:\n$echo_resolve_command\noutput:\n" . join("\n", @$echo_resolve_output));
+         return;
+      }
+      else {
+         notify($ERRORS{'DEBUG'}, 0, "updated $resolv_conf_path on $computer_name:\n" . join("\n", @$echo_resolve_output));
+      }
+   }
+   else {
+      notify($ERRORS{'DEBUG'}, 0, "$resolv_conf_path not updated  on $computer_name because DNS server address is not configured for the management node");
+   }
+
+   notify($ERRORS{'OK'}, 0, "successfully set static public IP address on $computer_name");
+   return 1;
+
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 restart_network_interface
+
+ Parameters  : $interface_name
+ Returns     :
+ Description : Calls ifdown and then ifup on the network interface.
+
+=cut
+
+sub restart_network_interface {
+   my $self = shift;
+   if (ref($self) !~ /linux/i) {
+      notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+      return 0;
+   }
+  
+   my $interface_name = shift;
+   if (!$interface_name) {
+      notify($ERRORS{'WARNING'}, 0, "unable to restart network interface, interface name argument was not supplied");
+      return;
+   }
+  
+   my $computer_name = $self->data->get_computer_short_name();
+  
+   # Restart the interface
+   notify($ERRORS{'DEBUG'}, 0, "attempting to restart network interface $interface_name on $computer_name");
+   my $interface_restart_command = "/sbin/ifdown $interface_name ; /sbin/ifup $interface_name";
+   my ($interface_restart_exit_status, $interface_restart_output) = $self->execute($interface_restart_command);
+   if (!defined($interface_restart_output)) {
+      notify($ERRORS{'WARNING'}, 0, "failed to run command to restart interface $interface_name on $computer_name: '$interface_restart_command'");
+      return;
+   }
+   elsif ($interface_restart_exit_status) {
+      notify($ERRORS{'WARNING'}, 0, "failed to restart network interface $interface_name on $computer_name, exit status: $interface_restart_exit_status, command: '$interface_restart_command', output:\n" . join("\n", @$interface_restart_output));
+      return;
+   }
+   else {
+      notify($ERRORS{'DEBUG'}, 0, "restarted network interface $interface_name on $computer_name");
+   }
+  
+   return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 activate_interfaces
+
+ Parameters  : 
+ Returns     :
+ Description : 
+
+=cut
+
+sub activate_interfaces {
+	return 1;
+
+}
+	
 1;
 __END__
 
