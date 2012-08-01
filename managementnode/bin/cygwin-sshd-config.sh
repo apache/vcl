@@ -355,6 +355,7 @@ echo Killing Cygwin processes in order to run rebaseall
 taskkill.exe /F /FI "IMAGENAME eq cyg*" 2>NUL
 taskkill.exe /F /FI "IMAGENAME eq bash*" 2>NUL
 taskkill.exe /F /FI "IMAGENAME eq ssh*" 2>NUL
+taskkill.exe /F /FI "IMAGENAME eq mintty*" 2>NUL
 echo.
 
 echo Waiting 3 seconds for processes to die
@@ -383,6 +384,6 @@ EOF
 ) > $REBASEALL_PATH_CYGWIN
 
 echo Calling $REBASEALL_PATH_DOS
-/cygdrive/C/Windows/System32/cmd.exe /k "$REBASEALL_PATH_DOS"
+/cygdrive/C/Windows/System32/cmd.exe /k start "$REBASEALL_PATH_DOS"
 
 exit 0
