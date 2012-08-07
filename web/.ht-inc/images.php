@@ -1137,11 +1137,12 @@ function editOrAddImage($state) {
 	print "   </div>\n";
 	print "</div>\n";
 
-	if($state)
-		return;
-	print "<div id=revisiondiv>\n";
-	print getRevisionHTML($data['imageid']);
-	print "</div>\n";
+    if(!$state){
+        print "<div id=revisiondiv>\n";
+        print getRevisionHTML($data['imageid']);
+        print "</div>\n";
+    }
+    print "</DIV>\n";
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1935,6 +1936,7 @@ function confirmEditOrAddImage($state) {
 	print "    </TD>\n";
 	print "  </TR>\n";
 	print "</TABLE>\n";
+    print "</DIV>\n";
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -2652,6 +2654,7 @@ function confirmDeleteImage() {
 	print "    </TD>\n";
 	print "  </TR>\n";
 	print "</TABLE>\n";
+    print "</DIV>\n";
 }
 
 ////////////////////////////////////////////////////////////////////////////////

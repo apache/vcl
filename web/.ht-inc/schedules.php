@@ -365,6 +365,7 @@ function confirmEditOrAddSchedule($state) {
 	print "    </TD>\n";
 	print "  </TR>\n";
 	print "</TABLE>\n";
+    print "</DIV>\n";
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -495,6 +496,7 @@ function confirmDeleteSchedule() {
 	print "    </TD>\n";
 	print "  </TR>\n";
 	print "</TABLE>\n";
+    print "</DIV>\n";
 }
 
 ////////////////////////////////////////////////////////////////////////////////

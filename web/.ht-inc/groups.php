@@ -833,8 +833,10 @@ function editOrAddGroup($state) {
 		print "</TABLE>\n";
 	}
 
-	if($data["type"] != "user")
-		return;
+    if($data["type"] != "user"){
+        print "</DIV>\n";
+        return;
+    }
 	if($editusergroup) {
 		$newuser = processInputVar("newuser", ARG_STRING);
 		print "<H3>Group Membership</H3>\n";
@@ -890,6 +892,7 @@ function editOrAddGroup($state) {
 		}
 		print "</TABLE>\n";
 	}
+    print "</DIV>\n";
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1314,6 +1317,7 @@ function confirmEditOrAddGroup($state) {
 	print "    </TD>\n";
 	print "  </TR>\n";
 	print "</TABLE>\n";
+    print "</DIV>\n";
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1490,6 +1494,7 @@ function confirmDeleteGroup() {
 	print "    </TD>\n";
 	print "  </TR>\n";
 	print "</TABLE>\n";
+    print "</DIV>\n";
 }
 
 ////////////////////////////////////////////////////////////////////////////////
