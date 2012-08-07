@@ -722,6 +722,11 @@ sub _automethod : Automethod {
 		$mode            = $1;
 		$data_identifier = $2;
 	}
+	elsif ($method_name eq 'mn_os') {
+		# Allow $self->mn_os to be called from this DataStructure object
+		# Return a code reference to mn_os subroutine
+		return $self->can("VCL::Module::mn_os");
+	}
 	else {
 		notify($ERRORS{'WARNING'}, 0, "illegal subroutine name: $method_name");
 		return sub { };
@@ -1628,25 +1633,17 @@ sub get_computer_private_ip_address {
 	}
 	
 	notify($ERRORS{'DEBUG'}, 0, "attempting to retrieve private IP address for computer: $computer_name");
-
-	# Retrieve the contents of /etc/hosts using cat
-	my ($exit_status, $output) = run_command('cat /etc/hosts', 1);
-	if (defined $exit_status && $exit_status == 0) {
-		notify($ERRORS{'DEBUG'}, 0, "retrieved contents of /etc/hosts on this management node, contains " . scalar @$output . " lines");
-	}
-	elsif (defined $exit_status) {
-		notify($ERRORS{'WARNING'}, 0, "failed to cat /etc/hosts on this management node, exit status: $exit_status, output:\n" . join("\n", @$output));
-		return;
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to run command to cat /etc/hosts on this management node");
+	
+	my @hosts_lines = $self->mn_os->get_file_contents('/etc/hosts');
+	if (!@hosts_lines) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve contents of /etc/hosts on this management node");
 		return;
 	}
 	
 	# Find lines containing the computer name followed by a space or period
 	my %matching_computer_ip_addresses;
 	
-	for my $line (@$output) {
+	for my $line (@hosts_lines) {
 		# Ignore commented lines
 		next if ($line =~ /^\s*#/);
 		
