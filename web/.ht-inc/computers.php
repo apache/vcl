@@ -1443,6 +1443,7 @@ function computerAddMaintenanceNote() {
 	print "    </FORM>\n";
 	print "  </TR>\n";
 	print "</TABLE>\n";
+    print "</DIV>\n";
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1681,6 +1682,7 @@ function confirmDeleteComputer() {
 	print "    </TD>\n";
 	print "  </TR>\n";
 	print "</TABLE>\n";
+    print "</DIV>\n";
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1980,6 +1982,7 @@ function bulkAddComputer() {
 	print "    </TD>\n";
 	print "  </TR>\n";
 	print "</TABLE>\n";
+    print "</DIV>\n";
 }
 
 ////////////////////////////////////////////////////////////////////////////////

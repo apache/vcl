@@ -486,6 +486,7 @@ function editOrAddMgmtnode($state) {
 	print "    </TD>\n";
 	print "  </TR>\n";
 	print "</TABLE>\n";
+    print "</DIV>\n";
 	print "<div id=helpbox onmouseover=\"blockClear();\" onmouseout=\"clearHelpbox2(0);\"></div>\n";
 
 	# tooltips
@@ -712,6 +713,7 @@ function confirmEditOrAddMgmtnode($state) {
 	print "    </TD>\n";
 	print "  </TR>\n";
 	print "</TABLE>\n";
+    print "</DIV>\n";
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -788,6 +790,7 @@ function confirmDeleteMgmtnode() {
 	print "    </TD>\n";
 	print "  </TR>\n";
 	print "</TABLE>\n";
+    print "</DIV>\n";
 }
 
 ////////////////////////////////////////////////////////////////////////////////
