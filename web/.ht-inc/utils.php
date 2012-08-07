@@ -164,12 +164,12 @@ function initGlobals() {
 					$skin = 'example2';
 					break;
 				default:
-					$skin = 'default';
+					$skin = DEFAULTTHEME;
 					break;
 			}
 		}
 		else
-			$skin = 'default';
+			$skin = DEFAULTTHEME;
 		if($mode != 'selectauth' && $mode != 'submitLogin')
 			require_once("themes/$skin/page.php");
 
