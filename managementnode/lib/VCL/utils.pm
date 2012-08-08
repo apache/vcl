@@ -587,9 +587,9 @@ EOF
 		}
 		print LOGFILE $process_info;
 		close(LOGFILE);
-	}
-
-	print STDOUT $process_info;
+	} else {
+        print STDOUT $process_info;
+    }
 }
 
 #/////////////////////////////////////////////////////////////////////////////
