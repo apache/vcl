@@ -774,13 +774,13 @@ sub daemonize {
 	close(PIDFILE);
 	
 	preplogfile();
-	print "Created VCL daemon process: $$\n";
 	
 	#Redirect STDIN,STDOUT,STDERR 
 	open STDIN,  '/dev/null'  or die "Can't read /dev/null $!";
 	open STDOUT, ">>$LOGFILE" or die "Can't write $LOGFILE $!";
 	open STDERR, ">>$LOGFILE" or die "Can't write $LOGFILE $!";
 
+	print "Created VCL daemon process: $$\n";
 	
 } ## end sub daemonize
 

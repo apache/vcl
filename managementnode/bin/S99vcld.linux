@@ -51,20 +51,28 @@ umask 077
 
 start() {
  	echo -n $"Starting $DAEMON daemon: "
-	echo
 	daemon $DAEMON_PATH/$DAEMON $DAEMON_OPTIONS
 	RETVAL=$?
+    if [ $RETVAL -eq 0 ]; then
+        success
+        touch /var/lock/subsys/$DAEMON
+    else
+        failure
+    fi
 	echo
-	[ $RETVAL -eq 0 ] && touch /var/lock/subsys/$DAEMON
 	return $RETVAL
 }	
 stop() {
 	echo -n $"Shutting down $DAEMON daemon: "
-	#killproc $DAEMON_PATH/$DAEMON
-	kill -9 `/bin/cat /var/run/$DAEMON.pid`
-	#RETVAL=$?
+	kill -9 `/bin/cat /var/run/$DAEMON.pid` 2>/dev/null
+    RETVAL=$?
+    if [ $RETVAL -eq 0 ]; then
+        rm -f /var/lock/subsys/$DAEMON
+        success
+    else
+        failure
+    fi
 	echo
-	[ $RETVAL -eq 0 ] && rm -f /var/lock/subsys/$DAEMON
 	return $RETVAL
 }
 _status() {
@@ -72,9 +80,6 @@ _status() {
 }
 restart() {
 	stop
-	#echo -n $"Shutting down $DAEMON daemon: "
-        #killproc $DAEMON_PATH/$DAEMON
-        #kill -9 `/bin/cat /var/run/$DAEMON.pid`
 	sleep 1
 	start
 }	
