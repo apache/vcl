@@ -115,19 +115,19 @@ echo ERRORLEVEL: %ERRORLEVEL%
 echo.
 
 echo %TIME%: Regenerating /etc/ssh_host_key...
-C:\Cygwin\bin\ssh-keygen.exe -t rsa1 -f /etc/ssh_host_key -N "" 2>&1
+C:\Cygwin\bin\bash.exe -c 'C:/Cygwin/bin/ssh-keygen.exe -t rsa1 -f /etc/ssh_host_key -N ""' 2>&1
 echo ERRORLEVEL: %ERRORLEVEL%
 set /A STATUS+=%ERRORLEVEL%
 echo.
 
 echo %TIME%: Regenerating /etc/ssh_host_rsa_key...
-C:\Cygwin\bin\ssh-keygen.exe -t rsa -f /etc/ssh_host_rsa_key -N "" 2>&1
+C:\Cygwin\bin\bash.exe -c 'C:/Cygwin/bin/ssh-keygen.exe -t rsa -f /etc/ssh_host_rsa_key -N ""' 2>&1
 echo ERRORLEVEL: %ERRORLEVEL%
 set /A STATUS+=%ERRORLEVEL%
 echo.
 
 echo %TIME%: Regenerating /etc/ssh_host_dsa_key...
-C:\Cygwin\bin\ssh-keygen.exe -t dsa -f /etc/ssh_host_dsa_key -N "" 2>&1
+C:\Cygwin\bin\bash.exe -c 'C:/Cygwin/bin/ssh-keygen.exe -t dsa -f /etc/ssh_host_dsa_key -N ""' 2>&1
 echo ERRORLEVEL: %ERRORLEVEL%
 set /A STATUS+=%ERRORLEVEL%
 echo.
