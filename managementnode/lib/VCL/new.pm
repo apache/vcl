@@ -424,7 +424,9 @@ sub process {
 			}
 
 			# Set variables for the next states
-			$next_computer_state = "reserved";
+			# Don't change state of computer to reserved yet, reserved.pm will do this after it initializes
+			# This is done to reduce the delay between when Connect is shown to the user and the firewall is prepared
+			$next_computer_state = "";
 			$next_request_state  = "reserved";
 		} ## end else [ if ($request_preload_only)
 	} ## end if ($request_state_name eq 'new')
@@ -440,11 +442,13 @@ sub process {
 	}
 
 	# Update the computer state
-	if (update_computer_state($computer_id, $next_computer_state)) {
-		notify($ERRORS{'OK'}, 0, "$computer_short_name state set to '$next_computer_state'");
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to set $computer_short_name state to '$next_computer_state'");
+	if ($next_computer_state) {
+		if (update_computer_state($computer_id, $next_computer_state)) {
+			notify($ERRORS{'OK'}, 0, "$computer_short_name state set to '$next_computer_state'");
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to set $computer_short_name state to '$next_computer_state'");
+		}
 	}
 
 	# Update request state if this is the parent reservation
