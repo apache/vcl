@@ -56,6 +56,8 @@ use English '-no_match_vars';
 use VCL::utils;
 use File::Basename;
 use Net::Netmask;
+use Text::CSV_XS;
+use IO::String;
 
 ##############################################################################
 
@@ -191,6 +193,43 @@ our %TIME_ZONE_INFO = (
 =head1 INTERFACE OBJECT METHODS
 
 =cut
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 initialize
+
+ Parameters  : 
+ Returns     : 
+ Description : 
+
+=cut
+
+sub initialize {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "beginning Windows module initialization");
+	
+	my $request_state = $self->data->get_request_state_name();
+	
+	# If the request state is reserved, retrieve the firewall configuration now to reduce a delay after the user clicks Connect
+	if ($request_state =~ /reserved/) {
+		notify($ERRORS{'DEBUG'}, 0, "request state is $request_state, caching firewall configuration to reduce delays later on");
+		$self->get_firewall_configuration('TCP');
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "Windows module initialization complete");
+	
+	if ($self->can("SUPER::initialize")) {
+		return $self->SUPER::initialize();
+	}
+	else {
+		return 1;
+	}
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -687,7 +726,7 @@ sub post_load {
 	if (!$self->update_ssh_known_hosts()) {
 		notify($ERRORS{'WARNING'}, 0, "unable to update the SSH known_hosts file on the management node");
 	}
-
+	
 =item *
 
  Enable RDP access on the private network interface
@@ -1009,38 +1048,11 @@ sub grant_access {
 	my $management_node_keys = $self->data->get_management_node_keys();
 	my $computer_node_name   = $self->data->get_computer_node_name();
 	my $system32_path        = $self->get_system32_path();
-	my $remote_ip            = $self->data->get_reservation_remote_ip();
 	my $request_forimaging   = $self->data->get_request_forimaging();
-
-	# Check to make sure remote IP is defined
-	my $remote_ip_range;
-	if (!$remote_ip) {
-		notify($ERRORS{'WARNING'}, 0, "reservation remote IP address is not set in the data structure, opening RDP to any address");
-	}
-	elsif ($remote_ip !~ /^(\d{1,3}\.?){4}$/) {
-		notify($ERRORS{'WARNING'}, 0, "reservation remote IP address format is invalid: $remote_ip, opening RDP to any address");
-	}
-	else {
-		# Assemble the IP range string in CIDR notation
-		$remote_ip_range = "$remote_ip/16";
-		notify($ERRORS{'OK'}, 0, "RDP will be allowed from $remote_ip_range on $computer_node_name");
-	}
-
-	# Set the $remote_ip_range variable to the string 'all' if it isn't already set (for display purposes)
-	$remote_ip_range = 'all' if !$remote_ip_range;
 	
 	if($self->process_connect_methods("", 1) ){
 		notify($ERRORS{'OK'}, 0, "processed connection methods on $computer_node_name");
 	}
-
-	# Allow RDP connections
-	#if ($self->firewall_enable_rdp($remote_ip_range)) {
-	#	notify($ERRORS{'OK'}, 0, "firewall was configured to allow RDP access from $remote_ip_range on $computer_node_name");
-	#}
-	#else {
-	#	notify($ERRORS{'WARNING'}, 0, "firewall could not be configured to grant RDP access from $remote_ip_range on $computer_node_name");
-	#	return 0;
-	#}
 
 	# If this is an imaging request, make sure the Administrator account is enabled
 	if ($request_forimaging) {
@@ -4423,12 +4435,20 @@ sub set_my_computer_name {
 
 =head2 get_firewall_configuration
 
- Parameters  : none
+ Parameters  : $protocol (optional), $no_cache (optional)
  Returns     : hash reference
  Description : Retrieves information about the open firewall ports on the
                computer and constructs a hash. The hash keys are protocol names.
                Each protocol key contains a hash reference. The keys are either
                port numbers or ICMP types.
+               
+               By default, the firewall configuration is only retrieved from the
+               computer the first time this subroutine is called. This data is
+               then stored in $self->{firewall_configuration} as a cached copy.
+               Subsequent calls return this cached copy by default. An optional
+               $no_cache argument may be supplied to override this, forcing the
+               firewall configuration to be retrieved from the computer again.
+               
                Example:
                
                   "ICMP" => {
@@ -4457,7 +4477,14 @@ sub get_firewall_configuration {
 		return;
 	}
 	
-	return $self->{firewall_configuration} if $self->{firewall_configuration};
+	my $protocol = shift || '*';
+	
+	my $no_cache = shift;
+	
+	if (!$no_cache && $self->{firewall_configuration}) {
+		notify($ERRORS{'DEBUG'}, 0, "returning previously retrieved firewall configuration");
+		return $self->{firewall_configuration};
+	}
 	
 	my $computer_node_name = $self->data->get_computer_node_name();
 	my $system32_path = $self->get_system32_path() || return;
@@ -4466,96 +4493,113 @@ sub get_firewall_configuration {
 	
 	my $firewall_configuration = {};
 	
-	my $port_command = "$system32_path/netsh.exe firewall show portopening verbose = ENABLE";
-	my ($port_exit_status, $port_output) = $self->execute($port_command);
-	if (!defined($port_output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to run command to show open firewall ports on $computer_node_name");
-		return;
-	}
-	elsif (!grep(/Port\s+Protocol/i, @$port_output)) {
-		notify($ERRORS{'WARNING'}, 0, "unexpected output returned from command to show open firewall ports on $computer_node_name, command: '$port_command', exit status: $port_exit_status, output:\n" . join("\n", @$port_output));
-		return;
-	}
-	
-	# Execute the netsh.exe command to retrieve firewall port openings
-	# Expected output:
-	# Port configuration for Local Area Connection 4:
-	# Port   Protocol  Mode     Name
-	# -------------------------------------------------------------------
-	# 443    TCP       Disable  Secure Web Server (HTTPS)
-	# 22     TCP       Disable  Cygwin SSHD
-	
-	my $configuration;
-	my $previous_protocol;
-	my $previous_port;
-	for my $line (@$port_output) {
-		if ($line =~ /^Port configuration for (.+):/ig) {
-			$configuration = $1;
+	# Retrieve the normal non-ICMP firewall configuration unless the protocol argument specifically requested ICMP only
+	if ($protocol !~ /^icmp$/) {
+		notify($ERRORS{'DEBUG'}, 0, "retrieving non-ICMP firewall configuration from $computer_node_name");
+		
+		my $port_command = "$system32_path/netsh.exe firewall show portopening verbose = ENABLE";
+		my ($port_exit_status, $port_output) = $self->execute($port_command);
+		if (!defined($port_output)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to run command to show open firewall ports on $computer_node_name");
+			return;
 		}
-		elsif ($line =~ /^(\d+)\s+(\w+)\s+(\w+)\s+(.*)/ig) {
-			my $port = $1;
-			my $protocol = $2;
-			my $mode = $3;
-			my $name = $4;
-			
-			$previous_protocol = $protocol;
-			$previous_port = $port;
-			
-			next if ($mode !~ /enable/i);
-			
-			$firewall_configuration->{$protocol}{$port}{name}= $name;
-			
-			if ($configuration !~ /\w+ profile/i) {
-				push @{$firewall_configuration->{$protocol}{$port}{interface_names}}, $configuration;
+		elsif (!grep(/Port\s+Protocol/i, @$port_output)) {
+			notify($ERRORS{'WARNING'}, 0, "unexpected output returned from command to show open firewall ports on $computer_node_name, command: '$port_command', exit status: $port_exit_status, output:\n" . join("\n", @$port_output));
+			return;
+		}
+		
+		# Execute the netsh.exe command to retrieve firewall port openings
+		# Expected output:
+		# Port configuration for Local Area Connection 4:
+		# Port   Protocol  Mode     Name
+		# -------------------------------------------------------------------
+		# 443    TCP       Disable  Secure Web Server (HTTPS)
+		# 22     TCP       Disable  Cygwin SSHD
+		
+		my $configuration;
+		my $previous_protocol;
+		my $previous_port;
+		for my $line (@$port_output) {
+			if ($line =~ /^Port configuration for (.+):/ig) {
+				$configuration = $1;
+			}
+			elsif ($line =~ /^(\d+)\s+(\w+)\s+(\w+)\s+(.*)/ig) {
+				my $port = $1;
+				my $protocol = $2;
+				my $mode = $3;
+				my $name = $4;
+				
+				$previous_protocol = $protocol;
+				$previous_port = $port;
+				
+				next if ($mode !~ /enable/i);
+				
+				$firewall_configuration->{$protocol}{$port}{name}= $name;
+				
+				if ($configuration !~ /\w+ profile/i) {
+					push @{$firewall_configuration->{$protocol}{$port}{interface_names}}, $configuration;
+				}
+			}
+			elsif (!defined($previous_protocol) ||
+					 !defined($previous_port) ||
+					 !defined($firewall_configuration->{$previous_protocol}) ||
+					 !defined($firewall_configuration->{$previous_protocol}{$previous_port})
+					 ) {
+				next;
+			}
+			elsif (my ($scope) = $line =~ /Scope:\s+(.+)/ig) {
+				$firewall_configuration->{$previous_protocol}{$previous_port}{scope} = $scope;
 			}
 		}
-		elsif (!defined($previous_protocol) ||
-				 !defined($previous_port) ||
-				 !defined($firewall_configuration->{$previous_protocol}) ||
-				 !defined($firewall_configuration->{$previous_protocol}{$previous_port})
-				 ) {
-			next;
-		}
-		elsif (my ($scope) = $line =~ /Scope:\s+(.+)/ig) {
-			$firewall_configuration->{$previous_protocol}{$previous_port}{scope} = $scope;
-		}
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "skipping retrieval of non-ICMP firewall configuration from $computer_node_name, protocol argument is '$protocol'");
 	}
 	
-	# Execute the netsh.exe ICMP command
-	my $icmp_command = "$system32_path/netsh.exe firewall show icmpsetting verbose = ENABLE";
-	my ($icmp_exit_status, $icmp_output) = $self->execute($icmp_command);
-	if (!defined($icmp_output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to run command to show firewall ICMP settings on $computer_node_name");
-		return;
-	}
-	elsif (!grep(/Mode\s+Type/i, @$icmp_output)) {
-		notify($ERRORS{'WARNING'}, 0, "unexpected output returned from command to show firewall ICMP settings on $computer_node_name, command: '$icmp_command', exit status: $icmp_exit_status, output:\n" . join("\n", @$icmp_output));
-		return;
-	}
-	
-	# ICMP configuration for Local Area Connection 4:
-	# Mode     Type  Description
-	# -------------------------------------------------------------------
-	# Disable  3     Allow outbound destination unreachable
-	# Disable  4     Allow outbound source quench
-
-	for my $line (@$icmp_output) {
-		if ($line =~ /^ICMP configuration for (.+):/ig) {
-			$configuration = $1;
+	# Retrieve the ICMP firewall configuration if the protocol argument specifically requested ICMP only or no argument was supplied
+	if ($protocol =~ /(icmp|\*)/) {
+		notify($ERRORS{'DEBUG'}, 0, "retrieving ICMP firewall configuration from $computer_node_name");
+		
+		# Execute the netsh.exe ICMP command
+		my $icmp_command = "$system32_path/netsh.exe firewall show icmpsetting verbose = ENABLE";
+		my ($icmp_exit_status, $icmp_output) = $self->execute($icmp_command);
+		if (!defined($icmp_output)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to run command to show firewall ICMP settings on $computer_node_name");
+			return;
 		}
-		elsif ($line =~ /^(\w+)\s+(\d+)\s+(.*)/ig) {
-			my $mode = $1;
-			my $type = $2;
-			my $description = $3;
-			
-			next if ($mode !~ /enable/i);
-			
-			$firewall_configuration->{ICMP}{$type}{description} = $description || '';
-			
-			if ($configuration !~ /\w+ profile/i) {
-				push @{$firewall_configuration->{ICMP}{$type}{interface_names}}, $configuration;
+		elsif (!grep(/Mode\s+Type/i, @$icmp_output)) {
+			notify($ERRORS{'WARNING'}, 0, "unexpected output returned from command to show firewall ICMP settings on $computer_node_name, command: '$icmp_command', exit status: $icmp_exit_status, output:\n" . join("\n", @$icmp_output));
+			return;
+		}
+		
+		# ICMP configuration for Local Area Connection 4:
+		# Mode     Type  Description
+		# -------------------------------------------------------------------
+		# Disable  3     Allow outbound destination unreachable
+		# Disable  4     Allow outbound source quench
+		
+		my $configuration;
+		for my $line (@$icmp_output) {
+			if ($line =~ /^ICMP configuration for (.+):/ig) {
+				$configuration = $1;
+			}
+			elsif ($line =~ /^(\w+)\s+(\d+)\s+(.*)/ig) {
+				my $mode = $1;
+				my $type = $2;
+				my $description = $3;
+				
+				next if ($mode !~ /enable/i);
+				
+				$firewall_configuration->{ICMP}{$type}{description} = $description || '';
+				
+				if ($configuration !~ /\w+ profile/i) {
+					push @{$firewall_configuration->{ICMP}{$type}{interface_names}}, $configuration;
+				}
 			}
 		}
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "skipping retrieval ICMP firewall configuration from $computer_node_name, protocol argument is '$protocol'");
 	}
 	
 	$self->{firewall_configuration} = $firewall_configuration;
@@ -4602,7 +4646,6 @@ sub parse_firewall_scope {
 			my $netmask_object = new Net::Netmask('any');
 			push @netmask_objects, $netmask_object;
 		}
-		
 		elsif ($scope_string =~ /LocalSubnet/i) {
 			my $network_configuration = $self->get_network_configuration() || return;
 			
@@ -4676,7 +4719,6 @@ sub parse_firewall_scope {
 		my $scope_result_string;
 		my @ip_address_ranges;
 		for my $netmask_object (@netmask_objects_collapsed) {
-			
 			if ($netmask_object->first() eq $netmask_object->last()) {
 				push @ip_address_ranges, $netmask_object->first();
 				$scope_result_string .= $netmask_object->base() . ",";
@@ -4741,82 +4783,103 @@ sub enable_firewall_port {
 	$protocol = uc($protocol);
 	
 	$scope_argument = '*' if (!defined($scope_argument));
+	my $parsed_scope_argument = $self->parse_firewall_scope($scope_argument);
+	if (!$parsed_scope_argument) {
+		notify($ERRORS{'WARNING'}, 0, "failed to parse firewall scope argument: '$scope_argument'");
+		return;
+	}
+	$scope_argument = $parsed_scope_argument;
 	
-	$name = '' if !$name;
-	$description = '' if !$description;
+	my $new_scope;
 	
-	my $scope;
-	
-	my $firewall_configuration = $self->get_firewall_configuration() || return;
-	my $existing_scope = $firewall_configuration->{$protocol}{$port}{scope} || '';
-	my $existing_name = $firewall_configuration->{$protocol}{$port}{name} || '';
-	my $existing_description = $firewall_configuration->{$protocol}{$port}{name} || '';
-	if ($existing_scope) {
+	my $firewall_configuration;
+	if (!$overwrite_existing) {
+		# Need to append to firewall, retrieve current configuration
+		$firewall_configuration = $self->get_firewall_configuration($protocol) || return;
+		my $existing_scope = $firewall_configuration->{$protocol}{$port}{scope};
+		my $existing_name = $firewall_configuration->{$protocol}{$port}{name} || '';
 		
-		if ($overwrite_existing) {
-			$scope = $self->parse_firewall_scope($scope_argument);
-			if (!$scope) {
-				notify($ERRORS{'WARNING'}, 0, "failed to parse firewall scope argument: '$scope_argument'");
-				return;
-			}
-			
-			notify($ERRORS{'DEBUG'}, 0, "existing firewall opening on $computer_node_name will be replaced:\n" .
-				"name: '$existing_name'\n" .
-				"protocol: $protocol\n" .
-				"port/type: $port\n" .
-				"existing scope: '$existing_scope'\n" .
-				"new scope: $scope\n" .
-				"overwrite existing rule: " . ($overwrite_existing ? 'yes' : 'no')
-			);
-		}
-		else {
+		# Check if an exception already exists for the protocol/port
+		if ($existing_scope) {
+			# Exception already exists, parse it
 			my $parsed_existing_scope = $self->parse_firewall_scope($existing_scope);
 			if (!$parsed_existing_scope) {
 				notify($ERRORS{'WARNING'}, 0, "failed to parse existing firewall scope: '$existing_scope'");
 				return;
 			}
+			$existing_scope = $parsed_existing_scope;
 			
-			$scope = $self->parse_firewall_scope("$scope_argument,$existing_scope");
-			if (!$scope) {
-				notify($ERRORS{'WARNING'}, 0, "failed to parse firewall scope argument appended with existing scope: '$scope_argument,$existing_scope'");
+			$new_scope = $self->parse_firewall_scope("$existing_scope,$scope_argument");
+			if (!$new_scope) {
+				notify($ERRORS{'WARNING'}, 0, "failed to parse new firewall scope: '$existing_scope,$scope_argument'");
 				return;
 			}
 			
-			if ($scope eq $parsed_existing_scope) {
-				notify($ERRORS{'DEBUG'}, 0, "firewall is already open on $computer_node_name, existing scope matches scope argument:\n" .
-					"name: '$existing_name'\n" .
+			# Check if existing exception scope matches the scope argument
+			if ($new_scope eq $existing_scope) {
+				notify($ERRORS{'DEBUG'}, 0, "firewall is already open on $computer_node_name, existing scope includes scope argument:\n" .
+					"existing name: '$existing_name'\n" .
 					"protocol: $protocol\n" .
 					"port/type: $port\n" .
-					"scope: $scope\n" .
+					"existing argument: $existing_scope\n" .
+					"scope argument: $scope_argument\n" .
 					"overwrite existing rule: " . ($overwrite_existing ? 'yes' : 'no')
 				);
 				return 1;
 			}
+			else {
+				notify($ERRORS{'DEBUG'}, 0, "firewall is already open on $computer_node_name, existing scope does NOT include scope argument:\n" .
+					"existing name: '$existing_name'\n" .
+					"protocol: $protocol\n" .
+					"port/type: $port\n" .
+					"existing scope: $existing_scope\n" .
+					"scope argument: $scope_argument\n" .
+					"new scope: $new_scope\n" .
+					"overwrite existing rule: " . ($overwrite_existing ? 'yes' : 'no')
+				);
+			}
+		}
+		else {
+			$new_scope = $scope_argument;
+			notify($ERRORS{'DEBUG'}, 0, "firewall exception does not already exist on $computer_node_name:\n" .
+				"protocol: $protocol\n" .
+				"port/type: $port\n" .
+				"scope: $new_scope\n" .
+				"overwrite existing rule: " . ($overwrite_existing ? 'yes' : 'no')
+			);
 		}
 	}
 	else {
-		$scope = $self->parse_firewall_scope($scope_argument);
-		if (!$scope) {
-			notify($ERRORS{'WARNING'}, 0, "failed to parse firewall scope argument: '$scope_argument'");
-			return;
-		}
-		
-		notify($ERRORS{'DEBUG'}, 0, "$protocol/$port firewall opening will be added to $computer_node_name, scope: $scope"
+		$new_scope = $scope_argument;
+		notify($ERRORS{'DEBUG'}, 0, "configuring firewall exception on $computer_node_name:\n" .
+			"protocol: $protocol\n" .
+			"port/type: $port\n" .
+			"scope: $new_scope\n" .
+			"overwrite existing rule: " . ($overwrite_existing ? 'yes' : 'no')
 		);
 	}
 	
-	$name = "VCL: allow $protocol/$port from $scope" if !$name;
-	$description = "VCL: allow $protocol/$port from $scope" if !$description;
+	# Make sure the scope was figured out before proceeding
+	if (!$new_scope) {
+		notify($ERRORS{'WARNING'}, 0, "failed to configure firewall exception on $computer_node_name, scope could not be determined");
+		return;
+	}
 	
+	# Construct a name and description if arguments were not supplied
+	$name = "VCL: allow $protocol/$port from $new_scope" if !$name;
+	$description = "VCL: allow $protocol/$port from $new_scope" if !$description;
 	$name = substr($name, 0, 60) . "..." if length($name) > 60;
 	
-	if ($self->_enable_firewall_port_helper($protocol, $port, $scope, $overwrite_existing, $name, $description)) {
-		$firewall_configuration->{$protocol}{$port} = {
-			name => $name,
-			name => $description,
-			scope => $scope,
-		};
-		
+	# Call the helper subroutine, this runs the appropriate netsh commands based on the version of Windows
+	if ($self->_enable_firewall_port_helper($protocol, $port, $new_scope, $overwrite_existing, $name, $description)) {
+		# Update the stored firewall configuration info if it was retrieved
+		if ($firewall_configuration) {
+			$firewall_configuration->{$protocol}{$port} = {
+				name => $name,
+				name => $description,
+				scope => $new_scope,
+			};
+		}
 		return 1;
 	}
 	else {
@@ -4860,10 +4923,16 @@ sub _enable_firewall_port_helper {
 	}
 	else {
 		if ($overwrite_existing) {
-			my $firewall_configuration = $self->get_firewall_configuration() || return;
-			
+			# Get the firewall configuration and check if an exception has been configured on an interface
+			my $firewall_configuration = $self->get_firewall_configuration($protocol) || return;
 			if (defined($firewall_configuration->{$protocol}{$port}{interface_names})) {
 				for my $interface_name (@{$firewall_configuration->{$protocol}{$port}{interface_names}}) {
+					notify($ERRORS{'DEBUG'}, 0, "removing existing firewall exception:\n" .
+						"protocol: $protocol\n" .
+						"port: $port\n" .
+						"interface: $interface_name"
+					);
+					
 					$netsh_command .= "$system32_path/netsh.exe firewall delete portopening";
 					$netsh_command .= " protocol = $protocol";
 					$netsh_command .= " port = $port";
@@ -4872,11 +4941,6 @@ sub _enable_firewall_port_helper {
 				}
 			}
 		}
-		
-		$netsh_command .= "$system32_path/netsh.exe firewall delete portopening";
-		$netsh_command .= " protocol = $protocol";
-		$netsh_command .= " port = $port";
-		$netsh_command .= " ; ";
 		
 		$netsh_command .= "$system32_path/netsh.exe firewall set portopening";
 		$netsh_command .= " name = \"$name\"";
@@ -4892,10 +4956,9 @@ sub _enable_firewall_port_helper {
 		$netsh_command .= " scope = CUSTOM";
 		$netsh_command .= " addresses = $scope";
 	}
-
+	
 	# Execute the netsh.exe command
 	my ($netsh_exit_status, $netsh_output) = $self->execute($netsh_command);
-	
 	if (!defined($netsh_output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to open firewall on $computer_node_name, command: '$netsh_command'");
 		return;
@@ -7404,9 +7467,6 @@ sub get_task_info {
 		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to run tasklist.exe");
 		return;
 	}
-	
-	use Text::CSV_XS;
-	use IO::String;
 	
 	my $csv = Text::CSV_XS->new();
 	

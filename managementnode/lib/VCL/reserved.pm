@@ -122,6 +122,15 @@ sub process {
 	else {
 		notify($ERRORS{'WARNING'}, 0, "unable to update log table while attempting to set id:$request_logid loaded time to now");
 	}
+	
+	# Update the computer state to reserved
+	if (update_computer_state($computer_id, 'reserved')) {
+		notify($ERRORS{'OK'}, 0, "$computer_short_name state set to 'reserved'");
+	}
+	else {
+		# Call reservation_failed
+		$self->reservation_failed("failed to set $computer_short_name state to 'reserved'");
+	}
 
 	my $nodename;
 	my $retval_conn;
@@ -174,7 +183,7 @@ sub process {
 	elsif ($remote_ip ne '0') {
 		# User has acknowledged
 		notify($ERRORS{'OK'}, 0, "user acknowledged, remote IP: $remote_ip");
-
+		
 		#if cluster reservation - populate parent node with child node information
 		if ($reservation_count > 1) {
 			notify($ERRORS{'OK'}, 0, "cluster reservation, attempting to populate nodes with cluster_info data");
@@ -222,7 +231,7 @@ sub process {
 		}
 		
 		notify($ERRORS{'OK'}, 0, "server_request_id = $server_request_id");
-
+		
 		#IF server_request_id
 		if ($server_request_id) {
 			if($server_request_admingroupid || $server_request_logingroupid ) {
@@ -246,7 +255,7 @@ sub process {
 			notify($ERRORS{'OK'}, 0, "attempt $acknowledge_attempts of 180, user has not acknowleged");
 		}
 
-		sleep 5;
+		sleep 1;
 
 		# Check if user deleted the request
 		if (is_request_deleted($request_id)) {
