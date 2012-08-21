@@ -246,13 +246,12 @@ sub process {
 		
 	}    # close if defined remoteIP
 
-	elsif ($acknowledge_attempts < 180) {
+	elsif ($acknowledge_attempts < 900) {
 		# User has approximately 15 minutes to acknowledge (5 seconds * 180 attempts)
 
-		# Print a status message every tenth attempt
-		if (($acknowledge_attempts % 10) == 0) {
+		if (($acknowledge_attempts % 30) == 0) {
 			# Print message every tenth attempt
-			notify($ERRORS{'OK'}, 0, "attempt $acknowledge_attempts of 180, user has not acknowleged");
+			notify($ERRORS{'OK'}, 0, "attempt $acknowledge_attempts/900, user has not acknowleged");
 		}
 
 		sleep 1;
