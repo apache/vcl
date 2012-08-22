@@ -766,8 +766,9 @@ sub power_reset {
 
  Parameters  : none
  Returns     : boolean
- Description : Performs tasks to the computer after it has been put into
-               maintenance mode.
+ Description : Performs tasks when a VM is unassigned from a host:
+               -Deletes domain from node
+               -Unassigns VM from VM host (sets computer.vmhostid to NULL)
 
 =cut
 
@@ -775,6 +776,25 @@ sub post_maintenance_action {
 	my $self = shift;
 	unless (ref($self) && $self->isa('VCL::Module')) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $domain_name = shift || $self->get_domain_name();
+	my $node_name = $self->data->get_vmhost_short_name();
+	my $computer_id = $self->data->get_computer_id();
+	
+	# Delete the domains on the node which were created for the computer being put into maintenance
+	if (!$self->delete_existing_domains()) {
+		notify($ERRORS{'WARNING'}, 0, "failed to delete existing $domain_name domains on $node_name");
+		return;
+	}
+	
+	# Unassign the VM from the VM host, change computer.vmhostid to NULL
+	if (switch_vmhost_id($computer_id, 'NULL')) {
+		notify($ERRORS{'OK'}, 0, "set vmhostid to NULL for for $domain_name");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to set the vmhostid to NULL for $domain_name");
 		return;
 	}
 	
