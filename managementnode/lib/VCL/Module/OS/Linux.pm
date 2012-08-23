@@ -243,7 +243,8 @@ sub post_load {
 	}
 
 	if (!$self->update_public_ip_address()) {
-   	$self->reservation_failed("failed to update public IP address");
+		notify($ERRORS{'WARNING'}, 0, "failed to update IP address for $computer_node_name");
+      return 0;
    }
 	
 	if ($image_os_install_type eq "kickstart"){
