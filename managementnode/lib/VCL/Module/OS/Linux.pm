@@ -268,14 +268,16 @@ sub post_load {
 		  notify($ERRORS{'WARNING'}, 0, "unable to generate /etc/init.d/ext_sshd on $computer_node_name");
 		  #return 0;
 		  }
-		
-		  #Generate rc.local
-		  if (!$self->generate_rc_local()){
-			notify($ERRORS{'WARNING'}, 0, "unable to generate /etc/rc.local script on $computer_node_name");
-			#return 0;
-		  }
 
-	}
+	}	
+
+  #Generate rc.local
+  if (!$self->generate_rc_local()){
+		notify($ERRORS{'WARNING'}, 0, "unable to generate /etc/rc.local script on $computer_node_name");
+		#return 0;
+  }
+
+	
 	
 	# Change password
 	if ($self->changepasswd($computer_node_name, "root")) {
