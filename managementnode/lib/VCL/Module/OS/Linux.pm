@@ -277,7 +277,11 @@ sub post_load {
 		#return 0;
   }
 
+	#Update time and ntpservers
 	
+	if(!$self->sync_date()){
+		notify($ERRORS{'WARNING'}, 0, "unable to synchroinze date and time on $computer_node_name");
+	}		
 	
 	# Change password
 	if ($self->changepasswd($computer_node_name, "root")) {
@@ -1010,6 +1014,68 @@ sub grant_access {
 	
 	return 1;
 } ## end sub grant_access
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 sync_date
+
+ Parameters  : called as an object
+ Returns     : 1 - success , 0 - failure
+ Description : updates and sets date on node
+
+=cut
+
+sub sync_date {
+   my $self = shift;   
+	if (ref($self) !~ /linux/i) {
+      notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+      return 0;
+   }
+
+	my $computer_node_name   = $self->data->get_computer_node_name();
+	
+	#get Throttle source value from database if set
+   my $time_source;
+   my $variable_name = "timesource|" . $self->data->get_management_node_hostname();
+   my $variable_name_global = "timesource|global";
+   if($self->data->is_variable_set($variable_name)){
+       #fetch variable
+       $time_source = $self->data->get_variable($variable_name);
+       notify($ERRORS{'DEBUG'}, 0, "time_source is $time_source  set for $variable_name");
+    }
+    elsif($self->data->is_variable_set($variable_name_global) ) {
+       #fetch variable
+       $time_source = $self->data->get_variable($variable_name_global);
+       notify($ERRORS{'DEBUG'}, 0, "time_source is $time_source  set for $variable_name");
+    }
+    else {
+       notify($ERRORS{'DEBUG'}, 0, "time_source is not set for $variable_name or $variable_name_global not able update time");
+		return ; 
+    }
+
+	# Replace commas with single whitespace 
+	$time_source =~ s/,/ /g;
+
+	# Assemble the time command
+	my $time_command = "rdate -s $time_source";
+
+	my ($exit_status, $output) = $self->execute($time_command, 1, 180);
+
+	#update ntpservers file
+
+	my @time_array = split(/ /,$time_source);
+	my $ntp_command = "cp /dev/null /etc/ntp/ntpservers;";
+	foreach my $i (@time_array) {	
+		$ntp_command .= "echo $i >> /etc/ntp/ntpservers; ";
+	}
+	
+	$ntp_command .= "/etc/init.d/ntpd restart";
+
+	($exit_status, $output) = $self->execute($ntp_command, 1, 180);
+	
+	return 1;
+	
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 
