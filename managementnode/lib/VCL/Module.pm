@@ -803,8 +803,9 @@ sub get_package_hierarchy {
                2: array reference containing arguments to pass to code reference
                3: message to display when attempting to execute code reference
                4: timeout seconds, maximum number of seconds to attempt to execute code until it returns true
-               5: seconds to wait in between code execution attempts
- Returns     : If code returns true: 1
+               5: seconds to wait in between code execution attempts (optional)
+               6: message interval seconds (optional)
+ Returns     : If code returns true: returns result returned by code reference
                If code never returns true: 0
  Description : Executes the code contained in the code reference argument until
                it returns true or until the timeout is reached.
@@ -824,17 +825,9 @@ sub code_loop_timeout {
 		return;
 	}
 	
-	# Get the start time
-	my $start_time = time();
-	
 	my $computer_node_name = $self->data->get_computer_node_name();
 	
-	# Check the argument count and get the arguments
-	if (scalar(@_) != 5) {
-		notify($ERRORS{'WARNING'}, 0, scalar(@_) . " arguments were passed, argument count must be 5");
-		return;
-	}
-	my ($code_ref, $args_array_ref, $message, $total_wait_seconds, $attempt_delay_seconds) = @_;
+	my ($code_ref, $args_array_ref, $message, $total_wait_seconds, $attempt_delay_seconds, $message_interval_seconds) = @_;
 	
 	# Make sure the code reference argument was passed correctly
 	if (!defined($code_ref)) {
@@ -868,37 +861,60 @@ sub code_loop_timeout {
 		return;
 	}
 	
-	if (!defined($attempt_delay_seconds) || $attempt_delay_seconds !~ /^\d+$/) {
+	if (!$attempt_delay_seconds) {
+		$attempt_delay_seconds = 15;
+	}
+	elsif (defined($attempt_delay_seconds) && $attempt_delay_seconds !~ /^\d+$/) {
 		notify($ERRORS{'WARNING'}, 0, "5th argument (attempt delay) was not passed correctly");
 		return;
 	}
 	
+	if ($message_interval_seconds) {
+		if ($message_interval_seconds !~ /^\d+$/) {
+			notify($ERRORS{'WARNING'}, 0, "6th argument (message interval) was not passed correctly");
+			return;
+		}
+		
+		# Message interval is pointless if it's set to a value less than $attempt_delay_seconds
+		if ($message_interval_seconds < $attempt_delay_seconds) {
+			$message_interval_seconds = 0;
+		}
+	}
+	else {
+		$message_interval_seconds = 0;
+	}
 	
-	# Calculate total seconds to wait and end time
-	my $end_time = $start_time + $total_wait_seconds;
-	notify($ERRORS{'OK'}, 0, "$message, maximum of $total_wait_seconds seconds");
+	notify($ERRORS{'DEBUG'}, 0, "$message, maximum of $total_wait_seconds seconds");
+	
+	my $start_time = time();
+	my $current_time = $start_time;
+	my $end_time = ($start_time + $total_wait_seconds);
 	
 	# Loop until code returns true
-	# Loop once if the wait time is 0
-	my $attempt_count = 0;
-	my $current_time;
-	while (($current_time = time()) < $end_time || ($total_wait_seconds == 0 && $attempt_count == 0)) {
-		$attempt_count++;
+	my $attempt = 0;
+	while (($current_time = time) <= $end_time) {
+		$attempt++;
 		
-		if ($attempt_count > 1) {
-			my $seconds_elapsed = $current_time - $start_time;
-			my $seconds_remaining = $end_time - $current_time;
-			
-			notify($ERRORS{'OK'}, 0, "attempt " . ($attempt_count-1) . ": $message ($seconds_elapsed/$seconds_remaining seconds) sleeping for $attempt_delay_seconds seconds");
-			sleep $attempt_delay_seconds;
-		}
-		
-		#notify($ERRORS{'OK'}, 0, "attempt $attempt_count: $message");
-		
-		if (&$code_ref(@{$args_array_ref})) {
+		# Execute the code reference
+		if (my $result = &$code_ref(@{$args_array_ref})) {
 			notify($ERRORS{'OK'}, 0, "$message, code returned true");
-			return 1;
+			return $result;
 		}
+		
+		$current_time = time;
+		my $seconds_elapsed = ($current_time - $start_time);
+		my $seconds_remaining = ($end_time > $current_time) ? ($end_time - $current_time) : 0;
+		my $sleep_seconds = ($seconds_remaining < $attempt_delay_seconds) ? $seconds_remaining : $attempt_delay_seconds;
+		
+		if (!$message_interval_seconds || ($attempt == 1 || ($seconds_remaining <= $attempt_delay_seconds) || ($seconds_elapsed % $message_interval_seconds) < $attempt_delay_seconds)) {
+			notify($ERRORS{'DEBUG'}, 0, "attempt $attempt: $message ($seconds_elapsed/$seconds_remaining elapsed/remaining seconds), sleeping for $sleep_seconds seconds");
+		}
+		
+		if (!$sleep_seconds) {
+			last;
+		}
+		
+		sleep $sleep_seconds;
 	}
 
 	notify($ERRORS{'OK'}, 0, "$message, code did not return true after waiting $total_wait_seconds seconds");

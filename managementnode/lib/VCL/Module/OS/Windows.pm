@@ -5607,7 +5607,7 @@ sub firewall_disable_rdp {
 
 =head2 get_network_configuration
 
- Parameters  : 
+ Parameters  : $no_cache (optional)
  Returns     :
  Description : Retrieves the network configuration from the computer. Returns
                a hash. The hash keys are the interface names:
@@ -5631,12 +5631,18 @@ sub get_network_configuration {
 		return;
 	}
 	
+	my $no_cache = shift;
+	
 	# Check if the network configuration has already been retrieved and saved in this object
-	return $self->{network_configuration} if ($self->{network_configuration});
+	if (!$no_cache && $self->{network_configuration}) {
+		notify($ERRORS{'DEBUG'}, 0, "returning network configuration previously retrieved");
+		return $self->{network_configuration};
+	}
 	
 	my $system32_path = $self->get_system32_path();
-	my $management_node_keys = $self->data->get_management_node_keys();
 	my $computer_node_name   = $self->data->get_computer_node_name();
+	
+	notify($ERRORS{'DEBUG'}, 0, "attempting to retrieve network configuration from $computer_node_name");
 	
 	# Get the computer private IP address
 	my $computer_private_ip_address = $self->data->get_computer_private_ip_address();
@@ -5645,32 +5651,32 @@ sub get_network_configuration {
 		return;
 	}
 	
-	# Check if OS may still be initializing before attempting to retrieve network information
-	# Windows may respond to SSH before all network interface drivers are installed and interfaces brought up
-	# This causes many problems
-	# Get the list of running tasks, check if drvinst.exe is running
-	my $initialization_check = 0;
-	my $initialization_check_limit = 12;
-	my $initialization_check_delay = 10;
-	while (++$initialization_check) {
-		# Get the list of running tasks (this returns an array reference of the raw tasklist.exe output)
-		notify($ERRORS{'DEBUG'}, 0, "attempt $initialization_check/$initialization_check_limit: checking if devices still appear to be initializing before retrieving network configuration");
-		my $task_info = $self->get_task_info('drvinst');
-		if (!defined($task_info)) {
-			notify($ERRORS{'WARNING'}, 0, "attempt $initialization_check/$initialization_check_limit: unable to determine if devices are still being initialized, task information could not be retrieved, sleeping for $initialization_check_delay seconds");
-			sleep $initialization_check_delay;
-			next;
-		}
-		elsif (!keys(%$task_info)) {
-			#notify($ERRORS{'DEBUG'}, 0, "no devices appear to still be initializing");
-			notify($ERRORS{'DEBUG'}, 0, "no devices appear to still be initializing, tasks:\n" . format_data($task_info));
-			last;
-		}
-		else {
-			notify($ERRORS{'DEBUG'}, 0, "attempt $initialization_check/$initialization_check_limit: devices still appear to be initializing, sleeping for $initialization_check_delay seconds, matching tasks:\n" . format_data($task_info));
-			sleep $initialization_check_delay;
-		}
-	}
+	## Check if OS may still be initializing before attempting to retrieve network information
+	## Windows may respond to SSH before all network interface drivers are installed and interfaces brought up
+	## This causes many problems
+	## Get the list of running tasks, check if drvinst.exe is running
+	#my $initialization_check = 0;
+	#my $initialization_check_limit = 12;
+	#my $initialization_check_delay = 10;
+	#while (++$initialization_check) {
+	#	# Get the list of running tasks (this returns an array reference of the raw tasklist.exe output)
+	#	notify($ERRORS{'DEBUG'}, 0, "attempt $initialization_check/$initialization_check_limit: checking if devices still appear to be initializing before retrieving network configuration");
+	#	my $task_info = $self->get_task_info('drvinst');
+	#	if (!defined($task_info)) {
+	#		notify($ERRORS{'WARNING'}, 0, "attempt $initialization_check/$initialization_check_limit: unable to determine if devices are still being initialized, task information could not be retrieved, sleeping for $initialization_check_delay seconds");
+	#		sleep $initialization_check_delay;
+	#		next;
+	#	}
+	#	elsif (!keys(%$task_info)) {
+	#		#notify($ERRORS{'DEBUG'}, 0, "no devices appear to still be initializing");
+	#		notify($ERRORS{'DEBUG'}, 0, "no devices appear to still be initializing, tasks:\n" . format_data($task_info));
+	#		last;
+	#	}
+	#	else {
+	#		notify($ERRORS{'DEBUG'}, 0, "attempt $initialization_check/$initialization_check_limit: devices still appear to be initializing, sleeping for $initialization_check_delay seconds, matching tasks:\n" . format_data($task_info));
+	#		sleep $initialization_check_delay;
+	#	}
+	#}
 	
 	my $network_configuration;
 	notify($ERRORS{'DEBUG'}, 0, "attempting to retrieve network configuration information from $computer_node_name");
@@ -5678,11 +5684,15 @@ sub get_network_configuration {
 	# Run ipconfig /all, try twice in case it fails the first time
 	my $ipconfig_attempt = 0;
 	my $ipconfig_attempt_limit = 2;
+	my $ipconfig_attempt_delay = 5;
 	
 	my $ipconfig_command = $system32_path . '/ipconfig.exe /all';
 	my ($ipconfig_exit_status, $ipconfig_output);
-	while (++$ipconfig_attempt) {
-		($ipconfig_exit_status, $ipconfig_output) = $self->execute($ipconfig_command);
+	
+	IPCONFIG_ATTEMPT: while (++$ipconfig_attempt) {
+		
+		
+		($ipconfig_exit_status, $ipconfig_output) = $self->execute($ipconfig_command, 0);
 		if (!defined($ipconfig_output)) {
 			notify($ERRORS{'WARNING'}, 0, "attempt $ipconfig_attempt: failed to run the SSH command to run ipconfig");
 		}
@@ -5701,7 +5711,7 @@ sub get_network_configuration {
 			return;
 		}
 		
-		sleep 2;
+		sleep $ipconfig_attempt_delay;
 	}
 
 	my $interface_name;
@@ -5724,11 +5734,6 @@ sub get_network_configuration {
 		
 		# Skip line if interface hasn't been found yet
 		next if !$interface_name;
-		
-		## Check if the interface should be ignored based on the name or description
-		#if ($interface_name =~ /loopback|vmnet|afs|tunnel|6to4|isatap|teredo/i) {
-		#	next;
-		#}
 		
 		# Take apart the line finding the setting name and value with a hideous regex
 		my ($line_setting, $value) = $line =~ /^[ ]{1,8}(\w[^\.]*\w)?[ \.:]+([^\r\n]*)/i;
@@ -5783,16 +5788,49 @@ sub get_network_configuration {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 get_public_interface_name
+
+ Parameters  : none
+ Returns     : string
+ Description : Retrieves the public interface name on the computer. This may not
+               be determined when the computer is first booting because the
+               interfaces are being initialized. This subroutine will loop for
+               up to 3 minutes.
+
+=cut
+
+sub get_public_interface_name {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $computer_node_name   = $self->data->get_computer_node_name();
+	
+	# Try to determine the public interface name
+	my $public_interface_name = $self->SUPER::get_public_interface_name();
+	return $public_interface_name if ($public_interface_name);
+	
+	# Network interfaces may still be initializing
+	return $self->code_loop_timeout(
+		sub {
+			return $self->SUPER::get_public_interface_name(1);
+		},
+		[], "waiting for public interface to initialize on $computer_node_name", 180, 3
+	);
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 get_public_ip_address
 
  Parameters  : none
  Returns     : string
- Description : Retrieves the public IP address from the computer. If the
-               management node is configured to use DHCP for public IP
-               addresses, the IP address is checked to make sure it is valid. If
-               the computer has an invalid public IP address (169.254.*.*,
-               0.0.0.0), an attempt is made to run 'ipconfig /renew' and
-               retrieve the network configuration again.
+ Description : Retrieves the public IP address from the computer. If the address
+               can't be determined and DHCP is used on the management node, an
+               attempt is made to run 'ipconfig /renew' and retrieve the network
+               configuration again. This will loop for up to 2 minutes.
 
 =cut
 
@@ -5806,25 +5844,45 @@ sub get_public_ip_address {
 	my $computer_node_name   = $self->data->get_computer_node_name();
 	my $public_ip_configuration = $self->data->get_management_node_public_ip_configuration();
 	
-	my $public_ip_address = $self->get_ip_address('public');
-	
-	# Check to make sure the address is valid if DHCP is used
-	if ($public_ip_configuration =~ /dhcp/i) {
-		if (!$public_ip_address || $public_ip_address =~ /^(169\.254|0\.0\.0\.0)/) {
-			notify($ERRORS{'WARNING'}, 0, "$computer_node_name is assigned an invalid public IP address: $public_ip_address, attempting to run ipconfig /renew");
-			delete $self->{network_configuration};
-			$self->ipconfig_renew('public');
-			
-			$public_ip_address = $self->get_ip_address('public');
-			if (!$public_ip_address || $public_ip_address =~ /^(169\.254|0\.0\.0\.0)/) {
-				notify($ERRORS{'CRITICAL'}, 0, "$computer_node_name failed to obtain a valid public IP address: $public_ip_address");
-				return;
-			}
-		}
+	# Make sure public interface name can be determined
+	my $public_interface_name = $self->get_public_interface_name();
+	if (!$public_interface_name) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine public IP address assigned to $computer_node_name, public interface name could not be determined");
+		return;
 	}
 	
-	notify($ERRORS{'DEBUG'}, 0, "retrieved public IP address of $computer_node_name: $public_ip_address");
-	return $public_ip_address;
+	# Call OS.pm::get_ip_address
+	# OS.pm will check for invalid addresses, assume the address is good if a value was returned
+	my $public_ip_address = $self->get_ip_address('public');
+	if ($public_ip_address) {
+		return $public_ip_address;
+	}
+	
+	# If unable to determine public IP on 1st try and DHCP isn't being used, return null
+	if ($public_ip_configuration !~ /dhcp/i) {
+		# Return null if MN is not configured to use DHCP and address could not be determined
+		notify($ERRORS{'WARNING'}, 0, "unable to determine public IP address assigned to $computer_node_name, static public IP address may not have been set yet, management node public IP configuration: $public_ip_configuration");
+		return;
+	}
+	
+	# Management node is configured to use DHCP, failed to determine public IP address on 1st try
+	# Check if DHCP is enabled on what was determined to be the public interface
+	# DHCP should always be enabled or something is wrong
+	# If not enabled, don't enter the loop below
+	# Don't forcefully enable DHCP
+	if (!$self->is_dhcp_enabled($public_interface_name)) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine public IP address assigned to $computer_node_name, DHCP is not enabled on public interface: '$public_interface_name', management node public IP configuration: $public_ip_configuration");
+		return;
+	}
+	
+	# Network interfaces may still be initializing
+	return $self->code_loop_timeout(
+		sub {
+			$self->ipconfig_renew('public');
+			return $self->get_ip_address('public')
+		},
+		[], "waiting for $computer_node_name to receive public IP address via DHCP", 120, 5
+	);
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -5954,6 +6012,11 @@ sub ipconfig_renew {
 	my $computer_node_name   = $self->data->get_computer_node_name();
 	my $system32_path        = $self->get_system32_path() || return;
 	
+	# Delete cached network configuration information
+	delete $self->{network_configuration};
+	delete $self->{public_interface_name};
+	delete $self->{private_interface_name};
+	
 	my $interface_name = shift;
 	if (!$interface_name) {
 		notify($ERRORS{'WARNING'}, 0, "interface name argument was not supplied");
@@ -5966,6 +6029,11 @@ sub ipconfig_renew {
 		$interface_name = $self->get_private_interface_name() || return;
 	}
 	
+	# Delete cached network configuration information again
+	delete $self->{network_configuration};
+	delete $self->{public_interface_name};
+	delete $self->{private_interface_name};
+	
 	my $release_first = shift;
 	
 	# Assemble the ipconfig command, include the interface name if argument was specified
@@ -5975,35 +6043,24 @@ sub ipconfig_renew {
 	}
 	$ipconfig_command .= "$system32_path/ipconfig.exe /renew \"$interface_name\"";
 	
-	# Delete cached network configuration information so it is retrieved next time it is needed
-	delete $self->{network_configuration};
-	
-	my $attempt_limit = 3;
-	my $attempt = 0;
-	
-	while ($attempt < $attempt_limit) {
-		$attempt++;
-		
-		# Run ipconfig
-		my ($ipconfig_status, $ipconfig_output) = $self->execute({command => $ipconfig_command, timeout => 65, ignore_error => 1});
-		
-		if (!defined($ipconfig_output)) {
-			notify($ERRORS{'WARNING'}, 0, "attempt $attempt/$attempt_limit: failed to execute command to renew IP configuration for interface '$interface_name'");
-		}
-		elsif (grep(/error occurred/i, @$ipconfig_output)) {
-			notify($ERRORS{'WARNING'}, 0, "attempt $attempt/$attempt_limit: failed to renew IP configuration for interface '$interface_name', exit status: $ipconfig_status, output:\n" . join("\n", @$ipconfig_output));
-			return;
-		}
-		elsif ($ipconfig_status ne '0' || grep(/error occurred/i, @$ipconfig_output)) {
-			notify($ERRORS{'WARNING'}, 0, "attempt $attempt/$attempt_limit: failed to renew IP configuration for interface '$interface_name', exit status: $ipconfig_status, command: '$ipconfig_command', output:\n" . join("\n", @$ipconfig_output));
-		}
-		else {
-			notify($ERRORS{'OK'}, 0, "renewed IP configuration for interface '$interface_name', output:\n" . join("\n", @$ipconfig_output));
-			return 1;
-		}
+	# Run ipconfig
+	my ($ipconfig_status, $ipconfig_output) = $self->execute({command => $ipconfig_command, timeout => 65, ignore_error => 1});
+	if (!defined($ipconfig_output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to renew IP configuration for interface '$interface_name'");
+		return;
 	}
-	
-	return;
+	elsif (grep(/error occurred/i, @$ipconfig_output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to renew IP configuration for interface '$interface_name', exit status: $ipconfig_status, output:\n" . join("\n", @$ipconfig_output));
+		return;
+	}
+	elsif ($ipconfig_status ne '0' || grep(/error occurred/i, @$ipconfig_output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to renew IP configuration for interface '$interface_name', exit status: $ipconfig_status, command: '$ipconfig_command', output:\n" . join("\n", @$ipconfig_output));
+		return;
+	}
+	else {
+		notify($ERRORS{'OK'}, 0, "renewed IP configuration for interface '$interface_name', output:\n" . join("\n", @$ipconfig_output));
+		return 1;
+	}
 } 
 
 #/////////////////////////////////////////////////////////////////////////////
