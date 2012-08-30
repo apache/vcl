@@ -578,7 +578,7 @@ sub reload_image {
 	if ($node_status_string =~ /^ready/i) {
 		# node_status returned 'ready'
 		notify($ERRORS{'OK'}, 0, "node_status returned '$node_status_string', $computer_short_name will not be reloaded");
-		insertloadlog($reservation_id, $computer_id, "info", "node status is $node_status_string, $computer_short_name will not be reloaded");
+		insertloadlog($reservation_id, $computer_id, "nodeready", "node status is $node_status_string, $computer_short_name will not be reloaded");
 	}
 	
 	elsif ($node_status_string =~ /^post_load/i) {
