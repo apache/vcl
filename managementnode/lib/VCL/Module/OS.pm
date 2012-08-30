@@ -1093,10 +1093,15 @@ sub get_public_interface_name {
 		return;
 	}
 	
-	return $self->{public_interface_name} if defined $self->{public_interface_name};
+	my $no_cache = shift;
+	
+	if (defined $self->{public_interface_name} && !$no_cache) {
+		notify($ERRORS{'DEBUG'}, 0, "returning public interface name previously retrieved: $self->{public_interface_name}");
+		return $self->{public_interface_name};
+	}
 	
 	# Get the network configuration hash reference
-	my $network_configuration = $self->get_network_configuration();
+	my $network_configuration = $self->get_network_configuration($no_cache);
 	if (!$network_configuration) {
 		notify($ERRORS{'WARNING'}, 0, "unable to determine public interface name, failed to retrieve network configuration");
 		return;
@@ -1132,7 +1137,39 @@ sub get_public_interface_name {
 		
 		# If $public_interface_name hasn't been set yet, set it and continue checking the next interface
 		if (!$public_interface_name) {
+			my @check_ip_addresses = keys %{$network_configuration->{$check_interface_name}{ip_address}};
+			my $matches_private = (grep { $_ eq $computer_private_ip_address } @check_ip_addresses) ? 1 : 0;
+			
+			if ($matches_private) {
+				if (scalar(@check_ip_addresses) == 1) {
+					notify($ERRORS{'DEBUG'}, 0, "'$check_interface_name' could not be the public interface, it is only assigned the private IP address");
+					next INTERFACE;
+				}
+				
+				notify($ERRORS{'DEBUG'}, 0, "'$check_interface_name' is assigned private IP address, checking if other assigned IP addresses could potentially be public");
+				CHECK_IP_ADDRESS: for my $check_ip_address (@check_ip_addresses) {
+					
+					if ($check_ip_address eq $computer_private_ip_address) {
+						notify($ERRORS{'DEBUG'}, 0, "ignoring private IP address ($check_ip_address) assigned to interface '$check_interface_name'");
+						next CHECK_IP_ADDRESS;
+					}
+					elsif ($check_ip_address =~ /^(169\.254|0\.0\.0\.0)/) {
+						notify($ERRORS{'DEBUG'}, 0, "ignoring invalid IP address ($check_ip_address) assigned to interface '$check_interface_name'");
+						next CHECK_IP_ADDRESS;
+					}
+					else {
+						notify($ERRORS{'DEBUG'}, 0, "'$check_interface_name' could potententially be public interface, assigned IP address: $check_ip_address");
 			$public_interface_name = $check_interface_name;
+						last CHECK_IP_ADDRESS;
+					}
+				}
+			}
+			else {
+				# Does not match private IP address
+				notify($ERRORS{'DEBUG'}, 0, "'$check_interface_name' could potententially be public interface, not assigned private IP address");
+				$public_interface_name = $check_interface_name;
+			}
+			
 			next INTERFACE;
 		}
 		
@@ -1443,11 +1480,6 @@ sub get_ip_address {
 		notify($ERRORS{'WARNING'}, 0, "unable to determine $network_type IP address, 'ip_address' value is not set in the network configuration info: \n" . format_data($network_configuration));
 		return;
 	}
-	elsif (scalar(@ip_addresses) == 1) {
-		$ip_address = $ip_addresses[0];
-		notify($ERRORS{'DEBUG'}, 0, "$network_type interface assigned a single IP address, returning $ip_address");
-		return $ip_address;
-	}
 	
 	# Interface has multiple IP addresses, try to find a valid one
 	for $ip_address (@ip_addresses) {
@@ -1460,10 +1492,8 @@ sub get_ip_address {
 		}
 	}
 	
-	# Multiple invalid IP addresses, return the first one
-	$ip_address = $ip_addresses[0];
-	notify($ERRORS{'WARNING'}, 0, "$network_type interface assigned a multiple invalid IP addresses (" . join(", ", @ip_addresses) . "), returning $ip_address");
-	return $ip_address;
+	notify($ERRORS{'WARNING'}, 0, "$network_type interface not assigned a valid IP address: " . join(", ", @ip_addresses));
+	return;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -2133,7 +2163,6 @@ sub execute_new {
 		};
 		
 		if ($EVAL_ERROR) {
-			
 			if ($ignore_error) {
 				notify($ERRORS{'DEBUG'}, 0, "executed command on $computer_name: '$command', ignoring error, returning null") if ($display_output);
 				return;
@@ -2507,7 +2536,6 @@ sub process_connect_methods {
 					notify($ERRORS{'WARNING'}, 0, "'$service_name' service for '$name' connect method does NOT exist on $computer_node_name, connect method install script is not defined");
 				}
 			}
-			
 			# Run the startup script if the service is not started
 			if (!$service_started && defined($startup_script)) {
 				notify($ERRORS{'DEBUG'}, 0, "attempting to run startup script '$startup_script' for '$name' connect method on $computer_node_name");
