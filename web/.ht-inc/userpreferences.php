@@ -395,6 +395,7 @@ function confirmUserPrefs($type) {
 	print "    </TD>\n";
 	print "  </TR>\n";
 	print "</table>\n";
+    print "</DIV>\n";
 }
 
 ////////////////////////////////////////////////////////////////////////////////
