@@ -9779,6 +9779,26 @@ function xmlrpccall() {
 	xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCremoveUsersFromGroup", "xmlRPChandler");
 	xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCautoCapture", "xmlRPChandler");
 	xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCdeployServer", "xmlRPChandler");
+	xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCgetNodes", "xmlRPChandler");
+	xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCaddNode", "xmlRPChandler");
+    xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCremoveNode", "xmlRPChandler");
+    xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCnodeExists", "xmlRPChandler");
+    xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCaddResourceGroupPriv", "xmlRPChandler");
+    xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCremoveResourceGroupPriv", "xmlRPChandler");
+    xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCgetResourceGroupPrivs", "xmlRPChandler");
+    xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCaddUserGroupPriv", "xmlRPChandler");
+    xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCremoveUserGroupPriv", "xmlRPChandler");
+    xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCgetUserGroupPrivs", "xmlRPChandler");
+    xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCaddResourceGroup", "xmlRPChandler");
+    xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCgetResourceGroups", "xmlRPChandler");
+    xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCremoveResourceGroup", "xmlRPChandler");
+	xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCgetUserGroups", "xmlRPChandler");
+    xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCremoveUserGroup", "xmlRPChandler");
+	xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCaddImageToGroup", "xmlRPChandler");
+    xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCremoveImageFromGroup", "xmlRPChandler");
+    xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCgetGroupImages", "xmlRPChandler");
+    xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCaddImageGroupToComputerGroup", "xmlRPChandler");
+    xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCremoveImageGroupFromComputerGroup", "xmlRPChandler");
 
 	print xmlrpc_server_call_method($xmlrpc_handle, $HTTP_RAW_POST_DATA, '');
 	xmlrpc_server_destroy($xmlrpc_handle);
