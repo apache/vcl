@@ -325,7 +325,7 @@ function initGlobals() {
 function checkAccess() {
 	global $mode, $user, $actionFunction, $authMechs;
 	global $itecsauthkey, $ENABLE_ITECSAUTH, $actions, $noHTMLwrappers;
-	global $inContinuation, $docreaders;
+	global $inContinuation, $docreaders, $apiValidateFunc;
 	if($mode == 'xmlrpccall') {
 		// double check for SSL
 		if(! isset($_SERVER['HTTPS']) || $_SERVER['HTTPS'] != "on") {
@@ -439,6 +439,16 @@ function checkAccess() {
 					exit;
 				}
 			}
+            elseif($authMechs[$authtype]['type'] == 'redirect'){
+                $affilid = $authMechs[$authtype]['affiliationid'];
+                if(!(isset($apiValidateFunc) && is_array($apiValidateFunc) &&
+                        array_key_exists($affilid, $apiValidateFunc) && 
+                        $apiValidateFunc[$affilid]($xmluser, $xmlpass))){
+                    printXMLRPCerror(3);    # access denied
+                    dbDisconnect();
+                    exit;
+                }
+            }
 			else {
 				printXMLRPCerror(6);    # unable to auth passed in X-User
 				dbDisconnect();
