@@ -2203,7 +2203,7 @@ function getResourcesFromGroups($groups, $type, $includedeleted) {
 ///
 /// \fn updateUserOrGroupPrivs($name, $node, $adds, $removes, $mode)
 ///
-/// \param $name - unityid, user id, or user group id
+/// \param $name - loginid, user id, or user group id
 /// \param $node - id of the node
 /// \param $adds - array of privs (the name, not the id) to add
 /// \param $removes - array of privs (the name, not the id) to remove
@@ -2834,22 +2834,21 @@ function getUserGroupMembers($groupid) {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn addUserGroupMember($unityid, $groupid)
+/// \fn addUserGroupMember($loginid, $groupid)
 ///
-/// \param $unityid - a user's unityid
+/// \param $loginid - a user's loginid
 /// \param $groupid - a usergroup id
 ///
 /// \brief adds an entry to usergroupmembers for $unityid and $groupid
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function addUserGroupMember($unityid, $groupid) {
-	$userid = getUserlistID($unityid);
+function addUserGroupMember($loginid, $groupid) {
+	$userid = getUserlistID($loginid);
 	$groups = getUsersGroups($userid);
 
 	if(in_array($groupid, array_keys($groups)))
 		return;
 
-	//$userid = getUserlistID($unityid);
 	$query = "INSERT INTO usergroupmembers "
 	       .        "(userid, " 
 	       .        "usergroupid) "
@@ -4960,8 +4959,7 @@ function getRequestInfo($id, $returnNULL=0) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function updateRequest($requestid) {
-	global $requestInfo, $user;
-	$userid = getUserlistID($user['unityid']);
+	global $requestInfo;
 	$startstamp = unixToDatetime($requestInfo["start"]);
 	$endstamp = unixToDatetime($requestInfo["end"]);
 
