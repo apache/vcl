@@ -69,7 +69,7 @@
 ///
 /// \brief gets all of the affilations for which users can log in to VCL\n
 /// \b NOTE: This is the only function available for which the X-User and X-Pass
-/// HTTP headers do not need to be passed
+/// HTTP headers do not need to be passed\n
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function XMLRPCaffiliations() {
@@ -90,7 +90,7 @@ function XMLRPCaffiliations() {
 /// \b id - id of the image\n
 /// \b name - name of the image
 ///
-/// \brief gets the images to which the user has acces
+/// \brief gets the images to which the user has access\n
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function XMLRPCgetImages() {
@@ -98,7 +98,11 @@ function XMLRPCgetImages() {
 	$resources["image"] = removeNoCheckout($resources["image"]);
 	$return = array();
 	foreach($resources['image'] as $key => $val) {
-		$tmp = array('id' => $key, 'name' => $val);
+        $notes = getImageNotes($key);
+        $tmp = array('id' => $key,
+                     'name' => $val,
+                     'description' => $notes['description'],
+                     'usage' => $notes['usage']);
 		array_push($return, $tmp);
 	}
 	return $return;
@@ -128,7 +132,7 @@ function XMLRPCgetImages() {
 /// \li \b requestid - identifier that should be passed to later calls when
 /// acting on the request
 ///
-/// \brief tries to make a request
+/// \brief tries to make a request\n
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function XMLRPCaddRequest($imageid, $start, $length, $foruser='') {
@@ -224,7 +228,7 @@ function XMLRPCaddRequest($imageid, $start, $length, $foruser='') {
 /// \li \b requestid - identifier that should be passed to later calls when
 /// acting on the request
 ///
-/// \brief tries to make a request with the specified ending time
+/// \brief tries to make a request with the specified ending time\n
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function XMLRPCaddRequestWithEnding($imageid, $start, $end, $foruser='') {
@@ -328,9 +332,9 @@ function XMLRPCaddRequestWithEnding($imageid, $start, $end, $foruser='') {
 /// in the array:
 /// \li \b time - the estimated wait time (in minutes) for loading to complete\n
 ///
-/// \b future - start time of request is in the future
+/// \b future - start time of request is in the future\n
 ///
-/// \brief determines and returns the status of the request
+/// \brief determines and returns the status of the request\n
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function XMLRPCgetRequestStatus($requestid) {
@@ -397,6 +401,54 @@ function XMLRPCgetRequestStatus($requestid) {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
+/// \fn XMLRPCgetUserGroups()
+///
+/// \return an array listing all of the groups to which the given user
+/// has read or write access. Each usergroup will be an array with the 
+/// following keys:\n
+/// id\n
+/// name\n
+/// groupaffiliation\n
+/// groupaffiliationid\n
+/// ownerid\n
+/// owner\n
+/// affiliation\n
+/// editgroupid\n
+/// editgroup\n
+/// editgroupaffiliationid\n
+/// editgroupaffiliation\n
+/// custom\n
+/// courseroll\n
+/// initialmaxtime\n
+/// maxextendtime\n
+/// overlapResCount\n
+///
+/// \brief builds a list of user groups\n
+///
+////////////////////////////////////////////////////////////////////////////////
+function XMLRPCgetUserGroups($groupType=0, $affiliationid=0) {
+    global $user;
+    $groups = getUserGroups($groupType, $affiliationid);
+
+    // Filter out any groups to which the user does not have access.
+    $usergroups = array();
+    foreach($groups as $id => $group){
+        if($group['ownerid'] == $user['id'] || 
+            (array_key_exists("editgroupid", $group) &&
+            array_key_exists($group['editgroupid'], $user["groups"])) || 
+            (array_key_exists($id, $user["groups"]))){
+            array_push($usergroups, $group);
+        }
+    }
+    return array(
+            "status" => "success",
+            "groups" => $usergroups);
+}
+
+
+
+////////////////////////////////////////////////////////////////////////////////
+///
 /// \fn XMLRPCgetRequestConnectData($requestid, $remoteIP)
 ///
 /// \param $requestid - id of a request
@@ -417,7 +469,7 @@ function XMLRPCgetRequestStatus($requestid) {
 /// \b notready - request is not ready for connection
 ///
 /// \brief if request is ready, adds the connecting user's computer to the
-/// request and returns info about how to connect to the computer
+/// request and returns info about how to connect to the computer\n
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function XMLRPCgetRequestConnectData($requestid, $remoteIP) {
@@ -457,6 +509,10 @@ function XMLRPCgetRequestConnectData($requestid, $remoteIP) {
 		addChangeLogEntry($requestData["logid"], $remoteIP);
 		$serverIP = $requestData["reservations"][0]["reservedIP"];
 		$passwd = $requestData["reservations"][0]["password"];
+        $connectport = $requestData["reservations"][0]["connectport"];
+        $connectMethods = getImageConnectMethodTexts(
+                $requestData["reservations"][0]["imageid"],
+                $requestData["reservations"][0]["imagerevisionid"]);
 		if($requestData["forimaging"])
 			$thisuser = 'Administrator';
 		else
@@ -464,10 +520,20 @@ function XMLRPCgetRequestConnectData($requestid, $remoteIP) {
 				$thisuser = $matches[1];
 			else
 				$thisuser = $user['unityid'];
+        foreach($connectMethods as $key => $cm){
+            $connecttext = $cm["connecttext"];
+            $connecttext = preg_replace("/#userid#/", $thisuser, $connecttext); 
+            $connecttext = preg_replace("/#password#/", $passwd, $connecttext); 
+            $connecttext = preg_replace("/#connectIP#/", $serverIP, $connecttext); 
+            $connecttext = preg_replace("/#connectport#/", $connectport, $connecttext); 
+            $connectMethods[$key]["connecttext"] = $connecttext;
+        }
 		return array('status' => 'ready',
 		             'serverIP' => $serverIP,
 		             'user' => $thisuser,
-		             'password' => $passwd);
+                     'password' => $passwd,
+                     'connectport' => $connectport,
+                     'connectMethods' => $connectMethods);
 	}
 	return array('status' => 'notready');
 }
@@ -488,7 +554,7 @@ function XMLRPCgetRequestConnectData($requestid, $remoteIP) {
 /// \b success - request was successfully extended\n
 ///
 /// \brief extends the length of an active request; if a request that has not
-/// started needs to be extended, delete the request and submit a new one
+/// started needs to be extended, delete the request and submit a new one\n
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function XMLRPCextendRequest($requestid, $extendtime) {
@@ -612,6 +678,802 @@ function XMLRPCextendRequest($requestid, $extendtime) {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
+/// \fn XMLRPCremoveImageFromGroup($name, $imageid)
+///
+/// \param $name - the name of an imageGroup
+/// \param $imageid - the id of an image
+///
+/// \return an array with at least one index named 'status' which will have
+/// one of these values\n
+/// \b error - error occurred; there will be 2 additional elements in the array:
+/// \li \b errorcode - error number\n
+/// \li \b errormsg - error string\n
+///
+/// \b success - image was removed from the group\n
+///
+/// \brief removes an image from a resource group\n
+///
+////////////////////////////////////////////////////////////////////////////////
+function XMLRPCremoveImageFromGroup($name, $imageid){
+    $groups = getUserResources(array("imageAdmin"), array("manageGroup"), 1);
+    
+    if($groupid = getResourceGroupID("image/$name")){
+        if(!array_key_exists($groupid, $groups['image'])){
+            return array('status' => 'error',
+                         'errorcode' => 46,
+                         'errormsg' => 'Unable to access image group');
+        }
+        $resources = getUserResources(array("imageAdmin"), array("manageGroup"));
+        if(!array_key_exists($imageid, $resources['image'])){
+            return array('status' => 'error',
+                         'errorcode' => 47,
+                         'errormsg' => 'Unable to access image');
+        }
+
+        $allimages = getImages();
+        $query = "DELETE FROM resourcegroupmembers "
+               . "WHERE resourceid={$allimages[$imageid]['resourceid']} "
+               . "AND resourcegroupid=$groupid";
+        doQuery($query, 287);
+        return array('status' => 'success');
+    } else {
+        return array('status' => 'error',
+                     'errorcode' => 83,
+                     'errormsg' => 'invalid resource group name');
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn XMLRPCaddImageToGroup($name, $imageid)
+///
+/// \param $name - the name of an imageGroup
+/// \param $imageid - the id of an image
+///
+/// \return an array with at least one index named 'status' which will have
+/// one of these values\n
+/// \b error - error occurred; there will be 2 additional elements in the array:
+/// \li \b errorcode - error number\n
+/// \li \b errormsg - error string\n
+///
+/// \b success - image was added to the group\n
+///
+/// \brief adds an image to a resource group\n
+///
+////////////////////////////////////////////////////////////////////////////////
+function XMLRPCaddImageToGroup($name, $imageid){
+    $groups = getUserResources(array("imageAdmin"), array("manageGroup"), 1);
+    
+    if($groupid = getResourceGroupID("image/$name")){
+        if(!array_key_exists($groupid, $groups['image'])){
+            return array('status' => 'error',
+                         'errorcode' => 46,
+                         'errormsg' => 'Unable to access image group');
+        }
+        $resources = getUserResources(array("imageAdmin"), array("manageGroup"));
+        if(!array_key_exists($imageid, $resources['image'])){
+            return array('status' => 'error',
+                         'errorcode' => 47,
+                         'errormsg' => 'Unable to access image');
+        }
+
+        $allimages = getImages();
+        $query = "INSERT IGNORE INTO resourcegroupmembers "
+               . "(resourceid, resourcegroupid) VALUES "
+               . "({$allimages[$imageid]['resourceid']}, $groupid)";
+        doQuery($query, 287);
+        return array('status' => 'success');
+    } else {
+        return array('status' => 'error',
+                     'errorcode' => 83,
+                     'errormsg' => 'invalid resource group name');
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn XMLRPCgetGroupImages($name)
+///
+/// \param $name - the name of an imageGroup
+///
+/// \return an array with at least one index named 'status' which will have
+/// one of these values\n
+/// \b error - error occurred; there will be 2 additional elements in the array:
+/// \li \b errorcode - error number\n
+/// \li \b errormsg - error string\n
+///
+/// \b success - returns an array of images\n
+///
+/// \brief gets a list of all images in a particular group\n
+///
+////////////////////////////////////////////////////////////////////////////////
+function XMLRPCgetGroupImages($name){
+    if($groupid = getResourceGroupID("image/$name")){
+        $membership = getResourceGroupMemberships('image');
+        $resources = getUserResources(array("imageAdmin"),
+                                      array("manageGroup"));
+
+        $images = array();
+        foreach($resources['image'] as $imageid => $image){
+            if(array_key_exists($imageid, $membership['image']) &&
+                    in_array($groupid, $membership['image'][$imageid])){
+                array_push($images, array('id' => $imageid, 'name' => $image));
+            }
+        }
+        return array('status' => 'success',
+                     'images' => $images);
+
+    } else {
+        return array('status' => 'error',
+                     'errorcode' => 83,
+                     'errormsg' => 'invalid resource group name');
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn XMLRPCaddImageGroupToComputerGroup($imageGroup, $computerGroup)
+///
+/// \param $imageGroup - the name of an imageGroup
+/// \param $computerGroup - the name of a computerGroup
+///
+/// \return an array with at least one index named 'status' which will have
+/// one of these values\n
+/// \b error - error occurred; there will be 2 additional elements in the array:
+/// \li \b errorcode - error number\n
+/// \li \b errormsg - error string\n
+///
+/// \b success - successfully mapped an image group to a computer group\n
+///
+/// \brief map an image group to a computer group\n
+///
+////////////////////////////////////////////////////////////////////////////////
+function XMLRPCaddImageGroupToComputerGroup($imageGroup, $computerGroup){
+    $imageid = getResourceGroupID("image/$imageGroup");
+    $compid = getResourceGroupID("computer/$computerGroup");
+    if($imageid && $compid){
+        $tmp = getUserResources(array("imageAdmin"),
+                                array("manageMapping"), 1);
+        $imagegroups = $tmp['image'];
+        $tmp = getUserResources(array("computerAdmin"),
+                                array("manageMapping"), 1);
+        $computergroups = $tmp['computer'];
+
+        if(array_key_exists($compid, $computergroups) &&
+            array_key_exists($imageid, $imagegroups)){
+            $mapping = getResourceMapping("image", "computer",
+                                          $imageid,
+                                          $compid);
+            if(!array_key_exists($imageid, $mapping) ||
+                !array_key_exists($compid, $mapping[$imageid])){
+                $query = "INSERT INTO resourcemap "
+                       .        "(resourcegroupid1, "
+			           .        "resourcetypeid1, "
+			           .        "resourcegroupid2, "
+			           .        "resourcetypeid2) "
+			           . "VALUES ($imageid, "
+			           .         "13, "
+			           .         "$compid, "
+			           .         "12)";
+                doQuery($query, 101);
+            }
+            return array('status' => 'success');
+        } else {
+            return array('status' => 'error',
+                         'errorcode' => 84,
+                         'errormsg' => 'cannot access computer and/or image group');
+        }
+    } else {
+        return array('status' => 'error',
+                     'errorcode' => 83,
+                     'errormsg' => 'invalid resource group name');
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn XMLRPCremoveImageGroupFromComputerGroup($imageGroup, $computerGroup)
+///
+/// \param $imageGroup - the name of an imageGroup
+/// \param $computerGroup - the name of a computerGroup
+///
+/// \return an array with at least one index named 'status' which will have
+/// one of these values\n
+/// \b error - error occurred; there will be 2 additional elements in the array:
+/// \li \b errorcode - error number\n
+/// \li \b errormsg - error string\n
+///
+/// \b success - successfully removed the mapping from an 
+///     image group to a computer group\n
+///
+/// \brief remove the mapping of an image group to a computer group\n
+///
+////////////////////////////////////////////////////////////////////////////////
+function XMLRPCremoveImageGroupFromComputerGroup($imageGroup, $computerGroup){
+    $imageid = getResourceGroupID("image/$imageGroup");
+    $compid = getResourceGroupID("computer/$computerGroup");
+    if($imageid && $compid){
+        $tmp = getUserResources(array("imageAdmin"),
+                                array("manageMapping"), 1);
+        $imagegroups = $tmp['image'];
+        $tmp = getUserResources(array("computerAdmin"),
+                                array("manageMapping"), 1);
+        $computergroups = $tmp['computer'];
+
+        if(array_key_exists($compid, $computergroups) &&
+            array_key_exists($imageid, $imagegroups)){
+            $mapping = getResourceMapping("image", "computer",
+                                          $imageid,
+                                          $compid);
+            if(array_key_exists($imageid, $mapping) &&
+                array_key_exists($compid, $mapping[$imageid])){
+                $query = "DELETE FROM resourcemap "
+					   . "WHERE resourcegroupid1 = $imageid AND "
+					   .       "resourcetypeid1 = 13 AND "
+					   .       "resourcegroupid2 = $compid AND "
+					   .       "resourcetypeid2 = 12";
+			    doQuery($query, 101);
+            }
+            return array('status' => 'success');
+        } else {
+            return array('status' => 'error',
+                         'errorcode' => 84,
+                         'errormsg' => 'cannot access computer and/or image group');
+        }
+    } else {
+        return array('status' => 'error',
+                     'errorcode' => 83,
+                     'errormsg' => 'invalid resource group name');
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn XMLRPCgetNodes($root)
+///
+/// \param $root - (optional) the ID of the node forming the root of the hierarchy
+///
+/// \return an array with at least one index named 'status' which will have
+/// one of these values\n
+/// \b error - error occurred; there will be 2 additional elements in the array:
+/// \li \b errorcode - error number\n
+/// \li \b errormsg - error string\n
+///
+/// \b success - returns an array of nodes\n
+///
+/// \brief gets a list of all nodes in the privilege tree\n
+///
+////////////////////////////////////////////////////////////////////////////////
+function XMLRPCgetNodes($root=NULL){
+    global $user;
+    if(in_array("nodeAdmin", $user['privileges'])){
+        $topNodes = $root ? getChildNodes($root) : getChildNodes();
+        $nodes = array();
+        $stack = array();
+        foreach($topNodes as $id => $node){
+            $node['id'] = $id;
+            array_push($nodes, $node);
+            array_push($stack, $node);
+        } 
+        while(count($stack)){
+            $item = array_shift($stack);
+            $children = getChildNodes($item['id']);
+            foreach($children as $id => $node){
+                $node['id'] = $id;
+                array_push($nodes, $node);
+                array_push($stack, $node);
+            }
+        }
+        return array(
+            'status' => 'success',
+            'nodes' => $nodes);
+    } else {
+        return array(
+            'status' => 'error',
+            'errorcode' => 56,
+            'errormsg' => 'User cannot access node content');
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn XMLRPCnodeExists($nodeName, $parentNode)
+///
+/// \param $nodeName - the name of a node
+/// \param $parentNode - the ID of the parent node
+///
+/// \return an array with at least one index named 'status' which will have
+/// one of these values\n
+/// \b error - error occurred; there will be 2 additional elements in the array:
+/// \li \b errorcode - error number\n
+/// \li \b errormsg - error string\n
+///
+/// \b success - returns an 'exists' element set to either 1 or 0\n
+///
+/// \brief indicates whether a node with that name already exists at this
+///     location in the privilege tree\n
+///
+////////////////////////////////////////////////////////////////////////////////
+function XMLRPCnodeExists($nodeName, $parentNode){
+    global $user;
+    if(in_array("nodeAdmin", $user['privileges'])){
+        // does a node with this name already exist?
+        $query = "SELECT id "
+               . "FROM privnode "
+               . "WHERE name = '$nodeName' AND parent = $parentNode";
+        $qh = doQuery($query, 335);
+        if(mysql_num_rows($qh)){
+            return array('status' => 'success', 'exists' => TRUE);
+        } else {
+            return array('status' => 'success', 'exists' => FALSE);
+        }
+    } else {
+        return array(
+            'status' => 'error',
+            'errorcode' => 56,
+            'errormsg' => 'User cannot access node content');
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn XMLRPCremoveNode($nodeID)
+///
+/// \param $nodeID - the ID of a node
+///
+/// \return an array with at least one index named 'status' which will have
+/// one of these values\n
+/// \b error - error occurred; there will be 2 additional elements in the array:
+/// \li \b errorcode - error number\n
+/// \li \b errormsg - error string\n
+///
+/// \b success - node was successfully deleted
+///
+/// \brief delete a node in the privilege tree\n
+///
+////////////////////////////////////////////////////////////////////////////////
+function XMLRPCremoveNode($nodeID){
+    require_once(".ht-inc/privileges.php");
+    global $user;
+    if(!in_array("nodeAdmin", $user['privileges'])){
+        return array(
+            'status' => 'error',
+            'errorcode' => 56,
+            'errormsg' => 'User cannot administer nodes');
+    }
+    if(!checkUserHasPriv("nodeAdmin", $user['id'], $nodeID)){
+        return array(
+            'status' => 'error',
+            'errorcode' => 57,
+            'errormsg' => 'User cannot edit this node');
+    }
+    $nodes = recurseGetChildren($nodeID);
+    array_push($nodes, $nodeID);
+    $deleteNodes = implode(',', $nodes);
+    $query = "DELETE FROM privnode "
+           . "WHERE id IN ($deleteNodes)";
+    doQuery($query, 345);
+    return array(
+            'status' => 'success');
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn XMLRPCaddNode($nodeName, $parentNode)
+///
+/// \param $nodeName - the name of the new node
+/// \param $parentNode - the ID of the node parent
+///
+/// \return an array with at least one index named 'status' which will have
+/// one of these values\n
+/// \b error - error occurred; there will be 2 additional elements in the array:
+/// \li \b errorcode - error number\n
+/// \li \b errormsg - error string\n
+///
+/// \b success - node was successfully added
+///
+/// \brief add a node to the privilege tree as a child of the
+///     specified parent node\n
+///
+////////////////////////////////////////////////////////////////////////////////
+function XMLRPCaddNode($nodeName, $parentNode){
+    require_once(".ht-inc/privileges.php");
+    global $user;
+    if(in_array("nodeAdmin", $user['privileges'])){
+        if(!$parentNode){
+            $topNodes = getChildNodes();
+            $keys = array_keys($topNodes);
+            $parentNode = array_shift($keys);
+        }
+
+        if(!preg_match("/^[-A-Za-z0-9_\. ]+$/", $nodeName)){
+            return array('status' => 'error',
+                         'errorcode' => 48,
+                         'errormsg' => 'Invalid node name');
+        }
+
+        if(checkUserHasPriv("nodeAdmin", $user['id'], $parentNode)){
+            $nodeInfo = getNodeInfo($parentNode);
+            $query = "SELECT id "
+                   . "FROM privnode "
+                   . "WHERE name = '$nodeName' AND parent = $parentNode";
+            $qh = doQuery($query, 335);
+            if(mysql_num_rows($qh)){
+                return array('status' => 'error',
+                             'errorcode' => 50,
+                             'errormsg' => 'A node of that name already exists under ' . $nodeInfo['name']);
+            }
+            $query = "INSERT IGNORE INTO privnode "
+                   .        "(parent, name) "
+                   . "VALUES "
+                   .        "($parentNode, '$nodeName')";
+            doQuery($query, 337);
+            $qh = doQuery("SELECT LAST_INSERT_ID() FROM privnode", 101);
+            if(!$row = mysql_fetch_row($qh)){
+                return array('status' => 'error',
+                             'errorcode' => 51,
+                             'errormsg' => 'Could not add node to database');
+            }
+            $nodeid = $row[0];
+            return array('status' => 'success',
+                         'nodeid' => $nodeid);
+        } else {
+            return array('status' => 'error',
+                         'errorcode' => 49,
+                         'errormsg' => 'Unable to add node at this location');
+        }
+    } else {
+        return array(
+            'status' => 'error',
+            'errorcode' => 56,
+            'errormsg' => 'User cannot access node content');
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn XMLRPCremoveResourceGroupPriv($name, $type, $nodeid, $permissions)
+///
+/// \param $name - the name of the resource group
+/// \param $type - the resource type
+/// \param $nodeid - the ID of the node in the privilege tree
+/// \param $permissions - a colon (:) delimited list of privileges to remove
+///
+/// \return an array with at least one index named 'status' which will have
+/// one of these values\n
+/// \b error - error occurred; there will be 2 additional elements in the array:
+/// \li \b errorcode - error number\n
+/// \li \b errormsg - error string\n
+///
+/// \b success - privileges were successfully removed
+///
+/// \brief remove privileges from a resource group in the privilege
+///      node tree\n
+///
+////////////////////////////////////////////////////////////////////////////////
+function XMLRPCremoveResourceGroupPriv($name, $type, $nodeid, $permissions){
+    require_once(".ht-inc/privileges.php");
+    global $user;
+
+    if(! checkUserHasPriv("resourceGrant", $user['id'], $nodeid)){
+        return array('status' => 'error',
+                     'errorcode' => 53,
+                     'errormsg' => 'Unable to remove group privileges on this node');
+    }
+    if($typeid = getResourceTypeID($type)){
+        if(!checkForGroupName($name, 'resource', '', $typeid)){
+            return array('status' => 'error',
+                         'errorcode' => 28,
+                         'errormsg' => 'resource group does not exist');
+        }
+        $perms = explode(':', $permissions);
+        updateResourcePrivs("$type/$name", $nodeid, array(), $perms);
+        return array('status' => 'success');
+    } else {
+        return array('status' => 'error',
+                     'errorcode' => 56,
+                     'errormsg' => 'Invalid resource type');
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn XMLRPCgetUserGroupPrivs($name, $affiliation, $nodeid)
+///
+/// \param $name - the name of the user group
+/// \param $affiliation - the affiliation of the group
+/// \param $nodeid - the ID of the node in the privilege tree
+///
+/// \return an array with at least one index named 'status' which will have
+/// one of these values\n
+/// \b error - error occurred; there will be 2 additional elements in the array:
+/// \li \b errorcode - error number\n
+/// \li \b errormsg - error string\n
+///
+/// \b success - an additional element is returned:
+/// \li \b privileges - a list of privileges available
+///
+/// \brief get a list of privileges for a user group at a particular
+///     location in the privilege tree\n
+///
+////////////////////////////////////////////////////////////////////////////////
+function XMLRPCgetUserGroupPrivs($name, $affiliation, $nodeid){
+    require_once(".ht-inc/privileges.php");
+    global $user;
+
+    if(! checkUserHasPriv("userGrant", $user['id'], $nodeid)){
+        return array('status' => 'error',
+                     'errorcode' => 53,
+                     'errormsg' => 'Unable to add resource group to this node');
+    }
+
+	$validate = array('name' => $name,
+	                  'affiliation' => $affiliation);
+	$rc = validateAPIgroupInput($validate, 1);
+	if($rc['status'] == 'error')
+		return $rc;
+
+    $privileges = array();
+    $nodePrivileges = getNodePrivileges($nodeid, 'usergroups');
+    $cascadedNodePrivileges = getNodeCascadePrivileges($nodeid, 'usergroups'); 
+    $cngp = $cascadedNodePrivileges['usergroups'];
+    $ngp = $nodePrivileges['usergroups'];
+    if(array_key_exists($name, $cngp)){
+        foreach($cngp[$name]['privs'] as $p){
+            if(! array_key_exists($name, $ngp) ||
+                    ! in_array("block", $ngp[$name]['privs'])){
+                array_push($privileges, $p);
+            }
+        }
+    }
+    if(array_key_exists($name, $ngp)){
+        foreach($ngp[$name]['privs'] as $p){
+            if($p != "block"){
+                array_push($privileges, $p);
+            }
+        }
+    }
+
+    return array(
+        'status' => 'success',
+        'privileges' => array_unique($privileges));
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn XMLRPCgetResourceGroupPrivs($name, $type, $nodeid)
+///
+/// \param $name - the name of the resource group
+/// \param $type - the resource group type
+/// \param $nodeid - the ID of the node in the privilege tree
+///
+/// \return an array with at least one index named 'status' which will have
+/// one of these values\n
+/// \b error - error occurred; there will be 2 additional elements in the array:
+/// \li \b errorcode - error number\n
+/// \li \b errormsg - error string\n
+///
+/// \b success - an additional element is returned:
+/// \li \b privileges - a list of privileges available
+///
+/// \brief get a list of privileges for a resource group at a particular
+///     location in the privilege tree\n
+///
+////////////////////////////////////////////////////////////////////////////////
+function XMLRPCgetResourceGroupPrivs($name, $type, $nodeid){
+    require_once(".ht-inc/privileges.php");
+    global $user;
+
+    if(! checkUserHasPriv("resourceGrant", $user['id'], $nodeid)){
+        return array('status' => 'error',
+                     'errorcode' => 53,
+                     'errormsg' => 'Unable to add resource group to this node');
+    }
+
+    if($typeid = getResourceTypeID($type)){
+        if(!checkForGroupName($name, 'resource', '', $typeid)){
+            return array('status' => 'error',
+                         'errorcode' => 28,
+                         'errormsg' => 'resource group does not exist');
+        }
+        $nodePrivileges = getNodePrivileges($nodeid, 'resources');
+        $nodePrivileges = getNodeCascadePrivileges($nodeid, 'resources', $nodePrivileges); 
+        foreach($nodePrivileges['resources'] as $resource => $privs){
+            if(strstr($resource, "$type/$name")){
+                return array(
+                    'status' => 'success',
+                    'privileges' => $privs);
+            }
+        }
+        return array(
+            'status' => 'error',
+            'errorcode' => 29,
+            'errormsg' => 'could not find resource name in privilege list');
+    } else {
+        return array('status' => 'error',
+                     'errorcode' => 56,
+                     'errormsg' => 'Invalid resource type');
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn XMLRPCaddResourceGroupPriv($name, $type, $nodeid, $permissions)
+///
+/// \param $name - the name of the resource group
+/// \param $type - the resource group type
+/// \param $nodeid - the ID of the node in the privilege tree
+/// \param $permissions - a colon (:) delimited list of privileges to add
+///
+/// \return an array with at least one index named 'status' which will have
+/// one of these values\n
+/// \b error - error occurred; there will be 2 additional elements in the array:
+/// \li \b errorcode - error number\n
+/// \li \b errormsg - error string\n
+///
+/// \b success - privileges were successfully added
+///
+/// \brief add privileges for a resource group at a particular
+///     location in the privilege tree\n
+///
+////////////////////////////////////////////////////////////////////////////////
+function XMLRPCaddResourceGroupPriv($name, $type, $nodeid, $permissions){
+    require_once(".ht-inc/privileges.php");
+    global $user;
+
+    if(! checkUserHasPriv("resourceGrant", $user['id'], $nodeid)){
+        return array('status' => 'error',
+                     'errorcode' => 53,
+                     'errormsg' => 'Unable to add resource group to this node');
+    }
+
+    if($typeid = getResourceTypeID($type)){
+        if(!checkForGroupName($name, 'resource', '', $typeid)){
+            return array('status' => 'error',
+                         'errorcode' => 28,
+                         'errormsg' => 'resource group does not exist');
+        }
+        $perms = explode(':', $permissions);
+        updateResourcePrivs("$type/$name", $nodeid, $perms, array());
+        return array('status' => 'success');
+    } else {
+        return array('status' => 'error',
+                     'errorcode' => 56,
+                     'errormsg' => 'Invalid resource type');
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn XMLRPCremoveResourceGroupPriv($name, $type, $nodeid, $permissions)
+///
+/// \param $name - the name of the resource group
+/// \param $type - the resource group type
+/// \param $nodeid - the ID of the node in the privilege tree
+/// \param $permissions - a colon (:) delimited list of privileges to remove
+///
+/// \return an array with at least one index named 'status' which will have
+/// one of these values\n
+/// \b error - error occurred; there will be 2 additional elements in the array:
+/// \li \b errorcode - error number\n
+/// \li \b errormsg - error string\n
+///
+/// \b success - privileges were successfully removed
+///
+/// \brief remove privileges for a resource group at a particular
+///     location in the privilege tree\n
+///
+////////////////////////////////////////////////////////////////////////////////
+function XMLRPCremoveUserGroupPriv($name, $affiliation, $nodeid, $permissions){
+    require_once(".ht-inc/privileges.php");
+	global $user;
+
+    if(! checkUserHasPriv("userGrant", $user['id'], $nodeid)){
+		return array('status' => 'error',
+                     'errorcode' => 53,
+                     'errormsg' => 'Unable to remove group privileges on this node');
+    }
+
+	$validate = array('name' => $name,
+	                  'affiliation' => $affiliation);
+	$rc = validateAPIgroupInput($validate, 1);
+	if($rc['status'] == 'error')
+		return $rc;
+
+    $groupid = $rc['id'];
+    $groupname = "$name@$affiliation";
+    $perms = explode(':', $permissions);
+    $usertypes = getTypes('users');
+    array_push($usertypes["users"], "block");
+	array_push($usertypes["users"], "cascade");
+    $cascadePrivs = getNodeCascadePriviliges($nodeid, "usergroups");
+    $removegroupprivs = array();
+    if(array_key_exists($groupname, $cascadePrivs['usergroups'])){
+        foreach($perms as $permission){
+            if(in_array($permission, $cascadePrivs['usergroups'][$groupname]['privs'])){
+                array_push($removegroupprivs, $permission);
+            }
+        }
+        $diff = array_diff($cascadePrivs['usergroups'][$groupname], $removegroupprivs);
+        if(count($diff) == 1 && in_array("cascade", $diff)){
+            array_push($removegroupprivs, "cascade");
+	}
+	}
+    if(empty($removegroupprivs)){
+		return array('status' => 'error',
+                     'errorcode' => 53,
+                     'errormsg' => 'Invalid or missing permissions list supplied');
+	}
+
+    updateUserOrGroupPrivs($groupid, $nodeid, array(), $removegroupprivs, "group");
+    return array('status' => 'success');
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn XMLRPCaddUserGroupPriv($name, $affiliation, $nodeid, $permissions)
+///
+/// \param $name - the name of the user group
+/// \param $affiliation - the affiliation of the user group
+/// \param $nodeid - the ID of the node in the privilege tree
+/// \param $permissions - a colon (:) delimited list of privileges to add
+///
+/// \return an array with at least one index named 'status' which will have
+/// one of these values\n
+/// \b error - error occurred; there will be 2 additional elements in the array:
+/// \li \b errorcode - error number\n
+/// \li \b errormsg - error string\n
+///
+/// \b success - privileges were successfully added
+///
+/// \brief add privileges for a user group at a particular
+///     location in the privilege tree\n
+///
+////////////////////////////////////////////////////////////////////////////////
+function XMLRPCaddUserGroupPriv($name, $affiliation, $nodeid, $permissions){
+    require_once(".ht-inc/privileges.php");
+    global $user;
+
+    if(! checkUserHasPriv("userGrant", $user['id'], $nodeid)){
+		return array('status' => 'error',
+                     'errorcode' => 52,
+                     'errormsg' => 'Unable to add a user group to this node');
+	}
+
+	$validate = array('name' => $name,
+	                  'affiliation' => $affiliation);
+	$rc = validateAPIgroupInput($validate, 1);
+	if($rc['status'] == 'error')
+		return $rc;
+
+    $groupid = $rc['id'];
+    $perms = explode(':', $permissions);
+    $usertypes = getTypes('users');
+    array_push($usertypes["users"], "block");
+	array_push($usertypes["users"], "cascade");
+	$newgroupprivs = array();
+	foreach($usertypes["users"] as $type) {
+		if(in_array($type, $perms))
+			array_push($newgroupprivs, $type);
+	}
+	if(empty($newgroupprivs) || (count($newgroupprivs) == 1 && 
+           in_array("cascade", $newgroupprivs))) {
+		return array('status' => 'error',
+                    'errorcode' => 53,
+                    'errormsg' => 'Invalid or missing permissions list supplied');
+	}
+    updateUserOrGroupPrivs($groupid, $nodeid, $newgroupprivs, array(), "group");
+	return array('status' => 'success');
+}
+
+
+
+
+////////////////////////////////////////////////////////////////////////////////
+///
 /// \fn XMLRPCsetRequestEnding($requestid, $end)
 ///
 /// \param $requestid - id of a request
@@ -627,7 +1489,7 @@ function XMLRPCextendRequest($requestid, $extendtime) {
 /// \b success - request was successfully extended\n
 ///
 /// \brief modifies the end time of an active request; if a request that has not
-/// started needs to be modifed, delete the request and submit a new one
+/// started needs to be modifed, delete the request and submit a new one\n
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function XMLRPCsetRequestEnding($requestid, $end) {
@@ -756,7 +1618,7 @@ function XMLRPCsetRequestEnding($requestid, $end) {
 ///
 /// \b success - request was successfully ended\n
 ///
-/// \brief ends/deletes a request
+/// \brief ends/deletes a request\n
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function XMLRPCendRequest($requestid) {
@@ -799,7 +1661,7 @@ function XMLRPCendRequest($requestid) {
 /// \li \b start - unix timestamp of start time\n
 /// \li \b end - unix timestamp of end time
 ///
-/// \brief gets information about all of user's requests
+/// \brief gets information about all of user's requests\n
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function XMLRPCgetRequestIds() {
@@ -866,7 +1728,7 @@ function XMLRPCgetRequestIds() {
 /// available
 ///
 /// \brief creates and processes a block allocation according to the passed
-/// in criteria
+/// in criteria\n
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function XMLRPCblockAllocation($imageid, $start, $end, $numMachines,
@@ -964,7 +1826,7 @@ function XMLRPCblockAllocation($imageid, $start, $end, $numMachines,
 /// available
 ///
 /// \brief processes a block allocation for the blockTimes entry associated
-/// with blockTimesid
+/// with blockTimesid\n
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function XMLRPCprocessBlockTime($blockTimesid, $ignoreprivileges=0) {
@@ -1256,7 +2118,7 @@ function XMLRPCprocessBlockTime($blockTimesid, $ignoreprivileges=0) {
 ///
 /// \b success - user group was successfully created
 ///
-/// \brief creates a new user group with the specified parameters
+/// \brief creates a new user group with the specified parameters\n
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function XMLRPCaddUserGroup($name, $affiliation, $owner, $managingGroup,
@@ -1301,6 +2163,196 @@ function XMLRPCaddUserGroup($name, $affiliation, $owner, $managingGroup,
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
+/// \fn XMLRPCgetResourceGroups($type)
+///
+/// \param $type - the resource group type
+///
+/// \return an array with at least one index named 'status' which will have
+/// one of these values\n
+/// \b error - error occurred; there will be 2 additional elements in the array:
+/// \li \b errorcode - error number\n
+/// \li \b errormsg - error string\n
+///
+/// \b success - an 'groups' element will contain a list of groups
+///         of the given type.\n
+///
+/// \brief get a list of resource groups of a particular type\n
+///
+////////////////////////////////////////////////////////////////////////////////
+function XMLRPCgetResourceGroups($type){
+    global $user;
+    $resources = getUserResources(array("groupAdmin"), array("manageGroup"), 1);
+    if(array_key_exists($type, $resources)){
+        return array(
+            'status' => 'success',
+            'groups' => $resources[$type]);
+    } else {
+        return array(
+            'status' => 'error',
+            'errorcode' => 29,
+            'errormsg' => 'invalid resource group type');
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn XMLRPCremoveResourceGroup($name, $type)
+///
+/// \param $name - the name of the resource group
+/// \param $type - the resource group type
+///
+/// \return an array with at least one index named 'status' which will have
+/// one of these values\n
+/// \b error - error occurred; there will be 2 additional elements in the array:
+/// \li \b errorcode - error number\n
+/// \li \b errormsg - error string\n
+///
+/// \b success - the resource group was removed\n
+///
+/// \brief remove a resource group\n
+///
+////////////////////////////////////////////////////////////////////////////////
+function XMLRPCremoveResourceGroup($name, $type){
+    global $user;
+    if(! in_array("groupAdmin", $user['privileges'])){
+        return array('status' => 'error',
+                     'errorcode' => 16,
+                     'errormsg' => 'access denied for managing user groups');
+    }
+
+    if($groupid = getResourceGroupID("$type/$name")){
+        $userresources = getUserResources(
+            array("groupAdmin"),
+            array("manageGroup"), 1);
+        if(array_key_exists($type, $userresources)){
+            if(array_key_exists($groupid, $userresources[$type])){
+                $query = "DELETE FROM resourcegroup "
+                       . "WHERE id = $groupid";
+                doQuery($query, 315);
+                return array('status' => 'success');
+            }
+        }
+    }
+    return array('status' => 'error',
+                 'errorcode' => 39,
+                 'errormsg' => 'invalid resource group name');
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn XMLRPCremoveUserGroup($name, $affiliation)
+///
+/// \param $name - the name of the resource group
+/// \param $affiliation - the affiliation of the user group
+///
+/// \return an array with at least one index named 'status' which will have
+/// one of these values\n
+/// \b error - error occurred; there will be 2 additional elements in the array:
+/// \li \b errorcode - error number\n
+/// \li \b errormsg - error string\n
+///
+/// \b success - the user group was removed\n
+///
+/// \brief remove a user group\n
+///
+////////////////////////////////////////////////////////////////////////////////
+function XMLRPCremoveUserGroup($name, $affiliation){
+    global $user;
+
+    if(! in_array("groupAdmin", $user['privileges'])){
+        return array('status' => 'error',
+                     'errorcode' => 16,
+                     'errormsg' => 'access denied for managing user groups');
+    }
+
+    $validate = array(
+        'name' => $name,
+        'affiliation' => $affiliation);
+
+    $rc = validateAPIgroupInput($validate, 1);
+    if($rc['status'] == 'error')
+        return $rc;
+
+    $groups = getUserGroups();
+    $groupid = $rc['id'];
+    if(array_key_exists($groupid, $groups)){
+        $group = $groups[$groupid];
+        if($group['ownerid'] == $user['id'] ||
+                (array_key_exists("editgroupid", $group) &&
+                array_key_exists($group['editgroupid'], $user["groups"])) || 
+                (array_key_exists($groupid, $user["groups"]))){
+            $query = "DELETE FROM usergroup "
+                   . "WHERE id = $groupid";
+            doQuery($query, 315);
+            return array('status' => 'success');
+        }
+    }
+    return array(
+        'status' => 'error',
+        'errorcode' => 17,
+        'errormsg' => 'access denied for editing specified group');
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn XMLRPCaddResourceGroup($name, $managingGroup, $type)
+///
+/// \param $name - the name of the resource group
+/// \param $managingGroup - the name of the managing group
+/// \param $type - the type of resource group
+///
+/// \return an array with at least one index named 'status' which will have
+/// one of these values\n
+/// \b error - error occurred; there will be 2 additional elements in the array:
+/// \li \b errorcode - error number\n
+/// \li \b errormsg - error string\n
+///
+/// \b success - the resource group was added\n
+///
+/// \brief add a resource group\n
+///
+////////////////////////////////////////////////////////////////////////////////
+function XMLRPCaddResourceGroup($name, $managingGroup, $type){
+    global $user;
+    if(! in_array("groupAdmin", $user['privileges'])){
+        return array('status' => 'error',
+                     'errorcode' => 16,
+                     'errormsg' => 'access denied for managing user groups');
+    }
+
+    $validate = array(
+        'managingGroup' => $managingGroup);
+    
+    $rc = validateAPIgroupInput($validate, 0);
+    if($rc['status'] == 'error')
+        return $rc;
+
+    if($typeid = getResourceTypeID($type)){
+        if(checkForGroupName($name, 'resource', '', $typeid)){
+            return array('status' => 'error',
+                         'errorcode' => 28,
+                         'errormsg' => 'resource group already exists');
+        }
+        $data = array(
+            'type' => $type,
+            'ownergroup' => $rc['managingGroupID'],
+            'resourcetypeid' => $typeid,
+            'name' => $name);
+        if(! addGroup($data)){
+            return array('status' => 'error',
+                         'errorcode' => 26,
+                         'errormsg' => 'failure while adding group to database');
+        }
+    } else {
+        return array('status' => 'error',
+                     'errorcode' => 68,
+                     'errormsg' => 'invalid resource type');
+    }
+    return array('status' => 'success');
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
 /// \fn XMLRPCgetUserGroupAttributes($name, $affiliation)
 ///
 /// \param $name - name of user group
@@ -1324,7 +2376,7 @@ function XMLRPCaddUserGroup($name, $affiliation, $owner, $managingGroup,
 /// \li \b maxExtendTime - (minutes) max length of time users can request as an
 ///                        extension to a reservation at a time
 ///
-/// \brief gets information about a user group
+/// \brief gets information about a user group\n
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function XMLRPCgetUserGroupAttributes($name, $affiliation) {
@@ -1392,7 +2444,7 @@ function XMLRPCgetUserGroupAttributes($name, $affiliation) {
 ///
 /// \b success - user group was successfully deleted
 ///
-/// \brief deletes a user group along with all of its privileges
+/// \brief deletes a user group along with all of its privileges\n
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function XMLRPCdeleteUserGroup($name, $affiliation) {
@@ -1468,7 +2520,7 @@ function XMLRPCdeleteUserGroup($name, $affiliation) {
 ///
 /// \brief modifies attributes of a user group\n
 /// \b NOTE: an empty string may be passed for any of the new* fields to leave
-/// that item unchanged
+/// that item unchanged\n
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function XMLRPCeditUserGroup($name, $affiliation, $newName, $newAffiliation,
@@ -1586,7 +2638,7 @@ function XMLRPCeditUserGroup($name, $affiliation, $newName, $newAffiliation,
 ///
 /// \brief gets members of a user group\n
 /// \b Note: it is possible to have a group with no members in which case
-/// success will be returned with an empty array for members
+/// success will be returned with an empty array for members\n
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function XMLRPCgetUserGroupMembers($name, $affiliation) {
@@ -1657,7 +2709,7 @@ function XMLRPCgetUserGroupMembers($name, $affiliation) {
 /// \li \b failedusers - array of users in username\@affiliation form that could
 ///                      not be added
 ///
-/// \brief adds users to a group
+/// \brief adds users to a group\n
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function XMLRPCaddUsersToGroup($name, $affiliation, $users) {
@@ -1738,7 +2790,7 @@ function XMLRPCaddUsersToGroup($name, $affiliation, $users) {
 /// \li \b failedusers - array of users in username\@affiliation form that could
 ///                      not be removed
 ///
-/// \brief removes users from a group
+/// \brief removes users from a group\n
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function XMLRPCremoveUsersFromGroup($name, $affiliation, $users) {
@@ -1822,7 +2874,7 @@ function XMLRPCremoveUsersFromGroup($name, $affiliation, $users) {
 /// \b success - image was successfully set to be captured
 ///
 /// \brief creates entries in appropriate tables to capture an image and sets
-/// the request state to image
+/// the request state to image\n
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function XMLRPCautoCapture($requestid) {
@@ -1937,7 +2989,7 @@ function XMLRPCautoCapture($requestid) {
 /// \li \b requestid - identifier that should be passed to later calls when
 /// acting on the request
 ///
-/// \brief tries to make a server request
+/// \brief tries to make a server request\n
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function XMLRPCdeployServer($imageid, $start, $end, $admingroup='',
@@ -2152,7 +3204,7 @@ function XMLRPCdeployServer($imageid, $start, $end, $admingroup='',
 /// \b string - contents of $string (after being sanatized)
 ///
 /// \brief this is a test function that call be called when getting XML RPC
-/// calls to this site to work
+/// calls to this site to work\n
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function XMLRPCtest($string) {
