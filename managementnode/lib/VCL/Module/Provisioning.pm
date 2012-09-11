@@ -52,6 +52,7 @@ use strict;
 use warnings;
 use diagnostics;
 use English qw( -no_match_vars );
+use File::Basename;
 
 use VCL::utils;
 
@@ -322,6 +323,17 @@ sub retrieve_image {
 		return;
 	}
 	
+	# Make sure the parent image repository path exists
+	my ($image_repository_directory_name, $image_repository_parent_directory_path) = fileparse($image_repository_path_local, qr/\.[^\\\/]*/);
+	if (!$image_repository_parent_directory_path) {
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve image, unable to determine parent directory of local image repository path: $image_repository_path_local");
+		return;
+	}
+	elsif (!$self->mn_os->file_exists($image_repository_parent_directory_path)) {
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve image, local image repository parent path does not exist: $image_repository_parent_directory_path");
+		return;
+	}
+	
 	# Loop through the partners
 	# Find partners which have the image
 	# Check size for each partner
@@ -332,7 +344,7 @@ sub retrieve_image {
 	my $largest_partner_image_size = 0;
 	my @partners_with_image;
 	
-	foreach my $partner (@partner_list) {
+	PARTNER: foreach my $partner (@partner_list) {
 		# Get the connection information for the partner management node
 		$partner_info{$partner}{hostname} = $self->data->get_management_node_hostname($partner);
 		$partner_info{$partner}{user} = $self->data->get_management_node_image_lib_user($partner) || 'root';
@@ -348,7 +360,7 @@ sub retrieve_image {
 		}
 		else {
 			notify($ERRORS{'WARNING'}, 0, "failed to retrieve image repository search paths for partner: $partner");
-			next;
+			next PARTNER;
 		}
 		
 		# Run du to get the size of the image files on the partner if the image exists in any of the search paths
@@ -368,26 +380,68 @@ sub retrieve_image {
 		
 		if (!defined($du_output)) {
 			notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to determine if image $image_name exists on $partner_info{$partner}{hostname}: $du_command");
-			next;
+			next PARTNER;
 		}
 		
 		# Loop through the du output lines, parse lines beginning with a number followed by a '/'
-		for my $line (@$du_output) {
+		LINE: for my $line (@$du_output) {
 			my ($file_size, $file_path) = $line =~ /^(\d+)\s+(\/.+)/;
 			next if (!defined($file_size) || !defined($file_path));
-			$partner_info{$partner}{file_paths}{$file_path} = $file_size;
-			$partner_info{$partner}{image_size} += $file_size;
+			
+			my ($file_prefix, $directory_path, $file_extension) = fileparse($file_path, qr/\.[^.]*/);
+			if (!$file_prefix || !$directory_path || !$file_extension) {
+				next LINE;
+			}
+			
+			my $file_name = "$file_prefix.$file_extension";
+			$partner_info{$partner}{directory_paths}{$directory_path}{file_paths}{$file_path}{file_name} = $file_name;
+			$partner_info{$partner}{directory_paths}{$directory_path}{file_paths}{$file_path}{file_size} = $file_size;
+			$partner_info{$partner}{directory_paths}{$directory_path}{image_size} += $file_size;
 		}
+		
+		if (!$partner_info{$partner}{directory_paths}) {
+			notify($ERRORS{'OK'}, 0, "$image_name does NOT exist on $partner_info{$partner}{hostname}, output:\n" . join("\n", @$du_output));
+			next PARTNER;
+		}
+		
+		# Loop through the directories containing image files found on the partner
+		# The image may have been found in multiple directories
+		my $directory_path;
+		DIRECTORY_PATH: for my $check_directory_path (keys %{$partner_info{$partner}{directory_paths}}) {
+			if (!$directory_path) {
+				$directory_path = $check_directory_path;
+				next DIRECTORY_PATH;
+			}
+			
+			my $file_count = scalar(keys %{$partner_info{$partner}{directory_paths}{$directory_path}{file_paths}});
+			my $image_size = $partner_info{$partner}{directory_paths}{$directory_path}{image_size};
+			my $check_file_count = scalar(keys %{$partner_info{$partner}{directory_paths}{$check_directory_path}{file_paths}});
+			my $check_image_size = $partner_info{$partner}{directory_paths}{$check_directory_path}{image_size};
+			
+			notify($ERRORS{'DEBUG'}, 0, "found $image_name in multiple directories on $partner_info{$partner}{hostname}:\n" .
+				"$directory_path: file count: $file_count, image size: $image_size\n" .
+				"$check_directory_path: file count: $check_file_count, image size: $check_image_size"
+			);
+			
+			# Compare the file count and image size, use the larger image
+			if ($check_image_size > $image_size || $check_file_count > $file_count) {
+				$directory_path = $check_directory_path;
+			}
+		}
+		
+		# Add the info for the winning directory to the top of the hash
+		$partner_info{$partner}{file_paths} = $partner_info{$partner}{directory_paths}{$directory_path}{file_paths};
+		$partner_info{$partner}{image_size} = $partner_info{$partner}{directory_paths}{$directory_path}{image_size};
 		
 		# Display the image size if any files were found
 		if ($partner_info{$partner}{image_size}) {
 			notify($ERRORS{'OK'}, 0, "$image_name exists on $partner_info{$partner}{hostname}, size: " . format_number($partner_info{$partner}{image_size}) . " bytes");
 		}
 		else {
-			notify($ERRORS{'OK'}, 0, "$image_name does NOT exist on $partner_info{$partner}{hostname}, output:\n" . join("\n", @$du_output));
-			next;
+			notify($ERRORS{'DEBUG'}, 0, "$image_name does NOT exist on $partner_info{$partner}{hostname}");
+			next PARTNER;
 		}
-
+		
 		# Check if the image size is larger than any previously found on other partners
 		if ($partner_info{$partner}{image_size} > $largest_partner_image_size) {
 			@partners_with_image = ();
@@ -399,7 +453,7 @@ sub retrieve_image {
 			$largest_partner_image_size = $partner_info{$partner}{image_size};
 		}
 	}
-
+	
 	# Check if any partner was found
 	if (!@partners_with_image) {
 		notify($ERRORS{'WARNING'}, 0, "unable to find $image_name on other management nodes");
@@ -411,7 +465,9 @@ sub retrieve_image {
 	# Choose a random partner so that the same management node isn't used for most transfers
 	my $random_index = int(rand(scalar(@partners_with_image)));
 	my $retrieval_partner = $partners_with_image[$random_index];
-	notify($ERRORS{'OK'}, 0, "selected random retrieval partner: $partner_info{$retrieval_partner}{hostname}");
+	my $retrieval_partner_hostname = $partner_info{$retrieval_partner}{hostname};
+	
+	notify($ERRORS{'OK'}, 0, "selected random retrieval partner: $retrieval_partner_hostname:\n" . format_data($partner_info{$retrieval_partner}));
 	
 	# Create the directory in the image repository
 	my $mkdir_command = "mkdir -pv $image_repository_path_local";
@@ -422,14 +478,15 @@ sub retrieve_image {
 	}
 	
 	# Copy each file path to the image repository directory
-	notify($ERRORS{'OK'}, 0, "attempting to retrieve $image_name from $partner_info{$retrieval_partner}{hostname}");
-	for my $partner_file_path (sort keys %{$partner_info{$retrieval_partner}{file_paths}}) {
-		my ($file_name) = $partner_file_path =~ /([^\/]+)$/;
-		if (run_scp_command("$partner_info{$retrieval_partner}{user}\@$retrieval_partner:$partner_file_path", "$image_repository_path_local/$file_name", $partner_info{$retrieval_partner}{key}, $partner_info{$retrieval_partner}{port})) {
-		notify($ERRORS{'OK'}, 0, "image $image_name was copied from $partner_info{$retrieval_partner}{hostname}");
+	for my $partner_file_path (sort {lc($a) cmp lc($b)} keys %{$partner_info{$retrieval_partner}{file_paths}}) {
+		my $file_name = $partner_info{$retrieval_partner}{file_paths}{$partner_file_path}{file_name};
+		my $local_file_path = "$image_repository_path_local/$file_name";
+		
+		if (run_scp_command("$partner_info{$retrieval_partner}{user}\@$retrieval_partner:$partner_file_path", $local_file_path, $partner_info{$retrieval_partner}{key}, $partner_info{$retrieval_partner}{port})) {
+			notify($ERRORS{'OK'}, 0, "image $image_name was copied from $retrieval_partner_hostname");
 		}
 		else {
-			notify($ERRORS{'WARNING'}, 0, "failed to copy image $image_name from $partner_info{$retrieval_partner}{hostname}");
+			notify($ERRORS{'WARNING'}, 0, "failed to copy image $image_name from $retrieval_partner_hostname");
 			return;
 		}
 	}
