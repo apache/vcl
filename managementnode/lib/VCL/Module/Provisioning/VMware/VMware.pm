@@ -4077,19 +4077,25 @@ sub get_image_repository_search_paths {
 	my $management_node_identifier = shift || $self->data->get_management_node_hostname();
 	
 	my $image_name = $self->data->get_image_name();
+	my $reference_vmx_file_name = $self->get_reference_vmx_file_name();
 	
 	my @repository_search_paths;
 	
 	if (my $repository_vmdk_directory_path = $self->get_repository_vmdk_directory_path()) {
 		push @repository_search_paths, "$repository_vmdk_directory_path/$image_name*.vmdk";
+		push @repository_search_paths, "$repository_vmdk_directory_path/$reference_vmx_file_name";
 	}
 	
 	if (my $management_node_install_path = $self->data->get_management_node_install_path($management_node_identifier)) {
 		push @repository_search_paths, "$management_node_install_path/vmware_images/$image_name/$image_name*.vmdk";
+		push @repository_search_paths, "$management_node_install_path/vmware_images/$image_name/$reference_vmx_file_name";
+		
 		push @repository_search_paths, "$management_node_install_path/$image_name/$image_name*.vmdk";
+		push @repository_search_paths, "$management_node_install_path/$image_name/$reference_vmx_file_name";
 	}
 	
 	push @repository_search_paths, "/install/vmware_images/$image_name/$image_name*.vmdk";
+	push @repository_search_paths, "/install/vmware_images/$image_name/$reference_vmx_file_name";
 	
 	my %seen;
 	@repository_search_paths = grep { !$seen{$_}++ } @repository_search_paths; 
@@ -5592,7 +5598,7 @@ sub delete_vm {
 		# Check if the directory containing the vmdk is shared among different VMs or dedicated to the VM being deleted
 		if ($self->is_vmdk_directory_shared($vmdk_directory_path)) {
 			# Directory is shared, entire directory can't be deleted
-			notify($ERRORS{'DEBUG'}, 0, "vmdk directory will NOT be deleted because the vmdk appears to be shared");
+			notify($ERRORS{'DEBUG'}, 0, "vmdk directory will NOT be deleted because the vmdk appears to be shared: $vmdk_directory_path");
 			
 			# Directory can't be deleted, check if individual files can be deleted
 			my $vmdk_file_path = $vmx_info->{vmdk}{$storage_identifier}{vmdk_file_path};
