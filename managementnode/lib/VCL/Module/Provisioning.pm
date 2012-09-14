@@ -393,7 +393,7 @@ sub retrieve_image {
 				next LINE;
 			}
 			
-			my $file_name = "$file_prefix.$file_extension";
+			my $file_name = "$file_prefix$file_extension";
 			$partner_info{$partner}{directory_paths}{$directory_path}{file_paths}{$file_path}{file_name} = $file_name;
 			$partner_info{$partner}{directory_paths}{$directory_path}{file_paths}{$file_path}{file_size} = $file_size;
 			$partner_info{$partner}{directory_paths}{$directory_path}{image_size} += $file_size;
