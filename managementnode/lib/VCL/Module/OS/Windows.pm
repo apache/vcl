@@ -8332,12 +8332,17 @@ sub set_static_public_address {
 	my $system32_path        = $self->get_system32_path() || return;
 	
 	my $computer_name = $self->data->get_computer_short_name();
+
+   my $server_request_id            = $self->data->get_server_request_id();
+   my $server_request_fixedIP       = $self->data->get_server_request_fixedIP();
 	
-	# Make sure public IP configuration is static
+	# Make sure public IP configuration is static or this is a server request
 	my $ip_configuration = $self->data->get_management_node_public_ip_configuration();
 	if ($ip_configuration !~ /static/i) {
-		notify($ERRORS{'WARNING'}, 0, "static public address can only be set if IP configuration is static, current value: $ip_configuration");
+		  if( !$server_request_fixedIP ) {
+				notify($ERRORS{'WARNING'}, 0, "static public address can only be set if IP configuration is static, current value: $ip_configuration \nserver_request_fixedIP=$server_request_fixedIP");
 		return;
+		}
 	}
 
 	# Get the IP configuration
@@ -8346,6 +8351,13 @@ sub set_static_public_address {
 	my $subnet_mask = $self->data->get_management_node_public_subnet_mask() || '<undefined>';
 	my $default_gateway = $self->data->get_management_node_public_default_gateway() || '<undefined>';
 	my @dns_servers = $self->data->get_management_node_public_dns_servers();
+
+   if ($server_request_fixedIP) {
+      $ip_address = $server_request_fixedIP;
+      $subnet_mask = $self->data->get_server_request_netmask();
+      $default_gateway = $self->data->get_server_request_router();
+      @dns_servers = $self->data->get_server_request_DNSservers();
+   }
 	
 	# Assemble a string containing the static IP configuration
 	my $configuration_info_string = <<EOF;
@@ -8364,6 +8376,13 @@ EOF
 	else {
 		notify($ERRORS{'OK'}, 0, "attempting to set static public IP address on $computer_name:\n$configuration_info_string");
 	}
+
+   #Try to ping address to make sure it's available
+   #FIXME  -- need to add other tests for checking ip_address is or is not available.
+   if(_pingnode($ip_address)) {
+      notify($ERRORS{'WARNING'}, 0, "ip_address $ip_address is pingable, can not assign to $computer_name ");
+      return;
+   }
 	
 	my $primary_dns_server_address = shift @dns_servers;
 	notify($ERRORS{'DEBUG'}, 0, "primary DNS server address: $primary_dns_server_address\nalternate DNS server address(s):\n" . (join("\n", @dns_servers) || '<none>'));

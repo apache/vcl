@@ -4104,12 +4104,17 @@ EOF
 		$request_info->{reservation}{$reservation_id}{serverrequest}{id} ||= 0;
 		$request_info->{reservation}{$reservation_id}{serverrequest}{fixedIP} ||= 0;
 		$request_info->{reservation}{$reservation_id}{serverrequest}{fixedMAC} ||= 0;
+		$request_info->{reservation}{$reservation_id}{serverrequest}{router} ||= 0;
+		$request_info->{reservation}{$reservation_id}{serverrequest}{netmask} ||= 0;
+		$request_info->{reservation}{$reservation_id}{serverrequest}{DNSservers} ||= 0;
 		$request_info->{reservation}{$reservation_id}{serverrequest}{admingroupid} ||= 0;
 		$request_info->{reservation}{$reservation_id}{serverrequest}{logingroupid} ||= 0;
 		$request_info->{reservation}{$reservation_id}{serverrequest}{monitored} ||= 0;
 		$request_info->{reservation}{$reservation_id}{serverrequest}{ALLOW_USERS} ||= 0;
 		
 		$request_info->{reservation}{$reservation_id}{READY} = '0';
+
+		
 	}
 	
 	# Set some default non-database values for the entire request

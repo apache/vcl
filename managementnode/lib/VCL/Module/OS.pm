@@ -799,6 +799,75 @@ sub update_ssh_known_hosts {
 	return 1;
 }
 
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 server_request_set_fixedIP
+
+ Parameters  : none
+ Returns     : If successful: true
+               If failed: false
+ Description : 
+
+=cut
+
+sub server_request_set_fixedIP {
+   my $self = shift;
+   if (ref($self) !~ /VCL::Module/i) {
+      notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+      return;
+   }
+   
+	my $reservation_id = $self->data->get_reservation_id() || return;
+	my $computer_id = $self->data->get_computer_id() || return;
+	my $computer_node_name = $self->data->get_computer_node_name() || return;   
+	my $image_os_name = $self->data->get_image_os_name() || return;
+	my $image_os_type = $self->data->get_image_os_type() || return;   
+	my $computer_ip_address = $self->data->get_computer_ip_address();   
+	my $public_ip_configuration = $self->data->get_management_node_public_ip_configuration() || return;
+	my $server_request_id            = $self->data->get_server_request_id();
+	my $server_request_fixedIP       = $self->data->get_server_request_fixedIP(); 
+
+   if($server_request_id) {
+      if($server_request_fixedIP) {
+         #Update the info related to fixedIP
+         if(!$self->update_fixedIP_info()) {
+            notify($ERRORS{'WARNING'}, 0, "Unable to update information related fixedIP for server_request $server_request_id");
+         }    
+         # Try to set the static public IP address using the OS module
+           if ($self->can("set_static_public_address")) {
+              if ($self->set_static_public_address()) {
+                 notify($ERRORS{'DEBUG'}, 0, "set static public IP address on $computer_node_name using OS module's set_static_public_address() method");                $self->data->set_computer_ip_address($server_request_fixedIP);
+
+                # Delete cached network configuration information so it is retrieved next time it is needed
+                delete $self->{network_configuration};
+
+                if (update_computer_address($computer_id, $server_request_fixedIP)) {
+                 notify($ERRORS{'OK'}, 0, "updated public IP address in computer table for $computer_node_name, $server_request_fixedIP");
+                }
+
+                #Update Hostname to match Public assigned name
+               if ($self->can("update_public_hostname")) {
+                  if($self->update_public_hostname()){
+                     notify($ERRORS{'OK'}, 0, "Updated hostname based on fixedIP $server_request_fixedIP");
+                  }
+               }
+           }
+           else {
+              notify($ERRORS{'WARNING'}, 0, "failed to set static public IP address on $computer_node_name");
+              return 0;
+           }
+        }
+        else {
+           notify($ERRORS{'WARNING'}, 0, "unable to set static public IP address on $computer_node_name, " . ref($self) . " module does not implement a set_static_public_address subroutine");
+        }
+      }
+   }
+
+	return 1;
+
+}
+
 #/////////////////////////////////////////////////////////////////////////////
 
 =head2 update_public_ip_address
@@ -829,7 +898,7 @@ sub update_public_ip_address {
 	my $image_os_type = $self->data->get_image_os_type() || return;
 	my $computer_ip_address = $self->data->get_computer_ip_address();
 	my $public_ip_configuration = $self->data->get_management_node_public_ip_configuration() || return;
-	
+
 	if ($public_ip_configuration =~ /dhcp/i) {
 		notify($ERRORS{'DEBUG'}, 0, "IP configuration is set to $public_ip_configuration, attempting to retrieve dynamic public IP address from $computer_node_name");
 		
@@ -1159,7 +1228,7 @@ sub get_public_interface_name {
 					}
 					else {
 						notify($ERRORS{'DEBUG'}, 0, "'$check_interface_name' could potententially be public interface, assigned IP address: $check_ip_address");
-			$public_interface_name = $check_interface_name;
+						$public_interface_name = $check_interface_name;
 						last CHECK_IP_ADDRESS;
 					}
 				}
@@ -2451,7 +2520,7 @@ sub process_connect_methods {
 		notify($ERRORS{'WARNING'}, 0, "no connect methods are configured for image revision $imagerevision_id");
 		return;
 	}
-	
+
 	my $remote_ip = shift;
 	if (!$remote_ip) {
 		notify($ERRORS{'OK'}, 0, "reservation remote IP address is not defined, connect methods will be available from any IP address");
@@ -3062,6 +3131,56 @@ sub get_tools_file_paths {
 	my @return_files = sort_by_file_name(keys %computer_tools_file_paths);
 	notify($ERRORS{'DEBUG'}, 0, "determined list of tools files intended for $computer_node_name, pattern: $pattern, architecture: $architecture:\n" . join("\n", @return_files));
 	return @return_files;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 update_fixedIP_info
+
+ Parameters  : 
+ Returns     : 1, 0 
+ Description : checks for variables in variable table related to fixedIP information for server reservations
+
+=cut
+
+sub update_fixedIP_info {
+
+	my $self = shift;
+   unless (ref($self) && $self->isa('VCL::Module')) {
+     notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a VCL::Module:: module object method");
+     return;
+   }
+	
+	my $server_request_id           = $self->data->get_server_request_id();
+	if(!$server_request_id) {
+		notify($ERRORS{'WARNING'}, 0, "Server request id not set.");
+		return;
+	}
+
+	my $variable_name = "fixedIPsr" . $server_request_id; 	
+   my $server_variable_data;
+
+	if($self->data->is_variable_set($variable_name)){
+		  #fetch variable
+		  $server_variable_data  = $self->data->get_variable($variable_name);
+
+		  notify($ERRORS{'DEBUG'}, 0, "data is set for $variable_name" . format_data($server_variable_data));
+			
+			my $router = $server_variable_data->{router};
+			my $netmask = $server_variable_data->{netmask};
+			my @dns = @{$server_variable_data->{dns}};
+		
+			notify($ERRORS{'OK'}, 0, "updated data server request router info") if ($self->data->set_server_request_router($server_variable_data->{router}));
+			notify($ERRORS{'OK'}, 0, "updated data server request netmask info") if ($self->data->set_server_request_netmask($server_variable_data->{netmask}));
+			notify($ERRORS{'OK'}, 0, "updated data server request dns info") if ($self->data->set_server_request_DNSservers(@{$server_variable_data->{dns}}));
+			notify($ERRORS{'DEBUG'}, 0, "router= $router, netmask= $netmask, dns= @dns");
+
+	}
+   else{
+        notify($ERRORS{'DEBUG'}, 0, "data is not set for $variable_name");
+        return 0;
+   }
+
 }
 
 #///////////////////////////////////////////////////////////////////////////
