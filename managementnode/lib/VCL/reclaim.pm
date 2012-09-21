@@ -98,6 +98,19 @@ sub process {
 	my $computer_state_name                 = $self->data->get_computer_state_name();
 	my $computer_currentimage_name          = $self->data->get_computer_currentimage_name(0);
 	my $server_request_id     					 = $self->data->get_server_request_id();
+
+	# Remove related fixedIPsr variable, if it exists
+	if ($server_request_id) {
+ 		my $variable_name = "fixedIPsr" . $server_request_id;
+ 		if($self->data->is_variable_set($variable_name)){
+               #Delete from variable table.
+               my $delete_sql_statement = "DELETE variable FROM variable WHERE name = '$variable_name' ";
+               if (database_execute($delete_sql_statement)) {
+         				notify($ERRORS{'OK'}, 0, "Detected server reservation entry for $variable_name from variable table");
+               }   
+         }   
+      }
+
 	
 	# Insert into computerloadlog if request state = timeout
 	if ($request_state_name =~ /timeout|deleted/) {
@@ -158,6 +171,7 @@ sub process {
 		notify($ERRORS{'OK'}, 0, "request laststate is $request_laststate_name, computer will be reloaded");
 		$self->insert_reload_and_exit();
 	}
+
 
 
 	# Update the request state to complete and exit

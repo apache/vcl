@@ -690,7 +690,7 @@ sub post_load {
 
    if (!$self->update_public_ip_address()) {
 		notify($ERRORS{'WARNING'}, 0, "failed to update IP address for $computer_node_name");
-      return 0;
+		return 0;
    }
 
 =item *
@@ -5864,7 +5864,7 @@ sub get_public_ip_address {
 		notify($ERRORS{'WARNING'}, 0, "unable to determine public IP address assigned to $computer_node_name, static public IP address may not have been set yet, management node public IP configuration: $public_ip_configuration");
 		return;
 	}
-	
+			
 	# Management node is configured to use DHCP, failed to determine public IP address on 1st try
 	# Check if DHCP is enabled on what was determined to be the public interface
 	# DHCP should always be enabled or something is wrong
@@ -5872,8 +5872,8 @@ sub get_public_ip_address {
 	# Don't forcefully enable DHCP
 	if (!$self->is_dhcp_enabled($public_interface_name)) {
 		notify($ERRORS{'WARNING'}, 0, "unable to determine public IP address assigned to $computer_node_name, DHCP is not enabled on public interface: '$public_interface_name', management node public IP configuration: $public_ip_configuration");
-		return;
-	}
+				return;
+			}
 	
 	# Network interfaces may still be initializing
 	return $self->code_loop_timeout(
@@ -6043,26 +6043,26 @@ sub ipconfig_renew {
 	}
 	$ipconfig_command .= "$system32_path/ipconfig.exe /renew \"$interface_name\"";
 	
-	# Run ipconfig
-	my ($ipconfig_status, $ipconfig_output) = $self->execute({command => $ipconfig_command, timeout => 65, ignore_error => 1});
-	if (!defined($ipconfig_output)) {
+		# Run ipconfig
+		my ($ipconfig_status, $ipconfig_output) = $self->execute({command => $ipconfig_command, timeout => 65, ignore_error => 1});
+		if (!defined($ipconfig_output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute command to renew IP configuration for interface '$interface_name'");
 		return;
-	}
-	elsif (grep(/error occurred/i, @$ipconfig_output)) {
+		}
+		elsif (grep(/error occurred/i, @$ipconfig_output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to renew IP configuration for interface '$interface_name', exit status: $ipconfig_status, output:\n" . join("\n", @$ipconfig_output));
-		return;
-	}
-	elsif ($ipconfig_status ne '0' || grep(/error occurred/i, @$ipconfig_output)) {
+			return;
+		}
+		elsif ($ipconfig_status ne '0' || grep(/error occurred/i, @$ipconfig_output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to renew IP configuration for interface '$interface_name', exit status: $ipconfig_status, command: '$ipconfig_command', output:\n" . join("\n", @$ipconfig_output));
 		return;
+		}
+		else {
+			notify($ERRORS{'OK'}, 0, "renewed IP configuration for interface '$interface_name', output:\n" . join("\n", @$ipconfig_output));
+			return 1;
+		}
 	}
-	else {
-		notify($ERRORS{'OK'}, 0, "renewed IP configuration for interface '$interface_name', output:\n" . join("\n", @$ipconfig_output));
-		return 1;
-	}
-} 
-
+	
 #/////////////////////////////////////////////////////////////////////////////
 
 =head2 delete_capture_configuration_files
@@ -8332,12 +8332,17 @@ sub set_static_public_address {
 	my $system32_path        = $self->get_system32_path() || return;
 	
 	my $computer_name = $self->data->get_computer_short_name();
+
+   my $server_request_id            = $self->data->get_server_request_id();
+   my $server_request_fixedIP       = $self->data->get_server_request_fixedIP();
 	
-	# Make sure public IP configuration is static
+	# Make sure public IP configuration is static or this is a server request
 	my $ip_configuration = $self->data->get_management_node_public_ip_configuration();
 	if ($ip_configuration !~ /static/i) {
-		notify($ERRORS{'WARNING'}, 0, "static public address can only be set if IP configuration is static, current value: $ip_configuration");
+		  if( !$server_request_fixedIP ) {
+				notify($ERRORS{'WARNING'}, 0, "static public address can only be set if IP configuration is static, current value: $ip_configuration \nserver_request_fixedIP=$server_request_fixedIP");
 		return;
+		}
 	}
 
 	# Get the IP configuration
@@ -8346,6 +8351,13 @@ sub set_static_public_address {
 	my $subnet_mask = $self->data->get_management_node_public_subnet_mask() || '<undefined>';
 	my $default_gateway = $self->data->get_management_node_public_default_gateway() || '<undefined>';
 	my @dns_servers = $self->data->get_management_node_public_dns_servers();
+
+   if ($server_request_fixedIP) {
+      $ip_address = $server_request_fixedIP;
+      $subnet_mask = $self->data->get_server_request_netmask();
+      $default_gateway = $self->data->get_server_request_router();
+      @dns_servers = $self->data->get_server_request_DNSservers();
+   }
 	
 	# Assemble a string containing the static IP configuration
 	my $configuration_info_string = <<EOF;
@@ -8364,6 +8376,13 @@ EOF
 	else {
 		notify($ERRORS{'OK'}, 0, "attempting to set static public IP address on $computer_name:\n$configuration_info_string");
 	}
+
+   #Try to ping address to make sure it's available
+   #FIXME  -- need to add other tests for checking ip_address is or is not available.
+   if(_pingnode($ip_address)) {
+      notify($ERRORS{'WARNING'}, 0, "ip_address $ip_address is pingable, can not assign to $computer_name ");
+      return;
+   }
 	
 	my $primary_dns_server_address = shift @dns_servers;
 	notify($ERRORS{'DEBUG'}, 0, "primary DNS server address: $primary_dns_server_address\nalternate DNS server address(s):\n" . (join("\n", @dns_servers) || '<none>'));

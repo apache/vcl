@@ -390,6 +390,9 @@ $SUBROUTINE_MAPPINGS{imagetype_name} = '$self->request_data->{reservation}{RESER
 
 $SUBROUTINE_MAPPINGS{server_request_id} = '$self->request_data->{reservation}{RESERVATION_ID}{serverrequest}{id}';
 $SUBROUTINE_MAPPINGS{server_request_fixedIP} = '$self->request_data->{reservation}{RESERVATION_ID}{serverrequest}{fixedIP}';
+$SUBROUTINE_MAPPINGS{server_request_router} = '$self->request_data->{reservation}{RESERVATION_ID}{serverrequest}{router}';
+$SUBROUTINE_MAPPINGS{server_request_netmask} = '$self->request_data->{reservation}{RESERVATION_ID}{serverrequest}{netmask}';
+$SUBROUTINE_MAPPINGS{server_request_DNSservers} = '$self->request_data->{reservation}{RESERVATION_ID}{serverrequest}{DNSservers}';
 $SUBROUTINE_MAPPINGS{server_request_fixedMAC} = '$self->request_data->{reservation}{RESERVATION_ID}{serverrequest}{fixedMAC}';
 $SUBROUTINE_MAPPINGS{server_request_admingroupid} = '$self->request_data->{reservation}{RESERVATION_ID}{serverrequest}{admingroupid}';
 $SUBROUTINE_MAPPINGS{server_request_logingroupid} = '$self->request_data->{reservation}{RESERVATION_ID}{serverrequest}{logingroupid}';

@@ -500,6 +500,8 @@ sub reload_image {
 	my $image_name                      = $self->data->get_image_name();
 	my $image_os_install_type				= $self->data->get_image_os_install_type();
 	my $imagerevision_id                = $self->data->get_imagerevision_id();
+	my $server_request_id	            = $self->data->get_server_request_id();
+   my $server_request_fixedIP		      = $self->data->get_server_request_fixedIP();
 	
 	# Try to get the node status if the provisioning engine has implemented a node_status() subroutine
 	my $node_status;
@@ -679,6 +681,7 @@ sub reload_image {
 		notify($ERRORS{'OK'}, 0, "node ready: successfully reloaded $computer_short_name with $image_name");
 		insertloadlog($reservation_id, $computer_id, "nodeready", "$computer_short_name was reloaded with $image_name");
 	}
+
 	
 	# Update the current image ID in the computer table
 	if (update_currentimage($computer_id, $image_id, $imagerevision_id, $image_id)) {
@@ -687,6 +690,19 @@ sub reload_image {
 	else {
 		notify($ERRORS{'WARNING'}, 0, "failed to update computer table for $computer_short_name: currentimageid=$image_id");
 	}
+
+	
+	if($server_request_id) {
+       notify($ERRORS{'DEBUG'}, 0, "  SERVER_REQUEST_ID detected");
+       if($server_request_fixedIP) {
+          notify($ERRORS{'DEBUG'}, 0, "server_request_fixedIP is set calling update_public_ip_address");
+			 if(!$self->os->server_request_set_fixedIP()){ 
+					notify($ERRORS{'WARNING'}, 0, "failed to update IP address for $computer_short_name");
+					insertloadlog($reservation_id, $computer_id, "failed", "unable to set public IP address on $computer_short_name possibly IP address is inuse");
+			      return;
+			 }
+		}
+	}	
 	
 	notify($ERRORS{'OK'}, 0, "returning 1");
 	return 1;
@@ -1284,7 +1300,6 @@ sub confirm_public_ip_address {
 	my $public_ip_address;
 	my $computer_ip_address             = $self->data->get_computer_ip_address();
    my $computer_id                     = $self->data->get_computer_id();
-   my $computer_short_name             = $self->data->get_computer_short_name();
 
 	#Try to get public IP address from OS module
 	if(!$self->os->can("get_public_ip_address")) {
