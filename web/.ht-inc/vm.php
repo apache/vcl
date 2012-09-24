@@ -279,6 +279,20 @@ function editVMInfo() {
 	print "    </select><img tabindex=0 src=\"images/helpicon.png\" id=\"genmac1help\" /></td>\n";
 	print "  </tr>\n";
 	print "  <tr>\n";
+    print "    <th align=right>RSA Public Key:</th>\n";
+    print "    <td>\n";
+    print "      <span id=prsapub dojoType=\"dijit.InlineEditBox\" editor=\"dijit.form.Textarea\" onChange=\"updateProfile('prsapub','rsapub')\"></span>\n";
+    print "      <img tabindex=0 src=\"images/helpicon.png\" id=\"rsapubhelp\" />\n";
+    print "    </td>\n";
+    print "  </tr>\n";
+    print "  <tr>\n";
+    print "    <th align=right>RSA Private Key File:</th>\n";
+    print "    <td>\n";
+    print "      <span id=prsakey dojoType=\"dijit.InlineEditBox\" onChange=\"updateProfile('prsakey','rsakey');\"></span>\n";
+    print "      <img tabindex=0 src=\"images/helpicon.png\" id=\"rsakeyhelp\" />\n";
+    print "    </td>\n";
+    print "  </tr>\n";
+	print "  <tr>\n";
 	print "    <th align=right>Username:</th>\n";
 	print "    <td><span id=pusername dojoType=\"dijit.InlineEditBox\" onChange=\"updateProfile('pusername', 'username');\"></span><img tabindex=0 src=\"images/helpicon.png\" id=\"usernamehelp\" /></td>\n";
 	print "  </tr>\n";
@@ -350,6 +364,12 @@ function editVMInfo() {
 	print "<div dojoType=\"dijit.Tooltip\" connectId=\"genmac1help\">\n";
 	print _("Specifies whether VMs are assigned MAC addresses defined in the VCL database or if random MAC addresses should be assigned.");
 	print "</div>\n";
+    print "<div dojoType=\"dijit.Tooltip\" connectId=\"rsapubhelp\">\n";
+    print _("(Optional) In order to encrypt the VM Host password in the database, create an RSA public/private key pair on the relevant management node. Enter the public key here. Note that while this value will be available to every management node in your system, only those management nodes with the designated private key will be able to decrypt the password.");
+    print "</div>\n";
+    print "<div dojoType=\"dijit.Tooltip\" connectId=\"rsakeyhelp\">\n";
+    print _("(Optional) In order to decrypt an encrypted VM Host password, enter the path to a private key on the management node. Any management node without this private key will not be able to decrypt the password.");
+    print "</div>\n";
 	print "<div dojoType=\"dijit.Tooltip\" connectId=\"usernamehelp\">\n";
 	print _("Name of the administrative or root user residing on the VM host.");
 	print "</div>\n";
@@ -872,7 +892,7 @@ function AJupdateVMprofileItem() {
 	}
 	$profileid = processInputVar('profileid', ARG_NUMERIC);
 	$item = processInputVar('item', ARG_STRING);
-	if(! preg_match('/^(profilename|imageid|resourcepath|repositorypath|repositoryimagetypeid|datastorepath|datastoreimagetypeid|vmdisk|vmpath|virtualswitch[0-3]|username|password|eth0generated|eth1generated)$/', $item)) {
+	if(! preg_match('/^(profilename|imageid|resourcepath|repositorypath|repositoryimagetypeid|datastorepath|datastoreimagetypeid|vmdisk|vmpath|virtualswitch[0-3]|username|password|eth0generated|eth1generated|rsakey|rsapub)$/', $item)) {
 		print "alert('Invalid data submitted.');";
 		return;
 	}
@@ -908,8 +928,19 @@ function AJupdateVMprofileItem() {
 
 	$item = mysql_real_escape_string($item);
 	$profile = getVMProfiles($profileid);
-	if($profile[$profileid][$item] == $newvalue)
+    if($item == 'password' && $profile[$profileid]['rsapub']){
+        $encrypted = encryptDataAsymmetric($newvalue, $profile[$profileid]['rsapub']);
+        $escaped = mysql_real_escape_string($encrypted);
+        $query = "UPDATE vmprofile "
+               . "SET `encryptedpasswd` = '$escaped' "
+               . "WHERE id=$profileid";
+        doQuery($query, 101);
+        # don't store the unencrypted password
+        $newvalue2 = 'NULL';
+        $newvalue = '';
+    } else if($profile[$profileid][$item] == $newvalue){
 		return;
+    }
 	$query = "UPDATE vmprofile "
 	       . "SET `$item` = $newvalue2 "
 	       . "WHERE id = $profileid";

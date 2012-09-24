@@ -2361,6 +2361,33 @@ function decryptData($data) {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+//
+//  \fn encryptDataAsymmetric($data, $public_key)
+//
+//  \param $data - a string
+//
+//  \param $public_key - either a filename for a public key or the public key itself
+//
+//  \return hex-encoded, encrypted form of $data
+//
+//  \brief generate public key encrypted data
+//
+////////////////////////////////////////////////////////////////////////////////
+function encryptDataAsymmetric($data, $public_key){
+    if(file_exists($public_key)){
+        $key = openssl_pkey_get_public(file_get_contents($public_key));
+    } else {
+        $key = openssl_pkey_get_public($public_key);
+    }    
+
+    openssl_public_encrypt($data, $encrypted, $key, OPENSSL_PKCS1_OAEP_PADDING);
+    openssl_free_key($key);
+
+    $hexformatted = unpack("H*hex", $encrypted);
+    return $hexformatted['hex'];
+}
+
+////////////////////////////////////////////////////////////////////////////////
 ///
 /// \fn getParentNodes($node)
 ///
@@ -9433,6 +9460,8 @@ function getVMProfiles($id="") {
 	       .        "vp.vmdisk, "
 	       .        "vp.username, "
 	       .        "vp.password, "
+           .        "vp.rsakey, "
+           .        "vp.rsapub, "
 	       .        "vp.eth0generated, "
 	       .        "vp.eth1generated "
 	       . "FROM vmprofile vp "
@@ -10757,6 +10786,7 @@ function getDojoHTML($refresh) {
 			                      'dijit.form.NumberSpinner',
 			                      'dijit.form.Button',
 			                      'dijit.form.TextBox',
+                                  'dijit.form.Textarea',
 			                      'dijit.form.FilteringSelect',
 			                      'dijit.form.Select',
 			                      'dijit.TitlePane',

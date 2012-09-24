@@ -74,6 +74,7 @@ use Data::Dumper;
 use Cwd;
 use Sys::Hostname;
 use XML::Simple;
+use Crypt::OpenSSL::RSA;
 
 #use Date::Calc qw(Delta_DHMS Time_to_Date Date_to_Time);
 
@@ -4784,6 +4785,34 @@ EOF
 	
 	$vmhost_info->{vmprofile}{username} = '' if !$vmhost_info->{vmprofile}{username};
 	$vmhost_info->{vmprofile}{password} = '' if !$vmhost_info->{vmprofile}{password};
+	
+    # Decrypt the vmhost password
+    if(-f $vmhost_info->{vmprofile}{rsakey} &&
+            $vmhost_info->{vmprofile}{encryptedpasswd}){
+        # Read the private keyfile into a string
+        local $/ = undef;
+        open FH, $vmhost_info->{vmprofile}{rsakey} or
+                notify($ERRORS{'WARNING'}, 0, "Could not read private keyfile (" . $vmhost_info->{vmprofile}{rsakey} . "): $!");
+        my $key = <FH>;
+        close FH;
+        if($key){
+            my $encrypted = $vmhost_info->{vmprofile}{encryptedpasswd};
+            my $rsa = Crypt::OpenSSL::RSA->new_private_key($key);
+            # Croak on an invalid key
+            $rsa->check_key;
+            # Use the same padding algorithm as the PHP code
+            $rsa->use_pkcs1_oaep_padding;
+            # Convert password from hex to binary, decrypt
+            # and store in the vmprofile.password field
+            $vmhost_info->{vmprofile}{password} = $rsa->decrypt(pack("H*", $encrypted));
+            notify($ERRORS{'DEBUG'}, 0, "decrypted vmprofile password with key: " . $vmhost_info->{vmprofile}{rsakey});
+        } else {
+            notify($ERRORS{'WARNING'}, 0, "unable to decrypt vmprofile password");    
+        }
+    }
+    # Clean up the extraneous data
+    delete $vmhost_info->{vmprofile}{rsakey};
+    delete $vmhost_info->{vmprofile}{encryptedpassword};
 	
 	$vmhost_info->{vmprofile}{vmpath} = $vmhost_info->{vmprofile}{datastorepath} if !$vmhost_info->{vmprofile}{vmpath};
 	$vmhost_info->{vmprofile}{virtualdiskpath} = $vmhost_info->{vmprofile}{vmpath} if !$vmhost_info->{vmprofile}{virtualdiskpath};

@@ -901,6 +901,9 @@ CALL AddColumnIfNotExists('vmprofile', 'repositoryimagetypeid', "smallint(5) uns
 CALL AddColumnIfNotExists('vmprofile', 'datastoreimagetypeid', "smallint(5) unsigned NOT NULL default '1' AFTER datastorepath");
 CALL AddColumnIfNotExists('vmprofile', 'virtualswitch2', "varchar(80) NULL default NULL AFTER `virtualswitch1`");
 CALL AddColumnIfNotExists('vmprofile', 'virtualswitch3', "varchar(80) NULL default NULL AFTER `virtualswitch2`");
+CALL AddColumnIfNotExists('vmprofile', 'rsapub', "text NULL default NULL AFTER `virtualswitch3`");
+CALL AddColumnIfNotExists('vmprofile', 'rsakey', "varchar(256) NULL default NULL AFTER `rsa_pub`");
+CALL AddColumnIfNotExists('vmprofile', 'encryptedpasswd', "text NULL default NULL AFTER `rsa_key`");
 
 CALL AddOrRenameColumn('vmprofile', 'vmware_mac_eth0_generated', 'eth0generated', "tinyint(1) unsigned NOT NULL default '0'");
 CALL AddOrRenameColumn('vmprofile', 'vmware_mac_eth1_generated', 'eth1generated', "tinyint(1) unsigned NOT NULL default '0'");
