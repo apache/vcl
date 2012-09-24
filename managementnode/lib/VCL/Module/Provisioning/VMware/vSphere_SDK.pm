@@ -266,6 +266,7 @@ sub vm_register {
 	}
 	
 	notify($ERRORS{'DEBUG'}, 0, "registered VM: $vmx_path");
+	return 1;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -740,7 +741,7 @@ sub copy_virtual_disk {
 	
 	my $source_vm_name = $self->_clean_vm_name("source_$destination_base_name");
 	my $clone_vm_name = $self->_clean_vm_name($destination_base_name);
-
+	
 	my $source_vm_directory_path = "[$source_datastore_name] $source_vm_name";
 	my $clone_vm_directory_path = "[$destination_datastore_name] $clone_vm_name";
 	
@@ -851,7 +852,7 @@ sub copy_virtual_disk {
 	
 	notify($ERRORS{'DEBUG'}, 0, "attempting to copy virtual disk by cloning temporary VM: '$source_path' --> '$destination_path'\n" .
 		"adapter type: $source_adapter_type\n" .
-		"disk type: $source_disk_type\n" .
+		"source disk type: $source_disk_type\n" .
 		"source capacity: " . get_file_size_info_string($source_file_capacity_bytes) . "\n" .
 		"source space used: " . get_file_size_info_string($source_file_size_bytes) . "\n" .
 		"source VM name: $source_vm_name\n" .
@@ -1042,36 +1043,6 @@ sub move_virtual_disk {
         notify($ERRORS{'WARNING'}, 0, "Unable to move virtual disk from $vmhost_name: '$source_path' --> '$destination_path'");
         return 0;
     }
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 set_file_permissions
-
- Parameters  : 
- Returns     : boolean
- Description : 
-
-=cut
-
-sub set_file_permissions {
-	my $self = shift;
-	if (ref($self) !~ /VCL::Module/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-	
-	# 
-	my $service_content = Vim::get_service_content() || return;
-	if (!$service_content->{authorizationManager}) {
-		notify($ERRORS{'WARNING'}, 0, "unable to set file permissions, authorization manager is not available through the vSphere SDK");
-		return;
-	}
-	my $authorization_manager = Vim::get_view(mo_ref => $service_content->{authorizationManager}) || return;
-	notify($ERRORS{'DEBUG'}, 0, "created vSphere SDK authorization manager object");
-	
-	my $permissions = $authorization_manager->RetrieveEntityPermissions();
-
 }
 
 #/////////////////////////////////////////////////////////////////////////////
