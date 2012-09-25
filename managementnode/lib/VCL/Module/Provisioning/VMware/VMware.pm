@@ -603,7 +603,7 @@ sub capture {
 	my $repository_mounted_on_vmhost = $self->is_repository_mounted_on_vmhost();
 	
 	# Make sure the VM profile repository path is configured if the VM profile disk type is local
-	if ($vmprofile_vmdisk =~ /local/ && !$self->get_repository_vmdk_base_directory_path()) {
+	if ($vmprofile_vmdisk =~ /(local|dedicated)/ && !$self->get_repository_vmdk_base_directory_path()) {
 		notify($ERRORS{'CRITICAL'}, 0, "disk type is set to '$vmprofile_vmdisk' but the repository path is NOT configured for VM profile '$vmprofile_name', this configuration is not allowed because it may result in vmdk directories being deleted without a backup copy saved in the image repository");
 		return;
 	}
@@ -729,7 +729,7 @@ sub capture {
 		}
 	}
 	
-	if ($vmprofile_vmdisk =~ /local/ && $repository_mounted_on_vmhost) {
+	if ($vmprofile_vmdisk =~ /(local|dedicated)/ && $repository_mounted_on_vmhost) {
 		notify($ERRORS{'DEBUG'}, 0, "vmx and vmdk files will not be copied or renamed directly on the host, the VM profile disk type is $vmprofile_vmdisk and the image repository is mounted on the host");
 		$vmdk_file_path_renamed = $vmdk_file_path_original;
 		$vmx_file_path_renamed = $vmx_file_path_original;
@@ -2683,7 +2683,7 @@ sub reclaim_vmhost_disk_space {
 		notify($ERRORS{'DEBUG'}, 0, "VM $vmx_file_name can be deleted");
 	}
 	
-	if ($vmhost_profile_vmdisk =~ /local/) {
+	if ($vmhost_profile_vmdisk =~ /(local|dedicated)/) {
 		for my $vmdk_directory_path (sort keys %$vmdk_directories) {
 			
 			$vmdk_directories->{$vmdk_directory_path}{deletable} = 1;

@@ -245,7 +245,7 @@ sub load {
 				} ## end if (open(SIZE, "du -k $image_repository_path/$requestedimagename 2>&1 |"...
 
 				notify($ERRORS{'DEBUG'}, 0, "file size $myvmdkfilesize of $requestedimagename");
-				if ($vmprofile_vmdisk eq "localdisk") {
+				if ($vmprofile_vmdisk =~ /(local|dedicated)/) {
 					notify($ERRORS{'OK'}, 0, "copying base image files $requestedimagename to $hostnode");
 					if (run_scp_command("$image_repository_path\/vbox\/$requestedimagename", "$hostnode:\"$datastorepath\/vbox\/\"", $management_node_keys)) {
 						#recheck host server for files - the  scp output is not being captured
@@ -273,7 +273,7 @@ sub load {
 						unlink($tmplockfile);
 						return 0;
 					}
-				} ## end if ($vmprofile_vmdisk eq "localdisk")
+				} ## end if ($vmprofile_vmdisk =~ /(local|dedicated)/)
 				notify($ERRORS{'OK'}, 0, "confirm image exist process complete removing lock on $tmplockfile");
 				close(TMPLOCK);
 				unlink($tmplockfile);
@@ -554,7 +554,7 @@ sub capture { ## This is going to need to be implemented before the module is co
                 }
         }
 	
-        if ($vmprofile_vmdisk eq "localdisk") {
+        if ($vmprofile_vmdisk =~ /(local|dedicated)/) {
                 # copy vdi files
                 # confirm they were copied
                 notify($ERRORS{'OK'}, 0, "Removing VM");
@@ -589,7 +589,7 @@ sub capture { ## This is going to need to be implemented before the module is co
                         notify($ERRORS{'CRITICAL'}, 0, "failed to copy .vdi file to image repository");
                         return 0;
                 }
-        } ## end if ($vmprofile_vmdisk eq "localdisk")
+        } ## end if ($vmprofile_vmdisk =~ /(local|dedicated)/)
 
 
 } ## end sub capture
