@@ -290,6 +290,7 @@ sub process {
 	# Confirm requested resouces are available
 	if ($self->reload_image()) {
 		notify($ERRORS{'OK'}, 0, "$computer_short_name is loaded with $image_name");
+		insertloadlog($reservation_id, $computer_id, "nodeready", "$computer_short_name is loaded with $image_name");
 	}
 	elsif ($request_preload_only) {
 		# Load failed preload only = true
@@ -580,7 +581,6 @@ sub reload_image {
 	if ($node_status_string =~ /^ready/i) {
 		# node_status returned 'ready'
 		notify($ERRORS{'OK'}, 0, "node_status returned '$node_status_string', $computer_short_name will not be reloaded");
-		insertloadlog($reservation_id, $computer_id, "nodeready", "node status is $node_status_string, $computer_short_name will not be reloaded");
 	}
 	
 	elsif ($node_status_string =~ /^post_load/i) {
@@ -677,11 +677,7 @@ sub reload_image {
 			insertloadlog($reservation_id, $computer_id, "loadimagefailed", "$image_name failed to load on $computer_short_name");
 			return;
 		}
-		
-		notify($ERRORS{'OK'}, 0, "node ready: successfully reloaded $computer_short_name with $image_name");
-		insertloadlog($reservation_id, $computer_id, "nodeready", "$computer_short_name was reloaded with $image_name");
 	}
-
 	
 	# Update the current image ID in the computer table
 	if (update_currentimage($computer_id, $image_id, $imagerevision_id, $image_id)) {
