@@ -263,7 +263,7 @@ sub process {
 							#notify($ERRORS{'OK'}, 0, " b=$b imagerevision_id=  $imagerevision_id");
 							$node_status_string = "post_load";
 							$node_status{status} = "post_load";
-							if ($l = /vcld_post_load/i ) {
+							if ($l =~ /vcld_post_load/i ) {
 								$node_status_string = "ready";
 								$node_status{status} = "ready";
 							}
