@@ -242,10 +242,6 @@ sub post_load {
 		return 0;
 	}
 
-	if (!$self->update_public_ip_address()) {
-		notify($ERRORS{'WARNING'}, 0, "failed to update IP address for $computer_node_name");
-      return 0;
-   }
 	
 	if ($image_os_install_type eq "kickstart"){
 		  notify($ERRORS{'OK'}, 0, "detected kickstart install on $computer_short_name, writing current_image.txt");
@@ -311,10 +307,6 @@ sub post_load {
 		notify($ERRORS{'OK'}, 0, "cleared known identity keys");
 	}
 
-	#Update Hostname to match Public assigned name
-   if($self->update_public_hostname()){
-      notify($ERRORS{'OK'}, 0, "Updated hostname");
-   }
 	
 	# Run the vcl_post_load script if it exists in the image
 	my $script_path = '/etc/init.d/vcl_post_load';
@@ -337,7 +329,17 @@ sub post_load {
 	
 	# Attempt to generate ifcfg-eth* files and ifup any interfaces which the file does not exist
 	$self->activate_interfaces();
+
+	if (!$self->update_public_ip_address()) {
+		notify($ERRORS{'WARNING'}, 0, "failed to update IP address for $computer_node_name");
+      return 0;
+   }
 	
+	#Update Hostname to match Public assigned name
+   if($self->update_public_hostname()){
+      notify($ERRORS{'OK'}, 0, "Updated hostname");
+   }
+
 	# Add a line to currentimage.txt indicating post_load has run
 	$self->set_vcld_post_load_status();
 	

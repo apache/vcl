@@ -10483,6 +10483,43 @@ sub sort_by_file_name {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 get_current_image_contents_noDS
+
+ Parameters  : node name
+ Returns     : array
+ Description : returns contents of currentimage.txt for given node
+
+=cut
+
+sub get_current_image_contents_noDS {
+
+   my ($computer_node_name) = @_;
+
+   if (!defined($computer_node_name)) {
+      notify($ERRORS{'WARNING'}, 0, "computer_node_name  argument was not supplied");
+      return;
+   }
+
+   # Attempt to retrieve the contents of currentimage.txt
+   my $cat_command = "cat ~/currentimage.txt";
+   my ($cat_exit_status, $cat_output) = run_ssh_command($computer_node_name, $ENV{management_node_info}{keys}, $cat_command);
+   if (!defined($cat_output)) {
+      notify($ERRORS{'WARNING'}, 0, "failed to execute command to failed to retrieve currentimage.txt from $computer_node_name");
+      return;
+   }
+   elsif ($cat_exit_status ne '0') {
+      notify($ERRORS{'WARNING'}, 0, "failed to retrieve currentimage.txt from $computer_node_name, exit status: $cat_exit_status, output:\n@{$cat_output}");
+      return;
+   }
+   else {
+      notify($ERRORS{'DEBUG'}, 0, "retrieved currentimage.txt contents from $computer_node_name:\n" . join("\n", @$cat_output));
+   }
+   return @{$cat_output};
+}
+
+
+#/////////////////////////////////////////////////////////////////////////////
+
 1;
 __END__
 
