@@ -228,8 +228,12 @@ sub process {
 		my $computer_hostname             = $data->get_computer_host_name();
 		my $computer_short_name 			 = $1 if ($computer_hostname =~ /([-_a-zA-Z0-9]*)(\.?)/);
 		my $computer_type                 = $data->get_computer_type(); 
-		next if ($computer_type eq "lab");
-		next if($computer_type eq "blade");
+		
+		if ($computer_type eq "lab") {
+			next;
+			$computer_short_name = $computer_hostname;
+		}
+		#next if($computer_type eq "blade");
 		#next if ($computer_type eq "virtualmachine");
 
 		my %node_status;
@@ -251,7 +255,6 @@ sub process {
 			my $sshd_status = _sshd_status($computer_short_name);
 			if($sshd_status eq "on") { 
 				my @currentimage_txt_contents 	 = get_current_image_contents_noDS($computer_short_name);
-				#notify($ERRORS{'OK'}, 0, "NODE $computer_short_name currentimage contents:\n @currentimage_txt_contents");
 
 					foreach my $l (@currentimage_txt_contents) {
 						#notify($ERRORS{'OK'}, 0, "NODE l=$l");
@@ -260,13 +263,12 @@ sub process {
 							chomp($l);
 							my ($b,$imagerevision_id) = split(/=/,$l);
 							$node_status{imagerevision_id} = $imagerevision_id;
-							#notify($ERRORS{'OK'}, 0, " b=$b imagerevision_id=  $imagerevision_id");
 							$node_status_string = "post_load";
 							$node_status{status} = "post_load";
-							if ($l =~ /vcld_post_load/i ) {
+						}
+						if ($l =~ /vcld_post_load/ ) {
 								$node_status_string = "ready";
 								$node_status{status} = "ready";
-							}
 						}
 					}
 					
@@ -281,9 +283,7 @@ sub process {
 					}
 			}
 
-		#	notify($ERRORS{'OK'}, 0, "NODE $computer_short_name node_status contents:\n  imagerevision_id= $node_status{imagerevision_id} currentimage $node_status{currentimage} current_image_id= $node_status{current_image_id} imagerevision_id= $node_status{imagerevision_id} ");
 		}
-
 
 		#need to pass some of the management node info to provisioing module node_status
 		$info->{computertable}->{$cid}->{"managementnode"} = $info->{managementnode};
