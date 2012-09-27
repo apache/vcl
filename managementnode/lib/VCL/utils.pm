@@ -128,6 +128,7 @@ our @EXPORT = qw(
   get_image_info
   get_imagemeta_info
   get_imagerevision_info
+  get_current_image_contents_noDS
   get_local_user_info
   get_management_node_blockrequests
   get_management_node_id
