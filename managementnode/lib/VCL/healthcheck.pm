@@ -230,7 +230,7 @@ sub process {
 		my $computer_type                 = $data->get_computer_type(); 
 		
 		if ($computer_type eq "lab") {
-			next;
+			#next;
 			$computer_short_name = $computer_hostname;
 		}
 		#next if($computer_type eq "blade");
@@ -239,6 +239,7 @@ sub process {
 		my %node_status;
 		$node_status{"ping"} = 0;
 		$node_status{"ssh"} = 0;
+		$node_status{"ssh_status"} = "off";
 		$node_status{"status"} = "reload";
 		$node_status{"imagerevision_id"} = 0;
 		$node_status{"currentimage"} = 0;
@@ -254,12 +255,16 @@ sub process {
 			$node_status{ping} = 1;	
 			my $sshd_status = _sshd_status($computer_short_name);
 			if($sshd_status eq "on") { 
+				$node_status{"ssh"} = 1;
+				if($computer_type eq "lab") {
+					$node_status_string = "ready";
+					$node_status{status} = "ready";
+					next;
+				}
 				my @currentimage_txt_contents 	 = get_current_image_contents_noDS($computer_short_name);
-
 					foreach my $l (@currentimage_txt_contents) {
 						#notify($ERRORS{'OK'}, 0, "NODE l=$l");
 						if( $l =~ /imagerevision_id/i ) {
-							$node_status{"ssh"} = 1;
 							chomp($l);
 							my ($b,$imagerevision_id) = split(/=/,$l);
 							$node_status{imagerevision_id} = $imagerevision_id;
@@ -359,7 +364,7 @@ sub process {
 			if ($computer_type eq "lab") {
 				#no additional checks required for lab type
 				#if(lab_investigator($info->{computertable}->{$cid})){
-				#	$node_available =1;
+					$node_available =1;
 				#}
 			}
 			elsif ($computer_type eq "virtualmachine") {
@@ -391,12 +396,10 @@ sub process {
 		} ## end elsif ($node_status_string =~ /^reload/i)  [ if ($node_status_string =~ /^ready/i)
 		else {
 			notify($ERRORS{'OK'}, 0, "node_status reports unknown value for $computer_hostname node_status_string= $node_status_string ");
-
 		}
 
 		# 
 		sleep 3;
-
 
 	}    #for loop
 	return 1;
