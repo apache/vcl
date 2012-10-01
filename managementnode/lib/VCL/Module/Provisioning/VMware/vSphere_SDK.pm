@@ -201,11 +201,19 @@ sub get_registered_vms {
 	local $SIG{__DIE__} = sub{};
 	
 	my @vms;
-	eval { @vms = @{Vim::find_entity_views(view_type => 'VirtualMachine', begin_entity => $self->_get_datacenter_view())}; };
+	eval { @vms = @{Vim::find_entity_views(view_type => 'VirtualMachine', begin_entity => $self->_get_resource_pool_view())}; };
 	
 	my @vmx_paths;
 	for my $vm (@vms) {
-		push @vmx_paths, $self->_get_normal_path($vm->summary->config->vmPathName) || return;
+		my $vmx_path = $vm->summary->config->vmPathName;
+		my $vmx_path_normal = $self->_get_normal_path($vmx_path);
+		
+		if ($vmx_path_normal) {
+			push @vmx_paths, $vmx_path_normal;
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "found registered VM but unable to determine normal vmx path: $vmx_path");
+		}
 	}
 	
 	notify($ERRORS{'DEBUG'}, 0, "found " . scalar(@vmx_paths) . " registered VMs:\n" . join("\n", @vmx_paths));
@@ -235,8 +243,7 @@ sub vm_register {
 	my $vmx_path = $self->_get_datastore_path(shift) || return;
 	
 	my $datacenter = $self->_get_datacenter_view() || return;
-	my $vm_folder = Vim::get_view(mo_ref => $datacenter->{vmFolder}) || return;
-	
+	my $vm_folder = $self->_get_vm_folder_view() || return;
 	my $resource_pool = $self->_get_resource_pool_view() || return;
 	
 	# Override the die handler
@@ -616,7 +623,6 @@ sub copy_virtual_disk {
 		return;
 	}
 	
-	
 	# Get the adapter type and disk type arguments if they were specified
 	# If not specified, set the default values
 	my $destination_disk_type = shift || 'thin';
@@ -635,6 +641,10 @@ sub copy_virtual_disk {
 	
 	my $vmhost_name = $self->data->get_vmhost_hostname();
 	
+	my $datacenter_view = $self->_get_datacenter_view() || return;
+	my $virtual_disk_manager_view = $self->_get_virtual_disk_manager_view() || return;
+	my $file_manager = $self->_get_file_manager_view() || return;
+	
 	my $source_datastore_name = $self->_get_datastore_name($source_path) || return;
 	my $destination_datastore_name = $self->_get_datastore_name($destination_path) || return;
 	
@@ -642,9 +652,6 @@ sub copy_virtual_disk {
 	my $destination_datastore = $self->_get_datastore_object($destination_datastore_name) || return;
 	
 	my $destination_base_name = $self->_get_file_base_name($destination_path);
-	
-	my $datacenter_view = $self->_get_datacenter_view() || return;
-	my $virtual_disk_manager_view = $self->_get_virtual_disk_manager_view() || return;
 	
 	# Get the source vmdk file info so the source adapter and disk type can be displayed
 	my $source_info = $self->_get_file_info($source_path) || return;
@@ -682,14 +689,6 @@ sub copy_virtual_disk {
 	my $destination_directory_path = $self->_get_parent_directory_datastore_path($destination_path) || return;
 	$self->create_directory($destination_directory_path) || return;
 	
-	notify($ERRORS{'DEBUG'}, 0, "attempting to copy virtual disk on VM host $vmhost_name: '$source_path' --> '$destination_path'\n" .
-		"source adapter type: $source_adapter_type\n" .
-		"destination adapter type: $destination_adapter_type\n" .
-		"disk type: $source_disk_type\n" .
-		"source capacity: " . get_file_size_info_string($source_file_capacity_bytes) . "\n" .
-		"source space used: " . get_file_size_info_string($source_file_size_bytes)
-	);
-	
 	
 	# Override the die handler
 	local $SIG{__DIE__} = sub{};
@@ -698,6 +697,15 @@ sub copy_virtual_disk {
 	my $virtual_disk_spec = VirtualDiskSpec->new(
 		adapterType => $destination_adapter_type,
 		diskType => $destination_disk_type,
+	);
+	
+	notify($ERRORS{'DEBUG'}, 0, "attempting to copy virtual disk on VM host $vmhost_name: '$source_path' --> '$destination_path'\n" .
+		"source adapter type: $source_adapter_type\n" .
+		"destination adapter type: $destination_adapter_type\n" .
+		"source disk type: $source_disk_type\n" .
+		"destination disk type: $destination_disk_type\n" .
+		"source capacity: " . get_file_size_info_string($source_file_capacity_bytes) . "\n" .
+		"source space used: " . get_file_size_info_string($source_file_size_bytes)
 	);
 	
 	my $copy_virtual_disk_result;
@@ -714,6 +722,9 @@ sub copy_virtual_disk {
 	
 	# Check if an error occurred
 	if (my $copy_virtual_disk_fault = $@) {
+		# Delete the destination directory path previously created
+		$self->delete_file($destination_directory_path);
+		
 		if ($copy_virtual_disk_fault =~ /No space left/i) {
 			# Check if the output indicates there is not enough space to copy the vmdk
 			# Output will contain:
@@ -724,13 +735,10 @@ sub copy_virtual_disk {
 		}
 		elsif ($copy_virtual_disk_fault =~ /not implemented/i) {
 			notify($ERRORS{'DEBUG'}, 0, "unable to copy vmdk using CopyVirtualDisk function, VM host $vmhost_name does not implement the CopyVirtualDisk function");
-			
-			# Delete the destination directory path previously created
-			$self->delete_file($destination_directory_path);
 		}
 		else {
 			notify($ERRORS{'WARNING'}, 0, "failed to copy vmdk on VM host $vmhost_name using CopyVirtualDisk function: '$source_path' --> '$destination_path'\nerror:\n$copy_virtual_disk_fault");
-			return;
+			#return;
 		}
 	}
 	else {
@@ -738,12 +746,43 @@ sub copy_virtual_disk {
 		return 1;
 	}
 	
+	my $resource_pool_view = $self->_get_resource_pool_view() || return;
+	my $resource_pool_path = $self->_get_managed_object_path($resource_pool_view->{mo_ref});
 	
-	my $source_vm_name = $self->_clean_vm_name("source_$destination_base_name");
-	my $clone_vm_name = $self->_clean_vm_name($destination_base_name);
+	my $vm_folder_view = $self->_get_vm_folder_view() || return;
+	my $vm_folder_path = $self->_get_managed_object_path($vm_folder_view->{mo_ref});
+	
+	my $request_id = $self->data->get_request_id();
+	
+	#my $source_vm_name = $self->_clean_vm_name("source-$request_id\_$destination_base_name");
+	#my $clone_vm_name = $self->_clean_vm_name($destination_base_name);
+	my $source_vm_name = "source-$request_id\_$destination_base_name";
+	my $clone_vm_name = $destination_base_name;
 	
 	my $source_vm_directory_path = "[$source_datastore_name] $source_vm_name";
 	my $clone_vm_directory_path = "[$destination_datastore_name] $clone_vm_name";
+	
+	# Check if VMs already exist using the source/clone directories
+	my @existing_vmx_file_paths = $self->get_vmx_file_paths();
+	for my $existing_vmx_file_path (@existing_vmx_file_paths) {
+		my $existing_vmx_directory_path = $self->_get_parent_directory_datastore_path($existing_vmx_file_path);
+		if ($existing_vmx_directory_path eq $source_vm_directory_path) {
+			notify($ERRORS{'WARNING'}, 0, "existing VM using the directory of the source VM will be deleted:\n" .
+				"source VM directory path: $source_vm_directory_path\n" .
+				"existing vmx file path: $existing_vmx_file_path"
+			);
+			
+			# Unregister the VM, don't attempt to delete it or else the source vmdk may be deleted
+			return unless $self->unregister_vm($existing_vmx_file_path);
+		}
+		elsif ($existing_vmx_directory_path eq $clone_vm_directory_path) {
+			notify($ERRORS{'WARNING'}, 0, "existing VM using the directory of the VM clone will be deleted:\n" .
+				"clone VM directory path: $clone_vm_directory_path\n" .
+				"existing vmx file path: $existing_vmx_file_path"
+			);
+			return unless $self->delete_vm($existing_vmx_file_path);
+		}
+	}
 	
 	# Make sure the source and clone directories don't exist
 	# Otherwise the VM creation/cloning process will create another directory with '_1' appended and the files won't be deleted
@@ -755,22 +794,7 @@ sub copy_virtual_disk {
 		notify($ERRORS{'WARNING'}, 0, "unable to copy virtual disk, clone VM directory path already exists: $clone_vm_directory_path");
 		return;
 	}
-	
-	
-	my $file_manager = $self->_get_file_manager_view() || return;
-	my $resource_pool_view = $self->_get_resource_pool_view() || return;
-	
-	my $folder_view = Vim::find_entity_view(
-		view_type => "Folder",
-		begin_entity => $datacenter_view,
-		filter => { name => "vm" }
-	);
-	
-	if (!$folder_view){
-		notify($ERRORS{'WARNING'}, 0, "failed to retrieve VM folder view");
-		return;
-	}
-	
+
 	# Create a virtual machine on top of this virtual disk
 	# First, create a controller for the virtual disk
 	my $controller;
@@ -828,6 +852,41 @@ sub copy_virtual_disk {
 		)
 	);
 	
+	notify($ERRORS{'DEBUG'}, 0, <<EOF
+attempting to create temporary VM to be cloned:
+VM name:             '$source_vm_name'
+VM directory path:   '$source_vm_directory_path'
+VM folder:           '$vm_folder_path'
+resource pool:       '$resource_pool_path'
+source disk path:    '$source_path'
+source adapter type: '$source_adapter_type'
+source disk type:    '$source_disk_type'
+EOF
+);
+	
+	# Create a temporary VM which will be cloned
+	my $source_vm_view;
+	notify($ERRORS{'DEBUG'}, 0, "creating temporary source VM which will be cloned in order to copy its virtual disk: $source_vm_name");
+	eval {
+		my $source_vm = $vm_folder_view->CreateVM(
+			config => $source_vm_config,
+			pool => $resource_pool_view
+		);
+		if ($source_vm) {
+			notify($ERRORS{'DEBUG'}, 0, "created temporary source VM which will be cloned: $source_vm_name");
+			$source_vm_view = Vim::get_view(mo_ref => $source_vm);
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to create temporary source VM which will be cloned: $source_vm_name");
+			return;
+		}
+	};
+	if (my $fault = $@) {
+		notify($ERRORS{'WARNING'}, 0, "failed to create temporary source VM which will be cloned on VM host $vmhost_name: $source_vm_name\nerror:\n$fault");
+		return;
+	}
+	
+	
 	# Create the specification for cloning the VM
 	my $clone_spec = VirtualMachineCloneSpec->new(
 		config => VirtualMachineConfigSpec->new(
@@ -849,38 +908,17 @@ sub copy_virtual_disk {
 		)
 	);
 	
-	
-	notify($ERRORS{'DEBUG'}, 0, "attempting to copy virtual disk by cloning temporary VM: '$source_path' --> '$destination_path'\n" .
-		"adapter type: $source_adapter_type\n" .
-		"source disk type: $source_disk_type\n" .
-		"source capacity: " . get_file_size_info_string($source_file_capacity_bytes) . "\n" .
-		"source space used: " . get_file_size_info_string($source_file_size_bytes) . "\n" .
-		"source VM name: $source_vm_name\n" .
-		"clone VM name: $clone_vm_name\n" .
-		"source VM directory path: $source_vm_directory_path\n" .
+	notify($ERRORS{'DEBUG'}, 0, "attempting to create clone of temporary VM:\n" .
+		"clone VM name: $source_vm_name\n" .
 		"clone VM directory path: $clone_vm_directory_path"
 	);
 	
-	
-	my $source_vm_view;
+	# Clone the temporary VM, thus creating a copy of its virtual disk
+	notify($ERRORS{'DEBUG'}, 0, "attempting to clone VM: $source_vm_name --> $clone_vm_name\nclone VM directory path: '$clone_vm_directory_path'");
 	my $clone_vm_view;
 	eval {
-		my $source_vm = $folder_view->CreateVM(
-			config => $source_vm_config,
-			pool => $resource_pool_view
-		);
-		if ($source_vm) {
-			notify($ERRORS{'DEBUG'}, 0, "created temporary source VM which will be cloned: $source_vm_name");
-			$source_vm_view = Vim::get_view(mo_ref => $source_vm);
-		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "failed to create temporary source VM which will be cloned: $source_vm_name");
-			return;
-		}
-		
-		notify($ERRORS{'DEBUG'}, 0, "cloning VM: $source_vm_name --> $clone_vm_name");
 		my $clone_vm = $source_vm_view->CloneVM(
-			folder => $folder_view,
+			folder => $vm_folder_view,
 			name => $clone_vm_name,
 			spec => $clone_spec
 		);
@@ -893,8 +931,6 @@ sub copy_virtual_disk {
 			return;
 		}
 	};
-	
-	# Check if an error occurred
 	if (my $fault = $@) {
 		if ($fault =~ /No space left/i) {
 			# Check if the output indicates there is not enough space to copy the vmdk
@@ -923,10 +959,10 @@ sub copy_virtual_disk {
 		$self->delete_file($clone_file_path);
 	}
 	
-    # Set this as a class value so that it is retrievable from within 
-    # the calling context, i.e. capture(), routine. This way, in case 
-    # the name changes, it is possible to update the database with the new value.
-    $self->{new_image_name} = $clone_vm_name;
+	# Set this as a class value so that it is retrievable from within 
+	# the calling context, i.e. capture(), routine. This way, in case 
+	# the name changes, it is possible to update the database with the new value.
+	$self->{new_image_name} = $clone_vm_name;
 	notify($ERRORS{'OK'}, 0, "copied virtual disk on VM host $vmhost_name: '$source_path' --> '$destination_path'");
 	return 1;
 }
@@ -2572,6 +2608,7 @@ sub _get_file_info {
 		}
 	}
 	
+	$self->{_get_file_info}{"$base_directory_path/$search_pattern"} = \%file_info;
 	notify($ERRORS{'DEBUG'}, 0, "retrieved info for " . scalar(keys(%file_info)) . " matching files:\n" . format_data(\%file_info));
 	return \%file_info;
 }
@@ -2770,17 +2807,17 @@ sub _get_resource_pool_view {
 	my $vmhost_profile_resource_path = $self->data->get_vmhost_profile_resource_path(0);
 	
 	# Retrieve all of the ResourcePool views on the VM host
-	my @resource_pools = @{Vim::find_entity_views(view_type => 'ResourcePool')};
-	if (!@resource_pools) {
+	my @resource_pool_views = @{Vim::find_entity_views(view_type => 'ResourcePool')};
+	if (!@resource_pool_views) {
 		notify($ERRORS{'WARNING'}, 0, "failed to retrieve any resource pool views from VM host $vmhost_name");
 		return;
 	}
 	
-	my @resource_pool_paths;
-	my %potential_matches;
-	for my $resource_pool (@resource_pools) {
+	my $resource_pools;
+	
+	for my $resource_pool_view (@resource_pool_views) {
 		# Assemble the full path to the resource view - including Datacenters, folders, clusters...
-		my $resource_pool_path = $self->_get_managed_object_path($resource_pool->{mo_ref});
+		my $resource_pool_path = $self->_get_managed_object_path($resource_pool_view->{mo_ref});
 		
 		# The path of the resource pool retrieved from the VM host will contain levels which don't appear in vCenter
 		# For example, 'host' and 'Resources' don't appear in the tree view:
@@ -2788,20 +2825,18 @@ sub _get_resource_pool_view {
 		# Check the actual path retrieved from the VM host and the path with these entries removed
 		my $resource_pool_path_fixed = $resource_pool_path;
 		$resource_pool_path_fixed =~ s/\/host\//\//g;
-		$resource_pool_path_fixed =~ s/\/Resources($|\/?)/$1/g;
-		
-		push @resource_pool_paths, $resource_pool_path_fixed;
-		
-		
-		# If only 1 resource pool was found on the host, ignore the VM profile resource path setting and use the resource pool that was found
-		if (scalar(@resource_pools) == 1) {
-			notify($ERRORS{'DEBUG'}, 0, "single resource pool found on VM host $vmhost_name will be used: $resource_pool_path_fixed");
-			$self->{resource_pool_view_object} = $resource_pool;
-			return $resource_pool;
-		}
+		$resource_pool_path_fixed =~ s/\/Resources($|\/?)/$1/g;	
+		$resource_pools->{$resource_pool_path_fixed} = $resource_pool_view;
+	}
+	notify($ERRORS{'DEBUG'}, 0, "retrieved resource pools on VM host $vmhost_name:\n" . join("\n", sort keys %$resource_pools));
+	
+
+	my %potential_matches;
+	for my $resource_pool_path (sort keys %$resource_pools) {
+		my $resource_pool = $resource_pools->{$resource_pool_path};
 		
 		# Check if the retrieved resource pool matches the profile resource path
-		if ($vmhost_profile_resource_path =~ /$resource_pool_path/i) {
+		if ($vmhost_profile_resource_path =~ /^$resource_pool_path$/i) {
 			notify($ERRORS{'DEBUG'}, 0, "found matching resource pool on VM host $vmhost_name\n" .
 					 "VM host profile resource path: $vmhost_profile_resource_path\n" .
 					 "resource pool path on host: $resource_pool_path"
@@ -2811,10 +2846,9 @@ sub _get_resource_pool_view {
 		}
 		
 		# Check if the fixed retrieved resource pool path matches the profile resource path
-		if ($vmhost_profile_resource_path =~ /^$resource_pool_path_fixed$/i) {
+		if ($vmhost_profile_resource_path =~ /^$resource_pool_path$/i) {
 			notify($ERRORS{'DEBUG'}, 0, "found resource pool on VM host $vmhost_name matching VM host profile resource path with default hidden levels removed:\n" .
 					 "path on VM host: '$resource_pool_path'\n" .
-					 "modified path on VM host: '$resource_pool_path_fixed'\n" .
 					 "VM profile path: '$vmhost_profile_resource_path'"
 			);
 			$self->{resource_pool_view_object} = $resource_pool;
@@ -2822,19 +2856,19 @@ sub _get_resource_pool_view {
 		}
 		
 		# Check if this is a potential match - resource pool path retrieved from VM host begins or ends with the profile value
-		if ($resource_pool_path_fixed =~ /^\/?$vmhost_profile_resource_path\//i) {
-			notify($ERRORS{'DEBUG'}, 0, "resource pool on VM host $vmhost_name '$resource_pool_path_fixed' is a potential match, it begins with VM host profile resource path '$vmhost_profile_resource_path'");
-			$potential_matches{$resource_pool_path_fixed} = $resource_pool;
+		if ($resource_pool_path =~ /^\/?$vmhost_profile_resource_path\//i) {
+			notify($ERRORS{'DEBUG'}, 0, "resource pool on VM host $vmhost_name '$resource_pool_path' is a potential match, it begins with VM host profile resource path '$vmhost_profile_resource_path'");
+			$potential_matches{$resource_pool_path} = $resource_pool;
 		}
-		elsif ($resource_pool_path_fixed =~ /\/$vmhost_profile_resource_path$/i) {
-			notify($ERRORS{'DEBUG'}, 0, "resource pool on VM host $vmhost_name '$resource_pool_path_fixed' is a potential match, it ends with VM host profile resource path '$vmhost_profile_resource_path'");
-			$potential_matches{$resource_pool_path_fixed} = $resource_pool;
+		elsif ($resource_pool_path =~ /\/$vmhost_profile_resource_path$/i) {
+			notify($ERRORS{'DEBUG'}, 0, "resource pool on VM host $vmhost_name '$resource_pool_path' is a potential match, it ends with VM host profile resource path '$vmhost_profile_resource_path'");
+			$potential_matches{$resource_pool_path} = $resource_pool;
 		}
 		else {
-			#notify($ERRORS{'DEBUG'}, 0, "resource pool on VM host $vmhost_name does NOT match VM host profile resource path:\n" .
-			#	"path on VM host: '$resource_pool_path'\n" .
-			#	"VM profile path: '$vmhost_profile_resource_path'"
-			#);
+			notify($ERRORS{'DEBUG'}, 0, "resource pool on VM host $vmhost_name does NOT match VM host profile resource path:\n" .
+				"path on VM host: '$resource_pool_path'\n" .
+				"VM profile path: '$vmhost_profile_resource_path'"
+			);
 		}
 	}
 	
@@ -2852,15 +2886,94 @@ sub _get_resource_pool_view {
 	
 	# Resource pool was found
 	if ($vmhost_profile_resource_path) {
-		notify($ERRORS{'WARNING'}, 0, "resource path '$vmhost_profile_resource_path' configured in VM host profile does NOT match any of resource pool paths found on VM host $vmhost_name:\n" . join("\n", sort @resource_pool_paths));
+		notify($ERRORS{'WARNING'}, 0, "resource path '$vmhost_profile_resource_path' configured in VM host profile does NOT match any of resource pool paths found on VM host $vmhost_name:\n" . join("\n", sort keys %$resource_pools));
 	}
-	elsif (scalar(@resource_pools) > 1) {
-		notify($ERRORS{'WARNING'}, 0, "unable to determine correct resource pool to use, VM host $vmhost_name contains multiple resource pool paths, VM host profile resource path MUST be configured to one of the following values:\n" . join("\n", sort @resource_pool_paths));
+	elsif (scalar(keys %$resource_pools) > 1) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine correct resource pool to use, VM host $vmhost_name contains multiple resource pool paths, VM host profile resource path MUST be configured to one of the following values:\n" . join("\n", sort keys %$resource_pools));
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to determine resource pool to use on VM host $vmhost_name:\n" . join("\n", sort @resource_pool_paths));
+		notify($ERRORS{'WARNING'}, 0, "failed to determine resource pool to use on VM host $vmhost_name:\n" . join("\n", sort keys %$resource_pools));
 	}
 	
+	return;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 _get_vm_folder_view
+
+ Parameters  : none
+ Returns     : vSphere SDK Folder view object
+ Description : Retrieves a vSphere SDK Folder view object. If the VM folder
+               is configured in the VM profile, the VM folder matching that name
+               is returned. If not configured, the firest VM folder found is
+               returned. If the VM folder path is configured in the VM profile
+               and no folder is found on the VM host with a matching name,
+               undefined is returned.
+
+=cut
+
+sub _get_vm_folder_view {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	return $self->{vm_folder_view_object} if $self->{vm_folder_view_object};
+	
+	my $vmhost_name = $self->data->get_vmhost_short_name();
+	my $vmhost_profile_folder_path = $self->data->get_vmhost_profile_folder_path(0);
+	
+	my $datacenter_view = $self->_get_datacenter_view() || return;
+	
+	# Retrieve all of the Folder views on the VM host
+	my @folder_views = @{Vim::find_entity_views(
+		view_type => 'Folder',
+		begin_entity => $datacenter_view,
+	)};
+	if (!@folder_views) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve any folder views from VM host $vmhost_name");
+		return;
+	}
+	
+	my @vm_folder_paths;
+	VM_FOLDER: for my $vm_folder_view (@folder_views) {
+		# Assemble the full path to the folder view
+		my $vm_folder_path = $self->_get_managed_object_path($vm_folder_view->{mo_ref});
+		
+		# Ignore non-VM folders
+		# vSphere automatically adds a "vm" layer in the path
+		# Example, folder appears as '/datacenter1/folder1' in the vSphere Client, path is actually '/datacenter1/vm/folder1'
+		if ($vm_folder_path !~ /\/vm($|\/)/) {
+			notify($ERRORS{'DEBUG'}, 0, "ignoring non-VM folder: $vm_folder_path");
+			next VM_FOLDER;
+		}
+		
+		# Strip the /vm layer from the folder name
+		$vm_folder_path =~ s/\/vm($|\/)/$1/;
+		push @vm_folder_paths, $vm_folder_path;
+		
+		# If the VM folder path isn't configured in the VM profile, return the first folder found
+		if (!$vmhost_profile_folder_path) {
+			notify($ERRORS{'DEBUG'}, 0, "VM folder path is not configured in the VM profile, returning 1st VM folder found: $vm_folder_path");
+		}
+		else {
+			# VM folder path is configured in the VM profile
+			if ($vm_folder_path =~ /^$vmhost_profile_folder_path$/i) {
+				notify($ERRORS{'DEBUG'}, 0, "found VM folder on VM host $vmhost_name matching VM folder path configured in the VM profile: $vm_folder_path");
+			}
+			else {
+				notify($ERRORS{'DEBUG'}, 0, "VM folder '$vm_folder_path' found on VM host $vmhost_name does NOT match path configured in VM profile: '$vmhost_profile_folder_path'");
+				next VM_FOLDER;
+			}
+		}
+		
+		$self->{vm_folder_view_object} = $vm_folder_view;
+		return $self->{vm_folder_view_object};
+	}
+	
+	notify($ERRORS{'WARNING'}, 0, "VM host $vmhost_name does not contain VM folder path configured in the VM profile: '$vmhost_profile_folder_path', VM folder paths found on $vmhost_name:\n" . join("\n", @vm_folder_paths));
 	return;
 }
 
@@ -2918,7 +3031,7 @@ sub _get_managed_object_path {
 	
 	my $view = Vim::get_view('mo_ref' => $mo_ref_argument) || return;
 	my $name = $view->{name} || return;
-	
+
 	my $parent_mo_ref;
 	if ($type eq 'VirtualMachine' && $view->{resourcePool}) {
 		$parent_mo_ref = $view->{resourcePool};

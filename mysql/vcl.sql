@@ -1223,6 +1223,7 @@ CREATE TABLE IF NOT EXISTS `vmprofile` (
   `profilename` varchar(56) NOT NULL,
   `imageid` smallint(5) unsigned NOT NULL,
   `resourcepath` varchar(256) default NULL,
+  `folderpath` varchar(256) default NULL,
   `repositorypath` varchar(128) default NULL,
   `repositoryimagetypeid` smallint(5) unsigned NOT NULL default '1',
   `datastorepath` varchar(128) NOT NULL,

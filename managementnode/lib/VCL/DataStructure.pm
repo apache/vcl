@@ -256,6 +256,7 @@ $SUBROUTINE_MAPPINGS{vmhost_profile_repository_imagetype_id} = '$self->request_d
 #$SUBROUTINE_MAPPINGS{vmhost_profile_id} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{vmprofile}{id}';
 $SUBROUTINE_MAPPINGS{vmhost_profile_image_id} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{vmprofile}{imageid}';
 $SUBROUTINE_MAPPINGS{vmhost_profile_resource_path} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{vmprofile}{resourcepath}';
+$SUBROUTINE_MAPPINGS{vmhost_profile_folder_path} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{vmprofile}{folderpath}';
 $SUBROUTINE_MAPPINGS{vmhost_profile_name} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{vmprofile}{profilename}';
 $SUBROUTINE_MAPPINGS{vmhost_profile_virtualswitch0} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{vmprofile}{virtualswitch0}';
 $SUBROUTINE_MAPPINGS{vmhost_profile_virtualswitch1} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{vmprofile}{virtualswitch1}';
@@ -1152,7 +1153,7 @@ sub get_reservation_remote_ip {
 	
 	# Make sure we return 0 if remote IP is blank
 	elsif ($selected_rows[0]{remoteIP} eq '') {
-		notify($ERRORS{'OK'}, 0, "reservation remote IP is not set");
+		#notify($ERRORS{'OK'}, 0, "reservation remote IP is not set");
 		return 0;
 	}
 	
