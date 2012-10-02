@@ -1364,8 +1364,8 @@ sub get_virtual_disk_hardware_version {
  Returns     : string
  Description : Returns the full VMware product name installed on the VM host.
                Examples:
-					VMware Server 2.0.2 build-203138
-					VMware ESXi 4.0.0 build-208167
+               VMware Server 2.0.2 build-203138
+               VMware ESXi 4.0.0 build-208167
 
 =cut
 
@@ -1427,35 +1427,6 @@ sub get_vmware_product_version {
 		notify($ERRORS{'WARNING'}, 0, "unable to retrieve product version for VM host $vmhost_hostname");
 		return;
 	}
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 get_network_names
-
- Parameters  : none
- Returns     : array
- Description : Retrieves the network names configured on the VM host.
-
-=cut
-
-sub get_network_names {
-	my $self = shift;
-	if (ref($self) !~ /VCL::Module/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-	
-	my $datacenter_view = $self->_get_datacenter_view();
-	
-	# Retrieve the network info, check if each network is accessible
-	my @network_names;
-	for my $network (@{Vim::get_views(mo_ref_array => $datacenter_view->network)}) {
-		push @network_names, $network->name;
-	}
-	
-	notify($ERRORS{'DEBUG'}, 0, "retrieved network names:\n" . join("\n", @network_names));
-	return @network_names;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -3466,6 +3437,321 @@ sub _is_vcenter {
 	#    'HostAgent' - standalone ESX/ESXi or VMware Server host
 	
 	return ($api_type =~ /VirtualCenter/) ? 1 : 0;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 _mo_ref_to_string
+
+ Parameters  : $mo_ref
+ Returns     : string
+ Description : Formats the information in a managed object reference. Filters
+               out a lot of information which is contained in every mo_ref such
+               as the vim key.
+
+=cut
+
+sub _mo_ref_to_string {
+	my $mo_ref = shift;
+	
+	# Check the argument, either a mo_ref or view can be supplied
+	if (!ref($mo_ref)) {
+		notify($ERRORS{'WARNING'}, 0, "argument is not a reference: $mo_ref");
+		return;
+	}
+	elsif (ref($mo_ref) eq 'ManagedObjectReference') {
+		$mo_ref = Vim::get_view(mo_ref => $mo_ref)
+	}
+	
+	my $return_string = '';
+	for my $key (sort keys %$mo_ref) {
+		# Ignore keys which only contain general info
+		next if $key =~ /(vim|alarmActionsEnabled|permission|recentTask|triggeredAlarmState|declaredAlarmState|tag|overallStatus|availableField|configIssue|configStatus|customValue|disabledMethod)/;
+		
+		my $value = $mo_ref->{$key};
+		if (!defined($value)) {
+			$return_string .= "KEY '$key': <undefined>\n";
+		}
+		elsif (my $type = ref($value)) {
+			$return_string .=  "KEY '$key' <$type>:\n";
+			$return_string .= format_data($value) . "\n";
+		}
+		else {
+			$return_string .= "KEY '$key' <scalar>: '$value'\n";
+		}
+	}
+	return $return_string;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_host_network_info
+
+ Parameters  : none
+ Returns     : hash reference
+ Description : Retrieves information about the networks defined on the VM host.
+               A hash reference is returned. The hash keys are the network
+               names. The data contained in the hash differs based on whether
+               its a dvPortgroup or regular network.
+               {
+                  "dv-net-vlan2148" => {
+                     "portgroupKey" => "dvportgroup-125",
+                     "switchUuid" => "4d 12 08 50 01 69 a8 6b-01 9c 43 69 92 7e ad f1",
+                     "type" => "DistributedVirtualPortgroup",
+                     "value" => "dvportgroup-125"
+                  },
+                  "regular-net-public" => {
+                     "network" => bless( {
+                       "type" => "Network",
+                       "value" => "network-159"
+                     }, 'ManagedObjectReference' ),
+                     "type" => "Network",
+                     "value" => "network-159"
+                  }
+               }
+
+=cut
+
+sub get_host_network_info {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	return $self->{vm_network_info} if $self->{vm_network_info};
+	
+	my $vmhost_hostname = $self->data->get_vmhost_hostname();
+	
+	# Override the die handler
+	local $SIG{__DIE__} = sub{};
+	
+	# Get the datacenter view
+	my $datacenter_view = $self->_get_datacenter_view();
+	
+	# Get the NetworkFolder view
+	my $network_folder_view = Vim::get_view(mo_ref => $datacenter_view->networkFolder);
+	if (!$network_folder_view) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve networkFolder view from $vmhost_hostname");
+		return;
+	}
+	
+	my $child_array = $network_folder_view->{childEntity};
+	if (!$child_array) {
+		notify($ERRORS{'WARNING'}, 0, "networkFolder does not contain a 'childEntity' key:\n" . _mo_ref_to_string($network_folder_view));
+		return;
+	}
+	
+	my $host_network_info = {};
+	CHILD: for my $child (@$child_array) {
+		my $type = $child->{type};
+		my $value = $child->{value};
+		
+		# Get a view for the child entity
+		my $child_view = Vim::get_view(mo_ref => $child);
+		if (!$child_view) {
+			notify($ERRORS{'WARNING'}, 0, "failed to retrieve view for networkFolder child:\n" . format_data($child));
+			next CHILD;
+		}
+		
+		my $name = $child_view->{name};
+		if (!$name) {
+			notify($ERRORS{'WARNING'}, 0, "networkFolder child does not have a 'name' key:\n" . format_data($child_view));
+			next CHILD;
+		}
+		
+		$host_network_info->{$name}{type} = $type;
+		$host_network_info->{$name}{value} = $value;
+		
+		if ($type eq 'Network') {
+			$host_network_info->{$name}{network} = $child;
+		}
+		elsif ($type eq 'DistributedVirtualPortgroup') {
+			# Save the portgroup key to the hash, example: dvportgroup-361
+			$host_network_info->{$name}{portgroupKey} = $child_view->{key};
+			
+			# Each portgroup belongs to a distributed virtual switch
+			# The UUID of the switch is required when adding the portgroup to a VM
+			# Get the dvSwitch view
+			my $dv_switch_view = Vim::get_view(mo_ref => $child_view->config->distributedVirtualSwitch);
+			if (!$dv_switch_view) {
+				notify($ERRORS{'WARNING'}, 0, "failed to retrieve DistributedVirtualSwitch view for portgroup $name");
+				next CHILD;
+			}
+			
+			my $dv_switch_uuid = $dv_switch_view->{uuid};
+			$host_network_info->{$name}{switchUuid} = $dv_switch_uuid;
+		}
+		
+	}
+	
+	$self->{host_network_info} = $host_network_info;
+	notify($ERRORS{'DEBUG'}, 0, "retrieved network info from $vmhost_hostname:\n" . format_data($host_network_info));
+	return $host_network_info;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_network_names
+
+ Parameters  : none
+ Returns     : array
+ Description : Retrieves the network names configured on the VM host.
+
+=cut
+
+sub get_network_names {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $host_network_info = $self->get_host_network_info();
+	if ($host_network_info) {
+		return sort keys %$host_network_info;
+	}
+	else {
+		return;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 add_ethernet_adapter
+
+ Parameters  : $vmx_path, $adapter_specification
+ Returns     : boolean
+ Description : Adds an ethernet adapter to the VM based on the adapter
+               specification argument.
+
+=cut
+
+sub add_ethernet_adapter {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get the vmx path argument and convert it to a datastore path
+	my $vmx_path = $self->_get_datastore_path(shift) || return;
+	
+	# Get the adapter spec argument and make sure required values are included
+	my $adapter_specification = shift;
+	if (!$adapter_specification) {
+		notify($ERRORS{'WARNING'}, 0, "adapter specification argument was not supplied");
+		return;
+	}
+	my $adapter_type = $adapter_specification->{adapter_type};
+	my $network_name = $adapter_specification->{network_name};
+	my $address_type = $adapter_specification->{address_type};
+	my $address = $adapter_specification->{address} || '';
+	if (!$adapter_type) {
+		notify($ERRORS{'WARNING'}, 0, "'adapter_type' is missing from adapter specification:\n" . format_data($adapter_specification));
+		return;
+	}
+	if (!$network_name) {
+		notify($ERRORS{'WARNING'}, 0, "'network_name' is missing from adapter specification:\n" . format_data($adapter_specification));
+		return;
+	}
+	if (!$address_type) {
+		notify($ERRORS{'WARNING'}, 0, "'address_type' is missing from adapter specification:\n" . format_data($adapter_specification));
+		return;
+	}
+	
+	# Get the VM host's network info
+	my $host_network_info = $self->get_host_network_info();
+	if (!$host_network_info) {
+		notify($ERRORS{'WARNING'}, 0, "unable to add ethernet adapter, VM host network info could not be retrieved");
+		return;
+	}
+	
+	# Make sure the network name provided in the adapter spec argument was found on the VM host
+	my $adapter_network_info = $host_network_info->{$network_name};
+	if (!$adapter_network_info) {
+		notify($ERRORS{'WARNING'}, 0, "unable to add ethernet adapter, VM host network info does not contain a network named '$network_name'");
+		return;
+	}
+	my $adapter_network_type = $adapter_network_info->{type};
+	
+	# Assemble the backing info
+	my $backing;
+	if ($adapter_network_type eq 'DistributedVirtualPortgroup') {
+		my $portgroup_key = $adapter_network_info->{portgroupKey};
+		my $switch_uuid = $adapter_network_info->{switchUuid};
+		
+		$backing = VirtualEthernetCardDistributedVirtualPortBackingInfo->new(
+			port => DistributedVirtualSwitchPortConnection->new(
+				portgroupKey => $portgroup_key,
+				switchUuid => $switch_uuid,
+			),
+		);
+	}
+	else {
+		my $network = $adapter_network_info->{network};
+		$backing = VirtualEthernetCardNetworkBackingInfo->new(
+			deviceName => $network_name,
+			network => $network,
+		);
+	}
+	
+	# Assemble the ethernet device
+	my $ethernet_device;
+	if ($adapter_type =~ /e1000/i) {
+		$ethernet_device = VirtualE1000->new(
+			key => '',
+			backing => $backing,
+			addressType => $address_type,
+			macAddress => $address,
+		);
+	}
+	elsif ($adapter_type =~ /vmxnet/i) {
+		$ethernet_device = VirtualVmxnet3->new(
+			key => '',
+			backing => $backing,
+			addressType => $address_type,
+			macAddress => $address,
+		);
+	}
+	else {
+		$ethernet_device = VirtualPCNet32->new(
+			key => '',
+			backing => $backing,
+			addressType => $address_type,
+			macAddress => $address,
+		);
+	}
+	
+	# Assemble the VM config spec
+	my $vm_config_spec = VirtualMachineConfigSpec->new(
+		deviceChange => [
+			VirtualDeviceConfigSpec->new(
+				operation =>	VirtualDeviceConfigSpecOperation->new('add'),
+				device => $ethernet_device,
+			),
+		],
+	);
+	
+	# Override the die handler
+	local $SIG{__DIE__} = sub{};
+	
+	my $vm = $self->_get_vm_view($vmx_path) || return;
+	
+	notify($ERRORS{'DEBUG'}, 0, "attempting to add ethernet adapter to VM: $vmx_path:\n" . format_data($adapter_specification));
+	eval {
+		$vm->ReconfigVM(
+			spec => $vm_config_spec,
+		);
+	};
+	if ($@) {
+		notify($ERRORS{'WARNING'}, 0, "failed to add ethernet adapter to VM: $vmx_path, adapter specification:\n" . format_data($adapter_specification) . "\nerror:\n$@");
+		return;
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "added ethernet adapter to VM: $vmx_path:\n" . format_data($adapter_specification));
+		return 1;
+	}
 }
 
 #/////////////////////////////////////////////////////////////////////////////
