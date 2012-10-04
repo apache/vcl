@@ -1010,8 +1010,8 @@ sub check_blockrequest_time {
 	#notify($ERRORS{'DEBUG'}, 0, "start:  $start_datetime,  epoch: $start_time_epoch_seconds,  delta: $start_delta_minutes minutes");
 	#notify($ERRORS{'DEBUG'}, 0, "end:    $end_datetime,    epoch: $end_time_epoch_seconds,    delta: $end_delta_minutes minutes");
 
-	# if 30min to 6 hrs in advance: start assigning resources
-	if ($start_delta_minutes >= (30) && $start_delta_minutes <= (6 * 60)) {
+	# if 1min to 6 hrs in advance: start assigning resources
+	if ($start_delta_minutes <= (6 * 60)) {
 		# Block request within start window
 		notify($ERRORS{'OK'}, 0, "block request start time is within start window ($start_delta_minutes minutes from now), returning 'start'");
 		return "start";
