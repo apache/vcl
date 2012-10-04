@@ -957,13 +957,18 @@ sub set_static_public_address {
 	my $request_id            = $self->data->get_request_id();
 	my $server_request_id     = $self->data->get_server_request_id();
 	my $management_node_keys     = $self->data->get_management_node_keys();
+
+   my $server_request_fixedIP       = $self->data->get_server_request_fixedIP();
+
 	
   	# Make sure public IP configuration is static or this is a server request
    my $ip_configuration = $self->data->get_management_node_public_ip_configuration();
    
-	if ($ip_configuration !~ /static/i || $server_request_id ) {
-      notify($ERRORS{'WARNING'}, 0, "static public address can only be set if IP configuration is static or through a server reservation, current value: $ip_configuration");
-      return;
+   if ($ip_configuration !~ /static/i) {
+      if( !$server_request_fixedIP ) {
+         notify($ERRORS{'WARNING'}, 0, "static public address can only be set if IP configuration is static or is a server request, current value: $ip_configuration \nserver_request_fixedIP=$server_request_fixedIP");
+         return;
+      }    
    }
 
    # Get the IP configuration
@@ -973,6 +978,13 @@ sub set_static_public_address {
    my $default_gateway = $self->data->get_management_node_public_default_gateway() || '<undefined>';
    my @dns_servers = $self->data->get_management_node_public_dns_servers();
 
+   if ($server_request_fixedIP) {
+      $ip_address = $server_request_fixedIP;
+      $subnet_mask = $self->data->get_server_request_netmask();
+      $default_gateway = $self->data->get_server_request_router();
+      @dns_servers = $self->data->get_server_request_DNSservers();
+   }
+
    # Make sure required info was retrieved
    if ("$interface_name $ip_address $subnet_mask $default_gateway" =~ /undefined/) {
       notify($ERRORS{'WARNING'}, 0, "failed to retrieve required network configuration for $computer_name");
@@ -980,6 +992,13 @@ sub set_static_public_address {
    }
    else {
       notify($ERRORS{'OK'}, 0, "attempting to set static public IP address on $computer_name");
+   }
+	
+	#Try to ping address to make sure it's available
+   #FIXME  -- need to add other tests for checking ip_address is or is not available.
+   if(_pingnode($ip_address)) {
+      notify($ERRORS{'WARNING'}, 0, "ip_address $ip_address is pingable, can not assign to $computer_name ");
+      return;
    }
 
    # Assemble the ifcfg file path
