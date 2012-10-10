@@ -2346,6 +2346,7 @@ sub manage_server_access {
 	my $user_login_id_owner         = $self->data->get_user_login_id();
 	my $user_id_owner		           = $self->data->get_user_id();
 	my $image_os_type 		= $self->data->get_image_os_type();
+	my $request_laststate_name      = $self->data->get_request_laststate_name();
 
 	# Build list of users.
 	# If in admin group set admin flag
@@ -2365,6 +2366,7 @@ sub manage_server_access {
 		@userlist_login = getusergroupmembers($server_request_logingroupid);
 	}	
 	
+	notify($ERRORS{'OK'}, 0, "request_laststate_name=$request_laststate_name");	
 	notify($ERRORS{'OK'}, 0, " admin login list= @userlist_admin");
 	notify($ERRORS{'OK'}, 0, " nonadmin login list= @userlist_login");
 	
@@ -2407,7 +2409,6 @@ sub manage_server_access {
 	foreach my $userid (sort keys %user_hash) {
 		next if (!($userid));
 		#Skip reservation owner, this account is processed in the new and reserved states
-		notify($ERRORS{'DEBUG'}, 0, "userid= $userid  user_id_owner= $user_id_owner login_id_owner= $user_login_id_owner ");
 		if ($userid eq $user_id_owner) {
 			#Add owner's login id if does not already exist
          $allow_list .= " $user_login_id_owner" if ($allow_list !~ /$user_login_id_owner/) ;
@@ -2417,7 +2418,8 @@ sub manage_server_access {
 		if(!$self->user_exists($user_hash{$userid}{username})){
 			delete($res_accounts{$userid});
 		}
-		if(!exists($res_accounts{$userid})){
+		
+		if(!exists($res_accounts{$userid}) || $request_laststate_name eq "reinstall" ){
 			# check affiliation
 			notify($ERRORS{'DEBUG'}, 0, "checking affiliation for $userid");
 			my $affiliation_name = get_user_affiliation($user_hash{$userid}{vcl_user_id}); 
@@ -2428,16 +2430,31 @@ sub manage_server_access {
 				}
 			}
 			
-			$user_hash{$userid}{"passwd"} = 0;
-			# Generate password if linux and standalone affiliation
-			unless ($image_os_type =~ /linux/ && !$standalone) {
-				$user_hash{$userid}{"passwd"} = getpw();
-			}
+			if($request_laststate_name ne "reinstall" ){	
+				$user_hash{$userid}{"passwd"} = 0;
+				# Generate password if linux and standalone affiliation
+				unless ($image_os_type =~ /linux/ && !$standalone) {
+					$user_hash{$userid}{"passwd"} = getpw();
+				}
 			
-			if (update_reservation_accounts($reservation_id,$userid,$user_hash{$userid}{passwd},"add")) {
-				notify($ERRORS{'OK'}, 0, "Inserted $reservation_id,$userid,$user_hash{$userid}{passwd} into reservationsaccounts table");
+				if (update_reservation_accounts($reservation_id,$userid,$user_hash{$userid}{passwd},"add")) {
+					notify($ERRORS{'OK'}, 0, "Inserted $reservation_id,$userid into reservationsaccounts table");
+				}
 			}
-			
+			# if reinstall and standalone check for existing password
+			if($request_laststate_name eq "reinstall" && $standalone) {
+				if ( $res_accounts{$userid}{password} ) {
+					$user_hash{$userid}{passwd} = $res_accounts{$userid}{password}
+				}
+				else {
+					#should have password for standalone accounts
+					$user_hash{$userid}{"passwd"} = getpw();
+					if (update_reservation_accounts($reservation_id,$userid,$user_hash{$userid}{passwd},"add")) {
+						notify($ERRORS{'OK'}, 0, "Inserted $reservation_id,$userid into reservationsaccounts table");
+					}
+				}
+			}
+	
 			# Create user on the OS
 			if($self->create_user($user_hash{$userid}{username},$user_hash{$userid}{passwd},$user_hash{$userid}{uid},$user_hash{$userid}{rootaccess},$standalone)) {
 				notify($ERRORS{'OK'}, 0, "Successfully created user $user_hash{$userid}{username} on $computer_node_name");
