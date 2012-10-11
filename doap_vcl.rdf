@@ -37,28 +37,28 @@
     <category rdf:resource="http://projects.apache.org/category/cloud" />
     <release>
       <Version>
-        <name>2.3</name>
+        <name>Apache VCL 2.3</name>
         <created>2012-07-20</created>
         <revision>2.3.0</revision>
       </Version>
     </release>
     <release>
       <Version>
-        <name>2.2.1</name>
+        <name>Apache VCL 2.2.1</name>
         <created>2011-04-08</created>
         <revision>2.2.1</revision>
       </Version>
     </release>
     <release>
       <Version>
-        <name>2.2</name>
+        <name>Apache VCL 2.2</name>
         <created>2010-10-05</created>
         <revision>2.2.0</revision>
       </Version>
     </release>
     <release>
       <Version>
-        <name>2.1</name>
+        <name>Apache VCL 2.1</name>
         <created>2009-12-04</created>
         <revision>2.1.0</revision>
       </Version>
