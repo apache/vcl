@@ -1812,6 +1812,7 @@ sub node_status {
 	}
 	else {
 		$status{rpower} = 0;
+		
 	}
 	notify($ERRORS{'OK'}, $log, "$computer_short_name rpower status: $rpower_status ($status{rpower})");
 
@@ -1843,6 +1844,8 @@ sub node_status {
 	} ## end if ($sshd_status =~ /on/)
 	else {
 		$status{ssh} = 0;
+		$status{status} = 'RELOAD';
+		return \%status;
 	}
 	notify($ERRORS{'OK'}, $log, "$computer_short_name sshd status: $sshd_status ($status{ssh})");
 

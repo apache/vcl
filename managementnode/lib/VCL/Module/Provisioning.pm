@@ -195,11 +195,11 @@ sub node_status {
 	}
 	#elsif ($current_image_name eq $image_name) {
 	elsif ($current_image_revision_id eq $imagerevision_id) {
-		notify($ERRORS{'DEBUG'}, 0, "currentimage.txt image ($current_image_revision_id) matches requested image $imagerevision_id ($image_name) on $computer_name");
+		notify($ERRORS{'DEBUG'}, 0, "currentimage.txt image $current_image_revision_id ($status->{currentimage}) matches requested image $imagerevision_id ($image_name) on $computer_name");
 		$status->{image_match} = 1;
 	}
 	else {
-		notify($ERRORS{'OK'}, 0, "currentimage.txt image ($current_image_revision_id) does not match requested image name $imagerevision_id ($image_name) on $computer_name, returning 'RELOAD'");
+		notify($ERRORS{'OK'}, 0, "currentimage.txt image $current_image_revision_id ($status->{currentimage}) does not match requested image name $imagerevision_id ($image_name) on $computer_name, returning 'RELOAD'");
 		return $status;
 	}
 	
