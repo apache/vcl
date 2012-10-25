@@ -271,6 +271,8 @@ $SUBROUTINE_MAPPINGS{vmhost_profile_eth1generated} = '$self->request_data->{rese
 $SUBROUTINE_MAPPINGS{vmhost_repository_imagetype_name} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{repositoryimagetype}{name}';
 $SUBROUTINE_MAPPINGS{vmhost_datastore_imagetype_name} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{datastoreimagetype}{name}';
 
+$SUBROUTINE_MAPPINGS{computer_currentimage_data} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{currentimage}';
+$SUBROUTINE_MAPPINGS{computer_currentimagerevision_data} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{currentimagerevision}';
 $SUBROUTINE_MAPPINGS{computer_currentimage_architecture} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{currentimage}{architecture}';
 $SUBROUTINE_MAPPINGS{computer_currentimage_deleted} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{currentimage}{deleted}';
 $SUBROUTINE_MAPPINGS{computer_currentimage_forcheckout} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{currentimage}{forcheckout}';
@@ -292,6 +294,7 @@ $SUBROUTINE_MAPPINGS{computer_currentimage_project} = '$self->request_data->{res
 $SUBROUTINE_MAPPINGS{computer_currentimage_reloadtime} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{currentimage}{reloadtime}';
 $SUBROUTINE_MAPPINGS{computer_currentimage_size} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{currentimage}{size}';
 $SUBROUTINE_MAPPINGS{computer_currentimage_test} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{currentimage}{test}';
+$SUBROUTINE_MAPPINGS{computer_currentimage_vcld_post_load} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{currentimage}{vcld_post_load}';	
 $SUBROUTINE_MAPPINGS{computer_currentimagerevision_comments} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{currentimagerevision}{comments}';
 $SUBROUTINE_MAPPINGS{computer_currentimagerevision_datecreated} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{currentimagerevision}{datecreated}';
 $SUBROUTINE_MAPPINGS{computer_currentimagerevision_deleted} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{currentimagerevision}{deleted}';

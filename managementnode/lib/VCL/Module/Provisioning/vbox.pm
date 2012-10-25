@@ -832,6 +832,7 @@ sub node_status {
         my $request_forimaging = 0;
         my $computer_node_name = 0;
         my $identity_keys      = 0;
+		  my $imagerevision_id 	 = 0;
 
 	# Check if subroutine was called as a class method
         if (ref($self) !~ /vbox/i) {
@@ -872,6 +873,8 @@ sub node_status {
                 $image_os_type      = $self->data->get_image_os_type;
                 $request_forimaging = $self->data->get_request_forimaging();
                 $identity_keys      = $self->data->get_management_node_keys;
+					 $imagerevision_id 	= $self->data->get_imagerevision_id();
+					 
         } ## end else [ if (ref($self) !~ /vbox/i)
 
         notify($ERRORS{'DEBUG'}, $log, "identity_keys= $identity_keys");
@@ -933,13 +936,14 @@ sub node_status {
 
                 $status{ssh} = 1;
 
-                $status{currentimage} = _getcurrentimage($vmclient_shortname);
+					 $status{currentimage} = $self->os->get_current_image_info("current_image_name");
+					 $status{currentimagerevisionid} = $self->os->get_current_image_info();
 
-                if ($status{currentimage}) {
-                        chomp($status{currentimage});
-                        if ($status{currentimage} =~ /$requestedimagename/) {
+                if ($status{currentimagerevisionid}) {
+                        chomp($status{currentimagerevisionid});
+                        if ($status{currentimagerevisionid} eq $imagerevision_id) {
                                 $status{image_match} = 1;
-                                notify($ERRORS{'OK'}, $log, "$vmclient_shortname is loaded with requestedimagename $requestedimagename");
+                                notify($ERRORS{'OK'}, $log, "$vmclient_shortname is loaded with requestedimagename imagerevision_id=$imagerevision_id $requestedimagename");
                         }
                         else {
                                 notify($ERRORS{'OK'}, $log, "$vmclient_shortname reports current image is currentimage= $status{currentimage} requestedimagename= $requestedimagename");

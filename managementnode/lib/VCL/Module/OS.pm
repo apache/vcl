@@ -275,33 +275,60 @@ sub get_currentimage_txt_contents {
 	else {
 		notify($ERRORS{'DEBUG'}, 0, "retrieved currentimage.txt contents from $computer_node_name:\n" . join("\n", @$cat_output));
 	}
-	return @{$cat_output};
+
+	my %output;
+	my @current_image_txt_contents = @{$cat_output};
+
+	my $current_image_name; 
+	if(defined $current_image_txt_contents[0]) {
+		$output{"current_image_name"} = $current_image_txt_contents[0];
+	}
+	
+	foreach my $l (@current_image_txt_contents) {
+		#remove any line break characters
+		$l =~ s/[\r\n]*//g;
+		my ($a, $b) = split(/=/, $l);
+		if(defined $b) {
+         $output{$a} = $b; 
+      }   
+   }
+	
+	return %output;
 } ## end sub get_currentimage_txt_contents
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 get_current_image_name
+=head2 get_current_image_info
 
- Parameters  : None
- Returns     : If successful: string
+ Parameters  : optional 
+					id,computer_hostname,computer_id,current_image_name,imagerevision_datecreated,imagerevision_id,prettyname,vcld_post_load 
+ Returns     : If successful: 
+					if no parameter return the imagerevision_id
+					return the value of parameter input
                If failed: false
- Description : Reads the currentimage.txt file on a computer and returns a
-               string containing the name of the loaded image.
-
+ Description : Collects currentimage hash on a computer and returns a
+               value containing of the input paramter or the imagerevision_id if no inputs.
+					This also updates the DataStructure.pm so data matches what is currently loaded.
 =cut
 
-sub get_current_image_name {
+sub get_current_image_info {
 	my $self = shift;
 	if (ref($self) !~ /VCL::Module/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
 
+	my $input = shift;
+
+	if(!defined $input) {
+		$input = "imagerevision_id";
+	}
+
 	my $computer_node_name = $self->data->get_computer_node_name();
 
 	# Get the contents of the currentimage.txt file
-	my @current_image_txt_contents;
-	if (@current_image_txt_contents = $self->get_currentimage_txt_contents()) {
+	my %current_image_txt_contents;
+	if (%current_image_txt_contents = $self->get_currentimage_txt_contents()) {
 		notify($ERRORS{'DEBUG'}, 0, "retrieved currentimage.txt contents from $computer_node_name");
 	}
 	else {
@@ -309,18 +336,29 @@ sub get_current_image_name {
 		return;
 	}
 
-	# Make sure an empty array wasn't returned
-	if (defined $current_image_txt_contents[0]) {
-		my $current_image_name = $current_image_txt_contents[0];
-
-		# Remove any line break characters
-		$current_image_name =~ s/[\r\n]*//g;
-
-		notify($ERRORS{'DEBUG'}, 0, "name of image currently loaded on $computer_node_name: $current_image_name");
-		return $current_image_name;
+	# Make sure an empty hash wasn't returned
+	if (defined $current_image_txt_contents{imagerevision_id}) {
+		notify($ERRORS{'DEBUG'}, 0, "user selected content of image currently loaded on $computer_node_name: $current_image_txt_contents{current_image_name}");
+	
+		if (my $imagerevision_info = get_imagerevision_info($current_image_txt_contents{imagerevision_id})){
+			$self->data->set_computer_currentimage_data($imagerevision_info->{image});
+			$self->data->set_computer_currentimagerevision_data($imagerevision_info);
+			
+			if (defined $current_image_txt_contents{"vcld_post_load"}) {
+				$self->data->set_computer_currentimage_vcld_post_load($current_image_txt_contents{vcld_post_load});
+			}
+		}
+		
+		if (defined($current_image_txt_contents{$input})){
+			return $current_image_txt_contents{$input};
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "$input was not defined in current_image_txt");	
+			return;
+		}
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "empty array was returned when currentimage.txt contents were retrieved from $computer_node_name");
+		notify($ERRORS{'WARNING'}, 0, "empty hash was returned when currentimage.txt contents were retrieved from $computer_node_name");
 		return;
 	}
 }
@@ -963,62 +1001,6 @@ sub update_public_ip_address {
 	}
 	
 	return 1;
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 get_vcld_post_load_status
-
- Parameters  : None
- Returns     : If vcld_post_load line exists: 1
-               If vcld_post_load line exists: 0
-               If an error occurred: undefined
- Description : Checks the currentimage.txt file on the computer for a line
-               beginning with 'vcld_post_load='. Returns 1 if this line is found
-               indicating that the OS module's post_load tasks have successfully
-               run. Returns 0 if the line is not found, and undefined if an
-               error occurred.
-
-=cut
-
-sub get_vcld_post_load_status {
-	my $self = shift;
-	if (ref($self) !~ /VCL::Module/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-	
-	# Make sure the OS module implements a post load subroutine
-	if (!$self->can('post_load')) {
-		notify($ERRORS{'DEBUG'}, 0, "OS module " . ref($self) . " does not implement a post_load subroutine, returning 1");
-		return 1;
-	}
-	
-	my $management_node_keys = $self->data->get_management_node_keys();
-	my $computer_node_name   = $self->data->get_computer_node_name();
-	
-	# Add a line to the end of currentimage.txt
-	my $command = "grep vcld_post_load= currentimage.txt";
-	
-	my ($exit_status, $output) = run_ssh_command($computer_node_name, $management_node_keys, $command, '', '', 0);
-	if (defined($output)) {
-		if (my ($status_line) = grep(/vcld_post_load=/, @$output)) {
-			notify($ERRORS{'DEBUG'}, 0, "vcld post load tasks have run on $computer_node_name: $status_line");
-			return 1;
-		}
-		else {
-			notify($ERRORS{'DEBUG'}, 0, "vcld post load tasks have NOT run on $computer_node_name");
-			return 0;
-		}
-	}
-	elsif ($exit_status) {
-		notify($ERRORS{'WARNING'}, 0, "failed to retrieve vcld_post_load status line from currentimage.txt on $computer_node_name, exit status: $exit_status, output:\n" . join("\n", @$output));
-		return;
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to retrieve vcld_post_load status line from currentimage.txt on $computer_node_name");
-		return;
-	}
 }
 
 #/////////////////////////////////////////////////////////////////////////////

@@ -1832,7 +1832,7 @@ sub node_status {
 
 		# Check the currentimage.txt file on the node
 		notify($ERRORS{'OK'}, $log, "checking image specified in currentimage.txt file on $computer_short_name");
-		my $status_currentimage = _getcurrentimage($computer_short_name);
+		my $status_currentimage = $self->os->get_current_image_info("current_image_name");
 		if ($status_currentimage) {
 			notify($ERRORS{'OK'}, $log, "$computer_short_name currentimage.txt has: $status_currentimage");
 			$status{currentimage} = $status_currentimage;
@@ -1884,13 +1884,15 @@ sub node_status {
 		$status{status} = 'RELOAD';
 		notify($ERRORS{'OK'}, $log, "currentimage.txt does not match requested image, node needs to be reloaded");
 	}
+	
+	my $vcld_post_load_status = $self->data->get_computer_currentimage_vcld_post_load();
 
 	# Node is up and doesn't need to be reloaded
 	if ($status{status} =~ /ready/i) {
 		notify($ERRORS{'OK'}, $log, "node is up and does not need to be reloaded");
 		
 		# Check if the OS post_load tasks have run
-		if ($self->os->get_vcld_post_load_status()) {
+		if ($vcld_post_load_status) {
 			notify($ERRORS{'OK'}, 0, "OS module post_load tasks have been completed on $computer_short_name");
 			$status{status} = 'READY';
 		}

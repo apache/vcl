@@ -82,7 +82,6 @@ our @ISA = qw(Exporter);
 
 our @EXPORT = qw(
   _checknstartservice
-  _getcurrentimage
   _machine_os
   _pingnode
   _sshd_status
@@ -2261,44 +2260,6 @@ sub setnextimage {
 		return 0;
 	}
 } ## end sub setnextimage
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 _getcurrentimage
-
- Parameters  : $node
- Returns     : retrieve the currentimage from currentimage.txt file on the node
- Description :
-
-=cut
-
-sub _getcurrentimage {
-	my $node = $_[0];
-	my ($package, $filename, $line, $sub) = caller(0);
-	notify($ERRORS{'WARNING'}, 0, "node is not defined") if (!(defined($node)));
-	# TODO - loop through the available ssh keys to figure out which one works
-	my $identity_keys = get_management_node_info()->{keys};
-	my @sshcmd = run_ssh_command($node, $identity_keys, "cat currentimage.txt");
-	foreach my $s (@{$sshcmd[1]}) {
-		if ($s =~ /Warning: /) {
-			#need to run makesshgkh
-			#if (VCL::Module::Provisioning::xCAT::makesshgkh($node)) {
-			#success
-			#not worth output here
-			#}
-			#else {
-			#}
-		}
-		if ($s =~ /^(rh|win|fc|vmware|cent|fe)/) {
-			chomp($s);
-			if ($s =~ s/\x0d//) {
-				notify($ERRORS{'OK'}, 0, "stripped dos newline $s");
-			}
-			return $s;
-		}
-	} ## end foreach my $s (@{$sshcmd[1]})
-	return 0;
-} ## end sub _getcurrentimage
 
 #/////////////////////////////////////////////////////////////////////////////
 
