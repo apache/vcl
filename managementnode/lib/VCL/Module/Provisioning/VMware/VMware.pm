@@ -527,6 +527,7 @@ sub load {
 		return;
 	}
 	
+	
 	# Power on the VM
 	if (!$self->power_on($vmx_file_path)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to power on VM $computer_name on VM host: $vmhost_name");
@@ -1157,6 +1158,7 @@ sub node_status {
 	my $computer_name = $self->data->get_computer_node_name();
 	my $image_name = $self->data->get_image_name();
 	my $request_forimaging = $self->data->get_request_forimaging();
+   my $imagerevision_id = $self->data->get_imagerevision_id();
 	
 	notify($ERRORS{'OK'}, 0, "attempting to check the status of computer $computer_name, image: $image_name");
 	
@@ -1203,20 +1205,24 @@ sub node_status {
 		return $status;
 	}
 	
-	# Get the contents of currentimage.txt and check if currentimage.txt matches the requested image name
-	my $current_image_name = $self->os->get_current_image_name();
-	$status->{currentimage} = $current_image_name;
+	# Get the contents of currentimage.txt and update the datastructure
+	my $current_image_revision_id = $self->os->get_current_image_info();
+   $status->{currentimagerevision_id} = $current_image_revision_id;
+
+   $status->{currentimage} = $self->data->get_computer_currentimage_name();
+	my $current_image_name = $status->{currentimage};
+	my $vcld_post_load_status = $self->data->get_computer_currentimage_vcld_post_load();
 	
-	if (!$current_image_name) {
+	if (!$current_image_revision_id) {
 		notify($ERRORS{'OK'}, 0, "unable to retrieve image name from currentimage.txt on VM $computer_name, returning 'RELOAD'");
 		return $status;
 	}
-	elsif ($current_image_name eq $image_name) {
-		notify($ERRORS{'OK'}, 0, "currentimage.txt image ($current_image_name) matches requested image name ($image_name) on VM $computer_name");
+	elsif ($current_image_revision_id eq $imagerevision_id) {
+		notify($ERRORS{'OK'}, 0, "currentimage.txt image $current_image_revision_id ($current_image_name) matches requested imagerevision_id $imagerevision_id ($image_name) on VM $computer_name");
 		$status->{image_match} = 1;
 	}
 	else {
-		notify($ERRORS{'OK'}, 0, "currentimage.txt image ($current_image_name) does not match requested image name ($image_name) on VM $computer_name, returning 'RELOAD'");
+		notify($ERRORS{'OK'}, 0, "currentimage.txt imagerevision_id $current_image_revision_id ($current_image_name) does not match requested imagerevision_id $imagerevision_id ($image_name) on VM $computer_name, returning 'RELOAD'");
 		return $status;
 	}
 	
@@ -1284,7 +1290,7 @@ sub node_status {
 	}
 	
 	# Check if the OS post_load tasks have run
-	if ($self->os->get_vcld_post_load_status()) {
+	if ($vcld_post_load_status) {
 		notify($ERRORS{'OK'}, 0, "OS module post_load tasks have been completed on VM $computer_name");
 		$status->{status} = 'READY';
 	}
@@ -1845,25 +1851,25 @@ sub prepare_vmx {
 	# ide needed for boot
 	# usb needed for mouse
 	# monitor, ich7m, smc for darwin
-	if ($image_os_type =~ /osx/i) {
-		%vmx_parameters = (%vmx_parameters, (
-			"ide1:0.clientDevice" => "TRUE",
-			"ide1:0.deviceType" => "atapi-cdrom",
-			"ide1:0.fileName" => "",           
-			"ide1:0.present" => "TRUE", 
-			"ide1:0.startConnected" => "FALSE",
-			"usb.present" => "TRUE",                              
-			"usb:1.deviceType" => "hub",      
-			"usb:1.present" => "TRUE",    
-			"usb:2.deviceType" => "mouse",    
-			"usb:2.present" => "TRUE", 
-			"monitor.virtual_exec" => "hardware",
-			"monitor.virtual_mmu" => "software",
-			"ich7m.present" => "TRUE",
-			"smc.present" => "FALSE",
-			"keyboard.vusb.enable" => "TRUE",
-			"mouse.vusb.enable" => "TRUE",
-		));
+  	if ($image_os_type =~ /osx/i) {
+		  %vmx_parameters = (%vmx_parameters, (
+		  "ide1:0.clientDevice" => "TRUE",
+        "ide1:0.deviceType" => "atapi-cdrom",
+        "ide1:0.fileName" => "",           
+        "ide1:0.present" => "TRUE", 
+        "ide1:0.startConnected" => "FALSE",
+        "usb.present" => "TRUE",                              
+        "usb:1.deviceType" => "hub",      
+        "usb:1.present" => "TRUE",    
+        "usb:2.deviceType" => "mouse",    
+        "usb:2.present" => "TRUE", 
+        "monitor.virtual_exec" => "hardware",
+        "monitor.virtual_mmu" => "software",
+        "ich7m.present" => "TRUE",
+        "smc.present" => "FALSE",
+        "keyboard.vusb.enable" => "TRUE",
+        "mouse.vusb.enable" => "TRUE",
+	  ));
 	}
 
 	# Check if the API implements 'add_ethernet_adapter'

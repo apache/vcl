@@ -2042,6 +2042,7 @@ sub node_status {
 	my $image_os_name           = 0;
 	my $image_name              = 0;
 	my $image_os_type           = 0;
+	my $imagerevision_id			 = 0;
 
 
 	# Check if subroutine was called as a class method
@@ -2082,6 +2083,7 @@ sub node_status {
 		$computer_short_name = $self->data->get_computer_short_name();
 		$image_name          = $self->data->get_image_name();
 		$image_os_type       = $self->data->get_image_os_type();
+		$imagerevision_id 	= $self->data->get_imagerevision_id();
 		$log                 = 0;
 	} ## end else [ if (ref($self) !~ /xcat/i)
 
@@ -2190,7 +2192,7 @@ sub node_status {
 
 		# Check the currentimage.txt file on the node
 		notify($ERRORS{'DEBUG'}, $log, "checking image specified in currentimage.txt file on $computer_short_name");
-		my $status_currentimage = _getcurrentimage($computer_short_name);
+		my $status_currentimage = $self->os->get_current_image_info("current_image_name");
 		if ($status_currentimage) {
 			notify($ERRORS{'OK'}, $log, "$computer_short_name currentimage.txt has: $status_currentimage");
 			$status{currentimage} = $status_currentimage;
@@ -2201,6 +2203,8 @@ sub node_status {
 	} ## end if ($sshd_status =~ /on/)
 	else {
 		$status{ssh} = 0;
+		$status{status} = 'RELOAD';
+      return \%status;
 	}
 	notify($ERRORS{'OK'}, $log, "$computer_short_name sshd status: $sshd_status ($status{ssh})");
 
@@ -2242,13 +2246,15 @@ sub node_status {
 		$status{status} = 'RELOAD';
 		notify($ERRORS{'OK'}, $log, "nodetype.tab does not match currentimage.txt, node needs to be reloaded");
 	}
+	
+	my $vcld_post_load_status = $self->data->get_computer_currentimage_vcld_post_load();
 
 	# Node is up and doesn't need to be reloaded
 	if ($status{status} =~ /ready/i) {
 		notify($ERRORS{'OK'}, $log, "node is up and does not need to be reloaded");
 		
 		# Check if the OS post_load tasks have run
-		if ($self->os->get_vcld_post_load_status()) {
+		if ($vcld_post_load_status) {
 			notify($ERRORS{'DEBUG'}, 0, "OS module post_load tasks have been completed on $computer_short_name");
 			$status{status} = 'READY';
 		}

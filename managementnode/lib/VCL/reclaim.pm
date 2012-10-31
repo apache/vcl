@@ -150,7 +150,7 @@ sub process {
 		}
 		
 		# Reload the computer if unable to retrieve the current image name
-		my $os_current_image_name = $self->os->get_current_image_name();
+		my $os_current_image_name = $self->os->get_current_image_info("current_image_name");
 		if (!$os_current_image_name) {
 			notify($ERRORS{'WARNING'}, 0, "failed to retrieve name of image currently loaded on $computer_shortname, computer will be reloaded");
 			$self->insert_reload_and_exit();

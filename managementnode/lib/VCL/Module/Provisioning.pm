@@ -157,8 +157,9 @@ sub node_status {
 	my $computer_name = $self->data->get_computer_node_name();
 	my $image_name = $self->data->get_image_name();
 	my $request_forimaging = $self->data->get_request_forimaging();
+	my $imagerevision_id = $self->data->get_imagerevision_id();
 	
-	notify($ERRORS{'DEBUG'}, 0, "attempting to check the status of computer $computer_name, image: $image_name");
+	notify($ERRORS{'DEBUG'}, 0, "attempting to check the status of computer $computer_name, image: $image_name imagerevision_id; $imagerevision_id");
 	
 	# Create a hash reference and populate it with the default values
 	my $status;
@@ -182,24 +183,28 @@ sub node_status {
 	}
 	
 	# Get the contents of currentimage.txt and check if currentimage.txt matches the requested image name
-	my $current_image_name = $self->os->get_current_image_name();
-	$status->{currentimage} = $current_image_name;
+	my $current_image_revision_id = $self->os->get_current_image_info();
+	$status->{currentimagerevision_id} = $current_image_revision_id;
+
+	$status->{currentimage} = $self->data->get_computer_currentimage_name();
+	my $vcld_post_load_status = $self->data->get_computer_currentimage_vcld_post_load();
 	
-	if (!$current_image_name) {
-		notify($ERRORS{'OK'}, 0, "unable to retrieve image name from currentimage.txt on $computer_name, returning 'RELOAD'");
+	if (!$current_image_revision_id) {
+		notify($ERRORS{'OK'}, 0, "unable to retrieve currentimage.txt contents on $computer_name, returning 'RELOAD'");
 		return $status;
 	}
-	elsif ($current_image_name eq $image_name) {
-		notify($ERRORS{'DEBUG'}, 0, "currentimage.txt image ($current_image_name) matches requested image name ($image_name) on $computer_name");
+	#elsif ($current_image_name eq $image_name) {
+	elsif ($current_image_revision_id eq $imagerevision_id) {
+		notify($ERRORS{'DEBUG'}, 0, "currentimage.txt image $current_image_revision_id ($status->{currentimage}) matches requested image $imagerevision_id ($image_name) on $computer_name");
 		$status->{image_match} = 1;
 	}
 	else {
-		notify($ERRORS{'OK'}, 0, "currentimage.txt image ($current_image_name) does not match requested image name ($image_name) on $computer_name, returning 'RELOAD'");
+		notify($ERRORS{'OK'}, 0, "currentimage.txt image $current_image_revision_id ($status->{currentimage}) does not match requested image name $imagerevision_id ($image_name) on $computer_name, returning 'RELOAD'");
 		return $status;
 	}
 	
 	# Check if the OS post_load tasks have run
-	if ($self->os->get_vcld_post_load_status()) {
+	if ($vcld_post_load_status) {
 		notify($ERRORS{'DEBUG'}, 0, "OS module post_load tasks have been completed on $computer_name");
 		$status->{status} = 'READY';
 	}
