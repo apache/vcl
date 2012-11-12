@@ -1779,7 +1779,7 @@ sub get_domain_info {
 	my $defined_domains = {};
 	my $domain_info_string = '';
 	for my $line (@$output) {
-		my ($id, $name, $state) = $line =~ /^\s*([\d\-]+)\s(.+?)\s+(\w+|shut off)$/g;
+		my ($id, $name, $state) = $line =~ /^\s*([\d\-]+)\s+(.+?)\s+(\w+|shut off)$/g;
 		next if (!defined($id));
 		
 		$defined_domains->{$name}{state} = $state;
