@@ -54,7 +54,9 @@ use diagnostics;
 no warnings 'redefine';
 
 use VCL::utils;
+use English qw( -no_match_vars );
 use Net::Netmask;
+use File::Basename;
 
 ##############################################################################
 
@@ -96,6 +98,86 @@ sub get_node_configuration_directory {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 init
+
+ Parameters  : none
+ Returns     : Linux init module reference
+ Description : Determines the Linux init daemon being used by the computer
+               (SysV, systemd, etc.) and creates an object. The default is SysV
+               if no other modules in the lib/VCL/Module/OS/Linux/init directory
+               match the init daemon on the computer. The init module is mainly
+               used to control services on the computer.
+
+=cut
+
+sub init {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+
+	return $self->{init} if $self->{init};
+	
+	notify($ERRORS{'DEBUG'}, 0, "beginning Linux init daemon module initialization");
+	
+	my $computer_node_name = $self->data->get_computer_node_name();
+	
+	# Get the absolute path of the init module directory
+	my $init_directory_path = "$FindBin::Bin/../lib/VCL/Module/OS/Linux/init";
+	notify($ERRORS{'DEBUG'}, 0, "Linux init module directory path: $init_directory_path");
+	
+	# Get a list of all *.pm files in the init module directory
+	my @init_module_paths = $self->mn_os->find_files($init_directory_path, '*.pm');
+	
+	# Find the position of the SysV.pm file
+	my ($sysv_index) = grep { $init_module_paths[$_] =~ /SysV\.pm/ } 0..$#init_module_paths;
+	
+	# Move the SysV.pm file to the end of the array
+	push(@init_module_paths, splice(@init_module_paths, $sysv_index, 1));
+
+	# Attempt to create an initialize an object for each init module
+	# Use the first init module successfully initialized
+	for my $init_module_path (@init_module_paths) {
+		my $init_name = fileparse($init_module_path, qr/\.pm$/i);
+		my $init_perl_package = "VCL::Module::OS::Linux::init::$init_name";
+		
+		# Create and initialize the init object
+		notify($ERRORS{'DEBUG'}, 0, "attempting to load $init_name init module: $init_perl_package");
+		eval "use $init_perl_package";
+		if ($EVAL_ERROR) {
+			notify($ERRORS{'WARNING'}, 0, "failed to load $init_name init module: $init_perl_package, error: $EVAL_ERROR");
+			next;
+		}
+		notify($ERRORS{'DEBUG'}, 0, "loaded $init_name init module: $init_perl_package");
+		
+		my $init;
+		eval { $init = ($init_perl_package)->new({data_structure => $self->data, os => $self}) };
+		if ($init) {
+			notify($ERRORS{'OK'}, 0, "$init_name init object created and initialized to control $computer_node_name");
+			$self->{init} = $init;
+			$self->{init_name} = $init_name;
+			last;
+		}
+		elsif ($EVAL_ERROR) {
+			notify($ERRORS{'WARNING'}, 0, "$init_name init object could not be created: type: $init_perl_package, error:\n$EVAL_ERROR");
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "$init_name init object could not be initialized to control $computer_node_name");
+		}
+	}
+	
+	# Make sure the init module object was successfully initialized
+	if (!$self->{init}) {
+		notify($ERRORS{'WARNING'}, 0, "failed to create Linux init daemon module");
+		return;
+	}
+	
+	return $self->{init};
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 pre_capture
 
  Parameters  : none
@@ -120,7 +202,7 @@ sub pre_capture {
 		$self->{end_state} = 'off';
 	}
 	
-	my $computer_node_name  = $self->data->get_computer_node_name();
+	my $computer_node_name = $self->data->get_computer_node_name();
 	
 	# Call OS::pre_capture to perform the pre-capture tasks common to all OS's
 	if (!$self->SUPER::pre_capture($args)) {
@@ -131,62 +213,43 @@ sub pre_capture {
 	notify($ERRORS{'OK'}, 0, "beginning Linux-specific image capture preparation tasks");
 	
 	if (!$self->file_exists("/root/.vclcontrol/vcl_exclude_list.sample")) {
-      notify($ERRORS{'DEBUG'}, 0, "/root/.vclcontrol/vcl_exclude_list.sample does not exists");
-		if(!$self->generate_vclcontrol_sample_files() ){
-      	notify($ERRORS{'DEBUG'}, 0, "could not create /root/.vclcontrol/vcl_exclude_list.sample");
+		notify($ERRORS{'DEBUG'}, 0, "/root/.vclcontrol/vcl_exclude_list.sample does not exists");
+		if (!$self->generate_vclcontrol_sample_files()) {
+			notify($ERRORS{'DEBUG'}, 0, "could not create /root/.vclcontrol/vcl_exclude_list.sample");
 		}
-   }
+	}
 	
-	# Force user off computer 
+	# Force user off computer
 	if (!$self->logoff_user()) {
 		notify($ERRORS{'WARNING'}, 0, "unable to log user off $computer_node_name");
 	}
-
+	
 	# Remove user and clean external ssh file
 	if ($self->delete_user()) {
 		notify($ERRORS{'OK'}, 0, "deleted user from $computer_node_name");
 	}
-
-	#Clean up connection methods
-	if($self->process_connect_methods("any", 1) ){
-		notify($ERRORS{'OK'}, 0, "processed connection methods on $computer_node_name");
-	}
 	
-	if(!$self->clean_iptables()) {
+	if (!$self->configure_default_sshd()) {
 		return;
 	}
 	
-	if(!$self->clean_known_files()) {
+	if (!$self->configure_rc_local()) {
+		return;
+	}
+	
+	# Clean up connection methods
+	if ($self->process_connect_methods("any", 1)) {
+		notify($ERRORS{'OK'}, 0, "processed connection methods on $computer_node_name");
+	}
+	
+	if (!$self->clean_iptables()) {
+		return;
+	}
+	
+	if (!$self->clean_known_files()) {
 		notify($ERRORS{'WARNING'}, 0, "unable to clean known files");
 	}
 	
-   #Fetch exclude_list
-   my @exclude_list = $self->get_exclude_list();
-
-	# Generate external_sshd_config
-	if(!(grep( /\/etc\/ssh\/external_sshd_config/ , @exclude_list ) ) ){
-		if(!$self->generate_ext_sshd_config()){
-			notify($ERRORS{'WARNING'}, 0, "unable to generate /etc/ssh/external_sshd_config on $computer_node_name");
-			return;
-		}
-	}
-
-	# Generate ext_sshd init script
-	if(!(grep( /ext_sshd/ , @exclude_list ) ) ){
-		if(!$self->generate_ext_sshd_start()){
-			notify($ERRORS{'WARNING'}, 0, "unable to generate /etc/init.d/ext_sshd on $computer_node_name");
-			return;
-		}
-	}
-	
-	# Write /etc/rc.local script
-	if(!(grep( /rc.local/ , @exclude_list ) ) ){
-		if (!$self->generate_rc_local()){
-			notify($ERRORS{'WARNING'}, 0, "unable to generate /etc/rc.local script on $computer_node_name");
-			return;
-		}
-	}
-
 	# Configure the private and public interfaces to use DHCP
 	if (!$self->enable_dhcp()) {
 		notify($ERRORS{'WARNING'}, 0, "failed to enable DHCP on the public and private interfaces");
@@ -204,7 +267,7 @@ sub pre_capture {
 	else {
 		notify($ERRORS{'DEBUG'}, 0, "$computer_node_name not shut down, provisioning module specified end state: $self->{end_state}");
 	}
-
+	
 	notify($ERRORS{'OK'}, 0, "Linux pre-capture steps complete");
 	return 1;
 }
@@ -225,59 +288,46 @@ sub post_load {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
-
+	
 	my $management_node_keys  = $self->data->get_management_node_keys();
 	my $image_name            = $self->data->get_image_name();
 	my $computer_short_name   = $self->data->get_computer_short_name();
 	my $computer_node_name    = $self->data->get_computer_node_name();
 	my $image_os_install_type = $self->data->get_image_os_install_type();
-	my $management_node_ip	  = $self->data->get_management_node_ipaddress();
-	my $mn_private_ip 		  = $self->mn_os->get_private_ip_address();
+	my $management_node_ip    = $self->data->get_management_node_ipaddress();
+	my $mn_private_ip         = $self->mn_os->get_private_ip_address();
 	
 	notify($ERRORS{'OK'}, 0, "initiating Linux post_load: $image_name on $computer_short_name");
-
+	
 	# Wait for computer to respond to SSH
 	if (!$self->wait_for_response(30, 600, 10)) {
 		notify($ERRORS{'WARNING'}, 0, "$computer_node_name never responded to SSH");
 		return 0;
 	}
-
 	
-	if ($image_os_install_type eq "kickstart"){
-		  notify($ERRORS{'OK'}, 0, "detected kickstart install on $computer_short_name, writing current_image.txt");
-		  if (write_currentimage_txt($self->data)){
+	# Configure sshd to only listen on the private interface and add ext_sshd service listening on the public interface
+	if (!$self->configure_ext_sshd()) {
+		notify($ERRORS{'WARNING'}, 0, "failed to configure ext_sshd on $computer_node_name");
+		return 0;
+	}
+	
+	# Remove commands from rc.local added by previous versions of VCL
+	$self->configure_rc_local();
+	
+	if ($image_os_install_type eq "kickstart") {
+		notify($ERRORS{'OK'}, 0, "detected kickstart install on $computer_short_name, writing current_image.txt");
+		if (write_currentimage_txt($self->data)) {
 			notify($ERRORS{'OK'}, 0, "wrote current_image.txt on $computer_short_name");
-		  }
-		  else {
+		}
+		else {
 			notify($ERRORS{'WARNING'}, 0, "failed to write current_image.txt on $computer_short_name");
-		  }
-
-
-		  #Generate ext_sshd_config
-		  if(!$self->generate_ext_sshd_config()){
-			notify($ERRORS{'WARNING'}, 0, "unable to generate /etc/ssh/external_sshd_config on $computer_node_name");
-			#return 0;
-		  }
-
-		  # Generate ext_sshd init script
-		  if(!$self->generate_ext_sshd_start()){
-		  notify($ERRORS{'WARNING'}, 0, "unable to generate /etc/init.d/ext_sshd on $computer_node_name");
-		  #return 0;
-		  }
-
-	}	
-
-  #Generate rc.local
-  if (!$self->generate_rc_local()){
-		notify($ERRORS{'WARNING'}, 0, "unable to generate /etc/rc.local script on $computer_node_name");
-		#return 0;
-  }
-
-	#Update time and ntpservers
+		}
+	}
 	
-	if(!$self->sync_date()){
+	# Update time and ntpservers
+	if (!$self->sync_date()) {
 		notify($ERRORS{'WARNING'}, 0, "unable to synchroinze date and time on $computer_node_name");
-	}		
+	}
 	
 	# Change password
 	if ($self->changepasswd($computer_node_name, "root")) {
@@ -287,31 +337,17 @@ sub post_load {
 		notify($ERRORS{'OK'}, 0, "failed to edit root password on $computer_node_name");
 	}
 	
-	#disable ext_sshd
-	if($self->stop_service("ext_sshd")){
-			notify($ERRORS{'OK'}, 0, "ext sshd stopped on $computer_node_name");
-	}
-
-	#Clear user from external_sshd_config
-	my $clear_extsshd = "sed -i -e \"/^AllowUsers .*/d\" /etc/ssh/external_sshd_config";
-	if (run_ssh_command($computer_node_name, $management_node_keys, $clear_extsshd, "root")) {
-		notify($ERRORS{'DEBUG'}, 0, "cleared AllowUsers directive from external_sshd_config");
-	}
-	else {
-		notify($ERRORS{'CRITICAL'}, 0, "failed to clear AllowUsers from external_sshd_config");
-	}
-	
 	notify($ERRORS{'DEBUG'}, 0, "calling clear_private_keys");
-	#Clear ssh idenity keys from /root/.ssh 
+	# Clear ssh idenity keys from /root/.ssh
 	if ($self->clear_private_keys()) {
 		notify($ERRORS{'OK'}, 0, "cleared known identity keys");
 	}
-
+	
 	
 	# Run the vcl_post_load script if it exists in the image
 	my $script_path = '/etc/init.d/vcl_post_load';
 	if ($self->file_exists($script_path)) {
-		my $result = $self->run_script($script_path,'1','300','1');
+		my $result = $self->run_script($script_path, '1', '300', '1');
 		if (!defined($result)) {
 			notify($ERRORS{'WARNING'}, 0, "error occurred running $script_path");
 		}
@@ -323,23 +359,23 @@ sub post_load {
 		}
 	}
 	
-	if($self->enable_firewall_port("tcp", "any", $mn_private_ip, 1) ){
-      notify($ERRORS{'OK'}, 0, "added MN_Priv_IP $mn_private_ip to firewall on $computer_short_name");
-   }
+	if ($self->enable_firewall_port("tcp", "any", $mn_private_ip, 1)) {
+		notify($ERRORS{'OK'}, 0, "added MN_Priv_IP $mn_private_ip to firewall on $computer_short_name");
+	}
 	
 	# Attempt to generate ifcfg-eth* files and ifup any interfaces which the file does not exist
 	$self->activate_interfaces();
-
+	
 	if (!$self->update_public_ip_address()) {
 		notify($ERRORS{'WARNING'}, 0, "failed to update IP address for $computer_node_name");
-      return 0;
-   }
+		return 0;
+	}
 	
-	#Update Hostname to match Public assigned name
-   if($self->update_public_hostname()){
-      notify($ERRORS{'OK'}, 0, "Updated hostname");
-   }
-
+	# Update Hostname to match Public assigned name
+	if ($self->update_public_hostname()) {
+		notify($ERRORS{'OK'}, 0, "Updated hostname");
+	}
+	
 	# Add a line to currentimage.txt indicating post_load has run
 	$self->set_vcld_post_load_status();
 	
@@ -364,9 +400,9 @@ sub post_reserve {
 		return 0;
 	}
 	
-	my $image_name           = $self->data->get_image_name();
-	my $computer_short_name  = $self->data->get_computer_short_name();
-	my $script_path = '/etc/init.d/vcl_post_reserve';
+	my $image_name          = $self->data->get_image_name();
+	my $computer_short_name = $self->data->get_computer_short_name();
+	my $script_path         = '/etc/init.d/vcl_post_reserve';
 	
 	notify($ERRORS{'OK'}, 0, "initiating Linux post_reserve: $image_name on $computer_short_name");
 	
@@ -377,7 +413,7 @@ sub post_reserve {
 	}
 	
 	# Run the vcl_post_reserve script if it exists in the image
-	my $result = $self->run_script($script_path,'1','300','1');
+	my $result = $self->run_script($script_path, '1', '300', '1');
 	if (!defined($result)) {
 		notify($ERRORS{'WARNING'}, 0, "error occurred running $script_path");
 	}
@@ -411,7 +447,7 @@ sub update_public_hostname {
 	my $self = shift;
 	unless (ref($self) && $self->isa('VCL::Module')) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a VCL::Module module object method");
-		return; 
+		return;
 	}
 	
 	my $management_node_keys = $self->data->get_management_node_keys();
@@ -440,27 +476,26 @@ sub update_public_hostname {
 	else {
 		notify($ERRORS{'DEBUG'}, 0, "failed to determine registered public hostname of $computer_node_name ($public_ip_address), command: '$ipcalc_command', output:\n" . join("\n", @$ipcalc_output));
 		
-		# Attempt to run the host command on the host
-		my $host_command = "host $public_ip_address"; 
-		my ($host_exit_status, $host_output) = run_ssh_command($computer_node_name, $management_node_keys, $host_command);
-		if (!defined($host_output)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to run host command on $computer_node_name to determine its public hostname, command: '$host_command'");
+		# Attempt to run the ipcalc command on the host
+		my ($ipcalc_exit_status, $ipcalc_output) = $self->execute($ipcalc_command);
+		if (!defined($ipcalc_output)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to run ipcalc command on $computer_node_name to determine its public hostname, command: '$ipcalc_command'");
 			return;
 		}
 		
-		($public_hostname) = $5 if ("@$host_output" =~ /([-\.0-9a-z]*)\s([a-z]*)\s([a-z]*)\s([a-z]*)\s(.*)\.$/);
+		($public_hostname) = ("@$ipcalc_output" =~ /HOSTNAME=(.*)/i);
 		if ($public_hostname) {
-			notify($ERRORS{'DEBUG'}, 0, "determined registered public hostname of $computer_node_name ($public_ip_address) by running host on $computer_node_name: '$public_hostname'");
+			notify($ERRORS{'DEBUG'}, 0, "determined registered public hostname of $computer_node_name ($public_ip_address) by running ipcalc on $computer_node_name: '$public_hostname'");
 		}
 		else {
-			notify($ERRORS{'WARNING'}, 0, "failed to determine registered public hostname of $computer_node_name ($public_ip_address) by running host on either the management node or $computer_node_name, command: '$host_command', output:\n" . join("\n", @$host_output));
+			notify($ERRORS{'WARNING'}, 0, "failed to determine registered public hostname of $computer_node_name ($public_ip_address) by running ipcalc on either the management node or $computer_node_name, command: '$ipcalc_command', output:\n" . join("\n", @$ipcalc_output));
 			return;
 		}
 	}
 	
 	# Set the node's hostname to public hostname
 	my $hostname_command = "hostname -v $public_hostname";
-	my ($hostname_exit_status, $hostname_output) = run_ssh_command($computer_node_name, $management_node_keys, $hostname_command); 
+	my ($hostname_exit_status, $hostname_output) = $self->execute($hostname_command);
 	if (!defined($hostname_output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to SSH command to set hostname on $computer_node_name to $public_hostname, command: '$hostname_command'");
 		return;
@@ -486,19 +521,19 @@ sub update_public_hostname {
 
 sub clear_private_keys {
 	my $self = shift;
-		unless (ref($self) && $self->isa('VCL::Module')) {
+	unless (ref($self) && $self->isa('VCL::Module')) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a VCL::Module module object method");
-		return;	
+		return;
 	}
-
+	
 	notify($ERRORS{'DEBUG'}, 0, "perparing to clear known identity keys");
 	my $management_node_keys = $self->data->get_management_node_keys();
 	my $computer_short_name  = $self->data->get_computer_short_name();
 	my $computer_node_name   = $self->data->get_computer_node_name();
-
-	#Clear ssh idenity keys from /root/.ssh 
+	
+	# Clear ssh idenity keys from /root/.ssh
 	my $clear_private_keys = "/bin/rm -f /root/.ssh/id_rsa /root/.ssh/id_rsa.pub";
-	if (run_ssh_command($computer_node_name, $management_node_keys, $clear_private_keys, "root")) {
+	if ($self->execute($clear_private_keys)) {
 		notify($ERRORS{'DEBUG'}, 0, "cleared any id_rsa keys from /root/.ssh");
 		return 1;
 	}
@@ -525,32 +560,32 @@ sub set_static_public_address {
 		return 0;
 	}
 	
-	my $computer_name = $self->data->get_computer_short_name();
-	my $server_request_id            = $self->data->get_server_request_id();
-	my $server_request_fixedIP       = $self->data->get_server_request_fixedIP();
+	my $computer_name          = $self->data->get_computer_short_name();
+	my $server_request_id      = $self->data->get_server_request_id();
+	my $server_request_fixedIP = $self->data->get_server_request_fixedIP();
 	
 	# Make sure public IP configuration is static or this is a server request
-
+	
 	my $ip_configuration = $self->data->get_management_node_public_ip_configuration();
 	if ($ip_configuration !~ /static/i) {
-		if( !$server_request_fixedIP ) {
+		if (!$server_request_fixedIP) {
 			notify($ERRORS{'WARNING'}, 0, "static public address can only be set if IP configuration is static or is a server request, current value: $ip_configuration \nserver_request_fixedIP=$server_request_fixedIP");
 			return;
 		}
 	}
-
+	
 	# Get the IP configuration
-	my $interface_name = $self->get_public_interface_name() || '<undefined>';
-	my $ip_address = $self->data->get_computer_ip_address() || '<undefined>';
-	my $subnet_mask = $self->data->get_management_node_public_subnet_mask() || '<undefined>';
+	my $interface_name  = $self->get_public_interface_name()                        || '<undefined>';
+	my $ip_address      = $self->data->get_computer_ip_address()                    || '<undefined>';
+	my $subnet_mask     = $self->data->get_management_node_public_subnet_mask()     || '<undefined>';
 	my $default_gateway = $self->data->get_management_node_public_default_gateway() || '<undefined>';
-	my @dns_servers = $self->data->get_management_node_public_dns_servers();
+	my @dns_servers     = $self->data->get_management_node_public_dns_servers();
 	
 	if ($server_request_fixedIP) {
-		$ip_address = $server_request_fixedIP;
-		$subnet_mask = $self->data->get_server_request_netmask();
+		$ip_address      = $server_request_fixedIP;
+		$subnet_mask     = $self->data->get_server_request_netmask();
 		$default_gateway = $self->data->get_server_request_router();
-		@dns_servers = $self->data->get_server_request_DNSservers();
+		@dns_servers     = $self->data->get_server_request_DNSservers();
 	}
 	
 	# Assemble a string containing the static IP configuration
@@ -570,17 +605,17 @@ EOF
 	else {
 		notify($ERRORS{'OK'}, 0, "attempting to set static public IP address on $computer_name:\n$configuration_info_string");
 	}
-
-	#Try to ping address to make sure it's available
-	#FIXME  -- need to add other tests for checking ip_address is or is not available.
-	if((_pingnode($ip_address))) {
+	
+	# Try to ping address to make sure it's available
+	# FIXME  -- need to add other tests for checking ip_address is or is not available.
+	if ((_pingnode($ip_address))) {
 		notify($ERRORS{'WARNING'}, 0, "ip_address $ip_address is pingable, can not assign to $computer_name ");
 		return;
 	}
 	
 	# Assemble the ifcfg file path
 	my $network_scripts_path = "/etc/sysconfig/network-scripts";
-	my $ifcfg_file_path = "$network_scripts_path/ifcfg-$interface_name";
+	my $ifcfg_file_path      = "$network_scripts_path/ifcfg-$interface_name";
 	notify($ERRORS{'DEBUG'}, 0, "public interface ifcfg file path: $ifcfg_file_path");
 	
 	# Assemble the ifcfg file contents
@@ -648,25 +683,13 @@ EOF
 		notify($ERRORS{'DEBUG'}, 0, "added default route to $default_gateway on public interface $interface_name on $computer_name, output:\n" . format_data($route_add_output));
 	}
 	
-	# Update the external sshd file
-	# Remove existing ListenAddress lines using sed
+	my $ext_sshd_config_file_path = '/etc/ssh/external_sshd_config';
+	
+	# Remove existing ListenAddress lines from external_sshd_config
+	$self->remove_lines_from_file($ext_sshd_config_file_path, 'ListenAddress') || return;
+	
 	# Add ListenAddress line to the end of the file
-	my $ext_sshd_command;
-	$ext_sshd_command .= "sed -i -e \"/ListenAddress .*/d \" /etc/ssh/external_sshd_config 2>&1";
-	$ext_sshd_command .= " && echo \"ListenAddress $ip_address\" >> /etc/ssh/external_sshd_config";
-	$ext_sshd_command .= " && tail -n1 /etc/ssh/external_sshd_config";
-	my ($ext_sshd_exit_status, $ext_sshd_output) = $self->execute($ext_sshd_command);
-	if (!defined($ext_sshd_output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to run command to update ListenAddress line in /etc/ssh/external_sshd_config on $computer_name: '$ext_sshd_command'");
-		return;
-	}
-	elsif ($ext_sshd_exit_status) {
-		notify($ERRORS{'WARNING'}, 0, "failed to update ListenAddress line in /etc/ssh/external_sshd_config on $computer_name, exit status: $ext_sshd_exit_status\ncommand:\n'$ext_sshd_command'\noutput:\n" . join("\n", @$ext_sshd_output));
-		return;
-	}
-	else {
-		notify($ERRORS{'DEBUG'}, 0, "updated ListenAddress line in /etc/ssh/external_sshd_config on $computer_name, output:\n" . join("\n", @$ext_sshd_output));
-	}
+	$self->append_text_file($ext_sshd_config_file_path, "ListenAddress $ip_address\n") || return;
 	
 	# Update resolv.conf if DNS server address is configured for the management node
 	my $resolv_conf_path = "/etc/resolv.conf";
@@ -695,7 +718,7 @@ EOF
 		}
 		
 		# Remove newlines for consistency
-		map { chomp $_ } @resolv_conf_lines;
+		map {chomp $_} @resolv_conf_lines;
 		
 		# Assemble the lines into an array
 		my $resolv_conf_contents = join("\n", @resolv_conf_lines);
@@ -746,7 +769,7 @@ sub restart_network_interface {
 		return;
 	}
 	
-	my $computer_name = $self->data->get_computer_short_name();
+	my $computer_name        = $self->data->get_computer_short_name();
 	my $network_scripts_path = "/etc/sysconfig/network-scripts";
 	
 	# Restart the interface
@@ -784,21 +807,21 @@ sub logoff_user {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return 0;
 	}
-
+	
 	# Make sure the user login ID was passed
 	my $user_login_id = shift || $self->data->get_user_login_id();
 	if (!$user_login_id) {
 		notify($ERRORS{'WARNING'}, 0, "user could not be determined");
 		return 0;
 	}
-
+	
 	# Make sure the user login ID was passed
 	my $computer_node_name = shift || $self->data->get_computer_node_name();
 	if (!$computer_node_name) {
 		notify($ERRORS{'WARNING'}, 0, "computer node name could not be determined");
 		return 0;
 	}
-
+	
 	my $logoff_cmd = "pkill -KILL -u $user_login_id";
 	my ($exit_status, $output) = $self->execute($logoff_cmd);
 	if (!defined($output)) {
@@ -816,7 +839,7 @@ sub logoff_user {
 	else {
 		notify($ERRORS{'OK'}, 0, "logged off $user_login_id from $computer_node_name");
 	}
-
+	
 	return 1;
 }
 
@@ -836,7 +859,7 @@ sub delete_user {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return 0;
 	}
-
+	
 	# Make sure the user login ID was passed
 	my $user_login_id = shift;
 	$user_login_id = $self->data->get_user_login_id() if (!$user_login_id);
@@ -844,7 +867,7 @@ sub delete_user {
 		notify($ERRORS{'WARNING'}, 0, "user could not be determined");
 		return 0;
 	}
-
+	
 	# Make sure the user login ID was passed
 	my $computer_node_name = shift;
 	$computer_node_name = $self->data->get_computer_node_name() if (!$computer_node_name);
@@ -852,63 +875,46 @@ sub delete_user {
 		notify($ERRORS{'WARNING'}, 0, "computer node name could not be determined");
 		return 0;
 	}
-
-	#Make sure the identity key was passed
+	
+	# Make sure the identity key was passed
 	my $image_identity = shift;
 	$image_identity = $self->data->get_image_identity() if (!$image_identity);
 	if (!$image_identity) {
 		notify($ERRORS{'WARNING'}, 0, "image identity keys could not be determined");
 		return 0;
 	}
-
+	
 	if ($self->user_logged_in($user_login_id)) {
 		notify($ERRORS{'OK'}, 0, "user $user_login_id is logged in, logging of user");
-		if($self->logoff_user($user_login_id)) {
+		if ($self->logoff_user($user_login_id)) {
 		
 		}
 	}
 	# Use userdel to delete the user
 	# Do not use userdel -r, it will affect HPC user storage for HPC installs
 	my $user_delete_command = "/usr/sbin/userdel $user_login_id";
-	my @user_delete_results = run_ssh_command($computer_node_name, $image_identity, $user_delete_command, "root");
+	my @user_delete_results = $self->execute($user_delete_command);
 	foreach my $user_delete_line (@{$user_delete_results[1]}) {
 		if ($user_delete_line =~ /currently logged in/) {
 			notify($ERRORS{'WARNING'}, 0, "user not deleted, $user_login_id currently logged in");
 			return 0;
 		}
 	}
-
+	
 	# Delete the group
 	my $user_group_cmd = "/usr/sbin/groupdel $user_login_id";
-	if(run_ssh_command($computer_node_name, $image_identity, $user_delete_command, "root")){
+	if ($self->execute($user_delete_command)) {
 		notify($ERRORS{'DEBUG'}, 0, "attempted to delete usergroup for $user_login_id");
 	}
-
+	
 	my $imagemeta_rootaccess = $self->data->get_imagemeta_rootaccess();
-
-	#Clear user from external_sshd_config
-	#my $clear_extsshd = "perl -pi -e \'s/^AllowUsers .*//\' /etc/ssh/external_sshd_config";
-	my $clear_extsshd = "sed -i -e \"/^AllowUsers .*/d\" /etc/ssh/external_sshd_config";
-	if (run_ssh_command($computer_node_name, $image_identity, $clear_extsshd, "root")) {
-		notify($ERRORS{'DEBUG'}, 0, "cleared AllowUsers directive from external_sshd_config");
-	}
-	else {
-		notify($ERRORS{'CRITICAL'}, 0, "failed to add AllowUsers $user_login_id to external_sshd_config");
-	}
-
-	#Clear user from sudoers
-
-	if ($imagemeta_rootaccess) {
-		#clear user from sudoers file
-		my $clear_cmd = "sed -i -e \"/^$user_login_id .*/d\" /etc/sudoers";
-		if (run_ssh_command($computer_node_name, $image_identity, $clear_cmd, "root")) {
-			notify($ERRORS{'DEBUG'}, 0, "cleared $user_login_id from /etc/sudoers");
-		}
-		else {
-			notify($ERRORS{'CRITICAL'}, 0, "failed to clear $user_login_id from /etc/sudoers");
-		}
-	} ## end if ($imagemeta_rootaccess)
-
+	
+	# Remove AllowUsers lines from external_sshd_config
+	$self->remove_lines_from_file('/etc/ssh/external_sshd_config', 'AllowUsers') || return;
+	
+	# Remove lines from sudoers
+	$self->remove_lines_from_file('/etc/sudoers', "^$user_login_id .*") || return;
+	
 	return 1;
 
 } ## end sub delete_user
@@ -929,24 +935,24 @@ sub reserve {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return 0;
 	}
-
+	
 	notify($ERRORS{'DEBUG'}, 0, "Enterered reserve() in the Linux OS module");
-
+	
 	my $user_name            = $self->data->get_user_login_id();
 	my $computer_node_name   = $self->data->get_computer_node_name();
 	my $image_identity       = $self->data->get_image_identity;
 	my $imagemeta_rootaccess = $self->data->get_imagemeta_rootaccess();
-	my $user_uid		 = $self->data->get_user_uid();
-
-	if($self->add_vcl_usergroup()){
-
+	my $user_uid             = $self->data->get_user_uid();
+	
+	if ($self->add_vcl_usergroup()) {
+	
 	}
 	
 	if (!$self->create_user()) {
 		notify($ERRORS{'CRITICAL'}, 0, "Failed to add user $user_name to $computer_node_name");
-	 	return 0;	
+		return 0;
 	}
-
+	
 	return 1;
 } ## end sub reserve
 
@@ -956,7 +962,8 @@ sub reserve {
 
  Parameters  : called as an object
  Returns     : 1 - success , 0 - failure
- Description :  adds username to external_sshd_config and and starts sshd with custom config
+ Description : adds username to external_sshd_config and and starts sshd with
+               custom config
 
 =cut
 
@@ -966,72 +973,50 @@ sub grant_access {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return 0;
 	}
-
-	my $user               = $self->data->get_user_login_id();
+	
+	my $user_login_id      = $self->data->get_user_login_id();
 	my $computer_node_name = $self->data->get_computer_node_name();
-	my $identity           = $self->data->get_image_identity;
-	my $server_request_id	  = $self->data->get_server_request_id();
-
-	notify($ERRORS{'OK'}, 0, "In grant_access routine $user,$computer_node_name");
-	my @sshcmd;
-	my $clear_extsshd = "sed -i -e \"/^AllowUsers .*/d\" /etc/ssh/external_sshd_config";
-	if (run_ssh_command($computer_node_name, $identity, $clear_extsshd, "root")) {
-		notify($ERRORS{'DEBUG'}, 0, "cleared AllowUsers directive from external_sshd_config");
-	}
-	else {
-		notify($ERRORS{'CRITICAL'}, 0, "failed to add AllowUsers $user to external_sshd_config");
-	}
-
-	my $cmd = "echo \"AllowUsers $user\" >> /etc/ssh/external_sshd_config";
-	if (run_ssh_command($computer_node_name, $identity, $cmd, "root")) {
-		notify($ERRORS{'DEBUG'}, 0, "added AllowUsers $user to external_sshd_config");
-	}
-	else {
-		notify($ERRORS{'CRITICAL'}, 0, "failed to add AllowUsers $user to external_sshd_config");
-		return 0;
+	my $server_request_id  = $self->data->get_server_request_id();
+	
+	my $ext_sshd_config_file_path = '/etc/ssh/external_sshd_config';
+	
+	# Remove all AllowUsers lines from external_sshd_config
+	if (!$self->remove_lines_from_file($ext_sshd_config_file_path, 'AllowUsers')) {
+		notify($ERRORS{'WARNING'}, 0, "unable to grant access to $computer_node_name, existing AllowUsers lines could not be removed from $ext_sshd_config_file_path");
+		return;
 	}
 	
-	notify($ERRORS{'OK'}, 0, "server_request_id= $server_request_id");
-
-	if ( $server_request_id ) {
+	# Assemble the list of usernames to add to the AllowUsers line
+	my $allow_users = $user_login_id;
+	
+	if ($server_request_id) {
 		my $server_allow_user_list = $self->data->get_server_allow_users();
-		notify($ERRORS{'OK'}, 0, "server_allow_user_list= $server_allow_user_list");
-		if ( $server_allow_user_list ) {
-
-			$cmd = "echo \"AllowUsers $server_allow_user_list\" >> /etc/ssh/external_sshd_config";
-			if (run_ssh_command($computer_node_name, $identity, $cmd, "root")) {
-				notify($ERRORS{'DEBUG'}, 0, "added AllowUsers $server_allow_user_list to external_sshd_config");
-			}
-			else {
-				notify($ERRORS{'CRITICAL'}, 0, "failed to add AllowUsers $server_allow_user_list to external_sshd_config");
-			}
+		if ($server_allow_user_list) {
+			notify($ERRORS{'DEBUG'}, 0, "server allow user list: $server_allow_user_list");
+			$allow_users .= " $server_allow_user_list";
 		}
 	}
-
-	undef @sshcmd;
 	
-	#@sshcmd = run_ssh_command($computer_node_name, $identity, "/etc/init.d/ext_sshd stop; /etc/init.d/ext_sshd start", "root");
-
-	if($self->stop_service("ext_sshd")) {
+	# Append AllowUsers line to the end of the file
+	if (!$self->append_text_file($ext_sshd_config_file_path, "AllowUsers $allow_users\n")) {
+		notify($ERRORS{'WARNING'}, 0, "unable to grant access to $computer_node_name, failed to add AllowUsers line $ext_sshd_config_file_path");
+		return;
+	}
 	
+	# Restart the ext_sshd service
+	if (!$self->restart_service('ext_sshd')) {
+		notify($ERRORS{'WARNING'}, 0, "unable to grant access to $computer_node_name, failed to restart ext_sshd service after configuring AllowUsers lines");
+		return;
 	}
-	if($self->start_service("ext_sshd")) {
-		notify($ERRORS{'OK'}, 0, "started ext_sshd on $computer_node_name");
+	
+	# Process the connection methods, allow firewall access from any address
+	if ($self->process_connect_methods("", 1)) {
+		notify($ERRORS{'DEBUG'}, 0, "processed connection methods on $computer_node_name setting 0.0.0.0 for all allowed ports");
 	}
-
-	#foreach my $l (@{$sshcmd[1]}) {
-	#	if ($l =~ /Stopping ext_sshd:/i) {
-	#		#notify($ERRORS{'OK'},0,"stopping sshd on $computer_node_name ");
-	#	}
-	#	if ($l =~ /Starting ext_sshd:[  OK  ]/i) {
-	#		notify($ERRORS{'OK'}, 0, "ext_sshd on $computer_node_name started");
-	#	}
-	#}    #foreach
-
-	if($self->process_connect_methods("", 1) ){
-		notify($ERRORS{'OK'}, 0, "processed connection methods on $computer_node_name setting 0.0.0.0 for all allowed ports");
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to process connection methods on $computer_node_name setting 0.0.0.0 for all allowed ports");
+		return;
 	}
-
 	
 	return 1;
 } ## end sub grant_access
@@ -1047,52 +1032,52 @@ sub grant_access {
 =cut
 
 sub sync_date {
-   my $self = shift;   
+	my $self = shift;
 	if (ref($self) !~ /linux/i) {
-      notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-      return 0;
-   }
-
-	my $computer_node_name   = $self->data->get_computer_node_name();
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return 0;
+	}
 	
-	#get Throttle source value from database if set
-   my $time_source;
-   my $variable_name = "timesource|" . $self->data->get_management_node_hostname();
-   my $variable_name_global = "timesource|global";
-   if($self->data->is_variable_set($variable_name)){
-       #fetch variable
-       $time_source = $self->data->get_variable($variable_name);
-       notify($ERRORS{'DEBUG'}, 0, "time_source is $time_source  set for $variable_name");
-    }
-    elsif($self->data->is_variable_set($variable_name_global) ) {
-       #fetch variable
-       $time_source = $self->data->get_variable($variable_name_global);
-       notify($ERRORS{'DEBUG'}, 0, "time_source is $time_source  set for $variable_name");
-    }
-    else {
-       notify($ERRORS{'DEBUG'}, 0, "time_source is not set for $variable_name or $variable_name_global not able update time");
-		return ; 
-    }
-
-	# Replace commas with single whitespace 
+	my $computer_node_name = $self->data->get_computer_node_name();
+	
+	# get Throttle source value from database if set
+	my $time_source;
+	my $variable_name        = "timesource|" . $self->data->get_management_node_hostname();
+	my $variable_name_global = "timesource|global";
+	if ($self->data->is_variable_set($variable_name)) {
+		# fetch variable
+		$time_source = $self->data->get_variable($variable_name);
+		notify($ERRORS{'DEBUG'}, 0, "time_source is $time_source  set for $variable_name");
+	}
+	elsif ($self->data->is_variable_set($variable_name_global)) {
+		# fetch variable
+		$time_source = $self->data->get_variable($variable_name_global);
+		notify($ERRORS{'DEBUG'}, 0, "time_source is $time_source  set for $variable_name");
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "time_source is not set for $variable_name or $variable_name_global not able update time");
+		return;
+	}
+	
+	# Replace commas with single whitespace
 	$time_source =~ s/,/ /g;
-
+	
 	# Assemble the time command
 	my $time_command = "rdate -s $time_source";
-
+	
 	my ($exit_status, $output) = $self->execute($time_command, 1, 180);
-
-	#update ntpservers file
-
-	my @time_array = split(/ /,$time_source);
-	my $ntp_command = "cp /dev/null /etc/ntp/ntpservers;";
-	foreach my $i (@time_array) {	
+	
+	# update ntpservers file
+	
+	my @time_array = split(/ /, $time_source);
+	my $ntp_command = "cp /dev/null /etc/ntp/ntpservers; ";
+	foreach my $i (@time_array) {
 		$ntp_command .= "echo $i >> /etc/ntp/ntpservers; ";
 	}
 	
-	$ntp_command .= "/etc/init.d/ntpd restart";
-
 	($exit_status, $output) = $self->execute($ntp_command, 1, 180);
+	
+	$self->restart_service('ntpd');
 	
 	return 1;
 	
@@ -1114,14 +1099,14 @@ sub changepasswd {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return 0;
 	}
-
+	
 	my $management_node_keys = $self->data->get_management_node_keys();
-
+	
 	# change the privileged account passwords on the blade images
-	my $node = shift; 
-	my $account = shift;  
-	my $passwd = shift; 
-
+	my $node    = shift;
+	my $account = shift;
+	my $passwd  = shift;
+	
 	notify($ERRORS{'WARNING'}, 0, "node is not defined")    if (!(defined($node)));
 	notify($ERRORS{'WARNING'}, 0, "account is not defined") if (!(defined($account)));
 	
@@ -1154,37 +1139,33 @@ sub sanitize {
 	}
 	
 	my $computer_node_name = $self->data->get_computer_node_name();
-	my $mn_private_ip         = $self->mn_os->get_private_ip_address();
+	my $mn_private_ip      = $self->mn_os->get_private_ip_address();
 	
 	# Make sure user is not connected
 	if ($self->is_connected()) {
 		notify($ERRORS{'WARNING'}, 0, "user is connected to $computer_node_name, computer will be reloaded");
-		#return false - reclaim will reload
+		# return false - reclaim will reload
+		return 0;
+	}
+	
+	# Clean up connection methods
+	if ($self->process_connect_methods($mn_private_ip, 1)) {
+		notify($ERRORS{'OK'}, 0, "processed connection methods on $computer_node_name");
+	}
+	
+	# Delete all user associated with the reservation
+	if (!$self->delete_user()) {
+		notify($ERRORS{'WARNING'}, 0, "failed to delete users from $computer_node_name");
 		return 0;
 	}
 	
 	# Revoke access
 	if (!$self->revoke_access()) {
 		notify($ERRORS{'WARNING'}, 0, "failed to revoke access to $computer_node_name");
-		#relcaim will reload
+		# relcaim will reload
 		return 0;
 	}
 	
-	#Clean up connection methods
-   if($self->process_connect_methods($mn_private_ip, 1) ){
-      notify($ERRORS{'OK'}, 0, "processed connection methods on $computer_node_name");
-   }
-
-	# Delete all user associated with the reservation
-	if ($self->delete_user()) {
-		notify($ERRORS{'OK'}, 0, "users have been deleted from $computer_node_name");
-		return 1;
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to delete users from $computer_node_name");
-		return 0;
-	}
-
 	notify($ERRORS{'OK'}, 0, "$computer_node_name has been sanitized");
 	return 1;
 } ## end sub sanitize
@@ -1205,51 +1186,18 @@ sub revoke_access {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
-
+	
 	my $management_node_keys = $self->data->get_management_node_keys();
 	my $computer_node_name   = $self->data->get_computer_node_name();
-
+	
 	if ($self->stop_external_sshd()) {
 		notify($ERRORS{'OK'}, 0, "stopped external sshd");
 	}
-
+	
 	notify($ERRORS{'OK'}, 0, "access has been revoked to $computer_node_name");
 	return 1;
 } ## end sub revoke_access
 
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 stop_external_sshd
-
- Parameters  :
- Returns     :
- Description :
-
-=cut
-
-sub stop_external_sshd {
-	my $self = shift;
-	if (ref($self) !~ /linux/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-
-	my $management_node_keys = $self->data->get_management_node_keys();
-	my $computer_node_name   = $self->data->get_computer_node_name();
-	my $identity             = $self->data->get_image_identity;
-
-	my @sshcmd = run_ssh_command($computer_node_name, $identity, "pkill -fx \"/usr/sbin/sshd -f /etc/ssh/external_sshd_config\"", "root");
-
-	foreach my $l (@{$sshcmd[1]}) {
-		if ($l) {
-			notify($ERRORS{'DEBUG'}, 0, "output detected: $l");
-		}
-	}
-
-	notify($ERRORS{'DEBUG'}, 0, "ext_sshd on $computer_node_name stopped");
-	return 1;
-
-} ## end sub stop_external_sshd
 #/////////////////////////////////////////////////////////////////////////////
 
 =head2 add_vcl_usergroup
@@ -1266,15 +1214,15 @@ sub add_vcl_usergroup {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
-
+	
 	my $management_node_keys = $self->data->get_management_node_keys();
 	my $computer_node_name   = $self->data->get_computer_node_name();
 	my $identity             = $self->data->get_image_identity;
-
-	if(run_ssh_command($computer_node_name, $identity, "groupadd vcl", "root")){
+	
+	if (run_ssh_command($computer_node_name, $identity, "groupadd vcl", "root")) {
 		notify($ERRORS{'DEBUG'}, 0, "successfully added the vcl user group");
 	}
-
+	
 	return 1;
 
 }
@@ -1295,17 +1243,17 @@ sub is_connected {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
-
+	
 	my $computer_node_name = $self->data->get_computer_node_name();
 	my $identity           = $self->data->get_image_identity;
 	my $remote_ip          = $self->data->get_reservation_remote_ip();
 	my $computer_ipaddress = $self->data->get_computer_ip_address();
-
+	
 	my @SSHCMD = run_ssh_command($computer_node_name, $identity, "netstat -an", "root", 22, 1);
 	foreach my $line (@{$SSHCMD[1]}) {
 		chomp($line);
 		next if ($line =~ /Warning/);
-
+		
 		if ($line =~ /Connection refused/) {
 			notify($ERRORS{'WARNING'}, 0, "$line");
 			return 1;
@@ -1314,7 +1262,7 @@ sub is_connected {
 			return 1;
 		}
 	} ## end foreach my $line (@{$SSHCMD[1]})
-
+	
 	return 0;
 
 } ## end sub is_connected
@@ -1342,9 +1290,9 @@ sub run_script {
 		notify($ERRORS{'WARNING'}, 0, "script path argument was not specified");
 		return;
 	}
-	my $display_output = shift || 0;
+	my $display_output  = shift || 0;
 	my $timeout_seconds = shift || 60;
-	my $max_attempts = shift || 3;
+	my $max_attempts    = shift || 3;
 	
 	# Check if script exists
 	if ($self->file_exists($script_path)) {
@@ -1389,7 +1337,7 @@ sub run_script {
 		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to execute $script_path");
 		return;
 	}
-
+	
 	return 1;
 }
 
@@ -1443,9 +1391,9 @@ sub file_exists {
 	}
 	
 	# Count the lines beginning with "Size:" and ending with "file", "directory", or "link" to determine how many files and/or directories were found
-	my $files_found = grep(/^\s*Size:.*file$/i, @$output);
+	my $files_found       = grep(/^\s*Size:.*file$/i,      @$output);
 	my $directories_found = grep(/^\s*Size:.*directory$/i, @$output);
-	my $links_found = grep(/^\s*Size:.*link$/i, @$output);
+	my $links_found       = grep(/^\s*Size:.*link$/i,      @$output);
 	
 	if ($files_found || $directories_found || $links_found) {
 		notify($ERRORS{'DEBUG'}, 0, "'$path' exists on $computer_short_name, files: $files_found, directories: $directories_found, links: $links_found");
@@ -1572,7 +1520,7 @@ sub create_directory {
 			notify($ERRORS{'OK'}, 0, "directory created on $computer_short_name: '$directory_path'");
 		}
 		else {
-			notify($ERRORS{'OK'}, 0, "directory already exists on $computer_short_name: '$directory_path'");
+			#notify($ERRORS{'OK'}, 0, "directory already exists on $computer_short_name: '$directory_path'");
 		}
 		return 1;
 	}
@@ -1600,7 +1548,7 @@ sub move_file {
 	}
 	
 	# Get the path arguments
-	my $source_path = shift;
+	my $source_path      = shift;
 	my $destination_path = shift;
 	if (!$source_path || !$destination_path) {
 		notify($ERRORS{'WARNING'}, 0, "source and destination path arguments were not specified");
@@ -1608,11 +1556,11 @@ sub move_file {
 	}
 	
 	# Remove any quotes from the beginning and end of the path
-	$source_path = normalize_file_path($source_path);
+	$source_path      = normalize_file_path($source_path);
 	$destination_path = normalize_file_path($destination_path);
 	
 	# Escape all spaces in the path
-	my $escaped_source_path = escape_file_path($source_path);
+	my $escaped_source_path      = escape_file_path($source_path);
 	my $escaped_destination_path = escape_file_path($destination_path);
 	
 	my $computer_short_name = $self->data->get_computer_short_name();
@@ -1698,8 +1646,8 @@ sub get_available_space {
 	
 	# Calculate the bytes available
 	my $bytes_available = ($block_size * $blocks_available);
-	my $mb_available = format_number(($bytes_available / 1024 / 1024), 2);
-	my $gb_available = format_number(($bytes_available / 1024 / 1024 / 1024), 1);
+	my $mb_available    = format_number(($bytes_available / 1024 / 1024), 2);
+	my $gb_available    = format_number(($bytes_available / 1024 / 1024 / 1024), 1);
 	
 	notify($ERRORS{'DEBUG'}, 0, "space available on volume on $computer_short_name containing '$path': " . get_file_size_info_string($bytes_available));
 	return $bytes_available;
@@ -1713,8 +1661,8 @@ sub get_available_space {
  Returns     : If successful: integer
                If failed: undefined
  Description : Returns the total size in bytes of the volume where the path
-					resides specified by the argument. Undefined is returned if an
-					error occurred.
+               resides specified by the argument. Undefined is returned if an
+               error occurred.
 
 =cut
 
@@ -1769,8 +1717,8 @@ sub get_total_space {
 	
 	# Calculate the bytes free
 	my $bytes_total = ($block_size * $blocks_total);
-	my $mb_total = format_number(($bytes_total / 1024 / 1024), 2);
-	my $gb_total = format_number(($bytes_total / 1024 / 1024 / 1024), 1);
+	my $mb_total    = format_number(($bytes_total / 1024 / 1024), 2);
+	my $gb_total    = format_number(($bytes_total / 1024 / 1024 / 1024), 1);
 	
 	notify($ERRORS{'DEBUG'}, 0, "total size of volume on $computer_short_name containing '$path': " . get_file_size_info_string($bytes_total));
 	return $bytes_total;
@@ -1868,9 +1816,9 @@ sub get_file_size {
 	# Get the computer name
 	my $computer_node_name = $self->data->get_computer_node_name() || return;
 	
-	my $file_count = 0;
+	my $file_count           = 0;
 	my $total_bytes_reserved = 0;
-	my $total_bytes_used = 0;
+	my $total_bytes_used     = 0;
 	
 	for my $file_path (@file_paths) {
 		# Normalize the file path
@@ -1919,7 +1867,7 @@ sub get_file_size {
 				
 				my $file_bytes_allocated = ($file_blocks * $block_size);
 				
-				$total_bytes_used += $file_bytes_allocated;
+				$total_bytes_used     += $file_bytes_allocated;
 				$total_bytes_reserved += $file_bytes;
 			}
 			elsif ($type =~ /directory/) {
@@ -1932,9 +1880,9 @@ sub get_file_size {
 					next;
 				}
 				
-				$file_count += $subdirectory_file_count;
+				$file_count           += $subdirectory_file_count;
 				$total_bytes_reserved += $subdirectory_bytes_used;
-				$total_bytes_used += $subdirectory_bytes_allocated;
+				$total_bytes_used     += $subdirectory_bytes_allocated;
 			}
 		}
 	}
@@ -1989,7 +1937,7 @@ sub set_file_permissions {
 		return;
 	}
 	
-	my $recursive = shift;
+	my $recursive        = shift;
 	my $recursive_string = '';
 	$recursive_string = "recursively " if $recursive;
 	
@@ -2018,523 +1966,6 @@ sub set_file_permissions {
 		notify($ERRORS{'OK'}, 0, $recursive_string . "set permissions of '$path' to '$chmod_mode' on $computer_node_name");
 		return 1;
 	}
-}
-	
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 generate_rc_local
-
- Parameters  : none
- Returns     : boolean
- Description : Generate a rc.local file locally, copy to node and make executable.
-
-=cut
-
-sub generate_rc_local {
-	my $self = shift;
-	if (ref($self) !~ /linux/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return 0;
-	}
-	
-	my $request_id               = $self->data->get_request_id();
-   my $management_node_keys     = $self->data->get_management_node_keys();
-   my $computer_short_name      = $self->data->get_computer_short_name();
-   my $computer_node_name       = $self->data->get_computer_node_name();
-	
-	# Determine if /etc/rc.local is a symlink or not
-	my $command = "file /etc/rc.local";
-	my $symlink = 0;
-	my $rc_local_path;
-	
-	my ($echo_exit_status, $echo_output) = $self->execute($command, 1);
-	if (!defined($echo_output)) {
-        notify($ERRORS{'WARNING'}, 0, "failed to run command to check file of /etc/rc.local");
-   }
-   elsif (grep(/symbolic/, @$echo_output)) {
-		  notify($ERRORS{'OK'}, 0, "confirmed /etc/rc.local is symbolic link \n" . join("\n", @$echo_output));
-		  $symlink = 1;
-   }
-	
-	if(!$symlink) {
-		#my $symlink_command = "mv /etc/rc.local /etc/_orig.rc.local ; ln -s /etc/rc.d/rc.local /etc/rc.local";
-		#my ($sym_exit_status, $sym_output) = $self->execute($symlink_command, 1);
-      #if (!defined($sym_output)) {
-		#  notify($ERRORS{'WARNING'}, 0, "failed to run symlink_command $symlink_command on node $computer_node_name");
-      #}
-		#else {
-		#	 notify($ERRORS{'OK'}, 0, "successfully ran $symlink_command on $computer_node_name");
-		#}
-	
-		$rc_local_path = "/etc/rc.local";
-		
-	}
-	else {
-		$rc_local_path = "/etc/rc.d/rc.local";
-	}
-
-	my @array2print;
-
-	push(@array2print, '#!/bin/sh' . "\n");
-	push(@array2print, '#' . "\n");
-   push(@array2print, '# This script will be executed after all the other init scripts.' . "\n");
-	push(@array2print, '#' . "\n");
-   push(@array2print, '# WARNING --- VCL IMAGE CREATORS --- WARNING' . "\n");
-	push(@array2print, '#' . "\n");
-   push(@array2print, '# This file will get overwritten during image capture. Any customizations' . "\n");
-   push(@array2print, '# should be put into /etc/init.d/vcl_post_reserve or /etc/init.d/vcl_post_load' . "\n");
-   push(@array2print, '# Note these files do not exist by default.' . "\n");
-   push(@array2print, "\n");
-   push(@array2print, "#Use the /root/.vclcontrol/vcl_exclude_list to prevent vcld from updating this file.");
-   push(@array2print, "\n");
-   push(@array2print, 'touch /var/lock/subsys/local' . "\n");
-   push(@array2print, "\n");
-   push(@array2print, 'IP0=$(ifconfig eth0 | grep inet | awk \'{print $2}\' | awk -F: \'{print $2}\')' . "\n");
-   push(@array2print, 'IP1=$(ifconfig eth1 | grep inet | awk \'{print $2}\' | awk -F: \'{print $2}\')' . "\n");
-   push(@array2print, 'sed -i -e \'/.*AllowUsers .*$/d\' /etc/ssh/sshd_config' . "\n");
-   push(@array2print, 'sed -i -e \'/.*ListenAddress .*/d\' /etc/ssh/sshd_config' . "\n");
-   push(@array2print, 'sed -i -e \'/.*ListenAddress .*/d\' /etc/ssh/external_sshd_config' . "\n");
-   push(@array2print, 'echo "AllowUsers root" >> /etc/ssh/sshd_config' . "\n");
-   push(@array2print, 'echo "ListenAddress $IP0" >> /etc/ssh/sshd_config' . "\n");
-   push(@array2print, 'echo "ListenAddress $IP1" >> /etc/ssh/external_sshd_config' . "\n");
-   push(@array2print, 'service ext_sshd stop' . "\n");
-   push(@array2print, 'service sshd restart' . "\n");
-   push(@array2print, 'sleep 2' . "\n");
-   #push(@array2print, 'service sshd start' . "\n");
-   push(@array2print, 'service ext_sshd start' . "\n");
-
-	#write to tmpfile
-	my $tmpfile = "/tmp/$request_id.rc.local";
-	if (open(TMP, ">$tmpfile")) {
-		print TMP @array2print;
-		close(TMP);
-	}
-	else {
-		#print "could not write $tmpfile $!\n";
-		notify($ERRORS{'OK'}, 0, "could not write $tmpfile $!");
-		return 0;
-	}
-	#copy to node
-	if (run_scp_command($tmpfile, "$computer_node_name:$rc_local_path", $management_node_keys)) {
-	}
-	else{
-		return 0;
-	}
-	
-	# Assemble the command
-	my $chmod_command = "chmod +rx $rc_local_path";
-	
-	# Execute the command
-	my ($exit_status, $output) = run_ssh_command($computer_node_name, $management_node_keys, $chmod_command, '', '', 1);
-	if (defined($exit_status) && $exit_status == 0) {
-		notify($ERRORS{'OK'}, 0, "executed $chmod_command, exit status: $exit_status");
-	}
-	elsif (defined($exit_status)) {
-		notify($ERRORS{'WARNING'}, 0, "setting rx on $rc_local_path returned a non-zero exit status: $exit_status");
-		return;
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to execute $chmod_command");
-		return 0;
-	}
-
-	unlink($tmpfile);
-	
-	# If systemd managed; confirm rc-local.service is enabled
-	if($self->file_exists("/bin/systemctl") ) {
-		
-		if(!$self->generate_rc_local_systemd() ) {
-			return 0;
-		}
-		
-	}
-	else {
-		#Re-run rc.local
-		my ($rclocal_exit_status, $rclocal_output) = $self->execute("$rc_local_path");
-		if (!defined($rclocal_exit_status)) {
-          notify($ERRORS{'WARNING'}, 0, "failed to run $rc_local_path on node $computer_node_name");
-      }
-		else {
-			notify($ERRORS{'OK'}, 0, "successfully ran $rc_local_path");
-		}
-
-	}
-	
-	return 1;
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 generate_ext_sshd_config
-
- Parameters  : none
- Returns     : boolean
- Description : Copy default sshd config and edit key values
-
-=cut
-
-sub generate_ext_sshd_config {
-	my $self = shift;
-	if (ref($self) !~ /linux/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return 0;
-	}
-	
-	my $request_id               = $self->data->get_request_id();
-	my $management_node_keys     = $self->data->get_management_node_keys();
-	my $computer_short_name      = $self->data->get_computer_short_name();
-	my $computer_node_name       = $self->data->get_computer_node_name();
-	
-	#check for and copy /etc/ssh/sshd_config file
-	
-	#Copy node's /etc/ssh/sshd_config to local /tmp for processing
-	my $tmpfile = "/tmp/$request_id.external_sshd_config";
-	if (run_scp_command("$computer_node_name:/etc/ssh/sshd_config", $tmpfile, $management_node_keys)) {
-		notify($ERRORS{'DEBUG'}, 0, "copied sshd_config from $computer_node_name for local processing");
-	}
-	else{
-		notify($ERRORS{'WARNING'}, 0, "failed to copied sshd_config from $computer_node_name for local processing");
-		return 0;
-	}
-	
-	my @ext_sshd_config = read_file_to_array($tmpfile);	
-	
-	foreach my $l (@ext_sshd_config) {
-		#clear any unwanted lines - could be multiples
-		if($l =~ /^(.)?PidFile/ ){
-			$l = "";
-		}
-		if($l =~ /^(.)?PermitRootLogin/){
-			$l = "";
-		} 
-		if($l =~ /^(.)?AllowUsers root/){
-			$l = "";
-		}
-		if($l =~ /^(.)?UseDNS/){
-			$l = "";
-		}
-		if($l =~ /^(.)?X11Forwarding/){
-			$l = "";
-		}
-		if($l =~ /^(.)?PasswordAuthentication/){
-			$l = "";
-		}
-	}
-	
-	push(@ext_sshd_config, "PidFile /var/run/ext_sshd.pid\n");
-	push(@ext_sshd_config, "PermitRootLogin no\n");
-	push(@ext_sshd_config, "UseDNS no\n");
-	push(@ext_sshd_config, "X11Forwarding yes\n");
-	push(@ext_sshd_config, "PasswordAuthentication yes\n");
-	
-	#clear temp file
-	unlink($tmpfile);
-	
-	#write_array to file
-	if(open(FILE, ">$tmpfile")){
-		print FILE @ext_sshd_config;
-		close FILE;
-	}
-	
-	#copy temp file to node
-	if (run_scp_command($tmpfile, "$computer_node_name:/etc/ssh/external_sshd_config", $management_node_keys)) {
-		notify($ERRORS{'DEBUG'}, 0, "copied $tmpfile to $computer_node_name:/etc/ssh/external_sshd_config");
-	}
-	else{
-		notify($ERRORS{'WARNING'}, 0, "failed to copied $tmpfile to $computer_node_name:/etc/ssh/external_sshd_config");
-		return 0;
-	}	
-	unlink($tmpfile);
-	
-	return 1;
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 generate_ext_sshd_start
-
- Parameters  : none
- Returns     : boolean
- Description :
-
-=cut
-
-sub generate_ext_sshd_start {
-   my $self = shift;
-   if (ref($self) !~ /linux/i) {
-      notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-      return 0;
-   }
-
-	# If using systemd, check for the systemctl command
-	if($self->file_exists("/bin/systemctl") ) {
-		if(!($self->generate_ext_sshd_systemd)) {
-			return 0;
-		}
-	}
-	else {
-		if(!($self->generate_ext_sshd_sysVinit)) {
-			return 0;
-		}
-	}
-	return 1;
-
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 generate_ext_sshd_systemd
-
- Parameters  : none
- Returns     : boolean
- Description :
-
-=cut
-
-sub generate_ext_sshd_systemd {
-   my $self = shift;
-   if (ref($self) !~ /linux/i) {
-      notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-      return 0;
-   }
-   
-   my $computer_short_name      = $self->data->get_computer_short_name();
-   my $computer_node_name       = $self->data->get_computer_node_name();
-	my $request_id               = $self->data->get_request_id();
-	my $management_node_keys  = $self->data->get_management_node_keys();
-
-	my $tmpfile = "/tmp/$request_id.ext_sshd.service";
-	my @array2print;
-
-	push(@array2print, '[Unit]' . "\n");
-	push(@array2print, 'Description=External OpenSSH server daemon.' . "\n");
-	push(@array2print, 'After=syslog.target network.target auditd.service' . "\n");
-	push(@array2print, "\n");
-	push(@array2print, '[Service]' . "\n");
-	push(@array2print, 'ExecStart=/usr/sbin/sshd -D -f /etc/ssh/external_sshd_config' . "\n");
-	push(@array2print, "\n");
-	push(@array2print, '[Install]' . "\n");
-	push(@array2print, 'WantedBy=multi-user.target' . "\n");
-	
-	#save to file
-   if(open(WRITEFILE,">$tmpfile")){
-      print WRITEFILE @array2print;
-      close(WRITEFILE);
-   }
-
-   #copy temp file to node
-   if (run_scp_command($tmpfile, "$computer_node_name:/lib/systemd/system/ext_sshd.service", $management_node_keys)) {
-      notify($ERRORS{'DEBUG'}, 0, "copied $tmpfile to $computer_node_name:/lib/systemd/system/ext_sshd.service");
-   }
-   else{
-      notify($ERRORS{'WARNING'}, 0, "failed to copied $tmpfile to $computer_node_name:/lib/systemd/system/ext_sshd.service");
-      return 0;
-   }
-	
-	#Enable ext_sshd.service
-	my $systemctl_command = "systemctl enable ext_sshd.service";
-   my ($systemctl_exit_status, $systemctl_output) = $self->execute($systemctl_command, 1);
-   if (!defined($systemctl_output)) {
-       notify($ERRORS{'WARNING'}, 0, "failed to run $systemctl_command on node $computer_node_name");
-   }
-   else {
-       notify($ERRORS{'OK'}, 0, "successfully ran $systemctl_command on $computer_node_name \n" . join("\n", @$systemctl_output));
-   }
-
-   #delete local tmpfile
-   unlink($tmpfile);
-
-   return 1;	
-	
-	
-
-}
-
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 generate_ext_sshd_sysVinit
-
- Parameters  : none
- Returns     : boolean
- Description :
-
-=cut
-
-sub generate_ext_sshd_sysVinit {
-	my $self = shift;
-	if (ref($self) !~ /linux/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return 0;
-	}
-	
-	my $request_id               = $self->data->get_request_id();
-	my $management_node_keys     = $self->data->get_management_node_keys();
-	my $computer_short_name      = $self->data->get_computer_short_name();
-	my $computer_node_name       = $self->data->get_computer_node_name();
-	
-	#copy /etc/init.d/sshd to local /tmp for processing
-	my $tmpfile = "/tmp/$request_id.ext_sshd";
-	if (run_scp_command("$computer_node_name:/etc/init.d/sshd", $tmpfile, $management_node_keys)) {
-		notify($ERRORS{'DEBUG'}, 0, "copied sshd init script from $computer_node_name for local processing");
-	}
-	else{
-		notify($ERRORS{'WARNING'}, 0, "failed to copied sshd init script from $computer_node_name for local processing");
-		return 0;
-	}
-	
-	my @ext_sshd_init = read_file_to_array($tmpfile);
-	
-	notify($ERRORS{'DEBUG'}, 0, "read file $tmpfile into array ");
-	
-	foreach my $l (@ext_sshd_init) {
-		if($l =~ /PID_FILE=/){
-			$l = "PID_FILE=/var/run/ext_sshd.pid" . "\n" . "OPTIONS=\'-f /etc/ssh/external_sshd_config\'\n";
-		}	
-		if($l =~ /prog=/){
-			$l="prog=\"ext_sshd\"" . "\n";
-		}
-		
-		my $string = '\[ "\$RETVAL" = 0 \] && touch \/var\/lock\/subsys\/sshd';	
-		if($l =~ /$string/){
-			$l = "[ \"\$RETVAL\" = 0 ] && touch /var/lock/subsys/ext_sshd" . "\n";
-		}
-		if($l =~ /if \[ -f \/var\/lock\/subsys\/sshd \] ; then/){
-			$l = "if [ -f /var/lock/subsys/ext_sshd ] ; then" . "\n";
-		}
-	}
-	
-	#clear temp file
-	unlink($tmpfile);
-	
-	#write_array to file
-	if(open(FILE, ">$tmpfile")){
-		print FILE @ext_sshd_init;
-		close(FILE);
-	}
-	
-	#slurp/read the file to scalar
-	my $sshd_data = do { local( @ARGV, $/ ) = $tmpfile ; <> } ;
-	
-	#notify($ERRORS{'DEBUG'}, 0, "sshd_data after read= $sshd_data");
-	
-	#write new stop block
-	my $new_stop_block = "stop()\n";
-	$new_stop_block .= "{\n";
-	$new_stop_block .= "        echo -n \$\"Stopping \$prog:\"\n";
-	$new_stop_block .= "        killproc \$prog -TERM\n";
-	$new_stop_block .= "        RETVAL=$?\n";
-	$new_stop_block .= "        [ \"\$RETVAL\" = 0 ] && rm -f /var/lock/subsys/ext_sshd\n";
-	$new_stop_block .= "        echo\n";	
-	$new_stop_block .= "}\n";	
-	
-	
-	#edit the stop block
-	$sshd_data =~ s/stop\(\).*?\}/$new_stop_block/s;
-	
-	
-	#save to file
-	if(open(WRITEFILE,">$tmpfile")){
-		print WRITEFILE $sshd_data;
-		close(WRITEFILE);
-	}
-	
-	#copy temp file to node
-	if (run_scp_command($tmpfile, "$computer_node_name:/etc/init.d/ext_sshd", $management_node_keys)) {
-		notify($ERRORS{'DEBUG'}, 0, "copied $tmpfile to $computer_node_name:/etc/init.d/ext_sshd");
-		if(run_ssh_command($computer_node_name, $management_node_keys, "chmod +rx /etc/init.d/ext_sshd", '', '', 1)){
-			notify($ERRORS{'DEBUG'}, 0, "setting  $computer_node_name:/etc/init.d/ext_sshd executable");
-		}
-	}
-	else{
-		notify($ERRORS{'WARNING'}, 0, "failed to copied $tmpfile to $computer_node_name:/etc/init.d/ext_sshd");
-		return 0;
-	}
-	
-	#delete local tmpfile
-	unlink($tmpfile);
-	
-	return 1;
-
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 generate_rc_local_systemd
-
- Parameters  : none
- Returns     : boolean
- Description : If OS is using systemd, create and enable rc_local.service file
-
-=cut
-
-sub generate_rc_local_systemd {
-   my $self = shift;
-   if (ref($self) !~ /linux/i) {
-      notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-      return 0;
-   }
-   
-   my $computer_short_name      = $self->data->get_computer_short_name();
-   my $computer_node_name       = $self->data->get_computer_node_name();
-   my $request_id               = $self->data->get_request_id();
-   my $management_node_keys  = $self->data->get_management_node_keys();
-
-   my $tmpfile = "/tmp/$request_id.rc-local.service";
-   my @array2print;
-
-   push(@array2print, '[Unit]' . "\n");
-   push(@array2print, 'Description=rc.local Compatibility' . "\n");
-   push(@array2print, 'After=network.target' . "\n");
-   push(@array2print, "\n");
-   push(@array2print, '[Service]' . "\n");
-   push(@array2print, 'Type=forking' . "\n");
-   push(@array2print, 'ExecStart=/etc/rc.d/rc.local' . "\n");
-   push(@array2print, 'StandardOutput=tty' . "\n");
-   push(@array2print, 'RemainAfterExit=yes' . "\n");
-   push(@array2print, 'SysVStartPriority=99' . "\n");
-   push(@array2print, "\n");
-   push(@array2print, '[Install]' . "\n");
-   push(@array2print, 'WantedBy=multi-user.target' . "\n");
-   
-   #save to file
-   if(open(WRITEFILE,">$tmpfile")){
-      print WRITEFILE @array2print;
-      close(WRITEFILE);
-   }
-
-	#copy temp file to node
-   if (run_scp_command($tmpfile, "$computer_node_name:/lib/systemd/system/rc-local.service", $management_node_keys)) {
-      notify($ERRORS{'DEBUG'}, 0, "copied $tmpfile to $computer_node_name:/lib/systemd/system/rc-local.service");
-   }
-   else{
-      notify($ERRORS{'WARNING'}, 0, "failed to copied $tmpfile to $computer_node_name:/lib/systemd/system/rc-local.service");
-      return 0;
-   }
-   
-   #Enable ext_sshd.service
-   my $systemctl_command = "systemctl enable rc-local.service";
-   my ($systemctl_exit_status, $systemctl_output) = $self->execute($systemctl_command, 1);
-   if (!defined($systemctl_output)) {
-       notify($ERRORS{'WARNING'}, 0, "failed to run $systemctl_command on node $computer_node_name");
-   }
-  else {
-       notify($ERRORS{'OK'}, 0, "successfully ran $systemctl_command on $computer_node_name \n" . join("\n", @$systemctl_output));
-   }
-
-	#Start rc-local.service
-	if($self->start_service("rc-local")) {
-		notify($ERRORS{'OK'}, 0, "started rc-local.service on $computer_node_name");
-	}  
-	else {
-		notify($ERRORS{'OK'}, 0, "failed to start rc-local.service on $computer_node_name");
-	}  
-
-   #delete local tmpfile
-   unlink($tmpfile);
-
-   return 1;
-
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -2568,7 +1999,7 @@ sub activate_interfaces {
 	}
 	
 	# Extract the interface names from the 'ip link' output
-	my @interface_names = grep { /^\d+:\s+(eth\d+)/ ; $_ = $1 } @$output;
+	my @interface_names = grep {/^\d+:\s+(eth\d+)/; $_ = $1} @$output;
 	notify($ERRORS{'DEBUG'}, 0, "found interface names:\n" . join("\n", @interface_names));
 	
 	# Find existing ifcfg-eth* files
@@ -2692,7 +2123,7 @@ sub get_network_configuration {
 		my ($default_gateway, $interface_name) = $route_line =~ /^0\.0\.0\.0\s+([\d\.]+).*\s([^\s]+)$/g;
 		
 		if (!defined($interface_name) || !defined($default_gateway)) {
-			notify($ERRORS{'DEBUG'}, 0, "route output line does not contain a default gateway: '$route_line'");
+			#notify($ERRORS{'DEBUG'}, 0, "route output line does not contain a default gateway: '$route_line'");
 		}
 		elsif (!defined($network_configuration->{$interface_name})) {
 			notify($ERRORS{'WARNING'}, 0, "found default gateway for '$interface_name' interface but the network configuration for '$interface_name' was not previously retrieved, route output:\n" . join("\n", @$route_output) . "\nnetwork configuation:\n" . format_data($network_configuration));
@@ -2728,7 +2159,7 @@ sub reboot {
 		return;
 	}
 	
-	my $computer_node_name   = $self->data->get_computer_node_name();
+	my $computer_node_name = $self->data->get_computer_node_name();
 	
 	# Check if an argument was supplied
 	my $wait_for_reboot = shift || 1;
@@ -2794,7 +2225,7 @@ sub reboot {
 	}
 	
 	my $wait_attempt_limit = 2;
-	if ($self->wait_for_reboot($wait_attempt_limit)){
+	if ($self->wait_for_reboot($wait_attempt_limit)) {
 		# Reboot was successful, calculate how long reboot took
 		my $reboot_end_time = time();
 		my $reboot_duration = ($reboot_end_time - $reboot_start_time);
@@ -2825,7 +2256,7 @@ sub shutdown {
 		return;
 	}
 	
-	my $computer_node_name   = $self->data->get_computer_node_name();
+	my $computer_node_name = $self->data->get_computer_node_name();
 	
 	# Check if an argument was supplied
 	my $wait_for_power_off = shift || 1;
@@ -2843,20 +2274,20 @@ sub shutdown {
 		my ($exit_status, $output) = $self->execute({command => $command, timeout => 90, ignore_error => 1});
 		
 		# Wait maximum of 5 minutes for computer to power off
-   	my $power_off = $self->provisioner->wait_for_power_off(300);
-   	if (!defined($power_off)) {
-      	# wait_for_power_off result will be undefined if the provisioning module doesn't implement a power_status subroutine
-      	notify($ERRORS{'OK'}, 0, "unable to determine power status of $computer_node_name from provisioning module, sleeping 1 minute to allow computer time to shutdown");
-      	sleep 60;
-   	}
-   	elsif (!$power_off) {
-      	notify($ERRORS{'WARNING'}, 0, "$computer_node_name never powered off");
+		my $power_off = $self->provisioner->wait_for_power_off(300);
+		if (!defined($power_off)) {
+			# wait_for_power_off result will be undefined if the provisioning module doesn't implement a power_status subroutine
+			notify($ERRORS{'OK'}, 0, "unable to determine power status of $computer_node_name from provisioning module, sleeping 1 minute to allow computer time to shutdown");
+			sleep 60;
+		}
+		elsif (!$power_off) {
+			notify($ERRORS{'WARNING'}, 0, "$computer_node_name never powered off");
 			# Call provisioning module's power_off() subroutine
 			if (!$self->provisioner->power_off()) {
 				notify($ERRORS{'WARNING'}, 0, "failed to shut down $computer_node_name, failed to initiate power off");
 				return;
 			}
-   	}
+		}
 	}
 	else {
 		notify($ERRORS{'DEBUG'}, 0, "$computer_node_name is not responding to SSH, attempting power off");
@@ -2893,11 +2324,11 @@ sub create_user {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
-
+	
 	my $management_node_keys = $self->data->get_management_node_keys();
 	my $computer_node_name   = $self->data->get_computer_node_name();
 	my $imagemeta_rootaccess = $self->data->get_imagemeta_rootaccess();
-
+	
 	# Attempt to get the username from the arguments
 	# If no argument was supplied, use the user specified in the DataStructure
 	my $username = shift;
@@ -2937,21 +2368,21 @@ sub create_user {
 		$imagemeta_rootaccess = 0;
 	}
 	else {
-		#no override detected, do not change database value
+		# no override detected, do not change database value
 	}
-
+	
 	my $useradd_string;
 	#if(defined($user_uid) && $user_uid != 0){
 	#	$useradd_string = "/usr/sbin/useradd -u $user_uid -d /home/$username -m $username -g vcl";
 	#}
-	if($user_standalone){
+	if ($user_standalone) {
 		$useradd_string = "/usr/sbin/useradd -d /home/$username -m $username -g vcl; chown -R $username /home/$username";
 	}
 	else {
 		$useradd_string = "/usr/sbin/useradd -u $user_uid -d /home/$username -m $username -g vcl; chown -R $username /home/$username";
 	}
-
-
+	
+	
 	my @sshcmd = run_ssh_command($computer_node_name, $management_node_keys, $useradd_string, "root");
 	foreach my $l (@{$sshcmd[1]}) {
 		if ($l =~ /$username exists/) {
@@ -2962,11 +2393,11 @@ sub create_user {
 			}
 		}
 	}
-
+	
 	if ($user_standalone) {
 		notify($ERRORS{'DEBUG'}, 0, "Standalone user setting single-use password");
-
-		#Set password
+		
+		# Set password
 		if ($self->changepasswd($computer_node_name, $username, $password)) {
 			notify($ERRORS{'OK'}, 0, "Successfully set password on useracct: $username on $computer_node_name");
 		}
@@ -2975,29 +2406,24 @@ sub create_user {
 			return 0;
 		}
 	} ## end if ($user_standalone)
-
-
-	#Check image profile for allowed root access
+	
+	
+	# Check image profile for allowed root access
 	if ($imagemeta_rootaccess) {
 		# Add to sudoers file
-		#clear user from sudoers file to prevent dups
-		my $clear_cmd = "sed -i -e \"/^$username .*/d\" /etc/sudoers";
-		if (run_ssh_command($computer_node_name, $management_node_keys, $clear_cmd, "root")) {
-			notify($ERRORS{'DEBUG'}, 0, "cleared $username from /etc/sudoers");
-		}
-		else {
-			notify($ERRORS{'CRITICAL'}, 0, "failed to clear $username from /etc/sudoers");
-		}
+		# clear user from sudoers file to prevent duplicates
+		$self->remove_lines_from_file('/etc/sudoers', "^$username .*");
+		
 		my $sudoers_cmd = "echo \"$username ALL= NOPASSWD: ALL\" >> /etc/sudoers";
-		if (run_ssh_command($computer_node_name, $management_node_keys, $sudoers_cmd, "root")) {
+		if ($self->execute($sudoers_cmd)) {
 			notify($ERRORS{'DEBUG'}, 0, "added $username to /etc/sudoers");
 		}
 		else {
 			notify($ERRORS{'CRITICAL'}, 0, "failed to add $username to /etc/sudoers");
 		}
 	} ## end if ($imagemeta_rootaccess)
-
-	return 1;	
+	
+	return 1;
 } ## end sub create_user
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -3012,41 +2438,37 @@ sub create_user {
 
 sub update_server_access {
 	my ($self) = shift;
-	
 	if (ref($self) !~ /linux/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
 	
-	my ($server_allow_user_list) = shift;
+	my $server_allow_user_list = shift || $self->data->get_server_allow_users();
 	
 	my $computer_node_name = $self->data->get_computer_node_name();
-	my $identity           = $self->data->get_image_identity;
 	
-	if ( !$server_allow_user_list ) {
-		my $server_allow_user_list = $self->data->get_server_allow_users();
+	my $ext_sshd_config_file_path = '/etc/ssh/external_sshd_config';
+	
+	if (!$server_allow_user_list) {
+		notify($ERRORS{'DEBUG'}, 0, "$ext_sshd_config_file_path AllowUsers setting not altered, server allow users list is empty");
+		return 1;
 	}
 	
-	notify($ERRORS{'OK'}, 0, "server_allow_user_list= $server_allow_user_list");
-	if ( $server_allow_user_list ) {
-		my $cmd = "sed -i -e \"/^AllowUsers */d\" /etc/ssh/external_sshd_config; echo \"AllowUsers $server_allow_user_list\" >> /etc/ssh/external_sshd_config";
-		if (run_ssh_command($computer_node_name, $identity, $cmd, "root")) {
-			notify($ERRORS{'DEBUG'}, 0, "added AllowUsers $server_allow_user_list to external_sshd_config");
-		}
-		else {
-			notify($ERRORS{'CRITICAL'}, 0, "failed to add AllowUsers $server_allow_user_list to external_sshd_config");
-		}
-		
-		if(!$self->stop_service("ext_sshd")) {
-		
-		}
-		
-		if(!$self->start_service("ext_sshd")) {
-			notify($ERRORS{'WARNING'}, 0, "failed to start ext_sshd");
-			return 0;	
-		}
-		
-		notify($ERRORS{'DEBUG'}, 0, "restarted ext_sshd");
+	# Remove all AllowUsers lines from external_sshd_config
+	if (!$self->remove_lines_from_file($ext_sshd_config_file_path, 'AllowUsers')) {
+		notify($ERRORS{'WARNING'}, 0, "unable to update server access on $computer_node_name, failed to remove existing AllowUsers lines from $ext_sshd_config_file_path");
+		return;
+	}
+	
+	# Add AllowUsers line to the end of the file
+	if (!$self->append_text_file($ext_sshd_config_file_path, "AllowUsers $server_allow_user_list\n")) {
+		notify($ERRORS{'WARNING'}, 0, "unable to update server access on $computer_node_name, failed to add line to $ext_sshd_config_file_path: AllowUsers $server_allow_user_list");
+		return;
+	}
+	
+	if (!$self->restart_service("ext_sshd")) {
+		notify($ERRORS{'WARNING'}, 0, "failed to restart ext_sshd service on $computer_node_name after updating $ext_sshd_config_file_path");
+		return;
 	}
 	
 	return 1;
@@ -3071,7 +2493,7 @@ sub enable_dhcp {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
-
+	
 	my $computer_node_name = $self->data->get_computer_node_name();
 	
 	my $interface_name_argument = shift;
@@ -3144,61 +2566,13 @@ sub service_exists {
 		return;
 	}
 	
-	my $management_node_keys = $self->data->get_management_node_keys();
-	my $computer_node_name   = $self->data->get_computer_node_name();
-
-	
 	my $service_name = shift;
 	if (!$service_name) {
 		notify($ERRORS{'WARNING'}, 0, "service name was not passed as an argument");
 		return;
 	}
-	my $command;
 	
-	# Check if OS is using systemd or SysVinit
-	if($self->file_exists("/bin/systemctl")) {
-		$command = "systemctl is-enabled $service_name" . ".service";	
-	}
-	elsif($self->file_exists("/sbin/chkconfig")) {
-		$command = "/sbin/chkconfig --list $service_name";
-	}	
-	else {
-		#Default to use the service cmd
-		$command = "service $service_name status";
-	}	
-	
-	my ($exit_status, $output) = run_ssh_command($computer_node_name, $management_node_keys, $command, '', '', 1);
-	if (!defined($output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to execute command to determine if '$service_name' service exists on $computer_node_name");
-		return;
-	}
-	elsif (grep(/error reading information on service/i, @$output)) {
-		notify($ERRORS{'DEBUG'}, 0, "'$service_name' service does not exist on $computer_node_name");
-		return 0;
-	}
-	elsif (grep(/unrecognized service/i, @$output)) {
-		notify($ERRORS{'DEBUG'}, 0, "'$service_name' service does not exist on $computer_node_name");
-		return 0;
-	}
-	elsif (grep(/Failed to issue method call/i, @$output)) {
-		notify($ERRORS{'DEBUG'}, 0, "'$service_name' service does not exist on $computer_node_name");
-		return 0;
-	}
-	elsif (defined($exit_status) && $exit_status == 0 ) {
-		notify($ERRORS{'DEBUG'}, 0, "'$service_name' service exists");
-		return 1;
-	}
-	elsif (defined($exit_status) && grep(/not referenced in any runlevel/i, @$output)) {
-		# chkconfig may display the following if the service exists but has not been added:
-		# service ext_sshd supports chkconfig, but is not referenced in any runlevel (run 'chkconfig --add ext_sshd')
-		notify($ERRORS{'DEBUG'}, 0, "'$service_name' service exists but is not referenced in any runlevel: output:\n" . join("\n", @$output));
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "unable to determine if '$service_name' service exists, exit status: $exit_status, output:\n" . join("\n", @$output));
-		return;
-	}
-	
-	return 1;
+	return $self->init->service_exists($service_name);
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -3206,9 +2580,7 @@ sub service_exists {
 =head2 start_service
 
  Parameters  : $service_name
- Returns     : If service started: 1
-               If service not started: 0
-               If error occurred: undefined
+ Returns     : boolean
  Description : 
 
 =cut
@@ -3220,42 +2592,13 @@ sub start_service {
 		return;
 	}
 	
-	my $management_node_keys = $self->data->get_management_node_keys();
-	my $computer_node_name   = $self->data->get_computer_node_name();
-	
 	my $service_name = shift;
 	if (!$service_name) {
 		notify($ERRORS{'WARNING'}, 0, "service name was not passed as an argument");
 		return;
 	}
-	my $command;
 	
-	# Check if OS is using systemd or SysVinit
-	if($self->file_exists("/bin/systemctl")){
-		$command = "systemctl start $service_name" . ".service";
-	}
-	else {
-		$command = "service $service_name start";
-	}
-	
-	my ($status, $output) = run_ssh_command($computer_node_name, $management_node_keys, $command, '', '', 1);
-	if (defined($output) && grep(/failed/i, @{$output})) {
-		notify($ERRORS{'DEBUG'}, 0, "service does not exist: $service_name");
-		return 0;
-	}
-	elsif (defined($status) && $status == 0) {
-		notify($ERRORS{'DEBUG'}, 0, "service exists: $service_name");
-	}
-	elsif (defined($status)) {
-		notify($ERRORS{'WARNING'}, 0, "unable to determine if service exists: $service_name, exit status: $status, output:\n@{$output}");
-		return;
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "unable to run ssh command to determine if service exists");
-		return;
-	}
-	
-	return 1;
+	return $self->init->start_service($service_name);
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -3263,9 +2606,7 @@ sub start_service {
 =head2 stop_service
 
  Parameters  : $service_name
- Returns     : If service started: 1
-               If service not started: 0
-               If error occurred: undefined
+ Returns     : boolean
  Description : 
 
 =cut
@@ -3277,8 +2618,32 @@ sub stop_service {
 		return;
 	}
 	
-	my $management_node_keys = $self->data->get_management_node_keys();
-	my $computer_node_name   = $self->data->get_computer_node_name();
+	my $service_name = shift;
+	if (!$service_name) {
+		notify($ERRORS{'WARNING'}, 0, "service name was not passed as an argument");
+		return;
+	}
+	my $command;
+	
+	return $self->init->stop_service($service_name);
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 restart_service
+
+ Parameters  : $service_name
+ Returns     : boolean
+ Description : 
+
+=cut
+
+sub restart_service {
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
 	
 	my $service_name = shift;
 	if (!$service_name) {
@@ -3287,32 +2652,7 @@ sub stop_service {
 	}
 	my $command;
 	
-	# Check if OS is using systemd or SysVinit
-	if($self->file_exists("/bin/systemctl")){
-		$command = "systemctl stop $service_name" . ".service";
-	}
-	else {
-		$command = "service $service_name stop";
-	}
-	
-	my ($status, $output) = run_ssh_command($computer_node_name, $management_node_keys, $command, '', '', 1);
-	if (defined($output) && grep(/failed/i, @{$output})) {
-		notify($ERRORS{'DEBUG'}, 0, "service does not exist: $service_name");
-		return 0;
-	}
-	elsif (defined($status) && $status == 0) {
-		notify($ERRORS{'DEBUG'}, 0, "service exists: $service_name");
-	}
-	elsif (defined($status)) {
-		notify($ERRORS{'WARNING'}, 0, "unable to determine if service exists: $service_name, exit status: $status, output:\n@{$output}");
-		return;
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "unable to run ssh command to determine if service exists");
-		return;
-	}
-	
-	return 1;
+	return $self->init->restart_service($service_name);
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -3332,12 +2672,12 @@ sub check_connection_on_port {
 		return;
 	}
 	
-	my $management_node_keys 	= $self->data->get_management_node_keys();
-	my $computer_node_name   	= $self->data->get_computer_node_name();
-	my $remote_ip 			= $self->data->get_reservation_remote_ip();
-	my $computer_ip_address   	= $self->data->get_computer_ip_address();
-	my $request_state_name   	= $self->data->get_request_state_name();
-	my $username = $self->data->get_user_login_id();
+	my $management_node_keys = $self->data->get_management_node_keys();
+	my $computer_node_name   = $self->data->get_computer_node_name();
+	my $remote_ip            = $self->data->get_reservation_remote_ip();
+	my $computer_ip_address  = $self->data->get_computer_ip_address();
+	my $request_state_name   = $self->data->get_request_state_name();
+	my $username             = $self->data->get_user_login_id();
 	
 	my $port = shift;
 	if (!$port) {
@@ -3345,9 +2685,9 @@ sub check_connection_on_port {
 		return "failed";
 	}
 	
-	my $ret_val = "no";	
+	my $ret_val = "no";
 	my $command = "netstat -an";
-	my ($status, $output) = run_ssh_command($computer_node_name, $management_node_keys, $command, '', '', 1);
+	my ($status, $output) = $self->execute($command, '', '', 1);
 	notify($ERRORS{'DEBUG'}, 0, "checking connections on node $computer_node_name on port $port");
 	foreach my $line (@{$output}) {
 		if ($line =~ /Connection refused|Permission denied/) {
@@ -3368,7 +2708,7 @@ sub check_connection_on_port {
 			}
 			else {
 				my $new_remote_ip = $4;
-				#this isn't the defined remoteIP
+				# this isn't the defined remoteIP
 				# Confirm the user is logged in
 				# Is user logged in
 				if (!$self->user_logged_in()) {
@@ -3376,8 +2716,8 @@ sub check_connection_on_port {
 					$ret_val = "no";
 					return $ret_val;
 				}
-				else {	
-					$self->data->set_reservation_remote_ip($new_remote_ip);	
+				else {
+					$self->data->set_reservation_remote_ip($new_remote_ip);
 					notify($ERRORS{'OK'}, 0, "Updating reservation remote_ip with $new_remote_ip");
 					$ret_val = "conn_wrong_ip";
 					return $ret_val;
@@ -3421,10 +2761,10 @@ sub get_cpu_core_count {
 		notify($ERRORS{'WARNING'}, 0, "unable to determine $computer_node_name CPU core count, output does not contain any 'processor :' lines:\n" . join("\n", @$output));
 		return;
 	}
-	my ($cpu_cores) = map { $_ =~ /cpu cores\s*:\s*(\d+)/ } @$output;
+	my ($cpu_cores) = map {$_ =~ /cpu cores\s*:\s*(\d+)/} @$output;
 	$cpu_cores = 1 unless $cpu_cores;
 	
-	my ($siblings) = map { $_ =~ /siblings\s*:\s*(\d+)/ } @$output;
+	my ($siblings) = map {$_ =~ /siblings\s*:\s*(\d+)/} @$output;
 	$siblings = 1 unless $siblings;
 	
 	# The actual CPU core count can be determined by the equation:
@@ -3470,7 +2810,7 @@ sub get_cpu_speed {
 		return;
 	}
 	
-	my ($mhz) = map { $_ =~ /cpu MHz\s*:\s*(\d+)/ } @$output;
+	my ($mhz) = map {$_ =~ /cpu MHz\s*:\s*(\d+)/} @$output;
 	if ($mhz) {
 		$mhz = int($mhz);
 		notify($ERRORS{'DEBUG'}, 0, "retrieved $computer_node_name CPU speed: $mhz MHz");
@@ -3511,7 +2851,7 @@ sub get_total_memory {
 	
 	# Output should look like this:
 	# Memory: 1024016k/1048576k available (2547k kernel code, 24044k reserved, 1289k data, 208k init)
-	my ($memory_kb) = map { $_ =~ /Memory:.*\/(\d+)k available/ } @$output;
+	my ($memory_kb) = map {$_ =~ /Memory:.*\/(\d+)k available/} @$output;
 	if ($memory_kb) {
 		my $memory_mb = int($memory_kb / 1024);
 		notify($ERRORS{'DEBUG'}, 0, "retrieved $computer_node_name total memory capacity: $memory_mb MB");
@@ -3526,11 +2866,11 @@ sub get_total_memory {
 #/////////////////////////////////////////////////////////////////////////////
 
 =head2 sanitize_firewall
- 
-  Parameters  : $scope (optional), 
-  Returns     : boolean
-  Description : Removes all entries for INUPT chain and Sets iptables firewall for private management node IP
- 
+
+ Parameters  : $scope (optional), 
+ Returns     : boolean
+ Description : Removes all entries for INUPT chain and Sets iptables firewall for private management node IP
+
 =cut
 
 sub sanitize_firewall {
@@ -3541,20 +2881,20 @@ sub sanitize_firewall {
 	}
 	
 	my $scope = shift;
-	if(!defined($scope)) {
+	if (!defined($scope)) {
 		notify($ERRORS{'CRITICAL'}, 0, "scope variable was not passed in as an arguement");
 		return;
 	}
 	
 	my $computer_node_name = $self->data->get_computer_node_name();
-	my $mn_private_ip = $self->mn_os->get_private_ip_address();
+	my $mn_private_ip      = $self->mn_os->get_private_ip_address();
 	
 	my $firewall_configuration = $self->get_firewall_configuration() || return;
 	my $chain;
 	my $iptables_del_cmd;
 	my $INPUT_CHAIN = "INPUT";
 	
-	for my $num (sort keys %{$firewall_configuration->{$INPUT_CHAIN}} ) {
+	for my $num (sort keys %{$firewall_configuration->{$INPUT_CHAIN}}) {
 	}
 }
 
@@ -3562,9 +2902,9 @@ sub sanitize_firewall {
 
 =head2 enable_firewall_port
  
-  Parameters  : $protocol, $port, $scope (optional), $overwrite_existing (optional), $name (optional), $description (optional)
-  Returns     : boolean
-  Description : Updates iptables for given port for collect IPaddress range and mode
+ Parameters  : $protocol, $port, $scope (optional), $overwrite_existing (optional), $name (optional), $description (optional)
+ Returns     : boolean
+ Description : Updates iptables for given port for collect IPaddress range and mode
  
 =cut
 
@@ -3578,7 +2918,7 @@ sub enable_firewall_port {
 	# Check to see if this distro has iptables
 	# If not return 1 so it does not fail
 	if (!($self->service_exists("iptables"))) {
-		notify($ERRORS{'WARNING'}, 0, "iptables does not exist on this OS");	
+		notify($ERRORS{'WARNING'}, 0, "iptables does not exist on this OS");
 		return 1;
 	}
 	
@@ -3589,40 +2929,40 @@ sub enable_firewall_port {
 	}
 	
 	my $computer_node_name = $self->data->get_computer_node_name();
-	my $mn_private_ip = $self->mn_os->get_private_ip_address();
+	my $mn_private_ip      = $self->mn_os->get_private_ip_address();
 	
 	$protocol = lc($protocol);
 	
 	$scope_argument = '' if (!defined($scope_argument));
-
-	$name = '' if !$name;
+	
+	$name        = '' if !$name;
 	$description = '' if !$description;
-
+	
 	my $scope;
-
+	
 	my $INPUT_CHAIN = "INPUT";
-
+	
 	
 	my $firewall_configuration = $self->get_firewall_configuration() || return;
 	my $chain;
 	my $iptables_del_cmd;
-
-	for my $num (sort keys %{$firewall_configuration->{$INPUT_CHAIN}} ) {
-		my $existing_scope = $firewall_configuration->{$INPUT_CHAIN}{$num}{$protocol}{$port}{scope} || '';
-		my $existing_name = $firewall_configuration->{$INPUT_CHAIN}{$num}{$protocol}{$port}{name} || '';
-		my $existing_description = $firewall_configuration->{$INPUT_CHAIN}{$num}{$protocol}{$port}{name} || '';
 	
+	for my $num (sort keys %{$firewall_configuration->{$INPUT_CHAIN}}) {
+		my $existing_scope       = $firewall_configuration->{$INPUT_CHAIN}{$num}{$protocol}{$port}{scope} || '';
+		my $existing_name        = $firewall_configuration->{$INPUT_CHAIN}{$num}{$protocol}{$port}{name}  || '';
+		my $existing_description = $firewall_configuration->{$INPUT_CHAIN}{$num}{$protocol}{$port}{name}  || '';
+		
 		if ($existing_scope) {
 			notify($ERRORS{'DEBUG'}, 0, " num= $num protocol= $protocol port= $port existing_scope= $existing_scope existing_name= $existing_name existing_description= $existing_description ");
-
+			
 			if ($overwrite_existing) {
-				$scope = $self->parse_firewall_scope($scope_argument);
+				$scope            = $self->parse_firewall_scope($scope_argument);
 				$iptables_del_cmd = "iptables -D $INPUT_CHAIN $num";
 				if (!$scope) {
 					notify($ERRORS{'WARNING'}, 0, "failed to parse firewall scope argument: '$scope_argument'");
 					return;
 				}
-
+				
 				notify($ERRORS{'DEBUG'}, 0, "existing firewall opening on $computer_node_name will be replaced:\n" .
 				"name: '$existing_name'\n" .
 				"num: '$num'\n" .
@@ -3639,13 +2979,13 @@ sub enable_firewall_port {
 					notify($ERRORS{'WARNING'}, 0, "failed to parse existing firewall scope: '$existing_scope'");
 					return;
 				}
-
+				
 				$scope = $self->parse_firewall_scope("$scope_argument,$existing_scope");
 				if (!$scope) {
 					notify($ERRORS{'WARNING'}, 0, "failed to parse firewall scope argument appended with existing scope: '$scope_argument,$existing_scope'");
 					return;
 				}
-
+				
 				if ($scope eq $parsed_existing_scope) {
 					notify($ERRORS{'DEBUG'}, 0, "firewall is already open on $computer_node_name, existing scope matches scope argument:\n" .
 					"name: '$existing_name'\n" .
@@ -3662,43 +3002,43 @@ sub enable_firewall_port {
 			next;
 		}
 	}
-
-		if(!$scope) {
-			$scope = $self->parse_firewall_scope($scope_argument);
-			if (!$scope) {
-				notify($ERRORS{'WARNING'}, 0, "failed to parse firewall scope argument: '$scope_argument'");
-				return;
-			}
+	
+	if (!$scope) {
+		$scope = $self->parse_firewall_scope($scope_argument);
+		if (!$scope) {
+			notify($ERRORS{'WARNING'}, 0, "failed to parse firewall scope argument: '$scope_argument'");
+			return;
 		}
-
-		$name = "VCL: allow $protocol/$port from $scope" if !$name;
-
-		$name = substr($name, 0, 60) . "..." if length($name) > 60;
-
-		my $command;
-
-		if ($iptables_del_cmd ){
-			$command = "$iptables_del_cmd ; ";
-		
-		}
-
-		$command .= "/sbin/iptables -I INPUT 1 -m state --state NEW,RELATED,ESTABLISHED -m $protocol -p $protocol -j ACCEPT";
-		
-		if ($port =~ /\d+/){
-			$command .= " --dport $port";
-		}
-
-		if ($scope_argument) {
+	}
+	
+	$name = "VCL: allow $protocol/$port from $scope" if !$name;
+	
+	$name = substr($name, 0, 60) . "..." if length($name) > 60;
+	
+	my $command;
+	
+	if ($iptables_del_cmd) {
+		$command = "$iptables_del_cmd ; ";
+	
+	}
+	
+	$command .= "/sbin/iptables -I INPUT 1 -m state --state NEW,RELATED,ESTABLISHED -m $protocol -p $protocol -j ACCEPT";
+	
+	if ($port =~ /\d+/) {
+		$command .= " --dport $port";
+	}
+	
+	if ($scope_argument) {
 		#	if($scope_argument eq '0.0.0.0') {
 		#		$scope_argument .= "/0";
 		#	}
 		#	else {
-		#		$scope_argument .= "/24";	
-		#	}	
+		#		$scope_argument .= "/24";
+		#	}
 	
 		$command .= " -s $scope_argument";
 	}
-
+	
 	# Make backup copy of original iptables configuration
 	my $iptables_backup_file_path = "/etc/sysconfig/iptables_pre_$port";
 	if ($self->copy_file("/etc/sysconfig/iptables", $iptables_backup_file_path)) {
@@ -3710,7 +3050,7 @@ sub enable_firewall_port {
 	
 	# Add rule
 	notify($ERRORS{'DEBUG'}, 0, "attempting to execute command on $computer_node_name: '$command'");
-	my ($status, $output) = $self->execute($command);	
+	my ($status, $output) = $self->execute($command);
 	if (defined $status && $status == 0) {
 		notify($ERRORS{'DEBUG'}, 0, "executed command on $computer_node_name: '$command'");
 	}
@@ -3720,7 +3060,7 @@ sub enable_firewall_port {
 	
 	# Save rules to sysconfig/iptables -- incase of reboot
 	my $iptables_save_cmd = "/sbin/iptables-save > /etc/sysconfig/iptables";
-	my ($status_save, $output_save) = $self->execute($iptables_save_cmd);	
+	my ($status_save, $output_save) = $self->execute($iptables_save_cmd);
 	if (defined $status_save && $status_save == 0) {
 		notify($ERRORS{'DEBUG'}, 0, "executed command $iptables_save_cmd on $computer_node_name");
 	}
@@ -3732,9 +3072,9 @@ sub enable_firewall_port {
 
 =head2 disable_firewall_port
  
-  Parameters  : none
-  Returns     : 1 successful, 0 failed
-  Description : updates iptables for given port for collect IPaddress range and mode
+ Parameters  : none
+ Returns     : 1 successful, 0 failed
+ Description : updates iptables for given port for collect IPaddress range and mode
  
 =cut
 
@@ -3744,7 +3084,7 @@ sub disable_firewall_port {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
-
+	
 	# Check to see if this distro has iptables
 	# If not return 1 so it does not fail
 	if (!($self->service_exists("iptables"))) {
@@ -3757,31 +3097,31 @@ sub disable_firewall_port {
 		notify($ERRORS{'WARNING'}, 0, "protocol and port arguments were not supplied");
 		return;
 	}
-
+	
 	my $computer_node_name = $self->data->get_computer_node_name();
-	my $mn_private_ip = $self->mn_os->get_private_ip_address();
-
+	my $mn_private_ip      = $self->mn_os->get_private_ip_address();
+	
 	$protocol = lc($protocol);
-
+	
 	$scope_argument = '' if (!defined($scope_argument));
-
-	$name = '' if !$name;
+	
+	$name        = '' if !$name;
 	$description = '' if !$description;
-
+	
 	my $scope;
-
+	
 	my $INPUT_CHAIN = "INPUT";
-
+	
 	my $firewall_configuration = $self->get_firewall_configuration() || return;
 	my $chain;
 	my $command;
-
-	for my $num (sort keys %{$firewall_configuration->{$INPUT_CHAIN}} ) {
+	
+	for my $num (sort keys %{$firewall_configuration->{$INPUT_CHAIN}}) {
 		my $existing_scope = $firewall_configuration->{$INPUT_CHAIN}{$num}{$protocol}{$port}{scope} || '';
-		my $existing_name = $firewall_configuration->{$INPUT_CHAIN}{$num}{$protocol}{$port}{name} || '';
-		if($existing_scope) {
+		my $existing_name  = $firewall_configuration->{$INPUT_CHAIN}{$num}{$protocol}{$port}{name}  || '';
+		if ($existing_scope) {
 			$command = "iptables -D $INPUT_CHAIN $num";
-
+			
 			notify($ERRORS{'DEBUG'}, 0, "attempting to execute command on $computer_node_name: '$command'");
 			my ($status, $output) = $self->execute($command);
 			if (defined $status && $status == 0) {
@@ -3790,7 +3130,7 @@ sub disable_firewall_port {
 			else {
 				notify($ERRORS{'WARNING'}, 0, "output from iptables:\n" . join("\n", @$output));
 			}
-
+			
 			# Save rules to sysconfig/iptables -- incase of reboot
 			my $iptables_save_cmd = "/sbin/iptables-save > /etc/sysconfig/iptables";
 			my ($status_save, $output_save) = $self->execute($iptables_save_cmd);
@@ -3806,37 +3146,37 @@ sub disable_firewall_port {
 
 =head2 get_exclude_list
  
-  Parameters  : none
-  Returns     : array, empty or contents of exclude list
-  Description : 
+ Parameters  : none
+ Returns     : array, empty or contents of exclude list
+ Description : 
  
 =cut
 
 sub get_exclude_list {
-   my $self = shift;
-   if (ref($self) !~ /VCL::Module/i) {
-      notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-      return;
-   }
-
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
 	my $computer_node_name = $self->data->get_computer_node_name();
 	
 	# Does /etc/vcl_exclude_list exists
 	my $filename = "/root/.vclcontrol/vcl_exclude_list";
-	if(!$self->file_exists($filename) ) {
+	if (!$self->file_exists($filename)) {
 		return;
 	}
 	
-	#Get the list
-	my $command = "cat $filename";	
-	my ($status,$output) = $self->execute($command);
+	# Get the list
+	my $command = "cat $filename";
+	my ($status, $output) = $self->execute($command);
 	
 	if (!defined($output)) {
-      notify($ERRORS{'DEBUG'}, 0, "empty exclude_list from $computer_node_name");
-      return;
-   }
+		notify($ERRORS{'DEBUG'}, 0, "empty exclude_list from $computer_node_name");
+		return;
+	}
 	
-	return @$output;		
+	return @$output;
 
 }
 
@@ -3844,62 +3184,64 @@ sub get_exclude_list {
 
 =head2 generate_exclude_list_sample
  
-  Parameters  : none
-  Returns     :boolean
-  Description : Generates sample exclude list for users to assist in customizing
+ Parameters  : none
+ Returns     :boolean
+ Description : Generates sample exclude list for users to assist in customizing
  
 =cut
 
 sub generate_vclcontrol_sample_files {
-
+	
 	my $self = shift;
-   if (ref($self) !~ /VCL::Module/i) {
-      notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-      return;
-   }
-
-	my $request_id               = $self->data->get_request_id();
-   my $management_node_keys     = $self->data->get_management_node_keys();
-   my $computer_short_name      = $self->data->get_computer_short_name();
-   my $computer_node_name       = $self->data->get_computer_node_name();
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $request_id           = $self->data->get_request_id();
+	my $management_node_keys = $self->data->get_management_node_keys();
+	my $computer_short_name  = $self->data->get_computer_short_name();
+	my $computer_node_name   = $self->data->get_computer_node_name();
 	
 	my @array2print;
-
-   push(@array2print, '#' . "\n");
-   push(@array2print, '# /root/.vclcontrol/vcl_exclude_list' . "\n");
-   push(@array2print, '# List any files here that vcld should exclude updating  during the capture process' . "\n");
-   push(@array2print, "# Format is one file per line including the full path name". "\n");
-   push(@array2print, "\n");
-
-   #write to tmpfile
-   my $tmpfile = "/tmp/$request_id.vcl_exclude_list.sample";
-   if (open(TMP, ">$tmpfile")) {
-      print TMP @array2print;
-      close(TMP);
-   }
-   else {
-      #print "could not write $tmpfile $!\n";
-      notify($ERRORS{'OK'}, 0, "could not write $tmpfile $!");
-      return 0;
-   }
+	
+	push(@array2print, '#' . "\n");
+	push(@array2print, '# /root/.vclcontrol/vcl_exclude_list' . "\n");
+	push(@array2print, '# List any files here that vcld should exclude updating  during the capture process' . "\n");
+	push(@array2print, "# Format is one file per line including the full path name" . "\n");
+	push(@array2print, "\n");
+	
+	# write to tmpfile
+	my $tmpfile = "/tmp/$request_id.vcl_exclude_list.sample";
+	if (open(TMP, ">$tmpfile")) {
+		print TMP @array2print;
+		close(TMP);
+	}
+	else {
+		#print "could not write $tmpfile $!\n";
+		notify($ERRORS{'OK'}, 0, "could not write $tmpfile $!");
+		return 0;
+	}
 	
 	# Make directory
 	my $mkdir = "mkdir /root/.vclcontrol";
 	
-	if($self->execute($mkdir)) {
+	if ($self->execute($mkdir)) {
 		notify($ERRORS{'DEBUG'}, 0, "created /root/.vclcontrol directory");
 	}
 	
-   #copy to node
-   if (run_scp_command($tmpfile, "$computer_node_name:/root/.vclcontrol/vcl_exclude_list.sample", $management_node_keys)) {
-   }
-   else{
-      return 0;
-   }
-
-	return 1;	
+	# copy to node
+	if (run_scp_command($tmpfile, "$computer_node_name:/root/.vclcontrol/vcl_exclude_list.sample", $management_node_keys)) {
+	}
+	else {
+		return 0;
+	}
+	
+	return 1;
 
 }
+
+#/////////////////////////////////////////////////////////////////////////////
 
 =head2 get_firewall_configuration
 
@@ -3931,111 +3273,111 @@ sub generate_vclcontrol_sample_files {
 =cut
 
 sub get_firewall_configuration {
-   my $self = shift;
-   if (ref($self) !~ /linux/i) {
-      notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-      return;
-   }
-
-	my $computer_node_name = $self->data->get_computer_node_name();	
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $computer_node_name     = $self->data->get_computer_node_name();
 	my $firewall_configuration = {};
-
+	
 	# Check to see if this distro has iptables
-   # If not return 1 so it does not fail
-   if (!($self->service_exists("iptables"))) {
-      notify($ERRORS{'WARNING'}, 0, "iptables does not exist on this OS");
-      return 1;
-   }
+	# If not return 1 so it does not fail
+	if (!($self->service_exists("iptables"))) {
+		notify($ERRORS{'WARNING'}, 0, "iptables does not exist on this OS");
+		return 1;
+	}
 	
 	my $port_command = "iptables -L --line-number -n";
 	my ($iptables_exit_status, $output_iptables) = $self->execute($port_command);
-   if (!defined($output_iptables)) {
-      notify($ERRORS{'WARNING'}, 0, "failed to run command to show open firewall ports on $computer_node_name");
-      return;
-   }
-
+	if (!defined($output_iptables)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run command to show open firewall ports on $computer_node_name");
+		return;
+	}
+	
 	#notify($ERRORS{'DEBUG'}, 0, "output from iptables:\n" . join("\n", @$output_iptables));
 	
-
+	
 	# Execute the iptables -L --line-number -n command to retrieve firewall port openings
-   # Expected output:
-	#Chain INPUT (policy ACCEPT 0 packets, 0 bytes)
-	#num  target     prot opt source               destination         
-	#1    RH-Firewall-1-INPUT  all  --  0.0.0.0/0            0.0.0.0/0           
-
-	#Chain FORWARD (policy ACCEPT)
-	#num  target     prot opt source               destination         
-	#1    RH-Firewall-1-INPUT  all  --  0.0.0.0/0            0.0.0.0/0           
-
-	#Chain OUTPUT (policy ACCEPT)
-	#num  target     prot opt source               destination         
-
-	#Chain RH-Firewall-1-INPUT (2 references)
-	#num  target     prot opt source               destination         
-	#1    ACCEPT     all  --  0.0.0.0/0            0.0.0.0/0           
-	#2    ACCEPT     all  --  0.0.0.0/0            0.0.0.0/0           
-	#3    ACCEPT     icmp --  0.0.0.0/0            0.0.0.0/0           icmp type 255 
-	#4    ACCEPT     esp  --  0.0.0.0/0            0.0.0.0/0           
-	#5    ACCEPT     ah   --  0.0.0.0/0            0.0.0.0/0           
-	#6    ACCEPT     all  --  0.0.0.0/0            0.0.0.0/0           state RELATED,ESTABLISHED 
-	#7    ACCEPT     tcp  --  0.0.0.0/0            0.0.0.0/0           state NEW tcp dpt:22 
-	#8    ACCEPT     tcp  --  0.0.0.0/0            0.0.0.0/0           state NEW tcp dpt:3389 
-	#9    REJECT     all  --  0.0.0.0/0            0.0.0.0/0           reject-with icmp-host-prohibited
-
-
-   my $chain;
-   my $previous_protocol;
-   my $previous_port;
-
+	# Expected output:
+	# Chain INPUT (policy ACCEPT 0 packets, 0 bytes)
+	# num  target     prot opt source               destination
+	# 1    RH-Firewall-1-INPUT  all  --  0.0.0.0/0            0.0.0.0/0
+	
+	# Chain FORWARD (policy ACCEPT)
+	# num  target     prot opt source               destination
+	# 1    RH-Firewall-1-INPUT  all  --  0.0.0.0/0            0.0.0.0/0
+	
+	# Chain OUTPUT (policy ACCEPT)
+	# num  target     prot opt source               destination
+	
+	# Chain RH-Firewall-1-INPUT (2 references)
+	# num  target     prot opt source               destination
+	# 1    ACCEPT     all  --  0.0.0.0/0            0.0.0.0/0
+	# 2    ACCEPT     all  --  0.0.0.0/0            0.0.0.0/0
+	# 3    ACCEPT     icmp --  0.0.0.0/0            0.0.0.0/0           icmp type 255
+	# 4    ACCEPT     esp  --  0.0.0.0/0            0.0.0.0/0
+	# 5    ACCEPT     ah   --  0.0.0.0/0            0.0.0.0/0
+	# 6    ACCEPT     all  --  0.0.0.0/0            0.0.0.0/0           state RELATED,ESTABLISHED
+	# 7    ACCEPT     tcp  --  0.0.0.0/0            0.0.0.0/0           state NEW tcp dpt:22
+	# 8    ACCEPT     tcp  --  0.0.0.0/0            0.0.0.0/0           state NEW tcp dpt:3389
+	# 9    REJECT     all  --  0.0.0.0/0            0.0.0.0/0           reject-with icmp-host-prohibited
+	
+	
+	my $chain;
+	my $previous_protocol;
+	my $previous_port;
+	
 	for my $line (@$output_iptables) {
 		if ($line =~ /^Chain\s+(\S+)\s+(.*)/ig) {
-         $chain = $1;
+			$chain = $1;
 			notify($ERRORS{'DEBUG'}, 0, "output Chain = $chain");
-      }
-		elsif($line =~ /^(\d+)\s+([A-Z]*)\s+([a-z]*)\s+(--)\s+(\S+)\s+(\S+)\s+(.*)/ig ) {
-		
-			my $num = $1;
-			my $target = $2;
-			my $protocol = $3;
-			my $scope = $5;
-			my $destination =$6;
+		}
+		elsif ($line =~ /^(\d+)\s+([A-Z]*)\s+([a-z]*)\s+(--)\s+(\S+)\s+(\S+)\s+(.*)/ig) {
+			
+			my $num         = $1;
+			my $target      = $2;
+			my $protocol    = $3;
+			my $scope       = $5;
+			my $destination = $6;
 			my $port_string = $7 if (defined($7));
-			my $port = ''; 
+			my $port        = '';
 			my $name;
-		
-		
-			if (defined($port_string) && ($port_string =~ /([\s(a-zA-Z)]*)(dpt:)(\d+)/ig )){
-				$port = $3;	
+			
+			
+			if (defined($port_string) && ($port_string =~ /([\s(a-zA-Z)]*)(dpt:)(\d+)/ig)) {
+				$port = $3;
 				notify($ERRORS{'DEBUG'}, 0, "output rule: $num, $target, $protocol, $scope, $destination, $port ");
 			}
-
+			
 			if (!$port) {
 				$port = "any";
 			}
 			
 			my $services_cmd = "cat /etc/services";
-			my ($services_status, $service_output) = $self->execute($services_cmd,0);
+			my ($services_status, $service_output) = $self->execute($services_cmd, 0);
 			if (!defined($service_output)) {
-      		notify($ERRORS{'DEBUG'}, 0, "failed to get /etc/services");
-   		}
-   		else {
+				notify($ERRORS{'DEBUG'}, 0, "failed to get /etc/services");
+			}
+			else {
 				for my $sline (@$service_output) {
-					if ( $sline =~ /(^[_-a-zA-Z1-9]+)\s+($port\/$protocol)\s+(.*) /ig ){
+					if ($sline =~ /(^[_-a-zA-Z1-9]+)\s+($port\/$protocol)\s+(.*) /ig) {
 						$name = $1;
-					} 
+					}
 				}
 				
-			}		
+			}
 			
 			$name = $port if (!$name);
-
-			$firewall_configuration->{$chain}->{$num}{$protocol}{$port}{name}= $name;
-			$firewall_configuration->{$chain}->{$num}{$protocol}{$port}{number}= $num;
-			$firewall_configuration->{$chain}->{$num}{$protocol}{$port}{scope}= $scope;
-			$firewall_configuration->{$chain}->{$num}{$protocol}{$port}{target}= $target;
-			$firewall_configuration->{$chain}->{$num}{$protocol}{$port}{destination}= $destination;
 			
-
+			$firewall_configuration->{$chain}->{$num}{$protocol}{$port}{name}        = $name;
+			$firewall_configuration->{$chain}->{$num}{$protocol}{$port}{number}      = $num;
+			$firewall_configuration->{$chain}->{$num}{$protocol}{$port}{scope}       = $scope;
+			$firewall_configuration->{$chain}->{$num}{$protocol}{$port}{target}      = $target;
+			$firewall_configuration->{$chain}->{$num}{$protocol}{$port}{destination} = $destination;
+			
+			
 			if (!defined($previous_protocol) ||
              !defined($previous_port) ||
              !defined($firewall_configuration->{$previous_protocol}) ||
@@ -4050,7 +3392,7 @@ sub get_firewall_configuration {
 	}
 	
 	notify($ERRORS{'DEBUG'}, 0, "retrieved firewall configuration from $computer_node_name:\n" . format_data($firewall_configuration));
-   return $firewall_configuration;
+	return $firewall_configuration;
 	
 	
 }
@@ -4074,110 +3416,110 @@ sub get_firewall_configuration {
 =cut
 
 sub parse_firewall_scope {
-   my $self = shift;
-   if (ref($self) !~ /linux/i) {
-      notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-      return;
-   }
-
-   my @scope_strings = @_;
-   if (!@scope_strings) {
-      notify($ERRORS{'WARNING'}, 0, "scope array argument was not supplied");
-      return;
-   }
-
-   my @netmask_objects;
-
-   for my $scope_string (@scope_strings) {
-      if ($scope_string =~ /(\*|Any)/i) {
-         my $netmask_object = new Net::Netmask('any');
-         push @netmask_objects, $netmask_object;
-      }
-
-      elsif ($scope_string =~ /LocalSubnet/i) {
-         my $network_configuration = $self->get_network_configuration() || return;
-
-         for my $interface_name (sort keys %$network_configuration) {
-            for my $ip_address (keys %{$network_configuration->{$interface_name}{ip_address}}) {
-               my $subnet_mask = $network_configuration->{$interface_name}{ip_address}{$ip_address};
-
-               my $netmask_object_1 = new Net::Netmask("$ip_address/$subnet_mask");
-               if ($netmask_object_1) {
-                  push @netmask_objects, $netmask_object_1;
-               }
-               else {
-                  notify($ERRORS{'WARNING'}, 0, "failed to create Net::Netmask object, IP address: $ip_address, subnet mask: $subnet_mask");
-                  return;
-               }
-            }
-         }
-      }
-
-      elsif (my @scope_sections = split(/,/, $scope_string)) {
-         for my $scope_section (@scope_sections) {
-
-            if (my ($start_address, $end_address) = $scope_section =~ /^([\d\.]+)-([\d\.]+)$/) {
-               my @netmask_range_objects = Net::Netmask::range2cidrlist($start_address, $end_address);
-               if (@netmask_range_objects) {
-                  push @netmask_objects, @netmask_range_objects;
-               }
-               else {
-                  notify($ERRORS{'WARNING'}, 0, "failed to call Net::Netmask::range2cidrlist to create an array of objects covering IP range: $start_address-$end_address");
-                  return;
-               }
-            }
-
-            elsif (my ($ip_address, $subnet_mask) = $scope_section =~ /^([\d\.]+)\/([\d\.]+)$/) {
-               my $netmask_object = new Net::Netmask("$ip_address/$subnet_mask");
-               if ($netmask_object) {
-                  push @netmask_objects, $netmask_object;
-               }
-               else {
-                  notify($ERRORS{'WARNING'}, 0, "failed to create Net::Netmask object, IP address: $ip_address, subnet mask: $subnet_mask");
-                  return;
-               }
-            }
-
-            elsif (($ip_address) = $scope_section =~ /^([\d\.]+)$/) {
-               my $netmask_object = new Net::Netmask("$ip_address");
-               if ($netmask_object) {
-                  push @netmask_objects, $netmask_object;
-               }
-               else {
-                  notify($ERRORS{'WARNING'}, 0, "failed to create Net::Netmask object, IP address: $ip_address");
-                  return;
-               }
-            }
-
-            else {
-               notify($ERRORS{'WARNING'}, 0, "unable to parse '$scope_section' section of scope: '$scope_string'");
-               return;
-            }
-         }
-      }
-
-      else {
-         notify($ERRORS{'WARNING'}, 0, "unexpected scope format: '$scope_string'");
-         return
-      }
-   }
-
-   my @netmask_objects_collapsed = cidrs2cidrs(@netmask_objects);
-   if (@netmask_objects_collapsed) {
-      my $scope_result_string;
-      my @ip_address_ranges;
-      for my $netmask_object (@netmask_objects_collapsed) {
-
-         if ($netmask_object->first() eq $netmask_object->last()) {
-            push @ip_address_ranges, $netmask_object->first();
-            $scope_result_string .= $netmask_object->base() . ",";
-         }
-         else {
-            push @ip_address_ranges, $netmask_object->first() . "-" . $netmask_object->last();
-            $scope_result_string .= $netmask_object->base() . "/" . $netmask_object->mask() . ",";
-         }
-      }
-
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my @scope_strings = @_;
+	if (!@scope_strings) {
+		notify($ERRORS{'WARNING'}, 0, "scope array argument was not supplied");
+		return;
+	}
+	
+	my @netmask_objects;
+	
+	for my $scope_string (@scope_strings) {
+		if ($scope_string =~ /(\*|Any)/i) {
+			my $netmask_object = new Net::Netmask('any');
+			push @netmask_objects, $netmask_object;
+		}
+		
+		elsif ($scope_string =~ /LocalSubnet/i) {
+			my $network_configuration = $self->get_network_configuration() || return;
+			
+			for my $interface_name (sort keys %$network_configuration) {
+				for my $ip_address (keys %{$network_configuration->{$interface_name}{ip_address}}) {
+					my $subnet_mask = $network_configuration->{$interface_name}{ip_address}{$ip_address};
+					
+					my $netmask_object_1 = new Net::Netmask("$ip_address/$subnet_mask");
+					if ($netmask_object_1) {
+						push @netmask_objects, $netmask_object_1;
+					}
+					else {
+						notify($ERRORS{'WARNING'}, 0, "failed to create Net::Netmask object, IP address: $ip_address, subnet mask: $subnet_mask");
+						return;
+					}
+				}
+			}
+		}
+		
+		elsif (my @scope_sections = split(/,/, $scope_string)) {
+			for my $scope_section (@scope_sections) {
+				
+				if (my ($start_address, $end_address) = $scope_section =~ /^([\d\.]+)-([\d\.]+)$/) {
+					my @netmask_range_objects = Net::Netmask::range2cidrlist($start_address, $end_address);
+					if (@netmask_range_objects) {
+						push @netmask_objects, @netmask_range_objects;
+					}
+					else {
+						notify($ERRORS{'WARNING'}, 0, "failed to call Net::Netmask::range2cidrlist to create an array of objects covering IP range: $start_address-$end_address");
+						return;
+					}
+				}
+				
+				elsif (my ($ip_address, $subnet_mask) = $scope_section =~ /^([\d\.]+)\/([\d\.]+)$/) {
+					my $netmask_object = new Net::Netmask("$ip_address/$subnet_mask");
+					if ($netmask_object) {
+						push @netmask_objects, $netmask_object;
+					}
+					else {
+						notify($ERRORS{'WARNING'}, 0, "failed to create Net::Netmask object, IP address: $ip_address, subnet mask: $subnet_mask");
+						return;
+					}
+				}
+				
+				elsif (($ip_address) = $scope_section =~ /^([\d\.]+)$/) {
+					my $netmask_object = new Net::Netmask("$ip_address");
+					if ($netmask_object) {
+						push @netmask_objects, $netmask_object;
+					}
+					else {
+						notify($ERRORS{'WARNING'}, 0, "failed to create Net::Netmask object, IP address: $ip_address");
+						return;
+					}
+				}
+				
+				else {
+					notify($ERRORS{'WARNING'}, 0, "unable to parse '$scope_section' section of scope: '$scope_string'");
+					return;
+				}
+			}
+		}
+		
+		else {
+			notify($ERRORS{'WARNING'}, 0, "unexpected scope format: '$scope_string'");
+			return
+		}
+	}
+	
+	my @netmask_objects_collapsed = cidrs2cidrs(@netmask_objects);
+	if (@netmask_objects_collapsed) {
+		my $scope_result_string;
+		my @ip_address_ranges;
+		for my $netmask_object (@netmask_objects_collapsed) {
+			
+			if ($netmask_object->first() eq $netmask_object->last()) {
+				push @ip_address_ranges, $netmask_object->first();
+				$scope_result_string .= $netmask_object->base() . ",";
+			}
+			else {
+				push @ip_address_ranges, $netmask_object->first() . "-" . $netmask_object->last();
+				$scope_result_string .= $netmask_object->base() . "/" . $netmask_object->mask() . ",";
+			}
+		}
+		
       $scope_result_string =~ s/,+$//;
       my $argument_string = join(",", @scope_strings);
       if ($argument_string ne $scope_result_string) {
@@ -4189,10 +3531,10 @@ sub parse_firewall_scope {
       }
       return $scope_result_string;
    }
-   else {
-      notify($ERRORS{'WARNING'}, 0, "failed to parse firewall scope: '" . join(",", @scope_strings) . "', no Net::Netmask objects were created");
-      return;
-   }
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to parse firewall scope: '" . join(",", @scope_strings) . "', no Net::Netmask objects were created");
+		return;
+	}
 }
 
 
@@ -4206,64 +3548,64 @@ sub parse_firewall_scope {
 
 =cut
 
-sub firewall_compare_update  {
+sub firewall_compare_update {
 	my $self = shift;
-   if (ref($self) !~ /linux/i) {
-      notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-      return;
-   }
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
 	
 	# Check to see if this distro has iptables
-   # If not return 1 so it does not fail
-   if (!($self->service_exists("iptables"))) {
-      notify($ERRORS{'WARNING'}, 0, "iptables does not exist on this OS");
-      return 1;
-   }
+	# If not return 1 so it does not fail
+	if (!($self->service_exists("iptables"))) {
+		notify($ERRORS{'WARNING'}, 0, "iptables does not exist on this OS");
+		return 1;
+	}
 	
 	my $computer_node_name = $self->data->get_computer_node_name();
-   my $imagerevision_id   = $self->data->get_imagerevision_id();
-	my $remote_ip 			  = $self->data->get_reservation_remote_ip();
+	my $imagerevision_id   = $self->data->get_imagerevision_id();
+	my $remote_ip          = $self->data->get_reservation_remote_ip();
 	
-	#collect connection_methods
-	#collect firewall_config
-	#For each port defined in connection_methods
-	#compare rule source address with remote_IP address
+	# collect connection_methods
+	# collect firewall_config
+	# For each port defined in connection_methods
+	# compare rule source address with remote_IP address
 	
-   # Retrieve the connect method info hash
-   my $connect_method_info = get_connect_method_info($imagerevision_id);
-   if (!$connect_method_info) {
-      notify($ERRORS{'WARNING'}, 0, "no connect methods are configured for image revision $imagerevision_id");
-      return;
-   }
-
+	# Retrieve the connect method info hash
+	my $connect_method_info = get_connect_method_info($imagerevision_id);
+	if (!$connect_method_info) {
+		notify($ERRORS{'WARNING'}, 0, "no connect methods are configured for image revision $imagerevision_id");
+		return;
+	}
+	
 	# Retrieve the firewall configuration
-   my $INPUT_CHAIN = "INPUT";
-   my $firewall_configuration = $self->get_firewall_configuration() || return;	
-		
-	for my $connect_method_id (sort keys %{$connect_method_info} ) {
-             
-      my $name            = $connect_method_info->{$connect_method_id}{name};
-      my $description     = $connect_method_info->{$connect_method_id}{description};
-      my $protocol        = $connect_method_info->{$connect_method_id}{protocol} || 'TCP';
-      my $port            = $connect_method_info->{$connect_method_id}{port};
-		my $scope;
+	my $INPUT_CHAIN = "INPUT";
+	my $firewall_configuration = $self->get_firewall_configuration() || return;
 	
+	for my $connect_method_id (sort keys %{$connect_method_info}) {
+		
+		my $name        = $connect_method_info->{$connect_method_id}{name};
+		my $description = $connect_method_info->{$connect_method_id}{description};
+		my $protocol    = $connect_method_info->{$connect_method_id}{protocol} || 'TCP';
+		my $port        = $connect_method_info->{$connect_method_id}{port};
+		my $scope;
+		
 		$protocol = lc($protocol);
 		
-		for my $num (sort keys %{$firewall_configuration->{$INPUT_CHAIN}} ) {
+		for my $num (sort keys %{$firewall_configuration->{$INPUT_CHAIN}}) {
 			my $existing_scope = $firewall_configuration->{$INPUT_CHAIN}{$num}{$protocol}{$port}{scope} || '';
-			if(!$existing_scope ) {
-
+			if (!$existing_scope) {
+			
 			}
 			else {
 				my $parsed_existing_scope = $self->parse_firewall_scope($existing_scope);
 				if (!$parsed_existing_scope) {
-                notify($ERRORS{'WARNING'}, 0, "failed to parse existing firewall scope: '$existing_scope'");
-                return;
-            }	
+					notify($ERRORS{'WARNING'}, 0, "failed to parse existing firewall scope: '$existing_scope'");
+					return;
+				}
 				$scope = $self->parse_firewall_scope("$remote_ip,$existing_scope");
-            if (!$scope) {
-                notify($ERRORS{'WARNING'}, 0, "failed to parse firewall scope argument appended with existing scope: '$remote_ip,$existing_scope'");
+				if (!$scope) {
+					notify($ERRORS{'WARNING'}, 0, "failed to parse firewall scope argument appended with existing scope: '$remote_ip,$existing_scope'");
                 return;
             }
 			
@@ -4278,15 +3620,15 @@ sub firewall_compare_update  {
 				else {
 					if ($self->enable_firewall_port($protocol, $port, "$remote_ip/24", 0)) {
                    notify($ERRORS{'OK'}, 0, "opened firewall port $port on $computer_node_name for $remote_ip $name connect method");
-               }
+					}
 				}
 				
-
-			}			
+			
+			}
 		}
 	}
-
-	return 1;	
+	
+	return 1;
 
 }
 
@@ -4302,76 +3644,69 @@ sub firewall_compare_update  {
 
 sub clean_iptables {
 	my $self = shift;
-   if (ref($self) !~ /linux/i) {
-      notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-      return;
-   }
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
 	
 	# Check to see if this distro has iptables
-   # If not return 1 so it does not fail
-   if (!($self->service_exists("iptables"))) {
-      notify($ERRORS{'WARNING'}, 0, "iptables does not exist on this OS");
-      return 1;
-   }
+	# If not return 1 so it does not fail
+	if (!($self->service_exists("iptables"))) {
+		notify($ERRORS{'WARNING'}, 0, "iptables does not exist on this OS");
+		return 1;
+	}
 	
-	my $computer_node_name = $self->data->get_computer_node_name();
-	my $reservation_id                  = $self->data->get_reservation_id();
-	my $management_node_keys  = $self->data->get_management_node_keys();
-
-   # Retrieve the firewall configuration
-   my $INPUT_CHAIN = "INPUT";
+	my $computer_node_name   = $self->data->get_computer_node_name();
+	my $reservation_id       = $self->data->get_reservation_id();
+	my $management_node_keys = $self->data->get_management_node_keys();
 	
-	# Retrieve the iptables file to work on locally	
-	my $tmpfile = "/tmp/" . $reservation_id . "_iptables";
+	# Retrieve the firewall configuration
+	my $INPUT_CHAIN = "INPUT";
+	
+	# Retrieve the iptables file to work on locally
+	my $tmpfile          = "/tmp/" . $reservation_id . "_iptables";
 	my $source_file_path = "/etc/sysconfig/iptables";
 	if (run_scp_command("$computer_node_name:\"$source_file_path\"", $tmpfile, $management_node_keys)) {
 		my @lines;
-		if(open(IPTAB_TMPFILE, $tmpfile)){
+		if (open(IPTAB_TMPFILE, $tmpfile)) {
 			@lines = <IPTAB_TMPFILE>;
-			close(IPTAB_TMPFILE);	
+			close(IPTAB_TMPFILE);
 		}
-		foreach my $line (@lines){
+		foreach my $line (@lines) {
 			if ($line =~ s/-A INPUT -s .*\n//) {
-         }
+			}
 		}
-	
-		#Rewrite array to tmpfile
-		if(open(IPTAB_TMPFILE, ">$tmpfile")){
+		
+		# Rewrite array to tmpfile
+		if (open(IPTAB_TMPFILE, ">$tmpfile")) {
 			print IPTAB_TMPFILE @lines;
-			close (IPTAB_TMPFILE);
+			close(IPTAB_TMPFILE);
 		}
-	
+		
 		# Copy iptables file back to node
 		if (run_scp_command($tmpfile, "$computer_node_name:\"$source_file_path\"", $management_node_keys)) {
 			notify($ERRORS{'DEBUG'}, 0, "copied $tmpfile to $computer_node_name $source_file_path");
 		}
-	}	
+	}
 	
-
+	
 	#my $command = "sed -i -e '/-A INPUT -s */d' /etc/sysconfig/iptables";
-   #my ($status, $output) = $self->execute($command);	
+	#my ($status, $output) = $self->execute($command);
 	
 	#if (defined $status && $status == 0) {
-   #   notify($ERRORS{'DEBUG'}, 0, "executed command $command on $computer_node_name");
-   #}
-   #else {
-   #   notify($ERRORS{'WARNING'}, 0, "output from iptables:" . join("\n", @$output));
-   #}
-        
-	#restart iptables
-   my $command = "/etc/init.d/iptables restart";
-   my ($status_iptables,$output_iptables) = $self->execute($command);
-   if (defined $status_iptables && $status_iptables == 0) {
-		notify($ERRORS{'DEBUG'}, 0, "executed command $command on $computer_node_name");
-   }
-   else {
-      notify($ERRORS{'WARNING'}, 0, "output from iptables:" . join("\n", @$output_iptables));
-   }
+	#   notify($ERRORS{'DEBUG'}, 0, "executed command $command on $computer_node_name");
+	#}
+	#else {
+	#   notify($ERRORS{'WARNING'}, 0, "output from iptables:" . join("\n", @$output));
+	#}
+	
+	# restart iptables
+	$self->restart_service('iptables');
 	
 	if ($self->wait_for_ssh(0)) {
-   	return 1;
+		return 1;
 	}
-	else { 
+	else {
 		notify($ERRORS{'CRITICAL'}, 0, "not able to login via ssh after cleaning_iptables");
 		return 0;
 	}
@@ -4389,43 +3724,43 @@ sub clean_iptables {
 =cut
 
 sub user_logged_in {
-   my $self = shift;
-   if (ref($self) !~ /linux/i) {
-      notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-      return;
-   }
-
-   my $management_node_keys = $self->data->get_management_node_keys();
-   my $computer_node_name   = $self->data->get_computer_node_name();
-
-   # Attempt to get the username from the arguments
-   # If no argument was supplied, use the user specified in the DataStructure
-   my $username = shift;
-
-   # Remove spaces from beginning and end of username argument
-   # Fixes problem if string containing only spaces is passed
-   $username =~ s/(^\s+|\s+$)//g if $username;
-
-   # Check if username argument was passed
-   if (!$username) {
-      $username = $self->data->get_user_login_id();
-   }
-   notify($ERRORS{'DEBUG'}, 0, "checking if $username is logged in to $computer_node_name");
-
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $management_node_keys = $self->data->get_management_node_keys();
+	my $computer_node_name   = $self->data->get_computer_node_name();
+	
+	# Attempt to get the username from the arguments
+	# If no argument was supplied, use the user specified in the DataStructure
+	my $username = shift;
+	
+	# Remove spaces from beginning and end of username argument
+	# Fixes problem if string containing only spaces is passed
+	$username =~ s/(^\s+|\s+$)//g if $username;
+	
+	# Check if username argument was passed
+	if (!$username) {
+		$username = $self->data->get_user_login_id();
+	}
+	notify($ERRORS{'DEBUG'}, 0, "checking if $username is logged in to $computer_node_name");
+	
 	my $cmd = "users";
 	my ($logged_in_status, $logged_in_output) = $self->execute($cmd);
-   if (!defined($logged_in_output)) {
-      notify($ERRORS{'WARNING'}, 0, "failed to run who command ");
-      return;
-   }
-   elsif (grep(/$username/i, @$logged_in_output)) {
+	if (!defined($logged_in_output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run who command ");
+		return;
+	}
+	elsif (grep(/$username/i, @$logged_in_output)) {
 		notify($ERRORS{'DEBUG'}, 0, "username $username is logged into $computer_node_name\n" . join("\n", @$logged_in_output));
 		return 1;
 	
 	}
 	
 	
-	return 0;	
+	return 0;
 
 }
 
@@ -4441,49 +3776,49 @@ sub user_logged_in {
 
 sub clean_known_files {
 	my $self = shift;
-   if (ref($self) !~ /linux/i) {
-      notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-      return;
-   }
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
 	
 	my $computer_node_name = $self->data->get_computer_node_name();
-
-	# Try to clear /tmp
-   if ($self->execute("/usr/sbin/tmpwatch -f 0 /tmp; /bin/cp /dev/null /var/log/wtmp")) {
-      notify($ERRORS{'DEBUG'}, 0, "cleared /tmp on $computer_node_name");
-   }
-
-	# Clear SSH idenity keys from /root/.ssh 
-   if (!$self->clear_private_keys()) {
-     notify($ERRORS{'WARNING'}, 0, "unable to clear known identity keys");
-   }
-
-	#Fetch exclude_list
-   my @exclude_list = $self->get_exclude_list();
-
-   if (@exclude_list ) {
-      notify($ERRORS{'DEBUG'}, 0, "skipping files listed in exclude_list\n" . join("\n", @exclude_list));
-   }
-   
-   #Remove files
-   if(!(grep( /70-persistent-net.rules/ , @exclude_list ) ) ){ 
-      if(!$self->delete_file("/etc/udev/rules.d/70-persistent-net.rules")){
-         notify($ERRORS{'WARNING'}, 0, "unable to remove /etc/udev/rules.d/70-persistent-net.rules");
-      }    
-   }
-   
-   if(!(grep( /\/var\/log\/secure/ , @exclude_list ) ) ){ 
-      if(!$self->delete_file("/var/log/secure")){
-         notify($ERRORS{'WARNING'}, 0, "unable to remove /var/log/secure");
-      }    
-   }	
 	
-	if(!(grep( /\/var\/log\/messages/ , @exclude_list ) ) ){ 
-      if(!$self->delete_file("/var/log/messages")){
-         notify($ERRORS{'WARNING'}, 0, "unable to remove /var/log/secure");
-      }    
-   }
-
+	# Try to clear /tmp
+	if ($self->execute("/usr/sbin/tmpwatch -f 0 /tmp; /bin/cp /dev/null /var/log/wtmp")) {
+		notify($ERRORS{'DEBUG'}, 0, "cleared /tmp on $computer_node_name");
+	}
+	
+	# Clear SSH idenity keys from /root/.ssh
+	if (!$self->clear_private_keys()) {
+		notify($ERRORS{'WARNING'}, 0, "unable to clear known identity keys");
+	}
+	
+	# Fetch exclude_list
+	my @exclude_list = $self->get_exclude_list();
+	
+	if (@exclude_list) {
+		notify($ERRORS{'DEBUG'}, 0, "skipping files listed in exclude_list\n" . join("\n", @exclude_list));
+	}
+	
+	# Remove files
+	if (!(grep(/70-persistent-net.rules/, @exclude_list))) {
+		if (!$self->delete_file("/etc/udev/rules.d/70-persistent-net.rules")) {
+			notify($ERRORS{'WARNING'}, 0, "unable to remove /etc/udev/rules.d/70-persistent-net.rules");
+		}
+	}
+	
+	if (!(grep(/\/var\/log\/secure/, @exclude_list))) {
+		if (!$self->delete_file("/var/log/secure")) {
+			notify($ERRORS{'WARNING'}, 0, "unable to remove /var/log/secure");
+		}
+	}
+	
+	if (!(grep(/\/var\/log\/messages/, @exclude_list))) {
+		if (!$self->delete_file("/var/log/messages")) {
+			notify($ERRORS{'WARNING'}, 0, "unable to remove /var/log/secure");
+		}
+	}
+	
 	return 1;
 }
 
@@ -4498,46 +3833,507 @@ sub clean_known_files {
 =cut
 
 sub user_exists {
-        my $self = shift;
-        if (ref($self) !~ /linux/i) {
-                notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-                return;
-        }
-
-        my $management_node_keys = $self->data->get_management_node_keys();
-        my $computer_node_name   = $self->data->get_computer_node_name();
-			# Attempt to get the username from the arguments
-        # If no argument was supplied, use the user specified in the DataStructure
-        my $username = shift;
-        if (!$username) {
-                $username = $self->data->get_user_login_id();
-        }
-
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $management_node_keys = $self->data->get_management_node_keys();
+	my $computer_node_name   = $self->data->get_computer_node_name();
+	# Attempt to get the username from the arguments
+	# If no argument was supplied, use the user specified in the DataStructure
+	my $username = shift;
+	if (!$username) {
+		$username = $self->data->get_user_login_id();
+	}
+	
 	notify($ERRORS{'DEBUG'}, 0, "checking if user $username exists on $computer_node_name");
-
-        # Attempt to query the user account
-        my $query_user_command = "id $username";
-        my ($query_user_exit_status, $query_user_output) = $self->execute($query_user_command,1);
-			
+	
+	# Attempt to query the user account
+	my $query_user_command = "id $username";
+	my ($query_user_exit_status, $query_user_output) = $self->execute($query_user_command, 1);
+	
 	if (grep(/uid/, @$query_user_output)) {
-               notify($ERRORS{'DEBUG'}, 0, "user $username exists on $computer_node_name");
-               return 1;
-       }
-       elsif (grep(/No such user/i, @$query_user_output)) {
-               notify($ERRORS{'DEBUG'}, 0, "user $username does not exist on $computer_node_name");
-               return 0;
-       }
-       elsif (defined($query_user_exit_status)) {
-               notify($ERRORS{'WARNING'}, 0, "failed to determine if user $username exists on $computer_node_name, exit status: $query_user_exit_status, output:\n@{$query_user_output}");
-               return;
-       }
-       else {
-               notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to determine if user $username exists on $computer_node_name");
-               return;
-       }
-
+		notify($ERRORS{'DEBUG'}, 0, "user $username exists on $computer_node_name");
+		return 1;
+	}
+	elsif (grep(/No such user/i, @$query_user_output)) {
+		notify($ERRORS{'DEBUG'}, 0, "user $username does not exist on $computer_node_name");
+		return 0;
+	}
+	elsif (defined($query_user_exit_status)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to determine if user $username exists on $computer_node_name, exit status: $query_user_exit_status, output:\n@{$query_user_output}");
+		return;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to determine if user $username exists on $computer_node_name");
+		return;
+	}
 }
 
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 delete_service
+
+ Parameters  : $service_name
+ Returns     : boolean
+ Description : 
+
+=cut
+
+sub delete_service {
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my ($service_name) = @_;
+	if (!$service_name) {
+		notify($ERRORS{'WARNING'}, 0, "service name pattern argument was not supplied");
+		return;
+	}
+	
+	return $self->init->delete_service($service_name);
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 stop_external_sshd
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Kills the external sshd process.
+
+=cut
+
+sub stop_external_sshd {
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $computer_node_name   = $self->data->get_computer_node_name();
+	
+	$self->stop_service('ext_sshd');
+	
+	# Run pkill to kill all external sshd processes
+	# Exit status may be:
+	# 0 - One or more processes matched the criteria.
+	# 1 - No processes matched.
+	my $pkill_command = "pkill -9 -f ext.*sshd";
+	my ($pkill_exit_status, $pkill_output) = $self->execute($pkill_command);
+	if (!defined($pkill_output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to kill external sshd process on $computer_node_name");
+		return;
+	}
+	elsif ($pkill_exit_status eq '0') {
+		notify($ERRORS{'DEBUG'}, 0, "killed external sshd process on $computer_node_name");
+	}
+	elsif ($pkill_exit_status eq '1') {
+		notify($ERRORS{'DEBUG'}, 0, "external sshd process is not running on $computer_node_name");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to kill external sshd process on $computer_node_name, exit status: $pkill_exit_status, output:\n" . join("\n", @$pkill_output));
+		return;
+	}
+	
+	$self->delete_file('/var/run/ext_sshd.pid');
+	
+	return 1;
+} ## end sub stop_external_sshd
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 configure_sshd_config_file
+
+ Parameters  : $custom_parameters (optional), $output_file_path (optional)
+ Returns     : boolean
+ Description : Configures and generates an output file based
+               on the /etc/ssh/sshd_config currently residing on the computer.
+               This is used to configure both the sshd_config and
+               external_sshd_config files. If no arguments are supplied,
+               /etc/ssh/sshd_config is configured to its stock, default state.
+               This is done prior to image capture. sshd_config is configured to
+               listen on all interfaces.
+               
+               By default, all of the settings which exist in
+               /etc/ssh/sshd_config are retained in the output file except for
+               the following:
+               StrictModes no
+               UseDNS no
+               PasswordAuthentication no
+               PermitRootLogin without-password
+               AllowUsers root
+               
+               In addition, any ListenAddress lines are not included in the
+               output file.
+               
+               An optional $custom_parameters hash reference argument may be
+               supplied. The key/values in this hash will result in the values
+               being set in the output file. If a parameter is included with an
+               empty value in the hash reference, all lines containing that
+               parameter will be removed from the the resulting output file.
+               Example:
+               $self->configure_sshd_config_file({
+                  ListenAddress =>'10.10.0.33',
+                  AllowUsers => '',
+               });
+               
+               The output file will be /etc/ssh/sshd_config since the 2nd
+               argument was not specified. This file will be based off itself
+               except a ListenAddress line will be added and all AllowUsers
+               lines will be omitted.
+
+=cut
+
+sub configure_sshd_config_file {
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $computer_node_name = $self->data->get_computer_node_name();
+	
+	my ($custom_parameters, $output_file_path) = @_;
+	
+	my $sshd_config_file_path = '/etc/ssh/sshd_config';
+	
+	# If output file path argument wasn't specified, write back to sshd_config
+	$output_file_path = $sshd_config_file_path if !$output_file_path;
+	
+	# Check if the output file is in the exclude list before proceeding
+	my @exclude_list = $self->get_exclude_list();
+	if (@exclude_list && grep(m|$output_file_path|, @exclude_list)) {
+		notify($ERRORS{'OK'}, 0, "skipping reconfiguration of $output_file_path because it is in the exclude file list");
+		return 1;
+	}
+	
+	# Get the contents of the sshd_config file already on the computer
+	my @sshd_config_file_lines = $self->get_file_contents($sshd_config_file_path);
+	if (!@sshd_config_file_lines) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve contents of $sshd_config_file_path from $computer_node_name");
+		return;
+	}
+	
+	# Add the following parameters to the end of the sshd_config file
+	# Any existing lines containing these parameters will be discarded
+	my $parameters = {
+		StrictModes => 'no',
+		UseDNS => 'no',
+		PasswordAuthentication => 'no',
+		PermitRootLogin => 'without-password',
+		AllowUsers => 'root',
+		ListenAddress => '',
+	};
+	
+	if ($custom_parameters) {
+		$parameters = {%$parameters, %$custom_parameters};
+	}
+	notify($ERRORS{'DEBUG'}, 0, "generating sshd config file: $output_file_path, custom parameters:\n" . format_data($parameters));
+	
+	my $custom_tag = 'VCL Settings';
+	
+	# Loop through the lines from the existing sshd_config file
+	my $output_file_contents;
+	LINE: for my $line (@sshd_config_file_lines) {
+		# Ignore lines already in the file which will be added later with custom values
+		if ((map { $line =~ /$_/ } ($custom_tag, keys %$parameters))) {
+			#notify($ERRORS{'DEBUG'}, 0, "ignoring line in $sshd_config_file_path: '$line'");
+			next LINE;
+		}
+		$output_file_contents .= "$line\n";
+	}
+	
+	# Remove extra blank lines from the end of the file
+	$output_file_contents =~ s/[\s\n]*$//gs;
+	
+	# Add each of the custom parameters to the file
+	$output_file_contents .= "\n\n#" . ('-' x 20) . " $custom_tag " . ('-' x 20) . "\n";
+	for my $custom_parameter (sort keys %$parameters) {
+		my $custom_value = $parameters->{$custom_parameter};
+		
+		# Add the custom parameter of the value is set
+		if (defined($custom_value) && length($custom_value) > 0) {
+			$output_file_contents .= "$custom_parameter $custom_value\n";
+		}
+	}
+	
+	if (!$self->create_text_file($output_file_path, $output_file_contents)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to create file on $computer_node_name: $output_file_path");
+		return;
+	}
+	
+	if (!$self->set_file_permissions($output_file_path, '600')) {
+		notify($ERRORS{'WARNING'}, 0, "failed to set permissions of $output_file_path on $computer_node_name");
+		return;
+	}
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 configure_ext_sshd_config_file
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Generates /etc/ssh/external_sshd_config based off of
+					/etc/ssh/sshd_config currently residing on the computer with the
+					following parameters overridden:
+					PidFile /var/run/ext_sshd.pid
+					PermitRootLogin no
+					X11Forwarding yes
+					PasswordAuthentication yes
+					AllowUsers 
+					ListenAddress => <public IP aaddress>
+
+=cut
+
+sub configure_ext_sshd_config_file {
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $computer_node_name = $self->data->get_computer_node_name();
+	
+	my $ext_sshd_config_file_path = '/etc/ssh/external_sshd_config';
+	
+	my $public_ip_address = $self->get_public_ip_address();
+	if (!$public_ip_address) {
+		notify($ERRORS{'WARNING'}, 0, "failed to generate $ext_sshd_config_file_path on $computer_node_name, public IP address could not be determined");
+		return;
+	}
+	
+	my $custom_ext_sshd_parameters = {
+		PidFile => '/var/run/ext_sshd.pid',
+		PermitRootLogin => 'no',
+		X11Forwarding => 'yes',
+		PasswordAuthentication => 'yes',
+		AllowUsers => '',
+		ListenAddress => $public_ip_address,
+	};
+	
+	return $self->configure_sshd_config_file($custom_ext_sshd_parameters, $ext_sshd_config_file_path);
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 configure_default_sshd
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Configures the sshd daemon back to a mostly default state.
+               Removes the ext_sshd service from the computer. Reconfigures
+               sshd to listen on all interfaces. Restarts sshd.
+               
+               This is called prior to image
+               capture. The purpose is to configure the captured image so that
+               it responds to SSH after it is loaded from any interface.
+
+=cut
+
+sub configure_default_sshd {
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $computer_node_name = $self->data->get_computer_node_name();
+	
+	# Stop existing external sshd process if it is running
+	$self->init->stop_service('ext_sshd');
+	if (!$self->stop_external_sshd()) {
+		notify($ERRORS{'WARNING'}, 0, "unable to configure default sshd state, problem occurred attempting to kill external sshd process");
+		return;
+	}
+	
+	# Delete the ext_sshd service
+	$self->init->delete_service('ext_sshd') || return;
+	
+	# Delete the external sshd configuration file
+	$self->delete_file('/etc/ssh/ext*ssh*');
+	
+	# Reconfigure sshd_config back to its default state
+	$self->configure_sshd_config_file() || return;
+	
+	# Restart the sshd service
+	$self->restart_service('sshd') || return;
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 configure_ext_sshd
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Adds the external_sshd_config file configured to listen on the
+               public network and adds the ext_sshd service to the computer.
+               Reconfigures the existing sshd service to only listen on the
+               private network and restarts sshd. Stops the ext_sshd service if
+               it is started.
+
+=cut
+
+sub configure_ext_sshd {
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $computer_node_name = $self->data->get_computer_node_name();
+	
+	my $private_ip_address = $self->get_private_ip_address();
+	if (!$private_ip_address) {
+		notify($ERRORS{'WARNING'}, 0, "unable to configure ext_sshd, failed to retrieve private IP address of $computer_node_name, necessary to configure sshd to only listen on private network");
+		return;
+	}
+	
+	# Recreate the sshd_config file, set ListenAddress to the private IP address
+	if (!$self->configure_sshd_config_file({ListenAddress => $private_ip_address})) {
+		notify($ERRORS{'WARNING'}, 0, "unable to configure ext_sshd, failed to reconfigure sshd_config to only listen on private network on $computer_node_name");
+		return;
+	}
+	
+	# Restart sshd to enact the changes
+	if (!$self->restart_service('sshd')) {
+		notify($ERRORS{'WARNING'}, 0, "unable to configure ext_sshd, failed to restart sshd on $computer_node_name after reconfiguring sshd_config to only listen on private network");
+		return;
+	}
+
+	# Create and configure the ext_sshd service
+	if (!$self->configure_ext_sshd_config_file()) {
+		notify($ERRORS{'WARNING'}, 0, "unable to configure ext_sshd, failed to configure external_sshd_config file on $computer_node_name");
+		return;
+	}
+	
+	# Add the ext_sshd service
+	if (!$self->init->add_ext_sshd_service()) {
+		notify($ERRORS{'WARNING'}, 0, "unable to configure ext_sshd, failed to add the ext_sshd service to $computer_node_name");
+		return;
+	}
+	
+	# Stop ext_sshd if it is running
+	$self->stop_service('ext_sshd');
+	
+	notify($ERRORS{'OK'}, 0, "configured ext_sshd on $computer_node_name");
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 configure_rc_local
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Checks if /etc/rc.local was configured by a previous version of
+               VCL. If so, returns file to its default state. Previous versions
+               of VCL had been adding commands to rc.local to configure
+               networking. This is now done by this backend code.
+
+=cut
+
+sub configure_rc_local {
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $computer_node_name = $self->data->get_computer_node_name();
+	
+	
+	# Check if rc.local is in the exclude list before proceeding
+	my @exclude_list = $self->get_exclude_list();
+	if (@exclude_list && grep(m|rc.local|, @exclude_list)) {
+		notify($ERRORS{'OK'}, 0, "skipping reconfiguration of rc.local because it is in the exclude file list");
+		return 1;
+	}
+	
+	my $rc_local_contents = <<EOF;
+#!/bin/sh
+#
+# This script will be executed *after* all the other init scripts.
+
+touch /var/lock/subsys/local
+EOF
+
+	for my $rc_local_file_path ('/etc/rc.d/rc.local', '/etc/rc.local') {
+		# Check if the file exists or else get_file_contents will complain
+		if (!$self->file_exists($rc_local_file_path)) {
+			notify($ERRORS{'DEBUG'}, 0, "skipping $rc_local_file_path reconfiguration, file does not exist on $computer_node_name");
+			next;
+		}
+		
+		my @rc_local_lines = $self->get_file_contents($rc_local_file_path);
+		if (!@rc_local_lines) {
+			notify($ERRORS{'WARNING'}, 0, "failed to retrieve contents of $rc_local_file_path on $computer_node_name");
+			next;
+		}
+		elsif (!grep(/ListenAddress \$IP0/, @rc_local_lines)) {
+			notify($ERRORS{'DEBUG'}, 0, "skipping $rc_local_file_path reconfiguration, it does not appear to be configured by a previous version of VCL");
+			next;
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "$rc_local_file_path will be returned to its default state, it appears to have been configured by a previous version of VCL");
+		}
+		
+		if (!$self->create_text_file($rc_local_file_path, $rc_local_contents)) {
+			return;
+		}
+	}
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 command_exists
+
+ Parameters  : $shell_command
+ Returns     : boolean
+ Description : Determines if a shell command exists on the computer by executing
+               'which <command>'.
+
+=cut
+
+sub command_exists {
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $shell_command = shift;
+	if (!$shell_command) {
+		notify($ERRORS{'WARNING'}, 0, "shell command argument was not supplied");
+		return;
+	}
+	
+	my $computer_node_name = $self->data->get_computer_node_name();
+	
+	my ($exit_status, $output) = $self->execute("which $shell_command");
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to determine if the '$shell_command' shell command exists on $computer_node_name");
+		return;
+	}
+	elsif (my ($command_line) = grep(/\/$shell_command$/, @$output)) {
+		notify($ERRORS{'DEBUG'}, 0, "verified '$shell_command' command exists on $computer_node_name: $command_line");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "'$shell_command' command does NOT exist on $computer_node_name");
+		return 0;
+	}
+}
 
 ##/////////////////////////////////////////////////////////////////////////////
 1;

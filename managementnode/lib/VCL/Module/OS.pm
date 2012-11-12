@@ -1767,17 +1767,13 @@ sub get_public_default_gateway {
 
 =head2 create_text_file
 
- Parameters  : $file_path, $file_contents, $no_correct_line_endings (optional)
+ Parameters  : $file_path, $file_contents, $concatenate
  Returns     : boolean
  Description : Creates a text file on the computer. The $file_contents
                string argument is converted to ASCII hex values. These values
                are echo'd on the computer which avoids problems with special
                characters and escaping. If the file already exists it is
                overwritten.
-               The line endings within the $file_contents string are corrected
-               by default to Windows-style (\r\n) or Linux-style (\n) depending
-               on the OS. An optional boolean 3rd argument can be specified to
-               prevent the string from being altered.
 
 =cut
 
@@ -1847,11 +1843,40 @@ sub create_text_file {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute command to create a file on $computer_node_name:\ncommand: '$command', exit status: $exit_status, output:\n" . join("\n", @$output));
 		return;
 	}
+	elsif ($concatenate) {
+		notify($ERRORS{'DEBUG'}, 0, "appended text file on $computer_node_name: $file_path");
+	}
 	else {
-		notify($ERRORS{'DEBUG'}, 0, "created file on $computer_node_name: $file_path");
+		notify($ERRORS{'DEBUG'}, 0, "created text file on $computer_node_name: $file_path");
 	}
 	
 	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 append_text_file
+
+ Parameters  : $file_path, $file_contents
+ Returns     : boolean
+ Description : Appends to a text file on the computer.
+
+=cut
+
+sub append_text_file {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my ($file_path, $file_contents_string) = @_;
+	if (!$file_path || !defined($file_contents_string)) {
+		notify($ERRORS{'WARNING'}, 0, "file path and contents arguments were not supplied");
+		return;
+	}
+	
+	return $self->create_text_file($file_path, $file_contents_string, 1);
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -1884,7 +1909,7 @@ sub get_file_contents {
 	
 	# Run cat to retrieve the contents of the file
 	my $command = "cat \"$path\"";
-	my ($exit_status, $output) = $self->execute($command,0);
+	my ($exit_status, $output) = $self->execute($command, 0);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to run command to read file on $computer_short_name:\n path: '$path'\ncommand: '$command'");
 		return;
@@ -1895,8 +1920,70 @@ sub get_file_contents {
 	}
 	else {
 		notify($ERRORS{'DEBUG'}, 0, "retrieved " . scalar(@$output) . " lines from file on $computer_short_name: '$path'");
+		
 		map { s/[\r\n]+$//g; } (@$output);
 		return @$output;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 remove_lines_from_file
+
+ Parameters  : $file_path, $pattern
+ Returns     : boolean
+ Description : Removes all lines containing the pattern from the file. The
+               pattern must be a regular expression.
+
+=cut
+
+sub remove_lines_from_file {
+	my $self = shift;
+	if (ref($self) !~ /module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my ($file_path, $pattern) = @_;
+	if (!$file_path || !$pattern) {
+		notify($ERRORS{'WARNING'}, 0, "file path and pattern arguments were not specified");
+		return;
+	}
+	
+	my $computer_short_name = $self->data->get_computer_short_name();
+	
+	# Assemble the command, grep the pattern to retrieve the number of times the pattern exists in the file before and after
+	# This is used to verify that the pattern doesn't exist afterwards
+	my $command = "echo -n 'before:' ; grep -c '$pattern' $file_path 2>&1 ; sed -i -e '/$pattern/d' $file_path 2>&1 ; echo -n 'after:' ; grep -c '$pattern' $file_path 2>&1";
+	my ($exit_status, $output) = $self->execute($command, 0);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to remove lines containing '$pattern' from '$file_path' on $computer_short_name\ncommand: $command");
+		return;
+	}
+	elsif (grep(/No such file/i, @$output)) {
+		notify($ERRORS{'WARNING'}, 0, "file does NOT exist on $computer_short_name: $file_path");
+		return;
+	}
+	
+	my $output_string = join("\n", @$output);
+	my ($before_count) = $output_string =~ /before:(\d+)/;
+	my ($after_count) = $output_string =~ /after:(\d+)/;
+
+	if (!defined($before_count) || (!defined($after_count) && $before_count != 0)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to remove lines containing '$pattern' from '$file_path' on $computer_short_name\ncommand: $command\noutput:\n$output_string");
+		return;
+	}
+	elsif ($before_count == 0) {
+		notify($ERRORS{'DEBUG'}, 0, "'$file_path' does not contain any lines matching '$pattern'");
+		return 1;
+	}
+	elsif ($after_count != 0) {
+		notify($ERRORS{'WARNING'}, 0, "failed to remove lines containing '$pattern' from '$file_path' on $computer_short_name, file still appears to have lines containing the pattern, command: '$command', output:\n$output_string");
+		return;
+	}
+	else {
+		notify($ERRORS{'OK'}, 0, "removed $before_count line" . ($before_count > 1 ? 's' : '') . " containing '$pattern' from '$file_path'");
+		return 1;
 	}
 }
 
@@ -2151,7 +2238,7 @@ sub execute_new {
 				}
 				
 				#$ssh->exec("stty -echo");
-				#$ssh->exec("stty raw -echo");
+				$ssh->exec("stty raw -echo");
 				
 				# Set the timeout counter behaviour:
 				# If true, sets the timeout to "inactivity timeout"
@@ -2181,7 +2268,6 @@ sub execute_new {
 			};
 			
 			return if ($return_null);
-			
 			if ($EVAL_ERROR) {
 				if ($EVAL_ERROR =~ /^(\w+) at \//) {
 					notify($ERRORS{'DEBUG'}, 0, $attempt_string . "$1 error occurred initializing Net::SSH::Expect object for $computer_name") if ($display_output);
@@ -2231,6 +2317,11 @@ sub execute_new {
 			next ATTEMPT;
 		}
 		
+		# Need to fix this:
+		#2012-09-25 16:15:57|executing command on blade1a3-2 (timeout: 7200 seconds):
+		#2012-09-25 16:16:24|23464|1915857:2002452|image|OS.pm:execute_new(2243)|error
+		#SSHConnectionError Reading error type 4 found: 4:Interrupted system call at /usr/local/vcl/bin/../lib/VCL/Module/OS.pm line 2231
+		
 		my $output = $ssh->before() || '';
 		$output =~ s/(^\s+)|(\s+$)//g;
 		
@@ -2242,7 +2333,8 @@ sub execute_new {
 			next ATTEMPT;
 		}
 		
-		my @output_lines = split(/[\r\n]+/, $output);
+		my @output_lines = split(/\n/, $output);
+		map { s/[\r]+//g; } (@output_lines);
 		
 		notify($ERRORS{'OK'}, 0, "executed command on $computer_name: '$command', exit status: $exit_status, output:\n$output") if ($display_output);
 		
