@@ -7274,6 +7274,8 @@ function getComputers($sort=0, $includedeleted=0, $compid="") {
 	$query .= "ORDER BY c.hostname";
 	$qh = doQuery($query, 180);
 	while($row = mysql_fetch_assoc($qh)) {
+		if($includedeleted && $row['deleted'] == 1)
+			$row['hostname']= preg_replace('/-DELETED-[0-9]+$/', '', $row['hostname']);
 		$return[$row['id']] = $row;
 	}
 	if($sort) {
@@ -7548,6 +7550,9 @@ function sortComputers($a, $b) {
 	if(empty($b)) {
 		return -1;
 	}
+
+	$a['hostname'] = preg_replace('/-(UN)?DELETED-[0-9]+$/', '', $a['hostname']);
+	$b['hostname'] = preg_replace('/-(UN)?DELETED-[0-9]+$/', '', $b['hostname']);
 
 	# get hostname and first part of domain name
 	$tmp = explode('.', $a["hostname"]);

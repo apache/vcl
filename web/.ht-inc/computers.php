@@ -1695,17 +1695,34 @@ function confirmDeleteComputer() {
 function submitDeleteComputer() {
 	$compid = getContinuationVar("compid");
 	$deleted = getContinuationVar("deleted");
+	$compdata = getComputers(0, 1, $compid);
 	if($deleted) {
+		$newhostname = preg_replace('/-DELETED-[0-9]+$/', '', $compdata[$compid]['hostname']);
+		$newhostname = mysql_real_escape_string($newhostname);
+		$query = "SELECT id "
+		       . "FROM computer "
+		       . "WHERE hostname = '$newhostname' AND "
+		       .       "id != $compid";
+		$qh = doQuery($query);
+		if(mysql_num_rows($qh))
+			$newhostname = "$newhostname-UNDELETED-$compid";
 		$query = "UPDATE computer "
-				 . "SET deleted = 0 "
-				 . "WHERE id = $compid";
+		       . "SET deleted = 0, "
+		       .     "hostname = '$newhostname' ";
+		if($compdata[$compid]['type'] == 'virtualmachine')
+			$query .= ", stateid = 10 ";
+		$query .= "WHERE id = $compid";
 		$qh = doQuery($query, 190);
 	}
 	else {
+		$newhostname = preg_replace('/-(UN)?DELETED-[0-9]+$/', '', $compdata[$compid]['hostname']);
+		$newhostname = "$newhostname-DELETED-$compid";
+		$newhostname = mysql_real_escape_string($newhostname);
 		$query = "UPDATE computer "
-				 . "SET deleted = 1, "
-				 .     "vmhostid = NULL "
-				 . "WHERE id = $compid";
+		       . "SET deleted = 1, "
+		       .     "vmhostid = NULL, "
+		       .     "hostname = '$newhostname' "
+		       . "WHERE id = $compid";
 		$qh = doQuery($query, 191);
 	}
 	$_SESSION['userresources'] = array();
