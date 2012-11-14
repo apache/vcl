@@ -35,7 +35,7 @@ package VCL::Module::OS::Linux::init::Upstart;
 
 # Specify the lib path using FindBin
 use FindBin;
-use lib "$FindBin::Bin/../../../..";
+use lib "$FindBin::Bin/../../../../..";
 
 # Configure inheritance
 use base qw(VCL::Module::OS::Linux);
@@ -58,11 +58,34 @@ use VCL::utils;
 
 =cut
 
+=head2 $INIT_DAEMON_ORDER
+
+ Data type   : integer
+ Value       : 10
+ Description : Determines the order in which Linux init daemon modules are used.
+               Lower values are used first.
+
+=cut
+
+our $INIT_DAEMON_ORDER = 10;
+
+=head2 @REQUIRED_COMMANDS
+
+ Data type   : array
+ Values      : initctl
+ Description : List of commands used within this module to configure and control
+               Upstart services. This module will not be used if any of these
+               commands are unavailable on the computer.
+
+=cut
+
+our @REQUIRED_COMMANDS = ('initctl');
+
 =head2 $SERVICE_NAME_MAPPINGS
 
  Data type   : hash reference
  Description : Contains a mapping of common service names to the names used by
-					Upstart distibutions. Example, sshd is called ssh on Ubuntu.
+               Upstart distibutions. Example, sshd is called ssh on Ubuntu.
 
 =cut
 
@@ -79,59 +102,16 @@ our $SERVICE_NAME_MAPPINGS = {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 initialize
+=head2 get_service_names
 
  Parameters  : none
- Returns     : boolean
- Description : 
+ Returns     : array
+ Description : Calls 'initctl list' to retrieve the list of services controlled
+               by Upstart on the computer.
 
 =cut
 
-sub initialize {
-	my $self = shift;
-	unless (ref($self) && $self->isa('VCL::Module')) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-	
-	my $computer_node_name = $self->data->get_computer_node_name();
-	
-	# Check to see if required commands exist
-	my @required_commands = (
-		'initctl',
-	);
-	
-	my @missing_commands;
-	for my $command (@required_commands) {
-		if (!$self->command_exists($command)) {
-			push @missing_commands, $command;
-		}
-	}
-	
-	if (@missing_commands) {
-		notify($ERRORS{'DEBUG'}, 0, "unable to initialize Upstart Linux init module to control $computer_node_name, the following commands are not available:\n" . join("\n", @missing_commands));
-		return;
-	}
-	else {
-		notify($ERRORS{'DEBUG'}, 0, "Upstart Linux init module successfully initialized to control $computer_node_name");
-		return 1;
-	}
-	
-	notify($ERRORS{'DEBUG'}, 0, "Upstart Linux init module successfully initialized to control $computer_node_name");
-	return 1;
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 service_exists
-
- Parameters  : $service_name
- Returns     : boolean
- Description : 
-
-=cut
-
-sub service_exists {
+sub get_service_names {
 	my $self = shift;
 	if (ref($self) !~ /linux/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
@@ -140,27 +120,30 @@ sub service_exists {
 	
 	my $computer_node_name = $self->data->get_computer_node_name();
 	
-	my $service_name = shift;
-	if (!$service_name) {
-		notify($ERRORS{'WARNING'}, 0, "service name was not passed as an argument");
-		return;
-	}
-	$service_name = $SERVICE_NAME_MAPPINGS->{$service_name} || $service_name;
+	my $service_info = {};
 	
 	my $command = "initctl list";
 	my ($exit_status, $output) = $self->execute($command, 0);
 	if (!defined($output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to execute command to determine if '$service_name' service exists on $computer_node_name");
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to list Upstart services on $computer_node_name");
 		return;
 	}
-	elsif (grep(/^$service_name[\s\t]/, @$output)) {
-		notify($ERRORS{'DEBUG'}, 0, "'$service_name' service exists on $computer_node_name");
-		return 1;
+	
+	# Format of initctl list output lines:
+	# splash-manager stop/waiting
+	# Add to hash then extract keys to remove duplicates
+	my %service_name_hash;
+	my %service_name_mappings_reversed = reverse %$SERVICE_NAME_MAPPINGS;
+	for my $line (@$output) {
+		my ($service_name) = $line =~ /^([^\s\t]+)/;
+		$service_name_hash{$service_name} = 1 if $service_name;
+		if (my $service_name_mapping = $service_name_mappings_reversed{$service_name}) {
+			$service_name_hash{$service_name_mapping} = 1;
+		}
 	}
-	else {
-		notify($ERRORS{'DEBUG'}, 0, "'$service_name' service does not exist on $computer_node_name");
-		return 0;
-	}
+	my @service_names = sort(keys %service_name_hash);
+	notify($ERRORS{'DEBUG'}, 0, "retrieved Upstart service names from $computer_node_name: " . join(", ", @service_names));
+	return @service_names;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -169,8 +152,8 @@ sub service_exists {
 
  Parameters  : $service_name
  Returns     : boolean
- Description : Calls 'chkconfig --del' to delete the service specified by the
-               argument. Deletes the service file from /etc/rc.d/init.d/.
+ Description : Stops the service if it is running. Deletes the
+               '/etc/init/<$service_name>.conf' file.
 
 =cut
 
@@ -206,7 +189,7 @@ sub delete_service {
 
  Parameters  : $service_name
  Returns     : boolean
- Description : 
+ Description : Calls 'initctl start <$service_name>' to start the service.
 
 =cut
 
@@ -259,7 +242,7 @@ sub start_service {
 
  Parameters  : $service_name
  Returns     : boolean
- Description : 
+ Description : Calls 'initctl stop <$service_name>' to stop the service.
 
 =cut
 
@@ -312,7 +295,7 @@ sub stop_service {
 
  Parameters  : $service_name
  Returns     : boolean
- Description : 
+ Description : Calls 'initctl restart <$service_name>' to restart the service.
 
 =cut
 
@@ -364,7 +347,9 @@ sub restart_service {
 
  Parameters  : none
  Returns     : boolean
- Description :
+ Description : Generates and configures '/etc/init/ext_ssh.conf' based off of
+               the existing '/etc/init/ext_ssh.conf' file. Adds the ext_ssh
+               service to the computer.
 
 =cut
 

@@ -98,7 +98,7 @@ sub get_node_configuration_directory {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 init
+=head2 get_init_modules
 
  Parameters  : none
  Returns     : Linux init module reference
@@ -110,14 +110,14 @@ sub get_node_configuration_directory {
 
 =cut
 
-sub init {
+sub get_init_modules {
 	my $self = shift;
 	if (ref($self) !~ /VCL::Module/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
 
-	return $self->{init} if $self->{init};
+	return @{$self->{init_modules}} if $self->{init_modules};
 	
 	notify($ERRORS{'DEBUG'}, 0, "beginning Linux init daemon module initialization");
 	
@@ -130,50 +130,80 @@ sub init {
 	# Get a list of all *.pm files in the init module directory
 	my @init_module_paths = $self->mn_os->find_files($init_directory_path, '*.pm');
 	
-	# Find the position of the SysV.pm file
-	my ($sysv_index) = grep { $init_module_paths[$_] =~ /SysV\.pm/ } 0..$#init_module_paths;
-	
-	# Move the SysV.pm file to the end of the array
-	push(@init_module_paths, splice(@init_module_paths, $sysv_index, 1));
-
 	# Attempt to create an initialize an object for each init module
-	# Use the first init module successfully initialized
-	for my $init_module_path (@init_module_paths) {
+	my %init_module_hash;
+	INIT_MODULE: for my $init_module_path (@init_module_paths) {
 		my $init_name = fileparse($init_module_path, qr/\.pm$/i);
 		my $init_perl_package = "VCL::Module::OS::Linux::init::$init_name";
 		
-		# Create and initialize the init object
+		# Attempt to load the init module
 		notify($ERRORS{'DEBUG'}, 0, "attempting to load $init_name init module: $init_perl_package");
 		eval "use $init_perl_package";
-		if ($EVAL_ERROR) {
-			notify($ERRORS{'WARNING'}, 0, "failed to load $init_name init module: $init_perl_package, error: $EVAL_ERROR");
-			next;
+		if ($EVAL_ERROR || $@) {
+			notify($ERRORS{'CRITICAL'}, 0, "failed to load $init_name init module: $init_perl_package, error: $EVAL_ERROR");
+			next INIT_MODULE;
 		}
-		notify($ERRORS{'DEBUG'}, 0, "loaded $init_name init module: $init_perl_package");
 		
+		# Attempt to create an init module object
+		# The 'new' constructor will automatically call the module's initialize subroutine
+		# initialize will check the computer to determine if it contains the corresponding Linux init daemon installed
+		# If not installed, the constructor will return false
 		my $init;
 		eval { $init = ($init_perl_package)->new({data_structure => $self->data, os => $self}) };
 		if ($init) {
-			notify($ERRORS{'OK'}, 0, "$init_name init object created and initialized to control $computer_node_name");
-			$self->{init} = $init;
-			$self->{init_name} = $init_name;
-			last;
+			my @required_commands = eval "@" . $init_perl_package . "::REQUIRED_COMMANDS";
+			if ($EVAL_ERROR) {
+				notify($ERRORS{'CRITICAL'}, 0, "\@REQUIRED_COMMANDS variable is not defined in the $init_perl_package Linux init daemon module");
+				next INIT_MODULE;
+			}
+			
+			for my $command (@required_commands) {
+				if (!$self->command_exists($command)) {
+					next INIT_MODULE;
+				}
+			}
+			
+			# init object successfully created, retrieve the module's $INIT_DAEMON_ORDER variable
+			# An OS may have/support multiple Linux init daemons, services may be registered under different init daemons
+			# In some cases, need to try multple init modules to control a service
+			# This $INIT_DAEMON_ORDER integer determines the order in which the modules are tried
+			my $init_daemon_order = eval '$' . $init_perl_package . '::INIT_DAEMON_ORDER';
+			if ($EVAL_ERROR) {
+				notify($ERRORS{'CRITICAL'}, 0, "\$INIT_DAEMON_ORDER variable is not defined in the $init_perl_package Linux init daemon module");
+				next INIT_MODULE;
+			}
+			elsif ($init_module_hash{$init_daemon_order}) {
+				notify($ERRORS{'CRITICAL'}, 0, "multiple Linux init daemon modules are configured to use \$INIT_DAEMON_ORDER=$init_daemon_order: " . ref($init_module_hash{$init_daemon_order}) . ", " . ref($init) . ", the value of this variable must be unique");
+				next INIT_MODULE;
+			}
+			else {
+				notify($ERRORS{'DEBUG'}, 0, "$init_name init object created and initialized to control $computer_node_name, order: $init_daemon_order");
+				$init_module_hash{$init_daemon_order} = $init;
+			}
 		}
 		elsif ($EVAL_ERROR) {
-			notify($ERRORS{'WARNING'}, 0, "$init_name init object could not be created: type: $init_perl_package, error:\n$EVAL_ERROR");
+			notify($ERRORS{'WARNING'}, 0, "$init_perl_package init object could not be created, error:\n$EVAL_ERROR");
 		}
 		else {
 			notify($ERRORS{'DEBUG'}, 0, "$init_name init object could not be initialized to control $computer_node_name");
 		}
 	}
 	
-	# Make sure the init module object was successfully initialized
-	if (!$self->{init}) {
+	# Make sure at least 1 init module object was successfully initialized
+	if (!%init_module_hash) {
 		notify($ERRORS{'WARNING'}, 0, "failed to create Linux init daemon module");
 		return;
 	}
 	
-	return $self->{init};
+	# Construct an array of init module objects from highest to lowest $INIT_DAEMON_ORDER
+	$self->{init_modules} = [];
+	my $init_module_order_string;
+	for my $init_daemon_order (sort {$a <=> $b} keys %init_module_hash) {
+		push @{$self->{init_modules}}, $init_module_hash{$init_daemon_order};
+		$init_module_order_string .= "$init_daemon_order: " . ref($init_module_hash{$init_daemon_order}) . "\n";
+	}
+	notify($ERRORS{'DEBUG'}, 0, "constructed array containing init module objects which may be used to control $computer_node_name:\n$init_module_order_string");
+	return @{$self->{init_modules}};
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -2552,10 +2582,34 @@ EOF
 =head2 service_exists
 
  Parameters  : $service_name
- Returns     : If service exists: 1
-               If service does not exist: 0
-               If error occurred: undefined
- Description : 
+ Returns     : If called in scalar/boolean context: boolean
+               If called in array context: array
+ Description : Checks if the service exists on the computer. The return value
+               differs depending on if this subroutine was called in
+               scalar/boolean or array context.
+               
+               Scalar/boolean context returns either '0' or '1':
+               if ($self->service_exists('xxx'))
+               
+               Array context returns an array with a single, integer element.
+               The value of this integer is the index of the init module
+               returned by get_init_modules which controls the service. This is
+               done so the calling subroutine doesn't need to perform the same
+               steps to determine which init module to use when controlling
+               services. The value of the array element may be 0, meaning the
+               service exists and is controlled by the first init module
+               returned by get_init_modules. Therefore, be sure to check if the
+               return value is defined and not whether it is true/false when
+               called in array context.
+               
+               my ($init_module_index) = $self->service_exists('xxx');
+               
+               if (defined($init_module_index))... means service exists,
+               $init_module_index may be 0 or another positive integer.
+               
+               if ($init_module_index)... WRONG! This will evaluate to false if
+               the service does not exist or if it does exist and the first init
+               module controls it.
 
 =cut
 
@@ -2572,7 +2626,35 @@ sub service_exists {
 		return;
 	}
 	
-	return $self->init->service_exists($service_name);
+	my $computer_node_name = $self->data->get_computer_node_name();
+	
+	my @init_modules = $self->get_init_modules();
+	my $init_module_index = 0;
+	for my $init (@init_modules) {
+		my ($init_module_name) = ref($init) =~ /([^:]+)$/;
+		
+		# Check if the service names have already been retrieved by this particular init module object
+		my @service_names;
+		if ($init->{service_names}) {
+			@service_names = @{$init->{service_names}};
+		}
+		else {
+			@service_names = $init->get_service_names();
+			$init->{service_names} = \@service_names;
+		}
+		
+		if (grep(/^$service_name$/, @service_names)) {
+			notify($ERRORS{'DEBUG'}, 0, "'$service_name' service exists on $computer_node_name, controlled by $init_module_name init module ($init_module_index)");
+			return (wantarray) ? ($init_module_index) : 1;
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "'$service_name' service is not controlled by $init_module_name init module ($init_module_index)");
+		}
+		$init_module_index++;
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "'$service_name' service does not exist on $computer_node_name");
+	return (wantarray) ? () : 0;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -2598,7 +2680,16 @@ sub start_service {
 		return;
 	}
 	
-	return $self->init->start_service($service_name);
+	my $computer_node_name = $self->data->get_computer_node_name();
+	
+	my ($init_module_index) = $self->service_exists($service_name);
+	if (!defined($init_module_index)) {
+		notify($ERRORS{'WARNING'}, 0, "unable to start '$service_name' service because it does not exist on $computer_node_name");
+		return;
+	}
+	
+	my $init_module = ($self->get_init_modules())[$init_module_index];
+	return $init_module->start_service($service_name);
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -2623,9 +2714,17 @@ sub stop_service {
 		notify($ERRORS{'WARNING'}, 0, "service name was not passed as an argument");
 		return;
 	}
-	my $command;
 	
-	return $self->init->stop_service($service_name);
+	my $computer_node_name = $self->data->get_computer_node_name();
+	
+	my ($init_module_index) = $self->service_exists($service_name);
+	if (!defined($init_module_index)) {
+		notify($ERRORS{'DEBUG'}, 0, "unable to stop '$service_name' service because it does not exist on $computer_node_name");
+		return 1;
+	}
+	
+	my $init_module = ($self->get_init_modules())[$init_module_index];
+	return $init_module->stop_service($service_name);
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -2650,9 +2749,60 @@ sub restart_service {
 		notify($ERRORS{'WARNING'}, 0, "service name was not passed as an argument");
 		return;
 	}
-	my $command;
 	
-	return $self->init->restart_service($service_name);
+	my $computer_node_name = $self->data->get_computer_node_name();
+	
+	my ($init_module_index) = $self->service_exists($service_name);
+	if (!defined($init_module_index)) {
+		notify($ERRORS{'WARNING'}, 0, "unable to restart '$service_name' service because it does not exist on $computer_node_name");
+		return;
+	}
+	
+	my $init_module = ($self->get_init_modules())[$init_module_index];
+	return $init_module->restart_service($service_name);
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 delete_service
+
+ Parameters  : $service_name
+ Returns     : boolean
+ Description : 
+
+=cut
+
+sub delete_service {
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $service_name = shift;
+	if (!$service_name) {
+		notify($ERRORS{'WARNING'}, 0, "service name was not passed as an argument");
+		return;
+	}
+	
+	my $computer_node_name = $self->data->get_computer_node_name();
+	
+	my ($init_module_index) = $self->service_exists($service_name);
+	if (!defined($init_module_index)) {
+		notify($ERRORS{'DEBUG'}, 0, "unable to delete '$service_name' service because it does not exist on $computer_node_name");
+		return 1;
+	}
+	
+	my $init_module = ($self->get_init_modules())[$init_module_index];
+	if ($init_module->delete_service($service_name)) {
+		# Delete the cached service name array
+		delete $init_module->{service_names};
+	}
+	else {
+		return;
+	}
+	
+	return 1;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -3874,32 +4024,6 @@ sub user_exists {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 delete_service
-
- Parameters  : $service_name
- Returns     : boolean
- Description : 
-
-=cut
-
-sub delete_service {
-	my $self = shift;
-	if (ref($self) !~ /linux/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-	
-	my ($service_name) = @_;
-	if (!$service_name) {
-		notify($ERRORS{'WARNING'}, 0, "service name pattern argument was not supplied");
-		return;
-	}
-	
-	return $self->init->delete_service($service_name);
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
 =head2 stop_external_sshd
 
  Parameters  : none
@@ -4082,14 +4206,14 @@ sub configure_sshd_config_file {
  Parameters  : none
  Returns     : boolean
  Description : Generates /etc/ssh/external_sshd_config based off of
-					/etc/ssh/sshd_config currently residing on the computer with the
-					following parameters overridden:
-					PidFile /var/run/ext_sshd.pid
-					PermitRootLogin no
-					X11Forwarding yes
-					PasswordAuthentication yes
-					AllowUsers 
-					ListenAddress => <public IP aaddress>
+               /etc/ssh/sshd_config currently residing on the computer with the
+               following parameters overridden:
+               PidFile /var/run/ext_sshd.pid
+               PermitRootLogin no
+               X11Forwarding yes
+               PasswordAuthentication yes
+               AllowUsers 
+               ListenAddress => <public IP aaddress>
 
 =cut
 
@@ -4148,14 +4272,14 @@ sub configure_default_sshd {
 	my $computer_node_name = $self->data->get_computer_node_name();
 	
 	# Stop existing external sshd process if it is running
-	$self->init->stop_service('ext_sshd');
+	$self->stop_service('ext_sshd');
 	if (!$self->stop_external_sshd()) {
 		notify($ERRORS{'WARNING'}, 0, "unable to configure default sshd state, problem occurred attempting to kill external sshd process");
 		return;
 	}
 	
 	# Delete the ext_sshd service
-	$self->init->delete_service('ext_sshd') || return;
+	$self->delete_service('ext_sshd') || return;
 	
 	# Delete the external sshd configuration file
 	$self->delete_file('/etc/ssh/ext*ssh*');
@@ -4216,8 +4340,21 @@ sub configure_ext_sshd {
 		return;
 	}
 	
+	# Deterine which init module is currently controlling sshd, use the same module to control ext_sshd
+	my ($init_module_index) = $self->service_exists('sshd');
+	if (!defined($init_module_index)) {
+		notify($ERRORS{'WARNING'}, 0, "unable to configure ext_sshd, init module controlling sshd could not be determined");
+		return;
+	}
+	
+	my $init_module = ($self->get_init_modules())[$init_module_index];
+	
 	# Add the ext_sshd service
-	if (!$self->init->add_ext_sshd_service()) {
+	if ($init_module->add_ext_sshd_service()) {
+		# Delete the cached service name array
+		delete $init_module->{service_names};
+	}
+	else {
 		notify($ERRORS{'WARNING'}, 0, "unable to configure ext_sshd, failed to add the ext_sshd service to $computer_node_name");
 		return;
 	}
@@ -4320,7 +4457,7 @@ sub command_exists {
 	
 	my $computer_node_name = $self->data->get_computer_node_name();
 	
-	my ($exit_status, $output) = $self->execute("which $shell_command");
+	my ($exit_status, $output) = $self->execute("which $shell_command", 0);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute command to determine if the '$shell_command' shell command exists on $computer_node_name");
 		return;

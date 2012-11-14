@@ -26,8 +26,8 @@ VCL::Module::OS::Linux::init::systemd.pm
 
  This module provides VCL support for the systemd Linux init daemon used in
  distributions such as:
- Fedora 15+
- openSUSE 12.1+
+    Fedora 15+
+    openSUSE 12.1+
 
 =cut
 
@@ -36,7 +36,7 @@ package VCL::Module::OS::Linux::init::systemd;
 
 # Specify the lib path using FindBin
 use FindBin;
-use lib "$FindBin::Bin/../../../..";
+use lib "$FindBin::Bin/../../../../..";
 
 # Configure inheritance
 use base qw(VCL::Module::OS::Linux);
@@ -55,63 +55,51 @@ use VCL::utils;
 
 ##############################################################################
 
+=head1 CLASS VARIABLES
+
+=cut
+
+=head2 $INIT_DAEMON_ORDER
+
+ Data type   : integer
+ Value       : 20
+ Description : Determines the order in which Linux init daemon modules are used.
+               Lower values are used first.
+
+=cut
+
+our $INIT_DAEMON_ORDER = 20;
+
+=head2 @REQUIRED_COMMANDS
+
+ Data type   : array
+ Values      : systemctl
+ Description : List of commands used within this module to configure and control
+               systemd services. This module will not be used if any of these
+               commands are unavailable on the computer.
+
+=cut
+
+our @REQUIRED_COMMANDS = ('systemctl');
+
+##############################################################################
+
 =head1 OBJECT METHODS
 
 =cut
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 initialize
+=head2 get_service_names
 
  Parameters  : none
- Returns     : boolean
- Description : 
+ Returns     : array
+ Description : Calls 'systemctl list-unit-files' to retrieve the list of
+               services controlled by systemd on the computer.
 
 =cut
 
-sub initialize {
-	my $self = shift;
-	unless (ref($self) && $self->isa('VCL::Module')) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-	
-	my $computer_node_name = $self->data->get_computer_node_name();
-	
-	# Check to see if required commands exist
-	my @required_commands = (
-		'systemctl',
-	);
-	
-	my @missing_commands;
-	for my $command (@required_commands) {
-		if (!$self->command_exists($command)) {
-			push @missing_commands, $command;
-		}
-	}
-	
-	if (@missing_commands) {
-		notify($ERRORS{'DEBUG'}, 0, "unable to initialize systemd Linux init module to control $computer_node_name, the following commands are not available:\n" . join("\n", @missing_commands));
-		return;
-	}
-	else {
-		notify($ERRORS{'DEBUG'}, 0, "systemd Linux init module successfully initialized to control $computer_node_name");
-		return 1;
-	}
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 service_exists
-
- Parameters  : $service_name
- Returns     : boolean
- Description : Calls 'systemctl list-unit-files' the output is parsed to
-               determine if the service exists.
-
-=cut
-
-sub service_exists {
+sub get_service_names {
 	my $self = shift;
 	if (ref($self) !~ /linux/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
@@ -120,30 +108,24 @@ sub service_exists {
 	
 	my $computer_node_name   = $self->data->get_computer_node_name();
 	
-	my $service_name = shift;
-	if (!$service_name) {
-		notify($ERRORS{'WARNING'}, 0, "service name was not passed as an argument");
-		return;
-	}
 	my $command = "systemctl --no-pager list-unit-files";
 	my ($exit_status, $output) = $self->execute($command, 0);
 	if (!defined($output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to execute command to determine if '$service_name' service exists on $computer_node_name");
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to retrieve systemd service names on $computer_node_name");
 		return;
 	}
 	
-	if (grep(/^$service_name\.service/, @$output)) {
-		notify($ERRORS{'DEBUG'}, 0, "'$service_name' service exists on $computer_node_name");
-		return 1;
+	# Format of systemctl list output lines:
+	# ssyslog.target                          static
+	# Add to hash then extract keys to remove duplicates
+	my %service_name_hash;
+	for my $line (@$output) {
+		my ($service_name) = $line =~ /^(.+)\.service/;
+		$service_name_hash{$service_name} = 1 if $service_name;
 	}
-	elsif (grep(/\.service/, @$output)) {
-		notify($ERRORS{'DEBUG'}, 0, "'$service_name' service does not exist on $computer_node_name");
-		return 0;
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "unable to determine if '$service_name' service exists, exit status: $exit_status, output:\n" . join("\n", @$output));
-		return;
-	}
+	my @service_names = sort(keys %service_name_hash);
+	notify($ERRORS{'DEBUG'}, 0, "retrieved systemd service names from $computer_node_name: " . join(", ", @service_names));
+	return @service_names;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -202,7 +184,7 @@ sub enable_service {
  Parameters  : $service_name
  Returns     : boolean
  Description : Calls 'systemctl disable' to disable the service specified by the
-					argument.
+               argument.
 
 =cut
 

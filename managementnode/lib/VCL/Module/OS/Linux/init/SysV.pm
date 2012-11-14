@@ -26,8 +26,8 @@ VCL::Module::OS::Linux::init::SysV.pm
 
  This module provides VCL support for the SysV-style Linux init daemon used in
  distributions such as:
- Red Hat Enterprise Linux 5.x, 6.x
- CentOS 5.x, 6.x
+    Red Hat Enterprise Linux 5.x, 6.x
+    CentOS 5.x, 6.x
 
 =cut
 
@@ -36,10 +36,7 @@ package VCL::Module::OS::Linux::init::SysV;
 
 # Specify the lib path using FindBin
 use FindBin;
-print "$FindBin::Bin/../../../.." . "\n\n";
-exit;
-
-use lib "$FindBin::Bin/../../../..";
+use lib "$FindBin::Bin/../../../../..";
 
 # Configure inheritance
 use base qw(VCL::Module::OS::Linux);
@@ -58,47 +55,54 @@ use VCL::utils;
 
 ##############################################################################
 
+=head1 CLASS VARIABLES
+
+=cut
+
+=head2 $INIT_DAEMON_ORDER
+
+ Data type   : integer
+ Value       : 50
+ Description : Determines the order in which Linux init daemon modules are used
+               if an OS supports multiple init daemons. Lower values are used
+               first. SysV has a higher value than other init modules because it
+               is older than other, newer init daemons. The newer init daemon
+               modules should be tried first.
+
+=cut
+
+our $INIT_DAEMON_ORDER = 50;
+
+=head2 @REQUIRED_COMMANDS
+
+ Data type   : array
+ Values      : chkconfig, service
+ Description : List of commands used within this module to configure and control
+               SysV services. This module will not be used if any of these
+               commands are unavailable on the computer.
+
+=cut
+
+our @REQUIRED_COMMANDS = ('chkconfig', 'service');
+
+##############################################################################
+
 =head1 OBJECT METHODS
 
 =cut
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 initialize
+=head2 get_service_names
 
  Parameters  : none
- Returns     : true
- Description : 
+ Returns     : array
+ Description : Calls 'chkconfig --list' to retrieve the list of services
+               controlled by SysV on the computer.
 
 =cut
 
-sub initialize {
-	my $self = shift;
-	unless (ref($self) && $self->isa('VCL::Module')) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-	
-	my $computer_node_name = $self->data->get_computer_node_name();
-	
-	# Don't do anything, this is the default init module
-	# It should be used if all others can't be initialized
-	
-	notify($ERRORS{'DEBUG'}, 0, "SysV Linux init module successfully initialized to control $computer_node_name");
-	return 1;
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 service_exists
-
- Parameters  : $service_name
- Returns     : boolean
- Description : 
-
-=cut
-
-sub service_exists {
+sub get_service_names {
 	my $self = shift;
 	if (ref($self) !~ /linux/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
@@ -107,25 +111,23 @@ sub service_exists {
 	
 	my $computer_node_name = $self->data->get_computer_node_name();
 	
-	my $service_name = shift;
-	if (!$service_name) {
-		notify($ERRORS{'WARNING'}, 0, "service name was not passed as an argument");
-		return;
-	}
 	my $command = "chkconfig --list";
 	my ($exit_status, $output) = $self->execute($command, 0);
 	if (!defined($output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to execute command to determine if '$service_name' service exists on $computer_node_name");
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to list SysV services on $computer_node_name");
 		return;
 	}
-	elsif (grep(/^$service_name[\s\t]/, @$output)) {
-		notify($ERRORS{'DEBUG'}, 0, "'$service_name' service exists on $computer_node_name");
-		return 1;
+	
+	# Format out chkconfig --list output lines:
+	# sshd            0:off   1:off   2:on    3:on    4:on    5:on    6:off
+	my %service_name_hash;
+	for my $line (@$output) {
+		my ($service_name) = $line =~ /^([^\s\t]+)/;
+		$service_name_hash{$service_name} = 1 if $service_name;
 	}
-	else {
-		notify($ERRORS{'DEBUG'}, 0, "'$service_name' service does not exist on $computer_node_name");
-		return 0;
-	}
+	my @service_names = sort(keys %service_name_hash);
+	notify($ERRORS{'DEBUG'}, 0, "retrieved SysV service names from $computer_node_name: " . join(", ", @service_names));
+	return @service_names;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -134,7 +136,8 @@ sub service_exists {
 
  Parameters  : $service_name
  Returns     : boolean
- Description : 
+ Description : Calls 'chkconfig <$service_name> on' to configure the service to
+               start automatically. Does not start the service.
 
 =cut
 
@@ -182,7 +185,8 @@ sub enable_service {
 
  Parameters  : $service_name
  Returns     : boolean
- Description : 
+ Description : Calls 'chkconfig <$service_name> off' to prevent the service from
+               starting automatically. Does not stop the service.
 
 =cut
 
@@ -230,9 +234,9 @@ sub disable_service {
 
  Parameters  : $service_name
  Returns     : boolean
- Description : Calls 'chkconfig --add' to add the service specified by the
-               argument. The service file must already reside in
-               /etc/rc.d/init.d/.
+ Description : Calls 'chkconfig --add <$service_name>' to add the service
+               specified by the argument. The service file must already reside
+               in /etc/rc.d/init.d/.
 
 =cut
 
@@ -274,8 +278,9 @@ sub add_service {
 
  Parameters  : $service_name
  Returns     : boolean
- Description : Calls 'chkconfig --del' to delete the service specified by the
-               argument. Deletes the service file from /etc/rc.d/init.d/.
+ Description : Calls 'chkconfig --del <$service_name>' to delete the service
+               specified by the argument. Deletes the service file from
+               /etc/rc.d/init.d/.
 
 =cut
 
@@ -326,7 +331,7 @@ sub delete_service {
 
  Parameters  : $service_name
  Returns     : boolean
- Description : 
+ Description : Calls 'service <$service_name> start' to start the service.
 
 =cut
 
@@ -371,7 +376,7 @@ sub start_service {
 
  Parameters  : $service_name
  Returns     : boolean
- Description : 
+ Description : Calls 'service <$service_name> stop' to start the service.
 
 =cut
 
@@ -417,7 +422,7 @@ sub stop_service {
 
  Parameters  : $service_name
  Returns     : boolean
- Description : 
+ Description : Calls 'service <$service_name> restart' to start the service.
 
 =cut
 
@@ -462,7 +467,10 @@ sub restart_service {
 
  Parameters  : none
  Returns     : boolean
- Description :
+ Description : Adds the ext_sshd service to the computer. Generates and
+               configures /etc/rc.d/init.d/ext_sshd based off of the existing
+               /etc/rc.d/init.d/sshd file. Adds the ext_sshd service and
+               configures it to start automatically.
 
 =cut
 
