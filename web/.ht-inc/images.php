@@ -1121,7 +1121,7 @@ function editOrAddImage($state) {
 	print "   <div align=\"center\">\n";
 	print "   <button dojoType=\"dijit.form.Button\">\n";
 	print "     Software is Manually Installed\n";
-	print "	   <script type=\"dojo/method\" event=\"onClick\">\n";
+	print "     <script type=\"dojo/method\" event=\"onClick\">\n";
 	print "       dijit.byId('autoconfirmdlg').hide();\n";
 	print "       addConnectMethod3();\n";
 	print "       dijit.byId('connectmethoddlg').openDropDown();\n";
@@ -1129,7 +1129,7 @@ function editOrAddImage($state) {
 	print "   </button>\n";
 	print "   <button dojoType=\"dijit.form.Button\">\n";
 	print "     Cancel\n";
-	print "	   <script type=\"dojo/method\" event=\"onClick\">\n";
+	print "     <script type=\"dojo/method\" event=\"onClick\">\n";
 	print "       dijit.byId('autoconfirmdlg').hide();\n";
 	print "       dijit.byId('connectmethoddlg').openDropDown();\n";
 	print "     </script>\n";
@@ -1137,12 +1137,12 @@ function editOrAddImage($state) {
 	print "   </div>\n";
 	print "</div>\n";
 
-    if(!$state){
-        print "<div id=revisiondiv>\n";
-        print getRevisionHTML($data['imageid']);
-        print "</div>\n";
-    }
-    print "</DIV>\n";
+	if(!$state){
+		print "<div id=revisiondiv>\n";
+		print getRevisionHTML($data['imageid']);
+		print "</div>\n";
+	}
+	print "</DIV>\n";
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -3085,10 +3085,15 @@ function processImageInput($checks=1) {
 		$submitErrMsg[PRETTYNAMEERR] = "Name can only contain alphabets, numbers, signs, and spaces.";
 	}
 
-	if(! ($submitErr & PRETTYNAMEERR) &&
-	   checkForImageName($return["prettyname"], "long", $return["imageid"])) {
-	   $submitErr |= PRETTYNAMEERR;
-	   $submitErrMsg[PRETTYNAMEERR] = "An image already exists with this name.";
+	if(! ($submitErr & PRETTYNAMEERR)) {
+		if($return['requestid'] == '')
+			$imageid = $return['imageid'];
+		else
+			$imageid = '';
+		if(checkForImageName($return["prettyname"], "long", $imageid)) {
+			$submitErr |= PRETTYNAMEERR;
+			$submitErrMsg[PRETTYNAMEERR] = "An image already exists with this name.";
+		}
 	}
 	if($return["minram"] < 0 || $return["minram"] > 20480) {
 	   $submitErr |= MINRAMERR;
