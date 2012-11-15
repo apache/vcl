@@ -604,7 +604,9 @@ function getVMprofileDataCB(data, ioArgs) {
 	dijit.byId('pname').setValue(curprofile.profilename);
 	dijit.byId('presourcepath').setValue(curprofile.resourcepath);
 	dijit.byId('prepositorypath').setValue(curprofile.repositorypath);
+	dijit.byId('prepositoryimgtype').setValue(curprofile.repositoryimagetypeid);
 	dijit.byId('pdspath').setValue(curprofile.datastorepath);
+	dijit.byId('pdatastoreimgtype').setValue(curprofile.datastoreimagetypeid);
 	dijit.byId('pvmpath').setValue(curprofile.vmpath);
 	dijit.byId('pvs0').setValue(curprofile.virtualswitch0);
 	dijit.byId('pvs1').setValue(curprofile.virtualswitch1);
