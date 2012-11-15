@@ -3085,10 +3085,15 @@ function processImageInput($checks=1) {
 		$submitErrMsg[PRETTYNAMEERR] = "Name can only contain alphabets, numbers, signs, and spaces.";
 	}
 
-	if(! ($submitErr & PRETTYNAMEERR) &&
-	   checkForImageName($return["prettyname"], "long", $return["imageid"])) {
-	   $submitErr |= PRETTYNAMEERR;
-	   $submitErrMsg[PRETTYNAMEERR] = "An image already exists with this name.";
+	if(! ($submitErr & PRETTYNAMEERR)) {
+		if($return['requestid'] == '')
+			$imageid = $return['imageid'];
+		else
+			$imageid = '';
+		if(checkForImageName($return["prettyname"], "long", $imageid)) {
+			$submitErr |= PRETTYNAMEERR;
+			$submitErrMsg[PRETTYNAMEERR] = "An image already exists with this name.";
+		}
 	}
 	if($return["minram"] < 0 || $return["minram"] > 20480) {
 	   $submitErr |= MINRAMERR;
