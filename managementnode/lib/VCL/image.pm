@@ -102,7 +102,7 @@ sub process {
 	my $computer_type              = $self->data->get_computer_type();
 	my $computer_shortname         = $self->data->get_computer_short_name();
 	my $managementnode_shortname   = $self->data->get_management_node_short_name();
-	my $sysadmin_mail_address      = $self->data->get_management_node_sysadmin_email(1);
+	my $sysadmin_mail_address      = $self->data->get_management_node_sysadmin_email(0);
 
 	if ($sysadmin_mail_address) {
 		# Notify administrators that image creation is starting
@@ -300,7 +300,7 @@ sub reservation_successful {
 	my $computer_id                = $self->data->get_computer_id();
 	my $computer_shortname         = $self->data->get_computer_short_name();
 	my $managementnode_shortname   = $self->data->get_management_node_short_name();
-	my $sysadmin_mail_address      = $self->data->get_management_node_sysadmin_email(1);
+	my $sysadmin_mail_address      = $self->data->get_management_node_sysadmin_email(0);
 
 	# Send image creation successful email to user
 	my $body_user = <<"END";
@@ -381,7 +381,7 @@ sub reservation_failed {
 	my $computer_id                = $self->data->get_computer_id();
 	my $computer_shortname         = $self->data->get_computer_short_name();
 	my $managementnode_shortname   = $self->data->get_management_node_short_name();
-	my $sysadmin_mail_address      = $self->data->get_management_node_sysadmin_email(1);
+	my $sysadmin_mail_address      = $self->data->get_management_node_sysadmin_email(0);
 
 	# Image process failed
 	notify($ERRORS{'CRITICAL'}, 0, "$image_name image creation failed");
