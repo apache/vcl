@@ -141,6 +141,7 @@ function updateVMlimit(cont) {
 	dojo.xhrPost({
 		url: 'index.php',
 		load: updateVMlimitCB,
+		handleAs: "json",
 		error: errorHandler,
 		content: {continuation: cont,
 					 vmhostid: hostid,
@@ -150,8 +151,10 @@ function updateVMlimit(cont) {
 }
 
 function updateVMlimitCB(data, ioArgs) {
-	if(data != 'SUCCESS') {
-		alert(data);
+	if(data.items.status != 'SUCCESS') {
+		if(data.items.status == 'LIMIT')
+			dijit.byId('vmlimit').set('value', data.items.limit);
+		alert(data.items.msg);
 	}
 	document.body.style.cursor = 'default';
 }

@@ -78,6 +78,7 @@ function editVMInfo() {
 		print "             constraints=\"{min:1,max:" . MAXVMLIMIT . "}\"\n";
 		print "             maxlength=\"3\"\n";
 		print "             id=\"vmlimit\"\n";
+		print "             intermediateChanges=\"true\"\n";
 		print "             onChange=\"updateVMlimit('$cont')\">\n";
 		print "    </td>\n";
 		print "  </tr>\n";
@@ -543,25 +544,56 @@ function getVMHostData($id='') {
 function updateVMlimit() {
 	global $mysql_link_vcl;
 	$vmhostid = processInputVar('vmhostid', ARG_NUMERIC);
+	$newlimit = processInputVar('newlimit', ARG_NUMERIC);
 
 	$data = getVMHostData($vmhostid);
+
+	if($data[$vmhostid]['vmlimit'] == $newlimit) {
+		sendJSON(array('status' => 'SUCCESS'));
+		return;
+	}
 	$resources = getUserResources(array("computerAdmin"), array("administer"));
 	if(! array_key_exists($data[$vmhostid]['computerid'], $resources['computer'])) {
-		print 'You do not have access to manage this host.';
+		print "alert('You do not have access to manage this host.');";
+		$rc = array('status' => 'ERROR',
+		            'msg' => "You do not have access to manage this host.");
+		sendJSON($rc);
 		return;
 	}
 
-	$newlimit = processInputVar('newlimit', ARG_NUMERIC);
 	if($newlimit < 0 || $newlimit > MAXVMLIMIT) {
-		print "ERROR: newlimit out of range";
+		$rc = array('status' => 'ERROR',
+		            'msg' => "ERROR: newlimit out of range");
+		sendJSON($rc);
 		return;
 	}
+
+	# get number of vms assigned to vmhost
+	$query = "SELECT COUNT(id) as assigned "
+	       . "FROM computer "
+	       . "WHERE type = 'virtualmachine' AND "
+	       .       "vmhostid = $vmhostid AND "
+	       .       "deleted = 0";
+	$qh = doQuery($query, 101);
+	$row = mysql_fetch_assoc($qh);
+	if($row['assigned'] > $newlimit) {
+		$rc = array('status' => 'LIMIT',
+		            'msg' => "Cannot reduce VM limit below the current number of assigned VMs",
+		            'limit' => $row['assigned']);
+		sendJSON($rc);
+		return;
+	}
+
 	$query = "UPDATE vmhost SET vmlimit = $newlimit WHERE id = $vmhostid";
 	$qh = doQuery($query, 101);
-	if(mysql_affected_rows($mysql_link_vcl))
-		print "SUCCESS";
-	else
-		print "ERROR: failed to update vmlimit";
+	if(mysql_affected_rows($mysql_link_vcl) == 0) {
+		$rc = array('status' => 'ERROR',
+		            'msg' => "ERROR: failed to update vmlimit",
+		            'data' => $data);
+		sendJSON($rc);
+		return;
+	}
+	sendJSON(array('status' => 'SUCCESS'));
 }
 
 ////////////////////////////////////////////////////////////////////////////////
