@@ -1121,7 +1121,7 @@ function editOrAddImage($state) {
 	print "   <div align=\"center\">\n";
 	print "   <button dojoType=\"dijit.form.Button\">\n";
 	print "     Software is Manually Installed\n";
-	print "	   <script type=\"dojo/method\" event=\"onClick\">\n";
+	print "     <script type=\"dojo/method\" event=\"onClick\">\n";
 	print "       dijit.byId('autoconfirmdlg').hide();\n";
 	print "       addConnectMethod3();\n";
 	print "       dijit.byId('connectmethoddlg').openDropDown();\n";
@@ -1129,7 +1129,7 @@ function editOrAddImage($state) {
 	print "   </button>\n";
 	print "   <button dojoType=\"dijit.form.Button\">\n";
 	print "     Cancel\n";
-	print "	   <script type=\"dojo/method\" event=\"onClick\">\n";
+	print "     <script type=\"dojo/method\" event=\"onClick\">\n";
 	print "       dijit.byId('autoconfirmdlg').hide();\n";
 	print "       dijit.byId('connectmethoddlg').openDropDown();\n";
 	print "     </script>\n";
@@ -1138,11 +1138,11 @@ function editOrAddImage($state) {
 	print "</div>\n";
 
 	if(!$state){
-        print "<div id=revisiondiv>\n";
-        print getRevisionHTML($data['imageid']);
-        print "</div>\n";
-    }
-    print "</DIV>\n";
+		print "<div id=revisiondiv>\n";
+		print getRevisionHTML($data['imageid']);
+		print "</div>\n";
+	}
+	print "</DIV>\n";
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -4136,7 +4136,8 @@ function AJdeleteRevisions() {
 		}
 	}
 	$query = "UPDATE imagerevision "
-	       . "SET deleted = 1 "
+	       . "SET deleted = 1, "
+	       .     "datedeleted = NOW() "
 	       . "WHERE id IN ($checkedids) "
 	       .   "AND production != 1";
 	doQuery($query, 101);
