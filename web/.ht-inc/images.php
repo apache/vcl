@@ -4136,7 +4136,8 @@ function AJdeleteRevisions() {
 		}
 	}
 	$query = "UPDATE imagerevision "
-	       . "SET deleted = 1 "
+	       . "SET deleted = 1, "
+	       .     "datedeleted = NOW() "
 	       . "WHERE id IN ($checkedids) "
 	       .   "AND production != 1";
 	doQuery($query, 101);
