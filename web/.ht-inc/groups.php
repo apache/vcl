@@ -936,12 +936,21 @@ function processGroupInput($checks=1) {
 		return $return;
 	}
 	
-	if($return['custom'] == 1 && $return['courseroll'] == 0 &&
-	   ! preg_match('/^[-a-zA-Z0-9_\.: ]{3,30}$/', $return["name"])) {
-	   $submitErr |= GRPNAMEERR;
-	   $submitErrMsg[GRPNAMEERR] = "Name must be between 3 and 30 characters "
-		                       . "and can only contain letters, numbers, and "
-		                       . "these characters: - _ . :";
+	if($return['custom'] == 1 && $return['courseroll'] == 0) {
+		if($return['type'] == 'user' &&
+		   ! preg_match('/^[-a-zA-Z0-9_\.: ]{3,30}$/', $return["name"])) {
+			$submitErr |= GRPNAMEERR;
+			$submitErrMsg[GRPNAMEERR] = "Name must be between 3 and 30 characters "
+			                          . "and can only contain letters, numbers, "
+			                          . "spaces, and these characters: - . _ :";
+		}
+		elseif($return['type'] == 'resource' &&
+		   ! preg_match('/^[-a-zA-Z0-9_\. ]{3,30}$/', $return["name"])) {
+			$submitErr |= GRPNAMEERR;
+			$submitErrMsg[GRPNAMEERR] = "Name must be between 3 and 30 characters "
+			                          . "and can only contain letters, numbers, "
+			                          . "spaces, and these characters: - . _";
+		}
 	}
 	if($return['type'] == 'user')
 		$extraid = $return['affiliationid'];
