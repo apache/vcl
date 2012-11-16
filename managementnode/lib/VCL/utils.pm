@@ -74,6 +74,7 @@ use Data::Dumper;
 use Cwd;
 use Sys::Hostname;
 use XML::Simple;
+use Time::HiRes qw(gettimeofday tv_interval);
 use Crypt::OpenSSL::RSA;
 
 #use Date::Calc qw(Delta_DHMS Time_to_Date Date_to_Time);
@@ -175,7 +176,6 @@ our @EXPORT = qw(
   lockfile
   mail
   makedatestring
-  monitorloading
   nmap_port
   normalize_file_path
   notify
@@ -205,6 +205,7 @@ our @EXPORT = qw(
   setup_get_input_string
   setup_print_wrap
   sort_by_file_name
+  stopwatch
   string_to_ascii
   switch_state
   switch_vmhost_id
@@ -3377,193 +3378,6 @@ sub timefloor15interval {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 monitorloading
-
- Parameters  : $reservationid, $requestedimagename, $computerid, $nodename, $ert
- Returns     : 0 or 1
- Description : using database loadlog table,
-					monitor given node for available state
-
-=cut
-
-
-sub monitorloading {
-	my ($reservationid, $requestedimagename, $computerid, $nodename, $ert) = @_;
-	my ($package, $filename, $line, $sub) = caller(0);
-	notify($ERRORS{'WARNING'}, 0, "reservationid is not defined")      if (!(defined($reservationid)));
-	notify($ERRORS{'WARNING'}, 0, "requestedimagename is not defined") if (!(defined($requestedimagename)));
-	notify($ERRORS{'WARNING'}, 0, "computerid is not defined")         if (!(defined($computerid)));
-	notify($ERRORS{'WARNING'}, 0, "nodename is not defined")           if (!(defined($nodename)));
-	notify($ERRORS{'WARNING'}, 0, "ert is not defined")                if (!(defined($ert)));
-	#get start time of this wait period
-	my $mystarttime = convert_to_epoch_seconds;
-	my $currentime  = 0;
-
-	my $mydbhandle = getnewdbh();
-	my $selhdl = $mydbhandle->prepare(
-		"SELECT s.loadstatename,c.additionalinfo,c.timestamp
-                                     FROM computerloadlog c, computerloadstate s
-                                     WHERE s.id = c.loadstateid AND c.loadstateid=s.id AND c.reservationid =? AND c.computerid=?") or notify($ERRORS{'WARNING'}, 0, "could not prepare statement to monitor for available stat" . $mydbhandle->errstr());
-
-	my $selhdl2 = $mydbhandle->prepare("SELECT s.name FROM computer c,state s WHERE c.stateid=s.id AND c.id =?") or notify($ERRORS{'WARNING'}, 0, "could not prepare statement check node for available state" . $mydbhandle->errstr());
-
-	#get est reload time of image
-
-	my $available     = 0;
-	my $stillrunnning = 1;
-	my $state;
-	my $s1     = 0;
-	my $s2     = 0;
-	my $s3     = 0;
-	my $s4     = 0;
-	my $s5     = 0;
-	my $s6     = 0;
-	my $s7     = 0;
-	my $s8     = 0;
-	my $s1time = 0;
-	my $s2time = 0;
-	my $s3time = 0;
-	my $s4time = 0;
-	my $s5time = 0;
-	my $s6time = 0;
-	my $s7time = 0;
-
-	MONITORLOADCHECKS:
-	$selhdl->execute($reservationid, $computerid) or notify($ERRORS{'WARNING'}, 0, "could not execute statement to monitor for available stat" . $mydbhandle->errstr());
-	my $rows = $selhdl->rows;
-	#check state of machine
-	$selhdl2->execute($computerid) or notify($ERRORS{'WARNING'}, 0, "could not execute statement to check state of blade " . $mydbhandle->errstr());
-	my $irows = $selhdl2->rows;
-	notify($ERRORS{'OK'}, 0, "checking if $nodename is available");
-	if ($irows) {
-		if (my @irow = $selhdl2->fetchrow_array) {
-			if ($irow[0] =~ /available/) {
-				#good machine is available
-				notify($ERRORS{'OK'}, 0, "good $nodename is now available");
-				return 1;
-			}
-			elsif ($irow[0] =~ /failed/) {
-				notify($ERRORS{'WARNING'}, 0, "$nodename reported failure");
-				return 0;
-			}
-		} ## end if (my @irow = $selhdl2->fetchrow_array)
-	} ## end if ($irows)
-	else {
-		notify($ERRORS{'WARNING'}, 0, "strange no records found for computerid $computerid $nodename - possible issue with query");
-		return 0;
-	}
-	my @row;
-	while (@row = $selhdl->fetchrow_array) {
-		if (!$s1) {
-			if ($row[0] =~ /loadimage|loadimagevmware/) {
-				notify($ERRORS{'OK'}, 0, "detected s1");
-				$s1     = 1;
-				$s1time = convert_to_epoch_seconds($row[2]);
-			}
-		}
-		if (!$s2) {
-			if ($row[0] =~ /startload/) {
-				notify($ERRORS{'OK'}, 0, "detected startload state");
-				if ($row[1] =~ /$requestedimagename/) {
-					notify($ERRORS{'OK'}, 0, "good $nodename is loading $requestedimagename");
-					$s2     = 1;
-					$s2time = convert_to_epoch_seconds($row[2]);
-				}
-				else {
-					notify($ERRORS{'WARNING'}, 0, "$nodename is not loading desired image");
-					return 0;
-				}
-			} ## end if ($row[0] =~ /startload/)
-		} ## end if (!$s2)
-		if (!$s3) {
-			if ($row[0] =~ /rinstall|transfervm/) {
-				notify($ERRORS{'OK'}, 0, "detected $row[0] for $nodename");
-				$s3     = 1;
-				$s3time = convert_to_epoch_seconds($row[2]);
-			}
-
-		}
-		if (!$s4) {
-			if ($row[0] =~ /xcatstage5|startvm/) {
-				notify($ERRORS{'OK'}, 0, "detected $row[0] for $nodename");
-				$s4     = 1;
-				$s4time = convert_to_epoch_seconds($row[2]);
-			}
-		}
-		if (!$s5) {
-			if ($row[0] =~ /bootstate|vmstage1/) {
-				notify($ERRORS{'OK'}, 0, "detected $row[0] for $nodename");
-				$s5     = 1;
-				$s5time = convert_to_epoch_seconds($row[2]);
-			}
-		}
-		if (!$s6) {
-			if ($row[0] =~ /xcatround3|vmstage5/) {
-				notify($ERRORS{'OK'}, 0, "detected $row[0] for $nodename");
-				$s6     = 1;
-				$s6time = convert_to_epoch_seconds($row[2]);
-			}
-		}
-		if (!$s7) {
-			if ($row[0] =~ /xcatREADY|vmwareready/) {
-				notify($ERRORS{'OK'}, 0, "detected $row[0] for $nodename");
-				$s7     = 1;
-				$s7time = convert_to_epoch_seconds($row[2]);
-			}
-		}
-		if (!$s8) {
-			if ($row[0] =~ /nodeready/) {
-				notify($ERRORS{'OK'}, 0, "detected $row[0] for $nodename, returning to calling process");
-				$s8 = 1;
-				#ready to return
-				return 1;
-			}
-		}
-		if ($row[0] =~ /failed/) {
-			return 0;
-		}
-	} ## end while (@row = $selhdl->fetchrow_array)
-
-	notify($ERRORS{'OK'}, 0, "current stages passed s1='$s1' s2='$s2' s3='$s3' s4='$s4' s5='$s5' s6='$s6' s7='$s7' going to sleep 15");
-	sleep 15;
-	#prevent infinite loop - check how long we've waited
-	$currentime = convert_to_epoch_seconds;
-	my $delta = $currentime - $mystarttime;
-	#check some state times
-	#if($s5){
-	#   if(!$s6){
-	#      #how long has it been since $s5 was set
-	#      my $s5diff = ($currentime-$s5time);
-	#      if($s5diff > 5*60){
-	#         #greater than 5 minutes
-	#         notify($ERRORS{'OK'},0,"waited over 5 minutes - $s5diff seconds for stage 6 to complete, returning");
-	#         return 0;
-	#      }
-	#   }
-	#   if(!$s7){
-	#      #how long has it been since $s6 was set
-	#      my $s6diff = $currentime-$s6time;
-	#      if($s6diff > 6*60){
-	#         #greater than 4 minutes
-	#         notify($ERRORS{'OK'},0,"waited over 6 minutes - $s6diff seconds for stage 7 to be reached, returning");
-	#         return 0;
-	#      }
-#
-#       }
-#    }
-
-	if ($delta > ($ert * 60)) {
-		notify($ERRORS{'OK'}, 0, "waited $delta seconds and we have exceeded our ert of $ert, returning");
-		#just return at this point - it should have been completed by now
-		return 0;
-	}
-
-	goto MONITORLOADCHECKS;
-
-} ## end sub monitorloading
-
-#/////////////////////////////////////////////////////////////////////////////
-
 =head2 insertloadlog
 
  Parameters  : $resid,   $computerid, $loadstatename, $additionalinfo
@@ -4256,7 +4070,7 @@ sub get_management_node_requests {
 	}    # Close loop through selected rows
 
 	# Each selected row represents a reservation associated with this request
-
+	
 	return %requests;
 } ## end sub get_management_node_requests
 
@@ -4748,33 +4562,33 @@ EOF
 	$vmhost_info->{vmprofile}{username} = '' if !$vmhost_info->{vmprofile}{username};
 	$vmhost_info->{vmprofile}{password} = '' if !$vmhost_info->{vmprofile}{password};
 	
-    # Decrypt the vmhost password
-    if(-f $vmhost_info->{vmprofile}{rsakey} &&
-            $vmhost_info->{vmprofile}{encryptedpasswd}){
-        # Read the private keyfile into a string
+	# Decrypt the vmhost password
+	if ($vmhost_info->{vmprofile}{rsakey} && -f $vmhost_info->{vmprofile}{rsakey} && $vmhost_info->{vmprofile}{encryptedpasswd}) {
+		# Read the private keyfile into a string
         local $/ = undef;
         open FH, $vmhost_info->{vmprofile}{rsakey} or
                 notify($ERRORS{'WARNING'}, 0, "Could not read private keyfile (" . $vmhost_info->{vmprofile}{rsakey} . "): $!");
         my $key = <FH>;
         close FH;
-        if($key){
-            my $encrypted = $vmhost_info->{vmprofile}{encryptedpasswd};
-            my $rsa = Crypt::OpenSSL::RSA->new_private_key($key);
-            # Croak on an invalid key
-            $rsa->check_key;
-            # Use the same padding algorithm as the PHP code
-            $rsa->use_pkcs1_oaep_padding;
-            # Convert password from hex to binary, decrypt
-            # and store in the vmprofile.password field
-            $vmhost_info->{vmprofile}{password} = $rsa->decrypt(pack("H*", $encrypted));
-            notify($ERRORS{'DEBUG'}, 0, "decrypted vmprofile password with key: " . $vmhost_info->{vmprofile}{rsakey});
-        } else {
-            notify($ERRORS{'WARNING'}, 0, "unable to decrypt vmprofile password");    
-        }
-    }
-    # Clean up the extraneous data
-    delete $vmhost_info->{vmprofile}{rsakey};
-    delete $vmhost_info->{vmprofile}{encryptedpassword};
+		if ($key) {
+			my $encrypted = $vmhost_info->{vmprofile}{encryptedpasswd};
+			my $rsa = Crypt::OpenSSL::RSA->new_private_key($key);
+			# Croak on an invalid key
+			$rsa->check_key;
+			# Use the same padding algorithm as the PHP code
+			$rsa->use_pkcs1_oaep_padding;
+			# Convert password from hex to binary, decrypt
+			# and store in the vmprofile.password field
+			$vmhost_info->{vmprofile}{password} = $rsa->decrypt(pack("H*", $encrypted));
+			notify($ERRORS{'DEBUG'}, 0, "decrypted vmprofile password with key: " . $vmhost_info->{vmprofile}{rsakey});
+		}
+		else {
+			Nnotify($ERRORS{'WARNING'}, 0, "unable to decrypt vmprofile password");    
+		}
+	}
+	# Clean up the extraneous data
+	delete $vmhost_info->{vmprofile}{rsakey};
+	delete $vmhost_info->{vmprofile}{encryptedpassword};
 	
 	$vmhost_info->{vmprofile}{vmpath} = $vmhost_info->{vmprofile}{datastorepath} if !$vmhost_info->{vmprofile}{vmpath};
 	$vmhost_info->{vmprofile}{virtualdiskpath} = $vmhost_info->{vmprofile}{vmpath} if !$vmhost_info->{vmprofile}{virtualdiskpath};
@@ -5137,7 +4951,7 @@ sub run_scp_command {
 		notify($ERRORS{'WARNING'}, 0, "unable to locate the SCP executable in the usual places");
 		return 0;
 	}
-
+	
 	# could be hazardous not confirming optional input flags
 	if (defined($options)) {
 		$scp_path .= " $options ";
@@ -5159,7 +4973,7 @@ sub run_scp_command {
 	# -r, Recursively copy entire directories.
 	# -v, Verbose mode.  Causes scp and ssh to print debugging messages about their progress.
 	# Don't use -q, Disables the progress meter. Error messages are more descriptive without it
-	my $scp_command = "$scp_path -B $identity_paths-P $port -p -r $path1 $path2";
+	my $scp_command = "$scp_path -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -B $identity_paths-P $port -p -r $path1 $path2";
 
 	# Redirect standard output and error output so all messages are captured
 	$scp_command .= ' 2>&1';
@@ -6204,10 +6018,11 @@ sub update_log_ending {
 
 	# Call the database execute subroutine
 	if (database_execute($update_statement)) {
+		notify($ERRORS{'DEBUG'}, 0, "log id $log_id ending set to '$ending'");
 		return 1;
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "unable to update database, log id $log_id");
+		notify($ERRORS{'WARNING'}, 0, "failed to set log id $log_id ending to '$ending'");
 		return 0;
 	}
 } ## end sub update_log_ending
@@ -6290,10 +6105,11 @@ sub update_log_loaded_time {
 
 	# Call the database execute subroutine
 	if (database_execute($update_statement)) {
+		notify($ERRORS{'OK'}, 0, "updated log loaded time to now for log id: $request_logid");
 		return 1;
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "unable to update database, request log ID $request_logid");
+		notify($ERRORS{'WARNING'}, 0, "failed to update log loaded time to now for log id: $request_logid");
 		return 0;
 	}
 } ## end sub update_log_loaded_time
@@ -10479,6 +10295,37 @@ sub get_current_image_contents_noDS {
    return @{$cat_output};
 }
 
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 stopwatch
+
+ Parameters  : $title (optional)
+ Returns     : none
+ Description : For vcld performance monitoring only. Every time stopwatch is
+               called, it prints a message to STDOUT with the current time and
+               the time elapsed since the last call.
+
+=cut
+
+sub stopwatch {
+	my ($title) = @_;
+	
+	if (!$ENV{'start'}) {
+		$ENV{'start'} = [gettimeofday];
+	}
+	
+	$ENV{'previous'} = $ENV{'current'} || $ENV{'start'};
+	
+	$ENV{'current'} = [gettimeofday];
+	
+	my $message = "stopwatch: ";
+	$message .= " $title: " if $title;
+	
+	$message .= "+" . tv_interval($ENV{'previous'}, $ENV{'current'}) . " (" . tv_interval($ENV{'start'}, $ENV{'current'}) . ")";
+	
+	print "\n\n$message\n\n";
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 
