@@ -982,17 +982,17 @@ sub check_blockrequest_time {
 
 	my $expire_time_epoch_seconds = convert_to_epoch_seconds($expire_datetime);
 	my $expire_delta_minutes      = int(($expire_time_epoch_seconds - $current_time_epoch_seconds) / 60);
-	#notify($ERRORS{'DEBUG'}, 0, "expire: $expire_datetime, epoch: $expire_time_epoch_seconds, delta: $expire_delta_minutes minutes");
+	#notify($ERRORS{'OK'}, 0, "expire: $expire_datetime, epoch: $expire_time_epoch_seconds, delta: $expire_delta_minutes minutes");
 
 	# If expire time is in the past, remove it
-	if ($expire_delta_minutes < 0) {
+	if ($expire_delta_minutes < 1) {
 		# Block request has expired
 		notify($ERRORS{'OK'}, 0, "block request expired " . abs($expire_delta_minutes) . " minutes ago, returning 'expire'");
 		return "expire";
 	}
 
 	if ($start_datetime =~ /^-?\d*$/ || $end_datetime =~ /^-?\d*$/) {
-		notify($ERRORS{'DEBUG'}, 0, "block request is not expired but has no block times assigned to it, returning 0");
+		#notify($ERRORS{'OK'}, 0, "block request is not expired but has no block times assigned to it, returning 0");
 		return 0;
 	}
 
@@ -1005,8 +1005,14 @@ sub check_blockrequest_time {
 	my $start_delta_minutes = int(($start_time_epoch_seconds - $current_time_epoch_seconds) / 60);
 	my $end_delta_minutes   = int(($end_time_epoch_seconds - $current_time_epoch_seconds) / 60);
 
-	#notify($ERRORS{'DEBUG'}, 0, "start:  $start_datetime,  epoch: $start_time_epoch_seconds,  delta: $start_delta_minutes minutes");
-	#notify($ERRORS{'DEBUG'}, 0, "end:    $end_datetime,    epoch: $end_time_epoch_seconds,    delta: $end_delta_minutes minutes");
+	#notify($ERRORS{'OK'}, 0, "start:  $start_datetime,  epoch: $start_time_epoch_seconds,  delta: $start_delta_minutes minutes");
+	#notify($ERRORS{'OK'}, 0, "end:    $end_datetime,    epoch: $end_time_epoch_seconds,    delta: $end_delta_minutes minutes");
+
+	# End time it is less than 1 minute
+	if ($end_delta_minutes < 1) {
+		notify($ERRORS{'OK'}, 0, "block request end time has been reached ($end_delta_minutes minutes from now), returning 'end'");
+		return "end";
+	}
 
 	# if 30min to 6 hrs in advance: start assigning resources
 	if ($start_delta_minutes <= (6 * 60)) {
@@ -1015,12 +1021,6 @@ sub check_blockrequest_time {
 		return "start";
 	}
 
-	# End time it is less than 1 minute
-	if ($end_delta_minutes < 0) {
-		# Block request end time is near
-		notify($ERRORS{'OK'}, 0, "block request end time has been reached ($end_delta_minutes minutes from now), returning 'end'");
-		return "end";
-	}
 
 	#notify($ERRORS{'DEBUG'}, 0, "block request does not need to be processed now, returning 0");
 	return 0;
