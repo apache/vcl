@@ -2305,16 +2305,7 @@ function updateResourcePrivs($group, $node, $adds, $removes) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function getKey($data) {
-	$newdata = array();
-	foreach($data as $arr)
-		if(is_array($arr))
-			$newdata = array_merge_recursive($newdata, $arr);
-		else
-			array_push($newdata, $arr);
-	$rc = '';
-	foreach($newdata as $key => $val)
-		$rc = md5("$rc$key$val");
-	return $rc;
+	return md5(serialize($data));
 }
 
 ////////////////////////////////////////////////////////////////////////////////
