@@ -379,7 +379,7 @@ sub load {
 						insertloadlog($reservation_id, $computer_id, "failed", "failed to start load process on $computer_node_name");
 						return 0;
 					}
-					if ($_ =~ /nodeset failure/) {
+					if ($_ =~ /failure/) {
 						my $success = 0;
 						notify($ERRORS{'OK'}, 0, "rinstall's nodeset failed - trying nodeset directly: ($_)");
 						if (open(NODESET, "$XCAT_ROOT/sbin/nodeset $computer_node_name install 2>&1 |")) {
@@ -401,23 +401,9 @@ sub load {
 						}
 						if ($success) {
 							$success = 0;
-							if (open(RPOWER, "$XCAT_ROOT/bin/rpower $computer_node_name boot 2>&1 |")) {
-								while (<RPOWER>) {
-									chomp($_);
-									if ($_ =~ /$computer_node_name:.* on/) {
-										$success = 1;
-										notify($ERRORS{'OK'}, 0, "node power set to boot");
-									}
-								}
-								close(RPOWER);
-							} ## end if (open(RPOWER, "$XCAT_ROOT/bin/rpower $computer_node_name boot 2>&1 |"...
-							else {
-								notify($ERRORS{'CRITICAL'}, 0, "failed to open rpower directly");
-								close(RINSTALL);
-								close(SEM);
-								insertloadlog($reservation_id, $computer_id, "failed", "failed to start load process on $computer_node_name");
-								return 0;
-							}
+							if($self->power_off()) {
+                        $success = 1 if($self->power_on());
+                     }
 						} ## end if ($success)
 						else {
 							notify($ERRORS{'CRITICAL'}, 0, "direct call of nodeset failed ($_)");
