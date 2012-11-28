@@ -164,22 +164,32 @@ sub delete_service {
 		return;
 	}
 	
-	my $service_name = shift;
-	if (!$service_name) {
+	my $service_name_argument = shift;
+	if (!$service_name_argument) {
 		notify($ERRORS{'WARNING'}, 0, "service name argument was not supplied");
 		return;
 	}
-	$service_name = $SERVICE_NAME_MAPPINGS->{$service_name} || $service_name;
+	
+	# Need to attempt to delete both the service with a name matching the argument as well as the mapped service name
+	my @service_names = ($service_name_argument);
+	
+	# If a mapped service name also exists, attempt to delete it as well
+	if ($SERVICE_NAME_MAPPINGS->{$service_name_argument}) {
+		push @service_names, $SERVICE_NAME_MAPPINGS->{$service_name_argument};
+	}
 	
 	my $computer_node_name = $self->data->get_computer_node_name();
 	
-	$self->stop_service($service_name) || return;
+	for my $service_name (@service_names) {
+		$self->stop_service($service_name) || return;
+		
+		# Delete the service configuration file
+		my $service_file_path = "/etc/init/$service_name.conf";
+		$self->delete_file($service_file_path) || return;
+		
+		notify($ERRORS{'DEBUG'}, 0, "deleted '$service_name' service on $computer_node_name");
+	}
 	
-	# Delete the service configuration file
-	my $service_file_path = "/etc/init/$service_name.conf";
-	$self->delete_file($service_file_path) || return;
-	
-	notify($ERRORS{'DEBUG'}, 0, "deleted '$service_name' service on $computer_node_name");
 	return 1;
 }
 
@@ -270,7 +280,7 @@ sub stop_service {
 	}
 	elsif (grep(/Unknown job/i, @$output)) {
 		# Output if the service doesn't exist: 'initctl: Unknown job: <service name>'
-		notify($ERRORS{'WARNING'}, 0, "'$service_name' service does not exist on $computer_node_name");
+		notify($ERRORS{'DEBUG'}, 0, "'$service_name' service does not exist on $computer_node_name");
 		return 1;
 	}
 	elsif (grep(/Unknown instance/i, @$output)) {
