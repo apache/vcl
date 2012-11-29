@@ -263,40 +263,50 @@ sub stop_service {
 		return;
 	}
 	
-	my $service_name = shift;
-	if (!$service_name) {
+	my $service_name_argument = shift;
+	if (!$service_name_argument) {
 		notify($ERRORS{'WARNING'}, 0, "service name argument was not supplied");
 		return;
 	}
-	$service_name = $SERVICE_NAME_MAPPINGS->{$service_name} || $service_name;
+	
+	# Need to attempt to stop both the service with a name matching the argument as well as the mapped service name
+	my @service_names = ($service_name_argument);
+	
+	# If a mapped service name also exists, attempt to stop it as well
+	if ($SERVICE_NAME_MAPPINGS->{$service_name_argument}) {
+		push @service_names, $SERVICE_NAME_MAPPINGS->{$service_name_argument};
+	}
 	
 	my $computer_node_name = $self->data->get_computer_node_name();
 	
-	my $command = "initctl stop $service_name";
-	my ($exit_status, $output) = $self->execute($command);
-	if (!defined($output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to execute command to stop '$service_name' service on $computer_node_name");
-		return;
+	for my $service_name (@service_names) {
+		my $command = "initctl stop $service_name";
+		my ($exit_status, $output) = $self->execute($command);
+		if (!defined($output)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to execute command to stop '$service_name' service on $computer_node_name");
+			return;
+		}
+		elsif (grep(/Unknown job/i, @$output)) {
+			# Output if the service doesn't exist: 'initctl: Unknown job: <service name>'
+			notify($ERRORS{'DEBUG'}, 0, "'$service_name' service does not exist on $computer_node_name");
+		}
+		elsif (grep(/Unknown instance/i, @$output)) {
+			# Output if the service is not running: 'initctl: Unknown instance:'
+			notify($ERRORS{'DEBUG'}, 0, "'$service_name' is already stopped on $computer_node_name");
+			return 1;
+		}
+		elsif (grep(/ stop\//i, @$output)) {
+			# Output if the service was stopped: '<service name> stop/waiting'
+			notify($ERRORS{'DEBUG'}, 0, "stopped '$service_name' service on $computer_node_name");
+			return 1;
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to stop '$service_name' service on $computer_node_name, exit status: $exit_status, command: '$command', output:\n" . join("\n", @$output));
+			return;
+		}
 	}
-	elsif (grep(/Unknown job/i, @$output)) {
-		# Output if the service doesn't exist: 'initctl: Unknown job: <service name>'
-		notify($ERRORS{'DEBUG'}, 0, "'$service_name' service does not exist on $computer_node_name");
-		return 1;
-	}
-	elsif (grep(/Unknown instance/i, @$output)) {
-		# Output if the service is not running: 'initctl: Unknown instance:'
-		notify($ERRORS{'DEBUG'}, 0, "'$service_name' is already stopped on $computer_node_name");
-		return 1;
-	}
-	elsif (grep(/ stop\//i, @$output)) {
-		# Output if the service was stopped: '<service name> stop/waiting'
-		notify($ERRORS{'DEBUG'}, 0, "stopped '$service_name' service on $computer_node_name");
-		return 1;
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to stop '$service_name' service on $computer_node_name, exit status: $exit_status, command: '$command', output:\n" . join("\n", @$output));
-		return;
-	}
+	
+	return 1;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
