@@ -514,7 +514,7 @@ function addComputerPrompt() {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function editOrAddComputer($state) {
-	global $submitErr, $submitErrMsg;
+	global $submitErr, $submitErrMsg, $mode;
 	$data2 = processComputerInput2();
 
 	$computers = getComputers();
@@ -656,6 +656,27 @@ function editOrAddComputer($state) {
 	}
 	else {
 		print "<H2>Edit Computer</H2>\n";
+
+		if($mode == 'submitDeleteComputer') {
+			$changehostname = getContinuationVar('changehostname', 0);
+			$seteth0null = getContinuationVar('seteth0null', 0);
+			$seteth1null = getContinuationVar('seteth1null', 0);
+			if($changehostname) {
+				$submitErr |= HOSTNAMEERR;
+				$submitErrMsg[HOSTNAMEERR] = '-UNDELETED-id was added to the end of the hostname due to an existing computer with the same hostname';
+			}
+			if($seteth0null) {
+				$oldeth0addr = getContinuationVar('oldeth0addr');
+				$submitErr |= MACADDRERR2;
+				$submitErrMsg[MACADDRERR2] = "This address was set to NULL due to a conflict with another computer. The address was $oldeth0addr";
+			}
+			if($seteth1null) {
+				$oldeth1addr = getContinuationVar('oldeth1addr');
+				$submitErr |= MACADDRERR;
+				$submitErrMsg[MACADDRERR] = "This address was set to NULL due to a conflict with another computer. The address was $oldeth1addr";
+			}
+		}
+
 		if($tovmhostinuse) {
 			print "<div class=\"highlightnoticewarn\" id=\"cancelvmhostinusediv\">\n";
 			$nicestart = date('g:i A \o\n l, F jS, Y', $tovmhostinuse);
@@ -885,7 +906,12 @@ function editOrAddComputer($state) {
 			$data2['allowvmhostinuse'] = 1;
 		else
 			$data2['allowvmhostinuse'] = 0;
-		$cont = addContinuationsEntry('confirmEditComputer', $data2, SECINDAY, 0);
+		if($mode == 'submitDeleteComputer') {
+			$data2['skipmaintenancenote'] = 1;
+			$cont = addContinuationsEntry('confirmEditComputer', $data2, SECINDAY);
+		}
+		else
+			$cont = addContinuationsEntry('confirmEditComputer', $data2, SECINDAY, 0);
 		print "      <INPUT type=submit value=\"Confirm Changes\">\n";
 	}
 	print "      <INPUT type=hidden name=continuation value=\"$cont\">\n";
@@ -915,6 +941,7 @@ function confirmEditOrAddComputer($state) {
 	global $submitErr, $submitErrMsg;
 
 	$data = processComputerInput();
+	$skipmaintenancenote = getContinuationVar('skipmaintenancenote', 0);
 
 	if($submitErr) {
 		editOrAddComputer($state);
@@ -1025,7 +1052,7 @@ function confirmEditOrAddComputer($state) {
 	print "  <TR>\n";
 	print "    <TD>\n";
 	print "      <FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
-	if(! $state && $data['stateid'] == 10)
+	if(! $state && $data['stateid'] == 10 && ! $skipmaintenancenote)
 		$cont = addContinuationsEntry('computerAddMaintenanceNote', $data, SECINDAY, 0);
 	else {
 		$data['provisioning'] = getContinuationVar('provisioning');
@@ -1668,6 +1695,41 @@ function confirmDeleteComputer() {
 	$cdata = $data;
 	$cdata['deleted'] = $deleted;
 	$cdata['compid'] = $compid;
+	if($deleted) {
+		# check for duplicate hostname
+		$query = "SELECT id "
+		       . "FROM computer "
+		       . "WHERE hostname = '{$computers[$compid]['hostname']}' AND "
+		       .       "id != $compid AND "
+		       .       "deleted = 0";
+		$qh = doQuery($query);
+		if(mysql_num_rows($qh))
+			$cdata['changehostname'] = 1;
+
+		# check for duplicate eth0macaddress
+		$query = "SELECT id "
+		       . "FROM computer "
+		       . "WHERE eth0macaddress = '{$computers[$compid]['eth0macaddress']}' AND "
+		       .       "id != $compid AND "
+		       .       "deleted = 0";
+		$qh = doQuery($query);
+		if(mysql_num_rows($qh)) {
+			$cdata['seteth0null'] = 1;
+			$cdata['oldeth0addr'] = $computers[$compid]['eth0macaddress'];
+		}
+
+		# check for duplicate eth1macaddress
+		$query = "SELECT id "
+		       . "FROM computer "
+		       . "WHERE eth1macaddress = '{$computers[$compid]['eth1macaddress']}' AND "
+		       .       "id != $compid AND "
+		       .       "deleted = 0";
+		$qh = doQuery($query);
+		if(mysql_num_rows($qh)) {
+			$cdata['seteth1null'] = 1;
+			$cdata['oldeth1addr'] = $computers[$compid]['eth1macaddress'];
+		}
+	}
 	$cont = addContinuationsEntry('submitDeleteComputer', $cdata, SECINDAY, 0, 0);
 	print "      <INPUT type=hidden name=continuation value=\"$cont\">\n";
 	print "      <INPUT type=submit value=$button>\n";
@@ -1696,36 +1758,43 @@ function submitDeleteComputer() {
 	$compid = getContinuationVar("compid");
 	$deleted = getContinuationVar("deleted");
 	$compdata = getComputers(0, 1, $compid);
+	$changehostname = 0;
+	$seteth0null = 0;
+	$seteth1null = 0;
 	if($deleted) {
-		$newhostname = preg_replace('/-DELETED-[0-9]+$/', '', $compdata[$compid]['hostname']);
-		$newhostname = mysql_real_escape_string($newhostname);
-		$query = "SELECT id "
-		       . "FROM computer "
-		       . "WHERE hostname = '$newhostname' AND "
-		       .       "id != $compid";
-		$qh = doQuery($query);
-		if(mysql_num_rows($qh))
-			$newhostname = "$newhostname-UNDELETED-$compid";
+		$changehostname = getContinuationVar('changehostname', 0);
+		$seteth0null = getContinuationVar('seteth0null', 0);
+		$seteth1null = getContinuationVar('seteth1null', 0);
+
 		$query = "UPDATE computer "
 		       . "SET deleted = 0, "
-		       .     "hostname = '$newhostname' ";
+		       .     "datedeleted = '0000-00-00 00:00:00' ";
+		if($changehostname)
+		   $query .= ", hostname = '{$compdata[$compid]['hostname']}-UNDELETED-$compid' ";
 		if($compdata[$compid]['type'] == 'virtualmachine')
 			$query .= ", stateid = 10 ";
+		if($seteth0null)
+			$query .= ", eth0macaddress = NULL ";
+		if($seteth1null)
+			$query .= ", eth1macaddress = NULL ";
 		$query .= "WHERE id = $compid";
 		$qh = doQuery($query, 190);
 	}
 	else {
-		$newhostname = preg_replace('/-(UN)?DELETED-[0-9]+$/', '', $compdata[$compid]['hostname']);
-		$newhostname = "$newhostname-DELETED-$compid";
-		$newhostname = mysql_real_escape_string($newhostname);
+		$newhostname = preg_replace('/-UNDELETED-[0-9]+$/', '', $compdata[$compid]['hostname']);
 		$query = "UPDATE computer "
 		       . "SET deleted = 1, "
+		       .     "datedeleted = NOW(), "
 		       .     "vmhostid = NULL, "
 		       .     "hostname = '$newhostname' "
 		       . "WHERE id = $compid";
 		$qh = doQuery($query, 191);
 	}
 	$_SESSION['userresources'] = array();
+	if($changehostname || $seteth0null || $seteth1null) {
+		editOrAddComputer(0);
+		return;
+	}
 	viewComputers();
 }
 
@@ -3645,7 +3714,8 @@ function submitCompStateChange() {
 		$compids = implode(',', $data['computerids']);
 		$query = "UPDATE computer "
 		       . "SET deleted = 1, "
-		       .     "notes = '', "
+		       .     "datedeleted = NOW(), "
+		       .     "hostname = REPLACE(hostname, CONCAT('-UNDELETED-', id), ''), "
 		       .     "vmhostid = NULL "
 		       . "WHERE id IN ($compids)";
 		doQuery($query, 999);
@@ -3801,11 +3871,21 @@ function processComputerInput($checks=1) {
 		$submitErrMsg[MACADDRERR2] = "Invalid MAC address.  Must be XX:XX:XX:XX:XX:XX "
 		                           . "with each pair of XX being from 00 to FF (inclusive)";
 	}
+	if(! ($submitErr & MACADDRERR2) &&
+	   checkForMACaddress($return['eth0macaddress'], 0, $return['compid'])) {
+	   $submitErr |= MACADDRERR2;
+	   $submitErrMsg[MACADDRERR2] = "There is already a computer with this MAC address.";
+	}
 	if(strlen($return['eth1macaddress']) &&
 	   ! preg_match('/^(([A-Fa-f0-9]){2}:){5}([A-Fa-f0-9]){2}$/', $return["eth1macaddress"])) {
 		$submitErr |= MACADDRERR;
 		$submitErrMsg[MACADDRERR] = "Invalid MAC address.  Must be XX:XX:XX:XX:XX:XX "
 		                          . "with each pair of XX being from 00 to FF (inclusive)";
+	}
+	if(! ($submitErr & MACADDRERR) &&
+	   checkForMACaddress($return['eth1macaddress'], 1, $return['compid'])) {
+	   $submitErr |= MACADDRERR;
+	   $submitErrMsg[MACADDRERR] = "There is already a computer with this MAC address.";
 	}
 	/*if(! ($submitErr & IPADDRERR) && 
 	   checkForIPaddress($return["ipaddress"], $return["compid"])) {
@@ -4103,7 +4183,8 @@ function processBulkComputerInput($checks=1) {
 		}
 		$allhosts = implode("','", $checkhosts);
 		$query = "SELECT hostname FROM computer "
-		       . "WHERE hostname IN ('$allhosts')";
+		       . "WHERE hostname IN ('$allhosts') AND "
+		       .       "deleted = 0";
 		$qh = doQuery($query);
 		$exists = array();
 		while($row = mysql_fetch_assoc($qh))
@@ -4178,7 +4259,38 @@ function processBulkComputerInput($checks=1) {
 ////////////////////////////////////////////////////////////////////////////////
 function checkForHostname($hostname, $compid) {
 	$query = "SELECT id FROM computer "
-	       . "WHERE hostname = '$hostname'";
+	       . "WHERE hostname = '$hostname' AND "
+	       .       "deleted = 0";
+	if(! empty($compid))
+		$query .= " AND id != $compid";
+	$qh = doQuery($query, 101);
+	if(mysql_num_rows($qh))
+		return 1;
+	return 0;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn checkForMACaddress($mac, $num, $compid)
+///
+/// \param $mac - computer mac address
+/// \param $num - which mac address to check - 0 or 1
+/// \param $compid - a computer id to ignore
+///
+/// \return 1 if $mac/$num is already in the computer table, 0 if not
+///
+/// \brief checks for $mac being somewhere in the computer table except
+/// for $compid
+///
+////////////////////////////////////////////////////////////////////////////////
+function checkForMACaddress($mac, $num, $compid) {
+	if($num == 0)
+		$field = 'eth0macaddress';
+	else
+		$field = 'eth1macaddress';
+	$query = "SELECT id FROM computer "
+	       . "WHERE $field = '$mac' AND "
+	       .       "deleted = 0";
 	if(! empty($compid))
 		$query .= " AND id != $compid";
 	$qh = doQuery($query, 101);

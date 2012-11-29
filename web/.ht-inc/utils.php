@@ -2365,17 +2365,17 @@ function decryptData($data) {
 //
 ////////////////////////////////////////////////////////////////////////////////
 function encryptDataAsymmetric($data, $public_key){
-    if(file_exists($public_key)){
-        $key = openssl_pkey_get_public(file_get_contents($public_key));
-    } else {
-        $key = openssl_pkey_get_public($public_key);
-    }    
+	if(file_exists($public_key)){
+		$key = openssl_pkey_get_public(file_get_contents($public_key));
+	} else {
+		$key = openssl_pkey_get_public($public_key);
+	}    
 
-    openssl_public_encrypt($data, $encrypted, $key, OPENSSL_PKCS1_OAEP_PADDING);
-    openssl_free_key($key);
+	openssl_public_encrypt($data, $encrypted, $key, OPENSSL_PKCS1_OAEP_PADDING);
+	openssl_free_key($key);
 
-    $hexformatted = unpack("H*hex", $encrypted);
-    return $hexformatted['hex'];
+	$hexformatted = unpack("H*hex", $encrypted);
+	return $hexformatted['hex'];
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -7294,8 +7294,6 @@ function getComputers($sort=0, $includedeleted=0, $compid="") {
 	$query .= "ORDER BY c.hostname";
 	$qh = doQuery($query, 180);
 	while($row = mysql_fetch_assoc($qh)) {
-		if($includedeleted && $row['deleted'] == 1)
-			$row['hostname']= preg_replace('/-DELETED-[0-9]+$/', '', $row['hostname']);
 		$return[$row['id']] = $row;
 	}
 	if($sort) {
@@ -7571,8 +7569,8 @@ function sortComputers($a, $b) {
 		return -1;
 	}
 
-	$a['hostname'] = preg_replace('/-(UN)?DELETED-[0-9]+$/', '', $a['hostname']);
-	$b['hostname'] = preg_replace('/-(UN)?DELETED-[0-9]+$/', '', $b['hostname']);
+	$a['hostname'] = preg_replace('/-UNDELETED-[0-9]+$/', '', $a['hostname']);
+	$b['hostname'] = preg_replace('/-UNDELETED-[0-9]+$/', '', $b['hostname']);
 
 	# get hostname and first part of domain name
 	$tmp = explode('.', $a["hostname"]);
@@ -9458,8 +9456,8 @@ function getVMProfiles($id="") {
 	       .        "vp.vmdisk, "
 	       .        "vp.username, "
 	       .        "vp.password, "
-           .        "vp.rsakey, "
-           .        "vp.rsapub, "
+	       .        "vp.rsakey, "
+	       .        "vp.rsapub, "
 	       .        "vp.eth0generated, "
 	       .        "vp.eth1generated "
 	       . "FROM vmprofile vp "
@@ -10784,7 +10782,7 @@ function getDojoHTML($refresh) {
 			                      'dijit.form.NumberSpinner',
 			                      'dijit.form.Button',
 			                      'dijit.form.TextBox',
-                                  'dijit.form.Textarea',
+			                      'dijit.form.Textarea',
 			                      'dijit.form.FilteringSelect',
 			                      'dijit.form.Select',
 			                      'dijit.TitlePane',
