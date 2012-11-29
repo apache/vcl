@@ -473,6 +473,76 @@ BEGIN
   END IF;
 END$$
 
+-- --------------------------------------------------------
+
+/*
+Procedure   : Add2ColUniqueIndexIfNotExist
+Parameters  : tableName, columnName1, columnName2
+Description : Adds a unique index to an existing table if a primary or unique
+              index does not already exist for the column. Any non-unique
+              indices are dropped before the unique index is added.
+*/
+
+DROP PROCEDURE IF EXISTS `Add2ColUniqueIndexIfNotExist`$$
+CREATE PROCEDURE `Add2ColUniqueIndexIfNotExist`(
+  IN tableName tinytext,
+  IN columnName1 tinytext,
+  IN columnName2 tinytext
+)
+BEGIN
+  DECLARE done INT DEFAULT 0;
+  DECLARE nonunique_index_name CHAR(16);
+  
+  DECLARE select_index_names CURSOR FOR
+    SELECT i1.INDEX_NAME FROM information_schema.STATISTICS i1
+    LEFT JOIN
+    (
+    	SELECT INDEX_NAME, SEQ_IN_INDEX, COLUMN_NAME
+    	FROM information_schema.STATISTICS
+    	WHERE TABLE_SCHEMA = Database()
+    	  AND TABLE_NAME = tableName
+    	  AND SEQ_IN_INDEX = 2
+    )
+    i2 ON (i1.INDEX_NAME = i2.INDEX_NAME AND i1.SEQ_IN_INDEX = 1 AND i2.SEQ_IN_INDEX = 2)
+    WHERE i1.TABLE_SCHEMA = Database()
+      AND i1.TABLE_NAME = tableName
+      AND i1.SEQ_IN_INDEX = 1
+      AND i1.COLUMN_NAME = columnName1
+      AND i2.COLUMN_NAME IS NULL;
+  
+  DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = 1;
+
+  OPEN select_index_names;
+  
+  REPEAT
+    FETCH select_index_names INTO nonunique_index_name;
+    IF NOT done THEN
+      SET @drop_nonunique_index = CONCAT('ALTER TABLE `', Database(), '`.', tableName, ' DROP INDEX ', nonunique_index_name);
+      PREPARE drop_nonunique_index FROM @drop_nonunique_index;
+      EXECUTE drop_nonunique_index;
+    END IF;
+  UNTIL done END REPEAT;
+  
+  CLOSE select_index_names;
+  
+  IF NOT EXISTS (
+    SELECT i1.INDEX_NAME
+    FROM information_schema.STATISTICS i1, information_schema.STATISTICS i2
+    WHERE i1.TABLE_SCHEMA = Database()
+    AND i1.TABLE_NAME = tableName
+    AND i2.TABLE_SCHEMA = Database()
+    AND i2.TABLE_NAME = tableName
+    AND i1.INDEX_NAME = i2.INDEX_NAME
+    AND i1.COLUMN_NAME != i2.COLUMN_NAME
+    AND i1.COLUMN_NAME = columnName1
+  )
+  THEN
+    SET @add_unique_index = CONCAT('ALTER TABLE `', Database(), '`.', tableName, ' ADD UNIQUE (', columnName1, ',', columnName2, ')');
+    PREPARE add_unique_index FROM @add_unique_index;
+    EXECUTE add_unique_index;
+  END IF;
+END$$
+
 /* ============= End of Stored Procedures ===============*/
 
 -- --------------------------------------------------------
@@ -523,12 +593,13 @@ CALL AddColumnIfNotExists('changelog', 'other', "varchar(255) default NULL");
 --  Table structure for table `computer`
 --
 
+CALL AddColumnIfNotExists('computer', 'datedeleted', "DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00' AFTER `deleted`");
+
 CALL DropColumnIfExists('computer', 'preferredimageid');
 CALL AddIndexIfNotExists('computer', 'imagerevisionid');
-CALL DropExistingIndices('computer', 'eth0macaddress');
-CALL AddIndexIfNotExists('computer', 'eth0macaddress');
-CALL DropExistingIndices('computer', 'eth1macaddress');
-CALL AddIndexIfNotExists('computer', 'eth1macaddress');
+CALL Add2ColUniqueIndexIfNotExist('computer', 'hostname', 'datedeleted');
+CALL Add2ColUniqueIndexIfNotExist('computer', 'eth0macaddress', 'datedeleted');
+CALL Add2ColUniqueIndexIfNotExist('computer', 'eth1macaddress', 'datedeleted');
 
 -- Set the default values for the currentimage and next image columns to 'noimage'
 SET @currentimageid_noimage = CONCAT('ALTER TABLE computer CHANGE currentimageid currentimageid SMALLINT(5) UNSIGNED NOT NULL DEFAULT ', (SELECT id FROM image WHERE name LIKE 'noimage'));
@@ -542,6 +613,9 @@ EXECUTE nextimageid_noimage;
 -- change RAM to mediumint
 ALTER TABLE `computer` CHANGE `RAM` `RAM` MEDIUMINT UNSIGNED NOT NULL DEFAULT '0';
 ALTER TABLE `computer` CHANGE `location` `location` VARCHAR(255) NULL DEFAULT NULL;
+
+-- set datedeleted for deleted computers
+UPDATE computer SET datedeleted = NOW() WHERE deleted = 1 AND datedeleted = '0000-00-00 00:00:00';
 
 -- --------------------------------------------------------
 
@@ -1062,6 +1136,7 @@ INSERT IGNORE provisioningOSinstalltype (provisioningid, OSinstalltypeid) SELECT
 INSERT IGNORE provisioningOSinstalltype (provisioningid, OSinstalltypeid) SELECT provisioning.id, OSinstalltype.id FROM provisioning, OSinstalltype WHERE provisioning.name LIKE '%esx%' AND OSinstalltype.name = 'vmware';
 INSERT IGNORE provisioningOSinstalltype (provisioningid, OSinstalltypeid) SELECT provisioning.id, OSinstalltype.id FROM provisioning, OSinstalltype WHERE provisioning.name LIKE '%vbox%' AND OSinstalltype.name = 'vbox';
 INSERT IGNORE provisioningOSinstalltype (provisioningid, OSinstalltypeid) SELECT provisioning.id, OSinstalltype.id FROM provisioning, OSinstalltype WHERE provisioning.name LIKE '%lab%' AND OSinstalltype.name = 'none';
+INSERT IGNORE provisioningOSinstalltype (provisioningid, OSinstalltypeid) SELECT provisioning.id, OSinstalltype.id FROM provisioning, OSinstalltype WHERE provisioning.name LIKE '%libvirt%' AND OSinstalltype.name = 'vmware';
 
 -- --------------------------------------------------------
 
@@ -1391,3 +1466,4 @@ DROP PROCEDURE IF EXISTS `AddOrRenameColumn`;
 DROP PROCEDURE IF EXISTS `DropExistingConstraints`;
 DROP PROCEDURE IF EXISTS `DropExistingIndices`;
 DROP PROCEDURE IF EXISTS `AddManageMapping`;
+DROP PROCEDURE IF EXISTS `Add2ColUniqueIndexIfNotExist`;

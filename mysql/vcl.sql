@@ -212,6 +212,7 @@ CREATE TABLE IF NOT EXISTS `computer` (
   `provisioningid` smallint(5) unsigned NOT NULL,
   `drivetype` varchar(4) NOT NULL default 'hda',
   `deleted` tinyint(1) unsigned NOT NULL default '0',
+  `datedeleted` DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00',
   `notes` text,
   `lastcheck` datetime default NULL,
   `location` varchar(255) default NULL,
@@ -224,9 +225,9 @@ CREATE TABLE IF NOT EXISTS `computer` (
   `vmhostid` smallint(5) unsigned default NULL,
   `vmtypeid` tinyint(3) unsigned default NULL,
   PRIMARY KEY  (`id`),
-  UNIQUE KEY `hostname` (`hostname`),
-  KEY `eth1macaddress` (`eth1macaddress`),
-  KEY `eth0macaddress` (`eth0macaddress`),
+  UNIQUE KEY `hostname` (`hostname`, `datedeleted`),
+  UNIQUE KEY `eth1macaddress` (`eth1macaddress`, `datedeleted`),
+  UNIQUE KEY `eth0macaddress` (`eth0macaddress`, `datedeleted`),
   KEY `ownerid` (`ownerid`),
   KEY `stateid` (`stateid`),
   KEY `platformid` (`platformid`),
@@ -1619,6 +1620,7 @@ INSERT IGNORE provisioningOSinstalltype (provisioningid, OSinstalltypeid) SELECT
 INSERT IGNORE provisioningOSinstalltype (provisioningid, OSinstalltypeid) SELECT provisioning.id, OSinstalltype.id FROM provisioning, OSinstalltype WHERE provisioning.name LIKE '%esx%' AND OSinstalltype.name = 'vmware';
 INSERT IGNORE provisioningOSinstalltype (provisioningid, OSinstalltypeid) SELECT provisioning.id, OSinstalltype.id FROM provisioning, OSinstalltype WHERE provisioning.name LIKE '%vbox%' AND OSinstalltype.name = 'vbox';
 INSERT IGNORE provisioningOSinstalltype (provisioningid, OSinstalltypeid) SELECT provisioning.id, OSinstalltype.id FROM provisioning, OSinstalltype WHERE provisioning.name LIKE '%lab%' AND OSinstalltype.name = 'none';
+INSERT IGNORE provisioningOSinstalltype (provisioningid, OSinstalltypeid) SELECT provisioning.id, OSinstalltype.id FROM provisioning, OSinstalltype WHERE provisioning.name LIKE '%libvirt%' AND OSinstalltype.name = 'vmware';
 
 -- 
 -- Dumping data for table `resource`
