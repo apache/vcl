@@ -3107,13 +3107,15 @@ function getAffiliationTheme($affilid) {
 ////////////////////////////////////////////////////////////////////////////////
 function processInputVar($vartag, $type, $defaultvalue=NULL, $stripwhitespace=0) {
 	if((array_key_exists($vartag, $_POST) &&
-	   strncmp("$_POST[$vartag]", "0", 1) == 0 &&
+	   ! is_array($_POST[$vartag]) &&
+	   strncmp("{$_POST[$vartag]}", "0", 1) == 0 &&
 	   $type == ARG_NUMERIC &&
-		strncmp("$_POST[$vartag]", "0x0", 3) != 0) ||
+		strncmp("{$_POST[$vartag]}", "0x0", 3) != 0) ||
 	   (array_key_exists($vartag, $_GET) && 
-	   strncmp("$_GET[$vartag]", "0", 1) == 0 &&
+	   ! is_array($_GET[$vartag]) &&
+	   strncmp("{$_GET[$vartag]}", "0", 1) == 0 &&
 	   $type == ARG_NUMERIC &&
-		strncmp("$_GET[$vartag]", "0x0", 3) != 0)) {
+		strncmp("{$_GET[$vartag]}", "0x0", 3) != 0)) {
 		$_POST[$vartag] = "zero";
 	}
 	if(!empty($_POST[$vartag])) {
