@@ -810,8 +810,10 @@ function editOrAddGroup($state) {
 			if($data['type'] == 'resource')
 				$cdata['resourcetypeid'] = $resourcetypeid;
 			else {
-				if($data['courseroll'] == 1 || $data['custom'] == 0)
+				if($data['courseroll'] == 1 || $data['custom'] == 0) {
 					$cdata['name'] = $data['name'];
+					$cdata['affiliationid'] = $data['affiliationid'];
+				}
 				$cdata['selectAffil'] = $selectAffil;
 				$cdata['groupwasnone'] = $groupwasnone;
 				$cdata['custom'] = $data['custom'];
