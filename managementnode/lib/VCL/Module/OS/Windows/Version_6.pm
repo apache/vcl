@@ -1731,21 +1731,24 @@ sub run_sysprep {
 		return;
 	}
 	
+	# Set the processorArchitecture to either amd64 or x86 in the XML depending on whether or not the OS is 64-bit
+	my $architecture = $self->is_64_bit() ? 'amd64' : 'x86';
+	
 	my $unattend_xml_file_path = "$system32_path/sysprep/Unattend.xml";
 	
 	my $unattend_xml_contents = <<EOF;
 <?xml version="1.0" encoding="utf-8"?>
 <unattend xmlns="urn:schemas-microsoft-com:unattend">
 	<settings pass="generalize">
-		<component name="Microsoft-Windows-PnpSysprep" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+		<component name="Microsoft-Windows-PnpSysprep" processorArchitecture="$architecture" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
 			<PersistAllDeviceInstalls>true</PersistAllDeviceInstalls>
 		</component>
-		<component name="Microsoft-Windows-Security-SPP" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+		<component name="Microsoft-Windows-Security-SPP" processorArchitecture="$architecture" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
 			<SkipRearm>1</SkipRearm>
 		</component>
 	</settings>
 	<settings pass="specialize">
-		<component name="Microsoft-Windows-Shell-Setup" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+		<component name="Microsoft-Windows-Shell-Setup" processorArchitecture="$architecture" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
 			<Display>
 				<ColorDepth>32</ColorDepth>
 				<DPI>120</DPI>
@@ -1757,7 +1760,7 @@ sub run_sysprep {
 			<TimeZone>$time_zone_name</TimeZone>
 			<ProductKey>$product_key</ProductKey>
 		</component>
-		<component name="Microsoft-Windows-Deployment" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+		<component name="Microsoft-Windows-Deployment" processorArchitecture="$architecture" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
 			<RunSynchronous>
 				<RunSynchronousCommand wcm:action="add">
 					<Path>C:\\Cygwin\\home\\root\\VCL\\Scripts\\sysprep_cmdlines.cmd &gt; C:\\cygwin\\home\\root\\VCL\\Logs\\sysprep_cmdlines.log 2&gt;&amp;1</Path>
@@ -1765,17 +1768,17 @@ sub run_sysprep {
 				</RunSynchronousCommand>
 			</RunSynchronous>
 		</component>
-		<component name="Microsoft-Windows-Security-SPP-UX" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+		<component name="Microsoft-Windows-Security-SPP-UX" processorArchitecture="$architecture" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
 			<SkipAutoActivation>true</SkipAutoActivation>
 		</component>
-		<component name="Microsoft-Windows-UnattendedJoin" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+		<component name="Microsoft-Windows-UnattendedJoin" processorArchitecture="$architecture" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
 			<Identification>
 				<JoinWorkgroup>VCL</JoinWorkgroup>
 			</Identification>
 		</component>
 	</settings>
 	<settings pass="auditSystem">
-		<component name="Microsoft-Windows-PnpCustomizationsNonWinPE" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+		<component name="Microsoft-Windows-PnpCustomizationsNonWinPE" processorArchitecture="$architecture" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
 			<DriverPaths>
 				<PathAndCredentials wcm:action="add" wcm:keyValue="1">
 					<Path>C:\\Cygwin\\home\\root\\VCL\\Drivers</Path>
@@ -1784,7 +1787,7 @@ sub run_sysprep {
 		</component>
 	</settings>
 	<settings pass="oobeSystem">
-		<component name="Microsoft-Windows-Shell-Setup" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+		<component name="Microsoft-Windows-Shell-Setup" processorArchitecture="$architecture" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
 			<OOBE>
 				<HideEULAPage>true</HideEULAPage>
 				<NetworkLocation>Work</NetworkLocation>
@@ -1795,9 +1798,21 @@ sub run_sysprep {
 					<Value>$WINDOWS_ROOT_PASSWORD</Value>
 					<PlainText>true</PlainText>
 				</AdministratorPassword>
+				<LocalAccounts>
+					<LocalAccount wcm:action="add">
+						<Password>
+							<Value>$WINDOWS_ROOT_PASSWORD</Value>
+							<PlainText>true</PlainText>
+						</Password>
+						<Group>Administrators</Group>
+						<Name>root</Name>
+						<DisplayName>root</DisplayName>
+						<Description>VCL root account</Description>
+					</LocalAccount>
+				</LocalAccounts>
 			</UserAccounts>
 		</component>
-		<component name="Microsoft-Windows-International-Core" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+		<component name="Microsoft-Windows-International-Core" processorArchitecture="$architecture" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
 			<InputLocale>en-US</InputLocale>
 			<SystemLocale>en-US</SystemLocale>
 			<UILanguage>en-US</UILanguage>
@@ -1807,7 +1822,7 @@ sub run_sysprep {
 </unattend>
 EOF
 
-	#notify($ERRORS{'DEBUG'}, 0, "'$unattend_xml_file_path' contents:\n$unattend_xml_contents");
+	notify($ERRORS{'DEBUG'}, 0, "'$unattend_xml_file_path' contents:\n$unattend_xml_contents");
 	if (!$self->create_text_file($unattend_xml_file_path, $unattend_xml_contents)) {
 		return;
 	}
