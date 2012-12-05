@@ -8460,7 +8460,14 @@ function sendRDPfile() {
 	$redirectcomports = $user["mapserial"];
 
 	header("Content-type: application/rdp");
-	header("Content-Disposition: inline; filename=\"{$res['prettyimage']}.rdp\"");
+	if($request['serverrequest']) {
+		if(count($request['reservations']) == 1)
+			header("Content-Disposition: inline; filename=\"{$request['servername']}.rdp\"");
+		else
+			header("Content-Disposition: inline; filename=\"{$request['servername']}-{$res['prettyimage']}.rdp\"");
+	}
+	else
+		header("Content-Disposition: inline; filename=\"{$res['prettyimage']}.rdp\"");
 	print "screen mode id:i:$screenmode\r\n";
 	print "desktopwidth:i:$width\r\n";
 	print "desktopheight:i:$height\r\n";
