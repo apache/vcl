@@ -23,5 +23,5 @@ $vclpassword = '';      # password to access database
 
 $cryptkey  = '';  # random password - won't ever have to type it so make it long
 
-$pemkey = ''; # random passphrase - same as given to genkeys.sh - should be long
+$pemkey = ''; # random passphrase - won't ever have to type it so make it long
 ?>
