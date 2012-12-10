@@ -5820,16 +5820,17 @@ sub copy_vmdk {
 		$self->api->{new_image_name} = $image_name;
 		if ($self->api->copy_virtual_disk($source_vmdk_file_path, $destination_vmdk_file_path, $virtual_disk_type)) {
 			notify($ERRORS{'OK'}, 0, "copied vmdk using API's copy_virtual_disk subroutine");
-            # If the new VM name is longer than 29 chars, it may be truncated.
-            # In that case, update the image name in the database, but only do this
-            # if the API changes the value of new_image_name.
-            if($self->api->{new_image_name} ne $image_name){
-                my $image_id = $self->data->get_image_id();
-                my $imagerevision_id = $self->data->get_imagerevision_id();
-                update_image_name($image_id, $imagerevision_id, $self->api->{new_image_name});
-                $self->data->set_image_name($self->api->{new_image_name});
-                notify($ERRORS{'DEBUG'}, 0, "updated image name to ".$self->api->{new_image_name});
-            }
+			# If the new VM name is longer than 29 chars, it may be truncated.
+			# In that case, update the image name in the database, but only do this
+			# if the API changes the value of new_image_name.
+			my $request_state_name = $self->data->get_request_state_name();
+			if ($request_state_name eq 'image' && $self->api->{new_image_name} ne $image_name) {
+				my $image_id = $self->data->get_image_id();
+				my $imagerevision_id = $self->data->get_imagerevision_id();
+				update_image_name($image_id, $imagerevision_id, $self->api->{new_image_name});
+				$self->data->set_image_name($self->api->{new_image_name});
+				notify($ERRORS{'DEBUG'}, 0, "updated image name to ".$self->api->{new_image_name});
+			}
 			$copy_result = 1;
 		}
 		else {
@@ -6200,20 +6201,21 @@ sub move_vmdk {
 	if ($self->api->can("move_virtual_disk")) {
 		notify($ERRORS{'OK'}, 0, "attempting to move vmdk file using API's 'move_virtual_disk' subroutine: $source_vmdk_file_path --> $destination_vmdk_file_path");
 		
-        my $image_name = $self->data->get_image_name();
-        $self->api->{new_image_name} = $image_name;
+		my $image_name = $self->data->get_image_name();
+		$self->api->{new_image_name} = $image_name;
 		if ($self->api->move_virtual_disk($source_vmdk_file_path, $destination_vmdk_file_path)) {
 			notify($ERRORS{'OK'}, 0, "moved vmdk using API's 'move_virtual_disk' subroutine: '$source_vmdk_file_path' --> '$destination_vmdk_file_path'");
-            # If the new VM name is longer than 29 chars, it may be truncated.
-            # In that case, update the image name in the database, but only do this
-            # if the API changes the value of {new_image_name}
-            if($self->api->{new_image_name} ne $image_name){
-                my $image_id = $self->data->get_image_id();
-                my $imagerevision_id = $self->data->get_imagerevision_id();
-                update_image_name($image_id, $imagerevision_id, $self->api->{new_image_name});
-                $self->data->set_image_name($self->api->{new_image_name});
-                notify($ERRORS{'DEBUG'}, 0, "updated image name to ".$self->api->{new_image_name});
-            }
+			# If the new VM name is longer than 29 chars, it may be truncated.
+			# In that case, update the image name in the database, but only do this
+			# if the API changes the value of {new_image_name}
+			my $request_state_name = $self->data->get_request_state_name();
+			if ($request_state_name eq 'image' && $self->api->{new_image_name} ne $image_name) {
+				my $image_id = $self->data->get_image_id();
+				my $imagerevision_id = $self->data->get_imagerevision_id();
+				update_image_name($image_id, $imagerevision_id, $self->api->{new_image_name});
+				$self->data->set_image_name($self->api->{new_image_name});
+				notify($ERRORS{'DEBUG'}, 0, "updated image name to ".$self->api->{new_image_name});
+			}
 			return 1;
 		}
 		else {
