@@ -67,10 +67,13 @@ There are five ways to become involved in the ASF VCL community.
 * Submit bug reports and feature requests to our JIRA bug tracking system.
   See section IV below for more information on doing this.
 
-* Create documentation on our Confluence site. Create an account at
-  http://cwiki.apache.org/confluence/display/VCL/Index and just start adding
-  content. (Note to current community: We should create a page explaining
-  the layout so new people will know where to add content better.)
+* Create documentation changes for our website. Our site is at
+
+  http://vcl.apache.org/
+
+  Anonymous contributions can be made by following these instructions:
+
+  http://www.apache.org/dev/cmsref#non-committer
 
 * Submit patches through the dev mailing list and via the JIRA bug
   tracking system. Once you have become familiar with VCL, you can begin
