@@ -1,6 +1,6 @@
-Please see the INSTALLATION file or the Install guide at the apache vcl
-site. (https://cwiki.apache.org/VCL/vcl-23-installation.html)
-This file is only a list of requirements, which are also stated in the Install guide.
+Please see the INSTALLATION file or the Install guide at the apache vcl site.
+(https://cwiki.apache.org/VCL/vcl-23-installation.html) This file is only a list
+of requirements, which are also stated in the Install guide.
 
 System Requirements:
 
@@ -23,30 +23,33 @@ Database:
 MySQL 5.0 or later
 
 Management Node Backend:
-OS - tested on CentOS 5, RedHat Advanced Server 4,5, and 6
+Operating system - Tested on CentOS 5.x, CentOS 6.x, RedHat Enterprise Linux
+5.x, Red Hat Enterprise Linux 6.x
+
 Packages:
-- expat
 - expat-devel
 - gcc
 - krb5-libs
 - krb5-devel
-- libxml2
 - libxml2-devel
-- openssl
+- make
+- nmap
 - openssl-devel
+- perl-Archive-Tar
 - perl-CPAN
-- perl-DBI
 - perl-DBD-MySQL
+- perl-DBI
 - perl-Digest-SHA1
+- perl-IO-String
 - perl-MailTools
 - perl-Net-Netmask
 - perl-Net-SSH-Expect
 - perl-RPC-XML
+- perl-Text-CSV_XS
 - perl-XML-Simple
 - perl-YAML
 - xmlsec1-openssl
 - MySQL 5 client
-- Nmap security scanner
 - OpenSSH client
 - Perl 5.8.x
 
@@ -56,9 +59,11 @@ distributed under one or more of the following licenses:
 - The "Artistic License"
 - GNU General Public License (GPL)
 - GNU Library or "Lesser" General Public License (LGPL)
+
 Some of the required Perl modules may be built into your distribution. A script
 is provided which attempts to install the Perl modules. See the "Installing
 Required Perl modules" section of the INSTALLATION file.
+
 - Crypt-SSLeay  
   http://search.cpan.org/dist/Crypt-SSLeay/
   License: Perl Artistic & GPL
@@ -106,27 +111,24 @@ Required Perl modules" section of the INSTALLATION file.
   License: Perl Artistic & GPL
 
 Management Node Backend Conditional System Requirements:
-- Bare-metal and virtual machine provisioning
-  Both bare-metal and virtual machine provisioning require a DHCP server running
-  on the management node listening on the private network.
+- Bare-metal and virtual machine provisioning Both bare-metal and virtual
+  machine provisioning require a DHCP server running on the management node
+  listening on the private network.
 - Bare-metal provisioning
-  If you want to provision bare-metal or physical computers such as blades. You
-  will need xCAT setup and working. This release supports either xCAT 1.3 or
-  xCAT 2.x. This is useful for very large setups, very custom environments, HPC
-  integration, automating VM host servers either ESX standard or VMware Free
-  Server. Imaging support using xCAT 2.x is an add on feature. To enable imaging 
-  for xCAT2.X See adding support for partimage and partimage-ng to xCAT 2.x in the vcl apache wiki. 
+  If you want to provision bare-metal or physical computers such as blades, you
+  will need xCAT configured and working. This release supports either xCAT 1.3
+  or xCAT 2.x. Image capture support using xCAT 2.x is an add on feature. To
+  enable imaging for xCAT2.X See adding support for partimage and partimage-ng
+  to xCAT 2.x in the VCL wiki. 
 - VMware virtual machine provisioning
-  If you want to provision virtual machines on ESX,ESXi, or VMWare Free server 2.x you will need the
-  VMware vSphere toolkit. This toolkit can be obtained from:
-  http://www.vmware.com/support/developer/viperltoolkit/
-  This toolkit is a set of Perl modules. The toolkit is not required if using
-  VMware Free server 1.x.
-- Windows XP/2003/Vista//7/2008
-  If provisioning Windows OS on bare-metal, you will need the following:
-  - Sysprep - used for preparing Windows environments before an image is
-	 captured
-- Jabber Instant Message Notification(optional)s
+  The VMware vSphere SDK is required in order to provision virtual machines on
+  VMware ESX or VMware ESXi without SSH enabled or on vCenter. It can be
+  obtained from http://www.vmware.com/support/developer.
+- Windows XP/2003
+  The Sysprep utility is required in order to provision bare-metal Windows XP or
+  Windows Server 2003 images. It can be downloaded from
+  http://www.microsoft.com.
+- Jabber Instant Message Notification (optional)
   VCL has the ability to send instant message notifications using Jabber. This
   feature is optional and can be enabled or disabled by configuring the
   "jabber=[yes|no]" property in the vcld.conf file. If Jabber notification
@@ -149,7 +151,6 @@ Management Node Backend Conditional System Requirements:
   - Digest::SHA1 
     http://search.cpan.org/dist/Digest-SHA1/
     License: Perl Artistic and GPL
-
 
 
 Bundled 3rd Party Software
