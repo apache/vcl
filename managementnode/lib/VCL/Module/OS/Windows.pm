@@ -3516,13 +3516,13 @@ sub reboot {
 	$pre_configure = 1 unless defined $pre_configure;
 
 	my $computer_node_name   = $self->data->get_computer_node_name();
-	my $system32_path        = $self->get_system32_path() || return;
+	my $system32_path        = $self->get_system32_path();
 
 	my $reboot_start_time = time();
 	notify($ERRORS{'DEBUG'}, 0, "reboot will be attempted on $computer_node_name");
 
 	# Check if computer responds to ssh before preparing for reboot
-	if ($self->wait_for_ssh(0)) {
+	if ($system32_path && $self->wait_for_ssh(0)) {
 		# Perform pre-reboot configuration tasks unless $pre_configure argument was supplied and is false
 		if ($pre_configure) {
 			# Make sure SSH access is enabled from private IP addresses
@@ -10984,7 +10984,7 @@ sub check_connection_on_port {
 	
 	my $management_node_keys 	= $self->data->get_management_node_keys();
 	my $computer_node_name   	= $self->data->get_computer_node_name();
-	my $remote_ip 			= $self->data->get_reservation_remote_ip();
+	my $remote_ip 			      = $self->data->get_reservation_remote_ip();
 	my $computer_ip_address   	= $self->data->get_computer_ip_address();
 	my $request_state_name          = $self->data->get_request_state_name();
 	
@@ -11048,7 +11048,7 @@ sub check_connection_on_port {
  Parameters  : $node,$reote_IP, $identity, $type
  Returns     : 0 or 1 (nochange or updated)
  Description : compares and updates the firewall for rdp port, specfically for windows
-                                        Currently only handles windows and allows two seperate scopes
+               Currently only handles windows and allows two seperate scopes
 
 =cut
 
