@@ -192,7 +192,7 @@ sub install_linux_packages {
 		'openssl-devel',
 		'perl-Archive-Tar',
 		'perl-CPAN',
-        'perl-Crypt-OpenSSL-RSA',
+		'perl-Crypt-OpenSSL-RSA',
 		'perl-DBD-MySQL',
 		'perl-DBI',
 		'perl-Digest-SHA1',
