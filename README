@@ -121,9 +121,9 @@ Management Node Backend Conditional System Requirements:
   enable imaging for xCAT2.X See adding support for partimage and partimage-ng
   to xCAT 2.x in the VCL wiki. 
 - VMware virtual machine provisioning
-  The VMware vSphere SDK is required in order to provision virtual machines on
+  The VMware vSphere SDK for Perl is required in order to provision virtual machines on
   VMware ESX or VMware ESXi without SSH enabled or on vCenter. It can be
-  obtained from http://www.vmware.com/support/developer.
+  obtained from http://www.vmware.com/support/developer/viperltoolkit.
 - Windows XP/2003
   The Sysprep utility is required in order to provision bare-metal Windows XP or
   Windows Server 2003 images. It can be downloaded from
