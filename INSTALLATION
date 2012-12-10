@@ -13,7 +13,7 @@ I. Install & Configure the Database
       a. If you have not already done so, download and the Apache VCL source to
          the database server: 
 
-         wget http://www.apache.org/dist/vcl/apache-VCL-2.3.1.tar.bz2
+         wget --trust-server-names http://vcl.apache.org/downloads/download.cgi?action=download&filename=%2Fvcl%2Fapache-VCL-2.3.1.tar.bz2
 
       b. Extract the files: 
 
@@ -123,7 +123,7 @@ II. Install & Configure the Web Components
          yum install httpd mod_ssl php php-gd php-mcrypt php-mysql php-xml php-xmlrpc php-ldap php-process -y 
 
          Note: You may need the optional server rpm repository for the
-         php-process package to add this run the following command:
+         php-process package; to add this run the following command:
          rhn-channel --add --channel=rhel-x86_64-server-optional-6
 
       b. Configure the web server daemon (httpd) to start automatically: 
@@ -172,7 +172,8 @@ II. Install & Configure the Web Components
          * Create random passwords for the following variables: 
             * $cryptkey
             * $pemkey
-            * Save the secrets.php file
+         * Save the secrets.php file
+
       d. Run the genkeys.sh script
 
          ./genkeys.sh 
@@ -256,7 +257,7 @@ II. Install & Configure the Web Components
       phpMyAdmin, follow the instructions on:
 
             VCL 2.3.1 phpMyAdmin Installation & Configuration
-            http://cwiki.apache.org/VCL/vcl-23-phpmyadmin-installation-configuration.html
+            http://vcl.apache.org/docs/installphpmyadmin.html
 
       Further steps if using only VMWare
 
@@ -290,7 +291,7 @@ II. Install & Configure the Web Components
                to get further information about that field. More information is
                available on the VMware Configuration page:
 
-               http://cwiki.apache.org/VCL/vmware-configuration.html
+               http://vcl.apache.org/docs/vmwareconfiguration.html
 
             NOTE: Just click on the text of any field you want to edit to change
             it.  After changing it, click somewhere else to save the changed
@@ -324,6 +325,7 @@ II. Install & Configure the Web Components
             6. Click Submit
                * The computer you just added isn't listed after clicking Submit.
                  This is not a problem.                                                     
+
          Adding Multiple VMWare Servers
 
             1. Click Manage Computers
@@ -391,7 +393,7 @@ II. Install & Configure the Web Components
                  00:50:56:40:00:00 - 00:50:56:FF:FF:FF are NOT valid VMware
                  virtual machines.
 
-               * Provisioning Engine - VMware
+               * Provisioning Engine - VMware or Libvirt Virtualization API
                * State - maintenance
                * Owner - admin@Local
                * RAM
@@ -443,7 +445,7 @@ II. Install & Configure the Web Components
                  00:50:56:40:00:00 - 00:50:56:FF:FF:FF are NOT valid VMware
                  virtual machines.
 
-               * Provisioning Engine - VMware
+               * Provisioning Engine - VMware or Libvirt Virtualization API
                * State - maintenance
                * Owner - admin@Local
                * RAM
@@ -952,7 +954,17 @@ III. Install & Configure the Management Node Components
          * See the following page for additional VCL VMware configuration
            information: 
 
-           http://cwiki.apache.org/VCL/vmware-configuration.html
+           http://vcl.apache.org/docs/vmwareconfiguration.html
+
+      c. KVM (libvirt)
+         * Fedora, Red Hat, and CentOS have packages for installing libvirt
+         * Documentation for libvirt is available at their site:
+
+           http://libvirt.org/docs.html
+
+         * The virsh command reference page is particularly helpful:
+
+           http://libvirt.org/virshcmdref.html
 
 --------------------------------------------------------------------------------
 
