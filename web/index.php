@@ -16,8 +16,8 @@
   limitations under the License.
 */
 
-# ASF VCL v2.3
-$VCLversion = '2.3';
+# ASF VCL v2.3.1
+$VCLversion = '2.3.1';
 
 @include_once("fckeditor/fckeditor.php");
 require_once(".ht-inc/conf.php");
