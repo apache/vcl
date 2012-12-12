@@ -249,7 +249,7 @@ sub get_image_repository_search_paths {
 		push @search_paths, "$management_node_install_path/vmware_images/$image_name*";
 	}
 	
-	my $vmhost_profile_repository_path = $self->data->get_vmhost_profile_repository_path();
+	my $vmhost_profile_repository_path = $self->data->get_vmhost_profile_repository_path(0);
 	push @search_paths, "$vmhost_profile_repository_path/$image_name*" if $vmhost_profile_repository_path;
 	
 	return @search_paths;
@@ -320,7 +320,7 @@ sub retrieve_image {
 		$image_repository_path_local = $self->get_image_repository_directory_path();
 	}
 	else {
-		$image_repository_path_local = $self->data->get_vmhost_profile_repository_path();
+		$image_repository_path_local = $self->data->get_vmhost_profile_repository_path(0);
 	}
 	
 	if (!$image_repository_path_local) {

@@ -145,7 +145,7 @@ sub initialize {
 
 =head2 _run_vim_cmd
 
- Parameters  : $vim_arguments
+ Parameters  : $vim_arguments, $timeout_seconds (optional)
  Returns     : array ($exit_status, $output)
  Description : Runs VIM command on the VMware host.
 
@@ -163,6 +163,8 @@ sub _run_vim_cmd {
 		notify($ERRORS{'WARNING'}, 0, "VIM command arguments were not specified");
 		return;
 	}
+	
+	my $timeout_seconds = shift || 30;
 	
 	my $vmhost_computer_name = $self->vmhost_os->data->get_computer_short_name();
 	
@@ -192,7 +194,7 @@ sub _run_vim_cmd {
 		$self->{vim_cmd_calls}++;
 		#notify($ERRORS{'DEBUG'}, 0, "vim-cmd call count: $self->{vim_cmd_calls} ($vim_arguments)");
 		
-		my ($exit_status, $output) = $self->vmhost_os->execute($command);
+		my ($exit_status, $output) = $self->vmhost_os->execute($command, 0, $timeout_seconds);
 		if (!defined($output)) {
 			notify($ERRORS{'WARNING'}, 0, "attempt $attempt/$attempt_limit: failed to run VIM command on VM host $vmhost_computer_name: $command");
 		}
@@ -1765,7 +1767,7 @@ sub remove_snapshots {
 	}
 	
 	my $vim_cmd_arguments = "vmsvc/snapshot.removeall $vm_id";
-	my ($exit_status, $output) = $self->_run_vim_cmd($vim_cmd_arguments);
+	my ($exit_status, $output) = $self->_run_vim_cmd($vim_cmd_arguments, 7200);
 	return if !$output;
 	
 	notify($ERRORS{'DEBUG'}, 0, "remove snapshots output:\n" . join("\n", @$output));

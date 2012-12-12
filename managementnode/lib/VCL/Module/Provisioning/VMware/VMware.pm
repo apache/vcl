@@ -4132,7 +4132,7 @@ sub get_repository_vmdk_base_directory_path {
 	}
 	
 	# Attempt the retrieve vmhost.repositorypath
-	my $repository_vmdk_base_directory_path = $self->data->get_vmhost_profile_repository_path();
+	my $repository_vmdk_base_directory_path = $self->data->get_vmhost_profile_repository_path(0);
 	if (!$repository_vmdk_base_directory_path) {
 		notify($ERRORS{'DEBUG'}, 0, "repository path is not configured in the VM profile");
 		return;
