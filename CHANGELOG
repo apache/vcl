@@ -1,3 +1,57 @@
+ASF VCL 2.3.1
+
+Dependency changes:
+
+No dependency changes for any components in this release.
+
+Release Notes - VCL - Version 2.3.1
+
+** Bug
+    * [VCL-451] - Cannot add deleted computers
+    * [VCL-603] - reboot hard does not work for hung windows machines
+    * [VCL-607] - 'default' skin hard-coded in initialization function when it should use the global DEFAULTTHEME
+    * [VCL-609] - Reservations fail if cat command returns non-zero exit status when retrieving contents of /etc/hosts on management node
+    * [VCL-610] - minor HTML errors 
+    * [VCL-613] - output from init.d startup scripts are slightly amiss
+    * [VCL-616] - update_cygwin.cmd fails to generate keys with current version of Cygwin
+    * [VCL-619] - usenls may be undefined in _() function in requests.js
+    * [VCL-620] - libvirt.pm does not remove VMs when unassigned from host via website
+    * [VCL-621] - confirm_public_ip_address does not detect public ip address correctly for reloads
+    * [VCL-622] - reservation_failed Linux.pm Windows.pm
+    * [VCL-623] - Invalid public IP address may be presented on Connect page
+    * [VCL-624] - getUserlistID should be passed a user's full login string, not just a unityid
+    * [VCL-625] - Image retrieval may attempt to copy multiple copies of the same file, does not retrieve VMware reference vmx file.
+    * [VCL-626] - Name RDP file download after server reservation name
+    * [VCL-627] - image type fields on VM Host Profile page do not get updated
+    * [VCL-628] - check for duplicate image name not correctly performed when specified name is the same as the base image
+    * [VCL-630] - currentimage.txt name may conflict with imagerevision name, causing unnecessary reloads
+    * [VCL-631] - imagerevision.datedeleted not getting set
+    * [VCL-632] - vSphere_SDK.pm set_file_permissions does not work
+    * [VCL-633] - Change of vmprofile.vmdisk value can cause image capture to fail due to insufficient space
+    * [VCL-634] - Cluster reservations fail if node_status returns POST_LOAD
+    * [VCL-641] - VCL fails to properly trim whitespace from `virsh list --all`
+    * [VCL-642] - colons should not be allowed in resource group names
+    * [VCL-643] - VM Limit can be decreased to below the current number of assigned VMs
+    * [VCL-648] - blockRequests re-processed at end time for skipped block time entries
+    * [VCL-649] - Images may fail to load if renamed in database by VMware code
+    * [VCL-650] - VCL breaks with PHP 5.4
+    * [VCL-651] - libvirt to vmware entry missing from provisioningOSinstalltype table
+    * [VCL-652] - xCAT nodeset failure 
+    * [VCL-653] - editing a federated user group sets the affiliation of the group that of the user editing the group
+    * [VCL-654] - Sysprep fails for 32-bit Windows 7
+
+** Improvement
+    * [VCL-608] - XMLRPC interface inaccessible to Shibboleth-authenticated users
+    * [VCL-615] - make default adminUsers group have the same level of access as the default admin user
+    * [VCL-629] - update ownership of existing /home/$username 
+    * [VCL-639] - server loads - reinstall
+    * [VCL-640] - block allocation fixes
+
+** New Feature
+    * [VCL-617] - new XML-RPC methods
+
+================================================================================
+
 ASF VCL 2.3
 
 Dependency changes:
