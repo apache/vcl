@@ -1249,7 +1249,7 @@ sub get_repository_image_directory_path {
 	}
 	
 	my $image_name = shift || $self->data->get_image_name();
-	my $vmhost_repository_directory_path = $self->data->get_vmhost_profile_repository_path();
+	my $vmhost_repository_directory_path = $self->data->get_vmhost_profile_repository_path(0);
 	
 	if ($vmhost_repository_directory_path) {
 		return "$vmhost_repository_directory_path/$image_name";
@@ -2257,7 +2257,7 @@ sub find_repository_image_file_paths {
 	return @{$self->{repository_file_paths}{$image_name}} if $self->{repository_file_paths}{$image_name};
 	
 	my $node_name = $self->data->get_vmhost_short_name();
-	my $vmhost_repository_directory_path = $self->data->get_vmhost_profile_repository_path();
+	my $vmhost_repository_directory_path = $self->data->get_vmhost_profile_repository_path(0);
 	
 	if (!$vmhost_repository_directory_path) {
 		notify($ERRORS{'DEBUG'}, 0, "repository path is not configured in the VM host profile for $node_name");
