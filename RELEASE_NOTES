@@ -1,4 +1,4 @@
-VCL 2.3
+VCL 2.3.1
 
 I. Intro and Description
 
@@ -21,15 +21,8 @@ servers in a server farm or HPC cluster.
 
 II. VCL Roadmap
 
-VCL 2.3 (this release)
-  * Service deployments
-  * Allow for additional connect methods for environments (port, other
-    protocols, etc)
-  * Added framework support for libvirt 
-  * Added support for KVM
-  * Added support for OS X under ESX
-  * Added support for VMware VCenter
-  * Added multilingualization to frontend
+VCL 2.3.1 (this release)
+  * Bug fixes
 
 VCL 2.4
   * Improve additional connect methods
