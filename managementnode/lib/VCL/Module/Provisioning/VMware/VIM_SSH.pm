@@ -1785,7 +1785,7 @@ sub remove_snapshots {
 	}
 	
 	# Wait for the task to complete
-	if ($self->_wait_for_task($task_ids[0])) {
+	if ($self->_wait_for_task($task_ids[0], 7200)) {
 		notify($ERRORS{'OK'}, 0, "removed snapshots for VM: $vmx_file_path");
 		return 1;
 	}
