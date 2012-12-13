@@ -39,6 +39,8 @@ Release Notes - VCL - Version 2.3.1
     * [VCL-652] - xCAT nodeset failure 
     * [VCL-653] - editing a federated user group sets the affiliation of the group that of the user editing the group
     * [VCL-654] - Sysprep fails for 32-bit Windows 7
+    * [VCL-656] - VIM_SSH.pm times out too early when removing snapshots from a VM
+    * [VCL-657] - Prevent benign warning messages from appearing in vcld.log
 
 ** Improvement
     * [VCL-608] - XMLRPC interface inaccessible to Shibboleth-authenticated users
