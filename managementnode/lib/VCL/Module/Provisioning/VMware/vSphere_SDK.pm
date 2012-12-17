@@ -123,7 +123,7 @@ sub initialize {
 	
 	# Override the die handler
 	local $SIG{__DIE__} = sub{};
-	
+
 	# Assemble the URLs to try, URL will vary based on the VMware product
 	my @possible_vmhost_urls = (
 		"https://$vmhost_hostname/sdk",
@@ -754,10 +754,8 @@ sub copy_virtual_disk {
 	
 	my $request_id = $self->data->get_request_id();
 	
-	#my $source_vm_name = $self->_clean_vm_name("source-$request_id\_$destination_base_name");
-	#my $clone_vm_name = $self->_clean_vm_name($destination_base_name);
-	my $source_vm_name = "source-$request_id\_$destination_base_name";
-	my $clone_vm_name = $destination_base_name;
+	my $source_vm_name = $self->_clean_vm_name("source-$request_id\_$destination_base_name");
+	my $clone_vm_name = $self->_clean_vm_name($destination_base_name);
 	
 	my $source_vm_directory_path = "[$source_datastore_name] $source_vm_name";
 	my $clone_vm_directory_path = "[$destination_datastore_name] $clone_vm_name";
