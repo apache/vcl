@@ -1,6 +1,6 @@
-Please see the INSTALLATION file or the Install guide at the apache vcl site.
-(https://cwiki.apache.org/VCL/vcl-23-installation.html) This file is only a list
-of requirements, which are also stated in the Install guide.
+For installation, please see the INSTALLATION file or the install guide at the
+Apache VCL site (http://vcl.apache.org/docs/installation.html). This file is
+only a list of requirements, which are also stated in the install guide.
 
 System Requirements:
 
