@@ -2410,7 +2410,7 @@ sub nmap_port {
 		return;
 	}
 	
-	if (grep(/open/i, @$output)) {
+	if (grep(/(open|filtered)/i, @$output)) {
 		#notify($ERRORS{'DEBUG'}, 0, "port $port is open on $hostname");
 		return 1;
 	}
