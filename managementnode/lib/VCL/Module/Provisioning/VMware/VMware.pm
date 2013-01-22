@@ -5899,7 +5899,7 @@ sub copy_vmdk {
 				return;
 			}
 		}
-		elsif (grep(/Failed to clone disk/, @$output) || !grep(/(100\% done|success)/, @$output)) {
+		elsif (grep(/(failed|warning|error)/i, @$output)) {
 			notify($ERRORS{'WARNING'}, 0, "failed to copy virtual disk\ncommand: '$command'\noutput:\n" . join("\n", @$output));
 		}
 		else {
