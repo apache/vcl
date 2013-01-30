@@ -2470,7 +2470,7 @@ sub reclaim_vmhost_disk_space {
 		return;
 	}
 	
-	my $reservation_id = $self->data->get_reservation_id();
+	my $request_id = $self->data->get_request_id();
 	my $reservation_computer_id = $self->data->get_computer_id();
 	my $vmhost_profile_vmdisk = $self->data->get_vmhost_profile_vmdisk();
 	
@@ -2625,20 +2625,20 @@ sub reclaim_vmhost_disk_space {
 		}
 		
 		
-		# Check if any reservations have been assigned to the computer
+		# Check if any other requests have been assigned to the computer
 		my $computer_requests = get_request_by_computerid($check_computer_id);
 		
-		# Remove the ID for the current reservation
-		delete $computer_requests->{$reservation_id};
-		if (!keys(%$computer_requests)) {
-			notify($ERRORS{'DEBUG'}, 0, "$vmx_file_name can't be deleted because it is assigned to another reservation: " . join(", ", sort keys(%$computer_requests)));
-			$vmx_files->{$vmx_file_path}{reservations} = [sort keys(%$computer_requests)];
+		# Remove the ID for the current request
+		delete $computer_requests->{$request_id};
+		if (keys(%$computer_requests)) {
+			notify($ERRORS{'DEBUG'}, 0, "$vmx_file_name can't be deleted because it is assigned to another request: " . join(", ", sort keys(%$computer_requests)));
+			$vmx_files->{$vmx_file_path}{requests} = [sort keys(%$computer_requests)];
 			$vmx_files->{$vmx_file_path}{deletable} = 0;
 			next;
 		}
 		else {
-			notify($ERRORS{'DEBUG'}, 0, "$check_computer_name has not been assigned to any other reservations");
-			$vmx_files->{$vmx_file_path}{reservations} = [];
+			notify($ERRORS{'DEBUG'}, 0, "$check_computer_name has not been assigned to any other requests");
+			$vmx_files->{$vmx_file_path}{requests} = [];
 		}
 		
 		# Get the amount of space being used by the vmx directory
