@@ -84,6 +84,28 @@ function XMLRPCaffiliations() {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
+/// \fn XMLRPCtest($string)
+///
+/// \param $string - a string
+///
+/// \return an array with 3 indices:\n
+/// \b status - will be 'success'\n
+/// \b message - will be 'RPC call worked successfully'\n
+/// \b string - contents of $string (after being sanatized)
+///
+/// \brief this is a test function that call be called when getting XML RPC
+/// calls to this site to work
+///
+////////////////////////////////////////////////////////////////////////////////
+function XMLRPCtest($string) {
+	$string = processInputData($string, ARG_STRING);
+	return array('status' => 'success',
+	             'message' => 'RPC call worked successfully',
+	             'string' => $string);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
 /// \fn XMLRPCgetImages()
 ///
 /// \return an array of image arrays, each with 2 indices:\n
@@ -314,6 +336,298 @@ function XMLRPCaddRequestWithEnding($imageid, $start, $end, $foruser='') {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
+/// \fn XMLRPCdeployServer($imageid, $start, $end, $admingroup, $logingroup,
+///                        $ipaddr, $macaddr, $monitored, $foruser, $name)
+///
+/// \param $imageid - id of an image
+/// \param $start - "now" or unix timestamp for start of reservation; will
+/// use a floor function to round down to the nearest 15 minute increment
+/// for actual reservation
+/// \param $end - "indefinite" or unix timestamp for end of reservation; will
+/// use a floor function to round up to the nearest 15 minute increment
+/// for actual reservation
+/// \param $admingroup - (optional, default='') admin user group for reservation
+/// \param $logingroup - (optional, default='') login user group for reservation
+/// \param $ipaddr - (optional, default='') IP address to use for public IP of
+/// server
+/// \param $macaddr - (optional, default='') MAC address to use for public NIC
+/// of server
+/// \param $monitored - (optional, default=0) whether or not the server should
+/// be monitored - CURRENTLY, THIS IS UNSUPPORTED
+/// \param $foruser - (optional) login to be used when setting up the account
+/// on the reserved machine - CURRENTLY, THIS IS UNSUPPORTED
+/// \param $name - (optional) name for reservation
+///
+/// \return an array with at least one index named '\b status' which will have
+/// one of these values:\n
+/// \b error - error occurred; there will be 2 additional elements in the array:
+/// \li \b errorcode - error number\n
+/// \li \b errormsg - error string\n
+///
+/// \b notavailable - no computers were available for the request\n
+/// \b success - there will be an additional element in the array:
+/// \li \b requestid - identifier that should be passed to later calls when
+/// acting on the request
+///
+/// \brief tries to make a server request
+///
+////////////////////////////////////////////////////////////////////////////////
+function XMLRPCdeployServer($imageid, $start, $end, $admingroup='',
+                            $logingroup='', $ipaddr='', $macaddr='',
+                            $monitored=0, $foruser='', $name='') {
+	global $user, $remoteIP;
+	if(! in_array("serverProfileAdmin", $user["privileges"])) {
+		return array('status' => 'error',
+		             'errorcode' => 60,
+		             'errormsg' => "access denied to deploy server");
+	}
+	$imageid = processInputData($imageid, ARG_NUMERIC);
+	$resources = getUserResources(array("imageAdmin", "imageCheckOut"));
+	$images = removeNoCheckout($resources["image"]);
+	$extraimages = getServerProfileImages($user['id']);
+	if(! array_key_exists($imageid, $images) &&
+	   ! array_key_exists($imageid, $extraimages)) {
+		return array('status' => 'error',
+		             'errorcode' => 3,
+		             'errormsg' => "access denied to $imageid");
+	}
+	if($admingroup != '') {
+		$admingroup = processInputData($admingroup, ARG_STRING);
+		if(get_magic_quotes_gpc())
+			$admingroup = stripslashes($admingroup);
+		if(preg_match('/@/', $admingroup)) {
+			$tmp = explode('@', $admingroup);
+			$escadmingroup = mysql_real_escape_string($tmp[0]);
+			$affilid = getAffiliationID($tmp[1]);
+			if(is_null($affilid)) {
+				return array('status' => 'error',
+				             'errorcode' => 51,
+				             'errormsg' => "unknown affiliation for admin user group: {$tmp[1]}");
+			}
+		}
+		else {
+			$escadmingroup = mysql_real_escape_string($admingroup);
+			$affilid = DEFAULT_AFFILID;
+		}
+		$admingroupid = getUserGroupID($escadmingroup, $affilid, 1);
+		if(is_null($admingroupid)) {
+			return array('status' => 'error',
+			             'errorcode' => 52,
+			             'errormsg' => "unknown admin user group: $admingroup");
+		}
+	}
+	else
+		$admingroupid = '';
+	if($logingroup != '') {
+		$logingroup = processInputData($logingroup, ARG_STRING);
+		if(get_magic_quotes_gpc())
+			$logingroup = stripslashes($logingroup);
+		if(preg_match('/@/', $logingroup)) {
+			$tmp = explode('@', $logingroup);
+			$esclogingroup = mysql_real_escape_string($tmp[0]);
+			$affilid = getAffiliationID($tmp[1]);
+			if(is_null($affilid)) {
+				return array('status' => 'error',
+				             'errorcode' => 54,
+				             'errormsg' => "unknown affiliation for login user group: {$tmp[1]}");
+			}
+		}
+		else {
+			$esclogingroup = mysql_real_escape_string($logingroup);
+			$affilid = DEFAULT_AFFILID;
+		}
+		$logingroupid = getUserGroupID($esclogingroup, $affilid, 1);
+		if(is_null($logingroupid)) {
+			return array('status' => 'error',
+			             'errorcode' => 55,
+			             'errormsg' => "unknown login user group: $logingroup");
+		}
+	}
+	else
+		$logingroupid = '';
+	$ipaddr = processInputData($ipaddr, ARG_STRING);
+	$ipaddrArr = explode('.', $ipaddr);
+	if($ipaddr != '' && (! preg_match('/^(([0-9]){1,3}\.){3}([0-9]){1,3}$/', $ipaddr) ||
+		$ipaddrArr[0] < 1 || $ipaddrArr[0] > 255 ||
+		$ipaddrArr[1] < 0 || $ipaddrArr[1] > 255 ||
+		$ipaddrArr[2] < 0 || $ipaddrArr[2] > 255 ||
+		$ipaddrArr[3] < 0 || $ipaddrArr[3] > 255)) {
+		return array('status' => 'error',
+		             'errorcode' => 57,
+		             'errormsg' => "Invalid IP address. Must be w.x.y.z with each of "
+		                         . "w, x, y, and z being between 1 and 255 (inclusive)");
+	}
+	$macaddr = processInputData($macaddr, ARG_STRING);
+	if($macaddr != '' && ! preg_match('/^(([A-Fa-f0-9]){2}:){5}([A-Fa-f0-9]){2}$/', $macaddr)) {
+		return array('status' => 'error',
+		             'errorcode' => 58,
+		             'errormsg' => "Invalid MAC address.  Must be XX:XX:XX:XX:XX:XX "
+		                         . "with each pair of XX being from 00 to FF (inclusive)");
+	}
+	$monitored = processInputData($monitored, ARG_NUMERIC);
+	if($monitored != 0 && $monitored != 1)
+		$monitored = 0;
+	$start = processInputData($start, ARG_STRING, 1);
+	$end = processInputData($end, ARG_STRING, 1);
+	#$foruser = processInputData($foruser, ARG_STRING, 1);
+
+	$name = processInputData($name, ARG_STRING);
+	if(get_magic_quotes_gpc())
+		$name = stripslashes($name);
+	if(! preg_match('/^([-a-zA-Z0-9_\. ]){0,255}$/', $name)) {
+		return array('status' => 'error',
+		             'errorcode' => 58,
+						 'errormsg' => "Invalid name. Can only contain letters, numbers, "
+		                         . "spaces, dashes(-), underscores(_), and periods(.) "
+		                         . "and be up to 255 characters long");
+	}
+	$name = mysql_real_escape_string($name);
+
+	# validate $start
+	if($start != 'now' && ! is_numeric($start)) {
+		return array('status' => 'error',
+		             'errorcode' => 4,
+		             'errormsg' => "received invalid input for start");
+	}
+	# validate $end
+	if($end != 'indefinite' && ! is_numeric($end)) {
+		return array('status' => 'error',
+		             'errorcode' => 59,
+		             'errormsg' => "received invalid input for end");
+	}
+
+	$nowfuture = 'future';
+	if($start == 'now') {
+		$start = unixFloor15(time());
+		$nowfuture = 'now';
+	}
+	else
+		if($start < (time() - 30))
+			return array('status' => 'error',
+			             'errorcode' => 5,
+			             'errormsg' => "start time is in the past");
+	if($end == 'indefinite')
+		$end = datetimeToUnix("2038-01-01 00:00:00");
+	elseif($end % (15 * 60))
+		$end = unixFloor15($end) + (15 * 60);
+	elseif($end < ($start + 900))
+		return array('status' => 'error',
+		             'errorcode' => 88,
+		             'errormsg' => "end time must be at least 15 minutes after start time");
+
+	$max = getMaxOverlap($user['id']);
+	if(checkOverlap($start, $end, $max)) {
+		return array('status' => 'error',
+		             'errorcode' => 7,
+		             'errormsg' => "reservation overlaps with another one you "
+		                         . "have, and you are allowed $max "
+		                         . "overlapping reservations at a time");
+	}
+
+	$images = getImages();
+	$revisionid = getProductionRevisionid($imageid);
+	$rc = isAvailable($images, $imageid, $revisionid, $start, $end,
+	                  0, 0, 0, 0, $ipaddr, $macaddr);
+	if($rc < 1) {
+		addLogEntry($nowfuture, unixToDatetime($start), 
+		            unixToDatetime($end), 0, $imageid);
+		return array('status' => 'notavailable');
+	}
+	$return['requestid']= addRequest();
+	$query = "UPDATE reservation "
+	       . "SET remoteIP = '$remoteIP' "
+	       . "WHERE requestid = {$return['requestid']}";
+	doQuery($query);
+	$fields = array('requestid');
+	$values = array($return['requestid']);
+	if($name != '') {
+		$fields[] = 'name';
+		$values[] = "'$name'";
+	}
+	if($ipaddr != '') {
+		$fields[] = 'fixedIP';
+		$values[] = "'$ipaddr'";
+	}
+	if($macaddr != '') {
+		$fields[] = 'fixedMAC';
+		$values[] = "'$macaddr'";
+	}
+	if($admingroupid != 0) {
+		$fields[] = 'admingroupid';
+		$values[] = $admingroupid;
+	}
+	if($logingroupid != 0) {
+		$fields[] = 'logingroupid';
+		$values[] = $logingroupid;
+	}
+	if($monitored != 0) {
+		$fields[] = 'monitored';
+		$values[] = 1;
+	}
+	$allfields = implode(',', $fields);
+	$allvalues = implode(',', $values);
+	$query = "INSERT INTO serverrequest ($allfields) VALUES ($allvalues)";
+	doQuery($query, 101);
+	$return['status'] = 'success';
+	return $return;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn XMLRPCgetRequestIds()
+///
+/// \return an array with at least one index named 'status' which will have
+/// one of these values\n
+/// \b error - error occurred; there will be 2 additional elements in the array:
+/// \li \b errorcode - error number\n
+/// \li \b errormsg - error string\n
+///
+/// \b success - request was successfully ended; there will be an additional
+/// element whose index is 'requests' which is an array of arrays, each having
+/// these elements (or empty if no existing requests):\n
+/// \li \b requestid - id of the request\n
+/// \li \b imageid - id of the image\n
+/// \li \b imagename - name of the image\n
+/// \li \b start - unix timestamp of start time\n
+/// \li \b end - unix timestamp of end time\n
+/// \li \b OS - name of OS used in image\n
+/// \li \b isserver - 0 or 1 - whether or not this is a server reservation\n
+/// \li \b state - current state of reservation\n
+/// \li \b servername - only included if isserver == 1 - name of the reservation
+///
+/// \brief gets information about all of user's requests
+///
+////////////////////////////////////////////////////////////////////////////////
+function XMLRPCgetRequestIds() {
+	global $user;
+	$requests = getUserRequests("all");
+	if(empty($requests))
+		return array('status' => 'success', 'requests' => array());
+	$states = getStates();
+	$ret = array();
+	foreach($requests as $req) {
+		$start = datetimeToUnix($req['start']);
+		$end = datetimeToUnix($req['end']);
+		$tmp = array('requestid' => $req['id'],
+		             'imageid' => $req['imageid'],
+		             'imagename' => $req['prettyimage'],
+		             'start' => $start,
+		             'end' => $end,
+		             'OS' => $req['OS'],
+		             'isserver' => $req['server']);
+		if($req['currstateid'] == 14)
+			$tmp['state'] = $states[$req['laststateid']];
+		else
+			$tmp['state'] = $states[$req['currstateid']];
+		if($req['server'])
+			$tmp['servername'] = $req['servername'];
+		array_push($ret, $tmp);
+	}
+	return array('status' => 'success', 'requests' => $ret);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
 /// \fn XMLRPCgetRequestStatus($requestid)
 ///
 /// \param $requestid - id of a request
@@ -397,60 +711,6 @@ function XMLRPCgetRequestStatus($requestid) {
 	# reservation is in the future
 	else
 		return array('status' => 'future');
-}
-
-////////////////////////////////////////////////////////////////////////////////
-///
-/// \fn XMLRPCgetUserGroups($groupType, $affiliationid)
-///
-/// \param $groupType - (optional, default=0) specify 0 for all groups, 1 for
-/// only custom groups, 2 for only courseroll groups
-/// \param $affiliationid - (optional, default=0) specifiy an affiliationid to
-/// limit returned groups to only those matching the affiliation; pass 0 for
-/// all affiliations
-///
-/// \return an array with two indices, one named 'status' which will have a
-/// value of 'success', the other named 'groups' which will be an array of
-/// arrays, each one having the following keys:\n
-/// \li \b id\n
-/// \li \b name\n
-/// \li \b groupaffiliation\n
-/// \li \b groupaffiliationid\n
-/// \li \b ownerid\n
-/// \li \b owner\n
-/// \li \b affiliation\n
-/// \li \b editgroupid\n
-/// \li \b editgroup\n
-/// \li \b editgroupaffiliationid\n
-/// \li \b editgroupaffiliation\n
-/// \li \b custom\n
-/// \li \b courseroll\n
-/// \li \b initialmaxtime\n
-/// \li \b maxextendtime\n
-/// \li \b overlapResCount\n
-///
-/// \brief builds a list of user groups
-///
-////////////////////////////////////////////////////////////////////////////////
-function XMLRPCgetUserGroups($groupType=0, $affiliationid=0) {
-	global $user;
-	$groupType = processInputData($groupType, ARG_NUMERIC, 0, 0);
-	$affiliationid = processInputData($affiliationid, ARG_NUMERIC, 0, 0);
-
-	$groups = getUserGroups($groupType, $affiliationid);
-
-	// Filter out any groups to which the user does not have access.
-	$usergroups = array();
-	foreach($groups as $id => $group) {
-		if($group['ownerid'] == $user['id'] || 
-		   (array_key_exists("editgroupid", $group) &&
-		   array_key_exists($group['editgroupid'], $user["groups"])) || 
-		   (array_key_exists($id, $user["groups"]))) {
-			array_push($usergroups, $group);
-		}
-	}
-	return array("status" => "success",
-	             "groups" => $usergroups);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -684,10 +944,11 @@ function XMLRPCextendRequest($requestid, $extendtime) {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn XMLRPCremoveImageFromGroup($name, $imageid)
+/// \fn XMLRPCsetRequestEnding($requestid, $end)
 ///
-/// \param $name - the name of an imageGroup
-/// \param $imageid - the id of an image
+/// \param $requestid - id of a request
+/// \param $end - unix timestamp for end of reservation; will be rounded up to
+/// the nearest 15 minute increment
 ///
 /// \return an array with at least one index named 'status' which will have
 /// one of these values\n
@@ -695,32 +956,300 @@ function XMLRPCextendRequest($requestid, $extendtime) {
 /// \li \b errorcode - error number\n
 /// \li \b errormsg - error string\n
 ///
-/// \b success - image was removed from the group\n
+/// \b success - request was successfully extended\n
 ///
-/// \brief removes an image from a resource group
+/// \brief modifies the end time of an active request; if a request that has not
+/// started needs to be modifed, delete the request and submit a new one
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function XMLRPCremoveImageFromGroup($name, $imageid) {
-	if($groupid = getResourceGroupID("image/$name")) {
-		$groups = getUserResources(array("imageAdmin"), array("manageGroup"), 1);
-		if(! array_key_exists($groupid, $groups['image'])) {
-			return array('status' => 'error',
-			             'errorcode' => 46,
-			             'errormsg' => 'Unable to access image group');
-		}
-		$resources = getUserResources(array("imageAdmin"), array("manageGroup"));
-		if(! array_key_exists($imageid, $resources['image'])) {
-			return array('status' => 'error',
-			             'errorcode' => 47,
-			             'errormsg' => 'Unable to access image');
-		}
+function XMLRPCsetRequestEnding($requestid, $end) {
+	global $user;
 
-		$allimages = getImages(0, $imageid);
-		$query = "DELETE FROM resourcegroupmembers "
-		       . "WHERE resourceid = {$allimages[$imageid]['resourceid']} AND "
-		       .       "resourcegroupid = $groupid";
-		doQuery($query);
-		return array('status' => 'success');
+	$requestid = processInputData($requestid, ARG_NUMERIC);
+	$userRequests = getUserRequests('all', $user['id']);
+	$found = 0;
+	foreach($userRequests as $req) {
+		if($req['id'] == $requestid) {
+			$request = getRequestInfo($requestid);
+			$found = 1;
+			break;
+		}
+	}
+	if(! $found)
+		return array('status' => 'error',
+		             'errorcode' => 1,
+		             'errormsg' => 'unknown requestid');
+
+	// make sure user is a member of the 'Specify End Time' group
+	$groupid = getUserGroupID('Specify End Time');
+	$members = getUserGroupMembers($groupid);
+	if(! $request['serverrequest'] && ! array_key_exists($user['id'], $members)) {
+		return array('status' => 'error',
+		             'errorcode' => 35,
+		             'errormsg' => "access denied to specify end time");
+	}
+
+	$end = processInputData($end, ARG_NUMERIC);
+
+	$maxend = datetimeToUnix("2038-01-01 00:00:00");
+	if($end < 0 || $end > $maxend) {
+		return array('status' => 'error',
+		             'errorcode' => 36,
+		             'errormsg' => "received invalid input for end");
+	}
+
+	$startts = datetimeToUnix($request['start']);
+	if($end % (15 * 60))
+		$end= unixFloor15($end) + (15 * 60);
+
+	// check that reservation has started
+	if($startts > time()) {
+		return array('status' => 'error',
+		             'errorcode' => 38,
+		             'errormsg' => 'reservation has not started');
+	}
+
+	// check for overlap
+	$max = getMaxOverlap($user['id']);
+	if(checkOverlap($startts, $end, $max, $requestid)) {
+		return array('status' => 'error',
+		             'errorcode' => 41,
+		             'errormsg' => 'overlapping reservation restriction',
+		             'maxoverlap' => $max);
+	}
+
+	// check for computer being available for extended time?
+	$timeToNext = timeToNextReservation($request);
+	$movedall = 1;
+	if($timeToNext > -1) {
+		foreach($request["reservations"] as $res) {
+			if(! moveReservationsOffComputer($res["computerid"])) {
+				$movedall = 0;
+				break;
+			}
+		}
+	}
+	if(! $movedall) {
+		$timeToNext = timeToNextReservation($request);
+		if($timeToNext >= 15)
+			$timeToNext -= 15;
+		$oldendts = datetimeToUnix($request['end']);
+		// reservation immediately after this one, cannot extend
+		if($timeToNext < 15) {
+			return array('status' => 'error',
+			             'errorcode' => 42,
+			             'errormsg' => 'cannot extend due to another reservation immediately after this one');
+		}
+		// check that requested extension < $timeToNext
+		elseif((($end - $oldendts) / 60) > $timeToNext) {
+			$maxend = $oldendts + ($timeToNext * 60);
+			return array('status' => 'error',
+			             'errorcode' => 43,
+			             'errormsg' => 'cannot extend by requested amount due to another reservation',
+			             'maxend' => $maxend);
+		}
+	}
+	$rc = isAvailable(getImages(), $request['reservations'][0]["imageid"],
+	                  $request['reservations'][0]['imagerevisionid'],
+	                  $startts, $end, $requestid);
+	// conflicts with scheduled maintenance
+	if($rc == -2) {
+		addChangeLogEntry($request["logid"], NULL, unixToDatetime($end),
+		                  $request['start'], NULL, NULL, 0);
+		return array('status' => 'error',
+		             'errorcode' => 46,
+		             'errormsg' => 'requested time is during a maintenance window');
+	}
+	// concurrent license overlap
+	elseif($rc == -1) {
+		addChangeLogEntry($request["logid"], NULL, unixToDatetime($end),
+		                  $request['start'], NULL, NULL, 0);
+		return array('status' => 'error',
+		             'errorcode' => 44,
+		             'errormsg' => 'concurrent license restriction');
+	}
+	// could not extend for some other reason
+	elseif($rc == 0) {
+		addChangeLogEntry($request["logid"], NULL, unixToDatetime($end),
+		                  $request['start'], NULL, NULL, 0);
+		return array('status' => 'error',
+		             'errorcode' => 45,
+		             'errormsg' => 'cannot extend at this time');
+	}
+	// success
+	updateRequest($requestid);
+	return array('status' => 'success');
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn XMLRPCendRequest($requestid)
+///
+/// \param $requestid - id of a request
+///
+/// \return an array with at least one index named 'status' which will have
+/// one of these values\n
+/// \b error - error occurred; there will be 2 additional elements in the array:
+/// \li \b errorcode - error number\n
+/// \li \b errormsg - error string\n
+///
+/// \b success - request was successfully ended\n
+///
+/// \brief ends/deletes a request
+///
+////////////////////////////////////////////////////////////////////////////////
+function XMLRPCendRequest($requestid) {
+	global $user;
+	$requestid = processInputData($requestid, ARG_NUMERIC);
+	$userRequests = getUserRequests('all', $user['id']);
+	$found = 0;
+	foreach($userRequests as $req) {
+		if($req['id'] == $requestid) {
+			$request = getRequestInfo($requestid);
+			$found = 1;
+			break;
+		}
+	}
+	if(! $found)
+		return array('status' => 'error',
+		             'errorcode' => 1,
+		             'errormsg' => 'unknown requestid');
+
+	deleteRequest($request);
+	return array('status' => 'success');
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn XMLRPCautoCapture($requestid)
+///
+/// \param $requestid - id of request to be captured
+///
+/// \return an array with at least one index named 'status' which will have
+/// one of these values:\n
+/// \b error - error occurred; there will be 2 additional elements in the array:
+/// \li \b errorcode - error number
+/// \li \b errormsg - error string
+///
+/// \b success - image was successfully set to be captured
+///
+/// \brief creates entries in appropriate tables to capture an image and sets
+/// the request state to image
+///
+////////////////////////////////////////////////////////////////////////////////
+function XMLRPCautoCapture($requestid) {
+	global $user, $xmlrpcBlockAPIUsers;
+	if(! in_array($user['id'], $xmlrpcBlockAPIUsers)) {
+		return array('status' => 'error',
+		             'errorcode' => 47,
+		             'errormsg' => 'access denied to XMLRPCautoCapture');
+	}
+	$query = "SELECT id FROM request WHERE id = $requestid";
+	$qh = doQuery($query, 101);
+	if(! mysql_num_rows($qh)) {
+		return array('status' => 'error',
+		             'errorcode' => 52,
+		             'errormsg' => 'specified request does not exist');
+	}
+	$reqData = getRequestInfo($requestid);
+	# check state of reservation
+	if($reqData['stateid'] != 14 || $reqData['laststateid'] != 8) {
+		return array('status' => 'error',
+		             'errorcode' => 51,
+		             'errormsg' => 'reservation not in valid state');
+	}
+	# check that not a cluster reservation
+	if(count($reqData['reservations']) > 1) {
+		return array('status' => 'error',
+		             'errorcode' => 48,
+		             'errormsg' => 'cannot image a cluster reservation');
+	}
+	require_once(".ht-inc/images.php");
+	$imageid = $reqData['reservations'][0]['imageid'];
+	$imageData = getImages(0, $imageid);
+	$captime = unixToDatetime(time());
+	$comments = "start: {$reqData['start']}<br>"
+	          . "end: {$reqData['end']}<br>"
+	          . "computer: {$reqData['reservations'][0]['reservedIP']}<br>"
+	          . "capture time: $captime";
+	# create new revision if requestor is owner and not a kickstart image
+	if($imageData[$imageid]['installtype'] != 'kickstart' &&
+	   $reqData['userid'] == $imageData[$imageid]['ownerid']) {
+		$rc = updateExistingImage($requestid, $reqData['userid'], $comments, 1);
+		if($rc == 0) {
+			return array('status' => 'error',
+			             'errorcode' => 49,
+			             'errormsg' => 'error encountered while attempting to create new revision');
+		}
+	}
+	# create a new image if requestor is not owner or a kickstart image
+	else {
+		$ownerdata = getUserInfo($reqData['userid'], 1, 1);
+		$desc = "This is an autocaptured image.<br>"
+		      . "captured from image: {$reqData['reservations'][0]['prettyimage']}<br>"
+		      . "captured on: $captime<br>"
+		      . "owner: {$ownerdata['unityid']}@{$ownerdata['affiliation']}<br>";
+		$connectmethods = getImageConnectMethods($imageid, $reqData['reservations'][0]['imagerevisionid']);
+		$data = array('requestid' => $requestid,
+		              'description' => $desc,
+		              'usage' => '',
+		              'owner' => "{$ownerdata['unityid']}@{$ownerdata['affiliation']}",
+		              'prettyname' => "Autocaptured ({$ownerdata['unityid']} - $requestid)",
+		              'minram' => 64,
+		              'minprocnumber' => 1,
+		              'minprocspeed' => 500,
+		              'minnetwork' => 10,
+		              'maxconcurrent' => '',
+		              'checkuser' => 1,
+		              'rootaccess' => 1,
+		              'sysprep' => 1,
+		              'comments' => $comments,
+		              'connectmethodids' => implode(',', array_keys($connectmethods)));
+		$rc = submitAddImage($data, 1);
+		if($rc == 0) {
+			return array('status' => 'error',
+			             'errorcode' => 50,
+			             'errormsg' => 'error encountered while attempting to create image');
+		}
+	}
+	return array('status' => 'success');
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn XMLRPCgetGroupImages($name)
+///
+/// \param $name - the name of an imageGroup
+///
+/// \return an array with at least one index named 'status' which will have
+/// one of these values\n
+/// \b error - error occurred; there will be 2 additional elements in the array:
+/// \li \b errorcode - error number\n
+/// \li \b errormsg - error string\n
+///
+/// \b success - returns an array of images; there will be an additional element
+/// in the array with an index of 'images' that is an array of images with
+/// each element having the following two keys:\n
+/// \li \b id - id of the image\n
+/// \li \b name - name of the image
+///
+/// \brief gets a list of all images in a particular group
+///
+////////////////////////////////////////////////////////////////////////////////
+function XMLRPCgetGroupImages($name) {
+	if($groupid = getResourceGroupID("image/$name")) {
+		$membership = getResourceGroupMemberships('image');
+		$resources = getUserResources(array("imageAdmin"), array("manageGroup"));
+
+		$images = array();
+		foreach($resources['image'] as $imageid => $image) {
+			if(array_key_exists($imageid, $membership['image']) &&
+			   in_array($groupid, $membership['image'][$imageid]))
+				array_push($images, array('id' => $imageid, 'name' => $image));
+		}
+		return array('status' => 'success',
+		             'images' => $images);
+
 	}
 	else {
 		return array('status' => 'error',
@@ -781,9 +1310,10 @@ function XMLRPCaddImageToGroup($name, $imageid) {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn XMLRPCgetGroupImages($name)
+/// \fn XMLRPCremoveImageFromGroup($name, $imageid)
 ///
 /// \param $name - the name of an imageGroup
+/// \param $imageid - the id of an image
 ///
 /// \return an array with at least one index named 'status' which will have
 /// one of these values\n
@@ -791,29 +1321,32 @@ function XMLRPCaddImageToGroup($name, $imageid) {
 /// \li \b errorcode - error number\n
 /// \li \b errormsg - error string\n
 ///
-/// \b success - returns an array of images; there will be an additional element
-/// in the array with an index of 'images' that is an array of images with
-/// each element having the following two keys:\n
-/// \li \b id - id of the image\n
-/// \li \b name - name of the image
+/// \b success - image was removed from the group\n
 ///
-/// \brief gets a list of all images in a particular group
+/// \brief removes an image from a resource group
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function XMLRPCgetGroupImages($name) {
+function XMLRPCremoveImageFromGroup($name, $imageid) {
 	if($groupid = getResourceGroupID("image/$name")) {
-		$membership = getResourceGroupMemberships('image');
-		$resources = getUserResources(array("imageAdmin"), array("manageGroup"));
-
-		$images = array();
-		foreach($resources['image'] as $imageid => $image) {
-			if(array_key_exists($imageid, $membership['image']) &&
-			   in_array($groupid, $membership['image'][$imageid]))
-				array_push($images, array('id' => $imageid, 'name' => $image));
+		$groups = getUserResources(array("imageAdmin"), array("manageGroup"), 1);
+		if(! array_key_exists($groupid, $groups['image'])) {
+			return array('status' => 'error',
+			             'errorcode' => 46,
+			             'errormsg' => 'Unable to access image group');
 		}
-		return array('status' => 'success',
-		             'images' => $images);
+		$resources = getUserResources(array("imageAdmin"), array("manageGroup"));
+		if(! array_key_exists($imageid, $resources['image'])) {
+			return array('status' => 'error',
+			             'errorcode' => 47,
+			             'errormsg' => 'Unable to access image');
+		}
 
+		$allimages = getImages(0, $imageid);
+		$query = "DELETE FROM resourcegroupmembers "
+		       . "WHERE resourceid = {$allimages[$imageid]['resourceid']} AND "
+		       .       "resourcegroupid = $groupid";
+		doQuery($query);
+		return array('status' => 'success');
 	}
 	else {
 		return array('status' => 'error',
@@ -1048,50 +1581,6 @@ function XMLRPCnodeExists($nodeName, $parentNode) {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn XMLRPCremoveNode($nodeID)
-///
-/// \param $nodeID - the ID of a node
-///
-/// \return an array with at least one index named 'status' which will have
-/// one of these values\n
-/// \b error - error occurred; there will be 2 additional elements in the array:
-/// \li \b errorcode - error number\n
-/// \li \b errormsg - error string\n
-///
-/// \b success - node was successfully deleted
-///
-/// \brief delete a node from the privilege tree
-///
-////////////////////////////////////////////////////////////////////////////////
-function XMLRPCremoveNode($nodeID) {
-	require_once(".ht-inc/privileges.php");
-	global $user;
-	if(! is_numeric($nodeID)) {
-		return array('status' => 'error',
-		             'errorcode' => 78,
-		             'errormsg' => 'Invalid nodeid specified');
-	}
-	if(! in_array("nodeAdmin", $user['privileges'])) {
-		return array('status' => 'error',
-		             'errorcode' => 70,
-		             'errormsg' => 'User cannot administer nodes');
-	}
-	if(! checkUserHasPriv("nodeAdmin", $user['id'], $nodeID)) {
-		return array('status' => 'error',
-		             'errorcode' => 57,
-		             'errormsg' => 'User cannot edit this node');
-	}
-	$nodes = recurseGetChildren($nodeID);
-	array_push($nodes, $nodeID);
-	$deleteNodes = implode(',', $nodes);
-	$query = "DELETE FROM privnode "
-	       . "WHERE id IN ($deleteNodes)";
-	doQuery($query, 345);
-	return array('status' => 'success');
-}
-
-////////////////////////////////////////////////////////////////////////////////
-///
 /// \fn XMLRPCaddNode($nodeName, $parentNode)
 ///
 /// \param $nodeName - the name of the new node
@@ -1171,12 +1660,9 @@ function XMLRPCaddNode($nodeName, $parentNode) {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn XMLRPCremoveResourceGroupPriv($name, $type, $nodeid, $permissions)
+/// \fn XMLRPCremoveNode($nodeID)
 ///
-/// \param $name - the name of the resource group
-/// \param $type - the resource type
-/// \param $nodeid - the ID of the node in the privilege tree
-/// \param $permissions - a colon (:) delimited list of privileges to remove
+/// \param $nodeID - the ID of a node
 ///
 /// \return an array with at least one index named 'status' which will have
 /// one of these values\n
@@ -1184,15 +1670,36 @@ function XMLRPCaddNode($nodeName, $parentNode) {
 /// \li \b errorcode - error number\n
 /// \li \b errormsg - error string\n
 ///
-/// \b success - privileges were successfully removed
+/// \b success - node was successfully deleted
 ///
-/// \brief remove privileges for a resource group from a node in the privilege
-/// tree
+/// \brief delete a node from the privilege tree
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function XMLRPCremoveResourceGroupPriv($name, $type, $nodeid, $permissions) {
-	return _XMLRPCchangeResourceGroupPriv_sub('remove', $name, $type, $nodeid,
-	                                          $permissions);
+function XMLRPCremoveNode($nodeID) {
+	require_once(".ht-inc/privileges.php");
+	global $user;
+	if(! is_numeric($nodeID)) {
+		return array('status' => 'error',
+		             'errorcode' => 78,
+		             'errormsg' => 'Invalid nodeid specified');
+	}
+	if(! in_array("nodeAdmin", $user['privileges'])) {
+		return array('status' => 'error',
+		             'errorcode' => 70,
+		             'errormsg' => 'User cannot administer nodes');
+	}
+	if(! checkUserHasPriv("nodeAdmin", $user['id'], $nodeID)) {
+		return array('status' => 'error',
+		             'errorcode' => 57,
+		             'errormsg' => 'User cannot edit this node');
+	}
+	$nodes = recurseGetChildren($nodeID);
+	array_push($nodes, $nodeID);
+	$deleteNodes = implode(',', $nodes);
+	$query = "DELETE FROM privnode "
+	       . "WHERE id IN ($deleteNodes)";
+	doQuery($query, 345);
+	return array('status' => 'success');
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1261,6 +1768,154 @@ function XMLRPCgetUserGroupPrivs($name, $affiliation, $nodeid) {
 
 	return array('status' => 'success',
 	              'privileges' => array_unique($privileges));
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn XMLRPCaddUserGroupPriv($name, $affiliation, $nodeid, $permissions)
+///
+/// \param $name - the name of the user group
+/// \param $affiliation - the affiliation of the user group
+/// \param $nodeid - the ID of the node in the privilege tree
+/// \param $permissions - a colon (:) delimited list of privileges to add
+///
+/// \return an array with at least one index named 'status' which will have
+/// one of these values\n
+/// \b error - error occurred; there will be 2 additional elements in the array:
+/// \li \b errorcode - error number\n
+/// \li \b errormsg - error string\n
+///
+/// \b success - privileges were successfully added
+///
+/// \brief add privileges for a user group at a particular node in the
+/// privilege tree
+///
+////////////////////////////////////////////////////////////////////////////////
+function XMLRPCaddUserGroupPriv($name, $affiliation, $nodeid, $permissions) {
+	require_once(".ht-inc/privileges.php");
+	global $user;
+
+	if(! is_numeric($nodeid)) {
+		return array('status' => 'error',
+		             'errorcode' => 78,
+		             'errormsg' => 'Invalid nodeid specified');
+	}
+
+	if(! checkUserHasPriv("userGrant", $user['id'], $nodeid)) {
+		return array('status' => 'error',
+		             'errorcode' => 52,
+		             'errormsg' => 'Unable to add a user group to this node');
+	}
+
+	$validate = array('name' => $name,
+	                  'affiliation' => $affiliation);
+	$rc = validateAPIgroupInput($validate, 1);
+	if($rc['status'] == 'error')
+		return $rc;
+
+	$groupid = $rc['id'];
+	#$name = "$name@$affiliation";
+	$perms = explode(':', $permissions);
+	$usertypes = getTypes('users');
+	array_push($usertypes["users"], "block");
+	array_push($usertypes["users"], "cascade");
+
+	$diff = array_diff($perms, $usertypes['users']);
+	if(count($diff) || (count($perms) == 1 && $perms[0] == 'cascade')) {
+		return array('status' => 'error',
+		             'errorcode' => 66,
+		             'errormsg' => 'Invalid or missing permissions list supplied');
+	}
+
+	$cnp = getNodeCascadePrivileges($nodeid, "usergroups");
+	$np = getNodePrivileges($nodeid, "usergroups", $cnp);
+
+	$diff = array_diff($perms, $np['usergroups'][$name]['privs']);
+	if(empty($diff))
+		return array('status' => 'success');
+
+	updateUserOrGroupPrivs($groupid, $nodeid, $diff, array(), "group");
+	return array('status' => 'success');
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn XMLRPCremoveUserGroupPriv($name, $affiliation, $nodeid,
+///                                   $permissions)
+///
+/// \param $name - the name of the user group
+/// \param $affiliation - the affiliation of the user group
+/// \param $nodeid - the ID of the node in the privilege tree
+/// \param $permissions - a colon (:) delimited list of privileges to remove
+///
+/// \return an array with at least one index named 'status' which will have
+/// one of these values\n
+/// \b error - error occurred; there will be 2 additional elements in the array:
+/// \li \b errorcode - error number\n
+/// \li \b errormsg - error string\n
+///
+/// \b success - privileges were successfully removed
+///
+/// \brief remove privileges for a resource group at a particular node in the
+/// privilege tree
+///
+////////////////////////////////////////////////////////////////////////////////
+function XMLRPCremoveUserGroupPriv($name, $affiliation, $nodeid, $permissions) {
+	require_once(".ht-inc/privileges.php");
+	global $user;
+
+	if(! is_numeric($nodeid)) {
+		return array('status' => 'error',
+		             'errorcode' => 78,
+		             'errormsg' => 'Invalid nodeid specified');
+	}
+
+	if(! checkUserHasPriv("userGrant", $user['id'], $nodeid)) {
+		return array('status' => 'error',
+		             'errorcode' => 65,
+		             'errormsg' => 'Unable to remove user group privileges on this node');
+	}
+
+	$validate = array('name' => $name,
+	                  'affiliation' => $affiliation);
+	$rc = validateAPIgroupInput($validate, 1);
+	if($rc['status'] == 'error')
+		return $rc;
+
+	$groupid = $rc['id'];
+	#$name = "$name@$affiliation";
+	$perms = explode(':', $permissions);
+	$usertypes = getTypes('users');
+	array_push($usertypes["users"], "block");
+	array_push($usertypes["users"], "cascade");
+
+	$diff = array_diff($perms, $usertypes['users']);
+	if(count($diff)) {
+		return array('status' => 'error',
+		             'errorcode' => 66,
+		             'errormsg' => 'Invalid or missing permissions list supplied');
+	}
+
+	$cnp = getNodeCascadePrivileges($nodeid, "usergroups");
+	$np = getNodePrivileges($nodeid, "usergroups");
+
+	if(array_key_exists($name, $cnp['usergroups']) &&
+	   (! array_key_exists($name, $np['usergroups']) ||
+	   ! in_array('block', $np['usergroups'][$name]))) {
+		$intersect = array_intersect($cnp['usergroups'][$name]['privs'], $perms);
+		if(count($intersect)) {
+			return array('status' => 'error',
+			             'errorcode' => 80,
+			             'errormsg' => 'Unable to modify privileges cascaded to this node');
+		}
+	}
+
+	$diff = array_diff($np['usergroups'][$name]['privs'], $perms);
+	if(count($diff) == 1 && in_array("cascade", $diff))
+		array_push($perms, "cascade");
+
+	updateUserOrGroupPrivs($groupid, $nodeid, array(), $perms, "group");
+	return array('status' => 'success');
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1362,11 +2017,10 @@ function XMLRPCaddResourceGroupPriv($name, $type, $nodeid, $permissions) {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn XMLRPCremoveUserGroupPriv($name, $affiliation, $nodeid,
-///                                   $permissions)
+/// \fn XMLRPCremoveResourceGroupPriv($name, $type, $nodeid, $permissions)
 ///
-/// \param $name - the name of the user group
-/// \param $affiliation - the affiliation of the user group
+/// \param $name - the name of the resource group
+/// \param $type - the resource type
 /// \param $nodeid - the ID of the node in the privilege tree
 /// \param $permissions - a colon (:) delimited list of privileges to remove
 ///
@@ -1378,11 +2032,41 @@ function XMLRPCaddResourceGroupPriv($name, $type, $nodeid, $permissions) {
 ///
 /// \b success - privileges were successfully removed
 ///
-/// \brief remove privileges for a resource group at a particular node in the
-/// privilege tree
+/// \brief remove privileges for a resource group from a node in the privilege
+/// tree
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function XMLRPCremoveUserGroupPriv($name, $affiliation, $nodeid, $permissions) {
+function XMLRPCremoveResourceGroupPriv($name, $type, $nodeid, $permissions) {
+	return _XMLRPCchangeResourceGroupPriv_sub('remove', $name, $type, $nodeid,
+	                                          $permissions);
+}
+
+##################################################################################
+###
+### fn _XMLRPCchangeResourceGroupPriv_sub($mode, $name, $type, $nodeid,
+###                                       $permissions)
+###
+### param $mode - 'add' or 'remove'
+### param $name - the name of the resource group
+### param $type - the resource type
+### param $nodeid - the ID of the node in the privilege tree
+### param $permissions - a colon (:) delimited list of privileges to remove
+###
+### return an array with at least one index named 'status' which will have
+### one of these values\n
+### error - error occurred; there will be 2 additional elements in the array:
+### * errorcode - error number\n
+### * errormsg - error string\n
+###
+### success - privileges were successfully added or removed
+###
+### brief internal function to be called from XMLRPCremoveResourceGroupPriv and
+### XMLRPCaddResourceGroupPriv - adds or removes privileges for a resource group
+### from a node in the privilege tree
+###
+################################################################################
+function _XMLRPCchangeResourceGroupPriv_sub($mode, $name, $type, $nodeid,
+                                            $permissions) {
 	require_once(".ht-inc/privileges.php");
 	global $user;
 
@@ -1392,39 +2076,53 @@ function XMLRPCremoveUserGroupPriv($name, $affiliation, $nodeid, $permissions) {
 		             'errormsg' => 'Invalid nodeid specified');
 	}
 
-	if(! checkUserHasPriv("userGrant", $user['id'], $nodeid)) {
+	if(! checkUserHasPriv("resourceGrant", $user['id'], $nodeid)) {
 		return array('status' => 'error',
-		             'errorcode' => 65,
-		             'errormsg' => 'Unable to remove user group privileges on this node');
+		             'errorcode' => 61,
+		             'errormsg' => 'Unable to remove resource group privileges on this node');
 	}
 
-	$validate = array('name' => $name,
-	                  'affiliation' => $affiliation);
-	$rc = validateAPIgroupInput($validate, 1);
-	if($rc['status'] == 'error')
-		return $rc;
+	$resourcetypes = getTypes('resources');
+	if(! in_array($type, $resourcetypes['resources'])) {
+		return array('status' => 'error',
+		             'errorcode' => 71,
+		             'errormsg' => 'Invalid resource type');
+	}
 
-	$groupid = $rc['id'];
-	#$name = "$name@$affiliation";
-	$perms = explode(':', $permissions);
-	$usertypes = getTypes('users');
-	array_push($usertypes["users"], "block");
-	array_push($usertypes["users"], "cascade");
+	$groupid = getResourceGroupID("$type/$name");
+	if(is_null($groupid)) {
+		return array('status' => 'error',
+		             'errorcode' => 74,
+		             'errormsg' => 'resource group does not exist');
+	}
 
-	$diff = array_diff($perms, $usertypes['users']);
+	$changeperms = explode(':', $permissions);
+	$allperms = getResourcePrivs();
+	$diff = array_diff($changeperms, $allperms);
 	if(count($diff)) {
 		return array('status' => 'error',
 		             'errorcode' => 66,
 		             'errormsg' => 'Invalid or missing permissions list supplied');
 	}
 
-	$cnp = getNodeCascadePrivileges($nodeid, "usergroups");
-	$np = getNodePrivileges($nodeid, "usergroups");
+	$nocheckperms = array('block', 'cascade', 'available');
+	$checkperms = array_diff($changeperms, $nocheckperms);
 
-	if(array_key_exists($name, $cnp['usergroups']) &&
-	   (! array_key_exists($name, $np['usergroups']) ||
-	   ! in_array('block', $np['usergroups'][$name]))) {
-		$intersect = array_intersect($cnp['usergroups'][$name]['privs'], $perms);
+	$groupdata = getResourceGroups($type, $groupid);
+	if(count($checkperms) &&
+	   ! array_key_exists($groupdata[$groupid]["ownerid"], $user["groups"])) {
+		return array('status' => 'error',
+		             'errorcode' => 79,
+		             'errormsg' => 'Unable to modify privilege set for resource group');
+	}
+
+	$key = "$type/$name/$groupid";
+	$cnp = getNodeCascadePrivileges($nodeid, "resources");
+	$np = getNodePrivileges($nodeid, 'resources');
+	if(array_key_exists($key, $cnp['resources']) &&
+	   (! array_key_exists($key, $np['resources']) ||
+	   ! in_array('block', $np['resources'][$key]))) {
+		$intersect = array_intersect($cnp['resources'][$key], $changeperms);
 		if(count($intersect)) {
 			return array('status' => 'error',
 			             'errorcode' => 80,
@@ -1432,311 +2130,867 @@ function XMLRPCremoveUserGroupPriv($name, $affiliation, $nodeid, $permissions) {
 		}
 	}
 
-	$diff = array_diff($np['usergroups'][$name]['privs'], $perms);
-	if(count($diff) == 1 && in_array("cascade", $diff))
-		array_push($perms, "cascade");
+	if($mode == 'remove') {
+		$diff = array_diff($np['resources'][$key], $changeperms);
+		if(count($diff) == 1 && in_array("cascade", $diff))
+			$changeperms[] = 'cascade';
+	}
 
-	updateUserOrGroupPrivs($groupid, $nodeid, array(), $perms, "group");
+	if($mode == 'add')
+		updateResourcePrivs("$groupid", $nodeid, $changeperms, array());
+	elseif($mode == 'remove')
+		updateResourcePrivs("$groupid", $nodeid, array(), $changeperms);
 	return array('status' => 'success');
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn XMLRPCaddUserGroupPriv($name, $affiliation, $nodeid, $permissions)
+/// \fn XMLRPCgetUserGroups($groupType, $affiliationid)
 ///
-/// \param $name - the name of the user group
-/// \param $affiliation - the affiliation of the user group
-/// \param $nodeid - the ID of the node in the privilege tree
-/// \param $permissions - a colon (:) delimited list of privileges to add
+/// \param $groupType - (optional, default=0) specify 0 for all groups, 1 for
+/// only custom groups, 2 for only courseroll groups
+/// \param $affiliationid - (optional, default=0) specifiy an affiliationid to
+/// limit returned groups to only those matching the affiliation; pass 0 for
+/// all affiliations
 ///
-/// \return an array with at least one index named 'status' which will have
-/// one of these values\n
-/// \b error - error occurred; there will be 2 additional elements in the array:
-/// \li \b errorcode - error number\n
-/// \li \b errormsg - error string\n
+/// \return an array with two indices, one named 'status' which will have a
+/// value of 'success', the other named 'groups' which will be an array of
+/// arrays, each one having the following keys:\n
+/// \li \b id\n
+/// \li \b name\n
+/// \li \b groupaffiliation\n
+/// \li \b groupaffiliationid\n
+/// \li \b ownerid\n
+/// \li \b owner\n
+/// \li \b affiliation\n
+/// \li \b editgroupid\n
+/// \li \b editgroup\n
+/// \li \b editgroupaffiliationid\n
+/// \li \b editgroupaffiliation\n
+/// \li \b custom\n
+/// \li \b courseroll\n
+/// \li \b initialmaxtime\n
+/// \li \b maxextendtime\n
+/// \li \b overlapResCount\n
 ///
-/// \b success - privileges were successfully added
-///
-/// \brief add privileges for a user group at a particular node in the
-/// privilege tree
+/// \brief builds a list of user groups
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function XMLRPCaddUserGroupPriv($name, $affiliation, $nodeid, $permissions) {
-	require_once(".ht-inc/privileges.php");
+function XMLRPCgetUserGroups($groupType=0, $affiliationid=0) {
 	global $user;
+	$groupType = processInputData($groupType, ARG_NUMERIC, 0, 0);
+	$affiliationid = processInputData($affiliationid, ARG_NUMERIC, 0, 0);
 
-	if(! is_numeric($nodeid)) {
-		return array('status' => 'error',
-		             'errorcode' => 78,
-		             'errormsg' => 'Invalid nodeid specified');
+	$groups = getUserGroups($groupType, $affiliationid);
+
+	// Filter out any groups to which the user does not have access.
+	$usergroups = array();
+	foreach($groups as $id => $group) {
+		if($group['ownerid'] == $user['id'] || 
+		   (array_key_exists("editgroupid", $group) &&
+		   array_key_exists($group['editgroupid'], $user["groups"])) || 
+		   (array_key_exists($id, $user["groups"]))) {
+			array_push($usergroups, $group);
+		}
 	}
+	return array("status" => "success",
+	             "groups" => $usergroups);
+}
 
-	if(! checkUserHasPriv("userGrant", $user['id'], $nodeid)) {
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn XMLRPCgetUserGroupAttributes($name, $affiliation)
+///
+/// \param $name - name of user group
+/// \param $affiliation - affiliation of user group
+///
+/// \return an array with at least one index named 'status' which will have
+/// one of these values:\n
+/// \b error - error occurred; there will be 2 additional elements in the array:
+/// \li \b errorcode - error number
+/// \li \b errormsg - error string
+///
+/// \b success - there will be six additional elements in this case:
+/// \li \b owner - user that will be the owner of the group in
+///                username\@affiliation form
+/// \li \b managingGroup - user group that can manage membership of this one in
+///                        groupname\@affiliation form
+/// \li \b initialMaxTime - (minutes) max initial time users in this group can
+///                         select for length of reservations
+/// \li \b totalMaxTime - (minutes) total length users in the group can have for
+///                       a reservation (including all extensions)
+/// \li \b maxExtendTime - (minutes) max length of time users can request as an
+///                        extension to a reservation at a time
+/// \li \b overlapResCount - maximum allowed number of overlapping reservations
+/// allowed for users in this group
+///
+/// \brief gets information about a user group
+///
+////////////////////////////////////////////////////////////////////////////////
+function XMLRPCgetUserGroupAttributes($name, $affiliation) {
+	global $user;
+	if(! in_array('groupAdmin', $user['privileges'])) {
 		return array('status' => 'error',
-		             'errorcode' => 52,
-		             'errormsg' => 'Unable to add a user group to this node');
+		             'errorcode' => 16,
+		             'errormsg' => 'access denied for managing groups');
 	}
-
 	$validate = array('name' => $name,
 	                  'affiliation' => $affiliation);
 	$rc = validateAPIgroupInput($validate, 1);
 	if($rc['status'] == 'error')
 		return $rc;
-
-	$groupid = $rc['id'];
-	#$name = "$name@$affiliation";
-	$perms = explode(':', $permissions);
-	$usertypes = getTypes('users');
-	array_push($usertypes["users"], "block");
-	array_push($usertypes["users"], "cascade");
-
-	$diff = array_diff($perms, $usertypes['users']);
-	if(count($diff) || (count($perms) == 1 && $perms[0] == 'cascade')) {
+	$query = "SELECT ug.id, "
+	       .        "ug.ownerid, "
+	       .        "CONCAT(u.unityid, '@', a.name) AS owner, "
+	       .        "ug.editusergroupid AS editgroupid, "
+	       .        "eug.name AS editgroup, "
+	       .        "eug.affiliationid AS editgroupaffiliationid, "
+	       .        "euga.name AS editgroupaffiliation, "
+	       .        "ug.initialmaxtime, "
+	       .        "ug.totalmaxtime, "
+	       .        "ug.maxextendtime, "
+	       .        "ug.overlapResCount "
+	       . "FROM usergroup ug "
+	       . "LEFT JOIN user u ON (ug.ownerid = u.id) "
+	       . "LEFT JOIN affiliation a ON (u.affiliationid = a.id) "
+	       . "LEFT JOIN usergroup eug ON (ug.editusergroupid = eug.id) "
+	       . "LEFT JOIN affiliation euga ON (eug.affiliationid = euga.id) "
+	       . "WHERE ug.id = {$rc['id']}";
+	$qh = doQuery($query, 101);
+	if(! $row = mysql_fetch_assoc($qh)) {
 		return array('status' => 'error',
-		             'errorcode' => 66,
-		             'errormsg' => 'Invalid or missing permissions list supplied');
+		             'errorcode' => 18,
+		             'errormsg' => 'user group with submitted name and affiliation does not exist');
 	}
+	// if not owner and not member of managing group, no access
+	if($user['id'] != $row['ownerid'] && 
+	   ! array_key_exists($row['editgroupid'], $user['groups'])) {
+		return array('status' => 'error',
+		             'errorcode' => 69,
+		             'errormsg' => 'access denied to user group with submitted name and affiliation');
+	}
+	$ret = array('status' => 'success',
+	             'owner' => $row['owner'],
+	             'managingGroup' => "{$row['editgroup']}@{$row['editgroupaffiliation']}",
+	             'initialMaxTime' => $row['initialmaxtime'],
+	             'totalMaxTime' => $row['totalmaxtime'],
+	             'maxExtendTime' => $row['maxextendtime'],
+	             'overlapResCount' => $row['overlapResCount']);
+	return $ret;
+}
 
-	$cnp = getNodeCascadePrivileges($nodeid, "usergroups");
-	$np = getNodePrivileges($nodeid, "usergroups", $cnp);
-
-	$diff = array_diff($perms, $np['usergroups'][$name]['privs']);
-	if(empty($diff))
-		return array('status' => 'success');
-
-	updateUserOrGroupPrivs($groupid, $nodeid, $diff, array(), "group");
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn XMLRPCaddUserGroup($name, $affiliation, $owner, $managingGroup,
+///                        $initialMaxTime, $totalMaxTime, $maxExtendTime,
+///                        $custom)
+///
+/// \param $name - name of user group
+/// \param $affiliation - affiliation of user group
+/// \param $owner - user that will be the owner of the group in
+///                 username\@affiliation form
+/// \param $managingGroup - user group that can manage membership of this one
+/// \param $initialMaxTime - (minutes) max initial time users in this group can
+///                          select for length of reservations
+/// \param $totalMaxTime - (minutes) total length users in the group can have
+///                        for a reservation (including all extensions)
+/// \param $maxExtendTime - (minutes) max length of time users can request as an
+///                         extension to a reservation at a time
+/// \param $custom - (optional, default=1) set custom flag for user group; if
+///                set to 0, $owner and $managingGroup will be ignored and group
+///                membership will be managed via authentication protocol
+///
+/// \return an array with at least one index named 'status' which will have
+/// one of these values:\n
+/// \b error - error occurred; there will be 2 additional elements in the array:
+/// \li \b errorcode - error number\n
+/// \li \b errormsg - error string
+///
+/// \b success - user group was successfully created
+///
+/// \brief creates a new user group with the specified parameters
+///
+////////////////////////////////////////////////////////////////////////////////
+function XMLRPCaddUserGroup($name, $affiliation, $owner, $managingGroup,
+                            $initialMaxTime, $totalMaxTime, $maxExtendTime,
+                            $custom=1) {
+	global $user;
+	if(! in_array('groupAdmin', $user['privileges'])) {
+		return array('status' => 'error',
+		             'errorcode' => 16,
+		             'errormsg' => 'access denied for managing groups');
+	}
+	$validate = array('name' => $name,
+	                  'affiliation' => $affiliation,
+	                  'owner' => $owner,
+	                  'managingGroup' => $managingGroup,
+	                  'initialMaxTime' => $initialMaxTime,
+	                  'totalMaxTime' => $totalMaxTime,
+	                  'maxExtendTime' => $maxExtendTime,
+	                  'custom' => $custom);
+	$rc = validateAPIgroupInput($validate, 0);
+	if($rc['status'] == 'error')
+		return $rc;
+	if($custom != 0 && $custom != 1)
+		$custom = 1;
+	if(! $custom)
+		$rc['managingGroupID'] = NULL;
+	$data = array('type' => 'user',
+	              'owner' => $owner,
+	              'name' => $name,
+	              'affiliationid' => $rc['affiliationid'],
+	              'editgroupid' => $rc['managingGroupID'],
+	              'initialmax' => $initialMaxTime,
+	              'totalmax' => $totalMaxTime,
+	              'maxextend' => $maxExtendTime,
+	              'overlap' => 0,
+	              'custom' => $custom);
+	if(! addGroup($data)) {
+		return array('status' => 'error',
+		             'errorcode' => 26,
+		             'errormsg' => 'failure while adding group to database');
+	}
 	return array('status' => 'success');
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn XMLRPCsetRequestEnding($requestid, $end)
+/// \fn XMLRPCeditUserGroup($name, $affiliation, $newName, $newAffiliation,
+///                         $newOwner, $newManagingGroup, $newInitialMaxTime,
+///                         $newTotalMaxTime, $newMaxExtendTime)
 ///
-/// \param $requestid - id of a request
-/// \param $end - unix timestamp for end of reservation; will be rounded up to
-/// the nearest 15 minute increment
+/// \param $name - name of user group
+/// \param $affiliation - affiliation of user group
+/// \param $newName - new name for user group
+/// \param $newAffiliation - new affiliation for user group
+/// \param $newOwner - (optional, default='') user that will be the owner of
+///                    the group in username\@affiliation form
+/// \param $newManagingGroup - (optional, default='') user group that can
+///                            manage membership of this one
+/// \param $newInitialMaxTime - (optional, default='') (minutes) max initial
+///                             time users in this group can select for length
+///                             of reservations
+/// \param $newTotalMaxTime - (optional, default='') (minutes) total length
+///                           users in the group can have for a reservation
+///                           (including all extensions)
+/// \param $newMaxExtendTime - (optional, default='') (minutes) max length of
+///                            time users can request as an extension to a
+///                            reservation at a time
 ///
 /// \return an array with at least one index named 'status' which will have
-/// one of these values\n
+/// one of these values:\n
 /// \b error - error occurred; there will be 2 additional elements in the array:
-/// \li \b errorcode - error number\n
-/// \li \b errormsg - error string\n
+/// \li \b errorcode - error number
+/// \li \b errormsg - error string
 ///
-/// \b success - request was successfully extended\n
+/// \b success - user group was successfully updated
 ///
-/// \brief modifies the end time of an active request; if a request that has not
-/// started needs to be modifed, delete the request and submit a new one
+/// \brief modifies attributes of a user group\n
+/// \b NOTE: an empty string may be passed for any of the new* fields to leave
+/// that item unchanged
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function XMLRPCsetRequestEnding($requestid, $end) {
-	global $user;
+function XMLRPCeditUserGroup($name, $affiliation, $newName, $newAffiliation,
+                             $newOwner='', $newManagingGroup='',
+                             $newInitialMaxTime='', $newTotalMaxTime='',
+                             $newMaxExtendTime='') {
+	global $user, $mysql_link_vcl;
+	if(! in_array('groupAdmin', $user['privileges'])) {
+		return array('status' => 'error',
+		             'errorcode' => 16,
+		             'errormsg' => 'access denied for managing groups');
+	}
 
-	$requestid = processInputData($requestid, ARG_NUMERIC);
-	$userRequests = getUserRequests('all', $user['id']);
-	$found = 0;
-	foreach($userRequests as $req) {
-		if($req['id'] == $requestid) {
-			$request = getRequestInfo($requestid);
-			$found = 1;
-			break;
+	$updates = array();
+
+	# validate group exists and new values other than newName and newAffiliation
+	#   are valid
+	$validate = array('name' => $name,
+	                  'affiliation' => $affiliation);
+	if(get_magic_quotes_gpc())
+		$newOwner = stripslashes($newOwner);
+	if(! empty($newOwner))
+		$validate['owner'] = $newOwner;
+	if(! empty($newManagingGroup))
+		$validate['managingGroup'] = $newManagingGroup;
+	if(! empty($newInitialMaxTime)) {
+		$validate['initialMaxTime'] = $newInitialMaxTime;
+		$updates[] = "initialmaxtime = $newInitialMaxTime";
+	}
+	if(! empty($newTotalMaxTime)) {
+		$validate['totalMaxTime'] = $newTotalMaxTime;
+		$updates[] = "totalmaxtime = $newTotalMaxTime";
+	}
+	if(! empty($newMaxExtendTime)) {
+		$validate['maxExtendTime'] = $newMaxExtendTime;
+		$updates[] = "maxextendtime = $newMaxExtendTime";
+	}
+	$rc = validateAPIgroupInput($validate, 1);
+	if($rc['status'] == 'error')
+		return $rc;
+
+	# get info about group
+	$query = "SELECT ownerid "
+	       .        "affiliationid, "
+	       .        "custom, "
+	       .        "courseroll "
+	       . "FROM usergroup "
+	       . "WHERE id = {$rc['id']}";
+	$qh = doQuery($query, 101);
+	if(! $row = mysql_fetch_assoc($qh)) {
+		return array('status' => 'error',
+		             'errorcode' => 18,
+		             'errormsg' => 'user group with submitted name and affiliation does not exist');
+	}
+	// if custom and not owner or custom/courseroll and no federated user group access, no access to edit group
+	if(($row['custom'] == 1 && $user['id'] != $row['ownerid']) ||
+	   (($row['custom'] == 0 || $row['courseroll'] == 1) &&
+	   ! checkUserHasPerm('Manage Federated User Groups (global)') &&
+	   (! checkUserHasPerm('Manage Federated User Groups (affiliation only)') ||
+	   $row['affiliationid'] != $user['affiliationid']))) {
+		return array('status' => 'error',
+		             'errorcode' => 32,
+		             'errormsg' => 'access denied to modify attributes for user group with submitted name and affiliation');
+	}
+
+	# validate that newName and newAffiliation are valid
+	if(($name != $newName || $affiliation != $newAffiliation) &&
+	   (! empty($newName) || ! empty($newAffiliation))) {
+		$validate = array('name' => $name,
+		                  'affiliation' => $affiliation);
+		if(! empty($newName)) {
+			if(get_magic_quotes_gpc())
+				$newName = stripslashes($newName);
+			$validate['name'] = $newName;
+			$tmp = mysql_real_escape_string($newName);
+			$updates[] = "name = '$tmp'";
 		}
-	}
-	if(! $found)
-		return array('status' => 'error',
-		             'errorcode' => 1,
-		             'errormsg' => 'unknown requestid');
-
-	// make sure user is a member of the 'Specify End Time' group
-	$groupid = getUserGroupID('Specify End Time');
-	$members = getUserGroupMembers($groupid);
-	if(! $request['serverrequest'] && ! array_key_exists($user['id'], $members)) {
-		return array('status' => 'error',
-		             'errorcode' => 35,
-		             'errormsg' => "access denied to specify end time");
-	}
-
-	$end = processInputData($end, ARG_NUMERIC);
-
-	$maxend = datetimeToUnix("2038-01-01 00:00:00");
-	if($end < 0 || $end > $maxend) {
-		return array('status' => 'error',
-		             'errorcode' => 36,
-		             'errormsg' => "received invalid input for end");
-	}
-
-	$startts = datetimeToUnix($request['start']);
-	if($end % (15 * 60))
-		$end= unixFloor15($end) + (15 * 60);
-
-	// check that reservation has started
-	if($startts > time()) {
-		return array('status' => 'error',
-		             'errorcode' => 38,
-		             'errormsg' => 'reservation has not started');
-	}
-
-	// check for overlap
-	$max = getMaxOverlap($user['id']);
-	if(checkOverlap($startts, $end, $max, $requestid)) {
-		return array('status' => 'error',
-		             'errorcode' => 41,
-		             'errormsg' => 'overlapping reservation restriction',
-		             'maxoverlap' => $max);
-	}
-
-	// check for computer being available for extended time?
-	$timeToNext = timeToNextReservation($request);
-	$movedall = 1;
-	if($timeToNext > -1) {
-		foreach($request["reservations"] as $res) {
-			if(! moveReservationsOffComputer($res["computerid"])) {
-				$movedall = 0;
-				break;
+		if(! empty($newAffiliation))
+			$validate['affiliation'] = $newAffiliation;
+		$rc2 = validateAPIgroupInput($validate, 0);
+		if($rc2['status'] == 'error') {
+			if($rc2['errorcode'] == 27) {
+				$rc2['errorcode'] = 31;
+				$rc2['errormsg'] = 'existing user group with new form of name@affiliation';
 			}
+			return $rc2;
 		}
+		if(! empty($newAffiliation))
+			$updates[] = "affiliationid = {$rc2['affiliationid']}";
 	}
-	if(! $movedall) {
-		$timeToNext = timeToNextReservation($request);
-		if($timeToNext >= 15)
-			$timeToNext -= 15;
-		$oldendts = datetimeToUnix($request['end']);
-		// reservation immediately after this one, cannot extend
-		if($timeToNext < 15) {
-			return array('status' => 'error',
-			             'errorcode' => 42,
-			             'errormsg' => 'cannot extend due to another reservation immediately after this one');
+
+	if($row['custom']) {
+		if(! empty($newOwner)) {
+			$newownerid = getUserlistID(mysql_real_escape_string($newOwner));
+			$updates[] = "ownerid = $newownerid";
 		}
-		// check that requested extension < $timeToNext
-		elseif((($end - $oldendts) / 60) > $timeToNext) {
-			$maxend = $oldendts + ($timeToNext * 60);
-			return array('status' => 'error',
-			             'errorcode' => 43,
-			             'errormsg' => 'cannot extend by requested amount due to another reservation',
-			             'maxend' => $maxend);
-		}
+		if(! empty($newManagingGroup))
+			$updates[] = "editusergroupid = {$rc['managingGroupID']}";
 	}
-	$rc = isAvailable(getImages(), $request['reservations'][0]["imageid"],
-	                  $request['reservations'][0]['imagerevisionid'],
-	                  $startts, $end, $requestid);
-	// conflicts with scheduled maintenance
-	if($rc == -2) {
-		addChangeLogEntry($request["logid"], NULL, unixToDatetime($end),
-		                  $request['start'], NULL, NULL, 0);
+	$sets = implode(',', $updates);
+	if(count($updates) == 0) {
 		return array('status' => 'error',
-		             'errorcode' => 46,
-		             'errormsg' => 'requested time is during a maintenance window');
+		             'errorcode' => 33,
+		             'errormsg' => 'no new values submitted');
 	}
-	// concurrent license overlap
-	elseif($rc == -1) {
-		addChangeLogEntry($request["logid"], NULL, unixToDatetime($end),
-		                  $request['start'], NULL, NULL, 0);
-		return array('status' => 'error',
-		             'errorcode' => 44,
-		             'errormsg' => 'concurrent license restriction');
-	}
-	// could not extend for some other reason
-	elseif($rc == 0) {
-		addChangeLogEntry($request["logid"], NULL, unixToDatetime($end),
-		                  $request['start'], NULL, NULL, 0);
-		return array('status' => 'error',
-		             'errorcode' => 45,
-		             'errormsg' => 'cannot extend at this time');
-	}
-	// success
-	updateRequest($requestid);
+	$query = "UPDATE usergroup "
+	       . "SET $sets "
+	       . "WHERE id = {$rc['id']}";
+	doQuery($query, 101);
 	return array('status' => 'success');
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn XMLRPCendRequest($requestid)
+/// \fn XMLRPCremoveUserGroup($name, $affiliation)
 ///
-/// \param $requestid - id of a request
+/// \param $name - name of user group
+/// \param $affiliation - affiliation of user group
 ///
 /// \return an array with at least one index named 'status' which will have
-/// one of these values\n
+/// one of these values:\n
 /// \b error - error occurred; there will be 2 additional elements in the array:
-/// \li \b errorcode - error number\n
-/// \li \b errormsg - error string\n
+/// \li \b errorcode - error number
+/// \li \b errormsg - error string
 ///
-/// \b success - request was successfully ended\n
+/// \b success - user group was successfully removed
 ///
-/// \brief ends/deletes a request
+/// \brief removes a user group along with all of its privileges
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function XMLRPCendRequest($requestid) {
-	global $user;
-	$requestid = processInputData($requestid, ARG_NUMERIC);
-	$userRequests = getUserRequests('all', $user['id']);
-	$found = 0;
-	foreach($userRequests as $req) {
-		if($req['id'] == $requestid) {
-			$request = getRequestInfo($requestid);
-			$found = 1;
-			break;
-		}
-	}
-	if(! $found)
+function XMLRPCremoveUserGroup($name, $affiliation) {
+	global $user, $mysql_link_vcl;
+	if(! in_array('groupAdmin', $user['privileges'])) {
 		return array('status' => 'error',
-		             'errorcode' => 1,
-		             'errormsg' => 'unknown requestid');
+		             'errorcode' => 16,
+		             'errormsg' => 'access denied for managing groups');
+	}
+	$validate = array('name' => $name,
+	                  'affiliation' => $affiliation);
+	$rc = validateAPIgroupInput($validate, 1);
+	if($rc['status'] == 'error')
+		return $rc;
+	$query = "SELECT ownerid, "
+	       .        "affiliationid, "
+	       .        "custom, "
+	       .        "courseroll "
+	       . "FROM usergroup "
+	       . "WHERE id = {$rc['id']}";
+	$qh = doQuery($query, 101);
+	if(! $row = mysql_fetch_assoc($qh)) {
+		return array('status' => 'error',
+		             'errorcode' => 18,
+		             'errormsg' => 'user group with submitted name and affiliation does not exist');
+	}
 
-	deleteRequest($request);
+	// if custom and not owner or custom/courseroll and no federated user group access, no access to delete group
+	if(($row['custom'] == 1 && $user['id'] != $row['ownerid']) ||
+	   (($row['custom'] == 0 || $row['courseroll'] == 1) &&
+	   ! checkUserHasPerm('Manage Federated User Groups (global)') &&
+	   (! checkUserHasPerm('Manage Federated User Groups (affiliation only)') ||
+	   $row['affiliationid'] != $user['affiliationid']))) {
+		return array('status' => 'error',
+		             'errorcode' => 29,
+		             'errormsg' => 'access denied to delete user group with submitted name and affiliation');
+	}
+	if(checkForGroupUsage($rc['id'], 'user')) {
+		return array('status' => 'error',
+		             'errorcode' => 72,
+		             'errormsg' => 'group currently in use and cannot be removed');
+	}
+	$query = "DELETE FROM usergroup "
+	       . "WHERE id = {$rc['id']}";
+	doQuery($query, 101);
+	# validate something deleted
+	if(mysql_affected_rows($mysql_link_vcl) == 0) {
+		return array('status' => 'error',
+		             'errorcode' => 30,
+		             'errormsg' => 'failure while deleting group from database');
+	}
 	return array('status' => 'success');
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn XMLRPCgetRequestIds()
+/// \fn XMLRPCdeleteUserGroup($name, $affiliation)
+///
+/// \param $name - name of user group
+/// \param $affiliation - affiliation of user group
 ///
 /// \return an array with at least one index named 'status' which will have
-/// one of these values\n
+/// one of these values:\n
 /// \b error - error occurred; there will be 2 additional elements in the array:
-/// \li \b errorcode - error number\n
-/// \li \b errormsg - error string\n
+/// \li \b errorcode - error number
+/// \li \b errormsg - error string
 ///
-/// \b success - request was successfully ended; there will be an additional
-/// element whose index is 'requests' which is an array of arrays, each having
-/// these elements (or empty if no existing requests):\n
-/// \li \b requestid - id of the request\n
-/// \li \b imageid - id of the image\n
-/// \li \b imagename - name of the image\n
-/// \li \b start - unix timestamp of start time\n
-/// \li \b end - unix timestamp of end time\n
-/// \li \b OS - name of OS used in image\n
-/// \li \b isserver - 0 or 1 - whether or not this is a server reservation\n
-/// \li \b state - current state of reservation\n
-/// \li \b servername - only included if isserver == 1 - name of the reservation
+/// \b success - user group was successfully removed
 ///
-/// \brief gets information about all of user's requests
+/// \brief alias for XMLRPCremoveUserGroup
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function XMLRPCgetRequestIds() {
+function XMLRPCdeleteUserGroup($name, $affiliation) {
+	# This was the original function. All other functions use 'remove' rather
+	# than 'delete'. The function was renamed to XMLRPCremoveUserGroup. This was
+	# kept for compatibility reasons
+	return XMLRPCremoveUserGroup($name, $affiliation);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn XMLRPCgetUserGroupMembers($name, $affiliation)
+///
+/// \param $name - name of user group
+/// \param $affiliation - affiliation of user group
+///
+/// \return an array with at least one index named 'status' which will have
+/// one of these values:\n
+/// \b error - error occurred; there will be 2 additional elements in the array:
+/// \li \b errorcode - error number
+/// \li \b errormsg - error string
+///
+/// \b success - there will be one additional element in this case:
+/// \li \b members - array of members of the group in username\@affiliation form
+///
+/// \brief gets members of a user group\n
+/// \b NOTE: it is possible to have a group with no members in which case
+/// success will be returned with an empty array for members
+///
+////////////////////////////////////////////////////////////////////////////////
+function XMLRPCgetUserGroupMembers($name, $affiliation) {
 	global $user;
-	$requests = getUserRequests("all");
-	if(empty($requests))
-		return array('status' => 'success', 'requests' => array());
-	$states = getStates();
-	$ret = array();
-	foreach($requests as $req) {
-		$start = datetimeToUnix($req['start']);
-		$end = datetimeToUnix($req['end']);
-		$tmp = array('requestid' => $req['id'],
-		             'imageid' => $req['imageid'],
-		             'imagename' => $req['prettyimage'],
-		             'start' => $start,
-		             'end' => $end,
-		             'OS' => $req['OS'],
-		             'isserver' => $req['server']);
-		if($req['currstateid'] == 14)
-			$tmp['state'] = $states[$req['laststateid']];
+	if(! in_array('groupAdmin', $user['privileges'])) {
+		return array('status' => 'error',
+		             'errorcode' => 16,
+		             'errormsg' => 'access denied for managing groups');
+	}
+	$validate = array('name' => $name,
+	                  'affiliation' => $affiliation);
+	$rc = validateAPIgroupInput($validate, 1);
+	if($rc['status'] == 'error')
+		return $rc;
+	$query = "SELECT ownerid, "
+	       .        "editusergroupid AS editgroupid, "
+	       .        "affiliationid, "
+	       .        "custom, "
+	       .        "courseroll "
+	       . "FROM usergroup "
+	       . "WHERE id = {$rc['id']}";
+	$qh = doQuery($query, 101);
+	if(! $row = mysql_fetch_assoc($qh)) {
+		return array('status' => 'error',
+		             'errorcode' => 18,
+		             'errormsg' => 'user group with submitted name and affiliation does not exist');
+	}
+	// if custom and not owner and not member of managing group or 
+	//    custom/courseroll and no federated user group access, no access to delete group
+	if(($row['custom'] == 1 && $user['id'] != $row['ownerid'] &&
+	   ! array_key_exists($row['editgroupid'], $user['groups'])) ||
+	   (($row['custom'] == 0 || $row['courseroll'] == 1) &&
+	   ! checkUserHasPerm('Manage Federated User Groups (global)') &&
+	   (! checkUserHasPerm('Manage Federated User Groups (affiliation only)') ||
+	   $row['affiliationid'] != $user['affiliationid']))) {
+		return array('status' => 'error',
+		             'errorcode' => 28,
+		             'errormsg' => 'access denied to user group with submitted name and affiliation');
+	}
+	$query = "SELECT CONCAT(u.unityid, '@', a.name) AS member "
+	       . "FROM usergroupmembers ugm, "
+	       .      "user u, "
+	       .      "affiliation a "
+	       . "WHERE ugm.usergroupid = {$rc['id']} AND "
+	       .       "ugm.userid = u.id AND "
+	       .       "u.affiliationid = a.id";
+	$qh = doQuery($query, 101);
+	$members = array();
+	while($row = mysql_fetch_assoc($qh))
+		$members[] = $row['member'];
+	return array('status' => 'success',
+	             'members' => $members);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn XMLRPCaddUsersToGroup($name, $affiliation, $users)
+///
+/// \param $name - name of user group
+/// \param $affiliation - affiliation of user group
+/// \param $users - array of users in username\@affiliation form to be added to
+///                 the group
+///
+/// \return an array with at least one index named 'status' which will have
+/// one of these values:\n
+/// \b error - error occurred; there will be 2 additional elements in the array:
+/// \li \b errorcode - error number
+/// \li \b errormsg - error string
+///
+/// \b success - users successfully added to the group\n
+/// \b warning - there was a non-fatal issue that occurred while processing
+/// the call; there will be three additional elements in this case:
+/// \li \b warningcode - warning number
+/// \li \b warningmsg - warning string
+/// \li \b failedusers - array of users in username\@affiliation form that could
+///                      not be added
+///
+/// \brief adds users to a group
+///
+////////////////////////////////////////////////////////////////////////////////
+function XMLRPCaddUsersToGroup($name, $affiliation, $users) {
+	global $user;
+	if(! in_array('groupAdmin', $user['privileges'])) {
+		return array('status' => 'error',
+		             'errorcode' => 16,
+		             'errormsg' => 'access denied for managing groups');
+	}
+	$validate = array('name' => $name,
+	                  'affiliation' => $affiliation);
+	$rc = validateAPIgroupInput($validate, 1);
+	if($rc['status'] == 'error')
+		return $rc;
+	$query = "SELECT ownerid, "
+	       .        "editusergroupid AS editgroupid "
+	       . "FROM usergroup "
+	       . "WHERE id = {$rc['id']}";
+	$qh = doQuery($query, 101);
+	if(! $row = mysql_fetch_assoc($qh)) {
+		return array('status' => 'error',
+		             'errorcode' => 18,
+		             'errormsg' => 'user group with submitted name and affiliation does not exist');
+	}
+	// if not owner and not member of managing group, no access
+	if($user['id'] != $row['ownerid'] && 
+	   ! array_key_exists($row['editgroupid'], $user['groups'])) {
+		return array('status' => 'error',
+		             'errorcode' => 28,
+		             'errormsg' => 'access denied to user group with submitted name and affiliation');
+	}
+	$fails = array();
+	foreach($users as $_user) {
+		if(empty($_user))
+			continue;
+		if(get_magic_quotes_gpc())
+			$_user = stripslashes($_user);
+		$esc_user = mysql_real_escape_string($_user);
+		if(validateUserid($_user) == 1)
+			addUserGroupMember($esc_user, $rc['id']);
 		else
-			$tmp['state'] = $states[$req['currstateid']];
-		if($req['server'])
-			$tmp['servername'] = $req['servername'];
-		array_push($ret, $tmp);
+			$fails[] = $_user;
 	}
-	return array('status' => 'success', 'requests' => $ret);
+	if(count($fails)) {
+		$cnt = 'some';
+		$code = 34;
+		if(count($fails) == count($users)) {
+			$cnt = 'all submitted';
+			$code = 35;
+		}
+		return array('status' => 'warning',
+		             'failedusers' => $fails,
+		             'warningcode' => $code,
+		             'warningmsg' => "failed to add $cnt users to user group");
+	}
+	return array('status' => 'success');
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn XMLRPCremoveUsersFromGroup($name, $affiliation, $users)
+///
+/// \param $name - name of user group
+/// \param $affiliation - affiliation of user group
+/// \param $users - array of users in username\@affiliation form to be removed
+///                 from the group
+///
+/// \return an array with at least one index named 'status' which will have
+/// one of these values:\n
+/// \b error - error occurred; there will be 2 additional elements in the array:
+/// \li \b errorcode - error number
+/// \li \b errormsg - error string
+///
+/// \b success - users successfully removed from the group\n
+/// \b warning - there was a non-fatal issue that occurred while processing
+/// the call; there will be three additional elements in this case:
+/// \li \b warningcode - warning number
+/// \li \b warningmsg - warning string
+/// \li \b failedusers - array of users in username\@affiliation form that could
+///                      not be removed
+///
+/// \brief removes users from a group
+///
+////////////////////////////////////////////////////////////////////////////////
+function XMLRPCremoveUsersFromGroup($name, $affiliation, $users) {
+	global $user, $findAffilFuncs;
+	if(! in_array('groupAdmin', $user['privileges'])) {
+		return array('status' => 'error',
+		             'errorcode' => 16,
+		             'errormsg' => 'access denied for managing groups');
+	}
+	$validate = array('name' => $name,
+	                  'affiliation' => $affiliation);
+	$rc = validateAPIgroupInput($validate, 1);
+	if($rc['status'] == 'error')
+		return $rc;
+	$query = "SELECT ownerid, "
+	       .        "editusergroupid AS editgroupid "
+	       . "FROM usergroup "
+	       . "WHERE id = {$rc['id']}";
+	$qh = doQuery($query, 101);
+	if(! $row = mysql_fetch_assoc($qh)) {
+		return array('status' => 'error',
+		             'errorcode' => 18,
+		             'errormsg' => 'user group with submitted name and affiliation does not exist');
+	}
+	// if not owner and not member of managing group, no access
+	if($user['id'] != $row['ownerid'] && 
+	   ! array_key_exists($row['editgroupid'], $user['groups'])) {
+		return array('status' => 'error',
+		             'errorcode' => 28,
+		             'errormsg' => 'access denied to user group with submitted name and affiliation');
+	}
+	$fails = array();
+	foreach($users as $_user) {
+		if(empty($_user))
+			continue;
+		if(get_magic_quotes_gpc())
+			$_user = stripslashes($_user);
+		$esc_user = mysql_real_escape_string($_user);
+		# check that affiliation of user can be determined because getUserlistID
+		#   will abort if it cannot find it
+		$affilok = 0;
+		foreach($findAffilFuncs as $func) {
+			if($func($_user, $dump))
+				$affilok = 1;
+		}
+		if(! $affilok) {
+			$fails[] = $_user;
+			continue;
+		}
+		$userid = getUserlistID($esc_user, 1);
+		if(is_null($userid))
+			$fails[] = $_user;
+		else
+			deleteUserGroupMember($userid, $rc['id']);
+	}
+	if(count($fails)) {
+		$cnt = 'some';
+		$code = 36;
+		if(count($fails) == count($users)) {
+			$cnt = 'any';
+			$code = 37;
+		}
+		return array('status' => 'warning',
+		             'failedusers' => $fails,
+		             'warningcode' => $code,
+		             'warningmsg' => "failed to remove $cnt users from user group");
+	}
+	return array('status' => 'success');
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn XMLRPCgetResourceGroups($type)
+///
+/// \param $type - the resource group type
+///
+/// \return an array with at least one index named 'status' which will have
+/// one of these values\n
+/// \b error - error occurred; there will be 2 additional elements in the array:
+/// \li \b errorcode - error number\n
+/// \li \b errormsg - error string\n
+///
+/// \b success - a 'groups' element will contain an array of groups of the given
+/// type\n
+///
+/// \brief get a list of resource groups of a particular type
+///
+////////////////////////////////////////////////////////////////////////////////
+function XMLRPCgetResourceGroups($type) {
+	global $user;
+	$resources = getUserResources(array("groupAdmin"), array("manageGroup"), 1);
+	if(array_key_exists($type, $resources)) {
+		return array('status' => 'success',
+		             'groups' => $resources[$type]);
+	}
+	else {
+		return array('status' => 'error',
+		             'errorcode' => 73,
+		             'errormsg' => 'invalid resource group type');
+	}
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn XMLRPCaddResourceGroup($name, $managingGroup, $type)
+///
+/// \param $name - the name of the resource group
+/// \param $managingGroup - the name of the managing group
+/// \param $type - the type of resource group
+///
+/// \return an array with at least one index named 'status' which will have
+/// one of these values\n
+/// \b error - error occurred; there will be 2 additional elements in the array:
+/// \li \b errorcode - error number\n
+/// \li \b errormsg - error string\n
+///
+/// \b success - the resource group was added
+///
+/// \brief add a resource group
+///
+////////////////////////////////////////////////////////////////////////////////
+function XMLRPCaddResourceGroup($name, $managingGroup, $type) {
+	global $user;
+	if(! in_array("groupAdmin", $user['privileges'])) {
+		return array('status' => 'error',
+		             'errorcode' => 16,
+		             'errormsg' => 'access denied for managing groups');
+	}
+
+	$validate = array('managingGroup' => $managingGroup);
+
+	$rc = validateAPIgroupInput($validate, 0);
+	if($rc['status'] == 'error')
+		return $rc;
+
+	if($typeid = getResourceTypeID($type)) {
+		if(checkForGroupName($name, 'resource', '', $typeid)) {
+			return array('status' => 'error',
+			             'errorcode' => 76,
+			             'errormsg' => 'resource group already exists');
+		}
+		if(get_magic_quotes_gpc())
+			$name = stripslashes($name);
+		if(! preg_match('/^[-a-zA-Z0-9_\. ]{3,30}$/', $name)) {
+			return array('status' => 'error',
+			             'errorcode' => 87,
+			             'errormsg' => 'Name must be between 3 and 30 characters and can only contain letters, numbers, spaces, and these characters: - . _');
+		}
+		$name = mysql_real_escape_string($name);
+		$data = array('type' => 'resource',
+		              'ownergroup' => $rc['managingGroupID'],
+		              'resourcetypeid' => $typeid,
+		              'name' => $name);
+		if(! addGroup($data)) {
+			return array('status' => 'error',
+			             'errorcode' => 26,
+			             'errormsg' => 'failure while adding group to database');
+		}
+	}
+	else {
+		return array('status' => 'error',
+		             'errorcode' => 68,
+		             'errormsg' => 'invalid resource type');
+	}
+	return array('status' => 'success');
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn XMLRPCremoveResourceGroup($name, $type)
+///
+/// \param $name - the name of the resource group
+/// \param $type - the resource group type
+///
+/// \return an array with at least one index named 'status' which will have
+/// one of these values\n
+/// \b error - error occurred; there will be 2 additional elements in the array:
+/// \li \b errorcode - error number\n
+/// \li \b errormsg - error string\n
+///
+/// \b success - the resource group was removed\n
+///
+/// \brief remove a resource group
+///
+////////////////////////////////////////////////////////////////////////////////
+function XMLRPCremoveResourceGroup($name, $type) {
+	global $user;
+	if(! in_array("groupAdmin", $user['privileges'])) {
+		return array('status' => 'error',
+		             'errorcode' => 16,
+		             'errormsg' => 'access denied for managing groups');
+	}
+
+	if($groupid = getResourceGroupID("$type/$name")) {
+		$userresources = getUserResources(array("groupAdmin"),
+		                                  array("manageGroup"), 1);
+		if(array_key_exists($type, $userresources)) {
+			if(array_key_exists($groupid, $userresources[$type])) {
+				if(checkForGroupUsage($groupid, 'resource')) {
+					return array('status' => 'error',
+					             'errorcode' => 72,
+					             'errormsg' => 'group currently in use and cannot be removed');
+				}
+				$query = "DELETE FROM resourcegroup "
+				       . "WHERE id = $groupid";
+				doQuery($query, 315);
+				return array('status' => 'success');
+			}
+			else
+				return array('status' => 'error',
+				             'errorcode' => 75,
+				             'errormsg' => 'access denied to specified resource group');
+		}
+	}
+	return array('status' => 'error',
+	             'errorcode' => 83,
+	             'errormsg' => 'invalid resource group name');
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -2250,1259 +3504,5 @@ function XMLRPCprocessBlockTime($blockTimesid, $ignoreprivileges=0) {
 	$return['allocated'] = ($compCompleted / $compsPerAlloc) + $allocated;
 	$return['unallocated'] = $rqdata['numMachines'] - $return['allocated'];
 	return $return;
-}
-
-////////////////////////////////////////////////////////////////////////////////
-///
-/// \fn XMLRPCaddUserGroup($name, $affiliation, $owner, $managingGroup,
-///                        $initialMaxTime, $totalMaxTime, $maxExtendTime,
-///                        $custom)
-///
-/// \param $name - name of user group
-/// \param $affiliation - affiliation of user group
-/// \param $owner - user that will be the owner of the group in
-///                 username\@affiliation form
-/// \param $managingGroup - user group that can manage membership of this one
-/// \param $initialMaxTime - (minutes) max initial time users in this group can
-///                          select for length of reservations
-/// \param $totalMaxTime - (minutes) total length users in the group can have
-///                        for a reservation (including all extensions)
-/// \param $maxExtendTime - (minutes) max length of time users can request as an
-///                         extension to a reservation at a time
-/// \param $custom - (optional, default=1) set custom flag for user group; if
-///                set to 0, $owner and $managingGroup will be ignored and group
-///                membership will be managed via authentication protocol
-///
-/// \return an array with at least one index named 'status' which will have
-/// one of these values:\n
-/// \b error - error occurred; there will be 2 additional elements in the array:
-/// \li \b errorcode - error number\n
-/// \li \b errormsg - error string
-///
-/// \b success - user group was successfully created
-///
-/// \brief creates a new user group with the specified parameters
-///
-////////////////////////////////////////////////////////////////////////////////
-function XMLRPCaddUserGroup($name, $affiliation, $owner, $managingGroup,
-                            $initialMaxTime, $totalMaxTime, $maxExtendTime,
-                            $custom=1) {
-	global $user;
-	if(! in_array('groupAdmin', $user['privileges'])) {
-		return array('status' => 'error',
-		             'errorcode' => 16,
-		             'errormsg' => 'access denied for managing groups');
-	}
-	$validate = array('name' => $name,
-	                  'affiliation' => $affiliation,
-	                  'owner' => $owner,
-	                  'managingGroup' => $managingGroup,
-	                  'initialMaxTime' => $initialMaxTime,
-	                  'totalMaxTime' => $totalMaxTime,
-	                  'maxExtendTime' => $maxExtendTime,
-	                  'custom' => $custom);
-	$rc = validateAPIgroupInput($validate, 0);
-	if($rc['status'] == 'error')
-		return $rc;
-	if($custom != 0 && $custom != 1)
-		$custom = 1;
-	if(! $custom)
-		$rc['managingGroupID'] = NULL;
-	$data = array('type' => 'user',
-	              'owner' => $owner,
-	              'name' => $name,
-	              'affiliationid' => $rc['affiliationid'],
-	              'editgroupid' => $rc['managingGroupID'],
-	              'initialmax' => $initialMaxTime,
-	              'totalmax' => $totalMaxTime,
-	              'maxextend' => $maxExtendTime,
-	              'overlap' => 0,
-	              'custom' => $custom);
-	if(! addGroup($data)) {
-		return array('status' => 'error',
-		             'errorcode' => 26,
-		             'errormsg' => 'failure while adding group to database');
-	}
-	return array('status' => 'success');
-}
-
-////////////////////////////////////////////////////////////////////////////////
-///
-/// \fn XMLRPCgetResourceGroups($type)
-///
-/// \param $type - the resource group type
-///
-/// \return an array with at least one index named 'status' which will have
-/// one of these values\n
-/// \b error - error occurred; there will be 2 additional elements in the array:
-/// \li \b errorcode - error number\n
-/// \li \b errormsg - error string\n
-///
-/// \b success - a 'groups' element will contain an array of groups of the given
-/// type\n
-///
-/// \brief get a list of resource groups of a particular type
-///
-////////////////////////////////////////////////////////////////////////////////
-function XMLRPCgetResourceGroups($type) {
-	global $user;
-	$resources = getUserResources(array("groupAdmin"), array("manageGroup"), 1);
-	if(array_key_exists($type, $resources)) {
-		return array('status' => 'success',
-		             'groups' => $resources[$type]);
-	}
-	else {
-		return array('status' => 'error',
-		             'errorcode' => 73,
-		             'errormsg' => 'invalid resource group type');
-	}
-}
-
-////////////////////////////////////////////////////////////////////////////////
-///
-/// \fn XMLRPCremoveResourceGroup($name, $type)
-///
-/// \param $name - the name of the resource group
-/// \param $type - the resource group type
-///
-/// \return an array with at least one index named 'status' which will have
-/// one of these values\n
-/// \b error - error occurred; there will be 2 additional elements in the array:
-/// \li \b errorcode - error number\n
-/// \li \b errormsg - error string\n
-///
-/// \b success - the resource group was removed\n
-///
-/// \brief remove a resource group
-///
-////////////////////////////////////////////////////////////////////////////////
-function XMLRPCremoveResourceGroup($name, $type) {
-	global $user;
-	if(! in_array("groupAdmin", $user['privileges'])) {
-		return array('status' => 'error',
-		             'errorcode' => 16,
-		             'errormsg' => 'access denied for managing groups');
-	}
-
-	if($groupid = getResourceGroupID("$type/$name")) {
-		$userresources = getUserResources(array("groupAdmin"),
-		                                  array("manageGroup"), 1);
-		if(array_key_exists($type, $userresources)) {
-			if(array_key_exists($groupid, $userresources[$type])) {
-				if(checkForGroupUsage($groupid, 'resource')) {
-					return array('status' => 'error',
-					             'errorcode' => 72,
-					             'errormsg' => 'group currently in use and cannot be removed');
-				}
-				$query = "DELETE FROM resourcegroup "
-				       . "WHERE id = $groupid";
-				doQuery($query, 315);
-				return array('status' => 'success');
-			}
-			else
-				return array('status' => 'error',
-				             'errorcode' => 75,
-				             'errormsg' => 'access denied to specified resource group');
-		}
-	}
-	return array('status' => 'error',
-	             'errorcode' => 83,
-	             'errormsg' => 'invalid resource group name');
-}
-
-////////////////////////////////////////////////////////////////////////////////
-///
-/// \fn XMLRPCaddResourceGroup($name, $managingGroup, $type)
-///
-/// \param $name - the name of the resource group
-/// \param $managingGroup - the name of the managing group
-/// \param $type - the type of resource group
-///
-/// \return an array with at least one index named 'status' which will have
-/// one of these values\n
-/// \b error - error occurred; there will be 2 additional elements in the array:
-/// \li \b errorcode - error number\n
-/// \li \b errormsg - error string\n
-///
-/// \b success - the resource group was added
-///
-/// \brief add a resource group
-///
-////////////////////////////////////////////////////////////////////////////////
-function XMLRPCaddResourceGroup($name, $managingGroup, $type) {
-	global $user;
-	if(! in_array("groupAdmin", $user['privileges'])) {
-		return array('status' => 'error',
-		             'errorcode' => 16,
-		             'errormsg' => 'access denied for managing groups');
-	}
-
-	$validate = array('managingGroup' => $managingGroup);
-
-	$rc = validateAPIgroupInput($validate, 0);
-	if($rc['status'] == 'error')
-		return $rc;
-
-	if($typeid = getResourceTypeID($type)) {
-		if(checkForGroupName($name, 'resource', '', $typeid)) {
-			return array('status' => 'error',
-			             'errorcode' => 76,
-			             'errormsg' => 'resource group already exists');
-		}
-		if(get_magic_quotes_gpc())
-			$name = stripslashes($name);
-		if(! preg_match('/^[-a-zA-Z0-9_\. ]{3,30}$/', $name)) {
-			return array('status' => 'error',
-			             'errorcode' => 87,
-			             'errormsg' => 'Name must be between 3 and 30 characters and can only contain letters, numbers, spaces, and these characters: - . _');
-		}
-		$name = mysql_real_escape_string($name);
-		$data = array('type' => 'resource',
-		              'ownergroup' => $rc['managingGroupID'],
-		              'resourcetypeid' => $typeid,
-		              'name' => $name);
-		if(! addGroup($data)) {
-			return array('status' => 'error',
-			             'errorcode' => 26,
-			             'errormsg' => 'failure while adding group to database');
-		}
-	}
-	else {
-		return array('status' => 'error',
-		             'errorcode' => 68,
-		             'errormsg' => 'invalid resource type');
-	}
-	return array('status' => 'success');
-}
-
-////////////////////////////////////////////////////////////////////////////////
-///
-/// \fn XMLRPCgetUserGroupAttributes($name, $affiliation)
-///
-/// \param $name - name of user group
-/// \param $affiliation - affiliation of user group
-///
-/// \return an array with at least one index named 'status' which will have
-/// one of these values:\n
-/// \b error - error occurred; there will be 2 additional elements in the array:
-/// \li \b errorcode - error number
-/// \li \b errormsg - error string
-///
-/// \b success - there will be six additional elements in this case:
-/// \li \b owner - user that will be the owner of the group in
-///                username\@affiliation form
-/// \li \b managingGroup - user group that can manage membership of this one in
-///                        groupname\@affiliation form
-/// \li \b initialMaxTime - (minutes) max initial time users in this group can
-///                         select for length of reservations
-/// \li \b totalMaxTime - (minutes) total length users in the group can have for
-///                       a reservation (including all extensions)
-/// \li \b maxExtendTime - (minutes) max length of time users can request as an
-///                        extension to a reservation at a time
-/// \li \b overlapResCount - maximum allowed number of overlapping reservations
-/// allowed for users in this group
-///
-/// \brief gets information about a user group
-///
-////////////////////////////////////////////////////////////////////////////////
-function XMLRPCgetUserGroupAttributes($name, $affiliation) {
-	global $user;
-	if(! in_array('groupAdmin', $user['privileges'])) {
-		return array('status' => 'error',
-		             'errorcode' => 16,
-		             'errormsg' => 'access denied for managing groups');
-	}
-	$validate = array('name' => $name,
-	                  'affiliation' => $affiliation);
-	$rc = validateAPIgroupInput($validate, 1);
-	if($rc['status'] == 'error')
-		return $rc;
-	$query = "SELECT ug.id, "
-	       .        "ug.ownerid, "
-	       .        "CONCAT(u.unityid, '@', a.name) AS owner, "
-	       .        "ug.editusergroupid AS editgroupid, "
-	       .        "eug.name AS editgroup, "
-	       .        "eug.affiliationid AS editgroupaffiliationid, "
-	       .        "euga.name AS editgroupaffiliation, "
-	       .        "ug.initialmaxtime, "
-	       .        "ug.totalmaxtime, "
-	       .        "ug.maxextendtime, "
-	       .        "ug.overlapResCount "
-	       . "FROM usergroup ug "
-	       . "LEFT JOIN user u ON (ug.ownerid = u.id) "
-	       . "LEFT JOIN affiliation a ON (u.affiliationid = a.id) "
-	       . "LEFT JOIN usergroup eug ON (ug.editusergroupid = eug.id) "
-	       . "LEFT JOIN affiliation euga ON (eug.affiliationid = euga.id) "
-	       . "WHERE ug.id = {$rc['id']}";
-	$qh = doQuery($query, 101);
-	if(! $row = mysql_fetch_assoc($qh)) {
-		return array('status' => 'error',
-		             'errorcode' => 18,
-		             'errormsg' => 'user group with submitted name and affiliation does not exist');
-	}
-	// if not owner and not member of managing group, no access
-	if($user['id'] != $row['ownerid'] && 
-	   ! array_key_exists($row['editgroupid'], $user['groups'])) {
-		return array('status' => 'error',
-		             'errorcode' => 69,
-		             'errormsg' => 'access denied to user group with submitted name and affiliation');
-	}
-	$ret = array('status' => 'success',
-	             'owner' => $row['owner'],
-	             'managingGroup' => "{$row['editgroup']}@{$row['editgroupaffiliation']}",
-	             'initialMaxTime' => $row['initialmaxtime'],
-	             'totalMaxTime' => $row['totalmaxtime'],
-	             'maxExtendTime' => $row['maxextendtime'],
-	             'overlapResCount' => $row['overlapResCount']);
-	return $ret;
-}
-
-////////////////////////////////////////////////////////////////////////////////
-///
-/// \fn XMLRPCremoveUserGroup($name, $affiliation)
-///
-/// \param $name - name of user group
-/// \param $affiliation - affiliation of user group
-///
-/// \return an array with at least one index named 'status' which will have
-/// one of these values:\n
-/// \b error - error occurred; there will be 2 additional elements in the array:
-/// \li \b errorcode - error number
-/// \li \b errormsg - error string
-///
-/// \b success - user group was successfully removed
-///
-/// \brief removes a user group along with all of its privileges
-///
-////////////////////////////////////////////////////////////////////////////////
-function XMLRPCremoveUserGroup($name, $affiliation) {
-	global $user, $mysql_link_vcl;
-	if(! in_array('groupAdmin', $user['privileges'])) {
-		return array('status' => 'error',
-		             'errorcode' => 16,
-		             'errormsg' => 'access denied for managing groups');
-	}
-	$validate = array('name' => $name,
-	                  'affiliation' => $affiliation);
-	$rc = validateAPIgroupInput($validate, 1);
-	if($rc['status'] == 'error')
-		return $rc;
-	$query = "SELECT ownerid, "
-	       .        "affiliationid, "
-	       .        "custom, "
-	       .        "courseroll "
-	       . "FROM usergroup "
-	       . "WHERE id = {$rc['id']}";
-	$qh = doQuery($query, 101);
-	if(! $row = mysql_fetch_assoc($qh)) {
-		return array('status' => 'error',
-		             'errorcode' => 18,
-		             'errormsg' => 'user group with submitted name and affiliation does not exist');
-	}
-
-	// if custom and not owner or custom/courseroll and no federated user group access, no access to delete group
-	if(($row['custom'] == 1 && $user['id'] != $row['ownerid']) ||
-	   (($row['custom'] == 0 || $row['courseroll'] == 1) &&
-	   ! checkUserHasPerm('Manage Federated User Groups (global)') &&
-	   (! checkUserHasPerm('Manage Federated User Groups (affiliation only)') ||
-	   $row['affiliationid'] != $user['affiliationid']))) {
-		return array('status' => 'error',
-		             'errorcode' => 29,
-		             'errormsg' => 'access denied to delete user group with submitted name and affiliation');
-	}
-	if(checkForGroupUsage($rc['id'], 'user')) {
-		return array('status' => 'error',
-		             'errorcode' => 72,
-		             'errormsg' => 'group currently in use and cannot be removed');
-	}
-	$query = "DELETE FROM usergroup "
-	       . "WHERE id = {$rc['id']}";
-	doQuery($query, 101);
-	# validate something deleted
-	if(mysql_affected_rows($mysql_link_vcl) == 0) {
-		return array('status' => 'error',
-		             'errorcode' => 30,
-		             'errormsg' => 'failure while deleting group from database');
-	}
-	return array('status' => 'success');
-}
-
-////////////////////////////////////////////////////////////////////////////////
-///
-/// \fn XMLRPCdeleteUserGroup($name, $affiliation)
-///
-/// \param $name - name of user group
-/// \param $affiliation - affiliation of user group
-///
-/// \return an array with at least one index named 'status' which will have
-/// one of these values:\n
-/// \b error - error occurred; there will be 2 additional elements in the array:
-/// \li \b errorcode - error number
-/// \li \b errormsg - error string
-///
-/// \b success - user group was successfully removed
-///
-/// \brief alias for XMLRPCremoveUserGroup
-///
-////////////////////////////////////////////////////////////////////////////////
-function XMLRPCdeleteUserGroup($name, $affiliation) {
-	# This was the original function. All other functions use 'remove' rather
-	# than 'delete'. The function was renamed to XMLRPCremoveUserGroup. This was
-	# kept for compatibility reasons
-	return XMLRPCremoveUserGroup($name, $affiliation);
-}
-
-////////////////////////////////////////////////////////////////////////////////
-///
-/// \fn XMLRPCeditUserGroup($name, $affiliation, $newName, $newAffiliation,
-///                         $newOwner, $newManagingGroup, $newInitialMaxTime,
-///                         $newTotalMaxTime, $newMaxExtendTime)
-///
-/// \param $name - name of user group
-/// \param $affiliation - affiliation of user group
-/// \param $newName - new name for user group
-/// \param $newAffiliation - new affiliation for user group
-/// \param $newOwner - (optional, default='') user that will be the owner of
-///                    the group in username\@affiliation form
-/// \param $newManagingGroup - (optional, default='') user group that can
-///                            manage membership of this one
-/// \param $newInitialMaxTime - (optional, default='') (minutes) max initial
-///                             time users in this group can select for length
-///                             of reservations
-/// \param $newTotalMaxTime - (optional, default='') (minutes) total length
-///                           users in the group can have for a reservation
-///                           (including all extensions)
-/// \param $newMaxExtendTime - (optional, default='') (minutes) max length of
-///                            time users can request as an extension to a
-///                            reservation at a time
-///
-/// \return an array with at least one index named 'status' which will have
-/// one of these values:\n
-/// \b error - error occurred; there will be 2 additional elements in the array:
-/// \li \b errorcode - error number
-/// \li \b errormsg - error string
-///
-/// \b success - user group was successfully updated
-///
-/// \brief modifies attributes of a user group\n
-/// \b NOTE: an empty string may be passed for any of the new* fields to leave
-/// that item unchanged
-///
-////////////////////////////////////////////////////////////////////////////////
-function XMLRPCeditUserGroup($name, $affiliation, $newName, $newAffiliation,
-                             $newOwner='', $newManagingGroup='',
-                             $newInitialMaxTime='', $newTotalMaxTime='',
-                             $newMaxExtendTime='') {
-	global $user, $mysql_link_vcl;
-	if(! in_array('groupAdmin', $user['privileges'])) {
-		return array('status' => 'error',
-		             'errorcode' => 16,
-		             'errormsg' => 'access denied for managing groups');
-	}
-
-	$updates = array();
-
-	# validate group exists and new values other than newName and newAffiliation
-	#   are valid
-	$validate = array('name' => $name,
-	                  'affiliation' => $affiliation);
-	if(get_magic_quotes_gpc())
-		$newOwner = stripslashes($newOwner);
-	if(! empty($newOwner))
-		$validate['owner'] = $newOwner;
-	if(! empty($newManagingGroup))
-		$validate['managingGroup'] = $newManagingGroup;
-	if(! empty($newInitialMaxTime)) {
-		$validate['initialMaxTime'] = $newInitialMaxTime;
-		$updates[] = "initialmaxtime = $newInitialMaxTime";
-	}
-	if(! empty($newTotalMaxTime)) {
-		$validate['totalMaxTime'] = $newTotalMaxTime;
-		$updates[] = "totalmaxtime = $newTotalMaxTime";
-	}
-	if(! empty($newMaxExtendTime)) {
-		$validate['maxExtendTime'] = $newMaxExtendTime;
-		$updates[] = "maxextendtime = $newMaxExtendTime";
-	}
-	$rc = validateAPIgroupInput($validate, 1);
-	if($rc['status'] == 'error')
-		return $rc;
-
-	# get info about group
-	$query = "SELECT ownerid "
-	       .        "affiliationid, "
-	       .        "custom, "
-	       .        "courseroll "
-	       . "FROM usergroup "
-	       . "WHERE id = {$rc['id']}";
-	$qh = doQuery($query, 101);
-	if(! $row = mysql_fetch_assoc($qh)) {
-		return array('status' => 'error',
-		             'errorcode' => 18,
-		             'errormsg' => 'user group with submitted name and affiliation does not exist');
-	}
-	// if custom and not owner or custom/courseroll and no federated user group access, no access to edit group
-	if(($row['custom'] == 1 && $user['id'] != $row['ownerid']) ||
-	   (($row['custom'] == 0 || $row['courseroll'] == 1) &&
-	   ! checkUserHasPerm('Manage Federated User Groups (global)') &&
-	   (! checkUserHasPerm('Manage Federated User Groups (affiliation only)') ||
-	   $row['affiliationid'] != $user['affiliationid']))) {
-		return array('status' => 'error',
-		             'errorcode' => 32,
-		             'errormsg' => 'access denied to modify attributes for user group with submitted name and affiliation');
-	}
-
-	# validate that newName and newAffiliation are valid
-	if(($name != $newName || $affiliation != $newAffiliation) &&
-	   (! empty($newName) || ! empty($newAffiliation))) {
-		$validate = array('name' => $name,
-		                  'affiliation' => $affiliation);
-		if(! empty($newName)) {
-			if(get_magic_quotes_gpc())
-				$newName = stripslashes($newName);
-			$validate['name'] = $newName;
-			$tmp = mysql_real_escape_string($newName);
-			$updates[] = "name = '$tmp'";
-		}
-		if(! empty($newAffiliation))
-			$validate['affiliation'] = $newAffiliation;
-		$rc2 = validateAPIgroupInput($validate, 0);
-		if($rc2['status'] == 'error') {
-			if($rc2['errorcode'] == 27) {
-				$rc2['errorcode'] = 31;
-				$rc2['errormsg'] = 'existing user group with new form of name@affiliation';
-			}
-			return $rc2;
-		}
-		if(! empty($newAffiliation))
-			$updates[] = "affiliationid = {$rc2['affiliationid']}";
-	}
-
-	if($row['custom']) {
-		if(! empty($newOwner)) {
-			$newownerid = getUserlistID(mysql_real_escape_string($newOwner));
-			$updates[] = "ownerid = $newownerid";
-		}
-		if(! empty($newManagingGroup))
-			$updates[] = "editusergroupid = {$rc['managingGroupID']}";
-	}
-	$sets = implode(',', $updates);
-	if(count($updates) == 0) {
-		return array('status' => 'error',
-		             'errorcode' => 33,
-		             'errormsg' => 'no new values submitted');
-	}
-	$query = "UPDATE usergroup "
-	       . "SET $sets "
-	       . "WHERE id = {$rc['id']}";
-	doQuery($query, 101);
-	return array('status' => 'success');
-}
-
-////////////////////////////////////////////////////////////////////////////////
-///
-/// \fn XMLRPCgetUserGroupMembers($name, $affiliation)
-///
-/// \param $name - name of user group
-/// \param $affiliation - affiliation of user group
-///
-/// \return an array with at least one index named 'status' which will have
-/// one of these values:\n
-/// \b error - error occurred; there will be 2 additional elements in the array:
-/// \li \b errorcode - error number
-/// \li \b errormsg - error string
-///
-/// \b success - there will be one additional element in this case:
-/// \li \b members - array of members of the group in username\@affiliation form
-///
-/// \brief gets members of a user group\n
-/// \b NOTE: it is possible to have a group with no members in which case
-/// success will be returned with an empty array for members
-///
-////////////////////////////////////////////////////////////////////////////////
-function XMLRPCgetUserGroupMembers($name, $affiliation) {
-	global $user;
-	if(! in_array('groupAdmin', $user['privileges'])) {
-		return array('status' => 'error',
-		             'errorcode' => 16,
-		             'errormsg' => 'access denied for managing groups');
-	}
-	$validate = array('name' => $name,
-	                  'affiliation' => $affiliation);
-	$rc = validateAPIgroupInput($validate, 1);
-	if($rc['status'] == 'error')
-		return $rc;
-	$query = "SELECT ownerid, "
-	       .        "editusergroupid AS editgroupid, "
-	       .        "affiliationid, "
-	       .        "custom, "
-	       .        "courseroll "
-	       . "FROM usergroup "
-	       . "WHERE id = {$rc['id']}";
-	$qh = doQuery($query, 101);
-	if(! $row = mysql_fetch_assoc($qh)) {
-		return array('status' => 'error',
-		             'errorcode' => 18,
-		             'errormsg' => 'user group with submitted name and affiliation does not exist');
-	}
-	// if custom and not owner and not member of managing group or 
-	//    custom/courseroll and no federated user group access, no access to delete group
-	if(($row['custom'] == 1 && $user['id'] != $row['ownerid'] &&
-	   ! array_key_exists($row['editgroupid'], $user['groups'])) ||
-	   (($row['custom'] == 0 || $row['courseroll'] == 1) &&
-	   ! checkUserHasPerm('Manage Federated User Groups (global)') &&
-	   (! checkUserHasPerm('Manage Federated User Groups (affiliation only)') ||
-	   $row['affiliationid'] != $user['affiliationid']))) {
-		return array('status' => 'error',
-		             'errorcode' => 28,
-		             'errormsg' => 'access denied to user group with submitted name and affiliation');
-	}
-	$query = "SELECT CONCAT(u.unityid, '@', a.name) AS member "
-	       . "FROM usergroupmembers ugm, "
-	       .      "user u, "
-	       .      "affiliation a "
-	       . "WHERE ugm.usergroupid = {$rc['id']} AND "
-	       .       "ugm.userid = u.id AND "
-	       .       "u.affiliationid = a.id";
-	$qh = doQuery($query, 101);
-	$members = array();
-	while($row = mysql_fetch_assoc($qh))
-		$members[] = $row['member'];
-	return array('status' => 'success',
-	             'members' => $members);
-}
-
-////////////////////////////////////////////////////////////////////////////////
-///
-/// \fn XMLRPCaddUsersToGroup($name, $affiliation, $users)
-///
-/// \param $name - name of user group
-/// \param $affiliation - affiliation of user group
-/// \param $users - array of users in username\@affiliation form to be added to
-///                 the group
-///
-/// \return an array with at least one index named 'status' which will have
-/// one of these values:\n
-/// \b error - error occurred; there will be 2 additional elements in the array:
-/// \li \b errorcode - error number
-/// \li \b errormsg - error string
-///
-/// \b success - users successfully added to the group\n
-/// \b warning - there was a non-fatal issue that occurred while processing
-/// the call; there will be three additional elements in this case:
-/// \li \b warningcode - warning number
-/// \li \b warningmsg - warning string
-/// \li \b failedusers - array of users in username\@affiliation form that could
-///                      not be added
-///
-/// \brief adds users to a group
-///
-////////////////////////////////////////////////////////////////////////////////
-function XMLRPCaddUsersToGroup($name, $affiliation, $users) {
-	global $user;
-	if(! in_array('groupAdmin', $user['privileges'])) {
-		return array('status' => 'error',
-		             'errorcode' => 16,
-		             'errormsg' => 'access denied for managing groups');
-	}
-	$validate = array('name' => $name,
-	                  'affiliation' => $affiliation);
-	$rc = validateAPIgroupInput($validate, 1);
-	if($rc['status'] == 'error')
-		return $rc;
-	$query = "SELECT ownerid, "
-	       .        "editusergroupid AS editgroupid "
-	       . "FROM usergroup "
-	       . "WHERE id = {$rc['id']}";
-	$qh = doQuery($query, 101);
-	if(! $row = mysql_fetch_assoc($qh)) {
-		return array('status' => 'error',
-		             'errorcode' => 18,
-		             'errormsg' => 'user group with submitted name and affiliation does not exist');
-	}
-	// if not owner and not member of managing group, no access
-	if($user['id'] != $row['ownerid'] && 
-	   ! array_key_exists($row['editgroupid'], $user['groups'])) {
-		return array('status' => 'error',
-		             'errorcode' => 28,
-		             'errormsg' => 'access denied to user group with submitted name and affiliation');
-	}
-	$fails = array();
-	foreach($users as $_user) {
-		if(empty($_user))
-			continue;
-		if(get_magic_quotes_gpc())
-			$_user = stripslashes($_user);
-		$esc_user = mysql_real_escape_string($_user);
-		if(validateUserid($_user) == 1)
-			addUserGroupMember($esc_user, $rc['id']);
-		else
-			$fails[] = $_user;
-	}
-	if(count($fails)) {
-		$cnt = 'some';
-		$code = 34;
-		if(count($fails) == count($users)) {
-			$cnt = 'all submitted';
-			$code = 35;
-		}
-		return array('status' => 'warning',
-		             'failedusers' => $fails,
-		             'warningcode' => $code,
-		             'warningmsg' => "failed to add $cnt users to user group");
-	}
-	return array('status' => 'success');
-}
-
-////////////////////////////////////////////////////////////////////////////////
-///
-/// \fn XMLRPCremoveUsersFromGroup($name, $affiliation, $users)
-///
-/// \param $name - name of user group
-/// \param $affiliation - affiliation of user group
-/// \param $users - array of users in username\@affiliation form to be removed
-///                 from the group
-///
-/// \return an array with at least one index named 'status' which will have
-/// one of these values:\n
-/// \b error - error occurred; there will be 2 additional elements in the array:
-/// \li \b errorcode - error number
-/// \li \b errormsg - error string
-///
-/// \b success - users successfully removed from the group\n
-/// \b warning - there was a non-fatal issue that occurred while processing
-/// the call; there will be three additional elements in this case:
-/// \li \b warningcode - warning number
-/// \li \b warningmsg - warning string
-/// \li \b failedusers - array of users in username\@affiliation form that could
-///                      not be removed
-///
-/// \brief removes users from a group
-///
-////////////////////////////////////////////////////////////////////////////////
-function XMLRPCremoveUsersFromGroup($name, $affiliation, $users) {
-	global $user, $findAffilFuncs;
-	if(! in_array('groupAdmin', $user['privileges'])) {
-		return array('status' => 'error',
-		             'errorcode' => 16,
-		             'errormsg' => 'access denied for managing groups');
-	}
-	$validate = array('name' => $name,
-	                  'affiliation' => $affiliation);
-	$rc = validateAPIgroupInput($validate, 1);
-	if($rc['status'] == 'error')
-		return $rc;
-	$query = "SELECT ownerid, "
-	       .        "editusergroupid AS editgroupid "
-	       . "FROM usergroup "
-	       . "WHERE id = {$rc['id']}";
-	$qh = doQuery($query, 101);
-	if(! $row = mysql_fetch_assoc($qh)) {
-		return array('status' => 'error',
-		             'errorcode' => 18,
-		             'errormsg' => 'user group with submitted name and affiliation does not exist');
-	}
-	// if not owner and not member of managing group, no access
-	if($user['id'] != $row['ownerid'] && 
-	   ! array_key_exists($row['editgroupid'], $user['groups'])) {
-		return array('status' => 'error',
-		             'errorcode' => 28,
-		             'errormsg' => 'access denied to user group with submitted name and affiliation');
-	}
-	$fails = array();
-	foreach($users as $_user) {
-		if(empty($_user))
-			continue;
-		if(get_magic_quotes_gpc())
-			$_user = stripslashes($_user);
-		$esc_user = mysql_real_escape_string($_user);
-		# check that affiliation of user can be determined because getUserlistID
-		#   will abort if it cannot find it
-		$affilok = 0;
-		foreach($findAffilFuncs as $func) {
-			if($func($_user, $dump))
-				$affilok = 1;
-		}
-		if(! $affilok) {
-			$fails[] = $_user;
-			continue;
-		}
-		$userid = getUserlistID($esc_user, 1);
-		if(is_null($userid))
-			$fails[] = $_user;
-		else
-			deleteUserGroupMember($userid, $rc['id']);
-	}
-	if(count($fails)) {
-		$cnt = 'some';
-		$code = 36;
-		if(count($fails) == count($users)) {
-			$cnt = 'any';
-			$code = 37;
-		}
-		return array('status' => 'warning',
-		             'failedusers' => $fails,
-		             'warningcode' => $code,
-		             'warningmsg' => "failed to remove $cnt users from user group");
-	}
-	return array('status' => 'success');
-}
-
-////////////////////////////////////////////////////////////////////////////////
-///
-/// \fn XMLRPCautoCapture($requestid)
-///
-/// \param $requestid - id of request to be captured
-///
-/// \return an array with at least one index named 'status' which will have
-/// one of these values:\n
-/// \b error - error occurred; there will be 2 additional elements in the array:
-/// \li \b errorcode - error number
-/// \li \b errormsg - error string
-///
-/// \b success - image was successfully set to be captured
-///
-/// \brief creates entries in appropriate tables to capture an image and sets
-/// the request state to image
-///
-////////////////////////////////////////////////////////////////////////////////
-function XMLRPCautoCapture($requestid) {
-	global $user, $xmlrpcBlockAPIUsers;
-	if(! in_array($user['id'], $xmlrpcBlockAPIUsers)) {
-		return array('status' => 'error',
-		             'errorcode' => 47,
-		             'errormsg' => 'access denied to XMLRPCautoCapture');
-	}
-	$query = "SELECT id FROM request WHERE id = $requestid";
-	$qh = doQuery($query, 101);
-	if(! mysql_num_rows($qh)) {
-		return array('status' => 'error',
-		             'errorcode' => 52,
-		             'errormsg' => 'specified request does not exist');
-	}
-	$reqData = getRequestInfo($requestid);
-	# check state of reservation
-	if($reqData['stateid'] != 14 || $reqData['laststateid'] != 8) {
-		return array('status' => 'error',
-		             'errorcode' => 51,
-		             'errormsg' => 'reservation not in valid state');
-	}
-	# check that not a cluster reservation
-	if(count($reqData['reservations']) > 1) {
-		return array('status' => 'error',
-		             'errorcode' => 48,
-		             'errormsg' => 'cannot image a cluster reservation');
-	}
-	require_once(".ht-inc/images.php");
-	$imageid = $reqData['reservations'][0]['imageid'];
-	$imageData = getImages(0, $imageid);
-	$captime = unixToDatetime(time());
-	$comments = "start: {$reqData['start']}<br>"
-	          . "end: {$reqData['end']}<br>"
-	          . "computer: {$reqData['reservations'][0]['reservedIP']}<br>"
-	          . "capture time: $captime";
-	# create new revision if requestor is owner and not a kickstart image
-	if($imageData[$imageid]['installtype'] != 'kickstart' &&
-	   $reqData['userid'] == $imageData[$imageid]['ownerid']) {
-		$rc = updateExistingImage($requestid, $reqData['userid'], $comments, 1);
-		if($rc == 0) {
-			return array('status' => 'error',
-			             'errorcode' => 49,
-			             'errormsg' => 'error encountered while attempting to create new revision');
-		}
-	}
-	# create a new image if requestor is not owner or a kickstart image
-	else {
-		$ownerdata = getUserInfo($reqData['userid'], 1, 1);
-		$desc = "This is an autocaptured image.<br>"
-		      . "captured from image: {$reqData['reservations'][0]['prettyimage']}<br>"
-		      . "captured on: $captime<br>"
-		      . "owner: {$ownerdata['unityid']}@{$ownerdata['affiliation']}<br>";
-		$connectmethods = getImageConnectMethods($imageid, $reqData['reservations'][0]['imagerevisionid']);
-		$data = array('requestid' => $requestid,
-		              'description' => $desc,
-		              'usage' => '',
-		              'owner' => "{$ownerdata['unityid']}@{$ownerdata['affiliation']}",
-		              'prettyname' => "Autocaptured ({$ownerdata['unityid']} - $requestid)",
-		              'minram' => 64,
-		              'minprocnumber' => 1,
-		              'minprocspeed' => 500,
-		              'minnetwork' => 10,
-		              'maxconcurrent' => '',
-		              'checkuser' => 1,
-		              'rootaccess' => 1,
-		              'sysprep' => 1,
-		              'comments' => $comments,
-		              'connectmethodids' => implode(',', array_keys($connectmethods)));
-		$rc = submitAddImage($data, 1);
-		if($rc == 0) {
-			return array('status' => 'error',
-			             'errorcode' => 50,
-			             'errormsg' => 'error encountered while attempting to create image');
-		}
-	}
-	return array('status' => 'success');
-}
-
-////////////////////////////////////////////////////////////////////////////////
-///
-/// \fn XMLRPCdeployServer($imageid, $start, $end, $admingroup, $logingroup,
-///                        $ipaddr, $macaddr, $monitored, $foruser, $name)
-///
-/// \param $imageid - id of an image
-/// \param $start - "now" or unix timestamp for start of reservation; will
-/// use a floor function to round down to the nearest 15 minute increment
-/// for actual reservation
-/// \param $end - "indefinite" or unix timestamp for end of reservation; will
-/// use a floor function to round up to the nearest 15 minute increment
-/// for actual reservation
-/// \param $admingroup - (optional, default='') admin user group for reservation
-/// \param $logingroup - (optional, default='') login user group for reservation
-/// \param $ipaddr - (optional, default='') IP address to use for public IP of
-/// server
-/// \param $macaddr - (optional, default='') MAC address to use for public NIC
-/// of server
-/// \param $monitored - (optional, default=0) whether or not the server should
-/// be monitored - CURRENTLY, THIS IS UNSUPPORTED
-/// \param $foruser - (optional) login to be used when setting up the account
-/// on the reserved machine - CURRENTLY, THIS IS UNSUPPORTED
-/// \param $name - (optional) name for reservation
-///
-/// \return an array with at least one index named '\b status' which will have
-/// one of these values:\n
-/// \b error - error occurred; there will be 2 additional elements in the array:
-/// \li \b errorcode - error number\n
-/// \li \b errormsg - error string\n
-///
-/// \b notavailable - no computers were available for the request\n
-/// \b success - there will be an additional element in the array:
-/// \li \b requestid - identifier that should be passed to later calls when
-/// acting on the request
-///
-/// \brief tries to make a server request
-///
-////////////////////////////////////////////////////////////////////////////////
-function XMLRPCdeployServer($imageid, $start, $end, $admingroup='',
-                            $logingroup='', $ipaddr='', $macaddr='',
-                            $monitored=0, $foruser='', $name='') {
-	global $user, $remoteIP;
-	if(! in_array("serverProfileAdmin", $user["privileges"])) {
-		return array('status' => 'error',
-		             'errorcode' => 60,
-		             'errormsg' => "access denied to deploy server");
-	}
-	$imageid = processInputData($imageid, ARG_NUMERIC);
-	$resources = getUserResources(array("imageAdmin", "imageCheckOut"));
-	$images = removeNoCheckout($resources["image"]);
-	$extraimages = getServerProfileImages($user['id']);
-	if(! array_key_exists($imageid, $images) &&
-	   ! array_key_exists($imageid, $extraimages)) {
-		return array('status' => 'error',
-		             'errorcode' => 3,
-		             'errormsg' => "access denied to $imageid");
-	}
-	if($admingroup != '') {
-		$admingroup = processInputData($admingroup, ARG_STRING);
-		if(get_magic_quotes_gpc())
-			$admingroup = stripslashes($admingroup);
-		if(preg_match('/@/', $admingroup)) {
-			$tmp = explode('@', $admingroup);
-			$escadmingroup = mysql_real_escape_string($tmp[0]);
-			$affilid = getAffiliationID($tmp[1]);
-			if(is_null($affilid)) {
-				return array('status' => 'error',
-				             'errorcode' => 51,
-				             'errormsg' => "unknown affiliation for admin user group: {$tmp[1]}");
-			}
-		}
-		else {
-			$escadmingroup = mysql_real_escape_string($admingroup);
-			$affilid = DEFAULT_AFFILID;
-		}
-		$admingroupid = getUserGroupID($escadmingroup, $affilid, 1);
-		if(is_null($admingroupid)) {
-			return array('status' => 'error',
-			             'errorcode' => 52,
-			             'errormsg' => "unknown admin user group: $admingroup");
-		}
-	}
-	else
-		$admingroupid = '';
-	if($logingroup != '') {
-		$logingroup = processInputData($logingroup, ARG_STRING);
-		if(get_magic_quotes_gpc())
-			$logingroup = stripslashes($logingroup);
-		if(preg_match('/@/', $logingroup)) {
-			$tmp = explode('@', $logingroup);
-			$esclogingroup = mysql_real_escape_string($tmp[0]);
-			$affilid = getAffiliationID($tmp[1]);
-			if(is_null($affilid)) {
-				return array('status' => 'error',
-				             'errorcode' => 54,
-				             'errormsg' => "unknown affiliation for login user group: {$tmp[1]}");
-			}
-		}
-		else {
-			$esclogingroup = mysql_real_escape_string($logingroup);
-			$affilid = DEFAULT_AFFILID;
-		}
-		$logingroupid = getUserGroupID($esclogingroup, $affilid, 1);
-		if(is_null($logingroupid)) {
-			return array('status' => 'error',
-			             'errorcode' => 55,
-			             'errormsg' => "unknown login user group: $logingroup");
-		}
-	}
-	else
-		$logingroupid = '';
-	$ipaddr = processInputData($ipaddr, ARG_STRING);
-	$ipaddrArr = explode('.', $ipaddr);
-	if($ipaddr != '' && (! preg_match('/^(([0-9]){1,3}\.){3}([0-9]){1,3}$/', $ipaddr) ||
-		$ipaddrArr[0] < 1 || $ipaddrArr[0] > 255 ||
-		$ipaddrArr[1] < 0 || $ipaddrArr[1] > 255 ||
-		$ipaddrArr[2] < 0 || $ipaddrArr[2] > 255 ||
-		$ipaddrArr[3] < 0 || $ipaddrArr[3] > 255)) {
-		return array('status' => 'error',
-		             'errorcode' => 57,
-		             'errormsg' => "Invalid IP address. Must be w.x.y.z with each of "
-		                         . "w, x, y, and z being between 1 and 255 (inclusive)");
-	}
-	$macaddr = processInputData($macaddr, ARG_STRING);
-	if($macaddr != '' && ! preg_match('/^(([A-Fa-f0-9]){2}:){5}([A-Fa-f0-9]){2}$/', $macaddr)) {
-		return array('status' => 'error',
-		             'errorcode' => 58,
-		             'errormsg' => "Invalid MAC address.  Must be XX:XX:XX:XX:XX:XX "
-		                         . "with each pair of XX being from 00 to FF (inclusive)");
-	}
-	$monitored = processInputData($monitored, ARG_NUMERIC);
-	if($monitored != 0 && $monitored != 1)
-		$monitored = 0;
-	$start = processInputData($start, ARG_STRING, 1);
-	$end = processInputData($end, ARG_STRING, 1);
-	#$foruser = processInputData($foruser, ARG_STRING, 1);
-
-	$name = processInputData($name, ARG_STRING);
-	if(get_magic_quotes_gpc())
-		$name = stripslashes($name);
-	if(! preg_match('/^([-a-zA-Z0-9_\. ]){0,255}$/', $name)) {
-		return array('status' => 'error',
-		             'errorcode' => 58,
-						 'errormsg' => "Invalid name. Can only contain letters, numbers, "
-		                         . "spaces, dashes(-), underscores(_), and periods(.) "
-		                         . "and be up to 255 characters long");
-	}
-	$name = mysql_real_escape_string($name);
-
-	# validate $start
-	if($start != 'now' && ! is_numeric($start)) {
-		return array('status' => 'error',
-		             'errorcode' => 4,
-		             'errormsg' => "received invalid input for start");
-	}
-	# validate $end
-	if($end != 'indefinite' && ! is_numeric($end)) {
-		return array('status' => 'error',
-		             'errorcode' => 59,
-		             'errormsg' => "received invalid input for end");
-	}
-
-	$nowfuture = 'future';
-	if($start == 'now') {
-		$start = unixFloor15(time());
-		$nowfuture = 'now';
-	}
-	else
-		if($start < (time() - 30))
-			return array('status' => 'error',
-			             'errorcode' => 5,
-			             'errormsg' => "start time is in the past");
-	if($end == 'indefinite')
-		$end = datetimeToUnix("2038-01-01 00:00:00");
-	elseif($end % (15 * 60))
-		$end = unixFloor15($end) + (15 * 60);
-	elseif($end < ($start + 900))
-		return array('status' => 'error',
-		             'errorcode' => 88,
-		             'errormsg' => "end time must be at least 15 minutes after start time");
-
-	$max = getMaxOverlap($user['id']);
-	if(checkOverlap($start, $end, $max)) {
-		return array('status' => 'error',
-		             'errorcode' => 7,
-		             'errormsg' => "reservation overlaps with another one you "
-		                         . "have, and you are allowed $max "
-		                         . "overlapping reservations at a time");
-	}
-
-	$images = getImages();
-	$revisionid = getProductionRevisionid($imageid);
-	$rc = isAvailable($images, $imageid, $revisionid, $start, $end,
-	                  0, 0, 0, 0, $ipaddr, $macaddr);
-	if($rc < 1) {
-		addLogEntry($nowfuture, unixToDatetime($start), 
-		            unixToDatetime($end), 0, $imageid);
-		return array('status' => 'notavailable');
-	}
-	$return['requestid']= addRequest();
-	$query = "UPDATE reservation "
-	       . "SET remoteIP = '$remoteIP' "
-	       . "WHERE requestid = {$return['requestid']}";
-	doQuery($query);
-	$fields = array('requestid');
-	$values = array($return['requestid']);
-	if($name != '') {
-		$fields[] = 'name';
-		$values[] = "'$name'";
-	}
-	if($ipaddr != '') {
-		$fields[] = 'fixedIP';
-		$values[] = "'$ipaddr'";
-	}
-	if($macaddr != '') {
-		$fields[] = 'fixedMAC';
-		$values[] = "'$macaddr'";
-	}
-	if($admingroupid != 0) {
-		$fields[] = 'admingroupid';
-		$values[] = $admingroupid;
-	}
-	if($logingroupid != 0) {
-		$fields[] = 'logingroupid';
-		$values[] = $logingroupid;
-	}
-	if($monitored != 0) {
-		$fields[] = 'monitored';
-		$values[] = 1;
-	}
-	$allfields = implode(',', $fields);
-	$allvalues = implode(',', $values);
-	$query = "INSERT INTO serverrequest ($allfields) VALUES ($allvalues)";
-	doQuery($query, 101);
-	$return['status'] = 'success';
-	return $return;
-}
-
-////////////////////////////////////////////////////////////////////////////////
-///
-/// \fn XMLRPCtest($string)
-///
-/// \param $string - a string
-///
-/// \return an array with 3 indices:\n
-/// \b status - will be 'success'\n
-/// \b message - will be 'RPC call worked successfully'\n
-/// \b string - contents of $string (after being sanatized)
-///
-/// \brief this is a test function that call be called when getting XML RPC
-/// calls to this site to work
-///
-////////////////////////////////////////////////////////////////////////////////
-function XMLRPCtest($string) {
-	$string = processInputData($string, ARG_STRING);
-	return array('status' => 'success',
-	             'message' => 'RPC call worked successfully',
-	             'string' => $string);
-}
-
-##################################################################################
-###
-### fn _XMLRPCchangeResourceGroupPriv_sub($mode, $name, $type, $nodeid,
-###                                       $permissions)
-###
-### param $mode - 'add' or 'remove'
-### param $name - the name of the resource group
-### param $type - the resource type
-### param $nodeid - the ID of the node in the privilege tree
-### param $permissions - a colon (:) delimited list of privileges to remove
-###
-### return an array with at least one index named 'status' which will have
-### one of these values\n
-### error - error occurred; there will be 2 additional elements in the array:
-### * errorcode - error number\n
-### * errormsg - error string\n
-###
-### success - privileges were successfully added or removed
-###
-### brief internal function to be called from XMLRPCremoveResourceGroupPriv and
-### XMLRPCaddResourceGroupPriv - adds or removes privileges for a resource group
-### from a node in the privilege tree
-###
-################################################################################
-function _XMLRPCchangeResourceGroupPriv_sub($mode, $name, $type, $nodeid,
-                                            $permissions) {
-	require_once(".ht-inc/privileges.php");
-	global $user;
-
-	if(! is_numeric($nodeid)) {
-		return array('status' => 'error',
-		             'errorcode' => 78,
-		             'errormsg' => 'Invalid nodeid specified');
-	}
-
-	if(! checkUserHasPriv("resourceGrant", $user['id'], $nodeid)) {
-		return array('status' => 'error',
-		             'errorcode' => 61,
-		             'errormsg' => 'Unable to remove resource group privileges on this node');
-	}
-
-	$resourcetypes = getTypes('resources');
-	if(! in_array($type, $resourcetypes['resources'])) {
-		return array('status' => 'error',
-		             'errorcode' => 71,
-		             'errormsg' => 'Invalid resource type');
-	}
-
-	$groupid = getResourceGroupID("$type/$name");
-	if(is_null($groupid)) {
-		return array('status' => 'error',
-		             'errorcode' => 74,
-		             'errormsg' => 'resource group does not exist');
-	}
-
-	$changeperms = explode(':', $permissions);
-	$allperms = getResourcePrivs();
-	$diff = array_diff($changeperms, $allperms);
-	if(count($diff)) {
-		return array('status' => 'error',
-		             'errorcode' => 66,
-		             'errormsg' => 'Invalid or missing permissions list supplied');
-	}
-
-	$nocheckperms = array('block', 'cascade', 'available');
-	$checkperms = array_diff($changeperms, $nocheckperms);
-
-	$groupdata = getResourceGroups($type, $groupid);
-	if(count($checkperms) &&
-	   ! array_key_exists($groupdata[$groupid]["ownerid"], $user["groups"])) {
-		return array('status' => 'error',
-		             'errorcode' => 79,
-		             'errormsg' => 'Unable to modify privilege set for resource group');
-	}
-
-	$key = "$type/$name/$groupid";
-	$cnp = getNodeCascadePrivileges($nodeid, "resources");
-	$np = getNodePrivileges($nodeid, 'resources');
-	if(array_key_exists($key, $cnp['resources']) &&
-	   (! array_key_exists($key, $np['resources']) ||
-	   ! in_array('block', $np['resources'][$key]))) {
-		$intersect = array_intersect($cnp['resources'][$key], $changeperms);
-		if(count($intersect)) {
-			return array('status' => 'error',
-			             'errorcode' => 80,
-			             'errormsg' => 'Unable to modify privileges cascaded to this node');
-		}
-	}
-
-	if($mode == 'remove') {
-		$diff = array_diff($np['resources'][$key], $changeperms);
-		if(count($diff) == 1 && in_array("cascade", $diff))
-			$changeperms[] = 'cascade';
-	}
-
-	if($mode == 'add')
-		updateResourcePrivs("$groupid", $nodeid, $changeperms, array());
-	elseif($mode == 'remove')
-		updateResourcePrivs("$groupid", $nodeid, array(), $changeperms);
-	return array('status' => 'success');
 }
 ?>
