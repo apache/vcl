@@ -2274,6 +2274,7 @@ function updateResourcePrivs($group, $node, $adds, $removes) {
 	else
 		$groupid = getResourceGroupID($group);
 	foreach($adds as $type) {
+		$type = mysql_real_escape_string($type);
 		$query = "INSERT IGNORE INTO resourcepriv ("
 		       .        "resourcegroupid, "
 		       .        "privnodeid, "
@@ -2285,6 +2286,7 @@ function updateResourcePrivs($group, $node, $adds, $removes) {
 		doQuery($query, 377);
 	}
 	foreach($removes as $type) {
+		$type = mysql_real_escape_string($type);
 		$query = "DELETE FROM resourcepriv "
 		       . "WHERE resourcegroupid = $groupid AND "
 		       .       "privnodeid = $node AND "
@@ -2627,18 +2629,22 @@ function getUserGroupPrivTypes() {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn getResourceGroups($type)
+/// \fn getResourceGroups($type, $id)
 ///
 /// \param $type - (optional) a name from the resourcetype table, defaults to
 /// be empty
+/// \param $id - (optional) id of a resource group
 ///
-/// \return an array of resource group names whose index values are the ids;
-/// the names are the resource type and group name combined as 'type/name'
+/// \return an array of resource groups where each key is a group id and each
+/// value is an array with these elements:\n
+/// \b name - type and name of group combined as type/name\n
+/// \b ownerid - id of owning user group\n
+/// \b owner - name of owning user group
 ///
 /// \brief builds list of resource groups
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function getResourceGroups($type="") {
+function getResourceGroups($type='', $id='') {
 	$return = array();
 	$query = "SELECT g.id AS id, "
 	       .        "g.name AS name, "
@@ -2655,6 +2661,9 @@ function getResourceGroups($type="") {
 
 	if(! empty($type))
 		$query .= "AND t.name = '$type' ";
+
+	if(! empty($id))
+		$query .= "AND g.id = $id ";
 
 	$query .= "ORDER BY t.name, g.name";
 	$qh = doQuery($query, 281);
@@ -3310,7 +3319,7 @@ function processInputData($data, $type, $addslashes=0, $defaultvalue=NULL) {
 			if(! is_string($value))
 				$return[$index] = $defaultvalue;
 			elseif($addslashes)
-				$return[$index] = addslashes($value);
+				$return[$index] = mysql_real_escape_string($value);
 		}
 		return $return;
 	}
@@ -3319,7 +3328,7 @@ function processInputData($data, $type, $addslashes=0, $defaultvalue=NULL) {
 		if(strlen($return) == 0)
 			$return = $defaultvalue;
 		elseif($addslashes)
-			$return = addslashes($return);
+			$return = mysql_real_escape_string($return);
 	}
 
 	return $return;
@@ -8210,11 +8219,13 @@ function updateGroups($newusergroups, $userid) {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn getUserGroupID($name, $affilid)
+/// \fn getUserGroupID($name, $affilid, $noadd)
 ///
 /// \param $name - a group name
 /// \param $affilid - (optional, defaults to DEFAULT_AFFILID) affiliation id
 /// for $name
+/// \param $noadd - (optional, defaults to 0) set to 1 to return NULL if group
+/// does not exist instead of adding it to table
 ///
 /// \return id for $name from group table
 ///
@@ -8222,15 +8233,16 @@ function updateGroups($newusergroups, $userid) {
 /// not currently in the table, adds it and returns the new id
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function getUserGroupID($name, $affilid=DEFAULT_AFFILID) {
+function getUserGroupID($name, $affilid=DEFAULT_AFFILID, $noadd=0) {
 	$query = "SELECT id "
 	       . "FROM usergroup "
 	       . "WHERE name = '$name' AND "
 	       .       "affiliationid = $affilid";
 	$qh = doQuery($query, 300);
-	if($row = mysql_fetch_row($qh)) {
+	if($row = mysql_fetch_row($qh))
 		return $row[0];
-	}
+	elseif($noadd)
+		return NULL;
 	$query = "INSERT INTO usergroup "
 	       .        "(name, "
 	       .        "affiliationid, "
@@ -8787,11 +8799,8 @@ function getTypes($subtype="both") {
 	if($subtype == "resources" || $subtype == "both") {
 		$query = "SELECT id, name FROM resourcetype";
 		$qh = doQuery($query, 366);
-		while($row = mysql_fetch_assoc($qh)) {
-			if($row["name"] == "block" || $row["name"] == "cascade")
-				continue;
+		while($row = mysql_fetch_assoc($qh))
 			$types["resources"][$row["id"]] = $row["name"];
-		}
 	}
 	return $types;
 }
@@ -8970,8 +8979,10 @@ function getReservationLengthCeiling($length) {
 /// \brief gets the id from the resourcegroup table for $groupname
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function getResourceGroupID($groupdname) {
-	list($type, $name) = explode('/', $groupdname);
+function getResourceGroupID($groupname) {
+	list($type, $name) = explode('/', $groupname);
+	$type = mysql_real_escape_string($type);
+	$name = mysql_real_escape_string($name);
 	$query = "SELECT g.id "
 	       . "FROM resourcegroup g, "
 	       .      "resourcetype t "
@@ -8997,6 +9008,7 @@ function getResourceGroupID($groupdname) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function getResourceTypeID($name) {
+	$name = mysql_real_escape_string($name);
 	$query = "SELECT id "
 	       . "FROM resourcetype "
 	       . "WHERE name = '$name'";
@@ -9811,24 +9823,24 @@ function xmlrpccall() {
 	xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCdeployServer", "xmlRPChandler");
 	xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCgetNodes", "xmlRPChandler");
 	xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCaddNode", "xmlRPChandler");
-    xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCremoveNode", "xmlRPChandler");
-    xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCnodeExists", "xmlRPChandler");
-    xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCaddResourceGroupPriv", "xmlRPChandler");
-    xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCremoveResourceGroupPriv", "xmlRPChandler");
-    xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCgetResourceGroupPrivs", "xmlRPChandler");
-    xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCaddUserGroupPriv", "xmlRPChandler");
-    xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCremoveUserGroupPriv", "xmlRPChandler");
-    xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCgetUserGroupPrivs", "xmlRPChandler");
-    xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCaddResourceGroup", "xmlRPChandler");
-    xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCgetResourceGroups", "xmlRPChandler");
-    xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCremoveResourceGroup", "xmlRPChandler");
+	xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCremoveNode", "xmlRPChandler");
+	xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCnodeExists", "xmlRPChandler");
+	xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCaddResourceGroupPriv", "xmlRPChandler");
+	xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCremoveResourceGroupPriv", "xmlRPChandler");
+	xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCgetResourceGroupPrivs", "xmlRPChandler");
+	xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCaddUserGroupPriv", "xmlRPChandler");
+	xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCremoveUserGroupPriv", "xmlRPChandler");
+	xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCgetUserGroupPrivs", "xmlRPChandler");
+	xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCaddResourceGroup", "xmlRPChandler");
+	xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCgetResourceGroups", "xmlRPChandler");
+	xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCremoveResourceGroup", "xmlRPChandler");
 	xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCgetUserGroups", "xmlRPChandler");
-    xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCremoveUserGroup", "xmlRPChandler");
+	xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCremoveUserGroup", "xmlRPChandler");
 	xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCaddImageToGroup", "xmlRPChandler");
-    xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCremoveImageFromGroup", "xmlRPChandler");
-    xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCgetGroupImages", "xmlRPChandler");
-    xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCaddImageGroupToComputerGroup", "xmlRPChandler");
-    xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCremoveImageGroupFromComputerGroup", "xmlRPChandler");
+	xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCremoveImageFromGroup", "xmlRPChandler");
+	xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCgetGroupImages", "xmlRPChandler");
+	xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCaddImageGroupToComputerGroup", "xmlRPChandler");
+	xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCremoveImageGroupFromComputerGroup", "xmlRPChandler");
 
 	print xmlrpc_server_call_method($xmlrpc_handle, $HTTP_RAW_POST_DATA, '');
 	xmlrpc_server_destroy($xmlrpc_handle);
@@ -9970,7 +9982,7 @@ function xmlRPCabort($errcode, $query='') {
 ////////////////////////////////////////////////////////////////////////////////
 function printXMLRPCerror($errcode) {
 	global $XMLRPCERRORS;
-	print "<?xml version=\"1.0\" encoding=\"iso-8859-1\"?>\n";
+	print "<?xml version=\"1.0\" encoding=\"iso-8859-1\"?" . ">\n"; # splitting the ? and > makes vim syntax highlighting work correctly
 	print "<methodResponse>\n";
 	print "<fault>\n";
 	print " <value>\n";
@@ -10008,7 +10020,7 @@ function printXMLRPCerror($errcode) {
 /// \b totalMaxTime \n
 /// \b maxExtendTime
 /// \param $exists - 1 to check if $name\@$affiliation exists, 0 to check that
-///                  they it does not exist
+///                  it does not exist
 ///
 /// \return an array to be returned as an error status or $items with these
 /// extra keys:\n
@@ -10058,8 +10070,7 @@ function validateAPIgroupInput($items, $exists) {
 	}
 	# affiliation
 	if(array_key_exists('affiliation', $items)) {
-		$esc_affiliation = mysql_real_escape_string($items['affiliation']);
-		$affilid = getAffiliationID($esc_affiliation);
+		$affilid = getAffiliationID($items['affiliation']);
 		if(is_null($affilid)) {
 			return array('status' => 'error',
 			             'errorcode' => 17,
@@ -10076,8 +10087,7 @@ function validateAPIgroupInput($items, $exists) {
 			                         . 'and can only contain letters, numbers, and '
 			                         . 'these characters: - _ . :');
 		}
-		$esc_name = mysql_real_escape_string($items['name']);
-		$doesexist = checkForGroupName($esc_name, 'user', '', $affilid);
+		$doesexist = checkForGroupName($items['name'], 'user', '', $affilid);
 		if($exists && ! $doesexist) {
 			return array('status' => 'error',
 			             'errorcode' => 18,
@@ -10089,12 +10099,13 @@ function validateAPIgroupInput($items, $exists) {
 			             'errormsg' => 'existing user group with submitted name and affiliation');
 		}
 		elseif($exists && $doesexist) {
+			$esc_name = mysql_real_escape_string($items['name']);
 			$items['id'] = getUserGroupID($esc_name, $affilid);
 		}
 	}
 	# owner
 	if($custom && array_key_exists('owner', $items)) {
-		if(! validateUserid(mysql_real_escape_string($items['owner']))) {
+		if(! validateUserid($items['owner'])) {
 			return array('status' => 'error',
 			             'errorcode' => 20,
 			             'errormsg' => 'submitted owner is invalid');
@@ -10108,15 +10119,14 @@ function validateAPIgroupInput($items, $exists) {
 			             'errorcode' => 24,
 			             'errormsg' => 'submitted managingGroup is invalid');
 		}
-		$esc_mgName = mysql_real_escape_string($parts[0]);
-		$esc_mgAffil = mysql_real_escape_string($parts[1]);
-		$mgaffilid = getAffiliationID($esc_mgAffil);
-		if(! checkForGroupName($esc_mgName, 'user', '', $mgaffilid)) {
+		$mgaffilid = getAffiliationID($parts[1]);
+		if(is_null($mgaffilid) ||
+		   ! checkForGroupName($parts[0], 'user', '', $mgaffilid)) {
 			return array('status' => 'error',
 			             'errorcode' => 25,
 			             'errormsg' => 'submitted managingGroup does not exist');
 		}
-		$items['managingGroupID'] = getUserGroupID($esc_mgName, $mgaffilid);
+		$items['managingGroupID'] = getUserGroupID($parts[0], $mgaffilid);
 		$items['managingGroupName'] = $parts[0];
 		$items['managingGroupAffilid'] = $mgaffilid;
 	}

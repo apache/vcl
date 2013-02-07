@@ -1016,6 +1016,7 @@ function processGroupInput($checks=1) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function checkForGroupName($name, $type, $id, $extraid) {
+	$name = mysql_real_escape_string($name);
 	if($type == "user")
 		$query = "SELECT id FROM usergroup "
 		       . "WHERE name = '$name' AND "
@@ -1090,9 +1091,9 @@ function updateGroup($data) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function addGroup($data) {
-	if($data['editgroupid'] == 0 || $data['editgroupid'] == '')
-		$data['editgroupid'] = 'NULL';
 	if($data['type'] == "user") {
+		if($data['editgroupid'] == 0 || $data['editgroupid'] == '')
+			$data['editgroupid'] = 'NULL';
 		if(! array_key_exists('custom', $data))
 			$data['custom'] = 1;
 		elseif($data['custom'] == 0) {
