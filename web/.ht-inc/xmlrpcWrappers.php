@@ -108,9 +108,11 @@ function XMLRPCtest($string) {
 ///
 /// \fn XMLRPCgetImages()
 ///
-/// \return an array of image arrays, each with 2 indices:\n
+/// \return an array of image arrays, each with these indices:\n
 /// \b id - id of the image\n
-/// \b name - name of the image
+/// \b name - name of the image\n
+/// \b description - description of image\n
+/// \b usage - usage instructions for image
 ///
 /// \brief gets the images to which the user has access
 ///
@@ -1608,7 +1610,7 @@ function XMLRPCaddNode($nodeName, $parentNode) {
 	}
 	if(in_array("nodeAdmin", $user['privileges'])) {
 		$nodeInfo = getNodeInfo($parentNode);
-		if(is_null($tmp)) {
+		if(is_null($nodeInfo)) {
 			return array('status' => 'error',
 			             'errorcode' => 78,
 			             'errormsg' => 'Invalid nodeid specified');
@@ -1821,7 +1823,8 @@ function XMLRPCaddUserGroupPriv($name, $affiliation, $nodeid, $permissions) {
 	array_push($usertypes["users"], "cascade");
 
 	$diff = array_diff($perms, $usertypes['users']);
-	if(count($diff) || (count($perms) == 1 && $perms[0] == 'cascade')) {
+	if(! count($perms) || count($diff) ||
+	   (count($perms) == 1 && $perms[0] == 'cascade')) {
 		return array('status' => 'error',
 		             'errorcode' => 66,
 		             'errormsg' => 'Invalid or missing permissions list supplied');
@@ -1830,9 +1833,13 @@ function XMLRPCaddUserGroupPriv($name, $affiliation, $nodeid, $permissions) {
 	$cnp = getNodeCascadePrivileges($nodeid, "usergroups");
 	$np = getNodePrivileges($nodeid, "usergroups", $cnp);
 
-	$diff = array_diff($perms, $np['usergroups'][$name]['privs']);
-	if(empty($diff))
-		return array('status' => 'success');
+	if(array_key_exists($name, $np['usergroups'])) {
+		$diff = array_diff($perms, $np['usergroups'][$name]['privs']);
+		if(empty($diff))
+			return array('status' => 'success');
+	}
+	else
+		$diff = $perms;
 
 	updateUserOrGroupPrivs($groupid, $nodeid, $diff, array(), "group");
 	return array('status' => 'success');
@@ -2156,22 +2163,22 @@ function _XMLRPCchangeResourceGroupPriv_sub($mode, $name, $type, $nodeid,
 /// \return an array with two indices, one named 'status' which will have a
 /// value of 'success', the other named 'groups' which will be an array of
 /// arrays, each one having the following keys:\n
-/// \li \b id\n
-/// \li \b name\n
-/// \li \b groupaffiliation\n
-/// \li \b groupaffiliationid\n
-/// \li \b ownerid\n
-/// \li \b owner\n
-/// \li \b affiliation\n
-/// \li \b editgroupid\n
-/// \li \b editgroup\n
-/// \li \b editgroupaffiliationid\n
-/// \li \b editgroupaffiliation\n
-/// \li \b custom\n
-/// \li \b courseroll\n
-/// \li \b initialmaxtime\n
-/// \li \b maxextendtime\n
-/// \li \b overlapResCount\n
+/// \li \b id
+/// \li \b name
+/// \li \b groupaffiliation
+/// \li \b groupaffiliationid
+/// \li \b ownerid
+/// \li \b owner
+/// \li \b affiliation
+/// \li \b editgroupid
+/// \li \b editgroup
+/// \li \b editgroupaffiliationid
+/// \li \b editgroupaffiliation
+/// \li \b custom
+/// \li \b courseroll
+/// \li \b initialmaxtime
+/// \li \b maxextendtime
+/// \li \b overlapResCount
 ///
 /// \brief builds a list of user groups
 ///
@@ -2430,7 +2437,7 @@ function XMLRPCeditUserGroup($name, $affiliation, $newName, $newAffiliation,
 		return $rc;
 
 	# get info about group
-	$query = "SELECT ownerid "
+	$query = "SELECT ownerid, "
 	       .        "affiliationid, "
 	       .        "custom, "
 	       .        "courseroll "

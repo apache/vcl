@@ -447,7 +447,10 @@ function submitAddUserGroup() {
 	var obj = dijit.byId('blockgrpchk');
 	if(obj.checked)
 		perms.push('block');
-	for(var i = 0; obj = dijit.byId('usergrpck0:' + i); i++) {
+	obj = dijit.byId('usergrpck0:0');
+	if(obj.checked)
+		perms.push('cascade');
+	for(var i = 1; obj = dijit.byId('usergrpck0:' + i); i++) {
 		if(obj.checked)
 			perms.push(obj.name);
 	}

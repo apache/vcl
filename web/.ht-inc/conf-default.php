@@ -98,6 +98,7 @@ define("ALLOWADDSHIBUSERS", 0); // this is only related to using Shibboleth auth
 
 $ENABLE_ITECSAUTH = 0;     // use ITECS accounts (also called "Non-NCSU" accounts)
 
+# adding to this array grants access to call XMLRPCblockAllocation, XMLRPCprocessBlockTime, and XMLRPCautoCapture which are called by vcld
 $xmlrpcBlockAPIUsers = array(3, # 3 = vclsystem
 );
 

@@ -3711,6 +3711,8 @@ function submitCompStateChange() {
 	}
 	# set to deleted
 	elseif($data['stateid'] == 999) {
+		# TODO this will throw an error if two computers will end up with the
+		# same hostname after -UNDELETED-ID gets removed
 		$compids = implode(',', $data['computerids']);
 		$query = "UPDATE computer "
 		       . "SET deleted = 1, "
