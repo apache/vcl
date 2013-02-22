@@ -1,4 +1,4 @@
-Installing VCL 2.3.1
+Installing VCL 2.3.2
 
 Install & Configure:
 I. Database
@@ -13,11 +13,11 @@ I. Install & Configure the Database
       a. If you have not already done so, download and the Apache VCL source to
          the database server: 
 
-         wget --trust-server-names http://vcl.apache.org/downloads/download.cgi?action=download&filename=%2Fvcl%2Fapache-VCL-2.3.1.tar.bz2
+         wget --trust-server-names http://vcl.apache.org/downloads/download.cgi?action=download&filename=%2Fvcl%2Fapache-VCL-2.3.2.tar.bz2
 
       b. Extract the files: 
 
-         tar -jxvf apache-VCL-2.3.1.tar.bz2
+         tar -jxvf apache-VCL-2.3.2.tar.bz2
 
    2. Install MySQL Server
       a. Install MySQL Server 5.x: 
@@ -74,7 +74,7 @@ I. Install & Configure the Database
 
       e. Import the vcl.sql file into the database: 
 
-         mysql vcl < apache-VCL-2.3.1/mysql/vcl.sql
+         mysql vcl < apache-VCL-2.3.2/mysql/vcl.sql
 
          The vcl.sql file is included in the mysql directory within the Apache
          VCL source code 
@@ -86,7 +86,7 @@ II. Install & Configure the Web Components
    Prerequisites:
 
    The following instructions assume these tasks have previously been completed:
-      * Apache VCL 2.3.1 has been downloaded
+      * Apache VCL 2.3.2 has been downloaded
       * VCL database has been installed and configured
 
    Web Server:
@@ -153,7 +153,7 @@ II. Install & Configure the Web Components
       a. Copy the web directory to a location under the web root of your web
          server and navigate to the destination .ht-inc subdirectory: 
 
-         cp -r apache-VCL-2.3.1/web/ /var/www/html/vcl
+         cp -r apache-VCL-2.3.2/web/ /var/www/html/vcl
          cd /var/www/html/vcl/.ht-inc 
 
       b. Copy secrets-default.php to secrets.php: 
@@ -256,7 +256,7 @@ II. Install & Configure the Web Components
       easier. This tool can be installed on the VCL web server.  To install 
       phpMyAdmin, follow the instructions on:
 
-            VCL 2.3.1 phpMyAdmin Installation & Configuration
+            VCL 2.3.2 phpMyAdmin Installation & Configuration
             http://vcl.apache.org/docs/installphpmyadmin.html
 
       Further steps if using only VMWare
@@ -664,7 +664,7 @@ III. Install & Configure the Management Node Components
       Copy the managementnode directory to the location where you want it to
       reside (typically /usr/local): 
 
-         cp -r apache-VCL-2.3.1/managementnode /usr/local/vcl 
+         cp -r apache-VCL-2.3.2/managementnode /usr/local/vcl 
 
    2. Install the Required Linux Packages & Perl Modules
       Run the install_perl_libs.pl script:
