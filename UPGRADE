@@ -1,6 +1,6 @@
 This file explains how to upgrade an existing install of Apache VCL
-to Apache VCL 2.3.1. It assumed that you extracted the release archive
-to /root/apache-VCL-2.3.1
+to Apache VCL 2.3.2. It assumed that you extracted the release archive
+to /root/apache-VCL-2.3.2
 
 The basic steps that will be performed:
 
@@ -24,13 +24,13 @@ The basic steps that will be performed:
 We will create a backup of the vcl database. This will provide a restore point
 if necessary.
 
-   mysqldump vcl > ~/vcl-pre2.3.1-upgrade.sql
+   mysqldump vcl > ~/vcl-pre2.3.2-upgrade.sql
 
-3. Update mysql schema
+3. Update mysql schema (can be skipped if upgrading from 2.3.1)
 
 This step updates the mysql schema.
 
-   cd /root/apache-VCL-2.3.1
+   cd /root/apache-VCL-2.3.2
    mysql vcl < mysql/update-vcl.sql
 
 One item of note: In 2.3 a new resource group is added in update-vcl.sql - 
@@ -42,7 +42,8 @@ in the privilege tree, scroll to Resources, click Add Resource Group, select
 administer, manageGroup, and manageMapping, and click "Submit New Resource
 Group".
 
-4. FOR UPGRADING from 2.2 ONLY (skip to step 5 if upgrading from 2.2.1 or 2.3) 
+4. FOR UPGRADING from 2.2 ONLY (skip to step 5 if upgrading from 2.2.1, 2.3,
+   or 2.3.1) 
 
 Grant CREATE TEMPORARY TABLES to mysql user
 
@@ -74,16 +75,16 @@ vcl web code at /var/www/html/vcl. If you installed it elsewhere, replace
    a. move your old code out of the way
 
       cd /var/www/html
-      mv vcl ~/vcl-pre2.3.1_web
+      mv vcl ~/vcl-pre2.3.2_web
 
    b. copy the new code in place
 
-      cd /root/apache-VCL-2.3.1
+      cd /root/apache-VCL-2.3.2
       cp -r web /var/www/html/vcl
 
    c. copy your config files from the previous version:
 
-      cd ~/vcl-pre2.3.1_web/.ht-inc
+      cd ~/vcl-pre2.3.2_web/.ht-inc
       cp conf.php secrets.php pubkey.pem keys.pem /var/www/html/vcl/.ht-inc
 
    d. make /var/www/html/vcl/.ht-inc/maintenance writable by
@@ -209,12 +210,12 @@ you've added.
 
       cd <your vcl MN code root path>
       ie. cd /usr/local/
-      cp -r vcl ~/vcl-pre2.3.1_managementnode
+      cp -r vcl ~/vcl-pre2.3.2_managementnode
 
-   b. Copy in the 2.3.1 code base to /usr/local, copying in should preserve any
+   b. Copy in the 2.3.2 code base to /usr/local, copying in should preserve any
       drivers or other files you've added.
 
-      /bin/cp -r /root/apache-VCL-2.3.1/managementnode/* /usr/local/vcl
+      /bin/cp -r /root/apache-VCL-2.3.2/managementnode/* /usr/local/vcl
 
    c. Run install_perl_libs.pl to update the perl dependencies (this will take
       a few minutes.)
