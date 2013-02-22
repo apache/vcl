@@ -1,3 +1,19 @@
+ASF VCL 2.3.2
+
+Dependency changes:
+
+No dependency changes for any components in this release.
+
+Release Notes - VCL - Version 2.3.2
+
+** Bug
+    * [VCL-666] - Administrator is always passed as the userid in RDP files for imaging reservations, even if it is for xRDP
+    * [VCL-671] - VMware may delete VM assigned to another reservation when reclaiming disk space on the host
+    * [VCL-674] - problem adding a user group to the privilege with cascade checked
+    * [VCL-675] - deleting a hierarchy of 3 or more privilege nodes throws an error
+
+================================================================================
+
 ASF VCL 2.3.1
 
 Dependency changes:
