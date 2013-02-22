@@ -3396,7 +3396,8 @@ function connectRequest() {
 			             $res['connectIP'], 
 			             $res['connectport']);
 			print preg_replace($froms, $tos, $method['connecttext']);
-			if(preg_match('/remote desktop/i', $method['description'])) {
+			if(preg_match('/remote desktop/i', $method['description']) ||
+			   preg_match('/RDP/i', $method['description'])) {
 				print "<div id=\"counterdiv\" class=\"hidden\"></div>\n";
 				print "<div id=\"connectdiv\">\n";
 				print "<FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";

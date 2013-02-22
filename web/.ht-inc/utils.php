@@ -8468,7 +8468,7 @@ function sendRDPfile() {
 	print "redirectsmartcards:i:1\r\n";
 	print "displayconnectionbar:i:1\r\n";
 	print "autoreconnection enabled:i:1\r\n";
-	if($request["forimaging"])
+	if($request["forimaging"] && $res['OStype'] == 'windows')
 		print "username:s:Administrator\r\n";
 	else {
 		if(preg_match('/(.*)@(.*)/', $user['unityid'], $matches))
