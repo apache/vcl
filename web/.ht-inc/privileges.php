@@ -1109,7 +1109,7 @@ function AJsubmitDeleteNode() {
 	       . "WHERE id IN ($deleteNodes)";
 	doQuery($query, 345);
 	print "setSelectedPrivNode('$parent'); ";
-	print "removeNodesFromTree('$deleteNodes'); ";
+	print "removeNodesFromTree('$activeNode'); ";
 	print "dijit.byId('deleteDialog').hide(); ";
 	print "var workingobj = dijit.byId('workingDialog'); ";
 	print "dojo.connect(workingobj._fadeOut, 'onEnd', dijit.byId('deleteDialog'), 'hide'); ";
