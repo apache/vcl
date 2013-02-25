@@ -1954,7 +1954,7 @@ sub remove_lines_from_file {
 	
 	# Assemble the command, grep the pattern to retrieve the number of times the pattern exists in the file before and after
 	# This is used to verify that the pattern doesn't exist afterwards
-	my $command = "echo -n 'before:' ; grep -c '$pattern' $file_path 2>&1 ; sed -i -e '/$pattern/d' $file_path 2>&1 ; echo -n 'after:' ; grep -c '$pattern' $file_path 2>&1";
+	my $command = "echo -n \"before:\" ; grep -c \"$pattern\" $file_path 2>&1 ; sed -i -e \"/$pattern/d\" $file_path 2>&1 ; echo -n \"after:\" ; grep -c \"$pattern\" $file_path 2>&1";
 	my ($exit_status, $output) = $self->execute($command, 0);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute command to remove lines containing '$pattern' from '$file_path' on $computer_short_name\ncommand: $command");
