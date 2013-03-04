@@ -1477,7 +1477,7 @@ sub get_firewall_configuration {
 	my $firewall_configuration;
 	
 	my $command = "$system32_path/netsh.exe advfirewall firewall show rule name=all verbose";
-	my ($exit_status, $output) = $self->execute($command);
+	my ($exit_status, $output) = $self->execute($command, 0);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to run command to show firewall rules on $computer_node_name");
 		return;
@@ -1554,6 +1554,10 @@ sub get_firewall_configuration {
 			#notify($ERRORS{'DEBUG'}, 0, "ignoring rule: '$rule_name', Protocol is not defined:\n$rule_section");
 			next RULE;
 		}
+		elsif ($rule_info->{Protocol} =~ /v6/i) {
+			# Skip IPv6 rules for now
+			next RULE;
+		}
 		
 		my @ports;
 		
@@ -1562,12 +1566,15 @@ sub get_firewall_configuration {
 				notify($ERRORS{'DEBUG'}, 0, "ignoring rule: '$rule_name', ICMP type could not be determined:\n$rule_section");
 				next RULE;
 			}
-			
 			@ports = sort keys(%{$rule_info->{ICMPTypes}})
 		}
 		else {
 			if (!defined($rule_info->{LocalPort})) {
-				notify($ERRORS{'DEBUG'}, 0, "ignoring rule: '$rule_name', LocalPort is not defined");
+				#notify($ERRORS{'DEBUG'}, 0, "ignoring rule: '$rule_name', LocalPort is not defined");
+				next RULE;
+			}
+			elsif ($rule_info->{LocalPort} !~ /^\d+$/) {
+				#notify($ERRORS{'DEBUG'}, 0, "ignoring rule: '$rule_name', LocalPort is not an integer");
 				next RULE;
 			}
 			
@@ -1585,7 +1592,17 @@ sub get_firewall_configuration {
 			$firewall_configuration->{$rule_info->{Protocol}}{$port}{scope} = $rule_info->{RemoteIP};
 			$firewall_configuration->{$rule_info->{Protocol}}{$port}{local_ip} = $rule_info->{LocalIP};
 		}
-		
+	}
+	
+	# Assemble a string containing all the rule info (don't print_data because it outputs too much to vcld.log)
+	my $rules_string;
+	for my $protocol (keys %$firewall_configuration) {
+		for my $port (sort keys %{$firewall_configuration->{$protocol}}) {
+			my $name = $firewall_configuration->{$protocol}{$port}{name};
+			my $scope = $firewall_configuration->{$protocol}{$port}{scope};
+			my $local_ip = $firewall_configuration->{$protocol}{$port}{local_ip};
+			$rules_string .= "$protocol:$port '$name' - local IP: $local_ip, scope: $scope\n";
+		}
 	}
 	
 	# Copy the ICMPv4 key to one named ICMP for compatibility
@@ -1595,7 +1612,7 @@ sub get_firewall_configuration {
 	
 	$self->{firewall_configuration} = $firewall_configuration;
 	
-	notify($ERRORS{'DEBUG'}, 0, "retrieved firewall info from $computer_node_name:\n" . format_data($firewall_configuration));
+	notify($ERRORS{'DEBUG'}, 0, "retrieved firewall info from $computer_node_name:\n$rules_string");
 	return $firewall_configuration;
 }
 
