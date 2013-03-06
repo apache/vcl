@@ -180,7 +180,7 @@ sub main () {
 		else {
 			notify($ERRORS{'CRITICAL'}, $LOGFILE, "could not retrieve request information for management node $management_node_id");
 		}
-
+		
 		# See if there's anything to do
 		my $request_count = scalar keys %{$info{request}};
 		#notify($ERRORS{'DEBUG'}, $LOGFILE, "number of requests assigned to management node $management_node_id: $request_count");
@@ -189,7 +189,7 @@ sub main () {
 		# Loop through the requests assigned to this management node
 		REQUEST: foreach my $request_id (keys %{$info{request}}) {
 			#notify($ERRORS{'DEBUG'}, $LOGFILE, "management node $management_node_id has been assigned request id: $request_id");
-
+			
 			# Store some request data into a local variables
 			my $request_state_name     = $info{request}{$request_id}{state}{name};
 			my $request_laststate_name = $info{request}{$request_id}{laststate}{name};
@@ -201,47 +201,45 @@ sub main () {
 			$ENV{reservation_id} = 0;
 			$ENV{state} = $request_state_name;
 			
-			$ENV{database_select_count} = 0;
-			$ENV{database_execute_count} = 0;
-			$ENV{database_select_calls} = {};
-
 			# Make sure the request state is valid
-			if ($request_state_name !~ /inuse|reserved|deleted|timeout|reclaim|reload|new|tomaintenance|image|imageprep|makeproduction|imageinuse|complete|failed|pending|maintenance|tovmhostinuse|rebootsoft|reboothard|reinstall|servermodified/) {
+			if ($request_state_name !~ /inuse|reserved|deleted|timeout|reclaim|reload|new|tomaintenance|image|imageprep|makeproduction|imageinuse|complete|failed|pending|maintenance|tovmhostinuse|rebootsoft|reboothard|reinstall|servermodified|test/) {
 				notify($ERRORS{'WARNING'}, $LOGFILE, "assigned request in unsupported state: $request_state_name");
 				next REQUEST;
 			}
-
+			
 			# Don't process requests that are already pending
 			if ($request_state_name =~ /^(pending|maintenance)/) {
 				next REQUEST;
 			}
-
+			
+			my %request_info;
+			
 			#===========================================================================
 			# Loop through the reservations associated with this request
-			RESERVATION: foreach my $reservation_id (keys %{$info{request}{$request_id}{reservation}}) {
+			RESERVATION: foreach my $reservation_id (reverse sort { $a <=> $b } keys %{$info{request}{$request_id}{reservation}}) {
 				$ENV{reservation_id} = $reservation_id;
-				
+				$ENV{database_select_count} = 0;
+				$ENV{database_execute_count} = 0;
+				$ENV{database_select_calls} = {};
+
 				# Check to see if the reservation is still in the hash before proceeding
 				# If request was deleted from database, it was also removed from this hash
 				if (!defined($info{request}{$request_id}{reservation}{$reservation_id})) {
 					#notify($ERRORS{'DEBUG'}, $LOGFILE, "reservation was deleted");
 					next RESERVATION;
 				}
-
+				
 				# Store reservation variables into local variable
 				my $reservation_lastcheck = $info{request}{$request_id}{reservation}{$reservation_id}{lastcheck};
-
+				
 				# Perform steps common to all states
 				#notify($ERRORS{'DEBUG'}, $LOGFILE, "assigned reservation in state: $request_state_name");
-
-				# The request_info hash stores all the information for this request
-				my %request_info;
-
+				
 				# Figure out the status of this reservation based on reservation times and the request state
 				# check_time_result can be: start, preload, end, poll, old, remove, 0
 				my $check_time_result = check_time($request_start, $request_end, $reservation_lastcheck, $request_state_name, $request_laststate_name);
 				#notify($ERRORS{'DEBUG'}, 0, "check_time returned \'$check_time_result\'");
-
+				
 				# Do nothing if check_time returned 0
 				# Check this before querying for the large set of request data
 				if (!$check_time_result) {
@@ -258,7 +256,7 @@ sub main () {
 					else {
 						notify($ERRORS{'WARNING'}, $LOGFILE, "unable to delete rows from request, reservation, and computerloadlog tables for request");
 					}
-
+					
 					# Remove the request key from the hash
 					delete $info{request}{$request_id};
 					next RESERVATION;
@@ -281,33 +279,35 @@ sub main () {
 				else {
 					notify($ERRORS{'DEBUG'}, $LOGFILE, "reservation $reservation_id is NOT already being processed");
 				}
-
-				# Get the full set of database data for this request
-				if (%request_info = get_request_info($request_id)) {
-					notify($ERRORS{'DEBUG'}, $LOGFILE, "retrieved request information from database");
-
-					# Add the reservation ID to be processed to the hash
-					$request_info{RESERVATIONID} = $reservation_id;
 				
-					# Set request variables that may have changed by other processes to their original values
-					# They may change if this is a cluster reservation
-					$request_info{state}{name}     = $request_state_name;
-					$request_info{laststate}{name} = $request_laststate_name;
-					$request_info{preload}         = $request_preload;
-				}
-				else {
-					notify($ERRORS{'WARNING'}, $LOGFILE, "could not retrieve request information from database");
-					next RESERVATION;
-				}
-
-				# Add the check_time result to the hash
-				$request_info{CHECKTIME} = $check_time_result;
-
-				# Check if preload was returned by check_time and that preload flag is 0
-				# The preload flag will be set to 1 by new.pm module after it's done
-				if ($check_time_result =~ /preload/ && !($request_info{preload})) {
-					notify($ERRORS{'OK'}, $LOGFILE, "request start time within 25-35 minute window and preload flag is 0, processing preload request");
-					$request_info{PRELOADONLY} = 1;
+				# Get the full set of database data for this request
+				if (!%request_info) {
+					if (%request_info = get_request_info($request_id)) {
+						notify($ERRORS{'DEBUG'}, $LOGFILE, "retrieved request information from database");
+						
+						# Add the reservation ID to be processed to the hash
+						$request_info{RESERVATIONID} = $reservation_id;
+						
+						# Set request variables that may have changed by other processes to their original values
+						# They may change if this is a cluster reservation
+						$request_info{state}{name}     = $request_state_name;
+						$request_info{laststate}{name} = $request_laststate_name;
+						$request_info{preload}         = $request_preload;
+						
+						# Add the check_time result to the hash
+						$request_info{CHECKTIME} = $check_time_result;
+						
+						# Check if preload was returned by check_time and that preload flag is 0
+						# The preload flag will be set to 1 by new.pm module after it's done
+						if ($check_time_result =~ /preload/ && !($request_info{preload})) {
+							notify($ERRORS{'OK'}, $LOGFILE, "request start time within 25-35 minute window and preload flag is 0, processing preload request");
+							$request_info{PRELOADONLY} = 1;
+						}
+					}
+					else {
+						notify($ERRORS{'WARNING'}, $LOGFILE, "could not retrieve request information from database");
+						next RESERVATION;
+					}
 				}
 				
 				# Get a new data structure object
