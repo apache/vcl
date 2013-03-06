@@ -285,9 +285,6 @@ sub main () {
 					if (%request_info = get_request_info($request_id)) {
 						notify($ERRORS{'DEBUG'}, $LOGFILE, "retrieved request information from database");
 						
-						# Add the reservation ID to be processed to the hash
-						$request_info{RESERVATIONID} = $reservation_id;
-						
 						# Set request variables that may have changed by other processes to their original values
 						# They may change if this is a cluster reservation
 						$request_info{state}{name}     = $request_state_name;
@@ -306,9 +303,12 @@ sub main () {
 					}
 					else {
 						notify($ERRORS{'WARNING'}, $LOGFILE, "could not retrieve request information from database");
-						next RESERVATION;
+						next REQUEST;
 					}
 				}
+				
+				# Add the reservation ID to be processed to the hash
+				$request_info{RESERVATIONID} = $reservation_id;
 				
 				# Get a new data structure object
 				my $data_structure;
