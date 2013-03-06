@@ -123,6 +123,7 @@ our @EXPORT = qw(
   get_current_file_name
   get_current_package_name
   get_current_subroutine_name
+  get_database_table_columns
   get_file_size_info_string
   get_group_name
   get_highest_imagerevision_info
@@ -3809,29 +3810,29 @@ EOF
 			}
 		}
 		
-		# Store duration in epoch seconds format
-		my $request_start_epoch = convert_to_epoch_seconds($request_info->{start});
-		my $request_end_epoch = convert_to_epoch_seconds($request_info->{end});
-		$request_info->{DURATION} = ($request_end_epoch - $request_start_epoch);
-		
-		# Add the image info to the hash
-		my $image_id = $request_info->{reservation}{$reservation_id}{imageid};
-		my $image_info = get_image_info($image_id, 1);
-		$request_info->{reservation}{$reservation_id}{image} = $image_info;
-		
-		# Add the imagerevision info to the hash
-		my $imagerevision_id = $request_info->{reservation}{$reservation_id}{imagerevisionid};
-		my $imagerevision_info = get_imagerevision_info($imagerevision_id, 1);
-		$request_info->{reservation}{$reservation_id}{imagerevision} = $imagerevision_info;
-		
-		# Add the computer info to the hash
-		my $computer_id = $request_info->{reservation}{$reservation_id}{computerid};
-		my $computer_info = get_computer_info($computer_id, 1);
-		$request_info->{reservation}{$reservation_id}{computer} = $computer_info;
-		
-		# Add the connect method info to the hash
-		my $connect_method_info = get_connect_method_info($imagerevision_id);
-		$request_info->{reservation}{$reservation_id}{connect_methods} = $connect_method_info;
+			# Store duration in epoch seconds format
+			my $request_start_epoch = convert_to_epoch_seconds($request_info->{start});
+			my $request_end_epoch = convert_to_epoch_seconds($request_info->{end});
+			$request_info->{DURATION} = ($request_end_epoch - $request_start_epoch);
+			
+			# Add the image info to the hash
+			my $image_id = $request_info->{reservation}{$reservation_id}{imageid};
+			my $image_info = get_image_info($image_id, 1);
+			$request_info->{reservation}{$reservation_id}{image} = $image_info;
+			
+			# Add the imagerevision info to the hash
+			my $imagerevision_id = $request_info->{reservation}{$reservation_id}{imagerevisionid};
+			my $imagerevision_info = get_imagerevision_info($imagerevision_id);
+			$request_info->{reservation}{$reservation_id}{imagerevision} = $imagerevision_info;
+			
+			# Add the computer info to the hash
+			my $computer_id = $request_info->{reservation}{$reservation_id}{computerid};
+			my $computer_info = get_computer_info($computer_id, 1);
+			$request_info->{reservation}{$reservation_id}{computer} = $computer_info;
+			
+			# Add the connect method info to the hash
+			my $connect_method_info = get_connect_method_info($imagerevision_id);
+			$request_info->{reservation}{$reservation_id}{connect_methods} = $connect_method_info;
 		
 		# Add the managementnode info to the hash
 		my $management_node_id = $request_info->{reservation}{$reservation_id}{managementnodeid};
@@ -3849,39 +3850,39 @@ EOF
 		$request_info->{reservation}{$reservation_id}{users}{$user_id} = get_user_info($user_id);
 		$request_info->{reservation}{$reservation_id}{users}{$user_id}{ROOTACCESS} = $imagemeta_root_access;
 		
-		# If server request and logingroupid is set, add user group members to hash, set ROOTACCESS to 0
-		if (my $login_group_id = $request_info->{reservation}{$reservation_id}{serverrequest}{logingroupid}) {
-			my $login_group_member_info = get_user_group_member_info($login_group_id);
-			for my $login_user_id (keys %$login_group_member_info) {
-				$request_info->{reservation}{$reservation_id}{users}{$login_user_id} = get_user_info($login_user_id);
-				$request_info->{reservation}{$reservation_id}{users}{$login_user_id}{ROOTACCESS} = 0;
+			# If server request and logingroupid is set, add user group members to hash, set ROOTACCESS to 0
+			if (my $login_group_id = $request_info->{reservation}{$reservation_id}{serverrequest}{logingroupid}) {
+				my $login_group_member_info = get_user_group_member_info($login_group_id);
+				for my $login_user_id (keys %$login_group_member_info) {
+					$request_info->{reservation}{$reservation_id}{users}{$login_user_id} = get_user_info($login_user_id);
+					$request_info->{reservation}{$reservation_id}{users}{$login_user_id}{ROOTACCESS} = 0;
+				}
 			}
-		}
-		
-		# If server request and admingroupid is set, add user group members to hash, set ROOTACCESS to 1
-		if (my $admin_group_id = $request_info->{reservation}{$reservation_id}{serverrequest}{admingroupid}) {
-			my $admin_group_member_info = get_user_group_member_info($admin_group_id);
-			for my $admin_user_id (keys %$admin_group_member_info, $user_id) {
-				$request_info->{reservation}{$reservation_id}{users}{$admin_user_id} = get_user_info($admin_user_id);
-				$request_info->{reservation}{$reservation_id}{users}{$admin_user_id}{ROOTACCESS} = 1;
+			
+			# If server request and admingroupid is set, add user group members to hash, set ROOTACCESS to 1
+			if (my $admin_group_id = $request_info->{reservation}{$reservation_id}{serverrequest}{admingroupid}) {
+				my $admin_group_member_info = get_user_group_member_info($admin_group_id);
+				for my $admin_user_id (keys %$admin_group_member_info, $user_id) {
+					$request_info->{reservation}{$reservation_id}{users}{$admin_user_id} = get_user_info($admin_user_id);
+					$request_info->{reservation}{$reservation_id}{users}{$admin_user_id}{ROOTACCESS} = 1;
+				}
 			}
-		}
-		
-		# If server request or duration is greater >= 24 hrs disable user checks
-		if ($request_info->{reservation}{$reservation_id}{serverrequest}{id}) {
-			notify($ERRORS{'DEBUG'}, 0, "server sequest - disabling user checks");
-			$request_info->{checkuser} = 0;
-			$request_info->{reservation}{$reservation_id}{serverrequest}{ALLOW_USERS} = $request_info->{user}{unityid};
-		}
-		elsif ($request_info->{DURATION} >= (60 * 60 * 24) ){
-			notify($ERRORS{'DEBUG'}, 0, "request length > 24 hours, disabling user checks");
-			$request_info->{checkuser} = 0;
-		}
-		
-		$request_info->{reservation}{$reservation_id}{serverrequest}{id} ||= 0;
-		$request_info->{reservation}{$reservation_id}{serverrequest}{fixedIP} ||= 0;
-		$request_info->{reservation}{$reservation_id}{serverrequest}{fixedMAC} ||= 0;
-		$request_info->{reservation}{$reservation_id}{serverrequest}{router} ||= 0;
+			
+			# If server request or duration is greater >= 24 hrs disable user checks
+			if ($request_info->{reservation}{$reservation_id}{serverrequest}{id}) {
+				notify($ERRORS{'DEBUG'}, 0, "server sequest - disabling user checks");
+				$request_info->{checkuser} = 0;
+				$request_info->{reservation}{$reservation_id}{serverrequest}{ALLOW_USERS} = $request_info->{user}{unityid};
+			}
+			elsif ($request_info->{DURATION} >= (60 * 60 * 24) ){
+				notify($ERRORS{'DEBUG'}, 0, "request length > 24 hours, disabling user checks");
+				$request_info->{checkuser} = 0;
+			}
+			
+			$request_info->{reservation}{$reservation_id}{serverrequest}{id} ||= 0;
+			$request_info->{reservation}{$reservation_id}{serverrequest}{fixedIP} ||= 0;
+			$request_info->{reservation}{$reservation_id}{serverrequest}{fixedMAC} ||= 0;
+			$request_info->{reservation}{$reservation_id}{serverrequest}{router} ||= 0;
 		$request_info->{reservation}{$reservation_id}{serverrequest}{netmask} ||= 0;
 		$request_info->{reservation}{$reservation_id}{serverrequest}{DNSservers} ||= 0;
 		$request_info->{reservation}{$reservation_id}{serverrequest}{admingroupid} ||= 0;
@@ -4094,7 +4095,17 @@ sub get_image_info {
 		return;
 	}
 	
-	return $ENV{image_info}{$image_identifier} if (!$no_cache && $ENV{image_info}{$image_identifier});
+	# Check if cached image info exists
+	if (!$no_cache && defined($ENV{image_info}{$image_identifier})) {
+		# Check the time the info was last retrieved
+		my $data_age_seconds = (time - $ENV{image_info}{$image_identifier}{RETRIEVAL_TIME});
+		if ($data_age_seconds < 600) {
+			return $ENV{image_info}{$image_identifier};
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "retrieving current image info for '$image_identifier' from database, cached data is stale: $data_age_seconds seconds old");
+		}
+	}
 	
 	# Get a hash ref containing the database column names
 	my $database_table_columns = get_database_table_columns();
@@ -4206,6 +4217,7 @@ EOF
 	
 	#notify($ERRORS{'DEBUG'}, 0, "retrieved info for image '$image_identifier':\n" . format_data($image_info));
 	$ENV{image_info}{$image_identifier} = $image_info;
+	$ENV{image_info}{$image_identifier}{RETRIEVAL_TIME} = time;
 	return $ENV{image_info}{$image_identifier};
 }
 
@@ -4226,7 +4238,17 @@ sub get_imagerevision_info {
 		return;
 	}
 	
-	return $ENV{imagerevision_info}{$imagerevision_identifier} if (!$no_cache && $ENV{imagerevision_info}{$imagerevision_identifier});
+	# Check if cached imagerevision info exists
+	if (!$no_cache && defined($ENV{imagerevision_info}{$imagerevision_identifier})) {
+		# Check the time the info was last retrieved
+		my $data_age_seconds = (time - $ENV{imagerevision_info}{$imagerevision_identifier}{RETRIEVAL_TIME});
+		if ($data_age_seconds < 600) {
+			return $ENV{imagerevision_info}{$imagerevision_identifier};
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "retrieving current imagerevision info for '$imagerevision_identifier' from database, cached data is stale: $data_age_seconds seconds old");
+		}
+	}
 
 	my $select_statement = <<EOF;
 SELECT
@@ -4274,6 +4296,7 @@ EOF
 	
 	# Add the info to %ENV so it doesn't need to be retrieved from the database again
 	$ENV{imagerevision_info}{$imagerevision_identifier} = $imagerevision_info;
+	$ENV{imagerevision_info}{$imagerevision_identifier}{RETRIEVAL_TIME} = time;
 	#notify($ERRORS{'DEBUG'}, 0, "retrieved info from database for imagerevision '$imagerevision_identifier':\n" . format_data($ENV{imagerevision_info}{$imagerevision_identifier}));
 	return $ENV{imagerevision_info}{$imagerevision_identifier};
 }
@@ -4282,7 +4305,7 @@ EOF
 
 =head2 get_production_imagerevision_info
 
- Parameters  : $image_id
+ Parameters  : $image_id, $no_cache (optional)
  Returns     : Hash containing imagerevision data for the production revision of an image
  Description :
 
@@ -4290,13 +4313,15 @@ EOF
 
 
 sub get_production_imagerevision_info {
-	my ($image_identifier) = @_;
+	my ($image_identifier, $no_cache) = @_;
 
 	# Check the passed parameter
 	if (!defined($image_identifier)) {
 		notify($ERRORS{'WARNING'}, 0, "imagerevision identifier argument was not specified");
 		return;
 	}
+	
+	return $ENV{production_imagerevision_info}{$image_identifier} if (!$no_cache && $ENV{production_imagerevision_info}{$image_identifier});
 	
 	my $select_statement = <<EOF;
 SELECT
@@ -4328,9 +4353,15 @@ EOF
 		notify($ERRORS{'WARNING'}, 0, "" . scalar @selected_rows . " rows were returned from database select statement:\n$select_statement");
 		return;
 	}
-
+	
 	my $imagerevision_id = $selected_rows[0]{id};
-	return get_imagerevision_info($imagerevision_id);
+	
+	my $imagerevision_info = get_imagerevision_info($imagerevision_id);
+	
+	$ENV{production_imagerevision_info}{$image_identifier} = $imagerevision_info;
+	notify($ERRORS{'DEBUG'}, 0, "retrieved info from database for production revision of image '$image_identifier'");
+	return $ENV{production_imagerevision_info}{$image_identifier};
+	
 } ## end sub get_production_imagerevision_info
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -6885,18 +6916,18 @@ sub switch_state {
 
 sub get_management_node_blockrequests {
 	my ($managementnode_id) = @_;
-
+	
 	my ($package, $filename, $line, $sub) = caller(0);
-
+	
 	# Check the passed parameter
 	if (!defined($managementnode_id)) {
 		notify($ERRORS{'WARNING'}, 0, "management node ID was not specified");
 		return;
 	}
-
+	
 	# Create the select statement
 	my $select_statement = "
-   SELECT
+	SELECT
 	blockRequest.id AS blockRequest_id,
 	blockRequest.name AS blockRequest_name,
 	blockRequest.imageid AS blockRequest_imageid,
@@ -6926,10 +6957,10 @@ sub get_management_node_blockrequests {
 	
 	WHERE
 	blockRequest.managementnodeid = $managementnode_id AND
-        blockRequest.status = 'accepted' AND
+   blockRequest.status = 'accepted' AND
 	blockTimes.processed = '0' AND
 	(blockTimes.skip = '0' AND blockTimes.start < (NOW() + INTERVAL 360 MINUTE )) OR
-        blockTimes.end < NOW() 
+   blockTimes.end < NOW() 
    ";
 
 	# Call the database select subroutine
@@ -6940,37 +6971,37 @@ sub get_management_node_blockrequests {
 	if (scalar @selected_rows == 0) {
 		#Lets check to see if we have blockRequests that have expired and don't have any time ids
 		$select_statement = "
-   		SELECT
-        	blockRequest.id AS blockRequest_id,
-        	blockRequest.name AS blockRequest_name,
-        	blockRequest.imageid AS blockRequest_imageid,
-        	blockRequest.numMachines AS blockRequest_numMachines,
-        	blockRequest.groupid AS blockRequest_groupid,
-        	blockRequest.repeating AS blockRequest_repeating,
-        	blockRequest.ownerid AS blockRequest_ownerid,
-        	blockRequest.admingroupid AS blockRequest_admingroupid,
-        	blockRequest.managementnodeid AS blockRequest_managementnodeid,
-        	blockRequest.expireTime AS blockRequest_expireTime,
-        	blockRequest.processing AS blockRequest_processing,
-        	blockRequest.status AS blockRequest_status,
+			SELECT
+			blockRequest.id AS blockRequest_id,
+			blockRequest.name AS blockRequest_name,
+			blockRequest.imageid AS blockRequest_imageid,
+			blockRequest.numMachines AS blockRequest_numMachines,
+			blockRequest.groupid AS blockRequest_groupid,
+			blockRequest.repeating AS blockRequest_repeating,
+			blockRequest.ownerid AS blockRequest_ownerid,
+			blockRequest.admingroupid AS blockRequest_admingroupid,
+			blockRequest.managementnodeid AS blockRequest_managementnodeid,
+			blockRequest.expireTime AS blockRequest_expireTime,
+			blockRequest.processing AS blockRequest_processing,
+			blockRequest.status AS blockRequest_status,
 	
-		blockTimes.id AS blockTimes_id,
-        	blockTimes.blockRequestid AS blockTimes_blockRequestid,
-        	blockTimes.start AS blockTimes_start,
-        	blockTimes.end AS blockTimes_end,
-        	blockTimes.processed AS blockTimes_processed
-		
-		FROM
-		blockRequest
-		LEFT JOIN
-        	blockTimes ON (
-                blockRequest.id = blockTimes.blockRequestid
-        	)
-
-		WHERE
-		blockRequest.managementnodeid = $managementnode_id AND
-        	blockRequest.status = 'accepted' AND
-		blockRequest.expireTime < NOW()
+			blockTimes.id AS blockTimes_id,
+			blockTimes.blockRequestid AS blockTimes_blockRequestid,
+			blockTimes.start AS blockTimes_start,
+			blockTimes.end AS blockTimes_end,
+			blockTimes.processed AS blockTimes_processed
+			
+			FROM
+			blockRequest
+			LEFT JOIN
+			blockTimes ON (
+				blockRequest.id = blockTimes.blockRequestid
+			)
+			
+			WHERE
+			blockRequest.managementnodeid = $managementnode_id AND
+			blockRequest.status = 'accepted' AND
+			blockRequest.expireTime < NOW()
 		";
 		
 		@selected_rows = database_select($select_statement);
@@ -6979,28 +7010,28 @@ sub get_management_node_blockrequests {
 			return 0;
 		}
 	}
-
+	
 	# Build the hash
 	my %blockrequests;
-
+	
 	for (@selected_rows) {
 		my %blockrequest_row = %{$_};
-
+		
 		# Get the blockRequest id and blockTimes id
 		my $blockrequest_id = $blockrequest_row{blockRequest_id};
 		my $blocktimes_id   = $blockrequest_row{blockTimes_id};
 		$blocktimes_id = -1 if !$blocktimes_id;
-
+		
 		# Loop through all the columns returned for the blockrequest
 		foreach my $key (keys %blockrequest_row) {
 			my $value = $blockrequest_row{$key};
-
+			
 			# Create another variable by stripping off the column_ part of each key
 			# This variable stores the original (correct) column name
 			(my $original_key = $key) =~ s/^.+_//;
-
+			
 			$value = '-1' if (!defined($value));
-
+			
 			if ($key =~ /blockRequest_/) {
 				$blockrequests{$blockrequest_id}{$original_key} = $value;
 				if($key =~ /_groupid/){
@@ -7014,9 +7045,9 @@ sub get_management_node_blockrequests {
 				notify($ERRORS{'WARNING'}, 0, "unknown key found in SQL data: $key");
 			}
 		} ## end foreach my $key (keys %blockrequest_row)
-
+	
 	} ## end for (@selected_rows)
-
+	
 	return \%blockrequests;
 
 } ## end sub get_management_node_blockrequests
@@ -7271,7 +7302,11 @@ sub get_user_info {
 		return;
 	}
 	
-	#return $ENV{user_info}{$user_identifier} if (!$no_cache && $ENV{user_info}{$user_identifier});
+	if (!$no_cache && $ENV{user_info}{$user_identifier}) {
+		notify($ERRORS{'DEBUG'}, 0, "returning cached user info: $user_identifier");
+		return $ENV{user_info}{$user_identifier};
+	}
+	notify($ERRORS{'DEBUG'}, 0, "retrieving user info: $user_identifier");
 	
 	# If affiliation identifier argument wasn't supplied, set it to % wildcard
 	$affiliation_identifier = '%' if !$affiliation_identifier;
@@ -7423,6 +7458,7 @@ EOF
 	
 	#notify($ERRORS{'DEBUG'}, 0, "retrieved info for user '$user_identifier', affiliation: '$affiliation_identifier':\n" . format_data($user_info));
 	$ENV{user_info}{$user_identifier} = $user_info;
+	$ENV{user_info}{$user_identifier}{RETRIEVAL_TIME} = time;
 	return $ENV{user_info}{$user_identifier};	
 }
 
@@ -7730,22 +7766,15 @@ EOF
 		}
 	}
 	
-	# 
-	my $next_image_id = $computer_info->{nextimageid};
-	if ($next_image_id && (my $nextimage_info = get_image_info($next_image_id))) {
-		my $next_image_name = $nextimage_info->{name};
-		#trim trailing white space
-		$next_image_name =~ s/\s+$//;
-		
-		my $next_imagerevision_info = get_imagerevision_info($next_image_name);
-		if ($next_imagerevision_info) {
+	# Get the nextimage info
+	if (my $next_image_id = $computer_info->{nextimageid}) {
+		if (my $next_imagerevision_info = get_production_imagerevision_info($next_image_id)) {
 			$computer_info->{nextimagerevision} = $next_imagerevision_info;
 			$computer_info->{nextimage} = $next_imagerevision_info->{image};
 		}
 		else {
-			notify($ERRORS{'WARNING'}, 0, "failed to retrieve nextimage info for $computer_hostname, nextimageid=$next_image_id next_image_name=$next_image_name");
+			notify($ERRORS{'WARNING'}, 0, "failed to retrieve nextimage info for $computer_hostname, nextimageid=$next_image_id");
 		}
-		
 	}
 	
 	# Check if the computer associated with this reservation has a vmhostid set
@@ -7762,6 +7791,7 @@ EOF
 	
 	#notify($ERRORS{'DEBUG'}, 0, "retrieved info for computer '$computer_identifier':\n" . format_data($computer_info));
 	$ENV{computer_info}{$computer_identifier} = $computer_info;
+	$ENV{computer_info}{$computer_identifier}{RETRIEVAL_TIME} = time;
 	return $ENV{computer_info}{$computer_identifier};
 }
 
@@ -7850,6 +7880,15 @@ sub insert_request {
 	if (!$managementnode_id) {
 		notify($ERRORS{'WARNING'}, 0, "missing mandatory reservation key: managementnode_id");
 		return 0;
+	}
+	
+	if ($computer_id !~ /^\d+$/) {
+		my @computer_ids = get_computer_ids($computer_id);
+		if (scalar(@computer_ids) != 1) {
+			notify($ERRORS{'WARNING'}, 0, "computer ID argument is not numeric and computer ID could not be determined");
+			return;
+		}
+		$computer_id = $computer_ids[0];
 	}
 
 	my $insert_request_statment = "
@@ -9885,7 +9924,7 @@ sub kill_child_processes {
 
 =head2 get_connect_method_info
 
- Parameters  : $imagerevision_id
+ Parameters  : $imagerevision_id, $no_cache (optional)
  Returns     : hash reference
  Description : Returns the connect methods for the image revision specified as
                the argument.
@@ -9893,10 +9932,22 @@ sub kill_child_processes {
 =cut
 
 sub get_connect_method_info {
-	my ($imagerevision_id) = @_;
+	my ($imagerevision_id, $no_cache) = @_;
 	if (!defined($imagerevision_id)) {
 		notify($ERRORS{'WARNING'}, 0, "imagerevision ID argument was not supplied");
 		return;
+	}
+	
+	# Check if cached image info exists
+	if (!$no_cache && defined($ENV{connect_method_info}{$imagerevision_id})) {
+		# Check the time the info was last retrieved
+		my $data_age_seconds = (time - $ENV{connect_method_info}{$imagerevision_id}{RETRIEVAL_TIME});
+		if ($data_age_seconds < 600) {
+			return $ENV{connect_method_info}{$imagerevision_id};
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "retrieving current connect method info for imagerevision $imagerevision_id from database, cached data is stale: $data_age_seconds seconds old");
+		}
 	}
 	
 	my $imagerevision_info = get_imagerevision_info($imagerevision_id);
@@ -9995,7 +10046,9 @@ EOF
 	}
 
 	#notify($ERRORS{'DEBUG'}, 0, "retrieved connect method info:\n" . format_data($connect_method_info));
-	return $connect_method_info;
+	$ENV{connect_method_info}{$imagerevision_id} = $connect_method_info;
+	$ENV{connect_method_info}{$imagerevision_id}{RETRIEVAL_TIME} = time;
+	return $ENV{connect_method_info}{$imagerevision_id};
 }
 
 #/////////////////////////////////////////////////////////////////////////////
