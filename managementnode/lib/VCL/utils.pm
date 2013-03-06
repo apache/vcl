@@ -3810,30 +3810,30 @@ EOF
 			}
 		}
 		
-			# Store duration in epoch seconds format
-			my $request_start_epoch = convert_to_epoch_seconds($request_info->{start});
-			my $request_end_epoch = convert_to_epoch_seconds($request_info->{end});
-			$request_info->{DURATION} = ($request_end_epoch - $request_start_epoch);
-			
-			# Add the image info to the hash
-			my $image_id = $request_info->{reservation}{$reservation_id}{imageid};
-			my $image_info = get_image_info($image_id, 1);
-			$request_info->{reservation}{$reservation_id}{image} = $image_info;
-			
-			# Add the imagerevision info to the hash
-			my $imagerevision_id = $request_info->{reservation}{$reservation_id}{imagerevisionid};
-			my $imagerevision_info = get_imagerevision_info($imagerevision_id);
-			$request_info->{reservation}{$reservation_id}{imagerevision} = $imagerevision_info;
-			
-			# Add the computer info to the hash
-			my $computer_id = $request_info->{reservation}{$reservation_id}{computerid};
-			my $computer_info = get_computer_info($computer_id, 1);
-			$request_info->{reservation}{$reservation_id}{computer} = $computer_info;
-			
-			# Add the connect method info to the hash
-			my $connect_method_info = get_connect_method_info($imagerevision_id);
-			$request_info->{reservation}{$reservation_id}{connect_methods} = $connect_method_info;
+		# Store duration in epoch seconds format
+		my $request_start_epoch = convert_to_epoch_seconds($request_info->{start});
+		my $request_end_epoch = convert_to_epoch_seconds($request_info->{end});
+		$request_info->{DURATION} = ($request_end_epoch - $request_start_epoch);
 		
+		# Add the image info to the hash
+		my $image_id = $request_info->{reservation}{$reservation_id}{imageid};
+		my $image_info = get_image_info($image_id, 1);
+		$request_info->{reservation}{$reservation_id}{image} = $image_info;
+		
+		# Add the imagerevision info to the hash
+		my $imagerevision_id = $request_info->{reservation}{$reservation_id}{imagerevisionid};
+		my $imagerevision_info = get_imagerevision_info($imagerevision_id);
+		$request_info->{reservation}{$reservation_id}{imagerevision} = $imagerevision_info;
+		
+		# Add the computer info to the hash
+		my $computer_id = $request_info->{reservation}{$reservation_id}{computerid};
+		my $computer_info = get_computer_info($computer_id, 1);
+		$request_info->{reservation}{$reservation_id}{computer} = $computer_info;
+		
+		# Add the connect method info to the hash
+		my $connect_method_info = get_connect_method_info($imagerevision_id);
+		$request_info->{reservation}{$reservation_id}{connect_methods} = $connect_method_info;
+	
 		# Add the managementnode info to the hash
 		my $management_node_id = $request_info->{reservation}{$reservation_id}{managementnodeid};
 		my $management_node_info = get_management_node_info($management_node_id);
@@ -3850,39 +3850,39 @@ EOF
 		$request_info->{reservation}{$reservation_id}{users}{$user_id} = get_user_info($user_id);
 		$request_info->{reservation}{$reservation_id}{users}{$user_id}{ROOTACCESS} = $imagemeta_root_access;
 		
-			# If server request and logingroupid is set, add user group members to hash, set ROOTACCESS to 0
-			if (my $login_group_id = $request_info->{reservation}{$reservation_id}{serverrequest}{logingroupid}) {
-				my $login_group_member_info = get_user_group_member_info($login_group_id);
-				for my $login_user_id (keys %$login_group_member_info) {
-					$request_info->{reservation}{$reservation_id}{users}{$login_user_id} = get_user_info($login_user_id);
-					$request_info->{reservation}{$reservation_id}{users}{$login_user_id}{ROOTACCESS} = 0;
-				}
+		# If server request and logingroupid is set, add user group members to hash, set ROOTACCESS to 0
+		if (my $login_group_id = $request_info->{reservation}{$reservation_id}{serverrequest}{logingroupid}) {
+			my $login_group_member_info = get_user_group_member_info($login_group_id);
+			for my $login_user_id (keys %$login_group_member_info) {
+				$request_info->{reservation}{$reservation_id}{users}{$login_user_id} = get_user_info($login_user_id);
+				$request_info->{reservation}{$reservation_id}{users}{$login_user_id}{ROOTACCESS} = 0;
 			}
-			
-			# If server request and admingroupid is set, add user group members to hash, set ROOTACCESS to 1
-			if (my $admin_group_id = $request_info->{reservation}{$reservation_id}{serverrequest}{admingroupid}) {
-				my $admin_group_member_info = get_user_group_member_info($admin_group_id);
-				for my $admin_user_id (keys %$admin_group_member_info, $user_id) {
-					$request_info->{reservation}{$reservation_id}{users}{$admin_user_id} = get_user_info($admin_user_id);
-					$request_info->{reservation}{$reservation_id}{users}{$admin_user_id}{ROOTACCESS} = 1;
-				}
+		}
+		
+		# If server request and admingroupid is set, add user group members to hash, set ROOTACCESS to 1
+		if (my $admin_group_id = $request_info->{reservation}{$reservation_id}{serverrequest}{admingroupid}) {
+			my $admin_group_member_info = get_user_group_member_info($admin_group_id);
+			for my $admin_user_id (keys %$admin_group_member_info, $user_id) {
+				$request_info->{reservation}{$reservation_id}{users}{$admin_user_id} = get_user_info($admin_user_id);
+				$request_info->{reservation}{$reservation_id}{users}{$admin_user_id}{ROOTACCESS} = 1;
 			}
-			
-			# If server request or duration is greater >= 24 hrs disable user checks
-			if ($request_info->{reservation}{$reservation_id}{serverrequest}{id}) {
-				notify($ERRORS{'DEBUG'}, 0, "server sequest - disabling user checks");
-				$request_info->{checkuser} = 0;
-				$request_info->{reservation}{$reservation_id}{serverrequest}{ALLOW_USERS} = $request_info->{user}{unityid};
-			}
-			elsif ($request_info->{DURATION} >= (60 * 60 * 24) ){
-				notify($ERRORS{'DEBUG'}, 0, "request length > 24 hours, disabling user checks");
-				$request_info->{checkuser} = 0;
-			}
-			
-			$request_info->{reservation}{$reservation_id}{serverrequest}{id} ||= 0;
-			$request_info->{reservation}{$reservation_id}{serverrequest}{fixedIP} ||= 0;
-			$request_info->{reservation}{$reservation_id}{serverrequest}{fixedMAC} ||= 0;
-			$request_info->{reservation}{$reservation_id}{serverrequest}{router} ||= 0;
+		}
+		
+		# If server request or duration is greater >= 24 hrs disable user checks
+		if ($request_info->{reservation}{$reservation_id}{serverrequest}{id}) {
+			notify($ERRORS{'DEBUG'}, 0, "server sequest - disabling user checks");
+			$request_info->{checkuser} = 0;
+			$request_info->{reservation}{$reservation_id}{serverrequest}{ALLOW_USERS} = $request_info->{user}{unityid};
+		}
+		elsif ($request_info->{DURATION} >= (60 * 60 * 24) ){
+			#notify($ERRORS{'DEBUG'}, 0, "request length > 24 hours, disabling user checks");
+			$request_info->{checkuser} = 0;
+		}
+		
+		$request_info->{reservation}{$reservation_id}{serverrequest}{id} ||= 0;
+		$request_info->{reservation}{$reservation_id}{serverrequest}{fixedIP} ||= 0;
+		$request_info->{reservation}{$reservation_id}{serverrequest}{fixedMAC} ||= 0;
+		$request_info->{reservation}{$reservation_id}{serverrequest}{router} ||= 0;
 		$request_info->{reservation}{$reservation_id}{serverrequest}{netmask} ||= 0;
 		$request_info->{reservation}{$reservation_id}{serverrequest}{DNSservers} ||= 0;
 		$request_info->{reservation}{$reservation_id}{serverrequest}{admingroupid} ||= 0;
@@ -3891,8 +3891,6 @@ EOF
 		$request_info->{reservation}{$reservation_id}{serverrequest}{ALLOW_USERS} ||= 0;
 		
 		$request_info->{reservation}{$reservation_id}{READY} = '0';
-
-		
 	}
 	
 	# Set some default non-database values for the entire request
