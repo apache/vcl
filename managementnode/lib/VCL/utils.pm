@@ -9945,13 +9945,16 @@ sub get_connect_method_info {
 	
 	# Check if cached image info exists
 	if (!$no_cache && defined($ENV{connect_method_info}{$imagerevision_id})) {
-		# Check the time the info was last retrieved
-		my $data_age_seconds = (time - $ENV{connect_method_info}{$imagerevision_id}{RETRIEVAL_TIME});
-		if ($data_age_seconds < 600) {
-			return $ENV{connect_method_info}{$imagerevision_id};
-		}
-		else {
-			notify($ERRORS{'DEBUG'}, 0, "retrieving current connect method info for imagerevision $imagerevision_id from database, cached data is stale: $data_age_seconds seconds old");
+		my $connect_method_id = (keys(%{$ENV{connect_method_info}{$imagerevision_id}}))[0];
+		if ($connect_method_id) {
+			# Check the time the info was last retrieved
+			my $data_age_seconds = (time - $ENV{connect_method_info}{$imagerevision_id}{$connect_method_id}{RETRIEVAL_TIME});
+			if ($data_age_seconds < 600) {
+				return $ENV{connect_method_info}{$imagerevision_id};
+			}
+			else {
+				notify($ERRORS{'DEBUG'}, 0, "retrieving current connect method info for imagerevision $imagerevision_id from database, cached data is stale: $data_age_seconds seconds old");
+			}
 		}
 	}
 	
@@ -10020,6 +10023,7 @@ EOF
 	# Transform the array of database rows into a hash
 	my $connect_method_info = {};
 	
+	my $timestamp = time;
 	for my $row (@selected_rows) {	
 		notify($ERRORS{'DEBUG'}, 0, $row->{"connectmethod-name"} . ": " .
 		"connectmethodid=" . $row->{"connectmethod-id"} . ", " .
@@ -10048,11 +10052,11 @@ EOF
 				$connect_method_info->{$connectmethod_id}{$table}{$column} = $value;
 			}
 		}
+		$connect_method_info->{$connectmethod_id}{RETRIEVAL_TIME} = $timestamp;
 	}
 
 	#notify($ERRORS{'DEBUG'}, 0, "retrieved connect method info:\n" . format_data($connect_method_info));
 	$ENV{connect_method_info}{$imagerevision_id} = $connect_method_info;
-	$ENV{connect_method_info}{$imagerevision_id}{RETRIEVAL_TIME} = time;
 	return $ENV{connect_method_info}{$imagerevision_id};
 }
 
