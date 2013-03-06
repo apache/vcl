@@ -7302,9 +7302,16 @@ sub get_user_info {
 		return;
 	}
 	
-	if (!$no_cache && $ENV{user_info}{$user_identifier}) {
-		notify($ERRORS{'DEBUG'}, 0, "returning cached user info: $user_identifier");
-		return $ENV{user_info}{$user_identifier};
+	# Check if cached user info exists
+	if (!$no_cache && defined($ENV{user_info}{$user_identifier})) {
+		# Check the time the info was last retrieved
+		my $data_age_seconds = (time - $ENV{user_info}{$user_identifier}{RETRIEVAL_TIME});
+		if ($data_age_seconds < 600) {
+			return $ENV{user_info}{$user_identifier};
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "retrieving current user info for '$user_identifier' from database, cached data is stale: $data_age_seconds seconds old");
+		}
 	}
 	notify($ERRORS{'DEBUG'}, 0, "retrieving user info: $user_identifier");
 	
