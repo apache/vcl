@@ -1078,6 +1078,7 @@ CREATE TABLE IF NOT EXISTS `user` (
   `showallgroups` tinyint(1) unsigned NOT NULL default '0',
   `lastupdated` datetime NOT NULL default '0000-00-00 00:00:00',
   `validated` tinyint(1) unsigned NOT NULL default '1',
+  `sshPublicKeys` text,
   PRIMARY KEY  (`id`),
   UNIQUE KEY `unityid` (`unityid`,`affiliationid`),
   UNIQUE KEY `uid` (`uid`),
