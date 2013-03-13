@@ -162,6 +162,7 @@ our @EXPORT = qw(
   insert_reload_request
   insert_request
   insertloadlog
+  is_IP_assigned_query
   is_management_node_process_running
   is_inblockrequest
   is_public_ip_address
@@ -1370,7 +1371,7 @@ sub isconnected {
 		if ($image_os_type =~ /windows/i) {
 			#notify($ERRORS{'OK'},0,"checking $nodename $ipaddress");
 			undef @SSHCMD;
-			@SSHCMD = run_ssh_command($shortname, $identity_keys, "netstat -an", "root", 22, 1);
+			@SSHCMD = run_ssh_command($shortname, $identity_keys, "netstat -an", "root", 22, 0);
 			foreach my $line (@{$SSHCMD[1]}) {
 				chomp($line);
 				if ($line =~ /Connection refused/) {
@@ -1390,7 +1391,7 @@ sub isconnected {
 		} ## end if ($osname =~ /win|vmwarewin/)
 		elsif ($image_os_type =~ /linux/i) {
 			undef @SSHCMD;
-			@SSHCMD = run_ssh_command($nodename, $identity_keys, "netstat -an", "root", 22, 1);
+			@SSHCMD = run_ssh_command($nodename, $identity_keys, "netstat -an", "root", 22, 0);
 			foreach my $line (@{$SSHCMD[1]}) {
 				chomp($line);
 				if ($line =~ /Warning/) {
@@ -7413,6 +7414,7 @@ EOF
 	if (!defined($user_info->{IMid})) {
 		$user_info->{IMid} = '';
 	}
+
 	
 	# Affiliation specific changes
 	# Check if the user's affiliation is listed in the management node's NOT_STANDALONE parameter
@@ -10357,6 +10359,55 @@ sub get_current_image_contents_noDS {
    return @{$cat_output};
 }
 
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 is_IP_assigned_query
+
+  Parameters  : IP address
+  Returns     :  boolean 1=true, 0=false
+  Description : checks if IP address exists in db
+
+=cut
+
+sub is_IP_assigned_query {
+	
+	my ($IPaddress) = @_;
+
+   if (!defined($IPaddress)) {
+      notify($ERRORS{'WARNING'}, 0, "IPaddress  argument was not supplied");
+      return;
+   }	
+
+   my $select_statement = <<EOF;
+SELECT
+computer.id AS computer_id,
+computer.hostname AS computer_hostname,
+computer.stateid AS computer_stateid,
+state.name AS state_name
+FROM computer, state
+WHERE
+computer.IPaddress = '$IPaddress' AND
+computer.stateid = state.id AND
+state.name != 'deleted' AND
+computer.vmhostid IS NOT NULL
+EOF
+
+   # Call the database select subroutine
+   my @selected_rows = database_select($select_statement);
+
+   # Check to make sure 1 row was returned
+   if (scalar @selected_rows == 0) {
+      notify($ERRORS{'OK'}, 0, "zero rows were returned from database select statement $IPaddress is available");
+      return 0;
+   }
+	elsif (scalar @selected_rows >= 1) {
+      notify($ERRORS{'OK'}, 0, scalar @selected_rows . " rows were returned from database select statement: $IPaddress is assigned");
+      return 1;
+   }
+
+	return 1;	
+		
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 

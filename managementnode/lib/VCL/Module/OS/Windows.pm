@@ -5782,7 +5782,8 @@ sub get_network_configuration {
 	}
 	
 	$self->{network_configuration} = $network_configuration;
-	notify($ERRORS{'DEBUG'}, 0, "retrieved network configuration:\n" . format_data($self->{network_configuration}));
+	#can produce large output, if you need to monitor the configuration setting uncomment the below output statement
+	#notify($ERRORS{'DEBUG'}, 0, "retrieved network configuration:\n" . format_data($self->{network_configuration}));
 	return $self->{network_configuration};
 }
 

@@ -872,10 +872,18 @@ sub server_request_set_fixedIP {
          if(!$self->update_fixedIP_info()) {
             notify($ERRORS{'WARNING'}, 0, "Unable to update information related fixedIP for server_request $server_request_id");
          }    
+
+			#Confirm requested IP is not being used
+			if (!$self->confirm_fixedIP_is_available()) {
+				#failed, insert into loadlog, fail reservation	
+				insertloadlog($reservation_id, $computer_id, "failed","$server_request_fixedIP is NOT available");
+				return 0;
+			}
          # Try to set the static public IP address using the OS module
            if ($self->can("set_static_public_address")) {
               if ($self->set_static_public_address()) {
-                 notify($ERRORS{'DEBUG'}, 0, "set static public IP address on $computer_node_name using OS module's set_static_public_address() method");                $self->data->set_computer_ip_address($server_request_fixedIP);
+                 notify($ERRORS{'DEBUG'}, 0, "set static public IP address on $computer_node_name using OS module's set_static_public_address() method");                
+						$self->data->set_computer_ip_address($server_request_fixedIP);
 
                 # Delete cached network configuration information so it is retrieved next time it is needed
                 delete $self->{network_configuration};
@@ -893,6 +901,7 @@ sub server_request_set_fixedIP {
            }
            else {
               notify($ERRORS{'WARNING'}, 0, "failed to set static public IP address on $computer_node_name");
+				  insertloadlog($reservation_id, $computer_id, "failed"," Not able to assigne IPaddress $server_request_fixedIP");
               return 0;
            }
         }
@@ -904,6 +913,52 @@ sub server_request_set_fixedIP {
 
 	return 1;
 
+}
+
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 confirm_fixedIP_is_available
+
+ Parameters  : none
+ Returns     : If successful: true
+					If failed: 0
+ Description : Preforms checks to confirm the requested IP is not being used
+					-- Check VCL database computer table for IP
+					-- try to ping the IP
+					-- future; good to check with upstream network switch or control
+
+=cut
+#/////////////////////////////////////////////////////////////////////////////
+
+sub confirm_fixedIP_is_available {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+
+	my $reservation_id = $self->data->get_reservation_id() || return;
+	my $computer_id = $self->data->get_computer_id() || return;
+	my $computer_node_name = $self->data->get_computer_node_name() || return;   
+	my $server_request_id            = $self->data->get_server_request_id();
+	my $server_request_fixedIP       = $self->data->get_server_request_fixedIP(); 
+	
+	#check VCL computer table
+	if(is_IP_assigned_query($server_request_fixedIP)) {
+		notify($ERRORS{'WARNING'}, 0, "$server_request_fixedIP is already assigned");
+		insertloadlog($reservation_id, $computer_id, "failed","$server_request_fixedIP is already assigned");
+		return 0;
+	}
+
+	#Is IP pingable	
+	if(_pingnode($server_request_fixedIP)) {
+		notify($ERRORS{'WARNING'}, 0, "$server_request_fixedIP is answering ping test");
+		insertloadlog($reservation_id, $computer_id, "failed","$server_request_fixedIP is answering ping test, but is not assigned in VCL database");
+		return 0;	
+	}
+
+	return 1;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -2418,8 +2473,9 @@ sub manage_server_access {
 	my $server_request_admingroupid = $self->data->get_server_request_admingroupid();
 	my $server_request_logingroupid = $self->data->get_server_request_logingroupid();
 	my $user_login_id_owner         = $self->data->get_user_login_id();
+	my $user_sshPublicKeys 			  = $self->data->get_user_sshPublicKeys();
 	my $user_id_owner		           = $self->data->get_user_id();
-	my $image_os_type 		= $self->data->get_image_os_type();
+	my $image_os_type 				  = $self->data->get_image_os_type();
 	my $request_laststate_name      = $self->data->get_request_laststate_name();
 
 	# Build list of users.
@@ -2449,6 +2505,7 @@ sub manage_server_access {
 			my ($username,$uid,$vcl_user_id) = 0;
 			($username,$uid,$vcl_user_id) = split(/:/, $str);
 			my ($correct_username, $user_domain) = split /@/, $username;
+         $user_hash{$vcl_user_id}{"user_info"} = get_user_info($vcl_user_id);
          $user_hash{$vcl_user_id}{"username"} = $correct_username;
 			$user_hash{$vcl_user_id}{"uid"} = $uid;
 			$user_hash{$vcl_user_id}{"vcl_user_id"} = $vcl_user_id;
@@ -2463,6 +2520,7 @@ sub manage_server_access {
 			($username, $uid,$vcl_user_id) = split(/:/, $str);
 			my ($correct_username, $user_domain) = split /@/, $username;
 			if (!exists($user_hash{$uid})) {
+				$user_hash{$vcl_user_id}{"user_info"} = get_user_info($vcl_user_id);
 				$user_hash{$vcl_user_id}{"username"} = $correct_username;
 				$user_hash{$vcl_user_id}{"uid"}	= $uid;
 				$user_hash{$vcl_user_id}{"vcl_user_id"}	= $vcl_user_id;
@@ -2488,7 +2546,9 @@ sub manage_server_access {
          $allow_list .= " $user_login_id_owner" if ($allow_list !~ /$user_login_id_owner/) ;
 			next;
 		}
-		my $standalone = 0;
+		#my $standalone = 0;
+		my $standalone = $user_hash{$userid}{user_info}{STANDALONE};
+
 		if(!$self->user_exists($user_hash{$userid}{username})){
 			delete($res_accounts{$userid});
 		}
@@ -2496,13 +2556,13 @@ sub manage_server_access {
 		if(!exists($res_accounts{$userid}) || $request_laststate_name eq "reinstall" ){
 			# check affiliation
 			notify($ERRORS{'DEBUG'}, 0, "checking affiliation for $userid");
-			my $affiliation_name = get_user_affiliation($user_hash{$userid}{vcl_user_id}); 
-			if(defined($affiliation_name)) {
+			#my $affiliation_name = get_user_affiliation($user_hash{$userid}{vcl_user_id}); 
+			#if(defined($affiliation_name)) {
 
-				if(!(grep(/$affiliation_name/, split(/,/, $not_standalone_list) ))) {
-					$standalone = 1;
-				}
-			}
+			#	if(!(grep(/$affiliation_name/, split(/,/, $not_standalone_list) ))) {
+			#		$standalone = 1;
+			#	}
+			#}
 			
 			if($request_laststate_name ne "reinstall" ){	
 				$user_hash{$userid}{"passwd"} = 0;
@@ -2530,7 +2590,7 @@ sub manage_server_access {
 			}
 	
 			# Create user on the OS
-			if($self->create_user($user_hash{$userid}{username},$user_hash{$userid}{passwd},$user_hash{$userid}{uid},$user_hash{$userid}{rootaccess},$standalone)) {
+			if($self->create_user($user_hash{$userid}{username},$user_hash{$userid}{passwd},$user_hash{$userid}{uid},$user_hash{$userid}{rootaccess},$standalone,$user_hash{$userid}{user_info}{user_sshPublicKeys})) {
 				notify($ERRORS{'OK'}, 0, "Successfully created user $user_hash{$userid}{username} on $computer_node_name");
 			}
 			else {

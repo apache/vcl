@@ -914,12 +914,29 @@ sub delete_user {
 		return 0;
 	}
 	
+	
 	if ($self->user_logged_in($user_login_id)) {
 		notify($ERRORS{'OK'}, 0, "user $user_login_id is logged in, logging of user");
 		if ($self->logoff_user($user_login_id)) {
 		
 		}
 	}
+
+	#Clean out any public ssh identity keys 
+	my $home_network_share_cmd = "df /home/$user_login_id";
+   my ($exit_status, $output) = $self->execute($home_network_share_cmd);
+   if(grep(/dev/, @$output)){
+     # confirm .ssh directory exists
+     # Make directory
+     my $rm_keys_cmd = "/bin/rm /home/$user_login_id/.ssh/authorized_keys";
+     if ($self->execute($rm_keys_cmd)) {
+         notify($ERRORS{'DEBUG'}, 0, "removed /home/$user_login_id/.ssh/authorized_keys file");
+     }
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "Detected network mounted home directory, will not remove authorized_keys: @$output");
+	}
+	
 	# Use userdel to delete the user
 	# Do not use userdel -r, it will affect HPC user storage for HPC installs
 	my $user_delete_command = "/usr/sbin/userdel $user_login_id";
@@ -1279,7 +1296,7 @@ sub is_connected {
 	my $remote_ip          = $self->data->get_reservation_remote_ip();
 	my $computer_ipaddress = $self->data->get_computer_ip_address();
 	
-	my @SSHCMD = run_ssh_command($computer_node_name, $identity, "netstat -an", "root", 22, 1);
+	my @SSHCMD = run_ssh_command($computer_node_name, $identity, "netstat -an", "root", 22, 0);
 	foreach my $line (@{$SSHCMD[1]}) {
 		chomp($line);
 		next if ($line =~ /Warning/);
@@ -2168,7 +2185,8 @@ sub get_network_configuration {
 	}
 	
 	$self->{network_configuration} = $network_configuration;
-	notify($ERRORS{'DEBUG'}, 0, "retrieved network configuration:\n" . format_data($self->{network_configuration}));
+	#can produce large output, if you need to monitor the configuration setting uncomment the below output statement
+	#notify($ERRORS{'DEBUG'}, 0, "retrieved network configuration:\n" . format_data($self->{network_configuration}));
 	return $self->{network_configuration};
 }
 
@@ -2366,6 +2384,7 @@ sub create_user {
 	my $user_uid = shift;
 	my $adminoverride = shift;
 	my $user_standalone = shift;
+	my $user_sshPublicKeys = shift;
 	
 	if (!$username) {
 		$username = $self->data->get_user_login_id();
@@ -2385,6 +2404,11 @@ sub create_user {
 	if (!$user_standalone) {
 		$user_standalone      = $self->data->get_user_standalone();
 		notify($ERRORS{'OK'}, 0, "user_standalone not provided, pulling from datastructure");
+	}
+	
+	if ( !defined($user_sshPublicKeys) ) {
+		$user_sshPublicKeys = $self->data->get_user_sshPublicKeys();
+		notify($ERRORS{'OK'}, 0, "user_sshPublicKeys not provided, pulling from datastructure");
 	}
 
 	#adminoverride, if 0 use value from database for $imagemeta_rootaccess
@@ -2452,7 +2476,31 @@ sub create_user {
 			notify($ERRORS{'CRITICAL'}, 0, "failed to add $username to /etc/sudoers");
 		}
 	} ## end if ($imagemeta_rootaccess)
-	
+
+	# Add user's public ssh identity keys if exists
+	if( $user_sshPublicKeys ) {
+		#Only add keys to home directories that are local,
+		#should not add network mounted filesystems as the clean up process will delete the key
+		my $home_network_share_cmd = "df /home/$username";
+		my ($exit_status, $output) = $self->execute($home_network_share_cmd);
+		if(grep(/dev/, @$output)){
+			# confirm .ssh directory exists
+			# Make directory
+			my $mkdir = "mkdir /home/$username/.ssh";
+			if ($self->execute($mkdir)) {
+    			notify($ERRORS{'DEBUG'}, 0, "created /home/$username/.ssh directory");
+			}
+			#concatenate user's sshPublicKeys to authorized_keys file
+			my $keys_cat_cmd = "echo \"$user_sshPublicKeys\" >> /home/$username/.ssh/authorized_keys";
+			if ($self->execute($keys_cat_cmd)) {
+         	notify($ERRORS{'DEBUG'}, 0, "copied public keys to /home/$username/.ssh/authorized_keys");
+      	}
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "/home/$username is a network share, skipping adding public ssh keys: @$output");
+		}
+	}	
+
 	return 1;
 } ## end sub create_user
 
@@ -3541,7 +3589,8 @@ sub get_firewall_configuration {
 		}
 	}
 	
-	notify($ERRORS{'DEBUG'}, 0, "retrieved firewall configuration from $computer_node_name:\n" . format_data($firewall_configuration));
+	#The below notify statement can produce large amounts of output over time, if needed to debug a reservation, uncomment the line
+	#notify($ERRORS{'DEBUG'}, 0, "retrieved firewall configuration from $computer_node_name:\n" . format_data($firewall_configuration));
 	return $firewall_configuration;
 	
 	
