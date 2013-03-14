@@ -427,8 +427,8 @@ function XMLRPCgetRequestConnectData($requestid, $remoteIP) {
 	if(! preg_match('/^([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})$/', $remoteIP, $matches) ||
 	   $matches[1] < 1 || $matches[1] > 223 ||
 	   $matches[2] > 255 ||
-		$matches[3] > 255 ||
-		$matches[4] > 255) {
+	   $matches[3] > 255 ||
+	   $matches[4] > 255) {
 		return array('status' => 'error',
 		             'errorcode' => 2,
 		             'errormsg' => 'invalid IP address');
@@ -659,6 +659,13 @@ function XMLRPCsetRequestEnding($requestid, $end) {
 		             'errorcode' => 1,
 		             'errormsg' => 'unknown requestid');
 
+	$maxend = datetimeToUnix("2038-01-01 00:00:00");
+	if($end < 0 || $end > $maxend) {
+		return array('status' => 'error',
+		             'errorcode' => 36,
+		             'errormsg' => "received invalid input for end");
+	}
+
 	$startts = datetimeToUnix($request['start']);
 	if($end % (15 * 60))
 		$end= unixFloor15($end) + (15 * 60);
@@ -832,7 +839,7 @@ function XMLRPCgetRequestIds() {
 /// \param $end - mysql datetime for the end time
 /// \param $numMachines - number of computers to allocate
 /// \param $usergroupid - id of user group for checking user access to machines
-/// \param $ignoreprivileges (optional, default=0) - 0 (false) or 1 (true) - set
+/// \param $ignoreprivileges  - (optional, default=0) 0 (false) or 1 (true) - set
 /// to 1 to select computers from any that are mapped to be able to run the
 /// image; set to 0 to only select computers from ones that are both mapped and
 /// that users in the usergroup assigned to this block allocation have been
@@ -877,6 +884,59 @@ function XMLRPCblockAllocation($imageid, $start, $end, $numMachines,
 		             'errorcode' => 34,
 		             'errormsg' => 'access denied for managing block allocations');
 	}
+
+	# valid $imageid
+	$resources = getUserResources(array("imageAdmin", "imageCheckOut"));
+	$resources["image"] = removeNoCheckout($resources["image"]);
+	if(! array_key_exists($imageid, $resources['image'])) {
+		return array('status' => 'error',
+		             'errorcode' => 3,
+		             'errormsg' => "access denied to $imageid");
+	}
+
+	# validate $start and $end
+	$dtreg = '([0-9]{4})-([0-9]{2})-([0-9]{2}) ([0-9]{2}):([0-9]{2}):([0-9]{2})';
+	$startts = datetimeToUnix($start);
+	$endts = datetimeToUnix($end);
+	$maxend = datetimeToUnix("2038-01-01 00:00:00");
+	if(! preg_match("/^$dtreg$/", $start) || $startts < 0 ||
+	   $startts > $maxend) {
+		return array('status' => 'error',
+		             'errorcode' => 4,
+		             'errormsg' => "received invalid input for start");
+	}
+	if(! preg_match("/^$dtreg$/", $end) || $endts < 0 ||
+	   $endts > $maxend) {
+		return array('status' => 'error',
+		             'errorcode' => 36,
+		             'errormsg' => "received invalid input for end");
+	}
+
+	# validate $numMachines
+	if(! is_numeric($numMachines) || $numMachines < MIN_BLOCK_MACHINES ||
+	   $numMachines > MAX_BLOCK_MACHINES) {
+		return array('status' => 'error',
+		             'errorcode' => 64,
+		             'errormsg' => 'The submitted number of seats must be between ' . MIN_BLOCK_MACHINES . ' and ' . MAX_BLOCK_MACHINES . '.');
+	}
+
+	# validate $usergroupid
+	$groups = getUserGroups();
+	if(! array_key_exists($usergroupid, $groups)) {
+		return array('status' => 'error',
+		             'errorcode' => 67,
+		             'errormsg' => 'Submitted user group does not exist');
+	}
+
+	# validate ignoreprivileges
+	if(! is_numeric($ignoreprivileges) ||
+	   $ignoreprivileges < 0 ||
+		$ignoreprivileges > 1) {
+		return array('status' => 'error',
+		             'errorcode' => 86,
+		             'errormsg' => 'ignoreprivileges must be 0 or 1');
+	}
+
 	$ownerid = getUserlistID('vclreload@Local');
 	$name = "API:$start";
 	$managementnodes = getManagementNodes('future');
@@ -920,6 +980,42 @@ function XMLRPCblockAllocation($imageid, $start, $end, $numMachines,
 	       .        "'$end')";
 	doQuery($query, 101);
 	$btid = dbLastInsertID();
+	$query = "INSERT INTO blockWebDate "
+	       .        "(blockRequestid, "
+	       .        "start, "
+	       .        "end, "
+	       .        "days) "
+	       . "VALUES "
+	       .        "($brid, "
+	       .        "'$start', "
+	       .        "'$end', "
+	       .        "0)";
+	doQuery($query, 101);
+	$sh = date('g', $startts);
+	$smi = date('i', $startts);
+	$sme = date('a', $startts);
+	$eh = date('g', $startts);
+	$emi = date('i', $startts);
+	$eme = date('a', $startts);
+	$query = "INSERT INTO blockWebTime "
+	       .        "(blockRequestid, "
+	       .        "starthour, "
+	       .        "startminute, "
+	       .        "startmeridian, "
+	       .        "endhour, "
+	       .        "endminute, "
+	       .        "endmeridian, "
+	       .        "`order`) "
+	       . "VALUES "
+	       .        "($brid, "
+	       .        "$sh,"
+	       .        "$smi,"
+	       .        "'$sme',"
+	       .        "$eh,"
+	       .        "$emi,"
+	       .        "'$eme',"
+	       .        "0)";
+	doQuery($query, 101);
 	$return = XMLRPCprocessBlockTime($btid, $ignoreprivileges);
 	$return['blockTimesid'] = $btid;
 	return $return;
@@ -930,7 +1026,7 @@ function XMLRPCblockAllocation($imageid, $start, $end, $numMachines,
 /// \fn XMLRPCprocessBlockTime($blockTimesid, $ignoreprivileges)
 ///
 /// \param $blockTimesid - id from the blockTimes table
-/// \param $ignoreprivileges (optional, default=0) - 0 (false) or 1 (true) - set
+/// \param $ignoreprivileges - (optional, default=0) 0 (false) or 1 (true) - set
 /// to 1 to select computers from any that are mapped to be able to run the
 /// image; set to 0 to only select computers from ones that are both mapped and
 /// that users in the usergroup assigned to this block allocation have been
@@ -974,6 +1070,23 @@ function XMLRPCprocessBlockTime($blockTimesid, $ignoreprivileges=0) {
 		             'errorcode' => 34,
 		             'errormsg' => 'access denied for managing block allocations');
 	}
+
+	# validate $blockTimesid
+	if(! is_numeric($blockTimesid)) {
+		return array('status' => 'error',
+		             'errorcode' => 77,
+		             'errormsg' => 'Invalid blockTimesid specified');
+	}
+
+	# validate ignoreprivileges
+	if(! is_numeric($ignoreprivileges) ||
+	   $ignoreprivileges < 0 ||
+		$ignoreprivileges > 1) {
+		return array('status' => 'error',
+		             'errorcode' => 86,
+		             'errormsg' => 'ignoreprivileges must be 0 or 1');
+	}
+
 	$return = array('status' => 'success');
 	$query = "SELECT bt.start, "
 	       .        "bt.end, "
@@ -1015,7 +1128,10 @@ function XMLRPCprocessBlockTime($blockTimesid, $ignoreprivileges=0) {
 		             'errormsg' => 'failure to communicate with database');
 	}
 	$compCompleted = $row['allocated'];
-	$compsPerAlloc = 1 + count($images[$rqdata['imageid']]['subimages']);
+	if(array_key_exists('subimages', $images[$rqdata['imageid']]))
+		$compsPerAlloc = 1 + count($images[$rqdata['imageid']]['subimages']);
+	else
+		$compsPerAlloc = 1;
 	$toallocate = ($rqdata['numMachines'] * $compsPerAlloc) - $compCompleted;
 	if($toallocate == 0)
 		return array('status' => 'completed');
@@ -1037,7 +1153,7 @@ function XMLRPCprocessBlockTime($blockTimesid, $ignoreprivileges=0) {
 			$userids = array_splice($userids, 0, $reqToAlloc);
 	}
 
-	# staggering: stagger start times for this round (ie, don't worry about
+	# staggering: stagger start times for this round (ie, do not worry about
 	#   previous processing of this block time) such that there is 1 minute
 	#   between the start times for each allocation
 	$stagExtra = $reqToAlloc * 60;
@@ -1102,17 +1218,17 @@ function XMLRPCprocessBlockTime($blockTimesid, $ignoreprivileges=0) {
 			$blockCompVals[] = "($blockTimesid, $compid, $subimageid, $reqid)";
 
 			$query = "INSERT INTO reservation "
-					 .        "(requestid, "
-					 .        "computerid, "
-					 .        "imageid, "
-					 .        "imagerevisionid, "
-					 .        "managementnodeid) "
-					 . "VALUES "
-					 .       "($reqid, "
-					 .       "$compid, "
-					 .       "$subimageid, "
-					 .       "$subrevid, "
-					 .       "$mgmtnodeid)";
+			       .        "(requestid, "
+			       .        "computerid, "
+			       .        "imageid, "
+			       .        "imagerevisionid, "
+			       .        "managementnodeid) "
+			       . "VALUES "
+			       .       "($reqid, "
+			       .       "$compid, "
+			       .       "$subimageid, "
+			       .       "$subrevid, "
+			       .       "$mgmtnodeid)";
 			doQuery($query, 101);
 		}
 		semUnlock();
@@ -1172,7 +1288,7 @@ function XMLRPCaddUserGroup($name, $affiliation, $owner, $managingGroup,
 	if(! in_array('groupAdmin', $user['privileges'])) {
 		return array('status' => 'error',
 		             'errorcode' => 16,
-		             'errormsg' => 'access denied for managing user groups');
+		             'errormsg' => 'access denied for managing groups');
 	}
 	$validate = array('name' => $name,
 	                  'affiliation' => $affiliation,
@@ -1187,6 +1303,8 @@ function XMLRPCaddUserGroup($name, $affiliation, $owner, $managingGroup,
 		return $rc;
 	if($custom != 0 && $custom != 1)
 		$custom = 1;
+	if(! $custom)
+		$rc['managingGroupID'] = NULL;
 	$data = array('type' => 'user',
 	              'owner' => $owner,
 	              'name' => $name,
@@ -1218,7 +1336,7 @@ function XMLRPCaddUserGroup($name, $affiliation, $owner, $managingGroup,
 /// \li \b errorcode - error number
 /// \li \b errormsg - error string
 ///
-/// \b success - there will be five additional elements in this case:
+/// \b success - there will be six additional elements in this case:
 /// \li \b owner - user that will be the owner of the group in
 ///                username\@affiliation form
 /// \li \b managingGroup - user group that can manage membership of this one in
@@ -1229,6 +1347,8 @@ function XMLRPCaddUserGroup($name, $affiliation, $owner, $managingGroup,
 ///                       a reservation (including all extensions)
 /// \li \b maxExtendTime - (minutes) max length of time users can request as an
 ///                        extension to a reservation at a time
+/// \li \b overlapResCount - maximum allowed number of overlapping reservations
+/// allowed for users in this group
 ///
 /// \brief gets information about a user group
 ///
@@ -1238,7 +1358,7 @@ function XMLRPCgetUserGroupAttributes($name, $affiliation) {
 	if(! in_array('groupAdmin', $user['privileges'])) {
 		return array('status' => 'error',
 		             'errorcode' => 16,
-		             'errormsg' => 'access denied for managing user groups');
+		             'errormsg' => 'access denied for managing groups');
 	}
 	$validate = array('name' => $name,
 	                  'affiliation' => $affiliation);
@@ -1268,19 +1388,21 @@ function XMLRPCgetUserGroupAttributes($name, $affiliation) {
 		             'errorcode' => 18,
 		             'errormsg' => 'user group with submitted name and affiliation does not exist');
 	}
-	# if not owner and not member of managing group, no access
+	// if not owner and not member of managing group, no access
 	if($user['id'] != $row['ownerid'] && 
 	   ! array_key_exists($row['editgroupid'], $user['groups'])) {
 		return array('status' => 'error',
-		             'errorcode' => 28,
+		             'errorcode' => 69,
 		             'errormsg' => 'access denied to user group with submitted name and affiliation');
 	}
-	return array('status' => 'success',
+	$ret = array('status' => 'success',
 	             'owner' => $row['owner'],
 	             'managingGroup' => "{$row['editgroup']}@{$row['editgroupaffiliation']}",
 	             'initialMaxTime' => $row['initialmaxtime'],
 	             'totalMaxTime' => $row['totalmaxtime'],
-	             'maxExtendTime' => $row['maxextendtime']);
+	             'maxExtendTime' => $row['maxextendtime'],
+	             'overlapResCount' => $row['overlapResCount']);
+	return $ret;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1385,7 +1507,7 @@ function XMLRPCeditUserGroup($name, $affiliation, $newName, $newAffiliation,
 	if(! in_array('groupAdmin', $user['privileges'])) {
 		return array('status' => 'error',
 		             'errorcode' => 16,
-		             'errormsg' => 'access denied for managing user groups');
+		             'errormsg' => 'access denied for managing groups');
 	}
 
 	$updates = array();
@@ -1394,6 +1516,8 @@ function XMLRPCeditUserGroup($name, $affiliation, $newName, $newAffiliation,
 	#   are valid
 	$validate = array('name' => $name,
 	                  'affiliation' => $affiliation);
+	if(get_magic_quotes_gpc())
+		$newOwner = stripslashes($newOwner);
 	if(! empty($newOwner))
 		$validate['owner'] = $newOwner;
 	if(! empty($newManagingGroup))
@@ -1415,7 +1539,10 @@ function XMLRPCeditUserGroup($name, $affiliation, $newName, $newAffiliation,
 		return $rc;
 
 	# get info about group
-	$query = "SELECT ownerid "
+	$query = "SELECT ownerid, "
+	       .        "affiliationid, "
+	       .        "custom, "
+	       .        "courseroll "
 	       . "FROM usergroup "
 	       . "WHERE id = {$rc['id']}";
 	$qh = doQuery($query, 101);
@@ -1424,18 +1551,25 @@ function XMLRPCeditUserGroup($name, $affiliation, $newName, $newAffiliation,
 		             'errorcode' => 18,
 		             'errormsg' => 'user group with submitted name and affiliation does not exist');
 	}
-	# if not owner no access to edit group attributes
-	if($user['id'] != $row['ownerid']) {
+	// if custom and not owner or custom/courseroll and no federated user group access, no access to edit group
+	if(($row['custom'] == 1 && $user['id'] != $row['ownerid']) ||
+	   (($row['custom'] == 0 || $row['courseroll'] == 1) &&
+	   ! checkUserHasPerm('Manage Federated User Groups (global)') &&
+	   (! checkUserHasPerm('Manage Federated User Groups (affiliation only)') ||
+	   $row['affiliationid'] != $user['affiliationid']))) {
 		return array('status' => 'error',
 		             'errorcode' => 32,
 		             'errormsg' => 'access denied to modify attributes for user group with submitted name and affiliation');
 	}
 
 	# validate that newName and newAffiliation are valid
-	if(! empty($newName) || ! empty($newAffiliation)) {
+	if(($name != $newName || $affiliation != $newAffiliation) &&
+	   (! empty($newName) || ! empty($newAffiliation))) {
 		$validate = array('name' => $name,
 		                  'affiliation' => $affiliation);
 		if(! empty($newName)) {
+			if(get_magic_quotes_gpc())
+				$newName = stripslashes($newName);
 			$validate['name'] = $newName;
 			$tmp = mysql_real_escape_string($newName);
 			$updates[] = "name = '$tmp'";
@@ -1454,12 +1588,13 @@ function XMLRPCeditUserGroup($name, $affiliation, $newName, $newAffiliation,
 			$updates[] = "affiliationid = {$rc2['affiliationid']}";
 	}
 
-	if(! empty($newOwner)) {
-		$newownerid = getUserlistID(mysql_real_escape_string($newOwner));
-		$updates[] = "ownerid = $newownerid";
-	}
-	if(! empty($newManagingGroup)) {
-		$updates[] = "editusergroupid = {$rc['managingGroupID']}";
+	if($row['custom']) {
+		if(! empty($newOwner)) {
+			$newownerid = getUserlistID(mysql_real_escape_string($newOwner));
+			$updates[] = "ownerid = $newownerid";
+		}
+		if(! empty($newManagingGroup))
+			$updates[] = "editusergroupid = {$rc['managingGroupID']}";
 	}
 	$sets = implode(',', $updates);
 	if(count($updates) == 0) {
@@ -1500,7 +1635,7 @@ function XMLRPCgetUserGroupMembers($name, $affiliation) {
 	if(! in_array('groupAdmin', $user['privileges'])) {
 		return array('status' => 'error',
 		             'errorcode' => 16,
-		             'errormsg' => 'access denied for managing user groups');
+		             'errormsg' => 'access denied for managing groups');
 	}
 	$validate = array('name' => $name,
 	                  'affiliation' => $affiliation);
@@ -1508,7 +1643,10 @@ function XMLRPCgetUserGroupMembers($name, $affiliation) {
 	if($rc['status'] == 'error')
 		return $rc;
 	$query = "SELECT ownerid, "
-	       .        "editusergroupid AS editgroupid "
+	       .        "editusergroupid AS editgroupid, "
+	       .        "affiliationid, "
+	       .        "custom, "
+	       .        "courseroll "
 	       . "FROM usergroup "
 	       . "WHERE id = {$rc['id']}";
 	$qh = doQuery($query, 101);
@@ -1517,9 +1655,14 @@ function XMLRPCgetUserGroupMembers($name, $affiliation) {
 		             'errorcode' => 18,
 		             'errormsg' => 'user group with submitted name and affiliation does not exist');
 	}
-	# if not owner and not member of managing group, no access
-	if($user['id'] != $row['ownerid'] && 
-	   ! array_key_exists($row['editgroupid'], $user['groups'])) {
+	// if custom and not owner and not member of managing group or 
+	//    custom/courseroll and no federated user group access, no access to delete group
+	if(($row['custom'] == 1 && $user['id'] != $row['ownerid'] &&
+	   ! array_key_exists($row['editgroupid'], $user['groups'])) ||
+	   (($row['custom'] == 0 || $row['courseroll'] == 1) &&
+	   ! checkUserHasPerm('Manage Federated User Groups (global)') &&
+	   (! checkUserHasPerm('Manage Federated User Groups (affiliation only)') ||
+	   $row['affiliationid'] != $user['affiliationid']))) {
 		return array('status' => 'error',
 		             'errorcode' => 28,
 		             'errormsg' => 'access denied to user group with submitted name and affiliation');
@@ -1554,8 +1697,7 @@ function XMLRPCgetUserGroupMembers($name, $affiliation) {
 /// \li \b errorcode - error number
 /// \li \b errormsg - error string
 ///
-/// \b success - users successfully added to the group
-///
+/// \b success - users successfully added to the group\n
 /// \b warning - there was a non-fatal issue that occurred while processing
 /// the call; there will be three additional elements in this case:
 /// \li \b warningcode - warning number
@@ -1571,7 +1713,7 @@ function XMLRPCaddUsersToGroup($name, $affiliation, $users) {
 	if(! in_array('groupAdmin', $user['privileges'])) {
 		return array('status' => 'error',
 		             'errorcode' => 16,
-		             'errormsg' => 'access denied for managing user groups');
+		             'errormsg' => 'access denied for managing groups');
 	}
 	$validate = array('name' => $name,
 	                  'affiliation' => $affiliation);
@@ -1588,7 +1730,7 @@ function XMLRPCaddUsersToGroup($name, $affiliation, $users) {
 		             'errorcode' => 18,
 		             'errormsg' => 'user group with submitted name and affiliation does not exist');
 	}
-	# if not owner and not member of managing group, no access
+	// if not owner and not member of managing group, no access
 	if($user['id'] != $row['ownerid'] && 
 	   ! array_key_exists($row['editgroupid'], $user['groups'])) {
 		return array('status' => 'error',
@@ -1599,8 +1741,10 @@ function XMLRPCaddUsersToGroup($name, $affiliation, $users) {
 	foreach($users as $_user) {
 		if(empty($_user))
 			continue;
+		if(get_magic_quotes_gpc())
+			$_user = stripslashes($_user);
 		$esc_user = mysql_real_escape_string($_user);
-		if(validateUserid($esc_user) == 1)
+		if(validateUserid($_user) == 1)
 			addUserGroupMember($esc_user, $rc['id']);
 		else
 			$fails[] = $_user;
@@ -1635,8 +1779,7 @@ function XMLRPCaddUsersToGroup($name, $affiliation, $users) {
 /// \li \b errorcode - error number
 /// \li \b errormsg - error string
 ///
-/// \b success - users successfully removed from the group
-///
+/// \b success - users successfully removed from the group\n
 /// \b warning - there was a non-fatal issue that occurred while processing
 /// the call; there will be three additional elements in this case:
 /// \li \b warningcode - warning number
@@ -1652,7 +1795,7 @@ function XMLRPCremoveUsersFromGroup($name, $affiliation, $users) {
 	if(! in_array('groupAdmin', $user['privileges'])) {
 		return array('status' => 'error',
 		             'errorcode' => 16,
-		             'errormsg' => 'access denied for managing user groups');
+		             'errormsg' => 'access denied for managing groups');
 	}
 	$validate = array('name' => $name,
 	                  'affiliation' => $affiliation);
@@ -1669,7 +1812,7 @@ function XMLRPCremoveUsersFromGroup($name, $affiliation, $users) {
 		             'errorcode' => 18,
 		             'errormsg' => 'user group with submitted name and affiliation does not exist');
 	}
-	# if not owner and not member of managing group, no access
+	// if not owner and not member of managing group, no access
 	if($user['id'] != $row['ownerid'] && 
 	   ! array_key_exists($row['editgroupid'], $user['groups'])) {
 		return array('status' => 'error',
@@ -1680,9 +1823,11 @@ function XMLRPCremoveUsersFromGroup($name, $affiliation, $users) {
 	foreach($users as $_user) {
 		if(empty($_user))
 			continue;
+		if(get_magic_quotes_gpc())
+			$_user = stripslashes($_user);
 		$esc_user = mysql_real_escape_string($_user);
 		# check that affiliation of user can be determined because getUserlistID
-		#   will abort if it can't find it
+		#   will abort if it cannot find it
 		$affilok = 0;
 		foreach($findAffilFuncs as $func) {
 			if($func($_user, $dump))

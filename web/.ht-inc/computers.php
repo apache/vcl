@@ -1591,15 +1591,17 @@ function submitAddBulkComputers() {
 		$resid = dbLastInsertID();
 
 		// add computer into selected groups
-		$vals = array();
-		foreach(array_keys($data["computergroup"]) as $groupid)
-			$vals[] = "($resid, $groupid)";
-		$allvals = implode(',', $vals);
-		$query = "INSERT INTO resourcegroupmembers "
-	          .        "(resourceid, "
-	          .        "resourcegroupid) "
-	          . "VALUES $allvals";
-		doQuery($query, 101);
+		if(! empty($data['computergroup'])) {
+			$vals = array();
+			foreach(array_keys($data["computergroup"]) as $groupid)
+				$vals[] = "($resid, $groupid)";
+			$allvals = implode(',', $vals);
+			$query = "INSERT INTO resourcegroupmembers "
+			       .        "(resourceid, "
+			       .        "resourcegroupid) "
+			       . "VALUES $allvals";
+			doQuery($query, 101);
+		}
 
 		if($data['stateid'] == 20) {
 			# create vmhost entry
@@ -1620,7 +1622,7 @@ function submitAddBulkComputers() {
 	else
 		print $count - $addedrows . " computers failed to get added<br><br>\n";
 	print "</div>\n";
-	if($domacs)
+	if($domacs && $dopr)
 		generateDhcpForm($dhcpdata);
 	clearPrivCache();
 }
@@ -3139,7 +3141,8 @@ function processComputerInput($checks=1) {
 	   $submitErr |= OWNERERR;
 	   $submitErrMsg[OWNERERR] = "Submitted ID is not valid";
 	}
-	if($return['type'] == 'virtualmachine' && $return['stateid'] == 2) {
+	if($mode == 'confirmAddComputer' &&
+	   $return['type'] == 'virtualmachine' && $return['stateid'] != 10) {
 	   $submitErr |= VMAVAILERR;
 	   $submitErrMsg[VMAVAILERR] = "Virtual machines can only be added in the maintenance state.";
 	}
@@ -3325,6 +3328,9 @@ function processBulkComputerInput($checks=1) {
 			$topplus = implode(':', str_split(dechex($topdec + 1), 2));
 			$start = $botdec;
 			$return['macs'] = array();
+			$eth0macs = array();
+			$eth1macs = array();
+			$toggle = 0;
 			$end = $start + (($endaddrArr[3] - $startaddrArr[3] + 1) * 2);
 			for($i = $start; $i < $end; $i++) {
 				if($i > 16777215) {
@@ -3338,8 +3344,28 @@ function processBulkComputerInput($checks=1) {
 					$tmp2 = str_split($tmp, 2);
 					$return['macs'][] = $topmac . ':' . implode(':', $tmp2);
 				}
+				if($toggle % 2)
+					$eth1macs[] = $topmac . ':' . implode(':', $tmp2);
+				else
+					$eth0macs[] = $topmac . ':' . implode(':', $tmp2);
+				$toggle++;
+
 			}
-			if($i > 16777215 && $topdec == 16777215) {
+			$ineth0s = implode("','", $eth0macs);
+			$ineth1s = implode("','", $eth1macs);
+			$query = "SELECT id "
+			       . "FROM computer "
+			       . "WHERE eth0macaddress IN ('$ineth0s') OR "
+			       .       "eth1macaddress IN ('$ineth1s')";
+			$qh = doQuery($query, 101);
+			if(mysql_num_rows($qh)) {
+				$submitErr |= MACADDRERR;
+				$submitErrMsg[MACADDRERR] = "The specified starting MAC address "
+				                          . "combined with the number of computers "
+				                          . "entered will result in a MAC address "
+				                          . "already assigned to another computer.";
+			}
+			elseif($i > 16777215 && $topdec == 16777215) {
 				$submitErr |= MACADDRERR;
 				$submitErrMsg[MACADDRERR] = "Starting MAC address too large for given "
 				                          . "given number of machines";
@@ -3582,15 +3608,17 @@ function addComputer($data) {
 	$resid = dbLastInsertID();
 
 	// add computer into selected groups
-	$vals = array();
-	foreach(array_keys($data["computergroup"]) as $groupid)
-		$vals[] = "($resid, $groupid)";
-	$allvals = implode(',', $vals);
-	$query = "INSERT INTO resourcegroupmembers "
-	       .        "(resourceid, "
-	       .        "resourcegroupid) "
-	       . "VALUES $allvals";
-	doQuery($query, 101);
+	if(! empty($data['computergroup'])) {
+		$vals = array();
+		foreach(array_keys($data["computergroup"]) as $groupid)
+			$vals[] = "($resid, $groupid)";
+		$allvals = implode(',', $vals);
+		$query = "INSERT INTO resourcegroupmembers "
+		       .        "(resourceid, "
+		       .        "resourcegroupid) "
+		       . "VALUES $allvals";
+		doQuery($query, 101);
+	}
 
 	if($data['stateid'] == 20) {
 		$profileid = processInputVar('profileid', ARG_NUMERIC);

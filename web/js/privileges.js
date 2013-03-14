@@ -130,11 +130,13 @@ function focusFirstNode(id) {
 		}
 		else {
 			fc.setSelected(false);
-			tree._itemNodesMap[id][0].setSelected(true);
+			//tree._itemNodesMap[id][0].setSelected(true);
+			//tree._selectNode(tree._itemNodesMap[id][0]);
 			//dojo.addClass(tree._itemNodesMap[id][0].labelNode, 'privtreeselected');
 		}
+		tree._selectNode(tree._itemNodesMap[id][0]);
 		tree.lastLabel = tree._itemNodesMap[id][0].labelNode;
-		//tree.lastLabel.focus();
+		dojo.addClass(tree._itemNodesMap[id][0].labelNode, 'privtreeselected');
 		tree.lastFocused = tree._itemNodesMap[id][0];
 		var nodename = tree.lastLabel.innerHTML;
 		updateNodeLabels(nodename);
@@ -432,7 +434,10 @@ function submitAddUserGroup() {
 	var obj = dijit.byId('blockgrpchk');
 	if(obj.checked)
 		perms.push('block');
-	for(var i = 0; obj = dijit.byId('usergrpck0:' + i); i++) {
+	obj = dijit.byId('usergrpck0:0');
+	if(obj.checked)
+		perms.push('cascade');
+	for(var i = 1; obj = dijit.byId('usergrpck0:' + i); i++) {
 		if(obj.checked)
 			perms.push(obj.name);
 	}

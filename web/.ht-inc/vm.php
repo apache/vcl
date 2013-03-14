@@ -120,6 +120,10 @@ function editVMInfo() {
 	print "</select><br>\n";
 	print "State of selected vm:<br>\n";
 	print "<span id=vmstate></span>\n";
+	print "<div id=\"noaccessdiv\" class=\"hidden\"><hr>VMs assigned to ";
+	print "host that you<br>do not have access to remove:<br><br>\n";
+	print "<div id=\"noaccess\"></div>\n";
+	print "</div>\n";
 	print "</td>\n";
 	# transfer buttons
 	print "<td style=\"vertical-align: middle;\">\n";
@@ -302,6 +306,7 @@ function vmhostdata() {
 		sendJSON(array('failed' => 'noaccess'));
 		return;
 	}
+	$computers = $resources['computer'];
 
 	# get vms assigned to vmhost
 	$query = "SELECT c.id, "
@@ -314,24 +319,31 @@ function vmhostdata() {
 	       .       "c.stateid = s.id AND "
 	       .       "(vmhostid IS NULL OR "
 	       .       "vmhostid NOT IN (SELECT id FROM vmhost) OR "
-	       .       "c.vmhostid = $vmhostid) "
+	       .       "c.vmhostid = $vmhostid) AND "
+	       .       "c.deleted = 0 "
 	       . "ORDER BY c.hostname";
 	$qh = doQuery($query, 101);
 	$ids = array();
 	$allvms = array();
 	$currvms = array();
+	$noaccess = array();
 	$freevms = array();
 	while($row = mysql_fetch_assoc($qh)) {
 		if($row['vmhostid'] == $vmhostid) {
 			$ids[$row['id']] = $row['hostname'];
-			$currvms[$row['id']] = array('id' => $row['id'],
-			                             'name' => $row['hostname'],
-			                             'state' => $row['state']);
+			if(array_key_exists($row['id'], $computers))
+				$currvms[$row['id']] = array('id' => $row['id'],
+				                             'name' => $row['hostname'],
+				                             'state' => $row['state']);
+			else
+				$noaccess[$row['id']] = array('id' => $row['id'],
+				                              'name' => $row['hostname'],
+				                              'state' => $row['state']);
 			$allvms[] = array('id' => $row['id'],
 			                  'name' => $row['hostname'],
 			                  'inout' => 1);
 		}
-		else {
+		elseif(array_key_exists($row['id'], $computers)) {
 			$freevms[] = array('id' => $row['id'],
 			                   'name' => $row['hostname']);
 			$allvms[] = array('id' => $row['id'],
@@ -341,6 +353,7 @@ function vmhostdata() {
 	}
 	uasort($allvms, "sortKeepIndex");
 	uasort($currvms, "sortKeepIndex");
+	uasort($noaccess, "sortKeepIndex");
 	uasort($freevms, "sortKeepIndex");
 
 	$keys = array_keys($ids);
@@ -370,6 +383,7 @@ function vmhostdata() {
 
 	$allvms = array_merge($allvms);
 	$currvms = array_merge($currvms);
+	$noaccess = array_merge($noaccess);
 	$freevms = array_merge($freevms);
 	$cont = addContinuationsEntry('AJchangeVMprofile', array(), 3600, 1, 0);
 	$arr = array('vmlimit' => $data[$vmhostid]['vmlimit'],
@@ -377,6 +391,7 @@ function vmhostdata() {
 	             'continuation' => $cont,
 	             'allvms' => $allvms,
 	             'currvms' => $currvms,
+	             'noaccess' => $noaccess,
 	             'freevms' => $freevms,
 	             'movevms' => $movevms);
 	sendJSON($arr);

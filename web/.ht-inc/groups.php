@@ -134,8 +134,8 @@ function viewGroups() {
 		$editor = 0;
 		if($usergroups[$id]["ownerid"] == $user["id"])
 			$owner = 1;
-		if(array_key_exists("editgroup", $usergroups[$id]) &&
-		   in_array($usergroups[$id]["editgroup"], $user["groups"]))
+		if(array_key_exists("editgroupid", $usergroups[$id]) &&
+		   array_key_exists($usergroups[$id]["editgroupid"], $user["groups"]))
 			$editor = 1;
 		if(! $owner && ! $editor)
 			continue;
@@ -507,12 +507,13 @@ function editOrAddGroup($state) {
 		else {
 			$cdata = array('type' => $data['type'],
 			               'groupid' => $data['groupid'],
-			               'isowner' => $data['isowner'],
-			               'groupwasnone' => $groupwasnone);
+			               'isowner' => $data['isowner']);
 			if($data['type'] == 'resource')
 				$cdata['resourcetypeid'] = $resourcetypeid;
-			else
+			else {
 				$cdata['selectAffil'] = $selectAffil;
+			        $cdata['groupwasnone'] = $groupwasnone;
+			}
 			$cont = addContinuationsEntry('confirmEditGroup', $cdata);
 			print "      <INPUT type=hidden name=continuation value=\"$cont\">\n";
 			print "      <INPUT type=submit value=\"Confirm Changes\">\n";
@@ -684,6 +685,7 @@ function processGroupInput($checks=1) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function checkForGroupName($name, $type, $id, $extraid) {
+	$name = mysql_real_escape_string($name);
 	if($type == "user")
 		$query = "SELECT id FROM usergroup "
 		       . "WHERE name = '$name' AND "

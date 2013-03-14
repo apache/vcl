@@ -533,9 +533,33 @@ function maintenanceCheck() {
 	$reg = "|" . SCRIPT . "$|";
 	$search = preg_replace($reg, '', $_SERVER['SCRIPT_FILENAME']);
 	$search .= "/.ht-inc/maintenance/";
-	$files = glob("$search*");
+	$files = glob("{$search}[0-9]*");
 	if(! is_array($files))
 		return;
+	if(empty($files)) {
+		dbConnect();
+		$endts = unixFloor15();
+		$enddt = unixToDatetime($endts);
+		$query = "SELECT id "
+		       . "FROM sitemaintenance "
+		       . "WHERE start <= NOW() AND "
+		       .       "end > '$enddt'";
+		$qh = doQuery($query);
+		$ids = array();
+		while($row = mysql_fetch_assoc($qh))
+			$ids[] = $row['id'];
+		if(empty($ids)) {
+			dbDisconnect();
+			return;
+		}
+		$allids = implode(',', $ids);
+		$query = "UPDATE sitemaintenance "
+		       . "SET end = '$enddt' "
+		       . "WHERE id IN ($allids)";
+		doQuery($query, 101, 'vcl', 1);
+		dbDisconnect();
+		return;
+	}  
 	$inmaintenance = 0;
 	foreach($files as $file) {
 		if(! preg_match("|^$search([0-9]{4})([0-9]{2})([0-9]{2})([0-9]{2})([0-9]{2})$|", $file, $matches))
@@ -1993,6 +2017,7 @@ function updateResourcePrivs($group, $node, $adds, $removes) {
 	else
 		$groupid = getResourceGroupID($group);
 	foreach($adds as $type) {
+		$type = mysql_real_escape_string($type);
 		$query = "INSERT IGNORE INTO resourcepriv ("
 		       .        "resourcegroupid, "
 		       .        "privnodeid, "
@@ -2004,6 +2029,7 @@ function updateResourcePrivs($group, $node, $adds, $removes) {
 		doQuery($query, 377);
 	}
 	foreach($removes as $type) {
+		$type = mysql_real_escape_string($type);
 		$query = "DELETE FROM resourcepriv "
 		       . "WHERE resourcegroupid = $groupid AND "
 		       .       "privnodeid = $node AND "
@@ -2319,8 +2345,11 @@ function getUserGroupPrivTypes() {
 /// \param $type - (optional) a name from the resourcetype table, defaults to
 /// be empty
 ///
-/// \return an array of resource group names whose index values are the ids;
-/// the names are the resource type and group name combined as 'type/name'
+/// \return an array of resource groups where each key is a group id and each
+/// value is an array with these elements:\n
+/// \b name - type and name of group combined as type/name\n
+/// \b ownerid - id of owning user group\n
+/// \b owner - name of owning user group
 ///
 /// \brief builds list of resource groups
 ///
@@ -2964,7 +2993,7 @@ function processInputData($data, $type, $addslashes=0, $defaultvalue=NULL) {
 			if(! is_string($value))
 				$return[$index] = $defaultvalue;
 			elseif($addslashes)
-				$return[$index] = addslashes($value);
+				$return[$index] = mysql_real_escape_string($value);
 		}
 		return $return;
 	}
@@ -2973,7 +3002,7 @@ function processInputData($data, $type, $addslashes=0, $defaultvalue=NULL) {
 		if(strlen($return) == 0)
 			$return = $defaultvalue;
 		elseif($addslashes)
-			$return = addslashes($return);
+			$return = mysql_real_escape_string($return);
 	}
 
 	return $return;
@@ -3202,8 +3231,13 @@ function getUsersGroupPerms($usergroupids) {
 ////////////////////////////////////////////////////////////////////////////////
 function checkUserHasPerm($perm, $userid=0) {
 	global $user;
-	if($userid == 0)
-		$perms = $user['groupperms'];
+	if($userid == 0) {
+		if(is_array($user) && array_key_exists('groupperms', $user))
+			$perms = $user['groupperms'];
+		else
+			return 0;
+	}
+
 	else {
 		$usersgroups = getUsersGroups($userid, 1);
 		$perms = getUsersGroupPerms(array_keys($usersgroups));
@@ -3497,6 +3531,7 @@ function isAvailable($images, $imageid, $imagerevisionid, $start, $end,
 		$requestData = getRequestInfo($requestid);
 	$startstamp = unixToDatetime($start);
 	$endstamp = unixToDatetime($end + 900);
+	$vmhostcheckdone = 0;
 	foreach($requestInfo["images"] as $key => $imageid) {
 		# check for max concurrent usage of image
 		if($images[$imageid]['maxconcurrent'] != NULL) {
@@ -3563,6 +3598,8 @@ function isAvailable($images, $imageid, $imagerevisionid, $start, $end,
 				semUnlock();
 				return 0;
 			}
+			// set $virtual to 0 so that it is defined later but skips the additional code
+			$virtual = 0;
 		}
 		// otherwise, build a list of computers
 		else {
@@ -3681,24 +3718,30 @@ function isAvailable($images, $imageid, $imagerevisionid, $start, $end,
 			#   available because they would already fit within the host's available
 			#   RAM
 
-			$query = "CREATE TEMPORARY TABLE VMhostCheck ( "
-			       .    "RAM mediumint unsigned NOT NULL, "
-			       .    "allocRAM mediumint unsigned NOT NULL, "
-			       .    "vmhostid smallint unsigned NOT NULL "
-			       . ") ENGINE=MEMORY";
-			doQuery($query, 101);
+			if(! $vmhostcheckdone) {
+				$vmhostcheckdone = 1;
+				$query = "DROP TEMPORARY TABLE IF EXISTS VMhostCheck";
+				doQuery($query, 101);
 
-			$query = "INSERT INTO VMhostCheck "
-			       . "SELECT c.RAM, "
-			       .        "SUM(i.minram), "
-			       .        "v.id "
-			       . "FROM vmhost v "
-			       . "LEFT JOIN computer c ON (v.computerid = c.id) "
-			       . "LEFT JOIN computer c2 ON (v.id = c2.vmhostid) "
-			       . "LEFT JOIN image i ON (c2.currentimageid = i.id) "
-			       . "WHERE c.stateid = 20 "
-			       . "GROUP BY c.id";
-			doQuery($query, 101);
+				$query = "CREATE TEMPORARY TABLE VMhostCheck ( "
+				       .    "RAM mediumint unsigned NOT NULL, "
+				       .    "allocRAM mediumint unsigned NOT NULL, "
+				       .    "vmhostid smallint unsigned NOT NULL "
+				       . ") ENGINE=MEMORY";
+				doQuery($query, 101);
+
+				$query = "INSERT INTO VMhostCheck "
+				       . "SELECT c.RAM, "
+				       .        "SUM(i.minram), "
+				       .        "v.id "
+				       . "FROM vmhost v "
+				       . "LEFT JOIN computer c ON (v.computerid = c.id) "
+				       . "LEFT JOIN computer c2 ON (v.id = c2.vmhostid) "
+				       . "LEFT JOIN image i ON (c2.currentimageid = i.id) "
+				       . "WHERE c.stateid = 20 "
+				       . "GROUP BY c.id";
+				doQuery($query, 101);
+			}
 
 			$inids = implode(',', $computerids);
 			// if want overbooking, modify the last part of the WHERE clause
@@ -3707,7 +3750,10 @@ function isAvailable($images, $imageid, $imagerevisionid, $start, $end,
 			       . "LEFT JOIN computer c ON (v.vmhostid = c.vmhostid) "
 			       . "LEFT JOIN image i ON (c.currentimageid = i.id) "
 			       . "WHERE c.id IN ($inids) AND "
-			       .       "(v.allocRAM - i.minram + {$images[$imageid]['minram']}) < v.RAM";
+			       .       "(v.allocRAM - i.minram + {$images[$imageid]['minram']}) < v.RAM "
+			       . "ORDER BY (c.procspeed * c.procnumber) DESC, "
+			       .          "c.RAM DESC, "
+			       .          "c.network DESC";
 			$qh = doQuery($query, 101);
 			$newcompids = array();
 			while($row = mysql_fetch_assoc($qh))
@@ -4179,7 +4225,7 @@ function addRequest($forimaging=0, $revisionid=array()) {
 	foreach($requestInfo["images"] as $key => $imageid) {
 		if(array_key_exists($imageid, $revisionid) &&
 		   ! empty($revisionid[$imageid]))
-			$imagerevisionid = $revisionid[$imageid];
+			$imagerevisionid = array_shift($revisionid[$imageid]);
 		else
 			$imagerevisionid = getProductionRevisionid($imageid);
 		$computerid = $requestInfo["computers"][$key];
@@ -4306,8 +4352,9 @@ function findManagementNode($compid, $start, $nowfuture) {
 	       . "FROM reservation rs, "
 	       .      "request rq "
 	       . "WHERE rs.managementnodeid IN ($inlist) AND "
-	       .       "rq.start > \"$start\" AND "
-	       .       "rq.start < \"$end\" "
+	       .       "rs.requestid = rq.id AND "
+	       .       "rq.start > '$start' AND "
+	       .       "rq.start < '$end' "
 	       . "GROUP BY rs.managementnodeid "
 	       . "ORDER BY count";
 	$qh = doQuery($query, 101);
@@ -7497,11 +7544,8 @@ function getTypes($subtype="both") {
 	if($subtype == "resources" || $subtype == "both") {
 		$query = "SELECT id, name FROM resourcetype";
 		$qh = doQuery($query, 366);
-		while($row = mysql_fetch_assoc($qh)) {
-			if($row["name"] == "block" || $row["name"] == "cascade")
-				continue;
+		while($row = mysql_fetch_assoc($qh))
 			$types["resources"][$row["id"]] = $row["name"];
-		}
 	}
 	return $types;
 }
@@ -7574,8 +7618,10 @@ function getUserMaxTimes($uid=0) {
 /// \brief gets the id from the resourcegroup table for $groupname
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function getResourceGroupID($groupdname) {
-	list($type, $name) = explode('/', $groupdname);
+function getResourceGroupID($groupname) {
+	list($type, $name) = explode('/', $groupname);
+	$type = mysql_real_escape_string($type);
+	$name = mysql_real_escape_string($name);
 	$query = "SELECT g.id "
 	       . "FROM resourcegroup g, "
 	       .      "resourcetype t "
@@ -7601,6 +7647,7 @@ function getResourceGroupID($groupdname) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function getResourceTypeID($name) {
+	$name = mysql_real_escape_string($name);
 	$query = "SELECT id "
 	       . "FROM resourcetype "
 	       . "WHERE name = '$name'";
@@ -8488,7 +8535,7 @@ function xmlRPCabort($errcode, $query='') {
 ////////////////////////////////////////////////////////////////////////////////
 function printXMLRPCerror($errcode) {
 	global $XMLRPCERRORS;
-	print "<?xml version=\"1.0\" encoding=\"iso-8859-1\"?>\n";
+	print "<?xml version=\"1.0\" encoding=\"iso-8859-1\"?" . ">\n"; # splitting the ? and > makes vim syntax highlighting work correctly
 	print "<methodResponse>\n";
 	print "<fault>\n";
 	print " <value>\n";
@@ -8526,7 +8573,7 @@ function printXMLRPCerror($errcode) {
 /// \b totalMaxTime \n
 /// \b maxExtendTime
 /// \param $exists - 1 to check if $name\@$affiliation exists, 0 to check that
-///                  they it does not exist
+///                  it does not exist
 ///
 /// \return an array to be returned as an error status or $items with these
 /// extra keys:\n
@@ -8576,8 +8623,7 @@ function validateAPIgroupInput($items, $exists) {
 	}
 	# affiliation
 	if(array_key_exists('affiliation', $items)) {
-		$esc_affiliation = mysql_real_escape_string($items['affiliation']);
-		$affilid = getAffiliationID($esc_affiliation);
+		$affilid = getAffiliationID($items['affiliation']);
 		if(is_null($affilid)) {
 			return array('status' => 'error',
 			             'errorcode' => 17,
@@ -8594,8 +8640,7 @@ function validateAPIgroupInput($items, $exists) {
 			                         . 'and can only contain letters, numbers, and '
 			                         . 'these characters: - _ . :');
 		}
-		$esc_name = mysql_real_escape_string($items['name']);
-		$doesexist = checkForGroupName($esc_name, 'user', '', $affilid);
+		$doesexist = checkForGroupName($items['name'], 'user', '', $affilid);
 		if($exists && ! $doesexist) {
 			return array('status' => 'error',
 			             'errorcode' => 18,
@@ -8607,12 +8652,13 @@ function validateAPIgroupInput($items, $exists) {
 			             'errormsg' => 'existing user group with submitted name and affiliation');
 		}
 		elseif($exists && $doesexist) {
+			$esc_name = mysql_real_escape_string($items['name']);
 			$items['id'] = getUserGroupID($esc_name, $affilid);
 		}
 	}
 	# owner
 	if($custom && array_key_exists('owner', $items)) {
-		if(! validateUserid(mysql_real_escape_string($items['owner']))) {
+		if(! validateUserid($items['owner'])) {
 			return array('status' => 'error',
 			             'errorcode' => 20,
 			             'errormsg' => 'submitted owner is invalid');
@@ -8626,15 +8672,14 @@ function validateAPIgroupInput($items, $exists) {
 			             'errorcode' => 24,
 			             'errormsg' => 'submitted managingGroup is invalid');
 		}
-		$esc_mgName = mysql_real_escape_string($parts[0]);
-		$esc_mgAffil = mysql_real_escape_string($parts[1]);
-		$mgaffilid = getAffiliationID($esc_mgAffil);
-		if(! checkForGroupName($esc_mgName, 'user', '', $mgaffilid)) {
+		$mgaffilid = getAffiliationID($parts[1]);
+		if(is_null($mgaffilid) ||
+		   ! checkForGroupName($parts[0], 'user', '', $mgaffilid)) {
 			return array('status' => 'error',
 			             'errorcode' => 25,
 			             'errormsg' => 'submitted managingGroup does not exist');
 		}
-		$items['managingGroupID'] = getUserGroupID($esc_mgName, $mgaffilid);
+		$items['managingGroupID'] = getUserGroupID($parts[0], $mgaffilid);
 		$items['managingGroupName'] = $parts[0];
 		$items['managingGroupAffilid'] = $mgaffilid;
 	}
@@ -8802,7 +8847,7 @@ function sendHeaders() {
 					print "</head>\n";
 					print "<body>\n";
 					print "Logging out of VCL...";
-					print "<iframe src=\"http://{$_SERVER['SERVER_NAME']}/Shibboleth.sso/Logout\" class=hidden>\n";
+					print "<iframe src=\"https://{$_SERVER['SERVER_NAME']}/Shibboleth.sso/Logout\" class=hidden>\n";
 					print "</iframe>\n";
 					if(array_key_exists('Shib-Identity-Provider', $shibdata) &&
 					   ! empty($shibdata['Shib-Identity-Provider'])) {
@@ -9374,10 +9419,11 @@ function getDojoHTML($refresh) {
 			foreach($dojoRequires as $req) {
 				$rt .= "   dojo.require(\"$req\");\n";
 			}
-			$id = getContinuationVar("scheduleid");
-			$cont = addContinuationsEntry('AJgetScheduleTimesData', array('id' => $id), SECINDAY, 1, 0);
-			$rt .= "   populateTimeStore('$cont');\n";
-			#$rt .= "   setTimeout(function() {populateTimeStore('$cont');}, 1000);\n";
+			if($mode != 'submitAddSchedule') {
+				$id = getContinuationVar("scheduleid");
+				$cont = addContinuationsEntry('AJgetScheduleTimesData', array('id' => $id), SECINDAY, 1, 0);
+				$rt .= "   populateTimeStore('$cont');\n";
+			}
 			$rt .= "   });\n";
 			$rt .= "</script>\n";
 			return $rt;

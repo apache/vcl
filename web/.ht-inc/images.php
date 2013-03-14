@@ -701,6 +701,10 @@ function startImage() {
 		$imageData = getImages(0, $imageid);
 		if($imageData[$imageid]['ownerid'] == $user['id'])
 			$disableUpdate = 0;
+		if($imageData[$imageid]['installtype'] == 'none' ||
+		   $imageData[$imageid]['installtype'] == 'kickstart')
+			$disableUpdate = 1;
+
 	}
 	print "<H2>Create / Update an Image</H2>\n";
 	print "Are you creating a new image from a base image or updating an ";
@@ -2570,6 +2574,16 @@ function addImage($data) {
 	}
 	$data['description'] = mysql_real_escape_string($data['description']);
 	$data['usage'] = mysql_real_escape_string($data['usage']);
+ 
+	# get architecture of base image
+	$query = "SELECT i.architecture "
+	       . "FROM image i, "
+	       .      "imagerevision ir "
+	       . "WHERE ir.imageid = i.id AND "
+	       .       "ir.id = {$data['basedoffrevisionid']}";
+	$qh = doQuery($query, 101);
+	$row = mysql_fetch_assoc($qh);
+	$arch = $row['architecture'];
 
 	$ownerdata = getUserInfo($data['owner'], 1);
 	$ownerid = $ownerdata['id'];
@@ -2587,6 +2601,7 @@ function addImage($data) {
 	       .         "maxconcurrent, "
 	       .         "reloadtime, "
 	       .         "deleted, "
+	       .         "architecture, "
 	       .         "description, "
 	       .         "`usage`, "
 	       .         "basedoffrevisionid) "
@@ -2601,6 +2616,7 @@ function addImage($data) {
 	       .         "{$data["maxconcurrent"]}, "
 	       .         "{$data["reloadtime"]}, "
 	       .         "1, "
+	       .         "'$arch', "
 	       .         "'{$data['description']}', "
 	       .         "'{$data['usage']}', "
 	       .         "{$data['basedoffrevisionid']})";

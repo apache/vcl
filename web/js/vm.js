@@ -99,6 +99,18 @@ function VMHostDataCB(data, ioArgs) {
 	for(var i = 0; i < data.items.freevms.length; i++) {
 		outobj.options[outobj.options.length] = new Option(data.items.freevms[i].name, data.items.freevms[i].id);
 	}
+	if(data.items.noaccess.length) {
+		dojo.removeClass('noaccessdiv', 'hidden');
+		var tmp = new Array();
+		for(var i = 0; i < data.items.noaccess.length; i++) {
+			tmp.push(data.items.noaccess[i].name);
+		}
+		dojo.byId('noaccess').innerHTML = tmp.join('<br>');
+	}
+	else {
+		dojo.addClass('noaccessdiv', 'hidden');
+		dojo.byId('noaccess').innerHTML = '';
+	}
 
 	if(data.items.movevms.length) {
 		document.getElementById('movevms').className = 'shown';
