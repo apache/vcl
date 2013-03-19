@@ -1122,6 +1122,7 @@ function getOSList() {
 /// \b platform - platform the image is for\n
 /// \b osid - osid for the os on the image\n
 /// \b os - os the image contains\n
+/// \b installtype - method used to install image\n
 /// \b minram - minimum amount of RAM needed for image\n
 /// \b minprocnumber - minimum number of processors needed for image\n
 /// \b minprocspeed - minimum speed of processor(s) needed for image\n
@@ -1161,6 +1162,7 @@ function getImages($includedeleted=0, $imageid=0) {
 	       .        "p.name AS platform, "
 	       .        "i.OSid AS osid, "
 	       .        "o.name AS os, "
+	       .        "o.installtype, "
 	       .        "i.minram AS minram, "
 	       .        "i.minprocnumber AS minprocnumber, "
 	       .        "i.minprocspeed AS minprocspeed, "
