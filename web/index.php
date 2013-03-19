@@ -16,7 +16,7 @@
   limitations under the License.
 */
 
-# ASF VCL v2.2.1
+# ASF VCL v2.2.2
 
 @include_once("fckeditor/fckeditor.php");
 require_once(".ht-inc/conf.php");
