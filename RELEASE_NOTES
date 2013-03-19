@@ -1,4 +1,4 @@
-VCL 2.2
+VCL 2.2.2
 
 I. Intro and Description
 
@@ -21,23 +21,32 @@ servers in a server farm or HPC cluster.
 
 II. VCL Roadmap
 
-VCL 2.2.1 (this release)
-  * removed frontend dependency on jpgraph
-  * remove any access control that is hard coded in frontend
-  * added support for VirtualBox hypervisor
-  * many bug fixes and improvements to VMWare support
+VCL 2.2.2 (this release)
+  * Bug fixes
 
-VCL 2.3
-  * Service deployments 
-  * power management
-  * improve cluster reservations
+VCL 2.3.2 (latest 2.3 series release)
+  * Bug fixes
 
 VCL 2.4
-  *  additional and improved hypervisor support
-  * KVM and possibly others (virtual box and XEN)
-  * Allow for additional access methods for environments (port, other protocols, etc)
+  * Configuration management system
+  * Scripted installation
+  * VCL Broker
 
 VCL 2.5
+  * Improve additional connect methods
+  * NAT support
+  * Remove requirement for 2 NICs
+  * Support for Spice remote display protocol
+  * Support for ESX OS for end users
+  * Initial support for EC2 API and OpenStack
+
+VCL 2.6
+  * Power management
+  * Improve cluster reservations
+  * Service deployment configuration management
+  * Initial support for Libcloud
+
+VCL 2.7
   * develop tools for managing both system and user storage
 
 With each release, we'll be working toward making VCL easier to install. As
@@ -51,24 +60,26 @@ III. Getting Involved in the ASF VCL Community
 There are five ways to become involved in the ASF VCL community.
 
 * Join the mailing lists and participate in discussion
-  There are two mailing lists: vcl-user@incubator.apache.org and 
-  vcl-dev@incubator.apache.org. To join vcl-user, send an empty message to
-  vcl-user-subscribe@incubator.apache.org. To join vcl-dev, send an empty
-  message to vcl-dev-subscribe@incubator.apache.org.
+  There are two mailing lists: user@vcl.apache.org and dev@vcl.apache.org.
+  To join user, send an empty message to user-subscribe@vcl.apache.org.
+  To join dev, send an empty message to dev-subscribe@vcl.apache.org.
 
 * Submit bug reports and feature requests to our JIRA bug tracking system.
   See section IV below for more information on doing this.
 
-* Create documentation on our Confluence site. Create an account at
-  http://cwiki.apache.org/confluence/display/VCL/Index and just start adding
-  content. (Note to current community: We should create a page explaining
-  the layout so new people will know where to add content better.)
+* Create documentation changes for our website. Our site is at
 
-* Submit patches through the vcl-dev mailing list and via the JIRA bug
+  http://vcl.apache.org/
+
+  Anonymous contributions can be made by following these instructions:
+
+  http://www.apache.org/dev/cmsref#non-committer
+
+* Submit patches through the dev mailing list and via the JIRA bug
   tracking system. Once you have become familiar with VCL, you can begin
   assisting with the development of it by picking a JIRA issue to fix or by
   adding a feature needed at your site. Then, contribute a patch of your
-  changes through the JIRA tracking system and send a message to the vcl-dev
+  changes through the JIRA tracking system and send a message to the dev
   list explaining what you have done.
 
 * Become an official committer to the project. Once you have shown that you have
@@ -78,7 +89,7 @@ There are five ways to become involved in the ASF VCL community.
   project.
 
 * If you are interested in contributing something to the project, please discuss
-  it on the vcl-dev list BEFORE starting work on it. This allows the community
+  it on the dev list BEFORE starting work on it. This allows the community
   to be involved in decisions and allows current developers to provide some
   guidance.
 
@@ -87,13 +98,13 @@ IV. How to Submit Bugs and Feature Requests
 If you find a bug, please submit a bug report to our JIRA bug tracking system at
 http://issues.apache.org/jira/browse/VCL (you will need to set up an account
 there if you haven't already done so - it's free to anyone). Also, we would
-appreciate it if you mentioned that you filed a bug on the vcl-dev list to make
+appreciate it if you mentioned that you filed a bug on the dev list to make
 sure we don't miss it.
 
 If you would like to requrest a new feature, you can also submit that in the
 same way through JIRA (just select "New Feature" or "Improvement" as the Issue
 Type). Again, it would be helpful if you mentioned that you filed a feature
-request on the vcl-dev list.
+request on the dev list.
 
 After you have created a JIRA issue, you have the option to vote on it to help
 us know how to prioritize issues. You can also "watch" the issue to see when
