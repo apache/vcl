@@ -15,7 +15,7 @@
   limitations under the License.
 */
 
--- Apache VCL version 2.1 to 2.2.1 database schema changes
+-- Apache VCL database upgrade script
 
 -- --------------------------------------------------------
 
