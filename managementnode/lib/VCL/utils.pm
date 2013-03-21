@@ -7451,8 +7451,8 @@ EOF
 	}
 
 	# If usepublickeys =0 && sshpublickeys is defined, disable public keys by setting sshpublickeys=0
-	if (!$user_info->usepublickeys && defined($user_info->sshpublickeys)) {
-			$user_info->sshpublickeys = 0;
+	if (!$user_info->{usepublickeys} && defined($user_info->{sshpublickeys})) {
+			$user_info->{sshpublickeys} = 0;
 	}
 	
 	# For test account only
