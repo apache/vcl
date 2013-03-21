@@ -7449,6 +7449,11 @@ EOF
 		notify($ERRORS{'DEBUG'}, 0, "user's unityid value contains '\@': $user_login_id, changing to $corrected_unity_id");
 		$user_info->{unityid} = $corrected_unity_id;
 	}
+
+	# If usepublickeys =0 && sshpublickeys is defined, disable public keys by setting sshpublickeys=0
+	if (!$user_info->usepublickeys && defined($user_info->sshpublickeys)) {
+			$user_info->sshpublickeys = 0;
+	}
 	
 	# For test account only
 	if ($user_login_id =~ /vcladmin/) {

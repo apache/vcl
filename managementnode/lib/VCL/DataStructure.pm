@@ -445,7 +445,8 @@ $SUBROUTINE_MAPPINGS{user_affiliation_helpaddress} = '$self->request_data->{user
 $SUBROUTINE_MAPPINGS{user_affiliation_name} = '$self->request_data->{user}{affiliation}{name}';
 $SUBROUTINE_MAPPINGS{user_affiliation_sitewwwaddress} = '$self->request_data->{user}{affiliation}{sitewwwaddress}';
 $SUBROUTINE_MAPPINGS{user_imtype_name} = '$self->request_data->{user}{IMtype}{name}';
-$SUBROUTINE_MAPPINGS{user_sshPublicKeys} = '$self->request_data->{user}{sshPublicKeys}';
+$SUBROUTINE_MAPPINGS{user_usePublicKeys} = '$self->request_data->{user}{usepublickeys}';
+$SUBROUTINE_MAPPINGS{user_sshPublicKeys} = '$self->request_data->{user}{sshpublickeys}';
 
 $SUBROUTINE_MAPPINGS{management_node_id} = '$ENV{management_node_info}{id}';
 $SUBROUTINE_MAPPINGS{management_node_ipaddress} = '$ENV{management_node_info}{IPaddress}';
