@@ -408,6 +408,11 @@ sub post_load {
 	
 	# Add a line to currentimage.txt indicating post_load has run
 	$self->set_vcld_post_load_status();
+
+	#Update Hostname to match Public assigned name
+   if($self->update_public_hostname()){
+      notify($ERRORS{'OK'}, 0, "Updated hostname");
+   }
 	
 	return 1;
 
@@ -490,6 +495,7 @@ sub update_public_hostname {
 		return;
 	}
 	notify($ERRORS{'DEBUG'}, 0, "retrieved public IP address of $computer_node_name: $public_ip_address");
+	sleep 5;
 	
 	# Get the hostname for the public IP address
 	my $ipcalc_command = "/bin/ipcalc --hostname $public_ip_address";
@@ -524,7 +530,7 @@ sub update_public_hostname {
 	}
 	
 	# Set the node's hostname to public hostname
-	my $hostname_command = "hostname -v $public_hostname";
+	my $hostname_command = "hostname -v $public_hostname; sed -i -e \"/^HOSTNAME=/d\" /etc/sysconfig/network; echo \"HOSTNAME=$public_hostname\" >> /etc/sysconfig/network";
 	my ($hostname_exit_status, $hostname_output) = $self->execute($hostname_command);
 	if (!defined($hostname_output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to SSH command to set hostname on $computer_node_name to $public_hostname, command: '$hostname_command'");
@@ -2426,20 +2432,17 @@ sub create_user {
 	}
 	
 	my $useradd_string;
-	#if(defined($user_uid) && $user_uid != 0){
-	#	$useradd_string = "/usr/sbin/useradd -u $user_uid -d /home/$username -m $username -g vcl";
-	#}
-	if ($user_standalone) {
-		$useradd_string = "/usr/sbin/useradd -d /home/$username -m $username -g vcl; chown -R $username /home/$username";
+	if(defined($user_uid) && $user_uid != 0){
+		$useradd_string = "/usr/sbin/useradd -u $user_uid -d /home/$username -m $username -g vcl; chown -R $username /home/$username";
 	}
 	else {
-		$useradd_string = "/usr/sbin/useradd -u $user_uid -d /home/$username -m $username -g vcl; chown -R $username /home/$username";
+		$useradd_string = "/usr/sbin/useradd -d /home/$username -m $username -g vcl; chown -R $username /home/$username";
 	}
 	
 	
 	my @sshcmd = run_ssh_command($computer_node_name, $management_node_keys, $useradd_string, "root");
 	foreach my $l (@{$sshcmd[1]}) {
-		if ($l =~ /$username exists/) {
+		if ($l =~ /exists/) {
 			notify($ERRORS{'OK'}, 0, "detected user already has account");
 			if ($self->delete_user($username)) {
 				notify($ERRORS{'OK'}, 0, "user has been deleted from $computer_node_name");
