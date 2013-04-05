@@ -1123,7 +1123,7 @@ sub node_status {
 		# Create a DataStructure object containing data for the computer specified as the argument
 		my $data;
 		eval {
-			$data= new VCL::DataStructure({computer_id => $computer_id});
+			$data= new VCL::DataStructure({computer_identifier => $computer_id});
 		};
 		if ($EVAL_ERROR) {
 			notify($ERRORS{'WARNING'}, 0, "failed to create DataStructure object for computer ID: $computer_id, error: $EVAL_ERROR");
@@ -1384,8 +1384,8 @@ sub get_vmhost_datastructure {
 	eval {
 		$vmhost_data= new VCL::DataStructure({request_data => $request_data,
 																		 reservation_id => $reservation_id,
-																		 computer_id => $vmhost_computer_id,
-																		 image_id => $vmhost_profile_image_id});
+																		 computer_identifier => $vmhost_computer_id,
+																		 image_identifier => $vmhost_profile_image_id});
 	};
 	
 	if ($EVAL_ERROR) {
@@ -2575,7 +2575,7 @@ sub reclaim_vmhost_disk_space {
 		
 		# Create a DataStructure object for the computer
 		my $check_computer_data;
-		eval { $check_computer_data = new VCL::DataStructure({computer_id => $check_computer_id}); };
+		eval { $check_computer_data = new VCL::DataStructure({computer_identifier => $check_computer_id}); };
 		if (!$check_computer_data) {
 			notify($ERRORS{'WARNING'}, 0, "$vmx_file_name can't be deleted, failed to create a DataStructure object for computer $check_computer_id");
 			$vmx_files->{$vmx_file_path}{deletable} = 0;
