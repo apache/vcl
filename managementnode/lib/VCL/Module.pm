@@ -310,7 +310,6 @@ sub create_os_object {
 	# Attempt to create the object
 	if (my $os = ($os_perl_package)->new({data_structure => $self->data})) {
 		my $os_address = sprintf('%x', $os);
-		my $os_image_name = $os->data->get_image_name();
 		notify($ERRORS{'OK'}, 0, "$os_perl_package OS object created, address: $os_address");
 		
 		# Store the OS object if an OS Perl package argument wasn't passed
@@ -363,7 +362,7 @@ sub create_mn_os_object {
 	# Create a DataStructure object containing computer data for the management node
 	my $mn_data;
 	eval {
-		$mn_data = new VCL::DataStructure('image_id' => 'noimage');
+		$mn_data = new VCL::DataStructure('image_identifier' => 'noimage');
 	};
 	
 	# Attempt to load the OS module
@@ -428,8 +427,8 @@ sub create_vmhost_os_object {
 		$vmhost_data = new VCL::DataStructure({
 															request_data => $request_data,
 															reservation_id => $reservation_id,
-															computer_id => $vmhost_computer_id,
-															image_id => $vmhost_profile_image_id
+															computer_identifier => $vmhost_computer_id,
+															image_identifier => $vmhost_profile_image_id
 															}
 														  );
 	};
@@ -536,7 +535,7 @@ sub create_provisioning_object {
 
 =head2 os
 
- Parameters  : None
+ Parameters  : $display_warning (optional)
  Returns     : Process's OS object
  Description : Allows modules to access the reservation's OS object.
 
@@ -545,8 +544,13 @@ sub create_provisioning_object {
 sub os {
 	my $self = shift;
 	
+	my $display_warning = shift;
+	if (!defined($display_warning)) {
+		$display_warning = 1;
+	}
+	
 	if (!$self->{os}) {
-		notify($ERRORS{'WARNING'}, 0, "unable to return OS object, \$self->{os} is not set");
+		notify($ERRORS{'WARNING'}, 0, "unable to return OS object, \$self->{os} is not set") if ($display_warning);
 		return;
 	}
 	else {
@@ -619,6 +623,22 @@ sub provisioner {
 	else {
 		return $self->{provisioner};
 	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 set_data
+
+ Parameters  : $data
+ Returns     : 
+ Description : Sets the DataStructure object for the module to access.
+
+=cut
+
+sub set_data {
+	my $self = shift;
+	my $data = shift;
+	$self->{data} = $data;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -824,8 +844,6 @@ sub code_loop_timeout {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
-	
-	my $computer_node_name = $self->data->get_computer_node_name();
 	
 	my ($code_ref, $args_array_ref, $message, $total_wait_seconds, $attempt_delay_seconds, $message_interval_seconds) = @_;
 	

@@ -388,6 +388,9 @@ $SUBROUTINE_MAPPINGS{image_os_module_pretty_name} = '$self->request_data->{reser
 $SUBROUTINE_MAPPINGS{image_os_module_description} = '$self->request_data->{reservation}{RESERVATION_ID}{image}{OS}{module}{description}';
 $SUBROUTINE_MAPPINGS{image_os_module_perl_package} = '$self->request_data->{reservation}{RESERVATION_ID}{image}{OS}{module}{perlpackage}';
 
+$SUBROUTINE_MAPPINGS{image_os_type_id} = '$self->request_data->{reservation}{RESERVATION_ID}{image}{OS}{OStype}{id}';
+$SUBROUTINE_MAPPINGS{image_os_type_name} = '$self->request_data->{reservation}{RESERVATION_ID}{image}{OS}{OStype}{name}';
+
 $SUBROUTINE_MAPPINGS{image_platform_name} = '$self->request_data->{reservation}{RESERVATION_ID}{image}{platform}{name}';
 
 $SUBROUTINE_MAPPINGS{imagetype_name} = '$self->request_data->{reservation}{RESERVATION_ID}{image}{imagetype}{name}';
@@ -545,32 +548,32 @@ my @request_data : Field : Deep : Arg('Name' => 'request_data', 'Default' => {})
 
 my @blockrequest_data : Field : Arg('Name' => 'blockrequest_data', 'Default' => {}) : Get('Name' => 'blockrequest_data', 'Private' => 1);
 
-=head3 @computer_id
+=head3 @computer_identifier
 
  Data type   : array of scalars
  Description :
 
 =cut
 
-my @computer_id : Field : Arg('Name' => 'computer_id') : Type(scalar) : Get('Name' => 'computer_id', 'Private' => 1);
+my @computer_identifier : Field : Arg('Name' => 'computer_identifier') : Type(scalar) : Get('Name' => 'computer_identifier', 'Private' => 1);
 
-=head3 @image_id
-
- Data type   : array of scalars
- Description :
-
-=cut
-
-my @image_id : Field : Arg('Name' => 'image_id') : Type(scalar) : Get('Name' => 'image_id', 'Private' => 1);
-
-=head3 @imagerevision_id
+=head3 @image_identifier
 
  Data type   : array of scalars
  Description :
 
 =cut
 
-my @imagerevision_id : Field : Arg('Name' => 'imagerevision_id') : Type(scalar) : Get('Name' => 'imagerevision_id', 'Private' => 1);
+my @image_identifier : Field : Arg('Name' => 'image_identifier') : Type(scalar) : Get('Name' => 'image_identifier', 'Private' => 1);
+
+=head3 @image_identifier
+
+ Data type   : array of scalars
+ Description :
+
+=cut
+
+my @imagerevision_identifier : Field : Arg('Name' => 'imagerevision_identifier') : Type(scalar) : Get('Name' => 'imagerevision_identifier', 'Private' => 1);
 
 ##############################################################################
 
@@ -613,19 +616,19 @@ sub _initialize : Init {
 		
 	}
 
-	my $computer_id = $self->computer_id;
-	my $image_id = $self->image_id;
-	my $imagerevision_id = $self->imagerevision_id;
+	my $computer_identifier = $self->computer_identifier;
+	my $image_identifier = $self->image_identifier;
+	my $imagerevision_identifier = $self->imagerevision_identifier;
 	
-	# Get the computer info if the computer_id argument was specified and add it to this object
-	if ($computer_id) {
-		notify($ERRORS{'DEBUG'}, 0, "computer ID argument was specified, retrieving data for computer ID: " . $self->computer_id);
-		my $computer_info = get_computer_info($self->computer_id);
+	# Get the computer info if the computer_identifier argument was specified and add it to this object
+	if ($computer_identifier) {
+		notify($ERRORS{'DEBUG'}, 0, "computer identifier argument was specified, retrieving data for computer: $computer_identifier");
+		my $computer_info = get_computer_info($computer_identifier);
 		if (!$computer_info) {
-			notify($ERRORS{'WARNING'}, 0, "DataStructure object could not be initialized, failed to retrieve data for computer ID: " . $self->computer_id);
+			notify($ERRORS{'WARNING'}, 0, "DataStructure object could not be initialized, failed to retrieve data for computer: $computer_identifier");
 			
 			# Throw an exception because simply returning undefined (return;) does not result in this DataStructure object being undefined
-			Exception::Class::Base->throw( error => "DataStructure object could not be initialized, failed to retrieve data for computer ID: " . $self->computer_id);
+			Exception::Class::Base->throw( error => "DataStructure object could not be initialized, failed to retrieve data for computer: $computer_identifier");
 			return;
 		}
 		
@@ -633,58 +636,56 @@ sub _initialize : Init {
 	}
 	
 	
-	# If either the computer ID, image ID, or imagerevision ID arguments are specified, retrieve appropriate image and imagerevision data
-	if ($imagerevision_id || $image_id || $computer_id) {
+	# If either the computer, image, or imagerevision identifier arguments are specified, retrieve appropriate image and imagerevision data
+	if ($imagerevision_identifier || $image_identifier || $computer_identifier) {
 		my $imagerevision_info;
 		
-		if ($imagerevision_id) {
-			notify($ERRORS{'DEBUG'}, 0, "imagerevision ID argument was specified: $imagerevision_id, DataStructure object will contain image information for this imagerevision ID: $imagerevision_id");
-			$imagerevision_info = get_imagerevision_info($imagerevision_id);
+		if ($imagerevision_identifier) {
+			notify($ERRORS{'DEBUG'}, 0, "imagerevision identifier argument was specified: $imagerevision_identifier, DataStructure object will contain image information for this imagerevision: $imagerevision_identifier");
+			$imagerevision_info = get_imagerevision_info($imagerevision_identifier);
 		}
-		
-		elsif ($image_id) {
-			notify($ERRORS{'DEBUG'}, 0, "image ID argument was specified: $image_id, DataStructure object will contain image information for the production imagerevision of this image");
-			$imagerevision_info = get_production_imagerevision_info($image_id);
+		elsif ($image_identifier) {
+			notify($ERRORS{'DEBUG'}, 0, "image identifier argument was specified: $image_identifier, DataStructure object will contain image information for the production imagerevision of this image");
+			$imagerevision_info = get_production_imagerevision_info($image_identifier);
 		}
-		
-		elsif ($computer_id) {
-			$imagerevision_id = $self->get_computer_imagerevision_id();
+		elsif ($computer_identifier) {
+			my $imagerevision_id = $self->get_computer_imagerevision_id();
 			if (defined($imagerevision_id)) {
-				notify($ERRORS{'OK'}, 0, "computer ID argument was specified ($computer_id) but image and imagerevision ID arguments were not, DataStructure object will contain image information for the computer's current imagerevision ID: $imagerevision_id");
-					  if(!$imagerevision_id) {
-						  notify($ERRORS{'OK'}, 0, "computer ID argument was specified ($computer_id) imagerevision_id is set to $imagerevision_id");
-						  $image_id = $self->get_computer_currentimage_id();
-						  if(defined($image_id)) {
-							  $imagerevision_info = get_production_imagerevision_info($image_id);
-						  }
-						  else {
-							  Exception::Class::Base->throw( error => "DataStructure object could not be initialized, computer's current imagerevision ID could not be retrieved from the current DataStructure data:\n" . format_data($self->get_request_data));
-								return;
-						  }
-					  }
-					  else {
-						  $imagerevision_info = get_imagerevision_info($imagerevision_id);
-					  }
+				notify($ERRORS{'OK'}, 0, "computer identifier argument was specified ($computer_identifier) but image and imagerevision ID arguments were not, DataStructure object will contain image information for the computer's current imagerevision ID: $imagerevision_id");
+				if (!$imagerevision_id) {
+					notify($ERRORS{'OK'}, 0, "computer identifier argument was specified ($computer_identifier) imagerevision_id is set to $imagerevision_id");
+					my $image_id = $self->get_computer_currentimage_id();
+					if (defined($image_id)) {
+						$imagerevision_info = get_production_imagerevision_info($image_id);
+					}
+					else {
+						Exception::Class::Base->throw( error => "DataStructure object could not be initialized, computer's current imagerevision ID could not be retrieved from the current DataStructure data:\n" . format_data($self->get_request_data));
+						return;
+					}
+				}
+				else {
+					$imagerevision_info = get_imagerevision_info($imagerevision_id);
+				}
 			}
 			else {
 				Exception::Class::Base->throw( error => "DataStructure object could not be initialized, computer's current imagerevision ID could not be retrieved from the current DataStructure data:\n" . format_data($self->get_request_data));
-                        return;
+				return;
 			}
 		}
 		
 		if ($imagerevision_info) {
-			$imagerevision_id = $imagerevision_info->{id};
+			my $imagerevision_id = $imagerevision_info->{id};
 			notify($ERRORS{'DEBUG'}, 0, "retrieved data for imagerevision ID: $imagerevision_id");
 			$self->request_data->{reservation}{$self->reservation_id}{imagerevision} = $imagerevision_info;
 		}
 		else {
-			Exception::Class::Base->throw( error => "DataStructure object could not be initialized, failed to retrieve imagerevision data: ");
+			Exception::Class::Base->throw( error => "DataStructure object could not be initialized, failed to retrieve imagerevision data");
 			return;
 		}
 		
-		$image_id = $imagerevision_info->{imageid};
+		my $image_id = $imagerevision_info->{imageid};
 		if (!defined($image_id)) {
-			Exception::Class::Base->throw( error => "DataStructure object could not be initialized, failed to retrieve image ID from the imagerevision data retrieved for imagerevision ID $imagerevision_id:\n" . format_data($imagerevision_info));
+			Exception::Class::Base->throw( error => "DataStructure object could not be initialized, failed to retrieve image ID from the imagerevision data:\n" . format_data($imagerevision_info));
 			return;
 		}
 		
@@ -699,9 +700,8 @@ sub _initialize : Init {
 		}
 	}
 	
-
 	return 1;
-}
+	}
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -847,7 +847,7 @@ sub _automethod : Automethod {
 		# Make sure the value was set in the hash
 		my $check_value = eval $hash_path;
 		if ($check_value eq $set_data) {
-			notify($ERRORS{'DEBUG'}, 0, "data structure updated, hash path: $hash_path, data identifier: $data_identifier, data:\n" . format_data($set_data));
+			#notify($ERRORS{'DEBUG'}, 0, "data structure updated, hash path: $hash_path, data identifier: $data_identifier");
 			return sub {1;};
 		}
 		else {
@@ -1200,7 +1200,7 @@ sub get_state_name {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 get_next_image
+=head2 get_next_image_dataStructure
 
  Parameters  : none
  Returns     : array 
@@ -1230,7 +1230,7 @@ sub get_next_image_dataStructure {
 
 	#collect predictive reload information from database.
 	my $management_predictive_info = get_management_predictive_info();
-	if(!$management_predictive_info->{predictivemoduleid}){
+	if (!$management_predictive_info->{predictivemoduleid}){
 		notify($ERRORS{'CRITICAL'}, 0, "unable to obtain management node info for this node, returning current reservation image information");
       return @current_image;
 	}
@@ -1248,9 +1248,9 @@ sub get_next_image_dataStructure {
 
 	if ($predictive_perl_package) {
 		notify($ERRORS{'OK'}, 0, "attempting to load predictive loading module: $predictive_perl_package");
-
+		
 		eval "use $predictive_perl_package";
-
+		
 		if ($EVAL_ERROR) {
 			notify($ERRORS{'WARNING'}, 0, "$predictive_perl_package module could not be loaded");
 			notify($ERRORS{'OK'},      0, "returning current reservation image information");
@@ -1277,7 +1277,6 @@ sub get_next_image_dataStructure {
 		notify($ERRORS{'OK'}, 0, "predictive loading module not loaded, Perl package is not defined, returning current reservation image information");
 		return @current_image;
 	}
-
 }
 #/////////////////////////////////////////////////////////////////////////////
 
