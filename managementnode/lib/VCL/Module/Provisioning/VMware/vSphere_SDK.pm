@@ -131,7 +131,7 @@ sub initialize {
 	);
 	
 	# Also add URLs containing the short host name if the VM hostname is a full DNS name
-	if ($vmhost_hostname =~ /\./) {
+	if ($vmhost_hostname =~ /[a-z]\./i) {
 		my ($vmhost_short_name) = $vmhost_hostname =~ /^([^\.]+)/;
 		push @possible_vmhost_urls, "https://$vmhost_short_name/sdk";
 		push @possible_vmhost_urls, "https://$vmhost_short_name:8333/sdk";
@@ -164,7 +164,7 @@ sub initialize {
 			last;
 		}
 	}
-	
+
 	if (!$vim) {
 		notify($ERRORS{'DEBUG'}, 0, "failed to connect to VM host $vmhost_hostname");
 		return;
@@ -2797,8 +2797,26 @@ sub _get_resource_pool_view {
 		$resource_pool_path_fixed =~ s/\/Resources($|\/?)/$1/g;	
 		$resource_pools->{$resource_pool_path_fixed} = $resource_pool_view;
 	}
-	notify($ERRORS{'DEBUG'}, 0, "retrieved resource pools on VM host $vmhost_name:\n" . join("\n", sort keys %$resource_pools));
 	
+	if (!$resource_pools) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve any resource pools on host $vmhost_name");
+		return;
+	}
+	elsif (!$vmhost_profile_resource_path) {
+		if (scalar(keys %$resource_pools) > 1) {
+			notify($ERRORS{'WARNING'}, 0, "unable to determine which resource pool to use, resource path not configured in VM profile and multiple resource paths exist on host $vmhost_name:\n" . join("\n", sort keys %$resource_pools));
+			return;
+		}
+		else {
+			my $resource_pool_name = (keys %$resource_pools)[0];
+			$self->{resource_pool_view_object} = $resource_pools->{$resource_pool_name};
+			notify($ERRORS{'DEBUG'}, 0, "resource path not configured in VM profile, returning the only resource pool found on VM host $vmhost_name: $resource_pool_name");
+			return $self->{resource_pool_view_object};
+		}
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "retrieved resource pools on VM host $vmhost_name:\n" . join("\n", sort keys %$resource_pools));
+	}
 
 	my %potential_matches;
 	for my $resource_pool_path (sort keys %$resource_pools) {
