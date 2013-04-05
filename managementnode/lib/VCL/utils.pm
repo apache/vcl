@@ -8778,9 +8778,20 @@ sub xmlrpc_call {
 
 =head2 is_management_node_process_running
 
- Parameters  : PID or process name
- Returns     : 0 or 1
- Description : 
+ Parameters  : $process_identifier
+ Returns     : array or hash reference
+ Description : Determines if any processes matching the $process_identifier
+               argument are running on the management node. The
+               $process_identifier must be a regular expression understood by
+               pgrep. The return value differs based on how this subroutine is
+               called.
+               
+               If called in scalar context, a hash reference is
+               returned. The hash keys are PIDs and the values are the full name
+               of the process.
+               
+               If called in list context, an array is returned containing the
+               PIDs.
 
 =cut
 
@@ -8800,9 +8811,9 @@ sub is_management_node_process_running {
 		return;
 	}
 	
-	my @processes_running;
+	my $processes_running = {};
 	for my $line (@$output) {
-		my ($pid) = $line =~ /^(\d+)/;
+		my ($pid, $process_name) = $line =~ /^(\d+)\s*(.*)/;
 		
 		if (!defined($pid)) {
 			notify($ERRORS{'DEBUG'}, 0, "ignoring pgrep output line, it does not begin with a number: $line");
@@ -8823,13 +8834,21 @@ sub is_management_node_process_running {
 		}
 		else {
 			notify($ERRORS{'DEBUG'}, 0, "found matching process: $line");
-			push @processes_running, $pid;
+			$processes_running->{$pid} = $process_name;
 		}
 	}
 	
-	if (@processes_running) {
-		notify($ERRORS{'DEBUG'}, 0, "process is running, identifier: '$process_identifier', returning array containing PIDs: @processes_running");
-		return @processes_running;
+	my $process_count = scalar(keys %$processes_running);
+	if ($process_count) {
+		if (wantarray) {
+			my @process_ids = sort keys %$processes_running;
+			notify($ERRORS{'DEBUG'}, 0, "process is running, identifier: '$process_identifier', returning array containing PIDs: @process_ids");
+			return @process_ids;
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "process is running, identifier: '$process_identifier', returning hash reference:\n" . format_data($processes_running));
+			return $processes_running;
+		}
 	}
 	else {
 		notify($ERRORS{'DEBUG'}, 0, "process is NOT running, identifier: '$process_identifier'");
