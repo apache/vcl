@@ -122,7 +122,7 @@ sub node_status {
 		# Create a DataStructure object containing data for the computer specified as the argument
 		my $data;
 		eval {
-			$data= new VCL::DataStructure({computer_id => $computer_id});
+			$data= new VCL::DataStructure({computer_identifier => $computer_id});
 		};
 		if ($EVAL_ERROR) {
 			notify($ERRORS{'WARNING'}, 0, "failed to create DataStructure object for computer ID: $computer_id, error: $EVAL_ERROR");

@@ -621,7 +621,7 @@ sub wait_for_ssh {
 
 =head2 is_ssh_responding
 
- Parameters  : $max_attempts
+ Parameters  : $computer_name (optional), $max_attempts (optional)
  Returns     : If computer responds to SSH: 1
                If computer never responds to SSH: 0
  Description : Checks if the computer is responding to SSH. Ports 22 and 24 are
@@ -641,10 +641,27 @@ sub is_ssh_responding {
 		return;
 	}
 	
-	# Get the max attempts argument if supplied, default to 1
-	my $max_attempts = shift || 1;
+	my $computer_node_name;
+	my $max_attempts = 1;
+
+	my $argument_1 = shift;
+	my $argument_2 = shift;
+	if ($argument_1) {
+		# Check if the argument is an integer
+		if ($argument_1 =~ /^\d+$/) {
+			$max_attempts = $argument_1;
+		}
+		else {
+			$computer_node_name = $argument_1;
+			if ($argument_2 && $argument_2 =~ /^\d+$/) {
+				$max_attempts = $argument_2;
+			}
+		}
+	}
 	
-	my $computer_node_name = $self->data->get_computer_node_name();
+	if (!$computer_node_name) {
+		$computer_node_name = $self->data->get_computer_node_name();
+	}
 	
 	# Try nmap to see if any of the ssh ports are open before attempting to run a test command
 	my $port_22_status = nmap_port($computer_node_name, 22) ? "open" : "closed";
