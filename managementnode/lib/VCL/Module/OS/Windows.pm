@@ -8629,6 +8629,15 @@ sub configure_time_synchronization {
 	
 	# Replace commas with single whitespace 
 	$time_source =~ s/,/ /g;
+	my @time_array = split(/ /, $time_source);
+	
+	#Update the registry
+   my $key = 'HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\DateTime\Servers';
+   for my $i (0 .. $#time_array) {
+       my $value = $i+1;
+       if($self->reg_add($key,$value, "REG_SZ", $time_array[$i])){
+       }
+   }
 
 	# Assemble the time command
 	my $time_command;
