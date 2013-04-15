@@ -2211,14 +2211,14 @@ sub _is_throttle_limit_reached {
 
  Parameters  : none
  Returns     : nothing
- Description : Destroys the xCAT2.pm module and resets node to the boot state.
+ Description : Destroys the xCAT.pm module and resets node to the boot state.
 
 =cut
 
 sub DESTROY {
 	my $self = shift;
 	my $type = ref($self);
-	if ($type =~ /xCAT/) {
+	if ($type =~ /xCAT/ && $self->data) {
 		my $node = $self->data->get_computer_node_name(0);
 		my $request_state_name = $self->data->get_request_state_name(0);
 		
