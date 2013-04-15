@@ -192,8 +192,11 @@ sub load {
 		notify($ERRORS{'DEBUG'}, 0, "'$variable_name' xCAT load throttle limit variable is NOT set in database");
 	}
 	
-	# Run rinstall to initiate the installation
-	$self->_rinstall($computer_node_name) || return;
+	# Set the computer to install on next boot
+	$self->_nodeset($computer_node_name, 'install') || return;
+	
+	# Restart the node
+	$self->power_reset($computer_node_name) || return;
 	
 	# Run lsdef to retrieve the node's configuration including its MAC address
 	my $node_info = $self->_lsdef($computer_node_name);
@@ -210,9 +213,8 @@ sub load {
 		return;
 	}
 	
-	# rinstall initiated
-	#   nodeset changes xCAT state to 'install'
-	#   node is power cycled or powered on (nodeset/nodestat status: install/noping)
+	# nodeset changes xCAT state to 'install'
+	# node is power cycled or powered on (nodeset/nodestat status: install/noping)
 	# Wait for node to boot from network (may take from 30 seconds to several minutes if node is using UEFI)
 	# In /var/log/messages:, node makes DHCP request & requests PXE boot information from DHCP server running on management node:
 	#   Apr  1 09:36:39 vclmgt dhcpd: DHCPDISCOVER from xx:xx:xx:xx:xx:xx via ethX
@@ -647,7 +649,7 @@ sub node_status {
 			notify($ERRORS{'DEBUG'}, 0, "nodetype.profile matches the reservation image name: $image_name");
 		}
 		else {
-			my $return_value = 'RELOAD';
+			my $return_value = 'INCONSISTENT';
 			notify($ERRORS{'DEBUG'}, 0, "nodetype.profile '$node_profile' does NOT match the reservation image name: '$image_name', returning '$return_value'"); 
 			return $return_value;
 		}
@@ -1416,86 +1418,6 @@ sub _edit_nodetype {
 		notify($ERRORS{'OK'}, 0, "edited xCAT configuration of $computer_node_name, command: '$command'");
 		return 1;
 	}
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 _rinstall
-
- Parameters  : $computer_node_name
- Returns     : boolean
- Description : Runs xCAT's rinstall command to initiate the installation of the
-               computer.
-
-=cut
-
-sub _rinstall {
-	my $self = shift;
-	if (ref($self) !~ /xCAT/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-	
-	# Get the computer name argument
-	my $computer_node_name = shift;
-	if (!$computer_node_name) {
-		notify($ERRORS{'WARNING'}, 0, "computer name argument was not specified");
-		return;
-	}
-	
-	# Output if blade is already powered on:
-	#   vclh3-4: install centos5-x86_64-centos5-base641008-v0
-	#   vclh3-4: on reset
-	# Output if blade is powered off:
-	#   vclh3-4: install centos5-x86_64-centos5-base641008-v0
-	#   vclh3-4: off on
-	# Output if error occurs:
-	#   vclh3-4: install centos5-x86_64-centos5-base641008-v0
-	#   vclh3-4: Error: resourceUnavailable (This is likely a out-of-memory failure within the agent)
-	#   rpower failure at /opt/xcat/bin/rinstall line 55.
-	# Output if entry for blade doens't exist in xCAT mac table
-	#   vclh3-4: Error: Unable to find requested mac from mac, with node=vclh3-4
-	#   Error: Some nodes failed to set up install resources, aborting
-	#   nodeset failure at /opt/xcat/bin/rinstall line 53.
-	
-	my $command = "$XCAT_ROOT/bin/rinstall $computer_node_name";
-	
-	my $rinstall_attempt_limit = 5;
-	my $rinstall_attempt_delay = 3;
-	my $rinstall_attempt = 0;
-	
-	RINSTALL_ATTEMPT: while ($rinstall_attempt++ < $rinstall_attempt_limit) {
-		if ($rinstall_attempt > 1) {
-			# Attempt to run rinv to fix any inventory problems with the blade
-			notify($ERRORS{'DEBUG'}, 0, "attempt $rinstall_attempt/$rinstall_attempt_limit: failed to initiate rinstall for $computer_node_name, running rinv then sleeping for $rinstall_attempt_delay seconds");
-			$self->_rinv($computer_node_name);
-			sleep $rinstall_attempt_delay;
-		}
-		
-		notify($ERRORS{'DEBUG'}, 0, "attempt $rinstall_attempt/$rinstall_attempt_limit: issuing rinstall command for $computer_node_name");
-		
-		my ($exit_status, $output) = $self->mn_os->execute($command);
-		if (!defined($output)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to execute rinstall command for $computer_node_name");
-			return;
-		}
-		elsif (grep(/(Error:|rpower failure|nodeset failure)/i, $output)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to issue rinstall command for $computer_node_name\ncommand: $command\noutput:\n" . join("\n", @$output));
-			next RINSTALL_ATTEMPT;
-		}
-		
-		# Find the line containing the node name
-		for my $line (@$output) {
-			my ($status) = $line =~ /^$computer_node_name:\s+(.+)$/;
-			if ($status) {
-				notify($ERRORS{'DEBUG'}, 0, "issued rinstall command for $computer_node_name, status line: '$line'");
-				return 1;
-			}
-		}
-	}
-	
-	notify($ERRORS{'WARNING'}, 0, "failed to issue rinstall command for $computer_node_name, made $rinstall_attempt_limit attempts");
-	return;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
