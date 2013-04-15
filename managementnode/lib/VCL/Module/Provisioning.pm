@@ -370,6 +370,8 @@ sub retrieve_image {
 		
 		# Run du to get the size of the image files on the partner if the image exists in any of the search paths
 		my $du_command = "du -b " . join(" ", @{$partner_info{$partner}{search_paths}});
+		# Add 2>&1 or else STDOUT and STDERR may get mixed together (See VCL-688)
+		$du_command .= " 2>&1";
 		my ($du_exit_status, $du_output) = VCL::Module::OS::execute(
 			{
 				node => $partner,
