@@ -261,7 +261,6 @@ sub load {
 		$image_reload_time_minutes = 10;
 	}
 	my $nochange_timeout_seconds = ($image_reload_time_minutes * 60);
-	my $monitor_delay_seconds = 20;
 	
 	my $monitor_start_time = time;
 	my $last_change_time = $monitor_start_time;
@@ -279,18 +278,25 @@ sub load {
 	}
 	my $overall_timeout_time = ($monitor_start_time + $overall_timeout_minutes * 60);
 	
+	# Number of seconds to wait between checks
+	# Set to a short delay at the beginning of monitoring, this will be increased once installation start is detected
+	my $monitor_delay_seconds = 5;
+	
 	my $previous_status;
 	my $current_time;
+	my $install_started = 0;
 	MONITOR_LOADING: while (($current_time = time) < $nochange_timeout_time && $current_time < $overall_timeout_time) {
 		my $total_elapsed_seconds = ($current_time - $monitor_start_time);
 		my $nochange_elapsed_seconds = ($current_time - $last_change_time);
 		my $nochange_remaining_seconds = ($nochange_timeout_time - $current_time);
 		my $overall_remaining_seconds = ($overall_timeout_time - $current_time);
-		notify($ERRORS{'DEBUG'}, 0, "monitoring $image_name loading on $computer_node_name/$overall_remaining_seconds\n" .
+		notify($ERRORS{'DEBUG'}, 0, "monitoring $image_name loading on $computer_node_name\n" .
 			"seconds since monitor start/until unconditional timeout: $total_elapsed_seconds/$overall_remaining_seconds\n" .
 			"seconds since last change/until no change timeout: $nochange_elapsed_seconds/$nochange_remaining_seconds"
 		);
 		
+		# Flag to set if anything changes
+		my $reset_timeout = 0;
 		
 		# Check if any lines have shown in in /var/log/messages for the node
 		my @lines = $log->getlines;
@@ -306,38 +312,46 @@ sub load {
 				insertloadlog($reservation_id, $computer_id, "xcatround2", "waiting for boot flag");
 			}
 			
-			notify($ERRORS{'DEBUG'}, 0, "reset no change timeout, DHCP activity detected in $messages_file_path:\n" . join("\n", @dhcp_lines));
+			$reset_timeout = 1;
+			notify($ERRORS{'DEBUG'}, 0, "DHCP activity detected in $messages_file_path:\n" . join("\n", @dhcp_lines));
+		}
+		
+		# Get the current status of the node
+		my $current_status = $self->_nodestat($computer_node_name);
+		
+		# Set previous status to current status if this is the first iteration
+		$previous_status = $current_status if !defined($previous_status);
+		
+		# Check if the installation has completed
+		if ($install_started && $current_status =~ /^(boot|complete|sshd)$/i) {
+			notify($ERRORS{'DEBUG'}, 0, "$computer_node_name is finished loading image, current status: $current_status");
+			insertloadlog($reservation_id, $computer_id, "bootstate", "$computer_node_name image load complete: $current_status");
+			last MONITOR_LOADING;
+		}
+		
+		# Set the install started flag if it hasn't been set already
+		if (!$install_started && $current_status =~ /(install|partimage)/i) {
+			$monitor_delay_seconds = 20;
+			notify($ERRORS{'DEBUG'}, 0, "installation has started, increasing wait between monitoring checks to $monitor_delay_seconds seconds");
+			$install_started = 1;
+		}
+		
+		# Check if the nodestat status changed from previous iteration
+		if ($current_status ne $previous_status) {
+			$reset_timeout = 1;
+			notify($ERRORS{'DEBUG'}, 0, "status of $computer_node_name changed");
 			
-			# Reset the nochange timeout
-			$last_change_time = $current_time;
-			$nochange_timeout_time = ($last_change_time + $nochange_timeout_seconds);
+			# Set previous status to the current status
+			$previous_status = $current_status;
 		}
 		else {
-			# Get the current status of the node
-			my $current_status = $self->_nodestat($computer_node_name);
-			
-			# Set previous status to current status if this is the first iteration
-			$previous_status = $current_status if !defined($previous_status);
-			
-			if ($current_status =~ /(boot|complete)/) {
-				notify($ERRORS{'DEBUG'}, 0, "$computer_node_name is finished loading image, current status: $current_status");
-				insertloadlog($reservation_id, $computer_id, "bootstate", "$computer_node_name image load complete: $current_status");
-				last MONITOR_LOADING;
-			}
-			
-			if ($current_status ne $previous_status) {
-				notify($ERRORS{'DEBUG'}, 0, "reset no change timeout, status of $computer_node_name changed: $previous_status --> $current_status");
-				
-				# Set previous status to the current status
-				$previous_status = $current_status;
-				
-				# Reset the nochange timeout
-				$last_change_time = $current_time;
-				$nochange_timeout_time = ($last_change_time + $nochange_timeout_seconds);
-			}
-			else {
-				notify($ERRORS{'DEBUG'}, 0, "status of $computer_node_name has not changed: $current_status");
-			}
+			notify($ERRORS{'DEBUG'}, 0, "status of $computer_node_name has not changed: $current_status");
+		}
+		
+		# If any changes were detected, reset the nochange timeout
+		if ($reset_timeout) {
+			$last_change_time = $current_time;
+			$nochange_timeout_time = ($last_change_time + $nochange_timeout_seconds);
 		}
 		
 		#notify($ERRORS{'DEBUG'}, 0, "sleeping for $monitor_delay_seconds seconds");
@@ -348,11 +362,11 @@ sub load {
 	
 	# Check if timeout was reached
 	if ($current_time >= $nochange_timeout_time) {
-		notify($ERRORS{'WARNING'}, 0, "failed to load $image_name on $computer_node_name, timed out because no progress was detected for $nochange_timeout_seconds seconds");
+		notify($ERRORS{'WARNING'}, 0, "failed to load $image_name on $computer_node_name, timed out because no progress was detected for $nochange_timeout_seconds seconds, start of installation detected: " . ($install_started ? 'yes' : 'no'));
 		return;
 	}
 	elsif ($current_time >= $overall_timeout_time) {
-		notify($ERRORS{'CRITICAL'}, 0, "failed to load $image_name on $computer_node_name, timed out because loading took longer than $overall_timeout_minutes minutes");
+		notify($ERRORS{'CRITICAL'}, 0, "failed to load $image_name on $computer_node_name, timed out because loading took longer than $overall_timeout_minutes minutes, start of installation detected: " . ($install_started ? 'yes' : 'no'));
 		return;
 	}
 	
@@ -1513,7 +1527,7 @@ sub _nodestat {
 	for my $line (@$output) {
 		my ($status) = $line =~ /^$computer_node_name:\s+(.+)$/;
 		if ($status) {
-			notify($ERRORS{'DEBUG'}, 0, "retrieved nodestat status of $computer_node_name: $status");
+			notify($ERRORS{'DEBUG'}, 0, "retrieved nodestat status of $computer_node_name: '$status'");
 			return $status;
 		}
 	}
