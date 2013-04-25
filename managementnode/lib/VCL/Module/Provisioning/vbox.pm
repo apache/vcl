@@ -123,6 +123,9 @@ sub load {
 	my $shortname          = $computer_shortname;
 
 	my $vmhost_imagename          = $self->data->get_vmhost_image_name;
+
+        my $vmhost_vmpath           = $self->data->get_vmhost_profile_vmpath;
+
 	my $vmhost_hostname           = $self->data->get_vmhost_hostname;
 	my $vmclient_eth0MAC          = $self->data->get_computer_eth0_mac_address;
 	my $vmclient_eth1MAC          = $self->data->get_computer_eth1_mac_address;
@@ -178,6 +181,7 @@ sub load {
 
 	notify($ERRORS{'DEBUG'}, 0, "persistent= NOT IMPLEMENTED");
 	notify($ERRORS{'DEBUG'}, 0, "myimagename= $myimagename");
+	notify($ERRORS{'OK'}, 0, "vmpath= $vmhost_vmpath");
 
 	#does the requested base vbox image files already existed on the vmhost
 	notify($ERRORS{'OK'}, 0, "checking for base image $requestedimagename on $hostnode ");
@@ -189,7 +193,7 @@ sub load {
 	if (sysopen(TMPLOCK, $tmplockfile, O_RDONLY | O_CREAT)) {
 		if (flock(TMPLOCK, LOCK_EX)) {
 			notify($ERRORS{'OK'}, 0, "owning exclusive lock on $tmplockfile");
-			notify($ERRORS{'OK'}, 0, "listing datestore $datastorepath\/vbox ");
+			notify($ERRORS{'OK'}, 0, "listing datestore $datastorepath ");
 
 			# Check to see if the baseimage is registered with VirtualBox on this host. 
 			undef @sshcmd;
@@ -197,7 +201,7 @@ sub load {
 			@sshcmd = run_ssh_command($hostnode, $management_node_keys, "VBoxManage -q list hdds", "root");
 			notify($ERRORS{'OK'}, 0, "Hdds in VirtualBox database on vm host:\n@{ $sshcmd[1] }");
 			foreach my $l (@{$sshcmd[1]}) {
-				if ($l =~ /(\s*?)$datastorepath\/vbox\/$myimagename/) {
+				if ($l =~ /(\s*?)$datastorepath\/$myimagename/) {
                                         # The base is registered, so we will assume it is also present (This may not be the best approach, but for now it will do).
 					notify($ERRORS{'OK'}, 0, "base image exists");
 					$baseisregistered = 1;
@@ -208,7 +212,7 @@ sub load {
                         # If the base is not registered, we will check to see if it exists
                         if (!($baseisregistered)) {
 				undef @sshcmd;
-				@sshcmd = run_ssh_command($hostnode, $management_node_keys, "ls -1 $datastorepath\/vbox", "root");
+				@sshcmd = run_ssh_command($hostnode, $management_node_keys, "ls -1 $datastorepath", "root");
 				foreach my $l (@{$sshcmd[1]}) {
                                 	if ($l =~ /(\s*?)$myimagename/) {
                                         	# The base exists so we just need to register it with VirtualBox.
@@ -227,13 +231,13 @@ sub load {
 
 				insertloadlog($reservation_id, $vmclient_computerid, "info", "image files do not exist on host server, preparing to copy");
 				my $myvmdkfilesize = 0;
-				if (open(SIZE, "du -k $image_repository_path\/vbox\/$requestedimagename 2>&1 |")) {
+				if (open(SIZE, "du -k $image_repository_path\/$requestedimagename 2>&1 |")) {
 					my @du = <SIZE>;
 					close(SIZE);
 					foreach my $d (@du) {
 						if ($d =~ /No such file or directory/) {
 							insertloadlog($reservation_id, $vmclient_computerid, "failed", "could not collect size of local image files");
-							notify($ERRORS{'CRITICAL'}, 0, "problem checking local vm file size on $image_repository_path\/vbox\/$requestedimagename");
+							notify($ERRORS{'CRITICAL'}, 0, "problem checking local vm file size on $image_repository_path\/$requestedimagename");
 							close(TMPLOCK);
 							unlink($tmplockfile);
 							return 0;
@@ -247,10 +251,10 @@ sub load {
 				notify($ERRORS{'DEBUG'}, 0, "file size $myvmdkfilesize of $requestedimagename");
 				if ($vmprofile_vmdisk =~ /(local|dedicated)/) {
 					notify($ERRORS{'OK'}, 0, "copying base image files $requestedimagename to $hostnode");
-					if (run_scp_command("$image_repository_path\/vbox\/$requestedimagename", "$hostnode:\"$datastorepath\/vbox\/\"", $management_node_keys)) {
+					if (run_scp_command("$image_repository_path\/$requestedimagename", "$hostnode:\"$datastorepath\/\"", $management_node_keys)) {
 						#recheck host server for files - the  scp output is not being captured
 						undef @sshcmd;
-						@sshcmd = run_ssh_command($hostnode, $management_node_keys, "ls -1 $datastorepath\/vbox", "root");
+						@sshcmd = run_ssh_command($hostnode, $management_node_keys, "ls -1 $datastorepath", "root");
 						foreach my $l (@{$sshcmd[1]}) {
 							if ($l =~ /denied|No such/) {
 								notify($ERRORS{'CRITICAL'}, 0, "node $hostnode output @{ $sshcmd[1] }");
@@ -282,11 +286,10 @@ sub load {
                         # If the base exists but was not registered we just need to register it
 			if((!($baseisregistered)) && ($baseexists)) {
 				undef @sshcmd;
-                                #@sshcmd = run_ssh_command($hostnode, $management_node_keys, "VBoxManage -q openmedium disk $datastorepath\/vbox\/$myimagename --type immutable", "root");
 
 				# So Oracle removed the method for registering an image with the server. Registration is now automated when media is attached to a VM. But a "read lock" error is given if you attempt to specify "-mtype multiattach" after the first attachment to a vm if the first vm is running. In order to avoid extra logic to determine if it is the first attachment during VM creation, a non-running VM is registered named "STORAGE_HOLDER" with a scsi controller named "STORAGE_HOLDER_SCSI". An image can be attached to port 0 in multiattach mode and any further attachments will default to multiattach when no mtype is specified, without the mtype arg no error is thrown. This feels more like a VBox bug to me, and I opened a bug report with Oracle.
 
-                                @sshcmd = run_ssh_command($hostnode, $management_node_keys, "VBoxManage storageattach STORAGE_HOLDER --storagectl STORAGE_HOLDER_SCSI --medium $datastorepath\/vbox\/$myimagename --mtype multiattach --type hdd --port 0", "root");
+                                @sshcmd = run_ssh_command($hostnode, $management_node_keys, "VBoxManage storageattach STORAGE_HOLDER --storagectl STORAGE_HOLDER_SCSI --medium $datastorepath\/$myimagename --mtype multiattach --type hdd --port 0", "root");
 	                             foreach my $l (@{$sshcmd[1]}) {
 					if ($l =~ /(\s*?)ERROR:/) {
                                                 # Registeration failed, manual intervention is probably required, send warning and die.
@@ -335,13 +338,8 @@ sub load {
 	} ## end if (defined($vmclient_imageminram))
 	
         VBOXCREATE:
-	## VirtualBox no longer uses this
-        #undef @sshcmd;
-        #@sshcmd = run_ssh_command($hostnode, $management_node_keys, "VBoxManage -q setproperty hdfolder $image_repository_path\/vbox\/SNAPSHOTS", "root");
-
         undef @sshcmd;
-        #@sshcmd = run_ssh_command($hostnode, $management_node_keys, "VBoxManage -q setproperty machinefolder  $image_repository_path\/vbox\/MACHINES\/$hostnode", "root");
-        @sshcmd = run_ssh_command($hostnode, $management_node_keys, "VBoxManage -q setproperty machinefolder  /VBOX_LOCAL", "root");
+        @sshcmd = run_ssh_command($hostnode, $management_node_keys, "VBoxManage -q setproperty machinefolder $vmhost_vmpath", "root");
         undef @sshcmd;
         @sshcmd = run_ssh_command($hostnode, $management_node_keys, "VBoxManage -q createvm --name $vm_name --register", "root");
         $vmclient_eth0MAC =~ tr/://d;
@@ -359,13 +357,13 @@ sub load {
         if ($persistent) {
 		notify($ERRORS{'OK'}, 0, "Cloning image, this could take a while.");
 		undef @sshcmd;
-	        @sshcmd = run_ssh_command($hostnode, $management_node_keys, "VBoxManage -q clonehd $image_repository_path\/vbox\/$requestedimagename $image_repository_path\/vbox\/$requestedimagename\_IMAGING\_$shortname.vdi ", "root");
+	        @sshcmd = run_ssh_command($hostnode, $management_node_keys, "VBoxManage -q clonehd $datastorepath\/$requestedimagename $datastorepath\/$requestedimagename\_IMAGING\_$shortname ", "root");
         	undef @sshcmd;
-                @sshcmd = run_ssh_command($hostnode, $management_node_keys, "VBoxManage -q storageattach $vm_name --storagectl $shortname\_stor --port 0 --device 0 --type hdd --medium $image_repository_path\/vbox\/$requestedimagename\_IMAGING\_$shortname.vdi", "root"); 
+                @sshcmd = run_ssh_command($hostnode, $management_node_keys, "VBoxManage -q storageattach $vm_name --storagectl $shortname\_stor --port 0 --device 0 --type hdd --medium $datastorepath\/$requestedimagename\_IMAGING\_$shortname", "root"); 
         } ## end if ($persistent)
         else {
         	undef @sshcmd;
-        	@sshcmd = run_ssh_command($hostnode, $management_node_keys, "VBoxManage -q storageattach $vm_name --storagectl $shortname\_stor --port 0 --device 0 --type hdd --medium $image_repository_path\/vbox\/$requestedimagename", "root");
+        	@sshcmd = run_ssh_command($hostnode, $management_node_keys, "VBoxManage -q storageattach $vm_name --storagectl $shortname\_stor --port 0 --device 0 --type hdd --medium $datastorepath\/$requestedimagename", "root");
         }
         undef @sshcmd;
         @sshcmd = run_ssh_command($hostnode, $management_node_keys, "VBoxManage -q modifyvm $vm_name --pae on", "root");
@@ -482,6 +480,10 @@ sub capture { ## This is going to need to be implemented before the module is co
         my $reservation_id = $self->data->get_reservation_id;
         my $management_node_keys     = $self->data->get_management_node_keys();
 
+	my $requestedimagename = $self->data->get_image_name;
+
+        my $datastorepath     = $self->data->get_vmhost_profile_datastore_path;
+
         my $image_id       = $self->data->get_image_id;
         my $image_os_name  = $self->data->get_image_os_name;
         my $image_identity = $self->data->get_image_identity;
@@ -565,27 +567,26 @@ sub capture { ## This is going to need to be implemented before the module is co
                 # confirm they were copied
 
                 undef @sshcmd;
-        	@sshcmd = run_ssh_command($hostnodename, $management_node_keys, "ls $vmhost_vmpath/vbox/*_IMAGING_$computer_shortname.vdi", "root");
+        	@sshcmd = run_ssh_command($hostnodename, $management_node_keys, "ls $datastorepath/*_IMAGING_$computer_shortname", "root");
 	        for my $l (@{$sshcmd[1]}) {
-                	if ($l =~ /\/(.*_IMAGING_$computer_shortname\.vdi)/) {
+                	if ($l =~ /\/(.*_IMAGING_$computer_shortname)/) {
 				$image_filename = $l;
                         	notify($ERRORS{'OK'}, 0, "Image filename is: $image_filename");
 			}
         	} ## end for my $l (@{$sshcmd[1]})
 
-                notify($ERRORS{'OK'}, 0, "attemping to copy vdi file to $image_repository_path\/vbox");
-                #if (run_scp_command("$hostnodename:\"$vmhost_vmpath/$image_filename\"", "$image_repository_path\/vbox\/$image_name", $management_node_keys)) {
-                if (run_scp_command("$hostnodename:\"$image_filename\"", "$image_repository_path\/vbox\/$image_name", $management_node_keys)) {
+                notify($ERRORS{'OK'}, 0, "attemping to copy vdi file to $image_repository_path");
+                if (run_scp_command("$hostnodename:\"$image_filename\"", "$image_repository_path\/$image_name", $management_node_keys)) {
 
                 # set file premissions on images to 644
                 # to allow for other management nodes to fetch image if neccessary
                 # useful in a large distributed framework
-                if (open(CHMOD, "/bin/chmod -R 644 $image_repository_path\/vbox\/$image_name 2>&1 |")) {
+                if (open(CHMOD, "/bin/chmod -R 644 $image_repository_path\/$image_name 2>&1 |")) {
                         close(CHMOD);
-                        notify($ERRORS{'DEBUG'}, 0, "$notify_prefix recursive update file permssions 644 on $image_repository_path\/vbox\/$image_name");
+                        notify($ERRORS{'DEBUG'}, 0, "$notify_prefix recursive update file permssions 644 on $image_repository_path\/$image_name");
                 }
 		undef @sshcmd;
-                @sshcmd = run_ssh_command($hostnodename, $management_node_keys, "VBoxManage closemedium disk $image_repository_path/vbox/$image_filename --delete", "root");
+                @sshcmd = run_ssh_command($hostnodename, $management_node_keys, "VBoxManage closemedium disk $datastorepath/$image_filename --delete", "root");
                 return 1;
                 } ## end if (run_scp_command("$hostnodename:\"$vmhost_vmpath/$vmx_directory/*.vmdk\""...
                 else {
@@ -597,8 +598,33 @@ sub capture { ## This is going to need to be implemented before the module is co
 		if ($self->control_VM("remove")) {
         	        notify($ERRORS{'OK'}, 0, "removed node $computer_shortname from vmhost $hostnodename");
 	        }
-        } ## end if ($vmprofile_vmdisk =~ /(local|dedicated)/)
-
+        } elsif ($vmprofile_vmdisk =~ /shared/) { ## end if ($vmprofile_vmdisk =~ /(local|dedicated)/)
+		
+ 		if (open(FILELIST, "/bin/ls $image_repository_path/*_IMAGING_$computer_shortname 2>&1 |")) {
+                	my @filelist = <FILELIST>;
+                	close(FILELIST);
+                	my $size = 0;
+                	foreach my $f (@filelist) {
+                        	if ($f =~ /\/(.*_IMAGING_$computer_shortname)/) {
+                                	$image_filename = $f;
+					$image_filename =~ s/(\r|\n)//g;
+                                	notify($ERRORS{'OK'}, 0, "Image filename is: $image_filename");
+                        	}
+                	}	
+        	} 
+		
+		if (open(MV, "/bin/mv $image_filename $image_repository_path\/$image_name 2>&1 |")) {
+			close(MV);
+        	       notify($ERRORS{'OK'}, 0, "renamed $image_filename to $image_repository_path\/$image_name");
+	        	if (open(CHMOD, "/bin/chmod -R 644 $image_repository_path\/$image_name 2>&1 |")) {
+				close(CHMOD);
+				notify($ERRORS{'DEBUG'}, 0, "$notify_prefix recursive update file permssions 644 on $image_repository_path\/$image_name");
+			}
+			#undef @sshcmd;
+                	#@sshcmd = run_ssh_command($hostnodename, $management_node_keys, "VBoxManage closemedium disk $datastorepath/$image_filename --delete", "root");
+			return 1;
+		}
+	}
 
 } ## end sub capture
 
@@ -719,15 +745,10 @@ sub control_VM {
                         	@sshcmd = run_ssh_command($hostnode, $management_node_keys, "VBoxManage -q controlvm $1 poweroff", "root");
                                 if ($control eq 'remove') {
                         		notify($ERRORS{'OK'}, 0, "UUID  $1 - REMOVE");
-                        		#undef @sshcmd;
-                        		#@sshcmd = run_ssh_command($hostnode, $management_node_keys, "VBoxManage -q storagectl $1 --name $shortname\_stor --remove", "root");
                         		undef @sshcmd;
                         		@sshcmd = run_ssh_command($hostnode, $management_node_keys, "VBoxManage -q unregistervm $1 --delete", "root");
-					#undef @sshcmd;
-        				#@sshcmd = run_ssh_command($hostnode, $management_node_keys, "rm -fr $image_repository_path\/vbox\/MACHINES\/$hostnode\/$vm_name", "root");
 					notify($ERRORS{'OK'}, 0, "Waiting 30 seconds to allow unregister to settle");
 					sleep 30
-					# $self->remove_snapshots();
                                 }
                                 $ret = 1;
                 	}
@@ -795,7 +816,7 @@ sub get_image_size {
 	notify($ERRORS{'DEBUG'}, 0, "getting size of image: $image_name");
 	
 
-	my $IMAGEREPOSITORY = "$image_repository_path\/vbox\/$image_name";
+	my $IMAGEREPOSITORY = "$image_repository_path\/$image_name";
 
 	#list files in image directory, account for main .gz file and any .gz.00X files
 	if (open(FILELIST, "/bin/ls -s1 $IMAGEREPOSITORY 2>&1 |")) {
@@ -803,7 +824,7 @@ sub get_image_size {
 		close(FILELIST);
 		my $size = 0;
 		foreach my $f (@filelist) {
-			if ($f =~ /$image_name.*vmdk/) {
+			if ($f =~ /$image_name/) {
 				my ($presize, $blah) = split(" ", $f);
 				$size += $presize;
 			}
@@ -1023,7 +1044,7 @@ sub does_image_exist {
 	}
 	
 	# Run du to get the size of the image files if the image exists
-	my $du_command = "du -c $image_repository_path\/vbox\/*$image_name* 2>&1 | grep total 2>&1";
+	my $du_command = "du -c $image_repository_path\/*$image_name* 2>&1 | grep total 2>&1";
 	my ($du_exit_status, $du_output) = run_command($du_command);
         notify($ERRORS{'OK'}, 0, "$du_command");
 	
@@ -1046,7 +1067,7 @@ sub does_image_exist {
 	my ($image_size) = (@$du_output[0] =~ /(\d+)\s+total/);
 	if ($image_size && $image_size > 0) {
 		my $image_size_mb = int($image_size / 1024);
-		notify($ERRORS{'DEBUG'}, 0, "$image_name exists in $image_repository_path\/vbox, size: $image_size_mb MB");
+		notify($ERRORS{'DEBUG'}, 0, "$image_name exists in $image_repository_path, size: $image_size_mb MB");
 		return 1;
 	}
 	else {
@@ -1151,7 +1172,7 @@ sub retrieve_image {
 		notify($ERRORS{'DEBUG'}, 0, "remote image repository path on $partner: $image_repository_path_remote");
 		
 		# Run du to get the size of the image files on the partner if the image exists
-		my ($du_exit_status, $du_output) = run_ssh_command($partner, $partner_image_lib_key, "du -c $image_repository_path_remote\/vbox\/*$image_name* | grep total", $partner_image_lib_user, $partner_ssh_port, 1);
+		my ($du_exit_status, $du_output) = run_ssh_command($partner, $partner_image_lib_key, "du -c $image_repository_path_remote\/*$image_name* | grep total", $partner_image_lib_user, $partner_ssh_port, 1);
 		
 		# If the partner doesn't have the image, a "no such file" error should be displayed
 		if (defined(@$du_output) && grep(/no such file/i, @$du_output)) {
@@ -1226,7 +1247,7 @@ sub _get_image_repository_path {
 		return 0;
 	}
 
-	my $return_path = "/VCL";
+	my $return_path = $self->data->get_vmhost_profile_repository_path(0);
 	return $return_path;
 } ## end sub _get_image_repository_path
 
