@@ -4337,7 +4337,10 @@ EOF
 		$select_statement .= "imagerevision.imageid = '$image_identifier'";
 	}
 	else{
-		$select_statement .= "imagerevision.imagename = \'$image_identifier\'";
+		# Assume $image_identifier is the image name, strip off '-v*' from the end
+		# Otherwise query may fail if production version is not the exact revision passed as the argument
+		$image_identifier =~ s/-\v\d+$/-v%/;
+		$select_statement .= "imagerevision.imagename LIKE \'$image_identifier\'";
 	}
 
 	# Call the database select subroutine
@@ -4357,8 +4360,9 @@ EOF
 	
 	my $imagerevision_info = get_imagerevision_info($imagerevision_id);
 	
+	my $image_name = $imagerevision_info->{imagename};
 	$ENV{production_imagerevision_info}{$image_identifier} = $imagerevision_info;
-	notify($ERRORS{'DEBUG'}, 0, "retrieved info from database for production revision of image '$image_identifier'");
+	notify($ERRORS{'DEBUG'}, 0, "retrieved info from database for production revision for image identifier '$image_identifier', production image: '$image_name'");
 	return $ENV{production_imagerevision_info}{$image_identifier};
 	
 } ## end sub get_production_imagerevision_info
