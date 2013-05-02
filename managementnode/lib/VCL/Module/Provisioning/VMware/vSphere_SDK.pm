@@ -771,7 +771,7 @@ sub copy_virtual_disk {
 			);
 			
 			# Unregister the VM, don't attempt to delete it or else the source vmdk may be deleted
-			return unless $self->unregister_vm($existing_vmx_file_path);
+			return unless $self->vm_unregister($existing_vmx_file_path);
 		}
 		elsif ($existing_vmx_directory_path eq $clone_vm_directory_path) {
 			notify($ERRORS{'WARNING'}, 0, "existing VM using the directory of the VM clone will be deleted:\n" .
