@@ -2504,7 +2504,6 @@ sub manage_server_access {
 	my @userlist_admin;
 	my @userlist_login;
 	my %user_hash;
-	my $allow_list = $user_login_id_owner;
 
 	if ($server_request_admingroupid) {
 		@userlist_admin = getusergroupmembers($server_request_admingroupid);
@@ -2559,11 +2558,8 @@ sub manage_server_access {
 		next if (!($userid));
 		#Skip reservation owner, this account is processed in the new and reserved states
 		if ($userid eq $user_id_owner) {
-			#Add owner's login id if does not already exist
-         $allow_list .= " $user_login_id_owner" if ($allow_list !~ /$user_login_id_owner/) ;
 			next;
 		}
-		#my $standalone = 0;
 		my $standalone = $user_hash{$userid}{user_info}{STANDALONE};
 
 		if(!$self->user_exists($user_hash{$userid}{username})){
@@ -2571,16 +2567,6 @@ sub manage_server_access {
 		}
 		
 		if(!exists($res_accounts{$userid}) || $request_laststate_name eq "reinstall" ){
-			# check affiliation
-			notify($ERRORS{'DEBUG'}, 0, "checking affiliation for $userid");
-			#my $affiliation_name = get_user_affiliation($user_hash{$userid}{vcl_user_id}); 
-			#if(defined($affiliation_name)) {
-
-			#	if(!(grep(/$affiliation_name/, split(/,/, $not_standalone_list) ))) {
-			#		$standalone = 1;
-			#	}
-			#}
-			
 			if($request_laststate_name ne "reinstall" ){	
 				$user_hash{$userid}{"passwd"} = 0;
 				# Generate password if linux and standalone affiliation
@@ -2613,23 +2599,17 @@ sub manage_server_access {
 			else {
 				notify($ERRORS{'WARNING'}, 0, "Failed to create user on $computer_node_name ");
 			}
-			
-			$allow_list .= " $user_hash{$userid}{username}";
-
 		}
 		else {
 			notify($ERRORS{'DEBUG'}, 0, "$userid exists in reservationaccounts table, assuming it exists on OS");
 		}
-			
 	}
 
 	#Remove anyone listed in reservationaccounts list that is not in user_hash
 	foreach my $res_userid (sort keys %res_accounts) {
 		notify($ERRORS{'OK'}, 0, "res_userid= $res_userid username= $res_accounts{$res_userid}{username}");
-		#Skip reservation owner, this account is processed in the new and reserved states
+		#Skip reservation owner, this account is not to be removed from the reservation.
       if ($res_userid eq $user_login_id_owner) {
-			#Add owner's login id if it does not already exist
-         $allow_list .= " $user_login_id_owner" if ($allow_list !~ /$user_login_id_owner/) ;
 			#Skip group checks as the owner may not be a member
 			next;
 		}
@@ -2645,23 +2625,10 @@ sub manage_server_access {
 				  }	
 				next;
 		}
-		$allow_list .= " $res_accounts{$res_userid}{username}";
-	}
-	
-	notify($ERRORS{'OK'}, 0, "allow_list= $allow_list");
-	
-	$self->data->set_server_allow_users($allow_list);
-	
-	if ($self->can("update_server_access") ) {
-		if ( $self->update_server_access($allow_list) ) {
-			notify($ERRORS{'OK'}, 0, "updated remote access list");
-		}
 	}
 	
 	return 1;
-
 }
-
 #/////////////////////////////////////////////////////////////////////////////
 
 =head2 process_connect_methods

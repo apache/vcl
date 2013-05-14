@@ -962,8 +962,16 @@ sub delete_user {
 	
 	my $imagemeta_rootaccess = $self->data->get_imagemeta_rootaccess();
 	
-	# Remove AllowUsers lines from external_sshd_config
-	$self->remove_lines_from_file('/etc/ssh/external_sshd_config', 'AllowUsers') || return;
+	# Remove user from  external_sshd_config
+	my $rem_user_sshd_cmd = "sed -i -e \"/AllowUsers/s/$user_login_id//\" /etc/ssh/external_sshd_config"; 
+	if ($self->execute($rem_user_sshd_cmd)) {
+		if (!$self->restart_service("ext_sshd")) {
+      	notify($ERRORS{'WARNING'}, 0, "failed to restart ext_sshd service on $computer_node_name after updating /etc/ssh/external_sshd_config");
+   	}	
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "Failed to remove user_login_id from external_sshd_config");
+	}
 	
 	# Remove lines from sudoers
 	$self->remove_lines_from_file('/etc/sudoers', "^$user_login_id .*") || return;
@@ -996,6 +1004,16 @@ sub reserve {
 	my $image_identity       = $self->data->get_image_identity;
 	my $imagemeta_rootaccess = $self->data->get_imagemeta_rootaccess();
 	my $user_uid             = $self->data->get_user_uid();
+	
+	# Remove AllowUsers lines from external_sshd_config
+	if($self->remove_lines_from_file('/etc/ssh/external_sshd_config', 'AllowUsers')) {
+		notify($ERRORS{'WARNING'}, 0, "Error in cleaning AllowUsers directive from external_sshd_config");
+	} 
+	
+	# Append AllowUsers line to the end of the file
+	if (!$self->append_text_file('/etc/ssh/external_sshd_config', "AllowUsers \n")) {
+		notify($ERRORS{'WARNING'}, 0, "Error in appending AllowUsers directive to external_sshd_config");
+	}
 	
 	if ($self->add_vcl_usergroup()) {
 	
@@ -1030,37 +1048,6 @@ sub grant_access {
 	my $user_login_id      = $self->data->get_user_login_id();
 	my $computer_node_name = $self->data->get_computer_node_name();
 	my $server_request_id  = $self->data->get_server_request_id();
-	
-	my $ext_sshd_config_file_path = '/etc/ssh/external_sshd_config';
-	
-	# Remove all AllowUsers lines from external_sshd_config
-	if (!$self->remove_lines_from_file($ext_sshd_config_file_path, 'AllowUsers')) {
-		notify($ERRORS{'WARNING'}, 0, "unable to grant access to $computer_node_name, existing AllowUsers lines could not be removed from $ext_sshd_config_file_path");
-		return;
-	}
-	
-	# Assemble the list of usernames to add to the AllowUsers line
-	my $allow_users = $user_login_id;
-	
-	if ($server_request_id) {
-		my $server_allow_user_list = $self->data->get_server_allow_users();
-		if ($server_allow_user_list) {
-			notify($ERRORS{'DEBUG'}, 0, "server allow user list: $server_allow_user_list");
-			$allow_users .= " $server_allow_user_list";
-		}
-	}
-	
-	# Append AllowUsers line to the end of the file
-	if (!$self->append_text_file($ext_sshd_config_file_path, "AllowUsers $allow_users\n")) {
-		notify($ERRORS{'WARNING'}, 0, "unable to grant access to $computer_node_name, failed to add AllowUsers line $ext_sshd_config_file_path");
-		return;
-	}
-	
-	# Restart the ext_sshd service
-	if (!$self->restart_service('ext_sshd')) {
-		notify($ERRORS{'WARNING'}, 0, "unable to grant access to $computer_node_name, failed to restart ext_sshd service after configuring AllowUsers lines");
-		return;
-	}
 	
 	# Process the connection methods, allow firewall access from any address
 	if ($self->process_connect_methods("", 1)) {
@@ -2451,6 +2438,17 @@ sub create_user {
 		}
 	}
 	
+	# Add user to external_sshd_config
+	my $add_user_sshd_cmd = "sed -i -e \"/AllowUsers/s/\$/ $username/\" /etc/ssh/external_sshd_config"; 
+	if ($self->execute($add_user_sshd_cmd)) {
+		if (!$self->restart_service("ext_sshd")) {
+			notify($ERRORS{'WARNING'}, 0, "failed to restart ext_sshd service on $computer_node_name after updating /etc/ssh/external_sshd_config");
+    }
+	}
+	else {
+		notify($ERRORS{'CRITICAL'}, 0, "Failed to add username to external_sshd_config");
+	}
+
 	if ($user_standalone) {
 		notify($ERRORS{'DEBUG'}, 0, "Standalone user setting single-use password");
 		
@@ -2508,55 +2506,6 @@ sub create_user {
 } ## end sub create_user
 
 #/////////////////////////////////////////////////////////////////////////////
-
-=head2 update_server_access
-
- Parameters  : 
- Returns     : 
- Description : 
-
-=cut
-
-sub update_server_access {
-	my ($self) = shift;
-	if (ref($self) !~ /linux/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-	
-	my $server_allow_user_list = shift || $self->data->get_server_allow_users();
-	
-	my $computer_node_name = $self->data->get_computer_node_name();
-	
-	my $ext_sshd_config_file_path = '/etc/ssh/external_sshd_config';
-	
-	if (!$server_allow_user_list) {
-		notify($ERRORS{'DEBUG'}, 0, "$ext_sshd_config_file_path AllowUsers setting not altered, server allow users list is empty");
-		return 1;
-	}
-	
-	# Remove all AllowUsers lines from external_sshd_config
-	if (!$self->remove_lines_from_file($ext_sshd_config_file_path, 'AllowUsers')) {
-		notify($ERRORS{'WARNING'}, 0, "unable to update server access on $computer_node_name, failed to remove existing AllowUsers lines from $ext_sshd_config_file_path");
-		return;
-	}
-	
-	# Add AllowUsers line to the end of the file
-	if (!$self->append_text_file($ext_sshd_config_file_path, "AllowUsers $server_allow_user_list\n")) {
-		notify($ERRORS{'WARNING'}, 0, "unable to update server access on $computer_node_name, failed to add line to $ext_sshd_config_file_path: AllowUsers $server_allow_user_list");
-		return;
-	}
-	
-	if (!$self->restart_service("ext_sshd")) {
-		notify($ERRORS{'WARNING'}, 0, "failed to restart ext_sshd service on $computer_node_name after updating $ext_sshd_config_file_path");
-		return;
-	}
-	
-	return 1;
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
 =head2 enable_dhcp
 
  Parameters  : $interface_name (optional)
