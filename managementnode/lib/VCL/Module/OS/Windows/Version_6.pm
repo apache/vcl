@@ -1758,7 +1758,8 @@ sub run_sysprep {
 <unattend xmlns="urn:schemas-microsoft-com:unattend">
 	<settings pass="generalize">
 		<component name="Microsoft-Windows-PnpSysprep" processorArchitecture="$architecture" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
-			<PersistAllDeviceInstalls>true</PersistAllDeviceInstalls>
+			<PersistAllDeviceInstalls>false</PersistAllDeviceInstalls>
+			<DoNotCleanUpNonPresentDevices>false</DoNotCleanUpNonPresentDevices>
 		</component>
 		<component name="Microsoft-Windows-Security-SPP" processorArchitecture="$architecture" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
 			<SkipRearm>1</SkipRearm>
