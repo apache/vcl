@@ -66,6 +66,7 @@ use VCL::utils;
 use Fcntl qw(:DEFAULT :flock);
 use File::Copy;
 use IO::Seekable;
+use Socket;
 
 ##############################################################################
 
@@ -282,7 +283,8 @@ sub load {
 	# Set to a short delay at the beginning of monitoring, this will be increased once installation start is detected
 	my $monitor_delay_seconds = 5;
 	
-	my $previous_status;
+	my $previous_nodestat_status;
+	my $previous_nodeset_status;
 	my $current_time;
 	my $install_started = 0;
 	MONITOR_LOADING: while (($current_time = time) < $nochange_timeout_time && $current_time < $overall_timeout_time) {
@@ -317,35 +319,48 @@ sub load {
 		}
 		
 		# Get the current status of the node
-		my $current_status = $self->_nodestat($computer_node_name);
-		
 		# Set previous status to current status if this is the first iteration
-		$previous_status = $current_status if !defined($previous_status);
+		my $current_nodestat_status = $self->_nodestat($computer_node_name);
+		$previous_nodestat_status = $current_nodestat_status if !defined($previous_nodestat_status);
 		
-		# Check if the installation has completed
-		if ($install_started && $current_status =~ /^(boot|complete|sshd)$/i) {
-			notify($ERRORS{'DEBUG'}, 0, "$computer_node_name is finished loading image, current status: $current_status");
-			insertloadlog($reservation_id, $computer_id, "bootstate", "$computer_node_name image load complete: $current_status");
-			last MONITOR_LOADING;
+		my $current_nodeset_status = $self->_nodeset($computer_node_name, 'stat');
+		$previous_nodeset_status = $current_nodeset_status if !defined($previous_nodeset_status);
+		
+		if (!$install_started) {
+			# Check if the installation has started
+			if ($current_nodestat_status =~ /(install|partimage)/i) {
+				# Slow down the monitor looping
+				$monitor_delay_seconds = 20;
+				notify($ERRORS{'DEBUG'}, 0, "installation has started, increasing wait between monitoring checks to $monitor_delay_seconds seconds");
+				$install_started = 1;
+			}
 		}
-		
-		# Set the install started flag if it hasn't been set already
-		if (!$install_started && $current_status =~ /(install|partimage)/i) {
-			$monitor_delay_seconds = 20;
-			notify($ERRORS{'DEBUG'}, 0, "installation has started, increasing wait between monitoring checks to $monitor_delay_seconds seconds");
-			$install_started = 1;
+		else {
+			# nodestat will return 'sshd' if the computer is responding to SSH while it is being installed instead of the more detailed information
+			# Try to get the installation status directly using a socket
+			if ($current_nodestat_status eq 'sshd') {
+				$current_nodestat_status = $self->_get_install_status($computer_node_name) || 'sshd';
+			}
+			
+			# Check if the installation has completed
+			if ($current_nodestat_status =~ /^(boot|complete)$/i || $current_nodeset_status =~ 'boot') {
+				notify($ERRORS{'DEBUG'}, 0, "$computer_node_name is finished loading image, current nodestat status: $current_nodestat_status, nodeset status: $current_nodeset_status");
+				insertloadlog($reservation_id, $computer_id, "bootstate", "$computer_node_name image load complete: $current_nodestat_status, $current_nodeset_status");
+				last MONITOR_LOADING;
+			}
 		}
 		
 		# Check if the nodestat status changed from previous iteration
-		if ($current_status ne $previous_status) {
+		if ($current_nodestat_status ne $previous_nodestat_status || $current_nodeset_status ne $previous_nodeset_status) {
 			$reset_timeout = 1;
 			notify($ERRORS{'DEBUG'}, 0, "status of $computer_node_name changed");
 			
 			# Set previous status to the current status
-			$previous_status = $current_status;
+			$previous_nodestat_status = $current_nodestat_status;
+			$previous_nodeset_status = $current_nodeset_status;
 		}
 		else {
-			notify($ERRORS{'DEBUG'}, 0, "status of $computer_node_name has not changed: $current_status");
+			notify($ERRORS{'DEBUG'}, 0, "status of $computer_node_name has not changed: $current_nodestat_status");
 		}
 		
 		# If any changes were detected, reset the nochange timeout
@@ -1334,7 +1349,7 @@ sub _edit_nodelist {
 	# For HPC, use image project = vclhpc. There should be an xCAT postscript group named 'vclhpc' configured with specific HPC postscripts
 	
 	my $groups;
-	if ($request_state_name eq 'image' || $image_os_install_type =~ /image/i) {
+	if ($request_state_name eq 'image') {
 		# Image-based install or capture
 		$groups = "all,blade,image";
 	}
@@ -1589,7 +1604,7 @@ sub _nodeset {
 		my ($status) = $line =~ /^$computer_node_name:\s+(.+)$/;
 		if ($status) {
 			if ($nodeset_option eq 'stat') {
-				notify($ERRORS{'DEBUG'}, 0, "retrieved nodeset status of $computer_node_name: $status");
+				notify($ERRORS{'DEBUG'}, 0, "retrieved nodeset status of $computer_node_name: '$status'");
 				return $status;
 			}
 			else {
@@ -2221,6 +2236,66 @@ sub _is_throttle_limit_reached {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 _get_install_status
+
+ Parameters  : $computer_node_name
+ Returns     : string
+ Description : Attempts to connect to TCP port 3001 on a node to retrieve the
+               installation status. This is done to overcome a problem which
+               occurs if the node is responding to SSH while it is being
+               installed and nodestat returns 'sshd' instead of the more
+               detailed status.
+
+=cut
+
+sub _get_install_status {
+	my $self = shift;
+	if (ref($self) !~ /xCAT/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get the computer name argument
+	my $computer_node_name = shift;
+	if (!$computer_node_name) {
+		notify($ERRORS{'WARNING'}, 0, "computer name argument was not specified");
+		return;
+	}
+	
+	my $protocol = 'tcp';
+	my $port = 3001;
+	
+	my $socket;
+	if (!socket($socket, PF_INET, SOCK_STREAM, getprotobyname($protocol))) {
+		return;
+	}
+	
+	my $host_by_name = gethostbyname($computer_node_name);
+	my $sockaddr_in = sockaddr_in($port, $host_by_name);
+	if (!connect($socket, $sockaddr_in)) {
+		return;
+	}
+	
+	print $socket "stat \n";
+	$socket->flush;
+	
+	my $status;
+	while (<$socket>) {
+		$status .= $_;
+	}
+	close($socket);
+	
+	if ($status =~ /\w/) {
+		notify($ERRORS{'DEBUG'}, 0, "retrieved install status from $computer_node_name: '$status'");
+		return $status;
+	}
+	else {
+		return;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 DESTROY
 
  Parameters  : none
@@ -2231,18 +2306,39 @@ sub _is_throttle_limit_reached {
 
 sub DESTROY {
 	my $self = shift;
+	if (!defined($self)) {
+		notify($ERRORS{'DEBUG'}, 0, "skipping xCAT DESTROY tasks, \$self is not defined");
+		return;
+	}
+	
+	my $address = sprintf('%x', $self);
 	my $type = ref($self);
-	if ($type =~ /xCAT/ && $self->data) {
+	notify($ERRORS{'DEBUG'}, 0, "destroying $type object, address: $address");
+	
+	if (!$self->data(0)) {
+		notify($ERRORS{'DEBUG'}, 0, "skipping xCAT DESTROY tasks, \$self->data is not defined");
+	}
+	elsif (!$self->mn_os(0)) {
+		notify($ERRORS{'DEBUG'}, 0, "skipping xCAT DESTROY tasks, \$self->mn_os is not defined");
+	}
+	else {
 		my $node = $self->data->get_computer_node_name(0);
 		my $request_state_name = $self->data->get_request_state_name(0);
 		
-		if ($request_state_name && $node && $request_state_name =~ /^(new|reload|image)$/) {
+		if (!defined($node) || !defined($request_state_name)) {
+			notify($ERRORS{'WARNING'}, 0, "skipping xCAT DESTROY tasks, unable to retrieve node name and request state name from DataStructure");
+		}
+		elsif ($request_state_name =~ /^(new|reload|image)$/) {
+			notify($ERRORS{'DEBUG'}, 0, "request state is '$request_state_name', attempting to set nodeset state of $node to 'boot'");
 			$self->_nodeset($node, 'boot');
 		}
-		
-		# Check for an overridden destructor
-		$self->SUPER::DESTROY if $self->can("SUPER::DESTROY");
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "request state is '$request_state_name', skipping setting nodeset state of $node to 'boot'");
+		}
 	}
+	
+	# Check for an overridden destructor
+	$self->SUPER::DESTROY if $self->can("SUPER::DESTROY");
 } ## end sub DESTROY
 
 #/////////////////////////////////////////////////////////////////////////////
