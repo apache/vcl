@@ -1011,7 +1011,7 @@ sub reserve {
 	} 
 	
 	# Append AllowUsers line to the end of the file
-	if (!$self->append_text_file('/etc/ssh/external_sshd_config', "AllowUsers \n")) {
+	if (!$self->append_text_file('/etc/ssh/external_sshd_config', "AllowUsers\n")) {
 		notify($ERRORS{'WARNING'}, 0, "Error in appending AllowUsers directive to external_sshd_config");
 	}
 	
