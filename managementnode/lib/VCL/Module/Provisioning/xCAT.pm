@@ -1589,7 +1589,7 @@ sub _nodeset {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute nodeset command for $computer_node_name");
 		return;
 	}
-	elsif (grep(/(Error:|nodeset failure)/, $output)) {
+	elsif (grep(/(Error:|nodeset failure)/, @$output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute nodeset command for $computer_node_name\ncommand: $command\noutput:\n" . join("\n", @$output));
 		return;
 	}
@@ -1794,7 +1794,7 @@ sub _rpower {
 			notify($ERRORS{'WARNING'}, 0, "failed to execute rpower command for $computer_node_name");
 			return;
 		}
-		elsif (grep(/Error:/, $output)) {
+		elsif (grep(/Error:/, @$output)) {
 			notify($ERRORS{'WARNING'}, 0, "failed to issue rpower command for $computer_node_name\ncommand: $command\noutput:\n" . join("\n", @$output));
 			next RPOWER_ATTEMPT;
 		}
@@ -1873,7 +1873,7 @@ sub _rinv {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute rinv command for $computer_node_name");
 		return;
 	}
-	elsif (grep(/Error:/, $output)) {
+	elsif (grep(/Error:/, @$output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to issue rinv command for $computer_node_name\ncommand: $command\noutput:\n" . join("\n", @$output));
 		return;
 	}
