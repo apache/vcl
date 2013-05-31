@@ -1518,7 +1518,8 @@ sub update_request_state {
 		UPDATE
 		request,
 		state state,
-		state laststate
+		state laststate,
+		state cstate
 		SET
 		request.stateid = state.id,
 		request.laststateid = laststate.id
@@ -1527,18 +1528,38 @@ sub update_request_state {
 		AND laststate.name = \'$laststate_name\'
 		AND request.id = $request_id
 		";
+
+      		# If input state_name is not pending. 
+      		# All other state changes must have the current state pending  
+      		if($state_name ne "pending") {
+         	  $update_statement .= "
+         	  AND request.stateid = cstate.id
+         	  AND cstate.name = 'pending'      
+         	  ";
+          	}
+
 	} ## end if (defined $laststate_name && $laststate_name...
 	else {
 		$update_statement = "
 		UPDATE
 		request,
-		state state
+		state state,
+		state cstate
 		SET
 		request.stateid = state.id
 		WHERE
 		state.name = \'$state_name\'
 		AND request.id = $request_id
 		";
+
+      		# If input state_name is not pending. 
+      		# All other state changes must have the current state pending  
+      		if($state_name ne "pending") {
+         	  $update_statement .= "
+         	  AND request.stateid = cstate.id
+         	  AND cstate.name = 'pending'      
+         	  ";
+          	}
 
 		$laststate_name = 'unchanged';
 	} ## end else [ if (defined $laststate_name && $laststate_name...
