@@ -2024,39 +2024,28 @@ sub remove_lines_from_file {
 	
 	my $computer_short_name = $self->data->get_computer_short_name();
 	
-	# Assemble the command, grep the pattern to retrieve the number of times the pattern exists in the file before and after
-	# This is used to verify that the pattern doesn't exist afterwards
-	my $command = "echo -n \"before:\" ; grep -c \"$pattern\" $file_path 2>&1 ; sed -i -e \"/$pattern/d\" $file_path 2>&1 ; echo -n \"after:\" ; grep -c \"$pattern\" $file_path 2>&1";
-	my ($exit_status, $output) = $self->execute($command, 0);
-	if (!defined($output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to execute command to remove lines containing '$pattern' from '$file_path' on $computer_short_name\ncommand: $command");
-		return;
-	}
-	elsif (grep(/No such file/i, @$output)) {
-		notify($ERRORS{'WARNING'}, 0, "file does NOT exist on $computer_short_name: $file_path");
-		return;
+	my @lines_removed;
+	my @lines_retained;
+	
+	my @lines = $self->get_file_contents($file_path);
+	for my $line (@lines) {
+		if ($line =~ /$pattern/) {
+			push @lines_removed, $line;
+		}
+		else {
+			push @lines_retained, $line;
+		}
 	}
 	
-	my $output_string = join("\n", @$output);
-	my ($before_count) = $output_string =~ /before:(\d+)/;
-	my ($after_count) = $output_string =~ /after:(\d+)/;
-
-	if (!defined($before_count) || (!defined($after_count) && $before_count != 0)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to remove lines containing '$pattern' from '$file_path' on $computer_short_name\ncommand: $command\noutput:\n$output_string");
-		return;
-	}
-	elsif ($before_count == 0) {
-		notify($ERRORS{'DEBUG'}, 0, "'$file_path' does not contain any lines matching '$pattern'");
-		return 1;
-	}
-	elsif ($after_count != 0) {
-		notify($ERRORS{'WARNING'}, 0, "failed to remove lines containing '$pattern' from '$file_path' on $computer_short_name, file still appears to have lines containing the pattern, command: '$command', output:\n$output_string");
-		return;
+	if (@lines_removed) {
+		my $lines_removed_count = scalar(@lines_removed);
+		notify($ERRORS{'DEBUG'}, 0, "removed $lines_removed_count line" . ($lines_removed_count > 1 ? 's' : '') . " from $file_path matching pattern: '$pattern'\n" . join("\n", @lines_removed));
+		$self->create_text_file($file_path, join("\n", @lines_retained)) || return;	
 	}
 	else {
-		notify($ERRORS{'OK'}, 0, "removed $before_count line" . ($before_count > 1 ? 's' : '') . " containing '$pattern' from '$file_path'");
-		return 1;
+		notify($ERRORS{'DEBUG'}, 0, "$file_path does NOT contain any lines matching pattern: '$pattern'");
 	}
+	return 1;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -2297,7 +2286,8 @@ sub execute_new {
 				);
 				
 				if ($ssh) {
-					notify($ERRORS{'DEBUG'}, 0, "created " . ref($ssh) . " object to control $computer_name, options: $ssh_options");
+					
+					notify($ERRORS{'DEBUG'}, 0, "created " . ref($ssh) . " object to control $computer_name, SSH options: $ssh_options");
 				}
 				else {
 					notify($ERRORS{'WARNING'}, 0, "failed to create Net::SSH::Expect object to control $computer_name, $!");
@@ -2310,7 +2300,7 @@ sub execute_new {
 				}
 				
 				#$ssh->exec("stty -echo");
-				$ssh->exec("stty raw -echo");
+				#$ssh->exec("stty raw -echo");
 				
 				# Set the timeout counter behaviour:
 				# If true, sets the timeout to "inactivity timeout"

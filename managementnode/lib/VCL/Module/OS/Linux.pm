@@ -328,13 +328,13 @@ sub post_load {
 	my $mn_private_ip         = $self->mn_os->get_private_ip_address();
 	
 	notify($ERRORS{'OK'}, 0, "initiating Linux post_load: $image_name on $computer_short_name");
-	
+
 	# Wait for computer to respond to SSH
-	if (!$self->wait_for_response(30, 600, 10)) {
+	if (!$self->wait_for_response(5, 600, 10)) {
 		notify($ERRORS{'WARNING'}, 0, "$computer_node_name never responded to SSH");
 		return 0;
 	}
-	
+
 	# Configure sshd to only listen on the private interface and add ext_sshd service listening on the public interface
 	if (!$self->configure_ext_sshd()) {
 		notify($ERRORS{'WARNING'}, 0, "failed to configure ext_sshd on $computer_node_name");
@@ -901,83 +901,103 @@ sub delete_user {
 	$user_login_id = $self->data->get_user_login_id() if (!$user_login_id);
 	if (!$user_login_id) {
 		notify($ERRORS{'WARNING'}, 0, "user could not be determined");
-		return 0;
+		return;
 	}
 	
-	# Make sure the user login ID was passed
-	my $computer_node_name = shift;
-	$computer_node_name = $self->data->get_computer_node_name() if (!$computer_node_name);
-	if (!$computer_node_name) {
-		notify($ERRORS{'WARNING'}, 0, "computer node name could not be determined");
-		return 0;
+	my $computer_node_name = $self->data->get_computer_node_name();
+	
+	# Make sure the user exists
+	if (!$self->user_exists($user_login_id)) {
+		notify($ERRORS{'DEBUG'}, 0, "user NOT deleted from $computer_node_name because it does not exist: $user_login_id");
+		return 1;
 	}
 	
-	# Make sure the identity key was passed
-	my $image_identity = shift;
-	$image_identity = $self->data->get_image_identity() if (!$image_identity);
-	if (!$image_identity) {
-		notify($ERRORS{'WARNING'}, 0, "image identity keys could not be determined");
-		return 0;
-	}
-	
-	
+	# Check if the user is logged in
 	if ($self->user_logged_in($user_login_id)) {
-		notify($ERRORS{'OK'}, 0, "user $user_login_id is logged in, logging of user");
-		if ($self->logoff_user($user_login_id)) {
+		if (!$self->logoff_user($user_login_id)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to delete user $user_login_id from $computer_node_name, user appears to be logged in but could NOT be logged off");
+			return;
+		}
+	}
+	
+	# Run df to determine if home directory is on a local device or network share
+	my $home_directory_path = "/home/$user_login_id";
+	my $df_command = "df -T -P $home_directory_path";
+	my ($df_exit_status, $df_output) = $self->execute($df_command);
+	if (!defined($df_output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to determine if home directory is mounted on a network share, command: '$df_command'");
+		return;
+	}
+	elsif (grep(/(no such file|no file system)/i, @$df_output)) {
+		notify($ERRORS{'DEBUG'}, 0, "home directory does NOT exist on $computer_node_name: $home_directory_path");
+	}
+	elsif (grep(/[\t\s]+nfs/, @$df_output)) {
+		notify($ERRORS{'DEBUG'}, 0, "home directory is mounted on a network share, command: '$df_command', output:\n" . join("\n", @$df_output));
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "home directory is NOT mounted on a network share, command: '$df_command', output:\n" . join("\n", @$df_output));
 		
-		}
+		# Delete the user's authorized keys file
+		my $authorized_keys_path = "$home_directory_path/.ssh/authorized_keys";
+		$self->delete_file($authorized_keys_path);
 	}
-
-	#Clean out any public ssh identity keys 
-	my $home_network_share_cmd = "df /home/$user_login_id";
-   my ($exit_status, $output) = $self->execute($home_network_share_cmd);
-   if(grep(/dev/, @$output)){
-     # confirm .ssh directory exists
-     # Make directory
-     my $rm_keys_cmd = "/bin/rm /home/$user_login_id/.ssh/authorized_keys";
-     if ($self->execute($rm_keys_cmd)) {
-         notify($ERRORS{'DEBUG'}, 0, "removed /home/$user_login_id/.ssh/authorized_keys file");
-     }
+	
+	# Call userdel to delete the user
+	# Do not use userdel -r or -f, it could remove a user's home directory on a network share
+	my $userdel_command = "/usr/sbin/userdel $user_login_id";
+	my ($userdel_exit_status, $userdel_output) = $self->execute($userdel_command);
+	if (!defined($userdel_output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to delete user from $computer_node_name: $user_login_id");
+		return;
+	}
+	elsif (grep(/does not exist/i, @$userdel_output)) {
+		notify($ERRORS{'DEBUG'}, 0, "user '$user_login_id' NOT deleted from $computer_node_name because it does not exist");
+	}
+	elsif (grep(/userdel: /i, @$userdel_output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to delete user '$user_login_id' from $computer_node_name, command: '$userdel_command', output:\n" . join("\n", @$userdel_output));
+		return;
 	}
 	else {
-		notify($ERRORS{'DEBUG'}, 0, "Detected network mounted home directory, will not remove authorized_keys: @$output");
+		notify($ERRORS{'OK'}, 0, "deleted user '$user_login_id' from $computer_node_name");
 	}
 	
-	# Use userdel to delete the user
-	# Do not use userdel -r, it will affect HPC user storage for HPC installs
-	my $user_delete_command = "/usr/sbin/userdel $user_login_id";
-	my @user_delete_results = $self->execute($user_delete_command);
-	foreach my $user_delete_line (@{$user_delete_results[1]}) {
-		if ($user_delete_line =~ /currently logged in/) {
-			notify($ERRORS{'WARNING'}, 0, "user not deleted, $user_login_id currently logged in");
-			return 0;
-		}
+	# Call groupdel to delete the user's group
+	my $groupdel_command = "/usr/sbin/groupdel $user_login_id";
+	my ($groupdel_exit_status, $groupdel_output) = $self->execute($groupdel_command);
+	if (!defined($groupdel_output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to delete group from $computer_node_name: $user_login_id");
+		return;
 	}
-	
-	# Delete the group
-	my $user_group_cmd = "/usr/sbin/groupdel $user_login_id";
-	if ($self->execute($user_delete_command)) {
-		notify($ERRORS{'DEBUG'}, 0, "attempted to delete usergroup for $user_login_id");
+	elsif (grep(/does not exist/i, @$groupdel_output)) {
+		notify($ERRORS{'DEBUG'}, 0, "group '$user_login_id' NOT deleted from $computer_node_name because it does not exist");
 	}
-	
-	my $imagemeta_rootaccess = $self->data->get_imagemeta_rootaccess();
-	
-	# Remove user from  external_sshd_config
-	my $rem_user_sshd_cmd = "sed -i -e \"/AllowUsers/s/$user_login_id//\" /etc/ssh/external_sshd_config"; 
-	if ($self->execute($rem_user_sshd_cmd)) {
-		if (!$self->restart_service("ext_sshd")) {
-      	notify($ERRORS{'WARNING'}, 0, "failed to restart ext_sshd service on $computer_node_name after updating /etc/ssh/external_sshd_config");
-   	}	
+	elsif (grep(/groupdel: /i, @$groupdel_output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to delete group '$user_login_id' from $computer_node_name, command: '$groupdel_command', output:\n" . join("\n", @$groupdel_output));
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "Failed to remove user_login_id from external_sshd_config");
+		notify($ERRORS{'OK'}, 0, "deleted group '$user_login_id' from $computer_node_name");
 	}
+	
+	# Remove username from AllowUsers lines in ssh/external_sshd_config
+	my $external_sshd_config_file_path = '/etc/ssh/external_sshd_config';
+	my @lines = $self->get_file_contents($external_sshd_config_file_path);
+	my $new_file_contents;
+	for my $line (@lines) {
+		if ($line =~ /AllowUsers/) {
+			$line =~ s/\s*$user_login_id//g;
+			# If user was only username listed on line, don't add empty AllowUsers line back to file
+			if ($line !~ /AllowUsers\s+\w/) {
+				next;
+			}
+		}
+		$new_file_contents .= "$line\n";
+	}
+	$self->create_text_file("$external_sshd_config_file_path\_new", $new_file_contents) || return;
 	
 	# Remove lines from sudoers
-	$self->remove_lines_from_file('/etc/sudoers', "^$user_login_id .*") || return;
+	$self->remove_lines_from_file('/etc/sudoers', "^\\s*$user_login_id\\s+") || return;
 	
 	return 1;
-
 } ## end sub delete_user
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -3999,26 +4019,26 @@ sub user_exists {
 		$username = $self->data->get_user_login_id();
 	}
 	
-	notify($ERRORS{'DEBUG'}, 0, "checking if user $username exists on $computer_node_name");
+	notify($ERRORS{'DEBUG'}, 0, "checking if user exists on $computer_node_name: $username");
 	
 	# Attempt to query the user account
 	my $query_user_command = "id $username";
-	my ($query_user_exit_status, $query_user_output) = $self->execute($query_user_command, 1);
+	my ($query_user_exit_status, $query_user_output) = $self->execute($query_user_command, 0);
 	
 	if (grep(/uid/, @$query_user_output)) {
-		notify($ERRORS{'DEBUG'}, 0, "user $username exists on $computer_node_name");
+		notify($ERRORS{'DEBUG'}, 0, "user exists on $computer_node_name: $username");
 		return 1;
 	}
 	elsif (grep(/No such user/i, @$query_user_output)) {
-		notify($ERRORS{'DEBUG'}, 0, "user $username does not exist on $computer_node_name");
+		notify($ERRORS{'DEBUG'}, 0, "user does not exist on $computer_node_name: $username");
 		return 0;
 	}
 	elsif (defined($query_user_exit_status)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to determine if user $username exists on $computer_node_name, exit status: $query_user_exit_status, output:\n@{$query_user_output}");
+		notify($ERRORS{'WARNING'}, 0, "failed to determine if user exists on $computer_node_name: $username, exit status: $query_user_exit_status, output:\n@{$query_user_output}");
 		return;
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to determine if user $username exists on $computer_node_name");
+		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to determine if user exists on $computer_node_name: $username");
 		return;
 	}
 }
