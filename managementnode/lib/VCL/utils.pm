@@ -4357,10 +4357,10 @@ EOF
 	if($image_identifier =~ /^\d/){
 		$select_statement .= "imagerevision.imageid = '$image_identifier'";
 	}
-	else{
+	else {
 		# Assume $image_identifier is the image name, strip off '-v*' from the end
 		# Otherwise query may fail if production version is not the exact revision passed as the argument
-		$image_identifier =~ s/-\v\d+$/-v%/;
+		$image_identifier =~ s/-v\d+$/-v%/;
 		$select_statement .= "imagerevision.imagename LIKE \'$image_identifier\'";
 	}
 
