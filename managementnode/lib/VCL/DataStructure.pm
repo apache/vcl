@@ -575,6 +575,16 @@ my @image_identifier : Field : Arg('Name' => 'image_identifier') : Type(scalar) 
 
 my @imagerevision_identifier : Field : Arg('Name' => 'imagerevision_identifier') : Type(scalar) : Get('Name' => 'imagerevision_identifier', 'Private' => 1);
 
+=head3 @mn_os
+
+ Data type   : array of scalars
+ Description :
+
+=cut
+
+my @mn_os : Field : Arg('Name' => 'mn_os') : Get('Name' => 'mn_os', 'Private' => 1) : Set('Name' => 'set_mn_os');
+
+
 ##############################################################################
 
 =head1 PRIVATE OBJECT METHODS
@@ -637,23 +647,25 @@ sub _initialize : Init {
 	
 	
 	# If either the computer, image, or imagerevision identifier arguments are specified, retrieve appropriate image and imagerevision data
-	if ($imagerevision_identifier || $image_identifier || $computer_identifier) {
+	if (defined($imagerevision_identifier) || defined($image_identifier) || defined($computer_identifier)) {
 		my $imagerevision_info;
 		
-		if ($imagerevision_identifier) {
+		if (defined($imagerevision_identifier)) {
+			$imagerevision_identifier = 'noimage' if !$imagerevision_identifier;
 			notify($ERRORS{'DEBUG'}, 0, "imagerevision identifier argument was specified: $imagerevision_identifier, DataStructure object will contain image information for this imagerevision: $imagerevision_identifier");
 			$imagerevision_info = get_imagerevision_info($imagerevision_identifier);
 		}
-		elsif ($image_identifier) {
+		elsif (defined($image_identifier)) {
+			$image_identifier = 'noimage' if !$image_identifier;
 			notify($ERRORS{'DEBUG'}, 0, "image identifier argument was specified: $image_identifier, DataStructure object will contain image information for the production imagerevision of this image");
 			$imagerevision_info = get_production_imagerevision_info($image_identifier);
 		}
-		elsif ($computer_identifier) {
+		elsif (defined($computer_identifier)) {
 			my $imagerevision_id = $self->get_computer_imagerevision_id();
 			if (defined($imagerevision_id)) {
-				notify($ERRORS{'OK'}, 0, "computer identifier argument was specified ($computer_identifier) but image and imagerevision ID arguments were not, DataStructure object will contain image information for the computer's current imagerevision ID: $imagerevision_id");
+				notify($ERRORS{'DEBUG'}, 0, "computer identifier argument was specified ($computer_identifier) but image and imagerevision ID arguments were not, DataStructure object will contain image information for the computer's current imagerevision ID: $imagerevision_id");
 				if (!$imagerevision_id) {
-					notify($ERRORS{'OK'}, 0, "computer identifier argument was specified ($computer_identifier) imagerevision_id is set to $imagerevision_id");
+					notify($ERRORS{'DEBUG'}, 0, "computer identifier argument was specified ($computer_identifier) imagerevision_id is set to $imagerevision_id");
 					my $image_id = $self->get_computer_currentimage_id();
 					if (defined($image_id)) {
 						$imagerevision_info = get_production_imagerevision_info($image_id);
@@ -701,7 +713,7 @@ sub _initialize : Init {
 	}
 	
 	return 1;
-	}
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -730,11 +742,6 @@ sub _automethod : Automethod {
 		# $mode stores either 'get' or 'set', data stores the requested data
 		$mode            = $1;
 		$data_identifier = $2;
-	}
-	elsif ($method_name eq 'mn_os') {
-		# Allow $self->mn_os to be called from this DataStructure object
-		# Return a code reference to mn_os subroutine
-		return $self->can("VCL::Module::mn_os");
 	}
 	else {
 		notify($ERRORS{'WARNING'}, 0, "illegal subroutine name: $method_name");
@@ -996,7 +1003,7 @@ sub get_reservation_ids {
 
 sub is_parent_reservation {
 	my $self = shift;
-
+	
 	my $reservation_id  = $self->get_reservation_id();
 	my @reservation_ids = $self->get_reservation_ids();
 
@@ -1642,7 +1649,14 @@ sub get_computer_private_ip_address {
 	
 	notify($ERRORS{'DEBUG'}, 0, "attempting to retrieve private IP address for computer: $computer_name");
 	
-	my @hosts_lines = $self->mn_os->get_file_contents('/etc/hosts');
+	# Make sure mn_os is defined
+	my $mn_os = $self->mn_os;
+	if (!$mn_os) {
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve private IP address for computer: $computer_name, management node OS object is not available");
+		return;
+	}
+	
+	my @hosts_lines = $mn_os->get_file_contents('/etc/hosts');
 	if (!@hosts_lines) {
 		notify($ERRORS{'WARNING'}, 0, "failed to retrieve contents of /etc/hosts on this management node");
 		return;
