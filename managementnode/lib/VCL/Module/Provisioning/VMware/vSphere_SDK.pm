@@ -164,7 +164,7 @@ sub initialize {
 			last;
 		}
 	}
-
+	
 	if (!$vim) {
 		notify($ERRORS{'DEBUG'}, 0, "failed to connect to VM host $vmhost_hostname");
 		return;
@@ -320,6 +320,10 @@ sub vm_unregister {
 	else {
 		$vm_name = $argument;
 		$vm_view = $self->_get_vm_view($argument);
+		if (!$vm_view) {
+			notify($ERRORS{'WARNING'}, 0, "failed to unregister VM, VM view object could not be retrieved for argument: '$argument'");
+			return;
+		}
 	}
 	
 	my $vmx_path = $vm_view->{summary}{config}{vmPathName};
@@ -485,64 +489,19 @@ sub get_vm_power_state {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 _clean_vm_name
- Parameters  : $vm_name
- Returns     : string
- Description : VMWare vCenter supports VM Names of up to 80 characters, but if
-               the name is greater than 29 characters, it will truncate the 
-               corresponding name and enclosing directory of the virtual disks.
-
-=cut
-
-sub _clean_vm_name {
-	my $self = shift;
-	if (ref($self) !~ /VCL::Module/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-	
-	my $vm_name = shift || return;
-	
-	# if the length of the name is > 29, then truncate it in such a way that
-	# the image name remains unique in the VCL database
-	my $MAX_VMNAME_LEN = 29;
-	if (length $vm_name > $MAX_VMNAME_LEN) {
-		notify($ERRORS{'DEBUG'}, 0, "truncating VM name $vm_name");
-		my $newname = "";
-		if ($vm_name =~ m/^(\w+)-(\w+?)(\d*)-(v\d+)$/) {
-			my $base = $1;
-			my $name = $2;
-			my $imgid = $3;
-			my $version = $4;
-			my $shortened = substr($name, 0, $MAX_VMNAME_LEN - 2 - length($imgid) - length($base) - length($version));
-			$newname = $base . "-" . $shortened . $imgid . "-" . $version; 
-		}
-		else {
-			my ($pre_len, $post_len) = ($MAX_VMNAME_LEN - 10, 10);
-			my ($pre, $post) = $vm_name =~ m/^(.{$pre_len}).*(.{$post_len})$/;
-			$newname = $pre . $post;
-		}
-		if (get_image_info($newname, 0, 1)) {
-			notify($ERRORS{'WARNING'}, 0, "Naming conflict: $newname already exists in the database");
-		}
-		else {
-			notify($ERRORS{'DEBUG'}, 0, "Changed image name to: $newname");
-			$vm_name = $newname;
-		}
-	}
-	return $vm_name;
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
 =head2 copy_virtual_disk
 
  Parameters  : $source_vmdk_file_path, $destination_vmdk_file_path, $disk_type (optional), $adapter_type (optional)
- Returns     : boolean
+ Returns     : string
  Description : Copies a virtual disk (set of vmdk files). This subroutine allows
                a virtual disk to be converted to a different disk type or
                adapter type. The source and destination vmdk file path arguments
                are required.
+               
+               A string is returned containing the destination vmdk file path.
+               This may not be the same as the $destination_vmdk_file_path
+               argument if the name had to be truncated to adhere to SDK naming
+               restrictions.
                
                The disk type argument is optional and may be one of the
                following values:
@@ -743,7 +702,7 @@ sub copy_virtual_disk {
 	}
 	else {
 		notify($ERRORS{'OK'}, 0, "copied vmdk on VM host $vmhost_name using CopyVirtualDisk function:\n" . format_data($copy_virtual_disk_result));
-		return 1;
+		return $destination_path;
 	}
 	
 	my $resource_pool_view = $self->_get_resource_pool_view() || return;
@@ -756,6 +715,12 @@ sub copy_virtual_disk {
 	
 	my $source_vm_name = $self->_clean_vm_name("source-$request_id\_$destination_base_name");
 	my $clone_vm_name = $self->_clean_vm_name($destination_base_name);
+	
+	if ($clone_vm_name ne $destination_base_name) {
+		notify($ERRORS{'OK'}, 0, "virtual disk name shortened:\noriginal: $destination_base_name --> modified: $clone_vm_name");
+		$destination_base_name = $clone_vm_name;
+		$destination_path = "[$destination_datastore_name] $clone_vm_name/$clone_vm_name.vmdk";
+	}
 	
 	my $source_vm_directory_path = "[$source_datastore_name] $source_vm_name";
 	my $clone_vm_directory_path = "[$destination_datastore_name] $clone_vm_name";
@@ -771,7 +736,8 @@ sub copy_virtual_disk {
 			);
 			
 			# Unregister the VM, don't attempt to delete it or else the source vmdk may be deleted
-			return unless $self->vm_unregister($existing_vmx_file_path);
+			# Don't fail if VM can't be unregistered, it may not be registered
+			$self->vm_unregister($existing_vmx_file_path);
 		}
 		elsif ($existing_vmx_directory_path eq $clone_vm_directory_path) {
 			notify($ERRORS{'WARNING'}, 0, "existing VM using the directory of the VM clone will be deleted:\n" .
@@ -922,7 +888,7 @@ EOF
 		);
 		if ($clone_vm) {
 			$clone_vm_view = Vim::get_view(mo_ref => $clone_vm);
-			notify($ERRORS{'DEBUG'}, 0, "cloned VM: $source_vm_name --> $clone_vm_name" . format_data($clone_vm_view));
+			notify($ERRORS{'DEBUG'}, 0, "cloned VM: $source_vm_name --> $clone_vm_name");
 		}
 		else {
 			notify($ERRORS{'WARNING'}, 0, "failed to clone VM: $source_vm_name --> $clone_vm_name");
@@ -960,9 +926,8 @@ EOF
 	# Set this as a class value so that it is retrievable from within 
 	# the calling context, i.e. capture(), routine. This way, in case 
 	# the name changes, it is possible to update the database with the new value.
-	$self->{new_image_name} = $clone_vm_name;
 	notify($ERRORS{'OK'}, 0, "copied virtual disk on VM host $vmhost_name: '$source_path' --> '$destination_path'");
-	return 1;
+	return $destination_path;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -970,7 +935,7 @@ EOF
 =head2 move_virtual_disk
 
  Parameters  : $source_path, $destination_path
- Returns     : boolean
+ Returns     : string
  Description : Moves or renames a virtual disk (set of vmdk files).
 
 =cut
@@ -999,6 +964,8 @@ sub move_virtual_disk {
 		notify($ERRORS{'WARNING'}, 0, "source file does not exist on VM host $vmhost_name: '$source_path'");
 		return;
 	}
+	
+	my $source_parent_directory_path = $self->_get_parent_directory_datastore_path($source_path) || return;
 	
 	# Make sure the destination file does not exist
 	if ($self->file_exists($destination_path)) {
@@ -1036,47 +1003,26 @@ sub move_virtual_disk {
 		# A FileNotFound fault will be generated if the source vmdk file exists but there is a problem with it
 		if ($fault->isa('SoapFault') && ref($fault->detail) eq 'FileNotFound' && defined($source_file_info->{type}) && $source_file_info->{type} !~ /vmdisk/i) {
 			notify($ERRORS{'WARNING'}, 0, "failed to move virtual disk on VM host $vmhost_name, source file is either not a virtual disk file or there is a problem with its configuration, check the 'Extent description' section of the vmdk file: '$source_path'\nsource file info:\n" . format_data($source_file_info));
-            return;
 		}
 		elsif ($fault =~ /No space left/i) {
 			notify($ERRORS{'CRITICAL'}, 0, "failed to move virtual disk on VM host $vmhost_name, no space is left on the destination device: '$destination_path'\nerror:\n$fault");
-            return;
 		}
-        elsif ($fault =~ /not implemented/i){
-            notify($ERRORS{'DEBUG'}, 0, "unable to move vmdk using MoveVirtualDisk function, VM host $vmhost_name does not implement the MoveVirtualDisk function");
-            $self->delete_file($destination_parent_directory_path);
-        }
+		elsif ($fault =~ /not implemented/i) {
+			notify($ERRORS{'DEBUG'}, 0, "unable to move vmdk using MoveVirtualDisk function, VM host $vmhost_name does not implement the MoveVirtualDisk function");
+			$self->delete_file($destination_parent_directory_path);
+		}
 		elsif ($source_file_info) {
 			notify($ERRORS{'WARNING'}, 0, "failed to move virtual disk on VM host $vmhost_name:\n'$source_path' --> '$destination_path'\nsource file info:\n" . format_data($source_file_info) . "\n$fault");
-            return;
 		}
 		else {
 			notify($ERRORS{'WARNING'}, 0, "failed to move virtual disk on VM host $vmhost_name:\n'$source_path' --> '$destination_path'\nsource file info: unavailable\n$fault");
-            return;
 		}
-		
-	} else {
-        notify($ERRORS{'OK'}, 0, "moved virtual disk on VM host $vmhost_name:\n'$source_path' --> '$destination_path'");
-        return 1;
-    }
-    
-    # This section should apply only to vCenter hosts, i.e. hosts for which the
-    # MoveVirtualDisk method is not implemented. Instead, use the copy_virtual_disk
-    # method (where the CloneVM method is used) and cleanup source files afterward. 
-    if($self->copy_virtual_disk($source_path, $destination_path)){
-        my $file_manager = $self->_get_file_manager_view() || return;
-        my $source_parent_directory_path = $self->_get_parent_directory_datastore_path($source_path) || return;
-        notify($ERRORS{'DEBUG'}, 0, "Removing source directory: $source_parent_directory_path");
-        $file_manager->DeleteDatastoreFile(
-                    name => $source_parent_directory_path,
-                    datacenter => $datacenter);
-        
-        notify($ERRORS{'OK'}, 0, "moved virtual disk on VM host $vmhost_name:\n'$source_path' --> '$destination_path'");
-        return 1; 
-    } else {
-        notify($ERRORS{'WARNING'}, 0, "Unable to move virtual disk from $vmhost_name: '$source_path' --> '$destination_path'");
-        return 0;
-    }
+		return;
+	}
+	else {
+		notify($ERRORS{'OK'}, 0, "moved virtual disk on VM host $vmhost_name:\n'$source_path' --> '$destination_path'");
+		return $destination_path;
+	}
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -1824,7 +1770,6 @@ sub copy_file_from {
         }, [], "attempting to copy file from VM host to management node:  $vmhost_hostname:'[$source_datastore_name] $source_file_relative_datastore_path' --> '$destination_file_path'", 50, 5);
 
 }
-
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -2852,10 +2797,10 @@ sub _get_resource_pool_view {
 			$potential_matches{$resource_pool_path} = $resource_pool;
 		}
 		else {
-			notify($ERRORS{'DEBUG'}, 0, "resource pool on VM host $vmhost_name does NOT match VM host profile resource path:\n" .
-				"path on VM host: '$resource_pool_path'\n" .
-				"VM profile path: '$vmhost_profile_resource_path'"
-			);
+			#notify($ERRORS{'DEBUG'}, 0, "resource pool on VM host $vmhost_name does NOT match VM host profile resource path:\n" .
+			#	"path on VM host: '$resource_pool_path'\n" .
+			#	"VM profile path: '$vmhost_profile_resource_path'"
+			#);
 		}
 	}
 	

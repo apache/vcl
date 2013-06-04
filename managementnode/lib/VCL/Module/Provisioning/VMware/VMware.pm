@@ -291,6 +291,7 @@ sub initialize {
 		notify($ERRORS{'DEBUG'}, 0, "vSphere SDK object will be used to control the VM host $vmhost_computer_name and the VM: $vm_computer_name");
 		
 		$self->set_vmhost_os($vmware_api);
+		$vmware_api->set_vmhost_os($vmware_api);
 	}
 	else {
 		# SSH access to the VM host OS is required if the vSphere SDK can't be used
@@ -3292,7 +3293,7 @@ sub set_vmx_file_path {
 
 =head2 get_reference_vmx_file_name
 
- Parameters  : none
+ Parameters  : $image_name (optional)
  Returns     : string
  Description : Returns the name of the reference vmx file that was used when the
                image was captured.
@@ -3306,67 +3307,8 @@ sub get_reference_vmx_file_name {
 		return;
 	}
 	
-	return $ENV{reference_vmx_file_name} if defined($ENV{reference_vmx_file_name});
-	
-	my $image_name = $self->data->get_image_name() || return;
-	
-	$ENV{reference_vmx_file_name} = "$image_name.vmx.reference";
-	return $ENV{reference_vmx_file_name};
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 get_reference_vmx_file_path
-
- Parameters  : none
- Returns     : string
- Description : Returns the path to the reference vmx file that was used when the
-               image was captured.
-
-=cut
-
-sub get_reference_vmx_file_path {
-	my $self = shift;
-	if (ref($self) !~ /vmware/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-	
-	return $ENV{reference_vmx_file_path} if defined($ENV{reference_vmx_file_path});
-	
-	my $vmdk_directory_path_shared = $self->get_vmdk_directory_path_shared();
-	if (!$vmdk_directory_path_shared) {
-		notify($ERRORS{'WARNING'}, 0, "unable to construct reference vmx file path, shared vmdk directory path could not be determined");
-		return;
-	}
-	
-	my $reference_vmx_file_name = $self->get_reference_vmx_file_name();
-	if (!$reference_vmx_file_name) {
-		notify($ERRORS{'WARNING'}, 0, "unable to construct reference vmx file path, reference vmx file name could not be determined");
-		return;
-	}
-	
-	my $reference_vmx_file_path = "$vmdk_directory_path_shared/$reference_vmx_file_name";
-	
-	if ($self->vmhost_os->file_exists($reference_vmx_file_path)) {
-		$ENV{reference_vmx_file_path} = $reference_vmx_file_path;
-		notify($ERRORS{'DEBUG'}, 0, "determined reference vmx file path: $ENV{reference_vmx_file_path}");
-		return $ENV{reference_vmx_file_path};
-	}
-	
-	my $repository_vmdk_file_path = $self->get_repository_vmdk_file_path();
-	if ($self->is_repository_mounted_on_vmhost()) {
-		if ($self->vmhost_os->file_exists($repository_vmdk_file_path)) {
-			$ENV{reference_vmx_file_path} = $repository_vmdk_file_path;
-			notify($ERRORS{'DEBUG'}, 0, "determined reference vmx file path: $ENV{reference_vmx_file_path}");
-			return $ENV{reference_vmx_file_path};
-		}
-	}
-	else {
-	}
-	
-	notify($ERRORS{'DEBUG'}, 0, "determined reference vmx file path: $ENV{reference_vmx_file_path}");
-	return $ENV{reference_vmx_file_path};
+	my $image_name = shift || $self->data->get_image_name();
+	return "$image_name.vmx.reference";
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -4573,6 +4515,8 @@ sub does_image_exist {
 		return;
 	}
 	
+	my $image_name = $self->data->get_image_name();
+	my $image_name_truncated = $self->_clean_vm_name($image_name);
 	my $vmhost_name = $self->data->get_vmhost_short_name() || return;
 	my $management_node_hostname = $self->data->get_management_node_short_name() || 'management node';
 	
@@ -4585,11 +4529,22 @@ sub does_image_exist {
 	
 	# Check if the vmdk file already exists on the VM host
 	if ($self->vmhost_os->file_exists($vmhost_vmdk_file_path_shared)) {
-		notify($ERRORS{'OK'}, 0, "image exists in the shared directory on the VM host: $vmhost_vmdk_file_path_shared");
+		notify($ERRORS{'OK'}, 0, "image exists in datastore on VM host $vmhost_name: $vmhost_vmdk_file_path_shared");
 		return 1;
 	}
 	else {
-		notify($ERRORS{'DEBUG'}, 0, "image does not exist in the shared directory on the VM host");
+		notify($ERRORS{'DEBUG'}, 0, "image does NOT exist in datastore on VM host $vmhost_name: $vmhost_vmdk_file_path_shared");
+	}
+	
+	# Check if the truncated vmdk file already exists on the VM host
+	(my $vmhost_vmdk_file_path_shared_truncated = $vmhost_vmdk_file_path_shared) =~ s/$image_name/$image_name_truncated/g;
+	if ($self->vmhost_os->file_exists($vmhost_vmdk_file_path_shared_truncated)) {
+		notify($ERRORS{'OK'}, 0, "image exists with truncated name in datastore on VM host $vmhost_name: $vmhost_vmdk_file_path_shared_truncated");
+		$self->data->set_image_name($image_name_truncated);
+		return 1;
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "image does NOT exist with truncated name in datastore on VM host $vmhost_name: $vmhost_vmdk_file_path_shared_truncated");
 	}
 	
 	# Get the image repository file path
@@ -4599,44 +4554,46 @@ sub does_image_exist {
 		return 0;
 	}
 	
+	(my $repository_vmdk_file_path_truncated = $repository_vmdk_file_path) =~ s/$image_name/$image_name_truncated/g;
+	
 	if ($self->is_repository_mounted_on_vmhost()) {
-		notify($ERRORS{'DEBUG'}, 0, "checking if vmdk file exists in image repository mounted on VM host: $vmhost_name:$repository_vmdk_file_path");
 		if ($self->vmhost_os->file_exists($repository_vmdk_file_path)) {
-			notify($ERRORS{'DEBUG'}, 0, "vmdk file exists in image repository mounted on VM host: $vmhost_name:$repository_vmdk_file_path");
+			notify($ERRORS{'DEBUG'}, 0, "image exists in image repository mounted on VM host: $vmhost_name:$repository_vmdk_file_path");
 			return 1;
 		}
 		else {
-			notify($ERRORS{'DEBUG'}, 0, "vmdk file does not exist in image repository mounted on VM host: $vmhost_name:$repository_vmdk_file_path");
-			return 0;
+			notify($ERRORS{'DEBUG'}, 0, "image does NOT exist in image repository mounted on VM host: $vmhost_name:$repository_vmdk_file_path");
+		}
+		
+		if ($self->vmhost_os->file_exists($repository_vmdk_file_path_truncated)) {
+			notify($ERRORS{'DEBUG'}, 0, "image exists with truncated name in image repository mounted on VM host $vmhost_name: $repository_vmdk_file_path_truncated");
+			$self->data->set_image_name($image_name_truncated);
+			return 1;
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "image does NOT exist with truncated name in image repository mounted on VM host $vmhost_name: $repository_vmdk_file_path_truncated");
 		}
 	}
 	else {
-		notify($ERRORS{'DEBUG'}, 0, "checking if vmdk file exists in image repository on managment node $management_node_hostname: $repository_vmdk_file_path");
-		
-		# Escape all spaces in the path
-		my $escaped_repository_vmdk_file_path = escape_file_path($repository_vmdk_file_path);
-		
-		# Check if the file or directory exists
-		# Do not enclose the path in quotes or else wildcards won't work
-		my $command = "stat $escaped_repository_vmdk_file_path";
-		my ($exit_status, $output) = run_command($command, 1);
-		if (!defined($output)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to run command to determine if vmdk file exists on management node:\npath: '$repository_vmdk_file_path'\ncommand: '$command'");
-			return;
-		}
-		elsif (grep(/no such file/i, @$output)) {
-			notify($ERRORS{'DEBUG'}, 0, "vmdk file does not exist on management node: '$repository_vmdk_file_path'");
-			return 0;
-		}
-		elsif (grep(/^\s*Size:.*file$/i, @$output)) {
-			notify($ERRORS{'DEBUG'}, 0, "vmdk file exists on management node: '$repository_vmdk_file_path'");
+		if ($self->mn_os->file_exists($repository_vmdk_file_path)) {
+			notify($ERRORS{'DEBUG'}, 0, "image exists in image repository mounted on management node: $repository_vmdk_file_path");
 			return 1;
 		}
 		else {
-			notify($ERRORS{'WARNING'}, 0, "failed to determine if vmdk file exists on management node:\npath: '$repository_vmdk_file_path'\ncommand: '$command'\nexit status: $exit_status, output:\n" . join("\n", @$output));
-			return;
+			notify($ERRORS{'DEBUG'}, 0, "image does NOT exist in image repository mounted on management node: $repository_vmdk_file_path");
+		}
+		
+		if ($self->mn_os->file_exists($repository_vmdk_file_path_truncated)) {
+			notify($ERRORS{'DEBUG'}, 0, "image exists with truncated name in image repository mounted on management node: $repository_vmdk_file_path_truncated");
+			$self->data->set_image_name($image_name_truncated);
+			return 1;
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "image does NOT exist with truncated name in image repository mounted on management node: $repository_vmdk_file_path_truncated");
 		}
 	}
+	
+	return 0;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -5776,11 +5733,16 @@ sub copy_vmdk {
 	my $source_directory_path = $self->_get_parent_directory_normal_path($source_vmdk_file_path) || return;
 	my $destination_directory_path = $self->_get_parent_directory_normal_path($destination_vmdk_file_path) || return;
 	
+	my $source_vmdk_file_base_name = $self->_get_file_base_name($source_vmdk_file_path) || return;
+	my $destination_vmdk_file_base_name = $self->_get_file_base_name($destination_vmdk_file_path) || return;
+	
 	# Construct the source and destination reference vmx file paths
 	# The reference vmx file is copied to the vmdk directory if it exists
-	my $reference_vmx_file_name = $self->get_reference_vmx_file_name();
-	my $source_reference_vmx_file_path = "$source_directory_path/$reference_vmx_file_name";
-	my $destination_reference_vmx_file_path = "$destination_directory_path/$reference_vmx_file_name";
+	my $source_reference_vmx_file_name = $self->get_reference_vmx_file_name($source_vmdk_file_base_name);
+	my $source_reference_vmx_file_path = "$source_directory_path/$source_reference_vmx_file_name";
+	
+	my $destination_reference_vmx_file_name = $self->get_reference_vmx_file_name($destination_vmdk_file_base_name);
+	my $destination_reference_vmx_file_path = "$destination_directory_path/$destination_reference_vmx_file_name";
 	
 	# Set the default virtual disk type if the argument was not specified
 	if (!$virtual_disk_type) {
@@ -5811,27 +5773,33 @@ sub copy_vmdk {
 	}
 	
 	my $start_time = time;
-	my $copy_result = 0;
-
+	my $end_time;
 	# Attempt to use the API's copy_virtual_disk subroutine
 	if ($self->api->can('copy_virtual_disk')) {
-		my $image_name = $self->data->get_image_name();
-		# Initialize this with the image name
-		$self->api->{new_image_name} = $image_name;
-		if ($self->api->copy_virtual_disk($source_vmdk_file_path, $destination_vmdk_file_path, $virtual_disk_type)) {
-			notify($ERRORS{'OK'}, 0, "copied vmdk using API's copy_virtual_disk subroutine");
-			# If the new VM name is longer than 29 chars, it may be truncated.
-			# In that case, update the image name in the database, but only do this
-			# if the API changes the value of new_image_name.
-			my $request_state_name = $self->data->get_request_state_name();
-			if ($request_state_name eq 'image' && $self->api->{new_image_name} ne $image_name) {
-				my $image_id = $self->data->get_image_id();
-				my $imagerevision_id = $self->data->get_imagerevision_id();
-				update_image_name($image_id, $imagerevision_id, $self->api->{new_image_name});
-				$self->data->set_image_name($self->api->{new_image_name});
-				notify($ERRORS{'DEBUG'}, 0, "updated image name to ".$self->api->{new_image_name});
+		my $copied_destination_vmdk_file_path = $self->api->copy_virtual_disk($source_vmdk_file_path, $destination_vmdk_file_path, $virtual_disk_type);
+		if ($copied_destination_vmdk_file_path) {
+			$end_time = time;
+			$copied_destination_vmdk_file_path = $self->_get_normal_path($copied_destination_vmdk_file_path);
+			if ($copied_destination_vmdk_file_path ne $destination_vmdk_file_path) {
+				notify($ERRORS{'DEBUG'}, 0, "copied vmdk using API's copy_virtual_disk subroutine but destination path was changed:\n" .
+					"intended destination path: $destination_vmdk_file_path\n" .
+					"copied destination path: $copied_destination_vmdk_file_path\n" .
+					"attempting to move copied vmdk to intended path"
+				);
+				
+				if ($self->move_vmdk($copied_destination_vmdk_file_path, $destination_vmdk_file_path)) {
+					my $copied_destination_directory_path = $self->_get_parent_directory_normal_path($copied_destination_vmdk_file_path);
+					$self->vmhost_os->delete_file($copied_destination_directory_path);
+				}
+				else {
+					notify($ERRORS{'WARNING'}, 0, "failed to move vmdk which was copied by API's copy_virtual_disk subroutine with a different name to the correct path");
+					$self->vmhost_os->delete_file($copied_destination_vmdk_file_path);
+					return;
+				}
 			}
-			$copy_result = 1;
+			else {
+				notify($ERRORS{'OK'}, 0, "copied vmdk using API's copy_virtual_disk subroutine");
+			}
 		}
 		else {
 			notify($ERRORS{'WARNING'}, 0, "failed to copy vmdk using API's copy_virtual_disk subroutine");
@@ -5840,19 +5808,18 @@ sub copy_vmdk {
 	}
 	
 	# Make sure VM host OS object implements 'execute' before attempting to call utilities
-	if (!$copy_result && !$self->vmhost_os->can('execute')) {
+	if (!$end_time && !$self->vmhost_os->can('execute')) {
 		notify($ERRORS{'WARNING'}, 0, "failed to copy vmdk on VM host $vmhost_name, unable to copy using API's copy_virtual_disk subroutine and an 'execute' subroutine is not implemented by the VM host OS object");
 		return;
 	}
-	elsif (!$copy_result) {
+	
+	if (!$end_time) {
 		# Create the destination directory
 		if (!$self->vmhost_os->create_directory($destination_directory_path)) {
 			notify($ERRORS{'WARNING'}, 0, "unable to copy vmdk, destination directory could not be created on VM host $vmhost_name: $destination_directory_path");
 			return;
 		}
-	}
-	
-	if (!$copy_result) {
+		
 		# Try to use vmkfstools
 		my $command = "vmkfstools -i \"$source_vmdk_file_path\" \"$destination_vmdk_file_path\" -d $virtual_disk_type";
 		notify($ERRORS{'DEBUG'}, 0, "attempting to copy virtual disk using vmkfstools, disk type: $virtual_disk_type:\n'$source_vmdk_file_path' --> '$destination_vmdk_file_path'");
@@ -5903,12 +5870,12 @@ sub copy_vmdk {
 			notify($ERRORS{'WARNING'}, 0, "failed to copy virtual disk\ncommand: '$command'\noutput:\n" . join("\n", @$output));
 		}
 		else {
+			$end_time = time;
 			notify($ERRORS{'OK'}, 0, "copied virtual disk on VM host using vmkfstools, destination disk type: $virtual_disk_type:\n'$source_vmdk_file_path' --> '$destination_vmdk_file_path'");
-			$copy_result = 1;
 		}
 	}
 	
-	if (!$copy_result) {
+	if (!$end_time) {
 		# Try to use vmware-vdiskmanager
 		# Use disk type  = 1 (2GB sparse)
 		my $vdisk_command = "vmware-vdiskmanager -r \"$source_vmdk_file_path\" -t 1 \"$destination_vmdk_file_path\"";
@@ -5999,7 +5966,7 @@ sub copy_vmdk {
 			elsif ($partial_chains_error) {
 				# Had to make a copy of the original master vmdk earlier, not the desired source vmdk
 				# Still need to merge the delta vmdk into this copy
-				$copy_result = 1;
+				$end_time = time;
 				
 				# Determine the .vmsd file path
 				my $vmx_file_path = $self->get_vmx_file_path();
@@ -6016,12 +5983,12 @@ sub copy_vmdk {
 					my ($sed_exit_status, $sed_output) = $self->vmhost_os->execute($sed_command);
 					if (!defined($sed_output)) {
 						notify($ERRORS{'WARNING'}, 0, "failed to execute command to replace original vmdk file path with copied vmdk file path in $replace_file_path");
-						$copy_result = 0;
+						undef $end_time;
 						last;
 					}
 					elsif (grep(/sed: /, @$sed_output)) {
 						notify($ERRORS{'WARNING'}, 0, "failed to replace original vmdk file path with copied vmdk file path in '$replace_file_path'\n'$source_vmdk_file_path' --> '$destination_vmdk_file_path'\ncommand: '$sed_command'\noutput:\n" . join("\n", @$sed_output));
-						$copy_result = 0;
+						undef $end_time;
 						last;
 					}
 					else {
@@ -6030,7 +5997,7 @@ sub copy_vmdk {
 				}
 				
 				# Remove the VM's snapshots, this merges the delta vmdk into the copy of the original master vmdk
-				if ($copy_result) {
+				if ($end_time) {
 					if ($self->api->remove_snapshots($vmx_file_path)) {
 						notify($ERRORS{'DEBUG'}, 0, "removed snapshots from VM, the merged delta vmdk '$delta_vmdk_file_path' with destination vmdk '$destination_vmdk_file_path'");
 					}
@@ -6042,13 +6009,13 @@ sub copy_vmdk {
 			}
 			else {
 				notify($ERRORS{'OK'}, 0, "copied virtual disk on VM host $vmhost_name using vmware-vdiskmanager:\n'$source_vmdk_file_path' --> '$destination_vmdk_file_path'");
-				$copy_result = 1;
+				$end_time = time;
 			}
 		}
 	}
 	
 	# Check if any of the methods was successful
-	if (!$copy_result) {
+	if (!$end_time) {
 		notify($ERRORS{'WARNING'}, 0, "failed to copy virtual disk on VM host $vmhost_name using any available methods:\n'$source_vmdk_file_path' --> '$destination_vmdk_file_path'");
 		
 		# Delete the destination directory
@@ -6058,12 +6025,11 @@ sub copy_vmdk {
 		elsif (!$self->vmhost_os->delete_file($destination_directory_path)) {
 			notify($ERRORS{'WARNING'}, 0, "failed to delete destination directory after failing to copy virtual disk on VM host $vmhost_name: $destination_directory_path");
 		}
-		
 		return;
 	}
 	
 	# Calculate how long it took to copy
-	my $duration_seconds = (time - $start_time);
+	my $duration_seconds = ($end_time - $start_time);
 	my $minutes = ($duration_seconds / 60);
 	$minutes =~ s/\..*//g;
 	my $seconds = ($duration_seconds - ($minutes * 60));
@@ -6091,7 +6057,7 @@ sub copy_vmdk {
 	$search_path =~ s/(\.vmdk)$/\*$1/i;
 	my $image_size_bytes = $self->vmhost_os->get_file_size($search_path);
 	if (!defined($image_size_bytes) || $image_size_bytes !~ /^\d+$/) {
-		notify($ERRORS{'WARNING'}, 0, "copied vmdk on VM host $vmhost_name but failed to retrieve destination file size:\n'$source_vmdk_file_path' --> '$destination_vmdk_file_path'");
+		notify($ERRORS{'WARNING'}, 0, "copied vmdk on VM host $vmhost_name but failed to retrieve destination file size:\nsource: '$source_vmdk_file_path'\ndestination: '$destination_vmdk_file_path'");
 		return 1;
 	}
 	
@@ -6121,7 +6087,9 @@ sub copy_vmdk {
 	my $gb_per_minute = ($image_size_gb / $duration_seconds * 60);
 	
 	
-	notify($ERRORS{'OK'}, 0, "copied vmdk on VM host $vmhost_name: '$source_vmdk_file_path' --> '$destination_vmdk_file_path'\n" .
+	notify($ERRORS{'OK'}, 0, "copied vmdk on VM host $vmhost_name:\n" .
+		"source: '$source_vmdk_file_path'\n" .
+		"destination: '$destination_vmdk_file_path'\n" .
 		"time to copy: $minutes:$seconds (" . format_number($duration_seconds) . " seconds)\n" .
 		"---\n" .
 		"bits copied:  " . format_number($image_size_bits) . " ($image_size_bits)\n" .
@@ -6198,37 +6166,15 @@ sub move_vmdk {
 	$self->vmhost_os->create_directory($destination_vmdk_directory_path) || return;
 	
 	# Check if the API object has implented a move_virtual_disk subroutine
-	if ($self->api->can("move_virtual_disk")) {
-		notify($ERRORS{'OK'}, 0, "attempting to move vmdk file using API's 'move_virtual_disk' subroutine: $source_vmdk_file_path --> $destination_vmdk_file_path");
-		
-		my $image_name = $self->data->get_image_name();
-		$self->api->{new_image_name} = $image_name;
+	if ($self->api->can('move_virtual_disk')) {
 		if ($self->api->move_virtual_disk($source_vmdk_file_path, $destination_vmdk_file_path)) {
-			notify($ERRORS{'OK'}, 0, "moved vmdk using API's 'move_virtual_disk' subroutine: '$source_vmdk_file_path' --> '$destination_vmdk_file_path'");
-			# If the new VM name is longer than 29 chars, it may be truncated.
-			# In that case, update the image name in the database, but only do this
-			# if the API changes the value of {new_image_name}
-			my $request_state_name = $self->data->get_request_state_name();
-			if ($request_state_name eq 'image' && $self->api->{new_image_name} ne $image_name) {
-				my $image_id = $self->data->get_image_id();
-				my $imagerevision_id = $self->data->get_imagerevision_id();
-				update_image_name($image_id, $imagerevision_id, $self->api->{new_image_name});
-				$self->data->set_image_name($self->api->{new_image_name});
-				notify($ERRORS{'DEBUG'}, 0, "updated image name to ".$self->api->{new_image_name});
-			}
+			notify($ERRORS{'OK'}, 0, "moved vmdk using API's move_virtual_disk subroutine");
 			return 1;
 		}
-		else {
-			notify($ERRORS{'DEBUG'}, 0, "failed to move vmdk using API's 'move_virtual_disk' subroutine");
-		}
-	}
-	else {
-		notify($ERRORS{'DEBUG'}, 0, "'move_virtual_disk' subroutine has not been implemented by the API: " . ref($self->api));
 	}
 	
 	# Check if the VM host OS object implements an execute subroutine and attempt to run vmware-vdiskmanager
 	if ($self->vmhost_os->can("execute")) {
-		
 		# Try vmware-vdiskmanager
 		notify($ERRORS{'OK'}, 0, "attempting to move vmdk file using vmware-vdiskmanager: $source_vmdk_file_path --> $destination_vmdk_file_path");
 		my $vdisk_command = "vmware-vdiskmanager -n \"$source_vmdk_file_path\" \"$destination_vmdk_file_path\"";
@@ -6421,10 +6367,9 @@ sub move_vmdk {
 		notify($ERRORS{'WARNING'}, 0, "failed to move vmdk using any available methods: '$source_vmdk_file_path' --> '$destination_vmdk_file_path'");
 		return;
 	}
-	else {
-		notify($ERRORS{'OK'}, 0, "moved vmdk file: '$source_vmdk_file_path' --> '$destination_vmdk_file_path'");
-		return 1;
-	}
+	
+	notify($ERRORS{'OK'}, 0, "moved vmdk file: '$source_vmdk_file_path' --> '$destination_vmdk_file_path'");
+	return 1;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -6754,7 +6699,7 @@ sub get_datastore_info {
 		return;
 	}
 	else {
-		notify($ERRORS{'DEBUG'}, 0, "retrieved datastore info from VM host:\n" . format_data($datastore_info));
+		notify($ERRORS{'DEBUG'}, 0, "retrieved datastore info from VM host: " . join(", ", sort keys %$datastore_info));
 		$self->{datastore_info} = $datastore_info;
 		return $datastore_info;
 	}
@@ -7405,6 +7350,56 @@ sub _get_vmx_file_path_computer_name {
 		notify($ERRORS{'DEBUG'}, 0, "computer name could not be determined from directory name: '$directory_name'");
 		return;
 	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 _clean_vm_name
+ Parameters  : $vm_name
+ Returns     : string
+ Description : VMWare vCenter supports VM Names of up to 80 characters, but if
+               the name is greater than 29 characters, it will truncate the 
+               corresponding name and enclosing directory of the virtual disks.
+
+=cut
+
+sub _clean_vm_name {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $vm_name = shift || return;
+	
+	# if the length of the name is > 29, then truncate it in such a way that
+	# the image name remains unique in the VCL database
+	my $MAX_VMNAME_LEN = 29;
+	if (length $vm_name > $MAX_VMNAME_LEN) {
+		notify($ERRORS{'DEBUG'}, 0, "truncating VM name $vm_name");
+		my $newname = "";
+		if ($vm_name =~ m/^(\w+)-(\w+?)(\d*)-(v\d+)$/) {
+			my $base = $1;
+			my $name = $2;
+			my $imgid = $3;
+			my $version = $4;
+			my $shortened = substr($name, 0, $MAX_VMNAME_LEN - 2 - length($imgid) - length($base) - length($version));
+			$newname = $base . "-" . $shortened . $imgid . "-" . $version; 
+		}
+		else {
+			my ($pre_len, $post_len) = ($MAX_VMNAME_LEN - 10, 10);
+			my ($pre, $post) = $vm_name =~ m/^(.{$pre_len}).*(.{$post_len})$/;
+			$newname = $pre . $post;
+		}
+		if (get_image_info($newname, 0, 1)) {
+			notify($ERRORS{'WARNING'}, 0, "Naming conflict: $newname already exists in the database");
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "Changed image name to: $newname");
+			$vm_name = $newname;
+		}
+	}
+	return $vm_name;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
