@@ -195,7 +195,7 @@ sub open_lockfile {
 	}
 	
 	# Run lsof to determine which process is locking the file
-	my ($exit_status, $output) = run_command("lsof -Fp $file_path", 1);
+	my ($exit_status, $output) = run_command("/usr/sbin/lsof -Fp $file_path", 1);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to run losf command to determine which process is locking the file: $file_path");
 		return;
