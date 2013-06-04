@@ -99,6 +99,7 @@ sub process {
 	my $computer_short_name             = $self->data->get_computer_short_name();
 	my $computer_state_name             = $self->data->get_computer_state_name();
 	my $computer_next_image_name        = $self->data->get_computer_nextimage_name(0);
+	my $computer_provisioning_name      = $self->data->get_computer_provisioning_name();
 	my $image_id                        = $self->data->get_image_id();
 	my $image_name                      = $self->data->get_image_name();
 	my $imagerevision_id                = $self->data->get_imagerevision_id();
@@ -288,7 +289,12 @@ sub process {
 	}
 
 	# Confirm requested resouces are available
-	if ($self->reload_image()) {
+	
+	if ($request_state_name eq 'tovmhostinuse' && ($image_name =~ /noimage/i || $computer_provisioning_name =~ /none/i)) {
+		notify($ERRORS{'OK'}, 0, "$computer_short_name will not be reloaded, image: $image_name, provisioning name: $computer_provisioning_name");
+		insertloadlog($reservation_id, $computer_id, "nodeready", "VM host $computer_short_name is not configured to be automatically loaded");
+	}
+	elsif ($self->reload_image()) {
 		notify($ERRORS{'OK'}, 0, "$computer_short_name is loaded with $image_name");
 		insertloadlog($reservation_id, $computer_id, "nodeready", "$computer_short_name is loaded with $image_name");
 	}
@@ -499,10 +505,10 @@ sub reload_image {
 	my $computer_state_name             = $self->data->get_computer_state_name();
 	my $image_id                        = $self->data->get_image_id();
 	my $image_name                      = $self->data->get_image_name();
-	my $image_os_install_type				= $self->data->get_image_os_install_type();
+	my $image_os_install_type           = $self->data->get_image_os_install_type();
 	my $imagerevision_id                = $self->data->get_imagerevision_id();
 	my $server_request_id	            = $self->data->get_server_request_id();
-   my $server_request_fixedIP		      = $self->data->get_server_request_fixedIP();
+	my $server_request_fixedIP		      = $self->data->get_server_request_fixedIP();
 	
 	# Try to get the node status if the provisioning engine has implemented a node_status() subroutine
 	my $node_status;
@@ -688,15 +694,15 @@ sub reload_image {
 	}
 
 	
-	if($server_request_id) {
-       notify($ERRORS{'DEBUG'}, 0, "  SERVER_REQUEST_ID detected");
-       if($server_request_fixedIP) {
-          notify($ERRORS{'DEBUG'}, 0, "server_request_fixedIP is set calling update_public_ip_address");
-			 if(!$self->os->server_request_set_fixedIP()){ 
-					notify($ERRORS{'WARNING'}, 0, "failed to update IP address for $computer_short_name");
-					insertloadlog($reservation_id, $computer_id, "failed", "unable to set public IP address on $computer_short_name possibly IP address is inuse");
-			      return;
-			 }
+	if ($server_request_id) {
+		notify($ERRORS{'DEBUG'}, 0, "  SERVER_REQUEST_ID detected");
+		if ($server_request_fixedIP) {
+			notify($ERRORS{'DEBUG'}, 0, "server_request_fixedIP is set calling update_public_ip_address");
+			if (!$self->os->server_request_set_fixedIP()) {
+				notify($ERRORS{'WARNING'}, 0, "failed to update IP address for $computer_short_name");
+				insertloadlog($reservation_id, $computer_id, "failed", "unable to set public IP address on $computer_short_name possibly IP address is inuse");
+				return;
+			}
 		}
 	}	
 	
