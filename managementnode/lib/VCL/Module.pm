@@ -169,22 +169,16 @@ sub new {
 		next if ($arg_key eq 'data_structure');
 		
 		$self->{$arg_key} = $args->{$arg_key};
-		#notify($ERRORS{'DEBUG'}, 0, "set '$arg_key' key for $class object from arguments");
+		notify($ERRORS{'DEBUG'}, 0, "set '$arg_key' key for $class object from arguments");
 	}
 
 	# Bless the object as the class which new was called with
+	notify($ERRORS{'DEBUG'}, 0, "blessing new $class object");
 	bless $self, $class;
 	
 	# Get the memory address of this newly created object - useful for debugging object creation problems
 	my $address = sprintf('%x', $self);
-	
-	# Create a management node OS object
-	if (!$self->isa('VCL::Module::OS::Linux::ManagementNode')) {
-		if (!$self->create_mn_os_object()) {
-			notify($ERRORS{'WARNING'}, 0, "failed to create management node OS object");
-			return;
-		}
-	}
+	notify($ERRORS{'DEBUG'}, 0, "blessed new $class object, address: $address");
 	
 	# Display a message based on the type of object created
 	if ($self->isa('VCL::Module::State')) {
@@ -202,7 +196,7 @@ sub new {
 	else {
 		notify($ERRORS{'DEBUG'}, 0, ref($self) . " object created, address: $address");
 	}
-
+	
 	# Check if not running in setup mode and if initialize() subroutine is defined for this module
 	if (!$SETUP_MODE && $self->can("initialize")) {
 		# Call the initialize() subroutine, if it returns 0, return 0
@@ -218,37 +212,6 @@ sub new {
 =head1 OBJECT METHODS
 
 =cut
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 data
-
- Parameters  : None
- Returns     : Reference to the DataStructure object
- Description : This subroutine allows VCL module objects to retrieve data using
-               the object's DataStructure object as follows:
-               my $image_id = $self->data->get_image_id();
-
-=cut
-
-sub data {
-	my $self = shift;
-
-	# If this was called as a class method, return the DataStructure object stored in the class object
-	return $self->{data} if ref($self);
-
-	# Not called as a class method, check to see if $ENV{data} is defined
-	return $ENV{data} if (defined($ENV{data}) && $ENV{data});
-
-	# $ENV{data} is not set, set it
-	$ENV{data} = new VCL::DataStructure();
-
-	# Return the new DataStructure if got created successfully
-	return $ENV{data} if (defined($ENV{data}) && $ENV{data});
-
-	notify($ERRORS{'CRITICAL'}, 0, "unable to create DataStructure object");
-	return 0;
-} ## end sub data
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -307,16 +270,18 @@ sub create_os_object {
 	}
 	notify($ERRORS{'DEBUG'}, 0, "$os_perl_package module loaded");
 	
-	# Attempt to create the object
-	if (my $os = ($os_perl_package)->new({data_structure => $self->data})) {
+	# Attempt to create the object, pass it the mn_os object if it has already been created
+	my $os;
+	if (my $mn_os = $self->mn_os(0)) {
+		$os = ($os_perl_package)->new({data_structure => $self->data, mn_os => $mn_os});
+	}
+	else {
+		$os = ($os_perl_package)->new({data_structure => $self->data})
+	}
+	
+	if ($os) {
 		my $os_address = sprintf('%x', $os);
 		notify($ERRORS{'OK'}, 0, "$os_perl_package OS object created, address: $os_address");
-		
-		# Store the OS object if an OS Perl package argument wasn't passed
-		if (!$os_perl_package_argument) {
-			$self->set_os($os);
-		}
-		
 		return $os;
 	}
 	else {
@@ -344,10 +309,8 @@ sub create_mn_os_object {
 	}
 	
 	# Check if an OS object has already been stored in the calling object
-	if ($ENV{mn_os}) {
-		my $address = sprintf('%x', $ENV{mn_os});
-		#notify($ERRORS{'DEBUG'}, 0, "management node OS object has already been created, address: $address, returning 1");
-		return 1;
+	if (my $mn_os = $self->mn_os(0)) {
+		return $mn_os;
 	}
 	
 	# Make sure calling object isn't an OS module to avoid an infinite loop
@@ -378,14 +341,16 @@ sub create_mn_os_object {
 	if (my $mn_os = ($mn_os_perl_package)->new({data_structure => $mn_data})) {
 		my $address = sprintf('%x', $mn_os);
 		notify($ERRORS{'OK'}, 0, "$mn_os_perl_package OS object created, address: $address");
-		$self->set_mn_os($mn_os);
-		return 1;
+		
+		# Allow $mn_os->data to access $mn_os
+		$mn_data->set_mn_os($mn_os);
+		
+		return $mn_os;
 	}
 	else {
 		notify($ERRORS{'WARNING'}, 0, "failed to create management node OS object");
 		return;
 	}
-	
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -406,8 +371,8 @@ sub create_vmhost_os_object {
 	}
 	
 	# Check if an OS object has already been stored in the calling object
-	if ($ENV{vmhost_os}) {
-		return 1;
+	if (my $vmhost_os = $self->vmhost_os(0)) {
+		return $vmhost_os;
 	}
 	
 	# Make sure calling object isn't an OS module to avoid an infinite loop
@@ -419,6 +384,7 @@ sub create_vmhost_os_object {
 	my $request_data = $self->data->get_request_data();
 	my $reservation_id = $self->data->get_reservation_id();
 	my $vmhost_computer_id = $self->data->get_vmhost_computer_id();
+	my $vmhost_hostname = $self->data->get_vmhost_hostname();
 	my $vmhost_profile_image_id = $self->data->get_vmhost_profile_image_id();
 	
 	# Create a DataStructure object containing computer data for the VM host
@@ -459,11 +425,19 @@ sub create_vmhost_os_object {
 	notify($ERRORS{'DEBUG'}, 0, "VM host OS module loaded: $vmhost_os_perl_package");
 	
 	# Attempt to create the object
-	if (my $vmhost_os = ($vmhost_os_perl_package)->new({data_structure => $vmhost_data})) {
+	my $vmhost_os;
+	if (my $mn_os = $self->mn_os(0)) {
+		$vmhost_os = ($vmhost_os_perl_package)->new({data_structure => $vmhost_data, mn_os => $mn_os});
+	}
+	else {
+		$vmhost_os = ($vmhost_os_perl_package)->new({data_structure => $vmhost_data})
+	}
+	
+	if ($vmhost_os) {
 		my $address = sprintf('%x', $vmhost_os);
 		notify($ERRORS{'OK'}, 0, "$vmhost_os_perl_package OS object created, address: $address");
 		$self->set_vmhost_os($vmhost_os);
-		return 1;
+		return $vmhost_os;
 	}
 	else {
 		notify($ERRORS{'WARNING'}, 0, "failed to create VM host OS object");
@@ -517,17 +491,100 @@ sub create_provisioning_object {
 	}
 	notify($ERRORS{'DEBUG'}, 0, "$provisioning_perl_package module loaded");
 
-	# Create provisioner object
-	if (my $provisioner = ($provisioning_perl_package)->new({data_structure => $self->data, os => $self->{os}})) {
+	# Attempt to provisioner the object, pass it the mn_os object if it has already been created
+	my $provisioner;
+	my $mn_os = $self->mn_os(0);
+	my $vmhost_os = $self->vmhost_os(0);
+	if ($mn_os) {
+		if ($vmhost_os) {
+			$provisioner = ($provisioning_perl_package)->new({data_structure => $self->data, mn_os => $mn_os, vmhost_os => $vmhost_os});
+		}
+		else {
+			$provisioner = ($provisioning_perl_package)->new({data_structure => $self->data, mn_os => $mn_os});
+		}
+	}
+	else {
+		$provisioner = ($provisioning_perl_package)->new({data_structure => $self->data})
+	}
+	
+	if ($provisioner) {
 		my $provisioner_address = sprintf('%x', $provisioner);
 		my $provisioner_computer_name = $provisioner->data->get_computer_short_name();
-		notify($ERRORS{'OK'}, 0, "$provisioning_perl_package provisioner object created for $provisioner_computer_name, address: $provisioner_address");
-		$self->set_provisioner($provisioner);
-		return 1;
+		notify($ERRORS{'OK'}, 0, "$provisioning_perl_package provisioning object created for $provisioner_computer_name, address: $provisioner_address");
+		return $provisioner;
 	}
 	else {
 		notify($ERRORS{'WARNING'}, 0, "provisioning object could not be created, returning 0");
 		return 0;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 data
+
+ Parameters  : $display_warning (optional)
+ Returns     : Reference to the DataStructure object
+ Description : This subroutine allows VCL module objects to retrieve data using
+               the object's DataStructure object as follows:
+               my $image_id = $self->data->get_image_id();
+
+=cut
+
+sub data {
+	my $self = shift;
+	if (!ref($self) || !$self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was not called as a VCL::Module or VCL::DataStructure class method");
+		return;
+	}
+	
+	my $display_warning = shift;
+	if (!defined($display_warning)) {
+		$display_warning = 1;
+	}
+	
+	if (!$self->{data}) {
+		if ($display_warning) {
+			notify($ERRORS{'WARNING'}, 0, "unable to return DataStructure object, \$self->{data} is not set");
+		}
+		return;
+	}
+	else {
+		return $self->{data};
+	}
+} ## end sub data
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 provisioner
+
+ Parameters  : $display_warning (optional)
+ Returns     : Process's provisioner object
+ Description : Allows OS modules to access the reservation's provisioner
+               object.
+
+=cut
+
+sub provisioner {
+	my $self = shift;
+	if (!ref($self) || !$self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was not called as a VCL::Module or VCL::DataStructure class method");
+		return;
+	}
+	
+	my $display_warning = shift;
+	if (!defined($display_warning)) {
+		$display_warning = 1;
+	}
+	
+	if (!$self->{provisioner}) {
+		if ($display_warning) {
+			notify($ERRORS{'WARNING'}, 0, "unable to return provisioner object, \$self->{provisioner} is not set");
+		}
+		return;
+	}
+	else {
+		return $self->{provisioner};
 	}
 }
 
@@ -543,6 +600,10 @@ sub create_provisioning_object {
 
 sub os {
 	my $self = shift;
+	if (!ref($self) || !$self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was not called as a VCL::Module or VCL::DataStructure class method");
+		return;
+	}
 	
 	my $display_warning = shift;
 	if (!defined($display_warning)) {
@@ -550,7 +611,9 @@ sub os {
 	}
 	
 	if (!$self->{os}) {
-		notify($ERRORS{'WARNING'}, 0, "unable to return OS object, \$self->{os} is not set") if ($display_warning);
+		if ($display_warning) {
+			notify($ERRORS{'WARNING'}, 0, "unable to return OS object, \$self->{os} is not set");
+		}
 		return;
 	}
 	else {
@@ -562,7 +625,7 @@ sub os {
 
 =head2 mn_os
 
- Parameters  : None
+ Parameters  : $display_warning (optional)
  Returns     : Management node's OS object
  Description : Allows modules to access the management node's OS object.
 
@@ -570,13 +633,24 @@ sub os {
 
 sub mn_os {
 	my $self = shift;
+	if (!ref($self) || !$self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was not called as a VCL::Module or VCL::DataStructure class method");
+		return;
+	}
 	
-	if (!$ENV{mn_os}) {
-		notify($ERRORS{'WARNING'}, 0, "unable to return management node OS object, \$ENV{mn_os} is not set");
+	my $display_warning = shift;
+	if (!defined($display_warning)) {
+		$display_warning = 1;
+	}
+	
+	if (!$self->{mn_os}) {
+		if ($display_warning) {
+			notify($ERRORS{'WARNING'}, 0, "unable to return management node OS object, \$self->{mn_os} is not set");
+		}
 		return;
 	}
 	else {
-		return $ENV{mn_os};
+		return $self->{mn_os};
 	}
 }
 
@@ -584,7 +658,7 @@ sub mn_os {
 
 =head2 vmhost_os
 
- Parameters  : None
+ Parameters  : $display_warning (optional)
  Returns     : VM hosts's OS object
  Description : Allows modules to access the VM host's OS object.
 
@@ -592,36 +666,24 @@ sub mn_os {
 
 sub vmhost_os {
 	my $self = shift;
+	if (!ref($self) || !$self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was not called as a VCL::Module or VCL::DataStructure class method");
+		return;
+	}
 	
-	if (!$ENV{vmhost_os}) {
-		notify($ERRORS{'WARNING'}, 0, "unable to return VM host OS object, \$self->{vmhost_os} is not set");
+	my $display_warning = shift;
+	if (!defined($display_warning)) {
+		$display_warning = 1;
+	}
+	
+	if (!$self->{vmhost_os}) {
+		if ($display_warning) {
+			notify($ERRORS{'WARNING'}, 0, "unable to return VM host OS object, \$self->{vmhost_os} is not set");
+		}
 		return;
 	}
 	else {
-		return $ENV{vmhost_os};
-	}
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 provisioner
-
- Parameters  : None
- Returns     : Process's provisioner object
- Description : Allows OS modules to access the reservation's provisioner
-               object.
-
-=cut
-
-sub provisioner {
-	my $self = shift;
-	
-	if (!$self->{provisioner}) {
-		notify($ERRORS{'WARNING'}, 0, "unable to return provisioner object, \$self->{provisioner} is not set");
-		return;
-	}
-	else {
-		return $self->{provisioner};
+		return $self->{vmhost_os};
 	}
 }
 
@@ -637,7 +699,20 @@ sub provisioner {
 
 sub set_data {
 	my $self = shift;
+	if (!ref($self) || !$self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was not called as a VCL::Module class method");
+		return;
+	}
+	
 	my $data = shift;
+	if (!defined($data)) {
+		notify($ERRORS{'WARNING'}, 0, "DataStructure object reference argument not supplied");
+		return;
+	}
+	elsif (!ref($data) || !$data->isa('VCL::DataStructure')) {
+		notify($ERRORS{'WARNING'}, 0, "supplied argument is not a DataStructure object reference:\n" . format_data($data));
+		return;
+	}
 	$self->{data} = $data;
 }
 
@@ -645,7 +720,7 @@ sub set_data {
 
 =head2 set_os
 
- Parameters  : None
+ Parameters  : $os
  Returns     : 
  Description : Sets the OS object for the module to access.
 
@@ -653,7 +728,20 @@ sub set_data {
 
 sub set_os {
 	my $self = shift;
+	if (!ref($self) || !$self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was not called as a VCL::Module class method");
+		return;
+	}
+	
 	my $os = shift;
+	if (!defined($os)) {
+		notify($ERRORS{'WARNING'}, 0, "OS object reference argument not supplied");
+		return;
+	}
+	elsif (!ref($os) || !$os->isa('VCL::Module::OS')) {
+		notify($ERRORS{'WARNING'}, 0, "supplied argument is not a VCL::Module::OS object reference:\n" . format_data($os));
+		return;
+	}
 	$self->{os} = $os;
 }
 
@@ -661,7 +749,7 @@ sub set_os {
 
 =head2 set_mn_os
 
- Parameters  : None
+ Parameters  : $mn_os
  Returns     : 
  Description : Sets the management node OS object for the module to access.
 
@@ -669,15 +757,33 @@ sub set_os {
 
 sub set_mn_os {
 	my $self = shift;
+	if (!ref($self) || !$self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was not called as a VCL::Module class method");
+		return;
+	}
+	
 	my $mn_os = shift;
-	$ENV{mn_os} = $mn_os;
+	if (!defined($mn_os)) {
+		notify($ERRORS{'WARNING'}, 0, "OS object reference argument not supplied");
+		return;
+	}
+	elsif (!ref($mn_os) || !$mn_os->isa('VCL::Module::OS')) {
+		notify($ERRORS{'WARNING'}, 0, "supplied argument is not a VCL::Module::OS object reference:\n" . format_data($mn_os));
+		return;
+	}
+	
+	my $address = sprintf('%x', $self);
+	my $type = ref($self);
+	my $mn_os_address = sprintf('%x', $mn_os);
+	notify($ERRORS{'DEBUG'}, 0, "storing reference to managment node OS object (address: $mn_os_address) in this $type object (address: $address)");
+	$self->{mn_os} = $mn_os;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
 
 =head2 set_vmhost_os
 
- Parameters  : None
+ Parameters  : $vmhost_os
  Returns     : 
  Description : Sets the VM host OS object for the module to access.
 
@@ -685,23 +791,54 @@ sub set_mn_os {
 
 sub set_vmhost_os {
 	my $self = shift;
+	if (!ref($self) || !$self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was not called as a VCL::Module class method");
+		return;
+	}
+	
 	my $vmhost_os = shift;
-	$ENV{vmhost_os} = $vmhost_os;
+	if (!defined($vmhost_os)) {
+		notify($ERRORS{'WARNING'}, 0, "OS object reference argument not supplied");
+		return;
+	}
+	elsif (!ref($vmhost_os) || !$vmhost_os->isa('VCL::Module')) {
+		notify($ERRORS{'WARNING'}, 0, "supplied argument is not a VCL::Module object reference:\n" . format_data($vmhost_os));
+		return;
+	}
+	
+	my $address = sprintf('%x', $self);
+	my $type = ref($self);
+	my $vmhost_os_address = sprintf('%x', $vmhost_os);
+	notify($ERRORS{'DEBUG'}, 0, "storing reference to VM host OS object (address: $vmhost_os_address) in this $type object (address: $address)");
+	$self->{vmhost_os} = $vmhost_os;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
 
 =head2 set_provisioner
 
- Parameters  : None
- Returns     : Process's provisioner object
+ Parameters  : $provisioner
+ Returns     : 
  Description : Sets the provisioner object for the module to access.
 
 =cut
 
 sub set_provisioner {
 	my $self = shift;
+	if (!ref($self) || !$self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was not called as a VCL::Module class method");
+		return;
+	}
+	
 	my $provisioner = shift;
+	if (!defined($provisioner)) {
+		notify($ERRORS{'WARNING'}, 0, "provisioner object reference argument not supplied");
+		return;
+	}
+	elsif (!ref($provisioner) || !$provisioner->isa('VCL::Module::Provisioning')) {
+		notify($ERRORS{'WARNING'}, 0, "supplied argument is not a VCL::Module::Provisioning object reference:\n" . format_data($provisioner));
+		return;
+	}
 	$self->{provisioner} = $provisioner;
 }
 
@@ -1414,6 +1551,31 @@ EOF
 	}
 	
 }
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 DESTROY
+
+ Parameters  : none
+ Returns     : nothing
+ Description : 
+
+=cut
+
+sub DESTROY {
+	my $self = shift;
+	if (!defined($self)) {
+		notify($ERRORS{'DEBUG'}, 0, "skipping VCL::Module DESTROY tasks, \$self is not defined");
+		return;
+	}
+	
+	my $address = sprintf('%x', $self);
+	my $type = ref($self);
+	notify($ERRORS{'DEBUG'}, 0, "destroying $type object, address: $address");
+	
+	# Check for an overridden destructor
+	$self->SUPER::DESTROY if $self->can("SUPER::DESTROY");
+} ## end sub DESTROY
 
 #/////////////////////////////////////////////////////////////////////////////
 

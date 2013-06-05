@@ -410,9 +410,9 @@ sub post_load {
 	$self->set_vcld_post_load_status();
 
 	#Update Hostname to match Public assigned name
-   if($self->update_public_hostname()){
-      notify($ERRORS{'OK'}, 0, "Updated hostname");
-   }
+	if ($self->update_public_hostname()) {
+		notify($ERRORS{'OK'}, 0, "Updated hostname");
+	}
 	
 	return 1;
 
@@ -881,127 +881,6 @@ sub logoff_user {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 delete_user
-
- Parameters  :
- Returns     :
- Description :
-
-=cut
-
-sub delete_user {
-	my $self = shift;
-	if (ref($self) !~ /linux/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return 0;
-	}
-	
-	# Make sure the user login ID was passed
-	my $user_login_id = shift;
-	$user_login_id = $self->data->get_user_login_id() if (!$user_login_id);
-	if (!$user_login_id) {
-		notify($ERRORS{'WARNING'}, 0, "user could not be determined");
-		return;
-	}
-	
-	my $computer_node_name = $self->data->get_computer_node_name();
-	
-	# Make sure the user exists
-	if (!$self->user_exists($user_login_id)) {
-		notify($ERRORS{'DEBUG'}, 0, "user NOT deleted from $computer_node_name because it does not exist: $user_login_id");
-		return 1;
-	}
-	
-	# Check if the user is logged in
-	if ($self->user_logged_in($user_login_id)) {
-		if (!$self->logoff_user($user_login_id)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to delete user $user_login_id from $computer_node_name, user appears to be logged in but could NOT be logged off");
-			return;
-		}
-	}
-	
-	# Run df to determine if home directory is on a local device or network share
-	my $home_directory_path = "/home/$user_login_id";
-	my $df_command = "df -T -P $home_directory_path";
-	my ($df_exit_status, $df_output) = $self->execute($df_command);
-	if (!defined($df_output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to execute command to determine if home directory is mounted on a network share, command: '$df_command'");
-		return;
-	}
-	elsif (grep(/(no such file|no file system)/i, @$df_output)) {
-		notify($ERRORS{'DEBUG'}, 0, "home directory does NOT exist on $computer_node_name: $home_directory_path");
-	}
-	elsif (grep(/[\t\s]+nfs/, @$df_output)) {
-		notify($ERRORS{'DEBUG'}, 0, "home directory is mounted on a network share, command: '$df_command', output:\n" . join("\n", @$df_output));
-	}
-	else {
-		notify($ERRORS{'DEBUG'}, 0, "home directory is NOT mounted on a network share, command: '$df_command', output:\n" . join("\n", @$df_output));
-		
-		# Delete the user's authorized keys file
-		my $authorized_keys_path = "$home_directory_path/.ssh/authorized_keys";
-		$self->delete_file($authorized_keys_path);
-	}
-	
-	# Call userdel to delete the user
-	# Do not use userdel -r or -f, it could remove a user's home directory on a network share
-	my $userdel_command = "/usr/sbin/userdel $user_login_id";
-	my ($userdel_exit_status, $userdel_output) = $self->execute($userdel_command);
-	if (!defined($userdel_output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to execute command to delete user from $computer_node_name: $user_login_id");
-		return;
-	}
-	elsif (grep(/does not exist/i, @$userdel_output)) {
-		notify($ERRORS{'DEBUG'}, 0, "user '$user_login_id' NOT deleted from $computer_node_name because it does not exist");
-	}
-	elsif (grep(/userdel: /i, @$userdel_output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to delete user '$user_login_id' from $computer_node_name, command: '$userdel_command', output:\n" . join("\n", @$userdel_output));
-		return;
-	}
-	else {
-		notify($ERRORS{'OK'}, 0, "deleted user '$user_login_id' from $computer_node_name");
-	}
-	
-	# Call groupdel to delete the user's group
-	my $groupdel_command = "/usr/sbin/groupdel $user_login_id";
-	my ($groupdel_exit_status, $groupdel_output) = $self->execute($groupdel_command);
-	if (!defined($groupdel_output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to execute command to delete group from $computer_node_name: $user_login_id");
-		return;
-	}
-	elsif (grep(/does not exist/i, @$groupdel_output)) {
-		notify($ERRORS{'DEBUG'}, 0, "group '$user_login_id' NOT deleted from $computer_node_name because it does not exist");
-	}
-	elsif (grep(/groupdel: /i, @$groupdel_output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to delete group '$user_login_id' from $computer_node_name, command: '$groupdel_command', output:\n" . join("\n", @$groupdel_output));
-	}
-	else {
-		notify($ERRORS{'OK'}, 0, "deleted group '$user_login_id' from $computer_node_name");
-	}
-	
-	# Remove username from AllowUsers lines in ssh/external_sshd_config
-	my $external_sshd_config_file_path = '/etc/ssh/external_sshd_config';
-	my @lines = $self->get_file_contents($external_sshd_config_file_path);
-	my $new_file_contents;
-	for my $line (@lines) {
-		if ($line =~ /AllowUsers/) {
-			$line =~ s/\s*$user_login_id//g;
-			# If user was only username listed on line, don't add empty AllowUsers line back to file
-			if ($line !~ /AllowUsers\s+\w/) {
-				next;
-			}
-		}
-		$new_file_contents .= "$line\n";
-	}
-	$self->create_text_file("$external_sshd_config_file_path\_new", $new_file_contents) || return;
-	
-	# Remove lines from sudoers
-	$self->remove_lines_from_file('/etc/sudoers', "^\\s*$user_login_id\\s+") || return;
-	
-	return 1;
-} ## end sub delete_user
-
-#/////////////////////////////////////////////////////////////////////////////
-
 =head2 reserve
 
  Parameters  : called as an object
@@ -1017,31 +896,20 @@ sub reserve {
 		return 0;
 	}
 	
-	notify($ERRORS{'DEBUG'}, 0, "Enterered reserve() in the Linux OS module");
-	
-	my $user_name            = $self->data->get_user_login_id();
 	my $computer_node_name   = $self->data->get_computer_node_name();
-	my $image_identity       = $self->data->get_image_identity;
-	my $imagemeta_rootaccess = $self->data->get_imagemeta_rootaccess();
-	my $user_uid             = $self->data->get_user_uid();
 	
 	# Remove AllowUsers lines from external_sshd_config
-	if($self->remove_lines_from_file('/etc/ssh/external_sshd_config', 'AllowUsers')) {
-		notify($ERRORS{'WARNING'}, 0, "Error in cleaning AllowUsers directive from external_sshd_config");
+	if (!$self->remove_lines_from_file('/etc/ssh/external_sshd_config', 'AllowUsers')) {
+		notify($ERRORS{'WARNING'}, 0, "failed to remove AllowUsers lines from external_sshd_config on $computer_node_name");
 	} 
 	
-	# Append AllowUsers line to the end of the file
-	if (!$self->append_text_file('/etc/ssh/external_sshd_config', "AllowUsers\n")) {
-		notify($ERRORS{'WARNING'}, 0, "Error in appending AllowUsers directive to external_sshd_config");
-	}
-	
-	if ($self->add_vcl_usergroup()) {
-	
+	if (!$self->add_vcl_usergroup()) {
+		notify($ERRORS{'WARNING'}, 0, "failed to add vcl user group to $computer_node_name");
 	}
 	
 	if (!$self->create_user()) {
-		notify($ERRORS{'CRITICAL'}, 0, "Failed to add user $user_name to $computer_node_name");
-		return 0;
+		notify($ERRORS{'CRITICAL'}, 0, "failed to add user to $computer_node_name");
+		return;
 	}
 	
 	return 1;
@@ -1219,44 +1087,14 @@ sub sanitize {
 		return 0;
 	}
 	
-	# Revoke access
-	if (!$self->revoke_access()) {
-		notify($ERRORS{'WARNING'}, 0, "failed to revoke access to $computer_node_name");
-		# relcaim will reload
-		return 0;
+	# Make sure ext_sshd is stopped
+	if (!$self->stop_external_sshd()) {
+		return;
 	}
 	
 	notify($ERRORS{'OK'}, 0, "$computer_node_name has been sanitized");
 	return 1;
 } ## end sub sanitize
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 revoke_access
-
- Parameters  :
- Returns     :
- Description :
-
-=cut
-
-sub revoke_access {
-	my $self = shift;
-	if (ref($self) !~ /linux/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-	
-	my $management_node_keys = $self->data->get_management_node_keys();
-	my $computer_node_name   = $self->data->get_computer_node_name();
-	
-	if ($self->stop_external_sshd()) {
-		notify($ERRORS{'OK'}, 0, "stopped external sshd");
-	}
-	
-	notify($ERRORS{'OK'}, 0, "access has been revoked to $computer_node_name");
-	return 1;
-} ## end sub revoke_access
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -2030,6 +1868,75 @@ sub set_file_permissions {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 set_file_owner
+
+ Parameters  : $file_path, $owner, $group, $recursive (optional)
+ Returns     : boolean
+ Description : Calls chown to set the owner of a file or directory.
+
+=cut
+
+sub set_file_owner {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get the arguments
+	my $path = shift;
+	if (!defined($path)) {
+		notify($ERRORS{'WARNING'}, 0, "path argument was not specified");
+		return;
+	}
+	
+	# Escape the file path in case it contains spaces
+	$path = escape_file_path($path);
+	
+	my $owner = shift;
+	if (!defined($owner)) {
+		notify($ERRORS{'WARNING'}, 0, "owner argument was not specified");
+		return;
+	}
+	
+	my $group = shift;
+	$owner .= ":$group" if $group;
+	
+	my $recursive = shift;
+	$recursive = 1 if !defined($recursive);
+	
+	my $recursive_string = '';
+	$recursive_string = "recursively " if $recursive;
+	
+	# Get the computer short and hostname
+	my $computer_node_name = $self->data->get_computer_node_name();
+	
+	# Run the chown command
+	my $command = "chown ";
+	$command .= "-R " if $recursive;
+	$command .= "$owner $path";
+	
+	my ($exit_status, $output) = $self->execute($command, 0);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run command to " . $recursive_string . "set file owner on $computer_node_name: '$command'");
+		return;
+	}
+	elsif (grep(/No such file or directory/i, @$output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to " . $recursive_string . "set owner of '$path' to '$owner' on $computer_node_name because the file does not exist, command: '$command', output:\n" . join("\n", @$output));
+		return;
+	}
+	elsif (grep(/^chown:/i, @$output)) {
+		notify($ERRORS{'WARNING'}, 0, "error occurred attempting to " . $recursive_string . "set owner of '$path' to '$owner' on $computer_node_name, command: '$command'\noutput:\n" . join("\n", @$output));
+		return;
+	}
+	else {
+		notify($ERRORS{'OK'}, 0, $recursive_string . "set owner of '$path' to '$owner' on $computer_node_name");
+		return 1;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 activate_interfaces
 
  Parameters  : none
@@ -2383,8 +2290,8 @@ sub shutdown {
 
 =head2 create_user
 
- Parameters  : username,password,adminoverride(0,1,2),user_uid
- Returns     : 1
+ Parameters  : $username, $password, $uid, $root_access, $user_standalone, $user_ssh_public_keys
+ Returns     : boolean
  Description : 
 
 =cut
@@ -2396,144 +2303,316 @@ sub create_user {
 		return;
 	}
 	
-	my $management_node_keys = $self->data->get_management_node_keys();
-	my $computer_node_name   = $self->data->get_computer_node_name();
-	my $imagemeta_rootaccess = $self->data->get_imagemeta_rootaccess();
+	my $computer_node_name = $self->data->get_computer_node_name();
 	
-	# Attempt to get the username from the arguments
-	# If no argument was supplied, use the user specified in the DataStructure
-	my $username = shift;
+	# Check if username argument was supplied
+	my $user_login_id = shift;
 	my $password = shift;
-	my $user_uid = shift;
-	my $adminoverride = shift;
+	my $uid = shift;
+	my $root_access = shift;
 	my $user_standalone = shift;
-	my $user_sshPublicKeys = shift;
+	my $user_ssh_public_keys = shift;
 	
-	if (!$username) {
-		$username = $self->data->get_user_login_id();
-					notify($ERRORS{'OK'}, 0, "username not provided, pulling from datastructure");
-	}
-	if (!$password) {
-		$password = $self->data->get_reservation_password();
-	}
-	if (!$adminoverride) {
-		$adminoverride = 0;	
-	}
-	if (!defined($user_uid)) {
-		$user_uid = $self->data->get_user_uid();	
-		notify($ERRORS{'OK'}, 0, "user_uid not provided, pulling from datastructure");
-	}
+	my $reservation_user_login_id = $self->data->get_user_login_id();
 	
-	if (!$user_standalone) {
-		$user_standalone      = $self->data->get_user_standalone();
-		notify($ERRORS{'OK'}, 0, "user_standalone not provided, pulling from datastructure");
-	}
-	
-	if ( !defined($user_sshPublicKeys) ) {
-		$user_sshPublicKeys = $self->data->get_user_sshPublicKeys();
-		notify($ERRORS{'OK'}, 0, "user_sshPublicKeys not provided, pulling from datastructure");
-	}
-
-	#adminoverride, if 0 use value from database for $imagemeta_rootaccess
-	# if 1 or 2 override database
-	# 1 - allow admin access, set $imagemeta_rootaccess=1
-	# 2 - disallow admin access, set $imagemeta_rootaccess=0
-	if ($adminoverride eq '1') {
-		$imagemeta_rootaccess = 1;
-	}
-	elsif ($adminoverride eq '2') {
-		$imagemeta_rootaccess = 0;
-	}
-	else {
-		# no override detected, do not change database value
-	}
-	
-	my $useradd_string;
-	if(defined($user_uid) && $user_uid != 0){
-		$useradd_string = "/usr/sbin/useradd -u $user_uid -d /home/$username -m $username -g vcl; chown -R $username /home/$username";
-	}
-	else {
-		$useradd_string = "/usr/sbin/useradd -d /home/$username -m $username -g vcl; chown -R $username /home/$username";
-	}
-	
-	
-	my @sshcmd = run_ssh_command($computer_node_name, $management_node_keys, $useradd_string, "root");
-	foreach my $l (@{$sshcmd[1]}) {
-		if ($l =~ /exists/) {
-			notify($ERRORS{'OK'}, 0, "detected user already has account");
-			if ($self->delete_user($username)) {
-				notify($ERRORS{'OK'}, 0, "user has been deleted from $computer_node_name");
-				@sshcmd = run_ssh_command($computer_node_name, $management_node_keys, $useradd_string, "root");
-			}
-		}
-	}
-	
-	# Add user to external_sshd_config
-	my $add_user_sshd_cmd = "sed -i -e \"/AllowUsers/s/\$/ $username/\" /etc/ssh/external_sshd_config"; 
-	if ($self->execute($add_user_sshd_cmd)) {
-		if (!$self->restart_service("ext_sshd")) {
-			notify($ERRORS{'WARNING'}, 0, "failed to restart ext_sshd service on $computer_node_name after updating /etc/ssh/external_sshd_config");
-    }
-	}
-	else {
-		notify($ERRORS{'CRITICAL'}, 0, "Failed to add username to external_sshd_config");
-	}
-
-	if ($user_standalone) {
-		notify($ERRORS{'DEBUG'}, 0, "Standalone user setting single-use password");
+	# If argument was supplied, check if it matches the reservation user
+	# Only retrieve user settings from $self->data if no argument was supplied or if the argument matches the reservation user
+	if (!$user_login_id || $user_login_id eq $reservation_user_login_id) {
+		$user_login_id = $reservation_user_login_id;
 		
-		# Set password
-		if ($self->changepasswd($computer_node_name, $username, $password)) {
-			notify($ERRORS{'OK'}, 0, "Successfully set password on useracct: $username on $computer_node_name");
-		}
-		else {
-			notify($ERRORS{'CRITICAL'}, 0, "Failed to set password on useracct: $username on $computer_node_name");
-			return 0;
-		}
-	} ## end if ($user_standalone)
+		$password = $self->data->get_reservation_password() unless defined $password;
+		$uid = $self->data->get_user_uid() unless defined $uid;
+		$root_access = $self->data->get_imagemeta_rootaccess() unless defined $root_access;
+		$user_standalone = $self->data->get_user_standalone() unless defined $user_standalone;
+		$user_ssh_public_keys = $self->data->get_user_sshPublicKeys(0) unless defined $user_ssh_public_keys;
+	}
 	
+	$root_access = 1 unless defined $root_access;
+	$user_standalone = 1 unless defined $user_standalone;
+	
+	# Make sure the password was determined
+	if ($user_standalone) {
+		if (!defined($password)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to create user '$user_login_id', user standalone = $user_standalone, password argument was not supplied and reservation password is not configured");
+			return;
+		}
+	}
+	else {
+		# user standalone is false, undefine the password
+		undef($password);
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "creating user on $computer_node_name:\n" .
+		"login ID: $user_login_id\n" .
+		"UID: " . ($uid ? $uid : '<not set>') . "\n" .
+		"root access: $root_access\n" .
+		"standalone: $user_standalone\n" .
+		"password: " . (defined($password) ? $password : '<not set>') . "\n" .
+		"SSH public keys: " . (defined($user_ssh_public_keys) ? $user_ssh_public_keys : '<not set>')
+	);
+	
+	my $useradd_command = "/usr/sbin/useradd -m -d /home/$user_login_id -g vcl";
+	$useradd_command .= " -u $uid" if ($uid);
+	$useradd_command .= " $user_login_id";
+	my ($useradd_exit_status, $useradd_output) = $self->execute($useradd_command);
+	
+	# Check if the output indicates that the user already exists
+	if ($useradd_output && grep(/already exists/, @$useradd_output)) {
+		if (!$self->delete_user($user_login_id)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to add user '$user_login_id' to $computer_node_name, user with same name already exists and could not be deleted");
+			return;
+		}
+		($useradd_exit_status, $useradd_output) = $self->execute($useradd_command);
+	}
+	if (!defined($useradd_output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to add user '$user_login_id' to $computer_node_name: '$useradd_command'");
+		return;
+	}
+	elsif (grep(/^useradd: /, @$useradd_output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to add user '$user_login_id' to $computer_node_name\ncommand: '$useradd_command'\noutput:\n" . join("\n", @$useradd_output));
+		return;
+	}
+	else {
+		notify($ERRORS{'OK'}, 0, "added user '$user_login_id' to $computer_node_name");
+	}
+	
+	if ($user_standalone) {
+		# Set password
+		if (!$self->changepasswd($computer_node_name, $user_login_id, $password)) {
+			notify($ERRORS{'CRITICAL'}, 0, "Failed to set password on useracct: $user_login_id on $computer_node_name");
+			return;
+		}
+	}
+	
+	# Append AllowUsers line to the end of the file
+	my $external_sshd_config_file_path = '/etc/ssh/external_sshd_config';
+	my $allow_users_line = "AllowUsers $user_login_id";
+	if ($self->append_text_file($external_sshd_config_file_path, $allow_users_line)) {
+		notify($ERRORS{'DEBUG'}, 0, "added line to $external_sshd_config_file_path: '$allow_users_line'");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to add line to $external_sshd_config_file_path: '$allow_users_line'");
+		return;
+	}
+	
+	$self->restart_service('ext_sshd') || return;
 	
 	# Check image profile for allowed root access
-	if ($imagemeta_rootaccess) {
-		# Add to sudoers file
-		# clear user from sudoers file to prevent duplicates
-		$self->remove_lines_from_file('/etc/sudoers', "^$username .*");
-		
-		my $sudoers_cmd = "echo \"$username ALL= NOPASSWD: ALL\" >> /etc/sudoers";
-		if ($self->execute($sudoers_cmd)) {
-			notify($ERRORS{'DEBUG'}, 0, "added $username to /etc/sudoers");
+	if ($root_access == 1) {
+		my $sudoers_file_path = '/etc/sudoers';
+		my $sudoers_line = "$user_login_id ALL= NOPASSWD: ALL";
+		if ($self->append_text_file($sudoers_file_path, $sudoers_line)) {
+			notify($ERRORS{'DEBUG'}, 0, "added line to $sudoers_file_path: '$sudoers_line'");
 		}
 		else {
-			notify($ERRORS{'CRITICAL'}, 0, "failed to add $username to /etc/sudoers");
+			notify($ERRORS{'WARNING'}, 0, "failed to add line to $sudoers_file_path: '$sudoers_line'");
+			return;
 		}
-	} ## end if ($imagemeta_rootaccess)
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "root access NOT granted to $user_login_id");
+	}
 
 	# Add user's public ssh identity keys if exists
-	if( $user_sshPublicKeys ) {
-		#Only add keys to home directories that are local,
-		#should not add network mounted filesystems as the clean up process will delete the key
-		my $home_network_share_cmd = "df /home/$username";
-		my ($exit_status, $output) = $self->execute($home_network_share_cmd);
-		if(grep(/dev/, @$output)){
-			# confirm .ssh directory exists
-			# Make directory
-			my $mkdir = "mkdir /home/$username/.ssh";
-			if ($self->execute($mkdir)) {
-    			notify($ERRORS{'DEBUG'}, 0, "created /home/$username/.ssh directory");
+	my $home_directory_path = "/home/$user_login_id";
+	my $ssh_directory_path = "$home_directory_path/.ssh";
+	my $authorized_keys_file_path = "$ssh_directory_path/authorized_keys";
+	
+	if ($user_ssh_public_keys) {
+		# Determine if home directory is on a local device or network share
+		my $home_directory_on_local_disk = $self->is_file_on_local_disk($home_directory_path);
+		
+		# Only add keys to home directories that are local,
+		# Don'd add keys to network mounted filesystems
+		
+		if ($home_directory_on_local_disk) {
+			# Create the .ssh directory
+			$self->create_directory($ssh_directory_path);
+			
+			if ($self->append_text_file($authorized_keys_file_path, $user_ssh_public_keys)) {
+				notify($ERRORS{'DEBUG'}, 0, "added user's public keys to $authorized_keys_file_path");
 			}
-			#concatenate user's sshPublicKeys to authorized_keys file
-			my $keys_cat_cmd = "echo \"$user_sshPublicKeys\" >> /home/$username/.ssh/authorized_keys";
-			if ($self->execute($keys_cat_cmd)) {
-         	notify($ERRORS{'DEBUG'}, 0, "copied public keys to /home/$username/.ssh/authorized_keys");
-      	}
+			else {
+				notify($ERRORS{'WARNING'}, 0, "failed to add user's public keys to $authorized_keys_file_path");
+			}
 		}
 		else {
-			notify($ERRORS{'DEBUG'}, 0, "/home/$username is a network share, skipping adding public ssh keys: @$output");
+			notify($ERRORS{'DEBUG'}, 0, "skipping adding user's public keys to $authorized_keys_file_path, home directory is on a network share");
 		}
-	}	
+	}
+	
+	if (!$self->set_file_owner($home_directory_path, $user_login_id, 'vcl', 1)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to set owner of user's home directory: $home_directory_path");
+		return;
+	}
 
 	return 1;
 } ## end sub create_user
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 delete_user
+
+ Parameters  :
+ Returns     :
+ Description :
+
+=cut
+
+sub delete_user {
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return 0;
+	}
+	
+	# Make sure the user login ID was passed
+	my $username = shift;
+	$username = $self->data->get_user_login_id() if (!$username);
+	if (!$username) {
+		notify($ERRORS{'WARNING'}, 0, "user could not be determined");
+		return;
+	}
+	
+	my $computer_node_name = $self->data->get_computer_node_name();
+	
+	# Make sure the user exists
+	if (!$self->user_exists($username)) {
+		notify($ERRORS{'DEBUG'}, 0, "user NOT deleted from $computer_node_name because it does not exist: $username");
+		#return 1;
+	}
+	
+	# Check if the user is logged in
+	if ($self->user_logged_in($username)) {
+		if (!$self->logoff_user($username)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to delete user $username from $computer_node_name, user appears to be logged in but could NOT be logged off");
+			return;
+		}
+	}
+	
+	# Determine if home directory is on a local device or network share
+	my $home_directory_path = "/home/$username";
+	my $home_directory_on_local_disk = $self->is_file_on_local_disk($home_directory_path);
+	
+	# Assemble the userdel command
+	my $userdel_command = "/usr/sbin/userdel";
+	
+	if ($home_directory_on_local_disk) {
+		notify($ERRORS{'DEBUG'}, 0, "home directory will be deleted: $home_directory_path");
+		$userdel_command .= ' -r -f';
+	}
+	$userdel_command .= " $username";
+	
+	# Call userdel to delete the user
+	my ($userdel_exit_status, $userdel_output) = $self->execute($userdel_command);
+	if (!defined($userdel_output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to delete user from $computer_node_name: $username");
+		return;
+	}
+	elsif (grep(/does not exist/i, @$userdel_output)) {
+		notify($ERRORS{'DEBUG'}, 0, "user '$username' NOT deleted from $computer_node_name because it does not exist");
+	}
+	elsif (grep(/userdel: /i, @$userdel_output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to delete user '$username' from $computer_node_name, command: '$userdel_command', output:\n" . join("\n", @$userdel_output));
+		return;
+	}
+	else {
+		notify($ERRORS{'OK'}, 0, "deleted user '$username' from $computer_node_name");
+	}
+	
+	# Call groupdel to delete the user's group
+	my $groupdel_command = "/usr/sbin/groupdel $username";
+	my ($groupdel_exit_status, $groupdel_output) = $self->execute($groupdel_command);
+	if (!defined($groupdel_output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to delete group from $computer_node_name: $username");
+		return;
+	}
+	elsif (grep(/does not exist/i, @$groupdel_output)) {
+		notify($ERRORS{'DEBUG'}, 0, "group '$username' NOT deleted from $computer_node_name because it does not exist");
+	}
+	elsif (grep(/groupdel: /i, @$groupdel_output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to delete group '$username' from $computer_node_name, command: '$groupdel_command', output:\n" . join("\n", @$groupdel_output));
+	}
+	else {
+		notify($ERRORS{'OK'}, 0, "deleted group '$username' from $computer_node_name");
+	}
+	
+	# Remove username from AllowUsers lines in ssh/external_sshd_config
+	my $external_sshd_config_file_path = '/etc/ssh/external_sshd_config';
+	my @original_lines = $self->get_file_contents($external_sshd_config_file_path);
+	my @modified_lines;
+	my $new_file_contents;
+	for my $line (@original_lines) {
+		if ($line =~ /AllowUsers.*\s$username(\s|$)/) {
+			push @modified_lines, $line;
+			$line =~ s/\s*$username//g;
+			# If user was only username listed on line, don't add empty AllowUsers line back to file
+			if ($line !~ /AllowUsers\s+\w/) {
+				next;
+			}
+		}
+		$new_file_contents .= "$line\n";
+	}
+	if (@modified_lines) {
+		notify($ERRORS{'OK'}, 0, "removing or modifying AllowUsers lines in $external_sshd_config_file_path:\n" . join("\n", @modified_lines));
+		$self->create_text_file($external_sshd_config_file_path, $new_file_contents) || return;
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "no AllowUsers lines were found in $external_sshd_config_file_path containing '$username'");
+	}
+	
+	# Remove lines from sudoers
+	$self->remove_lines_from_file('/etc/sudoers', "^\\s*$username\\s+") || return;
+	
+	return 1;
+} ## end sub delete_user
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 is_file_on_local_disk
+
+ Parameters  : $file_path
+ Returns     : boolean
+ Description : Determines if the file or directory is located on a local disk or
+               network share.
+
+=cut
+
+sub is_file_on_local_disk {
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return 0;
+	}
+	
+	my $file_path = shift;
+	if (!$file_path) {
+		notify($ERRORS{'WARNING'}, 0, "file path argument was not specified");
+		return;
+	}
+	
+	my $computer_name = $self->data->get_computer_short_name();
+	
+	# Run df to determine if file is on a local device or network share
+	my $df_command = "df -T -P $file_path";
+	my ($df_exit_status, $df_output) = $self->execute($df_command);
+	if (!defined($df_output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to determine if file is on a local disk");
+		return;
+	}
+	elsif (grep(/(no such file|no file system)/i, @$df_output)) {
+		notify($ERRORS{'DEBUG'}, 0, "file does NOT exist on $computer_name: $file_path");
+		return;
+	}
+	elsif (grep(m|/dev/|i, @$df_output) && !grep(/ (nfs|afs) /i, @$df_output)) {
+		notify($ERRORS{'DEBUG'}, 0, "file is on a local disk: $file_path, output:\n" . join("\n", @$df_output));
+		return 1;
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "file is NOT on a local disk: $file_path, output:\n" . join("\n", @$df_output));
+		return 0;
+	}
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 =head2 enable_dhcp
@@ -3209,7 +3288,7 @@ sub enable_firewall_port {
 	}
 	
 	if ($scope_argument) {
-		#	if($scope_argument eq '0.0.0.0') {
+		#	if ($scope_argument eq '0.0.0.0') {
 		#		$scope_argument .= "/0";
 		#	}
 		#	else {
@@ -3701,17 +3780,17 @@ sub parse_firewall_scope {
 			}
 		}
 		
-      $scope_result_string =~ s/,+$//;
-      my $argument_string = join(",", @scope_strings);
-      if ($argument_string ne $scope_result_string) {
-         notify($ERRORS{'DEBUG'}, 0, "parsed firewall scope:\n" .
-            "argument: '$argument_string'\n" .
-            "result: '$scope_result_string'\n" .
-            "IP address ranges:\n" . join(", ", @ip_address_ranges)
-         );
-      }
-      return $scope_result_string;
-   }
+		$scope_result_string =~ s/,+$//;
+		my $argument_string = join(",", @scope_strings);
+		if ($argument_string ne $scope_result_string) {
+			notify($ERRORS{'DEBUG'}, 0, "parsed firewall scope:\n" .
+				"argument: '$argument_string'\n" .
+				"result: '$scope_result_string'\n" .
+				"IP address ranges:\n" . join(", ", @ip_address_ranges)
+			);
+		}
+		return $scope_result_string;
+	}
 	else {
 		notify($ERRORS{'WARNING'}, 0, "failed to parse firewall scope: '" . join(",", @scope_strings) . "', no Net::Netmask objects were created");
 		return;
@@ -3787,20 +3866,21 @@ sub firewall_compare_update {
 				$scope = $self->parse_firewall_scope("$remote_ip,$existing_scope");
 				if (!$scope) {
 					notify($ERRORS{'WARNING'}, 0, "failed to parse firewall scope argument appended with existing scope: '$remote_ip,$existing_scope'");
-                return;
-            }
+					return;
+				}
 			
 				if ($scope eq $parsed_existing_scope) {
-                notify($ERRORS{'DEBUG'}, 0, "firewall is already open on $computer_node_name, existing scope matches scope argument:\n" .
-               "name: '$name'\n" .
-               "protocol: $protocol\n" .
-               "port/type: $port\n" .
-               "scope: $scope\n");
-                return 1;
-            }
+					notify($ERRORS{'DEBUG'}, 0, "firewall is already open on $computer_node_name, existing scope matches scope argument:\n" .
+						"name: '$name'\n" .
+						"protocol: $protocol\n" .
+						"port/type: $port\n" .
+						"scope: $scope\n"
+					);
+					return 1;
+				}
 				else {
 					if ($self->enable_firewall_port($protocol, $port, "$remote_ip/24", 0)) {
-                   notify($ERRORS{'OK'}, 0, "opened firewall port $port on $computer_node_name for $remote_ip $name connect method");
+						notify($ERRORS{'OK'}, 0, "opened firewall port $port on $computer_node_name for $remote_ip $name connect method");
 					}
 				}
 				

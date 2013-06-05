@@ -117,7 +117,7 @@ our @EXPORT = qw(
   get_computer_grp_members
   get_computer_ids
   get_computer_info
-  get_computers_controlled_by_MN
+  get_computers_controlled_by_mn
   get_connect_method_info
   get_copy_speed_info_string
   get_current_file_name
@@ -133,6 +133,8 @@ our @EXPORT = qw(
   get_current_image_contents_noDS
   get_local_user_info
   get_management_node_blockrequests
+  get_management_node_computer_ids
+  get_management_node_vmhost_info
   get_management_node_id
   get_management_node_info
   get_management_node_requests
@@ -143,6 +145,7 @@ our @EXPORT = qw(
   get_production_imagerevision_info
   get_random_mac_address
   get_request_by_computerid
+  get_request_current_state_name
   get_request_end
   get_request_info
   get_reservation_accounts
@@ -150,6 +153,7 @@ our @EXPORT = qw(
   get_managable_resource_groups
   get_user_affiliation
   get_user_info
+  get_vmhost_assigned_vm_info
   get_vmhost_info
   getimagesize
   getnewdbh
@@ -162,7 +166,7 @@ our @EXPORT = qw(
   insert_reload_request
   insert_request
   insertloadlog
-  is_IP_assigned_query
+  is_ip_assigned_query
   is_management_node_process_running
   is_inblockrequest
   is_public_ip_address
@@ -1528,16 +1532,15 @@ sub update_request_state {
 		AND laststate.name = \'$laststate_name\'
 		AND request.id = $request_id
 		";
-
-      		# If input state_name is not pending. 
-      		# All other state changes must have the current state pending  
-      		if($state_name ne "pending") {
-         	  $update_statement .= "
-         	  AND request.stateid = cstate.id
-         	  AND cstate.name = 'pending'      
-         	  ";
-          	}
-
+		
+		# If input state_name is not pending. 
+		# All other state changes must have the current state pending  
+		if ($state_name ne "pending") {
+			$update_statement .= "
+			AND request.stateid = cstate.id
+			AND cstate.name = 'pending'      
+			";
+		}
 	} ## end if (defined $laststate_name && $laststate_name...
 	else {
 		$update_statement = "
@@ -1551,16 +1554,16 @@ sub update_request_state {
 		state.name = \'$state_name\'
 		AND request.id = $request_id
 		";
-
-      		# If input state_name is not pending. 
-      		# All other state changes must have the current state pending  
-      		if($state_name ne "pending") {
-         	  $update_statement .= "
-         	  AND request.stateid = cstate.id
-         	  AND cstate.name = 'pending'      
-         	  ";
-          	}
-
+		
+		# If input state_name is not pending. 
+		# All other state changes must have the current state pending  
+		if ($state_name ne "pending") {
+			$update_statement .= "
+			AND request.stateid = cstate.id
+			AND cstate.name = 'pending'      
+			";
+		}
+		
 		$laststate_name = 'unchanged';
 	} ## end else [ if (defined $laststate_name && $laststate_name...
 
@@ -4605,13 +4608,14 @@ EOF
 	}
 	
 	# Get the vmprofile image info and add it to the hash
-	my $vmprofile_image_id = $vmhost_info->{vmprofile}{imageid};
-	my $vmprofile_image_info = get_image_info($vmprofile_image_id);
+	my $vmprofile_image_identifier = $vmhost_info->{vmprofile}{imageid};
+	$vmprofile_image_identifier = 'noimage' if !$vmprofile_image_identifier;
+	my $vmprofile_image_info = get_image_info($vmprofile_image_identifier);
 	if ($vmprofile_image_info) {
 		$vmhost_info->{vmprofile}{image} = $vmprofile_image_info;
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "unable to retrieve vmprofile image info, image ID: $vmprofile_image_id");
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve vmprofile image info, image identifier: $vmprofile_image_identifier");
 	}
 	
 	$vmhost_info->{vmprofile}{username} = '' if !$vmhost_info->{vmprofile}{username};
@@ -5895,6 +5899,63 @@ EOF
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 get_request_current_state_name
+
+ Parameters  : $request_id
+ Returns     : String containing state name for a request
+ Description :
+
+=cut
+
+
+sub get_request_current_state_name {
+	my ($request_id) = @_;
+
+	# Check the passed parameter
+	if (!(defined($request_id))) {
+		notify($ERRORS{'WARNING'}, 0, "request ID was not specified");
+		return ();
+	}
+
+	# Create the select statement
+	my $select_statement = <<EOF;
+SELECT
+state.name AS state_name,
+laststate.name AS laststate_name
+FROM
+request,
+state,
+state laststate
+WHERE
+request.id = $request_id
+AND request.stateid = state.id
+AND request.laststateid = laststate.id
+EOF
+
+	# Call the database select subroutine
+	my @selected_rows = database_select($select_statement);
+
+	# Check to make sure 1 row was returned
+	if (!@selected_rows) {
+		notify($ERRORS{'WARNING'}, 0, "zero rows were returned from database select");
+		return;
+	}
+	
+	my $row = $selected_rows[0];
+	my $state_name = $row->{state_name};
+	my $laststate_name = $row->{laststate_name};
+	notify($ERRORS{'DEBUG'}, 0, "retrieved current request state: $state_name/$laststate_name");
+	
+	if (wantarray) {
+		return ($state_name, $laststate_name);
+	}
+	else {
+		return $state_name;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 get_computer_current_state_name
 
  Parameters  : $computer_id
@@ -6086,42 +6147,41 @@ sub update_log_ending {
 
 =head2 update_reservation_lastcheck
 
- Parameters  : Updates the finalend and ending fields in the log table for the specified log ID
- Returns     : date string if successful, 0 if failed
+ Parameters  : $reservation_id or @reservation_ids
+ Returns     : boolean
  Description :
 
 =cut
 
 sub update_reservation_lastcheck {
-	my ($reservation_id) = @_;
-
-	my ($package, $filename, $line, $sub) = caller(0);
-
+	my @reservation_ids = @_;
+	
 	# Check the passed parameter
-	if (!(defined($reservation_id))) {
+	if (!@reservation_ids) {
 		notify($ERRORS{'WARNING'}, 0, "reservation ID was not specified");
-		return ();
+		return;
 	}
 
-	my $datestring = makedatestring();
-
+	my $reservation_id_string = join(', ', @reservation_ids);
+	
 	# Construct the update statement
-	my $update_statement = "
-      UPDATE
-		reservation
-		SET
-		lastcheck = \'$datestring\'
-		WHERE
-		id = $reservation_id
-   ";
+	my $update_statement = <<EOF;
+UPDATE
+reservation
+SET
+reservation.lastcheck = NOW()
+WHERE
+reservation.id IN ($reservation_id_string)
+EOF
 
 	# Call the database execute subroutine
 	if (database_execute($update_statement)) {
-		return $datestring;
+		notify($ERRORS{'DEBUG'}, 0, "updated reservation.lastcheck to now for reservation IDs: $reservation_id_string");
+		return 1;
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "unable to update database, reservation id $reservation_id");
-		return 0;
+		notify($ERRORS{'WARNING'}, 0, "failed to update reservation.lastcheck to now for reservation IDs: $reservation_id_string");
+		return;
 	}
 } ## end sub update_reservation_lastcheck
 
@@ -7078,7 +7138,7 @@ sub get_management_node_blockrequests {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 get_computers_controlled_by_MN
+=head2 get_computers_controlled_by_mn
 
  Parameters  : $managementnode_id
  Returns     : hash containing computer info
@@ -7086,7 +7146,7 @@ sub get_management_node_blockrequests {
 
 =cut
 
-sub get_computers_controlled_by_MN {
+sub get_computers_controlled_by_mn {
 	my (%managementnode) = @_;
 
 	my %info;
@@ -9777,22 +9837,26 @@ sub setup_get_input_string {
 =cut
 
 sub setup_get_hash_choice {
-	my ($hash_ref, $display_key) = @_;
+	my ($hash_ref, $display_key1, $display_key2) = @_;
 	
 	my $choice_count = scalar(keys %$hash_ref);
 	
 	my %choices;
 	for my $key (keys %$hash_ref) {
 		my $display_name;
-		if ($display_key) {
-			$display_name = $hash_ref->{$key}{$display_key};
+		if ($display_key1) {
+			$display_name = $hash_ref->{$key}{$display_key1};
 		}
-		else {
+		if ($display_key2) {
+			$display_name .= " (" . $hash_ref->{$key}{$display_key2} . ")";
+		}
+		
+		if (!$display_name) {
 			$display_name = $key;
 		}
 		
 		if ($choices{$display_name}) {
-			notify($ERRORS{'WARNING'}, 0, "duplicate hash keys containing the value '$display_key' = '$display_name', hash argument:\n" . format_data($hash_ref));
+			notify($ERRORS{'WARNING'}, 0, "duplicate hash keys containing the value '$display_name', hash argument:\n" . format_data($hash_ref));
 		}
 		
 		$choices{$display_name} = $key;
@@ -10410,15 +10474,15 @@ sub get_current_image_contents_noDS {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 is_IP_assigned_query
+=head2 is_ip_assigned_query
 
   Parameters  : IP address
-  Returns     :  boolean 1=true, 0=false
+  Returns     : boolean
   Description : checks if IP address exists in db
 
 =cut
 
-sub is_IP_assigned_query {
+sub is_ip_assigned_query {
 	
 	my ($IPaddress) = @_;
 
@@ -10473,20 +10537,233 @@ EOF
 sub stopwatch {
 	my ($title) = @_;
 	
+	my ($seconds, $microseconds) = gettimeofday;
+	
 	if (!$ENV{'start'}) {
-		$ENV{'start'} = [gettimeofday];
+		$ENV{'start'} = [$seconds, $microseconds];
+	}
+	
+	if (defined($ENV{'stopwatch_count'})) {
+		$ENV{'stopwatch_count'}++;
+	}
+	else {
+		$ENV{'stopwatch_count'} = 'a';
 	}
 	
 	$ENV{'previous'} = $ENV{'current'} || $ENV{'start'};
 	
-	$ENV{'current'} = [gettimeofday];
+	$ENV{'current'} = [$seconds, $microseconds];
 	
-	my $message = "stopwatch: ";
-	$message .= " $title: " if $title;
+	my $message = "stopwatch - $ENV{'stopwatch_count'}: ";
+	$message .= "$title " if defined($title);
+	$title = '<none>' if !defined($title);
 	
-	$message .= "+" . tv_interval($ENV{'previous'}, $ENV{'current'}) . " (" . tv_interval($ENV{'start'}, $ENV{'current'}) . ")";
+	my $previous_delta = tv_interval($ENV{'previous'}, $ENV{'current'});
+	my $start_delta = tv_interval($ENV{'start'}, $ENV{'current'});
 	
-	print "\n\n$message\n\n";
+	$start_delta = 0 if $start_delta =~ /e/;
+	$previous_delta = 0 if $previous_delta =~ /e/;
+	
+	$message .= "+$previous_delta ($start_delta)";
+	
+	print "$message\n";
+	
+	my $info = {
+		current => $ENV{'current'},
+		previous => $ENV{'previous'},
+		message => $message,
+		start_delta => $start_delta,
+		previous_delta => $previous_delta,
+		title => "$ENV{'stopwatch_count'}: $title",
+	};
+	
+	if (!$ENV{stopwatch}) {
+		$ENV{stopwatch} = [];
+	}
+	
+	push @{$ENV{stopwatch}}, $info;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_management_node_computer_ids
+
+ Parameters  : $management_node_identifier
+ Returns     : hash reference
+ Description : Retrieves a list of all computer IDs a particular management node
+               controls.
+
+=cut
+
+sub get_management_node_computer_ids {
+	my $management_node_identifier = shift;
+	if (!$management_node_identifier) {
+		notify($ERRORS{'WARNING'}, 0, "management node identifier argument was not supplied");
+		return;
+	}
+	
+	my $select_statement = <<EOF;
+SELECT DISTINCT
+computer.id,
+computer.hostname
+
+FROM
+managementnode       mn,
+resource             mn_resource,
+resourcetype         mn_resourcetype,
+resourcegroup        mn_resourcegroup,
+resourcegroupmembers mn_resourcegroupmembers,
+computer,
+resource             comp_resource,
+resourcegroup        comp_resourcegroup,
+resourcegroupmembers comp_resourceourcegroupmembers,
+resourcemap
+
+WHERE
+
+mn.id = mn_resource.subid AND
+mn_resource.resourcetypeid = mn_resourcetype.id AND
+mn_resourcetype.name = 'managementnode' AND
+
+mn_resource.id = mn_resourcegroupmembers.resourceid AND
+mn_resourcegroupmembers.resourcegroupid = mn_resourcegroup.id AND
+
+computer.id = comp_resource.subid AND
+comp_resource.id = comp_resourceourcegroupmembers.resourceid AND
+comp_resourceourcegroupmembers.resourcegroupid = comp_resourcegroup.id AND
+
+resourcemap.resourcegroupid1 = mn_resourcegroup.id AND
+resourcemap.resourcegroupid2 = comp_resourcegroup.id AND
+
+computer.deleted = 0
+EOF
+	
+	if ($management_node_identifier =~ /^\d+$/) {
+		$select_statement .= "AND mn.id = $management_node_identifier";
+	}
+	else {
+		$select_statement .= "AND mn.hostname = '$management_node_identifier'";
+	}
+	
+	my @selected_rows = database_select($select_statement);
+	
+	my %computers = map { $_->{id} => $_->{hostname} } @selected_rows;
+	my @computer_ids = keys %computers;
+	my $computer_count = scalar(@computer_ids);
+	#notify($ERRORS{'DEBUG'}, 0, "computers assigned to $management_node_identifier: $computer_count\n" . format_data(\%computers));
+	notify($ERRORS{'DEBUG'}, 0, "computers assigned to $management_node_identifier: $computer_count\n" . join(', ', @computer_ids));
+	return @computer_ids;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_management_node_vmhost_ids
+
+ Parameters  : $management_node_identifier
+ Returns     : array
+ Description : Returns a list of all VM host IDs controlled by a particular
+               management node.
+
+=cut
+
+sub get_management_node_vmhost_info {
+	my $management_node_identifier = shift;
+	if (!$management_node_identifier) {
+		notify($ERRORS{'WARNING'}, 0, "management node identifier argument was not supplied");
+		return;
+	}
+	
+	my $select_statement = <<EOF;
+SELECT DISTINCT
+vmhost.id
+
+FROM
+managementnode       mn,
+resource             mn_resource,
+resourcetype         mn_resourcetype,
+resourcegroup        mn_resourcegroup,
+resourcegroupmembers mn_resourcegroupmembers,
+computer,
+vmhost,
+resource             comp_resource,
+resourcegroup        comp_resourcegroup,
+resourcegroupmembers comp_resourceourcegroupmembers,
+resourcemap
+
+WHERE
+
+mn.id = mn_resource.subid AND
+mn_resource.resourcetypeid = mn_resourcetype.id AND
+mn_resourcetype.name = 'managementnode' AND
+
+mn_resource.id = mn_resourcegroupmembers.resourceid AND
+mn_resourcegroupmembers.resourcegroupid = mn_resourcegroup.id AND
+
+computer.deleted = 0 AND
+computer.type = 'virtualmachine' AND
+computer.id = comp_resource.subid AND
+comp_resource.id = comp_resourceourcegroupmembers.resourceid AND
+comp_resourceourcegroupmembers.resourcegroupid = comp_resourcegroup.id AND
+
+computer.vmhostid = vmhost.id AND
+
+resourcemap.resourcegroupid1 = mn_resourcegroup.id AND
+resourcemap.resourcegroupid2 = comp_resourcegroup.id
+EOF
+	
+	if ($management_node_identifier =~ /^\d+$/) {
+		$select_statement .= "AND mn.id = $management_node_identifier";
+	}
+	else {
+		$select_statement .= "AND mn.hostname = '$management_node_identifier'";
+	}
+	
+	my @selected_rows = database_select($select_statement);
+	
+	my @vmhost_ids = map { $_->{id} } @selected_rows;
+	
+	notify($ERRORS{'DEBUG'}, 0, "vmhost IDs assigned to $management_node_identifier:\n" . join(', ', @vmhost_ids));
+	return @vmhost_ids;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_vmhost_assigned_vm_info
+
+ Parameters  : $vmhost_id
+ Returns     : hash reference
+ Description : Returns a hash reference containing all of the computer IDs
+               assigned to a VM host.
+
+=cut
+
+sub get_vmhost_assigned_vm_info {
+	my $vmhost_id = shift;
+	if (!$vmhost_id) {
+		notify($ERRORS{'WARNING'}, 0, "VM host ID argument was not supplied");
+		return;
+	}
+	
+	my $select_statement = <<EOF;
+SELECT
+computer.id
+FROM
+computer
+WHERE
+computer.vmhostid = $vmhost_id
+EOF
+	
+	my @selected_rows = database_select($select_statement);
+	
+	my $assigned_computer_info = {};
+	for my $row (@selected_rows) {
+		my $computer_id = $row->{id};
+		my $computer_info = get_computer_info($computer_id);
+		$assigned_computer_info->{$computer_id} = $computer_info;
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "retrieved computer info for VMs assigned to VM host $vmhost_id: " . join(', ', sort keys %$assigned_computer_info));
+	return $assigned_computer_info;
 }
 
 #/////////////////////////////////////////////////////////////////////////////

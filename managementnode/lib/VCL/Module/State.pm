@@ -76,14 +76,16 @@ use VCL::DataStructure;
 
 sub initialize {
 	my $self = shift;
+	notify($ERRORS{'DEBUG'}, 0, "initializing VCL::Module::State object");
 	
 	$self->{start_time} = time;
 	
 	my $reservation_id = $self->data->get_reservation_id();
+	my $is_vm = $self->data->get_computer_vmhost_id(0);
 	
 	# Initialize the database handle count
 	$ENV{dbh_count} = 0;
-
+	
 	# Attempt to get a database handle
 	if ($ENV{dbh} = getnewdbh()) {
 		notify($ERRORS{'DEBUG'}, 0, "obtained a database handle for this state process, stored as \$ENV{dbh}");
@@ -113,27 +115,41 @@ sub initialize {
 	# Set the parent PID and this process's PID in the hash
 	set_hash_process_id($self->data->get_request_data);
 	
+	# Create a management node OS object
+	# Check to make sure the object currently being created is not a MN OS object to avoid endless loop
+	if (my $mn_os = $self->create_mn_os_object()) {
+		$self->set_mn_os($mn_os);
+		$self->data->set_mn_os($mn_os);
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to create management node OS object");
+		return;
+	}
+	
 	# Create an OS object
-	if (!$self->create_os_object()) {
+	if (my $os = $self->create_os_object()) {
+		$self->set_os($os);
+	}
+	else {
 		notify($ERRORS{'WARNING'}, 0, "failed to create OS object");
 		return;
 	}
 	
 	# Create a VM host OS object if vmhostid is set for the computer
-	my $is_vm = $self->data->get_computer_vmhost_id(0);
+	my $vmhost_os;
 	if ($is_vm) {
-		notify($ERRORS{'DEBUG'}, 0, "computer is a VM, attempting to create VM host OS object");
-		if (!$self->create_vmhost_os_object()) {
+		$vmhost_os = $self->create_vmhost_os_object();
+		if (!$vmhost_os) {
 			notify($ERRORS{'WARNING'}, 0, "failed to create VM host OS object");
 			return;
 		}
-	}
-	else {
-		notify($ERRORS{'DEBUG'}, 0, "computer is NOT a VM, VM host OS object not created");
+		$self->set_vmhost_os($vmhost_os);
 	}
 	
 	# Create a provisioning object
-	if ($self->create_provisioning_object()) {
+	if (my $provisioner = $self->create_provisioning_object()) {
+		$self->set_provisioner($provisioner);
+		
 		# Allow the provisioning object to access the OS object
 		$self->provisioner->set_os($self->os());
 		
@@ -146,12 +162,16 @@ sub initialize {
 		return;
 	}
 	
-	# Allow the provisioning object to access the VM host OS object
+	# Create a VM host OS object if vmhostid is set for the computer
 	if ($is_vm) {
-		$self->provisioner->set_vmhost_os($self->vmhost_os());
+		# Check if provisioning object already has a VM host OS object
+		my $provisioner_vmhost_os = $self->provisioner->vmhost_os(0);
+		
+		if (ref($provisioner_vmhost_os) ne ref($vmhost_os)) {
+			$self->set_vmhost_os($provisioner_vmhost_os);
+		}
 	}
 	
-	notify($ERRORS{'DEBUG'}, 0, "returning 1");
 	return 1;
 } ## end sub initialize
 

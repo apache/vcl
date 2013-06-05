@@ -962,7 +962,7 @@ sub confirm_fixedIP_is_available {
 	my $server_request_fixedIP       = $self->data->get_server_request_fixedIP(); 
 	
 	#check VCL computer table
-	if(is_IP_assigned_query($server_request_fixedIP)) {
+	if(is_ip_assigned_query($server_request_fixedIP)) {
 		notify($ERRORS{'WARNING'}, 0, "$server_request_fixedIP is already assigned");
 		insertloadlog($reservation_id, $computer_id, "failed","$server_request_fixedIP is already assigned");
 		return 0;
@@ -1844,8 +1844,7 @@ sub get_public_default_gateway {
  Description : Creates a text file on the computer. The $file_contents
                string argument is converted to ASCII hex values. These values
                are echo'd on the computer which avoids problems with special
-               characters and escaping. If the file already exists it is
-               overwritten.
+               characters and escaping.
 
 =cut
 
@@ -1857,7 +1856,11 @@ sub create_text_file {
 	}
 	
 	my ($file_path, $file_contents_string, $concatenate) = @_;
-	if (!$file_contents_string) {
+	if (!defined($file_path)) {
+		notify($ERRORS{'WARNING'}, 0, "file path argument was not supplied");
+		return;
+	}
+	elsif (!defined($file_contents_string)) {
 		notify($ERRORS{'WARNING'}, 0, "file contents argument was not supplied");
 		return;
 	}
@@ -1877,6 +1880,11 @@ sub create_text_file {
 	}
 	else {
 		$file_contents_string =~ s/\r//g;
+	}
+	
+	# Add a newline to the end of the contents
+	if ($file_contents_string !~ /\n$/) {
+		$file_contents_string .= "\n";
 	}
 	
 	# Convert the string to a string containing the hex value of each character
@@ -2039,8 +2047,9 @@ sub remove_lines_from_file {
 	
 	if (@lines_removed) {
 		my $lines_removed_count = scalar(@lines_removed);
+		my $new_file_contents = join("\n", @lines_retained) || '';
 		notify($ERRORS{'DEBUG'}, 0, "removed $lines_removed_count line" . ($lines_removed_count > 1 ? 's' : '') . " from $file_path matching pattern: '$pattern'\n" . join("\n", @lines_removed));
-		$self->create_text_file($file_path, join("\n", @lines_retained)) || return;	
+		$self->create_text_file($file_path, $new_file_contents) || return;	
 	}
 	else {
 		notify($ERRORS{'DEBUG'}, 0, "$file_path does NOT contain any lines matching pattern: '$pattern'");
@@ -2785,11 +2794,12 @@ sub is_user_connected {
 		return "failed";
 	}
 
-	my $request_id           = $self->data->get_request_id();	
-	my $computer_node_name   = $self->data->get_computer_node_name();
-	my $request_state_name	 = $self->data->get_request_state_name();
-	my $user_unityid         = $self->data->get_user_login_id();
-	my $connect_methods      = $self->data->get_connect_methods();	
+	my $request_id             = $self->data->get_request_id();	
+	my $computer_node_name     = $self->data->get_computer_node_name();
+	my $request_state_name	   = $self->data->get_request_state_name();
+	my $request_laststate_name = $self->data->get_request_state_name();
+	my $user_unityid           = $self->data->get_user_login_id();
+	my $connect_methods        = $self->data->get_connect_methods();
 	
 	my $start_time    = time();
 	my $timeout_time  = ($start_time + ($time_limit * 60));
@@ -2806,6 +2816,18 @@ sub is_user_connected {
 			$break   = 1;
 			$ret_val = "deleted";
 			return $ret_val;
+		}
+		
+		# Check if the request state changed
+		# This will occur with cluster requests while the child reservations are checking for a connection
+		my ($request_current_state_name, $request_current_laststate_name) = get_request_current_state_name($request_id);
+		if (($request_current_state_name eq 'pending' && $request_current_laststate_name ne $request_state_name) ||
+			 ($request_current_state_name ne 'pending' && $request_current_state_name ne $request_state_name)) {
+			notify($ERRORS{'OK'}, 0, "request state changed: $request_state_name/$request_laststate_name --> $request_current_state_name/$request_current_laststate_name, returning 'connected'");
+			return 'connected';
+		}
+		else {
+			notify($ERRORS{'OK'}, 0, "request state NOT changed: $request_state_name/$request_laststate_name --> $request_current_state_name/$request_current_laststate_name");
 		}
 		
 		$time_exceeded = time_exceeded($start_time, $time_limit);
