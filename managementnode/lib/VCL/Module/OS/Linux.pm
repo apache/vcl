@@ -343,6 +343,35 @@ sub post_load {
 	
 	# Remove commands from rc.local added by previous versions of VCL
 	$self->configure_rc_local();
+
+	#Local krb5 edit/change	
+	my $krb5_conf_file_path = '/etc/krb5.conf';
+        my @krb5_conf_contents = $self->get_file_contents($krb5_conf_file_path);
+        if (@krb5_conf_contents) {
+                notify($ERRORS{'DEBUG'}, 0, "retrieved $krb5_conf_file_path contents:\n" . join("\n", @krb5_conf_contents));
+
+                my $new_krb5_contents_string;
+                for my $line (@krb5_conf_contents) {
+                        if ($line =~ /(krb4_convert|krb4_use_as_req)/i) {
+                                next;
+                        }
+
+                        $new_krb5_contents_string .= "$line\n";
+
+                        if ($line =~ /pam\s*=\s*\{/i) {
+                                $new_krb5_contents_string .= "   krb4_convert = false\n";
+                                $new_krb5_contents_string .= "   krb4_use_as_req = false\n";
+                                $new_krb5_contents_string .= "   krb4_convert_524 = false\n";
+                        }
+                }
+
+                if ($self->create_text_file("$krb5_conf_file_path", $new_krb5_contents_string)) {
+                        notify($ERRORS{'DEBUG'}, 0, "updated $krb5_conf_file_path file:\n$new_krb5_contents_string");
+                }
+                else {
+                        notify($ERRORS{'WARNING'}, 0, "failed to update $krb5_conf_file_path file");
+                }
+        }
 	
 	if ($image_os_install_type eq "kickstart") {
 		notify($ERRORS{'OK'}, 0, "detected kickstart install on $computer_short_name, writing current_image.txt");
@@ -2148,7 +2177,9 @@ sub get_network_configuration {
 	for my $ifconfig_line (@$ifconfig_output) {
 		# Extract the interface name from the Link line:
 		# eth2      Link encap:Ethernet  HWaddr 00:0C:29:78:77:AB
-		if ($ifconfig_line =~ /^([^\s]+).*Link/) {
+		#eth0: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 1500
+		#if ($ifconfig_line =~ /^([^\s]+).*Link/) {
+		if ($ifconfig_line =~ /^([^\s:]+).*(Link|flags)/) {
 			$interface_name = $1;
 			$network_configuration->{$interface_name}{name} = $interface_name;
 		}
@@ -2158,8 +2189,9 @@ sub get_network_configuration {
 		
 		# Parse the HWaddr line:
 		# eth2      Link encap:Ethernet  HWaddr 00:0C:29:78:77:AB
-		if ($ifconfig_line =~ /HWaddr\s+([\w:]+)/) {
-			$network_configuration->{$interface_name}{physical_address} = lc($1);
+		#if ($ifconfig_line =~ /HWaddr\s+([\w:]+)/) {
+		if ($ifconfig_line =~ /(ether|HWaddr)\s+([\w:]+)/) {
+			$network_configuration->{$interface_name}{physical_address} = lc($2);
 		}
 		
 		# Parse the IP address line:
@@ -2168,6 +2200,13 @@ sub get_network_configuration {
 			$network_configuration->{$interface_name}{ip_address}{$1} = $3;
 			$network_configuration->{$interface_name}{broadcast_address} = $2;
 		}
+       		
+		# inet 10.25.14.3  netmask 255.255.240.0  broadcast 10.25.15.255
+      		if ($ifconfig_line =~ /inet\s+([\d\.]+)\s+netmask\s+([\d\.]+)\s+broadcast\s+([\d\.]+)/) {
+			$network_configuration->{$interface_name}{ip_address}{$1} = $2;
+			$network_configuration->{$interface_name}{broadcast_address} = $3;
+		}
+
 	}
 	
 	# Run route
