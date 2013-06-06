@@ -4905,7 +4905,7 @@ sub run_ssh_command {
 		# ssh exits with the exit status of the remote command or with 255 if an error occurred.
 		# Check for vmware-cmd usage message, it returns 255 if the vmware-cmd usage output is returned
 		if ($ssh_output_formatted =~ /ssh:.*(lost connection|reset by peer|no route to host|connection refused|connection timed out|resource temporarily unavailable|connection reset)/i) {
-			notify($ERRORS{'WARNING'}, 0, "attempt $attempts/$max_attempts: failed to execute SSH command on $node: '$command', exit status: $exit_status, output:\n$ssh_output_formatted");
+			notify($ERRORS{'WARNING'}, 0, "attempt $attempts/$max_attempts: failed to execute SSH command on $node: '$command', exit status: $exit_status, output:\n$ssh_output_formatted") if $output_level;
 			next;
 		}
 		elsif ($exit_status == 255 && $ssh_command !~ /(vmware-cmd|vim-cmd|vmkfstools|vmrun)/i) {
@@ -6920,7 +6920,7 @@ sub switch_state {
 			$computer_state_name_new = 'inuse';
 		}
 	}
-
+	
 	# Check if new request state was passed
 	if (!$request_state_name_new) {
 		notify($ERRORS{'DEBUG'}, 0, "request state was not specified, state not changed");

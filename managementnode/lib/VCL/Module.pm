@@ -492,20 +492,12 @@ sub create_provisioning_object {
 	notify($ERRORS{'DEBUG'}, 0, "$provisioning_perl_package module loaded");
 
 	# Attempt to provisioner the object, pass it the mn_os object if it has already been created
-	my $provisioner;
-	my $mn_os = $self->mn_os(0);
-	my $vmhost_os = $self->vmhost_os(0);
-	if ($mn_os) {
-		if ($vmhost_os) {
-			$provisioner = ($provisioning_perl_package)->new({data_structure => $self->data, mn_os => $mn_os, vmhost_os => $vmhost_os});
-		}
-		else {
-			$provisioner = ($provisioning_perl_package)->new({data_structure => $self->data, mn_os => $mn_os});
-		}
-	}
-	else {
-		$provisioner = ($provisioning_perl_package)->new({data_structure => $self->data})
-	}
+	my $constructor_arguments = {};
+	$constructor_arguments->{data_structure} = $self->data();
+	$constructor_arguments->{os} = $self->os(0) if $self->os(0);
+	$constructor_arguments->{mn_os} = $self->mn_os(0) if $self->mn_os(0);
+	$constructor_arguments->{vmhost_os} = $self->vmhost_os(0) if $self->vmhost_os(0);
+	my $provisioner = ($provisioning_perl_package)->new($constructor_arguments);
 	
 	if ($provisioner) {
 		my $provisioner_address = sprintf('%x', $provisioner);

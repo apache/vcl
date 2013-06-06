@@ -100,7 +100,7 @@ sub initialize {
 	
 	# Get a list of all *.pm files in the libvirt drivers directory
 	my @driver_module_paths = $self->mn_os->find_files($driver_directory_path, '*.pm');
-	
+
 	# Attempt to create an initialize an object for each driver module
 	# Use the first driver module successfully initialized
 	DRIVER: for my $driver_module_path (sort { lc($a) cmp lc($b) } @driver_module_paths) {
@@ -114,7 +114,7 @@ sub initialize {
 			next DRIVER;
 		}
 		my $driver;
-		eval { $driver = ($driver_perl_package)->new({data_structure => $self->data, os => $self->os}) };
+		eval { $driver = ($driver_perl_package)->new({data_structure => $self->data, os => $self->os, vmhost_os => $self->vmhost_os}) };
 		if ($driver) {
 			notify($ERRORS{'OK'}, 0, "libvirt $driver_name driver object created and initialized to control $node_name");
 			$self->{driver} = $driver;
