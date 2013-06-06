@@ -1159,7 +1159,7 @@ sub get_reservation_remote_ip {
 
 	# Return 0 if the column isn't set
 	if (!defined $selected_rows[0]{remoteIP}) {
-		notify($ERRORS{'OK'}, 0, "reservation remote IP is not defined");
+		#notify($ERRORS{'OK'}, 0, "reservation remote IP is not defined");
 		return 0;
 	}
 	
