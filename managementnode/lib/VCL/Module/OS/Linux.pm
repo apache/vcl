@@ -2320,7 +2320,7 @@ sub create_user {
 	if (!$user_login_id || $user_login_id eq $reservation_user_login_id) {
 		$user_login_id = $reservation_user_login_id;
 		
-		$password = $self->data->get_reservation_password() unless defined $password;
+		$password = $self->data->get_reservation_password(0) unless defined $password;
 		$uid = $self->data->get_user_uid() unless defined $uid;
 		$root_access = $self->data->get_imagemeta_rootaccess() unless defined $root_access;
 		$user_standalone = $self->data->get_user_standalone() unless defined $user_standalone;
