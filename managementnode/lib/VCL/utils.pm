@@ -3866,20 +3866,20 @@ EOF
 		
 		# Retrieve the user info and add to the hash
 		my $user_id = $request_info->{userid};
-		my $user_info = get_user_info($user_id);
+		my $user_info = get_user_info($user_id, 0, 1);
 		$request_info->{user} = $user_info;
 		
 		my $imagemeta_root_access = $request_info->{reservation}{$reservation_id}{image}{imagemeta}{rootaccess};
 		
 		# Add the request user to the hash, set ROOTACCESS to the value configured in imagemeta
-		$request_info->{reservation}{$reservation_id}{users}{$user_id} = get_user_info($user_id);
+		$request_info->{reservation}{$reservation_id}{users}{$user_id} = $user_info;
 		$request_info->{reservation}{$reservation_id}{users}{$user_id}{ROOTACCESS} = $imagemeta_root_access;
 		
 		# If server request and logingroupid is set, add user group members to hash, set ROOTACCESS to 0
 		if (my $login_group_id = $request_info->{reservation}{$reservation_id}{serverrequest}{logingroupid}) {
 			my $login_group_member_info = get_user_group_member_info($login_group_id);
 			for my $login_user_id (keys %$login_group_member_info) {
-				$request_info->{reservation}{$reservation_id}{users}{$login_user_id} = get_user_info($login_user_id);
+				$request_info->{reservation}{$reservation_id}{users}{$login_user_id} = get_user_info($login_user_id, 0, 1);
 				$request_info->{reservation}{$reservation_id}{users}{$login_user_id}{ROOTACCESS} = 0;
 			}
 		}
@@ -3888,7 +3888,7 @@ EOF
 		if (my $admin_group_id = $request_info->{reservation}{$reservation_id}{serverrequest}{admingroupid}) {
 			my $admin_group_member_info = get_user_group_member_info($admin_group_id);
 			for my $admin_user_id (keys %$admin_group_member_info, $user_id) {
-				$request_info->{reservation}{$reservation_id}{users}{$admin_user_id} = get_user_info($admin_user_id);
+				$request_info->{reservation}{$reservation_id}{users}{$admin_user_id} = get_user_info($admin_user_id, 0, 1);
 				$request_info->{reservation}{$reservation_id}{users}{$admin_user_id}{ROOTACCESS} = 1;
 			}
 		}
