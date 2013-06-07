@@ -119,7 +119,7 @@ sub _initialize {
 	}
 
 	#2 Collect hash of computers I can control with data
-	if ($info->{computertable} = get_computers_controlled_by_MN(%{$info->{managementnode}})) {
+	if ($info->{computertable} = get_computers_controlled_by_mn(%{$info->{managementnode}})) {
 		notify($ERRORS{'OK'}, 0, "retrieved management node resource groups from database");
 	}
 	else {
@@ -141,7 +141,7 @@ sub _initialize {
 
 sub process {
 	my ($info, $powerdownstage) = @_;
-	notify($ERRORS{'OK'}, 0, "in processing routine");
+	#notify($ERRORS{'OK'}, 0, "in processing routine");
 	$info->{"globalmsg"}->{"body"} = "Summary of VCL node monitoring system:\n\n";
 
 	my $mn_hostname = $info->{managementnode}->{hostname};
@@ -179,7 +179,7 @@ sub process {
 		my $self;
 		my $computer_id = $cid;
 		  eval {
-					 $data= new VCL::DataStructure({computer_id => $computer_id});
+					 $data= new VCL::DataStructure({computer_identifier => $computer_id});
 		  };
 		  if ($EVAL_ERROR) {
 					 notify($ERRORS{'WARNING'}, 0, "failed to create DataStructure object for computer ID: $computer_id, error: $EVAL_ERROR");
@@ -201,33 +201,33 @@ sub process {
 		  #skip if is inuse, maintenance, tovmhost, etc.
 		  if ($computer_state !~ /available|failed/) {
 
-					 #notify($ERRORS{'OK'}, 0, "NODE computer_id $computer_id is in computer_state $computer_state skipping");
-					 $info->{computers}->{$cid}->{"skip"} = 1;
-					 $info->{"computersskipped"} += 1;
-					 next;
+			 #notify($ERRORS{'OK'}, 0, "NODE computer_id $computer_id is in computer_state $computer_state skipping");
+			 $info->{computers}->{$cid}->{"skip"} = 1;
+			 $info->{"computersskipped"} += 1;
+			 next;
 		  }
 
-		  #check lastcheck
+		  #check lastcheck timestampe
 		  if (defined($last_check) && $computer_state !~ /failed/) {
-					 my $lastcheckepoch  = convert_to_epoch_seconds($last_check);
-					 my $currentimeepoch = convert_to_epoch_seconds();
-					 my $delta           = ($currentimeepoch - $lastcheckepoch);
+			 my $lastcheckepoch  = convert_to_epoch_seconds($last_check);
+			 my $currentimeepoch = convert_to_epoch_seconds();
+			 my $delta           = ($currentimeepoch - $lastcheckepoch);
 
-					 my $delta_minutes = round($delta / 30);
+			 my $delta_minutes = round($delta / 30);
 
-					 if ($delta_minutes <= (60)) {
-							 #  notify($ERRORS{'OK'}, 0, "NODE $computer_id recently checked $delta_minutes minutes ago skipping");
-								#this node was recently checked
-								$info->{computers}->{$cid}->{"skip"} = 1;
-								$info->{"computersskipped"} += 1;
-								next;
-					 }
-					 $info->{"computerschecked"} += 1;
+			 if ($delta_minutes <= (90)) {
+				 #  notify($ERRORS{'OK'}, 0, "NODE $computer_id recently checked $delta_minutes minutes ago skipping");
+				#this node was recently checked
+				$info->{computers}->{$cid}->{"skip"} = 1;
+				$info->{"computersskipped"} += 1;
+				next;
+			 }
+			 $info->{"computerschecked"} += 1;
 		  } ## end if (defined($last_check) && $computer_state !~...
 	
-		my $computer_hostname             = $data->get_computer_host_name();
-		my $computer_short_name 			 = $1 if ($computer_hostname =~ /([-_a-zA-Z0-9]*)(\.?)/);
-		my $computer_type                 = $data->get_computer_type(); 
+		my $computer_hostname            = $data->get_computer_host_name();
+		my $computer_short_name 	 = $1 if ($computer_hostname =~ /([-_a-zA-Z0-9]*)(\.?)/);
+		my $computer_type                = $data->get_computer_type(); 
 		
 		if ($computer_type eq "lab") {
 			#next;
@@ -294,16 +294,10 @@ sub process {
 		$info->{computertable}->{$cid}->{"managementnode"} = $info->{managementnode};
 		$info->{computertable}->{$cid}->{"logfile"}        = $info->{logfile};
 
-		notify($ERRORS{'OK'}, 0, "cid= $cid");
-		notify($ERRORS{'OK'}, 0, "computer_hostname= $computer_hostname");
-		notify($ERRORS{'OK'}, 0, "computer_type= $computer_type");
-		notify($ERRORS{'OK'}, 0, "computer_state= $computer_state");
-		notify($ERRORS{'OK'}, 0, "node_status currentimage: $node_status{currentimage}");
-		notify($ERRORS{'OK'}, 0, "node_status current_image_id: $node_status{current_image_id}");
-		notify($ERRORS{'OK'}, 0, "node_status imagerevision_id: $node_status{imagerevision_id}");
-		notify($ERRORS{'OK'}, 0, "node_status vmstate: $node_status{vmstate}");
-		notify($ERRORS{'OK'}, 0, "node_status rpower: $node_status{rpower}");
-		notify($ERRORS{'OK'}, 0, "node_status status: $node_status{status}");
+		notify($ERRORS{'OK'}, 0, "hostname:$computer_hostname cid:$cid type:$computer_type state:$computer_state");
+		notify($ERRORS{'OK'}, 0, "$computer_hostname currentimage:$node_status{currentimage} current_image_id:$node_status{current_image_id}");
+		notify($ERRORS{'OK'}, 0, "$computer_hostname imagerevision_id:$node_status{imagerevision_id}");
+		notify($ERRORS{'OK'}, 0, "$computer_hostname vmstate:$node_status{vmstate} power:$node_status{rpower} status:$node_status{status}");
 
 		# Collect current state of node - it could have changed since we started
 		if (my $comp_current_state = get_computer_current_state_name($cid)) {
