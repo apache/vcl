@@ -754,7 +754,6 @@ sub wait_for_response {
 	}
 	
 	# Wait for SSH to respond, loop until timeout is reached
-	notify($ERRORS{'OK'}, 0, "waiting for $computer_node_name to respond to SSH, maximum of $ssh_response_timeout_seconds seconds");
 	if (!$self->wait_for_ssh($ssh_response_timeout_seconds, $ssh_attempt_delay_seconds)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to connect to $computer_node_name via SSH after $ssh_response_timeout_seconds seconds");
 		return;
@@ -2092,7 +2091,7 @@ sub execute {
 	# Check the argument type
 	if (ref($argument)) {
 		if (ref($argument) eq 'HASH') {
-			#notify($ERRORS{'DEBUG'}, 0, "first argument is a hash reference:\n" . format_data($argument));
+			notify($ERRORS{'DEBUG'}, 0, "first argument is a hash reference:\n" . format_data($argument));
 			
 			$computer_name = $argument->{node} if (!$computer_name);
 			$command = $argument->{command};
@@ -2782,96 +2781,39 @@ sub process_connect_methods {
 =cut
 
 sub is_user_connected {
-	
 	my $self = shift;
 	if (ref($self) !~ /VCL::Module/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
-	my $time_limit = shift;
-	if ( !$time_limit ) {
-		notify($ERRORS{'WARNING'}, 0, "time_limit variable not passed as an argument");
-		return "failed";
-	}
 
-	my $request_id             = $self->data->get_request_id();	
-	my $computer_node_name     = $self->data->get_computer_node_name();
-	my $request_state_name	   = $self->data->get_request_state_name();
-	my $request_laststate_name = $self->data->get_request_state_name();
-	my $user_unityid           = $self->data->get_user_login_id();
-	my $connect_methods        = $self->data->get_connect_methods();
+	my $computer_node_name = $self->data->get_computer_node_name();
+	my $user_login_id      = $self->data->get_user_login_id();
+	my $connect_methods    = $self->data->get_connect_methods();
 	
-	my $start_time    = time();
-	my $timeout_time  = ($start_time + ($time_limit * 60));
-	my $time_exceeded = 0;
-	my $break         = 0;
-	my $ret_val       = "no";
-
-	# Figure out number of loops for log messages
-	while (!$break) {
-		notify($ERRORS{'OK'}, 0, "checking for connection by $user_unityid on $computer_node_name");
+	notify($ERRORS{'OK'}, 0, "checking for connection by $user_login_id on $computer_node_name");
+	
+	foreach my $connect_method_id (keys %$connect_methods) {
+		my $name = $connect_methods->{$connect_method_id}{name};
+		my $port = $connect_methods->{$connect_method_id}{port};
+		my $protocol = $connect_methods->{$connect_method_id}{protocol} || 'TCP';
 		
-		if (is_request_deleted($request_id)) {
-			notify($ERRORS{'OK'}, 0, "user has deleted request");
-			$break   = 1;
-			$ret_val = "deleted";
-			return $ret_val;
+		notify($ERRORS{'DEBUG'}, 0, "checking '$name' connect method, protocol: $protocol, port: $port");
+		
+		if (!$self->can("check_connection_on_port")) {
+			notify($ERRORS{'CRITICAL'}, 0, ref($self) . " OS module does not implement check_connection_on_port subroutine");
+			return;
 		}
 		
-		# Check if the request state changed
-		# This will occur with cluster requests while the child reservations are checking for a connection
-		my ($request_current_state_name, $request_current_laststate_name) = get_request_current_state_name($request_id);
-		if (($request_current_state_name eq 'pending' && $request_current_laststate_name ne $request_state_name) ||
-			 ($request_current_state_name ne 'pending' && $request_current_state_name ne $request_state_name)) {
-			notify($ERRORS{'OK'}, 0, "request state changed: $request_state_name/$request_laststate_name --> $request_current_state_name/$request_current_laststate_name, returning 'connected'");
-			return 'connected';
+		my $result = $self->check_connection_on_port($port);
+		if ($result && $result !~ /no/i) {
+			notify($ERRORS{'OK'}, 0, "$user_login_id is connected to $computer_node_name using $name connect method, result: $result");
+			return 1;
 		}
-		else {
-			notify($ERRORS{'OK'}, 0, "request state NOT changed: $request_state_name/$request_laststate_name --> $request_current_state_name/$request_current_laststate_name");
-		}
-		
-		$time_exceeded = time_exceeded($start_time, $time_limit);
-		if ($time_exceeded) {
-			notify($ERRORS{'OK'}, 0, "$time_limit minute time limit exceeded begin cleanup process");
-			# time_exceeded, begin cleanup process
-			$break = 1;
-			if ($request_state_name =~ /reserved/) {
-				notify($ERRORS{'OK'}, 0, "user never logged in returning nologin");
-				$ret_val = "nologin";
-			}
-			else {
-				$ret_val = "timeout";
-			}
-			return $ret_val;
-		} ## end if ($time_exceeded)
-		else {    # time not exceeded check for connection
-			foreach my $CMid (sort keys %{$connect_methods} ) {
-				if($self->can("check_connection_on_port")) {
-					if(defined($$connect_methods{$CMid}{port}) && $$connect_methods{$CMid}{port}) {
-						my $connect_state = $self->check_connection_on_port($$connect_methods{$CMid}{port});
-						if($connect_state =~ /(connected|conn_wrong_ip|timeout|failed)/i){
-						 	return $connect_state	
-						}
-					}
-					else {
-						notify($ERRORS{'WARNING'}, 0, "port not defined for connectMethod id $CMid");
-					}
-				}
-				else {
-					notify($ERRORS{'CRITICAL'}, 0, "OS module does not support check_connection_on_port: " . ref($self));
-					return;
-				}
-			}
-		}
-		
-		my $current_time = time();
-		my $seconds_elapsed = ($current_time - $start_time);
-		my $seconds_until_timeout = ($timeout_time - $current_time);
-		
-		notify($ERRORS{'DEBUG'}, 0, "$user_unityid has not connected to $computer_node_name ($seconds_elapsed/$seconds_until_timeout seconds elapsed/remaining), sleeping for 15 seconds");
-		sleep 15;
 	}
-	return $ret_val;
+	
+	notify($ERRORS{'OK'}, 0, "$user_login_id is not connected to $computer_node_name");
+	return 0;
 }
 
 #/////////////////////////////////////////////////////////////////////////////

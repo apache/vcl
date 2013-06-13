@@ -169,16 +169,14 @@ sub new {
 		next if ($arg_key eq 'data_structure');
 		
 		$self->{$arg_key} = $args->{$arg_key};
-		notify($ERRORS{'DEBUG'}, 0, "set '$arg_key' key for $class object from arguments");
+		#notify($ERRORS{'DEBUG'}, 0, "set '$arg_key' key for $class object from arguments");
 	}
 
 	# Bless the object as the class which new was called with
-	notify($ERRORS{'DEBUG'}, 0, "blessing new $class object");
 	bless $self, $class;
 	
 	# Get the memory address of this newly created object - useful for debugging object creation problems
 	my $address = sprintf('%x', $self);
-	notify($ERRORS{'DEBUG'}, 0, "blessed new $class object, address: $address");
 	
 	# Display a message based on the type of object created
 	if ($self->isa('VCL::Module::State')) {
@@ -281,7 +279,7 @@ sub create_os_object {
 	
 	if ($os) {
 		my $os_address = sprintf('%x', $os);
-		notify($ERRORS{'OK'}, 0, "$os_perl_package OS object created, address: $os_address");
+		notify($ERRORS{'DEBUG'}, 0, "$os_perl_package OS object created, address: $os_address");
 		return $os;
 	}
 	else {
@@ -340,7 +338,7 @@ sub create_mn_os_object {
 	# Attempt to create the object
 	if (my $mn_os = ($mn_os_perl_package)->new({data_structure => $mn_data})) {
 		my $address = sprintf('%x', $mn_os);
-		notify($ERRORS{'OK'}, 0, "$mn_os_perl_package OS object created, address: $address");
+		notify($ERRORS{'DEBUG'}, 0, "$mn_os_perl_package OS object created, address: $address");
 		
 		# Allow $mn_os->data to access $mn_os
 		$mn_data->set_mn_os($mn_os);
@@ -435,8 +433,7 @@ sub create_vmhost_os_object {
 	
 	if ($vmhost_os) {
 		my $address = sprintf('%x', $vmhost_os);
-		notify($ERRORS{'OK'}, 0, "$vmhost_os_perl_package OS object created, address: $address");
-		$self->set_vmhost_os($vmhost_os);
+		notify($ERRORS{'DEBUG'}, 0, "$vmhost_os_perl_package OS object created, address: $address");
 		return $vmhost_os;
 	}
 	else {
@@ -502,7 +499,7 @@ sub create_provisioning_object {
 	if ($provisioner) {
 		my $provisioner_address = sprintf('%x', $provisioner);
 		my $provisioner_computer_name = $provisioner->data->get_computer_short_name();
-		notify($ERRORS{'OK'}, 0, "$provisioning_perl_package provisioning object created for $provisioner_computer_name, address: $provisioner_address");
+		notify($ERRORS{'DEBUG'}, 0, "$provisioning_perl_package provisioning object created for $provisioner_computer_name, address: $provisioner_address");
 		return $provisioner;
 	}
 	else {
@@ -803,6 +800,13 @@ sub set_vmhost_os {
 	my $vmhost_os_address = sprintf('%x', $vmhost_os);
 	notify($ERRORS{'DEBUG'}, 0, "storing reference to VM host OS object (address: $vmhost_os_address) in this $type object (address: $address)");
 	$self->{vmhost_os} = $vmhost_os;
+	
+	
+	#my $address = sprintf('%x', $self);
+	#my $vmhost_os_address = sprintf('%x', $vmhost_os);
+	#my $type = ref($self);
+	#notify($ERRORS{'DEBUG'}, 0, "storing reference to VM host OS object (address: $vmhost_os_address) in this $type object (address: $address)");
+	#$self->{vmhost_os} = $vmhost_os;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -1053,8 +1057,11 @@ sub code_loop_timeout {
 		my $seconds_remaining = ($end_time > $current_time) ? ($end_time - $current_time) : 0;
 		my $sleep_seconds = ($seconds_remaining < $attempt_delay_seconds) ? $seconds_remaining : $attempt_delay_seconds;
 		
-		if (!$message_interval_seconds || ($attempt == 1 || ($seconds_remaining <= $attempt_delay_seconds) || ($seconds_elapsed % $message_interval_seconds) < $attempt_delay_seconds)) {
-			notify($ERRORS{'DEBUG'}, 0, "attempt $attempt: $message ($seconds_elapsed/$seconds_remaining elapsed/remaining seconds), sleeping for $sleep_seconds seconds");
+		if (!$message_interval_seconds) {
+			notify($ERRORS{'OK'}, 0, "attempt $attempt: $message ($seconds_elapsed/$seconds_remaining elapsed/remaining seconds), sleeping for $sleep_seconds seconds");
+		}
+		elsif ($attempt == 1 || ($seconds_remaining <= $attempt_delay_seconds) || ($seconds_elapsed % $message_interval_seconds) < $attempt_delay_seconds) {
+			notify($ERRORS{'OK'}, 0, "attempt $attempt: $message ($seconds_elapsed/$seconds_remaining elapsed/remaining seconds)");
 		}
 		
 		if (!$sleep_seconds) {

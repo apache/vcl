@@ -292,11 +292,9 @@ sub process {
 	
 	if ($request_state_name eq 'tovmhostinuse' && ($image_name =~ /noimage/i || $computer_provisioning_name =~ /none/i)) {
 		notify($ERRORS{'OK'}, 0, "$computer_short_name will not be reloaded, image: $image_name, provisioning name: $computer_provisioning_name");
-		insertloadlog($reservation_id, $computer_id, "nodeready", "VM host $computer_short_name is not configured to be automatically loaded");
 	}
 	elsif ($self->reload_image()) {
 		notify($ERRORS{'OK'}, 0, "$computer_short_name is loaded with $image_name");
-		insertloadlog($reservation_id, $computer_id, "nodeready", "$computer_short_name is loaded with $image_name");
 	}
 	elsif ($request_preload_only) {
 		# Load failed preload only = true
@@ -351,8 +349,8 @@ sub process {
 
 	# Parent only checks and waits for any other images to complete and checkin
 	if ($reservation_is_parent && $reservation_count > 1) {
-		insertloadlog($reservation_id, $computer_id, "info", "cluster based reservation");
-
+		insertloadlog($reservation_id, $computer_id, "nodeready", "$computer_short_name is loaded with $image_name (cluster parent)");
+		
 		# Wait on child reservations
 		if ($self->wait_for_child_reservations()) {
 			notify($ERRORS{'OK'}, 0, "done waiting for child reservations, they are all ready");
@@ -421,15 +419,7 @@ sub process {
 				# Call reservation_failed, problem computer not opened for reservation
 				$self->reservation_failed("process failed after attempting to reserve the computer");
 			}
-
-			# Insert a row into the computerloadlog table
-			if (insertloadlog($reservation_id, $computer_id, "reserved", "$computer_short_name successfully reserved with $image_name")) {
-				notify($ERRORS{'OK'}, 0, "inserted computerloadlog entry, load state=reserved");
-			}
-			else {
-				notify($ERRORS{'WARNING'}, 0, "failed to insert computerloadlog entry, load state=reserved");
-			}
-
+			
 			# Set variables for the next states
 			# Don't change state of computer to reserved yet, reserved.pm will do this after it initializes
 			# This is done to reduce the delay between when Connect is shown to the user and the firewall is prepared
@@ -471,15 +461,10 @@ sub process {
 	else {
 		notify($ERRORS{'OK'}, 0, "this is a child image, request state NOT changed to '$next_request_state'");
 	}
-
-	# Insert a row into the computerloadlog table
-	if (insertloadlog($reservation_id, $computer_id, "info", "$computer_short_name successfully set to $next_computer_state with $image_name")) {
-		notify($ERRORS{'OK'}, 0, "inserted computerloadlog entry: $computer_short_name successfully set to $next_computer_state with $image_name");
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to insert computerloadlog entry: $computer_short_name successfully set to $next_computer_state with $image_name");
-	}
-
+	
+	# Add nodeready last before process exits, this is used by the cluster parent to determine when child reservations are ready
+	insertloadlog($reservation_id, $computer_id, "nodeready", "$computer_short_name is loaded with $image_name");
+	
 	notify($ERRORS{'OK'}, 0, "exiting");
 	exit;
 
@@ -1209,15 +1194,15 @@ sub wait_for_child_reservations {
 			notify($ERRORS{'OK'}, 0, "waiting for $loop_iteration_delay seconds");
 			sleep $loop_iteration_delay;
 		}
-
+		
 		# Check if request has been deleted
 		if (is_request_deleted($request_id)) {
 			notify($ERRORS{'OK'}, 0, "request has been deleted, setting computer state to 'available' and exiting");
-
+			
 			# Update state of computer and exit
 			switch_state($request_data, '', 'available', '', '1');
 		}
-
+		
 		# Check if all of the reservations are ready according to the computerloadlog table
 		my $computerloadlog_reservations_ready = reservations_ready($request_id);
 		if ($computerloadlog_reservations_ready) {
@@ -1238,45 +1223,20 @@ sub wait_for_child_reservations {
 			if ($child_reservation_id == $reservation_id) {
 				next RESERVATION_LOOP;
 			}
-
+			
 			# Get the computer ID of the child reservation
 			my $child_computer_id = $request_data->{reservation}{$child_reservation_id}{computer}{id};
 			notify($ERRORS{'DEBUG'}, 0, "checking reservation $child_reservation_id: computer ID=$child_computer_id");
-
+			
 			# Get the child reservation's current computer state
 			my $child_computer_state = get_computer_current_state_name($child_computer_id);
 			notify($ERRORS{'DEBUG'}, 0, "reservation $child_reservation_id: computer state=$child_computer_state");
-
-			# Check child reservation's computer state, is it reserved?
-			if ($child_computer_state eq "reserved") {
-				notify($ERRORS{'OK'}, 0, "ready: reservation $child_reservation_id computer state is reserved");
-			}
-			elsif ($child_computer_state eq "reloading") {
-				notify($ERRORS{'OK'}, 0, "not ready: reservation $child_reservation_id is still reloading");
-				next WAITING_LOOP;
-			}
-			elsif ($child_computer_state eq "available" && $loop_iteration > 2) {
-				# Child computer may still be in the available state if the request start is recent
-				# Warn if still in available state after this subroutine has iterated a couple times
-				notify($ERRORS{'WARNING'}, 0, "not ready: reservation $child_reservation_id: computer state is still $child_computer_state");
-				next WAITING_LOOP;
-			}
-			elsif ($child_computer_state eq "available") {
-				notify($ERRORS{'OK'}, 0, "not ready: reservation $child_reservation_id: reloading has not begun yet");
-				next WAITING_LOOP;
-			}
-			elsif ($child_computer_state =~ /^(failed|maintenance|deleted)$/) {
-				notify($ERRORS{'WARNING'}, 0, "abort: reservation $child_reservation_id: computer was put into maintenance, returning");
+			
+			if ($child_computer_state =~ /^(failed|maintenance)$/) {
+				notify($ERRORS{'WARNING'}, 0, "aborting, child reservation $child_reservation_id computer state: $child_computer_state");
 				return;
 			}
-			else {
-				notify($ERRORS{'WARNING'}, 0, "unexpected: reservation $child_reservation_id: computer in unexpected state: $child_computer_state");
-				next WAITING_LOOP;
-			}
 		} ## end foreach my $child_reservation_id (@reservation_ids)
-
-		notify($ERRORS{'OK'}, 0, "all child reservations are ready, returning 1");
-		return 1;
 	} ## end for (my $loop_iteration = 1; $loop_iteration...
 
 	# If out of main loop, waited maximum amount of time

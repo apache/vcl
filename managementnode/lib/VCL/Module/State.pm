@@ -96,7 +96,10 @@ sub initialize {
 	}
 	
 	# Update reservation lastcheck value to prevent processes from being forked over and over if a problem occurs
-	update_reservation_lastcheck($reservation_id);
+	my $reservation_lastcheck = update_reservation_lastcheck($reservation_id);
+	if ($reservation_lastcheck) {
+		$self->data->set_reservation_lastcheck_time($reservation_lastcheck);
+	}
 	
 	# Check the image OS before creating OS object
 	if (!$self->check_image_os()) {

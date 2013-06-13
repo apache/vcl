@@ -106,16 +106,19 @@ sub process {
 	my $server_request_id	        = $self->data->get_server_request_id();
 	my $acknowledge_timeout_seconds = $self->data->get_variable('acknowledgetimeout') || 900;
 	my $connect_timeout_seconds     = $self->data->get_variable('connecttimeout') || 900;
+	my $is_parent_reservation       = $self->data->is_parent_reservation();
 	
 	# Update the log loaded time to now for this request
 	update_log_loaded_time($request_logid);
+	
+	insertloadlog($reservation_id, $computer_id, "reserved", "$computer_short_name successfully reserved");
 	
 	# Update the computer state to reserved
 	# This causes pending to change to the Connect button on the Current Reservations page
 	update_computer_state($computer_id, 'reserved');
 	
 	# Wait for the user to acknowledge the request by clicking Connect button or from API
-	if (!$self->code_loop_timeout(sub{$self->has_user_acknowledged()}, [], 'waiting for user acknowledgement', $acknowledge_timeout_seconds, 1, 10)) {
+	if (!$self->code_loop_timeout(sub{$self->user_acknowledged()}, [], 'waiting for user acknowledgement', $acknowledge_timeout_seconds, 1, 10)) {
 		$self->_notify_user_timeout($request_data);
 		switch_state($request_data, 'timeout', 'timeout', 'noack', 1);
 	}
@@ -142,48 +145,14 @@ sub process {
 		$self->reservation_failed("OS module post_reserve failed");
 	}
 	
-	# Wait for the user to connect to the computer
-	# This calls process_connect_methods
-	my $connected_result = $self->os->is_user_connected(($connect_timeout_seconds / 60));
-	
-	# Check once more if request has been deleted
-	if ($connected_result =~ /deleted/ || is_request_deleted($request_id)) {
-		notify($ERRORS{'OK'}, 0, "request deleted, exiting");
-		exit;
-	}
-	elsif ($connected_result =~ /(nologin)/) {
-		# Check if user connection check should be ignored
-		if (!$imagemeta_checkuser) {
-			notify($ERRORS{'OK'}, 0, "ignoring user connection check, imagemeta checkuser flag is false");
-		}
-		elsif ($reservation_count > 1) {
-			notify($ERRORS{'OK'}, 0, "ignoring user connection check, cluster reservation");
-		}
-		elsif ($request_forimaging){
-			notify($ERRORS{'OK'}, 0, "ignoring user connection check, image creation reservation");
-		}
-		elsif ($server_request_id) {
-			notify($ERRORS{'OK'}, 0, "ignoring user connection check, server reservation");
-		}
-		else {
-			# Default case, user never connected, timeout
-			$self->_notify_user_timeout($request_data);
-			switch_state($request_data, 'timeout', 'timeout', 'nologin', 1);
+	# For cluster reservations, the parent must wait until all child reserved processes have exited
+	# Otherwise, the state will change to inuse while the child processes are still finishing up the reserved state
+	# vcld will then fail to fork inuse processes for the child reservations
+	if ($reservation_count > 1 && $is_parent_reservation) {
+		if (!$self->code_loop_timeout(sub{$self->is_child_process_running()}, [], 'waiting for child reserved processes to exit', 3*60, 5)) {
+			$self->reservation_failed('child reservation reserved processes did not exit');
 		}
 	}
-	else {
-		insertloadlog($reservation_id, $computer_id, "connected", "reserved: user connected to $computer_short_name");
-	}
-	
-	# Process the connect methods again, lock the firewall down to the address the user connected from
-	my $remote_ip = $self->data->get_reservation_remote_ip();
-	if (!$self->os->process_connect_methods($remote_ip, 1)) {
-		notify($ERRORS{'CRITICAL'}, 0, "failed to process connect methods after user connected to computer");
-	}
-	
-	# Update the lastcheck value for this reservation to now so that inuse does not begin checking immediately
-	# If this is a cluster request, update lastcheck for all reservations so they also don't attempt to process the inuse state immediately
-	update_reservation_lastcheck(@reservation_ids);
 	
 	# Change the request and computer state to inuse then exit
 	switch_state($request_data, 'inuse', 'inuse', '', 1);
@@ -191,7 +160,41 @@ sub process {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 has_user_acknowledged
+=head2 is_child_process_running
+
+ Parameters  : none
+ Returns     : boolean
+ Description : 
+
+=cut
+
+sub is_child_process_running {
+	my $self = shift;
+	if (ref($self) !~ /VCL::reserved/) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a class method of a VCL::reserved object");
+		return;
+	}
+	
+	my $request_id = $self->data->get_request_id();
+	my $reservation_id = $self->data->get_reservation_id();
+	
+	my @reservation_ids = $self->data->get_reservation_ids();
+	@reservation_ids = grep { $_ ne $reservation_id} @reservation_ids;
+	
+	my $pattern = "$request_id:(" . join('|', @reservation_ids) . ")";
+	if (my @pids = is_management_node_process_running($pattern)) {
+		notify($ERRORS{'DEBUG'}, 0, "child processes are running: " . join(", ", @pids));
+		return 0;
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "no child processes running");
+		return 1;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 user_acknowledged
 
  Parameters  : none
  Returns     : boolean
@@ -203,7 +206,7 @@ sub process {
 
 =cut
 
-sub has_user_acknowledged {
+sub user_acknowledged {
 	my $self = shift;
 	if (ref($self) !~ /VCL::reserved/) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a class method of a VCL::reserved object");
@@ -253,6 +256,7 @@ sub _notify_user_timeout {
 	my $affiliation_helpaddress    = $self->data->get_user_affiliation_helpaddress();
 	my $image_prettyname           = $self->data->get_image_prettyname();
 	my $computer_ip_address        = $self->data->get_computer_ip_address();
+	my $is_parent_reservation      = $self->data->is_parent_reservation();
 
 	my $message = <<"EOF";
 
@@ -278,7 +282,7 @@ EOF
 
 	my $subject = "VCL -- Reservation Timeout";
 
-	if ($user_emailnotices) {
+	if ($is_parent_reservation && $user_emailnotices) {
 		#if  "0" user does not care to get additional notices
 		mail($user_email, $subject, $message, $affiliation_helpaddress);
 		notify($ERRORS{'OK'}, 0, "sent reservation timeout e-mail to $user_email");

@@ -77,8 +77,6 @@ use XML::Simple;
 use Time::HiRes qw(gettimeofday tv_interval);
 use Crypt::OpenSSL::RSA;
 
-#use Date::Calc qw(Delta_DHMS Time_to_Date Date_to_Time);
-
 require Exporter;
 our @ISA = qw(Exporter);
 
@@ -131,6 +129,7 @@ our @EXPORT = qw(
   get_imagemeta_info
   get_imagerevision_info
   get_current_image_contents_noDS
+  get_current_reservation_lastcheck
   get_local_user_info
   get_management_node_blockrequests
   get_management_node_computer_ids
@@ -145,6 +144,7 @@ our @EXPORT = qw(
   get_production_imagerevision_info
   get_random_mac_address
   get_request_by_computerid
+  get_request_computerloadstate_names
   get_request_current_state_name
   get_request_end
   get_request_info
@@ -658,17 +658,22 @@ sub notify {
 	$string =~ s/\s*\n\s*/\n/gs;
 	
 	# Replace consecutive spaces with a single space to keep log file concise as long as string doesn't contain a quote
-	if ($string !~ /[\'\"]/gs) {
+	if ($string !~ /[\'\"]/gs && $string !~ /\s:\s/gs) {
 		$string =~ s/[ \t]+/ /gs;
 	}
 
 	# Assemble the process identifier string
-	my $process_identifier = $PID;
-	$process_identifier .= "|$ENV{request_id}:$ENV{reservation_id}" if (defined $ENV{request_id} && defined $ENV{reservation_id});
-	$process_identifier .= "|$ENV{state}" if (defined $ENV{state});
+	my $process_identifier;
+	$process_identifier .= "|$PID|";
+	$process_identifier .= $ENV{request_id} if defined $ENV{request_id};
+	$process_identifier .= "|";
+	$process_identifier .= $ENV{reservation_id} if defined $ENV{reservation_id};
+	$process_identifier .= "|";
+	$process_identifier .= $ENV{state} || 'vcld';
+	$process_identifier .= "|$filename:$sub|$line";
 
 	# Assemble the log message
-	my $log_message = "$currenttime|$process_identifier|$caller_info|$string";
+	my $log_message = "$currenttime$process_identifier|$string";
 
 	# Format the data if WARNING or CRITICAL, and @data was passed
 	my $formatted_data;
@@ -794,7 +799,7 @@ END
 
 	# Add the process identifier to every line of the log message
 	chomp $log_message;
-	$log_message =~ s/\n([^\n])/\n|$process_identifier| $1/g;
+	$log_message =~ s/\n([^\n])/\n$process_identifier| $1/g;
 	
 	# Check if the logfile path has been set and not running in daemon mode and redirect output to log file
 	# No need to redirect in daemon mode because STDOUT is redirected by vcld
@@ -897,34 +902,34 @@ sub convert_to_epoch_seconds {
 
 sub check_endtimenotice_interval {
 	my $end = $_[0];
-	my ($package, $filename, $line, $sub) = caller(0);
 	notify($ERRORS{'WARNING'}, 0, "endtime not set") if (!defined($end));
+	
 	my $now      = convert_to_epoch_seconds();
 	my $epochend = convert_to_epoch_seconds($end);
 	my $epoch_until_end = $epochend - $now;
-
+	
 	notify($ERRORS{'OK'}, 0, "endtime= $end epoch_until_end= $epoch_until_end");
-
+	
 	my $diff_seconds = $epoch_until_end;
 	
 	my $diff_weeks = int($epoch_until_end/604800);
 	$diff_seconds -= $diff_weeks * 604800;
 	
 	my $diff_days = int($diff_seconds/86400);
-        my $Total_days = int($epoch_until_end/86400);
+	my $Total_days = int($epoch_until_end/86400);
 	$diff_seconds -= $diff_days * 86400;
-        
+	
 	my $diff_hours = int($diff_seconds/3600);
-        $diff_seconds -= $diff_hours * 3600;
-
-        my $diff_minutes = int($diff_seconds/60);
-        $diff_seconds -= $diff_minutes * 60;
+	$diff_seconds -= $diff_hours * 3600;
+	
+	my $diff_minutes = int($diff_seconds/60);
+	$diff_seconds -= $diff_minutes * 60;
 	
 	notify($ERRORS{'OK'}, 0, "End Time is in: $diff_weeks week\(s\) $diff_days day\(s\) $diff_hours hour\(s\) $diff_minutes min\(s\) and $diff_seconds sec\(s\)");
-
+	
 	#flag on: 2 & 1 week; 2,1 day, 1 hour, 30,15,10,5 minutes
 	#ignore over 2weeks away
-	if($diff_weeks >= 2){ 
+	if($diff_weeks >= 2){
 		return 0;
 	}
 	#2 week: between 14 days and a 14 day -6 minutes window
@@ -936,25 +941,23 @@ sub check_endtimenotice_interval {
 		return 0;
 	}
 	# 1 week notice: between 7 days and a 7 day -6 minute window
-        elsif ($Total_days >= 6 && $diff_hours >= 23 && $diff_minutes >= 55) {
-           return "1 week";
-        }
-       	# Ignore: between 2 days and 7 day - 15 minute window
-       	elsif ($Total_days >= 2) {
-               return 0;
-       	}
-       	# 2 day notice: between 2 days and a 2 day -6 minute window
-       	elsif($Total_days >= 1 && $diff_hours >= 23 && $diff_minutes >= 55) {
-           return "2 days";
-       	}
-	 # 1 day notice: between 1 days and a 1 day -6 minute window
-	elsif($Total_days >= 0 && $diff_hours >= 23 && $diff_minutes >= 55) {
-    		return "24 hours";
+	elsif ($Total_days >= 6 && $diff_hours >= 23 && $diff_minutes >= 55) {
+		return "1 week";
 	}
-
-	return 0; 
+	# Ignore: between 2 days and 7 day - 15 minute window
+	elsif ($Total_days >= 2) {
+		return 0;
+	}
+	# 2 day notice: between 2 days and a 2 day -6 minute window
+	elsif($Total_days >= 1 && $diff_hours >= 23 && $diff_minutes >= 55) {
+		return "2 days";
+	}
+	# 1 day notice: between 1 days and a 1 day -6 minute window
+	elsif($Total_days >= 0 && $diff_hours >= 23 && $diff_minutes >= 55) {
+		return "24 hours";
+	}
 	
-	
+	return 0;
 } ## end sub check_endtimenotice_interval
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -2075,6 +2078,48 @@ sub get_reservation_accounts {
 		
 	return ();
 
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_current_reservation_lastcheck
+
+ Parameters  : $reservation_id
+ Returns     : string
+ Description : Retrieves the current value of reservation.lastcheck from the
+               database.
+
+=cut
+
+sub get_current_reservation_lastcheck {
+	my ($reservation_id) = @_;
+
+	# Check the passed parameter
+	if (!defined($reservation_id)) {
+		notify($ERRORS{'WARNING'}, 0, "reservation ID was not specified");
+		return;
+	}
+
+	# Create the select statement
+	my $select_statement = <<EOF;
+SELECT
+reservation.lastcheck
+FROM
+reservation
+WHERE
+reservation.id = $reservation_id
+EOF
+
+	my @selected_rows = database_select($select_statement);
+
+	# Check to make sure 1 row was returned
+	if (!@selected_rows) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve current reservation lastcheck for reservation $reservation_id");
+		return;
+	}
+	
+	my $row = $selected_rows[0];
+	return $row->{lastcheck};
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -4494,8 +4539,7 @@ sub get_default_imagemeta_info {
 	$ENV{imagemeta_info}{default} = $default_imagemeta_info;
 	
 	my %default_imagemeta_info_copy = %{$ENV{imagemeta_info}{default}};
-	
-	notify($ERRORS{'DEBUG'}, 0, "retrieved default imagemeta info:\n" . format_data(\%default_imagemeta_info_copy));
+	#notify($ERRORS{'DEBUG'}, 0, "retrieved default imagemeta info:\n" . format_data(\%default_imagemeta_info_copy));
 	return \%default_imagemeta_info_copy;
 }
 
@@ -4802,10 +4846,10 @@ sub run_ssh_command {
 
 		# Print the SSH command, only display the attempt # if > 1
 		if ($attempts == 1) {
-			notify($ERRORS{'DEBUG'}, 0, "executing SSH command on $node:\n$ssh_command") if $output_level;
+			notify($ERRORS{'DEBUG'}, 0, "executing SSH command on $node: '$command'") if $output_level;
 		}
 		else {
-			notify($ERRORS{'DEBUG'}, 0, "attempt $attempts/$max_attempts: executing SSH command on $node:\n$ssh_command") if $output_level;
+			notify($ERRORS{'DEBUG'}, 0, "attempt $attempts/$max_attempts: executing SSH command on $node: '$ssh_command'") if $output_level;
 		}
 		
 		# Enclose SSH command in an eval block and use alarm to eventually timeout the SSH command if it hangs
@@ -4919,22 +4963,7 @@ sub run_ssh_command {
 			my @output_lines = split(/[\r\n]+/, $ssh_output);
 			
 			# Print the output unless no_output is set
-			notify($ERRORS{'DEBUG'}, 0, "run_ssh_command output:\n" . join("\n", @output_lines)) if $output_level > 1;
-			
-			# Print the command and exit status
-			(my $ssh_output_summary = $ssh_output) =~ s/\s+/ /gs;
-			if (length($ssh_output_summary) > 30) {
-				$ssh_output_summary = substr($ssh_output_summary, 0, 30);
-				$ssh_output_summary .= "...";
-			}
-			
-			# Display the full ssh command if the exit status is not 0
-			if ($exit_status) {
-				notify($ERRORS{'OK'}, 0, "SSH command executed on $node, command:\n$ssh_command\nreturning ($exit_status, \"$ssh_output_summary\")") if $output_level > 1;
-			}
-			else {
-				notify($ERRORS{'DEBUG'}, 0, "SSH command executed on $node, returning ($exit_status, \"$ssh_output_summary\")") if $output_level > 1;
-			}
+			notify($ERRORS{'DEBUG'}, 0, "command: '$command', output:\n" . join("\n", @output_lines)) if $output_level > 1;
 			
 			# Return the exit status and output
 			return ($exit_status, \@output_lines);
@@ -6148,8 +6177,10 @@ sub update_log_ending {
 =head2 update_reservation_lastcheck
 
  Parameters  : $reservation_id or @reservation_ids
- Returns     : boolean
- Description :
+ Returns     : string
+ Description : Updates reservation.lastcheck to the current time. The argument
+               may be a single reservation ID or an array of IDs. The timestamp
+               which lastcheck was set to is returned.
 
 =cut
 
@@ -6161,26 +6192,28 @@ sub update_reservation_lastcheck {
 		notify($ERRORS{'WARNING'}, 0, "reservation ID was not specified");
 		return;
 	}
-
 	my $reservation_id_string = join(', ', @reservation_ids);
+	
+	# Must use an explicit timestamp, can't use NOW() because calling subroutine may need the exact value this is set to
+	my $lastcheck = makedatestring();
 	
 	# Construct the update statement
 	my $update_statement = <<EOF;
 UPDATE
 reservation
 SET
-reservation.lastcheck = NOW()
+reservation.lastcheck = '$lastcheck'
 WHERE
 reservation.id IN ($reservation_id_string)
 EOF
 
 	# Call the database execute subroutine
 	if (database_execute($update_statement)) {
-		notify($ERRORS{'DEBUG'}, 0, "updated reservation.lastcheck to now for reservation IDs: $reservation_id_string");
-		return 1;
+		notify($ERRORS{'DEBUG'}, 0, "updated reservation.lastcheck to '$lastcheck' for reservation IDs: $reservation_id_string");
+		return $lastcheck;
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to update reservation.lastcheck to now for reservation IDs: $reservation_id_string");
+		notify($ERRORS{'WARNING'}, 0, "failed to update reservation.lastcheck to '$lastcheck' for reservation IDs: $reservation_id_string");
 		return;
 	}
 } ## end sub update_reservation_lastcheck
@@ -8564,6 +8597,58 @@ sub reservations_ready {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 get_request_computerloadstate_names
+
+ Parameters  :  $request_id
+ Returns     :  hash reference
+ Description : Retrieves the computerloadlog entries for all reservations
+               belonging to the request. A hash is constructed with keys set to
+               the reservation IDs. The data of each key is a reference to an
+               array containing the computerloadstate names, sorted from newest
+               computerloadlog entry to oldest.
+
+=cut
+
+sub get_request_computerloadstate_names {
+	my ($request_id) = @_;
+	if (!$request_id) {
+		notify($ERRORS{'WARNING'}, 0, "request ID argument was not passed");
+		return;
+	}
+
+	my $select_statement = <<EOF;
+SELECT
+computerloadlog.reservationid,
+computerloadstate.loadstatename
+
+FROM
+request,
+reservation
+
+LEFT JOIN (computerloadlog, computerloadstate) ON (
+computerloadlog.reservationid = reservation.id
+AND computerloadlog.loadstateid = computerloadstate.id
+)
+
+WHERE
+request.id = $request_id
+AND reservation.requestid = request.id
+ORDER BY computerloadlog.timestamp DESC
+EOF
+
+	my @rows = database_select($select_statement);
+	
+	my $computerloadlog_info = {};
+	for my $row (@rows) {
+		push @{$computerloadlog_info->{$row->{reservationid}}}, $row->{loadstatename};
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "retrieved computerloadlog info for request:\n" . format_data($computerloadlog_info));
+	return $computerloadlog_info;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 reservation_being_processed
 
  Parameters  :  reservation ID
@@ -10554,19 +10639,19 @@ sub stopwatch {
 	
 	$ENV{'current'} = [$seconds, $microseconds];
 	
-	my $message = "stopwatch - $ENV{'stopwatch_count'}: ";
+	my $message = "[stopwatch] $ENV{'stopwatch_count'}: ";
 	$message .= "$title " if defined($title);
 	$title = '<none>' if !defined($title);
 	
-	my $previous_delta = tv_interval($ENV{'previous'}, $ENV{'current'});
-	my $start_delta = tv_interval($ENV{'start'}, $ENV{'current'});
+	my $previous_delta = sprintf("%.2f", tv_interval($ENV{'previous'}, $ENV{'current'}));
+	my $start_delta = sprintf("%.2f", tv_interval($ENV{'start'}, $ENV{'current'}));
 	
 	$start_delta = 0 if $start_delta =~ /e/;
 	$previous_delta = 0 if $previous_delta =~ /e/;
 	
-	$message .= "+$previous_delta ($start_delta)";
+	$message .= "(previous/start: +$previous_delta/+$start_delta)";
 	
-	print "$message\n";
+	print "\n$message\n\n";
 	
 	my $info = {
 		current => $ENV{'current'},
