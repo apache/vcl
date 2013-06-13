@@ -82,9 +82,8 @@ use VCL::utils;
 
 =head2 process
 
- Parameters  : Reference to current reserved object is automatically passed
-               when invoked as a class method.
- Returns     : Process exits
+ Parameters  : none
+ Returns     : exits
  Description : Processes a reservation in the reserved state. Waits for user
                acknowledgement and connection.
 

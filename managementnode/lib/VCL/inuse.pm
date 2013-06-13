@@ -92,8 +92,8 @@ use VCL::utils;
 
 =head2 process
 
- Parameters  : 
- Returns     : boolean
+ Parameters  : none
+ Returns     : exits
  Description : Processes a reservation in the inuse state.
 
 =cut
@@ -355,9 +355,9 @@ sub process {
  Parameters  : none
  Returns     : boolean
  Description : Checks if the user is connected to the computer. If the user
-					isn't connected and this is a cluster request, checks if a
-					computerloadlog 'connected' entry exists for any of the other
-					reservations in cluster.
+               isn't connected and this is a cluster request, checks if a
+               computerloadlog 'connected' entry exists for any of the other
+               reservations in cluster.
 
 =cut
 
@@ -422,7 +422,7 @@ sub user_connected {
 =cut
 
 sub _notify_user_endtime {
-	my $self            = shift;
+	my $self = shift;
 	my $notice_interval = shift;
 	
 	# Check to make sure notice interval is set
@@ -531,8 +531,8 @@ EOF
 
 =head2 _notify_user_disconnect
 
- Parameters  : $request_data_hash_reference, $disconnect_time
- Returns     : 1 if successful, 0 otherwise
+ Parameters  : $disconnect_time
+ Returns     : boolean
  Description : Notifies the user that the session will be disconnected soon.
                Based on the user configuration, an e-mail message, IM message,
                Windows msg, or Linux wall message may be sent. A scalar
@@ -542,7 +542,7 @@ EOF
 =cut
 
 sub _notify_user_disconnect {
-	my $self            = shift;
+	my $self = shift;
 	my $disconnect_time = shift;
 	
 	# Check to make sure disconnect time was passed
@@ -676,11 +676,11 @@ EOF
 
 =head2 _notify_user_timeout
 
- Parameters  : $request_data_hash_reference
- Returns     : 1 if successful, 0 otherwise
- Description : Notifies the user that the session has timed out.
-               Based on the user configuration, an e-mail message, IM message,
-               Windows msg, or Linux wall message may be sent.
+ Parameters  : none
+ Returns     : boolean
+ Description : Notifies the user that the session has timed out. Based on the
+               user configuration, an e-mail message, IM message, Windows msg,
+               or Linux wall message may be sent.
 
 =cut
 
@@ -744,8 +744,8 @@ EOF
 
 =head2 _notify_user_request_ended
 
- Parameters  : $request_data_hash_reference
- Returns     : 1 if successful, 0 otherwise
+ Parameters  : none
+ Returns     : boolean
  Description : Notifies the user that the session has ended.
                Based on the user configuration, an e-mail message, IM message,
                Windows msg, or Linux wall message may be sent.
@@ -912,15 +912,16 @@ EOF
 
 =head2 _check_imaging_request
 
- Parameters  : 
- Returns     : 1 if not an imaging request, undefined if an error occurred, exits otherwise
- Description : The inuse process exits if the request state or laststate are set to image, or if the forimaging flag has been set.
+ Parameters  : none
+ Returns     : boolean
+ Description : The inuse process exits if the request state or laststate are set
+               to image, or if the forimaging flag has been set.
 
 =cut
 
 sub _check_imaging_request {
-	my $self               = shift;
-	my $request_id         = $self->data->get_request_id();
+	my $self = shift;
+	my $request_id = $self->data->get_request_id();
 	
 	my $imaging_result = is_request_imaging($request_id);
 	if ($imaging_result eq 'image') {
