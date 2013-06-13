@@ -79,7 +79,7 @@ use strict;
 use warnings;
 use diagnostics;
 
-use POSIX;
+use POSIX qw(ceil floor strftime);
 use VCL::utils;
 
 ##############################################################################
@@ -101,30 +101,34 @@ use VCL::utils;
 sub process {
 	my $self = shift;
 	
-	my $request_id = $self->data->get_request_id();
-	my $request_state_name = $self->data->get_request_state_name();
-	my $request_laststate_name = $self->data->get_request_laststate_name();
-	my $request_start = $self->data->get_request_start_time();
-	my $request_end = $self->data->get_request_end_time();
-	my $request_data = $self->data->get_request_data();
-	my $request_forimaging = $self->data->get_request_forimaging();
-	my $request_checkuser = $self->data->get_request_checkuser();
-	my $reservation_id = $self->data->get_reservation_id();
-	my $reservation_count = $self->data->get_reservation_count();
-	my $server_request_id = $self->data->get_server_request_id();
-	my $imagemeta_checkuser = $self->data->get_imagemeta_checkuser();
-	my $is_parent_reservation = $self->data->is_parent_reservation();
-	my $computer_id = $self->data->get_computer_id();
-	my $computer_short_name   = $self->data->get_computer_short_name();
-	my $connect_timeout_minutes = $self->data->get_variable('connect_timeout_minutes') || 15;
+	my $request_id              = $self->data->get_request_id();
+	my $request_state_name      = $self->data->get_request_state_name();
+	my $request_laststate_name  = $self->data->get_request_laststate_name();
+	my $request_start           = $self->data->get_request_start_time();
+	my $request_end             = $self->data->get_request_end_time();
+	my $request_data            = $self->data->get_request_data();
+	my $request_forimaging      = $self->data->get_request_forimaging();
+	my $request_checkuser       = $self->data->get_request_checkuser();
+	my $reservation_id          = $self->data->get_reservation_id();
+	my $reservation_count       = $self->data->get_reservation_count();
+	my $server_request_id       = $self->data->get_server_request_id();
+	my $imagemeta_checkuser     = $self->data->get_imagemeta_checkuser();
+	my $is_parent_reservation   = $self->data->is_parent_reservation();
+	my $computer_id             = $self->data->get_computer_id();
+	my $computer_short_name     = $self->data->get_computer_short_name();
+	my $connect_timeout_seconds = $self->data->get_variable('connecttimeout') || (15 * 60);
 	
 	# Make sure connect timeout is long enough
 	# It has to be a bit longer than the ~5 minute period between inuse checks due to cluster reservations
 	# If too short, a user may be connected to one computer in a cluster and another inuse process times out before the connected computer is checked
+	my $connect_timeout_minutes = ceil($connect_timeout_seconds / 60);
 	if ($connect_timeout_minutes < 10) {
 		notify($ERRORS{'WARNING'}, 0, "connect timeout is set to $connect_timeout_minutes minutes, it must be 10 minutes or more");
 		$connect_timeout_minutes = 10;
 	}
+	
+	# Connect timeout must be in whole minutes
+	$connect_timeout_seconds = ($connect_timeout_minutes * 60);
 	
 	# Check if reboot operation was requested
 	if ($request_state_name =~ /reboot/) {
@@ -136,8 +140,7 @@ sub process {
 		else {
 			notify($ERRORS{'CRITICAL'}, 0, "'$request_state_name' operation requested, " . ref($self->os) . " does not implement a 'reboot' subroutine");
 		}
-		update_request_state($request_id, "inuse", "inuse");
-		notify($ERRORS{'OK'}, 0, "exiting");
+		switch_state($request_data, 'inuse', 'inuse');
 		exit;
 	}
 	
@@ -146,7 +149,7 @@ sub process {
 		if (!$self->os->manage_server_access()) {
 			notify($ERRORS{'CRITICAL'}, 0, "failed to update server access");
       }
-		update_request_state($request_id, "inuse", "inuse");
+		switch_state($request_data, 'inuse', 'inuse');
       exit;
 	}
 	
@@ -154,28 +157,33 @@ sub process {
 	delete_computerloadlog_reservation($reservation_id, '!begin');
 	
 	my $now_epoch_seconds = time;
+	
 	my $request_start_epoch_seconds = convert_to_epoch_seconds($request_start);
 	my $request_end_epoch_seconds = convert_to_epoch_seconds($request_end);
+	
 	my $request_remaining_seconds = ($request_end_epoch_seconds - $now_epoch_seconds);
 	my $request_remaining_minutes = floor($request_remaining_seconds / 60);
+	
 	my $request_duration_seconds = ($request_end_epoch_seconds - $request_start_epoch_seconds);
 	my $request_duration_hours = floor($request_duration_seconds / 60 / 60);
 	
 	my $end_time_notify_minutes = 10;
 	my $end_time_notify_seconds = ($end_time_notify_minutes * 60);
 	
+	my $now_string               = strftime('%H:%M:%S', localtime($now_epoch_seconds));
+	my $request_end_string       = strftime('%H:%M:%S', localtime($request_end_epoch_seconds));
+	my $request_remaining_string = strftime('%H:%M:%S', gmtime($request_remaining_seconds));
+	my $end_time_notify_string   = strftime('%H:%M:%S', gmtime($end_time_notify_seconds));
+	my $connect_timeout_string   = strftime('%H:%M:%S', gmtime($connect_timeout_seconds));
+	
 	# Check if near the end time
+	# Compare remaining minutes to connect timeout minutes in case this is > 15 minutes
 	if ($request_remaining_minutes <= ($end_time_notify_minutes + 6)) {
 		# Only 1 reservation needs to handle the end time countdown
 		if (!$is_parent_reservation) {
 			notify($ERRORS{'OK'}, 0, "request end time countdown handled by parent reservation, exiting");
 			exit;
 		}
-		
-		my $now_string               = strftime('%H:%M:%S', localtime($now_epoch_seconds));
-		my $request_end_string       = strftime('%H:%M:%S', localtime($request_end_epoch_seconds));
-		my $request_remaining_string = strftime('%H:%M:%S', gmtime($request_remaining_seconds));
-		my $end_time_notify_string   = strftime('%H:%M:%S', gmtime($end_time_notify_seconds));
 		
 		my $sleep_seconds = ($request_remaining_seconds - $end_time_notify_seconds);
 		if ($sleep_seconds > 0) {
@@ -218,7 +226,7 @@ sub process {
 			# Check if the user extended the request
 			if ($current_request_end_epoch_seconds > $request_end_epoch_seconds) {
 				notify($ERRORS{'OK'}, 0, "user extended request, end time: $request_end --> $current_request_end, returning request to inuse state");
-				update_request_state($request_id, "inuse", "inuse");
+				switch_state($request_data, 'inuse', 'inuse');
 				exit;
 			}
 			
@@ -241,7 +249,7 @@ sub process {
 			notify($ERRORS{'OK'}, 0, "initiating image auto-capture process");
 			if (!$self->_start_imaging_request()) {
 				notify($ERRORS{'CRITICAL'}, 0, "failed to initiate image auto-capture process, changing request and computer state to maintenance");
-				update_request_state($request_id, 'maintenance', 'maintenance');
+				switch_state($request_data, 'maintenance', 'maintenance');
 				exit;
 			}
 		}
@@ -263,10 +271,27 @@ sub process {
 		notify($ERRORS{'DEBUG'}, 0, "skipping end time notice interval check, request duration: $request_duration_hours hours, parent reservation: $is_parent_reservation");
 	}
 	
+	# Compare remaining minutes to connect timeout
+	# Connect timeout may be longer than 15 minutes
+	# Make sure connect timeout doesn't run into the end time notice
+	if ($request_remaining_minutes < ($connect_timeout_minutes + $end_time_notify_minutes)) {
+		notify($ERRORS{'DEBUG'}, 0, "skipping user connection check, connect timeout would run into the end time notice stage:\n" .
+			"current time     : $now_string\n" .
+			"request end time : $request_end_string\n" .
+			"remaining time   : $request_remaining_string\n" .
+			"notify time      : $end_time_notify_string\n" . 
+			"connect timeout  : $connect_timeout_string"
+		);
+		switch_state($request_data, 'inuse', 'inuse');
+		exit;
+	}
+	
 	# Check if the computer is responding to SSH
+	# Skip connection checks if the computer is not responding to SSH
+	# This prevents a reservatino from timing out if the user is actually connected but SSH from the management node isn't working
 	if (!$self->os->is_ssh_responding()) {
 		notify($ERRORS{'OK'}, 0, "$computer_short_name is not responding to SSH, skipping user connection check");
-		update_request_state($request_id, "inuse", "inuse");
+		switch_state($request_data, 'inuse', 'inuse');
 		exit;
 	}
 	
@@ -275,9 +300,7 @@ sub process {
 	if ($request_laststate_name ne 'reserved' && $self->os->can('firewall_compare_update')) {
 		$self->os->firewall_compare_update();
 	}
-
-	# Skip connection checks if the computer is not responding to SSH
-	# This prevents a reservatino from timing out if the user is actually connected but SSH from the management node isn't working
+	
 	# Wait for the user to acknowledge the request by clicking Connect button or from API
 	if (!$self->code_loop_timeout(sub{$self->user_connected()}, [], "waiting for user to connect to $computer_short_name", ($connect_timeout_minutes*60), 15)) {
 		if (!$imagemeta_checkuser || !$request_checkuser) {
@@ -321,7 +344,7 @@ sub process {
 		}
 	}
 	
-	update_request_state($request_id, "inuse", "inuse");
+	switch_state($request_data, 'inuse', 'inuse');
 	exit;
 }
 

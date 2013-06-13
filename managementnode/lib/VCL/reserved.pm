@@ -94,24 +94,18 @@ sub process {
 	my $self = shift;
 	
 	my $request_id                  = $self->data->get_request_id();
-	my @reservation_ids             = $self->data->get_reservation_ids();
 	my $request_data                = $self->data->get_request_data();
 	my $request_logid               = $self->data->get_request_log_id();
-	my $request_forimaging          = $self->data->get_request_forimaging;
 	my $reservation_id              = $self->data->get_reservation_id();
 	my $reservation_count           = $self->data->get_reservation_count();
 	my $computer_id                 = $self->data->get_computer_id();
 	my $computer_short_name         = $self->data->get_computer_short_name();
-	my $imagemeta_checkuser         = $self->data->get_imagemeta_checkuser();
-	my $server_request_id	        = $self->data->get_server_request_id();
-	my $acknowledge_timeout_seconds = $self->data->get_variable('acknowledgetimeout') || 900;
-	my $connect_timeout_seconds     = $self->data->get_variable('connecttimeout') || 900;
 	my $is_parent_reservation       = $self->data->is_parent_reservation();
+	my $server_request_id           = $self->data->get_server_request_id();
+	my $acknowledge_timeout_seconds = $self->data->get_variable('acknowledgetimeout') || 900;
 	
 	# Update the log loaded time to now for this request
 	update_log_loaded_time($request_logid);
-	
-	insertloadlog($reservation_id, $computer_id, "reserved", "$computer_short_name successfully reserved");
 	
 	# Update the computer state to reserved
 	# This causes pending to change to the Connect button on the Current Reservations page
@@ -124,7 +118,6 @@ sub process {
 	}
 	
 	# User acknowledged request
-	
 	# Add the cluster information to the loaded computers if this is a cluster reservation
 	if ($reservation_count > 1 && !update_cluster_info($request_data)) {
 		$self->reservation_failed("update_cluster_info failed");
@@ -144,14 +137,23 @@ sub process {
 	if ($self->os->can("post_reserve") && !$self->os->post_reserve()) {
 		$self->reservation_failed("OS module post_reserve failed");
 	}
+
+	# Add a 'reserved' computerloadlog entry
+	# Do this last - important for cluster reservation timing
+	# Parent's reserved process will loop until this exists for all child reservations
+	insertloadlog($reservation_id, $computer_id, "reserved", "$computer_short_name successfully reserved");
 	
 	# For cluster reservations, the parent must wait until all child reserved processes have exited
 	# Otherwise, the state will change to inuse while the child processes are still finishing up the reserved state
 	# vcld will then fail to fork inuse processes for the child reservations
 	if ($reservation_count > 1 && $is_parent_reservation) {
-		if (!$self->code_loop_timeout(sub{$self->is_child_process_running()}, [], 'waiting for child reserved processes to exit', 3*60, 5)) {
-			$self->reservation_failed('child reservation reserved processes did not exit');
+		if (!$self->code_loop_timeout(sub{$self->wait_for_child_reservations()}, [], "waiting for child reservation reserved processes to complete", 180, 5)) {
+			$self->reservation_failed('all child reservation reserved processes did not complete');
 		}
+		
+		# Parent can't tell if reserved processes on other management nodes have terminated
+		# Wait a short time in case processes on other management nodes are terminating
+		sleep 3;
 	}
 	
 	# Change the request and computer state to inuse then exit
@@ -160,36 +162,66 @@ sub process {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 is_child_process_running
+=head2 wait_for_child_reservations
 
  Parameters  : none
  Returns     : boolean
- Description : 
+ Description : Checks if all child reservation 'reserved' processes have
+               completed.
 
 =cut
 
-sub is_child_process_running {
+sub wait_for_child_reservations {
 	my $self = shift;
-	if (ref($self) !~ /VCL::reserved/) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a class method of a VCL::reserved object");
+	my $request_id = $self->data->get_request_id();
+	
+	exit if is_request_deleted($request_id);
+	
+	# Check if 'reserved' computerloadlog entry exists for all reservations
+	my $request_loadstate_names = get_request_loadstate_names($request_id);
+	if (!$request_loadstate_names) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve request loadstate names");
 		return;
 	}
 	
-	my $request_id = $self->data->get_request_id();
-	my $reservation_id = $self->data->get_reservation_id();
+	my @reserved_exists;
+	my @reserved_does_not_exist;
+	my @failed;
+	for my $reservation_id (keys %$request_loadstate_names) {
+		my @loadstate_names = @{$request_loadstate_names->{$reservation_id}};
+		if (grep { $_ eq 'reserved' } @loadstate_names) {
+			push @reserved_exists, $reservation_id;
+		}
+		else {
+			push @reserved_does_not_exist, $reservation_id;
+		}
+		
+		if (grep { $_ eq 'failed' } @loadstate_names) {
+			push @failed, $reservation_id;
+		}
+	}
 	
-	my @reservation_ids = $self->data->get_reservation_ids();
-	@reservation_ids = grep { $_ ne $reservation_id} @reservation_ids;
+	# Check if any child reservations failed
+	if (@failed) {
+		$self->reservation_failed("child reservation reserve process failed: " . join(', ', @failed));
+	}
 	
-	my $pattern = "$request_id:(" . join('|', @reservation_ids) . ")";
-	if (my @pids = is_management_node_process_running($pattern)) {
-		notify($ERRORS{'DEBUG'}, 0, "child processes are running: " . join(", ", @pids));
+	if (@reserved_does_not_exist) {
+		notify($ERRORS{'DEBUG'}, 0, "computerloadlog 'reserved' entry does NOT exist for all reservations:\n" .
+			"exists for reservation IDs: " . join(', ', @reserved_exists) . "\n" .
+			"does not exist for reservation IDs: " . join(', ', @reserved_does_not_exist)
+		);
 		return 0;
 	}
 	else {
-		notify($ERRORS{'DEBUG'}, 0, "no child processes running");
-		return 1;
+		notify($ERRORS{'DEBUG'}, 0, "computerloadlog 'reserved' entry exists for all reservations");
 	}
+	
+	# Check if child reservation processes are running
+	return 0 unless $self->is_child_process_running();
+	
+	notify($ERRORS{'DEBUG'}, 0, "all child reservation reserved processes have completed");
+	return 1;
 }
 
 #/////////////////////////////////////////////////////////////////////////////

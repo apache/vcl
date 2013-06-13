@@ -144,10 +144,10 @@ our @EXPORT = qw(
   get_production_imagerevision_info
   get_random_mac_address
   get_request_by_computerid
-  get_request_computerloadstate_names
   get_request_current_state_name
   get_request_end
   get_request_info
+  get_request_loadstate_names
   get_reservation_accounts
   get_resource_groups
   get_managable_resource_groups
@@ -8597,7 +8597,7 @@ sub reservations_ready {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 get_request_computerloadstate_names
+=head2 get_request_loadstate_names
 
  Parameters  :  $request_id
  Returns     :  hash reference
@@ -8609,7 +8609,7 @@ sub reservations_ready {
 
 =cut
 
-sub get_request_computerloadstate_names {
+sub get_request_loadstate_names {
 	my ($request_id) = @_;
 	if (!$request_id) {
 		notify($ERRORS{'WARNING'}, 0, "request ID argument was not passed");
