@@ -57,6 +57,7 @@ use POSIX;
 use Getopt::Long;
 use English qw( -no_match_vars );
 use Fcntl qw(:DEFAULT :flock);
+use List::Util qw(min);
 
 use VCL::utils;
 use VCL::DataStructure;
@@ -110,15 +111,6 @@ $SIG{__DIE__} = \&die_handler;
 =cut
 
 sub main () {
-	#===========================================================================
-	# BEGIN NEW CODE
-	# This section does some prep work before looping
-	my ($package, $filename, $line, $sub) = caller(0);
-	
-	# Set the vcld environment variable to 0 so other subroutines know if this is the vcld or child process
-	$ENV{vcld} = 1;
-	notify($ERRORS{'DEBUG'}, $LOGFILE, "vcld environment variable set to $ENV{vcld} for this process");
-	
 	# Create a hash to store all of the program state information
 	my %info;
 
@@ -151,14 +143,20 @@ sub main () {
 	
 	#===========================================================================
 	while (1) {
-		SLEEP:
-		
 		delete $ENV{request_id};
 		delete $ENV{reservation_id};
 		delete $ENV{state};
 		delete $ENV{data};
 		
-		sleep $management_node_checkin_interval;
+		# Set the vcld environment variable to 0 so other subroutines know if this is the vcld or child process
+		if (!defined($ENV{vcld})) {
+			$ENV{vcld} = 1;
+			notify($ERRORS{'DEBUG'}, $LOGFILE, "vcld environment variable set to $ENV{vcld} for this process");
+		}
+		else {
+			#notify($ERRORS{'DEBUG'}, $LOGFILE, "sleeping for $management_node_checkin_interval seconds");
+			sleep_uninterupted($management_node_checkin_interval);
+		}
 		
 		#===========================================================================
 		# Update lastcheckin for this management node
@@ -197,6 +195,10 @@ sub main () {
 			my $request_end            = $info{request}{$request_id}{end};
 			my $request_preload        = $info{request}{$request_id}{preload};
 			
+			my @reservation_ids = sort { $a <=> $b } keys %{$info{request}{$request_id}{reservation}};
+			my $reservation_count = scalar @reservation_ids;
+			my $parent_reservation_id = min(@reservation_ids);
+			
 			$ENV{request_id} = $request_id;
 			$ENV{reservation_id} = 0;
 			$ENV{state} = $request_state_name;
@@ -216,24 +218,20 @@ sub main () {
 			
 			#===========================================================================
 			# Loop through the reservations associated with this request
-			RESERVATION: foreach my $reservation_id (reverse sort { $a <=> $b } keys %{$info{request}{$request_id}{reservation}}) {
+			RESERVATION: foreach my $reservation_id (@reservation_ids) {
 				$ENV{reservation_id} = $reservation_id;
 				$ENV{database_select_count} = 0;
 				$ENV{database_execute_count} = 0;
 				$ENV{database_select_calls} = {};
-
-				# Check to see if the reservation is still in the hash before proceeding
-				# If request was deleted from database, it was also removed from this hash
-				if (!defined($info{request}{$request_id}{reservation}{$reservation_id})) {
-					#notify($ERRORS{'DEBUG'}, $LOGFILE, "reservation was deleted");
+				
+				my $reservation_info = $info{request}{$request_id}{reservation}{$reservation_id};
+				my $reservation_management_node_id = $reservation_info->{managementnodeid};
+				my $reservation_lastcheck = $reservation_info->{lastcheck};
+				
+				if ($management_node_id != $reservation_management_node_id) {
+					notify($ERRORS{'DEBUG'}, $LOGFILE, "ignoring reservation $reservation_id assigned to management node ID $reservation_management_node_id");
 					next RESERVATION;
 				}
-				
-				# Store reservation variables into local variable
-				my $reservation_lastcheck = $info{request}{$request_id}{reservation}{$reservation_id}{lastcheck};
-				
-				# Perform steps common to all states
-				#notify($ERRORS{'DEBUG'}, $LOGFILE, "assigned reservation in state: $request_state_name");
 				
 				# Figure out the status of this reservation based on reservation times and the request state
 				# check_time_result can be: start, preload, end, poll, old, remove, 0
@@ -243,8 +241,6 @@ sub main () {
 				# Do nothing if check_time returned 0
 				# Check this before querying for the large set of request data
 				if (!$check_time_result) {
-					# do nothing - disabled debug output too much info for large numbr of requests
-					#notify($ERRORS{'DEBUG'}, $LOGFILE, "request will not be processed");
 					next RESERVATION;
 				}
 				elsif ($check_time_result eq "remove") {
@@ -259,8 +255,8 @@ sub main () {
 					
 					# Remove the request key from the hash
 					delete $info{request}{$request_id};
-					next RESERVATION;
-				} ## end elsif ($check_time_result eq "remove")  [ if (!$check_time_result)
+					next REQUEST;
+				}
 				elsif ($check_time_result eq "preload" && $request_preload) {
 					# Preload flag has already been set, don't process preload request again
 					notify($ERRORS{'DEBUG'}, $LOGFILE, "preload request has already been processed");
@@ -269,15 +265,50 @@ sub main () {
 				
 				# Make sure reservation is not currently being processed
 				my $being_processed = reservation_being_processed($reservation_id);
-				if ($being_processed && $request_state_name !~ /^(deleted|makeproduction|image|reinstall|rebootsoft|reboothard|servermodified)$/ ) {
-					notify($ERRORS{'WARNING'}, $LOGFILE, "reservation $reservation_id is already being processed");
-					next RESERVATION;
-				}
-				elsif ($being_processed) {
-					notify($ERRORS{'DEBUG'}, $LOGFILE, "$request_state_name processing delayed, reservation $reservation_id is currently being processed");
+				if ($being_processed) {
+					# It's OK for if a process is already running for some user-initated state changes
+					if ($request_state_name =~ /^(deleted|makeproduction|image|reinstall|rebootsoft|reboothard|servermodified)$/) {
+						notify($ERRORS{'DEBUG'}, $LOGFILE, "$request_state_name processing delayed, reservation $reservation_id is currently being processed");
+						next RESERVATION;
+					}
+					else {
+						notify($ERRORS{'WARNING'}, $LOGFILE, "reservation $reservation_id is already being processed");
+						next RESERVATION;
+					}
 				}
 				else {
 					notify($ERRORS{'DEBUG'}, $LOGFILE, "reservation $reservation_id is NOT already being processed");
+				}
+				
+				# Check if this is a child reservation of a cluster request
+				# Child reservations must wait for the parent to start before starting
+				if ($reservation_count > 1) {
+					# Get the computerloadlog entries for the parent reservation
+					my $request_loadstate_names = get_request_loadstate_names($request_id);
+					for my $check_reservation_id (keys %$request_loadstate_names) {
+						if (grep { $_ eq 'failed' } @{$request_loadstate_names->{$reservation_id}}) {
+							notify($ERRORS{'DEBUG'}, $LOGFILE, "reservation will not be processed, another reservation in the cluster failed: $check_reservation_id");
+							next REQUEST;
+						}
+					}
+					
+					if ($reservation_id ne $parent_reservation_id) {
+						my @parent_computerloadstate_entries = @{$request_loadstate_names->{$parent_reservation_id}};
+						if (@parent_computerloadstate_entries) {
+							notify($ERRORS{'DEBUG'}, $LOGFILE, "retrieved computerloadlog entries for parent reservation: $parent_reservation_id:\n" . join("\n", @parent_computerloadstate_entries));
+							if (grep {$_ eq 'begin'} @parent_computerloadstate_entries) {
+								notify($ERRORS{'DEBUG'}, $LOGFILE, "processing may proceed, parent reservation $parent_reservation_id is waiting for child reservation processes to start");
+							}
+							else {
+								notify($ERRORS{'WARNING'}, $LOGFILE, "processing delayed, computerloadlog 'begin' entry does not exist for parent reservation $parent_reservation_id:\n" . join("\n", @parent_computerloadstate_entries));
+								next REQUEST;
+							}
+						}
+						else {
+							notify($ERRORS{'DEBUG'}, $LOGFILE, "processing delayed, parent reservation $parent_reservation_id process has not started yet");
+							next REQUEST;
+						}
+					}
 				}
 				
 				# Get the full set of database data for this request
@@ -313,49 +344,28 @@ sub main () {
 				# Get a new data structure object
 				my $data_structure;
 				eval {$data_structure = new VCL::DataStructure({request_data => \%request_info, reservation_id => $reservation_id});};
-				if (my $e = Exception::Class::Base->caught()) {
-					notify($ERRORS{'CRITICAL'}, 0, "unable to create DataStructure object" . $e->message);
+				if (my $error = Exception::Class::Base->caught()) {
+					notify($ERRORS{'CRITICAL'}, 0, "unable to create DataStructure object" . $error->message);
 					next RESERVATION;
 				}
 				
 				# Add the DataStructure reference to %ENV so it can be accessed from non-object methods
 				$ENV{data} = $data_structure;
 				
-				# Update the request state to pending, laststate to next state
-				# Pending is set now so vcld doesn't try to process it again
-				# The previous state is already in the hash as the laststate value
-				# This will be passed to the next module so it knows where it came from
-				my $is_parent_reservation = $data_structure->is_parent_reservation();
-				if ($is_parent_reservation && update_request_state($request_id, "pending", $request_state_name)) {
-					#notify($ERRORS{'OK'}, $LOGFILE, "request state updated to pending, laststate $request_state_name");
-				}
-				elsif (!$is_parent_reservation) {
-					notify($ERRORS{'OK'}, $LOGFILE, "child reservation: request state NOT updated to pending");
-				}
-				else {
-					notify($ERRORS{'CRITICAL'}, $LOGFILE, "request state could not be updated to pending, reservation not processed");
-					next RESERVATION;
-				}
-				
 				# Insert a computerloadlog entry to indicate processing has begin for this reservation
 				my $computer_id = $data_structure->get_computer_id();
-				if (insertloadlog($reservation_id, $computer_id, "begin", "beginning to process, state is $request_state_name")) {
-					#notify($ERRORS{'OK'}, $LOGFILE, "inserted 'begin' entry into computerloadlog for reservation $reservation_id");
-				}
-				else {
-					notify($ERRORS{'CRITICAL'}, $LOGFILE, "failed to insert 'begin' entry into computerloadlog for reservation $reservation_id");
-				}
-
+				insertloadlog($reservation_id, $computer_id, "begin", "beginning to process, state is $request_state_name");
+				
 				# Make a new child process, passing it the request/reservation info
 				make_new_child({request_info => \%request_info, data_structure => $data_structure});
 			} ## end foreach my $reservation_id (keys %{$info{request...
 		} ## end foreach my $request_id (keys %{$info{request}})
-		
+
 		delete $ENV{request_id};
 		delete $ENV{reservation_id};
 		delete $ENV{state};
 		delete $ENV{data};
-
+		
 		#===========================================================================
 		# Get all the block requests assigned to this management node
 		my $blockrequest_data = get_management_node_blockrequests($management_node_id);
@@ -367,17 +377,17 @@ sub main () {
 			#notify($ERRORS{'OK'}, 0, "there are 0 block requests assigned to management node $management_node_id");
 			next;
 		}
-
+		
 		#notify($ERRORS{'CRITICAL'}, $LOGFILE, "\$blockrequest_data", $blockrequest_data);
 		#next;
-
+		
 		# Loop through the block requests assigned to this management node
 		BLOCKREQUEST: foreach my $blockrequest_id (keys %{$blockrequest_data}) {
 			#notify($ERRORS{'DEBUG'}, $LOGFILE, "checking block request id=$blockrequest_id");
-
+			
 			BLOCKTIME: foreach my $blocktime_id (keys %{$blockrequest_data->{$blockrequest_id}{blockTimes}}) {
 				#notify($ERRORS{'DEBUG'}, $LOGFILE, "checking block time id=$blocktime_id");
-
+				
 				# Get a new data structure object
 				my $data_structure;
 				eval {$data_structure = new VCL::DataStructure({blockrequest_data => $blockrequest_data, blockrequest_id => $blockrequest_id, blocktime_id => $blocktime_id});};
@@ -385,7 +395,7 @@ sub main () {
 					notify($ERRORS{'CRITICAL'}, 0, "unable to create DataStructure object" . $e->message);
 					next;
 				}
-
+				
 				# Store some block request data into a local variables
 				my $blockrequest_name       = $data_structure->get_blockrequest_name();
 				my $blockrequest_expire     = $data_structure->get_blockrequest_expire();
@@ -394,7 +404,7 @@ sub main () {
 				my $blocktime_end           = $data_structure->get_blocktime_end();
 				my $blocktime_processed     = $data_structure->get_blocktime_processed();
 				my $blocktime_id            = $data_structure->get_blocktime_id();
-
+				
 				#use VCL::blockrequest;
 				#$data_structure->set_blockrequest_mode('start');
 				#my $br_start = VCL::blockrequest->new({%{$blockrequest_data->{$blockrequest_id}}, data_structure => $data_structure});
@@ -472,7 +482,7 @@ sub main () {
 
 sub make_new_child {
 	my ($args) = @_;
-
+	
 	my $request_data   = $args->{request_info};
 	my $data_structure = $args->{data_structure};
 	$data_structure = 0 if !$data_structure;
@@ -539,7 +549,7 @@ sub make_new_child {
 			# Store the reservation ID so REAPER can clean up the reservation when it dies
 			$child_count++;
 			$child_pids{$pid} = $reservation_id;
-			notify($ERRORS{'DEBUG'}, $LOGFILE, "current number of forked kids: $child_count");
+			notify($ERRORS{'DEBUG'}, $LOGFILE, "created child process $pid for reservation $reservation_id, state: $state, current number of forked kids: $child_count");
 			return;
 		}
 		elsif (defined $pid) {

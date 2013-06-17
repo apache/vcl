@@ -210,6 +210,7 @@ our @EXPORT = qw(
   setup_get_hash_choice
   setup_get_input_string
   setup_print_wrap
+  sleep_uninterupted
   sort_by_file_name
   stopwatch
   string_to_ascii
@@ -1497,88 +1498,85 @@ sub update_preload_flag {
 
 =head2 update_request_state
 
- Parameters  : request id, state name, last state(optional), log(optional)
- Returns     : 1 success 0 failure
- Description : update states
+ Parameters  : $request_id, $state_name, $laststate_name, $force (optional)
+ Returns     : boolean
+ Description : Updates the request state and laststate. If the state is being
+               updated to pending, the laststate argument must match the current
+               state. This prevents problems if the state was updated via the
+               website after the running vcld process was launched:
+               OK - Current: inuse/reserved --> Argument: pending/inuse
+               Not OK - Current: image/inuse --> Argument: pending/inuse
+               
+               This can be overridden by passing the $force argument and should
+               only be done for testing.
 
 =cut
 
 sub update_request_state {
-	my ($request_id, $state_name, $laststate_name, $log) = @_;
-	my ($package,    $filename,   $line,           $sub) = caller(0);
-
+	my ($request_id, $state_name, $laststate_name, $force) = @_;
+	
 	# Check the passed parameters
 	if (!defined($request_id)) {
-		notify($ERRORS{'WARNING'}, $log, "unable to update request state, request id is not defined");
-		return 0;
+		notify($ERRORS{'WARNING'}, 0, "unable to update request state, request id is argument not supplied");
+		return;
 	}
 	if (!defined($state_name)) {
-		notify($ERRORS{'WARNING'}, $log, "unable to update request $request_id state, state name not defined");
-		return 0;
+		notify($ERRORS{'WARNING'}, 0, "unable to update request $request_id state, state name argument not supplied");
+		return;
 	}
-
-	my $update_statement;
-
-	# Determine whether or not to update laststate, construct the SQL statement
-	if (defined $laststate_name && $laststate_name ne "") {
-		$update_statement = "
-		UPDATE
-		request,
-		state state,
-		state laststate,
-		state cstate
-		SET
-		request.stateid = state.id,
-		request.laststateid = laststate.id
-		WHERE
-		state.name = \'$state_name\'
-		AND laststate.name = \'$laststate_name\'
-		AND request.id = $request_id
-		";
-		
-		# If input state_name is not pending. 
-		# All other state changes must have the current state pending  
-		if ($state_name ne "pending") {
-			$update_statement .= "
-			AND request.stateid = cstate.id
-			AND cstate.name = 'pending'      
-			";
+	if (!defined($laststate_name)) {
+		notify($ERRORS{'WARNING'}, 0, "unable to update request $request_id state, last state name argument not supplied");
+		return;
+	}
+	
+	
+	my $update_statement = <<EOF;
+UPDATE
+request,
+state state,
+state laststate,
+state currentstate,
+state currentlaststate
+SET
+request.stateid = state.id,
+request.laststateid = laststate.id
+WHERE
+request.id = $request_id
+AND request.stateid = currentstate.id
+AND request.laststateid = currentlaststate.id
+AND state.name = '$state_name'
+AND laststate.name = '$laststate_name'
+EOF
+	
+	if (!$force) {
+		if ($state_name eq 'pending') {
+			$update_statement .= "AND laststate.name = currentstate.name\n";
 		}
-	} ## end if (defined $laststate_name && $laststate_name...
-	else {
-		$update_statement = "
-		UPDATE
-		request,
-		state state,
-		state cstate
-		SET
-		request.stateid = state.id
-		WHERE
-		state.name = \'$state_name\'
-		AND request.id = $request_id
-		";
-		
-		# If input state_name is not pending. 
-		# All other state changes must have the current state pending  
-		if ($state_name ne "pending") {
-			$update_statement .= "
-			AND request.stateid = cstate.id
-			AND cstate.name = 'pending'      
-			";
+		elsif ($state_name !~ /(failed|maintenance)/) {
+			# New state is not pending
+			# Need to avoid:
+			#    pending/image --> inuse/inuse
+			$update_statement .= "AND currentstate.name = 'pending'\n";
+			$update_statement .= "AND currentlaststate.name = '$laststate_name'\n";
 		}
-		
-		$laststate_name = 'unchanged';
-	} ## end else [ if (defined $laststate_name && $laststate_name...
-
+	}
+	
 	# Call the database execute subroutine
-	if (database_execute($update_statement)) {
-		# Update successful
-		notify($ERRORS{'OK'}, $LOGFILE, "request $request_id state updated to: $state_name, laststate to: $laststate_name");
-		return 1;
+	my $result = database_execute($update_statement);
+	if ($result) {
+		my $rows_updated = (sprintf '%d', $result);
+		if ($rows_updated) {
+			#notify($ERRORS{'OK'}, $LOGFILE, "request $request_id state updated to: $state_name, laststate to: $laststate_name, rows updated: $rows_updated");
+		}
+		else {
+			notify($ERRORS{'OK'}, $LOGFILE, "request $request_id state updated to: $state_name, laststate to: $laststate_name, rows updated: $rows_updated");
+			print "\n$update_statement\n\n";
+		}
+		return $rows_updated;
 	}
 	else {
 		notify($ERRORS{'CRITICAL'}, 0, "unable to update states for request $request_id");
-		return 0;
+		return;
 	}
 } ## end sub update_request_state
 
@@ -1874,7 +1872,7 @@ sub is_request_deleted {
 		notify($ERRORS{'WARNING'}, 0, "" . scalar @selected_rows . " rows were returned from database select");
 		return 0;
 	}
-
+	
 	my $state_name     = $selected_rows[0]{currentstate_name};
 	my $laststate_name = $selected_rows[0]{laststate_name};
 
@@ -3518,12 +3516,12 @@ sub insertloadlog {
 	# Escape any single quotes in additionalinfo
 	$additionalinfo =~ s/\'/\\\'/g;
 
-	# Check to make sure the reservation has not been deleted
-	# The INSERT statement will fail if it has been deleted because of the key constraint on reservationid
-	if (is_reservation_deleted($resid)) {
-		notify($ERRORS{'OK'}, 0, "computerloadlog entry not inserted, reservation has been deleted");
-		return 1;
-	}
+	## Check to make sure the reservation has not been deleted
+	## The INSERT statement will fail if it has been deleted because of the key constraint on reservationid
+	#if (is_reservation_deleted($resid)) {
+	#	notify($ERRORS{'OK'}, 0, "computerloadlog entry not inserted, reservation has been deleted");
+	#	return 1;
+	#}
 
 	# Assemble the SQL statement
 	my $insert_loadlog_statement = "
@@ -3715,18 +3713,20 @@ sub database_select {
 
 =head2 database_execute
 
- Parameters  : SQL statement
- Returns     : 1 if successful, 0 if failed
- Description : Executes an SQL statement
+ Parameters  : $sql_statement, $database (optional)
+ Returns     : boolean
+ Description : Executes an SQL statement. If $sql_statement is an INSERT
+               statement, the ID of the row inserted is returned. For other
+               statements such as UPDATE, the number of rows updated is
+               returned.
 
 =cut
 
 sub database_execute {
 	my ($sql_statement, $database) = @_;
-	my ($package, $filename, $line, $sub) = caller(0);
 	
 	$ENV{database_execute_count}++;
-
+	
 	my $dbh;
 	if (!($dbh = getnewdbh($database))) {
 		# Try again if first attempt failed
@@ -3735,41 +3735,43 @@ sub database_execute {
 			return;
 		}
 	}
-
+	
 	# Prepare the statement handle
 	my $statement_handle = $dbh->prepare($sql_statement);
-
+	
 	# Check the statement handle
 	if (!$statement_handle) {
 		notify($ERRORS{'WARNING'}, 0, "could not prepare SQL statement, $sql_statement, " . $dbh->errstr());
 		$dbh->disconnect if !defined $ENV{dbh};
 		return;
 	}
-
+	
 	# Execute the statement handle
-	if (!($statement_handle->execute())) {
+	my $result = $statement_handle->execute();
+	if (!defined($result)) {
 		notify($ERRORS{'WARNING'}, 0, "could not execute SQL statement, $sql_statement, " . $dbh->errstr());
 		$statement_handle->finish;
 		$dbh->disconnect if !defined $ENV{dbh};
 		return;
 	}
-
+	
 	# Get the id of the last inserted record if this is an INSERT statement
 	if ($sql_statement =~ /insert/i) {
 		my $sql_insertid = $statement_handle->{'mysql_insertid'};
+		my $sql_warning_count = $statement_handle->{'mysql_warning_count'};
 		$statement_handle->finish;
 		$dbh->disconnect if !defined $ENV{dbh};
 		if($sql_insertid) {
 			return $sql_insertid;
 		}
-		else { 
-			return 1;
+		else {
+			return $result;
 		}
 	}
 	else {
 		$statement_handle->finish;
 		$dbh->disconnect if !defined $ENV{dbh};
-		return 1;
+		return $result;
 	}
 
 } ## end sub database_execute
@@ -6361,83 +6363,70 @@ EOF
 
 =head2 delete_computerloadlog_reservation
 
- Parameters  : $reservation_id, optional loadstatename
- Returns     : 0 failed or 1 success
+ Parameters  : $reservation_id, $loadstatename (optional)
+ Returns     : boolean
  Description : Deletes rows from the computerloadlog table. A loadstatename
                argument can be specified to limit the rows removed to a
-               certain loadstatename. To delete all rows except those
+               certain loadstatename value. To delete all rows except those
                matching a certain loadstatename, begin the loadstatename
-               with a !.
+               with a !. The $reservation_id argument may either be a single
+               integer or an array reference.
 
 =cut
 
-
 sub delete_computerloadlog_reservation {
-	my ($reservation_id, $loadstatename) = @_;
-
+	my ($reservation_id_argument, $loadstatename) = @_;
+	
 	# Check the passed parameter
-	if (!(defined($reservation_id))) {
+	if (!(defined($reservation_id_argument))) {
 		notify($ERRORS{'WARNING'}, 0, "reservation ID was not specified");
-		return ();
+		return;
+	}
+	
+	my $reservation_id_string;
+	if (ref($reservation_id_argument)) {
+		$reservation_id_string = join(', ', @$reservation_id_argument);
+	}
+	else {
+		$reservation_id_string = $reservation_id_argument;
 	}
 	
 	# Construct the SQL statement
-	my $sql_statement;
+	my $sql_statement = <<EOF;
+DELETE
+computerloadlog
+FROM
+reservation,
+computerloadlog,
+computerloadstate
+WHERE
+computerloadlog.reservationid IN ($reservation_id_string)
+AND computerloadlog.loadstateid = computerloadstate.id
+EOF
+	
 	# Check if loadstateid was specified
 	# If so, only delete rows matching the loadstateid
 	if ($loadstatename && $loadstatename !~ /^!/) {
 		notify($ERRORS{'DEBUG'}, 0, "removing computerloadlog entries matching loadstate = $loadstatename");
-		
-		$sql_statement = "
-		DELETE
-		computerloadlog
-		FROM
-		computerloadlog,
-		computerloadstate
-		WHERE
-		computerloadlog.reservationid = $reservation_id
-		AND computerloadlog.loadstateid = computerloadstate.id
-		AND computerloadstate.loadstatename = \'$loadstatename\'
-		";
+		$sql_statement .= "AND computerloadstate.loadstatename = \'$loadstatename\'";
 	}
 	elsif ($loadstatename) {
 		# Remove the first character of loadstatename, it is !
 		$loadstatename = substr($loadstatename, 1);
 		notify($ERRORS{'DEBUG'}, 0, "removing computerloadlog entries NOT matching loadstate = $loadstatename");
-		
-		$sql_statement = "
-		DELETE
-		computerloadlog
-		FROM
-		computerloadlog,
-		computerloadstate
-		WHERE
-		computerloadlog.reservationid = $reservation_id
-		AND computerloadlog.loadstateid = computerloadstate.id
-		AND computerloadstate.loadstatename != \'$loadstatename\'
-		";
+		$sql_statement .= "AND computerloadstate.loadstatename != \'$loadstatename\'";
 	}
 	else {
 		notify($ERRORS{'DEBUG'}, 0, "removing all computerloadlog entries for reservation");
-		
-		$loadstatename = 'all';
-		$sql_statement = "
-		DELETE
-		computerloadlog
-		FROM
-		computerloadlog
-		WHERE
-		computerloadlog.reservationid = $reservation_id
-		";
 	}
-
+	
 	# Call the database execute subroutine
 	if (database_execute($sql_statement)) {
-		notify($ERRORS{'OK'}, 0, "deleted rows from computerloadlog for reservation id=$reservation_id");
+		notify($ERRORS{'OK'}, 0, "deleted rows from computerloadlog for reservation IDs: $reservation_id_string");
 		return 1;
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "unable to delete from computerloadlog table for reservation id=$reservation_id");
+		notify($ERRORS{'WARNING'}, 0, "unable to delete from computerloadlog table for reservation IDs: $reservation_id_string");
 		return 0;
 	}
 } ## end sub delete_computerloadlog_reservation
@@ -6691,7 +6680,7 @@ sub rename_vcld_process {
 
 	# IMPORTANT: if you change the process name, check the checkonprocess subroutine
 	# It looks for running reservation processes based on the process name
-
+	
 	# Check the argument
 	my $data_structure;
 	if (defined($input_data) && (ref $input_data) =~ /HASH/) {
@@ -7540,7 +7529,7 @@ EOF
 	
 	# Set the user's UID to the VCL user ID if it's not configured in the database, set STANDALONE = 1
 	if (!$user_info->{uid}) {
-		$user_info->{uid} = $user_info->{id};
+		$user_info->{uid} = ($user_info->{id} + 500);
 		$user_info->{STANDALONE} = 1;
 		notify($ERRORS{'DEBUG'}, 0, "UID value is not configured for user $user_login_id, setting UID to VCL user ID: $user_login_id, standalone: 1");
 	}
@@ -8599,8 +8588,8 @@ sub reservations_ready {
 
 =head2 get_request_loadstate_names
 
- Parameters  :  $request_id
- Returns     :  hash reference
+ Parameters  : $request_id
+ Returns     : hash reference
  Description : Retrieves the computerloadlog entries for all reservations
                belonging to the request. A hash is constructed with keys set to
                the reservation IDs. The data of each key is a reference to an
@@ -8618,7 +8607,7 @@ sub get_request_loadstate_names {
 
 	my $select_statement = <<EOF;
 SELECT
-computerloadlog.reservationid,
+reservation.id AS reservation_id,
 computerloadstate.loadstatename
 
 FROM
@@ -8640,10 +8629,13 @@ EOF
 	
 	my $computerloadlog_info = {};
 	for my $row (@rows) {
-		push @{$computerloadlog_info->{$row->{reservationid}}}, $row->{loadstatename};
+		my $reservation_id = $row->{reservation_id};
+		my $loadstatename = $row->{loadstatename};
+		$computerloadlog_info->{$reservation_id} = [] if !defined($computerloadlog_info->{$reservation_id});
+		push @{$computerloadlog_info->{$reservation_id}}, $loadstatename if defined($loadstatename);
 	}
 	
-	notify($ERRORS{'DEBUG'}, 0, "retrieved computerloadlog info for request:\n" . format_data($computerloadlog_info));
+	notify($ERRORS{'DEBUG'}, 0, "retrieved computerloadlog info for request $request_id:\n" . format_data($computerloadlog_info));
 	return $computerloadlog_info;
 }
 
@@ -8667,7 +8659,7 @@ sub reservation_being_processed {
 		notify($ERRORS{'WARNING'}, 0, "reservation ID argument was not passed");
 		return;
 	}
-
+	
 	my $select_statement = "
 	SELECT
 	computerloadlog.*
@@ -10849,6 +10841,45 @@ EOF
 	
 	notify($ERRORS{'DEBUG'}, 0, "retrieved computer info for VMs assigned to VM host $vmhost_id: " . join(', ', sort keys %$assigned_computer_info));
 	return $assigned_computer_info;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 sleep_uninterupted
+
+ Parameters  : $seconds
+ Returns     : none
+ Description : A normal sleep call may be interrupted by a signal from a child
+               process. This occurs whenever a child vcld reservation process
+               exits. As a result, the intended sleep duration will be shorter
+               than intended. This subroutine loops to make sure the sleep time
+               is what is intended.
+
+=cut
+
+sub sleep_uninterupted {
+	my $seconds = shift;
+	my $start_time = Time::HiRes::time;
+	my $end_time = ($start_time + $seconds);
+	
+	#notify($ERRORS{'DEBUG'}, 0, "sleeping for $seconds seconds, end time: $end_time");
+	my $loop_count = 0;
+	while (1) {
+		$loop_count++;
+		my $current_time = Time::HiRes::time;
+		my $sleep_seconds = ($end_time - $current_time);
+		last if ($sleep_seconds <= 0);
+		if ($loop_count > 1) {
+			#notify($ERRORS{'DEBUG'}, 0, "loop $loop_count: sleep was interrupted\n" .
+			#	"start time    : $start_time\n" .
+			#	"current time  : $current_time\n" .
+			#	"end time      : $end_time\n" .
+			#	"sleep seconds : $sleep_seconds seconds"
+			#);
+		}
+		Time::HiRes::sleep($sleep_seconds);
+	}
+	return 1;
 }
 
 #/////////////////////////////////////////////////////////////////////////////

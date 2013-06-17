@@ -203,6 +203,7 @@ sub wait_for_child_reservations {
 	# Check if any child reservations failed
 	if (@failed) {
 		$self->reservation_failed("child reservation reserve process failed: " . join(', ', @failed));
+		return;
 	}
 	
 	if (@reserved_does_not_exist) {
@@ -215,9 +216,6 @@ sub wait_for_child_reservations {
 	else {
 		notify($ERRORS{'DEBUG'}, 0, "computerloadlog 'reserved' entry exists for all reservations");
 	}
-	
-	# Check if child reservation processes are running
-	return 0 unless $self->is_child_process_running();
 	
 	notify($ERRORS{'DEBUG'}, 0, "all child reservation reserved processes have completed");
 	return 1;
