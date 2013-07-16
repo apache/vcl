@@ -283,7 +283,7 @@ sub node_status {
 	}
 
 	# Determine the overall machine status based on the individual status results
-	if ($status{ping} && $status{ssh} && $status{vcl_client}) {
+	if ($status{vcl_client}) {
 		$status{status} = 'READY';
 	}
 	else {
