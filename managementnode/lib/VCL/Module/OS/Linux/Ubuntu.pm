@@ -455,7 +455,7 @@ sub disable_firewall_port {
    }
 
    # Check to see if this distro has iptables
-   if (!$self->service_exists("iptables")) {
+   if (!$self->service_exists("ufw")) {
       notify($ERRORS{'WARNING'}, 0, "iptables service does not exist on this OS");
       return 1;
    }
@@ -518,7 +518,7 @@ sub get_firewall_configuration {
    my $firewall_configuration = {};
 
    # Check to see if this distro has iptables
-   if (!$self->service_exists("iptables")) {
+   if (!$self->service_exists("ufw")) {
       notify($ERRORS{'WARNING'}, 0, "iptables service does not exist on this OS");
       return {};
    }
