@@ -85,18 +85,19 @@ function selectMgmtnodeOption() {
 	print "<FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
 	if($mnAdminCnt) {
 		$cont = addContinuationsEntry('viewMgmtnodes');
-		print "<INPUT type=radio name=continuation value=\"$cont\" checked>Edit ";
-		print "Management Node Information<br>\n";
+        print "<INPUT type=radio id=\"editmgmtinfo\" name=continuation value=\"$cont\" checked>";
+
+		print "<label for=\"editmgmtinfo\">Management Node Information</label><br />\n";
 	}
 	if($mnGroupCnt) {
 		$cont = addContinuationsEntry('viewMgmtnodeGrouping');
-		print "<INPUT type=radio name=continuation value=\"$cont\">Edit ";
-		print "Management Node Grouping<br>\n";
+		print "<INPUT type=radio id=\"editmgmtgroup\" name=continuation value=\"$cont\">";
+		print "<label for=\"editmgmtgroup\">Edit Management Node Grouping</label><br>\n";
 	}
 	if($mnMapCnt && $compMapCnt) {
 		$cont = addContinuationsEntry('viewMgmtnodeMapping');
-		print "<INPUT type=radio name=continuation value=\"$cont\">Edit ";
-		print "Management Node Mapping<br>\n";
+		print "<INPUT type=radio id=\"editmgmtmap\" name=continuation value=\"$cont\">";
+		print "<label for=\"editmgmtmap\">Edit Management Node Mapping</label><br>\n";
 	}
 	if($mnAdminCnt || $mnGroupCnt || ($mnMapCnt && $compMapCnt))
 		print "<INPUT type=submit value=Submit>\n";
