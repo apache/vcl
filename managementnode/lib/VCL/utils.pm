@@ -1379,7 +1379,7 @@ sub isconnected {
 		if ($image_os_type =~ /windows/i) {
 			#notify($ERRORS{'OK'},0,"checking $nodename $ipaddress");
 			undef @SSHCMD;
-			@SSHCMD = run_ssh_command($shortname, $identity_keys, "netstat -an", "root", 22, 0);
+			@SSHCMD = run_ssh_command($nodename, $identity_keys, "netstat -an", "root", 22, 0);
 			foreach my $line (@{$SSHCMD[1]}) {
 				chomp($line);
 				if ($line =~ /Connection refused/) {
