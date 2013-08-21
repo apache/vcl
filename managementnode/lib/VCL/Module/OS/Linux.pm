@@ -2357,7 +2357,7 @@ sub create_user {
 	my ($useradd_exit_status, $useradd_output) = $self->execute($useradd_command);
 	
 	# Check if the output indicates that the user already exists
-	if ($useradd_output && grep(/already exists/, @$useradd_output)) {
+	if ($useradd_output && grep(/exists/, @$useradd_output)) {
 		if (!$self->delete_user($user_login_id)) {
 			notify($ERRORS{'WARNING'}, 0, "failed to add user '$user_login_id' to $computer_node_name, user with same name already exists and could not be deleted");
 			return;
@@ -2498,8 +2498,13 @@ sub delete_user {
 	my $userdel_command = "/usr/sbin/userdel";
 	
 	if ($home_directory_on_local_disk) {
-		notify($ERRORS{'DEBUG'}, 0, "home directory will be deleted: $home_directory_path");
-		$userdel_command .= ' -r -f';
+		# Fetch exclude_list
+   	my @exclude_list = $self->get_exclude_list();
+
+   	if (!(grep(/home/, @exclude_list))) {
+			notify($ERRORS{'DEBUG'}, 0, "home directory will be deleted: $home_directory_path");
+			$userdel_command .= ' -r -f';
+   	}
 	}
 	$userdel_command .= " $username";
 	
