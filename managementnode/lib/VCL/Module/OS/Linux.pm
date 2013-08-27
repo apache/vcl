@@ -2501,7 +2501,7 @@ sub delete_user {
 		# Fetch exclude_list
    	my @exclude_list = $self->get_exclude_list();
 
-   	if (!(grep(/home/, @exclude_list))) {
+   	if (!(grep(/\/home\/$username/, @exclude_list))) {
 			notify($ERRORS{'DEBUG'}, 0, "home directory will be deleted: $home_directory_path");
 			$userdel_command .= ' -r -f';
    	}
@@ -2517,9 +2517,8 @@ sub delete_user {
 	elsif (grep(/does not exist/i, @$userdel_output)) {
 		notify($ERRORS{'DEBUG'}, 0, "user '$username' NOT deleted from $computer_node_name because it does not exist");
 	}
-	elsif (grep(/userdel: /i, @$userdel_output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to delete user '$username' from $computer_node_name, command: '$userdel_command', output:\n" . join("\n", @$userdel_output));
-		return;
+	elsif (grep(/warning/i, @$userdel_output)) {
+		notify($ERRORS{'WARNING'}, 0, "warning from to delete user cmd for '$username' from $computer_node_name, command: '$userdel_command', output:\n" . join("\n", @$userdel_output));
 	}
 	else {
 		notify($ERRORS{'OK'}, 0, "deleted user '$username' from $computer_node_name");
