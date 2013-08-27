@@ -2499,12 +2499,13 @@ sub delete_user {
 	
 	if ($home_directory_on_local_disk) {
 		# Fetch exclude_list
-   	my @exclude_list = $self->get_exclude_list();
 
-   	if (!(grep(/\/home\/$username/, @exclude_list))) {
+		my @exclude_list = $self->get_exclude_list();
+
+		if (!(grep(/\/home\/$username/, @exclude_list))) {
 			notify($ERRORS{'DEBUG'}, 0, "home directory will be deleted: $home_directory_path");
 			$userdel_command .= ' -r -f';
-   	}
+		}
 	}
 	$userdel_command .= " $username";
 	
