@@ -2369,8 +2369,7 @@ sub create_user {
 		return;
 	}
 	elsif (grep(/^useradd: /, @$useradd_output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to add user '$user_login_id' to $computer_node_name\ncommand: '$useradd_command'\noutput:\n" . join("\n", @$useradd_output));
-		return;
+		notify($ERRORS{'WARNING'}, 0, "warning on add user '$user_login_id' to $computer_node_name\ncommand: '$useradd_command'\noutput:\n" . join("\n", @$useradd_output));
 	}
 	else {
 		notify($ERRORS{'OK'}, 0, "added user '$user_login_id' to $computer_node_name");
