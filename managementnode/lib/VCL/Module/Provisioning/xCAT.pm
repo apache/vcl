@@ -420,6 +420,11 @@ sub capture {
 		return;
 	}
 	
+	# Check if image OS needs to be updated
+	if (!$self->_check_image_os()) {
+		return;
+	}
+	
 	my $image_name          = $self->data->get_image_name();
 	my $computer_node_name  = $self->data->get_computer_node_name();
 	
@@ -431,11 +436,6 @@ sub capture {
 	}
 	my $capture_done_file_path = "$image_repository_path/$image_name.img.capturedone";
 	my $capture_failed_file_path = "$image_repository_path/$image_name.img.capturefailed";
-	
-	# Check if image OS needs to be updated
-	if (!$self->_check_image_os()) {
-		return;
-	}
 	
 	# Print some preliminary information
 	notify($ERRORS{'OK'}, 0, "attempting to capture image '$image_name' on $computer_node_name");
@@ -692,7 +692,6 @@ sub node_status {
 	# Check if $self->os is defined, it may not be if xCAT.pm object is created from a monitoring script
 	my $os = $self->os(0);
 	if (!$os) {
-		my $data;
 		my $data = $self->create_datastructure_object({computer_identifier => $computer_node_name, image_identifier => $node_profile});
 		if (!$data) {
 			notify($ERRORS{'WARNING'}, 0, "unable to determine status of $computer_node_name, \$self->os is not defined, failed to create DataStructure object for image set as nodetype.profile: '$node_profile'");
