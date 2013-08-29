@@ -395,7 +395,7 @@ sub stop_service {
 	
 	my $computer_node_name = $self->data->get_computer_node_name();
 	
-	my $command = "service $service_name stop";
+	my $command = "service $service_name status ; service $service_name stop";
 	my ($exit_status, $output) = $self->execute($command);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute command to stop '$service_name' service on $computer_node_name");
@@ -404,6 +404,10 @@ sub stop_service {
 	elsif (grep(/(error reading information|No such file)/i, @$output)) {
 		# Output if the service doesn't exist: 'error reading information on service xxx: No such file or directory'
 		notify($ERRORS{'DEBUG'}, 0, "'$service_name' service does not exist on $computer_node_name");
+		return 1;
+	}
+	elsif (grep(/is stopped/i, @$output)) {
+		notify($ERRORS{'DEBUG'}, 0, "'$service_name' service is already stopped on $computer_node_name");
 		return 1;
 	}
 	elsif (grep(/Stopping $service_name:.*FAIL/i, @$output)) {
@@ -442,7 +446,7 @@ sub restart_service {
 	my $computer_node_name = $self->data->get_computer_node_name();
 	
 	my $command = "service $service_name restart";
-	my ($exit_status, $output) = $self->execute($command);
+	my ($exit_status, $output) = $self->execute($command, 0);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute command to restart '$service_name' service on $computer_node_name");
 		return;
@@ -483,18 +487,21 @@ sub add_ext_sshd_service {
 	
 	my $computer_node_name = $self->data->get_computer_node_name();
 	
-	my $sshd_service_file_path     = '/etc/rc.d/init.d/sshd';
-	my $ext_sshd_service_file_path = '/etc/rc.d/init.d/ext_sshd';
-	my $ext_sshd_config_file_path = '/etc/ssh/external_sshd_config';
+	my $sshd_service_file_path          = '/etc/rc.d/init.d/sshd';
+	my $sshd_service_file_path_original = '/etc/rc.d/init.d/sshd_original';
+	my $ext_sshd_service_file_path      = '/etc/rc.d/init.d/ext_sshd';
+	my $ext_sshd_config_file_path       = '/etc/ssh/external_sshd_config';
 	
 	# Get the contents of the sshd service startup file already on the computer
-	my @sshd_service_file_contents = $self->get_file_contents($sshd_service_file_path);
-	if (!@sshd_service_file_contents) {
+	my @sshd_service_file_lines = $self->get_file_contents($sshd_service_file_path);
+	if (!@sshd_service_file_lines) {
 		notify($ERRORS{'WARNING'}, 0, "failed to retrieve contents of $sshd_service_file_path from $computer_node_name");
 		return;
 	}
 	
-	my $ext_sshd_service_file_contents = join("\n", @sshd_service_file_contents);
+	my $sshd_service_file_contents_original = join("\n", @sshd_service_file_lines);
+	my $sshd_service_file_contents_updated = $sshd_service_file_contents_original;
+	my $ext_sshd_service_file_contents = $sshd_service_file_contents_original;
 	
 	# Replace: OpenSSH --> externalOpenSSH
 	$ext_sshd_service_file_contents =~ s|( OpenSSH)| external$1|g;
@@ -505,7 +512,8 @@ sub add_ext_sshd_service {
 	# Replace: sshd --> ext_sshd, exceptions:
 	# /bin/sshd
 	# /sshd_config
-	$ext_sshd_service_file_contents =~ s|(?<!bin/)sshd(?!_config)|ext_sshd|g;
+	# Note: pattern in look-behind assertion (?<!) must all be same length
+	$ext_sshd_service_file_contents =~ s*(?<!(bin|pty)/)sshd(?!_config)*ext_sshd*g;
 	
 	# Replace: sshd_config --> external_sshd_config
 	$ext_sshd_service_file_contents =~ s|(?:ext_)?(sshd_config)|external_$1|g;
@@ -513,8 +521,30 @@ sub add_ext_sshd_service {
 	# Add config file path argument to '$SSHD $OPTIONS'
 	$ext_sshd_service_file_contents =~ s|(\$SSHD)\s+(\$OPTIONS)|$1 -f $ext_sshd_config_file_path $2|g;
 	
-	# Replace 'pidfileofproc $SSHD' and 'killproc $SSHD'
-	$ext_sshd_service_file_contents =~ s/(pidfileofproc|killproc)\s+\$SSHD/$1 \$prog/g;
+	# Replace:
+	#    'pidfileofproc $SSHD' --> 'pidfileofproc $prog'
+	#    'killproc $SSHD' --> 'killproc $prog'
+	#    'status $SSHD' --> 'status $prog'
+	$ext_sshd_service_file_contents =~ s/(pidfileofproc|killproc|status)\s+\$SSHD/$1 \$prog/g;
+	
+	# Update the sshd file as well or else 'service sshd status' will always report sshd is running if ext_sshd is running
+	# The status line has to be: 'status -p $PID_FILE openssh-daemon'
+	$sshd_service_file_contents_updated =~ s/(status)\s+.*/$1 -p \$PID_FILE openssh-daemon/g;
+	
+	# Check if any changes were made to the original sshd file
+	if ($sshd_service_file_contents_updated ne $sshd_service_file_contents_original) {
+		# Save a copy of the original sshd file if the backup doesn't already exist
+		if (!$self->file_exists($sshd_service_file_path_original)) {
+			$self->copy_file($sshd_service_file_path, $sshd_service_file_path_original);
+		}
+		
+		if (!$self->create_text_file($sshd_service_file_path, $sshd_service_file_contents_updated)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to update sshd service file on $computer_node_name: $sshd_service_file_path");
+		}
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "sshd service file on $computer_node_name does not need to be updated");
+	}
 	
 	if (!$self->create_text_file($ext_sshd_service_file_path, $ext_sshd_service_file_contents)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to create ext_sshd service file on $computer_node_name: $ext_sshd_service_file_path");
