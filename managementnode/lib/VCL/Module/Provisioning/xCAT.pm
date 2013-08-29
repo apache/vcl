@@ -420,11 +420,6 @@ sub capture {
 		return;
 	}
 	
-	# Check if image OS needs to be updated
-	if (!$self->_check_image_os()) {
-		return;
-	}
-	
 	my $image_name          = $self->data->get_image_name();
 	my $computer_node_name  = $self->data->get_computer_node_name();
 	
@@ -439,7 +434,7 @@ sub capture {
 	
 	# Print some preliminary information
 	notify($ERRORS{'OK'}, 0, "attempting to capture image '$image_name' on $computer_node_name");
-
+	
 	# Make sure the computer is powered on
 	my $power_status = $self->power_status();
 	if (!$power_status || $power_status !~ /on/i) {
@@ -2309,7 +2304,7 @@ sub _get_install_status {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 _check_image_os
+=head2 check_image_os
 
  Parameters  : none
  Returns     : boolean
@@ -2320,7 +2315,7 @@ sub _get_install_status {
 
 =cut
 
-sub _check_image_os {
+sub check_image_os {
 	my $self = shift;
 	if (ref($self) !~ /xCAT/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");

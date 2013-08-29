@@ -87,7 +87,16 @@ use VCL::utils;
 =cut
 
 sub process {
-	my $self                       = shift;
+	my $self = shift;
+	
+	# Check if image OS needs to be updated
+	# Do this before retrieving data because it may change
+	if ($self->provisioner->can('check_image_os')) {
+		if (!$self->provisioner->check_image_os()) {
+			return;
+		}
+	}
+	
 	my $request_id                 = $self->data->get_request_id();
 	my $reservation_id             = $self->data->get_reservation_id();
 	my $user_id                    = $self->data->get_user_id();
