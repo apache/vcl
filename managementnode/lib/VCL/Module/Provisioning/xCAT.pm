@@ -432,6 +432,11 @@ sub capture {
 	my $capture_done_file_path = "$image_repository_path/$image_name.img.capturedone";
 	my $capture_failed_file_path = "$image_repository_path/$image_name.img.capturefailed";
 	
+	# Check if image OS needs to be updated
+	if (!$self->_check_image_os()) {
+		return;
+	}
+	
 	# Print some preliminary information
 	notify($ERRORS{'OK'}, 0, "attempting to capture image '$image_name' on $computer_node_name");
 
@@ -744,6 +749,17 @@ sub node_status {
 	else {
 		my $return_value = 'INCONSISTENT';
 		notify($ERRORS{'DEBUG'}, 0, "nodetype.profile '$node_profile' does NOT match current image reported by OS: '$current_image_name', returning '$return_value'"); 
+		return $return_value;
+	}
+	
+	# Check if currentimage.txt contains a 'vcld_post_load' line
+	my $vcld_post_load_status = $self->data->get_computer_currentimage_vcld_post_load(0);
+	if ($vcld_post_load_status) {
+		notify($ERRORS{'DEBUG'}, 0, "OS module post_load tasks have been completed on VM $computer_node_name");
+	}
+	else {
+		my $return_value = 'POST_LOAD';
+		notify($ERRORS{'OK'}, 0, "OS module post_load tasks have not been completed on VM $computer_node_name, returning '$return_value'");
 		return $return_value;
 	}
 	
@@ -2293,6 +2309,96 @@ sub _get_install_status {
 		return;
 	}
 }
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 _check_image_os
+
+ Parameters  : none
+ Returns     : boolean
+ Description : For image captures, checks the OS in the VCL database of the
+               image to be captured. If capturing a Kickstart-based image, the
+               image OS needs to be changed to from the Kickstart OS entry to
+               the corresponding image OS entry.
+
+=cut
+
+sub _check_image_os {
+	my $self = shift;
+	if (ref($self) !~ /xCAT/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $request_state_name = $self->data->get_request_state_name();
+	my $image_id           = $self->data->get_image_id();
+	my $image_name         = $self->data->get_image_name();
+	my $image_os_name      = $self->data->get_image_os_name();
+	my $imagerevision_id   = $self->data->get_imagerevision_id();
+	my $image_architecture = $self->data->get_image_architecture();
+	
+	my $image_os_name_new;
+	if ($image_os_name =~ /^(rh)el[s]?([0-9])/ || $image_os_name =~ /^rh(fc)([0-9])/) {
+		# Change rhelX --> rhXimage, rhfcX --> fcXimage
+		$image_os_name_new = "$1$2image";
+	}
+	elsif($image_os_name =~ /^(centos)([0-9])/) {
+		# Change rhelX --> rhXimage, rhfcX --> fcXimage
+		$image_os_name_new = "$1$2image";
+	}
+	elsif ($image_os_name =~ /^(fedora)([0-9])/) {
+		# Change fedoraX --> fcXimage
+		$image_os_name_new = "fc$1image"
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "no corrections need to be made to image OS: $image_os_name");
+		return 1;
+	}
+	
+	# Change the image name
+	$image_name =~ /^[^-]+-(.*)/;
+	my $image_name_new = "$image_os_name_new-$1";
+	
+	my $new_architecture = $image_architecture;
+	if ($image_architecture eq "x86_64" ) {
+		$new_architecture = "x86";
+	}
+	
+	notify($ERRORS{'OK'}, 0, "Kickstart image OS needs to be changed: $image_os_name -> $image_os_name_new, image name: $image_name -> $image_name_new");
+	
+	# Update the image table, change the OS for this image
+	my $sql_statement = <<EOF;
+UPDATE
+OS,
+image,
+imagerevision
+SET
+image.OSid = OS.id,
+image.architecture = '$new_architecture',
+image.name = '$image_name_new',
+imagerevision.imagename = '$image_name_new'
+WHERE
+image.id = $image_id
+AND imagerevision.id = $imagerevision_id
+AND OS.name = '$image_os_name_new'
+EOF
+	
+	# Update the image and imagerevision tables
+	if (database_execute($sql_statement)) {
+		notify($ERRORS{'OK'}, 0, "image ($image_id) and imagerevision ($imagerevision_id) tables updated: $image_name -> $image_name_new");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to update image and imagerevision tables: $image_name -> $image_name_new, returning 0");
+		return 0;
+	}
+	
+	if (!$self->data->refresh()) {
+		notify($ERRORS{'WARNING'}, 0, "failed to update DataStructure updated correcting image OS");
+		return 0;
+	}
+	
+	return 1;
+} ## end sub check_image_os
 
 #/////////////////////////////////////////////////////////////////////////////
 

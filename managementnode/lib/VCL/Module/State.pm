@@ -115,13 +115,6 @@ sub initialize {
 		$self->data->set_reservation_lastcheck_time($reservation_lastcheck);
 	}
 	
-	# TODO: Move this (VCL-711)
-	# Check the image OS before creating OS object
-	if (!$self->check_image_os()) {
-		notify($ERRORS{'WARNING'}, 0, "failed to check if image OS is correct");
-		return;
-	}
-	
 	# Set the PARENTIMAGE and SUBIMAGE keys in the request data hash
 	# These are deprecated, DataStructure's is_parent_reservation function should be used
 	$self->data->get_request_data->{PARENTIMAGE} = ($self->data->is_parent_reservation() + 0);
@@ -332,100 +325,6 @@ sub reservation_failed {
 	notify($ERRORS{'OK'}, 0, "exiting 1");
 	exit 1;
 } ## end sub reservation_failed
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 check_image_os
-
- Parameters  :
- Returns     :
- Description :
-
-=cut
-
-
-sub check_image_os {
-	my $self               = shift;
-	my $request_state_name = $self->data->get_request_state_name();
-	my $image_id           = $self->data->get_image_id();
-	my $image_name         = $self->data->get_image_name();
-	my $image_os_name      = $self->data->get_image_os_name();
-	my $imagerevision_id   = $self->data->get_imagerevision_id();
-	my $image_architecture    = $self->data->get_image_architecture();
-
-	# Only make corrections if state is image
-	if ($request_state_name ne 'image') {
-		notify($ERRORS{'DEBUG'}, 0, "no corrections need to be made, not an imaging request, returning 1");
-		return 1;
-	}
-
-	my $image_os_name_new;
-	if ($image_os_name =~ /^(rh)el[s]?([0-9])/ || $image_os_name =~ /^rh(fc)([0-9])/) {
-		# Change rhelX --> rhXimage, rhfcX --> fcXimage
-		$image_os_name_new = "$1$2image";
-	}
-	elsif($image_os_name =~ /^(centos)([0-9])/) {
-		# Change rhelX --> rhXimage, rhfcX --> fcXimage
-		$image_os_name_new = "$1$2image";
-	}
-	elsif ($image_os_name =~ /^(fedora)([0-9])/) {
-		# Change fedoraX --> fcXimage
-		$image_os_name_new = "fc$1image"
-   }
-
-	else {
-		notify($ERRORS{'DEBUG'}, 0, "no corrections need to be made to image OS: $image_os_name");
-		return 1;
-	}
-
-	# Change the image name
-	$image_name =~ /^[^-]+-(.*)/;
-	my $image_name_new = "$image_os_name_new-$1";
-	
-	my $new_architecture = $image_architecture;
-	if ($image_architecture eq "x86_64" ) {
-		$new_architecture = "x86";
-	}
-
-	notify($ERRORS{'OK'}, 0, "Kickstart image OS needs to be changed: $image_os_name -> $image_os_name_new, image name: $image_name -> $image_name_new");
-
-	# Update the image table, change the OS for this image
-	my $sql_statement = "
-	UPDATE
-	OS,
-	image,
-	imagerevision
-	SET
-	image.OSid = OS.id,
-	image.architecture = \'$new_architecture'\,
-	image.name = \'$image_name_new\',
-	imagerevision.imagename = \'$image_name_new\'
-	WHERE
-	image.id = $image_id
-	AND imagerevision.id = $imagerevision_id
-	AND OS.name = \'$image_os_name_new\'
-	";
-
-	# Update the image and imagerevision tables
-	if (database_execute($sql_statement)) {
-		notify($ERRORS{'OK'}, 0, "image($image_id) and imagerevision($imagerevision_id) tables updated: $image_name -> $image_name_new");
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to update image and imagerevision tables: $image_name -> $image_name_new, returning 0");
-		return 0;
-	}
-
-	if ($self->data->refresh()) {
-		notify($ERRORS{'DEBUG'}, 0, "DataStructure refreshed after correcting image OS");
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to update DataStructure updated correcting image OS, returning 0");
-		return 0;
-	}
-	
-	notify($ERRORS{'DEBUG'}, 0, "returning 1");
-	return 1;
-} ## end sub check_image_os
 
 #/////////////////////////////////////////////////////////////////////////////
 
