@@ -213,6 +213,45 @@ sub new {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 create_datastructure_object
+
+ Parameters  : $arguments
+ Returns     : VCL::DataStructure object
+ Description : Creates a DataStructure object. The arguments are the same as
+               those passed to the DataStructure constructor.
+
+=cut
+
+sub create_datastructure_object {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $arguments = shift || {};
+	
+	my $data;
+	eval {
+		$data = new VCL::DataStructure($arguments);
+	};
+	
+	if ($EVAL_ERROR) {
+		notify($ERRORS{'WARNING'}, 0, "failed to create DataStructure object, arguments:\n" . format_data($arguments) . "\nerror:\n" . $EVAL_ERROR);
+		return;
+	}
+	elsif (!$data) {
+		notify($ERRORS{'WARNING'}, 0, "failed to create DataStructure object, arguments:\n" . format_data($arguments));
+		return;
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "created DataStructure object, arguments:\n" . format_data($arguments));
+		return $data;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 create_os_object
 
  Parameters  : None
