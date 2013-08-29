@@ -1570,7 +1570,6 @@ EOF
 		}
 		else {
 			notify($ERRORS{'OK'}, $LOGFILE, "request $request_id state updated to: $state_name, laststate to: $laststate_name, rows updated: $rows_updated");
-			print "\n$update_statement\n\n";
 		}
 		return $rows_updated;
 	}
@@ -3894,7 +3893,7 @@ EOF
 		
 		# Add the imagerevision info to the hash
 		my $imagerevision_id = $request_info->{reservation}{$reservation_id}{imagerevisionid};
-		my $imagerevision_info = get_imagerevision_info($imagerevision_id);
+		my $imagerevision_info = get_imagerevision_info($imagerevision_id, 1);
 		$request_info->{reservation}{$reservation_id}{imagerevision} = $imagerevision_info;
 		
 		# Add the computer info to the hash
@@ -8044,10 +8043,10 @@ sub insert_request {
 	# If successful, the id of the newly inserted row is returned
 	my $request_id = database_execute($insert_request_statment);
 	if ($request_id) {
-		notify($ERRORS{'OK'}, 0, "inserted new reload request into request table, request id=$request_id");
+		notify($ERRORS{'OK'}, 0, "inserted new $request_state_name/$request_laststate_name request into request table, request id=$request_id");
 	}
 	else {
-		notify($ERRORS{'CRITICAL'}, 0, "failed to insert new reload request into request table");
+		notify($ERRORS{'CRITICAL'}, 0, "failed to insert new $request_state_name/$request_laststate_name request into request table");
 		return 0;
 	}
 
@@ -8075,10 +8074,10 @@ sub insert_request {
 	# If successful, the id of the newly inserted row is returned
 	my $reservation_id = database_execute($insert_reservation_statment);
 	if ($reservation_id) {
-		notify($ERRORS{'OK'}, 0, "inserted new reload request into reservation table, reservation id=$reservation_id");
+		notify($ERRORS{'OK'}, 0, "inserted new reservation for request $request_id: $reservation_id");
 	}
 	else {
-		notify($ERRORS{'CRITICAL'}, 0, "failed to insert new reload request into reservation table");
+		notify($ERRORS{'CRITICAL'}, 0, "failed to insert new reservation for request $request_id");
 		return 0;
 	}
 
@@ -10365,7 +10364,7 @@ sub xml_string_to_hash {
 
 =head2 hash_to_xml_string
 
- Parameters  : $xml_hashref
+ Parameters  : $xml_hashref, $root_name (optional)
  Returns     : string
  Description : Converts an XML hash reference to text to a hash using
                XML::Simple:XMLout.
