@@ -672,7 +672,7 @@ sub node_status {
 	
 	# Make sure node.profile is configured
 	my $node_profile = $node_info->{profile};
-	if (!$node_info) {
+	if (!$node_profile) {
 		notify($ERRORS{'WARNING'}, 0, "unable to determine status of $computer_node_name, node.profile is not configured:\n" . format_data($node_info));
 		return;
 	}
@@ -1495,10 +1495,6 @@ sub _lsdef {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute lsdef command for $computer_node_name");
 		return;
 	}
-	elsif (grep(/Error:/i, @$output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to run lsdef for $computer_node_name, output:\n" . join("\n", @$output));
-		return;
-	}
 	
 	# Expected output:
 	# Object name: vclh3-4
@@ -1518,6 +1514,12 @@ sub _lsdef {
 			$node_info->{$property} = $value;
 		}
 	}
+	
+	if (grep(/Error:/i, @$output) || !keys(%$node_info)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run lsdef for $computer_node_name, output:\n" . join("\n", @$output));
+		return;
+	}
+	
 	notify($ERRORS{'DEBUG'}, 0, "retrieved xCAT object definition for $computer_node_name:\n" . format_data($node_info));
 	return $node_info;
 }
