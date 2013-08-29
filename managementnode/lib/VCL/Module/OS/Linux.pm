@@ -2434,16 +2434,17 @@ sub create_user {
 			else {
 				notify($ERRORS{'WARNING'}, 0, "failed to add user's public keys to $authorized_keys_file_path");
 			}
+			
+			if (!$self->set_file_owner($home_directory_path, $user_login_id, 'vcl', 1)) {
+				notify($ERRORS{'WARNING'}, 0, "failed to set owner of user's home directory: $home_directory_path");
+				return;
+			}
 		}
 		else {
 			notify($ERRORS{'DEBUG'}, 0, "skipping adding user's public keys to $authorized_keys_file_path, home directory is on a network share");
 		}
 	}
 	
-	if (!$self->set_file_owner($home_directory_path, $user_login_id, 'vcl', 1)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to set owner of user's home directory: $home_directory_path");
-		return;
-	}
 
 	return 1;
 } ## end sub create_user
