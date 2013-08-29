@@ -693,12 +693,8 @@ sub node_status {
 	my $os = $self->os(0);
 	if (!$os) {
 		my $data;
-		eval { $data = new VCL::DataStructure({computer_identifier => $computer_node_name, image_identifier => $node_profile}) };
-		if ($EVAL_ERROR) {
-			notify($ERRORS{'WARNING'}, 0, "unable to determine status of $computer_node_name, failed to create DataStructure object for image set as nodetype.profile: '$node_profile', error:\n$EVAL_ERROR");
-			return;
-		}
-		elsif (!$data) {
+		my $data = $self->create_datastructure_object({computer_identifier => $computer_node_name, image_identifier => $node_profile});
+		if (!$data) {
 			notify($ERRORS{'WARNING'}, 0, "unable to determine status of $computer_node_name, \$self->os is not defined, failed to create DataStructure object for image set as nodetype.profile: '$node_profile'");
 			return;
 		}
@@ -1027,7 +1023,7 @@ sub get_image_repository_directory_path {
 	my $management_node_install_path = $self->data->get_management_node_install_path($management_node_identifier);
 	
 	# Create a DataStructure object containing info about the image
-	my $image_data = new VCL::DataStructure({image_identifier => $image_name}) || return;
+	my $image_data = $self->create_datastructure_object({image_identifier => $image_name}) || return;
 	my $image_id = $image_data->get_image_id() || return;
 	my $image_os_name = $image_data->get_image_os_name() || return;
 	my $image_os_type = $image_data->get_image_os_type() || return;
@@ -1352,7 +1348,7 @@ sub _edit_nodelist {
 	}
 	
 	# Create a DataStructure object containing info about the image
-	my $image_data = new VCL::DataStructure({image_identifier => $image_name}) || return;
+	my $image_data = $self->create_datastructure_object({image_identifier => $image_name}) || return;
 	my $image_os_install_type = $image_data->get_image_os_install_type() || return;
 	my $image_project = $image_data->get_image_project() || return;
 	my $image_os_name = $image_data->get_image_os_name() || return;
@@ -1431,7 +1427,7 @@ sub _edit_nodetype {
 	}
 	
 	# Create a DataStructure object containing info about the image
-	my $image_data = new VCL::DataStructure({image_identifier => $image_name}) || return;
+	my $image_data = $self->create_datastructure_object({image_identifier => $image_name}) || return;
 	my $image_architecture = $image_data->get_image_architecture();
 	my $image_os_install_type = $image_data->get_image_os_install_type();
 	my $image_os_name = $image_data->get_image_os_name();
@@ -1960,7 +1956,7 @@ sub _get_tmpl_directory_path {
 	my $management_node_install_path = $self->data->get_management_node_install_path($management_node_identifier);
 	
 	# Create a DataStructure object containing info about the image
-	my $image_data = new VCL::DataStructure({image_identifier => $image_name}) || return;
+	my $image_data = $self->create_datastructure_object({image_identifier => $image_name}) || return;
 	my $image_os_source_path = $image_data->get_image_os_source_path() || return;
 	my $image_os_install_type = $image_data->get_image_os_install_type() || return;
 	
@@ -2018,7 +2014,7 @@ sub _create_template {
 	}
 	
 	# Create a DataStructure object containing info about the image
-	my $image_data = new VCL::DataStructure({image_identifier => $image_name}) || return;
+	my $image_data = $self->create_datastructure_object({image_identifier => $image_name}) || return;
 	my $image_os_name = $image_data->get_image_os_name() || return;
 	my $image_os_type = $image_data->get_image_os_type_name() || return;
 	
