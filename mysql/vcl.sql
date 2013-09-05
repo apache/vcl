@@ -376,7 +376,7 @@ CREATE TABLE IF NOT EXISTS `image` (
   `prettyname` varchar(60) NOT NULL default '',
   `ownerid` mediumint(8) unsigned default '1',
   `imagetypeid` smallint(5) unsigned NOT NULL default '1',
-  `platformid` tinyint(3) unsigned NOT NULL default '0',
+  `platformid` tinyint(3) unsigned NOT NULL default '1',
   `OSid` tinyint(3) unsigned NOT NULL default '0',
   `imagemetaid` smallint(5) unsigned default NULL,
   `minram` mediumint(8) unsigned NOT NULL default '0',
@@ -391,7 +391,7 @@ CREATE TABLE IF NOT EXISTS `image` (
   `forcheckout` tinyint(1) unsigned NOT NULL default '1',
   `maxinitialtime` smallint(5) unsigned NOT NULL default '0',
   `project` enum('vcl','hpc','vclhpc') NOT NULL default 'vcl',
-  `size` smallint(5) unsigned NOT NULL default '1450',
+  `size` smallint(5) unsigned NOT NULL default '0',
   `architecture` enum('x86','x86_64') NOT NULL default 'x86',
   `description` text,
   `usage` text,
@@ -1402,7 +1402,8 @@ INSERT INTO `computerloadstate` (`id`, `loadstatename`, `prettyname`, `est`) VAL
 (51, 'imageloadcomplete', 'node ready to add user', 0),
 (52, 'repeat', 'repeat', 0),
 (53, 'deleted', 'deleted', NULL),
-(54, 'begin', 'beginning to process reservation', 0);
+(54, 'begin', 'beginning to process reservation', 0),
+(55, 'exited', 'vcld process exited', 0);
 
 --
 -- Dumping data for table `connectmethod`

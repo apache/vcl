@@ -155,7 +155,7 @@ sub main () {
 		}
 		else {
 			#notify($ERRORS{'DEBUG'}, $LOGFILE, "sleeping for $management_node_checkin_interval seconds");
-			sleep_uninterupted($management_node_checkin_interval);
+			sleep_uninterrupted($management_node_checkin_interval);
 		}
 		
 		#===========================================================================
@@ -352,7 +352,10 @@ sub main () {
 				# Add the DataStructure reference to %ENV so it can be accessed from non-object methods
 				$ENV{data} = $data_structure;
 				
-				# Insert a computerloadlog entry to indicate processing has begin for this reservation
+				# Remove any existing 'exited' computerloadlog entries
+				delete_computerloadlog_reservation($reservation_id, 'exited');
+				
+				# Insert a computerloadlog 'begin' entry to indicate processing has begun for this reservation
 				my $computer_id = $data_structure->get_computer_id();
 				insertloadlog($reservation_id, $computer_id, "begin", "beginning to process, state is $request_state_name");
 				
