@@ -3668,6 +3668,23 @@ sub shutdown {
 		notify($ERRORS{'DEBUG'}, 0, "shutting down $computer_node_name");
 	}
 	
+	# If computer is in ONE cloud, shutdown via ONE controls, else shutdown via shutdown.exe
+	
+	if($self->provisioner->can("opennebula")) {
+		if ($enable_dhcp) {
+			my ($shutdown_exit_status, $shutdown_output) = run_ssh_command($computer_node_name, $management_node_keys, $shutdown_command);
+			notify($ERRORS{'DEBUG'}, 0, "Executed pre_shutdown command on $computer_node_name, exit status: $shutdown_exit_status, output:\n@{$shutdown_output}");
+		}
+		if(!$self->provisioner->power_off()) {
+			notify($ERRORS{'CRITICAL'}, 0, "Couldn't shutdown $computer_node_name with provisioner->power_off()");
+			return 0;
+		} 
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "Powered off computer $computer_node_name via provisioning module");
+			return 1;
+		}
+	}
+	
 	# Check if tsshutdn.exe exists on the computer
 	# tsshutdn.exe is the preferred utility for Windows 2003, shutdown.exe often fails
 	my $windows_product_name = $self->get_product_name() || '';
