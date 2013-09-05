@@ -123,17 +123,6 @@ sub initialize {
 	# Set the parent PID and this process's PID in the hash
 	set_hash_process_id($self->data->get_request_data);
 	
-	# Create a management node OS object
-	# Check to make sure the object currently being created is not a MN OS object to avoid endless loop
-	if (my $mn_os = $self->create_mn_os_object()) {
-		$self->set_mn_os($mn_os);
-		$self->data->set_mn_os($mn_os);
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to create management node OS object");
-		return;
-	}
-	
 	# Create an OS object
 	if (my $os = $self->create_os_object()) {
 		$self->set_os($os);
@@ -187,7 +176,7 @@ sub initialize {
 		if ($reservation_count > 1) {
 			# Wait for all child processes to begin
 			if (!$self->wait_for_child_reservations_to_begin('begin', 60, 3)) {
-				$self->reservation_failed("child reservation processes failed begin");
+				$self->reservation_failed("child reservation processes failed to begin");
 			}
 		}
 		
@@ -455,6 +444,129 @@ sub wait_for_child_reservations_to_begin {
 		[],
 		"waiting for child reservation processes to begin", $total_wait_seconds, $attempt_delay_seconds
 	);
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 wait_for_child_reservations_to_exit
+
+ Parameters  : $total_wait_seconds (optional), $attempt_delay_seconds (optional)
+ Returns     : boolean
+ Description : Loops until an 'exited' computerloadlog entry exists for all
+               child reservations. Returns false if the loop times out. The
+               default $total_wait_seconds value is 300 seconds. The default
+               $attempt_delay_seconds value is 15 seconds.
+
+=cut
+
+sub wait_for_child_reservations_to_exit {
+	my $self = shift;
+	if (ref($self) !~ /VCL/) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a class method of a VCL object");
+		return;
+	}
+	
+	my $total_wait_seconds = shift || 300;
+	my $attempt_delay_seconds = shift || 15;
+	
+	my $request_id = $self->data->get_request_id();
+	my $request_state_name = $self->data->get_request_state_name();
+	
+	return $self->code_loop_timeout(
+		\&does_loadstate_entry_exist,
+		[$self, 'exited', 1],
+		"waiting for child reservation processes to exit", $total_wait_seconds, $attempt_delay_seconds
+	);
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 state_exit
+
+ Parameters  : $request_state_name_new (optional), $computer_state_name_new (optional), $request_log_ending (optional)
+ Returns     : none, exits
+ Description : Performs common tasks before a reservation process exits and then
+               exits.
+
+=cut
+
+sub state_exit {
+	my $self = shift;
+	if (ref($self) !~ /VCL/) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a class method of a VCL object");
+		return;
+	}
+	
+	my ($request_state_name_new, $computer_state_name_new, $request_log_ending) = @_;
+	
+	my $request_id                 = $self->data->get_request_id();
+	my $request_logid              = $self->data->get_request_log_id();
+	my $reservation_id             = $self->data->get_reservation_id();
+	my @reservation_ids            = $self->data->get_reservation_ids();
+	my $reservation_count          = $self->data->get_reservation_count();
+	my $is_parent_reservation      = $self->data->is_parent_reservation();
+	my $request_state_name_old     = $self->data->get_request_state_name();
+	my $request_laststate_name_old = $self->data->get_request_laststate_name();
+	my $computer_id                = $self->data->get_computer_id();
+	my $computer_state_name_old    = $self->data->get_computer_state_name();
+	my $computer_shortname         = $self->data->get_computer_short_name();
+	
+	# If new request state name argument was not supplied, set it back to the previous state
+	if (!$request_state_name_new) {
+		$request_state_name_new = $request_state_name_old;
+	}
+	
+	if ($is_parent_reservation) {
+		# If parent of a cluster request, wait for child processes to exit before switching the state
+		if ($reservation_count > 1) {
+			$self->wait_for_child_reservations_to_exit();
+		}
+		
+		# Never set request state to failed if previous state is image
+		if ($request_state_name_old eq 'image' && $request_state_name_new !~ /(complete|maintenance)/) {
+			notify($ERRORS{'CRITICAL'}, 0, "previous request state is $request_state_name_old, not setting request state to $request_state_name_new, setting request and computer state to maintenance");
+			$request_state_name_new = 'maintenance';
+			$computer_state_name_new = 'maintenance';
+		}
+		elsif ($request_state_name_old eq 'inuse' && $request_state_name_new !~ /(inuse|timeout|maintenance)/) {
+			notify($ERRORS{'CRITICAL'}, 0, "previous request state is $request_state_name_old, not setting request state to $request_state_name_new, setting request and computer state to inuse");
+			$request_state_name_new = 'inuse';
+			$computer_state_name_new = 'inuse';
+		}
+		
+		# Update the reservation.lastcheck time to now if the next request state is inuse
+		# Do this to ensure that reservations are not processed again quickly after this process exits
+		# For cluster requests, the parent may have had to wait a while for child processes to exit
+		# Resetting reservation.lastcheck causes reservations to wait the full interval between inuse checks
+		if ($request_state_name_new =~ /(inuse)/) {
+			update_reservation_lastcheck(@reservation_ids);
+		}
+		
+		# Update the request state
+		if (!update_request_state($request_id, $request_state_name_new, $request_state_name_old)) {
+			notify($ERRORS{'CRITICAL'}, 0, "failed to change request state: $request_state_name_old/$request_laststate_name_old --> $request_state_name_new/$request_state_name_old");
+		}
+		
+		# Update log.ending if this is the parent reservation and argument was supplied
+		if ($request_log_ending && !update_log_ending($request_logid, $request_log_ending)) {
+			notify($ERRORS{'CRITICAL'}, 0, "failed to set log ending to $request_log_ending, log ID: $request_logid");
+		}
+	}
+	
+	# Update the computer state if argument was supplied
+	if ($computer_state_name_new) {
+		if ($computer_state_name_new eq $computer_state_name_old) {
+			notify($ERRORS{'DEBUG'}, 0, "state of computer $computer_shortname not updated, already set to $computer_state_name_old");
+		}
+		elsif (!update_computer_state($computer_id, $computer_state_name_new)) {
+			notify($ERRORS{'CRITICAL'}, 0, "failed update state of computer $computer_shortname: $computer_state_name_old->$computer_state_name_new");
+		}
+	}
+	
+	# Insert a computerloadlog 'exited' entry
+	# This is used by the parent cluster reservation
+	insertloadlog($reservation_id, $computer_id, "exited", "vcld process exiting");
+	exit;
 }
 
 #/////////////////////////////////////////////////////////////////////////////

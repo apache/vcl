@@ -117,7 +117,7 @@ sub process {
 	my $computer_id             = $self->data->get_computer_id();
 	my $computer_short_name     = $self->data->get_computer_short_name();
 	my $connect_timeout_seconds = $self->data->get_variable('connecttimeout') || (15 * 60);
-	
+
 	# Make sure connect timeout is long enough
 	# It has to be a bit longer than the ~5 minute period between inuse checks due to cluster reservations
 	# If too short, a user may be connected to one computer in a cluster and another inuse process times out before the connected computer is checked
@@ -140,8 +140,8 @@ sub process {
 		else {
 			notify($ERRORS{'CRITICAL'}, 0, "'$request_state_name' operation requested, " . ref($self->os) . " does not implement a 'reboot' subroutine");
 		}
-		switch_state($request_data, 'inuse', 'inuse');
-		exit;
+		
+		$self->state_exit('inuse', 'inuse');
 	}
 	
 	# Check if server reservation has been modified
@@ -149,8 +149,8 @@ sub process {
 		if (!$self->os->manage_server_access()) {
 			notify($ERRORS{'CRITICAL'}, 0, "failed to update server access");
       }
-		switch_state($request_data, 'inuse', 'inuse');
-      exit;
+		
+		$self->state_exit('inuse', 'inuse');
 	}
 	
 	# Remove rows from computerloadlog for this reservation, don't remove the loadstate=begin row
@@ -182,7 +182,7 @@ sub process {
 		# Only 1 reservation needs to handle the end time countdown
 		if (!$is_parent_reservation) {
 			notify($ERRORS{'OK'}, 0, "request end time countdown handled by parent reservation, exiting");
-			exit;
+			$self->state_exit();
 		}
 		
 		my $sleep_seconds = ($request_remaining_seconds - $end_time_notify_seconds);
@@ -214,7 +214,7 @@ sub process {
 			notify($ERRORS{'OK'}, 0, "minutes until end of end of request: $request_remaining_minutes");
 			
 			# Check if user deleted the request
-			exit if is_request_deleted($request_id);
+			$self->state_exit() if is_request_deleted($request_id);
 			
 			# Check if this is an imaging request, causes process to exit if state or laststate = image
 			$self->_check_imaging_request();
@@ -226,8 +226,7 @@ sub process {
 			# Check if the user extended the request
 			if ($current_request_end_epoch_seconds > $request_end_epoch_seconds) {
 				notify($ERRORS{'OK'}, 0, "user extended request, end time: $request_end --> $current_request_end, returning request to inuse state");
-				switch_state($request_data, 'inuse', 'inuse');
-				exit;
+				$self->state_exit('inuse', 'inuse');
 			}
 			
 			# Notify user when 5 or 10 minutes remain
@@ -249,13 +248,11 @@ sub process {
 			notify($ERRORS{'OK'}, 0, "initiating image auto-capture process");
 			if (!$self->_start_imaging_request()) {
 				notify($ERRORS{'CRITICAL'}, 0, "failed to initiate image auto-capture process, changing request and computer state to maintenance");
-				switch_state($request_data, 'maintenance', 'maintenance');
-				exit;
+				$self->state_exit('maintenance', 'maintenance');
 			}
 		}
 		
-		switch_state($request_data, 'timeout', 'timeout', 'EOR', 1);
-		exit;
+		$self->state_exit('timeout', 'timeout', 'EOR');
 	}
 	
 	# If duration is greater than 24 hours perform end time notice checks
@@ -282,8 +279,7 @@ sub process {
 			"notify time      : $end_time_notify_string\n" . 
 			"connect timeout  : $connect_timeout_string"
 		);
-		switch_state($request_data, 'inuse', 'inuse');
-		exit;
+		$self->state_exit('inuse', 'inuse');
 	}
 	
 	# Check if the computer is responding to SSH
@@ -291,8 +287,7 @@ sub process {
 	# This prevents a reservatino from timing out if the user is actually connected but SSH from the management node isn't working
 	if (!$self->os->is_ssh_responding()) {
 		notify($ERRORS{'OK'}, 0, "$computer_short_name is not responding to SSH, skipping user connection check");
-		switch_state($request_data, 'inuse', 'inuse');
-		exit;
+		$self->state_exit('inuse', 'inuse');
 	}
 	
 	# Update the firewall if necessary - this is what allows a user to click Connect from different locations
@@ -319,18 +314,18 @@ sub process {
 			notify($ERRORS{'OK'}, 0, "never detected user connection, skipping timeout, request duration: $request_duration_hours hours");
 		}
 		else {
-			exit if is_request_deleted($request_id);
+			$self->state_exit() if is_request_deleted($request_id);
 			
 			# Update reservation lastcheck, otherwise request will be processed immediately again
 			update_reservation_lastcheck($reservation_id);
 			
 			if ($request_laststate_name eq 'reserved') {
 				$self->_notify_user_no_login();
-				switch_state($request_data, 'timeout', 'timeout', 'nologin', 1);
+				$self->state_exit('timeout', 'timeout', 'nologin');
 			}
 			else {
 				$self->_notify_user_timeout();
-				switch_state($request_data, 'timeout', 'timeout', 'timeout', 1);
+				$self->state_exit('timeout', 'timeout', 'timeout');
 			}
 		}
 	}
@@ -344,8 +339,7 @@ sub process {
 		}
 	}
 	
-	switch_state($request_data, 'inuse', 'inuse');
-	exit;
+	$self->state_exit('failed', 'inuse');
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -377,7 +371,7 @@ sub user_connected {
 	my $computer_short_name = $self->data->get_computer_short_name();
 	
 	# Check if user deleted the request
-	exit if is_request_deleted($request_id);
+	$self->state_exit() if is_request_deleted($request_id);
 	
 	# Check if this is an imaging request, causes process to exit if state or laststate = image
 	$self->_check_imaging_request();
@@ -450,7 +444,7 @@ sub _notify_user_endtime {
 	my $user_emailnotices               = $self->data->get_user_emailnotices();
 	my $user_imtype_name                = $self->data->get_user_imtype_name();
 	my $user_im_id                      = $self->data->get_user_im_id();
-	my $request_forimaging 		    = $self->_check_imaging_request();	
+	my $request_forimaging 		         = $self->_check_imaging_request();	
 	my $request_id                      = $self->data->get_request_id();
 	
 	my $message;
@@ -565,7 +559,7 @@ sub _notify_user_disconnect {
 	my $user_imtype_name                = $self->data->get_user_imtype_name();
 	my $user_im_id                      = $self->data->get_user_im_id();
 	my $is_parent_reservation           = $self->data->is_parent_reservation();
-	my $request_forimaging		    = $self->_check_imaging_request();
+	my $request_forimaging              = $self->_check_imaging_request();
 	
 	my $disconnect_string;
 	if ($disconnect_time == 0) {
@@ -926,9 +920,10 @@ sub _check_imaging_request {
 	my $imaging_result = is_request_imaging($request_id);
 	if ($imaging_result eq 'image') {
 		notify($ERRORS{'OK'}, 0, "image creation process has begun, exiting");
-		exit;
+		$self->state_exit();
 	}
 }
+
 #/////////////////////////////////////////////////////////////////////////////
 
 =head2 _start_imaging_request

@@ -171,7 +171,7 @@ sub new {
 		$self->{$arg_key} = $args->{$arg_key};
 		#notify($ERRORS{'DEBUG'}, 0, "set '$arg_key' key for $class object from arguments");
 	}
-
+	
 	# Bless the object as the class which new was called with
 	bless $self, $class;
 	
@@ -193,6 +193,19 @@ sub new {
 	}
 	else {
 		notify($ERRORS{'DEBUG'}, 0, ref($self) . " object created, address: $address");
+	}
+	
+	# Create a management node OS object
+	# Check to make sure the object currently being created is not a MN OS object to avoid endless loop
+	if (!$self->isa('VCL::Module::OS::Linux::ManagementNode')) {
+		if (my $mn_os = $self->create_mn_os_object()) {
+			$self->set_mn_os($mn_os);
+			$self->data->set_mn_os($mn_os);
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to create management node OS object");
+			return;
+		}
 	}
 	
 	# Check if not running in setup mode and if initialize() subroutine is defined for this module
@@ -671,14 +684,14 @@ sub mn_os {
 		$display_warning = 1;
 	}
 	
-	if (!$self->{mn_os}) {
+	if (!$ENV{mn_os}) {
 		if ($display_warning) {
-			notify($ERRORS{'WARNING'}, 0, "unable to return management node OS object, \$self->{mn_os} is not set");
+			notify($ERRORS{'WARNING'}, 0, "unable to return management node OS object, \$ENV{mn_os} is not set");
 		}
 		return;
 	}
 	else {
-		return $self->{mn_os};
+		return $ENV{mn_os};
 	}
 }
 
@@ -804,7 +817,7 @@ sub set_mn_os {
 	my $type = ref($self);
 	my $mn_os_address = sprintf('%x', $mn_os);
 	notify($ERRORS{'DEBUG'}, 0, "storing reference to managment node OS object (address: $mn_os_address) in this $type object (address: $address)");
-	$self->{mn_os} = $mn_os;
+	$ENV{mn_os} = $mn_os;
 }
 
 #/////////////////////////////////////////////////////////////////////////////

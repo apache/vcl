@@ -226,15 +226,7 @@ END
 	if ($create_image_result) {
 		# Success
 		notify($ERRORS{'OK'}, 0, "$image_name image files successfully saved");
-
-		# Update the request state to completed, laststate to image
-		if (update_request_state($request_id, "completed", "image")) {
-			notify($ERRORS{'OK'}, 0, "request state updated to completed, laststate to image");
-		}
-		else {
-			notify($ERRORS{'CRITICAL'}, 0, "unable to update request state to completed, laststate to image");
-		}
-
+		
 		# Get the new image size
 		my $image_size_new;
 		if ($image_size_new = $self->provisioner->get_image_size($image_name)) {
@@ -354,20 +346,12 @@ END
 	}
 	
 	# Insert reload request data into the datbase
-	if (insert_reload_request($request_data)) {
-		notify($ERRORS{'OK'}, 0, "inserted reload request into database for computer id=$computer_id");
-
-		# Switch the request state to complete, leave the computer state as is, update log ending to EOR, exit
-		switch_state($request_data, 'complete', '', 'EOR', '1');
-	}
-	else {
+	if (!insert_reload_request($request_data)) {
 		notify($ERRORS{'CRITICAL'}, 0, "failed to insert reload request into database for computer id=$computer_id");
-
-		# Switch the request and computer states to failed, set log ending to failed, exit
-		switch_state($request_data, 'failed', 'failed', 'failed', '1');
 	}
-
-	notify($ERRORS{'OK'}, 0, "exiting");
+	
+	# Switch the request state to complete, leave the computer state as is, update log ending to EOR, exit
+	switch_state($request_data, 'complete', '', 'EOR', '1');
 	exit;
 } ## end sub reservation_successful
 

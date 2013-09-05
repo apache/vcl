@@ -106,6 +106,7 @@ our @EXPORT = qw(
   disablesshd
   escape_file_path
   format_data
+  format_hash_keys
   format_number
   get_affiliation_info
   get_array_summary_string
@@ -210,7 +211,7 @@ our @EXPORT = qw(
   setup_get_hash_choice
   setup_get_input_string
   setup_print_wrap
-  sleep_uninterupted
+  sleep_uninterrupted
   sort_by_file_name
   stopwatch
   string_to_ascii
@@ -6873,8 +6874,6 @@ EOF
 
 =cut
 
-#/////////////////////////////////////////////////////////////////////////////
-
 sub switch_state {
 	my ($request_data, $request_state_name_new, $computer_state_name_new, $request_log_ending, $exit) = @_;
 
@@ -8285,6 +8284,87 @@ sub format_data {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 format_hash_keys
+
+ Parameters  : $hash_ref, $level (optional), $parent_keys (optional)
+ Returns     : hash reference
+ Description : 
+
+=cut
+
+sub format_hash_keys {
+	my ($hash_ref, $display_parent_keys, $display_values_hashref, $parent_keys) = @_;
+	if (!$hash_ref) {
+		notify($ERRORS{'WARNING'}, 0, "hash reference argument was not supplied");
+		return;
+	}
+	elsif (!ref($hash_ref) || ref($hash_ref) ne 'HASH') {
+		notify($ERRORS{'WARNING'}, 0, "first argument is not a hash reference");
+		return;
+	}
+	
+	my $return_string;
+	if ($return_string) {
+		$return_string .= "\n";
+	}
+	else {
+		$return_string = '';
+	}
+	
+	if (!defined($parent_keys)) {
+		$parent_keys = [];
+	}
+	
+	my $level = scalar(@$parent_keys);
+	
+	# Add specific values specified in $display_values_hashref to the return string
+	if (@$parent_keys && $display_values_hashref) {
+		my $parent_key = @$parent_keys[-1];
+		for my $key (sort { lc($a) cmp lc($b) } keys %$hash_ref) {
+			my $value = $hash_ref->{$key} || '<NULL>';
+			next if ref($value);
+			for my $display_parent_key (sort { lc($a) cmp lc($b) } keys %$display_values_hashref) {
+				my $display_key = $display_values_hashref->{$display_parent_key};
+				next if ($parent_key ne $display_parent_key || $key ne $display_key);
+				$return_string .= '-' x ($level * 3);
+				$return_string .= join('', map { "{$_}" } @$parent_keys) if ($display_parent_keys);
+				$return_string .= "{$key} => '$value'";
+				$return_string .= "\n";
+			}
+		}
+	}
+	
+	for my $key (sort { lc($a) cmp lc($b) } keys %$hash_ref) {
+		my $value = $hash_ref->{$key};
+		my $type = ref($value);
+		if (!$type) {
+			next;
+		}
+		
+		$return_string .= '-' x ($level * 3);
+		
+		if ($type eq 'HASH') {
+			$return_string .= join('', map { "{$_}" } @$parent_keys) if ($display_parent_keys);
+			$return_string .= "{$key}";
+			$return_string .= "\n";
+			
+			push @$parent_keys, $key;
+			$return_string .= format_hash_keys($value, $display_parent_keys, $display_values_hashref, $parent_keys);
+			pop @$parent_keys;
+		}
+		elsif ($type eq 'ARRAY') {
+			$return_string .= "[$key]\n";
+		}
+		else {
+			$return_string .= "<$type: $key>\n";
+		}
+	}
+	
+	return $return_string;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 get_caller_trace
 
  Parameters  : $level_limit - number of previous calls to return
@@ -8592,8 +8672,7 @@ sub reservations_ready {
  Description : Retrieves the computerloadlog entries for all reservations
                belonging to the request. A hash is constructed with keys set to
                the reservation IDs. The data of each key is a reference to an
-               array containing the computerloadstate names, sorted from newest
-               computerloadlog entry to oldest.
+               array containing the computerloadstate names.
 
 =cut
 
@@ -8621,7 +8700,7 @@ AND computerloadlog.loadstateid = computerloadstate.id
 WHERE
 request.id = $request_id
 AND reservation.requestid = request.id
-ORDER BY computerloadlog.timestamp DESC
+ORDER BY computerloadlog.timestamp ASC
 EOF
 
 	my @rows = database_select($select_statement);
@@ -8634,7 +8713,14 @@ EOF
 		push @{$computerloadlog_info->{$reservation_id}}, $loadstatename if defined($loadstatename);
 	}
 	
-	notify($ERRORS{'DEBUG'}, 0, "retrieved computerloadlog info for request $request_id:\n" . format_data($computerloadlog_info));
+	my $computerloadlog_string = '';
+	for my $reservation_id (keys %$computerloadlog_info) {
+		$computerloadlog_string .= "$reservation_id: ";
+		$computerloadlog_string .= join(', ', @{$computerloadlog_info->{$reservation_id}});
+		$computerloadlog_string .= "\n";
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "retrieved computerloadstate names for request $request_id:\n$computerloadlog_string");
 	return $computerloadlog_info;
 }
 
@@ -10844,7 +10930,7 @@ EOF
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 sleep_uninterupted
+=head2 sleep_uninterrupted
 
  Parameters  : $seconds
  Returns     : none
@@ -10856,7 +10942,7 @@ EOF
 
 =cut
 
-sub sleep_uninterupted {
+sub sleep_uninterrupted {
 	my $seconds = shift;
 	my $start_time = Time::HiRes::time;
 	my $end_time = ($start_time + $seconds);

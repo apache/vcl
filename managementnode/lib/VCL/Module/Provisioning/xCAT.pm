@@ -637,14 +637,55 @@ sub node_status {
 	}
 	
 	# Get the computer name argument
-	my $computer_node_name = shift || $self->data->get_computer_node_name();
-	if (!$computer_node_name) {
-		notify($ERRORS{'WARNING'}, 0, "computer name argument was not specified");
-		return;
-	}
-	notify($ERRORS{'DEBUG'}, 0, "checking status of node: $computer_node_name");
+	my $computer_node_name = shift;
 	
+	if ($computer_node_name) {
+		notify($ERRORS{'DEBUG'}, 0, "checking status of node specified by argument: $computer_node_name");
+	}
+	else {
+		$computer_node_name = $self->data->get_computer_node_name();
+		if ($computer_node_name) {
+			notify($ERRORS{'DEBUG'}, 0, "checking status of node assigned to reservation: $computer_node_name");
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "computer name argument was not specified and could not be retrieved from the DataStructure object");
+			return;
+		}
+	}
+	
+	my $request_state_name = $self->data->get_request_state_name(0);
 	my $image_name = $self->data->get_image_name(0);
+	
+	# If request state is 'new' and necessary objects are available, go straight to checking currentimage.txt
+	# Calling the xCAT functions can overload the management node when several computers are being loaded concurrently (cluster requests)
+	if ($image_name && $request_state_name && $request_state_name eq 'new' && $self->os(0)) {
+		# Check image name reported from OS
+		my $current_image_name = $self->os->get_current_image_info('current_image_name');
+		if (!defined($current_image_name)) {
+			my $return_value = 'RELOAD';
+			notify($ERRORS{'WARNING'}, 0, "unable to determine status of $computer_node_name, failed to retrieve current image name from OS, returning '$return_value'");
+			return 'RELOAD';
+		}
+		
+		if ($current_image_name ne $image_name) {
+			my $return_value = 'RELOAD';
+			notify($ERRORS{'DEBUG'}, 0, "current image reported by OS '$current_image_name' does NOT match the reservation image name: '$image_name', returning '$return_value'"); 
+			return $return_value;
+		}
+		
+		# Check if currentimage.txt contains a 'vcld_post_load' line
+		my $vcld_post_load_status = $self->data->get_computer_currentimage_vcld_post_load(0);
+		if ($vcld_post_load_status) {
+			my $return_value = 'READY';
+			notify($ERRORS{'DEBUG'}, 0, "OS module post_load tasks have been completed on VM $computer_node_name, returning '$return_value'");
+			return $return_value;
+		}
+		else {
+			my $return_value = 'POST_LOAD';
+			notify($ERRORS{'OK'}, 0, "OS module post_load tasks have not been completed on VM $computer_node_name, returning '$return_value'");
+			return $return_value;
+		}
+	}
 	
 	# Check if the node is powered on
 	my $power_status = $self->power_status($computer_node_name);
@@ -716,8 +757,9 @@ sub node_status {
 	# Check image name reported from OS
 	my $current_image_name = $os->get_current_image_info('current_image_name');
 	if (!defined($current_image_name)) {
-		notify($ERRORS{'WARNING'}, 0, "unable to determine status of $computer_node_name, failed to retrieve current image name from OS");
-		return;
+		my $return_value = 'UNRESPONSIVE';
+		notify($ERRORS{'WARNING'}, 0, "unable to determine status of $computer_node_name, failed to retrieve current image name from OS, returning '$return_value'");
+		return $return_value;
 	}
 	
 	# Check if OS's current image matches the reservation image name
@@ -2424,7 +2466,7 @@ sub DESTROY {
 		my $request_state_name = $self->data->get_request_state_name(0);
 		
 		if (!defined($node) || !defined($request_state_name)) {
-			notify($ERRORS{'WARNING'}, 0, "skipping xCAT DESTROY tasks, unable to retrieve node name and request state name from DataStructure");
+			notify($ERRORS{'DEBUG'}, 0, "skipping xCAT DESTROY tasks, unable to retrieve node name and request state name from DataStructure");
 		}
 		elsif ($request_state_name =~ /^(new|reload|image)$/) {
 			notify($ERRORS{'DEBUG'}, 0, "request state is '$request_state_name', attempting to set nodeset state of $node to 'boot'");

@@ -149,7 +149,7 @@ sub get_init_modules {
 		# initialize will check the computer to determine if it contains the corresponding Linux init daemon installed
 		# If not installed, the constructor will return false
 		my $init;
-		eval { $init = ($init_perl_package)->new({data_structure => $self->data, os => $self}) };
+		eval { $init = ($init_perl_package)->new({data_structure => $self->data, os => $self, mn_os => $self->mn_os}) };
 		if ($init) {
 			my @required_commands = eval "@" . $init_perl_package . "::REQUIRED_COMMANDS";
 			if ($EVAL_ERROR) {
@@ -530,7 +530,12 @@ sub update_public_hostname {
 	}
 	
 	# Set the node's hostname to public hostname
-	my $hostname_command = "hostname -v $public_hostname; sed -i -e \"/^HOSTNAME=/d\" /etc/sysconfig/network; echo \"HOSTNAME=$public_hostname\" >> /etc/sysconfig/network";
+	my $network_file_path = '/etc/sysconfig/network';
+	if (!$self->file_exists($network_file_path)) {
+		return 1;
+	}
+	
+	my $hostname_command = "hostname -v $public_hostname; sed -i -e \"/^HOSTNAME=/d\" $network_file_path; echo \"HOSTNAME=$public_hostname\" >> $network_file_path";
 	my ($hostname_exit_status, $hostname_output) = $self->execute($hostname_command);
 	if (!defined($hostname_output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to SSH command to set hostname on $computer_node_name to $public_hostname, command: '$hostname_command'");
@@ -951,15 +956,15 @@ sub grant_access {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 sync_date
+=head2 synchronize_time
 
- Parameters  : called as an object
- Returns     : 1 - success , 0 - failure
- Description : updates and sets date on node
+ Parameters  : none
+ Returns     : boolean
+ Description : 
 
 =cut
 
-sub sync_date {
+sub synchronize_time {
 	my $self = shift;
 	if (ref($self) !~ /linux/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
@@ -967,48 +972,63 @@ sub sync_date {
 	}
 	
 	my $computer_node_name = $self->data->get_computer_node_name();
+	my $management_node_hostname = $self->data->get_management_node_hostname();
 	
-	# get Throttle source value from database if set
-	my $time_source;
-	my $variable_name        = "timesource|" . $self->data->get_management_node_hostname();
+	my $variable_name = "timesource|$management_node_hostname";
 	my $variable_name_global = "timesource|global";
+	
+	my $time_source_variable;
 	if ($self->data->is_variable_set($variable_name)) {
-		# fetch variable
-		$time_source = $self->data->get_variable($variable_name);
-		notify($ERRORS{'DEBUG'}, 0, "time_source is $time_source  set for $variable_name");
+		$time_source_variable = $self->data->get_variable($variable_name);
+		notify($ERRORS{'DEBUG'}, 0, "retrieved time source variable '$variable_name': $time_source_variable");
 	}
 	elsif ($self->data->is_variable_set($variable_name_global)) {
-		# fetch variable
-		$time_source = $self->data->get_variable($variable_name_global);
-		notify($ERRORS{'DEBUG'}, 0, "time_source is $time_source  set for $variable_name");
+		$time_source_variable = $self->data->get_variable($variable_name_global);
+		notify($ERRORS{'DEBUG'}, 0, "retrieved global time source variable '$variable_name_global': $time_source_variable");
 	}
 	else {
-		notify($ERRORS{'DEBUG'}, 0, "time_source is not set for $variable_name or $variable_name_global not able update time");
+		notify($ERRORS{'DEBUG'}, 0, "unable to sync time, neither '$variable_name' or '$variable_name_global' time source variable is set in database");
 		return;
 	}
 	
-	# Replace commas with single whitespace
-	$time_source =~ s/,/ /g;
+	# Split the time source variable into an array
+	my @time_sources = split(/[,; ]+/, $time_source_variable);
 	
-	# Assemble the time command
-	my $time_command = "rdate -s $time_source";
-	
-	my ($exit_status, $output) = $self->execute($time_command, 1, 180);
-	
-	# update ntpservers file
-	
-	my @time_array = split(/ /, $time_source);
-	my $ntp_command = "cp /dev/null /etc/ntp/ntpservers; ";
-	foreach my $i (@time_array) {
-		$ntp_command .= "echo $i >> /etc/ntp/ntpservers; ";
+	# Assemble the rdate command
+	# Ubuntu doesn't accept multiple servers in a single command
+	my $rdate_command;
+	for my $time_source (@time_sources) {
+		$rdate_command .= "rdate -s $time_source || ";
+	}
+	$rdate_command =~ s/[ \|]+$//g;
+	my ($rdate_exit_status, $rdate_output) = $self->execute($rdate_command, 0, 180);
+	if (!defined($rdate_output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute rdate command to synchronize time on $computer_node_name");
+		return;
+	}
+	elsif (grep(/not found/i, @$rdate_output)) {
+		notify($ERRORS{'DEBUG'}, 0, "unable to synchronize time on $computer_node_name, rdate is not installed");
+	}
+	elsif ($rdate_exit_status > 0) {
+		notify($ERRORS{'WARNING'}, 0, "failed to synchronize time on $computer_node_name using rdate, exit status: $rdate_exit_status, command:\n$rdate_command\noutput:\n" . join("\n", @$rdate_output));
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "synchronized time on $computer_node_name using rdate");
 	}
 	
-	($exit_status, $output) = $self->execute($ntp_command, 1, 180);
+	# Check if the ntpd service exists before attempting to configure it
+	if (!$self->service_exists('ntpd')) {
+		notify($ERRORS{'DEBUG'}, 0, "skipping ntpd configuration, ntpd service does not exist");
+		return 1;
+	}
 	
-	$self->restart_service('ntpd');
+	# Update ntpservers file
+	my $ntpservers_contents = join("\n", @time_sources);
+	if (!$self->create_text_file('/etc/ntp/ntpservers', $ntpservers_contents)) {
+		return;
+	}
 	
-	return 1;
-	
+	return $self->restart_service('ntpd');
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -2371,13 +2391,16 @@ sub create_user {
 	my ($useradd_exit_status, $useradd_output) = $self->execute($useradd_command);
 	
 	# Check if the output indicates that the user already exists
-	if ($useradd_output && grep(/exists/, @$useradd_output)) {
+	# useradd: warning: the home directory already exists
+	# useradd: user ibuser exists
+	if ($useradd_output && grep(/ exists(\s|$)/i, @$useradd_output)) {
 		if (!$self->delete_user($user_login_id)) {
 			notify($ERRORS{'WARNING'}, 0, "failed to add user '$user_login_id' to $computer_node_name, user with same name already exists and could not be deleted");
 			return;
 		}
 		($useradd_exit_status, $useradd_output) = $self->execute($useradd_command);
 	}
+	
 	if (!defined($useradd_output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute command to add user '$user_login_id' to $computer_node_name: '$useradd_command'");
 		return;
@@ -2493,7 +2516,7 @@ sub delete_user {
 	# Make sure the user exists
 	if (!$self->user_exists($username)) {
 		notify($ERRORS{'DEBUG'}, 0, "user NOT deleted from $computer_node_name because it does not exist: $username");
-		#return 1;
+		return 1;
 	}
 	
 	# Check if the user is logged in
@@ -2517,9 +2540,9 @@ sub delete_user {
 		my @exclude_list = $self->get_exclude_list();
 
 		if (!(grep(/\/home\/$username/, @exclude_list))) {
-			notify($ERRORS{'DEBUG'}, 0, "home directory will be deleted: $home_directory_path");
-			$userdel_command .= ' -r -f';
-		}
+		notify($ERRORS{'DEBUG'}, 0, "home directory will be deleted: $home_directory_path");
+		$userdel_command .= ' -r';
+	}
 	}
 	$userdel_command .= " $username";
 	
@@ -2532,8 +2555,9 @@ sub delete_user {
 	elsif (grep(/does not exist/i, @$userdel_output)) {
 		notify($ERRORS{'DEBUG'}, 0, "user '$username' NOT deleted from $computer_node_name because it does not exist");
 	}
-	elsif (grep(/warning/i, @$userdel_output)) {
-		notify($ERRORS{'WARNING'}, 0, "warning from to delete user cmd for '$username' from $computer_node_name, command: '$userdel_command', output:\n" . join("\n", @$userdel_output));
+	elsif (grep(/userdel: /i, @$userdel_output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to delete user '$username' from $computer_node_name, command: '$userdel_command', exit status: $userdel_exit_status, output:\n" . join("\n", @$userdel_output));
+		return;
 	}
 	else {
 		notify($ERRORS{'OK'}, 0, "deleted user '$username' from $computer_node_name");
@@ -3196,7 +3220,7 @@ sub enable_firewall_port {
 	# Check to see if this distro has iptables
 	# If not return 1 so it does not fail
 	if (!($self->service_exists("iptables"))) {
-		notify($ERRORS{'WARNING'}, 0, "iptables does not exist on this OS");
+		notify($ERRORS{'DEBUG'}, 0, "iptables does not exist on this OS");
 		return 1;
 	}
 	
@@ -4402,7 +4426,6 @@ sub configure_default_sshd {
 	my $computer_node_name = $self->data->get_computer_node_name();
 	
 	# Stop existing external sshd process if it is running
-	$self->stop_service('ext_sshd');
 	if (!$self->stop_external_sshd()) {
 		notify($ERRORS{'WARNING'}, 0, "unable to configure default sshd state, problem occurred attempting to kill external sshd process");
 		return;
