@@ -339,7 +339,7 @@ sub process {
 		}
 	}
 	
-	$self->state_exit('failed', 'inuse');
+	$self->state_exit('inuse', 'inuse');
 }
 
 #/////////////////////////////////////////////////////////////////////////////
