@@ -236,7 +236,7 @@ sub reservation_failed {
 	# Check if the request has been deleted
 	if (is_request_deleted($request_id)) {
 		notify($ERRORS{'OK'}, 0, "request has been deleted, setting computer state to available and exiting");
-
+		
 		# Update the computer state to available
 		if ($computer_state_name !~ /^(maintenance)/){
 			if (update_computer_state($computer_id, "available")) {
@@ -253,7 +253,12 @@ sub reservation_failed {
 		notify($ERRORS{'OK'}, 0, "exiting 0");
 		exit 0;
 	} ## end if (is_request_deleted($request_id))
-
+	
+	# Never set inuse requests to failed, set the state back to inuse
+	if ($request_state_name eq 'inuse') {
+		$self->state_exit('inuse', 'inuse');
+	}
+	
 	# Display the message
 	notify($ERRORS{'CRITICAL'}, 0, "reservation failed on $computer_short_name: $message");
 

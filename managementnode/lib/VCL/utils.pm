@@ -1564,13 +1564,22 @@ EOF
 	
 	# Call the database execute subroutine
 	my $result = database_execute($update_statement);
-	if ($result) {
+	if (defined($result)) {
 		my $rows_updated = (sprintf '%d', $result);
 		if ($rows_updated) {
-			#notify($ERRORS{'OK'}, $LOGFILE, "request $request_id state updated to: $state_name, laststate to: $laststate_name, rows updated: $rows_updated");
+			notify($ERRORS{'OK'}, $LOGFILE, "request $request_id state updated to: $state_name, laststate to: $laststate_name");
+			return 1;
 		}
 		else {
-			notify($ERRORS{'OK'}, $LOGFILE, "request $request_id state updated to: $state_name, laststate to: $laststate_name, rows updated: $rows_updated");
+			my ($current_state_name, $current_laststate_name) = get_request_current_state_name($request_id);
+			if ($state_name eq $current_state_name && $laststate_name eq $current_laststate_name) {
+				notify($ERRORS{'OK'}, $LOGFILE, "request $request_id state already set to: $current_state_name/$current_laststate_name");
+				return 1;
+			}
+			else {
+				notify($ERRORS{'WARNING'}, $LOGFILE, "failed to update request $request_id state to: $state_name/$laststate_name, current state: $current_state_name/$current_laststate_name");
+				return;
+			}
 		}
 		return $rows_updated;
 	}
