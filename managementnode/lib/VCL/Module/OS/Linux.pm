@@ -2265,20 +2265,6 @@ sub shutdown {
 		notify($ERRORS{'DEBUG'}, 0, "shutting down $computer_node_name and NOT waiting for power off");
 	}
 	
-	# If computer is on ONE cloud, shutdown via ONE controls:
-	
-	if ($self->provisioner->can("opennebula")) {
-		if(!$self->provisioner->power_off()) {
-			notify($ERRORS{'CRITICAL'}, 0, "Couldn't shutdown $computer_node_name with provisioner->power_off()");
-			return 0;
-		} 
-		else {
-			notify($ERRORS{'DEBUG'}, 0, "Powered off computer $computer_node_name via provisioning module");
-			return 1;
-		}
-	}
-	######################################################
-	
 	# Check if computer responds to ssh before preparing for shut down
 	if ($self->wait_for_ssh(0)) {
 		my $command = '/sbin/shutdown -h now';
