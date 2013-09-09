@@ -625,10 +625,12 @@ sub power_off {
 	my $action = shift;
 	my $computer_name = $self->data->get_computer_hostname();
 	my $vmid = $self->one_get_object_id("computer",$computer_name);
-	my @poweroff = $one{'server'}->call('one.vm.action', $one{'auth'},'shutdown',$vmid);
+	my @poweroff;
 	
 	if (defined($action) and $action eq 'hard') {
 		@poweroff = $one{'server'}->call('one.vm.action', $one{'auth'},'shutdown-hard',$vmid);
+	} else {
+		@poweroff = $one{'server'}->call('one.vm.action', $one{'auth'},'shutdown',$vmid);
 	}
 	
 	if ( $poweroff[0][0]->value() ) {
