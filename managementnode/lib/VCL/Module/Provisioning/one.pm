@@ -182,9 +182,9 @@ sub load {
 	
 	# Check if SWAP disk needed, format: DISK=[DEV_PREFIX="vd",TYPE="swap",SIZE="4096"]
 	my $swap_disk = '';
-	my $swap_size = $self->get_image_tag_value("SWAP");
+	my $swap_size = $self->one_get_image_tag_value("SWAP");
 	if (defined($swap_size)) {
-		if ($self->get_image_tag_value("DEV_PREFIX") eq "vd") {
+		if ($self->one_get_image_tag_value("DEV_PREFIX") eq "vd") {
 			$swap_disk = 'DISK=[DEV_PREFIX="vd",TYPE="swap",SIZE="'.$swap_size.'"]';
 		} else {
 			$swap_disk = 'DISK=[TYPE="swap",SIZE="'.$swap_size.'"]';
@@ -400,10 +400,6 @@ sub one_get_object_id {
 
 sub one_delete_vm {
 	my $self = shift;
-	unless (ref($self) && $self->isa('VCL::Module')) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
 	my $vmid = shift;
 	my @reply;
 	
@@ -460,11 +456,10 @@ sub capture {
 		notify($ERRORS{'CRITICAL'}, 0, "Couldn't find vmid for $computer_name. Abort.");
 		return 0;
 	}
-	# check for new image to be READY (1)
 
-	# Call the OS module's pre_capture() subroutine, this will shutdown the VM at the end
+	# Call the OS module's pre_capture() subroutine (don't shutdown at the end)
 	if ($self->os->can("pre_capture")) {
-	 	if (!$self->os->pre_capture({end_state => 'off'})) {
+	 	if (!$self->os->pre_capture({end_state => 'on'})) {
 			notify($ERRORS{'CRITICAL'}, 0, "failed to complete OS module's pre_capture tasks");
 			return;
 		} else {
@@ -474,25 +469,100 @@ sub capture {
 		notify($ERRORS{'CRITICAL'}, 0, "OS module doesn't implement pre_capture(). Abort.");
 		return;
 	}
+	
+	# pre_capture was called with {end_state => 'on'}. Need to shutdown VM via ACPI.
+	if(!$self->power_off()) {
+		notify($ERRORS{'CRITICAL'}, 0, "Couldn't shutdown $computer_name with power_off()");
+		return 0;
+	} else {
+		# notify($ERRORS{'DEBUG'}, 0, "Sent 'shutdown' to computer $computer_name via provisioning module");
+		# make sure VM enters STATE=ACTIVE (3) & LCM_STATE=EPILOG(11)
+		# if VM doesn't reach EPILOG, wait for ACTIVE/RUNNING (3/3) and then send 'shutdown-hard', check for EPILOG again.
+		my $sleep = 5;
+		my $wait_time = 5 * 60; # how long to wait for LCM_STATE = EPILOG
+		my $flag = 0;
+		my $state;
+		my $lcm_state;
+		
+		notify($ERRORS{'OK'}, 0, "Wait for the VM $vmid to enter ACTIVE/EPILOG (3/11) state...");
+		while (1) {
+			$state = $self->one_get_vm_state($vmid);
+			notify($ERRORS{'OK'}, 0, "VM $vmid is in $state state");
+			if ($state == 3) {
+				$lcm_state = $self->one_get_vm_lcm_state($vmid);
+				notify($ERRORS{'OK'}, 0, "VM $vmid is in $lcm_state lcm_state");
+				if ($lcm_state == 11) {
+					notify($ERRORS{'OK'}, 0, "VM $vmid is in EPILOG state. OK");
+					last;
+				} else {
+					notify($ERRORS{'OK'}, 0, "VM $vmid is in $state / $lcm_state state...");
+				}
+			} else {
+				notify($ERRORS{'DEBUG'}, 0, "VM $vmid should be in ACTIVE (3) state, but it's in $state state");
+				return 0;
+			}
+			sleep $sleep;
+			$wait_time = $wait_time - $sleep;
+			notify($ERRORS{'OK'}, 0, "Waiting for VM $vmid to enter ACTIVE/EPILOG state, $wait_time sec left ...");
+			
+			if ($wait_time <= 0) {
+				notify($ERRORS{'DEBUG'}, 0, "VM $vmid never reached EPILOG state. Wait for ACTIVE/RUNNING (3/3) and send 'shutdown-hard'");
+				my $sleep = 15;
+				my $wait_time = 20 * 60; #how long to wait for ACTIVE/RUNNING (3/3)
+				
+				while (1) {
+					$state = $self->one_get_vm_state($vmid);
+					if ($state == 3) {
+						$lcm_state = $self->one_get_vm_lcm_state($vmid);
+						if ($lcm_state == 3) {
+							notify($ERRORS{'OK'}, 0, "VM $vmid is in $state / $lcm_state state. Wait $sleep sec and send 'shutdown-hard'");
+							sleep $sleep;
+							if (!$self->power_off('hard')) {
+								notify($ERRORS{'CRITICAL'}, 0, "Couldn't shutdown $computer_name with power_off('hard')");
+								return 0;
+							} 
+							last;
+						} else {
+							notify($ERRORS{'OK'}, 0, "VM $vmid is in $state / $lcm_state state...");
+						}
+					} else {
+						notify($ERRORS{'OK'}, 0, "VM $vmid is in $state state...");
+					}
+					sleep $sleep;
+					$wait_time = $wait_time - $sleep;
+					notify($ERRORS{'OK'}, 0, "Waiting for VM $vmid to enter ACTIVE/RUNNING state, $wait_time sec left ...");
+					if ($wait_time <= 0) {
+						notify($ERRORS{'CRITICAL'}, 0, "VM $vmid is in $state / $lcm_state after $wait_time sec ... Fail!");
+						return 0;
+					}
+				}
+				
+			}
+		}
+	}
 
-	my $attempt = 0;
-	my $sleep = 15;
+	#
+	
+	# Check that we have new_image_name created on ONE (it will be in LOCKED state until disk_save is done).
+	# just procation, image stub should be created already.
+	my $sleep = 5;
+	my $wait_time = 20 * 60; # in min * 60 = seconds
 	while (1) {
-		$attempt++;
 		$one_new_image_id = $self->one_get_object_id("image",$image_name);
 		last if ($one_new_image_id);
-		if ($attempt > 20) {
-			notify($ERRORS{'CRITICAL'}, 0, "ONE could not locate new disk id for $image_name");
+		$wait_time = $wait_time - $sleep;
+		if ($wait_time <= 0) {
+			notify($ERRORS{'CRITICAL'}, 0, "Could not locate new disk id for $image_name. disk_save wasn't successfull.");
 			last;
 		}
 		sleep $sleep;
 	}
 	
-	$attempt = 0;
-	my $total_attempts = 120;
+	# wait until disk_save is done
+	
+	$wait_time = 30 * 60; # in min * 60 = seconds
 	while (1) {
-		$attempt++;
-		notify($ERRORS{'OK'}, 0, "check status for new image id $one_new_image_id, attempt $attempt / $total_attempts");
+		notify($ERRORS{'OK'}, 0, "check status for new image id $one_new_image_id, $wait_time sec left...");
 		my $one_image_state = $self->one_get_image_state($one_new_image_id);
 		if ($one_image_state == 4) {
 			notify($ERRORS{'OK'}, 0, "disk save in pregress, image id $one_new_image_id is LOCKED");
@@ -505,11 +575,12 @@ sub capture {
 			notify($ERRORS{'OK'}, 0, "disk save OK, image id $one_new_image_id is READY");
 			return 1;
 		}
-		if ( $attempt > $total_attempts ) {
-			notify($ERRORS{'CRITICAL'}, 0, "disk save failed, image id $one_new_image_id is not READY after $total_attempts attempts");
+		if ( $wait_time <= 0 ) {
+			notify($ERRORS{'CRITICAL'}, 0, "disk save failed, image id $one_new_image_id is NOT READY. Fail.");
 			return 0;
 		}	
 		sleep $sleep;
+		$wait_time = $wait_time - $sleep;
 	}
 	
 	return 0;
@@ -535,16 +606,9 @@ sub one_get_image_state {
 	
 }
 
-=head2 opennebula
- Description : returns 1. Yes, it's opennebula module.
-=cut
-sub opennebula {
-	return 1;
-}
-
 =head2 power_off
 
- Parameters  : 
+ Parameters  : 'hard' (optional), execute shutdown-hard
  Returns     : 
  Description : send 'shutdown' to VM via controller.
 				* need to add check if VM is OFF. Sometimes VM won't power off *
@@ -558,15 +622,20 @@ sub power_off {
 		return;
 	}
 	
+	my $action = shift;
 	my $computer_name = $self->data->get_computer_hostname();
 	my $vmid = $self->one_get_object_id("computer",$computer_name);
 	my @poweroff = $one{'server'}->call('one.vm.action', $one{'auth'},'shutdown',$vmid);
+	
+	if (defined($action) and $action eq 'hard') {
+		@poweroff = $one{'server'}->call('one.vm.action', $one{'auth'},'shutdown-hard',$vmid);
+	}
 	
 	if ( $poweroff[0][0]->value() ) {
 		notify($ERRORS{'OK'}, 0, "Sent shutdown signal to VM $vmid");
 		return 1;
 	} else {
-		notify($ERRORS{'CRITICAL'}, 0, $poweroff[0][1]);
+		notify($ERRORS{'DEBUG'}, 0, $poweroff[0][1]);
 		return 0;
 	}
 	
@@ -624,7 +693,7 @@ sub one_wait_for_vm_state {
 	
 	
 	if (!$num_state) {
-		notify($ERRORS{'CRITICAL'}, 0, "Unknown vm_state: $state requested");
+		notify($ERRORS{'CRITICAL'}, 0, "Unknown vm_state $state requested");
 		return 0;
 	}
 	
@@ -650,13 +719,9 @@ sub one_wait_for_vm_state {
 	
 } ## end sub one_wait_for_vm_status
 
+# 
 sub one_get_vm_state {
 	my $self = shift;
-	unless (ref($self) && $self->isa('VCL::Module')) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-	# one.vm.info
 	my $vmid = shift;
 	
 	my @result = $one{'server'}->call('one.vm.info', $one{'auth'},$vmid);
@@ -668,6 +733,28 @@ sub one_get_vm_state {
 		return 0;
 	}
 }
+
+# gets LCM_STATE values, this sub-state is relevant only when STATE is ACTIVE (3)
+sub one_get_vm_lcm_state {
+	my $self = shift;
+	my $vmid = shift;
+	
+	my @result = $one{'server'}->call('one.vm.info', $one{'auth'},$vmid);
+	if ( $result[0][0]->value() ) {
+		my $data = $xml->XMLin($result[0][1]);
+		if ($data->{STATE} == 3) {
+			return $data->{LCM_STATE}; 
+		} else {
+			notify($ERRORS{'DEBUG'}, 0, "Cannot return LCM_STATE of VM $vmid, VM's STATE is not ACTIVE");
+			return;
+		}
+	} else {
+		notify($ERRORS{'CRITICAL'}, 0, $result[0][1]);
+		return 0;
+	}
+}
+
+
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -746,7 +833,7 @@ sub get_image_size {
 		return;
 	}
 	
-	return $self->get_image_tag_value("SIZE");
+	return $self->one_get_image_tag_value("SIZE");
 #	
 #	my $image_name = $self->data->get_image_name();
 #	
@@ -761,15 +848,9 @@ sub get_image_size {
 #	}
 }
 
-sub get_image_tag_value {
+sub one_get_image_tag_value {
 	my $self = shift;
-	unless (ref($self) && $self->isa('VCL::Module')) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-	
 	my $tag = shift;
-	
 	my $image_name = $self->data->get_image_name();
 	
 	my $imid = $self->one_get_object_id("image",$image_name);
