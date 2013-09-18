@@ -1577,7 +1577,7 @@ EOF
 				return 1;
 			}
 			else {
-				notify($ERRORS{'WARNING'}, $LOGFILE, "failed to update request $request_id state to: $state_name/$laststate_name, current state: $current_state_name/$current_laststate_name");
+				notify($ERRORS{'WARNING'}, $LOGFILE, "unable to update request $request_id state to: $state_name/$laststate_name, current state: $current_state_name/$current_laststate_name");
 				return;
 			}
 		}
@@ -2091,42 +2091,57 @@ sub get_reservation_accounts {
 
 =head2 get_current_reservation_lastcheck
 
- Parameters  : $reservation_id
+ Parameters  : @reservation_ids
  Returns     : string
  Description : Retrieves the current value of reservation.lastcheck from the
-               database.
+               database. Either a single reservation ID or multiple reservation
+               IDs may be passed as the argument. If a single reservation ID is
+               passed, a string is returned containing the reservation.lastcheck
+               value. If multiple reservation IDs are passed, a hash reference
+               is returned with the keys set to the reservation IDs.
 
 =cut
 
 sub get_current_reservation_lastcheck {
-	my ($reservation_id) = @_;
+	my @reservation_ids = @_;
 
 	# Check the passed parameter
-	if (!defined($reservation_id)) {
-		notify($ERRORS{'WARNING'}, 0, "reservation ID was not specified");
+	if (!@reservation_ids) {
+		notify($ERRORS{'WARNING'}, 0, "reservation ID argument was not specified");
 		return;
 	}
+	
+	my $reservation_id_string = join(', ', @reservation_ids);
 
 	# Create the select statement
 	my $select_statement = <<EOF;
 SELECT
+reservation.id,
 reservation.lastcheck
 FROM
 reservation
 WHERE
-reservation.id = $reservation_id
+reservation.id IN ($reservation_id_string)
 EOF
 
 	my @selected_rows = database_select($select_statement);
 
 	# Check to make sure 1 row was returned
 	if (!@selected_rows) {
-		notify($ERRORS{'WARNING'}, 0, "failed to retrieve current reservation lastcheck for reservation $reservation_id");
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve current reservation lastcheck for reservations: $reservation_id_string");
 		return;
 	}
-	
-	my $row = $selected_rows[0];
-	return $row->{lastcheck};
+	elsif (scalar(@selected_rows) == 1) {
+		my $row = $selected_rows[0];
+		return $row->{lastcheck};
+	}
+	else {
+		my $reservation_lastcheck_info = {};
+		for my $row (@selected_rows) {
+			$reservation_lastcheck_info->{$row->{id}} = $row->{lastcheck};
+		}
+		return $reservation_lastcheck_info;
+	}
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -4840,7 +4855,10 @@ sub run_ssh_command {
 	my $ssh_output_formatted = '';
 	my $attempts = 0;
 	my $exit_status = 255;
-
+	
+	my $banner_exchange_error_count = 0;
+	my $banner_exchange_error_limit = 3;
+	
 	# Make multiple attempts if failure occurs
 	while ($attempts < $max_attempts) {
 		$attempts++;
@@ -4851,10 +4869,10 @@ sub run_ssh_command {
 			notify($ERRORS{'DEBUG'}, 0, "sleeping for $delay_seconds seconds before making next SSH attempt") if $output_level;
 			sleep $delay_seconds;
 		}
-
+		
 		## Add -v (verbose) argument to command if this is the 2nd attempt
 		#$ssh_command =~ s/$ssh_path/$ssh_path -v/ if $attempts == 2;
-
+		
 		# Print the SSH command, only display the attempt # if > 1
 		if ($attempts == 1) {
 			notify($ERRORS{'DEBUG'}, 0, "executing SSH command on $node: '$command'") if $output_level;
@@ -4962,6 +4980,21 @@ sub run_ssh_command {
 		if ($ssh_output_formatted =~ /ssh:.*(lost connection|reset by peer|no route to host|connection refused|connection timed out|resource temporarily unavailable|connection reset)/i) {
 			notify($ERRORS{'WARNING'}, 0, "attempt $attempts/$max_attempts: failed to execute SSH command on $node: '$command', exit status: $exit_status, output:\n$ssh_output_formatted") if $output_level;
 			next;
+		}
+		elsif ($ssh_output_formatted =~ /(Connection timed out during banner exchange)/i) {
+			$banner_exchange_error_count++;
+			if ($banner_exchange_error_count >= $banner_exchange_error_limit) {
+				notify($ERRORS{'WARNING'}, 0, "failed to execute SSH command on $node, encountered $banner_exchange_error_count banner exchange errors");
+				return ();
+			}
+			else {
+				# Don't count against attempt limit
+				$attempts--;
+				my $banner_exchange_delay_seconds = ($banner_exchange_error_count * 2);
+				notify($ERRORS{'DEBUG'}, 0, "encountered banner exchange error on $node, sleeping for $banner_exchange_delay_seconds seconds, command:\n$command\noutput:\n$ssh_output") if $output_level;
+				sleep $banner_exchange_delay_seconds;
+				next;
+			}
 		}
 		elsif ($exit_status == 255 && $ssh_command !~ /(vmware-cmd|vim-cmd|vmkfstools|vmrun)/i) {
 			notify($ERRORS{'WARNING'}, 0, "attempt $attempts/$max_attempts: failed to execute SSH command on $node: '$command', exit status: $exit_status, SSH exits with the exit status of the remote command or with 255 if an error occurred, output:\n$ssh_output_formatted") if $output_level;
@@ -8729,7 +8762,7 @@ EOF
 		$computerloadlog_string .= "\n";
 	}
 	
-	notify($ERRORS{'DEBUG'}, 0, "retrieved computerloadstate names for request $request_id:\n$computerloadlog_string");
+	#notify($ERRORS{'DEBUG'}, 0, "retrieved computerloadstate names for request $request_id:\n$computerloadlog_string");
 	return $computerloadlog_info;
 }
 

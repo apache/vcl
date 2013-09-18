@@ -1170,78 +1170,145 @@ EOF
 
 =head2 wait_for_child_reservations
 
- Parameters  :
- Returns     :
- Description :
+ Parameters  : none
+ Returns     : boolean
+ Description : Called by the parent reservation if a cluster request is being
+               processed. The parent waits for the child reservations to finish
+               loading before proceeding to change the request state to
+               reserved. Child reservations indicate they are finished loading
+               by inserting a 'nodeready' computerloadlog entry.
+               
+               The parent attempts to detect any changes in child reservations
+               by retrieving the reservation.lastupdate values for all children
+               as well was all computerloadlog entries. The parent will wait up
+               to 20 minutes if no change is detected for any children.
 
 =cut
 
 sub wait_for_child_reservations {
 	my $self              = shift;
-	
 	my $request_data      = $self->data->get_request_data();
 	my $request_id        = $self->data->get_request_id();
-	my $reservation_id    = $self->data->get_reservation_id();
 	my @reservation_ids   = $self->data->get_reservation_ids();
+	my $reservation_count = $self->data->get_reservation_count();
 
-	# Set limits on how many attempts to make and how long to wait between attempts
-	# Wait a long time - 20 minutes
-	my $loop_iteration_limit = 40;
-	my $loop_iteration_delay = 30;
-
-	WAITING_LOOP: for (my $loop_iteration = 1; $loop_iteration <= $loop_iteration_limit; $loop_iteration++) {
-		if ($loop_iteration > 1) {
-			notify($ERRORS{'OK'}, 0, "waiting for $loop_iteration_delay seconds");
-			sleep $loop_iteration_delay;
-		}
+	# Set limits on how long to wait
+	my $overall_timeout_minutes = 60;
+	my $nochange_timeout_minutes = 20;
+	my $monitor_delay_seconds = 3;
+	
+	my $overall_timeout_seconds = ($overall_timeout_minutes * 60);
+	my $nochange_timeout_seconds = ($nochange_timeout_minutes * 60);
+	
+	my $monitor_start_time = time;
+	my $last_change_time = $monitor_start_time;
+	my $current_time;
+	my $nochange_timeout_time = ($monitor_start_time + $nochange_timeout_seconds);
+	my $overall_timeout_time = ($monitor_start_time + $overall_timeout_seconds);
+	
+	my $previous_lastcheck_info;
+	my $previous_request_loadstate_names;
+	
+	MONITOR_LOADING: while (($current_time = time) < $nochange_timeout_time && $current_time < $overall_timeout_time) {
+		my $total_elapsed_seconds      = ($current_time - $monitor_start_time);
+		my $nochange_elapsed_seconds   = ($current_time - $last_change_time);
+		my $nochange_remaining_seconds = ($nochange_timeout_time - $current_time);
+		my $overall_remaining_seconds  = ($overall_timeout_time - $current_time);
+		
+		notify($ERRORS{'DEBUG'}, 0, "waiting for child reservations seconds elapsed/until no change timeout: $nochange_elapsed_seconds/$nochange_remaining_seconds, unconditional timeout: $total_elapsed_seconds/$overall_remaining_seconds");
 		
 		# Check if request has been deleted
 		if (is_request_deleted($request_id)) {
 			notify($ERRORS{'OK'}, 0, "request has been deleted, setting computer state to 'available' and exiting");
-			
-			# Update state of computer and exit
-			switch_state($request_data, '', 'available', '', '1');
+			$self->state_exit('', 'available');
 		}
 		
-		# Check if all of the reservations are ready according to the computerloadlog table
-		my $computerloadlog_reservations_ready = reservations_ready($request_id);
-		if ($computerloadlog_reservations_ready) {
-			notify($ERRORS{'OK'}, 0, "ready: all child reservations are ready according to computerloadlog, returning 1");
+		my @reservations_ready;
+		my @reservations_not_ready;
+		my @reservations_failed;
+		my @reservations_lastcheck_changed;
+		my @reservations_loadstate_changed;
+		my @reservations_unknown;
+		
+		# Get reservation.lastcheck value for all reservations
+		my $current_lastcheck_info = get_current_reservation_lastcheck(@reservation_ids);
+		$previous_lastcheck_info = $current_lastcheck_info if !$previous_lastcheck_info;
+		
+		# Get computerloadlog info for all reservations
+		my $current_request_loadstate_names = get_request_loadstate_names($request_id);
+		$previous_request_loadstate_names = $current_request_loadstate_names if !$previous_request_loadstate_names;
+		
+		RESERVATION_ID: for my $reservation_id (@reservation_ids) {
+			if (!defined($current_request_loadstate_names->{$reservation_id})) {
+				notify($ERRORS{'WARNING'}, 0, "request loadstate info does not contain a key for reservation $reservation_id:\n" . format_data($current_request_loadstate_names));
+				next RESERVATION_ID;
+			}
+			
+			my @previous_reservation_loadstate_names = @{$previous_request_loadstate_names->{$reservation_id}};
+			my @current_reservation_loadstate_names = @{$current_request_loadstate_names->{$reservation_id}};
+			
+			if (grep {$_ eq 'failed'} @current_reservation_loadstate_names) {
+				push @reservations_failed, $reservation_id;
+				next RESERVATION_ID;
+			}
+			elsif (grep {$_ eq 'nodeready'} @current_reservation_loadstate_names) {
+				push @reservations_ready, $reservation_id;
+				next RESERVATION_ID;
+			}
+			elsif (grep {$_ eq 'begin'} @current_reservation_loadstate_names) {
+				push @reservations_not_ready, $reservation_id;
+			}
+			else {
+				push @reservations_unknown, $reservation_id;
+			}
+			
+			if ($previous_lastcheck_info->{$reservation_id} ne $current_lastcheck_info->{$reservation_id}) {
+				push @reservations_lastcheck_changed, $reservation_id;
+			}
+			if (scalar(@previous_reservation_loadstate_names) != scalar(@current_reservation_loadstate_names)) {
+				push @reservations_loadstate_changed, $reservation_id;
+			}
+		}
+		
+		my $ready_count     = scalar @reservations_ready;
+		my $not_ready_count = scalar @reservations_not_ready;
+		my $unknown_count   = scalar @reservations_unknown;
+		my $failed_count    = scalar @reservations_failed;
+		
+		notify($ERRORS{'DEBUG'}, 0, "current status of reservations:\n" .
+			"ready     : $ready_count (" . join(', ', @reservations_ready) . ")\n" .
+			"not ready : $not_ready_count (" . join(', ', @reservations_not_ready) . ")\n" .
+			"unknown   : $unknown_count (" . join(', ', @reservations_unknown) . ")\n" .
+			"failed    : $failed_count (" . join(', ', @reservations_failed) . ")"
+		);
+		
+		if ($failed_count) {
+			$self->state_exit('failed', 'available');
+		}
+		elsif ($ready_count == $reservation_count) {
+			notify($ERRORS{'OK'}, 0, "all reservations are ready");
 			return 1;
 		}
-		elsif (defined $computerloadlog_reservations_ready) {
-			notify($ERRORS{'OK'}, 0, "not ready: all child reservations are NOT ready according to computerloadlog");
+		
+		
+		# If any changes were detected, reset the nochange timeout
+		if (@reservations_lastcheck_changed || @reservations_loadstate_changed) {
+			notify($ERRORS{'DEBUG'}, 0, "resetting no change timeout, detected reservation change:\n" .
+				"reservation lastcheck changed: (" . join(', ', @reservations_lastcheck_changed) . ")\n" .
+				"reservation loadstate changed: (" . join(', ', @reservations_loadstate_changed) . ")"
+			);
+			$last_change_time = $current_time;
+			$nochange_timeout_time = ($last_change_time + $nochange_timeout_seconds);
 		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "error occurred checking if child reservations are ready according to computerloadlog");
-		}
-
-		notify($ERRORS{'OK'}, 0, "attempt $loop_iteration/$loop_iteration_limit: waiting for child reservations to become ready");
-
-		RESERVATION_LOOP: foreach my $child_reservation_id (@reservation_ids) {
-			# Don't bother checking this reservation
-			if ($child_reservation_id == $reservation_id) {
-				next RESERVATION_LOOP;
-			}
-			
-			# Get the computer ID of the child reservation
-			my $child_computer_id = $request_data->{reservation}{$child_reservation_id}{computer}{id};
-			notify($ERRORS{'DEBUG'}, 0, "checking reservation $child_reservation_id: computer ID=$child_computer_id");
-			
-			# Get the child reservation's current computer state
-			my $child_computer_state = get_computer_current_state_name($child_computer_id);
-			notify($ERRORS{'DEBUG'}, 0, "reservation $child_reservation_id: computer state=$child_computer_state");
-			
-			if ($child_computer_state =~ /^(failed|maintenance)$/) {
-				notify($ERRORS{'WARNING'}, 0, "aborting, child reservation $child_reservation_id computer state: $child_computer_state");
-				return;
-			}
-		} ## end foreach my $child_reservation_id (@reservation_ids)
-	} ## end for (my $loop_iteration = 1; $loop_iteration...
+		
+		$previous_request_loadstate_names = $current_request_loadstate_names;
+		$previous_lastcheck_info = $current_lastcheck_info;
+		sleep $monitor_delay_seconds;
+	}
 
 	# If out of main loop, waited maximum amount of time
-	notify($ERRORS{'WARNING'}, 0, "waited maximum amount of time for child reservations to become ready, returning 0");
-	return 0;
+	notify($ERRORS{'WARNING'}, 0, "waited maximum amount of time for all reservations to become ready");
+	return;
 
 } ## end sub wait_for_child_reservations
 

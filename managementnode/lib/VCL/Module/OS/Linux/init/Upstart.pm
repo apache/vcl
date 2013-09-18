@@ -136,6 +136,7 @@ sub get_service_names {
 	my %service_name_mappings_reversed = reverse %$SERVICE_NAME_MAPPINGS;
 	for my $line (@$output) {
 		my ($service_name) = $line =~ /^([^\s\t]+)/;
+		next unless $service_name;
 		$service_name_hash{$service_name} = 1 if $service_name;
 		if (my $service_name_mapping = $service_name_mappings_reversed{$service_name}) {
 			$service_name_hash{$service_name_mapping} = 1;
