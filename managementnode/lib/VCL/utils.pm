@@ -81,7 +81,6 @@ require Exporter;
 our @ISA = qw(Exporter);
 
 our @EXPORT = qw(
-  _checknstartservice
   _pingnode
   _sshd_status
   changelinuxpassword
@@ -170,7 +169,6 @@ our @EXPORT = qw(
   kill_child_processes
   kill_reservation_process
   known_hosts
-  lockfile
   mail
   makedatestring
   nmap_port
@@ -185,7 +183,6 @@ our @EXPORT = qw(
   read_file_to_array
   rename_vcld_process
   reservation_being_processed
-  reservations_ready
   round
   run_command
   run_scp_command
@@ -206,7 +203,6 @@ our @EXPORT = qw(
   string_to_ascii
   switch_state
   switch_vmhost_id
-  time_exceeded
   update_blockrequest_processing
   update_cluster_info
   update_computer_address
@@ -1179,32 +1175,6 @@ sub check_time {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 time_exceeded
-
- Parameters  : $time_slice, $limit
- Returns     : 1(success) or 0(failure)
- Description : preform a difference check,
-					if delta of now and input $time_slice
-					is less than input $limit return 1(true)
-=cut
-
-sub time_exceeded {
-
-	my ($time_slice, $limit) = @_;
-	my ($package, $filename, $line, $sub) = caller(0);
-	my $now  = time();
-	my $diff = $now - $time_slice;
-	if ($diff > ($limit * 60)) {
-		#time  exceeded
-		return 1;
-	}
-	else {
-		return 0;
-	}
-} ## end sub time_exceeded
-
-#/////////////////////////////////////////////////////////////////////////////
-
 =head2 mail
 
  Parameters  : $to, $subject,  $mailstring, $from
@@ -1270,67 +1240,6 @@ sub mail {
 		}
 	} ## end else [ if ($shared_mail_box)
 } ## end sub mail
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 _checknstartservice
-
- Parameters  : $service name
- Returns     : 1 or 0
- Description : checks for running local service attempts to restart
-					xCAT specific
-=cut
-
-sub _checknstartservice {
-	my $service = $_[0];
-	my ($package, $filename, $line, $sub) = caller(0);
-	notify($ERRORS{'OK'}, 0, "service not set") if (!defined($service));
-	my $status = 0;
-	if (open(SERVICE, "/sbin/service $service status |")) {
-		while (<SERVICE>) {
-			chomp($_);
-			#notify($ERRORS{'OK'},0,"_checknstartservice: $_");
-			if ($_ =~ /running/) {
-				$status = 1;
-				notify($ERRORS{'OK'}, 0, "_checknstartservice: $service is running");
-			}
-		}
-		close(SERVICE);
-		if ($status == 1) {
-			return 1;
-		}
-		else {
-			notify($ERRORS{'OK'}, 0, "_checknstartservice: $service is not running will try to start");
-			# try to start service
-			if (open(SERVICE, "/sbin/service $service start |")) {
-				while (<SERVICE>) {
-					chomp($_);
-					notify($ERRORS{'WARNING'}, 0, "_checknstartservice: $_");
-					if ($_ =~ /started/) {
-						$status = 1;
-						last;
-					}
-				}
-				close(SERVICE);
-				if ($status == 1) {
-					return 1;
-				}
-				else {
-					notify($ERRORS{'WARNING'}, 0, "_checknstartservice: $service could not start");
-					return 0;
-				}
-			} ## end if (open(SERVICE, "/sbin/service $service start |"...
-			else {
-				notify($ERRORS{'WARNING'}, 0, "_checknstartservice: WARNING -- could not run service command for $service start. $! ");
-				return 0;
-			}
-		} ## end else [ if ($status == 1)
-	} ## end if (open(SERVICE, "/sbin/service $service status |"...
-	else {
-		notify($ERRORS{'WARNING'}, 0, "_checknstartservice: WARNING -- could not run service command for $service check. $! ");
-		return 0;
-	}
-} ## end sub _checknstartservice
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -1762,75 +1671,13 @@ sub is_request_deleted {
 	my $laststate_name = $selected_rows[0]{laststate_name};
 
 	#notify($ERRORS{'DEBUG'}, 0,"state=$state_name, laststate=$laststate_name");
-
+	
 	if ($state_name =~ /(deleted|makeproduction)/ || $laststate_name =~ /(deleted|makeproduction)/) {
 		return 1;
 	}
 
 	return 0;
 } ## end sub is_request_deleted
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 is_reservation_deleted
-
- Parameters  : $reservation_id
- Returns     : return 1 if reservation's request state or laststate is set to deleted or if reservation does not exist
-					return 0 if reservation exists and neither request state nor laststate is set to deleted: 1 success, 0 failure
- Description : checks if reservation has been deleted
-
-=cut
-
-sub is_reservation_deleted {
-	my ($reservation_id) = @_;
-
-	# Check the passed parameter
-	if (!(defined($reservation_id))) {
-		notify($ERRORS{'WARNING'}, 0, "reservation ID was not specified");
-		return 0;
-	}
-
-	# Create the select statement
-	my $select_statement = "
-	SELECT
-   reservation.id AS reservation_id,
-	request.stateid AS currentstate_id,
-	request.laststateid AS laststate_id,
-	currentstate.name AS currentstate_name,
-	laststate.name AS laststate_name
-	FROM
-	reservation, request, state currentstate, state laststate
-	WHERE
-   reservation.id = $reservation_id
-	AND reservation.requestid = request.id
-	AND request.stateid = currentstate.id
-	AND request.laststateid = laststate.id
-	";
-
-	# Call the database select subroutine
-	# This will return an array of one or more rows based on the select statement
-	my @selected_rows = database_select($select_statement);
-
-	# Check to make sure 1 row was returned
-	if (scalar @selected_rows == 0) {
-		return 1;
-	}
-	elsif (scalar @selected_rows > 1) {
-		notify($ERRORS{'WARNING'}, 0, "" . scalar @selected_rows . " rows were returned from database select");
-		return 0;
-	}
-
-	my $state_name     = $selected_rows[0]{currentstate_name};
-	my $laststate_name = $selected_rows[0]{laststate_name};
-
-	#notify($ERRORS{'DEBUG'}, 0,"state=$state_name, laststate=$laststate_name");
-
-	if ($state_name =~ /(deleted|makeproduction)/ || $laststate_name =~ /(deleted|makeproduction)/) {
-		return 1;
-	}
-
-	return 0;
-} ## end sub is_reservation_deleted
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -2607,32 +2454,6 @@ sub notify_via_wall {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 lockfile
-
- Parameters  : $file
- Returns     : 0 failed or 1 success
- Description : creates $file.lock
-
-=cut
-
-sub lockfile {
-	my ($file) = $_[0];
-	my $lockfile = $file . ".lock";
-	while (!(-r $lockfile)) {
-		if (open(LOCK, ">$lockfile")) {
-			print LOCK "1";
-			close LOCK;
-		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "could not create $lockfile $!");
-			return 0;
-		}
-		return 1;
-	} ## end while (!(-r $lockfile))
-} ## end sub lockfile
-
-#/////////////////////////////////////////////////////////////////////////////
-
 =head2 notify_via_msg
 
  Parameters  : $node, $user, $message
@@ -3047,13 +2868,6 @@ sub insertloadlog {
 
 	# Escape any single quotes in additionalinfo
 	$additionalinfo =~ s/\'/\\\'/g;
-
-	## Check to make sure the reservation has not been deleted
-	## The INSERT statement will fail if it has been deleted because of the key constraint on reservationid
-	#if (is_reservation_deleted($resid)) {
-	#	notify($ERRORS{'OK'}, 0, "computerloadlog entry not inserted, reservation has been deleted");
-	#	return 1;
-	#}
 
 	# Assemble the SQL statement
 	my $insert_loadlog_statement = "
@@ -7804,124 +7618,6 @@ sub switch_vmhost_id {
 		return 0;
 	}
 } ## end sub switch_vmhost_id
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 reservations_ready
-
- Parameters  :  request ID
- Returns     :  1 if all reservations are ready, 0 if any are not ready, undefined if any failed
- Description :  
-
-=cut
-
-sub reservations_ready {
-	my ($request_id) = @_;
-
-	# Make sure request ID was passed
-	if (!$request_id) {
-		notify($ERRORS{'WARNING'}, 0, "request ID argument was not passed");
-		return;
-	}
-
-	my $select_statement = "
-	SELECT
-	reservation.id AS reservation_id,
-	computerloadstate.loadstatename
-	
-	FROM
-	request,
-	reservation
-	
-	LEFT JOIN
-	computerloadlog
-	ON (
-	computerloadlog.reservationid = reservation.id
-	)
-	
-	LEFT JOIN
-	computerloadstate
-	ON (
-	computerloadstate.id = computerloadlog.loadstateid
-	)
-	
-	WHERE
-	request.id = $request_id
-	AND reservation.requestid = request.id
-	";
-
-	# Call the database select subroutine
-	# This will return an array of one or more rows based on the select statement
-	my @computerloadlog_rows = database_select($select_statement);
-
-	# Check to make sure 1 row was returned
-	if (scalar @computerloadlog_rows == 0) {
-		notify($ERRORS{'WARNING'}, 0, "reservations associated with request $request_id could not be retrieved from the database, 0 rows were returned");
-		return;
-	}
-
-	my %reservation_status;
-
-	# Loop through the rows, check the loadstate
-	for my $computerloadlog_row (@computerloadlog_rows) {
-		my $reservation_id         = $computerloadlog_row->{reservation_id};
-		my $computerloadstate_name = $computerloadlog_row->{loadstatename};
-
-		# Initialize the hash key for the reservation if it isn't defined
-		if (!defined($reservation_status{$reservation_id})) {
-			$reservation_status{$reservation_id} = 'not ready';
-		}
-
-		# Skip if loadstatename is undefined, means no computerloadlog rows exist for the reservation
-		if (!defined($computerloadstate_name)) {
-			next;
-		}
-
-		# Only populate hash keys with loadstatnames we care about
-		# Ignore 'info' and other entries
-		if ($computerloadstate_name =~ /loadimagecomplete|nodeready|failed/i) {
-
-			# Update the reservation hash key, don't overwrite 'failed'
-			if ($reservation_status{$reservation_id} !~ /failed/) {
-				$reservation_status{$reservation_id} = $computerloadstate_name;
-			}
-		}
-	} ## end for my $computerloadlog_row (@computerloadlog_rows)
-
-	# Assemble a string of all of the statuses
-	my $status_string = '';
-	my $failed        = 0;
-	my $ready         = 1;
-	foreach my $reservation_check_id (sort keys(%reservation_status)) {
-		my $reservation_check_status = $reservation_status{$reservation_check_id};
-		$status_string .= "reservation $request_id:$reservation_check_id: $reservation_check_status\n";
-
-		# Set the failed flag to 1 if any reservations failed
-		if ($reservation_check_status =~ /failed/i) {
-			$failed = 1;
-		}
-
-		# Set the ready flag to 0 if any reservations are set to 0 (matching state wasn't found)
-		if ($reservation_check_status =~ /not ready/) {
-			$ready = 0;
-		}
-	} ## end foreach my $reservation_check_id (sort keys(%reservation_status...
-
-	if ($failed) {
-		notify($ERRORS{'WARNING'}, 0, "request $request_id has failed reservations, returning undefined:\n$status_string");
-		return;
-	}
-
-	if ($ready) {
-		notify($ERRORS{'OK'}, 0, "all reservations for request $request_id are ready, returning $ready:\n$status_string");
-	}
-	else {
-		notify($ERRORS{'OK'}, 0, "not all reservations for request $request_id are ready, returning $ready:\n$status_string");
-	}
-
-	return $ready;
-
-} ## end sub reservations_ready
 
 #/////////////////////////////////////////////////////////////////////////////
 
