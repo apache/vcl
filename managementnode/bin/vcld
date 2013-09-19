@@ -560,6 +560,10 @@ sub make_new_child {
 			# Child must *NOT* return from this subroutine after this point. It must exit.
 			# If child returns it will become a parent process and spawn off its own children
 			
+			# Set the process group of this child process to its own PID instead of it's parent PID
+			# This allows any processes forked by this child to be killed when this process is killed
+			setpgrp $$, 0;
+			
 			# Configure the SIGINT signal to kill this process normally
 			$SIG{INT} = 'DEFAULT';
 			
@@ -736,6 +740,9 @@ sub REAPER {
 			# Child which died was a VCL state process since its pid is in the hash
 			$child_count--;
 			delete $child_pids{$dead_pid};
+			
+			# Kill all child processes which were forked by this process
+			kill 'SIGTERM', -$dead_pid;
 		}
 	}
 	

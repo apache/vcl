@@ -8862,39 +8862,21 @@ sub reservation_being_processed {
 sub run_command {
 	my ($command, $no_output) = @_;
 	
-	my $pid;
-	my @output = ();
-	my $exit_status;
+	my $output_string = `$command 2>&1`;
+	my $exit_status = $?;
+	if ($exit_status >= 0) {
+		$exit_status = $exit_status >> 8;
+	}
 	
-	# Pipe the command output to a file handle
-	# The open function returns the pid of the process
-	if ($pid = open(COMMAND, "$command 2>&1 |")) {
-		# Capture the output of the command
-		@output = <COMMAND>;
-		
-		# Save the exit status
-		$exit_status = $? >> 8;
-		
-		if ($? == -1) {
-			notify($ERRORS{'OK'}, 0, "\$? is set to $?, setting exit status to 0, Perl bug likely encountered");
-			$exit_status = 0;
-		}
-		
-		# Close the command handle
-		close(COMMAND);
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to execute command: $command, error: $!");
-		return;
-	}
+	# Remove any trailing newlines from the output
+	chomp $output_string;
+	
+	# Split the output string into an array of lines
+	my @output = split(/[\r\n]+/, $output_string);
 	
 	if (!$no_output) {
-		notify($ERRORS{'DEBUG'}, 0, "executed command: $command, pid: $pid, exit status: $exit_status, output:\n@output");
+		notify($ERRORS{'DEBUG'}, 0, "executed command: $command, exit status: $exit_status, output:\n@output");
 	}
-	
-	# Remove newlines from output lines
-	map { chomp $_ } @output;
-	
 	return ($exit_status, \@output);
 }
 	
