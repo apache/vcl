@@ -1817,16 +1817,18 @@ EOF
 
 =head2 get_variable
 
- Parameters  : variable name
+ Parameters  : $variable_name, $show_warnings (optional)
  Returns     : If successful: data stored in the variable table for the variable name specified
                If failed: false
  Description : Queries the variable table for the variable with the name
-					specified by the argument. Returns the data stored for the
-					variable. Values are deserialized before being returned if the
-					value stored was a reference.
-					
-					Undefined is returned if the variable name does not exist in the
-					variable table.
+               specified by the argument. Returns the data stored for the
+               variable. Values are deserialized before being returned if the
+               value stored was a reference.
+               
+               Undefined is returned if the variable name does not exist in the
+               variable table. A log message is displayed by default. To
+               suppress the log message, supply the $show_warnings argument with
+               a value of 0.
 
 =cut
 
@@ -1841,6 +1843,9 @@ sub get_variable {
 		notify($ERRORS{'WARNING'}, 0, "variable name argument was not supplied");
 		return;
 	}
+	
+	my $show_warnings = shift;
+	$show_warnings = 1 unless defined $show_warnings;
 	
 	# Construct the select statement
 my $select_statement .= <<"EOF";
@@ -1858,7 +1863,7 @@ EOF
 
 	# Check to make 1 sure row was returned
 	if (!@selected_rows){
-		notify($ERRORS{'OK'}, 0, "variable '$variable_name' is not set in the database");
+		notify($ERRORS{'OK'}, 0, "variable '$variable_name' is not set in the database") if $show_warnings;
 		return 0;
 	}
 	elsif (@selected_rows > 1){
