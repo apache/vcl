@@ -1888,7 +1888,10 @@ INSERT INTO `variable` (`name`, `serialization`, `value`) VALUES
 ('schema-version', 'none', '1'),
 ('timesource|global', 'none','time.nist.gov,time-a.nist.gov,time-b.nist.gov,time.windows.com'),
 ('acknowledgetimeout', 'none', '900'),
-('connecttimeout', 'none', '900');
+('connecttimeout', 'none', '900'),
+('xcat|timeout_error_limit', 'none', '5'),
+('xcat|rpower_error_limit', 'none', '3');
+
 
 -- 
 -- Dumping data for table `vmprofile`

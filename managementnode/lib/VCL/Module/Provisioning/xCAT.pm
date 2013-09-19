@@ -283,6 +283,11 @@ sub load {
 	# Set to a short delay at the beginning of monitoring, this will be increased once installation start is detected
 	my $monitor_delay_seconds = 5;
 	
+	# Keep track of when reservation.lastcheck was last updated
+	my $update_lastcheck_interval_seconds = 60;
+	my $update_lastcheck_time = time;
+	update_reservation_lastcheck($reservation_id);
+	
 	my $previous_nodestat_status;
 	my $previous_nodeset_status;
 	my $current_time;
@@ -367,6 +372,15 @@ sub load {
 		if ($reset_timeout) {
 			$last_change_time = $current_time;
 			$nochange_timeout_time = ($last_change_time + $nochange_timeout_seconds);
+			
+			# Check how long ago reservation.lastcheck was updated
+			# Update it occasionally - used by parent reservation in cluster requests to detect that child reservations are still loading
+			# Updating reservation.lastcheck prevents the parent from timing out while waiting for children to finish loading
+			my $update_lastcheck_elapsed = ($current_time - $update_lastcheck_time);
+			if ($update_lastcheck_elapsed >= $update_lastcheck_interval_seconds) {
+				update_reservation_lastcheck($reservation_id);
+				$update_lastcheck_time = time;
+			}
 		}
 		
 		#notify($ERRORS{'DEBUG'}, 0, "sleeping for $monitor_delay_seconds seconds");
@@ -1802,6 +1816,21 @@ sub _wait_for_off {
                   reset        - Send a hardware reset
                   boot         - If off, then power on. If on, then hard reset.
                   cycle        - Power off, then on
+               
+               Multiple rpower attempts will be attempted if an error is
+               detected. For non-timeout errors, the default number of attempts
+               is 3. This can be overridden if either of the following variables
+               exist in the variable table in the database:
+                  xcat|rpower_error_limit|<management node hostname>
+                  xcat|rpower_error_limit
+               
+               Timeout errors are counted separately and do not count towards
+               the general error limit. The default number of timeout errors
+               which may be encountered is 5. This can be overridden if either
+               of the following variables exist in the variable table in the
+               database:
+                  xcat|timeout_error_limit|<management node hostname>
+                  xcat|timeout_error_limit
 
 =cut
 
@@ -1824,19 +1853,37 @@ sub _rpower {
 		return;
 	}
 	
+	my $management_node_hostname = $self->data->get_management_node_hostname();
+	
 	my $command = "$XCAT_ROOT/bin/rpower $computer_node_name $rpower_option";
 	
-	my $rpower_attempt_limit = 5;
-	my $rpower_attempt_delay = 3;
 	my $rpower_attempt = 0;
+	my $rpower_attempt_limit = $self->data->get_variable("xcat|rpower_error_limit|$management_node_hostname", 0) || $self->data->get_variable("xcat|rpower_error_limit", 0);
+	if (!$rpower_error_limit || $rpower_error_limit !~ /^\d+$/) {
+		$rpower_error_limit = 3;
+	}
 	
-	RPOWER_ATTEMPT: while ($rpower_attempt++ < $rpower_attempt_limit) {
+	my $timeout_error_count = 0;
+	my $timeout_error_limit = $self->data->get_variable("xcat|timeout_error_limit|$management_node_hostname", 0) || $self->data->get_variable("xcat|timeout_error_limit", 0);
+	if (!$timeout_error_limit || $timeout_error_limit !~ /^\d+$/) {
+		$timeout_error_limit = 5;
+	}
+	
+	my $rinv_attempted = 0;
+	RPOWER_ATTEMPT: while ($rpower_attempt <= ($rpower_attempt_limit+$timeout_error_count)) {
+		$rpower_attempt++;
+		
 		if ($rpower_attempt > 1) {
-			# Attempt to run rinv to fix any inventory problems with the blade
-			notify($ERRORS{'DEBUG'}, 0, "attempt $rpower_attempt/$rpower_attempt_limit: failed to initiate rpower for $computer_node_name, running rinv then sleeping for $rpower_attempt_delay seconds");
-			$self->_rinv($computer_node_name);
+			# Wait a random amount of time to prevent several cluster reservations from reattempting at the same time
+			my $rpower_attempt_delay = int(rand($rpower_attempt*2))+1;
+			
+			my $notify_string = "attempt $rpower_attempt/$rpower_attempt_limit";
+			if ($timeout_error_count) {
+				$notify_string .= "+$timeout_error_count (timeout errors: $timeout_error_count/$timeout_error_limit)";
+			}
+			$notify_string .= ": waiting $rpower_attempt_delay before issuing rpower $rpower_option command for $computer_node_name";
+			notify($ERRORS{'DEBUG'}, 0, $notify_string);
 			sleep $rpower_attempt_delay;
-			notify($ERRORS{'DEBUG'}, 0, "attempt $rpower_attempt/$rpower_attempt_limit: issuing rpower command for $computer_node_name, option: $rpower_option");
 		}
 		
 		my ($exit_status, $output) = $self->mn_os->execute($command);
@@ -1844,8 +1891,32 @@ sub _rpower {
 			notify($ERRORS{'WARNING'}, 0, "failed to execute rpower command for $computer_node_name");
 			return;
 		}
+		elsif (grep(/Error: Timeout/, @$output)) {
+			# blade2f3-14: Error: Timeout
+			$timeout_error_count++;
+			if ($timeout_error_count >= $timeout_error_limit) {
+				notify($ERRORS{'WARNING'}, 0, "attempt $rpower_attempt: failed to issue rpower $rpower_option command for $computer_node_name, timeout error limit reached: $timeout_error_count");
+				return;
+			}
+			else {
+				# Wait a random amount of time to prevent several cluster reservations from reattempting at the same time
+				my $timeout_error_delay = int(rand($timeout_error_count*3))+1;
+				notify($ERRORS{'DEBUG'}, 0, "attempt $rpower_attempt: encountered timeout error $timeout_error_count/$timeout_error_limit");
+				next RPOWER_ATTEMPT;
+			}
+		}
 		elsif (grep(/Error:/, @$output)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to issue rpower command for $computer_node_name\ncommand: $command\noutput:\n" . join("\n", @$output));
+			notify($ERRORS{'WARNING'}, 0, "attempt $rpower_attempt: failed to issue rpower command for $computer_node_name\ncommand: $command\noutput:\n" . join("\n", @$output));
+			
+			# Attempt to run rinv once if an error was detected, it may fix the following error:
+			#    Error: Invalid nodes and/or groups in noderange: bladex
+			if (!$rinv_attempted) {
+				# Attempt to run rinv to fix any inventory problems with the blade
+				notify($ERRORS{'DEBUG'}, 0, "attempt $rpower_attempt: failed to initiate rpower for $computer_node_name, attempting to run rinv");
+				$self->_rinv($computer_node_name);
+				$rinv_attempted = 1;
+			}
+			
 			next RPOWER_ATTEMPT;
 		}
 		
@@ -1870,7 +1941,7 @@ sub _rpower {
 		for my $line (@$output) {
 			my ($status) = $line =~ /^$computer_node_name:.*\s([^\s]+)$/;
 			if ($status) {
-				notify($ERRORS{'DEBUG'}, 0, "issued rpower command for $computer_node_name, option: $rpower_option, status line: '$line'");
+				notify($ERRORS{'DEBUG'}, 0, "issued rpower $rpower_option command for $computer_node_name, status line: '$line', returning '$status'");
 				return $status;
 			}
 		}
