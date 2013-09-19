@@ -82,7 +82,6 @@ our @ISA = qw(Exporter);
 
 our @EXPORT = qw(
   _checknstartservice
-  _machine_os
   _pingnode
   _sshd_status
   changelinuxpassword
@@ -90,11 +89,7 @@ our @EXPORT = qw(
   check_endtimenotice_interval
   check_ssh
   check_time
-  check_uptime
-  checkonprocess
   clearfromblockrequest
-  collectsshkeys
-  construct_image_name
   controlVM
   convert_to_datetime
   convert_to_epoch_seconds
@@ -103,13 +98,11 @@ our @EXPORT = qw(
   database_select
   delete_computerloadlog_reservation
   delete_request
-  disablesshd
   escape_file_path
   format_data
   format_hash_keys
   format_number
   get_affiliation_info
-  get_array_summary_string
   get_block_request_image_info
   get_caller_trace
   get_computer_current_state_name
@@ -125,7 +118,6 @@ our @EXPORT = qw(
   get_database_table_columns
   get_file_size_info_string
   get_group_name
-  get_highest_imagerevision_info
   get_image_info
   get_imagemeta_info
   get_imagerevision_info
@@ -175,8 +167,6 @@ our @EXPORT = qw(
   is_request_imaging
   is_valid_dns_host_name
   is_valid_ip_address
-  isconnected
-  isfilelocked
   kill_child_processes
   kill_reservation_process
   known_hosts
@@ -196,7 +186,6 @@ our @EXPORT = qw(
   rename_vcld_process
   reservation_being_processed
   reservations_ready
-  restoresshkeys
   round
   run_command
   run_scp_command
@@ -218,8 +207,6 @@ our @EXPORT = qw(
   switch_state
   switch_vmhost_id
   time_exceeded
-  timefloor15interval
-  unlockfile
   update_blockrequest_processing
   update_cluster_info
   update_computer_address
@@ -1347,117 +1334,6 @@ sub _checknstartservice {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 isconnected
-
- Parameters  : $nodename, $type, $remoteIP, $osname, $ipaddress
- Returns     : 1 connected 0 not connected
- Description : confirms user is connected to node
-					assumes port 3389 for windows and port 22 for linux/solaris
-=cut
-
-sub isconnected {
-	my ($nodename, $type, $remoteIP, $osname, $ipaddress, $image_os_type) = @_;
-	my ($package, $filename, $line, $sub) = caller(0);
-	notify($ERRORS{'OK'}, 0, "nodename not set")  if (!defined($nodename));
-	notify($ERRORS{'OK'}, 0, "type not set")      if (!defined($type));
-	notify($ERRORS{'OK'}, 0, "remoteIP not set")  if (!defined($remoteIP));
-	notify($ERRORS{'OK'}, 0, "osname not set")    if (!defined($osname));
-	notify($ERRORS{'OK'}, 0, "image_os_type not set")    if (!defined($image_os_type));
-	notify($ERRORS{'OK'}, 0, "ipaddress not set") if (!defined($ipaddress));
-
-	my $identity_keys = get_management_node_info()->{keys};
-
-	my @netstat;
-	my @SSHCMD;
-	if ($type =~ /blade|virtualmachine/) {
-		my $shortname = 0;
-		$shortname = $1 if ($nodename =~ /([-_a-zA-Z0-9]*)\./);
-		if ($shortname) {
-			#convert shortname
-			$nodename = $shortname;
-		}
-
-		if ($image_os_type =~ /windows/i) {
-			#notify($ERRORS{'OK'},0,"checking $nodename $ipaddress");
-			undef @SSHCMD;
-			@SSHCMD = run_ssh_command($nodename, $identity_keys, "netstat -an", "root", 22, 0);
-			foreach my $line (@{$SSHCMD[1]}) {
-				chomp($line);
-				if ($line =~ /Connection refused/) {
-					notify($ERRORS{'WARNING'}, 0, "$line");
-					return 0;
-				}
-				#if($line =~ /\s+($ipaddress:3389)\s+([.0-9]*):([0-9]*)\s+(ESTABLISHED)/){
-				if ($line =~ /\s+(TCP\s+[.0-9]*:3389)\s+([.0-9]*):([0-9]*)\s+(ESTABLISHED)/) {
-					#notify($ERRORS{'WARNING'},0,"$line");
-					return 1 if ($2 eq $remoteIP);
-					if ($2 ne $remoteIP) {
-						notify($ERRORS{'WARNING'}, 0, "not correct remote IP is connected");
-						return 1;
-					}
-				}
-			} ## end foreach my $line (@{$SSHCMD[1]})
-		} ## end if ($osname =~ /win|vmwarewin/)
-		elsif ($image_os_type =~ /linux/i) {
-			undef @SSHCMD;
-			@SSHCMD = run_ssh_command($nodename, $identity_keys, "netstat -an", "root", 22, 0);
-			foreach my $line (@{$SSHCMD[1]}) {
-				chomp($line);
-				if ($line =~ /Warning/) {
-					if (known_hosts($nodename, "linux", $ipaddress)) {
-						#good
-					}
-					next;
-				}
-				if ($line =~ /Connection refused/) {
-					notify($ERRORS{'WARNING'}, 0, "$line");
-					return 0;
-				}
-				if ($line =~ /tcp\s+([0-9]*)\s+([0-9]*)\s($ipaddress:22)\s+([.0-9]*):([0-9]*)(.*)(ESTABLISHED)/) {
-					return 1 if ($4 eq $remoteIP);
-					if ($4 ne $remoteIP) {
-						notify($ERRORS{'WARNING'}, 0, "not correct remote IP connected: $line");
-						return 1;
-					}
-				}
-			} ## end foreach my $line (@{$SSHCMD[1]})
-		} 
-		return 0;
-	} ## end if ($type =~ /blade|virtualmachine/)
-	elsif ($type eq "lab") {
-		undef @SSHCMD;
-		@SSHCMD = run_ssh_command($nodename, $identity_keys, "netstat -an", "vclstaff", 24, 1);
-		foreach my $line (@{$SSHCMD[1]}) {
-			chomp($line);
-			if ($line =~ /Connection refused/) {
-				notify($ERRORS{'WARNING'}, 0, "$nodename $line");
-				return 0;
-			}
-			if ($osname =~ /sun4x_/) {
-				if ($line =~ /\s*($ipaddress\.22)\s+([.0-9]*)\.([0-9]*)(.*)(ESTABLISHED)/) {
-					return 1 if ($2 eq $remoteIP);
-					if ($2 ne $remoteIP) {
-						notify($ERRORS{'WARNING'}, 0, "not correct remote IP connected $4");
-						return 1;
-					}
-				}
-			}
-			elsif ($osname =~ /realmrhel3/) {
-				if ($line =~ /tcp\s+([0-9]*)\s+([0-9]*)\s($ipaddress:22)\s+([.0-9]*):([0-9]*)(.*)(ESTABLISHED)/) {
-					return 1 if ($4 eq $remoteIP);
-					if ($4 ne $remoteIP) {
-						notify($ERRORS{'WARNING'}, 0, "not correct remote IP connected $4");
-						return 1;
-					}
-				}
-			}
-		} ## end foreach my $line (@{$SSHCMD[1]})
-		return 0;
-	} ## end elsif ($type eq "lab")  [ if ($type =~ /blade|virtualmachine/)
-} ## end sub isconnected
-
-#/////////////////////////////////////////////////////////////////////////////
-
 =head2 update_preload_fla
 
  Parameters  : request id, flag 1,0
@@ -2431,50 +2307,6 @@ sub _sshd_status {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 _machine_os
-
- Parameters  : $node, $imagename, $log
- Returns     : 0 or system type name
- Description : actually logs into remote node
-=cut
-
-sub _machine_os {
-	my ($node, $imagename) = @_;
-	my ($package, $filename, $line, $sub) = caller(0);
-	notify($ERRORS{'WARNING'}, 0, "node is not defined") if (!(defined($node)));
-	if (!nmap_port($node, 22)) {
-		notify($ERRORS{'OK'}, 0, "ssh port not open cannot check $node OS");
-		return 0;
-	}
-	my $identity_keys = get_management_node_info()->{keys};
-	my @sshcmd = run_ssh_command($node, $identity_keys, "uname -s", "root");
-	foreach my $l (@{$sshcmd[1]}) {
-		if ($l =~ /CYGWIN_NT-5\.1/) {
-			return "WinXp";
-		}
-		elsif ($l =~ "CYGWIN_NT-5\.2") {
-			return "win2003";
-		}
-		elsif ($l =~ /Linux/) {
-			return "Linux";
-		}
-		elsif ($l =~ /Connection refused/) {
-			return 0;
-		}
-		elsif ($l =~ /No route to host/) {
-			return 0;
-		}
-		elsif ($l =~ /Permission denied/) {
-			return 0;
-		}
-		else {
-			return 0;
-		}
-	} ## end foreach my $l (@{$sshcmd[1]})
-} ## end sub _machine_os
-
-#/////////////////////////////////////////////////////////////////////////////
-
 =head2 nmap_port
 
  Parameters  : $hostname,n $port
@@ -2775,28 +2607,6 @@ sub notify_via_wall {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 isfilelocked
-
- Parameters  : $file - file path
- Returns     : 0 no or 1 yes
- Description : looks for supplied file
-					appends .lock to the end of supplied file
-
-=cut
-
-sub isfilelocked {
-	my ($file) = $_[0];
-	my $lockfile = $file . ".lock";
-	if (-r $lockfile) {
-		return 1;
-	}
-	else {
-		return 0;
-	}
-} ## end sub isfilelocked
-
-#/////////////////////////////////////////////////////////////////////////////
-
 =head2 lockfile
 
  Parameters  : $file
@@ -2820,28 +2630,6 @@ sub lockfile {
 		return 1;
 	} ## end while (!(-r $lockfile))
 } ## end sub lockfile
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 unlockfile
-
- Parameters  : $file
- Returns     : 0 or 1
- Description : removes file if exists
-
-=cut
-
-sub unlockfile {
-	my ($file) = $_[0];
-	my $lockfile = $file . ".lock";
-	if (-r $lockfile) {
-		unlink $lockfile;
-	}
-	else {
-		# no lock file exists
-	}
-	return 1;
-} ## end sub unlockfile
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -3098,191 +2886,6 @@ EOF
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 collectsshkeys
-
- Parameters  : node
- Returns     : 0 or 1
- Description : collects ssh keys from client
-
-=cut
-
-sub collectsshkeys {
-	my $node = $_[0];
-	my ($package, $filename, $line, $sub) = caller(0);
-	notify($ERRORS{'WARNING'}, 0, "node is not defined") if (!(defined($node)));
-	if (!(defined($node))) {
-		return 0;
-	}
-	my ($id, $ipaddress, $type, $hostname, $currentimage, $osname);
-	#if lab client and OS is linux or solaris fetch ssh keys
-	#store repective key into computer table for the node
-	my $dbh = getnewdbh;
-	#collect a little information about the node.
-	my $sel = $dbh->prepare("SELECT c.id,c.IPaddress,c.hostname,c.type,o.name,i.name FROM computer c, OS o, image i WHERE c.currentimageid=i.id AND i.OSid=o.id AND c.hostname REGEXP ?") or notify($ERRORS{'WARNING'}, 0, "could not prepare collect computer detail statement" . $dbh->errstr());
-	$sel->execute($node) or notify($ERRORS{'WARNING'}, 0, "Problem could not execute on computer detail : " . $dbh->errstr);
-	my $rows = $sel->rows;
-	$sel->bind_columns(\($id, $ipaddress, $hostname, $type, $osname, $currentimage));
-
-	if ($rows) {
-		if ($sel->fetch) {
-			print "$id,$ipaddress,$hostname,$type,$osname,$currentimage\n";
-		}
-	}
-	else {
-		notify($ERRORS{'CRITICAL'}, 0, "no information found in computer table for $node ");
-		$dbh->disconnect if !defined $ENV{dbh};
-		return 0;
-	}
-
-	#what identity do we use
-	my $key = get_management_node_info()->{keys};
-
-	#send fetch keys flag to node
-	my @sshcmd = run_ssh_command($ipaddress, $key, "echo fetch > /home/vclstaff/clientdata; echo 1 > /home/vclstaff/flag", "vclstaff", "24");
-	foreach my $l (@{$sshcmd[1]}) {
-		if ($l =~ /Warning|denied|No such/) {
-			notify($ERRORS{'CRITICAL'}, 0, "node $node ouput @{ $sshcmd[1] }");
-		}
-	}
-	#retrieve the keys
-	#sleep 6, node flag check is every 5 sec
-	sleep 6;
-	my ($loop, $ct) = 0;
-	undef @sshcmd;
-	@sshcmd = run_ssh_command($ipaddress, $key, "ls -1", "vclstaff", "24");
-	foreach my $l (@{$sshcmd[1]}) {
-		chomp($l);
-
-		if ($l =~ /ssh_host/) {
-			#print "$l\n";
-			if (!(-d "/tmp/$id")) {
-				notify($ERRORS{'OK'}, 0, "creating /tmp/$id") if (mkdir("/tmp/$id"));
-			}
-			if (run_scp_command("vclstaff\@$ipaddress:/home/vclstaff/$l", "/tmp/$id/$l", $key, "24")) {
-				$ct++;
-			}
-		}
-	}    #foreach
-	if ($ct < 6) {
-		notify($ERRORS{'OK'}, 0, "count copied, is less than 6 trying again");
-		if ($loop > 2) {
-			notify($ERRORS{'CRITICAL'}, 0, "could not copy 6 ssh keys from $node");
-			$dbh->disconnect if !defined $ENV{dbh};
-			return 0;
-		}
-		$loop++;
-		goto COLLECT;
-	} ## end if ($ct < 6)
-	     #read in key files
-	my $dsa;
-	my $dsapub;
-	my $rsa;
-	my $rsapub;
-	my $hostbuffer = "";
-	my $hostpub;
-
-	if (open(DSA, "/tmp/$id/ssh_host_dsa_key")) {
-		print "slurping dsa_key\n";
-		#@dsa=<DSA>;
-		read(DSA, $dsa, 1024);
-		close(DSA);
-	}
-	else {
-		notify($ERRORS{'CRITICAL'}, 0, "could not open dsa file $!");
-	}
-
-	if (open(DSAPUB, "/tmp/$id/ssh_host_dsa_key.pub")) {
-		print "slurping dsa_pub_key\n";
-		#@dsapub=<DSAPUB>;
-		read(DSAPUB, $dsapub, 1024);
-		close(DSAPUB);
-	}
-	else {
-		notify($ERRORS{'CRITICAL'}, 0, "could not open dsa.pub file $!");
-	}
-
-	if (open(RSA, "/tmp/$id/ssh_host_rsa_key")) {
-		print "slurping rsa_key\n";
-		#@rsa=<RSA>;
-		read(RSA, $rsa, 1024);
-		close(RSA);
-	}
-	else {
-		notify($ERRORS{'CRITICAL'}, 0, "could not open rsa file $!");
-	}
-
-	if (open(RSAPUB, "/tmp/$id/ssh_host_rsa_key.pub")) {
-		print "slurping rsa_pub_key\n";
-		#@rsapub=<RSAPUB>;
-		read(RSAPUB, $rsapub, 1024);
-		close(RSAPUB);
-	}
-	else {
-		notify($ERRORS{'CRITICAL'}, 0, "could not open rsa.pub file $!");
-	}
-
-	if (open(HOSTPUB, "/tmp/$id/ssh_host_key.pub")) {
-		print "slurping host_pub_key\n";
-		#@hostpub=<HOSTPUB>;
-		read(HOSTPUB, $hostpub, 1024);
-		close(HOSTPUB);
-	}
-	else {
-		notify($ERRORS{'CRITICAL'}, 0, "could not open host.pub file $!");
-	}
-
-	#binary file
-	if (open(HOST, "/tmp/$id/ssh_host_key.pub")) {
-		print "slurping host_key\n";
-		binmode(HOST);
-		my $r = read(HOST, $hostbuffer, 1024);
-		#@hostbuffer=<HOST>;
-		close(HOST);
-		if (defined($r)) {
-			#print "read $r k chunks on binary file ssh_host_key.pub\n";
-			#notify($ERRORS{'OK'},0,"read $r k chunks on binary file ssh_host_key.pub");
-			#print "uploading: $dsa\n $dsapub\n$rsa\n$rsapub\n$hostbuffer\n$hostpub \n $id\n";
-		}
-		else {
-			#print "could not read binary file ssh_host_key.pub\n";
-			notify($ERRORS{'CRITICAL'}, 0, "could not read binary file ssh_host_key.pub");
-		}
-	} ## end if (open(HOST, "/tmp/$id/ssh_host_key.pub"...
-	else {
-		notify($ERRORS{'CRITICAL'}, 0, "could not open host binary file $!");
-	}
-
-	#print "uploading: @dsa\n @dsapub\n @rsa\n @rsapub\n $hostbuffer \n,@hostpub \n $id\n";
-	#upload keys to db
-
-	my $update = $dbh->prepare("UPDATE computer SET dsa=?,dsapub=?,rsa=?,rsapub=?,hostpub=? WHERE id=?") or print "could not prepare update key statement node= $node id= $id" . $dbh->errstr();
-	$update->execute($dsa, $dsapub, $rsa, $rsapub, $hostpub, $id) or print "Problem could not execute on update key statement node= $node id= $id: " . $dbh->errstr;
-
-	$dbh->disconnect if !defined $ENV{dbh};
-
-} ## end sub collectsshkeys
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2  restoresshkeys
-
- Parameters  : node
- Returns     : 0 or 1
- Description : NOT COMPLETED
-					connects to node and replaces ssh keys with keys stored in db
-=cut
-
-sub restoresshkeys {
-	my $node = $_[0];
-	my ($package, $filename, $line, $sub) = caller(0);
-	notify($ERRORS{'WARNING'}, 0, "node is not defined") if (!(defined($node)));
-	if (!(defined($node))) {
-		return 0;
-	}
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
 =head2  notifyviaIM
 
  Parameters  : IM type, IM user ID, message string
@@ -3373,101 +2976,6 @@ sub notify_via_IM {
 	
 	return 1;
 } ## end sub notify_via_IM
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 check_uptime
-
- Parameters  : $node, $IPaddress, $OSname, $type, $log
- Returns     : value or 0(failed) + failure message
- Description : fetchs uptime of remote node
-
-=cut
-
-sub check_uptime {
-	my ($node, $IPaddress, $OSname, $type, $log) = @_;
-	my ($package, $filename, $line, $sub) = caller(0);
-	$log = 0 if (!(defined($log)));
-	notify($ERRORS{'WARNING'}, $log, "node is not defined")      if (!(defined($node)));
-	notify($ERRORS{'WARNING'}, $log, "IPaddress is not defined") if (!(defined($IPaddress)));
-	notify($ERRORS{'WARNING'}, $log, "OSname is not defined")    if (!(defined($OSname)));
-	notify($ERRORS{'WARNING'}, $log, "type is not defined")      if (!(defined($type)));
-
-	if ($type eq "lab") {
-		my $identity_keys = get_management_node_info()->{keys};
-
-		my @sshcmd = run_ssh_command($node, $identity_keys, "uptime", "vclstaff", "24");
-		my $l;
-		foreach $l (@{$sshcmd[1]}) {
-			if ($l =~ /(\s*\d*:\d*:\d*\s*up\s*)(\d*)(\s*days,)/) {
-				return $2;
-			}
-			if ($l =~ /^(\s*\d*:\d*)(am|pm)(\s*up\s*)(\d*)(\s*day)/) {
-				return $4;
-			}
-			if ($l =~ /(\s*\d*:\d*:\d*\s*up)/) {
-				return 1;
-			}
-			if ($l =~ /password/) {
-				notify($ERRORS{'WARNING'}, $log, "@{ $sshcmd[1] }");
-				return (0, $l);
-			}
-		} ## end foreach $l (@{$sshcmd[1]})
-
-
-	} ## end if ($type eq "lab")
-	elsif ($type eq "blade") {
-		return 0;
-	}
-	elsif ($type eq "virtualmachine") {
-		return 0;
-	}
-
-} ## end sub check_uptime
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2  timefloor15interval
-
- Parameters  : time string(optional)
- Returns     : the nearest 15 minute interval 0,15,30,45 less than the current time and zero seconds
- Description :
-
-=cut
-
-sub timefloor15interval {
-	my $time = $_[0];
-	# we got nothing set to current time
-	if (!defined($time)) {
-		$time = makedatestring;
-	}
-	#we got a null timestamp, set it to current time
-	if ($time =~ /0000-00-00 00:00:00/) {
-		$time = makedatestring;
-	}
-
-	#format received: year-mon-mday hr:min:sec
-	my ($vardate, $vartime) = split(/ /, $time);
-	my ($yr, $mon, $mday) = split(/-/, $vardate);
-	my ($hr, $min, $sec)  = split(/:/, $vartime);
-	$sec = "0";
-	if ($min < 15) {
-		$min = 0;
-	}
-	elsif ($min < 30) {
-		$min = 15;
-	}
-	elsif ($min < 45) {
-		$min = 30;
-	}
-	elsif ($min < 60) {
-		$min = 45;
-	}
-
-	my $datestring = sprintf("%04d-%02d-%02d %02d:%02d:%02d", $yr, $mon, $mday, $hr, $min, $sec);
-	return $datestring;
-
-} ## end sub timefloor15interval
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -3580,39 +3088,6 @@ sub insertloadlog {
 
 	return 1;
 } ## end sub insertloadlog
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 checkonprocess
-
- Parameters  : $state, $requestid
- Returns     : 0 or 1
- Description : checks the process list to confirm the process for given request is actually running
-					in case the process dies for some reason
-
-=cut
-
-
-sub checkonprocess {
-	my ($request_state_name, $request_id) = @_;
-
-	notify($ERRORS{'WARNING'}, 0, "state is not defined")     if (!(defined($request_state_name)));
-	notify($ERRORS{'WARNING'}, 0, "requestid is not defined") if (!(defined($request_id)));
-	return if (!(defined($request_state_name)));
-	return if (!(defined($request_id)));
-
-	# Use the pgrep utility to find processes matching the state and request ID
-	if (open(PGREP, "/bin/pgrep -fl '$request_state_name $request_id' 2>&1 |")) {
-		my @process_list = <PGREP>;
-		close(PGREP);
-		notify($ERRORS{'DEBUG'}, 0, "pgrep found " . scalar @process_list . " processes matching state=$request_state_name and request=$request_id");
-		return scalar @process_list;
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to open handle for pgrep process");
-		return;
-	}
-} ## end sub checkonprocess
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -5248,76 +4723,6 @@ sub write_currentimage_txt {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 vmwareclone
-
- Parameters  : $hostnode, $identity, $srcDisk, $dstDisk, $dstDir
- Returns     : 1 if successful, 0 if error occurred
- Description : using vm tools clone srcdisk to dstdisk
-				  	currently using builtin vmkfstools
-
-=cut
-
-=pod
-
-sub vmwareclone {
-	my ($hostnode, $identity, $srcDisk, $dstDisk, $dstDir) = @_;
-	my ($package, $filename, $line, $sub) = caller(0);
-
-	#TODO - add checks for VI toolkit - then use vmclone.pl instead
-	#vmclone.pl would need additional parameters
-
-	my @list = run_ssh_command($hostnode, $identity, "ls -1 $srcDisk", "root");
-	my $srcDiskexist = 0;
-
-	foreach my $l (@{ $list[1] }) {
-		$srcDiskexist = 1 if ($l =~ /($srcDisk)$/);
-		$srcDiskexist = 0 if ($l =~ /No such file or directory/);
-		notify($ERRORS{'OK'}, 0, "$l");
-	}
-	my @ssh;
-	if ($srcDiskexist) {
-		#make dir for dstdisk
-		my @mkdir = run_ssh_command($hostnode, $identity, "mkdir -m 755 $dstDir", "root");
-		notify($ERRORS{'OK'}, 0, "srcDisk is exists $srcDisk ");
-		notify($ERRORS{'OK'}, 0, "starting clone process vmkfstools -d thin -i $srcDisk $dstDisk");
-		if (open(SSH, "/usr/bin/ssh -x -q -i $identity -l root $hostnode \"vmkfstools -i $srcDisk -d thin $dstDisk\" 2>&1 |")) {
-			#@ssh=<SSH>;
-			#close(SSH);
-			#foreach my $l (@ssh) {
-			#  notify($ERRORS{'OK'},0,"$l");
-			#}
-			while (<SSH>) {
-				notify($ERRORS{'OK'}, 0, "started $_") if ($_ =~ /Destination/);
-				notify($ERRORS{'OK'}, 0, "started $_") if ($_ =~ /Cloning disk/);
-				notify($ERRORS{'OK'}, 0, "status $_")  if ($_ =~ /Clone:/);
-			}
-			close(SSH);
-		} ## end if (open(SSH, "/usr/bin/ssh -x -q -i $identity -l root $hostnode \"vmkfstools  -i $srcDisk -d thin $dstDisk\" 2>&1 |"...
-	} ## end if ($srcDiskexist)
-	else {
-		notify($ERRORS{'OK'}, 0, "srcDisk $srcDisk does not exists");
-	}
-	#confirm
-	@list = 0;
-	@list = run_ssh_command($hostnode, $identity, "ls -1 $dstDisk", "root");
-	my $dstDiskexist = 0;
-	foreach my $l (@{ $list[1] }) {
-		$dstDiskexist = 1 if ($l =~ /($dstDisk)$/);
-		$dstDiskexist = 0 if ($l =~ /No such file or directory/);
-	}
-	if ($dstDiskexist) {
-		return 1;
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "clone process failed dstDisk $dstDisk does not exist");
-		return 0;
-	}
-} ## end sub vmwareclone
-
-=cut
-
-#/////////////////////////////////////////////////////////////////////////////
-
 =head2 get_management_predictive_info
 
  Parameters  : Either a management node hostname or database ID
@@ -6086,86 +5491,6 @@ sub get_computer_current_state_name {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 construct_image_name
-
- Parameters  : $image_name, $specified_version
- Returns     : String containing a new image name.
-					If no number is specified, version is incremented by 1.
-					If number is specified, version is set to that number
- Description :
-
-=cut
-
-
-sub construct_image_name {
-	my ($image_name, $specified_version, $os_name) = @_;
-
-	my ($package, $filename, $line, $sub) = caller(0);
-
-	# Check the passed parameter
-	if (!(defined($image_name))) {
-		notify($ERRORS{'WARNING'}, 0, "image name was not specified");
-		return 0;
-	}
-
-	# If version was specified, check to make sure it's just numerical digits
-	if (defined($specified_version) && $specified_version !~ /^\d+$/) {
-		notify($ERRORS{'WARNING'}, 0, "specified version is not in the correct format: $specified_version");
-		return 0;
-	}
-
-	# Image Name Format: osname-longnameid-v#
-	# Example: winxp-Thisistheimagename23-v0
-
-	# Split the image name by dashes
-	my @name_sections = split(/-/, $image_name);
-	my $section_count = scalar @name_sections;
-
-	# Check to make sure at least 3 sections were found (separated by "-")
-	if ($section_count < 3) {
-		notify($ERRORS{'WARNING'}, 0, "image name is in the wrong format, cannot construct: $image_name");
-		return 0;
-	}
-
-	# The OS should be the first section
-	my $os_section = $name_sections[0];
-
-	# If an OS name was passed as an argument use it, otherwise use the OS name from the previous image name
-	if (defined $os_name && $os_name ne '') {
-		$os_section = $os_name;
-	}
-
-	# The version should be the last section
-	my $version_section = $name_sections[$section_count - 1];
-
-	# Everything in between should be the image name and version
-	my $name_section = join('-', @name_sections[1 .. ($section_count - 2)]);
-
-	# Check to make sure the version number is valid
-	if ($version_section =~ /^([v|V])([0-9]+)/) {
-		my $v              = $1;
-		my $version_number = $2;
-
-		# Increment version number or use the specified version if it was passed
-		if (defined($specified_version)) {
-			$version_number = $specified_version;
-		}
-		else {
-			$version_number++;
-		}
-
-		return $os_section . "-" . "$name_section" . "-" . $v . $version_number;
-	} ## end if ($version_section =~ /^([v|V])([0-9]+)/)
-
-	else {
-		notify($ERRORS{'WARNING'}, 0, "could not detect version number from image name: $image_name");
-		return 0;
-	}
-
-} ## end sub construct_image_name
-
-#/////////////////////////////////////////////////////////////////////////////
-
 =head2 update_log_ending
 
  Parameters  : $log_id, $ending
@@ -6850,57 +6175,6 @@ sub set_logfile_path {
 	my ($package, $filename, $line, $sub) = caller(0);
 	($LOGFILE) = @_;
 	#print STDOUT "log file path changed to \'$LOGFILE\'\n";
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 get_highest_imagerevision_info
-
- Parameters  : $image_id
- Returns     : Hash containing image revision data
- Description :
-
-=cut
-
-
-sub get_highest_imagerevision_info {
-	my ($image_id) = @_;
-	
-	# Check the passed parameter
-	if (!defined($image_id)) {
-		notify($ERRORS{'WARNING'}, 0, "image ID argument was not specified");
-		return;
-	}
-
-	# Select the highest image revision id for the specified image id
-	my $select_statement = <<EOF;
-SELECT
-MAX(imagerevision.id) AS id
-FROM
-imagerevision
-WHERE
-imagerevision.imageid = '$image_id'
-EOF
-
-	# Call the database select subroutine
-	# This will return an array of one or more rows based on the select statement
-	my @selected_rows = database_select($select_statement);
-
-	# Check to make sure 1 row was returned
-	if (!@selected_rows) {
-		notify($ERRORS{'WARNING'}, 0, "image revision data for image ID $image_id was not found in the database, 0 rows were returned");
-		return;
-	}
-	elsif (scalar @selected_rows > 1) {
-		notify($ERRORS{'WARNING'}, 0, scalar @selected_rows . " rows were returned from database select statement:\n$select_statement");
-		return ();
-	}
-
-	# A single row was returned
-	my $row = $selected_rows[0];
-	my $imagerevision_id = $row->{id};
-
-	return get_imagerevision_info($imagerevision_id);
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -7619,62 +6893,6 @@ EOF
 	$ENV{user_info}{$user_identifier} = $user_info;
 	$ENV{user_info}{$user_identifier}{RETRIEVAL_TIME} = time;
 	return $ENV{user_info}{$user_identifier};	
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 get_user_affiliation
-
- Parameters  : $user_id
- Returns     : scalar - affiliation name
- Description :
-
-=cut
-
-sub get_user_affiliation {
-	my ($user_id) = shift;
-	
-	if(!defined($user_id)){
-		notify($ERRORS{'WARNING'}, $LOGFILE, "user_id was not supplied");
-		return 0;
-	}
-	
-	my $select_statement = <<EOF;
-SELECT DISTINCT
-affiliation.name
-FROM
-user,
-affiliation
-WHERE
-affiliation.id = user.affiliationid AND
-user.id = $user_id
-EOF
-
-	# Call the database select subroutine
-	# This will return an array of one or more rows based on the select statement
-	my @selected_rows = database_select($select_statement);
-	
-	# Check to make sure 1 row was returned
-	if (scalar @selected_rows == 0) {
-		notify($ERRORS{'WARNING'}, 0, "zero rows were returned from database select");
-		return ();
-	}
-	elsif (scalar @selected_rows > 1) {
-		notify($ERRORS{'WARNING'}, 0, "" . scalar @selected_rows . " rows were returned from database select");
-		return ();
-	}
-	
-	# Get the single returned row
-	# It contains a hash
-	
-	# Make sure we return undef if the column wasn't found
-	if (defined $selected_rows[0]{name}) {
-		my $name = $selected_rows[0]{name};
-		return $name;
-	}
-	else {
-		return undef;
-	}
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -9534,82 +8752,6 @@ sub get_current_subroutine_name {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 disablesshd
-
- Parameters  : $hostname, $unityname, $remoteIP, $state, $osname, $log
- Returns     : 1 success 0 failure
- Description : using ssh identity key log into remote lab machine
-					and set flag for vclclientd to disable sshd for  remote user
-
-=cut
-
-sub disablesshd {
-	my ($hostname, $unityname, $remoteIP, $state, $osname, $log) = @_;
-	my ($package, $filename, $line, $sub) = caller(0);
-	$log = 0 if (!(defined($log)));
-	notify($ERRORS{'WARNING'}, $log, "hostname is not defined")  if (!(defined($hostname)));
-	notify($ERRORS{'WARNING'}, $log, "unityname is not defined") if (!(defined($unityname)));
-	notify($ERRORS{'WARNING'}, $log, "remoteIP is not defined")  if (!(defined($remoteIP)));
-	notify($ERRORS{'WARNING'}, $log, "state is not defined")     if (!(defined($state)));
-	notify($ERRORS{'WARNING'}, $log, "osname is not defined")    if (!(defined($osname)));
-
-	if (!(defined($remoteIP))) {
-		$remoteIP = "127.0.0.1";
-	}
-	my @lines;
-	my $l;
-	my $identity_keys = get_management_node_info()->{keys};
-	# create clientdata file
-	my $clientdata = "/tmp/clientdata.$hostname";
-	if (open(CLIENTDATA, ">$clientdata")) {
-		print CLIENTDATA "$state\n";
-		print CLIENTDATA "$unityname\n";
-		print CLIENTDATA "$remoteIP\n";
-		close CLIENTDATA;
-
-		# scp to hostname
-		my $target = "vclstaff\@$hostname:/home/vclstaff/clientdata";
-		if (run_scp_command($clientdata, $target, $identity_keys, "24")) {
-			notify($ERRORS{'OK'}, $log, "Success copied $clientdata to $target");
-			unlink($clientdata);
-
-			# send flag to activate changes
-			my @sshcmd = run_ssh_command($hostname, $identity_keys, "echo 1 > /home/vclstaff/flag", "vclstaff", "24");
-			notify($ERRORS{'OK'}, $log, "setting flag to 1 on $hostname");
-
-			my $nmapchecks = 0;
-			# return nmap check
-
-			NMAPPORT:
-			if (!(nmap_port($hostname, 22))) {
-				return 1;
-			}
-			else {
-				if ($nmapchecks < 5) {
-					$nmapchecks++;
-					sleep 1;
-					notify($ERRORS{'OK'}, $log, "port 22 not closed yet calling NMAPPORT code block");
-					goto NMAPPORT;
-				}
-				else {
-					notify($ERRORS{'WARNING'}, $log, "port 22 never closed on client $hostname");
-					return 0;
-				}
-			} ## end else [ if (!(nmap_port($hostname, 22)))
-		} ## end if (run_scp_command($clientdata, $target, ...
-		else {
-			notify($ERRORS{'OK'}, $log, "could not copy src=$clientdata to target=$target");
-			return 0;
-		}
-	} ## end if (open(CLIENTDATA, ">$clientdata"))
-	else {
-		notify($ERRORS{'WARNING'}, $log, "could not open /tmp/clientdata.$hostname $! ");
-		return 0;
-	}
-} ## end sub disablesshd
-
-#/////////////////////////////////////////////////////////////////////////////
-
 =head2 get_affiliation_info
 
  Parameters  : Affiliation ID (optional)
@@ -10513,51 +9655,6 @@ sub hash_to_xml_string {
 	else {
 		notify($ERRORS{'WARNING'}, 0, "failed to convert XML hash reference to text, XML hash reference:" . format_data($xml_hashref));
 		return;
-	}
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 get_array_summary_string
-
- Parameters  : $array_ref or @array
- Returns     : string
- Description : Formats a string from an array. If there are more than 3 elements
-               in the array, the values are summarized:
-					/vmwarelinux-RHEL54Small2251-v1-s001.vmdk
-               ...14 additional entries...
-               /vmwarelinux-RHEL54Small2251-v1-s016.vmdk
-
-
-=cut
-
-sub get_array_summary_string {
-	my @arguments = @_;
-	if (!@arguments) {
-		return '';
-	}
-	elsif (scalar(@arguments) == 1) {
-		if (!ref($arguments[0])) {
-			return $arguments[0];
-		}
-		elsif (ref($arguments[0]) eq 'ARRAY') {
-			@arguments = @{$arguments[0]};
-		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "argument is not an array reference: " . ref($arguments[0]));
-			return '';
-		}
-	}
-
-	my $array_size = scalar(@arguments);
-	if ($array_size == 1) {
-		return $arguments[0];
-	}
-	if ($array_size > 3) {
-		return "$arguments[0]\n..." . ($array_size-2) . " additional entries...\n$arguments[-1]";
-	}
-	else {
-		return join("\n", @arguments);
 	}
 }
 
