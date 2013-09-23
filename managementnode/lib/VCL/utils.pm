@@ -83,13 +83,11 @@ our @ISA = qw(Exporter);
 our @EXPORT = qw(
   _pingnode
   _sshd_status
-  changelinuxpassword
   check_blockrequest_time
   check_endtimenotice_interval
   check_ssh
   check_time
   clearfromblockrequest
-  controlVM
   convert_to_datetime
   convert_to_epoch_seconds
   create_management_node_directory
@@ -143,18 +141,15 @@ our @EXPORT = qw(
   get_reservation_accounts
   get_resource_groups
   get_managable_resource_groups
-  get_user_affiliation
   get_user_info
   get_vmhost_assigned_vm_info
   get_vmhost_info
-  getimagesize
   getnewdbh
   getpw
   getusergroupmembers
   get_user_group_member_info
   hash_to_xml_string
   help
-  hostname
   insert_reload_request
   insert_request
   insertloadlog
@@ -190,7 +185,6 @@ our @EXPORT = qw(
   set_hash_process_id
   set_logfile_path
   set_managementnode_state
-  setimageid
   setnextimage
   setup_confirm
   setup_get_array_choice
