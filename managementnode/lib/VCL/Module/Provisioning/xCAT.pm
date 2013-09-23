@@ -1858,7 +1858,7 @@ sub _rpower {
 	my $command = "$XCAT_ROOT/bin/rpower $computer_node_name $rpower_option";
 	
 	my $rpower_attempt = 0;
-	my $rpower_attempt_limit = $self->data->get_variable("xcat|rpower_error_limit|$management_node_hostname", 0) || $self->data->get_variable("xcat|rpower_error_limit", 0);
+	my $rpower_error_limit = $self->data->get_variable("xcat|rpower_error_limit|$management_node_hostname", 0) || $self->data->get_variable("xcat|rpower_error_limit", 0);
 	if (!$rpower_error_limit || $rpower_error_limit !~ /^\d+$/) {
 		$rpower_error_limit = 3;
 	}
@@ -1870,14 +1870,14 @@ sub _rpower {
 	}
 	
 	my $rinv_attempted = 0;
-	RPOWER_ATTEMPT: while ($rpower_attempt <= ($rpower_attempt_limit+$timeout_error_count)) {
+	RPOWER_ATTEMPT: while ($rpower_attempt <= ($rpower_error_limit+$timeout_error_count)) {
 		$rpower_attempt++;
 		
 		if ($rpower_attempt > 1) {
 			# Wait a random amount of time to prevent several cluster reservations from reattempting at the same time
 			my $rpower_attempt_delay = int(rand($rpower_attempt*2))+1;
 			
-			my $notify_string = "attempt $rpower_attempt/$rpower_attempt_limit";
+			my $notify_string = "attempt $rpower_attempt/$rpower_error_limit";
 			if ($timeout_error_count) {
 				$notify_string .= "+$timeout_error_count (timeout errors: $timeout_error_count/$timeout_error_limit)";
 			}
@@ -1949,7 +1949,7 @@ sub _rpower {
 		notify($ERRORS{'WARNING'}, 0, "failed to parse rpower output\ncommand: $command\noutput:\n" . join("\n", @$output));
 	}
 	
-	notify($ERRORS{'WARNING'}, 0, "failed to issue rpower command for $computer_node_name, made $rpower_attempt_limit attempts");
+	notify($ERRORS{'WARNING'}, 0, "failed to issue rpower command for $computer_node_name, made $rpower_attempt attempts");
 	return;
 }
 
