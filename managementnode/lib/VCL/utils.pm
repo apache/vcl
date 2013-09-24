@@ -102,6 +102,7 @@ our @EXPORT = qw(
   get_affiliation_info
   get_block_request_image_info
   get_caller_trace
+  get_calling_subroutine
   get_computer_current_state_name
   get_computer_grp_members
   get_computer_ids
@@ -227,11 +228,6 @@ our @EXPORT = qw(
   $DATABASE
   $DEFAULTHELPEMAIL
   $FQDN
-  $jabPass
-  $jabPort
-  $jabResource
-  $jabServer
-  $jabUser
   $LOGFILE
   $MYSQL_SSL
   $MYSQL_SSL_CERT
@@ -252,40 +248,63 @@ our @EXPORT = qw(
 
 );
 
-#our %ERRORS=('DEPENDENT'=>4,'UNKNOWN'=>3,'OK'=>0,'WARNING'=>1,'CRITICAL'=>2,'MAILMASTERS'=>5);
+our %ERRORS = (
+	'OK' => 0,
+	'WARNING' => 1,
+	'CRITICAL' => 2,
+	'UNKNOWN' => 3,
+	'DEPENDENT' => 4,
+	'MAILMASTERS' => 5,
+	'DEBUG' => 6
+);
+
+our $PROCESSNAME;
+our $LOGFILE;
+our $PIDFILE;
+our $FQDN;
+
+our $SERVER;
+our $DATABASE;
+our $WRTUSER;
+our $WRTPASS;
+our $MYSQL_SSL;
+our $MYSQL_SSL_CERT;
+
+our $JABBER;
+our $JABBER_SERVER;
+our $JABBER_USER;
+our $JABBER_PASSWORD;
+our $JABBER_RESOURCE;
+our $JABBER_PORT;
+
+our $DEFAULTHELPEMAIL;
+our $RETURNPATH;
+
+our $WINDOWS_ROOT_PASSWORD;
+
+our $XMLRPC_USER;
+our $XMLRPC_PASS;
+our $XMLRPC_URL;
+
+our $BIN_PATH = $FindBin::Bin;
+our $TOOLS = "$FindBin::Bin/../tools";
+our $VERBOSE;
+our $CONF_FILE_PATH;
+our $DAEMON_MODE;
+our $SETUP_MODE;
+
 
 INIT {
 	# Parse config file and set globals
-	our ($JABBER, $jabServer, $jabUser, $jabPass, $jabResource, $jabPort) = 0;
-	our ($LOGFILE, $PIDFILE, $PROCESSNAME);
-	our ($DATABASE, $SERVER, $WRTUSER, $WRTPASS, $LockerRdUser, $rdPass) = 0;
-	our ($DEFAULTHELPEMAIL, $RETURNPATH) = 0;
-	our ($XCATROOT) = 0;
-	our ($FQDN)     = 0;
-	our ($MYSQL_SSL,       $MYSQL_SSL_CERT);
-	our ($WINDOWS_ROOT_PASSWORD);
-   our ($XMLRPC_USER, $XMLRPC_PASS, $XMLRPC_URL);
-
+	
 	# Set Getopt pass_through so this module doesn't erase parameters that other modules may use
 	Getopt::Long::Configure('pass_through');
-
-	# Set the VERBOSE flag to 0 by default
-	our $VERBOSE = 0;
-	
-	# Set the SETUP_MODE flag to 0 by default
-	our $SETUP_MODE = 0;
-	
-	# Set the SETUP_MODE flag to 1 by default
-	our $DAEMON_MODE = 1;
-
-	# Use the default configuration file path if -conf isn't specified on the command line
-	our $BIN_PATH = $FindBin::Bin;
 	
 	# Set a default config file path
 	my $hostname = hostname();
 	$hostname =~ s/\..*//g;
 	my $cwd = getcwd();
-	our $CONF_FILE_PATH = "$cwd/$hostname.conf";
+	$CONF_FILE_PATH = "$cwd/$hostname.conf";
 	if (!-f $CONF_FILE_PATH) {
 		if ($BIN_PATH =~ /dev/) {
 			$CONF_FILE_PATH = "/etc/vcl/vcldev.conf";
@@ -305,211 +324,128 @@ INIT {
 				  'setup!' => \$SETUP_MODE,
 				  'verbose!' => \$VERBOSE,
 	);
+
+	my %parameters = (
+		'log'							=> \$LOGFILE,
+		'pidfile'					=> \$PIDFILE,
+		'fqdn'						=> \$FQDN,
+		'database'					=> \$DATABASE,
+		'server'						=> \$SERVER,
+		'lockerwrtuser'			=> \$WRTUSER,
+		'wrtpass'					=> \$WRTPASS,
+		'xmlrpc_username'			=> \$XMLRPC_USER,
+		'xmlrpc_pass'				=> \$XMLRPC_PASS,
+		'xmlrpc_url'				=> \$XMLRPC_URL,
+		'enable_mysql_ssl'		=> \$MYSQL_SSL,
+		'mysql_ssl_cert'			=> \$MYSQL_SSL_CERT,
+		'returnpath'				=> \$RETURNPATH,
+		'jabber'						=> \$JABBER,
+		'jabserver'					=> \$JABBER_SERVER,
+		'jabuser'					=> \$JABBER_USER,
+		'jabpass'					=> \$JABBER_PASSWORD,
+		'jabport'					=> \$JABBER_PORT,
+		'jabresource'				=> \$JABBER_RESOURCE,
+		'processname'				=> \$PROCESSNAME,
+		'windows_root_password'	=> \$WINDOWS_ROOT_PASSWORD,
+		'verbose'					=> \$VERBOSE,
+		'defaulthelpemail'		=> \$DEFAULTHELPEMAIL,
+	);
 	
 	# Make sure the config file exists
 	if (!-f $CONF_FILE_PATH) {
 		if (!$SETUP_MODE) {
-			print STDOUT "ERROR: config file does not exist: $CONF_FILE_PATH\n";
+			print STDERR "FATAL: vcld configuration file does not exist: $CONF_FILE_PATH\n";
 			help();
 		}
 	}
-	elsif (open(CONF, $CONF_FILE_PATH)) {
-		my @conf = <CONF>;
-		close(CONF);
-		foreach my $l (@conf) {
-			# Remove all new line and carriage return characters from the end of the line
-			# Chomp doesn't always remove carriage returns
-			$l =~ s/[\r\n]*$//;
-			
-			#logfile
-			if ($l =~ /^log=(.*)/ && (!defined($LOGFILE))) {
-				chomp($l);
-				$LOGFILE = $1;
-			}
-			#pidfile
-			if ($l =~ /^pidfile=(.*)/) {
-				chomp($l);
-				$PIDFILE = $1;
-			}
-
-			#FQDN - to many issues trying to figure out my FQDN so just tell me
-			if ($l =~ /^FQDN=([-.a-zA-Z0-9]*)/) {
-				$FQDN = $1;
-			}
-
-			#mysql settings
-			#name of db
-			if ($l =~ /^database=(.*)/) {
-				$DATABASE = $1;
-			}
-			#name of database server
-			if ($l =~ /^server=([-.a-zA-Z0-9]*)/) {
-				$SERVER = $1;
-			}
-			#write user name
-			if ($l =~ /^LockerWrtUser=(.*)/) {
-				$WRTUSER = $1;
-			}
-
-			#write user password
-			if ($l =~ /^wrtPass=(.*)/) {
-				$WRTPASS = $1;
-			}
-
-			#read user name
-			if ($l =~ /^LockerRdUser=(.*)/) {
-				$LockerRdUser = $1;
-			}
-
-			#read user password
-			if ($l =~ /^rdPass=(.*)/) {
-				$rdPass = $1;
-			}
-         
-			#xmlrpc_username
-			if ($l =~ /^xmlrpc_username=(.*)/) {
-				$XMLRPC_USER = $1;
-			}
-
-			#xmlrpc_username password
-			if ($l =~ /^xmlrpc_pass=(.*)/) {
-				$XMLRPC_PASS = $1;
-			}
-         
-			#xmlrpc_url
-			if ($l =~ /^xmlrpc_url=(.*)/) {
-				$XMLRPC_URL = $1;
-			}
-
-			#is mysql ssl option enabled
-			if ($l =~ /^enable_mysql_ssl=(yes)/) {
-				$MYSQL_SSL = 1;
-			}
-			elsif ($l =~ /^enable_mysql_ssl=(no)/) {
-				$MYSQL_SSL = 0;
-			}
-
-			#collect path to cert -- only valid if $MYSQL_SSL is true
-			if ($l =~ /^mysql_ssl_cert=(.*)/) {
-				$MYSQL_SSL_CERT = $1;
-			}
+	elsif (!open(CONF, $CONF_FILE_PATH)) {
+		print STDERR "FATAL: failed to open vcld configuration file: $CONF_FILE_PATH, $!\n";
+		exit;
+	}
 	
-			#Sendmail Envelope Sender 
-			if ($l =~ /^RETURNPATH=([,-.\@a-zA-Z0-9_]*)/) {
-				$RETURNPATH = $1;
+	my @conf_file_lines = <CONF>;
+	close(CONF);
+	
+	my $line_number = 0;
+	foreach my $line (@conf_file_lines) {
+		$line_number++;
+		
+		$line =~ s/[\s]*$//g;
+		
+		# Skip commented and blank lines
+		if ($line =~ /^\s*#/ || $line !~ /\w/) {
+			next;
+		}
+		
+		my ($parameter, $value) = $line =~ /\s*([^=]+)=(.+)/;
+		if (!defined($parameter) || !defined($value)) {
+			print STDERR "WARNING: ignoring line $line_number in $CONF_FILE_PATH: $line\n";
+			next;
+		}
+		
+		# Remove any leading and trailing spaces
+		for ($parameter, $value) {
+			s/^\s+//;
+			s/\s+$//;
+		}
+		
+		$parameter = lc($parameter);
+		
+		if (my $variable_ref = $parameters{$parameter}) {
+			if (defined($$variable_ref)) {
+				#print STDOUT "INFO: ignoring previously set parameter: $parameter\n";
 			}
-
-			#jabber - stuff
-			if ($l =~ /^jabber=(yes)/) {
-				$JABBER = 1;
+			else {
+				$$variable_ref = $value;
+				#print STDOUT "set parameter: '$parameter' = '$value'\n";
 			}
-			if ($l =~ /^jabber=(no)/) {
-				$JABBER = 0;
-			}
-			#collect remaining pieces of the jabber settings
-			#$jabServer,$jabUser,$jabPass,$jabResource,$jabPort
-			if ($l =~ /^jabServer=([.a-zA-Z0-9]*)/) {
-				$jabServer = $1;
-			}
-			if ($l =~ /^jabPort=([0-9]*)/) {
-				$jabPort = $1;
-			}
-			if ($l =~ /^jabUser=(.*)/) {
-				$jabUser = $1;
-			}
-			if ($l =~ /^jabPass=(.*)/) {
-				$jabPass = $1;
-			}
-			if ($l =~ /^jabResource=(.*)/) {
-				$jabResource = $1;
-			}
-
-			#process name
-			if ($l =~ /^processname=([-_a-zA-Z0-9]*)/) {
-				$PROCESSNAME = $1;
-			}
-
-
-			if ($l =~ /^windows_root_password=(.*)/i) {
-				$WINDOWS_ROOT_PASSWORD = $1;
-			}
-
-			if ($l =~ /^verbose=(.*)/i && !$VERBOSE) {
-				$VERBOSE = $1;
-			}
-
-            if ($l =~ /^defaulthelpemail=(.*)/i){
-                $DEFAULTHELPEMAIL = $1;
-            }
-			
-		}    # Close foreach line in conf file
-	}    # Close open conf file
-
-	else {
-		die "failed to open vcld configuration file: $CONF_FILE_PATH, exiting --  $! \n";
+		}
+		else {
+			print STDERR "WARNING: unsupported parameter found on line $line_number in $CONF_FILE_PATH: " . string_to_ascii($parameter) . "\n";
+		}
 	}
-
-	if (!$PROCESSNAME) {
-		$PROCESSNAME = "vcld";
+	
+	if (!$FQDN) {
+		print STDERR "FATAL: FQDN parameter must be configured in $CONF_FILE_PATH\n";
+		exit;
 	}
-	if (!($LOGFILE) && $LOGFILE ne '0') {
-		#set default
-		$LOGFILE = "/var/log/$PROCESSNAME.log";
-	}
-
-	if (!$WINDOWS_ROOT_PASSWORD) {
-		$WINDOWS_ROOT_PASSWORD = "clOudy";
-	}
-
-	if (!($FQDN)) {
-		print STDOUT "FQDN is not listed\n";
-	}
-	if (!($PIDFILE)) {
-		#set default
-		$PIDFILE = "/var/run/$PROCESSNAME.pid";
-	}
-	if (!($RETURNPATH)){
-		$RETURNPATH="";
-	}
-
-	if ($JABBER) {
-		#jabber is enabled - import required jabber module
-		# todo - check if Jabber module is installed
-		# i.e. perl -MNet::Jabber -e1
-		# check version -- perl -MNet::Jabber -e'print $Net::Jabber::VERSION\n";'
-		require "Net/Jabber.pm";
-		import Net::Jabber qw(client);
-	}
-
+	
+	$PROCESSNAME = 'vcld' if !$PROCESSNAME;
+	$PIDFILE = "/var/run/$PROCESSNAME.pid" if !$PIDFILE;
+	$LOGFILE = "/var/log/$PROCESSNAME.log" if !defined($LOGFILE);
+	$WINDOWS_ROOT_PASSWORD = "clOudy" if !defined($WINDOWS_ROOT_PASSWORD);
+	$DEFAULTHELPEMAIL = "vcl_help\@example.org" if !$DEFAULTHELPEMAIL;
+	
 	# Can't be both daemon mode and setup mode, use setup if both are set
-	$DAEMON_MODE = 0 if ($DAEMON_MODE && $SETUP_MODE);
-
+	if ($SETUP_MODE) {
+		$DAEMON_MODE = 0;
+	}
+	elsif (!defined($DAEMON_MODE)) {
+		$DAEMON_MODE = 1;
+	}
+	
+	# Set boolean variables to 0 or 1, they may be set to 'no' or 'yes' in the conf file
+	for ($MYSQL_SSL, $JABBER, $VERBOSE, $DAEMON_MODE, $SETUP_MODE) {
+		if (!$_ || $_ =~ /no/i) {
+			$_ = 0;
+		}
+		else {
+			$_ = 1;
+		}
+	}
+	
+	if ($JABBER) {
+		# Jabber is enabled - import required module
+		eval {
+			require "Net/Jabber.pm";
+			import Net::Jabber qw(client);
+		};
+		if ($EVAL_ERROR) {
+			print STDERR "FATAL: failed to load Jabber module, error:\n$EVAL_ERROR\n";
+			exit;
+		}
+	}
 } ## end INIT
-
-
-our ($JABBER, $PROCESSNAME);
-our %ERRORS = ('DEPENDENT' => 4, 'UNKNOWN' => 3, 'OK' => 0, 'WARNING' => 1, 'CRITICAL' => 2, 'MAILMASTERS' => 5, 'DEBUG' => 6);
-our ($LockerWrtUser, $wrtPass,  $database,       $server);
-our ($jabServer,     $jabUser,  $jabPass,        $jabResource, $jabPort);
-our ($vcldquerykey, $RETURNPATH);
-our ($LOGFILE, $PIDFILE, $VCLDRPCQUERYKEY);
-our ($SERVER, $DATABASE, $WRTUSER, $WRTPASS);
-our ($MYSQL_SSL,       $MYSQL_SSL_CERT);
-our ($FQDN);
-our $XCATROOT           = "/opt/xcat";
-our $TOOLS              = "$FindBin::Bin/../tools";
-our $VMWARE_MAC_GENERATED;
-our $VERBOSE;
-our $CONF_FILE_PATH;
-our $WINDOWS_ROOT_PASSWORD;
-our ($XMLRPC_USER, $XMLRPC_PASS, $XMLRPC_URL);
-our $DAEMON_MODE;
-our $SETUP_MODE;
-our $BIN_PATH;
-
-our $DEFAULTHELPEMAIL = "vcl_help\@example.org"; # default value if affiliation helpaddress is not set
-
-sub makedatestring;
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -1196,8 +1132,14 @@ sub mail {
 	if (!(defined($from))) {
 		$from = $DEFAULTHELPEMAIL;
 	}
-	my $localreturnpath = "-f $RETURNPATH";
-	my $mailer = Mail::Mailer->new("sendmail", $localreturnpath);
+	
+	my $mailer;
+	if (defined($RETURNPATH)) {
+		$mailer = Mail::Mailer->new("sendmail", "-f $RETURNPATH");
+	}
+	else {
+		$mailer = Mail::Mailer->new("sendmail");
+	}
 	
 	my $shared_mail_box = '';
 	my $management_node_info = get_management_node_info();
@@ -2738,28 +2680,28 @@ sub notify_via_IM {
 		}
 		
 		# Attempt to connect to the jabber server
-		my $jabber_connect_result = $jabber_client->Connect(hostname => $jabServer, port => $jabPort);
+		my $jabber_connect_result = $jabber_client->Connect(hostname => $JABBER_SERVER, port => $JABBER_PORT);
 		if (!$jabber_connect_result) {
-			notify($ERRORS{'DEBUG'}, 0, "connected to jabber server: $jabServer, port: $jabPort, result: $jabber_connect_result");
+			notify($ERRORS{'DEBUG'}, 0, "connected to jabber server: $JABBER_SERVER, port: $JABBER_PORT, result: $jabber_connect_result");
 		}
 		else {
-			notify($ERRORS{'WARNING'}, 0, "failed to connect to jabber server: $jabServer, port: $jabPort, result: $jabber_connect_result");
+			notify($ERRORS{'WARNING'}, 0, "failed to connect to jabber server: $JABBER_SERVER, port: $JABBER_PORT, result: $jabber_connect_result");
 			return;
 		}
 		
 		# Attempt to authenticate to jabber
 		my @jabber_auth_result = $jabber_client->AuthSend(
-			username => $jabUser,
-			password => $jabPass,
-			resource => $jabResource
+			username => $JABBER_USER,
+			password => $JABBER_PASSWORD,
+			resource => $JABBER_RESOURCE
 		);
 		
 		# Check the jabber authentication result
 		if ($jabber_auth_result[0] && $jabber_auth_result[0] eq "ok") {
-			notify($ERRORS{'DEBUG'}, 0, "authenticated to jabber server: $jabServer, user: $jabUser, resource: $jabResource");
+			notify($ERRORS{'DEBUG'}, 0, "authenticated to jabber server: $JABBER_SERVER, user: $JABBER_USER, resource: $JABBER_RESOURCE");
 		}
 		else {
-			notify($ERRORS{'WARNING'}, 0, "failed to authenticate to jabber server: $jabServer, user: $jabUser, resource: $jabResource");
+			notify($ERRORS{'WARNING'}, 0, "failed to authenticate to jabber server: $JABBER_SERVER, user: $JABBER_USER, resource: $JABBER_RESOURCE");
 			return;
 		}
 	
@@ -2778,7 +2720,7 @@ sub notify_via_IM {
 			notify($ERRORS{'OK'}, 0, "jabber message sent to $im_id");
 		}
 		else {
-			notify($ERRORS{'WARNING'}, 0, "failed to send jabber message to $jabUser");
+			notify($ERRORS{'WARNING'}, 0, "failed to send jabber message to $JABBER_USER");
 			return;
 		}
 		
@@ -3995,7 +3937,7 @@ EOF
 			notify($ERRORS{'DEBUG'}, 0, "decrypted vmprofile password with key: " . $vmhost_info->{vmprofile}{rsakey});
 		}
 		else {
-			Nnotify($ERRORS{'WARNING'}, 0, "unable to decrypt vmprofile password");    
+			notify($ERRORS{'WARNING'}, 0, "unable to decrypt vmprofile password");    
 		}
 	}
 	# Clean up the extraneous data
@@ -7491,6 +7433,22 @@ sub get_caller_trace {
 
 	return $caller_trace;
 } ## end sub get_caller_trace
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_calling_subroutine
+
+ Parameters  : none
+ Returns     : string
+ Description : Returns the name of the subroutine which called the subroutine in
+               which get_calling_subroutine is called.
+
+=cut
+
+sub get_calling_subroutine {
+	my @caller = caller(2);
+	return $caller[3];
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 

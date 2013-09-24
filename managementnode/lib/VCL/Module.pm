@@ -315,7 +315,7 @@ sub create_os_object {
 	# Attempt to load the OS module
 	eval "use $os_perl_package";
 	if ($EVAL_ERROR) {
-		notify($ERRORS{'WARNING'}, 0, "$os_perl_package module could not be loaded, returning 0");
+		notify($ERRORS{'WARNING'}, 0, "$os_perl_package module could not be loaded, error:\n" . $EVAL_ERROR);
 		return 0;
 	}
 	notify($ERRORS{'DEBUG'}, 0, "$os_perl_package module loaded");
@@ -382,7 +382,7 @@ sub create_mn_os_object {
 	my $mn_os_perl_package = 'VCL::Module::OS::Linux::ManagementNode';
 	eval "use $mn_os_perl_package";
 	if ($EVAL_ERROR) {
-		notify($ERRORS{'WARNING'}, 0, "$mn_os_perl_package module could not be loaded, returning 0");
+		notify($ERRORS{'WARNING'}, 0, "$mn_os_perl_package module could not be loaded, error:\n" . $EVAL_ERROR);
 		return 0;
 	}
 	notify($ERRORS{'DEBUG'}, 0, "$mn_os_perl_package module loaded");
@@ -535,7 +535,7 @@ sub create_provisioning_object {
 	# Attempt to load the computer provisioning module
 	eval "use $provisioning_perl_package";
 	if ($EVAL_ERROR) {
-		notify($ERRORS{'WARNING'}, 0, "$provisioning_perl_package module could not be loaded, returning 0");
+		notify($ERRORS{'WARNING'}, 0, "$provisioning_perl_package module could not be loaded, error:\n" . $EVAL_ERROR);
 		return 0;
 	}
 	notify($ERRORS{'DEBUG'}, 0, "$provisioning_perl_package module loaded");
@@ -964,7 +964,7 @@ sub get_package_hierarchy {
 		# Argument is not a reference, assume argument is a string containing a package name
 		$package_name = $argument;
 	}
-	notify($ERRORS{'DEBUG'}, 0, "finding package hierarchy for: $package_name");
+	#notify($ERRORS{'DEBUG'}, 0, "finding package hierarchy for: $package_name");
 	
 	# Use eval to retrieve the package name's @ISA array
 	my @package_isa = eval '@' . $package_name . '::ISA';
@@ -978,11 +978,11 @@ sub get_package_hierarchy {
 	
 	# Check if @ISA is empty
 	if ($package_isa_count == 0) {
-		notify($ERRORS{'DEBUG'}, 0, "$package_name has no parent packages");
+		#notify($ERRORS{'DEBUG'}, 0, "$package_name has no parent packages");
 		return ();
 	}
 	
-	notify($ERRORS{'DEBUG'}, 0, "parent package names for $package_name:\n" . format_data(\@package_isa));
+	#notify($ERRORS{'DEBUG'}, 0, "parent package names for $package_name:\n" . format_data(\@package_isa));
 	my $parent_package_name = $package_isa[0];
 	
 	# Warn if package uses multiple inheritance, only use 1st element of package's @ISA array
@@ -996,7 +996,11 @@ sub get_package_hierarchy {
 	# Recursively call this sub on the parent package and add the results to the return array
 	push @return_package_names, get_package_hierarchy($parent_package_name);
 	
-	notify($ERRORS{'DEBUG'}, 0, "returning for $package_name:\n" . format_data(\@return_package_names));
+	# Print the package names only for the original argument, not for recursive packages
+	my $calling_subroutine = get_calling_subroutine();
+	if ($calling_subroutine !~ /get_package_hierarchy/) {
+		notify($ERRORS{'DEBUG'}, 0, "returning for $package_name:\n" . join("\n", @return_package_names));
+	}
 	return @return_package_names;
 }
 
