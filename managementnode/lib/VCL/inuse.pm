@@ -841,7 +841,7 @@ EOF
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 _notify_user_nologin
+=head2 _notify_user_no_login
 
  Parameters  : none
  Returns     : boolean
@@ -851,7 +851,7 @@ EOF
 
 =cut
 
-sub _notify_user_nologin {
+sub _notify_user_no_login {
 	my $self = shift;
 	
 	my $request_id                 = $self->data->get_request_id();
