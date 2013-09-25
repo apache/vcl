@@ -167,6 +167,7 @@ sub load {
 	my $image_reload_time_minutes  = $self->data->get_image_reload_time() || 10;
 	my $computer_id                = $self->data->get_computer_id();
 	my $computer_node_name         = $self->data->get_computer_node_name();
+	my $management_node_hostname   = $self->data->get_management_node_hostname();
 	
 	insertloadlog($reservation_id, $computer_id, "startload", "$computer_node_name $image_name");
 	
@@ -178,19 +179,19 @@ sub load {
 	$self->_edit_nodelist($computer_node_name, $image_name) || return;
 	
 	# Check to see if management node throttle is configured
-	my $throttle_limit;
-	my $variable_name = $self->data->get_management_node_hostname() . "|xcat|throttle";
-	if ($self->data->is_variable_set($variable_name) && ($throttle_limit = $self->data->get_variable($variable_name))) {
-		notify($ERRORS{'DEBUG'}, 0, "'$variable_name' xCAT load throttle limit variable is set in database: $throttle_limit");
-		
-		my $throttle_limit_wait_seconds = (30 * 60);
-		if (!$self->code_loop_timeout(sub{!$self->_is_throttle_limit_reached(@_)}, [$throttle_limit], 'checking throttle limit', $throttle_limit_wait_seconds, 1, 10)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to load image due to throttle limit, waited $throttle_limit_wait_seconds seconds");
-			return;
-		}
+	my $throttle_limit = $self->data->get_variable("xcat|throttle|$management_node_hostname", 0) || $self->data->get_variable("$management_node_hostname|xcat|throttle", 0) || $self->data->get_variable("xcat|throttle", 0);
+	if (!$throttle_limit || $throttle_limit !~ /^\d+$/) {
+		$throttle_limit = 10;
+		notify($ERRORS{'DEBUG'}, 0, "xCAT load throttle limit variable is NOT set in database: 'xcat|throttle', using default value: $throttle_limit");
 	}
 	else {
-		notify($ERRORS{'DEBUG'}, 0, "'$variable_name' xCAT load throttle limit variable is NOT set in database");
+		notify($ERRORS{'DEBUG'}, 0, "xCAT load throttle limit variable is set in database: $throttle_limit");
+	}
+	
+	my $throttle_limit_wait_seconds = (30 * 60);
+	if (!$self->code_loop_timeout(sub{!$self->_is_throttle_limit_reached(@_)}, [$throttle_limit], 'checking throttle limit', $throttle_limit_wait_seconds, 1, 10)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to load image due to throttle limit, waited $throttle_limit_wait_seconds seconds");
+		return;
 	}
 	
 	# Set the computer to install on next boot
