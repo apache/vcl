@@ -2371,33 +2371,43 @@ sub create_user {
 		"SSH public keys: " . (defined($user_ssh_public_keys) ? $user_ssh_public_keys : '<not set>')
 	);
 	
-	my $useradd_command = "/usr/sbin/useradd -m -d /home/$user_login_id -g vcl";
-	$useradd_command .= " -u $uid" if ($uid);
-	$useradd_command .= " $user_login_id";
-	my ($useradd_exit_status, $useradd_output) = $self->execute($useradd_command);
+	my $home_directory_path = "/home/$user_login_id";
+	my $home_directory_root = "/home";
+	my $home_directory_on_local_disk = $self->is_file_on_local_disk($home_directory_root);
+	if($home_directory_on_local_disk ) {
+
+		my $useradd_command = "/usr/sbin/useradd -m -d /home/$user_login_id -g vcl";
+		$useradd_command .= " -u $uid" if ($uid);
+		$useradd_command .= " $user_login_id";
+		my ($useradd_exit_status, $useradd_output) = $self->execute($useradd_command);
 	
-	# Check if the output indicates that the user already exists
-	# useradd: warning: the home directory already exists
-	# useradd: user ibuser exists
-	if ($useradd_output && grep(/ exists(\s|$)/i, @$useradd_output)) {
-		if (!$self->delete_user($user_login_id)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to add user '$user_login_id' to $computer_node_name, user with same name already exists and could not be deleted");
+		# Check if the output indicates that the user already exists
+		# useradd: warning: the home directory already exists
+		# useradd: user ibuser exists
+	
+		if ($useradd_output && grep(/ exists(\s|$)/i, @$useradd_output)) {
+			if (!$self->delete_user($user_login_id)) {
+				notify($ERRORS{'WARNING'}, 0, "failed to add user '$user_login_id' to $computer_node_name, user with same name already exists and could not be deleted");
+				return;
+			}
+			($useradd_exit_status, $useradd_output) = $self->execute($useradd_command);
+		}
+	
+		if (!defined($useradd_output)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to execute command to add user '$user_login_id' to $computer_node_name: '$useradd_command'");
 			return;
 		}
-		($useradd_exit_status, $useradd_output) = $self->execute($useradd_command);
-	}
-	
-	if (!defined($useradd_output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to execute command to add user '$user_login_id' to $computer_node_name: '$useradd_command'");
-		return;
-	}
-	elsif (grep(/^useradd: /, @$useradd_output)) {
-		notify($ERRORS{'WARNING'}, 0, "warning on add user '$user_login_id' to $computer_node_name\ncommand: '$useradd_command'\noutput:\n" . join("\n", @$useradd_output));
+		elsif (grep(/^useradd: /, @$useradd_output)) {
+			notify($ERRORS{'WARNING'}, 0, "warning on add user '$user_login_id' to $computer_node_name\ncommand: '$useradd_command'\noutput:\n" . join("\n", @$useradd_output));
+		}
+		else {
+			notify($ERRORS{'OK'}, 0, "added user '$user_login_id' to $computer_node_name");
+		}
 	}
 	else {
-		notify($ERRORS{'OK'}, 0, "added user '$user_login_id' to $computer_node_name");
+		notify($ERRORS{'OK'}, 0, "$home_directory_path is NOT on local disk, skipping useradd attempt");	
 	}
-	
+
 	if ($user_standalone) {
 		# Set password
 		if (!$self->changepasswd($computer_node_name, $user_login_id, $password)) {
@@ -2436,13 +2446,12 @@ sub create_user {
 	}
 
 	# Add user's public ssh identity keys if exists
-	my $home_directory_path = "/home/$user_login_id";
 	my $ssh_directory_path = "$home_directory_path/.ssh";
 	my $authorized_keys_file_path = "$ssh_directory_path/authorized_keys";
 	
 	if ($user_ssh_public_keys) {
 		# Determine if home directory is on a local device or network share
-		my $home_directory_on_local_disk = $self->is_file_on_local_disk($home_directory_path);
+		$home_directory_on_local_disk = $self->is_file_on_local_disk($home_directory_path);
 		
 		# Only add keys to home directories that are local,
 		# Don'd add keys to network mounted filesystems
@@ -2457,16 +2466,17 @@ sub create_user {
 			else {
 				notify($ERRORS{'WARNING'}, 0, "failed to add user's public keys to $authorized_keys_file_path");
 			}
+
+			if (!$self->set_file_owner($home_directory_path, $user_login_id, 'vcl', 1)) {
+				notify($ERRORS{'WARNING'}, 0, "failed to set owner of user's home directory: $home_directory_path");
+				return;
+			}
 		}
 		else {
 			notify($ERRORS{'DEBUG'}, 0, "skipping adding user's public keys to $authorized_keys_file_path, home directory is on a network share");
 		}
 	}
 	
-	if (!$self->set_file_owner($home_directory_path, $user_login_id, 'vcl', 1)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to set owner of user's home directory: $home_directory_path");
-		return;
-	}
 
 	return 1;
 } ## end sub create_user
