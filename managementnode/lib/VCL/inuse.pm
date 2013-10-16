@@ -369,12 +369,20 @@ sub user_connected {
 	my $reservation_count = $self->data->get_request_reservation_count();
 	my $computer_id = $self->data->get_computer_id();
 	my $computer_short_name = $self->data->get_computer_short_name();
+	my $server_request_id       = $self->data->get_server_request_id();
 	
 	# Check if user deleted the request
 	$self->state_exit() if is_request_deleted($request_id);
 	
 	# Check if this is an imaging request, causes process to exit if state or laststate = image
 	$self->_check_imaging_request();
+
+	# Check if this is a server request, causes process to exit if server request
+	if ($server_request_id) {
+			notify($ERRORS{'DEBUG'}, 0, "Server reservation detected, set as user is connected");
+			insertloadlog($reservation_id, $computer_id, "connected", "user connected to $computer_short_name");
+			return 1;
+	}
 	
 	# Check if the user has connected to the reservation being processed
 	if ($self->os->is_user_connected()) {
