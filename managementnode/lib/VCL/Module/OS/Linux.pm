@@ -2984,7 +2984,7 @@ sub check_connection_on_port {
 	
 	my $ret_val = "no";
 	my $command = "netstat -an";
-	my ($status, $output) = $self->execute($command, '', '', 1);
+	my ($status, $output) = $self->execute($command, '', '', 0);
 	notify($ERRORS{'DEBUG'}, 0, "checking connections on node $computer_node_name on port $port");
 	foreach my $line (@{$output}) {
 		if ($line =~ /Connection refused|Permission denied/) {
