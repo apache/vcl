@@ -222,6 +222,7 @@ our @EXPORT = qw(
   write_currentimage_txt
   xmlrpc_call
   xml_string_to_hash
+  add_imageid_to_newimages
 
   $CONF_FILE_PATH
   $DAEMON_MODE
@@ -5393,7 +5394,7 @@ sub update_log_loaded_time {
 =cut
 
 sub update_image_name {
-	my ($image_id, $imagerevision_id, $new_image_name) = @_;
+	my ($image_id, $imagerevision_id, $new_image_name, $new_image_pretty_name) = @_;
 
 	# Check the passed parameter
 	unless (defined($image_id) && defined($imagerevision_id) && defined($new_image_name)) {
@@ -5408,6 +5409,15 @@ image,
 imagerevision
 SET
 image.name = \'$new_image_name\',
+EOF
+
+	if(defined($new_image_pretty_name) ) {
+		$update_statement .= <<EOF;
+image.prettyname = \'$new_image_pretty_name\',
+EOF
+	}
+
+$update_statement .= <<EOF;	
 imagerevision.imagename = \'$new_image_name\'
 WHERE
 image.id = $image_id AND
@@ -7819,6 +7829,56 @@ sub string_to_ascii {
 	}
 }
 
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 add_imageid_to_newimages
+
+ Parameters  : $ownerid, $resourceid, $virtual
+ Returns     : 1, 0 
+ Description : Calls the RPC::XML function defined in the arguments
+
+=cut
+sub add_imageid_to_newimages {
+	my ($ownerid, $resourceid, $virtual) = @_;
+
+   my ($package, $filename, $line, $sub) = caller(0);
+
+   # Check the arguments
+   if (!defined($ownerid)) {
+       notify($ERRORS{'WARNING'}, 0, "ownerid was not specified");
+       return 0;
+   }
+   if (!defined($resourceid)) {
+       notify($ERRORS{'WARNING'}, 0, "resourceid was not specified");
+       return 0;
+   }
+   if (!defined($virtual)) {
+       notify($ERRORS{'WARNING'}, 0, "virtual was not specified");
+       return 0;
+   }
+
+	my $method = "XMLRPCfinishBaseImageCapture";
+	my @argument_string = ($method,$ownerid, $resourceid, $virtual); 
+	my $xml_ret = xmlrpc_call(@argument_string);
+	# Check if the XML::RPC call failed
+   if (!defined($xml_ret)) {
+      notify($ERRORS{'WARNING'}, 0, "failed to add image to owner's new image group, XML::RPC '$method' call failed");
+      return 0;
+   }
+   elsif ($xml_ret->value->{status} !~ /success/) {
+      notify($ERRORS{'WARNING'}, 0, "failed to add image to owner's newimage group, XML::RPC '$method' status: $xml_ret->value->{status}\n" .
+            "error code $xml_ret->value->{errorcode}\n" .
+            "error message: $xml_ret->value->{errormsg}"
+       );
+       return 0;
+	}
+   else {
+	 return 1;
+	}
+
+}
+
 #/////////////////////////////////////////////////////////////////////////////
 
 =head2 xmlrpc_call
@@ -7828,6 +7888,7 @@ sub string_to_ascii {
  Description : Calls the RPC::XML function defined in the arguments
 
 =cut
+
 sub xmlrpc_call {
 	my @arguments = @_;
 	if (!@arguments) {

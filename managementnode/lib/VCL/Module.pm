@@ -1404,7 +1404,11 @@ sub setup_test_rpc_xml {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
-	
+	my $verbose = shift;
+	if (!defined($verbose)) {
+		$verbose = 1;
+	}
+
 	my $error_count = 0;
 	my $user_id;
 	
@@ -1499,7 +1503,7 @@ sub setup_test_rpc_xml {
 	
 	if ($error_count) {
 		print "FAILURE: RPC-XML access is not configured correctly, errors encountered: $error_count\n";
-		return;
+		return 0;
 	}
 	
 	my $xmlrpc_function = 'system.listMethods';
@@ -1509,14 +1513,14 @@ sub setup_test_rpc_xml {
 	
 	my $response = xmlrpc_call(@xmlrpc_arguments);
 	if ($response && $response->value) {
-		print "SUCCESS: RPC-XML access is configured correctly\n" . format_data($response->value) . "\n";
-		return;
+		print "SUCCESS: RPC-XML access is configured correctly\n" . format_data($response->value) . "\n" if($verbose == 1);
+		return 1;
 	}
 	
 	
 	if (!$ENV{rpc_xml_error}) {
 		print "FAILURE: RPC-XML access is not configured correctly, view the log file for more information: $LOGFILE\n";
-		return;
+		return 0;
 	}
 	
 	print "FAILURE: RPC-XML access is not configured correctly, error message:\n$ENV{rpc_xml_error}\n\n";
@@ -1540,7 +1544,7 @@ sub setup_test_rpc_xml {
 		print "SUGGESTION: make sure user ID $user_id has been added to the \$xmlrpcBlockAPIUsers line in the conf.php file on the web server\n";
 	}
 	
-	return;
+	return 0;
 }
 
 #/////////////////////////////////////////////////////////////////////////////

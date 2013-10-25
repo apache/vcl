@@ -522,6 +522,14 @@ sub setup_capture_base_image {
 		print "ERROR: failed to determine the management node ID\n";
 		return;
 	}
+
+	my ($request_id, $reservation_id) = 0;
+	my $image_is_virtual = 0;
+
+	print "\nTesting api call\n";
+	if($self->setup_test_rpc_xml(0)) {
+		print "VCL API call successful\n\n";
+	}
 	
 	# Get the user who the reservation and image will belong to
 	my $user_id;
@@ -573,12 +581,12 @@ sub setup_capture_base_image {
 			$computer_id = (keys %computer_info)[0];
 		}
 		
-		
 	}
 	
 	my $computer_hostname = $computer_info{$computer_id}{hostname};
 	my $computer_state_name = $computer_info{$computer_id}{state}{name};
 	my $computer_provisioning_module_name = $computer_info{$computer_id}{provisioning}{module}{name};
+	my $computer_node_name = $computer_info{$computer_id}{SHORTNAME};
 	
 	my $install_type;
 	if ($computer_provisioning_module_name =~ /xcat/i) {
@@ -589,17 +597,177 @@ sub setup_capture_base_image {
 	}
 	
 	print "\nComputer to be captured: $computer_hostname (ID: $computer_id)\n";
+	print "Computer shortname: $computer_node_name\n";
+	print "Computer State: $computer_state_name\n";
 	print "Provisioning module: $computer_provisioning_module_name\n";
 	print "Install type: $install_type\n";
-	print "\n";
 	
-	# Make sure the computer state is valid
-	if ($computer_state_name =~ /(maintenance|deleted)/i) {
-		print "ERROR: state of $computer_hostname is $computer_state_name\n";
-		return;
+	my $vmhost_name;
+	if ($install_type eq "vmware") {
+		$image_is_virtual = 1;
+		#should have a vmhost assigned
+		if($computer_info{$computer_id}{vmhostid}){
+			$vmhost_name = $computer_info{$computer_id}{vmhost}{computer}{SHORTNAME};
+			print "VM host name: $vmhost_name\n";
+			print "VM host profile: $computer_info{$computer_id}{vmhost}{vmprofile}{profilename}\n";
+			print "\n";
+
+		}
+		else {
+			print "ERROR: Install type is vmware, $computer_node_name is NOT assigned to a vmhost\n";
+			print "ERROR: Assign $computer_node_name to a vmhost before proceeding.\n";
+			print "\n";
+			return;
+		}
 	}
 	
+	print "Testing ssh access to $computer_hostname\n";
+
+	# Node Checks
+	# is the node up and accessible through ssh pki
+	# If it is a vm, is it assigned to a vmhost
+	# Try nmap to see if any of the ssh ports are open before attempting to run a test command
+   my $port_22_status = nmap_port($computer_node_name, 22) ? "open" : "closed";
+   my $port_24_status = nmap_port($computer_node_name, 24) ? "open" : "closed";
+   if ($port_22_status ne 'open' && $port_24_status ne 'open') {
+		print "Error: ssh port on $computer_node_name is NOT responding to SSH, ports 22 or 24 are both closed\n";
+      return;
+   }
+
+	my ($exit_status, $output) = run_ssh_command({
+       node => $computer_node_name,
+       command => "echo \"testing ssh on $computer_node_name\"",
+       max_attempts => 2,
+       output_level => 0,
+       timeout_seconds => 30,
+   });
+
+   # The exit status will be 0 if the command succeeded
+   if (defined($output) && grep(/testing/, @$output)) {
+	   print "$computer_node_name is responding to SSH, port 22: $port_22_status, port 24: $port_24_status\n";
+		print "\n";
+   } 
+	else {
+	   print "ERROR: $computer_node_name is NOT responding to SSH, SSH command failed, port 22: $port_22_status, port 24: $port_24_status\n";
+		print "Make sure you can login using ssh PKI on $computer_node_name before continuing\n"; 
+		print "\n";
+		return;
+	}
+
+	# Check if computer id is in an existing or failed imaging reservation
+	my $computer_requests = get_request_by_computerid($computer_id);
+	my %existing_requests_array_choices;
+	if (keys(%$computer_requests)) {
+		$existing_requests_array_choices{0}{"prettyname"} = "None : delete all previous reservations for $computer_node_name";
+		for my $competing_request_id (sort keys %$computer_requests) {
+		    my $competing_reservation_id    = $computer_requests->{$competing_request_id}{data}->get_reservation_id();
+		    my $competing_imagerevision_id  = $computer_requests->{$competing_request_id}{data}->get_imagerevision_id();
+		    my $competing_image_id		   	= $computer_requests->{$competing_request_id}{data}->get_image_id();
+		    my $competing_prettyimage_name  = $computer_requests->{$competing_request_id}{data}->get_image_prettyname();
+		    my $competing_image_name		   = $computer_requests->{$competing_request_id}{data}->get_image_name();
+			 my $competing_request_state		= $computer_requests->{$competing_request_id}{data}->get_request_state_name();
+
+			$existing_requests_array_choices{$competing_request_id}{"prettyname"} = $competing_prettyimage_name;
+			$existing_requests_array_choices{$competing_request_id}{"name"} = $competing_image_name;
+			$existing_requests_array_choices{$competing_request_id}{"image_id"} = $competing_image_id;
+			$existing_requests_array_choices{$competing_request_id}{"image_revision_id"} = $competing_imagerevision_id;
+			$existing_requests_array_choices{$competing_request_id}{"current_state"} = $competing_request_state;
+			$existing_requests_array_choices{$competing_request_id}{"reservation_id"} = $competing_reservation_id;
+		}
+
+		my $num_computer_requests = keys(%$computer_requests);
+		print "WARNING: Image capture reservation exists for $computer_node_name.\n\n"; 
+		print "Make Selection, Choose none to start over or choose the image to restart image capture for that request:\n"; 
+
+		my $chosen_request_id = setup_get_hash_choice(\%existing_requests_array_choices, 'prettyname');
+		return if (!defined($chosen_request_id));
+		my $chosen_prettyname = $existing_requests_array_choices{$chosen_request_id}{prettyname};
+		print "\nSelected reservation: $chosen_request_id $chosen_prettyname\n\n";
+
+		# if 0 selected, delete all reservations related to $computer_node_name
+		# Set $computer_node_name to available, proceed with questions
+		my $epoch_time = convert_to_epoch_seconds;
+		if ($chosen_request_id == 0 ){
+			delete $existing_requests_array_choices{0};
+
+			foreach my $request_id_del (sort keys %existing_requests_array_choices) {
+				my $del_reservation_id = $existing_requests_array_choices{$request_id_del}{reservation_id};
+				my $del_image_id = $existing_requests_array_choices{$request_id_del}{image_id};
+				my $del_imagerevision_id = $existing_requests_array_choices{$request_id_del}{image_revision_id};
+				my $del_image_name = $existing_requests_array_choices{$request_id_del}{name};
+				print "del_image_name= $del_image_name\n";
+				my $new_image_name = $del_image_name . $epoch_time;
+				my $new_prettyimage_name = $existing_requests_array_choices{$request_id_del}{prettyname} . $epoch_time;
+				
+				if(reservation_being_processed($del_reservation_id)) {
+					print "WARNING: The selected reservation is currently being processed. You must wait until it has completed.\n";
+					print "Reservation id: $del_reservation_id\n";
+					print "\n";
+					next;
+				}
+				
+				if(delete_request($request_id_del)) {
+					print "Removed reservation id $request_id_del for $del_image_name\n";
+					if(update_image_name($del_image_id, $del_imagerevision_id, $new_image_name, $new_prettyimage_name)) {
+					}
+					if (update_computer_state($computer_id, "available")){
+						print "Set $computer_node_name to available state\n";
+					}
+				}
+			}
+		}
+		# Elseif a request id is choosen. set $computer_node_name to available, test ssh access, restart image capture
+		if ($chosen_request_id){
+			$request_id = $chosen_request_id;
+			$reservation_id = $existing_requests_array_choices{$chosen_request_id}{reservation_id};
+			if(reservation_being_processed($chosen_request_id)) {
+				print "WARNING: The selected reservation is currently being processed. You must wait until it has completed.\n";
+				print "Reservation id: $chosen_request_id\n";
+				print "\n";
+				my @yes_no_choices = (
+					'Yes',
+					'No',
+				);
 	
+				print "Monitor vcld.log for completion?:\n";
+				my $monitor_choice_index = setup_get_array_choice(@yes_no_choices);
+				last if (!defined($monitor_choice_index));
+				my $monitor_choice = $yes_no_choices[$monitor_choice_index];
+				if ($monitor_choice =~ /yes/i) {
+					print ".\n";	
+					goto MONITOR_LOG_OUTPUT;
+				}
+				else {
+					return;
+				}
+			}
+			if (update_computer_state($computer_id, "available")){
+				 print "Set $computer_node_name to available state\n";
+     	 	}
+			$chosen_prettyname = $existing_requests_array_choices{$chosen_request_id}{prettyname};
+			print "Restarting image capture for: \nRequest id= $chosen_request_id \nImage Name: $chosen_prettyname \nNode Name: $computer_node_name\n";
+
+
+			if (update_request_state($chosen_request_id, "image", "image", 1)) {
+				print "Set request_id= $chosen_request_id to image state\n\n";
+				print "Starting monitor process:\n\n";
+				
+				goto MONITOR_LOG_OUTPUT;
+			}
+			else {
+				print "ERROR: failed to update request state for $chosen_request_id, state_name= image, last_state: image\n";
+			}
+		}
+	}
+
+	# Make sure the computer state is valid
+	if ($computer_state_name =~ /(maintenance|deleted)/i) {
+		print "ERROR: state of $computer_node_name is $computer_state_name\n";
+		print "\n";
+		return;
+	}
+
+
 	# Get the OS table contents from the database
 	my $os_info = get_os_info();
 	if (!$os_info) {
@@ -676,7 +844,7 @@ EOF
 	
 	my $imagemeta_id = database_execute($insert_imagemeta_statement);
 	if (!defined($imagemeta_id)) {
-		print "ERROR: failed to insert into imagemeta table\n";
+		print "ERROR: failed to insert into imagemeta table.\n";
 		return;
 	}
 	
@@ -688,7 +856,7 @@ EOF
 	
 	my $image_id = database_execute($insert_image_statement);
 	if (!defined($image_id)) {
-		print "ERROR: failed to insert into image table\n";
+		print "ERROR: failed to insert into image table. Please choose another name.\n";
 		return;
 	}
 	
@@ -732,6 +900,13 @@ EOF
 		print "ERROR: failed to insert into resource table\n";
 		return;
 	}
+
+	# Add image resource_id to users' new image group
+	if(!add_imageid_to_newimages($user_id, $resource_id, $image_is_virtual)) {
+		print "\nWARNING: Failed to add image to user's new images group\n";
+		print "You might need to add manually to the new images or all images image groups\n";
+		print "Continuing to with image capture\n\n";
+	}
 	
 	print "\nAdded new image to database: '$image_prettyname'\n";
 	print "   image.name: $image_name\n";
@@ -741,7 +916,7 @@ EOF
 	print "   resource.id: $resource_id\n\n";
 	
 	
-	my ($request_id, $reservation_id) = insert_request($management_node_id, 'image', 'image', 0, $username, $computer_id, $image_id, $imagerevision_id, 0, 60);
+	($request_id, $reservation_id) = insert_request($management_node_id, 'image', 'image', 0, $username, $computer_id, $image_id, $imagerevision_id, 0, 60);
 	if (!defined($request_id) || !defined($reservation_id)) {
 		print "ERROR: failed to insert new imaging request\n";
 		return;
@@ -763,12 +938,14 @@ EOF
 	print '-' x 76 . "\n";
 	print "$message";
 	print '-' x 76 . "\n";
+
+MONITOR_LOG_OUTPUT:
 	
 	# Pipe the command output to a file handle
 	# The open function returns the pid of the process
 	if (open(COMMAND, "tail -f $LOGFILE 2>&1 |")) {
 		# Capture the output of the command
-		
+
 		while (my $output = <COMMAND>) {
 			print $output if ($output =~ /$reservation_id/);
 		}
