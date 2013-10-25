@@ -98,6 +98,8 @@ define("ALLOWADDSHIBUSERS", 0); // this is only related to using Shibboleth auth
 
 $ENABLE_ITECSAUTH = 0;     // use ITECS accounts (also called "Non-NCSU" accounts)
 
+# xmlrpcBlockAPIUsers is an array of ids from user table for users that are
+# allowed to call XMLRPC functions designed specifically to be called by vcld
 $xmlrpcBlockAPIUsers = array(3, # 3 = vclsystem
 );
 

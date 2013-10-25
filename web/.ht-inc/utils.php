@@ -9841,6 +9841,7 @@ function xmlrpccall() {
 	xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCgetGroupImages", "xmlRPChandler");
 	xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCaddImageGroupToComputerGroup", "xmlRPChandler");
 	xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCremoveImageGroupFromComputerGroup", "xmlRPChandler");
+	xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCfinishBaseImageCapture", "xmlRPChandler");
 
 	print xmlrpc_server_call_method($xmlrpc_handle, $HTTP_RAW_POST_DATA, '');
 	xmlrpc_server_destroy($xmlrpc_handle);

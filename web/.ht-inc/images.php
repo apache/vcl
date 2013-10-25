@@ -3405,13 +3405,36 @@ function addImage($data) {
 	$row = mysql_fetch_row($qh);
 	$resourceid = $row[0];
 
-	if(strncmp($OSs[$data['osid']]['name'], 'vmware', 6) == 0)
-		$vmware = 1;
+	$installtype = $OSs[$data['osid']]['installtype'];
+	if($installtype == 'none' ||
+	   $installtype == 'partimage' ||
+	   $installtype == 'kickstart')
+		$virtual = 0;
 	else
-		$vmware = 0;
+		$virtual = 1;
 
+	addImagePermissions($ownerdata, $resourceid, $virtual);
+
+	return $imageid;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn addImagePermissions($ownerdata, $resourceid, $virtual)
+///
+/// \param $ownerdata - array of data returned from getUserInfo for the owner of
+/// the image
+/// \param $resourceid - id from resource table for the image
+/// \param $virtual - (bool) 0 if bare metal image, 1 if virtual
+///
+/// \brief sets up permissions, grouping, and mapping for the owner of the image
+/// to be able to make a reservation for it
+///
+////////////////////////////////////////////////////////////////////////////////
+function addImagePermissions($ownerdata, $resourceid, $virtual) {
+	$ownerid = $ownerdata['id'];
 	// create new node if it does not exist
-	if($vmware)
+	if($virtual)
 		$nodename = 'newvmimages';
 	else
 		$nodename = 'newimages';
@@ -3460,7 +3483,7 @@ function addImage($data) {
 	$qh = doQuery($query, 101);
 	$row = mysql_fetch_assoc($qh);
 	$ownergroupid = $row['id'];
-	if($vmware)
+	if($virtual)
 		$prefix = 'newvmimages';
 	else
 		$prefix = 'newimages';
@@ -3486,7 +3509,7 @@ function addImage($data) {
 		$resourcegroupid = $row[0];
 
 		// map group to newimages/newvmimages comp group
-		if($vmware)
+		if($virtual)
 			$rgroupname = 'newvmimages';
 		else
 			$rgroupname = 'newimages';
@@ -3511,7 +3534,7 @@ function addImage($data) {
 
 	// make image group available at new node
 	$adds = array('available', 'administer');
-	if($vmware)
+	if($virtual)
 		updateResourcePrivs("image/newvmimages-{$ownerdata['login']}-$ownerid", $newnode, $adds, array());
 	else
 		updateResourcePrivs("image/newimages-{$ownerdata['login']}-$ownerid", $newnode, $adds, array());
@@ -3521,8 +3544,6 @@ function addImage($data) {
 	       . "(resourceid, resourcegroupid) "
 	       . "VALUES ($resourceid, $resourcegroupid)";
 	doQuery($query, 101);
-
-	return $imageid;
 }
 
 ////////////////////////////////////////////////////////////////////////////////

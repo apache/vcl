@@ -3505,4 +3505,69 @@ function XMLRPCprocessBlockTime($blockTimesid, $ignoreprivileges=0) {
 	$return['unallocated'] = $rqdata['numMachines'] - $return['allocated'];
 	return $return;
 }
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn XMLRPCfinishBaseImageCapture($ownerid, $resourceid, $virtual=1)
+///
+/// \param $ownerdata - array of data returned from getUserInfo for the owner of
+/// the image
+/// \param $resourceid - id from resource table for the image
+/// \param $virtual - (bool) 0 if bare metal image, 1 if virtual
+///
+/// \return an array with at least one index named 'status' which will have
+/// one of these values\n
+/// \b error - error occurred; there will be 2 additional elements in the array:
+/// \li \b errorcode - error number\n
+/// \li \b errormsg - error string\n
+///
+/// \b success - the permissions, groupings, and mappings were set up
+/// successfully
+///
+/// \brief calls addImagePermissions to create and set up permissions,
+/// groupings, and mappings so that the owner of a new base image will be able
+/// to make a reservation for it after capturing it using 'vcld -setup';
+/// specifically designed to be called by vcld as part of the process of
+/// capturing a new base image
+///
+////////////////////////////////////////////////////////////////////////////////
+function XMLRPCfinishBaseImageCapture($ownerid, $resourceid, $virtual=1) {
+	global $user, $xmlrpcBlockAPIUsers;
+	if(! in_array($user['id'], $xmlrpcBlockAPIUsers)) {
+		return array('status' => 'error',
+		             'errorcode' => 89,
+		             'errormsg' => 'access denied for call to XMLRPCfinishBaseImageCapture');
+	}
+	if(! is_numeric($ownerid)) {
+		return array('status' => 'error',
+		             'errorcode' => 90,
+		             'errormsg' => 'Invalid ownerid submitted');
+	}
+	if(! is_numeric($resourceid)) {
+		return array('status' => 'error',
+		             'errorcode' => 91,
+		             'errormsg' => 'Invalid resourceid submitted');
+	}
+	$ownerdata = getUserInfo($ownerid, 1, 1);
+	if(is_null($ownerdata) || empty($ownerdata)) {
+		return array('status' => 'error',
+		             'errorcode' => 90,
+		             'errormsg' => 'Invalid ownerid passed as second argument');
+	}
+	$query = "SELECT i.id "
+	       . "FROM image i, "
+	       .      "resource r "
+	       . "WHERE r.id = $resourceid AND "
+	       .       "r.subid = i.id AND "
+	       .       "r.resourcetypeid = 13";
+	$qh = doQuery($query);
+	if(mysql_num_rows($qh) != 1) {
+		return array('status' => 'error',
+		             'errorcode' => 91,
+		             'errormsg' => 'Invalid resourceid submitted');
+	}
+	require_once(".ht-inc/images.php");
+	addImagePermissions($ownerdata, $resourceid, $virtual);
+	return array('status' => 'success');
+}
 ?>
