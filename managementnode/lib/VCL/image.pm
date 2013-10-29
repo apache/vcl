@@ -530,6 +530,13 @@ sub setup_capture_base_image {
 	if($self->setup_test_rpc_xml(0)) {
 		print "VCL API call successful\n\n";
 	}
+
+	# Is vcld service running
+	if(!run_command('service vcld restart')){
+		print "ERROR: Unable to confirm vcld is running, Attempted to use service vcld restart\n";
+		return;
+	}
+	
 	
 	# Get the user who the reservation and image will belong to
 	my $user_id;
@@ -586,6 +593,9 @@ sub setup_capture_base_image {
 	my $computer_hostname = $computer_info{$computer_id}{hostname};
 	my $computer_state_name = $computer_info{$computer_id}{state}{name};
 	my $computer_provisioning_module_name = $computer_info{$computer_id}{provisioning}{module}{name};
+	my $computer_provisioning_module_pretty_name = $computer_info{$computer_id}{provisioning}{module}{prettyname};
+	my $computer_provisioning_pretty_name = $computer_info{$computer_id}{provisioning}{prettyname};
+	my $computer_provisioning_name = $computer_info{$computer_id}{provisioning}{name};
 	my $computer_node_name = $computer_info{$computer_id}{SHORTNAME};
 	
 	my $install_type;
@@ -593,17 +603,17 @@ sub setup_capture_base_image {
 		$install_type = 'partimage';
 	}
 	else {
-		$install_type = 'vmware';
+		$install_type = $computer_provisioning_name;
 	}
 	
 	print "\nComputer to be captured: $computer_hostname (ID: $computer_id)\n";
 	print "Computer shortname: $computer_node_name\n";
 	print "Computer State: $computer_state_name\n";
-	print "Provisioning module: $computer_provisioning_module_name\n";
+	print "Provisioning module: $computer_provisioning_module_pretty_name\n";
 	print "Install type: $install_type\n";
 	
 	my $vmhost_name;
-	if ($install_type eq "vmware") {
+	if ($install_type ne "partimage") {
 		$image_is_virtual = 1;
 		#should have a vmhost assigned
 		if($computer_info{$computer_id}{vmhostid}){
@@ -947,7 +957,12 @@ MONITOR_LOG_OUTPUT:
 		# Capture the output of the command
 
 		while (my $output = <COMMAND>) {
-			print $output if ($output =~ /$reservation_id/);
+			 if ($output =~ /$reservation_id/) {
+				print $output;
+				if ($output =~ /complete/i ){
+					last;
+			 	}
+			}
 		}
 	}
 	
