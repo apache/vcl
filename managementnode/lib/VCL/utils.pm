@@ -1306,7 +1306,7 @@ EOF
 		return $rows_updated;
 	}
 	else {
-		notify($ERRORS{'CRITICAL'}, 0, "unable to update states for request $request_id");
+		notify($ERRORS{'WARNING'}, 0, "unable to update states for request $request_id");
 		return;
 	}
 } ## end sub update_request_state

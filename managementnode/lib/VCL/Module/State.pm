@@ -182,7 +182,7 @@ sub initialize {
 		
 		# Update the request state to pending
 		if (!update_request_state($request_id, "pending", $request_state_name)) {
-			notify($ERRORS{'CRITICAL'}, 0, "failed to update request state to pending");
+			notify($ERRORS{'WARNING'}, 0, "failed to update request state to pending");
 		}
 	}
 	
