@@ -296,7 +296,7 @@ sub process {
 		$self->os->firewall_compare_update();
 	}
 	
-	# Wait for the user to acknowledge the request by clicking Connect button or from API
+	# Check to see if user is connected. user_connected will true(1) for servers and requests > 24 hours
 	if (!$self->code_loop_timeout(sub{$self->user_connected()}, [], "waiting for user to connect to $computer_short_name", ($connect_timeout_minutes*60), 15)) {
 		if (!$imagemeta_checkuser || !$request_checkuser) {
 			notify($ERRORS{'OK'}, 0, "never detected user connection, skipping timeout, imagemeta checkuser: $imagemeta_checkuser, request checkuser: $request_checkuser");
@@ -362,14 +362,16 @@ sub user_connected {
 		return;
 	}
 	
-	my $request_id = $self->data->get_request_id();
-	my @reservation_ids = $self->data->get_reservation_ids();
-	my $reservation_id = $self->data->get_reservation_id();
-	my $reservation_lastcheck = $self->data->get_reservation_lastcheck_time();
-	my $reservation_count = $self->data->get_request_reservation_count();
-	my $computer_id = $self->data->get_computer_id();
-	my $computer_short_name = $self->data->get_computer_short_name();
-	my $server_request_id       = $self->data->get_server_request_id();
+	my $request_id 						= $self->data->get_request_id();
+	my @reservation_ids 					= $self->data->get_reservation_ids();
+	my $reservation_id 					= $self->data->get_reservation_id();
+	my $reservation_lastcheck 			= $self->data->get_reservation_lastcheck_time();
+	my $reservation_count 				= $self->data->get_request_reservation_count();
+	my $computer_id 						= $self->data->get_computer_id();
+	my $computer_short_name 			= $self->data->get_computer_short_name();
+	my $server_request_id       		= $self->data->get_server_request_id();
+	my $request_duration_epoch_secs	= $self->data->get_request_duration_epoch();
+	my $request_duration_hrs 			= floor($request_duration_epoch_secs / 60 / 60);
 	
 	# Check if user deleted the request
 	$self->state_exit() if is_request_deleted($request_id);
@@ -384,6 +386,13 @@ sub user_connected {
 			return 1;
 	}
 	
+	# If duration is >= 24 hrs set as connected and return
+	if($request_duration_hrs >= 24 ) {
+		notify($ERRORS{'OK'}, 0, "Duration is $request_duration_hrs hrs . Is >= to 24 hrs, skipping inuse checks");
+		insertloadlog($reservation_id, $computer_id, "connected", "user connected to $computer_short_name");
+		return 1;
+	}	
+
 	# Check if the user has connected to the reservation being processed
 	if ($self->os->is_user_connected()) {
 		insertloadlog($reservation_id, $computer_id, "connected", "user connected to $computer_short_name");
