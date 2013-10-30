@@ -247,13 +247,43 @@ sub process {
 		$node_status{"rpower"} = "off";
 		my $datestring; 
 		my $node_status_string = "reload";
-		
-		
 
 		notify($ERRORS{'OK'}, 0, "pinging node $computer_short_name ");
 		if(_pingnode($computer_short_name) ){
-			$node_status{ping} = 1;	
-			my $sshd_status = _sshd_status($computer_short_name);
+			$node_status{ping} = 1;	 
+			# Try nmap to see if any of the ssh ports are open before attempting to run a test command
+			my $port_22_status = nmap_port($computer_short_name, 22) ? "open" : "closed";
+			my $port_24_status = nmap_port($computer_short_name, 24) ? "open" : "closed";
+
+			my $port = 22; 
+			if ($port_24_status eq "open") {
+				$port = 24;
+			}
+
+			my $ssh_user= "root";
+			$ssh_user = "vclstaff" if ($computer_type eq "lab");
+
+			my ($exit_status, $output) = run_ssh_command({
+		       node => $computer_short_name,
+		       command => "echo \"testing ssh on $computer_short_name\"",
+		       max_attempts => 2,
+		       output_level => 0,
+				 port => $port,
+				 user => $ssh_user,
+		       timeout_seconds => 30,
+		   });
+
+			my $sshd_status = "off";
+		 
+		   # The exit status will be 0 if the command succeeded
+		   if (defined($output) && grep(/testing/, @$output)) {
+				notify($ERRORS{'OK'}, 0, "ssh test: Successful");
+			 	$sshd_status = "on";
+			}
+			else {
+				notify($ERRORS{'OK'}, 0, "ssh test: failed. port 22: $port_22_status, port 24: $port_24_status");
+			}
+
 			if($sshd_status eq "on") { 
 				$node_status{"ssh"} = 1;
 				if($computer_type eq "lab") {
