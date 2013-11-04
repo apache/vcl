@@ -4240,6 +4240,7 @@ sub stop_external_sshd {
                PasswordAuthentication no
                PermitRootLogin without-password
                AllowUsers root
+					Banner none
                
                In addition, any ListenAddress lines are not included in the
                output file.
@@ -4301,6 +4302,7 @@ sub configure_sshd_config_file {
 		PermitRootLogin => 'without-password',
 		AllowUsers => 'root',
 		ListenAddress => '',
+		Banner => 'none',
 	};
 	
 	if ($custom_parameters) {
