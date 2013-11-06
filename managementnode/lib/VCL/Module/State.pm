@@ -551,7 +551,7 @@ sub state_exit {
 		if (!is_request_deleted($request_id)) {
 			notify($ERRORS{'OK'}, 0, "request has been deleted, NOT updating new state: $request_state_name_new old state: $request_state_name_old");
 			if (!update_request_state($request_id, $request_state_name_new, $request_state_name_old)) {
-				notify($ERRORS{'CRITICAL'}, 0, "failed to change request state: $request_state_name_old/$request_laststate_name_old --> $request_state_name_new/$request_state_name_old");
+				notify($ERRORS{'WARNING'}, 0, "failed to change request state: $request_state_name_old/$request_laststate_name_old --> $request_state_name_new/$request_state_name_old");
 			}
 		}
 
