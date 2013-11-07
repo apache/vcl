@@ -82,7 +82,6 @@ our @ISA = qw(Exporter);
 
 our @EXPORT = qw(
   _pingnode
-  _sshd_status
   check_blockrequest_time
   check_endtimenotice_interval
   check_ssh
@@ -2051,43 +2050,6 @@ sub check_ssh {
 
 		return 0;
 } ## end sub check_ssh
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 _sshd_status
-
- Parameters  : $node, $imagename, $log
- Returns     : on or off
- Description : actually logs into remote node
-=cut
-
-sub _sshd_status {
-	my ($node, $imagename,$image_os_type, $log) = @_;
-	my ($package, $filename, $line, $sub) = caller(0);
-	$log = 0 if (!defined($log));
-	notify($ERRORS{'WARNING'}, $log, "node is not defined") if (!(defined($node)));
-
-	if (!nmap_port($node, 22)) {
-		return "off";
-	}
-
-	my $identity_keys = get_management_node_info()->{keys};
-
-	my @sshcmd = run_ssh_command($node, $identity_keys, "uname -s", "root");
-	
-	return "off" if (!defined($sshcmd[0]) || !defined($sshcmd[1]) || $sshcmd[0] == 1);
-	foreach my $l (@{$sshcmd[1]}) {
-		if ($l =~ /^Warning:/) {
-			#if (VCL::Module::Provisioning::xCAT::makesshgkh($node)) {
-			#}
-		}
-		return "off" if ($l =~ /noping/);
-		return "off" if ($l =~ /No route to host/);
-		return "off" if ($l =~ /Connection refused/);
-		return "off" if ($l =~ /Permission denied/);
-	} ## end foreach my $l (@{$sshcmd[1]})
-	return "on";
-} ## end sub _sshd_status
 
 #/////////////////////////////////////////////////////////////////////////////
 

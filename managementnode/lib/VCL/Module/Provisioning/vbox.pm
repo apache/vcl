@@ -964,11 +964,29 @@ sub node_status {
         } ## end foreach my $l (@{$sshcmd[1]})
         notify($ERRORS{'OK'}, $log, "$vmclient_shortname vmstate reports $status{vmstate}");
 
-        #can I ssh into it
-        my $sshd = _sshd_status($vmclient_shortname, $requestedimagename, $image_os_type);
+			# Check if $self->os is defined, it may not be if xCAT.pm object is created from a monitoring script
+			my $os = $self->os(0);
+			if (!$os) {
+				my $data = $self->create_datastructure_object({computer_identifier => $computer_node_name, image_identifier => $requestedimagename});
+				if (!$data) {
+					notify($ERRORS{'WARNING'}, 0, "unable to determine status of $computer_node_name, \$self->os is not defined, failed to create DataStructure object for image set as image: '$requestedimagename'");
+					return;
+			   }
+			 
+		   	# Set the data, create_os_object copies the data from the calling object to the new OS object
+		   	$self->set_data($data);
+	
+       		my $image_os_module_perl_package = $data->get_image_os_module_perl_package();
+		 		$os = $self->create_os_object($image_os_module_perl_package);
+		 		if (!$os) {
+		    		notify($ERRORS{'WARNING'}, 0, "unable to determine status of $computer_node_name, failed to create OS object for image set as imagename: 'requestedimagename'");
+		    		return;
+		 		}
+		 	}
 
-        #is it running the requested image
-        if ($sshd eq "on") {
+			# Check if the node is responding to SSH
+			my $ssh_responding = $os->is_ssh_responding();
+		   if ($ssh_responding) {
 
                 $status{ssh} = 1;
 
