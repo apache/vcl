@@ -359,6 +359,13 @@ sub main () {
 				my $computer_id = $data_structure->get_computer_id();
 				insertloadlog($reservation_id, $computer_id, "begin", "beginning to process, state is $request_state_name");
 				
+				# Update state to pending for non-cluster reservations to limit another attempt at processing 
+				if($reservation_count == 1) {
+					# Update the request state to pending
+					if (!update_request_state($request_id, "pending", $request_state_name)) {
+					   notify($ERRORS{'WARNING'}, 0, "failed to update request state to pending");
+					}
+				}
 				# Make a new child process, passing it the request/reservation info
 				make_new_child({request_info => \%request_info, data_structure => $data_structure});
 			} ## end foreach my $reservation_id (keys %{$info{request...

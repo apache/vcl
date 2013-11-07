@@ -178,11 +178,13 @@ sub initialize {
 			if (!$self->wait_for_child_reservations_to_begin('begin', 60, 3)) {
 				$self->reservation_failed("child reservation processes failed to begin");
 			}
-		}
 		
-		# Update the request state to pending
-		if (!update_request_state($request_id, "pending", $request_state_name)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to update request state to pending");
+				
+			# Update the request state to pending for this cluster reservation.
+			# Single reservations are set to pending in vcld
+			if (!update_request_state($request_id, "pending", $request_state_name)) {
+				notify($ERRORS{'WARNING'}, 0, "failed to update request state to pending");
+			}
 		}
 	}
 	
@@ -549,7 +551,7 @@ sub state_exit {
 		
 		# Update the request state
 		if (!is_request_deleted($request_id)) {
-			notify($ERRORS{'OK'}, 0, "request has been deleted, NOT updating new state: $request_state_name_new old state: $request_state_name_old");
+			notify($ERRORS{'OK'}, 0, "request has NOT been deleted, updating new state: $request_state_name_new old state: $request_state_name_old");
 			if (!update_request_state($request_id, $request_state_name_new, $request_state_name_old)) {
 				notify($ERRORS{'WARNING'}, 0, "failed to change request state: $request_state_name_old/$request_laststate_name_old --> $request_state_name_new/$request_state_name_old");
 			}
