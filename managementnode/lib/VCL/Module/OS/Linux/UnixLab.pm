@@ -417,7 +417,101 @@ sub check_connection_on_port {
         }
         return $ret_val;
 }
+#/////////////////////////////////////////////////////////////////////////////
 
+=head2 is_ssh_responding
+
+ Parameters  : $computer_name (optional), $max_attempts (optional)
+ Returns     : If computer responds to SSH: 1
+               If computer never responds to SSH: 0
+				   Description : Checks if the computer is responding to SSH. Ports 22 and 24 are
+               first checked to see if either is open. If neither is open, 0 is
+               returned. If either of the ports is open a test SSH command which
+              simply echo's a string is attempted. The default is to only
+               attempt to run this command once. This can be changed by
+               supplying the $max_attempts argument. If the $max_attempts is
+					supplied but set to 0, only the port checks are done.
+
+=cut
+
+sub is_ssh_responding {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		 notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+       return;
+	}
+
+	my $computer_node_name;
+	my $max_attempts = 1;
+	 
+	my $argument_1 = shift;
+	my $argument_2 = shift;
+
+	if ($argument_1) {
+ 		# Check if the argument is an integer
+		if ($argument_1 =~ /^\d+$/) {
+			$max_attempts = $argument_1;
+		}
+		else {
+			$computer_node_name = $argument_1;
+			if ($argument_2 && $argument_2 =~ /^\d+$/) {
+				$max_attempts = $argument_2;
+			}
+		}
+	}
+
+	if (!$computer_node_name) {
+		$computer_node_name = $self->data->get_computer_node_name();
+	}
+
+	# Try nmap to see if any of the ssh ports are open before attempting to run a test command
+	my $port_22_status = nmap_port($computer_node_name, 22) ? "open" : "closed";
+	my $port_24_status = nmap_port($computer_node_name, 24) ? "open" : "closed";
+	if ($port_22_status ne 'open' && $port_24_status ne 'open') {
+		notify($ERRORS{'DEBUG'}, 0, "$computer_node_name is NOT responding to SSH, ports 22 or 24 are both closed");
+		return 0;
+	}
+
+	if ($max_attempts) {
+		my ($exit_status, $output) = run_ssh_command({
+			node => $computer_node_name,
+			command => "echo \"testing ssh on $computer_node_name\"",
+			max_attempts => $max_attempts,
+			output_level => 0,
+			timeout_seconds => 30,
+			port => 24,
+			user => "vclstaff",
+		});
+
+		# The exit status will be 0 if the command succeeded
+		if (defined($output) && grep(/testing/, @$output)) {
+			notify($ERRORS{'DEBUG'}, 0, "$computer_node_name is responding to SSH, port 22: $port_22_status, port 24: $port_24_status");
+			return 1;
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "$computer_node_name is NOT responding to SSH, SSH command failed, port 22: $port_22_status, port 24: $port_24_status");
+			return 0;
+		}
+	}
+	else {
+		return 1;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 firewall_compare_update
+
+ Parameters  : $computer_name (optional), $max_attempts (optional)
+ Returns     :	returns true.
+ 					Since the vclstaff user doesn't have root on the lab machines, there is not much this routine can do.
+
+=cut 
+
+sub firewall_compare_update {
+	
+	return 1;
+}
 #/////////////////////////////////////////////////////////////////////////////
 
 1;
