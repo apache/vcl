@@ -87,6 +87,7 @@ our @EXPORT = qw(
   check_ssh
   check_time
   clearfromblockrequest
+  clear_next_image_id
   convert_to_datetime
   convert_to_epoch_seconds
   create_management_node_directory
@@ -3490,7 +3491,7 @@ EOF
 	my $imagemeta_id = $image_info->{imagemetaid};
 	my $imagemeta_info = get_imagemeta_info($imagemeta_id);
 	$image_info->{imagemeta} = $imagemeta_info;
-	
+
 	my $image_owner_id = $image_info->{ownerid};
 	my $image_owner_user_info = get_user_info($image_owner_id);
 	$image_info->{owner} = $image_owner_user_info;
@@ -5630,6 +5631,46 @@ sub update_blockrequest_processing {
 		return 0;
 	}
 } ## end sub update_blockrequest_processing
+
+
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 clear_next_image_id
+
+ Parameters  : $computer_id
+ Returns     : 0 or 1
+ Description : sets next_image_id to 0
+
+=cut
+sub clear_next_image_id {
+	my ($computer_id) = @_;
+	my ($package, $filename, $line, $sub) = caller(0);
+	# Check the passed parameter
+	if (!(defined($computer_id))) {
+		notify($ERRORS{'WARNING'}, 0, "computer_id was not specified");
+		return 0;
+	}
+
+	my $update_statement = "
+	UPDATE
+	computer
+	SET
+	nextimageid = '0'
+	WHERE
+	id = $computer_id
+	";
+
+	if (database_execute($update_statement)) {
+		notify($ERRORS{'OK'}, 0, "updated nextimageid to 0 for computer id $computer_id");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unable to update database, failed to set nextimageid=0 for computerid $computer_id");
+		return 0;
+	}
+
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 

@@ -84,6 +84,7 @@ sub get_next_image {
 	my $reservation_id      = $self->data->get_reservation_id();
 	my $computer_id         = $self->data->get_computer_id();
 	my $computer_short_name = $self->data->get_computer_short_name();
+	my $computer_nextimage_id = $self->data->get_computer_nextimage_id();
 
 	my @ret_array;
 	my $notify_prefix = "predictive_reload_Level_1 :";
@@ -93,13 +94,54 @@ sub get_next_image {
 	#check if node is part of block reservation 
 	if(is_inblockrequest($computer_id)){
 		notify($ERRORS{'DEBUG'}, 0, "computer id $computer_id is in blockComputers table");
-		 my @block_ret_array = get_block_request_image_info($computer_id);
+		my @block_ret_array = get_block_request_image_info($computer_id);
 
 		if(defined($block_ret_array[0]) && $block_ret_array[0]){
 			return @block_ret_array;
 		}
 		else{
 			notify($ERRORS{'WARNING'}, 0, "computer $computer_id is part of blockComputers, failed to return image info"); 
+		}
+	}
+
+	#If nextimageid set, set to default 0 and return the imageid
+	if(defined($computer_nextimage_id) && $computer_nextimage_id) {
+		#Get computer_nextimage_id info
+		my $select_nextimage = " 
+		SELECT DISTINCT
+		imagerevision.imagename AS imagename,
+		imagerevision.id AS imagerevisionid,
+		image.id AS imageid
+		FROM
+		image,
+		computer,
+		imagerevision
+		WHERE
+		imagerevision.imageid = computer.nextimageid
+		AND imagerevision.production = 1
+		AND computer.nextimageid = image.id
+		AND computer.id = $computer_id
+		";
+		
+		#Clear next_imageid
+		if(!clear_next_image_id($computer_id)){
+			notify($ERRORS{'WARNING'}, 0, "$notify_prefix failed to clear next_image_id for computerid $computer_id");
+		}
+
+		# Call the database select subroutine
+		# This will return an array of one or more rows based on the select statement
+		my @next_selected_rows = database_select($select_nextimage);
+		# Check to make sure at least 1 row were returned
+		if (scalar @next_selected_rows == 0) {
+			notify($ERRORS{'WARNING'}, 0, "$notify_prefix failed to fetch next image for computerid $computer_id");
+		}   
+		elsif (scalar @next_selected_rows > 1) {      notify($ERRORS{'WARNING'}, 0, "" . scalar @next_selected_rows . " rows were returned from database select");
+		}
+		else {
+			notify($ERRORS{'OK'}, 0, "$notify_prefix returning nextimage image=$next_selected_rows[0]{imagename} imageid=$next_selected_rows[0]{imageid}");
+			my @next_image_ret_array;
+			push(@next_image_ret_array, $next_selected_rows[0]{imagename}, $next_selected_rows[0]{imageid}, $next_selected_rows[0]{imagerevisionid});
+			return @next_image_ret_array;
 		}
 
 	}

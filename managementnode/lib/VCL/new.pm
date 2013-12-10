@@ -671,7 +671,7 @@ sub reload_image {
 	}
 	
 	# Update the current image ID in the computer table
-	if (update_currentimage($computer_id, $image_id, $imagerevision_id, $image_id)) {
+	if (update_currentimage($computer_id, $image_id, $imagerevision_id)) {
 		notify($ERRORS{'OK'}, 0, "updated computer table for $computer_short_name: currentimageid=$image_id");
 	}
 	else {
