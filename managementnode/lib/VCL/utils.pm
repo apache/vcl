@@ -4037,7 +4037,17 @@ sub run_ssh_command {
 	# -p <port>, Port to connect to on the remote host.
 	# -x, Disables X11 forwarding.
 	# Dont use: -q, Quiet mode.  Causes all warning and diagnostic messages to be suppressed.
-	my $ssh_command = "$ssh_path $identity_paths -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectionAttempts=1 -o ConnectTimeout=3 -l $user -p $port -x $node '$command' 2>&1";
+	my $ssh_command = "$ssh_path $identity_paths ";
+	$ssh_command .= "-o StrictHostKeyChecking=no ";
+	$ssh_command .= "-o UserKnownHostsFile=/dev/null ";
+	$ssh_command .= "-o ConnectionAttempts=1 ";
+	$ssh_command .= "-o ConnectTimeout=3 ";
+	$ssh_command .= "-o BatchMode=no ";
+	$ssh_command .= "-o PasswordAuthentication=no ";
+	$ssh_command .= "-l $user ";
+	$ssh_command .= "-p $port ";
+	$ssh_command .= "-x ";
+	$ssh_command .= "$node '$command' 2>&1";
 	
 	# Execute the command
 	my $ssh_output = '';
@@ -4133,10 +4143,12 @@ sub run_ssh_command {
 		#    Offending key for IP in /root/.ssh/known_hosts:264
 		#    Matching host key in /root/.ssh/known_hosts:3977
 		#    Address x.x.x.x maps to y.y.org, but this does not map back to the address - POSSIBLE BREAK-IN ATTEMPT!
-		$ssh_output =~ s/^Warning:.*//ig;
+		$ssh_output =~ s/^(Warning:.*[\r\n]+)+//ig;
 		$ssh_output =~ s/Offending key.*//ig;
 		$ssh_output =~ s/Matching host key in.*//ig;
 		$ssh_output =~ s/.*POSSIBLE BREAK-IN ATTEMPT.*//ig;
+		$ssh_output =~ s/.*ssh-askpass:[^\n]*//igs;
+		$ssh_output =~ s/.*bad permissions:[^\n]*//igs;
 		
 		# Remove any spaces from the beginning and end of the output
 		$ssh_output =~ s/(^\s+)|(\s+$)//g;
@@ -4344,8 +4356,10 @@ sub run_scp_command {
 		}
 		
 		# Check the output for known error messages
-		if ($scp_output =~ /permission denied|no such file|ambiguous target|is a directory|not known|no space/i) {
-			notify($ERRORS{'WARNING'}, 0, "failed to copy via SCP: '$path1' --> '$path2'\ncommand: $scp_command\noutput:\n$scp_output");
+		# Be careful with "no such file" warnings, this may be displayed if the copy was successful but there is a problem with an identity key:
+		#    Warning: Identity file /etc/vcl/bad.key not accessible: No such file or directory.
+		if ($scp_exit_status != 0 && $scp_output =~ /permission denied|no such file|ambiguous target|is a directory|not known|no space/i) {
+			notify($ERRORS{'WARNING'}, 0, "failed to copy via SCP: '$path1' --> '$path2'\nexit status: $scp_exit_status\ncommand: $scp_command\noutput:\n$scp_output");
 			return 0;
 		}
 		elsif ($scp_output =~ /^(scp|ssh):/i) {
