@@ -80,7 +80,6 @@ use IO::String;
 
 our $SOURCE_CONFIGURATION_DIRECTORY = "$TOOLS/Windows";
 
-
 =head2 $NODE_CONFIGURATION_DIRECTORY
 
  Data type   : String
@@ -5651,33 +5650,6 @@ sub get_network_configuration {
 		return;
 	}
 	
-	## Check if OS may still be initializing before attempting to retrieve network information
-	## Windows may respond to SSH before all network interface drivers are installed and interfaces brought up
-	## This causes many problems
-	## Get the list of running tasks, check if drvinst.exe is running
-	#my $initialization_check = 0;
-	#my $initialization_check_limit = 12;
-	#my $initialization_check_delay = 10;
-	#while (++$initialization_check) {
-	#	# Get the list of running tasks (this returns an array reference of the raw tasklist.exe output)
-	#	notify($ERRORS{'DEBUG'}, 0, "attempt $initialization_check/$initialization_check_limit: checking if devices still appear to be initializing before retrieving network configuration");
-	#	my $task_info = $self->get_task_info('drvinst');
-	#	if (!defined($task_info)) {
-	#		notify($ERRORS{'WARNING'}, 0, "attempt $initialization_check/$initialization_check_limit: unable to determine if devices are still being initialized, task information could not be retrieved, sleeping for $initialization_check_delay seconds");
-	#		sleep $initialization_check_delay;
-	#		next;
-	#	}
-	#	elsif (!keys(%$task_info)) {
-	#		#notify($ERRORS{'DEBUG'}, 0, "no devices appear to still be initializing");
-	#		notify($ERRORS{'DEBUG'}, 0, "no devices appear to still be initializing, tasks:\n" . format_data($task_info));
-	#		last;
-	#	}
-	#	else {
-	#		notify($ERRORS{'DEBUG'}, 0, "attempt $initialization_check/$initialization_check_limit: devices still appear to be initializing, sleeping for $initialization_check_delay seconds, matching tasks:\n" . format_data($task_info));
-	#		sleep $initialization_check_delay;
-	#	}
-	#}
-	
 	my $network_configuration;
 	notify($ERRORS{'DEBUG'}, 0, "attempting to retrieve network configuration information from $computer_node_name");
 	
@@ -9995,55 +9967,28 @@ sub disable_shutdown_event_tracker {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 setup
+=head2 setup_get_menu
 
  Parameters  : none
  Returns     : 
- Description : Presents a command-line menu interface to the user to configure
-               the Windows OS modules when vcld is run in setup mode.
+ Description : 
 
 =cut
 
-sub setup {
-	my $self = shift;
-	unless (ref($self) && $self->isa('VCL::Module')) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
+sub setup_get_menu {
+	my $menu = {
+		'Windows Image Configuration' => {
+			'Activation' => {
+				'Configure Multiple Activation Key (MAK) Activation' => \&setup_product_keys,			
+				'Configure Key Management Service (KMS) Activation' => \&setup_kms_servers,
+			}
+		},
+		'Check Configuration' => {
+			'Check Windows OS Module' => \&setup_check,
+		},
+	};
 	
-	push @{$ENV{setup_path}}, 'Windows';
-	
-	my @operation_choices = (
-		'Configure Product Keys',
-		'Configure KMS Servers',
-	);
-	
-	my @setup_path = @{$ENV{setup_path}};
-	OPERATION: while (1) {
-		@{$ENV{setup_path}} = @setup_path;
-		
-		print '-' x 76 . "\n";
-		
-		$self->setup_check();
-		
-		print "Choose an operation:\n";
-		my $operation_choice_index = setup_get_array_choice(@operation_choices);
-		last if (!defined($operation_choice_index));
-		my $operation_name = $operation_choices[$operation_choice_index];
-		print "\n";
-		
-		push @{$ENV{setup_path}}, $operation_name;
-		
-		if ($operation_name =~ /product keys/i) {
-			$self->setup_product_keys();
-		}
-		elsif ($operation_name =~ /kms/i) {
-			$self->setup_kms_servers();
-		}
-	}
-	
-	pop @{$ENV{setup_path}};
-	return 1;
+	return $menu;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -10053,8 +9998,7 @@ sub setup {
  Parameters  : none
  Returns     :
  Description : Checks various configuration settings and displays a message to
-					the user if any important settings are not configured. This gets
-					called every time Windows.pm::setup() is called.
+               the user if any important settings are not configured.
 
 =cut
 
@@ -10166,6 +10110,7 @@ sub setup_product_keys {
 	);
 	
 	my @setup_path = @{$ENV{setup_path}};
+	
 	OPERATION: while (1) {
 		@{$ENV{setup_path}} = @setup_path;
 		
@@ -10231,7 +10176,7 @@ sub setup_product_keys {
 			my $product_key_info = $self->get_product_key_info();
 			if (!defined($product_key_info)) {
 				notify($ERRORS{'WARNING'}, 0, "failed to retrieve product key information from the database");
-				return;
+				next;
 			}
 			
 			my %product_keys;
@@ -10372,7 +10317,9 @@ sub setup_kms_servers {
 		'Delete KMS Server',
 	);
 	
+	
 	my @setup_path = @{$ENV{setup_path}};
+	
 	OPERATION: while (1) {
 		@{$ENV{setup_path}} = @setup_path;
 		print '-' x 76 . "\n";
@@ -10437,7 +10384,7 @@ sub setup_kms_servers {
 			my $kms_server_info = $self->get_kms_server_info();
 			if (!defined($kms_server_info)) {
 				notify($ERRORS{'WARNING'}, 0, "failed to retrieve KMS server information from the database");
-				return;
+				next;
 			}
 			
 			my %kms_servers;
