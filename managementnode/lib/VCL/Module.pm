@@ -239,7 +239,7 @@ sub create_datastructure_object {
 	my $arguments = shift;
 	
 	if (my $type = ref($arguments)) {
-		if (UNIVERSAL::isa($arguments, 'can')) {
+		if ($type =~ /VCL::/) {
 			# First argument is an object reference, assume this was called as an object method
 			$arguments = shift;
 		}
