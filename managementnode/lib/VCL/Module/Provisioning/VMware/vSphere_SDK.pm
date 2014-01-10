@@ -95,7 +95,7 @@ sub initialize {
 	
 	eval "use VMware::VIRuntime; use VMware::VILib; use VMware::VIExt";
 	if ($EVAL_ERROR) {
-		notify($ERRORS{'OK'}, 0, "vSphere SDK for Perl does not appear to be installed on this managment node, unable to load VMware vSphere SDK Perl modules, error:\n$EVAL_ERROR");
+		notify($ERRORS{'DEBUG'}, 0, "vSphere SDK for Perl does not appear to be installed on this managment node, unable to load VMware vSphere SDK Perl modules, error:\n$EVAL_ERROR");
 		return 0;
 	}
 	notify($ERRORS{'DEBUG'}, 0, "loaded VMware vSphere SDK modules");
@@ -1394,8 +1394,16 @@ sub is_restricted {
 		return;
 	}
 	
-	my $service_content = Vim::get_service_content();
-	if (!$service_content) {
+	my $service_content;
+	eval {
+		$service_content = Vim::get_service_content();
+	};
+	
+	if ($EVAL_ERROR) {
+		notify($ERRORS{'DEBUG'}, 0, "unable to retrieve vSphere SDK service content object, vSphere SDK may not be installed, error:\n$EVAL_ERROR");
+		return 1;
+	}
+	elsif (!$service_content) {
 		notify($ERRORS{'WARNING'}, 0, "unable to retrieve vSphere SDK service content object, assuming access to the VM host via the vSphere SDK is restricted");
 		return 1;
 	}
@@ -1433,7 +1441,7 @@ sub is_restricted {
 		}
 	}
 	
-	notify($ERRORS{'OK'}, 0, "access to the VM host via the vSphere SDK is NOT restricted due to the license");
+	notify($ERRORS{'DEBUG'}, 0, "access to the VM host via the vSphere SDK is NOT restricted due to the license");
 	
 	return 0;
 }
@@ -1544,7 +1552,7 @@ sub delete_file {
 	local $SIG{__DIE__} = sub{};
 
 	# Attempt to delete the file
-	notify($ERRORS{'OK'}, 0, "attempting to delete file: $datastore_path");
+	notify($ERRORS{'DEBUG'}, 0, "attempting to delete file: $datastore_path");
 	eval { $file_manager->DeleteDatastoreFile(name => $datastore_path, datacenter => $self->_get_datacenter_view()); };
 	if ($@) {
 		if ($@->isa('SoapFault') && ref($@->detail) eq 'FileNotFound') {
@@ -1732,7 +1740,7 @@ sub copy_file_from {
 			return;
 		}
 		elsif (grep(/^$destination_directory_path/, @$output)) {
-			notify($ERRORS{'OK'}, 0, "directory already exists on management node: '$destination_directory_path'");
+			notify($ERRORS{'DEBUG'}, 0, "directory already exists on management node: '$destination_directory_path'");
 		}
 		else {
 			notify($ERRORS{'WARNING'}, 0, "unexpected output returned from command to create directory on management node: '$destination_directory_path':\ncommand: '$command'\nexit status: $exit_status\noutput:\n" . join("\n", @$output));
@@ -1994,7 +2002,7 @@ sub get_file_size {
 		notify($ERRORS{'DEBUG'}, 0, "unable to determine size of file on $vmhost_hostname because it does not exist: $file_path_argument");
 		return;
 	}
-	
+
 	# Loop through the files, add their sizes to the total
 	my $total_size_bytes = 0;
 	for my $file_path (keys(%{$file_info})) {
@@ -2110,7 +2118,7 @@ sub get_total_space {
 		return; 
 	} 
 	
-	notify($ERRORS{'DEBUG'}, 0, "capacity of $datastore_name datastore on $vmhost_hostname: " . get_file_size_info_string($total_bytes));
+	#notify($ERRORS{'DEBUG'}, 0, "capacity of $datastore_name datastore on $vmhost_hostname: " . get_file_size_info_string($total_bytes));
 	return $total_bytes; 
 } 
 
@@ -2154,7 +2162,7 @@ sub get_available_space {
 		return;
 	}
 	
-	notify($ERRORS{'DEBUG'}, 0, "space available in $datastore_name datastore on $vmhost_hostname: " . get_file_size_info_string($available_bytes));
+	#notify($ERRORS{'DEBUG'}, 0, "space available in $datastore_name datastore on $vmhost_hostname: " . get_file_size_info_string($available_bytes));
 	return $available_bytes;
 }
 
@@ -3291,7 +3299,7 @@ sub _get_datastore_info {
 		$datastore_info->{$datastore_name} = $datastore_view->summary;
 	}
 	
-	notify($ERRORS{'DEBUG'}, 0, "retrieved datastore info:\n" . format_data($datastore_info));
+	notify($ERRORS{'DEBUG'}, 0, "retrieved datastore info: " . join(", ", sort keys %$datastore_info));
 	$self->{datastore_info} = $datastore_info;
 	return $datastore_info;
 }

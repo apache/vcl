@@ -597,7 +597,7 @@ sub DESTROY {
 	my $self = shift;
 	
 	my $address = sprintf('%x', $self);
-	#notify($ERRORS{'DEBUG'}, 0, ref($self) . " destructor called, address: $address");
+	notify($ERRORS{'DEBUG'}, 0, ref($self) . " destructor called, address: $address");
 	
 	# If not a blockrequest, delete computerloadlog entry
 	if ($self && $self->data && !$self->data->is_blockrequest()) {
@@ -605,7 +605,7 @@ sub DESTROY {
 		my @reservation_ids = $self->data->get_reservation_ids();
 		my $is_parent_reservation = $self->data->is_parent_reservation();
 		
-		if (@reservation_ids) {
+		if (@reservation_ids && $request_id) {
 			if ($is_parent_reservation) {
 				# Delete all computerloadlog rows with loadstatename = 'begin' for all reservations in this request
 				delete_computerloadlog_reservation(\@reservation_ids, 'begin');
@@ -615,11 +615,11 @@ sub DESTROY {
 				notify($ERRORS{'DEBUG'}, 0, "child reservation, computerloadlog 'begin' entries not removed");
 			}
 		}
-		else {
+		elsif (!$SETUP_MODE) {
 			notify($ERRORS{'WARNING'}, 0, "failed to retrieve the reservation ID, computerloadlog 'begin' rows not removed");
 		}
 	}
-
+	
 	# Print the number of database handles this process created for testing/development
 	if (defined $ENV{dbh_count}) {
 		#notify($ERRORS{'DEBUG'}, 0, "number of database handles state process created: $ENV{dbh_count}");

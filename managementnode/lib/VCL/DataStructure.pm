@@ -557,6 +557,15 @@ my @blockrequest_data : Field : Arg('Name' => 'blockrequest_data', 'Default' => 
 
 my @computer_identifier : Field : Arg('Name' => 'computer_identifier') : Type(scalar) : Get('Name' => 'computer_identifier', 'Private' => 1);
 
+=head3 @vmhost_id
+
+ Data type   : array of scalars
+ Description :
+
+=cut
+
+my @vmhost_id : Field : Arg('Name' => 'vmhost_id') : Type(scalar) : Get('Name' => 'vmhost_id', 'Private' => 1);
+
 =head3 @image_identifier
 
  Data type   : array of scalars
@@ -627,6 +636,7 @@ sub _initialize : Init {
 	}
 
 	my $computer_identifier = $self->computer_identifier;
+	my $vmhost_id = $self->vmhost_id;
 	my $image_identifier = $self->image_identifier;
 	my $imagerevision_identifier = $self->imagerevision_identifier;
 	
@@ -645,6 +655,19 @@ sub _initialize : Init {
 		$self->request_data->{reservation}{$self->reservation_id}{computer} = $computer_info;
 	}
 	
+	# Get the VM host info if the vmhost_id argument was specified and add it to this object
+	if ($vmhost_id) {
+		notify($ERRORS{'DEBUG'}, 0, "VM host identifier argument was specified, retrieving data for VM host: $vmhost_id");
+		my $vmhost_info = get_vmhost_info($vmhost_id);
+		if (!$vmhost_info) {
+			notify($ERRORS{'WARNING'}, 0, "DataStructure object could not be initialized, failed to retrieve data for VM host: $vmhost_id");
+			
+			# Throw an exception because simply returning undefined (return;) does not result in this DataStructure object being undefined
+			Exception::Class::Base->throw( error => "DataStructure object could not be initialized, failed to retrieve data for VM host: $vmhost_id");
+			return;
+		}
+		$self->request_data->{reservation}{$self->reservation_id}{computer}{vmhost} = $vmhost_info;
+	}
 	
 	# If either the computer, image, or imagerevision identifier arguments are specified, retrieve appropriate image and imagerevision data
 	if (defined($imagerevision_identifier) || defined($image_identifier) || defined($computer_identifier)) {

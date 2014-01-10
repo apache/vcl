@@ -236,13 +236,23 @@ sub new {
 =cut
 
 sub create_datastructure_object {
-	my $self = shift;
-	unless (ref($self) && $self->isa('VCL::Module')) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
+	my $arguments = shift;
 	
-	my $arguments = shift || {};
+	if (my $type = ref($arguments)) {
+		if (UNIVERSAL::isa($arguments, 'can')) {
+			# First argument is an object reference, assume this was called as an object method
+			$arguments = shift;
+		}
+		elsif ($type ne 'HASH') {
+			# First argument is not a hash reference
+			notify($ERRORS{'CRITICAL'}, 0, "subroutine was not called as a VCL::Module object method and first argument is a $type reference");
+			return;
+		}
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "no arguments specified, creating default DataStructure object");
+		$arguments = {};
+	}
 	
 	my $data;
 	eval {
@@ -265,9 +275,79 @@ sub create_datastructure_object {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 create_object
+
+ Parameters  : $perl_package, $data_structure_arguments (optional)
+ Returns     : VCL::Module object reference
+ Description : This is a general constructor to create VCL::Module objects. It
+               contains the code to call 'use $perl_package', instantiate an
+               object, and catch errors.
+
+=cut
+
+sub create_object {
+	my $argument = shift;
+	
+	# Check if called as an object method
+	my $self;
+	if ($argument && ref($argument)) {
+		$self = $argument;
+		$argument = shift;
+	}
+	
+	if (!$argument) {
+		notify($ERRORS{'WARNING'}, 0, "Perl package path argument was not specified");
+		return;
+	}
+	elsif (my $type = ref($argument)) {
+		notify($ERRORS{'WARNING'}, 0, "first argument must be the Perl package path scalar, not a $type reference");
+		return;
+	}
+	
+	my $perl_package = $argument;
+	
+	my $data;
+	if (my $data_structure_arguments = shift || !$self) {
+		$data = create_datastructure_object($data_structure_arguments);
+	}
+	elsif ($self) {
+		$data = $self->data;
+	}
+
+	# Attempt to load the module
+	eval "use $perl_package";
+	if ($EVAL_ERROR) {
+		notify($ERRORS{'WARNING'}, 0, "$perl_package module could not be loaded, error:\n" . $EVAL_ERROR);
+		return;
+	}
+	notify($ERRORS{'DEBUG'}, 0, "$perl_package module loaded");
+	
+	# Attempt to create the object
+	my $object;
+	eval {
+		$object = ($perl_package)->new({data_structure => $data})
+	};
+	
+	if ($EVAL_ERROR) {
+		notify($ERRORS{'WARNING'}, 0, "failed to create $perl_package object, error: $EVAL_ERROR");
+		return;
+	}
+	elsif (!$object) {
+		notify($ERRORS{'WARNING'}, 0, "failed to create $perl_package object");
+		return;
+	}
+	else {
+		my $address = sprintf('%x', $object);
+		notify($ERRORS{'DEBUG'}, 0, "$perl_package object created, address: $address");
+		return $object;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 create_os_object
 
- Parameters  : None
+ Parameters  : none
  Returns     : boolean
  Description : Creates an OS object if one has not already been created for the
                calling object.
@@ -344,7 +424,7 @@ sub create_os_object {
 
 =head2 create_mn_os_object
 
- Parameters  : None
+ Parameters  : none
  Returns     : boolean
  Description : Creates a management node OS object if one has not already been
                created for the calling object.
@@ -407,7 +487,7 @@ sub create_mn_os_object {
 
 =head2 create_vmhost_os_object
 
- Parameters  : None
+ Parameters  : none
  Returns     : boolean
  Description : Creates an OS object for the VM host.
 
@@ -498,9 +578,10 @@ sub create_vmhost_os_object {
 
 =head2 create_provisioning_object
 
- Parameters  : None
- Returns     : 
- Description : 
+ Parameters  : none
+ Returns     : VCL::Module::Provisioning object reference
+ Description : Creates an provisioning module object if one has not already been
+               created for the calling object.
 
 =cut
 
@@ -733,7 +814,7 @@ sub vmhost_os {
 =head2 set_data
 
  Parameters  : $data
- Returns     : 
+ Returns     : boolean
  Description : Sets the DataStructure object for the module to access.
 
 =cut
@@ -755,6 +836,7 @@ sub set_data {
 		return;
 	}
 	$self->{data} = $data;
+	return 1;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -762,7 +844,7 @@ sub set_data {
 =head2 set_os
 
  Parameters  : $os
- Returns     : 
+ Returns     : boolean
  Description : Sets the OS object for the module to access.
 
 =cut
@@ -784,6 +866,7 @@ sub set_os {
 		return;
 	}
 	$self->{os} = $os;
+	return 1;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -791,7 +874,7 @@ sub set_os {
 =head2 set_mn_os
 
  Parameters  : $mn_os
- Returns     : 
+ Returns     : boolean
  Description : Sets the management node OS object for the module to access.
 
 =cut
@@ -818,6 +901,7 @@ sub set_mn_os {
 	my $mn_os_address = sprintf('%x', $mn_os);
 	notify($ERRORS{'DEBUG'}, 0, "storing reference to managment node OS object (address: $mn_os_address) in this $type object (address: $address)");
 	$ENV{mn_os} = $mn_os;
+	return 1;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -825,7 +909,7 @@ sub set_mn_os {
 =head2 set_vmhost_os
 
  Parameters  : $vmhost_os
- Returns     : 
+ Returns     : boolean
  Description : Sets the VM host OS object for the module to access.
 
 =cut
@@ -852,13 +936,7 @@ sub set_vmhost_os {
 	my $vmhost_os_address = sprintf('%x', $vmhost_os);
 	notify($ERRORS{'DEBUG'}, 0, "storing reference to VM host OS object (address: $vmhost_os_address) in this $type object (address: $address)");
 	$self->{vmhost_os} = $vmhost_os;
-	
-	
-	#my $address = sprintf('%x', $self);
-	#my $vmhost_os_address = sprintf('%x', $vmhost_os);
-	#my $type = ref($self);
-	#notify($ERRORS{'DEBUG'}, 0, "storing reference to VM host OS object (address: $vmhost_os_address) in this $type object (address: $address)");
-	#$self->{vmhost_os} = $vmhost_os;
+	return 1;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -866,7 +944,7 @@ sub set_vmhost_os {
 =head2 set_provisioner
 
  Parameters  : $provisioner
- Returns     : 
+ Returns     : boolean
  Description : Sets the provisioner object for the module to access.
 
 =cut
@@ -888,6 +966,7 @@ sub set_provisioner {
 		return;
 	}
 	$self->{provisioner} = $provisioner;
+	return 1;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -1211,57 +1290,25 @@ sub get_semaphore {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 setup
+=head2 setup_get_menu
 
  Parameters  : none
- Returns     : 
- Description : This subroutine is used when vcld is run in setup mode. It
-               presents a menu for overall VCL configuration settings.
+ Returns     : hash reference
+ Description : Constructs the general menu items used when 'vcld -setup' is
+               invoked.
 
 =cut
 
-sub setup {
-	my $self = shift;
-	unless (ref($self) && $self->isa('VCL::Module')) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-	
-	push @{$ENV{setup_path}}, 'User Accounts';
-	
-	my @operation_choices = (
-		'Add Local VCL User Account',
-		'Set Local VCL User Account Password',
-		'Test RPC-XML Access',
-	);
-	
-	my @setup_path = @{$ENV{setup_path}};
-	OPERATION: while (1) {
-		@{$ENV{setup_path}} = @setup_path;
-		
-		print '-' x 76 . "\n";
-		
-		print "Choose an operation:\n";
-		my $operation_choice_index = setup_get_array_choice(@operation_choices);
-		last if (!defined($operation_choice_index));
-		my $operation_name = $operation_choices[$operation_choice_index];
-		print "\n";
-		
-		push @{$ENV{setup_path}}, $operation_name;
-		
-		if ($operation_name =~ /add local/i) {
-			$self->setup_add_local_account();
+sub setup_get_menu {
+	return {
+		'User Accounts' => {
+			'Add Local VCL User Account' => \&setup_add_local_account,
+			'Set Local VCL User Account Password' => \&setup_set_local_account_password,
+		},
+		'Management Node Configuration' => {
+			'Test RPC-XML Access' => \&setup_test_rpc_xml,
 		}
-		elsif ($operation_name =~ /rpc/i) {
-			$self->setup_test_rpc_xml();
-		}
-		elsif ($operation_name =~ /password/i) {
-			$self->setup_set_local_account_password();
-		}
-	}
-	
-	pop @{$ENV{setup_path}};
-	return 1;
+	};
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -1617,7 +1664,8 @@ EOF
 
  Parameters  : none
  Returns     : nothing
- Description : 
+ Description : Displays the module objects address and calls the super class
+               destroy method if available.
 
 =cut
 

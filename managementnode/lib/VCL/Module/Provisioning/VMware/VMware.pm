@@ -274,7 +274,6 @@ sub initialize {
 	}
 	
 	my $request_state_name = $self->data->get_request_state_name();
-	my $vm_computer_name = $self->data->get_computer_node_name();
 	my $vmhost_computer_name = $vmhost_data->get_computer_node_name();
 	my $vmhost_image_name = $vmhost_data->get_image_name();
 	my $vmhost_os_module_package = $vmhost_data->get_image_os_module_perl_package();
@@ -288,7 +287,7 @@ sub initialize {
 	
 	# Create an API object which will be used to control the VM (register, power on, etc.)
 	if (($vmware_api = $self->get_vmhost_api_object($VSPHERE_SDK_PACKAGE)) && !$vmware_api->is_restricted()) {
-		notify($ERRORS{'DEBUG'}, 0, "vSphere SDK object will be used to control the VM host $vmhost_computer_name and the VM: $vm_computer_name");
+		notify($ERRORS{'DEBUG'}, 0, "vSphere SDK object will be used to control VM host $vmhost_computer_name");
 		
 		$self->set_vmhost_os($vmware_api);
 		$vmware_api->set_vmhost_os($vmware_api);
@@ -322,6 +321,10 @@ sub initialize {
 		}
 	}
 	
+	if ($SETUP_MODE) {
+		$vmware_api->initialize() || return;
+	}
+	
 	# Store the VM host API object in this object
 	$self->{api} = $vmware_api;
 	
@@ -335,6 +338,10 @@ sub initialize {
 	if (!$vmhost_product_name) {
 		notify($ERRORS{'WARNING'}, 0, "VMware module initialization failed, unable to determine VMware product installed on VM host $vmhost_computer_name");
 		return;
+	}
+	
+	if ($SETUP_MODE) {
+		return 1;
 	}
 	
 	# Make sure the vmx and vmdk base directories can be accessed
@@ -381,7 +388,7 @@ sub initialize {
 		}
 		
 		if (!$cpu_core_count) {
-			notify($ERRORS{'OK'}, 0, "VM host computer.procnumber not updated, CPU core count could not be retrieved from the API or VM host OS object");
+			notify($ERRORS{'DEBUG'}, 0, "VM host computer.procnumber not updated, CPU core count could not be retrieved from the API or VM host OS object");
 		}
 		elsif ($cpu_core_count eq $vmhost_data->get_computer_processor_count()) {
 			notify($ERRORS{'DEBUG'}, 0, "VM host computer.procnumber is already correct in the database");
@@ -400,7 +407,7 @@ sub initialize {
 		}
 		
 		if (!$cpu_speed) {
-			notify($ERRORS{'OK'}, 0, "VM host computer.procspeed not updated, CPU speed could not be retrieved from the API or VM host OS object");
+			notify($ERRORS{'DEBUG'}, 0, "VM host computer.procspeed not updated, CPU speed could not be retrieved from the API or VM host OS object");
 		}
 		elsif ($cpu_speed eq $vmhost_data->get_computer_processor_speed()) {
 			notify($ERRORS{'DEBUG'}, 0, "VM host computer.procspeed is already correct in the database");
@@ -419,7 +426,7 @@ sub initialize {
 		}
 		
 		if (!$ram_mb) {
-			notify($ERRORS{'OK'}, 0, "VM host computer.RAM not updated, total memory could not be retrieved from the API or VM host OS object");
+			notify($ERRORS{'DEBUG'}, 0, "VM host computer.RAM not updated, total memory could not be retrieved from the API or VM host OS object");
 		}
 		elsif ($ram_mb eq $vmhost_data->get_computer_ram()) {
 			notify($ERRORS{'DEBUG'}, 0, "VM host computer.RAM is already correct in the database");
@@ -1041,7 +1048,7 @@ sub get_active_vmx_file_path {
 		
 		# Ignore the vmx file if it is not registered
 		if (!$self->is_vm_registered($host_vmx_path)) {
-			notify($ERRORS{'OK'}, 0, "ignoring $vmx_file_name because the VM is not registered");
+			notify($ERRORS{'DEBUG'}, 0, "ignoring $vmx_file_name because the VM is not registered");
 			next;
 		}
 		
@@ -1114,10 +1121,10 @@ sub node_status {
 		}
 		
 		if ($computer_id) {
-			notify($ERRORS{'OK'}, 0, "computer ID: $computer_id");
+			notify($ERRORS{'DEBUG'}, 0, "computer ID: $computer_id");
 		}
 		else {
-			notify($ERRORS{'OK'}, 0, "unable to determine computer ID from argument:\n" . format_data($argument));
+			notify($ERRORS{'WARNING'}, 0, "unable to determine computer ID from argument:\n" . format_data($argument));
 			return;
 		}
 		
@@ -1135,13 +1142,13 @@ sub node_status {
 			return;
 		}
 		else {
-			notify($ERRORS{'OK'}, 0, "created DataStructure object  for computer ID: $computer_id");
+			notify($ERRORS{'DEBUG'}, 0, "created DataStructure object  for computer ID: $computer_id");
 		}
 		
 		# Create a VMware object
 		my $object_type = 'VCL::Module::Provisioning::VMware::VMware';
 		if ($self = ($object_type)->new({data_structure => $data})) {
-			notify($ERRORS{'OK'}, 0, "created $object_type object to check the status of computer ID: $computer_id");
+			notify($ERRORS{'DEBUG'}, 0, "created $object_type object to check the status of computer ID: $computer_id");
 		}
 		else {
 			notify($ERRORS{'WARNING'}, 0, "failed to create $object_type object to check the status of computer ID: $computer_id");
@@ -1161,7 +1168,7 @@ sub node_status {
 	my $request_forimaging = $self->data->get_request_forimaging();
    my $imagerevision_id = $self->data->get_imagerevision_id();
 	
-	notify($ERRORS{'OK'}, 0, "attempting to check the status of computer $computer_name, image: $image_name");
+	notify($ERRORS{'DEBUG'}, 0, "attempting to check the status of computer $computer_name, image: $image_name");
 	
 	# Create a hash reference and populate it with the default values
 	my $status;
@@ -1177,11 +1184,11 @@ sub node_status {
 	# Skip the ping and power status checks for a normal reservation to speed things up
 	if (!$reservation_id) {
 		if (_pingnode($computer_name)) {
-			notify($ERRORS{'OK'}, 0, "VM $computer_name is pingable");
+			notify($ERRORS{'DEBUG'}, 0, "VM $computer_name is pingable");
 			$status->{ping} = 1;
 		}
 		else {
-			notify($ERRORS{'OK'}, 0, "VM $computer_name is not pingable");
+			notify($ERRORS{'DEBUG'}, 0, "VM $computer_name is not pingable");
 			$status->{ping} = 0;
 		}
 		
@@ -1194,7 +1201,7 @@ sub node_status {
 	
 	# Check if SSH is available
 	if ($self->os->is_ssh_responding()) {
-		notify($ERRORS{'OK'}, 0, "VM $computer_name is responding to SSH");
+		notify($ERRORS{'DEBUG'}, 0, "VM $computer_name is responding to SSH");
 		$status->{ssh} = 1;
 	}
 	else {
@@ -1271,7 +1278,7 @@ sub node_status {
 			return $status;
 		}
 		
-		notify($ERRORS{'OK'}, 0, "vmdk file path used by the VM already loaded: $vmdk_file_path, mode: $vmdk_mode");
+		notify($ERRORS{'DEBUG'}, 0, "vmdk file path used by the VM already loaded: $vmdk_file_path, mode: $vmdk_mode");
 		
 		# Can't use if nonpersistent
 		if ($vmdk_mode =~ /nonpersistent/i) {
@@ -1281,18 +1288,18 @@ sub node_status {
 		
 		if ($is_vm_dedicated) {
 			if ($self->is_vmdk_file_shared($vmdk_file_path)) {
-				notify($ERRORS{'OK'}, 0, "VM already loaded may NOT be used, the vmdk appears to be shared");
+				notify($ERRORS{'DEBUG'}, 0, "VM already loaded may NOT be used, the vmdk appears to be shared, returning '$status'");
 				return $status;
 			}
 			else {
-				notify($ERRORS{'OK'}, 0, "VM already loaded may be used, the vmdk does NOT appear to be shared");
+				notify($ERRORS{'DEBUG'}, 0, "VM already loaded may be used, the vmdk does NOT appear to be shared");
 			}
 		}
 	}
 	
 	# Check if the OS post_load tasks have run
 	if ($vcld_post_load_status) {
-		notify($ERRORS{'OK'}, 0, "OS module post_load tasks have been completed on VM $computer_name");
+		notify($ERRORS{'DEBUG'}, 0, "OS module post_load tasks have been completed on VM $computer_name");
 		$status->{status} = 'READY';
 	}
 	else {
@@ -1460,7 +1467,7 @@ sub get_vmhost_os_object {
 	my $vmhost_os;
 	eval { $vmhost_os = ($vmhost_os_perl_package)->new({data_structure => $vmhost_data}) };
 	if ($vmhost_os) {
-		notify($ERRORS{'OK'}, 0, "VM host OS object created: " . ref($vmhost_os));
+		notify($ERRORS{'DEBUG'}, 0, "VM host OS object created: " . ref($vmhost_os));
 		return $vmhost_os;
 	}
 	elsif ($EVAL_ERROR) {
@@ -3503,7 +3510,7 @@ sub get_vmdk_base_directory_path_shared {
 	
 	# Get the vmprofile.datastore
 	if ($vmdk_base_directory_path = $self->data->get_vmhost_profile_datastore_path()) {
-		notify($ERRORS{'DEBUG'}, 0, "using VM profile datastore path as the vmdk base directory path: $vmdk_base_directory_path");
+		#notify($ERRORS{'DEBUG'}, 0, "using VM profile datastore path as the vmdk base directory path: $vmdk_base_directory_path");
 	}
 	else {
 		notify($ERRORS{'WARNING'}, 0, "unable to determine the vmdk base directory path, failed to retrieve the datastore path for the VM profile");
@@ -3976,7 +3983,7 @@ sub check_file_paths {
 	}
 	else {
 		# Set the vmdk_file_path environment variable
-		notify($ERRORS{'OK'}, 0, "successfully retrieved $file_type file path components:\n$check_paths_string");
+		notify($ERRORS{'DEBUG'}, 0, "successfully retrieved $file_type file path components:\n$check_paths_string");
 		return 1;
 	}
 }
@@ -4800,7 +4807,7 @@ sub get_vm_virtual_hardware_version {
 		}
 	}
 	
-	notify($ERRORS{'OK'}, 0, "returning hardware version: $hardware_version");
+	notify($ERRORS{'DEBUG'}, 0, "returning hardware version: $hardware_version");
 	return $hardware_version;
 }
 
@@ -5488,7 +5495,7 @@ sub delete_vm {
 	
 	my $vmdk_base_directory_path_shared = $self->get_vmdk_base_directory_path_shared();
 	
-	notify($ERRORS{'OK'}, 0, "attempting to delete VM: $vmx_file_path");
+	notify($ERRORS{'DEBUG'}, 0, "attempting to delete VM: $vmx_file_path");
 	delete $self->{vmx_info}{$vmx_file_path};
 	
 	if ($self->is_vm_registered($vmx_file_path)) {
@@ -6195,7 +6202,7 @@ sub move_vmdk {
 		
 		
 		# Try vmkfstools
-		notify($ERRORS{'OK'}, 0, "attempting to move vmdk file using vmkfstools: $source_vmdk_file_path --> $destination_vmdk_file_path");
+		notify($ERRORS{'DEBUG'}, 0, "attempting to move vmdk file using vmkfstools: $source_vmdk_file_path --> $destination_vmdk_file_path");
 		my $vmkfs_command = "vmkfstools -E \"$source_vmdk_file_path\" \"$destination_vmdk_file_path\"";
 		my ($vmkfs_exit_status, $vmkfs_output) = $self->vmhost_os->execute($vmkfs_command, 1, 7200);
 		
@@ -6731,7 +6738,7 @@ sub _get_datastore_names {
 	}
 	
 	my @datastore_names = sort keys %{$datastore_info};
-	notify($ERRORS{'DEBUG'}, 0, "datastore names:\n" . join("\n", @datastore_names));
+	notify($ERRORS{'DEBUG'}, 0, "datastore names: " . join(", ", sort @datastore_names));
 	
 	return @datastore_names;
 }
@@ -7343,7 +7350,7 @@ sub _get_vmx_file_path_computer_name {
 	}
 	
 	if ($computer_name) {
-		notify($ERRORS{'DEBUG'}, 0, "determined computer name '$computer_name' from directory name: '$directory_name'");
+		#notify($ERRORS{'DEBUG'}, 0, "determined computer name '$computer_name' from directory name: '$directory_name'");
 		return $computer_name;
 	}
 	else {
@@ -7533,7 +7540,7 @@ sub _check_datastore_paths {
 		}
 	}
 	
-	notify($ERRORS{'OK'}, 0, "retrieved datastore path components:\n$check_paths_string");
+	notify($ERRORS{'DEBUG'}, 0, "retrieved datastore path components:\n$check_paths_string");
 	
 	if ($check_paths_string =~ /$undefined_string/) {
 		return;
@@ -7612,7 +7619,7 @@ sub configure_vmhost_dedicated_ssh_key {
 	
 	# Write the updated contents back to boot.cfg
 	if (!$bootbank_cfg_changed) {
-		notify($ERRORS{'OK'}, 0, "$bootbank_cfg_path does not need to be updated on VM host");
+		notify($ERRORS{'DEBUG'}, 0, "$bootbank_cfg_path does not need to be updated on VM host");
 	}
 	elsif ($self->vmhost_os->create_text_file($bootbank_cfg_path, $updated_bootbank_cfg_contents)) {
 		notify($ERRORS{'OK'}, 0, "updated $bootbank_cfg_path on VM host:\n" . join("\n", @bootbank_cfg_contents));
@@ -7718,6 +7725,470 @@ sub set_image_repository_permissions {
 	
 	notify($ERRORS{'WARNING'}, 0, "failed to set permissions on files in image repository for image $image_name to $mode");
 	return 0;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 setup_get_menu
+
+ Parameters  : none
+ Returns     : hash reference
+ Description : Defines the menu entries when vcld -setup is invoked for the
+               VMware.pm module.
+
+=cut
+
+sub setup_get_menu {
+	return {
+		'VMware Provisioning Module' => {
+			'VM Host Operations' => \&setup_vm_host_operations,
+		},
+	};
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 setup_vm_host_operations
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Retrieves info for all the VM hosts assigned to the management
+               node and displays a menu to select a host. After a host is
+               selected, a provisioning object is created so that the host can
+               be queried and controlled. A host operations menu is then
+               displayed.
+
+=cut
+
+sub setup_vm_host_operations {
+	my $self = shift;
+	if (ref($self) !~ /VMware/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+
+	# Retrieve all VM hosts assigned to managment node and select one from menu
+	setup_print_break('.');
+	print "Retrieving VMware hosts mapped to $FQDN...\n";
+	my $management_node_vmhost_info = get_management_node_vmhost_info();
+	if (!$management_node_vmhost_info) {
+		print "ERROR: Failed to retrieve VM hosts mapped to $FQDN\n";
+		return;
+	}
+	elsif (!keys %$management_node_vmhost_info) {
+		print "No VM hosts are mapped to $FQDN\n";
+		return;
+	}
+	
+	print "Select a VM host:\n";
+	my $vmhost_id = setup_get_hash_choice($management_node_vmhost_info, 'hostname') || return;
+	my $vmhost_computer_name = $management_node_vmhost_info->{$vmhost_id}{computer}{hostname};
+	push @{$ENV{setup_path}}, $vmhost_computer_name;
+	
+	
+	# Get a provisioning object to control the VM host
+	my $vmhost_provisioner;
+	if ($vmhost_provisioner = $management_node_vmhost_info->{$vmhost_id}{provisioner}) {
+		print "Using previously created provisioning object to control $vmhost_computer_name.\n";
+	}
+	else {
+		print "\nCreating provisioning object to control $vmhost_computer_name...";
+		$vmhost_provisioner = $self->create_object('VCL::Module::Provisioning::VMware::VMware', {vmhost_id => $vmhost_id});
+		if (!$vmhost_provisioner) {
+			print "\nERROR: Failed to create provisioning object to control $vmhost_computer_name.\n";
+			return;
+		}
+		
+		my $vmhost_os = $vmhost_provisioner->create_vmhost_os_object();
+		if (!$vmhost_os) {
+			print "\nERROR: Failed to create OS object to control $vmhost_computer_name.\n";
+			return;
+		}
+		$vmhost_provisioner->set_vmhost_os($vmhost_os);
+		
+		if (!$vmhost_provisioner->initialize()) {
+			print "\nERROR: Failed to initial provisioning object to control $vmhost_computer_name.\n";
+			return;
+		}
+		print "Success.\n";
+		$management_node_vmhost_info->{$vmhost_id}{provisioner} = $vmhost_provisioner;
+	}
+	
+	setup_print_break('.');
+	my $datastore_operations_menu = {
+		'Purge deleted and unused images from virtual disk datastore' => \&setup_purge_datastore_images,
+	};
+	
+	
+	print "Select an operation:\n";
+	my $datastore_operations_choice = setup_get_menu_choice($datastore_operations_menu) || return;
+	#For testing:
+	#my $datastore_operations_choice = {
+	#	"name" => "Purge deleted images from datastore",
+	#	"parent_menu_names" => [],
+	#	"sub_ref" => \&setup_purge_datastore_images,
+	#};
+	
+	my $datastore_operations_choice_name = $datastore_operations_choice->{name};
+	my $datastore_operations_choice_sub_ref = $datastore_operations_choice->{sub_ref};
+	push @{$ENV{setup_path}}, $datastore_operations_choice_name;
+	&$datastore_operations_choice_sub_ref($vmhost_provisioner);
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 setup_purge_datastore_images
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Checks all images stored in the virtual disk path location and
+               determines if any can be safely purged from the datastore.
+
+=cut
+
+sub setup_purge_datastore_images {
+	my $self = shift;
+	if (ref($self) !~ /VMware/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $vmhost_computer_name = $self->data->get_vmhost_hostname();
+	my $vmhost_profile_datastore_path = $self->data->get_vmhost_profile_datastore_path();
+	my $vmhost_profile_repository_path = $self->data->get_vmhost_profile_repository_path();
+	
+	if (!$vmhost_profile_repository_path) {
+		print "WARNING: images not purged because repository path is not configured in the VM host profile\n";
+		return;
+	}
+	
+	my $datastore_base_path = $self->_get_normal_path($vmhost_profile_datastore_path);
+	if (!$datastore_base_path) {
+		print "ERROR: failed to locate virtual disk path configured in the VM host profile on $vmhost_computer_name: $vmhost_profile_datastore_path\n";
+		return;
+	}
+	
+	my $repository_base_path = $self->_get_normal_path($vmhost_profile_repository_path);
+	if (!$repository_base_path) {
+		print "ERROR: failed to locate repository path configured in the VM host profile on $vmhost_computer_name: $vmhost_profile_repository_path\n";
+		return;
+	}
+	
+	if ($datastore_base_path eq $repository_base_path) {
+		print "WARNING: images not purged because virtual disk path is the same location as the repository path configured in the VM host profile: $datastore_base_path\n";
+		return;
+	}
+	
+	setup_print_break('.');
+	# Get an array of image names currently stored on the datastore
+	my @datastore_imagerevision_names = $self->get_datastore_imagerevision_names($datastore_base_path);
+	
+	setup_print_break('.');
+	# Get an array of image names currently stored on the repository
+	my @repository_imagerevision_names = $self->get_datastore_imagerevision_names($repository_base_path);
+	
+	setup_print_break('.');
+	# Get various info about image revisions such as deleted, date created...
+	my $imagerevision_cleanup_info = get_imagerevision_cleanup_info();
+	
+	# Get reservation info for all imagerevisions in datastore
+	my $imagerevision_reservation_info = get_imagerevision_reservation_info();
+	
+	# Get computers on which imagerevisions in datastore are currently loaded according to the database
+	my $imagerevision_loaded_info = get_imagerevision_loaded_info();
+	
+	# Ask the user how many days in the past to check if reservations were made for the image revision
+	my $min_reservation_days;
+	while (!$min_reservation_days) {
+		$min_reservation_days = setup_get_input_string("Enter minimum number of days since last reservation", 120);
+		return if !defined($min_reservation_days);
+		$min_reservation_days =~ s/\s*//g;
+		if ($min_reservation_days !~ /^\d+$/) {
+			print "Value must be an integer\n";
+			$min_reservation_days = '';
+		}
+	}
+	
+	# Ask the user minimum number of days old an image revision must be to be purged
+	my $min_imagerevision_age;
+	while (!$min_imagerevision_age) {
+		$min_imagerevision_age = setup_get_input_string("Enter minimum number of days since image revision was created", 120);
+		return if !defined($min_imagerevision_age);
+		$min_imagerevision_age =~ s/\s*//g;
+		if ($min_imagerevision_age !~ /^\d+$/) {
+			print "Value must be an integer\n";
+			$min_imagerevision_age = '';
+		}
+	}
+	
+	# Retrieve a list of image revisions reserved the the past x number of days selected by the user
+	my @imagerevision_names_recently_reserved = get_imagerevision_names_recently_reserved($min_reservation_days);
+	
+	my @deleted;
+	my @not_deleted;
+	my @has_reservations;
+	my @no_reservations;
+	my @loaded;
+	my @not_loaded;
+	my @in_repository;
+	my @not_in_repository;
+	my @recently_reserved;
+	my @not_recently_reserved;
+	my @recently_created;
+	my @not_recently_created;
+	my @production;
+	my @older_than_production;
+	my @newer_than_production;
+	
+	# Build lists of imagerevisions with certain characteristics
+	for my $datastore_imagerevision_name (@datastore_imagerevision_names) {
+		if (!$imagerevision_cleanup_info->{$datastore_imagerevision_name}) {
+			print "WARNING: failed to retrieve cleanup info from database for image revision: $datastore_imagerevision_name\n";
+			return;
+		}
+		
+		if ($imagerevision_cleanup_info->{$datastore_imagerevision_name}{deleted}) {
+			push @deleted, $datastore_imagerevision_name;
+		}
+		else {
+			push @not_deleted, $datastore_imagerevision_name;
+		}
+		
+		if ($imagerevision_reservation_info->{$datastore_imagerevision_name}) {
+			push @has_reservations, $datastore_imagerevision_name;
+		}
+		else {
+			push @no_reservations, $datastore_imagerevision_name;
+		}
+		
+		if ($imagerevision_loaded_info->{$datastore_imagerevision_name}) {
+			push @loaded, $datastore_imagerevision_name;
+		}
+		else {
+			push @not_loaded, $datastore_imagerevision_name;
+		}
+		
+		if (grep { $_ eq $datastore_imagerevision_name } @repository_imagerevision_names) {
+			push @in_repository, $datastore_imagerevision_name;
+		}
+		else {
+			push @not_in_repository, $datastore_imagerevision_name;
+		}
+		
+		my $revision = $imagerevision_cleanup_info->{$datastore_imagerevision_name}{revision};
+		my $production_revision = $imagerevision_cleanup_info->{$datastore_imagerevision_name}{productionrevision};
+		if ($revision eq $production_revision) {
+			push @production, $datastore_imagerevision_name;
+		}
+		elsif ($revision < $production_revision) {
+			push @older_than_production, $datastore_imagerevision_name;
+		}
+		else {
+			push @newer_than_production, $datastore_imagerevision_name;
+		}
+		
+		if ($imagerevision_cleanup_info->{$datastore_imagerevision_name}{age} <= $min_imagerevision_age) {
+			push @recently_created, $datastore_imagerevision_name;
+		}
+		else {
+			push @not_recently_created, $datastore_imagerevision_name;
+		}
+		
+		if (grep { $_ eq $datastore_imagerevision_name } @imagerevision_names_recently_reserved) {
+			push @recently_reserved, $datastore_imagerevision_name;
+		}
+		else {
+			push @not_recently_reserved, $datastore_imagerevision_name;
+		}
+	}
+	
+	# Find image revisions which have multiple characteristics by finding the intersection of the arrays
+	my @deleted_has_reservations 					= get_array_intersection(\@deleted, \@has_reservations);
+	my @deleted_has_reservations_loaded 		= get_array_intersection(\@deleted, \@has_reservations, \@loaded);
+	my @deleted_has_reservations_not_loaded 	= get_array_intersection(\@deleted, \@has_reservations, \@not_loaded);
+	my @deleted_no_reservations 					= get_array_intersection(\@deleted, \@no_reservations);
+	my @deleted_no_reservations_loaded 			= get_array_intersection(\@deleted, \@no_reservations, \@loaded);
+	my @deleted_no_reservations_not_loaded 	= get_array_intersection(\@deleted, \@no_reservations, \@not_loaded);
+	my @not_deleted_has_reservations 				= get_array_intersection(\@not_deleted, \@has_reservations);
+	my @not_deleted_has_reservations_loaded 		= get_array_intersection(\@not_deleted, \@has_reservations, \@loaded);
+	my @not_deleted_has_reservations_not_loaded 	= get_array_intersection(\@not_deleted, \@has_reservations, \@not_loaded);
+	my @not_deleted_no_reservations 					= get_array_intersection(\@not_deleted, \@no_reservations);
+	my @not_deleted_no_reservations_loaded 		= get_array_intersection(\@not_deleted, \@no_reservations, \@loaded);
+	my @not_deleted_no_reservations_not_loaded 	= get_array_intersection(\@not_deleted, \@no_reservations, \@not_loaded);
+	my @not_deleted_candidate													= get_array_intersection(\@not_deleted, \@no_reservations, \@not_loaded, \@in_repository);
+	my @not_deleted_no_reservations_not_loaded_not_in_repository 	= get_array_intersection(\@not_deleted, \@no_reservations, \@not_loaded, \@not_in_repository);
+	my @not_deleted_candidate_older_than_production 											= get_array_intersection(\@not_deleted_candidate, \@older_than_production); # Purgable
+	my @not_deleted_candidate_production 															= get_array_intersection(\@not_deleted_candidate, \@production);
+	my @not_deleted_candidate_production_recently_created 									= get_array_intersection(\@not_deleted_candidate, \@production, \@recently_created);
+	my @not_deleted_candidate_production_not_recently_created 								= get_array_intersection(\@not_deleted_candidate, \@production, \@not_recently_created);
+	my @not_deleted_candidate_production_not_recently_created_recently_reserved 		= get_array_intersection(\@not_deleted_candidate, \@production, \@not_recently_created, \@recently_reserved);
+	my @not_deleted_candidate_production_not_recently_created_not_recently_reserved 	= get_array_intersection(\@not_deleted_candidate, \@production, \@not_recently_created, \@not_recently_reserved); # Purgable
+	my @not_deleted_candidate_newer_than_production 											= get_array_intersection(\@not_deleted_candidate, \@newer_than_production);
+	my @not_deleted_candidate_newer_than_production_recently_created 						= get_array_intersection(\@not_deleted_candidate, \@newer_than_production, \@recently_created);
+	my @not_deleted_candidate_newer_than_production_not_recently_created 				= get_array_intersection(\@not_deleted_candidate, \@newer_than_production, \@not_recently_created); # Purgable
+	
+	setup_print_break('-');
+	print "|- Deleted: " 																				. scalar(@deleted) . "\n";
+	print "   |- Has reservation: " 																	. scalar(@deleted_has_reservations) . "\n";
+	print "      |- No reservations: " 																. scalar(@deleted_no_reservations) . "\n";
+	print "         |- Loaded: " 																		. scalar(@deleted_no_reservations_loaded) . "\n";
+	print "         |- Not loaded: " 																. scalar(@deleted_no_reservations_not_loaded) . " (*)\n";
+	print "|- Not deleted: " 																			. scalar(@not_deleted) . "\n";
+	print "   |- Has reservation: " 																	. scalar(@not_deleted_has_reservations) . "\n";
+	print "   |- No reservations: " 																	. scalar(@not_deleted_no_reservations) . "\n";
+	print "      |- Loaded: " 																			. scalar(@not_deleted_no_reservations_loaded) . "\n";
+	print "      |- Not loaded: " 																	. scalar(@not_deleted_no_reservations_not_loaded) . "\n";
+	print "         |- Not in_repository: " 														. scalar(@not_deleted_no_reservations_not_loaded_not_in_repository) . "\n";
+	print "         |- In repository: " 															. scalar(@not_deleted_candidate) . "\n";
+	print "            |- Production: " 															. scalar(@not_deleted_candidate_production) . "\n";
+	print "               |- Created in last $min_imagerevision_age days: " 			. scalar(@not_deleted_candidate_production_recently_created) . "\n";
+	print "               |- Not created in last $min_imagerevision_age days: " 		. scalar(@not_deleted_candidate_production_not_recently_created) . "\n";
+	print "                  |- Reserved in last $min_reservation_days days: " 		. scalar(@not_deleted_candidate_production_not_recently_created_recently_reserved) . "\n";
+	print "                  |- Not reserved in last $min_reservation_days days: " 	. scalar(@not_deleted_candidate_production_not_recently_created_not_recently_reserved) . " (*)\n";
+	print "            |- Older than production: " 												. scalar(@not_deleted_candidate_older_than_production) . " (*)\n";
+	print "            |- Newer than production: " 												. scalar(@not_deleted_candidate_newer_than_production) . "\n";
+	print "               |- Created in last $min_imagerevision_age days: " 			. scalar(@not_deleted_candidate_newer_than_production_recently_created) . "\n";
+	print "               |- Not created in last $min_imagerevision_age days: " 		. scalar(@not_deleted_candidate_newer_than_production_not_recently_created) . " (*)\n";
+	print "(*) May be safely purged\n\n";
+	
+	my @purgable_imagerevisions;
+	
+	if (@deleted_no_reservations_not_loaded) {
+		push @purgable_imagerevisions, @deleted_no_reservations_not_loaded;
+		print "Deleted, no reservations, not loaded: " . scalar(@deleted_no_reservations_not_loaded) . "\n";
+		print "- " . join("\n- ", @deleted_no_reservations_not_loaded) . "\n\n";
+	}
+	
+	if (@not_deleted_candidate_older_than_production) {
+		push @purgable_imagerevisions, @not_deleted_candidate_older_than_production;
+		print "Not deleted, no reservations, not loaded, in repository, older than production revision: " . scalar(@not_deleted_candidate_older_than_production) . "\n";
+		print "- " . join("\n- ", @not_deleted_candidate_older_than_production) . "\n\n";
+	}
+	
+	if (@not_deleted_candidate_newer_than_production_not_recently_created) {
+		push @purgable_imagerevisions, @not_deleted_candidate_newer_than_production_not_recently_created;
+		print "Not deleted, no reservations, not loaded, in repository, newer than production revision, not created in last $min_imagerevision_age days: " . scalar(@not_deleted_candidate_newer_than_production_not_recently_created) . "\n";
+		print "- " . join("\n- ", @not_deleted_candidate_newer_than_production_not_recently_created) . "\n\n";
+	}
+	
+	if (@not_deleted_candidate_production_not_recently_created_not_recently_reserved) {
+		push @purgable_imagerevisions, @not_deleted_candidate_production_not_recently_created_not_recently_reserved;
+		print "Not deleted, no reservations, not loaded, in repository, production, not created in last $min_imagerevision_age days, not reserved in last $min_reservation_days days: " . scalar(@not_deleted_candidate_production_not_recently_created_not_recently_reserved) . "\n";
+		print "- " . join("\n- ", @not_deleted_candidate_production_not_recently_created_not_recently_reserved) . "\n\n";
+	}
+	
+	
+	if (!@purgable_imagerevisions) {
+		print "No image revisions were found which can be safely purged from the virtual disk datastore\n";
+		return;
+	}
+	
+	my $purgable_imagerevision_count = scalar(@purgable_imagerevisions);
+	
+	my $delete_limit;
+	while (!$delete_limit) {
+		$delete_limit = setup_get_input_string("Enter number of image revisions to purge (0-$purgable_imagerevision_count)", $purgable_imagerevision_count);
+		return if !$delete_limit;
+		$delete_limit =~ s/\s*//g;
+		if ($delete_limit !~ /^\d+$/ || $delete_limit > $purgable_imagerevision_count) {
+			print "Value must be an integer between 0 and $purgable_imagerevision_count\n";
+			$delete_limit = '';
+		}
+	}
+	
+	my $delete_count = 0;
+	for my $imagerevision_name (@purgable_imagerevisions) {
+		$delete_count++;
+		setup_print_break('.');
+		print "Deleting image revision $delete_count/$delete_limit: $imagerevision_name\n";
+		
+		my $datastore_directory_path = "$datastore_base_path/$imagerevision_name";
+		print "Datastore directory path: $datastore_directory_path\n";
+		
+		if ($self->vmhost_os->delete_file($datastore_directory_path)) {
+			print "Done\n";
+		}
+		else {
+			print "\nERROR: failed to delete image revision: $imagerevision_name\n";
+			exit;
+		}
+		
+		if ($delete_count >= $delete_limit) {
+			last;
+		}
+	}
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_datastore_image_names
+
+ Parameters  : $datastore_base_path
+ Returns     : array
+ Description : Retrieves a list of all image revisions which exist under the
+               datastore base path. The directory entries checked to ensure a
+               matching image revision exists in the database so that extraneous
+               file entries are not returned.
+
+=cut
+
+sub get_datastore_imagerevision_names {
+	my $self = shift;
+	if (ref($self) !~ /VMware/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $datastore_base_path = shift;
+	if (!$datastore_base_path) {
+		notify($ERRORS{'WARNING'}, 0, "datastore base path argument was not supplied");
+		return;
+	}
+	
+	print "Retrieving list of all image revisions from database... ";
+	my @imagerevision_names = get_imagerevision_names();
+	print scalar(@imagerevision_names) . " found\n";
+	my %imagerevision_name_hash = map { $_ => 1 } @imagerevision_names;
+	
+	print "Retrieving list of files and directories in datastore: $datastore_base_path\n";
+	
+	my @file_paths = $self->vmhost_os->find_files($datastore_base_path, "*", 0);
+	
+	my @datastore_imagerevision_names;
+	my @ignored;
+	
+	for my $file_path (@file_paths) {
+		$file_path =~ s/\/+$//;
+		next if $file_path eq $datastore_base_path;
+		my $file_name = $self->_get_file_name($file_path);
+		next if !$file_name;
+		
+		if (defined($imagerevision_name_hash{$file_name})) {
+			push @datastore_imagerevision_names, $file_name;
+		}
+		else {
+			push @ignored, $file_name;
+		}
+	}
+	
+	# Remove duplicates
+	my %datastore_imagerevision_name_hash = map { $_ => 1 } @datastore_imagerevision_names;
+	@datastore_imagerevision_names = sort keys %datastore_imagerevision_name_hash;
+	
+	my $datastore_imagerevision_name_count = scalar(@datastore_imagerevision_names);
+	my $ignored_count = scalar(@ignored);
+	
+	print "\n";
+	if (@ignored) {
+		print "$ignored_count files and/or directories ignored: " . join(", ", @ignored) . "\n\n";
+	}
+	print "$datastore_imagerevision_name_count images found in datastore '$datastore_base_path'\n";
+	
+	return @datastore_imagerevision_names;
 }
 
 #/////////////////////////////////////////////////////////////////////////////

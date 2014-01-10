@@ -76,6 +76,7 @@ use Sys::Hostname;
 use XML::Simple;
 use Time::HiRes qw(gettimeofday tv_interval);
 use Crypt::OpenSSL::RSA;
+use B qw(svref_2object);
 
 require Exporter;
 our @ISA = qw(Exporter);
@@ -100,9 +101,12 @@ our @EXPORT = qw(
   format_hash_keys
   format_number
   get_affiliation_info
+  get_array_intersection
   get_block_request_image_info
   get_caller_trace
   get_calling_subroutine
+  get_code_ref_package_name
+  get_code_ref_subroutine_name
   get_computer_current_state_name
   get_computer_grp_members
   get_computer_ids
@@ -118,12 +122,18 @@ our @EXPORT = qw(
   get_group_name
   get_image_info
   get_imagemeta_info
+  get_imagerevision_cleanup_info
   get_imagerevision_info
+  get_imagerevision_loaded_info
+  get_imagerevision_names
+  get_imagerevision_names_recently_reserved
+  get_imagerevision_reservation_info
   get_current_image_contents_noDS
   get_current_reservation_lastcheck
   get_local_user_info
   get_management_node_blockrequests
   get_management_node_computer_ids
+  get_management_node_vmhost_ids
   get_management_node_vmhost_info
   get_management_node_id
   get_management_node_info
@@ -191,6 +201,8 @@ our @EXPORT = qw(
   setup_get_array_choice
   setup_get_hash_choice
   setup_get_input_string
+  setup_get_menu_choice
+  setup_print_break
   setup_print_wrap
   sleep_uninterrupted
   sort_by_file_name
@@ -307,7 +319,7 @@ INIT {
 	my $cwd = getcwd();
 	$CONF_FILE_PATH = "$cwd/$hostname.conf";
 	if (!-f $CONF_FILE_PATH) {
-		if ($BIN_PATH =~ /dev/) {
+		if ($BIN_PATH && $BIN_PATH =~ /dev/) {
 			$CONF_FILE_PATH = "/etc/vcl/vcldev.conf";
 		}
 		else {
@@ -380,7 +392,7 @@ INIT {
 		
 		my ($parameter, $value) = $line =~ /\s*([^=]+)=(.+)/;
 		if (!defined($parameter) || !defined($value)) {
-			print STDERR "WARNING: ignoring line $line_number in $CONF_FILE_PATH: $line\n";
+			#print STDERR "WARNING: ignoring line $line_number in $CONF_FILE_PATH: $line\n";
 			next;
 		}
 		
@@ -402,7 +414,7 @@ INIT {
 			}
 		}
 		else {
-			print STDERR "WARNING: unsupported parameter found on line $line_number in $CONF_FILE_PATH: " . string_to_ascii($parameter) . "\n";
+			#print STDERR "WARNING: unsupported parameter found on line $line_number in $CONF_FILE_PATH: " . string_to_ascii($parameter) . "\n";
 		}
 	}
 	
@@ -521,9 +533,10 @@ EOF
 =head2 notify
 
  Parameters  : $error, $LOG, $string, $data
- Returns     : nothing
+ Returns     : true
  Description : based on error value write string and/or data to
-					provide or default log file
+               provide or default log file
+
 =cut
 
 sub notify {
@@ -754,8 +767,8 @@ sub makedatestring {
 
  Parameters  : time in epoch format
  Returns     : date in datetime format
- Description : accepts time in epoch format (10 digit) and
-					returns time  in datetime format
+ Description : accepts time in epoch format (10 digit) and returns time in
+               datetime format
 
 =cut
 
@@ -781,7 +794,7 @@ sub convert_to_datetime {
  Parameters  : datetime
  Returns     : time in epoch format
  Description : takes input(optional) and returns epoch 10 digit string of
-					the supplied date_time or the current time
+               the supplied date_time or the current time
 
 =cut
 
@@ -812,7 +825,7 @@ sub convert_to_epoch_seconds {
  Parameters  : endtime
  Returns     : scalar: 2week, 1week, 2day, 1day, 30min, or 0
  Description : used to send a notice to owner regarding how far out the end of
-					their reservation is
+               their reservation is
 
 =cut
 
@@ -883,7 +896,7 @@ sub check_endtimenotice_interval {
  Parameters  : start, end, and expire times
  Returns     : 0 or 1 and task
  Description : check current time against all three tasks
-					expire time overides end, end overrides start
+               expire time overides end, end overrides start
 
 =cut
 
@@ -961,6 +974,7 @@ sub check_blockrequest_time {
  Parameters  : $request_start, $request_end, $reservation_lastcheck, $request_state_name, $request_laststate_name
  Returns     : start, preload, end, poll, old, remove, or 0
  Description : based on the input return a value used by vcld
+
 =cut
 
 sub check_time {
@@ -1111,6 +1125,7 @@ sub check_time {
  Parameters  : $to, $subject,  $mailstring, $from
  Returns     : 1(success) or 0(failure)
  Description : send an email
+
 =cut
 
 sub mail {
@@ -1135,11 +1150,17 @@ sub mail {
 	}
 	
 	my $mailer;
+	my $mailer_options = '';
 	if (defined($RETURNPATH)) {
-		$mailer = Mail::Mailer->new("sendmail", "-f $RETURNPATH");
+		$mailer_options = "-f $RETURNPATH";
 	}
-	else {
-		$mailer = Mail::Mailer->new("sendmail");
+	
+	eval {
+		$mailer = Mail::Mailer->new("sendmail", $mailer_options);
+	};
+	if ($EVAL_ERROR) {
+		notify($ERRORS{'WARNING'}, 0, "failed to send mail, error:\n$EVAL_ERROR");
+		return;
 	}
 	
 	my $shared_mail_box = '';
@@ -1442,8 +1463,8 @@ EOF
  Parameters  : $computer_id, $cpu_speed
  Returns     : boolean
  Description : Updates the computer.procspeed value for the specified computer.
-					The $cpu_speed argument should contain an integer value of the
-					CPU speed in MHz.
+               The $cpu_speed argument should contain an integer value of the
+               CPU speed in MHz.
 
 =cut
 
@@ -1482,8 +1503,8 @@ EOF
  Parameters  : $computer_id, $ram_mb
  Returns     : boolean
  Description : Updates the computer.ram value for the specified computer.
-					The $ram_mb argument should contain an integer value of the
-					RAM in MB.
+               The $ram_mb argument should contain an integer value of the
+               RAM in MB.
 
 =cut
 
@@ -1560,7 +1581,7 @@ sub update_request_password {
 
  Parameters  : $request_id
  Returns     : return 1 if request state or laststate is set to deleted or if request does not exist
-					return 0 if request exists and neither request state nor laststate is set to deleted1 success 0 failure
+               return 0 if request exists and neither request state nor laststate is set to deleted1 success 0 failure
  Description : checks if request has been deleted
 
 =cut
@@ -1622,9 +1643,9 @@ sub is_request_deleted {
 
  Parameters  : $request_id
  Returns     : return 'image' if request state or laststate is set to image
-					return 'forimaging' if forimaging is set to 1, and neither request state nor laststate is set to image
-					return 0 if forimaging is set to 0, and neither request state nor laststate is set to image
-					return undefined if an error occurred
+               return 'forimaging' if forimaging is set to 1, and neither request state nor laststate is set to image
+               return 0 if forimaging is set to 0, and neither request state nor laststate is set to image
+               return undefined if an error occurred
  Description : checks if request is in imaging mode and if forimaging has been set
 
 =cut
@@ -1886,10 +1907,10 @@ EOF
 
  Parameters  : $computerid
  Returns     : imageid,imagerevisionid,imagename
- Description : Looks for any upcoming reservations
-					for supplied computerid, if starttime is
-					within 50 minutes return that imageid. Else
-					fetch and return next image
+ Description : Looks for any upcoming reservations for supplied computerid, if
+               starttime is within 50 minutes return that imageid. Else fetch
+               and return next image
+
 =cut
 
 sub get_next_image_default {
@@ -1996,6 +2017,7 @@ sub get_next_image_default {
  Parameters  : $computerid, $image
  Returns     : 1 success, 0 failed
  Description : updates nextimageid on provided computerid
+
 =cut
 
 sub setnextimage {
@@ -2023,7 +2045,8 @@ sub setnextimage {
  Parameters  : $node, $port, $log
  Returns     : 1(active) or 0(inactive)
  Description : uses check_ssh binary from tools dir to check
-					the sshd statuse on the remote node
+               the sshd statuse on the remote node
+
 =cut
 
 sub check_ssh {
@@ -2103,7 +2126,8 @@ sub nmap_port {
  Parameters  : $hostname
  Returns     : 1 pingable 0 not-pingable
  Description : using Net::Ping to check if node is pingable
-					assumes icmp echo is allowed
+               assumes icmp echo is allowed
+
 =cut
 
 sub _pingnode {
@@ -2359,7 +2383,7 @@ sub notify_via_wall {
  Parameters  : $node, $user, $message
  Returns     : 0 or 1
  Description : using windows msg.exe cmd writes supplied $message
-					to windows user console
+               to windows user console
 
 =cut
 
@@ -2402,7 +2426,8 @@ sub notify_via_msg {
  Parameters  : length(optional) - if not defined sets to 6
  Returns     : randomized password
  Description : called for standalone accounts and used in randomizing
-					privileged account passwords
+               privileged account passwords
+
 =cut
 
 sub getpw {
@@ -2425,7 +2450,8 @@ sub getpw {
 
  Parameters  : $node , management OS, $ipaddress
  Returns     : 0 or 1
- Description : check for or add nodenames public rsa key to local known_hosts file
+ Description : check for or add nodenames public rsa key to local known_hosts
+               file
 
 =cut
 
@@ -2612,7 +2638,7 @@ EOF
  Parameters  : IM type, IM user ID, message string
  Returns     : 0 or 1
  Description : if Jabber enabled - send IM to user
-					currently only supports jabber
+               currently only supports jabber
 
 =cut
 
@@ -3763,7 +3789,7 @@ sub get_default_imagemeta_info {
 
 =head2  get_vmhost_info
 
- Parameters  : $vmhost_id
+ Parameters  : $vmhost_id, $no_cache (optional)
  Returns     : Hash reference
  Description : Retrieves info from the database for the vmhost, vmprofile, and
                repository and datastore imagetypes.
@@ -3772,13 +3798,15 @@ sub get_default_imagemeta_info {
 
 
 sub get_vmhost_info {
-	my ($vmhost_id) = @_;
+	my ($vmhost_id, $no_cache) = @_;
 	
 	# Check the passed parameter
 	if (!defined($vmhost_id)) {
 		notify($ERRORS{'WARNING'}, 0, "vmhost ID argument was not specified");
 		return;
 	}
+	
+	return $ENV{vmhost_info}{$vmhost_id} if (!$no_cache && $ENV{vmhost_info}{$vmhost_id});
 	
 	# Get a hash ref containing the database column names
 	my $database_table_columns = get_database_table_columns();
@@ -3911,7 +3939,9 @@ EOF
 	$vmhost_info->{vmprofile}{vmpath} = $vmhost_info->{vmprofile}{datastorepath} if !$vmhost_info->{vmprofile}{vmpath};
 	$vmhost_info->{vmprofile}{virtualdiskpath} = $vmhost_info->{vmprofile}{vmpath} if !$vmhost_info->{vmprofile}{virtualdiskpath};
 	
-	return $vmhost_info;
+	notify($ERRORS{'DEBUG'}, 0, "retrieved VM host $vmhost_id info, computer: $vmhost_info->{computer}{hostname}");
+	$ENV{vmhost_info}{$vmhost_id} = $vmhost_info;
+	return $ENV{vmhost_info}{$vmhost_id};
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -3919,20 +3949,20 @@ EOF
 =head2 run_ssh_command
 
  Parameters  : $node, $identity_path, $command, $user, $port, $output_level, $timeout_seconds
-					-or-
-					Hash reference with the following keys:
-						node - node name (required)
-						command - command to be executed remotely (required)
-						identity_paths - string containing paths to identity key files separated by commas (optional)
-						user - user to run remote command as (optional, default is 'root')
-						port - SSH port number (optional, default is 22)
-						output_level - allows the amount of output to be controlled: 0, 1, or 2 (optional)
-						max_attempts - maximum number of SSH attempts to make
-						timeout_seconds - maximum number seconds SSH process can run before being terminated
+               -or-
+               Hash reference with the following keys:
+                  node - node name (required)
+                  command - command to be executed remotely (required)
+                  identity_paths - string containing paths to identity key files separated by commas (optional)
+                  user - user to run remote command as (optional, default is 'root')
+                  port - SSH port number (optional, default is 22)
+                  output_level - allows the amount of output to be controlled: 0, 1, or 2 (optional)
+                  max_attempts - maximum number of SSH attempts to make
+                  timeout_seconds - maximum number seconds SSH process can run before being terminated
  Returns     : If successful: array:
                   $array[0] = the exit status of the command
-					   $array[1] = reference to array containing lines of output
-					If failed: false
+                  $array[1] = reference to array containing lines of output
+               If failed: false
  Description : Runs an SSH command on the specified node.
 
 =cut
@@ -4228,13 +4258,13 @@ sub run_ssh_command {
  Parameters  : $path1, $path2, $identity_path, $port, $options
  Returns     : 1 success
  Description : assumes path1 or path2 contains the src and target
-					example: copy from remote node to local file
-					path1 = $user\@$node:<filename>
-					path2 =  <localfilename>
+               example: copy from remote node to local file
+               path1 = $user\@$node:<filename>
+               path2 =  <localfilename>
 
-					example: copy local file to remote node
-					path1 =  <localfilename>
-					path2 = $user\@$node:<filename>
+               example: copy local file to remote node
+               path1 =  <localfilename>
+               path2 = $user\@$node:<filename>
 
 =cut
 
@@ -5223,8 +5253,8 @@ sub get_computer_current_state_name {
 
  Parameters  : $log_id, $ending
  Returns     : 0 or 1
- Description : Updates the finalend and ending fields
-					in the log table for the specified log ID
+ Description : Updates the finalend and ending fields in the log table for the
+               specified log ID
 
 =cut
 
@@ -5366,7 +5396,7 @@ sub update_log_loaded_time {
  Parameters  : $image_id, $imagerevision_id, $new_image_name
  Returns     : boolean
  Description : Updates the image.name and imagerevision.imagename values in the
-					database.
+               database.
 
 =cut
 
@@ -5541,9 +5571,9 @@ EOF
 
  Parameters  : $request_id
  Returns     : 0 or 1
- Description : Deletes request and all associated reservations for a given request
-					ID. This also deletes all computerloadlog rows associated with any
-					of the reservations.
+ Description : Deletes request and all associated reservations for a given
+               request ID. This also deletes all computerloadlog rows associated
+               with any of the reservations.
 
 =cut
 
@@ -5732,10 +5762,10 @@ sub clearfromblockrequest {
 
  Parameters  : $computer_id
  Returns     : 0 or 1
- Description : updates log table with IPaddress of node
-					when dynamic dhcp is enabled there is no way to track which IP was used
-=cut
+ Description : updates log table with IPaddress of node when dynamic dhcp is
+               enabled there is no way to track which IP was used
 
+=cut
 
 sub update_sublog_ipaddress {
 	my ($logid, $computer_ip_address) = @_;
@@ -5770,9 +5800,9 @@ sub update_sublog_ipaddress {
  Parameters  : Reference to a hash
  Returns     : 0 or 1
  Description : Sets the process ID of the current process and parent process ID
-					in a hash, to which a reference was passed.
-					$hash{PID} = process ID
-					$hash{PPID} = parent process ID
+               in a hash, to which a reference was passed.
+               $hash{PID} = process ID
+               $hash{PPID} = parent process ID
 
 =cut
 
@@ -5811,9 +5841,9 @@ sub set_hash_process_id {
  Parameters  : hash - Reference to hash containing request data
  Returns     : 0 or 1
  Description : Renames running process based on request information.  Appends the state
-					name, request ID, and reservation ID to the process name.
-					Sets PARENTIMAGE and SUBIMAGE in the hash depending on whether or
-					reservation ID is the lowest for a request.
+               name, request ID, and reservation ID to the process name.
+               Sets PARENTIMAGE and SUBIMAGE in the hash depending on whether or
+               reservation ID is the lowest for a request.
 
 =cut
 
@@ -5944,8 +5974,9 @@ sub round {
  Parameters  : file path
  Returns     : 0 or 1
  Description : This subroutine is for testing purposes.  It sets vcld's logfile
-					path to the parameter passed.  It is useful when running automated
-					tests to isoloate logfile output.
+               path to the parameter passed.  It is useful when running automated
+               tests to isoloate logfile output.
+
 =cut
 
 sub set_logfile_path {
@@ -7782,8 +7813,8 @@ sub run_command {
                 names
  Description :  Takes the string passed, checks each character, and replaces
                 special ASCII characters with the character name. For
-					 example, "This is a\r\nstring." would return
-					 "This[SP]is[SP]a[CR][LF]string."
+                example, "This is a\r\nstring." would return
+                "This[SP]is[SP]a[CR][LF]string."
 
 =cut
 
@@ -8222,6 +8253,7 @@ sub is_valid_dns_host_name {
                   224.0.0.0 - 239.255.255.255
                Broadcast:
                   255.255.255.255
+
 =cut
 
 sub is_public_ip_address {
@@ -8492,21 +8524,20 @@ sub get_current_subroutine_name {
                Example showing the format of the data structure returned:
                
                my $affiliation_info = get_affiliation_info();
-					$affiliation_info->{0}
-						|--{dataUpdateText} = ''
-						|--{helpaddress} = NULL
-						|--{name} = 'Global'
-						|--{shibname} = NULL
-						|--{shibonly} = '0'
-						|--{sitewwwaddress} = NULL
-					$affiliation_info->{1}
-						|--{dataUpdateText} = '<font size="-2">* To update any of these fields, follow the appropriate<br>link under <strong>Related Tools</strong> at the Campus Directory</font>'
-						|--{helpaddress} = 'vcl_help@blah.edu'
-						|--{name} = 'University of Blah'
-						|--{shibname} = 'blah.edu'
-						|--{shibonly} = '0'
-						|--{sitewwwaddress} = 'http://vcl.blah.edu'
-
+               $affiliation_info->{0}
+                  |--{dataUpdateText} = ''
+                  |--{helpaddress} = NULL
+                  |--{name} = 'Global'
+                  |--{shibname} = NULL
+                  |--{shibonly} = '0'
+                  |--{sitewwwaddress} = NULL
+               $affiliation_info->{1}
+                  |--{dataUpdateText} = '<font size="-2">* To update any of these fields, follow the appropriate<br>link under <strong>Related Tools</strong> at the Campus Directory</font>'
+                  |--{helpaddress} = 'vcl_help@blah.edu'
+                  |--{name} = 'University of Blah'
+                  |--{shibname} = 'blah.edu'
+                  |--{shibonly} = '0'
+                  |--{sitewwwaddress} = 'http://vcl.blah.edu'
 
 =cut
 
@@ -8726,9 +8757,9 @@ sub create_management_node_directory {
  Returns     : string
  Description : Normalizes a file or directory path:
                -spaces from the beginning and end of the path are removed
-					-quotes from the beginning and end of the path are removed
-					-trailing slashes are removed
-					-escaped spaces are unescaped
+               -quotes from the beginning and end of the path are removed
+               -trailing slashes are removed
+               -escaped spaces are unescaped
 
 =cut
 
@@ -8810,83 +8841,79 @@ sub parent_directory_path {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 setup_get_array_choice
+=head2 setup_get_menu_choice
 
- Parameters  :
- Returns     :
- Description :
-
-=cut
-
-sub setup_get_array_choice {
-	my (@choices) = @_;
-	notify($ERRORS{'DEBUG'}, 0, "choices argument:\n" . join("\n", @choices));
-	
-	my $choice_count = scalar(@choices);
-	
-	while (1) {
-		for (my $i=1; $i<=$choice_count; $i++) {
-			print "$i. $choices[$i-1]\n";
-		}
-		print "\n[" . join("/", @{$ENV{setup_path}}) . "]\n";
-		print "Make a selection (1";
-		print "-$choice_count" if ($choice_count > 1);
-		print ", 'c' to cancel): ";
-		
-		my $choice = <STDIN>;
-		chomp $choice;
-		
-		if ($choice =~ /^c$/i) {
-			return;
-		}
-		if ($choice !~ /^\d+$/ || $choice < 1 || $choice > $choice_count) {
-			print "\n*** Choice must be an integer between 1 and $choice_count ***\n\n";
-		}
-		else {
-			return ($choice - 1);
-		}
-	}
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 setup_get_input_string
-
- Parameters  :
- Returns     :
- Description :
+ Parameters  : $subref_hashref
+ Returns     : subroutine reference
+ Description : Accepts a hash reference which defines a 'vcld -setup' menu
+               structure. The hash keys are the names of menu categories or menu
+               items.
+               
+               If a hash key is the name of a menu category, its value must be a
+               hash reference.
+               
+               If a hash key is the name of a menu item, its value must be a
+               subroutine reference.
 
 =cut
 
-sub setup_get_input_string {
-	my ($message, $default_value) = @_;
-	if ($default_value) {
-		print "$message [$default_value]: ";
-	}
-	else {
-		print "$message ('c' to cancel): ";
+sub setup_get_menu_choice {
+	my ($menu, $choices, $parent_menu_names) = @_;
+
+	# Initialize the $choices array reference
+	if (!$choices) {
+		$choices = [];
 	}
 	
-	my $input = <STDIN>;
-	chomp $input;
-	if ($input =~ /^c$/i) {
+	if (!$parent_menu_names) {
+		$parent_menu_names = [];
+	}
+	
+	my $level = scalar(@$parent_menu_names);
+	
+	for my $name (sort keys %$menu) {
+		my $value = $menu->{$name};
+		my $type = ref($value);
+		
+		if ($type eq 'CODE') {
+			push @$choices, { name => $name, sub_ref => $value, parent_menu_names => $parent_menu_names};
+			
+			print ' ' x ($level*3);
+			print scalar(@$choices) . ": $name\n";
+		}
+		elsif ($type eq 'HASH') {
+			print "\n" if ($level == 0 && scalar(@$choices) > 0);
+			print ' ' x ($level*3);
+			print "$name\n";
+			
+			# Recursively call this subroutine to add nested menu to choices
+			setup_get_menu_choice($value, $choices, [@$parent_menu_names, $name]);
+		}
+	}
+	
+	# Check if this is a recursive call
+	my $calling_subroutine = get_calling_subroutine();
+	if ($calling_subroutine =~ /setup_get_menu_choice/) {
 		return;
 	}
-	elsif ($default_value && !length($input)) {
-		return $default_value;
-	}
-	else {
-		return $input;
-	}
+	
+	my $choice_index = setup_get_choice(scalar(@$choices));
+	return if (!defined($choice_index));
+	return @$choices[$choice_index];
 }
 
 #/////////////////////////////////////////////////////////////////////////////
 
 =head2 setup_get_hash_choice
 
- Parameters  : $hash_ref, $display_key ()
- Returns     :
- Description :
+ Parameters  : $hash_ref, $display_key1 (optional), $display_key2 (optional)
+ Returns     : $choice_name
+ Description : Prompts the user to select an element from the hash. By default,
+               the choices displayed are the top-level hash key values. If
+               $hash_ref is a hash of hashes, the menu choices displayed may be
+               the value of child hash values if $display_key1 is provided. If
+               $display_key2 is provided, the choices will be a concatenation of
+               2 child hash values.
 
 =cut
 
@@ -8915,12 +8942,131 @@ sub setup_get_hash_choice {
 		
 		$choices{$display_name} = $key;
 	}
-	
+
 	my $choice_index = setup_get_array_choice(sort keys %choices);
 	return if (!defined($choice_index));
 	
 	my $choice_name = (sort keys %choices)[$choice_index];
 	return $choices{$choice_name};
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 setup_get_array_choice
+
+ Parameters  : @choices, $print_choices
+ Returns     : integer
+ Description : Lists the elements in the @choices argument as a menu and accepts
+               user input to select one of the elements. The array index
+               corresponding to the user's choice is returned.
+
+=cut
+
+sub setup_get_array_choice {
+	my (@choices, $print_choices) = @_;
+	
+	if (@choices) {
+		notify($ERRORS{'DEBUG'}, 0, "choices argument:\n" . join("\n", @choices));
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "choices argument was either not supplied or is emptry");
+		return;
+	}
+	
+	my $choice_count = scalar(@choices);
+	
+	while (1) {
+		if (!defined($print_choices) || $print_choices) {
+			for (my $i=1; $i<=$choice_count; $i++) {
+				print "$i. $choices[$i-1]\n";
+			}
+		}
+		
+		print "\n[" . join("/", @{$ENV{setup_path}}) . "]\n";
+		print "Make a selection (1";
+		print "-$choice_count" if ($choice_count > 1);
+		print ", 'c' to cancel): ";
+		
+		my $choice = <STDIN>;
+		chomp $choice;
+		
+		if ($choice =~ /^c$/i) {
+			return;
+		}
+		if ($choice !~ /^\d+$/ || $choice < 1 || $choice > $choice_count) {
+			print "\n*** Choice must be an integer between 1 and $choice_count ***\n\n";
+		}
+		else {
+			return ($choice - 1);
+		}
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 setup_get_choice
+
+ Parameters  : $choice_count
+ Returns     : integer
+ Description : Presents the 'Make a selection' prompt to the user loops until a
+               valid choice is entered.
+
+=cut
+
+sub setup_get_choice {
+	my ($choice_count) = @_;
+	
+	print "\n[" . join("/", @{$ENV{setup_path}}) . "]\n";
+	while (1) {
+		print "Make a selection (1";
+		print "-$choice_count" if ($choice_count > 1);
+		print ", 'c' to cancel): ";
+		
+		my $choice = <STDIN>;
+		chomp $choice;
+		
+		if ($choice =~ /^c$/i) {
+			return;
+		}
+		if ($choice !~ /^\d+$/ || $choice < 1 || $choice > $choice_count) {
+			print "*** Choice must be an integer between 1 and $choice_count ***\n";
+		}
+		else {
+			return ($choice - 1);
+		}
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 setup_get_input_string
+
+ Parameters  : $message, $default_value (optional)
+ Returns     : string
+ Description : Prompts the user to enter a string.
+
+=cut
+
+sub setup_get_input_string {
+	my ($message, $default_value) = @_;
+	if ($default_value) {
+		print "$message [$default_value]: ";
+	}
+	else {
+		print "$message ('c' to cancel): ";
+	}
+	
+	my $input = <STDIN>;
+	chomp $input;
+	if ($input =~ /^c$/i) {
+		return;
+	}
+	elsif ($default_value && !length($input)) {
+		return $default_value;
+	}
+	else {
+		return $input;
+	}
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -8951,20 +9097,37 @@ sub setup_confirm {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 setup_print_break
+
+ Parameters  : $character (optional), $columns (optional)
+ Returns     : true
+ Description : Prints a horizontal line to stdout. Used to format the output
+               from 'vcld -setup'.
+
+=cut
+
+sub setup_print_break {
+	my $character = shift || '-';
+	my $columns = shift || 100;
+	$character =~ s/^(.).*/$1/;
+	print $character x $columns . "\n";
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 setup_print_wrap
 
  Parameters  : $message, $columns (optional)
- Returns     :
- Description : Prints a message to STDOUT formatted to the column width. 76 is
+ Returns     : true
+ Description : Prints a message to STDOUT formatted to the column width. 100 is
                the default column value.
 
 =cut
 
 sub setup_print_wrap {
-	my ($message, $columns) = @_;
-	$columns = 76 if !defined($columns);
-	
-	return if !$message;
+	my $message = shift || return;
+	my $columns = shift || 100;
 	
 	# Save the leading and trailing lines then remove them from the string
 	# This is done so wrap doesn't lose them
@@ -9668,19 +9831,23 @@ EOF
 
 =head2 get_management_node_vmhost_ids
 
- Parameters  : $management_node_identifier
+ Parameters  : $management_node_identifier (optional)
  Returns     : array
  Description : Returns a list of all VM host IDs controlled by a particular
-               management node.
+               management node. This list will include any VM host computers
+               mapped to the management node as well as VM host computers which
+               are assigned a VM which is mapped to the management node.
 
 =cut
 
-sub get_management_node_vmhost_info {
-	my $management_node_identifier = shift;
-	if (!$management_node_identifier) {
-		notify($ERRORS{'WARNING'}, 0, "management node identifier argument was not supplied");
-		return;
+sub get_management_node_vmhost_ids {
+	my $management_node_identifier = shift || $FQDN;
+	
+	if ($ENV{management_node_vmhost_ids}{$management_node_identifier}) {
+		notify($ERRORS{'DEBUG'}, 0, "returning previously retrieved vmhost IDs assigned to management node: $management_node_identifier");
+		return @{$ENV{management_node_vmhost_ids}{$management_node_identifier}};
 	}
+	notify($ERRORS{'DEBUG'}, 0, "retrieving vmhost IDs assigned to management node: $management_node_identifier");
 	
 	my $select_statement = <<EOF;
 SELECT DISTINCT
@@ -9694,6 +9861,7 @@ resourcegroup        mn_resourcegroup,
 resourcegroupmembers mn_resourcegroupmembers,
 computer,
 vmhost,
+computer host,
 resource             comp_resource,
 resourcegroup        comp_resourcegroup,
 resourcegroupmembers comp_resourceourcegroupmembers,
@@ -9709,15 +9877,26 @@ mn_resource.id = mn_resourcegroupmembers.resourceid AND
 mn_resourcegroupmembers.resourcegroupid = mn_resourcegroup.id AND
 
 computer.deleted = 0 AND
-computer.type = 'virtualmachine' AND
+host.deleted = 0 AND
+
 computer.id = comp_resource.subid AND
 comp_resource.id = comp_resourceourcegroupmembers.resourceid AND
 comp_resourceourcegroupmembers.resourcegroupid = comp_resourcegroup.id AND
-
-computer.vmhostid = vmhost.id AND
-
 resourcemap.resourcegroupid1 = mn_resourcegroup.id AND
 resourcemap.resourcegroupid2 = comp_resourcegroup.id
+
+AND (
+	(
+		computer.type = 'virtualmachine' AND
+		computer.vmhostid = vmhost.id
+	)
+	OR
+	(
+		computer.type = 'blade' AND
+		vmhost.computerid = computer.id
+	)
+)
+AND vmhost.computerid = host.id
 EOF
 	
 	if ($management_node_identifier =~ /^\d+$/) {
@@ -9726,13 +9905,41 @@ EOF
 	else {
 		$select_statement .= "AND mn.hostname = '$management_node_identifier'";
 	}
-	
 	my @selected_rows = database_select($select_statement);
 	
 	my @vmhost_ids = map { $_->{id} } @selected_rows;
 	
-	notify($ERRORS{'DEBUG'}, 0, "vmhost IDs assigned to $management_node_identifier:\n" . join(', ', @vmhost_ids));
-	return @vmhost_ids;
+	notify($ERRORS{'DEBUG'}, 0, "vmhost IDs assigned to $management_node_identifier (" . scalar(@vmhost_ids) . "): " . join(', ', @vmhost_ids));
+	$ENV{management_node_vmhost_ids}{$management_node_identifier} = \@vmhost_ids;
+	return @{$ENV{management_node_vmhost_ids}{$management_node_identifier}};
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_management_node_vmhost_info
+
+ Parameters  : $management_node_identifier (optional)
+ Returns     : hash
+ Description : Retrieves information for all VM hosts assigned to a management
+               node. The hash keys are vmhost.id values.
+
+=cut
+
+sub get_management_node_vmhost_info {
+	my $management_node_identifier = shift || $FQDN;
+	return $ENV{management_node_vmhost_info}{$management_node_identifier} if $ENV{management_node_vmhost_info}{$management_node_identifier};
+	
+	my @management_node_vmhost_ids = get_management_node_vmhost_ids($management_node_identifier);
+	
+	my $vmhost_info = {};
+	for my $vmhost_id (@management_node_vmhost_ids) {
+		$vmhost_info->{$vmhost_id} = get_vmhost_info($vmhost_id);
+		$vmhost_info->{$vmhost_id}{hostname} = $vmhost_info->{$vmhost_id}{computer}{hostname};
+		$vmhost_info->{$vmhost_id}{vmprofile_profilename} = $vmhost_info->{$vmhost_id}{vmprofile}{profilename};
+	}
+	
+	$ENV{management_node_vmhost_info}{$management_node_identifier} = $vmhost_info;
+	return $ENV{management_node_vmhost_info}{$management_node_identifier};
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -9812,6 +10019,429 @@ sub sleep_uninterrupted {
 		Time::HiRes::sleep($sleep_seconds);
 	}
 	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_imagerevision_cleanup_info
+
+ Parameters  : none
+ Returns     : hash reference
+ Description : Retrieves various attribues from the database for all image
+               revisions. A hash is constructed:
+               "winxp-win_generator1485-v24" => {
+                  "age" => 1270,
+                  "datecreated" => "2010-07-19 13:24:44",
+                  "deleted" => 1,
+                  "imagename" => "winxp-win_generator1485-v24",
+                  "production" => 0,
+                  "productionrevision" => 28,
+                  "revision" => 24
+                  "image" => {
+                     "deleted" => 1
+                  },
+               },
+
+=cut
+
+sub get_imagerevision_cleanup_info {
+	return $ENV{imagerevision_cleanup_info} if $ENV{imagerevision_cleanup_info};
+	
+	my $sql = <<EOF;	
+SELECT
+imagerevision.imagename AS imagerevision_imagename,
+imagerevision.datecreated AS imagerevision_datecreated,
+TIMESTAMPDIFF(DAY, imagerevision.datecreated, NOW()) AS imagerevision_age,
+imagerevision.production AS imagerevision_production,
+imagerevision.revision AS imagerevision_revision,
+image.deleted AS image_deleted,
+imagerevision.deleted AS imagerevision_deleted,
+productionimagerevision.revision AS imagerevision_productionrevision
+FROM
+image,
+imagerevision,
+imagerevision productionimagerevision
+WHERE
+imagerevision.imageid = image.id
+AND productionimagerevision.imageid = imagerevision.imageid
+AND productionimagerevision.production = 1
+EOF
+	
+	my @rows = database_select($sql);
+	my $imagerevision_count = scalar(@rows);
+	my $imagerevision_cleanup_info = {};
+	
+	my $deleted_count = 0;
+	
+	for my $row (@rows) {
+		my $imagerevision_imagename = $row->{imagerevision_imagename};
+		for my $key (keys %$row) {
+			my $value = $row->{$key};
+			my ($table, $column) = $key =~ /^(\w+)_(\w+)$/;
+			if ($table eq 'imagerevision') {
+				$imagerevision_cleanup_info->{$imagerevision_imagename}{$column} = $value;
+			}
+			else {
+				$imagerevision_cleanup_info->{$imagerevision_imagename}{$table}{$column} = $value;
+			}
+		}
+		
+		if ($row->{imagerevision_deleted} || $row->{image_deleted}) {
+			$deleted_count++;
+			$imagerevision_cleanup_info->{$imagerevision_imagename}{deleted} = 1;
+		}
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "retrieved cleanup info for imagerevision entries in the database");
+	$ENV{imagerevision_cleanup_info} = $imagerevision_cleanup_info;
+	return $ENV{imagerevision_cleanup_info};
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_imagerevision_reservation_info
+
+ Parameters  : $imagerevision_identifier (optional)
+ Returns     : hash
+ Description : Retrieves info regarding the image revisions currently assigned
+               to reservations. A hash reference is returned. The hash keys are
+               imagerevision.imagename values. Image revisions not assigned to
+               any reservations are not included in the hash. Result format:
+               
+               "winxp-Word2003Eclipseforclassroom1308-v11" => {
+                 "id" => 8362,
+                 "imagename" => "winxp-Word2003Eclipseforclassroom1308-v11",
+                 "reservation" => {
+                   2450746 => {
+                     "id" => 2450746,
+                     "request" => {
+                       "end" => "2014-01-08 20:30:00",
+                       "laststate" => {
+                         "name" => "inuse"
+                       },
+                       "start" => "2014-01-05 20:15:00",
+                       "state" => {
+                         "name" => "pending"
+                       }
+                     },
+                     "requestid" => 2356990
+                   },
+                   2450747 => {
+                     "id" => 2450747,
+                     "request" => {
+                       "end" => "2014-01-08 20:45:00",
+                       "laststate" => {
+                         "name" => "inuse"
+                       },
+                       "start" => "2014-01-05 20:30:00",
+                       "state" => {
+                         "name" => "inuse"
+                       }
+                     },
+                     "requestid" => 2356991
+                   }
+                 }
+               }
+
+=cut
+
+sub get_imagerevision_reservation_info {
+	my $imagerevision_identifier = shift;
+	
+	my $sql = <<EOF;	
+SELECT
+imagerevision.id AS imagerevision_id,
+imagerevision.imagename AS imagerevision_imagename,
+reservation.id AS reservation_id,
+reservation.requestid AS reservation_requestid,
+request.start AS request_start,
+request.end AS request_end,
+state.name AS state_name,
+laststate.name AS laststate_name
+FROM
+imagerevision,
+reservation,
+request,
+state,
+state laststate
+WHERE
+reservation.imagerevisionid = imagerevision.id
+AND reservation.requestid = request.id
+AND request.stateid = state.id
+AND request.laststateid = laststate.id
+EOF
+	
+	if ($imagerevision_identifier) {
+		if ($imagerevision_identifier =~ /^\d+$/) {
+			$sql .= "AND imagerevision.id = '$imagerevision_identifier'";
+		}
+		else {
+			$sql .= "AND imagerevision.imagename = '$imagerevision_identifier'";
+		}
+	}
+
+	my @rows = database_select($sql);
+	
+	my $imagerevision_reservation_info = {};
+	for my $row (@rows) {
+		my $imagerevision_imagename = $row->{imagerevision_imagename};
+		my $request_id = $row->{request_id};
+		my $reservation_id = $row->{reservation_id};
+		
+		for my $key (keys %$row) {
+			my $value = $row->{$key};
+			my ($table, $column) = $key =~ /^(\w+)_(\w+)$/;
+			if ($table eq 'imagerevision') {
+				$imagerevision_reservation_info->{$imagerevision_imagename}{$column} = $value;
+			}
+			elsif ($table eq 'reservation') {
+				$imagerevision_reservation_info->{$imagerevision_imagename}{$table}{$reservation_id}{$column} = $value;
+			}
+			elsif ($table eq 'request') {
+				$imagerevision_reservation_info->{$imagerevision_imagename}{reservation}{$reservation_id}{$table}{$column} = $value;
+			}
+			elsif ($table =~ /state/) {
+				$imagerevision_reservation_info->{$imagerevision_imagename}{reservation}{$reservation_id}{request}{$table}{$column} = $value;
+			}
+		}
+	}
+	
+	#notify($ERRORS{'DEBUG'}, 0, "retrieved imagerevision reservation info:\n" . format_data($imagerevision_reservation_info));
+	return $imagerevision_reservation_info;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_imagerevision_loaded_info
+
+ Parameters  : $imagerevision_identifier (optional)
+ Returns     : hash reference
+ Description : Retrieves info regarding the image revisions currently loaded on
+               computers. A hash reference is returned. The hash keys are
+               imagerevision.imagename values. Image revisions not loaded on any
+               computers according to computer.imagerevisionid are not included
+               in the hash. Result format:
+               
+               "winxp-ICTN2531RHEL61onVMware2865-v6" => {
+                 "computer" => {
+                   508 => {
+                     "hostname" => "vm-1",
+                     "id" => 508,
+                     "state" => {
+                       "name" => "available"
+                     }
+                   },
+                   554 => {
+                     "hostname" => "vm-53",
+                     "id" => 554,
+                     "state" => {
+                       "name" => "inuse"
+                     }
+                   },
+                 },
+                 "id" => 7452,
+                 "imagename" => "winxp-ICTN2531RHEL61onVMware2865-v6"
+               },
+
+=cut
+
+sub get_imagerevision_loaded_info {
+	my $imagerevision_identifier = shift;
+	
+	my $sql = <<EOF;	
+SELECT
+imagerevision.id AS imagerevision_id,
+imagerevision.imagename AS imagerevision_imagename,
+computer.id AS computer_id,
+computer.hostname AS computer_hostname,
+state.name AS state_name
+FROM
+imagerevision,
+computer,
+state
+WHERE
+computer.imagerevisionid = imagerevision.id
+AND computer.stateid = state.id
+AND computer.deleted = 0
+EOF
+	
+	if ($imagerevision_identifier) {
+		if ($imagerevision_identifier =~ /^\d+$/) {
+			$sql .= "AND imagerevision.id = '$imagerevision_identifier'";
+		}
+		else {
+			$sql .= "AND imagerevision.imagename = '$imagerevision_identifier'";
+		}
+	}
+
+	my @rows = database_select($sql);
+	
+	my $imagerevision_loaded_info = {};
+	for my $row (@rows) {
+		my $imagerevision_imagename = $row->{imagerevision_imagename};
+		my $computer_id = $row->{computer_id};
+		for my $key (keys %$row) {
+			my $value = $row->{$key};
+			my ($table, $column) = $key =~ /^(\w+)_(\w+)$/;
+			if ($table eq 'imagerevision') {
+				$imagerevision_loaded_info->{$imagerevision_imagename}{$column} = $value;
+			}
+			elsif ($table eq 'computer') {
+				$imagerevision_loaded_info->{$imagerevision_imagename}{computer}{$computer_id}{$column} = $value;
+			}
+			elsif ($table eq 'state') {
+				$imagerevision_loaded_info->{$imagerevision_imagename}{computer}{$computer_id}{state}{$column} = $value;
+			}
+		}
+	}
+	
+	#notify($ERRORS{'DEBUG'}, 0, "retrieved imagerevision loaded computer info:\n" . format_data($imagerevision_loaded_info));
+	return $imagerevision_loaded_info;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_imagerevision_names
+
+ Parameters  : none
+ Returns     : array
+ Description : Retrieves a list of all image revision names from the database.
+
+=cut
+
+sub get_imagerevision_names {
+	return @{$ENV{imagerevision_names}} if $ENV{imagerevision_names};
+	
+	my $sql = "SELECT imagerevision.imagename FROM imagerevision WHERE 1";
+	my @rows = database_select($sql);
+	my @imagerevision_names = map { $_->{imagename} } @rows;
+	my $imagerevision_count = scalar(@imagerevision_names);
+	notify($ERRORS{'DEBUG'}, 0, "retrieved $imagerevision_count imagerevision names from database");
+	
+	$ENV{imagerevision_names} = \@imagerevision_names;
+	return @{$ENV{imagerevision_names}};
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_imagerevision_names_recently_reserved
+
+ Parameters  : $days
+ Returns     : array
+ Description : Retrieves a list of image revision names from the database which
+               have been reserved in the last number of days specified by the
+               argument. Image revisions included in the result have been
+               reserved recently. Image revisions not included in the result
+               have not been reserved recently.
+
+=cut
+
+sub get_imagerevision_names_recently_reserved {
+	my $days = shift;
+	if (!$days) {
+		notify($ERRORS{'WARNING'}, 0, "days argument was not supplied");
+		return;
+	}
+	
+	my $sql = <<EOF;	
+SELECT DISTINCT
+imagerevision.imagename
+FROM
+image,
+imagerevision,
+log,
+sublog
+WHERE
+imagerevision.imageid = image.id
+AND sublog.imageid = image.id
+AND sublog.logid = log.id
+AND log.finalend >= DATE_SUB(NOW(), INTERVAL $days DAY)
+EOF
+
+	my @rows = database_select($sql);
+	
+	my @imagerevision_names = map { $_->{imagename} } @rows;
+	my $imagerevision_count = scalar(@imagerevision_names);
+	notify($ERRORS{'DEBUG'}, 0, "retrieved $imagerevision_count imagerevision names from database whose images were reserved within the past $days days");
+	return @imagerevision_names;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_array_intersection
+
+ Parameters  : $array_ref_1, $array_ref_2...
+ Returns     : array
+ Description : Finds the intersection of any number of arrays.
+
+=cut
+
+sub get_array_intersection {
+	my @array_refs = @_;
+	
+	# Set the resulting intersection hash to the first array ref argument
+	my $array_ref_1 = shift @array_refs;
+	my $array_ref_1_type = ref($array_ref_1);
+	if (!$array_ref_1_type || $array_ref_1_type ne 'ARRAY') {
+		notify($ERRORS{'WARNING'}, 0, "first argument is not a reference to an array");
+		return;
+	}
+	
+	my @intersection = @$array_ref_1;
+	
+	my $loop = 0;
+	for my $array_ref (@array_refs) {
+		my @array = @$array_ref;
+		my %hash = map { $_ => 1 } @array;
+		@intersection = grep($hash{$_}, @intersection);
+	}
+	
+	return sort @intersection;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_code_ref_package_name
+
+ Parameters  : $code_ref
+ Returns     : string
+ Description : Determines the perl package name of a subroutine reference. The
+               subroutine name is not included.
+
+=cut
+
+sub get_code_ref_package_name {
+	my $code_ref = shift;
+	if (!$code_ref || !ref($code_ref)) {
+		return;
+	}
+	
+	my $cv = svref_2object($code_ref) || return;
+	my $gv = $cv->GV || return;
+	my $st = $gv->STASH || return;
+	return $st->NAME;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_code_ref_subroutine_name
+
+ Parameters  : $code_ref
+ Returns     : string
+ Description : Determines the subroutine name of a subroutine reference. The
+               perl package is not included.
+
+=cut
+
+sub get_code_ref_subroutine_name {
+	my $code_ref = shift;
+	if (!$code_ref || !ref($code_ref)) {
+		return;
+	}
+	
+	my $cv = svref_2object($code_ref) || return;
+	my $gv = $cv->GV || return;
+	return $gv->NAME;
 }
 
 #/////////////////////////////////////////////////////////////////////////////

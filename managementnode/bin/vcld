@@ -360,7 +360,7 @@ sub main () {
 				insertloadlog($reservation_id, $computer_id, "begin", "beginning to process, state is $request_state_name");
 				
 				# Update state to pending for non-cluster reservations to limit another attempt at processing 
-				if($reservation_count == 1) {
+				if ($reservation_count == 1) {
 					# Update the request state to pending
 					if (!update_request_state($request_id, "pending", $request_state_name)) {
 					   notify($ERRORS{'WARNING'}, 0, "failed to update request state to pending");
@@ -531,16 +531,6 @@ sub make_new_child {
 		$state_module = "VCL::new";
 	}
 
-	#notify($ERRORS{'DEBUG'}, $LOGFILE, "creating new process");
-
-	eval "use $state_module";
-	if (!$EVAL_ERROR) {
-		notify($ERRORS{'DEBUG'}, $LOGFILE, "loaded $state_module module");
-	}
-	else {
-		notify($ERRORS{'WARNING'}, $LOGFILE, "$state_module module could not be loaded");
-	}
-
 	# Build a signal set using POSIX::SigSet->new, contains only the SIGINT signal
 	my $sigset = POSIX::SigSet->new(SIGINT);
 	
@@ -576,31 +566,50 @@ sub make_new_child {
 			
 			# Unblock the SIGINT signal
 			sigprocmask(SIG_UNBLOCK, $sigset) or die "can't unblock SIGINT for fork: $!\n";
-
+			
 			# Set the vcld environment variable to 0 so other subroutines know if this is the vcld or child process
 			$ENV{vcld} = 0;
 			notify($ERRORS{'DEBUG'}, $LOGFILE, "vcld environment variable set to $ENV{vcld} for this process");
-
+			
 			# Set the request_id and reservation_id environment variables
 			$ENV{request_id}     = $request_id;
 			$ENV{reservation_id} = $reservation_id if $reservation_id;
 			$ENV{state}          = $state;
 			$ENV{data}           = $data_structure;
-
+			
+			#notify($ERRORS{'DEBUG'}, $LOGFILE, "creating new process");
+			eval "use $state_module";
+			if ($EVAL_ERROR) {
+				notify($ERRORS{'CRITICAL'}, $LOGFILE, "$state_module module could not be loaded, error: $EVAL_ERROR");
+				switch_state($request_data, 'failed', '', 'failed', 1);
+				exit;
+			}
+			
+			notify($ERRORS{'DEBUG'}, $LOGFILE, "loaded $state_module module");
+			
 			# Create a new VCL state object, passing it the reservation data
-			if (my $state_object = ($state_module)->new({%{$request_data}, data_structure => $data_structure})) {
+			my $state_object;
+			eval {
+				$state_object = ($state_module)->new({%{$request_data}, data_structure => $data_structure});
+			};
+			
+			if ($state_object) {
 				notify($ERRORS{'OK'}, $LOGFILE, "$state_module object created and initialized");
 				
 				# Call the state object's process() subroutine
 				$state_object->process();
 			}
 			else {
-				notify($ERRORS{'CRITICAL'}, $LOGFILE, "$state_module object could not be created and initialized");
+				if ($EVAL_ERROR) {
+					notify($ERRORS{'CRITICAL'}, $LOGFILE, "$state_module object could not be created and initialized, error:\n$EVAL_ERROR");
+				}
+				else {
+					notify($ERRORS{'CRITICAL'}, $LOGFILE, "$state_module object could not be created and initialized");
+				}
 				switch_state($request_data, 'failed', '', 'failed', 1);
 			}
 			
 			exit;
-			
 		} ## end elsif (defined $pid)  [ if ($pid = fork)
 		
 		elsif ($! =~ /No more process/) {
@@ -849,7 +858,9 @@ sub setup_management_node {
 	
 	# Loop through the entries in the data from the module table
 	my %setup_module_objects;
+	my %setup_menu;
 	
+	use VCL::Module;
 	for my $module_id (keys %$module_info) {
 		# Get the module's Perl package and name
 		my $module_name = $module_info->{$module_id}{name};
@@ -860,21 +871,17 @@ sub setup_management_node {
 		eval "use $module_perl_package";
 		if ($EVAL_ERROR) {
 			notify($ERRORS{'WARNING'}, 0, "$module_name module (" . $module_perl_package . ") could not be loaded, error message:\n$EVAL_ERROR");
-			print "ERROR: '$module_name' module could not be loaded:\n$EVAL_ERROR\n";
 			next;
 		}
 		
 		# Check if the module implements a setup subroutine
 		# Don't use 'can' or else the same setup subroutine will be called multiple times due to inheritance
-		if (!defined(&{$module_perl_package . "::setup"})) {
+		if (!defined(&{$module_perl_package . "::setup"}) && !defined(&{$module_perl_package . "::setup_get_menu"})) {
 			next;
 		}
 		
-		# Create a new VCL state object, passing it the reservation data
-		my $module_object;
-		unless ($module_object = ($module_perl_package)->new({data_structure => $data_structure})) {
-			notify($ERRORS{'WARNING'}, 0, "$module_name module (" . $module_perl_package . ") object could not be created, error message:\n$!");
-			print "ERROR: '$module_name' object could not be created, see log file, $!";
+		my $module_object = VCL::Module::create_object($module_perl_package);
+		if (!$module_object) {
 			next;
 		}
 		
@@ -891,33 +898,52 @@ sub setup_management_node {
 			$module_display_name =~ s/\b([a-z])(\w+)\b/\u$1$2/g;
 		}
 		$setup_module_objects{$module_perl_package}{display_name} = $module_display_name;
+		
+		
+		if (defined(&{$module_perl_package . "::setup_get_menu"})) {
+			my $module_menu = $module_object->setup_get_menu();
+			%setup_menu = (%setup_menu, %$module_menu);
+		}
+		else {
+			$setup_menu{Modules}{$module_display_name} = \&{$module_perl_package . "::setup"}
+		}
+		
+		
 	}
-	
-	# Set the setup_path environment variable to anonymous array containing 'vcld'
-	# This is used to display the location in the menu hierarchy
-	# strings added/removed to the array cause the location to change
-	$ENV{setup_path} = ['vcld'];
 	
 	# Loop until the user selects 'c' to cancel
 	while (1) {
-		print '-' x 76 . "\n";
+		# Set the setup_path environment variable to anonymous array containing 'vcld'
+		# This is used to display the location in the menu hierarchy
+		# strings added/removed to the array cause the location to change
+		$ENV{setup_path} = ['vcld'];
 		
-		# Display a menu to the user listing the modules that were found containing setup subroutines
-		print "Select a module to configure:\n";
-		my $module_perl_package = setup_get_hash_choice(\%setup_module_objects, 'display_name');
-		last if (!defined($module_perl_package));
+		setup_print_break();
+		my $choice = setup_get_menu_choice(\%setup_menu);
+		## For testing
+		#my $choice = {
+		#	"name" => "VM Host Operations",
+		#	"parent_menu_names" => ["VMware Provisioning Module"],
+		#	"sub_ref" => \&VCL::Module::Provisioning::VMware::VMware::setup_vm_host_operations,
+		#};
 		
-		# Retrieve the module object already created
-		my $module_object = $setup_module_objects{$module_perl_package}{object};
-		if (!$module_object) {
-			die "Module object is not defined: $module_perl_package";
-		}
+		last unless defined($choice);
 		
-		# Call the setup subroutine
-		$module_object->setup();
+		my $choice_name = $choice->{name};
+		my $choice_sub_ref = $choice->{sub_ref};
+		my $choice_parent_menu_names = $choice->{parent_menu_names};
+		
+		push @{$ENV{setup_path}}, @$choice_parent_menu_names, $choice_name;
+		
+		my $package_name = get_code_ref_package_name($choice_sub_ref);
+		my $subroutine_name = get_code_ref_subroutine_name($choice_sub_ref);
+		
+		my $module_object = $setup_module_objects{$package_name}{object};
+		&$choice_sub_ref($module_object);
+		pop @{$ENV{setup_path}};
 	}
 	
-	print "============================================================================\n";
+	setup_print_break('=');
 	exit;
 }
 

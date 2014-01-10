@@ -83,21 +83,23 @@ sub initialize {
 	}
 	
 	my $args  = shift;
-
-	# 
-	if (!defined $args->{vmhost_os}) {
-		notify($ERRORS{'WARNING'}, 0, "required 'vmhost_os' argument was not passed");
-		return;
+	
+	if (!defined($self->{vmhost_os})) {
+		# 
+		if (!defined $args->{vmhost_os}) {
+			notify($ERRORS{'WARNING'}, 0, "required 'vmhost_os' argument was not passed");
+			return;
+		}
+	
+		# 
+		if (ref $args->{vmhost_os} !~ /VCL::Module::OS/) {
+			notify($ERRORS{'CRITICAL'}, 0, "'vmhost_os' argument passed is not a reference to a VCL::Module::OS object, type: " . ref($args->{vmhost_os}));
+			return;
+		}
+	
+		# 
+		$self->{vmhost_os} = $args->{vmhost_os};
 	}
-
-	# 
-	if (ref $args->{vmhost_os} !~ /VCL::Module::OS/) {
-		notify($ERRORS{'CRITICAL'}, 0, "'vmhost_os' argument passed is not a reference to a VCL::Module::OS object, type: " . ref($args->{vmhost_os}));
-		return;
-	}
-
-	# 
-	$self->{vmhost_os} = $args->{vmhost_os};
 	
 	if (!$self->vmhost_os) {
 		return;

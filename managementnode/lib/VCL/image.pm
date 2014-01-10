@@ -452,49 +452,20 @@ END
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 setup
+=head2 setup_get_menu
 
  Parameters  : none
  Returns     : 
- Description : This subroutine is used when vcld is run in setup mode. It
-               presents a menu for the image module.
+ Description : 
 
 =cut
 
-sub setup {
-	my $self = shift;
-	unless (ref($self) && $self->isa('VCL::Module')) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-	
-	push @{$ENV{setup_path}}, 'Image';
-	
-	my @operation_choices = (
-		'Capture Base Image',
-	);
-	
-	my @setup_path = @{$ENV{setup_path}};
-	OPERATION: while (1) {
-		@{$ENV{setup_path}} = @setup_path;
-		
-		print '-' x 76 . "\n";
-		
-		print "Choose an operation:\n";
-		my $operation_choice_index = setup_get_array_choice(@operation_choices);
-		last if (!defined($operation_choice_index));
-		my $operation_name = $operation_choices[$operation_choice_index];
-		print "\n";
-		
-		push @{$ENV{setup_path}}, $operation_name;
-		
-		if ($operation_name =~ /capture/i) {
-			$self->setup_capture_base_image();
-		}
-	}
-	
-	pop @{$ENV{setup_path}};
-	return 1;
+sub setup_get_menu {
+	return {
+		'Image Management' => {
+			'Capture a Base Image' => \&setup_capture_base_image,
+		},
+	};
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -616,7 +587,7 @@ sub setup_capture_base_image {
 	if ($install_type ne "partimage") {
 		$image_is_virtual = 1;
 		#should have a vmhost assigned
-		if($computer_info{$computer_id}{vmhostid}){
+		if ($computer_info{$computer_id}{vmhostid}){
 			$vmhost_name = $computer_info{$computer_id}{vmhost}{computer}{SHORTNAME};
 			print "VM host name: $vmhost_name\n";
 			print "VM host profile: $computer_info{$computer_id}{vmhost}{vmprofile}{profilename}\n";
@@ -709,16 +680,16 @@ sub setup_capture_base_image {
 				my $new_image_name = $del_image_name . $epoch_time;
 				my $new_prettyimage_name = $existing_requests_array_choices{$request_id_del}{prettyname} . $epoch_time;
 				
-				if(reservation_being_processed($del_reservation_id)) {
+				if (reservation_being_processed($del_reservation_id)) {
 					print "WARNING: The selected reservation is currently being processed. You must wait until it has completed.\n";
 					print "Reservation id: $del_reservation_id\n";
 					print "\n";
 					next;
 				}
 				
-				if(delete_request($request_id_del)) {
+				if (delete_request($request_id_del)) {
 					print "Removed reservation id $request_id_del for $del_image_name\n";
-					if(update_image_name($del_image_id, $del_imagerevision_id, $new_image_name, $new_prettyimage_name)) {
+					if (update_image_name($del_image_id, $del_imagerevision_id, $new_image_name, $new_prettyimage_name)) {
 					}
 					if (update_computer_state($computer_id, "available")){
 						print "Set $computer_node_name to available state\n";
@@ -730,7 +701,7 @@ sub setup_capture_base_image {
 		if ($chosen_request_id){
 			$request_id = $chosen_request_id;
 			$reservation_id = $existing_requests_array_choices{$chosen_request_id}{reservation_id};
-			if(reservation_being_processed($chosen_request_id)) {
+			if (reservation_being_processed($chosen_request_id)) {
 				print "WARNING: The selected reservation is currently being processed. You must wait until it has completed.\n";
 				print "Reservation id: $chosen_request_id\n";
 				print "\n";
@@ -912,7 +883,7 @@ EOF
 	}
 
 	# Add image resource_id to users' new image group
-	if(!add_imageid_to_newimages($user_id, $resource_id, $image_is_virtual)) {
+	if (!add_imageid_to_newimages($user_id, $resource_id, $image_is_virtual)) {
 		print "\nWARNING: Failed to add image to user's new images group\n";
 		print "You might need to add manually to the new images or all images image groups\n";
 		print "Continuing to with image capture\n\n";

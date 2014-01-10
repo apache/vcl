@@ -2945,16 +2945,13 @@ sub copy_file_to {
 
 =head2 find_files
 
- Parameters  : $base_directory_path, $file_pattern, $search_type (optional)
+ Parameters  : $base_directory_path, $file_pattern, $search_subdirectories (optional)
  Returns     : array
- Description : Finds files under the base directory and any subdirectories path
+ Description : Finds files under the base directory path
                matching the file pattern. The search is not case sensitive. An
-               array is returned containing matching file paths.
-               
-               A third argument can be supplied specifying the search type.
-               
-               If 'regex' is supplied, the $file_pattern argument is assumed to
-               be a regular expression.
+               array is returned containing matching file paths. Subdirectories
+               are searched by default. An optional $search_subdirectories
+               argument may be specified.
 
 =cut
 
@@ -2966,11 +2963,13 @@ sub find_files {
 	}
 	
 	# Get the arguments
-	my ($base_directory_path, $file_pattern, $search_type) = @_;
+	my ($base_directory_path, $file_pattern, $search_subdirectories) = @_;
 	if (!$base_directory_path || !$file_pattern) {
 		notify($ERRORS{'WARNING'}, 0, "base directory path and file pattern arguments were not specified");
 		return;
 	}
+	
+	$search_subdirectories = 1 if !defined($search_subdirectories);
 	
 	# Normalize the arguments
 	$base_directory_path = normalize_file_path($base_directory_path);
@@ -2989,19 +2988,10 @@ sub find_files {
 	
 	COMMAND: for my $find_command (@find_commands) {
 		# Run the find command
-		my $command = "$find_command \"$base_directory_path\"";
+		my $command = "$find_command \"$base_directory_path\" -iname \"$file_pattern\"";
 		
-		if ($search_type) {
-			if ($search_type =~ /regex/i) {
-				$command .= " -type f -iregex \"$file_pattern\"";
-			}
-			else {
-				notify($ERRORS{'WARNING'}, 0, "invalid search type argument was specified: '$search_type'");
-				return;
-			}
-		}
-		else {
-			$command .= " -type f -iname \"$file_pattern\"";
+		if (!$search_subdirectories) {
+			$command .= " -maxdepth 1";
 		}
 		
 		notify($ERRORS{'DEBUG'}, 0, "attempting to find files on $computer_node_name, base directory path: '$base_directory_path', pattern: $file_pattern, command: $command");
