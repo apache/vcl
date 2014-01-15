@@ -1332,32 +1332,32 @@ sub confirm_public_ip_address {
 
 	#Try to get public IP address from OS module
 	if(!$self->os->can("get_public_ip_address")) {
-		 notify($ERRORS{'WARNING'}, 0, "unable to retrieve public IP address from $computer_short_name, OS module " . ref($self) . " does not implement a 'get_public_ip_address' subroutine");
-         return;
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve public IP address from $computer_short_name, OS module " . ref($self) . " does not implement a 'get_public_ip_address' subroutine");
+		return;
 	}
 	elsif ($public_ip_address = $self->os->get_public_ip_address()) {
-         notify($ERRORS{'DEBUG'}, 0, "retrieved public IP address from $computer_short_name using the OS module: $public_ip_address");
-
-			# Update the Datastructure and computer table if the retrieved IP address does not match what is in the database
-      	if ($computer_ip_address ne $public_ip_address) {
-         	$self->data->set_computer_ip_address($public_ip_address);
-     
-         	if (update_computer_address($computer_id, $public_ip_address)) {
-            	notify($ERRORS{'OK'}, 0, "updated dynamic public IP address in computer table for $computer_short_name, $public_ip_address");
-         	}    
-        	 	else {
-            	notify($ERRORS{'WARNING'}, 0, "failed to update dynamic public IP address in computer table for $computer_short_name, $public_ip_address");
-            return 0;
-         	}    
-      	}
-   }
-   else {
-      notify($ERRORS{'WARNING'}, 0, "failed to retrieve dynamic public IP address from $computer_short_name");
+		notify($ERRORS{'DEBUG'}, 0, "retrieved public IP address from $computer_short_name using the OS module: $public_ip_address");
+		
+		# Update the Datastructure and computer table if the retrieved IP address does not match what is in the database
+		if ($computer_ip_address ne $public_ip_address) {
+			$self->data->set_computer_ip_address($public_ip_address);
+			
+			if (update_computer_address($computer_id, $public_ip_address)) {
+			notify($ERRORS{'OK'}, 0, "updated dynamic public IP address in computer table for $computer_short_name, $public_ip_address");
+			}    
+			else {
+				notify($ERRORS{'WARNING'}, 0, "failed to update dynamic public IP address in computer table for $computer_short_name, $public_ip_address");
+				return 0;
+			}    
+		}
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve dynamic public IP address from $computer_short_name");
 		#It might not exist or got droppred
 		if (!$self->os->update_public_ip_address()) {
-          $self->reservation_failed("failed to update public IP address");
-       }
-   }
+			$self->reservation_failed("failed to update public IP address");
+		}
+	}
 	
 	return 1;
 
