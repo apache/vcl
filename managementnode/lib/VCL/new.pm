@@ -104,13 +104,13 @@ sub process {
 	my $image_name                      = $self->data->get_image_name();
 	my $imagerevision_id                = $self->data->get_imagerevision_id();
 	my $user_standalone                 = $self->data->get_user_standalone();
-
+	
 	#If reload state is reload and computer is part of block allocation confirm imagerevisionid is the production image.
 	if ($request_state_name eq 'reload' && is_inblockrequest($computer_id)) {
 		notify($ERRORS{'OK'}, 0, "request state is '$request_state_name', computer $computer_id is in blockrequest, making sure reservation is assigned production image revision");
 		my $imagerev_info = get_production_imagerevision_info($image_id);
 		
-		unless($imagerevision_id == $imagerev_info->{id}){
+		unless ($imagerevision_id == $imagerev_info->{id}) {
 			notify($ERRORS{'OK'}, 0, "imagerevision_id does not match imagerevision_id= $imagerevision_id imagerev_info $imagerev_info->{id}");	
 			$self->data->set_imagerevision_id($imagerev_info->{id});
 			$self->data->set_sublog_imagerevisionid($imagerev_info->{id});
@@ -121,7 +121,6 @@ sub process {
 			$imagerevision_id = $imagerev_info->{id};
 			$image_name = $imagerev_info->{imagename};
 		}
-
 	}
 	
 	# Confirm requested computer is available
@@ -140,7 +139,7 @@ sub process {
 		
 		my $sub_ref = $self->can("computer_not_being_used");
 		my $message = "waiting for existing reservations on $computer_short_name to end";
-	
+		
 		if (!$self->code_loop_timeout($sub_ref, [$self], $message, $total_wait_seconds, $attempt_delay_seconds)) {
 			notify($ERRORS{'CRITICAL'}, 0, "$computer_short_name could not be put into maintenance because it is NOT available");
 			
@@ -159,7 +158,7 @@ sub process {
 	elsif ($request_state_name ne 'new') {
 		# Computer is not available, not a new request (most likely a simple reload)
 		notify($ERRORS{'WARNING'}, 0, "request state=$request_state_name, $computer_short_name is NOT available");
-
+		
 		# Set the computer next image so it gets loaded if/when other reservations are complete
 		if (!defined($computer_next_image_name) || $image_name ne $computer_next_image_name) {
 			notify($ERRORS{'OK'}, 0, "$computer_short_name is not available, setting computer next image to $image_name");
@@ -173,7 +172,7 @@ sub process {
 		else {
 			notify($ERRORS{'OK'}, 0, "$computer_short_name is not available, computer next image is already set to $image_name");
 		}
-
+		
 		# Update request state to complete
 		if (update_request_state($request_id, "complete", $request_state_name)) {
 			notify($ERRORS{'OK'}, 0, "request state updated to 'complete'/'$request_state_name'");
@@ -181,14 +180,14 @@ sub process {
 		else {
 			notify($ERRORS{'CRITICAL'}, 0, "failed to update the request state to 'complete'/'$request_state_name'");
 		}
-
+		
 		notify($ERRORS{'OK'}, 0, "exiting");
 		exit;
 	} ## end elsif ($request_state_name ne 'new')  [ if ($self->computer_not_being_used())
 	elsif ($request_preload_only) {
 		# Computer is not available, preload only = true
 		notify($ERRORS{'WARNING'}, 0, "preload reservation, $computer_short_name is NOT available");
-
+		
 		# Set the computer next image so it gets loaded if/when other reservations are complete
 		if (!defined($computer_next_image_name) || $image_name ne $computer_next_image_name) {
 			notify($ERRORS{'OK'}, 0, "preload only request, $computer_short_name is not available, setting computer next image to $image_name");
@@ -202,16 +201,16 @@ sub process {
 		else {
 			notify($ERRORS{'OK'}, 0, "preload only request, $computer_short_name is not available, computer next image is already set to $image_name");
 		}
-
+		
 		# Only the parent reservation  is allowed to modify the request state in this module
 		if (!$reservation_is_parent) {
 			notify($ERRORS{'OK'}, 0, "child preload reservation, computer is not available, states will be changed by the parent, exiting");
 			exit;
 		}
-
+		
 		# Return back to original states
 		notify($ERRORS{'OK'}, 0, "parent preload reservation, returning states back to original");
-
+		
 		# Set the preload flag back to 1 so it will be processed again
 		if (update_preload_flag($request_id, 1)) {
 			notify($ERRORS{'OK'}, 0, "updated preload flag to 1");
@@ -219,7 +218,7 @@ sub process {
 		else {
 			notify($ERRORS{'WARNING'}, 0, "failed to update preload flag to 1");
 		}
-
+		
 		# Return request state back to the original
 		if (update_request_state($request_id, $request_state_name, $request_state_name)) {
 			notify($ERRORS{'OK'}, 0, "request state set back to '$request_state_name'/'$request_state_name'");
@@ -227,7 +226,7 @@ sub process {
 		else {
 			notify($ERRORS{'WARNING'}, 0, "failed to set request state back to '$request_state_name'/'$request_state_name'");
 		}
-
+		
 		# Return computer state back to the original
 		if (update_computer_state($computer_id, $computer_state_name)) {
 			notify($ERRORS{'OK'}, 0, "$computer_short_name state set back to '$computer_state_name'");
@@ -235,7 +234,7 @@ sub process {
 		else {
 			notify($ERRORS{'WARNING'}, 0, "failed to set $computer_short_name state back to '$computer_state_name'");
 		}
-
+		
 		notify($ERRORS{'OK'}, 0, "exiting");
 		exit;
 	} ## end elsif ($request_preload_only)  [ if ($self->computer_not_being_used())
@@ -246,7 +245,7 @@ sub process {
 		# Call reservation_failed
 		$self->reservation_failed("process failed because computer is not available");
 	}
-
+	
 	# If state is tomaintenance, place machine into maintenance state and set request to complete
 	if ($request_state_name =~ /tomaintenance/) {
 		notify($ERRORS{'OK'}, 0, "setting computer $computer_short_name state to 'maintenance'");
@@ -289,7 +288,6 @@ sub process {
 	}
 
 	# Confirm requested resouces are available
-	
 	if ($request_state_name eq 'tovmhostinuse' && ($image_name =~ /noimage/i || $computer_provisioning_name =~ /none/i)) {
 		notify($ERRORS{'OK'}, 0, "$computer_short_name will not be reloaded, image: $image_name, provisioning name: $computer_provisioning_name");
 	}
@@ -299,18 +297,18 @@ sub process {
 	elsif ($request_preload_only) {
 		# Load failed preload only = true
 		notify($ERRORS{'WARNING'}, 0, "preload reservation, failed to load $computer_short_name with $image_name");
-
+		
 		# Check if parent, only the parent is allowed to modify the request state in this module
 		if (!$reservation_is_parent) {
 			notify($ERRORS{'OK'}, 0, "this is a child preload reservation, states will be changed by the parent");
-
+			
 			notify($ERRORS{'OK'}, 0, "exiting");
 			exit;
 		}
-
+		
 		# Return back to original states
 		notify($ERRORS{'OK'}, 0, "this is a parent preload reservation, returning states back to original");
-
+		
 		# Set the preload flag back to 1 so it will be processed again
 		if (update_preload_flag($request_id, 1)) {
 			notify($ERRORS{'OK'}, 0, "updated preload flag to 1");
@@ -318,7 +316,7 @@ sub process {
 		else {
 			notify($ERRORS{'WARNING'}, 0, "failed to update preload flag to 1");
 		}
-
+		
 		# Return request state back to the original
 		if (update_request_state($request_id, $request_state_name, $request_state_name)) {
 			notify($ERRORS{'OK'}, 0, "request state set back to '$request_state_name'/'$request_state_name'");
@@ -334,19 +332,18 @@ sub process {
 		else {
 			notify($ERRORS{'WARNING'}, 0, "failed to set $computer_short_name state back to '$computer_state_name'");
 		}
-
+		
 		notify($ERRORS{'OK'}, 0, "exiting");
 		exit;
 	} ## end elsif ($request_preload_only)  [ if ($self->reload_image())
 	else {
 		# Load failed, PRELOADONLY = false
 		notify($ERRORS{'WARNING'}, 0, "failed to load $computer_short_name with $image_name");
-
+		
 		# Call reservation_failed, problem computer not opened for reservation
 		$self->reservation_failed("process failed after trying to load or make available");
 	}
-
-
+	
 	# Parent only checks and waits for any other images to complete and checkin
 	if ($reservation_is_parent && $reservation_count > 1) {
 		insertloadlog($reservation_id, $computer_id, "nodeready", "$computer_short_name is loaded with $image_name (cluster parent)");
@@ -360,19 +357,18 @@ sub process {
 			$self->reservation_failed("child reservations never all became ready");
 		}
 	} ## end if ($reservation_is_parent && $reservation_count...
-
-
+	
 	# Check if request has been deleted
 	if (is_request_deleted($request_id)) {
 		notify($ERRORS{'OK'}, 0, "request has been deleted, setting computer state to 'available' and exiting");
-
+		
 		# Update state of computer and exit
 		switch_state($request_data, '', 'available', '', '1');
 	}
-
+	
 	my $next_computer_state;
 	my $next_request_state;
-
+	
 	# Attempt to reserve the computer if this is a 'new' reservation
 	# These steps are not done for simple reloads
 	notify($ERRORS{'OK'}, 0, "request_state_name= $request_state_name");
@@ -389,11 +385,11 @@ sub process {
 		else {
 			notify($ERRORS{'OK'}, 0, "$computer_short_name next image is already set to $image_name");
 		}
-
+		
 		if ($request_preload_only) {
 			# Return back to original states
 			notify($ERRORS{'OK'}, 0, "this is a preload reservation, returning states back to original");
-
+			
 			# Set the preload flag back to 1 so it will be processed again
 			if (update_preload_flag($request_id, 1)) {
 				notify($ERRORS{'OK'}, 0, "updated preload flag to 1");
@@ -401,11 +397,11 @@ sub process {
 			else {
 				notify($ERRORS{'WARNING'}, 0, "failed to update preload flag to 1");
 			}
-
+			
 			# Set variables for the next states
 			$next_computer_state = $computer_state_name;
 			$next_request_state  = $request_state_name;
-
+			
 		} ## end if ($request_preload_only)
 		else {
 			# Perform the steps necessary to prepare the computer for a user
@@ -415,7 +411,7 @@ sub process {
 			else {
 				# reserve_computer() returned false
 				notify($ERRORS{'OK'}, 0, "$computer_short_name with $image_name could NOT be reserved");
-
+				
 				# Call reservation_failed, problem computer not opened for reservation
 				$self->reservation_failed("process failed after attempting to reserve the computer");
 			}
@@ -437,7 +433,7 @@ sub process {
 		$next_computer_state = "available";
 		$next_request_state  = "complete";
 	}
-
+	
 	# Update the computer state
 	if ($next_computer_state) {
 		if (update_computer_state($computer_id, $next_computer_state)) {
@@ -447,7 +443,7 @@ sub process {
 			notify($ERRORS{'WARNING'}, 0, "failed to set $computer_short_name state to '$next_computer_state'");
 		}
 	}
-
+	
 	# Update request state if this is the parent reservation
 	# Only parent reservations should modify the request state
 	if ($reservation_is_parent && update_request_state($request_id, $next_request_state, $request_state_name)) {
@@ -467,7 +463,6 @@ sub process {
 	
 	notify($ERRORS{'OK'}, 0, "exiting");
 	exit;
-
 } ## end sub process
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -501,21 +496,21 @@ sub reload_image {
 	if ($self->provisioner->can("node_status")) {
 		notify($ERRORS{'DEBUG'}, 0, "calling " . ref($self->provisioner) . "->node_status()");
 		insertloadlog($reservation_id, $computer_id, "statuscheck", "checking status of node");
-
+		
 		# Call node_status(), check the return value
 		$node_status = $self->provisioner->node_status();
-
+		
 		# Make sure a return value is defined, an error occurred if it is undefined
 		if (!defined($node_status)) {
 			notify($ERRORS{'CRITICAL'}, 0, ref($self->provisioner) . "->node_status() returned an undefined value, returning");
 			return;
 		}
-
+		
 		# Check what node_status returned and try to get the "status" string
 		# First see if it returned a hashref
 		if (ref($node_status) eq 'HASH') {
 			notify($ERRORS{'DEBUG'}, 0, "node_status returned a hash reference");
-
+			
 			# Check if the hash contains a key called "status"
 			if (defined $node_status->{status}) {
 				$node_status_string = $node_status->{status};
@@ -525,11 +520,11 @@ sub reload_image {
 				notify($ERRORS{'DEBUG'}, 0, "node_status hash reference does not contain a key called 'status'");
 			}
 		} ## end if (ref($node_status) eq 'HASH')
-
+		
 		# Check if node_status returned an array ref
 		elsif (ref($node_status) eq 'ARRAY') {
 			notify($ERRORS{'DEBUG'}, 0, "node_status returned an array reference");
-
+			
 			# Check if the hash contains a key called "status"
 			if (defined((@{$node_status})[0])) {
 				$node_status_string = (@{$node_status})[0];
@@ -539,7 +534,7 @@ sub reload_image {
 				notify($ERRORS{'DEBUG'}, 0, "node_status array reference is empty");
 			}
 		} ## end elsif (ref($node_status) eq 'ARRAY')  [ if (ref($node_status) eq 'HASH')
-
+		
 		# Check if node_status didn't return a reference
 		# Assume string was returned
 		elsif (!ref($node_status)) {
@@ -547,7 +542,7 @@ sub reload_image {
 			$node_status_string = $node_status;
 			notify($ERRORS{'DEBUG'}, 0, "node_status returned a scalar: $node_status");
 		}
-
+		
 		else {
 			notify($ERRORS{'CRITICAL'}, 0, ref($self->provisioner) . "->node_status() returned an unsupported reference type: " . ref($node_status) . ", returning");
 			insertloadlog($reservation_id, $computer_id, "failed", "node_status() returned an undefined value");
@@ -560,14 +555,14 @@ sub reload_image {
 	
 	#If reinstall state - force reload state
 	$computer_state_name = 'reload' if ($request_state_name eq 'reinstall');
-
+	
 	if ($computer_state_name eq 'reload') {
 		# Always call load() if state is reload regardless of node_status()
 		# Admin-initiated reloads will always cause node to be reloaded
 		notify($ERRORS{'OK'}, 0, "request state is $request_state_name, node will be reloaded regardless of status");
 		$node_status_string = 'reload';
 	}
-
+	
 	# Check if the status string returned by node_status = 'ready'
 	if ($node_status_string =~ /^ready/i) {
 		# node_status returned 'ready'
@@ -606,7 +601,6 @@ sub reload_image {
 			return;
 		}
 		
-		
 		# Make sure the image exists on this management node's local disks
 		# Attempt to retrieve it if necessary
 		if ($self->provisioner->can("does_image_exist")) {
@@ -643,7 +637,6 @@ sub reload_image {
 			notify($ERRORS{'OK'}, 0, "unable to check if image exists, does_image_exist() not implemented by " . ref($self->provisioner));
 		}
 		
-		
 		# Update the computer state to reloading
 		if (update_computer_state($computer_id, "reloading")) {
 			notify($ERRORS{'OK'}, 0, "computer $computer_short_name state set to reloading");
@@ -654,7 +647,6 @@ sub reload_image {
 			insertloadlog($reservation_id, $computer_id, "failed", "unable to set computer $computer_short_name state to reloading");
 			return;
 		}
-		
 		
 		# Call provisioning module's load() subroutine
 		notify($ERRORS{'OK'}, 0, "calling " . ref($self->provisioner) . "->load() subroutine");
@@ -677,7 +669,6 @@ sub reload_image {
 	else {
 		notify($ERRORS{'WARNING'}, 0, "failed to update computer table for $computer_short_name: currentimageid=$image_id");
 	}
-
 	
 	if ($server_request_id) {
 		notify($ERRORS{'DEBUG'}, 0, "  SERVER_REQUEST_ID detected");
@@ -925,23 +916,21 @@ sub reserve_computer {
 	my $user_im_id                      = $self->data->get_user_im_id();
 	
 	notify($ERRORS{'OK'}, 0, "user_standalone=$user_standalone, image OS type=$image_os_type");
-
+	
 	my ($mailstring, $subject, $r);
-
+	
 	# check for deletion
 	if (is_request_deleted($request_id)) {
 		notify($ERRORS{'OK'}, 0, "user has deleted, quietly exiting");
 		#return 0 and let process routine handle reset computer state
 		return 0;
 	}
-
-	if ($computer_type =~ /blade|virtualmachine/) {
 	
+	if ($computer_type =~ /blade|virtualmachine/) {
 		#Confirm public IP address
-		if($self->confirm_public_ip_address()) {
-
-		}	
-			
+		if ($self->confirm_public_ip_address()) {
+		}
+		
 		# Update the $computer_ip_address varible in case the IP address was different than what was originally in the database
 		#$computer_ip_address = $self->data->get_computer_ip_address();
 		
@@ -950,12 +939,12 @@ sub reserve_computer {
 		# Only generate new password if:
 		# ! reinstall
 		# linux and user standalone	
-		if ( $request_state_name !~ /^(reinstall)/ ) {
+		if ($request_state_name !~ /^(reinstall)/) {
 			# Create a random password and update the reservation table unless the reservation if for a Linux non-standalone image
 			unless ($image_os_type =~ /linux/ && !$user_standalone) {
 				# Create a random password for the reservation
 				my $reservation_password = getpw();
-			
+				
 				# Update the password in the reservation table
 				if (update_request_password($reservation_id, $reservation_password)) {
 					notify($ERRORS{'DEBUG'}, 0, "updated password in the reservation table");
@@ -963,7 +952,7 @@ sub reserve_computer {
 				else {
 					$self->reservation_failed("failed to update password in the reservation table");
 				}
-			
+				
 				# Set the password in the DataStructure object
 				$self->data->set_reservation_password($reservation_password);
 			}
@@ -985,12 +974,10 @@ sub reserve_computer {
 		if (!$reservation_is_parent) {
 			return 1;
 		}
-
+		
 		# Assemble the message subject based on whether this is a cluster based or normal request
 		if ($request_forimaging) {
 			$subject = "VCL -- $image_prettyname imaging reservation";
-
-			
 		}
 		elsif ($reservation_count > 1) {
 			$subject = "VCL -- Cluster-based reservation";
@@ -999,8 +986,6 @@ sub reserve_computer {
 			$subject = "VCL -- $image_prettyname reservation";
 		}
 		
-		
-
 		# Assemble the message body reservations
 		if ($request_forimaging) {
 			$mailstring = <<"EOF";
@@ -1024,22 +1009,22 @@ The resources for your VCL request have been successfully reserved.
 
 EOF
 		}
-
+		
 		# Add the image name and IP address information
 		$mailstring .= "Reservation Information:\n";
 		foreach $r (keys %{$request_data->{reservation}}) {
 			my $reservation_image_name = $request_data->{reservation}{$r}{image}{prettyname};
 			$mailstring .= "Image Name: $reservation_image_name\n";
 		}
-
+		
 		if ($request_state_name !~ /^(reinstall)$/) {
-                        $mailstring = <<"EOF";
+			$mailstring = <<"EOF";
 
 Connection will not be allowed until you acknowledge using the VCL web interface.  You must acknowledge the reservation within the next 15 minutes or the resources will be reclaimed for other VCL users.
 
 EOF
 		}
-
+		
 		$mailstring .= <<"EOF";
 
 -Visit $user_affiliation_sitewwwaddress
@@ -1049,7 +1034,7 @@ EOF
 Upon acknowledgement, all of the remaining connection details will be displayed.
 
 EOF
-
+		
 		if ($request_forimaging) {
 			$mailstring .= <<"EOF";
 You have up to 8 hours to complete the new image.  Once you have completed preparing the new image:
@@ -1060,7 +1045,7 @@ You have up to 8 hours to complete the new image.  Once you have completed prepa
 
 EOF
 		} ## end if ($request_forimaging)
-
+		
 		$mailstring .= <<"EOF";
 Thank You,
 VCL Team
@@ -1085,23 +1070,20 @@ EOF
 			#just for our email record keeping, might be overkill
 			notify($ERRORS{'MAILMASTERS'}, 0, " $user_email\n$mailstring");
 		}
-
+		
 		notify($ERRORS{'DEBUG'}, 0, "IMTYPE_name= $user_imtype_name calling notify_via");
 		if ($user_imtype_name ne "none") {
 			notify_via_IM($user_imtype_name, $user_im_id, $mailstring, $user_affiliation_helpaddress);
 		}
-
-
-
 	} ## end if ($computer_type =~ /blade|virtualmachine/)
-
+	
 	elsif ($computer_type eq "lab") {
 		if ($image_os_name =~ /sun4x_|rhel/) {
 			# i can't really do anything here
 			# because I need the remoteIP the user
 			# will be accessing the machine from
 			$subject = "VCL -- $image_prettyname reservation";
-
+			
 			$mailstring = <<"EOF";
 
 A machine with $image_prettyname has been reserved. Use ssh to connect to $computer_ip_address.
@@ -1154,7 +1136,7 @@ EOF
 			return 0;
 		}
 	} ## end elsif ($computer_type eq "lab")  [ if ($computer_type =~ /blade|virtualmachine/)
-
+	
 	#update log table with the IPaddress of the machine
 	if (update_sublog_ipaddress($request_logid, $computer_ip_address)) {
 		notify($ERRORS{'OK'}, 0, "updated sublog $request_logid for node $computer_short_name IPaddress $computer_ip_address");
@@ -1162,7 +1144,7 @@ EOF
 	else {
 		notify($ERRORS{'WARNING'}, 0, "could not update sublog $request_logid for node $computer_short_name IPaddress $computer_ip_address");
 	}
-
+	
 	return 1;
 } ## end sub reserve_computer
 
@@ -1191,7 +1173,7 @@ sub wait_for_child_reservations {
 	my $request_id        = $self->data->get_request_id();
 	my @reservation_ids   = $self->data->get_reservation_ids();
 	my $reservation_count = $self->data->get_reservation_count();
-
+	
 	# Set limits on how long to wait
 	my $overall_timeout_minutes = 60;
 	my $nochange_timeout_minutes = 20;
@@ -1305,11 +1287,10 @@ sub wait_for_child_reservations {
 		$previous_lastcheck_info = $current_lastcheck_info;
 		sleep $monitor_delay_seconds;
 	}
-
+	
 	# If out of main loop, waited maximum amount of time
 	notify($ERRORS{'WARNING'}, 0, "waited maximum amount of time for all reservations to become ready");
 	return;
-
 } ## end sub wait_for_child_reservations
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -1324,14 +1305,14 @@ sub wait_for_child_reservations {
 
 sub confirm_public_ip_address {
 	my $self = shift;
-
+	
 	my $computer_short_name             = $self->data->get_computer_short_name();
 	my $public_ip_address;
 	my $computer_ip_address             = $self->data->get_computer_ip_address();
-   my $computer_id                     = $self->data->get_computer_id();
-
+	my $computer_id                     = $self->data->get_computer_id();
+	
 	#Try to get public IP address from OS module
-	if(!$self->os->can("get_public_ip_address")) {
+	if (!$self->os->can("get_public_ip_address")) {
 		notify($ERRORS{'WARNING'}, 0, "unable to retrieve public IP address from $computer_short_name, OS module " . ref($self) . " does not implement a 'get_public_ip_address' subroutine");
 		return;
 	}
@@ -1358,9 +1339,7 @@ sub confirm_public_ip_address {
 			$self->reservation_failed("failed to update public IP address");
 		}
 	}
-	
 	return 1;
-
 }
 
 #/////////////////////////////////////////////////////////////////////////////
