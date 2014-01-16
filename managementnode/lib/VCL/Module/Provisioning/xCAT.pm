@@ -724,8 +724,9 @@ sub node_status {
 	# Make sure node.profile is configured
 	my $node_profile = $node_info->{profile};
 	if (!$node_profile) {
-		notify($ERRORS{'WARNING'}, 0, "unable to determine status of $computer_node_name, node.profile is not configured:\n" . format_data($node_info));
-		return;
+		my $return_value = 'RELOAD';
+		notify($ERRORS{'DEBUG'}, 0, "unable to determine status of $computer_node_name, node.profile is not configured:\n" . format_data($node_info) . "\nreturning '$return_value'");
+		return $return_value;
 	}
 	
 	# Check if node.profile matches the reservation image name
