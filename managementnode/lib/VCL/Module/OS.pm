@@ -662,7 +662,7 @@ sub is_ssh_responding {
 	if (!$computer_node_name) {
 		$computer_node_name = $self->data->get_computer_node_name();
 	}
-	
+
 	# Try nmap to see if any of the ssh ports are open before attempting to run a test command
 	my $port_22_status = nmap_port($computer_node_name, 22) ? "open" : "closed";
 	my $port_24_status = nmap_port($computer_node_name, 24) ? "open" : "closed";
@@ -2943,15 +2943,63 @@ sub copy_file_to {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 copy_file_from
+
+ Parameters  : $source_path, $destination_path
+ Returns     : boolean
+ Description : Copies file(s) from the computer to the management node.
+
+=cut
+
+sub copy_file_from {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get the source and destination arguments
+	my ($source_path, $destination_path) = @_;
+	if (!$source_path || !$destination_path) {
+		notify($ERRORS{'WARNING'}, 0, "source and destination path arguments were not specified");
+		return;
+	}
+	
+	# Get the computer short and hostname
+	my $computer_node_name = $self->data->get_computer_node_name() || return;
+	
+	# Get the destination parent directory path and create the directory
+	my $destination_directory_path = parent_directory_path($destination_path);
+	if (!$destination_directory_path) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine destination parent directory path: $destination_path");
+		return;
+	}
+	$self->mn_os->create_directory($destination_directory_path) || return;
+	
+	# Get the identity keys used by the management node
+	my $management_node_keys = $self->data->get_management_node_keys() || '';
+	
+	# Run the SCP command
+	if (run_scp_command("$computer_node_name:\"$source_path\"", $destination_path, $management_node_keys)) {
+		notify($ERRORS{'DEBUG'}, 0, "copied file from $computer_node_name to management node: $computer_node_name:'$source_path' --> '$destination_path'");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to copy file from $computer_node_name to management node: $computer_node_name:'$source_path' --> '$destination_path'");
+		return;
+	}
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 find_files
 
  Parameters  : $base_directory_path, $file_pattern, $search_subdirectories (optional)
  Returns     : array
- Description : Finds files under the base directory path
+ Description : Finds files under the base directory and any subdirectories path
                matching the file pattern. The search is not case sensitive. An
-               array is returned containing matching file paths. Subdirectories
-               are searched by default. An optional $search_subdirectories
-               argument may be specified.
+               array is returned containing matching file paths.
 
 =cut
 
@@ -2988,7 +3036,7 @@ sub find_files {
 	
 	COMMAND: for my $find_command (@find_commands) {
 		# Run the find command
-		my $command = "$find_command \"$base_directory_path\" -iname \"$file_pattern\"";
+		my $command = "$find_command \"$base_directory_path\" -iname \"$file_pattern\" -type f";
 		
 		if (!$search_subdirectories) {
 			$command .= " -maxdepth 1";

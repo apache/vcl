@@ -684,16 +684,6 @@ sub post_load {
 
 =item *
 
-	Collect or Set the public IP address
-=cut
-
-   if (!$self->update_public_ip_address()) {
-		notify($ERRORS{'WARNING'}, 0, "failed to update IP address for $computer_node_name");
-		return 0;
-   }
-
-=item *
-
  Set root as the owner of /home/root
 
 =cut
@@ -3968,21 +3958,33 @@ sub get_service_configuration {
 	my $computer_node_name   = $self->data->get_computer_node_name();
 	
 	notify($ERRORS{'DEBUG'}, 0, "retrieving service configuration information from the registry");
+	
 	my $services_key = 'HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Services';
+	
 	my $node_reg_file_path = "C:/cygwin/tmp/services_$computer_node_name.reg";
+	my $mn_reg_file_path = "/tmp/vcl/services_$computer_node_name.reg";
+	
+	# Export the registry key to the temp directory on the computer
 	if (!$self->reg_export($services_key, $node_reg_file_path)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to retrieve service credential information from the registry on $computer_node_name");
 		return;
 	}
 	
-	my @reg_file_contents = $self->get_file_contents($node_reg_file_path);
+	# Copy the file to the managment node
+	if (!$self->copy_file_from($node_reg_file_path, $mn_reg_file_path)) {
+		return;
+	}
+	
+	# Get the contents of the file on the managment node
+	my @reg_file_contents = $self->mn_os->get_file_contents($mn_reg_file_path);
 	if (!@reg_file_contents) {
 		notify($ERRORS{'WARNING'}, 0, "failed to retrieve contents of file on $computer_node_name containing exported service credential information from the registry: $node_reg_file_path");
 		return;
 	}
 	
-	# Delete the registry file
+	# Delete the registry files
 	$self->delete_file($node_reg_file_path);
+	$self->mn_os->delete_file($mn_reg_file_path);
 	
 	my $service_configuration;
 	my $service_name;
@@ -3997,6 +3999,7 @@ sub get_service_configuration {
 		}
 	}
 	
+	#notify($ERRORS{'DEBUG'}, 0, "retrieved service configuration from $computer_node_name:\n" . format_data($service_configuration));
 	$self->{service_configuration} = $service_configuration;
 	return $self->{service_configuration};
 }
@@ -8957,7 +8960,12 @@ sub user_logged_in {
 	
 	# Check if username argument was passed
 	if (!$username) {
-		$username = $self->data->get_user_login_id();
+		if ($self->data->get_request_forimaging()) {
+			$username = 'Administrator';
+		}
+		else {
+			$username = $self->data->get_user_login_id();
+		}
 	}
 	notify($ERRORS{'DEBUG'}, 0, "checking if $username is logged in to $computer_node_name");
 
@@ -9998,7 +10006,7 @@ sub setup_get_menu {
  Parameters  : none
  Returns     :
  Description : Checks various configuration settings and displays a message to
-               the user if any important settings are not configured.
+					the user if any important settings are not configured.
 
 =cut
 
