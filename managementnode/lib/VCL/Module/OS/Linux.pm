@@ -3652,19 +3652,19 @@ sub get_firewall_configuration {
 				$port = "any";
 			}
 			
-			my $services_cmd = "cat /etc/services";
-			my ($services_status, $service_output) = $self->execute($services_cmd, 0);
-			if (!defined($service_output)) {
-				notify($ERRORS{'DEBUG'}, 0, "failed to get /etc/services");
-			}
-			else {
-				for my $sline (@$service_output) {
-					if ($sline =~ /(^[_-a-zA-Z1-9]+)\s+($port\/$protocol)\s+(.*) /ig) {
-						$name = $1;
-					}
-				}
-				
-			}
+			#my $services_cmd = "cat /etc/services";
+			#my ($services_status, $service_output) = $self->execute($services_cmd, 0);
+			#if (!defined($service_output)) {
+			#	notify($ERRORS{'DEBUG'}, 0, "failed to get /etc/services");
+			#}
+			#else {
+			#	for my $sline (@$service_output) {
+			#		if ($sline =~ /(^[_-a-zA-Z1-9]+)\s+($port\/$protocol)\s+(.*) /ig) {
+			#			$name = $1;
+			#		}
+			#	}
+			#	
+			#}
 			
 			$name = $port if (!$name);
 			
