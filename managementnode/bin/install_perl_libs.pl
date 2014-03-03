@@ -203,6 +203,7 @@ sub install_linux_packages {
 		'perl-Net-SSH-Expect',
 		'perl-RPC-XML',
 		'perl-Text-CSV_XS',
+		'perl-Time-HiRes',
 		'perl-XML-Simple',
 		'perl-YAML',
 		'xmlsec1-openssl',
