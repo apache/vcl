@@ -8156,16 +8156,17 @@ sub get_datastore_imagerevision_names {
 	
 	print "Retrieving list of files and directories in datastore: $datastore_base_path\n";
 	
-	my @file_paths = $self->vmhost_os->find_files($datastore_base_path, "*", 0);
-	
+	my @file_paths = $self->vmhost_os->find_files($datastore_base_path, "*.vmdk", 1);
+
 	my @datastore_imagerevision_names;
 	my @ignored;
 	
 	for my $file_path (@file_paths) {
 		$file_path =~ s/\/+$//;
 		next if $file_path eq $datastore_base_path;
-		my $file_name = $self->_get_file_name($file_path);
-		next if !$file_name;
+		
+		my $file_name = $self->_get_parent_directory_name($file_path);
+		next if !$file_name || $file_name !~ /v\d+/;
 		
 		if (defined($imagerevision_name_hash{$file_name})) {
 			push @datastore_imagerevision_names, $file_name;
@@ -8184,7 +8185,7 @@ sub get_datastore_imagerevision_names {
 	
 	print "\n";
 	if (@ignored) {
-		print "$ignored_count files and/or directories ignored: " . join(", ", @ignored) . "\n\n";
+		print "$ignored_count files and/or directories ignored: " . join("\n", @ignored) . "\n\n";
 	}
 	print "$datastore_imagerevision_name_count images found in datastore '$datastore_base_path'\n";
 	
