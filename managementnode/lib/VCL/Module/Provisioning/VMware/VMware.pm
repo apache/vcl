@@ -8185,7 +8185,7 @@ sub get_datastore_imagerevision_names {
 	
 	print "\n";
 	if (@ignored) {
-		print "$ignored_count files and/or directories ignored: " . join("\n", @ignored) . "\n\n";
+		print "$ignored_count files and/or directories ignored:\n" . join("\n", @ignored) . "\n\n";
 	}
 	print "$datastore_imagerevision_name_count images found in datastore '$datastore_base_path'\n";
 	
