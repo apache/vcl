@@ -264,6 +264,7 @@ sub initialize {
 		return;
 	}
 	
+	return 1 if ($self->data->get_request_state_name() =~ /test/i);
 	notify($ERRORS{'DEBUG'}, 0, "initializing " . ref($self) . " object");
 	
 	# Get a DataStructure object containing data for the VM host computer
@@ -7779,9 +7780,13 @@ sub setup_vm_host_operations {
 		print "No VM hosts are mapped to $FQDN\n";
 		return;
 	}
-	
+
 	print "Select a VM host:\n";
-	my $vmhost_id = setup_get_hash_choice($management_node_vmhost_info, 'hostname') || return;
+	#print format_data($management_node_vmhost_info) . "\n\n";
+	my $vmhost_id = setup_get_hash_choice($management_node_vmhost_info, 'hostname', 'vmprofile_profilename') || return;
+	#For testing:
+	#my $vmhost_id = 599;
+	
 	my $vmhost_computer_name = $management_node_vmhost_info->{$vmhost_id}{computer}{hostname};
 	push @{$ENV{setup_path}}, $vmhost_computer_name;
 	
@@ -7817,8 +7822,8 @@ sub setup_vm_host_operations {
 	setup_print_break('.');
 	my $datastore_operations_menu = {
 		'Purge deleted and unused images from virtual disk datastore' => \&setup_purge_datastore_images,
+		'Purge deleted and unused images from repository datastore' => \&setup_purge_repository_images,
 	};
-	
 	
 	print "Select an operation:\n";
 	my $datastore_operations_choice = setup_get_menu_choice($datastore_operations_menu) || return;
@@ -7827,6 +7832,11 @@ sub setup_vm_host_operations {
 	#	"name" => "Purge deleted images from datastore",
 	#	"parent_menu_names" => [],
 	#	"sub_ref" => \&setup_purge_datastore_images,
+	#};
+	#my $datastore_operations_choice = {
+	#	"name" => "Purge deleted images from repository",
+	#	"parent_menu_names" => [],
+	#	"sub_ref" => \&setup_purge_repository_images,
 	#};
 	
 	my $datastore_operations_choice_name = $datastore_operations_choice->{name};
@@ -8030,6 +8040,7 @@ sub setup_purge_datastore_images {
 	my @not_deleted_candidate_newer_than_production_not_recently_created 				= get_array_intersection(\@not_deleted_candidate, \@newer_than_production, \@not_recently_created); # Purgable
 	
 	setup_print_break('-');
+	print "Analyzed image revisions stored in the virtual disk path datastore:\n";
 	print "|- Deleted: " 																				. scalar(@deleted) . "\n";
 	print "   |- Has reservation: " 																	. scalar(@deleted_has_reservations) . "\n";
 	print "      |- No reservations: " 																. scalar(@deleted_no_reservations) . "\n";
@@ -8125,6 +8136,191 @@ sub setup_purge_datastore_images {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 setup_purge_repository_images
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Checks all images stored in the repository path location and
+               safely purges them.
+
+=cut
+
+sub setup_purge_repository_images {
+	my $self = shift;
+	if (ref($self) !~ /VMware/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $vmhost_computer_name = $self->data->get_vmhost_hostname();
+	my $vmhost_profile_datastore_path = $self->data->get_vmhost_profile_datastore_path();
+	my $vmhost_profile_repository_path = $self->data->get_vmhost_profile_repository_path();
+	
+	if (!$vmhost_profile_repository_path) {
+		print "WARNING: images not purged because repository path is not configured in the VM host profile\n";
+		return;
+	}
+	
+	my $datastore_base_path = $self->_get_normal_path($vmhost_profile_datastore_path);
+	if (!$datastore_base_path) {
+		print "ERROR: failed to locate virtual disk path configured in the VM host profile on $vmhost_computer_name: $vmhost_profile_datastore_path\n";
+		return;
+	}
+	
+	my $repository_base_path = $self->_get_normal_path($vmhost_profile_repository_path);
+	if (!$repository_base_path) {
+		print "ERROR: failed to locate repository path configured in the VM host profile on $vmhost_computer_name: $vmhost_profile_repository_path\n";
+		return;
+	}
+	
+	if ($datastore_base_path eq $repository_base_path) {
+		print "WARNING: images not purged because virtual disk path is the same location as the repository path configured in the VM host profile: $datastore_base_path\n";
+		return;
+	}
+	
+	setup_print_break('.');
+	# Get an array of image names currently stored on the repository
+	my @repository_imagerevision_names = $self->get_datastore_imagerevision_names($repository_base_path);
+	
+	setup_print_break('.');
+	# Get various info about image revisions such as deleted, date created...
+	my $imagerevision_cleanup_info = get_imagerevision_cleanup_info();
+
+	# Get reservation info for all imagerevisions in repository
+	my $imagerevision_reservation_info = get_imagerevision_reservation_info();
+	
+	# Get computers on which imagerevisions in datastore are currently loaded according to the database
+	my $imagerevision_loaded_info = get_imagerevision_loaded_info();
+	
+	my @deleted;
+	my @not_deleted;
+	my @has_reservations;
+	my @no_reservations;
+	my @loaded;
+	my @not_loaded;
+	
+	# Build lists of imagerevisions with certain characteristics
+	for my $repository_imagerevision_name (@repository_imagerevision_names) {
+		if (!$imagerevision_cleanup_info->{$repository_imagerevision_name}) {
+			print "WARNING: failed to retrieve cleanup info from database for image revision: $repository_imagerevision_name\n";
+			return;
+		}
+		
+		if ($imagerevision_cleanup_info->{$repository_imagerevision_name}{deleted}) {
+			push @deleted, $repository_imagerevision_name;
+		}
+		else {
+			push @not_deleted, $repository_imagerevision_name;
+		}
+		
+		if ($imagerevision_reservation_info->{$repository_imagerevision_name}) {
+			push @has_reservations, $repository_imagerevision_name;
+		}
+		else {
+			push @no_reservations, $repository_imagerevision_name;
+		}
+		
+		if ($imagerevision_loaded_info->{$repository_imagerevision_name}) {
+			push @loaded, $repository_imagerevision_name;
+		}
+		else {
+			push @not_loaded, $repository_imagerevision_name;
+		}
+	}
+	
+	# Find image revisions which have multiple characteristics by finding the intersection of the arrays
+	my @deleted_has_reservations 					= get_array_intersection(\@deleted, \@has_reservations);
+	my @deleted_has_reservations_loaded 		= get_array_intersection(\@deleted, \@has_reservations, \@loaded);
+	my @deleted_has_reservations_not_loaded 	= get_array_intersection(\@deleted, \@has_reservations, \@not_loaded);
+	my @deleted_no_reservations 					= get_array_intersection(\@deleted, \@no_reservations);
+	my @deleted_no_reservations_loaded 			= get_array_intersection(\@deleted, \@no_reservations, \@loaded);
+	my @deleted_no_reservations_not_loaded 	= get_array_intersection(\@deleted, \@no_reservations, \@not_loaded);
+	
+	setup_print_break('-');
+	print "Analyzed image revisions stored in the repository datastore:\n";
+	print "|- Deleted: " 						. scalar(@deleted) . "\n";
+	print "   |- Has reservation: " 			. scalar(@deleted_has_reservations) . "\n";
+	print "      |- No reservations: " 		. scalar(@deleted_no_reservations) . "\n";
+	print "         |- Loaded: " 				. scalar(@deleted_no_reservations_loaded) . "\n";
+	print "         |- Not loaded: " 		. scalar(@deleted_no_reservations_not_loaded) . " (*)\n";
+	print "|- Not deleted: " 					. scalar(@not_deleted) . "\n";
+	print "(*) May be safely purged\n\n";
+	
+	my @purgable_imagerevisions;
+	
+	if (@deleted_no_reservations_not_loaded) {
+		push @purgable_imagerevisions, @deleted_no_reservations_not_loaded;
+		print "Deleted, no reservations, not loaded: " . scalar(@deleted_no_reservations_not_loaded) . "\n";
+		print "- " . join("\n- ", @deleted_no_reservations_not_loaded) . "\n\n";
+	}
+	
+	if (!@purgable_imagerevisions) {
+		print "No image revisions were found which can be safely purged from the repository datastore\n";
+		return;
+	}
+	
+	my $purgable_imagerevision_count = scalar(@purgable_imagerevisions);
+	
+	my $delete_limit;
+	while (!$delete_limit) {
+		$delete_limit = setup_get_input_string("Enter number of image revisions to purge (0-$purgable_imagerevision_count)", $purgable_imagerevision_count);
+		return if !$delete_limit;
+		$delete_limit =~ s/\s*//g;
+		if ($delete_limit !~ /^\d+$/ || $delete_limit > $purgable_imagerevision_count) {
+			print "Value must be an integer between 0 and $purgable_imagerevision_count\n";
+			$delete_limit = '';
+		}
+	}
+	
+	my $delete_count = 0;
+	for my $imagerevision_name (@purgable_imagerevisions) {
+		$delete_count++;
+		setup_print_break('.');
+		print "Deleting image revision $delete_count/$delete_limit: $imagerevision_name\n";
+		
+		my $repository_directory_path = "$repository_base_path/$imagerevision_name";
+		print "repository directory path: $repository_directory_path\n";
+		
+		# Check files in directory, make sure it's safe to delete
+		my @file_paths = $self->vmhost_os->find_files($repository_directory_path, "*", 1);
+		
+		# Don't delete directories which contain files which shouldn't reside in a repository direcotry
+		my @unsafe_file_paths = ();
+		push @unsafe_file_paths, grep(/-flat\./, @file_paths);
+		push @unsafe_file_paths, grep(/\.vmx$/, @file_paths);
+		if (@unsafe_file_paths) {
+			print "ERROR: image revision not deleted from repository: $imagerevision_name\n";
+			print "Directory contains files which normally wouldn't reside in an image repository directory:\n";
+			print join("\n", @unsafe_file_paths) . "\n";
+			next;
+		}
+		
+		# Make sure directory contains a file name using the 2gbsparse format
+		if (!grep(/-s\d+\.vmdk$/, @file_paths)) {
+			print "ERROR: image revision not deleted from repository: $imagerevision_name\n";
+			print "Directory does not contain a 2GB sparse formatted file name (xxx-s001.vmdk):\n";
+			print join("\n", @file_paths) . "\n";
+			next;
+		}
+		
+		if ($self->vmhost_os->delete_file($repository_directory_path)) {
+			print "Done\n";
+		}
+		else {
+			print "\nERROR: failed to delete image revision: $imagerevision_name\n";
+			exit;
+		}
+		
+		if ($delete_count >= $delete_limit) {
+			last;
+		}
+	}
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 get_datastore_image_names
 
  Parameters  : $datastore_base_path
@@ -8181,11 +8377,14 @@ sub get_datastore_imagerevision_names {
 	@datastore_imagerevision_names = sort keys %datastore_imagerevision_name_hash;
 	
 	my $datastore_imagerevision_name_count = scalar(@datastore_imagerevision_names);
-	my $ignored_count = scalar(@ignored);
 	
 	print "\n";
 	if (@ignored) {
-		print "$ignored_count files and/or directories ignored:\n" . join("\n", @ignored) . "\n\n";
+		# Remove duplicates
+		my %ignored_hash = map { $_ => 1 } @ignored;
+		@ignored = sort keys %ignored_hash;
+		my $ignored_count = scalar(@ignored);
+		print "$ignored_count files and/or directories ignored, image revision not found in database:\n" . join("\n", @ignored) . "\n\n";
 	}
 	print "$datastore_imagerevision_name_count images found in datastore '$datastore_base_path'\n";
 	
