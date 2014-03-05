@@ -965,8 +965,7 @@ sub reserve {
 	}
 	
 	if (!$self->create_user()) {
-		notify($ERRORS{'CRITICAL'}, 0, "failed to add user to $computer_node_name");
-		return;
+		notify($ERRORS{'WARNING'}, 0, "failed to add user to $computer_node_name");
 	}
 	
 	return 1;
