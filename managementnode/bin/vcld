@@ -196,8 +196,6 @@ sub main () {
 			my $request_preload        = $info{request}{$request_id}{preload};
 			
 			my @reservation_ids = sort { $a <=> $b } keys %{$info{request}{$request_id}{reservation}};
-			my $reservation_count = scalar @reservation_ids;
-			my $parent_reservation_id = min(@reservation_ids);
 			
 			$ENV{request_id} = $request_id;
 			$ENV{reservation_id} = 0;
@@ -272,43 +270,12 @@ sub main () {
 						next RESERVATION;
 					}
 					else {
-						notify($ERRORS{'WARNING'}, $LOGFILE, "reservation $reservation_id is already being processed");
+						notify($ERRORS{'DEBUG'}, $LOGFILE, "reservation $reservation_id is already being processed");
 						next RESERVATION;
 					}
 				}
 				else {
 					notify($ERRORS{'DEBUG'}, $LOGFILE, "reservation $reservation_id is NOT already being processed");
-				}
-				
-				# Check if this is a child reservation of a cluster request
-				# Child reservations must wait for the parent to start before starting
-				if ($reservation_count > 1) {
-					# Get the computerloadlog entries for the parent reservation
-					my $request_loadstate_names = get_request_loadstate_names($request_id);
-					for my $check_reservation_id (keys %$request_loadstate_names) {
-						if (grep { $_ eq 'failed' } @{$request_loadstate_names->{$reservation_id}}) {
-							notify($ERRORS{'DEBUG'}, $LOGFILE, "reservation will not be processed, another reservation in the cluster failed: $check_reservation_id");
-							next REQUEST;
-						}
-					}
-					
-					if ($reservation_id ne $parent_reservation_id) {
-						my @parent_computerloadstate_entries = @{$request_loadstate_names->{$parent_reservation_id}};
-						if (@parent_computerloadstate_entries) {
-							notify($ERRORS{'DEBUG'}, $LOGFILE, "retrieved computerloadlog entries for parent reservation: $parent_reservation_id:\n" . join("\n", @parent_computerloadstate_entries));
-							if (grep {$_ eq 'begin'} @parent_computerloadstate_entries) {
-								notify($ERRORS{'DEBUG'}, $LOGFILE, "processing may proceed, parent reservation $parent_reservation_id is waiting for child reservation processes to start");
-							}
-							else {
-								notify($ERRORS{'WARNING'}, $LOGFILE, "processing delayed, computerloadlog 'begin' entry does not exist for parent reservation $parent_reservation_id:\n" . join("\n", @parent_computerloadstate_entries));
-								next REQUEST;
-							}
-						}
-						else {
-							notify($ERRORS{'DEBUG'}, $LOGFILE, "processing delayed, parent reservation $parent_reservation_id process has not started yet");
-							next REQUEST;
-						}
-					}
 				}
 				
 				# Get the full set of database data for this request
@@ -356,16 +323,11 @@ sub main () {
 				delete_computerloadlog_reservation($reservation_id, 'exited');
 				
 				# Insert a computerloadlog 'begin' entry to indicate processing has begun for this reservation
+				# This should prevent multiple processes from being forked for a given reservation
+				# Do this before forking the new process because a cluster child will wait for the parent in State.pm::initialize
 				my $computer_id = $data_structure->get_computer_id();
 				insertloadlog($reservation_id, $computer_id, "begin", "beginning to process, state is $request_state_name");
-				
-				# Update state to pending for non-cluster reservations to limit another attempt at processing 
-				if ($reservation_count == 1) {
-					# Update the request state to pending
-					if (!update_request_state($request_id, "pending", $request_state_name)) {
-					   notify($ERRORS{'WARNING'}, 0, "failed to update request state to pending");
-					}
-				}
+
 				# Make a new child process, passing it the request/reservation info
 				make_new_child({request_info => \%request_info, data_structure => $data_structure});
 			} ## end foreach my $reservation_id (keys %{$info{request...

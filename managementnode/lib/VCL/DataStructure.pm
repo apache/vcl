@@ -1013,6 +1013,24 @@ sub get_reservation_ids {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 get_parent_reservation_id
+
+ Parameters  : none
+ Returns     : integer
+ Description : Returns the reservation ID for the parent reservation of a
+               cluster request.
+
+=cut
+
+sub get_parent_reservation_id {
+	my $self = shift;
+	
+	# The parent reservation has the lowest ID
+	return min $self->get_reservation_ids();
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 is_parent_reservation
 
  Parameters  : None
@@ -1028,17 +1046,14 @@ sub is_parent_reservation {
 	my $self = shift;
 	
 	my $reservation_id  = $self->get_reservation_id();
-	my @reservation_ids = $self->get_reservation_ids();
-
-	# The parent reservation has the lowest ID
-	my $parent_reservation_id = min @reservation_ids;
+	my $parent_reservation_id = $self->get_parent_reservation_id();
 
 	if ($reservation_id == $parent_reservation_id) {
-		notify($ERRORS{'DEBUG'}, 0, "returning true: parent reservation ID for this request: $parent_reservation_id");
+		notify($ERRORS{'DEBUG'}, 0, "this is the parent reservation");
 		return 1;
 	}
 	else {
-		notify($ERRORS{'DEBUG'}, 0, "returning false: parent reservation ID for this request: $parent_reservation_id");
+		notify($ERRORS{'DEBUG'}, 0, "this is a child reservation, parent reservation ID for this request: $parent_reservation_id");
 		return 0;
 	}
 } ## end sub is_parent_reservation

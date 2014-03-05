@@ -296,6 +296,12 @@ sub process {
 		$self->os->firewall_compare_update();
 	}
 	
+	# TODO: fix user connection checking for cluster requests
+	if ($reservation_count > 1 && $request_laststate_name ne 'reserved') {
+		notify($ERRORS{'OK'}, 0, "skipping user connection check for cluster request");
+		$self->state_exit('inuse', 'inuse');
+	}
+	
 	# Check to see if user is connected. user_connected will true(1) for servers and requests > 24 hours
 	if (!$self->code_loop_timeout(sub{$self->user_connected()}, [], "waiting for user to connect to $computer_short_name", ($connect_timeout_minutes*60), 15)) {
 		if (!$imagemeta_checkuser || !$request_checkuser) {
@@ -381,14 +387,14 @@ sub user_connected {
 
 	# Check if this is a server request, causes process to exit if server request
 	if ($server_request_id) {
-			notify($ERRORS{'DEBUG'}, 0, "Server reservation detected, set as user is connected");
-			insertloadlog($reservation_id, $computer_id, "connected", "user connected to $computer_short_name");
-			return 1;
+		notify($ERRORS{'DEBUG'}, 0, "server reservation detected, set as user is connected");
+		insertloadlog($reservation_id, $computer_id, "connected", "user connected to $computer_short_name");
+		return 1;
 	}
 	
 	# If duration is >= 24 hrs set as connected and return
 	if($request_duration_hrs >= 24 ) {
-		notify($ERRORS{'OK'}, 0, "Duration is $request_duration_hrs hrs . Is >= to 24 hrs, skipping inuse checks");
+		notify($ERRORS{'OK'}, 0, "duration is $request_duration_hrs hrs . Is >= to 24 hrs, skipping inuse checks");
 		insertloadlog($reservation_id, $computer_id, "connected", "user connected to $computer_short_name");
 		return 1;
 	}	

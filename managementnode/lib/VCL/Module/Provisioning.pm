@@ -331,11 +331,11 @@ sub retrieve_image {
 	# Make sure the parent image repository path exists
 	my ($image_repository_directory_name, $image_repository_parent_directory_path) = fileparse($image_repository_path_local, qr/\.[^\\\/]*/);
 	if (!$image_repository_parent_directory_path) {
-		notify($ERRORS{'WARNING'}, 0, "unable to retrieve image, unable to determine parent directory of local image repository path: $image_repository_path_local");
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve image from another management node because the path specified as the VM host profile repository could not be parsed: $image_repository_path_local");
 		return;
 	}
 	elsif (!$self->mn_os->file_exists($image_repository_parent_directory_path)) {
-		notify($ERRORS{'WARNING'}, 0, "unable to retrieve image, local image repository parent path does not exist: $image_repository_parent_directory_path");
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve image from another management node because the path on this management node where the image files are to be copied does not exist, the path specified as the VM host profile repository path is: $image_repository_parent_directory_path, either a directory, mount point, or symbolic link must exist on this management node in this location");
 		return;
 	}
 	
