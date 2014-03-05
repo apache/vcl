@@ -971,6 +971,52 @@ sub firewall_compare_update {
 	return 1;
 }
 
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 update_hostname_file
+
+ Parameters  : hostname
+ Returns     : boolean
+ Description : updates the static hostname file on node, so hostname persists across reboots
+               this routine is seperated from update_public_hostname for different locations
+               and formats for different Linux distributions
+
+=cut
+
+sub update_hostname_file {
+   my $self = shift;
+   if (ref($self) !~ /linux/i) {
+      notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+      return 0;
+   }
+   
+   my $public_hostname = shift;
+   if (!$public_hostname) {
+      notify($ERRORS{'WARNING'}, 0, "public_hostname was not passed correctly");
+      return 0;
+   }
+
+   my $computer_node_name   = $self->data->get_computer_node_name();
+   my $network_file_path = '/etc/hostname';
+
+   my $command = "echo \"$public_hostname\" > $network_file_path";
+   my ($exit_status, $output) = $self->execute($command);
+   if (!defined($output)) {
+      notify($ERRORS{'WARNING'}, 0, "failed to SSH command to set hostname on $computer_node_name to $public_hostname, command: '$command'");
+      return;
+   }
+   elsif ($exit_status == 0) {
+      notify($ERRORS{'OK'}, 0, "set public hostname on $computer_node_name to $public_hostname");
+      return 1;
+   }
+   else {
+      notify($ERRORS{'WARNING'}, 0, "failed to set public hostname on $computer_node_name to $public_hostname, exit status: $exit_status, output:\n" . join("\n", @ $output));
+      return 0;
+   }
+
+}
+
+
 
 #/////////////////////////////////////////////////////////////////////////////
 

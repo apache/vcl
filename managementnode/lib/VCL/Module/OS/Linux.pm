@@ -530,12 +530,14 @@ sub update_public_hostname {
 	}
 	
 	# Set the node's hostname to public hostname
-	my $network_file_path = '/etc/sysconfig/network';
-	if (!$self->file_exists($network_file_path)) {
-		return 1;
+
+	if($self->can("update_hostname_file")) {
+		if(!$self->update_hostname_file($public_hostname)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to update hostname file");
+		}
 	}
 	
-	my $hostname_command = "hostname -v $public_hostname; sed -i -e \"/^HOSTNAME=/d\" $network_file_path; echo \"HOSTNAME=$public_hostname\" >> $network_file_path";
+	my $hostname_command = "hostname $public_hostname";
 	my ($hostname_exit_status, $hostname_output) = $self->execute($hostname_command);
 	if (!defined($hostname_output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to SSH command to set hostname on $computer_node_name to $public_hostname, command: '$hostname_command'");
@@ -549,7 +551,57 @@ sub update_public_hostname {
 		notify($ERRORS{'WARNING'}, 0, "failed to set public hostname on $computer_node_name to $public_hostname, exit status: $hostname_exit_status, output:\n" . join("\n", @$hostname_output));
 		return 0;
 	}
+	
+	return 1;
+
 }
+
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 update_hostname_file
+
+ Parameters  : hostname
+ Returns     : boolean
+ Description : updates the static hostname file on node, so hostname persists across reboots
+ 					seperated from update_public_hostname as the file location and format can differ
+					accross Linux distributions
+
+=cut
+
+sub update_hostname_file {
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return 0;
+	}
+
+	my $public_hostname = shift;
+	if (!$public_hostname) {
+		notify($ERRORS{'WARNING'}, 0, "public_hostname was not passed correctly");
+		return 0;
+	}
+
+	my $computer_node_name   = $self->data->get_computer_node_name();
+	my $network_file_path = '/etc/sysconfig/network';
+
+	my $command = "sed -i -e \"/^HOSTNAME=/d\" $network_file_path; echo \"HOSTNAME=$public_hostname\" >> $network_file_path";
+	my ($exit_status, $output) = $self->execute($command);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to SSH command to set hostname on $computer_node_name to $public_hostname, command: '$command'");
+		return 0;
+	}
+	elsif ($exit_status == 0) {
+		notify($ERRORS{'OK'}, 0, "set public hostname on $computer_node_name to $public_hostname");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to set public hostname on $computer_node_name to $public_hostname, exit status: $exit_status, output:\n" . join("\n", @ $output));
+		return 0;
+	}
+
+}
+
 #/////////////////////////////////////////////////////////////////////////////
 
 =head2 clear_private_keys
