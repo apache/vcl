@@ -175,11 +175,6 @@ sub initialize {
 	
 	# Parent reservation needs to update the request state to pending
 	if ($is_parent_reservation) {
-		if (is_request_deleted($request_id)) {
-			notify($ERRORS{'OK'}, 0, "request has been deleted, exiting");
-			$self->state_exit();
-		}
-		
 		if ($reservation_count > 1) {
 			# Check if any reservations have failed
 			if (my @failed_reservation_ids = $self->does_loadstate_exist_any_reservation('failed')) {
