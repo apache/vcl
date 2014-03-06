@@ -106,9 +106,6 @@ sub initialize {
 		return;
 	}
 	
-	# Rename this process to include some request info
-	rename_vcld_process($self->data);
-	
 	# Update reservation lastcheck value to prevent processes from being forked over and over if a problem occurs
 	my $reservation_lastcheck = update_reservation_lastcheck($reservation_id);
 	if ($reservation_lastcheck) {
@@ -185,6 +182,23 @@ sub initialize {
 		
 		# Update the request state to pending for this reservation
 		if (!update_request_state($request_id, "pending", $request_state_name)) {
+			# Check if request was deleted
+			if (is_request_deleted($request_id)) {
+				exit;
+			}
+			
+			# Check the current state
+			my ($current_request_state, $current_request_laststate) = get_request_current_state_name($request_id);
+			if (!$current_request_state) {
+				# Request probably complete and already removed
+				notify($ERRORS{'DEBUG'}, 0, "current request state could not be retrieved, it was probably completed by another vcld process");
+				exit;
+			}
+			if ($current_request_state =~ /^(deleted|complete)$/ || $current_request_laststate =~ /^(deleted)$/) {
+				notify($ERRORS{'DEBUG'}, 0, "current request state: $current_request_state/$current_request_laststate, exiting");
+				exit;
+			}
+			
 			$self->reservation_failed("failed to update request state to pending");
 		}
 	}
@@ -635,7 +649,7 @@ sub state_exit {
 			}
 			
 			# Update the request state
-			if (!is_request_deleted($request_id)) {
+			if ($request_state_name_old ne 'deleted' && !is_request_deleted($request_id)) {
 				# Check if the request state has already been updated
 				# This can occur if another reservation in a cluster failed
 				my ($request_state_name_current, $request_laststate_name_current) = get_request_current_state_name($request_id);

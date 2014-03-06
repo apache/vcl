@@ -1290,16 +1290,17 @@ AND request.stateid = currentstate.id
 AND request.laststateid = currentlaststate.id
 AND state.name = '$state_name'
 AND laststate.name = '$laststate_name'
+AND currentstate.name != 'maintenance'
 EOF
 	
 	if (!$force) {
 		if ($state_name eq 'pending') {
+			# Avoid: deleted/inuse --> pending/inuse
 			$update_statement .= "AND laststate.name = currentstate.name\n";
 		}
 		elsif ($state_name !~ /(complete|failed|maintenance)/) {
 			# New state is not pending
-			# Need to avoid:
-			#    pending/image --> inuse/inuse
+			# Avoid: pending/image --> inuse/inuse
 			$update_statement .= "AND currentstate.name = 'pending'\n";
 			$update_statement .= "AND currentlaststate.name = '$laststate_name'\n";
 		}
@@ -6541,7 +6542,6 @@ sub get_user_info {
 			notify($ERRORS{'DEBUG'}, 0, "retrieving current user info for '$user_identifier' from database, cached data is stale: $data_age_seconds seconds old");
 		}
 	}
-	notify($ERRORS{'DEBUG'}, 0, "retrieving user info: $user_identifier");
 	
 	# If affiliation identifier argument wasn't supplied, set it to % wildcard
 	$affiliation_identifier = '%' if !$affiliation_identifier;
@@ -6653,7 +6653,7 @@ EOF
 	if (!$user_info->{uid}) {
 		$user_info->{uid} = ($user_info->{id} + 500);
 		$user_info->{STANDALONE} = 1;
-		notify($ERRORS{'DEBUG'}, 0, "UID value is not configured for user $user_login_id, setting UID to VCL user ID: $user_login_id, standalone: 1");
+		notify($ERRORS{'DEBUG'}, 0, "UID value is not configured for user '$user_login_id', setting UID: $user_info->{uid}, standalone: 1");
 	}
 	
 	# Fix the unityid if the user's UID is >= 1,000,000
@@ -7327,7 +7327,7 @@ sub format_data {
 	}
 	
 	# If a string was passed which appears to be XML, convert it to a hash using XML::Simple
-	if (scalar(@data) == 1 && !ref($data[0]) && $data[0] =~ /^</) {
+	if (scalar(@data) == 1 && defined($data[0]) && !ref($data[0]) && $data[0] =~ /^</) {
 		my $xml_hashref = xml_string_to_hash($data[0]);
 		return format_data($xml_hashref);
 	}
@@ -7638,7 +7638,17 @@ sub switch_vmhost_id {
  Description : Retrieves the computerloadlog entries for all reservations
                belonging to the request. A hash is constructed with keys set to
                the reservation IDs. The data of each key is a reference to an
-               array containing the computerloadstate names.
+               array containing the computerloadstate names. Example:
+					{
+					  3115 => [
+						 "begin",
+					  ],
+					  3116 => [
+						 "begin",
+						 "nodeready"
+					  ]
+					}
+
 
 =cut
 
@@ -7695,10 +7705,9 @@ EOF
 =head2 reservation_being_processed
 
  Parameters  :  reservation ID
- Returns     :  true if reservation is avtively being processed, false otherwise
+ Returns     :  array or boolean
  Description :  Checks the computerloadlog table for rows matching the
-                reservation ID and loadstate = begin. Returns true if any
-					 matching rows exist, false otherwise.
+                reservation ID and loadstate = begin.
 
 =cut
 
@@ -7732,11 +7741,11 @@ sub reservation_being_processed {
 	# Check if at least 1 row was returned
 	my $computerloadlog_exists;
 	if (scalar @computerloadlog_rows == 1) {
-		notify($ERRORS{'DEBUG'}, 0, "computerloadlog 'begin' entry exists for reservation");
+		notify($ERRORS{'DEBUG'}, 0, "computerloadlog 'begin' entry exists for reservation $reservation_id");
 		$computerloadlog_exists = 1;
 	}
 	elsif (scalar @computerloadlog_rows > 1) {
-		notify($ERRORS{'WARNING'}, 0, "multiple computerloadlog 'begin' entries exist for reservation");
+		notify($ERRORS{'WARNING'}, 0, "multiple computerloadlog 'begin' entries exist for reservation $reservation_id");
 		$computerloadlog_exists = 1;
 	}
 	else {
@@ -7749,21 +7758,18 @@ sub reservation_being_processed {
 	
 	# Check the results and return
 	if ($computerloadlog_exists && @processes_running) {
-		notify($ERRORS{'DEBUG'}, 0, "reservation is currently being processed, computerloadlog 'begin' entry exists and running process was found: @processes_running");
-		return 1;
+		notify($ERRORS{'DEBUG'}, 0, "reservation $reservation_id is currently being processed, computerloadlog 'begin' entry exists and running process was found: @processes_running");
 	}
 	elsif (!$computerloadlog_exists && @processes_running) {
-		notify($ERRORS{'WARNING'}, 0, "computerloadlog 'begin' entry does NOT exist but running process was found: @processes_running, assuming reservation is currently being processed");
-		return 1;
+		notify($ERRORS{'WARNING'}, 0, "computerloadlog 'begin' entry does NOT exist but running process was found: @processes_running, assuming reservation $reservation_id is currently being processed");
 	}
 	elsif ($computerloadlog_exists && !@processes_running) {
-		notify($ERRORS{'WARNING'}, 0, "computerloadlog 'begin' entry exists but running process was NOT found, assuming reservation is NOT currently being processed");
-		return 0;
+		notify($ERRORS{'WARNING'}, 0, "computerloadlog 'begin' entry exists but running process was NOT found, assuming reservation $reservation_id is NOT currently being processed");
 	}
 	else {
-		notify($ERRORS{'DEBUG'}, 0, "reservation is NOT currently being processed");
-		return 0;
+		notify($ERRORS{'DEBUG'}, 0, "reservation $reservation_id is NOT currently being processed");
 	}
+	return wantarray ? @processes_running : scalar(@processes_running);
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -8928,8 +8934,14 @@ sub setup_get_hash_choice {
 		if ($display_key1) {
 			$display_name = $hash_ref->{$key}{$display_key1};
 		}
+		
 		if ($display_key2) {
-			$display_name .= " (" . $hash_ref->{$key}{$display_key2} . ")";
+			if ($display_key2 =~ /^([^-]+)-([^-]+)$/) {
+				$display_name .= " (" . $hash_ref->{$key}{$1}{$2} . ")";
+			}
+			else {
+				$display_name .= " (" . $hash_ref->{$key}{$display_key2} . ")";
+			}
 		}
 		
 		if (!$display_name) {

@@ -539,6 +539,9 @@ sub make_new_child {
 			$ENV{state}          = $state;
 			$ENV{data}           = $data_structure;
 			
+			# Rename this process to include some request info
+			rename_vcld_process($data_structure);
+			
 			#notify($ERRORS{'DEBUG'}, $LOGFILE, "creating new process");
 			eval "use $state_module";
 			if ($EVAL_ERROR) {

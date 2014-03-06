@@ -354,6 +354,70 @@ sub get_reservation_semaphore_ids {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 get_process_semaphore_ids
+
+ Parameters  : $pid
+ Returns     : array
+ Description : Returns the Semaphore IDs opened by the process PID specified by
+               the argument. An empty list is returned if no Semaphores are
+               open.
+
+=cut
+
+sub get_process_semaphore_ids {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $pid = shift;
+	if (!$pid) {
+		notify($ERRORS{'WARNING'}, 0, "process PID argument was not supplied");
+		return;
+	}
+	
+	my @lockfile_paths = $self->mn_os->find_files($LOCKFILE_DIRECTORY_PATH, "*.$LOCKFILE_EXTENSION");
+	if (!@lockfile_paths) {
+		notify($ERRORS{'DEBUG'}, 0, "did not find any lockfiles on this management node");
+		return ();
+	}
+	
+	my @process_semaphore_ids;
+	
+	for my $lockfile_path (@lockfile_paths) {
+		my ($semaphore_id) = $lockfile_path =~ /([^\/]+)\.$LOCKFILE_EXTENSION/;
+		
+		my @lockfile_contents = $self->mn_os->get_file_contents($lockfile_path);
+		if (!@lockfile_contents) {
+			notify($ERRORS{'WARNING'}, 0, "failed to retrieve contents of lockfile: $lockfile_path");
+			next;
+		}
+		
+		my $lockfile_line = $lockfile_contents[0];
+		
+		# Line should contain a string similar to this:
+		# 31862 vclark 2376:3116 tomaintenance vclv1-42>vclh3-12.hpc.ncsu.edu vmwarewinxp-base234-v14 admin
+		my ($lockfile_pid) = $lockfile_line =~ /^(\d+) /;
+		
+		if (!defined($lockfile_pid)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to determine PID from 1st line in $lockfile_path: '$lockfile_line'");
+			next;
+		}
+		
+		if ($lockfile_pid == $pid) {
+			notify($ERRORS{'DEBUG'}, 0, "semaphore '$semaphore_id' belongs to process $pid");
+			push @process_semaphore_ids, $semaphore_id;
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "semaphore '$semaphore_id' does NOT belong to process $pid");
+		}
+	}
+	return @process_semaphore_ids;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 DESTROY
 
  Parameters  : none
