@@ -1296,7 +1296,7 @@ EOF
 		if ($state_name eq 'pending') {
 			$update_statement .= "AND laststate.name = currentstate.name\n";
 		}
-		elsif ($state_name !~ /(failed|maintenance)/) {
+		elsif ($state_name !~ /(complete|failed|maintenance)/) {
 			# New state is not pending
 			# Need to avoid:
 			#    pending/image --> inuse/inuse
