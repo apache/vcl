@@ -168,7 +168,8 @@ CREATE TABLE IF NOT EXISTS `changelog` (
   PRIMARY KEY  (`id`),
   KEY `logid` (`logid`),
   KEY `userid` (`userid`),
-  KEY `reservationid` (`reservationid`)
+  KEY `reservationid` (`reservationid`),
+  UNIQUE KEY reservation_user_remoteIP (userid,reservationid,remoteIP)
 ) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------

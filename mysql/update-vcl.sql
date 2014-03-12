@@ -543,6 +543,108 @@ BEGIN
   END IF;
 END$$
 
+-- --------------------------------------------------------
+
+/*
+Procedure   : Add3ColUniqueIndexIfNotExist
+Parameters  : tableName, columnName1, columnName2, columnName2
+Description : Adds a unique index to an existing table if a primary or unique
+              index does not already exist for the column. Any non-unique
+              indices are dropped before the unique index is added.
+*/
+
+DROP PROCEDURE IF EXISTS `Add3ColUniqueIndexIfNotExist`$$
+CREATE PROCEDURE `Add3ColUniqueIndexIfNotExist`(
+  IN tableName tinytext,
+  IN columnName1 tinytext,
+  IN columnName2 tinytext,
+  IN columnName3 tinytext
+)
+BEGIN
+  DECLARE done INT DEFAULT 0;
+  DECLARE nonunique_index_name CHAR(16);
+  
+  DECLARE select_index_names CURSOR FOR
+    SELECT
+    i1.INDEX_NAME
+    FROM
+    information_schema.STATISTICS i1,
+    information_schema.STATISTICS i2
+    LEFT JOIN information_schema.STATISTICS i3 ON (
+      i3.TABLE_SCHEMA = i2.TABLE_SCHEMA
+      AND i3.TABLE_NAME = i2.TABLE_NAME
+      AND i3.INDEX_NAME = i2.INDEX_NAME
+      AND i3.SEQ_IN_INDEX = 3
+    )
+    WHERE
+    i1.TABLE_SCHEMA = Database()
+    AND i1.TABLE_NAME = tableName
+    AND i1.SEQ_IN_INDEX = 1
+    AND i1.COLUMN_NAME IN (columnName1, columnName2, columnName3)
+    AND i2.TABLE_SCHEMA = i1.TABLE_SCHEMA
+    AND i2.TABLE_NAME = i1.TABLE_NAME
+    AND i2.INDEX_NAME = i1.INDEX_NAME
+    AND i2.SEQ_IN_INDEX = 2
+    AND i2.COLUMN_NAME IN (columnName1, columnName2, columnName3)
+    AND (i3.COLUMN_NAME IS NULL OR i3.COLUMN_NAME IN (columnName1, columnName2, columnName3));
+
+  DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = 1;
+
+  OPEN select_index_names;
+  
+  REPEAT
+    FETCH select_index_names INTO nonunique_index_name;
+    IF NOT done THEN
+      SET @drop_nonunique_index = CONCAT('ALTER TABLE `', Database(), '`.', tableName, ' DROP INDEX ', nonunique_index_name);
+      PREPARE drop_nonunique_index FROM @drop_nonunique_index;
+      EXECUTE drop_nonunique_index;
+    END IF;
+  UNTIL done END REPEAT;
+  
+  CLOSE select_index_names;
+  
+  IF NOT EXISTS (
+    SELECT
+    i1.INDEX_NAME,
+    i1.COLUMN_NAME AS c1,
+    i2.COLUMN_NAME AS c2,
+    i3.COLUMN_NAME AS c3
+    
+    FROM
+    information_schema.STATISTICS i1,
+    information_schema.STATISTICS i2,
+    information_schema.STATISTICS i3
+    
+    WHERE
+    i1.TABLE_SCHEMA = Database()
+    AND i1.TABLE_SCHEMA = i2.TABLE_SCHEMA
+    AND i1.TABLE_SCHEMA = i3.TABLE_SCHEMA
+    
+    AND i1.TABLE_NAME = tableName
+    AND i1.TABLE_NAME = i2.TABLE_NAME
+    AND i1.TABLE_NAME = i3.TABLE_NAME
+    
+    AND i1.INDEX_NAME = i2.INDEX_NAME
+    AND i1.INDEX_NAME = i3.INDEX_NAME
+    
+    AND i1.COLUMN_NAME != i2.COLUMN_NAME
+    AND i1.COLUMN_NAME != i3.COLUMN_NAME
+    
+    AND i1.SEQ_IN_INDEX = 1
+    AND i2.SEQ_IN_INDEX = 2
+    AND i3.SEQ_IN_INDEX = 3
+    
+    AND i1.COLUMN_NAME IN (columnName1, columnName2, columnName3)
+    AND i2.COLUMN_NAME IN (columnName1, columnName2, columnName3)
+    AND i3.COLUMN_NAME IN (columnName1, columnName2, columnName3)
+  )
+  THEN
+    SET @add_unique_index = CONCAT('ALTER TABLE `', Database(), '`.', tableName, ' ADD UNIQUE (', columnName1, ',', columnName2, ',', columnName3, ')');
+    PREPARE add_unique_index FROM @add_unique_index;
+    EXECUTE add_unique_index;
+  END IF;
+END$$
+
 /* ============= End of Stored Procedures ===============*/
 
 -- --------------------------------------------------------
@@ -590,6 +692,8 @@ CALL AddColumnIfNotExists('changelog', 'reservationid', "mediumint(8) unsigned d
 CALL AddColumnIfNotExists('changelog', 'other', "varchar(255) default NULL AFTER `timestamp`");
 CALL AddIndexIfNotExists('changelog', 'userid');
 CALL AddIndexIfNotExists('changelog', 'reservationid');
+
+CALL Add3ColUniqueIndexIfNotExist('changelog', 'reservationid', 'userid', 'remoteIP');
 
 -- --------------------------------------------------------
 
