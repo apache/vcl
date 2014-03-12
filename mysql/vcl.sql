@@ -156,6 +156,8 @@ CREATE TABLE IF NOT EXISTS `blockWebTime` (
 CREATE TABLE IF NOT EXISTS `changelog` (
   `id` int(10) unsigned NOT NULL auto_increment,
   `logid` int(10) unsigned NOT NULL default '0',
+  `userid` mediumint(8) unsigned DEFAULT NULL,
+  `reservationid` mediumint(8) unsigned default NULL,
   `start` datetime default NULL,
   `end` datetime default NULL,
   `computerid` smallint(5) unsigned default NULL,
@@ -164,7 +166,9 @@ CREATE TABLE IF NOT EXISTS `changelog` (
   `timestamp` datetime NOT NULL default '0000-00-00 00:00:00',
   `other` varchar(255) default NULL,
   PRIMARY KEY  (`id`),
-  KEY `logid` (`logid`)
+  KEY `logid` (`logid`),
+  KEY `userid` (`userid`),
+  KEY `reservationid` (`reservationid`)
 ) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
@@ -2072,7 +2076,9 @@ ALTER TABLE `request`
 ALTER TABLE `reservation`
   ADD CONSTRAINT `reservation_ibfk_11` FOREIGN KEY (`requestid`) REFERENCES `request` (`id`) ON DELETE CASCADE,
   ADD CONSTRAINT `reservation_ibfk_10` FOREIGN KEY (`managementnodeid`) REFERENCES `managementnode` (`id`),
-  ADD CONSTRAINT `reservation_ibfk_9` FOREIGN KEY (`computerid`) REFERENCES `computer` (`id`) ON UPDATE CASCADE;
+  ADD CONSTRAINT `reservation_ibfk_9` FOREIGN KEY (`computerid`) REFERENCES `computer` (`id`) ON UPDATE CASCADE,
+  ADD CONSTRAINT reservation_ibfk_13 FOREIGN KEY (imagerevisionid) REFERENCES imagerevision (id) ON UPDATE CASCADE,
+  ADD CONSTRAINT reservation_ibfk_12 FOREIGN KEY (imageid) REFERENCES image (id) ON UPDATE CASCADE;
 
 --
 -- Constraints for table `reservationaccounts`

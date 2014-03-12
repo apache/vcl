@@ -585,7 +585,11 @@ CALL AddColumnIfNotExists('blockTimes', 'skip', "tinyint(1) unsigned NOT NULL de
 --  Table structure for table `changelog`
 --
 
-CALL AddColumnIfNotExists('changelog', 'other', "varchar(255) default NULL");
+CALL AddColumnIfNotExists('changelog', 'userid', "mediumint(8) unsigned default NULL AFTER `logid`");
+CALL AddColumnIfNotExists('changelog', 'reservationid', "mediumint(8) unsigned default NULL AFTER `userid`");
+CALL AddColumnIfNotExists('changelog', 'other', "varchar(255) default NULL AFTER `timestamp`");
+CALL AddIndexIfNotExists('changelog', 'userid');
+CALL AddIndexIfNotExists('changelog', 'reservationid');
 
 -- --------------------------------------------------------
 
@@ -978,8 +982,8 @@ CALL AddColumnIfNotExists('vmprofile', 'datastoreimagetypeid', "smallint(5) unsi
 CALL AddColumnIfNotExists('vmprofile', 'virtualswitch2', "varchar(80) NULL default NULL AFTER `virtualswitch1`");
 CALL AddColumnIfNotExists('vmprofile', 'virtualswitch3', "varchar(80) NULL default NULL AFTER `virtualswitch2`");
 CALL AddColumnIfNotExists('vmprofile', 'rsapub', "text NULL default NULL AFTER `virtualswitch3`");
-CALL AddColumnIfNotExists('vmprofile', 'rsakey', "varchar(256) NULL default NULL AFTER `rsa_pub`");
-CALL AddColumnIfNotExists('vmprofile', 'encryptedpasswd', "text NULL default NULL AFTER `rsa_key`");
+CALL AddColumnIfNotExists('vmprofile', 'rsakey', "varchar(256) NULL default NULL AFTER `rsapub`");
+CALL AddColumnIfNotExists('vmprofile', 'encryptedpasswd', "text NULL default NULL AFTER `rsakey`");
 
 CALL AddOrRenameColumn('vmprofile', 'vmware_mac_eth0_generated', 'eth0generated', "tinyint(1) unsigned NOT NULL default '0'");
 CALL AddOrRenameColumn('vmprofile', 'vmware_mac_eth1_generated', 'eth1generated', "tinyint(1) unsigned NOT NULL default '0'");
@@ -1337,6 +1341,15 @@ CALL AddConstraintIfNotExists('image', 'imagetypeid', 'imagetype', 'id', 'update
  
 CALL AddConstraintIfNotExists('provisioningOSinstalltype', 'provisioningid', 'provisioning', 'id', 'both', 'CASCADE');
 CALL AddConstraintIfNotExists('provisioningOSinstalltype', 'OSinstalltypeid', 'OSinstalltype', 'id', 'both', 'CASCADE');
+
+-- --------------------------------------------------------
+
+--
+-- Constraints for table `reservation`
+--
+
+CALL AddConstraintIfNotExists('reservation', 'imageid', 'image', 'id', 'restrict', 'CASCADE');
+CALL AddConstraintIfNotExists('reservation', 'imagerevisionid', 'imagerevision', 'id', 'restrict', 'CASCADE');
 
 -- --------------------------------------------------------
 
