@@ -2529,11 +2529,10 @@ sub manage_server_access {
 	}		
 	if (scalar @userlist_login > 0) {
 		foreach my $str (@userlist_login) {
-			notify($ERRORS{'OK'}, 0, "nonadmin user str= $str");
 			my ($username, $uid,$vcl_user_id) = 0;
 			($username, $uid,$vcl_user_id) = split(/:/, $str);
 			my ($correct_username, $user_domain) = split /@/, $username;
-			if (!exists($user_hash{$uid})) {
+			if (!exists($user_hash{$vcl_user_id})) {
 				$user_hash{$vcl_user_id}{"user_info"} = get_user_info($vcl_user_id);
 				$user_hash{$vcl_user_id}{"username"} = $correct_username;
 				$user_hash{$vcl_user_id}{"uid"}	= $uid;
