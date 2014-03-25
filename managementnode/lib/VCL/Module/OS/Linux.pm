@@ -373,22 +373,6 @@ sub post_load {
 		notify($ERRORS{'OK'}, 0, "cleared known identity keys");
 	}
 	
-	
-	# Run the vcl_post_load script if it exists in the image
-	my $script_path = '/etc/init.d/vcl_post_load';
-	if ($self->file_exists($script_path)) {
-		my $result = $self->run_script($script_path, '1', '300', '1');
-		if (!defined($result)) {
-			notify($ERRORS{'WARNING'}, 0, "error occurred running $script_path");
-		}
-		elsif ($result == 0) {
-			notify($ERRORS{'DEBUG'}, 0, "$script_path does not exist in image: $image_name");
-		}
-		else {
-			notify($ERRORS{'DEBUG'}, 0, "ran $script_path");
-		}
-	}
-	
 	if ($self->enable_firewall_port("tcp", "any", $mn_private_ip, 1)) {
 		notify($ERRORS{'OK'}, 0, "added MN_Priv_IP $mn_private_ip to firewall on $computer_short_name");
 	}
@@ -406,13 +390,23 @@ sub post_load {
 		notify($ERRORS{'OK'}, 0, "Updated hostname");
 	}
 	
+	# Run the vcl_post_load script if it exists in the image
+	my $script_path = '/etc/init.d/vcl_post_load';
+	if ($self->file_exists($script_path)) {
+		my $result = $self->run_script($script_path, '1', '300', '1');
+		if (!defined($result)) {
+			notify($ERRORS{'WARNING'}, 0, "error occurred running $script_path");
+		}
+		elsif ($result == 0) {
+			notify($ERRORS{'DEBUG'}, 0, "$script_path does not exist in image: $image_name");
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "ran $script_path");
+		}
+	}
+	
 	# Add a line to currentimage.txt indicating post_load has run
 	$self->set_vcld_post_load_status();
-
-	#Update Hostname to match Public assigned name
-	if ($self->update_public_hostname()) {
-		notify($ERRORS{'OK'}, 0, "Updated hostname");
-	}
 	
 	return 1;
 
